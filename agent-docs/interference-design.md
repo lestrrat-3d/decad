@@ -356,7 +356,7 @@ through b's support along m, with no unit normal:
 
 - a prism with exact section and levels over a whole circle of centre c and
   radius r reaches m·t + μ·(c, z) + r·√(μ₁² + μ₂²) at one of its levels, with
-  μ = Lᵀm; over whole lines it reaches its largest vertex, and an arc adds the support of the circle through its two ends about its centre, ends at one exact distance from it;
+  μ = Lᵀm; over whole lines it reaches its largest vertex, and an arc adds the support of the circle through its start about its centre, the record stating that start and the centre and never the radius;
 - a Revolve the meridian separator reads over whole lines reaches m·t + μ·anchor + z·(μ·d) +
   ρ·|μ across d| at a vertex of its region, d its axis and μ again Lᵀm, the
   frame coordinates measuring true distance so the split across d is exact.
@@ -495,8 +495,10 @@ apart from the chain, a slab by either of:
   per exact prism part of the target (a Union's operands, whatever displacement
   the Union's own record holds). The tool's axis is the slab's exactly, its radius
   at least the slab's, and each part contributes the range of the slab's axial
-  coordinate over its section's box inside the slab's strip across the axis, the
-  part's box taken from its lines' ends and its circles' and arcs' boxes. The
+  coordinate over its section's outline inside the slab's closed strip across the
+  axis: whole lines clipped to the strip by their ends, and a circle or an arc,
+  whose box leaves the strip or does not, by its box, an arc's circle the one
+  through its start about its centre. The
   tool's levels must hold the union of those ranges. A plate across a shank is
   held by a hole that runs past it though a knuckle beside the plate stands
   higher than the hole;

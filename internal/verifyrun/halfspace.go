@@ -165,14 +165,10 @@ func prismSupport(p prismrecord.Payload, m [3]*big.Rat) (support, bool) {
 	zero := new(big.Rat)
 	for _, seg := range p.Profile.Outer.Segments {
 		if arc, ok := seg.(sectionrecord.ArcSeg); ok {
-			// An arc lies on the circle through its two ends about its centre,
-			// whose support bounds the arc's; ends at unequal distances name no
-			// circle.
-			rs, re := distSquared(arc.Center, arc.Start), distSquared(arc.Center, arc.End)
-			if rs.Cmp(re) != 0 {
-				return support{}, false
-			}
-			radius, ok := sqrtUpper(rs)
+			// An arc lies on the circle through its start about its centre, the
+			// record stating the start and the centre and never the radius,
+			// and that circle's support bounds the arc's.
+			radius, ok := sqrtUpper(distSquared(arc.Center, arc.Start))
 			if !ok {
 				return support{}, false
 			}

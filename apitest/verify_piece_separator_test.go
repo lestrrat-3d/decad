@@ -20,44 +20,44 @@ import (
 // y in [0, 10] with a knuckle arc of radius 4 about (8, 10) standing on its
 // right end, swept 15 mm along z about z = 0, less a vertical hole of radius
 // hole about the y axis that runs 5 mm past both faces.
-func pieceBracket(t *testing.T, doc *decad.Document, hole float64) *decad.Body {
+func pieceBracket(t *testing.T, doc *decad.Document, hole, s float64) *decad.Body {
 	t.Helper()
 	w := sketch.NewWorld()
-	s, err := w.CreateSketch(w.XY())
+	sk, err := w.CreateSketch(w.XY())
 	require.NoError(t, err)
-	a, b := s.CreatePoint(-10, 0), s.CreatePoint(12, 0)
-	c, d := s.CreatePoint(12, 10), s.CreatePoint(4, 10)
-	e := s.CreatePoint(-10, 10)
-	centre := s.CreatePoint(8, 10)
-	s.Fix(a)
-	s.Fix(centre)
-	s.CreateLine(a, b)
-	s.CreateLine(b, c)
-	s.CreateArc(centre, c, d)
-	s.CreateLine(d, e)
-	s.CreateLine(e, a)
-	_, err = s.Solve(t.Context())
+	a, b := sk.CreatePoint(-10*s, 0), sk.CreatePoint(12*s, 0)
+	c, d := sk.CreatePoint(12*s, 10*s), sk.CreatePoint(4*s, 10*s)
+	e := sk.CreatePoint(-10*s, 10*s)
+	centre := sk.CreatePoint(8*s, 10*s)
+	sk.Fix(a)
+	sk.Fix(centre)
+	sk.CreateLine(a, b)
+	sk.CreateLine(b, c)
+	sk.CreateArc(centre, c, d)
+	sk.CreateLine(d, e)
+	sk.CreateLine(e, a)
+	_, err = sk.Solve(t.Context())
 	require.NoError(t, err)
-	require.Len(t, s.Profiles(), 1)
-	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Symmetric{D: units.Millimeters(7.5)})
+	require.Len(t, sk.Profiles(), 1)
+	body, err := decad.Extrude(t.Context(), doc, sk, sk.Profiles()[0], decad.Symmetric{D: units.Millimeters(7.5 * s)})
 	require.NoError(t, err)
-	return pieceHole(t, doc, body, hole)
+	return pieceHole(t, doc, body, hole, s)
 }
 
-func pieceHole(t *testing.T, doc *decad.Document, host *decad.Body, radius float64) *decad.Body {
+func pieceHole(t *testing.T, doc *decad.Document, host *decad.Body, radius, s float64) *decad.Body {
 	t.Helper()
 	w := sketch.NewWorld()
 	// The XZ plane's normal is -y: the tool hangs 25 mm below the plane at y = 20.
-	plane, err := w.CreateOffsetPlane(w.XZ(), -20)
+	plane, err := w.CreateOffsetPlane(w.XZ(), -20*s)
 	require.NoError(t, err)
-	s, err := w.CreateSketch(plane)
+	sk, err := w.CreateSketch(plane)
 	require.NoError(t, err)
-	c := s.CreatePoint(0, 0)
-	s.Fix(c)
-	s.CreateCircle(c, radius)
-	_, err = s.Solve(t.Context())
+	c := sk.CreatePoint(0, 0)
+	sk.Fix(c)
+	sk.CreateCircle(c, radius)
+	_, err = sk.Solve(t.Context())
 	require.NoError(t, err)
-	tool, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(25), Dir: decad.Along})
+	tool, err := decad.Extrude(t.Context(), doc, sk, sk.Profiles()[0], decad.Distance{D: units.Millimeters(25 * s), Dir: decad.Along})
 	require.NoError(t, err)
 	out, err := decad.Cut(t.Context(), host, tool)
 	require.NoError(t, err)
@@ -66,11 +66,11 @@ func pieceHole(t *testing.T, doc *decad.Document, host *decad.Body, radius float
 
 // pieceScrew is a screw turned about the y axis: a shank of radius 1.5 from
 // y = -8 to y = 10 and a head of radius 3 from y = 10 up by headHeight.
-func pieceScrew(t *testing.T, doc *decad.Document, headBase, headHeight float64) *decad.Body {
+func pieceScrew(t *testing.T, doc *decad.Document, headBase, headHeight, s float64) *decad.Body {
 	t.Helper()
-	s, profile := polygonSketch(t, [][2]float64{{0, -8}, {1.5, -8}, {1.5, headBase}, {3, headBase},
-		{3, headBase + headHeight}, {0, headBase + headHeight}})
-	body, err := decad.Revolve(t.Context(), doc, s, profile,
+	sk, profile := polygonSketch(t, [][2]float64{{0, -8 * s}, {1.5 * s, -8 * s}, {1.5 * s, headBase * s}, {3 * s, headBase * s},
+		{3 * s, (headBase + headHeight) * s}, {0, (headBase + headHeight) * s}})
+	body, err := decad.Revolve(t.Context(), doc, sk, profile,
 		decad.SketchLine{End: decad.Point2{V: 1}}, decad.FullRevolution{})
 	require.NoError(t, err)
 	return body
@@ -89,17 +89,19 @@ func TestVerifyPieceSeparator(t *testing.T) {
 		name      string
 		hole      float64
 		headBase  float64
+		scale     float64
 		separated bool
 	}{
-		{"head flush, shank in the hole", 1.6, 10, true},
-		{"head sunk into the bracket", 1.6, 9.5, false},
-		{"hole narrower than the shank", 1.4, 10, false},
+		{"head flush, shank in the hole", 1.6, 10, 1, true},
+		{"head flush at scale 0.8, arc ends off their circle by rounding", 1.6, 10, 0.8, true},
+		{"head sunk into the bracket", 1.6, 9.5, 1, false},
+		{"hole narrower than the shank", 1.4, 10, 1, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			doc := decad.New()
-			bracket := pieceBracket(t, doc, tc.hole)
-			screw := pieceScrew(t, doc, tc.headBase, 1.5)
+			bracket := pieceBracket(t, doc, tc.hole*tc.scale, tc.scale)
+			screw := pieceScrew(t, doc, tc.headBase, 1.5, tc.scale)
 			report, err := doc.Verify(t.Context())
 			require.NoError(t, err)
 			interferences, diagnostics := pairFindings(report, bracket, screw)
@@ -181,7 +183,7 @@ func TestVerifyPieceSeparatorStripReach(t *testing.T) {
 			t.Parallel()
 			doc := decad.New()
 			leaf := pieceLeaf(t, doc, tc.holeTop)
-			screw := pieceScrew(t, doc, 3, 1.5)
+			screw := pieceScrew(t, doc, 3, 1.5, 1)
 			report, err := doc.Verify(t.Context())
 			require.NoError(t, err)
 			interferences, diagnostics := pairFindings(report, leaf, screw)
