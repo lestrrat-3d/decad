@@ -1,6 +1,7 @@
 package apitest_test
 
 import (
+	"math"
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
@@ -36,9 +37,12 @@ func coaxialSection(t *testing.T, doc *decad.Document, cx, cy, length float64, r
 	return body
 }
 
-// placedAlongZ moves body by dz.
+// placedAlongZ moves body by dz; zero leaves it unplaced.
 func placedAlongZ(t *testing.T, body *decad.Body, dz float64) *decad.Body {
 	t.Helper()
+	if dz == 0 {
+		return body
+	}
 	move, err := r3.Translation(r3.Vec{Z: dz})
 	require.NoError(t, err)
 	placed, err := decad.Transform(t.Context(), body, move)
@@ -67,6 +71,19 @@ func keyedShaft(t *testing.T, doc *decad.Document) *decad.Body {
 	return keyed
 }
 
+// turned rotates body by angle about the x axis through the origin.
+func turned(t *testing.T, body *decad.Body, angle float64) *decad.Body {
+	t.Helper()
+	if angle == 0 {
+		return body
+	}
+	turn, err := r3.Rotation(r3.Vec{X: 1}, units.Radians(angle))
+	require.NoError(t, err)
+	out, err := decad.Transform(t.Context(), body, turn)
+	require.NoError(t, err)
+	return out
+}
+
 // pairFindings counts the report's interference rows and pair diagnostics
 // that name both a and b.
 func pairFindings(report *decad.Report, a, b *decad.Body) (interferences, diagnostics int) {
@@ -85,23 +102,30 @@ func pairFindings(report *decad.Report, a, b *decad.Body) (interferences, diagno
 }
 
 // TestVerifyCoaxialSeparator holds the separator to exact matches: a held or
-// prism shaft in a bore of its radius is decided, and a smaller bore or an
-// axis 0.01 mm off is not.
+// prism shaft in a bore of its radius is decided, as is a pair turned by one
+// shared inexact rotation; a smaller bore, an axis 0.01 mm off, a shaft
+// turned by an inexact rotation its bore does not share, or a bore whose
+// placement composes a rounded translation with that rotation is not.
 //
 // Leg shown to fail: never matching the outside side leaves both coincident
 // cases with pair diagnostics.
 func TestVerifyCoaxialSeparator(t *testing.T) {
 	t.Parallel()
 	for _, tc := range []struct {
-		name      string
-		held      bool
-		cx, bore  float64
-		separated bool
+		name                   string
+		held                   bool
+		cx, bore               float64
+		shaftTurn, bearingTurn float64
+		bearingZ               float64
+		separated              bool
 	}{
-		{"held shaft in a bore of its radius", true, 0, 4, true},
-		{"prism shaft in a bore of its radius", false, 0, 4, true},
-		{"bore smaller than the shaft", true, 0, 3.9, false},
-		{"bore off the shaft's axis", true, 0.01, 4, false},
+		{"held shaft in a bore of its radius", true, 0, 4, 0, 0, 6, true},
+		{"prism shaft in a bore of its radius", false, 0, 4, 0, 0, 6, true},
+		{"both turned by one inexact rotation", false, 0, 4, math.Pi / 3, math.Pi / 3, 0, true},
+		{"bore smaller than the shaft", true, 0, 3.9, 0, 0, 6, false},
+		{"bore off the shaft's axis", true, 0.01, 4, 0, 0, 6, false},
+		{"shaft and bore turned apart", false, 0, 4, math.Pi / 3, 0, 6, false},
+		{"bore moved after one inexact rotation", false, 0, 4, math.Pi / 3, math.Pi / 3, 6, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
@@ -110,9 +134,9 @@ func TestVerifyCoaxialSeparator(t *testing.T) {
 			if tc.held {
 				shaft = keyedShaft(t, doc)
 			} else {
-				shaft = coaxialSection(t, doc, 0, 0, 40, 4)
+				shaft = turned(t, coaxialSection(t, doc, 0, 0, 40, 4), tc.shaftTurn)
 			}
-			bearing := placedAlongZ(t, coaxialSection(t, doc, tc.cx, 0, 8, 11, tc.bore), 6)
+			bearing := turned(t, placedAlongZ(t, coaxialSection(t, doc, tc.cx, 0, 8, 11, tc.bore), tc.bearingZ), tc.bearingTurn)
 			report, err := doc.Verify(t.Context())
 			require.NoError(t, err)
 			interferences, diagnostics := pairFindings(report, shaft, bearing)

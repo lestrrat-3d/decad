@@ -24,18 +24,27 @@ import (
 //
 // Each side is proven from records alone, exactly:
 //
-//   - a prism whose frame and placement are exactly orthonormal lies inside
-//     the cylinder over its outer loop when that loop is one whole circle, and
-//     outside the cylinder over any hole that is one whole circle;
+//   - a prism lies inside the cylinder over its outer loop when that loop is
+//     one whole circle, and outside the cylinder over any hole that is one
+//     whole circle; two such cylinders are the same set when exactly
+//     orthonormal lifts give them one axis and radius, or when one affine lift
+//     carries both;
 //   - a mesh Boolean result whose history denotes its operation exactly
 //     (boolchain.Expandable) inherits containment: a Cut lies where its target
 //     lies, an Intersect where either operand lies, a Union where both lie.
 
-// coaxialCylinder is a circular cylinder in exact world coordinates: the line
-// through Anchor along Dir, at radius Radius.
+// coaxialCylinder is the cylinder a prism's lateral face over one whole
+// circle lies on, kept as the prism's exact lift: the world point of section
+// point (x, y) at level z is t + L·(x, y, z), and the circle has centre
+// (cx, cy) and radius r in section coordinates. iso marks a lift whose
+// linear part is exactly orthonormal, so the set is a circular cylinder of
+// radius r about the lifted centre along L's third column.
 type coaxialCylinder struct {
-	anchor, dir [3]*big.Rat
-	radius      *big.Rat
+	l      [3][3]*big.Rat // columns: lifted u, v, n
+	t      [3]*big.Rat
+	cx, cy *big.Rat
+	radius *big.Rat
+	iso    bool
 }
 
 // coaxialMaxDepth bounds the history walk; a deeper chain stays undecided.
@@ -154,12 +163,8 @@ func wholeCircle(loop sectionrecord.LoopRecord) (sectionrecord.CircleSeg, bool) 
 	return c, ok && whole
 }
 
-// prismCylinder is the world cylinder a prism's lateral face over circle
-// lies on: the section circle's centre lifted through the frame and the
-// placement, along the frame normal. It refuses unless the section is held
-// exactly and the frame axes and the placement basis are exactly
-// orthonormal, so the lift is an exact isometry and every section point's
-// distance from the centre is its world distance from the axis.
+// prismCylinder is the cylinder a prism's lateral face over circle lies on.
+// It refuses unless the section is held exactly.
 func prismCylinder(pp prismrecord.Payload, circle sectionrecord.CircleSeg) (coaxialCylinder, bool) {
 	if pp.SectionDelta != 0 || pp.SurfaceResult {
 		return coaxialCylinder{}, false
@@ -169,33 +174,74 @@ func prismCylinder(pp prismrecord.Payload, circle sectionrecord.CircleSeg) (coax
 		return coaxialCylinder{}, false
 	}
 	u, v, n, o := ratVec(pp.Frame.U()), ratVec(pp.Frame.V()), ratVec(pp.Frame.N()), ratVec(pp.Frame.Origin())
-	if !orthonormal(u, v, n) {
-		return coaxialCylinder{}, false
-	}
 	basis := pp.Xform.Basis()
 	ex, ey, ez := ratVec(basis.EX), ratVec(basis.EY), ratVec(basis.EZ)
-	if !orthonormal(ex, ey, ez) {
-		return coaxialCylinder{}, false
-	}
-	cx, cy := ratOf(circle.Center.U), ratOf(circle.Center.V)
-	local := addVec(o, addVec(scaleVec(u, cx), scaleVec(v, cy)))
 	apply := func(p [3]*big.Rat) [3]*big.Rat {
 		return addVec(addVec(scaleVec(ex, p[0]), scaleVec(ey, p[1])), scaleVec(ez, p[2]))
 	}
-	anchor := addVec(apply(local), ratVec(pp.Xform.Translation()))
-	return coaxialCylinder{anchor: anchor, dir: apply(n), radius: ratOf(r)}, true
+	lu, lv, ln := apply(u), apply(v), apply(n)
+	return coaxialCylinder{
+		l:      [3][3]*big.Rat{lu, lv, ln},
+		t:      addVec(apply(o), ratVec(pp.Xform.Translation())),
+		cx:     ratOf(circle.Center.U),
+		cy:     ratOf(circle.Center.V),
+		radius: ratOf(r),
+		iso:    orthonormal(lu, lv, ln),
+	}, true
 }
 
-// equal reports whether two cylinders are the same set: equal radius, and
-// the same axis line.
+// equal reports whether two cylinders are the same set. Two exactly
+// orthonormal lifts are compared in the world: equal radius and the same axis
+// line. Two lifts with the same linear part are compared in either's section
+// coordinates, where the other's circle moves by the lift's own preimage of the
+// translation between them; the same affine map then carries one circle's
+// cylinder onto the other's, round or not.
 func (c coaxialCylinder) equal(o coaxialCylinder) bool {
 	if c.radius.Cmp(o.radius) != 0 {
 		return false
 	}
-	if !isZero(crossVec(c.dir, o.dir)) {
+	if c.iso && o.iso {
+		dc, do := c.l[2], o.l[2]
+		if !isZero(crossVec(dc, do)) {
+			return false
+		}
+		return isZero(crossVec(subVec(o.anchor(), c.anchor()), dc))
+	}
+	for i := range 3 {
+		for k := range 3 {
+			if c.l[i][k].Cmp(o.l[i][k]) != 0 {
+				return false
+			}
+		}
+	}
+	w, ok := solve(c.l, subVec(o.t, c.t))
+	if !ok {
 		return false
 	}
-	return isZero(crossVec(subVec(o.anchor, c.anchor), c.dir))
+	return new(big.Rat).Add(o.cx, w[0]).Cmp(c.cx) == 0 && new(big.Rat).Add(o.cy, w[1]).Cmp(c.cy) == 0
+}
+
+// anchor is the lifted circle centre at level zero.
+func (c coaxialCylinder) anchor() [3]*big.Rat {
+	return addVec(c.t, addVec(scaleVec(c.l[0], c.cx), scaleVec(c.l[1], c.cy)))
+}
+
+// solve returns x with cols·x = b, by Cramer's rule, and false when the
+// columns are singular.
+func solve(cols [3][3]*big.Rat, b [3]*big.Rat) ([3]*big.Rat, bool) {
+	det := dotVec(cols[0], crossVec(cols[1], cols[2]))
+	if det.Sign() == 0 {
+		return [3]*big.Rat{}, false
+	}
+	x := [3]*big.Rat{
+		dotVec(b, crossVec(cols[1], cols[2])),
+		dotVec(cols[0], crossVec(b, cols[2])),
+		dotVec(cols[0], crossVec(cols[1], b)),
+	}
+	for i := range x {
+		x[i].Quo(x[i], det)
+	}
+	return x, true
 }
 
 func ratOf(x float64) *big.Rat { return new(big.Rat).SetFloat64(x) }
