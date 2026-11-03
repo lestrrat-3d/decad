@@ -1,8 +1,10 @@
 package meshbool
 
 import (
+	"cmp"
 	"context"
 	"fmt"
+	"math"
 	"math/big"
 	"slices"
 
@@ -154,6 +156,10 @@ func (tc *TriCutter) cut(ctx context.Context, xtri [3]proof.Xpt, normal proof.Xp
 		// by parity.
 		probe := XCentroid(xtri[0], xtri[1], xtri[2])
 		return []CutRegion{{Tris: [][3]proof.Xpt{xtri}, Probe: probe}}, nil
+	}
+
+	if err := tc.refuseCrossingEdges(); err != nil {
+		return nil, err
 	}
 
 	// Open every closed chain with split lines, then split the facet into
@@ -605,6 +611,60 @@ func (tc *TriCutter) SplitEdgesAtU(c *big.Rat) error {
 			CutEdge{A: mid, B: e.B, Partner: e.Partner, ViaParity: e.ViaParity})
 	}
 	tc.Edges = out
+	return nil
+}
+
+// refuseCrossingEdges refuses a facet whose contact edges cross at a point
+// interior to both. Two facets of a non-self-intersecting operand meet this
+// facet's plane in curves that touch only at that operand's edges and
+// vertices, where the chains share a vertex; a crossing means the other
+// operand's held surface folds through itself here, as two near-coincident
+// facets can, and no region split along both curves is consistent. Like a
+// branching curve it is a contact the predicates cannot classify. Candidates
+// come from a sweep over float boxes: rounding is monotone, so exact boxes
+// that meet have float boxes that meet; the crossing itself is decided
+// exactly.
+func (tc *TriCutter) refuseCrossingEdges() error {
+	type box struct {
+		lo, hi [2]float64
+		edge   int
+	}
+	boxes := make([]box, len(tc.Edges))
+	for i, e := range tc.Edges {
+		if err := tc.Work.Step(); err != nil {
+			return err
+		}
+		a, b := tc.Verts[e.A].P2, tc.Verts[e.B].P2
+		bx := box{lo: [2]float64{math.Inf(-1), math.Inf(-1)}, hi: [2]float64{math.Inf(1), math.Inf(1)}, edge: i}
+		if a.floatFromExact && b.floatFromExact {
+			bx.lo = [2]float64{min(a.Fu, b.Fu), min(a.Fv, b.Fv)}
+			bx.hi = [2]float64{max(a.Fu, b.Fu), max(a.Fv, b.Fv)}
+		}
+		boxes[i] = bx
+	}
+	slices.SortFunc(boxes, func(x, y box) int { return cmp.Compare(x.lo[0], y.lo[0]) })
+	for i, x := range boxes {
+		for _, y := range boxes[i+1:] {
+			if y.lo[0] > x.hi[0] {
+				break
+			}
+			if y.lo[1] > x.hi[1] || x.lo[1] > y.hi[1] {
+				continue
+			}
+			if err := tc.Work.Step(); err != nil {
+				return err
+			}
+			e, f := tc.Edges[x.edge], tc.Edges[y.edge]
+			if e.A == f.A || e.A == f.B || e.B == f.A || e.B == f.B {
+				continue
+			}
+			a, b := tc.Verts[e.A].P2, tc.Verts[e.B].P2
+			c, d := tc.Verts[f.A].P2, tc.Verts[f.B].P2
+			if Cross2xSign(a, b, c)*Cross2xSign(a, b, d) < 0 && Cross2xSign(c, d, a)*Cross2xSign(c, d, b) < 0 {
+				return ErrUnclassifiableContact(`intersection curves cross on a facet`)
+			}
+		}
+	}
 	return nil
 }
 

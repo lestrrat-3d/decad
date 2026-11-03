@@ -36,6 +36,9 @@ func legacyCut(ctx context.Context, tc *TriCutter, xtri [3]proof.Xpt, normal pro
 		probe := XCentroid(xtri[0], xtri[1], xtri[2])
 		return []CutRegion{{Tris: [][3]proof.Xpt{xtri}, Probe: probe}}, nil
 	}
+	if err := tc.refuseCrossingEdges(); err != nil {
+		return nil, err
+	}
 	lines, chains, err := tc.OpenLoops()
 	if err != nil {
 		return nil, err
