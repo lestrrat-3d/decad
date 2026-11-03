@@ -158,54 +158,6 @@ func brakeconformOnce(ctx context.Context, verts []proof.Xpt, tris *[][3]int, sr
 	return splitAny, nil
 }
 
-// brakeOnSegmentInterior3 reports, exactly, whether p lies strictly inside the 3D
-// segment (a, b).
-//
-// The parameter t = ap[axis]/d[axis] is compared only against 0 and 1, which
-// is decided with no division and no big.Rat: ap[axis] and d[axis] are raw
-// homogeneous numerators over their own (possibly different) positive
-// denominators ap.w and d.w, so "t < 1" cross-multiplies them
-// (ap[axis]·d.w vs d[axis]·ap.w — never a sign flip, since both denominators
-// are positive) and "t > 0" reads ap[axis]'s sign directly (ap.w is
-// positive). Only the FINAL combination branches on d[axis]'s sign, the same
-// rule stage A's version of this function established.
-func brakeOnSegmentInterior3(a, b, p proof.Xpt) bool {
-	d := proof.Xsub(b, a)
-	ap := proof.Xsub(p, a)
-	cr := proof.Xcross(d, ap)
-	if cr.X.Sign() != 0 || cr.Y.Sign() != 0 || cr.Z.Sign() != 0 {
-		return false
-	}
-	axis := brakeDominantAxis(d)
-	dAxis := XIntCoordOf(d, axis)
-	dSign := dAxis.Sign()
-	if dSign == 0 {
-		return false
-	}
-	apAxis := XIntCoordOf(ap, axis)
-	cmp := new(big.Int).Mul(apAxis, d.W).Cmp(new(big.Int).Mul(dAxis, ap.W))
-	if dSign > 0 {
-		return apAxis.Sign() > 0 && cmp < 0
-	}
-	return apAxis.Sign() < 0 && cmp > 0
-}
-
-// brakeDominantAxis picks the coordinate of d with the largest magnitude. d's
-// three coordinates share one positive denominator, so their magnitudes
-// compare directly as integers — no cross-multiplication needed.
-func brakeDominantAxis(d proof.Xpt) int {
-	ax := new(big.Int).Abs(d.X)
-	ay := new(big.Int).Abs(d.Y)
-	az := new(big.Int).Abs(d.Z)
-	if ax.Cmp(ay) >= 0 && ax.Cmp(az) >= 0 {
-		return 0
-	}
-	if ay.Cmp(az) >= 0 {
-		return 1
-	}
-	return 2
-}
-
 // brakeConformScan indexes the stitched vertices by their float approximations and
 // retains the exact vertices for the on-edge predicate. Its reject-only filter
 // threshold is derived from the approximation error, so pruning cannot miss an
@@ -361,11 +313,7 @@ func (s *brakeConformScan) EdgeInteriorHits(ctx context.Context, budget *proofbo
 	// this float segment, by SegAdmissionRadius2. Querying that expanded segment
 	// box is therefore a complete superset, even when subtracting Lo to find a
 	// grid cell loses precision at large coordinate offsets.
-	tau := math.Nextafter(math.Sqrt(s.Tau2), math.Inf(1))
-	box := [2]r3.Vec{
-		{X: math.Nextafter(math.Min(pa.X, pb.X)-tau, math.Inf(-1)), Y: math.Nextafter(math.Min(pa.Y, pb.Y)-tau, math.Inf(-1)), Z: math.Nextafter(math.Min(pa.Z, pb.Z)-tau, math.Inf(-1))},
-		{X: math.Nextafter(math.Max(pa.X, pb.X)+tau, math.Inf(1)), Y: math.Nextafter(math.Max(pa.Y, pb.Y)+tau, math.Inf(1)), Z: math.Nextafter(math.Max(pa.Z, pb.Z)+tau, math.Inf(1))},
-	}
+	box := conformSegmentQueryBox(pa, pb, s.Tau2)
 	visit := func(i int) error {
 		if err := budget.Step(); err != nil {
 			return err
@@ -381,7 +329,7 @@ func (s *brakeConformScan) EdgeInteriorHits(ctx context.Context, budget *proofbo
 				return err
 			}
 		} else {
-			inside = brakeOnSegmentInterior3(s.Verts[a], s.Verts[b], s.Verts[i])
+			inside = OnSegmentInterior3(s.Verts[a], s.Verts[b], s.Verts[i])
 		}
 		if inside {
 			if err := budget.Reserve(1); err != nil {
@@ -486,7 +434,7 @@ func brakeSortAlongEdge(ctx context.Context, budget *proofbound.WorkBudget, vert
 		return brakesortAlongEdgeReplay(ctx, budget, verts, a, b, hits)
 	}
 	d := proof.Xsub(verts[b], verts[a])
-	axis := brakeDominantAxis(d)
+	axis := DominantAxis(d)
 	daSign := XIntCoordOf(d, axis).Sign()
 	if err := budget.Reserve(uint64(len(hits))); err != nil {
 		return err
