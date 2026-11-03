@@ -93,23 +93,42 @@ func TestLazyRatFloat64MatchesBigFloatLegacy(t *testing.T) {
 	}
 }
 
+// lazyBitsInt returns a random positive integer of exactly bits bits.
+func lazyBitsInt(rng *rand.Rand, bits int) *big.Int {
+	out := new(big.Int)
+	for i := range bits - 1 {
+		out.SetBit(out, i, uint(rng.IntN(2)))
+	}
+	return out.SetBit(out, bits-1, 1)
+}
+
+// BenchmarkLazyRatFloat64 covers the operand shapes the cross-bore proof
+// passes: numerator and denominator of similar width (the numerator is
+// scaled up), a power-of-two denominator, and a short wide-numerator case.
 func BenchmarkLazyRatFloat64(b *testing.B) {
 	rng := rand.New(rand.NewPCG(437, 439))
-	n := lazyRandInt(rng, 200)
-	n.Abs(n).Add(n, big.NewInt(1))
-	d := lazyRandInt(rng, 130)
-	d.Abs(d).Add(d, big.NewInt(3))
-	x := lazyFracOf(new(big.Int).Neg(n), d)
-	b.Run("current", func(b *testing.B) {
-		b.ReportAllocs()
-		for range b.N {
-			_, _, _ = x.Float64()
-		}
-	})
-	b.Run("legacy", func(b *testing.B) {
-		b.ReportAllocs()
-		for range b.N {
-			_, _, _ = legacyLazyFloat64(x)
-		}
-	})
+	odd := func(x *big.Int) *big.Int { return x.SetBit(x, 0, 1) }
+	cases := []struct {
+		name string
+		x    proofarith.LazyRat
+	}{
+		{"num200_den130", lazyFracOf(new(big.Int).Neg(lazyBitsInt(rng, 200)), odd(lazyBitsInt(rng, 130)))},
+		{"num570_den610", lazyFracOf(lazyBitsInt(rng, 570), odd(lazyBitsInt(rng, 610)))},
+		{"num5700_den5730", lazyFracOf(new(big.Int).Neg(lazyBitsInt(rng, 5700)), odd(lazyBitsInt(rng, 5730)))},
+		{"num570_pow2den", lazyFracOf(odd(lazyBitsInt(rng, 570)), new(big.Int).Lsh(big.NewInt(1), 600))},
+	}
+	for _, c := range cases {
+		b.Run(c.name+"/current", func(b *testing.B) {
+			b.ReportAllocs()
+			for range b.N {
+				_, _, _ = c.x.Float64()
+			}
+		})
+		b.Run(c.name+"/legacy", func(b *testing.B) {
+			b.ReportAllocs()
+			for range b.N {
+				_, _, _ = legacyLazyFloat64(c.x)
+			}
+		})
+	}
 }
