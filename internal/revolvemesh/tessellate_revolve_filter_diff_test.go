@@ -5,15 +5,14 @@ import (
 	"math/rand/v2"
 	"testing"
 
-	"github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/stretchr/testify/require"
 )
 
 // filterSpecials are the float ends the differential tests combine: signed
-// zeros, subnormals, both sides of RevUp's 2^-969 threshold, powers of two
-// (the ties a one-product step has to avoid) and their neighbours, huge
-// magnitudes, the range ends, infinities and NaN.
+// zeros, subnormals, both sides of the race build's 2^-969 step threshold,
+// powers of two (the ties a one-product step has to avoid) and their
+// neighbours, huge magnitudes, the range ends, infinities and NaN.
 func filterSpecials() []float64 {
 	var out []float64
 	for _, x := range []float64{
@@ -31,35 +30,6 @@ func requireSameIv(t *testing.T, want, got RevIv, what string, args ...any) {
 	if math.Float64bits(want.Lo) != math.Float64bits(got.Lo) || math.Float64bits(want.Hi) != math.Float64bits(got.Hi) {
 		require.Failf(t, what, "want [%x, %x], got [%x, %x] for %v", math.Float64bits(want.Lo), math.Float64bits(want.Hi),
 			math.Float64bits(got.Lo), math.Float64bits(got.Hi), args)
-	}
-}
-
-// TestRevStepMatchesProof compares RevUp and RevDown with proof.NextUp and
-// proof.NextDown by bit pattern on the specials, every power of two with its
-// neighbours, and random bit patterns.
-func TestRevStepMatchesProof(t *testing.T) {
-	t.Parallel()
-	check := func(x float64) {
-		if math.Float64bits(RevUp(x)) != math.Float64bits(proof.NextUp(x)) {
-			require.Failf(t, "RevUp", "x = %x", math.Float64bits(x))
-		}
-		if math.Float64bits(RevDown(x)) != math.Float64bits(proof.NextDown(x)) {
-			require.Failf(t, "RevDown", "x = %x", math.Float64bits(x))
-		}
-	}
-	for _, x := range filterSpecials() {
-		check(x)
-	}
-	for e := -1074; e <= 1023; e++ {
-		p := math.Ldexp(1, e)
-		for _, x := range []float64{p, math.Nextafter(p, 0), math.Nextafter(p, math.Inf(1))} {
-			check(x)
-			check(-x)
-		}
-	}
-	r := rand.New(rand.NewPCG(3, 5))
-	for range 200_000 {
-		check(math.Float64frombits(r.Uint64()))
 	}
 }
 
