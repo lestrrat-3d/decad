@@ -15,8 +15,8 @@ import "github.com/lestrrat-3d/decad/internal/proof"
 func PlanarDeepVertex(a, b *PlanarSolid, margin proof.Dyadic, poll func() error) (bool, error) {
 	marginSquared := proof.DyMul(margin, margin)
 	pa, pb := preparePlanar(a), preparePlanar(b)
-	// The float boxes turn on the cast's axis pretest and the facet box
-	// pretest (planar_prune.go); neither changes an answer or a poll.
+	// The float boxes turn on the cast's axis pre-test and the facet box
+	// pre-test (planar_prune.go); neither changes an answer or a poll.
 	pa.floatBoxes()
 	pb.floatBoxes()
 	k := &planarKernel{a: pa, b: pb, poll: poll}
