@@ -223,8 +223,14 @@ operation's exact result, and only that set enters the walk:
   recorded coordinate a float, and then its shifted levels lie within the
   other's and Sketch proves its shifted section inside the other's
   (`prismcells.SectionWithin`, the arrangement of
-  `agent-docs/prism-boolean-design.md` §4.1-§4.2); any other leaf lies only in
-  an analytically equal body;
+  `agent-docs/prism-boolean-design.md` §4.1-§4.2). A section whose outer loop
+  is one whole circle exactly equal to the outer loop of a hole-free section
+  lies in it without the arrangement, which cannot hold two coincident
+  circles: the inner section lies in the closed disc, and closed containment
+  is all the miss rule reads, because a body in the closed tool misses every
+  interior the tool's Cut result keeps. A pin seated in the bore its own
+  tool drilled is decided this way. Any other leaf lies only in an
+  analytically equal body;
 - two such prisms, read through the same exact offset, miss each other when
   their levels share no interior or Sketch proves their sections share none (`prismcells.SectionsApart`), so a
   block glued flat on a rail is decided; a leaf against a Boolean result is
