@@ -817,13 +817,13 @@ func RevolveRejectionAxis(d, u RevolveOffset, delta float64) RevolveSepAxis {
 //
 // The mirror, with the roles swapped, is the caller's second call.
 func RevolveVertexIsolated(a RevolveAuditTri, triA [3]int, b RevolveAuditTri, triB [3]int, shared int, delta float64) bool {
-	return revolveVertexIsolated(a, triA, b, triB, shared, delta, nil, 0)
+	return revolveVertexIsolated(&a, triA, &b, triB, shared, delta, nil, 0)
 }
 
 // revolveVertexIsolated is RevolveVertexIsolated reading a's candidate axes
 // from cache entry ia when cache is non-nil. Every cached axis is the value
 // the uncached path builds from a, the shared corner and delta alone.
-func revolveVertexIsolated(a RevolveAuditTri, triA [3]int, b RevolveAuditTri, triB [3]int, shared int, delta float64,
+func revolveVertexIsolated(a *RevolveAuditTri, triA [3]int, b *RevolveAuditTri, triB [3]int, shared int, delta float64,
 	cache *revolveAxisCache, ia int) bool {
 	e := proofbound.ProductUpper(2, delta)
 	ai := TriangleVertexSlot(triA, shared)
@@ -831,8 +831,8 @@ func revolveVertexIsolated(a RevolveAuditTri, triA [3]int, b RevolveAuditTri, tr
 	if ai < 0 || bi < 0 {
 		return false
 	}
-	aOff := RevolveCornerOffsets(a, ai)
-	bOff := RevolveCornerOffsets(b, bi)
+	aOff := a.Off[ai]
+	bOff := b.Off[bi]
 
 	// signed reads the common sign of the listed offsets, or reports that this
 	// candidate cannot sign them all.
@@ -866,7 +866,7 @@ func revolveVertexIsolated(a RevolveAuditTri, triA [3]int, b RevolveAuditTri, tr
 		if cache != nil {
 			return cache.normalAxis(ia, a, delta)
 		}
-		return RevolveNormalAxis(a, delta)
+		return RevolveNormalAxis(*a, delta)
 	}
 	if try(normal(), nil) {
 		return true
@@ -880,7 +880,7 @@ func revolveVertexIsolated(a RevolveAuditTri, triA [3]int, b RevolveAuditTri, tr
 		if corner != nil {
 			ax = corner.fan[k]
 		} else {
-			ax = RevolveEdgeFanAxis(a, aOff[k], delta)
+			ax = RevolveEdgeFanAxis(*a, aOff[k], delta)
 		}
 		if try(ax, []RevolveOffset{aOff[1-k]}) {
 			return true
@@ -891,7 +891,7 @@ func revolveVertexIsolated(a RevolveAuditTri, triA [3]int, b RevolveAuditTri, tr
 		chordAxis = corner.chord
 	} else {
 		chord := RevolveOffsetOf(proofarith.DvSub(aOff[0].V, aOff[1].V), RevIvSubVec(aOff[0].F, aOff[1].F))
-		chordAxis = RevolveEdgeFanAxis(a, chord, delta)
+		chordAxis = RevolveEdgeFanAxis(*a, chord, delta)
 	}
 	if try(chordAxis, aOff[:]) {
 		return true
