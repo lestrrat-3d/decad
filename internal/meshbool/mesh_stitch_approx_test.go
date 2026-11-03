@@ -69,15 +69,15 @@ func conformFlipNew(t *testing.T, m *approxMesh) (int, error) {
 	return flipNeedlesHeld(t.Context(), m.verts, approx, m.tris, m.src, m.bounds)
 }
 
-func requireSameMesh(t *testing.T, want, got approxMesh) {
+func requireSameMesh(t *testing.T, seed uint64, want, got approxMesh) {
 	t.Helper()
-	require.Equal(t, want.tris, got.tris)
-	require.Equal(t, want.src, got.src)
-	require.Equal(t, want.bounds, got.bounds)
-	require.Equal(t, want.xbeta, got.xbeta)
-	require.Len(t, got.verts, len(want.verts))
+	require.Equal(t, want.tris, got.tris, "seed %d", seed)
+	require.Equal(t, want.src, got.src, "seed %d", seed)
+	require.Equal(t, want.bounds, got.bounds, "seed %d", seed)
+	require.Equal(t, want.xbeta, got.xbeta, "seed %d", seed)
+	require.Len(t, got.verts, len(want.verts), "seed %d", seed)
 	for i := range want.verts {
-		require.Equal(t, want.verts[i].Key(), got.verts[i].Key(), "vertex %d", i)
+		require.Equal(t, want.verts[i].Key(), got.verts[i].Key(), "seed %d vertex %d", seed, i)
 	}
 }
 
@@ -129,7 +129,7 @@ func TestConformFlipSharedApproxMatchesPerCallRounding(t *testing.T) {
 		// A soup the exact re-triangulation cannot split fails the same way.
 		require.Equal(t, wantErr, gotErr, "seed %d", seed)
 		require.Equal(t, wantFlips, gotFlips, "seed %d", seed)
-		requireSameMesh(t, want, got)
+		requireSameMesh(t, seed, want, got)
 		if wantErr != nil {
 			continue
 		}
@@ -195,6 +195,6 @@ func TestConformOnceNilApproxMatchesExplicit(t *testing.T) {
 		gotSplit, gotErr := conformOnceApprox(t.Context(), got.verts, approx, &got.tris, &got.src, &got.bounds, got.xbeta)
 		require.Equal(t, wantErr, gotErr, "seed %d", seed)
 		require.Equal(t, wantSplit, gotSplit, "seed %d", seed)
-		requireSameMesh(t, want, got)
+		requireSameMesh(t, seed, want, got)
 	}
 }
