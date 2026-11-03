@@ -57,6 +57,13 @@ func unionParts(history boolchain.Source, body *topo.Body, depth int) []*topo.Bo
 // cutCircleMeridianApart is cutToolMeridianApart for one circle prism tool.
 func cutCircleMeridianApart(ctx context.Context, budget *proofbound.WorkBudget, history boolchain.Source,
 	target, tool, b *topo.Body) (bool, error) {
+	return cutCircleMeridianApartRegions(ctx, budget, history, target, tool, meridiansOf(b))
+}
+
+// cutCircleMeridianApartRegions is cutCircleMeridianApart for a body known to
+// lie in the revolution of any one of bms, each compared in turn.
+func cutCircleMeridianApartRegions(ctx context.Context, budget *proofbound.WorkBudget, history boolchain.Source,
+	target, tool *topo.Body, bms []meridian) (bool, error) {
 	pt, ok := tool.Payload.(prismrecord.Payload)
 	if !ok || len(pt.Profile.Holes) != 0 {
 		return false, nil
@@ -103,7 +110,7 @@ func cutCircleMeridianApart(ctx context.Context, budget *proofbound.WorkBudget, 
 	}
 	cut := tm
 	cut.region = region
-	for _, mb := range meridiansOf(b) {
+	for _, mb := range bms {
 		if err := ctx.Err(); err != nil {
 			return false, err
 		}

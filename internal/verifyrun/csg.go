@@ -112,6 +112,9 @@ func (w historyWalk) misses(a, b *topo.Body, depth int) (bool, error) {
 		if apart, err := axialApart(w.ctx, w.budget, w.history, a, b); err != nil || apart {
 			return apart, err
 		}
+		if apart, err := revolvePiecesApart(w.ctx, w.budget, w.history, a, b); err != nil || apart {
+			return apart, err
+		}
 		return w.misses(inputs[0], b, depth+1)
 	case meshbool.OpIntersect:
 		for _, part := range inputs {
