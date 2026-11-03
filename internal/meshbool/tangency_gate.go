@@ -209,14 +209,36 @@ func localSlackFromContacts(bmA, bmB *BoolMesh, nc NearContacts, slack float64) 
 	if len(nc.CloseA) == 0 || len(nc.CloseB) == 0 {
 		return slack
 	}
-	worst := func(m *BoolMesh, facets []int) float64 {
+	// A facet's region near the other side's close facets is inside its own
+	// box and within slack of their joint box. Where that region is clear of
+	// the facet's chords, its true piece there is within its planar bound.
+	near := func(m *BoolMesh, facets []int) [2]r3.Vec {
+		lo, hi := m.Boxes[facets[0]][0], m.Boxes[facets[0]][1]
+		for _, f := range facets[1:] {
+			b := m.Boxes[f]
+			lo = r3.Vec{X: math.Min(lo.X, b[0].X), Y: math.Min(lo.Y, b[0].Y), Z: math.Min(lo.Z, b[0].Z)}
+			hi = r3.Vec{X: math.Max(hi.X, b[1].X), Y: math.Max(hi.Y, b[1].Y), Z: math.Max(hi.Z, b[1].Z)}
+		}
+		pad := proofbound.AbsSumUpper(slack, proofbound.ProductUpper(slack, 1e-9))
+		return [2]r3.Vec{{X: lo.X - pad, Y: lo.Y - pad, Z: lo.Z - pad}, {X: hi.X + pad, Y: hi.Y + pad, Z: hi.Z + pad}}
+	}
+	worst := func(m *BoolMesh, facets []int, other [2]r3.Vec) float64 {
 		w := 0.0
 		for _, f := range facets {
-			w = max(w, m.FacetBound[f])
+			b := m.FacetBound[f]
+			if m.PlanarOwn != nil && m.PlanarOwn[f] < b {
+				box := m.Boxes[f]
+				lo := r3.Vec{X: math.Max(box[0].X, other[0].X), Y: math.Max(box[0].Y, other[0].Y), Z: math.Max(box[0].Z, other[0].Z)}
+				hi := r3.Vec{X: math.Min(box[1].X, other[1].X), Y: math.Min(box[1].Y, other[1].Y), Z: math.Min(box[1].Z, other[1].Z)}
+				if ChordClear(lo, hi, m.PlanarChords[f], m.PlanarReach[f]) {
+					b = m.PlanarOwn[f]
+				}
+			}
+			w = max(w, b)
 		}
 		return w
 	}
-	return proofbound.AbsSumUpper(worst(bmA, nc.CloseA), worst(bmB, nc.CloseB))
+	return proofbound.AbsSumUpper(worst(bmA, nc.CloseA, near(bmB, nc.CloseB)), worst(bmB, nc.CloseB, near(bmA, nc.CloseA)))
 }
 
 // firstFacet is the first of facets, or zero when there is none.
@@ -336,4 +358,21 @@ func refuseFacetContact(ctx context.Context, bmA, bmB *BoolMesh, a, b []int,
 		}
 	}
 	return nil
+}
+
+// ChordClear reports whether the box [lo, hi] lies farther than reach, on
+// some axis, from every chord's box. An empty box is clear.
+func ChordClear(lo, hi r3.Vec, chords [][2]r3.Vec, reach float64) bool {
+	if lo.X > hi.X || lo.Y > hi.Y || lo.Z > hi.Z {
+		return true
+	}
+	for _, c := range chords {
+		clo := r3.Vec{X: math.Min(c[0].X, c[1].X), Y: math.Min(c[0].Y, c[1].Y), Z: math.Min(c[0].Z, c[1].Z)}
+		chi := r3.Vec{X: math.Max(c[0].X, c[1].X), Y: math.Max(c[0].Y, c[1].Y), Z: math.Max(c[0].Z, c[1].Z)}
+		if !(clo.X-hi.X > reach || lo.X-chi.X > reach || clo.Y-hi.Y > reach || lo.Y-chi.Y > reach ||
+			clo.Z-hi.Z > reach || lo.Z-chi.Z > reach) {
+			return false
+		}
+	}
+	return true
 }
