@@ -185,7 +185,36 @@ func LinearWeightPrimitive(alpha, beta, t *big.Rat, weight int) *big.Rat {
 
 // IvTwoTriangleArea encloses twice the area of a triangle whose corners are
 // themselves enclosed — the |A × B| the held facet's own Jacobian is.
+//
+// Corners that are all point intervals, as held float64 vertices are, give a
+// point |A × B|² whose two interval endpoints are the same rational, so that
+// value is formed once and handed to the same square-root enclosure.
 func IvTwoTriangleArea(p0, p1, p2 proofbound.IvVec3) (proofbound.RatInterval, bool) {
+	if ivVec3IsPoint(p0) && ivVec3IsPoint(p1) && ivVec3IsPoint(p2) {
+		var a, b [3]*big.Rat
+		for k := range a {
+			a[k] = proofarith.SubRat(new(big.Rat), p1[k].Lo, p0[k].Lo)
+			b[k] = proofarith.SubRat(new(big.Rat), p2[k].Lo, p0[k].Lo)
+		}
+		normSq := new(big.Rat)
+		for k := range a {
+			i, j := (k+1)%3, (k+2)%3
+			c := proofarith.MulRat(new(big.Rat), a[i], b[j])
+			proofarith.SubRat(c, c, proofarith.MulRat(new(big.Rat), a[j], b[i]))
+			proofarith.AddRat(normSq, normSq, proofarith.MulRat(c, c, c))
+		}
+		return proofbound.IntervalSqrt(proofbound.RatInterval{Lo: normSq, Hi: normSq})
+	}
 	n := proofbound.IvVec3Cross(proofbound.IvVec3Sub(p1, p0), proofbound.IvVec3Sub(p2, p0))
 	return proofbound.IntervalSqrt(proofbound.IvVec3NormSq(n))
+}
+
+// ivVec3IsPoint reports whether every coordinate of v is a point interval.
+func ivVec3IsPoint(v proofbound.IvVec3) bool {
+	for _, c := range v {
+		if c.Lo != c.Hi && proofarith.CmpRat(c.Lo, c.Hi) != 0 {
+			return false
+		}
+	}
+	return true
 }
