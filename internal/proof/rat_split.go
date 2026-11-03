@@ -126,14 +126,16 @@ func QuoRat(z, a, b *big.Rat) *big.Rat {
 // compare their numerators. Two power-of-two denominators 2^i and 2^j with
 // i == j compare their numerators without a shift. With i != j both
 // numerators sit over 2^max(i, j) in effect, so their bit lengths there are
-// BitLen(an)+max(i, j)-i and BitLen(bn)+max(i, j)-j. Equal signs and unequal
-// bit lengths decide the order without forming a shifted numerator: the
-// larger magnitude is the one with more bits. Equal bit lengths shift the
-// numerator with the smaller exponent left by |i-j| and compare those. Any
-// other pair compares the two cross products a.Num·b.Denom and b.Num·a.Denom, whose sign equals the sign
-// of the difference because both denominators are positive. The integers the
-// shifts and products need are stack-declared big.Int values, and no branch
-// reaches math/big's pooled scratch stack below the Karatsuba size.
+// BitLen(an)+max(i, j)-i and BitLen(bn)+max(i, j)-j. Unequal bit lengths
+// decide the order without forming a shifted numerator: the operand with more
+// bits has the larger magnitude, so it is the larger of two positive operands
+// and the smaller of two negative ones. Equal bit lengths shift the numerator
+// with the smaller exponent left by |i-j| and compare those. Any other pair
+// compares the two cross products a.Num·b.Denom and b.Num·a.Denom, whose sign
+// equals the sign of the difference because both denominators are positive.
+// The integers the shifts and products need are stack-declared big.Int
+// values, and no branch reaches math/big's pooled scratch stack below the
+// Karatsuba size.
 func CmpRat(a, b *big.Rat) int {
 	sa, sb := a.Sign(), b.Sign()
 	if sa != sb {
