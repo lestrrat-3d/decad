@@ -36,30 +36,44 @@ type pairSweepRun struct {
 }
 
 func (r *pairSweepRun) sample(ctx context.Context, f *big.Rat) (*sweepSample, error) {
+	return samplePair(ctx, f, r.report, r.req, r.hooks, r.pa.Duration,
+		r.pa.PoseAt, r.pb.PoseAt, r.idealContact, r.transferManifold)
+}
+
+type sweepPoseAt func(*big.Rat) (r3.Transform, error)
+
+type sweepIdealAt func(*big.Rat, vocab.SweepInstant) sweepEvent
+
+type sweepManifoldTransfer func(*big.Rat, r3.Transform, r3.Transform, *contactReport, *sweepEvent)
+
+func samplePair(ctx context.Context, f *big.Rat, report *sweepReport, req vocab.SweepRequest,
+	hooks Hooks, duration *big.Rat, poseAAt, poseBAt sweepPoseAt, idealAt sweepIdealAt,
+	transfer sweepManifoldTransfer,
+) (*sweepSample, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	if r.report.PoseEvaluations >= r.req.MaxPoseEvaluations {
+	if report.PoseEvaluations >= req.MaxPoseEvaluations {
 		return nil, errSweepPoseBudget
 	}
-	poseA, err := r.pa.PoseAt(f)
+	poseA, err := poseAAt(f)
 	if err != nil {
 		return nil, err
 	}
-	poseB, err := r.pb.PoseAt(f)
+	poseB, err := poseBAt(f)
 	if err != nil {
 		return nil, err
 	}
-	contact, err := r.hooks.Contact(ctx, poseA, poseB, r.req.ContactRequest)
+	contact, err := hooks.Contact(ctx, poseA, poseB, req.ContactRequest)
 	if err != nil {
 		return nil, err
 	}
-	at := sweeppath.Instant(f, r.pa.Duration)
-	event := r.idealContact(f, at)
-	r.transferManifold(f, poseA, poseB, contact, &event)
+	at := sweeppath.Instant(f, duration)
+	event := idealAt(f, at)
+	transfer(f, poseA, poseB, contact, &event)
 	sample := sampleWith(sweepSample{At: at, PoseA: poseA, PoseB: poseB, FloatContact: contact, Ideal: event}, new(big.Rat).Set(f))
-	r.report.Samples = append(r.report.Samples, sample)
-	r.report.PoseEvaluations++
+	report.Samples = append(report.Samples, sample)
+	report.PoseEvaluations++
 	return &sample, nil
 }
 

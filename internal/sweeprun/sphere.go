@@ -115,31 +115,8 @@ func (r *sourceSphereSweepRun) idealAt(f *big.Rat, at vocab.SweepInstant) sweepE
 }
 
 func (r *sourceSphereSweepRun) sample(ctx context.Context, f *big.Rat) (*sweepSample, error) {
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-	if r.report.PoseEvaluations >= r.req.MaxPoseEvaluations {
-		return nil, errSweepPoseBudget
-	}
-	poseA, err := r.pa.SpherePoseAt(f)
-	if err != nil {
-		return nil, err
-	}
-	poseB, err := r.pb.SpherePoseAt(f)
-	if err != nil {
-		return nil, err
-	}
-	contact, err := r.hooks.Contact(ctx, poseA, poseB, r.req.ContactRequest)
-	if err != nil {
-		return nil, err
-	}
-	at := sweeppath.Instant(f, r.pa.Duration)
-	ideal := r.idealAt(f, at)
-	r.transferManifold(f, poseA, poseB, contact, &ideal)
-	sample := sampleWith(sweepSample{At: at, PoseA: poseA, PoseB: poseB, FloatContact: contact, Ideal: ideal}, new(big.Rat).Set(f))
-	r.report.Samples = append(r.report.Samples, sample)
-	r.report.PoseEvaluations++
-	return &sample, nil
+	return samplePair(ctx, f, r.report, r.req, r.hooks, r.pa.Duration,
+		r.pa.SpherePoseAt, r.pb.SpherePoseAt, r.idealAt, r.transferManifold)
 }
 
 // transferManifold uses the real posed contact witness. The source ball and
