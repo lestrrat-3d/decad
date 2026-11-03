@@ -5,6 +5,7 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/massmoment"
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/r3"
@@ -291,15 +292,22 @@ func imageGap(linear [3][3]*big.Rat, w, moved r3.Vec) float64 {
 // pointGap bounds the distance of the float image moved from the exact image
 // B·p + t of the point p, with B, t and p read as rationals.
 func pointGap(linear [3][3]*big.Rat, translation [3]*big.Rat, p, moved r3.Vec) float64 {
-	coords := [3]float64{p.X, p.Y, p.Z}
+	coords := ratVecOf(p)
 	got := [3]float64{moved.X, moved.Y, moved.Z}
 	gap := 0.0
+	var term big.Rat
 	for i := range got {
-		exact := new(big.Rat).Set(translation[i])
-		for j := range coords {
-			exact.Add(exact, pointPlaneMul(linear[i][j], ratOfPointPlane(coords[j])))
-		}
-		gap = max(gap, proofbound.RatAbsDiff(exact, got[i]))
+		gap = max(gap, proofbound.RatAbsDiff(imageCoord(linear[i], translation[i], coords, &term), got[i]))
 	}
 	return proofbound.Radius3D(gap)
+}
+
+// imageCoord is the exact value of row·coords + t, in lowest terms. term is
+// caller scratch for one product and holds no result afterwards.
+func imageCoord(row [3]*big.Rat, t *big.Rat, coords [3]*big.Rat, term *big.Rat) *big.Rat {
+	exact := new(big.Rat).Set(t)
+	for j := range coords {
+		proofarith.AddRat(exact, exact, proofarith.MulRat(term, row[j], coords[j]))
+	}
+	return exact
 }
