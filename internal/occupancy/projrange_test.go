@@ -9,8 +9,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// mathProjRange is the fold projRange replaced: math.Min and math.Max from
-// +Inf and -Inf.
+// mathProjRange is the reference fold projRange must match bit for bit:
+// math.Min and math.Max from +Inf and -Inf.
 func mathProjRange(a r3.Vec, vs []r3.Vec) (float64, float64) {
 	lo, hi := math.Inf(1), math.Inf(-1)
 	for _, v := range vs {
@@ -54,4 +54,46 @@ func TestProjRangeMatchesMathFold(t *testing.T) {
 		}
 	}
 	require.Zero(t, mismatches)
+}
+
+// TestProjRangeSpecialValuesExhaustive checks projRange against the math.Min
+// and math.Max fold bit for bit on every sequence of up to five projections
+// drawn from NaN, both infinities, both zeros, both units, both smallest
+// subnormals and both largest finite values. The axis (1, 0, 0) and vertices
+// (d, -0, -0) make each projection exactly d, signed zeros included.
+func TestProjRangeSpecialValuesExhaustive(t *testing.T) {
+	values := []float64{
+		math.NaN(), math.Inf(1), math.Inf(-1), 0, math.Copysign(0, -1), 1, -1,
+		5e-324, -5e-324, math.MaxFloat64, -math.MaxFloat64,
+	}
+	negZero := math.Copysign(0, -1)
+	a := r3.Vec{X: 1}
+	mismatches, unexact, cases := 0, 0, 0
+	idx := make([]int, 0, 5)
+	vs := make([]r3.Vec, 0, 5)
+	var walk func()
+	walk = func() {
+		cases++
+		olo, ohi := mathProjRange(a, vs)
+		nlo, nhi := projRange(a, vs)
+		if math.Float64bits(olo) != math.Float64bits(nlo) || math.Float64bits(ohi) != math.Float64bits(nhi) {
+			mismatches++
+		}
+		if len(idx) == cap(idx) {
+			return
+		}
+		for i, d := range values {
+			v := r3.Vec{X: d, Y: negZero, Z: negZero}
+			if math.Float64bits(a.Dot(v)) != math.Float64bits(d) {
+				unexact++
+			}
+			idx, vs = append(idx, i), append(vs, v)
+			walk()
+			idx, vs = idx[:len(idx)-1], vs[:len(vs)-1]
+		}
+	}
+	walk()
+	require.Zero(t, unexact, "a projection differs from its value")
+	require.Zero(t, mismatches)
+	require.Equal(t, 177156, cases, "1 + 11 + ... + 11^5 sequences")
 }
