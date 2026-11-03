@@ -290,9 +290,9 @@ the proximity gate reads the refined face bounds. The variants' first failures a
 | Variant | First failure |
 |---|---|
 | small-seven | `head-leg` Cut: the proximity gate cannot decide held facets within the chord tolerance |
-| large-nine | `yarn-leader` Union: every parity ray is ambiguous |
+| large-nine | `yarn-leader` Union: every parity ray is ambiguous (the oblique parity rays now decide it) |
 | twelve | `treadle-heel-rail` Cut: the same proximity refusal |
-| small-seventeen | `brake-spring-left` Union: the revolve facet contact audit hits its work ceiling |
+| small-seventeen | `brake-spring-left` Union: the revolve facet contact audit hits its work ceiling, and every coarser rung's parity rays are ambiguous (the oblique parity rays now decide them) |
 
 In small-seven the leg's planar end face carries a 0.0137 mm face bound, the chord of its heel hole, against a rail
 face that crosses it far from the hole. Every facet of a face carries the face's whole bound, so the gate reads the
