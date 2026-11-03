@@ -246,7 +246,12 @@ operation's exact result, and only that set enters the walk:
   circles: the inner section lies in the closed disc, and closed containment
   is all the miss rule reads, because a body in the closed tool misses every
   interior the tool's Cut result keeps. A pin seated in the bore its own
-  tool drilled is decided this way. Any other leaf lies only in an
+  tool drilled is decided this way. A prism that is one axis-aligned
+  rectangle of whole lines lies in another such prism, on frames whose axes are
+  the other's signed and permuted, compared before one placement both carry bit
+  for bit or in the world when both lifts are exactly orthonormal, when its box
+  lies in the other's box, exactly. A plate swept along one axis seats in the
+  recess a box swept along another milled. Any other leaf lies only in an
   analytically equal body;
 - two such prisms, read through the same exact offset, miss each other when
   their levels share no interior or Sketch proves their sections share none (`prismcells.SectionsApart`), so a
@@ -423,6 +428,15 @@ apart from the chain, a slab by either of:
   target reaches along the axis, which is the Cut-tool meridian with the slab as
   the Revolve's region: the Cut result misses its tool's solid. A shank in the
   hole its own tool bored is decided this way;
+- the same tool holds every point of the cylinder that lies in the target, read
+  per exact prism part of the target (a Union's operands, whatever displacement
+  the Union's own record holds). The tool's axis is the slab's exactly, its radius
+  at least the slab's, and each part contributes the range of the slab's axial
+  coordinate over its section's box inside the slab's strip across the axis, the
+  part's box taken from its lines' ends and its circles' and arcs' boxes. The
+  tool's levels must hold the union of those ranges. A plate across a shank is
+  held by a hole that runs past it though a knuckle beside the plate stands
+  higher than the hole;
 - the cylinder's footprint on the target's section plane has no interior in
   common with the target's section. The axis must lie in that plane along one of
   its axes, the target sweep across it, and both lifts be exactly orthonormal,
@@ -430,7 +444,7 @@ apart from the chain, a slab by either of:
   world. The footprint is the rectangle the cylinder projects to along the sweep,
   its edges rounded outward to floats; a point of both interiors would project
   into both sections' interiors, which Sketch has ruled out
-  (`prismcells.SectionsApart`). A head flush on a bracket's face, though its
+  (`prismcells.SectionsApart`), for every exact prism part of the target. A head flush on a bracket's face, though its
   revolution reaches a knuckle beside it, is decided this way, as is a cylinder
   whose reach along the sweep misses the target's levels.
 

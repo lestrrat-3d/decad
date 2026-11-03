@@ -112,3 +112,153 @@ func TestVerifyPieceSeparator(t *testing.T) {
 		})
 	}
 }
+
+// pieceLeaf is a hinge-leaf-like target: a plate x in [-10, 6], y in [0, 3] and a
+// knuckle disc of radius 5 about (10, 3), both swept 15 mm along z about z = 0
+// and joined, less a vertical hole of radius 1.6 about the y axis from y = -5 up
+// to holeTop. The knuckle stands higher than the hole's top, but clear of the
+// screw, so only the plate lies where the hole is.
+func pieceLeaf(t *testing.T, doc *decad.Document, holeTop float64) *decad.Body {
+	t.Helper()
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	s.CreateRectangle(-10, 0, 6, 3)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	plate, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Symmetric{D: units.Millimeters(7.5)})
+	require.NoError(t, err)
+	w2 := sketch.NewWorld()
+	s2, err := w2.CreateSketch(w2.XY())
+	require.NoError(t, err)
+	c := s2.CreatePoint(10, 3)
+	s2.Fix(c)
+	s2.CreateCircle(c, 5)
+	_, err = s2.Solve(t.Context())
+	require.NoError(t, err)
+	knuckle, err := decad.Extrude(t.Context(), doc, s2, s2.Profiles()[0], decad.Symmetric{D: units.Millimeters(7.5)})
+	require.NoError(t, err)
+	both, err := decad.Union(t.Context(), plate, knuckle)
+	require.NoError(t, err)
+	w3 := sketch.NewWorld()
+	// The XZ plane's normal is -y: the tool hangs below the plane at y = holeTop.
+	plane, err := w3.CreateOffsetPlane(w3.XZ(), -holeTop)
+	require.NoError(t, err)
+	s3, err := w3.CreateSketch(plane)
+	require.NoError(t, err)
+	hc := s3.CreatePoint(0, 0)
+	s3.Fix(hc)
+	s3.CreateCircle(hc, 1.6)
+	_, err = s3.Solve(t.Context())
+	require.NoError(t, err)
+	tool, err := decad.Extrude(t.Context(), doc, s3, s3.Profiles()[0],
+		decad.Distance{D: units.Millimeters(holeTop + 5), Dir: decad.Along})
+	require.NoError(t, err)
+	out, err := decad.Cut(t.Context(), both, tool)
+	require.NoError(t, err)
+	return out
+}
+
+// TestVerifyPieceSeparatorStripReach holds the separator to the target's reach
+// inside the slab's strip. The leaf's knuckle stands above the hole's top, so the
+// target's whole reach along the screw's axis leaves the hole's levels, but the
+// plate is all that lies across the shank: a hole that runs past the plate is
+// decided, and one that stops 0.5 mm inside it is not.
+//
+// Leg shown to fail: reading the target's whole axial reach instead of its
+// reach within the strip leaves the first case with a pair diagnostic.
+func TestVerifyPieceSeparatorStripReach(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name      string
+		holeTop   float64
+		separated bool
+	}{
+		{"hole runs past the plate", 3.4, true},
+		{"hole stops inside the plate", 2.5, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			doc := decad.New()
+			leaf := pieceLeaf(t, doc, tc.holeTop)
+			screw := pieceScrew(t, doc, 3, 1.5)
+			report, err := doc.Verify(t.Context())
+			require.NoError(t, err)
+			interferences, diagnostics := pairFindings(report, leaf, screw)
+			if tc.separated {
+				require.Zero(t, interferences)
+				require.Zero(t, diagnostics, "the strip reach decides the pair")
+				return
+			}
+			require.Positive(t, interferences+diagnostics, "an overlapping pair is never called separated")
+		})
+	}
+}
+
+// TestVerifyBoxInRecess seats a plate, swept along y, flush in a recess its bar's
+// tool milled, a box swept along z: the plate's five faces lie in the recess's.
+// The plate lies in the tool's closed solid whichever way each is swept, so the
+// bar's Cut result misses it. A plate 0.5 mm wider than the recess overlaps the
+// bar and is not decided.
+//
+// Leg shown to fail: containing only boxes on one frame leaves the flush plate
+// with a pair diagnostic.
+func TestVerifyBoxInRecess(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name      string
+		x0        float64
+		separated bool
+	}{
+		{"plate flush in the recess", 5, true},
+		{"plate 0.5 mm too wide", 4.5, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			doc := decad.New()
+			w := sketch.NewWorld()
+			s, err := w.CreateSketch(w.XY())
+			require.NoError(t, err)
+			s.CreateRectangle(0, 0, 40, 20)
+			_, err = s.Solve(t.Context())
+			require.NoError(t, err)
+			bar, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+			require.NoError(t, err)
+
+			w2 := sketch.NewWorld()
+			up, err := w2.CreateOffsetPlane(w2.XY(), 5)
+			require.NoError(t, err)
+			s2, err := w2.CreateSketch(up)
+			require.NoError(t, err)
+			s2.CreateRectangle(5, 5, 25, 15)
+			_, err = s2.Solve(t.Context())
+			require.NoError(t, err)
+			recess, err := decad.Extrude(t.Context(), doc, s2, s2.Profiles()[0], decad.Distance{D: units.Millimeters(6), Dir: decad.Along})
+			require.NoError(t, err)
+			bar, err = decad.Cut(t.Context(), bar, recess)
+			require.NoError(t, err)
+
+			w3 := sketch.NewWorld()
+			// The XZ plane's normal is -y: the plate hangs 10 mm below the plane at y = 15.
+			side, err := w3.CreateOffsetPlane(w3.XZ(), -15)
+			require.NoError(t, err)
+			s3, err := w3.CreateSketch(side)
+			require.NoError(t, err)
+			s3.CreateRectangle(tc.x0, 5, 25, 8)
+			_, err = s3.Solve(t.Context())
+			require.NoError(t, err)
+			plate, err := decad.Extrude(t.Context(), doc, s3, s3.Profiles()[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+			require.NoError(t, err)
+
+			report, err := doc.Verify(t.Context())
+			require.NoError(t, err)
+			interferences, diagnostics := pairFindings(report, bar, plate)
+			if tc.separated {
+				require.Zero(t, interferences)
+				require.Zero(t, diagnostics, "the plate lies in the recess's tool")
+				return
+			}
+			require.Positive(t, interferences+diagnostics, "an overlapping pair is never called separated")
+		})
+	}
+}
