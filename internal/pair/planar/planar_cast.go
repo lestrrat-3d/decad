@@ -45,7 +45,8 @@ func (k *planarKernel) cast(p proof.DyV3, solid *planarPrep) (castResult, error)
 // castAlong is one ray of cast, ambiguous when the ray meets a facet's
 // boundary. When boxed, pb is p's outward float box and solid carries its
 // float boxes: an axis ray then skips a triangle the float pre-test proves it
-// passes beside (planar_prune.go).
+// passes beside (planar_prune.go). An axis ray also skips a facet whose exact
+// plane is parallel to the ray and does not contain p.
 func (k *planarKernel) castAlong(p proof.DyV3, pb floatBox, boxed bool, dir [3]int64, solid *planarPrep) (castResult, error) {
 	d := proof.DyV3{proof.DyInt(dir[0]), proof.DyInt(dir[1]), proof.DyInt(dir[2])}
 	axis := rayAxis(dir)
@@ -57,6 +58,15 @@ func (k *planarKernel) castAlong(p proof.DyV3, pb floatBox, boxed bool, dir [3]i
 		if boxed && axis >= 0 && solid.normal[t][axis].Sign() != 0 && floatApartOff(pb, solid.triBox[t], axis) {
 			continue
 		}
+		ahead := 0
+		aheadReady := false
+		if axis >= 0 && solid.normal[t][axis].Sign() == 0 {
+			ahead = proof.DvDot(solid.normal[t], proof.DvSub(solid.s.Verts[tri[0]], p)).Sign()
+			aheadReady = true
+			if ahead != 0 {
+				continue
+			}
+		}
 		var signs [3]int
 		for i := range 3 {
 			u, w := solid.s.Verts[tri[i]], solid.s.Verts[tri[(i+1)%3]]
@@ -67,7 +77,9 @@ func (k *planarKernel) castAlong(p proof.DyV3, pb floatBox, boxed bool, dir [3]i
 		}
 		normal := solid.normal[t]
 		along := proof.DvDot(normal, d).Sign()
-		ahead := proof.DvDot(normal, proof.DvSub(solid.s.Verts[tri[0]], p)).Sign()
+		if !aheadReady {
+			ahead = proof.DvDot(normal, proof.DvSub(solid.s.Verts[tri[0]], p)).Sign()
+		}
 		if along == 0 {
 			if ahead != 0 {
 				continue
