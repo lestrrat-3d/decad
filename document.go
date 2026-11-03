@@ -53,6 +53,9 @@ type Document struct {
 	consumers        map[*Body][]*Operation
 	circleBuilds     map[*Body]*prismrecord.CircleBuildWitness
 	circlePlacements map[*Body]*circlePlacementWitness
+	// identityPlacements names the Transform results whose motion was exactly
+	// the identity, so each denotes its source's own set (SameSetProducer).
+	identityPlacements map[*Body]struct{}
 }
 
 // DocumentOption configures New. WithGapTolerance, ExactOnly,
@@ -492,9 +495,22 @@ func transform(ctx context.Context, body *Body, t r3.Transform, kind OperationKi
 			}
 			d.circlePlacements[placed] = &circlePlacementWitness{source: body, placed: placed, motion: t, composed: composed}
 		}
+		if exactIdentity(t) {
+			if d.identityPlacements == nil {
+				d.identityPlacements = make(map[*Body]struct{})
+			}
+			d.identityPlacements[placed] = struct{}{}
+		}
 		d.n.LiveMu.Unlock()
 	}
 	return placed, nil
+}
+
+// exactIdentity reports whether t is exactly the identity motion: unit axes
+// and a zero translation, bit for bit up to the sign of zero.
+func exactIdentity(t r3.Transform) bool {
+	b := t.Basis()
+	return b.EX == (r3.Vec{X: 1}) && b.EY == (r3.Vec{Y: 1}) && b.EZ == (r3.Vec{Z: 1}) && t.Translation() == (r3.Vec{})
 }
 
 // CopyOption configures Copy. Only WithCopyPlacement and WithCopyRotation
