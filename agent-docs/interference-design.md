@@ -170,6 +170,26 @@ answer, a cup is never tessellated for verification
 (`agent-docs/payload-verification-design.md` §1), and a loft, a composite sweep
 and a cap-loop chamfer keep their own designs' staging.
 
+**The coaxial separator** (`internal/verifyrun/coaxial.go`) answers a pair both
+arms leave `boundaryaudit.PairUndecided` when one circular cylinder separates
+the interiors: one body lies in the closed solid cylinder of axis `L` and
+radius `r`, the other misses its open interior. The interiors are then
+disjoint whatever the boundaries share, so a shaft pressed into a bore of its
+own radius, whose coincident faces no held mesh can decide, is proven
+non-overlapping. Each side is read from records alone, in exact rationals:
+
+- a prism whose frame and placement basis are exactly orthonormal and whose
+  section is held exactly lies inside the cylinder over its outer loop when
+  that loop is one whole circle, and outside the cylinder over any hole that
+  is one whole circle;
+- a mesh Boolean result whose history denotes its operation exactly
+  (`boolchain.Expandable`) inherits it: a Cut lies where its target lies, an
+  Intersect where either operand lies, a Union where both lie.
+
+Two cylinders match only with equal radii and the same axis line, exactly.
+The certificate proves no gap, so under `WithClearances()` the pair keeps an
+unmeasured-clearance diagnostic, as a Cut result against its own tool does.
+
 ### 3.3 Full containment
 
 A strict full-containment certificate proves both the relation and the overlap
