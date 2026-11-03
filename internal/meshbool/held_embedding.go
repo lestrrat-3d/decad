@@ -55,6 +55,18 @@ type HeldRounding struct {
 	ScanAxes [3]r3.Vec
 }
 
+// HeldFoldError is the refusal of a held mesh its float rounding folds through
+// itself after the bounded search. It reads as that refusal and unwraps to
+// ErrUnsupported; a Boolean that may move an operand reads its type
+// (agent-docs/gap-tolerance-design.md §5.2 item 7).
+type HeldFoldError struct{}
+
+func (*HeldFoldError) Error() string {
+	return fmt.Sprintf(`%v: the result's float rounding folds its held mesh through itself, and the bounded float-box search did not clear it — the held mesh would not be embedded, so this evaluator refuses the result rather than publish it`, decaderr.ErrUnsupported)
+}
+
+func (*HeldFoldError) Unwrap() error { return decaderr.ErrUnsupported }
+
 // heldEmbeddingSweeps caps the passes over the offending vertices. A pass that
 // moves nothing ends the search early; the cap only bounds the work.
 const heldEmbeddingSweeps = 16
@@ -96,7 +108,7 @@ func enforceHeldEmbeddingWithSummary(ctx context.Context, h HeldRounding, memo b
 		return 0, nil, err
 	}
 	if len(failing) > 0 {
-		return 0, nil, fmt.Errorf(`%w: the result's float rounding folds its held mesh through itself, and the bounded float-box search did not clear it — the held mesh would not be embedded, so this evaluator refuses the result rather than publish it`, decaderr.ErrUnsupported)
+		return 0, nil, &HeldFoldError{}
 	}
 	if summary.DisplacementBound == 0 {
 		return moved, nil, nil
@@ -126,7 +138,7 @@ func EnforceHeldEmbeddingReplay(ctx context.Context, h HeldRounding, budget *pro
 		return 0, nil, err
 	}
 	if len(failing) > 0 {
-		return 0, nil, fmt.Errorf(`%w: the result's float rounding folds its held mesh through itself, and the bounded float-box search did not clear it — the held mesh would not be embedded, so this evaluator refuses the result rather than publish it`, decaderr.ErrUnsupported)
+		return 0, nil, &HeldFoldError{}
 	}
 	if summary.DisplacementBound == 0 {
 		return moved, nil, nil
