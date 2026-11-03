@@ -22,7 +22,7 @@ import (
 func (fp Payload) RefinedSurfaceBounds(ctx context.Context, target float64, limit int64) ([]float64, error) {
 	rec := fp.OccupancyRecord()
 	if rec == nil {
-		return nil, fmt.Errorf(`%w: Refine takes mesh Unions of extruded, revolved, swept or coiled circles, then Cuts by extruded circles, and this body's history is not one`, decaderr.ErrUnsupported)
+		return nil, fmt.Errorf(`%w: Refine takes mesh Unions of extruded, revolved, swept or coiled circles and extruded polygons, then Cuts by extruded circles or polygons, and this body's history is not one`, decaderr.ErrUnsupported)
 	}
 	cross := make([]float64, len(fp.Tris))
 	for t, tri := range fp.Tris {

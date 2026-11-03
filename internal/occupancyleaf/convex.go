@@ -142,17 +142,17 @@ func convexSplit(pts []xpt) ([][]xpt, bool) {
 			if cross(pts[a], pts[b], pts[c]) <= 0 {
 				continue
 			}
-			clear := true
+			empty := true
 			for _, j := range idx {
 				if j == a || j == b || j == c {
 					continue
 				}
 				if inClosedTriangle(pts[j], pts[a], pts[b], pts[c]) {
-					clear = false
+					empty = false
 					break
 				}
 			}
-			if !clear {
+			if !empty {
 				continue
 			}
 			if q := minAngle(pts[a], pts[b], pts[c]); q > bestQuality {

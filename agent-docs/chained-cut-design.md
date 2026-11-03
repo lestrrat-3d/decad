@@ -84,7 +84,14 @@ overlap in at most 1/8 of the pair's diameter (`meshbool.OverlapChordRatio`),
 first passes the overlap's diameter (`meshbool.OverlapDiameter`) in place of
 `diameter`. Only the common part of the boxes can meet, so a short curved tool
 at one end of a long bar chords the pair as finely as a short bar would, and
-the result's held facets near the cut keep a smaller bound. Held operands, the
+the result's held facets near the cut keep a smaller bound. For a prism tool
+the overlap is read tighter (`booleaneval.clipOverlapDiameter`): the target's
+held facets, or its box's faces when it holds no mesh, are clipped in floats to
+the tool's section box over its levels in the tool's frame, and the clipped
+points' box is measured. Only there can the two boundaries meet, so a long
+straight tool crossing a long diagonal bar reads the short crossing rather
+than the boxes' common part along the bar. The smaller of the two readings is
+the overlap. Held operands, the
 pair tolerance and the chain gate still read the whole pair's diameter. When
 that attempt refuses at any stage, `booleandispatch.BodyScaled` runs the Cut
 again at the pair's diameter, so the finer chord never refuses a Cut the pair's
