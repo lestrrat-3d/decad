@@ -4,7 +4,7 @@ go 1.27.3
 
 require (
 	github.com/lestrrat-3d/r3 v0.0.0-20261014125509-3c90eee135e1
-	github.com/lestrrat-3d/sketch v0.0.0-20261103103814-4c07107860da
+	github.com/lestrrat-3d/sketch v0.0.0-20261103123945-004da48fd8a9
 	github.com/lestrrat-3d/step v0.0.0-20261009070858-31dac8684384
 	github.com/lestrrat-3d/units v0.0.0-20261004210137-572d4a3c7f0a
 	github.com/lestrrat-go/option/v3 v3.0.0-alpha1
