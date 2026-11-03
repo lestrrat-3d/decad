@@ -24,7 +24,7 @@ jobs:
       # reference is generated into docs/reference and committed. This step
       # fails and lists the stale files when the committed copy has drifted.
       - name: Check generated reference
-        uses: lestrrat/go-docgen-action@607dd420aea2f6c5332ba12b6afd3f261be79ce2 # main
+        uses: lestrrat/go-docgen-action@fc2962e743f9327fe636e1ee158c9ecff0d9af2d # main
         with:
           version: e1a899b8c7ec5a1494be07caf2338086fd99bcc9 # lestrrat-go/docgen main
           out: docs/reference
