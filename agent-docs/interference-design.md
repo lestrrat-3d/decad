@@ -248,10 +248,12 @@ operation's exact result, and only that set enters the walk:
 
 **The meridian separator** (`internal/verifyrun/meridian.go`) reads a leaf as
 a region of the (ρ, z) half-plane whose full revolution about an axis holds
-the body. A full, solid Revolve with no section displacement, an exact unit
-axis, no snap onto the axis, no material admitted across it, and a meridian
-of whole chained lines on one side of the axis is its own region (its holes
-only remove material). A prism with exact section and levels gives the rectangle ρ ≤ r over its levels for a whole-circle outer loop of
+the body. A solid Revolve with no section displacement, an exact unit axis,
+no snap onto the axis, no material admitted across it, and a meridian of whole
+chained lines, or of one whole circle, on one side of the axis is its own
+region (its holes only remove material). A partial sweep lies in the full
+revolution of its region, so its angles are never read; a band wrapped half
+round a pulley is read as its disc. A prism with exact section and levels gives the rectangle ρ ≤ r over its levels for a whole-circle outer loop of
 radius r, and the strip ρ ≥ r over its levels for each whole-circle hole. Each
 frame must be exactly orthonormal, so frame coordinates measure true distance
 before the placement. Two regions are compared in a's frame coordinates when
@@ -260,8 +262,8 @@ translation between them, or in the world when both lifts are exactly
 orthonormal. The axes must be one line exactly; b's z then maps to
 a's by an exact shift and sign. A strip's open side is closed at a radius past
 every finite radius of the two regions, which loses no point the other region
-can reach and keeps two strips overlapping exactly when their levels do. Every
-coordinate must stay a float, and Sketch then proves the two regions'
+can reach and keeps two strips overlapping exactly when their levels do. A disc
+moves with its centre. Every coordinate must stay a float, and Sketch then proves the two regions'
 interiors disjoint (`prismcells.SectionsApart`).
 
 The step is sound because each body lies in the revolution of its region,
@@ -284,7 +286,7 @@ through b's support along m, with no unit normal:
 - a prism with exact section and levels over a whole circle of centre c and
   radius r reaches m·t + μ·(c, z) + r·√(μ₁² + μ₂²) at one of its levels, with
   μ = Lᵀm; over whole lines it reaches its largest vertex;
-- a Revolve the meridian separator reads reaches m·t + μ·anchor + z·(μ·d) +
+- a Revolve the meridian separator reads over whole lines reaches m·t + μ·anchor + z·(μ·d) +
   ρ·|μ across d| at a vertex of its region, d its axis and μ again Lᵀm, the
   frame coordinates measuring true distance so the split across d is exact.
 

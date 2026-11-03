@@ -2990,3 +2990,4 @@
 11	0.00	TestVerifyEndCapSeparator
 11	0.00	TestVerifyHistoryPinInItsBore
 11	0.00	TestVerifyCoaxialCutTool
+11	0.00	TestVerifyMeridianBandInGroove
