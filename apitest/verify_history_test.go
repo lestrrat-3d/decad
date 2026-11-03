@@ -342,3 +342,30 @@ func TestVerifyHistoryTurnedFarOperand(t *testing.T) {
 		})
 	}
 }
+
+// TestVerifyHistoryRefinedOperand refines the hook of
+// TestVerifyHistoryFarOperand before Verify. Refine moves no vertex and only
+// tightens the bound its mesh publishes, so the refined hook is the same
+// solid as its Union and the history walk reads it as that Union: the stem
+// through its drilling tool and the ring by its box.
+//
+// Leg shown to fail: without reading a Refine as its source the refined
+// hook is a leaf no rule separates.
+func TestVerifyHistoryRefinedOperand(t *testing.T) {
+	t.Parallel()
+	doc := decad.New()
+	block := slab(t, doc, 0, -5, 20, 5, 0, 10, r3.Identity())
+	tool := placedAlongZ(t, coaxialSection(t, doc, 10, 0, 17, 1), -1)
+	drilled, err := decad.Cut(t.Context(), block, tool)
+	require.NoError(t, err)
+	stem := placedAlongZ(t, coaxialSection(t, doc, 10, 0, 14, 1), 2)
+	hook, err := decad.Union(t.Context(), stem, hookRing(t, doc, 15.5))
+	require.NoError(t, err)
+	refined, err := decad.Refine(t.Context(), hook, units.Millimeters(0.05))
+	require.NoError(t, err)
+	report, err := doc.Verify(t.Context())
+	require.NoError(t, err)
+	interferences, diagnostics := pairFindings(report, drilled, refined)
+	require.Zero(t, interferences)
+	require.Zero(t, diagnostics, "the refined hook is read as its Union")
+}

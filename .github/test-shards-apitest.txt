@@ -2996,3 +2996,5 @@
 11	0.00	TestVerifyHistoryFarOperand
 0	61.97	TestVerifyHistoryTurnedFarOperand
 11	0.00	TestVerifyMeridianSharedPlacement
+11	0.00	TestVerifyMeridianCutTool
+11	0.00	TestVerifyHistoryRefinedOperand

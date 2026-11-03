@@ -54,11 +54,36 @@ type historyWalk struct {
 	budget  *proofbound.WorkBudget
 }
 
+// sameSetSource is a history that also names the producers whose result is
+// the same true solid as their one input: a Refine moves no vertex and only
+// tightens the bound it publishes, so its result is read as its source.
+type sameSetSource interface {
+	SameSetProducer(n *topo.Body) (*topo.Body, bool)
+}
+
+// sameSetOf follows history's same-set producers back from b, a bounded
+// number of steps.
+func sameSetOf(history boolchain.Source, b *topo.Body) *topo.Body {
+	s, ok := history.(sameSetSource)
+	if !ok {
+		return b
+	}
+	for range historyMaxDepth {
+		src, ok := s.SameSetProducer(b)
+		if !ok || src == nil {
+			break
+		}
+		b = src
+	}
+	return b
+}
+
 // misses reports whether a's interior misses b's, read through a's history.
 func (w historyWalk) misses(a, b *topo.Body, depth int) (bool, error) {
 	if depth > historyMaxDepth {
 		return false, nil
 	}
+	a, b = sameSetOf(w.history, a), sameSetOf(w.history, b)
 	if err := w.budget.Step(); err != nil {
 		return false, err
 	}
@@ -80,6 +105,9 @@ func (w historyWalk) misses(a, b *topo.Body, depth int) (bool, error) {
 	case meshbool.OpCut:
 		if in, err := w.within(b, inputs[1], 0); err != nil || in {
 			return in, err
+		}
+		if apart, err := cutToolMeridianApart(w.ctx, w.budget, w.history, inputs[0], inputs[1], b); err != nil || apart {
+			return apart, err
 		}
 		return w.misses(inputs[0], b, depth+1)
 	case meshbool.OpIntersect:
@@ -105,6 +133,7 @@ func (w historyWalk) within(inner, outer *topo.Body, depth int) (bool, error) {
 	if depth > historyMaxDepth {
 		return false, nil
 	}
+	inner, outer = sameSetOf(w.history, inner), sameSetOf(w.history, outer)
 	if err := w.budget.Step(); err != nil {
 		return false, err
 	}

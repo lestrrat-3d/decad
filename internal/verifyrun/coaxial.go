@@ -81,6 +81,7 @@ func insideCylinders(history boolchain.Source, body *topo.Body, depth int) []coa
 	if depth > coaxialMaxDepth {
 		return nil
 	}
+	body = sameSetOf(history, body)
 	if pp, ok := body.Payload.(prismrecord.Payload); ok {
 		if circle, ok := wholeCircle(pp.Profile.Outer); ok {
 			if c, ok := prismCylinder(pp, circle); ok {
@@ -136,6 +137,7 @@ func outsideCylinder(history boolchain.Source, body *topo.Body, c coaxialCylinde
 	if depth > coaxialMaxDepth {
 		return false
 	}
+	body = sameSetOf(history, body)
 	if pp, ok := body.Payload.(prismrecord.Payload); ok {
 		for _, hole := range pp.Profile.Holes {
 			circle, ok := wholeCircle(hole)

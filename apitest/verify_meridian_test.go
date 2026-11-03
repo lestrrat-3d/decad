@@ -201,3 +201,63 @@ func TestVerifyMeridianSharedPlacement(t *testing.T) {
 		})
 	}
 }
+
+// TestVerifyMeridianCutTool seats a revolved screw in one of two Ø2 pilots
+// that one Union tool bores through a 20×10×10 block from z = −1 to 11. The
+// screw's Ø2 shank runs from z = 2 up the pilot and its Ø4 head rests on the
+// block's top face. The block has no hole of its own, but the Cut result lies
+// in the revolution about the pilot's axis of the band between the block's
+// levels less the pilot's rectangle, and the screw's meridian misses that. A
+// head sunk 0.5 mm into the block is not decided.
+//
+// Leg shown to fail: reading only the Cut's target leaves the seated screw
+// with a pair diagnostic.
+func TestVerifyMeridianCutTool(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name      string
+		headZ     float64
+		separated bool
+	}{
+		{"head on the top face", 10, true},
+		{"head sunk into the block", 9.5, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			doc := decad.New()
+			block := slab(t, doc, 0, -5, 20, 5, 0, 10, r3.Identity())
+			pilots, err := decad.Union(t.Context(),
+				placedAlongZ(t, coaxialSection(t, doc, 5, 0, 12, 1), -1),
+				placedAlongZ(t, coaxialSection(t, doc, 15, 0, 12, 1), -1))
+			require.NoError(t, err)
+			bored, err := decad.Cut(t.Context(), block, pilots)
+			require.NoError(t, err)
+			w := sketch.NewWorld()
+			s, err := w.CreateSketch(w.XZ())
+			require.NoError(t, err)
+			pts := [][2]float64{{5, 2}, {6, 2}, {6, tc.headZ}, {7, tc.headZ}, {7, tc.headZ + 1}, {5, tc.headZ + 1}}
+			sp := make([]*sketch.Point, len(pts))
+			for i, p := range pts {
+				sp[i] = s.CreatePoint(p[0], p[1])
+				s.Fix(sp[i])
+			}
+			for i := range sp {
+				s.CreateLine(sp[i], sp[(i+1)%len(sp)])
+			}
+			_, err = s.Solve(t.Context())
+			require.NoError(t, err)
+			screw, err := decad.Revolve(t.Context(), doc, s, s.Profiles()[0],
+				decad.SketchLine{Start: decad.Point2{U: 5}, End: decad.Point2{U: 5, V: 1}}, decad.FullRevolution{})
+			require.NoError(t, err)
+			report, err := doc.Verify(t.Context())
+			require.NoError(t, err)
+			interferences, diagnostics := pairFindings(report, bored, screw)
+			if tc.separated {
+				require.Zero(t, interferences)
+				require.Zero(t, diagnostics, "the Cut's pilot and the block's levels hold the screw off")
+				return
+			}
+			require.Positive(t, interferences+diagnostics)
+		})
+	}
+}
