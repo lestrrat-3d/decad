@@ -6,6 +6,7 @@ import (
 	"github.com/lestrrat-3d/r3"
 
 	"github.com/lestrrat-3d/decad/internal/boolshift"
+	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/topo"
 )
 
@@ -65,4 +66,17 @@ const SpanningPieces = spanningPieces
 // SpanningPieces for a face whose facets lie in several.
 func FacePieces(m *topo.Mesh) map[*topo.Face]int {
 	return boolshift.FacePieces(m, boolshift.PiecesOf(m))
+}
+
+// GrowFolded runs growFolded over count pieces with attempt, which sees each
+// piece's grow.
+func GrowFolded(ctx context.Context, refusal error, op meshbool.OperationKind, count int,
+	attempt func(map[int]float64) (Evaluation, error)) (Evaluation, error) {
+	return growFolded(ctx, refusal, op, boolshift.NewPieces(nil, nil, count), func(shifts map[int]pieceShift) (Evaluation, error) {
+		grows := make(map[int]float64, len(shifts))
+		for c, sh := range shifts {
+			grows[c] = sh.Grow
+		}
+		return attempt(grows)
+	})
 }

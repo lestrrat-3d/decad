@@ -1565,8 +1565,12 @@ work intervals inside quadratic/refinement loops, as interference §7 specifies.
     never reaches this stage.
   - **Refuse what the bounded search does not clear.** A mesh still failing
     the exact held-facet checks is refused (`ErrUnsupported`,
-    `BooleanExpectedUnsupported`). The evaluator cannot certify an embedded
-    held mesh from the candidates this bounded search checked.
+    `BooleanExpectedUnsupported`, typed `meshbool.HeldFoldError`). The
+    evaluator cannot certify an embedded held mesh from the candidates this
+    bounded search checked. A mesh Boolean whose own stitched result is
+    refused this way, under a positive gap tolerance, is run again with its
+    second operand grown about its centre (`agent-docs/gap-tolerance-design.md`
+    §5.2 item 7); a fold met while meshing an operand is not retried.
 
   `HeldFolds` runs the same exact check without the repair and returns the
   folded facet pairs, and `RepairHeldEmbedding` runs the repair and returns the

@@ -372,6 +372,50 @@ func growShifted(ctx context.Context, refusal error, op meshbool.OperationKind, 
 	return Evaluation{}, refusal
 }
 
+// growFolded answers a result whose float rounding folds its held mesh through
+// itself after the embedding search (agent-docs/gap-tolerance-design.md §5.2
+// item 7). Such a fold comes from the operands' boundaries lying closer than
+// the rounding where they meet, as a cap a last-place step past the face it
+// was drawn on. The fold names no contact normal, so no translation is
+// chosen; every piece of the second operand is grown about its centre by the
+// steps of the reach, as a coplanar contact is (item 5): outward for a Union
+// and a Cut, inward for an Intersect, so faces that nearly coincide overlap by
+// the growth or part by it. The growth is charged as any displacement is. The
+// first outcome that is not a contact or fold refusal is the result; when
+// every step refuses, the original refusal is returned.
+func growFolded(ctx context.Context, refusal error, op meshbool.OperationKind, pc pieces,
+	attempt func(map[int]pieceShift) (Evaluation, error)) (Evaluation, error) {
+	reach := gaptol.Reach(ctx)
+	if !(reach > 0) || pc.Count() == 0 {
+		return Evaluation{}, refusal
+	}
+	for _, step := range shiftSteps {
+		if err := ctx.Err(); err != nil {
+			return Evaluation{}, err
+		}
+		grow := step * reach
+		if op == meshbool.OpIntersect {
+			grow = -grow
+		}
+		shifts := make(map[int]pieceShift, pc.Count())
+		for c := range pc.Count() {
+			shifts[c] = pieceShift{Grow: grow}
+		}
+		ev, err := attempt(shifts)
+		if errors.Is(err, errShiftDeclined) {
+			continue
+		}
+		if _, ok := errors.AsType[*meshbool.TouchContactError](err); ok {
+			continue
+		}
+		if _, ok := errors.AsType[*meshbool.HeldFoldError](err); ok {
+			continue
+		}
+		return ev, err
+	}
+	return Evaluation{}, refusal
+}
+
 // flushOnly reports whether no contact is Decisive and none carries slack: every one is a flush face of the second
 // operand that lies on the first operand's own face, which a Union leaves unchanged when the second sits inside it.
 func flushOnly(byPiece map[int][]meshbool.TouchContact) bool {

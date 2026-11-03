@@ -145,20 +145,41 @@ func Evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 		return ev, nil
 	}
 	var touch *meshbool.TouchContactError
-	if !errors.As(err, &touch) || !(gaptol.Reach(ctx) > 0) {
-		return ev, err
+	_, folded := errors.AsType[*resultFoldError](err)
+	if !errors.As(err, &touch) && !folded || !(gaptol.Reach(ctx) > 0) {
+		return ev, unwrapResultFold(err)
 	}
 	tolMM, dPair, perr := booloperand.PairChord(ctx, a, b)
 	if perr != nil {
-		return ev, err
+		return ev, unwrapResultFold(err)
 	}
 	mb, _, terr := meshes.TessellateOperand(ctx, b, operandChord(ctx, b, tolMM*chordScale, chordDiameter(ctx, op, a, b, dPair), chordScale))
 	if terr != nil {
-		return ev, err
+		return ev, unwrapResultFold(err)
 	}
-	return retryShifted(ctx, err, op, boolshift.PiecesOf(mb), func(shifts map[int]pieceShift) (Evaluation, error) {
-		return evaluate(ctx, op, a, b, meshes, chordScale, capFace, coneFace, twins, shifts, nil, nil, nil, 0)
-	})
+	attempt := func(shifts map[int]pieceShift) (Evaluation, error) {
+		ev, err := evaluate(ctx, op, a, b, meshes, chordScale, capFace, coneFace, twins, shifts, nil, nil, nil, 0)
+		return ev, unwrapResultFold(err)
+	}
+	if folded {
+		return growFolded(ctx, unwrapResultFold(err), op, boolshift.PiecesOf(mb), attempt)
+	}
+	return retryShifted(ctx, err, op, boolshift.PiecesOf(mb), attempt)
+}
+
+// resultFoldError marks a refusal of the stitched result's float rounding
+// (meshbool.HeldFoldError), as opposed to one met while meshing an operand,
+// so that only the result's fold is retried with the second operand grown.
+type resultFoldError struct{ error }
+
+func (e *resultFoldError) Unwrap() error { return e.error }
+
+// unwrapResultFold drops the resultFoldError mark, which never leaves Evaluate.
+func unwrapResultFold(err error) error {
+	if f, ok := err.(*resultFoldError); ok {
+		return f.error
+	}
+	return err
 }
 
 // evaluate is Evaluate's single attempt, with the pieces of b's mesh moved by
@@ -682,8 +703,12 @@ func evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 		stitched, err = meshbool.StitchFacetsContext(ctx, kept)
 	}
 	if err != nil {
+		_, folded := errors.AsType[*meshbool.HeldFoldError](err)
 		if errors.Is(err, decaderr.ErrUnsupported) {
 			err = meshbool.ExpectedBoolean(meshbool.BooleanExpectedUnsupported, err)
+		}
+		if folded && replay == nil {
+			err = &resultFoldError{err}
 		}
 		return Evaluation{}, err
 	}

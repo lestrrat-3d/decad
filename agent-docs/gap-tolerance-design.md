@@ -35,7 +35,8 @@ The tolerance is the **reach** of two repairs, and each runs only after the exac
   (`agent-docs/evaluator-design.md` §9). A mesh that search leaves folded gets a second stage in which each movable
   vertex of a failing pair may also sit up to the reach from its exact point.
 - The shifted Boolean retry (§5.2). A mesh Boolean whose operands meet in coplanar facets is run again with the
-  second operand moved by up to the reach.
+  second operand moved by up to the reach, and one whose stitched result the embedding repair leaves folded is run
+  again with the second operand grown by up to the reach (§5.2 item 7).
 
 With reach zero neither runs, and the refusal is the one the exact path gives.
 
@@ -205,6 +206,15 @@ runs the Boolean again with the second operand moved:
    held curved operand needs the shrink to pass its own chord bound, so the steps climb to it. When no shrink stands,
    the translations of items 1 to 4 run as before. Where this is the first step of a chain (`PatternJoin` of round pins
    into a mesh plate), the result keeps the plate's six faces and the volume of the plate.
+7. A mesh Boolean whose own stitched result the embedding repair leaves folded (§5.1, `meshbool.HeldFoldError`) is
+   run again with every piece of the second operand grown about its centre (`growFolded`): outward for a Union and a
+   Cut, inward for an Intersect, by the steps of item 3 times the reach, smallest first. Such a fold comes from the
+   operands' boundaries lying closer than the rounding where they meet: a coil's end cap one last-place step past the
+   leg drawn from its nominal end, whose welded vertices the repair may not move. The fold names no contact normal,
+   so no translation is chosen; the growth makes the near-coincident faces overlap or part by the step, as item 5
+   does for a coplanar contact. A step that folds again or meets a contact refusal is passed over, and the first
+   other outcome is the result; when every step refuses, the fold is returned. The growth is charged as item 5's is.
+   A fold met while meshing an operand is not retried, and the bounded replay path keeps its refusal.
 4. Each connected piece of the second operand (the teeth of a gear tool, for one) is moved on its own, along the
    directions and by the length its own contacts ask for, and a piece no contact names stays where it is. Each
    piece's displacement is charged to its own vertices and faces, the mesh bound takes the largest, and the swept
@@ -279,7 +289,8 @@ The tolerance repairs one refusal class: a held mesh whose float rounding folds 
 keeps its refusal:
 
 - A mesh the second stage leaves folded, because a vertex is welded, no candidate within the reach clears it, or
-  the reach is too small.
+  the reach is too small, unless it is a Boolean's stitched result that a growth of the second operand clears
+  (§5.2 item 7). A placement or similarity image that stays folded is refused.
 - `Stitch` of a curved edge, of a vertex that carries a bound, and of any pair under `ExactOnly`: the edges stay free (§5.3).
 - Branching intersection curves, and a facet or subdivision region that touches the other operand's boundary. They
   carry no contact normal.
@@ -301,6 +312,7 @@ owns that refusal in the same change.
 | `meshbool.TestEnforceHeldEmbeddingReachCannotMoveAWeldedVertex` | A welded vertex stays and the fold is still refused. |
 | `facetproof.TestKeepPlacedEmbeddedReach` | A 118-facet crop of a restored spiral cap refuses with no reach, clears at a reach of 1e-3 mm, and charges every moved vertex at least the distance it moved. |
 | `apitest.TestDocumentGapToleranceOptions` | The option set, its last-wins rule and each invalid value's error. |
+| `booleaneval.TestGrowFolded` | A folded result is retried with every piece grown by the same step, outward for a Union and a Cut and inward for an Intersect, smallest first; a fold or contact refusal moves to the next step; another outcome ends the search; no reach and no answering step keep the fold. |
 | `booleaneval.TestShiftNeed` | The least shift that clears a contact's Slack, along a normal and along a slanted direction. |
 | `booleaneval.TestShiftPiecesChargeEachPieceOnItsOwn` | Two separate pieces: only the moved piece moves and is charged. |
 | `booleaneval.TestShiftDecisionChargesRounding` | A tetrahedron at `2^30` mm moved by a snapped shift whose sums round: each decision vertex bound, its face bound and the mesh bound cover the exact distance of the stored vertex from `v + s`; a tetrahedron at 50 mm moves exactly and keeps zero bounds; a grown piece's bounds stretch by `1 + k`. Red legs: drop the addition, the face widening, the mesh-bound widening or the stretch. |
