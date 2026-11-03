@@ -6,6 +6,8 @@ import (
 	"math/big"
 	"math/rand"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 type keyTestBudget struct{ work, bytes, fail, failAt uint64 }
@@ -157,22 +159,24 @@ func replayKeyChargeCases() []struct {
 }
 
 // TestReplayExactKeyCharges pins the budget charges and key bytes. The want
-// values were recorded from the implementation that copied a byte slice into
-// the result string.
+// values are fixed numbers, so changing any reservation or work charge fails
+// it. It also checks the key length against the raw input size that
+// ReplayExactKey pre-grows its buffer to.
 func TestReplayExactKeyCharges(t *testing.T) {
 	for _, tc := range replayKeyChargeCases() {
-		b := new(chargeTestBudget)
-		got, err := ReplayExactKey(t.Context(), tc.p, b)
-		if err != nil {
-			t.Fatal(tc.name, err)
-		}
-		if got != tc.p.Key() {
-			t.Fatalf("%s: key bytes differ from Key", tc.name)
-		}
-		if b.records != tc.records || b.bytes != tc.bytes || b.work != tc.work {
-			t.Fatalf("%s: charges records=%d bytes=%d work=%d, want %d %d %d",
-				tc.name, b.records, b.bytes, b.work, tc.records, tc.bytes, tc.work)
-		}
+		t.Run(tc.name, func(t *testing.T) {
+			b := new(chargeTestBudget)
+			got, err := ReplayExactKey(t.Context(), tc.p, b)
+			require.NoError(t, err)
+			require.True(t, got == tc.p.Key(), "key bytes differ from Key")
+			raw := 36
+			for _, v := range []*big.Int{tc.p.X, tc.p.Y, tc.p.Z, tc.p.W} {
+				raw += (v.BitLen() + 7) / 8
+			}
+			require.LessOrEqual(t, len(got), raw, "key longer than its raw input size")
+			require.Equal(t, [3]uint64{tc.records, tc.bytes, tc.work}, [3]uint64{b.records, b.bytes, b.work},
+				"charges [records bytes work]")
+		})
 	}
 }
 
@@ -181,7 +185,7 @@ func BenchmarkReplayExactKey(b *testing.B) {
 	p := Xpt{X: new(big.Int).Neg(huge), Y: new(big.Int).Add(huge, big.NewInt(3)), Z: big.NewInt(7), W: new(big.Int).Lsh(huge, 1)}
 	b.ReportAllocs()
 	for b.Loop() {
-		if _, err := ReplayExactKey(context.Background(), p, new(chargeTestBudget)); err != nil {
+		if _, err := ReplayExactKey(b.Context(), p, new(chargeTestBudget)); err != nil {
 			b.Fatal(err)
 		}
 	}

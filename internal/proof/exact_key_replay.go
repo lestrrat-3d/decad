@@ -167,7 +167,8 @@ func ReplayExactKey(ctx context.Context, p Xpt, budget ReplayKeyBudget) (string,
 		return "", err
 	}
 	// The key is built in place: String returns the builder's bytes without
-	// copying them.
+	// copying them. rawBytes bounds the key length because each reduced
+	// magnitude is no longer than its input, so the buffer is grown once.
 	var out strings.Builder
 	out.Grow(int(rawBytes))
 	for i, value := range values {
