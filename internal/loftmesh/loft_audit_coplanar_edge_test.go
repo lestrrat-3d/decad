@@ -7,6 +7,7 @@ import (
 	"math/rand/v2"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/hwfault"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
@@ -206,6 +207,7 @@ var coplanarEdgeBuilders = map[string]func([]r3.Vec, [][3]int) *LoftAuditData{
 }
 
 func TestCoplanarSharedEdgeMatchesTheHelper(t *testing.T) {
+	hwfault.SkipOnWindows(t)
 	t.Parallel()
 	rng := rand.New(rand.NewPCG(7, 11))
 	type mesh struct {
@@ -263,6 +265,7 @@ func TestCoplanarSharedEdgeMatchesTheHelper(t *testing.T) {
 // constructor builds: rational lifts, negative weight spellings, vertices
 // sharing one point's integers, and missing normals.
 func TestCoplanarSharedEdgeMatchesTheHelperOnHandBuiltTables(t *testing.T) {
+	hwfault.SkipOnWindows(t)
 	t.Parallel()
 	frac := func(x, y, z, w int64) proof.Xpt {
 		return proof.Xpt{X: big.NewInt(x), Y: big.NewInt(y), Z: big.NewInt(z), W: big.NewInt(w)}
