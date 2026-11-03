@@ -111,16 +111,11 @@ func (r *Record) Bulges(verts []r3.Vec, tris [][3]int, delta []float64) []float6
 func (r *Record) BulgeParts(verts []r3.Vec, tris [][3]int, delta []float64) ([]float64, []float64) {
 	out := make([]float64, len(tris))
 	reach := make([]float64, len(tris))
+	pokes := r.meshPokes(verts, tris)
 	for t, tri := range tris {
 		tv := [3]r3.Vec{verts[tri[0]], verts[tri[1]], verts[tri[2]]}
 		lo, hi := triBox(tv)
-		poke := math.Inf(1)
-		for _, l := range r.Leaves {
-			if l.near(lo, hi, r.Cross+l.Delta) {
-				poke = math.Min(poke, l.shape.poke(tv))
-			}
-		}
-		lam := poke
+		lam := pokes[t]
 		for _, l := range r.Holes {
 			if l.nearHoleWall(lo, hi, r.Cross) {
 				// The true hole reaches past its held wall by at most the tool
@@ -136,6 +131,50 @@ func (r *Record) BulgeParts(verts []r3.Vec, tris [][3]int, delta []float64) ([]f
 		out[t] = math.Min(delta[t], lam)
 	}
 	return out, reach
+}
+
+// meshPokes is, per facet, the least poke over the leaves near it, each leaf
+// read in order. A cylinder leaf's poke is fixed by its corners' readings, so
+// each shared vertex is read once per leaf instead of once per facet.
+func (r *Record) meshPokes(verts []r3.Vec, tris [][3]int) []float64 {
+	pokes := make([]float64, len(tris))
+	for t := range pokes {
+		pokes[t] = math.Inf(1)
+	}
+	var corner []float64
+	for _, l := range r.Leaves {
+		cyl, isCyl := l.shape.(cylinderShape)
+		var rr, twoR *big.Rat
+		if isCyl {
+			if corner == nil {
+				corner = make([]float64, len(verts))
+			}
+			for v := range corner {
+				corner[v] = math.NaN()
+			}
+			rr, twoR = cyl.radii()
+		}
+		for t, tri := range tris {
+			tv := [3]r3.Vec{verts[tri[0]], verts[tri[1]], verts[tri[2]]}
+			lo, hi := triBox(tv)
+			if !l.near(lo, hi, r.Cross+l.Delta) {
+				continue
+			}
+			if !isCyl {
+				pokes[t] = math.Min(pokes[t], l.shape.poke(tv))
+				continue
+			}
+			worst := 0.0
+			for _, v := range tri {
+				if math.IsNaN(corner[v]) {
+					corner[v] = cyl.cornerPoke(verts[v], rr, twoR)
+				}
+				worst = max(worst, corner[v])
+			}
+			pokes[t] = math.Min(pokes[t], cyl.pokeOf(worst))
+		}
+	}
+	return pokes
 }
 
 // SiteReach is how far from a contact segment a bulge source (an earlier
@@ -640,40 +679,55 @@ func (c cylinderShape) boundaryFar(lo, hi r3.Vec, pad float64) bool {
 }
 
 func (c cylinderShape) poke(tri [3]r3.Vec) float64 {
-	rr := new(big.Rat).Mul(ratOf(c.r), ratOf(c.r))
-	twoR := new(big.Rat).Mul(big.NewRat(2, 1), ratOf(c.r))
+	rr, twoR := c.radii()
 	worst := 0.0
 	for _, w := range tri {
-		f := w
-		for _, a := range c.finv {
-			f = a.applyFloat(f)
-		}
-		// A corner the float reading puts inside by more than 1e-6 of the
-		// section's size cannot be outside: float evaluation errs by far less.
-		margin := 1e-6 * (c.r + math.Abs(c.z0) + math.Abs(c.z1) + w.Len())
-		if math.Hypot(f.X, f.Y) < c.r-margin && f.Z > c.z0+margin && f.Z < c.z1-margin {
-			continue
-		}
-		p := xvecOf(w)
-		for _, e := range c.inv {
-			p = e.apply(p)
-		}
-		q := new(big.Rat).Mul(p[0], p[0])
-		q.Add(q, new(big.Rat).Mul(p[1], p[1]))
-		radial := 0.0
-		if q.Cmp(rr) > 0 {
-			// sqrt(q) − r = (q − r²)/(sqrt(q) + r) ≤ (q − r²)/(2r).
-			radial = ratUpper(new(big.Rat).Quo(q.Sub(q, rr), twoR))
-		}
-		axial := 0.0
-		if d := new(big.Rat).Sub(ratOf(c.z0), p[2]); d.Sign() > 0 {
-			axial = ratUpper(d)
-		}
-		if d := new(big.Rat).Sub(p[2], ratOf(c.z1)); d.Sign() > 0 {
-			axial = max(axial, ratUpper(d))
-		}
-		worst = max(worst, proofbound.AbsSumUpper(radial, axial))
+		worst = max(worst, c.cornerPoke(w, rr, twoR))
 	}
+	return c.pokeOf(worst)
+}
+
+// radii is r² and 2r, exactly, for cornerPoke.
+func (c cylinderShape) radii() (*big.Rat, *big.Rat) {
+	return new(big.Rat).Mul(ratOf(c.r), ratOf(c.r)), new(big.Rat).Mul(big.NewRat(2, 1), ratOf(c.r))
+}
+
+// cornerPoke bounds how far the corner w lies outside the cylinder in local
+// coordinates; 0 when the float reading proves it inside. It is never NaN.
+func (c cylinderShape) cornerPoke(w r3.Vec, rr, twoR *big.Rat) float64 {
+	f := w
+	for _, a := range c.finv {
+		f = a.applyFloat(f)
+	}
+	// A corner the float reading puts inside by more than 1e-6 of the
+	// section's size cannot be outside: float evaluation errs by far less.
+	margin := 1e-6 * (c.r + math.Abs(c.z0) + math.Abs(c.z1) + w.Len())
+	if math.Hypot(f.X, f.Y) < c.r-margin && f.Z > c.z0+margin && f.Z < c.z1-margin {
+		return 0
+	}
+	p := xvecOf(w)
+	for _, e := range c.inv {
+		p = e.apply(p)
+	}
+	q := new(big.Rat).Mul(p[0], p[0])
+	q.Add(q, new(big.Rat).Mul(p[1], p[1]))
+	radial := 0.0
+	if q.Cmp(rr) > 0 {
+		// sqrt(q) − r = (q − r²)/(sqrt(q) + r) ≤ (q − r²)/(2r).
+		radial = ratUpper(new(big.Rat).Quo(q.Sub(q, rr), twoR))
+	}
+	axial := 0.0
+	if d := new(big.Rat).Sub(ratOf(c.z0), p[2]); d.Sign() > 0 {
+		axial = ratUpper(d)
+	}
+	if d := new(big.Rat).Sub(p[2], ratOf(c.z1)); d.Sign() > 0 {
+		axial = max(axial, ratUpper(d))
+	}
+	return proofbound.AbsSumUpper(radial, axial)
+}
+
+// pokeOf is the facet's poke from its corners' largest cornerPoke.
+func (c cylinderShape) pokeOf(worst float64) float64 {
 	return proofbound.AbsSumUpper(proofbound.UpRound(worst*c.stretch), c.displacement)
 }
 
