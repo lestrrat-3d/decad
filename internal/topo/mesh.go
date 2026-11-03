@@ -1,6 +1,9 @@
 package topo
 
 import (
+	"reflect"
+	"unsafe"
+
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -76,6 +79,71 @@ type Mesh struct {
 	// it when the handle is born and maps a node back to its handle through
 	// it; nothing else writes it.
 	Owner any
+
+	// planar is an optional record of the mesh's planar facets
+	// (PlanarRecord); planarKey ties it to the mesh it was proven for.
+	planar    *PlanarRecord
+	planarKey facetBoundKey
+}
+
+// facetBoundKey identifies the data a facet record was proven against: the
+// vertex and triangle arrays, the global bounds and the face-bound map. A
+// shallow copy that moves a vertex array, widens a bound or swaps the
+// face-bound map no longer matches it, so FacetBounds drops the record
+// rather than carry it past a change it never saw.
+type facetBoundKey struct {
+	verts, tris       uintptr
+	nVerts, nTris     int
+	bound, coordBound float64
+	faceBound         uintptr
+}
+
+func (m *Mesh) facetBoundKey() facetBoundKey {
+	k := facetBoundKey{nVerts: len(m.Vertices), nTris: len(m.Triangles), bound: m.Bound, coordBound: m.CoordBound}
+	if len(m.Vertices) > 0 {
+		k.verts = uintptr(unsafe.Pointer(&m.Vertices[0]))
+	}
+	if len(m.Triangles) > 0 {
+		k.tris = uintptr(unsafe.Pointer(&m.Triangles[0]))
+	}
+	if m.FaceBound != nil {
+		k.faceBound = reflect.ValueOf(m.FaceBound).Pointer()
+	}
+	return k
+}
+
+// PlanarRecord bounds a planar face's facets apart from its trim chording.
+// On a planar face the chording moves only the region between each chord of
+// a curved trim and its arc, which lies within Reach[face] of the chord. Own
+// is parallel to the triangles: a facet of a planar face lies, away from that
+// region, within Own[t] of its true piece, which is the triangle of its
+// corners' true points; any other facet carries +Inf. Chords lists each
+// planar face's chords as segment end points.
+type PlanarRecord struct {
+	Own    []float64
+	Chords map[*Face][][2]r3.Vec
+	Reach  map[*Face]float64
+}
+
+// SetPlanarRecord records rec for the mesh as it now stands. The caller
+// proves every entry and calls it after the mesh's vertices, triangles,
+// global bounds and face-bound map are final.
+func (m *Mesh) SetPlanarRecord(rec *PlanarRecord) {
+	if rec == nil || len(rec.Own) != len(m.Triangles) {
+		m.planar = nil
+		return
+	}
+	m.planar = rec
+	m.planarKey = m.facetBoundKey()
+}
+
+// Planar returns the planar record when the mesh is still the one it was
+// proven for, and nil otherwise. It is shared; callers never write it.
+func (m *Mesh) Planar() *PlanarRecord {
+	if m.planar == nil || len(m.planar.Own) != len(m.Triangles) || m.planarKey != m.facetBoundKey() {
+		return nil
+	}
+	return m.planar
 }
 
 // TessEntry is one cached tessellation of a body (root Body.Tessellate): the

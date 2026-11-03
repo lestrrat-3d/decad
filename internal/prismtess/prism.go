@@ -14,6 +14,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/decad/internal/stationbound"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 	"github.com/lestrrat-3d/decad/internal/sweeprecord"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
@@ -347,6 +348,7 @@ func build(ctx context.Context, b *topo.Body, pp prismrecord.Payload,
 		// neither, so neither is finished and neither is published
 		// (tessellateContext's own withholdProofs is what drops them). Every
 		// face bound this mesh states is complete and stands.
+		setPlanarFacetBounds(mesh, faceTrim, faceAxial, vertexStore, pp.SectionDelta, replay != nil)
 		return mesh, nil
 	}
 	if pp.SectionDelta > 0 {
@@ -385,6 +387,7 @@ func build(ctx context.Context, b *topo.Body, pp prismrecord.Payload,
 		// absence, not a placeholder for one still to come — meshbool.OperandSymDiff
 		// (boolean.go) is the consumer that reads symDiffOK and refuses a
 		// boolean that reaches this operand.
+		setPlanarFacetBounds(mesh, faceTrim, faceAxial, vertexStore, pp.SectionDelta, replay != nil)
 		return mesh, nil
 	}
 
@@ -428,5 +431,21 @@ func build(ctx context.Context, b *topo.Body, pp prismrecord.Payload,
 	}
 	mesh.VolSymDiff = total
 	mesh.SymDiffOK = true
+	setPlanarFacetBounds(mesh, faceTrim, faceAxial, vertexStore, pp.SectionDelta, replay != nil)
 	return mesh, nil
+}
+
+// setPlanarFacetBounds records the mesh's planar record
+// (tessellation.PlanarFacetRecord): away from every chord of an arc, a cap or
+// flat wall facet carries its own corners' store and the section and axial
+// terms, not its face's trim chording. A bounded replay records none.
+func setPlanarFacetBounds(mesh *topo.Mesh, trim, axial map[*topo.Face]float64, store []float64, section float64, replay bool) {
+	if replay || len(store) != len(mesh.Vertices) {
+		return
+	}
+	planar := func(f *topo.Face) bool {
+		_, ok := f.Surface.(surfacegeom.Plane)
+		return ok
+	}
+	mesh.SetPlanarRecord(tessellation.PlanarFacetRecord(mesh.Vertices, mesh.Triangles, mesh.Source, planar, trim, axial, store, section))
 }

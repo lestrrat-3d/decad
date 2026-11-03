@@ -41,6 +41,14 @@ type BoolMesh struct {
 	// FacetBound except for a facet of a retained plane, whose true piece lies
 	// in that exact plane (SetSlabBounds).
 	SlabBound []float64
+	// PlanarOwn, when set, is facet t's bound away from its face's trim
+	// chording (topo.PlanarRecord): +Inf off a planar face. PlanarChords[t]
+	// are the chords of t's face and PlanarReach[t] how far from them the
+	// chording can move the true face. The proximity gate reads them where
+	// a contact stays clear of every chord (localSlackFromContacts).
+	PlanarOwn    []float64
+	PlanarChords [][][2]r3.Vec
+	PlanarReach  []float64
 	// FaceSurface, when set, is a source face's surface bound: every true
 	// point of that face lies within it of the face's held facets, and every
 	// held point within it of the true face. Refine records it
