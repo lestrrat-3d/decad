@@ -230,14 +230,14 @@ operation's exact result, and only that set enters the walk:
   block glued flat on a rail is decided; a leaf against a Boolean result is
   read through the result's history;
 - two leaves the prism rule leaves open miss each other through the meridian
-  separator below.
+  separator or the end-cap separator below.
 
 **The meridian separator** (`internal/verifyrun/meridian.go`) reads a leaf as
 a region of the (ρ, z) half-plane whose full revolution about an axis holds
 the body. A full, solid Revolve with no section displacement, an exact unit
-axis, no snap onto the axis, no material admitted across it, and a meridian of whole chained lines on one side of the axis is its own
-region (its holes only remove material). A prism with exact section and levels
-gives the rectangle ρ ≤ r over its levels for a whole-circle outer loop of
+axis, no snap onto the axis, no material admitted across it, and a meridian
+of whole chained lines on one side of the axis is its own region (its holes
+only remove material). A prism with exact section and levels gives the rectangle ρ ≤ r over its levels for a whole-circle outer loop of
 radius r, and the strip ρ ≥ r over its levels for each whole-circle hole. Each
 frame must be exactly orthonormal, so frame coordinates measure true distance
 before the placement. Two regions are compared in a's frame coordinates when
@@ -260,7 +260,33 @@ regions' interiors meet, which Sketch has ruled out. A turned spindle under a
 bearing that sits flush on its collar, with its bore flush on the spindle, is
 decided this way.
 
-Like the coaxial separator, it proves no gap.
+**The end-cap separator** (`internal/verifyrun/halfspace.go`) reads a prism a
+with exact levels as lying between the planes of its two end caps: with m the
+exact cross product of its first two lift columns, turned so that m·L₃ > 0,
+a lies where m·x ≥ m·p(lo) and where m·x ≤ m·p(hi). It decides the pair when
+the other body b lies wholly on the far side of one of those planes, proven
+through b's support along m, with no unit normal:
+
+- a prism with exact section and levels over a whole circle of centre c and
+  radius r reaches m·t + μ·(c, z) + r·√(μ₁² + μ₂²) at one of its levels, with
+  μ = Lᵀm; over whole lines it reaches its largest vertex;
+- a Revolve the meridian separator reads reaches m·t + μ·anchor + z·(μ·d) +
+  ρ·|μ across d| at a vertex of its region, d its axis and μ again Lᵀm, the
+  frame coordinates measuring true distance so the split across d is exact.
+
+Each candidate lin + ρ·√q is held at most the cap's value k exactly, as
+k − lin ≥ 0 and (k − lin)² ≥ ρ²·q. For a Revolve only the part of b in a's
+slab across the axis enters: a's reach along the axial level's functional
+g (Lᵀg = d), each square root rounded up to a float checked exactly, bounds
+the slab, and the region is cut to the vertices inside it and its edges'
+crossings of the two levels, whose hull holds the cut region. The step is
+sound because a lies in the closed half-space beyond the cap and in the slab,
+and the part of b in the slab lies in the opposite closed half-space, so the
+interiors, which lie in the open half-spaces, share no point. A set screw
+seated on a shaft is decided this way, away from a collar the screw's slab
+would reach.
+
+Like the coaxial separator, they prove no gap.
 
 ### 3.3 Full containment
 

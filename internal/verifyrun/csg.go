@@ -181,6 +181,15 @@ func expandRecorded(history boolchain.Source, body *topo.Body) (meshbool.Operati
 	return op, inputs, true
 }
 
+// leafApartOtherwise decides two leaves the shared-lift prism rule leaves
+// open: by their meridians about one axis, or by a prism's end-cap plane.
+func (w historyWalk) leafApartOtherwise(a, b *topo.Body) (bool, error) {
+	if apart, err := meridianApart(w.ctx, w.budget, a, b); err != nil || apart {
+		return apart, err
+	}
+	return capApart(a, b) || capApart(b, a), nil
+}
+
 // leafApart decides between two records directly whether their interiors are
 // disjoint: two prisms with one exact linear lift whose levels or sections,
 // read in one prism's coordinates, share no interior.
@@ -188,11 +197,11 @@ func (w historyWalk) leafApart(a, b *topo.Body) (bool, error) {
 	pa, okA := a.Payload.(prismrecord.Payload)
 	pb, okB := b.Payload.(prismrecord.Payload)
 	if !okA || !okB {
-		return meridianApart(w.ctx, w.budget, a, b)
+		return w.leafApartOtherwise(a, b)
 	}
 	off, ok := liftOffset(pa, pb)
 	if !ok {
-		return meridianApart(w.ctx, w.budget, a, b)
+		return w.leafApartOtherwise(a, b)
 	}
 	alo, ahi := levels(pa, nil)
 	blo, bhi := levels(pb, off.dz)
