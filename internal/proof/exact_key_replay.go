@@ -7,6 +7,7 @@ import (
 	"math/big"
 	"math/bits"
 	"slices"
+	"strings"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 )
@@ -67,7 +68,7 @@ func ReplayExactKey(ctx context.Context, p Xpt, budget ReplayKeyBudget) (string,
 	if err := budget.ReserveBytes(ctx, 2*workspaceBytes+128); err != nil {
 		return "", err
 	}
-	// Byte slice and independently allocated immutable result string.
+	// Fixed envelope for the key buffer and its result string.
 	if err := budget.ReserveBytes(ctx, rawBytes*4+256); err != nil {
 		return "", err
 	}
@@ -165,21 +166,25 @@ func ReplayExactKey(ctx context.Context, p Xpt, budget ReplayKeyBudget) (string,
 	if err := budget.SpendWork(ctx, uint64(4*n)); err != nil {
 		return "", err
 	}
-	out := make([]byte, 0, int(rawBytes))
+	// The key is built in place: String returns the builder's bytes without
+	// copying them. rawBytes bounds the key length because each reduced
+	// magnitude is no longer than its input, so the buffer is grown once.
+	var out strings.Builder
+	out.Grow(int(rawBytes))
 	for i, value := range values {
 		mag := q[i]
 		length := keyBitLen(mag)
 		byteLen := (length + 7) / 8
 		sign := value.Sign()
-		out = append(out, byte(sign+1))
+		out.WriteByte(byte(sign + 1))
 		var header [8]byte
 		binary.LittleEndian.PutUint64(header[:], uint64(byteLen))
-		out = append(out, header[:]...)
+		out.Write(header[:])
 		for j := byteLen - 1; j >= 0; j-- {
-			out = append(out, byte(mag[j/(bits.UintSize/8)]>>uint((j%(bits.UintSize/8))*8)))
+			out.WriteByte(byte(mag[j/(bits.UintSize/8)] >> uint((j%(bits.UintSize/8))*8)))
 		}
 	}
-	return string(out), nil
+	return out.String(), nil
 }
 
 func keyZero(a []big.Word) bool {
