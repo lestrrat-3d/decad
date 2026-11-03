@@ -235,9 +235,9 @@ operation's exact result, and only that set enters the walk:
 **The meridian separator** (`internal/verifyrun/meridian.go`) reads a leaf as
 a region of the (ρ, z) half-plane whose full revolution about an axis holds
 the body. A full, solid Revolve with no section displacement, an exact unit
-axis, no snap onto the axis, no material admitted across it, and a meridian of whole chained lines on one side of the axis is its own
-region (its holes only remove material). A prism with exact section and levels
-gives the rectangle ρ ≤ r over its levels for a whole-circle outer loop of
+axis, no snap onto the axis, no material admitted across it, and a meridian
+of whole chained lines on one side of the axis is its own region (its holes
+only remove material). A prism with exact section and levels gives the rectangle ρ ≤ r over its levels for a whole-circle outer loop of
 radius r, and the strip ρ ≥ r over its levels for each whole-circle hole. Each
 frame must be exactly orthonormal, so frame coordinates measure true distance
 before the placement. Two regions are compared in a's frame coordinates when
