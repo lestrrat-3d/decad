@@ -136,7 +136,7 @@ func MeasuredInterference(ctx context.Context, alloc topo.Alloc, a, b *topo.Body
 			// facet pair within the summed displacements interpenetrates
 			// deeper than them, and none does here, so the held boundaries
 			// stand farther apart than both displacements and the true
-			// interiors are disjoint (agent-docs/interference-design.md §6).
+			// interiors are disjoint (agent-docs/interference-design.md §6.1).
 			if expected.Kind == meshbool.BooleanExpectedEmpty && expected.AppliedShift == nil {
 				return vocab.Measurement{}, boundaryaudit.InterferenceProvenDisjoint, nil
 			}

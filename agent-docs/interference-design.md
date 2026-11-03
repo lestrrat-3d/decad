@@ -626,17 +626,8 @@ These outcomes do **not** emit a row:
 | operand/result unsupported | evaluator lacks a complete path | `Suspect` |
 
 An unshifted empty held intersection proves the interiors disjoint
-(`boundaryaudit.InterferenceProvenDisjoint`). The proximity gate ran first: every
-pair of facets that came within the summed displacements of their faces
-interpenetrates deeper than that sum, which would keep facets, so none comes
-that close. The held boundaries then stand farther apart than both
-displacements, and the held solids share no point. Every true solid lies
-within its displacement band of its held one, and no band reaches the other
-solid's held body or band without crossing a held boundary closer than the
-sum. The true interiors are therefore disjoint, and the pair takes no row and
-no diagnostic, or an unmeasured-clearance one under `WithClearances()`. A
-coplanar face-on-face arrangement never reaches this outcome: the mesh pass
-refuses it.
+(`boundaryaudit.InterferenceProvenDisjoint`, §6.1). The pair takes no row and
+no diagnostic, or an unmeasured-clearance diagnostic under `WithClearances()`.
 
 Do not turn a mesh witness point, an intersection segment, a nesting witness,
 or a positive held volume alone into a row. Every row carries the bounded
@@ -646,6 +637,92 @@ The set-identity paths are the only exceptions to `V - E > 0`: strict full
 containment proves `inner ∩ outer = inner`, and the §4.1 analytic equality
 certificate proves `A ∩ B = A`. Each independently proves positive overlap,
 and the existing body volume is the quantity, not the proof of existence.
+
+### 6.1 Why an empty gated intersection proves disjointness
+
+The rule strengthens `Verify`: a pair it used to leave `Suspect` now passes. The
+claim, its premises and its proof follow in full.
+
+**Claim.** Let `A` and `B` be the true solids and `HA`, `HB` their held
+solids, the closed polyhedra `Verify` meshes them as. Suppose the read-only
+intersection `OpIntersect(A, B)` ran with no gap shift, passed the proximity
+gate (`meshbool.RefuseUndecidableProximity`), and kept no facet
+(`meshbool.BooleanExpectedEmpty` with no `AppliedShift`). Then the interiors of
+`A` and `B` are disjoint.
+
+**Premises.** The proof reads only what the evaluator already proves.
+
+- P1, the operand bound. Every held facet `f` carries a bound `d(f)`: its
+  face's `sourceBound`, or a finer per-facet or per-region figure where one is
+  proven (`agent-docs/faceted-vertex-bounds-design.md` §2,
+  `agent-docs/tessellation-design.md` §2's planar record). The true boundary
+  `∂A` is the end of a homotopy that starts at the held boundary `∂HA` and
+  moves each point of facet `f` by at most `d(f)`. The tessellation contract
+  states every bound as such a displacement, two-sided: every true boundary
+  point lies within `d(f)` of some held facet `f`, and every held point within
+  `d(f)` of the true boundary (tessellation §2's `sourceBound`). The
+  construction homotopies of tessellation §11 realize it, and every other
+  bound-based proof in `Verify`, such as the clearance kernel's widening of a
+  gap by both displacements, reads the same premise.
+- P2, the gate. For every face pair the gate visits, it gathers the facet
+  pairs `(a, b)` that come within the slack of their faces. It narrows that
+  slack to the contacting facets' own bounds, `d(a) + d(b)` at most. Then
+  either it proves an interpenetration of the held facets deeper than that
+  slack, or it finds no facet pair within it, or it refuses. A face pair with
+  zero slack is held exactly, and the mesh pass's exact predicates decide it.
+  A coplanar face-on-face overlap is deferred to the mesh pass, which refuses
+  it ("two operand facets overlap in one plane") instead of returning empty.
+- P3, the mesh pass. `OpIntersect` over the held solids keeps every facet of
+  `HA` inside `HB`, every facet of `HB` inside `HA`, and the cut pieces of
+  every crossing. It keeps none exactly when `HA ∩ HB` has no interior and no
+  boundary crossing.
+
+**Step 1: no held facets are close.** A gate witness of interpenetration
+deeper than the slack places held material of one solid strictly inside the
+other, so P3 would keep facets. The result kept none, so the gate found no
+such witness. It did not refuse either, and no coplanar overlap reached the
+mesh pass (P2). So every held facet pair `(a, b)` stands farther apart than
+`d(a) + d(b)`, or both facets are exact and the exact predicates saw them meet
+in no interior point.
+
+**Step 2: the held solids are apart.** By P3 and the empty result, `HA` and
+`HB` share no interior point and their boundaries do not cross. With Step 1
+the boundaries do not even touch, except where exact faces meet with opposed
+material, which the exact predicates decided. So `HA` and `HB` are disjoint
+closed sets, or meet only on exact faces from opposite sides. In particular
+neither lies inside the other: nesting would keep every facet of the inner
+one.
+
+**Step 3: each true solid stays in its held solid's band.** Let `NA` be the
+set of points within `d(f)` of some facet `f` of `HA`, and `NB` likewise. By
+P1 the homotopy from `∂HA` to `∂A` sweeps only points of `NA`. A point outside
+`NA` is never crossed by the moving boundary, so its winding number about the
+boundary, and with it its membership, is the same in `A` as in `HA`. Hence
+`A ⊆ HA ∪ NA` and `B ⊆ HB ∪ NB`.
+
+**Step 4: the bands keep apart.** Take a point `x` in both `A` and `B`. By
+Step 3 it lies in `HA ∪ NA` and in `HB ∪ NB`. Every case is impossible:
+
+- `x ∈ HA ∩ HB` contradicts Step 2.
+- `x ∈ NA ∩ NB` puts `x` within `d(a)` of a facet `a` and within `d(b)` of a
+  facet `b`, so `a` and `b` are within `d(a) + d(b)` of each other, against
+  Step 1.
+- `x ∈ HA ∩ NB`: `x` lies within `d(b)` of a facet `b` of `HB`, at a point `y`
+  of `∂HB`. `y` is not in `HA`, by Step 2, so the segment from `x` to `y`
+  leaves `HA` through some point `z` of a facet `a` of `HA`. Then `a` and `b`
+  are within `|xy| ≤ d(b)` of each other, against Step 1. `x ∈ NA ∩ HB` is the
+  same with the roles swapped.
+
+The exact-face exception of Step 1 adds only boundary points, where both
+solids' exact faces meet with opposed material, and no interior point. So no
+interior point lies in both `A` and `B`. ∎
+
+**What the rule does not claim.** It proves no gap: the true boundaries may
+touch along exact faces, and the margin Step 1 finds is not measured. A gap
+shift moves a held mesh off its true operand, so P1 fails for the moved
+operand and a shifted empty result proves nothing. Every other empty result,
+from a point-cone record or a public Boolean's dispatch, never reaches this
+path.
 
 ## 7. Errors and cancellation
 
