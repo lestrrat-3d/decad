@@ -335,34 +335,11 @@ func auditFacetedMesh(ctx context.Context, verts []r3.Vec, tris [][3]int, worker
 		return nil, err
 	}
 	audit.Adj = Adj
-	work := 0
-	for i := range tris {
-		if audit.Comp[i] != -1 {
-			continue
-		}
-		id := len(audit.Members)
-		queue := []int{i}
-		audit.Comp[i] = id
-		var list []int
-		for len(queue) > 0 {
-			work++
-			if work%256 == 0 {
-				if err := ctx.Err(); err != nil {
-					return nil, err
-				}
-			}
-			f := queue[0]
-			queue = queue[1:]
-			list = append(list, f)
-			for _, nb := range audit.Adj[f] {
-				if audit.Comp[nb] == -1 {
-					audit.Comp[nb] = id
-					queue = append(queue, nb)
-				}
-			}
-		}
-		audit.Members = append(audit.Members, list)
+	members, err := componentMembers(ctx, audit.Adj, audit.Comp)
+	if err != nil {
+		return nil, err
 	}
+	audit.Members = members
 
 	// preDet[fi] is facet fi's determinant term, computed ahead
 	// of the component loop that consumes them in its own order.
@@ -382,7 +359,10 @@ func auditFacetedMesh(ctx context.Context, verts []r3.Vec, tris [][3]int, worker
 	}
 
 	sixth := big.NewRat(1, 6)
-	det := make([]proof.Dyadic, len(tris))
+	det := preDet
+	if det == nil {
+		det = make([]proof.Dyadic, len(tris))
+	}
 	audit.CompVol = make([]*big.Rat, len(audit.Members))
 	for ci, list := range audit.Members {
 		// Every term is a Dyadic (power-of-two denominators), so the
@@ -400,8 +380,8 @@ func auditFacetedMesh(ctx context.Context, verts []r3.Vec, tris [][3]int, worker
 				term = preDet[fi]
 			} else {
 				term = floatFacetDeterminant(verts, tris[fi])
+				det[fi] = term
 			}
-			det[fi] = term
 			total.Add(term)
 		}
 		v := total.Rat()
@@ -485,4 +465,44 @@ func auditFacetedMesh(ctx context.Context, verts []r3.Vec, tris [][3]int, worker
 func floatFacetDeterminant(verts []r3.Vec, t [3]int) proof.Dyadic {
 	a, b, c := verts[t[0]], verts[t[1]], verts[t[2]]
 	return proof.FloatDeterminant(a, b, c)
+}
+
+// componentMembers fills comp (every entry -1 on entry) with each facet's
+// component id and returns the member list of every component. Components
+// are numbered by their lowest facet and listed in breadth-first order.
+//
+// The components partition the facets, and a breadth-first walk lists a
+// component in the order it queues it, so one facet-sized array serves as
+// every component's queue and member list. Each member list is capped at its
+// own length so an append to one cannot reach the next. The array belongs to
+// this call alone.
+func componentMembers(ctx context.Context, adj [][]int, comp []int) ([][]int, error) {
+	var members [][]int
+	order := make([]int, 0, len(comp))
+	work := 0
+	for i := range comp {
+		if comp[i] != -1 {
+			continue
+		}
+		id := len(members)
+		start := len(order)
+		order = append(order, i)
+		comp[i] = id
+		for head := start; head < len(order); head++ {
+			work++
+			if work%256 == 0 {
+				if err := ctx.Err(); err != nil {
+					return nil, err
+				}
+			}
+			for _, nb := range adj[order[head]] {
+				if comp[nb] == -1 {
+					comp[nb] = id
+					order = append(order, nb)
+				}
+			}
+		}
+		members = append(members, order[start:len(order):len(order)])
+	}
+	return members, nil
 }

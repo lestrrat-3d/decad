@@ -20,3 +20,6 @@ var ReferenceClosedFacetEdges = referenceClosedFacetEdges
 
 // GroupedVertexRange reports the vertex range closedFacetEdges groups over.
 var GroupedVertexRange = groupedVertexRange
+
+// ComponentMembers lists each facet component's members in walk order.
+var ComponentMembers = componentMembers
