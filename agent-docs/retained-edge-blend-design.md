@@ -450,12 +450,15 @@ diagonal; the ring is wound outward by its signed volume. Its band is group
 
 **Proofs (each failure refuses `ErrUnsupported`).**
 
-1. Band cells: `crossbore.ProveToolBand` runs the same eight interval sign checks
+1. Band cells: `crossbore.ProveToolBases` runs the same eight interval sign checks
    as `CellExactProof` on the `N/4 + 1`
    quarter-turn cells widened by `2π/N` (the outer foot outside the bore, the
-   bore foot inside the shaft, polar progress, no fold), and mirrors them over
-   the whole turn as cross-cylinder-bore does; the local pose is exactly
-   symmetric by construction.
+   bore foot inside the shaft, polar progress, no fold), and
+   `crossbore.ProveToolBandWith` mirrors them over the whole turn as
+   cross-cylinder-bore does; the local pose is exactly symmetric by
+   construction. The base cells read only `R`, `r` and the setback `d`, never
+   the pose, so within one chamfer call consecutive saddles of bit-equal `R`
+   and `r` (the two mouths of one through bore) read one proof of them.
 2. Chord bound `ε`: a point of a held band triangle pairs with the exact
    extended band `F(θ, t) = B⁺(θ) + t·D(θ)`, `D = O⁺ − B⁺`, at the same
    parameters. Take the quad between stations `θ_j`, `θ_j+1` (`h = 2π/N`) and
