@@ -204,6 +204,24 @@ func proveVerifyPair(ctx context.Context, job verifyPairJob, cfg verifyConfig, g
 		}
 	}
 
+	if res.Verdict == boundaryaudit.PairUndecided {
+		// A circular cylinder that separates the interiors proves the pair
+		// non-overlapping where coincident cylinder faces leave every mesh
+		// undecided (coaxial.go).
+		separated, err := coaxialSeparated(ctx, history, a, b)
+		if err != nil {
+			return verifyPairOutcome{}, err
+		}
+		if separated {
+			if cfg.Clearances {
+				out.diagnostics = append(out.diagnostics, PairDiagNone(a, b, vocab.DiagUndecidedClearance,
+					"a circular cylinder separates the pair's interiors, but the requested clearance gap is unmeasured"))
+				out.undecided = true
+			}
+			return out, nil
+		}
+	}
+
 	volume, outcome, err := MeasuredInterference(ctx, alloc, a, b, res, meshes)
 	if err != nil {
 		return verifyPairOutcome{}, err
