@@ -161,9 +161,26 @@ func prismSupport(p prismrecord.Payload, m [3]*big.Rat) (support, bool) {
 		}
 		return s, true
 	}
-	s := support{q: new(big.Rat)}
+	s := support{q: new(big.Rat).Add(new(big.Rat).Mul(mu[0], mu[0]), new(big.Rat).Mul(mu[1], mu[1]))}
 	zero := new(big.Rat)
 	for _, seg := range p.Profile.Outer.Segments {
+		if arc, ok := seg.(sectionrecord.ArcSeg); ok {
+			// An arc lies on the circle through its two ends about its centre,
+			// whose support bounds the arc's; ends at unequal distances name no
+			// circle.
+			rs, re := distSquared(arc.Center, arc.Start), distSquared(arc.Center, arc.End)
+			if rs.Cmp(re) != 0 {
+				return support{}, false
+			}
+			radius, ok := sqrtUpper(rs)
+			if !ok {
+				return support{}, false
+			}
+			for _, z := range levels {
+				s.terms = append(s.terms, supportTerm{lin: reach(ratOf(arc.Center.U), ratOf(arc.Center.V), z), rho: radius})
+			}
+			continue
+		}
 		start, end, ok := wholeLine(seg)
 		if !ok {
 			return support{}, false
@@ -242,4 +259,11 @@ func slabCut(r meridian, near prismrecord.Payload) [][2]*big.Rat {
 		}
 	}
 	return out
+}
+
+// distSquared is the exact squared distance between two section points.
+func distSquared(a, b sectionrecord.Point2) *big.Rat {
+	du := new(big.Rat).Sub(ratOf(a.U), ratOf(b.U))
+	dv := new(big.Rat).Sub(ratOf(a.V), ratOf(b.V))
+	return du.Mul(du, du).Add(du, dv.Mul(dv, dv))
 }

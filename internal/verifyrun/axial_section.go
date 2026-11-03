@@ -4,6 +4,7 @@ import (
 	"context"
 	"math"
 	"math/big"
+	"slices"
 
 	"github.com/lestrrat-3d/decad/internal/boolchain"
 	"github.com/lestrrat-3d/decad/internal/classbgeom"
@@ -404,4 +405,156 @@ func axisRectangle(p momentinput.Profile) (u0, v0, u1, v1 *big.Rat, ok bool) {
 		v0, v1 = minRat(v0, vs[i]), maxRat(v1, vs[i])
 	}
 	return u0, v0, u1, v1, u0.Cmp(u1) != 0 && v0.Cmp(v1) != 0
+}
+
+// revolvePiecesApart reports whether a, a Cut chain down to a prism, misses the
+// Revolve b by pieces (agent-docs/interference-design.md §3.2, "The piece
+// separator"). b lies in the revolution of its meridian, which splits at the
+// meridian's vertex levels into slabs; each slab lies in a cylinder about b's
+// axis. A slab is apart from a when either
+//
+//   - the cylinder lies in a circle-prism tool of the chain, over the levels a's
+//     target reaches along the axis: the Cut result misses the tool's solid
+//     (the Cut-tool meridian, with the slab as b's region), or
+//   - the cylinder's footprint on the target's section plane, a rectangle, has
+//     no interior in common with the target's section, where the axis lies in
+//     that plane along one of its axes, the target sweeps across the axis, and
+//     both lifts are exactly orthonormal. The footprint holds the projection of
+//     every point of the cylinder along the sweep, so a point of both interiors
+//     would project into both sections' interiors.
+//
+// Every slab apart means b misses a, because b lies in the union of its slabs.
+func revolvePiecesApart(ctx context.Context, budget *proofbound.WorkBudget, history boolchain.Source,
+	a, b *topo.Body) (bool, error) {
+	b = sameSetOf(history, b)
+	rp, ok := b.Payload.(revolveplan.Payload)
+	if !ok {
+		return false, nil
+	}
+	m, ok := revolveMeridian(rp)
+	if !ok || m.disc != nil {
+		return false, nil
+	}
+	target, cutters := cutChain(history, a)
+	pt, ok := target.Payload.(prismrecord.Payload)
+	if !ok || !prismExact(pt) {
+		return false, nil
+	}
+	var levelsZ []*big.Rat
+	for _, q := range m.region {
+		levelsZ = append(levelsZ, q[1])
+	}
+	slices.SortFunc(levelsZ, func(x, y *big.Rat) int { return x.Cmp(y) })
+	levelsZ = slices.CompactFunc(levelsZ, func(x, y *big.Rat) bool { return x.Cmp(y) == 0 })
+	zero := new(big.Rat)
+	for i := 0; i+1 < len(levelsZ); i++ {
+		z0, z1 := levelsZ[i], levelsZ[i+1]
+		pts := slabPoints(m.region, z0, z1)
+		if len(pts) == 0 {
+			continue
+		}
+		rho := pts[0][0]
+		for _, q := range pts {
+			rho = maxRat(rho, q[0])
+		}
+		slab := m
+		slab.region = [][2]*big.Rat{{zero, z0}, {rho, z0}, {rho, z1}, {zero, z1}}
+		apart, err := slabApart(ctx, budget, history, target, pt, cutters, slab, rho, z0, z1)
+		if err != nil || !apart {
+			return false, err
+		}
+	}
+	return true, nil
+}
+
+// slabApart decides one slab of a Revolve against a Cut chain's target.
+func slabApart(ctx context.Context, budget *proofbound.WorkBudget, history boolchain.Source,
+	target *topo.Body, pt prismrecord.Payload, cutters []*topo.Body, slab meridian, rho, z0, z1 *big.Rat) (bool, error) {
+	for _, tool := range cutters {
+		if apart, err := cutCircleMeridianApartRegions(ctx, budget, history, target, tool, []meridian{slab}); err != nil || apart {
+			return apart, err
+		}
+	}
+	rect, apart, ok := footprint(slab, pt, rho, z0, z1)
+	if apart {
+		return true, nil
+	}
+	if !ok {
+		return false, nil
+	}
+	return prismcells.SectionsApart(ctx, budget, []momentinput.Profile{rect}, []momentinput.Profile{pt.Profile})
+}
+
+// footprint is the rectangle a slab's cylinder (ρ ≤ rho over meridian levels
+// z0..z1) projects to on prism pt's section plane, rounded outward to floats,
+// when the axis lies in that plane along one of its axes. apart reports that
+// the cylinder's reach along pt's sweep misses pt's levels.
+func footprint(slab meridian, pt prismrecord.Payload, rho, z0, z1 *big.Rat) (
+	rect momentinput.Profile, apart, ok bool) {
+	la, ta := slab.l, slab.t
+	lt, tt := prismLift(pt)
+	if slab.xform == pt.Xform && slab.fl[0][0] != nil {
+		la, ta = slab.fl, slab.ft
+		var iso bool
+		lt, tt, iso = frameLift(pt.Frame, r3.Identity())
+		if !iso {
+			return momentinput.Profile{}, false, false
+		}
+	}
+	if !orthonormal(la[0], la[1], la[2]) || !orthonormal(lt[0], lt[1], lt[2]) {
+		return momentinput.Profile{}, false, false
+	}
+	at := func(p [3]*big.Rat) [3]*big.Rat {
+		return addVec(addVec(scaleVec(la[0], p[0]), scaleVec(la[1], p[1])), scaleVec(la[2], p[2]))
+	}
+	dir := at(slab.dir)
+	if dotVec(dir, lt[2]).Sign() != 0 {
+		return momentinput.Profile{}, false, false
+	}
+	rel := subVec(addVec(at(slab.anchor), ta), tt)
+	u0, v0, h0 := dotVec(rel, lt[0]), dotVec(rel, lt[1]), dotVec(rel, lt[2])
+	tlo, thi := levels(pt, nil)
+	if new(big.Rat).Add(h0, rho).Cmp(tlo) <= 0 || new(big.Rat).Sub(h0, rho).Cmp(thi) >= 0 {
+		return momentinput.Profile{}, true, true
+	}
+	du, dv := dotVec(dir, lt[0]), dotVec(dir, lt[1])
+	one := big.NewRat(1, 1)
+	span := func(base, d *big.Rat) (*big.Rat, *big.Rat) {
+		a := new(big.Rat).Add(base, new(big.Rat).Mul(d, z0))
+		b := new(big.Rat).Add(base, new(big.Rat).Mul(d, z1))
+		return minRat(a, b), maxRat(a, b)
+	}
+	var uLo, uHi, vLo, vHi *big.Rat
+	switch {
+	case new(big.Rat).Abs(du).Cmp(one) == 0 && dv.Sign() == 0:
+		uLo, uHi = span(u0, du)
+		vLo, vHi = new(big.Rat).Sub(v0, rho), new(big.Rat).Add(v0, rho)
+	case new(big.Rat).Abs(dv).Cmp(one) == 0 && du.Sign() == 0:
+		vLo, vHi = span(v0, dv)
+		uLo, uHi = new(big.Rat).Sub(u0, rho), new(big.Rat).Add(u0, rho)
+	default:
+		return momentinput.Profile{}, false, false
+	}
+	down := func(r *big.Rat) float64 {
+		f, _ := r.Float64()
+		if ratOf(f).Cmp(r) > 0 {
+			f = math.Nextafter(f, math.Inf(-1))
+		}
+		return f
+	}
+	up := func(r *big.Rat) float64 {
+		f, _ := r.Float64()
+		if ratOf(f).Cmp(r) < 0 {
+			f = math.Nextafter(f, math.Inf(1))
+		}
+		return f
+	}
+	x0, x1, y0, y1 := down(uLo), up(uHi), down(vLo), up(vHi)
+	p := func(x, y float64) sectionrecord.Point2 { return sectionrecord.Point2{U: x, V: y} }
+	return momentinput.Profile{Outer: sectionrecord.LoopRecord{Segments: []sectionrecord.CurveSegment{
+		sectionrecord.LineSeg{Start: p(x0, y0), End: p(x1, y0), TEnd: 1},
+		sectionrecord.LineSeg{Start: p(x1, y0), End: p(x1, y1), TEnd: 1},
+		sectionrecord.LineSeg{Start: p(x1, y1), End: p(x0, y1), TEnd: 1},
+		sectionrecord.LineSeg{Start: p(x0, y1), End: p(x0, y0), TEnd: 1},
+	}}}, false, true
 }

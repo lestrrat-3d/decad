@@ -3002,3 +3002,4 @@
 11	0.00	TestVerifyAxialSectionSeparator
 11	0.00	TestVerifyAxialSectionTurnedMate
 11	0.00	TestVerifyAxialSectionShoulderAtLevel
+11	0.00	TestVerifyPieceSeparator

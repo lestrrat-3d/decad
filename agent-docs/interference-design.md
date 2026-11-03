@@ -296,7 +296,7 @@ through b's support along m, with no unit normal:
 
 - a prism with exact section and levels over a whole circle of centre c and
   radius r reaches m·t + μ·(c, z) + r·√(μ₁² + μ₂²) at one of its levels, with
-  μ = Lᵀm; over whole lines it reaches its largest vertex;
+  μ = Lᵀm; over whole lines it reaches its largest vertex, and an arc adds the support of the circle through its two ends about its centre, ends at one exact distance from it;
 - a Revolve the meridian separator reads over whole lines reaches m·t + μ·anchor + z·(μ·d) +
   ρ·|μ across d| at a vertex of its region, d its axis and μ again Lᵀm, the
   frame coordinates measuring true distance so the split across d is exact.
@@ -411,6 +411,34 @@ rational, so the disc and the levels only widen.
 A pair whose cover touches a hole on a lift that is not exactly a rotation of
 b's stays open: the widened disc crosses the hole by rounding, as for a
 shaft pressed into a bore of its own radius under two inexact rotations.
+
+**The piece separator** (`internal/verifyrun/axial_section.go`) reads a Cut
+chain down to a prism, whose target a turned screw sits across, against a Revolve
+the meridian separator reads. The Revolve lies in the revolution of its meridian,
+which splits at the meridian's vertex levels into slabs, each in a cylinder about
+the axis of the largest ρ the slab holds. The pair is decided when every slab is
+apart from the chain, a slab by either of:
+
+- the cylinder lies in a whole-circle prism of the chain over the levels its
+  target reaches along the axis, which is the Cut-tool meridian with the slab as
+  the Revolve's region: the Cut result misses its tool's solid. A shank in the
+  hole its own tool bored is decided this way;
+- the cylinder's footprint on the target's section plane has no interior in
+  common with the target's section. The axis must lie in that plane along one of
+  its axes, the target sweep across it, and both lifts be exactly orthonormal,
+  in the coordinates before one placement the two carry bit for bit or in the
+  world. The footprint is the rectangle the cylinder projects to along the sweep,
+  its edges rounded outward to floats; a point of both interiors would project
+  into both sections' interiors, which Sketch has ruled out
+  (`prismcells.SectionsApart`). A head flush on a bracket's face, though its
+  revolution reaches a knuckle beside it, is decided this way, as is a cylinder
+  whose reach along the sweep misses the target's levels.
+
+The step is sound because the Revolve lies in the union of its slabs' cylinders
+and every slab's cylinder, less the chain's tools where the first reading uses
+them, misses the target's interior. The first reading needs the target's
+axial range, which reads an arc of the target's section by the support of its
+circle.
 
 Like the coaxial separator, they prove no gap.
 
