@@ -62,20 +62,26 @@ func sameToolProof(a, b crossbore.ToolProof) string {
 
 // TestSharedToolBasesMatchOldPath proves the two mouths of one through bore,
 // sharing one proof of the base cells through sharedToolBases, get the bits
-// the per-saddle proof gave, and that a saddle of other radii gets its own.
+// the per-saddle proof gave, and that a saddle of other radii or another
+// setback gets its own.
 func TestSharedToolBasesMatchOldPath(t *testing.T) {
 	t.Parallel()
-	const d = 1.5
-	mouth := func(R, r float64, pose crossbore.Pose) saddle {
-		return saddle{key: saddleKey{pose: pose, R: R, r: r}}
+	type mouth struct {
+		s saddle
+		d float64
 	}
-	saddles := []saddle{
-		mouth(10, 3, crossbore.Pose{Axis: [3]int{2, 1, 0}, Sign: [3]float64{-1, -1, 1}, Shift: r3.Vec{X: 40}}),
-		mouth(10, 3, crossbore.Pose{Axis: [3]int{2, 1, 0}, Sign: [3]float64{1, 1, 1}, Shift: r3.Vec{X: -40}}),
-		mouth(9, 2.5, crossbore.Pose{Axis: [3]int{2, 1, 0}, Sign: [3]float64{1, 1, 1}, Shift: r3.Vec{X: 5}}),
+	at := func(R, r, d float64, pose crossbore.Pose) mouth {
+		return mouth{saddle{key: saddleKey{pose: pose, R: R, r: r}}, d}
+	}
+	mouths := []mouth{
+		at(10, 3, 1.5, crossbore.Pose{Axis: [3]int{2, 1, 0}, Sign: [3]float64{-1, -1, 1}, Shift: r3.Vec{X: 40}}),
+		at(10, 3, 1.5, crossbore.Pose{Axis: [3]int{2, 1, 0}, Sign: [3]float64{1, 1, 1}, Shift: r3.Vec{X: -40}}),
+		at(9, 2.5, 1.5, crossbore.Pose{Axis: [3]int{2, 1, 0}, Sign: [3]float64{1, 1, 1}, Shift: r3.Vec{X: 5}}),
+		at(9, 2.5, 1, crossbore.Pose{Axis: [3]int{2, 1, 0}, Sign: [3]float64{-1, -1, 1}, Shift: r3.Vec{X: -5}}),
 	}
 	var shared sharedToolBases
-	for i, s := range saddles {
+	for i, m := range mouths {
+		s, d := m.s, m.d
 		got, err := placeSaddleTool(s, d)
 		require.NoError(t, err)
 		want, err := placeSaddleTool(s, d)

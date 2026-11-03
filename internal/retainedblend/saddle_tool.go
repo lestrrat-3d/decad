@@ -377,27 +377,28 @@ func toolPayload(tools []*saddleTool, producer provenance.Producer) (facetedreco
 }
 
 // sharedToolBases holds the base cells of the last saddle proved within one
-// cutSaddles call. The cells read only the radii and the setback, so saddles
-// of equal radii (the two mouths of one through bore) share one proof of them.
-// It is local to the call and its cells are never written.
+// cutSaddles call. The cells read only the radii and the setback, so
+// consecutive saddles of equal radii (the two mouths of one through bore)
+// share one proof of them. It is local to the call and its cells are never
+// written.
 type sharedToolBases struct {
-	bases  crossbore.ToolBases
-	R, r   float64
-	proved bool
+	bases   crossbore.ToolBases
+	R, r, d float64
+	proved  bool
 }
 
 // get returns the base cells for s's radii and the setback d, proving them
-// unless the previous saddle had the same radii.
+// unless the previous call had the same radii and setback, compared by bits.
 func (b *sharedToolBases) get(ctx context.Context, s saddle, d float64) (crossbore.ToolBases, error) {
 	if b.proved && math.Float64bits(s.key.R) == math.Float64bits(b.R) &&
-		math.Float64bits(s.key.r) == math.Float64bits(b.r) {
+		math.Float64bits(s.key.r) == math.Float64bits(b.r) && math.Float64bits(d) == math.Float64bits(b.d) {
 		return b.bases, nil
 	}
 	bases, err := crossbore.ProveToolBases(ctx, s.key.R, s.key.r, d)
 	if err != nil {
 		return crossbore.ToolBases{}, err
 	}
-	*b = sharedToolBases{bases: bases, R: s.key.R, r: s.key.r, proved: true}
+	*b = sharedToolBases{bases: bases, R: s.key.R, r: s.key.r, d: d, proved: true}
 	return bases, nil
 }
 
