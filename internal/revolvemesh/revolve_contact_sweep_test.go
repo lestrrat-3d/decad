@@ -199,9 +199,9 @@ func TestRevolveVertexIsolatedCachedMatchesUncached(t *testing.T) {
 					}
 					a, b := m.data[i], m.data[j]
 					require.Equal(t, RevolveVertexIsolated(a, m.tris[i], b, m.tris[j], shared[0], delta),
-						revolveVertexIsolated(a, m.tris[i], b, m.tris[j], shared[0], delta, cache, i), "%s %d,%d", name, i, j)
+						revolveVertexIsolated(&a, m.tris[i], &b, m.tris[j], shared[0], delta, cache, i), "%s %d,%d", name, i, j)
 					require.Equal(t, RevolveVertexIsolated(b, m.tris[j], a, m.tris[i], shared[0], delta),
-						revolveVertexIsolated(b, m.tris[j], a, m.tris[i], shared[0], delta, cache, j), "%s %d,%d", name, j, i)
+						revolveVertexIsolated(&b, m.tris[j], &a, m.tris[i], shared[0], delta, cache, j), "%s %d,%d", name, j, i)
 				}
 			}
 		}

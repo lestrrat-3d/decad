@@ -34,22 +34,22 @@ func newRevolveAxisCache(n int) *revolveAxisCache {
 	}
 }
 
-func (c *revolveAxisCache) normalAxis(i int, a RevolveAuditTri, delta float64) RevolveSepAxis {
+func (c *revolveAxisCache) normalAxis(i int, a *RevolveAuditTri, delta float64) RevolveSepAxis {
 	if !c.normalOK[i] {
-		c.normal[i] = RevolveNormalAxis(a, delta)
+		c.normal[i] = RevolveNormalAxis(*a, delta)
 		c.normalOK[i] = true
 	}
 	return c.normal[i]
 }
 
-func (c *revolveAxisCache) corner(i int, a RevolveAuditTri, at int, delta float64) *revolveCornerAxes {
+func (c *revolveAxisCache) corner(i int, a *RevolveAuditTri, at int, delta float64) *revolveCornerAxes {
 	if !c.cornerOK[i][at] {
-		off := RevolveCornerOffsets(a, at)
+		off := a.Off[at]
 		out := &c.corners[i][at]
-		out.fan[0] = RevolveEdgeFanAxis(a, off[0], delta)
-		out.fan[1] = RevolveEdgeFanAxis(a, off[1], delta)
+		out.fan[0] = RevolveEdgeFanAxis(*a, off[0], delta)
+		out.fan[1] = RevolveEdgeFanAxis(*a, off[1], delta)
 		chord := RevolveOffsetOf(proofarith.DvSub(off[0].V, off[1].V), RevIvSubVec(off[0].F, off[1].F))
-		out.chord = RevolveEdgeFanAxis(a, chord, delta)
+		out.chord = RevolveEdgeFanAxis(*a, chord, delta)
 		c.cornerOK[i][at] = true
 	}
 	return &c.corners[i][at]
@@ -62,8 +62,8 @@ func auditRevolvePairCached(data []RevolveAuditTri, tris [][3]int, shared [3]int
 	if count != 1 {
 		return AuditRevolvePair(data, tris, shared, count, i, j, delta)
 	}
-	if revolveVertexIsolated(data[i], tris[i], data[j], tris[j], shared[0], delta, cache, i) ||
-		revolveVertexIsolated(data[j], tris[j], data[i], tris[i], shared[0], delta, cache, j) {
+	if revolveVertexIsolated(&data[i], tris[i], &data[j], tris[j], shared[0], delta, cache, i) ||
+		revolveVertexIsolated(&data[j], tris[j], &data[i], tris[i], shared[0], delta, cache, j) {
 		return nil
 	}
 	return fmt.Errorf(`%w: revolve facets %d and %d do not provably meet only at the vertex they share`, decaderr.ErrUnsupported, i, j)
