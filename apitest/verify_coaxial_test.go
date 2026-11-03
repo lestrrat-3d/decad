@@ -190,3 +190,44 @@ func TestVerifyCoaxialNaryUnion(t *testing.T) {
 		})
 	}
 }
+
+// TestVerifyCoaxialCutTool bores a 30×30×8 plate with a Ø8 tool along z and
+// runs a Ø8 shaft from z = −10 to 30 through the bore. The plate has no hole of
+// its own, so only the Cut's tool shows that the plate lies outside the
+// shaft's cylinder: a tool running through the plate decides the pair; a tool
+// that stops inside the plate, or one bored smaller than the shaft, does not.
+//
+// Leg shown to fail: reading only a Cut's target leaves the bored plate with
+// a pair diagnostic.
+func TestVerifyCoaxialCutTool(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name         string
+		radius       float64
+		toolZ, toolH float64
+		separated    bool
+	}{
+		{"tool through the plate", 4, -1, 10, true},
+		{"tool stopping inside the plate", 4, -1, 6, false},
+		{"tool smaller than the shaft", 3.9, -1, 10, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			doc := decad.New()
+			plate := slab(t, doc, -15, -15, 15, 15, 0, 8, r3.Identity())
+			tool := placedAlongZ(t, coaxialSection(t, doc, 0, 0, tc.toolH, tc.radius), tc.toolZ)
+			bored, err := decad.Cut(t.Context(), plate, tool)
+			require.NoError(t, err)
+			shaft := placedAlongZ(t, coaxialSection(t, doc, 0, 0, 40, 4), -10)
+			report, err := doc.Verify(t.Context())
+			require.NoError(t, err)
+			interferences, diagnostics := pairFindings(report, bored, shaft)
+			if tc.separated {
+				require.Zero(t, interferences)
+				require.Zero(t, diagnostics, "the Cut's tool separates the shaft")
+				return
+			}
+			require.Positive(t, interferences+diagnostics)
+		})
+	}
+}

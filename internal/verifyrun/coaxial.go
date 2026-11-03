@@ -29,6 +29,10 @@ import (
 //     whole circle; two such cylinders are the same set when exactly
 //     orthonormal lifts give them one axis and radius, or when one affine lift
 //     carries both;
+//   - a Cut result lies outside the cylinder of its tool, or of a Union
+//     operand of its tool, that is a prism over one whole circle, when its
+//     target lies within the tool's levels: the target's part inside the
+//     cylinder then lies in the tool, which the Cut removes;
 //   - a mesh Boolean result whose history denotes its operation exactly
 //     (boolchain.Expandable) inherits containment: a Cut lies where its target
 //     lies, an Intersect where either operand lies, a Union where both lie.
@@ -144,7 +148,7 @@ func outsideCylinder(history boolchain.Source, body *topo.Body, c coaxialCylinde
 	}
 	switch op {
 	case meshbool.OpCut:
-		return outsideCylinder(history, inputs[0], c, depth+1)
+		return outsideCylinder(history, inputs[0], c, depth+1) || toolHolds(history, inputs[1], inputs[0], c, depth+1)
 	case meshbool.OpIntersect:
 		for _, part := range inputs {
 			if outsideCylinder(history, part, c, depth+1) {
@@ -339,4 +343,93 @@ func orthonormal(a, b, c [3]*big.Rat) bool {
 		}
 	}
 	return dotVec(a, b).Sign() == 0 && dotVec(b, c).Sign() == 0 && dotVec(a, c).Sign() == 0
+}
+
+// toolHolds reports whether tool, or an operand of a Union tool, is a prism
+// over one whole circle whose cylinder is c and whose levels hold target along
+// the cylinder's axis. Every point of target inside c then lies in that prism,
+// so target less the tool misses c's open interior.
+func toolHolds(history boolchain.Source, tool, target *topo.Body, c coaxialCylinder, depth int) bool {
+	if depth > coaxialMaxDepth {
+		return false
+	}
+	if pp, ok := tool.Payload.(prismrecord.Payload); ok {
+		circle, ok := wholeCircle(pp.Profile.Outer)
+		if !ok || len(pp.Profile.Holes) != 0 || pp.Z0Delta != 0 || pp.Z1Delta != 0 {
+			return false
+		}
+		own, ok := prismCylinder(pp, circle)
+		if !ok || !own.equal(c) {
+			return false
+		}
+		return withinLevels(history, target, pp, depth+1)
+	}
+	op, inputs, ok := expandRecorded(history, tool)
+	if !ok || op != meshbool.OpUnion {
+		return false
+	}
+	for _, part := range inputs {
+		if toolHolds(history, part, target, c, depth+1) {
+			return true
+		}
+	}
+	return false
+}
+
+// withinLevels reports whether body lies between the levels of prism pp: with
+// pp's lift t + L·(x, y, z), every point x of body has z = g·(x − t) in
+// [z0, z1], where Lᵀg = e₃. The reach along ±g is read exactly; a Cut lies
+// where its target lies, an Intersect where any operand lies, a Union where
+// all lie.
+func withinLevels(history boolchain.Source, body *topo.Body, pp prismrecord.Payload, depth int) bool {
+	if depth > coaxialMaxDepth {
+		return false
+	}
+	l, t := prismLift(pp)
+	var cols [3][3]*big.Rat
+	for i := range 3 {
+		cols[i] = [3]*big.Rat{l[0][i], l[1][i], l[2][i]}
+	}
+	zero, one := new(big.Rat), big.NewRat(1, 1)
+	g, ok := solve(cols, [3]*big.Rat{zero, zero, one})
+	if !ok {
+		return false
+	}
+	base := dotVec(g, t)
+	lo := new(big.Rat).Add(base, ratOf(min(pp.Z0, pp.Z1)))
+	hi := new(big.Rat).Add(base, ratOf(max(pp.Z0, pp.Z1)))
+	var leaf func(*topo.Body, int) bool
+	leaf = func(b *topo.Body, depth int) bool {
+		if depth > coaxialMaxDepth {
+			return false
+		}
+		if up, ok := supportOf(b, g, nil); ok {
+			down, ok := supportOf(b, scaleVec(g, big.NewRat(-1, 1)), nil)
+			return ok && up.within(hi) && down.within(new(big.Rat).Neg(lo))
+		}
+		op, inputs, ok := expandRecorded(history, b)
+		if !ok {
+			return false
+		}
+		switch op {
+		case meshbool.OpCut:
+			return leaf(inputs[0], depth+1)
+		case meshbool.OpIntersect:
+			for _, part := range inputs {
+				if leaf(part, depth+1) {
+					return true
+				}
+			}
+			return false
+		case meshbool.OpUnion:
+			for _, part := range inputs {
+				if !leaf(part, depth+1) {
+					return false
+				}
+			}
+			return true
+		}
+		return false
+	}
+	return leaf(body, depth)
 }

@@ -106,21 +106,21 @@ func capApart(a, b *topo.Body) bool {
 	// a's points t + L·(x, y, z) reach m·t + z·(m·L₃) along m, and m·L₃ > 0,
 	// so a lies where m·x ≥ m·p(lo) and where m·x ≤ m·p(hi).
 	at := func(z *big.Rat) *big.Rat { return dotVec(m, addVec(t, scaleVec(l[2], z))) }
-	if s, ok := supportOf(b, m, pa); ok && s.within(at(lo)) {
+	if s, ok := supportOf(b, m, &pa); ok && s.within(at(lo)) {
 		return true
 	}
 	neg := scaleVec(m, big.NewRat(-1, 1))
-	if s, ok := supportOf(b, neg, pa); ok && s.within(new(big.Rat).Neg(at(hi))) {
+	if s, ok := supportOf(b, neg, &pa); ok && s.within(new(big.Rat).Neg(at(hi))) {
 		return true
 	}
 	return false
 }
 
-// supportOf bounds how far along m the part of a body that can meet the prism
-// near reaches: a prism with an exact section and levels over a whole circle
-// or whole lines, or the part of a Revolve the meridian separator reads that
-// lies in near's slab across its axis.
-func supportOf(body *topo.Body, m [3]*big.Rat, near prismrecord.Payload) (support, bool) {
+// supportOf bounds how far along m a body reaches: a prism with an exact
+// section and levels over a whole circle or whole lines, or a Revolve the
+// meridian separator reads. Given near, a Revolve's reach is that of its part
+// in near's slab across its axis; nil reads the whole body.
+func supportOf(body *topo.Body, m [3]*big.Rat, near *prismrecord.Payload) (support, bool) {
 	switch p := body.Payload.(type) {
 	case prismrecord.Payload:
 		return prismSupport(p, m)
@@ -182,13 +182,17 @@ func prismSupport(p prismrecord.Payload, m [3]*big.Rat) (support, bool) {
 // that peaks at m·t + μ·anchor + z·(μ·dir) + ρ·|μ across the axis| over the
 // vertices of the meridian cut to near's slab; the frame coordinates measure
 // true distance, so the split is exact.
-func revolveSupport(r meridian, m [3]*big.Rat, near prismrecord.Payload) support {
+func revolveSupport(r meridian, m [3]*big.Rat, near *prismrecord.Payload) support {
 	mu := [3]*big.Rat{dotVec(r.l[0], m), dotVec(r.l[1], m), dotVec(r.l[2], m)}
 	along := dotVec(mu, r.dir)
 	q := new(big.Rat).Sub(dotVec(mu, mu), new(big.Rat).Mul(along, along))
 	base := new(big.Rat).Add(dotVec(m, r.t), dotVec(mu, r.anchor))
 	s := support{q: q}
-	for _, v := range slabCut(r, near) {
+	region := r.region
+	if near != nil {
+		region = slabCut(r, *near)
+	}
+	for _, v := range region {
 		s.terms = append(s.terms, supportTerm{lin: new(big.Rat).Add(base, new(big.Rat).Mul(along, v[1])), rho: v[0]})
 	}
 	return s
