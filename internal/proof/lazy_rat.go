@@ -115,15 +115,11 @@ func (x LazyRat) Float64() (float64, bool, bool) {
 	if x.n.Sign() == 0 {
 		return 0, true, true
 	}
-	var nf, df, q big.Float
-	nf.SetInt(x.n)
-	df.SetInt(x.d)
-	q.SetPrec(53).SetMode(big.ToNearestEven).Quo(&nf, &df)
-	if exp := q.MantExp(nil); exp < -1020 || exp > 1023 {
+	f, exact := quotientFloat64(x.n, x.d)
+	if a := math.Abs(f); !(a >= 0x1p-1021 && a < 0x1p1023) {
 		return 0, false, false
 	}
-	f, _ := q.Float64()
-	return f, q.Acc() == big.Exact, true
+	return f, exact, true
 }
 
 // LazyFloatError is RationalFloatError(x.Rat(), held): the difference is
