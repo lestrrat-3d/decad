@@ -224,7 +224,8 @@ func prismWithHoles(p prismrecord.Payload, delta float64) *occupancy.Record {
 // a circle leaf, or as the polygon leaves of the convex pieces of a loop of
 // line segments (convexSplit), its holes as circle leaves. The pieces' union
 // is the loop's polygon, which departs from the recorded segments by at most
-// their largest join gap (lineCorners); rounding the pieces' exact corners to
+// their largest join gap (lineCorners); a piece's near-straight corner dropped
+// moves it by at most straightenCorners' charge; rounding the exact corners to
 // floats moves each by at most the rounding charge. Both widen every piece's
 // section displacement, so each widened piece still holds its part of the
 // denoted section and each narrowed one lies in it.
@@ -246,13 +247,14 @@ func regionLeaves(frame r3.Frame, place r3.Transform, pr momentinput.Profile, z0
 			return nil, nil, false
 		}
 		for _, piece := range pieces {
-			pts, rounding := floatCorners(piece)
+			straight, moved := straightenCorners(piece)
+			pts, rounding := floatCorners(straight)
 			scale := 1 + math.Max(math.Abs(z0), math.Abs(z1))
 			for _, p := range pts {
 				scale = math.Max(scale, 1+math.Abs(p[0])+math.Abs(p[1]))
 			}
 			l, err := occupancy.PolygonLeaf(prismChain(frame, place), pts, z0, z1,
-				proofbound.AbsSumUpper(sectionDelta, gap, rounding), dz0, dz1, relativeSlack*scale, delta)
+				proofbound.AbsSumUpper(sectionDelta, gap, moved, rounding), dz0, dz1, relativeSlack*scale, delta)
 			if err != nil {
 				return nil, nil, false
 			}

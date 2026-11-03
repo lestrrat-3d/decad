@@ -249,6 +249,58 @@ func minAngle(a, b, c xpt) float64 {
 	return min(sine(ax, ay, bx, by, cx, cy), sine(bx, by, cx, cy, ax, ay), sine(cx, cy, ax, ay, bx, by))
 }
 
+// straightenCorners drops every corner that lies within a hair of the line
+// through its neighbours, which a trimmed corner left by rounding does, and
+// returns an upper bound on the distance it moved the polygon's boundary:
+// dropping corner b moves no boundary point farther than b's distance to the
+// line ac, which |(c−a)×(b−a)| / max(|Δu|, |Δv|) bounds from above. A hair is
+// 1e-9 of the corners' magnitude, far below any feature a section draws, so
+// only rounding's near-straight corners go; a polygon shape needs every corner
+// turned by more than that.
+func straightenCorners(pts []xpt) ([]xpt, float64) {
+	scale := 1.0
+	for _, p := range pts {
+		for k := range 2 {
+			f, _ := p[k].Float64()
+			scale = math.Max(scale, math.Abs(f))
+		}
+	}
+	hair := ratOf(1e-9 * scale)
+	moved := new(big.Rat)
+	for changed := true; changed && len(pts) > 3; {
+		changed = false
+		n := len(pts)
+		for i := range pts {
+			a, b, c := pts[(i+n-1)%n], pts[i], pts[(i+1)%n]
+			ux, uy := new(big.Rat).Sub(c[0], a[0]), new(big.Rat).Sub(c[1], a[1])
+			vx, vy := new(big.Rat).Sub(b[0], a[0]), new(big.Rat).Sub(b[1], a[1])
+			area := new(big.Rat).Sub(new(big.Rat).Mul(ux, vy), new(big.Rat).Mul(uy, vx))
+			area.Abs(area)
+			span := new(big.Rat).Abs(ux)
+			if s := new(big.Rat).Abs(uy); s.Cmp(span) > 0 {
+				span = s
+			}
+			if span.Sign() == 0 {
+				continue
+			}
+			d := new(big.Rat).Quo(area, span)
+			if d.Cmp(hair) <= 0 {
+				if d.Cmp(moved) > 0 {
+					moved = d
+				}
+				pts = slices.Delete(slices.Clone(pts), i, i+1)
+				changed = true
+				break
+			}
+		}
+	}
+	m, _ := moved.Float64()
+	if ratOf(m).Cmp(moved) < 0 {
+		m = math.Nextafter(m, math.Inf(1))
+	}
+	return pts, m
+}
+
 // floatCorners rounds exact corners to floats and returns, beside them, an
 // upper bound on how far any rounded corner lies from its exact one.
 func floatCorners(pts []xpt) ([][2]float64, float64) {
