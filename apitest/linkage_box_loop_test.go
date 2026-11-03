@@ -222,6 +222,7 @@ func TestVerifyJointBoxLoopGate(t *testing.T) {
 		}
 	}
 	t.Logf("outcomes %v, worst hull slack ratio %.6f, refused hulls %d", outcomes, worstSlack, refused)
+	require.Zero(t, refused, `the decomposition certifies the whole drive and no ask is refused, so every leaf publishes its hull`)
 	require.InDelta(t, 1, area, 1e-12, `the leaves cover the box`)
 	for a := range spans {
 		for b := a + 1; b < len(spans); b++ {
