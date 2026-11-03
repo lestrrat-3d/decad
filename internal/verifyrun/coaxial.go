@@ -49,6 +49,12 @@ type coaxialCylinder struct {
 	cx, cy *big.Rat
 	radius *big.Rat
 	iso    bool
+	// xform is the placement the lift composes, fl and ft the frame's own lift
+	// before it, and frameIso whether that is exactly orthonormal.
+	xform    r3.Transform
+	fl       [3][3]*big.Rat
+	ft       [3]*big.Rat
+	frameIso bool
 }
 
 // coaxialMaxDepth bounds the history walk; a deeper chain stays undecided.
@@ -209,13 +215,18 @@ func prismCylinder(pp prismrecord.Payload, circle sectionrecord.CircleSeg) (coax
 		return coaxialCylinder{}, false
 	}
 	l, t := prismLift(pp)
+	fl, ft, frameIso := frameLift(pp.Frame, r3.Identity())
 	return coaxialCylinder{
-		l:      l,
-		t:      t,
-		cx:     ratOf(circle.Center.U),
-		cy:     ratOf(circle.Center.V),
-		radius: ratOf(r),
-		iso:    orthonormal(l[0], l[1], l[2]),
+		l:        l,
+		t:        t,
+		cx:       ratOf(circle.Center.U),
+		cy:       ratOf(circle.Center.V),
+		radius:   ratOf(r),
+		iso:      orthonormal(l[0], l[1], l[2]),
+		xform:    pp.Xform,
+		fl:       fl,
+		ft:       ft,
+		frameIso: frameIso,
 	}, true
 }
 
@@ -248,6 +259,19 @@ func (c coaxialCylinder) equal(o coaxialCylinder) bool {
 			return false
 		}
 		return isZero(crossVec(subVec(o.anchor(), c.anchor()), dc))
+	}
+	// One placement, bit for bit, is one affine bijection on both sets, so
+	// they are the same set when their frames' exactly orthonormal lifts give
+	// one axis line and radius before it.
+	if c.xform == o.xform && c.frameIso && o.frameIso {
+		dc, do := c.fl[2], o.fl[2]
+		if !isZero(crossVec(dc, do)) {
+			return false
+		}
+		frameAnchor := func(x coaxialCylinder) [3]*big.Rat {
+			return addVec(x.ft, addVec(scaleVec(x.fl[0], x.cx), scaleVec(x.fl[1], x.cy)))
+		}
+		return isZero(crossVec(subVec(frameAnchor(o), frameAnchor(c)), dc))
 	}
 	for i := range 3 {
 		for k := range 3 {

@@ -40,6 +40,11 @@ type meridian struct {
 	t           [3]*big.Rat
 	anchor, dir [3]*big.Rat
 	region      [][2]*big.Rat // polygon vertices (ρ, z), in order
+	// xform is the placement the lift composes, and fl, ft the frame's own
+	// exactly orthonormal lift before it.
+	xform r3.Transform
+	fl    [3][3]*big.Rat
+	ft    [3]*big.Rat
 	// disc, when set, makes the region the closed disc of centre
 	// (disc[0], disc[1]) and radius disc[2] in place of a polygon.
 	disc *[3]*big.Rat
@@ -111,7 +116,8 @@ func revolveMeridian(p revolveplan.Payload) (meridian, bool) {
 			return meridian{}, false
 		}
 		rho.Abs(rho)
-		return meridian{l: l, t: t, anchor: [3]*big.Rat{au, av, zero}, dir: [3]*big.Rat{du, dv, zero},
+		fl, ft, _ := frameLift(p.Frame, r3.Identity())
+		return meridian{l: l, t: t, xform: p.Xform, fl: fl, ft: ft, anchor: [3]*big.Rat{au, av, zero}, dir: [3]*big.Rat{du, dv, zero},
 			disc: &[3]*big.Rat{rho, z, rr}}, true
 	}
 	segs := p.Profile.Outer.Segments
@@ -142,7 +148,8 @@ func revolveMeridian(p revolveplan.Payload) (meridian, bool) {
 			q[0].Neg(q[0])
 		}
 	}
-	return meridian{l: l, t: t, anchor: [3]*big.Rat{au, av, zero}, dir: [3]*big.Rat{du, dv, zero}, region: region}, true
+	fl, ft, _ := frameLift(p.Frame, r3.Identity())
+	return meridian{l: l, t: t, xform: p.Xform, fl: fl, ft: ft, anchor: [3]*big.Rat{au, av, zero}, dir: [3]*big.Rat{du, dv, zero}, region: region}, true
 }
 
 // wholeLine returns a whole line's ends in walk order.
@@ -170,11 +177,12 @@ func prismMeridians(p prismrecord.Payload) []meridian {
 	if !ok {
 		return nil
 	}
+	fl, ft, _ := frameLift(p.Frame, r3.Identity())
 	z0, z1 := ratOf(min(p.Z0, p.Z1)), ratOf(max(p.Z0, p.Z1))
 	zero, one := new(big.Rat), big.NewRat(1, 1)
 	cylinder := func(c sectionrecord.CircleSeg, r0, r1 *big.Rat) meridian {
 		return meridian{
-			l: l, t: t,
+			l: l, t: t, xform: p.Xform, fl: fl, ft: ft,
 			anchor: [3]*big.Rat{ratOf(c.Center.U), ratOf(c.Center.V), zero},
 			dir:    [3]*big.Rat{zero, zero, one},
 			region: [][2]*big.Rat{{r0, z0}, {r1, z0}, {r1, z1}, {r0, z1}},
@@ -278,8 +286,9 @@ func meridianProfile(m meridian, far *big.Rat) (momentinput.Profile, bool) {
 
 // commonAxes places both axes in one exactly Euclidean coordinate system: a's
 // frame coordinates when the lifts share a linear part, b's moving by the
-// exact preimage of the translation between them, else the world when both
-// lifts are exactly orthonormal.
+// exact preimage of the translation between them; else the coordinates before
+// one placement both carry bit for bit; else the world when both lifts are
+// exactly orthonormal.
 func commonAxes(a, b meridian) (aAnchor, aDir, bAnchor, bDir [3]*big.Rat, ok bool) {
 	same := true
 	for i := range 3 {
@@ -294,13 +303,21 @@ func commonAxes(a, b meridian) (aAnchor, aDir, bAnchor, bDir [3]*big.Rat, ok boo
 		}
 		return a.anchor, a.dir, addVec(b.anchor, w), b.dir, true
 	}
-	if !orthonormal(a.l[0], a.l[1], a.l[2]) || !orthonormal(b.l[0], b.l[1], b.l[2]) {
+	// One placement, bit for bit, is one affine bijection on both bodies, so
+	// they are compared before it, where their frames are exactly
+	// orthonormal and measure true distance.
+	sharedPlacement := a.xform == b.xform && a.fl[0][0] != nil && b.fl[0][0] != nil
+	if !sharedPlacement && (!orthonormal(a.l[0], a.l[1], a.l[2]) || !orthonormal(b.l[0], b.l[1], b.l[2])) {
 		return aAnchor, aDir, bAnchor, bDir, false
 	}
 	world := func(m meridian, p [3]*big.Rat, point bool) [3]*big.Rat {
-		out := addVec(addVec(scaleVec(m.l[0], p[0]), scaleVec(m.l[1], p[1])), scaleVec(m.l[2], p[2]))
+		l, t := m.l, m.t
+		if sharedPlacement {
+			l, t = m.fl, m.ft
+		}
+		out := addVec(addVec(scaleVec(l[0], p[0]), scaleVec(l[1], p[1])), scaleVec(l[2], p[2]))
 		if point {
-			out = addVec(out, m.t)
+			out = addVec(out, t)
 		}
 		return out
 	}
