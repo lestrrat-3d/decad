@@ -92,3 +92,31 @@ func TestAuditFacetDeterminantsMatchRationalFormula(t *testing.T) {
 		}
 	}
 }
+
+// TestAuditFacetDeterminantsCoverEveryFacet runs the multi-component meshes
+// back to back, every parallel audit before the serial ones, so a determinant
+// left over from an earlier audit or a facet skipped deep in a long component
+// shows up as a wrong entry.
+func TestAuditFacetDeterminantsCoverEveryFacet(t *testing.T) {
+	t.Parallel()
+	cases := auditCases(t)
+	for _, workers := range []int{4, 1} {
+		for _, c := range cases {
+			audit, err := facetproof.AuditFacetedMeshWorkers(t.Context(), c.verts, c.tris, workers)
+			require.NoError(t, err, "%s, workers %d", c.name, workers)
+			require.Len(t, audit.Det, len(c.tris), "%s, workers %d", c.name, workers)
+			for fi, tri := range c.tris {
+				require.Zero(t, rationalFacetDeterminant(c.verts, tri).Cmp(audit.Det[fi].Rat()),
+					"%s, workers %d, facet %d", c.name, workers, fi)
+			}
+			for ci, members := range audit.Members {
+				total := new(big.Rat)
+				for _, fi := range members {
+					total.Add(total, audit.Det[fi].Rat())
+				}
+				require.Zero(t, total.Quo(total, big.NewRat(6, 1)).Cmp(audit.CompVol[ci]),
+					"%s, workers %d, component %d", c.name, workers, ci)
+			}
+		}
+	}
+}
