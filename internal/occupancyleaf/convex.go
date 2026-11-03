@@ -25,13 +25,16 @@ func cross(a, b, c xpt) int {
 }
 
 // lineCorners reads a loop of line segments, each walked from its point at
-// TStart to its point at TEnd and ending exactly where the next starts, as
-// the exact corners of its polygon, counter-clockwise, with collinear and
-// repeated corners dropped.
-func lineCorners(loop sectionrecord.LoopRecord) ([]xpt, bool) {
+// TStart to its point at TEnd, as the exact corners of its polygon,
+// counter-clockwise, with collinear and repeated corners dropped. Each corner
+// is the end of a segment; where the next segment starts elsewhere, as the
+// rounded trim parameters of an analytic union leave it, the polygon's edge
+// departs from the recorded segment by at most that gap, and the largest gap
+// is returned as an upper bound on the polygon's departure from the loop.
+func lineCorners(loop sectionrecord.LoopRecord) ([]xpt, float64, bool) {
 	segs := loop.Segments
 	if len(segs) < 3 || len(segs) > convexPieceLimit {
-		return nil, false
+		return nil, 0, false
 	}
 	at := func(l sectionrecord.LineSeg, t float64) xpt {
 		rt := ratOf(t)
@@ -39,29 +42,32 @@ func lineCorners(loop sectionrecord.LoopRecord) ([]xpt, bool) {
 		y := new(big.Rat).Add(ratOf(l.Start.V), new(big.Rat).Mul(rt, new(big.Rat).Sub(ratOf(l.End.V), ratOf(l.Start.V))))
 		return xpt{x, y}
 	}
-	var pts []xpt
-	var first, prev xpt
+	starts := make([]xpt, len(segs))
+	ends := make([]xpt, len(segs))
 	for i, seg := range segs {
 		l, ok := seg.(sectionrecord.LineSeg)
 		if !ok || l.TStart == l.TEnd || l.TStart < 0 || l.TStart > 1 || l.TEnd < 0 || l.TEnd > 1 {
-			return nil, false
+			return nil, 0, false
 		}
-		s, e := at(l, l.TStart), at(l, l.TEnd)
-		if i > 0 && (s[0].Cmp(prev[0]) != 0 || s[1].Cmp(prev[1]) != 0) {
-			return nil, false
-		}
-		if i == 0 {
-			first = s
-		}
-		pts = append(pts, s)
-		prev = e
+		starts[i], ends[i] = at(l, l.TStart), at(l, l.TEnd)
 	}
-	if prev[0].Cmp(first[0]) != 0 || prev[1].Cmp(first[1]) != 0 {
-		return nil, false
+	// The gap at each join, |Δu| + |Δv| ≥ the Euclidean distance.
+	gap := new(big.Rat)
+	for i := range segs {
+		next := starts[(i+1)%len(segs)]
+		d := new(big.Rat).Add(new(big.Rat).Abs(new(big.Rat).Sub(next[0], ends[i][0])),
+			new(big.Rat).Abs(new(big.Rat).Sub(next[1], ends[i][1])))
+		if d.Cmp(gap) > 0 {
+			gap = d
+		}
 	}
-	pts = dropCollinear(pts)
+	g, _ := gap.Float64()
+	if ratOf(g).Cmp(gap) < 0 {
+		g = math.Nextafter(g, math.Inf(1))
+	}
+	pts := dropCollinear(slices.Clone(ends))
 	if len(pts) < 3 {
-		return nil, false
+		return nil, 0, false
 	}
 	area := new(big.Rat)
 	for i := range pts {
@@ -70,11 +76,11 @@ func lineCorners(loop sectionrecord.LoopRecord) ([]xpt, bool) {
 	}
 	switch area.Sign() {
 	case 0:
-		return nil, false
+		return nil, 0, false
 	case -1:
 		slices.Reverse(pts)
 	}
-	return pts, true
+	return pts, g, true
 }
 
 // dropCollinear removes every corner collinear with its neighbours, and
