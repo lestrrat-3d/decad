@@ -109,6 +109,9 @@ func (w historyWalk) misses(a, b *topo.Body, depth int) (bool, error) {
 		if apart, err := cutToolMeridianApart(w.ctx, w.budget, w.history, inputs[0], inputs[1], b); err != nil || apart {
 			return apart, err
 		}
+		if apart, err := axialApart(w.ctx, w.budget, w.history, a, b); err != nil || apart {
+			return apart, err
+		}
 		return w.misses(inputs[0], b, depth+1)
 	case meshbool.OpIntersect:
 		for _, part := range inputs {
@@ -225,7 +228,10 @@ func (w historyWalk) leafApartOtherwise(a, b *topo.Body) (bool, error) {
 	if apart, err := meridianApart(w.ctx, w.budget, a, b); err != nil || apart {
 		return apart, err
 	}
-	return capApart(a, b) || capApart(b, a) || sideApart(a, b) || sideApart(b, a), nil
+	if capApart(a, b) || capApart(b, a) || sideApart(a, b) || sideApart(b, a) {
+		return true, nil
+	}
+	return axialApart(w.ctx, w.budget, w.history, a, b)
 }
 
 // leafApart decides between two records directly whether their interiors are

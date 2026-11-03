@@ -353,6 +353,65 @@ because each body lies in the closed half-space its reach bounds, and the
 prism in the opposite closed one. A hook ring standing clear of a turned arm,
 whose world boxes overlap, is decided this way.
 
+**The axial section separator** (`internal/verifyrun/axial_section.go`) reads a
+body a, less the prisms its Cut chain removed, against a prism b with holes. It
+runs at a Cut result and at two leaves the other separators leave open. a is
+read through its Cut chain (a Union tool's operands each) down to a target, a
+solid Revolve the meridian separator reads or a prism, and b is a prism with
+exact section and levels. The pair is decided when, over b's levels, the
+target's cover lies in the union of b's holes and the cutting prisms' sections:
+
+- a prism target's cover is its outer loop, moved into b's coordinates by the
+  exact offset of two prisms on one linear lift (`liftOffset`), over the levels
+  the two share;
+- a Revolve's cover is a closed disc. The Revolve is round in its frame's
+  coordinates, and b is an exact rational image of its recorded set, so a point
+  of the Revolve sits in b's coordinates at c + z·g3 + ρ·(cos φ·g1 + sin φ·g2),
+  with c, g3, g1 and g2 the exact solves, against b's lift, of the axis anchor,
+  the axis direction and the two unit directions across it. The disc is about
+  c + z_c·g3, of radius max(ρ·σ + |z − z_c|·|g3'|) over the vertices that bound
+  the meridian's interior inside b's levels, σ the spectral norm of the section
+  plane's 2×2 reading of g1 and g2, g3' the section plane's reading of g3, each
+  square root rounded up to a float and checked exactly, and the centre
+  rounded to a float and its distance charged. The levels are b's, widened by
+  ρ·|(g1, g2) across the sweep| since a point off the axis leans out of its
+  level. A lift that is exactly a rotation of b's has σ = 1 and no lean, so the
+  cover is the exact disc of the largest ρ; one that is a rotation by rounding
+  widens the disc by about 1e-15 relative, which a hole of the same radius does
+  not survive;
+- a vertex of the meridian that only touches b's level, such as the near face
+  of a shoulder that starts on the knob's top level, bounds no interior inside
+  the open levels and is left out;
+- a cutting prism removes material from the cover when its levels, moved by the
+  same offset, hold the levels the cover is read over: either it shares b's
+  exact linear lift, or it is one axis-aligned rectangle of whole lines on a
+  frame whose three axes are b's, signed and permuted, compared before one
+  placement both carry bit for bit or in the world when both lifts are exactly
+  orthonormal, where it is a box across b's sweep with a rectangle section.
+  A cutter that does not hold the levels is left out, which only widens the
+  cover.
+
+prismcells' `SectionWithinUnion` then asks Sketch whether every cell of the
+cover lies in the union of the outer regions: b's hole loops, each walked
+counter-clockwise as a region, and the cutters' sections. The outer regions may
+overlap, so membership is Sketch's containment verdicts against the declared
+loops alone, and the edge-direction reading, which takes each outer edge to
+bound the family, only falsifies the cover's side when it reads at all.
+
+The step is sound because a point p of a's interior, at a level of b's open
+interval, lies in the target's cover, outside every cutter that holds the levels
+(a Cut result's interior misses its closed tool), and has its section point
+outside the closed hole of b if p is in b's interior. The cover's section lies
+in the closure of the union of the holes and the cutters' sections, so p's
+section point lies in the closure of one of them, which it cannot, being
+outside the closed holes and the closed cutter sections. The interiors share no
+point. Every number that enters the cover is an upper bound or an exact
+rational, so the disc and the levels only widen.
+
+A pair whose cover touches a hole on a lift that is not exactly a rotation of
+b's stays open: the widened disc crosses the hole by rounding, as for a
+shaft pressed into a bore of its own radius under two inexact rotations.
+
 Like the coaxial separator, they prove no gap.
 
 ### 3.3 Full containment
