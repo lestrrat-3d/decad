@@ -11,9 +11,11 @@ import (
 	"github.com/lestrrat-3d/r3"
 )
 
-// legacyAxisCache and the legacy* functions below are the by-value
-// implementations the pointer signatures replaced, copied verbatim apart from
-// their names. They are the reference the pointer forms must match exactly.
+// legacyAxisCache and the legacy* functions below are a by-value reference
+// implementation of revolveVertexIsolated and its axis cache: the same code
+// with every triangle passed as a RevolveAuditTri value. The pointer forms
+// must match them exactly, so a change to the production logic changes these
+// the same way.
 type legacyAxisCache struct {
 	normal   []RevolveSepAxis
 	normalOK []bool
@@ -124,25 +126,7 @@ func legacyVertexIsolated(a RevolveAuditTri, triA [3]int, b RevolveAuditTri, tri
 	if try(chordAxis, aOff[:]) {
 		return true
 	}
-	// The edge-pair family. g = eA × eB zeroes both eA and eB identically, so
-	// the plane holds one edge of each triangle for the WHOLE family rather
-	// than at the stored coordinates alone. That leaves a with two corners on
-	// the plane and one strictly off it, and b likewise, so a sits in one
-	// closed half-space and b in the other and their intersection lies in the
-	// plane. A triangle with two corners on a plane and its third strictly off
-	// meets that plane in exactly the closed segment between the two, so the
-	// intersection is contained in eA ∩ eB — two segments from the shared
-	// corner that a non-zero g makes non-parallel, and which therefore meet
-	// only at that corner.
-	//
-	// g stays non-zero over the whole family without a separate test: a member
-	// whose g vanished would read zero on both remaining corners, and sideOf
-	// has already proven each of them strictly outside its own perturbation
-	// allowance, which bounds exactly how far that reading can move. length
-	// bounds |eA × eB| by the product of the two factor lengths and drift is
-	// PerturbBilinearAllow over the two factors sliding by e, so the charge is
-	// the one every other candidate here makes. A reading inside its allowance
-	// stays UNDECIDED and the candidate is skipped, never admitted.
+	// The edge-pair family; revolveVertexIsolated states why it is sound.
 	for k := range 2 {
 		for m := range 2 {
 			g := proofarith.DvCross(aOff[k].V, bOff[m].V)
@@ -220,8 +204,8 @@ func TestRevolveVertexIsolatedPointerFormMatchesByValue(t *testing.T) {
 					revolveVertexIsolated(&b, triB, &a, triA, shared, delta, newCache, 1), "iter %d round %d", iter, round)
 			}
 			for at := range 3 {
-				require.Equal(t, oldCache.normalAxis(0, a, delta), newCache.normalAxis(0, &a, delta))
-				require.Equal(t, *oldCache.corner(0, a, at, delta), *newCache.corner(0, &a, at, delta))
+				require.Equal(t, oldCache.normalAxis(0, a, delta), newCache.normalAxis(0, &a, delta), "iter %d at %d", iter, at)
+				require.Equal(t, *oldCache.corner(0, a, at, delta), *newCache.corner(0, &a, at, delta), "iter %d at %d", iter, at)
 			}
 		}
 	}
