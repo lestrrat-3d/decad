@@ -9,9 +9,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// legacyRevDown and legacyRevUp are the float steps RevDown and RevUp had
-// before the plain build began calling proof directly. Both builds must
-// return the same value as them for every x.
+// legacyRevDown and legacyRevUp copy the race build's float steps. Both
+// builds must return the same value as them for every x.
 func legacyRevDown(x float64) float64 {
 	if x <= -0x1p-969 {
 		return x + float64(x*0x1.0000000000001p-53)
@@ -68,6 +67,35 @@ func TestRevStepMatchesLegacyFloat(t *testing.T) {
 		}
 	}
 	r := rand.New(rand.NewPCG(11, 13))
+	for range 200_000 {
+		check(math.Float64frombits(r.Uint64()))
+	}
+}
+
+// TestRevStepMatchesProof compares RevUp and RevDown with proof.NextUp and
+// proof.NextDown by bit pattern on the specials, every power of two with its
+// neighbours, and random bit patterns.
+func TestRevStepMatchesProof(t *testing.T) {
+	t.Parallel()
+	check := func(x float64) {
+		if math.Float64bits(RevUp(x)) != math.Float64bits(proof.NextUp(x)) {
+			require.Failf(t, "RevUp", "x = %x", math.Float64bits(x))
+		}
+		if math.Float64bits(RevDown(x)) != math.Float64bits(proof.NextDown(x)) {
+			require.Failf(t, "RevDown", "x = %x", math.Float64bits(x))
+		}
+	}
+	for _, x := range filterSpecials() {
+		check(x)
+	}
+	for e := -1074; e <= 1023; e++ {
+		p := math.Ldexp(1, e)
+		for _, x := range []float64{p, math.Nextafter(p, 0), math.Nextafter(p, math.Inf(1))} {
+			check(x)
+			check(-x)
+		}
+	}
+	r := rand.New(rand.NewPCG(3, 5))
 	for range 200_000 {
 		check(math.Float64frombits(r.Uint64()))
 	}
