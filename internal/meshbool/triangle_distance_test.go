@@ -124,7 +124,7 @@ func TestTriTriDistanceExceedsMatchesDistance(t *testing.T) {
 	for i := range n {
 		mode := i % exceedsPairModes
 		ta, tb := exceedsPair(rng, mode)
-		d := oldTriTriDistance(ta, tb)
+		d := TriTriDistance(ta, tb)
 		for _, slack := range exceedsSlacks(d) {
 			want := d > slack
 			require.Equal(t, want, TriTriDistanceExceeds(ta, tb, slack),

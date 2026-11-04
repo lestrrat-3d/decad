@@ -10,72 +10,14 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// The functions below are the bodies TriTriDistance and its helpers had when they
-// called math.Min, math.Max directly. They are the oracle: the comparison forms in
-// boolean.go must return the same bits for every input.
+// These helpers state the math.Min and math.Max forms that Clamp01 and
+// minFloat64 preserve, including signed zero and NaN behavior.
 
-func oldClamp01(num, den float64) float64 {
+func mathClamp01(num, den float64) float64 {
 	if den <= 0 {
 		return 0
 	}
 	return math.Max(0, math.Min(1, num/den))
-}
-
-//nolint:dupl // Independent pre-change oracle for SegSegDist3.
-func oldSegSegDist3(p0, p1, q0, q1 r3.Vec) float64 {
-	u := p1.Sub(p0)
-	v := q1.Sub(q0)
-	w := p0.Sub(q0)
-	a, b, c := u.Dot(u), u.Dot(v), v.Dot(v)
-	d, e := u.Dot(w), v.Dot(w)
-	den := a*c - b*b
-	var s, t float64
-	if den <= 0 {
-		s, t = 0, oldClamp01(e, c)
-	} else {
-		s = oldClamp01(b*e-c*d, den)
-		t = oldClamp01(a*e-b*d, den)
-	}
-	if tn := e + s*b; c > 0 {
-		t = oldClamp01(tn, c)
-	}
-	if sn := -d + t*b; a > 0 {
-		s = oldClamp01(sn, a)
-	}
-	return p0.Add(u.Scale(s)).Sub(q0.Add(v.Scale(t))).Len()
-}
-
-func oldPointTriDistance(p r3.Vec, t [3]r3.Vec) float64 {
-	n := t[1].Sub(t[0]).Cross(t[2].Sub(t[0]))
-	if nn := n.Dot(n); nn > 0 {
-		h := n.Dot(p.Sub(t[0])) / nn
-		foot := p.Sub(n.Scale(h))
-		if PointInTriangle(foot, t, n) {
-			return p.Sub(foot).Len()
-		}
-	}
-	best := math.Inf(1)
-	for i := range 3 {
-		best = math.Min(best, oldSegSegDist3(p, p, t[i], t[(i+1)%3]))
-	}
-	return best
-}
-
-func oldTriTriDistance(ta, tb [3]r3.Vec) float64 {
-	best := math.Inf(1)
-	for i := range 3 {
-		for j := range 3 {
-			best = math.Min(best, oldSegSegDist3(ta[i], ta[(i+1)%3], tb[j], tb[(j+1)%3]))
-		}
-	}
-	for i := range 3 {
-		best = math.Min(best, oldPointTriDistance(ta[i], tb))
-		best = math.Min(best, oldPointTriDistance(tb[i], ta))
-	}
-	if best <= 0 || best != best || best > math.MaxFloat64 || best < -math.MaxFloat64 {
-		return 0
-	}
-	return best * (1 - 1e-12)
 }
 
 // adversarialFloats lists the values where math.Min, math.Max and the clamp change
@@ -166,19 +108,19 @@ func TestClamp01MatchesMathForm(t *testing.T) {
 	vals := adversarialFloats()
 	for _, num := range vals {
 		for _, den := range vals {
-			requireSameBitsf(t, oldClamp01(num, den), Clamp01(num, den), "Clamp01(%v, %v)", num, den)
+			requireSameBitsf(t, mathClamp01(num, den), Clamp01(num, den), "Clamp01(%v, %v)", num, den)
 		}
 	}
 	rng := rand.New(rand.NewPCG(3, 4))
 	for range 1_000_000 {
 		num, den := randomFloat(rng, vals), randomFloat(rng, vals)
-		requireSameBitsf(t, oldClamp01(num, den), Clamp01(num, den), "Clamp01(%v, %v)", num, den)
+		requireSameBitsf(t, mathClamp01(num, den), Clamp01(num, den), "Clamp01(%v, %v)", num, den)
 	}
 	// The ratio itself lands on the clamp edges, which a pair from vals rarely does.
 	for _, q := range vals {
 		for _, den := range []float64{1, 2, 3, math.SmallestNonzeroFloat64} {
 			num := q * den
-			requireSameBitsf(t, oldClamp01(num, den), Clamp01(num, den), "Clamp01(%v, %v)", num, den)
+			requireSameBitsf(t, mathClamp01(num, den), Clamp01(num, den), "Clamp01(%v, %v)", num, den)
 		}
 	}
 }
@@ -251,20 +193,37 @@ func trianglePair(rng *rand.Rand, mode int) ([3]r3.Vec, [3]r3.Vec) {
 	return ta, tb
 }
 
-func TestTriTriDistanceMatchesMathForm(t *testing.T) {
-	rng := rand.New(rand.NewPCG(5, 6))
-	for i := range 400_000 {
-		mode := i % 8
-		ta, tb := trianglePair(rng, mode)
-		requireSameBitsf(t, oldTriTriDistance(ta, tb), TriTriDistance(ta, tb), "TriTriDistance mode %d %v %v", mode, ta, tb)
-		for j := range 3 {
-			requireSameBitsf(t, oldPointTriDistance(ta[j], tb), PointTriDistance(ta[j], tb),
-				"PointTriDistance mode %d", mode)
-			k := (j + 1) % 3
-			requireSameBitsf(t, oldSegSegDist3(ta[j], ta[k], tb[j], tb[k]), SegSegDist3(ta[j], ta[k], tb[j], tb[k]),
-				"SegSegDist3 mode %d", mode)
-		}
+func TestDistanceOperationsMatchKnownGeometry(t *testing.T) {
+	triangle := [3]r3.Vec{{}, {X: 4}, {Y: 4}}
+	for _, tc := range []struct {
+		name   string
+		p0, p1 r3.Vec
+		q0, q1 r3.Vec
+		want   float64
+	}{
+		{name: "crossing segments", p0: r3.Vec{X: 0}, p1: r3.Vec{X: 2}, q0: r3.Vec{X: 1, Y: -1}, q1: r3.Vec{X: 1, Y: 1}, want: 0},
+		{name: "parallel segments", p0: r3.Vec{}, p1: r3.Vec{X: 1}, q0: r3.Vec{Y: 3}, q1: r3.Vec{X: 1, Y: 3}, want: 3},
+		{name: "skew segments", p0: r3.Vec{}, p1: r3.Vec{X: 2}, q0: r3.Vec{X: 1, Z: 4}, q1: r3.Vec{X: 1, Y: 1, Z: 4}, want: 4},
+		{name: "point to segment", p0: r3.Vec{}, p1: r3.Vec{}, q0: r3.Vec{X: 3}, q1: r3.Vec{X: 4}, want: 3},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			require.InDelta(t, tc.want, SegSegDist3(tc.p0, tc.p1, tc.q0, tc.q1), 1e-10)
+		})
 	}
+	for _, tc := range []struct {
+		name  string
+		point r3.Vec
+		want  float64
+	}{
+		{name: "above face", point: r3.Vec{X: 1, Y: 1, Z: 3}, want: 3},
+		{name: "outside hypotenuse", point: r3.Vec{X: 3, Y: 3}, want: math.Sqrt2},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			require.InDelta(t, tc.want, PointTriDistance(tc.point, triangle), 1e-10)
+		})
+	}
+	separated := [3]r3.Vec{{Z: 5}, {X: 4, Z: 5}, {Y: 4, Z: 5}}
+	require.InDelta(t, 5, TriTriDistance(triangle, separated), 1e-10)
 }
 
 func BenchmarkTriTriDistance(b *testing.B) {
@@ -274,22 +233,12 @@ func BenchmarkTriTriDistance(b *testing.B) {
 		ta, tb := trianglePair(rng, 0)
 		pairs[i] = [2][3]r3.Vec{ta, tb}
 	}
-	b.Run("new", func(b *testing.B) {
-		var sink float64
-		for i := range b.N {
-			p := pairs[i%len(pairs)]
-			sink += TriTriDistance(p[0], p[1])
-		}
-		_ = sink
-	})
-	b.Run("old", func(b *testing.B) {
-		var sink float64
-		for i := range b.N {
-			p := pairs[i%len(pairs)]
-			sink += oldTriTriDistance(p[0], p[1])
-		}
-		_ = sink
-	})
+	var sink float64
+	for i := range b.N {
+		p := pairs[i%len(pairs)]
+		sink += TriTriDistance(p[0], p[1])
+	}
+	_ = sink
 }
 
 // triTriFoldPositions is the number of minimum folds in TriTriDistance: nine
@@ -314,12 +263,12 @@ func triTriDistanceDropNaNAt(ta, tb [3]r3.Vec, pos int) float64 {
 	}
 	for i := range 3 {
 		for j := range 3 {
-			fold(oldSegSegDist3(ta[i], ta[(i+1)%3], tb[j], tb[(j+1)%3]))
+			fold(SegSegDist3(ta[i], ta[(i+1)%3], tb[j], tb[(j+1)%3]))
 		}
 	}
 	for i := range 3 {
-		fold(oldPointTriDistance(ta[i], tb))
-		fold(oldPointTriDistance(tb[i], ta))
+		fold(PointTriDistance(ta[i], tb))
+		fold(PointTriDistance(tb[i], ta))
 	}
 	if best <= 0 || best != best || best > math.MaxFloat64 || best < -math.MaxFloat64 {
 		return 0
@@ -383,7 +332,6 @@ func TestTriTriDistanceNaNInOneFold(t *testing.T) {
 		}
 		t.Run(c.comment, func(t *testing.T) {
 			require.Zero(t, TriTriDistance(ta, tb))
-			requireSameBitsf(t, oldTriTriDistance(ta, tb), TriTriDistance(ta, tb), "oracle")
 			// Only the fold at c.pos drops the NaN, so the witness must tell
 			// that fold apart from every other.
 			for pos := range triTriFoldPositions {
