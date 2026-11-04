@@ -6052,7 +6052,10 @@ JointBoxRequest records the effective settings of a VerifyJointBox call.
 
 <pre>type JointCell = report.<a href="report.md#JointCell">JointCell</a></pre>
 
-JointCell records one closed cell of joint values.
+JointCell records one closed cell of joint values. In a joint-box result a
+closed loop's dependent joint carries its proven range over the cell; where
+the loop's enclosure of the cell was refused, Min and Max hold the zero
+units.Value for it, which claims no range.
 
 <a name="JointCellResult"></a>
 ### type JointCellResult

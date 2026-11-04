@@ -690,7 +690,10 @@ String renders the stable lower-snake token, including unknown values.
     Min, Max []units.Value
 }</pre>
 
-JointCell records one closed cell of joint values.
+JointCell records one closed cell of joint values. In a joint-box result a
+closed loop's dependent joint carries its proven range over the cell; where
+the loop's enclosure of the cell was refused, Min and Max hold the zero
+units.Value for it, which claims no range.
 
 <a name="JointCell.Clone"></a>
 #### func (JointCell) Clone
