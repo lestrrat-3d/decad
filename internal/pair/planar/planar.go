@@ -443,11 +443,13 @@ type planarKernel struct {
 	poll    func() error
 	best    frac
 	bestUp  float64 // a float at or above best (fracAbove)
+	bestLo  float64 // a float at or below best (fracBelow)
 	hasBest bool
 	// cap is a squared distance at or above the exact minimum, known before
 	// the scan, that prunes as best does but is never offered (hint).
 	cap    frac
 	capUp  float64 // a float at or above cap (fracAbove)
+	capLo  float64 // a float at or below cap (fracBelow)
 	hasCap bool
 	// hint is the caller's guess at the nearest candidate pair, cur names
 	// the candidate pair being offered, and nearest the one that set best.

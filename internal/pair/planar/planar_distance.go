@@ -20,7 +20,7 @@ func (k *planarKernel) addSite(site contactSite) {
 // offer folds one candidate squared distance into the running minimum.
 func (k *planarKernel) offer(d frac) {
 	if !k.hasBest || fracCmp(d, k.best) < 0 {
-		k.best, k.bestUp, k.hasBest = d, fracAbove(d), true
+		k.best, k.bestUp, k.bestLo, k.hasBest = d, fracAbove(d), fracBelow(d), true
 		k.nearest = k.cur
 	}
 }
@@ -41,6 +41,9 @@ func (k *planarKernel) pruned(alo, ahi, blo, bhi [3]proof.Dyadic, fa, fb floatBo
 	if gapSquaredBelowLimit(fa, fb, up) > up {
 		return true
 	}
+	if fa.tight && fb.tight && k.clearlyWithin(fa, fb) {
+		return false
+	}
 	if !boxesApart(alo, ahi, blo, bhi) {
 		return false
 	}
@@ -55,6 +58,15 @@ func (k *planarKernel) pruned(alo, ahi, blo, bhi [3]proof.Dyadic, fa, fb floatBo
 		return fracCmp(*gap, bound) > 0
 	}
 	return (k.hasBest && beyond(k.best)) || (k.hasCap && beyond(k.cap))
+}
+
+// clearlyWithin reports whether two tight boxes' squared gap is proven below
+// every bound that is set, so neither exact comparison below could find the
+// gap beyond it and pruned would answer false. A bound whose float lower copy
+// is zero never qualifies, so the zero bound's rule stays with the exact test.
+func (k *planarKernel) clearlyWithin(fa, fb floatBox) bool {
+	gap := gapSquaredAbove(fa, fb)
+	return (!k.hasBest || gap < k.bestLo) && (!k.hasCap || gap < k.capLo)
 }
 
 // boundUp returns the least float upper bound among the running minimum's and

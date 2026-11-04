@@ -24,7 +24,7 @@ func (k *planarKernel) seedCap() {
 	scratch.seedSide(k.a, k.b)
 	scratch.seedSide(k.b, k.a)
 	if scratch.hasBest && (!k.hasCap || fracCmp(scratch.best, k.cap) < 0) {
-		k.cap, k.capUp, k.hasCap = scratch.best, scratch.bestUp, true
+		k.cap, k.capUp, k.capLo, k.hasCap = scratch.best, scratch.bestUp, scratch.bestLo, true
 	}
 }
 

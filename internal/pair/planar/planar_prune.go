@@ -73,6 +73,11 @@ import (
 // A coordinate whose float is not finite widens to an infinity on that side.
 type floatBox struct {
 	lo, hi [3]float64
+	// tight is set when the float box is the exact box: every coordinate that
+	// bounds it is a float. A tight box's float gap to another tight box is the
+	// exact gap up to rounding, so it can be enclosed from above as well as
+	// below (gapSquaredAbove). The zero value is not tight.
+	tight bool
 }
 
 // floatBoxes fills the outward float boxes of every vertex, triangle and edge
@@ -119,6 +124,7 @@ func (p *planarPrep) edgeBoxTree() *boxTree {
 func (p *planarPrep) unionBox(indices []int) floatBox {
 	out := p.vertBox[indices[0]]
 	for _, v := range indices[1:] {
+		out.tight = out.tight && p.vertBox[v].tight
 		for axis := range 3 {
 			out.lo[axis] = minFloat(out.lo[axis], p.vertBox[v].lo[axis])
 			out.hi[axis] = maxFloat(out.hi[axis], p.vertBox[v].hi[axis])
@@ -130,8 +136,10 @@ func (p *planarPrep) unionBox(indices []int) floatBox {
 // pointFloatBox is the outward float box of the exact point v.
 func pointFloatBox(v proof.DyV3) floatBox {
 	var out floatBox
+	out.tight = true
 	for axis := range 3 {
 		out.lo[axis], out.hi[axis] = proof.FloatBounds(v[axis])
+		out.tight = out.tight && out.lo[axis] == out.hi[axis]
 	}
 	return out
 }
@@ -266,6 +274,41 @@ func fracAbove(x frac) float64 {
 	return divUp(num, den)
 }
 
+// fracBelow is a float at or below x = num/den: zero when the floats give no
+// positive bound. num is nonnegative and den positive.
+func fracBelow(x frac) float64 {
+	num, _ := proof.FloatBounds(x.num)
+	_, den := proof.FloatBounds(x.den)
+	if !(num > 0) || !(den > 0) || math.IsInf(den, 1) {
+		return 0
+	}
+	if q := divDown(num, den); q > 0 {
+		return q
+	}
+	return 0
+}
+
+// gapSquaredAbove is a float at or above the exact squared gap of two tight
+// float boxes (floatBox.tight), which are their exact boxes. Each axis gap is
+// a difference of two floats, so rounding it up and squaring it up stays at or
+// above the exact value. +Inf or NaN reads as no bound.
+func gapSquaredAbove(a, b floatBox) float64 {
+	sum := 0.0
+	for axis := range 3 {
+		var gap float64
+		switch {
+		case a.hi[axis] < b.lo[axis]:
+			gap = subUp(b.lo[axis], a.hi[axis])
+		case b.hi[axis] < a.lo[axis]:
+			gap = subUp(a.lo[axis], b.hi[axis])
+		default:
+			continue
+		}
+		sum = addUp(sum, mulUp(gap, gap))
+	}
+	return sum
+}
+
 // sidePlanes returns the three side planes n×(w−u) of triangle t, one per
 // directed edge u->w in winding order, and their outward float boxes,
 // computing both on first use.
@@ -391,6 +434,6 @@ func (k *planarKernel) applyHint() {
 		return
 	}
 	if scratch.hasBest {
-		k.cap, k.capUp, k.hasCap = scratch.best, scratch.bestUp, true
+		k.cap, k.capUp, k.capLo, k.hasCap = scratch.best, scratch.bestUp, scratch.bestLo, true
 	}
 }
