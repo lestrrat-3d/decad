@@ -104,10 +104,12 @@ func TestSetAlgebraTables(t *testing.T) {
 // and in B.
 func TestLocateBooleanCombines(t *testing.T) {
 	t.Parallel()
-	t.Run("union", func(t *testing.T) {
-		t.Parallel()
-		n, src := overlappingCubeBoolean(t, meshbool.OpUnion)
-		requireBooleanLocations(t, n, src, []prismCase{
+	for _, tc := range []struct {
+		name   string
+		op     meshbool.OperationKind
+		points []prismCase
+	}{
+		{name: "union", op: meshbool.OpUnion, points: []prismCase{
 			{name: "in A only", at: r3.NewVec(2, 5, 5), want: Inside},
 			{name: "in B only", at: r3.NewVec(12, 5, 5), want: Inside},
 			{name: "A's face inside B", at: r3.NewVec(10, 5, 5), want: Inside},
@@ -115,23 +117,15 @@ func TestLocateBooleanCombines(t *testing.T) {
 			{name: "B's face outside A", at: r3.NewVec(15, 5, 5), want: OnBoundary},
 			{name: "both tops", at: r3.NewVec(7, 5, 10), want: Undecided},
 			{name: "beyond both", at: r3.NewVec(16, 5, 5), want: Outside},
-		})
-	})
-	t.Run("intersect", func(t *testing.T) {
-		t.Parallel()
-		n, src := overlappingCubeBoolean(t, meshbool.OpIntersect)
-		requireBooleanLocations(t, n, src, []prismCase{
+		}},
+		{name: "intersect", op: meshbool.OpIntersect, points: []prismCase{
 			{name: "in both", at: r3.NewVec(7, 5, 5), want: Inside},
 			{name: "B's face inside A", at: r3.NewVec(5, 5, 5), want: OnBoundary},
 			{name: "A's face inside B", at: r3.NewVec(10, 5, 5), want: OnBoundary},
 			{name: "in A only", at: r3.NewVec(2, 5, 5), want: Outside},
 			{name: "both tops", at: r3.NewVec(7, 5, 10), want: Undecided},
-		})
-	})
-	t.Run("cut", func(t *testing.T) {
-		t.Parallel()
-		n, src := overlappingCubeBoolean(t, meshbool.OpCut)
-		requireBooleanLocations(t, n, src, []prismCase{
+		}},
+		{name: "cut", op: meshbool.OpCut, points: []prismCase{
 			{name: "in A only", at: r3.NewVec(2, 5, 5), want: Inside},
 			{name: "in both", at: r3.NewVec(7, 5, 5), want: Outside},
 			{name: "B's face inside A", at: r3.NewVec(5, 5, 5), want: OnBoundary},
@@ -139,8 +133,14 @@ func TestLocateBooleanCombines(t *testing.T) {
 			{name: "in B only", at: r3.NewVec(12, 5, 5), want: Outside},
 			{name: "both bottoms", at: r3.NewVec(2, 5, 0), want: OnBoundary},
 			{name: "A's top on B's face", at: r3.NewVec(5, 5, 10), want: Undecided},
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			n, src := overlappingCubeBoolean(t, tc.op)
+			requireBooleanLocations(t, n, src, tc.points)
 		})
-	})
+	}
 }
 
 // TestLocateBooleanWalksHistory reads a three-input Union, a Cut over a

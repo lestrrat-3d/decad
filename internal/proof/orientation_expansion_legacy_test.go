@@ -10,6 +10,7 @@ import (
 	"github.com/lestrrat-3d/r3"
 )
 
+//nolint:dupl // This legacy implementation is the independent differential oracle.
 func LegacyOrientSignExpansion(a, b, c, d r3.Vec) (int, bool) {
 	ba, ca, da := b.Sub(a), c.Sub(a), d.Sub(a)
 	for _, row := range [...][3]float64{

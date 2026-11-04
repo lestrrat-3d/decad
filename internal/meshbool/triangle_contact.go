@@ -763,6 +763,8 @@ func CompareCoord(a, b proof.Xpt, axis int) int {
 
 // SegTriOverlap2 reports whether segment (a, b) meets the closed triangle
 // with positive length — exactly.
+//
+//nolint:dupl // Kept beside oracleSegTriOverlap2 for exact differential tests.
 func SegTriOverlap2(a, b, ta, tb, tc Xp2) bool {
 	// Clip the segment parameter interval [0, 1] against each closed edge
 	// half-plane of the triangle, in exact arithmetic; a positive-length

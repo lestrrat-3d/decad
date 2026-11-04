@@ -18,37 +18,7 @@ func TestFacetAreasReplay(t *testing.T) {
 		_, err := revolvemesh.FacetAreasReplay(ctx, verts, tris, 0, b)
 		return err
 	}
-	b := proofbound.NewReplayTrialBudget()
-	if e := run(t.Context(), b); e != nil {
-		t.Fatal(e)
-	}
-	w, r := b.Usage()
-	z := b.Bytes()
-	for _, mode := range []string{replayBudgetTestExact, replayBudgetTestWork, replayBudgetTestRecords, replayBudgetTestBytes} {
-		m := proofbound.NewReplayTrialBudget()
-		ww, rr, zz := proofbound.ReplayTrialWork-w, proofbound.ReplayTrialRecords-r, proofbound.ReplayTrialBytes-z
-		switch mode {
-		case replayBudgetTestWork:
-			ww++
-		case replayBudgetTestRecords:
-			rr++
-		case replayBudgetTestBytes:
-			zz++
-		}
-		if e := m.SpendWork(t.Context(), ww); e != nil {
-			t.Fatal(e)
-		}
-		if e := m.ReserveRecords(t.Context(), rr); e != nil {
-			t.Fatal(e)
-		}
-		if e := m.ReserveBytes(t.Context(), zz); e != nil {
-			t.Fatal(e)
-		}
-		e := run(t.Context(), m)
-		if mode == replayBudgetTestExact && e != nil || mode != replayBudgetTestExact && !errors.Is(e, decaderr.ErrUnsupported) {
-			t.Fatalf("%s: %v", mode, e)
-		}
-	}
+	assertReplayBudgetLimits(t, run)
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 	if e := run(ctx, proofbound.NewReplayTrialBudget()); !errors.Is(e, context.Canceled) {
@@ -57,5 +27,42 @@ func TestFacetAreasReplay(t *testing.T) {
 	tris[1] = [3]int{0, 0, 1}
 	if e := run(t.Context(), proofbound.NewReplayTrialBudget()); e == nil {
 		t.Fatal("zero area accepted")
+	}
+}
+
+func assertReplayBudgetLimits(t *testing.T, run func(context.Context, *proofbound.ReplayBudget) error) {
+	t.Helper()
+	trial := proofbound.NewReplayTrialBudget()
+	if err := run(t.Context(), trial); err != nil {
+		t.Fatal(err)
+	}
+	work, records := trial.Usage()
+	bytes := trial.Bytes()
+	for _, mode := range []string{replayBudgetTestExact, replayBudgetTestWork, replayBudgetTestRecords, replayBudgetTestBytes} {
+		budget := proofbound.NewReplayTrialBudget()
+		w := proofbound.ReplayTrialWork - work
+		r := proofbound.ReplayTrialRecords - records
+		b := proofbound.ReplayTrialBytes - bytes
+		switch mode {
+		case replayBudgetTestWork:
+			w++
+		case replayBudgetTestRecords:
+			r++
+		case replayBudgetTestBytes:
+			b++
+		}
+		if err := budget.SpendWork(t.Context(), w); err != nil {
+			t.Fatal(err)
+		}
+		if err := budget.ReserveRecords(t.Context(), r); err != nil {
+			t.Fatal(err)
+		}
+		if err := budget.ReserveBytes(t.Context(), b); err != nil {
+			t.Fatal(err)
+		}
+		err := run(t.Context(), budget)
+		if mode == replayBudgetTestExact && err != nil || mode != replayBudgetTestExact && !errors.Is(err, decaderr.ErrUnsupported) {
+			t.Fatalf("%s: %v", mode, err)
+		}
 	}
 }

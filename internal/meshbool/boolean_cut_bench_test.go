@@ -19,19 +19,23 @@ type cutFixtureFacet struct {
 // cutFixtureGrid is an n x n grid of quads, two triangles each, with corner
 // heights z(x, y) over [ox, ox+n*step] x [oy, oy+n*step].
 func cutFixtureGrid(tb testing.TB, n int, ox, oy, step float64, z func(x, y float64) float64) *BoolMesh {
+	return cutGrid(tb, n, n, ox, oy, step, step, z)
+}
+
+func cutGrid(tb testing.TB, nx, ny int, ox, oy, sx, sy float64, z func(x, y float64) float64) *BoolMesh {
 	tb.Helper()
-	verts := make([]r3.Vec, 0, (n+1)*(n+1))
-	for iy := 0; iy <= n; iy++ {
-		for ix := 0; ix <= n; ix++ {
-			x, y := ox+float64(ix)*step, oy+float64(iy)*step
+	verts := make([]r3.Vec, 0, (nx+1)*(ny+1))
+	for iy := 0; iy <= ny; iy++ {
+		for ix := 0; ix <= nx; ix++ {
+			x, y := ox+float64(ix)*sx, oy+float64(iy)*sy
 			verts = append(verts, r3.NewVec(x, y, z(x, y)))
 		}
 	}
-	tris := make([][3]int, 0, 2*n*n)
-	for iy := range n {
-		for ix := range n {
-			v00 := iy*(n+1) + ix
-			v10, v01, v11 := v00+1, v00+n+1, v00+n+2
+	tris := make([][3]int, 0, 2*nx*ny)
+	for iy := range ny {
+		for ix := range nx {
+			v00 := iy*(nx+1) + ix
+			v10, v01, v11 := v00+1, v00+nx+1, v00+nx+2
 			tris = append(tris, [3]int{v00, v10, v11}, [3]int{v00, v11, v01})
 		}
 	}

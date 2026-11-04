@@ -87,25 +87,7 @@ func TestPrepareBlindBuildReplaySceneBinding(t *testing.T) {
 	}
 	w, r := baseline.Usage()
 	bytes := baseline.Bytes()
-	for _, tc := range []struct {
-		name    string
-		w, r, b uint64
-		pass    bool
-	}{{replayTestCaseExact, w, r, bytes, true}, {replayTestCaseWorkShort, w - 1, r, bytes, false}, {replayTestCaseRecordsShort, w, r - 1, bytes, false}, {replayTestCaseBytesShort, w, r, bytes - 1, false}} {
-		t.Run(tc.name, func(t *testing.T) {
-			m, e := proofbound.NewReplayBudgetLimits(tc.w, tc.r, tc.b)
-			if e != nil {
-				t.Fatal(e)
-			}
-			p, ok, e := run(context.Background(), m)
-			if tc.pass && (e != nil || !ok || p == nil) {
-				t.Fatalf("ok=%t error=%v", ok, e)
-			}
-			if !tc.pass && (e == nil || ok || p != nil) {
-				t.Fatalf("rollback ok=%t error=%v", ok, e)
-			}
-		})
-	}
+	assertBlindBuildPlanBudgetLimits(t, run, w, r, bytes)
 	for _, mode := range []int{1, 2} {
 		mutation = mode
 		if p, ok, err := run(context.Background(), proofbound.NewReplayTrialBudget()); err != nil || ok || p != nil {

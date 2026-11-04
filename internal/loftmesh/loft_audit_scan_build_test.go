@@ -38,6 +38,8 @@ import (
 // gridScanBelowReference is newGridScanBelow with its items sorted by
 // comparison on (start, pos), and each member's cell range computed again
 // for registration.
+//
+//nolint:dupl // Independent comparison-sort oracle for newGridScanBelow.
 func gridScanBelowReference(boxes [][2]r3.Vec, members []int, budget, beat uint64) (gridScan, bool) {
 	g := gridScan{boxes: boxes}
 	if len(members) < 2 {

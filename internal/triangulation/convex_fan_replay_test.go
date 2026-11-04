@@ -39,37 +39,48 @@ func TestConvexFanReplay(t *testing.T) {
 		if n != 1068 {
 			continue
 		}
-		work, records := meter.Usage()
-		bytes := meter.Bytes()
-		for _, short := range []string{"", "work", "records", "bytes"} {
-			b := proofbound.NewReplayTrialBudget()
-			w, r, z := proofbound.ReplayTrialWork-work, proofbound.ReplayTrialRecords-records, proofbound.ReplayTrialBytes-bytes
-			switch short {
-			case "work":
-				w++
-			case "records":
-				r++
-			case "bytes":
-				z++
-			}
-			if err := b.SpendWork(t.Context(), w); err != nil {
-				t.Fatal(err)
-			}
-			if err := b.ReserveRecords(t.Context(), r); err != nil {
-				t.Fatal(err)
-			}
-			if err := b.ReserveBytes(t.Context(), z); err != nil {
-				t.Fatal(err)
-			}
-			_, err := ConvexFanReplay(t.Context(), pts, poly, b)
-			if short == "" && err != nil || short != "" && !errors.Is(err, decaderr.ErrUnsupported) {
-				t.Fatalf("%q: %v", short, err)
-			}
-		}
+		assertTriangulationReplayBudgetLimits(t, pts, poly, ConvexFanReplay)
 		ctx, cancel := context.WithCancel(t.Context())
 		cancel()
 		if _, err := ConvexFanReplay(ctx, pts, poly, proofbound.NewReplayTrialBudget()); !errors.Is(err, context.Canceled) {
 			t.Fatalf("cancellation: %v", err)
+		}
+	}
+}
+
+func assertTriangulationReplayBudgetLimits(t *testing.T, pts []Point2, poly []int, run func(context.Context, []Point2, []int, *proofbound.ReplayBudget) ([][3]int, error)) {
+	t.Helper()
+	trial := proofbound.NewReplayTrialBudget()
+	if _, err := run(t.Context(), pts, poly, trial); err != nil {
+		t.Fatal(err)
+	}
+	work, records := trial.Usage()
+	bytes := trial.Bytes()
+	for _, short := range []string{"", "work", "records", "bytes"} {
+		budget := proofbound.NewReplayTrialBudget()
+		w := proofbound.ReplayTrialWork - work
+		r := proofbound.ReplayTrialRecords - records
+		b := proofbound.ReplayTrialBytes - bytes
+		switch short {
+		case "work":
+			w++
+		case "records":
+			r++
+		case "bytes":
+			b++
+		}
+		if err := budget.SpendWork(t.Context(), w); err != nil {
+			t.Fatal(err)
+		}
+		if err := budget.ReserveRecords(t.Context(), r); err != nil {
+			t.Fatal(err)
+		}
+		if err := budget.ReserveBytes(t.Context(), b); err != nil {
+			t.Fatal(err)
+		}
+		_, err := run(t.Context(), pts, poly, budget)
+		if short == "" && err != nil || short != "" && !errors.Is(err, decaderr.ErrUnsupported) {
+			t.Fatalf("%q: %v", short, err)
 		}
 	}
 }

@@ -1268,6 +1268,8 @@ func TrianglePlaneSigns(plane LoftExactPlane, other [3]proof.Xpt) [3]int {
 // An identical table-owned point is one of the plane's corners and has sign
 // zero without arithmetic. Equal coordinates with distinct lifts still use
 // the adaptive predicate.
+//
+//nolint:dupl // Kept beside referencePlaneSigns for differential verification.
 func (d *LoftAuditData) planeSigns(i int, xother [3]proof.Xpt, other [3]r3.Vec) [3]int {
 	if d.exactLifts {
 		return TrianglePlaneSigns(d.Planes[i], xother)

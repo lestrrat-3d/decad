@@ -86,40 +86,7 @@ func TestCirclePlacementReplaySnapshot(t *testing.T) {
 	w, r := measured.Usage()
 	z := measured.Bytes()
 	t.Logf("placement work=%d records=%d bytes=%d", w, r, z)
-	for _, kind := range []string{circleTestExact, circleTestWork, circleTestRecords, circleTestBytes} {
-		t.Run(kind, func(t *testing.T) {
-			m := proofbound.NewCircleReplayBudget()
-			ww, rr, zz := proofbound.ReplayTrialWork-w, proofbound.ReplayTrialRecords-r, proofbound.ReplayTrialBytes-z
-			switch kind {
-			case circleTestWork:
-				ww++
-			case circleTestRecords:
-				rr++
-			case circleTestBytes:
-				zz++
-			}
-			if err := m.SpendWork(t.Context(), ww); err != nil {
-				t.Fatal(err)
-			}
-			if err := m.ReserveRecords(t.Context(), rr); err != nil {
-				t.Fatal(err)
-			}
-			if err := m.ReserveBytes(t.Context(), zz); err != nil {
-				t.Fatal(err)
-			}
-			err := run(t.Context(), m)
-			if kind == circleTestExact && err != nil || kind != circleTestExact && !errors.Is(err, ErrUnsupported) {
-				t.Fatalf("budget: %v", err)
-			}
-			if kind != circleTestExact {
-				var limit *proofbound.WorkLimitError
-				resource := map[string]string{circleTestWork: "multiway_work", circleTestRecords: "multiway_records", circleTestBytes: "replay_bytes"}[kind]
-				if !errors.As(err, &limit) || limit.Resource != resource {
-					t.Fatalf("wrong budget refusal: %v", err)
-				}
-			}
-		})
-	}
+	assertCircleReplayBudgetLimits(t, "", run, w, r, z)
 	m := proofbound.NewCircleReplayBudget()
 	s, err := captureCirclePlacement(t.Context(), doc, placed, m)
 	if err != nil {
@@ -238,40 +205,7 @@ func TestCirclePlacementReplaySnapshot(t *testing.T) {
 	cw, cr := chainBudget.Usage()
 	cz := chainBudget.Bytes()
 	t.Logf("source chain work=%d records=%d bytes=%d", cw, cr, cz)
-	for _, kind := range []string{circleTestExact, circleTestWork, circleTestRecords, circleTestBytes} {
-		t.Run("chain_"+kind, func(t *testing.T) {
-			budget := proofbound.NewCircleReplayBudget()
-			ww, rr, zz := proofbound.ReplayTrialWork-cw, proofbound.ReplayTrialRecords-cr, proofbound.ReplayTrialBytes-cz
-			switch kind {
-			case circleTestWork:
-				ww++
-			case circleTestRecords:
-				rr++
-			case circleTestBytes:
-				zz++
-			}
-			if err := budget.SpendWork(t.Context(), ww); err != nil {
-				t.Fatal(err)
-			}
-			if err := budget.ReserveRecords(t.Context(), rr); err != nil {
-				t.Fatal(err)
-			}
-			if err := budget.ReserveBytes(t.Context(), zz); err != nil {
-				t.Fatal(err)
-			}
-			err := runChain(t.Context(), budget)
-			if kind == circleTestExact && err != nil || kind != circleTestExact && !errors.Is(err, ErrUnsupported) {
-				t.Fatalf("chain budget: %v", err)
-			}
-			if kind != circleTestExact {
-				var limit *proofbound.WorkLimitError
-				resource := map[string]string{circleTestWork: "multiway_work", circleTestRecords: "multiway_records", circleTestBytes: "replay_bytes"}[kind]
-				if !errors.As(err, &limit) || limit.Resource != resource {
-					t.Fatalf("wrong chain limit: %v", err)
-				}
-			}
-		})
-	}
+	assertCircleReplayBudgetLimits(t, "chain_", runChain, cw, cr, cz)
 	chain, err := captureCircleSource(t.Context(), doc, placedAgain, proofbound.NewCircleReplayBudget())
 	if err != nil {
 		t.Fatal(err)
@@ -334,6 +268,47 @@ func TestCirclePlacementReplaySnapshot(t *testing.T) {
 	cancel2()
 	if err := chain.revalidate(ctx2, doc, chain.budget); !errors.Is(err, context.Canceled) {
 		t.Fatalf("chain cancellation: %v", err)
+	}
+}
+
+func assertCircleReplayBudgetLimits(t *testing.T, prefix string, run func(context.Context, *proofbound.ReplayBudget) error, work, records, bytes uint64) {
+	t.Helper()
+	for _, kind := range []string{circleTestExact, circleTestWork, circleTestRecords, circleTestBytes} {
+		t.Run(prefix+kind, func(t *testing.T) {
+			budget := proofbound.NewCircleReplayBudget()
+			w := proofbound.ReplayTrialWork - work
+			r := proofbound.ReplayTrialRecords - records
+			b := proofbound.ReplayTrialBytes - bytes
+			switch kind {
+			case circleTestWork:
+				w++
+			case circleTestRecords:
+				r++
+			case circleTestBytes:
+				b++
+			}
+			if err := budget.SpendWork(t.Context(), w); err != nil {
+				t.Fatal(err)
+			}
+			if err := budget.ReserveRecords(t.Context(), r); err != nil {
+				t.Fatal(err)
+			}
+			if err := budget.ReserveBytes(t.Context(), b); err != nil {
+				t.Fatal(err)
+			}
+			err := run(t.Context(), budget)
+			if kind == circleTestExact && err != nil || kind != circleTestExact && !errors.Is(err, ErrUnsupported) {
+				t.Fatalf("budget: %v", err)
+			}
+			if kind == circleTestExact {
+				return
+			}
+			var limit *proofbound.WorkLimitError
+			resource := map[string]string{circleTestWork: "multiway_work", circleTestRecords: "multiway_records", circleTestBytes: "replay_bytes"}[kind]
+			if !errors.As(err, &limit) || limit.Resource != resource {
+				t.Fatalf("wrong budget refusal: %v", err)
+			}
+		})
 	}
 }
 

@@ -127,6 +127,8 @@ func newGridScan(boxes [][2]r3.Vec, members []int, budget uint64) (gridScan, boo
 // its work is below beat. ok is also false as soon as the work counted so far
 // reaches beat: the count only grows, so the finished grid could not be kept.
 // A grid returned with ok false is partly built and must be dropped.
+//
+//nolint:dupl // Kept beside gridScanBelowReference for differential verification.
 func newGridScanBelow(boxes [][2]r3.Vec, members []int, budget, beat uint64) (gridScan, bool) {
 	g := gridScan{boxes: boxes}
 	if len(members) < 2 {

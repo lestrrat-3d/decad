@@ -48,40 +48,50 @@ func legacyOf(f float64) legacyDyadic {
 }
 
 func legacyAdd(a, b legacyDyadic) legacyDyadic {
-	switch {
-	case a.isZero() && b.isZero():
-		return legacyDyadic{}
-	case a.isZero():
-		return legacyDyadic{mant: new(big.Int).Set(b.mant), exp: b.exp}
-	case b.isZero():
-		return legacyDyadic{mant: new(big.Int).Set(a.mant), exp: a.exp}
-	case a.exp == b.exp:
-		return legacyDyadic{mant: new(big.Int).Add(a.mant, b.mant), exp: a.exp}.norm()
-	case a.exp > b.exp:
-		out := new(big.Int).Lsh(a.mant, uint(a.exp-b.exp))
-		return legacyDyadic{mant: out.Add(out, b.mant), exp: b.exp}.norm()
-	default:
-		out := new(big.Int).Lsh(b.mant, uint(b.exp-a.exp))
-		return legacyDyadic{mant: out.Add(a.mant, out), exp: a.exp}.norm()
-	}
+	return legacyAddSub(a, b, false)
 }
 
 func legacySub(a, b legacyDyadic) legacyDyadic {
+	return legacyAddSub(a, b, true)
+}
+
+// legacyAddSub keeps the big.Int oracle's exponent alignment in one place.
+func legacyAddSub(a, b legacyDyadic, subtract bool) legacyDyadic {
 	switch {
 	case a.isZero() && b.isZero():
 		return legacyDyadic{}
 	case a.isZero():
-		return legacyDyadic{mant: new(big.Int).Neg(b.mant), exp: b.exp}
+		mant := new(big.Int).Set(b.mant)
+		if subtract {
+			mant.Neg(mant)
+		}
+		return legacyDyadic{mant: mant, exp: b.exp}
 	case b.isZero():
 		return legacyDyadic{mant: new(big.Int).Set(a.mant), exp: a.exp}
 	case a.exp == b.exp:
-		return legacyDyadic{mant: new(big.Int).Sub(a.mant, b.mant), exp: a.exp}.norm()
+		mant := new(big.Int)
+		if subtract {
+			mant.Sub(a.mant, b.mant)
+		} else {
+			mant.Add(a.mant, b.mant)
+		}
+		return legacyDyadic{mant: mant, exp: a.exp}.norm()
 	case a.exp > b.exp:
 		out := new(big.Int).Lsh(a.mant, uint(a.exp-b.exp))
-		return legacyDyadic{mant: out.Sub(out, b.mant), exp: b.exp}.norm()
+		if subtract {
+			out.Sub(out, b.mant)
+		} else {
+			out.Add(out, b.mant)
+		}
+		return legacyDyadic{mant: out, exp: b.exp}.norm()
 	default:
 		out := new(big.Int).Lsh(b.mant, uint(b.exp-a.exp))
-		return legacyDyadic{mant: out.Sub(a.mant, out), exp: a.exp}.norm()
+		if subtract {
+			out.Sub(a.mant, out)
+		} else {
+			out.Add(a.mant, out)
+		}
+		return legacyDyadic{mant: out, exp: a.exp}.norm()
 	}
 }
 

@@ -6,7 +6,6 @@ import (
 
 	"github.com/lestrrat-3d/decad"
 	"github.com/lestrrat-3d/r3"
-	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
 )
@@ -14,15 +13,7 @@ import (
 // linkageBlock extrudes the rectangle (x0, y0)-(x1, y1) over z ∈ [z0, z0+h].
 func linkageBlock(tb testing.TB, doc *decad.Document, x0, y0, x1, y1, z0, h float64) *decad.Body {
 	tb.Helper()
-	w := sketch.NewWorld()
-	plane, err := w.CreateOffsetPlane(w.XY(), z0)
-	require.NoError(tb, err)
-	s, err := w.CreateSketch(plane)
-	require.NoError(tb, err)
-	rect := s.CreateRectangle(x0, y0, x1, y1)
-	s.Fix(rect.A)
-	_, err = s.Solve(context.Background())
-	require.NoError(tb, err)
+	s := offsetBoxSketch(tb, context.Background(), x0, y0, x1, y1, z0)
 	body, err := decad.Extrude(tb.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
 	require.NoError(tb, err)
 	return body

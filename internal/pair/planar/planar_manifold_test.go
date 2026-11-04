@@ -14,6 +14,8 @@ import (
 // supportSetRebuilt is one plane's lifted set built the way PlanarSupportSets
 // must reproduce: both solids' derived data and adjacency built afresh for
 // the plane alone.
+//
+//nolint:dupl // Independent rebuild oracle for supportSet.
 func supportSetRebuilt(a, b *PlanarSolid, plane SupportPlane, band proof.Dyadic, overlap bool,
 	poll func() error) ([]PatchPoint, error) {
 	if len(a.Faces) != len(a.Tris) || len(b.Faces) != len(b.Tris) || band.Sign() <= 0 {
