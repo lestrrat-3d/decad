@@ -217,7 +217,8 @@ func missesBySide(tri [3]r3.Vec, shift r3.Vec, ft [3]r3.Vec, p *Piece, budget *B
 	return true, nil
 }
 
-func separated(axis r3.Vec, tri [3]xvec, verts []xvec) bool {
+func separated(axisFloat r3.Vec, tri [3]xvec, verts []xvec) bool {
+	axis := ratVecOf(axisFloat)
 	var tlo, thi, plo, phi *big.Rat
 	for _, v := range tri {
 		d := dotExact(axis, v)
