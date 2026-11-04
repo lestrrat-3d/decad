@@ -46,10 +46,23 @@ func ReplayBindGroupOrigins(ctx context.Context, recorded, replayed stackedrecor
 	used := make([]bool, n)
 	a := prismplacement.Operand{Frame: recorded.Frame, Xform: recorded.Xform, Z0: ra.Z0, Z1: ra.Z1, Z0Delta: ra.Z0Delta, Z1Delta: ra.Z1Delta, Z0Denoted: ra.Z0Denoted, Z1Denoted: ra.Z1Denoted}
 	b := prismplacement.Operand{Frame: replayed.Frame, Xform: replayed.Xform, Z0: rb.Z0, Z1: rb.Z1, Z0Delta: rb.Z0Delta, Z1Delta: rb.Z1Delta, Z0Denoted: rb.Z0Denoted, Z1Denoted: rb.Z1Denoted}
+	var mapping prismplacement.ReplaySignedMap
+	var err error
+	if n != 0 {
+		var ok bool
+		mapping, ok, err = prismplacement.ReplayParallelSignedMap(ctx, a, b, budget)
+		if err != nil || !ok {
+			return nil, false, err
+		}
+		ok, err = prismplacement.ReplaySameShiftedInterval(ctx, a, b, mapping.Shift, budget)
+		if err != nil || !ok {
+			return nil, false, err
+		}
+	}
 	for i, region := range ra.Regions {
 		match := -1
 		for j, candidate := range rb.Regions {
-			ok, err := ReplayWholeCircleMatch(ctx, region, candidate, a, b, budget)
+			ok, err := replayWholeCircleMatchWithMap(ctx, region, candidate, mapping, budget)
 			if err != nil {
 				return nil, false, err
 			}

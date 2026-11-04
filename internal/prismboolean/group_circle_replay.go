@@ -25,6 +25,14 @@ func ReplayWholeCircleMatch(ctx context.Context, group, leaf momentinput.Profile
 	if err != nil || !ok {
 		return false, err
 	}
+	return replayWholeCircleMatchWithMap(ctx, group, leaf, m, budget)
+}
+
+func replayWholeCircleMatchWithMap(ctx context.Context, group, leaf momentinput.Profile,
+	m prismplacement.ReplaySignedMap, budget proof.ReplayKeyBudget) (bool, error) {
+	if budget == nil {
+		return false, nil
+	}
 	if err := budget.SpendWork(ctx, 16); err != nil {
 		return false, err
 	}
