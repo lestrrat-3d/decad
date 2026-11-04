@@ -139,3 +139,70 @@ func BenchmarkSeparatedProjection(b *testing.B) {
 }
 
 func r3Vec(x, y, z float64) r3.Vec { return r3.Vec{X: x, Y: y, Z: z} }
+
+// TestSideBeyondMatchesRat holds side.beyond to the reduced big.Rat sum and
+// comparison on random sides and points, ties included.
+func TestSideBeyondMatchesRat(t *testing.T) {
+	t.Parallel()
+	rng := rand.New(rand.NewPCG(19, 23))
+	pick := func() float64 {
+		if rng.IntN(6) == 0 {
+			return float64(rng.IntN(5) - 2)
+		}
+		return (rng.Float64() - 0.5) * 20
+	}
+	e, err := invert(applyAffineFixture(0.7, 1.25, -3.5, 2))
+	require.NoError(t, err)
+	ties, over := 0, 0
+	for range 3000 {
+		x := e.apply(xvec{ratOf(pick()), ratOf(pick()), ratOf(pick())})
+		s := side{ux: ratOf(pick()), uy: ratOf(pick())}
+		sum := new(big.Rat).Mul(s.ux, x[0])
+		sum.Add(sum, new(big.Rat).Mul(s.uy, x[1]))
+		switch rng.IntN(3) {
+		case 0:
+			s.c = new(big.Rat).Set(sum)
+		case 1:
+			s.c = new(big.Rat).Add(sum, big.NewRat(1, 1<<20))
+		default:
+			s.c = new(big.Rat).Sub(sum, big.NewRat(1, 1<<20))
+		}
+		want := sum.Cmp(s.c) > 0
+		require.Equal(t, want, s.beyond(x))
+		if sum.Cmp(s.c) == 0 {
+			ties++
+		}
+		if want {
+			over++
+		}
+	}
+	require.Positive(t, ties, "premise: ties occur")
+	require.Positive(t, over, "premise: some sums exceed c")
+}
+
+func sideBeyondRat(s side, x xvec) bool {
+	d := new(big.Rat).Mul(s.ux, x[0])
+	d.Add(d, new(big.Rat).Mul(s.uy, x[1]))
+	return d.Cmp(s.c) > 0
+}
+
+func benchSide() (side, xvec) {
+	e, _ := invert(applyAffineFixture(0.7, 1.25, -3.5, 2))
+	x := e.apply(xvec{ratOf(3.1), ratOf(-4.7), ratOf(0.9)})
+	s := side{ux: ratOf(0.6), uy: ratOf(-0.8), c: ratOf(1.3)}
+	return s, x
+}
+
+func BenchmarkSideBeyond(b *testing.B) {
+	s, x := benchSide()
+	for range b.N {
+		s.beyond(x)
+	}
+}
+
+func BenchmarkSideBeyondRat(b *testing.B) {
+	s, x := benchSide()
+	for range b.N {
+		sideBeyondRat(s, x)
+	}
+}

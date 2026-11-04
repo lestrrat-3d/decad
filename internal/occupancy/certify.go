@@ -202,9 +202,7 @@ func missesBySide(tri [3]r3.Vec, shift r3.Vec, ft [3]r3.Vec, p *Piece, budget *B
 		switch {
 		case best < len(p.sides):
 			sd := p.sides[best]
-			d := new(big.Rat).Mul(sd.ux, x[0])
-			d.Add(d, new(big.Rat).Mul(sd.uy, x[1]))
-			beyond = d.Cmp(sd.c) > 0
+			beyond = sd.beyond(x)
 		case best == len(p.sides):
 			beyond = x[2].Cmp(p.z0) < 0
 		default:
