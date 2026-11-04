@@ -287,6 +287,19 @@ func (p *planarPrep) sidePlanes(t int) (*[3]proof.DyV3, *[3]floatBox) {
 // the products lie between the least and greatest corner product. A NaN
 // corner, from an infinity times zero, makes both ends NaN.
 func mulEnclosure(a, b, c, d float64) (float64, float64) {
+	p, q, r, s := float64(a*c), float64(a*d), float64(b*c), float64(b*d)
+	if p != p || q != q || r != r || s != s {
+		return mulEnclosureSlow(a, b, c, d)
+	}
+	// down and up never decrease with their argument, so stepping the least
+	// and greatest rounded corner is the least of the stepped corners.
+	return down(min(min(p, q), min(r, s))), up(max(max(p, q), max(r, s)))
+}
+
+// mulEnclosureSlow is mulEnclosure's corner-by-corner form, which a NaN
+// corner needs: minFloat and maxFloat order a NaN against an infinity as
+// math.Min and math.Max do.
+func mulEnclosureSlow(a, b, c, d float64) (float64, float64) {
 	lo := minFloat(minFloat(mulDown(a, c), mulDown(a, d)), minFloat(mulDown(b, c), mulDown(b, d)))
 	hi := maxFloat(maxFloat(mulUp(a, c), mulUp(a, d)), maxFloat(mulUp(b, c), mulUp(b, d)))
 	return lo, hi

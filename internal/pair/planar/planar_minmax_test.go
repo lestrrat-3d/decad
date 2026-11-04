@@ -46,3 +46,22 @@ func BenchmarkMulEnclosure(b *testing.B) {
 	}
 	_, _ = lo, hi
 }
+
+// TestMulEnclosureMatchesCornerForm holds mulEnclosure to the corner-by-corner
+// enclosure on every combination of special and finite operands, by bit pattern.
+func TestMulEnclosureMatchesCornerForm(t *testing.T) {
+	t.Parallel()
+	ops := append(minmaxOperands(), 0.1, -0.3, 3, 1e200, -1e200, 1e-200, 0x1p-1074, 7.25)
+	for _, a := range ops {
+		for _, b := range ops {
+			for _, c := range ops {
+				for _, d := range ops {
+					lo, hi := mulEnclosure(a, b, c, d)
+					wlo, whi := mulEnclosureSlow(a, b, c, d)
+					require.Equal(t, math.Float64bits(wlo), math.Float64bits(lo), "lo %v %v %v %v", a, b, c, d)
+					require.Equal(t, math.Float64bits(whi), math.Float64bits(hi), "hi %v %v %v %v", a, b, c, d)
+				}
+			}
+		}
+	}
+}
