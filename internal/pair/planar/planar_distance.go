@@ -80,6 +80,9 @@ func (k *planarKernel) distances() error {
 	k.a.floatBoxes()
 	k.b.floatBoxes()
 	k.applyHint()
+	if !k.noSeed {
+		k.seedCap()
+	}
 	return k.scan()
 }
 

@@ -962,6 +962,8 @@ func ratioDyadic(i, n int) proof.Dyadic {
 // result's own Nearest among them: the same relation, reason, gap, contacts,
 // crossings, nearest pair and polls.
 //
+// The own guess at the nearest pair (seedCap) is held to the unguessed answer.
+//
 // Leg shown to fail: the cap pruning a box pair whose squared gap equals it
 // drops the first pair at the minimum of a box resting flat.
 func TestClassifyPlanarHintKeepsAnswers(t *testing.T) {
@@ -993,6 +995,14 @@ func TestClassifyPlanarHintKeepsAnswers(t *testing.T) {
 		want, err := ClassifyPlanar(a, b, countingPoll(&wantPolls))
 		require.NoError(t, err)
 		relations[want.Relation]++
+		unseeded, err := classifyPlanar(a, b, PlanarHint{}, false, noPollInternal)
+		require.NoError(t, err)
+		require.Equal(t, unseeded.Relation, want.Relation, "trial %d: seeded relation", trial)
+		require.Equal(t, unseeded.Reason, want.Reason, "trial %d: seeded reason", trial)
+		require.Equal(t, unseeded.Gap, want.Gap, "trial %d: seeded gap", trial)
+		require.Equal(t, unseeded.Contacts, want.Contacts, "trial %d: seeded contacts", trial)
+		require.Equal(t, unseeded.Crossings, want.Crossings, "trial %d: seeded crossings", trial)
+		require.Equal(t, unseeded.Nearest, want.Nearest, "trial %d: seeded nearest", trial)
 		edgesA, edgesB := len(want.preps[0].edges), len(want.preps[1].edges)
 		hints := []PlanarHint{want.Nearest,
 			{kind: hintVertexFacet, i: rng.IntN(len(a.Verts)), j: rng.IntN(len(b.Tris))},

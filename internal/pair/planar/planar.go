@@ -195,6 +195,13 @@ func ClassifyPlanar(a, b *PlanarSolid, poll func() error) (PlanarResult, error) 
 // is the same for every hint, including one that names no candidate of these
 // solids (planar_prune.go).
 func ClassifyPlanarHinted(a, b *PlanarSolid, hint PlanarHint, poll func() error) (PlanarResult, error) {
+	return classifyPlanar(a, b, hint, true, poll)
+}
+
+// classifyPlanar is ClassifyPlanarHinted with the distance scan's own guess at
+// the nearest pair (seedCap) switched by seed, so a test can hold the guess to
+// the unguessed answer.
+func classifyPlanar(a, b *PlanarSolid, hint PlanarHint, seed bool, poll func() error) (PlanarResult, error) {
 	pa, pb := preparePlanar(a), preparePlanar(b)
 	steps := 0
 	inner := poll
@@ -204,7 +211,7 @@ func ClassifyPlanarHinted(a, b *PlanarSolid, hint PlanarHint, poll func() error)
 		}
 		return inner()
 	}
-	k := &planarKernel{a: pa, b: pb, poll: poll, hint: hint}
+	k := &planarKernel{a: pa, b: pb, poll: poll, hint: hint, noSeed: !seed}
 	result, err := k.classify()
 	if err != nil {
 		return PlanarResult{}, err
@@ -445,9 +452,11 @@ type planarKernel struct {
 	// hint is the caller's guess at the nearest candidate pair, cur names
 	// the candidate pair being offered, and nearest the one that set best.
 	hint, cur, nearest PlanarHint
-	sites              []contactSite
-	seen               map[PlanarContact]struct{}
-	crossed            []PlanarCrossing
+	// noSeed switches seedCap off.
+	noSeed  bool
+	sites   []contactSite
+	seen    map[PlanarContact]struct{}
+	crossed []PlanarCrossing
 }
 
 func orientSign(p *planarPrep, t int, v proof.DyV3) int {
