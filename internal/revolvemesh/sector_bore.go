@@ -13,8 +13,11 @@ import (
 )
 
 // SectorBoreMaxStations caps the angular stations a centered cylinder Cut of
-// a Revolve/sector Union accepts.
-const SectorBoreMaxStations = 2_304
+// a Revolve/sector Union accepts. A fitted-route join starts at a quarter of
+// the plain sag allowance and a 32-tooth straight bevel gear then holds 2,368
+// stations, so the cap leaves room for twice the old 2,304; the audited
+// triangle count and the audit scan ceiling still bound the work.
+const SectorBoreMaxStations = 4_608
 
 // SectorCapFan returns an angular cell only for a complete, source-
 // labeled axis fan triangle on the retained outer ring.

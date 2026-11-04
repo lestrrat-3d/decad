@@ -169,7 +169,7 @@ The retained Union station gaps are rechecked with rational intervals. The
 circular bore ring bounds its own trigonometric rounding and chord sag at
 those stations. Existing bore callers keep their 0.025 radian station limit;
 this route supplies the certified joined ring's largest step and requires a
-0.1 mm result boundary bound. The rewrite limits stations to 2,304, audited
+0.1 mm result boundary bound. The rewrite limits stations to 4,608, audited
 triangles to 1,321,696 and audit scans to 400 million. It checks connected
 orientation, vertex links and triangle contacts before building a result.
 The result audit proposes each copied face group and each half-annulus as a
