@@ -13,34 +13,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// legacyJoints and legacyApply are ReadPoints as it was written over big.Rat
-// interval arithmetic, split where readPoseBounds takes the composed pose;
-// legacyReadPointBounds rounds that reading with RoundCorners.
-//
-//nolint:dupl // Independent legacy path used to verify readJoints.
-func legacyJoints(frames []motionbound.MotionFrame, params []motionbound.MotionParam, path []int, revolute []bool, below int) ([]jointAt, *motionbound.IdealPose) {
-	joints := make([]jointAt, 0, len(path)-below)
-	var pose *motionbound.IdealPose
-	for _, i := range path[below:] {
-		f := frames[i]
-		var unit motionbound.IvVec
-		for d := range 3 {
-			unit[d] = proofbound.IntervalScale(f.Unit, f.Axis[d])
-		}
-		pivot := motionbound.PointVec(f.Center)
-		ideal := f.At(params[i])
-		if pose != nil {
-			unit = pose.Rot.Apply(unit)
-			pivot = ApplyIdeal(*pose, pivot)
-			ideal = ideal.Then(*pose)
-		}
-		joints = append(joints, jointAt{revolute: revolute[i], unit: unit, pivot: pivot})
-		pose = &ideal
-	}
-	return joints, pose
-}
-
-func legacyApply(joints []jointAt, pose *motionbound.IdealPose, out Reading) Reading {
+// exactApply maps a reading through its pose and encloses its velocities with
+// independent big.Rat arithmetic. exactReadPointBounds rounds that reading.
+func exactApply(joints []jointAt, pose *motionbound.IdealPose, out Reading) Reading {
 	for c := range out.Pos {
 		if pose != nil {
 			out.Pos[c] = ApplyIdeal(*pose, out.Pos[c])
@@ -57,9 +32,9 @@ func legacyApply(joints []jointAt, pose *motionbound.IdealPose, out Reading) Rea
 	return out
 }
 
-func legacyReadPointBounds(frames []motionbound.MotionFrame, params []motionbound.MotionParam, path []int, revolute []bool, below int, out Reading) (Bounds, bool) {
-	joints, pose := legacyJoints(frames, params, path, revolute, below)
-	return RoundCorners(legacyApply(joints, pose, out))
+func exactReadPointBounds(frames []motionbound.MotionFrame, params []motionbound.MotionParam, path []int, revolute []bool, below int, out Reading) (Bounds, bool) {
+	joints, pose := readJoints(frames, params, path, revolute, below)
+	return RoundCorners(exactApply(joints, pose, out))
 }
 
 // readingCase is one generated input: a joint chain, its parameters, and a
@@ -192,7 +167,7 @@ func TestReadPointBoundsMatchesExactReading(t *testing.T) {
 	rng := rand.New(rand.NewPCG(2611, 2617))
 	for i := range 400 {
 		rc := randomReadingCase(t, rng, false)
-		want, wantOK := legacyReadPointBounds(rc.frames, rc.params, rc.path, rc.revolute, rc.below, rc.points())
+		want, wantOK := exactReadPointBounds(rc.frames, rc.params, rc.path, rc.revolute, rc.below, rc.points())
 		got, gotOK := ReadPointBounds(rc.frames, rc.params, rc.path, rc.revolute, rc.below, rc.points())
 		requireSameBounds(t, want, wantOK, got, gotOK, fmt.Sprintf("case %d", i))
 	}
@@ -205,14 +180,14 @@ func TestReadPoseBoundsIntervalPivot(t *testing.T) {
 	rng := rand.New(rand.NewPCG(2621, 2633))
 	for range 60 {
 		rc := randomReadingCase(t, rng, true)
-		joints, pose := legacyJoints(rc.frames, rc.params, rc.path, rc.revolute, rc.below)
+		joints, pose := readJoints(rc.frames, rc.params, rc.path, rc.revolute, rc.below)
 		if pose == nil {
 			continue
 		}
 		for d := range 3 {
 			pose.Pivot[d] = proofbound.IntervalOwned(new(big.Rat).Sub(pose.Pivot[d].Lo, big.NewRat(1, 3)), new(big.Rat).Set(pose.Pivot[d].Hi))
 		}
-		want, wantOK := RoundCorners(legacyApply(joints, pose, rc.points()))
+		want, wantOK := RoundCorners(exactApply(joints, pose, rc.points()))
 		got, gotOK := readPoseBounds(joints, pose, rc.points())
 		requireSameBounds(t, want, wantOK, got, gotOK, "interval pivot")
 	}
@@ -233,7 +208,7 @@ func TestReadPointBoundsOverflow(t *testing.T) {
 		points := func() Reading {
 			return StaticPoints([]motionbound.RatVec{{new(big.Rat).Set(p[0]), new(big.Rat).Set(p[1]), new(big.Rat).Set(p[2])}})
 		}
-		want, wantOK := legacyReadPointBounds([]motionbound.MotionFrame{frame}, params, []int{0}, []bool{true}, 0, points())
+		want, wantOK := exactReadPointBounds([]motionbound.MotionFrame{frame}, params, []int{0}, []bool{true}, 0, points())
 		got, gotOK := ReadPointBounds([]motionbound.MotionFrame{frame}, params, []int{0}, []bool{true}, 0, points())
 		require.False(t, wantOK)
 		requireSameBounds(t, want, wantOK, got, gotOK, "overflow")
@@ -247,7 +222,7 @@ func TestReadPointBoundsOverflow(t *testing.T) {
 	points := func() Reading {
 		return StaticPoints([]motionbound.RatVec{{new(big.Rat).SetFloat64(math.MaxFloat64), new(big.Rat), new(big.Rat)}})
 	}
-	want, wantOK := legacyReadPointBounds([]motionbound.MotionFrame{far}, still, []int{0}, []bool{true}, 0, points())
+	want, wantOK := exactReadPointBounds([]motionbound.MotionFrame{far}, still, []int{0}, []bool{true}, 0, points())
 	got, gotOK := ReadPointBounds([]motionbound.MotionFrame{far}, still, []int{0}, []bool{true}, 0, points())
 	require.False(t, wantOK)
 	requireSameBounds(t, want, wantOK, got, gotOK, "velocity overflow")
@@ -293,10 +268,10 @@ func BenchmarkReadPointBounds(b *testing.B) {
 				}
 			}
 		})
-		b.Run(name+"/legacy", func(b *testing.B) {
+		b.Run(name+"/exact", func(b *testing.B) {
 			b.ReportAllocs()
 			for b.Loop() {
-				if _, ok := legacyReadPointBounds(rc.frames, rc.params, rc.path, rc.revolute, 0, rc.points()); !ok {
+				if _, ok := exactReadPointBounds(rc.frames, rc.params, rc.path, rc.revolute, 0, rc.points()); !ok {
 					b.Fatal("reading failed")
 				}
 			}

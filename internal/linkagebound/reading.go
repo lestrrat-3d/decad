@@ -76,8 +76,6 @@ func readPoseBounds(joints []jointAt, pose *motionbound.IdealPose, out Reading) 
 
 // readJoints reads every joint on path[below:] at its parameter and composes
 // their ideal poses; the pose is nil when the path has no joint below.
-//
-//nolint:dupl // Kept beside legacyJoints for exact differential verification.
 func readJoints(frames []motionbound.MotionFrame, params []motionbound.MotionParam, path []int, revolute []bool, below int) ([]jointAt, *motionbound.IdealPose) {
 	joints := make([]jointAt, 0, len(path)-below)
 	var pose *motionbound.IdealPose

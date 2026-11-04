@@ -199,8 +199,6 @@ func sum2Step(pi, sigma, p float64) (float64, float64) {
 
 // orientSignGrow is the exact sign of det[ba, ca, da] for admitted
 // differences, from the full zero-eliminating expansion of its 24 components.
-//
-//nolint:dupl // Kept independent of the legacy differential oracle.
 func orientSignGrow(ba, ca, da r3.Vec) int {
 	var sum orientationExpansion
 	for _, term := range [...][3]float64{

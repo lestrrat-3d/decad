@@ -1,28 +1,24 @@
-package proof_test
+package proof
 
 import (
 	"math"
 	"math/rand/v2"
 	"testing"
 
-	"github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/stretchr/testify/require"
 )
 
-// requireSameOrientation checks OrientSignExpansion against the previous
-// grow-expansion implementation, and a certain answer against the integer
-// determinant.
-func requireSameOrientation(t *testing.T, p [4]r3.Vec, label string) {
+// requireExactOrientation checks every certain result against the integer
+// determinant and requires uncertain results to make no sign claim.
+func requireExactOrientation(t *testing.T, p [4]r3.Vec, label string) {
 	t.Helper()
-	got, certain := proof.OrientSignExpansion(p[0], p[1], p[2], p[3])
-	legacy, legacyCertain := proof.LegacyOrientSignExpansion(p[0], p[1], p[2], p[3])
-	require.Equal(t, legacyCertain, certain, "%s: certainty differs from the previous implementation", label)
-	require.Equal(t, legacy, got, "%s: sign differs from the previous implementation", label)
+	got, certain := OrientSignExpansion(p[0], p[1], p[2], p[3])
 	if !certain {
+		require.Zero(t, got, "%s: uncertain result must make no sign claim", label)
 		return
 	}
-	want := proof.OrientSignExact(proof.XptOf(p[0]), proof.XptOf(p[1]), proof.XptOf(p[2]), proof.XptOf(p[3]))
+	want := OrientSignExact(XptOf(p[0]), XptOf(p[1]), XptOf(p[2]), XptOf(p[3]))
 	require.Equal(t, want, got, "%s: sign differs from the exact determinant", label)
 }
 
@@ -78,12 +74,12 @@ func nearCoplanarQuads(n int) [][4]r3.Vec {
 	return quads[:n]
 }
 
-func TestOrientSignExpansionMatchesPreviousImplementation(t *testing.T) {
+func TestOrientSignExpansionNearCoplanarMatchesExactDeterminant(t *testing.T) {
 	t.Parallel()
 	decided := 0
 	for _, q := range nearCoplanarQuads(40000) {
-		requireSameOrientation(t, q, "generated")
-		if _, ok := proof.OrientSignSum2(q[0], q[1], q[2], q[3]); ok {
+		requireExactOrientation(t, q, "generated")
+		if _, ok := orientSignSum2(q[1].Sub(q[0]), q[2].Sub(q[0]), q[3].Sub(q[0])); ok {
 			decided++
 		}
 	}
@@ -100,7 +96,7 @@ func TestOrientSignExpansionMatchesPreviousImplementation(t *testing.T) {
 		for k := range q {
 			q[k] = r3.Vec{X: pick(), Y: pick(), Z: pick()}
 		}
-		requireSameOrientation(t, q, "edge")
+		requireExactOrientation(t, q, "edge")
 	}
 }
 
@@ -149,13 +145,13 @@ func TestOrientSignSum2LeavesUnprovenSignsToTheExpansion(t *testing.T) {
 	}
 	for _, tc := range cases {
 		p := tc.points
-		exact := proof.OrientSignExact(proof.XptOf(p[0]), proof.XptOf(p[1]), proof.XptOf(p[2]), proof.XptOf(p[3]))
+		exact := OrientSignExact(XptOf(p[0]), XptOf(p[1]), XptOf(p[2]), XptOf(p[3]))
 		require.Equal(t, tc.want, exact, tc.name)
-		_, decided := proof.OrientSignSum2(p[0], p[1], p[2], p[3])
+		_, decided := orientSignSum2(p[1].Sub(p[0]), p[2].Sub(p[0]), p[3].Sub(p[0]))
 		require.Equal(t, tc.decided, decided, tc.name)
-		got, certain := proof.OrientSignExpansion(p[0], p[1], p[2], p[3])
+		got, certain := OrientSignExpansion(p[0], p[1], p[2], p[3])
 		require.True(t, certain, tc.name)
 		require.Equal(t, tc.want, got, tc.name)
-		requireSameOrientation(t, p, tc.name)
+		requireExactOrientation(t, p, tc.name)
 	}
 }

@@ -560,8 +560,6 @@ func TriTriDistance(ta, tb [3]r3.Vec) float64 {
 }
 
 // SegSegDist3 is the distance between two closed 3D segments.
-//
-//nolint:dupl // Kept beside oldSegSegDist3 for float-bit differential tests.
 func SegSegDist3(p0, p1, q0, q1 r3.Vec) float64 {
 	u := p1.Sub(p0)
 	v := q1.Sub(q0)
