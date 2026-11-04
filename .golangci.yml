@@ -77,6 +77,10 @@ linters:
       - legacy
       - std-error-handling
     rules:
+      # Examples repeat setup to explain each operation in place.
+      - linters:
+          - dupl
+        path: (^|/)examples/.*_test\.go$
       - linters:
           - staticcheck
         text: 'ST1003: should not use underscores in package names'
