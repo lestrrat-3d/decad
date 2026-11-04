@@ -45,6 +45,13 @@ import (
 //     minimum, so the recorded minimum is the same fraction. Every
 //     zero-distance site lies in a box pair with a zero gap, which no bound
 //     prunes, so the sites are the same, in the same order.
+//   - The scan's own guess at the nearest pair (seedCap, planar_seed.go). Before
+//     the scan, a walk over float vertex distances finds a nearby vertex pair,
+//     and the vertices of each solid nearest to the other's are read against the
+//     facets nearest to them; the least exact distance found lowers the cap, as
+//     a hint's does, whether or not the caller named one.
+//     The cap is a candidate's exact distance, so every argument above holds
+//     for it and the answers are the same with or without the guess.
 //   - Box trees. The crossing and distance scans ask a tree over the other
 //     solid's facet, or edge, float boxes (planar_boxtree.go) for the boxes the
 //     pre-test above keeps, in index order, instead of testing every one. A
