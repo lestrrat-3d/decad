@@ -2148,7 +2148,7 @@ func (e *heldEmbedding) candidates(i int) ([]int, error) {
 	// The list is reused across calls: each caller is done with it before
 	// the next query.
 	out := e.cands[:0]
-	add := func(j int32) error {
+	addWide := func(j int32) error {
 		if e.budget.ReserveFn != nil {
 			if err := e.budget.Step(); err != nil {
 				return err
@@ -2172,15 +2172,25 @@ func (e *heldEmbedding) candidates(i int) ([]int, error) {
 					return nil, err
 				}
 				for _, j := range e.cells[(x*e.dims[1]+y)*e.dims[2]+z] {
-					if err := add(j); err != nil {
+					if e.budget.ReserveFn != nil {
+						if err := e.budget.Step(); err != nil {
+							return nil, err
+						}
+					}
+					if e.stamp[j] == id {
+						continue
+					}
+					if err := e.budget.Reserve(1); err != nil {
 						return nil, err
 					}
+					e.stamp[j] = id
+					out = append(out, int(j))
 				}
 			}
 		}
 	}
 	for _, j := range e.wide {
-		if err := add(j); err != nil {
+		if err := addWide(j); err != nil {
 			return nil, err
 		}
 	}
