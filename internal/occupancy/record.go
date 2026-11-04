@@ -764,11 +764,37 @@ type exactAffine struct {
 	t xvec
 }
 
-func (e exactAffine) apply(p xvec) xvec {
-	var out xvec
-	// A zero factor adds exactly zero, so the term is skipped. Both signs are
-	// read before the skip, so a nil factor panics on the same term as the
-	// product would.
+// unreduced is the rational n/d with d positive, in whatever terms the
+// arithmetic that formed it left it: no common factor is divided out. Order
+// and equality go by cross-multiplication.
+type unreduced struct {
+	n, d big.Int
+}
+
+// cmpRat compares u with c.
+func (u *unreduced) cmpRat(c *big.Rat) int {
+	var l, r big.Int
+	l.Mul(&u.n, c.Denom())
+	r.Mul(c.Num(), &u.d)
+	return l.Cmp(&r)
+}
+
+// unreducedOf is the unreduced form of the rationals in p.
+func unreducedOf(p xvec) [3]unreduced {
+	var out [3]unreduced
+	for i := range 3 {
+		out[i].n.Set(p[i].Num())
+		out[i].d.Set(p[i].Denom())
+	}
+	return out
+}
+
+// applyUnreduced is apply without the final reduction: the three values in
+// the terms the sums left them. A zero factor adds exactly zero, so the term
+// is skipped. Both signs are read before the skip, so a nil factor panics on
+// the same term as the product would.
+func (e exactAffine) applyUnreduced(p xvec) [3]unreduced {
+	var out [3]unreduced
 	var sum fracSum
 	for i := range 3 {
 		sum.start(e.t[i])
@@ -779,9 +805,31 @@ func (e exactAffine) apply(p xvec) xvec {
 			}
 			sum.addProduct(e.m[i][j], p[j])
 		}
-		out[i] = sum.rat()
+		out[i].n.Set(&sum.n)
+		out[i].d.Set(&sum.d)
 	}
 	return out
+}
+
+func (e exactAffine) apply(p xvec) xvec {
+	u := e.applyUnreduced(p)
+	var out xvec
+	for i := range 3 {
+		out[i] = new(big.Rat).SetFrac(&u[i].n, &u[i].d)
+	}
+	return out
+}
+
+// applyChainUnreduced applies chain's maps in order and leaves the last
+// result unreduced; an empty chain returns p's own terms.
+func applyChainUnreduced(chain []exactAffine, p xvec) [3]unreduced {
+	if len(chain) == 0 {
+		return unreducedOf(p)
+	}
+	for _, e := range chain[:len(chain)-1] {
+		p = e.apply(p)
+	}
+	return chain[len(chain)-1].applyUnreduced(p)
 }
 
 func (e exactAffine) float() Affine {

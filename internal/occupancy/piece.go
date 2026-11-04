@@ -111,6 +111,18 @@ func (f *fracSum) start(r *big.Rat) {
 func (f *fracSum) addProduct(a, b *big.Rat) {
 	f.tn.Mul(a.Num(), b.Num())
 	f.td.Mul(a.Denom(), b.Denom())
+	f.addTerm()
+}
+
+// addScaled adds a·(n/d) to the sum, for a positive d.
+func (f *fracSum) addScaled(a *big.Rat, n, d *big.Int) {
+	f.tn.Mul(a.Num(), n)
+	f.td.Mul(a.Denom(), d)
+	f.addTerm()
+}
+
+// addTerm adds the fraction tn/td, formed by the caller, to the sum.
+func (f *fracSum) addTerm() {
 	if f.d.Cmp(&f.td) == 0 {
 		f.n.Add(&f.n, &f.tn)
 		return
@@ -165,11 +177,11 @@ type side struct {
 // beyond reports whether ux·x[0] + uy·x[1] exceeds c, exactly. The sum is
 // held as one unreduced fraction and compared by cross-multiplication, so no
 // greatest common divisor is taken.
-func (s side) beyond(x xvec) bool {
+func (s side) beyond(x *[3]unreduced) bool {
 	var sum fracSum
 	sum.zero()
-	sum.addProduct(s.ux, x[0])
-	sum.addProduct(s.uy, x[1])
+	sum.addScaled(s.ux, &x[0].n, &x[0].d)
+	sum.addScaled(s.uy, &x[1].n, &x[1].d)
 	return sum.cmpRat(s.c) > 0
 }
 
@@ -283,17 +295,15 @@ func (p *Piece) containsMoved(tri [3]r3.Vec, shift r3.Vec) bool {
 		if f.Z < p.fz0-1e-9 || f.Z > p.fz1+1e-9 {
 			return false
 		}
-		for _, e := range p.inv {
-			x = e.apply(x)
-		}
-		if x[2].Cmp(p.z0) < 0 || x[2].Cmp(p.z1) > 0 {
+		u := applyChainUnreduced(p.inv, x)
+		if u[2].cmpRat(p.z0) < 0 || u[2].cmpRat(p.z1) > 0 {
 			return false
 		}
 		for _, sd := range p.sides {
 			if sd.fux*f.X+sd.fuy*f.Y > sd.fc+1e-9 {
 				return false
 			}
-			if sd.beyond(x) {
+			if sd.beyond(&u) {
 				return false
 			}
 		}
