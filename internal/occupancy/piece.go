@@ -121,6 +121,20 @@ func (f *fracSum) addProduct(a, b *big.Rat) {
 	f.d.Mul(&f.d, &f.td)
 }
 
+// zero sets the sum to 0.
+func (f *fracSum) zero() {
+	f.n.SetInt64(0)
+	f.d.SetInt64(1)
+}
+
+// cmpRat compares the sum with c by cross-multiplying, without reducing
+// either: both denominators are positive, so the order is the rationals'.
+func (f *fracSum) cmpRat(c *big.Rat) int {
+	f.tn.Mul(&f.n, c.Denom())
+	f.td.Mul(c.Num(), &f.d)
+	return f.tn.Cmp(&f.td)
+}
+
 // rat returns the sum as a reduced rational.
 func (f *fracSum) rat() *big.Rat { return new(big.Rat).SetFrac(&f.n, &f.d) }
 
@@ -146,6 +160,17 @@ type Piece struct {
 type side struct {
 	ux, uy, c    *big.Rat
 	fux, fuy, fc float64
+}
+
+// beyond reports whether ux·x[0] + uy·x[1] exceeds c, exactly. The sum is
+// held as one unreduced fraction and compared by cross-multiplication, so no
+// greatest common divisor is taken.
+func (s side) beyond(x xvec) bool {
+	var sum fracSum
+	sum.zero()
+	sum.addProduct(s.ux, x[0])
+	sum.addProduct(s.uy, x[1])
+	return sum.cmpRat(s.c) > 0
 }
 
 // face is one plane of the piece in floats, for ranking axes and escape
@@ -268,9 +293,7 @@ func (p *Piece) containsMoved(tri [3]r3.Vec, shift r3.Vec) bool {
 			if sd.fux*f.X+sd.fuy*f.Y > sd.fc+1e-9 {
 				return false
 			}
-			d := new(big.Rat).Mul(sd.ux, x[0])
-			d.Add(d, new(big.Rat).Mul(sd.uy, x[1]))
-			if d.Cmp(sd.c) > 0 {
+			if sd.beyond(x) {
 				return false
 			}
 		}
