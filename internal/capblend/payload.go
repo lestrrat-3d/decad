@@ -315,6 +315,11 @@ func (cbp Payload) ExtentAlong(g r3.Vec) (float64, float64, float64, error) {
 // placement can leave every coefficient exactly right and still round when the
 // terms are added.
 func (cbp Payload) ExtentBoundedAlong(ctx context.Context, g r3.Vec, work *freeform.FreeformWork) (float64, float64, float64, error) {
+	return cbp.extentBoundedAlong(ctx, g, work, nil, nil)
+}
+
+func (cbp Payload) extentBoundedAlong(ctx context.Context, g r3.Vec, work *freeform.FreeformWork,
+	deltas []float64, deltaReady []bool) (float64, float64, float64, error) {
 	pl := cbp.PrismLike(0, 0)
 	base := cbp.Xform.Apply(cbp.Frame.Origin()).Dot(g)
 	gu := pl.Dir(1, 0, 0).Dot(g)
@@ -390,9 +395,21 @@ func (cbp Payload) ExtentBoundedAlong(ctx context.Context, g r3.Vec, work *freef
 			return 0, 0, 0, err
 		}
 		setback := cbp.LoopSetback(li)
-		delta, err := cbp.LoopContourDelta(ctx, li, loop, setback.Dc, setback.DcDelta)
-		if err != nil {
-			return 0, 0, 0, err
+		var delta float64
+		if deltas != nil && deltaReady[li] {
+			if err := ctx.Err(); err != nil {
+				return 0, 0, 0, err
+			}
+			delta = deltas[li]
+		} else {
+			delta, err = cbp.LoopContourDelta(ctx, li, loop, setback.Dc, setback.DcDelta)
+			if err != nil {
+				return 0, 0, 0, err
+			}
+			if deltas != nil {
+				deltas[li] = delta
+				deltaReady[li] = true
+			}
 		}
 		cl, ch, contourPlaneAllow, err := prismextent.ProfileBoundaryExtremes(ctx, momentinput.Profile{Outer: contour}, gu, gv, work, nil)
 		if err != nil {
