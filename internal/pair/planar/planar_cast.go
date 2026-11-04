@@ -60,17 +60,24 @@ func (k *planarKernel) castAlong(p proof.DyV3, pb floatBox, boxed bool, dir [3]i
 		}
 		ahead := 0
 		aheadReady := false
+		var rel [3]proof.DyV3
 		if axis >= 0 && solid.normal[t][axis].Sign() == 0 {
-			ahead = proof.DvDot(solid.normal[t], proof.DvSub(solid.s.Verts[tri[0]], p)).Sign()
+			rel[0] = proof.DvSub(solid.s.Verts[tri[0]], p)
+			ahead = proof.DvDot(solid.normal[t], rel[0]).Sign()
 			aheadReady = true
 			if ahead != 0 {
 				continue
 			}
 		}
+		for i := range 3 {
+			if i == 0 && aheadReady {
+				continue
+			}
+			rel[i] = proof.DvSub(solid.s.Verts[tri[i]], p)
+		}
 		var signs [3]int
 		for i := range 3 {
-			u, w := solid.s.Verts[tri[i]], solid.s.Verts[tri[(i+1)%3]]
-			signs[i] = proof.DvDot(d, proof.DvCross(proof.DvSub(u, p), proof.DvSub(w, p))).Sign()
+			signs[i] = proof.DvDot(d, proof.DvCross(rel[i], rel[(i+1)%3])).Sign()
 		}
 		if hasSign(signs, 1) && hasSign(signs, -1) {
 			continue
@@ -78,7 +85,7 @@ func (k *planarKernel) castAlong(p proof.DyV3, pb floatBox, boxed bool, dir [3]i
 		normal := solid.normal[t]
 		along := proof.DvDot(normal, d).Sign()
 		if !aheadReady {
-			ahead = proof.DvDot(normal, proof.DvSub(solid.s.Verts[tri[0]], p)).Sign()
+			ahead = proof.DvDot(normal, rel[0]).Sign()
 		}
 		if along == 0 {
 			if ahead != 0 {
