@@ -13,8 +13,13 @@ import (
 )
 
 // SectorBoreMaxStations caps the angular stations a centered cylinder Cut of
-// a Revolve/sector Union accepts.
-const SectorBoreMaxStations = 2_304
+// a Revolve/sector Union accepts. 2,304 was the station count of the module-4
+// four-tooth gear's two-pass join at the plain 0.01 starting sag
+// (agent-docs/revolve-loft-sector-design.md). Chord sag grows with the square of
+// the angular step, so a fitted-route join that starts at a quarter of that sag
+// (0.0025) halves the step and doubles the stations, and the cap doubles with it.
+// The audited triangle count and the audit scan ceiling still bound the work.
+const SectorBoreMaxStations = 4_608
 
 // SectorCapFan returns an angular cell only for a complete, source-
 // labeled axis fan triangle on the retained outer ring.

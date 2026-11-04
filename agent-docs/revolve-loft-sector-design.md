@@ -169,9 +169,16 @@ The retained Union station gaps are rechecked with rational intervals. The
 circular bore ring bounds its own trigonometric rounding and chord sag at
 those stations. Existing bore callers keep their 0.025 radian station limit;
 this route supplies the certified joined ring's largest step and requires a
-0.1 mm result boundary bound. The rewrite limits stations to 2,304, audited
+0.1 mm result boundary bound. The rewrite limits stations to 4,608, audited
 triangles to 1,321,696 and audit scans to 400 million. It checks connected
 orientation, vertex links and triangle contacts before building a result.
+The station limit is the 2,304 stations of the module-4 four-tooth gear's two-pass
+join at the plain 0.01 starting sag, doubled. Chord sag grows with the square of
+the angular step, so a fitted-route join that starts at a quarter of that sag
+(0.0025) halves the step and doubles the stations. The 32-tooth straight bevel
+driving gear then holds 2,368 stations, 437,248 joined triangles and, after the
+bore, 446,720 audited triangles and 23,034,858 audit scans, under the
+1,321,696-triangle and 400-million-scan ceilings.
 The result audit proposes each copied face group and each half-annulus as a
 projected YZ patch. It proves each patch from the result triangles; failed
 proposals retain every pair. Only pairs inside a proven patch leave the exact
