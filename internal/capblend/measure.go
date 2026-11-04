@@ -93,13 +93,15 @@ func readBandMassWithSideArea(ctx context.Context, li int, loop sectionrecord.Lo
 // the extremization contributes nothing here.
 func Bounds(ctx context.Context, cbp Payload, work *freeform.FreeformWork) (measurement.Box, error) {
 	axes := []r3.Vec{r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0), r3.NewVec(0, 0, 1)}
+	deltas := make([]float64, len(cbp.Loops()))
+	deltaReady := make([]bool, len(deltas))
 	var minC, maxC [3]float64
 	bound := 0.0
 	for i, axis := range axes {
 		if err := ctx.Err(); err != nil {
 			return measurement.Box{}, err
 		}
-		lo, hi, axisBound, err := cbp.ExtentBoundedAlong(ctx, axis, work)
+		lo, hi, axisBound, err := cbp.extentBoundedAlong(ctx, axis, work, deltas, deltaReady)
 		if err != nil {
 			return measurement.Box{}, err
 		}
