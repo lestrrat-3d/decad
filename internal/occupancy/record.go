@@ -766,32 +766,20 @@ type exactAffine struct {
 
 func (e exactAffine) apply(p xvec) xvec {
 	var out xvec
-	// Each row is summed as one fraction, with no reduction between terms, and
-	// reduced once at the end: the value is the same canonical rational the
-	// term-by-term sum gives, for a tenth of the GCD work. A zero factor adds
-	// exactly zero, so the term is skipped. Both signs are read before the
-	// skip, so a nil factor panics on the same term as the product would.
-	var sn, sd, tn, td, scaled big.Int
+	// A zero factor adds exactly zero, so the term is skipped. Both signs are
+	// read before the skip, so a nil factor panics on the same term as the
+	// product would.
+	var sum fracSum
 	for i := range 3 {
-		sn.Set(e.t[i].Num())
-		sd.Set(e.t[i].Denom())
+		sum.start(e.t[i])
 		for j := range 3 {
 			mz, pz := e.m[i][j].Sign() == 0, p[j].Sign() == 0
 			if mz || pz {
 				continue
 			}
-			tn.Mul(e.m[i][j].Num(), p[j].Num())
-			td.Mul(e.m[i][j].Denom(), p[j].Denom())
-			if sd.Cmp(&td) == 0 {
-				sn.Add(&sn, &tn)
-				continue
-			}
-			scaled.Mul(&tn, &sd)
-			sn.Mul(&sn, &td)
-			sn.Add(&sn, &scaled)
-			sd.Mul(&sd, &td)
+			sum.addProduct(e.m[i][j], p[j])
 		}
-		out[i] = new(big.Rat).SetFrac(&sn, &sd)
+		out[i] = sum.rat()
 	}
 	return out
 }

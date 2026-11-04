@@ -79,11 +79,50 @@ func (p xvec) float() r3.Vec {
 	return r3.Vec{X: x, Y: y, Z: z}
 }
 
-func dotExact(a r3.Vec, p xvec) *big.Rat {
-	s := new(big.Rat).Mul(ratOf(a.X), p[0])
-	s.Add(s, new(big.Rat).Mul(ratOf(a.Y), p[1]))
-	return s.Add(s, new(big.Rat).Mul(ratOf(a.Z), p[2]))
+// ratVec is a vector of exact rationals.
+type ratVec [3]*big.Rat
+
+func ratVecOf(v r3.Vec) ratVec { return ratVec{ratOf(v.X), ratOf(v.Y), ratOf(v.Z)} }
+
+// dotExact is a·p, exactly.
+func dotExact(a ratVec, p xvec) *big.Rat {
+	var sum fracSum
+	sum.start(new(big.Rat))
+	for k := range 3 {
+		sum.addProduct(a[k], p[k])
+	}
+	return sum.rat()
 }
+
+// fracSum accumulates a sum of rational products as one fraction, with no
+// reduction between terms and one at the end. The value is the canonical
+// rational a term-by-term big.Rat sum gives, for far fewer GCDs.
+type fracSum struct {
+	n, d, tn, td, scaled big.Int
+}
+
+// start sets the sum to r.
+func (f *fracSum) start(r *big.Rat) {
+	f.n.Set(r.Num())
+	f.d.Set(r.Denom())
+}
+
+// addProduct adds a·b to the sum.
+func (f *fracSum) addProduct(a, b *big.Rat) {
+	f.tn.Mul(a.Num(), b.Num())
+	f.td.Mul(a.Denom(), b.Denom())
+	if f.d.Cmp(&f.td) == 0 {
+		f.n.Add(&f.n, &f.tn)
+		return
+	}
+	f.scaled.Mul(&f.tn, &f.d)
+	f.n.Mul(&f.n, &f.td)
+	f.n.Add(&f.n, &f.scaled)
+	f.d.Mul(&f.d, &f.td)
+}
+
+// rat returns the sum as a reduced rational.
+func (f *fracSum) rat() *big.Rat { return new(big.Rat).SetFrac(&f.n, &f.d) }
 
 // Piece is a convex polyhedron held exactly by its vertices, with float
 // copies of the vertices, its face normals and its edges for the axis search.

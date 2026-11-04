@@ -6,6 +6,8 @@ import (
 	"math/rand/v2"
 	"testing"
 
+	"github.com/lestrrat-3d/r3"
+
 	"github.com/stretchr/testify/require"
 )
 
@@ -94,3 +96,46 @@ func BenchmarkExactApplyChain(b *testing.B) {
 	}
 	_ = out
 }
+
+func TestDotExactMatchesTermwise(t *testing.T) {
+	t.Parallel()
+	rng := rand.New(rand.NewPCG(3, 5))
+	pick := func() float64 {
+		if rng.IntN(5) == 0 {
+			return 0
+		}
+		return (rng.Float64() - 0.5) * 100
+	}
+	for range 400 {
+		a := r3Vec(pick(), pick(), pick())
+		e, err := invert(applyAffineFixture(rng.Float64()*6, pick(), pick(), pick()))
+		require.NoError(t, err)
+		p := e.apply(xvec{ratOf(pick()), ratOf(pick()), ratOf(pick())})
+		want := new(big.Rat).Mul(ratOf(a.X), p[0])
+		want.Add(want, new(big.Rat).Mul(ratOf(a.Y), p[1]))
+		want.Add(want, new(big.Rat).Mul(ratOf(a.Z), p[2]))
+		got := dotExact(ratVecOf(a), p)
+		require.Zero(t, want.Num().Cmp(got.Num()))
+		require.Zero(t, want.Denom().Cmp(got.Denom()))
+	}
+}
+
+func BenchmarkSeparatedProjection(b *testing.B) {
+	e, err := invert(applyAffineFixture(0.3, 1.5, -2.25, 7.125))
+	require.NoError(b, err)
+	var verts []xvec
+	for i := range 12 {
+		verts = append(verts, e.apply(xvec{ratOf(float64(i) * 1.37), ratOf(float64(i%5) - 2.1), ratOf(0.7 * float64(i))}))
+	}
+	var tri [3]xvec
+	for i := range tri {
+		tri[i] = e.apply(xvec{ratOf(float64(i) + 0.3), ratOf(2.2 - float64(i)), ratOf(5.5)})
+	}
+	axis := r3Vec(0.3, 0.5, 0.81)
+	b.ResetTimer()
+	for range b.N {
+		separated(axis, tri, verts)
+	}
+}
+
+func r3Vec(x, y, z float64) r3.Vec { return r3.Vec{X: x, Y: y, Z: z} }
