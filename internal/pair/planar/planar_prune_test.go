@@ -567,21 +567,8 @@ func TestCastAxisPretestKeepsAnswers(t *testing.T) {
 	for range 300 {
 		var s PlanarSolid
 		for range 4 {
-			v := len(s.Verts)
-			for range 3 {
-				s.Verts = append(s.Verts, proof.DyV3{coordinate(), coordinate(), coordinate()})
-			}
-			if rng.IntN(2) == 0 {
-				// An axis-aligned triangle: one coordinate shared by all
-				// three corners.
-				axis := rng.IntN(3)
-				s.Verts[v+1][axis], s.Verts[v+2][axis] = s.Verts[v][axis], s.Verts[v][axis]
-			}
-			if proof.DvIsZero(proof.DvCross(proof.DvSub(s.Verts[v+1], s.Verts[v]), proof.DvSub(s.Verts[v+2], s.Verts[v]))) {
-				s.Verts = s.Verts[:v]
-				continue
-			}
-			s.Tris = append(s.Tris, [3]int{v, v + 1, v + 2})
+			// Include axis-aligned triangles and reject degenerate samples.
+			appendRandomTriangle(&s, rng, coordinate)
 		}
 		if len(s.Tris) == 0 {
 			continue

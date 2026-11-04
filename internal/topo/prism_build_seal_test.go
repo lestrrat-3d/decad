@@ -165,31 +165,7 @@ func TestStrictPrismBuildSealReplayBudgetAndRollback(t *testing.T) {
 	if work == 0 || records == 0 || bytes == 0 {
 		t.Fatalf("missing seal charge: work=%d records=%d bytes=%d", work, records, bytes)
 	}
-	for _, tc := range []struct {
-		name                 string
-		work, records, bytes uint64
-		want                 bool
-	}{
-		{replayTestCaseExact, work, records, bytes, true},
-		{"work short", work - 1, records, bytes, false},
-		{"records short", work, records - 1, bytes, false},
-		{"bytes short", work, records, bytes - 1, false},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			budget, err := proofbound.NewReplayBudgetLimits(tc.work, tc.records, tc.bytes)
-			if err != nil {
-				t.Fatal(err)
-			}
-			body, ok, err := run(t.Context(), budget)
-			if tc.want {
-				if err != nil || !ok || !body.HasStrictPrismBuildSeal() {
-					t.Fatalf("exact seal admitted=%t strict=%t err=%v", ok, body.HasStrictPrismBuildSeal(), err)
-				}
-			} else if err == nil || ok || body.HasStrictPrismBuildSeal() {
-				t.Fatalf("short seal admitted=%t strict=%t err=%v", ok, body.HasStrictPrismBuildSeal(), err)
-			}
-		})
-	}
+	assertStrictPrismSealBudgetRollback(t, run, work, records, bytes)
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 	body, ok, err = run(ctx, proofbound.NewReplayTrialBudget())
@@ -302,31 +278,7 @@ func TestStrictPrismBuildSealBindsPayloadDenotations(t *testing.T) {
 	}
 	w, r := meter.Usage()
 	b := meter.Bytes()
-	for _, tc := range []struct {
-		name    string
-		w, r, b uint64
-		want    bool
-	}{
-		{replayTestCaseExact, w, r, b, true},
-		{"work short", w - 1, r, b, false},
-		{"records short", w, r - 1, b, false},
-		{"bytes short", w, r, b - 1, false},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			limit, e := proofbound.NewReplayBudgetLimits(tc.w, tc.r, tc.b)
-			if e != nil {
-				t.Fatal(e)
-			}
-			built, admitted, e := run(t.Context(), limit)
-			if tc.want {
-				if e != nil || !admitted || !built.HasStrictPrismBuildSeal() {
-					t.Fatalf("exact admitted=%t strict=%t error=%v", admitted, built.HasStrictPrismBuildSeal(), e)
-				}
-			} else if e == nil || admitted || built.HasStrictPrismBuildSeal() {
-				t.Fatalf("short admitted=%t strict=%t error=%v", admitted, built.HasStrictPrismBuildSeal(), e)
-			}
-		})
-	}
+	assertStrictPrismSealBudgetRollback(t, run, w, r, b)
 	_, _, profile, frame := prismSealFixture(t)
 	check := func(a, b prismplacement.LevelDenotation, want bool) {
 		t.Helper()
@@ -343,6 +295,31 @@ func TestStrictPrismBuildSealBindsPayloadDenotations(t *testing.T) {
 	cancel()
 	if built, admitted, e := run(ctx, proofbound.NewReplayTrialBudget()); e == nil || admitted || built.HasStrictPrismBuildSeal() {
 		t.Fatalf("cancelled admitted=%t strict=%t error=%v", admitted, built.HasStrictPrismBuildSeal(), e)
+	}
+}
+
+func assertStrictPrismSealBudgetRollback(t *testing.T, run func(context.Context, *proofbound.ReplayBudget) (*Body, bool, error), work, records, bytes uint64) {
+	t.Helper()
+	for _, tc := range []struct {
+		name    string
+		w, r, b uint64
+		want    bool
+	}{{replayTestCaseExact, work, records, bytes, true}, {"work short", work - 1, records, bytes, false},
+		{"records short", work, records - 1, bytes, false}, {"bytes short", work, records, bytes - 1, false}} {
+		t.Run(tc.name, func(t *testing.T) {
+			budget, err := proofbound.NewReplayBudgetLimits(tc.w, tc.r, tc.b)
+			if err != nil {
+				t.Fatal(err)
+			}
+			body, admitted, err := run(t.Context(), budget)
+			if tc.want {
+				if err != nil || !admitted || !body.HasStrictPrismBuildSeal() {
+					t.Fatalf("exact admitted=%t strict=%t error=%v", admitted, body.HasStrictPrismBuildSeal(), err)
+				}
+			} else if err == nil || admitted || body.HasStrictPrismBuildSeal() {
+				t.Fatalf("short admitted=%t strict=%t error=%v", admitted, body.HasStrictPrismBuildSeal(), err)
+			}
+		})
 	}
 }
 

@@ -16,6 +16,8 @@ import (
 // legacyJoints and legacyApply are ReadPoints as it was written over big.Rat
 // interval arithmetic, split where readPoseBounds takes the composed pose;
 // legacyReadPointBounds rounds that reading with RoundCorners.
+//
+//nolint:dupl // Independent legacy path used to verify readJoints.
 func legacyJoints(frames []motionbound.MotionFrame, params []motionbound.MotionParam, path []int, revolute []bool, below int) ([]jointAt, *motionbound.IdealPose) {
 	joints := make([]jointAt, 0, len(path)-below)
 	var pose *motionbound.IdealPose

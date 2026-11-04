@@ -9,6 +9,8 @@ import (
 
 // referenceClosedFacetEdges is closedFacetEdges as it stood with one edge map
 // for every mesh, kept verbatim for the differential tests.
+//
+//nolint:dupl // Independent pre-optimization oracle for closedFacetEdges.
 func referenceClosedFacetEdges(ctx context.Context, tris [][3]int) ([]int, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err

@@ -49,6 +49,8 @@ func PlanarSupportSets(a, b *PlanarSolid, result PlanarResult, planes []SupportP
 // supportSet is one plane's lifted set (PlanarSupportSets) over the host and
 // guest sides. A nil result means the plane is not a support plane or its set
 // is empty.
+//
+//nolint:dupl // Kept beside supportSetRebuilt for exact differential tests.
 func supportSet(host, guest *patchSide, plane SupportPlane, band proof.Dyadic, overlap bool,
 	poll func() error) ([]PatchPoint, error) {
 	guestSolid := guest.prep.s

@@ -113,23 +113,29 @@ func depthShapes(rng *rand.Rand) (PlanarSolid, PlanarSolid) {
 			return s
 		}
 		for len(s.Tris) < 3+rng.IntN(4) {
-			v := len(s.Verts)
-			for range 3 {
-				s.Verts = append(s.Verts, proof.DyV3{coordinate(), coordinate(), coordinate()})
-			}
-			if rng.IntN(2) == 0 {
-				axis := rng.IntN(3)
-				s.Verts[v+1][axis], s.Verts[v+2][axis] = s.Verts[v][axis], s.Verts[v][axis]
-			}
-			if proof.DvIsZero(proof.DvCross(proof.DvSub(s.Verts[v+1], s.Verts[v]), proof.DvSub(s.Verts[v+2], s.Verts[v]))) {
-				s.Verts = s.Verts[:v]
-				continue
-			}
-			s.Tris = append(s.Tris, [3]int{v, v + 1, v + 2})
+			appendRandomTriangle(&s, rng, coordinate)
 		}
 		return s
 	}
 	return solid(), solid()
+}
+
+// appendRandomTriangle adds one non-degenerate random triangle using the
+// caller's coordinate source, preserving the order of its random draws.
+func appendRandomTriangle(s *PlanarSolid, rng *rand.Rand, coordinate func() proof.Dyadic) {
+	v := len(s.Verts)
+	for range 3 {
+		s.Verts = append(s.Verts, proof.DyV3{coordinate(), coordinate(), coordinate()})
+	}
+	if rng.IntN(2) == 0 {
+		axis := rng.IntN(3)
+		s.Verts[v+1][axis], s.Verts[v+2][axis] = s.Verts[v][axis], s.Verts[v][axis]
+	}
+	if proof.DvIsZero(proof.DvCross(proof.DvSub(s.Verts[v+1], s.Verts[v]), proof.DvSub(s.Verts[v+2], s.Verts[v]))) {
+		s.Verts = s.Verts[:v]
+		return
+	}
+	s.Tris = append(s.Tris, [3]int{v, v + 1, v + 2})
 }
 
 // failAfter returns a poll that errors on call n and counts every call.

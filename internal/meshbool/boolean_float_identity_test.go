@@ -21,6 +21,7 @@ func oldClamp01(num, den float64) float64 {
 	return math.Max(0, math.Min(1, num/den))
 }
 
+//nolint:dupl // Independent pre-change oracle for SegSegDist3.
 func oldSegSegDist3(p0, p1, q0, q1 r3.Vec) float64 {
 	u := p1.Sub(p0)
 	v := q1.Sub(q0)

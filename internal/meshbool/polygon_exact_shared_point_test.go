@@ -59,6 +59,7 @@ func oraclePlaneSide(a, b, p, n proof.Xpt) int {
 	return proof.XdotSign(proof.Xcross(proof.Xsub(b, a), proof.Xsub(p, a)), n)
 }
 
+//nolint:dupl // Independent pre-change oracle for SegTriOverlap2.
 func oracleSegTriOverlap2(a, b, ta, tb, tc Xp2) bool {
 	ccw := oracleCross2xSign(ta, tb, tc)
 	if ccw == 0 {

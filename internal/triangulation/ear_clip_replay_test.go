@@ -43,33 +43,7 @@ func TestEarClipReplay(t *testing.T) {
 		if c != 0 {
 			continue
 		}
-		work, records := meter.Usage()
-		bytes := meter.Bytes()
-		for _, short := range []string{"", "work", "records", "bytes"} {
-			b := proofbound.NewReplayTrialBudget()
-			w, r, z := proofbound.ReplayTrialWork-work, proofbound.ReplayTrialRecords-records, proofbound.ReplayTrialBytes-bytes
-			switch short {
-			case "work":
-				w++
-			case "records":
-				r++
-			case "bytes":
-				z++
-			}
-			if err := b.SpendWork(t.Context(), w); err != nil {
-				t.Fatal(err)
-			}
-			if err := b.ReserveRecords(t.Context(), r); err != nil {
-				t.Fatal(err)
-			}
-			if err := b.ReserveBytes(t.Context(), z); err != nil {
-				t.Fatal(err)
-			}
-			_, err := EarClipReplay(t.Context(), pts, idx, b)
-			if short == "" && err != nil || short != "" && !errors.Is(err, decaderr.ErrUnsupported) {
-				t.Fatalf("%q limit: %v", short, err)
-			}
-		}
+		assertTriangulationReplayBudgetLimits(t, pts, idx, EarClipReplay)
 		ctx, cancel := context.WithCancel(t.Context())
 		cancel()
 		_, err = EarClipReplay(ctx, pts, idx, proofbound.NewReplayTrialBudget())

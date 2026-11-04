@@ -14,6 +14,42 @@ import (
 	"github.com/lestrrat-3d/r3"
 )
 
+func requireReplayBudgetLimits(t *testing.T, ctx context.Context, work, records, bytes uint64,
+	run func(testing.TB, *proofbound.ReplayBudget) error) {
+	t.Helper()
+	for _, short := range []string{brakeTestExact, brakeTestWork, brakeTestRecords, brakeTestBytes} {
+		t.Run(short, func(t *testing.T) {
+			meter := proofbound.NewReplayTrialBudget()
+			w, r, b := proofbound.ReplayTrialWork-work, proofbound.ReplayTrialRecords-records,
+				proofbound.ReplayTrialBytes-bytes
+			switch short {
+			case brakeTestWork:
+				w++
+			case brakeTestRecords:
+				r++
+			case brakeTestBytes:
+				b++
+			}
+			if err := meter.SpendWork(ctx, w); err != nil {
+				t.Fatal(err)
+			}
+			if err := meter.ReserveRecords(ctx, r); err != nil {
+				t.Fatal(err)
+			}
+			if err := meter.ReserveBytes(ctx, b); err != nil {
+				t.Fatal(err)
+			}
+			err := run(t, meter)
+			if short == brakeTestExact && err != nil {
+				t.Fatalf("exact: %v", err)
+			}
+			if short != brakeTestExact && !errors.Is(err, decaderr.ErrUnsupported) {
+				t.Fatalf("one-short: %v", err)
+			}
+		})
+	}
+}
+
 func TestBrakeReplayAllocationShellLimits(t *testing.T) {
 	cases := []struct {
 		name string
@@ -91,36 +127,9 @@ func TestBrakeSmallProductBudgetLimits(t *testing.T) {
 	}
 	work, records := meter.Usage()
 	bytes := meter.Bytes()
-	for _, short := range []string{brakeTestExact, brakeTestWork, brakeTestRecords, brakeTestBytes} {
-		t.Run(short, func(t *testing.T) {
-			m := proofbound.NewReplayTrialBudget()
-			w, r, b := proofbound.ReplayTrialWork-work, proofbound.ReplayTrialRecords-records, proofbound.ReplayTrialBytes-bytes
-			switch short {
-			case brakeTestWork:
-				w++
-			case brakeTestRecords:
-				r++
-			case brakeTestBytes:
-				b++
-			}
-			if err := m.SpendWork(ctx, w); err != nil {
-				t.Fatal(err)
-			}
-			if err := m.ReserveRecords(ctx, r); err != nil {
-				t.Fatal(err)
-			}
-			if err := m.ReserveBytes(ctx, b); err != nil {
-				t.Fatal(err)
-			}
-			err := run(m)
-			if short == brakeTestExact && err != nil {
-				t.Fatalf("exact: %v", err)
-			}
-			if short != brakeTestExact && !errors.Is(err, decaderr.ErrUnsupported) {
-				t.Fatalf("one-short: %v", err)
-			}
-		})
-	}
+	requireReplayBudgetLimits(t, ctx, work, records, bytes, func(_ testing.TB, meter *proofbound.ReplayBudget) error {
+		return run(meter)
+	})
 }
 
 func TestBrakeAppendWorkChargesNewElements(t *testing.T) {
@@ -221,36 +230,9 @@ func TestBrakeNearContactsFixedLimits(t *testing.T) {
 	}
 	work, records := measure.Usage()
 	bytes := measure.Bytes()
-	for _, short := range []string{brakeTestExact, brakeTestWork, brakeTestRecords, brakeTestBytes} {
-		t.Run(short, func(t *testing.T) {
-			meter := proofbound.NewReplayTrialBudget()
-			w, r, b := proofbound.ReplayTrialWork-work, proofbound.ReplayTrialRecords-records, proofbound.ReplayTrialBytes-bytes
-			switch short {
-			case brakeTestWork:
-				w++
-			case brakeTestRecords:
-				r++
-			case brakeTestBytes:
-				b++
-			}
-			if err := meter.SpendWork(ctx, w); err != nil {
-				t.Fatal(err)
-			}
-			if err := meter.ReserveRecords(ctx, r); err != nil {
-				t.Fatal(err)
-			}
-			if err := meter.ReserveBytes(ctx, b); err != nil {
-				t.Fatal(err)
-			}
-			err := reserveBrakeNearContactsFixed(ctx, meter)
-			if short == brakeTestExact && err != nil {
-				t.Fatalf("exact: %v", err)
-			}
-			if short != brakeTestExact && !errors.Is(err, decaderr.ErrUnsupported) {
-				t.Fatalf("one-short: %v", err)
-			}
-		})
-	}
+	requireReplayBudgetLimits(t, ctx, work, records, bytes, func(_ testing.TB, meter *proofbound.ReplayBudget) error {
+		return reserveBrakeNearContactsFixed(ctx, meter)
+	})
 }
 
 func TestBrakeNearContactBatchRecordLimits(t *testing.T) {
@@ -310,36 +292,9 @@ func TestBrakeStitchFixedLimits(t *testing.T) {
 	}
 	work, records := measure.Usage()
 	bytes := measure.Bytes()
-	for _, short := range []string{brakeTestExact, brakeTestWork, brakeTestRecords, brakeTestBytes} {
-		t.Run(short, func(t *testing.T) {
-			meter := proofbound.NewReplayTrialBudget()
-			w, r, b := proofbound.ReplayTrialWork-work, proofbound.ReplayTrialRecords-records, proofbound.ReplayTrialBytes-bytes
-			switch short {
-			case brakeTestWork:
-				w++
-			case brakeTestRecords:
-				r++
-			case brakeTestBytes:
-				b++
-			}
-			if err := meter.SpendWork(ctx, w); err != nil {
-				t.Fatal(err)
-			}
-			if err := meter.ReserveRecords(ctx, r); err != nil {
-				t.Fatal(err)
-			}
-			if err := meter.ReserveBytes(ctx, b); err != nil {
-				t.Fatal(err)
-			}
-			err := reserveBrakeStitchFixed(ctx, meter)
-			if short == brakeTestExact && err != nil {
-				t.Fatalf("exact: %v", err)
-			}
-			if short != brakeTestExact && !errors.Is(err, decaderr.ErrUnsupported) {
-				t.Fatalf("one-short: %v", err)
-			}
-		})
-	}
+	requireReplayBudgetLimits(t, ctx, work, records, bytes, func(_ testing.TB, meter *proofbound.ReplayBudget) error {
+		return reserveBrakeStitchFixed(ctx, meter)
+	})
 }
 
 func TestBrakeReplayGapRecordLimits(t *testing.T) {
@@ -396,34 +351,7 @@ func TestBrakeFaceGroupingBudgetLimits(t *testing.T) {
 	}
 	work, records := measure.Usage()
 	bytes := measure.Bytes()
-	for _, short := range []string{brakeTestExact, brakeTestWork, brakeTestRecords, brakeTestBytes} {
-		t.Run(short, func(t *testing.T) {
-			meter := proofbound.NewReplayTrialBudget()
-			w, r, b := proofbound.ReplayTrialWork-work, proofbound.ReplayTrialRecords-records, proofbound.ReplayTrialBytes-bytes
-			switch short {
-			case brakeTestWork:
-				w++
-			case brakeTestRecords:
-				r++
-			case brakeTestBytes:
-				b++
-			}
-			if err := meter.SpendWork(ctx, w); err != nil {
-				t.Fatal(err)
-			}
-			if err := meter.ReserveRecords(ctx, r); err != nil {
-				t.Fatal(err)
-			}
-			if err := meter.ReserveBytes(ctx, b); err != nil {
-				t.Fatal(err)
-			}
-			err := run(meter)
-			if short == brakeTestExact && err != nil {
-				t.Fatalf("exact: %v", err)
-			}
-			if short != brakeTestExact && !errors.Is(err, decaderr.ErrUnsupported) {
-				t.Fatalf("one-short: %v", err)
-			}
-		})
-	}
+	requireReplayBudgetLimits(t, ctx, work, records, bytes, func(_ testing.TB, meter *proofbound.ReplayBudget) error {
+		return run(meter)
+	})
 }

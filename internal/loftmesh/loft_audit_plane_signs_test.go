@@ -31,6 +31,8 @@ func referenceLoftPlaneSeparatedSigns(data *LoftAuditData, i, j int) (bool, [3]i
 // referencePlaneSigns is a copy of planeSigns: the identity test on the exact
 // lifts first, then the float plane, the float expansion and the exact
 // numerator.
+//
+//nolint:dupl // Independent pre-cache oracle for planeSigns.
 func referencePlaneSigns(d *LoftAuditData, i int, xother [3]proof.Xpt, other [3]r3.Vec) [3]int {
 	if d.exactLifts {
 		return TrianglePlaneSigns(d.Planes[i], xother)

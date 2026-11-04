@@ -4,32 +4,13 @@ import (
 	"math"
 	"testing"
 
-	"github.com/lestrrat-3d/r3"
 	"github.com/stretchr/testify/require"
 )
 
 // cutStripGrid is an nx x ny grid of sx x sy quads from (ox, oy), two
 // triangles each, with corner heights z(x, y).
 func cutStripGrid(tb testing.TB, nx, ny int, ox, oy, sx, sy float64, z func(x, y float64) float64) *BoolMesh {
-	tb.Helper()
-	verts := make([]r3.Vec, 0, (nx+1)*(ny+1))
-	for iy := 0; iy <= ny; iy++ {
-		for ix := 0; ix <= nx; ix++ {
-			x, y := ox+float64(ix)*sx, oy+float64(iy)*sy
-			verts = append(verts, r3.NewVec(x, y, z(x, y)))
-		}
-	}
-	tris := make([][3]int, 0, 2*nx*ny)
-	for iy := range ny {
-		for ix := range nx {
-			v00 := iy*(nx+1) + ix
-			v10, v01, v11 := v00+1, v00+nx+1, v00+nx+2
-			tris = append(tris, [3]int{v00, v10, v11}, [3]int{v00, v11, v01})
-		}
-	}
-	bm, err := PrepContext(tb.Context(), verts, tris, nil)
-	require.NoError(tb, err)
-	return bm
+	return cutGrid(tb, nx, ny, ox, oy, sx, sy, z)
 }
 
 // cutCrossingFacets collects, for every cut facet of a, the transversal

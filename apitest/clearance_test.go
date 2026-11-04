@@ -43,15 +43,7 @@ func boxBody(t *testing.T, doc *decad.Document, x0, y0, x1, y1, h float64) *deca
 // whose z0 is always 0.
 func boxBodyAtZ(t testing.TB, doc *decad.Document, x0, y0, x1, y1, z0, h float64) *decad.Body {
 	t.Helper()
-	w := sketch.NewWorld()
-	plane, err := w.CreateOffsetPlane(w.XY(), z0)
-	require.NoError(t, err)
-	s, err := w.CreateSketch(plane)
-	require.NoError(t, err)
-	rect := s.CreateRectangle(x0, y0, x1, y1)
-	s.Fix(rect.A)
-	_, err = s.Solve(t.Context())
-	require.NoError(t, err)
+	s := offsetBoxSketch(t, t.Context(), x0, y0, x1, y1, z0)
 	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
 	require.NoError(t, err)
 	return body

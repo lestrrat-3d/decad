@@ -41,25 +41,7 @@ func TestPrepareBlindBuildReplay(t *testing.T) {
 	}
 	w, r := m.Usage()
 	bytes := m.Bytes()
-	for _, tc := range []struct {
-		name    string
-		w, r, b uint64
-		pass    bool
-	}{{replayTestCaseExact, w, r, bytes, true}, {replayTestCaseWorkShort, w - 1, r, bytes, false}, {replayTestCaseRecordsShort, w, r - 1, bytes, false}, {replayTestCaseBytesShort, w, r, bytes - 1, false}} {
-		t.Run(tc.name, func(t *testing.T) {
-			m, e := proofbound.NewReplayBudgetLimits(tc.w, tc.r, tc.b)
-			if e != nil {
-				t.Fatal(e)
-			}
-			p, ok, e := run(context.Background(), m)
-			if tc.pass && (e != nil || !ok || p == nil) {
-				t.Fatalf("ok=%t error=%v", ok, e)
-			}
-			if !tc.pass && (e == nil || ok || p != nil) {
-				t.Fatalf("rollback ok=%t error=%v", ok, e)
-			}
-		})
-	}
+	assertBlindBuildPlanBudgetLimits(t, run, w, r, bytes)
 	old := plan.patches[0].Record.Outer.Segments[0]
 	sp.Interfaces[0].LowerExposed[0].Outer.Segments[0] = sectionrecord.CircleSeg{Radius: units.Millimeters(3), CCW: true, TEnd: 1}
 	if plan.patches[0].Record.Outer.Segments[0] != old {
@@ -72,6 +54,29 @@ func TestPrepareBlindBuildReplay(t *testing.T) {
 	cancel()
 	if p, ok, e := run(ctx, proofbound.NewReplayTrialBudget()); e == nil || ok || p != nil {
 		t.Fatalf("cancellation ok=%t error=%v", ok, e)
+	}
+}
+
+func assertBlindBuildPlanBudgetLimits(t *testing.T, run func(context.Context, *proofbound.ReplayBudget) (*replayBlindBuildPlan, bool, error), work, records, bytes uint64) {
+	t.Helper()
+	for _, tc := range []struct {
+		name    string
+		w, r, b uint64
+		pass    bool
+	}{{replayTestCaseExact, work, records, bytes, true}, {replayTestCaseWorkShort, work - 1, records, bytes, false}, {replayTestCaseRecordsShort, work, records - 1, bytes, false}, {replayTestCaseBytesShort, work, records, bytes - 1, false}} {
+		t.Run(tc.name, func(t *testing.T) {
+			budget, err := proofbound.NewReplayBudgetLimits(tc.w, tc.r, tc.b)
+			if err != nil {
+				t.Fatal(err)
+			}
+			plan, ok, err := run(context.Background(), budget)
+			if tc.pass && (err != nil || !ok || plan == nil) {
+				t.Fatalf("ok=%t error=%v", ok, err)
+			}
+			if !tc.pass && (err == nil || ok || plan != nil) {
+				t.Fatalf("rollback ok=%t error=%v", ok, err)
+			}
+		})
 	}
 }
 

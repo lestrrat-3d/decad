@@ -15,6 +15,8 @@ import (
 // A mesh whose corners all lie in [0, 3·len(tris)) takes the grouped form,
 // closedFacetEdgesGrouped, which makes the same polls and returns the same
 // result; any other mesh keeps the map.
+//
+//nolint:dupl // Kept beside referenceClosedFacetEdges for differential verification.
 func closedFacetEdges(ctx context.Context, tris [][3]int) ([]int, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
