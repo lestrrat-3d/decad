@@ -113,8 +113,8 @@ func (p *planarPrep) unionBox(indices []int) floatBox {
 	out := p.vertBox[indices[0]]
 	for _, v := range indices[1:] {
 		for axis := range 3 {
-			out.lo[axis] = math.Min(out.lo[axis], p.vertBox[v].lo[axis])
-			out.hi[axis] = math.Max(out.hi[axis], p.vertBox[v].hi[axis])
+			out.lo[axis] = minFloat(out.lo[axis], p.vertBox[v].lo[axis])
+			out.hi[axis] = maxFloat(out.hi[axis], p.vertBox[v].hi[axis])
 		}
 	}
 	return out
@@ -175,8 +175,8 @@ func (h hpoint) floatBox() (floatBox, bool) {
 // an interval that excludes zero: the quotients lie between the least and
 // greatest corner quotient. An infinity over an infinity makes both ends NaN.
 func divEnclosure(a, b, c, d float64) (float64, float64) {
-	lo := math.Min(math.Min(divDown(a, c), divDown(a, d)), math.Min(divDown(b, c), divDown(b, d)))
-	hi := math.Max(math.Max(divUp(a, c), divUp(a, d)), math.Max(divUp(b, c), divUp(b, d)))
+	lo := minFloat(minFloat(divDown(a, c), divDown(a, d)), minFloat(divDown(b, c), divDown(b, d)))
+	hi := maxFloat(maxFloat(divUp(a, c), divUp(a, d)), maxFloat(divUp(b, c), divUp(b, d)))
 	return lo, hi
 }
 
@@ -197,7 +197,26 @@ func mulDown(a, b float64) float64  { return down(float64(a * b)) }
 func mulUp(a, b float64) float64    { return up(float64(a * b)) }
 func divDown(a, b float64) float64  { return down(a / b) }
 func divUp(a, b float64) float64    { return up(a / b) }
-func nonnegative(x float64) float64 { return math.Max(x, 0) }
+func nonnegative(x float64) float64 { return maxFloat(x, 0) }
+
+// minFloat is math.Min, bit for bit, at the cost of a NaN test and the
+// compiler's inlined builtin min. The builtin differs from math.Min only when
+// one operand is NaN and the other an infinity (math.Min(-Inf, NaN) is -Inf,
+// the builtin gives NaN), so a NaN operand takes the math call.
+func minFloat(a, b float64) float64 {
+	if a != a || b != b {
+		return math.Min(a, b)
+	}
+	return min(a, b)
+}
+
+// maxFloat is math.Max, bit for bit; see minFloat.
+func maxFloat(a, b float64) float64 {
+	if a != a || b != b {
+		return math.Max(a, b)
+	}
+	return max(a, b)
+}
 
 // gapSquaredBelow is a float at or below the exact squared gap of two boxes
 // whose float boxes are a and b. Each term is nonnegative, so a bound below
@@ -268,8 +287,8 @@ func (p *planarPrep) sidePlanes(t int) (*[3]proof.DyV3, *[3]floatBox) {
 // the products lie between the least and greatest corner product. A NaN
 // corner, from an infinity times zero, makes both ends NaN.
 func mulEnclosure(a, b, c, d float64) (float64, float64) {
-	lo := math.Min(math.Min(mulDown(a, c), mulDown(a, d)), math.Min(mulDown(b, c), mulDown(b, d)))
-	hi := math.Max(math.Max(mulUp(a, c), mulUp(a, d)), math.Max(mulUp(b, c), mulUp(b, d)))
+	lo := minFloat(minFloat(mulDown(a, c), mulDown(a, d)), minFloat(mulDown(b, c), mulDown(b, d)))
+	hi := maxFloat(maxFloat(mulUp(a, c), mulUp(a, d)), maxFloat(mulUp(b, c), mulUp(b, d)))
 	return lo, hi
 }
 
