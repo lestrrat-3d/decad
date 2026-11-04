@@ -195,18 +195,16 @@ func missesBySide(tri [3]r3.Vec, shift r3.Vec, ft [3]r3.Vec, p *Piece, budget *B
 		for k := range 3 {
 			x[k].Add(x[k], sx[k])
 		}
-		for _, e := range p.inv {
-			x = e.apply(x)
-		}
+		u := applyChainUnreduced(p.inv, x)
 		var beyond bool
 		switch {
 		case best < len(p.sides):
 			sd := p.sides[best]
-			beyond = sd.beyond(x)
+			beyond = sd.beyond(&u)
 		case best == len(p.sides):
-			beyond = x[2].Cmp(p.z0) < 0
+			beyond = u[2].cmpRat(p.z0) < 0
 		default:
-			beyond = x[2].Cmp(p.z1) > 0
+			beyond = u[2].cmpRat(p.z1) > 0
 		}
 		if !beyond {
 			return false, nil

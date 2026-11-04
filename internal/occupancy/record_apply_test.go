@@ -155,7 +155,13 @@ func TestSideBeyondMatchesRat(t *testing.T) {
 	require.NoError(t, err)
 	ties, over := 0, 0
 	for range 3000 {
-		x := e.apply(xvec{ratOf(pick()), ratOf(pick()), ratOf(pick())})
+		in := xvec{ratOf(pick()), ratOf(pick()), ratOf(pick())}
+		x, u := e.apply(in), e.applyUnreduced(in)
+		for k := range 3 {
+			require.Positive(t, u[k].d.Sign())
+			require.Zero(t, x[k].Cmp(new(big.Rat).SetFrac(&u[k].n, &u[k].d)))
+			require.Zero(t, u[k].cmpRat(x[k]))
+		}
 		s := side{ux: ratOf(pick()), uy: ratOf(pick())}
 		sum := new(big.Rat).Mul(s.ux, x[0])
 		sum.Add(sum, new(big.Rat).Mul(s.uy, x[1]))
@@ -168,7 +174,7 @@ func TestSideBeyondMatchesRat(t *testing.T) {
 			s.c = new(big.Rat).Sub(sum, big.NewRat(1, 1<<20))
 		}
 		want := sum.Cmp(s.c) > 0
-		require.Equal(t, want, s.beyond(x))
+		require.Equal(t, want, s.beyond(&u))
 		if sum.Cmp(s.c) == 0 {
 			ties++
 		}
@@ -180,29 +186,31 @@ func TestSideBeyondMatchesRat(t *testing.T) {
 	require.Positive(t, over, "premise: some sums exceed c")
 }
 
-func sideBeyondRat(s side, x xvec) bool {
-	d := new(big.Rat).Mul(s.ux, x[0])
-	d.Add(d, new(big.Rat).Mul(s.uy, x[1]))
-	return d.Cmp(s.c) > 0
-}
-
-func benchSide() (side, xvec) {
+func benchSideStep() (exactAffine, side, xvec) {
 	e, _ := invert(applyAffineFixture(0.7, 1.25, -3.5, 2))
-	x := e.apply(xvec{ratOf(3.1), ratOf(-4.7), ratOf(0.9)})
+	in := xvec{ratOf(3.1), ratOf(-4.7), ratOf(0.9)}
 	s := side{ux: ratOf(0.6), uy: ratOf(-0.8), c: ratOf(1.3)}
-	return s, x
+	return e, s, in
 }
 
-func BenchmarkSideBeyond(b *testing.B) {
-	s, x := benchSide()
+// BenchmarkLocalSideStepUnreduced is one corner's map to local coordinates and
+// one side test, the unit containsMoved repeats, in unreduced terms.
+func BenchmarkLocalSideStepUnreduced(b *testing.B) {
+	e, s, in := benchSideStep()
 	for range b.N {
-		s.beyond(x)
+		u := e.applyUnreduced(in)
+		s.beyond(&u)
 	}
 }
 
-func BenchmarkSideBeyondRat(b *testing.B) {
-	s, x := benchSide()
+// BenchmarkLocalSideStepReduced is the same step with the map's result reduced
+// and the side test summed in big.Rat.
+func BenchmarkLocalSideStepReduced(b *testing.B) {
+	e, s, in := benchSideStep()
 	for range b.N {
-		sideBeyondRat(s, x)
+		x := e.apply(in)
+		d := new(big.Rat).Mul(s.ux, x[0])
+		d.Add(d, new(big.Rat).Mul(s.uy, x[1]))
+		_ = d.Cmp(s.c) > 0
 	}
 }
