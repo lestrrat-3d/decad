@@ -69,9 +69,10 @@ func (a AxisSource) String() string {
 
 // JointReport is what Check found.
 type JointReport struct {
-	Request     CheckRequest  // the effective tolerances and options
-	Joints      []JointResult // one per declared joint, in Join order
-	Unexplained []PairFinding // part pairs whose boxes meet and that no joint names
+	Request     CheckRequest    // the effective tolerances and options
+	Joints      []JointResult   // one per declared joint, in Join order
+	Unexplained []PairFinding   // part pairs whose boxes meet and that no joint names
+	Inferred    []InferredJoint // inferred matches whose pair no declared joint names
 }
 
 // CheckRequest is the effective settings of one Check.

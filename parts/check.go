@@ -69,6 +69,15 @@ func (s *Set) Check(ctx context.Context, opts ...CheckOption) (*JointReport, err
 		return nil, err
 	}
 	rep.Unexplained = s.unexplained(faces, c)
+	named := map[[2]string]struct{}{}
+	for _, j := range s.joints {
+		named[[2]string{j.A, j.B}], named[[2]string{j.B, j.A}] = struct{}{}, struct{}{}
+	}
+	for _, ij := range s.infer(faces, c) {
+		if _, ok := named[[2]string{ij.Joint.A, ij.Joint.B}]; !ok {
+			rep.Inferred = append(rep.Inferred, ij)
+		}
+	}
 	if c.witness {
 		if err := s.searchUnexplained(ctx, rep.Unexplained, faces, c); err != nil {
 			return nil, err
