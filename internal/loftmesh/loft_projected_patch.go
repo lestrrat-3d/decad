@@ -37,7 +37,7 @@ const (
 type patchEdge struct{ a, b int }
 
 type patchEdgeUse struct {
-	from, to, count, net int
+	count, net int
 }
 
 func patchEdgeKey(a, b int) patchEdge {
@@ -181,7 +181,6 @@ func projectedPatchProofLimited(budget *proofbound.WorkBudget, verts []r3.Vec,
 			}
 			key := patchEdgeKey(a, b)
 			entry := use[key]
-			entry.from, entry.to = a, b
 			entry.count++
 			if a < b {
 				entry.net++
@@ -196,19 +195,23 @@ func projectedPatchProofLimited(budget *proofbound.WorkBudget, verts []r3.Vec,
 	}
 	next := make(map[int]int)
 	in := make(map[int]int)
-	for _, edge := range use {
+	for key, edge := range use {
 		switch {
 		case edge.count == 2 && edge.net == 0:
 			continue
 		case edge.count != 1 || (edge.net != 1 && edge.net != -1):
 			return ProjectedPatchStructure
 		}
-		if _, exists := next[edge.from]; exists {
+		from, to := key.a, key.b
+		if edge.net == -1 {
+			from, to = to, from
+		}
+		if _, exists := next[from]; exists {
 			return ProjectedPatchBoundary
 		}
-		next[edge.from] = edge.to
-		in[edge.to]++
-		if in[edge.to] > 1 {
+		next[from] = to
+		in[to]++
+		if in[to] > 1 {
 			return ProjectedPatchBoundary
 		}
 	}
