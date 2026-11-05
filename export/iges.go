@@ -59,7 +59,7 @@ const (
 	igesSolid      = 186
 )
 
-// IGES writes body as an IGES 5.3 file of manifold solid B-reps (agent-docs/iges-export-design.md): the verified
+// IGES writes body as an IGES 5.3 file of manifold solid B-reps (agent-docs/format-io-design.md): the verified
 // tessellation at tol, one planar face per triangle, so any solid the evaluator can tessellate is written as the
 // planar solid ReadIGES reads, and a read back mesh has the body's own triangles. A body of several lumps writes
 // one solid per lump and a cavity a void shell of its solid. The file is millimetres with a model space scale of 1.

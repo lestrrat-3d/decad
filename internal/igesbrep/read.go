@@ -1,5 +1,5 @@
 // Package igesbrep reads the planar-faced solids of an IGES model into a triangle mesh
-// (agent-docs/iges-import-design.md). It reads the manifold solid B-rep entity and the shells, faces,
+// (agent-docs/format-io-design.md). It reads the manifold solid B-rep entity and the shells, faces,
 // loops, edges and vertices below it, whose surfaces are planes and whose edges are straight lines, and
 // refuses the rest.
 package igesbrep

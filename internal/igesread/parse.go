@@ -1,5 +1,5 @@
 // Package igesread parses the fixed-format records of an IGES file into entities
-// (agent-docs/iges-import-design.md). It reads the sections of IGES 5.3, the global
+// (agent-docs/format-io-design.md). It reads the sections of IGES 5.3, the global
 // parameters that fix the delimiters and the unit, the directory entries and the parameter
 // data of each entity, and interprets none of the geometry.
 package igesread

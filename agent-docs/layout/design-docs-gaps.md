@@ -10,10 +10,6 @@ The rules for rows live in `agent-docs/layout.md`.
 | Path | Responsibility |
 |---|---|
 | `agent-docs/thread-design.md` | `Thread`: ISO metric thread cut into a cylindrical face through a coil, and its groove profile. |
-| `agent-docs/gltf-export-design.md` | The glTF writer's file layout, metre scaling and error contract. |
-| `agent-docs/iges-export-design.md` | `export.IGES`: a body's verified tessellation as planar-faced manifold solid B-reps of an IGES 5.3 file. |
-| `agent-docs/iges-import-design.md` | `ReadIGES`: the IGES 5.3 record parser and the planar B-rep reader into a welded, wound mesh. |
-| `agent-docs/step-import-design.md` | `ReadSTEP`: the Part 21 parser, the planar B-rep reader and the polygon triangulation. |
 | `agent-docs/text-design.md` | `TextProfiles`: lettering from font outlines as sketch profiles, its layout and fill rule. |
 | `agent-docs/union-fold-design.md` | The two-at-a-time fold of a many-body `Union` that no certified route takes. |
 | `agent-docs/subd-design.md` | `SubDMesh`: Catmull-Clark subdivision of a polygon cage into a `MeshBody`. |
@@ -29,7 +25,6 @@ The rules for rows live in `agent-docs/layout.md`.
 | `agent-docs/section-outline-design.md` | `Body.SectionOutline`: the mesh cut by a plane as closed outlines, its on-plane rule and its bound. |
 | `agent-docs/boss-design.md` | `Boss`: a round boss and its blind pilot hole in one atomic union-and-cut commit. |
 | `agent-docs/mesh-wall-survey-design.md` | The wall and undercut surveys of a faceted body by rays through its held mesh: what they prove and what they cannot. |
-| `agent-docs/gcode-design.md` | `export.GCodePerimeters`: the layer-by-layer perimeter toolpath of a body, with rectilinear infill, as G-code. |
 | `agent-docs/dxf-export-design.md` | `export.DXF`: feature-edge projection, hidden-line runs and the release-12 file. |
 | `agent-docs/png-export-design.md` | `export.PNG` and `export.PNGBodies`: the orthographic flat-shaded renderer, its camera and shading rules. |
 | `agent-docs/boolean-chain-regroup-design.md` | Rebuilding a refused two-body Boolean from the source bodies its history names: admitted set identities, plan, fallback and fixtures. |
@@ -38,3 +33,4 @@ The rules for rows live in `agent-docs/layout.md`.
 | `agent-docs/revolve-operand-coarsening-design.md` | A boolean's retry of a revolve operand at up to eight times the pair tolerance after a work ceiling refuses it. |
 | `agent-docs/body-refine-design.md` | `Refine`: surface bounds for held Union meshes of convex leaves, the occupancy certificate, records and increments. |
 | `agent-docs/orthogonal-design.md` | Axis-square faceted solids on a shared grid: `Shell`, the Booleans, `Body.Section`, `Offset`, `MoveFace` and the wall, undercut and concave-radius surveys. |
+| `agent-docs/format-io-design.md` | The small readers and writers: `ReadSTEP`, `ReadIGES`, `export.IGES`, `export.GLTF`, `export.ThreeMF` and `export.GCodePerimeters`. |

@@ -24,7 +24,7 @@ const (
 
 // GLTF writes body as a deterministic glTF 2.0 file at the requested chord
 // tolerance: one JSON document whose single buffer is embedded as a base64
-// data URI (agent-docs/gltf-export-design.md). The file holds one scene, one
+// data URI (agent-docs/format-io-design.md). The file holds one scene, one
 // node, one mesh and one triangle primitive, with positions and 32-bit indices
 // and no normals, materials or textures. Positions are in metres, as glTF
 // requires, so every millimetre coordinate is multiplied by 0.001 and stored as

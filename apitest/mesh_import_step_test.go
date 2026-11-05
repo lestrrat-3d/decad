@@ -17,7 +17,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file is agent-docs/step-import-design.md's public-surface tests for
+// This file is agent-docs/format-io-design.md's public-surface tests for
 // ReadSTEP. Most files come from decad's own STEP writer, so a body written and
 // read back gives its own volume and bounds; the rest are written by hand.
 

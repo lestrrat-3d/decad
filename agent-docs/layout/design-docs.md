@@ -82,7 +82,6 @@ The rules for rows live in `agent-docs/layout.md`.
 | `agent-docs/multibody-dynamics-design.md` | N-body dynamics, islands, `Timeline`. |
 | `agent-docs/planar-convex-filter-design.md` | Float pre-test of the §9.2 convexity certificate: error bound, range guard, poll count. |
 | `agent-docs/step-export-design.md` | Export package entry points and the AP214 faceted writer contract. |
-| `agent-docs/3mf-export-design.md` | The 3MF writer's package parts, mesh mapping, and error contract. |
 
 ### User guides
 

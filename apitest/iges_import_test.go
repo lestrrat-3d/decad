@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file is agent-docs/iges-import-design.md's public-surface tests for ReadIGES. The files are written
+// This file is agent-docs/format-io-design.md's public-surface tests for ReadIGES. The files are written
 // here, record by record, from the IGES 5.3 fixed format, so the reader is tested against the format's own
 // layout and not against its own output.
 

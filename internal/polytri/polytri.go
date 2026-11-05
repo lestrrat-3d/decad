@@ -1,5 +1,5 @@
 // Package polytri triangulates a planar polygon with holes by ear clipping
-// (agent-docs/step-import-design.md). It works on plain two-dimensional data.
+// (agent-docs/format-io-design.md). It works on plain two-dimensional data.
 package polytri
 
 import (

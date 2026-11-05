@@ -2244,9 +2244,9 @@ indices but no proof term. All accept `WithVerification` to demand a stronger
 proof and accept its refusals. An STL file from a sheet is not a solid; at
 `VerifyNone`, a solid mesh is closed but not proven free of self-intersection.
 `ThreeMF` writes a sheet as a 3MF `surface` object and a solid as a `model`
-object. See `agent-docs/3mf-export-design.md`. `export.GLTF` writes the same
+object. See `agent-docs/format-io-design.md`. `export.GLTF` writes the same
 mesh as a glTF 2.0 file with an embedded buffer, in metres, and defaults to
-`VerifyNone` like the others. See `agent-docs/gltf-export-design.md`. `export.PNG` draws the mesh as an
+`VerifyNone` like the others. See `agent-docs/format-io-design.md`. `export.PNG` draws the mesh as an
 orthographic flat-shaded image from a `View`. See `agent-docs/png-export-design.md`. `export.DXF` writes the mesh's feature edges as
 a 2D DXF drawing with hidden edges on their own layer. See `agent-docs/dxf-export-design.md`.
 
