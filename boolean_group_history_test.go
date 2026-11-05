@@ -1114,6 +1114,36 @@ func TestGroupUnionInputsUsesPublicHistory(t *testing.T) {
 	})
 }
 
+func BenchmarkGroupUnionSourceSnapshotFourCircles(b *testing.B) {
+	b.StopTimer()
+	doc := New()
+	leaves := make([]*Body, 0, 4)
+	for _, x := range []float64{-6, -2, 2, 6} {
+		world := sketch.NewWorld()
+		s, err := world.CreateSketch(world.XY())
+		require.NoError(b, err)
+		center := s.CreatePoint(x, 0)
+		s.Fix(center)
+		s.CreateCircle(center, 1)
+		_, err = s.Solve(b.Context())
+		require.NoError(b, err)
+		body, err := Extrude(b.Context(), doc, s, s.Profiles()[0], Distance{D: units.Millimeters(4), Dir: Along})
+		require.NoError(b, err)
+		leaves = append(leaves, body)
+	}
+	group, err := Union(b.Context(), leaves[0], leaves[1:]...)
+	require.NoError(b, err)
+	b.ReportAllocs()
+	b.ResetTimer()
+	b.StartTimer()
+	for range b.N {
+		_, ok, err := groupUnionSourceSnapshot(b.Context(), group, proofbound.NewReplayTrialBudget())
+		if err != nil || !ok {
+			b.Fatalf("group source replay ok=%t error=%v", ok, err)
+		}
+	}
+}
+
 func TestGroupDirectPrismSourceHistory(t *testing.T) {
 	doc := New()
 	source := internalBoxBody(t, doc, 0, 0, 4, 5, 6)
