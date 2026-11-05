@@ -887,7 +887,7 @@ Other record-based consumers keep their existing payload gates.
 | shell of a blind pocket outside §3.1b, a counterbore outside §3.1e, a blind port, a stacked union outside §3.1a or §3.1c, or a keyway (P2, P3, P6c) | SG3 | the remaining cases need a shape-specific exact transition and occupied-volume proof |
 | an outward shell, or a closed shell outside §3.1a and outside a brep record that reads as a prism (along one axis only, outward) | SG1 / SG2 | §3.2 |
 | shell removing a curved outer wall (a fillet cylinder, P8), or a wall run ending at a reflex corner (P7's `y = 8` wall) | SG5 | the rim at a curved outer wall is a swept face less the cavity's trace, and a reflex end's rim lies inside the material along the removed carrier; the rim assembly states only planar regions on a removed face |
-| the surveyed modify requests on faceted P6b, and on P9 other than the equal-setback chamfer of its hole mouths (retained-edge-blend R7, §4.9) | reach SX9 | these requests have no retained source route; a complete tilted plate-to-cylinder junction has the separate bounded `Fillet` in `agent-docs/oblique-boss-fillet-design.md` |
+| the surveyed modify requests on faceted P6b, and on P9 other than the equal-setback chamfer of its hole mouths (retained-edge-blend R7, §4.9) | reach SX9 | these requests have no retained source route; a complete tilted plate-to-cylinder junction has the separate bounded `Fillet` in `agent-docs/blend-variants-design.md` |
 
 ## 7. Decided questions
 

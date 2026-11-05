@@ -33,7 +33,7 @@ Outside prism-boolean's admitted class a boolean tessellates both operands
    boss rooted inside a plate, a tee of cylinders all build, but as
    `facetedPayload`: most `Fillet`/`Chamfer`/`Shell` requests refuse
    (modify-reach SX9). A complete tilted plate-to-cylinder junction can take
-   the bounded `Fillet` in `agent-docs/oblique-boss-fillet-design.md`. The three
+   the bounded `Fillet` in `agent-docs/blend-variants-design.md`. The three
    surveys read `Suspect`, the analytic STEP
    path is gone, and the published bound is 0.5–2 mm³ against 1e-12 mm³ for
    the same part drawn as an analytic cut.

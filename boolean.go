@@ -431,7 +431,7 @@ func booleanBodyWith(ctx context.Context, op meshbool.OperationKind, a, b *Body,
 	// that answers winning; each mesh publishes the chording it actually took,
 	// so every bound is the coarser one. A pair no rung answers reports the
 	// refusal the pair tolerance itself hit
-	// (agent-docs/revolve-operand-coarsening-design.md §2).
+	// (agent-docs/revolve-loft-design.md, Operand coarsening §2).
 	first := err
 	for rung := 1; rung <= booloperand.MaxOperandCoarsenings; rung++ {
 		hooks.Mesher = pairMeshes{rung: rung}

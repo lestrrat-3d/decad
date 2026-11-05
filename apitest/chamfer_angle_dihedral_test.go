@@ -11,8 +11,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file is agent-docs/chamfer-angle-design.md §5's and
-// agent-docs/fillet-chord-design.md §5's public-surface tests for edges that are
+// This file is agent-docs/blend-variants-design.md, Angle chamfer §5's and
+// agent-docs/blend-variants-design.md, Chord fillet §5's public-surface tests for edges that are
 // not right angled: the 120 degree edges of a hexagonal prism and the 45 degree
 // edge of a right-isosceles triangular prism, 10 mm tall.
 

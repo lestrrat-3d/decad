@@ -3048,7 +3048,7 @@ parallel to it; the tag origin and every vertex of every cap loop lie on the
 plane; and every `Circle3` or `Arc3` rim has its center on the plane and its
 axis parallel to `m`. Any other edge curve refuses. The cap then states
 `AxialDelta` 0. A join loft (`JoinDelta` nonzero,
-`agent-docs/axial-pattern-join-design.md`) never clears its caps: its
+`agent-docs/pattern-union-design.md`) never clears its caps: its
 `JoinDelta` also carries how far each placed operand's end plane sits from the
 reference's, so its record's section plane is not the ideal join's end plane.
 The other terms folded into `delta` are in-plane: the fillet's

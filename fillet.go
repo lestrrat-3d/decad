@@ -115,7 +115,7 @@ type FilletOption interface{ filletOption() }
 // prism uses a bounded faceted cutter when that edge or its terminal walls
 // are oblique; the cutter and receiver commit atomically. A faceted Union of
 // a rooted oblique circular boss and rectangular plate also accepts its one
-// complete root junction (agent-docs/oblique-boss-fillet-design.md). Any other
+// complete root junction (agent-docs/blend-variants-design.md). Any other
 // receiver outside those routes, loft §17 and draft §10.4 is S3
 // (ErrUnsupported).
 //

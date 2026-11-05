@@ -11,7 +11,7 @@ import (
 
 // ChamferAngle bevels the edges sel selects by a distance d along the
 // reference face and an angle between the bevel and that face, returning the
-// new body and retiring b (agent-docs/chamfer-angle-design.md).
+// new body and retiring b (agent-docs/blend-variants-design.md).
 //
 // The bevel leaves the reference face d from each edge and makes angle with it.
 // It meets the other face d·sin(angle)/sin(φ + angle) from the edge, where φ is

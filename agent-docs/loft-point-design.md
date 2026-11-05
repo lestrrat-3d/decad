@@ -208,5 +208,5 @@ A finite full Revolve section can join one or more authenticated cone-trimmed
 point-Loft sectors. Serial and variadic `Union` use the same section-ring and
 sector-cap construction. A centered spanning cylinder can `Cut` its completed
 caps or one straight band. The source, construction, and proof contracts live
-in `agent-docs/revolve-loft-sector-design.md`. Full gear models and their acceptance
+in `agent-docs/revolve-loft-design.md`. Full gear models and their acceptance
 tests live in `decad-gallery`.

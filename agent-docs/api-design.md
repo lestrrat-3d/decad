@@ -1181,7 +1181,7 @@ it, so the option never admits a shape for another reason. It is read only
 where a pair's source records keep a cone limit (a point-Loft cut or
 intersected by a cone about an axis through the world origin in a world
 coordinate plane); elsewhere it has no effect. The
-construction is in `agent-docs/revolve-loft-sector-design.md`.
+construction is in `agent-docs/revolve-loft-design.md`.
 
 `Union` requires at least two distinct live bodies from one document. A
 two-body call uses the pair evaluator. For three or more bodies, one operation
@@ -1213,7 +1213,7 @@ all about one axis: world X, or an axis through the world origin in a world
 coordinate plane. Serial and variadic `Union` rebuild one section ring and its
 certified sector caps. A centered cylinder spanning both axial caps can `Cut`
 a body joined about world X or about another admitted axis. The source,
-clearance, boundary and volume proofs are in `agent-docs/revolve-loft-sector-design.md`, and the general axis
+clearance, boundary and volume proofs are in `agent-docs/revolve-loft-design.md`, and the general axis
 in `agent-docs/revolve-axis-design.md`.
 
 The bounded spiral-bevel class accepts an exact finite revolve blank and
@@ -1437,10 +1437,10 @@ func FilletChord(ctx context.Context, b *Body, sel EdgeSelector, chord units.Val
 ```
 
 `FilletChord(ctx, b, sel, chord)` rounds right-angled planar edges with the radius `chord/√2` and builds the result with
-`Fillet`. `agent-docs/fillet-chord-design.md` owns its rules.
+`Fillet`. `agent-docs/blend-variants-design.md` owns its rules.
 
 `ChamferAngle` sets back `d` on `reference` and `d·tan(angle)` on the other face of each right-angled planar edge, and
-builds the result with `Chamfer`. `agent-docs/chamfer-angle-design.md` owns its rules.
+builds the result with `Chamfer`. `agent-docs/blend-variants-design.md` owns its rules.
 
 Each bounds cancellation latency in its cancellable construction
 and audit paths, including Shell's shared offset-construction, crossing, and

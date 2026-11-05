@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file is agent-docs/chamfer-angle-design.md's public-surface tests for
+// This file is agent-docs/blend-variants-design.md's public-surface tests for
 // ChamferAngle on a 20 x 20 x 10 block, whose vertical corner edges are right
 // angled.
 

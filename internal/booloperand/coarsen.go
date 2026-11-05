@@ -10,7 +10,7 @@ import (
 
 // MaxOperandCoarsenings is how many times a revolve operand's chord request may
 // be doubled past the pair tolerance, so it never exceeds 2^3 = 8 times it. The
-// cap is fixed; no caller sets it (agent-docs/revolve-operand-coarsening-design.md §2).
+// cap is fixed; no caller sets it (agent-docs/revolve-loft-design.md, Operand coarsening §2).
 const MaxOperandCoarsenings = 3
 
 // CoarsensOperand reports whether err, the refusal of meshing b at its current

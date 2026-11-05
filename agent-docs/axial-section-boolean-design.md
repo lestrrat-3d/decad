@@ -67,7 +67,7 @@ and so avoids it. A later `DeclareLoop` element that names an entity with a para
 
 - Placed copies. An operand that carries a placement (a `Copy` or `PatternCopies` instance of a prism or loft) is placed
   onto the reference frame and re-recorded with a charge, and a prism that carries a section displacement is not an
-  operand (`agent-docs/axial-pattern-join-design.md`). A placement that tilts the sweep planes is a miss.
+  operand (`agent-docs/pattern-union-design.md`). A placement that tilts the sweep planes is a miss.
 - The loft fillet (§17) takes the corner this union leaves, a line or arc meeting a trimmed circle fragment, so a root
   fillet, then a bore and an outer-cap chamfer, apply to the result.
 - Union only. Cut and Intersect, and sections with holes, are later.
