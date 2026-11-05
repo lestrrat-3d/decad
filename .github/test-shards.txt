@@ -61,7 +61,6 @@
 2	0.27	TestQuarterSourceHeldY1RealProducerGate
 2	0.25	TestQuarterSourceHeldY3RealProducerGate
 2	0.50	TestQuarterSourceHeldY3Refusals
-2	0.00	TestReplayHandleAllocationSizes
 2	0.01	TestThickenPrismUnrepresentableOffset
 2	0.00	TestThickenRibbonWalkClassRefusals
 2	4.38	TestTwistWideThinRectangleAngles

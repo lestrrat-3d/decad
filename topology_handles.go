@@ -2,6 +2,7 @@ package decad
 
 import (
 	"context"
+	"unsafe"
 
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
@@ -432,4 +433,26 @@ func meshNode(m *Mesh) *topo.Mesh {
 		return nil
 	}
 	return &m.n
+}
+
+// ReplayNodeSize reports the storage for the handle containing each topology node.
+func (handleAlloc) ReplayNodeSize(kind string) (uint64, bool) {
+	switch kind {
+	case "body":
+		return uint64(unsafe.Sizeof(Body{})), true
+	case "lump":
+		return uint64(unsafe.Sizeof(Lump{})), true
+	case "shell":
+		return uint64(unsafe.Sizeof(FaceShell{})), true
+	case "face":
+		return uint64(unsafe.Sizeof(Face{})), true
+	case "loop":
+		return uint64(unsafe.Sizeof(Loop{})), true
+	case "edge":
+		return uint64(unsafe.Sizeof(Edge{})), true
+	case "vertex":
+		return uint64(unsafe.Sizeof(Vertex{})), true
+	default:
+		return 0, false
+	}
 }
