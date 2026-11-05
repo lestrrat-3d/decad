@@ -15,6 +15,7 @@ The functions that build and read these values are in the [API reference](api.md
 - [Reports](#reports)
 - [Paths and profiles](#paths-and-profiles)
 - [Linkages](#linkages)
+- [Parts](#parts)
 
 ## Type index
 
@@ -429,3 +430,22 @@ centroid and second moments without building a body.
 A `*decad.Linkage` is a tree of `*decad.Link` values rooted at `Linkage.Ground`. Joints join a link to its parent, and
 `Linkage.Close` adds a loop-closing joint. A `decad.Drive` lists the `decad.JointSweep` values that move the joints.
 
+## Parts
+
+A `*parts.Set` holds `parts.Part` values (a name, a `parts.Kind`, an optional `*decad.Body`, a material and a
+quantity) and `parts.Joint` values. A part's group is the path of its body's `*decad.Container`. A `parts.Joint` joins
+part A, the inserted or moving member, to part B, the receiver, with a `parts.JointKind`, a `parts.Motion`, an optional
+declared `parts.Axis`, and a declared clearance, minimum gap or direction where its kind uses one.
+
+| Type | Kind | Holds | Obtained from |
+|---|---|---|---|
+| `parts.Set` | struct | Parts and joints of one document. | `parts.NewSet` |
+| `parts.Part`, `parts.Material` | struct | One piece of the build and what it is made of. | The caller |
+| `parts.Kind` | enum | `parts.Manufactured` or `parts.Purchased`. | The caller |
+| `parts.Joint`, `parts.Axis` | struct | A connection between two parts, and a line with a unit direction. | The caller |
+| `parts.JointKind`, `parts.Motion` | enum | The form of a connection and what it lets part A do. | The caller |
+| `parts.Exploded`, `parts.ExplodedPart`, `parts.Leader` | struct | The exploded layout: a rigid placement and label anchor per part, and the segment each joint draws. | `Set.Explode` |
+| `parts.PullSource` | enum | Where a part's pull direction came from: faces, a declared axis, a contact normal or box centres. | `ExplodedPart.Pull` |
+| `parts.Graph`, `parts.Node`, `parts.Edge` | struct | The connection diagram: parts as nodes, joints as typed edges. | `Set.Graph` |
+| `parts.JointStatus`, `parts.JointReport`, `parts.JointResult` | enum, struct | What a joint check found for each joint. | The caller |
+| `parts.ExplodeOption`, `parts.ViewOption`, `parts.CheckOption` | option set | Settings on `Set.Explode` and the other queries. | `parts.WithExplodeGround` and the other `With` functions |

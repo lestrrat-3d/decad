@@ -1,7 +1,8 @@
 # Parts design
 
-Design-only. No code of this design exists yet. The package lands in the PRs of §13, and each PR carries the part of
-this document it implements; PR P1 carries this document.
+The package lands in the PRs of §13, and each PR carries the part of this document it implements. P1 has landed:
+`Kind`, `Material`, `Part`, `Joint`, `Axis`, `Set`, axis matching (§7.1), `Explode` and `Graph`. Everything else
+here is design only until its PR.
 
 **`github.com/lestrrat-3d/decad/parts` is a generic schematic and exploded view of a build made of separate bodies.**
 Its two primary outputs are:
@@ -230,7 +231,8 @@ type Axis struct{ Point, Dir r3.Vec }
 without a positive `MinGap`, a `Motion` the kind cannot have (`Keepout`, `Contact` and `Tie` are `Fixed`;
 `FaceContact` with `Slides` needs a nonzero `Direction`), an `Axis` on a kind without one or with a zero direction,
 and a geometric kind naming a body-less part. A quantity of the wrong kind is `decad.ErrUnitKind`; a non-finite one
-`decad.ErrNotFinite`. `Join` normalises `Axis.Dir`.
+`decad.ErrNotFinite`. `Join` normalises `Axis.Dir`. A second joint between the same two parts needs an explicit `Name`: an empty one
+would repeat `A~B`.
 
 ### 3.3 Entry points
 
@@ -332,6 +334,9 @@ type PairFinding struct {
     Overlap  *decad.Measurement // Overlapping, when Verify bounded the volume
 }
 ```
+
+Until `Check` lands (P4), `JointReport` holds only `Joints`, and `JointResult` only `Joint` and `Status`: the part `Graph`
+reads.
 
 `Exploded` is in §5, `Graph` and `Views` in §6, `BOM` in §8. Enumerations reserve zero as "not evaluated", as
 `report.Coverage` does, so a zero record never reads as an answer, and each has a `String` method printing the
@@ -458,12 +463,12 @@ type Leader struct {
 |---|---|
 | E1 | The joint graph is walked breadth-first from the ground, joints in `Join` order, so each part has one parent joint; a part reached twice keeps its first parent. Parts no joint reaches keep a zero offset and `Depth` −1. |
 | E2 | A part's direction from its parent: a `PinInBore` or `PinInSlot` pulls along its axis, from the faces when §7.1 matches them, else the declared `Axis`, else as a `Contact`; a `FaceContact` along the contact face's normal, away from the parent; `Contact` and `Tie` along the line between the two box centres. `Pull` records which was used, so a viewer can flag a guessed direction. |
-| E3 | For each sense along the direction, the travel is the distance that takes the part's box clear of its parent's box. A sense is free when `Document.SweptBox` along that travel is `StrictlyDisjoint` from every other part's box except the parent's; strictly disjoint boxes prove the path clear. A free sense beats a blocked one, then the shorter travel wins, then the sense whose largest direction component is positive. |
-| E4 | The offset is the chosen travel plus `WithExplodeGap`, along the chosen sense, added to the parent's offset. |
+| E3 | For each sense along the direction, the travel is the distance that takes the part's box, at its parent's offset, clear of the exploded box of its parent and of every other part it is joined to that the walk has already placed. A sense is free when `Document.SweptBox` along that travel is `StrictlyDisjoint` from the box of every part not joined to it, each at its current offset (a part not yet placed sits where it was assembled); strictly disjoint boxes prove the path clear. Parts joined to the moving part never block it. A free sense beats a blocked one, then the shorter travel wins, then the sense whose largest direction component is positive. |
+| E4 | The offset is the chosen travel plus `WithExplodeGap`, along the chosen sense, added to the parent's offset. A `FaceContact` has one sense, away from the parent. |
 | E5 | `Leaders` join the two ports of each joint (§6.2 V3) in exploded coordinates, so a consumer can draw the dotted line a pin travels. |
 | E6 | `Overlaps` reports exploded box pairs that still meet. It is advice for the consumer, not a proof. |
 
-`Explode` needs no `Verify`. It reads faces, boxes and swept boxes only, so it works on a model whose pair check is
+A matched axis carries its point at the middle of the engagement, which is the joint's port (V3). `Explode` needs no `Verify`. It reads faces, boxes and swept boxes only, so it works on a model whose pair check is
 slow or undecided (§14).
 
 ## 6. Schematic
@@ -544,7 +549,9 @@ and plane records that `parts` reads through `Face.Surface`, `Face.NormalAt`, `M
 | M3 | `PinInBore`: a convex cylinder of A and a concave one of B whose axes are parallel within `AxisTolerance`, whose axis distance is within `FitTolerance`, whose radii satisfy `R − r ≤ MaxFit`, and whose axial extents overlap by a positive length. `Measured` is `R − r`, its bound the radius bounds and the axis distance. |
 | M4 | `PinInSlot`: a convex cylinder of A and two planar faces of B parallel to its axis within `AxisTolerance`, with normals opposed and pointing at the axis, at distances whose sum less `2r` is at most `MaxFit`. `Measured` is that sum less `2r`. |
 | M5 | A mesh Boolean result keeps a `Cylinder` or `Plane` tag on a face only where faceted source retention proved it (`agent-docs/faceted-source-retention-design.md`, the `RetainedTag` faces); a displaced retained tag matches with its bound charged. A face whose `Surface` is `Faceted` never matches, and `Face.NormalAt` refuses it with `ErrUnsupported`, so it is never asked for a normal here. A joint whose faces do not match falls back to its declared `Axis`, then to box centres (E2). |
-| M6 | Two or more matches for one declared joint: the one with the longest axial overlap wins, then the smallest `Measured`. |
+| M6 | Two or more matches for one declared joint: the one with the longest axial overlap wins, then the smallest `Measured`. Matches of one cylinder split into several faces join into one match. |
+| M7 | `FaceContact`: a planar face of A and one of B with opposed normals within `AxisTolerance`, planes within `MaxFit` of each other, and a positive overlap of their vertex boxes projected onto the plane; the largest overlap wins. The overlap is the box rectangle, so it never under-reports the shared area. |
+| M8 | Faces are read from a mesh made with `VerifyNone` at a chord tolerance of 0.05 mm, then 0.5 mm, then 5 mm, whichever the body first accepts; the mesh gives only the vertices of each face. A face's reading bound is the bound `Face.NormalAt` reports, taken in millimetres for every length test it takes part in. A body no tolerance meshes reads as having no matchable face. |
 
 ### 7.2 Checking
 
@@ -752,8 +759,8 @@ an exploded image and a diagram of all 51 parts, P2 by a part sheet, P4 by the w
 linkage.
 
 **CI shards** (`agent-docs/testing.md`). `parts/` is a new package: the CI workflow's race job must name it, or
-`TestCIWorkflowRaceShardsCoverEveryPackage` fails; it joins the `./decadtest/ ./export/ ./internal/decaderr/` job,
-moving to its own runner only if measured time asks. The new internal packages fall under `./internal/...`. No
+`TestCIWorkflowRaceShardsCoverEveryPackage` fails; it joins the `./decadtest/ ./export/ ./internal/decaderr/ ./parts/` job
+(the support-package job and shard 0), moving to its own runner only if measured time asks. The new internal packages fall under `./internal/...`. No
 root-package test is added, so `.github/test-shards.txt` and `test-shards-apitest.txt` stay unchanged. The examples
 run in the independent examples job. Run `go test . ./apitest/ -run '^TestCI'` before each push.
 

@@ -143,7 +143,7 @@ jobs:
         run: go mod download
 
       - name: Run support package race tests
-        run: go test -race -count=1 -v -timeout 10m ./decadtest/ ./export/ ./internal/decaderr/
+        run: go test -race -count=1 -v -timeout 10m ./decadtest/ ./export/ ./internal/decaderr/ ./parts/
 
       - name: Save Go build cache
         uses: ./.github/actions/go-build-cache-save
@@ -159,7 +159,7 @@ jobs:
           - os: ubuntu-latest
             race: "-race"
             shard: "0"
-            packages: "./decadtest/ ./export/ ./internal/decaderr/"
+            packages: "./decadtest/ ./export/ ./internal/decaderr/ ./parts/"
           - os: ubuntu-latest
             race: "-race"
             shard: "1"

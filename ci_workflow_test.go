@@ -67,7 +67,7 @@ import (
 const (
 	ciWorkflowPath           = ".github/workflows/ci.yml"
 	ciExamplesCommand        = "go test -race -count=1 -v -timeout 10m ./examples/..."
-	ciSupportPackagesCommand = "go test -race -count=1 -v -timeout 10m ./decadtest/ ./export/ ./internal/decaderr/"
+	ciSupportPackagesCommand = "go test -race -count=1 -v -timeout 10m ./decadtest/ ./export/ ./internal/decaderr/ ./parts/"
 )
 
 var (

@@ -24,6 +24,7 @@ Root-package identifiers carry the `decad.` prefix. `apitest/api_reference_test.
 - [Reading bodies](#reading-bodies)
 - [Verification](#verification)
 - [Motion, linkages and contact](#motion-linkages-and-contact)
+- [Parts, exploded views and diagrams](#parts-exploded-views-and-diagrams)
 - [Import](#import)
 - [Export](#export)
 - [Errors](#errors)
@@ -36,6 +37,7 @@ Root-package identifiers carry the `decad.` prefix. `apitest/api_reference_test.
 | `decad` | Documents, bodies, features, selectors, measurement and verification. |
 | `decad/export` | Writes a body as STEP, STL, OBJ, 3MF or glTF, draws it as a PNG image, or writes a 2D DXF drawing of it. |
 | `decad/dynamics` | Rigid-body worlds, stepping and replayable timelines. |
+| `decad/parts` | The parts and joints of a build: an exploded view and a connection diagram. |
 | `decad/decadtest` | Assertions for tests that build and verify bodies. |
 
 decad builds on three sibling modules. `sketch` solves 2D profiles, `r3` supplies vectors, frames and transforms,
@@ -494,6 +496,23 @@ A `decad.Diagnostic` states each reason a report is not sound, with its `decad.D
 - `Document.ContactPair` classifies how two posed bodies touch, and `Document.SweepPair` finds first contact along
   two paths.
 - The `dynamics` package builds a `dynamics.World` from a document, steps it, and records a `dynamics.Timeline`.
+
+## Parts, exploded views and diagrams
+
+The `parts` package names the placed bodies of one document and the joints between them. A `parts.Set` is a builder
+(`parts.NewSet`, `Set.Add`, `Set.Join`) and edits only itself; every other method is a query that leaves the document
+as it found it.
+
+- `Set.Explode` pulls each part away from the part it joins, along the joint's axis or contact normal, and returns
+  a `parts.Exploded`: a `Placement` and `Offset` per part, a label `Anchor`, `Leaders` that join the two ends of each
+  joint and the part pairs whose exploded boxes still meet. Tune it with `parts.WithExplodeGround` and
+  `parts.WithExplodeGap`.
+- A `parts.Joint` is a `parts.PinInBore`, `parts.PinInSlot`, `parts.FaceContact`, `parts.Contact`, `parts.Keepout` or
+  `parts.Tie`. Its axis is read from the matched cylinder faces; where the faces show none, `Joint.Axis` is used,
+  and `ExplodedPart.Pull` says which source gave each direction. `parts.WithFitTolerance`,
+  `parts.WithAxisTolerance` and `parts.WithMaxFit` tune the matching.
+- `Set.Graph` returns the connection diagram as nodes and edges, and `Graph.WriteMermaid` writes it as a Mermaid
+  flowchart.
 
 ## Import
 
