@@ -3,8 +3,8 @@
 The package lands in the PRs of §13, and each PR carries the part of this document it implements. P1 and E1 have landed: `Kind`, `Material`, `Part`, `Joint`, `Axis`, `Set`, axis matching (§7.1), `Explode`, `Graph` and
 `export.ThreeMFItems`. P2 added `Views`, P3 added `BOM` and `Summary`, and P4a adds `Check` for `PinInBore`,
 `PinInSlot`, `FaceContact` and `Tie` joints and the box-screened list of pairs no joint names (§7.2), and P4b adds
-point witnesses, `Contact` and `Keepout` checks, `WithWitnessSearch` and `WithVerifyReport`. The linkage bridge and
-`Infer` are design only until their PRs.
+point witnesses, `Contact` and `Keepout` checks, `WithWitnessSearch` and `WithVerifyReport`. P5 adds `Set.Linkage`.
+`Infer` is design only until its PR.
 
 **`github.com/lestrrat-3d/decad/parts` is a generic schematic and exploded view of a build made of separate bodies.**
 Its two primary outputs are:
@@ -691,9 +691,9 @@ declared laps are checked. Touching pairs without a cylinder match appear in `Un
 
 | Rule | Decision |
 |---|---|
-| K1 | Parts joined by `Fixed` joints form one link, found by union-find over those joints. The ground's link is `Linkage.Ground()`. |
-| K2 | Walking the remaining joints breadth-first from the ground in `Join` order: a `Turns` joint becomes `Link.Revolute` about its axis from `r`; a `Slides` joint becomes `Link.Prismatic` along its slot direction (the slot planes' direction normal to the pin axis) or its `Direction`; `TurnsAndSlides` becomes the revolute-and-prismatic chain `linkage-check-design.md` §1 names. |
-| K3 | Every joint between bodies of different links is declared with `Linkage.DeclareJointContact`. |
+| K1 | Parts joined by `Fixed` pin, slot and face joints form one link, found by union-find over those joints; a `Contact`, `Tie` or `Keepout` joint holds nothing rigid. The ground part's group is `Linkage.Ground()`, whose bodies belong to no link and stay static. |
+| K2 | Walking the remaining joints breadth-first from the ground in `Join` order: a `Turns` joint becomes `Link.Revolute` about its axis from `r`; a `Slides` joint becomes `Link.Prismatic` along its slot direction (the axis crossed with the slot wall's normal), its `Direction`, or for a pin in a bore its axis. The axis is `JointResult.Axis` from `r`, else the joint's declared `Axis`; `r` may be nil. `TurnsAndSlides` is unplaced: the revolute-and-prismatic chain of `linkage-check-design.md` §1 needs an intermediate link that carries a body, and a part joint supplies none. |
+| K3 | Every `PinInBore`, `PinInSlot`, `FaceContact`, `Contact` and `Tie` joint between bodies of different links, or of a link and a static body, is declared with `Linkage.DeclareJointContact`, once per pair. A `Keepout` is not: its parts must stay apart. |
 | K4 | A joint that would close a loop, or whose axis `r` neither matched nor took from a declaration, is returned unplaced, for the caller's `Linkage.Close` or for repair. Body-less parts take no part. |
 
 One `Join` then feeds the exploded view, the diagram, the static check and the motion check.

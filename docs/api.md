@@ -522,6 +522,9 @@ as it found it.
   `parts.WithContactTolerance` sets how near parts must come to be listed. A `Contact` or `Keepout` joint is read from
   box gaps and point witnesses; `parts.WithWitnessSearch` also looks for a proven contact in each listed pair, and
   `parts.WithVerifyReport` lets a `Verify` report the caller already has settle what the structural rules leave open.
+- `Set.Linkage` builds a `decad.Linkage` from the joints, rooted at a ground part: parts held by fixed joints form a link,
+  a turning joint becomes a revolute about its axis and a sliding one a prismatic. It returns the joints it could not place,
+  for `Linkage.Close` or for repair, and `Document.VerifyLinkage` checks the result.
 - `Set.Graph` returns the connection diagram as nodes and edges, and `Graph.WriteMermaid` writes it as a Mermaid
   flowchart.
 

@@ -69,7 +69,7 @@ func TestViewsPosesAndFallbackPorts(t *testing.T) {
 		parts.Part{Name: nameBase, Kind: parts.Manufactured, Body: block(t, doc, 0, 0, 10, 10, 0, 5)},
 		parts.Part{Name: "side", Kind: parts.Manufactured, Body: block(t, doc, 10, 0, 20, 10, 0, 5)})
 	mustJoin(t, s,
-		parts.Joint{Name: "lap", Kind: parts.FaceContact, A: "a", B: nameBase},
+		parts.Joint{Name: nameLap, Kind: parts.FaceContact, A: "a", B: nameBase},
 		parts.Joint{Name: "snap", Kind: parts.Contact, A: "side", B: nameBase})
 
 	// A turn of 90 degrees about Z, then 10 mm along X, poses part a.
