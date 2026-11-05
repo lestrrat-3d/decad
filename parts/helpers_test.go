@@ -18,6 +18,9 @@ const (
 	nameStrap = "strap"
 	nameTop   = "top"
 	nameBlock = "block"
+	nameLap   = "lap"
+	nameArm   = "arm"
+	nameHinge = "hinge"
 )
 
 // block extrudes the rectangle x0..x1, y0..y1 from height z0 by height.

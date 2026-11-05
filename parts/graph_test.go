@@ -23,12 +23,12 @@ func TestGraphMermaid(t *testing.T) {
 	s := parts.NewSet(doc)
 	mustAdd(t, s,
 		parts.Part{Name: nameBase, Kind: parts.Manufactured, Body: base},
-		parts.Part{Name: "arm", Kind: parts.Manufactured, Body: arm},
+		parts.Part{Name: nameArm, Kind: parts.Manufactured, Body: arm},
 		parts.Part{Name: "pin 1", Kind: parts.Manufactured, Body: pin},
 		parts.Part{Name: "band", Kind: parts.Purchased, Quantity: 1})
 	mustJoin(t, s,
-		parts.Joint{Name: "lap", Kind: parts.FaceContact, A: "arm", B: nameBase},
-		parts.Joint{Name: "hinge", Kind: parts.PinInBore, A: "pin 1", B: "arm", Motion: parts.Turns},
+		parts.Joint{Name: nameLap, Kind: parts.FaceContact, A: nameArm, B: nameBase},
+		parts.Joint{Name: nameHinge, Kind: parts.PinInBore, A: "pin 1", B: nameArm, Motion: parts.Turns},
 		parts.Joint{Name: nameStrap, Kind: parts.Tie, A: "band", B: nameBase})
 
 	g := s.Graph(nil)
@@ -57,8 +57,8 @@ func TestGraphMermaid(t *testing.T) {
 
 	// A report adds each joint's status and, when it is not confirmed, its cause.
 	r := &parts.JointReport{Joints: []parts.JointResult{
-		{Joint: parts.Joint{Name: "hinge"}, Status: parts.Confirmed},
-		{Joint: parts.Joint{Name: "lap"}, Status: parts.Contradicted, Cause: parts.CauseApart},
+		{Joint: parts.Joint{Name: nameHinge}, Status: parts.Confirmed},
+		{Joint: parts.Joint{Name: nameLap}, Status: parts.Contradicted, Cause: parts.CauseApart},
 		{Joint: parts.Joint{Name: nameStrap}, Status: parts.Undecided, Cause: parts.CauseUnreadFace},
 	}}
 	g = s.Graph(r)

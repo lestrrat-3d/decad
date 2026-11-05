@@ -81,7 +81,7 @@ func lapSet(t *testing.T) (*parts.Set, *decad.Document) {
 		parts.Part{Name: "pin1", Kind: parts.Manufactured, Body: cylinder(t, doc, 5, 3, -2, 14)},
 		parts.Part{Name: "pin2", Kind: parts.Manufactured, Body: cylinder(t, doc, 15, 3, -2, 14)})
 	mustJoin(t, s,
-		parts.Joint{Name: "lap", Kind: parts.FaceContact, A: nameTop, B: nameBase},
+		parts.Joint{Name: nameLap, Kind: parts.FaceContact, A: nameTop, B: nameBase},
 		parts.Joint{Name: "pin1~base", Kind: parts.PinInBore, A: "pin1", B: nameBase, Motion: parts.Turns},
 		parts.Joint{Name: "pin2~base", Kind: parts.PinInBore, A: "pin2", B: nameBase, Motion: parts.Turns},
 		parts.Joint{Name: "pin1~top", Kind: parts.PinInBore, A: "pin1", B: nameTop, Motion: parts.Turns},
