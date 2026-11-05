@@ -1,7 +1,7 @@
 # Parts design
 
 The package lands in the PRs of §13, and each PR carries the part of this document it implements. P1 and E1 have landed: `Kind`, `Material`, `Part`, `Joint`, `Axis`, `Set`, axis matching (§7.1), `Explode`, `Graph` and
-`export.ThreeMFItems`. P2 adds `Views`. Everything else here is design only until its PR.
+`export.ThreeMFItems`. P2 added `Views`, and P3 adds `BOM` and `Summary`. Everything else here is design only until its PR.
 
 **`github.com/lestrrat-3d/decad/parts` is a generic schematic and exploded view of a build made of separate bodies.**
 Its two primary outputs are:
@@ -608,15 +608,19 @@ type BOMRow struct {
 }
 ```
 
-Parts sharing a `Spec` must agree: their volumes must overlap within their bounds, or `BOM` returns
-`decad.ErrDegenerate` naming the two parts. That check only falsifies the caller's claim that the parts are the same.
-`Mass` is the solid body's mass.
+Parts sharing a `Spec` must agree: they must have the same `Kind` and material name, and their volumes must overlap
+within their bounds, or `BOM` returns `decad.ErrDegenerate` naming the two parts. That check only falsifies the
+caller's claim that the parts are the same. A part with a body counts one and a body-less part counts its `Quantity`.
+`Mass` is the solid body's mass: the volume and its bound times the density. `Add` refuses a density that is not a
+finite, non-negative `units.Density` (`decad.ErrUnitKind`, `decad.ErrNotFinite`, `decad.ErrNegativeMagnitude`).
 
 ### 8.2 Summary
 
 `Summary.WriteMarkdown` writes, in this order: the bill of materials table; the joint table with statuses and reasons
 when `Joints` is set; `Unexplained` and `Undecided` pairs; the exploded depth and pull table when `Exploded` is set;
-the Mermaid diagram. Numbers print with their bounds. This is the agent's primary view of the schematic: it reads a
+the Mermaid diagram. Numbers print with their bounds. The joint table lists the Set's joints with the status the report gives, and the
+pairs and reasons columns come with `Check` (P4). `WriteMarkdown` takes no context: it reads volumes and faces only.
+This is the agent's primary view of the schematic: it reads a
 page, not pixels. Images come from the consumer (§11).
 
 ## 9. Reuse
