@@ -31,6 +31,15 @@ func TestGapLowAndOverlap(t *testing.T) {
 	require.False(t, a.Grow(0.5).Meets(box(11, 0, 0, 20, 10, 10)))
 }
 
+func TestGapHighAndPointDistance(t *testing.T) {
+	a, b := box(0, 0, 0, 10, 10, 10), box(13, 0, 0, 20, 10, 10)
+	// The farthest corners are (0,*,*) and (20,*,*): 20 along X and 10 along Y and Z.
+	require.InDelta(t, math.Sqrt(400+100+100), jointcheck.GapHigh(a, b), 1e-12)
+	require.InDelta(t, 3.0, a.PointDistance(r3.Vec{X: 13, Y: 5, Z: 5}), 1e-12)
+	require.InDelta(t, 5.0, a.PointDistance(r3.Vec{X: 13, Y: 14, Z: 5}), 1e-12)
+	require.InDelta(t, 0.0, a.PointDistance(r3.Vec{X: 1, Y: 5, Z: 5}), 1e-12)
+}
+
 func TestWithin(t *testing.T) {
 	require.Equal(t, jointcheck.Inside, jointcheck.Within(0.2, 0.01, 0.15, 0.25))
 	require.Equal(t, jointcheck.Outside, jointcheck.Within(0.3, 0.01, 0.15, 0.25))

@@ -99,14 +99,18 @@ type JointResult struct {
 	AxisFrom AxisSource         // faces, declared or none
 	Measured *decad.Measurement // PinInBore: R − r; PinInSlot: width − 2r; FaceContact: the planes' distance
 	Engaged  *decad.Measurement // PinInBore, PinInSlot: axial overlap of the matched faces
-	Witness  *r3.Vec            // a point the face overlap claim was read at
+	Gap      *decad.Measurement // Contact, Keepout: the interval the box gap and any witness prove
+	Witness  *r3.Vec            // a point the contact or face overlap claim was read at
 	FacesA   []*decad.Face      // the faces of A the rule read
 	FacesB   []*decad.Face
-	Reason   string // the numbers behind Cause, for people, not for branching
+	Verified *decad.ContactRelation // the pair's relation in a WithVerifyReport report; nil without one
+	Reason   string                 // the numbers behind Cause, for people, not for branching
 }
 
 // PairFinding is a pair of parts whose boxes meet and that no joint names.
 type PairFinding struct {
-	A, B    string
-	Overlap decad.Box // where the two boxes, grown by the contact tolerance and their bounds, meet
+	A, B     string
+	Overlap  decad.Box              // where the two boxes, grown by the contact tolerance and their bounds, meet
+	Near     *decad.Measurement     // WithWitnessSearch: a proven gap upper bound at most the contact tolerance
+	Verified *decad.ContactRelation // the pair's relation in a WithVerifyReport report; nil without one
 }

@@ -47,6 +47,22 @@ func GapLow(a, b Box, slack float64) float64 {
 	return math.Max(0, gap-slack)
 }
 
+// GapHigh is the largest distance between any point of box a and any point of
+// box b: an upper end of the gap between two bodies only when their points are
+// unknown.
+func GapHigh(a, b Box) float64 {
+	far := func(lo1, hi1, lo2, hi2 float64) float64 { return math.Max(math.Abs(hi1-lo2), math.Abs(hi2-lo1)) }
+	return math.Sqrt(math.Pow(far(a.Min.X, a.Max.X, b.Min.X, b.Max.X), 2) +
+		math.Pow(far(a.Min.Y, a.Max.Y, b.Min.Y, b.Max.Y), 2) + math.Pow(far(a.Min.Z, a.Max.Z, b.Min.Z, b.Max.Z), 2))
+}
+
+// PointDistance is the distance from p to the box: zero inside it.
+func (b Box) PointDistance(p r3.Vec) float64 {
+	d := func(v, lo, hi float64) float64 { return math.Max(0, math.Max(lo-v, v-hi)) }
+	return math.Sqrt(math.Pow(d(p.X, b.Min.X, b.Max.X), 2) + math.Pow(d(p.Y, b.Min.Y, b.Max.Y), 2) +
+		math.Pow(d(p.Z, b.Min.Z, b.Max.Z), 2))
+}
+
 // Verdict is how a reading with a bound stands against an allowed interval.
 type Verdict int
 

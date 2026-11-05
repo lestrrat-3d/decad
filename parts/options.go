@@ -19,6 +19,7 @@ type config struct {
 	ground     string
 	poses      map[string]r3.Transform
 	verify     *decad.Report
+	witness    bool
 }
 
 func defaultConfig() config {
@@ -165,4 +166,13 @@ func WithPartPose(part string, t r3.Transform) ViewOption {
 		c.poses[part] = t
 		return nil
 	}}
+}
+
+// WithWitnessSearch makes Check also look for a witness for each unexplained
+// pair: a point whose distances to the two parts prove the pair within the
+// contact tolerance of each other, which Check then reports as PairFinding.Near.
+// A pair without Near may be apart. The search samples up to 128 mesh vertices
+// per pair and calls Body.DistanceToPoint at each.
+func WithWitnessSearch() CheckOption {
+	return option{func(c *config) error { c.witness = true; return nil }}
 }

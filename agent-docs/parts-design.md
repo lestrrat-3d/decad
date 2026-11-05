@@ -2,9 +2,9 @@
 
 The package lands in the PRs of §13, and each PR carries the part of this document it implements. P1 and E1 have landed: `Kind`, `Material`, `Part`, `Joint`, `Axis`, `Set`, axis matching (§7.1), `Explode`, `Graph` and
 `export.ThreeMFItems`. P2 added `Views`, P3 added `BOM` and `Summary`, and P4a adds `Check` for `PinInBore`,
-`PinInSlot`, `FaceContact` and `Tie` joints and the box-screened list of pairs no joint names (§7.2). Point witnesses,
-`Contact` and `Keepout` checks, `WithWitnessSearch` and `WithVerifyReport` (P4b), the linkage bridge and `Infer` are
-design only until their PRs.
+`PinInSlot`, `FaceContact` and `Tie` joints and the box-screened list of pairs no joint names (§7.2), and P4b adds
+point witnesses, `Contact` and `Keepout` checks, `WithWitnessSearch` and `WithVerifyReport`. The linkage bridge and
+`Infer` are design only until their PRs.
 
 **`github.com/lestrrat-3d/decad/parts` is a generic schematic and exploded view of a build made of separate bodies.**
 Its two primary outputs are:
@@ -371,9 +371,7 @@ type PairFinding struct {
 }
 ```
 
-Until P4b, `JointReport` has no `Inferred`, `CheckRequest` always has `WitnessSearch` and `VerifyReport` false,
-`JointResult` has no `Verified` and no `Gap`, and `PairFinding` has no `Near` and no `Verified`; a `Contact` or
-`Keepout` joint is `NotChecked`. The `AxisSource` values are named `AxisSourceNone`, `AxisSourceFaces` and
+Until P6, `JointReport` has no `Inferred`. The `AxisSource` values are named `AxisSourceNone`, `AxisSourceFaces` and
 `AxisSourceDeclared`, because `AxisFromFaces` and `AxisDeclared` already name `PullSource` values.
 
 `Exploded` is in §5, `Graph` and `Views` in §6, `BOM` in §8. Enumerations reserve zero as "not evaluated", as
@@ -618,7 +616,7 @@ one of the 64. A joint check built on the pair proof would leave most joints `Un
 |---|---|
 | G0 | Every part's faces are read once per call, as M1–M8 read them, from the mesh at the first chord tolerance of M8's ladder the body accepts **with `decad.VerifyAll`**. Point distances (G2) need that verification, and a body holds one cached tessellation, so reading faces and distances from the same tolerance and level tessellates each body once. A body that refuses `VerifyAll` at every rung is read at `VerifyNone` for its faces, and its point distances are unavailable. |
 | G1 | **Box gap.** The lower end of a pair's gap is the separation of the two `Body.Bounds` boxes along the axis that separates them most, less both boxes' `Bound`s, and zero when the boxes meet. It is sound: the bodies lie inside their boxes. |
-| G2 | **Witness.** An upper end of a pair's gap comes from points. For any point `p`, the gap between A and B is at most `A.DistanceToPoint(p)` plus `B.DistanceToPoint(p)`, each taken at its upper end (the triangle inequality; a distance is zero for a point inside or on the solid). `p` runs over up to 64 mesh vertices of A nearest B's box, then up to 64 of B nearest A's box, at G0's tolerance. The least sum is the witness and its point `Witness`. The search finds a witness when one exists among the sampled points; finding none proves nothing. |
+| G2 | **Witness.** An upper end of a pair's gap comes from points. For any point `p`, the gap between A and B is at most `A.DistanceToPoint(p)` plus `B.DistanceToPoint(p)`, each taken at its upper end (the triangle inequality; a distance is zero for a point inside or on the solid). `p` runs over up to 64 mesh vertices of A nearest B's box, then up to 64 of B nearest A's box, at G0's tolerance. The least sum is the witness and its point `Witness`. The search finds a witness when one exists among the sampled points; finding none proves nothing. A search stops at the first point whose sum is already below the threshold it serves (`ContactTolerance`, or `MinGap` for a keepout), so `Gap` then reports that point's sum, not the least of all 128. Joints and unexplained pairs are searched on up to `GOMAXPROCS` goroutines. |
 | G5 | **Resolution.** A witness cannot prove a gap smaller than the two distance readings' own widths, which grow with the meshes' bounds (about the chord tolerance G0 settled on, 0.1 mm for a body that refuses 0.05 mm). `JointReport.Request` records each part's tolerance and mesh bound. A `Contact` whose two parts' bounds together exceed `ContactTolerance` is `Undecided` (`CauseNoWitness`, `Reason` "below resolution") without a search. The default `ContactTolerance` of 0.25 mm leaves room for two parts meshed at 0.1 mm; a caller who needs a finer contact claim states a smaller tolerance and accepts more `Undecided` contacts. |
 | G3 | **Faces near a pair.** A face is near the pair when its vertex box, grown by `MaxFit`, meets the other part's box. A rule that needs a cylinder or plane and finds none among the near faces reports `CauseNoMatch` only when every near face of both parts was read (tagged `Plane` or `Cylinder` and answered `Face.NormalAt`); one near face that reads `Faceted`, or a body that would not mesh, makes it `CauseUnreadFace` and the joint `Undecided`. |
 | G4 | Interval tests read both ends: a reading `[m − b, m + b]` inside the allowed interval confirms, one outside it contradicts, and one that straddles its edge is `Undecided` with the cause of the test it failed to settle. |

@@ -228,7 +228,8 @@ func TestCheckLeavesTheDocumentAlone(t *testing.T) {
 	require.Equal(t, bodies, doc.Bodies())
 	require.Len(t, doc.OperationHistory().Operations(), ops)
 
-	// Contact, keepout and tie joints have no structural rule yet: they are not checked.
+	// A tie is never checked. The pin is 0.2 mm inside its bore, so no sampled point proves a
+	// contact within 0.25 mm (the witness sums read 0.29 mm) and a 1 mm keepout is violated.
 	mustAdd(t, s, parts.Part{Name: nameStrap, Kind: parts.Purchased, Quantity: 1})
 	mustJoin(t, s, parts.Joint{Name: "tie", Kind: parts.Tie, A: nameStrap, B: namePlate},
 		parts.Joint{Name: "snap", Kind: parts.Contact, A: namePin, B: namePlate},
@@ -236,9 +237,11 @@ func TestCheckLeavesTheDocumentAlone(t *testing.T) {
 	rep, err := s.Check(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, parts.Confirmed, rep.Joints[0].Status)
-	for _, r := range rep.Joints[1:] {
-		require.Equal(t, parts.NotChecked, r.Status, r.Joint.Name)
-	}
+	require.Equal(t, parts.NotChecked, rep.Joints[1].Status)
+	require.Equal(t, parts.Undecided, rep.Joints[2].Status)
+	require.Equal(t, parts.CauseNoWitness, rep.Joints[2].Cause)
+	require.Equal(t, parts.Contradicted, rep.Joints[3].Status)
+	require.Equal(t, parts.CauseTooClose, rep.Joints[3].Cause)
 
 	retired := decad.New()
 	rs := pinSet(t, retired, 3.2, 3, 10, parts.Joint{})

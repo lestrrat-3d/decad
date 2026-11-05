@@ -18,8 +18,9 @@ import (
 // calls Document.Verify, and it does not prove that two parts' interiors are
 // disjoint. A Contradicted joint is a finding, not an error.
 //
-// Until the contact witnesses land, Contact and Keepout joints are NotChecked,
-// as a Tie is.
+// Contact and Keepout joints are read from box gaps and point witnesses; a Tie is
+// NotChecked. A report from a Verify the caller already ran can settle what the
+// structural rules leave open (WithVerifyReport).
 func (s *Set) Check(ctx context.Context, opts ...CheckOption) (*JointReport, error) {
 	c, err := foldOptions(opts)
 	if err != nil {
@@ -33,6 +34,11 @@ func (s *Set) Check(ctx context.Context, opts ...CheckOption) (*JointReport, err
 	}
 	if err := s.live(); err != nil {
 		return nil, err
+	}
+	if c.verify != nil {
+		if err := s.checkVerifyReport(c.verify); err != nil {
+			return nil, err
+		}
 	}
 	fc := newFaceCache(true)
 	faces := map[string]*bodyFaces{}
@@ -51,27 +57,65 @@ func (s *Set) Check(ctx context.Context, opts ...CheckOption) (*JointReport, err
 		rep.Request.Meshes = append(rep.Request.Meshes, PartMesh{Part: p.Name, Tolerance: units.Millimeters(bf.meshTol),
 			Bound: units.Millimeters(bf.meshBound), Verified: bf.verified})
 	}
-	for _, j := range s.joints {
-		if err := ctx.Err(); err != nil {
-			return nil, err
-		}
-		rep.Joints = append(rep.Joints, s.checkJoint(j, faces[j.A], faces[j.B], c))
+	rep.Request.WitnessSearch, rep.Request.VerifyReport = c.witness, c.verify != nil
+	rep.Joints = make([]JointResult, len(s.joints))
+	err = parallel(ctx, len(s.joints), func(i int) error {
+		j := s.joints[i]
+		var err error
+		rep.Joints[i], err = s.checkJoint(ctx, j, faces[j.A], faces[j.B], c)
+		return err
+	})
+	if err != nil {
+		return nil, err
 	}
 	rep.Unexplained = s.unexplained(faces, c)
+	if c.witness {
+		if err := s.searchUnexplained(ctx, rep.Unexplained, faces, c); err != nil {
+			return nil, err
+		}
+	}
+	if c.verify != nil {
+		s.applyVerify(rep, c)
+	}
 	return rep, nil
 }
 
-func (s *Set) checkJoint(j Joint, a, b *bodyFaces, c config) JointResult {
+func (s *Set) checkJoint(ctx context.Context, j Joint, a, b *bodyFaces, c config) (JointResult, error) {
 	r := JointResult{Joint: j}
+	var err error
 	switch j.Kind {
 	case PinInBore, PinInSlot:
 		s.checkPin(&r, a, b, c)
 	case FaceContact:
 		checkFace(&r, a, b, c)
+	case Contact:
+		err = checkContact(ctx, &r, a, b, s.parts[s.index[j.A]].Body, s.parts[s.index[j.B]].Body, c)
+	case Keepout:
+		err = checkKeepout(ctx, &r, a, b, s.parts[s.index[j.A]].Body, s.parts[s.index[j.B]].Body)
 	default:
 		r.Status = NotChecked
 	}
-	return r
+	return r, err
+}
+
+// searchUnexplained is U2: each unexplained pair gets Near when a witness proves
+// it within the contact tolerance.
+func (s *Set) searchUnexplained(ctx context.Context, pairs []PairFinding, faces map[string]*bodyFaces, c config) error {
+	return parallel(ctx, len(pairs), func(i int) error {
+		p := &pairs[i]
+		a, b := faces[p.A], faces[p.B]
+		if !distancesReadable(a, b) || a.meshBound+b.meshBound > c.contactTol {
+			return nil
+		}
+		w, err := findWitness(ctx, a, b, s.parts[s.index[p.A]].Body, s.parts[s.index[p.B]].Body, c.contactTol)
+		if err != nil {
+			return err
+		}
+		if w.ok && w.upper <= c.contactTol {
+			p.Near = interval(0, w.upper)
+		}
+		return nil
+	})
 }
 
 func partBox(bf *bodyFaces) jointcheck.Box {
