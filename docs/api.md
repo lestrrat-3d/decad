@@ -511,6 +511,8 @@ as it found it.
   `parts.Tie`. Its axis is read from the matched cylinder faces; where the faces show none, `Joint.Axis` is used,
   and `ExplodedPart.Pull` says which source gave each direction. `parts.WithFitTolerance`,
   `parts.WithAxisTolerance` and `parts.WithMaxFit` tune the matching.
+- `Set.Views` poses each part alone for a part sheet: centred in the assembled orientation, or by `parts.WithPartPose`,
+  with its bounds, a label anchor and a `parts.Port` at each joint.
 - `Set.Graph` returns the connection diagram as nodes and edges, and `Graph.WriteMermaid` writes it as a Mermaid
   flowchart.
 

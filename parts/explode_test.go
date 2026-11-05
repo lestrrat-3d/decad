@@ -145,7 +145,7 @@ func TestExplodeUnreached(t *testing.T) {
 	mustAdd(t, s,
 		parts.Part{Name: "a", Kind: parts.Manufactured, Body: block(t, doc, 0, 0, 20, 20, 0, 10)},
 		parts.Part{Name: "b", Kind: parts.Manufactured, Body: block(t, doc, 40, 0, 50, 10, 0, 5)},
-		parts.Part{Name: "strap", Kind: parts.Purchased, Quantity: 2})
+		parts.Part{Name: nameStrap, Kind: parts.Purchased, Quantity: 2})
 	ex, err := s.Explode(t.Context(), parts.WithExplodeGround("a"))
 	require.NoError(t, err)
 	require.Len(t, ex.Parts, 2, "a body-less part is omitted")
@@ -155,7 +155,7 @@ func TestExplodeUnreached(t *testing.T) {
 	require.Equal(t, parts.PullNone, b.Pull)
 
 	// Contact joints fall back to the line between box centres.
-	mustJoin(t, s, parts.Joint{Kind: parts.Contact, A: "b", B: "a"}, parts.Joint{Kind: parts.Tie, A: "strap", B: "a"})
+	mustJoin(t, s, parts.Joint{Kind: parts.Contact, A: "b", B: "a"}, parts.Joint{Kind: parts.Tie, A: nameStrap, B: "a"})
 	ex, err = s.Explode(t.Context(), parts.WithExplodeGround("a"))
 	require.NoError(t, err)
 	b = partByName(t, ex, "b")
@@ -166,7 +166,7 @@ func TestExplodeUnreached(t *testing.T) {
 	require.Greater(t, b.Offset.X, 9.0)
 	require.Len(t, ex.Leaders, 1, "a tie to a body-less part draws no leader")
 
-	_, err = s.Explode(t.Context(), parts.WithExplodeGround("strap"))
+	_, err = s.Explode(t.Context(), parts.WithExplodeGround(nameStrap))
 	require.ErrorIs(t, err, decad.ErrDegenerate)
 	_, err = s.Explode(t.Context(), nil)
 	require.ErrorIs(t, err, decad.ErrDegenerate)

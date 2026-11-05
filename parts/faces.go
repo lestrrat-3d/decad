@@ -36,13 +36,7 @@ func readFaces(ctx context.Context, b *decad.Body) (*bodyFaces, error) {
 		return nil, err
 	}
 	bf := &bodyFaces{box: box}
-	var mesh *decad.Mesh
-	for _, tol := range faceTolerances {
-		mesh, err = b.Tessellate(ctx, units.Millimeters(tol), decad.WithVerification(decad.VerifyNone))
-		if err == nil || !errors.Is(err, decad.ErrUnsupported) {
-			break
-		}
-	}
+	mesh, err := meshOf(ctx, b)
 	if err != nil {
 		if errors.Is(err, decad.ErrUnsupported) {
 			bf.unmeshed = true
@@ -70,6 +64,19 @@ func readFaces(ctx context.Context, b *decad.Body) (*bodyFaces, error) {
 		}
 	}
 	return bf, nil
+}
+
+// meshOf tessellates b at the first of faceTolerances it accepts.
+func meshOf(ctx context.Context, b *decad.Body) (*decad.Mesh, error) {
+	var mesh *decad.Mesh
+	var err error
+	for _, tol := range faceTolerances {
+		mesh, err = b.Tessellate(ctx, units.Millimeters(tol), decad.WithVerification(decad.VerifyNone))
+		if err == nil || !errors.Is(err, decad.ErrUnsupported) {
+			break
+		}
+	}
+	return mesh, err
 }
 
 func (bf *bodyFaces) addPlane(f *decad.Face, verts []r3.Vec, idx []int) {

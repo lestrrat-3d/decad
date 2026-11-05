@@ -29,7 +29,7 @@ func TestGraphMermaid(t *testing.T) {
 	mustJoin(t, s,
 		parts.Joint{Name: "lap", Kind: parts.FaceContact, A: "arm", B: nameBase},
 		parts.Joint{Name: "hinge", Kind: parts.PinInBore, A: "pin 1", B: "arm", Motion: parts.Turns},
-		parts.Joint{Name: "strap", Kind: parts.Tie, A: "band", B: nameBase})
+		parts.Joint{Name: nameStrap, Kind: parts.Tie, A: "band", B: nameBase})
 
 	g := s.Graph(nil)
 	require.Len(t, g.Nodes, 4)

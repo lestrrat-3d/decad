@@ -9,6 +9,12 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
+// Part names the parts and export examples share.
+const (
+	partNamePlate = "plate"
+	partNamePin   = "pin"
+)
+
 // extrudeBlock adds a rectangular block to doc and returns it. The block spans
 // x0..x1 and y0..y1 in millimeters, starts at height z0, and is height mm
 // tall. The motion, linkage and dynamics examples use it to build the scene

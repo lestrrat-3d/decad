@@ -38,19 +38,19 @@ func Example_parts_explode() {
 
 	set := parts.NewSet(doc)
 	for _, p := range []parts.Part{
-		{Name: "plate", Kind: parts.Manufactured, Body: plate},
-		{Name: "pin", Kind: parts.Manufactured, Body: pin},
+		{Name: partNamePlate, Kind: parts.Manufactured, Body: plate},
+		{Name: partNamePin, Kind: parts.Manufactured, Body: pin},
 	} {
 		if err := set.Add(p); err != nil {
 			fmt.Printf("failed to add %s: %s\n", p.Name, err)
 			return
 		}
 	}
-	if err := set.Join(parts.Joint{Kind: parts.PinInBore, A: "pin", B: "plate", Motion: parts.Turns}); err != nil {
+	if err := set.Join(parts.Joint{Kind: parts.PinInBore, A: partNamePin, B: partNamePlate, Motion: parts.Turns}); err != nil {
 		fmt.Printf("failed to join: %s\n", err)
 		return
 	}
-	ex, err := set.Explode(ctx, parts.WithExplodeGround("plate"))
+	ex, err := set.Explode(ctx, parts.WithExplodeGround(partNamePlate))
 	if err != nil {
 		fmt.Printf("failed to explode: %s\n", err)
 		return

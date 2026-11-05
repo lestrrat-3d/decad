@@ -5,6 +5,7 @@ import (
 	"math"
 
 	"github.com/lestrrat-3d/decad"
+	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
 
@@ -16,6 +17,7 @@ type config struct {
 	contactTol float64 // mm
 	gap        float64 // mm
 	ground     string
+	poses      map[string]r3.Transform
 	verify     *decad.Report
 }
 
@@ -28,20 +30,30 @@ func defaultConfig() config {
 type option struct{ f func(*config) error }
 
 func (o option) apply(c *config) error { return o.f(c) }
+func (option) explodeOption()          {}
+func (option) viewOption()             {}
+func (option) checkOption()            {}
 
 // ExplodeOption configures Explode. The tolerance options of CheckOption are
 // accepted too.
-type ExplodeOption interface{ apply(*config) error }
+type ExplodeOption interface {
+	apply(*config) error
+	explodeOption()
+}
 
 // ViewOption configures Views. The tolerance options of CheckOption are
 // accepted too.
-type ViewOption interface{ apply(*config) error }
+type ViewOption interface {
+	apply(*config) error
+	viewOption()
+}
 
 // CheckOption configures Check and Infer, and sets the tolerances Explode and
 // Views read.
 type CheckOption interface {
 	ExplodeOption
 	ViewOption
+	checkOption()
 }
 
 func foldOptions[O interface{ apply(*config) error }](opts []O) (config, error) {
@@ -136,4 +148,21 @@ func WithExplodeGap(gap units.Value) ExplodeOption {
 		return failing(err)
 	}
 	return option{func(c *config) error { c.gap = gap.Base(); return nil }}
+}
+
+// WithPartPose makes Views pose the named part by t instead of centring it. t
+// maps assembled coordinates to view coordinates and must be a proper rigid
+// motion: a reflection or the zero Transform is decad.ErrDegenerate. A name no
+// part has is decad.ErrDegenerate at the query.
+func WithPartPose(part string, t r3.Transform) ViewOption {
+	if !t.IsValid() || t.IsReflection() {
+		return failing(fmt.Errorf("parts: %w: pose of %q is not a proper rigid motion", decad.ErrDegenerate, part))
+	}
+	return option{func(c *config) error {
+		if c.poses == nil {
+			c.poses = map[string]r3.Transform{}
+		}
+		c.poses[part] = t
+		return nil
+	}}
 }

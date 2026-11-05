@@ -5,6 +5,7 @@ import (
 
 	"github.com/lestrrat-3d/decad"
 	"github.com/lestrrat-3d/decad/parts"
+	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
@@ -14,6 +15,7 @@ const (
 	namePlate = "plate"
 	namePin   = "pin"
 	nameBase  = "base"
+	nameStrap = "strap"
 )
 
 // block extrudes the rectangle x0..x1, y0..y1 from height z0 by height.
@@ -100,4 +102,20 @@ func facetedCopy(t *testing.T, doc *decad.Document, b *decad.Body) *decad.Body {
 	out, err := decad.SolidFromMesh(t.Context(), doc, mb)
 	require.NoError(t, err)
 	return out
+}
+
+func unitsDegrees(d float64) units.Value { return units.Degrees(d) }
+
+func translationOf(t *testing.T, v r3.Vec) r3.Transform {
+	t.Helper()
+	tr, err := r3.Translation(v)
+	require.NoError(t, err)
+	return tr
+}
+
+func frameXY(t *testing.T) r3.Frame {
+	t.Helper()
+	f, err := r3.NewFrame(r3.Vec{}, r3.Vec{X: 1}, r3.Vec{Y: 1})
+	require.NoError(t, err)
+	return f
 }
