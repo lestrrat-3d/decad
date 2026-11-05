@@ -51,6 +51,9 @@ commit the result.
 - Keep independent internal-package jobs and dynamics independent of the
   race-binary artifact. The workflow's dedicated-package exclusions must match
   its dedicated runners; `TestCIWorkflowRaceShardsCoverEveryPackage` checks them.
+- The `CI gate` job in `ci.yml` is the one required status check on `main`.
+  It needs every other job and fails when any failed or was cancelled. A new
+  job joins its `needs` list; shard names need no rules change.
 - Measure PR completion from workflow creation through its last required check.
   Job execution budgets exclude runner queue and artifact-build time. A passing
   budget does not establish the five-minute PR target.
