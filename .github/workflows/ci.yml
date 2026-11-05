@@ -674,3 +674,33 @@ jobs:
 
       - name: Save Go build cache
         uses: ./.github/actions/go-build-cache-save
+
+  # The one required status check. Branch rules require this job by name, so
+  # adding or renaming a shard never needs a rules change. A skipped job is
+  # accepted (platform, gallery and govulncheck skip on pull requests); a
+  # failed or cancelled one fails the gate.
+  ci-gate:
+    name: CI gate
+    if: always()
+    needs:
+      - lint
+      - race-binary
+      - test-support-packages
+      - test-root-race
+      - test-examples
+      - test-arithmetic
+      - test
+      - test-platforms
+      - verify
+      - gallery
+      - govulncheck
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every job to pass or skip
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "job results: ${RESULTS}"
+          case " ${RESULTS} " in
+            *" failure "*|*" cancelled "*) exit 1 ;;
+          esac
