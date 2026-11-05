@@ -513,6 +513,9 @@ as it found it.
   `parts.WithAxisTolerance` and `parts.WithMaxFit` tune the matching.
 - `Set.Views` poses each part alone for a part sheet: centred in the assembled orientation, or by `parts.WithPartPose`,
   with its bounds, a label anchor and a `parts.Port` at each joint.
+- `Set.BOM` returns the bill of materials: one `parts.BOMRow` per `Spec`, with quantity, material, the volume of one part
+  and its mass. `parts.Summary.WriteMarkdown` writes the bill, the joints, the exploded layout and the connection diagram
+  as one Markdown page.
 - `Set.Graph` returns the connection diagram as nodes and edges, and `Graph.WriteMermaid` writes it as a Mermaid
   flowchart.
 

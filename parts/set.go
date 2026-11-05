@@ -8,6 +8,7 @@ package parts
 
 import (
 	"fmt"
+	"math"
 	"slices"
 	"strings"
 
@@ -100,6 +101,9 @@ func (s *Set) Add(p Part) error {
 	default:
 		return fmt.Errorf("parts: %w: part %q has no kind", decad.ErrDegenerate, p.Name)
 	}
+	if err := checkDensity(p.Material.Density); err != nil {
+		return fmt.Errorf("parts: part %q: %w", p.Name, err)
+	}
 	if p.Body == nil {
 		if p.Kind == Manufactured {
 			return fmt.Errorf("parts: %w: manufactured part %q has no body", decad.ErrDegenerate, p.Name)
@@ -174,6 +178,25 @@ func (s *Set) live() error {
 		if _, err := s.doc.ContainerOf(p.Body); err != nil {
 			return fmt.Errorf("parts: part %q: %w", p.Name, err)
 		}
+	}
+	return nil
+}
+
+// checkDensity validates a material density: the zero Value (unknown), or a
+// finite non-negative units.Density.
+func checkDensity(d units.Value) error {
+	if d == (units.Value{}) {
+		return nil
+	}
+	if d.Kind() != units.Density {
+		return fmt.Errorf("density: %w", decad.ErrUnitKind)
+	}
+	b := d.Base()
+	if math.IsNaN(b) || math.IsInf(b, 0) {
+		return fmt.Errorf("density: %w", decad.ErrNotFinite)
+	}
+	if b < 0 {
+		return fmt.Errorf("density: %w", decad.ErrNegativeMagnitude)
 	}
 	return nil
 }

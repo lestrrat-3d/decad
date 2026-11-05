@@ -449,5 +449,7 @@ declared `parts.Axis`, and a declared clearance, minimum gap or direction where 
 | `parts.PullSource` | enum | Where a part's pull direction came from: faces, a declared axis, a contact normal or box centres. | `ExplodedPart.Pull` |
 | `parts.Graph`, `parts.Node`, `parts.Edge` | struct | The connection diagram: parts as nodes, joints as typed edges. | `Set.Graph` |
 | `parts.Views`, `parts.PartView`, `parts.Port` | struct | Each part posed for drawing alone: a placement, bounds, label anchor and the points where its joints attach. | `Set.Views` |
+| `parts.BOM`, `parts.BOMRow` | struct | The bill of materials: a row per spec with its parts, quantity, material, volume and mass. | `Set.BOM` |
+| `parts.Summary` | struct | The set, and optionally a joint report and an exploded layout, to write as one Markdown page. | The caller |
 | `parts.JointStatus`, `parts.JointReport`, `parts.JointResult` | enum, struct | What a joint check found for each joint. | The caller |
 | `parts.ExplodeOption`, `parts.ViewOption`, `parts.CheckOption` | option set | Settings on `Set.Explode` and the other queries. | `parts.WithExplodeGround` and the other `With` functions |
