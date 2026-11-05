@@ -77,15 +77,15 @@ func lapSet(t *testing.T) (*parts.Set, *decad.Document) {
 	s := parts.NewSet(doc)
 	mustAdd(t, s,
 		parts.Part{Name: nameBase, Kind: parts.Manufactured, Body: bore(0)},
-		parts.Part{Name: "top", Kind: parts.Manufactured, Body: bore(5)},
+		parts.Part{Name: nameTop, Kind: parts.Manufactured, Body: bore(5)},
 		parts.Part{Name: "pin1", Kind: parts.Manufactured, Body: cylinder(t, doc, 5, 3, -2, 14)},
 		parts.Part{Name: "pin2", Kind: parts.Manufactured, Body: cylinder(t, doc, 15, 3, -2, 14)})
 	mustJoin(t, s,
-		parts.Joint{Name: "lap", Kind: parts.FaceContact, A: "top", B: nameBase},
+		parts.Joint{Name: "lap", Kind: parts.FaceContact, A: nameTop, B: nameBase},
 		parts.Joint{Name: "pin1~base", Kind: parts.PinInBore, A: "pin1", B: nameBase, Motion: parts.Turns},
 		parts.Joint{Name: "pin2~base", Kind: parts.PinInBore, A: "pin2", B: nameBase, Motion: parts.Turns},
-		parts.Joint{Name: "pin1~top", Kind: parts.PinInBore, A: "pin1", B: "top", Motion: parts.Turns},
-		parts.Joint{Name: "pin2~top", Kind: parts.PinInBore, A: "pin2", B: "top", Motion: parts.Turns})
+		parts.Joint{Name: "pin1~top", Kind: parts.PinInBore, A: "pin1", B: nameTop, Motion: parts.Turns},
+		parts.Joint{Name: "pin2~top", Kind: parts.PinInBore, A: "pin2", B: nameTop, Motion: parts.Turns})
 	return s, doc
 }
 
@@ -96,8 +96,8 @@ func TestExplodeLap(t *testing.T) {
 
 	// The top plate lifts along the contact normal, away from the base: it
 	// already clears the base, so only the gap remains.
-	top := partByName(t, ex, "top")
-	requireVec(t, r3.Vec{Z: 10}, top.Offset, "top")
+	top := partByName(t, ex, nameTop)
+	requireVec(t, r3.Vec{Z: 10}, top.Offset, nameTop)
 	require.Equal(t, parts.FaceNormal, top.Pull)
 	// The top plate now sits at z 15..20, so a pin would clear it only after
 	// 22 mm up; down it clears the base in 12 mm. It drops 12 mm plus the gap.
@@ -206,10 +206,10 @@ func TestExplodePinInSlot(t *testing.T) {
 	require.NoError(t, err)
 	s := parts.NewSet(doc)
 	mustAdd(t, s,
-		parts.Part{Name: "block", Kind: parts.Manufactured, Body: blk},
+		parts.Part{Name: nameBlock, Kind: parts.Manufactured, Body: blk},
 		parts.Part{Name: namePin, Kind: parts.Manufactured, Body: cylinder(t, doc, 15, 2, -2, 15)})
-	mustJoin(t, s, parts.Joint{Kind: parts.PinInSlot, A: namePin, B: "block", Motion: parts.Slides})
-	ex, err := s.Explode(t.Context(), parts.WithExplodeGround("block"))
+	mustJoin(t, s, parts.Joint{Kind: parts.PinInSlot, A: namePin, B: nameBlock, Motion: parts.Slides})
+	ex, err := s.Explode(t.Context(), parts.WithExplodeGround(nameBlock))
 	require.NoError(t, err)
 	pin := partByName(t, ex, namePin)
 	require.Equal(t, parts.AxisFromFaces, pin.Pull)
@@ -219,10 +219,10 @@ func TestExplodePinInSlot(t *testing.T) {
 	// Walls too far apart for MaxFit are not a match: the box centres are used.
 	loose := parts.NewSet(doc)
 	mustAdd(t, loose,
-		parts.Part{Name: "block", Kind: parts.Manufactured, Body: blk},
+		parts.Part{Name: nameBlock, Kind: parts.Manufactured, Body: blk},
 		parts.Part{Name: namePin, Kind: parts.Manufactured, Body: cylinder(t, doc, 15, 2, -2, 15)})
-	mustJoin(t, loose, parts.Joint{Kind: parts.PinInSlot, A: namePin, B: "block"})
-	ex, err = loose.Explode(t.Context(), parts.WithExplodeGround("block"), parts.WithMaxFit(units.Millimeters(0.3)))
+	mustJoin(t, loose, parts.Joint{Kind: parts.PinInSlot, A: namePin, B: nameBlock})
+	ex, err = loose.Explode(t.Context(), parts.WithExplodeGround(nameBlock), parts.WithMaxFit(units.Millimeters(0.3)))
 	require.NoError(t, err)
 	require.Equal(t, parts.BoxCentres, partByName(t, ex, namePin).Pull)
 }

@@ -61,7 +61,7 @@ func (s *Set) Views(ctx context.Context, opts ...ViewOption) (*Views, error) {
 	if err := s.live(); err != nil {
 		return nil, err
 	}
-	fc := newFaceCache()
+	fc := newFaceCache(false)
 	out := &Views{}
 	index := map[string]int{}
 	for _, p := range s.parts {
@@ -124,7 +124,7 @@ func viewBounds(ctx context.Context, b *decad.Body, box decad.Box, pl r3.Transfo
 	if basis.EX == (r3.Vec{X: 1}) && basis.EY == (r3.Vec{Y: 1}) && basis.EZ == (r3.Vec{Z: 1}) {
 		return decad.Box{Min: pl.Apply(box.Min), Max: pl.Apply(box.Max), Exactness: box.Exactness, Bound: box.Bound}, nil
 	}
-	mesh, err := meshOf(ctx, b)
+	mesh, _, _, err := meshOf(ctx, b, false)
 	if err != nil {
 		return decad.Box{}, err
 	}

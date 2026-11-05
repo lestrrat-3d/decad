@@ -114,19 +114,24 @@ func TestSummaryMarkdownSections(t *testing.T) {
 	mustJoin(t, s, parts.Joint{Kind: parts.PinInBore, A: namePin, B: namePlate, Motion: parts.Turns})
 	ex, err := s.Explode(t.Context(), parts.WithExplodeGround(namePlate))
 	require.NoError(t, err)
-	rep := &parts.JointReport{Joints: []parts.JointResult{{Joint: s.Joints()[0], Status: parts.Confirmed}}}
+	rep, err := s.Check(t.Context())
+	require.NoError(t, err)
+	rep.Unexplained = []parts.PairFinding{{A: "x", B: "y"}}
 
 	var out bytes.Buffer
 	require.NoError(t, parts.Summary{Set: s, Joints: rep, Exploded: ex}.WriteMarkdown(&out))
 	page := out.String()
-	order := []string{"## Bill of materials", "## Joints", "## Exploded view", "## Connection diagram"}
+	order := []string{"## Bill of materials", "## Joints", "## Unexplained pairs", "## Exploded view", "## Connection diagram"}
 	last := -1
 	for _, h := range order {
 		i := strings.Index(page, h)
 		require.Greater(t, i, last, h)
 		last = i
 	}
-	require.Contains(t, page, "| pin~plate | pin in bore | pin | plate | turns | confirmed |")
+	require.Contains(t, page, "| Joint | Kind | A | B | Motion | Status | Cause | Evidence |")
+	require.Contains(t, page, "| pin~plate | pin in bore | pin | plate | turns | confirmed | - | measured 0.20")
+	require.Contains(t, page, "engaged 10.00 mm; axis from faces |")
+	require.Contains(t, page, "## Unexplained pairs")
 	require.Contains(t, page, "Ground: plate.")
 	require.Contains(t, page, "| pin | 1 | axis from faces | (0.00, 0.00, 22.00) |")
 	require.Contains(t, page, `pin -- "pin in bore, turns, confirmed" --> plate`)

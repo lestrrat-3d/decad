@@ -16,6 +16,8 @@ const (
 	namePin   = "pin"
 	nameBase  = "base"
 	nameStrap = "strap"
+	nameTop   = "top"
+	nameBlock = "block"
 )
 
 // block extrudes the rectangle x0..x1, y0..y1 from height z0 by height.
@@ -57,10 +59,14 @@ func cylinder(t *testing.T, doc *decad.Document, cx, radius, z0, height float64)
 
 // boredPlate is a 20 x 20 x 10 plate with a vertical bore of radius 3.2 at
 // (10, 10).
-func boredPlate(t *testing.T, doc *decad.Document) *decad.Body {
+func boredPlate(t *testing.T, doc *decad.Document) *decad.Body { return boredPlateR(t, doc, 3.2) }
+
+// boredPlateR is a 20 x 20 x 10 plate with a vertical bore of the given radius at
+// (10, 10).
+func boredPlateR(t *testing.T, doc *decad.Document, radius float64) *decad.Body {
 	t.Helper()
 	plate := block(t, doc, 0, 0, 20, 20, 0, 10)
-	tool := cylinder(t, doc, 10, 3.2, -1, 12)
+	tool := cylinder(t, doc, 10, radius, -1, 12)
 	out, err := decad.Cut(t.Context(), plate, tool)
 	require.NoError(t, err)
 	return out

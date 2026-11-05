@@ -98,7 +98,7 @@ func (s *Set) readJoint(ctx context.Context, j Joint, fc *faceCache, c config) (
 			return r, err
 		}
 		boxA, boxB = fromDecad(a.box), fromDecad(b.box)
-		r.faceted = a.faceted+b.faceted > 0 || a.unmeshed || b.unmeshed
+		r.faceted = len(a.unread)+len(b.unread) > 0 || a.unmeshed || b.unmeshed
 		s.matchFaces(&r, j, a, b, c)
 	}
 	if r.matched {
@@ -215,7 +215,7 @@ func (s *Set) Explode(ctx context.Context, opts ...ExplodeOption) (*Exploded, er
 	if err != nil {
 		return nil, err
 	}
-	fc := newFaceCache()
+	fc := newFaceCache(false)
 	boxes := make([]explodeplan.Box, len(idx))
 	for k, i := range idx {
 		bf, err := fc.get(ctx, s.parts[i].Body)

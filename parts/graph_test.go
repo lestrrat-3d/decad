@@ -55,19 +55,30 @@ func TestGraphMermaid(t *testing.T) {
 		`  band -- "tie" --> base`,
 	}, lines)
 
-	// A report adds each joint's status to its edge.
+	// A report adds each joint's status and, when it is not confirmed, its cause.
 	r := &parts.JointReport{Joints: []parts.JointResult{
 		{Joint: parts.Joint{Name: "hinge"}, Status: parts.Confirmed},
-		{Joint: parts.Joint{Name: "lap"}, Status: parts.Contradicted},
+		{Joint: parts.Joint{Name: "lap"}, Status: parts.Contradicted, Cause: parts.CauseApart},
+		{Joint: parts.Joint{Name: nameStrap}, Status: parts.Undecided, Cause: parts.CauseUnreadFace},
 	}}
 	g = s.Graph(r)
 	require.Equal(t, parts.Contradicted, g.Edges[0].Status)
+	require.Equal(t, parts.CauseApart, g.Edges[0].Cause)
 	require.Equal(t, parts.Confirmed, g.Edges[1].Status)
-	require.Equal(t, parts.NotEvaluated, g.Edges[2].Status)
+	require.Equal(t, parts.CauseNone, g.Edges[1].Cause)
 	out.Reset()
 	require.NoError(t, g.WriteMermaid(&out))
-	require.Contains(t, out.String(), `arm -- "face contact, contradicted" --> base`)
-	require.Contains(t, out.String(), `pin_1 -- "pin in bore, turns, confirmed" --> arm`)
+	// A contradicted edge ends in a cross, an undecided one is dotted, the others keep the arrow.
+	require.Contains(t, out.String(), `  arm -- "face contact, contradicted (apart)" --x base`+"\n")
+	require.Contains(t, out.String(), `  pin_1 -- "pin in bore, turns, confirmed" --> arm`+"\n")
+	require.Contains(t, out.String(), `  band -. "tie, undecided (unread face)" .-> base`+"\n")
+
+	// A joint the report leaves out, or one it did not check, keeps the plain arrow.
+	g = s.Graph(&parts.JointReport{Joints: []parts.JointResult{{Joint: parts.Joint{Name: nameStrap}, Status: parts.NotChecked}}})
+	out.Reset()
+	require.NoError(t, g.WriteMermaid(&out))
+	require.Contains(t, out.String(), `  band -- "tie, not checked" --> base`+"\n")
+	require.Contains(t, out.String(), `  arm -- "face contact" --> base`+"\n")
 }
 
 func TestGraphMermaidNames(t *testing.T) {

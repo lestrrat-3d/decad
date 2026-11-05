@@ -516,6 +516,10 @@ as it found it.
 - `Set.BOM` returns the bill of materials: one `parts.BOMRow` per `Spec`, with quantity, material, the volume of one part
   and its mass. `parts.Summary.WriteMarkdown` writes the bill, the joints, the exploded layout and the connection diagram
   as one Markdown page.
+- `Set.Check` judges each declared joint against the faces and bounds of its two parts and lists the pairs of parts whose
+  boxes meet with no joint naming them. It never runs `Document.Verify`. Each `parts.JointResult` is `Confirmed`,
+  `Contradicted`, `Undecided` or `NotChecked`, and one that is not `Confirmed` carries a typed `parts.Cause`.
+  `parts.WithContactTolerance` sets how near parts must come to be listed.
 - `Set.Graph` returns the connection diagram as nodes and edges, and `Graph.WriteMermaid` writes it as a Mermaid
   flowchart.
 
