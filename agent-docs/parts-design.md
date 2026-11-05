@@ -4,7 +4,8 @@ The package lands in the PRs of §13, and each PR carries the part of this docum
 `export.ThreeMFItems`. P2 added `Views`, P3 added `BOM` and `Summary`, and P4a adds `Check` for `PinInBore`,
 `PinInSlot`, `FaceContact` and `Tie` joints and the box-screened list of pairs no joint names (§7.2), and P4b adds
 point witnesses, `Contact` and `Keepout` checks, `WithWitnessSearch` and `WithVerifyReport`. P5 added `Set.Linkage`, and P6 adds
-`Infer` and `JointReport.Inferred`: the whole design has landed.
+`Infer` and `JointReport.Inferred`. P7 adds staged explosion with per-stage, per-part and overall distance control (§5.2
+to §5.6): the whole design has landed.
 
 **`github.com/lestrrat-3d/decad/parts` is a generic schematic and exploded view of a build made of separate bodies.**
 Its two primary outputs are:
@@ -223,11 +224,20 @@ type Joint struct {
     // Direction is a Slides joint's direction for a FaceContact, in assembled
     // world coordinates. Zero elsewhere.
     Direction r3.Vec
+    // Pull (P7) is the direction in which A leaves B in an exploded view, in
+    // assembled world coordinates, or zero. On a PinInBore or PinInSlot it
+    // picks the sense along the axis; on any other kind it is the direction
+    // (§5.1 E2). Its length does not matter.
+    Pull r3.Vec
 }
 
 // Axis is a line: a point on it and a unit direction.
 type Axis struct{ Point, Dir r3.Vec }
 ```
+
+`Join` refuses a non-finite `Pull` with `decad.ErrNotFinite`. `Explode` refuses, with `decad.ErrDegenerate` naming the
+joint, a `Pull` on a `PinInBore` or `PinInSlot` that lies within `AxisTolerance` of normal to the axis it uses, since it
+then names no sense.
 
 `Join` refuses with `decad.ErrDegenerate`: an unknown part, `A == B`, `JointUnset`, a repeated name, a `Keepout`
 without a positive `MinGap`, a `Motion` the kind cannot have (`Keepout`, `Contact` and `Tie` are `Fixed`;
@@ -245,6 +255,15 @@ func (s *Set) Explode(ctx context.Context, opts ...ExplodeOption) (*Exploded, er
 
 func WithExplodeGround(name string) ExplodeOption  // default: the manufactured part of largest volume
 func WithExplodeGap(gap units.Value) ExplodeOption // default 10 mm past full disengagement
+
+// P7 (§5.2–§5.6):
+func WithExplodeStages(stages ...Stage) ExplodeOption           // ordered stages; unnamed parts form a last stage
+func WithPartGap(part string, gap units.Value) ExplodeOption    // one part's gap, over its stage's
+func WithExplodeScale(scale units.Value) ExplodeOption          // a Dimensionless multiplier on every offset; default units.Scalar(1)
+
+// Hidden lists the pairs of exploded parts where one may hide the other seen
+// along view, by their projected boxes (§5.6). It moves nothing.
+func (e *Exploded) Hidden(view r3.Vec) ([]Occlusion, error)
 
 // Graph is the connection diagram: parts as nodes, joints as typed edges
 // (§6.1). r may be nil; with one, each edge carries its check status.
@@ -472,6 +491,141 @@ in the root container.
 box and the pin's box meet; the joint names that pair, so it is not unexplained. A second joint declared with
 `Clearance: units.Millimeters(0.3)` would print `contradicted (clearance)`.
 
+**Staged explosion, P7** (`examples/parts_explode_stages_example_test.go`). A housing of two 40 x 20 x 10 mm halves,
+split at z = 0, holds a 12 x 6 x 8 mm lever in a pocket; one Ø4 pin runs along Z through both halves and the lever.
+The one-stage explosion lifts the top half off but leaves the lever inside the bottom half's box. Three stages take
+the top off, lift the lever out of the opened housing, then pull the pin.
+
+```go
+package examples_test
+
+import (
+    "context"
+    "fmt"
+
+    "github.com/lestrrat-3d/decad"
+    "github.com/lestrrat-3d/decad/parts"
+    "github.com/lestrrat-3d/r3"
+    "github.com/lestrrat-3d/units"
+)
+
+// Stages take an assembly apart in order. Each stage's parts move along their
+// joints, or along a stated direction, and a ClearAll stage moves them until
+// they clear every part still standing, so a mechanism comes out of the
+// housing that encloses it instead of staying inside it.
+func Example_parts_explode_stages() {
+    ctx := context.Background()
+    doc := decad.New()
+    centre := r3.Vec{X: 20, Y: 10}
+    // block is a box with a pocket and a Ø4.2 bore cut into it.
+    block := func(x0, y0, x1, y1, z0, h float64, pocket [6]float64, bz0, bh float64) (*decad.Body, error) {
+        b, err := extrudeBlock(doc, x0, y0, x1, y1, z0, h)
+        if err != nil {
+            return nil, err
+        }
+        if pocket != ([6]float64{}) {
+            tool, err := extrudeBlock(doc, pocket[0], pocket[1], pocket[2], pocket[3], pocket[4], pocket[5])
+            if err != nil {
+                return nil, err
+            }
+            if b, err = decad.Cut(ctx, b, tool); err != nil {
+                return nil, err
+            }
+        }
+        bore, err := extrudeCircle(doc, centre, 2.1, bz0, bh)
+        if err != nil {
+            return nil, err
+        }
+        return decad.Cut(ctx, b, bore)
+    }
+    bottom, err := block(0, 0, 40, 20, -10, 10, [6]float64{10, 4, 30, 16, -6, 7}, -11, 12)
+    if err != nil {
+        fmt.Printf("failed to build the bottom half: %s\n", err)
+        return
+    }
+    top, err := block(0, 0, 40, 20, 0, 10, [6]float64{10, 4, 30, 16, -1, 7}, -1, 12)
+    if err != nil {
+        fmt.Printf("failed to build the top half: %s\n", err)
+        return
+    }
+    lever, err := block(14, 7, 26, 13, -4, 8, [6]float64{}, -5, 10)
+    if err != nil {
+        fmt.Printf("failed to build the lever: %s\n", err)
+        return
+    }
+    pin, err := extrudeCircle(doc, centre, 2, -12, 24)
+    if err != nil {
+        fmt.Printf("failed to build the pin: %s\n", err)
+        return
+    }
+
+    set := parts.NewSet(doc)
+    for _, p := range []parts.Part{
+        {Name: "housing-bottom", Kind: parts.Manufactured, Body: bottom},
+        {Name: "housing-top", Kind: parts.Manufactured, Body: top},
+        {Name: "lever", Kind: parts.Manufactured, Body: lever},
+        {Name: "pin", Kind: parts.Manufactured, Body: pin},
+    } {
+        if err := set.Add(p); err != nil {
+            fmt.Printf("failed to add %s: %s\n", p.Name, err)
+            return
+        }
+    }
+    for _, j := range []parts.Joint{
+        {Kind: parts.FaceContact, A: "housing-top", B: "housing-bottom"},
+        {Kind: parts.PinInBore, A: "pin", B: "housing-top"},
+        {Kind: parts.PinInBore, A: "pin", B: "housing-bottom"},
+        {Kind: parts.PinInBore, A: "pin", B: "lever", Motion: parts.Turns},
+    } {
+        if err := set.Join(j); err != nil {
+            fmt.Printf("failed to join: %s\n", err)
+            return
+        }
+    }
+
+    // One stage: the lever comes off its pin but stays in the bottom half's box.
+    flat, err := set.Explode(ctx, parts.WithExplodeGround("housing-bottom"))
+    if err != nil {
+        fmt.Printf("failed to explode: %s\n", err)
+        return
+    }
+    fmt.Printf("one stage: %d overlap(s) %v\n", len(flat.Overlaps), flat.Overlaps)
+
+    staged, err := set.Explode(ctx, parts.WithExplodeGround("housing-bottom"), parts.WithExplodeStages(
+        parts.Stage{Name: "shell", Parts: []string{"housing-top"}},
+        parts.Stage{Name: "mechanism", Parts: []string{"lever"}, Clear: parts.ClearAll, Direction: r3.Vec{Z: 1}},
+        parts.Stage{Name: "pins", Parts: []string{"pin"}, Clear: parts.ClearAll, Gap: units.Millimeters(10)},
+    ))
+    if err != nil {
+        fmt.Printf("failed to explode in stages: %s\n", err)
+        return
+    }
+    for _, p := range staged.Parts {
+        path := p.Path.String()
+        if p.Path == parts.PathEnclosed {
+            path += " by " + p.Blocker
+        }
+        fmt.Printf("%s: stage %q, offset (%.0f, %.0f, %.0f), path %s\n",
+            p.Name, p.Stage, p.Offset.X, p.Offset.Y, p.Offset.Z, path)
+    }
+    fmt.Printf("staged: %d overlap(s), %d short\n", len(staged.Overlaps), len(staged.Short))
+    // Output:
+    // one stage: 1 overlap(s) [[housing-bottom lever]]
+    // housing-bottom: stage "", offset (0, 0, 0), path none
+    // housing-top: stage "shell", offset (0, 0, 10), path enclosed by lever
+    // lever: stage "mechanism", offset (0, 0, 34), path enclosed by housing-bottom
+    // pin: stage "pins", offset (0, 0, -32), path clear
+    // staged: 0 overlap(s), 0 short
+}
+```
+
+The numbers follow from §5.3. The top half lifts off its face contact by its 10 mm gap (S4). The lever rises along
++Z until its box is 10 mm clear of both halves' boxes, the top half's now at z 10 to 20, so its bottom sits at
+z 30 and its offset is 34 (S5); the pin is excluded from its standing set, because the pin leaves later. The pin
+then needs 32 mm downward against 60 mm upward, past the lifted lever, to clear every standing box by 10 mm, and
+takes the shorter (S5, E3). The housing and the lever start inside each other's boxes, so their paths read
+`enclosed` (S7).
+
 ## 5. Exploded view
 
 ```go
@@ -480,6 +634,10 @@ type Exploded struct {
     Parts    []ExplodedPart // in Set order, body-less parts omitted
     Leaders  []Leader
     Overlaps [][2]string    // part pairs whose exploded boxes still meet
+    // P7:
+    Stages []string    // the stage names in the order they ran; "" is the last, implicit stage (S1)
+    Scale  units.Value // the WithExplodeScale multiplier, Dimensionless
+    Short  []string    // parts whose Clearance is below their gap (S9), in Set order
 }
 
 type ExplodedPart struct {
@@ -488,19 +646,34 @@ type ExplodedPart struct {
     Placement r3.Transform // the same, as a transform
     Depth     int          // joint steps from the ground; -1 when no joint reaches it
     Anchor    r3.Vec       // label anchor: exploded box centre
-    Pull      PullSource   // AxisFromFaces, AxisDeclared, FaceNormal, BoxCentres, None
+    Pull      PullSource   // AxisFromFaces, AxisDeclared, FaceNormal, BoxCentres, PullDeclared, StageDirection, None
+    // P7:
+    Stage     string       // the last stage that moved it; "" for the ground and the implicit last stage
+    Dir       r3.Vec       // the unit direction of that stage's move; zero when it did not move
+    Travel    units.Value  // the distance that stage's clearing rule needed (S4, S5), before the gap and scale
+    Gap       units.Value  // the gap asked for there: the part's WithPartGap, else the stage's, else WithExplodeGap
+    Moved     units.Value  // the length of its own offset from where its parent ended, all stages and scale included
+    Clearance units.Value  // after the last stage: the least box distance to any part it is not joined to; zero when boxes meet
+    Path      PathState    // PathClear, PathBlocked, PathEnclosed, PathStuck, PathNone (S7)
+    Blocker   string       // the part that blocked or enclosed the path, or that Clearance was read against
 }
 
 type Leader struct {
     Joint    string
     From, To r3.Vec // exploded coordinates: the port on A, the port on B
+    // Separation (P7) is the distance between the two parts' exploded boxes,
+    // zero when they meet: how far a pin ended up from the part it passes
+    // through, which Clearance (joined parts excluded) does not say.
+    Separation units.Value
 }
 ```
+
+### 5.1 One stage: the rules every explosion keeps
 
 | Rule | Decision |
 |---|---|
 | E1 | The joint graph is walked breadth-first from the ground, joints in `Join` order, so each part has one parent joint; a part reached twice keeps its first parent. Parts no joint reaches keep a zero offset and `Depth` −1. |
-| E2 | A part's direction from its parent: a `PinInBore` or `PinInSlot` pulls along its axis, from the faces when §7.1 matches them, else the declared `Axis`, else as a `Contact`; a `FaceContact` along the contact face's normal, away from the parent; `Contact` and `Tie` along the line between the two box centres. `Pull` records which was used, so a viewer can flag a guessed direction. |
+| E2 | A part's direction from its parent: a `PinInBore` or `PinInSlot` pulls along its axis, from the faces when §7.1 matches them, else the declared `Axis`, else as a `Contact`; a `FaceContact` along the contact face's normal, away from the parent; `Contact` and `Tie` along the line between the two box centres. A declared `Joint.Pull` (P7) replaces the face normal and the box-centre line, and on an axis kind fixes the sense, so E3 compares one sense only; `Pull` then reads `PullDeclared`. `Pull` records which was used, so a viewer can flag a guessed direction. A stage's `Direction` replaces all of these for its members, and `Pull` reads `StageDirection` (§5.3 S3). |
 | E3 | For each sense along the direction, the travel is the distance that takes the part's box, at its parent's offset, clear of the exploded box of its parent and of every other part it is joined to that the walk has already placed. A sense is free when `Document.SweptBox` along that travel is `StrictlyDisjoint` from the box of every part not joined to it, each at its current offset (a part not yet placed sits where it was assembled); strictly disjoint boxes prove the path clear. Parts joined to the moving part never block it. A free sense beats a blocked one, then the shorter travel wins, then the sense whose largest direction component is positive. |
 | E4 | The offset is the chosen travel plus `WithExplodeGap`, along the chosen sense, added to the parent's offset. A `FaceContact` has one sense, away from the parent. |
 | E5 | `Leaders` join the two ports of each joint (§6.2 V3) in exploded coordinates, so a consumer can draw the dotted line a pin travels. |
@@ -508,6 +681,113 @@ type Leader struct {
 
 A matched axis carries its point at the middle of the engagement, which is the joint's port (V3). `Explode` needs no `Verify`. It reads faces, boxes and swept boxes only, so it works on a model whose pair check is
 slow or undecided (§14).
+
+### 5.2 Why one stage is not enough
+
+E3 and E4 move each part just clear of its parent and the joined parts already placed, plus one gap. A part nested
+inside an enclosure is joined to its pins, not to the enclosure's other walls, so it moves clear of its pin and stays
+inside the enclosure. On the crossbow (51 parts, ground `receiver-right`) the release nut, sear, trigger bar, hooks,
+carriage and links end up inside the boxes of the receiver halves, the side plates and the stock, and the gallery
+replaced `Explode`'s offsets with a hand-written table of 40 offsets to show them (dated illustration, 2026-11). One
+global gap cannot fix it: raising it moves the enclosure and the mechanism alike.
+
+Exploded-view tools solve this with ordered steps: take the shell off, lift the mechanism out, then pull its pins.
+P7 adds exactly that, with each stage's parts clearing either their joined neighbours (as today) or everything still
+standing, and with directions still taken from the joints unless a stage states one.
+
+### 5.3 Stages
+
+```go
+// Stage is one step of a staged explosion. Its parts move in it, in the order
+// of the joint walk (E1); every other part stays where earlier stages left it.
+type Stage struct {
+    Name   string   // non-empty and unique
+    Parts  []string // part names
+    Groups []string // container paths (Set.Group); every part in one is a member
+    // Gap is how far past clearing each member moves; the zero Value means
+    // WithExplodeGap's gap.
+    Gap units.Value
+    // Clear says what the members must clear: ClearJoined (the zero value,
+    // E3's rule) or ClearAll (S5).
+    Clear Clearing
+    // Direction, when not zero, moves every member along it instead of along
+    // its joint (Pull reads StageDirection). Its length does not matter.
+    Direction r3.Vec
+    // Together moves the members as one rigid group by one offset (S6).
+    Together bool
+}
+
+type Clearing int
+
+const (
+    ClearJoined Clearing = iota // clear the parent and the joined parts already moved (E3)
+    ClearAll                    // clear every part that stays put, by the gap (S5)
+)
+```
+
+| Rule | Decision |
+|---|---|
+| S1 | Stages run in the order given. Parts no stage names, other than the ground, form a last stage named `""` with `ClearJoined`, `WithExplodeGap`'s gap and no direction. With no stages every part is in that last stage, which is the one-stage explosion of §5.1 unchanged. |
+| S2 | Each member keeps its parent joint and direction from the joint walk E1 and E2; the walk is the same whatever the stages. A part moves only in the stages that name it: until its first, it stays where it was assembled, and between stages it stays where the last one left it. A part named by several stages moves in each, from where the previous one left it, so a group lifted as one in one stage can be taken apart in the next. |
+| S3 | A member starts from its parent's offset when its parent is a member of the same stage (it is carried, as in §5.1), else from its own current offset. With a `Direction`, a member moves along that direction in its one sense; without one, along E2's direction in the senses E2 allows. |
+| S4 | `ClearJoined`: the travel is E3's, computed against the parent and the joined parts already moved in this or an earlier stage, at their current offsets. The offset is the travel plus the gap, as E4. |
+| S5 | `ClearAll`: the travel is the least `t ≥ 0` at which the member's box, moved from its start by `t` along the sense, overlaps no box of the **standing** parts, each grown by the gap on every side. Standing parts are all parts except the member itself, the members of its stage not yet moved in it (they leave too), and the parts joined to it that a later stage moves (they come out after it, as a pin leaves its bore). The overlap intervals of `t` against each standing box are read exactly from the box faces and merged; `t` is the least point at or after zero outside their union. The gap is already inside the test, so the offset is that `t` alone; `Travel` reports `t` less the gap, floored at zero: grown boxes close the holes between standing boxes that the plain boxes leave, so a part is not left in a space narrower than its gap, and `Moved − Travel` is the gap. When no `t` up to 10⁶ mm clears (a direction along a box that is longer than that, or a direction that is zero), the member stays at its start with `PathStuck`. |
+| S6 | `Together`: the members move by one offset. The moving box is the union of the members' boxes at their current offsets; the direction is the stage's `Direction`, else E2's direction of the first member in walk order whose parent is not a member; the clearing rule is the stage's, applied to the union box with the members excluded from the standing set. Members keep their relative places, so a later stage can take the group apart. |
+| S7 | `Path`, for each move: `PathClear` when the `Document.SweptBox` of the moving box along its travel is `StrictlyDisjoint` from the box of every standing part not joined to it, as E3 proves; `PathEnclosed` when the start box already meets such a part's box, so a box test cannot decide whether the part can leave it (a mechanism inside a housing); `PathBlocked` when the start is clear and the sweep meets one; `PathStuck` from S5; `PathNone` for a part that did not move, the zero value. The standing parts of a `ClearJoined` move are every part but the member and those joined to it; of a `ClearAll` move, S5's set less the parts joined to it. The path is swept to the travel without the gap. `Blocker` names the first such part in `Set` order, a part that starts inside the member's box before one the sweep meets. The sense choice of E3 applies with `PathClear` counting as free. |
+| S8 | `WithPartGap` replaces its part's gap in whatever stage moves it. `WithExplodeScale(s)` multiplies every final offset by `s`, a positive `Dimensionless` value, after the last stage: a uniform spread about the assembled layout, so the ground stays put unless a stage moved it. `Moved` is the length of the part's last move, from where that move started to where it ended, scale included; `Travel` and `Gap` are not scaled. A part that did not move has a zero `Gap`, so it is never short. Scaling by more than 1 can bring two parts that moved the same way closer, so `Overlaps`, `Clearance` and `Short` are read after scaling. |
+| S9 | After scaling, each part's `Clearance` is the least distance between its exploded box and the exploded box of any part it is not joined to, zero when they meet, with `Blocker` naming that part when its move has none. `Short` lists the parts whose `Clearance` is below their `Gap` by more than 10⁻⁹ of the gap (rounding of the box arithmetic), so a caller sees which parts the stages did not separate enough and against what. A part joined to every other part has the zero `Clearance` and is never short. |
+| S10 | Refusals, before `ctx` is read: an empty or repeated stage name, a stage with no members, an unknown part or group, a part named twice in one stage (directly or through a group), the ground in a stage without a `Direction` (with one, the ground moves by its gap along it, so two halves can open symmetrically), a non-finite `Direction`, a gap that is not a non-negative finite `Length`, and a scale that is not a positive finite `Dimensionless` value; each is `decad.ErrDegenerate`, `decad.ErrUnitKind`, `decad.ErrNegativeMagnitude` or `decad.ErrNotFinite` as `api-design.md` §12 sorts them. A part without a body in a stage, and a gap of a part no Set has, are `decad.ErrDegenerate` too; a group names its descendants as well, and a group with no part with a body is unknown. |
+
+`Leaders` (E5) join the two ports of each joint at the final offsets, so a pin's leader runs from its exploded place
+back to the bore it left whatever stage moved it.
+
+### 5.4 What a stage proves and what it costs
+
+Every clearing decision is a box decision. `ClearAll` proves that the member's exploded box is apart from each
+standing part's box by at least the gap at the end of its stage, and later stages and the scale may change that,
+which S9 reports. `PathClear` proves the straight path clear of every part not joined to it, box against box. Nothing
+proves that a part can leave an enclosure along its path: `PathEnclosed` says the box test cannot tell, which is the
+usual case for a mechanism inside a housing, and the exploded picture is a layout, not an assembly sequence (§1).
+
+Cost: S5 is one interval per standing part per sense, so `n²` box comparisons per stage, about 2,600 for 51 parts. S7
+adds one `SweptBox` per standing part per sense, the same calls §5.1 makes today, at about 30 ms for the crossbow's
+one stage (dated illustration). The standing boxes are computed once per stage. Larger distances cost nothing extra:
+`t` comes from the interval union, not from stepping.
+
+### 5.5 Output and determinism
+
+`Explode` is deterministic: stages run in the given order, members in walk order, senses and ties as E3, and every
+quantity is computed from boxes and offsets in a fixed order. Equal inputs give equal `Exploded` values and therefore
+equal `export.ThreeMFItems` bytes. `Stages`, `Scale` and the P7 fields of `ExplodedPart` record what was asked
+(`Gap`, `Stage`, `Dir`) and what came out (`Travel`, `Moved`, `Clearance`, `Path`, `Blocker`), so the gallery can
+assert a separation instead of reading pixels.
+
+Nothing else changes with stages. `Views` and `Graph` do not read `Exploded`. `Summary` prints the new columns
+(§8.2). `export.ThreeMFItems` takes each `ExplodedPart.Placement` as before, and `Leaders` follow the final offsets.
+
+### 5.6 What stays the caller's, and the rejected view-driven explosion
+
+The caller chooses the stages (which parts form the shell, which group lifts out, which way), the camera, the labels,
+the drawing of `Leaders`, and any animation between stages; kinetograph can play a stage-by-stage explosion from the
+offsets because each stage's offsets are a prefix of the result (a part not yet moved has a zero own offset).
+
+**A view-driven explosion is rejected.** Pushing parts that hide others along a viewing direction would tie the
+layout to one camera, while the same `Exploded` feeds several views, the exploded 3MF and the summary; the gallery
+draws the crossbow's one explosion from four cameras (an overall view, left, right and top). Occlusion is
+the renderer's knowledge (perspective, field of view, image size), and minimising it has no unique answer, so the
+result would shift with small model edits. Moving a part along its joint does not even help when the joint runs along
+the view. Instead `Exploded.Hidden(view)` reports, without moving anything, each pair whose boxes, projected
+orthographically along `view`, overlap with one nearer the viewer:
+
+```go
+type Occlusion struct {
+    Front, Back string
+    Covered     units.Value // Dimensionless: the share of Back's projected box that Front's covers
+}
+```
+
+A pair absent from the list cannot hide one another; a listed pair may. The caller then adds or changes a stage. A
+zero or non-finite `view` is `decad.ErrDegenerate` or `decad.ErrNotFinite`.
 
 ## 6. Schematic
 
@@ -730,7 +1010,9 @@ finite, non-negative `units.Density` (`decad.ErrUnitKind`, `decad.ErrNotFinite`,
 when `Joints` is set; the `Unexplained` pairs; the exploded depth and pull table when `Exploded` is set; the Mermaid
 diagram. Numbers print with their bounds. The joint table lists the Set's joints with the status the report gives;
 the cause, the evidence (`Measured`, `Engaged`, `Gap`, faces read) and the `Unexplained` table come with `Check`
-(P4a), and `Near` with P4b. `WriteMarkdown` takes no context: it reads volumes and faces only.
+(P4a), and `Near` with P4b. From P7 the exploded table adds the stage, the moved distance, the clearance, the path
+state and its blocker for each part, and lists `Short`. `WriteMarkdown` takes no context: it reads volumes and faces
+only.
 This is the agent's primary view of the schematic: it reads a
 page, not pixels. Images come from the consumer (§11).
 
@@ -740,7 +1022,8 @@ page, not pixels. Images come from the consumer (§11).
 |---|---|---|
 | Cylinder and plane geometry and normals | `Face.Surface`, `Face.NormalAt` | the matching of M3, M4 |
 | Triangles and their source faces, the mesh bound | `Body.Tessellate`, `Mesh.SourceFaces`, `Mesh.Bound` | none |
-| Pull-path clearance for explode | `Document.SweptBox`, `SweptBox.StrictlyDisjoint` | the sense choice of E3 |
+| Pull-path clearance for explode | `Document.SweptBox`, `SweptBox.StrictlyDisjoint` | the sense choice of E3, the path states of S7 |
+| Stage membership by group | `Set.Group` over `Document.ContainerOf` | none |
 | Gap bounds for a pair | `Body.Bounds` with its `Bound`, `Body.DistanceToPoint` on the body's cached verified mesh (`agent-docs/point-containment-design.md`) | the box gap of G1, the vertex sample of G2 |
 | Pair proof, when the caller has one | a `decad.Report` from `Document.Verify` with `WithClearances` (`agent-docs/clearance-design.md`), passed by `WithVerifyReport` | the reading of R1 |
 | Motion of joints | `decad.Linkage`, `Link.Revolute`, `Link.Prismatic`, `Linkage.DeclareJointContact`, `VerifyLinkage` | the bridge of §7.4 |
@@ -753,7 +1036,7 @@ New internal packages, each taking plain data (`r3.Vec`, slices, floats in milli
 | Package | Holds |
 |---|---|
 | `internal/jointinfer/` | cylinder and slot matching of M1–M6 on plain cylinder and plane records |
-| `internal/explodeplan/` | the breadth-first walk, travels and offsets of E1–E4, and the port points of V3 |
+| `internal/explodeplan/` | the breadth-first walk, travels and offsets of E1–E4, and the port points of V3; from P7 the stage runner of S1–S9 (interval union, union boxes, clearances, scale) and the projected-box overlap of `Hidden`, all on plain boxes, with the swept-box question still asked through its `Blocker` interface |
 | `internal/jointcheck/` | the per-kind rules J1–J5 and G1, G3–G5 on plain matches, boxes and distance intervals; the vertex sample of G2; the overlap witness of J3; the unexplained screen of U1 (P4a) |
 
 `parts` keeps only the adapters: it reads faces, boxes and meshes, calls `Body.DistanceToPoint` for the sample points
@@ -794,9 +1077,9 @@ item's placement it writes the exploded view as a file any 3MF viewer opens.
 | Gate item | Evidence |
 |---|---|
 | Input class stated | Axis matching: faces whose `Surface` is a `Plane` or `Cylinder`, exact or retained with a bound. Explode and views: any live solid body with bounds and a boundary-proved tessellation. Checking: the same faces for pin, slot and face joints, and any solid with bounds, plus a `VerifyAll` tessellation for point witnesses, for contact and keepout joints. 3MF items: any bodies `ThreeMF` writes, under any proper rigid placement. |
-| Behavior by geometric invariants | Coaxiality and radius difference (M3), opposed parallel planes (M4), box travel and swept-box disjointness (E3), box overlap centres (V3), box gaps and point-distance witnesses (G1, G2), plane distance and a shared-area witness (J3). None names a part. |
+| Behavior by geometric invariants | Coaxiality and radius difference (M3), opposed parallel planes (M4), box travel and swept-box disjointness (E3), box clearance intervals along a direction and box distances (S5, S9), projected box overlap (`Hidden`), box overlap centres (V3), box gaps and point-distance witnesses (G1, G2), plane distance and a shared-area witness (J3). None names a part. |
 | No part-specific or process-specific dispatch | No route reads a name, a fixture, a gallery model or a manufacturing process. Part names are labels only. |
-| Independent cases | §12 lists a pin and plate, a press fit, a slider in a groove, a lap with two pins, a pin through two plates, two touching blocks, two L-shaped plates whose boxes overlap but whose faces do not, a keepout pair with meeting boxes, a faceted-face joint and a rotated copy; each varies the geometry its rule reads. The crossbow is an acceptance run in the gallery, never a decad fixture (`agent-docs/testing.md` "Test scope"). |
+| Independent cases | §12 lists a pin and plate, a press fit, a slider in a groove, a lap with two pins, a pin through two plates, two touching blocks, two L-shaped plates whose boxes overlap but whose faces do not, a keepout pair with meeting boxes, a faceted-face joint, a rotated copy, and for P7 a housing holding a lever, a group lifted as one, a direction that never clears and a scaled layout; each varies the geometry its rule reads. Stage membership is the caller's naming, never a route the package chooses by part. The crossbow is an acceptance run in the gallery, never a decad fixture (`agent-docs/testing.md` "Test scope"). |
 
 ### 10.2 Root package placement
 
@@ -877,10 +1160,23 @@ computed geometry: offsets, axes, clearances, gaps, coordinates. Fixtures are th
 | `TestCheckWitnessSearch` | `WithWitnessSearch` sets `Near` on an unexplained touching pair and not on a pair whose boxes meet while its bodies stay 1 mm apart | P4b |
 | `TestLinkage` | a hinge and a slider become a revolute and a prismatic link with declared contacts; a loop joint comes back unplaced; `VerifyLinkage` runs on the result | P5 |
 | `TestInfer` | a lap with two pins infers both pins and nothing else; a rotated copy infers through retained tags (M5) | P6 |
+| `TestExplodeStagesDefault` | no stages gives the offsets of P1's `TestExplode` exactly, with every P7 field filled: `Stage` "", `Gap` 10 mm, `Moved` the offset's length | P7 |
+| `TestExplodeStagesHousing` | the §4 housing: the one-stage overlap, the three stage offsets, `Travel` 24 and `Moved` 34 for the lever, `PathEnclosed` with both blockers, zero `Overlaps` and `Short` | P7 |
+| `TestExplodeClearAllIntervals` | a box moving through a row of three standing boxes with gaps of 3, 8 and 30 mm between them and a 5 mm gap asked: it stops in the 30 mm space, not the 8 mm one, at the travel the interval union gives | P7 |
+| `TestExplodeTogether` | two parts lifted as one keep their relative place; a later stage takes them apart from there; `Leaders` follow the final offsets | P7 |
+| `TestExplodeStuck` | a stage direction along which a box never leaves a longer standing box reads `PathStuck` and leaves the part at its start | P7 |
+| `TestExplodePartGapAndScale` | `WithPartGap` changes one part's offset only; scale 2 doubles every offset, recomputes `Clearance`, and puts two parts that moved the same way into `Short` | P7 |
+| `TestExplodeStageRefusals` | every S10 refusal, each with its sentinel | P7 |
+| `TestExplodeHidden` | looking down −Z at the housing before and after staging: the top half covers the whole lever (`Covered` 1) before, nothing covers it after; a zero view is refused | P7 |
+| `TestExplodeDeterminism` | two runs with the same stages give equal `Exploded` values and equal `export.ThreeMFItems` bytes | P7 |
+| `TestExplodeJointPull` | a `Contact` with `Pull` +Y moves along +Y instead of the box-centre line and reads `PullDeclared`; a `Pull` on a pin picks the sense E3 would not; a `Pull` normal to the pin's axis is refused; a non-finite one is refused at `Join` | P7 |
+| `TestExplodeGroundStage` | the ground in a stage with a `Direction` moves by its gap, so two halves open symmetrically; without a `Direction` it is refused | P7 |
+| `TestExplodeLeaderSeparation` | the housing's pin leaders read the distance between the pin's box and each half's box; a pin left in its bore reads zero | P7 |
 
 Examples: `examples/parts_explode_example_test.go` (P1), `examples/parts_views_example_test.go` (P2),
-`examples/export_3mf_items_example_test.go` (E1), `examples/parts_summary_example_test.go` (P3) and
-`examples/parts_joints_example_test.go` (P4a), each with a verified `// Output:` block.
+`examples/export_3mf_items_example_test.go` (E1), `examples/parts_summary_example_test.go` (P3),
+`examples/parts_joints_example_test.go` (P4a) and `examples/parts_explode_stages_example_test.go` (P7), each with a
+verified `// Output:` block.
 
 **Acceptance case: the crossbow, in the gallery.** Per `agent-docs/testing.md` "Test scope", the 51-part model stays
 in `decad-gallery`. Each phase is accepted when its real output passes through the real consumer there (§15): P1 by
@@ -906,6 +1202,58 @@ matching alone takes 25 ms on cached meshes; `VerifyAll` tessellation of 51 part
 more with `WithWitnessSearch`, against 9 min 57 s for `Verify`. A miss on either target stops the PR and is reported
 with the measurement.
 
+**Staged explosion on the crossbow (P7).** The gallery's hand-tuned layout (`StagedExplosion` in
+`models/crossbow/schematic_explode.go`, dated illustration, 2026-11) shows what the stages must reproduce. The
+one-stage `Explode` left the receiver halves, side plates and links in front of the mechanism; it pulled the hooks,
+trigger, limbs and bands, whose joints are contacts or ties, along box-centre lines; 15 exploded box pairs met. The
+hand layout opens the receiver symmetrically and sends the side layers out along ±Y in the order the parts come off
+(receiver half 30 mm, side plate 70, hook 110, follower 140, link 170, hook pin 205; rivets 105 past the plate),
+lifts the trigger train (95 mm), carriage (55), disc (110) and lever (150) along +Z, sends the bow and fore-end
+forward along +X and the butt back. It leaves 2 meeting box pairs, both band strands, and every pin and slot joint's
+pin at least 20 mm from the part it passes through (58 joints pass). Its two stated needs were a distance scale or
+per-group distance, and a pull direction on a contact or tie joint; `WithExplodeScale`, `Stage.Gap`, `WithPartGap`
+and `Joint.Pull` answer them.
+
+The stages that reproduce it, ground `receiver-right` opened by its own stage, with `Joint.Pull` declared on the
+contact and tie joints of the hooks, trigger, limbs and bands (±Y by side for the hooks, +Z for the trigger, ±Y then
++X for the limbs) and on the receiver halves' face contact:
+
+| Stage | Members | Rule | Expected separation |
+|---|---|---|---|
+| open | `receiver-right` | `Direction` −Y, gap 30 mm | the ground moves 30 mm (S10) |
+| shell | `receiver-left`, `stock-rear`, `receiver-front`, the three stock pins | `ClearJoined`, gap 30 mm, joint directions | each 30 mm past the part it left |
+| plates | both side plates and the six rivets | `ClearAll`, gap 15 mm, joint axes, sense from `Pull` | every box 15 mm from every standing box |
+| hooks | both hooks | `ClearAll`, gap 15 mm, `Pull` ±Y | outside the plates |
+| followers | both followers | `ClearAll`, gap 15 mm, joint axes | outside the hooks |
+| links | both links | `ClearAll`, gap 15 mm, `Pull` ±Y | outside the followers |
+| hook pins | both hook pins | `ClearAll`, gap 15 mm, joint axes | outside the links |
+| train | release nut, sear, trigger, trigger bar, safety and their five pins | `Together`, `ClearAll`, gap 20 mm, `Direction` +Z | the group's box 20 mm above everything standing |
+| top | carriage, disc, lever, lug and lever pins | `ClearAll`, gap 20 mm, `Direction` +Z | each 20 mm above everything standing |
+| train pins | the train's five pins again | `ClearAll`, gap 10 mm, joint axes | each 10 mm out of the lifted train |
+| "" | the bow, its pins and posts, the band strands | `ClearJoined`, `WithExplodeGap`, `Pull` on the limbs | forward of the fore-end |
+
+Eleven stages for 51 parts replace 40 hand-set offsets; every distance comes from the boxes, so a model edit moves
+the layout with it. Targets, each read from `Exploded`, not from an image:
+
+- `Overlaps` holds no pair of two `Manufactured` parts after the last stage; pairs with a band strand are listed and
+  accepted, because a strand runs between parts that move apart. The hand layout's 2 is the bar to match.
+- Every `PinInBore` and `PinInSlot` `Leader` has `Separation` at least 20 mm, as the hand layout achieves.
+- `Short` names no part of the open, shell, plates, hooks, followers, links, hook pins, train or top stages.
+- `Hidden` along each of the gallery's four exploded cameras reports no `Covered` of 1 for the release nut, sear,
+  trigger bar, hooks, carriage or links.
+- `Explode` with the eleven stages takes under 0.5 s on the built model (one stage takes about 30 ms, dated
+  illustration), and two runs give equal exploded 3MF bytes.
+
+The table is a plan, not a measurement. The first P7 crossbow run (2026-11, ground `receiver-right`, the gallery's own
+`Schematic` joints with `Pull` declared) reached every target with thirteen stages: the table's eleven, with the
+train's five parts moving one by one (`Together` kept the interlocked release nut and sear overlapping, so it is not
+used for the train) and the bow in two stages of its own (risers and limbs along +X, then their pins on their axes),
+and with every gap 20 mm except the shell's 10 for `receiver-front` by `WithPartGap`. It left no two manufactured parts
+meeting (two band-strand pairs meet), every pin and slot leader at least 20 mm, no `Hidden` cover of 1 on the release
+nut, sear, trigger bar, hooks, carriage or links along the gallery's four cameras, `Short` naming only the bow pins and
+the band strands, and the largest offset 287 mm (the lug pin; the hand layout's 205 mm). Explode took 38 ms and two
+runs wrote equal 3MF bytes.
+
 **CI shards** (`agent-docs/testing.md`). `parts/` is a new package: the CI workflow's race job must name it, or
 `TestCIWorkflowRaceShardsCoverEveryPackage` fails; it joins the `./decadtest/ ./export/ ./internal/decaderr/ ./parts/` job
 (the support-package job and shard 0), moving to its own runner only if measured time asks. The new internal packages fall under `./internal/...`. No
@@ -928,8 +1276,10 @@ boundary gate evidence in its description. P1 also carries this document. Sizes 
 | P4b | point witnesses (G2, G5), `Contact` and `Keepout` (J4, J5), `WithWitnessSearch` (U2), `WithVerifyReport` (R1–R3) | P4a | 600 |
 | P5 | `Set.Linkage` | P4a | 450 |
 | P6 | `Infer` and `JointReport.Inferred` | P4a | 300 |
+| P7 | the §5.2–§5.6 design delta; `Stage`, `Clearing`, `PathState`, `Occlusion`; `Joint.Pull` and `PullDeclared`; `WithExplodeStages`, `WithPartGap`, `WithExplodeScale`; the stage runner in `internal/explodeplan` (S1–S9), the ground in a stage with a `Direction`; the P7 fields of `Exploded`, `ExplodedPart` and `Leader`; `Exploded.Hidden`; the exploded table's new columns in `Summary`; staged example | P1–P6 (landed) | 850 |
 
-P1, E1, P2 and P3 have landed.
+P1 to P6 have landed. P7 is one PR; `Hidden` (about 100 lines with its test) can leave it for a follow-up if review
+asks for a smaller one.
 
 **Parallel work.** P4a comes first: it decides the pin, slot and face joints, 65 of the crossbow's 74 checked joints,
 without a single distance query. After P4a, P4b, P5 and P6 run in parallel; none edits another's rules. P5 reads
@@ -942,8 +1292,9 @@ nobody can look at. If review asks for a smaller first PR, P1 splits into P1a (`
 Before P1 grows past its first case, `Explode` runs on the real 51-part crossbow and the count of joints whose `Pull`
 is `BoxCentres` (no axis from faces or declaration) is recorded. Before P4a grows past the pin case, `Check` runs on
 the real crossbow and its time and status counts are recorded against §12's targets; before P4b grows past the
-`Contact` case, the same for the witnesses. If a run misses its target, expansion of that PR stops and the blocker is
-reported.
+`Contact` case, the same for the witnesses. Before P7 grows past the housing case, the gallery's crossbow runs the
+stages of §12 and its `Overlaps`, `Short` and timing are recorded. If a run misses its target, expansion of that PR
+stops and the blocker is reported.
 
 ## 14. Risks and open questions
 
@@ -955,6 +1306,9 @@ reported.
 | The cost of `VerifyAll` tessellation and of `DistanceToPoint` per call on the crossbow's parts is unmeasured. The gallery already meshes all 51 parts with `VerifyAll` at 0.1 mm in its tests. | The P4a and P4b crossbow runs against §12's targets. |
 | A 64-point sample per side can miss a small touching spot, leaving a true contact `Undecided`. | `CauseNoWitness` says so; raising the sample is a constant to revisit with the P4b measurement. |
 | E3's box test is coarse: a long pin's swept box may meet a neighbour's box though the pin's path is clear. | E3 then falls back to the shorter travel, and `Overlaps` reports any exploded boxes that still meet. |
+| Boxes are a poor stand-in for long, diagonal or L-shaped parts: a crossbow link's box covers much empty space, so `ClearAll` can push parts far past what the eye needs, and `Overlaps` can list pairs that do not touch. | The P7 crossbow run shows how wide the result gets. Clearing against meshes instead of boxes is a later option if boxes prove too coarse; P7 does not add it. |
+| `ClearAll` along an axis can send a part through the far side of a wide enclosure; the move is legal, and `PathEnclosed` says the box test could not judge the path. | A stage `Direction` or an earlier stage that opens the enclosure; the caller chooses. |
+| A `Pull` declared on a joint states the author's intent, not geometry; a wrong one sends a part the wrong way. | `Pull` reads `PullDeclared` in the output, and the `Overlaps`, `Short` and `Separation` readings show a bad result. |
 | The request mentioned a joint-chain checking program on branch `feat-joint-chain-check`. No such branch or worktree exists; the work merged as #665, "check joint chains with VerifyLinkage", and is the linkage check §7.4 consumes. | Nothing further, unless another branch was meant. |
 
 ## 15. Gallery adoption
@@ -976,6 +1330,10 @@ schematic, the connection diagram and the part sheets come from `parts` only:
    no `Unexplained` pair has `Near` set. `internal/meshgap` stays for the poses the cycle tests sweep, where the
    gallery needs a gap screen on every pair at every step, which `Check` does not do.
 6. After P5: the model's motion checks read their joints from the same `Set`.
+7. After P7: `StagedExplosion` and its offset table are deleted; the model declares `Pull` on the joints of §12's
+   plan and passes its stages to `Set.Explode`,
+   the exploded image and the exploded 3MF read the same `Exploded`, and `TestSchematicExplode` asserts the §12
+   targets on `Overlaps`, leader `Separation`, `Short` and `Hidden`.
 
 **Printing checks stay in the gallery.** `TestPrintSize` (every printed part within a 200 mm cube),
 `TestPrintWithoutSupports` (down-facing faces only on the bed in a chosen build direction) and the pins' "lying on

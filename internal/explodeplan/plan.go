@@ -4,7 +4,6 @@
 package explodeplan
 
 import (
-	"context"
 	"math"
 
 	"github.com/lestrrat-3d/r3"
@@ -39,124 +38,7 @@ type Joint struct {
 	Source int
 }
 
-// Blocker answers whether a part, swept from its assembled box moved by from to
-// that box moved by to, stays strictly clear of every other part's box except
-// those in ignore. offsets holds each part's offset so far; a part no joint has
-// reached yet sits at its assembled place.
-type Blocker interface {
-	Clear(ctx context.Context, part int, from, to r3.Vec, offsets []r3.Vec, ignore []int) (bool, error)
-}
-
-// Result is one part's place in the plan.
-type Result struct {
-	Offset r3.Vec
-	Depth  int // -1 when no joint reaches the part
-	Joint  int // the parent joint's index, -1 for the ground and unreached parts
-	Source int // the parent joint's Source, -1 when Joint is -1
-}
-
 const eps = 1e-9
-
-// Plan walks the joints breadth-first from ground, joints in input order, and
-// returns one Result per box. A part reached twice keeps its first parent. gap
-// is added to every travel.
-func Plan(ctx context.Context, boxes []Box, joints []Joint, ground int, gap float64, blocker Blocker) ([]Result, error) {
-	res := make([]Result, len(boxes))
-	for i := range res {
-		res[i] = Result{Depth: -1, Joint: -1, Source: -1}
-	}
-	res[ground].Depth = 0
-	offsets := make([]r3.Vec, len(boxes))
-	queue := []int{ground}
-	for len(queue) > 0 {
-		p := queue[0]
-		queue = queue[1:]
-		for ji, j := range joints {
-			var child int
-			switch p {
-			case j.A:
-				child = j.B
-			case j.B:
-				child = j.A
-			default:
-				continue
-			}
-			if child == p || res[child].Depth >= 0 {
-				continue
-			}
-			own, err := ownOffset(ctx, boxes, joints, res, offsets, j, p, child, gap, blocker)
-			if err != nil {
-				return nil, err
-			}
-			res[child] = Result{Offset: res[p].Offset.Add(own), Depth: res[p].Depth + 1, Joint: ji, Source: j.Source}
-			offsets[child] = res[child].Offset
-			queue = append(queue, child)
-		}
-	}
-	return res, nil
-}
-
-// ownOffset is the child's move away from its parent. The parts the child is
-// joined to never block it, because they are joined to it; those already
-// placed are cleared by the travel itself.
-func ownOffset(ctx context.Context, boxes []Box, joints []Joint, res []Result, offsets []r3.Vec, j Joint, parent, child int,
-	gap float64, blocker Blocker) (r3.Vec, error) {
-	dir, both := direction(boxes, j, parent, child)
-	if dir == (r3.Vec{}) {
-		return r3.Vec{}, nil
-	}
-	cleared := []int{parent}
-	partners := []int{parent}
-	for _, o := range joints {
-		other := -1
-		switch child {
-		case o.A:
-			other = o.B
-		case o.B:
-			other = o.A
-		}
-		if other < 0 || other == child {
-			continue
-		}
-		partners = append(partners, other)
-		if res[other].Depth >= 0 {
-			cleared = append(cleared, other)
-		}
-	}
-	start := res[parent].Offset
-	senses := []r3.Vec{dir}
-	if both {
-		senses = append(senses, dir.Scale(-1))
-	}
-	type choice struct {
-		move r3.Vec
-		free bool
-		t    float64
-	}
-	var best *choice
-	for _, s := range senses {
-		t := 0.0
-		for _, c := range cleared {
-			t = math.Max(t, travel(shift(boxes[child], start), shift(boxes[c], res[c].Offset), s))
-		}
-		if math.IsInf(t, 1) {
-			continue
-		}
-		free, err := blocker.Clear(ctx, child, start, start.Add(s.Scale(t)), offsets, partners)
-		if err != nil {
-			return r3.Vec{}, err
-		}
-		c := choice{move: s, free: free, t: t}
-		if best == nil || better(c.free, c.t, c.move, best.free, best.t, best.move) {
-			cc := c
-			best = &cc
-		}
-	}
-	if best == nil {
-		return r3.Vec{}, nil
-	}
-	return best.move.Scale(best.t + gap), nil
-}
 
 func shift(b Box, o r3.Vec) Box { return Box{Min: b.Min.Add(o), Max: b.Max.Add(o)} }
 

@@ -61,9 +61,9 @@ func Example_parts_summary() {
 	//
 	// Ground: plate.
 	//
-	// | Part | Depth | Pull | Offset (mm) |
-	// |---|---|---|---|
-	// | plate | 0 | none | (0.00, 0.00, 0.00) |
+	// | Part | Depth | Pull | Stage | Offset (mm) | Moved (mm) | Clearance (mm) | Path |
+	// |---|---|---|---|---|---|---|---|
+	// | plate | 0 | none | - | (0.00, 0.00, 0.00) | 0.00 | 0.00 | none |
 	//
 	// ## Connection diagram
 	//

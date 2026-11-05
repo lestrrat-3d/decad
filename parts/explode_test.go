@@ -82,7 +82,7 @@ func lapSet(t *testing.T) *parts.Set {
 		parts.Part{Name: namePin2, Kind: parts.Manufactured, Body: cylinder(t, doc, 15, 3, -2, 14)})
 	mustJoin(t, s,
 		parts.Joint{Name: nameLap, Kind: parts.FaceContact, A: nameTop, B: nameBase},
-		parts.Joint{Name: "pin1~base", Kind: parts.PinInBore, A: namePin1, B: nameBase, Motion: parts.Turns},
+		parts.Joint{Name: jointPin1Base, Kind: parts.PinInBore, A: namePin1, B: nameBase, Motion: parts.Turns},
 		parts.Joint{Name: "pin2~base", Kind: parts.PinInBore, A: namePin2, B: nameBase, Motion: parts.Turns},
 		parts.Joint{Name: "pin1~top", Kind: parts.PinInBore, A: namePin1, B: nameTop, Motion: parts.Turns},
 		parts.Joint{Name: "pin2~top", Kind: parts.PinInBore, A: namePin2, B: nameTop, Motion: parts.Turns})
