@@ -4,10 +4,12 @@ import (
 	"archive/zip"
 	"bytes"
 	"context"
+	"encoding/xml"
 	"fmt"
 	"io"
 
 	"github.com/lestrrat-3d/decad"
+	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
 
@@ -41,6 +43,21 @@ func ThreeMF(ctx context.Context, w io.Writer, body *decad.Body, tol units.Value
 		return err
 	}
 
+	return writeThreeMFPackage(ctx, w, []threeMFObject{{kind: body.Kind(), vertices: mesh.Vertices(),
+		triangles: mesh.Triangles()}})
+}
+
+// threeMFObject is one mesh object of a package. A name is written when set.
+type threeMFObject struct {
+	name      string
+	kind      decad.BodyKind
+	vertices  []r3.Vec
+	triangles [][3]int
+}
+
+// writeThreeMFPackage builds the whole archive before it writes to w, so a
+// failure before the copy leaves w untouched.
+func writeThreeMFPackage(ctx context.Context, w io.Writer, objects []threeMFObject) error {
 	var archive bytes.Buffer
 	zw := zip.NewWriter(&archive)
 	if err := writeThreeMFPart(zw, "[Content_Types].xml", threeMFContentTypes); err != nil {
@@ -53,7 +70,7 @@ func ThreeMF(ctx context.Context, w io.Writer, body *decad.Body, tol units.Value
 	if err != nil {
 		return fmt.Errorf("export: 3MF model part: %w", err)
 	}
-	if err := writeThreeMFModel(ctx, model, body.Kind(), mesh); err != nil {
+	if err := writeThreeMFModel(ctx, model, objects); err != nil {
 		return err
 	}
 	if err := zw.Close(); err != nil {
@@ -97,35 +114,51 @@ func writeThreeMFPart(zw *zip.Writer, name, content string) error {
 	return nil
 }
 
-func writeThreeMFModel(ctx context.Context, w io.Writer, kind decad.BodyKind, mesh *decad.Mesh) error {
-	objectType := "model"
-	if kind == decad.BodySheet {
-		objectType = "surface"
-	}
+func writeThreeMFModel(ctx context.Context, w io.Writer, objects []threeMFObject) error {
 	sw := stickyWriter{w: w}
 	sw.printf("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n")
 	sw.printf("<model unit=\"millimeter\" xmlns=\"http://schemas.microsoft.com/3dmanufacturing/core/2015/02\">\n")
-	sw.printf("<resources><object id=\"1\" type=\"%s\"><mesh><vertices>\n", objectType)
-	for _, v := range mesh.Vertices() {
-		if err := ctx.Err(); err != nil {
-			return err
+	sw.printf("<resources>")
+	for i, obj := range objects {
+		objectType := "model"
+		if obj.kind == decad.BodySheet {
+			objectType = "surface"
 		}
-		sw.printf("<vertex x=\"%s\" y=\"%s\" z=\"%s\"/>\n", fmtCoord(v.X), fmtCoord(v.Y), fmtCoord(v.Z))
-		if sw.err != nil {
-			return fmt.Errorf("export: 3MF model part: %w", sw.err)
+		name := ""
+		if obj.name != "" {
+			var esc bytes.Buffer
+			if err := xml.EscapeText(&esc, []byte(obj.name)); err != nil {
+				return fmt.Errorf("export: 3MF object name: %w", err)
+			}
+			name = fmt.Sprintf(" name=\"%s\"", esc.String())
 		}
+		sw.printf("<object id=\"%d\" type=\"%s\"%s><mesh><vertices>\n", i+1, objectType, name)
+		for _, v := range obj.vertices {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+			sw.printf("<vertex x=\"%s\" y=\"%s\" z=\"%s\"/>\n", fmtCoord(v.X), fmtCoord(v.Y), fmtCoord(v.Z))
+			if sw.err != nil {
+				return fmt.Errorf("export: 3MF model part: %w", sw.err)
+			}
+		}
+		sw.printf("</vertices><triangles>\n")
+		for _, tri := range obj.triangles {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+			sw.printf("<triangle v1=\"%d\" v2=\"%d\" v3=\"%d\"/>\n", tri[0], tri[1], tri[2])
+			if sw.err != nil {
+				return fmt.Errorf("export: 3MF model part: %w", sw.err)
+			}
+		}
+		sw.printf("</triangles></mesh></object>")
 	}
-	sw.printf("</vertices><triangles>\n")
-	for _, tri := range mesh.Triangles() {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		sw.printf("<triangle v1=\"%d\" v2=\"%d\" v3=\"%d\"/>\n", tri[0], tri[1], tri[2])
-		if sw.err != nil {
-			return fmt.Errorf("export: 3MF model part: %w", sw.err)
-		}
+	sw.printf("</resources><build>")
+	for i := range objects {
+		sw.printf("<item objectid=\"%d\"/>", i+1)
 	}
-	sw.printf("</triangles></mesh></object></resources><build><item objectid=\"1\"/></build></model>\n")
+	sw.printf("</build></model>\n")
 	if sw.err != nil {
 		return fmt.Errorf("export: 3MF model part: %w", sw.err)
 	}

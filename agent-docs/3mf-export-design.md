@@ -34,6 +34,21 @@ not change coordinates, indices, or winding.
   tessellation, ZIP construction, or cancellation leaves it untouched. An I/O
   error while copying the completed archive may leave a partial file.
 
+## Several bodies
+
+`export.ThreeMFItems(ctx, w, items, tol, opts...)` writes several bodies as one package. It knows nothing of parts or
+of any process; a caller that explodes an assembly passes each part's placement.
+
+- An `export.ThreeMFItem` is a name, a body and an `r3.Transform`. Item `i` becomes object `i+1` and build item
+  `i+1`, in input order, with the name as the object's `name` attribute, XML-escaped. An empty name writes none.
+- Vertices are moved by the placement before they are written, not through the 3MF `transform` attribute, so every
+  reader places them the same way. Triangles keep their indices and winding.
+- A body named by several items is tessellated once, at the one tolerance and options.
+- A placement that reflects or is not a valid transform, a nil body, an empty item list, a nil context or writer
+  are `ErrDegenerate`; a reflection would turn the mesh inside out. Equal input writes equal bytes.
+- `ThreeMF` and `ThreeMFItems` share the package writer, so the archive layout, determinism and the
+  build-before-write rule above hold for both.
+
 The [3MF Core specification](https://github.com/3MFConsortium/spec_core/blob/master/3MF%20Core%20Specification.md)
 defines the ZIP package, StartPart relationship, mesh indices, object types,
 and millimetre units.

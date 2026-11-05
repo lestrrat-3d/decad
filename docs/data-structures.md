@@ -129,6 +129,7 @@ configuration option.
 | `decad.ClosestPoint` | struct | The nearest point of a body or face to a query point, its distance reading and how far it can lie from the true surface. | `Body.ClosestPoint`, `Face.ClosestPoint` |
 | `decad.MeshBody` | struct | An imported triangle mesh: vertices, triangles and what they say. Not a `decad.Body`. | `decad.ReadSTL`, `decad.ReadOBJ`, `decad.ReadThreeMF`, `decad.ReadSTEP`, `decad.NewMeshBody` |
 | `decad.MeshImportOption` | option set | A limit on `decad.ReadSTL`, `decad.ReadOBJ`, `decad.ReadThreeMF`, `decad.ReadSTEP` or `decad.ReadIGES`: `decad.WithMaxMeshTriangles` or `decad.WithMaxMeshBytes`. | The caller |
+| `export.ThreeMFItem` | struct | One object of a 3MF package: a name, a body and a rigid placement. | The caller |
 | `decad.SubDCage` | struct | A polygon cage: vertices and the faces that index them, wound counter-clockwise seen from outside. | `decad.SubDMesh` |
 | `decad.InfillSpec` | struct | An infill: the lattice kind, the cell length, the wall level, the samples to a cell and an optional skin thickness. | `decad.Infill` |
 | `decad.LatticeKind` | enum | Which lattice an infill uses: `GyroidInfill`, `SchwarzPInfill`, `DiamondInfill`, `NeoviusInfill`, `IWPInfill`, `FischerKochSInfill`, `LidinoidInfill` or `SplitPInfill`. | `decad.InfillSpec` |
