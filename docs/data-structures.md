@@ -447,6 +447,7 @@ declared `parts.Axis`, and a declared clearance, minimum gap or direction where 
 | `parts.JointKind`, `parts.Motion` | enum | The form of a connection and what it lets part A do. | The caller |
 | `parts.Exploded`, `parts.ExplodedPart`, `parts.Leader` | struct | The exploded layout: a rigid placement and label anchor per part, and the segment each joint draws. | `Set.Explode` |
 | `parts.PullSource` | enum | Where a part's pull direction came from: faces, a declared axis, a contact normal or box centres. | `ExplodedPart.Pull` |
+| `parts.Stage`, `parts.Clearing`, `parts.PathState`, `parts.Occlusion` | struct, enum | One step of a staged explosion and what it must clear; what a part's path met; a pair where one part may hide another along a view. | The caller, `ExplodedPart.Path`, `Exploded.Hidden` |
 | `parts.Graph`, `parts.Node`, `parts.Edge` | struct | The connection diagram: parts as nodes, joints as typed edges. | `Set.Graph` |
 | `parts.Views`, `parts.PartView`, `parts.Port` | struct | Each part posed for drawing alone: a placement, bounds, label anchor and the points where its joints attach. | `Set.Views` |
 | `parts.BOM`, `parts.BOMRow` | struct | The bill of materials: a row per spec with its parts, quantity, material, volume and mass. | `Set.BOM` |

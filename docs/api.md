@@ -516,6 +516,12 @@ as it found it.
 - `Set.BOM` returns the bill of materials: one `parts.BOMRow` per `Spec`, with quantity, material, the volume of one part
   and its mass. `parts.Summary.WriteMarkdown` writes the bill, the joints, the exploded layout and the connection diagram
   as one Markdown page.
+- `Set.Explode` also takes stages: `parts.WithExplodeStages` runs ordered `parts.Stage` values, each moving named parts or
+  container groups along their joints or a stated direction, by what they must clear (`parts.ClearJoined` or
+  `parts.ClearAll`), alone or together. `parts.WithPartGap` sets one part's gap and `parts.WithExplodeScale` scales
+  every offset. `Joint.Pull` states the direction a part leaves its neighbour. Each `parts.ExplodedPart` reports its
+  stage, direction, travel, clearance and `parts.PathState`, each `parts.Leader` its `Separation`, and
+  `Exploded.Hidden` lists the pairs where one part may hide another along a view direction.
 - `Set.Check` judges each declared joint against the faces and bounds of its two parts and lists the pairs of parts whose
   boxes meet with no joint naming them. It never runs `Document.Verify`. Each `parts.JointResult` is `Confirmed`,
   `Contradicted`, `Undecided` or `NotChecked`, and one that is not `Confirmed` carries a typed `parts.Cause`.

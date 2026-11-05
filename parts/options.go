@@ -20,10 +20,13 @@ type config struct {
 	poses      map[string]r3.Transform
 	verify     *decad.Report
 	witness    bool
+	stages     []Stage
+	partGaps   map[string]units.Value
+	scale      float64
 }
 
 func defaultConfig() config {
-	return config{fitTol: 0.05, axisTol: 0.5 * math.Pi / 180, maxFit: 1, contactTol: 0.25, gap: 10}
+	return config{fitTol: 0.05, axisTol: 0.5 * math.Pi / 180, maxFit: 1, contactTol: 0.25, gap: 10, scale: 1}
 }
 
 // option is the one concrete option type. The three public option interfaces

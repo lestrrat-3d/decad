@@ -24,7 +24,7 @@ func TestInfer(t *testing.T) {
 	s := lapSet(t)
 	got, err := s.Infer(t.Context())
 	require.NoError(t, err)
-	require.ElementsMatch(t, []string{"pin1~base", "pin1~top", "pin2~base", "pin2~top"}, inferredNames(got))
+	require.ElementsMatch(t, []string{jointPin1Base, "pin1~top", "pin2~base", "pin2~top"}, inferredNames(got))
 	for _, ij := range got {
 		require.Equal(t, parts.PinInBore, ij.Joint.Kind)
 		require.Equal(t, parts.Fixed, ij.Joint.Motion)
@@ -106,7 +106,7 @@ func TestInferFacetedAndCheckInferred(t *testing.T) {
 		parts.Part{Name: nameTop, Kind: parts.Manufactured, Body: bore(5)},
 		parts.Part{Name: namePin1, Kind: parts.Manufactured, Body: cylinder(t, doc2, 5, 3, -2, 14)})
 	mustJoin(t, partial, parts.Joint{Name: "lap", Kind: parts.FaceContact, A: nameTop, B: nameBase},
-		parts.Joint{Name: "pin1~base", Kind: parts.PinInBore, A: namePin1, B: nameBase})
+		parts.Joint{Name: jointPin1Base, Kind: parts.PinInBore, A: namePin1, B: nameBase})
 	rep, err = partial.Check(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, []string{"pin1~top"}, inferredNames(rep.Inferred))
@@ -136,7 +136,7 @@ func TestInferRotatedCopy(t *testing.T) {
 		parts.Part{Name: namePin1, Kind: parts.Manufactured, Body: turned(cylinder(t, doc, 5, 3, -2, 14))})
 	got, err := s.Infer(t.Context())
 	require.NoError(t, err)
-	require.ElementsMatch(t, []string{"pin1~base", "pin1~top"}, inferredNames(got))
+	require.ElementsMatch(t, []string{jointPin1Base, "pin1~top"}, inferredNames(got))
 	want := turn.ApplyDir(r3.Vec{Z: 1})
 	for _, ij := range got {
 		require.InDelta(t, 0.2, ij.Measured.Value.Base(), 1e-6)

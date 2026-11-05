@@ -12,17 +12,20 @@ import (
 )
 
 const (
-	namePlate = "plate"
-	namePin   = "pin"
-	nameBase  = "base"
-	nameStrap = "strap"
-	nameTop   = "top"
-	nameBlock = "block"
-	nameLap   = "lap"
-	nameArm   = "arm"
-	nameHinge = "hinge"
-	namePin1  = "pin1"
-	namePin2  = "pin2"
+	namePlate     = "plate"
+	namePin       = "pin"
+	nameBase      = "base"
+	nameStrap     = "strap"
+	nameTop       = "top"
+	nameBlock     = "block"
+	nameLap       = "lap"
+	nameArm       = "arm"
+	nameHinge     = "hinge"
+	namePin1      = "pin1"
+	namePin2      = "pin2"
+	nameLeft      = "left"
+	nameRight     = "right"
+	jointPin1Base = "pin1~base"
 )
 
 // block extrudes the rectangle x0..x1, y0..y1 from height z0 by height.

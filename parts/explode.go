@@ -3,6 +3,7 @@ package parts
 import (
 	"context"
 	"fmt"
+	"math"
 	"slices"
 
 	"github.com/lestrrat-3d/decad"
@@ -16,11 +17,13 @@ import (
 type PullSource int
 
 const (
-	PullNone      PullSource = iota // the ground, or a part no joint reaches
-	AxisFromFaces                   // the axis of the matched cylinder faces
-	AxisDeclared                    // the joint's declared Axis
-	FaceNormal                      // the normal of the matched contact faces
-	BoxCentres                      // the line between the two parts' box centres
+	PullNone       PullSource = iota // the ground, or a part no joint reaches
+	AxisFromFaces                    // the axis of the matched cylinder faces
+	AxisDeclared                     // the joint's declared Axis
+	FaceNormal                       // the normal of the matched contact faces
+	BoxCentres                       // the line between the two parts' box centres
+	PullDeclared                     // the joint's declared Pull
+	StageDirection                   // the direction its stage stated
 )
 
 // String returns the lower-case words for the source.
@@ -34,6 +37,10 @@ func (p PullSource) String() string {
 		return "face normal"
 	case BoxCentres:
 		return "box centres"
+	case PullDeclared:
+		return "pull declared"
+	case StageDirection:
+		return "stage direction"
 	}
 	return "none"
 }
@@ -44,6 +51,11 @@ type Exploded struct {
 	Parts    []ExplodedPart // in Set order, body-less parts omitted
 	Leaders  []Leader
 	Overlaps [][2]string // part pairs whose exploded boxes still meet
+	Stages   []string    // the stage names in the order they ran; "" is the last, implicit stage
+	Scale    units.Value // the WithExplodeScale multiplier, Dimensionless
+	Short    []string    // parts whose Clearance is below their Gap, in Set order
+
+	boxes []explodeplan.Box // the exploded boxes, in Parts order, for Hidden
 }
 
 // ExplodedPart is one part's place in the exploded layout.
@@ -54,12 +66,23 @@ type ExplodedPart struct {
 	Depth     int          // joint steps from the ground; -1 when no joint reaches it
 	Anchor    r3.Vec       // label anchor: exploded box centre
 	Pull      PullSource
+	Stage     string      // the last stage that moved it; "" for the ground and the implicit last stage
+	Dir       r3.Vec      // the unit direction of that stage's move; zero when it did not move
+	Travel    units.Value // the distance that stage's clearing rule needed, before the gap and scale
+	Gap       units.Value // the gap asked for there: its WithPartGap, else its stage's, else WithExplodeGap
+	Moved     units.Value // the length of that move, scale included
+	Clearance units.Value // after the last stage and the scale: the least box distance to any part it is not joined to
+	Path      PathState
+	Blocker   string // the part that blocked or enclosed the path, or that Clearance was read against
 }
 
 // Leader is the dotted line one joint draws in the exploded view.
 type Leader struct {
 	Joint    string
 	From, To r3.Vec // exploded coordinates: the port on A, the port on B
+	// Separation is the distance between the two parts' exploded boxes, zero
+	// when they meet.
+	Separation units.Value
 }
 
 // reading is what the faces and the declaration say about one joint.
@@ -185,6 +208,10 @@ func fromDecad(b decad.Box) explodeplan.Box {
 // disjoint from every other part's box except those joined to it, else the
 // shorter travel, then the sense with a positive largest component; the offset
 // is the travel that clears the parent plus WithExplodeGap.
+//
+// WithExplodeStages runs that in ordered stages, WithPartGap and
+// WithExplodeScale tune the distances, and Joint.Pull states a direction
+// (agent-docs/parts-design.md §5.3).
 func (s *Set) Explode(ctx context.Context, opts ...ExplodeOption) (*Exploded, error) {
 	c, err := foldOptions(opts)
 	if err != nil {
@@ -192,9 +219,6 @@ func (s *Set) Explode(ctx context.Context, opts ...ExplodeOption) (*Exploded, er
 	}
 	if ctx == nil || s == nil || s.doc == nil {
 		return nil, fmt.Errorf("parts: %w: nil context or set", decad.ErrDegenerate)
-	}
-	if err := ctx.Err(); err != nil {
-		return nil, err
 	}
 	if err := s.live(); err != nil {
 		return nil, err
@@ -213,6 +237,13 @@ func (s *Set) Explode(ctx context.Context, opts ...ExplodeOption) (*Exploded, er
 	}
 	ground, err := s.pickGround(c.ground, idx, plan)
 	if err != nil {
+		return nil, err
+	}
+	stages, err := s.resolveStages(c, ground, idx, plan)
+	if err != nil {
+		return nil, err
+	}
+	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
 	fc := newFaceCache(false)
@@ -237,6 +268,9 @@ func (s *Set) Explode(ctx context.Context, opts ...ExplodeOption) (*Exploded, er
 		if err != nil {
 			return nil, err
 		}
+		if err := applyPull(&r, j, c); err != nil {
+			return nil, err
+		}
 		joints = append(joints, explodeplan.Joint{A: a, B: b, Mode: r.mode, Dir: r.dir, Source: int(r.src)})
 		readings = append(readings, r)
 		jointOf = append(jointOf, ji)
@@ -245,17 +279,41 @@ func (s *Set) Explode(ctx context.Context, opts ...ExplodeOption) (*Exploded, er
 	for k, i := range idx {
 		blk.bodies[k] = s.parts[i].Body
 	}
-	res, err := explodeplan.Plan(ctx, boxes, joints, ground, c.gap, blk)
+	order, nodes := explodeplan.Walk(len(idx), joints, ground)
+	res, err := explodeplan.Run(ctx, explodeplan.Input{Boxes: boxes, Joints: joints, Ground: ground, Order: order, Nodes: nodes,
+		Stages: stages.stages, DefaultGap: c.gap, PartGap: stages.partGap, Scale: c.scale, Blocker: blk})
 	if err != nil {
 		return nil, err
 	}
-	return s.buildExploded(idx, ground, boxes, res, joints, readings, jointOf)
+	return s.buildExploded(idx, ground, boxes, res, nodes, joints, readings, jointOf, stages.names, c.scale)
 }
 
-func (s *Set) buildExploded(idx []int, ground int, boxes []explodeplan.Box, res []explodeplan.Result,
-	joints []explodeplan.Joint, readings []reading, jointOf []int) (*Exploded, error) {
-	ex := &Exploded{Ground: s.parts[idx[ground]].Name}
+// applyPull folds a joint's declared Pull into its reading: it replaces the face
+// normal and the box-centre line, and on an axis it picks the sense. A Pull at
+// right angles to the axis names no sense and is refused.
+func applyPull(r *reading, j Joint, c config) error {
+	u, ok := j.Pull.Normalize()
+	if !ok {
+		return nil
+	}
+	if r.mode == explodeplan.ModeAxis && r.axis != nil {
+		along := r.dir.Dot(u)
+		if math.Abs(along) <= math.Sin(c.axisTol) {
+			return fmt.Errorf("parts: %w: the pull of joint %q is at right angles to its axis", decad.ErrDegenerate, j.Name)
+		}
+		r.dir = r.dir.Scale(math.Copysign(1, along))
+	} else {
+		r.dir = u
+	}
+	r.src, r.mode = PullDeclared, explodeplan.ModeAway
+	return nil
+}
+
+func (s *Set) buildExploded(idx []int, ground int, boxes []explodeplan.Box, res []explodeplan.Result, nodes []explodeplan.Node,
+	joints []explodeplan.Joint, readings []reading, jointOf []int, stageNames []string, scale float64) (*Exploded, error) {
+	ex := &Exploded{Ground: s.parts[idx[ground]].Name, Stages: stageNames, Scale: units.Scalar(scale)}
 	moved := make([]explodeplan.Box, len(boxes))
+	mm := units.Millimeters
 	for k, i := range idx {
 		off := res[k].Offset
 		t, err := r3.Translation(off)
@@ -264,15 +322,32 @@ func (s *Set) buildExploded(idx []int, ground int, boxes []explodeplan.Box, res 
 		}
 		moved[k] = explodeplan.Box{Min: boxes[k].Min.Add(off), Max: boxes[k].Max.Add(off)}
 		pull := PullNone
-		if res[k].Joint >= 0 {
+		switch {
+		case res[k].Source == explodeplan.StageDirection:
+			pull = StageDirection
+		case nodes[k].Joint >= 0:
 			pull = PullSource(res[k].Source)
 		}
+		stage := ""
+		if res[k].Stage >= 0 {
+			stage = stageNames[res[k].Stage]
+		}
+		blocker := ""
+		if res[k].Blocker >= 0 {
+			blocker = s.parts[idx[res[k].Blocker]].Name
+		}
 		ex.Parts = append(ex.Parts, ExplodedPart{Name: s.parts[i].Name, Offset: off, Placement: t,
-			Depth: res[k].Depth, Anchor: moved[k].Centre(), Pull: pull})
+			Depth: nodes[k].Depth, Anchor: moved[k].Centre(), Pull: pull, Stage: stage, Dir: res[k].Dir,
+			Travel: mm(res[k].Travel), Gap: mm(res[k].Gap), Moved: mm(res[k].Moved), Clearance: mm(res[k].Clearance),
+			Path: PathState(res[k].Path), Blocker: blocker})
+		if res[k].Short {
+			ex.Short = append(ex.Short, s.parts[i].Name)
+		}
 	}
 	for n, j := range joints {
 		ex.Leaders = append(ex.Leaders, Leader{Joint: s.joints[jointOf[n]].Name,
-			From: readings[n].port.Add(res[j.A].Offset), To: readings[n].port.Add(res[j.B].Offset)})
+			From: readings[n].port.Add(res[j.A].Offset), To: readings[n].port.Add(res[j.B].Offset),
+			Separation: mm(explodeplan.BoxDistance(moved[j.A], moved[j.B]))})
 	}
 	for a := range moved {
 		for b := a + 1; b < len(moved); b++ {
@@ -281,6 +356,7 @@ func (s *Set) buildExploded(idx []int, ground int, boxes []explodeplan.Box, res 
 			}
 		}
 	}
+	ex.boxes = moved
 	return ex, nil
 }
 
@@ -332,22 +408,41 @@ func (b *sweptBlocker) at(ctx context.Context, part int, from, to r3.Vec) (decad
 	return b.doc.SweptBox(ctx, b.bodies[part], decad.PoseSegment{From: f, To: t, Duration: units.Seconds(1)})
 }
 
-func (b *sweptBlocker) Clear(ctx context.Context, part int, from, to r3.Vec, offsets []r3.Vec, ignore []int) (bool, error) {
+func (b *sweptBlocker) Path(ctx context.Context, part int, from, to r3.Vec, offsets []r3.Vec, ignore []int) (explodeplan.PathState,
+	int, error) {
 	moving, err := b.at(ctx, part, from, to)
 	if err != nil {
-		return false, err
+		return 0, -1, err
 	}
+	start, err := b.at(ctx, part, from, from)
+	if err != nil {
+		return 0, -1, err
+	}
+	enclosed, blocked := -1, -1
 	for k := range b.bodies {
 		if k == part || slices.Contains(ignore, k) {
 			continue
 		}
 		still, err := b.at(ctx, k, offsets[k], offsets[k])
 		if err != nil {
-			return false, err
+			return 0, -1, err
 		}
-		if !moving.StrictlyDisjoint(still) {
-			return false, nil
+		if moving.StrictlyDisjoint(still) {
+			continue
+		}
+		if !start.StrictlyDisjoint(still) {
+			if enclosed < 0 {
+				enclosed = k
+			}
+		} else if blocked < 0 {
+			blocked = k
 		}
 	}
-	return true, nil
+	switch {
+	case enclosed >= 0:
+		return explodeplan.PathEnclosed, enclosed, nil
+	case blocked >= 0:
+		return explodeplan.PathBlocked, blocked, nil
+	}
+	return explodeplan.PathClear, -1, nil
 }

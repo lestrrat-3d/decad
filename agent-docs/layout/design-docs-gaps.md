@@ -20,7 +20,7 @@ The rules for rows live in `agent-docs/layout.md`.
 | `agent-docs/path-pattern-design.md` | `PathPatternCopies`: copies spaced at equal arc length along a `Path`, and the path sampler. |
 | `agent-docs/blend-variants-design.md` | Chord-length fillet, angle chamfer and the oblique boss fillet. |
 | `agent-docs/arrange-design.md` | `Arrange`: shelf packing of body footprints onto a flat bed by translation. |
-| `agent-docs/parts-design.md` | `parts`: exploded view and schematic of placed bodies; typed joints, part views, BOM, summary, a structural joint check without `Verify`, linkage bridge; `export.ThreeMFItems`. |
+| `agent-docs/parts-design.md` | `parts`: staged exploded view and schematic of placed bodies; typed joints, part views, BOM, summary, a structural joint check without `Verify`, linkage bridge; `export.ThreeMFItems`. |
 | `agent-docs/section-outline-design.md` | `Body.SectionOutline`: the mesh cut by a plane as closed outlines, its on-plane rule and its bound. |
 | `agent-docs/boss-design.md` | `Boss`: a round boss and its blind pilot hole in one atomic union-and-cut commit. |
 | `agent-docs/mesh-wall-survey-design.md` | The wall and undercut surveys of a faceted body by rays through its held mesh: what they prove and what they cannot. |

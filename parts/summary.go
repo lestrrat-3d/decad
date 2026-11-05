@@ -73,10 +73,21 @@ func (s Summary) WriteMarkdown(w io.Writer) error {
 	}
 	if s.Exploded != nil {
 		fmt.Fprintf(&b, "\n## Exploded view\n\nGround: %s.\n\n", s.Exploded.Ground)
-		b.WriteString("| Part | Depth | Pull | Offset (mm) |\n|---|---|---|---|\n")
+		b.WriteString("| Part | Depth | Pull | Stage | Offset (mm) | Moved (mm) | Clearance (mm) | Path |\n|---|---|---|---|---|---|---|---|\n")
 		for _, p := range s.Exploded.Parts {
-			fmt.Fprintf(&b, "| %s | %d | %s | (%.2f, %.2f, %.2f) |\n", cell(p.Name), p.Depth, p.Pull, p.Offset.X, p.Offset.Y,
-				p.Offset.Z)
+			path := p.Path.String()
+			if p.Blocker != "" && (p.Path == PathBlocked || p.Path == PathEnclosed) {
+				path += " by " + cell(p.Blocker)
+			}
+			fmt.Fprintf(&b, "| %s | %d | %s | %s | (%.2f, %.2f, %.2f) | %.2f | %.2f | %s |\n", cell(p.Name), p.Depth, p.Pull,
+				cell(p.Stage), p.Offset.X, p.Offset.Y, p.Offset.Z, p.Moved.Base(), p.Clearance.Base(), path)
+		}
+		if len(s.Exploded.Short) > 0 {
+			b.WriteString("\nParts closer to a part they are not joined to than their gap:")
+			for _, n := range s.Exploded.Short {
+				fmt.Fprintf(&b, " %s;", n)
+			}
+			b.WriteString("\n")
 		}
 		if len(s.Exploded.Overlaps) > 0 {
 			b.WriteString("\nExploded boxes that still meet:")

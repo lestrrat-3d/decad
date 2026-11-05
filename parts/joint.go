@@ -90,6 +90,11 @@ type Joint struct {
 	// Direction is a Slides joint's direction for a FaceContact, in assembled
 	// world coordinates. Zero elsewhere.
 	Direction r3.Vec
+	// Pull is the direction in which A leaves B in an exploded view, in assembled
+	// world coordinates, or zero. On a PinInBore or PinInSlot it picks the sense
+	// along the axis; on any other kind it is the direction. Its length does not
+	// matter.
+	Pull r3.Vec
 }
 
 func (j Joint) geometric() bool { return j.Kind != Tie }
@@ -129,6 +134,9 @@ func (s *Set) Join(j Joint) error {
 	}
 	if !finiteVec(j.Direction) {
 		return fmt.Errorf("parts: %w: joint %q direction", decad.ErrNotFinite, j.Name)
+	}
+	if !finiteVec(j.Pull) {
+		return fmt.Errorf("parts: %w: joint %q pull", decad.ErrNotFinite, j.Name)
 	}
 	if j.Kind == Keepout && j.MinGap.Base() <= 0 {
 		return fmt.Errorf("parts: %w: keepout %q needs a positive min gap", decad.ErrDegenerate, j.Name)

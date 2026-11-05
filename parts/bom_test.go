@@ -136,7 +136,7 @@ func TestSummaryMarkdownSections(t *testing.T) {
 	require.Contains(t, page, "| x | y |")
 	require.Contains(t, page, "| within 0.10 mm |")
 	require.Contains(t, page, "Ground: plate.")
-	require.Contains(t, page, "| pin | 1 | axis from faces | (0.00, 0.00, 22.00) |")
+	require.Contains(t, page, "| pin | 1 | axis from faces | - | (0.00, 0.00, 22.00) | 22.00 | 0.00 | clear |")
 	require.Contains(t, page, `pin -- "pin in bore, turns, confirmed" --> plate`)
 
 	require.ErrorIs(t, parts.Summary{}.WriteMarkdown(&out), decad.ErrDegenerate)
