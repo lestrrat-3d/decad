@@ -579,7 +579,7 @@ the first push (expect conflicts only in `agent-docs/missing-features.md` and `.
 ### Task 2: `internal/boolchain` normal form and plan
 
 - **Files**: new `internal/boolchain/chain.go`, `internal/boolchain/plan.go`, `internal/boolchain/chain_test.go`,
-  `internal/boolchain/plan_test.go`; `agent-docs/layout/operation-observability.md` (row).
+  `internal/boolchain/plan_test.go`; `agent-docs/layout/verification.md` (row).
 - **What**: `Literal`, `Chain`, `Source`, `Flatten`, `Step`, `Steps`, `Run`, `MaxLiterals` per Chain normal form,
   Eligibility of an expandable body and Plan. No caller yet.
 - **Depends on**: Task 1.

@@ -29,9 +29,8 @@ first.
   records, mass properties and free-form curves.
 - `agent-docs/layout/design-docs-gaps.md`: design documents of the features added to close gap rows.
 - `agent-docs/layout/features.md`: feature files and the cap-loop chamfer.
-- `agent-docs/layout/modify-booleans.md`: modify operations.
-- `agent-docs/layout/booleans.md`: Boolean files.
-- `agent-docs/layout/verification.md`: verification, survey and check files.
+- `agent-docs/layout/booleans.md`: Boolean files and modify operations.
+- `agent-docs/layout/verification.md`: verification, survey, check and observability files.
 - `agent-docs/layout/output-repository.md`: tessellation and export, then
   examples, test kits, tooling and CI.
 - `agent-docs/layout/internal-core.md`: internal packages for arithmetic, records,
@@ -39,13 +38,7 @@ first.
 - `agent-docs/layout/internal-revolve-sweep.md`: Revolve, Sweep, coil and pair-sweep path internal packages.
 - `agent-docs/layout/internal-checks.md`: internal packages for bounds, surveys,
   sweeps and clearance.
-- `agent-docs/layout/internal-surveys.md`: wall, undercut and concave-radius survey internal packages.
-- `agent-docs/layout/internal-loft.md`: Loft, point-loft, cone and contact internal packages.
-- `agent-docs/layout/internal-prism.md`: prism, stacked, cup and Shell internal packages.
-- `agent-docs/layout/internal-placement.md`: body layout and path-spacing internal packages.
-- `agent-docs/layout/operation-observability.md`: operation history and diagnostics internals.
-- `agent-docs/layout/internal-trim.md`: trim-graph internal packages.
-- `agent-docs/layout/internal-blends.md`: retained, saddle and oblique edge-blend internal packages.
+- `agent-docs/layout/internal-features.md`: Loft, prism, Shell, placement, trim-graph and edge-blend internal packages.
 
 ## Splitting oversized agent files
 

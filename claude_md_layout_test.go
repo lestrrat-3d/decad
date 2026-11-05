@@ -177,20 +177,13 @@ var (
 		layoutPartSpec("design-docs.md"),
 		layoutPartSpec("design-docs-gaps.md"),
 		layoutPartSpec("features.md"),
-		layoutPartSpec("modify-booleans.md"),
 		layoutPartSpec("booleans.md"),
 		layoutPartSpec("verification.md"),
 		layoutPartSpec("output-repository.md"),
 		layoutPartSpec("internal-core.md"),
 		layoutPartSpec("internal-revolve-sweep.md"),
 		layoutPartSpec("internal-checks.md"),
-		layoutPartSpec("internal-surveys.md"),
-		layoutPartSpec("internal-loft.md"),
-		layoutPartSpec("internal-prism.md"),
-		layoutPartSpec("internal-placement.md"),
-		layoutPartSpec("operation-observability.md"),
-		layoutPartSpec("internal-trim.md"),
-		layoutPartSpec("internal-blends.md"),
+		layoutPartSpec("internal-features.md"),
 	}
 )
 

@@ -66,7 +66,7 @@ export of the new blend surfaces; topology-changing offsets (merge, split, vanis
   trim-graph receiver takes ball erosion. `shell.go` and trim §1 state the split. Decisions records it.
 - Increments 2 and 3a carry staged tasks (Staged tasks). Increments 3b–12 are outlines: the PR that implements one
   first replaces its outline with tasks in this document, in the same PR.
-- New internal packages get rows in a new part file `agent-docs/layout/internal-trim.md`, because
+- New internal packages get rows in `agent-docs/layout/internal-features.md`, because
   `agent-docs/layout/internal-core.md` (12208 bytes) and `internal-checks.md` (11939 bytes) are near the 12288-byte
   budget.
 - Fixtures reuse the apitest helpers `wedgedPlate`, `blendPlate` and `newRetentionScene`
