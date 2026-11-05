@@ -166,6 +166,10 @@ func (k *Kernel) circlePlaneFE(f *clearance.CFace, e *clearance.CEdge, sink *cle
 		if clearance.ClrBoxDist(f.Box, e.Box) > k.tol {
 			return
 		}
+		if lo, hi, ok := k.tiltedRimOverPlane(f, e); ok {
+			sink.CoarseWith(lo, hi, f.Box, e.Box, f.Witnesses(k.tol), e.Witnesses(k.tol))
+			return
+		}
 		sink.Unsure = true
 		return
 	}
@@ -495,7 +499,8 @@ func (k *Kernel) windowedCircleOrCoarse(f *clearance.CFace, e *clearance.CEdge, 
 //     the constant D = √(ρ² + h²), h the axial offset of s' from c;
 //   - a line spine of unit direction a: dist(p, line) = |P(c − a₀) + ρ·P(u)|,
 //     P the projection off a, so it lies in [ρ·cos α − δ, ρ + δ] with
-//     δ = dist(c, line) and sin α ≤ |n × a|, since |u·a| ≤ sin α.
+//     δ = dist(c, line) and sin α ≤ |n × a|, since |u·a| ≤ sin α
+//     (circleAxisBand).
 //
 // When the band clears r by more than tol on one side the whole edge lies
 // strictly outside (or inside) the face's carrier: the two never meet, and
@@ -521,9 +526,7 @@ func (k *Kernel) windowedCircleFE(f *clearance.CFace, e *clearance.CEdge) (float
 		d := math.Sqrt(rho*rho + h*h)
 		dLo, dHi = d-delta, d+delta
 	} else {
-		delta := clearance.PointSpineDist(e.Center, f)
-		sin := math.Min(1, proofbound.AbsSumUpper(e.Axis.Cross(f.Axis).Len(), proofbound.AnalyticRoundBound(1)))
-		dLo, dHi = rho*math.Sqrt(1-sin*sin)-delta, rho+delta
+		dLo, dHi = circleAxisBand(rho, clearance.PointSpineDist(e.Center, f), clearance.TiltSine(e.Axis, f.Axis))
 	}
 	dLo, dHi = freeform.DownRound(dLo-charge), proofbound.AbsSumUpper(dHi, charge)
 	var lo float64
@@ -777,6 +780,13 @@ func (k *Kernel) circleCircleEE(ea, eb *clearance.CEdge, sink *clearance.CellSin
 	fb := &clearance.CFace{Kind: clearance.CkTorus, Anchor: eb.Center, Axis: eb.Axis, RefU: eb.RefU, RefV: eb.RefV, Major: eb.Radius}
 	crits, ok := k.circleCircleCrits(fa, fb)
 	if !ok {
+		// No closed form: the circle pair band tightens the coarse enclosure
+		// when it clears the tolerance (agent-docs/clearance-band-design.md
+		// §4.1).
+		if lo, hi, ok := k.windowedCircleEE(ea, eb); ok {
+			sink.CoarseWith(lo, hi, ea.Box, eb.Box, ea.Witnesses(k.tol), eb.Witnesses(k.tol))
+			return
+		}
 		sink.Coarse(ea.Box, eb.Box, ea.Witnesses(k.tol), eb.Witnesses(k.tol))
 		return
 	}

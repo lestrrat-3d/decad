@@ -589,6 +589,11 @@ trimmed inner face alone and asks the oracle nothing:
   caps cross the pin's wall inside their trims — which `sink.Overlap` reads
   ahead of any interval. A face with a nonzero `sectionDelta` has no model
   at all (§2).
+- **The other band readings.** Two circular edges, a plane crossed by a
+  tilted cylinder, a circular edge over a tilted plane and the flat features
+  of placed bodies reach the same undecided band.
+  `agent-docs/clearance-band-design.md` owns their readings, under this
+  cell's rules.
 
 ## 5. Intervals: witnesses, conservative bounds, refinement
 
@@ -910,6 +915,8 @@ reads `Suspect`, never an error, never a silent pass:
 | 2 | the `BB` refiner (the 1- and 2-variable azimuth searches; the `Minor ≥ Major` torus downgrade path), the coaxial and co-directional 2D reductions | non-coplanar contacts |
 | 3 | the remaining §6 certified contact types | osculating and edge/vertex contacts (§9) |
 | 4 | the windowed nested cell (§4): a sphere or cylinder face whose spine window lies strictly inside a sphere or cylinder carrier, read without an oracle answer, and its edge-tier twin for a circular edge about the same axis; its band test (two cylinder faces, anchors `1e-14` apart, `Gap` within `2·tol` of `0.5`, with a ball in a bore, a pin in a ball, a ball in a ball and a pin tilted `1e-12` rad in both orders, red when the cell is deleted: undecided; and a pin that fills its bore undecided, red when a lower bound at or below `tol` is admitted), its tilt test (a pin of radius `5` and half-height `5` turned `1e-6` rad about `X` through its centre in a bore of radius `5.5`, `Gap` within `1e-7` of `0.5 − 5e-6` and the lower bound at or below the true minimum, red when `d_sup` reads the window's midpoint instead of its ends), its rim test (a bore's rim outside a pin, a pin's rim inside a bore, a bore's rim around a ball and a tilted pin inside a rim, each `1e-14` off, `Gap` within `2·tol` of `0.5`, red when the twin is deleted: the coarse zero), its coarse-enclosure tests (a rim of radius `30` axially clear of a pin and a short pin axially clear of a bore, each lower bound at least the boxes' `12` with a finite upper bound, red when the windowed bound replaces the coarse enclosure), and `agent-docs/linkage-check-design.md` §11's scene 8 | a pin that fills its bore; a circle spine in the undecided band |
+| 5 | the pin-in-bore band readings of `agent-docs/clearance-band-design.md` §4: the circle pair band, the crossing annulus and the rim height band | that document's §5 and §6 |
+| 6 (planned) | the flat-feature readings of `agent-docs/clearance-band-design.md` §5 | that document's §6 less the near-parallel plane faces |
 
 The cup adapter lands in payload verification §13. Until its stage lands, an
 invoked pair containing a cup remains `Suspect`; the analytic kernel does not

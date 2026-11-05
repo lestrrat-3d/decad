@@ -67,8 +67,8 @@ The rules for rows live in `agent-docs/layout.md`.
 | `internal/pointquery/` | Exact point-to-mesh distance and nearest point, the body and face distance and closest-point readings, the occupied-volume transfer proof, exact prism and line-only A7 Cut classifiers, and their Boolean-history combination. See point-containment design. |
 | `internal/facetedtopology/` | Chains audited mesh face boundaries, proves axial chain directions, selects loops, resolves source-group faces and matches cap patches. See evaluator §9. |
 | `internal/clearance/` | Clearance geometry, edge carriers, shell witnesses and cell sums. See clearance design. |
-| `internal/clearance/facepair/` | Face-pair cells. See clearance §4. |
-| `internal/clearance/curvecells/` | Face-edge and edge-edge cells. See clearance §4. |
+| `internal/clearance/facepair/` | Face-pair cells. See clearance §4 and clearance-band §4–§5. |
+| `internal/clearance/curvecells/` | Face-edge and edge-edge cells. See clearance §4 and clearance-band §4–§5. |
 | `internal/clearance/tier/` | Vertex cells and ruling proofs. See clearance §3/§6. |
 | `internal/clearance/spine/` | Point, line and circle spine cell pairs. See clearance §4. |
 | `internal/stitchflux/` | Stitch exact revolve tag admission, face flux and mass proofs. See surface §6.4. |
