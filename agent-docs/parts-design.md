@@ -1,8 +1,7 @@
 # Parts design
 
-The package lands in the PRs of §13, and each PR carries the part of this document it implements. P1 has landed:
-`Kind`, `Material`, `Part`, `Joint`, `Axis`, `Set`, axis matching (§7.1), `Explode` and `Graph`. Everything else
-here is design only until its PR.
+The package lands in the PRs of §13, and each PR carries the part of this document it implements. P1 and E1 have landed: `Kind`, `Material`, `Part`, `Joint`, `Axis`, `Set`, axis matching (§7.1), `Explode`, `Graph` and
+`export.ThreeMFItems`. P2 adds `Views`. Everything else here is design only until its PR.
 
 **`github.com/lestrrat-3d/decad/parts` is a generic schematic and exploded view of a build made of separate bodies.**
 Its two primary outputs are:
@@ -528,8 +527,8 @@ type Port struct {
 | Rule | Decision |
 |---|---|
 | V1 | `Placement` is the translation that puts the body's box centre at the origin, keeping the assembled orientation, or the caller's `WithPartPose` transform. A part sheet then shows every part the way it was modelled, side by side. |
-| V2 | `Bounds` is the box of the body's mesh vertices moved by `Placement`, grown by the mesh bound and the rotation's rounding, as Arrange G4 grows its footprints (`agent-docs/arrange-design.md`). For a pure translation it is the body's `Bounds` moved. |
-| V3 | A port's `Point` is the midpoint of the matched or declared axis over the engagement, or the contact face's centre for a `FaceContact`, or else the centre of the two parts' box overlap (or of the shortest segment between their boxes when they do not overlap). `Dir` is the axis or the face normal; it is zero for the box fallback. |
+| V2 | `Bounds` is the box of the body's mesh vertices moved by `Placement`, grown by the mesh bound, the body's box bound and the rotation's rounding (eight units in the last place of the largest coordinate), as Arrange G4 grows its footprints (`agent-docs/arrange-design.md`). For a pure translation it is the body's `Bounds` moved, with its own exactness. A pose that is a reflection or not a valid transform is `decad.ErrDegenerate`, as is a pose naming a part that is unknown or has no body. |
+| V3 | A port's `Point` is the midpoint of the matched axis over the engagement, or the declared axis's point nearest the box overlap centre, or the contact face's centre for a `FaceContact`, or else the centre of the two parts' box overlap (or of the shortest segment between their boxes when they do not overlap); it is the part's own box centre when the other part has no body. `Dir` is the axis, or the part's own outward face normal for a `FaceContact` (the two ends of one contact get opposite directions); it is zero for the box fallback. |
 
 Views pose each part for drawing, not for making. `parts` offers no "lay it flat" or "best side down" frame, because
 choosing a side for a part to rest on is a process decision. A caller that wants another pose passes it with

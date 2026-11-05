@@ -40,8 +40,8 @@ func Example_export_3mf_items() {
 
 	var out bytes.Buffer
 	err = export.ThreeMFItems(ctx, &out, []export.ThreeMFItem{
-		{Name: "plate", Body: plate, Placement: stay},
-		{Name: "pin", Body: pin, Placement: lift},
+		{Name: partNamePlate, Body: plate, Placement: stay},
+		{Name: partNamePin, Body: pin, Placement: lift},
 	}, units.Millimeters(0.1))
 	if err != nil {
 		fmt.Printf("failed to export: %s\n", err)
@@ -72,7 +72,7 @@ func Example_export_3mf_items() {
 		fmt.Printf("objects: %d, build items: %d\n",
 			strings.Count(string(model), "<object "), strings.Count(string(model), "<item "))
 		fmt.Printf("named plate and pin: %v\n",
-			strings.Contains(string(model), `name="plate"`) && strings.Contains(string(model), `name="pin"`))
+			strings.Contains(string(model), `name="`+partNamePlate+`"`) && strings.Contains(string(model), `name="`+partNamePin+`"`))
 	}
 	// Output:
 	// objects: 2, build items: 2
