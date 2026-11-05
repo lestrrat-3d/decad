@@ -6,6 +6,7 @@ import (
 	"math"
 
 	"github.com/lestrrat-3d/decad"
+	"github.com/lestrrat-3d/decad/internal/explodeplan"
 	"github.com/lestrrat-3d/decad/internal/jointinfer"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -18,25 +19,29 @@ type bodyFaces struct {
 	cylFaces   []*decad.Face
 	planes     []jointinfer.Plane
 	planeFaces []*decad.Face
-	faceted    int  // faces whose tag is not a plane or a cylinder
-	unmeshed   bool // the body would not tessellate, so no face could be read
+	planeTris  [][][3]r3.Vec     // parallel to planes: the mesh triangles of each plane face
+	unread     []explodeplan.Box // vertex boxes of the faces whose tag is neither a plane nor a cylinder
+	unmeshed   bool              // the body would not tessellate, so no face could be read
 	box        decad.Box
+	meshTol    float64 // the chord tolerance the faces were read at, millimetres
+	meshBound  float64 // that mesh's bound, millimetres
+	verified   bool    // the mesh was built at VerifyAll
 }
 
 // faceTolerances are the tessellation tolerances tried in turn: the mesh is
 // read only for which face each vertex belongs to, and a mesh Boolean result
 // refuses a tolerance finer than its own bound.
-var faceTolerances = []float64{0.05, 0.5, 5}
+var faceTolerances = []float64{0.05, 0.1, 0.2, 0.5, 5}
 
 // readFaces reads the cylinder and plane faces of b. A face whose Surface is
 // neither a Plane nor a Cylinder is counted and never asked for a normal.
-func readFaces(ctx context.Context, b *decad.Body) (*bodyFaces, error) {
+func readFaces(ctx context.Context, b *decad.Body, verified bool) (*bodyFaces, error) {
 	box, err := b.Bounds()
 	if err != nil {
 		return nil, err
 	}
 	bf := &bodyFaces{box: box}
-	mesh, err := meshOf(ctx, b)
+	mesh, tol, ver, err := meshOf(ctx, b, verified)
 	if err != nil {
 		if errors.Is(err, decad.ErrUnsupported) {
 			bf.unmeshed = true
@@ -44,6 +49,7 @@ func readFaces(ctx context.Context, b *decad.Body) (*bodyFaces, error) {
 		}
 		return nil, err
 	}
+	bf.meshTol, bf.meshBound, bf.verified = tol, mesh.Bound().Base(), ver
 	verts, tris, src := mesh.Vertices(), mesh.Triangles(), mesh.SourceFaces()
 	perFace := map[*decad.Face][]int{}
 	for ti, t := range tris {
@@ -60,38 +66,55 @@ func readFaces(ctx context.Context, b *decad.Body) (*bodyFaces, error) {
 		case decad.Cylinder:
 			bf.addCylinder(f, s, verts, idx)
 		default:
-			bf.faceted++
+			bf.markUnread(verts, idx)
 		}
 	}
 	return bf, nil
 }
 
-// meshOf tessellates b at the first of faceTolerances it accepts.
-func meshOf(ctx context.Context, b *decad.Body) (*decad.Mesh, error) {
-	var mesh *decad.Mesh
+// meshOf tessellates b at the first of faceTolerances it accepts, and says the
+// tolerance it settled on and whether the mesh is VerifyAll. With verified, every
+// rung is tried at VerifyAll first, and only a body that refuses all of them is
+// read at VerifyNone.
+func meshOf(ctx context.Context, b *decad.Body, verified bool) (*decad.Mesh, float64, bool, error) {
+	levels := []decad.Verification{decad.VerifyNone}
+	if verified {
+		levels = []decad.Verification{decad.VerifyAll, decad.VerifyNone}
+	}
 	var err error
-	for _, tol := range faceTolerances {
-		mesh, err = b.Tessellate(ctx, units.Millimeters(tol), decad.WithVerification(decad.VerifyNone))
-		if err == nil || !errors.Is(err, decad.ErrUnsupported) {
-			break
+	for _, level := range levels {
+		for _, tol := range faceTolerances {
+			var mesh *decad.Mesh
+			mesh, err = b.Tessellate(ctx, units.Millimeters(tol), decad.WithVerification(level))
+			if err == nil {
+				return mesh, tol, level == decad.VerifyAll, nil
+			}
+			if !errors.Is(err, decad.ErrUnsupported) {
+				return nil, 0, false, err
+			}
 		}
 	}
-	return mesh, err
+	return nil, 0, false, err
 }
 
 func (bf *bodyFaces) addPlane(f *decad.Face, verts []r3.Vec, idx []int) {
 	v0 := verts[idx[0]]
 	n, err := f.NormalAt(v0)
 	if err != nil {
-		bf.faceted++
+		bf.markUnread(verts, idx)
 		return
 	}
 	u, ok := n.Value.Normalize()
 	if !ok {
-		bf.faceted++
+		bf.markUnread(verts, idx)
 		return
 	}
 	lo, hi := boxOf(verts, idx)
+	tris := make([][3]r3.Vec, 0, len(idx)/3)
+	for k := 0; k+2 < len(idx); k += 3 {
+		tris = append(tris, [3]r3.Vec{verts[idx[k]], verts[idx[k+1]], verts[idx[k+2]]})
+	}
+	bf.planeTris = append(bf.planeTris, tris)
 	bf.planes = append(bf.planes, jointinfer.Plane{Normal: u, Offset: u.Dot(v0), Min: lo, Max: hi,
 		Bound: n.Bound.Base()})
 	bf.planeFaces = append(bf.planeFaces, f)
@@ -100,13 +123,13 @@ func (bf *bodyFaces) addPlane(f *decad.Face, verts []r3.Vec, idx []int) {
 func (bf *bodyFaces) addCylinder(f *decad.Face, s decad.Cylinder, verts []r3.Vec, idx []int) {
 	axis, ok := s.Axis.Normalize()
 	if !ok {
-		bf.faceted++
+		bf.markUnread(verts, idx)
 		return
 	}
 	v0 := verts[idx[0]]
 	n, err := f.NormalAt(v0)
 	if err != nil {
-		bf.faceted++
+		bf.markUnread(verts, idx)
 		return
 	}
 	radial := v0.Sub(s.Origin)
@@ -119,6 +142,12 @@ func (bf *bodyFaces) addCylinder(f *decad.Face, s decad.Cylinder, verts []r3.Vec
 	bf.cyls = append(bf.cyls, jointinfer.Cylinder{Origin: s.Origin, Axis: axis, Radius: s.Radius.Base(),
 		Convex: n.Value.Dot(radial) > 0, Lo: lo, Hi: hi, Bound: n.Bound.Base()})
 	bf.cylFaces = append(bf.cylFaces, f)
+}
+
+// markUnread records a face the matching cannot read, by its vertex box.
+func (bf *bodyFaces) markUnread(verts []r3.Vec, idx []int) {
+	lo, hi := boxOf(verts, idx)
+	bf.unread = append(bf.unread, explodeplan.Box{Min: lo, Max: hi})
 }
 
 func boxOf(verts []r3.Vec, idx []int) (r3.Vec, r3.Vec) {
@@ -134,18 +163,21 @@ func boxOf(verts []r3.Vec, idx []int) (r3.Vec, r3.Vec) {
 
 // faceCache reads each body once per query.
 type faceCache struct {
-	byID map[*decad.Body]*bodyFaces
+	byID     map[*decad.Body]*bodyFaces
+	verified bool
 }
 
-func newFaceCache() *faceCache {
-	return &faceCache{byID: map[*decad.Body]*bodyFaces{}}
+// newFaceCache returns a cache that meshes bodies at VerifyNone, or at VerifyAll
+// first when verified.
+func newFaceCache(verified bool) *faceCache {
+	return &faceCache{byID: map[*decad.Body]*bodyFaces{}, verified: verified}
 }
 
 func (c *faceCache) get(ctx context.Context, b *decad.Body) (*bodyFaces, error) {
 	if bf, ok := c.byID[b]; ok {
 		return bf, nil
 	}
-	bf, err := readFaces(ctx, b)
+	bf, err := readFaces(ctx, b, c.verified)
 	if err != nil {
 		return nil, err
 	}

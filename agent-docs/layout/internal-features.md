@@ -40,6 +40,7 @@ Boolean result. The rules for rows live in `agent-docs/layout.md`.
 | `internal/shellseparation/` | Bounded source-shell and held-copy separation, exact slab projections, and placement error. See faceted-vertex-bounds §3.7. |
 | `internal/arrangeplan/` | Shelf packing of rectangular footprints onto a bed with a gap; plain millimetre data. See arrange design. |
 | `internal/jointinfer/` | Matches cylinder and plane face records of two parts into pin-in-bore, pin-in-slot and face-contact joints; plain millimetre data. See parts design §7.1. |
+| `internal/jointcheck/` | Box gaps, interval verdicts, line offsets and the overlap witness of two planar faces for the structural joint check; plain millimetre data. See parts design §7.2. |
 | `internal/explodeplan/` | Breadth-first walk of a joint graph from a ground part, with box travels and offsets for an exploded view; plain millimetre boxes. See parts design §5. |
 | `internal/pathsample/` | Equal-arc-length points along a path of lines and circular arcs; plain millimetre vectors. See path-pattern design. |
 | `internal/glyphs/` | TrueType layout of a line of text and flattening of its glyph outlines to closed polygons. See text design. |

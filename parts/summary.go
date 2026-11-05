@@ -19,7 +19,8 @@ type Summary struct {
 }
 
 // WriteMarkdown writes one page, in this order: the bill of materials table; the
-// joint table with each joint's status when Joints is set; the exploded depth
+// joint table with each joint's status, cause and evidence, and the unexplained
+// pairs, when Joints is set; the exploded depth
 // and pull table when Exploded is set; the Mermaid connection diagram. Numbers
 // print with their bounds. A Set with a retired body is decad.ErrRetiredBody
 // and a nil Set decad.ErrDegenerate.
@@ -41,14 +42,28 @@ func (s Summary) WriteMarkdown(w io.Writer) error {
 	}
 	b.WriteString("\nVolume is that of one part. Mass is the solid body's mass: infill lowers it.\n")
 	if s.Joints != nil {
-		b.WriteString("\n## Joints\n\n| Joint | Kind | A | B | Motion | Status |\n|---|---|---|---|---|---|\n")
-		status := map[string]JointStatus{}
+		b.WriteString("\n## Joints\n\n| Joint | Kind | A | B | Motion | Status | Cause | Evidence |\n|---|---|---|---|---|---|---|---|\n")
+		result := map[string]JointResult{}
 		for _, jr := range s.Joints.Joints {
-			status[jr.Joint.Name] = jr.Status
+			result[jr.Joint.Name] = jr
 		}
 		for _, j := range s.Set.joints {
-			fmt.Fprintf(&b, "| %s | %s | %s | %s | %s | %s |\n", cell(j.Name), j.Kind, cell(j.A), cell(j.B), j.Motion,
-				status[j.Name])
+			jr := result[j.Name]
+			cause := "-"
+			if jr.Cause != CauseNone {
+				cause = jr.Cause.String()
+			}
+			fmt.Fprintf(&b, "| %s | %s | %s | %s | %s | %s | %s | %s |\n", cell(j.Name), j.Kind, cell(j.A), cell(j.B), j.Motion,
+				jr.Status, cause, cell(evidence(jr)))
+		}
+		if len(s.Joints.Unexplained) > 0 {
+			b.WriteString("\n## Unexplained pairs\n\nBoxes meet and no joint names the pair; this is where to look, not a finding.\n\n")
+			b.WriteString("| A | B | Overlap min (mm) | Overlap max (mm) |\n|---|---|---|---|\n")
+			for _, p := range s.Joints.Unexplained {
+				o := p.Overlap
+				fmt.Fprintf(&b, "| %s | %s | (%.2f, %.2f, %.2f) | (%.2f, %.2f, %.2f) |\n", cell(p.A), cell(p.B), o.Min.X, o.Min.Y,
+					o.Min.Z, o.Max.X, o.Max.Y, o.Max.Z)
+			}
 		}
 	}
 	if s.Exploded != nil {
@@ -73,6 +88,24 @@ func (s Summary) WriteMarkdown(w io.Writer) error {
 	b.WriteString("```\n")
 	_, err = io.WriteString(w, b.String())
 	return err
+}
+
+// evidence is the numbers a joint's status rests on, for the joint table.
+func evidence(r JointResult) string {
+	var parts []string
+	if r.Measured != nil {
+		parts = append(parts, "measured "+measure(r.Measured, units.Millimeter, "mm"))
+	}
+	if r.Engaged != nil {
+		parts = append(parts, "engaged "+measure(r.Engaged, units.Millimeter, "mm"))
+	}
+	if r.Axis != nil {
+		parts = append(parts, "axis from "+r.AxisFrom.String())
+	}
+	if r.Reason != "" {
+		parts = append(parts, r.Reason)
+	}
+	return strings.Join(parts, "; ")
 }
 
 // cell makes text safe inside a table cell.

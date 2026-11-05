@@ -33,17 +33,6 @@ func (j JointStatus) String() string {
 	return "not evaluated"
 }
 
-// JointResult is what Check found for one declared joint.
-type JointResult struct {
-	Joint  Joint
-	Status JointStatus
-}
-
-// JointReport is what Check found. Graph reads its Joints.
-type JointReport struct {
-	Joints []JointResult // one per declared joint, in Join order
-}
-
 // Graph is the connection diagram: parts as nodes, joints as typed edges.
 type Graph struct {
 	Nodes []Node // in Set order
@@ -63,6 +52,7 @@ type Edge struct {
 	Kind   JointKind
 	Motion Motion
 	Status JointStatus // NotEvaluated when Graph was given no report
+	Cause  Cause       // why the joint is not Confirmed; CauseNone otherwise
 }
 
 // Graph returns the connection diagram of the Set. r may be nil; with one, each
@@ -74,15 +64,15 @@ func (s *Set) Graph(r *JointReport) Graph {
 		grp, _ := s.Group(p.Name)
 		g.Nodes = append(g.Nodes, Node{Part: p.Name, Group: grp, Kind: p.Kind})
 	}
-	status := map[string]JointStatus{}
+	result := map[string]JointResult{}
 	if r != nil {
 		for _, jr := range r.Joints {
-			status[jr.Joint.Name] = jr.Status
+			result[jr.Joint.Name] = jr
 		}
 	}
 	for _, j := range s.joints {
 		g.Edges = append(g.Edges, Edge{Joint: j.Name, A: j.A, B: j.B, Kind: j.Kind, Motion: j.Motion,
-			Status: status[j.Name]})
+			Status: result[j.Name].Status, Cause: result[j.Name].Cause})
 	}
 	return g
 }
@@ -90,7 +80,9 @@ func (s *Set) Graph(r *JointReport) Graph {
 // WriteMermaid writes a left-to-right Mermaid flowchart: one subgraph per
 // non-root group, a rectangle for a manufactured part and a rounded node for a
 // purchased one, and one edge per joint from A to B labelled with its kind, its
-// motion when not fixed, and its status when known.
+// motion when not fixed, its status when known and, when the joint is not
+// Confirmed, its cause in brackets. A Contradicted edge ends in a cross (--x) and
+// an Undecided one is dotted; the others keep the plain arrow.
 func (g Graph) WriteMermaid(w io.Writer) error {
 	ids := map[string]string{}
 	used := map[string]struct{}{}
@@ -140,8 +132,18 @@ func (g Graph) WriteMermaid(w io.Writer) error {
 		}
 		if e.Status != NotEvaluated {
 			label += ", " + e.Status.String()
+			if e.Cause != CauseNone {
+				label += " (" + e.Cause.String() + ")"
+			}
 		}
-		fmt.Fprintf(&b, "  %s -- \"%s\" --> %s\n", ids[e.A], mermaidText(label), ids[e.B])
+		switch e.Status {
+		case Contradicted:
+			fmt.Fprintf(&b, "  %s -- \"%s\" --x %s\n", ids[e.A], mermaidText(label), ids[e.B])
+		case Undecided:
+			fmt.Fprintf(&b, "  %s -. \"%s\" .-> %s\n", ids[e.A], mermaidText(label), ids[e.B])
+		default:
+			fmt.Fprintf(&b, "  %s -- \"%s\" --> %s\n", ids[e.A], mermaidText(label), ids[e.B])
+		}
 	}
 	_, err := io.WriteString(w, b.String())
 	return err

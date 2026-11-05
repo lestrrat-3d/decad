@@ -1,7 +1,10 @@
 # Parts design
 
 The package lands in the PRs of §13, and each PR carries the part of this document it implements. P1 and E1 have landed: `Kind`, `Material`, `Part`, `Joint`, `Axis`, `Set`, axis matching (§7.1), `Explode`, `Graph` and
-`export.ThreeMFItems`. P2 added `Views`, and P3 adds `BOM` and `Summary`. Everything else here is design only until its PR.
+`export.ThreeMFItems`. P2 added `Views`, P3 added `BOM` and `Summary`, and P4a adds `Check` for `PinInBore`,
+`PinInSlot`, `FaceContact` and `Tie` joints and the box-screened list of pairs no joint names (§7.2). Point witnesses,
+`Contact` and `Keepout` checks, `WithWitnessSearch` and `WithVerifyReport` (P4b), the linkage bridge and `Infer` are
+design only until their PRs.
 
 **`github.com/lestrrat-3d/decad/parts` is a generic schematic and exploded view of a build made of separate bodies.**
 Its two primary outputs are:
@@ -53,7 +56,7 @@ hand-written stand-ins for what this package provides:
 | `Part{Name, Group, Motion, Body}` and string groups | `parts.Part`, grouped by the body's `Container` (§3.1) |
 | no exploded view or connection diagram | `Set.Explode`, `Set.Graph`, `Set.Views` (§5, §6) |
 | `designedContacts`, a map of pair names that may touch | declared joints and `Set.Check`'s unexplained-contact list (§7.2) |
-| `internal/meshgap`, a boundary-gap screen | `Document.Verify`'s pair partition, read by `Set.Check` (§7.2) |
+| `internal/meshgap`, a boundary-gap screen | `Set.Check`'s box screen and point witnesses (§7.2) |
 | joints stated again for each motion check | `Set.Linkage`, built from the same joints (§7.4) |
 | `threemf.go`, a private multi-object 3MF writer | `export.ThreeMFItems` (§9.1) |
 
@@ -97,7 +100,7 @@ view and the schematic are views of those parts, and the bill of materials is a 
 
 `parts` sits above the root as `dynamics` does (`agent-docs/collision-dynamics-design.md` §1): every geometric fact it
 needs is a public query that already states its own proof (`Tessellate`, `Mesh.SourceFaces`, `Face.Surface`,
-`Face.NormalAt`, `Body.Bounds`, `Body.Volume`, `Document.Verify`, `Document.SweptBox`, `Document.ContainerOf`). It
+`Face.NormalAt`, `Body.Bounds`, `Body.Volume`, `Body.DistanceToPoint`, `Document.SweptBox`, `Document.ContainerOf`). It
 never needs a body's private payload, so it adds no root adapter. `api-design.md` §2 keeps types that the root API
 names in the root package; the root never names a `parts` type, as it never names a `dynamics` type.
 
@@ -252,20 +255,22 @@ func (s *Set) Views(ctx context.Context, opts ...ViewOption) (*Views, error)
 
 func WithPartPose(part string, t r3.Transform) ViewOption // a caller's pose for one part
 
-// Check compares every declared joint with the geometry and lists every pair
-// of parts that touches, overlaps or comes within the contact tolerance
-// without a joint that explains it (§7.2).
+// Check judges every declared joint against the faces and bounds of its two
+// parts, and lists the pairs of parts whose boxes meet with no joint naming
+// them (§7.2). It is a structural check: it never calls Document.Verify, and
+// it does not prove that two parts' interiors are disjoint.
 func (s *Set) Check(ctx context.Context, opts ...CheckOption) (*JointReport, error)
 
 // Infer lists the joints the geometry suggests between the parts (§7.3). It
 // adds nothing to the Set.
 func (s *Set) Infer(ctx context.Context, opts ...CheckOption) ([]InferredJoint, error)
 
-func WithVerifyReport(r *decad.Report) CheckOption     // reuse a Verify the caller ran
 func WithFitTolerance(tol units.Value) CheckOption     // default 0.05 mm
-func WithContactTolerance(tol units.Value) CheckOption // default 0.05 mm
+func WithContactTolerance(tol units.Value) CheckOption // default 0.25 mm (§7.2 G5)
 func WithAxisTolerance(a units.Value) CheckOption      // default 0.5°
 func WithMaxFit(fit units.Value) CheckOption           // largest clearance matched; default 1 mm
+func WithWitnessSearch() CheckOption                   // also seek a contact witness for each unexplained pair (§7.2 U2)
+func WithVerifyReport(r *decad.Report) CheckOption     // read a Verify the caller already ran (§7.2 R1)
 
 // BOM is the bill of materials (§8.1).
 func (s *Set) BOM(ctx context.Context) (*BOM, error)
@@ -299,25 +304,57 @@ after `WriteMarkdown`.
 
 ```go
 type JointReport struct {
-    Request     CheckRequest
+    Request     CheckRequest    // the effective tolerances and options
     Joints      []JointResult   // one per declared joint, in Join order
-    Unexplained []PairFinding   // pairs that touch, overlap or come near with no joint
-    Undecided   []PairFinding   // pairs Verify could not decide
-    Inferred    []InferredJoint // inferred matches no declared joint covers
+    Unexplained []PairFinding   // part pairs whose boxes meet and that no joint names (§7.2 U1)
+    Inferred    []InferredJoint // inferred matches no declared joint covers (from P6)
+}
+
+type CheckRequest struct {
+    FitTolerance, ContactTolerance, AxisTolerance, MaxFit units.Value
+    WitnessSearch bool
+    VerifyReport  bool       // a WithVerifyReport report was read
+    Meshes        []PartMesh // one per part with a body, in Set order (§7.2 G0, G5)
+}
+
+type PartMesh struct {
+    Part      string
+    Tolerance units.Value // the chord tolerance the part was read at
+    Bound     units.Value // that mesh's bound
+    Verified  bool        // VerifyAll held, so point distances were available
 }
 
 type JointResult struct {
     Joint    Joint
     Status   JointStatus        // Confirmed, Contradicted, Undecided, NotChecked
-    Relation decad.ContactRelation
-    Gap      *decad.Measurement
-    Measured *decad.Measurement // radial or side clearance read from the faces
-    Axis     *Axis              // the axis used (§7.1)
+    Cause    Cause              // why it is not Confirmed; CauseNone when it is
+    Axis     *Axis              // PinInBore, PinInSlot: the axis used (§7.1)
     AxisFrom AxisSource         // Faces, Declared or None
-    FacesA   []*decad.Face
+    Measured *decad.Measurement // PinInBore: R − r; PinInSlot: width − 2r; FaceContact: the planes' distance
+    Engaged  *decad.Measurement // PinInBore, PinInSlot: axial overlap of the matched faces
+    Gap      *decad.Measurement // Contact, Keepout: the interval the box gap and any witness prove (§7.2 G1)
+    Witness  *r3.Vec            // a point the contact or overlap claim was read at
+    FacesA   []*decad.Face      // the faces of A the rule read
     FacesB   []*decad.Face
-    Reason   string             // why it is not Confirmed; for people, not for branching
+    Verified *decad.ContactRelation // the pair's relation in a WithVerifyReport report; nil without one
+    Reason   string             // the numbers behind Cause, for people, not for branching
 }
+
+// Cause names why a joint is not Confirmed.
+type Cause int
+
+const (
+    CauseNone          Cause = iota
+    CauseNoMatch             // no face pair of the joint's form exists, and every face near the pair was read
+    CauseClearance           // the measured clearance is not the declared one
+    CauseAxis                // the matched axis is not the declared one
+    CauseInterference        // a pin larger than its bore with no declared press fit, or Verify's overlap
+    CauseApart               // the parts are proven farther apart than the joint allows
+    CauseTooClose            // a keepout pair is proven closer than MinGap
+    CauseUnreadFace          // a face near the pair reads Faceted or the body would not mesh
+    CauseNoWitness           // no point proves the contact or the face overlap
+    CauseNeedsPairProof      // only a pair proof (Verify) could decide it
+)
 
 type InferredJoint struct {
     Joint    Joint // Kind PinInBore or PinInSlot, Motion Fixed, Axis and Clearance as matched
@@ -328,14 +365,16 @@ type InferredJoint struct {
 
 type PairFinding struct {
     A, B     string
-    Relation decad.ContactRelation
-    Gap      *decad.Measurement // Separated and Touching
-    Overlap  *decad.Measurement // Overlapping, when Verify bounded the volume
+    Overlap  decad.Box              // where the two boxes, grown by ContactTolerance and their bounds, meet
+    Near     *decad.Measurement     // WithWitnessSearch: a proven gap upper bound at most ContactTolerance
+    Verified *decad.ContactRelation // the pair's relation in a WithVerifyReport report; nil without one
 }
 ```
 
-Until `Check` lands (P4), `JointReport` holds only `Joints`, and `JointResult` only `Joint` and `Status`: the part `Graph`
-reads.
+Until P4b, `JointReport` has no `Inferred`, `CheckRequest` always has `WitnessSearch` and `VerifyReport` false,
+`JointResult` has no `Verified` and no `Gap`, and `PairFinding` has no `Near` and no `Verified`; a `Contact` or
+`Keepout` joint is `NotChecked`. The `AxisSource` values are named `AxisSourceNone`, `AxisSourceFaces` and
+`AxisSourceDeclared`, because `AxisFromFaces` and `AxisDeclared` already name `PullSource` values.
 
 `Exploded` is in §5, `Graph` and `Views` in §6, `BOM` in §8. Enumerations reserve zero as "not evaluated", as
 `report.Coverage` does, so a zero record never reads as an answer, and each has a `String` method printing the
@@ -429,9 +468,11 @@ func Example_parts_explode() {
 Mermaid text is fixed by P1's `WriteMermaid` tests (§6.1); the lines above are its shape for a set whose parts all sit
 in the root container.
 
-**Joint check, P4** (`examples/parts_joints_example_test.go`). The same pin and plate, joined with
-`Clearance: units.Millimeters(0.2)` and checked with `Set.Check`, printing `pin~plate: confirmed, radial clearance
-0.20 mm` and `0 unexplained contacts`.
+**Joint check, P4a** (`examples/parts_joints_example_test.go`). The same pin and plate, joined with
+`Clearance: units.Millimeters(0.2)` and checked with `Set.Check`, printing three lines: `pin~plate: confirmed`,
+`radial clearance 0.20 mm, engaged 10 mm` and `0 unexplained pairs`. The pin passes through the bore, so the plate's
+box and the pin's box meet; the joint names that pair, so it is not unexplained. A second joint declared with
+`Clearance: units.Millimeters(0.3)` would print `contradicted (clearance)`.
 
 ## 5. Exploded view
 
@@ -501,6 +542,11 @@ part and a rounded node for a purchased one, and one edge per joint labelled wit
 fixed, and its status when known. Mermaid is text an agent reads directly and GitHub renders, so decad needs no graph
 layout. A drawn layout belongs to the consumer.
 
+With a `JointReport` (P4a), an edge's label ends with its status and, when not `Confirmed`, its cause in brackets
+(`pin in bore, turns, contradicted (clearance)`). A `Contradicted` edge is drawn with a crossed end (`--x`) and an
+`Undecided` one dotted (`-.->`), so the problem joints stand out in a rendered diagram as well as in its text. A
+`NotChecked` edge keeps the plain arrow.
+
 ### 6.2 Part views
 
 `Views` returns, for each part with a body, what a renderer needs to draw that part alone on a part sheet.
@@ -549,25 +595,89 @@ and plane records that `parts` reads through `Face.Surface`, `Face.NormalAt`, `M
 | M4 | `PinInSlot`: a convex cylinder of A and two planar faces of B parallel to its axis within `AxisTolerance`, with normals opposed and pointing at the axis, at distances whose sum less `2r` is at most `MaxFit`. `Measured` is that sum less `2r`. |
 | M5 | A mesh Boolean result keeps a `Cylinder` or `Plane` tag on a face only where faceted source retention proved it (`agent-docs/faceted-source-retention-design.md`, the `RetainedTag` faces); a displaced retained tag matches with its bound charged. A face whose `Surface` is `Faceted` never matches, and `Face.NormalAt` refuses it with `ErrUnsupported`, so it is never asked for a normal here. A joint whose faces do not match falls back to its declared `Axis`, then to box centres (E2). |
 | M6 | Two or more matches for one declared joint: the one with the longest axial overlap wins, then the smallest `Measured`. Matches of one cylinder split into several faces join into one match. |
-| M7 | `FaceContact`: a planar face of A and one of B with opposed normals within `AxisTolerance`, planes within `MaxFit` of each other, and a positive overlap of their vertex boxes projected onto the plane; the largest overlap wins. The overlap is the box rectangle, so it never under-reports the shared area. |
-| M8 | Faces are read from a mesh made with `VerifyNone` at a chord tolerance of 0.05 mm, then 0.5 mm, then 5 mm, whichever the body first accepts; the mesh gives only the vertices of each face. A face's reading bound is the bound `Face.NormalAt` reports, taken in millimetres for every length test it takes part in. A body no tolerance meshes reads as having no matchable face. |
+| M7 | `FaceContact`: a planar face of A and one of B with opposed normals within `AxisTolerance`, planes within `MaxFit` of each other, and a positive overlap of their vertex boxes projected onto the plane; the largest overlap wins. The overlap is the box rectangle, so it never under-reports the shared area; it is enough to pick a pull direction, and `Check` confirms shared area with a witness instead (§7.2 J3). |
+| M8 | Faces are read from a mesh made with `VerifyNone` at a chord tolerance of 0.05 mm, then 0.1, 0.2, 0.5 and 5 mm, whichever the body first accepts (the 0.1 and 0.2 mm rungs come with P4a, so a body that refuses 0.05 mm, as a model built with a 0.1 mm chain tolerance does, is not read at 0.5 mm); the mesh gives only the vertices of each face. A face's reading bound is the bound `Face.NormalAt` reports, taken in millimetres for every length test it takes part in. A body no tolerance meshes reads as having no matchable face. |
 
 ### 7.2 Checking
 
-`Check` reads one pair partition and judges each declared joint against it and against the faces.
+**`Check` is a structural check.** For each declared joint it asks one question: is the declaration consistent with
+the faces and bounds of its two parts? It reads face tags, mesh vertices, body boxes and point distances, all public
+queries with stated bounds, and never calls `Document.Verify`. It does not prove that two parts' interiors are
+disjoint; that is a pair proof, `Verify`'s, which `WithVerifyReport` can feed in when the caller already has one.
+
+`Check` takes this form because the pair proof does not decide a real build's joints. Measured on the crossbow's 51
+parts (2026-11, a dated illustration): `Verify(WithClearances)` took 9 min 57 s and left 771 of 1,275 pairs
+undecided, 64 of them declared joint pairs. Of those 64, 59 involve faceted mesh Boolean parts; about 250 undecided
+pairs in all involve the rivets (a `Union` of two cylinders) or the disc (a chamfered cylinder with no clearance
+reader); 22 are face-on-face contacts. A clearance-kernel fix for oblique pins in bores, designed separately, decides
+one of the 64. A joint check built on the pair proof would leave most joints `Undecided`.
+
+#### 7.2.1 Shared readings
 
 | Rule | Decision |
 |---|---|
-| C1 | The partition is `Document.Verify(ctx, decad.WithClearances())`, or the report given by `WithVerifyReport`. A pair of parts is `Overlapping` when it is an interference row, `Touching` when a clearance row's `Gap` is an `Exact` zero, `Separated` with its gap otherwise, and `Undecided` when it is in neither list. Verify covers every live body of the document; pairs with a non-part body are ignored. |
-| C2 | `PinInBore` and `PinInSlot`: the faces of M3 or M4 must match (else `Contradicted`, "no coaxial cylinder pair"), unless a face that would take part reads `Faceted`, which makes it `Undecided`. A declared `Axis` more than `AxisTolerance` or `FitTolerance` from the matched one is `Contradicted`. With a declared `Clearance`, `Measured` within `FitTolerance` of it is required. A non-negative declared clearance with an `Overlapping` pair is `Contradicted`. A negative one (press fit) expects `Overlapping` or `Touching`. |
-| C3 | `FaceContact` and `Contact`: `Touching`, or `Separated` with a gap upper end at most `ContactTolerance`, confirms; `Overlapping` contradicts; anything else is `Undecided`. |
-| C4 | `Keepout`: `Separated` with a gap lower end at least `MinGap` confirms; `Touching`, `Overlapping` or a gap upper end below `MinGap` contradicts. |
-| C5 | `Tie`: `NotChecked`. |
-| C6 | `Unexplained`: every part pair that is `Overlapping`, `Touching` or `Separated` with a gap upper end at most `ContactTolerance`, and that no declared joint names. This is the gallery's `designedContacts` check as a decad answer. |
-| C7 | `Undecided` lists every part pair Verify left undecided; `JointReport` never treats one as clear. |
-| C8 | `Inferred` lists `Infer`'s matches whose pair no declared joint names (from P6; empty before it). |
+| G0 | Every part's faces are read once per call, as M1–M8 read them, from the mesh at the first chord tolerance of M8's ladder the body accepts **with `decad.VerifyAll`**. Point distances (G2) need that verification, and a body holds one cached tessellation, so reading faces and distances from the same tolerance and level tessellates each body once. A body that refuses `VerifyAll` at every rung is read at `VerifyNone` for its faces, and its point distances are unavailable. |
+| G1 | **Box gap.** The lower end of a pair's gap is the separation of the two `Body.Bounds` boxes along the axis that separates them most, less both boxes' `Bound`s, and zero when the boxes meet. It is sound: the bodies lie inside their boxes. |
+| G2 | **Witness.** An upper end of a pair's gap comes from points. For any point `p`, the gap between A and B is at most `A.DistanceToPoint(p)` plus `B.DistanceToPoint(p)`, each taken at its upper end (the triangle inequality; a distance is zero for a point inside or on the solid). `p` runs over up to 64 mesh vertices of A nearest B's box, then up to 64 of B nearest A's box, at G0's tolerance. The least sum is the witness and its point `Witness`. The search finds a witness when one exists among the sampled points; finding none proves nothing. |
+| G5 | **Resolution.** A witness cannot prove a gap smaller than the two distance readings' own widths, which grow with the meshes' bounds (about the chord tolerance G0 settled on, 0.1 mm for a body that refuses 0.05 mm). `JointReport.Request` records each part's tolerance and mesh bound. A `Contact` whose two parts' bounds together exceed `ContactTolerance` is `Undecided` (`CauseNoWitness`, `Reason` "below resolution") without a search. The default `ContactTolerance` of 0.25 mm leaves room for two parts meshed at 0.1 mm; a caller who needs a finer contact claim states a smaller tolerance and accepts more `Undecided` contacts. |
+| G3 | **Faces near a pair.** A face is near the pair when its vertex box, grown by `MaxFit`, meets the other part's box. A rule that needs a cylinder or plane and finds none among the near faces reports `CauseNoMatch` only when every near face of both parts was read (tagged `Plane` or `Cylinder` and answered `Face.NormalAt`); one near face that reads `Faceted`, or a body that would not mesh, makes it `CauseUnreadFace` and the joint `Undecided`. |
+| G4 | Interval tests read both ends: a reading `[m − b, m + b]` inside the allowed interval confirms, one outside it contradicts, and one that straddles its edge is `Undecided` with the cause of the test it failed to settle. |
 
-`Check` returns a report whenever it ran. A `Contradicted` joint is a finding, not an error.
+#### 7.2.2 Per kind
+
+| Rule | Kind | Confirmed | Contradicted | Undecided |
+|---|---|---|---|---|
+| J1 | `PinInBore` | M3 matches; `Engaged`, the axial overlap of the matched faces, has a positive lower end; with a declared `Clearance` `c`, `Measured` lies within `c ± FitTolerance`; without one, `Measured` is at least zero; a declared `Axis` lies within `AxisTolerance` and `FitTolerance` of the matched one | no match and every near face read (`CauseNoMatch`, `Reason` naming the closest cylinder pair's radii and axis distance); `Measured` outside `c ± FitTolerance` (`CauseClearance`); `R − r` below zero with no negative `c` declared (`CauseInterference`); a declared axis off the matched one (`CauseAxis`); G1's box gap above `MaxFit` (`CauseApart`) | a near face unread (`CauseUnreadFace`); a straddling interval (G4) |
+| J2 | `PinInSlot` | M4 matches; positive `Engaged` along the axis; the declared clearance and axis tests of J1 on `width − 2r` | as J1, with "no pin between parallel walls" for `CauseNoMatch` | as J1 |
+| J3 | `FaceContact` | M7 matches with the planes' distance `Measured` at most `FitTolerance`, and an **overlap witness**: the centroid of a triangle of A's face lies inside a triangle of B's face in projection onto the plane, farther than `β_A + β_B` from that triangle's edges, or the same with A and B swapped | no opposed planar pair near and every near face read (`CauseNoMatch`); the nearest opposed pair's `Measured` lower end above `FitTolerance` (`CauseApart`) | a near face unread (`CauseUnreadFace`); planes coincide but no overlap witness (`CauseNoWitness`) |
+| J4 | `Contact` | a G2 witness with an upper end at most `ContactTolerance` | G1's lower end above `ContactTolerance` (`CauseApart`) | no witness (`CauseNoWitness`), or point distances unavailable (`CauseUnreadFace`) |
+| J5 | `Keepout` | G1's lower end at least `MinGap` | a G2 witness below `MinGap` (`CauseTooClose`) | neither (`CauseNeedsPairProof`) |
+| J6 | `Tie` | — | — | — (`NotChecked`) |
+
+`Gap` reports the interval G1 and G2 prove for `Contact` and `Keepout`: `[box gap, witness]`, with `Value` its
+midpoint and `Bound` its half width; with no witness its upper end is the largest distance between the two boxes.
+
+J3's overlap witness replaces M7's box-rectangle overlap for confirming: two L-shaped faces whose vertex boxes overlap
+but whose faces do not would pass M7 and must not be confirmed. Its points are mesh triangles of the two faces, read
+in projection on the shared plane; that is a point-in-triangle test on mesh chords with a stated bound, not a 2D
+question about recorded entities, so `sketch` is not asked.
+
+#### 7.2.3 Pairs no joint names
+
+| Rule | Decision |
+|---|---|
+| U1 | `Unexplained` lists every pair of parts with bodies whose boxes, grown by `ContactTolerance` and both boxes' bounds, meet, and that no declared joint names, with the region where the grown boxes meet. Boxes meeting is a screen, not a finding: it bounds the work and says where to look. |
+| U2 | With `WithWitnessSearch`, each `Unexplained` pair also runs G2 and carries `Near` when a witness proves its gap at most `ContactTolerance`: an undeclared contact, proven. Pairs without `Near` may be apart. A caller gates on `Near` entries, not on the list's length. |
+| U3 | Pairs whose boxes do not meet are never listed: G1 proves them apart by more than `ContactTolerance`. |
+
+#### 7.2.4 A Verify report, when the caller has one
+
+| Rule | Decision |
+|---|---|
+| R1 | `WithVerifyReport(r)` sets `Verified` on each joint and `Unexplained` pair to the pair's relation in `r`: `Overlapping` for an interference row, `Touching` for a clearance row whose `Gap` is an `Exact` zero, `Separated` for another clearance row, `Undecided` for a pair in neither list. |
+| R2 | It can only settle what the structural rules left open or contradict what they confirmed. `Overlapping` contradicts any joint but a press fit (`CauseInterference`). A `Separated` gap at least `MinGap` confirms a `Keepout` that J5 left `Undecided`. A `Touching` relation, or a gap at most `ContactTolerance`, confirms a `Contact` J4 left `Undecided`. An `Unexplained` pair `r` proves `Separated` beyond `ContactTolerance` is dropped. |
+| R3 | `Check` never calls `Verify` itself. A report of another document, or one older than a body of the `Set` (it does not name that body), is `decad.ErrDegenerate`. |
+
+`Check` returns a report whenever it ran. A `Contradicted` joint is a finding, not an error. `Inferred` lists `Infer`'s
+matches whose pair no declared joint names (from P6; empty before it).
+
+#### 7.2.5 What stays undecided, and why
+
+| Case | Why `Check` cannot decide it |
+|---|---|
+| A pin, slot or face joint where a near face reads `Faceted` | The face carries no plane or cylinder tag, so there is no radius or plane to compare; a mesh fit would be a guess, and a guess cannot confirm. A declared `Axis` still drives `Explode`. |
+| A `FaceContact` whose planes coincide but whose sampled triangles give no overlap witness | Thin or interleaved faces can coincide in plane without sharing area; the witness test is the only cheap proof of shared area. |
+| A `Contact` with no witness among the sampled vertices | The 64-vertex sample can miss the touching spot on a large part. |
+| A `Keepout` whose boxes come within `MinGap` and whose sampled vertices stay farther | Only a pair proof bounds the gap from below inside the boxes. |
+| Any claim that two parts' interiors are disjoint | That is `Verify`'s pair proof; `Check` does not make it. |
+
+#### 7.2.6 Cost
+
+`Check` costs one `VerifyAll` tessellation per part (G0), the face matching `Explode` already runs (25 ms for the
+crossbow's 51 parts, on cached meshes), one box test per pair, and at most 256 `DistanceToPoint` calls (128 points,
+two bodies each) per `Contact` or `Keepout` joint, and per `Unexplained` pair under `WithWitnessSearch`. Each call
+reads the body's cached verified mesh. There is no pair proof and no all-pairs distance. The witness search runs
+pairs concurrently, since `DistanceToPoint` is a read of immutable bodies.
 
 ### 7.3 Inference
 
@@ -617,9 +727,10 @@ finite, non-negative `units.Density` (`decad.ErrUnitKind`, `decad.ErrNotFinite`,
 ### 8.2 Summary
 
 `Summary.WriteMarkdown` writes, in this order: the bill of materials table; the joint table with statuses and reasons
-when `Joints` is set; `Unexplained` and `Undecided` pairs; the exploded depth and pull table when `Exploded` is set;
-the Mermaid diagram. Numbers print with their bounds. The joint table lists the Set's joints with the status the report gives, and the
-pairs and reasons columns come with `Check` (P4). `WriteMarkdown` takes no context: it reads volumes and faces only.
+when `Joints` is set; the `Unexplained` pairs; the exploded depth and pull table when `Exploded` is set; the Mermaid
+diagram. Numbers print with their bounds. The joint table lists the Set's joints with the status the report gives;
+the cause, the evidence (`Measured`, `Engaged`, `Gap`, faces read) and the `Unexplained` table come with `Check`
+(P4a), and `Near` with P4b. `WriteMarkdown` takes no context: it reads volumes and faces only.
 This is the agent's primary view of the schematic: it reads a
 page, not pixels. Images come from the consumer (§11).
 
@@ -630,7 +741,8 @@ page, not pixels. Images come from the consumer (§11).
 | Cylinder and plane geometry and normals | `Face.Surface`, `Face.NormalAt` | the matching of M3, M4 |
 | Triangles and their source faces, the mesh bound | `Body.Tessellate`, `Mesh.SourceFaces`, `Mesh.Bound` | none |
 | Pull-path clearance for explode | `Document.SweptBox`, `SweptBox.StrictlyDisjoint` | the sense choice of E3 |
-| Pair partition, gaps, interference | `Document.Verify` with `WithClearances` (`agent-docs/clearance-design.md`, `agent-docs/interference-design.md`) | the mapping of C1 |
+| Gap bounds for a pair | `Body.Bounds` with its `Bound`, `Body.DistanceToPoint` on the body's cached verified mesh (`agent-docs/point-containment-design.md`) | the box gap of G1, the vertex sample of G2 |
+| Pair proof, when the caller has one | a `decad.Report` from `Document.Verify` with `WithClearances` (`agent-docs/clearance-design.md`), passed by `WithVerifyReport` | the reading of R1 |
 | Motion of joints | `decad.Linkage`, `Link.Revolute`, `Link.Prismatic`, `Linkage.DeclareJointContact`, `VerifyLinkage` | the bridge of §7.4 |
 | Grouping | `Document.ContainerOf` | none |
 | Volume, mass | `Body.Volume`, `units` arithmetic | none |
@@ -642,6 +754,10 @@ New internal packages, each taking plain data (`r3.Vec`, slices, floats in milli
 |---|---|
 | `internal/jointinfer/` | cylinder and slot matching of M1–M6 on plain cylinder and plane records |
 | `internal/explodeplan/` | the breadth-first walk, travels and offsets of E1–E4, and the port points of V3 |
+| `internal/jointcheck/` | the per-kind rules J1–J5 and G1, G3–G5 on plain matches, boxes and distance intervals; the vertex sample of G2; the overlap witness of J3; the unexplained screen of U1 (P4a) |
+
+`parts` keeps only the adapters: it reads faces, boxes and meshes, calls `Body.DistanceToPoint` for the sample points
+`internal/jointcheck` chooses, and hands the intervals back.
 
 ### 9.1 The multi-object 3MF writer
 
@@ -677,16 +793,16 @@ item's placement it writes the exploded view as a file any 3MF viewer opens.
 
 | Gate item | Evidence |
 |---|---|
-| Input class stated | Axis matching: faces whose `Surface` is a `Plane` or `Cylinder`, exact or retained with a bound. Explode and views: any live solid body with bounds and a boundary-proved tessellation. Checking: any pair `Verify` partitions. 3MF items: any bodies `ThreeMF` writes, under any proper rigid placement. |
-| Behavior by geometric invariants | Coaxiality and radius difference (M3), opposed parallel planes (M4), box travel and swept-box disjointness (E3), box overlap centres (V3). None names a part. |
+| Input class stated | Axis matching: faces whose `Surface` is a `Plane` or `Cylinder`, exact or retained with a bound. Explode and views: any live solid body with bounds and a boundary-proved tessellation. Checking: the same faces for pin, slot and face joints, and any solid with bounds, plus a `VerifyAll` tessellation for point witnesses, for contact and keepout joints. 3MF items: any bodies `ThreeMF` writes, under any proper rigid placement. |
+| Behavior by geometric invariants | Coaxiality and radius difference (M3), opposed parallel planes (M4), box travel and swept-box disjointness (E3), box overlap centres (V3), box gaps and point-distance witnesses (G1, G2), plane distance and a shared-area witness (J3). None names a part. |
 | No part-specific or process-specific dispatch | No route reads a name, a fixture, a gallery model or a manufacturing process. Part names are labels only. |
-| Independent cases | §12 lists a pin and plate, a press fit, a slider in a groove, a lap with two pins, a pin through two plates, two touching blocks, a keepout pair, a faceted-face joint and a rotated copy; each varies the geometry its rule reads. The crossbow is an acceptance run in the gallery, never a decad fixture (`agent-docs/testing.md` "Test scope"). |
+| Independent cases | §12 lists a pin and plate, a press fit, a slider in a groove, a lap with two pins, a pin through two plates, two touching blocks, two L-shaped plates whose boxes overlap but whose faces do not, a keepout pair with meeting boxes, a faceted-face joint and a rotated copy; each varies the geometry its rule reads. The crossbow is an acceptance run in the gallery, never a decad fixture (`agent-docs/testing.md` "Test scope"). |
 
 ### 10.2 Root package placement
 
 | Gate item | Evidence |
 |---|---|
-| Private algorithms in `internal/` | §9's new algorithms live in the two internal packages, which take plain data. |
+| Private algorithms in `internal/` | §9's new algorithms live in the three internal packages, which take plain data. |
 | No handle passed to reach data | `parts` unwraps `*decad.Body` and `*decad.Face` through public queries into plain records before calling an internal package. |
 | Root adapters | None. Neither `parts` nor `export.ThreeMFItems` adds a file to the root package. |
 | Exported types | In `parts` and `export`, both above the root (§2). |
@@ -698,7 +814,11 @@ item's placement it writes the exploded view as a file any 3MF viewer opens.
   (`api-design.md` §3).
 - No operation mutates the document; `Set` is a builder (`api-design.md` §6.3).
 - Every check that reads the geometry either falsifies a declaration or states an interval.
-- No 2D question is answered in decad; the one that would be (coplanar overlap, §7.3) is deferred to `sketch`.
+- No 2D question about recorded entities is answered in decad: J3's overlap witness is a point-in-triangle test on
+  mesh chords with stated bounds, and coplanar-face inference (§7.3), which would need the trims' overlap, is
+  deferred to `sketch`.
+- `Check` never runs a pair proof, so it never claims one: no status means "interiors disjoint" unless a caller's
+  `Verify` report says so (R2).
 - Nothing in the design belongs to a manufacturing process.
 
 ## 11. Consumers
@@ -745,21 +865,46 @@ computed geometry: offsets, axes, clearances, gaps, coordinates. Fixtures are th
 | `TestViews` | centring, `WithPartPose`, ports at a pin's axis midpoint and at a box-overlap centre | P2 |
 | `TestThreeMFItems` | object names, moved vertices, one tessellation for a repeated body, reflection refusal, determinism | E1 |
 | `TestBOM`, `TestSummaryMarkdown` | the lap's rows, `Spec` grouping and its volume falsifier; the page's sections in order | P3 |
-| `TestCheckContactKinds` | `FaceContact`, `Contact`, `Keepout`, `Tie` confirm and contradict cases | P4 |
-| `TestCheckUnexplained` | two touching blocks without a joint appear in `Unexplained`; with a `FaceContact` they do not | P4 |
-| `TestCheckPins` | Ø6 in Ø6.4 `Confirmed` 0.2; declared 0.3 `Contradicted`; a declared axis 1 mm off `Contradicted`; a press fit declared −0.05 confirms and +0.1 contradicts | P4 |
-| `TestCheckVerifyReuse` | `WithVerifyReport` gives the same report as the internal `Verify` | P4 |
+| `TestCheckPins` | Ø6 in Ø6.4: `Confirmed`, `Measured` 0.2, `Engaged` 10; declared 0.3 `Contradicted` (`CauseClearance`); a declared axis 1 mm off `Contradicted` (`CauseAxis`); a pin 1 mm off the bore's axis `Contradicted` (`CauseNoMatch`) with `Reason` naming both radii; a Ø6.1 pin in a Ø6 bore declared −0.05 `Confirmed`, undeclared `Contradicted` (`CauseInterference`); a pin 5 mm clear of the plate `Contradicted` (`CauseApart`) | P4a |
+| `TestCheckPinInSlot` | a Ø4 pin in a 4.4 mm groove `Confirmed` 0.4; walls not parallel to the pin `Contradicted` | P4a |
+| `TestCheckUnread` | a bore whose face reads `Faceted` (a rotated copy past retention) makes its pin joint `Undecided` (`CauseUnreadFace`), never `Contradicted`; its declared `Axis` is reported | P4a |
+| `TestCheckFaceContact` | two stacked blocks `Confirmed` with a witness on the shared plane; blocks 0.5 mm apart `Contradicted` (`CauseApart`); two L-shaped plates on one plane whose vertex boxes overlap but whose faces do not stay `Undecided` (`CauseNoWitness`), never `Confirmed` | P4a |
+| `TestCheckUnexplained` | touching blocks with no joint are listed with their box overlap; with a `FaceContact` they are not; blocks 1 mm apart are not listed (U3) | P4a |
+| `TestCheckNoVerify` | `Check` on the pin and plate leaves the document's history and live set as they were, and its result is the same with and without `WithVerifyReport` when the report adds nothing | P4a |
+| `TestGraphStatus` | edge labels end with status and cause; contradicted edges use `--x`, undecided ones `-.->` | P4a |
+| `TestCheckContact` | a block resting on another `Confirmed` with a witness whose `Gap` upper end is within 0.25 mm; blocks 2 mm apart `Contradicted` (`CauseApart`); a contact between parts meshed coarser than the tolerance allows `Undecided` ("below resolution", G5) | P4b |
+| `TestCheckKeepout` | blocks 5 mm apart with `MinGap` 2 `Confirmed` by boxes; L-shaped parts whose boxes meet but whose nearest points are 1 mm apart `Contradicted` (`CauseTooClose`) by a witness; the same parts 3 mm apart `Undecided` (`CauseNeedsPairProof`), then `Confirmed` with a `WithVerifyReport` report | P4b |
+| `TestCheckWitnessSearch` | `WithWitnessSearch` sets `Near` on an unexplained touching pair and not on a pair whose boxes meet while its bodies stay 1 mm apart | P4b |
 | `TestLinkage` | a hinge and a slider become a revolute and a prismatic link with declared contacts; a loop joint comes back unplaced; `VerifyLinkage` runs on the result | P5 |
 | `TestInfer` | a lap with two pins infers both pins and nothing else; a rotated copy infers through retained tags (M5) | P6 |
 
 Examples: `examples/parts_explode_example_test.go` (P1), `examples/parts_views_example_test.go` (P2),
 `examples/export_3mf_items_example_test.go` (E1), `examples/parts_summary_example_test.go` (P3) and
-`examples/parts_joints_example_test.go` (P4), each with a verified `// Output:` block.
+`examples/parts_joints_example_test.go` (P4a), each with a verified `// Output:` block.
 
 **Acceptance case: the crossbow, in the gallery.** Per `agent-docs/testing.md` "Test scope", the 51-part model stays
 in `decad-gallery`. Each phase is accepted when its real output passes through the real consumer there (§15): P1 by
-an exploded image and a diagram of all 51 parts, P2 by a part sheet, P4 by the whole assembly's `Check`, P5 by its
-linkage.
+an exploded image and a diagram of all 51 parts, P2 by a part sheet, P4a and P4b by the whole assembly's `Check`, P5
+by its linkage.
+
+**`Check` on the crossbow.** The model declares 82 joints: 46 `PinInBore`, 4 `PinInSlot`, 15 `FaceContact`, 9
+`Contact` and 8 `Tie` (the bands). The figures below are dated illustrations from P1's acceptance run (2026-11) and
+the model's layout, not measurements of `Check`:
+
+| Kind | Joints | Expected | Basis |
+|---|---|---|---|
+| `PinInBore` | 46 | 40 `Confirmed`, 6 `Contradicted` (`CauseApart`) | `Explode` read 40 of the 46 axes from the faces. The other 6 pair a rivet with a receiver part it does not pass through (rivets 1 and 2 against the front receiver, rivet 3 against the two rear halves), from layout coordinates tens of millimetres apart, so their boxes are apart. They are joints the model declares wrongly, which `Check` should report. |
+| `PinInSlot` | 4 | 4 `Confirmed` | all 4 axes came from the faces |
+| `FaceContact` | 15 | at least 7 `Confirmed`; the rest `Confirmed` or `Undecided` (`CauseUnreadFace`, `CauseNoWitness`) | `Explode` pulled 7 parts along a matched contact face; the other 8 contacts were not a part's first joint, so P1 did not record whether they match |
+| `Contact` | 9 | most `Confirmed` | parts at rest against each other by design; the count depends on G5's resolution at the model's 0.1 mm meshes and is the main unknown |
+| `Tie` | 8 | 8 `NotChecked` | by J6 |
+
+**Targets.** Of the 74 checked joints, at least 51 `Confirmed` (40 + 4 + 7), the 6 misdeclared rivet joints
+`Contradicted`, no `Contradicted` joint the gallery cannot trace to a modelling error, and every `Undecided` one
+carrying a cause. Time: P4a's structural rules under 5 s for the whole model after its parts are built (the face
+matching alone takes 25 ms on cached meshes; `VerifyAll` tessellation of 51 parts dominates); P4b's witnesses under 60 s
+more with `WithWitnessSearch`, against 9 min 57 s for `Verify`. A miss on either target stops the PR and is reported
+with the measurement.
 
 **CI shards** (`agent-docs/testing.md`). `parts/` is a new package: the CI workflow's race job must name it, or
 `TestCIWorkflowRaceShardsCoverEveryPackage` fails; it joins the `./decadtest/ ./export/ ./internal/decaderr/ ./parts/` job
@@ -779,28 +924,36 @@ boundary gate evidence in its description. P1 also carries this document. Sizes 
 | E1 | `export.ThreeMFItems` and its section in `agent-docs/format-io-design.md` | — | 300 |
 | P2 | `Views` and ports; views example | P1 | 350 |
 | P3 | `BOM`, `Summary`; summary example | P1 | 500 |
-| P4 | `Check` over `Verify` (C1–C7), `JointReport`, edge statuses in `Graph`; joints example | P1 | 800 |
-| P5 | `Set.Linkage` | P4 | 450 |
-| P6 | `Infer` and `JointReport.Inferred` | P4 | 300 |
+| P4a | the §7.2 design delta; `internal/jointcheck`; `Check` for `PinInBore`, `PinInSlot`, `FaceContact` and `Tie` (G0, G1, G3, G4, J1–J3, J6), `Unexplained` by boxes (U1, U3), `JointReport`, `CheckRequest`, `Cause`; M8's finer rungs; edge statuses in `Graph`; the joint table's cause and evidence columns in `Summary`; joints example | P1–P3 (landed) | 900 |
+| P4b | point witnesses (G2, G5), `Contact` and `Keepout` (J4, J5), `WithWitnessSearch` (U2), `WithVerifyReport` (R1–R3) | P4a | 600 |
+| P5 | `Set.Linkage` | P4a | 450 |
+| P6 | `Infer` and `JointReport.Inferred` | P4a | 300 |
 
-**Parallel work.** P1 and E1 start together. After P1, P2, P3 and P4 run in parallel. After P4, P5 and P6 run in
-parallel. `Summary` prints the joint table from whichever of P3 and P4 lands second.
+P1, E1, P2 and P3 have landed.
+
+**Parallel work.** P4a comes first: it decides the pin, slot and face joints, 65 of the crossbow's 74 checked joints,
+without a single distance query. After P4a, P4b, P5 and P6 run in parallel; none edits another's rules. P5 reads
+only `JointResult.Axis`, which P4a fills.
 
 P1 is the largest PR because the exploded view needs the axis matching; splitting it further would ship a `Set`
 nobody can look at. If review asks for a smaller first PR, P1 splits into P1a (`Set`, `Join`, `Graph`,
 `WriteMermaid`: the diagram, 500) and P1b (`internal/jointinfer`, `Explode`: the exploded view, 800).
 
 Before P1 grows past its first case, `Explode` runs on the real 51-part crossbow and the count of joints whose `Pull`
-is `BoxCentres` (no axis from faces or declaration) is recorded. Before P4 starts, one `Verify` with
-`WithClearances` runs over the same model and its time and undecided pair count are recorded (§14). If either run
-fails, expansion of that PR stops and the blocker is reported.
+is `BoxCentres` (no axis from faces or declaration) is recorded. Before P4a grows past the pin case, `Check` runs on
+the real crossbow and its time and status counts are recorded against §12's targets; before P4b grows past the
+`Contact` case, the same for the witnesses. If a run misses its target, expansion of that PR stops and the blocker is
+reported.
 
 ## 14. Risks and open questions
 
 | Risk or unknown | What settles it |
 |---|---|
 | A face of a mesh Boolean result keeps a `Cylinder` tag only where retention proved it; other faces read `Faceted`. The crossbow's moving parts are placed by rotations about +Y, so their bores may read as displaced retained tags or as `Faceted`, and M3 may not match them. | P1's crossbow run counts `Pull` sources. A declared `Axis` covers each unmatched pin; the exploded view stays right, and `Pull` shows which axes were stated rather than read. |
-| `Verify` over 51 faceted parts may be slow, or leave many pin and bore pairs undecided. The gallery screens pairs with its own `meshgap` and never calls `Verify` on the crossbow, which suggests one of the two. A mostly-`Undecided` `Check` would not replace `designedContacts`. | The pre-P4 run. The exploded view and diagram do not depend on it. If undecided pairs dominate, the fix is in the clearance kernel's faceted coverage, a decad change, not a `parts` fallback. |
+| `Verify` is slow and mostly undecided on a real build (9 min 57 s, 64 of 82 crossbow joint pairs undecided), so `Check` does not use it. Its pair proof stays the only proof that interiors are disjoint. | `Check` is structural (§7.2). Faster, more decisive pair proofs are clearance-kernel work, a decad change outside `parts`; `WithVerifyReport` reads one when a caller has it. |
+| `DistanceToPoint`'s enclosure width on a faceted part is unknown; if it is much wider than the mesh bound, G5 leaves most `Contact` joints `Undecided`. | P4b's first crossbow run measures the witness sums for the 9 contacts. |
+| The cost of `VerifyAll` tessellation and of `DistanceToPoint` per call on the crossbow's parts is unmeasured. The gallery already meshes all 51 parts with `VerifyAll` at 0.1 mm in its tests. | The P4a and P4b crossbow runs against §12's targets. |
+| A 64-point sample per side can miss a small touching spot, leaving a true contact `Undecided`. | `CauseNoWitness` says so; raising the sample is a constant to revisit with the P4b measurement. |
 | E3's box test is coarse: a long pin's swept box may meet a neighbour's box though the pin's path is clear. | E3 then falls back to the shorter travel, and `Overlaps` reports any exploded boxes that still meet. |
 | The request mentioned a joint-chain checking program on branch `feat-joint-chain-check`. No such branch or worktree exists; the work merged as #665, "check joint chains with VerifyLinkage", and is the linkage check §7.4 consumes. | Nothing further, unless another branch was meant. |
 
@@ -817,8 +970,11 @@ schematic, the connection diagram and the part sheets come from `parts` only:
    an exploded 3MF with the exploded placements.
 3. After P2: `tools/render/` draws a part sheet from `Set.Views`, one tile per part, ports as callouts.
 4. After P3: the model writes the `Summary` page beside the README.
-5. After P4: `designedContacts` is deleted; `TestPoseClearance` asserts `Unexplained` is empty and no joint is
-   `Contradicted`. `internal/meshgap` stays only for checks `Verify` cannot yet decide, each listed against a decad gap.
+5. After P4a: the six rivet joints `Check` contradicts are fixed in the model (dropped, or made `Contact` where a rivet
+   head does rest on the part). `designedContacts` is deleted; `TestPoseClearance` asserts no joint is `Contradicted`
+   and records the `Undecided` count and the `Unexplained` pairs. After P4b, with `WithWitnessSearch`, it asserts that
+   no `Unexplained` pair has `Near` set. `internal/meshgap` stays for the poses the cycle tests sweep, where the
+   gallery needs a gap screen on every pair at every step, which `Check` does not do.
 6. After P5: the model's motion checks read their joints from the same `Set`.
 
 **Printing checks stay in the gallery.** `TestPrintSize` (every printed part within a 200 mm cube),

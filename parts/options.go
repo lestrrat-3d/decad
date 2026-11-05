@@ -22,7 +22,7 @@ type config struct {
 }
 
 func defaultConfig() config {
-	return config{fitTol: 0.05, axisTol: 0.5 * math.Pi / 180, maxFit: 1, contactTol: 0.05, gap: 10}
+	return config{fitTol: 0.05, axisTol: 0.5 * math.Pi / 180, maxFit: 1, contactTol: 0.25, gap: 10}
 }
 
 // option is the one concrete option type. The three public option interfaces
@@ -93,7 +93,7 @@ func lengthCheckOption(v units.Value, what string, allowZero bool, set func(*con
 }
 
 // WithFitTolerance sets the largest axis distance and radius disagreement a
-// match allows; the default is 0.05 mm.
+// match allows; the default is 0.25 mm.
 func WithFitTolerance(tol units.Value) CheckOption {
 	return lengthCheckOption(tol, "fit tolerance", false, func(c *config, v float64) { c.fitTol = v })
 }

@@ -451,5 +451,7 @@ declared `parts.Axis`, and a declared clearance, minimum gap or direction where 
 | `parts.Views`, `parts.PartView`, `parts.Port` | struct | Each part posed for drawing alone: a placement, bounds, label anchor and the points where its joints attach. | `Set.Views` |
 | `parts.BOM`, `parts.BOMRow` | struct | The bill of materials: a row per spec with its parts, quantity, material, volume and mass. | `Set.BOM` |
 | `parts.Summary` | struct | The set, and optionally a joint report and an exploded layout, to write as one Markdown page. | The caller |
-| `parts.JointStatus`, `parts.JointReport`, `parts.JointResult` | enum, struct | What a joint check found for each joint. | The caller |
+| `parts.JointStatus`, `parts.Cause`, `parts.AxisSource` | enum | Whether a joint check confirmed a joint, why not, and where its axis came from. | `JointResult` |
+| `parts.JointReport`, `parts.JointResult`, `parts.CheckRequest`, `parts.PartMesh` | struct | What `Set.Check` found: a result per joint, the settings used and how each part's faces were meshed. | `Set.Check` |
+| `parts.PairFinding` | struct | A pair of parts whose boxes meet and that no joint names, with where they meet. | `JointReport.Unexplained` |
 | `parts.ExplodeOption`, `parts.ViewOption`, `parts.CheckOption` | option set | Settings on `Set.Explode` and the other queries. | `parts.WithExplodeGround` and the other `With` functions |
