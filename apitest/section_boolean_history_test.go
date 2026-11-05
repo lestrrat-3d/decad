@@ -232,7 +232,7 @@ func TestSectionMeshBooleanHistoryRefusals(t *testing.T) {
 		duplicate, err := decad.Copy(t.Context(), notched)
 		require.NoError(t, err)
 		// The history gate refuses a copy, but a copy of an axis-square result keeps its exact vertices, so the grid
-		// reads the same notch (agent-docs/orthogonal-section-design.md).
+		// reads the same notch (agent-docs/orthogonal-design.md).
 		requireExactHistorySection(t, duplicate, historyLevel(t, 7), [][2]float64{
 			{0, 0}, {10, 0}, {10, 5}, {5, 5}, {5, 10}, {0, 10},
 		}, 75)
@@ -252,7 +252,7 @@ func TestSectionMeshBooleanHistoryRefusals(t *testing.T) {
 		joined, err := decad.Union(t.Context(), historyCube(t, doc), beamAlongX(t, doc, -5, 20, 6, 14))
 		require.NoError(t, err)
 		// The history gate refuses a plane that misses an operand, but the result is a solid whose faces all square to
-		// an axis and a plane square to one, so the grid reads the cut (agent-docs/orthogonal-section-design.md).
+		// an axis and a plane square to one, so the grid reads the cut (agent-docs/orthogonal-design.md).
 		requireExactHistorySection(t, joined, historyLevel(t, 3), [][2]float64{{0, 0}, {10, 0}, {10, 10}, {0, 10}}, 100)
 	})
 	t.Run("cut circle", func(t *testing.T) {

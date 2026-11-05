@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file is agent-docs/orthogonal-move-design.md's public-surface tests for MoveFace.
+// This file is agent-docs/orthogonal-design.md's public-surface tests for MoveFace.
 
 func TestMoveFacePushesAndPullsFacesOfABox(t *testing.T) {
 	t.Parallel()

@@ -70,7 +70,7 @@ func WithOffsetSide(side OffsetSide) OffsetOption { return offsetSideOption{side
 // of agent-docs/modify-design.md §8, growing a radius-distance arc at each convex
 // corner and mitering each concave one. Every other sheet family is ErrUnsupported (agent-docs/surface-design.md Table R row R37). A solid
 // offsets only when it is a faceted solid whose faces all square to a world axis, such as a mesh solid
-// (agent-docs/orthogonal-offset-design.md): each face moves along its outward normal, outward for OffsetPositive
+// (agent-docs/orthogonal-design.md): each face moves along its outward normal, outward for OffsetPositive
 // and inward for OffsetNegative, the neighbouring faces extended or trimmed to meet, and the result is a second
 // solid; any other solid is ErrUnsupported.
 //
@@ -140,7 +140,7 @@ func Offset(ctx context.Context, b *Body, distance units.Value,
 	return result, nil
 }
 
-// offsetSolid offsets a faceted solid every face of which squares to a world axis (agent-docs/orthogonal-offset-design.md):
+// offsetSolid offsets a faceted solid every face of which squares to a world axis (agent-docs/orthogonal-design.md):
 // each face moves along its outward normal by the distance, outward for OffsetPositive and inward for OffsetNegative, and
 // the result is a second solid, the receiver staying live as for a sheet. Any other solid is ErrUnsupported.
 func offsetSolid(ctx context.Context, d *Document, b *Body, side OffsetSide, dmm float64) (*Body, error) {

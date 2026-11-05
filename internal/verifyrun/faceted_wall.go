@@ -41,7 +41,7 @@ func facetedWall(budget *proofbound.WorkBudget, pl facetedrecord.Payload) (wallO
 }
 
 // orthogonalWall reads the wall of a faceted body every face of which squares to a world axis, with no vertex bound,
-// exactly (agent-docs/orthogonal-wall-design.md): the thinnest wall is the shortest run of material along an axis on
+// exactly (agent-docs/orthogonal-design.md): the thinnest wall is the shortest run of material along an axis on
 // the solid's grid, a reading with a lower end as well as an upper one, so a wall thick enough is proven as well as one
 // too thin. ok is false when the body is outside that class and the rays take it.
 func orthogonalWall(budget *proofbound.WorkBudget, pl facetedrecord.Payload) (wallOutcome, bool) {
@@ -61,7 +61,7 @@ func orthogonalWall(budget *proofbound.WorkBudget, pl facetedrecord.Payload) (wa
 }
 
 // orthogonalRadius reads the concave radius of a faceted body every face of which squares to a world axis, with no vertex
-// bound (agent-docs/orthogonal-wall-design.md §4): every edge is sharp, so a concave edge is a concave feature of radius
+// bound (agent-docs/orthogonal-design.md, Wall survey §4): every edge is sharp, so a concave edge is a concave feature of radius
 // zero, read exactly, and a body with none has no concave feature at all, which is a proven absence. ok is false when
 // the body is outside that class.
 func orthogonalRadius(pl facetedrecord.Payload) (radiusOutcome, bool) {

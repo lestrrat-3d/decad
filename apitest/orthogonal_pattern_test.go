@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file is agent-docs/orthogonal-boolean-design.md B14's public-surface test: a circular pattern of a faceted solid
+// This file is agent-docs/orthogonal-design.md B14's public-surface test: a circular pattern of a faceted solid
 // that is a whole number of quarter turns about a world axis keeps every instance exact, so the joined pattern reads
 // exactly.
 

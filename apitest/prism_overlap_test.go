@@ -291,7 +291,7 @@ func TestVerifyFacetedMultiRegionPairReadsOnItsGrid(t *testing.T) {
 	require.NoError(t, err)
 	// Neither operand is a prismPayload, so G1 excludes the pair from every analytic path and the mesh route refuses it as
 	// coplanar contact. Both are axis-square faceted solids, so their common grid reads the overlap exactly
-	// (agent-docs/orthogonal-boolean-design.md), the same 120 mm^3 the prisms' own reading gives.
+	// (agent-docs/orthogonal-design.md), the same 120 mm^3 the prisms' own reading gives.
 	require.Len(t, report.Interferences, 1)
 	require.InDelta(t, 120.0, report.Interferences[0].Volume.Value.Base(), 1e-9)
 	require.Less(t, report.Interferences[0].Volume.Bound.Base(), 1e-9)

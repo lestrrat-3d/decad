@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file is agent-docs/orthogonal-boolean-design.md's public-surface test for Verify's overlap volume of two faceted
+// This file is agent-docs/orthogonal-design.md's public-surface test for Verify's overlap volume of two faceted
 // solids every face of which squares to a world axis, including a pair that shares a face plane.
 
 func TestOrthogonalInterferenceReadsTheOverlapVolumeExactly(t *testing.T) {

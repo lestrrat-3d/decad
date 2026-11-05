@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file is agent-docs/orthogonal-boolean-design.md B10's public-surface tests for QuarterTurn.
+// This file is agent-docs/orthogonal-design.md B10's public-surface tests for QuarterTurn.
 
 func TestQuarterTurnExchangesCoordinatesExactly(t *testing.T) {
 	t.Parallel()

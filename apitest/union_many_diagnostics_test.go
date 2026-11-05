@@ -21,7 +21,7 @@ func TestUnionManyOperationWarnings(t *testing.T) {
 			doc := decad.New()
 			first := boxBody(t, doc, 0, 0, 10, 10, 10)
 			// A round operand keeps the pair on the mesh route, where a coplanar face takes a gap shift: two boxes meet
-			// exactly on a grid (agent-docs/orthogonal-boolean-design.md) and need none.
+			// exactly on a grid (agent-docs/orthogonal-design.md) and need none.
 			touching := translated(t, discBody(t, doc, 5, 3, 10), 0, 5, 10)
 			inside := translated(t, boxBody(t, doc, 2, 2, 4, 4, 2), 0, 0, 2)
 			others := []*decad.Body{touching, inside}

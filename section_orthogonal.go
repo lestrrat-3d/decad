@@ -10,7 +10,7 @@ import (
 )
 
 // orthogonalSection sections a faceted solid every face of which squares to a world axis by a plane square to
-// an axis (agent-docs/orthogonal-section-design.md): the cut is read from the grid of the solid's coordinates, so
+// an axis (agent-docs/orthogonal-design.md): the cut is read from the grid of the solid's coordinates, so
 // its corners are coordinates of the solid. ok is false when the route does not apply or declines, and the caller
 // takes its other routes: the receiver is placed or holds a vertex bound, the plane's frame is not made of
 // world axes, the plane lies on a grid line or outside the solid, the cut is not one region, or a corner does

@@ -9,7 +9,7 @@ import (
 )
 
 // facetedHoleSite is the site of a hole in a planar face of a faceted solid with exact vertices
-// (agent-docs/orthogonal-boolean-design.md B20). The face's plane is read exactly from its vertices
+// (agent-docs/orthogonal-design.md B20). The face's plane is read exactly from its vertices
 // (convexExactPolygon) and its unit normal, rounded once to a float, is the hole's axis: the hole runs along that float
 // direction, the way it runs along an analytic plane's frame normal, and the tool starts outside the body, so the mouth
 // plane is not the face's. The outward side is the one the face's area centroid certifiably leaves the body on.

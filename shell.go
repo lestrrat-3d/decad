@@ -46,7 +46,7 @@ const (
 	Outward
 	// Centered straddles the original surface, half the thickness each side. Only
 	// a faceted solid whose faces all square to a world axis takes it
-	// (agent-docs/orthogonal-shell-design.md); any other body is ErrUnsupported.
+	// (agent-docs/orthogonal-design.md); any other body is ErrUnsupported.
 	Centered
 )
 
@@ -72,7 +72,7 @@ func WithShellSense(s ShellSense) ShellOption {
 
 // WithShellFaceThickness gives the walls whose outward normal is the world axis direction normal (+X, +Y, +Z or a
 // negative one) the thickness t in place of Shell's own, so a part can have a heavy floor and thin sides
-// (agent-docs/orthogonal-shell-design.md). It applies to an Inward shell of a faceted solid whose faces all square to a
+// (agent-docs/orthogonal-design.md). It applies to an Inward shell of a faceted solid whose faces all square to a
 // world axis; any other body, a sense other than Inward, a normal that is not exactly a world axis direction
 // (ErrDegenerate) and a direction named twice (ErrDegenerate) are refused. t is a positive length. Directions the
 // option does not name take Shell's thickness, and the walls of two directions meet in a mitred corner.
@@ -128,7 +128,7 @@ func WithShellFaceThickness(normal r3.Vec, t units.Value) ShellOption {
 // such as a part read from STL and made a solid by SolidFromMesh, shells inward on a grid:
 // the cavity is the solid eroded by a cube of side twice t, so the walls are mitered at
 // every edge, the removed faces open it, and the result is a mesh solid whose axis faces keep
-// their planes (agent-docs/orthogonal-shell-design.md). A wall is t thick to the rounding
+// their planes (agent-docs/orthogonal-design.md). A wall is t thick to the rounding
 // of x ± t; walls that meet are ErrDegenerate. An Outward shell of such a solid wraps it
 // instead, the solid dilated by a cube less itself, ending flush with a removed face's plane.
 //

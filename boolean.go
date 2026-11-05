@@ -387,7 +387,7 @@ func containedCutQuantities(ctx context.Context, result, target, tool *Body) err
 // commits only the last result. a and b MUST belong to one document.
 //
 // Two axis-square faceted solids, or one beside an extruded rectilinear body, combine exactly on a grid first
-// (agent-docs/orthogonal-boolean-design.md), so a feature built from tool bodies reads exactly on a mesh solid.
+// (agent-docs/orthogonal-design.md), so a feature built from tool bodies reads exactly on a mesh solid.
 func booleanBody(ctx context.Context, op meshbool.OperationKind, a, b *Body, ref producerID) (*Body, error) {
 	if body, ok := orthogonalBooleanAt(ctx, documentHandle(a.n.Doc), op, a, b, ref); ok {
 		return body, nil

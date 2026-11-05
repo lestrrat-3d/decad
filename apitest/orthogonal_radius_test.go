@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file is agent-docs/orthogonal-wall-design.md §4's public-surface tests for Verify's concave-radius survey of
+// This file is agent-docs/orthogonal-design.md, Wall survey §4's public-surface tests for Verify's concave-radius survey of
 // a faceted solid every face of which squares to a world axis.
 
 func TestOrthogonalConcaveRadiusIsAbsentFromABlockAndZeroFromAnL(t *testing.T) {

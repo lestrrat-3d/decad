@@ -23,7 +23,7 @@ const tiltedStopMinCosine = 1e-3
 const tiltedStopMargin = 1e-6
 
 // extrudeToTiltedFace extrudes the profile up to a planar face of a faceted solid with exact vertices that is tilted
-// from the sweep (agent-docs/orthogonal-boolean-design.md B19): the profile is extruded past the face and the part
+// from the sweep (agent-docs/orthogonal-design.md B19): the profile is extruded past the face and the part
 // beyond the face is cut away by a prism standing on the face's own outline. The face's vertices are exact and
 // coplanar, and the tool's bottom is that polygon, so the cut plane is the face's plane with no rounding to charge.
 // The face must be a convex polygon with one loop, wholly on one side of the sketch plane, and its outline, seen along

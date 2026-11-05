@@ -222,7 +222,7 @@ func prismOverlapVolume(ctx context.Context, alloc topo.Alloc, a, b *topo.Body) 
 }
 
 // orthogonalOverlapVolume reads the volume two faceted bodies share, each of which has every face square to a world axis
-// and no vertex bound, exactly on their common grid (agent-docs/orthogonal-boolean-design.md): the sum of the cells
+// and no vertex bound, exactly on their common grid (agent-docs/orthogonal-design.md): the sum of the cells
 // both occupy, with the bound of its own rounding. It also reads a pair that shares a face plane, which the mesh route
 // refuses as contact. ok is false when either body is outside that class, and the mesh route takes the pair.
 func orthogonalOverlapVolume(a, b *topo.Body) (vocab.Measurement, bool) {

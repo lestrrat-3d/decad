@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file is agent-docs/orthogonal-offset-design.md's public-surface tests for Offset of a solid.
+// This file is agent-docs/orthogonal-design.md's public-surface tests for Offset of a solid.
 
 func TestOffsetGrowsAndShrinksABlock(t *testing.T) {
 	t.Parallel()

@@ -11,7 +11,7 @@ import (
 
 // orthogonalBoolean performs a Union, Cut or Intersect of two faceted solids every face of which squares to a
 // world axis, held at no vertex bound and unplaced, such as mesh solids and the results of this route
-// (agent-docs/orthogonal-boolean-design.md). The operands are read onto one grid of their coordinates and the
+// (agent-docs/orthogonal-design.md). The operands are read onto one grid of their coordinates and the
 // result is built from its cells, so it is exact and a pair that touches or overlaps in a face is decided like any
 // other. The result is not committed. ok is false when the route does not apply or refuses the pair, and the
 // caller takes the general route: an operand outside the class, a result with no cell, a grid past its cells, or a

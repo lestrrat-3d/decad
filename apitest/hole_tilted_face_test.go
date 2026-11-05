@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file is agent-docs/orthogonal-boolean-design.md B20's public-surface tests: a Hole in a planar face of a mesh solid
+// This file is agent-docs/orthogonal-design.md B20's public-surface tests: a Hole in a planar face of a mesh solid
 // that is tilted from every axis.
 
 func TestHoleInATiltedMeshFaceRunsAlongTheFacesNormal(t *testing.T) {

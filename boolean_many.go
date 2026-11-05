@@ -69,7 +69,7 @@ func unionManyBodies(ctx context.Context, d *Document, ref producerID, operands 
 	if err == nil || !errors.Is(err, ErrUnsupported) {
 		return body, span, err
 	}
-	// Axis-square faceted solids join exactly on one grid (agent-docs/orthogonal-boolean-design.md).
+	// Axis-square faceted solids join exactly on one grid (agent-docs/orthogonal-design.md).
 	if joined, ok := orthogonalUnionMany(ctx, d, ref, operands); ok {
 		return joined, 1, ctx.Err()
 	}

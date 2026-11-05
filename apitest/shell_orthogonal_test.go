@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file is agent-docs/orthogonal-shell-design.md's public-surface tests for Shell on a faceted
+// This file is agent-docs/orthogonal-design.md's public-surface tests for Shell on a faceted
 // solid every face of which squares to a world axis.
 
 func blockSolid(t *testing.T, lo, hi r3.Vec) (*decad.Document, *decad.Body) {

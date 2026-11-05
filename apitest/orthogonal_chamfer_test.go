@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file is agent-docs/orthogonal-boolean-design.md B17's public-surface tests: a chamfer of several convex edges of
+// This file is agent-docs/orthogonal-design.md B17's public-surface tests: a chamfer of several convex edges of
 // a mesh solid that share corners, which the retained blend route refuses, is the solid less the wedge of each edge.
 
 // The volume the chamfer of a 20 x 20 x 10 box removes is the wedges' ½·d²·L along each chosen edge less what two or three

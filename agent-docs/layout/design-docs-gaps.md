@@ -17,12 +17,7 @@ The rules for rows live in `agent-docs/layout.md`.
 | `agent-docs/text-design.md` | `TextProfiles`: lettering from font outlines as sketch profiles, its layout and fill rule. |
 | `agent-docs/union-fold-design.md` | The two-at-a-time fold of a many-body `Union` that no certified route takes. |
 | `agent-docs/subd-design.md` | `SubDMesh`: Catmull-Clark subdivision of a polygon cage into a `MeshBody`. |
-| `agent-docs/orthogonal-move-design.md` | `MoveFace`: the press-pull of one face of an orthogonal mesh solid on the shell's grid. |
 | `agent-docs/sheet-metal-design.md` | `SheetMetal`: a bent strip of legs and circular bends as one solid, and its flat pattern. |
-| `agent-docs/orthogonal-boolean-design.md` | `Union`, `Cut` and `Intersect` of two axis-square faceted solids on a shared grid: exact, any contact. |
-| `agent-docs/orthogonal-wall-design.md` | `Verify`'s wall survey of an axis-square faceted solid: the thinnest run of material on the grid, a reading with both ends. |
-| `agent-docs/orthogonal-offset-design.md` | `Offset` of an axis-square faceted solid: every face moved along its normal on the shell's grid. |
-| `agent-docs/orthogonal-shell-design.md` | `Shell` of a faceted solid whose faces all square to an axis: the grid erosion, the removed-face slab and the wall mesh. |
 | `agent-docs/lattice-design.md` | `GyroidLattice`: the gyroid field, its box cap and the marching tetrahedra that cut it into a closed `MeshBody`. |
 | `agent-docs/mesh-solid-design.md` | `SolidFromMesh`: a closed `MeshBody` as a Faceted solid `Body`, its proofs and exact plane groups. |
 | `agent-docs/mesh-import-design.md` | `MeshBody`, `ReadSTL` and `ReadOBJ`: the mesh readers, the mesh report and its exact volume. |
@@ -42,3 +37,4 @@ The rules for rows live in `agent-docs/layout.md`.
 | `agent-docs/trim-graph-design.md` | General modify reach over retained analytic faces: trim graph, offsets, certified curves, face meshing, gates, increments. |
 | `agent-docs/revolve-operand-coarsening-design.md` | A boolean's retry of a revolve operand at up to eight times the pair tolerance after a work ceiling refuses it. |
 | `agent-docs/body-refine-design.md` | `Refine`: surface bounds for held Union meshes of convex leaves, the occupancy certificate, records and increments. |
+| `agent-docs/orthogonal-design.md` | Axis-square faceted solids on a shared grid: `Shell`, the Booleans, `Body.Section`, `Offset`, `MoveFace` and the wall, undercut and concave-radius surveys. |

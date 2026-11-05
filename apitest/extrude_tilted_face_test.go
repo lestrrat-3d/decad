@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file is agent-docs/orthogonal-boolean-design.md B19's public-surface tests: an Extrude to a planar face of a mesh
+// This file is agent-docs/orthogonal-design.md B19's public-surface tests: an Extrude to a planar face of a mesh
 // solid that is tilted from the sweep.
 
 // rampSolid is a 20 x 10 mesh block whose top slopes from 4 mm at x = 0 to 14 mm at x = 20 (z = 4 + x/2).

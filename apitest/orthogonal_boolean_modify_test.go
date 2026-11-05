@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file is agent-docs/orthogonal-boolean-design.md B8's tests: a result of the orthogonal Boolean
+// This file is agent-docs/orthogonal-design.md B8's tests: a result of the orthogonal Boolean
 // keeps exact planes, so Fillet, Chamfer and Shell take it.
 
 // lBracket is the union of a 10 x 4 x 4 bar and a 4 x 10 x 4 bar sharing a corner: an L of 160 + 160 − 64 = 256 mm³.

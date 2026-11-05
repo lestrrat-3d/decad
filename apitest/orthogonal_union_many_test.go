@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file is agent-docs/orthogonal-boolean-design.md B11's public-surface tests for the union of three or more
+// This file is agent-docs/orthogonal-design.md B11's public-surface tests for the union of three or more
 // axis-square faceted solids.
 
 func TestOrthogonalUnionOfSeveralBodiesJoinsThemOnOneGrid(t *testing.T) {

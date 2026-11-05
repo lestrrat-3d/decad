@@ -16,7 +16,7 @@ import (
 
 // shellOrthogonal shells a faceted solid every one of whose faces squares to a world axis, such as a
 // mesh solid made by SolidFromMesh or a mesh Boolean of axis-aligned boxes
-// (agent-docs/orthogonal-shell-design.md). The cavity is the solid eroded by a cube of side 2t,
+// (agent-docs/orthogonal-design.md). The cavity is the solid eroded by a cube of side 2t,
 // computed on a grid of the solid's coordinates and those coordinates ± t, with the slab twice t
 // thick over each removed face joined to the solid first so the cavity opens through it; the
 // result is the body cut by that cavity, made a mesh solid. ok is false when the route does not

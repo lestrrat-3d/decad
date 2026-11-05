@@ -39,7 +39,7 @@ func (w wedge) flushEnds() int {
 	return n
 }
 
-// chamferByWedges chamfers edges of the axis-square faceted solid b by d (agent-docs/orthogonal-boolean-design.md B17):
+// chamferByWedges chamfers edges of the axis-square faceted solid b by d (agent-docs/orthogonal-design.md B17):
 // the chamfer of a convex edge removes the triangular wedge between the two faces and the plane that cuts d along each,
 // so the result is b less the union of those wedges, which at a corner where two or more selected edges meet is the
 // solid within every chamfer plane, as a CAD chamfer of several edges is. Each wedge is cut by a prism a little longer

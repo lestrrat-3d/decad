@@ -1,5 +1,5 @@
 // Package orthoshell finds the cavity of a shell of an orthogonal polyhedron: a
-// closed solid whose faces all square to a world axis (agent-docs/orthogonal-shell-design.md).
+// closed solid whose faces all square to a world axis (agent-docs/orthogonal-design.md).
 // It works on plain millimetre data and touches no body, document or sketch.
 package orthoshell
 

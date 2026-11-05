@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file is agent-docs/orthogonal-section-design.md's public-surface tests for Body.Section of a faceted
+// This file is agent-docs/orthogonal-design.md's public-surface tests for Body.Section of a faceted
 // solid every face of which squares to a world axis.
 
 func sectionArea(t *testing.T, body *decad.Body, frame r3.Frame, outer, holes int) float64 {

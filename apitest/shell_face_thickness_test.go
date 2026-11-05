@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file is agent-docs/orthogonal-shell-design.md O12's public-surface tests for WithShellFaceThickness.
+// This file is agent-docs/orthogonal-design.md O12's public-surface tests for WithShellFaceThickness.
 
 func TestShellGivesEachDirectionItsOwnThickness(t *testing.T) {
 	t.Parallel()
