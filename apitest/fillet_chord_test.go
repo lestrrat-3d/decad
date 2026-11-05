@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file is agent-docs/fillet-chord-design.md's public-surface tests for
+// This file is agent-docs/blend-variants-design.md's public-surface tests for
 // FilletChord on the 20 x 20 x 10 block of chamfer_angle_test.go.
 
 func TestFilletChordSetsTheRadius(t *testing.T) {

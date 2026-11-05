@@ -5,7 +5,7 @@
 `STL`, `OBJ`, and `ThreeMF` accept `decad.TessellateOption` values and default to
 `decad.VerifyNone`. They write the mesh returned by `Body.Tessellate` at the
 requested verification level. The 3MF package contract is in
-`agent-docs/3mf-export-design.md`. `export` imports decad and
+`agent-docs/format-io-design.md`. `export` imports decad and
 `github.com/lestrrat-3d/step/ap214`; decad's root package does not import
 STEP. `NewSTEPFile(ctx, body, tol, header)` returns a `step.File`. The
 `STEP(ctx, w, body, tol, opts...)` writer requires options for a nonempty file

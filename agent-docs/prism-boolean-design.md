@@ -760,7 +760,7 @@ input section must have no holes, zero section displacement, and only whole
 `LineSeg` edges. Two input edges on the same infinite line carrier are
 refused because this path has no proof for their shared source span. A
 circular prism joined to radial copies of one fitted section has a separate
-certified path in `agent-docs/prism-pattern-union-design.md`. Other multi-prism
+certified path in `agent-docs/pattern-union-design.md`. Other multi-prism
 classes enter `Union`'s certified two-body evaluator in source order after
 the specialized multi-body gates miss. A pair refusal leaves every original
 operand live.

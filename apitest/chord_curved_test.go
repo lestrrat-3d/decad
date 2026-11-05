@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file is agent-docs/fillet-chord-design.md §6's and chamfer-angle-design.md §4's
+// This file is agent-docs/blend-variants-design.md, Chord fillet §6's and chamfer-angle-design.md §4's
 // public-surface tests for a circular edge between a plane and a cylinder: the rims of
 // a rod of radius 5 and length 20.
 

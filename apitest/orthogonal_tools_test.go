@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file is agent-docs/orthogonal-boolean-design.md B13's public-surface test: a feature built from tool bodies
+// This file is agent-docs/orthogonal-design.md B13's public-surface test: a feature built from tool bodies
 // reads exactly on a faceted solid every face of which squares to a world axis.
 
 func TestEmbossOnAMeshSolidReadsExactly(t *testing.T) {

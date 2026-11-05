@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file is agent-docs/step-import-design.md §10's public-surface tests for
+// This file is agent-docs/format-io-design.md, STEP import §10's public-surface tests for
 // spherical faces, on hand-written domes: a sphere of radius 5 about the origin cut by
 // the plane z = h, the cap above it as one SPHERICAL_SURFACE face with one circular loop
 // and the disc below it as a plane.

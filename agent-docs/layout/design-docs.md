@@ -20,14 +20,13 @@ The rules for rows live in `agent-docs/layout.md`.
 | `agent-docs/tessellation-design.md` | Tessellation: curve samples, manifold proofs, source faces, certificates, boolean handoff. |
 | `agent-docs/clearance-design.md` | Pair disjointness and bounded gap proofs. |
 | `agent-docs/point-containment-design.md` | Public point classification, distance, mesh-to-body proofs, the exact prism-record route and the Boolean-history route. |
-| `agent-docs/orthogonal-section-design.md` | `Body.Section` of an axis-square faceted solid by an axis-square plane, read from the grid. |
 | `agent-docs/section-design.md` | Read-only planar section gate and Sketch reconstruction proof. |
 | `agent-docs/interference-design.md` | Read-only pair overlap and bounded volume proofs. |
 | `agent-docs/hole-design.md` | `Hole`: face and point placement, size gates, tool shapes and the atomic cut. |
 | `agent-docs/rib-design.md` | `Rib` and `Web`: line outline, extent, overrun, touch and volume checks, and the merged join. |
 | `agent-docs/emboss-design.md` | `Emboss`: face-derived sweep, plane checks, margin, volume checks and the shared join. |
 | `agent-docs/modify-design.md` | `Fillet`/`Chamfer`/`Shell` tables, section rewrite, exact offset, and build audit. |
-| `agent-docs/shell-twisted-sweep-design.md` | Inward top-cap Shell of a one-line twisted rounded Sweep: offset, held cup and bounds. |
+| `agent-docs/shell-variants-design.md` | `Shell` of a faceted body with bosses and of a twisted sweep. |
 | `agent-docs/twist-sweep-cut-design.md` | Stationed refinement of a twisted Sweep so Cut, Union and Intersect admit it. |
 | `agent-docs/chained-cut-design.md` | Fine partner chord and fine twist refinement so chained twisted bore cuts and window cuts are admitted with tight bounds. |
 | `agent-docs/spline-design.md` | Free-form kinds, exactness tiers, refusals, Tier A moments, work budget, proven brackets, and reach. |
@@ -37,28 +36,22 @@ The rules for rows live in `agent-docs/layout.md`.
 | `agent-docs/loop-fillet-design.md` | Route L's fillet arm: pipe bands on a planar face's loop. |
 | `agent-docs/vertex-blend-design.md` | Three-edge fillets, sphere patches, route V, and exact-radius refusals. |
 | `agent-docs/shell-opening-design.md` | Shell side openings on a prism and a revolve: rim rule, brep record, Tables RO/SO/BO/DO. |
-| `agent-docs/shell-faceted-boss-design.md` | Source-backed Shell of a nested rectangular boss in a faceted prism Union. |
 | `agent-docs/draft-design.md` | `WithTaper` and `Draft`: the sharp offset family, `draftPayload`, Tables RD/SD/BD/DD. |
 | `agent-docs/loft-design.md` | `Loft` pairing, refusals, results, consumers, chains, mass properties, and wall-crossing audit. |
 | `agent-docs/loft-sections-design.md` | Smooth-section loft classes, held meshes and proofs. |
 | `agent-docs/loft-face-sections-design.md` | Source-cap nine-section loft, cap correspondence, embedding, occupied-volume proof and two-cone continuation. |
-| `agent-docs/revolve-loft-contact-graph-design.md` | Source-event ownership and held anchors for finite Revolve and trimmed LoftFaces contacts. |
 | `agent-docs/loft-point-design.md` | Point-to-profile solid loft, its apex topology and mesh proof. |
-| `agent-docs/revolve-loft-sector-design.md` | Finite Revolve and trimmed point-Loft source certificate, first Union class and removal ledger. |
 | `agent-docs/revolve-axis-design.md` | Revolve/point-Loft sector Union and point-cone trims about a coordinate-plane axis through the origin: exact axis vector, predicates, charges, angle basis, ring, coaxial bore Cut, consumer contract, tests, +X digest. |
 | `agent-docs/loft-gear-bounds-design.md` | Loft gear bounds: per-cell residuals, centroid shift, `A/P` target, audit, ceilings. |
-| `agent-docs/loft-cylinder-boolean-design.md` | Certified axial Loft and centered cylinder Union, cap record, seam and volume bounds. |
-| `agent-docs/loft-mirror-boolean-design.md` | Certified end-cap reflection of one axial Loft and its sewn three-ring Union. |
+| `agent-docs/loft-boolean-design.md` | Loft Booleans with a mirror image and with a cylinder. |
 | `agent-docs/sweep-design.md` | `Path`/`Sweep`, its chain section (§15), mitred sweeps (§16) and bounded one-cell, composite and stationed twist (§17). |
 | `agent-docs/helix-design.md` | `Coil`: a profile screwed about an in-plane axis. |
 | `agent-docs/axial-section-boolean-design.md` | Union of axial extrusions as the extrusion of the 2D union of their sections, through sketch loop containment. |
-| `agent-docs/axial-pattern-join-design.md` | Union of axial extrusions that carry a rigid placement, such as pattern copies: exact plane map, re-recorded sections and the join displacement. |
+| `agent-docs/pattern-union-design.md` | `PatternJoin` of prism and of axial Loft chains. |
 | `agent-docs/prism-boolean-design.md` | Analytic `Union`/`Cut`/`Intersect` over co-directional prisms. |
-| `agent-docs/prism-pattern-union-design.md` | Certified Union of a circular prism and radial copies of one fitted section. |
 | `agent-docs/stacked-prism-design.md` | Stacked slabs, walls, measurements, mesh and consumers. |
 | `agent-docs/mirror-pattern-design.md` | Mirror and pattern entry points, the exact mirror join, the prism group. |
 | `agent-docs/general-boolean-design.md` | Boolean classes past the prism pair, and `brepPayload`. |
-| `agent-docs/oblique-boss-fillet-design.md` | Complete plane-to-oblique-cylinder boss junction and bounded fillet mesh. |
 | `agent-docs/cross-cylinder-bore-chamfer-design.md` | Source-backed perpendicular cylinder bore-mouth chamfer and mesh proof. |
 | `agent-docs/tessellation-reach-design.md` | Tessellation reach for lofts, free-form prisms, revolves and cap-loop chamfers. |
 | `agent-docs/faceted-vertex-bounds-design.md` | Per-vertex displacement bounds on faceted bodies and their boolean composition. |
@@ -83,7 +76,6 @@ The rules for rows live in `agent-docs/layout.md`.
 | `agent-docs/multibody-dynamics-design.md` | N-body dynamics, islands, `Timeline`. |
 | `agent-docs/planar-convex-filter-design.md` | Float pre-test of the §9.2 convexity certificate: error bound, range guard, poll count. |
 | `agent-docs/step-export-design.md` | Export package entry points and the AP214 faceted writer contract. |
-| `agent-docs/3mf-export-design.md` | The 3MF writer's package parts, mesh mapping, and error contract. |
 
 ### User guides
 

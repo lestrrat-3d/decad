@@ -530,7 +530,7 @@ Two subclasses were examined.
 - **Retained planes and cylinders** (the drilled rounded box of §1). The bore makes the body non-convex, and its
   reflex junctions need trims the record lacks. This design has no construction from tags alone.
 
-`Shell` of a `facetedPayload` stays SX9 outside the source-backed routes (`agent-docs/shell-faceted-boss-design.md`).
+`Shell` of a `facetedPayload` stays SX9 outside the source-backed routes (`agent-docs/shell-variants-design.md`).
 §16 lists the operand-record route.
 
 ### 9.2 `Draft` (GAP-C)

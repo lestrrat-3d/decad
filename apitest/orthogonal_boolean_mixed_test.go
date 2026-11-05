@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file is agent-docs/orthogonal-boolean-design.md B7's public-surface test: a faceted operand and an
+// This file is agent-docs/orthogonal-design.md B7's public-surface test: a faceted operand and an
 // extruded one.
 
 func TestOrthogonalBooleanTakesAnExtrudedPartnerForAMeshSolid(t *testing.T) {

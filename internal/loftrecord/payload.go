@@ -61,7 +61,7 @@ type Payload struct {
 	// connector's complete arc length, keyed by the outer-loop segment index.
 	ConstructionDelta float64
 	// JoinDelta is how far the recorded section sits from the exact image of
-	// the placed operand sections it was joined from (agent-docs/axial-pattern-join-design.md).
+	// the placed operand sections it was joined from (agent-docs/pattern-union-design.md).
 	// It is folded into the held-vertex, chord and matched displacements of
 	// the join body, so its readings enclose the ideal join. A body rebuilt from
 	// a copy of this payload keeps the term as extra slack; it denotes its own

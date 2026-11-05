@@ -11,7 +11,7 @@ import (
 type infillSegment struct{ a, b r3.Vec }
 
 // rectilinearInfill returns the lines that fill the region the loops of a layer's outline enclose
-// (agent-docs/gcode-design.md G7): parallel to the X axis when alongX, else to the Y axis, a line every spacing
+// (agent-docs/format-io-design.md G7): parallel to the X axis when alongX, else to the Y axis, a line every spacing
 // across the loops' extent starting half a spacing in, each cut where it crosses a loop, an outer loop and a hole
 // alike, so that it runs through the material between crossings in pairs. Each piece is drawn shorter by inset at
 // both ends, so it does not pile onto the perimeter, and one no longer than that is dropped. Alternate lines run
@@ -79,7 +79,7 @@ func rectilinearInfill(loops [][]r3.Vec, alongX bool, spacing, inset float64) []
 	return out
 }
 
-// insetLoops moves every loop of a layer's outline d towards the material (agent-docs/gcode-design.md G10): the outer
+// insetLoops moves every loop of a layer's outline d towards the material (agent-docs/format-io-design.md G10): the outer
 // loops inward and the loops of holes outward, each corner at the meeting of its two moved sides, so that a line
 // traced along the result lays its edge, and not its middle, on the outline. A loop is wound with the material on its
 // left, an outer loop counter-clockwise and a hole clockwise, decided by how many other loops enclose it. A corner

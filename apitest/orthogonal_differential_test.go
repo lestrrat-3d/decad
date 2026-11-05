@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file is agent-docs/orthogonal-boolean-design.md B16's public-surface differential test: random solids of unit
+// This file is agent-docs/orthogonal-design.md B16's public-surface differential test: random solids of unit
 // cubes are read in as mesh solids and run through Union, Cut, Intersect, Shell and Offset, each volume compared with
 // the same operation done cube by cube. internal/orthoshell's own differential test checks the grid operations; this one
 // checks the way the document's operations use them.

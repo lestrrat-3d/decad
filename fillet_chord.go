@@ -11,7 +11,7 @@ import (
 
 // FilletChord rounds the edges sel selects with an arc whose chord, the
 // straight line between its two tangent edges, is chord long, returning the
-// new body and retiring b (agent-docs/fillet-chord-design.md).
+// new body and retiring b (agent-docs/blend-variants-design.md).
 //
 // Where the faces meet at the angle φ across the corner (the interior angle of a
 // convex edge, the open wedge of a concave one) the arc turns π − φ, so its

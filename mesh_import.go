@@ -155,7 +155,7 @@ func ReadThreeMF(ctx context.Context, r io.Reader, opts ...MeshImportOption) (*M
 }
 
 // ReadIGES reads the planar-faced solids of an IGES file into a [MeshBody]
-// (agent-docs/iges-import-design.md). It reads every manifold solid B-rep entity (186) with the shells (514),
+// (agent-docs/format-io-design.md). It reads every manifold solid B-rep entity (186) with the shells (514),
 // faces (510), loops (508), edge lists (504) and vertex lists (502) below it: each face on a plane
 // (108, 190) is cut into triangles, a face with holes included, the vertices are welded by coordinate and
 // each solid is wound outward, a void's shell into its cavity. Lengths are converted from the file's unit to
@@ -207,7 +207,7 @@ func ReadIGES(ctx context.Context, r io.Reader, opts ...MeshImportOption) (*Mesh
 }
 
 // ReadSTEP reads the planar-, cylinder- and cone-faced solids of a STEP file into a [MeshBody]
-// (agent-docs/step-import-design.md). It reads every MANIFOLD_SOLID_BREP and
+// (agent-docs/format-io-design.md). It reads every MANIFOLD_SOLID_BREP and
 // BREP_WITH_VOIDS: each face on a plane is cut into triangles, a face with holes
 // included, each wall on a cylinder or a cone is cut into a ladder of triangles, arcs are
 // cut into chords within 0.01 mm of their circle, and the vertices are welded

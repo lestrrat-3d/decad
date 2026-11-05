@@ -15,7 +15,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file is agent-docs/gcode-design.md's tests for GCodePerimeters.
+// This file is agent-docs/format-io-design.md's tests for GCodePerimeters.
 
 func gcodeSpec() export.GCodeSpec {
 	return export.GCodeSpec{

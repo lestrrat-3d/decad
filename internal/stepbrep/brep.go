@@ -1,5 +1,5 @@
 // Package stepbrep reads the solids of a STEP model into a triangle mesh
-// (agent-docs/step-import-design.md). It reads the faces of MANIFOLD_SOLID_BREP
+// (agent-docs/format-io-design.md). It reads the faces of MANIFOLD_SOLID_BREP
 // and BREP_WITH_VOIDS whose surfaces are planes, cylinders or cones and whose edges are
 // lines or circles, and refuses the rest.
 package stepbrep

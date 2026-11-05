@@ -10,7 +10,7 @@ import (
 
 // QuarterTurn turns a faceted solid by a whole number of quarter turns about an axis through about, a world axis
 // with the right-hand sense, and returns the result as a new solid, retiring b
-// (agent-docs/orthogonal-boolean-design.md B9). A quarter turn only exchanges and negates coordinates, so the
+// (agent-docs/orthogonal-design.md B9). A quarter turn only exchanges and negates coordinates, so the
 // turned solid is exact where [Transform] by a 90 degree [r3.Rotation] is not: its vertices stay unbounded and it
 // stays on the exact routes of an axis-square solid.
 //

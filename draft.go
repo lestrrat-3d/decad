@@ -73,7 +73,7 @@ var errNilNeutralPlane = fmt.Errorf(`%w: nil neutral plane`, ErrDegenerate)
 // (agent-docs/draft-design.md §10.2).
 //
 // A faceted solid with exact vertices that is a straight prism along a world axis is also drafted, on all its walls,
-// about one of its two caps (agent-docs/orthogonal-boolean-design.md B21).
+// about one of its two caps (agent-docs/orthogonal-design.md B21).
 //
 // b is a live straight prism: an extrude, a filleted or chamfered
 // extrude, a tube, or any of these placed, whose recorded section is the
@@ -157,7 +157,7 @@ func Draft(ctx context.Context, b *Body, sel FaceSelector, neutral NeutralPlane,
 	pp, err := draftrecord.Receiver(bodyNode(b))
 	if err != nil {
 		// A straight prism read from a mesh, drafted on all its walls, is a tapered extrude of its section
-		// (agent-docs/orthogonal-boolean-design.md B21).
+		// (agent-docs/orthogonal-design.md B21).
 		if errors.Is(err, ErrUnsupported) && !isFrame {
 			if selected, serr := sel.SelectFaces(b); serr == nil {
 				if out, handled, derr := draftMeshPrism(ctx, d, b, neutralFace, selected, angle); derr != nil {

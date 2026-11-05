@@ -1,5 +1,5 @@
 // Package stepread reads the entity graph of an ISO 10303-21 (STEP physical
-// file) into plain values (agent-docs/step-import-design.md). It knows the
+// file) into plain values (agent-docs/format-io-design.md). It knows the
 // syntax and nothing of any application protocol.
 package stepread
 

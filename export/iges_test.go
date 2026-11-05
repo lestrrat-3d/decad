@@ -16,7 +16,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file is agent-docs/iges-export-design.md's tests for IGES: each file is read back through ReadIGES, the reader
+// This file is agent-docs/format-io-design.md's tests for IGES: each file is read back through ReadIGES, the reader
 // the format's own records were written against, and its mesh compared with the body's tessellation.
 
 func writeIGES(t *testing.T, body *decad.Body) string {

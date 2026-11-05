@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file is agent-docs/orthogonal-wall-design.md's public-surface tests for Verify's undercut survey of a faceted
+// This file is agent-docs/orthogonal-design.md's public-surface tests for Verify's undercut survey of a faceted
 // solid every face of which squares to a world axis, against a pull along that axis.
 
 // tCap is a 10 x 10 x 4 base, a 2 x 2 post on it and a 10 x 10 cap on the post: a pull along z is blocked by the cap, a

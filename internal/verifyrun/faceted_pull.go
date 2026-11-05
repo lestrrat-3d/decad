@@ -53,7 +53,7 @@ func facetedUndercuts(budget *proofbound.WorkBudget, b *topo.Body, pl facetedrec
 }
 
 // orthogonalUndercuts reads the undercuts of a faceted body every face of which squares to a world axis, with no vertex
-// bound, against a pull along that axis, exactly (agent-docs/orthogonal-wall-design.md): a face square to the pull is
+// bound, against a pull along that axis, exactly (agent-docs/orthogonal-design.md): a face square to the pull is
 // blocked when material lies beyond it on any line over it, tested on the solid's grid, so the survey lists the blocked
 // faces and, when there is none, proves the pull free. ok is false when the body is outside that class or the pull is
 // not exactly a world axis, and the rays take it.

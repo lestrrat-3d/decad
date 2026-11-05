@@ -817,7 +817,7 @@ func TestVerifyDiagnosticsUndercut(t *testing.T) {
 func TestVerifyDiagnosticsUnsupportedFacetedSurveys(t *testing.T) {
 	t.Parallel()
 	// Two thick plates crossing at 45 degrees: a faceted body with slanted faces, outside the axis-square class whose
-	// wall, undercuts and concave radius are read exactly from a grid (agent-docs/orthogonal-wall-design.md).
+	// wall, undercuts and concave radius are read exactly from a grid (agent-docs/orthogonal-design.md).
 	doc := crossedPlates(t, 8)
 	report, err := doc.Verify(t.Context(),
 		decad.WithMinWallThickness(units.Millimeters(1)),

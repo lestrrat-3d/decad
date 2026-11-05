@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file is agent-docs/orthogonal-boolean-design.md's public-surface tests for the Booleans of two
+// This file is agent-docs/orthogonal-design.md's public-surface tests for the Booleans of two
 // faceted solids every face of which squares to a world axis.
 
 func blockIn(t *testing.T, doc *decad.Document, lo, hi r3.Vec) *decad.Body {

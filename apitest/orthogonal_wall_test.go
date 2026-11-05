@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file is agent-docs/orthogonal-wall-design.md's public-surface tests for Verify's wall survey of a faceted
+// This file is agent-docs/orthogonal-design.md's public-surface tests for Verify's wall survey of a faceted
 // solid every face of which squares to a world axis.
 
 func wallReport(t *testing.T, doc *decad.Document, tool float64) *decad.Report {

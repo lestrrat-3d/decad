@@ -277,7 +277,7 @@ func Patterned(ctx context.Context, b *Body, spec PatternSpec) (*Body, error) {
 
 // PatternJoin repeats feature by spec and joins every instance, feature
 // included, to target in one Union, retiring target and feature
-// (agent-docs/axial-pattern-join-design.md §7). It is PatternCopies followed
+// (agent-docs/pattern-union-design.md, Axial pattern join §7). It is PatternCopies followed
 // by Union(target, feature, copies...) with the copies never registered, so a
 // refusal leaves the document unchanged and both bodies live.
 //
@@ -393,7 +393,7 @@ func (rp resolvedPattern) joinPlacedLofts(ctx context.Context, d *Document, base
 // instance is a whole number of quarter turns about a world axis (a count of 2 or 4, the axis exactly +X, +Y or +Z or a
 // negative one): the turn only exchanges and negates coordinates, so the instance is exact where the 90 degree
 // rotation is not, and the instances stay on the exact routes of an axis-square solid
-// (agent-docs/orthogonal-boolean-design.md B14). ok is false when the instance is not such a turn, or its coordinates
+// (agent-docs/orthogonal-design.md B14). ok is false when the instance is not such a turn, or its coordinates
 // cannot be held exactly, and the placed copy takes it.
 func (rp resolvedPattern) quarterTurnedInstance(ctx context.Context, d *Document, ref producerID, payload topo.Payload, i int) (*Body, bool) {
 	held, isFaceted := payload.(facetedPayload)

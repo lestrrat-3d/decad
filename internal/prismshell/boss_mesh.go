@@ -208,7 +208,7 @@ func PrismUnionBossShellMeshOf(ctx context.Context, ref provenance.Producer,
 	prev := upperBase
 	rootGroups := sideGroups("shellRootBand", false)
 	// The cavity keeps distance t from the source root edge, the boss outline
-	// at InterfaceZ (agent-docs/shell-faceted-boss-design.md). In the inset q
+	// at InterfaceZ (agent-docs/shell-variants-design.md). In the inset q
 	// and the height s above BossBottom, the band is the quarter circle of
 	// radius t centred on the root edge at (q, s) = (0, t), from the ledge's
 	// boss-outline ring at (0, 0) to the upper inset ring at (t, t). Station

@@ -331,7 +331,7 @@ func (c *curvedHole) margin(in holeplan.Input) (float64, error) {
 }
 
 // resolveHoleSite resolves spec.Face to exactly one analytic plane or cylinder, or a planar face of a faceted solid with
-// exact vertices (agent-docs/orthogonal-boolean-design.md B20).
+// exact vertices (agent-docs/orthogonal-design.md B20).
 // On a plane the site is the plane. On a cylinder the hole axis runs along the
 // radial line through spec.At, which MUST lie on the cylinder, and the site is
 // the plane tangent to the cylinder there.

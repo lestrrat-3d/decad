@@ -128,7 +128,7 @@ func Extrude[S Section](ctx context.Context, d *Document, s *sketch.Sketch, sec 
 		body, err := extrudeProfile(ctx, d, s, v, e, opts)
 		if err != nil && errors.Is(err, ErrUnsupported) {
 			// A stop face tilted from the sweep, on a faceted solid with exact vertices, is cut to
-			// (agent-docs/orthogonal-boolean-design.md B19).
+			// (agent-docs/orthogonal-design.md B19).
 			if tf, ok := any(e).(ToFace); ok {
 				if out, handled, _ := extrudeToTiltedFace(ctx, d, s, v, tf, opts); handled {
 					return out, nil

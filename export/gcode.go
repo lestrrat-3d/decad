@@ -39,7 +39,7 @@ type GCodeSpec struct {
 	// decad.ErrDegenerate.
 	SolidLayers int
 	// PerimeterInset moves each perimeter half a line width into the material, so that the printed line's edge and
-	// not its middle lies on the body's outline (agent-docs/gcode-design.md G10). The infill is unchanged.
+	// not its middle lies on the body's outline (agent-docs/format-io-design.md G10). The infill is unchanged.
 	PerimeterInset bool
 	// Retraction is the length of filament pulled back before each travel move between two extruded lines and pushed
 	// forward again after it, a positive length. The zero value writes no retraction. The first travel of the print,
@@ -58,7 +58,7 @@ type GCodeSpec struct {
 	FanSpeed     units.Value
 	FanFromLayer int
 	// Skirt is the number of loops traced round the part in the first layer before its perimeters, from the one nearest
-	// the part outward, each a line width outside the last (agent-docs/gcode-design.md G16). SkirtDistance is the gap from
+	// the part outward, each a line width outside the last (agent-docs/format-io-design.md G16). SkirtDistance is the gap from
 	// the part's outline to the first loop, a positive length that Skirt requires. The zero Skirt writes none, and a
 	// negative one is decad.ErrDegenerate.
 	Skirt         int
@@ -66,7 +66,7 @@ type GCodeSpec struct {
 }
 
 // GCodePerimeters writes the toolpath that prints body's outline layer by layer as G-code
-// (agent-docs/gcode-design.md): the perimeter of each layer, traced once along the body's section at the
+// (agent-docs/format-io-design.md): the perimeter of each layer, traced once along the body's section at the
 // middle of the layer, a hole traced as well, and, when the spec sets InfillSpacing, rectilinear infill
 // inside the perimeters, its lines alternating between the X and Y directions from one layer to the next. The
 // first and last SolidLayers layers are filled solid, their lines a line width apart, and PerimeterInset moves

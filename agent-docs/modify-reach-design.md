@@ -1810,7 +1810,7 @@ Section 10.1 admits one isolated rectangular-prism Union outer-edge fillet or
 equal-setback chamfer.
 The nested rectangular-boss Shell route accepts a complete boss top cap from
 one authenticated prism Union and rebuilds a bounded faceted cup
-(`agent-docs/shell-faceted-boss-design.md`). Other unrecognized faceted cases remain SX9.
+(`agent-docs/shell-variants-design.md`). Other unrecognized faceted cases remain SX9.
 
 **What SX9 leaves a caller proving.** Outside RX6, a caller whose
 part fillets or chamfers a faceted boolean result cannot reach the modified

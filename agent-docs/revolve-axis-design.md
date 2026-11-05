@@ -1,7 +1,7 @@
 # General-axis copied-tooth Union
 
 This design extends the finite Revolve and point-Loft sector class
-(`agent-docs/revolve-loft-sector-design.md`) and its point-cone trims
+(`agent-docs/revolve-loft-design.md`) and its point-cone trims
 (`agent-docs/loft-point-design.md` "Coaxial finite cone trims") from the world
 +X axis to any axis through the world origin that lies in a world coordinate
 plane. The +X class is the special case in which every new charge is exactly
@@ -1113,7 +1113,7 @@ canonical axis to a call in them, as `revolve_sector_placement_test.go` passes
 
 `SectorCylinderCut` cuts a joined body with a complete coaxial cylinder. A
 certificate from the general record branch takes `sectorCylinderCutAbout`;
-any other takes the +X route (`agent-docs/revolve-loft-sector-design.md`,
+any other takes the +X route (`agent-docs/revolve-loft-design.md`,
 "Coaxial cylinder Cut"). Both build the annular result in
 `buildSectorAnnularCut` and the band result in `BuildSectorBandCut`, which
 read the axis only through `sectorBoreAxis`: `xBoreAxis` holds the +X body
@@ -1234,7 +1234,7 @@ A bore whose radius lies strictly between the low cap's radius and the high
 cap's crosses the straight band before the low cap. `BuildSectorBandCut`
 removes both cap fans and the band's cells, and inserts the clipped band, the
 high annulus and the wall, as the +X route does
-(`agent-docs/revolve-loft-sector-design.md`, "Coaxial cylinder Cut"). It
+(`agent-docs/revolve-loft-design.md`, "Coaxial cylinder Cut"). It
 reads the axis through `sectorBoreAxis.band`. The general reading
 (`generalBoreAxis.band`) is:
 

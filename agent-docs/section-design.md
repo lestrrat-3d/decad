@@ -30,7 +30,7 @@ fresh, valid Sketch snapshots; changing the Sketch makes them stale under the
 ordinary seam rules or the bounded-source certificate below. The result is a
 slice because a section can hold several material regions: the full Revolve
 classes and the mesh Boolean history class below, and the orthogonal class
-(`agent-docs/orthogonal-section-design.md`), return one profile per region, and
+(`agent-docs/orthogonal-design.md`), return one profile per region, and
 every other admitted class returns one.
 The caller may read a retired body. A nil body or context, or an invalid frame,
 is `ErrDegenerate`; a sheet or unsound solid is `ErrNotSolid`.

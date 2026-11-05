@@ -249,7 +249,7 @@ func TestPrismUnionGearToothOnHubSharedCarrier(t *testing.T) {
 // TestPrismUnionG1FallsBackToTheMeshPath: a G1 miss (a revolve body carries no
 // prismPayload) reaches the mesh path. The sphere's mesh at the pair tolerance
 // runs into a work ceiling, so the boolean requests its operands coarser
-// (agent-docs/revolve-operand-coarsening-design.md) and the union of the ball
+// (agent-docs/revolve-loft-design.md) and the union of the ball
 // that holds its upper half is the box plus the lower hemisphere, within its
 // reported bound.
 func TestPrismUnionG1FallsBackToTheMeshPath(t *testing.T) {
@@ -558,7 +558,7 @@ func TestPrismUnionDownstreamFilletAndWallSurvey(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, meshReport.Bodies, 1)
 	// The two 10 mm boxes' mesh Boolean result has every face square to an axis and no vertex bound, so the faceted
-	// wall survey reads its grid (agent-docs/orthogonal-wall-design.md) and publishes the exact thinnest wall, 10 mm.
+	// wall survey reads its grid (agent-docs/orthogonal-design.md) and publishes the exact thinnest wall, 10 mm.
 	wall := meshReport.Bodies[0].Wall
 	require.Equal(t, decad.ScalarMeasured, wall.Outcome)
 	require.NotNil(t, wall.Minimum)

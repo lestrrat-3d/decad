@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file is agent-docs/orthogonal-boolean-design.md B9's tests: a placement whose vertex images are floats
+// This file is agent-docs/orthogonal-design.md B9's tests: a placement whose vertex images are floats
 // charges no rounding, so a placed mesh solid stays on the exact grid routes.
 
 func TestPlacedMeshSolidByAWholeTranslationStaysExact(t *testing.T) {

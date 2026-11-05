@@ -1,6 +1,139 @@
-# Finite Revolve and trimmed point-Loft Union
+# Revolve and Loft contact design
 
-## Source admission
+One part per Revolve/Loft contact topic. Each part keeps its own decision IDs and `§` numbers; cite a `§` number as "Part name §N".
+
+## Contact graph
+
+This private graph names source events shared by a finite Revolve boundary and
+an authenticated, cone-trimmed `LoftFaces` body. The producer is the current
+`certifyRevolveLoftFacesSource` certificate and its complete face-pair census.
+The graph does not establish a closed joined boundary or admit `Union`.
+
+### Source ownership
+
+The graph has one entry for every ordered pair of live Revolve and trimmed
+`LoftFaces` faces. It also has one entry for every source cell in the census
+manifest, including strict-side cells on pair misses and vertical cells with
+no retained wall. A retained cell belongs to exactly one pair. Its identity
+includes the live face, `FeatureRef`, source segment and span, LoftFaces band,
+and exact source and band-time intervals. Miss cells own no seam station ID.
+
+An occupied heel-cap arc has one pair entry and two distinct endpoints. Each
+endpoint must have the unique source-side cell proved by the heel-arc
+side-tie check against the graph's own census. A whole radial Sketch arc contact has one
+complete station run. All cap endpoints and stations receive IDs from one
+counter, so unrelated event kinds cannot share an ID. No ID is inferred from
+nearby held coordinates.
+
+### Held anchors and freshness
+
+The checked open-patch constructor uses the live graph, selects one whole-arc
+run by exact source interval and live face, and checks each station of the
+run, in order, against the actual seam index in both open patches. It checks
+the shared held point, each side's vertex bound and that the run's station IDs
+are distinct. The patches carry no IDs; the run keeps them.
+
+The cap-ring blank-shell constructor selects a graph run and its occupied cap
+arcs. After building, it binds every station ID to the actual shell seam index
+and compares that point with both checked open patches. Each cap endpoint ID
+must name exactly one ring vertex and retain its unique tied side-cell ID.
+The ring's held point and blank-side bound are checked. Duplicate or missing
+shell, patch, ring, or side-cell anchors refuse.
+
+The multi-run blank-shell consumer inserts every graph whole-arc run and every
+occupied cap arc into one closed Revolve shell. Each cut must lie strictly
+inside its authenticated meridian section. Cuts on one section are sorted by
+their exact meridian fractions; equal fractions refuse. One angular grid is
+shared by every ring. Stations from different runs may use the same exact ray
+and still name different held vertices on their own rings. Two stations from
+one run or a cap endpoint and a station on one ray refuse. Every station and
+cap source box must stay in strict angular order beside its neighboring rays.
+
+The constructor binds every station ID to its shell vertex and both checked
+open-patch vertices, and binds each cap endpoint ID to its ring vertex and
+live side cell. Each shell triangle records its Revolve section, adjacent
+ring band, angular ray interval and triangle half. The shell repeats the
+orientation, crossing, Euler, positive-volume and face-bound audits. These
+records do not classify a triangle as retained or removed.
+
+### Vertical source contact on the blank shell
+
+The vertical-trace consumer builds the live graph and all-run shell. It
+selects one constant-X source cell by its graph ID and finds the cap arc with
+that cell's section and blank face. The graph's two endpoint-cell IDs choose
+the path ends. Exact mapped source endpoints link every retained piece on
+that planar side; a missing piece, extra component, changed root bracket, or
+duplicate owner refuses.
+
+The supported path uses exact mapped two-control lines and live Sketch arcs
+whose positive similarity maps their center to the Revolve axis. Every line
+and arc has a strict angular derivative in the positive radial half-plane.
+Lines adjacent to an arc must leave its circle radially; nonadjacent lines
+must have disjoint exact control hulls. Each piece lies inside the cap circle
+except at its graph-owned root bracket. Other curve and path classes refuse.
+
+The consumer finds each piece's crossing with every shell ray. A ray may meet
+different path pieces more than once, including a cap endpoint and the inner
+arc. Exact source parameters bound line crossings; centered-arc radius and
+ray direction bound arc crossings. Each adjacent pair of held path vertices
+must fit one ray wedge. The line segment's endpoint boxes and the arc chord's
+angle bound charge source-to-held displacement; a bound at or above 0.1 mm
+refuses.
+
+Every affected planar fan wedge is split by its ordered radial contacts and
+source edges. Exact edge-crossing checks and ear clipping triangulate each
+bounded region. Each emitted triangle records one original section, ring
+band, and ray wedge. The rebuilt shell repeats orientation, Euler, exact
+facet-crossing, positive-volume and face-bound audits. The trace does not
+classify retained LoftFaces faces or produce a joined Union boundary.
+
+A stored graph is checked against the live graph before later use. The
+comparison includes every pair verdict, cell owner and exact interval,
+complete station run, and occupied cap arc. A changed source station, face,
+reference, interval, root, or event ID refuses. Graph records
+and the open patches remain construction pieces; the retained LoftFaces faces,
+joined shell, boundary displacement, and occupied-volume proofs are separate.
+
+A top-level consumer (the all-run shell, the cap-ring shell, the vertical
+trace and the clear-patch context) opens one call scope. Inside it, the source
+certificate and contact graph of a body pair are built from the live bodies the
+first time a check needs them, and every later check in the same call reuses
+them. A census is derived once per source certificate in the call. Nothing
+inside a call edits the bodies, so a rebuild inside the call would produce the
+same records. Separate top-level calls never share a scope, so a body changed
+between calls is certified again and a changed record refuses.
+
+### Clear blank-shell triangles
+
+A clear-patch consumer constructs the graph and all-run shell from the current
+Revolve and trimmed `LoftFaces` producers, then tessellates the actual trimmed
+tool at `VerifyAll` with the caller's chord tolerance. A candidate triangle
+must retain its source section, face origins, ring band, angular interval,
+held vertices and sufficient face bound. The tool mesh must publish an embedded
+boundary and an occupied-volume proof. A missing or changed producer,
+provenance record, bound or proof leaves the candidate unclassified.
+The source certificate records the trimmed body's faceted proof data by value.
+The consumer compares its `VerifyAll` mesh with a fresh payload restatement,
+then copies the audited shell and mesh into its private classification context.
+Candidate distance and point queries read only those copies. Before each
+single-triangle classification, the consumer compares the complete proof data
+of both copies with sealed values and rechecks the source records and live tool
+payload. A changed body or context cannot borrow an earlier proof.
+
+For every tool facet, exact triangle-distance predicates must prove a gap
+strictly greater than the sum of the shell's complete face bound and the
+tool's mesh bound. A candidate beside a contact run or trim-cap arc generally
+cannot pass this test and stays unclassified. The exact interior centroid is
+rounded with its displacement charged against the gap. A verified point query
+must classify that point as inside or outside the trimmed tool. The gap then
+keeps the tool boundary away from every point of the connected shell triangle,
+so that one point's occupancy labels the whole triangle. An undecided or
+boundary point query leaves it unclassified. These labels do not select a
+retained mask, build the LoftFaces side, close a joined shell or admit `Union`.
+
+## Sector Boolean
+
+### Source admission
 
 The first public `Union` route accepts a finite, unplaced, full Revolve of one
 closed Sketch section and one point-Loft sector after authenticated toe Cut
@@ -48,7 +181,7 @@ and area allowances. Placement clears
 the direct join certificate and records an authenticated rigid copy of the
 original trimmed source.
 
-## Sector construction
+### Sector construction
 
 The builder meshes every recorded meridian span at one shared angular plan.
 It omits a root-face interval only where a certified sector cap replaces that
@@ -135,7 +268,7 @@ source class requires an unplaced, full Revolve about an axis that
 `agent-docs/revolve-axis-design.md` §3 admits. Transformed Revolves and
 other axes use the ordinary Boolean route or refuse.
 
-## Coaxial cylinder Cut
+### Coaxial cylinder Cut
 
 `Cut` accepts a full centered cylinder spanning both axial ends of a joined
 Revolve/point-Loft sector body. This section states the route for a
@@ -201,7 +334,7 @@ both verification flags are true, and the joined computed-volume lower bound
 exceeds the hub's computed-volume upper bound. Its joined faces retain both
 split-cap source roles and an analytic root cone.
 
-## Public routing
+### Public routing
 
 Public serial and variadic `Union` use the same certified section-ring and
 sector-cap builder. The root routes collect the placed copies;
@@ -214,3 +347,69 @@ and builds the annular or straight-band result. The legacy six-line join and
 bore constructors are absent. A section with unsupported source geometry or an
 unproved contact refuses. Full gear acceptance tests run in `decad-gallery`;
 Decad tests use small Revolve and point-Loft producers.
+
+## Operand coarsening
+
+A boolean with a revolve operand whose mesh at the pair tolerance exceeds a work ceiling requests both operands
+coarser, up to eight times the pair tolerance. `agent-docs/tessellation-design.md` §3 owns the ceilings;
+this document owns the retry.
+
+### 1. Problem
+
+A boolean chords every operand at the pair tolerance, `meshbool.ChordFactor` (2e-5) times the pair diameter
+(`internal/meshbool/chord.go`). A revolve mesh is one meridian chording times one global angular count, so a long
+arc of a thick tube asks for more facets than `maxFacetsPerMesh` (65 536) allows, or more facet-contact work than
+`maxFacetPairTestsPerCall` allows. Facets scale as 1/tolerance.
+
+A torus of major radius 4 and minor radius 1, unioned with a radius-1 stem ending on its tube centreline, at the
+pair tolerance (`apitest/revolve_local_refinement_test.go`):
+
+| Sweep | Angular stations | Facets | Refusal |
+|---|---|---|---|
+| 300° | 347 | 129 452 | per-mesh facet ceiling |
+| 180° | 228 | 93 886 | per-mesh facet ceiling |
+| 60° | 84 | 38 246 | facet-pair audit ceiling |
+| 20° | 30 | 14 814 | none |
+
+### 2. The retry
+
+`booleanBodyWith` runs the pair at the pair tolerance first. When a revolve operand's mesh is refused with a
+work-limit error (`proofbound.WorkLimitError`: the facet ceiling or the facet-pair audit ceiling),
+`booloperand.CoarsensOperand` says so and the pair is retried on rungs 1, 2 and 3. Rung `r` requests BOTH operands
+at `2^r` times their pair request, so neither is far finer than its partner. The first rung that answers wins.
+When no rung answers, the call reports the refusal the pair tolerance hit.
+
+- The request is at most eight times the pair tolerance. `booloperand.MaxOperandCoarsenings` (3) is a constant;
+  no caller sets it.
+- Only a boolean's own operand request coarsens. `Body.Tessellate` never does, and `agent-docs/tessellation-design.md`
+  §3's "refinement may never coarsen" is unchanged for it.
+- A held operand (`booloperand.HeldFloor`) keeps its floor: its request is `max(request, floor)` on every rung.
+- Each mesh publishes the chording it actually took, so its face bounds, the rim bound, the hidden-tangency slack,
+  the result's vertex bounds and `Mesh.Bound()` all read that figure. The result of a retried pair reports bounds
+  up to eight times the pair tolerance on its walls. No path other than this retry does.
+- A rung after the first may fail for a reason other than a ceiling (an undecided contact, a float fold). The
+  retry continues to the next rung regardless. A pair-tolerance failure that was not a ceiling is returned at
+  once and never retried.
+- A facet-pair audit that exceeds its work ceiling inside one revolve tessellation is final for that request: a
+  finer angular count only adds facets, so `tessellateRevolve` returns the audit's own refusal rather than
+  refining and charging every attempt's mesh to the cumulative facet ceiling.
+- No ceiling or budget changes.
+
+### 3. Measured
+
+The same torus-plus-stem pair succeeds at 60°, 180° and 300° with the retry. Each union volume matches the arc
+volume plus the stem volume outside the arc, the latter by midpoint integration, within the reported bound.
+
+### 4. Why not a finer mesh near the contact
+
+A mesh refined only near the contact (non-uniform angular stations, a per-interval area and volume proof) was
+designed first and not built. A revolve mesh publishes no per-vertex bound, so a face's published bound is its
+coarsest chording, and a finer patch tightens no bound any proof reads. The retry gives the same bounds and
+changes none of the revolve proofs.
+
+### 5. Test obligations
+
+- The 60°, 180° and 300° torus-plus-stem unions succeed, and each volume matches the analytic value within the
+  reported bound and stays under two percent of the volume.
+- Each case is shown to fail first: remove the retry and all three refuse.
+- No test pins a `Bound` literal; bounds differ between amd64 and arm64.

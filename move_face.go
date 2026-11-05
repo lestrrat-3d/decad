@@ -11,12 +11,12 @@ import (
 )
 
 // MoveFace moves one face of b along its normal by distance and returns the new body, retiring b: the
-// press-pull of a CAD system (agent-docs/orthogonal-move-design.md). A positive distance moves the
+// press-pull of a CAD system (agent-docs/orthogonal-design.md). A positive distance moves the
 // face outward, growing the body, and a negative one inward, cutting it, and the walls beside the face
 // follow it. The result is the body joined to the prism the face sweeps, or less it, so a notch
 // bottom moves as readily as an outer wall.
 //
-// The route is the grid one of the orthogonal shell (agent-docs/orthogonal-shell-design.md): b
+// The route is the grid one of the orthogonal shell (agent-docs/orthogonal-design.md): b
 // MUST be a faceted solid, such as one made by [SolidFromMesh], every face of which squares to a
 // world axis and whose held vertices carry no bound, otherwise ErrUnsupported. sel MUST resolve to
 // exactly one planar face of b, otherwise ErrDegenerate. distance is a signed length: zero is

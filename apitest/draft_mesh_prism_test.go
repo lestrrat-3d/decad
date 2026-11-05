@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file is agent-docs/orthogonal-boolean-design.md B21's public-surface tests: Draft of every wall of a mesh solid
+// This file is agent-docs/orthogonal-design.md B21's public-surface tests: Draft of every wall of a mesh solid
 // that is a straight prism.
 
 func meshWalls() *decad.FaceQuery {

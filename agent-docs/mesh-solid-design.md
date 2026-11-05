@@ -43,7 +43,7 @@ widened part, and a swapped pair of factors fails them.
 A mesh solid's faces are exact planes (§2), so `Hole`, `Boss` and the other tool features that cut or raise a prism
 take it as they take a prism-faced body, through `Union` and `Cut` of the prism tool with the faceted body. A tool
 with straight sides and an axis-square placement (a rectangular or polygonal pocket, an `OutlineHole`, a rectangular
-boss) is read by the mixed route of `agent-docs/orthogonal-boolean-design.md` B7, so the result is exact; a round
+boss) is read by the mixed route of `agent-docs/orthogonal-design.md` B7, so the result is exact; a round
 bore or boss is a tool the grid does not hold, so it takes the general mesh Boolean route and its volume is read
 inside the bound that route states. The tests cut a rectangular pocket, an L-shaped through hole and a round bore
 and raise a rectangular boss on a plate, and read volumes, face counts and points. `Emboss` of a rectangular
