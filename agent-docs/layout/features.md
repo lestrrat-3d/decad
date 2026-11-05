@@ -10,8 +10,7 @@ The rules for rows live in `agent-docs/layout.md`.
 | Path | Responsibility |
 |---|---|
 | `topology.go` | Topology types from `Body` to `Vertex` and public surface and curve variants. See API §6.1 and evaluator §3. |
-| `topology_handles.go` | Born-handle constructors, the node-to-handle mapping of linked topology nodes, `handleAlloc` and `envOf` for internal builders, `bodyResult`, and `placePayload`, the root path into `topo.Payload.Placed`. See evaluator §3, §8. |
-| `topology_replay_alloc.go` | Reports topology handle sizes for bounded replay allocation charges. |
+| `topology_handles.go` | Born-handle constructors, node-to-handle mapping, `handleAlloc` (with `ReplayNodeSize`) and `envOf` for internal builders, `bodyResult`, and `placePayload`. See evaluator §3, §8. |
 | `container.go` | `Container`, the document's grouping of sketches, planes and bodies; placement of results and `ErrCrossContainer`. See `agent-docs/container-design.md`. |
 | `document.go` | `Document`: live body set, atomic operation publication, `Remove`, liveness gates, `Transform` and `Copy`; the producer identity spelling and zero-vector predicate. See evaluator §8 and operation history. |
 | `circle_affine_replay.go` | Exact affine differences for replay of placed circle sources. |
@@ -56,8 +55,7 @@ The rules for rows live in `agent-docs/layout.md`.
 | `draft.go` | `Draft`, `NeutralPlane`, `Walls` gates, plus the tapered extrude angle and surface-result gates, extent resolution and slab dispatch. See draft §5, §7, §10. |
 | `draft_mesh_prism.go` | `draftMeshPrism`: Draft of every wall of an exact-vertex faceted straight prism, read on the grid and swept with a taper. See orthogonal Boolean B21. |
 | `sheet_metal.go` | Public `SheetMetal`, `SheetMetalSpec` and `SheetMetalReport`: gates, the thickened centreline as a sketch outline, `Extrude`, and the flat pattern. See sheet-metal design. |
-| `sweep.go` | Generic `Sweep` over a profile or chain: nil, option and seam gates, then `internal/sweepbuild/` builds and root commits. See sweep §3.3, §15.8–§15.9. |
-| `sweep_mitre.go` | Mitred options and entry adapters; builds through `sweepmitre.Build`. See sweep §16. |
+| `sweep.go` | Generic `Sweep` over a profile or chain: nil, option and seam gates, then `internal/sweepbuild/` builds and root commits. Also the mitred options and entry adapters, built through `sweepmitre.Build`. See sweep §3.3, §15.8–§15.9, §16. |
 | `coil.go` | `Coil`, `CoilOption`, Table CS gates. Root `coilPayload` aliases `coilshell.Payload`. See helix §2, §4, §5.6. |
 | `revolve.go` | Generic `Revolve` over a profile or chain: `Axis` variants, options, angular extents, and the public axis adapter to `internal/revolveaxis/`. See evaluator §6 and surface §13.2. |
 | `stops.go` | Body-relative stop resolution: live stop bodies, face selection and angular stops; `internal/extent` admits a `ToFace` or `ToFaceAngular` face and computes its stop, and resolves through-all stops. See evaluator §5/§6/§11. |

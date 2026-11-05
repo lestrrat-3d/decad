@@ -24,7 +24,7 @@ import (
 // This file owns the public mesh, tessellation dispatch, and prism mesh handle
 // adapter (core §11, agent-docs/evaluator-design.md §9).
 // A boolean-faceted body restates its held mesh here; the exact-predicate
-// mesh boolean that produces it lives in boolean_mesh.go.
+// mesh boolean that produces it lives in boolean.go.
 
 // Mesh is a triangle mesh: an OUTPUT of [Body.Tessellate], never the body
 // representation (core §3 invariant #1 — the public vocabulary stays
