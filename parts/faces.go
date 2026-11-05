@@ -23,9 +23,10 @@ type bodyFaces struct {
 	unread     []explodeplan.Box // vertex boxes of the faces whose tag is neither a plane nor a cylinder
 	unmeshed   bool              // the body would not tessellate, so no face could be read
 	box        decad.Box
-	meshTol    float64 // the chord tolerance the faces were read at, millimetres
-	meshBound  float64 // that mesh's bound, millimetres
-	verified   bool    // the mesh was built at VerifyAll
+	meshTol    float64  // the chord tolerance the faces were read at, millimetres
+	meshBound  float64  // that mesh's bound, millimetres
+	verts      []r3.Vec // the mesh vertices, for the witness search
+	verified   bool     // the mesh was built at VerifyAll
 }
 
 // faceTolerances are the tessellation tolerances tried in turn: the mesh is
@@ -51,6 +52,7 @@ func readFaces(ctx context.Context, b *decad.Body, verified bool) (*bodyFaces, e
 	}
 	bf.meshTol, bf.meshBound, bf.verified = tol, mesh.Bound().Base(), ver
 	verts, tris, src := mesh.Vertices(), mesh.Triangles(), mesh.SourceFaces()
+	bf.verts = verts
 	perFace := map[*decad.Face][]int{}
 	for ti, t := range tris {
 		perFace[src[ti]] = append(perFace[src[ti]], t[0], t[1], t[2])

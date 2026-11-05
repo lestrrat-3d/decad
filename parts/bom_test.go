@@ -116,7 +116,8 @@ func TestSummaryMarkdownSections(t *testing.T) {
 	require.NoError(t, err)
 	rep, err := s.Check(t.Context())
 	require.NoError(t, err)
-	rep.Unexplained = []parts.PairFinding{{A: "x", B: "y"}}
+	rep.Unexplained = []parts.PairFinding{{A: "x", B: "y", Near: &decad.Measurement{Value: units.Millimeters(0.05),
+		Exactness: decad.Approximate, Bound: units.Millimeters(0.05)}}}
 
 	var out bytes.Buffer
 	require.NoError(t, parts.Summary{Set: s, Joints: rep, Exploded: ex}.WriteMarkdown(&out))
@@ -132,6 +133,8 @@ func TestSummaryMarkdownSections(t *testing.T) {
 	require.Contains(t, page, "| pin~plate | pin in bore | pin | plate | turns | confirmed | - | measured 0.20")
 	require.Contains(t, page, "engaged 10.00 mm; axis from faces |")
 	require.Contains(t, page, "## Unexplained pairs")
+	require.Contains(t, page, "| x | y |")
+	require.Contains(t, page, "| within 0.10 mm |")
 	require.Contains(t, page, "Ground: plate.")
 	require.Contains(t, page, "| pin | 1 | axis from faces | (0.00, 0.00, 22.00) |")
 	require.Contains(t, page, `pin -- "pin in bore, turns, confirmed" --> plate`)

@@ -58,11 +58,16 @@ func (s Summary) WriteMarkdown(w io.Writer) error {
 		}
 		if len(s.Joints.Unexplained) > 0 {
 			b.WriteString("\n## Unexplained pairs\n\nBoxes meet and no joint names the pair; this is where to look, not a finding.\n\n")
-			b.WriteString("| A | B | Overlap min (mm) | Overlap max (mm) |\n|---|---|---|---|\n")
+			b.WriteString("| A | B | Overlap min (mm) | Overlap max (mm) | Near |\n|---|---|---|---|---|\n")
 			for _, p := range s.Joints.Unexplained {
 				o := p.Overlap
-				fmt.Fprintf(&b, "| %s | %s | (%.2f, %.2f, %.2f) | (%.2f, %.2f, %.2f) |\n", cell(p.A), cell(p.B), o.Min.X, o.Min.Y,
-					o.Min.Z, o.Max.X, o.Max.Y, o.Max.Z)
+				near := "-"
+				if p.Near != nil {
+					near = "within " + measure(&decad.Measurement{Value: units.Millimeters(p.Near.Value.Base() + p.Near.Bound.Base()),
+						Exactness: decad.Exact}, units.Millimeter, "mm")
+				}
+				fmt.Fprintf(&b, "| %s | %s | (%.2f, %.2f, %.2f) | (%.2f, %.2f, %.2f) | %s |\n", cell(p.A), cell(p.B), o.Min.X,
+					o.Min.Y, o.Min.Z, o.Max.X, o.Max.Y, o.Max.Z, near)
 			}
 		}
 	}

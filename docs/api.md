@@ -519,7 +519,9 @@ as it found it.
 - `Set.Check` judges each declared joint against the faces and bounds of its two parts and lists the pairs of parts whose
   boxes meet with no joint naming them. It never runs `Document.Verify`. Each `parts.JointResult` is `Confirmed`,
   `Contradicted`, `Undecided` or `NotChecked`, and one that is not `Confirmed` carries a typed `parts.Cause`.
-  `parts.WithContactTolerance` sets how near parts must come to be listed.
+  `parts.WithContactTolerance` sets how near parts must come to be listed. A `Contact` or `Keepout` joint is read from
+  box gaps and point witnesses; `parts.WithWitnessSearch` also looks for a proven contact in each listed pair, and
+  `parts.WithVerifyReport` lets a `Verify` report the caller already has settle what the structural rules leave open.
 - `Set.Graph` returns the connection diagram as nodes and edges, and `Graph.WriteMermaid` writes it as a Mermaid
   flowchart.
 
