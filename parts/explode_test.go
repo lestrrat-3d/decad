@@ -62,7 +62,7 @@ func TestExplodePinAndPlate(t *testing.T) {
 
 // lapSet is a 20 x 20 x 5 base with a same-size top plate lapped on it and two
 // pins through both, at x = 5 and x = 15.
-func lapSet(t *testing.T) (*parts.Set, *decad.Document) {
+func lapSet(t *testing.T) *parts.Set {
 	t.Helper()
 	doc := decad.New()
 	bore := func(z0 float64) *decad.Body {
@@ -78,19 +78,19 @@ func lapSet(t *testing.T) (*parts.Set, *decad.Document) {
 	mustAdd(t, s,
 		parts.Part{Name: nameBase, Kind: parts.Manufactured, Body: bore(0)},
 		parts.Part{Name: nameTop, Kind: parts.Manufactured, Body: bore(5)},
-		parts.Part{Name: "pin1", Kind: parts.Manufactured, Body: cylinder(t, doc, 5, 3, -2, 14)},
-		parts.Part{Name: "pin2", Kind: parts.Manufactured, Body: cylinder(t, doc, 15, 3, -2, 14)})
+		parts.Part{Name: namePin1, Kind: parts.Manufactured, Body: cylinder(t, doc, 5, 3, -2, 14)},
+		parts.Part{Name: namePin2, Kind: parts.Manufactured, Body: cylinder(t, doc, 15, 3, -2, 14)})
 	mustJoin(t, s,
 		parts.Joint{Name: nameLap, Kind: parts.FaceContact, A: nameTop, B: nameBase},
-		parts.Joint{Name: "pin1~base", Kind: parts.PinInBore, A: "pin1", B: nameBase, Motion: parts.Turns},
-		parts.Joint{Name: "pin2~base", Kind: parts.PinInBore, A: "pin2", B: nameBase, Motion: parts.Turns},
-		parts.Joint{Name: "pin1~top", Kind: parts.PinInBore, A: "pin1", B: nameTop, Motion: parts.Turns},
-		parts.Joint{Name: "pin2~top", Kind: parts.PinInBore, A: "pin2", B: nameTop, Motion: parts.Turns})
-	return s, doc
+		parts.Joint{Name: "pin1~base", Kind: parts.PinInBore, A: namePin1, B: nameBase, Motion: parts.Turns},
+		parts.Joint{Name: "pin2~base", Kind: parts.PinInBore, A: namePin2, B: nameBase, Motion: parts.Turns},
+		parts.Joint{Name: "pin1~top", Kind: parts.PinInBore, A: namePin1, B: nameTop, Motion: parts.Turns},
+		parts.Joint{Name: "pin2~top", Kind: parts.PinInBore, A: namePin2, B: nameTop, Motion: parts.Turns})
+	return s
 }
 
 func TestExplodeLap(t *testing.T) {
-	s, _ := lapSet(t)
+	s := lapSet(t)
 	ex, err := s.Explode(t.Context(), parts.WithExplodeGround(nameBase))
 	require.NoError(t, err)
 
@@ -101,7 +101,7 @@ func TestExplodeLap(t *testing.T) {
 	require.Equal(t, parts.FaceNormal, top.Pull)
 	// The top plate now sits at z 15..20, so a pin would clear it only after
 	// 22 mm up; down it clears the base in 12 mm. It drops 12 mm plus the gap.
-	for _, name := range []string{"pin1", "pin2"} {
+	for _, name := range []string{namePin1, namePin2} {
 		p := partByName(t, ex, name)
 		require.Equal(t, parts.AxisFromFaces, p.Pull, name)
 		require.Equal(t, 1, p.Depth, name)

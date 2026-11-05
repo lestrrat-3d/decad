@@ -3,8 +3,8 @@
 The package lands in the PRs of §13, and each PR carries the part of this document it implements. P1 and E1 have landed: `Kind`, `Material`, `Part`, `Joint`, `Axis`, `Set`, axis matching (§7.1), `Explode`, `Graph` and
 `export.ThreeMFItems`. P2 added `Views`, P3 added `BOM` and `Summary`, and P4a adds `Check` for `PinInBore`,
 `PinInSlot`, `FaceContact` and `Tie` joints and the box-screened list of pairs no joint names (§7.2), and P4b adds
-point witnesses, `Contact` and `Keepout` checks, `WithWitnessSearch` and `WithVerifyReport`. P5 adds `Set.Linkage`.
-`Infer` is design only until its PR.
+point witnesses, `Contact` and `Keepout` checks, `WithWitnessSearch` and `WithVerifyReport`. P5 added `Set.Linkage`, and P6 adds
+`Infer` and `JointReport.Inferred`: the whole design has landed.
 
 **`github.com/lestrrat-3d/decad/parts` is a generic schematic and exploded view of a build made of separate bodies.**
 Its two primary outputs are:
@@ -371,7 +371,7 @@ type PairFinding struct {
 }
 ```
 
-Until P6, `JointReport` has no `Inferred`. The `AxisSource` values are named `AxisSourceNone`, `AxisSourceFaces` and
+The `AxisSource` values are named `AxisSourceNone`, `AxisSourceFaces` and
 `AxisSourceDeclared`, because `AxisFromFaces` and `AxisDeclared` already name `PullSource` values.
 
 `Exploded` is in §5, `Graph` and `Views` in §6, `BOM` in §8. Enumerations reserve zero as "not evaluated", as
@@ -679,8 +679,10 @@ pairs concurrently, since `DistanceToPoint` is a read of immutable bodies.
 
 ### 7.3 Inference
 
-`Infer` runs M1–M5 over every candidate pair and returns each match as a `PinInBore` or `PinInSlot` joint with its
-measured clearance. Coplanar `FaceContact` inference is deferred: it needs the overlap area of two planar faces'
+`Infer` runs M1–M5 over every candidate pair, in both directions (a pin of either part in a receiver of the other),
+and returns each match as a `PinInBore` or `PinInSlot` joint with its measured clearance. Each match of a pair is
+returned, not only the best of M6: a joint name is `A~B`, with `#2`, `#3` for further matches of one pair. It reads
+faces from the `VerifyNone` ladder of M8, as `Explode` does. Coplanar `FaceContact` inference is deferred: it needs the overlap area of two planar faces'
 trims, a 2D question for `sketch` (a private scene of both loops), and no consumer needs it before the gallery's
 declared laps are checked. Touching pairs without a cylinder match appear in `Unexplained` instead.
 

@@ -453,5 +453,6 @@ declared `parts.Axis`, and a declared clearance, minimum gap or direction where 
 | `parts.Summary` | struct | The set, and optionally a joint report and an exploded layout, to write as one Markdown page. | The caller |
 | `parts.JointStatus`, `parts.Cause`, `parts.AxisSource` | enum | Whether a joint check confirmed a joint, why not, and where its axis came from. | `JointResult` |
 | `parts.JointReport`, `parts.JointResult`, `parts.CheckRequest`, `parts.PartMesh` | struct | What `Set.Check` found: a result per joint, the settings used and how each part's faces were meshed. | `Set.Check` |
+| `parts.InferredJoint` | struct | A joint the geometry suggests: a pin joint with its axis, measured clearance and the faces it was read from. | `Set.Infer`, `JointReport.Inferred` |
 | `parts.PairFinding` | struct | A pair of parts whose boxes meet and that no joint names, with where they meet. | `JointReport.Unexplained` |
 | `parts.ExplodeOption`, `parts.ViewOption`, `parts.CheckOption` | option set | Settings on `Set.Explode` and the other queries. | `parts.WithExplodeGround` and the other `With` functions |

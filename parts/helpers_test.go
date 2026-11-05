@@ -21,6 +21,8 @@ const (
 	nameLap   = "lap"
 	nameArm   = "arm"
 	nameHinge = "hinge"
+	namePin1  = "pin1"
+	namePin2  = "pin2"
 )
 
 // block extrudes the rectangle x0..x1, y0..y1 from height z0 by height.
