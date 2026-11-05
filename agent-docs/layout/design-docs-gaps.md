@@ -29,6 +29,7 @@ The rules for rows live in `agent-docs/layout.md`.
 | `agent-docs/path-pattern-design.md` | `PathPatternCopies`: copies spaced at equal arc length along a `Path`, and the path sampler. |
 | `agent-docs/fillet-chord-design.md` | `FilletChord`: chord-length fillet as a radius, sharing the right-angle gate of `ChamferAngle`. |
 | `agent-docs/arrange-design.md` | `Arrange`: shelf packing of body footprints onto a flat bed by translation. |
+| `agent-docs/parts-design.md` | Design-only `parts` package: exploded view and schematic of placed bodies; typed joints, part views, joint check over `Verify`, BOM, summary, linkage bridge; `export.ThreeMFItems`. |
 | `agent-docs/chamfer-angle-design.md` | `ChamferAngle`: distance-and-angle bevel as a second setback, and its right-angle gate. |
 | `agent-docs/section-outline-design.md` | `Body.SectionOutline`: the mesh cut by a plane as closed outlines, its on-plane rule and its bound. |
 | `agent-docs/boss-design.md` | `Boss`: a round boss and its blind pilot hole in one atomic union-and-cut commit. |
