@@ -3011,3 +3011,8 @@
 11	0.00	TestVerifyBoxAlgebraRotatedRail
 11	0.00	TestVerifyPieceTangentKnuckle
 11	0.00	TestVerifyAxialSectionRoundPrismTurnedMate
+11	0.00	TestClearancePlacedPinInBore
+11	0.00	TestClearancePlacedPinTwoPlacements
+11	0.00	TestClearancePlacedPinThatFillsItsBore
+11	0.00	TestClearancePlacedPinDifferential
+11	0.00	TestClearancePlacedPinInBoreIsFast

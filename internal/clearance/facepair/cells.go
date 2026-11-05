@@ -529,6 +529,12 @@ func (k *Kernel) planeCrossesRevolved(f, g *clearance.CFace, sink *clearance.Cel
 		sink.Crossing(rel)
 		return
 	}
+	// A tilt the oracle does not prove zero crosses in an ellipse; the
+	// annulus between its semi-axes either misses the trim or the crossing
+	// stays undecided.
+	if k.tiltedCrossingExcluded(f, g) {
+		return
+	}
 	sink.Unsure = true
 }
 
