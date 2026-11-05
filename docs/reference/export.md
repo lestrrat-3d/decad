@@ -34,6 +34,7 @@ Package export writes decad bodies as STL, OBJ, 3MF, and AP214 STEP files.
 - [func STEP](<#STEP>)
 - [func STL](<#STL>)
 - [func ThreeMF](<#ThreeMF>)
+- [func ThreeMFItems](<#ThreeMFItems>)
 - [type DXFField](<#DXFField>)
 - [type DXFHatch](<#DXFHatch>)
 - [type DXFPaper](<#DXFPaper>)
@@ -46,6 +47,7 @@ Package export writes decad bodies as STL, OBJ, 3MF, and AP214 STEP files.
   - [func WithSTEPName](<#WithSTEPName>)
   - [func WithSTEPOrganization](<#WithSTEPOrganization>)
   - [func WithSTEPTimestamp](<#WithSTEPTimestamp>)
+- [type ThreeMFItem](<#ThreeMFItem>)
 - [type View](<#View>)
   - [func IsometricView](<#IsometricView>)
 
@@ -376,6 +378,20 @@ chord tolerance. Solids become model objects; sheets become surface objects.
 The mesh defaults to decad.VerifyNone. Pass decad.WithVerification to request
 stronger proofs. ctx, w, and body must not be nil.
 
+<a name="ThreeMFItems"></a>
+### func ThreeMFItems
+
+<pre>func ThreeMFItems(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>, w io.<a href="https://pkg.go.dev/io#Writer">Writer</a>, items []<a href="#ThreeMFItem">ThreeMFItem</a>, tol units.Value,
+    opts ...decad.<a href="decad.md#TessellateOption">TessellateOption</a>) <a href="https://pkg.go.dev/builtin#error">error</a></pre>
+
+ThreeMFItems writes several bodies as one deterministic 3MF Core package: one
+named object and one build item each, vertices moved by the item's
+Placement. A body named by several items is tessellated once. A Placement
+that reflects, or is not a valid transform, is decad.ErrDegenerate, because a
+reflection would turn the mesh inside out. An empty item list, or a nil body,
+is decad.ErrDegenerate. The writer's other rules are ThreeMF's. ctx and w
+must not be nil.
+
 <a name="pkg-types"></a>
 ## Types
 
@@ -554,6 +570,17 @@ WithSTEPOrganization sets the STEP file's organization.
 <pre>func WithSTEPTimestamp(timestamp time.<a href="https://pkg.go.dev/time#Time">Time</a>) <a href="#STEPOption">STEPOption</a></pre>
 
 WithSTEPTimestamp sets the STEP file's timestamp.
+
+<a name="ThreeMFItem"></a>
+### type ThreeMFItem
+
+<pre>type ThreeMFItem struct {
+    Name      <a href="https://pkg.go.dev/builtin#string">string</a>
+    Body      *decad.<a href="decad.md#Body">Body</a>
+    Placement r3.Transform
+}</pre>
+
+ThreeMFItem is one object of a 3MF package: a body placed by a rigid motion.
 
 <a name="View"></a>
 ### type View

@@ -10,4 +10,5 @@
 - [dynamics](<dynamics.md>): Package dynamics advances rigid bodies using decad's certified geometry queries.
 - [export](<export.md>): Package export writes decad bodies as STL, OBJ, 3MF, and AP214 STEP files.
 - [linkage](<linkage.md>): Package linkage holds the linkage model of agent-docs/linkage-check-design.md — Linkage, Link, the sealed Joint set, Drive, LinkageLoop and Schedule — and the engines that pose a linkage and verify a drive or a box of joint values over the motion engine.
+- [parts](<parts.md>): Package parts is a generic schematic and exploded view of a build made of separate bodies (agent-docs/parts-design.md).
 - [report](<report.md>): Package report holds the result vocabulary the decad contact, sweep, motion and linkage queries publish.
