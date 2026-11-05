@@ -190,6 +190,9 @@ func projectedPatchProofLimited(budget *proofbound.WorkBudget, verts []r3.Vec,
 			if entry.count > 2 {
 				return ProjectedPatchStructure
 			}
+			if entry.count == 2 && entry.net != 0 {
+				return ProjectedPatchStructure
+			}
 			use[key] = entry
 		}
 	}
