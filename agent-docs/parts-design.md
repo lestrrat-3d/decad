@@ -666,7 +666,7 @@ func ThreeMFItems(ctx context.Context, w io.Writer, items []ThreeMFItem, tol uni
 ```
 
 Vertices are moved before writing rather than through the 3MF `transform` attribute, so every reader places them the
-same way. `agent-docs/3mf-export-design.md` gains a section for it in PR E1. With each `ExplodedPart.Placement` as an
+same way. `agent-docs/format-io-design.md` gains a section for it in PR E1. With each `ExplodedPart.Placement` as an
 item's placement it writes the exploded view as a file any 3MF viewer opens.
 
 ## 10. Gate analysis
@@ -776,7 +776,7 @@ boundary gate evidence in its description. P1 also carries this document. Sizes 
 | PR | Content | Needs | Size |
 |---|---|---|---|
 | P1 | this document; `Kind`, `Material`, `Part`, `Joint`, `Axis`, `Set`, `Add`, `Join`; `internal/jointinfer` axis matching (M1–M6); `Explode` with `internal/explodeplan`; `Graph` and `WriteMermaid`; explode example; CI job entry | — | 1,300 |
-| E1 | `export.ThreeMFItems` and its section in `agent-docs/3mf-export-design.md` | — | 300 |
+| E1 | `export.ThreeMFItems` and its section in `agent-docs/format-io-design.md` | — | 300 |
 | P2 | `Views` and ports; views example | P1 | 350 |
 | P3 | `BOM`, `Summary`; summary example | P1 | 500 |
 | P4 | `Check` over `Verify` (C1–C7), `JointReport`, edge statuses in `Graph`; joints example | P1 | 800 |
