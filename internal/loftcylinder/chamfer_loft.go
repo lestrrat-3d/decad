@@ -51,11 +51,7 @@ func BindLoftCapSetback(z0, z1, d, dDelta float64) error {
 // the exact offset to that rounding, as Loft §18's held-polygon chamfer does.
 func ChamferLoftCaps(ctx context.Context, env topo.Env, fp facetedrecord.Payload,
 	side ChamferSideSource, inner [2][]int, setback float64) (*topo.Body, error) {
-	const (
-		maxRimVertices   = 4_096
-		maxInsetVertices = 4_096
-		maxTriangles     = 32_768
-	)
+	const maxRimVertices = 4_096
 	if (side.BoreGroup < 0) != (len(inner[0]) == 0) || (side.BoreGroup < 0) != (len(inner[1]) == 0) {
 		return nil, fmt.Errorf("%w: loft cap chamfer has a bore wall without both rims", decaderr.ErrUnsupported)
 	}
@@ -99,6 +95,22 @@ func ChamferLoftCaps(ctx context.Context, env topo.Env, fp facetedrecord.Payload
 	if middleFirst == len(mesh.Tris) {
 		return nil, fmt.Errorf("%w: loft cap chamfer keeps no side", decaderr.ErrUnsupported)
 	}
+	return chamferHeldShell(ctx, env, fp, side, inner, setback, mesh, bounds, clipped)
+}
+
+// chamferHeldShell finishes a held cap chamfer once the side strips are
+// clipped into mesh: clipped.Rings are the exact side rings at the band levels
+// side.Z0+setback and side.Z1−setback, and mesh holds the kept side and bore
+// triangles with their vertex bounds. It insets both outer cap loops, adds the
+// bands and caps, and runs the audits ChamferLoftCaps states.
+func chamferHeldShell(ctx context.Context, env topo.Env, fp facetedrecord.Payload,
+	side ChamferSideSource, inner [2][]int, setback float64, mesh *facetedrecord.JoinedMesh,
+	bounds []float64, clipped ChamferSideResult) (*topo.Body, error) {
+	const (
+		maxInsetVertices = 4_096
+		maxTriangles     = 32_768
+	)
+	levels := [2]float64{side.Z0, side.Z1}
 	var inset [2][]int
 	var bands [2][2]int
 	maxInset := 0.0
@@ -124,7 +136,11 @@ func ChamferLoftCaps(ctx context.Context, env topo.Env, fp facetedrecord.Payload
 		if !BoreRingSimple(ctx, mesh.Verts, inset[capIndex]) {
 			return nil, fmt.Errorf("%w: loft inset is not one simple outer ring", decaderr.ErrUnsupported)
 		}
-		pairs := [][2][]int{{side.Outer[capIndex], inset[capIndex]}, {clipped.Rings[capIndex], inset[capIndex]}}
+		// The side ring need not enclose the inset in projection: a twisted wall
+		// leans, and at depth setback its ring can turn past the inset. The
+		// band's containment in H comes from ChamferContactAudit and the
+		// crossing audit below, not from that nesting.
+		pairs := [][2][]int{{side.Outer[capIndex], inset[capIndex]}}
 		if len(inner[capIndex]) > 0 {
 			pairs = append(pairs, [2][]int{inset[capIndex], inner[capIndex]})
 		}
@@ -134,7 +150,7 @@ func ChamferLoftCaps(ctx context.Context, env topo.Env, fp facetedrecord.Payload
 				return nil, err
 			}
 			if !nested {
-				return nil, fmt.Errorf("%w: loft inset crosses its cap outline, side ring or bore rim", decaderr.ErrUnsupported)
+				return nil, fmt.Errorf("%w: loft inset crosses its cap outline or bore rim", decaderr.ErrUnsupported)
 			}
 		}
 		if err := ChamferHeldOutlineGap(ctx, mesh.Verts, side.Outer[capIndex], inset[capIndex], fp.MeshBound); err != nil {
@@ -186,13 +202,7 @@ func ChamferLoftCaps(ctx context.Context, env topo.Env, fp facetedrecord.Payload
 		if !ChamferExactRingSimple(ctx, ideal, clipped.Rings[capIndex]) {
 			return nil, fmt.Errorf("%w: ideal loft side section is not simple", decaderr.ErrUnsupported)
 		}
-		nested, err := ChamferExactNested(ctx, ideal, clipped.Rings[capIndex], inset[capIndex])
-		if err != nil {
-			return nil, err
-		}
-		if !nested {
-			return nil, fmt.Errorf("%w: ideal loft inset crosses its side section", decaderr.ErrUnsupported)
-		}
+		var err error
 		bandSideEdges[capIndex], err = ChamferBandBoundary(mesh.Tris, bands[capIndex], clipped.Rings[capIndex], inset[capIndex])
 		if err != nil {
 			return nil, err
