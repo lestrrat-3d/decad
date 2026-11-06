@@ -18,6 +18,18 @@ import (
 // the circle of radius r.
 func lobeLoft(t testing.TB, doc *decad.Document, r, rot, half float64, height float64) *decad.Body {
 	t.Helper()
+	return flankLobeLoft(t, doc, r, rot, half, height, func(f float64) (float64, float64) {
+		return r + 0.35 + f*0.65, half * (1 - 0.4*f)
+	})
+}
+
+// flankLobeLoft lofts the lobe section of lobeLoft with its fit flanks drawn by
+// flank: fit point f ∈ [0, 1] of the side at angle half sits at radius and angle
+// flank(f), and the opposite side mirrors it. The radial lines run from the circle
+// of radius r to flank(0).
+func flankLobeLoft(t testing.TB, doc *decad.Document, r, rot, half float64, height float64,
+	flank func(f float64) (float64, float64)) *decad.Body {
+	t.Helper()
 	w := sketch.NewWorld()
 	section := func(plane *sketch.Plane) (*sketch.Sketch, *sketch.Profile) {
 		s, err := w.CreateSketch(plane)
@@ -32,9 +44,7 @@ func lobeLoft(t testing.TB, doc *decad.Document, r, rot, half float64, height fl
 		const fit = 5
 		right, left := make([]*sketch.Point, fit), make([]*sketch.Point, fit)
 		for i := range fit {
-			f := float64(i) / float64(fit-1)
-			rad := r + 0.35 + f*0.65
-			a := half * (1 - 0.4*f)
+			rad, a := flank(float64(i) / float64(fit-1))
 			right[i], left[i] = pt(rad, -a), pt(rad, a)
 		}
 		s.CreateLine(rr, right[0])

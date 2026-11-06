@@ -24,6 +24,9 @@ import (
 // Both profiles must state the same section, so replacing each with the same
 // rewritten record preserves their one-to-one loft correspondence. Spline
 // segments remain the original records; only the analytic corner is trimmed.
+// A short line that a line/circle corner's fillet consumes, ending at a fit
+// spline, leaves the section, and the corner is rounded against that fit
+// spline by the fit-circle route (agent-docs/loft-design.md §17).
 func FilletStraight(ctx context.Context, env topo.Env, selector string, edges []*topo.Edge,
 	pl Payload, radius float64) (*topo.Body, error) {
 	if pl.ConstructionDelta > 0 || len(pl.ConstructionArcUpper) != 0 || len(pl.ConstructionLengthExtra) != 0 {
@@ -81,7 +84,8 @@ func FilletStraight(ctx context.Context, env topo.Env, selector string, edges []
 		rootCarrierDeparture float64
 		circleIdealParam     proofbound.RatInterval
 	}
-	blends := make(map[int]loftCornerBlend, len(edges))
+	corners := make([]int, 0, len(edges))
+	selected := make(map[int]struct{}, len(edges))
 	for _, edge := range edges {
 		if _, ok := edge.Curve.(surfacegeom.Line3); !ok || edge.Start == nil || edge.End == nil {
 			return nil, fmt.Errorf(`%w: the selected loft edge is not an axial corner`, decaderr.ErrUnsupported)
@@ -107,14 +111,44 @@ func FilletStraight(ctx context.Context, env topo.Env, selector string, edges []
 		if matched < 0 {
 			return nil, fmt.Errorf(`%w: a selected loft edge has no analytic section corner`, decaderr.ErrUnsupported)
 		}
+		if _, exists := selected[matched]; exists {
+			return nil, fmt.Errorf(`%w: a loft corner was selected twice`, decaderr.ErrDegenerate)
+		}
+		selected[matched] = struct{}{}
+		corners = append(corners, matched)
+	}
+	// A line a selected corner's tangent arc consumes whole leaves the section,
+	// and that corner's fillet touches the fit spline beyond the line instead.
+	origin := make([]int, n)
+	for i := range origin {
+		origin[i] = i
+	}
+	sectionCorners, sectionLen := corners, n
+	rolled := rolledLines(segments, walks, corners, radius)
+	if len(rolled) != 0 {
+		segments, walks, origin, corners = dropSegments(segments, walks, corners, rolled)
+		n = len(segments)
+		if n < 2 {
+			return nil, fmt.Errorf(`%w: the loft fillets consume the section`, decaderr.ErrDegenerate)
+		}
+	}
+	blends := make(map[int]loftCornerBlend, len(corners))
+	for k, matched := range corners {
 		if _, exists := blends[matched]; exists {
 			return nil, fmt.Errorf(`%w: a loft corner was selected twice`, decaderr.ErrDegenerate)
 		}
+		corner := sectionCorners[k]
 		prev := (matched + n - 1) % n
 		if loftfillet.FitCirclePair(segments[prev], segments[matched]) {
 			cb, fitParam, circleParam, err := loftfillet.CircleBlend(segments, walks, matched, radius)
 			if err != nil {
-				return nil, fmt.Errorf(`%w; selector %s, section corner %d`, err, selector, matched)
+				_, leaves := rolled[corner]
+				_, arrives := rolled[(corner+sectionLen-1)%sectionLen]
+				if leaves || arrives {
+					return nil, fmt.Errorf(`%w; the fillet consumes the line at selector %s, section corner %d, and cannot touch the fit spline beyond it`,
+						err, selector, corner)
+				}
+				return nil, fmt.Errorf(`%w; selector %s, section corner %d`, err, selector, corner)
 			}
 			fitArrives := false
 			fit, isFit := segments[prev].(sectionrecord.FitSplineSeg)
@@ -140,16 +174,16 @@ func FilletStraight(ctx context.Context, env topo.Env, selector string, edges []
 			cert, err := loftfillet.CertifyRoot(ctx, fit, circle, connector, fitParam, radius,
 				fitArrives, math.Copysign(1, cross))
 			if err != nil {
-				return nil, fmt.Errorf(`%w; selector %s, section corner %d`, err, selector, matched)
+				return nil, fmt.Errorf(`%w; selector %s, section corner %d`, err, selector, corner)
 			}
 			departure, idealLength, err := loftfillet.ArcDeparture(cert, connector, fitArrives, radius)
 			if err != nil {
-				return nil, fmt.Errorf(`%w; selector %s, section corner %d`, err, selector, matched)
+				return nil, fmt.Errorf(`%w; selector %s, section corner %d`, err, selector, corner)
 			}
 			fitCarrier, rootCarrier, circleIdealParam, err := loftfillet.CarrierDeparture(cert, circle,
 				fitParam, circleParam, fitArrives)
 			if err != nil {
-				return nil, fmt.Errorf(`%w; selector %s, section corner %d`, err, selector, matched)
+				return nil, fmt.Errorf(`%w; selector %s, section corner %d`, err, selector, corner)
 			}
 			blends[matched] = loftCornerBlend{
 				blend: cb, fitParam: fitParam, circleParam: circleParam, fitCircle: true,
@@ -160,7 +194,7 @@ func FilletStraight(ctx context.Context, env topo.Env, selector string, edges []
 		} else {
 			cb, err := offset2d.Fillet(walks, matched, radius, sectionaudit.Tolerance)
 			if err != nil {
-				return nil, fmt.Errorf(`%w; selector %s, section corner %d`, err, selector, matched)
+				return nil, fmt.Errorf(`%w; selector %s, section corner %d`, err, selector, corner)
 			}
 			blends[matched] = loftCornerBlend{blend: cb, lineCircle: lineCirclePair(segments[prev], segments[matched])}
 		}
@@ -194,7 +228,7 @@ func FilletStraight(ctx context.Context, env topo.Env, selector string, edges []
 			}
 			if increasing && startParam.Hi.Cmp(endParam.Lo) >= 0 ||
 				!increasing && startParam.Lo.Cmp(endParam.Hi) <= 0 {
-				return nil, fmt.Errorf(`%w: ideal loft fillets consume section segment %d`, decaderr.ErrUnsupported, i)
+				return nil, fmt.Errorf(`%w: ideal loft fillets consume section segment %d`, decaderr.ErrUnsupported, origin[i])
 			}
 		}
 		carrierDeparture := 0.0
@@ -229,7 +263,7 @@ func FilletStraight(ctx context.Context, env topo.Env, selector string, edges []
 					original.TEnd = end.fitParam
 				}
 				if original.TStart == original.TEnd {
-					return nil, fmt.Errorf(`%w: loft fillets consume section segment %d`, decaderr.ErrUnsupported, i)
+					return nil, fmt.Errorf(`%w: loft fillets consume section segment %d`, decaderr.ErrUnsupported, origin[i])
 				}
 				rewritten = append(rewritten, original)
 			case sectionrecord.CircleSeg:
@@ -262,7 +296,7 @@ func FilletStraight(ctx context.Context, env topo.Env, selector string, edges []
 					}
 				}
 				if original.CCW != (original.TStart < original.TEnd) {
-					return nil, fmt.Errorf(`%w: loft fillets consume section segment %d`, decaderr.ErrUnsupported, i)
+					return nil, fmt.Errorf(`%w: loft fillets consume section segment %d`, decaderr.ErrUnsupported, origin[i])
 				}
 				rewritten = append(rewritten, original)
 			case sectionrecord.LineSeg, sectionrecord.ArcSeg:
@@ -283,7 +317,7 @@ func FilletStraight(ctx context.Context, env topo.Env, selector string, edges []
 					cut += end.blend.CutbackA
 				}
 				if cut >= w.Length-sectionaudit.Tolerance || offset2d.WalkConsumed(w, from, to, sectionaudit.Tolerance) {
-					return nil, fmt.Errorf(`%w: loft fillets consume section segment %d`, decaderr.ErrUnsupported, i)
+					return nil, fmt.Errorf(`%w: loft fillets consume section segment %d`, decaderr.ErrUnsupported, origin[i])
 				}
 				rewritten = append(rewritten, offset2d.OriginalSegment(w, from.U, from.V, to.U, to.V))
 			default:
@@ -343,6 +377,83 @@ func FilletStraight(ctx context.Context, env topo.Env, selector string, edges []
 	next.Cell, next.Side, next.CapStartCount = nil, nil, 0
 	next.Proof = loftmesh.MeshProof{}
 	return Build(ctx, env, next, budget, work0, work1)
+}
+
+// rolledLines returns the LineSeg segments that a selected line/circle corner's
+// tangent arc consumes whole and whose other end meets a FitSplineSeg. Such a
+// corner is rounded against the fit spline instead (agent-docs/loft-design.md §17):
+// the line leaves the section, and the circle fragment and the fit spline meet at
+// a fit-circle corner. The test only routes the corner; the fit-circle route's
+// root certificate and the rewritten section's audit decide whether it is admitted.
+func rolledLines(segments []sectionrecord.CurveSegment, walks []survey2d.SideWalk, corners []int,
+	radius float64) map[int]struct{} {
+	n := len(segments)
+	rolled := make(map[int]struct{})
+	for _, corner := range corners {
+		prev := (corner + n - 1) % n
+		if !lineCirclePair(segments[prev], segments[corner]) {
+			continue
+		}
+		line, far := corner, (corner+1)%n
+		if _, ok := segments[prev].(sectionrecord.LineSeg); ok {
+			line, far = prev, (prev+n-1)%n
+		}
+		if _, ok := segments[line].(sectionrecord.LineSeg); !ok {
+			continue
+		}
+		if _, ok := segments[far].(sectionrecord.FitSplineSeg); !ok {
+			continue
+		}
+		cb, err := offset2d.Fillet(walks, corner, radius, sectionaudit.Tolerance)
+		if err != nil {
+			continue
+		}
+		w := walks[line]
+		from := sectionrecord.Point2{U: w.StartU, V: w.StartV}
+		to := sectionrecord.Point2{U: w.EndU, V: w.EndV}
+		cut := cb.CutbackB
+		if line == prev {
+			to, cut = cb.FA, cb.CutbackA
+		} else {
+			from = cb.FB
+		}
+		if cut >= w.Length-sectionaudit.Tolerance || offset2d.WalkConsumed(w, from, to, sectionaudit.Tolerance) {
+			rolled[line] = struct{}{}
+		}
+	}
+	return rolled
+}
+
+// dropSegments removes the dropped segments from a section and its walks. It
+// returns the remaining segments and walks, each remaining segment's index in
+// the original section, and each corner moved to the first remaining segment at
+// or after it, which starts the corner that the removal leaves.
+func dropSegments(segments []sectionrecord.CurveSegment, walks []survey2d.SideWalk, corners []int,
+	dropped map[int]struct{}) ([]sectionrecord.CurveSegment, []survey2d.SideWalk, []int, []int) {
+	n := len(segments)
+	keptSegments := make([]sectionrecord.CurveSegment, 0, n)
+	keptWalks := make([]survey2d.SideWalk, 0, n)
+	origin := make([]int, 0, n)
+	index := make([]int, n)
+	for i := range segments {
+		index[i] = len(keptSegments)
+		if _, ok := dropped[i]; ok {
+			continue
+		}
+		keptSegments = append(keptSegments, segments[i])
+		keptWalks = append(keptWalks, walks[i])
+		origin = append(origin, i)
+	}
+	moved := make([]int, len(corners))
+	for k, corner := range corners {
+		// index[corner] is the next kept segment's slot; past the last kept
+		// segment it wraps to the first.
+		moved[k] = index[corner]
+		if len(keptSegments) != 0 {
+			moved[k] %= len(keptSegments)
+		}
+	}
+	return keptSegments, keptWalks, origin, moved
 }
 
 // lineCirclePair reports a corner between a line or an arc and a trimmed circle
