@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"math"
 	"time"
 
 	"github.com/lestrrat-3d/decad"
@@ -189,17 +190,17 @@ func assembleSTEPFile(
 			vertexRefs[i] = b.add(ap214.VertexPoint(0, "", pointRefs[i]))
 		}
 
+		normals, err := triangleNormals(vertices, triangles)
+		if err != nil {
+			return step.File{}, fmt.Errorf("export: STEP: %w", err)
+		}
 		edges := make(map[edgeKey]step.Reference, len(triangles)*3/2)
 		faces = make([]step.Reference, 0, len(triangles))
 		for i, tri := range triangles {
 			if err := ctx.Err(); err != nil {
 				return step.File{}, err
 			}
-			face, err := b.addTriangle(tri, vertices, pointRefs, vertexRefs, edges)
-			if err != nil {
-				return step.File{}, fmt.Errorf("export: STEP triangle %d: %w", i, err)
-			}
-			faces = append(faces, face)
+			faces = append(faces, b.addTriangle(tri, normals[i], vertices, pointRefs, vertexRefs, edges))
 			faceComponent = append(faceComponent, components[i])
 		}
 	}
@@ -345,15 +346,13 @@ func real3(v r3.Vec) [3]step.Real {
 	return [3]step.Real{step.Real(v.X), step.Real(v.Y), step.Real(v.Z)}
 }
 
-func (b *fileBuilder) addTriangle(tri [3]int, vertices []r3.Vec, points, topologicalVertices []step.Reference, edges map[edgeKey]step.Reference) (step.Reference, error) {
-	a, c, d := vertices[tri[0]], vertices[tri[1]], vertices[tri[2]]
-	x, ok := c.Sub(a).Normalize()
+func (b *fileBuilder) addTriangle(tri [3]int, z r3.Vec, vertices []r3.Vec, points, topologicalVertices []step.Reference, edges map[edgeKey]step.Reference) step.Reference {
+	x, ok := vertices[tri[1]].Sub(vertices[tri[0]]).Normalize()
 	if !ok {
-		return 0, fmt.Errorf("%w: triangle edge has no direction", decad.ErrDegenerate)
-	}
-	z, ok := c.Sub(a).Cross(d.Sub(a)).Normalize()
-	if !ok {
-		return 0, fmt.Errorf("%w: triangle has no plane", decad.ErrDegenerate)
+		e := longestEdge(tri, vertices)
+		if x, ok = e.Sub(z.Scale(e.Dot(z))).Normalize(); !ok {
+			x, _ = anyPerpendicular(z)
+		}
 	}
 	axis := b.add(ap214.Direction(0, "", real3(z)))
 	refDirection := b.add(ap214.Direction(0, "", real3(x)))
@@ -368,7 +367,9 @@ func (b *fileBuilder) addTriangle(tri [3]int, vertices []r3.Vec, points, topolog
 		if !exists {
 			vector, ok := vertices[key.b].Sub(vertices[key.a]).Normalize()
 			if !ok {
-				return 0, fmt.Errorf("%w: mesh edge has no direction", decad.ErrDegenerate)
+				// An edge shorter than r3's direction guard joins two held vertices that differ in their last
+				// bits; its line takes the face's in-plane direction.
+				vector = x
 			}
 			direction := b.add(ap214.Direction(0, "", real3(vector)))
 			unitVector := b.add(ap214.Vector(0, "", direction, 1))
@@ -380,7 +381,7 @@ func (b *fileBuilder) addTriangle(tri [3]int, vertices []r3.Vec, points, topolog
 	}
 	loop := b.add(ap214.EdgeLoop(0, "", oriented...))
 	bound := b.add(ap214.FaceOuterBound(0, "", loop, true))
-	return b.add(ap214.AdvancedFace(0, "", plane, true, bound)), nil
+	return b.add(ap214.AdvancedFace(0, "", plane, true, bound))
 }
 
 type edgeUse struct {
@@ -454,4 +455,26 @@ func meshRoot(parents []int, i int) int {
 		i = parents[i]
 	}
 	return i
+}
+
+func edgeLength(vertices []r3.Vec, t [3]int, j int) float64 {
+	return vertices[t[(j+1)%3]].Sub(vertices[t[j]]).Len()
+}
+
+func longestEdge(t [3]int, vertices []r3.Vec) r3.Vec {
+	best := r3.Vec{}
+	for j := range 3 {
+		if e := vertices[t[(j+1)%3]].Sub(vertices[t[j]]); e.Len() > best.Len() {
+			best = e
+		}
+	}
+	return best
+}
+
+func anyPerpendicular(z r3.Vec) (r3.Vec, bool) {
+	ref := r3.Vec{X: 1}
+	if math.Abs(z.X) > 0.9 {
+		ref = r3.Vec{Y: 1}
+	}
+	return ref.Cross(z).Normalize()
 }
