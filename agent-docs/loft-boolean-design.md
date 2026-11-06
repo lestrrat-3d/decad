@@ -504,6 +504,21 @@ the charged annulus. The source-circle proof gives one occupied angular
 sector per tooth; the held ring has its own exact angular ordering. On either
 side, a hidden connector point reaches its same-height circle crossing by
 at most the certified connector reach plus the matched Loft departure.
+This reach claims the crossing on the slice's first piece. At the cap where
+that piece has zero length, its far end is the root endpoint, which the
+section records on the circle; float rounding puts it inside or outside.
+When it is inside, the crossing lies on the second piece at heights just
+above that cap. `loftcylinder.ConnectorReach` therefore widens the tooth's
+cap collar. It tries dyadic fractions `2⁻⁵²` through `2⁻⁸` of the height
+in increasing order, starting from the tooth's existing collar. It keeps
+the first collar at whose two interior heights every source and held
+connector starts strictly inside the circle and its far end stays strictly
+outside it. Squared radius is convex along each root ruling, so its two
+strict endpoint tests cover every height between the collars. The far end
+moves along one segment between those heights, and the test reads that
+segment's exact minimum radius. The join charges the wider collar like
+the root collar below. If no fraction settles the endpoints, the tooth
+lacks the connector certificate.
 The exact radial derivative also bounds the shift between source and held
 crossings: the matched point lies within `δ` of the crossing, so its squared
 radius differs from `R²` by at most `2Rδ+δ²`. Dividing by the certified
@@ -536,9 +551,11 @@ published boundary bound includes the Loft source bound, the maximum of
 connector reach plus departure and radial ring reach plus root-angle reach,
 outward root excess, one cap collar height, and its XY sweep. A result above
 0.1 mm refuses.
-If any tooth lacks the tighter connector certificate, the join retains the
-prior two-times-inward-reach bound for the complete pattern. It never mixes
-the two bounds within one result.
+If any tooth lacks the connector certificate, the join uses the
+two-times-inward-reach bound for the complete pattern. That bound uses no
+connector certificate, so when every tooth has one the join uses the smaller
+of the two complete-pattern seam reaches. It never mixes the two bounds
+across teeth within one result.
 
 For volume, let `B` be the exact blank and `T` the union of exact teeth.
 Replacing each true tooth by its held Loft changes occupied volume by at most

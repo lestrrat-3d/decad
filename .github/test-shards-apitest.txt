@@ -3016,3 +3016,4 @@
 11	0.00	TestLoftFilletRestsOnTheLineFlankVertex
 11	0.00	TestLoftFilletLargeRadiusRestsOnTheBladeTop
 11	0.00	TestMeshBodyLocatePointConcurrent
+11	0.00	TestUnionManyJoinsTwistedLoftTeethWithRootsInsideTheDisc
