@@ -26,7 +26,7 @@ func joinFixture(t *testing.T) (*decad.Document, *decad.Body, *decad.Body, *deca
 func TestPathPatternUnionUnitesTheInstancesWithTheTarget(t *testing.T) {
 	t.Parallel()
 	doc, bar, peg, path := joinFixture(t)
-	copies, err := decad.PathPatternCopies(t.Context(), peg, path, 3)
+	copies, err := decad.PathPattern(t.Context(), peg, path, decad.WithPathCount(3))
 	require.NoError(t, err)
 	out, err := decad.Union(t.Context(), bar, append([]*decad.Body{peg}, copies...)...)
 	require.NoError(t, err)
@@ -37,10 +37,10 @@ func TestPathPatternUnionUnitesTheInstancesWithTheTarget(t *testing.T) {
 	decadtest.MeasuresBounds(t, out, r3.Vec{}, r3.Vec{X: 30, Y: 4, Z: 2})
 }
 
-func TestPathPatternSpacedUnionPlacesTheCopiesByDistance(t *testing.T) {
+func TestPathPatternSpacingUnionPlacesTheCopiesByDistance(t *testing.T) {
 	t.Parallel()
 	doc, bar, peg, path := joinFixture(t)
-	copies, err := decad.PathPatternSpaced(t.Context(), peg, path, units.Millimeters(10))
+	copies, err := decad.PathPattern(t.Context(), peg, path, decad.WithPathSpacing(units.Millimeters(10)))
 	require.NoError(t, err)
 	out, err := decad.Union(t.Context(), bar, append([]*decad.Body{peg}, copies...)...)
 	require.NoError(t, err)
@@ -56,7 +56,7 @@ func TestPathPatternUnionRefusalLeavesEveryOperandLive(t *testing.T) {
 	// feature and every copy live.
 	sheetDoc, sheet := offsetPrismSheet(t)
 	feature := decadtest.NewBlock(t, sheetDoc, 0, 0, 4, 4, units.Millimeters(2))
-	copies, err := decad.PathPatternCopies(t.Context(), feature, path, 3)
+	copies, err := decad.PathPattern(t.Context(), feature, path, decad.WithPathCount(3))
 	require.NoError(t, err)
 	_, err = decad.Union(t.Context(), sheet, append([]*decad.Body{feature}, copies...)...)
 	require.ErrorIs(t, err, decad.ErrUnsupported)

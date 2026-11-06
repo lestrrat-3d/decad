@@ -1,26 +1,28 @@
 # Path pattern design
 
-`PathPatternCopies` and `PathPatternSpaced` repeat a body at points spaced along a `Path`, by count and by distance. It places each instance with `Copy` and a
+`PathPattern` repeats a body at points spaced along a `Path`, by count or by distance. It places each instance with `Copy` and a
 translation and adds no geometry kernel. The points come from `internal/pathsample/`, which works on plain
 millimetre vectors.
 
 ## 1. Contract
 
 ```go
-func PathPatternCopies(ctx context.Context, b *Body, path *Path, count int, opts ...PathPatternOption) ([]*Body, error)
-func PathPatternSpaced(ctx context.Context, b *Body, path *Path, spacing units.Value, opts ...PathPatternOption) ([]*Body, error)
+func PathPattern(ctx context.Context, b *Body, path *Path, opts ...PathPatternOption) ([]*Body, error)
+func WithPathCount(n int) PathPatternOption
+func WithPathSpacing(spacing units.Value) PathPatternOption
 func WithPathFollow() PathPatternOption
 func WithPathPivot(pivot r3.Vec) PathPatternOption
 ```
 
 | Decision | Rule |
 |---|---|
-| P1 | Instance 0 is `b`, taken to sit at the path's start. The result holds the `count − 1` other instances, as `PatternCopies` does, and `b` stays live. |
+| P1 | Instance 0 is `b`, taken to sit at the path's start. With `WithPathCount(count)` the result holds the `count − 1` other instances, as `PatternCopies` does, and `b` stays live. |
 | P2 | Instance `i` is `Copy(b, WithCopyPlacement(Translation(point(i) − point(0))))`, where `point(i)` lies `i/(count − 1)` of the way along the path's total length. The last instance sits at the path's end. |
 | P3 | Instances keep the orientation of `b` unless `WithPathFollow` is given (§5). |
 | P4 | Points are spaced by arc length over the whole path, not per segment. A short segment can hold no instance and a long one many. |
-| P5 | `count` below 2, a nil path and a retired body are `ErrDegenerate`, `ErrDegenerate` and `ErrRetiredBody`. A nil context or a body of no document is `ErrDegenerate`. |
+| P5 | A `WithPathCount` below 2, a nil path and a retired body are `ErrDegenerate`, `ErrDegenerate` and `ErrRetiredBody`. A nil context or a body of no document is `ErrDegenerate`. |
 | P6 | A failed or canceled call retires every copy it already made and returns the error, so no copy outlives the call. |
+| P7 | Exactly one of `WithPathCount` (P1, P2) and `WithPathSpacing` (§6) places the instances. Neither, both, or either given twice is `ErrDegenerate`. The count is an `int`: it counts instances and measures nothing, like `LinearPattern.Count`. The spacing is a length `units.Value`. A failure is reported as an `OperationCopy` failure. |
 
 ## 2. Sampling
 
@@ -62,20 +64,20 @@ point with the unit direction there, and `pathsample.Turn` gives the shortest ro
 
 ## 6. Spacing by distance
 
-`PathPatternSpaced` places copies at a stated arc length instead of a count. `pathsample.SampleSpaced` returns the points.
+`WithPathSpacing` places copies at a stated arc length instead of a count. `pathsample.SampleSpaced` returns the points.
 
 | Decision | Rule |
 |---|---|
 | S1 | Instance `i` lies `i · spacing` of arc length along the path, for every `i` with `i · spacing` within the path's length. The first is at the path's start. |
 | S2 | A spacing that divides the length, up to a relative 1e-12 of rounding, gives the last instance at the path's end exactly. Otherwise the last lies short of the end. |
-| S3 | `spacing` is a positive length. A wrong unit kind is `ErrUnitKind`, a negative value is `ErrNegativeMagnitude`, and zero is `ErrDegenerate`. |
+| S3 | The `WithPathSpacing` value is a positive length. A wrong unit kind is `ErrUnitKind`, a negative value is `ErrNegativeMagnitude`, and zero is `ErrDegenerate`. |
 | S4 | A spacing that leaves no copy, because it is longer than the path, is `ErrDegenerate`. One that would place more than 100000 points is `ErrDegenerate`. |
-| S5 | Orientation, `WithPathFollow`, the path's segments, failure and the copies' exactness are `PathPatternCopies`'s (P1 to P6, §5). |
+| S5 | Orientation, `WithPathFollow`, the path's segments, failure and the copies' exactness are as with `WithPathCount` (P1 to P6, §5). |
 
 ## 7. Joining the copies
 
 | Decision | Rule |
 |---|---|
-| J1 | The join is `Union(target, feature, copies...)` over the result of `PathPatternCopies` or `PathPatternSpaced`, `feature` being instance 0. It takes the routes `Union` takes over those operands, and its result and refusals are `Union`'s. |
+| J1 | The join is `Union(target, feature, copies...)` over the result of `PathPattern`, `feature` being instance 0. It takes the routes `Union` takes over those operands, and its result and refusals are `Union`'s. |
 | J2 | A refused `Union` leaves `target`, `feature` and every copy live. The caller removes the copies with `Remove`. |
 | J3 | The history holds the copies' `OperationCopy` entries and the `Union`'s own entries. |

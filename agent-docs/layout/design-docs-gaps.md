@@ -17,7 +17,7 @@ The rules for rows live in `agent-docs/layout.md`.
 | `agent-docs/lattice-design.md` | `GyroidLattice`: the gyroid field, its box cap and the marching tetrahedra that cut it into a closed `MeshBody`. |
 | `agent-docs/mesh-solid-design.md` | `SolidFromMesh`: a closed `MeshBody` as a Faceted solid `Body`, its proofs and exact plane groups. |
 | `agent-docs/mesh-import-design.md` | `MeshBody`, `ReadSTL` and `ReadOBJ`: the mesh readers, the mesh report and its exact volume. |
-| `agent-docs/path-pattern-design.md` | `PathPatternCopies`: copies spaced at equal arc length along a `Path`, and the path sampler. |
+| `agent-docs/path-pattern-design.md` | `PathPattern`: copies along a `Path` by count or by arc-length spacing, and the path sampler. |
 | `agent-docs/blend-variants-design.md` | Chord-length fillet, angle chamfer and the oblique boss fillet. |
 | `agent-docs/arrange-design.md` | `Arrange`: shelf packing of body footprints onto a flat bed by translation. |
 | `agent-docs/parts-design.md` | `parts`: staged exploded view and schematic of placed bodies; typed joints, part views, BOM, summary, a structural joint check without `Verify`, linkage bridge; `export.ThreeMFItems`. |

@@ -193,11 +193,11 @@ type CircularPattern struct{ Center, Axis r3.Vec; Count int }
 
 func PatternCopies(ctx context.Context, b *Body, spec PatternSpec) ([]*Body, error)
 func Patterned(ctx context.Context, b *Body, spec PatternSpec) (*Body, error)
-func PathPatternCopies(ctx context.Context, b *Body, path *Path, count int) ([]*Body, error)
+func PathPattern(ctx context.Context, b *Body, path *Path, opts ...PathPatternOption) ([]*Body, error)
 ```
 
-`PathPatternCopies` is not a `PatternSpec`: it takes a `Path` and a count, leaves the receiver live like
-`PatternCopies`, and places each copy by translation along the path. `agent-docs/path-pattern-design.md` owns it.
+`PathPattern` is not a `PatternSpec`: it takes a `Path` and a `WithPathCount` or
+`WithPathSpacing` option, leaves the receiver live like `PatternCopies`, and places each copy by translation along the path. `agent-docs/path-pattern-design.md` owns it.
 
 `PatternCopies` leaves the receiver live and returns `Count − 1` new live
 bodies, instances `1..Count−1` in order. `Patterned` retires the receiver and

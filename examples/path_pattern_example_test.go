@@ -11,10 +11,10 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// PathPatternCopies repeats a body along a path, such as bolts along a curved
-// flange or ribs along a rail. The copies sit at equal distances measured along
-// the path's length and keep the body's orientation. The body itself counts as
-// the first instance, taken to sit at the path's start.
+// PathPattern with WithPathCount repeats a body along a path, such as bolts
+// along a curved flange or ribs along a rail. The copies sit at equal distances
+// measured along the path's length and keep the body's orientation. The body
+// itself counts as the first instance, taken to sit at the path's start.
 func Example_path_pattern() {
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
@@ -44,7 +44,7 @@ func Example_path_pattern() {
 		fmt.Printf("failed to build path: %s\n", err)
 		return
 	}
-	copies, err := decad.PathPatternCopies(context.Background(), peg, path, 4)
+	copies, err := decad.PathPattern(context.Background(), peg, path, decad.WithPathCount(4))
 	if err != nil {
 		fmt.Printf("failed to pattern: %s\n", err)
 		return
@@ -95,7 +95,7 @@ func Example_path_pattern_follow() {
 		fmt.Printf("failed to build path: %s\n", err)
 		return
 	}
-	copies, err := decad.PathPatternCopies(context.Background(), peg, path, 4, decad.WithPathFollow())
+	copies, err := decad.PathPattern(context.Background(), peg, path, decad.WithPathCount(4), decad.WithPathFollow())
 	if err != nil {
 		fmt.Printf("failed to pattern: %s\n", err)
 		return
@@ -114,8 +114,8 @@ func Example_path_pattern_follow() {
 	// x 16.0..20.0, y 20.0..24.0
 }
 
-// PathPatternSpaced places copies at a stated distance along the path instead
-// of a count: here a peg every 12 mm along a 30 mm line. The last copy sits
+// PathPattern with WithPathSpacing places copies at a stated distance along the
+// path instead of a count: here a peg every 12 mm along a 30 mm line. The last copy sits
 // short of the path's end when the distance does not divide its length.
 func Example_path_pattern_spaced() {
 	w := sketch.NewWorld()
@@ -142,7 +142,7 @@ func Example_path_pattern_spaced() {
 		fmt.Printf("failed to build path: %s\n", err)
 		return
 	}
-	copies, err := decad.PathPatternSpaced(context.Background(), peg, path, units.Millimeters(12))
+	copies, err := decad.PathPattern(context.Background(), peg, path, decad.WithPathSpacing(units.Millimeters(12)))
 	if err != nil {
 		fmt.Printf("failed to pattern: %s\n", err)
 		return
@@ -193,7 +193,7 @@ func Example_path_pattern_pivot() {
 		return
 	}
 	for _, pivot := range []r3.Vec{{}, {X: 2, Y: 2}} {
-		copies, err := decad.PathPatternCopies(context.Background(), peg, path, 2,
+		copies, err := decad.PathPattern(context.Background(), peg, path, decad.WithPathCount(2),
 			decad.WithPathFollow(), decad.WithPathPivot(pivot))
 		if err != nil {
 			fmt.Printf("failed to pattern: %s\n", err)
@@ -212,8 +212,8 @@ func Example_path_pattern_pivot() {
 	// pivot (2, 2): x 10..14, y 10..14
 }
 
-// PathPatternCopies repeats a part along a path, and one Union joins every copy
-// to a base body: here three 4 mm pegs on a bar, 10 mm apart along its length.
+// PathPattern repeats a part along a path, and one Union joins every copy to a
+// base body: here three 4 mm pegs on a bar, 10 mm apart along its length.
 func Example_path_pattern_join() {
 	doc := decad.New()
 	build := func(x1, y1 float64, height float64) (*decad.Body, error) {
@@ -245,7 +245,7 @@ func Example_path_pattern_join() {
 		fmt.Printf("failed to build path: %s\n", err)
 		return
 	}
-	copies, err := decad.PathPatternCopies(context.Background(), peg, path, 3)
+	copies, err := decad.PathPattern(context.Background(), peg, path, decad.WithPathCount(3))
 	if err != nil {
 		fmt.Printf("failed to copy: %s\n", err)
 		return
