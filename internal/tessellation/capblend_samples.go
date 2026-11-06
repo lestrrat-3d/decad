@@ -59,7 +59,6 @@ func SampleCapBlend(in CapBlendSampleInput, budget *proofbound.WorkBudget,
 		}
 		seg := in.Segments[w.Segs[0]]
 		count := in.Count[i]
-		dth := (w.Th1 - w.Th0) / float64(count)
 		for k := range count {
 			if err := budget.Step(); err != nil {
 				return CapBlendSamples{}, err
@@ -67,8 +66,7 @@ func SampleCapBlend(in CapBlendSampleInput, budget *proofbound.WorkBudget,
 			p := sectionrecord.Point2{U: w.StartU, V: w.StartV}
 			bound := start
 			if k > 0 {
-				th := w.Th0 + float64(k)*dth
-				p = sectionrecord.Point2{U: w.CU + w.Radius*math.Cos(th), V: w.CV + w.Radius*math.Sin(th)}
+				p = CircularStation(w.SegmentWalk, k, count)
 				bound = stationBound(seg, k, count, p.U, p.V)
 			}
 			out.SidePts = append(out.SidePts, p)
@@ -92,13 +90,11 @@ func SampleCapBlend(in CapBlendSampleInput, budget *proofbound.WorkBudget,
 		w := in.Walks[0]
 		out.CapWallStart[0] = 0
 		count := in.Count[0]
-		dth := (in.CapTh1[0] - in.CapTh0[0]) / float64(count)
 		for k := range count {
 			if err := budget.Step(); err != nil {
 				return CapBlendSamples{}, err
 			}
-			th := in.CapTh0[0] + float64(k)*dth
-			p := sectionrecord.Point2{U: w.CU + in.CapRadius[0]*math.Cos(th), V: w.CV + in.CapRadius[0]*math.Sin(th)}
+			p, th := circleStation(w.CU, w.CV, in.CapRadius[0], in.CapTh0[0], in.CapTh1[0], k, count)
 			addCap(p, CapStationBound(w.CU, w.CV, in.CapRadius[0], th, p.U, p.V))
 		}
 		return out, nil
@@ -114,13 +110,11 @@ func SampleCapBlend(in CapBlendSampleInput, budget *proofbound.WorkBudget,
 			addCap(start, proofbound.WalkEndBound{})
 		} else {
 			count := in.Count[i]
-			dth := (in.CapTh1[i] - in.CapTh0[i]) / float64(count)
 			for k := range count {
 				if err := budget.Step(); err != nil {
 					return CapBlendSamples{}, err
 				}
-				th := in.CapTh0[i] + float64(k)*dth
-				p := sectionrecord.Point2{U: w.CU + in.CapRadius[i]*math.Cos(th), V: w.CV + in.CapRadius[i]*math.Sin(th)}
+				p, th := circleStation(w.CU, w.CV, in.CapRadius[i], in.CapTh0[i], in.CapTh1[i], k, count)
 				if k == 0 {
 					p = start
 				}
@@ -134,13 +128,11 @@ func SampleCapBlend(in CapBlendSampleInput, budget *proofbound.WorkBudget,
 		}
 		out.CapArcStart[ni] = len(out.CapPts)
 		count := in.ArcCount[ni]
-		dth := (in.ArcTh1[ni] - in.ArcTh0[ni]) / float64(count)
 		for k := range count {
 			if err := budget.Step(); err != nil {
 				return CapBlendSamples{}, err
 			}
-			th := in.ArcTh0[ni] + float64(k)*dth
-			p := sectionrecord.Point2{U: j.VU + in.D*math.Cos(th), V: j.VV + in.D*math.Sin(th)}
+			p, th := circleStation(j.VU, j.VV, in.D, in.ArcTh0[ni], in.ArcTh1[ni], k, count)
 			if k == 0 {
 				p = j.PA
 			}

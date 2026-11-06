@@ -425,7 +425,12 @@ sketch input. They use the same recorded-walk normalization:
 4. Reuse those samples at every incident face.
 
 A line contributes its start point; its end is the next walk's start. A circular
-walk of radius `r` and parameter span `theta` uses `n` equal subarcs. A subarc's
+walk of radius `r` and parameter span `theta` uses `n` equal subarcs. Station `k`
+sits at angle `th0 + k·theta/n` and point `(cu + r cos th, cv + r sin th)`, every
+product rounded before its sum (`tessellation.CircularStation`, and the cap-ring
+stations of a cap blend): arm64 would otherwise fuse those multiply-adds, which
+amd64 never does, and a held station, the mesh and every exported file built on
+it would carry different bits per architecture. A subarc's
 TRUE sagitta is `2 r sin²(abs(theta) / (4 n))`, and the sagitta the tessellation
 publishes and decides on is the proven upper bound:
 
