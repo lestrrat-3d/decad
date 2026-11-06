@@ -1512,7 +1512,7 @@ work intervals inside quadratic/refinement loops, as interference §7 specifies.
   facet is a needle (`internal/meshbool/mesh_needle.go`). The flip keeps the
   exact surface and every vertex. It removes the fold that no float-box move
   can clear, where a needle thinner than one float step lies along an edge
-  next to a fan of facets. The rounding then runs in three steps
+  next to a fan of facets. The rounding then runs in these steps
   (`internal/meshbool/held_embedding.go`):
   - **Round to nearest, then check.** Each exact vertex rounds to its nearest
     float, and coincident roundings weld as above. A held vertex is MOVED when
@@ -1563,6 +1563,26 @@ work intervals inside quadratic/refinement loops, as interference §7 specifies.
     the normals of their facets and the coordinate axes, nearest first
     (`agent-docs/gap-tolerance-design.md` §5.1). A mesh the float box clears
     never reaches this stage.
+  - **Flip toward Delaunay around a fold the search leaves.** A chain of
+    exact vertices within an ulp of one line on a planar face triangulates
+    into slivers whose corners all round onto that line. A cut vertex on a
+    long, nearly straight edge of an operand's own cap triangulation, beside
+    a hole's chord, is the usual case. When those corners stand for exact
+    floats or for welded points, no float-box move reaches them. The stitch
+    then reads the facets the first rounding folds and visits the shared
+    edges around them. It flips an edge when the two facets have the same
+    source, one of them is a needle, the exact predicates show them coplanar
+    and strictly convex as a quadrilateral, and the fourth corner lies
+    strictly inside the circle through the other three, read in the plane's
+    coordinate projection. That is a Delaunay flip, which never keeps a
+    sliver whose circle holds a neighbouring vertex; the needle flip above
+    refuses a flip that leaves a needle, so it cannot take the two flips a
+    chain needs. A flip queues the quadrilateral's outer edges next. The
+    flips end because each one lowers the projected Delaunay potential, and
+    a round flips at most two edges per facet. The flips keep the exact
+    surface and every vertex, and the whole rounding runs again over the new
+    facets, at most three times (`internal/meshbool/mesh_fold_flip.go`). A
+    mesh with no fold never reaches this step.
   - **Refuse what the bounded search does not clear.** A mesh still failing
     the exact held-facet checks is refused (`ErrUnsupported`,
     `BooleanExpectedUnsupported`, typed `meshbool.HeldFoldError`). The

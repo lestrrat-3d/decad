@@ -2,6 +2,7 @@ package meshbool
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math/big"
 	"slices"
@@ -175,7 +176,34 @@ func StitchFacetsContext(ctx context.Context, kept []KeptFacet) (*StitchedMesh, 
 	if len(tris) > 4096 {
 		edges = nil
 	}
+	out, err := roundStitched(ctx, xverts, approx, xbeta, tris, src, edges)
+	// A fold the float-box search leaves is retried after exact Delaunay flips
+	// around it (mesh_fold_flip.go). The flips keep the exact surface, so the
+	// retried rounding is checked like the first.
+	for range foldFlipRounds {
+		if _, folded := errors.AsType[*HeldFoldError](err); !folded {
+			break
+		}
+		flips, ferr := flipFoldsDelaunay(ctx, xverts, approx, tris, src, facetBound)
+		if ferr != nil {
+			return nil, ferr
+		}
+		if flips == 0 {
+			break
+		}
+		out, err = roundStitched(ctx, xverts, approx, xbeta, tris, src, edges)
+	}
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
 
+// roundStitched rounds the exact stitched mesh to float64 and proves the
+// held mesh embedded and closed. edges is a table the rounded audit may
+// clear and reuse, or nil.
+func roundStitched(ctx context.Context, xverts []proof.Xpt, approx []r3.Vec, xbeta []float64,
+	tris [][3]int, src []int, edges map[[2]int]uint8) (*StitchedMesh, error) {
 	// Round to float64, welding vertices whose roundings coincide — two exact
 	// points closer than an ulp become one held vertex — and drop the facets
 	// that collapse under the weld: a collapsed facet's two real directed
