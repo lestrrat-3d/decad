@@ -44,9 +44,13 @@ the raised origin charged as its lateral offset. Anything else is a miss, and th
 
 The route runs for the many-operand Union (`Union(base, tools...)`) ahead of the other many-operand routes, and for a
 two-operand Union ahead of the analytic prism routes and after the loft routes that need a recorded join.
-A set of prisms with no loft runs this route last (`axialsection.UnionManyPrisms`), after every other many-operand route has
-refused it with `ErrUnsupported`, so the prism-pattern route keeps every set it certifies. A refusal here leaves the first
-refusal as the answer.
+A set of prisms with no loft runs this route (`axialsection.UnionManyPrisms`) after the loft and sector routes and ahead of
+the prism-pattern route (`agent-docs/pattern-union-design.md`). Both routes can take a pattern of free-form sections joined
+to a circular blank. The prism-pattern route admits one only when every placed copy's root arc rounds strictly inside the
+blank, which a root arc on the blank's rim does or not by the last bit of each copy's rotation. This route decides by what
+`sketch` certifies about the placed sections, not by the sign of a rounding residue, so a root arc on the rim joins here
+at every tooth count. The prism-pattern route takes the sets this route refuses. A refusal here is a miss for the routes
+after it. When they refuse too, their refusal is the answer and the Union tries no pair chain.
 
 ## 3. What is a miss, and what is an error
 
@@ -82,3 +86,8 @@ and so avoids it. A later `DeclareLoop` element that names an entity with a para
 - `apitest.TestAxialSectionUnionLobesOnADisc`: the joined volume against disc plus lobes within its bound, `VerifyAll`
   boundary and volume verified, for N = 8, 10, 12 and 17. `TestAxialSectionUnionPlateAndTongue`: a plate and a curved-top
   tongue, the overlap an exact rectangle. `TestAxialSectionUnionFinishes`: a bore Cut and an outer-cap Chamfer on the result.
+- `TestRimToothPatternJoinsBySectionUnion`: patterns of 8, 11, 17, 18 and 27 involute teeth whose root arcs lie on the
+  blank's rim, each thinned so that on amd64 every copy's root arc rounds strictly inside the blank, join through this
+  route ahead of the prism-pattern route and take all 2N root fillets with a verified boundary and volume. At 27 teeth the
+  fillet reaches the involute flank, which the prism-pattern fillet refuses. `TestRimToothPatternFilletVolumeBound`: the
+  rounded 17-tooth pattern at 10 mm thick reads its volume within 0.5 mm³.

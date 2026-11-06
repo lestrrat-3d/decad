@@ -19,10 +19,12 @@ The root arc's denoted radius comes from its recorded start. Its recorded
 end can differ slightly, so both endpoints must have squared radius
 strictly below the blank's squared radius after multiplying by the copy's
 exact dyadic XY scale squared. A tangent or outward root refuses this route
-before a joined shell is built. A set with a free-form section that this route
-refuses, or that has more than 32 copies, is then tried as a union of the
-sections (`agent-docs/axial-section-boolean-design.md`), which joins a root arc
-lying on the blank's rim and any number of copies. Every other boundary curve stays outside the blank:
+before a joined shell is built. A set with a free-form section is first tried
+as a union of the sections (`agent-docs/axial-section-boolean-design.md` §2),
+which joins a root arc lying on the blank's rim and any number of copies. This
+route takes such a set only when that one refuses, as for a root arc a
+nanometre inside the blank, where `sketch` places no region of the arrangement
+inside an operand. Every other boundary curve stays outside the blank:
 lines and fitted-spline Bezier spans use a strict support line for all their
 controls; centered arcs use their denoted radius. The two lines next to the
 root start inside and end outside the circle, with a positive radial
@@ -133,7 +135,9 @@ keep the omitted source-root chords inside its caps.
 
 `TestPrismPatternFilletPastShortRadialLine` rounds every root corner of 12-,
 17- and 22-tooth involute patterns whose radial root line is shorter than
-`2r`, and checks the volume gain against the analytic corner area.
+`2r`, and checks the volume gain against the analytic corner area. Their root
+arcs lie 1 nm inside the blank, so the union of the sections refuses them and
+this route joins them.
 `TestPrismPatternFilletRefusesUnprovedCornerAndLargeRadius` refuses a radius
 whose line foot lies past the root line's far end.
 
