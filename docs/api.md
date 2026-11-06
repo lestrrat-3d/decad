@@ -566,6 +566,7 @@ stretches a mesh body by a separate factor along each axis about a point; a nega
 A fillet's horn torus corner, which closes on its axis at a vertex, such as a pocket mouth's, is written as a torus. A
 whole sphere or ring with no edge on it, such as a revolved ball, is written as facets.
 `export.STEP` writes a solid with a cavity as a `BREP_WITH_VOIDS` of its outer shell and the cavity shells, and a body of several lumps as one solid per lump.
+`export.STEPItems` writes several bodies as one STEP assembly, and `export.NewSTEPItemsFile` builds it in memory. Each `export.STEPItem` places a body by a rigid `Placement` under a unique `Name`, and may set a `Color` and a chord `Tolerance`. Each distinct body is one named part, written as `export.STEP` writes it, and each item is one named occurrence, so a receiving CAD system opens named components in their positions. A held faceted body that refuses the call's tolerance is written at its own minimum mesh bound, which keeps all its facets; `export.STEPItemsFile.Parts` reports the tolerance each body used. A non-zero `STEPItem.Tolerance` is used as given and its refusal is returned. `decad.ReadSTEP` does not read an assembly.
 `export.NewSTEPFile` builds a STEP file in memory. STEP header fields use `export.WithSTEPAuthor`,
 `export.WithSTEPName`, `export.WithSTEPOrganization` and `export.WithSTEPTimestamp`.
 

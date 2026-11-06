@@ -208,3 +208,23 @@ The tests build a cube with a cubic cavity, a disjoint union of two blocks, and 
 from the cube's middle and every void face's toward the cavity's. A body of a closed shell (`WithNoOpenings`) is such a
 solid.
 
+## 10. Assemblies (`STEPItems`)
+
+`NewSTEPItemsFile(ctx, items, tol, header)` returns a `STEPItemsFile` (the `step.File` and one `STEPPart` per distinct
+body); `STEPItems(ctx, w, items, tol, opts...)` writes it. `parts` does not import `export`; a caller converts its
+parts to `STEPItem{Name, Body, Placement, Tolerance, Color}` as it does for `ThreeMFItems`.
+
+| Decision | Rule |
+|---|---|
+| A1 | The file is an AP214 product structure: one `PRODUCT` per distinct body (first item's name is its id and name), each with its own `ADVANCED_BREP_SHAPE_REPRESENTATION`, and one assembly `PRODUCT` named by `header.Name` with a `SHAPE_REPRESENTATION`. A flat file of named solids is refused: OpenCascade drops solid names by default and it has no instances. |
+| A2 | Each item is one `NEXT_ASSEMBLY_USAGE_OCCURRENCE` named by the item, placed by an `ITEM_DEFINED_TRANSFORMATION` inside the complex `REPRESENTATION_RELATIONSHIP` / `..._WITH_TRANSFORMATION` / `SHAPE_REPRESENTATION_RELATIONSHIP`, attached by a `CONTEXT_DEPENDENT_SHAPE_REPRESENTATION`. `item_1` is the child representation's origin axis, `item_2` the occurrence's axis from `Placement.Basis()` and `Translation()`. The child is `rep_1`, the parent `rep_2`. Placement never moves geometry, so analytic surfaces stay exact. |
+| A3 | One `GEOMETRIC_REPRESENTATION_CONTEXT`, one application context and one `PRODUCT_DEFINITION_CONTEXT` serve every representation. |
+| A4 | Each body is written by `planSTEPBody` and `addSTEPSolids`, the same arms as `NewSTEPFile`. Items naming one pointer share one product; they must agree on `Tolerance` and `Color`. |
+| A5 | IDs: shared block, then each body in first-item order, then the assembly product, the occurrence axes, the assembly representation, each item's usage records in input order, and last the colour block. No map is iterated for output; equal inputs and header give equal bytes. |
+| A6 | Tolerance: a zero `STEPItem.Tolerance` uses the call's `tol`; when a held faceted body refuses it with a `*decad.MeshBoundError` (`errors.As`), the body is planned once more at `Floor()`. The held facets do not depend on a tolerance at or above the floor, so the file loses no detail. `STEPPart.HeldFloor` reports it. A non-zero `Tolerance` is used as given and its refusal is returned. Error text is never parsed. |
+| A7 | Colour: `Color` (alpha ignored) writes `COLOUR_RGB` (channel/255) through `FILL_AREA_STYLE_COLOUR`, `FILL_AREA_STYLE`, `SURFACE_STYLE_FILL_AREA`, `SURFACE_SIDE_STYLE`, `SURFACE_STYLE_USAGE(.BOTH.)` to one `PRESENTATION_STYLE_ASSIGNMENT` per distinct RGB, a `STYLED_ITEM('color')` on every solid of a coloured body, and one `MECHANICAL_DESIGN_GEOMETRIC_PRESENTATION_REPRESENTATION` last. |
+| A8 | Not written: material, mass, density, body-less parts. A reflection or invalid placement is `ErrDegenerate`. The whole `step.File` is built before the writer is touched. |
+
+`decad.ReadSTEP` refuses such a file with `ErrUnsupported` because it does not read placements. The tests check the
+graph with the `step.File` entities (`export/step_items_test.go`); no external STEP reader was available when this
+shipped, so reader acceptance (IDT item order, shared context, colours on solids) is unverified outside decad.

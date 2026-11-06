@@ -1087,7 +1087,7 @@ item's placement it writes the exploded view as a file any 3MF viewer opens.
 |---|---|
 | Private algorithms in `internal/` | §9's new algorithms live in the three internal packages, which take plain data. |
 | No handle passed to reach data | `parts` unwraps `*decad.Body` and `*decad.Face` through public queries into plain records before calling an internal package. |
-| Root adapters | None. Neither `parts` nor `export.ThreeMFItems` adds a file to the root package. |
+| Root adapters | None. Neither `parts` nor `export.ThreeMFItems` or `export.STEPItems` (`agent-docs/step-export-design.md` §10) adds a file to the root package. |
 | Exported types | In `parts` and `export`, both above the root (§2). |
 
 ### 10.3 House rules this design keeps
