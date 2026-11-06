@@ -124,7 +124,6 @@ configuration option.
 | `decad.EdgeAxis` | struct | A linear edge of a body, selected by query. | The caller |
 | `decad.LoftSection` | struct | One recorded section of a smooth `decad.LoftSections` feature. | The caller |
 | `decad.LoftSplit` | struct | One recorded segment of one loop and the parameter fractions at which `decad.WithLoftSplits` cuts it. | The caller |
-| `decad.ConeTangentEnd` | struct | The cone that the last section of `decad.LoftFacesToConeTangent` touches. | The caller |
 | `decad.ClosestPoint` | struct | The nearest point of a body or face to a query point, its distance reading and how far it can lie from the true surface. | `Body.ClosestPoint`, `Face.ClosestPoint` |
 | `decad.MeshBody` | struct | An imported triangle mesh: vertices, triangles and what they say. Not a `decad.Body`. | `decad.ReadSTL`, `decad.ReadOBJ`, `decad.ReadThreeMF`, `decad.ReadSTEP`, `decad.NewMeshBody` |
 | `decad.MeshImportOption` | option set | A limit on `decad.ReadSTL`, `decad.ReadOBJ`, `decad.ReadThreeMF`, `decad.ReadSTEP` or `decad.ReadIGES`: `decad.WithMaxMeshTriangles` or `decad.WithMaxMeshBytes`. | The caller |
@@ -308,6 +307,7 @@ other sections return them.
 | `decad.RevolveOption` | `decad.Revolve` |
 | `decad.SweepOption` | `decad.Sweep` |
 | `decad.LoftOption`, `decad.ChainLoftOption` | `decad.Loft`, `decad.LoftChain` |
+| `decad.LoftFacesOption` | `decad.LoftFaces` |
 | `decad.CoilOption` | `decad.Coil` |
 | `decad.FilletOption`, `decad.ChamferOption`, `decad.FilletChamferOption` | `decad.Fillet`, `decad.Chamfer` |
 | `decad.ShellOption` | `decad.Shell` |

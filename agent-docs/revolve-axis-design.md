@@ -877,7 +877,7 @@ removed.
   - an on-axis point one unit in the last place off the axis;
   - a non-coordinate frame;
   - a `LoftFaces` cut with a general cone, a heel `Intersect` with one,
-    `LoftFacesToConeTangent` with one, and `CapOutside*`;
+    `LoftFaces` with `WithConeTangentEnd` and one, and `CapOutside*`;
   - `ConeFromFace` registering a cone that reads back about another axis;
   - the bore `Cut` of a join whose tooth trim holds a limit about another
     axis than its certificate (§9.1).

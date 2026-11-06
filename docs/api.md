@@ -158,8 +158,7 @@ a sheet. The `decad.Section` type constraint covers both.
 | `decad.Loft` | A ruled solid between two profiles on different planes. |
 | `decad.LoftChain` | A ruled sheet between two open chains. |
 | `decad.LoftSections` | A smooth solid through three or more profiles, including up to 1024 sections of one fitted edge and whole lines that turn about the plane origin. |
-| `decad.LoftFaces` | A solid through ordered cap faces. |
-| `decad.LoftFacesToConeTangent` | A face loft that ends tangent to a cone. |
+| `decad.LoftFaces` | A solid through ordered cap faces. `decad.WithConeTangentEnd` ends it with a section tangent to a cone. |
 | `decad.LoftFromPoint` | A solid from an apex point to a profile. |
 | `decad.Coil` | A profile moved along a screw motion, such as a thread or spring. |
 | `decad.ConeFromFace` | The cone that extends a face's straight meridian. |
@@ -186,6 +185,7 @@ distances from the center and lie perpendicular to the axis. The positive turn a
 |---|---|
 | `decad.WithTaper` | `decad.Extrude` |
 | `decad.WithLoftAlignment`, `decad.WithLoftSplits` | `decad.Loft` |
+| `decad.WithConeTangentEnd` | `decad.LoftFaces` |
 | `decad.WithMitredJoins`, `decad.WithSectionScale`, `decad.WithSweepTwist` | `decad.Sweep` |
 | `decad.WithLeftHand` | `decad.Coil` |
 | `decad.WithSurfaceResult` | Section features: build a sheet instead of a solid. |
