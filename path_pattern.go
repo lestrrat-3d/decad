@@ -13,7 +13,7 @@ import (
 	"github.com/lestrrat-go/option/v3"
 )
 
-// PathPatternOption configures [PathPatternCopies].
+// PathPatternOption configures [PathPattern].
 type PathPatternOption interface {
 	option.Interface
 	pathPatternOption()
@@ -25,8 +25,10 @@ func (pathPatternOption) pathPatternOption() {}
 
 type identPathFollow struct{}
 type identPathPivot struct{}
+type identPathCount struct{}   // value: int
+type identPathSpacing struct{} // value: units.Value
 
-// WithPathFollow turns each copy of [PathPatternCopies] to follow the path.
+// WithPathFollow turns each copy of [PathPattern] to follow the path.
 // Copy i is rotated about the path's start by the shortest turn that takes the
 // path's direction of travel there onto its direction at that copy's point,
 // then moved to the point. The body is taken to sit at the path's start with
@@ -48,24 +50,44 @@ func WithPathPivot(pivot r3.Vec) PathPatternOption {
 	return pathPatternOption{option.New(identPathPivot{}, pivot)}
 }
 
-// PathPatternCopies repeats b along path and returns the count-1 extra copies
-// as separate live bodies, leaving b live (agent-docs/path-pattern-design.md).
-// Instance 0 is b, taken to sit at the path's start. Instance i is a [Copy] of
-// b moved by the vector from the path's start to the point i/(count-1) of the
-// way along the path's length, so the last instance sits at the path's end.
-// Copies keep the orientation of b unless [WithPathFollow] turns them to follow
-// the path.
+// WithPathCount makes [PathPattern] place n instances, b and n-1 copies, at
+// equal arc length along the path. The first is at the path's start and the
+// last at its end (agent-docs/path-pattern-design.md §1). n is at least 2, and
+// a smaller n is ErrDegenerate. A call takes exactly one of WithPathCount and
+// [WithPathSpacing].
+func WithPathCount(n int) PathPatternOption {
+	return pathPatternOption{option.New(identPathCount{}, n)}
+}
+
+// WithPathSpacing makes [PathPattern] place instances spacing apart by arc
+// length. Instance i sits i·spacing along the path, for every i within its
+// length, and a spacing that divides the length puts the last instance at the
+// path's end (agent-docs/path-pattern-design.md §6). spacing is a positive
+// length no longer than the path. A wrong unit kind is ErrUnitKind and a
+// negative spacing is ErrNegativeMagnitude. A zero spacing, one that leaves no
+// copy, and one that would place over 100000 copies are ErrDegenerate. A call
+// takes exactly one of WithPathSpacing and [WithPathCount].
+func WithPathSpacing(spacing units.Value) PathPatternOption {
+	return pathPatternOption{option.New(identPathSpacing{}, spacing)}
+}
+
+// PathPattern repeats b along path and returns the extra copies as separate
+// live bodies, leaving b live (agent-docs/path-pattern-design.md). Instance 0
+// is b, taken to sit at the path's start. [WithPathCount] or [WithPathSpacing]
+// chooses the other instances' points. Exactly one of them is required, and
+// neither, both, or either given twice is ErrDegenerate. Instance i is a [Copy]
+// of b moved by the vector from the path's start to its point. Copies keep the
+// orientation of b unless [WithPathFollow] turns them to follow the path.
 //
 // The path is the sweep [Path] of straight [LineTo] and circular
 // [ArcThrough] and [ArcAround] segments. Points are spaced by arc length, not by segment.
 // Join the copies with the base through one [Union], as with [PatternCopies].
 //
-// b MUST be live; path MUST NOT be nil. count is at least 2, and a smaller
-// count is ErrDegenerate. A path segment with no length or no circle is
-// ErrDegenerate. A failed or canceled call leaves b live and retires every copy it
-// had already made, so no copy outlives the call. Each copy is a Copy, so it
-// carries Copy's own refusals.
-func PathPatternCopies(ctx context.Context, b *Body, path *Path, count int, opts ...PathPatternOption) (result []*Body, retErr error) {
+// b MUST be live; path MUST NOT be nil. A nil context, a nil option, and a path
+// segment with no length or no circle are ErrDegenerate. A failed or canceled
+// call leaves b live and retires every copy it had already made, so no copy
+// outlives the call. Each copy is a Copy, so it carries Copy's own refusals.
+func PathPattern(ctx context.Context, b *Body, path *Path, opts ...PathPatternOption) (result []*Body, retErr error) {
 	defer func() { retErr = operationError(OperationCopy, retErr) }()
 	if ctx == nil {
 		return nil, fmt.Errorf(`%w: a nil context cannot control a pattern`, ErrDegenerate)
@@ -76,96 +98,97 @@ func PathPatternCopies(ctx context.Context, b *Body, path *Path, count int, opts
 	if path == nil {
 		return nil, fmt.Errorf(`%w: a path pattern needs a path`, ErrDegenerate)
 	}
-	if count < 2 {
-		return nil, fmt.Errorf(`%w: a path pattern needs a count of at least 2, got %d`, ErrDegenerate, count)
-	}
-	if err := documentHandle(b.n.Doc).requireLive(b); err != nil {
-		return nil, err
-	}
-	settings, err := pathPatternFollows(opts)
-	if err != nil {
-		return nil, err
-	}
-	samples, err := patternSegments(path)
-	if err != nil {
-		return nil, err
-	}
-	stations, err := pathsample.SampleStations(path.Start(), samples, count)
-	if err != nil {
-		return nil, pathSampleError(err)
-	}
-	return pathCopies(ctx, b, stations, settings)
-}
-
-// PathPatternSpaced repeats b along path at a stated distance and returns the
-// extra copies as separate live bodies, leaving b live
-// (agent-docs/path-pattern-design.md §6). Instance 0 is b, taken to sit at the
-// path's start, and instance i sits i·spacing of arc length along the path, for
-// every i that lies within the path's length. A spacing that divides the length
-// puts the last instance at the path's end. Orientation, [WithPathFollow], the
-// path's segments and every other rule are those of [PathPatternCopies].
-//
-// spacing is a positive length no longer than the path, and a spacing that
-// leaves no copy is ErrDegenerate, as is one that would place over 100000
-// copies. A wrong unit kind is ErrUnitKind and a negative spacing is
-// ErrNegativeMagnitude.
-func PathPatternSpaced(ctx context.Context, b *Body, path *Path, spacing units.Value, opts ...PathPatternOption) (result []*Body, retErr error) {
-	defer func() { retErr = operationError(OperationCopy, retErr) }()
-	if ctx == nil {
-		return nil, fmt.Errorf(`%w: a nil context cannot control a pattern`, ErrDegenerate)
-	}
-	if b == nil || b.n.Doc == nil {
-		return nil, fmt.Errorf(`%w: the body belongs to no document`, ErrDegenerate)
-	}
-	if path == nil {
-		return nil, fmt.Errorf(`%w: a path pattern needs a path`, ErrDegenerate)
-	}
-	step, err := sectionrecord.MagnitudeIn(spacing, units.Length, units.Millimeter, "the path pattern spacing")
+	settings, err := foldPathPatternOptions(opts)
 	if err != nil {
 		return nil, err
 	}
 	if err := documentHandle(b.n.Doc).requireLive(b); err != nil {
 		return nil, err
 	}
-	settings, err := pathPatternFollows(opts)
-	if err != nil {
-		return nil, err
-	}
 	samples, err := patternSegments(path)
 	if err != nil {
 		return nil, err
 	}
-	stations, err := pathsample.SampleSpaced(path.Start(), samples, step)
+	var stations []pathsample.Station
+	if settings.hasCount {
+		stations, err = pathsample.SampleStations(path.Start(), samples, settings.count)
+		if err != nil {
+			return nil, pathSampleError(err)
+		}
+		return pathCopies(ctx, b, stations, settings)
+	}
+	stations, err = pathsample.SampleSpaced(path.Start(), samples, settings.spacing)
 	if err != nil {
 		return nil, pathSampleError(err)
 	}
 	if len(stations) < 2 {
-		return nil, fmt.Errorf(`%w: a spacing of %g mm leaves no copy along the path`, ErrDegenerate, step)
+		return nil, fmt.Errorf(`%w: a spacing of %g mm leaves no copy along the path`, ErrDegenerate, settings.spacing)
 	}
 	return pathCopies(ctx, b, stations, settings)
 }
 
-// pathPatternSettings are the options of a path pattern read.
-type pathPatternSettings struct {
-	follow   bool
-	pivot    r3.Vec
-	hasPivot bool
+// PathPatternCopies is [PathPattern] with [WithPathCount]; removed before this PR merges.
+func PathPatternCopies(ctx context.Context, b *Body, path *Path, count int, opts ...PathPatternOption) ([]*Body, error) {
+	return PathPattern(ctx, b, path, append([]PathPatternOption{WithPathCount(count)}, opts...)...)
 }
 
-// pathPatternFollows reads the options of a path pattern.
-func pathPatternFollows(opts []PathPatternOption) (pathPatternSettings, error) {
+// PathPatternSpaced is [PathPattern] with [WithPathSpacing]; removed before this PR merges.
+func PathPatternSpaced(ctx context.Context, b *Body, path *Path, spacing units.Value, opts ...PathPatternOption) ([]*Body, error) {
+	return PathPattern(ctx, b, path, append([]PathPatternOption{WithPathSpacing(spacing)}, opts...)...)
+}
+
+// pathPatternSettings are the options of a path pattern read.
+type pathPatternSettings struct {
+	count      int // instances, set when hasCount
+	hasCount   bool
+	spacing    float64 // millimetres, set when hasSpacing
+	hasSpacing bool
+	follow     bool
+	pivot      r3.Vec
+	hasPivot   bool
+}
+
+// foldPathPatternOptions reads and validates the options of a path pattern.
+func foldPathPatternOptions(opts []PathPatternOption) (pathPatternSettings, error) {
 	var out pathPatternSettings
+	var spacing units.Value
 	for _, o := range opts {
 		if o == nil {
 			return out, fmt.Errorf(`%w: a nil option names nothing to apply`, ErrDegenerate)
 		}
 		switch o.Ident().(type) {
+		case identPathCount:
+			if out.hasCount {
+				return out, fmt.Errorf(`%w: WithPathCount was passed more than once`, ErrDegenerate)
+			}
+			out.count, _ = option.Get[int](o)
+			out.hasCount = true
+		case identPathSpacing:
+			if out.hasSpacing {
+				return out, fmt.Errorf(`%w: WithPathSpacing was passed more than once`, ErrDegenerate)
+			}
+			spacing, _ = option.Get[units.Value](o)
+			out.hasSpacing = true
 		case identPathFollow:
 			out.follow = true
 		case identPathPivot:
 			out.pivot, _ = option.Get[r3.Vec](o)
 			out.hasPivot = true
 		}
+	}
+	switch {
+	case out.hasCount && out.hasSpacing:
+		return out, fmt.Errorf(`%w: a path pattern takes WithPathCount or WithPathSpacing, not both`, ErrDegenerate)
+	case out.hasCount && out.count < 2:
+		return out, fmt.Errorf(`%w: a path pattern needs a count of at least 2, got %d`, ErrDegenerate, out.count)
+	case out.hasSpacing:
+		step, err := sectionrecord.MagnitudeIn(spacing, units.Length, units.Millimeter, "the path pattern spacing")
+		if err != nil {
+			return out, err
+		}
+		out.spacing = step
+	case !out.hasCount:
+		return out, fmt.Errorf(`%w: a path pattern needs WithPathCount or WithPathSpacing to place its copies`, ErrDegenerate)
 	}
 	if out.hasPivot && !proofbound.FiniteVec(out.pivot) {
 		return out, fmt.Errorf(`%w: the path pattern pivot is not finite`, ErrNotFinite)
