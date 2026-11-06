@@ -1189,6 +1189,7 @@
 5	0.01	TestLoftChainVerifyValidityAfterAudit
 5	0.28	TestLoftCutRoundedZToolCenterKeepsFacetedTopology
 5	0.00	TestLoftFilletCircleFragmentRefusals
+5	29.10	TestLoftFilletTwistedGearMirrorJoin
 5	0.06	TestLoftFilletRectangleCorner
 5	0.43	TestLoftFromPointKeepsFittedFarBoundary
 5	0.01	TestLoftPlacedS12TinyBodyFarTranslation
@@ -2990,6 +2991,8 @@
 11	0.00	TestCutChordsByTheCrossing
 11	0.00	TestVerifyHistoryFarOperand
 0	61.97	TestVerifyHistoryTurnedFarOperand
+0	0.40	TestLoftFilletSectionsWithDifferentRecords
+0	30.80	TestLoftFilletTwistedGearRoots
 11	0.00	TestVerifyMeridianSharedPlacement
 11	0.00	TestVerifyMeridianCutTool
 11	0.00	TestVerifyHistoryRefinedOperand
@@ -3017,6 +3020,3 @@
 11	0.00	TestLoftFilletLargeRadiusRestsOnTheBladeTop
 11	0.00	TestMeshBodyLocatePointConcurrent
 11	0.00	TestUnionManyJoinsTwistedLoftTeethWithRootsInsideTheDisc
-11	0.00	TestLoftFilletTwistedGearRoots
-11	0.00	TestLoftFilletTwistedGearMirrorJoin
-11	0.00	TestLoftFilletSectionsWithDifferentRecords
