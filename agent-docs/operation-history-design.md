@@ -751,10 +751,10 @@ Do not merge a partially instrumented public history API.
   handles from producer roles or rescan after evaluation. Add real ToFace,
   ToFaceAngular, EdgeAxis and ThroughAll fixtures. Check computed extents and
   live reference bodies, including an excluded scanned body.
-- `sweep.go`, `loft.go`, `loft_between.go`, `loft_point.go`, `loft_sections.go`,
+- `sweep.go`, `loft.go`, `loft_point.go`, `loft_sections.go`,
   `loft_faces.go`, `cone_from_face.go`, `patch.go`: Cover profile and chain
-  overloads, reductions and delegated routes. Capture owning bodies for face
-  sections and tangent ends. Keep the caller's kind through private builders.
+  overloads and reductions. Capture owning bodies for face sections and
+  tangent ends. Each private builder commits its own entry point's kind.
   Add minimal supported cases for each public entry and distinct publication
   path. Check bounded volume, area or coordinates.
 - `boolean.go`, `boolean_many.go`, `internal/booleandispatch/`: Cover analytic,

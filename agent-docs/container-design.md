@@ -45,7 +45,7 @@ Placement is decided where an operation commits, from its inputs, never from a g
 | `Union`, `Cut`, `Intersect`, `Combine`, `Hole`, `Fillet`, `Chamfer`, `Shell`, `Draft`, `Thicken`, `Offset`, `Transform`, `Mirrored`, `ScaledAt`, `Patterned`, `PatternJoin`, `PatchEdges`, `Stitch`, `Trim`, `Extend`, `Split`, `Unstitch` | the container of its first (target) body |
 | `Copy`, `MirroredCopy`, `PatternCopies` | the container of the source body; every copy lands there |
 | `Extrude`, `Revolve`, `Sweep`, `Coil`, `PatchProfile`, `Loft`, `LoftChain` | the container of its sketch (of the first sketch for a loft) |
-| `LoftSections`, `LoftBetween`, `LoftFromPoint` | the container of the first section's or end's sketch |
+| `LoftSections`, `LoftFromPoint` | the container of the first section's sketch, or of the point loft's profile sketch |
 | `LoftFaces`, `LoftFacesToConeTangent`, `ConeFromFace` | the container of the body the first face belongs to |
 
 An operation that commits many bodies puts every one of them in the same container.
