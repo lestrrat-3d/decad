@@ -9,9 +9,10 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// RibArc stands a curved fin on a body: a rib that follows a circular arc,
-// such as a stiffener around a boss. The arc is drawn in a sketch, and the rib
-// is that arc thickened by the width you give and raised to the height you give.
+// WebPath stands a curved fin on a body when its path is one arc: a rib that
+// follows a circular arc, such as a stiffener around a boss. The arc is drawn
+// in a sketch, and the rib is that arc thickened by the width you give and
+// raised to the height you give.
 func Example_rib_arc() {
 	// A 60 x 60 x 5 mm plate (see Example_extrude for these steps).
 	w := sketch.NewWorld()
@@ -60,7 +61,7 @@ func Example_rib_arc() {
 
 	// A 2 mm thick rib, 9 mm tall from the sketch plane, so it stands 8 mm
 	// above the plate's top face.
-	ribbed, err := decad.RibArc(context.Background(), plate, rs, arc, units.Millimeters(2),
+	ribbed, err := decad.WebPath(context.Background(), plate, rs, []sketch.Entity{arc}, units.Millimeters(2),
 		decad.Distance{D: units.Millimeters(9), Dir: decad.Along})
 	if err != nil {
 		fmt.Printf("failed to add the rib: %s\n", err)

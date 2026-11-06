@@ -10,8 +10,8 @@ import (
 )
 
 // WebPath turns a run of sketch lines and arcs into one stiffening rib, such as
-// a wall that follows a slot-shaped outline. Each leg is thickened as Rib and
-// RibArc thicken one, and a small overrun lets the legs overlap where they meet.
+// a wall that follows a slot-shaped outline. Each leg is thickened into its
+// own rib, and a small overrun lets the legs overlap where they meet.
 func Example_web_path() {
 	// A 40 x 40 x 5 mm plate (see Example_extrude for these steps).
 	w := sketch.NewWorld()

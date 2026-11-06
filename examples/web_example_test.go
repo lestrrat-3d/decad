@@ -9,10 +9,10 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// Web adds a set of crossing ribs to a part. Ribs stiffen thin walls and
-// pockets without adding much weight. You draw each rib as a line, and Web
-// gives it thickness and height and joins it to the part. Use it for stiffening
-// ribs in a housing or a bracket.
+// WebPath adds a set of crossing ribs to a part. Ribs stiffen thin walls and
+// pockets without adding much weight. You draw each rib as a line, and WebPath
+// gives it thickness and height and joins it to the part. Use it for
+// stiffening ribs in a housing or a bracket.
 func Example_web() {
 	ctx := context.Background()
 	w := sketch.NewWorld()
@@ -53,7 +53,7 @@ func Example_web() {
 		fmt.Printf("failed to create rib sketch: %s\n", err)
 		return
 	}
-	var lines []*sketch.Line
+	var lines []sketch.Entity
 	for _, ends := range [][4]float64{{3, 20, 37, 20}, {20, 3, 20, 37}} {
 		a := ribs.CreatePoint(ends[0], ends[1])
 		b := ribs.CreatePoint(ends[2], ends[3])
@@ -68,7 +68,7 @@ func Example_web() {
 
 	// Make each rib 2 mm thick and 11 mm tall (reaching z = 15, which is 5 mm
 	// below the top of the pocket).
-	ribbed, err := decad.Web(ctx, part, ribs, lines, units.Millimeters(2),
+	ribbed, err := decad.WebPath(ctx, part, ribs, lines, units.Millimeters(2),
 		decad.Distance{D: units.Millimeters(11), Dir: decad.Along})
 	if err != nil {
 		fmt.Printf("failed to add web: %s\n", err)
