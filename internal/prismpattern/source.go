@@ -73,11 +73,20 @@ func SourceOf(ctx context.Context, operands []*topo.Body) (*facetedrecord.PrismP
 			return nil, true, err
 		}
 		section, isPrism := body.Payload.(prismrecord.Payload)
-		if !isPrism || section.Frame != first.Frame || section.Z0 != first.Z0 ||
-			section.Z1 != first.Z1 || !AxialRotation(section.Xform) ||
-			len(section.Profile.Outer.Segments) != len(segments) ||
-			&section.Profile.Outer.Segments[0] != &segments[0] {
-			return nil, true, fmt.Errorf("%w: section %d is not a radial copy of the first prism", decaderr.ErrUnsupported, i+1)
+		if !isPrism {
+			return nil, true, fmt.Errorf("%w: section %d is not a prism payload", decaderr.ErrUnsupported, i+1)
+		}
+		sameFrame := section.Frame == first.Frame
+		sameZ0 := section.Z0 == first.Z0
+		sameZ1 := section.Z1 == first.Z1
+		axialRotation := AxialRotation(section.Xform)
+		sameSegmentCount := len(section.Profile.Outer.Segments) == len(segments)
+		sameSourceSegments := sameSegmentCount &&
+			&section.Profile.Outer.Segments[0] == &segments[0]
+		if !sameFrame || !sameZ0 || !sameZ1 || !axialRotation || !sameSegmentCount || !sameSourceSegments {
+			return nil, true, fmt.Errorf("%w: section %d is not a radial copy of the first prism "+
+				"(same-frame=%t same-z0=%t same-z1=%t axial-rotation=%t same-segment-count=%t same-source-segments=%t)",
+				decaderr.ErrUnsupported, i+1, sameFrame, sameZ0, sameZ1, axialRotation, sameSegmentCount, sameSourceSegments)
 		}
 		localGap, good := ArcGap(root, circle.Radius.Base(), section.Xform)
 		if !good {

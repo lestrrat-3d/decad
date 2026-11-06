@@ -118,7 +118,7 @@ func TestPackIsolatesCostlyTestAndCoversBothPackages(t *testing.T) {
 	rootCosts := make(map[string]float64)
 	apiCosts := make(map[string]float64)
 	var rootNames, apiNames []string
-	for i := range 12 {
+	for i := range shardCount {
 		rootName := fmt.Sprintf("TestRoot%02d", i)
 		apiName := fmt.Sprintf("TestAPI%02d", i)
 		rootNames = append(rootNames, rootName)

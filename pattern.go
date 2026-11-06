@@ -192,6 +192,10 @@ func (rp resolvedPattern) placedInstance(ctx context.Context, d *Document, ref p
 	if err != nil {
 		return nil, fmt.Errorf(`%w: pattern instance %d has no rigid motion: %s`, ErrDegenerate, i, err)
 	}
+	if payload.Transform() == r3.Identity() {
+		// Avoid rounding the motion through an identity composition.
+		return placePayload(ctx, payload, d, ref, m)
+	}
 	composed, err := payload.Transform().Then(m)
 	if err != nil {
 		return nil, fmt.Errorf(`decad: composing the placement failed: %w`, err)

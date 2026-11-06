@@ -204,6 +204,10 @@ jobs:
             race: "-race"
             shard: "11"
             packages: ""
+          - os: ubuntu-latest
+            race: "-race"
+            shard: "12"
+            packages: ""
     runs-on: ${{ matrix.os }}
     env:
       GORACE: atexit_sleep_ms=0
@@ -496,7 +500,7 @@ jobs:
   # The platform check names match the former macOS and Windows matrix legs.
   test-platforms:
     name: test (${{ matrix.os }})
-    if: github.event_name != 'pull_request'
+    if: github.event_name != 'pull_request' || matrix.os == 'macos-latest'
     strategy:
       fail-fast: false
       matrix:
