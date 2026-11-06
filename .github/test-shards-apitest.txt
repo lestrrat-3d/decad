@@ -142,9 +142,9 @@
 1	0.02	TestOrthogonalBooleansWithCoplanarFaces
 1	0.01	TestOrthogonalUnionOfBlocksTouchingAtAFace
 1	0.00	TestPatchIsAPlanarSheet
-1	0.00	TestPathPatternSpacedPlacesCopiesAtTheStatedDistance
-1	0.01	TestPathPatternSpacedPutsTheLastCopyAtTheEndWhenItDivides
-1	0.07	TestPathPatternSpacedUnionPlacesTheCopiesByDistance
+1	0.00	TestPathPatternSpacingPlacesCopiesAtTheStatedDistance
+1	0.01	TestPathPatternSpacingPutsTheLastCopyAtTheEndWhenItDivides
+1	0.07	TestPathPatternSpacingUnionPlacesTheCopiesByDistance
 1	0.09	TestPathPatternUnionUnitesTheInstancesWithTheTarget
 1	0.00	TestPatternedTangentCopies
 1	0.02	TestPlacementContextCancelsAnalyticMetadataRewriting
@@ -413,9 +413,9 @@
 2	0.05	TestOrthogonalBooleanResultsChain
 2	0.03	TestOrthogonalUndercutSurveyProvesAPullFree
 2	0.00	TestPatchRejections
-2	0.01	TestPathPatternCopiesAlongAnArc
+2	0.01	TestPathPatternCountAlongAnArc
 2	0.02	TestPathPatternPivotAtThePathStartIsTheDefault
-2	0.00	TestPathPatternSpacedRefusals
+2	0.00	TestPathPatternSpacingRefusals
 2	0.01	TestPatternUnionFlanksCrossTheBase
 2	2.15	TestPatternUnionJoinsCopiesThatShareWholeSides
 2	0.38	TestPatternedNHoleCut
@@ -1741,8 +1741,8 @@
 7	0.02	TestOrthogonalUnionOfSeveralBodiesJoinsThemOnOneGrid
 7	0.04	TestOrthogonalUnionOfSeveralBodiesLeavesNearCoincidentFacesToTheGeneralRoute
 7	0.00	TestOverBudgetFreeformRefusesBeforeSketchSampling
-7	0.01	TestPathPatternCopiesAlongALine
-7	0.00	TestPathPatternCopiesRefusals
+7	0.01	TestPathPatternCountAlongALine
+7	0.00	TestPathPatternCountRefusals
 7	0.01	TestPatternCopiesStacked
 7	0.00	TestPatternUnionManyCopies
 7	24.78	TestPatternUnionRefusesLobesThatOnlyTouchTheBase
@@ -2004,7 +2004,7 @@
 8	0.00	TestNewPathUsesExactArcCollinearity
 8	0.01	TestOffsetRefusals
 8	0.00	TestOverClampedNURBSRefusesAsUnsupported
-8	0.00	TestPathPatternCopiesSpacesByArcLength
+8	0.00	TestPathPatternCountSpacesByArcLength
 8	0.01	TestPathPatternPivotRefusals
 8	0.03	TestPatternUnionFoldRefusalLeavesEveryBodyLive
 8	0.20	TestPatternUnionFoldsPolygonalPinsIntoAMeshPlate
@@ -2799,8 +2799,8 @@
 11	0.10	TestOverBudgetConversionRefusesBeforeLifting
 11	0.00	TestPathPatternArcAround
 11	0.00	TestPathPatternArcAroundUnrepresentableSampler
-11	0.00	TestPathPatternSpacedFollowsThePath
-11	0.01	TestPathPatternSpacedMeasuresAlongAnArc
+11	0.00	TestPathPatternSpacingFollowsThePath
+11	0.01	TestPathPatternSpacingMeasuresAlongAnArc
 11	1.87	TestPatternUnionSlidesATongueAlongAPlate
 11	0.00	TestPatternedLobesJoinADisc
 11	0.01	TestPlacementContextCancelsAnalyticProvenanceAssembly
