@@ -43,7 +43,7 @@ faces are planes and cylinders where the Booleans admit them.
 
 ## 3. Not covered
 
-- Ribs other than the triangular gussets of §9, and gussets on a drafted, filleted or cylinder boss. Add others with `Rib` and `Web`.
+- Ribs other than the triangular gussets of §9, and gussets on a drafted, filleted or cylinder boss. Add others with `WebPath`.
 - A pilot thread whose major diameter exceeds the boss's.
 - A draft that closes the boss or breaks its circle before its top: `Extrude`'s refusal.
 - A boss that stands on a curved face other than a cylinder's (§8), a boss on a cylinder with a root fillet or a draft, and a shaped boss with a root fillet.
