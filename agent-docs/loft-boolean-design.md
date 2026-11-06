@@ -75,6 +75,10 @@ the Loft axis that reaches both outer caps meets that slab in the same section
 prism as its reflection `F(T)`, so `(L ∪ F(L)) − T = (L − T) ∪ F(L − T)`. A
 tool short of either outer cap, a placed join, and a lower Loft the
 through-bore declines keep the general Boolean.
+The bored halves are rebuilt by the Cut itself, so their caps already carry the
+Cut's own cap roles; the sewn join drops those before it names its two outer
+caps, so `CapStart` and `CapEnd` of the result each name one face, and the
+bored join takes Loft §19.1's outer-cap chamfer.
 
 The sewn shell reads each Loft's held vertex layout from its per-wall cell
 record: each loop lifts its start stations, then its end stations. Every loop's

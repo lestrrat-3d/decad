@@ -51,3 +51,44 @@ func TestLoftMirrorJoinCapChamfer(t *testing.T) {
 		}
 	}
 }
+
+// TestLoftMirrorJoinCapChamferKeepsTheBore chamfers both outer cap loops of a
+// rounded gear join twisted the other way after a centered through-bore, the
+// bore-first order of a herringbone gear. The removed held volume is d/2 times the cap
+// area lost within 3%, the bore stays whole with every vertex near the axis on
+// it, and the shell keeps its one hole.
+func TestLoftMirrorJoinCapChamferKeepsTheBore(t *testing.T) {
+	const half, r, d = 1.5, 0.5, 0.1
+	joined := roundedMirrorJoin(t, 5, half, -10*math.Pi/180)
+	bored, err := decad.Cut(t.Context(), joined, circleBodyAtZ(t, joined.Document(), 0, r, -1, 2*half+2))
+	require.NoError(t, err)
+	held := heldVolume(t, bored)
+	capsBefore, _ := capAreaTotal(t, bored)
+	chamfered, err := decad.Chamfer(t.Context(), bored, outerCapLoops(bored), units.Millimeters(d))
+	require.NoError(t, err)
+	after, err := chamfered.Volume()
+	require.NoError(t, err)
+	capsAfter, _ := capAreaTotal(t, chamfered)
+	shrink := capsBefore - capsAfter
+	require.Positive(t, shrink)
+	require.InEpsilon(t, d/2*shrink, held-after.Value.Base(), 0.03)
+
+	mesh, err := chamfered.Tessellate(t.Context(), units.Millimeters(0.1), decad.WithVerification(decad.VerifyAll))
+	require.NoError(t, err)
+	require.True(t, mesh.BoundaryVerified())
+	require.True(t, mesh.VolumeVerified())
+	require.Equal(t, 0, loftMirrorChamferEuler(mesh), "the chamfered shell keeps its one hole")
+	near := 0
+	for _, p := range mesh.Vertices() {
+		on := false
+		for _, level := range []float64{0, d, half, 2*half - d, 2 * half} {
+			on = on || math.Abs(p.Z-level) <= 1e-12
+		}
+		require.True(t, on, "vertex z=%g is off the cap, band and middle levels", p.Z)
+		if radius := math.Hypot(p.X, p.Y); radius < 2*r {
+			require.InDelta(t, r, radius, 1e-9, "a vertex near the axis is on the bore")
+			near++
+		}
+	}
+	require.Positive(t, near)
+}

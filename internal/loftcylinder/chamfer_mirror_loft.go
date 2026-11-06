@@ -9,6 +9,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
+	"github.com/lestrrat-3d/decad/internal/loftrecord"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/provenance"
@@ -16,8 +17,9 @@ import (
 )
 
 // MirrorLoftCapChamfer accepts exactly the two full outer cap loops of an
-// unplaced, hole-free mirrored Loft join (agent-docs/loft-design.md §19) and
-// chamfers them with one equal setback. It reports false, with no error, for
+// unplaced mirrored Loft join (agent-docs/loft-design.md §19.1), without a
+// hole or with the one bore its through-bore Cut left, and chamfers them with
+// one equal setback. It reports false, with no error, for
 // any other receiver or selection. asymmetric is true when the caller asked
 // for unequal setbacks, which this class refuses.
 func MirrorLoftCapChamfer(ctx context.Context, env topo.Env, b *topo.Body, fp facetedrecord.Payload,
@@ -26,13 +28,13 @@ func MirrorLoftCapChamfer(ctx context.Context, env topo.Env, b *topo.Body, fp fa
 	if record == nil || fp.Xform != r3.Identity() || !fp.ContactAudited || !b.Solid {
 		return nil, false, nil
 	}
-	n := record.StationCount
-	if n < 3 || len(fp.Verts) != 3*n || len(fp.VertexBound) != len(fp.Verts) || len(fp.Src) != len(fp.Tris) {
+	lower, ok := record.Lower.Payload.(loftrecord.Payload)
+	if !ok || len(fp.VertexBound) != len(fp.Verts) || len(fp.Src) != len(fp.Tris) {
 		return nil, false, nil
 	}
-	rings := [3][]int{make([]int, n), make([]int, n), make([]int, n)}
-	for i := range n {
-		rings[0][i], rings[1][i], rings[2][i] = i, n+i, 2*n+i
+	rings, hole, ok := mirrorJoinRings(lower, record.StationCount, len(fp.Verts))
+	if !ok {
+		return nil, false, nil
 	}
 	outer := [2][]int{rings[0], rings[2]}
 	start := provenance.Ref{Producer: b.Origin.Producer, Role: provenance.RoleCapStart}
@@ -50,7 +52,7 @@ func MirrorLoftCapChamfer(ctx context.Context, env topo.Env, b *topo.Body, fp fa
 		return nil, true, err
 	}
 	side := ChamferSideSource{Outer: outer, CapGroups: record.CapGroups, BoreGroup: -1, Z0: z0, Z1: z1}
-	body, err := ChamferMirrorLoftCaps(ctx, env, fp, side, rings[1], d)
+	body, err := ChamferMirrorLoftCaps(ctx, env, fp, side, rings[1], hole, d)
 	if err != nil {
 		return nil, true, fmt.Errorf("mirrored loft cap chamfer: %w", err)
 	}
@@ -64,18 +66,37 @@ func MirrorLoftCapChamfer(ctx context.Context, env topo.Env, b *topo.Body, fp fa
 // strip is clipped once, at the exact level setback inside its outer cap,
 // and keeps every piece between that level and the middle ring, so the middle
 // ring and the walls around it are exact subsets of the old walls. The insets,
-// bands, caps, audits and bounds are ChamferLoftCaps'. The shell has no hole.
+// bands, caps, audits and bounds are ChamferLoftCaps'. A bore's loop, when
+// hole is not empty, runs the same way: hole[0] on the bottom cap, hole[1] on
+// the middle ring and hole[2] on the top cap, each in the Loft's clockwise hole
+// order; its two-triangle cells are kept whole, so the bore stays sharp.
 func ChamferMirrorLoftCaps(ctx context.Context, env topo.Env, fp facetedrecord.Payload,
-	side ChamferSideSource, middle []int, setback float64) (*topo.Body, error) {
+	side ChamferSideSource, middle []int, hole [3][]int, setback float64) (*topo.Body, error) {
 	const maxRimVertices = 4_096
 	n := len(middle)
 	if n < 3 || len(side.Outer[0]) != n || len(side.Outer[1]) != n || n > maxRimVertices || side.BoreGroup != -1 {
 		return nil, fmt.Errorf("%w: mirrored loft cap chamfer lacks paired rings", decaderr.ErrUnsupported)
 	}
+	m := len(hole[1])
+	if len(hole[0]) != m || len(hole[2]) != m || m != 0 && m < 3 {
+		return nil, fmt.Errorf("%w: mirrored loft cap chamfer lacks paired bore rims", decaderr.ErrUnsupported)
+	}
+	// The cap audits read each bore rim counterclockwise.
+	var inner [2][]int
+	if m > 0 {
+		inner = [2][]int{reverseInts(hole[0]), reverseInts(hole[2])}
+	}
 	levels := [2]float64{side.Z0, side.Z1}
 	for capIndex := range 2 {
-		if !AuditCap(ctx, fp.Verts, fp.Tris, fp.Src, side.Outer[capIndex], side.CapGroups[capIndex],
-			levels[capIndex], capIndex == 0) {
+		tiles := false
+		if m > 0 {
+			tiles = AuditAnnulus(ctx, fp.Verts, fp.Tris, fp.Src, side.Outer[capIndex], inner[capIndex],
+				side.CapGroups[capIndex], levels[capIndex], capIndex == 0)
+		} else {
+			tiles = AuditCap(ctx, fp.Verts, fp.Tris, fp.Src, side.Outer[capIndex], side.CapGroups[capIndex],
+				levels[capIndex], capIndex == 0)
+		}
+		if !tiles {
 			return nil, fmt.Errorf("%w: mirrored loft cap %d does not tile its held outline", decaderr.ErrUnsupported, capIndex)
 		}
 	}
@@ -94,6 +115,23 @@ func ChamferMirrorLoftCaps(ctx context.Context, env topo.Env, fp facetedrecord.P
 	mesh := &facetedrecord.JoinedMesh{Verts: append([]r3.Vec(nil), fp.Verts...),
 		Groups: append([]facetedrecord.Group(nil), fp.Groups...)}
 	bounds := append([]float64(nil), fp.VertexBound...)
+	for _, rim := range [2][]int{hole[0], hole[2]} {
+		for i := range m {
+			j := (i + 1) % m
+			for _, tri := range [2][3]int{{rim[i], rim[j], hole[1][j]}, {rim[i], hole[1][j], hole[1][i]}} {
+				key := chamferTriangleKey(tri)
+				group, ok := lookup[key]
+				if !ok {
+					return nil, fmt.Errorf("%w: mirrored loft bore lost its two-triangle strip", decaderr.ErrUnsupported)
+				}
+				if side.BoreGroup < 0 {
+					side.BoreGroup = group
+				}
+				delete(lookup, key)
+				mesh.Add(tri, group)
+			}
+		}
+	}
 	clipped := ChamferSideResult{}
 	trueLevels := [2]*big.Rat{
 		new(big.Rat).Add(proofarith.FloatRat(side.Z0), proofarith.FloatRat(setback)),
@@ -144,5 +182,55 @@ func ChamferMirrorLoftCaps(ctx context.Context, env topo.Env, fp facetedrecord.P
 	if len(lookup) != 0 {
 		return nil, fmt.Errorf("%w: mirrored loft side has an unmatched facet", decaderr.ErrUnsupported)
 	}
-	return chamferHeldShell(ctx, env, fp, side, [2][]int{}, setback, mesh, bounds, clipped)
+	return chamferHeldShell(ctx, env, fp, side, inner, setback, mesh, bounds, clipped)
+}
+
+// mirrorJoinRings reads the station rings of a mirrored Loft join from its
+// lower Loft's layout (loftmesh.Assemble): each loop lifts its start stations,
+// then its end stations, outer loop first; the join then appends each loop's
+// reflected start stations in the same order. It returns the outer loop's
+// bottom, middle and top rings and, for a Loft with one hole, the hole loop's;
+// it reports false for any other layout.
+func mirrorJoinRings(lower loftrecord.Payload, stations, vertices int) ([3][]int, [3][]int, bool) {
+	var sizes []int
+	if len(lower.Cell) != lower.Walls || len(lower.Profile0.Holes) > 1 {
+		return [3][]int{}, [3][]int{}, false
+	}
+	for _, cell := range lower.Cell {
+		switch cell[0] {
+		case len(sizes):
+			sizes = append(sizes, 1)
+		case len(sizes) - 1:
+			sizes[cell[0]]++
+		default:
+			return [3][]int{}, [3][]int{}, false
+		}
+	}
+	if len(sizes) != 1+len(lower.Profile0.Holes) {
+		return [3][]int{}, [3][]int{}, false
+	}
+	total := 0
+	for i, cells := range sizes {
+		if cells%2 != 0 || cells/2 < 3 {
+			return [3][]int{}, [3][]int{}, false
+		}
+		sizes[i] = cells / 2
+		total += sizes[i]
+	}
+	if total != stations || vertices != 3*total || len(lower.Verts) != 2*total {
+		return [3][]int{}, [3][]int{}, false
+	}
+	var loops [2][3][]int
+	offset, top := 0, 2*total
+	for i, size := range sizes {
+		for k := range 3 {
+			loops[i][k] = make([]int, size)
+		}
+		for k := range size {
+			loops[i][0][k], loops[i][1][k], loops[i][2][k] = offset+k, offset+size+k, top+k
+		}
+		offset += 2 * size
+		top += size
+	}
+	return loops[0], loops[1], true
 }
