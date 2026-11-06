@@ -43,7 +43,9 @@ func writeSTL(ctx context.Context, w io.Writer, mesh meshSource) error {
 		return err
 	}
 	sw := stickyWriter{w: w}
-	sw.printf("solid decad\n")
+	line := make([]byte, 0, 128)
+	line = append(line, "solid decad\n"...)
+	sw.write(line)
 	for i, tri := range triangles {
 		if err := ctx.Err(); err != nil {
 			return err
@@ -53,16 +55,34 @@ func writeSTL(ctx context.Context, w io.Writer, mesh meshSource) error {
 		if !ok {
 			return fmt.Errorf("export: STL: %w: facet %d has no normal", decad.ErrDegenerate, i)
 		}
-		sw.printf("  facet normal %s %s %s\n", fmtCoord(normal.X), fmtCoord(normal.Y), fmtCoord(normal.Z))
-		sw.printf("    outer loop\n")
+		line = append(line[:0], "  facet normal "...)
+		line = appendCoord(line, normal.X)
+		line = append(line, ' ')
+		line = appendCoord(line, normal.Y)
+		line = append(line, ' ')
+		line = appendCoord(line, normal.Z)
+		line = append(line, '\n')
+		sw.write(line)
+		line = append(line[:0], "    outer loop\n"...)
+		sw.write(line)
 		for _, index := range tri {
 			v := vertices[index]
-			sw.printf("      vertex %s %s %s\n", fmtCoord(v.X), fmtCoord(v.Y), fmtCoord(v.Z))
+			line = append(line[:0], "      vertex "...)
+			line = appendCoord(line, v.X)
+			line = append(line, ' ')
+			line = appendCoord(line, v.Y)
+			line = append(line, ' ')
+			line = appendCoord(line, v.Z)
+			line = append(line, '\n')
+			sw.write(line)
 		}
-		sw.printf("    endloop\n")
-		sw.printf("  endfacet\n")
+		line = append(line[:0], "    endloop\n"...)
+		sw.write(line)
+		line = append(line[:0], "  endfacet\n"...)
+		sw.write(line)
 	}
-	sw.printf("endsolid decad\n")
+	line = append(line[:0], "endsolid decad\n"...)
+	sw.write(line)
 	if sw.err != nil {
 		return fmt.Errorf("export: STL write failed: %w", sw.err)
 	}
@@ -93,17 +113,32 @@ func writeOBJ(ctx context.Context, w io.Writer, mesh meshSource) error {
 		return err
 	}
 	sw := stickyWriter{w: w}
+	line := make([]byte, 0, 128)
 	for _, v := range mesh.Vertices() {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		sw.printf("v %s %s %s\n", fmtCoord(v.X), fmtCoord(v.Y), fmtCoord(v.Z))
+		line = append(line[:0], "v "...)
+		line = appendCoord(line, v.X)
+		line = append(line, ' ')
+		line = appendCoord(line, v.Y)
+		line = append(line, ' ')
+		line = appendCoord(line, v.Z)
+		line = append(line, '\n')
+		sw.write(line)
 	}
 	for _, tri := range mesh.Triangles() {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		sw.printf("f %d %d %d\n", tri[0]+1, tri[1]+1, tri[2]+1)
+		line = append(line[:0], "f "...)
+		line = strconv.AppendInt(line, int64(tri[0]+1), 10)
+		line = append(line, ' ')
+		line = strconv.AppendInt(line, int64(tri[1]+1), 10)
+		line = append(line, ' ')
+		line = strconv.AppendInt(line, int64(tri[2]+1), 10)
+		line = append(line, '\n')
+		sw.write(line)
 	}
 	if sw.err != nil {
 		return fmt.Errorf("export: OBJ write failed: %w", sw.err)
@@ -131,6 +166,20 @@ func (sw *stickyWriter) printf(format string, args ...any) {
 		return
 	}
 	_, sw.err = fmt.Fprintf(sw.w, format, args...)
+}
+
+func (sw *stickyWriter) write(p []byte) {
+	if sw.err != nil {
+		return
+	}
+	_, sw.err = sw.w.Write(p)
+}
+
+func appendCoord(dst []byte, x float64) []byte {
+	if x == 0 {
+		x = 0
+	}
+	return strconv.AppendFloat(dst, x, 'g', -1, 64)
 }
 
 func fmtCoord(x float64) string {
