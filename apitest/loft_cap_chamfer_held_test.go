@@ -38,14 +38,15 @@ func heldVolume(t *testing.T, b *decad.Body) float64 {
 }
 
 // requireOnChamferLevels checks that every vertex of b's verified mesh lies on
-// a cap level or on a band's side level.
-func requireOnChamferLevels(t *testing.T, b *decad.Body, height, d float64, msg string) {
+// a cap level or on a band's side level, and that the shell has Euler
+// characteristic euler: 2 without a hole, 0 with one bore.
+func requireOnChamferLevels(t *testing.T, b *decad.Body, height, d float64, euler int, msg string) {
 	t.Helper()
 	mesh, err := b.Tessellate(t.Context(), units.Millimeters(0.1), decad.WithVerification(decad.VerifyAll))
 	require.NoError(t, err, msg)
 	require.True(t, mesh.BoundaryVerified(), msg)
 	require.True(t, mesh.VolumeVerified(), msg)
-	require.Equal(t, 2, loftMirrorChamferEuler(mesh), "the chamfered shell must close like a sphere: %s", msg)
+	require.Equal(t, euler, loftMirrorChamferEuler(mesh), "the chamfered shell's genus: %s", msg)
 	for _, p := range mesh.Vertices() {
 		near := func(level float64) bool { return math.Abs(p.Z-level) <= 1e-12 }
 		require.True(t, near(0) || near(d) || near(height-d) || near(height),
@@ -92,7 +93,7 @@ func TestLoftCapChamferRoundedTwistedGear(t *testing.T) {
 		require.InDelta(t, before.Value.Base()-d/2*shrink, after.Value.Base(),
 			before.Bound.Base()+after.Bound.Base()+0.03*d/2*shrink, "setback %g", d)
 		require.Equal(t, len(bottom), filletRoleCount(chamfered), "the rounded roots stay: setback %g", d)
-		requireOnChamferLevels(t, chamfered, height, d, "gear")
+		requireOnChamferLevels(t, chamfered, height, d, 2, "gear")
 	}
 }
 
@@ -129,7 +130,7 @@ func TestLoftCapChamferSquareFrustum(t *testing.T) {
 	_, caps := capAreaTotal(t, chamfered)
 	require.InDelta(t, (s0-2*d)*(s0-2*d), caps[0], 1e-9)
 	require.InDelta(t, (s1-2*d)*(s1-2*d), caps[1], 1e-9)
-	requireOnChamferLevels(t, chamfered, height, d, "frustum")
+	requireOnChamferLevels(t, chamfered, height, d, 2, "frustum")
 }
 
 // TestLoftCapChamferTurnedSquare chamfers a loft from a square to the same
@@ -150,5 +151,50 @@ func TestLoftCapChamferTurnedSquare(t *testing.T) {
 	for _, area := range caps {
 		require.InDelta(t, (s-2*d)*(s-2*d), area, 1e-9)
 	}
-	requireOnChamferLevels(t, chamfered, height, d, "turned square")
+	requireOnChamferLevels(t, chamfered, height, d, 2, "turned square")
+}
+
+// TestLoftCapChamferKeepsTheBore chamfers both outer cap loops of a rounded
+// twisted gear loft after a centered through-bore. The bore wall and its two
+// rims stay whole: the result keeps one cylinder of the bore's radius, and
+// every cap vertex within the bore's reach lies on it. The removed held volume
+// is d/2 times the cap area lost within 3%.
+func TestLoftCapChamferKeepsTheBore(t *testing.T) {
+	const height, r, d = 3.0, 0.5, 0.1
+	twist := 14.5 * math.Pi / 180
+	g := newTwistedGear(5, 20*math.Pi/180, 0.05)
+	body, bottom, top := g.loft(t, height, twist, 0)
+	rounded, err := decad.Fillet(t.Context(), body, rungQuery(bottom, top, height).Exactly(len(bottom)),
+		units.Millimeters(0.25))
+	require.NoError(t, err)
+	bored, err := decad.Cut(t.Context(), rounded, circleBodyAtZ(t, rounded.Document(), 0, r, -1, height+2))
+	require.NoError(t, err)
+	held := heldVolume(t, bored)
+	capsBefore, _ := capAreaTotal(t, bored)
+	chamfered, err := decad.Chamfer(t.Context(), bored, outerCapLoops(bored), units.Millimeters(d))
+	require.NoError(t, err)
+	after, err := chamfered.Volume()
+	require.NoError(t, err)
+	capsAfter, _ := capAreaTotal(t, chamfered)
+	shrink := capsBefore - capsAfter
+	require.Positive(t, shrink)
+	require.InEpsilon(t, d/2*shrink, held-after.Value.Base(), 0.03)
+
+	walls, err := decad.Faces(decad.Cylindrical()).SelectFaces(chamfered)
+	require.NoError(t, err)
+	require.Len(t, walls, 1)
+	cylinder, ok := walls[0].Surface().(decad.Cylinder)
+	require.True(t, ok)
+	require.InDelta(t, r, cylinder.Radius.Base(), 1e-12)
+	mesh, err := chamfered.Tessellate(t.Context(), units.Millimeters(0.1), decad.WithVerification(decad.VerifyAll))
+	require.NoError(t, err)
+	rim := 0
+	for _, p := range mesh.Vertices() {
+		if math.Hypot(p.X, p.Y) < 2*r {
+			require.InDelta(t, r, math.Hypot(p.X, p.Y), 1e-9, "a vertex near the axis is on the bore")
+			rim++
+		}
+	}
+	require.Positive(t, rim)
+	requireOnChamferLevels(t, chamfered, height, d, 0, "bored gear")
 }
