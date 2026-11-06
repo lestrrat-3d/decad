@@ -3180,3 +3180,45 @@ the sum of the ordinary chord term, finite vertex sweep, both cylinder slabs,
 and `source.VolSymDiff`. An unenclosable term refuses `VerifyAll` rather than
 publishing a volume proof. The Boolean precheck admits this same narrow
 payload when its tessellation publishes that proof.
+
+## 19. Held outer-cap chamfer of a loft with different sections
+
+An equal-distance `Chamfer` of both complete outer cap loops also accepts a solid, unplaced Loft whose two sections
+differ, such as a gear outline lofted to the same outline turned about its axis, with or without §17's rounded
+corners. Both sections must be hole-free single loops with zero alignment on frames with the exact XY basis at
+ascending levels (`MirrorAxialSource`), so each cap is a horizontal plane at its frame's level and the held mesh
+pairs station `i` of the start ring with station `i` of the end ring. Identical sections keep §18's route. A partial
+loop, an inner or side edge, an asymmetric setback, placement and holes are not this route's class. The setback `d`
+must move each float cap level, and the exact levels `z0+d` and `z1−d` must be ordered
+(`loftcylinder.BindLoftCapSetback`).
+
+`brepmodify.HeldLoftCapChamfer` reads the Loft's verified mesh at `VerifyAll` as a faceted shell: its triangles must be
+the payload's held triangles, both cap faces must be whole, and the selection must be exactly the two outer cap walks
+(`loftcylinder.ChamferSelectsOuterLoops`). `loftcylinder.ChamferLoftCaps` then builds one rational polyhedral solid
+`C` from that held shell `H`, with the steps of loft-boolean's joined-gear cap chamfer that read only the held shell:
+
+- Every two-triangle side cell is clipped at the exact levels `z0+d` and `z1−d` (`ChamferClipSide`). The clipped
+  ring at each level alternates each ruling's crossing with its diagonal's crossing; both are exact rational points
+  on the old wall, rounded once into the mesh.
+- Each held cap outline is offset inward by `d` (`ChamferInset`) and chorded; the chord samples are `C`'s inset loop.
+  A setback whose offset drops a held edge, such as one wider than half a tooth's tip land, refuses.
+- A bevel band joins each inset loop to its clipped ring, and the inset loop is triangulated as the new cap.
+
+The audits prove that the clipped rings and inset loops are simple and nested, that every band triangle lies at its two
+levels and meets the old walls only along its side ring, that the band lies inside `H`, that the shell is outward,
+manifold and free of crossings, and that each new cap tiles its inset loop. Thus `C ⊂ H`, and `C = H∩C`.
+
+The result denotes `C`, the held solid cut by the bands, as §18's chamfer denotes its held polygon band. For the true
+Loft `S`, `(S∩C) △ C` lies inside `S △ H`, so the occupied-volume bound is the Loft's own plus the rounding of the
+clipped stations swept over the result's area. The boundary bound is the Loft's held boundary bound plus the larger of
+that rounding and the inset's chord departure from the exact offset. The cap groups keep their planes and gain the
+chamfer's `capStart` and `capEnd` roles; each band is a `chamferCap(i,0,0)` face; the clipped wall pieces keep their
+Loft roles, including §17's `fillet(loop,segment)` roles. Mass readings come from the faceted result.
+
+`apitest.TestLoftCapChamferSquareFrustum` chamfers a loft from a square to a smaller square: its planar walls make
+each removed region's slice area quadratic in height, so Simpson's rule gives the removed volume exactly, and each
+inset cap is a square of side `s−2d`. `TestLoftCapChamferTurnedSquare` chamfers a square lofted to the same square
+turned 25° and refuses a setback whose bands meet. `TestLoftCapChamferRoundedTwistedGear` chamfers a rounded twisted
+gear loft: the removed held volume is `d/2` times the cap area lost within 3%, the rounded roots keep their roles, and a
+setback that drops the tooth tips refuses. Each case checks the verified tessellation, its closed shell and the cap
+and band levels.
