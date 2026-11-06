@@ -1,6 +1,7 @@
 package apitest_test
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
@@ -10,9 +11,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file is agent-docs/path-pattern-design.md §7's public-surface tests for
-// PathPatternJoin and PathPatternJoinSpaced: a 4 x 4 x 2 peg at the origin
-// joined, along a path, to a 30 x 4 x 1 bar under it.
+// This file is agent-docs/path-pattern-design.md §7's tests: a 4 x 4 x 2 peg at the
+// origin, copied along a path and joined by one Union to a 30 x 4 x 1 bar under it.
 
 func joinFixture(t *testing.T) (*decad.Document, *decad.Body, *decad.Body, *decad.Path) {
 	t.Helper()
@@ -23,10 +23,12 @@ func joinFixture(t *testing.T) (*decad.Document, *decad.Body, *decad.Body, *deca
 	return doc, bar, peg, path
 }
 
-func TestPathPatternJoinUnitesTheInstancesWithTheTarget(t *testing.T) {
+func TestPathPatternUnionUnitesTheInstancesWithTheTarget(t *testing.T) {
 	t.Parallel()
 	doc, bar, peg, path := joinFixture(t)
-	out, err := decad.PathPatternJoin(t.Context(), bar, peg, path, 3)
+	copies, err := decad.PathPatternCopies(t.Context(), peg, path, 3)
+	require.NoError(t, err)
+	out, err := decad.Union(t.Context(), bar, append([]*decad.Body{peg}, copies...)...)
 	require.NoError(t, err)
 	require.Len(t, doc.Bodies(), 1, "the target, the feature and the copies are all retired")
 	require.True(t, doc.Bodies()[0] == out)
@@ -35,32 +37,31 @@ func TestPathPatternJoinUnitesTheInstancesWithTheTarget(t *testing.T) {
 	decadtest.MeasuresBounds(t, out, r3.Vec{}, r3.Vec{X: 30, Y: 4, Z: 2})
 }
 
-func TestPathPatternJoinSpacedPlacesTheCopiesByDistance(t *testing.T) {
+func TestPathPatternSpacedUnionPlacesTheCopiesByDistance(t *testing.T) {
 	t.Parallel()
 	doc, bar, peg, path := joinFixture(t)
-	out, err := decad.PathPatternJoinSpaced(t.Context(), bar, peg, path, units.Millimeters(10))
+	copies, err := decad.PathPatternSpaced(t.Context(), peg, path, units.Millimeters(10))
+	require.NoError(t, err)
+	out, err := decad.Union(t.Context(), bar, append([]*decad.Body{peg}, copies...)...)
 	require.NoError(t, err)
 	require.Len(t, doc.Bodies(), 1)
 	decadtest.MeasuresVolume(t, out, units.CubicMillimeters(120+3*16))
 }
 
-func TestPathPatternJoinRefusalsLeaveBothBodiesLive(t *testing.T) {
+func TestPathPatternUnionRefusalLeavesEveryOperandLive(t *testing.T) {
 	t.Parallel()
-	doc, bar, peg, path := joinFixture(t)
-	_, err := decad.PathPatternJoin(t.Context(), bar, bar, path, 3)
-	require.ErrorIs(t, err, decad.ErrDegenerate, "a target is not its own feature")
-	_, err = decad.PathPatternJoin(t.Context(), nil, peg, path, 3)
-	require.ErrorIs(t, err, decad.ErrDegenerate)
-	_, err = decad.PathPatternJoin(t.Context(), bar, peg, path, 1)
-	require.ErrorIs(t, err, decad.ErrDegenerate, "a count of one")
-	_, err = decad.PathPatternJoinSpaced(t.Context(), bar, peg, path, units.Millimeters(-1))
-	require.ErrorIs(t, err, decad.ErrNegativeMagnitude)
-	// A sheet is no solid to join to: Union refuses it after the copies exist, and the document
-	// ends with the target and the feature only, no stray copy.
+	_, _, _, path := joinFixture(t)
+	// A sheet is no solid to join to: Union refuses it and leaves the sheet, the
+	// feature and every copy live.
 	sheetDoc, sheet := offsetPrismSheet(t)
 	feature := decadtest.NewBlock(t, sheetDoc, 0, 0, 4, 4, units.Millimeters(2))
-	_, err = decad.PathPatternJoin(t.Context(), sheet, feature, path, 3)
-	require.Error(t, err)
-	require.Len(t, sheetDoc.Bodies(), 2, "a refused join leaves the sheet and the feature, and no copy")
-	require.Len(t, doc.Bodies(), 2, "the first document is as it was")
+	copies, err := decad.PathPatternCopies(t.Context(), feature, path, 3)
+	require.NoError(t, err)
+	_, err = decad.Union(t.Context(), sheet, append([]*decad.Body{feature}, copies...)...)
+	require.ErrorIs(t, err, decad.ErrUnsupported)
+	require.True(t, slices.Equal(append([]*decad.Body{sheet, feature}, copies...), sheetDoc.Bodies()))
+	for _, c := range copies {
+		require.NoError(t, decad.Remove(c))
+	}
+	require.Len(t, sheetDoc.Bodies(), 2)
 }

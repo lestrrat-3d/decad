@@ -2,6 +2,7 @@ package apitest_test
 
 import (
 	"math"
+	"slices"
 	"testing"
 
 	"github.com/lestrrat-3d/r3"
@@ -12,11 +13,11 @@ import (
 	"github.com/lestrrat-3d/decad"
 )
 
-// TestPatternJoinRefusesCopiesItCannotCertify slides a 4 mm wide tongue along a plate. At a
+// TestPatternUnionRefusesCopiesItCannotCertify slides a 4 mm wide tongue along a plate. At a
 // 4 mm step the copies share whole side edges and join. At a 3 mm step the arched tops cross
 // each other, and at a step a hair past 4 mm the sides nearly coincide: sketch cannot certify
 // either arrangement, so the join refuses with ErrUnsupported and leaves the document as it was.
-func TestPatternJoinRefusesCopiesItCannotCertify(t *testing.T) {
+func TestPatternUnionRefusesCopiesItCannotCertify(t *testing.T) {
 	t.Parallel()
 	for name, step := range map[string]float64{"arches cross": 3, "sides nearly coincide": 4.0000001} {
 		t.Run(name, func(t *testing.T) {
@@ -25,16 +26,23 @@ func TestPatternJoinRefusesCopiesItCannotCertify(t *testing.T) {
 			plate := polyPrismBody(t, doc, [][2]float64{{0, 0}, {30, 0}, {30, 6}, {0, 6}}, 5)
 			tongue := tongueLoft(t, doc, 5)
 			before := doc.Bodies()
-			_, err := decad.PatternJoin(t.Context(), plate, tongue,
+			copies, err := decad.PatternCopies(t.Context(), tongue,
 				decad.LinearPattern{Dir: r3.NewVec(1, 0, 0), Step: units.Millimeters(step), Count: 3})
+			require.NoError(t, err)
+			_, err = decad.Union(t.Context(), plate, append([]*decad.Body{tongue}, copies...)...)
 			require.ErrorIs(t, err, decad.ErrUnsupported)
-			require.Equal(t, before, doc.Bodies())
+			require.True(t, slices.Equal(append(slices.Clone(before), copies...), doc.Bodies()),
+				"a refused Union leaves the target, the feature and every copy live")
+			for _, c := range copies {
+				require.NoError(t, decad.Remove(c))
+			}
+			require.True(t, slices.Equal(before, doc.Bodies()))
 		})
 	}
 }
 
-// TestPatternJoinJoinsCopiesThatShareWholeSides is the step the refusals above are measured against.
-func TestPatternJoinJoinsCopiesThatShareWholeSides(t *testing.T) {
+// TestPatternUnionJoinsCopiesThatShareWholeSides is the step the refusals above are measured against.
+func TestPatternUnionJoinsCopiesThatShareWholeSides(t *testing.T) {
 	t.Parallel()
 	const height = 4.0
 	doc := decad.New()
@@ -44,8 +52,10 @@ func TestPatternJoinJoinsCopiesThatShareWholeSides(t *testing.T) {
 	require.NoError(t, err)
 	tv, err := tongue.Volume()
 	require.NoError(t, err)
-	joined, err := decad.PatternJoin(t.Context(), plate, tongue,
+	copies, err := decad.PatternCopies(t.Context(), tongue,
 		decad.LinearPattern{Dir: r3.NewVec(1, 0, 0), Step: units.Millimeters(4), Count: 3})
+	require.NoError(t, err)
+	joined, err := decad.Union(t.Context(), plate, append([]*decad.Body{tongue}, copies...)...)
 	require.NoError(t, err)
 	v, err := joined.Volume()
 	require.NoError(t, err)
@@ -53,28 +63,35 @@ func TestPatternJoinJoinsCopiesThatShareWholeSides(t *testing.T) {
 	require.InDelta(t, want, v.Value.Base(), v.Bound.Base()+pv.Bound.Base()+3*tv.Bound.Base()+1e-9)
 }
 
-// TestPatternJoinRefusesLobesThatOnlyTouchTheBase builds lobes whose bottom arc rests on the
+// TestPatternUnionRefusesLobesThatOnlyTouchTheBase builds lobes whose bottom arc rests on the
 // disc's circle with the flank ends on it, and lobes a hair above it. The first touch the disc along
 // an arc and at the flank ends, the second leave a gap: neither joins into one region sketch can
 // certify, so the join refuses with ErrUnsupported and leaves the document as it was.
-func TestPatternJoinRefusesLobesThatOnlyTouchTheBase(t *testing.T) {
+func TestPatternUnionRefusesLobesThatOnlyTouchTheBase(t *testing.T) {
 	t.Parallel()
 	const r, height, n = 3.0, 2.0, 12
 	doc := decad.New()
 	disc := circleBodyAtZ(t, doc, 0, r, 0, height)
 	lobe := gapLoft(t, doc, r, 0, 0.4*math.Pi/n, height)
 	before := doc.Bodies()
-	_, err := decad.PatternJoin(t.Context(), disc, lobe,
+	copies, err := decad.PatternCopies(t.Context(), lobe,
 		decad.CircularPattern{Axis: r3.NewVec(0, 0, 1), Count: n})
+	require.NoError(t, err)
+	_, err = decad.Union(t.Context(), disc, append([]*decad.Body{lobe}, copies...)...)
 	require.ErrorIs(t, err, decad.ErrUnsupported)
-	require.Equal(t, before, doc.Bodies())
+	require.True(t, slices.Equal(append(slices.Clone(before), copies...), doc.Bodies()),
+		"a refused Union leaves the target, the feature and every copy live")
+	for _, c := range copies {
+		require.NoError(t, decad.Remove(c))
+	}
+	require.True(t, slices.Equal(before, doc.Bodies()))
 }
 
-// TestPatternJoinKeepsLobesThatMissTheBaseByAMicronApart is the other case: lobes a micron off the disc leave a gap
+// TestPatternUnionKeepsLobesThatMissTheBaseByAMicronApart is the other case: lobes a micron off the disc leave a gap
 // sketch cannot certify away, so no certified route takes the set, and the two-at-a-time fold builds the Union of
 // bodies that do not touch: a body of the disc and the twelve lobes as thirteen lumps, whose volume is their sum, which
 // the test reads from the operands and not from the join.
-func TestPatternJoinKeepsLobesThatMissTheBaseByAMicronApart(t *testing.T) {
+func TestPatternUnionKeepsLobesThatMissTheBaseByAMicronApart(t *testing.T) {
 	t.Parallel()
 	const r, height, n = 3.0, 2.0, 12
 	doc := decad.New()
@@ -84,10 +101,12 @@ func TestPatternJoinKeepsLobesThatMissTheBaseByAMicronApart(t *testing.T) {
 	require.NoError(t, err)
 	lobeVolume, err := lobe.Volume()
 	require.NoError(t, err)
-	out, err := decad.PatternJoin(t.Context(), disc, lobe,
+	copies, err := decad.PatternCopies(t.Context(), lobe,
 		decad.CircularPattern{Axis: r3.NewVec(0, 0, 1), Count: n})
 	require.NoError(t, err)
-	require.Equal(t, []*decad.Body{out}, doc.Bodies())
+	out, err := decad.Union(t.Context(), disc, append([]*decad.Body{lobe}, copies...)...)
+	require.NoError(t, err)
+	require.True(t, slices.Equal([]*decad.Body{out}, doc.Bodies()))
 	require.Len(t, out.Lumps(), n+1, "the lobes stay clear of the disc")
 	volume, err := out.Volume()
 	require.NoError(t, err)

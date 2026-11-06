@@ -57,11 +57,11 @@ func crossingLoft(t *testing.T, doc *decad.Document, r, half, height float64) *d
 	return crossingLoftAt(t, doc, r, half, height, 0)
 }
 
-// TestPatternJoinFlanksCrossTheBase joins patterned lobes whose spline flanks cross the
+// TestPatternUnionFlanksCrossTheBase joins patterned lobes whose spline flanks cross the
 // base circle, so the union cuts splines against a circle. The volume is the disc and the
 // lobes less the part of each lobe inside the disc, which the same lobes drawn at their
 // own angles also have.
-func TestPatternJoinFlanksCrossTheBase(t *testing.T) {
+func TestPatternUnionFlanksCrossTheBase(t *testing.T) {
 	t.Parallel()
 	const r, height = 3.0, 2.0
 	for _, n := range []int{8, 12} {
@@ -70,8 +70,11 @@ func TestPatternJoinFlanksCrossTheBase(t *testing.T) {
 			half := 0.4 * math.Pi / float64(n)
 			doc := decad.New()
 			disc := circleBodyAtZ(t, doc, 0, r, 0, height)
-			joined, err := decad.PatternJoin(t.Context(), disc, crossingLoft(t, doc, r, half, height),
+			lobe := crossingLoft(t, doc, r, half, height)
+			copies, err := decad.PatternCopies(t.Context(), lobe,
 				decad.CircularPattern{Axis: r3.NewVec(0, 0, 1), Count: n})
+			require.NoError(t, err)
+			joined, err := decad.Union(t.Context(), disc, append([]*decad.Body{lobe}, copies...)...)
 			require.NoError(t, err)
 			require.True(t, joined.IsSolid())
 
@@ -93,10 +96,10 @@ func TestPatternJoinFlanksCrossTheBase(t *testing.T) {
 	}
 }
 
-// TestPatternJoinFlanksCrossTheBaseThenFilletBoreChamfer takes the joined part through the
+// TestPatternUnionFlanksCrossTheBaseThenFilletBoreChamfer takes the joined part through the
 // finishing order: a concave fillet where each flank meets the base circle, a through-bore
 // Cut and a cap Chamfer.
-func TestPatternJoinFlanksCrossTheBaseThenFilletBoreChamfer(t *testing.T) {
+func TestPatternUnionFlanksCrossTheBaseThenFilletBoreChamfer(t *testing.T) {
 	t.Parallel()
 	const r, height, n = 3.0, 2.0, 8
 	half := 0.4 * math.Pi / n

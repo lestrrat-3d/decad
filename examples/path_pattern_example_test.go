@@ -212,8 +212,8 @@ func Example_path_pattern_pivot() {
 	// pivot (2, 2): x 10..14, y 10..14
 }
 
-// PathPatternJoin repeats a part along a path and unites every copy with a base
-// body in one step: here three 4 mm pegs on a bar, 10 mm apart along its length.
+// PathPatternCopies repeats a part along a path, and one Union joins every copy
+// to a base body: here three 4 mm pegs on a bar, 10 mm apart along its length.
 func Example_path_pattern_join() {
 	doc := decad.New()
 	build := func(x1, y1 float64, height float64) (*decad.Body, error) {
@@ -245,7 +245,12 @@ func Example_path_pattern_join() {
 		fmt.Printf("failed to build path: %s\n", err)
 		return
 	}
-	joined, err := decad.PathPatternJoin(context.Background(), bar, peg, path, 3)
+	copies, err := decad.PathPatternCopies(context.Background(), peg, path, 3)
+	if err != nil {
+		fmt.Printf("failed to copy: %s\n", err)
+		return
+	}
+	joined, err := decad.Union(context.Background(), bar, append([]*decad.Body{peg}, copies...)...)
 	if err != nil {
 		fmt.Printf("failed to join: %s\n", err)
 		return
