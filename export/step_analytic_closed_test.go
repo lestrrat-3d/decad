@@ -123,7 +123,7 @@ func TestNewSTEPFileWholeSphereAnalytic(t *testing.T) {
 			if entity.Name == "SPHERICAL_SURFACE" {
 				sphere++
 			}
-			if entity.Name == "PLANE" {
+			if entity.Name == planeRecord {
 				planes++
 			}
 		}
