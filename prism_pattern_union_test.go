@@ -11,10 +11,15 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// prismPatternInsetBlank is a blank radius a nanometre past the tabs' root arcs
+// at 3 mm. The union of the sections places no region there, so the
+// copied-prism route joins these tabs.
+const prismPatternInsetBlank = 3 + 1e-9
+
 // The public Sketch, Extrude, Copy and Union producers must agree on the
 // boundary and volume of a small radial prism pattern.
 func TestPrismPatternUnionOfCopiedExtrudes(t *testing.T) {
-	doc, blank, tooth, rotated := prismPatternTabBodies(t, math.Nextafter(3, math.Inf(1)))
+	doc, blank, tooth, rotated := prismPatternTabBodies(t, prismPatternInsetBlank)
 	blankVolume, err := blank.Volume()
 	require.NoError(t, err)
 	toothVolume, err := tooth.Volume()
@@ -62,7 +67,7 @@ func TestPrismPatternUnionOfTangentRootJoinsBySectionUnion(t *testing.T) {
 }
 
 func TestPrismPatternUnionSelectsProvenAxialChains(t *testing.T) {
-	_, blank, section, rotated := prismPatternTabBodies(t, math.Nextafter(3, math.Inf(1)))
+	_, blank, section, rotated := prismPatternTabBodies(t, prismPatternInsetBlank)
 	joined, err := Union(t.Context(), blank, section, rotated)
 	require.NoError(t, err)
 	require.Len(t, joined.Edges(), 36)

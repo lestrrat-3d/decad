@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/lestrrat-3d/decad/internal/axialsection"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/unionmany"
 )
@@ -72,27 +71,21 @@ func unionManyBodies(ctx context.Context, d *Document, ref producerID, operands 
 	if joined, ok := orthogonalUnionMany(ctx, d, ref, operands); ok {
 		return joined, 1, ctx.Err()
 	}
-	// Every certified set route above refused. A set of prisms with a free-form
-	// section can still join through the union of its sections. If that route
-	// declines, try the generic pair chain and keep the first refusal if it fails.
-	node, matched, aerr := axialsection.UnionManyPrisms(ctx, envOf(documentNode(d), ref), bodyNodes(operands))
-	if aerr != nil {
+	// Every certified set route refused. A refusal from the union of the prism
+	// sections stays the answer. Otherwise try the generic pair chain and keep
+	// the first refusal if it fails.
+	var sectionRefusal *unionmany.SectionUnionError
+	if errors.As(err, &sectionRefusal) || !isManyUnionRefusal(err) {
 		return nil, 0, err
 	}
-	if !matched {
-		if !isManyUnionRefusal(err) {
-			return nil, 0, err
-		}
-		body, span, matched, chainErr := tryPrismUnionChain(ctx, ref, operands)
-		if chainErr != nil {
-			return nil, 0, chainErr
-		}
-		if matched {
-			return body, span, ctx.Err()
-		}
-		return nil, 0, err
+	body, span, matched, chainErr := tryPrismUnionChain(ctx, ref, operands)
+	if chainErr != nil {
+		return nil, 0, chainErr
 	}
-	return bodyHandle(node), 1, ctx.Err()
+	if matched {
+		return body, span, ctx.Err()
+	}
+	return nil, 0, err
 }
 
 // unionManyRoutes unwraps private Document.n and Body.n fields, supplies the

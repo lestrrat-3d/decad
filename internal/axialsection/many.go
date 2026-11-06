@@ -32,11 +32,12 @@ func UnionMany(ctx context.Context, env topo.Env, bodies []*topo.Body) (*topo.Bo
 	return unionMany(ctx, env, payloads, false)
 }
 
-// UnionManyPrisms is UnionMany for a set that holds no loft, which the other routes
-// have already declined. The first unplaced prism supplies the two planes the result
-// records (Operand.AsReference). It runs after the prism-pattern route so that route
-// keeps every set it certifies; this one takes the sets whose root contact it
-// cannot certify, such as a root arc that lies on the blank's rim.
+// UnionManyPrisms is UnionMany for a set that holds no loft; a set that holds one
+// is a miss, since UnionMany reads it. The first unplaced prism supplies the two
+// planes the result records (Operand.AsReference). It runs ahead of the
+// prism-pattern route, so for a free-form section the route that joins depends on
+// whether sketch certifies the union of the sections, not on how the copies'
+// placements round against the blank.
 func UnionManyPrisms(ctx context.Context, env topo.Env, bodies []*topo.Body) (*topo.Body, bool, error) {
 	payloads := make([]topo.Payload, len(bodies))
 	for i, b := range bodies {
@@ -62,7 +63,11 @@ func unionMany(ctx context.Context, env topo.Env, payloads []topo.Payload, prism
 	if !anyFreeform {
 		return nil, false, nil
 	}
-	if prismReference && !slices.ContainsFunc(ops, func(op Operand) bool { return op.FromLoft }) {
+	if prismReference {
+		if slices.ContainsFunc(ops, func(op Operand) bool { return op.FromLoft }) {
+			// UnionMany has already read a set that holds a loft.
+			return nil, false, nil
+		}
 		// A set of prisms has no loft to supply the two planes the result records,
 		// so an unplaced prism supplies them.
 		i := slices.IndexFunc(ops, func(op Operand) bool { return op.Xform == r3.Identity() })

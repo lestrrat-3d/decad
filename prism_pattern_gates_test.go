@@ -42,7 +42,7 @@ func prismPatternUnionMany(t *testing.T, mesher interface {
 func TestPrismPatternUnionManyGates(t *testing.T) {
 	setup := func(t *testing.T) (blank, a, b *Body) {
 		t.Helper()
-		_, blank, a, b = prismPatternTabBodies(t, math.Nextafter(3, math.Inf(1)))
+		_, blank, a, b = prismPatternTabBodies(t, prismPatternInsetBlank)
 		return blank, a, b
 	}
 	edit := func(body *Body, f func(*prismPayload)) {
@@ -124,7 +124,7 @@ func mustBodies(blank, a, b *Body) []*Body { return []*Body{blank, a, b} }
 func TestPrismPatternFilletBodyGates(t *testing.T) {
 	setup := func(t *testing.T) (*Body, []*Edge) {
 		t.Helper()
-		_, blank, section, rotated := prismPatternTabBodies(t, math.Nextafter(3, math.Inf(1)))
+		_, blank, section, rotated := prismPatternTabBodies(t, prismPatternInsetBlank)
 		joined, err := Union(t.Context(), blank, section, rotated)
 		require.NoError(t, err)
 		edges, err := prismPatternRootSelection(t, joined).SelectEdges(joined)
