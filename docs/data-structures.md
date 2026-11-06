@@ -227,6 +227,7 @@ configuration option.
 | `decad.Clearance` | struct | A measured gap between two bodies. | `Report.Clearances` |
 | `decad.BooleanError` | struct | The typed failure of a boolean. | `decad.Union`, `decad.Cut`, `decad.Intersect` |
 | `decad.BooleanErrorCode` | enum | The fine reason a boolean failed. | `BooleanError.Code` |
+| `decad.MeshBoundError` | struct | The refusal of a tessellation tolerance below a faceted body's minimum mesh bound; `Floor()` is the smallest accepted tolerance. | `Body.Tessellate` |
 | `decad.OperationDiagnosticError` | interface | An error that returns structured operation diagnostics. | `errors.As` |
 | `decad.OperationError` | struct | An original error plus structured operation reasons. | Modeling calls |
 | `decad.OperationDiagnostic` | struct | One operation failure or successful-call warning. | Errors, `Body.OperationDiagnostics` |
