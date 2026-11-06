@@ -134,6 +134,16 @@ func LoftCrossingAuditStructured(budget *proofbound.WorkBudget, verts []r3.Vec, 
 	return err
 }
 
+// LoftCrossingAuditBanded is LoftCrossingAuditStructured over a shell whose
+// two caps are separated by interior section rings (LoftAuditStructure's
+// Interior), such as two lofts sewn along a common middle ring. tris must be
+// ordered as structure states: walls, then the first cap, then the second.
+func LoftCrossingAuditBanded(budget *proofbound.WorkBudget, verts []r3.Vec, tris [][3]int,
+	structure LoftAuditStructure) error {
+	_, err := loftCrossingAudit(budget, verts, tris, &structure, loftStructuredShortcuts, proofbound.MaxFacetPairTestsPerCall)
+	return err
+}
+
 // LoftSweepCandidates returns the generic audit's candidate list over every
 // triangle, in the order its pair loop tests them. It is the tests' view of
 // sweepCandidates; no production path calls it.
