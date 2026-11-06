@@ -2962,11 +2962,14 @@ fillets, optional bore and both outer-cap chamfers.
 
 ## 18. Coaxial bore and held outer-cap chamfer
 
-`Cut` keeps a solid matching axial loft as a `loftPayload` when a straight
+`Cut` keeps a solid axial loft as a `loftPayload` when a straight
 prism tool cuts one full circular, D-shaped or closed line-and-arc-profile
-through-bore. Both recorded
-sections must be identical and hole-free before the cut, share their in-plane
-axes, have zero alignment, and have no placement. The tool must share those
+through-bore. Both recorded sections must be hole-free before the cut and
+have the same segment kinds in the same order, share their in-plane axes,
+have zero alignment, and have no placement. The sections may differ, such as
+a gear outline lofted to the same outline turned about its axis: both
+receive the same hole, and the circle containment proof below runs on each
+section's own outer loop. Identical sections share one proof. The tool must share those
 axes and span both cap levels. Exact rational lifts of its endpoint levels
 must lie on or beyond the exact cap planes. The tool's circle center and the
 inserted hole center must have equal exact lifts, including the recovered
@@ -2988,6 +2991,9 @@ authenticated outer loop. It inserts the same clockwise `CircleSeg` hole into
 both sections and runs the normal loft evaluator. A pair outside these gates
 uses the general boolean path; the global sketch reconstruction ceiling is
 unchanged.
+`apitest.TestLoftBoreTwistedSections` bores a rounded gear outline lofted to the same outline turned 14.5° and a
+square lofted to a smaller square turned −30°. Each result keeps its Cut caps and one `Cylinder` bore wall of the tool's
+radius, removes exactly `πr²h` within the two volume bounds, and passes the verified tessellation.
 The rewritten payload records `throughBoreCut` whether or not it publishes
 analytic bore topology. `Body.Section` reads D-shaped and closed line-and-arc
 cuts only for a matching pair of authenticated source profiles at an interior
