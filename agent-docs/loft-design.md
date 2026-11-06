@@ -2880,7 +2880,19 @@ fragment's own side of its start (`circleFootParameter`). The point the trimmed 
 from the foot by the rounding of the foot's distance from the circle and of the angle; the connector and the fragment
 then meet at distinct denoted ends, which the pairing's junction charge already carries into the loft's bounds
 (`loftmesh.PairRecords`). A foot outside the fragment's range, or a radius that consumes either carrier, refuses with
-`ErrUnsupported`. A whole circle has no corner.
+`ErrUnsupported`, except for the case below. A whole circle has no corner.
+
+A short line between a circle fragment and a fit spline is the one consumed carrier the fillet continues past. The class
+is a selected `LineSeg`/`CircleSeg` corner whose line ends, at its other end, at a `FitSplineSeg`, and whose
+`offset2d.Fillet` setback reaches that end (`rolledLines`). The line is then removed from the section: the circle fragment
+and the fit spline become one fit-circle root corner, and the corner takes the fit-circle route above, with its exact root
+certificate, connector and carrier departures and section audits. The fillet circle touches the root circle and the fit
+spline beyond the line, and the region it fills holds the whole line. The setback test only chooses the route; the root
+certificate and the audits decide admission. The fit-circle route's own limits apply. The circle fragment must turn less
+than half a revolution. A flank whose start turns so far from the line that the fillet circle would have to touch the flank
+before its start has no contact root and refuses with `ErrUnsupported`. A rolling ball there rests on the line/flank
+vertex, and decad builds no fillet through a vertex. A consumed line between two circle fragments, and a consumed arc,
+refuse. A refusal message names the original section corner and segment indices.
 
 The 17-tooth gear with 15 fit points per involute flank exercises all 34
 line/arc root corners in one call. The focused test checks the selected edges,
@@ -2891,7 +2903,11 @@ placed copy still has fillet roles.
 `apitest.TestLoftFilletAtALineMeetingACircleFragment` rounds the two corners where a curved-topped blade's straight sides meet a
 disc and checks the gain against the analytic corner area `r²(cot(a/2) − (π − a)/2)` per corner;
 `TestLoftFilletEveryCornerOfLobesOnADisc` rounds all 2N corners of N lobes on a disc, then bores and chamfers the result;
-`TestLoftFilletCircleFragmentRefusals` covers a radius that consumes a carrier and an edge that is not a corner; the
+`TestLoftFilletRollsPastAShortLine` rounds all 2N root corners of N lobes whose radial line is shorter than the setback,
+with a straight leaning flank, a curved flank and a larger radius. Each case checks the volume gain against the gap
+integrated from the flank's own fit interpolant, and checks the verified tessellation.
+`TestLoftFilletCircleFragmentRefusals` covers a radius that consumes a carrier, a flank that turns too far from the line
+it continues, and an edge that is not a corner; the
 `loftrecord` unit tests pin `circleFootParameter` and the corner class.
 An audit fixture moves a fit spline's control hull across a changed line and
 checks that the audit refuses the possible contact. The full embedded 30-tooth
