@@ -115,16 +115,27 @@ func (f tangentLoftFixture) cone(t *testing.T, doc *Document) *Body {
 	return body
 }
 
-func TestLoftFacesToConeTangentBuildsExactEnd(t *testing.T) {
+func TestLoftFacesConeTangentEndBuildsExactEnd(t *testing.T) {
 	f := newTangentLoftFixture(t)
 	cone := f.cone(t, f.doc)
 	limit, ok := revolveplan.PointConeSource(&cone.n)
 	require.True(t, ok)
 	require.Zero(t, limit.Slope.Cmp(big.NewRat(3, 4)))
 
-	body, err := LoftFacesToConeTangent(t.Context(), ConeTangentEnd{Cone: cone, Radial: r3.NewVec(0, 1, 0)},
-		f.toe, f.heel)
+	body, err := LoftFaces(t.Context(), []*Face{f.toe, f.heel},
+		WithConeTangentEnd(cone, r3.NewVec(0, 1, 0)))
 	require.NoError(t, err)
+
+	ops := f.doc.OperationHistory().Operations()
+	last := ops[len(ops)-1]
+	require.Equal(t, OperationLoftFaces, last.Kind())
+	require.Len(t, last.Inputs(), 3)
+	require.Equal(t, "section", last.Inputs()[0].Role)
+	require.Equal(t, "section", last.Inputs()[1].Role)
+	require.Equal(t, "tangent", last.Inputs()[2].Role)
+	require.Equal(t, cone, last.Inputs()[2].Body)
+	require.Equal(t, "loft_faces", OperationLoftFaces.String())
+	require.Equal(t, "thread", OperationThread.String())
 
 	record := body.n.Payload.(facetedPayload).LoftFacesCap
 	require.NotNil(t, record)
@@ -168,7 +179,7 @@ func TestLoftFacesToConeTangentBuildsExactEnd(t *testing.T) {
 
 	// The tangent plane is the source plane, so the volume matches the plain
 	// loft through the far slab's own end cap, within both proven bounds.
-	plain, err := LoftFaces(t.Context(), f.doc, f.toe, f.heel, f.farCapFace)
+	plain, err := LoftFaces(t.Context(), []*Face{f.toe, f.heel, f.farCapFace})
 	require.NoError(t, err)
 	tv, err := body.Volume()
 	require.NoError(t, err)
@@ -179,14 +190,15 @@ func TestLoftFacesToConeTangentBuildsExactEnd(t *testing.T) {
 	require.LessOrEqual(t, math.Abs(tv.Value.Base()-pv.Value.Base()), tv.Bound.Base()+pv.Bound.Base())
 }
 
-func TestLoftFacesToConeTangentRefuses(t *testing.T) {
+func TestLoftFacesConeTangentEndRefuses(t *testing.T) {
 	f := newTangentLoftFixture(t)
 	cone := f.cone(t, f.doc)
-	good := ConeTangentEnd{Cone: cone, Radial: r3.NewVec(0, 1, 0)}
+	radial := r3.NewVec(0, 1, 0)
+	good := WithConeTangentEnd(cone, radial)
 	faces := []*Face{f.toe, f.heel}
 
 	t.Run("not a cone", func(t *testing.T) {
-		_, err := LoftFacesToConeTangent(t.Context(), ConeTangentEnd{Cone: f.near, Radial: good.Radial}, faces...)
+		_, err := LoftFaces(t.Context(), faces, WithConeTangentEnd(f.near, radial))
 		require.ErrorIs(t, err, ErrUnsupported)
 	})
 	t.Run("placed cone", func(t *testing.T) {
@@ -195,69 +207,79 @@ func TestLoftFacesToConeTangentRefuses(t *testing.T) {
 		other := f.cone(t, f.doc)
 		placed, err := Transform(t.Context(), other, move)
 		require.NoError(t, err)
-		_, err = LoftFacesToConeTangent(t.Context(), ConeTangentEnd{Cone: placed, Radial: good.Radial}, faces...)
+		_, err = LoftFaces(t.Context(), faces, WithConeTangentEnd(placed, radial))
 		require.ErrorIs(t, err, ErrUnsupported)
-		_, err = LoftFacesToConeTangent(t.Context(), ConeTangentEnd{Cone: other, Radial: good.Radial}, faces...)
+		_, err = LoftFaces(t.Context(), faces, WithConeTangentEnd(other, radial))
 		require.ErrorIs(t, err, ErrRetiredBody, "the transformed original is retired")
 	})
 	t.Run("radial", func(t *testing.T) {
-		for name, radial := range map[string]r3.Vec{
+		for name, bad := range map[string]r3.Vec{
 			"x nonzero": r3.NewVec(1e-9, 1, 0), "zero": {}, "nan": r3.NewVec(0, math.NaN(), 0),
 			"infinite": r3.NewVec(0, math.Inf(1), 0),
 		} {
-			_, err := LoftFacesToConeTangent(t.Context(), ConeTangentEnd{Cone: cone, Radial: radial}, faces...)
+			_, err := LoftFaces(t.Context(), faces, WithConeTangentEnd(cone, bad))
 			require.ErrorIs(t, err, ErrDegenerate, name)
 		}
 	})
 	t.Run("other document", func(t *testing.T) {
 		foreign := f.cone(t, New())
-		_, err := LoftFacesToConeTangent(t.Context(), ConeTangentEnd{Cone: foreign, Radial: good.Radial}, faces...)
+		_, err := LoftFaces(t.Context(), faces, WithConeTangentEnd(foreign, radial))
 		require.ErrorIs(t, err, ErrForeignBody)
 	})
 	t.Run("section count", func(t *testing.T) {
-		_, err := LoftFacesToConeTangent(t.Context(), good)
+		_, err := LoftFaces(t.Context(), nil, good)
 		require.ErrorIs(t, err, ErrDegenerate)
 		many := make([]*Face, maxLoftFacesSections)
 		for i := range many {
 			many[i] = f.heel
 		}
-		_, err = LoftFacesToConeTangent(t.Context(), good, many...)
+		_, err = LoftFaces(t.Context(), many, good)
 		require.ErrorIs(t, err, ErrDegenerate)
-		_, err = LoftFacesToConeTangent(t.Context(), good, f.toe, nil)
+		_, err = LoftFaces(t.Context(), []*Face{f.toe, nil}, good)
 		require.ErrorIs(t, err, ErrDegenerate)
 	})
 	t.Run("nil", func(t *testing.T) {
-		_, err := LoftFacesToConeTangent(nil, good, faces...) //nolint:staticcheck // a nil context is the case under test.
+		_, err := LoftFaces(nil, faces, good) //nolint:staticcheck // a nil context is the case under test.
 		require.ErrorIs(t, err, ErrDegenerate)
-		_, err = LoftFacesToConeTangent(t.Context(), ConeTangentEnd{Radial: good.Radial}, faces...)
+		_, err = LoftFaces(t.Context(), faces, WithConeTangentEnd(nil, radial))
 		require.ErrorIs(t, err, ErrDegenerate)
 	})
 	t.Run("cone without a document", func(t *testing.T) {
-		_, err := LoftFacesToConeTangent(t.Context(), ConeTangentEnd{Cone: bornBody(&Body{}), Radial: good.Radial}, faces...)
+		_, err := LoftFaces(t.Context(), faces, WithConeTangentEnd(bornBody(&Body{}), radial))
 		require.ErrorIs(t, err, ErrDegenerate)
 	})
 	t.Run("stale source", func(t *testing.T) {
 		stale := newTangentLoftFixture(t)
 		stale.s.CreatePoint(1, 1)
-		_, err := LoftFacesToConeTangent(t.Context(),
-			ConeTangentEnd{Cone: stale.cone(t, stale.doc), Radial: good.Radial}, stale.toe, stale.heel)
+		_, err := LoftFaces(t.Context(), []*Face{stale.toe, stale.heel},
+			WithConeTangentEnd(stale.cone(t, stale.doc), radial))
 		require.ErrorIs(t, err, ErrStaleProfile)
+	})
+	t.Run("options", func(t *testing.T) {
+		_, err := LoftFaces(t.Context(), faces, nil)
+		require.ErrorIs(t, err, ErrDegenerate)
+		_, err = LoftFaces(t.Context(), faces, good, good)
+		require.ErrorIs(t, err, ErrDegenerate)
+		_, err = LoftFaces(t.Context(), faces, loftFacesOption{})
+		require.ErrorIs(t, err, ErrDegenerate)
+		_, err = LoftFaces(t.Context(), []*Face{nil, f.heel}, good)
+		require.ErrorIs(t, err, ErrDegenerate)
 	})
 	require.Len(t, f.doc.Bodies(), 5, "refusals leave the document unchanged")
 }
 
-func TestLoftFacesToConeTangentRefusalKeepsProvenance(t *testing.T) {
+func TestLoftFacesConeTangentEndRefusalKeepsProvenance(t *testing.T) {
 	f := newTangentLoftFixture(t)
 	cone := f.cone(t, f.doc)
 	next := f.doc.nextProducerID()
-	_, err := LoftFacesToConeTangent(t.Context(),
-		ConeTangentEnd{Cone: cone, Radial: r3.NewVec(1e-9, 1, 0)}, f.toe, f.heel)
+	_, err := LoftFaces(t.Context(), []*Face{f.toe, f.heel},
+		WithConeTangentEnd(cone, r3.NewVec(1e-9, 1, 0)))
 	require.ErrorIs(t, err, ErrDegenerate)
-	_, err = LoftFacesToConeTangent(t.Context(),
-		ConeTangentEnd{Cone: f.near, Radial: r3.NewVec(0, 1, 0)}, f.toe, f.heel)
+	_, err = LoftFaces(t.Context(), []*Face{f.toe, f.heel},
+		WithConeTangentEnd(f.near, r3.NewVec(0, 1, 0)))
 	require.ErrorIs(t, err, ErrUnsupported)
 	require.Equal(t, next, f.doc.nextProducerID(), "refused calls consume no provenance number")
-	out, err := LoftFacesToConeTangent(t.Context(), ConeTangentEnd{Cone: cone, Radial: r3.NewVec(0, 1, 0)}, f.toe, f.heel)
+	out, err := LoftFaces(t.Context(), []*Face{f.toe, f.heel}, WithConeTangentEnd(cone, r3.NewVec(0, 1, 0)))
 	require.NoError(t, err)
 	require.NotNil(t, out)
 	require.Equal(t, next+1, f.doc.nextProducerID(), "the produced feature takes the unconsumed number")
@@ -278,12 +300,12 @@ func (c *countdownContext) Err() error {
 	return nil
 }
 
-func TestLoftFacesToConeTangentCancelledDuringEvaluation(t *testing.T) {
+func TestLoftFacesConeTangentEndCancelledDuringEvaluation(t *testing.T) {
 	radial := r3.NewVec(0, 1, 0)
 	// Count how many Err checks a successful evaluation makes, on a twin document.
 	g := newTangentLoftFixture(t)
 	counter := &countdownContext{Context: t.Context(), left: 1 << 30}
-	_, err := LoftFacesToConeTangent(counter, ConeTangentEnd{Cone: g.cone(t, g.doc), Radial: radial}, g.toe, g.heel)
+	_, err := LoftFaces(counter, []*Face{g.toe, g.heel}, WithConeTangentEnd(g.cone(t, g.doc), radial))
 	require.NoError(t, err)
 	checks := (1 << 30) - counter.left
 	require.Greater(t, checks, 2, "evaluation polls the context after entry")
@@ -298,9 +320,9 @@ func TestLoftFacesToConeTangentCancelledDuringEvaluation(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			f := newTangentLoftFixture(t)
-			end := ConeTangentEnd{Cone: f.cone(t, f.doc), Radial: radial}
+			end := WithConeTangentEnd(f.cone(t, f.doc), radial)
 			before, next := len(f.doc.Bodies()), f.doc.nextProducerID()
-			_, err := LoftFacesToConeTangent(&countdownContext{Context: t.Context(), left: left}, end, f.toe, f.heel)
+			_, err := LoftFaces(&countdownContext{Context: t.Context(), left: left}, []*Face{f.toe, f.heel}, end)
 			require.ErrorIs(t, err, context.Canceled)
 			require.Len(t, f.doc.Bodies(), before)
 			require.Equal(t, next, f.doc.nextProducerID())
@@ -308,13 +330,13 @@ func TestLoftFacesToConeTangentCancelledDuringEvaluation(t *testing.T) {
 	}
 }
 
-func TestLoftFacesToConeTangentCancelled(t *testing.T) {
+func TestLoftFacesConeTangentEndCancelled(t *testing.T) {
 	f := newTangentLoftFixture(t)
 	cone := f.cone(t, f.doc)
 	before := len(f.doc.Bodies())
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
-	_, err := LoftFacesToConeTangent(ctx, ConeTangentEnd{Cone: cone, Radial: r3.NewVec(0, 1, 0)}, f.toe, f.heel)
+	_, err := LoftFaces(ctx, []*Face{f.toe, f.heel}, WithConeTangentEnd(cone, r3.NewVec(0, 1, 0)))
 	require.ErrorIs(t, err, context.Canceled)
 	require.Len(t, f.doc.Bodies(), before)
 }
@@ -361,8 +383,8 @@ func buildTangentTrimChain(t *testing.T) tangentTrimChain {
 	c.heelTool = f.cone(t, f.doc)
 	c.toeTool = f.coneAt(t, -4, 8.625, 7.5)
 	var err error
-	c.loft, err = LoftFacesToConeTangent(t.Context(), ConeTangentEnd{Cone: c.heelTool, Radial: r3.NewVec(0, tangentCos, tangentSin)},
-		f.toe, f.heel)
+	c.loft, err = LoftFaces(t.Context(), []*Face{f.toe, f.heel},
+		WithConeTangentEnd(c.heelTool, r3.NewVec(0, tangentCos, tangentSin)))
 	require.NoError(t, err)
 	c.loftRecord = c.loft.n.Payload.(facetedPayload).LoftFacesCap
 	c.cut, err = Cut(t.Context(), c.loft, c.toeTool)

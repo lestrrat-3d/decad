@@ -50,7 +50,7 @@
 2	0.03	TestLoftContactPartitionRealVaryingCapJunctions
 2	1.67	TestLoftCylinderCommonPlacementLargeRepeatedShift
 2	0.00	TestLoftFaceRatHelpersAcceptNonReducedOperandsByValue
-2	0.02	TestLoftFacesToConeTangentRefusesGeneralAxis
+2	0.02	TestLoftFacesConeTangentEndRefusesGeneralAxis
 2	0.28	TestLoftFitSplineSourceCapsRealWedge
 2	12.45	TestLoftMirrorCylinderPairsParallelMatchesSerial
 2	2.38	TestLoftMirrorCylinderPlaceTeethCancelled
@@ -75,8 +75,8 @@
 3	0.00	TestLayoutPartGuardsRefuse
 3	0.09	TestLoftContactOutputBoundaryMiddleRegionContact
 3	0.00	TestLoftFacesCapRecordChecksVariableSourceShape
-3	0.03	TestLoftFacesToConeTangentCancelled
-3	0.06	TestLoftFacesToConeTangentRefuses
+3	0.03	TestLoftFacesConeTangentEndCancelled
+3	0.06	TestLoftFacesConeTangentEndRefuses
 3	6.87	TestLoftMirrorCylinderPlaceTeethMatchesSerialPlacement
 3	0.01	TestParseCLAUDEMDAcceptsTheShapesTheFormatMakesSafe
 3	0.25	TestPlacedLoftBoreChargesPlacement
@@ -162,7 +162,7 @@
 6	2.17	TestGeneralPlanInputReadsRadiusAndFrameAboutAxis
 6	1.39	TestImplicitMarginAboutAxisScalesCost
 6	0.00	TestLoftCircleSourceSpanRefusesInvalidRecord
-6	0.77	TestLoftFacesToConeTangentCancelledDuringEvaluation
+6	0.77	TestLoftFacesConeTangentEndCancelledDuringEvaluation
 6	0.10	TestLoftVolumeComposeKeepsBoundaryOperationBudget
 6	0.01	TestLoftVolumeSourceRefusesRealTriangleFractionalSeam
 6	0.00	TestMirrorFaceStatedAxialDelta
@@ -246,7 +246,7 @@
 9	1.87	TestLoftContactDirectShellUnionVaryingRectangleBothOrders
 9	0.00	TestLoftContactSeamReadsVaryingRecordedLines
 9	1.31	TestLoftFacesTangentHeelRefusesOtherCone
-9	0.09	TestLoftFacesToConeTangentRefusalKeepsProvenance
+9	0.09	TestLoftFacesConeTangentEndRefusalKeepsProvenance
 9	0.24	TestLoftThroughBoreCutGates
 9	0.00	TestOperationErrorCopiesOptionalDetailsAndUnwrapsOriginal
 9	0.01	TestParseLayoutRowsRefusesTextItWouldNotReach
@@ -273,7 +273,7 @@
 10	5.91	TestLoftCylinderCommonPlacementNativeYZConsumers
 10	0.00	TestLoftCylinderCommonPlacementRejectsOrdinaryQuarterTurn
 10	2.22	TestLoftFacesTangentHeelIntersectKeepsTrimRecord
-10	0.11	TestLoftFacesToConeTangentBuildsExactEnd
+10	0.11	TestLoftFacesConeTangentEndBuildsExactEnd
 10	0.22	TestLoftQuarterOriginalHeldY1RealProducer
 10	1.45	TestLoftVolumeComposeRealVaryingTabBothOrders
 10	0.00	TestOperationErrorPreservesKnownFailureAndSkipsTypedErrors
