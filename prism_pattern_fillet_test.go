@@ -1,6 +1,7 @@
 package decad
 
 import (
+	"fmt"
 	"math"
 	"testing"
 
@@ -127,6 +128,147 @@ func prismPatternNarrowTabBodies(t *testing.T) (*Document, *Body, *Body, *Body) 
 	return doc, blank, section, rotated
 }
 
+// A gear-like tooth whose radial root line is shorter than 2r: the complete
+// fillet circle reaches past the line's far end and into the flank, but each
+// changed corner stays inside its line foot's radius. Every root corner of
+// the copied pattern rounds, and the volume gain is the analytic corner area.
+func TestPrismPatternFilletPastShortRadialLine(t *testing.T) {
+	type gear struct {
+		teeth                 int
+		root, base, tip, half float64
+		radius, inset         float64
+	}
+	// A module-1, 20° involute gear: the root, base and tip radii, the
+	// tooth's half angle at its root lines and a root fillet of 0.9 of half
+	// the root gap. The root arc lies inset inside the blank.
+	involute := func(teeth int, inset float64) gear {
+		n := float64(teeth)
+		pressure := 20 * math.Pi / 180
+		inv := math.Tan(pressure) - pressure
+		root := (n - 2.5) / 2
+		return gear{teeth: teeth, root: root, base: n / 2 * math.Cos(pressure), tip: (n + 2) / 2,
+			half: math.Pi/(2*n) + inv, radius: 0.9 * root * (math.Pi/n - 2*inv) / 2, inset: inset}
+	}
+	// The copied-prism route needs every PatternCopies placement to be an
+	// exact axial rotation, which these tooth counts give. At 22 teeth the
+	// line foot lands 0.1 mm short of the line's far end.
+	for _, tc := range []gear{involute(12, 1e-9), involute(17, 1e-9), involute(22, 1e-9)} {
+		t.Run(fmt.Sprintf("%d teeth", tc.teeth), func(t *testing.T) {
+			// The fillet circle overruns the radial line, yet its line foot
+			// (for a radial line, at sqrt((R+r)²-r²)) lands on it.
+			foot := math.Sqrt((tc.root+tc.radius)*(tc.root+tc.radius) - tc.radius*tc.radius)
+			require.Greater(t, tc.root+2*tc.radius, tc.base)
+			require.Less(t, foot, tc.base)
+
+			doc, blank, tooth := prismPatternGearToothBodies(t, tc.teeth, tc.root, tc.base, tc.tip,
+				tc.half, tc.inset)
+			copies, err := PatternCopies(t.Context(), tooth, CircularPattern{Axis: r3.Vec{Z: 1}, Count: tc.teeth})
+			require.NoError(t, err)
+			joined, err := Union(t.Context(), blank, append([]*Body{tooth}, copies...)...)
+			require.NoError(t, err)
+			require.NotNil(t, joined.n.Payload.(facetedPayload).PrismPatternJoin, "the copied-prism route joins")
+			before, err := joined.Volume()
+			require.NoError(t, err)
+
+			rootRadius := tc.root - tc.inset
+			axial, err := Edges(ParallelTo(r3.Vec{Z: 1})).SelectEdges(joined)
+			require.NoError(t, err)
+			var selection *EdgeQuery
+			roots := 0
+			for _, edge := range axial {
+				p := edge.Start().Position().Value
+				if math.Abs(math.Hypot(p.X, p.Y)-rootRadius) > tc.inset/10 {
+					continue
+				}
+				roots++
+				if selection == nil {
+					selection = Edges(ParallelTo(r3.Vec{Z: 1}), EndpointAt(p))
+					continue
+				}
+				selection.Or(ParallelTo(r3.Vec{Z: 1}), EndpointAt(p))
+			}
+			require.Equal(t, 2*tc.teeth, roots)
+
+			rounded, err := Fillet(t.Context(), joined, selection.Exactly(roots), units.Millimeters(tc.radius))
+			require.NoError(t, err)
+			require.Len(t, doc.Bodies(), 1)
+			require.True(t, rounded.IsSolid())
+			mesh, err := rounded.Tessellate(t.Context(), units.Millimeters(0.1), WithVerification(VerifyAll))
+			require.NoError(t, err)
+			require.True(t, mesh.BoundaryVerified())
+			require.True(t, mesh.VolumeVerified())
+			require.Less(t, mesh.Bound().Base(), 0.1)
+
+			// A radial line meeting the circle of radius R at a right angle:
+			// triangle (axis, line foot, fillet center) less the fillet's
+			// sector at its center and the blank's sector to the circle foot.
+			R, r := tc.root, tc.radius
+			corner := r*foot/2 - r*r*math.Acos(r/(R+r))/2 - R*R*math.Atan2(r, foot)/2
+			after, err := rounded.Volume()
+			require.NoError(t, err)
+			gain := after.Value.Base() - before.Value.Base()
+			want := float64(2*tc.teeth) * corner * 2
+			require.InDelta(t, want, gain, 0.02*want)
+		})
+	}
+}
+
+// prismPatternGearToothBodies draws one tooth of teeth with radial root lines
+// from inset inside the root circle to the base circle, fitted involute
+// flanks, and a tip arc, and a blank on the root circle.
+func prismPatternGearToothBodies(t *testing.T, teeth int, root, base, tip, half, inset float64) (*Document, *Body, *Body) {
+	t.Helper()
+	require.Less(t, half, math.Pi/float64(teeth))
+	world := sketch.NewWorld()
+	s, err := world.CreateSketch(world.XY())
+	require.NoError(t, err)
+	center := s.CreatePoint(0, 0)
+	s.Fix(center)
+	point := func(radius, angle float64) *sketch.Point {
+		p := s.CreatePoint(radius*math.Cos(angle), radius*math.Sin(angle))
+		s.Fix(p)
+		return p
+	}
+	rootRight, rootLeft := point(root-inset, -half), point(root-inset, half)
+	const samples = 8
+	right := make([]*sketch.Point, samples)
+	left := make([]*sketch.Point, samples)
+	for i := range samples {
+		// Each flank is an involute of the base circle, leaving it at the
+		// root line's angle and leaning in to the tip.
+		radius := base + (tip-base)*float64(i)/(samples-1)
+		pressure := math.Acos(base / radius)
+		angle := half - (math.Tan(pressure) - pressure)
+		right[i], left[i] = point(radius, -angle), point(radius, angle)
+	}
+	s.CreateLine(rootRight, right[0])
+	_, err = s.CreateFitSpline(right...)
+	require.NoError(t, err)
+	s.CreateArc(center, right[samples-1], left[samples-1])
+	_, err = s.CreateFitSpline(left...)
+	require.NoError(t, err)
+	s.CreateLine(left[0], rootLeft)
+	s.CreateArc(center, rootRight, rootLeft)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	require.Len(t, s.Profiles(), 1)
+	require.Len(t, s.Profiles()[0].Outer, 6)
+	doc := New()
+	tooth, err := Extrude(t.Context(), doc, s, s.Profiles()[0], Distance{D: units.Millimeters(2), Dir: Along})
+	require.NoError(t, err)
+	blankSketch, err := world.CreateSketch(world.XY())
+	require.NoError(t, err)
+	c := blankSketch.CreatePoint(0, 0)
+	blankSketch.Fix(c)
+	blankSketch.CreateCircle(c, root)
+	_, err = blankSketch.Solve(t.Context())
+	require.NoError(t, err)
+	blank, err := Extrude(t.Context(), doc, blankSketch, blankSketch.Profiles()[0],
+		Distance{D: units.Millimeters(2), Dir: Along})
+	require.NoError(t, err)
+	return doc, blank, tooth
+}
+
 func TestPrismPatternFilletRefusesUnprovedCornerAndLargeRadius(t *testing.T) {
 	doc, blank, section, rotated := prismPatternTabBodies(t, math.Nextafter(3, math.Inf(1)))
 	joined, err := Union(t.Context(), blank, section, rotated)
@@ -146,8 +288,11 @@ func TestPrismPatternFilletRefusesUnprovedCornerAndLargeRadius(t *testing.T) {
 		EndpointAt(exterior.Start().Position().Value)), units.Millimeters(0.05))
 	require.ErrorIs(t, err, ErrUnsupported)
 	require.Len(t, doc.Bodies(), 1)
-	_, err = Fillet(t.Context(), joined, prismPatternRootSelection(t, joined), units.Millimeters(0.2))
+	// The tab's radial root lines run from 3 to 3.35. At r = 0.4 the line
+	// foot, sqrt(9+6r) = 3.38 from the axis, lies past the line's far end.
+	_, err = Fillet(t.Context(), joined, prismPatternRootSelection(t, joined), units.Millimeters(0.4))
 	require.ErrorIs(t, err, ErrUnsupported)
+	require.ErrorContains(t, err, "contact escapes its connector")
 	require.Len(t, doc.Bodies(), 1)
 }
 
