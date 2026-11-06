@@ -3213,11 +3213,14 @@ the payload's held triangles, both cap faces must be whole, and the selection mu
 - A bevel band joins each inset loop to its clipped ring, and the inset loop is triangulated as the new cap, around
   the bore rim when there is one. The bore wall and both rims are kept whole, so the bore stays sharp.
 
-The audits prove that the clipped rings and inset loops are simple and nested, that each inset loop strictly encloses
-its bore rim, that every band triangle lies at its two
+The audits prove that the clipped rings and inset loops are simple, that each inset loop lies inside its held cap
+outline and strictly encloses its bore rim, that every band triangle lies at its two
 levels and meets the old walls only along its side ring, that the band lies inside `H`, that the shell is outward,
 manifold and free of crossings, the bore wall included, and that each new cap tiles its inset loop or the annulus
-between it and the bore rim. Thus `C ⊂ H`, and `C = H∩C`.
+between it and the bore rim. Every boundary piece of `C` then lies in `H`: the kept walls are pieces of old walls, the
+new caps lie inside the old caps, and the band is inside. The complement of `H` is connected, so `C ⊂ H`, and
+`C = H∩C`. The side ring need not enclose the inset loop in projection: a twisted wall leans, and at depth `d` its ring
+can turn past the inset, as on a gear loft with a short height for its twist.
 
 The result denotes `C`, the held solid cut by the bands, as §18's chamfer denotes its held polygon band. For the true
 Loft `S`, `(S∩C) △ C` lies inside `S △ H`, so the occupied-volume bound is the Loft's own plus the rounding of the
@@ -3236,3 +3239,17 @@ setback that drops the tooth tips refuses. `TestLoftCapChamferKeepsTheBore` cham
 removed held volume is `d/2` times the cap area lost within 3%, one `Cylinder` of the bore's radius remains, and every
 mesh vertex near the axis lies on the bore. Each case checks the verified tessellation, the genus of its shell and the
 cap and band levels.
+
+### 19.1 Mirrored Loft join
+
+The same chamfer accepts an unplaced, hole-free Loft joined to its mirror image across its end section
+(`agent-docs/loft-boolean-design.md`, Mirror Boolean), the construction of a herringbone gear: both complete outer cap
+loops of the join, one equal setback (`loftcylinder.MirrorLoftCapChamfer`). The join's held shell has three rings: the
+lower Loft's start ring on the bottom cap, the shared middle ring, and the reflected start ring on the top cap. Each
+half's two-triangle cells run from its outer ring to the middle ring. `loftcylinder.ChamferMirrorLoftCaps` clips each
+half's strip once, at the exact level `d` inside its outer cap, and keeps every piece between that level and the middle
+ring, so the middle ring and the walls around it are exact subsets of the old walls. The insets, bands, caps, audits,
+denotation and bounds are those above, with `H` the join's held shell and `S` its true union.
+`apitest.TestLoftMirrorJoinCapChamfer` chamfers rounded twisted gear joins of half height 1.5 and 0.5: the removed held
+volume is `d/2` times the cap area lost within 3%, every mesh vertex lies on a cap, band or middle level, and the
+tessellation is verified. At half height 0.5 the side ring turns past the inset loop in projection.

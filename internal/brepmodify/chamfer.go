@@ -150,6 +150,10 @@ func Chamfer(ctx context.Context, env topo.Env, b *topo.Body, call ChamferCall) 
 		if recognized || err != nil {
 			return Result{Body: node}, err
 		}
+		node, recognized, err = loftcylinder.MirrorLoftCapChamfer(ctx, env, b, fp, edges, dmm, dDelta, asym != nil)
+		if recognized || err != nil {
+			return Result{Body: node}, err
+		}
 		node, recognized, err = loftcylinder.MirrorCapChamfer(ctx, env, b, fp, edges, dmm, dDelta, asym != nil)
 		if recognized || err != nil {
 			return Result{Body: node}, err
