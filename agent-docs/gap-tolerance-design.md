@@ -204,8 +204,8 @@ runs the Boolean again with the second operand moved:
    up: the second operand then lies strictly inside the first, so the union is the first operand's own faces and
    leaves no sliver for the next Boolean of a chain to meet, where a translation protrudes by the shift at one end. A
    held curved operand needs the shrink to pass its own chord bound, so the steps climb to it. When no shrink stands,
-   the translations of items 1 to 4 run as before. Where this is the first step of a chain (`PatternJoin` of round pins
-   into a mesh plate), the result keeps the plate's six faces and the volume of the plate.
+   the translations of items 1 to 4 run as before. Where this is the first step of a chain (`Union` of a mesh plate, a round pin and its
+   `PatternCopies`), the result keeps the plate's six faces and the volume of the plate.
 7. A mesh Boolean whose own stitched result the embedding repair leaves folded (§5.1, `meshbool.HeldFoldError`) is
    run again with every piece of the second operand grown about its centre (`growFolded`): outward for a Union and a
    Cut, inward for an Intersect, by the steps of item 3 times the reach, smallest first. Such a fold comes from the

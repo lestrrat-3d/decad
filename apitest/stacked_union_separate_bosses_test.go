@@ -62,11 +62,14 @@ func unionOf(bosses ...separateBoss) func(t *testing.T, doc *decad.Document) *de
 func separateBossesCases() []separateBossesCase {
 	three := []separateBoss{onTop(20), onTop(50), onTop(80)}
 	return []separateBossesCase{
-		{name: "PatternJoin of three", bosses: three, join: func(t *testing.T, doc *decad.Document) *decad.Body {
+		{name: "PatternCopies and Union of three", bosses: three, join: func(t *testing.T, doc *decad.Document) *decad.Body {
 			t.Helper()
 			plate := boxBody(t, doc, 0, 0, 100, 60, 10)
-			joined, err := decad.PatternJoin(t.Context(), plate, onTop(20).prism(t, doc),
+			boss := onTop(20).prism(t, doc)
+			copies, err := decad.PatternCopies(t.Context(), boss,
 				decad.LinearPattern{Dir: r3.NewVec(1, 0, 0), Step: units.Millimeters(30), Count: 3})
+			require.NoError(t, err)
+			joined, err := decad.Union(t.Context(), plate, append([]*decad.Body{boss}, copies...)...)
 			require.NoError(t, err)
 			return joined
 		}},
@@ -168,7 +171,7 @@ func requireBossesVolume(t *testing.T, b *decad.Body, n int, extra *big.Float) {
 }
 
 // TestStackedUnionSeparateBossesFillet fillets every root and rim of the
-// three bosses a PatternJoin stood on the plate, radius 1. A radius-r fillet
+// three bosses a linear pattern stood on the plate, radius 1. A radius-r fillet
 // of a circular edge of radius R adds or removes the ring swept by the corner
 // region of area A = (1 − π/4)·r², whose centroid lies
 // d = r·(10 − 3π)/(3·(4 − π)) from the edge towards the corner. The root adds

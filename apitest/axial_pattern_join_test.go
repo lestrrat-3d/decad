@@ -2,6 +2,7 @@ package apitest_test
 
 import (
 	"math"
+	"slices"
 	"strconv"
 	"testing"
 
@@ -75,55 +76,35 @@ func TestPatternedLobesAboutATiltedAxisAreRefused(t *testing.T) {
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 }
 
-// TestPatternJoinMatchesPatternCopiesThenUnion pins the one-call form to the two-call
-// form on the same lobes, and its document effect: target and feature retire and no
-// instance is registered.
-func TestPatternJoinMatchesPatternCopiesThenUnion(t *testing.T) {
-	t.Parallel()
-	const r, height, n = 3.0, 2.0, 8
-	doc := decad.New()
-	disc := circleBodyAtZ(t, doc, 0, r, 0, height)
-	lobe := lobeLoft(t, doc, r, 0, 0.4*math.Pi/n, height)
-	spec := decad.CircularPattern{Axis: r3.NewVec(0, 0, 1), Count: n}
-	joined, err := decad.PatternJoin(t.Context(), disc, lobe, spec)
-	require.NoError(t, err)
-	require.True(t, joined.IsSolid())
-	require.Equal(t, []*decad.Body{joined}, doc.Bodies())
-
-	want, err := joinedByPattern(t, r, height, n, r3.NewVec(0, 0, 1))
-	require.NoError(t, err)
-	wv, err := want.Volume()
-	require.NoError(t, err)
-	gv, err := joined.Volume()
-	require.NoError(t, err)
-	require.InDelta(t, wv.Value.Base(), gv.Value.Base(), wv.Bound.Base()+gv.Bound.Base())
-}
-
-func TestPatternJoinRefusalLeavesTheDocumentUnchanged(t *testing.T) {
+func TestPatternUnionRefusalLeavesEveryOperandLive(t *testing.T) {
 	t.Parallel()
 	const r, height, n = 3.0, 2.0, 8
 	doc := decad.New()
 	disc := circleBodyAtZ(t, doc, 0, r, 0, height)
 	lobe := lobeLoft(t, doc, r, 0, 0.4*math.Pi/n, height)
 	before := doc.Bodies()
-	_, err := decad.PatternJoin(t.Context(), disc, lobe,
-		decad.CircularPattern{Axis: r3.NewVec(0.05, 0, 1), Count: n})
+	copies, err := decad.PatternCopies(t.Context(), lobe, decad.CircularPattern{Axis: r3.NewVec(0.05, 0, 1), Count: n})
+	require.NoError(t, err)
+	_, err = decad.Union(t.Context(), disc, append([]*decad.Body{lobe}, copies...)...)
 	require.ErrorIs(t, err, decad.ErrUnsupported)
-	require.Equal(t, before, doc.Bodies())
+	require.True(t, slices.Equal(append(slices.Clone(before), copies...), doc.Bodies()),
+		"a refused Union leaves the target, the feature and every copy live")
+	for _, c := range copies {
+		require.NoError(t, decad.Remove(c))
+	}
+	require.True(t, slices.Equal(before, doc.Bodies()))
 
-	_, err = decad.PatternJoin(t.Context(), lobe, lobe, decad.CircularPattern{Axis: r3.NewVec(0, 0, 1), Count: n})
+	_, err = decad.Union(t.Context(), lobe, lobe, disc)
 	require.ErrorIs(t, err, decad.ErrDegenerate)
-	_, err = decad.PatternJoin(t.Context(), nil, lobe, decad.CircularPattern{Axis: r3.NewVec(0, 0, 1), Count: n})
+	_, err = decad.PatternCopies(t.Context(), lobe, decad.CircularPattern{Axis: r3.NewVec(0, 0, 1), Count: 1})
 	require.ErrorIs(t, err, decad.ErrDegenerate)
-	_, err = decad.PatternJoin(t.Context(), disc, lobe, decad.CircularPattern{Axis: r3.NewVec(0, 0, 1), Count: 1})
-	require.ErrorIs(t, err, decad.ErrDegenerate)
-	require.Equal(t, before, doc.Bodies())
+	require.True(t, slices.Equal(before, doc.Bodies()))
 }
 
-// TestPatternJoinSlidesATongueAlongAPlate repeats a tongue with a fit-spline top along
+// TestPatternUnionSlidesATongueAlongAPlate repeats a tongue with a fit-spline top along
 // a plate, three times, each crossing the plate's top edge: the joined volume is the
 // plate and three tongues less three overlaps of 8 mm² of section.
-func TestPatternJoinSlidesATongueAlongAPlate(t *testing.T) {
+func TestPatternUnionSlidesATongueAlongAPlate(t *testing.T) {
 	t.Parallel()
 	const height = 5.0
 	doc := decad.New()
@@ -133,8 +114,10 @@ func TestPatternJoinSlidesATongueAlongAPlate(t *testing.T) {
 	require.NoError(t, err)
 	tv, err := tongue.Volume()
 	require.NoError(t, err)
-	joined, err := decad.PatternJoin(t.Context(), plate, tongue,
+	copies, err := decad.PatternCopies(t.Context(), tongue,
 		decad.LinearPattern{Dir: r3.NewVec(1, 0, 0), Step: units.Millimeters(6), Count: 3})
+	require.NoError(t, err)
+	joined, err := decad.Union(t.Context(), plate, append([]*decad.Body{tongue}, copies...)...)
 	require.NoError(t, err)
 	v, err := joined.Volume()
 	require.NoError(t, err)
@@ -158,9 +141,9 @@ func obliqueFrames(t *testing.T, height float64) (r3.Frame, r3.Frame) {
 	return f0, f1
 }
 
-// obliquePatternJoin builds a disc and one lobe on an oblique frame, patterns the lobe
+// obliquePatternUnion builds a disc and one lobe on an oblique frame, patterns the lobe
 // about the frame's normal through its origin and joins everything.
-func obliquePatternJoin(t *testing.T, r, height float64, n int) (*decad.Body, error) {
+func obliquePatternUnion(t *testing.T, r, height float64, n int) (*decad.Body, error) {
 	t.Helper()
 	f0, f1 := obliqueFrames(t, height)
 	w := sketch.NewWorld()
@@ -211,16 +194,18 @@ func obliquePatternJoin(t *testing.T, r, height float64, n int) (*decad.Body, er
 	s1, q1 := section(p1)
 	lobe, err := decad.Loft(t.Context(), doc, s0, q0, s1, q1)
 	require.NoError(t, err)
-	return decad.PatternJoin(t.Context(), disc, lobe,
+	copies, err := decad.PatternCopies(t.Context(), lobe,
 		decad.CircularPattern{Center: f0.Origin(), Axis: f0.N(), Count: n})
+	require.NoError(t, err)
+	return decad.Union(t.Context(), disc, append([]*decad.Body{lobe}, copies...)...)
 }
 
-// TestPatternJoinOnAnObliqueFrame joins patterned lobes on a frame no axis aligns with.
+// TestPatternUnionOnAnObliqueFrame joins patterned lobes on a frame no axis aligns with.
 // A rigid motion keeps volume, so the result matches the same part on the world frame.
-func TestPatternJoinOnAnObliqueFrame(t *testing.T) {
+func TestPatternUnionOnAnObliqueFrame(t *testing.T) {
 	t.Parallel()
 	const r, height, n = 3.0, 2.0, 8
-	joined, err := obliquePatternJoin(t, r, height, n)
+	joined, err := obliquePatternUnion(t, r, height, n)
 	require.NoError(t, err)
 	require.True(t, joined.IsSolid())
 	want, err := joinedByPattern(t, r, height, n, r3.NewVec(0, 0, 1))
@@ -236,9 +221,9 @@ func TestPatternJoinOnAnObliqueFrame(t *testing.T) {
 	require.True(t, mesh.VolumeVerified())
 }
 
-// TestPatternJoinManyCopies joins 64 and 128 patterned lobes to a disc and checks the volume
+// TestPatternUnionManyCopies joins 64 and 128 patterned lobes to a disc and checks the volume
 // against the disc and the lobes: the sum of the parts, within the bounds of all of them.
-func TestPatternJoinManyCopies(t *testing.T) {
+func TestPatternUnionManyCopies(t *testing.T) {
 	t.Parallel()
 	for _, n := range []int{64, 128} {
 		t.Run(strconv.Itoa(n)+" copies", func(t *testing.T) {
@@ -251,8 +236,10 @@ func TestPatternJoinManyCopies(t *testing.T) {
 			require.NoError(t, err)
 			lv, err := lobe.Volume()
 			require.NoError(t, err)
-			joined, err := decad.PatternJoin(t.Context(), disc, lobe,
+			copies, err := decad.PatternCopies(t.Context(), lobe,
 				decad.CircularPattern{Axis: r3.NewVec(0, 0, 1), Count: n})
+			require.NoError(t, err)
+			joined, err := decad.Union(t.Context(), disc, append([]*decad.Body{lobe}, copies...)...)
 			require.NoError(t, err)
 			require.True(t, joined.IsSolid())
 			v, err := joined.Volume()
@@ -302,34 +289,4 @@ func slimLobeLoft(t *testing.T, doc *decad.Document, r, half, height float64) *d
 	b, err := decad.Loft(t.Context(), doc, s0, p0, s1, p1)
 	require.NoError(t, err)
 	return b
-}
-
-// TestPatternJoinMatchesBuiltInstancesExactly pins the join's unbuilt-copy route to the
-// built-copy route: PatternJoin holds the copies as placed payloads, PatternCopies then
-// Union builds each as a body, and the two give the same volume and bound to the bit.
-func TestPatternJoinMatchesBuiltInstancesExactly(t *testing.T) {
-	t.Parallel()
-	const r, height, n = 3.0, 2.0, 8
-	one := func(join bool) *decad.Body {
-		doc := decad.New()
-		disc := circleBodyAtZ(t, doc, 0, r, 0, height)
-		lobe := lobeLoft(t, doc, r, 0, 0.4*math.Pi/n, height)
-		spec := decad.CircularPattern{Axis: r3.NewVec(0, 0, 1), Count: n}
-		if join {
-			b, err := decad.PatternJoin(t.Context(), disc, lobe, spec)
-			require.NoError(t, err)
-			return b
-		}
-		copies, err := decad.PatternCopies(t.Context(), lobe, spec)
-		require.NoError(t, err)
-		b, err := decad.Union(t.Context(), disc, append([]*decad.Body{lobe}, copies...)...)
-		require.NoError(t, err)
-		return b
-	}
-	a, err := one(true).Volume()
-	require.NoError(t, err)
-	b, err := one(false).Volume()
-	require.NoError(t, err)
-	require.Equal(t, b.Value.Base(), a.Value.Base())
-	require.Equal(t, b.Bound.Base(), a.Bound.Base())
 }

@@ -17,9 +17,8 @@ Navigation only; the linked sections own their contracts.
 Implementation delivers public diagnostic values, typed `BooleanError` and
 `SelectionError` accessors, mapped `OperationError` branches, and warnings for
 accepted Boolean shifts, raised chain allowances, tolerant Stitch merges, and
-accepted positive-reach repairs. Three-input Union chains, Patterned,
-PatternJoin, private tool composites, direct modify routes, tangent trim, and
-mirrored assembly paths aggregate accepted summaries. Eleven resource names
+accepted positive-reach repairs. Three-input Union chains, Patterned, private tool composites, direct modify routes,
+tangent trim, and mirrored assembly paths aggregate accepted summaries. Eleven resource names
 retain exact counts where their producers know them; overflowed counts,
 saturated estimates and opaque refusals remain unclassified. Arrangement-cap
 refusals retain their observed and maximum segment counts.

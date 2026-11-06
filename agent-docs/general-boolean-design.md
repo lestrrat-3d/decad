@@ -1764,8 +1764,8 @@ are relations, never literals.
   the plate's plane.
 - **A1 separate bosses**: a 100 × 60 × 10 plate with radius-6, 8 mm round
   bosses standing apart (`apitest/stacked_union_separate_bosses_test.go`):
-  `PatternJoin` of three at 30 mm, `Union` of two, three in either order or
-  with a boss first, four, one under the plate, and one overhanging the
+  `PatternCopies` and `Union` of three at 30 mm, `Union` of two, three in
+  either order or with a boss first, four, one under the plate, and one overhanging the
   edge each build a brep with no shift, volume within its bound of
   `60000 + n·288π`, one radius-6 wall about each boss's axis and `Sound`; a
   radius-1 fillet of the three bosses' six circles gives six tori and

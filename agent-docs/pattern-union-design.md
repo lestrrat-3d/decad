@@ -222,11 +222,11 @@ second one.
 - A set whose only loft is itself placed has no reference frame and is a miss.
 - Segments of kind line, arc, circle and fit spline are placed. Other kinds are a miss.
 - A tooth or lobe that only touches the base (a bottom arc resting on the circle with the flank ends on it) or misses it by
-  a micron is a miss: it makes no region `sketch` can certify as one union. `apitest.TestPatternJoinRefusesLobesThatOnlyTouchTheBase`
+  a micron is a miss: it makes no region `sketch` can certify as one union. `apitest.TestPatternUnionRefusesLobesThatOnlyTouchTheBase`
   pins both.
 - Copies whose free-form edges cross one another (two arched tops that overlap), or whose sides nearly coincide without
   sharing a whole edge, are a miss: `sketch` certifies a spline against a circle but not a spline against another spline
-  or an arc. `apitest.TestPatternJoinRefusesCopiesItCannotCertify` pins both refusals against the 4 mm step that joins.
+  or an arc. `apitest.TestPatternUnionRefusesCopiesItCannotCertify` pins both refusals against the 4 mm step that joins.
 - The route is `Union` only.
 
 ### 6. Tests
@@ -240,36 +240,26 @@ second one.
   alone (shown to fail by disabling it); a section of quarter-millimetre coordinates slid by whole millimetres is charged
   exactly zero, spline included (`TestPlaceChargesNothingWhenTheMapIsExact`), so the charge is nonzero only where a
   placement rounds.
-- `apitest.TestPatternJoinManyCopies` joins 64 and 128 lobes to a disc and checks the sum of the parts.
-- `apitest.TestPatternedLobesJoinADisc`: one lobe patterned 8, 12, 17 and 24 times and joined to a disc has the volume
+- `apitest.TestPatternUnionManyCopies` joins 64 and 128 lobes to a disc and checks the sum of the parts.
+- `apitest.TestPatternedLobesJoinADisc`: one lobe patterned 8 and 12 times and joined to a disc has the volume
   of the same lobes drawn at their angles within both bounds, with a larger bound, and a `VerifyAll` mesh whose boundary
   and volume are verified. `TestPatternedLobesAboutATiltedAxisAreRefused`: `ErrUnsupported`.
-  `TestPatternJoinOnAnObliqueFrame`: the same part on a frame no axis aligns with has the world-frame part's volume
+  `TestPatternUnionOnAnObliqueFrame`: the same part on a frame no axis aligns with has the world-frame part's volume
   within both bounds, with a verified boundary and volume.
 
-### 7. PatternJoin
+### 7. Joining a pattern to a base
 
-```go
-func PatternJoin(ctx context.Context, target, feature *Body, spec PatternSpec) (*Body, error)
-```
+`PatternCopies` followed by `Union(target, feature, copies...)` joins a feature and its pattern to a base. The
+join takes every route `Union` takes over those operands, including the two-at-a-time fold
+(`agent-docs/union-fold-design.md`), so every refusal of §5 and of `agent-docs/axial-section-boolean-design.md` §3
+is `Union`'s. A refused `Union` leaves `target`, `feature` and every copy live, and the caller removes the copies
+with `Remove`. The history holds the `OperationPatternCopies` entry and the `Union`'s own entries.
 
-`PatternJoin` repeats `feature` by `spec` and joins every instance, `feature` included, to `target` in one `Union`, and
-retires `target` and `feature`. It is `PatternCopies` followed by `Union(target, feature, copies...)` with the copies
-never registered: they are built under consecutive producer identities, handed to the many-operand Union route chain
-(`unionManyBodies`, which `Union` shares) and dropped. A refusal leaves the document unchanged and both bodies live.
+Each copy of a loft feature is built before the `Union` reads it. The axial-section route reads only each
+operand's payload, so the result is the same as for the same lobes drawn in place.
 
-When `feature` is a loft, the copies are first held as placed payloads (`loftrecord.Payload.WithPlacement`) and handed to
-the axial-section route alone (`axialsection.UnionManyPayloads`), which reads nothing of a body but its payload; no copy is
-built. When that route declines, the copies are built and the other routes run as for `Union`. Both give the same
-volume and bound to the bit (`apitest.TestPatternJoinMatchesBuiltInstancesExactly`).
-
-The gates are `PatternCopies`' for `feature` and `spec`, and `Union`'s for `target`: a nil, foreign or retired target is
-refused, `target` and `feature` must be distinct, and a sheet in either role is `ErrUnsupported`. The join takes the
-routes `Union` takes over the same operands, so every refusal of §5 and of `agent-docs/axial-section-boolean-design.md`
-§3 is returned unchanged.
-
-`Patterned` keeps its own rule (`agent-docs/mirror-pattern-design.md` §4.3, §6.1): it returns the instances of one body
-as one body, and refuses disjoint lumps. `PatternJoin` is the call for a feature that joins a base.
+`Patterned` keeps its own rule (`agent-docs/mirror-pattern-design.md` §4.3, §6.1): it returns the instances of
+one body as one body, takes no target, and refuses disjoint lumps.
 
 ### 8. Features whose flanks cross the base
 
@@ -279,6 +269,6 @@ its pair certificate, `sketch/docs/pair-certificate-design.md`). The union recor
 `CircleSeg` fragments. A union `sketch` leaves uncertified is a miss, as in axial-section-boolean §3. The joined body
 then takes a concave `Fillet` where each flank leaves the circle, a through-bore `Cut` and a cap `Chamfer`.
 
-Tests: `apitest.TestPatternJoinFlanksCrossTheBase` joins 8, 12 and 24 patterned lobes whose flanks cross the disc and
+Tests: `apitest.TestPatternUnionFlanksCrossTheBase` joins 8 and 12 patterned lobes whose flanks cross the disc and
 compares their volume with the same lobes drawn at their own angles.
-`TestPatternJoinFlanksCrossTheBaseThenFilletBoreChamfer` takes 12 of them through the fillet, bore and chamfer.
+`TestPatternUnionFlanksCrossTheBaseThenFilletBoreChamfer` takes 8 of them through the fillet, bore and chamfer.

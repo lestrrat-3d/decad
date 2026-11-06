@@ -324,7 +324,7 @@ func depthLobe(t testing.TB, r0, r1, half float64, m int) *BoolMesh {
 }
 
 // BenchmarkDepthBeyond runs the witness search's depth query as
-// DeepWitnessInside asks it in the PatternJoin lobe tests: the facet sample
+// DeepWitnessInside asks it in the pattern Union lobe tests: the facet sample
 // points of a lobe resting on a disc's wall, against a 900-sided disc of 3596
 // facets (the largest operand there holds 3668), with the hint carried from
 // point to point and b at the tests' commonest slack. "facetScan" is

@@ -11,8 +11,6 @@ func PathPatternCopies(ctx context.Context, b *Body, path *Path, count int, opts
 func PathPatternSpaced(ctx context.Context, b *Body, path *Path, spacing units.Value, opts ...PathPatternOption) ([]*Body, error)
 func WithPathFollow() PathPatternOption
 func WithPathPivot(pivot r3.Vec) PathPatternOption
-func PathPatternJoin(ctx context.Context, target, feature *Body, path *Path, count int, opts ...PathPatternOption) (*Body, error)
-func PathPatternJoinSpaced(ctx context.Context, target, feature *Body, path *Path, spacing units.Value, opts ...PathPatternOption) (*Body, error)
 ```
 
 | Decision | Rule |
@@ -76,12 +74,8 @@ point with the unit direction there, and `pathsample.Turn` gives the shortest ro
 
 ## 7. Joining the copies
 
-`PathPatternJoin` and `PathPatternJoinSpaced` are `PathPatternCopies` and `PathPatternSpaced` followed by one `Union`,
-as `PatternJoin` is for `LinearPattern` and `CircularPattern`.
-
 | Decision | Rule |
 |---|---|
-| J1 | The instances are the copies of `feature` as P1 to P6 and S1 to S5 say, `feature` itself being instance 0. The join is `Union(target, feature, copies...)`, so it takes the routes `Union` takes over those operands, and its result is `Union`'s. |
-| J2 | `target` is live, distinct from `feature` and not a sheet. A nil, retired or equal target is `ErrDegenerate`, as is a sheet, which `Union` refuses. `feature`, `path` and the count or spacing carry the gates of `PathPatternCopies` and `PathPatternSpaced`. |
-| J3 | A refused `Union` retires every copy, so the call leaves `target` and `feature` live and the document as it was. A success retires `target`, `feature` and every copy and returns the joined body. |
-| J4 | The history holds the copies' `OperationCopy` entries and the `Union`'s own entry. |
+| J1 | The join is `Union(target, feature, copies...)` over the result of `PathPatternCopies` or `PathPatternSpaced`, `feature` being instance 0. It takes the routes `Union` takes over those operands, and its result and refusals are `Union`'s. |
+| J2 | A refused `Union` leaves `target`, `feature` and every copy live. The caller removes the copies with `Remove`. |
+| J3 | The history holds the copies' `OperationCopy` entries and the `Union`'s own entries. |

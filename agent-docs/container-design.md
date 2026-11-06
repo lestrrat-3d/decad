@@ -42,7 +42,7 @@ Placement is decided where an operation commits, from its inputs, never from a g
 
 | Operation | Result lands in |
 |---|---|
-| `Union`, `Cut`, `Intersect`, `Combine`, `Hole`, `Fillet`, `Chamfer`, `Shell`, `Draft`, `Thicken`, `Offset`, `Transform`, `Mirrored`, `ScaledAt`, `Patterned`, `PatternJoin`, `PatchEdges`, `Stitch`, `Trim`, `Extend`, `Split`, `Unstitch` | the container of its first (target) body |
+| `Union`, `Cut`, `Intersect`, `Combine`, `Hole`, `Fillet`, `Chamfer`, `Shell`, `Draft`, `Thicken`, `Offset`, `Transform`, `Mirrored`, `ScaledAt`, `Patterned`, `PatchEdges`, `Stitch`, `Trim`, `Extend`, `Split`, `Unstitch` | the container of its first (target) body |
 | `Copy`, `MirroredCopy`, `PatternCopies` | the container of the source body; every copy lands there |
 | `Extrude`, `Revolve`, `Sweep`, `Coil`, `PatchProfile`, `Loft`, `LoftChain` | the container of its sketch (of the first sketch for a loft) |
 | `LoftSections`, `LoftFromPoint` | the container of the first section's sketch, or of the point loft's profile sketch |

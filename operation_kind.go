@@ -23,7 +23,6 @@ const (
 	OperationCopy
 	OperationPatternCopies
 	OperationPatterned
-	OperationPatternJoin
 	OperationFillet
 	OperationChamfer
 	OperationShell
@@ -82,7 +81,6 @@ var operationKindNames = [...]string{
 	"copy",
 	"pattern_copies",
 	"patterned",
-	"pattern_join",
 	"fillet",
 	"chamfer",
 	"shell",

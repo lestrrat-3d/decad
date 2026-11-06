@@ -39,12 +39,14 @@ func TestOrthogonalUnionOfSeveralBodiesTakesAnExtrudedPartner(t *testing.T) {
 	requireVolume(t, bar, 480)
 }
 
-func TestPatternJoinOfAMeshSolidIsExact(t *testing.T) {
+func TestPatternUnionOfAMeshSolidIsExact(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
 	base := blockIn(t, doc, r3.NewVec(0, 0, 0), r3.NewVec(100, 20, 4))
 	tooth := blockIn(t, doc, r3.NewVec(2, 2, 4), r3.NewVec(6, 18, 12))
-	comb, err := decad.PatternJoin(t.Context(), base, tooth, decad.LinearPattern{Dir: r3.NewVec(1, 0, 0), Step: units.Millimeters(10), Count: 9})
+	copies, err := decad.PatternCopies(t.Context(), tooth, decad.LinearPattern{Dir: r3.NewVec(1, 0, 0), Step: units.Millimeters(10), Count: 9})
+	require.NoError(t, err)
+	comb, err := decad.Union(t.Context(), base, append([]*decad.Body{tooth}, copies...)...)
 	require.NoError(t, err)
 	requireVolume(t, comb, 100*20*4+9*4*16*8)
 	inside, err := comb.LocatePoint(t.Context(), r3.NewVec(84, 10, 8), units.Millimeters(0.01))
