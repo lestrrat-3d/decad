@@ -355,8 +355,7 @@ proven exact may return a faceted body whose measurements are `decad.Approximate
 | `decad.Transform` | Moves a body by an `r3.Transform` and retires the input. |
 | `decad.ScaledAt` | Scales a supported body uniformly about an anchor point. A scaled mesh Boolean result keeps the retained plane, cylinder, sphere and torus surfaces of its faces with their radii scaled; its other faces read `Faceted`. Other faceted solids, such as `LoftSections` and `LoftFromPoint` results or a fillet of a mesh Boolean result, scale once their held mesh passes a closure and self-crossing audit; they keep their plane faces and retained cylinder, sphere and torus faces, and their other curved faces read `Faceted`. Sheets are refused. |
 | `decad.Patterned` | Returns one body holding every instance of a `decad.PatternSpec`. |
-| `decad.PathPatternSpaced` | Returns copies of a body at a stated arc-length distance along a `decad.Path`, as `decad.PathPatternCopies` does for a count. |
-| `decad.PathPatternCopies` | Returns copies of a body spaced at equal arc length along a `decad.Path`, keeping its orientation, or turned to follow the path with `decad.WithPathFollow`, about its start or a `decad.WithPathPivot` point. |
+| `decad.PathPattern` | Returns copies of a body along a `decad.Path`: `decad.WithPathCount` spaces a count of instances at equal arc length and `decad.WithPathSpacing` places them a stated arc-length distance apart. The copies keep the body's orientation, or turn to follow the path with `decad.WithPathFollow`, about its start or a `decad.WithPathPivot` point. |
 | `decad.PatternCopies` | Returns the extra instances as separate bodies. |
 | `decad.Arrange` | Moves bodies to lie side by side on a flat bed, each resting on its surface and a gap apart; `decad.WithArrangeTurns` lets it turn them a quarter turn to fit and `decad.WithArrangeAngle` turns each to the angle of least footprint. |
 | `decad.Mirrored` | Returns the mirror image across a `decad.MirrorPlane` and retires the input. |
@@ -365,8 +364,8 @@ proven exact may return a faceted body whose measurements are `decad.Approximate
 Pattern layouts are `decad.LinearPattern` and `decad.CircularPattern`. Mirror planes are `decad.MirrorFrame` and
 `decad.MirrorFace`. `decad.WithJoin` joins a mirror to its source.
 
-To repeat one feature and join the copies to a base, call `decad.PatternCopies`, or `decad.PathPatternCopies` or
-`decad.PathPatternSpaced` along a path, and pass the base, the feature and its copies to one `decad.Union`. A refused
+To repeat one feature and join the copies to a base, call `decad.PatternCopies`, or
+`decad.PathPattern` along a path, and pass the base, the feature and its copies to one `decad.Union`. A refused
 `decad.Union` leaves every operand live, the copies included; remove them with `decad.Remove`. When the feature and the base are extrusions between the same two planes and the
 pattern keeps those planes (a turn about the sweep axis, or a slide in the plane), the result is one extrusion of the
 joined section, and its bound includes the rounding of the placed copies. A pattern that tilts the planes is refused.

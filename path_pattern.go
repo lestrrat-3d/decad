@@ -127,16 +127,6 @@ func PathPattern(ctx context.Context, b *Body, path *Path, opts ...PathPatternOp
 	return pathCopies(ctx, b, stations, settings)
 }
 
-// PathPatternCopies is [PathPattern] with [WithPathCount]; removed before this PR merges.
-func PathPatternCopies(ctx context.Context, b *Body, path *Path, count int, opts ...PathPatternOption) ([]*Body, error) {
-	return PathPattern(ctx, b, path, append([]PathPatternOption{WithPathCount(count)}, opts...)...)
-}
-
-// PathPatternSpaced is [PathPattern] with [WithPathSpacing]; removed before this PR merges.
-func PathPatternSpaced(ctx context.Context, b *Body, path *Path, spacing units.Value, opts ...PathPatternOption) ([]*Body, error) {
-	return PathPattern(ctx, b, path, append([]PathPatternOption{WithPathSpacing(spacing)}, opts...)...)
-}
-
 // pathPatternSettings are the options of a path pattern read.
 type pathPatternSettings struct {
 	count      int // instances, set when hasCount
