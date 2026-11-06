@@ -2,7 +2,6 @@ package tessellation
 
 import (
 	"context"
-	"math"
 	"unsafe"
 
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
@@ -50,7 +49,6 @@ func CircleSamplesReplay[F any](ctx context.Context, seg sectionrecord.CircleSeg
 	if err != nil {
 		return ChordSamples[F]{}, err
 	}
-	dth := (w.Th1 - w.Th0) / float64(n)
 	for k := range n {
 		if err := ctx.Err(); err != nil {
 			return ChordSamples[F]{}, err
@@ -58,8 +56,7 @@ func CircleSamplesReplay[F any](ctx context.Context, seg sectionrecord.CircleSeg
 		p := sectionrecord.Point2{U: w.StartU, V: w.StartV}
 		bound := boundarywalk.JunctionStartBound(seg, w, seg, w)
 		if k > 0 {
-			th := w.Th0 + float64(k)*dth
-			p = sectionrecord.Point2{U: w.CU + w.Radius*math.Cos(th), V: w.CV + w.Radius*math.Sin(th)}
+			p = CircularStation(w, k, n)
 			sin, cos, trigErr := turns.station(ctx, k, budget)
 			if trigErr != nil {
 				return ChordSamples[F]{}, trigErr

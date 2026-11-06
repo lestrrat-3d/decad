@@ -139,7 +139,6 @@ func SampleLoopWithCountFloor[F any](walks []survey2d.SideWalk, segments []secti
 			// Circular walks are not coalesced. Their stations name exact
 			// fractions of the recorded segment's parameter window.
 			seg := segments[w.Segs[0]]
-			dth := (w.Th1 - w.Th0) / float64(n)
 			for k := range n {
 				if err := budget.Step(); err != nil {
 					return ChordSamples[F]{}, err
@@ -147,8 +146,7 @@ func SampleLoopWithCountFloor[F any](walks []survey2d.SideWalk, segments []secti
 				p := sectionrecord.Point2{U: w.StartU, V: w.StartV}
 				bound := start
 				if k > 0 {
-					th := w.Th0 + float64(k)*dth
-					p = sectionrecord.Point2{U: w.CU + w.Radius*math.Cos(th), V: w.CV + w.Radius*math.Sin(th)}
+					p = CircularStation(w.SegmentWalk, k, n)
 					bound = stationBound(seg, k, n, p.U, p.V)
 				}
 				samples = append(samples, p)
@@ -171,6 +169,25 @@ func SampleLoopWithCountFloor[F any](walks []survey2d.SideWalk, segments []secti
 		SegmentArea: segmentArea,
 		Walks:       len(walks),
 	}, nil
+}
+
+// CircularStation is interior station k of n equal subarcs of circular walk w.
+// Every chording of a circular walk places its stations here.
+func CircularStation(w survey2d.SegmentWalk, k, n int) sectionrecord.Point2 {
+	p, _ := circleStation(w.CU, w.CV, w.Radius, w.Th0, w.Th1, k, n)
+	return p
+}
+
+// circleStation is station k of n equal subarcs of the circle of radius r about
+// (cu, cv) from angle th0 to th1, with its angle th0 + k·(th1 − th0)/n. Every
+// product is rounded on its own before the sum, the Go spec's explicit float64
+// conversion, so arm64 cannot fuse a multiply-add that amd64 never fuses: a
+// station has the same bits on both, and so does every mesh and file built
+// from it.
+func circleStation(cu, cv, r, th0, th1 float64, k, n int) (sectionrecord.Point2, float64) {
+	dth := (th1 - th0) / float64(n)
+	th := th0 + float64(float64(k)*dth)
+	return sectionrecord.Point2{U: cu + float64(r*math.Cos(th)), V: cv + float64(r*math.Sin(th))}, th
 }
 
 // sampleStartBound is the bound SampleLoop charges walk i's start: the

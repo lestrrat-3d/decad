@@ -159,10 +159,7 @@ func ReplayChordLoop(ctx context.Context, loop sectionrecord.LoopRecord,
 			p := sectionrecord.Point2{U: w.StartU, V: w.StartV}
 			bound := start
 			if k > 0 {
-				dth := (w.Th1 - w.Th0) / float64(plans[i].n)
-				th := w.Th0 + float64(k)*dth
-				p = sectionrecord.Point2{U: w.CU + w.Radius*math.Cos(th),
-					V: w.CV + w.Radius*math.Sin(th)}
+				p = CircularStation(w.SegmentWalk, k, plans[i].n)
 				rt, err := replayChordParameter(ctx, plans[i], k, budget)
 				if err != nil {
 					return ChordSamples[int]{}, err
