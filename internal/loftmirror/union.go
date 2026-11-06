@@ -158,6 +158,9 @@ func buildUnion(ctx context.Context, env topo.Env, mesher verifiedmesh.Mesher,
 			groupOf[face] = group
 			g := facetedrecord.Group{Origins: append([]provenance.Ref(nil), face.Origins...)}
 			if capRole != "" {
+				// A source rebuilt by this producer (ThroughBoreCut) already names
+				// its own caps; the join's cap role replaces those.
+				g.Origins = slices.DeleteFunc(g.Origins, func(ref provenance.Ref) bool { return ref.Producer == env.Ref })
 				g.Origins = append(g.Origins, provenance.Ref{Producer: env.Ref, Role: capRole})
 				g.Surface = face.Surface
 				g.Planar = true

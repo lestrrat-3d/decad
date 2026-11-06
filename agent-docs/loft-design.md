@@ -3242,14 +3242,20 @@ cap and band levels.
 
 ### 19.1 Mirrored Loft join
 
-The same chamfer accepts an unplaced, hole-free Loft joined to its mirror image across its end section
-(`agent-docs/loft-boolean-design.md`, Mirror Boolean), the construction of a herringbone gear: both complete outer cap
+The same chamfer accepts an unplaced Loft joined to its mirror image across its end section
+(`agent-docs/loft-boolean-design.md`, Mirror Boolean), the construction of a herringbone gear, without a hole or with
+the one bore the join's through-bore Cut leaves: both complete outer cap
 loops of the join, one equal setback (`loftcylinder.MirrorLoftCapChamfer`). The join's held shell has three rings: the
 lower Loft's start ring on the bottom cap, the shared middle ring, and the reflected start ring on the top cap. Each
 half's two-triangle cells run from its outer ring to the middle ring. `loftcylinder.ChamferMirrorLoftCaps` clips each
 half's strip once, at the exact level `d` inside its outer cap, and keeps every piece between that level and the middle
 ring, so the middle ring and the walls around it are exact subsets of the old walls. The insets, bands, caps, audits,
-denotation and bounds are those above, with `H` the join's held shell and `S` its true union.
+denotation and bounds are those above, with `H` the join's held shell and `S` its true union. The rings come from the
+lower Loft's layout (`loftcylinder.mirrorJoinRings`): each loop's start stations, then its end stations, outer loop
+first, then each loop's reflected start stations in the same order. A bore's loop has the same three rings; its cells
+are kept whole, its two rims stay sharp, and each new cap tiles the annulus between its inset loop and its rim.
 `apitest.TestLoftMirrorJoinCapChamfer` chamfers rounded twisted gear joins of half height 1.5 and 0.5: the removed held
 volume is `d/2` times the cap area lost within 3%, every mesh vertex lies on a cap, band or middle level, and the
 tessellation is verified. At half height 0.5 the side ring turns past the inset loop in projection.
+`TestLoftMirrorJoinCapChamferKeepsTheBore` chamfers the bored join: the same volume relation holds, every mesh vertex
+near the axis lies on the bore, and the shell keeps its one hole.
