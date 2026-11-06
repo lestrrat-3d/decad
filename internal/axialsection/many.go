@@ -29,13 +29,6 @@ func UnionMany(ctx context.Context, env topo.Env, bodies []*topo.Body) (*topo.Bo
 	for i, b := range bodies {
 		payloads[i] = b.Payload
 	}
-	return UnionManyPayloads(ctx, env, payloads)
-}
-
-// UnionManyPayloads is UnionMany over the operands' payloads alone. This route reads
-// nothing of a body but its payload, so a caller that wants only this route can hand it
-// payloads it has not built bodies for (loftrecord.Payload.WithPlacement).
-func UnionManyPayloads(ctx context.Context, env topo.Env, payloads []topo.Payload) (*topo.Body, bool, error) {
 	return unionMany(ctx, env, payloads, false)
 }
 

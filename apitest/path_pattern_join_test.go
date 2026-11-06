@@ -50,7 +50,8 @@ func TestPathPatternSpacedUnionPlacesTheCopiesByDistance(t *testing.T) {
 
 func TestPathPatternUnionRefusalLeavesEveryOperandLive(t *testing.T) {
 	t.Parallel()
-	_, _, _, path := joinFixture(t)
+	path, err := decad.NewPath(r3.Vec{}, decad.LineTo{End: r3.Vec{X: 20}})
+	require.NoError(t, err)
 	// A sheet is no solid to join to: Union refuses it and leaves the sheet, the
 	// feature and every copy live.
 	sheetDoc, sheet := offsetPrismSheet(t)

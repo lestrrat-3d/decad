@@ -342,7 +342,7 @@ If the caller explicitly invokes Copy followed by Union, those are two entries.
 | Transform or a modify operation | Consumed receiver, plus any distinct body dependencies. | The returned body. |
 | Copy or MirroredCopy | Referenced source and any body used to define placement. | The new copy. |
 | PatternCopies | Referenced source. | The returned new instances; the original is not an output. |
-| Patterned or PatternJoin | The public consumed inputs. | The final returned body. |
+| Patterned | The public consumed inputs. | The final returned body. |
 | Unstitch | Consumed receiver. | All returned sheets in one operation. |
 | Remove | Consumed body. | No outputs. |
 
@@ -764,7 +764,7 @@ Do not merge a partially instrumented public history API.
   Check volume and retirement.
 - `document.go`, `mirror.go`, `mirror_join.go`, `point_plane_scale.go`,
   `pattern.go`: Cover Transform, Copy, Mirrored, MirroredCopy, ScaledAt,
-  PatternCopies, Patterned and PatternJoin. Capture placement bodies. Exclude
+  PatternCopies and Patterned. Capture placement bodies. Exclude
   the original from PatternCopies outputs and every transient from producer
   lookup. Add minimal prisms with measured placements and volume. Query each
   output's producer. Check fast/fallback joins and numbering after the span.

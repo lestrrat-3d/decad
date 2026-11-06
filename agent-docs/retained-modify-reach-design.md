@@ -19,7 +19,7 @@ Navigation only; the sections own the content.
 | `Copy` with `WithCopyRotation` | §6 |
 | `ScaledAt` | §7 |
 | Edge between two parallel cylinders | §8 |
-| Why `Shell`, `Draft`, `Offset`, `PatternJoin`, cone and torus blends stay refused | §9 |
+| Why `Shell`, `Draft`, `Offset`, many-body `Union`, cone and torus blends stay refused | §9 |
 | Refusal rows and gate order | §10 |
 | Tests and their red legs | §12 |
 | PR order | §14 |
@@ -56,7 +56,7 @@ Every refusal is `ErrUnsupported`; the quoted text follows `decad: not supported
 | `Shell` inward, top face removed | refused (text S) | — | GAP-B; §9.1 |
 | `Draft` 2° of the walls about the bottom face | refused (SD23) | — | GAP-C; §9.2 |
 | `Offset` | refused (text O) | — | §9.3 |
-| `PatternJoin` of a linear pattern of a feature | refused (text J) | — | GAP-F; §9.4 |
+| `Union` of P2, a feature and its linear `PatternCopies` | refused (text J) | — | GAP-F; §9.4 |
 
 The refusal texts are these.
 
@@ -116,7 +116,7 @@ Faces with a stated departure, or a denoted patch whose tag is not exactly the s
 | GAP-B (`Shell`) | refuse | the cavity needs the trims between offset faces, which a mesh result does not record | §9.1 |
 | GAP-C (`Draft`) | refuse | each drafted face must be re-trimmed against its neighbours and the tool, with the same missing trims | §9.2 |
 | `Offset` of a solid | refuse | surface-design R37 refuses every solid; not a retention matter | §9.3 |
-| GAP-F (`PatternJoin`) | refuse here | the refusal is the many-body Union rule, which retention does not touch | §9.4 |
+| GAP-F (many-body `Union`) | refuse here | the refusal is the many-body Union rule, which retention does not touch | §9.4 |
 | Cylinder/Cylinder, crossing axes, `Fillet` outside blend R7's fillet row | refuse | the blend is a canal surface outside the surface vocabulary | §9.5 |
 | Cylinder/Cylinder, a bore crossing a larger shaft at right angles, `Chamfer` | build (blend R7) | a proven band-shaped tool cuts the exact equal-setback wedge through the mesh Boolean | blend §4.9 |
 | Cylinder/Cylinder, a bore crossing a larger cylinder at right angles, `Fillet` of the convex mouth, of two crossing bores' convex seam, or of a boss's or pin's concave root on a rod | build (blend R7 fillet) | both walls are cut by exact planes near the mouth and joined by a faceted pipe whose chord error is proven cell by cell; the pipe removes material at a convex edge and adds it at a concave one | blend §4.10 |
@@ -547,9 +547,10 @@ operand-record route.
 `Offset` refuses every solid (surface-design R37, `agent-docs/missing-features.md` "Direct edits"). Retention
 changes nothing about it.
 
-### 9.4 `PatternJoin` (GAP-F)
+### 9.4 Many-body `Union` (GAP-F)
 
-Not a retention matter. `PatternJoin` joins the target and every instance in one many-body `Union`. Its pairwise
+Not a retention matter. A `Union` of the target, a feature and its `PatternCopies` joins every operand in one
+many-body `Union`. Its pairwise
 fallback, `tryPrismUnionChain` (`boolean_many.go`), admits prism and exact-Loft operands only; the contract is
 `agent-docs/api-design.md`'s many-body `Union` paragraph. Each pair of a chain would be an ordinary mesh Boolean,
 and retention §3.1 already carries tags through a second generation. Whether faceted operands may join that chain
@@ -590,8 +591,7 @@ Rows narrow blend Table SR and reach SX2/SX9; sentinels follow those tables.
 | **SM8** | a straight end of an open chain whose base or wall is reflex at the corner: "a chain end's base or wall is reflex at the corner"; a turn there too near straight to read: "a chain end's base or wall turn at the corner is undecided"; an end face whose loop runs its edge with the base the way the base's loop does (a guard: an oriented held mesh never reaches it) | `ErrUnsupported` |
 | **SM9** | an open concave chain that ends on an arc, or an arc end on an end face reflex at the corner | `ErrUnsupported` |
 
-Kept refusals: `Shell` (the `shell.go` text, SX9), `Draft` (SD23), `Offset` (R37), `PatternJoin` (the many-body
-`Union` text), crossing cylinders outside blend R7's chamfer and fillet, `Cone`, `Torus` and oblique plane/cylinder rims
+Kept refusals: `Shell` (the `shell.go` text, SX9), `Draft` (SD23), `Offset` (R37), the many-body `Union` (text J), crossing cylinders outside blend R7's chamfer and fillet, `Cone`, `Torus` and oblique plane/cylinder rims
 (SR1).
 
 Gate order: modify §4 stage 1, reach stage 2 (expansion, SM1), stage 3 (SX3), then SR1, SM3, SM9, SR2 and SM2,
@@ -655,7 +655,7 @@ shown red first by the change named. `A_f = r²(1 − π/4)` is a fillet's corne
 | `facetedrecord` scale charge | a cylinder at `s = 1.1` has `NormalBound` at least the held term at `2·(P + ρ)` recomputed in the test | charge 0: the relation fails |
 | R5: two overlapping parallel bores, placed-tool cuts | the bore–bore ridge is `Line3`; fillet and chamfer change the volume by `L` times the section's corner area; the fillet is a `Cylinder` of radius `r` through the ball's centre | flip `κ1`: the centre sits on the wrong side of `C1` |
 | R5 refusals | a valley between bosses standing on a plate (ends of unlike corner type) and bores with crossing axes refuse with `ErrUnsupported` | drop the end-corner gate: the valley blend builds |
-| Kept refusals on P2 | `Shell`, `Draft`, `Offset` and `PatternJoin` keep the texts of §10 | none; pins the refusals |
+| Kept refusals on P2 | `Shell`, `Draft`, `Offset` and the many-body `Union` keep the texts of §10 | none; pins the refusals |
 
 ## 13. Files and fallout
 

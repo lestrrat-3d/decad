@@ -45,7 +45,7 @@ func performUnionMany(ctx context.Context, operands []*Body) (*Body, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	body, span, err := unionManyBodies(ctx, d, d.nextProducerID(), operands, true)
+	body, span, err := unionManyBodies(ctx, d, d.nextProducerID(), operands)
 	if err != nil {
 		return nil, err
 	}
@@ -59,12 +59,11 @@ func performUnionMany(ctx context.Context, operands []*Body) (*Body, error) {
 	return body, nil
 }
 
-// unionManyBodies is the many-operand Union's route chain over operands that
-// need not be live: Patterned's and PatternJoin's instances are built and never
-// registered. It evaluates under producer identity ref and returns the result
-// beside the span of producer identities it used. It commits nothing and
-// checks no cancellation after the last route, so the caller does.
-func unionManyBodies(ctx context.Context, d *Document, ref producerID, operands []*Body, regroupThree bool) (*Body, producerID, error) {
+// unionManyBodies is the many-operand Union's route chain. It evaluates under
+// producer identity ref and returns the result beside the span of producer
+// identities it used. It commits nothing and checks no cancellation after the
+// last route, so the caller does.
+func unionManyBodies(ctx context.Context, d *Document, ref producerID, operands []*Body) (*Body, producerID, error) {
 	body, span, err := unionManyRoutes(ctx, d, ref, operands)
 	if err == nil || !errors.Is(err, ErrUnsupported) {
 		return body, span, err
@@ -84,7 +83,7 @@ func unionManyBodies(ctx context.Context, d *Document, ref producerID, operands 
 		if !isManyUnionRefusal(err) {
 			return nil, 0, err
 		}
-		body, span, matched, chainErr := tryPrismUnionChain(ctx, ref, operands, regroupThree)
+		body, span, matched, chainErr := tryPrismUnionChain(ctx, ref, operands)
 		if chainErr != nil {
 			return nil, 0, chainErr
 		}
@@ -107,9 +106,9 @@ func unionManyRoutes(ctx context.Context, d *Document, ref producerID, operands 
 // tryPrismUnionChain unwraps private Body.n fields and supplies the handle
 // allocator, typed-error hooks and root invariant predicate to unionmany.
 // Its caller has already resolved the document's evaluator tolerances.
-func tryPrismUnionChain(ctx context.Context, ref producerID, operands []*Body, regroupThree bool) (*Body, producerID, bool, error) {
+func tryPrismUnionChain(ctx context.Context, ref producerID, operands []*Body) (*Body, producerID, bool, error) {
 	node, span, matched, err := unionmany.PrismChain(ctx, envOf(operands[0].n.Doc, ref), bodyNodes(operands),
-		regroupThree, booleanHooks(booleanConfig{}), regroupSurfaces)
+		true, booleanHooks(booleanConfig{}), regroupSurfaces)
 	return bodyHandle(node), span, matched, err
 }
 

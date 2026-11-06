@@ -48,7 +48,7 @@ The rules for rows live in `agent-docs/layout.md`.
 | `agent-docs/sweep-design.md` | `Path`/`Sweep`, its chain section (§15), mitred sweeps (§16) and bounded one-cell, composite and stationed twist (§17). |
 | `agent-docs/helix-design.md` | `Coil`: a profile screwed about an in-plane axis. |
 | `agent-docs/axial-section-boolean-design.md` | Union of axial extrusions as the extrusion of the 2D union of their sections, through sketch loop containment. |
-| `agent-docs/pattern-union-design.md` | `PatternJoin` of prism and of axial Loft chains. |
+| `agent-docs/pattern-union-design.md` | Joining prism and axial Loft pattern copies to a base through `Union`. |
 | `agent-docs/prism-boolean-design.md` | Analytic `Union`/`Cut`/`Intersect` over co-directional prisms. |
 | `agent-docs/stacked-prism-design.md` | Stacked slabs, walls, measurements, mesh and consumers. |
 | `agent-docs/mirror-pattern-design.md` | Mirror and pattern entry points, the exact mirror join, the prism group. |
@@ -64,7 +64,7 @@ The rules for rows live in `agent-docs/layout.md`.
 | `agent-docs/operation-diagnostics-design.md` | Operation failure diagnostics, successful-call warnings, delivery APIs, compatibility rules, and proof fixtures. |
 | `agent-docs/faceted-source-retention-design.md` | Analytic source surfaces carried onto mesh Boolean result faces: claim, admission, normal bound, readers, increments. |
 | `agent-docs/retained-edge-blend-design.md` | `Fillet` and `Chamfer` of an edge between two retained faces of a mesh Boolean result: edge classes, exact blend geometry, local mesh rewrite, gates, bounds, increments. |
-| `agent-docs/retained-modify-reach-design.md` | Modify and placement reach on retained mesh Boolean results: the per-call probe table, two-distance and tangent-chain blends, exact-copy and scaled tags, parallel-cylinder blends, and the Shell, Draft and PatternJoin refusals. |
+| `agent-docs/retained-modify-reach-design.md` | Modify and placement reach on retained mesh Boolean results: the per-call probe table, two-distance and tangent-chain blends, exact-copy and scaled tags, parallel-cylinder blends, and the Shell, Draft and many-body Union refusals. |
 | `agent-docs/surface-intersection-design.md` | `Trim`/`Extend`/`Split` over shared-generator sweeps. |
 | `agent-docs/surface-design.md` | Sheet bodies, surface operations, verification and export. |
 | `agent-docs/motion-check-design.md` | `VerifyMotion`: motions, the per-pose proof, the interval certificate, `MotionReport`. |

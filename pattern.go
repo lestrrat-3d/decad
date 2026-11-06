@@ -2,11 +2,8 @@ package decad
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
-	"github.com/lestrrat-3d/decad/internal/axialsection"
-	"github.com/lestrrat-3d/decad/internal/loftrecord"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/opdiagnostic"
 	"github.com/lestrrat-3d/decad/internal/patternassembly"
@@ -93,6 +90,10 @@ func resolvePatternSpec(spec PatternSpec) (patternrecord.Spec, error) {
 // normal, keeps one frame: each instance is the receiver's own record moved
 // in its plane, so a pattern of integer-millimetre holes stays Exact. Its
 // readings carry the motion's rounding as a section displacement.
+//
+// To join the instances to a base, pass the base, b and the result to one
+// [Union]: Union(ctx, base, append([]*Body{b}, copies...)...). A refused
+// Union leaves every operand live, the copies included; [Remove] them.
 func PatternCopies(ctx context.Context, b *Body, spec PatternSpec) ([]*Body, error) {
 	d, rp, keeping, err := b.patternReceiver(ctx, spec)
 	if err != nil {
@@ -273,120 +274,6 @@ func Patterned(ctx context.Context, b *Body, spec PatternSpec) (*Body, error) {
 		return nil, err
 	}
 	return acc, nil
-}
-
-// PatternJoin repeats feature by spec and joins every instance, feature
-// included, to target in one Union, retiring target and feature
-// (agent-docs/pattern-union-design.md, Axial pattern join §7). It is PatternCopies followed
-// by Union(target, feature, copies...) with the copies never registered, so a
-// refusal leaves the document unchanged and both bodies live.
-//
-// The gates are PatternCopies' for feature and spec, plus Union's for target: a
-// nil, foreign or retired target is refused, target and feature must be distinct
-// bodies, and a sheet in either role is refused. The join takes the routes Union
-// takes over the same operands, including its two-at-a-time fold when no route takes
-// the set, and returns that Union's error when none applies.
-func PatternJoin(ctx context.Context, target, feature *Body, spec PatternSpec) (*Body, error) {
-	d, rp, keeping, err := feature.patternReceiver(ctx, spec)
-	if err != nil {
-		return nil, err
-	}
-	if err := d.requireLive(target); err != nil {
-		return nil, err
-	}
-	if err := d.requireSameContainer([]*Body{target, feature}); err != nil {
-		return nil, err
-	}
-	if target == feature {
-		return nil, fmt.Errorf(`%w: PatternJoin needs a target distinct from the feature`, ErrDegenerate)
-	}
-	for _, operand := range []*Body{target, feature} {
-		if err := refuseSheetOperand(operand, "PatternJoin"); err != nil {
-			return nil, err
-		}
-	}
-	ctx, err = d.evalContext(ctx)
-	if err != nil {
-		return nil, err
-	}
-	base := d.nextProducerID()
-	if lp, ok := feature.n.Payload.(loftrecord.Payload); ok && !keeping {
-		// A free-form loft feature joins through the axial-section route, which reads
-		// payloads alone: try it on unbuilt copies before building any instance body.
-		body, matched, err := rp.joinPlacedLofts(ctx, d, base, target, feature, lp)
-		if err != nil {
-			return nil, err
-		}
-		if matched {
-			if err := d.commitOperationSpanIn(ctx, nil, OperationPatternJoin,
-				[]OperationInput{{Body: target, Role: operationRoleTarget, Use: InputConsumed},
-					{Body: feature, Role: "feature", Use: InputConsumed}}, body, producerID(rp.Count), target, feature); err != nil {
-				return nil, err
-			}
-			return body, nil
-		}
-	}
-	instances, err := rp.buildInstances(ctx, d, base, feature.n.Payload, keeping)
-	if err != nil {
-		return nil, err
-	}
-	operands := append([]*Body{target, feature}, instances...)
-	body, span, err := unionManyBodies(ctx, d, base+producerID(len(instances)), operands, false)
-	if err != nil {
-		if errors.Is(err, ErrUnsupported) && isManyUnionRefusal(err) {
-			// No certified route takes the set as a whole, so the instances are built as registered copies and
-			// joined two at a time by Union's own fold (agent-docs/union-fold-design.md); a refusal there removes
-			// the copies and leaves the refusal above.
-			if copies, cerr := PatternCopies(ctx, feature, spec); cerr == nil {
-				if joined, uerr := Union(ctx, target, append([]*Body{feature}, copies...)...); uerr == nil {
-					return joined, nil
-				}
-				removeTools(copies)
-			}
-		}
-		return nil, err
-	}
-	var warnings opdiagnostic.CompositeSummaries
-	warnings.Add(body.n.OperationWarnings, int(OperationPatternJoin))
-	for _, inst := range instances {
-		warnings.Add(inst.n.OperationWarnings, int(OperationPatternJoin))
-	}
-	body.n.OperationWarnings = warnings.Records()
-	if err := d.commitOperationSpanIn(ctx, nil, OperationPatternJoin,
-		[]OperationInput{{Body: target, Role: operationRoleTarget, Use: InputConsumed},
-			{Body: feature, Role: "feature", Use: InputConsumed}}, body,
-		producerID(len(instances))+span, target, feature); err != nil {
-		return nil, err
-	}
-	return body, nil
-}
-
-// joinPlacedLofts is the axial-section join of target, feature and its Count-1 copies,
-// the copies held as placed payloads and never built. matched is false when the route
-// takes none of the operands, and the caller builds the copies and tries the others.
-func (rp resolvedPattern) joinPlacedLofts(ctx context.Context, d *Document, base producerID,
-	target, feature *Body, lp loftrecord.Payload) (*Body, bool, error) {
-	if target.n.Payload == nil {
-		return nil, false, nil
-	}
-	payloads := make([]topo.Payload, 0, rp.Count+1)
-	payloads = append(payloads, target.n.Payload, feature.n.Payload)
-	for i := 1; i < rp.Count; i++ {
-		m, err := rp.WorldMotion(i)
-		if err != nil {
-			return nil, false, fmt.Errorf(`%w: pattern instance %d has no rigid motion: %s`, ErrDegenerate, i, err)
-		}
-		composed, err := lp.Transform().Then(m)
-		if err != nil {
-			return nil, false, fmt.Errorf(`decad: composing the placement failed: %w`, err)
-		}
-		payloads = append(payloads, lp.WithPlacement(composed))
-	}
-	node, matched, err := axialsection.UnionManyPayloads(ctx, envOf(documentNode(d), base+producerID(rp.Count-1)), payloads)
-	if err != nil || !matched {
-		return nil, false, err
-	}
-	return bodyHandle(node), true, ctx.Err()
 }
 
 // quarterTurnedInstance is instance i of a circular pattern of a faceted solid that holds no vertex bound, when the
