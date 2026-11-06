@@ -102,11 +102,19 @@ The line foot must lie beyond the blank and before the next source vertex;
 the circle foot must lie in a strictly bracketed shared-ring step. The bracket
 may follow several consumed ring stations. Held station order and source
 circle station order must both be certified, including ring-point rounding.
-The entire tangent arc fits within `3r` of the source root. The source control-hull
-certificate keeps every nonconnector wall beyond `R+2r`, the farthest radial
-reach of the whole fillet circle. Pinned source arcs charge their radial
-residual. The exact contact center, line foot and source root define a narrow
-polar sector for the connector cutback, circular-wall cutback and short
+The entire tangent arc fits within `3r` of the source root. The tangent arc
+must start on the fillet circle's near half: the line foot `P` lies on the
+side of the circle facing the axis. Then nothing the fillet changes lies
+farther from the axis than `P`. Squared radius grows along the connector
+cutback toward `P`, the circular cutback stays at `R`, and the short arc from
+the circle foot, the circle's point nearest the axis, grows in radius all the
+way to `P`. The source control-hull certificate keeps every nonconnector wall
+beyond the largest exact `|P|` bracket of the selected contacts. The two
+connectors next to the root must also end beyond it. The complete fillet
+circle reaches `R+2r`, but its far side is not part of the result, so a
+radial root line shorter than `2r` still admits a fillet whose line foot lands
+on it. Pinned source arcs charge their radial residual. The exact contact
+center, line foot and source root define a narrow polar sector for the connector cutback, circular-wall cutback and short
 fillet arc. The circle's tangent cone bounds the complete arc. Sectors of
 selected contacts and all other copied connectors must be strictly separate
 modulo a full turn. The connector belonging to each selected root is the only
@@ -122,6 +130,12 @@ trigonometric intervals and chord sagitta bound every new arc station and
 facet. The rebuilt shell must be connected and orientable with paired edges,
 pass the full exact triangle-crossing audit, tile both caps exactly, and
 keep the omitted source-root chords inside its caps.
+
+`TestPrismPatternFilletPastShortRadialLine` rounds every root corner of 12-,
+17- and 22-tooth involute patterns whose radial root line is shorter than
+`2r`, and checks the volume gain against the analytic corner area.
+`TestPrismPatternFilletRefusesUnprovedCornerAndLargeRadius` refuses a radius
+whose line foot lies past the root line's far end.
 
 Unchanged source and ring walls keep the Union boundary bound. The new
 boundary bound adds the arc station and sagitta allowance and must stay

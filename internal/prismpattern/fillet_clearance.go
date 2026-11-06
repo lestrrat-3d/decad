@@ -15,12 +15,14 @@ import (
 )
 
 // FilletClearance proves the fillet contacts clear every other source wall.
-// Nonconnector source walls clear the complete fillet circle radially. Other
+// Nonconnector source walls clear every changed corner region radially. Other
 // connectors and fillet arcs must clear each contact's angular sector.
 func FilletClearance(ctx context.Context, rec *facetedrecord.PrismPatternJoinRecord,
 	contacts []FilletContact, radius float64) error {
-	reach := proofbound.AbsSumUpper(rec.Source.BlankRadius,
-		proofbound.ProductUpper(2, radius))
+	reach, err := filletRadialReach(rec.Source.BlankRadius, contacts)
+	if err != nil {
+		return err
+	}
 	minScale2 := big.NewRat(1, 1)
 	for _, part := range rec.Parts {
 		scale2 := Scale2(part.Prism.Xform)
@@ -103,4 +105,38 @@ func FilletClearance(ctx context.Context, rec *facetedrecord.PrismPatternJoinRec
 		}
 	}
 	return nil
+}
+
+// filletRadialReach bounds the distance from the axis of every point a
+// fillet changes. Each corner region is bounded by three curves, and none
+// runs farther out than the exact line foot P:
+//   - the connector cutback from the blank circle to P, along which squared
+//     radius is convex with a positive derivative at the source root
+//     (rootConnector), so it grows toward P;
+//   - the circular cutback, on the blank circle of radius R < |P|;
+//   - the short tangent arc from the circle foot Q to P. Q is the fillet
+//     circle's nearest point to the axis, and distance grows monotonically
+//     along the circle away from Q. P lies on the circle's near half, so the
+//     short arc from Q stays within a quarter turn of Q and ends at its
+//     farthest point, P.
+//
+// A compact region attains its largest radius on its boundary, so the
+// largest exact line foot bounds the whole change; the complete fillet
+// circle reaches R+2r and is not part of it.
+func filletRadialReach(blankRadius float64, contacts []FilletContact) (float64, error) {
+	reachSq := RadiusSq(blankRadius)
+	for _, contact := range contacts {
+		center, line := contact.centerIV, contact.lineIV
+		if center.Dot(line.Sub(center)).Hi.Sign() >= 0 {
+			return 0, fmt.Errorf("%w: joined-prism fillet has no near-side arc", decaderr.ErrUnsupported)
+		}
+		if footSq := line.Dot(line).Hi; footSq.Cmp(reachSq) > 0 {
+			reachSq = footSq
+		}
+	}
+	reach := proofbound.RatSqrtUp(reachSq)
+	if proofbound.IsNonFinite(reach) {
+		return 0, fmt.Errorf("%w: joined-prism fillet has no finite radial reach", decaderr.ErrUnsupported)
+	}
+	return reach, nil
 }

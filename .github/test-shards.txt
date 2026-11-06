@@ -301,6 +301,7 @@
 11	0.01	TestLoftCylinderTriangleMinRadiusMatchesRational
 11	0.08	TestLoftVolumeComposeBudgetAndCancellation
 11	4.39	TestPlacedProxyShellsChargeExactCopies
+11	0.00	TestPrismPatternFilletPastShortRadialLine
 11	0.01	TestPublicCirclePrimitiveFaceTokenMutations
 11	0.24	TestQuarterSourceHeldY3ReverseOrder
 11	0.00	TestRetainedBlendStripFacetBounds
