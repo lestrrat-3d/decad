@@ -103,6 +103,7 @@ func TestContextOperationsRejectNilBeforeOperands(t *testing.T) {
 		{"Trim", func(ctx context.Context) error { _, err := decad.Trim(ctx, body, nil, 0); return err }},
 		{"Extend", func(ctx context.Context) error { _, err := decad.Extend(ctx, body, nil, nil); return err }},
 		{"Stitch", func(ctx context.Context) error { _, err := decad.Stitch(ctx); return err }},
+		{"PathPattern", func(ctx context.Context) error { _, err := decad.PathPattern(ctx, body, nil); return err }},
 		{"Union", func(ctx context.Context) error { _, err := decad.Union(ctx, nil, nil); return err }},
 		{"Cut", func(ctx context.Context) error { _, err := decad.Cut(ctx, nil, nil); return err }},
 		{"Intersect", func(ctx context.Context) error { _, err := decad.Intersect(ctx, nil, nil); return err }},

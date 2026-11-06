@@ -71,11 +71,14 @@ func TestPathPatternFollowOnAStraightPathKeepsTheOrientation(t *testing.T) {
 
 func TestPathPatternFollowRefusals(t *testing.T) {
 	t.Parallel()
-	_, block := patternBlock(t)
+	doc, block := patternBlock(t)
 	doubled, err := decad.NewPath(r3.Vec{}, decad.LineTo{End: r3.Vec{X: 10}}, decad.LineTo{End: r3.Vec{}})
 	require.NoError(t, err)
 	_, err = decad.PathPatternCopies(t.Context(), block, doubled, 3, decad.WithPathFollow())
 	require.ErrorIs(t, err, decad.ErrDegenerate, "a path that ends heading back along its start has no shortest turn")
+	_, err = decad.PathPattern(t.Context(), block, doubled, decad.WithPathCount(5), decad.WithPathFollow())
+	require.ErrorIs(t, err, decad.ErrDegenerate)
+	require.Equal(t, []*decad.Body{block}, doc.Bodies(), "a failed pattern retires the copies it made")
 	_, err = decad.PathPatternCopies(t.Context(), block, doubled, 3)
 	require.NoError(t, err, "without the option the same path is a plain pattern")
 	_, err = decad.PathPatternCopies(t.Context(), block, followPath(t), 3, nil)

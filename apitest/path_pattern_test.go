@@ -1,6 +1,7 @@
 package apitest_test
 
 import (
+	"context"
 	"math"
 	"testing"
 
@@ -105,4 +106,48 @@ func TestPathPatternCopiesRefusals(t *testing.T) {
 		_, err := decad.PathPatternCopies(t.Context(), block, path, 3)
 		require.ErrorIs(t, err, decad.ErrRetiredBody)
 	})
+	t.Run("canceled context", func(t *testing.T) {
+		t.Parallel()
+		doc, block := patternBlock(t)
+		ctx, cancel := context.WithCancel(t.Context())
+		cancel()
+		_, err := decad.PathPattern(ctx, block, path, decad.WithPathCount(3))
+		require.ErrorIs(t, err, context.Canceled)
+		require.Equal(t, []*decad.Body{block}, doc.Bodies())
+	})
+}
+
+func TestPathPatternStationOptionRefusals(t *testing.T) {
+	t.Parallel()
+	path, err := decad.NewPath(r3.Vec{}, decad.LineTo{End: r3.Vec{X: 30}})
+	require.NoError(t, err)
+	ten := units.Millimeters(10)
+	cases := []struct {
+		name string
+		opts []decad.PathPatternOption
+	}{
+		{"no option", nil},
+		{"follow only", []decad.PathPatternOption{decad.WithPathFollow()}},
+		{"count then spacing", []decad.PathPatternOption{decad.WithPathCount(3), decad.WithPathSpacing(ten)}},
+		{"spacing then count", []decad.PathPatternOption{decad.WithPathSpacing(ten), decad.WithPathCount(3)}},
+		{"count twice", []decad.PathPatternOption{decad.WithPathCount(3), decad.WithPathCount(3)}},
+		{"spacing twice", []decad.PathPatternOption{decad.WithPathSpacing(ten), decad.WithPathSpacing(ten)}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			doc, block := patternBlock(t)
+			_, err := decad.PathPattern(t.Context(), block, path, tc.opts...)
+			require.ErrorIs(t, err, decad.ErrDegenerate)
+			require.Equal(t, []*decad.Body{block}, doc.Bodies())
+			if tc.name != "no option" {
+				return
+			}
+			var de decad.OperationDiagnosticError
+			require.ErrorAs(t, err, &de)
+			diags := de.OperationDiagnostics()
+			require.NotEmpty(t, diags)
+			require.Equal(t, decad.OperationCopy, diags[0].Operation)
+		})
+	}
 }

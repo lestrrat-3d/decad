@@ -3011,3 +3011,4 @@
 11	0.00	TestClearancePlacedPinThatFillsItsBore
 11	0.00	TestClearancePlacedPinDifferential
 11	0.00	TestClearancePlacedPinInBoreIsFast
+11	0.00	TestPathPatternStationOptionRefusals
