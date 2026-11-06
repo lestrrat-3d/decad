@@ -19,7 +19,7 @@ func TestRibDraftThinsTheRibAsItRises(t *testing.T) {
 	for _, deg := range []float64{3, 5} {
 		_, part := ribPart(t)
 		s, lines := ribSketch(t, [4]float64{3, 20, 37, 20})
-		out, err := decad.Rib(t.Context(), part, s, lines[0], units.Millimeters(2),
+		out, err := decad.WebPath(t.Context(), part, s, lines, units.Millimeters(2),
 			decad.Distance{D: units.Millimeters(11), Dir: decad.Along},
 			decad.WithRibOverrun(units.Millimeters(1)), decad.WithRibDraft(units.Degrees(deg)))
 		require.NoError(t, err)
@@ -37,7 +37,7 @@ func TestRibDraftNegativeThickensTheRib(t *testing.T) {
 	t.Parallel()
 	_, part := ribPart(t)
 	s, lines := ribSketch(t, [4]float64{3, 20, 37, 20})
-	out, err := decad.Rib(t.Context(), part, s, lines[0], units.Millimeters(2),
+	out, err := decad.WebPath(t.Context(), part, s, lines, units.Millimeters(2),
 		decad.Distance{D: units.Millimeters(11), Dir: decad.Along},
 		decad.WithRibOverrun(units.Millimeters(1)), decad.WithRibDraft(units.Degrees(-4)))
 	require.NoError(t, err)
@@ -55,7 +55,7 @@ func TestRibDraftOfAWebAndLastWins(t *testing.T) {
 	t.Parallel()
 	_, part := ribPart(t)
 	s, lines := ribSketch(t, [4]float64{3, 12, 37, 12}, [4]float64{3, 28, 37, 28})
-	out, err := decad.Web(t.Context(), part, s, lines, units.Millimeters(2),
+	out, err := decad.WebPath(t.Context(), part, s, lines, units.Millimeters(2),
 		decad.Distance{D: units.Millimeters(11), Dir: decad.Along},
 		decad.WithRibOverrun(units.Millimeters(1)), decad.WithRibDraft(units.Degrees(10)), decad.WithRibDraft(units.Degrees(5)))
 	require.NoError(t, err)
@@ -75,7 +75,7 @@ func TestRibDraftRefusals(t *testing.T) {
 	} {
 		doc, part := ribPart(t)
 		s, lines := ribSketch(t, [4]float64{3, 20, 37, 20})
-		_, err := decad.Rib(t.Context(), part, s, lines[0], units.Millimeters(2),
+		_, err := decad.WebPath(t.Context(), part, s, lines, units.Millimeters(2),
 			decad.Distance{D: units.Millimeters(11), Dir: decad.Along}, decad.WithRibDraft(tc.draft))
 		require.ErrorIs(t, err, tc.want, name)
 		require.Equal(t, []*decad.Body{part}, doc.Bodies(), "%s: a refused rib leaves the part live and alone", name)

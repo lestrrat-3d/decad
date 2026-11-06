@@ -331,7 +331,7 @@ produce history records. Selector resolution produces none.
 Record one entry per successful public body-producing call, plus successful
 `Remove`. Record the public entry point the caller used. A `Hole` is one Hole
 record, and its private tool construction and cuts create no public history entries.
-The same rule applies to Rib, Web, Emboss, mirror joins and pattern joins.
+The same rule applies to WebPath, Emboss, mirror joins and pattern joins.
 If the caller explicitly invokes Copy followed by Union, those are two entries.
 
 | Call shape | Inputs | Outputs |
@@ -773,7 +773,7 @@ Do not merge a partially instrumented public history API.
   distinct body reads without changing fresh role policy. Use small supported
   receivers and existing modify fixture families. Check changed geometry and
   unchanged selector-role rules.
-- `hole.go`, `rib.go`, `emboss.go`, `tool_combine.go`: Group Hole, Rib, Web and
+- `hole.go`, `rib.go`, `emboss.go`, `tool_combine.go`: Group Hole, WebPath and
   Emboss above private tool construction and repeated Boolean steps. Keep tools
   and intermediate bodies out of public outputs and producer indexes. Add one
   supported minimal call per entry, plus failure after private work. Check

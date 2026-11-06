@@ -35,7 +35,6 @@ const (
 	OperationTrim
 	OperationExtend
 	OperationSplit
-	OperationRib
 	OperationWeb
 	OperationConeFromFace
 	OperationRemove
@@ -97,7 +96,6 @@ var operationKindNames = [...]string{
 	"trim",
 	"extend",
 	"split",
-	"rib",
 	"web",
 	"cone_from_face",
 	"remove",

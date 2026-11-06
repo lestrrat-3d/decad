@@ -1654,10 +1654,10 @@ persisting or constructing internal identifiers.
 counterbore or countersink head on a round hole, at a world point on a planar face of `b`, or radially at a point on a cylindrical one. It builds the tool bodies, cuts them from `b` in one
 atomic commit, and retires `b`. `agent-docs/hole-design.md` owns the placement, size and refusal rules.
 
-**A rib is a thickened line.** `Rib(ctx, b, s, line, thickness, e)` thickens one straight sketch line across its width,
-extrudes the outline by `e`, and joins it to `b`; `Web` does the same for several lines in one commit.
-`RibArc(ctx, b, s, arc, thickness, e)` does the same for one sketch arc, thickened into an annular band.
-`WithRibOverrun` buries the ends of a rib in the walls it spans. `agent-docs/rib-design.md` owns the rules.
+**A rib is a thickened line or arc.** `WebPath(ctx, b, s, path, thickness, e)` thickens each `*sketch.Line` and
+`*sketch.Arc` of `path` across its width, a line into a rectangle and an arc into an annular band, extrudes each
+outline by `e`, and joins the ribs to `b` in one commit. A path of one entity is one rib. `WithRibOverrun` buries the
+ends of a rib in the walls it spans, and `WithRibDraft` leans its walls. `agent-docs/rib-design.md` owns the rules.
 
 **A relief is a profile on a face.** `Emboss(ctx, b, s, profiles, face, mode, height)` extrudes closed profiles of a sketch
 that lies in the plane of a planar face, outward for `EmbossRaised` and inward for `EmbossEngraved`, and joins them to

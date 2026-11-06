@@ -148,7 +148,7 @@ these rules, and point location reads the same function (`agent-docs/point-conta
   (`internal/booleaneval/eval.go` `Diagnostics`, `internal/meshbool/held_embedding_diagnostics.go`), so `n` does not
   denote the operation over its inputs.
 
-A body whose producer is `Transform`, `Copy`, a modify operation, `Hole`/`Rib`/`Web`/`Emboss`/`Boss`, `Patterned`
+A body whose producer is `Transform`, `Copy`, a modify operation, `Hole`/`WebPath`/`Emboss`/`Boss`, `Patterned`
 or any non-Boolean kind is a leaf. An analytic (non-faceted) Boolean result is a leaf: it is already exact.
 `boolchain.Expandable` states this rule; `Body.Section` applies the same rule before it sections a mesh Boolean
 result from its two operands.

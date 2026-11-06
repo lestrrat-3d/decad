@@ -11,9 +11,10 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file is agent-docs/rib-design.md's public-surface tests for Rib and
-// Web. The part is a 40 x 40 x 20 block with a 30 x 30 pocket cut 15 deep from
-// its top, so the pocket walls stand at x, y = 5 and 35 and its floor at z = 5.
+// This file is agent-docs/rib-design.md's public-surface tests for line
+// ribs of WebPath. The part is a 40 x 40 x 20 block with a 30 x 30 pocket cut
+// 15 deep from its top, so the pocket walls stand at x, y = 5 and 35 and its
+// floor at z = 5.
 
 const (
 	ribBlockVolume  = 40 * 40 * 20
@@ -45,15 +46,15 @@ func ribPart(tb testing.TB) (*decad.Document, *decad.Body) {
 }
 
 // ribSketch returns a sketch on the plane z = 4, below the pocket floor, and
-// the lines (x0, y0)-(x1, y1) drawn in it.
-func ribSketch(tb testing.TB, segments ...[4]float64) (*sketch.Sketch, []*sketch.Line) {
+// the lines (x0, y0)-(x1, y1) drawn in it, as WebPath entities.
+func ribSketch(tb testing.TB, segments ...[4]float64) (*sketch.Sketch, []sketch.Entity) {
 	tb.Helper()
 	w := sketch.NewWorld()
 	plane, err := w.CreateOffsetPlane(w.XY(), 4)
 	require.NoError(tb, err)
 	s, err := w.CreateSketch(plane)
 	require.NoError(tb, err)
-	var lines []*sketch.Line
+	var lines []sketch.Entity
 	for _, seg := range segments {
 		a := s.CreatePoint(seg[0], seg[1])
 		b := s.CreatePoint(seg[2], seg[3])
@@ -71,13 +72,14 @@ func TestRibAcrossPocket(t *testing.T) {
 	doc, part := ribPart(t)
 	s, lines := ribSketch(t, [4]float64{3, 20, 37, 20})
 	operationCount := len(doc.OperationHistory().Operations())
-	out, err := decad.Rib(t.Context(), part, s, lines[0], units.Millimeters(2),
+	out, err := decad.WebPath(t.Context(), part, s, lines, units.Millimeters(2),
 		decad.Distance{D: units.Millimeters(11), Dir: decad.Along})
 	require.NoError(t, err)
 	require.Equal(t, []*decad.Body{out}, doc.Bodies(), "the part and the rib tool leave the document")
 	operations := doc.OperationHistory().Operations()
 	require.Len(t, operations, operationCount+1)
-	require.Equal(t, decad.OperationRib, operations[len(operations)-1].Kind())
+	require.Equal(t, decad.OperationWeb, operations[len(operations)-1].Kind())
+	require.Equal(t, "web", operations[len(operations)-1].Kind().String())
 	require.Equal(t, []decad.OperationInput{{Body: part, Role: "target", Use: decad.InputConsumed}}, operations[len(operations)-1].Inputs())
 	// The rib stands from the floor at z = 5 to z = 15 between the pocket
 	// walls x = 5 and 35: 30 x 2 x 10 of new material.
@@ -90,7 +92,7 @@ func TestWebCrossesRibs(t *testing.T) {
 	doc, part := ribPart(t)
 	s, lines := ribSketch(t, [4]float64{3, 20, 37, 20}, [4]float64{20, 3, 20, 37})
 	operationCount := len(doc.OperationHistory().Operations())
-	out, err := decad.Web(t.Context(), part, s, lines, units.Millimeters(2),
+	out, err := decad.WebPath(t.Context(), part, s, lines, units.Millimeters(2),
 		decad.ThroughAll{Dir: decad.Along})
 	require.NoError(t, err)
 	require.Len(t, doc.Bodies(), 1)
@@ -115,7 +117,7 @@ func TestRibOverrunBuriesTheEnds(t *testing.T) {
 	// The line stops exactly at the pocket walls, so the rib's end faces lie in
 	// the wall faces; an overrun of 1 mm buries them.
 	s, lines := ribSketch(t, [4]float64{5, 20, 35, 20})
-	out, err := decad.Rib(t.Context(), part, s, lines[0], units.Millimeters(2),
+	out, err := decad.WebPath(t.Context(), part, s, lines, units.Millimeters(2),
 		decad.Distance{D: units.Millimeters(11), Dir: decad.Along}, decad.WithRibOverrun(units.Millimeters(1)))
 	require.NoError(t, err)
 	decadtest.MeasuresVolume(t, out, units.CubicMillimeters(ribPartVolume+30*2*10))
@@ -146,7 +148,7 @@ func TestRibRefusals(t *testing.T) {
 			t.Parallel()
 			doc, part := ribPart(t)
 			s, lines := ribSketch(t, tc.seg)
-			_, err := decad.Rib(t.Context(), part, s, lines[0], tc.th, e, tc.opts...)
+			_, err := decad.WebPath(t.Context(), part, s, lines, tc.th, e, tc.opts...)
 			require.ErrorIs(t, err, tc.want)
 			require.ErrorContains(t, err, tc.text)
 			require.Equal(t, []*decad.Body{part}, doc.Bodies(), "a refused rib leaves the part live and alone")
@@ -159,9 +161,9 @@ func TestRibRefusesForeignLine(t *testing.T) {
 	doc, part := ribPart(t)
 	s, _ := ribSketch(t, [4]float64{3, 20, 37, 20})
 	_, other := ribSketch(t, [4]float64{3, 10, 37, 10})
-	_, err := decad.Rib(t.Context(), part, s, other[0], units.Millimeters(2), decad.Distance{D: units.Millimeters(11), Dir: decad.Along})
+	_, err := decad.WebPath(t.Context(), part, s, other, units.Millimeters(2), decad.Distance{D: units.Millimeters(11), Dir: decad.Along})
 	require.ErrorIs(t, err, decad.ErrDegenerate)
-	_, err = decad.Web(t.Context(), part, s, nil, units.Millimeters(2), decad.Distance{D: units.Millimeters(11), Dir: decad.Along})
+	_, err = decad.WebPath(t.Context(), part, s, nil, units.Millimeters(2), decad.Distance{D: units.Millimeters(11), Dir: decad.Along})
 	require.ErrorIs(t, err, decad.ErrDegenerate)
 	require.Equal(t, []*decad.Body{part}, doc.Bodies())
 }
