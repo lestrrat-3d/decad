@@ -79,8 +79,30 @@ func NewSTEPFile(ctx context.Context, body *decad.Body, tol units.Value, header 
 	if body == nil {
 		return step.File{}, fmt.Errorf("export: STEP: %w: nil body", decad.ErrDegenerate)
 	}
+	plan, err := planSTEPBody(ctx, body, tol)
+	if err != nil {
+		return step.File{}, err
+	}
+	return assembleSTEPFile(ctx, body, header, plan)
+}
+
+// stepPlan is one admitted body's writer arm and verified mesh
+// (agent-docs/step-export-design.md).
+type stepPlan struct {
+	analytic   bool
+	closed     *closedstep.Coverage
+	vertices   []r3.Vec
+	triangles  [][3]int
+	components []int
+	solids     []meshSolid
+}
+
+// planSTEPBody admits body, a non-nil solid, and picks its writer arm: it
+// tessellates at tol with the boundary verified and checks the mesh against
+// the body's shells. ctx must not be nil.
+func planSTEPBody(ctx context.Context, body *decad.Body, tol units.Value) (stepPlan, error) {
 	if body.Kind() != decad.BodySolid || !body.IsSolid() {
-		return step.File{}, fmt.Errorf("export: STEP: %w: body does not enclose a valid region", decad.ErrNotSolid)
+		return stepPlan{}, fmt.Errorf("export: STEP: %w: body does not enclose a valid region", decad.ErrNotSolid)
 	}
 	shells := body.Shells()
 	voids := 0
@@ -92,18 +114,18 @@ func NewSTEPFile(ctx context.Context, body *decad.Body, tol units.Value, header 
 
 	mesh, err := body.Tessellate(ctx, tol, decad.WithVerification(decad.VerifyBoundary))
 	if err != nil {
-		return step.File{}, err
+		return stepPlan{}, err
 	}
 	if !mesh.BoundaryVerified() {
-		return step.File{}, fmt.Errorf("export: STEP: %w: mesh boundary is not verified", decad.ErrUnsupported)
+		return stepPlan{}, fmt.Errorf("export: STEP: %w: mesh boundary is not verified", decad.ErrUnsupported)
 	}
 	vertices, triangles := mesh.Vertices(), mesh.Triangles()
 	components, count, err := checkMesh(ctx, vertices, triangles)
 	if err != nil {
-		return step.File{}, err
+		return stepPlan{}, err
 	}
 	if count != len(shells) {
-		return step.File{}, fmt.Errorf("export: STEP: %w: the mesh holds %d connected shells and the body %d",
+		return stepPlan{}, fmt.Errorf("export: STEP: %w: the mesh holds %d connected shells and the body %d",
 			decad.ErrUnsupported, count, len(shells))
 	}
 
@@ -116,7 +138,7 @@ func NewSTEPFile(ctx context.Context, body *decad.Body, tol units.Value, header 
 		if tagsUndeparted(body) && len(body.Faces()) == 1 {
 			c, ok, e := admitClosedSTEP(ctx, body)
 			if e != nil {
-				return step.File{}, e
+				return stepPlan{}, e
 			}
 			if ok {
 				closed = &c
@@ -125,30 +147,57 @@ func NewSTEPFile(ctx context.Context, body *decad.Body, tol units.Value, header 
 		}
 		if closed == nil {
 			if analytic, err = supportsAnalyticSTEP(ctx, body); err != nil {
-				return step.File{}, err
+				return stepPlan{}, err
 			}
 		}
 	}
 	if !analytic {
 		if solids, err = meshSolids(body, mesh.SourceFaces(), vertices, triangles, components, count); err != nil {
-			return step.File{}, err
+			return stepPlan{}, err
 		}
 	}
-	return assembleSTEPFile(ctx, body, header, analytic, closed, vertices, triangles, components, solids)
+	return stepPlan{
+		analytic: analytic, closed: closed, vertices: vertices, triangles: triangles,
+		components: components, solids: solids,
+	}, nil
 }
 
 // assembleSTEPFile writes the product structure and the shell of one admitted
-// body: its analytic faces when analytic, else one planar face per triangle
-// of the verified mesh (vertices, triangles), grouped into solids.
-func assembleSTEPFile(
-	ctx context.Context, body *decad.Body, header step.Header, analytic bool, closed *closedstep.Coverage, vertices []r3.Vec, triangles [][3]int,
-	components []int, solids []meshSolid,
-) (step.File, error) {
+// body: its analytic faces when the plan is analytic, else one planar face per
+// triangle of the verified mesh, grouped into solids.
+func assembleSTEPFile(ctx context.Context, body *decad.Body, header step.Header, plan stepPlan) (step.File, error) {
 	productDescription := "faceted decad solid"
-	if analytic {
+	if plan.analytic {
 		productDescription = "analytic decad solid"
 	}
 	b := &fileBuilder{}
+	sc := b.addSTEPContext()
+	product := b.add(ap214.Product(0, "1", header.Name, productDescription, sc.productContext))
+	b.add(ap214.ProductRelatedProductCategory(0, "part", product))
+	formation := b.add(ap214.ProductDefinitionFormation(0, "1", "", product))
+	definitionContext := b.add(ap214.ProductDefinitionContext(0, "part definition", sc.app, "design"))
+	definition := b.add(ap214.ProductDefinition(0, "design", "", formation, definitionContext))
+	shape := b.add(ap214.ProductDefinitionShape(0, "shape", "", definition))
+
+	items, err := b.addSTEPSolids(ctx, body, header.Name, plan)
+	if err != nil {
+		return step.File{}, err
+	}
+	representation := b.add(ap214.AdvancedBrepShapeRepresentation(0, header.Name, sc.representation, items...))
+	b.add(ap214.ShapeDefinitionRepresentation(0, shape, representation))
+	if err := ctx.Err(); err != nil {
+		return step.File{}, err
+	}
+	return ap214.NewFile(header, b.entities...), nil
+}
+
+// stepContext holds the shared unit, representation and application contexts
+// every product of a file refers to.
+type stepContext struct{ representation, productContext, app step.Reference }
+
+// addSTEPContext writes the units, the geometric representation context, the
+// application context and protocol, and the product context.
+func (b *fileBuilder) addSTEPContext() stepContext {
 	millimetre := b.add(ap214.Millimetre(0))
 	radian := b.add(ap214.Radian(0))
 	steradian := b.add(ap214.Steradian(0))
@@ -156,35 +205,35 @@ func assembleSTEPFile(
 	app := b.add(ap214.ApplicationContext(0, "automotive design"))
 	b.add(ap214.ApplicationProtocolDefinition(0, "international standard", 2003, app))
 	productContext := b.add(ap214.ProductContext(0, "mechanical parts", app, "mechanical"))
-	product := b.add(ap214.Product(0, "1", header.Name, productDescription, productContext))
-	b.add(ap214.ProductRelatedProductCategory(0, "part", product))
-	formation := b.add(ap214.ProductDefinitionFormation(0, "1", "", product))
-	definitionContext := b.add(ap214.ProductDefinitionContext(0, "part definition", app, "design"))
-	definition := b.add(ap214.ProductDefinition(0, "design", "", formation, definitionContext))
-	shape := b.add(ap214.ProductDefinitionShape(0, "shape", "", definition))
+	return stepContext{representation: representationContext, productContext: productContext, app: app}
+}
 
+// addSTEPSolids writes the plan's faces and returns one item per lump,
+// MANIFOLD_SOLID_BREP or BREP_WITH_VOIDS, named name.
+func (b *fileBuilder) addSTEPSolids(ctx context.Context, body *decad.Body, name string, plan stepPlan) ([]step.Reference, error) {
 	var faces []step.Reference
 	var faceComponent []int
 	var err error
-	if analytic {
-		if closed != nil {
-			if closed.Ring {
-				faces = b.addClosedRing(*closed)
+	if plan.analytic {
+		if plan.closed != nil {
+			if plan.closed.Ring {
+				faces = b.addClosedRing(*plan.closed)
 			} else {
-				faces = b.addClosedSphere(*closed)
+				faces = b.addClosedSphere(*plan.closed)
 			}
 		} else {
 			faces, err = b.addAnalyticFaces(ctx, body)
 		}
 		if err != nil {
-			return step.File{}, err
+			return nil, err
 		}
 	} else {
+		vertices, triangles := plan.vertices, plan.triangles
 		pointRefs := make([]step.Reference, len(vertices))
 		vertexRefs := make([]step.Reference, len(vertices))
 		for i, p := range vertices {
 			if err := ctx.Err(); err != nil {
-				return step.File{}, err
+				return nil, err
 			}
 			pointRefs[i] = b.add(ap214.CartesianPoint(0, "", real3(p)))
 			vertexRefs[i] = b.add(ap214.VertexPoint(0, "", pointRefs[i]))
@@ -192,57 +241,52 @@ func assembleSTEPFile(
 
 		normals, err := triangleNormals(vertices, triangles)
 		if err != nil {
-			return step.File{}, fmt.Errorf("export: STEP: %w", err)
+			return nil, fmt.Errorf("export: STEP: %w", err)
 		}
 		edges := make(map[edgeKey]step.Reference, len(triangles)*3/2)
 		faces = make([]step.Reference, 0, len(triangles))
 		for i, tri := range triangles {
 			if err := ctx.Err(); err != nil {
-				return step.File{}, err
+				return nil, err
 			}
 			faces = append(faces, b.addTriangle(tri, normals[i], vertices, pointRefs, vertexRefs, edges))
-			faceComponent = append(faceComponent, components[i])
+			faceComponent = append(faceComponent, plan.components[i])
 		}
 	}
 	var items []step.Reference
-	if analytic {
+	if plan.analytic {
 		shell := b.add(ap214.ClosedShell(0, "", faces...))
-		items = append(items, b.add(ap214.ManifoldSolidBrep(0, header.Name, shell)))
-	} else {
-		count := 0
-		for _, solid := range solids {
-			count += 1 + len(solid.voids)
+		items = append(items, b.add(ap214.ManifoldSolidBrep(0, name, shell)))
+		return items, nil
+	}
+	count := 0
+	for _, solid := range plan.solids {
+		count += 1 + len(solid.voids)
+	}
+	perComponent := make([][]step.Reference, count)
+	for i, face := range faces {
+		perComponent[faceComponent[i]] = append(perComponent[faceComponent[i]], face)
+	}
+	for _, solid := range plan.solids {
+		outerShell := b.add(ap214.ClosedShell(0, "", perComponent[solid.outer]...))
+		if len(solid.voids) == 0 {
+			items = append(items, b.add(ap214.ManifoldSolidBrep(0, name, outerShell)))
+			continue
 		}
-		perComponent := make([][]step.Reference, count)
-		for i, face := range faces {
-			perComponent[faceComponent[i]] = append(perComponent[faceComponent[i]], face)
-		}
-		for _, solid := range solids {
-			outerShell := b.add(ap214.ClosedShell(0, "", perComponent[solid.outer]...))
-			if len(solid.voids) == 0 {
-				items = append(items, b.add(ap214.ManifoldSolidBrep(0, header.Name, outerShell)))
-				continue
-			}
-			var voids []step.Value
-			for _, c := range solid.voids {
-				// A void's faces already look into the cavity, away from the material, which
-				// is the orientation BREP_WITH_VOIDS asks of its void shells.
-				closed := b.add(ap214.ClosedShell(0, "", perComponent[c]...))
-				voids = append(voids, b.add(step.Entity{Name: "ORIENTED_CLOSED_SHELL", Parameters: []step.Value{
-					step.String(""), step.Omitted{}, closed, step.Enumeration("T"),
-				}}))
-			}
-			items = append(items, b.add(step.Entity{Name: "BREP_WITH_VOIDS", Parameters: []step.Value{
-				step.String(header.Name), outerShell, step.List(voids),
+		var voids []step.Value
+		for _, c := range solid.voids {
+			// A void's faces already look into the cavity, away from the material, which
+			// is the orientation BREP_WITH_VOIDS asks of its void shells.
+			closed := b.add(ap214.ClosedShell(0, "", perComponent[c]...))
+			voids = append(voids, b.add(step.Entity{Name: "ORIENTED_CLOSED_SHELL", Parameters: []step.Value{
+				step.String(""), step.Omitted{}, closed, step.Enumeration("T"),
 			}}))
 		}
+		items = append(items, b.add(step.Entity{Name: "BREP_WITH_VOIDS", Parameters: []step.Value{
+			step.String(name), outerShell, step.List(voids),
+		}}))
 	}
-	representation := b.add(ap214.AdvancedBrepShapeRepresentation(0, header.Name, representationContext, items...))
-	b.add(ap214.ShapeDefinitionRepresentation(0, shape, representation))
-	if err := ctx.Err(); err != nil {
-		return step.File{}, err
-	}
-	return ap214.NewFile(header, b.entities...), nil
+	return items, nil
 }
 
 // STEP writes one AP214 file. Supply the name, author, and organization
