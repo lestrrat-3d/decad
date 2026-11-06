@@ -1,6 +1,6 @@
 # Source-cap face-fed loft
 
-`LoftFaces(ctx, doc, sections ...*Face)` builds one solid through two to
+`LoftFaces(ctx, sections, opts...)` builds one solid through two to
 thirty-two ordered planar caps. The admitted producer is one to thirty-one
 live, complete Split slabs from one authenticated `LoftFromPoint` source.
 Each section is an original Split cap, its rigid image, or its positive uniform image. The
@@ -15,9 +15,10 @@ Every admitted cap retains the same immutable point-loft Sketch/profile,
 source station order, exact rational ray-plane cut map, and ordered rigid
 and positive-scale steps. Each source record is current when the loft is
 built. A side face, mixed source, duplicate cap, stale source, reordered
-cap, missing proof record, or a section count outside two to thirty-two refuses
-without retiring an operand. The record, rather than a face's rounded
-`Plane` tag or `FacetedCurve` edges, defines the cap curve.
+cap, missing proof record, or a section count outside two to thirty-two (one to
+thirty-one with `WithConeTangentEnd`) refuses without retiring an operand. The
+record, rather than a face's rounded `Plane` tag or `FacetedCurve` edges,
+defines the cap curve.
 The thirty-two-cap ceiling bounds pairwise section-plane and mesh-contact work;
 every admitted count still passes the same exact embedding and volume proofs.
 
@@ -243,13 +244,19 @@ Every other Intersect result has no continuation record. Placement drops it.
 
 ## Cone-tangent end section
 
-`LoftFacesToConeTangent(ctx, end, sections...)` lofts through the selected
-caps and then through a last section that no selected cap supplies. The last
-section is the plane that touches `end.Cone` along one ruling. It is built
-from the cone's exact apex `A` and slope `k` (read by `revolveplan.PointConeSource`) and the
-float direction `end.Radial = (0, y, z)`. The construction is about world X, so a
-cone whose limit has any other axis refuses with `ErrUnsupported`
-(`agent-docs/revolve-axis-design.md` §4.6).
+`LoftFaces(ctx, sections, WithConeTangentEnd(cone, radial))` lofts
+through the selected caps and then through a last section that no
+selected cap supplies. With the option, `sections` holds one to
+thirty-one caps, so the loft has at most thirty-two sections, and the
+option is accepted at most once. The cone must be live in the document
+of the body of `sections[0]` and share its container. The history record
+is the `LoftFaces` record, with the cone as a referenced input of role
+`tangent` after the sections. The last section is the plane that touches
+`cone` along one ruling. It is built from the cone's exact apex `A` and
+slope `k` (read by `revolveplan.PointConeSource`) and the float direction
+`radial = (0, y, z)`; any other `radial` is `ErrDegenerate`. The
+construction is about world X, so a cone whose limit has any other axis
+refuses with `ErrUnsupported` (`agent-docs/revolve-axis-design.md` §4.6).
 
 `loftface.NewTangentEnd` chooses a unit vector `e = (e_y, e_z)` by the
 half-angle parameterisation: `e_y = (1-T^2)/(1+T^2)`, `e_z = 2T/(1+T^2)`, with

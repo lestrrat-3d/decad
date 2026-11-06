@@ -21,11 +21,11 @@ import (
 // boundary is a certified chorded fan and a cap (agent-docs/loft-point-design.md).
 func LoftFromPoint(ctx context.Context, d *Document, apex r3.Vec,
 	s *sketch.Sketch, p *sketch.Profile) (*Body, error) {
-	body, err := loftFromPoint(ctx, OperationLoftFromPoint, d, apex, s, p)
+	body, err := loftFromPoint(ctx, d, apex, s, p)
 	return body, operationError(OperationLoftFromPoint, err)
 }
 
-func loftFromPoint(ctx context.Context, kind OperationKind, d *Document, apex r3.Vec,
+func loftFromPoint(ctx context.Context, d *Document, apex r3.Vec,
 	s *sketch.Sketch, p *sketch.Profile) (*Body, error) {
 	if ctx == nil || d == nil || s == nil || p == nil {
 		return nil, fmt.Errorf("%w: point loft needs a context, document, sketch and profile", ErrDegenerate)
@@ -87,7 +87,7 @@ func loftFromPoint(ctx context.Context, kind OperationKind, d *Document, apex r3
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	if err := d.commitOperationIn(ctx, d.ContainerOfSketch(s), kind, nil, body); err != nil {
+	if err := d.commitOperationIn(ctx, d.ContainerOfSketch(s), OperationLoftFromPoint, nil, body); err != nil {
 		return nil, err
 	}
 	return body, nil

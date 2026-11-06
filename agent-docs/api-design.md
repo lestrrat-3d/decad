@@ -1099,34 +1099,39 @@ chain's seam gates and before the axis gates and any commit
 `Profile` together. It admits the bounded classes in
 `agent-docs/loft-sections-design.md`.
 
-`LoftFaces(ctx, doc, sections ...*Face)` consumes two to thirty-two ordered planar caps from
+`LoftFaces(ctx, sections, opts...)` consumes two to thirty-two ordered planar caps from
 authenticated point-loft Split slabs. It retains their original Sketch
 profile and exact cut-plane maps through rigid placement and positive
-uniform scale. Its bounded source class and proof are in
+uniform scale. It reaches the document through the body of `sections[0]`
+and takes no `*Document` (§6.3). Its bounded source class and proof are in
 `agent-docs/loft-face-sections-design.md`.
 
 ```go
-// ConeTangentEnd names the cone that the last, constructed section touches.
-type ConeTangentEnd struct {
-	Cone   *Body  // a live, unplaced, full straight-meridian Revolve cone about world X
-	Radial r3.Vec // direction of the touching ruling's radius; X must be 0, (Y, Z) nonzero
+// LoftFacesOption configures LoftFaces.
+type LoftFacesOption interface {
+	option.Interface
+	loftFacesOption()
 }
 
-// LoftFacesToConeTangent lofts through 1 to 31 selected caps, then a
-// constructed last section tangent to end.Cone along one ruling.
-func LoftFacesToConeTangent(ctx context.Context, end ConeTangentEnd, sections ...*Face) (*Body, error)
+func LoftFaces(ctx context.Context, sections []*Face, opts ...LoftFacesOption) (*Body, error)
+
+// WithConeTangentEnd ends the loft with a constructed section tangent to
+// cone along the ruling whose radius points along radial.
+func WithConeTangentEnd(cone *Body, radial r3.Vec) LoftFacesOption
 ```
 
-`LoftFacesToConeTangent` is a free function. Its `sections` follow `LoftFaces`
-(the least slab's toe cap, then heel caps in source order), and its last
-section is built from `end.Cone`'s exact apex and slope instead of being
-selected. The result is an ordinary LoftFaces body: its end face carries the
-cap-end role of the new loft and a rounded `Plane` tag, and `Cut` and
-`Intersect` continue from it as they do from `LoftFaces`. A cone that is not an
-exact point cone, a placed or retired cone, a `Radial` with a nonzero `X` or
-without a finite nonzero `(Y, Z)`, and a section count outside 1 to 31 are
-refused with `ErrUnsupported`, `ErrRetiredBody` or `ErrDegenerate`. The
-construction is in `agent-docs/loft-face-sections-design.md`.
+With `WithConeTangentEnd`, `sections` holds one to thirty-one caps, in
+the same order (the least slab's toe cap, then heel caps in source order),
+and the last section is built from `cone`'s exact apex and slope instead of
+being selected. The result is an ordinary LoftFaces body: its end face
+carries the cap-end role of the new loft and a rounded `Plane` tag, and
+`Cut` and `Intersect` continue from it as they do without the option. The
+option is accepted at most once. A nil option, a repeated option, a nil
+cone, a `radial` with a nonzero `X` or without a finite nonzero `(Y, Z)`,
+and a section count outside the bounds are `ErrDegenerate`. A cone that is
+not an unplaced exact point cone about world X is `ErrUnsupported`, a cone
+of another document `ErrForeignBody`, and a retired cone `ErrRetiredBody`.
+The construction is in `agent-docs/loft-face-sections-design.md`.
 
 `ConeFromFace(ctx, body, face, far)` is a free function that returns the full
 cone about the world X axis of a Revolve `body` whose meridian extends the

@@ -119,7 +119,6 @@
 1	0.01	TestImplicitExactlyOneEdgeAxis
 1	0.00	TestLineRationalRoundingIsBounded
 1	0.05	TestLoftAlignmentSelectsTheCorrespondence
-1	0.01	TestLoftBetweenProfileToProfileIsLoft
 1	0.00	TestLoftContextCancellation
 1	0.88	TestLoftLineAgainstFitSpline
 1	6.38	TestLoftMirrorCylinderBoreRejectsToolEndingInsideUpperHalf
@@ -391,7 +390,6 @@
 2	0.00	TestHoleRectangularRefusals
 2	0.08	TestInchPocketLevelsInvertedAfterRounding
 2	0.01	TestLatticeKindsAreClosedSolidsOfTheExpectedFraction
-2	0.00	TestLoftBetweenPointAndProfile
 2	0.00	TestLoftCoplanarSectionsRefuse
 2	0.02	TestLoftCopyIdentityIsMeasurementIdentical
 2	0.47	TestLoftFitSplineWedgeVerifiesSound
@@ -661,7 +659,6 @@
 3	0.55	TestInchPocketLevelsWithinOneUlp
 3	0.03	TestInfillSkinRefusalsLeaveTheBlockLive
 3	0.01	TestLatticeKindsConvergeAndThicken
-3	0.00	TestLoftBetweenRefusals
 3	0.02	TestLoftCopyPlacementChainDoesNotAccumulate
 3	0.13	TestLoftCutExactToolSpanKeepsUncutCap
 3	0.14	TestLoftCutTiltedFrameMapBoundsCylinder
@@ -1716,7 +1713,7 @@
 7	38.69	TestHoleThreadOutOfABore
 7	0.00	TestImplicitExactlyOneStopSuccessfulManyRewritten
 7	0.01	TestIntersectOverlappingCubes
-7	0.13	TestLoftBetweenConeOverACircle
+7	0.13	TestLoftFromPointConeOverACircle
 7	0.00	TestLoftChainMultiCellRibbonFreeEdgesAndArea
 7	0.59	TestLoftCutExactToolCenterRefusesRewrite
 7	0.01	TestLoftExportIsDeterministic

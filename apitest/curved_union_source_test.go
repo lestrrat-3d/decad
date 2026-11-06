@@ -113,7 +113,7 @@ func TestCurvedLoftFacesUnionStopsAtTheChainDepthGate(t *testing.T) {
 	for i := range slices.Backward(slabs) {
 		sections = append(sections, pointSlabCap(t, slabs[i], decad.CapEnd(slabs[i])))
 	}
-	loft, err := decad.LoftFaces(t.Context(), doc, sections...)
+	loft, err := decad.LoftFaces(t.Context(), sections)
 	require.NoError(t, err)
 	toe, err := decad.Cut(t.Context(), loft, pointConeTool(t, doc, 6.5))
 	require.NoError(t, err)

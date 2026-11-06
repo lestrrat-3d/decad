@@ -117,11 +117,11 @@ func WithLoftSplits(first, second []LoftSplit) LoftOption {
 //
 // A failed call leaves the document untouched.
 func Loft(ctx context.Context, d *Document, s0 *sketch.Sketch, p0 *sketch.Profile, s1 *sketch.Sketch, p1 *sketch.Profile, opts ...LoftOption) (*Body, error) {
-	body, err := loft(ctx, OperationLoft, d, s0, p0, s1, p1, opts...)
+	body, err := loft(ctx, d, s0, p0, s1, p1, opts...)
 	return body, operationError(OperationLoft, err)
 }
 
-func loft(ctx context.Context, kind OperationKind, d *Document, s0 *sketch.Sketch, p0 *sketch.Profile,
+func loft(ctx context.Context, d *Document, s0 *sketch.Sketch, p0 *sketch.Profile,
 	s1 *sketch.Sketch, p1 *sketch.Profile, opts ...LoftOption) (*Body, error) {
 	if ctx == nil {
 		return nil, fmt.Errorf(`%w: a nil context cannot control a loft`, ErrDegenerate)
@@ -154,7 +154,7 @@ func loft(ctx context.Context, kind OperationKind, d *Document, s0 *sketch.Sketc
 		return nil, err
 	}
 	body := bodyHandle(node)
-	if err := d.commitOperationIn(ctx, d.ContainerOfSketch(s0), kind, nil, body); err != nil {
+	if err := d.commitOperationIn(ctx, d.ContainerOfSketch(s0), OperationLoft, nil, body); err != nil {
 		return nil, err
 	}
 	return body, nil

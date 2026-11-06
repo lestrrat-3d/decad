@@ -46,9 +46,7 @@ const (
 	OperationMirrored
 	OperationMirroredCopy
 	OperationScaledAt
-	OperationLoftBetween
 	OperationLoftFaces
-	OperationLoftFacesToConeTangent
 	OperationThread
 	OperationBoss
 	OperationSolidFromMesh
@@ -107,9 +105,7 @@ var operationKindNames = [...]string{
 	"mirrored",
 	"mirrored_copy",
 	"scaled_at",
-	"loft_between",
 	"loft_faces",
-	"loft_faces_to_cone_tangent",
 	"thread",
 	"boss",
 	"solid_from_mesh",

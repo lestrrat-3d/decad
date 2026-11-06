@@ -119,10 +119,10 @@ func TestPointLoftAuditsDecideCapsAsFamilies(t *testing.T) {
 	addSlab("apex slab 2", inner2, 1)
 	addSlab("two-plane slab 1", slab1, 2)
 
-	loft, err := LoftFaces(t.Context(), doc,
+	loft, err := LoftFaces(t.Context(), []*Face{
 		neutralArcSeamCap(t, slab1, refOf(CapStart(slab1))),
 		neutralArcSeamCap(t, slab1, refOf(CapEnd(slab1))),
-		neutralArcSeamCap(t, slab0, refOf(CapEnd(slab0))))
+		neutralArcSeamCap(t, slab0, refOf(CapEnd(slab0)))})
 	require.NoError(t, err)
 	facesPayload, ok := loft.n.Payload.(facetedPayload)
 	require.True(t, ok)

@@ -48,7 +48,7 @@ func TestLoftFacesRefusesUnauthenticatedSections(t *testing.T) {
 	}
 	for _, tc := range tests {
 		before := doc.Bodies()
-		_, err := decad.LoftFaces(t.Context(), doc, tc.sections...)
+		_, err := decad.LoftFaces(t.Context(), tc.sections)
 		require.ErrorIs(t, err, tc.err, tc.name)
 		if tc.msg != "" {
 			require.ErrorContains(t, err, tc.msg, tc.name)

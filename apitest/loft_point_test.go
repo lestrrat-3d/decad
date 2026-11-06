@@ -1,6 +1,7 @@
 package apitest_test
 
 import (
+	"math"
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
@@ -132,4 +133,36 @@ func TestLoftFromPointRejectsApexInPlaneAndHoles(t *testing.T) {
 		return
 	}
 	t.Fatal("Sketch did not return the holed region")
+}
+
+// pointLoftDisc draws a circle of the given radius on the XY plane.
+func pointLoftDisc(t *testing.T, w *sketch.World, radius float64) (*sketch.Sketch, *sketch.Profile) {
+	t.Helper()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	c := s.CreatePoint(0, 0)
+	s.Fix(c)
+	s.CreateCircle(c, radius)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	require.Len(t, s.Profiles(), 1)
+	return s, s.Profiles()[0]
+}
+
+// TestLoftFromPointConeOverACircle checks a curved profile against the cone volume.
+func TestLoftFromPointConeOverACircle(t *testing.T) {
+	t.Parallel()
+	const radius, height = 3.0, 4.0
+	w := sketch.NewWorld()
+	s, p := pointLoftDisc(t, w, radius)
+	b, err := decad.LoftFromPoint(t.Context(), decad.New(), r3.NewVec(0, 0, height), s, p)
+	require.NoError(t, err)
+	v, err := b.Volume()
+	require.NoError(t, err)
+	want := math.Pi * radius * radius * height / 3
+	require.InDelta(t, want, v.Value.Base(), v.Bound.Base()+1e-9)
+	mesh, err := b.Tessellate(t.Context(), units.Millimeters(0.05), decad.WithVerification(decad.VerifyAll))
+	require.NoError(t, err)
+	require.True(t, mesh.BoundaryVerified())
+	require.True(t, mesh.VolumeVerified())
 }
