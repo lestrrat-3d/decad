@@ -1536,7 +1536,7 @@ type JointCellResult struct {
 }
 
 type CellOutcome int
-// CellNotEvaluated | CellClear | CellBlocked | CellColliding | CellUndecided
+// (zero value, unexported at the root) | CellClear | CellBlocked | CellColliding | CellUndecided
 
 // JointBoxCollision is a proven overlap at an evaluated centre, about the ideal
 // poses (§5.1), with the configuration as its witness.
@@ -1554,7 +1554,8 @@ type JointBoxCollision struct {
 | `CellColliding` | a proven collision sits at the centre; nothing is claimed about the rest of the cell. The floor or the budget stopped the split that would have told more |
 | `CellUndecided` | none of the above: the centre certifies nothing and the floor or the budget stopped the split |
 
-`CellNotEvaluated` is the zero value and never appears in a returned report: every published cell's centre
+The zero `CellOutcome` (`linkage.CellNotEvaluated`, not re-exported by the root package) never
+appears in a returned report: every published cell's centre
 was evaluated (§14.4). `Interference`, `Clearance`, `Diagnostic`, `ScalarReading`, `Assessment` and the
 pair order of §4 are reused as they are; `A` is the earlier body in that order. The four `DiagMotion*`
 codes carry the same findings: a `CellUndecided` cell raises `DiagMotionUndecidedInterval`, a `CellClear`

@@ -77,11 +77,10 @@ type (
 )
 
 const (
-	CellNotEvaluated = linkage.CellNotEvaluated
-	CellClear        = linkage.CellClear
-	CellBlocked      = linkage.CellBlocked
-	CellColliding    = linkage.CellColliding
-	CellUndecided    = linkage.CellUndecided
+	CellClear     = linkage.CellClear
+	CellBlocked   = linkage.CellBlocked
+	CellColliding = linkage.CellColliding
+	CellUndecided = linkage.CellUndecided
 )
 
 // NewLinkage returns a linkage holding the ground link alone.
