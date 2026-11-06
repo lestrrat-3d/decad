@@ -23,3 +23,25 @@ func TestLinearMotionUsesDenotedStep(t *testing.T) {
 	require.Zero(t, charge)
 	require.Zero(t, proofarith.RationalFloatError(big.NewRat(7, 1), point.U))
 }
+
+func TestWorldMotionKeepsExactAxialSimilarity(t *testing.T) {
+	for _, axis := range []r3.Vec{{Z: 1}, {Z: -1}} {
+		for _, count := range []int{12, 17, 22} {
+			rp, err := ResolveCircular(r3.Vec{}, axis, count)
+			require.NoError(t, err)
+			for i := 1; i < count; i++ {
+				motion, err := rp.WorldMotion(i)
+				require.NoError(t, err)
+				require.True(t, motion.IsValid(), "count=%d instance=%d", count, i)
+				require.False(t, motion.IsReflection(), "count=%d instance=%d", count, i)
+				require.Zero(t, motion.Translation(), "count=%d instance=%d", count, i)
+				basis := motion.Basis()
+				require.Equal(t, r3.Vec{Z: 1}, basis.EZ, "count=%d instance=%d", count, i)
+				require.Zero(t, basis.EX.Z, "count=%d instance=%d", count, i)
+				require.Zero(t, basis.EY.Z, "count=%d instance=%d", count, i)
+				require.Equal(t, basis.EX.X, basis.EY.Y, "count=%d instance=%d", count, i)
+				require.Equal(t, basis.EX.Y, -basis.EY.X, "count=%d instance=%d", count, i)
+			}
+		}
+	}
+}

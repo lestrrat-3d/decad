@@ -3,6 +3,7 @@ package export_test
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -76,15 +77,39 @@ func TestNewSTEPFileBytesArePinned(t *testing.T) {
 		body func(*testing.T) *decad.Body
 		tol  units.Value
 		want string
+		// The faceted mesh has different pinned bytes on macOS.
+		platformWant map[string]string
 	}{
-		{"AnalyticBox", func(t *testing.T) *decad.Body { return box(t, false) }, units.Millimeters(0.1), "2a0b0decbc4b08da870bbd7fbd8cad92a36c39d90648ef085beef569740e8088"},
-		{"FacetedBoolean", facetedCutPlate, units.Millimeters(0.1), "6e071286f415ab18c2b46a91a36248f7b6ca2548bb702318a0e4b356b372abc9"},
-		{"CavityCube", cavityCube, units.Millimeters(0.1), "f4763c9e1135ae40826492b858fb8443c332f4bfb8c9528540c6bc35441e5653"},
+		{
+			name: "AnalyticBox",
+			body: func(t *testing.T) *decad.Body { return box(t, false) },
+			tol:  units.Millimeters(0.1),
+			want: "2a0b0decbc4b08da870bbd7fbd8cad92a36c39d90648ef085beef569740e8088",
+		},
+		{
+			name: "FacetedBoolean",
+			body: facetedCutPlate,
+			tol:  units.Millimeters(0.1),
+			want: "6e071286f415ab18c2b46a91a36248f7b6ca2548bb702318a0e4b356b372abc9",
+			platformWant: map[string]string{
+				"darwin": "21edf38d638363e6c3dcdfe9ebdea5f12a4c7b94c0392b63818ddf977c73926c",
+			},
+		},
+		{
+			name: "CavityCube",
+			body: cavityCube,
+			tol:  units.Millimeters(0.1),
+			want: "f4763c9e1135ae40826492b858fb8443c332f4bfb8c9528540c6bc35441e5653",
+		},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()
-			require.Equal(t, c.want, stepHash(t, c.body(t), c.tol))
+			want := c.want
+			if platformWant, ok := c.platformWant[runtime.GOOS]; ok {
+				want = platformWant
+			}
+			require.Equal(t, want, stepHash(t, c.body(t), c.tol))
 		})
 	}
 }
