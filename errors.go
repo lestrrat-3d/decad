@@ -225,3 +225,10 @@ func (e *BooleanError) Error() string {
 
 // Unwrap returns the wrapped §12 sentinel so errors.Is keeps branching on it.
 func (e *BooleanError) Unwrap() error { return e.err }
+
+// MeshBoundError is Tessellate's refusal of a chord tolerance finer than the
+// minimum mesh bound a faceted body holds. Every tolerance at or above Floor
+// restates the same held facets, so a caller may retry at exactly Floor.
+// errors.As(err, &target) with target a *MeshBoundError reads it, and
+// errors.Is(err, [ErrUnsupported]) keeps holding.
+type MeshBoundError = decaderr.MeshBoundError

@@ -104,6 +104,10 @@ func TestTessellateFacetedToleranceBoundary(t *testing.T) {
 	mesh, err := body.Tessellate(t.Context(), requested)
 	require.Nil(t, mesh)
 	require.ErrorIs(t, err, decad.ErrUnsupported)
+	var boundErr *decad.MeshBoundError
+	require.ErrorAs(t, err, &boundErr)
+	require.Equal(t, bound, boundErr.Floor())
+	require.Equal(t, requested, boundErr.Requested())
 	require.ErrorContains(t, err, fmt.Sprintf("requested tolerance %s", requested))
 	require.ErrorContains(t, err, fmt.Sprintf("minimum mesh bound %s", bound))
 	require.ErrorContains(t, err, fmt.Sprintf("retry with a tolerance of at least %s", bound))

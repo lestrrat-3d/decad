@@ -590,6 +590,10 @@ Branch on a sentinel with `errors.Is`.
 | `decad.ErrMalformedMesh`, `decad.ErrMeshTooLarge` | An STL or OBJ file was malformed, or held more than the import limits allow. |
 | `decad.ErrForeignProfile`, `decad.ErrStaleProfile`, `decad.ErrInvalidProfile`, `decad.ErrUnrecordableProfile` | A sketch profile was rejected. |
 
+`Tessellate` of a faceted body at a tolerance below its minimum mesh bound returns a `*decad.MeshBoundError`, which
+also satisfies `errors.Is(err, decad.ErrUnsupported)`. Read it with `errors.As`: `Floor()` is the smallest accepted
+tolerance and `Requested()` the refused one. Every tolerance at or above `Floor()` restates the same held facets.
+
 ## Test helpers
 
 The `decadtest` package offers assertions such as `decadtest.IsManifold`, `decadtest.HasStatus` and
