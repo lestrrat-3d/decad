@@ -6,6 +6,7 @@ import (
 
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
+	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
 
 	"github.com/lestrrat-3d/decad"
@@ -45,5 +46,57 @@ func TestUnionManyJoinsTwistedLoftTeethToADisc(t *testing.T) {
 		slack := got.Bound.Base() + discVol.Bound.Base() + float64(tc.teeth)*toothVol.Bound.Base()
 		require.LessOrEqual(t, math.Abs(got.Value.Base()-want), slack,
 			"teeth %d: joined %v want %v", tc.teeth, got.Value, want)
+	}
+}
+
+// TestUnionManyJoinsTwistedLoftTeethWithRootsInsideTheDisc joins twisted
+// lofted teeth whose root endpoints lie on the disc's circle or just inside
+// it. A root endpoint inside the circle starts the connector line's first
+// slice piece inside it at the cap where that piece has zero length, so the
+// crossing is on the second piece arbitrarily close to that cap. The join
+// must exclude those heights with a cap collar instead of falling back to the
+// wider seam bound, which exceeds 0.1 mm for these radii and twists. The overlap
+// of each root band with the disc is at most offset times the tooth's root
+// chord times the height, below 1e-7 mm³, so the joined volume is the exact
+// disc plus every tooth within their bounds.
+func TestUnionManyJoinsTwistedLoftTeethWithRootsInsideTheDisc(t *testing.T) {
+	const height = 4.0
+	for _, tc := range []struct {
+		teeth                     int
+		root, half, twist, offset float64
+	}{
+		{teeth: 4, root: 7.25, half: 0.1, twist: 12 * math.Pi / 180, offset: 1e-9},
+		{teeth: 5, root: 10, half: 0.06, twist: 11 * math.Pi / 180, offset: 1e-12},
+		{teeth: 6, root: 12, half: 0.1, twist: 9 * math.Pi / 180},
+	} {
+		doc := decad.New()
+		w := sketch.NewWorld()
+		s0, p0 := twistedFitToothSection(t, w, w.XY(), tc.root, 5, tc.half, 0)
+		s1, p1 := twistedFitToothSection(t, w, splitTopPlane(t, w, height), tc.root, 5, tc.half, tc.twist)
+		tooth, err := decad.Loft(t.Context(), doc, s0, p0, s1, p1)
+		require.NoError(t, err, "teeth %d", tc.teeth)
+		toothVol, err := tooth.Volume()
+		require.NoError(t, err)
+		radius := tc.root + tc.offset
+		disc := circleBodyAtZ(t, doc, 0, radius, 0, height)
+
+		copies, err := decad.PatternCopies(t.Context(), tooth, decad.CircularPattern{Axis: r3.Vec{Z: 1}, Count: tc.teeth})
+		require.NoError(t, err)
+		joined, err := decad.Union(t.Context(), disc, append([]*decad.Body{tooth}, copies...)...)
+		require.NoError(t, err, "teeth %d", tc.teeth)
+		require.True(t, joined.IsSolid())
+		got, err := joined.Volume()
+		require.NoError(t, err)
+
+		want := math.Pi*radius*radius*height + float64(tc.teeth)*toothVol.Value.Base()
+		slack := got.Bound.Base() + float64(tc.teeth)*toothVol.Bound.Base() + 1e-7
+		require.LessOrEqual(t, math.Abs(got.Value.Base()-want), slack,
+			"teeth %d: joined %v want %v", tc.teeth, got.Value, want)
+
+		mesh, err := joined.Tessellate(t.Context(), units.Millimeters(0.1),
+			decad.WithVerification(decad.VerifyAll))
+		require.NoError(t, err, "teeth %d", tc.teeth)
+		require.True(t, mesh.BoundaryVerified(), "teeth %d", tc.teeth)
+		require.True(t, mesh.VolumeVerified(), "teeth %d", tc.teeth)
 	}
 }

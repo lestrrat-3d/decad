@@ -312,11 +312,13 @@ func (j *Join) Payload(ctx context.Context, blankMesh *topo.Mesh) (facetedrecord
 	// source crossing. The latter leg starts at the held root ray, not the
 	// held crossing ray. Source cylinder points under a held tooth use the
 	// separate source-to-held crossing shift. Hidden connector points use
-	// their same-height chain directly.
+	// their same-height chain directly. The two-times-inset bound needs no
+	// connector certificate, so it also holds when every tooth has one; the
+	// join keeps the smaller of the two whole-pattern bounds.
 	seamReach := proofbound.ProductUpper(2, j.innerInset)
 	if j.allReach {
-		seamReach = max(proofbound.AbsSumUpper(j.innerInset, j.angular),
-			j.connectorReach, j.crossingShift)
+		seamReach = min(seamReach, max(proofbound.AbsSumUpper(j.innerInset, j.angular),
+			j.connectorReach, j.crossingShift))
 	}
 	collarSweep, ok := collarSweep(j.Teeth, j.Z0, j.Z1, j.rootCollar)
 	if !ok {

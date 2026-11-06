@@ -1,6 +1,7 @@
 package loftcylinder
 
 import (
+	"math"
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/momentinput"
@@ -113,38 +114,58 @@ func heldRootCollar(near [2]r3.Vec, radius, height float64) (float64, bool) {
 	return 0, false
 }
 
-// The first piece of each radial-monotone connector must meet the circle
-// before its shared diagonal. Its cap vector vanishes at one end. Factoring
-// that axial factor keeps the crossing distance correlated with height.
-// The bound applies to both the denoted source wall and the held Loft wall.
+// ConnectorReach bounds how far each connector's first piece travels from its
+// root endpoint to the circle. The first piece of each radial-monotone
+// connector must meet the circle before its shared diagonal. Its cap vector
+// vanishes at one end. Factoring that axial factor keeps the crossing distance
+// correlated with height. The bound applies to both the denoted source wall
+// and the held Loft wall. It returns the reach, the crossing shift, the root
+// angle reach and the cap collar height its certificate covers, which is at
+// least collar.
 func ConnectorReach(verts []r3.Vec, tris [][3]int, segments [][]int,
 	profiles [2]momentinput.Profile, ex r3.Vec, facetDeparture float64,
-	root int, radius, collar float64) (float64, float64, float64, bool) {
+	root int, radius, collar float64) (ConnectorBound, bool) {
 	if collar < 0 || proofbound.IsNonFinite(collar) || radius <= 0 ||
 		proofbound.IsNonFinite(radius) || facetDeparture < 0 ||
 		proofbound.IsNonFinite(facetDeparture) {
-		return 0, 0, 0, false
+		return ConnectorBound{}, false
 	}
 	n := len(verts) / 2
 	if len(verts)%2 != 0 || root < 3 || root >= n-1 ||
 		len(tris) != 4*n-4 {
-		return 0, 0, 0, false
+		return ConnectorBound{}, false
 	}
 	z0, z1 := proofarith.FloatRat(verts[0].Z), proofarith.FloatRat(verts[n].Z)
 	height := proofarith.SubRat(new(big.Rat), z1, z0)
 	if height.Sign() <= 0 {
-		return 0, 0, 0, false
+		return ConnectorBound{}, false
+	}
+	r := proofarith.FloatRat(radius)
+	r2 := proofarith.MulRat(new(big.Rat), r, r)
+	var sources, helds [2]Connector
+	for i, cell := range []int{0, root - 1} {
+		source, ok := SourceConnectorOf(verts, tris, segments, profiles, ex, cell, root)
+		if !ok {
+			return ConnectorBound{}, false
+		}
+		held, ok := heldConnectorOf(verts, cell, root, source)
+		if !ok {
+			return ConnectorBound{}, false
+		}
+		sources[i], helds[i] = source, held
+	}
+	collar, ok := connectorReachCollar(append(sources[:], helds[:]...), r2, height, collar)
+	if !ok {
+		return ConnectorBound{}, false
 	}
 	lo := proofarith.QuoRat(new(big.Rat), proofarith.FloatRat(collar), height)
 	hi := proofarith.SubRat(new(big.Rat), big.NewRat(1, 1), lo)
 	if lo.Cmp(hi) >= 0 {
-		return 0, 0, 0, false
+		return ConnectorBound{}, false
 	}
-	r := proofarith.FloatRat(radius)
-	r2 := proofarith.MulRat(new(big.Rat), r, r)
 	delta := proofarith.FloatRat(facetDeparture)
 	if delta.Sign() < 0 || delta.Cmp(r) >= 0 {
-		return 0, 0, 0, false
+		return ConnectorBound{}, false
 	}
 	outer := proofarith.AddRat(new(big.Rat), r, delta)
 	inner := proofarith.SubRat(new(big.Rat), r, delta)
@@ -154,23 +175,16 @@ func ConnectorReach(verts []r3.Vec, tris [][3]int, segments [][]int,
 		deviation = innerDeviation
 	}
 	maximumShift, maximumAngular := 0.0, 0.0
-	for _, cell := range []int{0, root - 1} {
-		source, ok := SourceConnectorOf(verts, tris, segments, profiles, ex, cell, root)
-		if !ok {
-			return 0, 0, 0, false
-		}
-		held, ok := heldConnectorOf(verts, cell, root, source)
-		if !ok {
-			return 0, 0, 0, false
-		}
+	for i := range sources {
+		source, held := sources[i], helds[i]
 		angular, ok := connectorRootAngle(source, held, lo, hi, r)
 		if !ok {
-			return 0, 0, 0, false
+			return ConnectorBound{}, false
 		}
 		maximumAngular = max(maximumAngular, proofbound.RatFloatUp(angular))
 		for _, connector := range []Connector{source, held} {
 			if !connectorReachPiece(connector, r2, lo, hi, proofarith.FloatRat(0.08)) {
-				return 0, 0, 0, false
+				return ConnectorBound{}, false
 			}
 			// At one circle crossing, its parameter-matched point on the other
 			// Loft wall is within δ. Both crossings lie on the first piece.
@@ -178,7 +192,7 @@ func ConnectorReach(verts []r3.Vec, tris [][3]int, segments [][]int,
 			// vanishing cap factor cancels against that piece's length.
 			shift, ok := connectorCrossShift(connector, lo, hi, deviation)
 			if !ok || proofarith.AddRat(new(big.Rat), delta, shift).Cmp(proofarith.FloatRat(0.08)) > 0 {
-				return 0, 0, 0, false
+				return ConnectorBound{}, false
 			}
 			maximumShift = max(maximumShift, proofbound.AbsSumUpper(
 				facetDeparture, proofbound.RatFloatUp(shift)))
@@ -187,9 +201,71 @@ func ConnectorReach(verts []r3.Vec, tris [][3]int, segments [][]int,
 	quarterRadius := proofarith.QuoRat(new(big.Rat), r, big.NewRat(4, 1))
 	if proofarith.FloatRat(maximumShift).Cmp(quarterRadius) >= 0 ||
 		proofarith.FloatRat(maximumAngular).Cmp(quarterRadius) >= 0 {
-		return 0, 0, 0, false
+		return ConnectorBound{}, false
 	}
-	return 0.08, maximumShift, maximumAngular, true
+	return ConnectorBound{Reach: 0.08, Shift: maximumShift,
+		Angular: maximumAngular, Collar: collar}, true
+}
+
+// ConnectorBound is the certificate ConnectorReach returns. Reach bounds the
+// distance along a connector's first piece from its root endpoint to the
+// circle, Shift the source-to-held crossing shift, and Angular the root angle
+// reach. Collar is the cap collar height outside which the other three hold;
+// the caller charges it as a root collar.
+type ConnectorBound struct {
+	Reach, Shift, Angular, Collar float64
+}
+
+// connectorReachCollar returns the smallest tried cap collar height, at least
+// collar, between whose two heights every connector's first piece starts
+// strictly inside the circle and ends strictly outside it. A root endpoint the
+// section records on the blank circle lies inside or outside it by float
+// rounding. Where a piece vanishes at a cap, its far end then starts on the
+// wrong side, and the crossing lies on the second piece arbitrarily close to
+// that cap. Only a collar excludes those heights; the boundary proof charges
+// its height and XY sweep like any root collar. Dyadic collars from 2^-52 to
+// 2^-8 of the height are tried in increasing order; connectorReachPiece
+// rechecks the same strict endpoint conditions on the returned interval.
+func connectorReachCollar(connectors []Connector, r2, height *big.Rat, collar float64) (float64, bool) {
+	settled := func(candidate float64) bool {
+		lo := proofarith.QuoRat(new(big.Rat), proofarith.FloatRat(candidate), height)
+		hi := proofarith.SubRat(new(big.Rat), big.NewRat(1, 1), lo)
+		if lo.Cmp(hi) >= 0 {
+			return false
+		}
+		for _, c := range connectors {
+			if !connectorEndsSettled(c, r2, lo, hi) {
+				return false
+			}
+		}
+		return true
+	}
+	if settled(collar) {
+		return collar, true
+	}
+	heightUp := proofbound.RatFloatUp(height)
+	for shift := 52; shift >= 8; shift-- {
+		candidate := proofbound.ProductUpper(math.Ldexp(1, -shift), heightUp)
+		if candidate <= collar || proofbound.IsNonFinite(candidate) {
+			continue
+		}
+		if settled(candidate) {
+			return candidate, true
+		}
+	}
+	return 0, false
+}
+
+// connectorEndsSettled reports whether the first piece of c starts strictly
+// inside radius² r2 and its far end stays strictly outside it at every
+// height parameter in [lo, hi].
+func connectorEndsSettled(c Connector, r2, lo, hi *big.Rat) bool {
+	aLo := sourceLerp(c.a[0], c.a[1], lo)
+	aHi := sourceLerp(c.a[0], c.a[1], hi)
+	dLo := sourceLerp(c.d[0], c.d[1], lo)
+	dHi := sourceLerp(c.d[0], c.d[1], hi)
+	return SourceDot(aLo, aLo).Cmp(r2) < 0 && SourceDot(aHi, aHi).Cmp(r2) < 0 &&
+		sourceRadiusMin2(dLo, dHi).Cmp(r2) > 0
 }
 
 // Bound the chord on radius R between the held root ray, where the gap ring
@@ -333,15 +409,11 @@ func sameXY(a, b XY) bool {
 }
 
 func connectorReachPiece(c Connector, radius2, lo, hi, reach *big.Rat) bool {
-	aLo := sourceLerp(c.a[0], c.a[1], lo)
-	aHi := sourceLerp(c.a[0], c.a[1], hi)
-	dLo := sourceLerp(c.d[0], c.d[1], lo)
-	dHi := sourceLerp(c.d[0], c.d[1], hi)
-	if SourceDot(aLo, aLo).Cmp(radius2) >= 0 ||
-		SourceDot(aHi, aHi).Cmp(radius2) >= 0 ||
-		sourceRadiusMin2(dLo, dHi).Cmp(radius2) <= 0 {
+	if !connectorEndsSettled(c, radius2, lo, hi) {
 		return false
 	}
+	aLo := sourceLerp(c.a[0], c.a[1], lo)
+	aHi := sourceLerp(c.a[0], c.a[1], hi)
 	v0 := sourceSub(c.d[0], c.a[0])
 	v1 := sourceSub(c.d[1], c.a[1])
 	zero0 := SourceDot(v0, v0).Sign() == 0

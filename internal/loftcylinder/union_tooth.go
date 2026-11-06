@@ -175,7 +175,9 @@ func (t *Tooth) Admit(radius, z0, z1 float64) bool {
 		return false
 	}
 	collar = max(collar, connectorCollar)
-	reach, shift, angular, ok := ConnectorReach(lp.Verts, lp.Tris, lp.Segment,
+	// A connector certificate may widen the collar it is certified outside;
+	// the tooth then charges that wider collar.
+	bound, ok := ConnectorReach(lp.Verts, lp.Tris, lp.Segment,
 		profiles, lp.Xform.Basis().EX, lp.Proof.FacetDeparture, root, radius, collar)
 	if ok {
 		circle, err := SourceCircleOf(lp, radius)
@@ -191,7 +193,10 @@ func (t *Tooth) Admit(radius, z0, z1 float64) bool {
 		return false
 	}
 	t.RootGap, t.Inset = gap, inset
-	t.Reach, t.Shift, t.Angular = reach, shift, angular
+	if reachOK {
+		collar = max(collar, bound.Collar)
+	}
+	t.Reach, t.Shift, t.Angular = bound.Reach, bound.Shift, bound.Angular
 	t.ReachOK = reachOK
 	t.Collar, t.Wedge = collar, wedge
 	return true
