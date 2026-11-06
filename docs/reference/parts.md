@@ -20,22 +20,35 @@ parts knows nothing of how a part is made.
 ## Index
 
 - [type Axis](<#Axis>)
+- [type AxisSource](<#AxisSource>)
+  - [func (AxisSource) String](<#AxisSource.String>)
 - [type BOM](<#BOM>)
 - [type BOMRow](<#BOMRow>)
+- [type Cause](<#Cause>)
+  - [func (Cause) String](<#Cause.String>)
 - [type CheckOption](<#CheckOption>)
   - [func WithAxisTolerance](<#WithAxisTolerance>)
   - [func WithContactTolerance](<#WithContactTolerance>)
   - [func WithFitTolerance](<#WithFitTolerance>)
   - [func WithMaxFit](<#WithMaxFit>)
   - [func WithVerifyReport](<#WithVerifyReport>)
+  - [func WithWitnessSearch](<#WithWitnessSearch>)
+- [type CheckRequest](<#CheckRequest>)
+- [type Clearing](<#Clearing>)
+  - [func (Clearing) String](<#Clearing.String>)
 - [type Edge](<#Edge>)
 - [type ExplodeOption](<#ExplodeOption>)
   - [func WithExplodeGap](<#WithExplodeGap>)
   - [func WithExplodeGround](<#WithExplodeGround>)
+  - [func WithExplodeScale](<#WithExplodeScale>)
+  - [func WithExplodeStages](<#WithExplodeStages>)
+  - [func WithPartGap](<#WithPartGap>)
 - [type Exploded](<#Exploded>)
+  - [func (\*Exploded) Hidden](<#Exploded.Hidden>)
 - [type ExplodedPart](<#ExplodedPart>)
 - [type Graph](<#Graph>)
   - [func (Graph) WriteMermaid](<#Graph.WriteMermaid>)
+- [type InferredJoint](<#InferredJoint>)
 - [type Joint](<#Joint>)
 - [type JointKind](<#JointKind>)
   - [func (JointKind) String](<#JointKind.String>)
@@ -50,8 +63,13 @@ parts knows nothing of how a part is made.
 - [type Motion](<#Motion>)
   - [func (Motion) String](<#Motion.String>)
 - [type Node](<#Node>)
+- [type Occlusion](<#Occlusion>)
+- [type PairFinding](<#PairFinding>)
 - [type Part](<#Part>)
+- [type PartMesh](<#PartMesh>)
 - [type PartView](<#PartView>)
+- [type PathState](<#PathState>)
+  - [func (PathState) String](<#PathState.String>)
 - [type Port](<#Port>)
 - [type PullSource](<#PullSource>)
   - [func (PullSource) String](<#PullSource.String>)
@@ -59,15 +77,19 @@ parts knows nothing of how a part is made.
   - [func NewSet](<#NewSet>)
   - [func (\*Set) Add](<#Set.Add>)
   - [func (\*Set) BOM](<#Set.BOM>)
+  - [func (\*Set) Check](<#Set.Check>)
   - [func (\*Set) Document](<#Set.Document>)
   - [func (\*Set) Explode](<#Set.Explode>)
   - [func (\*Set) Graph](<#Set.Graph>)
   - [func (\*Set) Group](<#Set.Group>)
+  - [func (\*Set) Infer](<#Set.Infer>)
   - [func (\*Set) Join](<#Set.Join>)
   - [func (\*Set) Joints](<#Set.Joints>)
+  - [func (\*Set) Linkage](<#Set.Linkage>)
   - [func (\*Set) Part](<#Set.Part>)
   - [func (\*Set) Parts](<#Set.Parts>)
   - [func (\*Set) Views](<#Set.Views>)
+- [type Stage](<#Stage>)
 - [type Summary](<#Summary>)
   - [func (Summary) WriteMarkdown](<#Summary.WriteMarkdown>)
 - [type ViewOption](<#ViewOption>)
@@ -83,6 +105,28 @@ parts knows nothing of how a part is made.
 <pre>type Axis struct{ Point, Dir r3.Vec }</pre>
 
 Axis is a line: a point on it and a unit direction.
+
+<a name="AxisSource"></a>
+### type AxisSource
+
+<pre>type AxisSource <a href="https://pkg.go.dev/builtin#int">int</a></pre>
+
+AxisSource says where a joint's axis came from.
+
+<a name="AxisSourceNone"></a><a name="AxisSourceFaces"></a><a name="AxisSourceDeclared"></a>
+
+<pre>const (
+    AxisSourceNone     <a href="#AxisSource">AxisSource</a> = iota // no axis
+    AxisSourceFaces                      // the matched cylinder faces
+    AxisSourceDeclared                   // the joint&#39;s declared Axis
+)</pre>
+
+<a name="AxisSource.String"></a>
+#### func (AxisSource) String
+
+<pre>func (a <a href="#AxisSource">AxisSource</a>) String() <a href="https://pkg.go.dev/builtin#string">string</a></pre>
+
+String returns the lower-case words for the source.
 
 <a name="BOM"></a>
 ### type BOM
@@ -106,6 +150,35 @@ each by Spec, then name.
 }</pre>
 
 BOMRow is one line of the bill of materials.
+
+<a name="Cause"></a>
+### type Cause
+
+<pre>type Cause <a href="https://pkg.go.dev/builtin#int">int</a></pre>
+
+Cause names why a joint is not Confirmed.
+
+<a name="CauseNone"></a><a name="CauseNoMatch"></a><a name="CauseClearance"></a><a name="CauseAxis"></a><a name="CauseInterference"></a><a name="CauseApart"></a><a name="CauseTooClose"></a><a name="CauseUnreadFace"></a><a name="CauseNoWitness"></a><a name="CauseNeedsPairProof"></a>
+
+<pre>const (
+    CauseNone           <a href="#Cause">Cause</a> = iota
+    CauseNoMatch              // no face pair of the joint&#39;s form exists, and every face near the pair was read
+    CauseClearance            // the measured clearance is not the declared one
+    CauseAxis                 // the matched axis is not the declared one
+    CauseInterference         // a pin larger than its bore with no declared press fit
+    CauseApart                // the parts are proven farther apart than the joint allows
+    CauseTooClose             // a keepout pair is proven closer than its minimum gap
+    CauseUnreadFace           // a face near the pair reads Faceted or the body would not mesh
+    CauseNoWitness            // no point proves the contact or the face overlap
+    CauseNeedsPairProof       // only a pair proof could decide it
+)</pre>
+
+<a name="Cause.String"></a>
+#### func (Cause) String
+
+<pre>func (c <a href="#Cause">Cause</a>) String() <a href="https://pkg.go.dev/builtin#string">string</a></pre>
+
+String returns the lower-case words for the cause.
 
 <a name="CheckOption"></a>
 ### type CheckOption
@@ -141,7 +214,7 @@ default is 0.05 mm.
 <pre>func WithFitTolerance(tol units.Value) <a href="#CheckOption">CheckOption</a></pre>
 
 WithFitTolerance sets the largest axis distance and radius disagreement a
-match allows; the default is 0.05 mm.
+match allows; the default is 0.25 mm.
 
 <a name="WithMaxFit"></a>
 #### func WithMaxFit
@@ -159,6 +232,50 @@ default is 1 mm.
 WithVerifyReport makes Check read the pair partition from r instead of
 running Document.Verify. Explode and [Views](<#Views>) ignore it.
 
+<a name="WithWitnessSearch"></a>
+#### func WithWitnessSearch
+
+<pre>func WithWitnessSearch() <a href="#CheckOption">CheckOption</a></pre>
+
+WithWitnessSearch makes Check also look for a witness for each unexplained
+pair: a point whose distances to the two parts prove the pair within the
+contact tolerance of each other, which Check then reports as [PairFinding](<#PairFinding>).Near.
+A pair without Near may be apart. The search samples up to 128 mesh vertices
+per pair and calls Body.DistanceToPoint at each.
+
+<a name="CheckRequest"></a>
+### type CheckRequest
+
+<pre>type CheckRequest struct {
+    FitTolerance, ContactTolerance, AxisTolerance, MaxFit units.Value
+    WitnessSearch                                         <a href="https://pkg.go.dev/builtin#bool">bool</a>
+    VerifyReport                                          <a href="https://pkg.go.dev/builtin#bool">bool</a>       // a WithVerifyReport report was read
+    Meshes                                                []<a href="#PartMesh">PartMesh</a> // one per part with a body, in Set order
+}</pre>
+
+CheckRequest is the effective settings of one Check.
+
+<a name="Clearing"></a>
+### type Clearing
+
+<pre>type Clearing <a href="https://pkg.go.dev/builtin#int">int</a></pre>
+
+Clearing says what a stage's members must clear.
+
+<a name="ClearJoined"></a><a name="ClearAll"></a>
+
+<pre>const (
+    ClearJoined <a href="#Clearing">Clearing</a> = iota // clear the parent and the joined parts already moved
+    ClearAll                    // clear every part that stays put, by the gap
+)</pre>
+
+<a name="Clearing.String"></a>
+#### func (Clearing) String
+
+<pre>func (c <a href="#Clearing">Clearing</a>) String() <a href="https://pkg.go.dev/builtin#string">string</a></pre>
+
+String returns the lower-case words for the clearing.
+
 <a name="Edge"></a>
 ### type Edge
 
@@ -168,6 +285,7 @@ running Document.Verify. Explode and [Views](<#Views>) ignore it.
     Kind   <a href="#JointKind">JointKind</a>
     Motion <a href="#Motion">Motion</a>
     Status <a href="#JointStatus">JointStatus</a> // NotEvaluated when Graph was given no report
+    Cause  <a href="#Cause">Cause</a>       // why the joint is not Confirmed; CauseNone otherwise
 }</pre>
 
 Edge is one joint of the diagram.
@@ -198,6 +316,33 @@ default is 10 mm. A zero gap is allowed.
 WithExplodeGround names the part that stays put; the default is the
 manufactured part of largest volume.
 
+<a name="WithExplodeScale"></a>
+#### func WithExplodeScale
+
+<pre>func WithExplodeScale(scale units.Value) <a href="#ExplodeOption">ExplodeOption</a></pre>
+
+WithExplodeScale multiplies every final offset by scale, a positive
+Dimensionless value: a uniform spread about the assembled layout. The default
+is units.Scalar(1).
+
+<a name="WithExplodeStages"></a>
+#### func WithExplodeStages
+
+<pre>func WithExplodeStages(stages ...<a href="#Stage">Stage</a>) <a href="#ExplodeOption">ExplodeOption</a></pre>
+
+WithExplodeStages runs the explosion in the given stages, in order. A part no
+stage names, other than the ground, forms a last stage named "" that clears its
+joined neighbours by WithExplodeGap's gap. With no stages every part is in that
+last stage.
+
+<a name="WithPartGap"></a>
+#### func WithPartGap
+
+<pre>func WithPartGap(part <a href="https://pkg.go.dev/builtin#string">string</a>, gap units.Value) <a href="#ExplodeOption">ExplodeOption</a></pre>
+
+WithPartGap sets one part's gap, in place of its stage's and
+WithExplodeGap's. A part no [Set](<#Set>) has is decad.ErrDegenerate at the query.
+
 <a name="Exploded"></a>
 ### type Exploded
 
@@ -206,9 +351,27 @@ manufactured part of largest volume.
     Parts    []<a href="#ExplodedPart">ExplodedPart</a> // in Set order, body-less parts omitted
     Leaders  []<a href="#Leader">Leader</a>
     Overlaps [][2]<a href="https://pkg.go.dev/builtin#string">string</a> // part pairs whose exploded boxes still meet
+    Stages   []<a href="https://pkg.go.dev/builtin#string">string</a>    // the stage names in the order they ran; &#34;&#34; is the last, implicit stage
+    Scale    units.Value // the WithExplodeScale multiplier, Dimensionless
+    Short    []<a href="https://pkg.go.dev/builtin#string">string</a>    // parts whose Clearance is below their Gap, in Set order
+    // contains filtered or unexported fields
 }</pre>
 
 Exploded is the layout of a [Set](<#Set>) pulled apart along its joints.
+
+<a name="Exploded.Hidden"></a>
+#### func (\*Exploded) Hidden
+
+<pre>func (e *<a href="#Exploded">Exploded</a>) Hidden(view r3.Vec) ([]<a href="#Occlusion">Occlusion</a>, <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
+
+Hidden lists the pairs of exploded parts where one may hide the other seen along
+view, which points from the camera into the scene: each part's box is projected
+orthographically along view to a rectangle, and a pair whose rectangles overlap
+is listed with the nearer part (the one whose box centre is nearer the camera)
+as Front, and the share of Back's rectangle Front's covers. A pair absent from
+the list cannot hide one another; a listed pair may, since a box is larger than
+its part. Hidden moves nothing. A zero view is decad.ErrDegenerate and a
+non-finite one decad.ErrNotFinite. Pairs come in Parts order.
 
 <a name="ExplodedPart"></a>
 ### type ExplodedPart
@@ -220,6 +383,14 @@ Exploded is the layout of a [Set](<#Set>) pulled apart along its joints.
     Depth     <a href="https://pkg.go.dev/builtin#int">int</a>          // joint steps from the ground; -1 when no joint reaches it
     Anchor    r3.Vec       // label anchor: exploded box centre
     Pull      <a href="#PullSource">PullSource</a>
+    Stage     <a href="https://pkg.go.dev/builtin#string">string</a>      // the last stage that moved it; &#34;&#34; for the ground and the implicit last stage
+    Dir       r3.Vec      // the unit direction of that stage&#39;s move; zero when it did not move
+    Travel    units.Value // the distance that stage&#39;s clearing rule needed, before the gap and scale
+    Gap       units.Value // the gap asked for there: its WithPartGap, else its stage&#39;s, else WithExplodeGap
+    Moved     units.Value // the length of that move, scale included
+    Clearance units.Value // after the last stage and the scale: the least box distance to any part it is not joined to
+    Path      <a href="#PathState">PathState</a>
+    Blocker   <a href="https://pkg.go.dev/builtin#string">string</a> // the part that blocked or enclosed the path, or that Clearance was read against
 }</pre>
 
 ExplodedPart is one part's place in the exploded layout.
@@ -242,7 +413,22 @@ Graph is the connection diagram: parts as nodes, joints as typed edges.
 WriteMermaid writes a left-to-right Mermaid flowchart: one subgraph per
 non-root group, a rectangle for a manufactured part and a rounded node for a
 purchased one, and one edge per joint from A to B labelled with its kind, its
-motion when not fixed, and its status when known.
+motion when not fixed, its status when known and, when the joint is not
+Confirmed, its cause in brackets. A Contradicted edge ends in a cross (--x) and
+an Undecided one is dotted; the others keep the plain arrow.
+
+<a name="InferredJoint"></a>
+### type InferredJoint
+
+<pre>type InferredJoint struct {
+    Joint    <a href="#Joint">Joint</a> // Kind PinInBore or PinInSlot, Motion Fixed, Axis and Clearance as matched
+    Measured decad.<a href="decad.md#Measurement">Measurement</a>
+    FacesA   []*decad.<a href="decad.md#Face">Face</a>
+    FacesB   []*decad.<a href="decad.md#Face">Face</a>
+}</pre>
+
+InferredJoint is a joint the geometry suggests. Infer and [JointReport](<#JointReport>).Inferred
+return them; they are never added to the [Set](<#Set>).
 
 <a name="Joint"></a>
 ### type Joint
@@ -267,6 +453,11 @@ motion when not fixed, and its status when known.
     // Direction is a Slides joint&#39;s direction for a FaceContact, in assembled
     // world coordinates. Zero elsewhere.
     Direction r3.Vec
+    // Pull is the direction in which A leaves B in an exploded view, in assembled
+    // world coordinates, or zero. On a PinInBore or PinInSlot it picks the sense
+    // along the axis; on any other kind it is the direction. Its length does not
+    // matter.
+    Pull r3.Vec
 }</pre>
 
 Joint connects part A to part B. A is the inserted or moving member (the pin,
@@ -302,17 +493,31 @@ String returns the lower-case words for the kind.
 ### type JointReport
 
 <pre>type JointReport struct {
-    Joints []<a href="#JointResult">JointResult</a> // one per declared joint, in Join order
+    Request     <a href="#CheckRequest">CheckRequest</a>    // the effective tolerances and options
+    Joints      []<a href="#JointResult">JointResult</a>   // one per declared joint, in Join order
+    Unexplained []<a href="#PairFinding">PairFinding</a>   // part pairs whose boxes meet and that no joint names
+    Inferred    []<a href="#InferredJoint">InferredJoint</a> // inferred matches whose pair no declared joint names
 }</pre>
 
-JointReport is what Check found. [Graph](<#Graph>) reads its Joints.
+JointReport is what Check found.
 
 <a name="JointResult"></a>
 ### type JointResult
 
 <pre>type JointResult struct {
-    Joint  <a href="#Joint">Joint</a>
-    Status <a href="#JointStatus">JointStatus</a>
+    Joint    <a href="#Joint">Joint</a>
+    Status   <a href="#JointStatus">JointStatus</a>
+    Cause    <a href="#Cause">Cause</a>              // why it is not Confirmed; CauseNone when it is
+    Axis     *<a href="#Axis">Axis</a>              // PinInBore, PinInSlot: the axis used
+    AxisFrom <a href="#AxisSource">AxisSource</a>         // faces, declared or none
+    Measured *decad.<a href="decad.md#Measurement">Measurement</a> // PinInBore: R − r; PinInSlot: width − 2r; FaceContact: the planes&#39; distance
+    Engaged  *decad.<a href="decad.md#Measurement">Measurement</a> // PinInBore, PinInSlot: axial overlap of the matched faces
+    Gap      *decad.<a href="decad.md#Measurement">Measurement</a> // Contact, Keepout: the interval the box gap and any witness prove
+    Witness  *r3.Vec            // a point the contact or face overlap claim was read at
+    FacesA   []*decad.<a href="decad.md#Face">Face</a>      // the faces of A the rule read
+    FacesB   []*decad.<a href="decad.md#Face">Face</a>
+    Verified *decad.<a href="decad.md#ContactRelation">ContactRelation</a> // the pair&#39;s relation in a WithVerifyReport report; nil without one
+    Reason   <a href="https://pkg.go.dev/builtin#string">string</a>                 // the numbers behind Cause, for people, not for branching
 }</pre>
 
 JointResult is what Check found for one declared joint.
@@ -370,6 +575,9 @@ String returns the lower-case word for the kind.
 <pre>type Leader struct {
     Joint    <a href="https://pkg.go.dev/builtin#string">string</a>
     From, To r3.Vec // exploded coordinates: the port on A, the port on B
+    // Separation is the distance between the two parts&#39; exploded boxes, zero
+    // when they meet.
+    Separation units.Value
 }</pre>
 
 Leader is the dotted line one joint draws in the exploded view.
@@ -419,6 +627,28 @@ String returns the lower-case words for the motion.
 
 Node is one part of the diagram.
 
+<a name="Occlusion"></a>
+### type Occlusion
+
+<pre>type Occlusion struct {
+    Front, Back <a href="https://pkg.go.dev/builtin#string">string</a>
+    Covered     units.Value // Dimensionless: the share of Back&#39;s projected box that Front&#39;s covers
+}</pre>
+
+Occlusion says that one part may hide another seen along a view direction.
+
+<a name="PairFinding"></a>
+### type PairFinding
+
+<pre>type PairFinding struct {
+    A, B     <a href="https://pkg.go.dev/builtin#string">string</a>
+    Overlap  decad.<a href="decad.md#Box">Box</a>              // where the two boxes, grown by the contact tolerance and their bounds, meet
+    Near     *decad.<a href="decad.md#Measurement">Measurement</a>     // WithWitnessSearch: a proven gap upper bound at most the contact tolerance
+    Verified *decad.<a href="decad.md#ContactRelation">ContactRelation</a> // the pair&#39;s relation in a WithVerifyReport report; nil without one
+}</pre>
+
+PairFinding is a pair of parts whose boxes meet and that no joint names.
+
 <a name="Part"></a>
 ### type Part
 
@@ -441,6 +671,18 @@ Node is one part of the diagram.
 
 Part is one piece of the build.
 
+<a name="PartMesh"></a>
+### type PartMesh
+
+<pre>type PartMesh struct {
+    Part      <a href="https://pkg.go.dev/builtin#string">string</a>
+    Tolerance units.Value // the chord tolerance the part was read at
+    Bound     units.Value // that mesh&#39;s bound
+    Verified  <a href="https://pkg.go.dev/builtin#bool">bool</a>        // the mesh was built at VerifyAll
+}</pre>
+
+PartMesh says how one part's faces were read.
+
 <a name="PartView"></a>
 ### type PartView
 
@@ -453,6 +695,30 @@ Part is one piece of the build.
 }</pre>
 
 PartView is one part posed for drawing.
+
+<a name="PathState"></a>
+### type PathState
+
+<pre>type PathState <a href="https://pkg.go.dev/builtin#int">int</a></pre>
+
+PathState says what a part's straight path met, judged by boxes alone.
+
+<a name="PathNone"></a><a name="PathClear"></a><a name="PathBlocked"></a><a name="PathEnclosed"></a><a name="PathStuck"></a>
+
+<pre>const (
+    PathNone     <a href="#PathState">PathState</a> = iota // the part did not move
+    PathClear                     // its swept box meets no part it is not joined to
+    PathBlocked                   // it starts clear and its sweep meets a part
+    PathEnclosed                  // its start box already meets a part&#39;s box, so a box test cannot decide
+    PathStuck                     // no distance clears it
+)</pre>
+
+<a name="PathState.String"></a>
+#### func (PathState) String
+
+<pre>func (p <a href="#PathState">PathState</a>) String() <a href="https://pkg.go.dev/builtin#string">string</a></pre>
+
+String returns the lower-case word for the state.
 
 <a name="Port"></a>
 ### type Port
@@ -473,14 +739,16 @@ Port is where one joint attaches to a part.
 
 PullSource says where the direction a part was pulled in came from.
 
-<a name="PullNone"></a><a name="AxisFromFaces"></a><a name="AxisDeclared"></a><a name="FaceNormal"></a><a name="BoxCentres"></a>
+<a name="PullNone"></a><a name="AxisFromFaces"></a><a name="AxisDeclared"></a><a name="FaceNormal"></a><a name="BoxCentres"></a><a name="PullDeclared"></a><a name="StageDirection"></a>
 
 <pre>const (
-    PullNone      <a href="#PullSource">PullSource</a> = iota // the ground, or a part no joint reaches
-    AxisFromFaces                   // the axis of the matched cylinder faces
-    AxisDeclared                    // the joint&#39;s declared Axis
-    FaceNormal                      // the normal of the matched contact faces
-    BoxCentres                      // the line between the two parts&#39; box centres
+    PullNone       <a href="#PullSource">PullSource</a> = iota // the ground, or a part no joint reaches
+    AxisFromFaces                    // the axis of the matched cylinder faces
+    AxisDeclared                     // the joint&#39;s declared Axis
+    FaceNormal                       // the normal of the matched contact faces
+    BoxCentres                       // the line between the two parts&#39; box centres
+    PullDeclared                     // the joint&#39;s declared Pull
+    StageDirection                   // the direction its stage stated
 )</pre>
 
 <a name="PullSource.String"></a>
@@ -530,6 +798,21 @@ only falsifies the caller's claim that the parts are the same. A part with a
 body counts one; a body-less part counts its Quantity. Mass is the solid
 body's mass: infill lowers it.
 
+<a name="Set.Check"></a>
+#### func (\*Set) Check
+
+<pre>func (s *<a href="#Set">Set</a>) Check(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>, opts ...<a href="#CheckOption">CheckOption</a>) (*<a href="#JointReport">JointReport</a>, <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
+
+Check judges every declared joint against the faces and bounds of its two
+parts, and lists the pairs of parts whose boxes meet with no joint naming
+them (agent-docs/parts-design.md §7.2). It is a structural check: it never
+calls Document.Verify, and it does not prove that two parts' interiors are
+disjoint. A Contradicted joint is a finding, not an error.
+
+Contact and Keepout joints are read from box gaps and point witnesses; a Tie is
+NotChecked. A report from a Verify the caller already ran can settle what the
+structural rules leave open (WithVerifyReport).
+
 <a name="Set.Document"></a>
 #### func (\*Set) Document
 
@@ -552,6 +835,10 @@ disjoint from every other part's box except those joined to it, else the
 shorter travel, then the sense with a positive largest component; the offset
 is the travel that clears the parent plus WithExplodeGap.
 
+WithExplodeStages runs that in ordered stages, WithPartGap and
+WithExplodeScale tune the distances, and [Joint](<#Joint>).Pull states a direction
+(agent-docs/parts-design.md §5.3).
+
 <a name="Set.Graph"></a>
 #### func (\*Set) Graph
 
@@ -569,6 +856,21 @@ retired has an empty Group.
 Group returns the container path of the named part's body, joined with "/",
 or "" for the root container and for a body-less part. A body consumed by a
 later modelling step is decad.ErrRetiredBody.
+
+<a name="Set.Infer"></a>
+#### func (\*Set) Infer
+
+<pre>func (s *<a href="#Set">Set</a>) Infer(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>, opts ...<a href="#CheckOption">CheckOption</a>) ([]<a href="#InferredJoint">InferredJoint</a>, <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
+
+Infer lists the pin-in-bore and pin-in-slot joints the faces suggest between
+the parts (agent-docs/parts-design.md §7.3). For every pair of parts with
+bodies whose boxes, grown by MaxFit, meet, it runs the matching of §7.1 in both
+directions and returns each match, longest engagement first within a pair,
+with the clearance it measured. A match is a convex cylinder face of one part
+in a coaxial concave one of the other, or between two parallel planar faces; a
+face that reads as neither a plane nor a cylinder never matches. [Joint](<#Joint>) names
+are "A\~B", with "#2", "#3" for further matches of one pair. Infer adds nothing
+to the [Set](<#Set>). Coplanar face contacts are not inferred.
 
 <a name="Set.Join"></a>
 #### func (\*Set) Join
@@ -588,6 +890,31 @@ normalises [Axis](<#Axis>).Dir.
 <pre>func (s *<a href="#Set">Set</a>) Joints() []<a href="#Joint">Joint</a></pre>
 
 Joints returns the joints in Join order.
+
+<a name="Set.Linkage"></a>
+#### func (\*Set) Linkage
+
+<pre>func (s *<a href="#Set">Set</a>) Linkage(ground <a href="https://pkg.go.dev/builtin#string">string</a>, r *<a href="#JointReport">JointReport</a>) (*decad.<a href="decad.md#Linkage">Linkage</a>, []<a href="#Joint">Joint</a>, <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
+
+Linkage builds a [decad.Linkage](<decad.md#Linkage>) from the [Set](<#Set>) (agent-docs/parts-design.md §7.4)
+rooted at the ground part, and returns the joints it could not place.
+
+Parts joined by Fixed pin, slot and face joints form one link; the ground's
+link is the linkage's ground, whose bodies belong to no link and so stay
+static. Walking the other joints breadth-first from the ground in Join order, a
+Turns joint becomes a revolute about its axis, and a Slides joint a prismatic
+along the joint's axis (a pin in a bore), along the slot (a pin in a slot) or
+along Direction (a face contact). The axis comes from r, a report of Check, and
+otherwise from the joint's declared [Axis](<#Axis>). Every Contact and Tie joint between
+bodies of different links is declared a joint contact, as is each placed
+pin, slot and face joint; a Keepout is not, since its parts must stay apart.
+
+A joint is returned unplaced, for the caller's Linkage.Close or for repair,
+when it would close a loop, when neither r nor the joint gives the axis or
+slot direction it needs, or when it is a TurnsAndSlides joint: a cylindrical
+joint is a revolute and a prismatic with an intermediate link that carries a
+body, which a part joint cannot supply. r may be nil. A body-less part takes
+no part. A part no placed joint reaches belongs to no link and is static.
 
 <a name="Set.Part"></a>
 #### func (\*Set) Part
@@ -621,6 +948,29 @@ between their boxes when they do not overlap), or the part's own box centre
 when the other part has no body. Dir is the axis, or the part's own face
 normal for a FaceContact; it is zero for the box fallback.
 
+<a name="Stage"></a>
+### type Stage
+
+<pre>type Stage struct {
+    Name   <a href="https://pkg.go.dev/builtin#string">string</a>   // non-empty and unique
+    Parts  []<a href="https://pkg.go.dev/builtin#string">string</a> // part names
+    Groups []<a href="https://pkg.go.dev/builtin#string">string</a> // container paths (Set.Group); every part in one, or below it, is a member
+    // Gap is how far past clearing each member moves; the zero Value means
+    // WithExplodeGap&#39;s gap.
+    Gap units.Value
+    // Clear says what the members must clear: ClearJoined (the zero value) or
+    // ClearAll.
+    Clear <a href="#Clearing">Clearing</a>
+    // Direction, when not zero, moves every member along it instead of along its
+    // joint (Pull then reads StageDirection). Its length does not matter.
+    Direction r3.Vec
+    // Together moves the members as one rigid group by one offset.
+    Together <a href="https://pkg.go.dev/builtin#bool">bool</a>
+}</pre>
+
+Stage is one step of a staged explosion. Its parts move in it, in the order of
+the joint walk; every other part stays where earlier stages left it.
+
 <a name="Summary"></a>
 ### type Summary
 
@@ -640,7 +990,8 @@ the page writes them to the same [io.Writer](<https://pkg.go.dev/io#Writer>) aft
 <pre>func (s <a href="#Summary">Summary</a>) WriteMarkdown(w io.<a href="https://pkg.go.dev/io#Writer">Writer</a>) <a href="https://pkg.go.dev/builtin#error">error</a></pre>
 
 WriteMarkdown writes one page, in this order: the bill of materials table; the
-joint table with each joint's status when Joints is set; the exploded depth
+joint table with each joint's status, cause and evidence, and the unexplained
+pairs, when Joints is set; the exploded depth
 and pull table when [Exploded](<#Exploded>) is set; the Mermaid connection diagram. Numbers
 print with their bounds. A [Set](<#Set>) with a retired body is decad.ErrRetiredBody
 and a nil [Set](<#Set>) decad.ErrDegenerate.

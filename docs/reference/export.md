@@ -185,7 +185,7 @@ unit kind decad.ErrUnitKind.
 <pre>func GCodePerimeters(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>, w io.<a href="https://pkg.go.dev/io#Writer">Writer</a>, body *decad.<a href="decad.md#Body">Body</a>, tol units.Value, spec <a href="#GCodeSpec">GCodeSpec</a>) <a href="https://pkg.go.dev/builtin#error">error</a></pre>
 
 GCodePerimeters writes the toolpath that prints body's outline layer by layer as G-code
-(agent-docs/gcode-design.md): the perimeter of each layer, traced once along the body's section at the
+(agent-docs/format-io-design.md): the perimeter of each layer, traced once along the body's section at the
 middle of the layer, a hole traced as well, and, when the spec sets InfillSpacing, rectilinear infill
 inside the perimeters, its lines alternating between the X and Y directions from one layer to the next. The
 first and last SolidLayers layers are filled solid, their lines a line width apart, and PerimeterInset moves
@@ -213,7 +213,7 @@ decad.ErrUnitKind), as the feed rate (a velocity); a body lower than one layer, 
 
 GLTF writes body as a deterministic glTF 2.0 file at the requested chord
 tolerance: one JSON document whose single buffer is embedded as a base64
-data URI (agent-docs/gltf-export-design.md). The file holds one scene, one
+data URI (agent-docs/format-io-design.md). The file holds one scene, one
 node, one mesh and one triangle primitive, with positions and 32-bit indices
 and no normals, materials or textures. Positions are in metres, as glTF
 requires, so every millimetre coordinate is multiplied by 0.001 and stored as
@@ -228,7 +228,7 @@ nil, and tol is a positive length.
 
 <pre>func IGES(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>, w io.<a href="https://pkg.go.dev/io#Writer">Writer</a>, body *decad.<a href="decad.md#Body">Body</a>, tol units.Value) <a href="https://pkg.go.dev/builtin#error">error</a></pre>
 
-IGES writes body as an IGES 5.3 file of manifold solid B-reps (agent-docs/iges-export-design.md): the verified
+IGES writes body as an IGES 5.3 file of manifold solid B-reps (agent-docs/format-io-design.md): the verified
 tessellation at tol, one planar face per triangle, so any solid the evaluator can tessellate is written as the
 planar solid ReadIGES reads, and a read back mesh has the body's own triangles. A body of several lumps writes
 one solid per lump and a cavity a void shell of its solid. The file is millimetres with a model space scale of 1.
@@ -495,7 +495,7 @@ IsometricDrawingView looks along (-1, -1, -1) with +Z up the sheet, as
     // decad.ErrDegenerate.
     SolidLayers <a href="https://pkg.go.dev/builtin#int">int</a>
     // PerimeterInset moves each perimeter half a line width into the material, so that the printed line&#39;s edge and
-    // not its middle lies on the body&#39;s outline (agent-docs/gcode-design.md G10). The infill is unchanged.
+    // not its middle lies on the body&#39;s outline (agent-docs/format-io-design.md G10). The infill is unchanged.
     PerimeterInset <a href="https://pkg.go.dev/builtin#bool">bool</a>
     // Retraction is the length of filament pulled back before each travel move between two extruded lines and pushed
     // forward again after it, a positive length. The zero value writes no retraction. The first travel of the print,
@@ -514,7 +514,7 @@ IsometricDrawingView looks along (-1, -1, -1) with +Z up the sheet, as
     FanSpeed     units.Value
     FanFromLayer <a href="https://pkg.go.dev/builtin#int">int</a>
     // Skirt is the number of loops traced round the part in the first layer before its perimeters, from the one nearest
-    // the part outward, each a line width outside the last (agent-docs/gcode-design.md G16). SkirtDistance is the gap from
+    // the part outward, each a line width outside the last (agent-docs/format-io-design.md G16). SkirtDistance is the gap from
     // the part&#39;s outline to the first loop, a positive length that Skirt requires. The zero Skirt writes none, and a
     // negative one is decad.ErrDegenerate.
     Skirt         <a href="https://pkg.go.dev/builtin#int">int</a>

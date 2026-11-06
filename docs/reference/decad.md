@@ -368,10 +368,8 @@ package.
   - [func Infill](<#Infill>)
   - [func Intersect](<#Intersect>)
   - [func Loft](<#Loft>)
-  - [func LoftBetween](<#LoftBetween>)
   - [func LoftChain](<#LoftChain>)
   - [func LoftFaces](<#LoftFaces>)
-  - [func LoftFacesToConeTangent](<#LoftFacesToConeTangent>)
   - [func LoftFromPoint](<#LoftFromPoint>)
   - [func LoftSections](<#LoftSections>)
   - [func Mirrored](<#Mirrored>)
@@ -380,18 +378,12 @@ package.
   - [func Offset](<#Offset>)
   - [func PatchEdges](<#PatchEdges>)
   - [func PatchProfile](<#PatchProfile>)
-  - [func PathPatternCopies](<#PathPatternCopies>)
-  - [func PathPatternJoin](<#PathPatternJoin>)
-  - [func PathPatternJoinSpaced](<#PathPatternJoinSpaced>)
-  - [func PathPatternSpaced](<#PathPatternSpaced>)
+  - [func PathPattern](<#PathPattern>)
   - [func PatternCopies](<#PatternCopies>)
-  - [func PatternJoin](<#PatternJoin>)
   - [func Patterned](<#Patterned>)
   - [func QuarterTurn](<#QuarterTurn>)
   - [func Refine](<#Refine>)
   - [func Revolve](<#Revolve>)
-  - [func Rib](<#Rib>)
-  - [func RibArc](<#RibArc>)
   - [func ScaledAt](<#ScaledAt>)
   - [func Shell](<#Shell>)
   - [func SolidFromMesh](<#SolidFromMesh>)
@@ -405,7 +397,6 @@ package.
   - [func Trim](<#Trim>)
   - [func Union](<#Union>)
   - [func Unstitch](<#Unstitch>)
-  - [func Web](<#Web>)
   - [func WebPath](<#WebPath>)
   - [func (\*Body) Area](<#Body.Area>)
   - [func (\*Body) Bounds](<#Body.Bounds>)
@@ -462,7 +453,6 @@ package.
 - [type ConcaveRadiusResult](<#ConcaveRadiusResult>)
 - [type Cone](<#Cone>)
   - [func (Cone) Kind](<#Cone.Kind>)
-- [type ConeTangentEnd](<#ConeTangentEnd>)
 - [type ConstructionAxis](<#ConstructionAxis>)
 - [type ContactFeature](<#ContactFeature>)
 - [type ContactManifold](<#ContactManifold>)
@@ -650,9 +640,8 @@ package.
 - [type LinkagePose](<#LinkagePose>)
 - [type LinkagePoseResult](<#LinkagePoseResult>)
 - [type LinkageReport](<#LinkageReport>)
-- [type LoftEnd](<#LoftEnd>)
-  - [func PointEnd](<#PointEnd>)
-  - [func ProfileEnd](<#ProfileEnd>)
+- [type LoftFacesOption](<#LoftFacesOption>)
+  - [func WithConeTangentEnd](<#WithConeTangentEnd>)
 - [type LoftOption](<#LoftOption>)
   - [func WithLoftAlignment](<#WithLoftAlignment>)
   - [func WithLoftSplits](<#WithLoftSplits>)
@@ -778,8 +767,10 @@ package.
   - [func (\*Path) Segments](<#Path.Segments>)
   - [func (\*Path) Start](<#Path.Start>)
 - [type PathPatternOption](<#PathPatternOption>)
+  - [func WithPathCount](<#WithPathCount>)
   - [func WithPathFollow](<#WithPathFollow>)
   - [func WithPathPivot](<#WithPathPivot>)
+  - [func WithPathSpacing](<#WithPathSpacing>)
 - [type PathSegment](<#PathSegment>)
 - [type PatternSpec](<#PatternSpec>)
 - [type Plane](<#Plane>)
@@ -972,14 +963,13 @@ package.
     SweepEventUnrepresentable = report.SweepEventUnrepresentable
 )</pre>
 
-<a name="CellNotEvaluated"></a><a name="CellClear"></a><a name="CellBlocked"></a><a name="CellColliding"></a><a name="CellUndecided"></a>
+<a name="CellClear"></a><a name="CellBlocked"></a><a name="CellColliding"></a><a name="CellUndecided"></a>
 
 <pre>const (
-    CellNotEvaluated = linkage.CellNotEvaluated
-    CellClear        = linkage.CellClear
-    CellBlocked      = linkage.CellBlocked
-    CellColliding    = linkage.CellColliding
-    CellUndecided    = linkage.CellUndecided
+    CellClear     = linkage.CellClear
+    CellBlocked   = linkage.CellBlocked
+    CellColliding = linkage.CellColliding
+    CellUndecided = linkage.CellUndecided
 )</pre>
 
 <a name="Exact"></a><a name="Approximate"></a>
@@ -1820,7 +1810,7 @@ surveys read the patches. It is a boolean operand where each band is a whole
 turn, line-line miters or exact tangent joins; a band with a cone at a
 reflex corner is export-only and ErrUnsupported as an operand. Several convex edges of a faceted solid every face of
 which squares to a world axis, which share corners and so have no route of their own, are the solid less the wedge
-of each edge, or with concave edges the solid plus it (agent-docs/orthogonal-boolean-design.md B17, B18), a faceted result
+of each edge, or with concave edges the solid plus it (agent-docs/orthogonal-design.md B17, B18), a faceted result
 with a bound. A clearance
 pair its boxes do not decide reads Suspect. A selection that is part of a loop, mixes loops with lone edges or
 holds two loops sharing an edge is SL1, a face beside a loop that is curved,
@@ -1836,7 +1826,7 @@ empties a loop's offset is SX6 (ErrDegenerate).
 
 ChamferAngle bevels the edges sel selects by a distance d along the
 reference face and an angle between the bevel and that face, returning the
-new body and retiring b (agent-docs/chamfer-angle-design.md).
+new body and retiring b (agent-docs/blend-variants-design.md).
 
 The bevel leaves the reference face d from each edge and makes angle with it.
 It meets the other face d·sin(angle)/sin(φ + angle) from the edge, where φ is
@@ -1980,7 +1970,7 @@ moved and a kept line is the intersection of the two
 (agent-docs/draft-design.md §10.2).
 
 A faceted solid with exact vertices that is a straight prism along a world axis is also drafted, on all its walls,
-about one of its two caps (agent-docs/orthogonal-boolean-design.md B21).
+about one of its two caps (agent-docs/orthogonal-design.md B21).
 
 b is a live straight prism: an extrude, a filleted or chamfered
 extrude, a tube, or any of these placed, whose recorded section is the
@@ -2127,8 +2117,8 @@ document unchanged.
     opts ...<a href="#FilletOption">FilletOption</a>) (result *<a href="#Body">Body</a>, retErr <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
 
 Fillet rounds selected section corners of a straight prism, its admitted
-one-line Sweep reduction, or a matching-section axial loft with a tangent
-arc of radius r, returning the new body and retiring b
+one-line Sweep reduction, or an axial loft whose sections match in segment
+kinds with a tangent arc of radius r, returning the new body and retiring b
 (agent-docs/modify-design.md §6, core §8). A nil b is ErrDegenerate. sel is
 resolved against the live b; a query matching nothing is loud (ErrNoMatch / ErrCardinality,
 S16). r is a length magnitude, gated like every other (S15); a zero r is
@@ -2153,10 +2143,13 @@ revolve is rebuilt over the receiver's own axis, sweep and placement. The
 blend is a [Torus](<#Torus>), or a [Sphere](<#Sphere>) when its centre lies on the axis. One
 quarter-turn rectangular angular-cap radial rim has a bounded faceted
 route; other cap edges and edges on the axis are SX5 (ErrUnsupported).
-An axial loft whose two section records match also accepts line/arc corners
-on its hole-free section. It rewrites both records together and rebuilds the
-loft. Unchanged free-form segments retain their recorded curves; a new
-analytic piece must be proven clear of each non-adjacent free-form segment.
+An axial loft whose two hole-free sections have the same segment kinds in
+the same order also accepts line/arc corners. The second section may be the
+first turned about the axis, as for a helical gear. Each section receives
+its own tangent arc at the selected corner and the loft is rebuilt from the
+two rewritten records (agent-docs/loft-design.md §17). Unchanged free-form
+segments retain their recorded curves; a new analytic piece must be proven
+clear of each non-adjacent free-form segment.
 
 An analytic boolean result (a brep or stacked body) that reads as a prism
 along a reference axis is filleted as that prism
@@ -2195,7 +2188,7 @@ return a brep body (RF3). A single cap edge on a strictly convex straight
 prism uses a bounded faceted cutter when that edge or its terminal walls
 are oblique; the cutter and receiver commit atomically. A faceted Union of
 a rooted oblique circular boss and rectangular plate also accepts its one
-complete root junction (agent-docs/oblique-boss-fillet-design.md). Any other
+complete root junction (agent-docs/blend-variants-design.md). Any other
 receiver outside those routes, loft §17 and draft §10.4 is S3
 (ErrUnsupported).
 
@@ -2215,7 +2208,7 @@ brep body (agent-docs/loop-fillet-design.md Table DF).
 
 FilletChord rounds the edges sel selects with an arc whose chord, the
 straight line between its two tangent edges, is chord long, returning the
-new body and retiring b (agent-docs/fillet-chord-design.md).
+new body and retiring b (agent-docs/blend-variants-design.md).
 
 Where the faces meet at the angle φ across the corner (the interior angle of a
 convex edge, the open wedge of a concave one) the arc turns π − φ, so its
@@ -2335,25 +2328,6 @@ both section caps and publishes a sheet body instead of a solid
 
 A failed call leaves the document untouched.
 
-<a name="LoftBetween"></a>
-#### func LoftBetween
-
-<pre>func LoftBetween(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>, d *<a href="#Document">Document</a>, from, to <a href="#LoftEnd">LoftEnd</a>, opts ...<a href="#LoftOption">LoftOption</a>) (*<a href="#Body">Body</a>, <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
-
-LoftBetween builds a solid between two ends, each a profile or a point
-(agent-docs/loft-design.md §3.3). Two profiles are Loft's pair and take its
-options; a profile and a point are LoftFromPoint's cone over that profile,
-whichever end the point is, so the solid, its certificate and its limits are
-LoftFromPoint's: one outer loop and no holes, the point off the profile's
-plane, a faceted payload with no loft fillet or chamfer, and the profile's
-cap named capEnd as LoftFromPoint names it. WithLoftAlignment and
-WithLoftSplits name a pairing a point end does not have, so either is
-[ErrDegenerate](<#ErrDegenerate>) on a call with a point end, and WithSurfaceResult is
-[ErrUnsupported](<#ErrUnsupported>). Two points, or an end built by neither constructor, are
-[ErrDegenerate](<#ErrDegenerate>). Loft and LoftFromPoint keep their own contracts.
-
-A failed call leaves the document untouched.
-
 <a name="LoftChain"></a>
 #### func LoftChain
 
@@ -2387,34 +2361,22 @@ compile against this call. A failed call leaves the document untouched.
 <a name="LoftFaces"></a>
 #### func LoftFaces
 
-<pre>func LoftFaces(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>, d *<a href="#Document">Document</a>, sections ...*<a href="#Face">Face</a>) (*<a href="#Body">Body</a>, <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
+<pre>func LoftFaces(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>, sections []*<a href="#Face">Face</a>, opts ...<a href="#LoftFacesOption">LoftFacesOption</a>) (*<a href="#Body">Body</a>, <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
 
 LoftFaces builds one solid through ordered complete caps of the same
 authenticated point-loft Split source (agent-docs/loft-face-sections-design.md).
 
-<a name="LoftFacesToConeTangent"></a>
-#### func LoftFacesToConeTangent
-
-<pre>func LoftFacesToConeTangent(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>, end <a href="#ConeTangentEnd">ConeTangentEnd</a>, sections ...*<a href="#Face">Face</a>) (*<a href="#Body">Body</a>, <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
-
-LoftFacesToConeTangent lofts through 1 to 31 selected caps, then a
-constructed last section tangent to end.Cone along one ruling
-(agent-docs/loft-face-sections-design.md, "[Cone](<#Cone>)-tangent end section").
-
-sections follow LoftFaces: the least slab's toe cap, then heel caps in
-source order. The last section is built from the cone, not selected. Its
-plane is exactly tangent to the cone's exact apex and slope, with the
-source origin at the cone apex, so it fits a point-loft source whose plane
-is that tangent plane. Any other source still goes through the ordinary
-embedding gates, which refuse an inconsistent end. The end face carries the
-cap-end role of the new loft and a rounded [Plane](<#Plane>) tag. Cut and Intersect
-continue from the result as they do from LoftFaces.
-
-The cone must be live in the sections' document. A nil context, cone or
-section list of the wrong length, a Radial with a nonzero X or without a
-finite nonzero (Y, Z), or a cone that is not an exact point cone about
-world X is ErrDegenerate or ErrUnsupported. Selection failures are those of
-LoftFaces. A canceled ctx returns ctx.Err() before the document changes.
+sections are the least slab's toe cap, then heel caps in source order. There
+are 2 to 32 of them, or 1 to 31 with WithConeTangentEnd, which adds a last,
+constructed section. The document is the one owning the first section's
+body, and the result is in the container of that body. A nil context, a
+nil option, a repeated option, a nil cone, a section count outside the
+bounds, a first section that is not a body face, or a radial that
+WithConeTangentEnd cannot use is ErrDegenerate. A cone that is not an
+unplaced exact point cone about world X is ErrUnsupported. A section or cone
+of another document is ErrForeignBody and a retired one ErrRetiredBody.
+Selection failures are those of the section source. A canceled ctx returns
+ctx.Err() before the document changes.
 
 <a name="LoftFromPoint"></a>
 #### func LoftFromPoint
@@ -2481,12 +2443,12 @@ A nil b is ErrDegenerate.
 <pre>func MoveFace(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>, b *<a href="#Body">Body</a>, sel <a href="#FaceSelector">FaceSelector</a>, distance units.Value) (result *<a href="#Body">Body</a>, retErr <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
 
 MoveFace moves one face of b along its normal by distance and returns the new body, retiring b: the
-press-pull of a CAD system (agent-docs/orthogonal-move-design.md). A positive distance moves the
+press-pull of a CAD system (agent-docs/orthogonal-design.md). A positive distance moves the
 face outward, growing the body, and a negative one inward, cutting it, and the walls beside the face
 follow it. The result is the body joined to the prism the face sweeps, or less it, so a notch
 bottom moves as readily as an outer wall.
 
-The route is the grid one of the orthogonal shell (agent-docs/orthogonal-shell-design.md): b
+The route is the grid one of the orthogonal shell (agent-docs/orthogonal-design.md): b
 MUST be a faceted solid, such as one made by [SolidFromMesh](<#SolidFromMesh>), every face of which squares to a
 world axis and whose held vertices carry no bound, otherwise ErrUnsupported. sel MUST resolve to
 exactly one planar face of b, otherwise ErrDegenerate. distance is a signed length: zero is
@@ -2511,7 +2473,7 @@ profile-fed prism sheet offsets by the certified per-feature section offset
 of agent-docs/modify-design.md §8, growing a radius-distance arc at each convex
 corner and mitering each concave one. Every other sheet family is ErrUnsupported (agent-docs/surface-design.md Table R row R37). A solid
 offsets only when it is a faceted solid whose faces all square to a world axis, such as a mesh solid
-(agent-docs/orthogonal-offset-design.md): each face moves along its outward normal, outward for OffsetPositive
+(agent-docs/orthogonal-design.md): each face moves along its outward normal, outward for OffsetPositive
 and inward for OffsetNegative, the neighbouring faces extended or trimmed to meet, and the result is a second
 solid; any other solid is ErrUnsupported.
 
@@ -2565,71 +2527,27 @@ boundary carrying a free-form segment this evaluator cannot integrate is
 ErrUnsupported (Table R row R3). A failed evaluation leaves the document
 untouched. A nil context or a nil d is ErrDegenerate.
 
-<a name="PathPatternCopies"></a>
-#### func PathPatternCopies
+<a name="PathPattern"></a>
+#### func PathPattern
 
-<pre>func PathPatternCopies(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>, b *<a href="#Body">Body</a>, path *<a href="#Path">Path</a>, count <a href="https://pkg.go.dev/builtin#int">int</a>, opts ...<a href="#PathPatternOption">PathPatternOption</a>) (result []*<a href="#Body">Body</a>, retErr <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
+<pre>func PathPattern(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>, b *<a href="#Body">Body</a>, path *<a href="#Path">Path</a>, opts ...<a href="#PathPatternOption">PathPatternOption</a>) (result []*<a href="#Body">Body</a>, retErr <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
 
-PathPatternCopies repeats b along path and returns the count-1 extra copies
-as separate live bodies, leaving b live (agent-docs/path-pattern-design.md).
-Instance 0 is b, taken to sit at the path's start. Instance i is a [Copy](<#Copy>) of
-b moved by the vector from the path's start to the point i/(count-1) of the
-way along the path's length, so the last instance sits at the path's end.
-Copies keep the orientation of b unless [WithPathFollow](<#WithPathFollow>) turns them to follow
-the path.
+PathPattern repeats b along path and returns the extra copies as separate
+live bodies, leaving b live (agent-docs/path-pattern-design.md). Instance 0
+is b, taken to sit at the path's start. [WithPathCount](<#WithPathCount>) or [WithPathSpacing](<#WithPathSpacing>)
+chooses the other instances' points. Exactly one of them is required, and
+neither, both, or either given twice is ErrDegenerate. Instance i is a [Copy](<#Copy>)
+of b moved by the vector from the path's start to its point. Copies keep the
+orientation of b unless [WithPathFollow](<#WithPathFollow>) turns them to follow the path.
 
 The path is the sweep [Path](<#Path>) of straight [LineTo](<#LineTo>) and circular
 [ArcThrough](<#ArcThrough>) and [ArcAround](<#ArcAround>) segments. Points are spaced by arc length, not by segment.
 Join the copies with the base through one [Union](<#Union>), as with [PatternCopies](<#PatternCopies>).
 
-b MUST be live; path MUST NOT be nil. count is at least 2, and a smaller
-count is ErrDegenerate. A path segment with no length or no circle is
-ErrDegenerate. A failed or canceled call leaves b live and retires every copy it
-had already made, so no copy outlives the call. Each copy is a Copy, so it
-carries Copy's own refusals.
-
-<a name="PathPatternJoin"></a>
-#### func PathPatternJoin
-
-<pre>func PathPatternJoin(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>, target, feature *<a href="#Body">Body</a>, path *<a href="#Path">Path</a>, count <a href="https://pkg.go.dev/builtin#int">int</a>, opts ...<a href="#PathPatternOption">PathPatternOption</a>) (*<a href="#Body">Body</a>, <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
-
-PathPatternJoin repeats feature along path as [PathPatternCopies](<#PathPatternCopies>) does and
-joins every instance, feature included, to target in one [Union](<#Union>), returning
-the joined body and retiring target and feature
-(agent-docs/path-pattern-design.md §7). The copies are never left live: a
-refusal retires them, and leaves target and feature live and the document as it
-was.
-
-The gates are PathPatternCopies' for feature, path and count, plus Union's for
-target: target must be live, distinct from feature, and a sheet in either role
-is refused. The join takes the routes Union takes over the same operands and
-returns that Union's error when none applies.
-
-<a name="PathPatternJoinSpaced"></a>
-#### func PathPatternJoinSpaced
-
-<pre>func PathPatternJoinSpaced(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>, target, feature *<a href="#Body">Body</a>, path *<a href="#Path">Path</a>, spacing units.Value, opts ...<a href="#PathPatternOption">PathPatternOption</a>) (*<a href="#Body">Body</a>, <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
-
-PathPatternJoinSpaced is [PathPatternJoin](<#PathPatternJoin>) with the copies placed by
-[PathPatternSpaced](<#PathPatternSpaced>): a stated arc-length distance apart instead of a count.
-
-<a name="PathPatternSpaced"></a>
-#### func PathPatternSpaced
-
-<pre>func PathPatternSpaced(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>, b *<a href="#Body">Body</a>, path *<a href="#Path">Path</a>, spacing units.Value, opts ...<a href="#PathPatternOption">PathPatternOption</a>) (result []*<a href="#Body">Body</a>, retErr <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
-
-PathPatternSpaced repeats b along path at a stated distance and returns the
-extra copies as separate live bodies, leaving b live
-(agent-docs/path-pattern-design.md §6). Instance 0 is b, taken to sit at the
-path's start, and instance i sits i·spacing of arc length along the path, for
-every i that lies within the path's length. A spacing that divides the length
-puts the last instance at the path's end. Orientation, [WithPathFollow](<#WithPathFollow>), the
-path's segments and every other rule are those of [PathPatternCopies](<#PathPatternCopies>).
-
-spacing is a positive length no longer than the path, and a spacing that
-leaves no copy is ErrDegenerate, as is one that would place over 100000
-copies. A wrong unit kind is ErrUnitKind and a negative spacing is
-ErrNegativeMagnitude.
+b MUST be live; path MUST NOT be nil. A nil context, a nil option, and a path
+segment with no length or no circle are ErrDegenerate. A failed or canceled
+call leaves b live and retires every copy it had already made, so no copy
+outlives the call. Each copy is a Copy, so it carries Copy's own refusals.
 
 <a name="PatternCopies"></a>
 #### func PatternCopies
@@ -2654,22 +2572,9 @@ normal, keeps one frame: each instance is the receiver's own record moved
 in its plane, so a pattern of integer-millimetre holes stays Exact. Its
 readings carry the motion's rounding as a section displacement.
 
-<a name="PatternJoin"></a>
-#### func PatternJoin
-
-<pre>func PatternJoin(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>, target, feature *<a href="#Body">Body</a>, spec <a href="#PatternSpec">PatternSpec</a>) (*<a href="#Body">Body</a>, <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
-
-PatternJoin repeats feature by spec and joins every instance, feature
-included, to target in one Union, retiring target and feature
-(agent-docs/axial-pattern-join-design.md §7). It is PatternCopies followed
-by Union(target, feature, copies...) with the copies never registered, so a
-refusal leaves the document unchanged and both bodies live.
-
-The gates are PatternCopies' for feature and spec, plus Union's for target: a
-nil, foreign or retired target is refused, target and feature must be distinct
-bodies, and a sheet in either role is refused. The join takes the routes Union
-takes over the same operands, including its two-at-a-time fold when no route takes
-the set, and returns that Union's error when none applies.
+To join the instances to a base, pass the base, b and the result to one
+[Union](<#Union>): Union(ctx, base, append(\[\]\*[Body](<#Body>){b}, copies...)...). A refused
+Union leaves every operand live, the copies included; [Remove](<#Remove>) them.
 
 <a name="Patterned"></a>
 #### func Patterned
@@ -2703,7 +2608,7 @@ unchanged and b live.
 
 QuarterTurn turns a faceted solid by a whole number of quarter turns about an axis through about, a world axis
 with the right-hand sense, and returns the result as a new solid, retiring b
-(agent-docs/orthogonal-boolean-design.md B9). A quarter turn only exchanges and negates coordinates, so the
+(agent-docs/orthogonal-design.md B9). A quarter turn only exchanges and negates coordinates, so the
 turned solid is exact where [Transform](<#Transform>) by a 90 degree [r3.Rotation](<https://pkg.go.dev/github.com/lestrrat-3d/r3#Rotation>) is not: its vertices stay unbounded and it
 stays on the exact routes of an axis-square solid.
 
@@ -2796,48 +2701,6 @@ axis and extent and building the body, and inside the evaluators; a
 canceled context returns ctx.Err() unchanged. Every failure and
 cancellation leaves the document unchanged.
 
-<a name="Rib"></a>
-#### func Rib
-
-<pre>func Rib(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>, b *<a href="#Body">Body</a>, s *sketch.Sketch, line *sketch.Line, thickness units.Value, e <a href="#Extent">Extent</a>,
-    opts ...<a href="#RibOption">RibOption</a>) (result *<a href="#Body">Body</a>, retErr <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
-
-Rib adds a rib to b along line and returns the result, retiring b.
-
-line is a straight line of s. The rib is that line thickened across its
-width by thickness, centred on the line, and extruded by e from the plane of
-s, then joined to b with Union. e is any [Extent](<#Extent>) that Extrude accepts,
-resolved against the plane of s exactly as it would be for an Extrude of the
-rib's outline. The rib has the exactness Union gives for the same two
-bodies.
-
-b MUST be a live solid. A nil context, sketch, line or body, a line that is
-not an entity of s, is stale or has no length, a non-positive thickness and
-a negative overrun are ErrDegenerate. A rib whose bounding box is disjoint
-from b's, and a rib that Union certifies adds no volume to b, are
-ErrDegenerate. A union the evaluator cannot decide is the union's own error.
-Every failure leaves the document unchanged and b live.
-
-<a name="RibArc"></a>
-#### func RibArc
-
-<pre>func RibArc(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>, b *<a href="#Body">Body</a>, s *sketch.Sketch, arc *sketch.Arc, thickness units.Value, e <a href="#Extent">Extent</a>,
-    opts ...<a href="#RibOption">RibOption</a>) (result *<a href="#Body">Body</a>, retErr <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
-
-RibArc adds a rib to b along arc and returns the result, retiring b.
-
-arc is a circular arc of s, which sweeps counter-clockwise from its Start to
-its End. The rib is the arc thickened across its width by thickness, centred
-on the arc, extruded by e from the plane of s and joined to b with Union, as
-Rib does for a line (agent-docs/rib-design.md §5). WithRibOverrun lengthens
-the rib by that arc length beyond both ends.
-
-The arc's end points MUST lie on one circle about its centre. A nil context,
-sketch, arc or body, an arc that is not an entity of s or is stale, a
-non-positive thickness, a negative overrun, a rib so thick that its inner edge
-reaches the arc's centre and an overrun that would wrap the rib a full turn
-are ErrDegenerate. Every other rule is Rib's.
-
 <a name="ScaledAt"></a>
 #### func ScaledAt
 
@@ -2906,7 +2769,7 @@ A faceted solid whose every face squares to a world axis and whose held vertices
 such as a part read from STL and made a solid by SolidFromMesh, shells inward on a grid:
 the cavity is the solid eroded by a cube of side twice t, so the walls are mitered at
 every edge, the removed faces open it, and the result is a mesh solid whose axis faces keep
-their planes (agent-docs/orthogonal-shell-design.md). A wall is t thick to the rounding
+their planes (agent-docs/orthogonal-design.md). A wall is t thick to the rounding
 of x ± t; walls that meet are ErrDegenerate. An Outward shell of such a solid wraps it
 instead, the solid dilated by a cube less itself, ending flush with a removed face's plane.
 
@@ -3278,36 +3141,41 @@ different document is [ErrForeignBody](<#ErrForeignBody>) (R13); a retired b is
 b unchanged: every result is built before any is registered, and
 [Document](<#Document>).commitOperationManyFacesIn registers them and retires b in one atomic step.
 
-<a name="Web"></a>
-#### func Web
-
-<pre>func Web(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>, b *<a href="#Body">Body</a>, s *sketch.Sketch, lines []*sketch.Line, thickness units.Value, e <a href="#Extent">Extent</a>,
-    opts ...<a href="#RibOption">RibOption</a>) (result *<a href="#Body">Body</a>, retErr <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
-
-Web adds one rib along each of lines and returns the result, retiring b.
-Every rib has Rib's thickness, extent and overrun, and the ribs may cross
-each other. Web joins them to b in the order of lines and commits once, so a
-failure on any rib leaves the document unchanged and b live. lines MUST NOT
-be empty (ErrDegenerate); every other rule is Rib's.
-
 <a name="WebPath"></a>
 #### func WebPath
 
 <pre>func WebPath(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>, b *<a href="#Body">Body</a>, s *sketch.Sketch, path []sketch.Entity, thickness units.Value, e <a href="#Extent">Extent</a>,
     opts ...<a href="#RibOption">RibOption</a>) (result *<a href="#Body">Body</a>, retErr <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
 
-WebPath adds one rib along each of path, a run of lines and arcs of s in the
-order given, and returns the result, retiring b (agent-docs/rib-design.md §6).
-A \*sketch.Line is a rib as Rib builds it and a \*sketch.Arc one as RibArc builds
-it; the ribs have one thickness, extent and overrun and may cross or meet.
-They are joined to b in order and committed once, so a failure on any rib
-leaves the document unchanged and b live.
+WebPath adds one rib along each entity of path, a run of lines and arcs of s in
+the order given, and returns the result, retiring b (agent-docs/rib-design.md).
+A path of one entity is one rib.
+
+A \*sketch.Line rib is the line thickened across its width by thickness,
+centred on the line. A \*sketch.Arc rib is the arc, which sweeps
+counter-clockwise from its Start to its End, thickened the same way into an
+annular band. The arc's end points MUST lie on one circle about its centre.
+Each outline is extruded by e from the plane of s, where e is any [Extent](<#Extent>) that
+Extrude accepts, resolved against that plane exactly as for an Extrude of the
+outline. The ribs share one thickness, extent and overrun, and may cross or
+meet. They are united with one another in path order and joined to b with
+Union in one commit, which records one OperationWeb entry. The result has the
+exactness Union gives for the same bodies.
 
 Ribs that meet end to end, as the legs of a polyline or an arc and the lines
 either side of it do, need an overrun to overlap at the joint: with the
 default of zero, two ribs that only touch end faces meet in coplanar contact,
-which Union refuses. path MUST NOT be empty and must hold only lines and arcs,
-each otherwise ErrDegenerate; every other rule is Rib's and RibArc's.
+which Union refuses.
+
+b MUST be a live solid. A nil context, sketch or body, an empty path, an
+entity that is nil, neither a line nor an arc, not an entity of s or stale, a
+line with no length, a zero thickness, an arc rib so thick that its inner edge
+reaches the arc's centre, and an overrun that would wrap an arc rib a full
+turn are ErrDegenerate. A negative thickness or overrun is
+ErrNegativeMagnitude, and either of the wrong unit kind is ErrUnitKind. A rib
+whose bounding box is disjoint from b's, and ribs that Union certifies add no
+volume to b, are ErrDegenerate. A union the evaluator cannot decide is the
+union's own error. Every failure leaves the document unchanged and b live.
 
 <a name="Body.Area"></a>
 #### func (\*Body) Area
@@ -4126,20 +3994,6 @@ Radius is measured at Origin.
 <pre>func (<a href="#Cone">Cone</a>) Kind() <a href="#SurfaceKind">SurfaceKind</a></pre>
 
 Kind reports KindCone.
-
-<a name="ConeTangentEnd"></a>
-### type ConeTangentEnd
-
-<pre>type ConeTangentEnd struct {
-    // Cone is a live, unplaced, full straight-meridian Revolve cone about world X.
-    Cone *<a href="#Body">Body</a>
-    // Radial is the direction of the touching ruling&#39;s radius. Its X must be 0
-    // and its (Y, Z) finite and nonzero.
-    Radial r3.Vec
-}</pre>
-
-ConeTangentEnd names the cone that the last, constructed LoftFacesToConeTangent
-section touches along one ruling.
 
 <a name="ConstructionAxis"></a>
 ### type ConstructionAxis
@@ -5968,11 +5822,10 @@ InfillSpec describes the lattice an [Infill](<#Infill>) fills a body with: its k
 
 InputUse describes whether a call retired or only read an input body.
 
-<a name="InputUseUnknown"></a><a name="InputConsumed"></a><a name="InputReferenced"></a>
+<a name="InputConsumed"></a><a name="InputReferenced"></a>
 
 <pre>const (
-    InputUseUnknown <a href="#InputUse">InputUse</a> = iota
-    InputConsumed
+    InputConsumed InputUse
     InputReferenced
 )</pre>
 
@@ -6257,29 +6110,39 @@ LinkagePoseResult records one evaluated pose and its pair findings.
 
 LinkageReport is VerifyLinkage's report.
 
-<a name="LoftEnd"></a>
-### type LoftEnd
+<a name="LoftFacesOption"></a>
+### type LoftFacesOption
 
-<pre>type LoftEnd struct {
-    // contains filtered or unexported fields
+<pre>type LoftFacesOption interface {
+    option.Interface
+    // contains filtered or unexported methods
 }</pre>
 
-LoftEnd is one end of a LoftBetween: a recorded profile or a single point.
-Build one with ProfileEnd or PointEnd; the zero value names no end.
+LoftFacesOption configures LoftFaces. An option from another package cannot
+implement this sealed tier.
 
-<a name="PointEnd"></a>
-#### func PointEnd
+<a name="WithConeTangentEnd"></a>
+#### func WithConeTangentEnd
 
-<pre>func PointEnd(apex r3.Vec) <a href="#LoftEnd">LoftEnd</a></pre>
+<pre>func WithConeTangentEnd(cone *<a href="#Body">Body</a>, radial r3.Vec) <a href="#LoftFacesOption">LoftFacesOption</a></pre>
 
-PointEnd is a LoftBetween end that is one world point, in millimetres.
+WithConeTangentEnd ends the loft with a last, constructed section tangent
+to cone along one ruling (agent-docs/loft-face-sections-design.md,
+"[Cone](<#Cone>)-tangent end section").
 
-<a name="ProfileEnd"></a>
-#### func ProfileEnd
+The cone is a live, unplaced, full straight-meridian Revolve cone about
+world X. radial is the direction of the touching ruling's radius: its X
+must be 0 and its (Y, Z) finite and nonzero. The last section is built from
+the cone, not selected. Its plane is exactly tangent to the cone's exact
+apex and slope, with the source origin at the cone apex, so it fits a
+point-loft source whose plane is that tangent plane. Any other source still
+goes through the ordinary embedding gates, which refuse an inconsistent end.
+The end face carries the cap-end role of the new loft and a rounded [Plane](<#Plane>)
+tag. Cut and Intersect continue from the result as they do without the
+option.
 
-<pre>func ProfileEnd(s *sketch.Sketch, p *sketch.Profile) <a href="#LoftEnd">LoftEnd</a></pre>
-
-ProfileEnd is a LoftBetween end that is a closed profile of a sketch.
+The option is accepted at most once. With it, LoftFaces takes 1 to 31 cap
+faces. The cone must be live in the document of the first section's body.
 
 <a name="LoftOption"></a>
 ### type LoftOption
@@ -6688,7 +6551,7 @@ its error.
 <pre>func ReadIGES(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>, r io.<a href="https://pkg.go.dev/io#Reader">Reader</a>, opts ...<a href="#MeshImportOption">MeshImportOption</a>) (*<a href="#MeshBody">MeshBody</a>, <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
 
 ReadIGES reads the planar-faced solids of an IGES file into a [MeshBody](<#MeshBody>)
-(agent-docs/iges-import-design.md). It reads every manifold solid B-rep entity (186) with the shells (514),
+(agent-docs/format-io-design.md). It reads every manifold solid B-rep entity (186) with the shells (514),
 faces (510), loops (508), edge lists (504) and vertex lists (502) below it: each face on a plane
 (108, 190) is cut into triangles, a face with holes included, the vertices are welded by coordinate and
 each solid is wound outward, a void's shell into its cavity. Lengths are converted from the file's unit to
@@ -6726,7 +6589,7 @@ context returns its error.
 <pre>func ReadSTEP(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>, r io.<a href="https://pkg.go.dev/io#Reader">Reader</a>, opts ...<a href="#MeshImportOption">MeshImportOption</a>) (*<a href="#MeshBody">MeshBody</a>, <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
 
 ReadSTEP reads the planar-, cylinder- and cone-faced solids of a STEP file into a [MeshBody](<#MeshBody>)
-(agent-docs/step-import-design.md). It reads every MANIFOLD\_SOLID\_BREP and
+(agent-docs/format-io-design.md). It reads every MANIFOLD\_SOLID\_BREP and
 BREP\_WITH\_VOIDS: each face on a plane is cut into triangles, a face with holes
 included, each wall on a cylinder or a cone is cut into a ladder of triangles, arcs are
 cut into chords within 0.01 mm of their circle, and the vertices are welded
@@ -7609,7 +7472,7 @@ OperationInput identifies a body argument and its public role.
 
 OperationKind names a public modeling or selector-resolution call.
 
-<a name="OperationUnknown"></a><a name="OperationExtrude"></a><a name="OperationRevolve"></a><a name="OperationSweep"></a><a name="OperationLoft"></a><a name="OperationLoftChain"></a><a name="OperationLoftSections"></a><a name="OperationLoftFromPoint"></a><a name="OperationPatchProfile"></a><a name="OperationPatchEdges"></a><a name="OperationCut"></a><a name="OperationUnion"></a><a name="OperationIntersect"></a><a name="OperationTransform"></a><a name="OperationCopy"></a><a name="OperationPatternCopies"></a><a name="OperationPatterned"></a><a name="OperationPatternJoin"></a><a name="OperationFillet"></a><a name="OperationChamfer"></a><a name="OperationShell"></a><a name="OperationDraft"></a><a name="OperationOffset"></a><a name="OperationThicken"></a><a name="OperationStitch"></a><a name="OperationUnstitch"></a><a name="OperationTrim"></a><a name="OperationExtend"></a><a name="OperationSplit"></a><a name="OperationRib"></a><a name="OperationWeb"></a><a name="OperationConeFromFace"></a><a name="OperationRemove"></a><a name="OperationSelectEdges"></a><a name="OperationSelectFaces"></a><a name="OperationHole"></a><a name="OperationEmboss"></a><a name="OperationCoil"></a><a name="OperationMirrored"></a><a name="OperationMirroredCopy"></a><a name="OperationScaledAt"></a><a name="OperationLoftBetween"></a><a name="OperationLoftFaces"></a><a name="OperationLoftFacesToConeTangent"></a><a name="OperationThread"></a><a name="OperationBoss"></a><a name="OperationSolidFromMesh"></a><a name="OperationMoveFace"></a><a name="OperationStretch"></a><a name="OperationQuarterTurn"></a><a name="OperationRefine"></a>
+<a name="OperationUnknown"></a><a name="OperationExtrude"></a><a name="OperationRevolve"></a><a name="OperationSweep"></a><a name="OperationLoft"></a><a name="OperationLoftChain"></a><a name="OperationLoftSections"></a><a name="OperationLoftFromPoint"></a><a name="OperationPatchProfile"></a><a name="OperationPatchEdges"></a><a name="OperationCut"></a><a name="OperationUnion"></a><a name="OperationIntersect"></a><a name="OperationTransform"></a><a name="OperationCopy"></a><a name="OperationPatternCopies"></a><a name="OperationPatterned"></a><a name="OperationFillet"></a><a name="OperationChamfer"></a><a name="OperationShell"></a><a name="OperationDraft"></a><a name="OperationOffset"></a><a name="OperationThicken"></a><a name="OperationStitch"></a><a name="OperationUnstitch"></a><a name="OperationTrim"></a><a name="OperationExtend"></a><a name="OperationSplit"></a><a name="OperationWeb"></a><a name="OperationConeFromFace"></a><a name="OperationRemove"></a><a name="OperationSelectEdges"></a><a name="OperationSelectFaces"></a><a name="OperationHole"></a><a name="OperationEmboss"></a><a name="OperationCoil"></a><a name="OperationMirrored"></a><a name="OperationMirroredCopy"></a><a name="OperationScaledAt"></a><a name="OperationLoftFaces"></a><a name="OperationThread"></a><a name="OperationBoss"></a><a name="OperationSolidFromMesh"></a><a name="OperationMoveFace"></a><a name="OperationStretch"></a><a name="OperationQuarterTurn"></a><a name="OperationRefine"></a>
 
 <pre>const (
     OperationUnknown <a href="#OperationKind">OperationKind</a> = iota
@@ -7629,7 +7492,6 @@ OperationKind names a public modeling or selector-resolution call.
     OperationCopy
     OperationPatternCopies
     OperationPatterned
-    OperationPatternJoin
     OperationFillet
     OperationChamfer
     OperationShell
@@ -7641,7 +7503,6 @@ OperationKind names a public modeling or selector-resolution call.
     OperationTrim
     OperationExtend
     OperationSplit
-    OperationRib
     OperationWeb
     OperationConeFromFace
     OperationRemove
@@ -7653,9 +7514,7 @@ OperationKind names a public modeling or selector-resolution call.
     OperationMirrored
     OperationMirroredCopy
     OperationScaledAt
-    OperationLoftBetween
     OperationLoftFaces
-    OperationLoftFacesToConeTangent
     OperationThread
     OperationBoss
     OperationSolidFromMesh
@@ -7784,14 +7643,25 @@ Start returns the path's recorded initial point.
     // contains filtered or unexported methods
 }</pre>
 
-PathPatternOption configures [PathPatternCopies](<#PathPatternCopies>).
+PathPatternOption configures [PathPattern](<#PathPattern>).
+
+<a name="WithPathCount"></a>
+#### func WithPathCount
+
+<pre>func WithPathCount(n <a href="https://pkg.go.dev/builtin#int">int</a>) <a href="#PathPatternOption">PathPatternOption</a></pre>
+
+WithPathCount makes [PathPattern](<#PathPattern>) place n instances, b and n-1 copies, at
+equal arc length along the path. The first is at the path's start and the
+last at its end (agent-docs/path-pattern-design.md §1). n is at least 2, and
+a smaller n is ErrDegenerate. A call takes exactly one of WithPathCount and
+[WithPathSpacing](<#WithPathSpacing>).
 
 <a name="WithPathFollow"></a>
 #### func WithPathFollow
 
 <pre>func WithPathFollow() <a href="#PathPatternOption">PathPatternOption</a></pre>
 
-WithPathFollow turns each copy of [PathPatternCopies](<#PathPatternCopies>) to follow the path.
+WithPathFollow turns each copy of [PathPattern](<#PathPattern>) to follow the path.
 Copy i is rotated about the path's start by the shortest turn that takes the
 path's direction of travel there onto its direction at that copy's point,
 then moved to the point. The body is taken to sit at the path's start with
@@ -7811,6 +7681,20 @@ away from the path's start, or a pivot at the body's own centre, swings
 about that point. The last of several pivots wins. A pivot with no
 [WithPathFollow](<#WithPathFollow>) has no turn to centre and is ErrDegenerate, and a non-finite
 pivot is ErrNotFinite.
+
+<a name="WithPathSpacing"></a>
+#### func WithPathSpacing
+
+<pre>func WithPathSpacing(spacing units.Value) <a href="#PathPatternOption">PathPatternOption</a></pre>
+
+WithPathSpacing makes [PathPattern](<#PathPattern>) place instances spacing apart by arc
+length. Instance i sits i·spacing along the path, for every i within its
+length, and a spacing that divides the length puts the last instance at the
+path's end (agent-docs/path-pattern-design.md §6). spacing is a positive
+length no longer than the path. A wrong unit kind is ErrUnitKind and a
+negative spacing is ErrNegativeMagnitude. A zero spacing, one that leaves no
+copy, and one that would place over 100000 copies are ErrDegenerate. A call
+takes exactly one of WithPathSpacing and [WithPathCount](<#WithPathCount>).
 
 <a name="PathSegment"></a>
 ### type PathSegment
@@ -8038,8 +7922,7 @@ Revolve returns ErrUnsupported for WithSurfaceResult() on a chain.
     // contains filtered or unexported methods
 }</pre>
 
-RibOption configures Rib, RibArc, Web and WebPath. WithRibOverrun and
-WithRibDraft make one.
+RibOption configures WebPath. WithRibOverrun and WithRibDraft make one.
 
 <a name="WithRibDraft"></a>
 #### func WithRibDraft
@@ -8053,15 +7936,15 @@ from its tool, and a negative one thicker. The angle is [WithTaper](<#WithTaper>
 lean is measured from the sketch plane, the ends lean too, and a draft at or
 past a right angle is ErrDegenerate. The last occurrence wins and the default
 is a straight wall. A rib whose outline has a corner that an arc meets, such
-as one of [RibArc](<#RibArc>), takes the refusals of the drafted [Extrude](<#Extrude>) it builds.
+as an arc rib of [WebPath](<#WebPath>), takes the refusals of the drafted [Extrude](<#Extrude>) it builds.
 
 <a name="WithRibOverrun"></a>
 #### func WithRibOverrun
 
 <pre>func WithRibOverrun(overrun units.Value) <a href="#RibOption">RibOption</a></pre>
 
-WithRibOverrun lengthens every rib by overrun beyond both ends of its line.
-A rib whose ends only touch a wall of the body is a coplanar contact that
+WithRibOverrun lengthens every rib by overrun beyond both ends of its line or
+arc, measured along the arc for an arc rib. A rib whose ends only touch a wall of the body is a coplanar contact that
 the union refuses, so a rib that spans a cavity draws its line wall to wall
 and adds an overrun to bury both ends in the walls. overrun is a
 non-negative length, and the last occurrence wins. The default is zero.
@@ -8349,7 +8232,7 @@ ErrUnsupported for every receiver it accepts the option on.
 
 WithShellFaceThickness gives the walls whose outward normal is the world axis direction normal (+X, +Y, +Z or a
 negative one) the thickness t in place of Shell's own, so a part can have a heavy floor and thin sides
-(agent-docs/orthogonal-shell-design.md). It applies to an Inward shell of a faceted solid whose faces all square to a
+(agent-docs/orthogonal-design.md). It applies to an Inward shell of a faceted solid whose faces all square to a
 world axis; any other body, a sense other than Inward, a normal that is not exactly a world axis direction
 (ErrDegenerate) and a direction named twice (ErrDegenerate) are refused. t is a positive length. Directions the
 option does not name take Shell's thickness, and the walls of two directions meet in a mitred corner.
@@ -8382,7 +8265,7 @@ wall grows is enumerated, not signed.
     Outward
     // Centered straddles the original surface, half the thickness each side. Only
     // a faceted solid whose faces all square to a world axis takes it
-    // (agent-docs/orthogonal-shell-design.md); any other body is ErrUnsupported.
+    // (agent-docs/orthogonal-design.md); any other body is ErrUnsupported.
     Centered
 )</pre>
 

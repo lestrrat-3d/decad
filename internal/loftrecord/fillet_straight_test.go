@@ -47,7 +47,7 @@ func cornerEdge(u, v float64) *topo.Edge {
 }
 
 const (
-	classMsg    = "a loft fillet needs matching, parallel, solid sections without holes"
+	classMsg    = "a loft fillet needs parallel solid sections without holes whose segments match in kind"
 	notEdgeMsg  = "the selected loft edge is not an axial corner"
 	noCornerMsg = "a selected loft edge has no analytic section corner"
 )
@@ -76,9 +76,13 @@ func TestFilletStraightGates(t *testing.T) {
 			p.Profile0.Holes = []sectionrecord.LoopRecord{p.Profile0.Outer}
 			p.Profile1.Holes = []sectionrecord.LoopRecord{p.Profile1.Outer}
 		}, err: decaderr.ErrUnsupported, msg: classMsg},
-		"different sections": {edit: func(p *loftrecord.Payload, _ *[]*topo.Edge) {
+		"a segment of another kind": {edit: func(p *loftrecord.Payload, _ *[]*topo.Edge) {
 			p.Profile1.Outer.Segments = slices.Clone(p.Profile1.Outer.Segments)
-			p.Profile1.Outer.Segments[0] = sectionrecord.LineSeg{End: sectionrecord.Point2{U: 3}, TEnd: 1}
+			p.Profile1.Outer.Segments[0] = sectionrecord.ArcSeg{Center: sectionrecord.Point2{U: 2, V: -2},
+				End: sectionrecord.Point2{U: 4}, TEnd: 1}
+		}, err: decaderr.ErrUnsupported, msg: classMsg},
+		"another segment count": {edit: func(p *loftrecord.Payload, _ *[]*topo.Edge) {
+			p.Profile1.Outer.Segments = append(slices.Clone(p.Profile1.Outer.Segments), p.Profile1.Outer.Segments[0])
 		}, err: decaderr.ErrUnsupported, msg: classMsg},
 		"planes turned in u": {edit: func(p *loftrecord.Payload, _ *[]*topo.Edge) { p.Plane1.U = r3.Vec{Y: 1} }, err: decaderr.ErrUnsupported, msg: classMsg},
 		"planes turned in v": {edit: func(p *loftrecord.Payload, _ *[]*topo.Edge) { p.Plane1.V = r3.Vec{X: 1} }, err: decaderr.ErrUnsupported, msg: classMsg},

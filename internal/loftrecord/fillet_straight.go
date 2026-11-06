@@ -3,7 +3,9 @@ package loftrecord
 import (
 	"context"
 	"fmt"
+	"maps"
 	"math"
+	"reflect"
 
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/decaderr"
@@ -20,24 +22,30 @@ import (
 	"github.com/lestrrat-3d/decad/internal/topo"
 )
 
-// FilletStraight rounds recorded line/arc corners of an untwisted loft.
-// Both profiles must state the same section, so replacing each with the same
-// rewritten record preserves their one-to-one loft correspondence. Spline
-// segments remain the original records; only the analytic corner is trimmed.
-// A short line that a line/circle corner's fillet consumes, ending at a fit
-// spline, leaves the section. The corner is rounded against that fit spline by
-// the fit-circle route, or, where the fit spline turns away from the fillet
-// circle, by a connector that ends at the line's far end and leaves the fit
-// spline whole (agent-docs/loft-design.md §17).
+// FilletStraight rounds recorded line/arc corners of a loft whose two
+// sections lie on parallel planes with the same in-plane axes and an axial
+// translation, and whose outer loops have the same segment kinds in the same
+// order. Each section is rewritten on its own: the same corners receive a
+// tangent arc of the radius in each section, and the loft of the two
+// rewritten records is the result. Two identical sections are rewritten once
+// and receive the same record. Spline segments remain the original records;
+// only the analytic corner is trimmed. A short line that a line/circle
+// corner's fillet consumes, ending at a fit spline, leaves the section. The
+// corner is rounded against that fit spline by the fit-circle route, or, where
+// the fit spline turns away from the fillet circle, by a connector that ends at
+// the line's far end and leaves the fit spline whole (agent-docs/loft-design.md
+// §17). Two different sections must give rewrites of the same segment kinds,
+// connectors and dropped lines, or the call refuses.
 func FilletStraight(ctx context.Context, env topo.Env, selector string, edges []*topo.Edge,
 	pl Payload, radius float64) (*topo.Body, error) {
 	if pl.ConstructionDelta > 0 || len(pl.ConstructionArcUpper) != 0 || len(pl.ConstructionLengthExtra) != 0 {
 		return nil, fmt.Errorf(`%w: a certified fitted-spline loft fillet cannot be filleted again`, decaderr.ErrUnsupported)
 	}
 	if pl.SurfaceResult || len(pl.Profile0.Holes) != 0 || len(pl.Profile1.Holes) != 0 ||
-		!sectionrecord.IdenticalRecord(pl.Profile0, pl.Profile1) ||
+		!sameSegmentKinds(pl.Profile0.Outer.Segments, pl.Profile1.Outer.Segments) ||
 		pl.Plane0.U != pl.Plane1.U || pl.Plane0.V != pl.Plane1.V {
-		return nil, fmt.Errorf(`%w: a loft fillet needs matching, parallel, solid sections without holes`, decaderr.ErrUnsupported)
+		return nil, fmt.Errorf(`%w: a loft fillet needs parallel solid sections without holes whose segments match in kind`,
+			decaderr.ErrUnsupported)
 	}
 	for _, off := range pl.Alignment {
 		if off != 0 {
@@ -48,48 +56,144 @@ func FilletStraight(ctx context.Context, env topo.Env, selector string, edges []
 	if shift.Dot(pl.Plane0.U) != 0 || shift.Dot(pl.Plane0.V) != 0 {
 		return nil, fmt.Errorf(`%w: a loft fillet needs an axial section translation`, decaderr.ErrUnsupported)
 	}
-	segments := pl.Profile0.Outer.Segments
-	n := len(segments)
+	segments0, segments1 := pl.Profile0.Outer.Segments, pl.Profile1.Outer.Segments
+	n := len(segments0)
 	if n < 2 {
 		return nil, fmt.Errorf(`%w: a loft fillet needs an analytic section corner`, decaderr.ErrUnsupported)
 	}
-	walks := make([]survey2d.SideWalk, n)
-	analytic := make([]bool, n)
+	identical := sectionrecord.IdenticalRecord(pl.Profile0, pl.Profile1)
 	walkWork := freeform.NewFreeformWork()
-	walkWork.RaiseLimit(loftmesh.StationWorkLimit(0, uint64(n)))
+	walkWork.RaiseLimit(loftmesh.StationWorkLimit(0, uint64(2*n)))
+	walks0, err := sectionWalks(ctx, segments0, walkWork)
+	if err != nil {
+		return nil, err
+	}
+	walks1 := walks0
+	if !identical {
+		walks1, err = sectionWalks(ctx, segments1, walkWork)
+		if err != nil {
+			return nil, err
+		}
+	}
+	corners, err := matchLoftCorners(edges, pl, segments0, segments1, walks0, walks1)
+	if err != nil {
+		return nil, err
+	}
+	section0, err := rewriteFilletSection(ctx, selector, segments0, walks0, corners, radius)
+	if err != nil {
+		return nil, err
+	}
+	section1 := section0
+	if !identical {
+		section1, err = rewriteFilletSection(ctx, selector, segments1, walks1, corners, radius)
+		if err != nil {
+			return nil, err
+		}
+		if err := section0.sameShape(section1); err != nil {
+			return nil, fmt.Errorf(`%w; selector %s`, err, selector)
+		}
+	}
+	// Each held station's construction displacement is its own section's;
+	// the larger one bounds both, and each segment's arc-length and carrier
+	// allowances take the larger of the two sections' values.
+	constructionDelta := math.Max(section0.constructionDelta, section1.constructionDelta)
+	constructionArcUpper := maxPerSegment(section0.arcUpper, section1.arcUpper)
+	constructionLengthExtra := maxPerSegment(section0.lengthExtra, section1.lengthExtra)
+	profile0 := momentinput.Profile{Outer: sectionrecord.LoopRecord{Segments: section0.segments}}
+	profile1 := momentinput.Profile{Outer: sectionrecord.LoopRecord{Segments: section1.segments}}
+	budget := proofbound.NewWorkBudget(ctx)
+	work0, work1 := freeform.NewFreeformWork(), freeform.NewFreeformWork()
+	pl.RaiseReconstructionLimit(work0, work1)
+	limit := pl.RewriteWorkLimit(uint64(len(section0.segments)))
+	work0.RaiseLimit(limit)
+	work1.RaiseLimit(limit)
+	if err := loftfillet.AuditProfile(ctx, budget, profile0, section0.changed, constructionDelta, work0); err != nil {
+		return nil, err
+	}
+	if !identical {
+		if err := loftfillet.AuditProfile(ctx, budget, profile1, section1.changed, constructionDelta, work1); err != nil {
+			return nil, err
+		}
+	}
+	area0, err := profile0.EvaluatorIntegralsContext(ctx, freeform.MomentAreaOrder, work0)
+	if err != nil {
+		return nil, err
+	}
+	area1, err := profile1.EvaluatorIntegralsContext(ctx, freeform.MomentAreaOrder, work1)
+	if err != nil {
+		return nil, err
+	}
+	if area0.Area <= 0 || area1.Area <= 0 {
+		return nil, fmt.Errorf(`%w: the loft fillet consumes its section`, decaderr.ErrDegenerate)
+	}
+	next := pl
+	next.Profile0, next.Profile1 = profile0, profile1
+	next.BlendSegs = []map[int]struct{}{section0.blendSegs}
+	next.ConstructionDelta = constructionDelta
+	next.ConstructionArcUpper = constructionArcUpper
+	next.ConstructionLengthExtra = constructionLengthExtra
+	next.RecordArea = [2]float64{area0.Area, area1.Area}
+	next.Verts, next.Tris, next.Walls = nil, nil, 0
+	next.Cell, next.Side, next.CapStartCount = nil, nil, 0
+	next.Proof = loftmesh.MeshProof{}
+	return Build(ctx, env, next, budget, work0, work1)
+}
+
+// sameSegmentKinds reports two outer loops with the same number of segments
+// and the same segment type at every index.
+func sameSegmentKinds(a, b []sectionrecord.CurveSegment) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if reflect.TypeOf(a[i]) != reflect.TypeOf(b[i]) {
+			return false
+		}
+	}
+	return true
+}
+
+// sectionWalks walks every segment of one section's outer loop.
+func sectionWalks(ctx context.Context, segments []sectionrecord.CurveSegment,
+	work *freeform.FreeformWork) ([]survey2d.SideWalk, error) {
+	walks := make([]survey2d.SideWalk, len(segments))
 	for i, seg := range segments {
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		w, err := boundarywalk.WalkOf(seg, walkWork)
+		w, err := boundarywalk.WalkOf(seg, work)
 		if err != nil {
 			return nil, err
 		}
 		walks[i] = survey2d.SideWalk{SegmentWalk: w, Segs: []int{i}}
-		switch seg.(type) {
-		case sectionrecord.LineSeg, sectionrecord.ArcSeg:
-			analytic[i] = true
-		}
 	}
-	type loftCornerBlend struct {
-		blend                 *offset2d.Blend
-		fitParam, circleParam float64
-		fitCircle             bool
-		// lineCircle marks a corner between a line or arc and a trimmed circle
-		// fragment: the connector is the ordinary tangent arc, and the fragment is
-		// trimmed by the parameter of the blend's tangent foot.
-		lineCircle bool
-		// vertex marks a fit-circle corner left by a consumed line whose
-		// fillet ball rests on the line/fit vertex: the circle is trimmed by
-		// the foot's parameter, as for lineCircle, and the fit spline stays whole.
-		vertex               bool
-		certificate          loftfillet.RootCertificate
-		constructionDelta    float64
-		idealArcLength       float64
-		fitCarrierDeparture  float64
-		rootCarrierDeparture float64
-		circleIdealParam     proofbound.RatInterval
+	return walks, nil
+}
+
+// analyticSeg reports a line or arc segment.
+func analyticSeg(seg sectionrecord.CurveSegment) bool {
+	switch seg.(type) {
+	case sectionrecord.LineSeg, sectionrecord.ArcSeg:
+		return true
 	}
+	return false
+}
+
+// filletCornerClass reports a corner the loft fillet rounds: two analytic
+// segments, a fit spline and a circle fragment, or a line or arc and a circle
+// fragment.
+func filletCornerClass(prev, seg sectionrecord.CurveSegment) bool {
+	return analyticSeg(prev) && analyticSeg(seg) || loftfillet.FitCirclePair(prev, seg) || lineCirclePair(prev, seg)
+}
+
+// matchLoftCorners maps each selected rung to the section corner it joins: the
+// start of segment i lifted through the first section's frame at one end and
+// the start of the same segment of the second section lifted through its frame
+// at the other, compared without tolerance. Both sections must state a
+// rounded corner class there.
+func matchLoftCorners(edges []*topo.Edge, pl Payload, segments0, segments1 []sectionrecord.CurveSegment,
+	walks0, walks1 []survey2d.SideWalk) ([]int, error) {
+	n := len(segments0)
 	corners := make([]int, 0, len(edges))
 	selected := make(map[int]struct{}, len(edges))
 	for _, edge := range edges {
@@ -97,15 +201,13 @@ func FilletStraight(ctx context.Context, env topo.Env, selector string, edges []
 			return nil, fmt.Errorf(`%w: the selected loft edge is not an axial corner`, decaderr.ErrUnsupported)
 		}
 		matched := -1
-		for i := range segments {
+		for i := range segments0 {
 			prev := (i + n - 1) % n
-			if (!analytic[prev] || !analytic[i]) && !loftfillet.FitCirclePair(segments[prev], segments[i]) &&
-				!lineCirclePair(segments[prev], segments[i]) {
+			if !filletCornerClass(segments0[prev], segments0[i]) || !filletCornerClass(segments1[prev], segments1[i]) {
 				continue
 			}
-			w := walks[i]
-			bottom := pl.Xform.Apply(pl.Frame0.ToWorldUV(w.StartU, w.StartV))
-			top := pl.Xform.Apply(pl.Frame1.ToWorldUV(w.StartU, w.StartV))
+			bottom := pl.Xform.Apply(pl.Frame0.ToWorldUV(walks0[i].StartU, walks0[i].StartV))
+			top := pl.Xform.Apply(pl.Frame1.ToWorldUV(walks1[i].StartU, walks1[i].StartV))
 			if (edge.Start.Position == bottom && edge.End.Position == top) ||
 				(edge.Start.Position == top && edge.End.Position == bottom) {
 				if matched >= 0 {
@@ -123,6 +225,75 @@ func FilletStraight(ctx context.Context, env topo.Env, selector string, edges []
 		selected[matched] = struct{}{}
 		corners = append(corners, matched)
 	}
+	return corners, nil
+}
+
+// filletSection is one section's rewrite: its new outer-loop segments, the
+// changed pieces the audit checks, the connector segments, and the
+// construction allowances keyed by rewritten segment index.
+type filletSection struct {
+	segments          []sectionrecord.CurveSegment
+	changed           map[int]bool
+	blendSegs         map[int]struct{}
+	constructionDelta float64
+	arcUpper          map[int]float64
+	lengthExtra       map[int]float64
+}
+
+// sameShape refuses two section rewrites that differ in segment count, in a
+// segment's kind, or in which segments are connectors, since the loft pairs
+// the two rewritten loops segment by segment.
+func (s filletSection) sameShape(o filletSection) error {
+	if !sameSegmentKinds(s.segments, o.segments) || len(s.blendSegs) != len(o.blendSegs) {
+		return fmt.Errorf(`%w: the loft fillet rewrites the two sections differently`, decaderr.ErrUnsupported)
+	}
+	for i := range s.blendSegs {
+		if _, ok := o.blendSegs[i]; !ok {
+			return fmt.Errorf(`%w: the loft fillet rewrites the two sections differently`, decaderr.ErrUnsupported)
+		}
+	}
+	return nil
+}
+
+// maxPerSegment merges two per-segment upper bounds into a new map, keeping
+// the larger value of a segment both name. The bounds are nonnegative, so a
+// segment only b names keeps b's value.
+func maxPerSegment(a, b map[int]float64) map[int]float64 {
+	out := make(map[int]float64, max(len(a), len(b)))
+	maps.Copy(out, a)
+	for k, v := range b {
+		out[k] = math.Max(out[k], v)
+	}
+	return out
+}
+
+// loftCornerBlend is one selected corner's proposed connector and, for a
+// fit-circle corner, its certificate and construction departures.
+type loftCornerBlend struct {
+	blend                 *offset2d.Blend
+	fitParam, circleParam float64
+	fitCircle             bool
+	// lineCircle marks a corner between a line or arc and a trimmed circle
+	// fragment: the connector is the ordinary tangent arc, and the fragment is
+	// trimmed by the parameter of the blend's tangent foot.
+	lineCircle bool
+	// vertex marks a fit-circle corner left by a consumed line whose
+	// fillet ball rests on the line/fit vertex: the circle is trimmed by
+	// the foot's parameter, as for lineCircle, and the fit spline stays whole.
+	vertex               bool
+	certificate          loftfillet.RootCertificate
+	constructionDelta    float64
+	idealArcLength       float64
+	fitCarrierDeparture  float64
+	rootCarrierDeparture float64
+	circleIdealParam     proofbound.RatInterval
+}
+
+// rewriteFilletSection rounds the given corners of one section: it proposes
+// each connector, certifies a fit-circle root, and trims the carriers.
+func rewriteFilletSection(ctx context.Context, selector string, segments []sectionrecord.CurveSegment,
+	walks []survey2d.SideWalk, corners []int, radius float64) (filletSection, error) {
+	n := len(segments)
 	// A line a selected corner's tangent arc consumes whole leaves the section,
 	// and that corner's fillet touches the fit spline beyond the line instead.
 	origin := make([]int, n)
@@ -136,13 +307,13 @@ func FilletStraight(ctx context.Context, env topo.Env, selector string, edges []
 		segments, walks, origin, corners = dropSegments(segments, walks, corners, rolled)
 		n = len(segments)
 		if n < 2 {
-			return nil, fmt.Errorf(`%w: the loft fillets consume the section`, decaderr.ErrDegenerate)
+			return filletSection{}, fmt.Errorf(`%w: the loft fillets consume the section`, decaderr.ErrDegenerate)
 		}
 	}
 	blends := make(map[int]loftCornerBlend, len(corners))
 	for k, matched := range corners {
 		if _, exists := blends[matched]; exists {
-			return nil, fmt.Errorf(`%w: a loft corner was selected twice`, decaderr.ErrDegenerate)
+			return filletSection{}, fmt.Errorf(`%w: a loft corner was selected twice`, decaderr.ErrDegenerate)
 		}
 		corner := sectionCorners[k]
 		prev := (matched + n - 1) % n
@@ -152,7 +323,7 @@ func FilletStraight(ctx context.Context, env topo.Env, selector string, edges []
 			if leaves || arrives {
 				vb, onVertex, err := vertexBlend(sectionSegments, sectionWalks, corner, leaves, radius)
 				if err != nil {
-					return nil, fmt.Errorf(`%w; selector %s, section corner %d`, err, selector, corner)
+					return filletSection{}, fmt.Errorf(`%w; selector %s, section corner %d`, err, selector, corner)
 				}
 				if onVertex {
 					blends[matched] = loftCornerBlend{blend: vb, vertex: true}
@@ -162,10 +333,10 @@ func FilletStraight(ctx context.Context, env topo.Env, selector string, edges []
 			cb, fitParam, circleParam, err := loftfillet.CircleBlend(segments, walks, matched, radius)
 			if err != nil {
 				if leaves || arrives {
-					return nil, fmt.Errorf(`%w; the fillet consumes the line at selector %s, section corner %d, and cannot touch the fit spline beyond it`,
+					return filletSection{}, fmt.Errorf(`%w; the fillet consumes the line at selector %s, section corner %d, and cannot touch the fit spline beyond it`,
 						err, selector, corner)
 				}
-				return nil, fmt.Errorf(`%w; selector %s, section corner %d`, err, selector, corner)
+				return filletSection{}, fmt.Errorf(`%w; selector %s, section corner %d`, err, selector, corner)
 			}
 			fitArrives := false
 			fit, isFit := segments[prev].(sectionrecord.FitSplineSeg)
@@ -177,30 +348,30 @@ func FilletStraight(ctx context.Context, env topo.Env, selector string, edges []
 				fit, isFit = segments[matched].(sectionrecord.FitSplineSeg)
 			}
 			if !isFit || !isCircle {
-				return nil, fmt.Errorf(`%w: the loft fit-circle carrier changed kind`, decaderr.ErrUnsupported)
+				return filletSection{}, fmt.Errorf(`%w: the loft fit-circle carrier changed kind`, decaderr.ErrUnsupported)
 			}
 			arrive, leave := walks[prev], walks[matched]
 			cross := arrive.TanOutU*leave.TanInV - arrive.TanOutV*leave.TanInU
 			if cross == 0 || math.IsNaN(cross) || math.IsInf(cross, 0) {
-				return nil, fmt.Errorf(`%w: the loft fit-circle corner has no certified turn`, decaderr.ErrUnsupported)
+				return filletSection{}, fmt.Errorf(`%w: the loft fit-circle corner has no certified turn`, decaderr.ErrUnsupported)
 			}
 			connector, ok := cb.Connector.(sectionrecord.ArcSeg)
 			if !ok {
-				return nil, fmt.Errorf(`%w: the loft fit-circle connector is not an arc`, decaderr.ErrUnsupported)
+				return filletSection{}, fmt.Errorf(`%w: the loft fit-circle connector is not an arc`, decaderr.ErrUnsupported)
 			}
 			cert, err := loftfillet.CertifyRoot(ctx, fit, circle, connector, fitParam, radius,
 				fitArrives, math.Copysign(1, cross))
 			if err != nil {
-				return nil, fmt.Errorf(`%w; selector %s, section corner %d`, err, selector, corner)
+				return filletSection{}, fmt.Errorf(`%w; selector %s, section corner %d`, err, selector, corner)
 			}
 			departure, idealLength, err := loftfillet.ArcDeparture(cert, connector, fitArrives, radius)
 			if err != nil {
-				return nil, fmt.Errorf(`%w; selector %s, section corner %d`, err, selector, corner)
+				return filletSection{}, fmt.Errorf(`%w; selector %s, section corner %d`, err, selector, corner)
 			}
 			fitCarrier, rootCarrier, circleIdealParam, err := loftfillet.CarrierDeparture(cert, circle,
 				fitParam, circleParam, fitArrives)
 			if err != nil {
-				return nil, fmt.Errorf(`%w; selector %s, section corner %d`, err, selector, corner)
+				return filletSection{}, fmt.Errorf(`%w; selector %s, section corner %d`, err, selector, corner)
 			}
 			blends[matched] = loftCornerBlend{
 				blend: cb, fitParam: fitParam, circleParam: circleParam, fitCircle: true,
@@ -211,7 +382,7 @@ func FilletStraight(ctx context.Context, env topo.Env, selector string, edges []
 		} else {
 			cb, err := offset2d.Fillet(walks, matched, radius, sectionaudit.Tolerance)
 			if err != nil {
-				return nil, fmt.Errorf(`%w; selector %s, section corner %d`, err, selector, corner)
+				return filletSection{}, fmt.Errorf(`%w; selector %s, section corner %d`, err, selector, corner)
 			}
 			blends[matched] = loftCornerBlend{blend: cb, lineCircle: lineCirclePair(segments[prev], segments[matched])}
 		}
@@ -225,7 +396,7 @@ func FilletStraight(ctx context.Context, env topo.Env, selector string, edges []
 	constructionLengthExtra := make(map[int]float64, len(blends)*2)
 	for i, original := range segments {
 		if err := ctx.Err(); err != nil {
-			return nil, err
+			return filletSection{}, err
 		}
 		start, hasStart := blends[i]
 		end, hasEnd := blends[(i+1)%n]
@@ -241,11 +412,11 @@ func FilletStraight(ctx context.Context, env topo.Env, selector string, edges []
 			case sectionrecord.CircleSeg:
 				increasing = segment.TStart < segment.TEnd
 			default:
-				return nil, fmt.Errorf(`%w: a two-ended loft fillet has no certified carrier`, decaderr.ErrUnsupported)
+				return filletSection{}, fmt.Errorf(`%w: a two-ended loft fillet has no certified carrier`, decaderr.ErrUnsupported)
 			}
 			if increasing && startParam.Hi.Cmp(endParam.Lo) >= 0 ||
 				!increasing && startParam.Lo.Cmp(endParam.Hi) <= 0 {
-				return nil, fmt.Errorf(`%w: ideal loft fillets consume section segment %d`, decaderr.ErrUnsupported, origin[i])
+				return filletSection{}, fmt.Errorf(`%w: ideal loft fillets consume section segment %d`, decaderr.ErrUnsupported, origin[i])
 			}
 		}
 		carrierDeparture := 0.0
@@ -270,18 +441,18 @@ func FilletStraight(ctx context.Context, env topo.Env, selector string, edges []
 				// A vertex fillet ends at the fit spline's own end.
 				if hasStart && !start.vertex {
 					if !start.fitCircle {
-						return nil, fmt.Errorf(`%w: a loft fillet cannot trim this fit-spline carrier`, decaderr.ErrUnsupported)
+						return filletSection{}, fmt.Errorf(`%w: a loft fillet cannot trim this fit-spline carrier`, decaderr.ErrUnsupported)
 					}
 					original.TStart = start.fitParam
 				}
 				if hasEnd && !end.vertex {
 					if !end.fitCircle {
-						return nil, fmt.Errorf(`%w: a loft fillet cannot trim this fit-spline carrier`, decaderr.ErrUnsupported)
+						return filletSection{}, fmt.Errorf(`%w: a loft fillet cannot trim this fit-spline carrier`, decaderr.ErrUnsupported)
 					}
 					original.TEnd = end.fitParam
 				}
 				if original.TStart == original.TEnd {
-					return nil, fmt.Errorf(`%w: loft fillets consume section segment %d`, decaderr.ErrUnsupported, origin[i])
+					return filletSection{}, fmt.Errorf(`%w: loft fillets consume section segment %d`, decaderr.ErrUnsupported, origin[i])
 				}
 				rewritten = append(rewritten, original)
 			case sectionrecord.CircleSeg:
@@ -292,11 +463,11 @@ func FilletStraight(ctx context.Context, env topo.Env, selector string, edges []
 					case start.lineCircle || start.vertex:
 						t, ok := circleFootParameter(original, start.blend.FB)
 						if !ok {
-							return nil, fmt.Errorf(`%w: the loft fillet foot lies outside its circle fragment`, decaderr.ErrUnsupported)
+							return filletSection{}, fmt.Errorf(`%w: the loft fillet foot lies outside its circle fragment`, decaderr.ErrUnsupported)
 						}
 						original.TStart = t
 					default:
-						return nil, fmt.Errorf(`%w: a loft fillet cannot trim this circle carrier`, decaderr.ErrUnsupported)
+						return filletSection{}, fmt.Errorf(`%w: a loft fillet cannot trim this circle carrier`, decaderr.ErrUnsupported)
 					}
 				}
 				if hasEnd {
@@ -306,15 +477,15 @@ func FilletStraight(ctx context.Context, env topo.Env, selector string, edges []
 					case end.lineCircle || end.vertex:
 						t, ok := circleFootParameter(original, end.blend.FA)
 						if !ok {
-							return nil, fmt.Errorf(`%w: the loft fillet foot lies outside its circle fragment`, decaderr.ErrUnsupported)
+							return filletSection{}, fmt.Errorf(`%w: the loft fillet foot lies outside its circle fragment`, decaderr.ErrUnsupported)
 						}
 						original.TEnd = t
 					default:
-						return nil, fmt.Errorf(`%w: a loft fillet cannot trim this circle carrier`, decaderr.ErrUnsupported)
+						return filletSection{}, fmt.Errorf(`%w: a loft fillet cannot trim this circle carrier`, decaderr.ErrUnsupported)
 					}
 				}
 				if original.CCW != (original.TStart < original.TEnd) {
-					return nil, fmt.Errorf(`%w: loft fillets consume section segment %d`, decaderr.ErrUnsupported, origin[i])
+					return filletSection{}, fmt.Errorf(`%w: loft fillets consume section segment %d`, decaderr.ErrUnsupported, origin[i])
 				}
 				rewritten = append(rewritten, original)
 			case sectionrecord.LineSeg, sectionrecord.ArcSeg:
@@ -335,11 +506,11 @@ func FilletStraight(ctx context.Context, env topo.Env, selector string, edges []
 					cut += end.blend.CutbackA
 				}
 				if cut >= w.Length-sectionaudit.Tolerance || offset2d.WalkConsumed(w, from, to, sectionaudit.Tolerance) {
-					return nil, fmt.Errorf(`%w: loft fillets consume section segment %d`, decaderr.ErrUnsupported, origin[i])
+					return filletSection{}, fmt.Errorf(`%w: loft fillets consume section segment %d`, decaderr.ErrUnsupported, origin[i])
 				}
 				rewritten = append(rewritten, offset2d.OriginalSegment(w, from.U, from.V, to.U, to.V))
 			default:
-				return nil, fmt.Errorf(`%w: a loft fillet cannot trim this section carrier`, decaderr.ErrUnsupported)
+				return filletSection{}, fmt.Errorf(`%w: a loft fillet cannot trim this section carrier`, decaderr.ErrUnsupported)
 			}
 			// A trimmed fit spline is a subset of its authenticated source.
 			// Only newly made analytic pieces need the free-form contact audit.
@@ -363,38 +534,8 @@ func FilletStraight(ctx context.Context, env topo.Env, selector string, edges []
 			}
 		}
 	}
-	profile := momentinput.Profile{Outer: sectionrecord.LoopRecord{Segments: rewritten}}
-	budget := proofbound.NewWorkBudget(ctx)
-	work0, work1 := freeform.NewFreeformWork(), freeform.NewFreeformWork()
-	pl.RaiseReconstructionLimit(work0, work1)
-	limit := pl.RewriteWorkLimit(uint64(len(rewritten)))
-	work0.RaiseLimit(limit)
-	work1.RaiseLimit(limit)
-	if err := loftfillet.AuditProfile(ctx, budget, profile, changed, constructionDelta, work0); err != nil {
-		return nil, err
-	}
-	area0, err := profile.EvaluatorIntegralsContext(ctx, freeform.MomentAreaOrder, work0)
-	if err != nil {
-		return nil, err
-	}
-	area1, err := profile.EvaluatorIntegralsContext(ctx, freeform.MomentAreaOrder, work1)
-	if err != nil {
-		return nil, err
-	}
-	if area0.Area <= 0 || area1.Area <= 0 {
-		return nil, fmt.Errorf(`%w: the loft fillet consumes its section`, decaderr.ErrDegenerate)
-	}
-	next := pl
-	next.Profile0, next.Profile1 = profile, profile
-	next.BlendSegs = []map[int]struct{}{blendSegs}
-	next.ConstructionDelta = constructionDelta
-	next.ConstructionArcUpper = constructionArcUpper
-	next.ConstructionLengthExtra = constructionLengthExtra
-	next.RecordArea = [2]float64{area0.Area, area1.Area}
-	next.Verts, next.Tris, next.Walls = nil, nil, 0
-	next.Cell, next.Side, next.CapStartCount = nil, nil, 0
-	next.Proof = loftmesh.MeshProof{}
-	return Build(ctx, env, next, budget, work0, work1)
+	return filletSection{segments: rewritten, changed: changed, blendSegs: blendSegs,
+		constructionDelta: constructionDelta, arcUpper: constructionArcUpper, lengthExtra: constructionLengthExtra}, nil
 }
 
 // rolledLines returns the LineSeg segments that a selected line/circle corner's
