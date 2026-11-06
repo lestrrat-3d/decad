@@ -3191,10 +3191,12 @@ payload when its tessellation publishes that proof.
 
 An equal-distance `Chamfer` of both complete outer cap loops also accepts a solid, unplaced Loft whose two sections
 differ, such as a gear outline lofted to the same outline turned about its axis, with or without §17's rounded
-corners. Both sections must be hole-free single loops with zero alignment on frames with the exact XY basis at
+corners and with or without §18's through-bore. Both sections must be single outer loops, either hole-free or with
+one whole-circle bore whose wall is one face, with zero alignment on frames with the exact XY basis at
 ascending levels (`MirrorAxialSource`), so each cap is a horizontal plane at its frame's level and the held mesh
 pairs station `i` of the start ring with station `i` of the end ring. Identical sections keep §18's route. A partial
-loop, an inner or side edge, an asymmetric setback, placement and holes are not this route's class. The setback `d`
+loop, an inner or side edge, an asymmetric setback, placement, a hole that is not a whole circle and a bore wall split
+into several faces are not this route's class. The setback `d`
 must move each float cap level, and the exact levels `z0+d` and `z1−d` must be ordered
 (`loftcylinder.BindLoftCapSetback`).
 
@@ -3208,23 +3210,29 @@ the payload's held triangles, both cap faces must be whole, and the selection mu
   on the old wall, rounded once into the mesh.
 - Each held cap outline is offset inward by `d` (`ChamferInset`) and chorded; the chord samples are `C`'s inset loop.
   A setback whose offset drops a held edge, such as one wider than half a tooth's tip land, refuses.
-- A bevel band joins each inset loop to its clipped ring, and the inset loop is triangulated as the new cap.
+- A bevel band joins each inset loop to its clipped ring, and the inset loop is triangulated as the new cap, around
+  the bore rim when there is one. The bore wall and both rims are kept whole, so the bore stays sharp.
 
-The audits prove that the clipped rings and inset loops are simple and nested, that every band triangle lies at its two
+The audits prove that the clipped rings and inset loops are simple and nested, that each inset loop strictly encloses
+its bore rim, that every band triangle lies at its two
 levels and meets the old walls only along its side ring, that the band lies inside `H`, that the shell is outward,
-manifold and free of crossings, and that each new cap tiles its inset loop. Thus `C ⊂ H`, and `C = H∩C`.
+manifold and free of crossings, the bore wall included, and that each new cap tiles its inset loop or the annulus
+between it and the bore rim. Thus `C ⊂ H`, and `C = H∩C`.
 
 The result denotes `C`, the held solid cut by the bands, as §18's chamfer denotes its held polygon band. For the true
 Loft `S`, `(S∩C) △ C` lies inside `S △ H`, so the occupied-volume bound is the Loft's own plus the rounding of the
 clipped stations swept over the result's area. The boundary bound is the Loft's held boundary bound plus the larger of
 that rounding and the inset's chord departure from the exact offset. The cap groups keep their planes and gain the
 chamfer's `capStart` and `capEnd` roles; each band is a `chamferCap(i,0,0)` face; the clipped wall pieces keep their
-Loft roles, including §17's `fillet(loop,segment)` roles. Mass readings come from the faceted result.
+Loft roles, including §17's `fillet(loop,segment)` roles, and the bore wall keeps its face and its `Cylinder` tag with
+the tag's normal bound. Mass readings come from the faceted result.
 
 `apitest.TestLoftCapChamferSquareFrustum` chamfers a loft from a square to a smaller square: its planar walls make
 each removed region's slice area quadratic in height, so Simpson's rule gives the removed volume exactly, and each
 inset cap is a square of side `s−2d`. `TestLoftCapChamferTurnedSquare` chamfers a square lofted to the same square
 turned 25° and refuses a setback whose bands meet. `TestLoftCapChamferRoundedTwistedGear` chamfers a rounded twisted
 gear loft: the removed held volume is `d/2` times the cap area lost within 3%, the rounded roots keep their roles, and a
-setback that drops the tooth tips refuses. Each case checks the verified tessellation, its closed shell and the cap
-and band levels.
+setback that drops the tooth tips refuses. `TestLoftCapChamferKeepsTheBore` chamfers the bored rounded gear: the
+removed held volume is `d/2` times the cap area lost within 3%, one `Cylinder` of the bore's radius remains, and every
+mesh vertex near the axis lies on the bore. Each case checks the verified tessellation, the genus of its shell and the
+cap and band levels.

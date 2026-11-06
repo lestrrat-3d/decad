@@ -76,6 +76,7 @@ func pair(t *testing.T) (lower, upper loftrecord.Payload) {
 		SourceIdentity: new(loftrecord.SourceIdentity), AuthenticatedReconstruction: true,
 		Profile0: square(), Profile1: square(), Frame0: frame(0), Frame1: frame(5), Alignment: []int{0, 0},
 		Xform: r3.Identity(), Walls: 6, CapStartCount: 1,
+		Cell:  [][2]int{{0, 0}, {0, 0}, {0, 1}, {0, 1}, {0, 2}, {0, 2}},
 		Verts: []r3.Vec{{}, {X: 4}, {X: 4, Y: 4}, {Z: 5}, {X: 4, Z: 5}, {X: 4, Y: 4, Z: 5}},
 		Tris:  [][3]int{{0, 1, 4}, {0, 4, 3}, {1, 2, 5}, {1, 5, 4}, {2, 0, 3}, {2, 3, 5}, {0, 2, 1}, {3, 4, 5}},
 	}

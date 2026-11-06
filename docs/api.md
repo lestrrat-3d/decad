@@ -197,7 +197,7 @@ Each of these returns a new body and retires its input.
 | Function | Effect |
 |---|---|
 | `decad.Fillet` | Rounds selected edges with a tangent arc of a given radius. On a mesh solid, straight edges that meet end to end on one face at right-angle corners, such as a box's top loop, are rounded together and their arcs meet in a mitre at each corner; three edges meeting at a corner of three perpendicular faces end in a sphere octant. On a loft, a radius that consumes a short line between a circle and a fit spline removes the line: the arc touches the fit spline, or, where the fit spline turns away from the arc, ends at the line's far end and leaves a corner there no sharper than the line's own. A loft's two sections may differ, such as a helical gear outline lofted to the same outline turned about its axis, when they have the same kinds of curves in the same order; each section's selected corner gets its own tangent arc of the radius. |
-| `decad.Chamfer` | Bevels selected edges. `decad.WithAsymmetricChamfer` sets a second distance. Selecting the whole outer cap loop of a prism whose section is a smooth chain of fit splines bevels it within a measured ratio of the ideal chamfer, as a cut. Several convex edges of an axis-square mesh solid that share corners are bevelled as the solid less each edge's wedge, and several concave ones whose ends lie in material or open to air as the solid plus each edge's wedge. Selecting both whole outer cap loops of a loft whose two sections differ, such as a helical gear outline lofted to the same outline turned about its axis, bevels its held facets: each cap is inset by the distance and joined by a band to the walls cut at that height. |
+| `decad.Chamfer` | Bevels selected edges. `decad.WithAsymmetricChamfer` sets a second distance. Selecting the whole outer cap loop of a prism whose section is a smooth chain of fit splines bevels it within a measured ratio of the ideal chamfer, as a cut. Several convex edges of an axis-square mesh solid that share corners are bevelled as the solid less each edge's wedge, and several concave ones whose ends lie in material or open to air as the solid plus each edge's wedge. Selecting both whole outer cap loops of a loft whose two sections differ, such as a helical gear outline lofted to the same outline turned about its axis, bevels its held facets, with or without a centered through-bore: each cap is inset by the distance and joined by a band to the walls cut at that height, and the bore stays sharp. |
 | `decad.FilletChord` | Rounds convex or concave edges between two planar faces, or circular ones between a plane and a surface of revolution, with an arc stated by its chord length. |
 | `decad.ChamferAngle` | Bevels convex or concave edges between two planar faces, or circular ones between a plane and a surface of revolution, by a distance along a reference face and an angle from that face. |
 | `decad.Stretch` | Scales a faceted solid, such as a mesh solid, by a separate factor along each world axis about an anchor, and returns a solid. |
@@ -225,7 +225,7 @@ exactly. Tessellation carries bounds for rounding at the two cap rims.
 | Function | Result |
 |---|---|
 | `decad.Union` | The volume enclosed by two or more bodies. |
-| `decad.Cut` | The target minus the tool. A straight-profile twisted `Sweep` is an admitted tool: a boolean restates its closer stationed boundary, and refuses a crossing or gap narrower than the two operands' held bounds together. A straight through-bore of a loft, including one whose upper section is the lower one turned about the axis, keeps the result a loft, so `CapStart` and `CapEnd` of the result still name its caps. |
+| `decad.Cut` | The target minus the tool. A straight-profile twisted `Sweep` is an admitted tool: a boolean restates its closer stationed boundary, and refuses a crossing or gap narrower than the two operands' held bounds together. A straight through-bore of a loft, including one whose upper section is the lower one turned about the axis, keeps the result a loft, so `CapStart` and `CapEnd` of the result still name its caps. A straight through-bore of a loft joined to its mirror image, such as a herringbone gear, bores both halves. |
 | `decad.Intersect` | The volume common to both bodies. |
 | `decad.Split` | One solid per arranged target cell. |
 | `decad.Refine` | The same held mesh with a tighter proven surface bound, for mesh Unions of extruded, revolved, swept or coiled circles, then Cuts by extruded circles. |
@@ -589,6 +589,10 @@ Branch on a sentinel with `errors.Is`.
 | `decad.ErrRetiredBody` | A body was already consumed by a feature. |
 | `decad.ErrMalformedMesh`, `decad.ErrMeshTooLarge` | An STL or OBJ file was malformed, or held more than the import limits allow. |
 | `decad.ErrForeignProfile`, `decad.ErrStaleProfile`, `decad.ErrInvalidProfile`, `decad.ErrUnrecordableProfile` | A sketch profile was rejected. |
+
+`Tessellate` of a faceted body at a tolerance below its minimum mesh bound returns a `*decad.MeshBoundError`, which
+also satisfies `errors.Is(err, decad.ErrUnsupported)`. Read it with `errors.As`: `Floor()` is the smallest accepted
+tolerance and `Requested()` the refused one. Every tolerance at or above `Floor()` restates the same held facets.
 
 ## Test helpers
 

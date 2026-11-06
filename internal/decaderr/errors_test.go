@@ -55,3 +55,21 @@ func TestSentinelsMatchTheirRootReExports(t *testing.T) {
 		}
 	}
 }
+
+// TestMeshBoundErrorMatchesRootAndSentinel pins the typed refusal: the root
+// name is the same type, errors.As reads the floor through wrapping, the text
+// is the pre-typed text byte for byte, and ErrUnsupported still matches.
+func TestMeshBoundErrorMatchesRootAndSentinel(t *testing.T) {
+	t.Parallel()
+	var err error = decaderr.NewMeshBoundError(0.25, 0.5)
+	wrapped := fmt.Errorf("wrapped: %w", err)
+
+	var target *decad.MeshBoundError
+	require.ErrorAs(t, wrapped, &target)
+	require.InDelta(t, 0.5, target.Floor().Mag(), 0)
+	require.InDelta(t, 0.25, target.Requested().Mag(), 0)
+	require.ErrorIs(t, wrapped, decad.ErrUnsupported)
+	require.ErrorIs(t, wrapped, decaderr.ErrUnsupported)
+	require.Equal(t, "decad: not supported by the current evaluator: requested tolerance 0.25 mm is below the faceted "+
+		"body's minimum mesh bound 0.5 mm; retry with a tolerance of at least 0.5 mm to restate the held mesh", err.Error())
+}

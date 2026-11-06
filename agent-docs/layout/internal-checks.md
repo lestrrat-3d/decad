@@ -39,7 +39,7 @@ The rules for rows live in `agent-docs/layout.md`.
 | `internal/offset2d/` | Offset carriers, proofs, profile offsets and corner loops, rewrite and offset audits, offset displacement, and the draft near and far section stages. See modify §5–§9, shell-opening §3–§5, draft §2, §7. |
 | `internal/capband/` | Cap-band loop walks, offset joins, contour, loop boundary, patch, locus, volume, first-moment and centroid bounds, and cap-loop chamfer refusals. See modify-reach §8.3–§8.4. |
 | `internal/filletband/` | Loop-fillet closed forms and reference-frame band mass. See loop-fillet §5. |
-| `internal/decaderr/` | The sentinel error values `errors.go` re-exports, so internal packages can return them. |
+| `internal/decaderr/` | The sentinel error values and the `MeshBoundError` type `errors.go` re-exports, so internal packages can return them. |
 | `internal/parambind/` | The ledger of parameter reads behind `Document.Bindings`. See param-binding §3. |
 | `internal/holeplan/` | Plans `Hole`: places the axis on the face plane, gates sizes, and returns the bore, counterbore and countersink tool shapes. See hole design. |
 | `internal/ribplan/` | Plans `WebPath`'s ribs: the outline from a line or an arc, thickness and overrun, the box-disjoint test and the no-added-volume test. See rib design. |
