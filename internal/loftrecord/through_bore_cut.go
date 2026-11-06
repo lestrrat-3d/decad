@@ -20,15 +20,17 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// ThroughBoreCut keeps a matching axial loft as a loft when a whole circular,
+// ThroughBoreCut keeps an axial loft as a loft when a whole circular,
 // D-shaped, or closed line-and-arc-profile through-tool becomes one new hole
-// in each section. A conservative circle certificate proves the hole lies
-// inside the existing outer loop. Every other pair keeps the general boolean
-// path.
+// in each section. The two sections may differ, such as a section turned
+// about the loft axis, when their outer loops have the same segment kinds in
+// the same order; both receive the same hole. A conservative circle
+// certificate proves the hole lies inside each section's outer loop. Every
+// other pair keeps the general boolean path.
 func ThroughBoreCut(ctx context.Context, env topo.Env, a, b topo.Payload) (*topo.Body, bool, error) {
 	pl, ok := a.(Payload)
-	if !ok || pl.SurfaceResult || len(pl.Profile0.Holes) != 0 ||
-		!sectionrecord.IdenticalRecord(pl.Profile0, pl.Profile1) ||
+	if !ok || pl.SurfaceResult || len(pl.Profile0.Holes) != 0 || len(pl.Profile1.Holes) != 0 ||
+		!sameSegmentKinds(pl.Profile0.Outer.Segments, pl.Profile1.Outer.Segments) ||
 		pl.Frame0.U() != pl.Frame1.U() || pl.Frame0.V() != pl.Frame1.V() ||
 		pl.Xform != r3.Identity() {
 		return nil, false, nil
@@ -73,7 +75,7 @@ func ThroughBoreCut(ctx context.Context, env topo.Env, a, b topo.Payload) (*topo
 	if end.Z <= 0 || !loftToolSpansExactCaps(tool, pl.Frame0, pl.Frame1) {
 		return nil, false, nil
 	}
-	profile := pl.Profile0
+	identical := sectionrecord.IdenticalRecord(pl.Profile0, pl.Profile1)
 	var hole sectionrecord.LoopRecord
 	if wholeCircle {
 		circle.Center = sectionrecord.Point2{U: center.X, V: center.Y}
@@ -90,11 +92,13 @@ func ThroughBoreCut(ctx context.Context, env topo.Env, a, b topo.Payload) (*topo
 			return nil, false, nil
 		}
 	}
-	profile.Holes = []sectionrecord.LoopRecord{hole}
+	profile0, profile1 := pl.Profile0, pl.Profile1
+	profile0.Holes = []sectionrecord.LoopRecord{hole}
+	profile1.Holes = []sectionrecord.LoopRecord{hole}
 	budget := proofbound.NewWorkBudget(ctx)
 	work0, work1 := freeform.NewFreeformWork(), freeform.NewFreeformWork()
 	pl.RaiseReconstructionLimit(work0, work1)
-	limit := pl.RewriteWorkLimit(uint64(len(profile.Outer.Segments) + 1))
+	limit := pl.RewriteWorkLimit(uint64(len(profile0.Outer.Segments) + 1))
 	work0.RaiseLimit(limit)
 	work1.RaiseLimit(limit)
 	container := circle
@@ -102,28 +106,46 @@ func ThroughBoreCut(ctx context.Context, env topo.Env, a, b topo.Payload) (*topo
 	container.Radius = units.Millimeters(proofbound.AbsSumUpper(
 		container.Radius.Base(), tool.SectionDelta))
 	targetDelta := proofbound.AbsSumUpper(pl.SectionDelta, pl.JoinDelta, pl.ConstructionDelta)
-	contained, err := loftfillet.CircleHoleInside(budget, pl.Profile0.Outer, container, targetDelta, work0)
-	if err != nil {
-		if ctx.Err() != nil {
-			return nil, false, ctx.Err()
+	// Each section's own outer loop must contain the hole. Identical sections
+	// share one certificate.
+	outers := []sectionrecord.LoopRecord{pl.Profile0.Outer}
+	works := []*freeform.FreeformWork{work0}
+	if !identical {
+		outers = append(outers, pl.Profile1.Outer)
+		works = append(works, work1)
+	}
+	for i, outer := range outers {
+		contained, err := loftfillet.CircleHoleInside(budget, outer, container, targetDelta, works[i])
+		if err != nil {
+			if ctx.Err() != nil {
+				return nil, false, ctx.Err()
+			}
+			return nil, false, nil
 		}
-		return nil, false, nil
+		if !contained {
+			return nil, false, nil
+		}
 	}
-	if !contained {
-		return nil, false, nil
-	}
-	ig, err := profile.EvaluatorIntegralsContext(ctx, freeform.MomentAreaOrder, work0)
+	ig, err := profile0.EvaluatorIntegralsContext(ctx, freeform.MomentAreaOrder, work0)
 	if err != nil {
 		return nil, false, err
+	}
+	area1 := ig.Area
+	if !identical {
+		ig1, err := profile1.EvaluatorIntegralsContext(ctx, freeform.MomentAreaOrder, work1)
+		if err != nil {
+			return nil, false, err
+		}
+		area1 = ig1.Area
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, false, err
 	}
 	next := pl
-	next.Profile0, next.Profile1 = profile, profile
+	next.Profile0, next.Profile1 = profile0, profile1
 	next.ThroughBoreCut = true
 	next.SectionDelta = max(pl.SectionDelta, tool.SectionDelta)
-	next.RecordArea = [2]float64{ig.Area, ig.Area}
+	next.RecordArea = [2]float64{ig.Area, area1}
 	// The analytic wall carries the normal departure a rounded center, a
 	// non-isometric frame map or a tilted held axis leaves on its tag. A bore
 	// whose departure has no bound keeps the Loft's tessellated topology.

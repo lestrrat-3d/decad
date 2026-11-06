@@ -135,6 +135,10 @@ func Chamfer(ctx context.Context, env topo.Env, b *topo.Body, call ChamferCall) 
 		if recognized || err != nil {
 			return Result{Body: body}, err
 		}
+		body, recognized, err = HeldLoftCapChamfer(ctx, env, hooks.Verified, b, lp, edges, dmm, dDelta, asym)
+		if recognized || err != nil {
+			return Result{Body: body}, err
+		}
 	}
 	if fp, ok := b.Payload.(facetedrecord.Payload); ok {
 		if fp.PrismUnionFillet != nil && asym == nil {
