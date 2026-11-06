@@ -2,7 +2,10 @@ package apitest_test
 
 import (
 	"context"
+	"fmt"
 	"math"
+	"math/rand/v2"
+	"sync"
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
@@ -98,6 +101,39 @@ func TestMeshBodyLocatePoint(t *testing.T) {
 	}
 }
 
+func TestMeshBodyLocatePointConcurrent(t *testing.T) {
+	t.Parallel()
+	mesh := queryCube(t, false)
+	queries := []struct {
+		point r3.Vec
+		want  decad.PointLocation
+	}{
+		{r3.NewVec(1, 1, 1), decad.PointInside},
+		{r3.NewVec(3, 1, 1), decad.PointOutside},
+		{r3.NewVec(2, 1, 1), decad.PointOnBoundary},
+	}
+	errs := make(chan error, len(queries))
+	ctx := t.Context()
+	var wg sync.WaitGroup
+	for _, query := range queries {
+		wg.Go(func() {
+			got, err := mesh.LocatePoint(ctx, query.point)
+			if err != nil {
+				errs <- err
+				return
+			}
+			if got != query.want {
+				errs <- fmt.Errorf("LocatePoint(%v) = %s, want %s", query.point, got, query.want)
+			}
+		})
+	}
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		require.NoError(t, err)
+	}
+}
+
 func TestMeshBodyDistanceToPoint(t *testing.T) {
 	t.Parallel()
 	m := queryCube(t, false)
@@ -166,9 +202,71 @@ func TestMeshBodyQueriesRefuseWhatEncloseNothing(t *testing.T) {
 	closed := queryCube(t, false)
 	_, err = closed.LocatePoint(context.Context(nil), r3.NewVec(1, 1, 1))
 	require.ErrorIs(t, err, decad.ErrDegenerate)
+	canceled, cancel := context.WithCancel(t.Context())
+	cancel()
+	got, err := closed.LocatePoint(t.Context(), r3.NewVec(1, 1, 1))
+	require.NoError(t, err)
+	require.Equal(t, decad.PointInside, got)
+	_, err = closed.LocatePoint(canceled, r3.NewVec(1, 1, 1))
+	require.ErrorIs(t, err, context.Canceled)
+	got, err = closed.LocatePoint(t.Context(), r3.NewVec(1, 1, 1))
+	require.NoError(t, err)
+	require.Equal(t, decad.PointInside, got)
 	_, err = closed.DistanceToPoint(t.Context(), r3.NewVec(math.NaN(), 0, 0))
 	require.ErrorIs(t, err, decad.ErrNotFinite)
 	var none *decad.MeshBody
 	_, err = none.ClosestPoint(t.Context(), r3.NewVec(1, 1, 1))
 	require.ErrorIs(t, err, decad.ErrDegenerate)
+}
+
+func BenchmarkMeshBodyLocatePointRepeated(b *testing.B) {
+	vertices, triangles := meshBodyBenchmarkCube(12)
+	mesh, err := decad.NewMeshBody(b.Context(), vertices, triangles)
+	if err != nil {
+		b.Fatal(err)
+	}
+	rng := rand.New(rand.NewPCG(0x5ca1, 0xab1e))
+	queries := make([]r3.Vec, 32)
+	for i := range queries {
+		queries[i] = r3.NewVec(0.5+0.9*rng.Float64(), 0.5+0.9*rng.Float64(), 0.5+0.9*rng.Float64())
+	}
+	b.ReportAllocs()
+	b.ResetTimer()
+	for b.Loop() {
+		for _, point := range queries {
+			if _, err := mesh.LocatePoint(b.Context(), point); err != nil {
+				b.Fatal(err)
+			}
+		}
+	}
+}
+
+func meshBodyBenchmarkCube(k int) ([]r3.Vec, [][3]int) {
+	vertices := make([]r3.Vec, 0, 6*(k+1)*(k+1))
+	ids := make(map[[3]int]int, cap(vertices))
+	at := func(i, j, l int) int {
+		key := [3]int{i, j, l}
+		if id, ok := ids[key]; ok {
+			return id
+		}
+		id := len(vertices)
+		ids[key] = id
+		vertices = append(vertices, r3.NewVec(float64(i)/float64(k), float64(j)/float64(k), float64(l)/float64(k)))
+		return id
+	}
+	triangles := make([][3]int, 0, 12*k*k)
+	quad := func(a, b, c, d int) {
+		triangles = append(triangles, [3]int{a, b, c}, [3]int{a, c, d})
+	}
+	for i := range k {
+		for j := range k {
+			quad(at(i, j, 0), at(i, j+1, 0), at(i+1, j+1, 0), at(i+1, j, 0))
+			quad(at(i, j, k), at(i+1, j, k), at(i+1, j+1, k), at(i, j+1, k))
+			quad(at(0, i, j), at(0, i, j+1), at(0, i+1, j+1), at(0, i+1, j))
+			quad(at(k, i, j), at(k, i+1, j), at(k, i+1, j+1), at(k, i, j+1))
+			quad(at(i, 0, j), at(i+1, 0, j), at(i+1, 0, j+1), at(i, 0, j+1))
+			quad(at(i, k, j), at(i, k, j+1), at(i+1, k, j+1), at(i+1, k, j))
+		}
+	}
+	return vertices, triangles
 }
