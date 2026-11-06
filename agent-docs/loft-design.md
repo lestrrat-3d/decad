@@ -2883,16 +2883,34 @@ then meet at distinct denoted ends, which the pairing's junction charge already 
 `ErrUnsupported`, except for the case below. A whole circle has no corner.
 
 A short line between a circle fragment and a fit spline is the one consumed carrier the fillet continues past. The class
-is a selected `LineSeg`/`CircleSeg` corner whose line ends, at its other end, at a `FitSplineSeg`, and whose
-`offset2d.Fillet` setback reaches that end (`rolledLines`). The line is then removed from the section: the circle fragment
-and the fit spline become one fit-circle root corner, and the corner takes the fit-circle route above, with its exact root
-certificate, connector and carrier departures and section audits. The fillet circle touches the root circle and the fit
-spline beyond the line, and the region it fills holds the whole line. The setback test only chooses the route; the root
-certificate and the audits decide admission. The fit-circle route's own limits apply. The circle fragment must turn less
-than half a revolution. A flank whose start turns so far from the line that the fillet circle would have to touch the flank
-before its start has no contact root and refuses with `ErrUnsupported`. A rolling ball there rests on the line/flank
-vertex, and decad builds no fillet through a vertex. A consumed line between two circle fragments, and a consumed arc,
-refuse. A refusal message names the original section corner and segment indices.
+is a selected `LineSeg`/`CircleSeg` corner whose line ends, at its other end V, at a `FitSplineSeg`, and whose
+`offset2d.Fillet` setback reaches V (`rolledLines`). The line is then removed from the section, and the region the fillet
+fills holds the whole line. The rolling ball rolls along the root circle toward the line and first touches either the fit
+spline beyond V or V itself. `loftfillet.VertexBlend` decides which. It builds the circle of the fillet radius that touches
+the root circle on the seed ball's side and passes through V, and reads the fit spline's travel tangent at V:
+
+- If the fit spline leaves V into that circle, the ball touches the fit spline. The circle fragment and the fit spline
+  become one fit-circle root corner, and the corner takes the fit-circle route above, with its exact root certificate,
+  connector and carrier departures and section audits.
+- If the fit spline leaves V outside that circle, the ball rests on V. The connector is that circle's short arc from its
+  foot on the root circle to V. The circle fragment is trimmed by the foot's parameter (`circleFootParameter`), and the
+  fit spline stays whole, so the connector ends exactly at the fit spline's own endpoint. The connector is tangent to the
+  root circle but not to the fit spline: the section keeps a convex kink at V.
+
+The kink is the angle between the connector's and the fit spline's travel tangents at V. It is never larger than the
+turn the original section makes from the line into the fit spline at V. The ball through V turns off the line toward the
+fit spline, and a line just longer than the setback keeps that whole turn at V, with the fillet ending on the line. The
+vertex route therefore leaves no corner sharper than one the section already had, and that turn is its limit:
+`VertexBlend` refuses with `ErrUnsupported` when the kink is not smaller than the line's own turn at V. The kink is
+largest when the line falls just short of the setback, and shrinks as the radius grows. The setback and tangent tests
+only choose the route, and the connector is a float proposal. The rewritten section's audits decide admission. `recordedFitArcSeparation` proves exactly
+that the connector does not cross the fit spline beyond V, the root-circle audit separates the connector from the root
+circle, and the loft pairing charges the junction gaps at the trimmed foot and at V. The tangent test at V is local: the
+route does not prove that the fit spline stays outside the whole fillet circle far from V.
+
+The fit-circle route's own limits apply on its branch, and its circle fragment must turn less than half a revolution. On
+either branch, a foot outside the circle fragment refuses, including two feet that cross on one fragment. A consumed line
+between two circle fragments, and a consumed arc, refuse. A refusal message names the original section corner and segment indices.
 
 The 17-tooth gear with 15 fit points per involute flank exercises all 34
 line/arc root corners in one call. The focused test checks the selected edges,
@@ -2906,8 +2924,12 @@ disc and checks the gain against the analytic corner area `r²(cot(a/2) − (π 
 `TestLoftFilletRollsPastAShortLine` rounds all 2N root corners of N lobes whose radial line is shorter than the setback,
 with a straight leaning flank, a curved flank and a larger radius. Each case checks the volume gain against the gap
 integrated from the flank's own fit interpolant, and checks the verified tessellation.
-`TestLoftFilletCircleFragmentRefusals` covers a radius that consumes a carrier, a flank that turns too far from the line
-it continues, and an edge that is not a corner; the
+`TestLoftFilletRestsOnTheLineFlankVertex` rounds the same corners where the flank leaves the line outside the ball:
+a radius just past the line, a shorter line with a larger radius, a flank turned far off the line and a curved flank.
+Each case checks the volume gain against the gap bounded by the line and by a fillet circle found independently by
+bisection, and checks the verified tessellation. `TestLoftFilletCircleFragmentRefusals` covers vertex fillets whose
+feet cross on one root fragment and an edge that is not a corner. The `loftfillet` unit test pins the vertex circle,
+its foot, the kink, the fit-circle branch for a flank that enters the ball and the kink limit; the
 `loftrecord` unit tests pin `circleFootParameter` and the corner class.
 An audit fixture moves a fit spline's control hull across a changed line and
 checks that the audit refuses the possible contact. The full embedded 30-tooth

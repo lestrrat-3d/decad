@@ -25,8 +25,10 @@ import (
 // rewritten record preserves their one-to-one loft correspondence. Spline
 // segments remain the original records; only the analytic corner is trimmed.
 // A short line that a line/circle corner's fillet consumes, ending at a fit
-// spline, leaves the section, and the corner is rounded against that fit
-// spline by the fit-circle route (agent-docs/loft-design.md §17).
+// spline, leaves the section. The corner is rounded against that fit spline by
+// the fit-circle route, or, where the fit spline turns away from the fillet
+// circle, by a connector that ends at the line's far end and leaves the fit
+// spline whole (agent-docs/loft-design.md §17).
 func FilletStraight(ctx context.Context, env topo.Env, selector string, edges []*topo.Edge,
 	pl Payload, radius float64) (*topo.Body, error) {
 	if pl.ConstructionDelta > 0 || len(pl.ConstructionArcUpper) != 0 || len(pl.ConstructionLengthExtra) != 0 {
@@ -76,7 +78,11 @@ func FilletStraight(ctx context.Context, env topo.Env, selector string, edges []
 		// lineCircle marks a corner between a line or arc and a trimmed circle
 		// fragment: the connector is the ordinary tangent arc, and the fragment is
 		// trimmed by the parameter of the blend's tangent foot.
-		lineCircle           bool
+		lineCircle bool
+		// vertex marks a fit-circle corner left by a consumed line whose
+		// fillet ball rests on the line/fit vertex: the circle is trimmed by
+		// the foot's parameter, as for lineCircle, and the fit spline stays whole.
+		vertex               bool
 		certificate          loftfillet.RootCertificate
 		constructionDelta    float64
 		idealArcLength       float64
@@ -124,6 +130,7 @@ func FilletStraight(ctx context.Context, env topo.Env, selector string, edges []
 		origin[i] = i
 	}
 	sectionCorners, sectionLen := corners, n
+	sectionSegments, sectionWalks := segments, walks
 	rolled := rolledLines(segments, walks, corners, radius)
 	if len(rolled) != 0 {
 		segments, walks, origin, corners = dropSegments(segments, walks, corners, rolled)
@@ -140,10 +147,20 @@ func FilletStraight(ctx context.Context, env topo.Env, selector string, edges []
 		corner := sectionCorners[k]
 		prev := (matched + n - 1) % n
 		if loftfillet.FitCirclePair(segments[prev], segments[matched]) {
+			_, leaves := rolled[corner]
+			_, arrives := rolled[(corner+sectionLen-1)%sectionLen]
+			if leaves || arrives {
+				vb, onVertex, err := vertexBlend(sectionSegments, sectionWalks, corner, leaves, radius)
+				if err != nil {
+					return nil, fmt.Errorf(`%w; selector %s, section corner %d`, err, selector, corner)
+				}
+				if onVertex {
+					blends[matched] = loftCornerBlend{blend: vb, vertex: true}
+					continue
+				}
+			}
 			cb, fitParam, circleParam, err := loftfillet.CircleBlend(segments, walks, matched, radius)
 			if err != nil {
-				_, leaves := rolled[corner]
-				_, arrives := rolled[(corner+sectionLen-1)%sectionLen]
 				if leaves || arrives {
 					return nil, fmt.Errorf(`%w; the fillet consumes the line at selector %s, section corner %d, and cannot touch the fit spline beyond it`,
 						err, selector, corner)
@@ -250,13 +267,14 @@ func FilletStraight(ctx context.Context, env topo.Env, selector string, edges []
 		if hasStart || hasEnd {
 			switch original := original.(type) {
 			case sectionrecord.FitSplineSeg:
-				if hasStart {
+				// A vertex fillet ends at the fit spline's own end.
+				if hasStart && !start.vertex {
 					if !start.fitCircle {
 						return nil, fmt.Errorf(`%w: a loft fillet cannot trim this fit-spline carrier`, decaderr.ErrUnsupported)
 					}
 					original.TStart = start.fitParam
 				}
-				if hasEnd {
+				if hasEnd && !end.vertex {
 					if !end.fitCircle {
 						return nil, fmt.Errorf(`%w: a loft fillet cannot trim this fit-spline carrier`, decaderr.ErrUnsupported)
 					}
@@ -271,7 +289,7 @@ func FilletStraight(ctx context.Context, env topo.Env, selector string, edges []
 					switch {
 					case start.fitCircle:
 						original.TStart = start.circleParam
-					case start.lineCircle:
+					case start.lineCircle || start.vertex:
 						t, ok := circleFootParameter(original, start.blend.FB)
 						if !ok {
 							return nil, fmt.Errorf(`%w: the loft fillet foot lies outside its circle fragment`, decaderr.ErrUnsupported)
@@ -285,7 +303,7 @@ func FilletStraight(ctx context.Context, env topo.Env, selector string, edges []
 					switch {
 					case end.fitCircle:
 						original.TEnd = end.circleParam
-					case end.lineCircle:
+					case end.lineCircle || end.vertex:
 						t, ok := circleFootParameter(original, end.blend.FA)
 						if !ok {
 							return nil, fmt.Errorf(`%w: the loft fillet foot lies outside its circle fragment`, decaderr.ErrUnsupported)
@@ -381,10 +399,11 @@ func FilletStraight(ctx context.Context, env topo.Env, selector string, edges []
 
 // rolledLines returns the LineSeg segments that a selected line/circle corner's
 // tangent arc consumes whole and whose other end meets a FitSplineSeg. Such a
-// corner is rounded against the fit spline instead (agent-docs/loft-design.md §17):
-// the line leaves the section, and the circle fragment and the fit spline meet at
-// a fit-circle corner. The test only routes the corner; the fit-circle route's
-// root certificate and the rewritten section's audit decide whether it is admitted.
+// corner is rounded against the fit spline or its end instead
+// (agent-docs/loft-design.md §17): the line leaves the section, and the circle
+// fragment and the fit spline meet at a fit-circle corner. The test only routes
+// the corner; the fit-circle route's root certificate, or vertexBlend's limits,
+// and the rewritten section's audit decide whether it is admitted.
 func rolledLines(segments []sectionrecord.CurveSegment, walks []survey2d.SideWalk, corners []int,
 	radius float64) map[int]struct{} {
 	n := len(segments)
@@ -422,6 +441,32 @@ func rolledLines(segments []sectionrecord.CurveSegment, walks []survey2d.SideWal
 		}
 	}
 	return rolled
+}
+
+// vertexBlend proposes the fillet at the original section corner whose line
+// rolledLines dropped, when the fillet ball rests on the line/fit vertex
+// (loftfillet.VertexBlend). leaves is true when the line leaves the corner, so
+// the section runs circle, line, fit spline; otherwise it runs fit spline, line,
+// circle. It reports false when the ball touches the fit spline instead.
+func vertexBlend(segments []sectionrecord.CurveSegment, walks []survey2d.SideWalk, corner int, leaves bool,
+	radius float64) (*offset2d.Blend, bool, error) {
+	n := len(segments)
+	circleAt, lineAt, fitAt := (corner+n-1)%n, corner, (corner+1)%n
+	if !leaves {
+		circleAt, lineAt, fitAt = corner, (corner+n-1)%n, (corner+n-2)%n
+	}
+	circle, ok := segments[circleAt].(sectionrecord.CircleSeg)
+	if !ok {
+		return nil, false, fmt.Errorf(`%w: the consumed loft line has no circle fragment`, decaderr.ErrUnsupported)
+	}
+	seed, err := offset2d.Fillet(walks, corner, radius, sectionaudit.Tolerance)
+	if err != nil {
+		return nil, false, err
+	}
+	return loftfillet.VertexBlend(loftfillet.VertexCorner{
+		Circle: circle, CircleWalk: walks[circleAt].SegmentWalk, Line: walks[lineAt].SegmentWalk,
+		Fit: walks[fitAt].SegmentWalk, Seed: seed, CircleArrives: leaves,
+	}, radius)
 }
 
 // dropSegments removes the dropped segments from a section and its walks. It

@@ -3013,3 +3013,5 @@
 11	0.00	TestClearancePlacedPinInBoreIsFast
 11	0.00	TestPathPatternStationOptionRefusals
 11	0.00	TestLoftFilletRollsPastAShortLine
+11	0.00	TestLoftFilletRestsOnTheLineFlankVertex
+11	0.00	TestLoftFilletLargeRadiusRestsOnTheBladeTop
