@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math/big"
+	"sync"
 
 	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/meshbody"
@@ -54,6 +55,8 @@ type MeshBody struct {
 	areaLow   *big.Rat
 	areaHigh  *big.Rat
 	box       Box
+	queryOnce sync.Once
+	queryData *pointquery.PreparedMesh
 }
 
 // NewMeshBody builds a mesh body from vertices in millimetres and triangles as
@@ -177,6 +180,16 @@ func (m *MeshBody) held(ctx context.Context, p r3.Vec) (topo.Mesh, error) {
 	return topo.Mesh{Vertices: m.vertices, Triangles: m.triangles, BoundaryOK: true, SymDiffOK: true}, nil
 }
 
+// pointQueryData passes m.vertices and m.triangles to
+// pointquery.NewPreparedMesh once. These private slices belong to this
+// immutable MeshBody, so cached projections match every later point query.
+func (m *MeshBody) pointQueryData() *pointquery.PreparedMesh {
+	m.queryOnce.Do(func() {
+		m.queryData = pointquery.NewPreparedMesh(m.vertices, m.triangles)
+	})
+	return m.queryData
+}
+
 // LocatePoint classifies p against the region the closed mesh encloses
 // (agent-docs/mesh-import-design.md §5). The answer is exact, with no
 // tolerance: a ray crossing count over the triangles decides inside from
@@ -187,11 +200,10 @@ func (m *MeshBody) held(ctx context.Context, p r3.Vec) (topo.Mesh, error) {
 // context or mesh is ErrDegenerate, and a point that is not finite is
 // ErrNotFinite.
 func (m *MeshBody) LocatePoint(ctx context.Context, p r3.Vec) (PointLocation, error) {
-	held, err := m.held(ctx, p)
-	if err != nil {
+	if _, err := m.held(ctx, p); err != nil {
 		return PointUndecided, err
 	}
-	result, err := pointquery.Locate(ctx, p, held.Vertices, held.Triangles, 0, 0)
+	result, err := pointquery.LocatePrepared(ctx, p, m.pointQueryData(), 0, 0)
 	return PointLocation(result), err
 }
 

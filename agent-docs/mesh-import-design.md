@@ -64,6 +64,7 @@ mesh bound of zero and an occupied-volume bound of zero. No tolerance argument e
 | Q2 | `LocatePoint` is the exact ray-crossing parity of the point over the triangles, and a point on a triangle is `PointOnBoundary`. It is never `PointUndecided` for a closed mesh. Where the mesh crosses itself the parity decides, so a region covered twice reads as outside. An inverted mesh encloses the same region as its flip. |
 | Q3 | `DistanceToPoint` is zero for a point inside or on the mesh, and otherwise the exact distance to the nearest triangle, published as the nearest float with a bound that is the rounding of that float alone. |
 | Q4 | `ClosestPoint` returns the point itself when it is inside or on the mesh, and otherwise the nearest point of the nearest triangle, rounded to floats. `OffSurface` is that rounding alone. |
+| Q5 | `LocatePoint` lazily builds a parity cache on the immutable mesh body and reuses it for later queries. Concurrent calls share the cache safely. |
 
 ## 4. Verification
 
