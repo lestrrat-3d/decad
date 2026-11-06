@@ -4,6 +4,7 @@ import (
 	"context"
 	"unsafe"
 
+	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/decad/internal/topobuild"
@@ -31,7 +32,7 @@ func restateReplay(ctx context.Context, body *topo.Body, fp Payload, chord float
 		return nil, errBrakeReplayBoundedRestatementRequiresABodyAndBudget
 	}
 	if chord < fp.MeshBound {
-		return nil, &boundError{requested: chord, held: fp.MeshBound}
+		return nil, decaderr.NewMeshBoundError(chord, fp.MeshBound)
 	}
 	if len(fp.VertexBound) != len(fp.Verts) || len(fp.FaceOf) != len(fp.Tris) {
 		return nil, errBrakeReplayAFacetedPayloadSPerVertexOrPerFacetRecordDoesNotMatchItsMesh

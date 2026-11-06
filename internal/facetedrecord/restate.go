@@ -8,22 +8,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/facetproof"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/decad/internal/topobuild"
-	"github.com/lestrrat-3d/units"
 )
-
-// boundError is Restate's refusal of a chord tolerance finer than the bound
-// the faceted body holds (agent-docs/tessellation-design.md §7). Only a Tessellate
-// caller, who chose the tolerance, reaches it: the boolean asks a restating
-// operand at its held floor and gates the facets the pair touches instead
-// (booloperand.HeldFloor, meshbool.RefuseCoarseHeldContact).
-type boundError struct{ requested, held float64 }
-
-func (e *boundError) Error() string {
-	requested, minimum := units.Millimeters(e.requested), units.Millimeters(e.held)
-	return fmt.Sprintf(`%v: requested tolerance %s is below the faceted body's minimum mesh bound %s; retry with a tolerance of at least %s to restate the held mesh`, decaderr.ErrUnsupported, requested, minimum, minimum)
-}
-
-func (e *boundError) Unwrap() error { return decaderr.ErrUnsupported }
 
 // Restate restates body's held mesh, whose payload is fp, as a mesh node: the
 // polygons ARE the boundary this evaluator holds (core §6.1), carrying their
@@ -38,7 +23,7 @@ func Restate(ctx context.Context, body *topo.Body, fp Payload, chord float64) (*
 		if sigma := fp.SurfaceBounds(); sigma != nil {
 			return restateSurface(ctx, body, fp, sigma, chord)
 		}
-		return nil, &boundError{requested: chord, held: fp.MeshBound}
+		return nil, decaderr.NewMeshBoundError(chord, fp.MeshBound)
 	}
 	src, err := facetproof.RestateSources(ctx, topobuild.Faces(body), fp.FaceOf,
 		len(fp.Verts), len(fp.VertexBound), len(fp.Tris))
@@ -79,7 +64,7 @@ func restateSurface(ctx context.Context, body *topo.Body, fp Payload, sigma []fl
 		held = max(held, s)
 	}
 	if chord < held {
-		return nil, &boundError{requested: chord, held: held}
+		return nil, decaderr.NewMeshBoundError(chord, held)
 	}
 	src, err := facetproof.RestateSources(ctx, topobuild.Faces(body), fp.FaceOf,
 		len(fp.Verts), len(fp.VertexBound), len(fp.Tris))
