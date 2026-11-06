@@ -32,9 +32,3 @@ func meshPolygonSketch(t *testing.T, world *sketch.World, plane *sketch.Plane,
 	t.Helper()
 	return fixedPolygonProfile(t, world, plane, vertices)
 }
-
-func splitPolygon(t *testing.T, world *sketch.World, plane *sketch.Plane,
-	vertices [][2]float64) (*sketch.Sketch, *sketch.Profile) {
-	t.Helper()
-	return fixedPolygonProfile(t, world, plane, vertices)
-}
