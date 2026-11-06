@@ -32,6 +32,16 @@ upper exterior caps and both sets of source walls. It removes the two middle
 caps and identifies their common station vertices. Its three rings comprise
 the lower start, common middle, and reflected upper start stations. Whole-mesh
 vertex-link and triangle-crossing audits must accept the sewn shell.
+When each source section is one loop without holes, the sewn shell is a
+banded loft whose middle ring is an interior section, so the crossing audit
+takes that structure (`loftmesh.LoftCrossingAuditBanded`): each planar outer
+cap is decided as a whole by `loftmesh.CapFamilyProof`, with the middle ring
+on the far side of each cap's plane, and every other pair is tested exactly.
+A cap whose proof fails keeps its pairs in the exact test. A source with holes
+takes the unstructured audit. The structured audit lets a source with many
+stations, such as a twisted gear outline with rounded roots (loft §17), stay
+below the audit's candidate ceiling; a rounded Loft keeps its source identity
+and authenticated records, so its mirrored copy joins by this route.
 
 The result's boundary displacement is at most the greater of the two source
 mesh bounds, because every retained wall and cap is one of their verified

@@ -2814,26 +2814,43 @@ a receiver row for a chain-fed payload.
 every chain-fed obligation sits in one place. Each asserts on computed
 geometry, and each bound assertion is shown to fail before it is trusted.
 
-## 17. Fillet of a matching axial loft
+## 17. Fillet of an axial loft
 
-`Fillet` accepts a solid loft whose two recorded profiles are identical,
-have no holes, use the same segment alignment, and occupy planes with the same
-in-plane axes and an axial translation. It accepts selected rung edges at
-`LineSeg`/`ArcSeg` analytic corners and at `FitSplineSeg`/`CircleSeg` root
-corners. A selected cap edge, spline station, twisted section or nonmatching
-profile returns `ErrUnsupported`. Selection and magnitude gates run before
-this route.
+`Fillet` accepts a solid loft whose two recorded profiles have no holes,
+have the same segment count with the same segment kind at every index, use
+zero alignment, and occupy planes with the same in-plane axes and an axial
+translation. The two records may differ. The second section may be the first
+turned about the loft axis, the section pair of a helical gear, or a section of
+another size. It accepts selected rung edges at `LineSeg`/`ArcSeg` analytic
+corners and at `FitSplineSeg`/`CircleSeg` root corners. A selected cap edge,
+a spline station, profiles whose segment kinds differ, and planes with turned
+in-plane axes return `ErrUnsupported`. Selection and magnitude gates run
+before this route.
 
-The selected rung must match both lifted copies of one recorded corner. The
-match uses the same frame lift and placement as `loftmesh.Assemble`, with no
-coordinate tolerance. If no corner or more than one corner matches, the call
-refuses. `offset2d.Fillet` computes each tangent connector. A setback that
-consumes either carrier refuses before a new record is evaluated.
+The selected rung must join the start of one segment lifted through the first
+section's frame and the start of the same segment of the second section lifted
+through its frame, and both sections must state a corner of a class below
+there. The match uses the same frame lift and placement as
+`loftmesh.Assemble`, with no coordinate tolerance. If no corner or more than
+one corner matches, the call refuses. `offset2d.Fillet` computes each tangent
+connector. A setback that consumes either carrier, in either section, refuses
+before a new record is evaluated.
+
+Each section is rewritten on its own by the steps below, with the same
+selected corners and radius (`loftrecord.FilletStraight`). Two identical
+sections are rewritten once and both profiles receive the same record. Two
+different sections must give rewrites with the same segment kinds at every
+index and the same connector indices, including any line a fillet removes, or
+the call refuses. Each rewritten section passes its own section audit. The
+construction displacement charged to every held station is the larger of the
+two sections' values, and each segment's arc-length and carrier-length
+allowances take the larger of its two values. The result denotes the loft of
+the two rewritten records, with §5's wall construction and §8's bounds. Each
+connector is the radius-r tangent arc in its own section's plane.
 
 The rewrite inserts each connector after its incoming segment and trims its
 two carriers. A fitted-spline root fillet keeps the original fitted control
-points and changes only its recorded trim parameter. Both loft profiles
-receive the same rewritten section. The numerical blend supplies a candidate;
+points and changes only its recorded trim parameter. The numerical blend supplies a candidate;
 `internal/loftfillet/root_cert.go` isolates one root of the exact rational
 tangent equation and proves its direction, positive speed and nearest-corner
 choice. The root brackets the ideal fit foot, connector center and circle
@@ -2927,7 +2944,14 @@ integrated from the flank's own fit interpolant, and checks the verified tessell
 `TestLoftFilletRestsOnTheLineFlankVertex` rounds the same corners where the flank leaves the line outside the ball:
 a radius just past the line, a shorter line with a larger radius, a flank turned far off the line and a curved flank.
 Each case checks the volume gain against the gap bounded by the line and by a fillet circle found independently by
-bisection, and checks the verified tessellation. `TestLoftFilletCircleFragmentRefusals` covers vertex fillets whose
+bisection, and checks the verified tessellation.
+`TestLoftFilletTwistedGearRoots` rounds every root corner of three involute gear outlines lofted to the same outline
+turned by −10° to 30°, with and without backlash. `TestLoftFilletSectionsWithDifferentRecords` rounds one corner of a
+square lofted to a turned square, a smaller square and a turned smaller square. Each case checks the volume against a
+loft of the two sections drawn already rounded and checks the verified tessellation; a radius that consumes a side of the
+second section alone refuses. `TestLoftFilletTwistedGearMirrorJoin` joins a rounded twisted gear half to its mirror
+image (`agent-docs/loft-boolean-design.md`, Mirror Boolean) and checks the joined volume against twice the half.
+`TestLoftFilletCircleFragmentRefusals` covers vertex fillets whose
 feet cross on one root fragment and an edge that is not a corner. The `loftfillet` unit test pins the vertex circle,
 its foot, the kink, the fit-circle branch for a flank that enters the ball and the kink limit; the
 `loftrecord` unit tests pin `circleFootParameter` and the corner class.

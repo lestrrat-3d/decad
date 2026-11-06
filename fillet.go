@@ -47,8 +47,8 @@ import (
 type FilletOption interface{ filletOption() }
 
 // Fillet rounds selected section corners of a straight prism, its admitted
-// one-line Sweep reduction, or a matching-section axial loft with a tangent
-// arc of radius r, returning the new body and retiring b
+// one-line Sweep reduction, or an axial loft whose sections match in segment
+// kinds with a tangent arc of radius r, returning the new body and retiring b
 // (agent-docs/modify-design.md §6, core §8). A nil b is ErrDegenerate. sel is
 // resolved against the live b; a query matching nothing is loud (ErrNoMatch / ErrCardinality,
 // S16). r is a length magnitude, gated like every other (S15); a zero r is
@@ -73,10 +73,13 @@ type FilletOption interface{ filletOption() }
 // blend is a Torus, or a Sphere when its centre lies on the axis. One
 // quarter-turn rectangular angular-cap radial rim has a bounded faceted
 // route; other cap edges and edges on the axis are SX5 (ErrUnsupported).
-// An axial loft whose two section records match also accepts line/arc corners
-// on its hole-free section. It rewrites both records together and rebuilds the
-// loft. Unchanged free-form segments retain their recorded curves; a new
-// analytic piece must be proven clear of each non-adjacent free-form segment.
+// An axial loft whose two hole-free sections have the same segment kinds in
+// the same order also accepts line/arc corners. The second section may be the
+// first turned about the axis, as for a helical gear. Each section receives
+// its own tangent arc at the selected corner and the loft is rebuilt from the
+// two rewritten records (agent-docs/loft-design.md §17). Unchanged free-form
+// segments retain their recorded curves; a new analytic piece must be proven
+// clear of each non-adjacent free-form segment.
 //
 // An analytic boolean result (a brep or stacked body) that reads as a prism
 // along a reference axis is filleted as that prism

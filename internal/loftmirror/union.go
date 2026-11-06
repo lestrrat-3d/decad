@@ -195,7 +195,7 @@ func buildUnion(ctx context.Context, env topo.Env, mesher verifiedmesh.Mesher,
 	if err := tessellation.RequireVertexLinks(ctx, len(verts), tris); err != nil {
 		return nil, fmt.Errorf("%w: reflected loft seam has an invalid vertex link: %s", decaderr.ErrUnsupported, err)
 	}
-	if err := loftmesh.LoftCrossingAudit(proofbound.NewWorkBudget(ctx), verts, tris); err != nil {
+	if err := auditSewnShell(ctx, verts, tris, lower, n); err != nil {
 		return nil, err
 	}
 	capGroups := record.CapGroups
@@ -204,6 +204,40 @@ func buildUnion(ctx context.Context, env topo.Env, mesher verifiedmesh.Mesher,
 		AreaSlack: areaSlack, DPair: pairDiameter, ContactAudited: true,
 		LoftMirrorJoin: record, MirrorCapGroups: &capGroups, Xform: r3.Identity()}
 	return facetedrecord.Build(ctx, env, fp)
+}
+
+// auditSewnShell runs the crossing audit over the sewn shell. tris holds the
+// lower walls, the lower start cap, the upper walls and the reflected upper
+// start cap, in that order. When each source section is one loop without
+// holes, its n stations per ring are, in loop order, vertices [0, n) on the
+// lower start cap, [n, 2n) on the common middle ring and [2n, 3n) on the
+// reflected upper cap, so the shell is a banded loft with the middle ring as
+// its interior section: the structured audit decides each planar outer cap as
+// a whole (loftmesh.CapFamilyProof), and every other pair is tested exactly. A
+// cap whose proof fails keeps its pairs in the exact test. Any other section
+// takes the unstructured audit.
+func auditSewnShell(ctx context.Context, verts []r3.Vec, tris [][3]int, lower loftrecord.Payload, n int) error {
+	budget := proofbound.NewWorkBudget(ctx)
+	if len(lower.Profile0.Holes) != 0 || len(lower.Profile1.Holes) != 0 {
+		return loftmesh.LoftCrossingAudit(budget, verts, tris)
+	}
+	walls, caps := lower.Walls, lower.CapStartCount
+	half := walls + caps
+	order := make([][3]int, 0, len(tris))
+	order = append(order, tris[:walls]...)
+	order = append(order, tris[half:half+walls]...)
+	order = append(order, tris[walls:half]...)
+	order = append(order, tris[half+walls:]...)
+	ring := func(offset int) [][]int {
+		loop := make([]int, n)
+		for i := range loop {
+			loop[i] = offset + i
+		}
+		return [][]int{loop}
+	}
+	structure := loftmesh.LoftAuditStructure{Walls: 2 * walls, CapStartCount: caps,
+		Loops0: ring(0), Loops1: ring(2 * n), Interior: ring(n)[0]}
+	return loftmesh.LoftCrossingAuditBanded(budget, verts, order, structure)
 }
 
 func meshMatchesPayload(mesh *topo.Mesh, lp loftrecord.Payload) bool {

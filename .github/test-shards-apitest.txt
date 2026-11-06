@@ -3017,3 +3017,6 @@
 11	0.00	TestLoftFilletLargeRadiusRestsOnTheBladeTop
 11	0.00	TestMeshBodyLocatePointConcurrent
 11	0.00	TestUnionManyJoinsTwistedLoftTeethWithRootsInsideTheDisc
+11	0.00	TestLoftFilletTwistedGearRoots
+11	0.00	TestLoftFilletTwistedGearMirrorJoin
+11	0.00	TestLoftFilletSectionsWithDifferentRecords
