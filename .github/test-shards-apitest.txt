@@ -1625,6 +1625,7 @@
 6	0.02	TestWholeCircleCylinderHasTwoLoops
 6	0.00	TestLoftCapChamferSquareFrustum
 6	0.00	TestLoftCapChamferTurnedSquare
+6	0.00	TestLoftCapChamferKeepsTheBore
 7	0.05	TestAsymmetricChamferOnBrepStraightEdge
 7	0.01	TestBlindCutBuildsAnalyticPocket
 7	0.03	TestBlindCutKeepsExistingThroughHole

@@ -37,7 +37,9 @@ func BindLoftCapSetback(z0, z1, d, dDelta float64) error {
 // Loft's verified boundary, occupied-volume and area allowances. side.Outer
 // pairs each start-cap station with its end-cap station, counterclockwise
 // from +Z, and the side between two consecutive pairs is the Loft's
-// two-triangle cell. side.BoreGroup is -1: the shell has no hole.
+// two-triangle cell. side.BoreGroup is -1 for a shell without holes, or the
+// one group of a bore wall whose start and end rims are inner[0] and inner[1];
+// the bore wall and both rims are kept whole.
 //
 // The result denotes the solid C cut from the held shell H: its side strips
 // are clipped at the exact levels z0+d and z1−d, each cap is replaced by the
@@ -48,14 +50,14 @@ func BindLoftCapSetback(z0, z1, d, dDelta float64) error {
 // bound adds the Loft's held departure and the inset's chord departure from
 // the exact offset to that rounding, as Loft §18's held-polygon chamfer does.
 func ChamferLoftCaps(ctx context.Context, env topo.Env, fp facetedrecord.Payload,
-	side ChamferSideSource, setback float64) (*topo.Body, error) {
+	side ChamferSideSource, inner [2][]int, setback float64) (*topo.Body, error) {
 	const (
 		maxRimVertices   = 4_096
 		maxInsetVertices = 4_096
 		maxTriangles     = 32_768
 	)
-	if side.BoreGroup != -1 {
-		return nil, fmt.Errorf("%w: loft cap chamfer needs a shell without holes", decaderr.ErrUnsupported)
+	if (side.BoreGroup < 0) != (len(inner[0]) == 0) || (side.BoreGroup < 0) != (len(inner[1]) == 0) {
+		return nil, fmt.Errorf("%w: loft cap chamfer has a bore wall without both rims", decaderr.ErrUnsupported)
 	}
 	if len(side.Outer[0]) > maxRimVertices || len(side.Outer[1]) > maxRimVertices {
 		return nil, fmt.Errorf("%w: loft cap outline exceeds the chamfer work ceiling", decaderr.ErrUnsupported)
@@ -65,8 +67,15 @@ func ChamferLoftCaps(ctx context.Context, env topo.Env, fp facetedrecord.Payload
 	}
 	levels := [2]float64{side.Z0, side.Z1}
 	for capIndex := range 2 {
-		if !AuditCap(ctx, fp.Verts, fp.Tris, fp.Src, side.Outer[capIndex], side.CapGroups[capIndex],
-			levels[capIndex], capIndex == 0) {
+		tiles := false
+		if len(inner[capIndex]) > 0 {
+			tiles = AuditAnnulus(ctx, fp.Verts, fp.Tris, fp.Src, side.Outer[capIndex], inner[capIndex],
+				side.CapGroups[capIndex], levels[capIndex], capIndex == 0)
+		} else {
+			tiles = AuditCap(ctx, fp.Verts, fp.Tris, fp.Src, side.Outer[capIndex], side.CapGroups[capIndex],
+				levels[capIndex], capIndex == 0)
+		}
+		if !tiles {
 			return nil, fmt.Errorf("%w: loft cap %d does not tile its held outline", decaderr.ErrUnsupported, capIndex)
 		}
 	}
@@ -77,6 +86,11 @@ func ChamferLoftCaps(ctx context.Context, env topo.Env, fp facetedrecord.Payload
 	mesh := &facetedrecord.JoinedMesh{Verts: append([]r3.Vec(nil), fp.Verts...),
 		Groups: append([]facetedrecord.Group(nil), fp.Groups...)}
 	bounds := append([]float64(nil), fp.VertexBound...)
+	for i, tri := range fp.Tris {
+		if fp.Src[i] == side.BoreGroup {
+			mesh.Add(tri, fp.Src[i])
+		}
+	}
 	middleFirst := len(mesh.Tris)
 	clipped, err := ChamferClipSide(ctx, mesh, &bounds, fp, side, groups, setback)
 	if err != nil {
@@ -110,13 +124,17 @@ func ChamferLoftCaps(ctx context.Context, env topo.Env, fp facetedrecord.Payload
 		if !BoreRingSimple(ctx, mesh.Verts, inset[capIndex]) {
 			return nil, fmt.Errorf("%w: loft inset is not one simple outer ring", decaderr.ErrUnsupported)
 		}
-		for _, outer := range [][]int{side.Outer[capIndex], clipped.Rings[capIndex]} {
-			nested, err := ChamferRingNested(ctx, mesh.Verts, outer, inset[capIndex])
+		pairs := [][2][]int{{side.Outer[capIndex], inset[capIndex]}, {clipped.Rings[capIndex], inset[capIndex]}}
+		if len(inner[capIndex]) > 0 {
+			pairs = append(pairs, [2][]int{inset[capIndex], inner[capIndex]})
+		}
+		for _, pair := range pairs {
+			nested, err := ChamferRingNested(ctx, mesh.Verts, pair[0], pair[1])
 			if err != nil {
 				return nil, err
 			}
 			if !nested {
-				return nil, fmt.Errorf("%w: loft inset crosses its cap outline or side ring", decaderr.ErrUnsupported)
+				return nil, fmt.Errorf("%w: loft inset crosses its cap outline, side ring or bore rim", decaderr.ErrUnsupported)
 			}
 		}
 		if err := ChamferHeldOutlineGap(ctx, mesh.Verts, side.Outer[capIndex], inset[capIndex], fp.MeshBound); err != nil {
@@ -129,7 +147,7 @@ func ChamferLoftCaps(ctx context.Context, env topo.Env, fp facetedrecord.Payload
 		}
 		mesh.Groups[capGroup].Origins = append(append([]provenance.Ref(nil), mesh.Groups[capGroup].Origins...),
 			provenance.Ref{Producer: env.Ref, Role: role})
-		capTris, err := ChamferCapTriangles(ctx, mesh.Verts, inset[capIndex], nil, capIndex == 0)
+		capTris, err := ChamferCapTriangles(ctx, mesh.Verts, inset[capIndex], inner[capIndex], capIndex == 0)
 		if err != nil {
 			return nil, fmt.Errorf("loft cap %d: %w", capIndex, err)
 		}
@@ -196,7 +214,8 @@ func ChamferLoftCaps(ctx context.Context, env topo.Env, fp facetedrecord.Payload
 	if len(mesh.Tris) > maxTriangles {
 		return nil, fmt.Errorf("%w: loft cap chamfer exceeds the triangle work ceiling", decaderr.ErrUnsupported)
 	}
-	audit := ChamferSource{Outer: side.Outer, CapGroups: side.CapGroups, BoreGroup: -1, Z0: side.Z0, Z1: side.Z1}
+	audit := ChamferSource{Outer: side.Outer, Inner: inner, CapGroups: side.CapGroups, BoreGroup: side.BoreGroup,
+		Z0: side.Z0, Z1: side.Z1}
 	if err := ChamferCrossingAudit(ctx, mesh, audit, inset, maxTriangles); err != nil {
 		return nil, err
 	}

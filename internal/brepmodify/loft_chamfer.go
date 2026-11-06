@@ -114,25 +114,46 @@ func capRef(b *topo.Body, role string) provenance.Ref {
 	return provenance.Ref{Producer: b.Origin.Producer, Role: role}
 }
 
-// HeldLoftCapChamfer is the complete outer-cap loop route of a hole-free
-// solid Loft whose sections differ, such as a gear outline lofted to the
-// same outline turned about its axis (agent-docs/loft-design.md §19). It
+// HeldLoftCapChamfer is the complete outer-cap loop route of a solid Loft
+// whose sections differ, such as a gear outline lofted to the same outline
+// turned about its axis, with no hole or one through-bore whose wall is one
+// face (agent-docs/loft-design.md §19). It
 // reads the Loft's verified held mesh as a faceted shell and hands it to
 // loftcylinder.ChamferLoftCaps. It reports false, with no error, for any
 // other loft or selection.
 func HeldLoftCapChamfer(ctx context.Context, env topo.Env, mesher verifiedmesh.Mesher, b *topo.Body,
 	pl loftrecord.Payload, edges []*topo.Edge, d, dDelta float64, asym *Asymmetric) (*topo.Body, bool, error) {
 	if mesher == nil || pl.SurfaceResult || !b.Solid || pl.Xform != r3.Identity() ||
-		len(pl.Profile0.Holes) != 0 || len(pl.Profile1.Holes) != 0 || !pl.MirrorAxialSource() {
+		len(pl.Profile0.Holes) != len(pl.Profile1.Holes) || len(pl.Profile0.Holes) > 1 || !pl.MirrorAxialSource() {
 		return nil, false, nil
+	}
+	for _, hole := range [][]sectionrecord.LoopRecord{pl.Profile0.Holes, pl.Profile1.Holes} {
+		if len(hole) == 0 {
+			continue
+		}
+		if _, ok := hole[0].Segments[0].(sectionrecord.CircleSeg); !ok || len(hole[0].Segments) != 1 {
+			return nil, false, nil
+		}
 	}
 	for _, offset := range pl.Alignment {
 		if offset != 0 {
 			return nil, false, nil
 		}
 	}
-	n := len(pl.Verts) / 2
-	if n < 3 || len(pl.Verts) != 2*n || pl.Walls != 2*n {
+	// Assemble lifts each loop's start stations, then its end stations, and
+	// emits two wall triangles per cell, loop by loop.
+	if len(pl.Cell) != pl.Walls {
+		return nil, false, nil
+	}
+	cells := [2]int{}
+	for _, cell := range pl.Cell {
+		if cell[0] < 0 || cell[0] > len(pl.Profile0.Holes) {
+			return nil, false, nil
+		}
+		cells[cell[0]]++
+	}
+	n, m := cells[0]/2, cells[1]/2
+	if n < 3 || len(pl.Verts) != 2*(n+m) || pl.Walls != 2*(n+m) || (m == 0) != (len(pl.Profile0.Holes) == 0) {
 		return nil, false, nil
 	}
 	start := capRef(b, provenance.RoleCapStart)
@@ -140,6 +161,14 @@ func HeldLoftCapChamfer(ctx context.Context, env topo.Env, mesher verifiedmesh.M
 	outer := [2][]int{make([]int, n), make([]int, n)}
 	for i := range n {
 		outer[0][i], outer[1][i] = i, n+i
+	}
+	// The hole loop runs clockwise; the cap audits read its rims counterclockwise.
+	var inner [2][]int
+	if m > 0 {
+		inner = [2][]int{make([]int, m), make([]int, m)}
+		for i := range m {
+			inner[0][m-1-i], inner[1][m-1-i] = 2*n+i, 2*n+m+i
+		}
 	}
 	if err := loftcylinder.ChamferSelectsOuterLoops(b, start, end, edges, pl.Verts, outer); err != nil {
 		// Any other selection is not this route's class; the receiver's own
@@ -172,6 +201,7 @@ func HeldLoftCapChamfer(ctx context.Context, env topo.Env, mesher verifiedmesh.M
 		fp.VertexBound[i] = mesh.Bound
 	}
 	capGroups := [2]int{-1, -1}
+	boreGroup := -1
 	groupOf := make(map[*topo.Face]int)
 	for i, face := range mesh.Source {
 		group, ok := groupOf[face]
@@ -200,12 +230,20 @@ func HeldLoftCapChamfer(ctx context.Context, env topo.Env, mesher verifiedmesh.M
 			fp.Groups = append(fp.Groups, g)
 		}
 		fp.Src[i] = group
+		if i < pl.Walls && pl.Cell[i][0] == 1 {
+			if boreGroup >= 0 && boreGroup != group {
+				return nil, true, fmt.Errorf("%w: the loft bore wall is not one face", decaderr.ErrUnsupported)
+			}
+			boreGroup = group
+			g := &fp.Groups[group]
+			g.Surface, g.NormalBound, g.Reversed = face.Surface, face.NormalBound, face.Reversed
+		}
 	}
 	if capGroups[0] < 0 || capGroups[1] < 0 {
 		return nil, true, fmt.Errorf("%w: the loft has no cap faces", decaderr.ErrUnsupported)
 	}
-	side := loftcylinder.ChamferSideSource{Outer: outer, CapGroups: capGroups, BoreGroup: -1, Z0: z0, Z1: z1}
-	body, err := loftcylinder.ChamferLoftCaps(ctx, env, fp, side, d)
+	side := loftcylinder.ChamferSideSource{Outer: outer, CapGroups: capGroups, BoreGroup: boreGroup, Z0: z0, Z1: z1}
+	body, err := loftcylinder.ChamferLoftCaps(ctx, env, fp, side, inner, d)
 	if err != nil {
 		return nil, true, fmt.Errorf("loft cap chamfer: %w", err)
 	}
