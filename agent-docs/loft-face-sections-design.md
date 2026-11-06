@@ -16,8 +16,9 @@ source station order, exact rational ray-plane cut map, and ordered rigid
 and positive-scale steps. Each source record is current when the loft is
 built. A side face, mixed source, duplicate cap, stale source, reordered
 cap, missing proof record, or a section count outside two to thirty-two (one to
-thirty-one with `WithConeTangentEnd`) refuses without retiring an operand. The record, rather than a face's rounded
-`Plane` tag or `FacetedCurve` edges, defines the cap curve.
+thirty-one with `WithConeTangentEnd`) refuses without retiring an operand. The
+record, rather than a face's rounded `Plane` tag or `FacetedCurve` edges,
+defines the cap curve.
 The thirty-two-cap ceiling bounds pairwise section-plane and mesh-contact work;
 every admitted count still passes the same exact embedding and volume proofs.
 
