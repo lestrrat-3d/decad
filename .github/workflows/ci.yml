@@ -500,19 +500,13 @@ jobs:
   # The platform check names match the former macOS and Windows matrix legs.
   test-platforms:
     name: test (${{ matrix.os }})
-    if: github.event_name != 'pull_request' || matrix.os == 'macos-latest'
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - os: macos-latest
-            race: ""
-            shard: ""
-            packages: ""
-          - os: windows-latest
-            race: ""
-            shard: ""
-            packages: ""
+        os: ${{ fromJSON(github.event_name == 'pull_request' && '["macos-latest"]' || '["macos-latest", "windows-latest"]') }}
+        race: [""]
+        shard: [""]
+        packages: [""]
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout repository
