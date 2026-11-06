@@ -121,7 +121,7 @@ outputs. `FaceSuccessors` reports `HistoryUnknown` when the operation has no
 complete face map.
 
 Every document records successful public body-producing calls and successful `Remove` calls. Temporary tools used
-inside `Hole`, `Rib`, `Web` and `Emboss` do not create separate history entries. A failed or canceled call creates
+inside `Hole`, `WebPath` and `Emboss` do not create separate history entries. A failed or canceled call creates
 no entry. History collection has no option.
 
 `Body.OperationDiagnostics` returns warnings attached to the call that created
@@ -209,10 +209,7 @@ Each of these returns a new body and retires its input.
 | `decad.LookupThread` | Reads a thread designation such as `M10`, `M10x1.25`, `1/4-20`, `#10-24` or `G1/2` into its major diameter and pitch. |
 | `decad.Thread` | Cuts an ISO metric thread, or a trapezoidal one from a `decad.ThreadForm`, with an optional lead-in chamfer, right- or left-handed, into a cylindrical face, a rod or a bore, from its pitch, along the whole face or a stated length of it. |
 | `decad.Boss` | Raises a round boss, optionally braced with gusset ribs from `decad.BossSpec.Ribs` or leaning by `decad.BossSpec.Tilt`, or a rectangular, slot or polygonal one from `decad.BossSpec.Shape`, on a planar (a planar face of a mesh solid tilted from every axis too) or cylindrical face, with an optional blind pilot hole that may carry a counterbore, a countersink or a thread, and a fillet round its root. |
-| `decad.Rib` | Thickens one straight sketch line, extrudes it by an `decad.Extent` and joins it to the body. `decad.WithRibOverrun` buries its ends in the walls, and `decad.WithRibDraft` leans its walls. |
-| `decad.RibArc` | Thickens one sketch arc and joins it to the body as a rib, like `decad.Rib` for a line. |
-| `decad.Web` | Adds one such rib for each of several lines in one step. |
-| `decad.WebPath` | Adds one rib for each line and arc of a run, in one step, so a polyline or a slot-shaped run becomes one rib. |
+| `decad.WebPath` | Thickens each line and arc of a run of sketch entities, extrudes it by a `decad.Extent` and joins the ribs to the body in one step. A run of one line or one arc is one rib, and a polyline or a slot-shaped run becomes one rib. `decad.WithRibOverrun` buries the rib ends in the walls, and `decad.WithRibDraft` leans the walls. |
 | `decad.TextProfiles` | Draws lines of text from a TrueType font (Go Regular by default) as closed sketch profiles for `decad.Emboss`. |
 | `decad.Emboss` | Raises or engraves closed profiles on a planar face (a planar face of a mesh solid tilted from every axis too), or on a cylindrical face from a sketch plane tangent to it. `decad.EmbossRaised` or `decad.EmbossEngraved` picks the mode, `decad.WithEmbossDraft` leans the walls and `decad.WithEmbossRimFillet` rounds the rim. |
 | `decad.Thicken` | Turns a sheet into a solid. `decad.WithThickenSide` picks the side. |
