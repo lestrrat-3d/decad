@@ -46,15 +46,15 @@ func writeSTL(ctx context.Context, w io.Writer, mesh meshSource) error {
 	line := make([]byte, 0, 128)
 	line = append(line, "solid decad\n"...)
 	sw.write(line)
+	normals, err := triangleNormals(vertices, triangles)
+	if err != nil {
+		return fmt.Errorf("export: STL: %w", err)
+	}
 	for i, tri := range triangles {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		a, b, c := vertices[tri[0]], vertices[tri[1]], vertices[tri[2]]
-		normal, ok := b.Sub(a).Cross(c.Sub(a)).Normalize()
-		if !ok {
-			return fmt.Errorf("export: STL: %w: facet %d has no normal", decad.ErrDegenerate, i)
-		}
+		normal := normals[i]
 		line = append(line[:0], "  facet normal "...)
 		line = appendCoord(line, normal.X)
 		line = append(line, ' ')
