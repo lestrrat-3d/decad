@@ -32,13 +32,12 @@ upper exterior caps and both sets of source walls. It removes the two middle
 caps and identifies their common station vertices. Its three rings comprise
 the lower start, common middle, and reflected upper start stations. Whole-mesh
 vertex-link and triangle-crossing audits must accept the sewn shell.
-When each source section is one loop without holes, the sewn shell is a
-banded loft whose middle ring is an interior section, so the crossing audit
-takes that structure (`loftmesh.LoftCrossingAuditBanded`): each planar outer
-cap is decided as a whole by `loftmesh.CapFamilyProof`, with the middle ring
-on the far side of each cap's plane, and every other pair is tested exactly.
-A cap whose proof fails keeps its pairs in the exact test. A source with holes
-takes the unstructured audit. The structured audit lets a source with many
+The sewn shell is a banded loft whose middle ring is an interior section, so
+the crossing audit takes that structure (`loftmesh.LoftCrossingAuditBanded`):
+each planar outer cap, with its hole loops, is decided as a whole by
+`loftmesh.CapFamilyProof`, with the middle ring on the far side of each cap's
+plane, and every other pair is tested exactly. A cap whose proof fails keeps
+its pairs in the exact test. The structured audit lets a source with many
 stations, such as a twisted gear outline with rounded roots (loft §17), stay
 below the audit's candidate ceiling; a rounded Loft keeps its source identity
 and authenticated records, so its mirrored copy joins by this route.
@@ -61,6 +60,32 @@ surface, with new Union cap roles appended. A later rigid `Copy` keeps a
 source-backed placement record, gives those caps copy-local roles, and
 revalidates the held mesh and displacement bounds. This record does not by
 itself authorize any other Boolean case.
+
+### Through-bore of the joined pair
+
+`Cut` accepts an unplaced, contact-audited join record of this route and one
+straight prism tool. `loftmirror.ThroughBoreCut` bores the recorded lower Loft
+with Loft §18's through-bore (`loftrecord.ThroughBoreCut`), places the bored
+Loft under the join's recorded reflection, and joins the two by the held
+boundary proof above. The tool's exact ends must lie on or beyond both outer
+caps of the join: the start plane and its reflection, twice the section gap
+above it (`loftrecord.ThroughToolSpans`). The lower Loft `L` lies in the slab
+between its start plane and the mirror plane, and a straight tool `T` along
+the Loft axis that reaches both outer caps meets that slab in the same section
+prism as its reflection `F(T)`, so `(L ∪ F(L)) − T = (L − T) ∪ F(L − T)`. A
+tool short of either outer cap, a placed join, and a lower Loft the
+through-bore declines keep the general Boolean.
+
+The sewn shell reads each Loft's held vertex layout from its per-wall cell
+record: each loop lifts its start stations, then its end stations. Every loop's
+end stations are the shared middle ring, and its reflected start stations bound
+the top cap, so a bored source joins with its hole loops like its outer loop,
+and the banded crossing audit receives every loop of each cap.
+`apitest.TestLoftMirrorJoinThroughBore` bores rounded twisted gear joins of five
+and seven teeth: each removes `πr²·2h` within the two volume bounds, passes the
+verified tessellation with one hole, and keeps every vertex near the axis on
+the bore. `TestLoftMirrorJoinShortToolKeepsTheTop` checks that a tool short of
+the top cap never removes the full cylinder.
 
 ### Scope
 

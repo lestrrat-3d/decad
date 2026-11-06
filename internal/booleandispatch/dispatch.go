@@ -80,6 +80,12 @@ func analyticRoutes(ctx context.Context, op meshbool.OperationKind, env topo.Env
 	} else if ok {
 		return n, true, nil
 	}
+	if n, ok, err := loftmirror.ThroughBoreCut(ctx, op, env, hooks.Verified,
+		a, b); err != nil {
+		return nil, false, err
+	} else if ok {
+		return n, true, nil
+	}
 	if n, ok, err := loftcylinder.MirrorUnion(ctx, op, env, hooks.Verified,
 		a, b); err != nil {
 		return nil, false, err

@@ -74,17 +74,21 @@ func Union(ctx context.Context, op meshbool.OperationKind, env topo.Env, mesher 
 
 func buildUnion(ctx context.Context, env topo.Env, mesher verifiedmesh.Mesher,
 	lowerBody, upperBody *topo.Body, lower, upper loftrecord.Payload) (*topo.Body, error) {
-	n := len(lower.Verts) / 2
-	if len(lower.Verts)%2 != 0 || n < 3 || len(upper.Verts) != len(lower.Verts) ||
-		lower.Walls != 2*n || upper.Walls != lower.Walls ||
+	layout, ok := ringLayoutOf(lower)
+	upperLayout, upperOK := ringLayoutOf(upper)
+	if !ok || !upperOK || !slices.Equal(layout.sizes, upperLayout.sizes) ||
+		len(upper.Verts) != len(lower.Verts) || upper.Walls != lower.Walls ||
 		lower.CapStartCount <= 0 || upper.CapStartCount != lower.CapStartCount ||
 		len(lower.Tris) != len(upper.Tris) ||
 		lower.Walls+lower.CapStartCount >= len(lower.Tris) {
 		return nil, fmt.Errorf("%w: reflected lofts lack matching cap and wall stations", decaderr.ErrUnsupported)
 	}
-	for i := range n {
-		if lower.Verts[n+i] != upper.Verts[n+i] {
-			return nil, fmt.Errorf("%w: reflected loft cap stations differ", decaderr.ErrUnsupported)
+	n := layout.stations
+	for _, loop := range layout.loops {
+		for _, index := range loop[1] {
+			if lower.Verts[index] != upper.Verts[index] {
+				return nil, fmt.Errorf("%w: reflected loft cap stations differ", decaderr.ErrUnsupported)
+			}
 		}
 	}
 	if !lower.MirrorCapTrianglesMatch(upper) {
@@ -122,15 +126,25 @@ func buildUnion(ctx context.Context, env topo.Env, mesher verifiedmesh.Mesher,
 	}
 
 	record := &facetedrecord.LoftMirrorJoinRecord{Lower: lowerBody, Upper: upperBody, StationCount: n}
-	verts := append(append([]r3.Vec(nil), lower.Verts...), upper.Verts[:n]...)
-	vertexBound := make([]float64, len(verts))
+	// Each upper start station joins the mesh after the lower vertices; each
+	// end station is the shared middle-ring vertex of the same index.
+	verts := append([]r3.Vec(nil), lower.Verts...)
+	vertexBound := make([]float64, len(lower.Verts), len(lower.Verts)+n)
 	for i := range vertexBound {
 		vertexBound[i] = lowerBound
-		if i >= n {
-			vertexBound[i] = upperBound
+	}
+	upperIndex := make([]int, len(upper.Verts))
+	for i := range upperIndex {
+		upperIndex[i] = i
+	}
+	for _, loop := range layout.loops {
+		for _, index := range loop[0] {
+			upperIndex[index] = len(verts)
+			verts = append(verts, upper.Verts[index])
+			vertexBound = append(vertexBound, upperBound)
 		}
-		if i >= n && i < 2*n {
-			vertexBound[i] = bound
+		for _, index := range loop[1] {
+			vertexBound[index] = bound
 		}
 	}
 	var tris [][3]int
@@ -176,9 +190,7 @@ func buildUnion(ctx context.Context, env topo.Env, mesher verifiedmesh.Mesher,
 			triangle := item.payload.Tris[i]
 			if half == 1 {
 				for corner, old := range triangle {
-					if old < n {
-						triangle[corner] = 2*n + old
-					}
+					triangle[corner] = upperIndex[old]
 				}
 			}
 			role, wallIndex := "", i
@@ -195,7 +207,7 @@ func buildUnion(ctx context.Context, env topo.Env, mesher verifiedmesh.Mesher,
 	if err := tessellation.RequireVertexLinks(ctx, len(verts), tris); err != nil {
 		return nil, fmt.Errorf("%w: reflected loft seam has an invalid vertex link: %s", decaderr.ErrUnsupported, err)
 	}
-	if err := auditSewnShell(ctx, verts, tris, lower, n); err != nil {
+	if err := auditSewnShell(ctx, verts, tris, lower, layout, upperIndex); err != nil {
 		return nil, err
 	}
 	capGroups := record.CapGroups
@@ -206,21 +218,67 @@ func buildUnion(ctx context.Context, env topo.Env, mesher verifiedmesh.Mesher,
 	return facetedrecord.Build(ctx, env, fp)
 }
 
+// ringLayout is a Loft's held vertex layout: loftmesh.Assemble lifts each
+// loop's start stations, then its end stations, loop by loop (outer first,
+// then the holes), and emits two wall triangles per cell. loops holds each
+// loop's start and end station indices in loop order; sizes their station
+// counts; stations their total per ring.
+type ringLayout struct {
+	loops    [][2][]int
+	sizes    []int
+	stations int
+}
+
+// ringLayoutOf reads the layout from the payload's per-wall cell record. It
+// reports false unless the cells name loops 0..k in order, every loop has at
+// least three stations, and the vertex and wall counts agree.
+func ringLayoutOf(pl loftrecord.Payload) (ringLayout, bool) {
+	if len(pl.Cell) != pl.Walls || pl.Walls == 0 {
+		return ringLayout{}, false
+	}
+	var layout ringLayout
+	for _, cell := range pl.Cell {
+		switch cell[0] {
+		case len(layout.sizes):
+			layout.sizes = append(layout.sizes, 1)
+		case len(layout.sizes) - 1:
+			layout.sizes[cell[0]]++
+		default:
+			return ringLayout{}, false
+		}
+	}
+	offset := 0
+	for i, cells := range layout.sizes {
+		if cells%2 != 0 || cells/2 < 3 {
+			return ringLayout{}, false
+		}
+		size := cells / 2
+		layout.sizes[i] = size
+		start, end := make([]int, size), make([]int, size)
+		for k := range size {
+			start[k], end[k] = offset+k, offset+size+k
+		}
+		layout.loops = append(layout.loops, [2][]int{start, end})
+		layout.stations += size
+		offset += 2 * size
+	}
+	if offset != len(pl.Verts) || len(layout.sizes) != 1+len(pl.Profile0.Holes) {
+		return ringLayout{}, false
+	}
+	return layout, true
+}
+
 // auditSewnShell runs the crossing audit over the sewn shell. tris holds the
 // lower walls, the lower start cap, the upper walls and the reflected upper
-// start cap, in that order. When each source section is one loop without
-// holes, its n stations per ring are, in loop order, vertices [0, n) on the
-// lower start cap, [n, 2n) on the common middle ring and [2n, 3n) on the
-// reflected upper cap, so the shell is a banded loft with the middle ring as
-// its interior section: the structured audit decides each planar outer cap as
-// a whole (loftmesh.CapFamilyProof), and every other pair is tested exactly. A
-// cap whose proof fails keeps its pairs in the exact test. Any other section
-// takes the unstructured audit.
-func auditSewnShell(ctx context.Context, verts []r3.Vec, tris [][3]int, lower loftrecord.Payload, n int) error {
-	budget := proofbound.NewWorkBudget(ctx)
-	if len(lower.Profile0.Holes) != 0 || len(lower.Profile1.Holes) != 0 {
-		return loftmesh.LoftCrossingAudit(budget, verts, tris)
-	}
+// start cap, in that order. Each loop's start stations bound the lower start
+// cap, their reflected images (upperIndex) the upper cap, and its end stations
+// form the common middle ring, so the shell is a banded loft with the middle
+// rings as its interior section: the structured audit decides each planar
+// outer cap as a whole (loftmesh.CapFamilyProof), holes included, and every
+// other pair is tested exactly. A cap whose proof fails keeps its pairs in the
+// exact test.
+func auditSewnShell(ctx context.Context, verts []r3.Vec, tris [][3]int, lower loftrecord.Payload,
+	layout ringLayout, upperIndex []int) error {
 	walls, caps := lower.Walls, lower.CapStartCount
 	half := walls + caps
 	order := make([][3]int, 0, len(tris))
@@ -228,16 +286,17 @@ func auditSewnShell(ctx context.Context, verts []r3.Vec, tris [][3]int, lower lo
 	order = append(order, tris[half:half+walls]...)
 	order = append(order, tris[walls:half]...)
 	order = append(order, tris[half+walls:]...)
-	ring := func(offset int) [][]int {
-		loop := make([]int, n)
-		for i := range loop {
-			loop[i] = offset + i
+	structure := loftmesh.LoftAuditStructure{Walls: 2 * walls, CapStartCount: caps}
+	for _, loop := range layout.loops {
+		reflected := make([]int, len(loop[0]))
+		for k, index := range loop[0] {
+			reflected[k] = upperIndex[index]
 		}
-		return [][]int{loop}
+		structure.Loops0 = append(structure.Loops0, loop[0])
+		structure.Loops1 = append(structure.Loops1, reflected)
+		structure.Interior = append(structure.Interior, loop[1]...)
 	}
-	structure := loftmesh.LoftAuditStructure{Walls: 2 * walls, CapStartCount: caps,
-		Loops0: ring(0), Loops1: ring(2 * n), Interior: ring(n)[0]}
-	return loftmesh.LoftCrossingAuditBanded(budget, verts, order, structure)
+	return loftmesh.LoftCrossingAuditBanded(proofbound.NewWorkBudget(ctx), verts, order, structure)
 }
 
 func meshMatchesPayload(mesh *topo.Mesh, lp loftrecord.Payload) bool {
