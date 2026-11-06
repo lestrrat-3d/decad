@@ -510,3 +510,49 @@ func loftToolSpansExactCaps(tool prismrecord.Payload, lower, upper r3.Frame) boo
 	}
 	return true
 }
+
+// ThroughToolSpans reports whether the straight prism tool b's exact end
+// points lie on or beyond the plane of frame and the plane parallel to it at
+// the exact offset along frame's normal map. A tool that is not a straight
+// prism payload, or an offset that is not positive, reports false.
+func ThroughToolSpans(b topo.Payload, frame r3.Frame, offset *big.Rat) bool {
+	tool, ok := b.(prismrecord.Payload)
+	if !ok || offset == nil || offset.Sign() <= 0 {
+		return false
+	}
+	toolOrigin, err := massmoment.RevolveAnchor(tool.Frame, 0, 0)
+	if err != nil {
+		return false
+	}
+	origin, err := massmoment.RevolveAnchor(frame, 0, 0)
+	if err != nil {
+		return false
+	}
+	toolMap, err := massmoment.PlaneMap(tool.Frame, r3.Identity())
+	if err != nil {
+		return false
+	}
+	frameMap, err := massmoment.PlaneMap(frame, r3.Identity())
+	if err != nil {
+		return false
+	}
+	for end, level := range [2]*big.Rat{new(big.Rat), offset} {
+		z := proofarith.FloatRat(tool.Z0)
+		if end == 1 {
+			z = proofarith.FloatRat(tool.Z1)
+		}
+		if z == nil {
+			return false
+		}
+		side := new(big.Rat)
+		for i := range toolOrigin {
+			point := new(big.Rat).Add(toolOrigin[i], new(big.Rat).Mul(toolMap[i][2], z))
+			plane := new(big.Rat).Add(origin[i], new(big.Rat).Mul(frameMap[i][2], level))
+			side.Add(side, new(big.Rat).Mul(new(big.Rat).Sub(point, plane), frameMap[i][2]))
+		}
+		if (end == 0 && side.Sign() > 0) || (end == 1 && side.Sign() < 0) {
+			return false
+		}
+	}
+	return true
+}

@@ -298,6 +298,7 @@
 1	0.03	TestWallSphericalZoneReadsFlats
 1	0.00	TestWallsSelector
 1	0.01	TestZeroAndNilBodyOperandsAreRejected
+1	0.00	TestLoftMirrorJoinShortToolKeepsTheTop
 2	0.02	TestArcEdgeAxisFollowsWalkSense
 2	0.00	TestArrangeRefusesBadBodyLists
 2	0.12	TestAsymmetricChamferOnBrepLoopSideOverrun
@@ -2428,6 +2429,7 @@
 9	0.03	TestWallHemisphereReadsAngleLimit
 9	0.01	TestWallThinPlateViolating
 9	0.00	TestLoftBoreTwistedSections
+9	0.00	TestLoftMirrorJoinThroughBore
 10	0.03	FuzzBoolean
 10	0.00	TestArrangeAngleRefusals
 10	0.01	TestArrangeLayersRefusals
