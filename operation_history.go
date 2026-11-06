@@ -84,7 +84,7 @@ func (capture *operationHistoryCapture) snapshot() []OperationInput {
 type InputUse int
 
 const (
-	InputUseUnknown InputUse = iota
+	_ InputUse = iota // the zero value names no use
 	InputConsumed
 	InputReferenced
 )
