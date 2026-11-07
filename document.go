@@ -513,8 +513,8 @@ func exactIdentity(t r3.Transform) bool {
 	return b.EX == (r3.Vec{X: 1}) && b.EY == (r3.Vec{Y: 1}) && b.EZ == (r3.Vec{Z: 1}) && t.Translation() == (r3.Vec{})
 }
 
-// CopyOption configures Copy. Only WithCopyPlacement and WithCopyRotation
-// change the copy's placement. An option from another package cannot implement
+// CopyOption configures Copy. Only WithCopyPlacement, WithCopyRotation and
+// WithCopyLiftTranslation change the copy's placement. An option from another package cannot implement
 // this sealed tier.
 type CopyOption interface {
 	option.Interface
@@ -528,6 +528,15 @@ func (copyOption) copyOption() {}
 type identCopyPlacement struct{}
 
 type identCopyRotation struct{}
+
+type identCopyLiftTranslation struct{}
+
+// copyLiftTranslation is the value WithCopyLiftTranslation stores under
+// identCopyLiftTranslation.
+type copyLiftTranslation struct {
+	lift     r3.Transform
+	from, to r3.Vec
+}
 
 // copyRotation is the value WithCopyRotation stores under identCopyRotation.
 type copyRotation struct {
@@ -566,10 +575,34 @@ func WithCopyRotation(center, axis r3.Vec, angle units.Value) CopyOption {
 	return copyOption{option.New(identCopyRotation{}, copyRotation{center: center, axis: axis, angle: angle})}
 }
 
+// WithCopyLiftTranslation places a new copy by moving the point from to the
+// point to, both given in lift's local coordinates. The exact world translation
+// is the lift's linear part times to minus from, formed in exact rationals: the
+// subtraction and the product round nothing. A faceted copy denotes its
+// source's true solid moved by exactly that vector, and its held vertices are
+// charged for the rounding of the held placement to the nearest float
+// translation. Other payloads are placed by that float translation alone,
+// exactly as WithCopyPlacement of it.
+//
+// The copy is marked as exactly placed like every exact copy, so VerifyMotion
+// and VerifyLinkage refuse to re-place it. Only a copy made directly from its
+// source records the translation: Transform and a copy of a copy record none.
+// Verify reads a direct copy as its source moved by the exact vector, so a
+// copy that stays inside a body the lift-local source stayed inside (a pin
+// moved from one bore sketched on the lift to another) is decided from the
+// recorded history.
+//
+// An invalid lift is ErrDegenerate and a non-finite from or to is
+// ErrNotFinite, both when Copy evaluates the option. A to that equals from is the
+// identity.
+func WithCopyLiftTranslation(lift r3.Transform, from, to r3.Vec) CopyOption {
+	return copyOption{option.New(identCopyLiftTranslation{}, copyLiftTranslation{lift: lift, from: from, to: to})}
+}
+
 // Copy returns a new live body carrying source's geometry and leaves source
 // live. With no options, the copy has source's placement. WithCopyPlacement
-// and WithCopyRotation compose a rigid motion onto it; repeated placement
-// options use the last value. The copy gets a new body identity and reproduces
+// WithCopyRotation and WithCopyLiftTranslation compose a rigid motion onto it;
+// repeated placement options use the last value. The copy gets a new body identity and reproduces
 // source provenance. source MUST NOT be nil. A body this evaluator did not
 // build is ErrUnsupported. Invalid or nil options are ErrDegenerate. A
 // canceled context stops the rebuild before the document changes.
@@ -600,6 +633,16 @@ func Copy(ctx context.Context, source *Body, opts ...CopyOption) (result *Body, 
 				return nil, fmt.Errorf(`%w: WithCopyRotation carries no rotation`, ErrDegenerate)
 			}
 			record, t, err := exactrotation.New(rot.center, rot.axis, rot.angle)
+			if err != nil {
+				return nil, err
+			}
+			motion, exact = t, record
+		case identCopyLiftTranslation:
+			lt, ok := option.Get[copyLiftTranslation](opt)
+			if !ok {
+				return nil, fmt.Errorf(`%w: WithCopyLiftTranslation carries no translation`, ErrDegenerate)
+			}
+			record, t, err := exactrotation.NewLiftTranslation(lt.lift, lt.from, lt.to)
 			if err != nil {
 				return nil, err
 			}
