@@ -276,6 +276,32 @@ Other payloads place by `r3.RotationAround(center, axis, angle)`, exactly as
 `WithCopyPlacement` of that transform. Non-frame-keeping instances go through
 `Copy` with `WithCopyPlacement` (§4.3).
 
+### 4.5 Exact lift translations
+
+```go
+func WithCopyLiftTranslation(lift r3.Transform, from, to r3.Vec) CopyOption
+```
+
+A body built on a lift `L` (a rigid or affine placement shared by the parts of
+an assembly) moves between positions sketched on that lift by a lift-local
+vector. The world translation is `t = L_lin * (to - from)`. A float world
+translation rounds it, and a body so placed no longer shares the lift-local
+coordinates of its neighbours. `WithCopyLiftTranslation` forms `t` in exact
+rationals: the basis columns of `L` and the two points are read exactly, and
+`to - from` is subtracted exactly. The record is the identity matrix with the
+translation `t` (`exactrotation.NewLiftTranslation`).
+
+A faceted copy denotes `S + t`, where `S` is the source's true solid. The held
+vertices are the float placement's by the nearest float to each component of
+`t`, charged for their distance to `S + t` exactly as §4.4 charges a rotation.
+The copy is marked `ExactPlaced` like every exact copy, so `VerifyMotion` and
+`VerifyLinkage` refuse to re-place it. Only a copy made directly from the
+source records the translation in its lineage; `Transform` and a copy of a copy
+record none. A payload that is not faceted places by the float translation
+alone, exactly as `WithCopyPlacement` of it. An invalid lift is `ErrDegenerate`
+and a non-finite `from` or `to` is `ErrNotFinite`. Verify reads such a copy as
+its source shifted by `t` (interference §3.2).
+
 ## 5. The mirror join
 
 ### 5.1 Admission
