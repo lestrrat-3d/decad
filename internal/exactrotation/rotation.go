@@ -1,5 +1,7 @@
-// Package exactrotation builds the exactly orthogonal rational rotation that an
-// exact-rotation copy denotes. Plain data in, plain data out.
+// Package exactrotation builds the exact rigid motion that an exact copy
+// denotes: an exactly orthogonal rational rotation (New) or an exact rational
+// translation defined in a lift's local coordinates (NewLiftTranslation).
+// Plain data in, plain data out.
 package exactrotation
 
 import (
@@ -20,8 +22,8 @@ import (
 const gapLimit = 0x1p-30
 
 // Rotation is an exactly orthogonal rational rotation with a rational
-// translation. Its fields are unexported; New is the only constructor. A
-// Rotation is immutable and every accessor returns copies.
+// translation. Its fields are unexported; New and NewLiftTranslation are the
+// constructors. A Rotation is immutable and every accessor returns copies.
 type Rotation struct {
 	m [3][3]*big.Rat
 	t [3]*big.Rat
@@ -105,6 +107,80 @@ func newAgainst(center, axis r3.Vec, angle units.Value, d r3.Transform) (*Rotati
 		return nil, fmt.Errorf("%w: the exact rotation departs from r3's matrix by %g", decaderr.ErrUnsupported, linear)
 	}
 	return r, nil
+}
+
+// NewLiftTranslation returns the exact translation that moves the lift-local
+// point from to the lift-local point to, together with the float transform
+// that places a held mesh for it.
+//
+// For an affine lift L, moving the local point from to the local point to is the world translation
+// t = L_lin * (to - from). It is formed in exact rationals: the lift's basis
+// columns are read exactly, to - from is subtracted exactly, and no float
+// product is rounded. The matrix of the record is the exact identity. The
+// returned transform is the translation by the nearest float to each component
+// of t; the record keeps t, so the rounding is a gap the caller charges, not a
+// change to what the copy denotes. A to that equals from is the identity.
+//
+// lift MUST be a valid transform, else the error is ErrDegenerate; a
+// non-finite from or to is ErrNotFinite. NewLiftTranslation refuses with
+// ErrUnsupported when the float translation departs from t by more than 2^-30
+// in the entrywise sum. That check only refuses: t is exact by construction.
+func NewLiftTranslation(lift r3.Transform, from, to r3.Vec) (*Rotation, r3.Transform, error) {
+	if !lift.IsValid() {
+		return nil, r3.Transform{}, fmt.Errorf("%w: an invalid lift names no coordinates", decaderr.ErrDegenerate)
+	}
+	f, fok := ratVec(from)
+	g, gok := ratVec(to)
+	if !fok || !gok {
+		return nil, r3.Transform{}, fmt.Errorf("%w: lift translation input is not finite", decaderr.ErrNotFinite)
+	}
+	basis := lift.Basis()
+	cols := [3]r3.Vec{basis.EX, basis.EY, basis.EZ}
+	r := &Rotation{}
+	for i := range r.m {
+		for j := range r.m[i] {
+			r.m[i][j] = big.NewRat(0, 1)
+			if i == j {
+				r.m[i][j] = big.NewRat(1, 1)
+			}
+		}
+		r.t[i] = new(big.Rat)
+	}
+	for j, col := range cols {
+		c, ok := ratVec(col)
+		if !ok {
+			return nil, r3.Transform{}, fmt.Errorf("%w: the lift is not finite", decaderr.ErrNotFinite)
+		}
+		delta := new(big.Rat).Sub(g[j], f[j])
+		for i := range r.t {
+			r.t[i].Add(r.t[i], new(big.Rat).Mul(c[i], delta))
+		}
+	}
+	var world r3.Vec
+	for i, q := range r.t {
+		v, _ := q.Float64()
+		switch i {
+		case 0:
+			world.X = v
+		case 1:
+			world.Y = v
+		default:
+			world.Z = v
+		}
+	}
+	move, err := r3.Translation(world)
+	if err != nil {
+		return nil, r3.Transform{}, fmt.Errorf("%w: the lift translation is not representable: %w", decaderr.ErrNotFinite, err)
+	}
+	_, gap, ok := r.Gap(move)
+	if !ok {
+		return nil, r3.Transform{}, fmt.Errorf("%w: the lift translation gap is not finite", decaderr.ErrNotFinite)
+	}
+	if gap > gapLimit {
+		return nil, r3.Transform{}, fmt.Errorf("%w: the exact lift translation departs from its float image by %g",
+			decaderr.ErrUnsupported, gap)
+	}
+	return r, move, nil
 }
 
 // scaledAxis divides the exact axis by its largest component.
@@ -201,6 +277,21 @@ func (r *Rotation) FixesXAxisAtOrigin() bool {
 // IsIdentity reports whether the matrix is exactly the identity and every
 // translation component is exactly zero.
 func (r *Rotation) IsIdentity() bool {
+	if !r.IsTranslation() {
+		return false
+	}
+	for _, q := range r.t {
+		if q.Sign() != 0 {
+			return false
+		}
+	}
+	return true
+}
+
+// IsTranslation reports whether the matrix is exactly the identity. The
+// translation may be nonzero, so the record is an exact translation, or the
+// identity.
+func (r *Rotation) IsTranslation() bool {
 	for i := range r.m {
 		for j := range r.m[i] {
 			want := int64(0)
@@ -210,11 +301,6 @@ func (r *Rotation) IsIdentity() bool {
 			if r.m[i][j].Cmp(big.NewRat(want, 1)) != 0 {
 				return false
 			}
-		}
-	}
-	for _, q := range r.t {
-		if q.Sign() != 0 {
-			return false
 		}
 	}
 	return true

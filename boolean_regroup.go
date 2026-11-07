@@ -4,11 +4,13 @@ import (
 	"context"
 	"errors"
 	"math"
+	"math/big"
 	"slices"
 
 	"github.com/lestrrat-3d/decad/internal/boolchain"
 	"github.com/lestrrat-3d/decad/internal/booleandispatch"
 	"github.com/lestrrat-3d/decad/internal/booloperand"
+	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/topo"
 )
@@ -338,4 +340,36 @@ func (h historyProducers) SameSetProducer(n *topo.Body) (*topo.Body, bool) {
 		return nil, false
 	}
 	return &in.Body.n, true
+}
+
+// ExactShiftProducer reports the source of n and the exact world translation
+// when n is a direct copy made by WithCopyLiftTranslation: the true solid of n
+// is the source's moved by exactly that vector. The operation record, the
+// referenced source and the source's producer must all agree with the copy's
+// lineage, and the copy must hold no private shift or operation warning. A
+// copy made with WithCopyPlacement or WithCopyRotation, a copy of a copy and a
+// Transform of a copy are not read (agent-docs/interference-design.md §3.2).
+func (h historyProducers) ExactShiftProducer(n *topo.Body) (*topo.Body, [3]*big.Rat, bool) {
+	h.d.n.LiveMu.RLock()
+	defer h.d.n.LiveMu.RUnlock()
+	op := h.d.producers[bodyHandle(n)]
+	if op == nil || op.kind != OperationCopy || len(op.inputs) != 1 || len(op.outputs) != 1 ||
+		op.outputs[0] != bodyHandle(n) {
+		return nil, [3]*big.Rat{}, false
+	}
+	in := op.inputs[0]
+	if in.Body == nil || in.Use != InputReferenced || in.Role != operationRoleSource || in.Body.n.Doc != n.Doc ||
+		len(n.OperationWarnings) != 0 || n.PrivateShift != nil {
+		return nil, [3]*big.Rat{}, false
+	}
+	payload, ok := n.Payload.(facetedrecord.Payload)
+	if !ok {
+		return nil, [3]*big.Rat{}, false
+	}
+	lineage := payload.CopyLineage
+	if lineage == nil || !lineage.Direct || lineage.Exact == nil || !lineage.Exact.IsTranslation() ||
+		lineage.Source != &in.Body.n || lineage.SourceProducer != lineage.Source.Origin.Producer {
+		return nil, [3]*big.Rat{}, false
+	}
+	return lineage.Source, lineage.Exact.Translation(), true
 }

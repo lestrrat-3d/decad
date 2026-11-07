@@ -6,7 +6,6 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/boolchain"
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
-	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/prismcells"
@@ -41,11 +40,12 @@ const historyMaxDepth = 32
 // interiors disjoint.
 func historySeparated(ctx context.Context, history boolchain.Source, a, b *topo.Body) (bool, error) {
 	w := historyWalk{ctx: ctx, history: history, budget: proofbound.NewWorkBudget(ctx)}
-	ok, err := w.misses(a, b, 0)
+	wa, wb := walkBody{n: a}, walkBody{n: b}
+	ok, err := w.misses(wa, wb, 0)
 	if err != nil || ok {
 		return ok, err
 	}
-	return w.misses(b, a, 0)
+	return w.misses(wb, wa, 0)
 }
 
 type historyWalk struct {
@@ -79,11 +79,12 @@ func sameSetOf(history boolchain.Source, b *topo.Body) *topo.Body {
 }
 
 // misses reports whether a's interior misses b's, read through a's history.
-func (w historyWalk) misses(a, b *topo.Body, depth int) (bool, error) {
+// a and b may carry different exact shifts (csg_shift.go).
+func (w historyWalk) misses(a, b walkBody, depth int) (bool, error) {
 	if depth > historyMaxDepth {
 		return false, nil
 	}
-	a, b = sameSetOf(w.history, a), sameSetOf(w.history, b)
+	a, b = w.resolve(a), w.resolve(b)
 	if err := w.budget.Step(); err != nil {
 		return false, err
 	}
@@ -91,32 +92,39 @@ func (w historyWalk) misses(a, b *topo.Body, depth int) (bool, error) {
 	// box's own proven bound, so two such boxes with disjoint interiors keep
 	// the bodies apart; the comparison is exact (measurement.BoxesDisjoint).
 	// A Union's operand far from the other body is decided here.
-	if measurement.BoxesDisjoint(a.Bounds, b.Bounds) {
+	if boxesDisjoint(a, b) {
 		return true, nil
 	}
-	op, inputs, ok := w.expand(a)
+	// The rules below read records and history in unshifted world
+	// coordinates. Moving both bodies by one vector keeps every relation, so
+	// they may answer only when the shifts agree.
+	same := a.s.equal(b.s)
+	op, nodes, ok := w.expand(a.n)
 	if !ok {
-		if _, _, expands := w.expand(b); expands {
+		if _, _, expands := w.expand(b.n); expands {
 			return w.misses(b, a, depth+1)
 		}
 		return w.leafApart(a, b)
 	}
+	inputs := wrap(nodes, a.s)
 	switch op {
 	case meshbool.OpCut:
 		if in, err := w.within(b, inputs[1], 0); err != nil || in {
 			return in, err
 		}
-		if apart, err := cutToolMeridianApart(w.ctx, w.budget, w.history, inputs[0], inputs[1], b); err != nil || apart {
-			return apart, err
-		}
-		if apart, err := axialApart(w.ctx, w.budget, w.history, a, b); err != nil || apart {
-			return apart, err
-		}
-		if apart, err := revolvePiecesApart(w.ctx, w.budget, w.history, a, b); err != nil || apart {
-			return apart, err
-		}
-		if apart, err := boxApart(w.budget, w.history, a, b); err != nil || apart {
-			return apart, err
+		if same {
+			if apart, err := cutToolMeridianApart(w.ctx, w.budget, w.history, nodes[0], nodes[1], b.n); err != nil || apart {
+				return apart, err
+			}
+			if apart, err := axialApart(w.ctx, w.budget, w.history, a.n, b.n); err != nil || apart {
+				return apart, err
+			}
+			if apart, err := revolvePiecesApart(w.ctx, w.budget, w.history, a.n, b.n); err != nil || apart {
+				return apart, err
+			}
+			if apart, err := boxApart(w.budget, w.history, a.n, b.n); err != nil || apart {
+				return apart, err
+			}
 		}
 		return w.misses(inputs[0], b, depth+1)
 	case meshbool.OpIntersect:
@@ -138,28 +146,29 @@ func (w historyWalk) misses(a, b *topo.Body, depth int) (bool, error) {
 }
 
 // within reports whether inner lies in outer.
-func (w historyWalk) within(inner, outer *topo.Body, depth int) (bool, error) {
+func (w historyWalk) within(inner, outer walkBody, depth int) (bool, error) {
 	if depth > historyMaxDepth {
 		return false, nil
 	}
-	inner, outer = sameSetOf(w.history, inner), sameSetOf(w.history, outer)
+	inner, outer = w.resolve(inner), w.resolve(outer)
 	if err := w.budget.Step(); err != nil {
 		return false, err
 	}
 	if in, err := w.leafWithin(inner, outer); err != nil || in {
 		return in, err
 	}
-	if op, inputs, ok := w.expand(outer); ok {
+	if op, nodes, ok := w.expand(outer.n); ok {
+		parts := wrap(nodes, outer.s)
 		switch op {
 		case meshbool.OpUnion:
-			for _, part := range inputs {
+			for _, part := range parts {
 				if in, err := w.within(inner, part, depth+1); err != nil || in {
 					return in, err
 				}
 			}
 		case meshbool.OpIntersect:
 			all := true
-			for _, part := range inputs {
+			for _, part := range parts {
 				in, err := w.within(inner, part, depth+1)
 				if err != nil {
 					return false, err
@@ -174,10 +183,11 @@ func (w historyWalk) within(inner, outer *topo.Body, depth int) (bool, error) {
 			}
 		}
 	}
-	op, inputs, ok := w.expand(inner)
+	op, nodes, ok := w.expand(inner.n)
 	if !ok {
 		return false, nil
 	}
+	inputs := wrap(nodes, inner.s)
 	switch op {
 	case meshbool.OpCut:
 		return w.within(inputs[0], outer, depth+1)
@@ -243,15 +253,27 @@ func (w historyWalk) leafApartOtherwise(a, b *topo.Body) (bool, error) {
 // leafApart decides between two records directly whether their interiors are
 // disjoint: two prisms with one exact linear lift whose levels or sections,
 // read in one prism's coordinates, share no interior.
-func (w historyWalk) leafApart(a, b *topo.Body) (bool, error) {
+//
+// Bodies under different shifts are decided only by the prism lift, which
+// adds each shift to its prism's exact translation; the other leaf rules read
+// unshifted records and answer only under equal shifts.
+func (w historyWalk) leafApart(wa, wb walkBody) (bool, error) {
+	a, b := wa.n, wb.n
+	same := wa.s.equal(wb.s)
+	otherwise := func() (bool, error) {
+		if !same {
+			return false, nil
+		}
+		return w.leafApartOtherwise(a, b)
+	}
 	pa, okA := a.Payload.(prismrecord.Payload)
 	pb, okB := b.Payload.(prismrecord.Payload)
 	if !okA || !okB {
-		return w.leafApartOtherwise(a, b)
+		return otherwise()
 	}
-	off, ok := liftOffset(pa, pb)
+	off, ok := liftOffsetShifted(pa, wa.s, pb, wb.s)
 	if !ok {
-		return w.leafApartOtherwise(a, b)
+		return otherwise()
 	}
 	alo, ahi := levels(pa, nil)
 	blo, bhi := levels(pb, off.dz)
@@ -278,6 +300,13 @@ type prismOffset struct {
 // translation between them then solves exactly into a section shift and a
 // level shift.
 func liftOffset(a, b prismrecord.Payload) (prismOffset, bool) {
+	return liftOffsetBy(a, [3]*big.Rat{new(big.Rat), new(big.Rat), new(big.Rat)},
+		b, [3]*big.Rat{new(big.Rat), new(big.Rat), new(big.Rat)})
+}
+
+// liftOffsetBy is liftOffset with the exact world vectors sa and sb added to
+// the prisms' lift translations: it reads the prisms as moved by them.
+func liftOffsetBy(a prismrecord.Payload, sa [3]*big.Rat, b prismrecord.Payload, sb [3]*big.Rat) (prismOffset, bool) {
 	if a.SurfaceResult || b.SurfaceResult {
 		return prismOffset{}, false
 	}
@@ -288,6 +317,7 @@ func liftOffset(a, b prismrecord.Payload) (prismOffset, bool) {
 	}
 	la, ta := prismLift(a)
 	lb, tb := prismLift(b)
+	ta, tb = addVec(ta, sa), addVec(tb, sb)
 	for i := range 3 {
 		for k := range 3 {
 			if la[i][k].Cmp(lb[i][k]) != 0 {
@@ -375,16 +405,26 @@ func (o prismOffset) profile(p momentinput.Profile) (momentinput.Profile, bool) 
 }
 
 // leafWithin decides containment between two records directly.
-func (w historyWalk) leafWithin(inner, outer *topo.Body) (bool, error) {
-	if inner == outer {
+// Under different shifts only the prism lift answers (prismWithinShifted);
+// body identity, the box fallback and analytic equality compare unshifted
+// records and answer only under equal shifts.
+func (w historyWalk) leafWithin(inner, outer walkBody) (bool, error) {
+	same := inner.s.equal(outer.s)
+	if same && inner.n == outer.n {
 		return true, nil
 	}
-	pi, okI := inner.Payload.(prismrecord.Payload)
-	po, okO := outer.Payload.(prismrecord.Payload)
+	pi, okI := inner.n.Payload.(prismrecord.Payload)
+	po, okO := outer.n.Payload.(prismrecord.Payload)
 	if okI && okO {
-		return prismWithin(w.ctx, w.budget, pi, po)
+		if same {
+			return prismWithin(w.ctx, w.budget, pi, po)
+		}
+		return prismWithinShifted(w.ctx, w.budget, pi, inner.s, po, outer.s)
 	}
-	return analyticBodiesEqual(w.budget, inner, outer)
+	if !same {
+		return false, nil
+	}
+	return analyticBodiesEqual(w.budget, inner.n, outer.n)
 }
 
 // prismWithin reports whether prism inner lies in prism outer: one exact

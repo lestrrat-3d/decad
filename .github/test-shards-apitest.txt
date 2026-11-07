@@ -3031,3 +3031,7 @@
 12	0.01	TestVerifyTouchingBoxesAreDisjoint
 12	0.01	TestWallThinPieWedge
 12	0.02	TestWholeCircleCylinderHasTwoLoops
+12	0.01	TestCopyLiftTranslationErrors
+12	5.00	TestCopyLiftTranslationFaceted
+12	0.01	TestCopyLiftTranslationPrism
+12	20.00	TestVerifyHistoryCopyLiftTranslation

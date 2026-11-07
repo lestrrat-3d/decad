@@ -337,3 +337,78 @@ func TestIsIdentity(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, offset.IsIdentity())
 }
+
+func TestNewLiftTranslation(t *testing.T) {
+	t.Parallel()
+	lift, err := r3.RotationAround(r3.Vec{X: 3, Y: -2, Z: 1}, r3.Vec{X: 1, Y: 2, Z: 3}, units.Radians(0.4))
+	require.NoError(t, err)
+	from, to := r3.Vec{X: -58.1, Y: 0, Z: 190.3}, r3.Vec{X: 20.01, Y: 7, Z: -190}
+
+	t.Run("t is the lift's linear part times to minus from", func(t *testing.T) {
+		t.Parallel()
+		rec, move, err := exactrotation.NewLiftTranslation(lift, from, to)
+		require.NoError(t, err)
+		b := lift.Basis()
+		cols := [3][3]*big.Rat{ratVec(b.EX), ratVec(b.EY), ratVec(b.EZ)}
+		f, g := ratVec(from), ratVec(to)
+		var want [3]*big.Rat
+		for i := range want {
+			want[i] = new(big.Rat)
+			for j := range cols {
+				d := new(big.Rat).Sub(g[j], f[j])
+				want[i].Add(want[i], new(big.Rat).Mul(cols[j][i], d))
+			}
+		}
+		got := rec.Translation()
+		for i := range want {
+			require.Zero(t, want[i].Cmp(got[i]), "component %d", i)
+		}
+		// The float image is the nearest float to each component.
+		moved := move.Translation()
+		for i, v := range []float64{moved.X, moved.Y, moved.Z} {
+			nearest, _ := want[i].Float64()
+			require.Equal(t, nearest, v, "component %d", i)
+		}
+		// The matrix is exactly the identity.
+		lin := rec.Linear()
+		for i := range lin {
+			for j := range lin[i] {
+				require.Zero(t, lin[i][j].Cmp(big.NewRat(map[bool]int64{true: 1, false: 0}[i == j], 1)))
+			}
+		}
+		require.True(t, rec.IsTranslation())
+		require.False(t, rec.IsIdentity())
+	})
+	t.Run("the subtraction is exact", func(t *testing.T) {
+		t.Parallel()
+		// 0.1 + 0.2 - 0.3 style cancellation: float subtraction would round.
+		a, b := r3.Vec{X: 0.1}, r3.Vec{X: 0.3}
+		rec, _, err := exactrotation.NewLiftTranslation(r3.Identity(), a, b)
+		require.NoError(t, err)
+		want := new(big.Rat).Sub(ratOf(0.3), ratOf(0.1))
+		require.Zero(t, want.Cmp(rec.Translation()[0]))
+	})
+	t.Run("equal endpoints are the identity", func(t *testing.T) {
+		t.Parallel()
+		rec, move, err := exactrotation.NewLiftTranslation(lift, from, from)
+		require.NoError(t, err)
+		require.True(t, rec.IsIdentity())
+		require.True(t, rec.IsTranslation())
+		require.Equal(t, r3.Vec{}, move.Translation())
+	})
+	t.Run("a rotation is not a translation", func(t *testing.T) {
+		t.Parallel()
+		rec, _, err := exactrotation.New(r3.Vec{}, r3.Vec{Z: 1}, units.Radians(0.5))
+		require.NoError(t, err)
+		require.False(t, rec.IsTranslation())
+	})
+	t.Run("refusals", func(t *testing.T) {
+		t.Parallel()
+		_, _, err := exactrotation.NewLiftTranslation(r3.Transform{}, from, to)
+		require.ErrorIs(t, err, decaderr.ErrDegenerate)
+		_, _, err = exactrotation.NewLiftTranslation(lift, from, r3.Vec{X: math.NaN()})
+		require.ErrorIs(t, err, decaderr.ErrNotFinite)
+		_, _, err = exactrotation.NewLiftTranslation(lift, r3.Vec{Y: math.Inf(1)}, to)
+		require.ErrorIs(t, err, decaderr.ErrNotFinite)
+	})
+}
