@@ -295,9 +295,11 @@ operation's exact result, and only that set enters the walk:
   Boolean history to its leaves. A box test adds each shift to its box
   exactly, and two prisms add each shift to their exact lift translation, so
   a pin copied between two seats sketched on one lift is read against the
-  second seat. Every other rule reads unshifted records and answers only when
-  both bodies carry the same shift: translating both by one vector keeps their
-  relation. A copy made by `WithCopyPlacement` or `WithCopyRotation`, a copy of
+  second seat. The end-cap and slab separators read the other body moved by
+  the relative shift `d`: its reach gains `g·d` (`m·d`), and the end-cap slab
+  is read with the prism moved by `−d` relative to the Revolve. Every other
+  rule reads unshifted records and answers only when both bodies carry the
+  same shift: translating both by one vector keeps their relation. A copy made by `WithCopyPlacement` or `WithCopyRotation`, a copy of
   a copy and a `Transform` of a copy stay leaves;
 - a prism lies in another prism whose exact linear lift (frame axes carried
   by the placement basis, in rationals) is the same, with both sections and
@@ -358,7 +360,10 @@ regions' interiors meet, which Sketch has ruled out. A turned spindle under a
 bearing that sits flush on its collar, with its bore flush on the spindle, is
 decided this way.
 
-**The end-cap separator** (`internal/verifyrun/halfspace.go`) reads a prism a
+**The end-cap separator** (`internal/verifyrun/halfspace.go`), under bodies
+carrying different exact copy shifts, reads the other body moved by the
+relative shift: its support gains `m·d` and the slab moves with the prism. It
+reads a prism a
 with exact levels as lying between the planes of its two end caps: with m the
 exact cross product of its first two lift columns, turned so that m·L₃ > 0,
 a lies where m·x ≥ m·p(lo) and where m·x ≤ m·p(hi). It decides the pair when
@@ -416,7 +421,9 @@ meridian separator compares two (`sharedMeridians`, `SectionsApart`). A screw
 whose shank sits in the pilot the tool bored and whose head rests on the
 target's face is decided this way, though the target has no hole of its own.
 
-**The slab separator** (`internal/verifyrun/slab.go`) reads the world box
+**The slab separator** (`internal/verifyrun/slab.go`), under bodies carrying
+different exact copy shifts, adds `g·d` to the other body's reach for the
+relative shift `d`. It reads the world box
 test of the history walk in a prism's own frame. With the prism's exact lift
 `t + L·(x, y, z)`, its coordinate along local axis `k` at world point `p` is
 `g_k·(p − t)` with `Lᵀg_k = e_k`, so the prism, with exact section and levels,
