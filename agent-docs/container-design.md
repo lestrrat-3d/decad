@@ -11,6 +11,9 @@ consumer that maps a model onto a tool with its own component tree reads the gro
 ```go
 func (d *Document) Root() *Container
 func (c *Container) NewChild(name string) (*Container, error)
+func (c *Container) ChildNamed(name string) (*Container, error)      // get or create
+func (c *Container) NewUniqueChild(name string) (*Container, error)  // suffixes " 2", " 3", ...
+func (c *Container) Path() string                                    // "/a/b"; the root is "/"
 func (c *Container) Name() string
 func (c *Container) Parent() *Container        // nil for the root
 func (c *Container) Children() []*Container    // creation order
@@ -22,12 +25,18 @@ func (c *Container) Bodies() []*Body              // live bodies, creation order
 func (d *Document) MoveBody(b *Body, to *Container) error
 func (d *Document) ContainerOf(b *Body) (*Container, error)
 func (d *Document) ContainerOfSketch(s *sketch.Sketch) *Container
+func (d *Document) VerifyContainers() *ContainerReport
 ```
 
 - Every document has one root container, named `""`. A body, sketch or plane that was never placed
   belongs to the root.
 - `NewChild` takes a non-empty name that is unique among its siblings; anything else is
   `ErrDegenerate`.
+- `ChildNamed` returns the child of `c` with that name and adds it when there is none, so calls in a
+  loop with one name share one container. It checks the name as `NewChild` does.
+- `NewUniqueChild` never fails on a taken name: it appends `" 2"`, `" 3"`, ... and uses the first name
+  no sibling has. The base name is checked as `NewChild` checks it. `NewChild` itself keeps refusing a
+  duplicate.
 - A container belongs to one document for life. There is no delete or rename.
 - `AddSketch` and `AddPlane` place the sketch or plane in `c`, and take it out of the container it was
   in. Adding it again to `c` changes nothing. The document keeps the link by the sketch's or plane's
@@ -69,7 +78,7 @@ moves the finished body.
 Container state is document state, guarded by the same lock as the live set. `Body` stays immutable:
 its container is not a field of it. `Bodies`, `Remove`, `Verify` and the readers above may run
 concurrently with one another; a mutation of the tree (`NewChild`, `AddSketch`, `AddPlane`,
-`MoveBody`) is a mutation of the document and not safe to run concurrently with another.
+`MoveBody`, and so `ChildNamed` and `NewUniqueChild`) is a mutation of the document and not safe to run concurrently with another.
 
 ## 5. What does not change
 
@@ -77,7 +86,31 @@ Geometry, measurements, `Verify`, export and every existing refusal keep their r
 that never uses a container behaves as before: every body, sketch and plane is in the root and no
 check can fail.
 
-## 6. Tests
+## 6. Layout check
+
+`Document.VerifyContainers` reads the container tree and the live set once, under the document lock,
+and changes nothing. It returns a `*ContainerReport`:
+
+| Field or method | Meaning |
+|---|---|
+| `RootBodies` | Live bodies placed directly in the root, in creation order. |
+| `EmptyContainers` | Non-root containers with no live body in them or in any container beneath them, depth first, children in creation order. |
+| `Passed()` | True when both lists are empty. |
+| `Err()` | Nil when `Passed`; otherwise an error wrapping `ErrContainerLayout` that names each root body by its 1-based place among the live bodies (`#2`) and each empty container by its `Path()`. |
+
+A container that holds bodies only in a container beneath it is not empty: a group of groups is a
+valid layout. A parent of empty containers only is empty. Sketches and planes do not make a container
+non-empty, since only bodies are the model's content. The report carries no measurement. A document
+that never uses a container reports each of its bodies as a root body.
+
+## 7. Tests
+
+| Test | What it shows |
+|---|---|
+| `apitest.TestContainerChildNamed` | repeated calls return one container; names under different parents differ; empty name is `ErrDegenerate` |
+| `apitest.TestContainerNewUniqueChild` | suffixes in order, a taken suffix is skipped, `NewChild` still refuses a duplicate |
+| `apitest.TestContainerVerifyContainers` | root bodies, empty and nested containers, the error text, and a clean layout after `MoveBody` |
+
 
 | Test | What it shows |
 |---|---|

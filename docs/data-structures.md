@@ -29,6 +29,7 @@ configuration option.
 |---|---|---|---|
 | `decad.Document` | struct | The live set of bodies, provenance identities and operation records. | `decad.New` |
 | `decad.Container` | struct | A named, nestable group of sketches, planes and bodies of one document. | `Document.Root`, `Container.NewChild` |
+| `decad.ContainerReport` | struct | `RootBodies` (live bodies directly in the root) and `EmptyContainers` (non-root containers with no body beneath them), with `Passed` and `Err`. | `Document.VerifyContainers` |
 | `decad.Binding` | struct | One parameter read: name, source text, value and direct dependencies. | `Document.Bindings` |
 | `decad.Body` | struct | An immutable solid or sheet. | A feature function |
 | `decad.BodyKind` | enum | `decad.BodySolid` or `decad.BodySheet`. | `Body.Kind` |

@@ -260,3 +260,104 @@ func TestContainerMoveBody(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, report.Passed())
 }
+
+func TestContainerChildNamed(t *testing.T) {
+	t.Parallel()
+	doc := decad.New()
+	root := doc.Root()
+	a, err := root.ChildNamed("Planet Gears")
+	require.NoError(t, err)
+	b, err := root.ChildNamed("Planet Gears")
+	require.NoError(t, err)
+	require.Same(t, a, b)
+	require.Len(t, root.Children(), 1)
+	require.Equal(t, "/Planet Gears", a.Path())
+
+	// A child made by NewChild is found by name, and the same name under another
+	// parent is a different container.
+	sun, err := root.NewChild("Sun")
+	require.NoError(t, err)
+	got, err := root.ChildNamed("Sun")
+	require.NoError(t, err)
+	require.Same(t, sun, got)
+	nested, err := a.ChildNamed("Sun")
+	require.NoError(t, err)
+	require.NotSame(t, sun, nested)
+	require.Equal(t, "/Planet Gears/Sun", nested.Path())
+
+	_, err = root.ChildNamed("")
+	require.ErrorIs(t, err, decad.ErrDegenerate)
+	var nilC *decad.Container
+	_, err = nilC.ChildNamed("x")
+	require.ErrorIs(t, err, decad.ErrDegenerate)
+}
+
+func TestContainerNewUniqueChild(t *testing.T) {
+	t.Parallel()
+	doc := decad.New()
+	root := doc.Root()
+	var names []string
+	for range 3 {
+		c, err := root.NewUniqueChild("Gear")
+		require.NoError(t, err)
+		names = append(names, c.Name())
+	}
+	require.Equal(t, []string{"Gear", "Gear 2", "Gear 3"}, names)
+
+	// NewChild still refuses a duplicate, and a taken suffix is skipped.
+	_, err := root.NewChild("Gear")
+	require.ErrorIs(t, err, decad.ErrDegenerate)
+	_, err = root.NewChild("Pin 2")
+	require.NoError(t, err)
+	_, err = root.NewUniqueChild("Pin")
+	require.NoError(t, err)
+	c, err := root.NewUniqueChild("Pin")
+	require.NoError(t, err)
+	require.Equal(t, "Pin 3", c.Name())
+
+	_, err = root.NewUniqueChild("")
+	require.ErrorIs(t, err, decad.ErrDegenerate)
+}
+
+func TestContainerVerifyContainers(t *testing.T) {
+	t.Parallel()
+	doc := decad.New()
+	root := doc.Root()
+	require.True(t, doc.VerifyContainers().Passed())
+	require.NoError(t, doc.VerifyContainers().Err())
+
+	gears, err := root.NewChild("Gears")
+	require.NoError(t, err)
+	inner, err := gears.NewChild("Inner")
+	require.NoError(t, err)
+	empty, err := root.NewChild("Empty")
+	require.NoError(t, err)
+	emptyKid, err := empty.NewChild("Kid")
+	require.NoError(t, err)
+
+	loose := containerBox(t, doc, nil, 0, 0, 1, 1, 1)
+	held := containerBox(t, doc, inner, 5, 0, 6, 1, 1)
+
+	rep := doc.VerifyContainers()
+	require.False(t, rep.Passed())
+	require.Equal(t, []*decad.Body{loose}, rep.RootBodies)
+	require.Equal(t, []*decad.Container{empty, emptyKid}, rep.EmptyContainers)
+	err = rep.Err()
+	require.ErrorIs(t, err, decad.ErrContainerLayout)
+	require.Contains(t, err.Error(), "live bodies #1 sit in the root container")
+	require.Contains(t, err.Error(), `"/Empty", "/Empty/Kid"`)
+
+	// A container holding bodies only beneath it counts as used.
+	require.NotContains(t, err.Error(), "/Gears")
+
+	require.NoError(t, doc.MoveBody(loose, empty))
+	require.NoError(t, doc.MoveBody(held, emptyKid))
+	rep = doc.VerifyContainers()
+	require.Empty(t, rep.RootBodies)
+	require.Equal(t, []*decad.Container{gears, inner}, rep.EmptyContainers)
+	require.Contains(t, rep.Err().Error(), `"/Gears", "/Gears/Inner"`)
+
+	require.NoError(t, doc.MoveBody(held, inner))
+	rep = doc.VerifyContainers()
+	require.Equal(t, []*decad.Container{emptyKid}, rep.EmptyContainers)
+}
