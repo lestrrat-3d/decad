@@ -32,6 +32,7 @@ Package export writes decad bodies as STL, OBJ, 3MF, and AP214 STEP files.
 - [func PNG](<#PNG>)
 - [func PNGBodies](<#PNGBodies>)
 - [func STEP](<#STEP>)
+- [func STEPItems](<#STEPItems>)
 - [func STL](<#STL>)
 - [func ThreeMF](<#ThreeMF>)
 - [func ThreeMFItems](<#ThreeMFItems>)
@@ -41,12 +42,16 @@ Package export writes decad bodies as STL, OBJ, 3MF, and AP214 STEP files.
 - [type DrawingView](<#DrawingView>)
   - [func IsometricDrawingView](<#IsometricDrawingView>)
 - [type GCodeSpec](<#GCodeSpec>)
+- [type STEPItem](<#STEPItem>)
+- [type STEPItemsFile](<#STEPItemsFile>)
+  - [func NewSTEPItemsFile](<#NewSTEPItemsFile>)
 - [type STEPOption](<#STEPOption>)
   - [func WithSTEPAuthor](<#WithSTEPAuthor>)
   - [func WithSTEPHeader](<#WithSTEPHeader>)
   - [func WithSTEPName](<#WithSTEPName>)
   - [func WithSTEPOrganization](<#WithSTEPOrganization>)
   - [func WithSTEPTimestamp](<#WithSTEPTimestamp>)
+- [type STEPPart](<#STEPPart>)
 - [type ThreeMFItem](<#ThreeMFItem>)
 - [type View](<#View>)
   - [func IsometricView](<#IsometricView>)
@@ -358,6 +363,15 @@ Geometry and references are built before the writer is touched. Invalid
 header data also leaves the writer untouched. An I/O error may leave a
 partial file. ctx, w, and body must not be nil.
 
+<a name="STEPItems"></a>
+### func STEPItems
+
+<pre>func STEPItems(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>, w io.<a href="https://pkg.go.dev/io#Writer">Writer</a>, items []<a href="#STEPItem">STEPItem</a>, tol units.Value, opts ...<a href="#STEPOption">STEPOption</a>) <a href="https://pkg.go.dev/builtin#error">error</a></pre>
+
+STEPItems writes one AP214 assembly file of items, as NewSTEPItemsFile builds it. It takes STEP's header
+options; the default description is "decad assembly". The file is built before w is touched. An I/O error
+may leave a partial file. ctx and w must not be nil.
+
 <a name="STL"></a>
 ### func STL
 
@@ -524,6 +538,53 @@ IsometricDrawingView looks along (-1, -1, -1) with +Z up the sheet, as
 GCodeSpec describes the print GCodePerimeters writes G-code for. LayerHeight, LineWidth and
 FilamentDiameter are positive lengths, and FeedRate a positive velocity.
 
+<a name="STEPItem"></a>
+### type STEPItem
+
+<pre>type STEPItem struct {
+    // Name names the occurrence and, for the first item naming Body, the part&#39;s PRODUCT and solid.
+    // It must be non-empty and unique among the items.
+    Name <a href="https://pkg.go.dev/builtin#string">string</a>
+    // Body is a solid that NewSTEPFile accepts. Several items may name one body; it is written once and
+    // placed once per item.
+    Body *decad.<a href="decad.md#Body">Body</a>
+    // Placement moves Body from its own coordinates into the assembly. r3.Identity() keeps it where it is,
+    // which is the assembled pose of a parts.Part body. A reflection or an invalid transform is refused.
+    Placement r3.Transform
+    // Tolerance is the chord tolerance for this body. The zero Value uses the call&#39;s tolerance and lets a
+    // held faceted mesh that refuses it be written at its own floor; a non-zero Tolerance is used as given
+    // and its refusal is returned.
+    Tolerance units.Value
+    // Color, when not nil, colours every solid of the body. Alpha is ignored.
+    Color *color.<a href="https://pkg.go.dev/image/color#RGBA">RGBA</a>
+}</pre>
+
+STEPItem is one occurrence of a body in a STEP assembly: a body placed by a rigid motion.
+
+<a name="STEPItemsFile"></a>
+### type STEPItemsFile
+
+<pre>type STEPItemsFile struct {
+    File  step.File
+    Parts []<a href="#STEPPart">STEPPart</a> // one per distinct body, in first-item order
+}</pre>
+
+STEPItemsFile is an AP214 assembly file and how each part was written.
+
+<a name="NewSTEPItemsFile"></a>
+#### func NewSTEPItemsFile
+
+<pre>func NewSTEPItemsFile(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>, items []<a href="#STEPItem">STEPItem</a>, tol units.Value, header step.Header) (<a href="#STEPItemsFile">STEPItemsFile</a>, <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
+
+NewSTEPItemsFile builds one AP214 assembly file from items: one product per distinct body, each written as
+NewSTEPFile writes it, and one assembly product holding one placed occurrence per item
+(agent-docs/step-export-design.md §10). A body whose held faceted mesh refuses the call's tolerance is
+written at that mesh's floor, which writes the same facets; [STEPPart](<#STEPPart>) reports it. A non-zero
+[STEPItem](<#STEPItem>).Tolerance is used as given. header.Name names the assembly. An empty item list, a nil body, an
+empty or repeated name, an invalid or reflecting placement, or two items of one body that disagree on
+Tolerance or Color is decad.ErrDegenerate. A part the single-body writer refuses fails the call with an
+error naming the item and wrapping the cause. ctx must not be nil.
+
 <a name="STEPOption"></a>
 ### type STEPOption
 
@@ -570,6 +631,18 @@ WithSTEPOrganization sets the STEP file's organization.
 <pre>func WithSTEPTimestamp(timestamp time.<a href="https://pkg.go.dev/time#Time">Time</a>) <a href="#STEPOption">STEPOption</a></pre>
 
 WithSTEPTimestamp sets the STEP file's timestamp.
+
+<a name="STEPPart"></a>
+### type STEPPart
+
+<pre>type STEPPart struct {
+    Name      <a href="https://pkg.go.dev/builtin#string">string</a>      // product name: the first item naming the body
+    Analytic  <a href="https://pkg.go.dev/builtin#bool">bool</a>        // analytic faces, else one planar face per mesh triangle
+    Tolerance units.Value // chord tolerance the body was tessellated at
+    HeldFloor <a href="https://pkg.go.dev/builtin#bool">bool</a>        // Tolerance was raised to the body&#39;s held mesh floor (decad.MeshBoundError)
+}</pre>
+
+STEPPart reports how one distinct body was written.
 
 <a name="ThreeMFItem"></a>
 ### type ThreeMFItem

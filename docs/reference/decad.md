@@ -697,6 +697,7 @@ package.
   - [func (\*MeshBody) Triangles](<#MeshBody.Triangles>)
   - [func (\*MeshBody) Vertices](<#MeshBody.Vertices>)
   - [func (\*MeshBody) Volume](<#MeshBody.Volume>)
+- [type MeshBoundError](<#MeshBoundError>)
 - [type MeshImportOption](<#MeshImportOption>)
   - [func WithMaxMeshBytes](<#WithMaxMeshBytes>)
   - [func WithMaxMeshTriangles](<#WithMaxMeshTriangles>)
@@ -6864,6 +6865,17 @@ boundary edge, a non-manifold or misoriented edge, or a negative signed
 volume encloses no volume the triangles can state. The reading is the exact
 sum of signed tetrahedra, so it is Exact when that sum is representable and
 otherwise carries only the rounding of its float value.
+
+<a name="MeshBoundError"></a>
+### type MeshBoundError
+
+<pre>type MeshBoundError = decaderr.MeshBoundError</pre>
+
+MeshBoundError is Tessellate's refusal of a chord tolerance finer than the
+minimum mesh bound a faceted body holds. Every tolerance at or above Floor
+restates the same held facets, so a caller may retry at exactly Floor.
+errors.As(err, \&target) with target a \*MeshBoundError reads it, and
+errors.Is(err, [ErrUnsupported](<#ErrUnsupported>)) keeps holding.
 
 <a name="MeshImportOption"></a>
 ### type MeshImportOption
