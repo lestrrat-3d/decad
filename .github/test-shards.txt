@@ -310,3 +310,4 @@
 12	0.05	TestSweepPairBoundedFacetedFloorStrictClearReplay
 12	0.03	TestSweepPairPlacedFacetedFloorImpactAndDeparture
 12	2.20	TestTwistLocalAreaRealArcCell
+12	2.00	TestExactShiftProducerGate

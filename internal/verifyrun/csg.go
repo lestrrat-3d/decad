@@ -254,17 +254,21 @@ func (w historyWalk) leafApartOtherwise(a, b *topo.Body) (bool, error) {
 // disjoint: two prisms with one exact linear lift whose levels or sections,
 // read in one prism's coordinates, share no interior.
 //
-// Bodies under different shifts are decided only by the prism lift, which
-// adds each shift to its prism's exact translation; the other leaf rules read
-// unshifted records and answer only under equal shifts.
+// Bodies under different shifts are decided by the prism lift, which adds
+// each shift to its prism's exact translation, and by the end-cap and slab
+// separators, which add the relative shift to the other body's reach
+// (planesApart); the other leaf rules read unshifted records and answer only
+// under equal shifts.
 func (w historyWalk) leafApart(wa, wb walkBody) (bool, error) {
 	a, b := wa.n, wb.n
 	same := wa.s.equal(wb.s)
 	otherwise := func() (bool, error) {
-		if !same {
-			return false, nil
+		if same {
+			return w.leafApartOtherwise(a, b)
 		}
-		return w.leafApartOtherwise(a, b)
+		// Only the plane separators read b moved relative to a; the meridian
+		// and axial-section rules read unshifted records.
+		return planesApart(a, b, subVec(wb.s.vec(), wa.s.vec())), nil
 	}
 	pa, okA := a.Payload.(prismrecord.Payload)
 	pb, okB := b.Payload.(prismrecord.Payload)

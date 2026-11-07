@@ -3035,3 +3035,4 @@
 12	5.00	TestCopyLiftTranslationFaceted
 12	0.01	TestCopyLiftTranslationPrism
 12	20.00	TestVerifyHistoryCopyLiftTranslation
+12	10.00	TestVerifyHistoryCopyEndCap

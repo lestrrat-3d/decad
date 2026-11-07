@@ -4,7 +4,13 @@ import (
 	"math/big"
 	"testing"
 
+	"math"
+
 	"github.com/lestrrat-3d/decad/internal/measurement"
+	"github.com/lestrrat-3d/decad/internal/momentinput"
+	"github.com/lestrrat-3d/decad/internal/prismrecord"
+	"github.com/lestrrat-3d/decad/internal/sectionrecord"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
@@ -55,5 +61,80 @@ func TestBoxesDisjointShifted(t *testing.T) {
 			// Equal shifts move both boxes alike, so they agree with the raw test.
 			require.Equal(t, measurement.BoxesDisjoint(unit, tc.b), boxesDisjointShifted(unit, tc.sa, tc.b, tc.sb))
 		})
+	}
+}
+
+// rectPrism is a prism of the rectangle [0, w]×[0, h] on frame f, levels 0
+// to depth, placed by xf.
+func rectPrism(t *testing.T, f r3.Frame, xf r3.Transform, w, h, depth float64) *topo.Body {
+	t.Helper()
+	pts := []sectionrecord.Point2{{U: 0, V: 0}, {U: w, V: 0}, {U: w, V: h}, {U: 0, V: h}}
+	var segs []sectionrecord.CurveSegment
+	for i := range pts {
+		segs = append(segs, sectionrecord.LineSeg{Start: pts[i], End: pts[(i+1)%len(pts)], TStart: 0, TEnd: 1})
+	}
+	return &topo.Body{Payload: prismrecord.Payload{
+		Profile: momentinput.Profile{Outer: sectionrecord.LoopRecord{Segments: segs}},
+		Frame:   f, Z0: 0, Z1: depth, Xform: xf,
+	}}
+}
+
+// dyadic rounds x to a multiple of 1/1024, so sums of such values stay exact.
+func dyadic(x float64) float64 { return math.Round(x*1024) / 1024 }
+
+// TestPlanesApartShiftMatchesMovedBody holds the shifted end-cap and slab
+// separators to the unshifted ones on a body really moved: a block on an
+// inexact lift and a small box whose frame origin moves by d, every sum a
+// multiple of 1/1024 and so exact. Reading the box under shift d must give the
+// same answer as moving it by d, for each rule, both argument orders, across a
+// sweep of d that crosses the block's top plane.
+//
+// Leg shown to fail: adding the shift with the wrong sign, or reading the
+// first body as the moved one, disagrees with the moved box in the sweep.
+func TestPlanesApartShiftMatchesMovedBody(t *testing.T) {
+	t.Parallel()
+	lift, err := r3.RotationAround(r3.Vec{X: 3, Y: -2, Z: 1}, r3.Vec{X: 1, Y: 2, Z: 3}, units.Radians(0.4))
+	require.NoError(t, err)
+	xy, err := r3.NewFrame(r3.Vec{}, r3.Vec{X: 1}, r3.Vec{Y: 1})
+	require.NoError(t, err)
+	block := rectPrism(t, xy, lift, 4, 2, 1)
+	box := func(o r3.Vec) *topo.Body {
+		f, err := r3.NewFrame(o, r3.Vec{X: 1}, r3.Vec{Y: 1})
+		require.NoError(t, err)
+		return rectPrism(t, f, r3.Identity(), 0.25, 0.25, 0.25)
+	}
+	rules := []struct {
+		name    string
+		shifted func(a, b *topo.Body, d [3]*big.Rat) bool
+		moved   func(a, b *topo.Body) bool
+	}{
+		{"slab", sideApartBy, sideApart},
+		{"end cap", capApartBy, capApart},
+		{"both", planesApart, func(a, b *topo.Body) bool { return planesApart(a, b, zeroVec()) }},
+	}
+	// The box sits 0.1 above the block's top and 0.1 below its bottom, read
+	// along the lift's local z, so both planes of each pair decide somewhere.
+	for _, local := range []r3.Vec{{X: 2, Y: 1, Z: 1.1}, {X: 2, Y: 1, Z: -0.35}} {
+		for _, dir := range []r3.Vec{{Z: 1}, {X: 1, Y: -1, Z: 1}} {
+			at := lift.Apply(local)
+			origin := r3.Vec{X: dyadic(at.X), Y: dyadic(at.Y), Z: dyadic(at.Z)}
+			seen := map[bool]struct{}{}
+			for k := -32; k <= 32; k++ {
+				step := float64(k) / 128
+				d := r3.Vec{X: dir.X * step, Y: dir.Y * step, Z: dir.Z * step}
+				dv := ratVec(d)
+				back := scaleVec(dv, big.NewRat(-1, 1))
+				still, moved := box(origin), box(origin.Add(d))
+				for _, rule := range rules {
+					want := rule.moved(block, moved)
+					require.Equal(t, want, rule.shifted(block, still, dv), "%s, block first, d = %v", rule.name, d)
+					require.Equal(t, rule.moved(moved, block), rule.shifted(still, block, back), "%s, box first, d = %v", rule.name, d)
+					if rule.name == "both" {
+						seen[want] = struct{}{}
+					}
+				}
+			}
+			require.Len(t, seen, 2, "the sweep from %v along %v crosses a plane of the block", local, dir)
+		}
 	}
 }
