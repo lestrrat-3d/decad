@@ -102,12 +102,14 @@ A `decad.Document` is not safe for concurrent mutation. Bodies are immutable and
 | `decad.New` | Creates an empty `decad.Document`. |
 | `Document.Bodies` | Lists the live bodies. |
 | `Document.OperationHistory` | Returns an immutable snapshot of recorded successful modeling calls. |
-| `Document.Root`, `Container.NewChild` | Read the document's root container and add named children to a container. A container groups sketches, planes and bodies and changes no geometry. |
-| `Container.Name`, `Container.Parent`, `Container.Children` | Read a container's name, parent (nil for the root) and children in creation order. |
+| `Document.Root`, `Container.NewChild` | Read the document's root container and add named children to a container. A container groups sketches, planes and bodies and changes no geometry. `NewChild` refuses a name a sibling has. |
+| `Container.ChildNamed`, `Container.NewUniqueChild` | `ChildNamed` returns the child with that name, adding it when missing. `NewUniqueChild` adds a child and, when a sibling has the name, appends " 2", " 3", ... |
+| `Container.Name`, `Container.Parent`, `Container.Children`, `Container.Path` | Read a container's name, parent (nil for the root), children in creation order and its "/"-joined path. |
 | `Container.AddSketch`, `Container.AddPlane` | Place a sketch or plane in a container. Unplaced ones belong to the root. |
 | `Container.Sketches`, `Container.Planes`, `Container.Bodies` | List a container's members in creation order. |
 | `Document.ContainerOf`, `Document.ContainerOfSketch` | Read the container of a body or a sketch. |
 | `Document.MoveBody` | Puts a live body in another container and changes nothing else. |
+| `Document.VerifyContainers`, `decad.ContainerReport`, `decad.ErrContainerLayout` | Report live bodies left directly in the root and non-root containers holding no bodies beneath them. `Passed` and `Err` summarise the report. |
 | `decad.Remove` | Retires a body from its document. |
 | `decad.Body` | An immutable solid or sheet. |
 | `decad.BodyKind` | `decad.BodySolid` or `decad.BodySheet`. `Body.Kind` and `Body.IsSolid` read it. |
@@ -587,6 +589,7 @@ Branch on a sentinel with `errors.Is`.
 | `decad.ErrNotSolid` | A solid-only reading was asked of a sheet. |
 | `decad.ErrForeignBody` | A body belongs to another document. |
 | `decad.ErrCrossContainer` | One operation read bodies or sketches from different containers. |
+| `decad.ErrContainerLayout` | `ContainerReport.Err` found a body in the root or an empty container. |
 | `decad.ErrRetiredBody` | A body was already consumed by a feature. |
 | `decad.ErrMalformedMesh`, `decad.ErrMeshTooLarge` | An STL or OBJ file was malformed, or held more than the import limits allow. |
 | `decad.ErrForeignProfile`, `decad.ErrStaleProfile`, `decad.ErrInvalidProfile`, `decad.ErrUnrecordableProfile` | A sketch profile was rejected. |

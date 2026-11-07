@@ -11,7 +11,7 @@ The rules for rows live in `agent-docs/layout.md`.
 |---|---|
 | `topology.go` | Topology types from `Body` to `Vertex` and public surface and curve variants. See API §6.1 and evaluator §3. |
 | `topology_handles.go` | Born-handle constructors, node-to-handle mapping, `handleAlloc` (with `ReplayNodeSize`) and `envOf` for internal builders, `bodyResult`, and `placePayload`. See evaluator §3, §8. |
-| `container.go` | `Container`, the document's grouping of sketches, planes and bodies; placement of results and `ErrCrossContainer`. See `agent-docs/container-design.md`. |
+| `container.go` | `Container`, the document's grouping of sketches, planes and bodies; placement of results, `ErrCrossContainer`, `ChildNamed`, `NewUniqueChild` and `VerifyContainers`. See `agent-docs/container-design.md`. |
 | `document.go` | `Document`: live body set, atomic operation publication, `Remove`, liveness gates, `Transform` and `Copy`; the producer identity spelling and zero-vector predicate. See evaluator §8 and operation history. |
 | `circle_affine_replay.go` | Exact affine differences for replay of placed circle sources. |
 | `circle_placement_replay.go` | Ordered placement witness and rounding checks for circle sources. |

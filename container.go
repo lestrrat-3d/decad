@@ -15,13 +15,18 @@ import (
 // one way across.
 var ErrCrossContainer = fmt.Errorf("decad: operands sit in different containers")
 
+// ErrContainerLayout is the error ContainerReport.Err returns when a body sits
+// directly in the root or a non-root container holds no bodies
+// (agent-docs/container-design.md §6).
+var ErrContainerLayout = fmt.Errorf("decad: container layout is not clean")
+
 // Container is a named group inside one Document. It holds sketches, planes and
 // bodies and nests inside other containers. It is bookkeeping only: it has no
 // transform, instances nothing and changes no geometry (agent-docs/container-design.md).
 //
 // A Container belongs to one document for life. Its readers are safe to call
-// concurrently with Bodies, Remove and Verify; NewChild, AddSketch, AddPlane and
-// MoveBody mutate the document and are not safe to run concurrently with another
+// concurrently with Bodies, Remove and Verify; NewChild, ChildNamed, NewUniqueChild,
+// AddSketch, AddPlane and MoveBody mutate the document and are not safe to run concurrently with another
 // mutation.
 type Container struct {
 	doc      *Document
@@ -71,15 +76,69 @@ func (c *Container) NewChild(name string) (*Container, error) {
 	d := c.doc
 	d.n.LiveMu.Lock()
 	defer d.n.LiveMu.Unlock()
-	for _, child := range c.children {
-		if child.name == name {
-			return nil, fmt.Errorf(`%w: container %q already has a child named %q`, ErrDegenerate, c.pathLocked(), name)
-		}
+	if c.childLocked(name) != nil {
+		return nil, fmt.Errorf(`%w: container %q already has a child named %q`, ErrDegenerate, c.pathLocked(), name)
 	}
 	child := &Container{doc: d, name: name, parent: c}
 	c.children = append(c.children, child)
 	return child, nil
 }
+
+// ChildNamed returns the child of c named name, adding it when c has none. Calls
+// with one name on one container return the same container. The name is checked as
+// NewChild checks it (ErrDegenerate).
+func (c *Container) ChildNamed(name string) (*Container, error) {
+	if c == nil {
+		return nil, fmt.Errorf(`%w: a nil container holds no child`, ErrDegenerate)
+	}
+	if name == "" {
+		return nil, fmt.Errorf(`%w: a container needs a non-empty name`, ErrDegenerate)
+	}
+	d := c.doc
+	d.n.LiveMu.Lock()
+	defer d.n.LiveMu.Unlock()
+	if child := c.childLocked(name); child != nil {
+		return child, nil
+	}
+	child := &Container{doc: d, name: name, parent: c}
+	c.children = append(c.children, child)
+	return child, nil
+}
+
+// NewUniqueChild adds a container under c named name, or, when a child already has
+// that name, name followed by " 2", " 3" and so on: the first free one. The name is
+// checked as NewChild checks it (ErrDegenerate).
+func (c *Container) NewUniqueChild(name string) (*Container, error) {
+	if c == nil {
+		return nil, fmt.Errorf(`%w: a nil container holds no child`, ErrDegenerate)
+	}
+	if name == "" {
+		return nil, fmt.Errorf(`%w: a container needs a non-empty name`, ErrDegenerate)
+	}
+	d := c.doc
+	d.n.LiveMu.Lock()
+	defer d.n.LiveMu.Unlock()
+	unique := name
+	for n := 2; c.childLocked(unique) != nil; n++ {
+		unique = fmt.Sprintf("%s %d", name, n)
+	}
+	child := &Container{doc: d, name: unique, parent: c}
+	c.children = append(c.children, child)
+	return child, nil
+}
+
+// childLocked returns the child of c named name, or nil. The caller holds LiveMu.
+func (c *Container) childLocked(name string) *Container {
+	for _, child := range c.children {
+		if child.name == name {
+			return child
+		}
+	}
+	return nil
+}
+
+// Path spells c as its names from the root, joined by "/"; the root is "/".
+func (c *Container) Path() string { return c.pathLocked() }
 
 // Name returns the container's name; the root's is "".
 func (c *Container) Name() string { return c.name }
@@ -333,4 +392,83 @@ func (d *Document) requireSameContainer(bodies []*Body, sketches ...*sketch.Sket
 		}
 	}
 	return nil
+}
+
+// ContainerReport is what VerifyContainers found. Both lists are in a fixed order:
+// RootBodies in creation order and EmptyContainers in depth-first order of the tree,
+// children in creation order.
+type ContainerReport struct {
+	// RootBodies are the live bodies placed directly in the root container.
+	RootBodies []*Body
+	// EmptyContainers are the non-root containers with no live body in them or in
+	// any container beneath them.
+	EmptyContainers []*Container
+
+	// rootIndex numbers each RootBodies member by its place in the live set, from 1.
+	rootIndex []int
+}
+
+// Passed reports whether the layout is clean: no body in the root and no empty
+// container.
+func (r *ContainerReport) Passed() bool {
+	return len(r.RootBodies) == 0 && len(r.EmptyContainers) == 0
+}
+
+// Err returns nil when Passed, and otherwise an error wrapping ErrContainerLayout.
+// It names each root body by its 1-based place among the live bodies and each empty
+// container by its path.
+func (r *ContainerReport) Err() error {
+	if r.Passed() {
+		return nil
+	}
+	var parts []string
+	if len(r.rootIndex) > 0 {
+		places := make([]string, len(r.rootIndex))
+		for i, n := range r.rootIndex {
+			places[i] = fmt.Sprintf("#%d", n)
+		}
+		parts = append(parts, fmt.Sprintf("live bodies %s sit in the root container", strings.Join(places, ", ")))
+	}
+	if len(r.EmptyContainers) > 0 {
+		paths := make([]string, len(r.EmptyContainers))
+		for i, c := range r.EmptyContainers {
+			paths[i] = fmt.Sprintf("%q", c.Path())
+		}
+		parts = append(parts, fmt.Sprintf("containers %s hold no bodies", strings.Join(paths, ", ")))
+	}
+	return fmt.Errorf("%w: %s", ErrContainerLayout, strings.Join(parts, "; "))
+}
+
+// VerifyContainers checks the document's container layout without touching
+// geometry: every live body should sit in a named container, and every non-root
+// container should hold a body, directly or in a container beneath it. A document
+// that never uses a container reports every body as a root body.
+func (d *Document) VerifyContainers() *ContainerReport {
+	d.n.LiveMu.Lock()
+	defer d.n.LiveMu.Unlock()
+	root := d.rootLocked()
+	rep := &ContainerReport{}
+	held := map[*Container]struct{}{}
+	for i, b := range d.n.LiveSet {
+		c := d.bodyContainerLocked(b)
+		if c == root {
+			rep.RootBodies = append(rep.RootBodies, bodyHandle(b))
+			rep.rootIndex = append(rep.rootIndex, i+1)
+			continue
+		}
+		for at := c; at != nil; at = at.parent {
+			held[at] = struct{}{}
+		}
+	}
+	var walk func(c *Container)
+	walk = func(c *Container) {
+		for _, child := range c.children {
+			if _, ok := held[child]; !ok {
+				rep.EmptyContainers = append(rep.EmptyContainers, child)
+			}
+			walk(child)
+		}
+	}
+	walk(root)
+	return rep
 }
