@@ -8,11 +8,15 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"math/big"
+
 	"github.com/lestrrat-3d/decad/internal/booleandispatch"
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/opdiagnostic"
 	"github.com/lestrrat-3d/decad/internal/topo"
+	"github.com/lestrrat-3d/r3"
+	"github.com/lestrrat-3d/units"
 )
 
 func TestRegroupSurfacesInvariantBreaks(t *testing.T) {
@@ -256,4 +260,76 @@ func TestRegroupSurfacesInvariantBreaks(t *testing.T) {
 		_, ok = pairedCutSources(t.Context(), d, cut, nextTool)
 		require.False(t, ok)
 	})
+}
+
+// TestExactShiftProducerGate calls the history's exact-shift reading
+// directly, so a refusal is the gate's own and not a later geometry rule's.
+// Only a direct WithCopyLiftTranslation copy of a faceted body reads, as its
+// source and lift·(to − from) exactly; a placement, rotation or plain copy, a
+// copy of a copy, a Transform of a copy, and a copy of a prism do not.
+//
+// Leg shown to fail: dropping the IsTranslation check reads the rotation copy,
+// and dropping both the Direct and the source checks reads the copy of a copy.
+func TestExactShiftProducerGate(t *testing.T) {
+	t.Parallel()
+	doc := New()
+	turn, err := r3.Rotation(r3.Vec{X: 1}, units.Degrees(30))
+	require.NoError(t, err)
+	disc, err := Transform(t.Context(), internalDiscBody(t, doc, 1, 6), turn)
+	require.NoError(t, err)
+	source, err := Union(t.Context(), internalBoxBody(t, doc, 0, -2, 4, 2, 2), disc)
+	require.NoError(t, err)
+	_, faceted := source.n.Payload.(facetedPayload)
+	require.True(t, faceted, "the source must be faceted for an exact copy record")
+	prism := internalBoxBody(t, doc, 10, 0, 12, 2, 2)
+
+	lift, err := r3.RotationAround(r3.Vec{X: 3, Y: -2, Z: 1}, r3.Vec{X: 1, Y: 2, Z: 3}, units.Radians(0.4))
+	require.NoError(t, err)
+	from, to := r3.Vec{X: 1}, r3.Vec{X: 21.5, Y: -3, Z: 2}
+	exact := WithCopyLiftTranslation(lift, from, to)
+	copyOf := func(b *Body, opts ...CopyOption) *Body {
+		c, err := Copy(t.Context(), b, opts...)
+		require.NoError(t, err)
+		return c
+	}
+	direct := copyOf(source, exact)
+	moved, err := r3.Translation(r3.Vec{X: 5})
+	require.NoError(t, err)
+	h := historyProducers{documentHandle(source.n.Doc)}
+
+	src, shift, ok := h.ExactShiftProducer(&direct.n)
+	require.True(t, ok, "a direct exact lift copy reads")
+	require.Same(t, &source.n, src)
+	b := lift.Basis()
+	cols := [3]r3.Vec{b.EX, b.EY, b.EZ}
+	delta := [3]*big.Rat{
+		new(big.Rat).Sub(new(big.Rat).SetFloat64(to.X), new(big.Rat).SetFloat64(from.X)),
+		new(big.Rat).Sub(new(big.Rat).SetFloat64(to.Y), new(big.Rat).SetFloat64(from.Y)),
+		new(big.Rat).Sub(new(big.Rat).SetFloat64(to.Z), new(big.Rat).SetFloat64(from.Z)),
+	}
+	for i := range 3 {
+		want := new(big.Rat)
+		for j, col := range cols {
+			c := [3]float64{col.X, col.Y, col.Z}
+			want.Add(want, new(big.Rat).Mul(new(big.Rat).SetFloat64(c[i]), delta[j]))
+		}
+		require.Zero(t, want.Cmp(shift[i]), "component %d is lift·(to − from) exactly", i)
+	}
+
+	transformed, err := Transform(t.Context(), copyOf(source, exact), moved)
+	require.NoError(t, err)
+	for _, tc := range []struct {
+		name string
+		body *Body
+	}{
+		{"plain copy", copyOf(source)},
+		{"placement copy", copyOf(source, WithCopyPlacement(moved))},
+		{"rotation copy", copyOf(source, WithCopyRotation(r3.Vec{}, r3.Vec{Z: 1}, units.Degrees(90)))},
+		{"copy of a copy", copyOf(direct, WithCopyLiftTranslation(lift, to, from))},
+		{"Transform of a copy", transformed},
+		{"lift copy of a prism", copyOf(prism, exact)},
+	} {
+		_, _, ok := h.ExactShiftProducer(&tc.body.n)
+		require.False(t, ok, tc.name)
+	}
 }

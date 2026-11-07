@@ -106,7 +106,19 @@ func TestVerifyHistoryCopyLiftTranslation(t *testing.T) {
 		{"exact lift move into the second bore", 20, func(t *testing.T, sc scene) *decad.Body {
 			return copyOf(t, sc.master, decad.WithCopyLiftTranslation(sc.lift, first, second))
 		}, true, true},
-		{"float placement of the same move", 20, func(t *testing.T, sc scene) *decad.Body {
+		{"exact move along the top, ring 0.2 above it", 11, func(t *testing.T, sc scene) *decad.Body {
+			return copyOf(t, sc.master, decad.WithCopyLiftTranslation(sc.lift, first, second))
+		}, true, true},
+		{"exact move lifted 0.3 off the top", 11, func(t *testing.T, sc scene) *decad.Body {
+			return copyOf(t, sc.master, decad.WithCopyLiftTranslation(sc.lift, first, r3.Vec{X: 20, Z: 0.3}))
+		}, true, true},
+		{"exact move lowered 0.21, ring 0.01 into the top", 11, func(t *testing.T, sc scene) *decad.Body {
+			return copyOf(t, sc.master, decad.WithCopyLiftTranslation(sc.lift, first, r3.Vec{X: 20, Z: -0.21}))
+		}, false, true},
+		{"exact move lowered 1, ring across the top plane", 11, func(t *testing.T, sc scene) *decad.Body {
+			return copyOf(t, sc.master, decad.WithCopyLiftTranslation(sc.lift, first, r3.Vec{X: 20, Z: -1}))
+		}, false, true},
+		{"float placement of the same move", 11, func(t *testing.T, sc scene) *decad.Body {
 			move, err := r3.Translation(sc.lift.Basis().EX.Scale(10))
 			require.NoError(t, err)
 			return copyOf(t, sc.master, decad.WithCopyPlacement(move))
@@ -114,17 +126,17 @@ func TestVerifyHistoryCopyLiftTranslation(t *testing.T) {
 		{"exact move 0.01 off the bore", 20, func(t *testing.T, sc scene) *decad.Body {
 			return copyOf(t, sc.master, decad.WithCopyLiftTranslation(sc.lift, first, r3.Vec{X: 20.01}))
 		}, false, true},
-		{"exact move under another lift", 20, func(t *testing.T, sc scene) *decad.Body {
+		{"exact move under another lift", 11, func(t *testing.T, sc scene) *decad.Body {
 			return copyOf(t, sc.master, decad.WithCopyLiftTranslation(liftAbout(t, 0.15+1e-9), first, second))
 		}, false, true},
 		{"exact move that sinks the ring into the block", 9.5, func(t *testing.T, sc scene) *decad.Body {
 			return copyOf(t, sc.master, decad.WithCopyLiftTranslation(sc.lift, first, second))
 		}, false, false},
-		{"copy of a copy", 20, func(t *testing.T, sc scene) *decad.Body {
+		{"copy of a copy", 11, func(t *testing.T, sc scene) *decad.Body {
 			away := copyOf(t, sc.master, decad.WithCopyLiftTranslation(sc.lift, first, r3.Vec{X: 20, Y: 40}))
 			return copyOf(t, away, decad.WithCopyLiftTranslation(sc.lift, r3.Vec{X: 20, Y: 40}, second))
 		}, false, true},
-		{"exact move of a refined master", 20, func(t *testing.T, sc scene) *decad.Body {
+		{"exact move of a refined master", 11, func(t *testing.T, sc scene) *decad.Body {
 			refined, err := decad.Refine(t.Context(), sc.master, units.Millimeters(0.05))
 			require.NoError(t, err)
 			return copyOf(t, refined, decad.WithCopyLiftTranslation(sc.lift, first, second))
@@ -150,6 +162,55 @@ func TestVerifyHistoryCopyLiftTranslation(t *testing.T) {
 				return
 			}
 			require.Positive(t, masterInterferences+masterDiagnostics)
+		})
+	}
+}
+
+// TestVerifyHistoryCopyEndCap moves a set screw along a revolved spindle by
+// exact copies. The master is the Union of a Ø2 screw whose seat lies in the
+// plane x = 4, tangent to the spindle at y = 20, and a ring far from the
+// spindle. The end-cap separator decides the master: within the screw's slab
+// across the spindle's axis, the spindle reaches no further than x = 4. An
+// exact copy is read as the master moved by its vector, so the screw's cap
+// plane and its slab move with it: a copy at y = 30 or 0.01 mm off the
+// spindle is decided, and a copy over the collar or 0.01 mm into the spindle
+// is not.
+//
+// Leg shown to fail: reading the slab at the master's place reports the copy
+// over the collar separated, and flipping the shift along the cap normal
+// reports the copy 0.01 mm into the spindle separated.
+func TestVerifyHistoryCopyEndCap(t *testing.T) {
+	t.Parallel()
+	from := r3.Vec{Y: 20}
+	for _, tc := range []struct {
+		name      string
+		to        r3.Vec
+		separated bool
+	}{
+		{"exact move along the spindle", r3.Vec{Y: 30}, true},
+		{"exact move 0.01 into the spindle", r3.Vec{X: -0.01, Y: 30}, false},
+		{"exact move over the collar", r3.Vec{Y: 11}, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			doc := decad.New()
+			spindle := collarSpindle(t, doc)
+			master, err := decad.Union(t.Context(), xScrew(t, doc, 4, from.Y, 0), hookRing(t, doc, 20))
+			require.NoError(t, err)
+			copied, err := decad.Copy(t.Context(), master, decad.WithCopyLiftTranslation(r3.Identity(), from, tc.to))
+			require.NoError(t, err)
+			report, err := doc.Verify(t.Context())
+			require.NoError(t, err)
+			masterInterferences, masterDiagnostics := pairFindings(report, spindle, master)
+			require.Zero(t, masterInterferences)
+			require.Zero(t, masterDiagnostics, "the screw's cap plane decides the master")
+			interferences, diagnostics := pairFindings(report, spindle, copied)
+			if tc.separated {
+				require.Zero(t, interferences)
+				require.Zero(t, diagnostics, "the copy is the master moved along the spindle")
+				return
+			}
+			require.Positive(t, interferences+diagnostics, "the copy must be reported or left undecided")
 		})
 	}
 }
