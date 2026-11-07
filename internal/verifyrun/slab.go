@@ -20,11 +20,15 @@ import (
 // body's reach along g_k, or along −g_k, stays on the far side of one of those
 // planes, the plane separates the interiors. This is the world box test of the
 // history walk read in the prism's own coordinates, so a part turned off the
-// world axes is still decided by the box its own frame gives it.
+// world axes is still decided by the box its own frame gives it. Read under a
+// relative exact shift d, the other body's reach gains g·d.
 
 // sideApart reports whether one of a's six frame planes holds b wholly on
 // the side away from a.
-func sideApart(a, b *topo.Body) bool {
+func sideApart(a, b *topo.Body) bool { return sideApartBy(a, b, zeroVec()) }
+
+// sideApartBy is sideApart with b read as moved by the exact world vector d.
+func sideApartBy(a, b *topo.Body, d [3]*big.Rat) bool {
 	pa, ok := a.Payload.(prismrecord.Payload)
 	if !ok || pa.SurfaceResult || pa.Z0Delta != 0 || pa.Z1Delta != 0 || pa.SectionDelta != 0 {
 		return false
@@ -49,11 +53,12 @@ func sideApart(a, b *topo.Body) bool {
 			return false
 		}
 		base := dotVec(g, t)
-		if up, ok := reachUpper(b, g); ok && up.Cmp(new(big.Rat).Add(base, lo[k])) <= 0 {
+		neg := scaleVec(g, big.NewRat(-1, 1))
+		if up, ok := reachUpper(b, g); ok && up.Add(up, dotVec(g, d)).Cmp(new(big.Rat).Add(base, lo[k])) <= 0 {
 			return true
 		}
-		if down, ok := reachUpper(b, scaleVec(g, big.NewRat(-1, 1))); ok &&
-			down.Cmp(new(big.Rat).Neg(new(big.Rat).Add(base, hi[k]))) <= 0 {
+		if down, ok := reachUpper(b, neg); ok &&
+			down.Add(down, dotVec(neg, d)).Cmp(new(big.Rat).Neg(new(big.Rat).Add(base, hi[k]))) <= 0 {
 			return true
 		}
 	}
@@ -111,7 +116,7 @@ func reachUpper(body *topo.Body, m [3]*big.Rat) (*big.Rat, bool) {
 		if r.disc != nil {
 			return discReachUpper(r, m)
 		}
-		return revolveSupport(r, m, nil).upper()
+		return revolveSupport(r, m, nil, zeroVec()).upper()
 	}
 	s, ok := supportOf(body, m, nil)
 	if !ok {

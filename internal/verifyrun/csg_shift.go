@@ -17,8 +17,9 @@ import (
 // lift translation denotes its source's true solid moved by an exact rational
 // vector. The walk reads such a copy as its source plus that shift and carries
 // the shift down the source's Boolean history. Only the rules that add the
-// shift exactly may read two bodies with different shifts: the box test and the
-// prism lift. Translating both bodies by one vector keeps every relation, so
+// shift exactly may read two bodies with different shifts: the box test, the
+// prism lift, and the end-cap and slab separators, which read the other body
+// moved by the relative shift (planesApart). Translating both bodies by one vector keeps every relation, so
 // every other rule reads the raw nodes only when both shifts are equal.
 
 // exactShiftSource is a history that also names a direct exact-translation
@@ -162,4 +163,14 @@ func prismWithinShifted(ctx context.Context, budget *proofbound.WorkBudget,
 		return false, nil
 	}
 	return prismcells.SectionWithin(ctx, budget, []momentinput.Profile{moved}, []momentinput.Profile{outer.Profile})
+}
+
+// zeroVec is the zero world vector, the shift of a body that is not moved.
+func zeroVec() [3]*big.Rat { return [3]*big.Rat{new(big.Rat), new(big.Rat), new(big.Rat)} }
+
+// planesApart is the end-cap and slab separators for a and b, with b read as
+// moved by the exact world vector d relative to a.
+func planesApart(a, b *topo.Body, d [3]*big.Rat) bool {
+	back := scaleVec(d, big.NewRat(-1, 1))
+	return capApartBy(a, b, d) || capApartBy(b, a, back) || sideApartBy(a, b, d) || sideApartBy(b, a, back)
 }

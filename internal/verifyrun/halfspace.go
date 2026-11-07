@@ -12,7 +12,8 @@ import (
 )
 
 // This file is the end-cap separator (agent-docs/interference-design.md §3.2,
-// "The end-cap separator"). A prism with exact levels lies between the planes
+// "The end-cap separator"). Read under a relative exact shift d, the other
+// body's reach gains m·d and the end-cap slab moves with the prism. A prism with exact levels lies between the planes
 // of its two end caps. When another body lies wholly on the far side of one of
 // those planes, the plane separates the interiors: a set screw seated on a
 // shaft's surface is decided by the plane of its seat. The far side is proven
@@ -89,7 +90,10 @@ func sqrtUpper(q *big.Rat) (*big.Rat, bool) {
 
 // capApart reports whether the plane of one of a's end caps holds b, within
 // the slab a occupies across b's axis, wholly on the side away from a.
-func capApart(a, b *topo.Body) bool {
+func capApart(a, b *topo.Body) bool { return capApartBy(a, b, zeroVec()) }
+
+// capApartBy is capApart with b read as moved by the exact world vector d.
+func capApartBy(a, b *topo.Body, d [3]*big.Rat) bool {
 	pa, ok := a.Payload.(prismrecord.Payload)
 	if !ok || pa.SurfaceResult || pa.Z0Delta != 0 || pa.Z1Delta != 0 {
 		return false
@@ -106,11 +110,12 @@ func capApart(a, b *topo.Body) bool {
 	// a's points t + L·(x, y, z) reach m·t + z·(m·L₃) along m, and m·L₃ > 0,
 	// so a lies where m·x ≥ m·p(lo) and where m·x ≤ m·p(hi).
 	at := func(z *big.Rat) *big.Rat { return dotVec(m, addVec(t, scaleVec(l[2], z))) }
-	if s, ok := supportOf(b, m, &pa); ok && s.within(at(lo)) {
+	back := scaleVec(d, big.NewRat(-1, 1))
+	if s, ok := supportNear(b, m, &pa, back); ok && s.moved(dotVec(m, d)).within(at(lo)) {
 		return true
 	}
 	neg := scaleVec(m, big.NewRat(-1, 1))
-	if s, ok := supportOf(b, neg, &pa); ok && s.within(new(big.Rat).Neg(at(hi))) {
+	if s, ok := supportNear(b, neg, &pa, back); ok && s.moved(dotVec(neg, d)).within(new(big.Rat).Neg(at(hi))) {
 		return true
 	}
 	return false
@@ -121,6 +126,12 @@ func capApart(a, b *topo.Body) bool {
 // meridian separator reads. Given near, a Revolve's reach is that of its part
 // in near's slab across its axis; nil reads the whole body.
 func supportOf(body *topo.Body, m [3]*big.Rat, near *prismrecord.Payload) (support, bool) {
+	return supportNear(body, m, near, zeroVec())
+}
+
+// supportNear is supportOf with near read as moved by the exact world vector
+// at relative to body.
+func supportNear(body *topo.Body, m [3]*big.Rat, near *prismrecord.Payload, at [3]*big.Rat) (support, bool) {
 	switch p := body.Payload.(type) {
 	case prismrecord.Payload:
 		return prismSupport(p, m)
@@ -129,9 +140,18 @@ func supportOf(body *topo.Body, m [3]*big.Rat, near *prismrecord.Payload) (suppo
 		if !ok || r.disc != nil {
 			return support{}, false
 		}
-		return revolveSupport(r, m, near), true
+		return revolveSupport(r, m, near, at), true
 	}
 	return support{}, false
+}
+
+// moved is s for the body moved by c along the direction s measures.
+func (s support) moved(c *big.Rat) support {
+	out := support{q: s.q, terms: make([]supportTerm, len(s.terms))}
+	for i, term := range s.terms {
+		out.terms[i] = supportTerm{lin: new(big.Rat).Add(term.lin, c), rho: term.rho}
+	}
+	return out
 }
 
 // prismSupport reads a prism's points t + L·(x, y, z) along m as
@@ -194,8 +214,9 @@ func prismSupport(p prismrecord.Payload, m [3]*big.Rat) (support, bool) {
 // unit vector across the axis, along m. With μ = Lᵀm split along the axis,
 // that peaks at m·t + μ·anchor + z·(μ·dir) + ρ·|μ across the axis| over the
 // vertices of the meridian cut to near's slab; the frame coordinates measure
-// true distance, so the split is exact.
-func revolveSupport(r meridian, m [3]*big.Rat, near *prismrecord.Payload) support {
+// true distance, so the split is exact. at is near's position relative to the
+// revolve, an exact world vector: the slab is cut for near moved by at.
+func revolveSupport(r meridian, m [3]*big.Rat, near *prismrecord.Payload, at [3]*big.Rat) support {
 	mu := [3]*big.Rat{dotVec(r.l[0], m), dotVec(r.l[1], m), dotVec(r.l[2], m)}
 	along := dotVec(mu, r.dir)
 	q := new(big.Rat).Sub(dotVec(mu, mu), new(big.Rat).Mul(along, along))
@@ -203,7 +224,7 @@ func revolveSupport(r meridian, m [3]*big.Rat, near *prismrecord.Payload) suppor
 	s := support{q: q}
 	region := r.region
 	if near != nil {
-		region = slabCut(r, *near)
+		region = slabCut(r, *near, at)
 	}
 	for _, v := range region {
 		s.terms = append(s.terms, supportTerm{lin: new(big.Rat).Add(base, new(big.Rat).Mul(along, v[1])), rho: v[0]})
@@ -214,8 +235,9 @@ func revolveSupport(r meridian, m [3]*big.Rat, near *prismrecord.Payload) suppor
 // slabCut lists points of r's region whose hull holds the part of the region
 // at axial levels near can reach: the vertices within the slab and the edges'
 // crossings of its two levels. It returns every vertex when near's reach along
-// the axis is not bounded.
-func slabCut(r meridian, near prismrecord.Payload) [][2]*big.Rat {
+// the axis is not bounded. at moves near: both slab ends gain g·at, g the
+// axial gradient of the level.
+func slabCut(r meridian, near prismrecord.Payload, at [3]*big.Rat) [][2]*big.Rat {
 	cols := [3][3]*big.Rat{}
 	for i := range 3 {
 		cols[i] = [3]*big.Rat{r.l[0][i], r.l[1][i], r.l[2][i]}
@@ -236,8 +258,10 @@ func slabCut(r meridian, near prismrecord.Payload) [][2]*big.Rat {
 	if !okHi || !okLo {
 		return r.region
 	}
-	hi.Sub(hi, off)
-	lo.Neg(lo).Sub(lo, off)
+	// near moved by at reaches g·at further along g and g·at less along −g.
+	ga := dotVec(g, at)
+	hi.Add(hi, ga).Sub(hi, off)
+	lo.Sub(lo, ga).Neg(lo).Sub(lo, off)
 	var out [][2]*big.Rat
 	for i, p := range r.region {
 		if p[1].Cmp(lo) >= 0 && p[1].Cmp(hi) <= 0 {
