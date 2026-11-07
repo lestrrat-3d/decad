@@ -69,7 +69,7 @@ func TestVerifyHistoryCopyLiftTranslation(t *testing.T) {
 		master  *decad.Body
 	}
 	build := func(t *testing.T, ringZ float64) scene {
-		lift := liftAbout(t, 0.4)
+		lift := liftAbout(t, 0.15)
 		doc := decad.New()
 		on := func(b *decad.Body) *decad.Body {
 			out, err := decad.Transform(t.Context(), b, lift)
@@ -79,10 +79,10 @@ func TestVerifyHistoryCopyLiftTranslation(t *testing.T) {
 		drilled := on(slab(t, doc, 0, -5, 30, 5, 0, 10, r3.Identity()))
 		for _, x := range []float64{10, 20} {
 			var err error
-			drilled, err = decad.Cut(t.Context(), drilled, on(discAt(t, doc, x, 0, -1, 60, 1)))
+			drilled, err = decad.Cut(t.Context(), drilled, on(discAt(t, doc, x, 0, -1, 30, 1)))
 			require.NoError(t, err)
 		}
-		stem := on(discAt(t, doc, 10, 0, 2, 40, 1))
+		stem := on(discAt(t, doc, 10, 0, 2, 20, 1))
 		master, err := decad.Union(t.Context(), stem, on(hookRing(t, doc, ringZ)))
 		require.NoError(t, err)
 		return scene{doc: doc, lift: lift, drilled: drilled, master: master}
@@ -103,28 +103,28 @@ func TestVerifyHistoryCopyLiftTranslation(t *testing.T) {
 		// masterClear says whether the (drilled, master) pair is decided clear.
 		masterClear bool
 	}{
-		{"exact lift move into the second bore", 40, func(t *testing.T, sc scene) *decad.Body {
+		{"exact lift move into the second bore", 20, func(t *testing.T, sc scene) *decad.Body {
 			return copyOf(t, sc.master, decad.WithCopyLiftTranslation(sc.lift, first, second))
 		}, true, true},
-		{"float placement of the same move", 40, func(t *testing.T, sc scene) *decad.Body {
+		{"float placement of the same move", 20, func(t *testing.T, sc scene) *decad.Body {
 			move, err := r3.Translation(sc.lift.Basis().EX.Scale(10))
 			require.NoError(t, err)
 			return copyOf(t, sc.master, decad.WithCopyPlacement(move))
 		}, false, true},
-		{"exact move 0.01 off the bore", 40, func(t *testing.T, sc scene) *decad.Body {
+		{"exact move 0.01 off the bore", 20, func(t *testing.T, sc scene) *decad.Body {
 			return copyOf(t, sc.master, decad.WithCopyLiftTranslation(sc.lift, first, r3.Vec{X: 20.01}))
 		}, false, true},
-		{"exact move under another lift", 40, func(t *testing.T, sc scene) *decad.Body {
-			return copyOf(t, sc.master, decad.WithCopyLiftTranslation(liftAbout(t, 0.4+1e-9), first, second))
+		{"exact move under another lift", 20, func(t *testing.T, sc scene) *decad.Body {
+			return copyOf(t, sc.master, decad.WithCopyLiftTranslation(liftAbout(t, 0.15+1e-9), first, second))
 		}, false, true},
 		{"exact move that sinks the ring into the block", 9.5, func(t *testing.T, sc scene) *decad.Body {
 			return copyOf(t, sc.master, decad.WithCopyLiftTranslation(sc.lift, first, second))
 		}, false, false},
-		{"copy of a copy", 40, func(t *testing.T, sc scene) *decad.Body {
+		{"copy of a copy", 20, func(t *testing.T, sc scene) *decad.Body {
 			away := copyOf(t, sc.master, decad.WithCopyLiftTranslation(sc.lift, first, r3.Vec{X: 20, Y: 40}))
 			return copyOf(t, away, decad.WithCopyLiftTranslation(sc.lift, r3.Vec{X: 20, Y: 40}, second))
 		}, false, true},
-		{"exact move of a refined master", 40, func(t *testing.T, sc scene) *decad.Body {
+		{"exact move of a refined master", 20, func(t *testing.T, sc scene) *decad.Body {
 			refined, err := decad.Refine(t.Context(), sc.master, units.Millimeters(0.05))
 			require.NoError(t, err)
 			return copyOf(t, refined, decad.WithCopyLiftTranslation(sc.lift, first, second))
