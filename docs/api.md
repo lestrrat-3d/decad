@@ -105,10 +105,10 @@ A `decad.Document` is not safe for concurrent mutation. Bodies are immutable and
 | `Document.Root`, `Container.NewChild` | Read the document's root container and add named children to a container. A container groups sketches, planes and bodies and changes no geometry. `NewChild` refuses a name a sibling has. |
 | `Container.ChildNamed`, `Container.NewUniqueChild` | `ChildNamed` returns the child with that name, adding it when missing. `NewUniqueChild` adds a child and, when a sibling has the name, appends " 2", " 3", ... |
 | `Container.Name`, `Container.Parent`, `Container.Children`, `Container.Path` | Read a container's name, parent (nil for the root), children in creation order and its "/"-joined path. |
-| `Container.AddSketch`, `Container.AddPlane` | Place a sketch or plane in a container. Unplaced ones belong to the root. |
+| `Container.AddSketch`, `Container.AddPlane` | Place a sketch or plane in a container, taking it out of the container it was in. Unplaced ones belong to the root. |
 | `Container.Sketches`, `Container.Planes`, `Container.Bodies` | List a container's members in creation order. |
 | `Document.ContainerOf`, `Document.ContainerOfSketch` | Read the container of a body or a sketch. |
-| `Document.MoveBody` | Puts a live body in another container and changes nothing else. |
+| `Container.AddBody` | Places a live body in the container, taking it out of the container it was in, and changes nothing else. |
 | `Document.VerifyContainers`, `decad.ContainerReport`, `decad.ErrContainerLayout` | Report live bodies left directly in the root and non-root containers holding no bodies beneath them. `Passed` and `Err` summarise the report. |
 | `decad.Remove` | Retires a body from its document. |
 | `decad.Body` | An immutable solid or sheet. |
