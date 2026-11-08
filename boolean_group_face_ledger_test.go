@@ -103,10 +103,10 @@ func testBlindGroupPublicContainer(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := doc.MoveBody(host, container); err != nil {
+	if err := container.AddBody(host); err != nil {
 		t.Fatal(err)
 	}
-	if err := doc.MoveBody(group, container); err != nil {
+	if err := container.AddBody(group); err != nil {
 		t.Fatal(err)
 	}
 	result, err := Cut(t.Context(), host, group)

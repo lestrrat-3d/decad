@@ -85,7 +85,7 @@ func TestSetGroupAndRetirement(t *testing.T) {
 	inner, err := rig.NewChild("inner")
 	require.NoError(t, err)
 	a, b := block(t, doc, 0, 0, 10, 10, 0, 5), block(t, doc, 20, 0, 30, 10, 0, 5)
-	require.NoError(t, doc.MoveBody(b, inner))
+	require.NoError(t, inner.AddBody(b))
 
 	s := parts.NewSet(doc)
 	mustAdd(t, s, parts.Part{Name: "a", Kind: parts.Manufactured, Body: a},

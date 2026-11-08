@@ -1917,7 +1917,7 @@
 8	0.02	TestContactPairBandChamferedBlockOnFloor
 8	0.01	TestContactPairPlanarManifoldCancels
 8	0.00	TestContactPairSupportSetPastRim
-8	0.01	TestContainerMoveBody
+8	0.01	TestContainerAddBody
 8	0.00	TestCrossingBlindPocketOnDisplacedPlate
 8	0.01	TestCutRemovingEverythingIsEmpty
 8	0.02	TestCutSpanDisplacedLevelIntersect

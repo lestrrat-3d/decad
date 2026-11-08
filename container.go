@@ -11,8 +11,8 @@ import (
 )
 
 // ErrCrossContainer is returned when one operation reads bodies or sketches that
-// sit in different containers (agent-docs/container-design.md §3). MoveBody is the
-// one way across.
+// sit in different containers (agent-docs/container-design.md §3). Container.AddBody
+// puts a body in the other operand's container.
 var ErrCrossContainer = fmt.Errorf("decad: operands sit in different containers")
 
 // ErrContainerLayout is the error ContainerReport.Err returns when a body sits
@@ -26,8 +26,8 @@ var ErrContainerLayout = fmt.Errorf("decad: container layout is not clean")
 //
 // A Container belongs to one document for life. Its readers are safe to call
 // concurrently with Bodies, Remove and Verify; NewChild, ChildNamed, NewUniqueChild,
-// AddSketch, AddPlane and MoveBody mutate the document and are not safe to run concurrently with another
-// mutation.
+// AddSketch, AddPlane and AddBody mutate the document and are not safe to
+// run concurrently with another mutation.
 type Container struct {
 	doc      *Document
 	name     string
@@ -228,7 +228,7 @@ func (c *Container) Bodies() []*Body {
 }
 
 // ContainerOf returns the container holding the live body b: the root until
-// MoveBody or an operation's placement rule says otherwise. A foreign body is
+// AddBody or an operation's placement rule says otherwise. A foreign body is
 // ErrForeignBody and a retired one ErrRetiredBody.
 func (d *Document) ContainerOf(b *Body) (*Container, error) {
 	if err := d.requireLive(b); err != nil {
@@ -246,23 +246,22 @@ func (d *Document) ContainerOfSketch(s *sketch.Sketch) *Container {
 	return d.sketchContainerLocked(s)
 }
 
-// MoveBody puts the live body b in to, and changes nothing else: b keeps its
-// handle, coordinates, provenance and measurements, and no producer identity
-// advances. A foreign body or container is ErrForeignBody, a retired body
-// ErrRetiredBody, and a nil argument ErrDegenerate.
-func (d *Document) MoveBody(b *Body, to *Container) error {
-	if to == nil {
+// AddBody places the live body b in c and takes it out of the container it was
+// in. Adding b to the container it is already in changes nothing. Nothing else
+// changes: b keeps its handle, coordinates, provenance and measurements, and no
+// producer identity advances. A nil c or b is ErrDegenerate, a body of another
+// document ErrForeignBody, and a retired body ErrRetiredBody.
+func (c *Container) AddBody(b *Body) error {
+	if c == nil {
 		return fmt.Errorf(`%w: a nil container holds no body`, ErrDegenerate)
 	}
-	if to.doc != d {
-		return ErrForeignBody
-	}
+	d := c.doc
 	if err := d.requireLive(b); err != nil {
 		return err
 	}
 	d.n.LiveMu.Lock()
 	defer d.n.LiveMu.Unlock()
-	d.placeLocked(bodyNode(b), to)
+	d.placeLocked(bodyNode(b), c)
 	return nil
 }
 

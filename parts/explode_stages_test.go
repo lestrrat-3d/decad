@@ -274,7 +274,7 @@ func TestExplodeStageRefusals(t *testing.T) {
 	g := parts.NewSet(doc)
 	a := block(t, doc, 0, 0, 10, 10, 0, 5)
 	b := block(t, doc, 20, 0, 30, 10, 0, 5)
-	require.NoError(t, doc.MoveBody(b, rig))
+	require.NoError(t, rig.AddBody(b))
 	mustAdd(t, g, parts.Part{Name: "a", Kind: parts.Manufactured, Body: a}, parts.Part{Name: "b", Kind: parts.Manufactured, Body: b})
 	mustJoin(t, g, parts.Joint{Kind: parts.Contact, A: "b", B: "a", Pull: r3.Vec{X: 1}})
 	_, err = g.Explode(t.Context(), parts.WithExplodeGround("a"), parts.WithExplodeStages(

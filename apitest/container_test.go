@@ -78,7 +78,7 @@ func TestContainerTree(t *testing.T) {
 
 	other := decad.New()
 	require.NotSame(t, root, other.Root())
-	require.ErrorIs(t, other.MoveBody(containerBox(t, other, nil, 0, 0, 1, 1, 1), gear), decad.ErrForeignBody)
+	require.ErrorIs(t, gear.AddBody(containerBox(t, other, nil, 0, 0, 1, 1, 1)), decad.ErrForeignBody)
 }
 
 func TestContainerSketchAndPlaneMembership(t *testing.T) {
@@ -216,7 +216,7 @@ func TestContainerCrossRefusal(t *testing.T) {
 	require.Contains(t, doc.Bodies(), inB)
 }
 
-func TestContainerMoveBody(t *testing.T) {
+func TestContainerAddBody(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
 	a, err := doc.Root().NewChild("a")
@@ -234,27 +234,31 @@ func TestContainerMoveBody(t *testing.T) {
 	_, err = decad.Cut(t.Context(), inA, inB)
 	require.ErrorIs(t, err, decad.ErrCrossContainer)
 
-	require.NoError(t, doc.MoveBody(inB, a))
+	require.NoError(t, a.AddBody(inB))
 	require.Same(t, a, containerOf(t, doc, inB))
 	after, err := inB.Volume()
 	require.NoError(t, err)
-	require.Equal(t, volume, after, "a move changes no measurement")
+	require.Equal(t, volume, after, "adding changes no measurement")
 	afterBox, err := inB.Bounds()
 	require.NoError(t, err)
 	require.Equal(t, box, afterBox)
 	require.Empty(t, b.Bodies())
 	require.ElementsMatch(t, []*decad.Body{inA, inB}, a.Bodies())
+	require.NoError(t, a.AddBody(inB), "adding to its own container changes nothing")
+	require.Same(t, a, containerOf(t, doc, inB))
+	require.ElementsMatch(t, []*decad.Body{inA, inB}, a.Bodies())
 
 	cut, err := decad.Cut(t.Context(), inA, inB)
 	require.NoError(t, err)
-	require.Same(t, a, containerOf(t, doc, cut), "after the move the operands share a container")
-	require.NoError(t, doc.MoveBody(cut, doc.Root()))
+	require.Same(t, a, containerOf(t, doc, cut), "after AddBody the operands share a container")
+	require.NoError(t, doc.Root().AddBody(cut))
 	require.Same(t, doc.Root(), containerOf(t, doc, cut))
 
-	require.ErrorIs(t, doc.MoveBody(inA, b), decad.ErrRetiredBody, "a consumed body cannot move")
+	require.ErrorIs(t, b.AddBody(inA), decad.ErrRetiredBody, "a consumed body cannot be added")
 	_, err = doc.ContainerOf(inA)
 	require.ErrorIs(t, err, decad.ErrRetiredBody)
-	require.ErrorIs(t, doc.MoveBody(cut, nil), decad.ErrDegenerate)
+	require.ErrorIs(t, (*decad.Container)(nil).AddBody(cut), decad.ErrDegenerate)
+	require.ErrorIs(t, a.AddBody(nil), decad.ErrDegenerate)
 
 	report, err := doc.Verify(t.Context())
 	require.NoError(t, err)
@@ -350,14 +354,14 @@ func TestContainerVerifyContainers(t *testing.T) {
 	// A container holding bodies only beneath it counts as used.
 	require.NotContains(t, err.Error(), "/Gears")
 
-	require.NoError(t, doc.MoveBody(loose, empty))
-	require.NoError(t, doc.MoveBody(held, emptyKid))
+	require.NoError(t, empty.AddBody(loose))
+	require.NoError(t, emptyKid.AddBody(held))
 	rep = doc.VerifyContainers()
 	require.Empty(t, rep.RootBodies)
 	require.Equal(t, []*decad.Container{gears, inner}, rep.EmptyContainers)
 	require.Contains(t, rep.Err().Error(), `"/Gears", "/Gears/Inner"`)
 
-	require.NoError(t, doc.MoveBody(held, inner))
+	require.NoError(t, inner.AddBody(held))
 	rep = doc.VerifyContainers()
 	require.Equal(t, []*decad.Container{emptyKid}, rep.EmptyContainers)
 }

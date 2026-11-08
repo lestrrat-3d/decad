@@ -13,8 +13,8 @@ import (
 // moves nothing and instances nothing: a consumer that maps a model onto a tool
 // with its own component tree reads the grouping from it. An extrude lands in its
 // sketch's container, a boolean in its target's, and an operation that reads two
-// containers refuses with decad.ErrCrossContainer until MoveBody puts a finished
-// body next to the other.
+// containers refuses with decad.ErrCrossContainer until Container.AddBody puts a finished
+// body in the other's container.
 func Example_containers() {
 	ctx := context.Background()
 	doc := decad.New()
@@ -62,9 +62,9 @@ func Example_containers() {
 		fmt.Println("cut across containers refuses:", err)
 	}
 
-	// MoveBody puts the finished pin in the driver container; nothing else changes.
-	if err := doc.MoveBody(pin, driver); err != nil {
-		fmt.Printf("failed to move: %s\n", err)
+	// AddBody places the finished pin in the driver container; nothing else changes.
+	if err := driver.AddBody(pin); err != nil {
+		fmt.Printf("failed to add:%s\n", err)
 		return
 	}
 	cut, err := decad.Cut(ctx, plate, pin)

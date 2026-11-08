@@ -17,8 +17,8 @@ func TestGraphMermaid(t *testing.T) {
 	base := block(t, doc, 0, 0, 20, 20, 0, 5)
 	arm := block(t, doc, 0, 0, 20, 20, 5, 5)
 	pin := cylinder(t, doc, 10, 3, 0, 10)
-	require.NoError(t, doc.MoveBody(arm, rig))
-	require.NoError(t, doc.MoveBody(pin, rig))
+	require.NoError(t, rig.AddBody(arm))
+	require.NoError(t, rig.AddBody(pin))
 
 	s := parts.NewSet(doc)
 	mustAdd(t, s,
