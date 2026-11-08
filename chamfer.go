@@ -106,7 +106,7 @@ type ChamferOption interface{ chamferOption() }
 // volume, area, bounds, undercut and minimum-radius readings all answer.
 // A selection covering the whole outer loop of one or both caps of a straight
 // prism whose section holds fit splines and lines, with no corner past 10°,
-// bevels it at an equal setback by cutting the prism with a lofted cutter
+// bevels it at an equal setback by cutting the prism with a polyhedral cutter
 // (agent-docs/modify-reach-design.md §8.5). Decad cannot offset a fit spline
 // exactly, so the cutter's offset curves are fit splines through points of the
 // exact offset, and the call refuses an offset that departs from it by more than
@@ -115,7 +115,7 @@ type ChamferOption interface{ chamferOption() }
 // setback that reaches the outline's radius of curvature is ErrDegenerate.
 //
 // On a mesh Boolean result, whole loops of a retained planar face that the per-edge routes cannot bevel, such as a
-// window of lines and arcs with sharp corners, are cut by a lofted cutter (agent-docs/retained-modify-reach-design.md
+// window of lines and arcs with sharp corners, are cut by a polyhedral cutter (agent-docs/retained-modify-reach-design.md
 // §15a): faceted, the Cut's own readings, and the bevel ruled between its two sections.
 //
 // All twelve straight edges of an exact axis-aligned box take
@@ -255,7 +255,7 @@ func Chamfer(ctx context.Context, b *Body, sel EdgeSelector, d units.Value,
 			} else if handled {
 				return out, nil
 			}
-			// Whole loops with sharp corners on a mesh Boolean result are cut by a lofted cutter, after the exact
+			// Whole loops with sharp corners on a mesh Boolean result are cut by a polyhedral cutter, after the exact
 			// wedge route has declined them (agent-docs/retained-modify-reach-design.md §15a).
 			if res, matched, lerr := brepmodify.RetainedLoopChamfer(ctx, envOf(b.n.Doc, b.n.Doc.NextProducer), modifyHooks(),
 				&b.n, edgeNodes(edges), dmm, dDelta, nil); matched {

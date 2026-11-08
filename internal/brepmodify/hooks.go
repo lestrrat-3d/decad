@@ -3,6 +3,8 @@ package brepmodify
 import (
 	"context"
 
+	"github.com/lestrrat-3d/r3"
+
 	"github.com/lestrrat-3d/decad/internal/booleaneval"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
@@ -23,6 +25,9 @@ type Hooks struct {
 	// Boolean runs the full Boolean dispatch over a and b under env's
 	// producer identity, without touching the document.
 	Boolean func(ctx context.Context, op meshbool.OperationKind, env topo.Env, a, b *topo.Body) (*topo.Body, error)
+	// MeshSolid makes a solid body of a closed, outward-wound triangle mesh held exactly, every vertex within bound of
+	// the surface the mesh stands for, under env's producer identity and without touching the document.
+	MeshSolid func(ctx context.Context, env topo.Env, verts []r3.Vec, tris [][3]int, bound float64) (*topo.Body, error)
 	// CurveName names a curve in the public API's vocabulary.
 	CurveName func(surfacegeom.Curve) string
 }

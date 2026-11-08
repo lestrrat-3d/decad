@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/lestrrat-3d/r3"
+
 	"github.com/lestrrat-3d/decad/internal/brepmodify"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
@@ -62,6 +64,14 @@ func modifyHooks() brepmodify.Hooks {
 		AsBooleanError: asBooleanError,
 		Boolean: func(ctx context.Context, op meshbool.OperationKind, env topo.Env, a, b *topo.Body) (*topo.Body, error) {
 			out, err := booleanBody(ctx, op, bodyHandle(a), bodyHandle(b), env.Ref)
+			return bodyNode(out), err
+		},
+		MeshSolid: func(ctx context.Context, env topo.Env, verts []r3.Vec, tris [][3]int, bound float64) (*topo.Body, error) {
+			m, err := NewMeshBody(ctx, verts, tris)
+			if err != nil {
+				return nil, err
+			}
+			out, err := solidFromMeshBodyBoundedAt(ctx, documentHandle(env.Doc), m, env.Ref, bound)
 			return bodyNode(out), err
 		},
 		CurveName: publicCurveName,

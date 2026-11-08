@@ -745,11 +745,17 @@ retained plane"). `brepmodify.RetainedLoopChamfer` (`internal/brepmodify/retaine
   with its axis normal to it, and every edge is convex. Anything else declines and the earlier refusal stands.
 - Circle loops go first through the retained rim route, because a cutter of a large circle needs more chord cells than
   a loft allows. Their edges in the result are found again by their ends and curve kind.
-- Each remaining loop is cut by a lofted cutter, as `FreeformRimChamfer` cuts a free-form rim. At height `h` above
-  the face the cutter's boundary is the loop moved `d + h` into the material with a mitre at each corner, so the
-  bevel is 45° and meets the wall at depth `d`. A face's outer loop takes the ring outside the moved loop; a hole loop
-  takes the region inside it. Between two sections the cutter is ruled, so at a line-arc corner the bevel patches
-  meet along a straight ruling where the exact patches meet along a conic. The difference is of order `d²/R`.
+- Each remaining loop is cut by a polyhedral cutter, held exactly as a mesh solid and cut with a mesh Boolean. At
+  height `h` above the face the cutter's section is the loop moved `d + h` into the material with a mitre at each
+  corner, so the bevel is 45° and meets the wall at depth `d`. The sections are taken at six equal steps from `d/2`
+  above the face to `d/2` below the bevel's far end, and each arc is sampled so a chord lies within 0.002 mm of its
+  circle. A face's outer loop takes the ring between a rectangle and the moved loop; a hole loop takes the region
+  inside it. Between two steps the cutter is ruled, so at a line-arc corner the bevel patches meet along a straight
+  ruling where the exact patches meet along a conic; the departure is about `d²/(R·6²)`. Every cutter vertex carries
+  the chord sagitta plus that departure (about 0.0024 mm for the cover windows) as its bound. A lofted cutter of two
+  sections is not used: its twisted arc cells carry a facet bound of 0.013 mm at `d` = 0.5 mm, which the Boolean's rim
+  rule `(δ_A + δ_B)/sin θ` turns into a 0.022 mm body bound; the polyhedral cutter leaves the body's bound at the
+  value its target already had.
 - The setback reaching the far end of a wall is `ErrUnsupported`, and one that empties a loop is `ErrDegenerate`.
 - The cut allows the chain-depth gate the body's own mesh bound (`chaintol` on the context, which the document's
   tolerance never lowers). The cutter meets only the face and the walls beside the loop, so the rims it makes compose
