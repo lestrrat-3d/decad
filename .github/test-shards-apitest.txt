@@ -3040,3 +3040,8 @@
 12	0.01	TestContainerNewUniqueChild
 12	0.01	TestContainerVerifyContainers
 12	3.74	TestContactPairBandSeatsHeadInPocket
+12	0.50	TestChamferTangentLineArcOutline
+12	0.50	TestChamferTangentOutlineAfterPinUnion
+12	0.50	TestChamferWindowLoops
+12	0.50	TestChamferWindowLoopsAfterBossUnion
+12	0.50	TestChamferWindowLoopsRefusals

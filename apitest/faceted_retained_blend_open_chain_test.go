@@ -296,10 +296,10 @@ func TestFacetedRetainedBlendOpenChain(t *testing.T) {
 		require.ErrorContains(t, err, "WithTangentChain")
 	})
 
-	t.Run("a junction the tags nearly meet at is refused with its text", func(t *testing.T) {
+	t.Run("a junction the tags miss by a rounding is filleted", func(t *testing.T) {
 		t.Parallel()
 		// The fillet radius 2.7 is not a float the corner cylinder's origin
-		// reaches exactly, so the line and arc tags miss tangency by a rounding.
+		// reaches exactly, so the line and arc tags miss tangency by a rounding, which proves the junction tangent.
 		sc := newRetentionScene()
 		s, err := sc.w.CreateSketch(sc.w.XY())
 		require.NoError(t, err)
@@ -330,9 +330,8 @@ func TestFacetedRetainedBlendOpenChain(t *testing.T) {
 			outline = outline.Or(decad.EndpointAt(p), decad.EndpointAt(q))
 		}
 		require.Equal(t, 8, named)
-		_, err = decad.Fillet(t.Context(), drilled, outline.Exactly(named), units.Millimeters(0.5))
-		require.ErrorIs(t, err, decad.ErrUnsupported)
-		require.ErrorContains(t, err, "is nearly tangent and the tags cannot decide it")
-		require.ErrorContains(t, err, "2.7,0,20")
+		out, err := decad.Fillet(t.Context(), drilled, outline.Exactly(named), units.Millimeters(0.5))
+		require.NoError(t, err)
+		require.True(t, out.IsSolid())
 	})
 }
