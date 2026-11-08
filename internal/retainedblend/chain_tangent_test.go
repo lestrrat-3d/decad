@@ -49,10 +49,18 @@ func TestTangentJunction(t *testing.T) {
 		require.Equal(t, clearance.DegYes, retainedblend.Tangent(arc, line, v))
 	})
 
-	t.Run("tags one float step off are undecided", func(t *testing.T) {
+	t.Run("tags a few float steps off are float round-off and prove tangent", func(t *testing.T) {
 		t.Parallel()
-		// The cylinder's centre is one float step from the tangent position.
+		// The cylinder's radius is one float step from the tangent position, as a sketch's tangent arc and line leave it.
 		line, arc, v := junctionAt(t, math.Nextafter(3, 4))
+		require.Equal(t, clearance.DegYes, retainedblend.Tangent(line, arc, v))
+		require.Equal(t, clearance.DegYes, retainedblend.Tangent(arc, line, v))
+	})
+
+	t.Run("tags beyond round-off but inside the noise band are undecided", func(t *testing.T) {
+		t.Parallel()
+		// 1e-12 of a 3 mm radius is thousands of float steps, far past round-off and far inside the angular band.
+		line, arc, v := junctionAt(t, 3*(1+1e-12))
 		require.Equal(t, clearance.DegUnknown, retainedblend.Tangent(line, arc, v))
 	})
 

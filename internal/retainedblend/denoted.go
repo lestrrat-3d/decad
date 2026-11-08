@@ -20,6 +20,9 @@ import (
 // cap, a rotated placement or an off-axis sketch line fails the test, so those
 // faces stay refused. The test reads recorded data by exact equality and never
 // admits on a residual.
+// TagIsRecord reports whether the retained plane or cylinder tag of f is the surface its face stands for.
+func TagIsRecord(f *topo.Face) bool { return tagIsRecord(f) }
+
 func tagIsRecord(f *topo.Face) bool {
 	if f.Denoted == nil {
 		return true

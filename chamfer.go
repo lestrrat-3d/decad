@@ -114,6 +114,10 @@ type ChamferOption interface{ chamferOption() }
 // own bounds, and it matches the ideal chamfer only within that ratio. A
 // setback that reaches the outline's radius of curvature is ErrDegenerate.
 //
+// On a mesh Boolean result, whole loops of a retained planar face that the per-edge routes cannot bevel, such as a
+// window of lines and arcs with sharp corners, are cut by a lofted cutter (agent-docs/retained-modify-reach-design.md
+// §15a): faceted, the Cut's own readings, and the bevel ruled between its two sections.
+//
 // All twelve straight edges of an exact axis-aligned box take
 // agent-docs/modify-general-design.md §4.3b's simultaneous chamfer, with or
 // without a cross bore. Other partial cap selections and mixed cap/lateral
@@ -250,6 +254,15 @@ func Chamfer(ctx context.Context, b *Body, sel EdgeSelector, d units.Value,
 				return nil, werr
 			} else if handled {
 				return out, nil
+			}
+			// Whole loops with sharp corners on a mesh Boolean result are cut by a lofted cutter, after the exact
+			// wedge route has declined them (agent-docs/retained-modify-reach-design.md §15a).
+			if res, matched, lerr := brepmodify.RetainedLoopChamfer(ctx, envOf(b.n.Doc, b.n.Doc.NextProducer), modifyHooks(),
+				&b.n, edgeNodes(edges), dmm, dDelta, nil); matched {
+				if lerr != nil {
+					return nil, lerr
+				}
+				return commitResult(ctx, OperationChamfer, b, res)
 			}
 		}
 		return nil, err

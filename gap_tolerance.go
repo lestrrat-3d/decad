@@ -88,5 +88,7 @@ func (d *Document) evalContext(ctx context.Context) (context.Context, error) {
 	if d.chainErr != nil {
 		return nil, d.chainErr
 	}
-	return chaintol.With(gaptol.With(ctx, d.gapReach), d.chainTol), nil
+	// An internal route that has proven what its cut meets (the loop chamfer) hands down an allowance of its own on
+	// ctx. It never lowers the document's.
+	return chaintol.With(gaptol.With(ctx, d.gapReach), max(d.chainTol, chaintol.Of(ctx))), nil
 }

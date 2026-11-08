@@ -14,9 +14,9 @@ import (
 
 // This file decides the tangent junction of agent-docs/retained-modify-reach-design.md
 // §5.2 from the retained tags alone. Every "yes" is an identity over the tags'
-// floats read as rationals. A "no" is a clear structural or numeric miss, and a
-// gap inside the angular noise band is undecided: a tolerance never proves
-// "tangent".
+// floats read as rationals, or a gap that only float round-off of the stored
+// tags can explain (tangentRoundoff). A "no" is a clear structural or numeric
+// miss, and a gap between round-off and the angular noise band is undecided.
 
 // ratVec is a vector of rationals.
 type ratVec [3]*big.Rat
@@ -228,7 +228,7 @@ func tangentState(e, c *topo.Edge, v *topo.Vertex) (junction, clr.DegState, bool
 		d := cy.c.sub(pl.o).dot(pl.n)
 		lhs := new(big.Rat).Mul(d, d)
 		rhs := new(big.Rat).Mul(new(big.Rat).Mul(cy.radius, cy.radius), pl.n.dot(pl.n))
-		s, nr = gapState(lhs, rhs)
+		s, nr = gapState(lhs, rhs, tagScale(cy.fc, pl.fo, cy.fr))
 		state, near = meet(state, s), near || nr
 		if state != clr.DegYes {
 			return junction{}, state, near
@@ -248,8 +248,9 @@ func tangentState(e, c *topo.Edge, v *topo.Vertex) (junction, clr.DegState, bool
 		sum := new(big.Rat).Add(t1.radius, t2.radius)
 		diff := new(big.Rat).Sub(t1.radius, t2.radius)
 		d2 := perp.dot(perp)
-		ext, nrExt := gapState(d2, new(big.Rat).Mul(sum, sum))
-		inn, nrInn := gapState(d2, new(big.Rat).Mul(diff, diff))
+		scale := tagScale(t1.fc, t2.fc, max(t1.fr, t2.fr))
+		ext, nrExt := gapState(d2, new(big.Rat).Mul(sum, sum), scale)
+		inn, nrInn := gapState(d2, new(big.Rat).Mul(diff, diff), scale)
 		switch {
 		case ext == clr.DegYes:
 			g = t1.c.add(perp.scale(new(big.Rat).Quo(t1.radius, sum)))
@@ -313,11 +314,33 @@ func bandOf(exact ratVec, f, a, b r3.Vec) (clr.DegState, bool) {
 	return clr.DegUnknown, true
 }
 
-// gapState decides lhs == rhs: yes when equal, no when they differ by more than
-// the noise band relative to rhs, undecided between.
-func gapState(lhs, rhs *big.Rat) (clr.DegState, bool) {
+// tangentRoundoff is how many ulps of a junction's coordinate scale a tangency
+// gap may span and still be float round-off of the stored tags. A sketch cannot
+// place a line and an arc exactly tangent in floats: the arc's centre, the
+// line's plane and the cylinder's radius each round, so tags of an exactly
+// tangent pair differ by a few ulps. The bound is the one the falsifier above
+// and the route's other held-geometry slacks use.
+const tangentRoundoff = 64
+
+// tagScale is the coordinate scale of two tag points and a length: the size
+// whose ulp bounds the rounding of the tags that carry them.
+func tagScale(a, b r3.Vec, length float64) float64 {
+	return max(1, length, math.Abs(a.X), math.Abs(a.Y), math.Abs(a.Z), math.Abs(b.X), math.Abs(b.Y), math.Abs(b.Z))
+}
+
+// gapState decides lhs == rhs, two squared lengths: yes when equal or when the
+// lengths differ by no more than tangentRoundoff ulps of scale, no when they
+// differ by more than the noise band relative to rhs, undecided between.
+func gapState(lhs, rhs *big.Rat, scale float64) (clr.DegState, bool) {
 	diff := new(big.Rat).Sub(lhs, rhs)
 	if diff.Sign() == 0 {
+		return clr.DegYes, false
+	}
+	// lhs - rhs = (a - b)(a + b) for the lengths a and b, so a - b is the gap over a + b.
+	lf, _ := lhs.Float64()
+	rf, _ := rhs.Float64()
+	df, _ := diff.Float64()
+	if sum := math.Sqrt(math.Abs(lf)) + math.Sqrt(math.Abs(rf)); sum > 0 && math.Abs(df)/sum <= tangentRoundoff*ulp*scale {
 		return clr.DegYes, false
 	}
 	rel := new(big.Rat).Quo(diff, rhs)

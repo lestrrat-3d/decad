@@ -205,7 +205,12 @@ Edges `e_k` and `e_{k+1}` meet at a tangent junction at vertex `v` when all of t
 
 Identity 2 is the oracle of reach §5.1 applied to tag data: exact equality proves "tangent"; a difference above
 `ClrAngTol` relative to the operands proves "not tangent"; anything between is undecided and is SX2. A tolerance
-never proves "tangent".
+never proves "tangent", with one exception: the wall-to-axis distance of identity 2 may differ from the radius by
+`tangentRoundoff` (64) ulps of the junction's coordinate scale, which is all that the rounding of the stored tags can
+explain. A sketch cannot place a line and an arc exactly tangent in floats: its rounded arc centre, line plane and
+radius differ by a few ulps, as in a rounded plate built from a sketch. Cross products
+of axes and normals stay exact. A gap past round-off but inside the angular band is still undecided. The falsifier
+(item 5) still holds the vertex to the junction point, and Claim J holds up to that round-off.
 
 ### 5.3 Expansion
 
@@ -646,7 +651,7 @@ shown red first by the change named. `A_f = r²(1 − π/4)` is a fillet's corne
 | Chain end gates | the step (block 40×20×30 with `x = 40` corners `r = 3`, cut to `z = 10` for `x > 10`) and the blind pocket's mouth refuse SM8; the slot `−2…30` with four `r = 3` corners refuses SM9 for its concave arc ends, and a ledge `8…30` with four corners for its arc ends on the reflex wall; unit tests read convex, reflex and undecided turns, `G`'s turn at both ends of the tongue and the reflex foot, and the cap's sign | drop the wall's turn: the step refuses SR4; drop the base's turn: the mouth builds a flat-ended notch; drop either arc gate: the other arc text, or the ledge builds; read `G`'s turn one way at both ends: the unit test fails; drop the cap's sign: the unit test fails |
 | Taken cap clearance | a 0.1 box joined across `x = 0` in the run-out slot's void, and a 0.1 cavity cut across `x = 10` in the reflex foot's ledge corner, each at either corner, refuse SM5 "the cap an end face takes meets another facet of the body"; the box moved clear of the cap builds with the run-out's fill; unit tests refuse a facet that crosses a taken cap but not the strip, one that shares a held vertex with the cap and crosses it beyond, and one coplanar with the cap beside a shared edge, while facets meeting the cap only at a shared vertex or along a shared edge pass, and `checkEndSense` refuses an end face's loop sense that matches the base's | skip the taken caps: the box builds, and the cavity refuses SR7 "a result shell has inconsistent orientation"; skip every pair that shares a vertex: the held-vertex unit case builds; refuse every contact of a sharing pair, or every point contact: the run-out, its chamfer and the reflex foot refuse; drop the loop-sense test from `checkEndSense`: its unit test builds; drop the call from `rewriteChain`: nothing goes red, because no oriented held mesh reaches it |
 | Chain clearance | a pocket whose chord crosses a band while its vertices lie outside it refuses SM5; a hole deep inside a band refuses SM4 | test vertices only: the crossing chord builds and SR7 or the volume check fails |
-| `internal/tangentchain` retained oracle | exactly tangent plane/cylinder tags prove "tangent"; tags one float step off are undecided; a clear miss is "not tangent" | replace the identity by a tolerance: the one-step case proves "tangent" |
+| `internal/tangentchain` retained oracle | exactly tangent plane/cylinder tags prove "tangent"; tags a few float steps off prove it too (round-off); tags 1e-12 relative off are undecided; a clear miss is "not tangent" | widen round-off to the angular band: the 1e-12 case proves "tangent"; drop it: the one-step case is undecided |
 | Exact-rotation copy of P3, 20° | 6 `Plane`, 5 `Cylinder`; `NormalAt` at an interior facet centroid within its bound plus 64 float steps of the rotated source normal; bounds below 1 | keep `ExactGroupPlaced`'s drop: `Faceted` |
 | `facetedrecord` exact-copy charge | a plane whose image under a 20° `Q` rounds has `NormalBound ≥ 8a + P` recomputed in the test, and above 0 | charge 0: the relation fails |
 | Exact-rotation copy of P3, 20°, ±z caps | bound 0; `ToFace` stops at exactly z = 20 and `MirrorFace` across the top cap mirrors to the exact z range; a tilted rotation still refuses | drop the fixed-plane arm in `ExactGroupPlaced`: both refuse |
@@ -727,18 +732,47 @@ increment stops and reports the refusal.
 - **Rebuild the operands of a mesh Cut from tags and roles.** Payload §5.2 forbids rebuilding from roles, and tags
   carry no trims.
 
+## 15a. Whole loops with sharp corners
+
+The per-edge routes above build an edge whose ends meet planes, and a closed tangent chain (§5). A closed loop of
+lines and arcs whose corners are not tangent, such as a window of two lines and two arcs in a cover, has an edge end
+that meets a cylinder wall, which `line.go`, `arc.go` and `cyl.go` refuse ("an edge end meets a face that is not a
+retained plane"). `brepmodify.RetainedLoopChamfer` (`internal/brepmodify/retained_loop_chamfer.go`) builds it when
+`retainedblend.Chamfer` refuses with `ErrUnsupported` or declines:
+
+- The selection is exactly whole boundary loops of retained planar faces of a faceted body. Each loop is a chain of
+  lines and arcs, or one circle. Each wall beside it is a retained plane normal to the face or a retained cylinder
+  with its axis normal to it, and every edge is convex. Anything else declines and the earlier refusal stands.
+- Circle loops go first through the retained rim route, because a cutter of a large circle needs more chord cells than
+  a loft allows. Their edges in the result are found again by their ends and curve kind.
+- Each remaining loop is cut by a lofted cutter, as `FreeformRimChamfer` cuts a free-form rim. At height `h` above
+  the face the cutter's boundary is the loop moved `d + h` into the material with a mitre at each corner, so the
+  bevel is 45° and meets the wall at depth `d`. A face's outer loop takes the ring outside the moved loop; a hole loop
+  takes the region inside it. Between two sections the cutter is ruled, so at a line-arc corner the bevel patches
+  meet along a straight ruling where the exact patches meet along a conic. The difference is of order `d²/R`.
+- The setback reaching the far end of a wall is `ErrUnsupported`, and one that empties a loop is `ErrDegenerate`.
+- The cut allows the chain-depth gate the body's own mesh bound (`chaintol` on the context, which the document's
+  tolerance never lowers). The cutter meets only the face and the walls beside the loop, so the rims it makes compose
+  from bounds those facets already carry. Without it the gate compares them with a chord tolerance that follows the
+  pair's size and refuses a face whose facets reach a coarse circle elsewhere, such as a boss ring on the cover.
+
+The result is a Boolean Cut: faceted, with the Cut's own readings. Tests are in `apitest/chamfer_planar_loops_test.go`:
+windows of a cover before and after a boss is joined (both faces, with the rim and bore in one call), refusals for a
+setback past the walls and for part of a loop, and measured removed volume against `L·d²/2`.
+
 ## 16. Decisions the user may want to overturn
 
 | Decision | Default | Alternative |
 |---|---|---|
-| Chain junctions | exact tangency only (§5.2) | a bounded near-tangency rule |
+| Chain junctions | exact tangency, or a gap of at most 64 ulps of the coordinate scale (§5.2) | a bounded near-tangency rule wider than round-off |
 | `Shell` and `Draft` of a mesh Cut | refuse (§9.1, §9.2) | a source-backed route on an operand record |
 | `Cone` and `Torus` rims | refuse (§9.5) | a coaxial revolution class read from denoted surfaces |
 | Increment order | M1 and M2 first (small), then the chains | chains first |
 | R5 | build last (M6) | drop it |
 
-- **Chain junctions.** The default proof is short and matches reach §5. It refuses every part whose wall and
-  fillet tags miss tangency by a rounding, for example a 40.1 mm box. The bounded rule admits those parts. It costs
+- **Chain junctions.** The default proof is short and matches reach §5. It admits a tangency gap of 64 ulps at
+  most (the rounding of sketch-built tags) and refuses every part whose wall and fillet tags miss tangency by
+  more, for example a 40.1 mm box. The wider bounded rule admits those parts. It costs
   a new proof that the seam lies within `√(2R·δ)` of the foot and that the crease angle is at most `√(2δ/R)`,
   with `δ` the exact tangency defect, both charged into the junction rows.
 - **`Shell` and `Draft`.** The mesh Cut would keep an immutable record of its operands `T` and `U`. Then
