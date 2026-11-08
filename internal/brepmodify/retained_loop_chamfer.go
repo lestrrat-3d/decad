@@ -5,16 +5,14 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"slices"
 
 	"github.com/lestrrat-3d/r3"
-	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
 
 	"github.com/lestrrat-3d/decad/internal/chaintol"
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
-	"github.com/lestrrat-3d/decad/internal/featureoption"
-	"github.com/lestrrat-3d/decad/internal/loftrecord"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/opdiagnostic"
 	"github.com/lestrrat-3d/decad/internal/provenance"
@@ -22,6 +20,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/decad/internal/topobuild"
+	"github.com/lestrrat-3d/decad/internal/triangulation"
 )
 
 // RetainedLoopChamfer chamfers whole boundary loops of a retained planar face of a mesh Boolean result when the
@@ -30,12 +29,13 @@ import (
 // circle, and every wall beside it is a retained plane normal to the face or a retained cylinder whose axis is
 // normal to it. Each wall descends from the face, so the chamfer removes material.
 //
-// Each loop is cut from the body by a lofted cutter, the way FreeformRimChamfer cuts a free-form rim. At depth s
-// below the face the cutter's boundary is the loop moved by d - s into the face's material, a mitre at every
-// corner, so the bevel is 45° and meets the wall at depth d. Between two sections the cutter is ruled, so at a
-// corner joining a line and an arc the bevel patches meet along a straight ruling where the exact patches meet
-// along a conic; the two differ by well under the setback. The result is a Boolean Cut: faceted, with the Cut's
-// own readings.
+// Each loop is cut from the body by a polyhedral cutter held exactly as a mesh solid, the way FreeformRimChamfer cuts
+// a free-form rim with a lofted one. At depth s below the face the cutter's boundary is the loop moved by d - s into
+// the face's material, a mitre at every corner, so the bevel is 45° and meets the wall at depth d. The cutter steps
+// through cutterLayers sections, so at a corner joining a line and an arc the bevel patches meet along short straight
+// rulings where the exact patches meet along a conic; the departure is a few microns for a millimetre setback. A
+// lofted two-section cutter is not used: its twisted arc cells carry a facet bound that the Boolean's rim rule
+// amplifies into the body's bound. The result is a Boolean Cut: faceted, with the Cut's own readings.
 //
 // It reports false, leaving the other routes in charge, for any receiver or selection it does not recognise.
 // A recognised selection whose setback cannot be cut is refused as ErrUnsupported (the setback reaches the far end
@@ -595,33 +595,6 @@ func (l *chamferLoop) sectionAt(t float64) (section, error) {
 	return sec, nil
 }
 
-// boundary is the circle that bounds every ring cutter: about the middle of the loop's box, scale times the farthest
-// point of the loop from that middle.
-func (l *chamferLoop) boundary(scale float64) (pt2, float64) {
-	lo, hi := pt2{math.Inf(1), math.Inf(1)}, pt2{math.Inf(-1), math.Inf(-1)}
-	add := func(p pt2) {
-		lo = pt2{math.Min(lo.x, p.x), math.Min(lo.y, p.y)}
-		hi = pt2{math.Max(hi.x, p.x), math.Max(hi.y, p.y)}
-	}
-	for _, s := range l.segs {
-		add(s.p0)
-		add(s.p1)
-		if s.arc {
-			add(s.c.add(pt2{s.r, s.r}))
-			add(s.c.sub(pt2{s.r, s.r}))
-		}
-	}
-	mid := lo.add(hi).scale(0.5)
-	far := 0.0
-	for _, s := range l.segs {
-		far = math.Max(far, math.Max(s.p0.dist(mid), s.p1.dist(mid)))
-		if s.arc {
-			far = math.Max(far, s.c.dist(mid)+s.r)
-		}
-	}
-	return mid, scale * far
-}
-
 // cutLoops cuts every loop from body with a cutter that reaches factor·d past the face and past the bevel's far end,
 // under producer identities from env.Ref+first on. It returns the body, how many identities it used, and whether an
 // error came from the Boolean.
@@ -636,11 +609,14 @@ func cutLoops(ctx context.Context, env topo.Env, hooks Hooks, body *topo.Body, l
 	}
 	out := body
 	var warnings opdiagnostic.CompositeSummaries
-	reuse := new(loftrecord.PairingReuse)
 	for _, l := range loops {
-		cutter, err := l.cutter(ctx, next(), d, over, attempt.scale, reuse)
+		mesh, err := l.cutterMesh(ctx, d, over, attempt.scale)
 		if err != nil {
 			return nil, used, true, err
+		}
+		cutter, err := hooks.MeshSolid(ctx, next(), mesh.verts, mesh.tris, mesh.bound)
+		if err != nil {
+			return nil, used, true, fmt.Errorf("%w: the loop chamfer's cutter: %v", decaderr.ErrUnsupported, err)
 		}
 		if out, err = hooks.Boolean(allowCoarse(ctx, out), meshbool.OpCut, next(), out, cutter); err != nil {
 			return nil, used, true, err
@@ -666,90 +642,206 @@ func allowCoarse(ctx context.Context, body *topo.Body) context.Context {
 	return chaintol.With(ctx, max(chaintol.Of(ctx), fp.MeshBound))
 }
 
-// cutter lofts the removed region of the loop. At height h above the face the section is the loop moved by d + h into
-// the material, from over above the face to over below the bevel's far end. The loop of a face's outer boundary
-// bounds material inside it, so its cutter is the ring outside the moved loop; any other loop's cutter is the whole
-// region inside the moved loop.
-func (l *chamferLoop) cutter(ctx context.Context, env topo.Env, d, over, scale float64,
-	reuse *loftrecord.PairingReuse) (*topo.Body, error) {
-	top, bottom := over, -(d + over)
-	s0, p0, err := l.sketchSection(ctx, top, d+top, scale)
-	if err != nil {
-		return nil, err
-	}
-	s1, p1, err := l.sketchSection(ctx, bottom, d+bottom, scale)
-	if err != nil {
-		return nil, err
-	}
-	cutter, err := loftrecord.FromProfilesReusing(ctx, env, s0, p0, s1, p1, featureoption.LoftConfig{}, reuse)
-	if err != nil {
-		return nil, fmt.Errorf("%w: the loop chamfer's cutter: %v", decaderr.ErrUnsupported, err)
-	}
-	return cutter, nil
+const (
+	// cutterLayers is how many equal steps the cutter takes from its top section to its bottom one. Between two
+	// layers a corner joining a line and an arc is ruled along a straight line where the exact bevel curves; the
+	// departure shrinks with the square of the step.
+	cutterLayers = 6
+	// cutterSagitta is how far a chord of a cutter arc may lie inside its circle, in millimetres. The cutter is a
+	// polyhedron, held exactly, and every vertex carries this plus the layer departure as its bound.
+	cutterSagitta = 0.002
+)
+
+// cutterMesh is the triangles of a cutter and the bound every vertex carries.
+type cutterMesh struct {
+	verts []r3.Vec
+	tris  [][3]int
+	bound float64
 }
 
-// sketchSection draws the loop moved by t, at height h above the face, and returns the one profile that is the
-// cutter's section there.
-func (l *chamferLoop) sketchSection(ctx context.Context, h, t, scale float64) (*sketch.Sketch, *sketch.Profile, error) {
-	sec, err := l.sectionAt(t)
-	if err != nil {
-		return nil, nil, err
-	}
-	frame, err := r3.NewFrame(l.to3(pt2{}, h), l.u, l.v)
-	if err != nil {
-		return nil, nil, fmt.Errorf("%w: the loop chamfer has no cutter frame: %v", decaderr.ErrUnsupported, err)
-	}
-	world := sketch.NewWorld()
-	plane, err := world.CreatePlaneFromFrame(frame)
-	if err != nil {
-		return nil, nil, fmt.Errorf("%w: the loop chamfer has no cutter plane: %v", decaderr.ErrUnsupported, err)
-	}
-	s, err := world.CreateSketch(plane)
-	if err != nil {
-		return nil, nil, fmt.Errorf("%w: the loop chamfer has no cutter sketch: %v", decaderr.ErrUnsupported, err)
-	}
-	joint := func(p pt2) *sketch.Point {
-		q := s.CreatePoint(p.x, p.y)
-		s.Fix(q)
-		return q
-	}
-	if l.outer {
-		mid, radius := l.boundary(scale)
-		s.CreateCircle(joint(mid), radius)
-	}
-	if l.circle {
-		s.CreateCircle(joint(sec.points[0]), sec.radii[0])
-	} else {
-		pts := make([]*sketch.Point, len(sec.points))
-		for i, p := range sec.points {
-			pts[i] = joint(p)
+// cutterRing samples a section as a closed polygon: its corners, and between the corners of an arc evenly spaced
+// points. cells[i] is the number of pieces segment i is cut into, equal at every layer so that layers pair vertex for
+// vertex.
+func (l *chamferLoop) cutterRing(sec section, cells []int) []pt2 {
+	n := len(l.segs)
+	var ring []pt2
+	for i, s := range l.segs {
+		a, b := sec.points[i], sec.points[(i+1)%n]
+		ring = append(ring, a)
+		if !s.arc {
+			continue
 		}
-		for i, seg := range l.segs {
-			from, to := pts[i], pts[(i+1)%len(pts)]
-			switch {
-			case !seg.arc:
-				s.CreateLine(from, to)
-			case seg.ccw:
-				s.CreateArc(joint(seg.c), from, to)
-			default:
-				s.CreateArc(joint(seg.c), to, from)
+		a0, a1 := math.Atan2(a.y-s.c.y, a.x-s.c.x), math.Atan2(b.y-s.c.y, b.x-s.c.x)
+		delta := a1 - a0
+		if s.ccw {
+			for delta <= 0 {
+				delta += 2 * math.Pi
+			}
+		} else {
+			for delta >= 0 {
+				delta -= 2 * math.Pi
+			}
+		}
+		for k := 1; k < cells[i]; k++ {
+			phi := a0 + delta*float64(k)/float64(cells[i])
+			ring = append(ring, pt2{s.c.x + sec.radii[i]*math.Cos(phi), s.c.y + sec.radii[i]*math.Sin(phi)})
+		}
+	}
+	return ring
+}
+
+// cutterMesh builds the removed region of the loop as a closed polyhedron. At height h above the face the section is
+// the loop moved by d + h into the material, in cutterLayers equal steps from over above the face to over below the
+// bevel's far end. The outer boundary of a face bounds material inside it, so its cutter is the ring between a
+// rectangle scale times the loop's reach and the moved loop; any other loop's cutter is the whole region inside the
+// moved loop.
+func (l *chamferLoop) cutterMesh(ctx context.Context, d, over, scale float64) (cutterMesh, error) {
+	top, bottom := over, -(d + over)
+	cells := make([]int, len(l.segs))
+	rmin := math.Inf(1)
+	for i, s := range l.segs {
+		cells[i] = 1
+		if !s.arc {
+			continue
+		}
+		rmax := s.r + d + over
+		step := 2 * math.Acos(1-cutterSagitta/rmax)
+		cells[i] = max(2, int(math.Ceil(s.sweep()/step)))
+		rmin = min(rmin, s.r)
+	}
+	rings := make([][]pt2, cutterLayers+1)
+	heights := make([]float64, cutterLayers+1)
+	for k := range rings {
+		heights[k] = top + (bottom-top)*float64(k)/cutterLayers
+		sec, err := l.sectionAt(d + heights[k])
+		if err != nil {
+			return cutterMesh{}, err
+		}
+		rings[k] = l.cutterRing(sec, cells)
+	}
+	// Walk every ring counter-clockwise about the face's outward normal.
+	ccw := ringArea(rings[0]) > 0
+	if !ccw {
+		for k := range rings {
+			slices.Reverse(rings[k])
+		}
+	}
+	m := cutterMesh{bound: cutterSagitta}
+	if !math.IsInf(rmin, 1) {
+		m.bound += d * d / (rmin * cutterLayers * cutterLayers)
+	}
+	n := len(rings[0])
+	add := func(p pt2, h float64) int {
+		m.verts = append(m.verts, l.to3(p, h))
+		return len(m.verts) - 1
+	}
+	idx := make([][]int, len(rings))
+	for k, ring := range rings {
+		idx[k] = make([]int, n)
+		for j, p := range ring {
+			idx[k][j] = add(p, heights[k])
+		}
+	}
+	// Side faces of the moved loop between consecutive layers: outward from the cutter's region, which for a filled
+	// cutter is away from the loop's inside and for a ring is into it.
+	for k := range cutterLayers {
+		for j := range n {
+			a, b := idx[k][j], idx[k][(j+1)%n]
+			c, e := idx[k+1][(j+1)%n], idx[k+1][j]
+			if l.outer {
+				m.tris = append(m.tris, [3]int{a, b, c}, [3]int{a, c, e})
+			} else {
+				m.tris = append(m.tris, [3]int{a, c, b}, [3]int{a, e, c})
 			}
 		}
 	}
-	if _, err := s.Solve(ctx); err != nil {
-		if ctxErr := ctx.Err(); ctxErr != nil {
-			return nil, nil, ctxErr
-		}
-		return nil, nil, fmt.Errorf("%w: the loop chamfer's cutter sketch does not solve: %v", decaderr.ErrUnsupported, err)
-	}
-	holes := 0
+	var boxTop, boxBottom [4]int
 	if l.outer {
-		holes = 1
-	}
-	for _, candidate := range s.Profiles() {
-		if candidate.Valid && len(candidate.Holes) == holes {
-			return s, candidate, nil
+		box := l.box(scale * (d + over))
+		for c, corner := range box {
+			boxTop[c], boxBottom[c] = add(corner, heights[0]), add(corner, heights[cutterLayers])
+		}
+		// The rectangle's four walls face outward.
+		for c := range box {
+			a, b := boxTop[c], boxTop[(c+1)%4]
+			cc, e := boxBottom[(c+1)%4], boxBottom[c]
+			m.tris = append(m.tris, [3]int{a, cc, b}, [3]int{a, e, cc})
 		}
 	}
-	return nil, nil, fmt.Errorf("%w: the loop chamfer's cutter section is not one valid region", decaderr.ErrUnsupported)
+	capTris := func(layer int, up bool) error {
+		pts := make([]triangulation.Point2, 0, n+4)
+		for _, p := range rings[layer] {
+			pts = append(pts, triangulation.Point2{U: p.x, V: p.y})
+		}
+		loop := make([]int, n)
+		for j := range n {
+			loop[j] = j
+		}
+		loops := [][]int{loop}
+		box := boxTop
+		if layer != 0 {
+			box = boxBottom
+		}
+		if l.outer {
+			corners := l.box(scale * (d + over))
+			for _, c := range corners {
+				pts = append(pts, triangulation.Point2{U: c.x, V: c.y})
+			}
+			slices.Reverse(loop)
+			loops = [][]int{{n, n + 1, n + 2, n + 3}, loop}
+		}
+		tris, err := triangulation.Triangulate(ctx, pts, loops)
+		if err != nil {
+			return fmt.Errorf("%w: the loop chamfer's cutter cap: %v", decaderr.ErrUnsupported, err)
+		}
+		vertex := func(i int) int {
+			if i < n {
+				return idx[layer][i]
+			}
+			return box[i-n]
+		}
+		for _, t := range tris {
+			a, b, c := vertex(t[0]), vertex(t[1]), vertex(t[2])
+			if !up {
+				b, c = c, b
+			}
+			m.tris = append(m.tris, [3]int{a, b, c})
+		}
+		return nil
+	}
+	if err := capTris(0, true); err != nil {
+		return cutterMesh{}, err
+	}
+	if err := capTris(cutterLayers, false); err != nil {
+		return cutterMesh{}, err
+	}
+	return m, nil
+}
+
+// ringArea is the signed area of a closed polygon, positive when it runs counter-clockwise.
+func ringArea(ring []pt2) float64 {
+	area := 0.0
+	for i, p := range ring {
+		area += p.cross(ring[(i+1)%len(ring)]) / 2
+	}
+	return area
+}
+
+// box is the counter-clockwise rectangle that surrounds the loop by margin on every side.
+func (l *chamferLoop) box(margin float64) [4]pt2 {
+	lo, hi := pt2{math.Inf(1), math.Inf(1)}, pt2{math.Inf(-1), math.Inf(-1)}
+	add := func(p pt2) {
+		lo = pt2{math.Min(lo.x, p.x), math.Min(lo.y, p.y)}
+		hi = pt2{math.Max(hi.x, p.x), math.Max(hi.y, p.y)}
+	}
+	for _, s := range l.segs {
+		add(s.p0)
+		add(s.p1)
+		if s.arc {
+			add(s.c.add(pt2{s.r, s.r}))
+			add(s.c.sub(pt2{s.r, s.r}))
+		}
+	}
+	lo, hi = lo.sub(pt2{margin, margin}), hi.add(pt2{margin, margin})
+	return [4]pt2{lo, {hi.x, lo.y}, hi, {lo.x, hi.y}}
 }

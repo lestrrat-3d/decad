@@ -63,17 +63,25 @@ func solidFromMeshBody(ctx context.Context, d *Document, m *MeshBody) (*Body, er
 
 // solidFromMeshBodyAt is solidFromMeshBody under the producer identity ref, for an operation that evaluates under one.
 func solidFromMeshBodyAt(ctx context.Context, d *Document, m *MeshBody, ref producerID) (*Body, error) {
-	return solidFromMeshBodyAtWithContactAudit(ctx, d, m, ref, true)
+	return solidFromMeshBodyAtWithContactAudit(ctx, d, m, ref, true, 0)
+}
+
+// solidFromMeshBodyBoundedAt is solidFromMeshBodyAt for a mesh that stands for a surface it only approximates: every
+// vertex carries bound as its distance from that surface, the way a chorded body's vertices do.
+func solidFromMeshBodyBoundedAt(ctx context.Context, d *Document, m *MeshBody, ref producerID,
+	bound float64) (*Body, error) {
+	return solidFromMeshBodyAtWithContactAudit(ctx, d, m, ref, true, bound)
 }
 
 // solidFromExactQuarterTurnMeshBodyAt rebuilds a mesh whose vertices came from
 // quarterTurnVerts applied to a ContactAudited faceted payload. That exact
 // coordinate permutation preserves the source's whole-mesh contact proof.
 func solidFromExactQuarterTurnMeshBodyAt(ctx context.Context, d *Document, m *MeshBody, ref producerID) (*Body, error) {
-	return solidFromMeshBodyAtWithContactAudit(ctx, d, m, ref, false)
+	return solidFromMeshBodyAtWithContactAudit(ctx, d, m, ref, false, 0)
 }
 
-func solidFromMeshBodyAtWithContactAudit(ctx context.Context, d *Document, m *MeshBody, ref producerID, auditContacts bool) (*Body, error) {
+func solidFromMeshBodyAtWithContactAudit(ctx context.Context, d *Document, m *MeshBody, ref producerID,
+	auditContacts bool, vertexBound float64) (*Body, error) {
 	if ctx == nil {
 		return nil, fmt.Errorf(`%w: a nil context cannot control a conversion`, ErrDegenerate)
 	}
@@ -126,9 +134,15 @@ func solidFromMeshBodyAtWithContactAudit(ctx context.Context, d *Document, m *Me
 	}
 	env := envOf(documentNode(d), ref)
 	src, groups := meshPlaneGroups(env.Ref, verts, tris)
+	bounds := make([]float64, len(verts))
+	if vertexBound > 0 {
+		for i := range bounds {
+			bounds[i] = vertexBound
+		}
+	}
 	node, err := facetedrecord.BuildWithProof(ctx, env, facetedrecord.Payload{
 		Verts: verts, Tris: tris, Src: src, Groups: groups,
-		VertexBound: make([]float64, len(verts)), DPair: diameter, ContactAudited: true, Xform: r3.Identity(),
+		VertexBound: bounds, MeshBound: vertexBound, DPair: diameter, ContactAudited: true, Xform: r3.Identity(),
 	}, audit, measurement.Measurement{Value: units.CubicMillimeters(volume),
 		Exactness: measurement.ExactnessOf(volumeBound), Bound: units.CubicMillimeters(volumeBound)}, held)
 	if err != nil {
