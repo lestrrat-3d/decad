@@ -3039,3 +3039,4 @@
 12	0.01	TestContainerChildNamed
 12	0.01	TestContainerNewUniqueChild
 12	0.01	TestContainerVerifyContainers
+12	3.74	TestContactPairBandSeatsHeadInPocket
