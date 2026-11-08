@@ -462,16 +462,24 @@ package.
 - [type ContactReport](<#ContactReport>)
 - [type ContactRequest](<#ContactRequest>)
 - [type Container](<#Container>)
+  - [func (\*Container) AddBody](<#Container.AddBody>)
   - [func (\*Container) AddPlane](<#Container.AddPlane>)
   - [func (\*Container) AddSketch](<#Container.AddSketch>)
   - [func (\*Container) Bodies](<#Container.Bodies>)
+  - [func (\*Container) ChildNamed](<#Container.ChildNamed>)
   - [func (\*Container) Children](<#Container.Children>)
   - [func (\*Container) Name](<#Container.Name>)
   - [func (\*Container) NewChild](<#Container.NewChild>)
+  - [func (\*Container) NewUniqueChild](<#Container.NewUniqueChild>)
   - [func (\*Container) Parent](<#Container.Parent>)
+  - [func (\*Container) Path](<#Container.Path>)
   - [func (\*Container) Planes](<#Container.Planes>)
   - [func (\*Container) Sketches](<#Container.Sketches>)
+- [type ContainerReport](<#ContainerReport>)
+  - [func (\*ContainerReport) Err](<#ContainerReport.Err>)
+  - [func (\*ContainerReport) Passed](<#ContainerReport.Passed>)
 - [type CopyOption](<#CopyOption>)
+  - [func WithCopyLiftTranslation](<#WithCopyLiftTranslation>)
   - [func WithCopyPlacement](<#WithCopyPlacement>)
   - [func WithCopyRotation](<#WithCopyRotation>)
 - [type Counterbore](<#Counterbore>)
@@ -495,7 +503,6 @@ package.
   - [func (\*Document) ContainerOf](<#Document.ContainerOf>)
   - [func (\*Document) ContainerOfSketch](<#Document.ContainerOfSketch>)
   - [func (\*Document) Expr](<#Document.Expr>)
-  - [func (\*Document) MoveBody](<#Document.MoveBody>)
   - [func (\*Document) OperationHistory](<#Document.OperationHistory>)
   - [func (\*Document) Param](<#Document.Param>)
   - [func (\*Document) ParamInt](<#Document.ParamInt>)
@@ -504,6 +511,7 @@ package.
   - [func (\*Document) SweepPair](<#Document.SweepPair>)
   - [func (\*Document) SweptBox](<#Document.SweptBox>)
   - [func (\*Document) Verify](<#Document.Verify>)
+  - [func (\*Document) VerifyContainers](<#Document.VerifyContainers>)
   - [func (\*Document) VerifyJointBox](<#Document.VerifyJointBox>)
   - [func (\*Document) VerifyLinkage](<#Document.VerifyLinkage>)
   - [func (\*Document) VerifyMotion](<#Document.VerifyMotion>)
@@ -1133,13 +1141,21 @@ Exactly(n) / AtLeast(n) on a query, or the implicit exactly-one of a [ToFace](<#
 [ToFaceAngular](<#ToFaceAngular>) or [EdgeAxis](<#EdgeAxis>). It takes precedence at zero matches — a failed
 assertion is ErrCardinality even when the selector matched nothing.
 
+<a name="ErrContainerLayout"></a>
+
+<pre>var ErrContainerLayout = fmt.Errorf(&#34;decad: container layout is not clean&#34;)</pre>
+
+ErrContainerLayout is the error [ContainerReport](<#ContainerReport>).Err returns when a body sits
+directly in the root or a non-root container holds no bodies
+(agent-docs/container-design.md §6).
+
 <a name="ErrCrossContainer"></a>
 
 <pre>var ErrCrossContainer = fmt.Errorf(&#34;decad: operands sit in different containers&#34;)</pre>
 
 ErrCrossContainer is returned when one operation reads bodies or sketches that
-sit in different containers (agent-docs/container-design.md §3). MoveBody is the
-one way across.
+sit in different containers (agent-docs/container-design.md §3). [Container](<#Container>).AddBody
+puts a body in the other operand's container.
 
 <a name="ErrDegenerate"></a>
 
@@ -1757,13 +1773,17 @@ with a band of analytic patches, and the result is a cap-blend body whose
 volume, area, bounds, undercut and minimum-radius readings all answer.
 A selection covering the whole outer loop of one or both caps of a straight
 prism whose section holds fit splines and lines, with no corner past 10°,
-bevels it at an equal setback by cutting the prism with a lofted cutter
+bevels it at an equal setback by cutting the prism with a polyhedral cutter
 (agent-docs/modify-reach-design.md §8.5). Decad cannot offset a fit spline
 exactly, so the cutter's offset curves are fit splines through points of the
 exact offset, and the call refuses an offset that departs from it by more than
 0\.002 of the setback. The result is a mesh Boolean's: faceted, with the Cut's
 own bounds, and it matches the ideal chamfer only within that ratio. A
 setback that reaches the outline's radius of curvature is ErrDegenerate.
+
+On a mesh Boolean result, whole loops of a retained planar face that the per-edge routes cannot bevel, such as a
+window of lines and arcs with sharp corners, are cut by a polyhedral cutter (agent-docs/retained-modify-reach-design.md
+§15a): faceted, the Cut's own readings, and the bevel ruled between its two sections.
 
 All twelve straight edges of an exact axis-aligned box take
 agent-docs/modify-general-design.md §4.3b's simultaneous chamfer, with or
@@ -1931,8 +1951,8 @@ document and its provenance numbering unchanged.
 
 Copy returns a new live body carrying source's geometry and leaves source
 live. With no options, the copy has source's placement. WithCopyPlacement
-and WithCopyRotation compose a rigid motion onto it; repeated placement
-options use the last value. The copy gets a new body identity and reproduces
+WithCopyRotation and WithCopyLiftTranslation compose a rigid motion onto it;
+repeated placement options use the last value. The copy gets a new body identity and reproduces
 source provenance. source MUST NOT be nil. A body this evaluator did not
 build is ErrUnsupported. Invalid or nil options are ErrDegenerate. A
 canceled context stops the rebuild before the document changes.
@@ -4072,9 +4092,20 @@ bodies and nests inside other containers. It is bookkeeping only: it has no
 transform, instances nothing and changes no geometry (agent-docs/container-design.md).
 
 A Container belongs to one document for life. Its readers are safe to call
-concurrently with Bodies, Remove and Verify; NewChild, AddSketch, AddPlane and
-MoveBody mutate the document and are not safe to run concurrently with another
-mutation.
+concurrently with Bodies, Remove and Verify; NewChild, ChildNamed, NewUniqueChild,
+AddSketch, AddPlane and AddBody mutate the document and are not safe to
+run concurrently with another mutation.
+
+<a name="Container.AddBody"></a>
+#### func (\*Container) AddBody
+
+<pre>func (c *<a href="#Container">Container</a>) AddBody(b *<a href="#Body">Body</a>) <a href="https://pkg.go.dev/builtin#error">error</a></pre>
+
+AddBody places the live body b in c and takes it out of the container it was
+in. Adding b to the container it is already in changes nothing. Nothing else
+changes: b keeps its handle, coordinates, provenance and measurements, and no
+producer identity advances. A nil c or b is ErrDegenerate, a body of another
+document ErrForeignBody, and a retired body ErrRetiredBody.
 
 <a name="Container.AddPlane"></a>
 #### func (\*Container) AddPlane
@@ -4101,6 +4132,15 @@ ErrDegenerate.
 Bodies lists the live bodies placed directly in c, in creation order. A body
 of a child container is not listed. A retired body has left its container.
 
+<a name="Container.ChildNamed"></a>
+#### func (\*Container) ChildNamed
+
+<pre>func (c *<a href="#Container">Container</a>) ChildNamed(name <a href="https://pkg.go.dev/builtin#string">string</a>) (*<a href="#Container">Container</a>, <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
+
+ChildNamed returns the child of c named name, adding it when c has none. Calls
+with one name on one container return the same container. The name is checked as
+NewChild checks it (ErrDegenerate).
+
 <a name="Container.Children"></a>
 #### func (\*Container) Children
 
@@ -4124,12 +4164,28 @@ NewChild adds a container named name under c. The name must be non-empty and
 unique among c's children (ErrDegenerate); a container of another document is
 ErrForeignBody.
 
+<a name="Container.NewUniqueChild"></a>
+#### func (\*Container) NewUniqueChild
+
+<pre>func (c *<a href="#Container">Container</a>) NewUniqueChild(name <a href="https://pkg.go.dev/builtin#string">string</a>) (*<a href="#Container">Container</a>, <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
+
+NewUniqueChild adds a container under c named name, or, when a child already has
+that name, name followed by " 2", " 3" and so on: the first free one. The name is
+checked as NewChild checks it (ErrDegenerate).
+
 <a name="Container.Parent"></a>
 #### func (\*Container) Parent
 
 <pre>func (c *<a href="#Container">Container</a>) Parent() *<a href="#Container">Container</a></pre>
 
 Parent returns the container c nests in, or nil for the root.
+
+<a name="Container.Path"></a>
+#### func (\*Container) Path
+
+<pre>func (c *<a href="#Container">Container</a>) Path() <a href="https://pkg.go.dev/builtin#string">string</a></pre>
+
+[Path](<#Path>) spells c as its names from the root, joined by "/"; the root is "/".
 
 <a name="Container.Planes"></a>
 #### func (\*Container) Planes
@@ -4145,6 +4201,39 @@ Planes lists the planes added to c, in the order they were added.
 
 Sketches lists the sketches added to c, in the order they were added.
 
+<a name="ContainerReport"></a>
+### type ContainerReport
+
+<pre>type ContainerReport struct {
+    // RootBodies are the live bodies placed directly in the root container.
+    RootBodies []*<a href="#Body">Body</a>
+    // EmptyContainers are the non-root containers with no live body in them or in
+    // any container beneath them.
+    EmptyContainers []*<a href="#Container">Container</a>
+    // contains filtered or unexported fields
+}</pre>
+
+ContainerReport is what VerifyContainers found. Both lists are in a fixed order:
+RootBodies in creation order and EmptyContainers in depth-first order of the tree,
+children in creation order.
+
+<a name="ContainerReport.Err"></a>
+#### func (\*ContainerReport) Err
+
+<pre>func (r *<a href="#ContainerReport">ContainerReport</a>) Err() <a href="https://pkg.go.dev/builtin#error">error</a></pre>
+
+Err returns nil when Passed, and otherwise an error wrapping ErrContainerLayout.
+It names each root body by its 1-based place among the live bodies and each empty
+container by its path.
+
+<a name="ContainerReport.Passed"></a>
+#### func (\*ContainerReport) Passed
+
+<pre>func (r *<a href="#ContainerReport">ContainerReport</a>) Passed() <a href="https://pkg.go.dev/builtin#bool">bool</a></pre>
+
+Passed reports whether the layout is clean: no body in the root and no empty
+container.
+
 <a name="CopyOption"></a>
 ### type CopyOption
 
@@ -4153,9 +4242,35 @@ Sketches lists the sketches added to c, in the order they were added.
     // contains filtered or unexported methods
 }</pre>
 
-CopyOption configures Copy. Only WithCopyPlacement and WithCopyRotation
-change the copy's placement. An option from another package cannot implement
+CopyOption configures Copy. Only WithCopyPlacement, WithCopyRotation and
+WithCopyLiftTranslation change the copy's placement. An option from another package cannot implement
 this sealed tier.
+
+<a name="WithCopyLiftTranslation"></a>
+#### func WithCopyLiftTranslation
+
+<pre>func WithCopyLiftTranslation(lift r3.Transform, from, to r3.Vec) <a href="#CopyOption">CopyOption</a></pre>
+
+WithCopyLiftTranslation places a new copy by moving the point from to the
+point to, both given in lift's local coordinates. The exact world translation
+is the lift's linear part times to minus from, formed in exact rationals: the
+subtraction and the product round nothing. A faceted copy denotes its
+source's true solid moved by exactly that vector, and its held vertices are
+charged for the rounding of the held placement to the nearest float
+translation. Other payloads are placed by that float translation alone,
+exactly as WithCopyPlacement of it.
+
+The copy is marked as exactly placed like every exact copy, so VerifyMotion
+and VerifyLinkage refuse to re-place it. Only a copy made directly from its
+source records the translation: Transform and a copy of a copy record none.
+Verify reads a direct copy as its source moved by the exact vector, so a
+copy that stays inside a body the lift-local source stayed inside (a pin
+moved from one bore sketched on the lift to another) is decided from the
+recorded history.
+
+An invalid lift is ErrDegenerate and a non-finite from or to is
+ErrNotFinite, both when Copy evaluates the option. A to that equals from is the
+identity.
 
 <a name="WithCopyPlacement"></a>
 #### func WithCopyPlacement
@@ -4424,7 +4539,7 @@ Both bodies must be non-nil, distinct, live members of d.
 <pre>func (d *<a href="#Document">Document</a>) ContainerOf(b *<a href="#Body">Body</a>) (*<a href="#Container">Container</a>, <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
 
 ContainerOf returns the container holding the live body b: the root until
-MoveBody or an operation's placement rule says otherwise. A foreign body is
+AddBody or an operation's placement rule says otherwise. A foreign body is
 ErrForeignBody and a retired one ErrRetiredBody.
 
 <a name="Document.ContainerOfSketch"></a>
@@ -4443,16 +4558,6 @@ Expr evaluates an ad-hoc expression against the parameter table and returns
 it in the base unit of the kind it computes to (millimetre for a length,
 radian for an angle). An expression mixing kinds incompatibly is
 param.ErrIncompatibleKind. The read is recorded in Bindings.
-
-<a name="Document.MoveBody"></a>
-#### func (\*Document) MoveBody
-
-<pre>func (d *<a href="#Document">Document</a>) MoveBody(b *<a href="#Body">Body</a>, to *<a href="#Container">Container</a>) <a href="https://pkg.go.dev/builtin#error">error</a></pre>
-
-MoveBody puts the live body b in to, and changes nothing else: b keeps its
-handle, coordinates, provenance and measurements, and no producer identity
-advances. A foreign body or container is ErrForeignBody, a retired body
-ErrRetiredBody, and a nil argument ErrDegenerate.
 
 <a name="Document.OperationHistory"></a>
 #### func (\*Document) OperationHistory
@@ -4566,6 +4671,16 @@ retains its Sound result even when the context is already canceled. The
 document remains unchanged. Verify reads the live set once, as it stands
 when the call begins, so a concurrent Remove never changes the bodies one
 call reports on.
+
+<a name="Document.VerifyContainers"></a>
+#### func (\*Document) VerifyContainers
+
+<pre>func (d *<a href="#Document">Document</a>) VerifyContainers() *<a href="#ContainerReport">ContainerReport</a></pre>
+
+VerifyContainers checks the document's container layout without touching
+geometry: every live body should sit in a named container, and every non-root
+container should hold a body, directly or in a container beneath it. A document
+that never uses a container reports every body as a root body.
 
 <a name="Document.VerifyJointBox"></a>
 #### func (\*Document) VerifyJointBox
