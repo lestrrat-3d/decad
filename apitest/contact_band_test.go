@@ -233,12 +233,89 @@ func TestContactPairBandChargesHeldGap(t *testing.T) {
 	require.GreaterOrEqual(t, far.Gap.Bound.Base(), delta)
 	require.Positive(t, far.Gap.Value.Base()-far.Gap.Bound.Base())
 
-	// A held overlap shallower than δ proves nothing; the knob is not convex,
-	// so no penetration depth puts it in the band either.
+	// A held overlap shallower than δ is in the band: lifting the knob by δ
+	// clears it, though the knob is not convex and has no shallow patch.
 	shallow := at(-math.Ldexp(1, -14))
-	require.Equal(t, decad.ContactUndecided, shallow.Relation)
+	require.Equal(t, decad.ContactBand, shallow.Relation, "reason=%v", shallow.Reason)
+	require.Zero(t, shallow.Gap.Value.Base())
+	require.Equal(t, 2*delta, shallow.Gap.Bound.Base())
+	require.Nil(t, shallow.Manifold)
 	deep := at(-1)
 	require.Equal(t, decad.ContactOverlapping, deep.Relation)
+}
+
+// pocketedBlock is a 20 mm block on the floor plane z = 0, 10 mm tall, with a
+// radius-2 pocket 2 mm deep in its top face, and the displacement its held
+// mesh publishes at seatRequest's chord.
+func pocketedBlock(t *testing.T, doc *decad.Document) (*decad.Body, float64) {
+	t.Helper()
+	block := boxBody(t, doc, -10, -10, 10, 10, 10)
+	pocket := discBody(t, doc, 0, 2, 3)
+	pocket, err := decad.Transform(t.Context(), pocket, contactPose(t, r3.Vec{Z: 8}))
+	require.NoError(t, err)
+	block, err = decad.Cut(t.Context(), block, pocket)
+	require.NoError(t, err)
+	mesh, err := block.Tessellate(t.Context(), seatRequest().HeldChord)
+	require.NoError(t, err)
+	return block, mesh.Bound().Base()
+}
+
+// socketHead is a radius-1.9 disc 2 mm tall standing on z = 0 with a 1 mm
+// square socket 0.5 mm deep in its top, and its displacement at
+// seatRequest's chord.
+func socketHead(t *testing.T, doc *decad.Document) (*decad.Body, float64) {
+	t.Helper()
+	head := discBody(t, doc, 0, 1.9, 2)
+	socket := boxBodyAtZ(t, doc, -0.5, -0.5, 0.5, 0.5, 1.5, 1)
+	head, err := decad.Cut(t.Context(), head, socket)
+	require.NoError(t, err)
+	mesh, err := head.Tessellate(t.Context(), seatRequest().HeldChord)
+	require.NoError(t, err)
+	return head, mesh.Bound().Base()
+}
+
+// seatRequest reads the pocketed block and the socket head, each with a
+// curved face, at a 1e-3 mm held chord.
+func seatRequest() decad.ContactRequest {
+	req := bandContactRequest()
+	req.HeldChord = units.Millimeters(1e-3)
+	return req
+}
+
+func TestContactPairBandSeatsHeadInPocket(t *testing.T) {
+	// A socket head sits in a block's pocket, its top flush with the block's
+	// top face and its underside on the pocket floor, 0.1 mm clear of the
+	// pocket wall. Neither body is convex, and both carry a displacement.
+	doc := decad.New()
+	block, deltaBlock := pocketedBlock(t, doc)
+	head, deltaHead := socketHead(t, doc)
+	delta := deltaBlock + deltaHead
+	require.Greater(t, delta, math.Ldexp(1, -14), "the fixture sinks the head 2^-14 mm, inside the band")
+	require.Less(t, delta, 0.01, "and 0.01 mm, outside it")
+	at := func(z float64) *decad.ContactReport {
+		t.Helper()
+		report, err := doc.ContactPair(t.Context(), head, block, contactPose(t, r3.Vec{Z: 8 + z}), r3.Identity(),
+			seatRequest())
+		require.NoError(t, err)
+		return report
+	}
+
+	seated := at(0)
+	require.Equal(t, decad.ContactBand, seated.Relation, "reason=%v", seated.Reason)
+	// A rounded placement can sink the head a hair into the floor. Backing
+	// it out by δ clears the held overlap, so the pair stays in the band.
+	for _, sunk := range []float64{math.Ldexp(1, -40), math.Ldexp(1, -14)} {
+		report := at(-sunk)
+		require.Equal(t, decad.ContactBand, report.Relation, "sunk %g: reason=%v", sunk, report.Reason)
+		require.Equal(t, decad.ContactNonConvex, report.Reason)
+		require.Zero(t, report.Gap.Value.Base())
+		require.GreaterOrEqual(t, report.Gap.Bound.Base(), 2*delta)
+		require.Less(t, report.Gap.Bound.Base(), 2*delta*(1+1e-9))
+		require.Nil(t, report.Manifold)
+	}
+	// Sunk past δ, the underside's rim is a vertex deeper than δ in the
+	// block: a true overlap.
+	require.Equal(t, decad.ContactOverlapping, at(-0.01).Relation)
 }
 
 func TestSweepPairBandImpact(t *testing.T) {

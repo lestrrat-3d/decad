@@ -66,3 +66,68 @@ func TestPlanarDeepVertexPollsAndStops(t *testing.T) {
 	})
 	require.ErrorIs(t, err, stop)
 }
+
+// Legs of PlanarShallowOverlap shown to fail (each removed in turn, fixture
+// red, then restored):
+//   - the margin: translating by a fixed length of 1 instead, the 0.25 deep
+//     plug clears at a margin of 0.125;
+//   - the trial relation: accepting an overlapping trial, the plug clears at
+//     a margin of 0.125;
+//   - the reversed normals of a's facets: read as they are, the plug no longer
+//     backs out of its own facets.
+
+func shallowOverlap(t *testing.T, a, b planar.PlanarSolid, margin float64) bool {
+	t.Helper()
+	result, err := planar.ClassifyPlanar(&a, &b, noPoll)
+	require.NoError(t, err)
+	shallow, err := planar.PlanarShallowOverlap(&a, &b, result, dy(margin), noPoll)
+	require.NoError(t, err)
+	return shallow
+}
+
+func TestPlanarShallowOverlap(t *testing.T) {
+	block := boxSolid([3]float64{0, 0, 0}, [3]float64{10, 10, 10})
+	// The plug sinks 0.25 into the block's top face. Backing out along +Z
+	// (the plug moved) or -Z (the block moved) clears it.
+	plug := boxSolid([3]float64{4, 4, 9.75}, [3]float64{6, 6, 12})
+	for _, order := range [][2]planar.PlanarSolid{{plug, block}, {block, plug}} {
+		require.True(t, shallowOverlap(t, order[0], order[1], 0.5))
+		require.False(t, shallowOverlap(t, order[0], order[1], 0.125))
+		require.False(t, shallowOverlap(t, order[0], order[1], 0))
+	}
+	// A plug in a pocket of the hollow's cavity wall: the cavity is the pocket,
+	// and the plug overlaps only its floor, so backing out of the floor clears it.
+	hollow := hollowSolid([3]float64{-20, -20, -20}, [3]float64{20, 20, 20},
+		[3]float64{-15, -15, -15}, [3]float64{15, 15, 15})
+	seated := boxSolid([3]float64{-1, -1, -15.25}, [3]float64{1, 1, -10})
+	require.True(t, shallowOverlap(t, seated, hollow, 0.5))
+	require.True(t, shallowOverlap(t, hollow, seated, 0.5))
+
+	// A plate pinched 0.25 deep between two walls: no single translation
+	// clears both sides, however shallow each is.
+	walls := boxSolid([3]float64{-5, -5, -5}, [3]float64{-1, 5, 5})
+	right := boxSolid([3]float64{1, -5, -5}, [3]float64{5, 5, 5})
+	walls.Verts = append(walls.Verts, right.Verts...)
+	walls.Tris = append(walls.Tris, boxTriangles(8)...)
+	plate := boxSolid([3]float64{-1.25, -2, -2}, [3]float64{1.25, 2, 2})
+	require.False(t, shallowOverlap(t, plate, walls, 0.5))
+	// Crossing bars overlap with no deep vertex, yet every way out is longer
+	// than the margin.
+	barA := boxSolid([3]float64{-4, -1, -1}, [3]float64{4, 1, 1})
+	barB := boxSolid([3]float64{-0.5, -4, -2}, [3]float64{0.5, 4, 2})
+	require.False(t, deepVertex(t, barA, barB, 0))
+	require.False(t, shallowOverlap(t, barA, barB, 1))
+	// Only an overlap is read.
+	resting := boxSolid([3]float64{4, 4, 10}, [3]float64{6, 6, 12})
+	require.False(t, shallowOverlap(t, resting, block, 0.5))
+}
+
+func TestPlanarShallowOverlapPollsAndStops(t *testing.T) {
+	block := boxSolid([3]float64{0, 0, 0}, [3]float64{10, 10, 10})
+	plug := boxSolid([3]float64{4, 4, 9.75}, [3]float64{6, 6, 12})
+	result, err := planar.ClassifyPlanar(&plug, &block, noPoll)
+	require.NoError(t, err)
+	stop := errors.New("stop")
+	_, err = planar.PlanarShallowOverlap(&plug, &block, result, dy(0.5), func() error { return stop })
+	require.ErrorIs(t, err, stop)
+}

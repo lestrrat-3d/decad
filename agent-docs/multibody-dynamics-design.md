@@ -1607,7 +1607,19 @@ point lies within `δ` of the held pair's. `ContactPair` reads §9.1's exact hel
 | `Touching`, or `Separated` with gap upper end at most `δ` and no lifted set | `ContactBand`, `Gap = [−2δ, 2δ]` |
 | `Overlapping` with a vertex deeper than `δ` inside the other body (`pair.PlanarDeepVertex`) | `Overlapping`, with the held penetration manifold charged, when one publishes |
 | `Overlapping` of two convex bodies whose §9.3 shallow patch has depth at most `δ` | `ContactBand`, `Gap = [−2δ, 2δ]` |
+| `Overlapping` that a translation of the first body no longer than `δ` leaves touching or separated (`planar.PlanarShallowOverlap`) | `ContactBand`, `Gap = [−2δ, 2δ]`, no manifold |
 | anything else | `Undecided` |
+
+The clearing translation `v` bounds a held overlap's depth for any pair, convex or not: a point `x` inside
+both held interiors has `x + v` outside the second body's interior, since the moved first body shares no
+interior point with it, so `x` lies within `|v|` of the second body's boundary, and by the same argument with
+`x − v` within `|v|` of the first's. That is the bound a convex pair's shallow patch gives. The tried
+directions are the crossing facets' outward normals, the second body's as they are and the first's
+reversed, the three most frequent first; floats pick a direction, and the offset is the exact lift of its
+float components, admitted when its exact length is at most `δ`. A trial that reaches the planar kernel's work
+limit ends the search, and no clearing translation leaves the pair `Undecided`. This decides a body seated
+flush in a pocket whose rounded placement sinks it a few ulps into the floor; a body pinched by two
+opposite walls has no single clearing direction and stays `Undecided`.
 
 The lifted band `b` reads `δ` from below: a resting displaced pair is placed with its held gap at most `δ`
 (§6.6), and a held vertex within `δ` of the plane is as near to touching as the body's own precision can
@@ -1616,7 +1628,8 @@ width is a selection of which vertices are published, not a claim: each lifted p
 exact ones of §10.5 charged with `δ`, so the published set is sound at any `b`. The true gap lies in
 `[g_lo − δ, g_hi + δ]`, inside `[−(g + δ), g + δ]`.
 
-A band from a held touch or shallow patch carries that held manifold charged afterwards (§9.4): each
+A band from a clearing translation publishes no manifold, and its reason is `ContactNonConvex` when neither
+body is convex. A band from a held touch or shallow patch carries that held manifold charged afterwards (§9.4): each
 witness ball grows by its own body's `δ`, and every `Separation` is the band. A lifted point of a displaced
 pair carries the same charges: its `M` witness ball grows by `M`'s `δ`, its `S` witness ball by `S`'s, and
 its `Separation` is the vertex's exact height widened by the summed `δ`, since the true `M` boundary lies

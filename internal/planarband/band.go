@@ -30,10 +30,12 @@ type bandPair struct {
 // which the zero-δ body hosts a lifted set is a band carrying that set
 // (liftedBand); a held gap whose lower end exceeds δ is a true gap with δ
 // charged; a held touch, or a held gap or penetration depth at most δ, puts
-// the true signed separation in [−2δ, 2δ], ContactBand; a held vertex deeper
-// than δ inside the other held body is a true overlap (planar.PlanarDeepVertex)
-// carrying the held penetration patch charged with δ (overlapManifold).
-// Anything between is undecided.
+// the true signed separation in [−2δ, 2δ], ContactBand, the depth read off a
+// convex pair's shallow patch (shallowPatch) or off a translation no longer
+// than δ that clears the held overlap (shallowTranslation); a held vertex
+// deeper than δ inside the other held body is a true overlap
+// (planar.PlanarDeepVertex) carrying the held penetration patch charged with δ
+// (overlapManifold). Anything between is undecided.
 func (p *bandPair) classify(ctx context.Context, budget *proofbound.WorkBudget, report *contactReport,
 	result planar.PlanarResult) error {
 	delta := proofarith.DyAdd(p.deltaA, p.deltaB).Rat()
@@ -89,22 +91,58 @@ func (p *bandPair) classify(ctx context.Context, budget *proofbound.WorkBudget, 
 		}
 		report.Reason = vocab.ContactNoGapProof
 		convexA, convexB, err := convexities(ctx, budget, report, p.certificates)
-		if err != nil || !convexA || !convexB {
+		if err != nil {
 			return err
 		}
-		points, err := planar.PlanarPenetrationManifold(p.a, p.b, budget.Step)
-		if err != nil || points == nil {
-			return err
-		}
-		for _, point := range points {
-			// The held depth is minus the separation's lower end.
-			depth := new(big.Rat).Sub(proofarith.FloatRat(point.Separation.BoundMM),
-				proofarith.FloatRat(point.Separation.ValueMM))
-			if depth.Cmp(delta) > 0 {
-				return nil
+		if convexA && convexB {
+			published, err := p.shallowPatch(ctx, budget, report, delta)
+			if err != nil || published {
+				return err
 			}
 		}
-		return p.publishBand(ctx, budget, report, points)
+		return p.shallowTranslation(ctx, budget, report, result, convexA, convexB)
+	}
+	return nil
+}
+
+// shallowPatch publishes a held overlap of two convex bodies as ContactBand
+// when §9.3's shallow patch has depth at most δ, carrying that patch charged
+// with the band. It reports whether it published.
+func (p *bandPair) shallowPatch(ctx context.Context, budget *proofbound.WorkBudget, report *contactReport,
+	delta *big.Rat) (bool, error) {
+	points, err := planar.PlanarPenetrationManifold(p.a, p.b, budget.Step)
+	if err != nil || points == nil {
+		return false, err
+	}
+	for _, point := range points {
+		// The held depth is minus the separation's lower end.
+		depth := new(big.Rat).Sub(proofarith.FloatRat(point.Separation.BoundMM),
+			proofarith.FloatRat(point.Separation.ValueMM))
+		if depth.Cmp(delta) > 0 {
+			return false, nil
+		}
+	}
+	return true, p.publishBand(ctx, budget, report, points)
+}
+
+// shallowTranslation publishes a held overlap as ContactBand with no manifold
+// when a translation of A no longer than δ leaves the held pair touching or
+// separated (planar.PlanarShallowOverlap). That puts every point inside both
+// held interiors within δ of both held boundaries, the bound §9.3's shallow
+// patch gives a convex pair, so the true signed separation lies in [−2δ, 2δ]
+// as for a held touch. The reason is ContactNonConvex when neither body is
+// convex, as for a non-convex held touch.
+func (p *bandPair) shallowTranslation(ctx context.Context, budget *proofbound.WorkBudget, report *contactReport,
+	result planar.PlanarResult, convexA, convexB bool) error {
+	shallow, err := planar.PlanarShallowOverlap(p.a, p.b, result, proofarith.DyAdd(p.deltaA, p.deltaB), budget.Step)
+	if err != nil || !shallow {
+		return err
+	}
+	if err := p.publishBand(ctx, budget, report, nil); err != nil {
+		return err
+	}
+	if report.Relation == vocab.ContactBand && !convexA && !convexB {
+		report.Reason = vocab.ContactNonConvex
 	}
 	return nil
 }
