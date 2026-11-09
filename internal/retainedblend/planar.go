@@ -137,6 +137,18 @@ func bridgeNearest(ps []pt2, merged []int, holes [][]int) ([]int, [][]int, error
 		holeIdx int
 	}
 	var cands []candidate
+	count := 0
+	for _, hole := range holes {
+		var ok bool
+		count, ok = addCandidateCount(count, len(merged), len(hole))
+		if !ok {
+			count = 0
+			break
+		}
+	}
+	if count > 0 {
+		cands = make([]candidate, 0, count)
+	}
 	for hi, hole := range holes {
 		for hk, hv := range hole {
 			for mi, mv := range merged {
@@ -169,6 +181,13 @@ func bridgeNearest(ps []pt2, merged []int, holes [][]int) ([]int, [][]int, error
 		return spliced, rest, nil
 	}
 	return nil, nil, fmt.Errorf("%w: no segment joins a hole of the face to its outer boundary", decaderr.ErrUnsupported)
+}
+
+func addCandidateCount(count, merged, hole int) (int, bool) {
+	if merged != 0 && hole > (math.MaxInt-count)/merged {
+		return 0, false
+	}
+	return count + merged*hole, true
 }
 
 // bridgeClear reports whether the segment from merged[m] to holes[hole][h]
