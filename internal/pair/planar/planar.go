@@ -301,6 +301,12 @@ type planarPrep struct {
 	sides     [][3]proof.DyV3
 	sideBoxes [][3]floatBox
 	sidesSet  []bool
+	offsets   []facetOffset
+}
+
+type facetOffset struct {
+	d   proof.Dyadic
+	set bool
 }
 
 // preparePlanar builds s's derived data, or reuses the pose data
