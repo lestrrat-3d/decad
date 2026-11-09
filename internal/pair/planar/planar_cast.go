@@ -178,8 +178,21 @@ func pointInFacetBoxed(p *planarPrep, t int, x hpoint, xb floatBox, boxed bool) 
 	if proof.DvDot(p.normal[t], x.from(p.s.Verts[tri[0]])).Sign() != 0 {
 		return false
 	}
+	planes, boxes := p.sidePlanes(t)
+	weightSign := x.w.Sign()
 	for i := range 3 {
-		if edgeSide(p.normal[t], p.s.Verts[tri[i]], p.s.Verts[tri[(i+1)%3]], x) < 0 {
+		sign, decided := 0, false
+		if boxed && weightSign != 0 {
+			// The float test uses x/w; the exact homogeneous sign includes w.
+			sign, decided = floatDotSign(xb, p.vertBox[tri[i]], boxes[i])
+			if weightSign < 0 {
+				sign = -sign
+			}
+		}
+		if !decided {
+			sign = proof.DvDot(x.from(p.s.Verts[tri[i]]), planes[i]).Sign()
+		}
+		if sign < 0 {
 			return false
 		}
 	}
