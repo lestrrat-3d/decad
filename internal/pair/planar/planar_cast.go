@@ -165,13 +165,16 @@ func (h hpoint) inBox(lo, hi [3]proof.Dyadic) bool {
 //
 // xb, when boxed, is x's outward float box (hpoint.floatBox), and p carries
 // its float boxes: a float box apart from the triangle's proves x outside the
-// exact box before the exact comparisons run (planar_prune.go).
+// exact box (planar_prune.go). Otherwise, for positive weight, the exact plane
+// and edge tests imply containment in the triangle and its box. With negative
+// weight the three edge expressions sum to a negative value for a nonzero
+// normal, so they cannot all pass. At zero weight inBox already accepts.
 func pointInFacet(p *planarPrep, t int, x hpoint) bool {
 	return pointInFacetBoxed(p, t, x, floatBox{}, false)
 }
 
 func pointInFacetBoxed(p *planarPrep, t int, x hpoint, xb floatBox, boxed bool) bool {
-	if !proof.DvIsZero(p.normal[t]) && ((boxed && floatApart(xb, p.triBox[t])) || !x.inBox(p.triLo[t], p.triHi[t])) {
+	if !proof.DvIsZero(p.normal[t]) && ((boxed && floatApart(xb, p.triBox[t])) || (!boxed && !x.inBox(p.triLo[t], p.triHi[t]))) {
 		return false
 	}
 	tri := p.s.Tris[t]
