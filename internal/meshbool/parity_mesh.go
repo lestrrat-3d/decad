@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"math/big"
+	"sync"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/proof"
@@ -97,6 +98,7 @@ type ParityMesh struct {
 	// obliqueScales holds each box's maximum absolute coordinate, floored at 1.
 	obliqueBoxes  [][2]r3.Vec
 	obliqueScales []float64
+	obliqueMu     sync.Mutex
 	// projections[axis][vi] is vertex vi projected onto the plane a ray
 	// sweeping axis leaves. Both rays of an axis carry the same (u, v) pair
 	// (AxisRays), so one slot per axis serves both senses. A slot stays nil

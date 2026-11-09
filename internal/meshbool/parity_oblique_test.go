@@ -1,10 +1,13 @@
 package meshbool
 
 import (
+	"context"
 	"math"
 	"math/big"
 	"math/rand"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
@@ -45,6 +48,40 @@ func TestParityObliqueRays(t *testing.T) {
 	bm, err := PrepContext(t.Context(), verts, tris, nil)
 	require.NoError(t, err)
 	bm.SetVertexBounds(make([]float64, len(verts)))
+	canceled, cancel := context.WithCancel(t.Context())
+	cancel()
+	canceledInside, canceledBoundary, canceledDecided, err := bm.Parity.obliqueParity(
+		canceled, proof.XptOf(r3.Vec{}), len(all), func(i int) int { return all[i] })
+	require.ErrorIs(t, err, context.Canceled)
+	require.False(t, canceledInside || canceledBoundary || canceledDecided)
+	require.Nil(t, bm.Parity.obliqueScales)
+	axisPoint := proof.XptOf(r3.Vec{X: 0.1, Y: 0.2, Z: 0.3})
+	inside, boundary, err := MeshParityAllContext(t.Context(), axisPoint, bm.Parity)
+	require.NoError(t, err)
+	require.True(t, inside)
+	require.False(t, boundary)
+	require.Nil(t, bm.Parity.obliqueScales)
+	centre := proof.XptOf(r3.Vec{})
+	wantInside, wantBoundary, wantDecided, wantErr := NewParityMesh(verts, tris).obliqueParity(
+		t.Context(), centre, len(all), func(i int) int { return all[i] })
+	type result struct {
+		inside, boundary, decided bool
+		err                       error
+	}
+	results := make(chan result, 8)
+	var wg sync.WaitGroup
+	for range 8 {
+		wg.Go(func() {
+			i, b, d, e := bm.Parity.obliqueParity(t.Context(), centre, len(all), func(i int) int { return all[i] })
+			results <- result{i, b, d, e}
+		})
+	}
+	wg.Wait()
+	close(results)
+	for got := range results {
+		require.Equal(t, wantErr, got.err)
+		require.Equal(t, []bool{wantInside, wantBoundary, wantDecided}, []bool{got.inside, got.boundary, got.decided})
+	}
 	at := func(x, y, z int64) proof.Xpt {
 		return ratXpt(big.NewRat(x, 1), big.NewRat(y, 1), big.NewRat(z, 1))
 	}
@@ -99,6 +136,8 @@ func TestPreparedObliqueBoxMatchesStandalone(t *testing.T) {
 		}
 		bm := &BoolMesh{Verts: v[:3], Tris: [][3]int{{0, 1, 2}}, Boxes: [][2]r3.Vec{TriBox(v, [3]int{0, 1, 2})}}
 		bm.SetVertexBounds([]float64{0, 0, 0})
+		_, err := bm.Parity.initObliqueScales(t.Context())
+		require.NoError(t, err)
 		p, box := v[3], bm.Boxes[0]
 		scale := max(1, math.Abs(p.X), math.Abs(p.Y), math.Abs(p.Z), bm.Parity.obliqueScales[0])
 		refScale := 1.0
@@ -112,5 +151,35 @@ func TestPreparedObliqueBoxMatchesStandalone(t *testing.T) {
 			got := rayMissesPreparedBox(p, d, box[0], box[1], scale)
 			require.Equal(t, want, got, "case %d, direction %v", i, ray)
 		}
+	}
+}
+
+type cancelAfterPolls struct {
+	polls int
+}
+
+func (c *cancelAfterPolls) Deadline() (time.Time, bool) { return time.Time{}, false }
+func (c *cancelAfterPolls) Done() <-chan struct{}       { return nil }
+func (c *cancelAfterPolls) Value(any) any               { return nil }
+
+func (c *cancelAfterPolls) Err() error {
+	c.polls++
+	if c.polls >= 3 {
+		return context.Canceled
+	}
+	return nil
+}
+
+func TestObliqueScaleBuildCancellationRetries(t *testing.T) {
+	pm := &ParityMesh{obliqueBoxes: make([][2]r3.Vec, 600)}
+	ctx := &cancelAfterPolls{}
+	_, err := pm.initObliqueScales(ctx)
+	require.ErrorIs(t, err, context.Canceled)
+	require.Nil(t, pm.obliqueScales)
+	scales, err := pm.initObliqueScales(t.Context())
+	require.NoError(t, err)
+	require.Len(t, scales, 600)
+	for _, scale := range scales {
+		require.Equal(t, 1.0, scale)
 	}
 }

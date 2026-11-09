@@ -32,7 +32,15 @@ func (pm *ParityMesh) obliqueParity(ctx context.Context, p proof.Xpt, count int,
 	finite := !math.IsInf(pf.X, 0) && !math.IsInf(pf.Y, 0) && !math.IsInf(pf.Z, 0) &&
 		!math.IsNaN(pf.X) && !math.IsNaN(pf.Y) && !math.IsNaN(pf.Z)
 	pointScale := max(1, math.Abs(pf.X), math.Abs(pf.Y), math.Abs(pf.Z))
-	prepared := len(pm.obliqueBoxes) == len(pm.Tris) && len(pm.obliqueScales) == len(pm.Tris)
+	prepared := finite && count > 0 && len(pm.obliqueBoxes) > 0 && len(pm.obliqueBoxes) == len(pm.Tris)
+	var scales []float64
+	if prepared {
+		var err error
+		scales, err = pm.initObliqueScales(ctx)
+		if err != nil {
+			return false, false, false, err
+		}
+	}
 	for _, dir := range obliqueRays {
 		d := proof.Xpt{X: big.NewInt(dir[0]), Y: big.NewInt(dir[1]), Z: big.NewInt(dir[2]), W: big.NewInt(1)}
 		df := [3]float64{float64(dir[0]), float64(dir[1]), float64(dir[2])}
@@ -49,7 +57,7 @@ func (pm *ParityMesh) obliqueParity(ctx context.Context, p proof.Xpt, count int,
 			if finite {
 				if prepared {
 					box := pm.obliqueBoxes[ti]
-					if rayMissesPreparedBox(pf, df, box[0], box[1], max(pointScale, pm.obliqueScales[ti])) {
+					if rayMissesPreparedBox(pf, df, box[0], box[1], max(pointScale, scales[ti])) {
 						continue
 					}
 				} else if rayMissesBox(pf, df, pm.Verts[tri[0]], pm.Verts[tri[1]], pm.Verts[tri[2]]) {
@@ -89,6 +97,41 @@ func (pm *ParityMesh) obliqueParity(ctx context.Context, p proof.Xpt, count int,
 		return crossings%2 == 1, false, true, nil
 	}
 	return false, false, false, nil
+}
+
+func (pm *ParityMesh) initObliqueScales(ctx context.Context) ([]float64, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	pm.obliqueMu.Lock()
+	scales := pm.obliqueScales
+	pm.obliqueMu.Unlock()
+	if scales != nil {
+		return scales, ctx.Err()
+	}
+	scales = make([]float64, len(pm.obliqueBoxes))
+	for i, box := range pm.obliqueBoxes {
+		if i%256 == 0 {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
+		}
+		lo, hi := box[0], box[1]
+		scales[i] = max(1, math.Abs(lo.X), math.Abs(hi.X), math.Abs(lo.Y),
+			math.Abs(hi.Y), math.Abs(lo.Z), math.Abs(hi.Z))
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	pm.obliqueMu.Lock()
+	defer pm.obliqueMu.Unlock()
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if pm.obliqueScales == nil {
+		pm.obliqueScales = scales
+	}
+	return pm.obliqueScales, nil
 }
 
 // exactVertex is vertex vi's exact point: the borrowed Boolean geometry when
