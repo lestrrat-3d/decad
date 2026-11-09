@@ -225,6 +225,9 @@ func planeSignLayouts(m planeSignMesh) map[string]*LoftAuditData {
 func requireSameSeparation(t *testing.T, wantSep, gotSep bool, wantA, gotA, wantB, gotB [3]int,
 	msgAndArgs ...any) {
 	t.Helper()
+	if wantSep == gotSep && wantB == gotB && wantA == gotA {
+		return
+	}
 	require.Equal(t, wantSep, gotSep, msgAndArgs...)
 	require.Equal(t, wantB, gotB, msgAndArgs...)
 	require.Equal(t, wantA, gotA, msgAndArgs...)
