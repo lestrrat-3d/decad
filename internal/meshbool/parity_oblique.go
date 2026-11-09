@@ -31,6 +31,16 @@ func (pm *ParityMesh) obliqueParity(ctx context.Context, p proof.Xpt, count int,
 	pf := p.Vec()
 	finite := !math.IsInf(pf.X, 0) && !math.IsInf(pf.Y, 0) && !math.IsInf(pf.Z, 0) &&
 		!math.IsNaN(pf.X) && !math.IsNaN(pf.Y) && !math.IsNaN(pf.Z)
+	pointScale := max(1, math.Abs(pf.X), math.Abs(pf.Y), math.Abs(pf.Z))
+	prepared := finite && count > 0 && len(pm.obliqueBoxes) > 0 && len(pm.obliqueBoxes) == len(pm.Tris)
+	var scales []float64
+	if prepared {
+		var err error
+		scales, err = pm.initObliqueScales(ctx)
+		if err != nil {
+			return false, false, false, err
+		}
+	}
 	for _, dir := range obliqueRays {
 		d := proof.Xpt{X: big.NewInt(dir[0]), Y: big.NewInt(dir[1]), Z: big.NewInt(dir[2]), W: big.NewInt(1)}
 		df := [3]float64{float64(dir[0]), float64(dir[1]), float64(dir[2])}
@@ -44,8 +54,15 @@ func (pm *ParityMesh) obliqueParity(ctx context.Context, p proof.Xpt, count int,
 			}
 			ti := facet(i)
 			tri := pm.Tris[ti]
-			if finite && rayMissesBox(pf, df, pm.Verts[tri[0]], pm.Verts[tri[1]], pm.Verts[tri[2]]) {
-				continue
+			if finite {
+				if prepared {
+					box := pm.obliqueBoxes[ti]
+					if rayMissesPreparedBox(pf, df, box[0], box[1], max(pointScale, scales[ti])) {
+						continue
+					}
+				} else if rayMissesBox(pf, df, pm.Verts[tri[0]], pm.Verts[tri[1]], pm.Verts[tri[2]]) {
+					continue
+				}
 			}
 			xa, xb, xc := pm.exactVertex(tri[0]), pm.exactVertex(tri[1]), pm.exactVertex(tri[2])
 			ua, ub, uc := proof.Xsub(xa, p), proof.Xsub(xb, p), proof.Xsub(xc, p)
@@ -82,6 +99,41 @@ func (pm *ParityMesh) obliqueParity(ctx context.Context, p proof.Xpt, count int,
 	return false, false, false, nil
 }
 
+func (pm *ParityMesh) initObliqueScales(ctx context.Context) ([]float64, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	pm.obliqueMu.Lock()
+	scales := pm.obliqueScales
+	pm.obliqueMu.Unlock()
+	if scales != nil {
+		return scales, ctx.Err()
+	}
+	scales = make([]float64, len(pm.obliqueBoxes))
+	for i, box := range pm.obliqueBoxes {
+		if i%256 == 0 {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
+		}
+		lo, hi := box[0], box[1]
+		scales[i] = max(1, math.Abs(lo.X), math.Abs(hi.X), math.Abs(lo.Y),
+			math.Abs(hi.Y), math.Abs(lo.Z), math.Abs(hi.Z))
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	pm.obliqueMu.Lock()
+	defer pm.obliqueMu.Unlock()
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if pm.obliqueScales == nil {
+		pm.obliqueScales = scales
+	}
+	return pm.obliqueScales, nil
+}
+
 // exactVertex is vertex vi's exact point: the borrowed Boolean geometry when
 // present, else the float vertex lifted exactly.
 func (pm *ParityMesh) exactVertex(vi int) proof.Xpt {
@@ -103,6 +155,15 @@ func rayMissesBox(p r3.Vec, d [3]float64, a, b, c r3.Vec) bool {
 	for k := range 3 {
 		scale = max(scale, math.Abs(lo[k]), math.Abs(hi[k]), math.Abs(pc[k]))
 	}
+	return rayMissesSlabs(pc, d, lo, hi, scale)
+}
+
+func rayMissesPreparedBox(p r3.Vec, d [3]float64, lo, hi r3.Vec, scale float64) bool {
+	return rayMissesSlabs([3]float64{p.X, p.Y, p.Z}, d,
+		[3]float64{lo.X, lo.Y, lo.Z}, [3]float64{hi.X, hi.Y, hi.Z}, scale)
+}
+
+func rayMissesSlabs(pc [3]float64, d [3]float64, lo, hi [3]float64, scale float64) bool {
 	if math.IsInf(scale, 0) || scale > 0x1p500 {
 		return false
 	}

@@ -78,6 +78,7 @@ func (bm *BoolMesh) SetVertexBounds(beta []float64) {
 	bm.Parity = NewParityMesh(bm.Verts, bm.Tris)
 	bm.Parity.exactVerts = bm.Xverts
 	bm.Parity.exactNorms = bm.Norms
+	bm.Parity.obliqueBoxes = bm.Boxes
 }
 
 // SourceIDs maps a tessellation's per-facet source faces to the global group
