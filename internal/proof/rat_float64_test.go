@@ -242,10 +242,16 @@ func TestXhpVecMatchesLegacyQuotient(t *testing.T) {
 		t.Helper()
 		want := legacyXhpFractionFloat64(num, den)
 		got := proof.XhpVec(proof.Xhp{X: num, Y: new(big.Int).Neg(num), Z: new(big.Int), W: den})
-		require.Equal(t, math.Float64bits(want), math.Float64bits(got.X), "num=%v den=%v", num, den)
+		if math.Float64bits(want) != math.Float64bits(got.X) {
+			require.Equal(t, math.Float64bits(want), math.Float64bits(got.X), "num=%v den=%v", num, den)
+		}
 		wantNeg := legacyXhpFractionFloat64(new(big.Int).Neg(num), den)
-		require.Equal(t, math.Float64bits(wantNeg), math.Float64bits(got.Y), "neg num=%v den=%v", num, den)
-		require.Zero(t, math.Float64bits(got.Z))
+		if math.Float64bits(wantNeg) != math.Float64bits(got.Y) {
+			require.Equal(t, math.Float64bits(wantNeg), math.Float64bits(got.Y), "neg num=%v den=%v", num, den)
+		}
+		if math.Float64bits(got.Z) != 0 {
+			require.Zero(t, math.Float64bits(got.Z))
+		}
 	}
 	for _, q := range ratFloat64Cases(rng, ratFloat64Randoms()/2) {
 		n, d := q.Num(), q.Denom()
