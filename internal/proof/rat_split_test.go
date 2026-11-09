@@ -104,7 +104,9 @@ func TestSplitGCDRatOpsMatchBigRat(t *testing.T) {
 	// returns 1/3, and no production path passes such an operand.
 	for range 20000 {
 		a, b := nonReducedRat(rng), operand()
-		require.False(t, isReduced(a), "generator made the reduced %s", rawString(a))
+		if reduced := isReduced(a); reduced {
+			require.False(t, reduced, "generator made the reduced %s", rawString(a))
+		}
 		switch rng.IntN(3) {
 		case 0:
 			a, b = b, a
@@ -118,14 +120,24 @@ func TestSplitGCDRatOpsMatchBigRat(t *testing.T) {
 			ar, br := rawCopy(a), rawCopy(b)
 			want := o.want(new(big.Rat), reduceCopy(a), reduceCopy(b))
 			got := o.got(new(big.Rat), a, b)
-			require.Zero(t, got.Cmp(want), "%s(%s, %s) = %v, want %v", o.name, rawString(ar), rawString(br), got, want)
-			require.Equal(t, rawString(ar), rawString(a), "%s changed operand a", o.name)
-			require.Equal(t, rawString(br), rawString(b), "%s changed operand b", o.name)
+			if cmp := got.Cmp(want); cmp != 0 {
+				require.Zero(t, cmp, "%s(%s, %s) = %v, want %v", o.name, rawString(ar), rawString(br), got, want)
+			}
+			if !same(ar, a) {
+				require.Equal(t, rawString(ar), rawString(a), "%s changed operand a", o.name)
+			}
+			if !same(br, b) {
+				require.Equal(t, rawString(br), rawString(b), "%s changed operand b", o.name)
+			}
 
 			za := rawCopy(a)
-			require.Zero(t, o.got(za, za, b).Cmp(want), "%s z=a (%s, %s)", o.name, rawString(ar), rawString(br))
+			if cmp := o.got(za, za, b).Cmp(want); cmp != 0 {
+				require.Zero(t, cmp, "%s z=a (%s, %s)", o.name, rawString(ar), rawString(br))
+			}
 			zb := rawCopy(b)
-			require.Zero(t, o.got(zb, a, zb).Cmp(want), "%s z=b (%s, %s)", o.name, rawString(ar), rawString(br))
+			if cmp := o.got(zb, a, zb).Cmp(want); cmp != 0 {
+				require.Zero(t, cmp, "%s z=b (%s, %s)", o.name, rawString(ar), rawString(br))
+			}
 		}
 	}
 }
