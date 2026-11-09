@@ -2970,6 +2970,7 @@
 12	0.00	TestStackedBlindCutSplitsExistingSlab
 12	0.01	TestStackedUnionEqualBoxesStacked
 12	0.00	TestStatusString
+12	0.00	TestStemOutsideTorusArcsMatchesSingleSweepOracle
 12	0.13	TestStitchCurvedRevolveSheetTessellates
 12	0.01	TestStitchDisplacedPatchStaysASheet
 12	0.01	TestStitchSolidTessellateRecordsThePostSignFixTriangleSet
