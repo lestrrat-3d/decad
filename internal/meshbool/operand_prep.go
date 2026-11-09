@@ -3,6 +3,7 @@ package meshbool
 import (
 	"context"
 	"fmt"
+	"math"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/proof"
@@ -78,6 +79,13 @@ func (bm *BoolMesh) SetVertexBounds(beta []float64) {
 	bm.Parity = NewParityMesh(bm.Verts, bm.Tris)
 	bm.Parity.exactVerts = bm.Xverts
 	bm.Parity.exactNorms = bm.Norms
+	bm.Parity.obliqueBoxes = bm.Boxes
+	bm.Parity.obliqueScales = make([]float64, len(bm.Boxes))
+	for i, box := range bm.Boxes {
+		lo, hi := box[0], box[1]
+		bm.Parity.obliqueScales[i] = max(1, math.Abs(lo.X), math.Abs(hi.X), math.Abs(lo.Y),
+			math.Abs(hi.Y), math.Abs(lo.Z), math.Abs(hi.Z))
+	}
 }
 
 // SourceIDs maps a tessellation's per-facet source faces to the global group

@@ -93,6 +93,10 @@ type ParityMesh struct {
 	// them nil and classifyFacet builds the exact geometry on demand.
 	exactVerts []proof.Xpt
 	exactNorms []proof.Xpt
+	// obliqueBoxes borrows the prepared operand's immutable facet boxes.
+	// obliqueScales holds each box's maximum absolute coordinate, floored at 1.
+	obliqueBoxes  [][2]r3.Vec
+	obliqueScales []float64
 	// projections[axis][vi] is vertex vi projected onto the plane a ray
 	// sweeping axis leaves. Both rays of an axis carry the same (u, v) pair
 	// (AxisRays), so one slot per axis serves both senses. A slot stays nil
