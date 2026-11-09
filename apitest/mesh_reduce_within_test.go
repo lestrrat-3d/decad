@@ -78,10 +78,8 @@ func closestOnTriangle(p, a, b, c r3.Vec) float64 {
 	return p.Sub(a.Add(ab.Scale(vb * denom)).Add(ac.Scale(vc * denom))).Len()
 }
 
-// farthest is the greatest distance from a sample of m's surface (vertices, edge midpoints and triangle
-// centroids) to the surface of other.
-func farthest(m, other *decad.MeshBody) float64 {
-	ov, ot := other.Vertices(), other.Triangles()
+// surfaceSamples returns the vertices, edge midpoints and triangle centroids of m.
+func surfaceSamples(m *decad.MeshBody) []r3.Vec {
 	v, tris := m.Vertices(), m.Triangles()
 	var samples []r3.Vec
 	samples = append(samples, v...)
@@ -89,8 +87,14 @@ func farthest(m, other *decad.MeshBody) float64 {
 		a, b, c := v[t[0]], v[t[1]], v[t[2]]
 		samples = append(samples, a.Add(b).Scale(0.5), b.Add(c).Scale(0.5), c.Add(a).Scale(0.5), a.Add(b).Add(c).Scale(1.0/3))
 	}
+	return samples
+}
+
+// farthest is the greatest distance from a surface sample of m to the surface of other.
+func farthest(m, other *decad.MeshBody) float64 {
+	ov, ot := other.Vertices(), other.Triangles()
 	worst := 0.0
-	for _, p := range samples {
+	for _, p := range surfaceSamples(m) {
 		best := math.Inf(1)
 		for _, t := range ot {
 			best = math.Min(best, closestOnTriangle(p, ov[t[0]], ov[t[1]], ov[t[2]]))
@@ -100,8 +104,44 @@ func farthest(m, other *decad.MeshBody) float64 {
 	return worst
 }
 
+// samplesWithin reports whether every surface sample of m lies within bound of other.
+func samplesWithin(m, other *decad.MeshBody, bound float64) bool {
+	if math.IsNaN(bound) || math.IsInf(bound, 0) {
+		return false
+	}
+	ov, ot := other.Vertices(), other.Triangles()
+	for _, p := range surfaceSamples(m) {
+		found := false
+		for _, tri := range ot {
+			distance := closestOnTriangle(p, ov[tri[0]], ov[tri[1]], ov[tri[2]])
+			if math.IsNaN(distance) || math.IsInf(distance, 0) {
+				return false
+			}
+			if distance <= bound {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return false
+		}
+	}
+	return true
+}
+
 func TestReduceMeshWithinStaysWithinItsStatedDistance(t *testing.T) {
 	t.Parallel()
+	// Small meshes retain the exhaustive maximum as an independent comparison.
+	small, larger := uvSphere(t, 10, 4, 8), uvSphere(t, 11, 4, 8)
+	for _, pair := range [][2]*decad.MeshBody{{small, larger}, {larger, small}} {
+		maxDistance := farthest(pair[0], pair[1])
+		for _, b := range []float64{math.Nextafter(maxDistance, math.Inf(-1)), maxDistance,
+			math.Nextafter(maxDistance, math.Inf(1))} {
+			require.Equal(t, maxDistance <= b, samplesWithin(pair[0], pair[1], b), "bound=%g", b)
+		}
+		require.False(t, samplesWithin(pair[0], pair[1], math.Inf(1)))
+		require.False(t, samplesWithin(pair[0], pair[1], math.NaN()))
+	}
 	sphere := uvSphere(t, 10, 40, 80)
 	const distance = 1.0
 	out, report, err := decad.ReduceMeshWithin(t.Context(), sphere, units.Millimeters(distance))
@@ -112,14 +152,14 @@ func TestReduceMeshWithinStaysWithinItsStatedDistance(t *testing.T) {
 	require.LessOrEqual(t, bound, distance)
 	require.GreaterOrEqual(t, bound, report.MaxVertexMove.Base(), "the bound is above the greatest move")
 	// Checked from outside, by brute force, in both directions.
-	require.LessOrEqual(t, farthest(sphere, out), bound, "the input is within the bound of the result")
-	require.LessOrEqual(t, farthest(out, sphere), bound, "and the result is within the bound of the input")
+	require.True(t, samplesWithin(sphere, out, bound), "the input is within the bound of the result")
+	require.True(t, samplesWithin(out, sphere, bound), "and the result is within the bound of the input")
 	// A tighter ask keeps more of the sphere.
 	finer, fr, err := decad.ReduceMeshWithin(t.Context(), sphere, units.Millimeters(0.6))
 	require.NoError(t, err)
 	require.Greater(t, len(finer.Triangles()), len(out.Triangles()))
 	require.LessOrEqual(t, fr.SurfaceBound.Base(), 0.6)
-	require.LessOrEqual(t, farthest(sphere, finer), fr.SurfaceBound.Base())
+	require.True(t, samplesWithin(sphere, finer, fr.SurfaceBound.Base()))
 }
 
 func TestReduceMeshWithinThinsAFinelyCutBlock(t *testing.T) {
@@ -130,8 +170,8 @@ func TestReduceMeshWithinThinsAFinelyCutBlock(t *testing.T) {
 	out, report, err := decad.ReduceMeshWithin(t.Context(), fine, units.Millimeters(2))
 	require.NoError(t, err)
 	require.Less(t, len(out.Triangles()), len(fine.Triangles())/2)
-	require.LessOrEqual(t, farthest(fine, out), report.SurfaceBound.Base())
-	require.LessOrEqual(t, farthest(out, fine), report.SurfaceBound.Base())
+	require.True(t, samplesWithin(fine, out, report.SurfaceBound.Base()))
+	require.True(t, samplesWithin(out, fine, report.SurfaceBound.Base()))
 }
 
 // subdividedBlock splits each triangle of the closed mesh into 64 by midpoint subdivision, three rounds.
