@@ -432,8 +432,8 @@ func TestHpointFloatBoxHoldsPoint(t *testing.T) {
 	require.Positive(t, refused, "premise: some weights' floats hold zero or overflow")
 }
 
-// TestPointInFacetFloatPretestKeepsAnswers holds pointInFacetBoxed to
-// pointInFacet over rational points x/w at a triangle's corners, on its edges,
+// TestPointInFacetFloatPretestKeepsAnswers holds pointInFacetBoxed to the
+// independent plane and edge tests over points at a triangle's corners, on its edges,
 // inside it, just past its box, and away from it. Points at the corners lie
 // on the float boxes' edges, where the float test cannot decide.
 //
@@ -479,7 +479,7 @@ func TestPointInFacetFloatPretestKeepsAnswers(t *testing.T) {
 				}
 				x := hpoint{x: dvScale(point, proof.DyShift(w, -2)), w: w}
 				xb, ok := x.floatBox()
-				want := pointInFacet(prep, 0, x)
+				want := pointInFacetPlane(prep, x)
 				require.Equal(t, want, pointInFacetBoxed(prep, 0, x, xb, ok))
 				switch {
 				case ok && floatApart(xb, prep.triBox[0]):
@@ -495,6 +495,67 @@ func TestPointInFacetFloatPretestKeepsAnswers(t *testing.T) {
 	require.Positive(t, counts["float"], "premise: the float test rejects some points")
 	require.Positive(t, counts["exact"], "premise: the exact tests reject some points")
 	require.Positive(t, counts["inside"], "premise: some points lie in their triangle")
+}
+
+func TestPointInFacetBoxedHomogeneousFallback(t *testing.T) {
+	t.Parallel()
+	zero, one := proof.DyZero(), proof.DyInt(1)
+	large := proof.DyShift(one, 1100)
+	tiny := proof.DyShift(one, -1100)
+	for _, degenerate := range []bool{false, true} {
+		s := PlanarSolid{
+			Verts: []proof.DyV3{{zero, zero, zero}, {large, zero, zero}, {zero, large, zero}},
+			Tris:  [][3]int{{0, 1, 2}},
+		}
+		if degenerate {
+			s.Verts[2] = s.Verts[1]
+		}
+		prep := preparePlanar(&s)
+		prep.floatBoxes()
+		points := []proof.DyV3{
+			{zero, zero, zero}, {one, one, zero}, {large, large, zero},
+			{one, one, one}, {tiny, tiny, zero},
+		}
+		for _, point := range points {
+			for _, weight := range []proof.Dyadic{one, proof.DyNeg(one), zero, tiny} {
+				x := hpoint{x: point, w: weight}
+				xb, boxed := x.floatBox()
+				want := pointInFacetPlane(prep, x)
+				require.Equal(t, want, pointInFacetBoxed(prep, 0, x, xb, boxed),
+					"degenerate=%t boxed=%t weight sign=%d", degenerate, boxed, weight.Sign())
+				require.Equal(t, want, pointInFacetBoxed(prep, 0, x, floatBox{}, false))
+			}
+		}
+	}
+}
+
+func TestPointInFacetBoxedSideSigns(t *testing.T) {
+	t.Parallel()
+	z, four := proof.DyZero(), proof.DyInt(4)
+	s := PlanarSolid{
+		Verts: []proof.DyV3{{z, z, z}, {four, z, z}, {z, four, z}},
+		Tris:  [][3]int{{0, 1, 2}},
+	}
+	prep := preparePlanar(&s)
+	prep.floatBoxes()
+	_, boxes := prep.sidePlanes(0)
+	for _, value := range []int64{1, 2, 3} {
+		point := proof.DyV3{proof.DyInt(value), proof.DyInt(value), z}
+		for _, weight := range []int64{1, -1} {
+			x := hpoint{x: dvScale(point, proof.DyInt(weight)), w: proof.DyInt(weight)}
+			xb, boxed := x.floatBox()
+			require.True(t, boxed)
+			sign, decided := floatDotSign(xb, prep.vertBox[1], boxes[1])
+			if value == 2 {
+				require.False(t, decided, "boundary must use the exact side test")
+			} else {
+				require.True(t, decided)
+				require.Equal(t, int(2-value), sign)
+			}
+			require.Equal(t, pointInFacetPlane(prep, x), pointInFacetBoxed(prep, 0, x, xb, boxed),
+				"point=%d weight=%d", value, weight)
+		}
+	}
 }
 
 // castAlongExact is castAlong before its float pre-test: every triangle's

@@ -86,7 +86,8 @@ func TestPrunedMatchesGapComparison(t *testing.T) {
 
 // pointInFacetPlane is pointInFacet without its box prefilter: the plane test
 // and the three edge sides alone.
-func pointInFacetPlane(p *planarPrep, t int, x hpoint) bool {
+func pointInFacetPlane(p *planarPrep, x hpoint) bool {
+	const t = 0
 	tri := p.s.Tris[t]
 	if proof.DvDot(p.normal[t], x.from(p.s.Verts[tri[0]])).Sign() != 0 {
 		return false
@@ -137,7 +138,7 @@ func TestPointInFacetBoxPrefilterKeepsAnswers(t *testing.T) {
 				scale := proof.DyShift(proof.DyInt(w), -2)
 				for _, point := range []proof.DyV3{sum, off} {
 					x := hpoint{x: dvScale(point, scale), w: proof.DyInt(w)}
-					want := pointInFacetPlane(prep, 0, x)
+					want := pointInFacetPlane(prep, x)
 					require.Equal(t, want, pointInFacet(prep, 0, x))
 					if want {
 						inside++
