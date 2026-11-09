@@ -529,6 +529,34 @@ func TestPointInFacetBoxedHomogeneousFallback(t *testing.T) {
 	}
 }
 
+func TestPointInFacetOverlappingBoxMatchesExactGate(t *testing.T) {
+	t.Parallel()
+	z, one, four := proof.DyZero(), proof.DyInt(1), proof.DyInt(4)
+	tiny := proof.DyShift(one, -1100)
+	for _, degenerate := range []bool{false, true} {
+		s := PlanarSolid{Verts: []proof.DyV3{{z, z, z}, {four, z, z}, {z, four, z}}, Tris: [][3]int{{0, 1, 2}}}
+		if degenerate {
+			s.Verts[2] = s.Verts[1]
+		}
+		prep := preparePlanar(&s)
+		prep.floatBoxes()
+		for _, point := range []proof.DyV3{{proof.DyNeg(tiny), z, z}, {z, z, z}, {one, one, z}, {four, z, z}} {
+			for _, weight := range []proof.Dyadic{one, proof.DyNeg(one), z} {
+				x := hpoint{x: dvScale(point, weight), w: weight}
+				xb, boxed := x.floatBox()
+				want := pointInFacetBoxed(prep, 0, x, floatBox{}, false)
+				require.Equal(t, want, pointInFacetBoxed(prep, 0, x, xb, boxed),
+					"degenerate=%t weight sign=%d", degenerate, weight.Sign())
+				if weight.Sign() != 0 && proof.DyCmp(point[0], proof.DyNeg(tiny)) == 0 {
+					require.True(t, boxed)
+					require.False(t, floatApart(xb, prep.triBox[0]))
+					require.False(t, x.inBox(prep.triLo[0], prep.triHi[0]))
+				}
+			}
+		}
+	}
+}
+
 func TestFacetPlaneSignMatchesDirect(t *testing.T) {
 	t.Parallel()
 	rng := rand.New(rand.NewPCG(173, 179))
