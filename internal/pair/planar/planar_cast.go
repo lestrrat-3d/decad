@@ -175,7 +175,7 @@ func pointInFacetBoxed(p *planarPrep, t int, x hpoint, xb floatBox, boxed bool) 
 		return false
 	}
 	tri := p.s.Tris[t]
-	if proof.DvDot(p.normal[t], x.from(p.s.Verts[tri[0]])).Sign() != 0 {
+	if p.planeSign(t, x) != 0 {
 		return false
 	}
 	planes, boxes := p.sidePlanes(t)
@@ -197,6 +197,19 @@ func pointInFacetBoxed(p *planarPrep, t int, x hpoint, xb floatBox, boxed bool) 
 		}
 	}
 	return true
+}
+
+// planeSign evaluates normal·(x.x - x.w*v0), reusing the exact normal·v0.
+func (p *planarPrep) planeSign(t int, x hpoint) int {
+	if p.offsets == nil {
+		p.offsets = make([]facetOffset, len(p.s.Tris))
+	}
+	offset := &p.offsets[t]
+	if !offset.set {
+		offset.d = proof.DvDot(p.normal[t], p.s.Verts[p.s.Tris[t][0]])
+		offset.set = true
+	}
+	return proof.DySubScalar(proof.DvDot(p.normal[t], x.x), proof.DyMul(x.w, offset.d)).Sign()
 }
 
 // shellsInside casts one witness vertex per shell of from against to. A shell

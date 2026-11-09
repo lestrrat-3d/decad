@@ -529,6 +529,33 @@ func TestPointInFacetBoxedHomogeneousFallback(t *testing.T) {
 	}
 }
 
+func TestFacetPlaneSignMatchesDirect(t *testing.T) {
+	t.Parallel()
+	rng := rand.New(rand.NewPCG(173, 179))
+	zero := proof.DyZero()
+	for trial := range 300 {
+		var normal, vertex, point proof.DyV3
+		for axis := range 3 {
+			normal[axis], vertex[axis], point[axis] = pruneDyadic(rng), pruneDyadic(rng), pruneDyadic(rng)
+		}
+		if trial%4 == 0 {
+			normal = proof.DyV3{zero, zero, zero}
+		}
+		prep := &planarPrep{
+			s:      &PlanarSolid{Verts: []proof.DyV3{vertex}, Tris: [][3]int{{0, 0, 0}}},
+			normal: []proof.DyV3{normal},
+		}
+		for _, weight := range []proof.Dyadic{zero, proof.DyInt(1), proof.DyInt(-1), pruneDyadic(rng)} {
+			for _, px := range []proof.DyV3{point, dvScale(vertex, weight),
+				proof.DvAdd(dvScale(vertex, weight), normal)} {
+				x := hpoint{x: px, w: weight}
+				want := proof.DvDot(normal, x.from(vertex)).Sign()
+				require.Equal(t, want, prep.planeSign(0, x), "trial=%d weight sign=%d", trial, weight.Sign())
+			}
+		}
+	}
+}
+
 func TestPointInFacetBoxedSideSigns(t *testing.T) {
 	t.Parallel()
 	z, four := proof.DyZero(), proof.DyInt(4)
