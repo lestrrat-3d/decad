@@ -157,6 +157,35 @@ func bridgeNearest(ps []pt2, merged []int, holes [][]int) ([]int, [][]int, error
 			}
 		}
 	}
+	if len(cands) > 0 {
+		best := cands[0]
+		unique := true
+		for _, c := range cands[1:] {
+			switch cmp.Compare(c.d, best.d) {
+			case -1:
+				best, unique = c, true
+			case 0:
+				unique = false
+			}
+		}
+		if unique && bridgeClear(ps, merged, holes, best.holeIdx, best.m, best.h) {
+			hole := holes[best.holeIdx]
+			a, b := ps[merged[best.m]], ps[hole[best.h]]
+			mid := pt2{(a.u + b.u) / 2, (a.w + b.w) / 2}
+			if insidePolygon(ps, merged, mid) {
+				spliced := make([]int, 0, len(merged)+len(hole)+2)
+				spliced = append(spliced, merged[:best.m+1]...)
+				for k := range len(hole) + 1 {
+					spliced = append(spliced, hole[(best.h+k)%len(hole)])
+				}
+				spliced = append(spliced, merged[best.m])
+				spliced = append(spliced, merged[best.m+1:]...)
+				rest := append([][]int(nil), holes[:best.holeIdx]...)
+				rest = append(rest, holes[best.holeIdx+1:]...)
+				return spliced, rest, nil
+			}
+		}
+	}
 	// cmp.Compare orders NaN before every number, so the order stays total.
 	slices.SortFunc(cands, func(a, b candidate) int { return cmp.Compare(a.d, b.d) })
 	for _, c := range cands {
