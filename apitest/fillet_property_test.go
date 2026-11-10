@@ -69,13 +69,20 @@ func concaveLateral() *decad.EdgeQuery {
 // corner).
 type filletCase struct {
 	name        string
-	build       func(t *testing.T, k float64) (*decad.Document, *decad.Body)
+	prepare     func(t *testing.T, k float64) (*sketch.Sketch, *sketch.Profile)
 	area        float64
 	convexMaxR  float64
 	concaveMaxR float64
 }
 
 func (fc filletCase) sectionArea(k float64) float64 { return fc.area * k * k }
+
+// build keeps scale-invariance trials on a fresh scaled sketch and profile.
+func (fc filletCase) build(t *testing.T, k float64) (*decad.Document, *decad.Body) {
+	t.Helper()
+	s, p := fc.prepare(t, k)
+	return filletExtrude(t, s, p, k)
+}
 
 // pickProfile returns the solved profile with the given outer/hole segment
 // counts.
@@ -106,7 +113,7 @@ func genRect(rng *rand.Rand) filletCase {
 		name:       "rect",
 		area:       w * h,
 		convexMaxR: math.Min(w, h) / 2,
-		build: func(t *testing.T, k float64) (*decad.Document, *decad.Body) {
+		prepare: func(t *testing.T, k float64) (*sketch.Sketch, *sketch.Profile) {
 			world := sketch.NewWorld()
 			s, err := world.CreateSketch(world.XY())
 			require.NoError(t, err)
@@ -114,7 +121,7 @@ func genRect(rng *rand.Rand) filletCase {
 			s.Fix(rect.A)
 			_, err = s.Solve(t.Context())
 			require.NoError(t, err)
-			return filletExtrude(t, s, pickProfile(t, s, 4, 0), k)
+			return s, pickProfile(t, s, 4, 0)
 		},
 	}
 }
@@ -134,7 +141,7 @@ func genL(rng *rand.Rand) filletCase {
 		area:        w*h - (w-w2)*(h-h2),
 		convexMaxR:  math.Min(bothConvex, reflexEdges),
 		concaveMaxR: reflexEdges,
-		build: func(t *testing.T, k float64) (*decad.Document, *decad.Body) {
+		prepare: func(t *testing.T, k float64) (*sketch.Sketch, *sketch.Profile) {
 			world := sketch.NewWorld()
 			s, err := world.CreateSketch(world.XY())
 			require.NoError(t, err)
@@ -149,7 +156,7 @@ func genL(rng *rand.Rand) filletCase {
 			}
 			_, err = s.Solve(t.Context())
 			require.NoError(t, err)
-			return filletExtrude(t, s, pickProfile(t, s, 6, 0), k)
+			return s, pickProfile(t, s, 6, 0)
 		},
 	}
 }
@@ -169,7 +176,7 @@ func genRectHole(rng *rand.Rand) filletCase {
 		area:        w*h - hw*hh,
 		convexMaxR:  math.Min(w, h) / 2,
 		concaveMaxR: math.Min(hw, hh) / 2,
-		build: func(t *testing.T, k float64) (*decad.Document, *decad.Body) {
+		prepare: func(t *testing.T, k float64) (*sketch.Sketch, *sketch.Profile) {
 			world := sketch.NewWorld()
 			s, err := world.CreateSketch(world.XY())
 			require.NoError(t, err)
@@ -178,7 +185,7 @@ func genRectHole(rng *rand.Rand) filletCase {
 			s.CreateRectangle(off*k, off*k, (off+hw)*k, (off+hh)*k)
 			_, err = s.Solve(t.Context())
 			require.NoError(t, err)
-			return filletExtrude(t, s, pickProfile(t, s, 4, 1), k)
+			return s, pickProfile(t, s, 4, 1)
 		},
 	}
 }
@@ -197,7 +204,7 @@ func genRectDiskHole(rng *rand.Rand) filletCase {
 		name:       "rectDiskHole",
 		area:       w*h - math.Pi*rho*rho,
 		convexMaxR: math.Min(w, h) / 2,
-		build: func(t *testing.T, k float64) (*decad.Document, *decad.Body) {
+		prepare: func(t *testing.T, k float64) (*sketch.Sketch, *sketch.Profile) {
 			world := sketch.NewWorld()
 			s, err := world.CreateSketch(world.XY())
 			require.NoError(t, err)
@@ -206,7 +213,7 @@ func genRectDiskHole(rng *rand.Rand) filletCase {
 			s.CreateCircle(s.CreatePoint(cx*k, cy*k), rho*k)
 			_, err = s.Solve(t.Context())
 			require.NoError(t, err)
-			return filletExtrude(t, s, pickProfile(t, s, 4, 1), k)
+			return s, pickProfile(t, s, 4, 1)
 		},
 	}
 }
@@ -228,7 +235,7 @@ func genCornerDiskHole(rng *rand.Rand) filletCase {
 		name:       "cornerDiskHole",
 		area:       w*h - math.Pi*rho*rho,
 		convexMaxR: math.Min(w, h) / 2,
-		build: func(t *testing.T, k float64) (*decad.Document, *decad.Body) {
+		prepare: func(t *testing.T, k float64) (*sketch.Sketch, *sketch.Profile) {
 			world := sketch.NewWorld()
 			s, err := world.CreateSketch(world.XY())
 			require.NoError(t, err)
@@ -237,7 +244,7 @@ func genCornerDiskHole(rng *rand.Rand) filletCase {
 			s.CreateCircle(s.CreatePoint(a*k, a*k), rho*k)
 			_, err = s.Solve(t.Context())
 			require.NoError(t, err)
-			return filletExtrude(t, s, pickProfile(t, s, 4, 1), k)
+			return s, pickProfile(t, s, 4, 1)
 		},
 	}
 }
@@ -277,13 +284,16 @@ func TestFilletPropertyInvariants(t *testing.T) {
 	for _, factory := range factories {
 		for range perTemplate {
 			fc := factory(rng)
+			// Keep this solved sketch and profile unchanged across trials. Each
+			// trial extrudes them into its own fresh Document.
+			s, p := fc.prepare(t, 1.0)
 			for _, plan := range filletPlans(fc) {
 				for _, frac := range fracs {
 					r := frac * plan.maxR
 					if r <= 0 {
 						continue
 					}
-					if runFilletCase(t, fc, plan, r) {
+					if runFilletCase(t, fc, plan, r, s, p) {
 						builds++
 					} else {
 						refuses++
@@ -301,9 +311,9 @@ func TestFilletPropertyInvariants(t *testing.T) {
 
 // runFilletCase runs one (section, polarity, radius) trial and asserts the
 // build-or-refuse invariants. It reports whether the fillet built.
-func runFilletCase(t *testing.T, fc filletCase, plan filletPlan, r float64) bool {
+func runFilletCase(t *testing.T, fc filletCase, plan filletPlan, r float64, s *sketch.Sketch, p *sketch.Profile) bool {
 	t.Helper()
-	doc, body := fc.build(t, 1.0)
+	doc, body := filletExtrude(t, s, p, 1.0)
 
 	// Count the corners this selector will round BEFORE filleting — the oracle
 	// needs the count, and every one of them is a right angle.
