@@ -245,6 +245,11 @@ func TestVerifyHistoryPinInItsBore(t *testing.T) {
 // line x = 10, y = 0, its centre 1.5 from the axis at height z.
 func hookRing(t *testing.T, doc *decad.Document, z float64) *decad.Body {
 	t.Helper()
+	return hookRingSweep(t, doc, z, 270)
+}
+
+func hookRingSweep(t *testing.T, doc *decad.Document, z, degrees float64) *decad.Body {
+	t.Helper()
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XZ())
 	require.NoError(t, err)
@@ -255,7 +260,7 @@ func hookRing(t *testing.T, doc *decad.Document, z float64) *decad.Body {
 	require.NoError(t, err)
 	ring, err := decad.Revolve(t.Context(), doc, s, s.Profiles()[0],
 		decad.SketchLine{Start: decad.Point2{U: 10}, End: decad.Point2{U: 10, V: 1}},
-		decad.AngleExtent{A: units.Degrees(270), Dir: decad.Along})
+		decad.AngleExtent{A: units.Degrees(degrees), Dir: decad.Along})
 	require.NoError(t, err)
 	return ring
 }
