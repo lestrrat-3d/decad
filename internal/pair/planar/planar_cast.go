@@ -174,6 +174,13 @@ func pointInFacet(p *planarPrep, t int, x hpoint) bool {
 }
 
 func pointInFacetBoxed(p *planarPrep, t int, x hpoint, xb floatBox, boxed bool) bool {
+	return pointInFacetBoxedEdges(p, t, x, xb, boxed, nil)
+}
+
+// pointInFacetBoxedEdges reports whether x lies in triangle t and, when
+// edges is non-nil, returns each directed edge plane's exact sign. A zero sign
+// identifies an edge containing x when the triangle has a nonzero normal.
+func pointInFacetBoxedEdges(p *planarPrep, t int, x hpoint, xb floatBox, boxed bool, edges *[3]int) bool {
 	if !proof.DvIsZero(p.normal[t]) && ((boxed && floatApart(xb, p.triBox[t])) || (!boxed && !x.inBox(p.triLo[t], p.triHi[t]))) {
 		return false
 	}
@@ -194,6 +201,9 @@ func pointInFacetBoxed(p *planarPrep, t int, x hpoint, xb floatBox, boxed bool) 
 		}
 		if !decided {
 			sign = proof.DvDot(x.from(p.s.Verts[tri[i]]), planes[i]).Sign()
+		}
+		if edges != nil {
+			edges[i] = sign
 		}
 		if sign < 0 {
 			return false
