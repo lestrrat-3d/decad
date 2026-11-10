@@ -131,14 +131,14 @@ func TestInfillTakesEachLatticeKind(t *testing.T) {
 		decad.SchwarzPInfill: 1, decad.DiamondInfill: 0.5, decad.NeoviusInfill: 4, decad.IWPInfill: 2,
 		decad.FischerKochSInfill: 0.4, decad.LidinoidInfill: 0.6, decad.SplitPInfill: 0.7} {
 		doc := decad.New()
-		block := boxBody(t, doc, 5, 5, 15, 15, 12)
+		block := boxBody(t, doc, 5, 5, 10, 10, 6)
 		out, err := decad.Infill(t.Context(), block, decad.InfillSpec{
 			Kind: kind, Cell: units.Millimeters(10), Level: units.Scalar(level), Resolution: 8})
 		require.NoError(t, err, kind.String())
 		volume, err := out.Volume()
 		require.NoError(t, err)
-		require.Greater(t, volume.Value.Base(), 100.0, kind.String())
-		require.Less(t, volume.Value.Base(), 1200.0, kind.String())
+		require.Greater(t, volume.Value.Base(), 15.0, kind.String())
+		require.Less(t, volume.Value.Base(), 150.0, kind.String())
 	}
 }
 
