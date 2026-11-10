@@ -1,6 +1,8 @@
 package apitest_test
 
 import (
+	"fmt"
+	"slices"
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
@@ -93,7 +95,7 @@ func TestVerifyHistoryCopyLiftTranslation(t *testing.T) {
 		return c
 	}
 	first, second := r3.Vec{X: 10}, r3.Vec{X: 20}
-	for _, tc := range []struct {
+	cases := []struct {
 		name string
 		ring float64
 		// copy makes the body checked against the drilled block.
@@ -141,27 +143,64 @@ func TestVerifyHistoryCopyLiftTranslation(t *testing.T) {
 			require.NoError(t, err)
 			return copyOf(t, refined, decad.WithCopyLiftTranslation(sc.lift, first, second))
 		}, true, true},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
+	}
+	// Groups own separate documents; their cases run serially and remove their
+	// temporary bodies before the next case uses that document.
+	for _, ring := range []float64{20, 11, 9.5} {
+		t.Run(fmt.Sprintf("ring=%g", ring), func(t *testing.T) {
 			t.Parallel()
-			sc := build(t, tc.ring)
-			copied := tc.copy(t, sc)
-			report, err := sc.doc.Verify(t.Context())
-			require.NoError(t, err)
-			interferences, diagnostics := pairFindings(report, sc.drilled, copied)
-			if tc.separated {
-				require.Zero(t, interferences)
-				require.Zero(t, diagnostics, "the copy is its master moved into the second bore")
-			} else {
-				require.Positive(t, interferences+diagnostics, "the copy must be reported or left undecided")
+			sc := build(t, ring)
+			before := sc.doc.Bodies()
+			for _, tc := range cases {
+				if tc.ring != ring {
+					continue
+				}
+				t.Run(tc.name, func(t *testing.T) {
+					live := sc.doc.Bodies()
+					require.Len(t, live, len(before), "the previous case left temporary bodies")
+					for _, body := range before {
+						require.True(t, slices.Contains(live, body), "a fixture body is no longer live")
+					}
+					t.Cleanup(func() {
+						for _, body := range sc.doc.Bodies() {
+							if !slices.Contains(before, body) {
+								require.NoError(t, decad.Remove(body))
+							}
+						}
+						live := sc.doc.Bodies()
+						refined := tc.name == "exact move of a refined master"
+						want := len(before)
+						if refined {
+							want-- // Refine consumes the master; this is the group's last case.
+						}
+						require.Len(t, live, want, "temporary bodies remain after cleanup")
+						for _, body := range before {
+							if refined && body == sc.master {
+								require.False(t, slices.Contains(live, body), "Refine must retire the master")
+								continue
+							}
+							require.True(t, slices.Contains(live, body), "a fixture body is no longer live")
+						}
+					})
+					copied := tc.copy(t, sc)
+					report, err := sc.doc.Verify(t.Context())
+					require.NoError(t, err)
+					interferences, diagnostics := pairFindings(report, sc.drilled, copied)
+					if tc.separated {
+						require.Zero(t, interferences)
+						require.Zero(t, diagnostics, "the copy is its master moved into the second bore")
+					} else {
+						require.Positive(t, interferences+diagnostics, "the copy must be reported or left undecided")
+					}
+					masterInterferences, masterDiagnostics := pairFindings(report, sc.drilled, sc.master)
+					if tc.masterClear {
+						require.Zero(t, masterInterferences)
+						require.Zero(t, masterDiagnostics, "the master is decided by its own history")
+						return
+					}
+					require.Positive(t, masterInterferences+masterDiagnostics)
+				})
 			}
-			masterInterferences, masterDiagnostics := pairFindings(report, sc.drilled, sc.master)
-			if tc.masterClear {
-				require.Zero(t, masterInterferences)
-				require.Zero(t, masterDiagnostics, "the master is decided by its own history")
-				return
-			}
-			require.Positive(t, masterInterferences+masterDiagnostics)
 		})
 	}
 }
