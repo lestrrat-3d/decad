@@ -2,6 +2,7 @@ package apitest_test
 
 import (
 	"context"
+	"fmt"
 	"math"
 	"testing"
 
@@ -99,6 +100,59 @@ func fieldFraction(field func(x, y, z float64) float64, level float64) float64 {
 	return float64(inside) / (n * n * n)
 }
 
+type latticeTrig struct{ s, c, s2, c2 float64 }
+
+// The expressions keep the direct fields' operation order. The grid evaluates
+// the same coordinates on each axis, so their trigonometric values can be reused.
+var latticeSampleFields = map[string]func(x, y, z latticeTrig) float64{
+	"Schwarz P": func(x, y, z latticeTrig) float64 { return x.c + y.c + z.c },
+	"diamond": func(x, y, z latticeTrig) float64 {
+		return x.s*y.s*z.s + x.s*y.c*z.c + x.c*y.s*z.c + x.c*y.c*z.s
+	},
+	"Neovius": func(x, y, z latticeTrig) float64 { return 3*(x.c+y.c+z.c) + 4*x.c*y.c*z.c },
+	"IWP": func(x, y, z latticeTrig) float64 {
+		return 2*(x.c*y.c+y.c*z.c+z.c*x.c) - (x.c2 + y.c2 + z.c2)
+	},
+	"Fischer-Koch S": func(x, y, z latticeTrig) float64 {
+		return x.c2*y.s*z.c + x.c*y.c2*z.s + x.s*y.c*z.c2
+	},
+	"Lidinoid": func(x, y, z latticeTrig) float64 {
+		return 0.5*(x.s2*y.c*z.s+y.s2*z.c*x.s+z.s2*x.c*y.s) -
+			0.5*(x.c2*y.c2+y.c2*z.c2+z.c2*x.c2) + 0.15
+	},
+	"Split P": func(x, y, z latticeTrig) float64 {
+		return 1.1*(x.s2*z.s*y.c+y.s2*x.s*z.c+z.s2*y.s*x.c) -
+			0.2*(x.c2*y.c2+y.c2*z.c2+z.c2*x.c2) - 0.4*(x.c2+y.c2+z.c2)
+	},
+}
+
+func latticeSampleGrid() [160]latticeTrig {
+	var grid [160]latticeTrig
+	for i := range grid {
+		x := (float64(i) + 0.5) / 160 * (2 * math.Pi)
+		grid[i] = latticeTrig{math.Sin(x), math.Cos(x), math.Sin(2 * x), math.Cos(2 * x)}
+	}
+	return grid
+}
+
+func sharedKindFraction(kind latticeKind, level float64) float64 {
+	return sharedFractions.get(fmt.Sprintf("%s/%v", kind.name, level), func() float64 {
+		grid := latticeSampleGrid()
+		field := latticeSampleFields[kind.name]
+		inside := 0
+		for _, x := range grid {
+			for _, y := range grid {
+				for _, z := range grid {
+					if math.Abs(field(x, y, z)) <= level {
+						inside++
+					}
+				}
+			}
+		}
+		return float64(inside) / (160 * 160 * 160)
+	})
+}
+
 func TestLatticeKindsAreClosedSolidsOfTheExpectedFraction(t *testing.T) {
 	t.Parallel()
 	for _, kind := range latticeKinds {
@@ -161,7 +215,7 @@ func TestLatticeKindsConvergeAndThicken(t *testing.T) {
 		t.Run(kind.name, func(t *testing.T) {
 			t.Parallel()
 			level := kind.maxLevel / 3
-			want := sharedFraction(kind.name, kind.field, level) * 20 * 20 * 20
+			want := sharedKindFraction(kind, level) * 20 * 20 * 20
 			var errs []float64
 			for _, res := range []int{8, 24} {
 				m, err := sharedLattice(t.Context(), kind.name, kind.build, latticeSpec(level, res))
