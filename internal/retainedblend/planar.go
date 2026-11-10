@@ -272,15 +272,27 @@ func earClip(ps []pt2, poly []int) ([][3]int, error) {
 	idx := append([]int(nil), poly...)
 	tris := make([][3]int, 0, len(idx))
 	var ears []planarEar
+	turns := make([]int, len(idx))
+	qualities := make([]float64, len(idx))
+	update := func(at int) {
+		n := len(idx)
+		a, b, c := ps[idx[(at+n-1)%n]], ps[idx[at]], ps[idx[(at+1)%n]]
+		turns[at] = orient(a, b, c)
+		if turns[at] > 0 {
+			qualities[at] = earQuality(a, b, c)
+		}
+	}
+	for i := range idx {
+		update(i)
+	}
 	for len(idx) > 3 {
 		ears = ears[:0]
 		n := len(idx)
 		for i := range n {
-			a, b, c := ps[idx[(i+n-1)%n]], ps[idx[i]], ps[idx[(i+1)%n]]
-			if orient(a, b, c) <= 0 {
+			if turns[i] <= 0 {
 				continue
 			}
-			ears = append(ears, planarEar{i, earQuality(a, b, c)})
+			ears = append(ears, planarEar{i, qualities[i]})
 		}
 		best, ok := bestPlanarEar(ears)
 		if !ok {
@@ -305,6 +317,12 @@ func earClip(ps []pt2, poly []int) ([][3]int, error) {
 		}
 		tris = append(tris, [3]int{ia, ib, ic})
 		idx = append(idx[:best.at], idx[best.at+1:]...)
+		turns = append(turns[:best.at], turns[best.at+1:]...)
+		qualities = append(qualities[:best.at], qualities[best.at+1:]...)
+		if len(idx) > 3 {
+			update((best.at + len(idx) - 1) % len(idx))
+			update(best.at % len(idx))
+		}
 	}
 	if orient(ps[idx[0]], ps[idx[1]], ps[idx[2]]) <= 0 {
 		return nil, fmt.Errorf("%w: the face's boundary closes on a degenerate triangle", decaderr.ErrUnsupported)
