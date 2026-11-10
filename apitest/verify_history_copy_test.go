@@ -85,8 +85,9 @@ func TestVerifyHistoryCopyLiftTranslation(t *testing.T) {
 			require.NoError(t, err)
 		}
 		stem := on(discAt(t, doc, 10, 0, 2, 20, 1))
-		master, err := decad.Union(t.Context(), stem, on(hookRing(t, doc, ringZ)))
+		master, err := decad.Union(t.Context(), stem, on(hookRingSweep(t, doc, ringZ, 90)))
 		require.NoError(t, err)
+		require.True(t, tookMeshPath(master))
 		return scene{doc: doc, lift: lift, drilled: drilled, master: master}
 	}
 	copyOf := func(t *testing.T, body *decad.Body, opt decad.CopyOption) *decad.Body {
