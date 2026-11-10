@@ -19,6 +19,15 @@ import (
 // out the base cells: one body that proves its own bases.
 func oldProveToolBand(ctx context.Context, R, r, d float64, pose Pose,
 	held func(j, i int) r3.Vec) (ToolProof, error) {
+	bases, err := oldProveToolBaseSet(ctx, R, r, d)
+	if err != nil {
+		return ToolProof{}, err
+	}
+	return oldProveToolBandWithBases(ctx, pose, held, bases)
+}
+
+// oldProveToolBaseSet builds the legacy base set independently of any pose.
+func oldProveToolBaseSet(ctx context.Context, R, r, d float64) ([]toolBase, error) {
 	const n = ToolStations
 	gap := new(big.Rat).Quo(new(big.Rat).Mul(big.NewRat(2, 1), proofbound.PiUpper), big.NewRat(n, 1))
 	bases := make([]toolBase, n/4+1)
@@ -28,8 +37,17 @@ func oldProveToolBand(ctx context.Context, R, r, d float64, pose Pose,
 		bases[k] = b
 		return err
 	}); err != nil {
-		return ToolProof{}, err
+		return nil, err
 	}
+	return bases, nil
+}
+
+// oldProveToolBandWithBases derives the legacy proof from an immutable base set.
+func oldProveToolBandWithBases(ctx context.Context, pose Pose,
+	held func(j, i int) r3.Vec, bases []toolBase) (ToolProof, error) {
+	const n = ToolStations
+	gap := new(big.Rat).Quo(new(big.Rat).Mul(big.NewRat(2, 1), proofbound.PiUpper), big.NewRat(n, 1))
+	workers := orderedwork.EachWorkers(len(bases), CellParallelMin)
 	samples := make([]float64, n)
 	if err := cellEach(ctx, n, workers, func(j int) error {
 		k, flipY, flipZ := cellMirrorOf(j, n)
@@ -112,6 +130,10 @@ func TestProveToolBasesMatchesOldPath(t *testing.T) {
 			t.Parallel()
 			tb, err := ProveToolBases(t.Context(), c.R, c.r, c.d)
 			require.NoError(t, err)
+			// The legacy bases do not depend on pose; reuse this read-only set
+			// when deriving both per-pose reference proofs.
+			oldBases, err := oldProveToolBaseSet(t.Context(), c.R, c.r, c.d)
+			require.NoError(t, err)
 			for pi, pose := range poses {
 				held := func(j, i int) r3.Vec {
 					o, b := BandEnds(c.R, c.r, c.d, j%ToolStations)
@@ -119,7 +141,7 @@ func TestProveToolBasesMatchesOldPath(t *testing.T) {
 					v.X += 1e-9 * float64((j+i)%5)
 					return v
 				}
-				want, err := oldProveToolBand(t.Context(), c.R, c.r, c.d, pose, held)
+				want, err := oldProveToolBandWithBases(t.Context(), pose, held, oldBases)
 				require.NoError(t, err)
 				require.Positive(t, want.SampleError, "case %d pose %d", ci, pi)
 				got, err := ProveToolBandWith(t.Context(), tb, pose, held)
