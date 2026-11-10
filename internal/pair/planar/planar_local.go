@@ -38,10 +38,12 @@ func (k *planarKernel) fanAt(p *planarPrep, x hpoint) (fan, error) {
 		if err := k.poll(); err != nil {
 			return fan{}, err
 		}
-		if !pointInFacetBoxed(p, t, x, xb, boxed) {
+		var sideSigns [3]int
+		if !pointInFacetBoxedEdges(p, t, x, xb, boxed, &sideSigns) {
 			continue
 		}
 		tri := p.s.Tris[t]
+		degenerate := proof.DvIsZero(p.normal[t])
 		tris = append(tris, t)
 		f.normals = append(f.normals, p.normal[t])
 		for i, v := range tri {
@@ -55,7 +57,14 @@ func (k *planarKernel) fanAt(p *planarPrep, x hpoint) (fan, error) {
 				continue
 			}
 			seenEdge[key] = struct{}{}
-			if onSegment(p.s.Verts[key[0]], p.s.Verts[key[1]], x) {
+			// On a nondegenerate facet, its exact side-plane signs already
+			// prove whether x lies on each closed edge. A degenerate facet's
+			// side planes all vanish, so only it needs the segment test.
+			onEdge := sideSigns[i] == 0
+			if degenerate {
+				onEdge = onSegment(p.s.Verts[key[0]], p.s.Verts[key[1]], x)
+			}
+			if onEdge {
 				f.edgeDirs = append(f.edgeDirs, proof.DvSub(p.s.Verts[key[1]], p.s.Verts[key[0]]))
 			}
 		}
