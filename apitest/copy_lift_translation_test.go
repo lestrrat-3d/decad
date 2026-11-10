@@ -50,8 +50,14 @@ func exactLiftShift(lift r3.Transform, from, to r3.Vec) r3.Vec {
 func TestCopyLiftTranslationFaceted(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
-	a := slab(t, doc, 0, -5, 20, 5, 0, 10, r3.Identity())
-	source, err := decad.Union(t.Context(), a, hookRing(t, doc, 12))
+	// Disjoint Z ranges make the union a two-lump faceted body.
+	a := boxBody(t, doc, 0, 0, 10, 10, 10)
+	b := boxBody(t, doc, 5, 5, 15, 15, 10)
+	above, err := r3.Translation(r3.Vec{Z: 30})
+	require.NoError(t, err)
+	b, err = decad.Transform(t.Context(), b, above)
+	require.NoError(t, err)
+	source, err := decad.Union(t.Context(), a, b)
 	require.NoError(t, err)
 	require.Equal(t, "decad.facetedPayload", decadtest.PayloadClass(source))
 
