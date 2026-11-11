@@ -539,11 +539,13 @@ func (r *Run) Refine() ([]*Pose, []Span, error) {
 		poses = append(poses, pose)
 	}
 	spans := []Span{r.intervalVerdict(poses[0], poses[1])}
+	step5Cursor := 0
 	for {
-		k := r.nextRefinement(poses, spans)
+		k, _ := r.nextRefinement(poses, spans, step5Cursor)
 		if k < 0 {
 			break
 		}
+		step5Cursor = k
 		f := new(big.Rat).Add(poses[k].F, poses[k+1].F)
 		f.Quo(f, big.NewRat(2, 1))
 		mid, err := r.evaluatePose(f, r.Dom.Label(f))
@@ -571,8 +573,24 @@ func (r *Run) Refine() ([]*Pose, []Span, error) {
 // and the interval is wider than the reading's floor, or while a requested
 // margin is neither proven nor disproven by that interval and it is wider than
 // the resolution. Every interval narrower than both floors stops, so the loop
-// ends.
-func (r *Run) nextRefinement(poses []*Pose, spans []Span) int {
+// ends. step5Cursor skips the prefix whose Step-5 candidates have been
+// resolved; the complete Step-6 scan still considers every span.
+func (r *Run) nextRefinement(poses []*Pose, spans []Span, step5Cursor int) (int, bool) {
+	for k := step5Cursor; k < len(spans); k++ {
+		if poses[k].Unbuildable != nil && poses[k+1].Unbuildable != nil {
+			// Never bisected: no pose between two unbuildable ones is asked.
+			continue
+		}
+		startHits, endHits := len(poses[k].Collisions) > 0, len(poses[k+1].Collisions) > 0
+		onset := spans[k].outcome == vocab.IntervalColliding && startHits != endHits
+		if spans[k].outcome != vocab.IntervalUndecided && !onset {
+			continue
+		}
+		if r.wide(poses[k], poses[k+1]) {
+			return k, true
+		}
+	}
+
 	allClear := true
 	smallest := -1
 	for k, span := range spans {
@@ -580,11 +598,6 @@ func (r *Run) nextRefinement(poses []*Pose, spans []Span) int {
 			// Never bisected: no pose between two unbuildable ones is asked.
 			allClear = false
 			continue
-		}
-		startHits, endHits := len(poses[k].Collisions) > 0, len(poses[k+1].Collisions) > 0
-		onset := span.outcome == vocab.IntervalColliding && startHits != endHits
-		if (span.outcome == vocab.IntervalUndecided || onset) && r.wide(poses[k], poses[k+1]) {
-			return k
 		}
 		if span.outcome != vocab.IntervalClear {
 			allClear = false
@@ -594,18 +607,18 @@ func (r *Run) nextRefinement(poses []*Pose, spans []Span) int {
 		}
 	}
 	if smallest < 0 {
-		return -1
+		return -1, false
 	}
 	a, b := poses[smallest], poses[smallest+1]
 	if allClear && r.wideForReading(a, b) {
 		if reading, _ := r.PathClearance(poses, spans[smallest].clearance, "whole-path"); reading != nil && reading.Tolerance.State != vocab.ToleranceSatisfied {
-			return smallest
+			return smallest, false
 		}
 	}
 	if r.Cfg.MinimumMM != nil && r.wide(a, b) && !anyViolated(poses) && !r.MeetsMinimum(spans[smallest].clearance) {
-		return smallest
+		return smallest, false
 	}
-	return -1
+	return -1, false
 }
 
 // wideForReading reports whether the interval between two poses is wider
