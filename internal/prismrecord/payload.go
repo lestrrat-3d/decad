@@ -69,6 +69,13 @@ import (
 // displacement without restating the denotation reads nil there
 // (agent-docs/stacked-prism-design.md §2.1).
 //
+// ExactCarriers lists, for a displaced section, the loops whose carriers are
+// exact even so (exact_carriers.go): a Cut whose result keeps the target's own
+// undisplaced loops verbatim lists them, so a carrier reader can tell them
+// from the displaced loops the tool brought. It refines no coordinate reading,
+// which keeps SectionDelta, and a copy that changes SectionDelta or a listed
+// loop leaves it stale, which CarrierExact reads as no listing.
+//
 // Walks holds the plane-local walks and moments of THIS payload's own profile,
 // published by the evaluation that built the body and carried through every
 // rigid re-evaluation of it (Placed). It is a pure cache: it
@@ -90,6 +97,7 @@ type Payload struct {
 	BlendSegs     []map[int]struct{}
 	BlendKind     string
 	SectionDelta  float64
+	ExactCarriers *ExactCarriers
 	Walks         *momentinput.ProfileWalks
 	SurfaceResult bool
 	// Upstream is the operand roles an analytic Boolean attributed to this

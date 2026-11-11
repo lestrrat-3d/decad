@@ -1133,6 +1133,24 @@ extension is two pieces, each in the existing machinery's own shape:
   shifted endpoint, whose single rounding rides in that end's axial
   displacement (above), never in `δ`.
 
+**Exact carriers.** `δ` is one bound for the whole section, but a `Cut` that
+lands in §4.2's clean sub-case keeps the target's own loops whole and
+verbatim; only the tool's loops carry its displacement. The result lists the
+loops it keeps bit for bit from the target, wherever the target states their
+carriers exactly — a target with zero displacement, or one whose own listing
+names the loop — in `prismrecord.Payload.ExactCarriers`
+(`prismrecord.ListExactCarriers`, read by `Payload.CarrierExact`). Each
+listed segment's carrier is then a carrier of the denoted boundary: the
+denoted result is the target less the true tool, so every boundary point it
+takes from a listed loop lies on that loop's line or circle. The listing
+refines no coordinate reading. A displaced tool loop may still reach a listed
+loop within `δ`, so every vertex, length, area and box reading keeps `δ`;
+only a reader of carriers, such as the faceted view's retained tags
+(brep-modify §2.2), takes a listed loop as exact. The listing records the
+`δ` it was made at, and `CarrierExact` answers false for every loop once the
+payload's `δ` or the loop record differs. A copy that moves the record, such
+as a pattern instance, clears it.
+
 The result's `Exactness` is then the existing rule with these displacement
 terms added:
 
@@ -1329,9 +1347,11 @@ face this rule leaves unnamed selects by geometric predicate (`Facing`,
   centre or an offset miter amplifies a displacement by the corner geometry —
   by an unbounded factor at a shallow corner — so `Fillet`/`Chamfer`/`Shell`
   refuse a displaced receiver (`ErrUnsupported`) rather than publish a result
-  whose bounds speak only for the record. The rule stays for a prism
-  receiver; a class-B brep receiver takes brep-modify §4.4, which blends from
-  the record's exact carriers. Every one of these stagings is
+  whose bounds speak only for the record. The corner rewrite keeps the rule
+  for a prism receiver; a class-B brep receiver takes brep-modify §4.4, which
+  blends from the record's exact carriers, and a prism `Chamfer` whose edges
+  lie on loops with exact carriers (§7) takes brep-modify §2.2's faceted
+  view. Every one of these stagings is
   invisible at `δ == 0`, which covers every body a caller draws and every
   union whose sources and re-expression carry zero displacement.
 - **§4.5's overlap-area reading answers a multi-region pair for `Verify`
@@ -1639,7 +1659,9 @@ it denotes:
   sets each record is only within its own `δ` of.
 - `prismrecord.Payload.RequireExactSection` refuses the receiver for
   `Fillet`/`Chamfer`/`Shell` with `ErrUnsupported`, since a rewrite of that
-  section has no proven displacement of its own.
+  section has no proven displacement of its own. A `Chamfer` it refuses
+  first tries brep-modify §2.2's faceted view, which rewrites no recorded
+  coordinate.
 
 ### internal/meshbool/tangency_gate.go
 

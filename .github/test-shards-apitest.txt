@@ -2830,6 +2830,7 @@
 12	0.00	TestChainFedRefusalsStillRunTheSeamGates
 12	0.00	TestChamferConcaveEdgeAddsWedge
 12	0.21	TestChamferOfAPocketsFloorEdgesFillsTheirWedges
+12	0.00	TestChamferPlateAfterPatternSocketCut
 12	0.02	TestCircleSegMomentRadiusErrorsUseDecadSentinels
 12	0.03	TestCircularPrismScaledAtAcceptsPlacedAndRepeatedImage
 12	0.00	TestClassBPinThroughSlottedPlate
