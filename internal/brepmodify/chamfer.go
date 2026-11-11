@@ -219,8 +219,23 @@ func Chamfer(ctx context.Context, env topo.Env, b *topo.Body, call ChamferCall) 
 		return displacedChamfer(ctx, env, pp, caps, *route.Carriers, sel, edges, dmm)
 	}
 	// The corner rewrite needs the original 2D outline, not an approximate
-	// outline recovered from a rendered or sampled shape.
+	// outline recovered from a rendered or sampled shape. A displaced prism
+	// whose selected edges lie on loops with exact carriers takes the faceted
+	// view's retained edge blend instead (brep-modify §2.2).
 	if err := pp.RequireExactSection("chamfers"); err != nil {
+		if route.Prism == nil && !sweepStraight {
+			out, matched, viewErr := exactCarrierViewBlend(ctx, env, hooks, b, edges, asymRefs,
+				func(view *topo.Body, fp facetedrecord.Payload, edges []*topo.Edge, refs map[*topo.Edge]*topo.Face) (*topo.Body, bool, error) {
+					var ref *retainedblend.Reference
+					if asym != nil {
+						ref = &retainedblend.Reference{Refs: refs, Other: asym.Other, OtherDelta: asym.OtherDelta}
+					}
+					return retainedblend.Chamfer(ctx, env, view, fp, edges, dmm, dDelta, ref)
+				})
+			if matched || viewErr != nil {
+				return Result{Body: out}, viewErr
+			}
+		}
 		return Result{}, err
 	}
 	// A single straight cap edge takes the bounded cutter or route E's corner

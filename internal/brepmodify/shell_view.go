@@ -2,6 +2,7 @@ package brepmodify
 
 import (
 	"context"
+	"slices"
 
 	"github.com/lestrrat-3d/units"
 
@@ -29,16 +30,41 @@ import (
 // refs, when non-nil, maps each selected edge to its reference face of b, and
 // blend receives the image of each on the view.
 func shellViewBlend(ctx context.Context, env topo.Env, hooks Hooks, b *topo.Body, edges []*topo.Edge,
-	refs map[*topo.Edge]*topo.Face,
-	blend func(view *topo.Body, fp facetedrecord.Payload, edges []*topo.Edge, refs map[*topo.Edge]*topo.Face) (*topo.Body, bool, error),
+	refs map[*topo.Edge]*topo.Face, blend viewBlendFunc,
 ) (*topo.Body, bool, error) {
 	bp, ok := b.Payload.(breprecord.Payload)
 	if !ok || (bp.BossShell == nil && bp.PocketShell == nil) || len(edges) == 0 {
 		return nil, false, nil
 	}
+	return retainedViewBlend(ctx, env, hooks, b, edges, refs, nil, blend)
+}
+
+// viewBlendFunc runs the retained edge blend on a faceted view: view is the
+// view body, fp its payload, and edges and refs the images of the selection
+// and its reference faces on the view.
+type viewBlendFunc func(view *topo.Body, fp facetedrecord.Payload, edges []*topo.Edge, refs map[*topo.Edge]*topo.Face) (*topo.Body, bool, error)
+
+// retainedViewBlend restates b as its faceted view and runs blend on the
+// images of edges and refs there. untag, when non-nil, lists the faces of b
+// (by index in topobuild.Faces order) whose surface the view must not keep as
+// a retained tag; their facets stay in the view as plain faceted obstacles.
+// matched follows shellViewBlend's rule.
+func retainedViewBlend(ctx context.Context, env topo.Env, hooks Hooks, b *topo.Body, edges []*topo.Edge,
+	refs map[*topo.Edge]*topo.Face, untag map[int]struct{}, blend viewBlendFunc,
+) (*topo.Body, bool, error) {
 	fp, audit, err := booleaneval.View(ctx, b, hooks.Mesher)
 	if err != nil {
 		return nil, true, err
+	}
+	if len(untag) > 0 {
+		groups := slices.Clone(fp.Groups)
+		for gi := range untag {
+			if gi < 0 || gi >= len(groups) {
+				return nil, false, nil
+			}
+			groups[gi] = untagged(groups[gi])
+		}
+		fp.Groups = groups
 	}
 	volF, volBound, volRat, err := booleaneval.VolumeReading(ctx, audit, fp.VolSymDiff)
 	if err != nil {
@@ -50,7 +76,7 @@ func shellViewBlend(ctx context.Context, env topo.Env, hooks Hooks, b *topo.Body
 	if err != nil {
 		return nil, true, err
 	}
-	fp, ok = view.Payload.(facetedrecord.Payload)
+	fp, ok := view.Payload.(facetedrecord.Payload)
 	if !ok {
 		return nil, false, nil
 	}

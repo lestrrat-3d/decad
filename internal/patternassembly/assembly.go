@@ -101,6 +101,8 @@ func FrameKeepingInstance(ctx context.Context, env topo.Env, rp patternrecord.Sp
 		}
 		p.Profile = moved
 		p.SectionDelta = patternrecord.WithDelta(p.SectionDelta, delta)
+		// The listing names the receiver's loops, not the moved ones.
+		p.ExactCarriers = nil
 		p.Walks = nil
 		body, err := prismrecord.Build(ctx, env, p, freeform.NewFreeformWork())
 		return body, false, err

@@ -122,9 +122,14 @@ func TryGroupCut(ctx context.Context, a, b topo.Payload) (prismrecord.Payload, b
 		if err != nil {
 			return prismrecord.Payload{}, false, err
 		}
-		// Every edge of the matched cell is whole: no cut charge.
+		// Every edge of the matched cell is whole: no cut charge. The cell
+		// keeps the target's own loops whole, so a displaced group leaves the
+		// target's exact carriers exact (prism-boolean §7, "Exact carriers").
 		result.Profile = profile
 		result.SectionDelta = inputDelta
+		if result.ExactCarriers, err = prismrecord.ListExactCarriers(budget, result, target); err != nil {
+			return prismrecord.Payload{}, false, err
+		}
 		return result, true, nil
 	}
 

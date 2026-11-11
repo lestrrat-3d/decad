@@ -91,6 +91,11 @@ func ResolveAndBuildCut(ctx context.Context, budget *proofbound.WorkBudget, targ
 			proofbound.AbsSumUpper(tool.SectionDelta, sceneDelta.B, reexpress.Delta),
 		),
 	}
+	// The matched cell keeps the target's own loops whole, so a displaced
+	// tool leaves the target's exact carriers exact (§7, "Exact carriers").
+	if result.ExactCarriers, err = prismrecord.ListExactCarriers(budget, result, target); err != nil {
+		return prismrecord.Payload{}, false, err
+	}
 	return result, true, nil
 }
 

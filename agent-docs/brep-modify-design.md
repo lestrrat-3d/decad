@@ -149,6 +149,35 @@ verticals at `r = 3` leaves `√2·t − (√2−1)·r = 1.586` mm of wall on ea
 corner's diagonal and removes `4·20·9·(1 − π/4)` mm³. At `r = 7`, past
 `√2·t/(√2−1) = 6.83`, the strip meets the cavity and SR7 refuses.
 
+### 2.2 A displaced prism: the faceted view with exact carriers
+
+A `prismPayload` with a section displacement refuses the corner rewrite
+(`prismrecord.Payload.RequireExactSection`), since the rewrite reads the
+displaced coordinates. The usual source is a `Cut` by rotated pattern copies:
+each copy records its rotated section to the nearest float and charges that
+rounding as its section displacement (mirror-pattern §4.3), and the `Cut`
+carries it into the result (prism-boolean §7). The rounding is real: the
+denoted holes have irrational coordinates, so no float record states them.
+The target's own loops still enter the result verbatim, and the `Cut` lists
+them as loops with exact carriers (prism-boolean §7, "Exact carriers").
+
+A `Chamfer` that the corner rewrite refuses this way runs on the body's
+faceted view (`exactCarrierViewBlend`,
+`internal/brepmodify/exact_carrier_view.go`), by §2.1's three steps with one
+change to step 1. The view keeps a retained tag on each cap and on each side
+face whose loop has exact carriers (`prismrecord.Payload.CarrierExact`). A
+side face of any other loop, or a face whose roles name no single loop, keeps
+no tag: its recorded surface lies only within the displacement of the true
+one, so its facets are plain obstacles. The tessellation charges the section
+displacement into every facet bound (tessellation §2, §5), so the strip check
+(SR7) clears the true holes, not only the recorded ones. The retained blend
+rewrites only faces with an exact tag, so a selection on a displaced loop is
+not recognized and keeps the `RequireExactSection` refusal. The result is a
+`facetedPayload`, as in §2.1. For the 3 mm rounded-triangle plate of
+`apitest/chamfer_pattern_socket_test.go` with three pattern-copied sockets, a
+0.5 mm chamfer of both outlines in one call builds; its volume bound is about
+±2 mm³.
+
 ## 3. Table RB — receivers
 
 | RB | Receiver | `Fillet` / `Chamfer` | `Shell` |
@@ -158,6 +187,7 @@ corner's diagonal and removes `4·20·9·(1 − π/4)` mm³. At `r = 7`, past
 | **RB3** | `brepPayload` or stacked receiver with a section displacement | route P's displaced reading (§4.4) for a lateral Fillet or symmetric Chamfer that passes Table PD; otherwise SB1 | SB1 |
 | **RB4** | `facetedPayload` | reach SX9 (permanent) | reach SX9 |
 | **RB5** | `brepPayload` carrying a boss or pocket shell band | the faceted view's retained edge blend (§2.1), else SB11 | SB11; a closed shell is modify-general SG2 |
+| **RB6** | `prismPayload` with a section displacement | `Chamfer`: the faceted view's retained edge blend over loops with exact carriers (§2.2), else `RequireExactSection`'s refusal; `Fillet`: that refusal | that refusal |
 
 RB1's zero-displacement rule is prism-boolean §13's displaced-receiver rule,
 the one `prismrecord.Payload.RequireExactSection` enforces for a prism: a rewrite of a record that
