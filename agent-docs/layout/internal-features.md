@@ -42,6 +42,7 @@ Boolean result. The rules for rows live in `agent-docs/layout.md`.
 | `internal/jointinfer/` | Matches cylinder and plane face records of two parts into pin-in-bore, pin-in-slot and face-contact joints; plain millimetre data. See parts design §7.1. |
 | `internal/jointcheck/` | Box gaps, interval verdicts, line offsets and the overlap witness of two planar faces for the structural joint check; plain millimetre data. See parts design §7.2. |
 | `internal/explodeplan/` | Breadth-first walk of a joint graph from a ground part, with box travels and offsets for an exploded view; plain millimetre boxes. See parts design §5. |
+| `internal/explodeblock/` | Projection of a tessellation along a direction, the pairwise blocking test with `Mesh.Bound` rules (blocked, free, undecided, with a witness), candidate directions and the per-direction blocking table; plain millimetre vertices and triangles. See parts design §5.7. |
 | `internal/pathsample/` | Equal-arc-length points along a path of lines and circular arcs; plain millimetre vectors. See path-pattern design. |
 | `internal/glyphs/` | TrueType layout of a line of text and flattening of its glyph outlines to closed polygons. See text design. |
 | `internal/igesread/` | IGES 5.3 fixed-format records into entities, delimiters and the unit. See iges-import design. |
