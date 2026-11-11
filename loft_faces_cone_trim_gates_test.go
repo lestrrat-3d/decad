@@ -43,13 +43,20 @@ func TestConeHeelBooleanGates(t *testing.T) {
 		require.True(t, matched)
 		require.NotNil(t, got.Payload.(facetedPayload).LoftFacesTrim)
 	})
+	t.Run("union", func(t *testing.T) {
+		t.Parallel()
+		_, matched, err := loftfacestrim.ConeHeelBoolean(
+			t.Context(), meshbool.OpUnion, topo.Env{}, pairMeshes{}, nil, nil,
+		)
+		require.NoError(t, err)
+		require.False(t, matched)
+	})
 
 	declines := []struct {
 		name string
 		edit func(t *testing.T, c *tangentTrimChain, op *meshbool.OperationKind, tool **Body)
 	}{
 		{"cut", func(_ *testing.T, _ *tangentTrimChain, op *meshbool.OperationKind, _ **Body) { *op = meshbool.OpCut }},
-		{"union", func(_ *testing.T, _ *tangentTrimChain, op *meshbool.OperationKind, _ **Body) { *op = meshbool.OpUnion }},
 		{"unfaceted target", func(_ *testing.T, c *tangentTrimChain, _ *meshbool.OperationKind, _ **Body) {
 			c.cut.n.Payload = nil
 		}},
