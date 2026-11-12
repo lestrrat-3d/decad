@@ -1,6 +1,6 @@
 module github.com/lestrrat-3d/decad
 
-go 1.27.3
+go 1.27.4
 
 require (
 	github.com/lestrrat-3d/r3 v0.0.0-20261014125509-3c90eee135e1
