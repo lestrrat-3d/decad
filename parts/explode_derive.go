@@ -8,6 +8,8 @@ import (
 	"runtime"
 	"slices"
 	"strings"
+	"sync"
+	"sync/atomic"
 
 	"github.com/lestrrat-3d/decad"
 	"github.com/lestrrat-3d/decad/internal/explodeblock"
@@ -70,7 +72,7 @@ type derivedInput struct {
 	walk      []int
 	nodes     []explodeplan.Node
 	faces     *faceCache
-	jointAxes []r3.Vec
+	jointAxes []jointAxis
 }
 
 type derivedStages struct {
@@ -78,13 +80,82 @@ type derivedStages struct {
 	names  []string
 	order  []int
 	nodes  []explodeplan.Node
+	report derivedReport
+}
+
+// jointAxis is an axis or pull a joint offers as a candidate direction, and where it was read from.
+type jointAxis struct {
+	dir r3.Vec
+	src PullSource
+}
+
+// derivedReport is what the search says about the layout, in plan indices for the per-part slices.
+type derivedReport struct {
+	order, round []int // 1-based; 0 for parts the search did not move
+	src          []PullSource
+	blocked      []BlockedPair
+	undecided    []UndecidedPair
+}
+
+// report reads the pairs that forced the order and the pairs read as free off the tables, for the
+// direction each unit left by.
+func (s *Set) report(in derivedInput, items []int, tables []*explodeblock.Table, blockers [][][]int, rounds [][]explodeorder.Unit,
+	cons constraints, axisSrc []PullSource, dirs []r3.Vec) derivedReport {
+	n := len(in.idx)
+	rep := derivedReport{order: make([]int, n), round: make([]int, n), src: make([]PullSource, n)}
+	pos := make([]int, n) // plan index -> table index
+	for i, k := range items {
+		pos[k] = i
+	}
+	dirOf, unitOf := make([]int, n), make([]int, n)
+	seq, unitNo := 0, 0
+	for r, round := range rounds {
+		for _, u := range round {
+			unitNo++
+			for _, m := range u.Members {
+				seq++
+				rep.order[m], rep.round[m], dirOf[m], unitOf[m] = seq, r+1, u.Dir, unitNo
+				rep.src[m] = axisSrc[u.Dir]
+				if _, ok := cons.fixedVec[m]; ok {
+					rep.src[m] = RemovalDirection
+				}
+			}
+		}
+	}
+	name := func(k int) string { return s.parts[in.idx[k]].Name }
+	var movers []int
+	for k := range n {
+		if rep.order[k] > 0 {
+			movers = append(movers, k)
+		}
+	}
+	slices.SortFunc(movers, func(a, b int) int { return rep.order[a] - rep.order[b] })
+	for _, m := range movers {
+		d := dirOf[m]
+		tab := tables[d]
+		for _, b := range blockers[d][m] {
+			if unitOf[b] == unitOf[m] {
+				continue
+			}
+			w := tab.At(pos[m], pos[b]).Witness
+			rep.blocked = append(rep.blocked, BlockedPair{Mover: name(m), Blocker: name(b), Dir: dirs[d], Point: w.Point,
+				Height: w.Height})
+		}
+		for _, bi := range tab.Uncertain(pos[m]) {
+			b := items[bi]
+			if unitOf[b] == unitOf[m] || (rep.round[b] > 0 && rep.round[b] < rep.round[m]) {
+				continue
+			}
+			rep.undecided = append(rep.undecided, UndecidedPair{Mover: name(m), Other: name(b), Dir: dirs[d]})
+		}
+	}
+	return rep
 }
 
 // deriveStages appends the removal rounds to the explicit stages.
 func (s *Set) deriveStages(ctx context.Context, c config, in derivedInput) (derivedStages, error) {
 	var out derivedStages
 	n := len(in.idx)
-	name := func(k int) string { return s.parts[in.idx[k]].Name }
 	named := make([]bool, n)
 	for _, st := range in.stages.stages {
 		for _, m := range st.Members {
@@ -104,55 +175,71 @@ func (s *Set) deriveStages(ctx context.Context, c config, in derivedInput) (deri
 			items = append(items, k)
 		}
 	}
-	dirs := explodeblock.Directions(append(slices.Clone(cons.stated), in.jointAxes...), math.Sin(c.axisTol))
+	dirs := explodeblock.Directions(append(slices.Clone(cons.stated), jointDirs(in.jointAxes)...), math.Sin(c.axisTol))
 	for k, f := range cons.fixedVec {
 		cons.fixed[k] = nearest(dirs, f)
 	}
 	sc := &layoutScorer{dirs: dirs, boxes: in.boxes, zero: make([]r3.Vec, n), joint: make([]bool, len(dirs)),
-		projs: make([][]*explodeblock.Projection, len(dirs))}
+		trail: make([][]float64, len(dirs))}
 	tol := math.Sin(c.axisTol)
+	axisSrc := make([]PullSource, len(dirs)) // the source of each direction when a part leaves freely by it
+	rank := map[PullSource]int{PullDeclared: 3, AxisFromFaces: 2, AxisDeclared: 1}
 	for i, d := range dirs {
+		axisSrc[i] = WorldAxis
+		best := 0
 		for _, a := range in.jointAxes {
-			u, ok := a.Normalize()
-			sc.joint[i] = sc.joint[i] || (ok && (near(u, d, tol) || near(u.Scale(-1), d, tol)))
+			u, ok := a.dir.Normalize()
+			if !ok || !(near(u, d, tol) || near(u.Scale(-1), d, tol)) {
+				continue
+			}
+			sc.joint[i] = true
+			if r := rank[a.src]; r > best {
+				best, axisSrc[i] = r, a.src
+			}
 		}
 	}
 	sc.groundCentre = in.boxes[in.ground].Centre()
-	meshes := map[*decad.Body]explodeblock.Mesh{}
-	for _, k := range items {
+	// Identical bodies at different positions share one projection per direction: the meshes are
+	// grouped once, and each part is an offset of its class.
+	byBody := map[*decad.Body]explodeblock.Mesh{}
+	meshes := make([]explodeblock.Mesh, len(items))
+	for i, k := range items {
 		b := s.parts[in.idx[k]].Body
-		if _, ok := meshes[b]; ok {
-			continue
+		m, ok := byBody[b]
+		if !ok {
+			bf, err := in.faces.get(ctx, b)
+			if err != nil {
+				return out, err
+			}
+			m = meshOfFaces(bf)
+			if c.boxOnly {
+				m = meshOfBox(bf)
+			}
+			byBody[b] = m
 		}
-		bf, err := in.faces.get(ctx, b)
-		if err != nil {
-			return out, err
-		}
-		meshes[b] = meshOfFaces(bf)
+		meshes[i] = m
 	}
+	shares, classes := explodeblock.Group(meshes)
 	workers := runtime.GOMAXPROCS(0)
+	tables := make([]*explodeblock.Table, len(dirs))
 	blockers := make([][][]int, len(dirs))
 	for di, d := range dirs {
 		if err := ctx.Err(); err != nil {
 			return out, err
 		}
-		byBody := map[*decad.Body]*explodeblock.Projection{}
-		sc.projs[di] = make([]*explodeblock.Projection, n)
-		var insts []explodeblock.Instance
-		for _, k := range items {
-			b := s.parts[in.idx[k]].Body
-			p, ok := byBody[b]
-			if !ok {
-				var err error
-				if p, err = explodeblock.Project(meshes[b], d); err != nil {
-					return out, fmt.Errorf("parts: part %q: %w", name(k), err)
-				}
-				byBody[b] = p
-			}
-			sc.projs[di][k] = p
-			insts = append(insts, explodeblock.Instance{P: p})
+		projs, err := projectClasses(ctx, classes, d, workers, c.projCount)
+		if err != nil {
+			return out, fmt.Errorf("parts: %w", err)
+		}
+		insts := make([]explodeblock.Instance, len(items))
+		sc.trail[di] = make([]float64, n)
+		for i, k := range items {
+			insts[i] = explodeblock.Instance{P: projs[shares[i].Class], Offset: shares[i].Offset}
+			lo, _ := insts[i].Span()
+			sc.trail[di][k] = lo.Base()
 		}
 		tab := explodeblock.BuildTable(insts, workers)
+		tables[di] = tab
 		blockers[di] = make([][]int, n)
 		for a, k := range items {
 			if k == in.ground {
@@ -168,6 +255,7 @@ func (s *Set) deriveStages(ctx context.Context, c config, in derivedInput) (deri
 	if err != nil {
 		return out, s.orderError(err, dirs, in)
 	}
+	out.report = s.report(in, items, tables, blockers, rounds, cons, axisSrc, dirs)
 	out.stages, out.names = slices.Clone(in.stages.stages), slices.Clone(in.stages.names)
 	for _, p := range in.walk {
 		if named[p] {
@@ -222,6 +310,11 @@ func meshOfFaces(bf *bodyFaces) explodeblock.Mesh {
 	if !bf.unmeshed && len(bf.tris) > 0 {
 		return explodeblock.Mesh{Vertices: bf.verts, Triangles: bf.tris, Bound: units.Millimeters(bf.meshBound)}
 	}
+	return meshOfBox(bf)
+}
+
+// meshOfBox is the body's box as a mesh.
+func meshOfBox(bf *bodyFaces) explodeblock.Mesh {
 	lo, hi := bf.box.Min, bf.box.Max
 	var vs []r3.Vec
 	for i := range 8 {
@@ -389,7 +482,7 @@ type layoutScorer struct {
 	boxes        []explodeplan.Box
 	zero         []r3.Vec
 	groundCentre r3.Vec
-	projs        [][]*explodeblock.Projection // per direction, per plan index
+	trail        [][]float64 // per direction, per plan index: the lowest position along it
 }
 
 func (l *layoutScorer) Joint(d int) bool    { return l.joint[d] }
@@ -421,8 +514,50 @@ func (l *layoutScorer) Travel(ms []int, d int, remaining []bool) float64 {
 func (l *layoutScorer) Trailing(ms []int, d int) float64 {
 	lo := math.Inf(1)
 	for _, m := range ms {
-		a, _ := explodeblock.Instance{P: l.projs[d][m]}.Span()
-		lo = math.Min(lo, a.Base())
+		lo = math.Min(lo, l.trail[d][m])
 	}
 	return lo
+}
+
+// projectClasses projects every class mesh along d with at most workers goroutines. Each projection
+// built adds one to count when it is not nil.
+func projectClasses(ctx context.Context, classes []explodeblock.Mesh, d r3.Vec, workers int,
+	count *atomic.Int64) ([]*explodeblock.Projection, error) {
+	out := make([]*explodeblock.Projection, len(classes))
+	errs := make([]error, len(classes))
+	next := make(chan int, len(classes))
+	for i := range classes {
+		next <- i
+	}
+	close(next)
+	var wg sync.WaitGroup
+	for range min(max(workers, 1), max(len(classes), 1)) {
+		wg.Go(func() {
+			for i := range next {
+				if ctx.Err() != nil {
+					return
+				}
+				out[i], errs[i] = explodeblock.Project(classes[i], d)
+				if count != nil {
+					count.Add(1)
+				}
+			}
+		})
+	}
+	wg.Wait()
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if err := errors.Join(errs...); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func jointDirs(as []jointAxis) []r3.Vec {
+	out := make([]r3.Vec, len(as))
+	for i, a := range as {
+		out[i] = a.dir
+	}
+	return out
 }

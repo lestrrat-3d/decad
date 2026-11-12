@@ -3,6 +3,7 @@ package parts
 import (
 	"fmt"
 	"math"
+	"sync/atomic"
 
 	"github.com/lestrrat-3d/decad"
 	"github.com/lestrrat-3d/r3"
@@ -25,6 +26,8 @@ type config struct {
 	scale      float64
 	derived    bool
 	removals   map[string]Removal
+	boxOnly    bool          // test hook: block as boxes, to show the tessellation is needed
+	projCount  *atomic.Int64 // test hook: counts the projections a derived explode builds
 }
 
 func defaultConfig() config {

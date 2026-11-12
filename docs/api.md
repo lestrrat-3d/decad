@@ -522,7 +522,11 @@ as it found it.
   tessellations: a part leaves along a joint axis or a world axis once nothing still present blocks it, and parts that
   block each other leave as one rigid group. `parts.WithRemoval` takes a `parts.Removal` (`Direction`, `After`, `Before`,
   `Group`) per part. A pair the tessellation cannot decide counts as free, so the result is a layout, not a proof; a
-  part with no free direction is `decad.ErrDegenerate`.
+  part with no free direction is `decad.ErrDegenerate`. The result sets `Exploded.Derived` (layout-grade). Each derived
+  `parts.ExplodedPart` reports its `Order` and `Round` and a `Pull` of `AxisFromFaces`, `AxisDeclared`, `PullDeclared`,
+  `WorldAxis` or `RemovalDirection`. `Exploded.Blocked` lists each `parts.BlockedPair` that forced the order (mover,
+  blocker, direction and the witness point and height), and `Exploded.Undecided` each `parts.UndecidedPair` read as
+  free. Identical bodies at different positions share one projection per direction.
 - `Set.Check` judges each declared joint against the faces and bounds of its two parts and lists the pairs of parts whose
   boxes meet with no joint naming them. It never runs `Document.Verify`. Each `parts.JointResult` is `Confirmed`,
   `Contradicted`, `Undecided` or `NotChecked`, and one that is not `Confirmed` carries a typed `parts.Cause`.

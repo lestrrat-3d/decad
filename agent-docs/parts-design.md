@@ -646,7 +646,7 @@ type ExplodedPart struct {
     Placement r3.Transform // the same, as a transform
     Depth     int          // joint steps from the ground; -1 when no joint reaches it
     Anchor    r3.Vec       // label anchor: exploded box centre
-    Pull      PullSource   // AxisFromFaces, AxisDeclared, FaceNormal, BoxCentres, PullDeclared, StageDirection, None
+    Pull      PullSource   // AxisFromFaces, AxisDeclared, FaceNormal, BoxCentres, PullDeclared, StageDirection, WorldAxis, RemovalDirection, None
     // P7:
     Stage     string       // the last stage that moved it; "" for the ground and the implicit last stage
     Dir       r3.Vec       // the unit direction of that stage's move; zero when it did not move
@@ -656,6 +656,8 @@ type ExplodedPart struct {
     Clearance units.Value  // after the last stage: the least box distance to any part it is not joined to; zero when boxes meet
     Path      PathState    // PathClear, PathBlocked, PathEnclosed, PathStuck, PathNone (S7)
     Blocker   string       // the part that blocked or enclosed the path, or that Clearance was read against
+    // P8:
+    Order, Round int       // 1-based position in the derived removal order and its round; 0 when not derived
 }
 
 type Leader struct {
@@ -815,6 +817,13 @@ Blocking between two parts does not depend on which others are present. `BuildTa
 direction (optionally in parallel; the table is identical either way) after a prefilter on shadow boxes and on position
 along `d`. `Directions` lists candidate directions: given axes in both senses, then the six world axes.
 
+Identical bodies at different positions share one `Projection`. `Group` sorts meshes into classes: the same triangles over
+the same vertex numbering, each vertex within 1e-9 mm of the other mesh's, translated by one common vector. A hash of the
+triangle numbering picks the candidates and only those are compared vertex by vertex. A class mesh carries the largest
+`Mesh.Bound` of its members plus the largest vertex deviation seen, so its projection, moved by the member's offset
+(`Instance.Offset`), bounds every member and a verdict is never less cautious than the member's own. Meshes that differ
+by more, or are rotated, are separate classes.
+
 ### 5.8 Derived removal order
 
 `WithDerivedExplode` derives the order and direction of every part no `WithExplodeStages` entry names from the
@@ -845,6 +854,8 @@ func WithRemoval(part string, r Removal) ExplodeOption // needs WithDerivedExplo
 | D7 | Each round becomes `explodeplan.Stage` entries named `removal N` (`removal N.2` for a further stage of the same round): consecutive single parts leaving the same way share one `ClearAll` stage, a group has its own `Together` stage, and `Dir` is the chosen direction. `explodeplan.Run` is unchanged and gives the distances, leaders and overlaps. Derived parts run with no parent in the stage, so a part is never carried with the part that happens to be its joint parent. |
 | D8 | `Removal.Direction` fixes the only direction a part may use. `After` and `Before` order rounds strictly. `Group` joins parts into one unit; its members may not be fixed to different directions. A name that is unknown, has no body, is the ground or is already moved by an explicit stage is `decad.ErrDegenerate`, as is `WithRemoval` without `WithDerivedExplode`. |
 | D9 | A part with no free direction is `decad.ErrDegenerate` naming the part and, per direction, the parts that block it. A constraint that makes a removable part wait for one that cannot leave, an order cycle and a group fixed to two directions are `decad.ErrDegenerate` naming the parts. |
+| D10 | `Exploded` is the report. `Derived` is true, which marks the layout as layout-grade: a part that stands in the way of nothing the tessellation could see was read as free (an Undecided pair counts as free), so the order is a picture, not a proof. `ExplodedPart.Order` and `Round` give the 1-based removal position and round of each derived part, and its `Pull` the direction source: `PullDeclared`, `AxisFromFaces` or `AxisDeclared` when a joint offers the direction (in that precedence), `RemovalDirection` when its `WithRemoval` fixes it, else `WorldAxis`. The ground and the parts an explicit stage moved keep 0 and their stage's source. `Blocked` lists, in removal order, every `Blocked` verdict along each part's chosen direction between parts of different units: the blocker left earlier, and the witness is the one `explodeblock.Block` returned. `Undecided` lists the pairs along the chosen direction whose verdict was Undecided and whose other part is still present when the mover leaves. All three are empty and zero without `WithDerivedExplode`. |
+| D11 | The table build is bounded. Meshes are grouped once, as in section 5.7. Per direction, one projection per class is built by at most `GOMAXPROCS` goroutines, the instance table is built, the part's trailing position is kept as a float and the projections are dropped, so the projections of one direction are alive at a time. Tessellation is shared only between parts that hold the same `*decad.Body`; distinct bodies are tessellated each. |
 
 ## 6. Schematic
 

@@ -79,8 +79,29 @@ func Example_parts_derived_explode() {
 	for _, p := range ex.Parts {
 		fmt.Printf("%s: %s, direction (%g, %g, %g)\n", p.Name, p.Stage, p.Dir.X, p.Dir.Y, p.Dir.Z)
 	}
+	// The report: the layout is derived, so it is layout-grade, and it lists the
+	// parts in removal order and the pairs that forced that order.
+	fmt.Printf("derived: %t\n", ex.Derived)
+	byOrder := make([]string, len(ex.Parts))
+	for _, p := range ex.Parts {
+		if p.Order > 0 {
+			byOrder[p.Order-1] = fmt.Sprintf("%s (round %d, %s)", p.Name, p.Round, p.Pull)
+		}
+	}
+	for i, line := range byOrder {
+		if line != "" {
+			fmt.Printf("order %d: %s\n", i+1, line)
+		}
+	}
+	for _, b := range ex.Blocked {
+		fmt.Printf("%s is blocked by %s along (%g, %g, %g)\n", b.Mover, b.Blocker, b.Dir.X, b.Dir.Y, b.Dir.Z)
+	}
 	// Output:
 	// carrier: , direction (0, 0, 0)
 	// shaft: removal 2, direction (0, 0, -1)
 	// bearing: removal 1, direction (0, 0, -1)
+	// derived: true
+	// order 1: bearing (round 1, world axis)
+	// order 2: shaft (round 2, world axis)
+	// shaft is blocked by bearing along (0, 0, -1)
 }
