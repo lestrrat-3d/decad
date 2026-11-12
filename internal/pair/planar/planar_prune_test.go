@@ -613,12 +613,12 @@ func TestPointInFacetBoxedSideSigns(t *testing.T) {
 	}
 }
 
-// castAlongExact is castAlong before its float pre-test: every triangle's
-// exact edge signs, then its plane.
-func castAlongExact(p proof.DyV3, dir [3]int64, solid *planarPrep) castResult {
+func castAlongExactPolls(p proof.DyV3, dir [3]int64, solid *planarPrep) (castResult, int) {
 	d := proof.DyV3{proof.DyInt(dir[0]), proof.DyInt(dir[1]), proof.DyInt(dir[2])}
 	crossings := 0
+	polls := 0
 	for t, tri := range solid.s.Tris {
+		polls++
 		var signs [3]int
 		for i := range 3 {
 			u, w := solid.s.Verts[tri[i]], solid.s.Verts[tri[(i+1)%3]]
@@ -635,25 +635,25 @@ func castAlongExact(p proof.DyV3, dir [3]int64, solid *planarPrep) castResult {
 				continue
 			}
 			if pointInFacet(solid, t, dyPoint(p)) {
-				return castOnBoundary
+				return castOnBoundary, polls
 			}
-			return castAmbiguous
+			return castAmbiguous, polls
 		}
 		if ahead == 0 {
-			return castOnBoundary
+			return castOnBoundary, polls
 		}
 		if ahead != along {
 			continue
 		}
 		if signs[0] == 0 || signs[1] == 0 || signs[2] == 0 {
-			return castAmbiguous
+			return castAmbiguous, polls
 		}
 		crossings++
 	}
 	if crossings%2 == 1 {
-		return castInside
+		return castInside, polls
 	}
-	return castOutside
+	return castOutside, polls
 }
 
 // TestCastAxisPretestKeepsAnswers holds castAlong's float and exact plane
@@ -701,11 +701,12 @@ func TestCastAxisPretestKeepsAnswers(t *testing.T) {
 			}
 			pb := pointFloatBox(p)
 			for _, dir := range rayLadder {
-				want := castAlongExact(p, dir, prep)
+				want, wantPolls := castAlongExactPolls(p, dir, prep)
 				polls = 0
 				got, err := k.castAlong(p, pb, true, dir, prep)
 				require.NoError(t, err)
 				require.Equal(t, want, got, "p %v dir %v", p, dir)
+				require.Equal(t, wantPolls, polls, "polls p %v dir %v", p, dir)
 				outcomes[want]++
 				if axis := rayAxis(dir); axis >= 0 {
 					for tri := range polls {
@@ -732,47 +733,69 @@ func TestCastAxisPretestKeepsAnswers(t *testing.T) {
 	}
 }
 
-// TestCastAxisPlanePretestPaths exercises a visited facet on both sides of the
-// exact plane gate, including a zero normal that the gate must keep.
+// TestCastAxisPlanePretestPaths exercises the axis-ray plane filter with both
+// ray directions, on- and off-plane points, zero normals and wide float bounds.
 func TestCastAxisPlanePretestPaths(t *testing.T) {
 	t.Parallel()
 	v := func(x, y, z int64) proof.DyV3 {
 		return proof.DyV3{proof.DyInt(x), proof.DyInt(y), proof.DyInt(z)}
 	}
 	tri := []proof.DyV3{v(1, 0, 0), v(1, 1, 0), v(1, 0, 1)}
+	overflow := proof.DyShift(proof.DyInt(1), 520)
+	subnormal := proof.DyShift(proof.DyInt(1), -600)
 	for _, tc := range []struct {
-		name  string
-		verts []proof.DyV3
-		point proof.DyV3
-		want  castResult
+		name         string
+		verts        []proof.DyV3
+		point        proof.DyV3
+		want         castResult
+		offPlane     bool
+		floatDecides bool
 	}{
-		{"off plane", tri, v(0, 0, 0), castOutside},
-		{"on plane", tri, v(1, 0, 0), castOnBoundary},
-		{"zero normal", []proof.DyV3{v(0, 0, 0), v(0, 0, 0), v(0, 0, 0)}, v(1, 0, 0), castOnBoundary},
+		{name: "off plane", verts: tri, point: v(0, 0, 0), want: castOutside, offPlane: true, floatDecides: true},
+		{name: "on plane", verts: tri, point: v(1, 0, 0), want: castOnBoundary},
+		{name: "zero normal", verts: []proof.DyV3{v(0, 0, 0), v(0, 0, 0), v(0, 0, 0)},
+			point: v(1, 0, 0), want: castOnBoundary},
+		{name: "overflow normal", verts: []proof.DyV3{{}, {proof.DyZero(), overflow, proof.DyZero()},
+			{proof.DyZero(), proof.DyZero(), overflow}}, point: v(1, 0, 0), want: castOutside,
+			offPlane: true, floatDecides: true},
+		{name: "subnormal normal", verts: []proof.DyV3{{}, {proof.DyZero(), subnormal, proof.DyZero()},
+			{proof.DyZero(), proof.DyZero(), subnormal}}, point: v(1, 0, 0), want: castOutside,
+			offPlane: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			s := PlanarSolid{Verts: tc.verts, Tris: [][3]int{{0, 1, 2}}}
 			prep := preparePlanar(&s)
 			prep.floatBoxes()
+			require.Len(t, prep.normalBox, 1)
 			pb := pointFloatBox(tc.point)
 			axis := 1
 			require.Zero(t, prep.normal[0][axis].Sign())
+			require.Equal(t, pointFloatBox(prep.normal[0]), prep.normalBox[0])
 			ahead := proof.DvDot(prep.normal[0], proof.DvSub(s.Verts[0], tc.point)).Sign()
-			require.Equal(t, tc.name == "off plane", ahead != 0)
+			require.Equal(t, tc.offPlane, ahead != 0)
+			sign, decided := floatDotSign(pb, prep.vertBox[0], prep.normalBox[0])
+			require.Equal(t, tc.floatDecides, decided && sign != 0)
 			if tc.name == "off plane" {
 				require.True(t, floatApartOff(pb, prep.triBox[0], axis))
 			}
-			polls := 0
-			k := planarKernel{poll: countingPoll(&polls)}
-			got, err := k.castAlong(tc.point, pb, true, [3]int64{0, 1, 0}, prep)
-			require.NoError(t, err)
-			require.Equal(t, tc.want, castAlongExact(tc.point, [3]int64{0, 1, 0}, prep))
-			require.Equal(t, tc.want, got)
-			require.Equal(t, 1, polls, "the facet is reached after the float pre-test")
+			for _, boxed := range []bool{true, false} {
+				for _, dir := range [][3]int64{{0, 1, 0}, {0, -1, 0}, {1, 2, 3}} {
+					want, wantPolls := castAlongExactPolls(tc.point, dir, prep)
+					polls := 0
+					k := planarKernel{poll: countingPoll(&polls)}
+					got, err := k.castAlong(tc.point, pb, boxed, dir, prep)
+					require.NoError(t, err)
+					if boxed && rayAxis(dir) >= 0 {
+						require.Equal(t, tc.want, want)
+					}
+					require.Equal(t, want, got)
+					require.Equal(t, wantPolls, polls, "boxed=%v dir=%v", boxed, dir)
+				}
+			}
 			if tc.name == "off plane" {
 				stopped := fmt.Errorf("cast stopped")
-				k.poll = func() error { return stopped }
-				got, err = k.castAlong(tc.point, pb, true, [3]int64{0, 1, 0}, prep)
+				k := planarKernel{poll: func() error { return stopped }}
+				got, err := k.castAlong(tc.point, pb, true, [3]int64{0, 1, 0}, prep)
 				require.ErrorIs(t, err, stopped)
 				require.Equal(t, castAmbiguous, got)
 			}

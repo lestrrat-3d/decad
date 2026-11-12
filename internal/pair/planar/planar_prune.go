@@ -80,8 +80,8 @@ type floatBox struct {
 	tight bool
 }
 
-// floatBoxes fills the outward float boxes of every vertex, triangle and edge
-// of p. ClassifyPlanar fills them before its crossing scan, and
+// floatBoxes fills p's outward float boxes for vertices, triangles, edges and
+// normals. ClassifyPlanar fills them before its crossing scan, and
 // PlanarDeepVertex before its deep-inside scans and casts.
 func (p *planarPrep) floatBoxes() {
 	if p.vertBox != nil {
@@ -92,8 +92,10 @@ func (p *planarPrep) floatBoxes() {
 		p.vertBox[v] = pointFloatBox(point)
 	}
 	p.triBox = make([]floatBox, len(p.s.Tris))
+	p.normalBox = make([]floatBox, len(p.normal))
 	for t, tri := range p.s.Tris {
 		p.triBox[t] = p.unionBox(tri[:])
+		p.normalBox[t] = pointFloatBox(p.normal[t])
 	}
 	p.edgeBox = make([]floatBox, len(p.edges))
 	for e, edge := range p.edges {

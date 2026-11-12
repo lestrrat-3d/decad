@@ -62,6 +62,11 @@ func (k *planarKernel) castAlong(p proof.DyV3, pb floatBox, boxed bool, dir [3]i
 		aheadReady := false
 		var rel [3]proof.DyV3
 		if axis >= 0 && solid.normal[t][axis].Sign() == 0 {
+			if boxed {
+				if sign, decided := floatDotSign(pb, solid.vertBox[tri[0]], solid.normalBox[t]); decided && sign != 0 {
+					continue
+				}
+			}
 			rel[0] = proof.DvSub(solid.s.Verts[tri[0]], p)
 			ahead = proof.DvDot(solid.normal[t], rel[0]).Sign()
 			aheadReady = true

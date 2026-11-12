@@ -175,6 +175,12 @@ func TestVerifyMitredSweepMeetingPrismArmIsNotSound(t *testing.T) {
 		overhangPart(t, doc)
 		mitredBranch(t, doc, leaningBranchPoints(40), leaningBranchRadii)
 
+		defaultReport, err := doc.Verify(t.Context())
+		require.NoError(t, err)
+		require.Equal(t, decad.Suspect, defaultReport.Status)
+		require.Empty(t, defaultReport.Interferences)
+		require.Len(t, defaultReport.Diagnostics, 1, "a held touch with positive displacement stays undecided")
+
 		report, err := doc.Verify(t.Context(), decad.WithClearances())
 		require.NoError(t, err)
 		require.Equal(t, decad.Suspect, report.Status)

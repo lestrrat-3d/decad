@@ -170,6 +170,20 @@ answer, a cup is never tessellated for verification
 (`agent-docs/payload-verification-design.md` §1), and a loft, a composite sweep
 and a cap-loop chamfer keep their own designs' staging.
 
+**`Verify` without clearance reporting** needs a pair partition, not a boundary-gap
+reading. Keep the same crossing and shell-containment proofs. If neither proves
+overlap, scan the exact vertex-facet and edge-edge candidates with a squared
+distance cap of `δ²`. For `δ > 0`, any candidate at or below the cap leaves the
+pair `PairUndecided`; no candidate within the cap proves the held gap exceeds
+`δ`, so `Verify` may report `PairDisjoint` without taking a square root. For
+`δ = 0`, scan every zero-distance candidate and run the existing local-separation
+proof on each site: no site proves `PairDisjoint`, all locally separated sites
+prove `PairTouching`, and any undecided site leaves `PairUndecided`. Preserve
+the full relation and gap calculation for `Document.ContactPair` and
+`Verify` with `WithClearances()`. The relation-only path omits pair diameter;
+after a measured interference, `verifyrun` recomputes it for the §8 tolerance
+gate.
+
 **The coaxial separator** (`internal/verifyrun/coaxial.go`) answers a pair both
 arms leave `boundaryaudit.PairUndecided` when one circular cylinder separates
 the interiors: one body lies in the closed solid cylinder of axis `L` and

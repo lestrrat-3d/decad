@@ -52,6 +52,18 @@ func TestPlanarDeepVertexMargin(t *testing.T) {
 	require.False(t, deepVertex(t, barA, barB, 0))
 }
 
+func TestPlanarDeepVertexNegativeMarginKeepsSquaredBehavior(t *testing.T) {
+	block := boxSolid([3]float64{0, 0, 0}, [3]float64{10, 10, 10})
+	plug := boxSolid([3]float64{2, 2, 2}, [3]float64{8, 8, 8})
+	for _, margin := range []float64{0, 1, 2, 3, 4} {
+		for _, order := range [][2]planar.PlanarSolid{{plug, block}, {block, plug}} {
+			positive := deepVertex(t, order[0], order[1], margin)
+			negative := deepVertex(t, order[0], order[1], -margin)
+			require.Equal(t, positive, negative, "margin ±%g", margin)
+		}
+	}
+}
+
 func TestPlanarDeepVertexPollsAndStops(t *testing.T) {
 	block := boxSolid([3]float64{0, 0, 0}, [3]float64{10, 10, 10})
 	far := boxSolid([3]float64{20, 20, 20}, [3]float64{21, 21, 21})

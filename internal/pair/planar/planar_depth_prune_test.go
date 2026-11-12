@@ -2,6 +2,7 @@ package planar
 
 import (
 	"errors"
+	"fmt"
 	"math/rand/v2"
 	"testing"
 
@@ -347,4 +348,59 @@ func TestPlanarDeepVertexGapSkipAtMargin(t *testing.T) {
 		skip := gapSquaredBelowLimit(pointFloatBox(corner), prep.triBox[face], marginUp) > marginUp
 		require.Equal(t, c.skip, skip, "margin %v", c.margin)
 	}
+}
+
+func TestDeepInsideExpandedBoxPrefilter(t *testing.T) {
+	t.Parallel()
+	for _, shift := range []int{0, -1080, 1030} {
+		outer := cubeSolid(proof.DyZero(), proof.DyInt(4), shift)
+		prep := preparePlanar(&outer)
+		prep.floatBoxes()
+		corner := proof.DyV3{
+			proof.DyShift(proof.DyInt(1), shift),
+			proof.DyShift(proof.DyInt(1), shift),
+			proof.DyShift(proof.DyInt(1), shift),
+		}
+		face := 0
+		gapSquared := boxGapSquared(corner, corner, prep.triLo[face], prep.triHi[face])
+		require.Equal(t, 0, proof.DyCmp(gapSquared, proof.DyShift(proof.DyInt(1), 2*shift)),
+			"shift %d: the exact box gap is the square of the x offset", shift)
+
+		cases := []struct {
+			name      string
+			margin    proof.Dyadic
+			wantApart bool
+		}{
+			{name: "zero", margin: proof.DyZero(), wantApart: shift != -1080},
+			{name: "half gap", margin: proof.DyShift(proof.DyInt(1), shift-1), wantApart: shift == 0},
+			{name: "equal gap", margin: proof.DyShift(proof.DyInt(1), shift)},
+			{name: "over gap", margin: proof.DyShift(proof.DyInt(1), shift+1)},
+		}
+		for _, tc := range cases {
+			t.Run(fmt.Sprintf("shift_%d/%s", shift, tc.name), func(t *testing.T) {
+				_, radiusUp := proof.FloatBounds(tc.margin)
+				expanded := expandFloatBox(pointFloatBox(corner), radiusUp)
+				apart := floatApart(expanded, prep.triBox[face])
+				require.Equal(t, tc.wantApart, apart)
+				if apart {
+					require.Greater(t, proof.DyCmp(gapSquared, proof.DyMul(tc.margin, tc.margin)), 0,
+						"a box reject must prove exact squared distance exceeds margin squared")
+				}
+			})
+		}
+	}
+}
+
+func TestDeepInsideExpandedBoxPollsBeforeReject(t *testing.T) {
+	t.Parallel()
+	solid := cubeSolid(proof.DyZero(), proof.DyInt(1), 0)
+	prep := preparePlanar(&solid)
+	prep.floatBoxes()
+	p := proof.DyV3{proof.DyInt(4), proof.DyInt(4), proof.DyInt(4)}
+	stop := errors.New("poll before box reject")
+	k := planarKernel{poll: func() error { return stop }}
+	marginSquared := proof.DyZero()
+	deep, err := k.deepInside(p, pointFloatBox(p), prep, marginSquared, 0, 0)
+	require.ErrorIs(t, err, stop)
+	require.False(t, deep)
 }
