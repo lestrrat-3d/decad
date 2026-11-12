@@ -582,6 +582,39 @@ func TestFacetPlaneSignMatchesDirect(t *testing.T) {
 			}
 		}
 	}
+
+	vertex := proof.DyV3{proof.DyInt(7), proof.DyInt(-11), proof.DyInt(5)}
+	weights := []proof.Dyadic{
+		zero,
+		proof.DyInt(1), proof.DyInt(-1), proof.DyInt(3),
+		proof.DyShift(proof.DyInt(5), 900), proof.DyShift(proof.DyInt(-7), -900),
+	}
+	delta := proof.DyShift(proof.DyInt(1), -700)
+	for axis := range 3 {
+		for _, normalSign := range []int64{-1, 1} {
+			for _, normalShift := range []int{0, 900, -900} {
+				var normal proof.DyV3
+				normal[axis] = proof.DyShift(proof.DyInt(normalSign), normalShift)
+				prep := &planarPrep{
+					s:      &PlanarSolid{Verts: []proof.DyV3{vertex}, Tris: [][3]int{{0, 0, 0}}},
+					normal: []proof.DyV3{normal},
+				}
+				for _, weight := range weights {
+					base := dvScale(vertex, weight)
+					for _, offset := range []proof.Dyadic{zero, delta, proof.DyNeg(delta)} {
+						point := base
+						point[axis] = proof.DyAdd(base[axis], offset)
+						x := hpoint{x: point, w: weight}
+						want := proof.DvDot(normal, x.from(vertex)).Sign()
+						require.Equal(t, want, prep.planeSign(0, x),
+							"axis=%d normalSign=%d normalShift=%d weightSign=%d weightShift=%d",
+							axis, normalSign, normalShift, weight.Sign(), weight.Exp())
+					}
+				}
+				require.Nil(t, prep.offsets, "single-axis normal must avoid the offset cache")
+			}
+		}
+	}
 }
 
 func TestPointInFacetBoxedSideSigns(t *testing.T) {

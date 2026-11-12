@@ -219,6 +219,26 @@ func pointInFacetBoxedEdges(p *planarPrep, t int, x hpoint, xb floatBox, boxed b
 
 // planeSign evaluates normal·(x.x - x.w*v0), reusing the exact normal·v0.
 func (p *planarPrep) planeSign(t int, x hpoint) int {
+	normal := p.normal[t]
+	axis := -1
+	for i, component := range normal {
+		if component.IsZero() {
+			continue
+		}
+		if axis >= 0 {
+			axis = -2
+			break
+		}
+		axis = i
+	}
+	if axis >= 0 {
+		v0 := p.s.Verts[p.s.Tris[t][0]]
+		sign := proof.DyCmp(x.x[axis], proof.DyMul(x.w, v0[axis]))
+		if normal[axis].Sign() < 0 {
+			return -sign
+		}
+		return sign
+	}
 	if p.offsets == nil {
 		p.offsets = make([]facetOffset, len(p.s.Tris))
 	}
