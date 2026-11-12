@@ -166,10 +166,9 @@ BOMRow is one line of the bill of materials.
     Height         units.Value
 }</pre>
 
-BlockedPair is one pair that forced the derived removal order: Blocker stood
-ahead of Mover along Dir, so Blocker left first. Point is a point on Mover's
-surface under Blocker, in millimetres, and Height how far Blocker's surface
-stands ahead of it along Dir.
+BlockedPair is one pair that forced the derived removal order: Blocker stood ahead of Mover
+along Dir, so Blocker left first. Point is a point on Mover's surface under Blocker, in
+millimetres, and Height how far Blocker's surface stands ahead of it along Dir.
 
 <a name="Cause"></a>
 ### type Cause
@@ -327,11 +326,11 @@ accepted too.
 
 WithDerivedExplode derives the removal order and direction of every part that
 no WithExplodeStages entry names from the parts' tessellations, instead of
-walking the joints. Explicit stages run first, unchanged. A part leaves along a
-joint axis, a stated pull or a world axis once no part still present stands in
-its way; parts that block each other leave together as one rigid group. A pair
-the tessellation cannot decide counts as free, so the result is a layout and
-not a proof (agent\-docs/parts\-design.md §5.8).
+walking the joints. Explicit stages run first, unchanged. A part leaves along
+a joint axis, a stated pull or a world axis once no part still present stands
+in its way; parts that block each other leave together as one rigid group. A
+pair the tessellation cannot decide counts as free, so the result is a layout
+and not a proof (agent-docs/parts-design.md §5.8).
 
 <a name="WithExplodeGap"></a>
 #### func WithExplodeGap
@@ -382,8 +381,8 @@ WithExplodeGap's. A part no [Set](<#Set>) has is decad.ErrDegenerate at the quer
 <pre>func WithRemoval(part <a href="https://pkg.go.dev/builtin#string">string</a>, r <a href="#Removal">Removal</a>) <a href="#ExplodeOption">ExplodeOption</a></pre>
 
 WithRemoval constrains the derived removal of one part and needs
-WithDerivedExplode. A part no [Set](<#Set>) has, a part without a body, the ground,
-or a part an explicit stage names is decad.ErrDegenerate at the query, as is a
+WithDerivedExplode. A part no [Set](<#Set>) has, a part without a body, the ground, or a
+part an explicit stage names is decad.ErrDegenerate at the query, as is a
 constraint the search cannot meet. A later WithRemoval for the same part
 replaces the earlier one.
 
@@ -401,7 +400,9 @@ replaces the earlier one.
 
     // Derived is true when WithDerivedExplode ran. The removal order of the parts no explicit stage
     // names was then read from tessellations, so the layout is layout-grade: a picture, not a proof
-    // (agent-docs/parts-design.md §5.8). Blocked and Undecided are empty without it.
+    // (agent-docs/parts-design.md §5.8). Its rounds run last-removed first, so the part removed last
+    // sits nearest the assembly and Stages lists the rounds in that order. Blocked and Undecided are
+    // empty without it.
     Derived <a href="https://pkg.go.dev/builtin#bool">bool</a>
     // Blocked lists, in removal order, each pair that forced the order: a part that leaves along a
     // direction and the part that stood in the way along it, which therefore left earlier.
@@ -803,15 +804,15 @@ PullSource says where the direction a part was pulled in came from.
 <a name="PullNone"></a><a name="AxisFromFaces"></a><a name="AxisDeclared"></a><a name="FaceNormal"></a><a name="BoxCentres"></a><a name="PullDeclared"></a><a name="StageDirection"></a><a name="WorldAxis"></a><a name="RemovalDirection"></a>
 
 <pre>const (
-    PullNone       <a href="#PullSource">PullSource</a> = iota // the ground, or a part no joint reaches
-    AxisFromFaces                    // the axis of the matched cylinder faces
-    AxisDeclared                     // the joint&#39;s declared Axis
-    FaceNormal                       // the normal of the matched contact faces
-    BoxCentres                       // the line between the two parts&#39; box centres
-    PullDeclared                     // the joint&#39;s declared Pull
-    StageDirection                   // the direction its stage stated
-    WorldAxis                        // derived: a world axis, or a direction another part&#39;s WithRemoval stated
-    RemovalDirection                 // derived: the direction its own WithRemoval stated
+    PullNone         <a href="#PullSource">PullSource</a> = iota // the ground, or a part no joint reaches
+    AxisFromFaces                      // the axis of the matched cylinder faces
+    AxisDeclared                       // the joint&#39;s declared Axis
+    FaceNormal                         // the normal of the matched contact faces
+    BoxCentres                         // the line between the two parts&#39; box centres
+    PullDeclared                       // the joint&#39;s declared Pull
+    StageDirection                     // the direction its stage stated
+    WorldAxis                          // derived: a world axis, or a direction another part&#39;s WithRemoval stated
+    RemovalDirection                   // derived: the direction its own WithRemoval stated
 )</pre>
 
 <a name="PullSource.String"></a>
@@ -823,8 +824,6 @@ String returns the lower-case words for the source.
 
 <a name="Removal"></a>
 ### type Removal
-
-Removal constrains how WithDerivedExplode removes one part.
 
 <pre>type Removal struct {
     // Direction, when not zero, is the only direction the part may leave by. Its
@@ -838,6 +837,8 @@ Removal constrains how WithDerivedExplode removes one part.
     // that leaves together along one direction.
     Group <a href="https://pkg.go.dev/builtin#string">string</a>
 }</pre>
+
+Removal constrains how WithDerivedExplode removes one part.
 
 <a name="Set"></a>
 ### type Set
@@ -918,7 +919,8 @@ is the travel that clears the parent plus WithExplodeGap.
 
 WithExplodeStages runs that in ordered stages, WithPartGap and
 WithExplodeScale tune the distances, and [Joint](<#Joint>).Pull states a direction
-(agent-docs/parts-design.md §5.3).
+(agent-docs/parts-design.md §5.3). WithDerivedExplode derives the order and
+direction of the parts no stage names from their tessellations (§5.8).
 
 <a name="Set.Graph"></a>
 #### func (\*Set) Graph
@@ -1085,9 +1087,8 @@ and a nil [Set](<#Set>) decad.ErrDegenerate.
     Dir          r3.Vec
 }</pre>
 
-UndecidedPair is a pair the tessellation could not settle: Other may stand ahead
-of Mover along Dir only inside the mesh bounds' uncertainty, and the layout read
-it as free.
+UndecidedPair is a pair the tessellation could not settle: Other may stand ahead of Mover along
+Dir only inside the mesh bounds' uncertainty, and the layout read it as free.
 
 <a name="ViewOption"></a>
 ### type ViewOption
