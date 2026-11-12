@@ -32,8 +32,10 @@ func psBolt(k int) string   { return fmt.Sprintf("bolt %d", k+1) }
 // (radius 8 at radius 11, z 13..21) sit on the carrier. Above, a rear cover (z 30..34, bore 8) holds a
 // rear bearing joined to it and is held by three identical bolts whose heads stand on it.
 //
-// The removal order this gives: the bolts, the rear bearing, the front cover and the front bearing
-// first; then the rear cover and the input shaft; then the planets; then the carrier.
+// The removal order this gives: the bolts and the front bearing first; then the rear cover, the rear
+// bearing and the input shaft; then the planets; then the carrier and the front cover. The rear bearing
+// and the front cover wait for nothing, so each leaves just before the first part it blocks: the rear
+// bearing before the planets, the front cover, which blocks nothing, last.
 func planetStack(t *testing.T) (*parts.Set, map[string]*decad.Body) {
 	t.Helper()
 	doc := decad.New()
@@ -95,7 +97,7 @@ func TestDerivedLayoutOrder(t *testing.T) {
 	}
 
 	// The removal order the layout is built from.
-	wantRound := map[string]int{psFrontCover: 1, psFrontBearing: 1, psRearBearing: 1, psRearCover: 2, psInputShaft: 2,
+	wantRound := map[string]int{psFrontCover: 4, psFrontBearing: 1, psRearBearing: 2, psRearCover: 2, psInputShaft: 2,
 		psCarrier: 4}
 	for k := range 3 {
 		wantRound[psBolt(k)], wantRound[psPlanet(k)] = 1, 3
@@ -128,13 +130,13 @@ func TestDerivedLayoutOrder(t *testing.T) {
 		}
 		// The carrier leaves last: it clears the ring, the only part still present, by the gap and no more.
 		require.InDelta(t, 30+psGap-9, p(psCarrier).Offset.Z, 1e-6)
-		// The input shaft clears the ring and the parts removed after it, not the front parts removed before it.
-		require.InDelta(t, -(8 + psGap), p(psInputShaft).Offset.Z, 1e-6)
+		// The front cover, removed last as well, clears the ring by the gap. The input shaft clears the front
+		// cover removed after it, not the front bearing removed before it.
+		require.InDelta(t, -psGap, p(psFrontCover).Offset.Z, 1e-6)
+		require.InDelta(t, final(psFrontCover).Min.Z-psGap, final(psInputShaft).Max.Z, 1e-6)
 	})
 
 	t.Run("a part removed before a joined part ends beyond it", func(t *testing.T) {
-		rb, rc := final(psRearBearing), final(psRearCover)
-		require.GreaterOrEqual(t, rb.Min.Z, rc.Max.Z+psGap-1e-6, "the rear bearing ends above the rear cover")
 		fb, sh := final(psFrontBearing), final(psInputShaft)
 		require.LessOrEqual(t, fb.Max.Z, sh.Min.Z-psGap+1e-6, "the front bearing ends below the input shaft")
 	})
@@ -149,11 +151,78 @@ func TestDerivedLayoutOrder(t *testing.T) {
 	})
 
 	t.Run("nested round members separate", func(t *testing.T) {
-		// The front bearing sits in the front cover's bore and both leave downward in one round: one ends
-		// beyond the other, and no exploded boxes meet.
-		fc, fb := final(psFrontCover), final(psFrontBearing)
-		require.True(t, fc.Max.Z <= fb.Min.Z-psGap+1e-6 || fb.Max.Z <= fc.Min.Z-psGap+1e-6,
-			"front cover z [%g, %g], front bearing z [%g, %g]", fc.Min.Z, fc.Max.Z, fb.Min.Z, fb.Max.Z)
+		// The rear bearing sits in the rear cover's bore and both leave upward in one round: one ends beyond
+		// the other, and no exploded boxes meet.
+		rc, rb := final(psRearCover), final(psRearBearing)
+		require.True(t, rc.Max.Z <= rb.Min.Z-psGap+1e-6 || rb.Max.Z <= rc.Min.Z-psGap+1e-6,
+			"rear cover z [%g, %g], rear bearing z [%g, %g]", rc.Min.Z, rc.Max.Z, rb.Min.Z, rb.Max.Z)
 		require.Empty(t, ex.Overlaps)
 	})
+}
+
+// TestDerivedPinsBesideCarrier checks that a part with a free way out from the start still leaves just
+// before the part it blocks. The ring (bore 20 above a shoulder of bore 17 that ends at z 9) is the ground
+// and the carrier (radius 18, z 9..12) rests on the shoulder. Three pins (shank radius 1.5 through the
+// carrier's 1.6 holes, head radius 2.5 on its top face) stand in the carrier's way. The rear cover above
+// (z 30..34) is an open frame: its bore of 14 passes the pins (out to radius 12.5) but not the carrier,
+// and a bolt whose head stands on the cover holds it. The pins could leave at once, but they belong with
+// the round just before the carrier, so they end next to it and not beyond the cover.
+func TestDerivedPinsBesideCarrier(t *testing.T) {
+	const (
+		ring, carrier, cover, bolt = "ring", "carrier", "rear cover", "bolt"
+	)
+	pin := func(k int) string { return fmt.Sprintf("pin %d", k+1) }
+	doc := decad.New()
+	cyl := func(x, y, r, z0, h float64) *decad.Body { return cylinderAt(t, doc, x, y, r, z0, h) }
+	cut := func(b, tool *decad.Body) *decad.Body { return must(decad.Cut(t.Context(), b, tool)) }
+	union := func(b, o *decad.Body) *decad.Body { return must(decad.Union(t.Context(), b, o)) }
+
+	bodies := map[string]*decad.Body{
+		ring:    cut(cut(cut(cyl(0, 0, 30, 0, 30), cyl(0, 0, 20, 9, 22)), cyl(0, 0, 17, -1, 11)), cyl(25, 0, 1.6, -1, 32)),
+		cover:   cut(cut(cyl(0, 0, 30, 30, 4), cyl(0, 0, 14, 29, 6)), cyl(25, 0, 1.6, 29, 6)),
+		bolt:    union(cyl(25, 0, 1.5, 22, 12), cyl(25, 0, 2.5, 34, 2)),
+		carrier: cyl(0, 0, 18, 9, 3),
+	}
+	for k := range 3 {
+		a := math.Pi/2 + 2*math.Pi*float64(k)/3
+		x, y := 10*math.Cos(a), 10*math.Sin(a)
+		bodies[carrier] = cut(bodies[carrier], cyl(x, y, 1.6, 8, 5))
+		bodies[pin(k)] = union(cyl(x, y, 1.5, 5, 8), cyl(x, y, 2.5, 12, 1))
+	}
+	s := parts.NewSet(doc)
+	names := []string{ring, carrier, cover, bolt, pin(0), pin(1), pin(2)}
+	for _, name := range names {
+		mustAdd(t, s, parts.Part{Name: name, Kind: parts.Manufactured, Body: bodies[name]})
+	}
+	ex, err := s.Explode(t.Context(), parts.WithDerivedExplode(), parts.WithExplodeGround(ring),
+		parts.WithExplodeGap(units.Millimeters(psGap)))
+	require.NoError(t, err)
+	p := func(name string) parts.ExplodedPart { return partByName(t, ex, name) }
+	final := func(name string) decad.Box {
+		b, err := bodies[name].Bounds()
+		require.NoError(t, err)
+		off := p(name).Offset
+		return decad.Box{Min: b.Min.Add(off), Max: b.Max.Add(off)}
+	}
+	for _, name := range names[1:] {
+		require.InDelta(t, 1, p(name).Dir.Z, 1e-9, name)
+	}
+
+	// The bolt holds the cover and the cover the carrier; each pin leaves with the cover, one round before
+	// the carrier it stands in the way of.
+	require.Equal(t, 1, p(bolt).Round)
+	require.Equal(t, 2, p(cover).Round)
+	require.Equal(t, 3, p(carrier).Round)
+	for k := range 3 {
+		require.Equal(t, p(carrier).Round-1, p(pin(k)).Round, pin(k))
+	}
+
+	// The carrier, removed last, clears the ring by the gap. Each pin clears the carrier by the gap and no
+	// more; the cover, which overlaps the pins seen along the axis, ends beyond them.
+	require.InDelta(t, 30+psGap-9, p(carrier).Offset.Z, 1e-6)
+	for k := range 3 {
+		require.InDelta(t, final(carrier).Max.Z+psGap, final(pin(k)).Min.Z, 1e-6, pin(k))
+		require.GreaterOrEqual(t, final(cover).Min.Z, final(pin(k)).Max.Z+psGap-1e-6, pin(k))
+	}
+	require.Empty(t, ex.Overlaps)
 }

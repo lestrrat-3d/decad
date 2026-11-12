@@ -2,11 +2,16 @@
 // leave it (agent-docs/parts-design.md §5.8). It works on plain part indices
 // and per-direction blocker lists and touches no body.
 //
-// Every round removes each part that has no blocker among the parts still
-// present along some candidate direction. When no part can leave, parts that
-// block each other along one direction form a strongly connected component and
-// leave together as one rigid group. Each round removes at least one part or
+// Every search round removes each part that has no blocker among the parts
+// still present along some candidate direction. When no part can leave, parts
+// that block each other along one direction form a strongly connected component
+// and leave together as one rigid group. Each round removes at least one part or
 // the search stops with an error, so it always terminates.
+//
+// The search finds each part's earliest round. A second pass then moves each
+// part that waits for no other part to the latest round before the first part it
+// blocks or must leave before, keeping its direction, so a part that is free from
+// the start leaves next to the part it frees.
 package explodeorder
 
 import (
@@ -116,15 +121,114 @@ func Search(in Input) ([][]Unit, error) {
 	if err := s.init(); err != nil {
 		return nil, err
 	}
-	var rounds [][]Unit
-	for s.left() > 0 {
-		round, err := s.round()
+	var picks []pick
+	for r := 0; s.left() > 0; r++ {
+		cs, err := s.round()
 		if err != nil {
 			return nil, err
 		}
-		rounds = append(rounds, round)
+		for _, c := range cs {
+			picks = append(picks, pick{chosen: c, round: r})
+		}
 	}
-	return rounds, nil
+	s.settle(picks)
+	return s.rounds(picks), nil
+}
+
+// pick is a unit or group the search removed and the round it leaves in.
+type pick struct {
+	chosen
+	round int
+}
+
+// settle moves each pick that waits for no other pick to the latest round before the first pick it must
+// leave before: one it blocks along that pick's direction, or one whose After names it. A pick waits
+// for another when that one blocks it along its direction or its After names it; such a pick keeps its
+// search round, just after the last pick it waits for. Each part then sits next to a part it depends on:
+// the one that freed it, or, when nothing held it, the one it frees.
+//
+// It walks the picks latest first, so every pick it could hold back already has its final round. A
+// pick q that p must leave before was removed in a later search round than p (p was present when q was
+// found free), so it is walked before p, and picks of one search round never hold each other. A moved
+// pick has no blocker among the picks along its direction, so it stays free in any round. Each pick
+// moves to a later round or stays, never past a pick it must leave before, so blockers keep their order
+// and every After holds.
+func (s *searcher) settle(picks []pick) {
+	if len(picks) == 0 {
+		return
+	}
+	pickOf := make([]int, len(s.units))
+	for i := range pickOf {
+		pickOf[i] = -1
+	}
+	for i, p := range picks {
+		for _, u := range p.units {
+			pickOf[u] = i
+		}
+	}
+	held := make([][]int, len(picks)) // held[i]: the picks that pick i must leave before
+	waits := make([]bool, len(picks)) // waits[j]: pick j must leave after some other pick
+	for j, q := range picks {
+		var need []int
+		for _, m := range s.membersOf(q.units) {
+			for _, b := range s.in.Blockers[q.dir][m] {
+				if u := s.unitOf[b]; u >= 0 && pickOf[u] >= 0 && pickOf[u] != j {
+					need = append(need, pickOf[u])
+				}
+			}
+		}
+		for _, u := range q.units {
+			for _, a := range s.units[u].after {
+				if pickOf[a] >= 0 {
+					need = append(need, pickOf[a])
+				}
+			}
+		}
+		slices.Sort(need)
+		waits[j] = len(need) > 0
+		for _, i := range slices.Compact(need) {
+			held[i] = append(held[i], j)
+		}
+	}
+	last := picks[len(picks)-1].round
+	for i := len(picks) - 1; i >= 0; i-- {
+		if waits[i] {
+			continue
+		}
+		limit := last
+		for _, j := range held[i] {
+			limit = min(limit, picks[j].round-1)
+		}
+		picks[i].round = max(picks[i].round, limit)
+	}
+}
+
+// rounds groups the picks by their settled round, dropping rounds left empty. Inside a round the
+// units keep their index order, then the part whose trailing face is lower goes closer in.
+func (s *searcher) rounds(picks []pick) [][]Unit {
+	byRound := map[int][]pick{}
+	var keys []int
+	for _, p := range picks {
+		if _, ok := byRound[p.round]; !ok {
+			keys = append(keys, p.round)
+		}
+		byRound[p.round] = append(byRound[p.round], p)
+	}
+	slices.Sort(keys)
+	out := make([][]Unit, 0, len(keys))
+	for _, k := range keys {
+		ps := byRound[k]
+		slices.SortStableFunc(ps, func(a, b pick) int { return cmp.Compare(a.units[0], b.units[0]) })
+		round := make([]Unit, 0, len(ps))
+		for _, p := range ps {
+			round = append(round, Unit{Members: s.membersOf(p.units), Dir: p.dir})
+		}
+		slices.SortStableFunc(round, func(a, b Unit) int {
+			return cmp.Compare(s.in.Score.Trailing(a.Members, a.Dir), s.in.Score.Trailing(b.Members, b.Dir))
+		})
+		out = append(out, round)
+	}
+	return out
 }
 
 func (s *searcher) init() error {
@@ -337,14 +441,11 @@ func (s *searcher) membersOf(us []int) []int {
 	return ms
 }
 
-func (s *searcher) round() ([]Unit, error) {
+// round removes the units of the next search round.
+func (s *searcher) round() ([]chosen, error) {
 	picks := s.step(false)
 	if picks == nil {
 		return nil, s.stuck()
-	}
-	var round []Unit
-	for _, c := range picks {
-		round = append(round, Unit{Members: s.membersOf(c.units), Dir: c.dir})
 	}
 	for _, c := range picks {
 		for _, u := range c.units {
@@ -354,11 +455,7 @@ func (s *searcher) round() ([]Unit, error) {
 			}
 		}
 	}
-	// The part whose trailing face is lower goes closer in.
-	slices.SortStableFunc(round, func(a, b Unit) int {
-		return cmp.Compare(s.in.Score.Trailing(a.Members, a.Dir), s.in.Score.Trailing(b.Members, b.Dir))
-	})
-	return round, nil
+	return picks, nil
 }
 
 // stuck explains why no unit can leave.

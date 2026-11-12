@@ -85,6 +85,45 @@ func TestAfterCycleIsConflict(t *testing.T) {
 	require.Equal(t, explodeorder.OrderCycle, cf.Kind)
 }
 
+func TestFreePartLeavesBeforeWhatItBlocks(t *testing.T) {
+	// 1 is a cover blocking 2, 2 a planet blocking 3, the carrier; 4 is a pin, free at once, that also
+	// blocks the carrier. The pin leaves in the round just before the carrier, with the planet.
+	r, err := explodeorder.Search(input(5, map[int][]int{2: {1}, 3: {2, 4}}))
+	require.NoError(t, err)
+	require.Equal(t, [][][]int{{{1}}, {{2}, {4}}, {{3}}}, members(r))
+}
+
+func TestPartBlockingNothingLeavesLast(t *testing.T) {
+	// 3 blocks nothing and leaves with 2, the last part; the round it was found free in empties and goes.
+	r, err := explodeorder.Search(input(4, map[int][]int{2: {1}}))
+	require.NoError(t, err)
+	require.Equal(t, [][][]int{{{1}}, {{2}, {3}}}, members(r))
+}
+
+func TestAfterHoldsALatePart(t *testing.T) {
+	// 3 blocks nothing, but 2 must leave after it, so it stays one round ahead of 2.
+	in := input(4, map[int][]int{2: {1}})
+	in.After[2] = []int{3}
+	r, err := explodeorder.Search(in)
+	require.NoError(t, err)
+	require.Equal(t, [][][]int{{{1}, {3}}, {{2}}}, members(r))
+}
+
+func TestWaitingPartKeepsItsRound(t *testing.T) {
+	// 4 blocks nothing but waits for 1, so it stays in the round just after 1 instead of moving to the
+	// last round.
+	r, err := explodeorder.Search(input(5, map[int][]int{2: {1}, 3: {2}, 4: {1}}))
+	require.NoError(t, err)
+	require.Equal(t, [][][]int{{{1}}, {{2}, {4}}, {{3}}}, members(r))
+}
+
+func TestGroupMovesAsOne(t *testing.T) {
+	// 1 and 2 block each other and leave as a group; 3 is free but blocks 4, which waits for the group.
+	r, err := explodeorder.Search(input(5, map[int][]int{1: {2}, 2: {1}, 4: {1, 3}}))
+	require.NoError(t, err)
+	require.Equal(t, [][][]int{{{1, 2}, {3}}, {{4}}}, members(r))
+}
+
 func TestGoneNeverBlocks(t *testing.T) {
 	in := input(3, map[int][]int{1: {2}})
 	in.Gone[2] = true
