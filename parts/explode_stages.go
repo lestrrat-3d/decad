@@ -122,6 +122,7 @@ type resolvedStages struct {
 	names   []string // the stage names, "" for the implicit last stage
 	stages  []explodeplan.Stage
 	partGap []float64 // per plan index, NaN when unset
+	rest    []int     // the plan indices no stage names and that are not the ground
 }
 
 // resolveStages checks the stages and part gaps against the Set (S10) and turns
@@ -180,7 +181,8 @@ func (s *Set) resolveStages(c config, ground int, idx []int, plan map[int]int) (
 			rest = append(rest, k)
 		}
 	}
-	if len(rest) > 0 {
+	out.rest = rest
+	if len(rest) > 0 && !c.derived {
 		out.names = append(out.names, "")
 		out.stages = append(out.stages, explodeplan.Stage{Members: rest, Gap: math.NaN()})
 	}

@@ -815,6 +815,37 @@ Blocking between two parts does not depend on which others are present. `BuildTa
 direction (optionally in parallel; the table is identical either way) after a prefilter on shadow boxes and on position
 along `d`. `Directions` lists candidate directions: given axes in both senses, then the six world axes.
 
+### 5.8 Derived removal order
+
+`WithDerivedExplode` derives the order and direction of every part no `WithExplodeStages` entry names from the
+tessellations, with no joint walk. The result is layout-grade: a layout, not a proof. Explicit stages run first and
+unchanged; their parts count as already gone. `internal/explodeorder` owns the search and `parts/explode_derive.go` the
+adapter that feeds it and turns its rounds into stages.
+
+```go
+type Removal struct {
+    Direction r3.Vec // the only direction the part may leave by; its length is ignored
+    After     []string // parts that must leave in an earlier round
+    Before    []string // parts this part leaves before
+    Group     string   // parts with the same Group leave as one rigid group
+}
+
+func WithDerivedExplode() ExplodeOption
+func WithRemoval(part string, r Removal) ExplodeOption // needs WithDerivedExplode
+```
+
+| Rule | Decision |
+|---|---|
+| D1 | Candidate directions are `explodeblock.Directions` of the joint axes read from the faces (both senses), the declared `Joint.Pull` vectors and the `WithRemoval` directions, then the six world axes, merged within the axis tolerance. |
+| D2 | Each body is read once through the face cache, which keeps its triangles and `Mesh.Bound`; a body that will not tessellate is blocked as its box. One `explodeblock.Projection` serves every part sharing a body, per direction, and `BuildTable` runs the pair tests in parallel. A `Blocked` verdict blocks. `Free` and `Undecided` do not: an `Undecided` pair counts as free, so a press fit with a gap below `2 x Bound` never deadlocks the search. |
+| D3 | A round removes every part with no blocker among the parts still present along some candidate. All blockers are read against the parts present at the start of the round, so the parts of one round may leave in any order. |
+| D4 | When no part can leave, the blocking graph of each direction is cut into strongly connected components. A component with no blocker outside it and more than one part leaves as one rigid group (a `Together` stage), the smallest first. This covers a captive nut staying with its housing. A component holding the ground never leaves. Each round removes at least one part, so the search terminates. |
+| D5 | Among the free directions of a part or group: a joint axis or pull first, then the side of the ground-relative outward direction (the group's box centre minus the ground's, dotted with the direction), then the shorter box travel, then a positive largest component, then the earlier candidate. The search is deterministic. |
+| D6 | Inside a round the part whose trailing face along its direction is lower goes closer in: it moves first, and the next part clears its moved box. |
+| D7 | Each round becomes `explodeplan.Stage` entries named `removal N` (`removal N.2` for a further stage of the same round): consecutive single parts leaving the same way share one `ClearAll` stage, a group has its own `Together` stage, and `Dir` is the chosen direction. `explodeplan.Run` is unchanged and gives the distances, leaders and overlaps. Derived parts run with no parent in the stage, so a part is never carried with the part that happens to be its joint parent. |
+| D8 | `Removal.Direction` fixes the only direction a part may use. `After` and `Before` order rounds strictly. `Group` joins parts into one unit; its members may not be fixed to different directions. A name that is unknown, has no body, is the ground or is already moved by an explicit stage is `decad.ErrDegenerate`, as is `WithRemoval` without `WithDerivedExplode`. |
+| D9 | A part with no free direction is `decad.ErrDegenerate` naming the part and, per direction, the parts that block it. A constraint that makes a removable part wait for one that cannot leave, an order cycle and a group fixed to two directions are `decad.ErrDegenerate` naming the parts. |
+
 ## 6. Schematic
 
 ### 6.1 Connection diagram

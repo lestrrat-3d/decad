@@ -26,6 +26,7 @@ type bodyFaces struct {
 	meshTol    float64  // the chord tolerance the faces were read at, millimetres
 	meshBound  float64  // that mesh's bound, millimetres
 	verts      []r3.Vec // the mesh vertices, for the witness search
+	tris       [][3]int // the mesh triangles, for the derived explode
 	verified   bool     // the mesh was built at VerifyAll
 }
 
@@ -52,7 +53,7 @@ func readFaces(ctx context.Context, b *decad.Body, verified bool) (*bodyFaces, e
 	}
 	bf.meshTol, bf.meshBound, bf.verified = tol, mesh.Bound().Base(), ver
 	verts, tris, src := mesh.Vertices(), mesh.Triangles(), mesh.SourceFaces()
-	bf.verts = verts
+	bf.verts, bf.tris = verts, tris
 	perFace := map[*decad.Face][]int{}
 	for ti, t := range tris {
 		perFace[src[ti]] = append(perFace[src[ti]], t[0], t[1], t[2])

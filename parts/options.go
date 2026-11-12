@@ -23,6 +23,8 @@ type config struct {
 	stages     []Stage
 	partGaps   map[string]units.Value
 	scale      float64
+	derived    bool
+	removals   map[string]Removal
 }
 
 func defaultConfig() config {

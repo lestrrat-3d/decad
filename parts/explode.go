@@ -211,11 +211,15 @@ func fromDecad(b decad.Box) explodeplan.Box {
 //
 // WithExplodeStages runs that in ordered stages, WithPartGap and
 // WithExplodeScale tune the distances, and Joint.Pull states a direction
-// (agent-docs/parts-design.md §5.3).
+// (agent-docs/parts-design.md §5.3). WithDerivedExplode derives the order and
+// direction of the parts no stage names from their tessellations (§5.8).
 func (s *Set) Explode(ctx context.Context, opts ...ExplodeOption) (*Exploded, error) {
 	c, err := foldOptions(opts)
 	if err != nil {
 		return nil, err
+	}
+	if len(c.removals) > 0 && !c.derived {
+		return nil, fmt.Errorf("parts: %w: WithRemoval needs WithDerivedExplode", decad.ErrDegenerate)
 	}
 	if ctx == nil || s == nil || s.doc == nil {
 		return nil, fmt.Errorf("parts: %w: nil context or set", decad.ErrDegenerate)
@@ -256,6 +260,7 @@ func (s *Set) Explode(ctx context.Context, opts ...ExplodeOption) (*Exploded, er
 		boxes[k] = fromDecad(bf.box)
 	}
 	var joints []explodeplan.Joint
+	var jointAxes []r3.Vec // the axes and pulls the derived search tries first
 	var readings []reading
 	var jointOf []int
 	for ji, j := range s.joints {
@@ -271,6 +276,12 @@ func (s *Set) Explode(ctx context.Context, opts ...ExplodeOption) (*Exploded, er
 		if err := applyPull(&r, j, c); err != nil {
 			return nil, err
 		}
+		if r.axis != nil {
+			jointAxes = append(jointAxes, r.axis.Dir)
+		}
+		if _, ok := j.Pull.Normalize(); ok {
+			jointAxes = append(jointAxes, j.Pull)
+		}
 		joints = append(joints, explodeplan.Joint{A: a, B: b, Mode: r.mode, Dir: r.dir, Source: int(r.src)})
 		readings = append(readings, r)
 		jointOf = append(jointOf, ji)
@@ -280,7 +291,16 @@ func (s *Set) Explode(ctx context.Context, opts ...ExplodeOption) (*Exploded, er
 		blk.bodies[k] = s.parts[i].Body
 	}
 	order, nodes := explodeplan.Walk(len(idx), joints, ground)
-	res, err := explodeplan.Run(ctx, explodeplan.Input{Boxes: boxes, Joints: joints, Ground: ground, Order: order, Nodes: nodes,
+	runNodes := nodes
+	if c.derived {
+		d, err := s.deriveStages(ctx, c, derivedInput{ground: ground, idx: idx, plan: plan, boxes: boxes, stages: stages,
+			walk: order, nodes: nodes, faces: fc, jointAxes: jointAxes})
+		if err != nil {
+			return nil, err
+		}
+		stages.stages, stages.names, order, runNodes = d.stages, d.names, d.order, d.nodes
+	}
+	res, err := explodeplan.Run(ctx, explodeplan.Input{Boxes: boxes, Joints: joints, Ground: ground, Order: order, Nodes: runNodes,
 		Stages: stages.stages, DefaultGap: c.gap, PartGap: stages.partGap, Scale: c.scale, Blocker: blk})
 	if err != nil {
 		return nil, err
