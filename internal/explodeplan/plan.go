@@ -123,3 +123,7 @@ func Meet(a, b Box) bool {
 		a.Min.Y <= b.Max.Y && b.Min.Y <= a.Max.Y &&
 		a.Min.Z <= b.Max.Z && b.Min.Z <= a.Max.Z
 }
+
+// DominantPositive reports whether the largest component of v is positive; ties
+// favour the earlier axis.
+func DominantPositive(v r3.Vec) bool { return dominantPositive(v) }

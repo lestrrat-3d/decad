@@ -38,11 +38,13 @@ parts knows nothing of how a part is made.
   - [func (Clearing) String](<#Clearing.String>)
 - [type Edge](<#Edge>)
 - [type ExplodeOption](<#ExplodeOption>)
+  - [func WithDerivedExplode](<#WithDerivedExplode>)
   - [func WithExplodeGap](<#WithExplodeGap>)
   - [func WithExplodeGround](<#WithExplodeGround>)
   - [func WithExplodeScale](<#WithExplodeScale>)
   - [func WithExplodeStages](<#WithExplodeStages>)
   - [func WithPartGap](<#WithPartGap>)
+  - [func WithRemoval](<#WithRemoval>)
 - [type Exploded](<#Exploded>)
   - [func (\*Exploded) Hidden](<#Exploded.Hidden>)
 - [type ExplodedPart](<#ExplodedPart>)
@@ -73,6 +75,7 @@ parts knows nothing of how a part is made.
 - [type Port](<#Port>)
 - [type PullSource](<#PullSource>)
   - [func (PullSource) String](<#PullSource.String>)
+- [type Removal](<#Removal>)
 - [type Set](<#Set>)
   - [func NewSet](<#NewSet>)
   - [func (\*Set) Add](<#Set.Add>)
@@ -300,6 +303,19 @@ Edge is one joint of the diagram.
 ExplodeOption configures Explode. The tolerance options of [CheckOption](<#CheckOption>) are
 accepted too.
 
+<a name="WithDerivedExplode"></a>
+#### func WithDerivedExplode
+
+<pre>func WithDerivedExplode() <a href="#ExplodeOption">ExplodeOption</a></pre>
+
+WithDerivedExplode derives the removal order and direction of every part that
+no WithExplodeStages entry names from the parts' tessellations, instead of
+walking the joints. Explicit stages run first, unchanged. A part leaves along a
+joint axis, a stated pull or a world axis once no part still present stands in
+its way; parts that block each other leave together as one rigid group. A pair
+the tessellation cannot decide counts as free, so the result is a layout and
+not a proof (agent\-docs/parts\-design.md §5.8).
+
 <a name="WithExplodeGap"></a>
 #### func WithExplodeGap
 
@@ -342,6 +358,17 @@ last stage.
 
 WithPartGap sets one part's gap, in place of its stage's and
 WithExplodeGap's. A part no [Set](<#Set>) has is decad.ErrDegenerate at the query.
+
+<a name="WithRemoval"></a>
+#### func WithRemoval
+
+<pre>func WithRemoval(part <a href="https://pkg.go.dev/builtin#string">string</a>, r <a href="#Removal">Removal</a>) <a href="#ExplodeOption">ExplodeOption</a></pre>
+
+WithRemoval constrains the derived removal of one part and needs
+WithDerivedExplode. A part no [Set](<#Set>) has, a part without a body, the ground,
+or a part an explicit stage names is decad.ErrDegenerate at the query, as is a
+constraint the search cannot meet. A later WithRemoval for the same part
+replaces the earlier one.
 
 <a name="Exploded"></a>
 ### type Exploded
@@ -757,6 +784,24 @@ PullSource says where the direction a part was pulled in came from.
 <pre>func (p <a href="#PullSource">PullSource</a>) String() <a href="https://pkg.go.dev/builtin#string">string</a></pre>
 
 String returns the lower-case words for the source.
+
+<a name="Removal"></a>
+### type Removal
+
+Removal constrains how WithDerivedExplode removes one part.
+
+<pre>type Removal struct {
+    // Direction, when not zero, is the only direction the part may leave by. Its
+    // length does not matter.
+    Direction r3.Vec
+    // After names parts that must leave in an earlier round than this part.
+    After []<a href="https://pkg.go.dev/builtin#string">string</a>
+    // Before names parts this part must leave before.
+    Before []<a href="https://pkg.go.dev/builtin#string">string</a>
+    // Group puts every part with the same non-empty Group into one rigid group
+    // that leaves together along one direction.
+    Group <a href="https://pkg.go.dev/builtin#string">string</a>
+}</pre>
 
 <a name="Set"></a>
 ### type Set

@@ -518,6 +518,11 @@ as it found it.
   every offset. `Joint.Pull` states the direction a part leaves its neighbour. Each `parts.ExplodedPart` reports its
   stage, direction, travel, clearance and `parts.PathState`, each `parts.Leader` its `Separation`, and
   `Exploded.Hidden` lists the pairs where one part may hide another along a view direction.
+- `parts.WithDerivedExplode` derives the removal order and direction of the parts no stage names from their
+  tessellations: a part leaves along a joint axis or a world axis once nothing still present blocks it, and parts that
+  block each other leave as one rigid group. `parts.WithRemoval` takes a `parts.Removal` (`Direction`, `After`, `Before`,
+  `Group`) per part. A pair the tessellation cannot decide counts as free, so the result is a layout, not a proof; a
+  part with no free direction is `decad.ErrDegenerate`.
 - `Set.Check` judges each declared joint against the faces and bounds of its two parts and lists the pairs of parts whose
   boxes meet with no joint naming them. It never runs `Document.Verify`. Each `parts.JointResult` is `Confirmed`,
   `Contradicted`, `Undecided` or `NotChecked`, and one that is not `Confirmed` carries a typed `parts.Cause`.

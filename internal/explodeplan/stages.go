@@ -605,3 +605,10 @@ func pick(bit int, lo, hi float64) float64 {
 	}
 	return hi
 }
+
+// LeastClear is the least t >= 0 at which a box moved by t along unit dir is
+// outside every standing box, each grown by gap. It is the distance ClearAll
+// stages use.
+func LeastClear(moving Box, dir r3.Vec, gap float64, boxes []Box, offsets []r3.Vec, standing []int) float64 {
+	return leastClear(moving, dir, gap, boxes, offsets, standing)
+}
