@@ -17,13 +17,15 @@ import (
 type PullSource int
 
 const (
-	PullNone       PullSource = iota // the ground, or a part no joint reaches
-	AxisFromFaces                    // the axis of the matched cylinder faces
-	AxisDeclared                     // the joint's declared Axis
-	FaceNormal                       // the normal of the matched contact faces
-	BoxCentres                       // the line between the two parts' box centres
-	PullDeclared                     // the joint's declared Pull
-	StageDirection                   // the direction its stage stated
+	PullNone         PullSource = iota // the ground, or a part no joint reaches
+	AxisFromFaces                      // the axis of the matched cylinder faces
+	AxisDeclared                       // the joint's declared Axis
+	FaceNormal                         // the normal of the matched contact faces
+	BoxCentres                         // the line between the two parts' box centres
+	PullDeclared                       // the joint's declared Pull
+	StageDirection                     // the direction its stage stated
+	WorldAxis                          // derived: a world axis, or a direction another part's WithRemoval stated
+	RemovalDirection                   // derived: the direction its own WithRemoval stated
 )
 
 // String returns the lower-case words for the source.
@@ -41,6 +43,10 @@ func (p PullSource) String() string {
 		return "pull declared"
 	case StageDirection:
 		return "stage direction"
+	case WorldAxis:
+		return "world axis"
+	case RemovalDirection:
+		return "removal direction"
 	}
 	return "none"
 }
@@ -54,6 +60,18 @@ type Exploded struct {
 	Stages   []string    // the stage names in the order they ran; "" is the last, implicit stage
 	Scale    units.Value // the WithExplodeScale multiplier, Dimensionless
 	Short    []string    // parts whose Clearance is below their Gap, in Set order
+
+	// Derived is true when WithDerivedExplode ran. The removal order of the parts no explicit stage
+	// names was then read from tessellations, so the layout is layout-grade: a picture, not a proof
+	// (agent-docs/parts-design.md §5.8). Blocked and Undecided are empty without it.
+	Derived bool
+	// Blocked lists, in removal order, each pair that forced the order: a part that leaves along a
+	// direction and the part that stood in the way along it, which therefore left earlier.
+	Blocked []BlockedPair
+	// Undecided lists the pairs whose verdict the tessellation could not settle and the layout read
+	// as free: a part, a part still present when it leaves and the direction it leaves by. These are
+	// the places where the layout is not certain.
+	Undecided []UndecidedPair
 
 	boxes []explodeplan.Box // the exploded boxes, in Parts order, for Hidden
 }
@@ -74,6 +92,28 @@ type ExplodedPart struct {
 	Clearance units.Value // after the last stage and the scale: the least box distance to any part it is not joined to
 	Path      PathState
 	Blocker   string // the part that blocked or enclosed the path, or that Clearance was read against
+	// Order is the 1-based position in the derived removal order, and Round the 1-based round the
+	// part left in. Both are 0 for the ground, for a part an explicit stage moved, and without
+	// WithDerivedExplode. For a derived part Pull is AxisFromFaces, AxisDeclared, PullDeclared,
+	// WorldAxis or RemovalDirection.
+	Order, Round int
+}
+
+// BlockedPair is one pair that forced the derived removal order: Blocker stood ahead of Mover
+// along Dir, so Blocker left first. Point is a point on Mover's surface under Blocker, in
+// millimetres, and Height how far Blocker's surface stands ahead of it along Dir.
+type BlockedPair struct {
+	Mover, Blocker string
+	Dir            r3.Vec
+	Point          r3.Vec
+	Height         units.Value
+}
+
+// UndecidedPair is a pair the tessellation could not settle: Other may stand ahead of Mover along
+// Dir only inside the mesh bounds' uncertainty, and the layout read it as free.
+type UndecidedPair struct {
+	Mover, Other string
+	Dir          r3.Vec
 }
 
 // Leader is the dotted line one joint draws in the exploded view.
@@ -260,7 +300,7 @@ func (s *Set) Explode(ctx context.Context, opts ...ExplodeOption) (*Exploded, er
 		boxes[k] = fromDecad(bf.box)
 	}
 	var joints []explodeplan.Joint
-	var jointAxes []r3.Vec // the axes and pulls the derived search tries first
+	var jointAxes []jointAxis // the axes and pulls the derived search tries first
 	var readings []reading
 	var jointOf []int
 	for ji, j := range s.joints {
@@ -277,10 +317,10 @@ func (s *Set) Explode(ctx context.Context, opts ...ExplodeOption) (*Exploded, er
 			return nil, err
 		}
 		if r.axis != nil {
-			jointAxes = append(jointAxes, r.axis.Dir)
+			jointAxes = append(jointAxes, jointAxis{dir: r.axis.Dir, src: r.src})
 		}
 		if _, ok := j.Pull.Normalize(); ok {
-			jointAxes = append(jointAxes, j.Pull)
+			jointAxes = append(jointAxes, jointAxis{dir: j.Pull, src: PullDeclared})
 		}
 		joints = append(joints, explodeplan.Joint{A: a, B: b, Mode: r.mode, Dir: r.dir, Source: int(r.src)})
 		readings = append(readings, r)
@@ -292,20 +332,21 @@ func (s *Set) Explode(ctx context.Context, opts ...ExplodeOption) (*Exploded, er
 	}
 	order, nodes := explodeplan.Walk(len(idx), joints, ground)
 	runNodes := nodes
+	var rep *derivedReport
 	if c.derived {
 		d, err := s.deriveStages(ctx, c, derivedInput{ground: ground, idx: idx, plan: plan, boxes: boxes, stages: stages,
 			walk: order, nodes: nodes, faces: fc, jointAxes: jointAxes})
 		if err != nil {
 			return nil, err
 		}
-		stages.stages, stages.names, order, runNodes = d.stages, d.names, d.order, d.nodes
+		stages.stages, stages.names, order, runNodes, rep = d.stages, d.names, d.order, d.nodes, &d.report
 	}
 	res, err := explodeplan.Run(ctx, explodeplan.Input{Boxes: boxes, Joints: joints, Ground: ground, Order: order, Nodes: runNodes,
 		Stages: stages.stages, DefaultGap: c.gap, PartGap: stages.partGap, Scale: c.scale, Blocker: blk})
 	if err != nil {
 		return nil, err
 	}
-	return s.buildExploded(idx, ground, boxes, res, nodes, joints, readings, jointOf, stages.names, c.scale)
+	return s.buildExploded(idx, ground, boxes, res, nodes, joints, readings, jointOf, stages.names, c.scale, rep)
 }
 
 // applyPull folds a joint's declared Pull into its reading: it replaces the face
@@ -330,8 +371,11 @@ func applyPull(r *reading, j Joint, c config) error {
 }
 
 func (s *Set) buildExploded(idx []int, ground int, boxes []explodeplan.Box, res []explodeplan.Result, nodes []explodeplan.Node,
-	joints []explodeplan.Joint, readings []reading, jointOf []int, stageNames []string, scale float64) (*Exploded, error) {
+	joints []explodeplan.Joint, readings []reading, jointOf []int, stageNames []string, scale float64, rep *derivedReport) (*Exploded, error) {
 	ex := &Exploded{Ground: s.parts[idx[ground]].Name, Stages: stageNames, Scale: units.Scalar(scale)}
+	if rep != nil {
+		ex.Derived, ex.Blocked, ex.Undecided = true, rep.blocked, rep.undecided
+	}
 	moved := make([]explodeplan.Box, len(boxes))
 	mm := units.Millimeters
 	for k, i := range idx {
@@ -348,6 +392,10 @@ func (s *Set) buildExploded(idx []int, ground int, boxes []explodeplan.Box, res 
 		case nodes[k].Joint >= 0:
 			pull = PullSource(res[k].Source)
 		}
+		order, round := 0, 0
+		if rep != nil && rep.order[k] > 0 {
+			pull, order, round = rep.src[k], rep.order[k], rep.round[k]
+		}
 		stage := ""
 		if res[k].Stage >= 0 {
 			stage = stageNames[res[k].Stage]
@@ -359,7 +407,7 @@ func (s *Set) buildExploded(idx []int, ground int, boxes []explodeplan.Box, res 
 		ex.Parts = append(ex.Parts, ExplodedPart{Name: s.parts[i].Name, Offset: off, Placement: t,
 			Depth: nodes[k].Depth, Anchor: moved[k].Centre(), Pull: pull, Stage: stage, Dir: res[k].Dir,
 			Travel: mm(res[k].Travel), Gap: mm(res[k].Gap), Moved: mm(res[k].Moved), Clearance: mm(res[k].Clearance),
-			Path: PathState(res[k].Path), Blocker: blocker})
+			Path: PathState(res[k].Path), Blocker: blocker, Order: order, Round: round})
 		if res[k].Short {
 			ex.Short = append(ex.Short, s.parts[i].Name)
 		}
