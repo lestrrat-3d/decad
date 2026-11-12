@@ -152,7 +152,7 @@ func (s *Set) report(in derivedInput, items []int, tables []*explodeblock.Table,
 	return rep
 }
 
-// deriveStages appends the removal rounds to the explicit stages.
+// deriveStages appends the removal rounds to the explicit stages, the round removed last first.
 func (s *Set) deriveStages(ctx context.Context, c config, in derivedInput) (derivedStages, error) {
 	var out derivedStages
 	n := len(in.idx)
@@ -263,44 +263,41 @@ func (s *Set) deriveStages(ctx context.Context, c config, in derivedInput) (deri
 		}
 	}
 	out.nodes = slices.Clone(in.nodes)
-	for r, round := range rounds {
-		var cur *explodeplan.Stage
-		stageNo := 0
-		emit := func(st explodeplan.Stage) {
-			label := fmt.Sprintf("removal %d", r+1)
-			if stageNo > 0 {
-				label = fmt.Sprintf("removal %d.%d", r+1, stageNo+1)
-			}
-			stageNo++
-			out.names = append(out.names, label)
-			out.stages = append(out.stages, st)
-		}
-		flush := func() {
-			if cur != nil {
-				emit(*cur)
-				cur = nil
-			}
-		}
+	for _, round := range rounds {
 		for _, u := range round {
 			for _, m := range u.Members {
 				out.order = append(out.order, m)
 				out.nodes[m].Parent = -1
 			}
-			st := explodeplan.Stage{Members: u.Members, Gap: math.NaN(), Clear: explodeplan.ClearAll, Dir: dirs[u.Dir],
-				Together: len(u.Members) > 1}
-			if st.Together {
-				flush()
-				emit(st)
-				continue
-			}
-			if cur != nil && cur.Dir == st.Dir {
-				cur.Members = append(cur.Members, u.Members...)
-				continue
-			}
-			flush()
-			cur = &st
 		}
-		flush()
+	}
+	// The round removed last runs first and sits nearest the assembly; each earlier round runs after it
+	// and ends beyond it (D7).
+	for r, round := range slices.Backward(rounds) {
+		var stages []explodeplan.Stage
+		single := map[int]int{} // direction index -> its single-part stage in stages
+		for _, u := range round {
+			st := explodeplan.Stage{Members: slices.Clone(u.Members), Gap: math.NaN(), Clear: explodeplan.ClearAll,
+				Dir: dirs[u.Dir], Together: len(u.Members) > 1, Round: r + 1}
+			if st.Together {
+				stages = append(stages, st)
+				continue
+			}
+			if i, ok := single[u.Dir]; ok {
+				stages[i].Members = append(stages[i].Members, u.Members...)
+				continue
+			}
+			single[u.Dir] = len(stages)
+			stages = append(stages, st)
+		}
+		for i, st := range stages {
+			label := fmt.Sprintf("removal %d", r+1)
+			if i > 0 {
+				label = fmt.Sprintf("removal %d.%d", r+1, i+1)
+			}
+			out.names = append(out.names, label)
+			out.stages = append(out.stages, st)
+		}
 	}
 	return out, nil
 }

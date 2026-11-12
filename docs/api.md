@@ -522,7 +522,10 @@ as it found it.
   tessellations: a part leaves along a joint axis or a world axis once nothing still present blocks it, and parts that
   block each other leave as one rigid group. `parts.WithRemoval` takes a `parts.Removal` (`Direction`, `After`, `Before`,
   `Group`) per part. A pair the tessellation cannot decide counts as free, so the result is a layout, not a proof; a
-  part with no free direction is `decad.ErrDegenerate`. The result sets `Exploded.Derived` (layout-grade). Each derived
+  part with no free direction is `decad.ErrDegenerate`. The layout places the part removed last nearest the assembly
+  and each part removed earlier beyond the parts removed after it, and identical parts of one round travel the same
+  distance; `Exploded.Stages` lists the rounds in that placing order. The result sets `Exploded.Derived`
+  (layout-grade). Each derived
   `parts.ExplodedPart` reports its `Order` and `Round` and a `Pull` of `AxisFromFaces`, `AxisDeclared`, `PullDeclared`,
   `WorldAxis` or `RemovalDirection`. `Exploded.Blocked` lists each `parts.BlockedPair` that forced the order (mover,
   blocker, direction and the witness point and height), and `Exploded.Undecided` each `parts.UndecidedPair` read as

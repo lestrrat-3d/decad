@@ -79,16 +79,16 @@ func TestDerivedGearbox(t *testing.T) {
 	require.Less(t, p(gbFrontBearing).Round, p(gbInputShaft).Round)
 	require.InDelta(t, -1, p(gbFrontBearing).Dir.Z, 1e-9)
 	require.InDelta(t, -1, p(gbInputShaft).Dir.Z, 1e-9)
-	require.Less(t, p(gbInputShaft).Offset.Z, p(gbFrontBearing).Offset.Z, "the shaft ends beyond the bearing")
-	require.Less(t, p(gbFrontBearing).Offset.Z, 0.0)
+	require.Less(t, p(gbFrontBearing).Offset.Z, p(gbInputShaft).Offset.Z, "the bearing, removed first, ends beyond the shaft")
+	require.Less(t, p(gbInputShaft).Offset.Z, 0.0)
 
 	// Rear side: the bearing leaves before the output shaft, both upward.
 	require.Less(t, p(gbRearBearing).Order, p(gbOutputShaft).Order)
 	require.Less(t, p(gbRearBearing).Round, p(gbOutputShaft).Round)
 	require.InDelta(t, 1, p(gbRearBearing).Dir.Z, 1e-9)
 	require.InDelta(t, 1, p(gbOutputShaft).Dir.Z, 1e-9)
-	require.Greater(t, p(gbOutputShaft).Offset.Z, p(gbRearBearing).Offset.Z)
-	require.Greater(t, p(gbRearBearing).Offset.Z, 0.0)
+	require.Greater(t, p(gbRearBearing).Offset.Z, p(gbOutputShaft).Offset.Z, "the bearing, removed first, ends beyond the shaft")
+	require.Greater(t, p(gbOutputShaft).Offset.Z, 0.0)
 
 	// Nothing moves sideways, and the ground stays.
 	for _, part := range ex.Parts {
