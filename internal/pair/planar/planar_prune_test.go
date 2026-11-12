@@ -836,6 +836,55 @@ func TestCastAxisPlanePretestPaths(t *testing.T) {
 	}
 }
 
+func TestCastAxisExactCoordinatePlanePretest(t *testing.T) {
+	t.Parallel()
+	level := proof.DyShift(proof.DyInt(1), 53)
+	half := proof.DyShift(proof.DyInt(1), -1)
+	offLevel := proof.DyAdd(level, half)
+	zero, one := proof.DyZero(), proof.DyInt(1)
+	s := PlanarSolid{
+		Verts: []proof.DyV3{
+			{level, zero, zero},
+			{level, one, zero},
+			{level, zero, one},
+		},
+		Tris: [][3]int{{0, 1, 2}},
+	}
+	prep := preparePlanar(&s)
+	prep.floatBoxes()
+	require.Equal(t, proof.DyV3{one, zero, zero}, prep.normal[0])
+
+	offPlane := proof.DyV3{offLevel, proof.DyShift(one, -2), proof.DyShift(one, -2)}
+	box := pointFloatBox(offPlane)
+	sign, decided := floatDotSign(box, prep.vertBox[0], prep.normalBox[0])
+	require.Zero(t, sign)
+	require.False(t, decided, "float plane interval must hold zero for the exact off-plane point")
+
+	for _, tc := range []struct {
+		name  string
+		point proof.DyV3
+		want  castResult
+	}{
+		{name: "off plane", point: offPlane, want: castOutside},
+		{name: "on plane", point: proof.DyV3{level, proof.DyShift(one, -2), proof.DyShift(one, -2)}, want: castOnBoundary},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			for _, boxed := range []bool{true, false} {
+				for _, dir := range [][3]int64{{0, 1, 0}, {0, -1, 0}} {
+					want, wantPolls := castAlongExactPolls(tc.point, dir, prep)
+					polls := 0
+					k := planarKernel{poll: countingPoll(&polls)}
+					got, err := k.castAlong(tc.point, pointFloatBox(tc.point), boxed, dir, prep)
+					require.NoError(t, err)
+					require.Equal(t, tc.want, want)
+					require.Equal(t, want, got, "boxed=%v dir=%v", boxed, dir)
+					require.Equal(t, wantPolls, polls, "boxed=%v dir=%v", boxed, dir)
+				}
+			}
+		})
+	}
+}
+
 // TestRayAxisNamesAxisRays holds rayAxis to the ladder: the six axis rays
 // name their axis and every other ray none.
 func TestRayAxisNamesAxisRays(t *testing.T) {

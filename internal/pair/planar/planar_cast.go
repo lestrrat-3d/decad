@@ -62,6 +62,22 @@ func (k *planarKernel) castAlong(p proof.DyV3, pb floatBox, boxed bool, dir [3]i
 		aheadReady := false
 		var rel [3]proof.DyV3
 		if axis >= 0 && solid.normal[t][axis].Sign() == 0 {
+			// An axis-aligned normal makes the facet plane one exact coordinate
+			// level, so reject an off-plane ray before its float interval test.
+			normalAxis := -1
+			for i, component := range solid.normal[t] {
+				if component.IsZero() {
+					continue
+				}
+				if normalAxis >= 0 {
+					normalAxis = -2
+					break
+				}
+				normalAxis = i
+			}
+			if normalAxis >= 0 && proof.DyCmp(p[normalAxis], solid.s.Verts[tri[0]][normalAxis]) != 0 {
+				continue
+			}
 			if boxed {
 				if sign, decided := floatDotSign(pb, solid.vertBox[tri[0]], solid.normalBox[t]); decided && sign != 0 {
 					continue
