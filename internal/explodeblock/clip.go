@@ -1,9 +1,6 @@
 package explodeblock
 
-import (
-	"math"
-	"slices"
-)
+import "math"
 
 // p2 is a point in the plane perpendicular to the projection direction.
 type p2 struct{ x, y float64 }
@@ -50,12 +47,22 @@ func (t *tri) plane() affine {
 	return affine{ax, ay, t.z[0] - ax*t.v[0].x - ay*t.v[0].y}
 }
 
+// clipper holds the buffers the clipping writes into, so that testing one pair
+// of meshes allocates nothing once the buffers have grown. The polygon a clip
+// returns lives in one of the buffers and stays valid until the clip after next.
+type clipper struct {
+	buf   [2][]p2
+	cur   int
+	edges []p2
+}
+
 // clipHalf keeps the part of the convex polygon where f(q) > 0, f affine.
-func clipHalf(poly []p2, f func(p2) float64) []p2 {
+func (c *clipper) clipHalf(poly []p2, f func(p2) float64) []p2 {
 	if len(poly) < 3 {
 		return nil
 	}
-	out := make([]p2, 0, len(poly)+1)
+	c.cur ^= 1
+	out := c.buf[c.cur][:0]
 	for i := range poly {
 		a, b := poly[i], poly[(i+1)%len(poly)]
 		fa, fb := f(a), f(b)
@@ -67,6 +74,7 @@ func clipHalf(poly []p2, f func(p2) float64) []p2 {
 			out = append(out, p2{a.x + s*(b.x-a.x), a.y + s*(b.y-a.y)})
 		}
 	}
+	c.buf[c.cur] = out
 	if len(out) < 3 {
 		return nil
 	}
@@ -74,11 +82,13 @@ func clipHalf(poly []p2, f func(p2) float64) []p2 {
 }
 
 // clipTriangles intersects two counter-clockwise triangles.
-func clipTriangles(a, b *tri) []p2 {
-	poly := []p2{a.v[0], a.v[1], a.v[2]}
+func (c *clipper) clipTriangles(a, b *tri) []p2 {
+	c.cur ^= 1
+	poly := append(c.buf[c.cur][:0], a.v[0], a.v[1], a.v[2])
+	c.buf[c.cur] = poly
 	for i := range 3 {
 		p, q := b.v[i], b.v[(i+1)%3]
-		poly = clipHalf(poly, func(r p2) float64 { return (q.x-p.x)*(r.y-p.y) - (q.y-p.y)*(r.x-p.x) })
+		poly = c.clipHalf(poly, func(r p2) float64 { return (q.x-p.x)*(r.y-p.y) - (q.y-p.y)*(r.x-p.x) })
 		if poly == nil {
 			return nil
 		}
@@ -88,18 +98,19 @@ func clipTriangles(a, b *tri) []p2 {
 
 // erode shrinks a counter-clockwise convex polygon by r on every side. A nil
 // result means no point of the polygon lies at least r inside every edge.
-func erode(poly []p2, r float64) []p2 {
+func (c *clipper) erode(poly []p2, r float64) []p2 {
 	if area(poly) <= minArea {
 		return nil
 	}
-	edges := slices.Clone(poly)
+	c.edges = append(c.edges[:0], poly...)
+	edges := c.edges
 	for i := range edges {
 		p, q := edges[i], edges[(i+1)%len(edges)]
 		l := math.Hypot(q.x-p.x, q.y-p.y)
 		if l == 0 {
 			continue
 		}
-		poly = clipHalf(poly, func(s p2) float64 { return ((q.x-p.x)*(s.y-p.y)-(q.y-p.y)*(s.x-p.x))/l - r })
+		poly = c.clipHalf(poly, func(s p2) float64 { return ((q.x-p.x)*(s.y-p.y)-(q.y-p.y)*(s.x-p.x))/l - r })
 		if poly == nil {
 			return nil
 		}

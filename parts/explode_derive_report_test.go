@@ -14,7 +14,7 @@ import (
 )
 
 // cylinderAt extrudes a circle about the vertical line through (cx, cy).
-func cylinderAt(t *testing.T, doc *decad.Document, cx, cy, radius, z0, height float64) *decad.Body {
+func cylinderAt(t testing.TB, doc *decad.Document, cx, cy, radius, z0, height float64) *decad.Body {
 	t.Helper()
 	w := sketch.NewWorld()
 	plane, err := w.CreateOffsetPlane(w.XY(), z0)
@@ -94,7 +94,7 @@ func TestDerivedReportZeroWithoutDerived(t *testing.T) {
 }
 
 // boltRingSet is a plate with n bolt holes on a ring and one identical bolt in each.
-func boltRingSet(t *testing.T, n int) *parts.Set {
+func boltRingSet(t testing.TB, n int) *parts.Set {
 	t.Helper()
 	doc := decad.New()
 	plate := block(t, doc, -30, -30, 30, 30, 0, 6)

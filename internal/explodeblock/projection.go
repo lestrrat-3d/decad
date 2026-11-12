@@ -31,8 +31,9 @@ type Projection struct {
 	u, v  r3.Vec
 	bound float64
 	tris  []tri
-	cell  float64
-	grid  map[[2]int32][]int32
+	grid  grid
+	// topZ is the highest corner of any kept triangle along the direction.
+	topZ float64
 	// local box of every vertex, including skipped parallel triangles
 	minU, maxU, minV, maxV, minW, maxW float64
 }
@@ -67,7 +68,7 @@ func Project(m Mesh, dir r3.Vec) (*Projection, error) {
 		return nil, errors.New("explodeblock: bound is negative or not finite")
 	}
 	u, v := basis(d)
-	p := &Projection{dir: d, u: u, v: v, bound: m.Bound.Base()}
+	p := &Projection{dir: d, u: u, v: v, bound: m.Bound.Base(), tris: make([]tri, 0, len(m.Triangles)), topZ: math.Inf(-1)}
 	p.minU, p.minV, p.minW = math.Inf(1), math.Inf(1), math.Inf(1)
 	p.maxU, p.maxV, p.maxW = math.Inf(-1), math.Inf(-1), math.Inf(-1)
 	for i, x := range m.Vertices {
@@ -87,9 +88,10 @@ func Project(m Mesh, dir r3.Vec) (*Projection, error) {
 		}
 		if tr, ok := project(m.Vertices, t, u, v, d); ok {
 			p.tris = append(p.tris, tr)
+			p.topZ = math.Max(p.topZ, tr.maxZ)
 		}
 	}
-	p.buildGrid()
+	p.grid = newGrid(p.tris, p.minU, p.maxU, p.minV, p.maxV)
 	return p, nil
 }
 
@@ -120,31 +122,6 @@ func project(vs []r3.Vec, t [3]int, u, v, d r3.Vec) (tri, bool) {
 	tr.minZ = math.Min(tr.z[0], math.Min(tr.z[1], tr.z[2]))
 	tr.maxZ = math.Max(tr.z[0], math.Max(tr.z[1], tr.z[2]))
 	return tr, true
-}
-
-func (p *Projection) buildGrid() {
-	p.grid = map[[2]int32][]int32{}
-	if len(p.tris) == 0 {
-		p.cell = 1
-		return
-	}
-	area := math.Max(p.maxU-p.minU, 1e-6) * math.Max(p.maxV-p.minV, 1e-6)
-	p.cell = math.Max(2*math.Sqrt(area/float64(len(p.tris))), 1e-3)
-	for i := range p.tris {
-		t := &p.tris[i]
-		x0, x1, y0, y1 := p.cellRange(t.minX, t.maxX, t.minY, t.maxY)
-		for x := x0; x <= x1; x++ {
-			for y := y0; y <= y1; y++ {
-				k := [2]int32{x, y}
-				p.grid[k] = append(p.grid[k], int32(i))
-			}
-		}
-	}
-}
-
-func (p *Projection) cellRange(x0, x1, y0, y1 float64) (int32, int32, int32, int32) {
-	f := func(c float64) int32 { return int32(math.Floor(c / p.cell)) }
-	return f(x0), f(x1), f(y0), f(y1)
 }
 
 // Instance is a projection placed at a translation. Identical bodies at
