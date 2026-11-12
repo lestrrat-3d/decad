@@ -97,6 +97,53 @@ func TestCheckPins(t *testing.T) {
 	require.InDelta(t, 1.0, far.Axis.Dir.Z, 1e-12)
 }
 
+// turnedPinSet is pinSet with both bodies turned 30 degrees about Z, which makes their faces read
+// from the mesh, so every reading carries a positive bound.
+func turnedPinSet(t *testing.T, j parts.Joint) *parts.Set {
+	t.Helper()
+	doc := decad.New()
+	turn, err := r3.Rotation(r3.Vec{Z: 1}, unitsDegrees(30))
+	require.NoError(t, err)
+	plate, err := decad.Transform(t.Context(), boredPlateR(t, doc, 3.2), turn)
+	require.NoError(t, err)
+	pin, err := decad.Transform(t.Context(), cylinder(t, doc, 10, 3, -2, 17), turn)
+	require.NoError(t, err)
+	s := parts.NewSet(doc)
+	mustAdd(t, s,
+		parts.Part{Name: namePlate, Kind: parts.Manufactured, Body: plate},
+		parts.Part{Name: namePin, Kind: parts.Manufactured, Body: pin})
+	j.Kind, j.A, j.B = parts.PinInBore, namePin, namePlate
+	mustJoin(t, s, j)
+	return s
+}
+
+func TestCheckPinDeclaredAxisWithBound(t *testing.T) {
+	// The matched axis, read once without a declaration, is declared back shifted by dx: dx 0 is an
+	// exact match, a distance of zero.
+	base := checkOne(t, turnedPinSet(t, parts.Joint{}))
+	require.NotNil(t, base.Axis)
+	check := func(dx float64) parts.JointResult {
+		pt := base.Axis.Point
+		pt.X += dx
+		s := turnedPinSet(t, parts.Joint{Axis: &parts.Axis{Point: pt, Dir: base.Axis.Dir}})
+		rep, err := s.Check(t.Context(), parts.WithFitTolerance(units.Millimeters(0.1)))
+		require.NoError(t, err)
+		return rep.Joints[0]
+	}
+
+	exact := check(0)
+	require.Greater(t, exact.Measured.Bound.Base(), 0.0, "the reading carries a bound")
+	require.Equal(t, parts.Confirmed, exact.Status, exact.Reason)
+	require.Equal(t, parts.CauseNone, exact.Cause)
+
+	inside := check(0.05)
+	require.Equal(t, parts.Confirmed, inside.Status, inside.Reason)
+
+	outside := check(0.2)
+	require.Equal(t, parts.Contradicted, outside.Status, outside.Reason)
+	require.Equal(t, parts.CauseAxis, outside.Cause)
+}
+
 func TestCheckPinInSlot(t *testing.T) {
 	build := func(pinR, cx float64) parts.JointResult {
 		doc := decad.New()
