@@ -63,7 +63,9 @@ type Exploded struct {
 
 	// Derived is true when WithDerivedExplode ran. The removal order of the parts no explicit stage
 	// names was then read from tessellations, so the layout is layout-grade: a picture, not a proof
-	// (agent-docs/parts-design.md §5.8). Blocked and Undecided are empty without it.
+	// (agent-docs/parts-design.md §5.8). Its rounds run last-removed first, so the part removed last
+	// sits nearest the assembly and Stages lists the rounds in that order. Blocked and Undecided are
+	// empty without it.
 	Derived bool
 	// Blocked lists, in removal order, each pair that forced the order: a part that leaves along a
 	// direction and the part that stood in the way along it, which therefore left earlier.

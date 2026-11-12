@@ -87,6 +87,13 @@ type Stage struct {
 	Clear    Clearing
 	Dir      r3.Vec // not zero: every member moves along it, in its one sense
 	Together bool
+	// Round, when not zero, marks a ClearAll stage as one derived removal round
+	// (agent-docs/parts-design.md §5.8 D7). Its members then clear only the parts
+	// still present when they leave: not the parts a later stage moves, and not
+	// the other members of stages with the same Round, except the members of
+	// their own stage already moved whose boxes overlap theirs seen along the
+	// direction.
+	Round int
 }
 
 // Input is everything Run reads.
@@ -261,10 +268,16 @@ func (r *runner) moveOne(ctx context.Context, si, m, k int, ms []int, inStage ma
 	var best *choice
 	for _, s := range senses {
 		var c choice
+		var standing []int
 		switch st.Clear {
 		case ClearAll:
-			standing := r.standing(si, m, ms[k+1:])
-			c.t = leastClear(shift(r.in.Boxes[m], start), s, gap, r.in.Boxes, r.offsets, standing)
+			if st.Round > 0 {
+				standing = r.present(si, m, ms[:k], s)
+				c.t = beyondAll(shift(r.in.Boxes[m], start), s, gap, r.in.Boxes, r.offsets, standing)
+			} else {
+				standing = r.standing(si, m, ms[k+1:])
+				c.t = leastClear(shift(r.in.Boxes[m], start), s, gap, r.in.Boxes, r.offsets, standing)
+			}
 			c.travel = math.Max(0, c.t-gap)
 			c.path, c.block = PathNone, -1
 			if c.t > stuckAt {
@@ -283,7 +296,10 @@ func (r *runner) moveOne(ctx context.Context, si, m, k int, ms []int, inStage ma
 		c.move = s
 		if c.path != PathStuck {
 			ignore := partners
-			if st.Clear == ClearAll {
+			switch {
+			case st.Clear == ClearAll && st.Round > 0:
+				ignore = append(slices.Clone(partners), r.absent(m, standing)...)
+			case st.Clear == ClearAll:
 				ignore = append(slices.Clone(partners), ms[k+1:]...)
 			}
 			var err error
@@ -354,6 +370,57 @@ func (r *runner) standing(si, m int, notYet []int) []int {
 	return out
 }
 
+// present is the standing set of member m of a derived round (Stage.Round): the
+// parts still there when it leaves, so the round removed last sits nearest the
+// assembly. A part a later stage moves left before m and ends beyond it. The
+// other members of m's round leave independently (§5.8 D3), except the members
+// of m's own stage already moved whose boxes overlap m's seen along dir: m would
+// pass through them, so it ends beyond them.
+func (r *runner) present(si, m int, moved []int, dir r3.Vec) []int {
+	round := r.in.Stages[si].Round
+	var out []int
+	for p := range r.in.Boxes {
+		if p == m || r.movesLater(p, si) {
+			continue
+		}
+		if r.inRound(p, round) && (!slices.Contains(moved, p) || !r.shadowed(m, p, dir)) {
+			continue
+		}
+		out = append(out, p)
+	}
+	return out
+}
+
+// absent is every part other than m that is not in standing.
+func (r *runner) absent(m int, standing []int) []int {
+	var out []int
+	for p := range r.in.Boxes {
+		if p != m && !slices.Contains(standing, p) {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
+// inRound reports whether a stage with the given derived round moves p.
+func (r *runner) inRound(p, round int) bool {
+	for _, s := range r.stageOf[p] {
+		if r.in.Stages[s].Round == round {
+			return true
+		}
+	}
+	return false
+}
+
+// shadowed reports whether the boxes of a and b, at their offsets, overlap with
+// positive area seen along dir.
+func (r *runner) shadowed(a, b int, dir r3.Vec) bool {
+	eu, ev := planeBasis(dir)
+	ra := project(shift(r.in.Boxes[a], r.offsets[a]), eu, ev)
+	rb := project(shift(r.in.Boxes[b], r.offsets[b]), eu, ev)
+	return math.Min(ra[1], rb[1])-math.Max(ra[0], rb[0]) > eps && math.Min(ra[3], rb[3])-math.Max(ra[2], rb[2]) > eps
+}
+
 func (r *runner) movesLater(p, si int) bool {
 	for _, s := range r.stageOf[p] {
 		if s > si {
@@ -366,7 +433,35 @@ func (r *runner) movesLater(p, si int) bool {
 // leastClear returns the least t >= 0 at which the box, moved by t along dir, is
 // outside every standing box grown by gap on each side.
 func leastClear(moving Box, dir r3.Vec, gap float64, boxes []Box, offsets []r3.Vec, standing []int) float64 {
-	type span struct{ lo, hi float64 }
+	spans := clearSpans(moving, dir, gap, boxes, offsets, standing)
+	slices.SortFunc(spans, func(a, b span) int { return cmp.Compare(a.lo, b.lo) })
+	t := 0.0
+	for _, s := range spans {
+		if s.lo < t && t < s.hi {
+			t = s.hi
+		}
+	}
+	return t
+}
+
+// beyondAll returns the least t >= 0 at which the box, moved by t along dir, is
+// past every standing box grown by gap that it meets on the way: a derived
+// round's member never settles in a space between standing parts, so it ends
+// beyond each part still present in its way (agent-docs/parts-design.md §5.8
+// D7).
+func beyondAll(moving Box, dir r3.Vec, gap float64, boxes []Box, offsets []r3.Vec, standing []int) float64 {
+	t := 0.0
+	for _, s := range clearSpans(moving, dir, gap, boxes, offsets, standing) {
+		t = math.Max(t, s.hi)
+	}
+	return t
+}
+
+type span struct{ lo, hi float64 }
+
+// clearSpans returns, per standing box grown by gap, the open interval of t over
+// which the box moved by t along dir overlaps it.
+func clearSpans(moving Box, dir r3.Vec, gap float64, boxes []Box, offsets []r3.Vec, standing []int) []span {
 	var spans []span
 	for _, p := range standing {
 		a := shift(boxes[p], offsets[p])
@@ -395,14 +490,7 @@ func leastClear(moving Box, dir r3.Vec, gap float64, boxes []Box, offsets []r3.V
 			spans = append(spans, span{lo, hi})
 		}
 	}
-	slices.SortFunc(spans, func(a, b span) int { return cmp.Compare(a.lo, b.lo) })
-	t := 0.0
-	for _, s := range spans {
-		if s.lo < t && t < s.hi {
-			t = s.hi
-		}
-	}
-	return t
+	return spans
 }
 
 // moveTogether is S6: the members move by one offset.
@@ -438,6 +526,14 @@ func (r *runner) moveTogether(ctx context.Context, si int, ms []int) error {
 		union = Box{Min: r3.Vec{X: math.Min(union.Min.X, b.Min.X), Y: math.Min(union.Min.Y, b.Min.Y), Z: math.Min(union.Min.Z, b.Min.Z)},
 			Max: r3.Vec{X: math.Max(union.Max.X, b.Max.X), Y: math.Max(union.Max.Y, b.Max.Y), Z: math.Max(union.Max.Z, b.Max.Z)}}
 	}
+	var absent []int // the parts a derived round's group does not clear (Stage.Round)
+	if st.Clear == ClearAll && st.Round > 0 {
+		for p := range r.in.Boxes {
+			if !in[p] && (r.movesLater(p, si) || r.inRound(p, st.Round)) {
+				absent = append(absent, p)
+			}
+		}
+	}
 	var best *choice
 	for _, s := range senses {
 		var c choice
@@ -446,7 +542,7 @@ func (r *runner) moveTogether(ctx context.Context, si int, ms []int) error {
 		case ClearAll:
 			var standing []int
 			for p := range r.in.Boxes {
-				if in[p] {
+				if in[p] || slices.Contains(absent, p) {
 					continue
 				}
 				joinedLater := false
@@ -459,7 +555,11 @@ func (r *runner) moveTogether(ctx context.Context, si int, ms []int) error {
 					standing = append(standing, p)
 				}
 			}
-			c.t = leastClear(union, s, gap, r.in.Boxes, r.offsets, standing)
+			if st.Round > 0 {
+				c.t = beyondAll(union, s, gap, r.in.Boxes, r.offsets, standing)
+			} else {
+				c.t = leastClear(union, s, gap, r.in.Boxes, r.offsets, standing)
+			}
 			c.travel = math.Max(0, c.t-gap)
 		default:
 			for _, m := range ms {
@@ -477,7 +577,7 @@ func (r *runner) moveTogether(ctx context.Context, si int, ms []int) error {
 			add := c.t
 			c.path, c.block = PathClear, -1
 			for _, m := range ms {
-				ignore := append(slices.Clone(r.partners[m]), ms...)
+				ignore := append(append(slices.Clone(r.partners[m]), ms...), absent...)
 				p, b, err := r.in.Blocker.Path(ctx, m, r.offsets[m], r.offsets[m].Add(s.Scale(add)), r.offsets, ignore)
 				if err != nil {
 					return err

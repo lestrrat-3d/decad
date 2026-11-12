@@ -67,20 +67,22 @@ func TestDerivedCollarShaft(t *testing.T) {
 	require.NoError(t, err)
 	bearing, shaft, carrier := partByName(t, ex, nameBearing), partByName(t, ex, nameShaft), partByName(t, ex, nameCarrier)
 
-	// The bearing leaves first, downward; the shaft follows the same way and ends beyond it.
+	// The bearing leaves first, downward, and the shaft follows the same way. The shaft, removed last,
+	// sits nearest the carrier and the bearing ends beyond it.
 	require.Equal(t, "removal 1", bearing.Stage)
 	require.Equal(t, "removal 2", shaft.Stage)
 	require.InDelta(t, -1, bearing.Dir.Z, 1e-9)
 	require.InDelta(t, -1, shaft.Dir.Z, 1e-9)
 	require.Equal(t, r3.Vec{}, carrier.Offset)
-	require.Less(t, offsetZ(t, ex, nameBearing), 0.0)
-	require.Less(t, offsetZ(t, ex, nameShaft), offsetZ(t, ex, nameBearing))
+	require.Less(t, offsetZ(t, ex, nameShaft), 0.0)
+	require.Less(t, offsetZ(t, ex, nameBearing), offsetZ(t, ex, nameShaft))
 	for _, p := range []parts.ExplodedPart{bearing, shaft} {
 		require.InDelta(t, 0, p.Offset.X, 1e-9, p.Name)
 		require.InDelta(t, 0, p.Offset.Y, 1e-9, p.Name)
 	}
-	// The shaft clears the bearing's moved box and the carrier by the gap.
-	require.Equal(t, []string{"removal 1", "removal 2"}, ex.Stages)
+	// The shaft clears the carrier, and the bearing the shaft's moved box, by the gap: the round removed
+	// last runs first.
+	require.Equal(t, []string{"removal 2", "removal 1"}, ex.Stages)
 	require.Empty(t, ex.Overlaps)
 
 	// The same query twice gives the same offsets.
