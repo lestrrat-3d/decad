@@ -814,8 +814,21 @@ serves many goroutines and many identical bodies (an `Instance` adds a translati
   search. The result is layout-grade, not a proof.
 
 Blocking between two parts does not depend on which others are present. `BuildTable` tests every ordered pair for one
-direction (optionally in parallel; the table is identical either way) after a prefilter on shadow boxes and on position
-along `d`. `Directions` lists candidate directions: given axes in both senses, then the six world axes.
+direction after a prefilter on shadow boxes and on position along `d`. Up to `workers` goroutines each take the next
+untested pair and reuse one set of clipping buffers for every pair they test; the table is identical for any number.
+`Directions` lists candidate directions: given axes in both senses, then the six world axes.
+
+A projection indexes its triangles in a grid of square cells, about two cells across per triangle on average, stored
+densely between the lowest and highest cell any triangle touches. The cell grows only when a long thin shadow would need
+more than 16 cells per triangle. For each mover triangle, the pair test:
+
+- skips the triangle when no triangle of the other mesh reaches above its lowest corner by more than the epsilon;
+- reads only the cells of the other mesh's grid that the triangle's shadow, dilated by `s`, touches inside that stored
+  range, and each triangle found there once.
+
+These steps skip only triangle pairs that cannot give a witness or a weak contact. The cells read keep their order and
+their triangles, so the verdicts and the witness are those of reading every cell. `Table.Work` counts what a table cost:
+pairs past the prefilter, cells read, triangle pairs read, and triangle pairs clipped.
 
 Identical bodies at different positions share one `Projection`. `Group` sorts meshes into classes: the same triangles over
 the same vertex numbering, each vertex within 1e-9 mm of the other mesh's, translated by one common vector. A hash of the

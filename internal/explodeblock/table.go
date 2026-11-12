@@ -2,6 +2,7 @@ package explodeblock
 
 import (
 	"sync"
+	"sync/atomic"
 
 	"github.com/lestrrat-3d/r3"
 )
@@ -10,42 +11,50 @@ import (
 // verdict for part a moving toward +Dir with part b standing in the way.
 // Blocking between two parts does not depend on which others are present.
 type Table struct {
-	dir r3.Vec
-	n   int
-	res []Result
+	dir  r3.Vec
+	n    int
+	res  []Result
+	work Work
 }
 
 // BuildTable tests every ordered pair of items. The items must all be
 // projections of the same direction. With workers above 1 the pairs are tested
-// by that many goroutines; the table is the same either way.
+// by that many goroutines, each taking the next untested pair; the table is the
+// same either way.
 func BuildTable(items []Instance, workers int) *Table {
 	n := len(items)
 	t := &Table{n: n, res: make([]Result, n*n)}
 	if n > 0 {
 		t.dir = items[0].P.dir
 	}
-	workers = max(workers, 1)
-	rows := make(chan int, n)
-	for a := range n {
-		rows <- a
-	}
-	close(rows)
+	var next atomic.Int64
+	var mu sync.Mutex
 	var wg sync.WaitGroup
-	for range workers {
+	for range min(max(workers, 1), max(n*n, 1)) {
 		wg.Go(func() {
-			for a := range rows {
-				for b := range n {
-					if a == b {
-						continue
-					}
-					t.res[a*n+b] = Block(items[a], items[b])
+			var w worker
+			for {
+				k := int(next.Add(1) - 1)
+				if k >= n*n {
+					break
 				}
+				a, b := k/n, k%n
+				if a == b {
+					continue
+				}
+				t.res[k] = w.block(items[a], items[b])
 			}
+			mu.Lock()
+			t.work.add(w.work)
+			mu.Unlock()
 		})
 	}
 	wg.Wait()
 	return t
 }
+
+// Work returns what testing the pairs of the table did.
+func (t *Table) Work() Work { return t.work }
 
 // Dir returns the direction the table was built for.
 func (t *Table) Dir() r3.Vec { return t.dir }

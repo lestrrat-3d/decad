@@ -53,29 +53,90 @@ type Witness struct {
 // projections of the same direction. Block only reads its arguments and is safe
 // to call from many goroutines.
 func Block(mover, other Instance) Result {
+	var w worker
+	return w.block(mover, other)
+}
+
+// Work counts what pairwise tests did. It depends only on the instances
+// tested, never on the number of goroutines.
+type Work struct {
+	// Pairs is the number of ordered pairs that passed the box and position
+	// prefilter.
+	Pairs int64
+	// Cells is the number of grid cells of the other mesh read.
+	Cells int64
+	// Candidates is the number of triangle pairs read from those cells, each
+	// pair once.
+	Candidates int64
+	// Clipped is the number of triangle pairs whose shadows were clipped
+	// against each other.
+	Clipped int64
+}
+
+func (w *Work) add(o Work) {
+	w.Pairs += o.Pairs
+	w.Cells += o.Cells
+	w.Candidates += o.Candidates
+	w.Clipped += o.Clipped
+}
+
+// worker is the scratch space of one goroutine testing pairs: the clipping
+// buffers, the marks that read each triangle of the other mesh once per
+// triangle of the mover, and the work done so far.
+type worker struct {
+	clip  clipper
+	seen  []uint32
+	stamp uint32
+	work  Work
+}
+
+// mark returns a fresh stamp for the n triangles of the other mesh.
+func (w *worker) mark(n int) uint32 {
+	if len(w.seen) < n {
+		w.seen = make([]uint32, n)
+		w.stamp = 0
+	}
+	w.stamp++
+	if w.stamp == 0 {
+		clear(w.seen)
+		w.stamp = 1
+	}
+	return w.stamp
+}
+
+func (w *worker) block(mover, other Instance) Result {
 	s := mover.P.bound + other.P.bound
 	if !prefilter(mover, other, s) {
 		return Result{Verdict: Free}
 	}
+	w.work.Pairs++
 	ua, va, wa := mover.local()
 	ub, vb, wb := other.local()
 	du, dv, dw := ub-ua, vb-va, wb-wa
 	b := other.P
-	seen := make([]int32, len(b.tris))
+	top := b.topZ + dw // no triangle of other reaches higher
 	weak := false
 	for i := range mover.P.tris {
 		ta := &mover.P.tris[i]
-		stamp := int32(i + 1)
-		x0, x1, y0, y1 := b.cellRange(ta.minX-s-du, ta.maxX+s-du, ta.minY-s-dv, ta.maxY+s-dv)
+		if top-ta.minZ <= heightEpsilon {
+			continue
+		}
+		x0, x1, y0, y1, ok := b.grid.cells(ta.minX-s-du, ta.maxX+s-du, ta.minY-s-dv, ta.maxY+s-dv)
+		if !ok {
+			continue
+		}
+		stamp := w.mark(len(b.tris))
 		var planeA affine
 		havePlane := false
 		for x := x0; x <= x1; x++ {
 			for y := y0; y <= y1; y++ {
-				for _, j := range b.grid[[2]int32{x, y}] {
-					if seen[j] == stamp {
+				w.work.Cells++
+				for _, j := range b.grid.at(x, y) {
+					if w.seen[j] == stamp {
 						continue
 					}
-					seen[j] = stamp
+					w.seen[j] = stamp
+					w.work.Candidates++
 					tb := b.tris[j].shifted(du, dv, dw)
 					if tb.maxZ-ta.minZ <= heightEpsilon {
 						continue
@@ -86,9 +147,10 @@ func Block(mover, other Instance) Result {
 					if !havePlane {
 						planeA, havePlane = ta.plane(), true
 					}
-					if w, ok := strongWitness(ta, &tb, planeA, s); ok {
-						w.Point = world(mover, w.Point)
-						return Result{Verdict: Blocked, Witness: w}
+					w.work.Clipped++
+					if wit, ok := w.strongWitness(ta, &tb, planeA, s); ok {
+						wit.Point = world(mover, wit.Point)
+						return Result{Verdict: Blocked, Witness: wit}
 					}
 					if !weak && within(ta, &tb, s) {
 						weak = true
@@ -121,18 +183,18 @@ func prefilter(a, b Instance, s float64) bool {
 // triangle stands ahead of the mover by more than heightEpsilon, the region
 // must survive an erosion by half the bounds' sum, which is exactly a width
 // above the sum.
-func strongWitness(ta, tb *tri, pa affine, s float64) (Witness, bool) {
-	r := clipTriangles(ta, tb)
+func (w *worker) strongWitness(ta, tb *tri, pa affine, s float64) (Witness, bool) {
+	r := w.clip.clipTriangles(ta, tb)
 	if r == nil {
 		return Witness{}, false
 	}
 	pb := tb.plane()
 	diff := func(q p2) float64 { return pb.at(q) - pa.at(q) - heightEpsilon }
-	r = clipHalf(r, diff)
+	r = w.clip.clipHalf(r, diff)
 	if r == nil {
 		return Witness{}, false
 	}
-	r = erode(r, s/2)
+	r = w.clip.erode(r, s/2)
 	if r == nil {
 		return Witness{}, false
 	}

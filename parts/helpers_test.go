@@ -29,7 +29,7 @@ const (
 )
 
 // block extrudes the rectangle x0..x1, y0..y1 from height z0 by height.
-func block(t *testing.T, doc *decad.Document, x0, y0, x1, y1, z0, height float64) *decad.Body {
+func block(t testing.TB, doc *decad.Document, x0, y0, x1, y1, z0, height float64) *decad.Body {
 	t.Helper()
 	w := sketch.NewWorld()
 	plane, err := w.CreateOffsetPlane(w.XY(), z0)
@@ -80,7 +80,7 @@ func boredPlateR(t *testing.T, doc *decad.Document, radius float64) *decad.Body 
 	return out
 }
 
-func mustAdd(t *testing.T, s *parts.Set, ps ...parts.Part) {
+func mustAdd(t testing.TB, s *parts.Set, ps ...parts.Part) {
 	t.Helper()
 	for _, p := range ps {
 		require.NoError(t, s.Add(p), p.Name)
