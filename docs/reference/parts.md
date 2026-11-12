@@ -24,6 +24,7 @@ parts knows nothing of how a part is made.
   - [func (AxisSource) String](<#AxisSource.String>)
 - [type BOM](<#BOM>)
 - [type BOMRow](<#BOMRow>)
+- [type BlockedPair](<#BlockedPair>)
 - [type Cause](<#Cause>)
   - [func (Cause) String](<#Cause.String>)
 - [type CheckOption](<#CheckOption>)
@@ -95,6 +96,7 @@ parts knows nothing of how a part is made.
 - [type Stage](<#Stage>)
 - [type Summary](<#Summary>)
   - [func (Summary) WriteMarkdown](<#Summary.WriteMarkdown>)
+- [type UndecidedPair](<#UndecidedPair>)
 - [type ViewOption](<#ViewOption>)
   - [func WithPartPose](<#WithPartPose>)
 - [type Views](<#Views>)
@@ -153,6 +155,21 @@ each by Spec, then name.
 }</pre>
 
 BOMRow is one line of the bill of materials.
+
+<a name="BlockedPair"></a>
+### type BlockedPair
+
+<pre>type BlockedPair struct {
+    Mover, Blocker <a href="https://pkg.go.dev/builtin#string">string</a>
+    Dir            r3.Vec
+    Point          r3.Vec
+    Height         units.Value
+}</pre>
+
+BlockedPair is one pair that forced the derived removal order: Blocker stood
+ahead of Mover along Dir, so Blocker left first. Point is a point on Mover's
+surface under Blocker, in millimetres, and Height how far Blocker's surface
+stands ahead of it along Dir.
 
 <a name="Cause"></a>
 ### type Cause
@@ -381,6 +398,18 @@ replaces the earlier one.
     Stages   []<a href="https://pkg.go.dev/builtin#string">string</a>    // the stage names in the order they ran; &#34;&#34; is the last, implicit stage
     Scale    units.Value // the WithExplodeScale multiplier, Dimensionless
     Short    []<a href="https://pkg.go.dev/builtin#string">string</a>    // parts whose Clearance is below their Gap, in Set order
+
+    // Derived is true when WithDerivedExplode ran. The removal order of the parts no explicit stage
+    // names was then read from tessellations, so the layout is layout-grade: a picture, not a proof
+    // (agent-docs/parts-design.md §5.8). Blocked and Undecided are empty without it.
+    Derived <a href="https://pkg.go.dev/builtin#bool">bool</a>
+    // Blocked lists, in removal order, each pair that forced the order: a part that leaves along a
+    // direction and the part that stood in the way along it, which therefore left earlier.
+    Blocked []<a href="#BlockedPair">BlockedPair</a>
+    // Undecided lists the pairs whose verdict the tessellation could not settle and the layout read
+    // as free: a part, a part still present when it leaves and the direction it leaves by. These are
+    // the places where the layout is not certain.
+    Undecided []<a href="#UndecidedPair">UndecidedPair</a>
     // contains filtered or unexported fields
 }</pre>
 
@@ -418,6 +447,11 @@ non-finite one decad.ErrNotFinite. Pairs come in Parts order.
     Clearance units.Value // after the last stage and the scale: the least box distance to any part it is not joined to
     Path      <a href="#PathState">PathState</a>
     Blocker   <a href="https://pkg.go.dev/builtin#string">string</a> // the part that blocked or enclosed the path, or that Clearance was read against
+    // Order is the 1-based position in the derived removal order, and Round the 1-based round the
+    // part left in. Both are 0 for the ground, for a part an explicit stage moved, and without
+    // WithDerivedExplode. For a derived part Pull is AxisFromFaces, AxisDeclared, PullDeclared,
+    // WorldAxis or RemovalDirection.
+    Order, Round <a href="https://pkg.go.dev/builtin#int">int</a>
 }</pre>
 
 ExplodedPart is one part's place in the exploded layout.
@@ -766,7 +800,7 @@ Port is where one joint attaches to a part.
 
 PullSource says where the direction a part was pulled in came from.
 
-<a name="PullNone"></a><a name="AxisFromFaces"></a><a name="AxisDeclared"></a><a name="FaceNormal"></a><a name="BoxCentres"></a><a name="PullDeclared"></a><a name="StageDirection"></a>
+<a name="PullNone"></a><a name="AxisFromFaces"></a><a name="AxisDeclared"></a><a name="FaceNormal"></a><a name="BoxCentres"></a><a name="PullDeclared"></a><a name="StageDirection"></a><a name="WorldAxis"></a><a name="RemovalDirection"></a>
 
 <pre>const (
     PullNone       <a href="#PullSource">PullSource</a> = iota // the ground, or a part no joint reaches
@@ -776,6 +810,8 @@ PullSource says where the direction a part was pulled in came from.
     BoxCentres                       // the line between the two parts&#39; box centres
     PullDeclared                     // the joint&#39;s declared Pull
     StageDirection                   // the direction its stage stated
+    WorldAxis                        // derived: a world axis, or a direction another part&#39;s WithRemoval stated
+    RemovalDirection                 // derived: the direction its own WithRemoval stated
 )</pre>
 
 <a name="PullSource.String"></a>
@@ -1040,6 +1076,18 @@ pairs, when Joints is set; the exploded depth
 and pull table when [Exploded](<#Exploded>) is set; the Mermaid connection diagram. Numbers
 print with their bounds. A [Set](<#Set>) with a retired body is decad.ErrRetiredBody
 and a nil [Set](<#Set>) decad.ErrDegenerate.
+
+<a name="UndecidedPair"></a>
+### type UndecidedPair
+
+<pre>type UndecidedPair struct {
+    Mover, Other <a href="https://pkg.go.dev/builtin#string">string</a>
+    Dir          r3.Vec
+}</pre>
+
+UndecidedPair is a pair the tessellation could not settle: Other may stand ahead
+of Mover along Dir only inside the mesh bounds' uncertainty, and the layout read
+it as free.
 
 <a name="ViewOption"></a>
 ### type ViewOption
