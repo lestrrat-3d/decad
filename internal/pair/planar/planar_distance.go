@@ -117,6 +117,10 @@ func (k *planarKernel) scan() error {
 				}
 				k.cur = vertexFacetHint(verts == k.b, v, t)
 				k.vertexFacet(verts, v, tris, t)
+				if k.stopAtCap && k.hasBest && fracCmp(k.best, k.cap) <= 0 {
+					k.withinCap = true
+					return nil
+				}
 			}
 		}
 	}
@@ -135,6 +139,10 @@ func (k *planarKernel) scan() error {
 			}
 			k.cur = PlanarHint{kind: hintEdgeEdge, i: ea, j: eb}
 			k.edgeEdge(edgeA, k.b.edges[eb])
+			if k.stopAtCap && k.hasBest && fracCmp(k.best, k.cap) <= 0 {
+				k.withinCap = true
+				return nil
+			}
 		}
 	}
 	return nil

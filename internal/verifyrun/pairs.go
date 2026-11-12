@@ -154,7 +154,7 @@ func proveVerifyPair(ctx context.Context, job verifyPairJob, cfg verifyConfig, g
 		// analytic kernel left open — a pair an operand has no carrier model
 		// in, or one its enumeration could not settle — and only ever adds a
 		// verdict, never replaces one (interference design §3.2).
-		planar, ok, err := planarPairVerdict(ctx, mesher, a, b)
+		planar, ok, err := planarPairVerdict(ctx, mesher, a, b, cfg.Clearances)
 		if err != nil {
 			return verifyPairOutcome{}, err
 		}

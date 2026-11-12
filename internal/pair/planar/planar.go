@@ -198,6 +198,36 @@ func ClassifyPlanarHinted(a, b *PlanarSolid, hint PlanarHint, poll func() error)
 	return classifyPlanar(a, b, hint, true, poll)
 }
 
+// ClassifyPlanarWithin decides whether the exact planar boundaries intersect
+// or approach within margin. A separated result proves every candidate is
+// farther than margin; a NoGapProof result means at least one candidate is at
+// or within margin. It retains crossing, containment, and zero-distance contact
+// proofs but does not measure a positive gap. Both solids must have passed
+// CheckPlanarSolid.
+func ClassifyPlanarWithin(a, b *PlanarSolid, margin proof.Dyadic, poll func() error) (PlanarResult, error) {
+	pa, pb := preparePlanar(a), preparePlanar(b)
+	steps := 0
+	inner := poll
+	poll = func() error {
+		if steps++; steps > stepLimit {
+			return ErrWorkLimit
+		}
+		return inner()
+	}
+	distanceCap := frac{num: proof.DyMul(margin, margin), den: proof.DyInt(1)}
+	k := &planarKernel{
+		a: pa, b: pb, poll: poll, noSeed: true,
+		cap: distanceCap, capUp: fracAbove(distanceCap), capLo: fracBelow(distanceCap), hasCap: true,
+		relationOnly: true, stopAtCap: margin.Sign() > 0,
+	}
+	result, err := k.classify()
+	if err != nil {
+		return PlanarResult{}, err
+	}
+	result.preps = [2]*planarPrep{pa, pb}
+	return result, nil
+}
+
 // classifyPlanar is ClassifyPlanarHinted with the distance scan's own guess at
 // the nearest pair (seedCap) switched by seed, so a test can hold the guess to
 // the unguessed answer.
@@ -243,6 +273,17 @@ func (k *planarKernel) classify() (PlanarResult, error) {
 	}
 	if err := k.distances(); err != nil {
 		return PlanarResult{}, err
+	}
+	if k.relationOnly {
+		if k.stopAtCap {
+			if k.withinCap {
+				return PlanarResult{Reason: pair.NoGapProof}, nil
+			}
+			return PlanarResult{Relation: pair.Separated}, nil
+		}
+		if !k.hasBest || k.best.num.Sign() > 0 {
+			return PlanarResult{Relation: pair.Separated}, nil
+		}
 	}
 	if k.best.num.Sign() > 0 {
 		gap, ok := fracSqrtReading(k.best)
@@ -294,6 +335,7 @@ type planarPrep struct {
 
 	// The distance scan's shortcuts (planar_prune.go), filled on first use.
 	vertBox, triBox, edgeBox []floatBox
+	normalBox                []floatBox
 	triTree, edgeTree        *boxTree
 	// flat lists the triangles with a zero normal, built on first use by
 	// facetsAt.
@@ -457,6 +499,12 @@ type planarKernel struct {
 	capUp  float64 // a float at or above cap (fracAbove)
 	capLo  float64 // a float at or below cap (fracBelow)
 	hasCap bool
+	// relationOnly avoids the positive-gap square root for Verify's
+	// displacement proof. stopAtCap is safe only for a positive threshold;
+	// zero-distance scans must retain every contact site.
+	relationOnly bool
+	stopAtCap    bool
+	withinCap    bool
 	// hint is the caller's guess at the nearest candidate pair, cur names
 	// the candidate pair being offered, and nearest the one that set best.
 	hint, cur, nearest PlanarHint

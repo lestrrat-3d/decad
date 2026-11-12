@@ -29,11 +29,16 @@ func PlanarDeepVertex(a, b *PlanarSolid, margin proof.Dyadic, poll func() error)
 	pa.floatBoxes()
 	pb.floatBoxes()
 	_, marginUp := proof.FloatBounds(marginSquared)
+	marginRadius := margin
+	if marginRadius.Sign() < 0 {
+		marginRadius = proof.DyAbs(marginRadius)
+	}
+	_, marginRadiusUp := proof.FloatBounds(marginRadius)
 	k := &planarKernel{a: pa, b: pb, poll: poll}
 	for _, side := range [][2]*planarPrep{{pa, pb}, {pb, pa}} {
 		from, to := side[0], side[1]
 		for v, point := range from.s.Verts {
-			deep, err := k.deepInside(point, from.vertBox[v], to, marginSquared, marginUp)
+			deep, err := k.deepInside(point, from.vertBox[v], to, marginSquared, marginUp, marginRadiusUp)
 			if err != nil || deep {
 				return deep, err
 			}
@@ -44,15 +49,26 @@ func PlanarDeepVertex(a, b *PlanarSolid, margin proof.Dyadic, poll func() error)
 
 // deepInside reports whether p lies strictly inside solid with every
 // boundary triangle farther than sqrt(marginSquared) away. pb is p's outward
-// float box and marginUp a float at or above marginSquared: a float lower
-// bound on the box gap above marginUp skips the triangle as the exact box test
-// would (planar_prune.go). Without the solid's float boxes every triangle
-// takes the exact test.
-func (k *planarKernel) deepInside(p proof.DyV3, pb floatBox, solid *planarPrep, marginSquared proof.Dyadic, marginUp float64) (bool, error) {
+// float box; marginUp bounds marginSquared above, and marginRadiusUp bounds
+// the nonnegative distance margin above. Their reject-only box tests run after
+// each triangle poll. Without the solid's float boxes every triangle takes the
+// exact test.
+func (k *planarKernel) deepInside(
+	p proof.DyV3, pb floatBox, solid *planarPrep, marginSquared proof.Dyadic, marginUp, marginRadiusUp float64,
+) (bool, error) {
 	boxed := solid.triBox != nil
+	var expanded floatBox
+	if boxed {
+		expanded = expandFloatBox(pb, marginRadiusUp)
+	}
 	for t := range solid.s.Tris {
 		if err := k.poll(); err != nil {
 			return false, err
+		}
+		// Separation from the outward-expanded point box proves the exact
+		// triangle lies farther than the margin on at least one axis.
+		if boxed && floatApart(expanded, solid.triBox[t]) {
+			continue
 		}
 		if boxed && gapSquaredBelowLimit(pb, solid.triBox[t], marginUp) > marginUp {
 			continue
@@ -67,6 +83,17 @@ func (k *planarKernel) deepInside(p proof.DyV3, pb floatBox, solid *planarPrep, 
 	}
 	result, err := k.cast(p, solid)
 	return result == castInside, err
+}
+
+// expandFloatBox outward-expands b by radius on each axis. radius must be a
+// nonnegative float upper bound on the exact distance margin.
+func expandFloatBox(b floatBox, radius float64) floatBox {
+	var out floatBox
+	for axis := range 3 {
+		out.lo[axis] = subDown(b.lo[axis], radius)
+		out.hi[axis] = addUp(b.hi[axis], radius)
+	}
+	return out
 }
 
 // pointTriangle is the exact squared distance from x to the closed triangle

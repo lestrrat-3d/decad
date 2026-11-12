@@ -143,6 +143,12 @@ func TestContactPairExactPlanarHexagonOnTray(t *testing.T) {
 	require.Equal(t, -0.5, crossing.Manifold.Points[0].Separation.Value.Base())
 	require.Zero(t, crossing.Manifold.Points[0].Separation.Bound.Base())
 
+	verified, err := doc.Verify(t.Context())
+	require.NoError(t, err)
+	require.Equal(t, decad.Sound, verified.Status)
+	require.Empty(t, verified.Diagnostics)
+	require.Empty(t, verified.Interferences)
+
 	require.Equal(t, before, doc.Bodies(), "a contact query changes no document state")
 }
 

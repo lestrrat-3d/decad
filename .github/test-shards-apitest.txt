@@ -3042,6 +3042,8 @@
 12	0.01	TestContainerNewUniqueChild
 12	0.01	TestContainerVerifyContainers
 12	3.74	TestContactPairBandSeatsHeadInPocket
+12	0.00	TestProvePairSeparatedKeepsContactPairValidationOrder
+12	0.00	TestProvePairSeparatedOnlyProvesStrictGaps
 8	0.14	TestChamferTangentLineArcOutline
 8	2.23	TestChamferTangentOutlineAfterPinUnion
 8	0.30	TestChamferWindowLoops

@@ -854,8 +854,8 @@ value it reads, so a retired body still answers it (§6). The query set is:
   `LocatePoint`, `DistanceToPoint`, `ExtremeFacesByCentroid`;
 - `Tessellate`, which returns a `Mesh` and registers nothing;
 - the document reads `Bodies`, `Verify`, `VerifyMotion`, `VerifyLinkage`,
-  `VerifyJointBox`, `ContactPair`, `SweepPair` and `SweptBox`, each of which
-  returns a report and leaves the document unchanged;
+  `VerifyJointBox`, `ContactPair`, `ProvePairSeparated`, `SweepPair` and
+  `SweptBox`, each of which returns a result and leaves the document unchanged;
 - the accessors and report methods on result types (`Report`, `MotionReport`,
   `SweepReport`, `Path`, `Mesh` and the like).
 

@@ -54,7 +54,7 @@ import (
 // same reading the interference path forms for this pair. The verdict never
 // loosens the analytic kernel's: the caller consults this arm only for a
 // boundaryaudit.PairUndecided result.
-func planarPairVerdict(ctx context.Context, mesher verifiedmesh.Mesher, a, b *topo.Body) (pairkernel.Result, bool, error) {
+func planarPairVerdict(ctx context.Context, mesher verifiedmesh.Mesher, a, b *topo.Body, clearances bool) (pairkernel.Result, bool, error) {
 	if !pairkernel.PlanarPairAdmits(a, b) {
 		return pairkernel.Result{}, false, nil
 	}
@@ -73,15 +73,41 @@ func planarPairVerdict(ctx context.Context, mesher verifiedmesh.Mesher, a, b *to
 	if err != nil || !okB {
 		return pairkernel.Result{}, false, err
 	}
-	result, err := planar.ClassifyPlanar(&sa, &sb, budget.Step)
+	delta := proofarith.DyAdd(deltaA, deltaB)
+	var result planar.PlanarResult
+	if clearances {
+		result, err = planar.ClassifyPlanar(&sa, &sb, budget.Step)
+	} else {
+		result, err = planar.ClassifyPlanarWithin(&sa, &sb, delta, budget.Step)
+	}
 	if err != nil {
 		return pairkernel.Result{}, false, err
+	}
+	if !clearances {
+		switch result.Relation {
+		case pair.Separated:
+			return pairkernel.Result{Verdict: boundaryaudit.PairDisjoint}, true, nil
+		case pair.Touching:
+			return pairkernel.Result{Verdict: boundaryaudit.PairTouching, Exact: true}, true, nil
+		}
+		if result.Relation == pair.Overlapping {
+			if delta.Sign() == 0 {
+				return pairkernel.Result{Verdict: boundaryaudit.PairOverlapping}, true, nil
+			}
+			deep, err := planar.PlanarDeepVertex(&sa, &sb, delta, budget.Step)
+			if err != nil {
+				return pairkernel.Result{}, false, err
+			}
+			if deep {
+				return pairkernel.Result{Verdict: boundaryaudit.PairOverlapping}, true, nil
+			}
+		}
+		return pairkernel.Result{}, true, nil
 	}
 	diam, err := pairkernel.PairGateDiameter(ctx, a, b, nil)
 	if err != nil {
 		return pairkernel.Result{}, false, err
 	}
-	delta := proofarith.DyAdd(deltaA, deltaB)
 	undecided := pairkernel.Result{Diam: diam}
 	switch result.Relation {
 	case pair.Separated:
