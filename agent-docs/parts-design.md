@@ -789,6 +789,32 @@ type Occlusion struct {
 A pair absent from the list cannot hide one another; a listed pair may. The caller then adds or changes a stage. A
 zero or non-finite `view` is `decad.ErrDegenerate` or `decad.ErrNotFinite`.
 
+### 5.7 Blocking between two tessellated parts
+
+`internal/explodeblock` decides, from tessellations alone, whether part B stands in the way of part A when A moves
+toward a unit direction `d`. It takes plain vertices, triangles and `Mesh.Bound`; it touches no body and has no public
+API. Box-only blocking cannot work: a shaft's box overlaps a bearing's box in both senses, whatever the bore.
+
+A `Projection` is the per-mesh half. It projects the triangles onto the plane perpendicular to `d` and keeps each
+corner's height along `d`; triangles parallel to `d` have no shadow and are dropped. It is immutable, so one projection
+serves many goroutines and many identical bodies (an `Instance` adds a translation). `Block(A, B)` is the per-pair half:
+
+- Over every overlap of a projected triangle of A with one of B, the height difference `zB - zA` is affine. A part of the
+  overlap where it exceeds 1e-6 mm is a witness: B stands ahead of A there. Faces at equal height (touching, coplanar)
+  give no witness.
+- With `s = bound(A) + bound(B)`, the pair is **Blocked** when a witness region survives an erosion by `s / 2`, that is
+  when it is wider than `s`. Its witness is a point on A's surface and the height difference there.
+- The pair is **Free** when no triangle of B that reaches ahead of the mover (highest corner above the mover's lowest by
+  more than the epsilon) lies within `s` of a triangle of A in the plane. That is the same test with A's shadow dilated
+  by `s`.
+- Anything else is **Undecided**: the only witnesses are narrower than `s`, as in a press fit with a gap below
+  `2 x Bound`. A layout reads Undecided as free along the part's own axis, so a tight fit never deadlocks a removal
+  search. The result is layout-grade, not a proof.
+
+Blocking between two parts does not depend on which others are present. `BuildTable` tests every ordered pair for one
+direction (optionally in parallel; the table is identical either way) after a prefilter on shadow boxes and on position
+along `d`. `Directions` lists candidate directions: given axes in both senses, then the six world axes.
+
 ## 6. Schematic
 
 ### 6.1 Connection diagram
