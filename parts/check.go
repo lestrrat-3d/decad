@@ -248,7 +248,9 @@ func (s *Set) checkPin(r *JointResult, a, b *bodyFaces, c config) {
 		angle, dist := jointcheck.LineOffset(jointcheck.Line{Point: j.Axis.Point, Dir: j.Axis.Dir},
 			jointcheck.Line{Point: line.Point, Dir: line.Dir})
 		v := jointcheck.Within(angle, 0, 0, c.axisTol)
-		if d := jointcheck.Within(dist, bound, 0, c.fitTol); d > v {
+		// A distance cannot be negative, so its interval has no lower limit: a lower limit of 0 would
+		// leave an exact match with a positive bound straddling it.
+		if d := jointcheck.Within(dist, bound, math.Inf(-1), c.fitTol); d > v {
 			v = d
 		}
 		note(v, CauseAxis, "the declared axis is %.3g degrees and %.3g mm from the matched one", angle*180/math.Pi, dist)
@@ -318,7 +320,8 @@ func checkFace(r *JointResult, a, b *bodyFaces, c config) {
 	nearest := math.Inf(1)
 	for _, m := range ms {
 		bound := a.planes[m.A].Bound + b.planes[m.B].Bound
-		switch jointcheck.Within(m.Gap, bound, 0, c.fitTol) {
+		// A gap is an absolute distance, so it has no lower limit.
+		switch jointcheck.Within(m.Gap, bound, math.Inf(-1), c.fitTol) {
 		case jointcheck.Outside:
 			nearest = math.Min(nearest, m.Gap)
 			continue

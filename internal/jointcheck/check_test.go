@@ -45,6 +45,15 @@ func TestWithin(t *testing.T) {
 	require.Equal(t, jointcheck.Outside, jointcheck.Within(0.3, 0.01, 0.15, 0.25))
 	require.Equal(t, jointcheck.Straddle, jointcheck.Within(0.25, 0.02, 0.15, 0.25))
 	require.Equal(t, jointcheck.Outside, jointcheck.Within(-0.1, 0.01, 0, math.Inf(1)))
+
+	// A distance cannot be negative, so its interval has no lower limit: an exact match with a
+	// positive bound is inside, a distance whose lower end passes the limit is outside, and one
+	// whose ends straddle it is neither.
+	lo := math.Inf(-1)
+	require.Equal(t, jointcheck.Inside, jointcheck.Within(0, 0.01, lo, 0.1))
+	require.Equal(t, jointcheck.Outside, jointcheck.Within(0.2, 0.01, lo, 0.1))
+	require.Equal(t, jointcheck.Straddle, jointcheck.Within(0.1, 0.01, lo, 0.1))
+	require.Equal(t, jointcheck.Straddle, jointcheck.Within(0, 0.01, 0, 0.1), "a lower limit of 0 cannot be met by a bounded zero")
 }
 
 func TestLineOffset(t *testing.T) {
