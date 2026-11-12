@@ -144,6 +144,48 @@ func (d *Document) ContactPair(ctx context.Context, a, b *Body, poseA, poseB r3.
 	return handleLift.Report(found), nil
 }
 
+// ProvePairSeparated reports whether an exact planar proof certifies a
+// strictly positive gap between two posed solids. False means that the caller
+// must use ContactPair or another complete relation check. Both bodies must be
+// non-nil, distinct, live members of d.
+func (d *Document) ProvePairSeparated(ctx context.Context, a, b *Body, poseA, poseB r3.Transform,
+	req ContactRequest) (bool, error) {
+	if a == b && a != nil {
+		return false, fmt.Errorf("%w: contact requires distinct bodies", ErrDegenerate)
+	}
+	if err := d.requireLive(a); err != nil {
+		return false, err
+	}
+	if err := d.requireLive(b); err != nil {
+		return false, err
+	}
+	if !a.n.Solid || a.n.Kind != topo.BodySolid || !b.n.Solid || b.n.Kind != topo.BodySolid {
+		return false, ErrNotSolid
+	}
+	if !poseA.IsValid() || !poseB.IsValid() {
+		return false, fmt.Errorf("%w: contact pose is invalid", ErrDegenerate)
+	}
+	if req.PointResolution.Kind() != units.Length || req.NormalResolution.Kind() != units.Angle {
+		return false, fmt.Errorf("%w: contact resolutions must be Length and Angle", ErrUnitKind)
+	}
+	if !measurement.FiniteValues(req.PointResolution.Base(), req.NormalResolution.Base()) {
+		return false, fmt.Errorf("%w: contact resolutions are non-finite", ErrNotFinite)
+	}
+	if req.PointResolution.Base() <= 0 || req.NormalResolution.Base() <= 0 {
+		return false, fmt.Errorf("%w: contact resolutions must be positive", ErrDegenerate)
+	}
+	if err := validateSupportBand(req.SupportBand); err != nil {
+		return false, err
+	}
+	if err := validateHeldChord(req.HeldChord); err != nil {
+		return false, err
+	}
+	if err := ctx.Err(); err != nil {
+		return false, err
+	}
+	return contactpair.ProveSeparated(ctx, verifyAllMesher{}, bodyNode(a), bodyNode(b), poseA, poseB, req)
+}
+
 // contactNodes is ContactPair's answer in node form: the sweeps read it
 // directly, and ContactPair lifts it to the public handles. It keeps the
 // recent reports a is the first operand of, and returns a copy of each.

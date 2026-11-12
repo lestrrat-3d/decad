@@ -490,7 +490,8 @@ A `decad.Diagnostic` states each reason a report is not sound, with its `decad.D
 - A `decad.Linkage` (from `decad.NewLinkage`) joins links with `decad.Revolute` and `decad.Prismatic` joints.
   `Document.VerifyLinkage` checks a `decad.Drive`, and `Document.VerifyJointBox` checks a whole box of joint values.
 - `Document.ContactPair` classifies how two posed bodies touch, and `Document.SweepPair` finds first contact along
-  two paths.
+  two paths. `Document.ProvePairSeparated` returns whether an exact planar proof certifies a strict gap between two
+  posed bodies; false means the caller must use its existing contact check.
 - The `dynamics` package builds a `dynamics.World` from a document, steps it, and records a `dynamics.Timeline`.
 
 ## Parts, exploded views and diagrams

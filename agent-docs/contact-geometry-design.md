@@ -131,10 +131,14 @@ face of a body with no displacement supplies the normal.
 func (d *Document) ContactPair(ctx context.Context, a, b *Body,
     poseA, poseB r3.Transform, req ContactRequest) (*ContactReport, error)
 
+func (d *Document) ProvePairSeparated(ctx context.Context, a, b *Body,
+    poseA, poseB r3.Transform, req ContactRequest) (bool, error)
+
 type ContactRequest struct {
     PointResolution  units.Value // positive Length
     NormalResolution units.Value // positive Angle
     SupportBand      units.Value // nonnegative Length; zero publishes the exact contact set alone (multibody §10.5)
+    HeldChord        units.Value // nonnegative Length; zero admits no curved held mesh
 }
 
 type ContactRelation int // Separated, Touching, Overlapping, Undecided,
@@ -193,6 +197,18 @@ analytic kernel proves separation but cannot measure the gap, return
 the transient pose's own displacement has been charged. A later overlap
 volume proof may upgrade an undecided analytic relation, but may not weaken a
 stronger earlier certificate.
+
+`ProvePairSeparated` is a read-only proof query for callers that need only a
+strict positive gap. It repeats `ContactPair`'s input validation and error
+priority, reads both bodies at the supplied query poses and `HeldChord`, and
+charges the same summed boundary displacement. It returns true only when an
+exact planar relation proves the held gap greater than that displacement. At
+zero `SupportBand` it uses `ClassifyPlanarWithin` with the displacement as its
+distance limit, so it avoids measuring a positive gap. A nonzero `SupportBand`
+or a non-planar snapshot returns false without claiming separation. Touching,
+overlapping, `ContactBand`, ambiguous, and work-limited results also return
+false; false means that the caller must use its existing `ContactPair` path.
+The query does not read or write `ContactPair`'s completed-report memo.
 
 ## 2. Transient pose and proof transfer
 
