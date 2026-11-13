@@ -835,7 +835,19 @@ func TestParityIndexPollsLikeTheLegacyScan(t *testing.T) {
 		indexed := &parityPollContext{Context: t.Context(), cancelAt: 2}
 		_, _, ierr := MeshParityAllContext(indexed, p, pm)
 		require.ErrorIs(t, ierr, context.Canceled)
-		require.NotNil(t, pm.index[0], `the index must have been used`)
+		require.False(t, pm.indexDeferred[0], `a canceled first scan must not count as a completed query`)
+		require.False(t, pm.indexBuilt[0], `a canceled first scan must not build the index`)
+		plain := NewParityMesh(verts, tris)
+		plain.Unfiltered = true
+		all := parityAllFacets(len(tris))
+		want := answerOf(MeshParityPreparedContext(t.Context(), p, plain, all))
+		got := answerOf(MeshParityAllContext(t.Context(), p, pm))
+		require.Equal(t, want, got)
+		require.True(t, pm.indexDeferred[0], `the next completed scan must defer the index`)
+		require.False(t, pm.indexBuilt[0], `the first completed scan must use the plain path`)
+		got = answerOf(MeshParityAllContext(t.Context(), p, pm))
+		require.Equal(t, want, got)
+		require.True(t, pm.indexBuilt[0], `the later call must build the index`)
 	})
 	t.Run(`cancel at every poll number`, func(t *testing.T) {
 		rng := rand.New(rand.NewPCG(0x51, 0x52))
@@ -1027,12 +1039,11 @@ func TestParityIndexDeduplicatesExactSlantedSegments(t *testing.T) {
 }
 
 // TestParityIndexSkipsUnusableFloatProjections requires a query whose first-ray
-// projection is not FloatFinite to take the plain scan: the answer and error
-// equal the unindexed scan's and the first ray's index is not even built. Every
-// query is compared with the plain scan, and every query, usable or not, also runs
-// on a fresh mesh, because whether the index was built is a property of one
-// mesh's first use. A usable query additionally runs on one shared indexed mesh
-// (the index kept across queries).
+// projection is not FloatFinite to take the plain scan. The answer and error
+// equal the unindexed scan's; only a later completed finite query can build an
+// index. Every query is compared with the plain scan and also runs on a fresh
+// mesh. Usable queries additionally run on one shared mesh so later calls can
+// reuse its indexes.
 func TestParityIndexSkipsUnusableFloatProjections(t *testing.T) {
 	t.Parallel()
 	rng := rand.New(rand.NewPCG(0x31d7, 0x0c55))
@@ -1060,7 +1071,7 @@ func TestParityIndexSkipsUnusableFloatProjections(t *testing.T) {
 				indexed++
 				pm := NewParityMesh(fx.verts, fx.tris)
 				require.Equal(t, want, answerOf(MeshParityAllContext(ctx, p, pm)), `query %d`, qi)
-				require.True(t, pm.indexBuilt[first.Axis], `query %d: a usable projection uses the index`, qi)
+				require.True(t, pm.indexDeferred[first.Axis], `query %d: a usable projection completes a plain scan`, qi)
 				require.Equal(t, want, answerOf(MeshParityAllContext(ctx, p, shared)), `query %d`, qi)
 			}
 			require.Positive(t, indexed, `some queries must take the indexed path`)
