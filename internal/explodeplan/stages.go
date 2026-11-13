@@ -91,8 +91,8 @@ type Stage struct {
 	// (agent-docs/parts-design.md §5.8 D7). Its members then clear only the parts
 	// still present when they leave: not the parts a later stage moves, and not
 	// the other members of stages with the same Round, except the members of
-	// their own stage already moved whose boxes overlap theirs seen along the
-	// direction.
+	// their own stage already moved whose boxes overlap theirs, or one of their
+	// copies' (Input.Copies), seen along the direction.
 	Round int
 }
 
@@ -108,6 +108,13 @@ type Input struct {
 	PartGap    []float64 // per part; NaN when unset
 	Scale      float64
 	Blocker    Blocker
+	// Copies, when not nil, gives per part the class of parts that are one shape
+	// at different positions, -1 for none. The copies in one derived round's stage
+	// (Stage.Round) that share a gap and whose boxes do not overlap each other seen
+	// along its direction leave at the first one's turn, and each ends beyond every
+	// member already moved whose box overlaps the box of any of them seen that way
+	// (agent-docs/parts-design.md §5.8 D6).
+	Copies []int
 	// Spread, when not nil, asks for the layer spread of agent-docs/parts-design.md
 	// §5.9 after the last stage.
 	Spread *Spread
@@ -228,16 +235,85 @@ func (r *runner) runStage(ctx context.Context, si int) error {
 	if st.Together {
 		return r.moveTogether(ctx, si, ms)
 	}
-	inStage := map[int]int{}
-	for k, m := range ms {
-		inStage[m] = k
+	dir, ok := st.Dir.Normalize()
+	if st.Clear != ClearAll || st.Round <= 0 || r.in.Copies == nil || !ok {
+		for k, m := range ms {
+			if err := r.moveOne(ctx, si, m, ms[:k], ms[k+1:], 0); err != nil {
+				return err
+			}
+		}
+		return nil
 	}
+	// A derived round: the copies of one shape leave at the first one's turn, and each ends beyond every
+	// member already moved that any of them would pass through.
+	var moved []int
+	placed := map[int]struct{}{}
 	for k, m := range ms {
-		if err := r.moveOne(ctx, si, m, k, ms, inStage); err != nil {
-			return err
+		if _, ok := placed[m]; ok {
+			continue
+		}
+		copies := r.copiesOf(si, m, ms[k+1:], dir)
+		floor := 0.0
+		for _, c := range copies {
+			floor = math.Max(floor, r.passTravel(si, c, moved, dir))
+		}
+		for _, c := range copies {
+			if err := r.moveOne(ctx, si, c, moved, nil, floor); err != nil {
+				return err
+			}
+			moved = append(moved, c)
+			placed[c] = struct{}{}
 		}
 	}
 	return nil
+}
+
+// copiesOf returns m and the members of later, the members of stage si after m, that are copies of m's
+// shape (Input.Copies) with m's gap, as long as no two of them overlap seen along dir: copies that
+// overlap that way clear each other one by one, as stacked washers do.
+func (r *runner) copiesOf(si, m int, later []int, dir r3.Vec) []int {
+	out := []int{m}
+	class := r.in.Copies[m]
+	if class < 0 {
+		return out
+	}
+	for _, c := range later {
+		if r.in.Copies[c] == class && r.gapOf(si, c) == r.gapOf(si, m) {
+			out = append(out, c)
+		}
+	}
+	if len(out) == 1 {
+		return out
+	}
+	for i, a := range out {
+		for _, b := range out[i+1:] {
+			if r.shadowed(a, b, dir) {
+				return []int{m}
+			}
+		}
+	}
+	return out
+}
+
+// passTravel is how far member m of the derived round stage si moves along dir to end beyond the members
+// of its stage already moved whose boxes overlap its box seen along dir (present's rule for them); zero
+// when there are none.
+func (r *runner) passTravel(si, m int, moved []int, dir r3.Vec) float64 {
+	var passed []int
+	for _, p := range moved {
+		if r.shadowed(m, p, dir) {
+			passed = append(passed, p)
+		}
+	}
+	return beyondAll(shift(r.in.Boxes[m], r.startOf(m, moved)), dir, r.gapOf(si, m), r.in.Boxes, r.offsets, passed)
+}
+
+// startOf is where member m starts: carried with its parent when the parent moved earlier in the stage.
+func (r *runner) startOf(m int, moved []int) r3.Vec {
+	if p := r.in.Nodes[m].Parent; p >= 0 && slices.Contains(moved, p) {
+		return r.offsets[p]
+	}
+	return r.offsets[m]
 }
 
 // senses returns the unit directions a member may move along, and whether they
@@ -270,7 +346,9 @@ type choice struct {
 
 func (c choice) free() bool { return c.path == PathClear }
 
-func (r *runner) moveOne(ctx context.Context, si, m, k int, ms []int, inStage map[int]int) error {
+// moveOne moves member m of stage si. moved holds the members of the stage already moved and notYet
+// those still to move; a derived round's member moves at least floor.
+func (r *runner) moveOne(ctx context.Context, si, m int, moved, notYet []int, floor float64) error {
 	st := r.in.Stages[si]
 	node := r.in.Nodes[m]
 	senses, fromStage := r.senses(st, m)
@@ -279,10 +357,7 @@ func (r *runner) moveOne(ctx context.Context, si, m, k int, ms []int, inStage ma
 		r.record(m, si, r3.Vec{}, 0, 0, 0, PathNone, -1, fromStage, node)
 		return nil
 	}
-	start := r.offsets[m]
-	if pk, ok := inStage[node.Parent]; ok && node.Parent >= 0 && pk < k {
-		start = r.offsets[node.Parent] // carried with its parent
-	}
+	start := r.startOf(m, moved) // carried with its parent when the parent moved first
 	gap := r.gapOf(si, m)
 	partners := slices.Clone(r.partners[m])
 	var best *choice
@@ -292,10 +367,10 @@ func (r *runner) moveOne(ctx context.Context, si, m, k int, ms []int, inStage ma
 		switch st.Clear {
 		case ClearAll:
 			if st.Round > 0 {
-				standing = r.present(si, m, ms[:k], s)
-				c.t = beyondAll(shift(r.in.Boxes[m], start), s, gap, r.in.Boxes, r.offsets, standing)
+				standing = r.present(si, m, moved, s)
+				c.t = math.Max(floor, beyondAll(shift(r.in.Boxes[m], start), s, gap, r.in.Boxes, r.offsets, standing))
 			} else {
-				standing = r.standing(si, m, ms[k+1:])
+				standing = r.standing(si, m, notYet)
 				c.t = leastClear(shift(r.in.Boxes[m], start), s, gap, r.in.Boxes, r.offsets, standing)
 			}
 			c.travel = math.Max(0, c.t-gap)
@@ -320,7 +395,7 @@ func (r *runner) moveOne(ctx context.Context, si, m, k int, ms []int, inStage ma
 			case st.Clear == ClearAll && st.Round > 0:
 				ignore = append(slices.Clone(partners), r.absent(m, standing)...)
 			case st.Clear == ClearAll:
-				ignore = append(slices.Clone(partners), ms[k+1:]...)
+				ignore = append(slices.Clone(partners), notYet...)
 			}
 			var err error
 			c.path, c.block, err = r.in.Blocker.Path(ctx, m, start, start.Add(s.Scale(c.t)), r.offsets, ignore)
