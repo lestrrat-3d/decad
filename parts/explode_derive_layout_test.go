@@ -3,10 +3,12 @@ package parts_test
 import (
 	"fmt"
 	"math"
+	"strings"
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
 	"github.com/lestrrat-3d/decad/parts"
+	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
 )
@@ -223,6 +225,54 @@ func TestDerivedPinsBesideCarrier(t *testing.T) {
 	for k := range 3 {
 		require.InDelta(t, final(carrier).Max.Z+psGap, final(pin(k)).Min.Z, 1e-6, pin(k))
 		require.GreaterOrEqual(t, final(cover).Min.Z, final(pin(k)).Max.Z+psGap-1e-6, pin(k))
+	}
+	require.Empty(t, ex.Overlaps)
+}
+
+// TestDerivedCopiesAroundHubTravelEqually checks that identical parts placed around a hub in one round
+// travel one distance. A hub (radius 6, z 0..8) stands on a base plate with three identical rings
+// (radius 8, bore 3, z 1..7) at radius 15 around it, the first on the X axis, 1 mm clear of the hub. All
+// four leave upward in one round and the hub goes first. Seen along Z the hub's box overlaps the boxes
+// of the rings at 120 and 240 degrees at their corners but not the box of the ring on the X axis, so
+// each ring alone would end at a different height. As copies of one shape all three end beyond the hub.
+func TestDerivedCopiesAroundHubTravelEqually(t *testing.T) {
+	const gap = 6.0
+	ring := func(k int) string { return fmt.Sprintf("ring %d", k+1) }
+	doc := decad.New()
+	cyl := func(x, y, r, z0, h float64) *decad.Body { return cylinderAt(t, doc, x, y, r, z0, h) }
+	cut := func(b, tool *decad.Body) *decad.Body { return must(decad.Cut(t.Context(), b, tool)) }
+	bodies := map[string]*decad.Body{namePlate: cyl(0, 0, 30, -5, 5), "hub": cyl(0, 0, 6, 0, 8)}
+	for k := range 3 {
+		a := 2 * math.Pi * float64(k) / 3
+		x, y := 15*math.Cos(a), 15*math.Sin(a)
+		bodies[ring(k)] = cut(cyl(x, y, 8, 1, 6), cyl(x, y, 3, 0, 8))
+	}
+	s := parts.NewSet(doc)
+	up := parts.Removal{Direction: r3.Vec{Z: 1}}
+	opts := []parts.ExplodeOption{parts.WithDerivedExplode(), parts.WithExplodeGround(namePlate),
+		parts.WithExplodeGap(units.Millimeters(gap)), parts.WithRemoval("hub", up)}
+	for _, name := range []string{namePlate, "hub", ring(0), ring(1), ring(2)} {
+		mustAdd(t, s, parts.Part{Name: name, Kind: parts.Manufactured, Body: bodies[name]})
+		if strings.HasPrefix(name, "ring") {
+			opts = append(opts, parts.WithRemoval(name, up))
+		}
+	}
+	ex, err := s.Explode(t.Context(), opts...)
+	require.NoError(t, err)
+	p := func(name string) parts.ExplodedPart { return partByName(t, ex, name) }
+	final := func(name string) decad.Box {
+		b, err := bodies[name].Bounds()
+		require.NoError(t, err)
+		off := p(name).Offset
+		return decad.Box{Min: b.Min.Add(off), Max: b.Max.Add(off)}
+	}
+
+	require.Equal(t, 1, p("hub").Round)
+	require.InDelta(t, gap, p("hub").Offset.Z, 1e-6, "the hub clears the plate by the gap")
+	for k := range 3 {
+		require.Equal(t, 1, p(ring(k)).Round, ring(k))
+		require.InDelta(t, 0, p(ring(k)).Offset.Sub(p(ring(0)).Offset).Len(), 1e-6, ring(k))
+		require.InDelta(t, final("hub").Max.Z+gap, final(ring(k)).Min.Z, 1e-6, "%s ends beyond the hub", ring(k))
 	}
 	require.Empty(t, ex.Overlaps)
 }

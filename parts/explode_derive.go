@@ -82,6 +82,7 @@ type derivedStages struct {
 	names  []string
 	order  []int
 	nodes  []explodeplan.Node
+	copies []int // per plan index: the shape class of a derived part, -1 for the others
 	report derivedReport
 }
 
@@ -228,6 +229,15 @@ func (s *Set) deriveStages(ctx context.Context, c config, in derivedInput) (deri
 		meshes[i] = m
 	}
 	shares, classes := explodeblock.Group(meshes)
+	out.copies = make([]int, n)
+	for k := range n {
+		out.copies[k] = -1
+	}
+	for i, k := range items {
+		if k != in.ground {
+			out.copies[k] = shares[i].Class
+		}
+	}
 	workers := runtime.GOMAXPROCS(0)
 	tables := make([]*explodeblock.Table, len(dirs))
 	blockers := make([][][]int, len(dirs))

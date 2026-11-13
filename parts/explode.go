@@ -379,13 +379,14 @@ func (s *Set) Explode(ctx context.Context, opts ...ExplodeOption) (*Exploded, er
 	order, nodes := explodeplan.Walk(len(idx), joints, ground)
 	runNodes := nodes
 	var rep *derivedReport
+	var copies []int
 	if c.derived {
 		d, err := s.deriveStages(ctx, c, derivedInput{ground: ground, idx: idx, plan: plan, boxes: boxes, stages: stages,
 			walk: order, nodes: nodes, faces: fc, jointAxes: jointAxes})
 		if err != nil {
 			return nil, err
 		}
-		stages.stages, stages.names, order, runNodes, rep = d.stages, d.names, d.order, d.nodes, &d.report
+		stages.stages, stages.names, order, runNodes, rep, copies = d.stages, d.names, d.order, d.nodes, &d.report, d.copies
 	}
 	var spreadReq *spreadPlan
 	if rep != nil {
@@ -396,7 +397,7 @@ func (s *Set) Explode(ctx context.Context, opts ...ExplodeOption) (*Exploded, er
 		spreadReq = planSpread(c, boxes, rep, stages.stages, joints, axes)
 	}
 	in := explodeplan.Input{Boxes: boxes, Joints: joints, Ground: ground, Order: order, Nodes: runNodes,
-		Stages: stages.stages, DefaultGap: c.gap, PartGap: stages.partGap, Scale: c.scale, Blocker: blk}
+		Stages: stages.stages, DefaultGap: c.gap, PartGap: stages.partGap, Scale: c.scale, Blocker: blk, Copies: copies}
 	if spreadReq != nil {
 		in.Spread = &spreadReq.req
 	}

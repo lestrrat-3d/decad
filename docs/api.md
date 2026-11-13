@@ -525,8 +525,10 @@ as it found it.
   `Group`) per part. A pair the tessellation cannot decide counts as free, so the result is a layout, not a proof; a
   part with no free direction is `decad.ErrDegenerate`. A part nothing blocks leaves in the round just before the
   first part it blocks, so it sits next to that part. The layout places the part removed last nearest the assembly
-  and each part removed earlier beyond the parts removed after it, and identical parts of one round travel the same
-  distance; `Exploded.Stages` lists the rounds in that placing order. The result sets `Exploded.Derived`
+  and each part removed earlier beyond the parts removed after it. Identical parts of one round placed by
+  translation end beyond the same parts of their round, so they travel the same distance unless a part removed
+  later stands in the way of only some of them; `Exploded.Stages` lists the rounds in that placing order. The
+  result sets `Exploded.Derived`
   (layout-grade). Each derived
   `parts.ExplodedPart` reports its `Order` and `Round` and a `Pull` of `AxisFromFaces`, `AxisDeclared`, `PullDeclared`,
   `WorldAxis` or `RemovalDirection`. `Exploded.Blocked` lists each `parts.BlockedPair` that forced the order (mover,

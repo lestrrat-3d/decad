@@ -120,6 +120,64 @@ func TestRunStuck(t *testing.T) {
 	require.Equal(t, r3.Vec{}, res[1].Offset, "a stuck part stays at its start")
 }
 
+// runRound runs one derived round that lifts the parts of order, in that order, off the ground, part 0,
+// by a 6 mm gap.
+func runRound(t *testing.T, boxes []explodeplan.Box, order, copies []int) []explodeplan.Result {
+	t.Helper()
+	_, nodes := explodeplan.Walk(len(boxes), nil, 0)
+	partGap := make([]float64, len(boxes))
+	for i := range partGap {
+		partGap[i] = nan()
+	}
+	out, err := explodeplan.Run(t.Context(), explodeplan.Input{Boxes: boxes, Ground: 0, Order: order, Nodes: nodes,
+		Stages:     []explodeplan.Stage{{Members: order, Gap: nan(), Clear: explodeplan.ClearAll, Dir: r3.Vec{Z: 1}, Round: 1}},
+		DefaultGap: 6, PartGap: partGap, Scale: 1, Blocker: blocker{limit: 1000}, Copies: copies})
+	require.NoError(t, err)
+	return out.Parts
+}
+
+func TestRunRoundCopies(t *testing.T) {
+	// A hub (part 1) and two copies of one 22 mm square part (parts 2 and 3) beside it on a base. Seen
+	// along Z the first copy's box clears the hub's, the second's overlaps its corner.
+	boxes := []explodeplan.Box{box(-40, -40, -5, 40, 40, 0), box(-7.5, -7.5, 0, 7.5, 7.5, 8),
+		box(10, -11, 1, 32, 11, 8), box(-21.5, 7.2, 1, 0.5, 29.2, 8)}
+
+	// Each part alone: the second copy ends beyond the hub, the first does not.
+	res := runRound(t, boxes, []int{1, 2, 3}, nil)
+	require.InDelta(t, 6.0, res[1].Offset.Z, 1e-9, "the hub clears the base by the gap")
+	require.InDelta(t, 5.0, res[2].Offset.Z, 1e-9)
+	require.InDelta(t, 19.0, res[3].Offset.Z, 1e-9, "the box overlapping the hub's ends 6 mm beyond the hub")
+
+	// As copies of one shape both end beyond the hub that one of them passes.
+	res = runRound(t, boxes, []int{1, 2, 3}, []int{-1, -1, 0, 0})
+	require.InDelta(t, 6.0, res[1].Offset.Z, 1e-9)
+	require.InDelta(t, 19.0, res[2].Offset.Z, 1e-9)
+	require.InDelta(t, 19.0, res[3].Offset.Z, 1e-9)
+	require.InDelta(t, 13.0, res[2].Travel, 1e-9, "the move less the gap")
+	require.Equal(t, explodeplan.PathClear, res[2].Path)
+
+	// A part outside the round standing over the first copy only (part 4, z 20 to 22) is cleared by that
+	// copy alone: each copy clears the parts of other stages by its own box.
+	pillar := append(append([]explodeplan.Box{}, boxes...), box(26, -5, 20, 32, 5, 22))
+	res = runRound(t, pillar, []int{1, 2, 3}, []int{-1, -1, 0, 0, -1})
+	require.InDelta(t, 22.0+6-1, res[2].Offset.Z, 1e-9, "the first copy ends 6 mm above the pillar")
+	require.InDelta(t, 19.0, res[3].Offset.Z, 1e-9, "the second copy ends beyond the hub only")
+
+	// With the hub between the copies in the stage order, the copies leave together at the first one's
+	// turn, and the hub, which the second copy's box overlaps, ends beyond both.
+	res = runRound(t, boxes, []int{2, 1, 3}, []int{-1, -1, 0, 0})
+	require.InDelta(t, 5.0, res[2].Offset.Z, 1e-9)
+	require.InDelta(t, 5.0, res[3].Offset.Z, 1e-9)
+	require.InDelta(t, 19.0, res[1].Offset.Z, 1e-9, "the hub ends 6 mm above the copies' tops at z 13")
+
+	// Copies that overlap each other seen along Z, as washers stacked on one pin, still clear each other
+	// one by one.
+	stacked := []explodeplan.Box{box(-40, -40, -5, 40, 40, 0), box(-5, -5, 0, 5, 5, 1), box(-5, -5, 1, 5, 5, 2)}
+	res = runRound(t, stacked, []int{1, 2}, []int{-1, 0, 0})
+	require.InDelta(t, 6.0, res[1].Offset.Z, 1e-9)
+	require.InDelta(t, 12.0, res[2].Offset.Z, 1e-9, "the upper washer ends 6 mm above the lower one's top at z 7")
+}
+
 func TestRunTogetherAndScale(t *testing.T) {
 	// Two parts side by side on a base, lifted as one over a cover that overhangs both.
 	boxes := []explodeplan.Box{box(0, 0, 0, 40, 10, 5), box(2, 2, 5, 8, 8, 9), box(12, 2, 5, 18, 8, 9), box(0, 0, 9, 40, 10, 12)}
