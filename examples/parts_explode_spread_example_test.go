@@ -11,11 +11,11 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// A derived explode of a thin assembly stacks its layers along one axis, which
-// hides the lower layers behind the wide plate. When the layers are not coaxial
-// the explode also spreads them across that axis, one cell of a grid each.
-// Guides gives each part a line from where it assembles on its joint partner, so
-// a renderer can show which part goes where.
+// A derived explode of a thin assembly keeps every part on the axis it assembles
+// on, in removal order along it. When a part would cover a part it is joined to,
+// its layer steps sideways along Spread.Shear, just far enough to show the
+// covered part. Guides gives each part a line from where it assembles on its
+// joint partner; Inline marks the lines a reader does not need.
 func Example_parts_explode_spread() {
 	doc := decad.New()
 	cut := func(b, tool *decad.Body, err error) (*decad.Body, error) {
@@ -95,6 +95,13 @@ func Example_parts_explode_spread() {
 		return
 	}
 
+	// A dial over the bridge, wider than it.
+	dial, err := extrudeBlock(doc, -60, -40, 60, 40, 23, 2)
+	if err != nil {
+		fmt.Printf("failed to build the dial: %s\n", err)
+		return
+	}
+
 	set := parts.NewSet(doc)
 	for _, p := range []parts.Part{
 		{Name: "plate", Kind: parts.Manufactured, Body: plate},
@@ -102,6 +109,7 @@ func Example_parts_explode_spread() {
 		{Name: "wheel", Kind: parts.Manufactured, Body: wheel},
 		{Name: "bridge", Kind: parts.Manufactured, Body: bridge},
 		{Name: "screw", Kind: parts.Purchased, Body: screw},
+		{Name: "dial", Kind: parts.Manufactured, Body: dial},
 	} {
 		if err := set.Add(p); err != nil {
 			fmt.Printf("failed to add %s: %s\n", p.Name, err)
@@ -116,6 +124,7 @@ func Example_parts_explode_spread() {
 		{Name: "wheel on arbor", Kind: parts.PinInBore, A: "wheel", B: "arbor", Axis: zAxis(0, 0)},
 		{Name: "arbor in bridge", Kind: parts.PinInBore, A: "arbor", B: "bridge", Axis: zAxis(0, 0)},
 		{Name: "screw in bridge", Kind: parts.PinInBore, A: "screw", B: "bridge", Axis: zAxis(45, 15)},
+		{Name: "dial on bridge", Kind: parts.Contact, A: "dial", B: "bridge"},
 	} {
 		if err := set.Join(j); err != nil {
 			fmt.Printf("failed to join %s: %s\n", j.Name, err)
@@ -123,18 +132,19 @@ func Example_parts_explode_spread() {
 		}
 	}
 
-	// The wheel is fixed to +Z: with the arbor gone nothing stands beside it, so the search would let it
-	// slide out sideways too.
+	// The wheel and the dial are fixed to +Z: with the arbor gone nothing stands beside the wheel, so the
+	// search would let it slide out sideways too.
 	ex, err := set.Explode(context.Background(), parts.WithDerivedExplode(), parts.WithExplodeGround("plate"),
 		parts.WithExplodeGap(units.Millimeters(5)),
-		parts.WithRemoval("wheel", parts.Removal{Direction: r3.Vec{Z: 1}}))
+		parts.WithRemoval("wheel", parts.Removal{Direction: r3.Vec{Z: 1}}),
+		parts.WithRemoval("dial", parts.Removal{Direction: r3.Vec{Z: 1}}))
 	if err != nil {
 		fmt.Printf("failed to explode: %s\n", err)
 		return
 	}
 	sp := ex.Spread
-	fmt.Printf("spread ran: %t, axis (%g, %g, %g), %d layers in %d columns\n", sp.Ran, sp.Axis.X, sp.Axis.Y, sp.Axis.Z,
-		sp.Layers, sp.Columns)
+	fmt.Printf("spread ran: %t, axis (%g, %g, %g), %d layers, steps along (%g, %g, %g)\n", sp.Ran, sp.Axis.X, sp.Axis.Y,
+		sp.Axis.Z, sp.Layers, sp.Shear.X, sp.Shear.Y, sp.Shear.Z)
 
 	// rounded keeps the printed numbers stable to the hundredth of a millimetre.
 	rounded := func(v r3.Vec) string {
@@ -145,20 +155,21 @@ func Example_parts_explode_spread() {
 		fmt.Printf("%s: layer %d, slide %s\n", p.Name, p.Layer, rounded(p.Slide))
 	}
 	for _, g := range ex.Guides {
-		if g.Part != "wheel" {
+		if g.Inline {
 			continue
 		}
-		// The guide runs from where the wheel assembles on its arbor, as the arbor sits in the exploded
-		// layout, to the wheel's own place.
-		fmt.Printf("wheel guide: to %s along %q, from %s to %s, size %g mm\n", g.Partner, g.Joint, rounded(g.From),
+		// The guide runs from where the dial assembles on its bridge, as the bridge sits in the exploded
+		// layout, to the dial's own place: across the axis, because the dial's layer stepped.
+		fmt.Printf("%s guide: to %s along %q, from %s to %s, size %g mm\n", g.Part, g.Partner, g.Joint, rounded(g.From),
 			rounded(g.To), math.Round(g.Size.Base()*100)/100)
 	}
 	// Output:
-	// spread ran: true, axis (0, 0, 1), 5 layers in 4 columns
+	// spread ran: true, axis (0, 0, 1), 6 layers, steps along (0, 1, 0)
 	// plate: layer 0, slide (0, 0, 0)
-	// arbor: layer -1, slide (-56, -49, 0)
-	// wheel: layer 1, slide (-48, 57, 0)
-	// bridge: layer 2, slide (-10, 94, 0)
-	// screw: layer 3, slide (23, -65, 0)
-	// wheel guide: to arbor along "wheel on arbor", from (-56, -49, -16.5) to (-48, 57, 12.5), size 24 mm
+	// arbor: layer -1, slide (0, 0, 0)
+	// wheel: layer 1, slide (0, 0, 0)
+	// bridge: layer 2, slide (0, 0, 0)
+	// screw: layer 3, slide (0, 0, 0)
+	// dial: layer 4, slide (0, 25, 0)
+	// dial guide: to bridge along "dial on bridge", from (0, 0, 28) to (0, 25, 47), size 120 mm
 }

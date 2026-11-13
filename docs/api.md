@@ -532,16 +532,18 @@ as it found it.
   `WorldAxis` or `RemovalDirection`. `Exploded.Blocked` lists each `parts.BlockedPair` that forced the order (mover,
   blocker, direction and the witness point and height), and `Exploded.Undecided` each `parts.UndecidedPair` read as
   free. Identical bodies at different positions share one projection per direction.
-- A derived explode of a thin assembly whose layers are not coaxial also spreads the layers across their axis, one cell
-  of a grid each, so no layer hides another from a known set of views. Each explicit stage that moves parts along a
-  direction gets a layer of its own, nearest the base. A derived rigid group whose members are joined by pins along the
-  spread's axis is stacked along it, the largest footprint nearest the assembly, and `ExplodedPart.Stack` gives each
-  member's place. `Exploded.Spread` (a `parts.Spread`) reports whether it ran, the axis, the grid and a `View` from
-  which no part hides a part of another layer; each `parts.ExplodedPart` carries its `Layer` and the `Slide` the spread
-  added to its `Offset`. `parts.WithoutExplodeSpread` keeps the layers stacked and needs `parts.WithDerivedExplode`,
+- A derived explode of a thin assembly whose layers are not coaxial keeps every layer on its axis. Each explicit stage
+  that moves parts along a direction gets a layer of its own, nearest the base. A derived rigid group whose members are
+  joined by pins along the spread's axis is stacked along it, the largest footprint nearest the assembly, and
+  `ExplodedPart.Stack` gives each member's place. A layer steps along `Spread.Shear` only where a part joined to it,
+  not on a shared axis, would be covered. The layers are settled along the axis so no two parts of different layers
+  meet. `Exploded.Spread` (a `parts.Spread`) reports whether it ran, the axis, `Shear`, the extents `Width`, `Depth` and
+  `Height` and a `View`; each `parts.ExplodedPart` carries its `Layer` and the `Slide` the spread added to its
+  `Offset`. `parts.WithoutExplodeSpread` keeps the layers stacked and needs `parts.WithDerivedExplode`,
   else `decad.ErrDegenerate`. Every `Explode` fills `Exploded.Guides`: a `parts.Guide` per moved part, from where it
   assembles on its joint partner (its parent in the joint walk, else the ground) to its `Anchor`, with the `Partner`,
-  the `Joint` and the part's `Size` so a caller can skip small parts. decad draws nothing; draw the guides as segments
+  the `Joint` and the part's `Size` so a caller can skip small parts. Each guide's `Inline` says whether the part sits
+  on its partner's line. decad draws nothing; draw the guides as segments
   with a renderer that draws 3D lines, for example solidlens `Scene.Lines`. `Exploded.Hidden` lists a pair only when
   the two boxes' exact projections overlap.
 - `Set.Check` judges each declared joint against the faces and bounds of its two parts and lists the pairs of parts whose

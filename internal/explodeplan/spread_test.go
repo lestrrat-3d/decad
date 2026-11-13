@@ -1,7 +1,6 @@
 package explodeplan_test
 
 import (
-	"math"
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/explodeplan"
@@ -12,11 +11,11 @@ import (
 // spreadGap is the gap g of every spread test, in mm.
 const spreadGap = 2
 
-// runSpread runs the layer spread over plain boxes with no stage: part 0 is the ground. The axis is Z, a row
-// of cells runs along Y and the rows advance along X.
+// runSpread runs the layer spread over plain boxes with no stage: part 0 is the ground. The axis is Z, the layers
+// step along Y and X is the third axis.
 func runSpread(t *testing.T, boxes []explodeplan.Box, layer []int, scale float64, thin bool) explodeplan.Outcome {
 	t.Helper()
-	return runPlan(t, boxes, nil, scale, &explodeplan.Spread{Axis: r3.Vec{Z: 1}, Across: r3.Vec{Y: 1}, Rows: r3.Vec{X: 1},
+	return runPlan(t, boxes, nil, scale, &explodeplan.Spread{Axis: r3.Vec{Z: 1}, Shear: r3.Vec{Y: 1}, Rows: r3.Vec{X: 1},
 		Layer: layer, Gap: spreadGap, Thin: thin})
 }
 
@@ -39,121 +38,96 @@ func moved(b explodeplan.Box, o r3.Vec) explodeplan.Box {
 	return explodeplan.Box{Min: b.Min.Add(o), Max: b.Max.Add(o)}
 }
 
-func TestSpreadSlabs(t *testing.T) {
-	// Gap 2. The base is [0, 10]^2 x [0, 2]. Layer +1 at z 5..6 stays (6 is past 2 + 2). Layer +2 at z 3..4
-	// would sit beside it, so it moves +5 to z 8..9. Layer -1 at z -3..-1 moves -1 to z -4..-2.
-	boxes := []explodeplan.Box{box(0, 0, 0, 10, 10, 2), box(20, 0, 5, 26, 6, 6), box(40, 0, 3, 46, 6, 4),
-		box(60, 0, -3, 66, 6, -1)}
-	out := runSpread(t, boxes, []int{0, 1, 2, -1}, 1, true)
+func TestSpreadSettle(t *testing.T) {
+	// Gap 2. The base is [0, 10]^2 x [0, 2]. Layer +1 [20, 26] x [0, 6] x [5, 6] stays: its footprint stands apart.
+	// Layer +2 [4, 8]^2 x [3, 4] lies over the base and moves 1 to z 4..5. Layer +3 [21, 25] x [1, 5] x [2, 3]
+	// lies under layer +1 and moves 6 to z 8..9. Layer -1 [60, 66] x [0, 6] x [-3, -1] stays. Layer -2
+	// [2, 8]^2 x [-1, 1] lies inside the base and moves -3 to z -4..-2.
+	boxes := []explodeplan.Box{box(0, 0, 0, 10, 10, 2), box(20, 0, 5, 26, 6, 6), box(4, 4, 3, 8, 8, 4),
+		box(21, 1, 2, 25, 5, 3), box(60, 0, -3, 66, 6, -1), box(2, 2, -1, 8, 8, 1)}
+	layer := []int{0, 1, 2, 3, -1, -2}
+	out := runSpread(t, boxes, layer, 1, true)
 	require.True(t, out.Spread.Ran)
-	want := []float64{0, 0, 5, -1}
+	want := []float64{0, 0, 1, 6, 0, -3}
 	for i, w := range want {
 		require.InDelta(t, w, out.Parts[i].Offset.Z, 1e-12, "part %d", i)
 		require.InDelta(t, w, out.Parts[i].Slide.Z, 1e-12, "part %d slide", i)
+		require.Zero(t, out.Parts[i].Offset.X, "part %d", i)
+		require.Zero(t, out.Parts[i].Offset.Y, "part %d", i)
 	}
 	zs := func(i int) (float64, float64) {
 		b := moved(boxes[i], out.Parts[i].Offset)
 		return b.Min.Z, b.Max.Z
 	}
-	lo, hi := zs(2)
-	require.InDelta(t, 8, lo, 1e-12)
-	require.InDelta(t, 9, hi, 1e-12)
-	lo, hi = zs(3)
-	require.InDelta(t, -4, lo, 1e-12)
-	require.InDelta(t, -2, hi, 1e-12)
+	for i, w := range map[int][2]float64{2: {4, 5}, 3: {8, 9}, 5: {-4, -2}} {
+		lo, hi := zs(i)
+		require.InDelta(t, w[0], lo, 1e-12, "part %d", i)
+		require.InDelta(t, w[1], hi, 1e-12, "part %d", i)
+	}
 
 	// A scale doubles the slide with the offset.
-	scaled := runSpread(t, boxes, []int{0, 1, 2, -1}, 2, true)
+	scaled := runSpread(t, boxes, layer, 2, true)
 	for i, p := range scaled.Parts {
 		require.Equal(t, out.Parts[i].Offset.Scale(2), p.Offset, "part %d", i)
 		require.Equal(t, out.Parts[i].Slide.Scale(2), p.Slide, "part %d slide", i)
 	}
 }
 
-func TestSpreadGrid(t *testing.T) {
-	// Three layers whose 10 x 10 footprints stand apart. Gap 2: one column is 10 x 34 (aspect 3.4), two
-	// columns 22 x 22 (aspect 1), three columns 34 x 10.
-	boxes := []explodeplan.Box{box(0, 0, 0, 10, 10, 1), box(30, 0, 5, 40, 10, 6), box(60, 0, 10, 70, 10, 11)}
-	out := runSpread(t, boxes, []int{0, 1, 2}, 1, true)
+func TestSpreadSteps(t *testing.T) {
+	// Gap 2, Shear Y, Rows X. G is the base. P [10, 20]^2 x [4, 6] (+1), Q [5, 25]^2 x [8, 10] (+2) and
+	// R [10, 20]^2 x [12, 14] (+3) lie over it; U [10, 20]^2 x [-6, -4] (-1) and V [5, 25]^2 x [-10, -8] (-2) under.
+	const (
+		g = iota
+		p
+		q
+		r
+		u
+		v
+	)
+	boxes := []explodeplan.Box{box(0, 0, 0, 50, 50, 2), box(10, 10, 4, 20, 20, 6), box(5, 5, 8, 25, 25, 10),
+		box(10, 10, 12, 20, 20, 14), box(10, 10, -6, 20, 20, -4), box(5, 5, -10, 25, 25, -8)}
+	layer := []int{0, 1, 2, 3, -1, -2}
+	mates := []explodeplan.Mate{{A: g, B: p, Coaxial: true}, {A: p, B: q}, {A: q, B: r, Coaxial: true},
+		{A: p, B: r, Coaxial: true}, {A: u, B: v}}
+	out := runPlan(t, boxes, nil, 1, &explodeplan.Spread{Axis: r3.Vec{Z: 1}, Shear: r3.Vec{Y: 1}, Rows: r3.Vec{X: 1},
+		Layer: layer, Gap: spreadGap, Thin: true, Mates: mates})
 	require.True(t, out.Spread.Ran)
-	require.False(t, out.Spread.Coaxial)
-	require.Equal(t, 2, out.Spread.Columns)
-	require.InDelta(t, 22, out.Spread.Width, 1e-9)
-	require.InDelta(t, 22, out.Spread.Depth, 1e-9)
-	// The base stays; layer 1 takes the next column (y 12..22, as x 0..10) and layer 2 the next row
-	// (x 12..22, y 0..10).
-	require.Equal(t, r3.Vec{}, out.Parts[0].Offset)
-	require.Equal(t, r3.Vec{X: -30, Y: 12}, out.Parts[1].Slide)
-	require.Equal(t, r3.Vec{X: -48}, out.Parts[2].Slide)
-
-	// A base and one layer tie at 2.2 for one column and two, and the smaller count wins.
-	out = runSpread(t, boxes[:2], []int{0, 1}, 1, true)
-	require.Equal(t, 1, out.Spread.Columns)
-	require.InDelta(t, 10, out.Spread.Width, 1e-9)
-	require.InDelta(t, 22, out.Spread.Depth, 1e-9)
-
-	// A layer below the base lies in the cell before it: base in the middle column.
-	out = runSpread(t, boxes, []int{1, 0, -1}, 1, true)
-	require.Equal(t, 2, out.Spread.Columns)
-	require.Equal(t, r3.Vec{}, out.Parts[1].Slide, "the base cell is anchored at its own footprint")
-}
-
-func TestSpreadCleanViews(t *testing.T) {
-	// Seven layers, three below the base and three above, of varied size and position along Z.
-	type spec struct {
-		layer      int
-		x, y       float64
-		w, d, z, h float64
+	// Q steps by 10 - (5 - 2) = 7. R keeps Q's step because their pin stays on its axis, and {P, R}, off its axis
+	// after the step, finds P's band of 7 toward -Y already. V steps -7 the same way.
+	want := map[int]r3.Vec{g: {}, p: {}, q: {Y: 7}, r: {Y: 7}, u: {}, v: {Y: -7}}
+	for i, w := range want {
+		require.InDelta(t, w.X, out.Parts[i].Slide.X, 1e-9, "part %d", i)
+		require.InDelta(t, w.Y, out.Parts[i].Slide.Y, 1e-9, "part %d", i)
+		require.InDelta(t, 0, out.Parts[i].Slide.Z, 1e-9, "part %d", i)
 	}
-	specs := []spec{
-		{0, 0, 0, 40, 30, 0, 2},
-		{1, 5, 3, 12, 7, 3, 2}, {2, -10, 8, 20, 9, 1, 3}, {3, 30, -12, 6, 14, 4, 1},
-		{-1, -8, -5, 9, 6, -1, 2}, {-2, 12, 14, 15, 5, -4, 2}, {-3, -20, -9, 7, 11, 0, 3},
-	}
-	var boxes []explodeplan.Box
-	var layer []int
-	for _, s := range specs {
-		boxes = append(boxes, box(s.x, s.y, s.z, s.x+s.w, s.y+s.d, s.z+s.h))
-		layer = append(layer, s.layer)
-	}
-	out := runSpread(t, boxes, layer, 1, true)
-	require.True(t, out.Spread.Ran)
 	final := make([]explodeplan.Box, len(boxes))
 	for i := range boxes {
 		final[i] = moved(boxes[i], out.Parts[i].Offset)
 	}
-	overlaps := func(view r3.Vec) int {
-		n := 0
-		for a := range final {
-			for b := a + 1; b < len(final); b++ {
-				if layer[a] == layer[b] {
-					continue
-				}
-				if _, cover := explodeplan.ProjectedCover(final[a], final[b], view); cover > 0 {
-					n++
-				}
-			}
-		}
-		return n
-	}
-	for _, v := range []r3.Vec{{X: 1, Y: 1, Z: -1}, {Z: -1}, {Z: 1}, {X: 1}, {Y: 1}, {Y: 1, Z: -3}, {X: 2, Y: 1, Z: -1}} {
-		require.Zero(t, overlaps(v), "no layer hides another along %v", v)
-	}
-	require.Positive(t, overlaps(r3.Vec{X: -1, Y: -1, Z: -1}), "a view outside the clean set sees a layer hide another")
-
-	// Every cross-layer pair keeps the gap along Z, and along X or Y.
-	for a := range final {
-		for b := a + 1; b < len(final); b++ {
-			if layer[a] == layer[b] {
-				continue
-			}
-			z := math.Max(final[a].Min.Z-final[b].Max.Z, final[b].Min.Z-final[a].Max.Z)
-			xy := math.Max(math.Max(final[a].Min.X-final[b].Max.X, final[b].Min.X-final[a].Max.X),
-				math.Max(final[a].Min.Y-final[b].Max.Y, final[b].Min.Y-final[a].Max.Y))
-			require.GreaterOrEqual(t, z, 2-1e-9, "layers %d and %d along Z", layer[a], layer[b])
-			require.GreaterOrEqual(t, xy, 2-1e-9, "layers %d and %d across Z", layer[a], layer[b])
+	// ProjectedCover(a, b, v) names the nearer box (0 for a) and the share of the farther one it covers. Along
+	// each view of the set the inner part P is in front or only partly covered; likewise U against V.
+	for _, tc := range []struct {
+		inner, outer int
+		views        []r3.Vec
+	}{
+		{p, q, []r3.Vec{{Z: -1}, {Y: 1, Z: -1}, {Y: 1, Z: -3}, {Y: 3, Z: -1}}},
+		{u, v, []r3.Vec{{Z: 1}, {Y: -1, Z: 1}, {Y: -1, Z: 3}}},
+	} {
+		for _, view := range tc.views {
+			front, cover := explodeplan.ProjectedCover(final[tc.inner], final[tc.outer], view)
+			require.True(t, front == 0 || cover < 1-1e-9, "the outer part wholly hides the inner one along %v: %d %v %v", view, front, cover, tc)
 		}
 	}
+	front, cover := explodeplan.ProjectedCover(final[p], final[q], r3.Vec{Z: -1})
+	require.Equal(t, 1, front)
+	require.InDelta(t, 0.8, cover, 1e-9)
+	front, cover = explodeplan.ProjectedCover(final[u], final[v], r3.Vec{Z: 1})
+	require.Equal(t, 1, front)
+	require.InDelta(t, 0.8, cover, 1e-9)
+	// Along (0, -1, -1), outside the set, Q covers P with Covered 1.
+	front, cover = explodeplan.ProjectedCover(final[p], final[q], r3.Vec{Y: -1, Z: -1})
+	require.Equal(t, 1, front)
+	require.InDelta(t, 1, cover, 1e-9)
 }
 
 func TestSpreadCoaxial(t *testing.T) {
@@ -172,7 +146,9 @@ func TestSpreadCoaxial(t *testing.T) {
 	out = runSpread(t, boxes, []int{0, 1, 2}, 1, true)
 	require.False(t, out.Spread.Coaxial)
 	require.True(t, out.Spread.Ran)
-	require.NotEqual(t, r3.Vec{}, out.Parts[2].Slide)
+	for i, p := range out.Parts {
+		require.Equal(t, r3.Vec{}, p.Slide, "part %d: the layers already stand apart and no mate is given", i)
+	}
 
 	// An assembly that is not thin is reported but never moved.
 	out = runSpread(t, boxes, []int{0, 1, 2}, 1, false)
@@ -200,7 +176,7 @@ func TestSpreadLayers(t *testing.T) {
 		{Members: []int{5}, Gap: nan(), Clear: explodeplan.ClearAll, Dir: down, Round: 1},
 	}
 	for _, thin := range []bool{true, false} {
-		out := runPlan(t, boxes, stages, 1, &explodeplan.Spread{Axis: r3.Vec{Z: 1}, Across: r3.Vec{Y: 1}, Rows: r3.Vec{X: 1},
+		out := runPlan(t, boxes, stages, 1, &explodeplan.Spread{Axis: r3.Vec{Z: 1}, Shear: r3.Vec{Y: 1}, Rows: r3.Vec{X: 1},
 			Layer: []int{0, 0, 0, 1, 2, -1, 0}, Gap: spreadGap, Thin: thin})
 		require.Equal(t, []int{0, 1, -1, 2, 3, -2, 0}, out.Spread.Layer, "thin %v", thin)
 		require.Equal(t, 6, out.Spread.Layers, "thin %v", thin)
@@ -221,7 +197,7 @@ func TestSpreadStacks(t *testing.T) {
 		box(58, 8, -9, 62, 12, -2), // 6 S2
 	}
 	layer := []int{0, 1, 1, 1, 1, -1, -1}
-	out := runPlan(t, boxes, nil, 1, &explodeplan.Spread{Axis: r3.Vec{Z: 1}, Across: r3.Vec{Y: 1}, Rows: r3.Vec{X: 1},
+	out := runPlan(t, boxes, nil, 1, &explodeplan.Spread{Axis: r3.Vec{Z: 1}, Shear: r3.Vec{Y: 1}, Rows: r3.Vec{X: 1},
 		Layer: layer, Gap: spreadGap, Thin: true, Stacks: [][]int{{1, 2}, {5, 6}}})
 	require.True(t, out.Spread.Ran)
 	require.False(t, out.Spread.Coaxial)

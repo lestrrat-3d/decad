@@ -111,9 +111,9 @@ type ExplodedPart struct {
 	// first, then the derived rounds, the round removed last first; 0 for the base. It is 0 when Spread
 	// is nil.
 	Layer int
-	// Slide is what the spread added to Offset: the push of a stacked group's member (L4a), the push
-	// along Spread.Axis and the move to the layer's cell, after WithExplodeScale. It is zero when the
-	// spread did not run. Moved does not include it.
+	// Slide is what the spread added to Offset: the push of a stacked group's member (L4a), the layer's
+	// step across Spread.Axis (L4) and its settling push along it (L5), after WithExplodeScale. It is
+	// zero when the spread did not run. Moved does not include it.
 	Slide r3.Vec
 	// Stack is the part's 1-based place in a stacked group (§5.9 L4a): 1 for the member that stays where
 	// its round placed the group, 2 and up for the members stacked outward along Spread.Axis. It is 0
@@ -127,12 +127,16 @@ type ExplodedPart struct {
 // and Joint the joint that made it the parent, empty when no joint reaches the part. From is the centre
 // of the part's assembled box moved by the partner's Offset; To is the part's Anchor. Both are in
 // millimetres, after the layer spread and WithExplodeScale. Size is the longest edge of the part's box,
-// so a caller can leave out the guides of small parts.
+// so a caller can leave out the guides of small parts, and Inline says whether the part sits on the line
+// it left its partner by, so a caller can leave out the guides a reader does not need.
 type Guide struct {
 	Part, Partner string
 	Joint         string
 	From, To      r3.Vec
 	Size          units.Value // Length
+	// Inline is true when To - From lies along the part's Dir, or along its partner's Dir when the
+	// part's is zero, within WithAxisTolerance.
+	Inline bool
 }
 
 // BlockedPair is one pair that forced the derived removal order: Blocker stood ahead of Mover
@@ -289,8 +293,9 @@ func fromDecad(b decad.Box) explodeplan.Box {
 // WithExplodeScale tune the distances, and Joint.Pull states a direction
 // (agent-docs/parts-design.md §5.3). WithDerivedExplode derives the order and
 // direction of the parts no stage names from their tessellations (§5.8); for a
-// thin assembly whose layers are not coaxial it also spreads the layers across
-// their axis (§5.9). Guides gives each moved part a line to its joint partner (§5.10).
+// thin assembly whose layers are not coaxial it also lays the layers out compactly: rigid groups stacked
+// along their shaft, a layer stepped sideways where a part joined to it would be covered, and the layers
+// settled along their axis (§5.9). Guides gives each moved part a line to its joint partner (§5.10).
 func (s *Set) Explode(ctx context.Context, opts ...ExplodeOption) (*Exploded, error) {
 	c, err := foldOptions(opts)
 	if err != nil {
@@ -399,12 +404,12 @@ func (s *Set) Explode(ctx context.Context, opts ...ExplodeOption) (*Exploded, er
 	if err != nil {
 		return nil, err
 	}
-	ex, err := s.buildExploded(idx, ground, boxes, out.Parts, nodes, joints, readings, jointOf, stages.names, c.scale, rep)
+	ex, err := s.buildExploded(idx, ground, boxes, out.Parts, nodes, joints, readings, jointOf, stages.names, c.scale, math.Cos(c.axisTol), rep)
 	if err != nil {
 		return nil, err
 	}
 	if spreadReq != nil {
-		ex.Spread = spreadReq.report(out.Spread)
+		ex.Spread = spreadReq.report(out.Spread, ex.boxes)
 		for k := range ex.Parts {
 			ex.Parts[k].Layer, ex.Parts[k].Stack = out.Spread.Layer[k], out.Spread.Stack[k]
 		}
@@ -434,7 +439,7 @@ func applyPull(r *reading, j Joint, c config) error {
 }
 
 func (s *Set) buildExploded(idx []int, ground int, boxes []explodeplan.Box, res []explodeplan.Result, nodes []explodeplan.Node,
-	joints []explodeplan.Joint, readings []reading, jointOf []int, stageNames []string, scale float64, rep *derivedReport) (*Exploded, error) {
+	joints []explodeplan.Joint, readings []reading, jointOf []int, stageNames []string, scale, cosTol float64, rep *derivedReport) (*Exploded, error) {
 	ex := &Exploded{Ground: s.parts[idx[ground]].Name, Stages: stageNames, Scale: units.Scalar(scale)}
 	if rep != nil {
 		ex.Derived, ex.Blocked, ex.Undecided = true, rep.blocked, rep.undecided
@@ -504,8 +509,14 @@ func (s *Set) buildExploded(idx []int, ground int, boxes []explodeplan.Box, res 
 			continue
 		}
 		d := boxes[k].Max.Sub(boxes[k].Min)
+		dir := res[k].Dir
+		if dir == (r3.Vec{}) {
+			dir = res[p].Dir
+		}
+		v := to.Sub(from)
 		ex.Guides = append(ex.Guides, Guide{Part: s.parts[i].Name, Partner: s.parts[idx[p]].Name, Joint: joint,
-			From: from, To: to, Size: mm(math.Max(d.X, math.Max(d.Y, d.Z)))})
+			From: from, To: to, Size: mm(math.Max(d.X, math.Max(d.Y, d.Z))),
+			Inline: dir != (r3.Vec{}) && math.Abs(v.Dot(dir)) >= cosTol*v.Len()})
 	}
 	ex.boxes = moved
 	return ex, nil

@@ -16,6 +16,7 @@ const (
 	mvPlate  = "back plate"
 	mvBridge = "bridge"
 	mvStage  = "screw" // the explicit stage of the pressed movement
+	mvDial   = "dial"
 )
 
 func mvArbor(k int) string { return fmt.Sprintf("arbor %d", k) }
@@ -111,14 +112,14 @@ type mvWant struct {
 func movementTable() map[string]mvWant {
 	table := map[string]mvWant{
 		mvPlate:  {},
-		mvBridge: {2, r3.Vec{X: 115, Y: -65}, r3.Vec{Z: 4}},
+		mvBridge: {2, r3.Vec{}, r3.Vec{Z: 4}},
 	}
 	for k := 1; k <= 3; k++ {
-		table[mvArbor(k)] = mvWant{-1, r3.Vec{X: -26, Y: -81}, r3.Vec{Z: -27}}
-		table[mvWheel(k)] = mvWant{1, r3.Vec{X: -18, Y: 57}, r3.Vec{Z: 2}}
+		table[mvArbor(k)] = mvWant{-1, r3.Vec{}, r3.Vec{Z: -27}}
+		table[mvWheel(k)] = mvWant{1, r3.Vec{}, r3.Vec{Z: 2}}
 	}
 	for k := 1; k <= 2; k++ {
-		table[mvScrew(k)] = mvWant{3, r3.Vec{X: 23, Y: -22}, r3.Vec{Z: 21}}
+		table[mvScrew(k)] = mvWant{3, r3.Vec{}, r3.Vec{Z: 21}}
 	}
 	return table
 }
@@ -159,17 +160,15 @@ func TestSpreadMovement(t *testing.T) {
 	require.NotNil(t, sp)
 	require.True(t, sp.Ran)
 	requireVec(t, r3.Vec{Z: 1}, sp.Axis, "axis")
-	requireVec(t, r3.Vec{Y: 1}, sp.Across, "across")
-	requireVec(t, r3.Vec{X: 1}, sp.Rows, "rows")
+	requireVec(t, r3.Vec{Y: 1}, sp.Shear, "shear")
 	require.Equal(t, 5, sp.Layers)
-	require.Equal(t, 3, sp.Columns)
-	require.InDelta(t, 154, sp.Width.Base(), 1e-6)
-	require.InDelta(t, 225, sp.Depth.Base(), 1e-6)
+	require.InDelta(t, 80, sp.Width.Base(), 1e-6)
+	require.InDelta(t, 120, sp.Depth.Base(), 1e-6)
+	require.InDelta(t, 78, sp.Height.Base(), 1e-6)
 	require.Equal(t, units.Length, sp.Width.Kind())
 	require.Equal(t, units.Length, sp.Depth.Kind())
-	require.Equal(t, units.Dimensionless, sp.Aspect.Kind())
-	require.InDelta(t, 225.0/154, sp.Aspect.Base(), 1e-6)
-	requireVec(t, r3.Vec{X: 1, Y: 1, Z: -1}.Scale(1/math.Sqrt(3)), sp.View, "view")
+	require.Equal(t, units.Length, sp.Height.Kind())
+	requireVec(t, r3.Vec{Y: 1, Z: -1}.Scale(1/math.Sqrt2), sp.View, "view")
 	require.InDelta(t, 1, sp.View.Len(), 1e-12)
 
 	for name, want := range table {
@@ -184,7 +183,7 @@ func TestSpreadMovement(t *testing.T) {
 	}
 	require.Empty(t, ex.Overlaps)
 
-	// Parts of different layers keep the gap along Z and along X or Y.
+	// Parts of different layers keep the gap along Z, X or Y.
 	final := func(name string) decad.Box {
 		b, err := bodies[name].Bounds()
 		require.NoError(t, err)
@@ -203,15 +202,9 @@ func TestSpreadMovement(t *testing.T) {
 				continue
 			}
 			fa, fb := final(a.Name), final(b.Name)
-			require.GreaterOrEqual(t, gapAlong(fa, fb, zLo, zHi), 5-1e-9, a.Name+" and "+b.Name+" along Z")
-			across := math.Max(gapAlong(fa, fb, xLo, xHi), gapAlong(fa, fb, yLo, yHi))
-			require.GreaterOrEqual(t, across, 5-1e-9, a.Name+" and "+b.Name+" across Z")
+			gap := math.Max(gapAlong(fa, fb, zLo, zHi), math.Max(gapAlong(fa, fb, xLo, xHi), gapAlong(fa, fb, yLo, yHi)))
+			require.GreaterOrEqual(t, gap, 5-1e-9, a.Name+" and "+b.Name)
 		}
-	}
-	for _, view := range []r3.Vec{sp.View, {Z: -1}} {
-		hidden, err := ex.Hidden(view)
-		require.NoError(t, err)
-		require.Empty(t, hidden, "no part hides another seen along %v", view)
 	}
 
 	again, err := s.Explode(t.Context(), movementOpts()...)
@@ -291,6 +284,9 @@ func TestSpreadGuides(t *testing.T) {
 	ex, err := s.Explode(t.Context(), movementOpts()...)
 	require.NoError(t, err)
 	require.Len(t, ex.Guides, 9)
+	for _, g := range ex.Guides {
+		require.True(t, g.Inline, g.Part)
+	}
 	want := []string{mvArbor(1), mvArbor(2), mvArbor(3), mvWheel(1), mvWheel(2), mvWheel(3), mvBridge, mvScrew(1), mvScrew(2)}
 	for i, g := range ex.Guides {
 		require.Equal(t, want[i], g.Part, "guides are in Parts order")
@@ -317,10 +313,10 @@ func TestSpreadGuides(t *testing.T) {
 		from, to             r3.Vec
 		size                 float64
 	}{
-		{mvWheel(2), mvArbor(2), "wheel 2 on arbor 2", r3.Vec{X: -26, Y: -81, Z: -16.5}, r3.Vec{X: -18, Y: 57, Z: 12.5}, 24},
-		{mvArbor(2), mvPlate, "arbor 2 in the plate", r3.Vec{Z: 6}, r3.Vec{X: -26, Y: -81, Z: -21}, 32},
-		{mvBridge, mvArbor(1), "arbor 1 in the bridge", r3.Vec{X: -26, Y: -81, Z: -10.5}, r3.Vec{X: 115, Y: -65, Z: 20.5}, 100},
-		{mvScrew(1), mvBridge, "screw 1 in the bridge", r3.Vec{X: 160, Y: -50, Z: 17}, r3.Vec{X: 68, Y: -7, Z: 34}, 14},
+		{mvWheel(2), mvArbor(2), "wheel 2 on arbor 2", r3.Vec{Z: -16.5}, r3.Vec{Z: 12.5}, 24},
+		{mvArbor(2), mvPlate, "arbor 2 in the plate", r3.Vec{Z: 6}, r3.Vec{Z: -21}, 32},
+		{mvBridge, mvArbor(1), "arbor 1 in the bridge", r3.Vec{Z: -10.5}, r3.Vec{Z: 20.5}, 100},
+		{mvScrew(1), mvBridge, "screw 1 in the bridge", r3.Vec{X: 45, Y: 15, Z: 17}, r3.Vec{X: 45, Y: 15, Z: 34}, 14},
 	} {
 		got := mvGuide(t, ex, g.part)
 		require.Equal(t, g.partner, got.Partner, g.part)
@@ -334,8 +330,8 @@ func TestSpreadGuides(t *testing.T) {
 	doubled, err := s.Explode(t.Context(), movementOpts(parts.WithExplodeScale(units.Scalar(2)))...)
 	require.NoError(t, err)
 	g := mvGuide(t, doubled, mvWheel(2))
-	requireVec(t, r3.Vec{X: -52, Y: -162, Z: -43.5}, g.From, "scaled from")
-	requireVec(t, r3.Vec{X: -36, Y: 114, Z: 14.5}, g.To, "scaled to")
+	requireVec(t, r3.Vec{Z: -43.5}, g.From, "scaled from")
+	requireVec(t, r3.Vec{Z: 14.5}, g.To, "scaled to")
 	require.Equal(t, partByName(t, doubled, mvWheel(2)).Anchor, g.To)
 }
 
@@ -356,15 +352,15 @@ type pressedRow struct {
 func pressedTable() map[string]pressedRow {
 	return map[string]pressedRow{
 		mvPlate:    {"", 0, 0, r3.Vec{}, r3.Vec{}},
-		mvScrew(2): {mvStage, 1, 0, r3.Vec{Z: 17}, r3.Vec{X: -102, Y: 63}},
-		mvWheel(2): {"removal 4.2", 2, 1, r3.Vec{Z: 21}, r3.Vec{X: -48, Y: 68, Z: 12}},
-		mvArbor(2): {"removal 4.2", 2, 2, r3.Vec{Z: 21}, r3.Vec{X: -48, Y: 68, Z: 39}},
-		mvArbor(1): {"removal 4", -1, 0, r3.Vec{Z: -27}, r3.Vec{X: -26, Y: -81}},
-		mvArbor(3): {"removal 4", -1, 0, r3.Vec{Z: -27}, r3.Vec{X: -26, Y: -81}},
-		mvWheel(1): {"removal 3", 3, 0, r3.Vec{Z: 2}, r3.Vec{X: -18, Y: 97, Z: 76}},
-		mvWheel(3): {"removal 3", 3, 0, r3.Vec{Z: 33}, r3.Vec{X: -18, Y: 97, Z: 76}},
-		mvBridge:   {"removal 2", 4, 0, r3.Vec{Z: 35}, r3.Vec{X: 115, Y: -65, Z: 76}},
-		mvScrew(1): {"removal 1", 5, 0, r3.Vec{Z: 52}, r3.Vec{X: 23, Y: -52, Z: 76}},
+		mvScrew(2): {mvStage, 1, 0, r3.Vec{Z: 17}, r3.Vec{}},
+		mvWheel(2): {"removal 4.2", 2, 1, r3.Vec{Z: 21}, r3.Vec{}},
+		mvArbor(2): {"removal 4.2", 2, 2, r3.Vec{Z: 21}, r3.Vec{Z: 27}},
+		mvArbor(1): {"removal 4", -1, 0, r3.Vec{Z: -27}, r3.Vec{}},
+		mvArbor(3): {"removal 4", -1, 0, r3.Vec{Z: -27}, r3.Vec{}},
+		mvWheel(1): {"removal 3", 3, 0, r3.Vec{Z: 2}, r3.Vec{}},
+		mvWheel(3): {"removal 3", 3, 0, r3.Vec{Z: 33}, r3.Vec{}},
+		mvBridge:   {"removal 2", 4, 0, r3.Vec{Z: 35}, r3.Vec{Z: 25}},
+		mvScrew(1): {"removal 1", 5, 0, r3.Vec{Z: 52}, r3.Vec{Z: 25}},
 	}
 }
 
@@ -390,9 +386,9 @@ func TestSpreadStackedGroup(t *testing.T) {
 	require.NotNil(t, sp)
 	require.True(t, sp.Ran)
 	require.Equal(t, 7, sp.Layers)
-	require.Equal(t, 5, sp.Columns)
-	require.InDelta(t, 194, sp.Width.Base(), 1e-6)
-	require.InDelta(t, 225, sp.Depth.Base(), 1e-6)
+	require.InDelta(t, 80, sp.Width.Base(), 1e-6)
+	require.InDelta(t, 120, sp.Depth.Base(), 1e-6)
+	require.InDelta(t, 134, sp.Height.Base(), 1e-6)
 	for name, row := range pressedTable() {
 		p, base := partByName(t, ex, name), partByName(t, flat, name)
 		require.Equal(t, row.stage, p.Stage, name)
@@ -413,21 +409,26 @@ func TestSpreadStackedGroup(t *testing.T) {
 	aa, wa := partByName(t, ex, mvArbor(2)).Anchor, partByName(t, ex, mvWheel(2)).Anchor
 	require.InDelta(t, wa.X, aa.X, 1e-9)
 	require.InDelta(t, wa.Y, aa.Y, 1e-9)
-	require.InDelta(t, -48, aa.X, 1e-6)
-	require.InDelta(t, 68, aa.Y, 1e-6)
+	require.InDelta(t, 0, aa.X, 1e-6)
+	require.InDelta(t, 0, aa.Y, 1e-6)
 	require.Empty(t, ex.Overlaps)
 
 	hidden, err := ex.Hidden(sp.View)
 	require.NoError(t, err)
-	require.Len(t, hidden, 1)
-	require.Equal(t, mvArbor(2), hidden[0].Front)
-	require.Equal(t, mvWheel(2), hidden[0].Back)
-	require.InDelta(t, 473.0/2025, hidden[0].Covered.Base(), 1e-9)
+	var found bool
+	for _, h := range hidden {
+		if h.Front == mvArbor(2) && h.Back == mvWheel(2) {
+			found = true
+			require.InDelta(t, 11.0/81, h.Covered.Base(), 1e-9)
+		}
+	}
+	require.True(t, found, "arbor 2 is seen in front of wheel 2 along the spread's view")
 
 	g := mvGuide(t, ex, mvWheel(2))
 	require.Equal(t, mvArbor(2), g.Partner)
-	requireVec(t, r3.Vec{X: -48, Y: 68, Z: 70.5}, g.From, "wheel 2 guide from")
-	requireVec(t, r3.Vec{X: -48, Y: 68, Z: 43.5}, g.To, "wheel 2 guide to")
+	requireVec(t, r3.Vec{Z: 58.5}, g.From, "wheel 2 guide from")
+	requireVec(t, r3.Vec{Z: 31.5}, g.To, "wheel 2 guide to")
+	require.True(t, g.Inline)
 }
 
 func TestSpreadExplicitLayer(t *testing.T) {
@@ -438,21 +439,94 @@ func TestSpreadExplicitLayer(t *testing.T) {
 	require.Equal(t, mvStage, screw.Stage)
 	require.Zero(t, screw.Order)
 	require.Equal(t, 1, screw.Layer)
-	requireVec(t, r3.Vec{X: -102, Y: 63}, screw.Slide, "screw 2 slide")
-	requireVec(t, r3.Vec{X: -102, Y: 63, Z: 17}, screw.Offset, "screw 2 offset")
+	requireVec(t, r3.Vec{}, screw.Slide, "screw 2 slide")
+	requireVec(t, r3.Vec{Z: 17}, screw.Offset, "screw 2 offset")
 	for _, p := range ex.Parts {
 		if p.Name != mvPlate {
-			require.NotZero(t, p.Layer, p.Name+" shares no cell with the plate")
+			require.NotZero(t, p.Layer, p.Name+" is not in the base layer")
 		}
 	}
 	require.Zero(t, partByName(t, ex, mvPlate).Layer)
 	for name, layer := range map[string]int{mvArbor(1): -1, mvArbor(3): -1, mvWheel(1): 3, mvWheel(3): 3, mvBridge: 4, mvScrew(1): 5} {
 		require.Equal(t, layer, partByName(t, ex, name).Layer, name)
 	}
-	hidden, err := ex.Hidden(ex.Spread.View)
+}
+
+// coveredSet is the movement with a dial over the bridge (agent-docs/parts-design.md §5.9 "The covered movement"):
+// a block x -60..60, y -40..40, z 23..25, wider than the bridge, joined to it by a Contact and fixed to +Z.
+func coveredSet(t *testing.T) (*parts.Set, map[string]*decad.Body) {
+	t.Helper()
+	s, bodies := movementSet(t, 10, false)
+	bodies[mvDial] = block(t, s.Document(), -60, -40, 60, 40, 23, 2)
+	mustAdd(t, s, parts.Part{Name: mvDial, Kind: parts.Manufactured, Body: bodies[mvDial]})
+	mustJoin(t, s, parts.Joint{Name: "dial on the bridge", Kind: parts.Contact, A: mvDial, B: mvBridge})
+	return s, bodies
+}
+
+func TestSpreadSteps(t *testing.T) {
+	opts := func(extra ...parts.ExplodeOption) []parts.ExplodeOption {
+		return movementOpts(append([]parts.ExplodeOption{
+			parts.WithRemoval(mvDial, parts.Removal{Direction: r3.Vec{Z: 1}})}, extra...)...)
+	}
+	coversOf := func(ex *parts.Exploded, view r3.Vec) float64 {
+		hidden, err := ex.Hidden(view)
+		require.NoError(t, err)
+		for _, h := range hidden {
+			if h.Front == mvDial && h.Back == mvBridge {
+				return h.Covered.Base()
+			}
+		}
+		return 0
+	}
+	s, bodies := coveredSet(t)
+	flat, err := s.Explode(t.Context(), opts(parts.WithoutExplodeSpread())...)
 	require.NoError(t, err)
-	for _, h := range hidden {
-		require.NotEqual(t, mvPlate, h.Front)
-		require.NotEqual(t, mvPlate, h.Back)
+	d := partByName(t, flat, mvDial)
+	require.Equal(t, 1, d.Round)
+	require.Equal(t, 4, d.Layer)
+	requireVec(t, r3.Vec{Z: 23}, d.Offset, "dial D7 offset")
+	require.InDelta(t, 1, coversOf(flat, r3.Vec{Z: -1}), 1e-9, "without the spread the dial hides the bridge")
+
+	ex, err := s.Explode(t.Context(), opts()...)
+	require.NoError(t, err)
+	sp := ex.Spread
+	require.NotNil(t, sp)
+	require.True(t, sp.Ran)
+	requireVec(t, r3.Vec{Y: 1}, sp.Shear, "shear")
+	require.Equal(t, 6, sp.Layers)
+	require.InDelta(t, 105, sp.Width.Base(), 1e-6)
+	require.InDelta(t, 120, sp.Depth.Base(), 1e-6)
+	require.InDelta(t, 85, sp.Height.Base(), 1e-6)
+	for _, p := range ex.Parts {
+		if p.Name == mvDial {
+			require.Equal(t, 4, p.Layer)
+			requireVec(t, r3.Vec{Y: 25}, p.Slide, "dial slide")
+			requireVec(t, r3.Vec{Y: 25, Z: 23}, p.Offset, "dial offset")
+			continue
+		}
+		requireVec(t, r3.Vec{}, p.Slide, p.Name+" slide")
+	}
+	require.Empty(t, ex.Overlaps)
+	// The bridge's box reaches 5 mm beyond the dial's toward -Y: -20 against -15.
+	minY := func(name string) float64 {
+		b, err := bodies[name].Bounds()
+		require.NoError(t, err)
+		return b.Min.Y + partByName(t, ex, name).Offset.Y
+	}
+	require.InDelta(t, -20, minY(mvBridge), 1e-6)
+	require.InDelta(t, -15, minY(mvDial), 1e-6)
+	require.InDelta(t, 7.0/8, coversOf(ex, r3.Vec{Z: -1}), 1e-9)
+	require.InDelta(t, 11.0/43, coversOf(ex, sp.View), 1e-9)
+
+	g := mvGuide(t, ex, mvDial)
+	require.Equal(t, mvBridge, g.Partner)
+	require.Equal(t, "dial on the bridge", g.Joint)
+	requireVec(t, r3.Vec{Z: 28}, g.From, "dial guide from")
+	requireVec(t, r3.Vec{Y: 25, Z: 47}, g.To, "dial guide to")
+	require.False(t, g.Inline)
+	for _, o := range ex.Guides {
+		if o.Part != mvDial {
+			require.True(t, o.Inline, o.Part)
+		}
 	}
 }

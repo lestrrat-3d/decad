@@ -10,29 +10,35 @@ import (
 
 // Spread asks Run for the layer spread of agent-docs/parts-design.md §5.9.
 type Spread struct {
-	Axis, Across, Rows r3.Vec  // unit positive world axes
-	Layer              []int   // per part: the derived half of L2, signed, 0 for every other part
-	CosTol             float64 // cos of the axis tolerance (L1, L2)
-	Gap                float64 // g of L4a, L4 and L5, mm, at least 1
-	Thin               bool    // L3 (a) and (b) hold; Run adds (c)
-	Stacks             [][]int // derived rigid groups L4a may stack, members ascending
+	Axis, Shear, Rows r3.Vec  // unit positive world axes: the explode axis, the step axis, the third axis
+	Layer             []int   // per part: the derived half of L2, signed, 0 for every other part
+	CosTol            float64 // cos of the axis tolerance (L1, L2)
+	Gap               float64 // g of L4a, L4 and L5, mm, at least 1
+	Thin              bool    // L3 (a) and (b) hold; Run adds (c)
+	Stacks            [][]int // derived rigid groups L4a may stack, members ascending
+	Mates             []Mate  // L4's mates, one per joint between parts with bodies, in Join order
+}
+
+// Mate is one joint of L4: parts A and B, and whether the joint is a pin whose axis lies within the axis tolerance
+// of the explode axis.
+type Mate struct {
+	A, B    int
+	Coaxial bool
 }
 
 // SpreadOutcome is what the spread step did.
 type SpreadOutcome struct {
-	Layer        []int // per part: its layer after the explicit half of L2; set whether or not the spread ran
-	Layers       int   // the number of layers, the base included
-	Stack        []int // per part: its L4a place, 0 when not stacked or when the spread did not run
-	Coaxial      bool
-	Ran          bool
-	Columns      int
-	Width, Depth float64 // the grid's extent along Across and Rows, mm, gaps included
+	Layer   []int // per part: its layer after the explicit half of L2; set whether or not the spread ran
+	Layers  int   // the number of layers, the base included
+	Stack   []int // per part: its L4a place, 0 when not stacked or when the spread did not run
+	Coaxial bool
+	Ran     bool
 }
 
 // coaxialTol is how far outside a footprint a centre may lie and still count as inside (L3 c), in mm.
 const coaxialTol = 1e-9
 
-// footprint is the rectangle a layer's boxes cover across the axis, in coordinates along Across and Rows.
+// footprint is the rectangle a layer's boxes cover across the axis, in coordinates along Shear and Rows.
 type footprint struct{ aLo, aHi, rLo, rHi float64 }
 
 func (f footprint) holds(a, r float64) bool {
@@ -89,14 +95,13 @@ func (r *runner) explicitLayers() []int {
 	return layer
 }
 
-// spread is the layer spread: the explicit half of L2, the coaxial test (L3 c), the stacks (L4a), the slabs (L4)
-// and the cell grid (L5). It moves whole layers, and the members of a stacked group, so every move is added to
+// spread is the layer spread: the explicit half of L2, the coaxial test (L3 c), the stacks (L4a), the steps (L4)
+// and the settle (L5). It moves whole layers, and the members of a stacked group, so every move is added to
 // the part's Slide.
 func (r *runner) spread() SpreadOutcome {
 	sp := r.in.Spread
 	layer := r.explicitLayers()
-	n := len(layer)
-	out := SpreadOutcome{Layer: layer, Stack: make([]int, n)}
+	out := SpreadOutcome{Layer: layer, Stack: make([]int, len(layer))}
 	lo, hi := 0, 0
 	for _, l := range layer {
 		lo, hi = min(lo, l), max(hi, l)
@@ -129,67 +134,19 @@ func (r *runner) spread() SpreadOutcome {
 		return out
 	}
 	out.Ran = true
-	g := sp.Gap
 
-	// L4a: stacks, before the slabs.
+	// L4a: stacks, before the steps.
 	for _, grp := range sp.Stacks {
 		r.stack(sp, grp, layer, out.Stack)
 	}
 
-	// L4: slabs, outward from the base.
-	_, prevTop := r.extent(sp, layers[m])
-	for k := 1; k <= hi; k++ {
-		ms := layers[k+m]
-		bottom, _ := r.extent(sp, ms)
-		if push := math.Max(0, prevTop+g-bottom); push > 0 {
-			r.move(ms, sp.Axis.Scale(push))
-		}
-		_, prevTop = r.extent(sp, ms)
-	}
-	prevBottom, _ := r.extent(sp, layers[m])
-	for k := -1; k >= lo; k-- {
-		ms := layers[k+m]
-		_, top := r.extent(sp, ms)
-		if push := math.Max(0, top-prevBottom+g); push > 0 {
-			r.move(ms, sp.Axis.Scale(-push))
-		}
-		prevBottom, _ = r.extent(sp, ms)
-	}
-
-	// L5: the grid with the least aspect.
-	n = len(layers)
-	bestAspect := math.Inf(1)
-	for c := 1; c <= n; c++ {
-		w, d := gridSizes(fps, c, g)
-		if a := aspect(w, d); out.Columns == 0 || a < bestAspect-1e-9 {
-			out.Columns, bestAspect = c, a
-		}
-	}
-	c := out.Columns
-	out.Width, out.Depth = gridSizes(fps, c, g)
-	colW, rowD := cellSizes(fps, c)
-	colStart := make([]float64, len(colW))
-	rowStart := make([]float64, len(rowD))
-	bj, br := m%c, m/c
-	colStart[bj], rowStart[br] = fps[m].aLo, fps[m].rLo
-	for j := bj + 1; j < len(colW); j++ {
-		colStart[j] = colStart[j-1] + colW[j-1] + g
-	}
-	for j := bj - 1; j >= 0; j-- {
-		colStart[j] = colStart[j+1] - g - colW[j]
-	}
-	for i := br + 1; i < len(rowD); i++ {
-		rowStart[i] = rowStart[i-1] + rowD[i-1] + g
-	}
-	for i := br - 1; i >= 0; i-- {
-		rowStart[i] = rowStart[i+1] - g - rowD[i]
-	}
+	// L4: steps, then L5: settle.
+	byLayer := make(map[int][]int, len(layers))
 	for q, ms := range layers {
-		v := sp.Across.Scale(colStart[q%c] - fps[q].aLo).Add(sp.Rows.Scale(rowStart[q/c] - fps[q].rLo))
-		if v != (r3.Vec{}) {
-			r.move(ms, v)
-		}
+		byLayer[q-m] = ms
 	}
+	r.steps(sp, byLayer, layer)
+	r.settle(sp, byLayer, layer)
 	return out
 }
 
@@ -212,7 +169,7 @@ func (r *runner) stack(sp *Spread, grp, layer, place []int) {
 	}
 	area := func(p int) float64 {
 		d := r.in.Boxes[p].Max.Sub(r.in.Boxes[p].Min)
-		return d.Dot(sp.Across) * d.Dot(sp.Rows)
+		return d.Dot(sp.Shear) * d.Dot(sp.Rows)
 	}
 	trailing := func(p int) float64 {
 		b := shift(r.in.Boxes[p], r.offsets[p])
@@ -245,57 +202,15 @@ func (r *runner) stack(sp *Spread, grp, layer, place []int) {
 	}
 }
 
-// cellSizes returns the width of each column along Across and the depth of each row along Rows for c columns.
-func cellSizes(fps []footprint, c int) ([]float64, []float64) {
-	colW := make([]float64, c)
-	rowD := make([]float64, (len(fps)+c-1)/c)
-	for q, f := range fps {
-		colW[q%c] = math.Max(colW[q%c], f.aHi-f.aLo)
-		rowD[q/c] = math.Max(rowD[q/c], f.rHi-f.rLo)
-	}
-	return colW, rowD
-}
-
-// gridSizes returns the grid's extent along Across and Rows for c columns, cells g apart.
-func gridSizes(fps []footprint, c int, g float64) (float64, float64) {
-	colW, rowD := cellSizes(fps, c)
-	w, d := float64(len(colW)-1)*g, float64(len(rowD)-1)*g
-	for _, x := range colW {
-		w += x
-	}
-	for _, x := range rowD {
-		d += x
-	}
-	return w, d
-}
-
-// aspect is the longer extent over the shorter.
-func aspect(w, d float64) float64 {
-	if lo := math.Min(w, d); lo > 0 {
-		return math.Max(w, d) / lo
-	}
-	return math.Inf(1)
-}
-
 // footprint reads the rectangle the members' boxes, at their offsets, cover across the axis.
 func (r *runner) footprint(sp *Spread, ms []int) footprint {
 	f := footprint{aLo: math.Inf(1), aHi: math.Inf(-1), rLo: math.Inf(1), rHi: math.Inf(-1)}
 	for _, p := range ms {
 		b := shift(r.in.Boxes[p], r.offsets[p])
-		f.aLo, f.aHi = math.Min(f.aLo, b.Min.Dot(sp.Across)), math.Max(f.aHi, b.Max.Dot(sp.Across))
+		f.aLo, f.aHi = math.Min(f.aLo, b.Min.Dot(sp.Shear)), math.Max(f.aHi, b.Max.Dot(sp.Shear))
 		f.rLo, f.rHi = math.Min(f.rLo, b.Min.Dot(sp.Rows)), math.Max(f.rHi, b.Max.Dot(sp.Rows))
 	}
 	return f
-}
-
-// extent reads the least and greatest coordinate along the axis of the members' boxes at their offsets.
-func (r *runner) extent(sp *Spread, ms []int) (float64, float64) {
-	lo, hi := math.Inf(1), math.Inf(-1)
-	for _, p := range ms {
-		b := shift(r.in.Boxes[p], r.offsets[p])
-		lo, hi = math.Min(lo, b.Min.Dot(sp.Axis)), math.Max(hi, b.Max.Dot(sp.Axis))
-	}
-	return lo, hi
 }
 
 // move moves every member by v and counts it in their Slide.
@@ -303,5 +218,119 @@ func (r *runner) move(ms []int, v r3.Vec) {
 	for _, p := range ms {
 		r.setOffset(p, r.offsets[p].Add(v))
 		r.slide[p] = r.slide[p].Add(v)
+	}
+}
+
+// sides are the outward senses of the layers on the +Axis side and the -Axis side of the base.
+var sides = [2]float64{1, -1}
+
+// stepEpsilon is the tolerance of the coaxial skip, in mm.
+const stepEpsilon = 1e-6
+
+// steps is L4: per side, outward, the least step along the side's sense of Shear that leaves each covered mate's
+// inner part a band of m toward the opposite sense, every layer starting from the step of the one before.
+func (r *runner) steps(sp *Spread, layers map[int][]int, layer []int) {
+	hi, lo := 0, 0
+	for l := range layers {
+		hi, lo = max(hi, l), min(lo, l)
+	}
+	for _, s := range sides {
+		top := hi
+		if s < 0 {
+			top = -lo
+		}
+		e := sp.Shear.Scale(s)
+		step := 0.0 // S_(k-1); the base has none
+		for k := 1; k <= top; k++ {
+			q := int(s) * k
+			for pass := 0; pass <= len(sp.Mates)+1; pass++ {
+				changed := false
+				for _, mt := range sp.Mates {
+					p, qq := mt.A, mt.B
+					if layer[qq] != q {
+						p, qq = mt.B, mt.A
+					}
+					if layer[qq] != q {
+						continue
+					}
+					lp := int(s) * layer[p]
+					if layer[p] != 0 && (lp < 1 || lp >= k) {
+						continue
+					}
+					oq := r.offsets[qq].Add(e.Scale(step))
+					if mt.Coaxial {
+						d := r.offsets[p].Sub(oq)
+						if d.Sub(sp.Axis.Scale(d.Dot(sp.Axis))).Len() <= stepEpsilon {
+							continue
+						}
+					}
+					if lack, ok := covered(shift(r.in.Boxes[p], r.offsets[p]), shift(r.in.Boxes[qq], oq), e, sp.Rows,
+						sp.Gap); ok {
+						step += lack
+						changed = true
+					}
+				}
+				if !changed {
+					break
+				}
+			}
+			if step != 0 {
+				r.move(layers[q], e.Scale(step))
+			}
+		}
+	}
+}
+
+// covered reports whether p, the inner part's box, is covered by q, the outer part's, with e the outer layer's step
+// sense: their footprints overlap and p reaches beyond q by less than m toward -e and toward both senses of rows.
+// It returns what p lacks toward -e.
+func covered(p, q Box, e, rows r3.Vec, g float64) (float64, bool) {
+	read := func(b Box, d r3.Vec) (float64, float64) {
+		a, c := b.Min.Dot(d), b.Max.Dot(d)
+		return math.Min(a, c), math.Max(a, c)
+	}
+	pE0, pE1 := read(p, e)
+	qE0, qE1 := read(q, e)
+	pR0, pR1 := read(p, rows)
+	qR0, qR1 := read(q, rows)
+	if math.Min(pE1, qE1)-math.Max(pE0, qE0) <= 1e-9 || math.Min(pR1, qR1)-math.Max(pR0, qR0) <= 1e-9 {
+		return 0, false
+	}
+	m := math.Min(g, math.Min(pE1-pE0, pR1-pR0)/2)
+	if pE0 <= qE0-m+1e-9 || pR0 <= qR0-m+1e-9 || pR1 >= qR1+m-1e-9 {
+		return 0, false
+	}
+	return pE0 - (qE0 - m), true
+}
+
+// settle is L5: per side, outward, each layer moved along its outward sense as one by the largest beyondAll of its
+// members against every part not in it or beyond it on that side.
+func (r *runner) settle(sp *Spread, layers map[int][]int, layer []int) {
+	hi, lo := 0, 0
+	for l := range layers {
+		hi, lo = max(hi, l), min(lo, l)
+	}
+	for _, s := range sides {
+		top := hi
+		if s < 0 {
+			top = -lo
+		}
+		u := sp.Axis.Scale(s)
+		for k := 1; k <= top; k++ {
+			var standing []int
+			for p, l := range layer {
+				if ls := int(s) * l; ls <= 0 || ls < k {
+					standing = append(standing, p)
+				}
+			}
+			ms := layers[int(s)*k]
+			t := 0.0
+			for _, p := range ms {
+				t = math.Max(t, beyondAll(shift(r.in.Boxes[p], r.offsets[p]), u, sp.Gap, r.in.Boxes, r.offsets, standing))
+			}
+			if t > 0 {
+				r.move(ms, u.Scale(t))
+			}
+		}
 	}
 }

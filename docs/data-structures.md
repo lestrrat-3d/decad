@@ -449,7 +449,7 @@ declared `parts.Axis`, and a declared clearance, minimum gap or direction where 
 | `parts.Joint`, `parts.Axis` | struct | A connection between two parts, and a line with a unit direction. | The caller |
 | `parts.JointKind`, `parts.Motion` | enum | The form of a connection and what it lets part A do. | The caller |
 | `parts.Exploded`, `parts.ExplodedPart`, `parts.Leader` | struct | The exploded layout: a rigid placement and label anchor per part, and the segment each joint draws. | `Set.Explode` |
-| `parts.Spread`, `parts.Guide` | struct | The layer spread of a derived explode (gate, axis, grid, a clean view) and the dotted line from where one part assembles on its joint partner to its exploded place, with the part's size. | `Exploded.Spread`, `Exploded.Guides` |
+| `parts.Spread`, `parts.Guide` | struct | The layer spread of a derived explode (gate, axis, step axis, extents, a view) and the dotted line from where one part assembles on its joint partner to its exploded place, with the part's size and whether it lies on its partner's line. | `Exploded.Spread`, `Exploded.Guides` |
 | `parts.PullSource` | enum | Where a part's pull direction came from: faces, a declared axis, a contact normal or box centres. | `ExplodedPart.Pull` |
 | `parts.Stage`, `parts.Clearing`, `parts.PathState`, `parts.Occlusion` | struct, enum | One step of a staged explosion and what it must clear; what a part's path met; a pair where one part may hide another along a view. | The caller, `ExplodedPart.Path`, `Exploded.Hidden` |
 | `parts.Graph`, `parts.Node`, `parts.Edge` | struct | The connection diagram: parts as nodes, joints as typed edges. | `Set.Graph` |

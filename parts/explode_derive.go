@@ -40,7 +40,7 @@ type Removal struct {
 // in its way; parts that block each other leave together as one rigid group. A
 // pair the tessellation cannot decide counts as free, so the result is a layout
 // and not a proof (agent-docs/parts-design.md §5.8). For a thin assembly whose
-// layers are not coaxial, the layers are also spread across their axis (§5.9);
+// layers are not coaxial, the layers are laid out compactly (§5.9);
 // WithoutExplodeSpread keeps them stacked.
 func WithDerivedExplode() ExplodeOption {
 	return option{func(c *config) error { c.derived = true; return nil }}
