@@ -39,7 +39,9 @@ type Removal struct {
 // a joint axis, a stated pull or a world axis once no part still present stands
 // in its way; parts that block each other leave together as one rigid group. A
 // pair the tessellation cannot decide counts as free, so the result is a layout
-// and not a proof (agent-docs/parts-design.md §5.8).
+// and not a proof (agent-docs/parts-design.md §5.8). For a thin assembly whose
+// layers are not coaxial, the layers are also spread across their axis (§5.9);
+// WithoutExplodeSpread keeps them stacked.
 func WithDerivedExplode() ExplodeOption {
 	return option{func(c *config) error { c.derived = true; return nil }}
 }
@@ -91,7 +93,8 @@ type jointAxis struct {
 
 // derivedReport is what the search says about the layout, in plan indices for the per-part slices.
 type derivedReport struct {
-	order, round []int // 1-based; 0 for parts the search did not move
+	order, round []int    // 1-based; 0 for parts the search did not move
+	dir          []r3.Vec // the unit direction each moved part leaves by
 	src          []PullSource
 	blocked      []BlockedPair
 	undecided    []UndecidedPair
@@ -102,7 +105,7 @@ type derivedReport struct {
 func (s *Set) report(in derivedInput, items []int, tables []*explodeblock.Table, blockers [][][]int, rounds [][]explodeorder.Unit,
 	cons constraints, axisSrc []PullSource, dirs []r3.Vec) derivedReport {
 	n := len(in.idx)
-	rep := derivedReport{order: make([]int, n), round: make([]int, n), src: make([]PullSource, n)}
+	rep := derivedReport{order: make([]int, n), round: make([]int, n), src: make([]PullSource, n), dir: make([]r3.Vec, n)}
 	pos := make([]int, n) // plan index -> table index
 	for i, k := range items {
 		pos[k] = i
@@ -115,7 +118,7 @@ func (s *Set) report(in derivedInput, items []int, tables []*explodeblock.Table,
 			for _, m := range u.Members {
 				seq++
 				rep.order[m], rep.round[m], dirOf[m], unitOf[m] = seq, r+1, u.Dir, unitNo
-				rep.src[m] = axisSrc[u.Dir]
+				rep.src[m], rep.dir[m] = axisSrc[u.Dir], dirs[u.Dir]
 				if _, ok := cons.fixedVec[m]; ok {
 					rep.src[m] = RemovalDirection
 				}

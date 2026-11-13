@@ -25,6 +25,7 @@ type config struct {
 	partGaps   map[string]units.Value
 	scale      float64
 	derived    bool
+	noSpread   bool
 	removals   map[string]Removal
 	boxOnly    bool          // test hook: block as boxes, to show the tessellation is needed
 	projCount  *atomic.Int64 // test hook: counts the projections a derived explode builds

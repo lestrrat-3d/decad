@@ -96,6 +96,10 @@ func (s Summary) WriteMarkdown(w io.Writer) error {
 			}
 			b.WriteString("\n")
 		}
+		if sp := s.Exploded.Spread; sp != nil && sp.Ran {
+			fmt.Fprintf(&b, "\nSpread: %d layers in %d columns, stacked along (%g, %g, %g); no layer hides another seen along (%g, %g, %g).\n",
+				sp.Layers, sp.Columns, sp.Axis.X, sp.Axis.Y, sp.Axis.Z, sp.View.X, sp.View.Y, sp.View.Z)
+		}
 	}
 	b.WriteString("\n## Connection diagram\n\n```mermaid\n")
 	if err := s.Set.Graph(s.Joints).WriteMermaid(&b); err != nil {

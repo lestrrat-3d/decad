@@ -5,7 +5,7 @@ The package lands in the PRs of §13, and each PR carries the part of this docum
 `PinInSlot`, `FaceContact` and `Tie` joints and the box-screened list of pairs no joint names (§7.2), and P4b adds
 point witnesses, `Contact` and `Keepout` checks, `WithWitnessSearch` and `WithVerifyReport`. P5 added `Set.Linkage`, and P6 adds
 `Infer` and `JointReport.Inferred`. P7 adds staged explosion with per-stage, per-part and overall distance control (§5.2
-to §5.6): the whole design has landed.
+to §5.6), and the derived removal order (§5.7, §5.8) has landed. P9 adds the layer spread and guide lines (§5.9, §5.10).
 
 **`github.com/lestrrat-3d/decad/parts` is a generic schematic and exploded view of a build made of separate bodies.**
 Its two primary outputs are:
@@ -260,6 +260,9 @@ func WithExplodeGap(gap units.Value) ExplodeOption // default 10 mm past full di
 func WithExplodeStages(stages ...Stage) ExplodeOption           // ordered stages; unnamed parts form a last stage
 func WithPartGap(part string, gap units.Value) ExplodeOption    // one part's gap, over its stage's
 func WithExplodeScale(scale units.Value) ExplodeOption          // a Dimensionless multiplier on every offset; default units.Scalar(1)
+
+// P9 (§5.9):
+func WithoutExplodeSpread() ExplodeOption // derived: keep the layers stacked along their axis
 
 // Hidden lists the pairs of exploded parts where one may hide the other seen
 // along view, by their projected boxes (§5.6). It moves nothing.
@@ -638,6 +641,9 @@ type Exploded struct {
     Stages []string    // the stage names in the order they ran; "" is the last, implicit stage (S1)
     Scale  units.Value // the WithExplodeScale multiplier, Dimensionless
     Short  []string    // parts whose Clearance is below their gap (S9), in Set order
+    // P9:
+    Guides []Guide     // each moved part's path from its assembled place to its exploded place (§5.10)
+    Spread *Spread     // the layer spread of a derived explode (§5.9); nil without one
 }
 
 type ExplodedPart struct {
@@ -658,6 +664,9 @@ type ExplodedPart struct {
     Blocker   string       // the part that blocked or enclosed the path, or that Clearance was read against
     // P8:
     Order, Round int       // 1-based position in the derived removal order and its round; 0 when not derived
+    // P9:
+    Layer     int          // its layer in the spread (§5.9 L2); 0 for the base and without a spread
+    Slide     r3.Vec       // what the spread added to Offset, scaled; zero when it did not run
 }
 
 type Leader struct {
@@ -789,7 +798,12 @@ type Occlusion struct {
 ```
 
 A pair absent from the list cannot hide one another; a listed pair may. The caller then adds or changes a stage. A
-zero or non-finite `view` is `decad.ErrDegenerate` or `decad.ErrNotFinite`.
+zero or non-finite `view` is `decad.ErrDegenerate` or `decad.ErrNotFinite`. The overlap is read from the boxes' exact
+projections, not their bounding rectangles (H1, §5.10).
+
+The layer spread of a derived explode (§5.9) is not a view-driven explosion: it reads only the shape, so one
+`Exploded` still serves every camera. It states the set of views from which no layer hides another (L7) and where it
+promises nothing (L8), and `Hidden` remains the check for a given camera.
 
 ### 5.7 Blocking between two tessellated parts
 
@@ -870,6 +884,246 @@ func WithRemoval(part string, r Removal) ExplodeOption // needs WithDerivedExplo
 | D9 | A part with no free direction is `decad.ErrDegenerate` naming the part and, per direction, the parts that block it. A constraint that makes a removable part wait for one that cannot leave, an order cycle and a group fixed to two directions are `decad.ErrDegenerate` naming the parts. |
 | D10 | `Exploded` is the report. `Derived` is true, which marks the layout as layout-grade: a part that stands in the way of nothing the tessellation could see was read as free (an Undecided pair counts as free), so the order is a picture, not a proof. `ExplodedPart.Order` and `Round` give the 1-based removal position and round of each derived part, and its `Pull` the direction source: `PullDeclared`, `AxisFromFaces` or `AxisDeclared` when a joint offers the direction (in that precedence), `RemovalDirection` when its `WithRemoval` fixes it, else `WorldAxis`. The ground and the parts an explicit stage moved keep 0 and their stage's source. `Blocked` lists, in removal order, every `Blocked` verdict along each part's chosen direction between parts of different units: the blocker left earlier, and the witness is the one `explodeblock.Block` returned. `Undecided` lists the pairs along the chosen direction whose verdict was Undecided and whose other part is still present when the mover leaves. All three are empty and zero without `WithDerivedExplode`. |
 | D11 | The table build is bounded. Meshes are grouped once, as in section 5.7. Per direction, one projection per class is built by at most `GOMAXPROCS` goroutines, the instance table is built, the part's trailing position is kept as a float and the projections are dropped, so the projections of one direction are alive at a time. Tessellation is shared only between parts that hold the same `*decad.Body`; distinct bodies are tessellated each. |
+| D12 | After the last round, the layer spread of §5.9 runs when its gate (L3) holds. It moves whole layers, so no rule above changes: the order, the rounds, the directions, `Stage`, `Dir`, `Travel`, `Moved` and `Path` stay what the rounds gave. |
+
+### 5.9 Layer spread
+
+A derived explode stacks its rounds along their direction. For a flat assembly drawn face-on that is not enough: the
+gallery's escapement (`decad-gallery` `models/escapement`, 29 parts, every derived part leaving along +Z) is 116 x 232
+mm across and 52 mm deep, and its derived layout leaves 52 pairs of parts of different rounds whose exact box
+projections overlap from the gallery's exploded camera (dated illustration, 2026-11-13, measured with a probe against
+this branch). The layer spread moves each layer across the axis as well as along it, into its own cell of a grid, so no
+layer hides another from a known set of views, and the grid is laid out to be compact.
+
+The spread reads only the assembly's shape. It takes no camera, so it keeps §5.6: one `Exploded` still feeds every
+camera, the exploded 3MF and the summary. What it promises is stated per view in L7, and `Exploded.Hidden(view)` stays
+the caller's check for any camera.
+
+```go
+// WithoutExplodeSpread keeps a derived explode's layers stacked along their
+// axis: the layer spread of agent-docs/parts-design.md §5.9 does not run, and
+// Exploded.Spread still reports its gate. It needs WithDerivedExplode.
+func WithoutExplodeSpread() ExplodeOption
+
+// Spread reports the layer spread of a derived explode (§5.9). Exploded.Spread
+// is nil without WithDerivedExplode, and when no derived part leaves along a
+// world axis.
+type Spread struct {
+    // Ran is true when the layers were moved. Across, Rows, Columns, Width,
+    // Depth, Aspect and View are zero when it is false.
+    Ran bool
+    // Axis is the positive world axis the derived layers leave along.
+    Axis r3.Vec
+    // Thinness is the assembled extent along Axis over the larger assembled
+    // extent across it, Dimensionless. The spread needs it below 1/3.
+    Thinness units.Value
+    // Coaxial is true when the centre of every layer's footprint lies inside
+    // every layer's footprint. The spread needs it false.
+    Coaxial bool
+    // Layers counts the layers, the base included.
+    Layers int
+    // Across is the positive world axis a row of cells runs along, and Rows
+    // the positive world axis the rows advance along.
+    Across, Rows r3.Vec
+    // Columns is the number of cells in a row.
+    Columns int
+    // Width and Depth are the grid's extent along Across and along Rows, gaps
+    // included, as Length values; Aspect is the longer over the shorter,
+    // Dimensionless.
+    Width, Depth, Aspect units.Value
+    // View is a unit view direction, pointing from the camera into the scene,
+    // from which no part hides a part of another layer: -Axis + Across + Rows,
+    // normalised. Every view v with (v·Axis)(v·Across) <= 0 and
+    // (v·Axis)(v·Rows) <= 0 has the same property.
+    View r3.Vec
+}
+```
+
+`ExplodedPart` gains `Layer int` and `Slide r3.Vec`, and `Exploded` gains `Spread *Spread` (§5). The two part fields
+read:
+
+```go
+    // Layer is the part's layer in the spread (§5.9): +k or -k for the k-th
+    // derived round from the base leaving along +Spread.Axis or -Spread.Axis,
+    // 0 for the base. It is 0 when Spread is nil.
+    Layer int
+    // Slide is what the spread added to Offset: the push along Spread.Axis and
+    // the move to the layer's cell, after WithExplodeScale. It is zero when the
+    // spread did not run. Moved does not include it.
+    Slide r3.Vec
+```
+
+| Rule | Decision |
+|---|---|
+| L1 | **Axis.** A derived part (`Order` > 0) counts for the world axis X, Y or Z whose direction, in either sense, lies within the axis tolerance of its `Dir`: `abs(Dir·w) >= cos(WithAxisTolerance)`. The explode axis is the world axis with the most counted parts; a tie goes to the axis along which the assembled box (L3) is shortest, then to Z, Y, X in that order. When no derived part counts, `Exploded.Spread` is nil and nothing below runs. A tilted axis is not spread, because the boxes are world-aligned and their extents along a tilted axis overstate the parts. |
+| L2 | **Layers.** A derived part whose `Dir` lies within the tolerance of `+Axis` joins layer `+k`, and one along `-Axis` layer `-k`, where `k` ranks its round among the rounds that send a part that way, the round removed last ranked 1 (D7 runs it first, nearest the assembly). Every other part with a body is in layer 0, the base: the ground, the parts explicit stages move, and derived parts that leave along another direction. All stages of one round leaving the same way form one layer, because the round is the unit the removal order defines and its parts leave independently (D3). |
+| L3 | **Gate.** The spread runs when all three hold. (a) `WithoutExplodeSpread` is absent. (b) The assembly is thin: `Thinness < 1/3`, where the assembled box is the union of every part's box as `Explode` reads it (grown by its bound), `h` its extent along `Axis` and `w` the larger of its extents along the other two world axes, `Thinness = h / w`. (c) The layers are not coaxial: a layer's footprint is the rectangle its members' boxes cover across `Axis`, at their offsets after the last stage and before the scale, and its centre that rectangle's centre; the layers are coaxial when every centre lies inside every footprint, edges included, within 1e-9 mm. |
+| L4 | **Slabs.** With `g` the larger of `WithExplodeGap`'s gap and 1 mm (`Meet` counts touching boxes as meeting), layers `+1, +2, ...` are taken in turn: layer `k` moves along `+Axis` by `max(0, top(k-1) + g - bottom(k))`, where `bottom` and `top` are the least and greatest coordinate along `Axis` of the layer's members' boxes at their current offsets (after the pushes of the layers before it), and layer 0's slab is the base's. Layers `-1, -2, ...` mirror it along `-Axis`: layer `-k` moves by `max(0, top(-k) - bottom(-k+1) + g)`. A layer moves as one, so the relative places D6 and D7 gave its members stay. |
+| L5 | **Grid.** `Across` is the world axis across `Axis` along which the assembled box is shorter, the earlier of X, Y, Z on a tie, and `Rows` the remaining one; both point positive. With `m` negative layers and `L` layers in all, layer `k` has grid index `q = k + m`, from 0 to `L-1`. For a column count `c`, layer `q` takes column `q mod c` and row `q div c`; column `j` is as wide as the widest footprint along `Across` in it, row `r` as deep as the deepest footprint along `Rows` in it, and cells are `g` apart. `Width` is the column widths plus `(c-1) g`, `Depth` the row depths plus `(rows-1) g`, `Aspect` the longer over the shorter. `c` is the count from 1 to `L` with the least `Aspect`; a tie within 1e-9 of the value goes to the smaller count. The base's cell is anchored at the base's footprint: its column starts at the base footprint's least `Across` coordinate and its row at the least `Rows` coordinate; a column of higher index starts `g` after the end of the one before it, a column of lower index ends `g` before the start of the one after it, and rows likewise. Each layer then moves across `Axis` by the vector that takes its footprint's least corner to its cell's least corner, so the base does not move. |
+| L6 | **When.** The spread runs inside `explodeplan.Run` after the last stage and before S8's scale, so S8 scales the pushes and slides with everything else, and S9's `Clearance` and `Short`, `Overlaps`, `Leaders` and `Hidden` read the spread layout. `Path` and `Blocker` stay the stage's: the spread is a layout step, not a removal path. |
+| L7 | **What it keeps, at scale 1.** (i) Inside a layer nothing moves relative to anything else, so every pair inside one layer keeps its box distance, `Overlaps` entry or absence, and D6 order. (ii) Two parts of different layers have boxes at least `g` apart along `Axis` (L4, by induction over the slabs), and at least `g` apart along `Across` in one row or along `Rows` in different rows (L5), so they never meet and never enter `Overlaps`; where `Overlaps` was empty it stays empty. (iii) Slabs and cells both follow `k`, so the round removed last sits next to the base along the axis and in the next cell, and each earlier round lies beyond it in both. (iv) The spread is deterministic: every quantity comes from boxes in `Set` order with the ties above. (v) For every view `v` with `(v·Axis)(v·Across) <= 0` and `(v·Axis)(v·Rows) <= 0`, no two parts of different layers have overlapping projections along `v`, so `Hidden(v)` lists no such pair (H1). The proof: for P in layer `i` and Q in layer `j > i`, the box `D = Q - P` (Minkowski difference) has every point with a positive coordinate along `Axis`, and a positive coordinate along `Across` (same row) or `Rows` (later row); the projections overlap only when some `t·v` lies inside `D`, which needs `v·Axis` and `v·Across` (same row) or `v·Rows` (later row) to be nonzero with the same sign. The clean set holds the views along `±Axis`, every view at right angles to `Axis`, and `Spread.View`. |
+| L8 | **Where it cannot promise.** A view outside L7's set may see a layer hide another, worst along the grid's own diagonal, where slabs and cells line up toward the camera; the escapement's spread still has 22 cross-layer pairs from the gallery's present camera, placed along (1, 0.5, 1.2) from the target, and none from a camera placed along (-1, 0, 1.2) (dated illustration, 2026-11-13, probe). Parts inside one layer may hide each other, as before the spread. A scale other than 1 voids (ii) and (v) as S8 says, and `Overlaps`, `Short` and `Hidden` report the scaled layout. Boxes are larger than parts, so a listed pair may not hide in pixels. |
+| L9 | **Cost.** One pass over the parts for the footprints and slabs and `O(L²)` for the column search; no tessellation, `SweptBox` or blocking table. |
+
+**Why the gate is a thinness ratio and a coaxial test.** The extents were measured on the test fixtures and the
+gallery's derived models (dated illustration, 2026-11-13; gallery `7302e55e8` built against this branch):
+
+| Assembly | Thinness | Coaxial | Must |
+|---|---|---|---|
+| `collarSet` | 1.50 | yes | stay |
+| `gearboxSet` | 0.95 | — | stay |
+| `planetStack` | 0.80 | — | stay |
+| `tBoltSet` | 0.77 | yes | stay |
+| `TestDerivedPinsBesideCarrier` | 0.60 | no | stay |
+| gallery planetary gearbox | 0.55 | no | stay |
+| `capturedSet` | 0.50 | yes | stay |
+| gallery cycloidal, two discs | 0.31 | yes | stay |
+| gallery cycloidal, one disc | 0.22 | yes | stay |
+| `boltRingSet` | 0.22 | yes | stay |
+| gallery escapement | 0.22 | no | spread |
+
+A dash marks a coaxial test that does not decide the outcome: the ratio alone keeps that assembly unchanged. The
+runner reads the coaxial test for every request, so `Spread.Coaxial` is reported whether or not the ratio decided. The ratio `1/3` is the geometric
+middle of the flattest stacked assembly that must stay (0.50) and the plate assemblies (0.22), so neither group sits
+near it. Thinness alone cannot tell the escapement from the cycloidal drive, which is as flat: the drive's layers all surround one axis, so each layer's rim shows around the same
+line in an oblique view and its README already shows that stacked column. The escapement's layers sit off one another's
+axes (its back great-wheel bearing at y = -46, its suspension cap at y = 70), and a small layer off the axis under a wide
+plate is what hides. The coaxial test needs no tolerance to tune: it fails exactly when some layer's centre lies outside
+some other layer's footprint.
+
+**Why a grid, and what "fills the frame" becomes.** A single row of layers would put the escapement's 13 layers in a
+strip about 810 mm long and 232 mm deep, so a fitted camera would draw every part small. decad does not know the image,
+so it cannot promise a share of it; a fitted camera already spans one image side. What decad controls is how compact the
+layout is: L5 picks the column count with the least footprint `Aspect`, the guarantee is that no other column count gives
+a squarer footprint, and `Spread.Aspect` reports it so a caller can bound it. On the escapement the grid has 6 columns,
+a footprint of 488 x 436 mm (`Aspect` 1.12) and slabs 355 mm tall, against 1,246 mm for one column (dated illustration,
+2026-11-13, probe).
+
+**Escapement acceptance.** The escapement needs `WithExplodeGround("Back Plate")` and its four nuts held in place by an
+explicit stage without a direction (they are captured in the back plate, so the derived search alone reports them as
+having no free direction). With those, every derived part leaves along +Z in 12 rounds, L3 holds (`Thinness` 0.22, not
+coaxial), the spread gives no meeting pair of different layers, and no cross-layer pair is hidden along
+`Spread.View`, along -Z or from a camera placed along (-1, 0, 1.2) from the target (dated illustration, 2026-11-13, probe). The gallery's `TestEscapementExploded`
+then asserts `Overlaps` empty and `Hidden` empty of cross-layer pairs along its camera.
+
+#### Test fixture: a flat movement
+
+`movementSet` in `parts/explode_spread_test.go` mimics the escapement: a wide flat back plate, three arbors standing
+behind it, wheels and a bridge in front, and two screws, every part leaving along Z. Coordinates in mm; every round part
+is a cylinder about Z.
+
+| Part | Body | Leaves |
+|---|---|---|
+| `back plate` (ground) | block x -60..60, y -40..40, z 0..6, with three through bores of radius 2.5 at the arbor centres | — |
+| `arbor 1..3` | at (-30, 0), (0, 0), (30, 0): a stem of radius 2 over z -10..22 and a collar of radius 4 over z -10..-6, behind the plate | -Z, last round |
+| `wheel 1..3` | on each arbor: a disc of radius 12, bore 2.5, z 9..12 | +Z, round 3 |
+| `bridge` | block x -50..50, y -20..20, z 15..18, with bores of radius 2.5 at the arbor centres and 1.6 at (45, ±15) | +Z, round 2 |
+| `screw 1, 2` | at (45, 15) and (45, -15): a shank of radius 1.5 over z 6..18 and a head of radius 3 over z 18..20 | +Z, round 1 |
+
+The screw heads hold the bridge and the bridge holds the wheels; the collars keep the arbors from leaving forward, and
+the arbors hold nothing, so they move to the last round (D3a). The fixture fixes each wheel to +Z with `WithRemoval`:
+once the arbors have left in a search round, nothing stands beside a wheel, so D3 would also let it leave sideways in
+round 2, which is not the movement the fixture stands for. The assembled box is 120 x 80 x 32 mm (`Thinness` 32/120
+= 0.267). The screws' footprint centre (45, 0) lies outside the arbors' footprint (x -34..34), so the layers are not
+coaxial. With `WithExplodeGap(5mm)`:
+
+| Part | Round | Layer | D7 offset | Slide | Final offset |
+|---|---|---|---|---|---|
+| `back plate` | 0 | 0 | 0 | 0 | 0 |
+| `arbor k` | 3 | -1 | (0, 0, -27) | (-26, -81, 0) | (-26, -81, -27) |
+| `wheel k` | 3 | +1 | (0, 0, 2) | (-18, 57, 0) | (-18, 57, 2) |
+| `bridge` | 2 | +2 | (0, 0, 4) | (115, -65, 0) | (115, -65, 4) |
+| `screw k` | 1 | +3 | (0, 0, 21) | (23, -22, 0) | (23, -22, 21) |
+
+D7 already stacks the slabs 5 mm apart (wheels z 11..14 over the plate's 0..6, the bridge 19..22, the screws 27..41, the
+arbors -37..-5 behind), so L4 pushes nothing here; the push is covered in `internal/explodeplan`. `Across` is Y (80 <
+120), `Rows` X. L5 compares `Aspect` 4.975 (1 column), 1.950 (2), 1.461 (3), 1.489 (4) and 1.733 (5) and takes 3
+columns: arbors, base and wheels in row 0, bridge and screws in row 1; `Width` 154, `Depth` 225. `Spread.View` is (1, 1,
+-1)/√3. The derivations: column origins along Y are -85, -40 and 45, row origins along X are -60 and 65, and each slide
+takes the layer's least footprint corner (arbors (-34, -4), wheels (-42, -12), bridge (-50, -20), screws (42, -18), as
+(x, y)) to its cell's.
+
+### 5.10 Guide lines
+
+```go
+// Guide is the path one part moved along, for a dotted guide line from its
+// exploded place back to where it assembles. Points runs from the centre of
+// the part's assembled box through the centre after each move (a carry with
+// its parent, each stage's move, the spread's push along its axis and its
+// move to its cell) to its Anchor, in millimetres and after
+// WithExplodeScale. Consecutive points differ, and there are at least two.
+type Guide struct {
+    Part   string
+    Points []r3.Vec
+}
+```
+
+`Exploded` gains `Guides []Guide` (§5).
+
+| Rule | Decision |
+|---|---|
+| T1 | Every `Explode`, derived or not, fills `Guides`: one per part whose path has at least two points, in `Parts` order. The ground and parts that never moved have none. |
+| T2 | The stage runner keeps each part's stops: its offset at the start (zero), the start of a move when it differs from the last stop (a member carried with its parent, S3, including a carried start that then reads `PathStuck`), the end of each move, the end of the L4 push and the end of the L5 move. A stop equal to the one before is not kept. S8 scales every stop with the same multiplication it applies to `Offset`. `Points[i]` is the centre of the part's box moved by stop `i`, computed as `Anchor` is, so `Points[0]` is the assembled box centre and the last point equals `Anchor` exactly. |
+| T3 | Guides are data. decad draws nothing, and a guide may pass through other parts' boxes. `Leaders` (E5) stay as they are: a leader joins two joint ports, a guide joins one part's own places, so a part with no joint still has a guide. |
+
+The caller draws a guide as a dashed world-space polyline with a renderer that draws 3D polylines, for example
+solidlens `Scene.Lines` (§11).
+
+#### Implementation of §5.9 and §5.10
+
+| File | Change |
+|---|---|
+| `parts/explode_spread.go` (new) | `Spread`, `WithoutExplodeSpread` (sets `config.noSpread`), and `planSpread`, which reads L1, L2, L3 (a) and (b) and the choice of `Across` and `Rows` from the assembled boxes and the derived report, returns the `explodeplan.Spread` request, and after `Run` builds the public `Spread` from the request and `Outcome.Spread`. |
+| `parts/options.go` | `config.noSpread bool`. |
+| `parts/explode.go` | `Exploded.Guides`, `Exploded.Spread`, `ExplodedPart.Layer`, `ExplodedPart.Slide`, `Guide`. `Explode` refuses `WithoutExplodeSpread` without `WithDerivedExplode` with `decad.ErrDegenerate` naming `WithDerivedExplode`, before reading `ctx`, as it refuses `WithRemoval`. It calls `planSpread` after `deriveStages`, passes the request as `Input.Spread`, and `buildExploded` fills `Guides` (T1, T2), `Layer`, `Slide` and `Spread` from the `Outcome`. The `Explode` doc comment adds one sentence naming the spread. |
+| `parts/explode_derive.go` | `derivedReport.dir []r3.Vec`, each derived part's chosen direction in plan indices, set where `round` is. The `WithDerivedExplode` doc comment adds: "For a thin assembly whose layers are not coaxial, the layers are also spread across their axis (§5.9); WithoutExplodeSpread keeps them stacked." |
+| `parts/summary.go` | When `Spread` ran, one line after the exploded table: `Spread: <Layers> layers in <Columns> columns, stacked along (x, y, z); no layer hides another seen along (x, y, z).` with `Axis` and `View` printed `%g`. |
+| `internal/explodeplan/spread.go` (new) | `Spread`, `SpreadOutcome` and the runner's `spread` step: the coaxial test (L3 c), the slabs (L4), the column search and the cell moves (L5), each move appended to the part's stops and added to its `Slide`. Components along an axis are read with `Vec.Dot` and moves built with `Vec.Scale` and `Vec.Add`; no coordinate math of its own. |
+| `internal/explodeplan/stages.go` | `Input.Spread *Spread`; `Result.Slide r3.Vec` and `Result.Stops []r3.Vec`; `Run` returns `(Outcome, error)` and calls the spread step after the last stage; `moveOne` and `moveTogether` append stops (T2); `finish` scales `Slide` and every stop as it scales `Offset`. `ProjectedCover` returns 0 unless the exact projections overlap (H1). |
+| `docs/api.md`, `docs/data-structures.md` | The spread, `WithoutExplodeSpread`, `Spread`, `Guide`, `Guides`, `Layer` and `Slide`; the data-structures table gains rows for `parts.Spread` and `parts.Guide`. |
+| `examples/parts_explode_spread_example_test.go` (new) | A smaller movement (one arbor, one wheel, the plate, a bridge, one screw off-centre), printing `Spread` (`Ran`, `Axis`, `Layers`, `Columns`) and one part's `Layer`, `Slide` and guide points, with a verified `// Output:` block. |
+
+```go
+// internal/explodeplan
+
+// Spread asks Run for the layer spread of agent-docs/parts-design.md §5.9.
+type Spread struct {
+    Axis, Across, Rows r3.Vec // unit world axes
+    Layer              []int  // per part: signed layer, 0 for the base
+    Gap                float64 // g of L4 and L5, mm, at least 1
+    Thin               bool    // L3 (a) and (b) hold; Run adds (c)
+}
+
+// SpreadOutcome is what the spread step did.
+type SpreadOutcome struct {
+    Coaxial      bool
+    Ran          bool
+    Columns      int
+    Width, Depth float64 // the grid's extent along Across and Rows, mm, gaps included
+}
+
+// Outcome is what Run returns.
+type Outcome struct {
+    Parts  []Result
+    Spread SpreadOutcome // zero when Input.Spread is nil
+}
+```
+
+**H1 (§5.6).** `Hidden` lists a pair only when the two boxes' exact projections along the view overlap with positive
+area: some translation of one box along the view meets the other with positive volume. That is `clearSpans` of the
+first box against the second, with zero gap and the unit view as the direction, over every real `t`, being non-empty.
+`Covered` stays the share of the back box's projected rectangle that the front box's rectangle covers. The bounding
+rectangles alone list pairs whose projections only meet in the rectangles' corners, which an oblique view of two boxes
+side by side does; the exact test removes those and keeps every pair that may hide.
+
+#### Risks
+
+| Choice | What each option costs |
+|---|---|
+| Automatic gate (chosen) or opt-in | The request asks for automatic. The gate's ratio and coaxial test are read off eleven assemblies; an assembly between 0.22 and 0.5, or a nearly coaxial stack with one small part off the axis (the planetary gearbox has a layer centred 5.2 mm off, beside a 7.4 mm wide one), can land on either side. `WithoutExplodeSpread` turns a wrong spread off; nothing turns a missed one on, so a model that needs it above 1/3 asks for a gate change. Opt-in would never surprise a caller but would not meet the request. |
+| Clean views fixed by world-axis signs | `Across` and `Rows` point positive because nothing in the shape says which side the camera belongs on. For the escapement, `Spread.View` places the camera below the clock, along (-1, -1, 1) from the target; the gallery picks another view in L7's set, such as a camera placed along (-1, 0, 1.2). A camera on the opposite side is not protected (L8). |
+| Grid, not a staircase along one axis | The grid keeps the footprint compact but places parts far from where they assemble (the escapement's 116 x 232 mm becomes 488 x 436 mm); an image shows the path back only when the caller draws `Guides`. A one-axis staircase stays closer but grows long with the layer count. |
+| Boxes for footprints | A long or diagonal part's box wastes cell area, as §14 says for `ClearAll`. |
 
 ## 6. Schematic
 
@@ -1093,8 +1347,9 @@ when `Joints` is set; the `Unexplained` pairs; the exploded depth and pull table
 diagram. Numbers print with their bounds. The joint table lists the Set's joints with the status the report gives;
 the cause, the evidence (`Measured`, `Engaged`, `Gap`, faces read) and the `Unexplained` table come with `Check`
 (P4a), and `Near` with P4b. From P7 the exploded table adds the stage, the moved distance, the clearance, the path
-state and its blocker for each part, and lists `Short`. `WriteMarkdown` takes no context: it reads volumes and faces
-only.
+state and its blocker for each part, and lists `Short`. From P9, when the layer spread ran, one line after the exploded
+table names its layers, columns, axis and `View` (§5.10 "Implementation"). `WriteMarkdown` takes no context: it reads
+volumes and faces only.
 This is the agent's primary view of the schematic: it reads a
 page, not pixels. Images come from the consumer (§11).
 
@@ -1193,7 +1448,7 @@ to: solidlens's `TriangleSource` is `Vertices() []r3.Vec` and `Triangles() [][3]
 
 | View | Built from |
 |---|---|
-| Exploded view | each part's mesh moved by `ExplodedPart.Placement`, `Leaders` as dotted lines, names at `Anchor` |
+| Exploded view | each part's mesh moved by `ExplodedPart.Placement`, `Leaders` and `Guides` as dotted lines, names at `Anchor`; for a spread layout, a camera in `Spread`'s clean set (§5.9 L7) |
 | Exploded animation | kinetograph: one translation track per part from zero to `Offset` |
 | Connection diagram | the Mermaid text, or any graph renderer over `Graph` |
 | Part sheet | one tile per `PartView`: the part's mesh moved by `Placement`, framed by `Bounds`, the name at `Anchor`, a callout per `Port` naming `Other` |
@@ -1209,6 +1464,9 @@ in this design:
    meanwhile.
 3. An optional translation per `Model`, for exploded views. A wrapper `TriangleSource` that offsets vertices works
    meanwhile, so this is the lowest priority.
+
+For `Exploded.Guides` and `Leaders`, solidlens's `Scene.Lines` draws world-space polylines over the models, not depth
+tested: the caller passes each `Guide.Points` and each leader's two ends to it.
 
 kinetograph needs nothing new: a translation track per part plays the explosion, and `linkage` posing already has its
 bridge (`agent-docs/linkage-check-design.md` §2.4).
@@ -1254,6 +1512,12 @@ computed geometry: offsets, axes, clearances, gaps, coordinates. Fixtures are th
 | `TestExplodeJointPull` | a `Contact` with `Pull` +Y moves along +Y instead of the box-centre line and reads `PullDeclared`; a `Pull` on a pin picks the sense E3 would not; a `Pull` normal to the pin's axis is refused; a non-finite one is refused at `Join` | P7 |
 | `TestExplodeGroundStage` | the ground in a stage with a `Direction` moves by its gap, so two halves open symmetrically; without a `Direction` it is refused | P7 |
 | `TestExplodeLeaderSeparation` | the housing's pin leaders read the distance between the pin's box and each half's box; a pin left in its bore reads zero | P7 |
+| `TestSpreadMovement` (`parts/explode_spread_test.go`) | `movementSet` (§5.9), gap 5 mm, wheels fixed to +Z. With `WithoutExplodeSpread`: the D7 offsets of the fixture table, `Spread.Ran` false, `Thinness` 0.2667 (32/120, within 1e-6), `Coaxial` false, every `Slide` zero, and `Hidden((0, 0, -1))` lists `back plate` as `Front` of each arbor with `Covered` 1 and `bridge` as `Front` of each wheel with `Covered` 1. With the spread: `Ran`, `Axis` (0, 0, 1), `Across` (0, 1, 0), `Rows` (1, 0, 0), `Layers` 5, `Columns` 3, `Width` 154 mm, `Depth` 225 mm, `Aspect` 225/154, `View` (1, 1, -1)/√3; each part's `Layer` and `Slide` as the fixture table, within 1e-6; `Offset - Slide` equal to the opt-out run's `Offset` and `Round`, `Order`, `Stage`, `Dir` equal; `Overlaps` empty; for every pair of different layers, final boxes at least 5 mm apart along Z and at least 5 mm apart along X or Y; `Hidden(Spread.View)` and `Hidden((0, 0, -1))` empty; a second run gives equal offsets | P9 |
+| `TestSpreadGate` (`parts/explode_spread_test.go`) | tall and coaxial assemblies stay unchanged: `collarSet` reads `Thinness` 1.5 and `gearboxSet` 0.95 with `Ran` false; `boltRingSet(8)` reads `Thinness` 13/60 and `Coaxial` true with `Ran` false, every bolt's offset with zero X and Y; every `Slide` zero in all three; a thick, off-axis variant of `movementSet` (arbors reaching 100 mm behind the plate, `Thinness` 122/120) has `Ran` false and `Coaxial` false, so only the thinness gate keeps it stacked; a non-derived explode of the housing has `Spread` nil and every `Layer` 0; `WithoutExplodeSpread` without `WithDerivedExplode` is `decad.ErrDegenerate` naming `WithDerivedExplode` | P9 |
+| `TestSpreadGuides` (`parts/explode_spread_test.go`) | on `movementSet` with the spread: 9 guides (no `back plate`); `wheel 2` runs (0, 0, 10.5), (0, 0, 12.5), (-18, 57, 12.5); `screw 1` runs (45, 15, 13), (45, 15, 34), (68, -7, 34); `arbor 2` runs (0, 0, 6), (0, 0, -21), (-26, -81, -21); each last point equals its `Anchor` exactly. With `WithExplodeScale(2)`, `wheel 2` runs (0, 0, 10.5), (0, 0, 14.5), (-36, 114, 14.5) | P9 |
+| `TestExplodeGuides` (`parts/explode_test.go`) | not derived: the pin and plate (§4) give the pin's guide (10, 10, 6.5), (10, 10, 28.5) and none for the plate; `lapSet` with `pin 1` joined to the top only gives `pin 1` a carried start: (5, 10, 5), (5, 10, 15), (5, 10, 37), the middle point being the top's 10 mm lift (S3) and the last the pin's 12 mm travel plus the 10 mm gap past the top | P9 |
+| `TestExplodeHiddenExact` (`parts/explode_hidden_test.go`) | two 10 mm cubes, unjoined, A at [0, 10]³ and B at [-11, -1] x [11, 21] x [0, 10]: along (1, 1, 1) their exact projections are apart, so `Hidden` lists nothing although their bounding rectangles overlap; along (1, -1, 0) it lists them; along -Z it lists nothing | P9 |
+| `TestSpreadSlabs`, `TestSpreadGrid`, `TestSpreadCleanViews`, `TestSpreadCoaxial` (`internal/explodeplan/spread_test.go`) | plain boxes through `Run` with no stages. Slabs, gap 2: base [0, 10]² x [0, 2], layer +1 at z 5..6 stays, layer +2 at z 3..4 beside it moves +5 to z 8..9, layer -1 at z -3..-1 moves -1 to z -4..-2. Grid: base and two layers all 10 x 10 choose 2 columns (`Aspect` 1 against 3.4 for 1 or 3); base and one layer tie at 2.2 and choose 1 column. Clean views: seven layers on both sides of varied size; no cross-layer pair overlaps along (1, 1, -1), (0, 0, -1), (1, 0, 0), (0, 1, -3) or (2, 1, -1), and at least one pair overlaps along (-1, -1, -1). Coaxial: concentric footprints give `Coaxial` and no move; one footprint moved off gives a spread | P9 |
 
 Examples: `examples/parts_explode_example_test.go` (P1), `examples/parts_views_example_test.go` (P2),
 `examples/export_3mf_items_example_test.go` (E1), `examples/parts_summary_example_test.go` (P3),
@@ -1359,6 +1623,7 @@ boundary gate evidence in its description. P1 also carries this document. Sizes 
 | P5 | `Set.Linkage` | P4a | 450 |
 | P6 | `Infer` and `JointReport.Inferred` | P4a | 300 |
 | P7 | the §5.2–§5.6 design delta; `Stage`, `Clearing`, `PathState`, `Occlusion`; `Joint.Pull` and `PullDeclared`; `WithExplodeStages`, `WithPartGap`, `WithExplodeScale`; the stage runner in `internal/explodeplan` (S1–S9), the ground in a stage with a `Direction`; the P7 fields of `Exploded`, `ExplodedPart` and `Leader`; `Exploded.Hidden`; the exploded table's new columns in `Summary`; staged example | P1–P6 (landed) | 850 |
+| P9 | §5.9 and §5.10 with H1; `WithoutExplodeSpread`, `Spread`, `Guide`, `Exploded.Guides`, `Exploded.Spread`, `ExplodedPart.Layer` and `Slide`; `internal/explodeplan` spread step, stops and `Outcome`; exact `Hidden`; the summary line; spread example | P7 and §5.8 (landed) | 700 |
 
 P1 to P6 have landed. P7 is one PR; `Hidden` (about 100 lines with its test) can leave it for a follow-up if review
 asks for a smaller one.
@@ -1391,6 +1656,7 @@ stops and the blocker is reported.
 | Boxes are a poor stand-in for long, diagonal or L-shaped parts: a crossbow link's box covers much empty space, so `ClearAll` can push parts far past what the eye needs, and `Overlaps` can list pairs that do not touch. | The P7 crossbow run shows how wide the result gets. Clearing against meshes instead of boxes is a later option if boxes prove too coarse; P7 does not add it. |
 | `ClearAll` along an axis can send a part through the far side of a wide enclosure; the move is legal, and `PathEnclosed` says the box test could not judge the path. | A stage `Direction` or an earlier stage that opens the enclosure; the caller chooses. |
 | A `Pull` declared on a joint states the author's intent, not geometry; a wrong one sends a part the wrong way. | `Pull` reads `PullDeclared` in the output, and the `Overlaps`, `Short` and `Separation` readings show a bad result. |
+| The layer spread's gate, its clean views and its grid each have a drawback on every option. | The "Risks" table at the end of §5.10. |
 | The request mentioned a joint-chain checking program on branch `feat-joint-chain-check`. No such branch or worktree exists; the work merged as #665, "check joint chains with VerifyLinkage", and is the linkage check §7.4 consumes. | Nothing further, unless another branch was meant. |
 
 ## 15. Gallery adoption

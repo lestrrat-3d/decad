@@ -19,7 +19,10 @@ type Occlusion struct {
 // view, which points from the camera into the scene: each part's box is projected
 // orthographically along view to a rectangle, and a pair whose rectangles overlap
 // is listed with the nearer part (the one whose box centre is nearer the camera)
-// as Front, and the share of Back's rectangle Front's covers. A pair absent from
+// as Front, and the share of Back's rectangle Front's covers. The rectangles must
+// overlap with positive area for the boxes' exact projections, so two boxes that
+// only meet in the corners of their bounding rectangles are not listed
+// (agent-docs/parts-design.md §5.10 H1). A pair absent from
 // the list cannot hide one another; a listed pair may, since a box is larger than
 // its part. Hidden moves nothing. A zero view is decad.ErrDegenerate and a
 // non-finite one decad.ErrNotFinite. Pairs come in Parts order.

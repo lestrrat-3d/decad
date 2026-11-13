@@ -262,3 +262,60 @@ func TestExplodeOptionsAndContext(t *testing.T) {
 	_, err = s.Explode(ctx, parts.WithFitTolerance(units.Degrees(1)))
 	require.ErrorIs(t, err, decad.ErrUnitKind)
 }
+
+// TestExplodeGuides checks the guide of each moved part on a joint-walk explode: the pin of the pin and
+// plate runs from its assembled box centre to its anchor and the ground has none; a pin joined to the top
+// plate only is carried with it, so its guide has the carried start between the two ends (S3).
+func TestExplodeGuides(t *testing.T) {
+	doc := decad.New()
+	s := parts.NewSet(doc)
+	mustAdd(t, s,
+		parts.Part{Name: namePlate, Kind: parts.Manufactured, Body: boredPlate(t, doc)},
+		parts.Part{Name: namePin, Kind: parts.Manufactured, Body: cylinder(t, doc, 10, 3, -2, 17)})
+	mustJoin(t, s, parts.Joint{Kind: parts.PinInBore, A: namePin, B: namePlate, Motion: parts.Turns})
+	ex, err := s.Explode(t.Context(), parts.WithExplodeGround(namePlate))
+	require.NoError(t, err)
+	require.Len(t, ex.Guides, 1)
+	g := ex.Guides[0]
+	require.Equal(t, namePin, g.Part)
+	require.Len(t, g.Points, 2)
+	requireVec(t, r3.Vec{X: 10, Y: 10, Z: 6.5}, g.Points[0], "assembled centre")
+	requireVec(t, r3.Vec{X: 10, Y: 10, Z: 28.5}, g.Points[1], "exploded centre")
+	require.Equal(t, partByName(t, ex, namePin).Anchor, g.Points[1])
+	require.Nil(t, ex.Spread)
+
+	// The pin is joined to the top only: the top lifts 10 mm, the pin starts there and then travels 12 mm
+	// to clear the top's lifted box and the 10 mm gap.
+	doc = decad.New()
+	bore := func(z0 float64) *decad.Body {
+		b, err := decad.Cut(t.Context(), block(t, doc, 0, 0, 20, 20, z0, 5), cylinder(t, doc, 5, 3.2, z0-1, 7))
+		require.NoError(t, err)
+		return b
+	}
+	s = parts.NewSet(doc)
+	mustAdd(t, s,
+		parts.Part{Name: nameBase, Kind: parts.Manufactured, Body: bore(0)},
+		parts.Part{Name: nameTop, Kind: parts.Manufactured, Body: bore(5)},
+		parts.Part{Name: namePin1, Kind: parts.Manufactured, Body: cylinder(t, doc, 5, 3, -2, 14)})
+	mustJoin(t, s,
+		parts.Joint{Name: nameLap, Kind: parts.FaceContact, A: nameTop, B: nameBase},
+		parts.Joint{Name: "pin in top", Kind: parts.PinInBore, A: namePin1, B: nameTop, Motion: parts.Turns})
+	ex, err = s.Explode(t.Context(), parts.WithExplodeGround(nameBase))
+	require.NoError(t, err)
+	require.Len(t, ex.Guides, 2, "the base never moved")
+	for _, g := range ex.Guides {
+		require.NotEqual(t, nameBase, g.Part)
+	}
+	var found bool
+	for _, g := range ex.Guides {
+		if g.Part != namePin1 {
+			continue
+		}
+		found = true
+		require.Len(t, g.Points, 3)
+		requireVec(t, r3.Vec{X: 5, Y: 10, Z: 5}, g.Points[0], "assembled centre")
+		requireVec(t, r3.Vec{X: 5, Y: 10, Z: 15}, g.Points[1], "carried start")
+		requireVec(t, r3.Vec{X: 5, Y: 10, Z: 37}, g.Points[2], "exploded centre")
+	}
+	require.True(t, found, "the pin has a guide")
+}

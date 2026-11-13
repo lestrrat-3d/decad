@@ -60,6 +60,13 @@ type Exploded struct {
 	Stages   []string    // the stage names in the order they ran; "" is the last, implicit stage
 	Scale    units.Value // the WithExplodeScale multiplier, Dimensionless
 	Short    []string    // parts whose Clearance is below their Gap, in Set order
+	// Guides lists each moved part's path from its assembled place to its exploded place, in Parts
+	// order (agent-docs/parts-design.md §5.10). decad draws nothing: the caller draws them as
+	// polylines.
+	Guides []Guide
+	// Spread reports the layer spread of a derived explode (§5.9). It is nil without WithDerivedExplode
+	// and when no derived part leaves along a world axis.
+	Spread *Spread
 
 	// Derived is true when WithDerivedExplode ran. The removal order of the parts no explicit stage
 	// names was then read from tessellations, so the layout is layout-grade: a picture, not a proof
@@ -99,6 +106,24 @@ type ExplodedPart struct {
 	// WithDerivedExplode. For a derived part Pull is AxisFromFaces, AxisDeclared, PullDeclared,
 	// WorldAxis or RemovalDirection.
 	Order, Round int
+	// Layer is the part's layer in the spread (agent-docs/parts-design.md §5.9): +k or -k for the
+	// k-th derived round from the base leaving along +Spread.Axis or -Spread.Axis, 0 for the base. It
+	// is 0 when Spread is nil.
+	Layer int
+	// Slide is what the spread added to Offset: the push along Spread.Axis and the move to the
+	// layer's cell, after WithExplodeScale. It is zero when the spread did not run. Moved does not
+	// include it.
+	Slide r3.Vec
+}
+
+// Guide is the path one part moved along, for a dotted guide line from its exploded place back to
+// where it assembles. Points runs from the centre of the part's assembled box through the centre
+// after each move (a carry with its parent, each stage's move, the spread's push along its axis and
+// its move to its cell) to its Anchor, in millimetres and after WithExplodeScale. Consecutive points
+// differ, and there are at least two. A guide may pass through other parts' boxes.
+type Guide struct {
+	Part   string
+	Points []r3.Vec
 }
 
 // BlockedPair is one pair that forced the derived removal order: Blocker stood ahead of Mover
@@ -254,7 +279,9 @@ func fromDecad(b decad.Box) explodeplan.Box {
 // WithExplodeStages runs that in ordered stages, WithPartGap and
 // WithExplodeScale tune the distances, and Joint.Pull states a direction
 // (agent-docs/parts-design.md §5.3). WithDerivedExplode derives the order and
-// direction of the parts no stage names from their tessellations (§5.8).
+// direction of the parts no stage names from their tessellations (§5.8); for a
+// thin assembly whose layers are not coaxial it also spreads the layers across
+// their axis (§5.9). Guides records each moved part's path (§5.10).
 func (s *Set) Explode(ctx context.Context, opts ...ExplodeOption) (*Exploded, error) {
 	c, err := foldOptions(opts)
 	if err != nil {
@@ -262,6 +289,9 @@ func (s *Set) Explode(ctx context.Context, opts ...ExplodeOption) (*Exploded, er
 	}
 	if len(c.removals) > 0 && !c.derived {
 		return nil, fmt.Errorf("parts: %w: WithRemoval needs WithDerivedExplode", decad.ErrDegenerate)
+	}
+	if c.noSpread && !c.derived {
+		return nil, fmt.Errorf("parts: %w: WithoutExplodeSpread needs WithDerivedExplode", decad.ErrDegenerate)
 	}
 	if ctx == nil || s == nil || s.doc == nil {
 		return nil, fmt.Errorf("parts: %w: nil context or set", decad.ErrDegenerate)
@@ -343,12 +373,30 @@ func (s *Set) Explode(ctx context.Context, opts ...ExplodeOption) (*Exploded, er
 		}
 		stages.stages, stages.names, order, runNodes, rep = d.stages, d.names, d.order, d.nodes, &d.report
 	}
-	res, err := explodeplan.Run(ctx, explodeplan.Input{Boxes: boxes, Joints: joints, Ground: ground, Order: order, Nodes: runNodes,
-		Stages: stages.stages, DefaultGap: c.gap, PartGap: stages.partGap, Scale: c.scale, Blocker: blk})
+	var spreadReq *spreadPlan
+	if rep != nil {
+		spreadReq = planSpread(c, boxes, rep)
+	}
+	in := explodeplan.Input{Boxes: boxes, Joints: joints, Ground: ground, Order: order, Nodes: runNodes,
+		Stages: stages.stages, DefaultGap: c.gap, PartGap: stages.partGap, Scale: c.scale, Blocker: blk}
+	if spreadReq != nil {
+		in.Spread = &spreadReq.req
+	}
+	out, err := explodeplan.Run(ctx, in)
 	if err != nil {
 		return nil, err
 	}
-	return s.buildExploded(idx, ground, boxes, res, nodes, joints, readings, jointOf, stages.names, c.scale, rep)
+	ex, err := s.buildExploded(idx, ground, boxes, out.Parts, nodes, joints, readings, jointOf, stages.names, c.scale, rep)
+	if err != nil {
+		return nil, err
+	}
+	if spreadReq != nil {
+		ex.Spread = spreadReq.report(out.Spread)
+		for k := range ex.Parts {
+			ex.Parts[k].Layer = spreadReq.req.Layer[k]
+		}
+	}
+	return ex, nil
 }
 
 // applyPull folds a joint's declared Pull into its reading: it replaces the face
@@ -409,7 +457,10 @@ func (s *Set) buildExploded(idx []int, ground int, boxes []explodeplan.Box, res 
 		ex.Parts = append(ex.Parts, ExplodedPart{Name: s.parts[i].Name, Offset: off, Placement: t,
 			Depth: nodes[k].Depth, Anchor: moved[k].Centre(), Pull: pull, Stage: stage, Dir: res[k].Dir,
 			Travel: mm(res[k].Travel), Gap: mm(res[k].Gap), Moved: mm(res[k].Moved), Clearance: mm(res[k].Clearance),
-			Path: PathState(res[k].Path), Blocker: blocker, Order: order, Round: round})
+			Path: PathState(res[k].Path), Blocker: blocker, Order: order, Round: round, Slide: res[k].Slide})
+		if pts := guidePoints(boxes[k], res[k].Stops); len(pts) >= 2 {
+			ex.Guides = append(ex.Guides, Guide{Part: s.parts[i].Name, Points: pts})
+		}
 		if res[k].Short {
 			ex.Short = append(ex.Short, s.parts[i].Name)
 		}
@@ -428,6 +479,15 @@ func (s *Set) buildExploded(idx []int, ground int, boxes []explodeplan.Box, res 
 	}
 	ex.boxes = moved
 	return ex, nil
+}
+
+// guidePoints is the centre of box moved by each stop, computed as ExplodedPart.Anchor is.
+func guidePoints(box explodeplan.Box, stops []r3.Vec) []r3.Vec {
+	out := make([]r3.Vec, len(stops))
+	for i, st := range stops {
+		out[i] = explodeplan.Box{Min: box.Min.Add(st), Max: box.Max.Add(st)}.Centre()
+	}
+	return out
 }
 
 // pickGround resolves WithExplodeGround, defaulting to the manufactured part

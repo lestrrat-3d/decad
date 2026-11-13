@@ -35,10 +35,10 @@ func run(t *testing.T, boxes []explodeplan.Box, joints []explodeplan.Joint, gap 
 	for i := range partGap {
 		partGap[i] = nan()
 	}
-	res, err := explodeplan.Run(t.Context(), explodeplan.Input{Boxes: boxes, Joints: joints, Ground: 0, Order: order, Nodes: nodes,
+	out, err := explodeplan.Run(t.Context(), explodeplan.Input{Boxes: boxes, Joints: joints, Ground: 0, Order: order, Nodes: nodes,
 		Stages: stages, DefaultGap: gap, PartGap: partGap, Scale: 1, Blocker: b})
 	require.NoError(t, err)
-	return res
+	return out.Parts
 }
 
 func TestRunAxis(t *testing.T) {
@@ -90,10 +90,11 @@ func TestRunClearAllIntervals(t *testing.T) {
 	order, nodes := explodeplan.Walk(len(boxes), joints, 1)
 	require.Equal(t, []int{0}, order)
 	partGap := []float64{nan(), nan(), nan(), nan(), nan()}
-	res, err := explodeplan.Run(t.Context(), explodeplan.Input{Boxes: boxes, Joints: joints, Ground: 1, Order: order, Nodes: nodes,
+	out, err := explodeplan.Run(t.Context(), explodeplan.Input{Boxes: boxes, Joints: joints, Ground: 1, Order: order, Nodes: nodes,
 		Stages:     []explodeplan.Stage{{Members: []int{0}, Gap: 5, Clear: explodeplan.ClearAll, Dir: r3.Vec{X: 1}}},
 		DefaultGap: 10, PartGap: partGap, Scale: 1, Blocker: blocker{limit: 100}})
 	require.NoError(t, err)
+	res := out.Parts
 	// The intervals of t are (-3, 21), (10, 34), (28, 52) and (68, 92): the first three merge,
 	// so the box stops at t = 52, between the third and the fourth box.
 	require.InDelta(t, 52.0, res[0].Offset.X, 1e-9)
@@ -110,10 +111,11 @@ func TestRunStuck(t *testing.T) {
 	boxes := []explodeplan.Box{box(0, 0, 0, 10, 10, 10), box(2, 2, 12, 4, 4, 14), box(-1e6, -1, -1, 2e6, 11, 20)}
 	joints := []explodeplan.Joint{{A: 1, B: 0, Mode: explodeplan.ModeAway, Dir: r3.Vec{Z: 1}}}
 	order, nodes := explodeplan.Walk(len(boxes), joints, 0)
-	res, err := explodeplan.Run(t.Context(), explodeplan.Input{Boxes: boxes, Joints: joints, Ground: 0, Order: order, Nodes: nodes,
+	out, err := explodeplan.Run(t.Context(), explodeplan.Input{Boxes: boxes, Joints: joints, Ground: 0, Order: order, Nodes: nodes,
 		Stages:     []explodeplan.Stage{{Members: []int{1}, Gap: 1, Clear: explodeplan.ClearAll, Dir: r3.Vec{X: 1}}},
 		DefaultGap: 10, PartGap: []float64{nan(), nan(), nan()}, Scale: 1, Blocker: blocker{limit: 100}})
 	require.NoError(t, err)
+	res := out.Parts
 	require.Equal(t, explodeplan.PathStuck, res[1].Path)
 	require.Equal(t, r3.Vec{}, res[1].Offset, "a stuck part stays at its start")
 }
@@ -127,10 +129,11 @@ func TestRunTogetherAndScale(t *testing.T) {
 	}
 	order, nodes := explodeplan.Walk(len(boxes), joints, 0)
 	partGap := []float64{nan(), nan(), nan(), nan()}
-	res, err := explodeplan.Run(t.Context(), explodeplan.Input{Boxes: boxes, Joints: joints, Ground: 0, Order: order, Nodes: nodes,
+	out, err := explodeplan.Run(t.Context(), explodeplan.Input{Boxes: boxes, Joints: joints, Ground: 0, Order: order, Nodes: nodes,
 		Stages:     []explodeplan.Stage{{Members: []int{1, 2}, Gap: 3, Clear: explodeplan.ClearAll, Dir: r3.Vec{Z: 1}, Together: true}},
 		DefaultGap: 10, PartGap: partGap, Scale: 2, Blocker: blocker{limit: 1000}})
 	require.NoError(t, err)
+	res := out.Parts
 	// The group's box (z 5 to 9) clears the cover (z 9 to 12) grown by 3: it rises 10 mm... the base
 	// top at 5 grown by 3 reaches 8, the cover to 15, so the group rises until its bottom is at 15.
 	require.InDelta(t, 20.0, res[1].Offset.Z, 1e-9, "10 mm, doubled by the scale")
