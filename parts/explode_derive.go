@@ -94,6 +94,7 @@ type jointAxis struct {
 // derivedReport is what the search says about the layout, in plan indices for the per-part slices.
 type derivedReport struct {
 	order, round []int    // 1-based; 0 for parts the search did not move
+	grouped      []bool   // true when the part's WithRemoval names a Group
 	dir          []r3.Vec // the unit direction each moved part leaves by
 	src          []PullSource
 	blocked      []BlockedPair
@@ -105,7 +106,11 @@ type derivedReport struct {
 func (s *Set) report(in derivedInput, items []int, tables []*explodeblock.Table, blockers [][][]int, rounds [][]explodeorder.Unit,
 	cons constraints, axisSrc []PullSource, dirs []r3.Vec) derivedReport {
 	n := len(in.idx)
-	rep := derivedReport{order: make([]int, n), round: make([]int, n), src: make([]PullSource, n), dir: make([]r3.Vec, n)}
+	rep := derivedReport{order: make([]int, n), round: make([]int, n), src: make([]PullSource, n), dir: make([]r3.Vec, n),
+		grouped: make([]bool, n)}
+	for k := range n {
+		rep.grouped[k] = cons.group[k] >= 0
+	}
 	pos := make([]int, n) // plan index -> table index
 	for i, k := range items {
 		pos[k] = i
