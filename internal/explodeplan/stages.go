@@ -108,6 +108,9 @@ type Input struct {
 	PartGap    []float64 // per part; NaN when unset
 	Scale      float64
 	Blocker    Blocker
+	// Spread, when not nil, asks for the layer spread of agent-docs/parts-design.md
+	// §5.9 after the last stage.
+	Spread *Spread
 }
 
 // StageDirection is the Source a result carries when its stage gave the
@@ -127,17 +130,30 @@ type Result struct {
 	Blocker   int     // the part that blocked or enclosed the path, else the nearest part; -1 for none
 	Clearance float64 // least box distance to a part it is not joined to; 0 when boxes meet
 	Short     bool
+	// Slide is what the layer spread added to Offset, scaled; zero when it did not run.
+	Slide r3.Vec
+	// Stops are the offsets the part passed through, scaled: zero first, the last equal to Offset
+	// (agent-docs/parts-design.md §5.10 T2). Consecutive stops differ.
+	Stops []r3.Vec
+}
+
+// Outcome is what Run returns.
+type Outcome struct {
+	Parts  []Result
+	Spread SpreadOutcome // zero when Input.Spread is nil
 }
 
 // stuckAt is the distance past which a clearing is given up (S5).
 const stuckAt = 1e6
 
-// Run runs the stages in order and returns one Result per part.
-func Run(ctx context.Context, in Input) ([]Result, error) {
+// Run runs the stages in order, then the layer spread when asked, and returns one Result per part.
+func Run(ctx context.Context, in Input) (Outcome, error) {
 	n := len(in.Boxes)
-	r := &runner{in: in, offsets: make([]r3.Vec, n), done: make([]bool, n), res: make([]Result, n)}
+	r := &runner{in: in, offsets: make([]r3.Vec, n), done: make([]bool, n), res: make([]Result, n),
+		stops: make([][]r3.Vec, n), slide: make([]r3.Vec, n)}
 	for i := range r.res {
 		r.res[i] = Result{Stage: -1, Source: -1, Blocker: -1}
+		r.stops[i] = []r3.Vec{{}}
 	}
 	r.done[in.Ground] = true
 	r.pos = make([]int, n)
@@ -162,11 +178,15 @@ func Run(ctx context.Context, in Input) ([]Result, error) {
 	}
 	for si := range in.Stages {
 		if err := r.runStage(ctx, si); err != nil {
-			return nil, err
+			return Outcome{}, err
 		}
 	}
+	var out SpreadOutcome
+	if in.Spread != nil {
+		out = r.spread()
+	}
 	r.finish()
-	return r.res, nil
+	return Outcome{Parts: r.res, Spread: out}, nil
 }
 
 type runner struct {
@@ -177,6 +197,21 @@ type runner struct {
 	partners [][]int
 	stageOf  [][]int
 	res      []Result
+	stops    [][]r3.Vec // per part: the offsets it passed through, before the scale
+	slide    []r3.Vec   // per part: what the spread added, before the scale
+}
+
+// setOffset moves part m to offset v and keeps the stop.
+func (r *runner) setOffset(m int, v r3.Vec) {
+	r.offsets[m] = v
+	r.addStop(m, v)
+}
+
+// addStop keeps v as a stop of m unless it equals the last one (§5.10 T2).
+func (r *runner) addStop(m int, v r3.Vec) {
+	if s := r.stops[m]; v != s[len(s)-1] {
+		r.stops[m] = append(s, v)
+	}
 }
 
 func (r *runner) gapOf(si, m int) float64 {
@@ -263,6 +298,7 @@ func (r *runner) moveOne(ctx context.Context, si, m, k int, ms []int, inStage ma
 	if pk, ok := inStage[node.Parent]; ok && node.Parent >= 0 && pk < k {
 		start = r.offsets[node.Parent] // carried with its parent
 	}
+	r.addStop(m, start)
 	gap := r.gapOf(si, m)
 	partners := slices.Clone(r.partners[m])
 	var best *choice
@@ -314,7 +350,7 @@ func (r *runner) moveOne(ctx context.Context, si, m, k int, ms []int, inStage ma
 		}
 	}
 	if best.path == PathStuck {
-		r.offsets[m] = start
+		r.setOffset(m, start)
 		r.record(m, si, r3.Vec{}, 0, 0, 0, PathStuck, -1, fromStage, node)
 		return nil
 	}
@@ -322,7 +358,7 @@ func (r *runner) moveOne(ctx context.Context, si, m, k int, ms []int, inStage ma
 	if st.Clear == ClearJoined {
 		dist += gap
 	}
-	r.offsets[m] = start.Add(best.move.Scale(dist))
+	r.setOffset(m, start.Add(best.move.Scale(dist)))
 	r.record(m, si, best.move, best.travel, dist, gap, best.path, best.block, fromStage, node)
 	return nil
 }
@@ -604,8 +640,7 @@ func (r *runner) moveTogether(ctx context.Context, si int, ms []int) error {
 		if st.Clear == ClearJoined {
 			dist += gap
 		}
-		before := r.offsets[m]
-		r.offsets[m] = before.Add(best.move.Scale(dist))
+		r.setOffset(m, r.offsets[m].Add(best.move.Scale(dist)))
 		r.record(m, si, best.move, travelOut, dist, r.gapOf(si, m), best.path, best.block, fromStage, node)
 		r.done[m] = true
 	}
@@ -618,6 +653,11 @@ func (r *runner) finish() {
 	for i := range r.res {
 		r.res[i].Offset = r.offsets[i].Scale(r.in.Scale)
 		r.res[i].Moved *= r.in.Scale
+		r.res[i].Slide = r.slide[i].Scale(r.in.Scale)
+		r.res[i].Stops = make([]r3.Vec, len(r.stops[i]))
+		for j, st := range r.stops[i] {
+			r.res[i].Stops[j] = st.Scale(r.in.Scale)
+		}
 	}
 	final := make([]Box, n)
 	for i := range final {
@@ -655,10 +695,16 @@ func BoxDistance(a, b Box) float64 {
 
 // ProjectedCover returns, for two boxes seen along view, which is nearer (front is
 // 0 for a, 1 for b) and the share of the farther box's projected rectangle the
-// nearer box's covers; zero when the projections do not overlap.
+// nearer box's rectangle covers; zero unless the boxes' exact projections overlap
+// with positive area.
 func ProjectedCover(a, b Box, view r3.Vec) (int, float64) {
 	u, ok := view.Normalize()
 	if !ok {
+		return 0, 0
+	}
+	// The projections overlap with positive area exactly when a moved along the view meets b with
+	// positive volume (agent-docs/parts-design.md §5.10 H1).
+	if len(clearSpans(a, u, 0, []Box{b}, []r3.Vec{{}}, []int{0})) == 0 {
 		return 0, 0
 	}
 	eu, ev := planeBasis(u)

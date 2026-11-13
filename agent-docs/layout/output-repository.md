@@ -47,7 +47,7 @@ The rules for rows live in `agent-docs/layout.md`.
 | `examples/` | Executable Go examples with verified output. Thread forms and lead-ins use separate packages under `thread/`. See testing guidance. |
 | `examples/operation_diagnostics_example_test.go` | Builds an exact body, reads its empty warning list, and branches on a wrapped selection diagnostic. See operation-diagnostics-design. |
 | `dynamics/` | Rigid-body worlds and their scheduled step. See `agent-docs/multibody-dynamics-design.md`. |
-| `parts/` | Parts and joints of one document: exploded view, connection diagram and part views. See `agent-docs/parts-design.md`. |
+| `parts/` | Parts and joints of one document: exploded view with guide lines and, for a thin derived explode, the layer spread (`explode_spread.go`), connection diagram and part views. See `agent-docs/parts-design.md`. |
 | `apitest/` | Tests of the exported API alone. See `apitest/doc.go`. |
 | `decadtest/` | The public test kit. See `decadtest/doc.go`. |
 | `step_closed_surface.go` | Authenticates complete Revolve surfaces for the STEP writer through the internal bridge. |
