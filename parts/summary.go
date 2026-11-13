@@ -97,8 +97,10 @@ func (s Summary) WriteMarkdown(w io.Writer) error {
 			b.WriteString("\n")
 		}
 		if sp := s.Exploded.Spread; sp != nil && sp.Ran {
-			fmt.Fprintf(&b, "\nSpread: %d layers in %d columns, stacked along (%g, %g, %g); no layer hides another seen along (%g, %g, %g).\n",
-				sp.Layers, sp.Columns, sp.Axis.X, sp.Axis.Y, sp.Axis.Z, sp.View.X, sp.View.Y, sp.View.Z)
+			fmt.Fprintf(&b, "\nSpread: %d layers along (%g, %g, %g), stepped along (%g, %g, %g), %.4g x %.4g x %.4g mm; "+
+				"seen along (%g, %g, %g) no part wholly hides a part it is joined to.\n",
+				sp.Layers, sp.Axis.X, sp.Axis.Y, sp.Axis.Z, sp.Shear.X, sp.Shear.Y, sp.Shear.Z,
+				sp.Width.Base(), sp.Depth.Base(), sp.Height.Base(), sp.View.X, sp.View.Y, sp.View.Z)
 		}
 	}
 	b.WriteString("\n## Connection diagram\n\n```mermaid\n")

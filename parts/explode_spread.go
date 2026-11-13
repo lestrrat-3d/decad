@@ -20,8 +20,8 @@ func WithoutExplodeSpread() ExplodeOption {
 // is nil without WithDerivedExplode, and when no derived part leaves along a
 // world axis.
 type Spread struct {
-	// Ran is true when the layers were moved. Across, Rows, Columns, Width,
-	// Depth, Aspect and View are zero when it is false.
+	// Ran is true when the layers were laid out. Shear, Width, Depth, Height
+	// and View are zero when it is false.
 	Ran bool
 	// Axis is the positive world axis the derived layers leave along.
 	Axis r3.Vec
@@ -33,19 +33,20 @@ type Spread struct {
 	Coaxial bool
 	// Layers counts the layers, the base included.
 	Layers int
-	// Across is the positive world axis a row of cells runs along, and Rows
-	// the positive world axis the rows advance along.
-	Across, Rows r3.Vec
-	// Columns is the number of cells in a row.
-	Columns int
-	// Width and Depth are the grid's extent along Across and along Rows, gaps
-	// included, as Length values; Aspect is the longer over the shorter,
-	// Dimensionless.
-	Width, Depth, Aspect units.Value
+	// Shear is the positive world axis across Axis along which a layer on the
+	// +Axis side steps where a part joined to it would be covered; a layer on
+	// the -Axis side steps along -Shear.
+	Shear r3.Vec
+	// Width, Depth and Height are the extents of the exploded layout, every
+	// part's box at its final Offset, along Shear, along the third world axis
+	// and along Axis, as Length values after WithExplodeScale.
+	Width, Depth, Height units.Value
 	// View is a unit view direction, pointing from the camera into the scene,
-	// from which no part hides a part of another layer: -Axis + Across + Rows,
-	// normalised. Every view v with (v·Axis)(v·Across) <= 0 and
-	// (v·Axis)(v·Rows) <= 0 has the same property.
+	// from which no part wholly hides a part of a nearer layer it is joined to,
+	// unless the two share an axis (§5.9 L7): Shear - Axis, normalised. Every
+	// view v at right angles to the third world axis with
+	// (v·Axis)(v·Shear) <= 0 has the same property for the layers on the side
+	// of the base the camera looks from.
 	View r3.Vec
 }
 
@@ -60,7 +61,7 @@ type spreadPlan struct {
 }
 
 // planSpread reads L1, the derived half of L2, L3 (a) and (b), the choice of
-// Across and Rows and L4a's candidate groups from the assembled boxes, the
+// Shear and Rows, L4's mates and L4a's candidate groups from the assembled boxes, the
 // derived report, the stages and the joints (axes[n] is joint n's axis, nil when
 // it has none). It returns nil when no derived part leaves along a world axis.
 func planSpread(c config, boxes []explodeplan.Box, rep *derivedReport, stages []explodeplan.Stage,
@@ -101,7 +102,7 @@ func planSpread(c config, boxes []explodeplan.Box, rep *derivedReport, stages []
 	if axis < 0 {
 		return nil
 	}
-	var across, rows int // L5: the other axes, the shorter extent first, X, Y, Z on a tie
+	var across, rows int // L4: the other axes, the shorter extent first, X, Y, Z on a tie
 	var others []int
 	for i := range world {
 		if i != axis {
@@ -113,7 +114,7 @@ func planSpread(c config, boxes []explodeplan.Box, rep *derivedReport, stages []
 		across, rows = others[1], others[0]
 	}
 
-	sp := &spreadPlan{req: explodeplan.Spread{Axis: world[axis], Across: world[across], Rows: world[rows],
+	sp := &spreadPlan{req: explodeplan.Spread{Axis: world[axis], Shear: world[across], Rows: world[rows],
 		Layer: make([]int, len(boxes)), CosTol: cosTol, Gap: math.Max(c.gap, 1)}}
 	if w := math.Max(extent[across], extent[rows]); w > 0 {
 		sp.thinness = extent[axis] / w
@@ -157,6 +158,10 @@ func planSpread(c config, boxes []explodeplan.Box, rep *derivedReport, stages []
 		}
 	}
 	sp.req.Stacks = stackGroups(sp.req, rep, stages, joints, axes)
+	for n, j := range joints {
+		sp.req.Mates = append(sp.req.Mates, explodeplan.Mate{A: j.A, B: j.B,
+			Coaxial: axes[n] != nil && math.Abs(axes[n].Dir.Dot(world[axis])) >= cosTol})
+	}
 	return sp
 }
 
@@ -206,15 +211,21 @@ func stackGroups(req explodeplan.Spread, rep *derivedReport, stages []explodepla
 	return out
 }
 
-// report builds the public Spread from the plan and the runner's outcome.
-func (sp *spreadPlan) report(out explodeplan.SpreadOutcome) *Spread {
+// report builds the public Spread from the plan and the runner's outcome; moved holds the exploded boxes.
+func (sp *spreadPlan) report(out explodeplan.SpreadOutcome, moved []explodeplan.Box) *Spread {
 	r := &Spread{Ran: out.Ran, Axis: sp.req.Axis, Thinness: units.Scalar(sp.thinness), Coaxial: out.Coaxial, Layers: out.Layers}
 	if !out.Ran {
 		return r
 	}
-	r.Across, r.Rows, r.Columns = sp.req.Across, sp.req.Rows, out.Columns
-	r.Width, r.Depth = units.Millimeters(out.Width), units.Millimeters(out.Depth)
-	r.Aspect = units.Scalar(math.Max(out.Width, out.Depth) / math.Min(out.Width, out.Depth))
-	r.View, _ = sp.req.Across.Add(sp.req.Rows).Sub(sp.req.Axis).Normalize()
+	extent := func(d r3.Vec) units.Value {
+		lo, hi := math.Inf(1), math.Inf(-1)
+		for _, b := range moved {
+			lo, hi = math.Min(lo, b.Min.Dot(d)), math.Max(hi, b.Max.Dot(d))
+		}
+		return units.Millimeters(hi - lo)
+	}
+	r.Shear = sp.req.Shear
+	r.Width, r.Depth, r.Height = extent(sp.req.Shear), extent(sp.req.Rows), extent(sp.req.Axis)
+	r.View, _ = sp.req.Shear.Sub(sp.req.Axis).Normalize()
 	return r
 }

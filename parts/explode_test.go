@@ -285,6 +285,7 @@ func TestExplodeGuides(t *testing.T) {
 	require.Equal(t, partByName(t, ex, namePin).Anchor, g.To)
 	require.InDelta(t, 17, g.Size.Base(), 1e-6)
 	require.Equal(t, units.Length, g.Size.Kind())
+	require.True(t, g.Inline, "the pin leaves along its own line")
 	require.Nil(t, ex.Spread)
 
 	// The top lifts 10 mm; the pin is joined to the top only, so its guide starts on the lifted top.
@@ -311,6 +312,8 @@ func TestExplodeGuides(t *testing.T) {
 	requireVec(t, r3.Vec{X: 10, Y: 10, Z: 7.5}, top.From, "top from")
 	requireVec(t, r3.Vec{X: 10, Y: 10, Z: 17.5}, top.To, "top to")
 	require.InDelta(t, 20, top.Size.Base(), 1e-6)
+	require.True(t, top.Inline, "the top lifts along its own line")
+	require.True(t, pin.Inline, "the pin leaves along its own line")
 	require.Equal(t, nameTop, pin.Partner)
 	require.Equal(t, "pin in top", pin.Joint)
 	requireVec(t, r3.Vec{X: 5, Y: 10, Z: 15}, pin.From, "pin from, raised by the top's lift")
@@ -326,6 +329,7 @@ func TestExplodeGuides(t *testing.T) {
 		g := mvGuide(t, ex, boltName(k))
 		require.Equal(t, namePlate, g.Partner)
 		require.Empty(t, g.Joint)
+		require.True(t, g.Inline, boltName(k))
 		requireVec(t, r3.Vec{X: 20 * math.Cos(a), Y: 20 * math.Sin(a), Z: 2.5}, g.From, boltName(k)+" from")
 		requireVec(t, r3.Vec{X: 20 * math.Cos(a), Y: 20 * math.Sin(a), Z: 22.5}, g.To, boltName(k)+" to")
 		require.InDelta(t, 13, g.Size.Base(), 1e-6)
