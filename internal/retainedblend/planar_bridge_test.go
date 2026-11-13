@@ -91,3 +91,20 @@ func TestBridgeNearestMatchesSortedSearch(t *testing.T) {
 		})
 	}
 }
+
+func TestBridgeNearestMatchesSortedSearchWithMultipleHoles(t *testing.T) {
+	t.Parallel()
+	ps := []pt2{
+		{0, 0}, {10, 0}, {10, 10}, {0, 10},
+		{2, 2}, {2, 4}, {4, 4}, {4, 2},
+		{6, 6}, {6, 8}, {8, 8}, {8, 6},
+	}
+	outer := []int{0, 1, 2, 3}
+	holes := [][]int{{4, 5, 6, 7}, {8, 9, 10, 11}}
+	want, wantRest, wantErr := sortedBridge(ps, outer, holes)
+	got, gotRest, gotErr := bridgeNearest(ps, outer, holes)
+	require.NoError(t, wantErr)
+	require.NoError(t, gotErr)
+	require.Equal(t, want, got)
+	require.Equal(t, wantRest, gotRest)
+}
