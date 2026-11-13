@@ -117,10 +117,12 @@ type ParityMesh struct {
 	// sets it.
 	Unfiltered bool
 	// index[axis] is that axis's parity index, built by MeshParityAllContext
-	// on the axis's first sweep; indexBuilt marks the attempt, since a mesh
-	// the grid would not help keeps a nil index.
-	index      [3]*ParityIndex
-	indexBuilt [3]bool
+	// after the first completed finite, box-filtered query on that axis;
+	// indexBuilt marks the attempt, since a mesh the grid would not help keeps a
+	// nil index. indexDeferred records that completed plain query.
+	index         [3]*ParityIndex
+	indexBuilt    [3]bool
+	indexDeferred [3]bool
 	// maxMemberships overrides ParityIndexMaxMemberships when positive; only
 	// tests set it.
 	maxMemberships int
@@ -452,8 +454,10 @@ func (prepared *ParityMesh) classifyFacet(p proof.Xpt, pa Xp2, axis, u, v, dir, 
 // prepared mesh in index order, answered through the axis's parity index when
 // one applies. The result, including the error text, is identical to
 // MeshParityPreparedContext over the subset 0..n-1. The index is built once
-// per ParityMesh on the first sweep of an axis (the mesh is single-goroutine)
-// and lists, per grid cell, only the facets that can do more than continue; it
+// per ParityMesh after the first completed finite, box-filtered query on an
+// axis (the mesh is single-goroutine). That first sweep uses the plain facet
+// scan; a later sweep may use the index. The index lists, per grid cell, only
+// the facets that can do more than continue; it
 // is skipped for meshes under ParityIndexMinFacets and for any projection the
 // grid cannot place. A listed facet runs the unchanged box filter and
 // classifyFacet in ascending order. Three kinds of facet are left out of a
@@ -489,8 +493,10 @@ func MeshParityAllContext(ctx context.Context, p proof.Xpt, prepared *ParityMesh
 		indexed := false
 		if boxFilter {
 			boxes = prepared.FacetBoxes(ray.Axis)
-			if idx := prepared.parityIndex(ray.Axis, ray.U, ray.V); idx != nil {
-				cands, indexed = idx.candidates(pa.Fu, pa.Fv), true
+			if prepared.indexDeferred[ray.Axis] || prepared.indexBuilt[ray.Axis] {
+				if idx := prepared.parityIndex(ray.Axis, ray.U, ray.V); idx != nil {
+					cands, indexed = idx.candidates(pa.Fu, pa.Fv), true
+				}
 			}
 		}
 		count := n
@@ -533,6 +539,9 @@ func MeshParityAllContext(ctx context.Context, p proof.Xpt, prepared *ParityMesh
 			if ambiguous || onBoundary {
 				break
 			}
+		}
+		if boxFilter && !prepared.indexDeferred[ray.Axis] && !prepared.indexBuilt[ray.Axis] {
+			prepared.indexDeferred[ray.Axis] = true
 		}
 		if onBoundary {
 			return false, true, nil
