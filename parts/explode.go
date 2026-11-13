@@ -60,9 +60,9 @@ type Exploded struct {
 	Stages   []string    // the stage names in the order they ran; "" is the last, implicit stage
 	Scale    units.Value // the WithExplodeScale multiplier, Dimensionless
 	Short    []string    // parts whose Clearance is below their Gap, in Set order
-	// Guides lists each moved part's path from its assembled place to its exploded place, in Parts
-	// order (agent-docs/parts-design.md §5.10). decad draws nothing: the caller draws them as
-	// polylines.
+	// Guides lists one line per moved part, from where it assembles on its joint partner to its Anchor,
+	// in Parts order (agent-docs/parts-design.md §5.10). decad draws nothing: the caller draws them as
+	// segments.
 	Guides []Guide
 	// Spread reports the layer spread of a derived explode (§5.9). It is nil without WithDerivedExplode
 	// and when no derived part leaves along a world axis.
@@ -106,24 +106,33 @@ type ExplodedPart struct {
 	// WithDerivedExplode. For a derived part Pull is AxisFromFaces, AxisDeclared, PullDeclared,
 	// WorldAxis or RemovalDirection.
 	Order, Round int
-	// Layer is the part's layer in the spread (agent-docs/parts-design.md §5.9): +k or -k for the
-	// k-th derived round from the base leaving along +Spread.Axis or -Spread.Axis, 0 for the base. It
-	// is 0 when Spread is nil.
+	// Layer is the part's layer in the spread (agent-docs/parts-design.md §5.9 L2): +k or -k for the
+	// k-th layer from the base on the +Spread.Axis or -Spread.Axis side, the layers of explicit stages
+	// first, then the derived rounds, the round removed last first; 0 for the base. It is 0 when Spread
+	// is nil.
 	Layer int
-	// Slide is what the spread added to Offset: the push along Spread.Axis and the move to the
-	// layer's cell, after WithExplodeScale. It is zero when the spread did not run. Moved does not
-	// include it.
+	// Slide is what the spread added to Offset: the push of a stacked group's member (L4a), the push
+	// along Spread.Axis and the move to the layer's cell, after WithExplodeScale. It is zero when the
+	// spread did not run. Moved does not include it.
 	Slide r3.Vec
+	// Stack is the part's 1-based place in a stacked group (§5.9 L4a): 1 for the member that stays where
+	// its round placed the group, 2 and up for the members stacked outward along Spread.Axis. It is 0
+	// for a part in no stacked group and when the spread did not run.
+	Stack int
 }
 
-// Guide is the path one part moved along, for a dotted guide line from its exploded place back to
-// where it assembles. Points runs from the centre of the part's assembled box through the centre
-// after each move (a carry with its parent, each stage's move, the spread's push along its axis and
-// its move to its cell) to its Anchor, in millimetres and after WithExplodeScale. Consecutive points
-// differ, and there are at least two. A guide may pass through other parts' boxes.
+// Guide is a dotted guide line from the place one part assembles to on its joint partner, as the
+// partner sits in the exploded layout, to the part's own exploded place
+// (agent-docs/parts-design.md §5.10). Partner is the part's parent in the joint walk, else the ground,
+// and Joint the joint that made it the parent, empty when no joint reaches the part. From is the centre
+// of the part's assembled box moved by the partner's Offset; To is the part's Anchor. Both are in
+// millimetres, after the layer spread and WithExplodeScale. Size is the longest edge of the part's box,
+// so a caller can leave out the guides of small parts.
 type Guide struct {
-	Part   string
-	Points []r3.Vec
+	Part, Partner string
+	Joint         string
+	From, To      r3.Vec
+	Size          units.Value // Length
 }
 
 // BlockedPair is one pair that forced the derived removal order: Blocker stood ahead of Mover
@@ -281,7 +290,7 @@ func fromDecad(b decad.Box) explodeplan.Box {
 // (agent-docs/parts-design.md §5.3). WithDerivedExplode derives the order and
 // direction of the parts no stage names from their tessellations (§5.8); for a
 // thin assembly whose layers are not coaxial it also spreads the layers across
-// their axis (§5.9). Guides records each moved part's path (§5.10).
+// their axis (§5.9). Guides gives each moved part a line to its joint partner (§5.10).
 func (s *Set) Explode(ctx context.Context, opts ...ExplodeOption) (*Exploded, error) {
 	c, err := foldOptions(opts)
 	if err != nil {
@@ -375,7 +384,11 @@ func (s *Set) Explode(ctx context.Context, opts ...ExplodeOption) (*Exploded, er
 	}
 	var spreadReq *spreadPlan
 	if rep != nil {
-		spreadReq = planSpread(c, boxes, rep)
+		axes := make([]*Axis, len(readings))
+		for n := range readings {
+			axes[n] = readings[n].axis
+		}
+		spreadReq = planSpread(c, boxes, rep, stages.stages, joints, axes)
 	}
 	in := explodeplan.Input{Boxes: boxes, Joints: joints, Ground: ground, Order: order, Nodes: runNodes,
 		Stages: stages.stages, DefaultGap: c.gap, PartGap: stages.partGap, Scale: c.scale, Blocker: blk}
@@ -393,7 +406,7 @@ func (s *Set) Explode(ctx context.Context, opts ...ExplodeOption) (*Exploded, er
 	if spreadReq != nil {
 		ex.Spread = spreadReq.report(out.Spread)
 		for k := range ex.Parts {
-			ex.Parts[k].Layer = spreadReq.req.Layer[k]
+			ex.Parts[k].Layer, ex.Parts[k].Stack = out.Spread.Layer[k], out.Spread.Stack[k]
 		}
 	}
 	return ex, nil
@@ -458,9 +471,6 @@ func (s *Set) buildExploded(idx []int, ground int, boxes []explodeplan.Box, res 
 			Depth: nodes[k].Depth, Anchor: moved[k].Centre(), Pull: pull, Stage: stage, Dir: res[k].Dir,
 			Travel: mm(res[k].Travel), Gap: mm(res[k].Gap), Moved: mm(res[k].Moved), Clearance: mm(res[k].Clearance),
 			Path: PathState(res[k].Path), Blocker: blocker, Order: order, Round: round, Slide: res[k].Slide})
-		if pts := guidePoints(boxes[k], res[k].Stops); len(pts) >= 2 {
-			ex.Guides = append(ex.Guides, Guide{Part: s.parts[i].Name, Points: pts})
-		}
 		if res[k].Short {
 			ex.Short = append(ex.Short, s.parts[i].Name)
 		}
@@ -477,17 +487,28 @@ func (s *Set) buildExploded(idx []int, ground int, boxes []explodeplan.Box, res 
 			}
 		}
 	}
+	for k, i := range idx {
+		if k == ground {
+			continue
+		}
+		p, joint := ground, ""
+		if nodes[k].Parent >= 0 {
+			p = nodes[k].Parent
+		}
+		if nodes[k].Joint >= 0 {
+			joint = s.joints[jointOf[nodes[k].Joint]].Name
+		}
+		from := explodeplan.Box{Min: boxes[k].Min.Add(res[p].Offset), Max: boxes[k].Max.Add(res[p].Offset)}.Centre()
+		to := moved[k].Centre()
+		if from == to {
+			continue
+		}
+		d := boxes[k].Max.Sub(boxes[k].Min)
+		ex.Guides = append(ex.Guides, Guide{Part: s.parts[i].Name, Partner: s.parts[idx[p]].Name, Joint: joint,
+			From: from, To: to, Size: mm(math.Max(d.X, math.Max(d.Y, d.Z)))})
+	}
 	ex.boxes = moved
 	return ex, nil
-}
-
-// guidePoints is the centre of box moved by each stop, computed as ExplodedPart.Anchor is.
-func guidePoints(box explodeplan.Box, stops []r3.Vec) []r3.Vec {
-	out := make([]r3.Vec, len(stops))
-	for i, st := range stops {
-		out[i] = explodeplan.Box{Min: box.Min.Add(st), Max: box.Max.Add(st)}.Centre()
-	}
-	return out
 }
 
 // pickGround resolves WithExplodeGround, defaulting to the manufactured part

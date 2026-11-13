@@ -57,13 +57,14 @@ const thinBelow = 1.0 / 3.0
 type spreadPlan struct {
 	req      explodeplan.Spread
 	thinness float64
-	layers   int
 }
 
-// planSpread reads L1, L2, L3 (a) and (b) and the choice of Across and Rows
-// from the assembled boxes and the derived report. It returns nil when no
-// derived part leaves along a world axis.
-func planSpread(c config, boxes []explodeplan.Box, rep *derivedReport) *spreadPlan {
+// planSpread reads L1, the derived half of L2, L3 (a) and (b), the choice of
+// Across and Rows and L4a's candidate groups from the assembled boxes, the
+// derived report, the stages and the joints (axes[n] is joint n's axis, nil when
+// it has none). It returns nil when no derived part leaves along a world axis.
+func planSpread(c config, boxes []explodeplan.Box, rep *derivedReport, stages []explodeplan.Stage,
+	joints []explodeplan.Joint, axes []*Axis) *spreadPlan {
 	world := [3]r3.Vec{{X: 1}, {Y: 1}, {Z: 1}}
 	asm := boxes[0]
 	for _, b := range boxes[1:] {
@@ -113,7 +114,7 @@ func planSpread(c config, boxes []explodeplan.Box, rep *derivedReport) *spreadPl
 	}
 
 	sp := &spreadPlan{req: explodeplan.Spread{Axis: world[axis], Across: world[across], Rows: world[rows],
-		Layer: make([]int, len(boxes)), Gap: math.Max(c.gap, 1)}}
+		Layer: make([]int, len(boxes)), CosTol: cosTol, Gap: math.Max(c.gap, 1)}}
 	if w := math.Max(extent[across], extent[rows]); w > 0 {
 		sp.thinness = extent[axis] / w
 	} else {
@@ -144,7 +145,6 @@ func planSpread(c config, boxes []explodeplan.Box, rep *derivedReport) *spreadPl
 			m[r] = k + 1
 		}
 	}
-	sp.layers = 1 + len(ranks[0]) + len(ranks[1])
 	for k, o := range rep.order {
 		if o == 0 {
 			continue
@@ -156,12 +156,59 @@ func planSpread(c config, boxes []explodeplan.Box, rep *derivedReport) *spreadPl
 			sp.req.Layer[k] = -ranks[1][rep.round[k]]
 		}
 	}
+	sp.req.Stacks = stackGroups(sp.req, rep, stages, joints, axes)
 	return sp
+}
+
+// stackGroups returns the derived rigid groups L4a may stack: a Together stage of a round, none of whose members
+// has a WithRemoval Group, whose members are connected through joints between members with an axis along the
+// spread's axis. Members are ascending.
+func stackGroups(req explodeplan.Spread, rep *derivedReport, stages []explodeplan.Stage, joints []explodeplan.Joint,
+	axes []*Axis) [][]int {
+	var out [][]int
+	for _, st := range stages {
+		if st.Round == 0 || !st.Together || len(st.Members) < 2 {
+			continue
+		}
+		members := slices.Clone(st.Members)
+		slices.Sort(members)
+		if slices.ContainsFunc(members, func(m int) bool { return rep.grouped[m] }) {
+			continue
+		}
+		seen := map[int]struct{}{members[0]: {}}
+		queue := []int{members[0]}
+		for len(queue) > 0 {
+			p := queue[0]
+			queue = queue[1:]
+			for n, j := range joints {
+				if axes[n] == nil || math.Abs(axes[n].Dir.Dot(req.Axis)) < req.CosTol {
+					continue
+				}
+				q := j.A
+				switch p {
+				case j.A:
+					q = j.B
+				case j.B:
+				default:
+					continue
+				}
+				_, in := slices.BinarySearch(members, q)
+				if _, ok := seen[q]; in && !ok {
+					seen[q] = struct{}{}
+					queue = append(queue, q)
+				}
+			}
+		}
+		if len(seen) == len(members) {
+			out = append(out, members)
+		}
+	}
+	return out
 }
 
 // report builds the public Spread from the plan and the runner's outcome.
 func (sp *spreadPlan) report(out explodeplan.SpreadOutcome) *Spread {
-	r := &Spread{Ran: out.Ran, Axis: sp.req.Axis, Thinness: units.Scalar(sp.thinness), Coaxial: out.Coaxial, Layers: sp.layers}
+	r := &Spread{Ran: out.Ran, Axis: sp.req.Axis, Thinness: units.Scalar(sp.thinness), Coaxial: out.Coaxial, Layers: out.Layers}
 	if !out.Ran {
 		return r
 	}

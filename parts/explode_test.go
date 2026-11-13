@@ -263,9 +263,9 @@ func TestExplodeOptionsAndContext(t *testing.T) {
 	require.ErrorIs(t, err, decad.ErrUnitKind)
 }
 
-// TestExplodeGuides checks the guide of each moved part on a joint-walk explode: the pin of the pin and
-// plate runs from its assembled box centre to its anchor and the ground has none; a pin joined to the top
-// plate only is carried with it, so its guide has the carried start between the two ends (S3).
+// TestExplodeGuides checks the guide of each moved part on a joint-walk explode: a guide runs from where the part
+// assembles on its joint partner to its anchor and the ground has none. A pin joined to the top plate only has
+// the top as its partner, so its start is raised by the top's lift. Without a joint the ground is the partner.
 func TestExplodeGuides(t *testing.T) {
 	doc := decad.New()
 	s := parts.NewSet(doc)
@@ -278,14 +278,16 @@ func TestExplodeGuides(t *testing.T) {
 	require.Len(t, ex.Guides, 1)
 	g := ex.Guides[0]
 	require.Equal(t, namePin, g.Part)
-	require.Len(t, g.Points, 2)
-	requireVec(t, r3.Vec{X: 10, Y: 10, Z: 6.5}, g.Points[0], "assembled centre")
-	requireVec(t, r3.Vec{X: 10, Y: 10, Z: 28.5}, g.Points[1], "exploded centre")
-	require.Equal(t, partByName(t, ex, namePin).Anchor, g.Points[1])
+	require.Equal(t, namePlate, g.Partner)
+	require.Equal(t, namePin+"~"+namePlate, g.Joint)
+	requireVec(t, r3.Vec{X: 10, Y: 10, Z: 6.5}, g.From, "assembled centre")
+	requireVec(t, r3.Vec{X: 10, Y: 10, Z: 28.5}, g.To, "exploded centre")
+	require.Equal(t, partByName(t, ex, namePin).Anchor, g.To)
+	require.InDelta(t, 17, g.Size.Base(), 1e-6)
+	require.Equal(t, units.Length, g.Size.Kind())
 	require.Nil(t, ex.Spread)
 
-	// The pin is joined to the top only: the top lifts 10 mm, the pin starts there and then travels 12 mm
-	// to clear the top's lifted box and the 10 mm gap.
+	// The top lifts 10 mm; the pin is joined to the top only, so its guide starts on the lifted top.
 	doc = decad.New()
 	bore := func(z0 float64) *decad.Body {
 		b, err := decad.Cut(t.Context(), block(t, doc, 0, 0, 20, 20, z0, 5), cylinder(t, doc, 5, 3.2, z0-1, 7))
@@ -303,19 +305,29 @@ func TestExplodeGuides(t *testing.T) {
 	ex, err = s.Explode(t.Context(), parts.WithExplodeGround(nameBase))
 	require.NoError(t, err)
 	require.Len(t, ex.Guides, 2, "the base never moved")
-	for _, g := range ex.Guides {
-		require.NotEqual(t, nameBase, g.Part)
+	top, pin := mvGuide(t, ex, nameTop), mvGuide(t, ex, namePin1)
+	require.Equal(t, nameBase, top.Partner)
+	require.Equal(t, nameLap, top.Joint)
+	requireVec(t, r3.Vec{X: 10, Y: 10, Z: 7.5}, top.From, "top from")
+	requireVec(t, r3.Vec{X: 10, Y: 10, Z: 17.5}, top.To, "top to")
+	require.InDelta(t, 20, top.Size.Base(), 1e-6)
+	require.Equal(t, nameTop, pin.Partner)
+	require.Equal(t, "pin in top", pin.Joint)
+	requireVec(t, r3.Vec{X: 5, Y: 10, Z: 15}, pin.From, "pin from, raised by the top's lift")
+	requireVec(t, r3.Vec{X: 5, Y: 10, Z: 37}, pin.To, "pin to")
+	require.InDelta(t, 14, pin.Size.Base(), 1e-6)
+
+	// No joint reaches a bolt: the ground is its partner and the joint is empty.
+	ex, err = boltRingSet(t, 8).Explode(t.Context(), parts.WithDerivedExplode(), parts.WithExplodeGround(namePlate))
+	require.NoError(t, err)
+	require.Len(t, ex.Guides, 8)
+	for k := range 8 {
+		a := 2 * math.Pi * float64(k) / 8
+		g := mvGuide(t, ex, boltName(k))
+		require.Equal(t, namePlate, g.Partner)
+		require.Empty(t, g.Joint)
+		requireVec(t, r3.Vec{X: 20 * math.Cos(a), Y: 20 * math.Sin(a), Z: 2.5}, g.From, boltName(k)+" from")
+		requireVec(t, r3.Vec{X: 20 * math.Cos(a), Y: 20 * math.Sin(a), Z: 22.5}, g.To, boltName(k)+" to")
+		require.InDelta(t, 13, g.Size.Base(), 1e-6)
 	}
-	var found bool
-	for _, g := range ex.Guides {
-		if g.Part != namePin1 {
-			continue
-		}
-		found = true
-		require.Len(t, g.Points, 3)
-		requireVec(t, r3.Vec{X: 5, Y: 10, Z: 5}, g.Points[0], "assembled centre")
-		requireVec(t, r3.Vec{X: 5, Y: 10, Z: 15}, g.Points[1], "carried start")
-		requireVec(t, r3.Vec{X: 5, Y: 10, Z: 37}, g.Points[2], "exploded centre")
-	}
-	require.True(t, found, "the pin has a guide")
 }

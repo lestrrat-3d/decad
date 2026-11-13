@@ -13,9 +13,9 @@ import (
 
 // A derived explode of a thin assembly stacks its layers along one axis, which
 // hides the lower layers behind the wide plate. When the layers are not coaxial
-// the explode also spreads them across that axis, one cell of a grid each, and
-// Guides records the path each part took so a renderer can draw it back to its
-// assembled place.
+// the explode also spreads them across that axis, one cell of a grid each.
+// Guides gives each part a line from where it assembles on its joint partner, so
+// a renderer can show which part goes where.
 func Example_parts_explode_spread() {
 	doc := decad.New()
 	cut := func(b, tool *decad.Body, err error) (*decad.Body, error) {
@@ -109,6 +109,20 @@ func Example_parts_explode_spread() {
 		}
 	}
 
+	// Each part is joined by a pin whose axis runs along Z through the part's centre.
+	zAxis := func(x, y float64) *parts.Axis { return &parts.Axis{Point: r3.Vec{X: x, Y: y}, Dir: r3.Vec{Z: 1}} }
+	for _, j := range []parts.Joint{
+		{Name: "arbor in plate", Kind: parts.PinInBore, A: "arbor", B: "plate", Axis: zAxis(0, 0)},
+		{Name: "wheel on arbor", Kind: parts.PinInBore, A: "wheel", B: "arbor", Axis: zAxis(0, 0)},
+		{Name: "arbor in bridge", Kind: parts.PinInBore, A: "arbor", B: "bridge", Axis: zAxis(0, 0)},
+		{Name: "screw in bridge", Kind: parts.PinInBore, A: "screw", B: "bridge", Axis: zAxis(45, 15)},
+	} {
+		if err := set.Join(j); err != nil {
+			fmt.Printf("failed to join %s: %s\n", j.Name, err)
+			return
+		}
+	}
+
 	// The wheel is fixed to +Z: with the arbor gone nothing stands beside it, so the search would let it
 	// slide out sideways too.
 	ex, err := set.Explode(context.Background(), parts.WithDerivedExplode(), parts.WithExplodeGround("plate"),
@@ -134,10 +148,10 @@ func Example_parts_explode_spread() {
 		if g.Part != "wheel" {
 			continue
 		}
-		// The wheel leaves the plate along Z, then moves to its cell.
-		for i, pt := range g.Points {
-			fmt.Printf("wheel guide %d: %s\n", i, rounded(pt))
-		}
+		// The guide runs from where the wheel assembles on its arbor, as the arbor sits in the exploded
+		// layout, to the wheel's own place.
+		fmt.Printf("wheel guide: to %s along %q, from %s to %s, size %g mm\n", g.Partner, g.Joint, rounded(g.From),
+			rounded(g.To), math.Round(g.Size.Base()*100)/100)
 	}
 	// Output:
 	// spread ran: true, axis (0, 0, 1), 5 layers in 4 columns
@@ -146,7 +160,5 @@ func Example_parts_explode_spread() {
 	// wheel: layer 1, slide (-48, 57, 0)
 	// bridge: layer 2, slide (-10, 94, 0)
 	// screw: layer 3, slide (23, -65, 0)
-	// wheel guide 0: (0, 0, 10.5)
-	// wheel guide 1: (0, 0, 12.5)
-	// wheel guide 2: (-48, 57, 12.5)
+	// wheel guide: to arbor along "wheel on arbor", from (-56, -49, -16.5) to (-48, 57, 12.5), size 24 mm
 }

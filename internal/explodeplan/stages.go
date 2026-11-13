@@ -132,9 +132,6 @@ type Result struct {
 	Short     bool
 	// Slide is what the layer spread added to Offset, scaled; zero when it did not run.
 	Slide r3.Vec
-	// Stops are the offsets the part passed through, scaled: zero first, the last equal to Offset
-	// (agent-docs/parts-design.md §5.10 T2). Consecutive stops differ.
-	Stops []r3.Vec
 }
 
 // Outcome is what Run returns.
@@ -150,10 +147,9 @@ const stuckAt = 1e6
 func Run(ctx context.Context, in Input) (Outcome, error) {
 	n := len(in.Boxes)
 	r := &runner{in: in, offsets: make([]r3.Vec, n), done: make([]bool, n), res: make([]Result, n),
-		stops: make([][]r3.Vec, n), slide: make([]r3.Vec, n)}
+		slide: make([]r3.Vec, n)}
 	for i := range r.res {
 		r.res[i] = Result{Stage: -1, Source: -1, Blocker: -1}
-		r.stops[i] = []r3.Vec{{}}
 	}
 	r.done[in.Ground] = true
 	r.pos = make([]int, n)
@@ -197,22 +193,11 @@ type runner struct {
 	partners [][]int
 	stageOf  [][]int
 	res      []Result
-	stops    [][]r3.Vec // per part: the offsets it passed through, before the scale
-	slide    []r3.Vec   // per part: what the spread added, before the scale
+	slide    []r3.Vec // per part: what the spread added, before the scale
 }
 
-// setOffset moves part m to offset v and keeps the stop.
-func (r *runner) setOffset(m int, v r3.Vec) {
-	r.offsets[m] = v
-	r.addStop(m, v)
-}
-
-// addStop keeps v as a stop of m unless it equals the last one (§5.10 T2).
-func (r *runner) addStop(m int, v r3.Vec) {
-	if s := r.stops[m]; v != s[len(s)-1] {
-		r.stops[m] = append(s, v)
-	}
-}
+// setOffset moves part m to offset v.
+func (r *runner) setOffset(m int, v r3.Vec) { r.offsets[m] = v }
 
 func (r *runner) gapOf(si, m int) float64 {
 	if g := r.in.PartGap[m]; !math.IsNaN(g) {
@@ -298,7 +283,6 @@ func (r *runner) moveOne(ctx context.Context, si, m, k int, ms []int, inStage ma
 	if pk, ok := inStage[node.Parent]; ok && node.Parent >= 0 && pk < k {
 		start = r.offsets[node.Parent] // carried with its parent
 	}
-	r.addStop(m, start)
 	gap := r.gapOf(si, m)
 	partners := slices.Clone(r.partners[m])
 	var best *choice
@@ -654,10 +638,6 @@ func (r *runner) finish() {
 		r.res[i].Offset = r.offsets[i].Scale(r.in.Scale)
 		r.res[i].Moved *= r.in.Scale
 		r.res[i].Slide = r.slide[i].Scale(r.in.Scale)
-		r.res[i].Stops = make([]r3.Vec, len(r.stops[i]))
-		for j, st := range r.stops[i] {
-			r.res[i].Stops[j] = st.Scale(r.in.Scale)
-		}
 	}
 	final := make([]Box, n)
 	for i := range final {

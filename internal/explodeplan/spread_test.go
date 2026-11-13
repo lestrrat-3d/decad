@@ -16,15 +16,20 @@ const spreadGap = 2
 // of cells runs along Y and the rows advance along X.
 func runSpread(t *testing.T, boxes []explodeplan.Box, layer []int, scale float64, thin bool) explodeplan.Outcome {
 	t.Helper()
+	return runPlan(t, boxes, nil, scale, &explodeplan.Spread{Axis: r3.Vec{Z: 1}, Across: r3.Vec{Y: 1}, Rows: r3.Vec{X: 1},
+		Layer: layer, Gap: spreadGap, Thin: thin})
+}
+
+// runPlan runs the stages, then the spread, over plain boxes: part 0 is the ground and no joint exists.
+func runPlan(t *testing.T, boxes []explodeplan.Box, stages []explodeplan.Stage, scale float64, sp *explodeplan.Spread) explodeplan.Outcome {
+	t.Helper()
 	order, nodes := explodeplan.Walk(len(boxes), nil, 0)
 	partGap := make([]float64, len(boxes))
 	for i := range partGap {
 		partGap[i] = nan()
 	}
 	out, err := explodeplan.Run(t.Context(), explodeplan.Input{Boxes: boxes, Ground: 0, Order: order, Nodes: nodes,
-		DefaultGap: 10, PartGap: partGap, Scale: scale, Blocker: blocker{limit: 1e9},
-		Spread: &explodeplan.Spread{Axis: r3.Vec{Z: 1}, Across: r3.Vec{Y: 1}, Rows: r3.Vec{X: 1}, Layer: layer, Gap: spreadGap,
-			Thin: thin}})
+		Stages: stages, DefaultGap: 10, PartGap: partGap, Scale: scale, Blocker: blocker{limit: 1e9}, Spread: sp})
 	require.NoError(t, err)
 	return out
 }
@@ -57,20 +62,11 @@ func TestSpreadSlabs(t *testing.T) {
 	require.InDelta(t, -4, lo, 1e-12)
 	require.InDelta(t, -2, hi, 1e-12)
 
-	// The push is one stop, the move to the cell another; the last stop is the offset.
-	for i, p := range out.Parts {
-		require.Equal(t, r3.Vec{}, p.Stops[0], "part %d starts at zero", i)
-		require.Equal(t, p.Offset, p.Stops[len(p.Stops)-1], "part %d ends at its offset", i)
-	}
-	require.Equal(t, r3.Vec{Z: 5}, out.Parts[2].Stops[1], "the push of layer +2")
-	require.Len(t, out.Parts[0].Stops, 1, "the base never moves")
-
-	// A scale doubles the slide and every stop with the offset.
+	// A scale doubles the slide with the offset.
 	scaled := runSpread(t, boxes, []int{0, 1, 2, -1}, 2, true)
 	for i, p := range scaled.Parts {
 		require.Equal(t, out.Parts[i].Offset.Scale(2), p.Offset, "part %d", i)
 		require.Equal(t, out.Parts[i].Slide.Scale(2), p.Slide, "part %d slide", i)
-		require.Equal(t, p.Offset, p.Stops[len(p.Stops)-1], "part %d", i)
 	}
 }
 
@@ -169,7 +165,6 @@ func TestSpreadCoaxial(t *testing.T) {
 	for i, p := range out.Parts {
 		require.Equal(t, r3.Vec{}, p.Offset, "part %d", i)
 		require.Equal(t, r3.Vec{}, p.Slide, "part %d", i)
-		require.Len(t, p.Stops, 1, "part %d", i)
 	}
 
 	// One footprint moved off the axis spreads the layers.
@@ -184,4 +179,74 @@ func TestSpreadCoaxial(t *testing.T) {
 	require.False(t, out.Spread.Coaxial)
 	require.False(t, out.Spread.Ran)
 	require.Equal(t, r3.Vec{}, out.Parts[2].Offset)
+}
+
+func TestSpreadLayers(t *testing.T) {
+	// Ground 0 and six 2 mm cubes on the floor. Explicit stages A (part 1, up) and B (part 2, down) each make a
+	// layer, C (part 6) has no direction and no joint so it does not move and stays in the base. Derived parts 3
+	// and 4 leave up in rounds 2 and 1, part 5 leaves down in round 1.
+	boxes := []explodeplan.Box{box(0, 0, 0, 10, 10, 2)}
+	for k := range 6 {
+		x := float64(20 + 10*k)
+		boxes = append(boxes, box(x, 0, 0, x+2, 2, 2))
+	}
+	up, down := r3.Vec{Z: 1}, r3.Vec{Z: -1}
+	stages := []explodeplan.Stage{
+		{Members: []int{1}, Gap: nan(), Clear: explodeplan.ClearAll, Dir: up},
+		{Members: []int{2}, Gap: nan(), Clear: explodeplan.ClearAll, Dir: down},
+		{Members: []int{6}, Gap: nan(), Clear: explodeplan.ClearAll},
+		{Members: []int{3}, Gap: nan(), Clear: explodeplan.ClearAll, Dir: up, Round: 2},
+		{Members: []int{4}, Gap: nan(), Clear: explodeplan.ClearAll, Dir: up, Round: 1},
+		{Members: []int{5}, Gap: nan(), Clear: explodeplan.ClearAll, Dir: down, Round: 1},
+	}
+	for _, thin := range []bool{true, false} {
+		out := runPlan(t, boxes, stages, 1, &explodeplan.Spread{Axis: r3.Vec{Z: 1}, Across: r3.Vec{Y: 1}, Rows: r3.Vec{X: 1},
+			Layer: []int{0, 0, 0, 1, 2, -1, 0}, Gap: spreadGap, Thin: thin})
+		require.Equal(t, []int{0, 1, -1, 2, 3, -2, 0}, out.Spread.Layer, "thin %v", thin)
+		require.Equal(t, 6, out.Spread.Layers, "thin %v", thin)
+		require.Equal(t, r3.Vec{}, out.Parts[6].Offset, "the part with no direction stays")
+	}
+}
+
+func TestSpreadStacks(t *testing.T) {
+	// Gap 2, Z is the axis. G is the base. Layer +1 holds B, a 20 mm plate, S, a pin through it that sticks out
+	// above, R, a ring above the pin, and Q, apart from them. Layer -1 holds B2 and its pin S2.
+	boxes := []explodeplan.Box{
+		box(0, 0, 0, 40, 40, 2),    // 0 G
+		box(0, 0, 3, 20, 20, 5),    // 1 B
+		box(8, 8, 2, 12, 12, 9),    // 2 S
+		box(8, 8, 10, 12, 12, 11),  // 3 R
+		box(30, 30, 3, 34, 34, 4),  // 4 Q
+		box(50, 0, -5, 70, 20, -3), // 5 B2
+		box(58, 8, -9, 62, 12, -2), // 6 S2
+	}
+	layer := []int{0, 1, 1, 1, 1, -1, -1}
+	out := runPlan(t, boxes, nil, 1, &explodeplan.Spread{Axis: r3.Vec{Z: 1}, Across: r3.Vec{Y: 1}, Rows: r3.Vec{X: 1},
+		Layer: layer, Gap: spreadGap, Thin: true, Stacks: [][]int{{1, 2}, {5, 6}}})
+	require.True(t, out.Spread.Ran)
+	require.False(t, out.Spread.Coaxial)
+	require.Equal(t, []int{0, 1, 2, 0, 0, 1, 2}, out.Spread.Stack)
+	require.Equal(t, 3, out.Spread.Layers)
+
+	slide := func(p int) r3.Vec { return out.Parts[p].Slide }
+	// S moves past B grown by 2 (t = 5) and past R, which it meets on the way (t = 11).
+	require.InDelta(t, 11, slide(2).Z-slide(1).Z, 1e-9)
+	require.InDelta(t, 0, slide(2).X-slide(1).X, 1e-9)
+	require.InDelta(t, 0, slide(2).Y-slide(1).Y, 1e-9)
+	require.InDelta(t, -5, slide(6).Z-slide(5).Z, 1e-9)
+	for _, p := range []int{3, 4} {
+		require.Equal(t, slide(1), slide(p), "part %d moves with the layer", p)
+	}
+	require.Equal(t, slide(5).X, slide(6).X)
+
+	final := make([]explodeplan.Box, len(boxes))
+	for i := range boxes {
+		final[i] = moved(boxes[i], out.Parts[i].Offset)
+	}
+	for a := 1; a <= 4; a++ {
+		for b := a + 1; b <= 4; b++ {
+			require.Positive(t, explodeplan.BoxDistance(final[a], final[b]), "parts %d and %d stand apart", a, b)
+		}
+	}
+	require.GreaterOrEqual(t, final[2].Min.Z-final[3].Max.Z, spreadGap-1e-9, "S is past R by the gap")
 }
