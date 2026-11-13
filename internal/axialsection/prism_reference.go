@@ -6,6 +6,7 @@ import (
 	"github.com/lestrrat-3d/r3"
 
 	"github.com/lestrrat-3d/decad/internal/patternrecord"
+	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 )
 
@@ -32,6 +33,19 @@ func (o Operand) AsReference() (Operand, bool) {
 	if !ok {
 		return o, false
 	}
+	gap := 0.0
+	for _, end := range []struct {
+		f     r3.Frame
+		level *big.Rat
+	}{{f0, o.Level0}, {f1, o.Level1}} {
+		got, lo, ok := patternrecord.PlaneHeight(end.f, r3.Identity(), new(big.Rat), o.Frame0, r3.Identity())
+		want, _, ok2 := patternrecord.PlaneHeight(o.Frame0, r3.Identity(), end.level, o.Frame0, r3.Identity())
+		if !ok || !ok2 {
+			return o, false
+		}
+		gap = max(gap, patternrecord.HeightGap(got, want, lo))
+	}
+	o.PlaneGap = proofbound.AbsSumUpper(o.PlaneGap, gap)
 	shift, lateral, ok := patternrecord.SweepShift(f0, f1, r3.Identity())
 	if !ok || shift.Sign() <= 0 {
 		return o, false

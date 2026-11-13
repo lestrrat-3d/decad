@@ -2,18 +2,25 @@ package loftrecord
 
 import (
 	"github.com/lestrrat-3d/decad/internal/capplane"
+	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/topo"
 )
 
-// clearExactCapLevels sets each cap's AxialDelta to zero where CapOnRecord
+// stateCapLevels sets each cap's AxialDelta to planeGap where CapOnRecord
 // proves that the cap's Plane tag and every point its loops hold lie exactly
 // on the plane its CapRecord denotes (agent-docs/loft-design.md §18). Any
-// other cap keeps the loft's vertex displacement.
-func clearExactCapLevels(caps ...*topo.Face) {
+// other cap adds planeGap to the loft's vertex displacement it already holds.
+// planeGap is Payload.JoinPlaneGap, zero for a loft that is no join, which
+// leaves every other cap as it is.
+func stateCapLevels(planeGap float64, caps ...*topo.Face) {
 	for _, face := range caps {
 		if CapOnRecord(face) {
-			face.AxialDelta = 0
+			face.AxialDelta = planeGap
+			continue
+		}
+		if planeGap != 0 {
+			face.AxialDelta = proofbound.AbsSumUpper(face.AxialDelta, planeGap)
 		}
 	}
 }

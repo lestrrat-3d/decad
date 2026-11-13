@@ -78,6 +78,60 @@ func TestPlaceRecordsARotatedLobeAsTheLobeDrawnThere(t *testing.T) {
 	}
 }
 
+// TestPlaceChargesPlaneGapAlongTheNormalOnly pins that PlaneGap holds the height
+// gaps and the off-plane charge of a placement, not its in-plane charge Delta.
+func TestPlaceChargesPlaneGapAlongTheNormalOnly(t *testing.T) {
+	t.Parallel()
+	const n = 17
+	lobe, _ := lobeSection(t, 3, 0, 0.4*math.Pi/n, 6)
+	ref := sweep(t, lobe, r3.Identity(), true)
+	place := func(t *testing.T, turn float64, preset float64, lateral float64) []axialsection.Operand {
+		t.Helper()
+		ops := []axialsection.Operand{ref, sweep(t, lobe, turnAbout(t, r3.NewVec(0, 0, 1), turn), false)}
+		ops[0].Lateral = lateral
+		ops[1].PlaneGap = preset
+		out, ok, err := axialsection.Place(t.Context(), ops)
+		require.NoError(t, err)
+		require.True(t, ok)
+		return out
+	}
+
+	t.Run("a turn that keeps the z axis exact", func(t *testing.T) {
+		t.Parallel()
+		// r3 keeps the z axis of this turn exact (measured), so only Delta moves.
+		out := place(t, 1.0/n, 0, 0)
+		require.Positive(t, out[1].Delta)
+		require.Zero(t, out[1].PlaneGap)
+	})
+
+	t.Run("a turn that rounds the z axis", func(t *testing.T) {
+		t.Parallel()
+		// r3 rounds the z axis of this turn to 0.9999999999999999 (measured).
+		out := place(t, 10.0/n, 0, 0)
+		require.Positive(t, out[1].PlaneGap)
+		require.Less(t, out[1].PlaneGap, 1e-12)
+	})
+
+	t.Run("the join adds the lateral offsets", func(t *testing.T) {
+		t.Parallel()
+		out := place(t, 10.0/n, 0, 0)
+		want := 0.0
+		for _, op := range out {
+			want = max(want, op.PlaneGap+op.Lateral)
+		}
+		require.GreaterOrEqual(t, axialsection.JoinPlaneGap(out, 0), want+out[0].Lateral)
+		require.InDelta(t, want+out[0].Lateral, axialsection.JoinPlaneGap(out, 0), 1e-20)
+		out = place(t, 10.0/n, 0, 1e-15)
+		require.GreaterOrEqual(t, axialsection.JoinPlaneGap(out, 0), 2e-15)
+	})
+
+	t.Run("an inherited gap is kept", func(t *testing.T) {
+		t.Parallel()
+		out := place(t, 1.0/n, 1e-15, 0)
+		require.GreaterOrEqual(t, out[1].PlaneGap, 1e-15)
+	})
+}
+
 func TestPlaceMissesWhatItCannotPlaceExactly(t *testing.T) {
 	t.Parallel()
 	lobe, _ := lobeSection(t, 3, 0, 0.1, 4)

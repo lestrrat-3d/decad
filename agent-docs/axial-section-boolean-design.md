@@ -23,7 +23,8 @@ from the solid it stands for and this route rebuilds from records.
 Operands are admitted together only when every one lies between the same two planes: equal section axes and equal exact
 offsets of both end planes along the normal. A loft records the planes. A set of prisms takes them from its first unplaced
 prism (`Operand.AsReference`): that prism's frame raised along its normal by each sweep level, with the float rounding of
-the raised origin charged as its lateral offset. Anything else is a miss, and the Union takes its next route.
+the raised origin charged as its lateral offset, and the offset of its raised plane along the normal charged as its
+`PlaneGap`. Anything else is a miss, and the Union takes its next route.
 
 ## 2. Flow
 

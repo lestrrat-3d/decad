@@ -3073,11 +3073,12 @@ equalities: the `Plane` tag's `U` and `V` are orthogonal to `m` and its `N` is
 parallel to it; the tag origin and every vertex of every cap loop lie on the
 plane; and every `Circle3` or `Arc3` rim has its center on the plane and its
 axis parallel to `m`. Any other edge curve refuses. The cap then states
-`AxialDelta` 0. A join loft (`JoinDelta` nonzero,
-`agent-docs/pattern-union-design.md`) never clears its caps: its
-`JoinDelta` also carries how far each placed operand's end plane sits from the
-reference's, so its record's section plane is not the ideal join's end plane.
-The other terms folded into `delta` are in-plane: the fillet's
+`AxialDelta` `Payload.JoinPlaneGap`, which is 0 for a loft that is no join. A
+join loft (`agent-docs/pattern-union-design.md`) sets `JoinPlaneGap` to how far
+its operands' end planes sit from the record's section planes along their
+normal, so an admitted cap states that gap, and any other cap states the vertex
+displacement plus `JoinPlaneGap`. `stateCapLevels` applies both rules.
+The terms folded into `delta` are in-plane: the join's `JoinDelta`, the fillet's
 `ConstructionDelta` is a matched displacement inside each section plane, and
 the station and section terms are plane-local. The check runs after the bore rewrite above, so it reads the
 cap's final rim circles. In-plane station rounding does not displace a cap

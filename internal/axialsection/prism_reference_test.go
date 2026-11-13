@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/lestrrat-3d/decad/internal/axialsection"
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 )
 
@@ -54,5 +55,31 @@ func TestAsReference(t *testing.T) {
 		got, ok := loft.AsReference()
 		require.True(t, ok)
 		require.Equal(t, loft, got)
+	})
+}
+
+func TestAsReferenceChargesTheRaisedPlane(t *testing.T) {
+	t.Parallel()
+	prism := func(origin float64, level1 float64) axialsection.Operand {
+		f := xyFrame(t, origin)
+		return axialsection.Operand{
+			Frame0: f, Frame1: f, Xform: r3.Identity(),
+			Level0: proofarith.FloatRat(0), Level1: proofarith.FloatRat(level1),
+		}
+	}
+
+	t.Run("a raised origin that rounds", func(t *testing.T) {
+		t.Parallel()
+		// 0.1 + 0.2 is not the float 0.3, so the raised plane sits off the exact level.
+		ref, ok := prism(0.1, 0.2).AsReference()
+		require.True(t, ok)
+		require.Positive(t, ref.PlaneGap)
+	})
+
+	t.Run("a raised origin that is exact", func(t *testing.T) {
+		t.Parallel()
+		ref, ok := prism(0, 2).AsReference()
+		require.True(t, ok)
+		require.Zero(t, ref.PlaneGap)
 	})
 }

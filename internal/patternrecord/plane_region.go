@@ -70,6 +70,18 @@ func MovePlaneRegion(budget *proofbound.WorkBudget, region Region, pm PlaneMap) 
 	return out, proofbound.AbsSumUpper(delta, normal), nil
 }
 
+// RegionNormalCharge is MovePlaneRegion's off-plane term over region's extent
+// widened by margin mm on each in-plane axis: an upper bound on how far any
+// point within margin of region, placed by pm, sits off the reference plane
+// along its normal (agent-docs/pattern-union-design.md §2).
+func RegionNormalCharge(region Region, pm PlaneMap, margin float64) (float64, error) {
+	ext, err := regionExtent(region)
+	if err != nil {
+		return 0, err
+	}
+	return pm.NormalCharge(proofbound.AbsSumUpper(ext.u, margin), proofbound.AbsSumUpper(ext.v, margin)), nil
+}
+
 func movePlaneSegment(seg CurveSegment, pm PlaneMap, mv PointMotion, defect float64) (CurveSegment, float64, error) {
 	pts := func(in ...Point2) ([]Point2, float64, error) {
 		moved := make([]Point2, len(in))

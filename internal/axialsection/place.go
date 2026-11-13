@@ -21,7 +21,8 @@ import (
 // the reference frame is not exactly orthonormal, the map is not a similarity, its
 // two end planes sit more than a few float steps from the reference operand's
 // heights, or a segment kind has no such image. The distance an end plane does sit
-// from the reference height is charged into Delta beside the section's own charge. Operands that carry no placement are returned as they are,
+// from the reference height is charged into Delta beside the section's own charge,
+// and with the off-plane charge of the moved section into PlaneGap. Operands that carry no placement are returned as they are,
 // so a set with none behaves as it did before placed operands were admitted.
 func Place(ctx context.Context, ops []Operand) ([]Operand, bool, error) {
 	ref := -1
@@ -62,6 +63,13 @@ func Place(ctx context.Context, ops []Operand) ([]Operand, bool, error) {
 				return nil, false, nil //nolint:nilerr // a section with no exact image is a miss, not a failure
 			}
 		}
+		normal := 0.0
+		if !onRef {
+			var err error
+			if normal, err = patternrecord.RegionNormalCharge(region, pm, op.Delta); err != nil {
+				return nil, false, nil //nolint:nilerr // a section with no exact image is a miss, not a failure
+			}
+		}
 		var gaps [2]float64
 		for k, levels := range [2][2]*big.Rat{{op.Level0, r.Level0}, {op.Level1, r.Level1}} {
 			got, lo, ok := patternrecord.PlaneHeight(op.Frame0, op.Xform, levels[0], r.Frame0, r.Xform)
@@ -87,6 +95,7 @@ func Place(ctx context.Context, ops []Operand) ([]Operand, bool, error) {
 			op.Section = momentinput.Profile{Outer: moved.Outer, Holes: moved.Holes}
 			delta = d
 		}
+		op.PlaneGap = proofbound.AbsSumUpper(op.PlaneGap, normal, max(gaps[0], gaps[1]))
 		op.Delta = proofbound.AbsSumUpper(op.Delta, delta, gaps[0], gaps[1])
 		op.Frame0, op.Frame1, op.Xform = r.Frame0, r.Frame1, r.Xform
 		op.Plane0, op.Plane1, op.FromLoft = r.Plane0, r.Plane1, false
@@ -109,6 +118,19 @@ func JoinDelta(ops []Operand, ref int) float64 {
 	worst := 0.0
 	for _, op := range ops {
 		worst = max(worst, proofbound.AbsSumUpper(op.Delta, op.Lateral))
+	}
+	return proofbound.AbsSumUpper(worst, ops[ref].Lateral)
+}
+
+// JoinPlaneGap is how far the end planes of the join of the operands can sit
+// from the recorded section planes, along their normal: the largest PlaneGap
+// plus that operand's Lateral, plus the reference operand's Lateral, whose end
+// frame the result keeps. An end frame's lateral offset moves its plane along
+// the exact normal by at most Lateral.
+func JoinPlaneGap(ops []Operand, ref int) float64 {
+	worst := 0.0
+	for _, op := range ops {
+		worst = max(worst, proofbound.AbsSumUpper(op.PlaneGap, op.Lateral))
 	}
 	return proofbound.AbsSumUpper(worst, ops[ref].Lateral)
 }

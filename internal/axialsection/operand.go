@@ -37,6 +37,11 @@ type Operand struct {
 	// Level0 and Level1 are the exact axial offsets of the end planes along the
 	// frame normal, from Frame0 of the prism or loft.
 	Level0, Level1 *big.Rat
+	// PlaneGap is an upper bound, in mm, on how far the true end planes of the
+	// solid this operand stands for sit from its recorded end planes, along their
+	// normal, measured at the projection of the start origin (Lateral is apart).
+	// Place adds the height gaps and off-plane charge of a placed operand.
+	PlaneGap float64
 }
 
 // OperandOf reads a payload as an axial extrusion: a prism, or a loft whose two
@@ -83,7 +88,7 @@ func OperandOf(ctx context.Context, payload topo.Payload) (Operand, bool, error)
 		}
 		return Operand{
 			Section: p.Profile0, Frame0: p.Frame0, Frame1: p.Frame1, Plane0: p.Plane0, Plane1: p.Plane1,
-			FromLoft: true, Level0: new(big.Rat), Level1: shift, Xform: p.Xform, Delta: p.JoinDelta, Lateral: lateral,
+			FromLoft: true, Level0: new(big.Rat), Level1: shift, Xform: p.Xform, Delta: p.JoinDelta, Lateral: lateral, PlaneGap: p.JoinPlaneGap,
 		}, true, nil
 	}
 	return Operand{}, false, nil
