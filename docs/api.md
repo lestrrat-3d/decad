@@ -35,7 +35,7 @@ Root-package identifiers carry the `decad.` prefix. `apitest/api_reference_test.
 | Package | Purpose |
 |---|---|
 | `decad` | Documents, bodies, features, selectors, measurement and verification. |
-| `decad/export` | Writes a body as STEP, STL, OBJ, 3MF or glTF, draws it as a PNG image, or writes a 2D DXF drawing of it. |
+| `decad/export` | Writes a body as STEP, IGES, STL, OBJ, 3MF or glTF, draws it as a PNG image, writes a 2D DXF drawing of it, or writes its print layers as G-code. |
 | `decad/dynamics` | Rigid-body worlds, stepping and replayable timelines. |
 | `decad/parts` | The parts and joints of a build: an exploded view and a connection diagram. |
 | `decad/decadtest` | Assertions for tests that build and verify bodies. |

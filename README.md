@@ -6,53 +6,108 @@
   <img src="docs/images/hero.gif" alt="DECAD letters assemble on a navy plate, a light sweeps across them, the logo holds, and the letters lift away" width="900">
 </p>
 
-A **headless CAD system** for Go: the 3D modeling layer above the
-[sketch](https://github.com/lestrrat-3d/sketch) 2D constraint engine and the
-[r3](https://github.com/lestrrat-3d/r3) coordinate-math layer.
+A **headless CAD engine** for Go. You build 3D parts in code, then check them:
+whether each body is a closed, valid solid, what its volume is, whether bodies
+interfere, and whether any wall is thinner than a minimum you state.
 
 > **Work in progress.** The API and supported capabilities may change.
 
-See the [API reference](docs/api.md) for the functions the library offers and
-[Data structures](docs/data-structures.md) for the types they take and return.
+decad is the 3D modeling layer above the
+[sketch](https://github.com/lestrrat-3d/sketch) 2D constraint engine and the
+[r3](https://github.com/lestrrat-3d/r3) coordinate-math layer. It needs no CAD
+application, no GUI and no network.
+
+## Why use it
+
+- **A model is a program.** Dimensioned sketches and ordered features build a
+  body. Change a dimension, run the program again, and the same inputs rebuild
+  the same part.
+- **A check, not a render.** `Document.Verify` returns a report whose status
+  is, from best to worst, `Sound`, `Suspect`, `Violating`, `Interfering` or
+  `Unsound`. Every volume, area and centroid carries an error bound. A check
+  decad cannot decide keeps the report from being `Sound`, and
+  `Report.Passed` is true only for `Sound`.
+- **A verification step for coding agents.** An agent can model a part here and
+  prove it sound before it writes the add-in that builds the part in Autodesk
+  Fusion or another CAD application. The agent finds a bad dimension in a
+  test run, not inside the CAD application.
+- **It checks motion too.** A motion check proves each interval it reports
+  clear free of collision at every pose in it, not only at sampled poses. The `dynamics`
+  package simulates impact and friction for a listed set of shapes. See
+  [Motion and collisions](#motion-and-collisions).
+- **It reads and writes common CAD and mesh formats.** It writes STEP, IGES,
+  STL, OBJ, 3MF, glTF, DXF, PNG and G-code. It reads STL, OBJ, 3MF, STEP and
+  IGES files into mesh bodies.
+
+## Quick start
+
+```
+go get github.com/lestrrat-3d/decad
+```
+
+```go
+// A solved 2D profile: a 100 x 60 plate on the XY plane.
+w := sketch.NewWorld()
+s, _ := w.CreateSketch(w.XY())
+rect := s.CreateRectangle(0, 0, 100, 60)
+s.Fix(rect.A)
+s.Solve(ctx)
+
+// Extrude it 10 mm, then verify the document.
+doc := decad.New()
+body, _ := decad.Extrude(ctx, doc, s, s.Profiles()[0],
+	decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+report, _ := doc.Verify(ctx)
+vol, _ := body.Volume()
+
+fmt.Println(vol.Value, vol.Exactness) // 60000 mm^3 Exact
+fmt.Println(report.Status, report.Passed()) // Sound true
+```
+
+The snippet drops error handling for length. The checked version is
+[`example_quickstart_test.go`](example_quickstart_test.go), and
+[`examples/`](examples) holds runnable examples by feature, each with output
+that `go test` checks.
+
+## What you can do
+
+| Task | What decad offers |
+|---|---|
+| Build | Extrude, Revolve, Sweep, Loft and Coil, from sketch profiles that may hold fit splines, with a surface-result option that leaves a sheet body. SheetMetal builds a bent strip and reports its flat length. |
+| Modify | Fillet, Chamfer, Shell, Draft, Hole, Thread, Boss, WebPath ribs, Emboss, Thicken and Offset. |
+| Combine | Union, Cut, Intersect and Split, plus Copy, Mirror, linear, circular and path patterns, and Arrange, which lays bodies side by side on a flat bed. |
+| Surfaces | Patch, Stitch, Unstitch, Trim and Extend on sheet bodies. |
+| Parametrize | Feature values read by name or expression from a `sketch` parameter table. Edit the table and run the program again to rebuild. `Document.Bindings` lists every value read. |
+| Read | Volume, area, centroid, bounds, mass properties, topology, surface and curve geometry, cross-sections, point location and distance, and tessellation with an error bound. |
+| Verify | Watertightness and solid validity, interference, clearances, minimum wall thickness, mold undercuts and concave radii, each with a typed diagnostic when a check fails. |
+| Move | `VerifyMotion` for one joint path, `VerifyLinkage` for joint chains and closed loops, `VerifyJointBox` for a box of joint values, `ContactPair` and `SweepPair` for contact, and the `dynamics` package for rigid-body timelines. |
+| Assemble | The `parts` package names parts and joints, draws an exploded view and a connection diagram, checks declared joints against the geometry, and writes a bill of materials. |
+| Import and export | STL, OBJ and 3MF meshes, STEP solids with plane, cylinder, cone and sphere-cap faces, and planar-faced IGES solids read in as mesh bodies. STEP, IGES, STL, OBJ, 3MF, glTF, DXF, PNG and G-code are written out. |
 
 ## Why this exists
 
-When a designer wanted a parametric part, they worked in a CAD app. They drew
-sketches, gave them dimensions, and added features such as extrusions and cuts.
-If a dimension changed, the app rebuilt the part from those steps. The designer
-could inspect the result and adjust the model in the same place. That workflow
-still works.
+A designer who wants a parametric part works in a CAD application. They draw
+sketches, give them dimensions, and add features such as extrusions and cuts.
+When a dimension changes, the application rebuilds the part from those steps.
 
-Coding agents can now make convincing 3D shapes. Some are good enough for a
-one-off render or print. But if you ask for a bevel gear built to given
-dimensions, a shape that looks like a gear is only the start. Its teeth have
-to mesh with its mate. A fresh request to the agent may also produce different
-geometry. Variation may be fine for a one-off model; it makes a dimensioned
-part hard to reproduce.
+Coding agents can generate 3D shapes, and some are good enough for a one-off
+render or print. But if you ask for a bevel gear built to given dimensions, a
+shape that looks like a gear is only the start. Its teeth have to mesh with
+its mate. A fresh request to the agent may also produce different
+geometry, which makes a dimensioned part hard to reproduce.
 
-With [decad](https://github.com/lestrrat-3d/decad), a Go program builds and
-checks a CAD model without a CAD app. It defines dimensioned sketches and
-ordered modeling operations, then builds 3D bodies from them. decad can
-tessellate those bodies for rendering. The program can measure volume and
-centroid, check whether bodies interfere or have enough clearance, and ask
-whether a wall is too thin for a cutting tool. An agent can change a dimension
-or feature, run the program again, and inspect the new body and verification
-report. With the program and inputs held fixed, **the same model can be rebuilt**
-without a fresh request to the agent.
+With decad, a Go program builds and checks the model. With the program and
+inputs held fixed, **the same model can be rebuilt** without a fresh request to
+the agent. The program can measure volume and centroid, check whether bodies
+interfere or have enough clearance, and ask whether a wall is too thin for a
+cutting tool. An agent can change a dimension or feature, run the program
+again, and read the new verification report.
 
-An agent can also use decad to verify a construction before writing an add-in
-that builds it in Autodesk Fusion or another CAD app. That route may be more
-practical when rebuilding the model in decad is too slow for the intended use.
-decad's performance may improve, but matching those apps' speed is not its
-primary goal. The agent checks the part in the app too, because it may
-interpret the steps differently.
+decad does not try to match the speed of a CAD application, so an agent may
+still build the final model there. The agent checks the part in that
+application too, because it may interpret the steps differently.
 
-For certified shape and motion paths, decad can detect a collision and compute
-the resulting rigid-body motion. The [current support guide](agent-docs/collision-v1-support.md)
-names those paths, and the [box collision example](examples/dynamics_box_collision_example_test.go)
-runs an impact and reports the rebound.
-
-## What it builds
+## Gallery
 
 Each animation shows intermediate decad bodies rendered from the triangle
 meshes decad tessellates.
@@ -157,7 +212,11 @@ overlap at one of its ends. An undecided interval makes the report `Suspect`, an
 decad does not count it as clear.
 
 The `dynamics` package simulates rigid bodies under gravity, impact and
-friction. A `dynamics.Timeline` advances a scene one fixed step at a time. A step
+friction, for the shape and motion paths the
+[collision support guide](agent-docs/collision-v1-support.md) lists. The
+[box collision example](examples/dynamics_box_collision_example_test.go) runs an
+impact and reports the rebound. A `dynamics.Timeline` advances a scene one
+fixed step at a time. A step
 that its proofs cannot settle returns `Undecided` with a typed reason, and the
 timeline stops there. Every frame below is a pose the check or the timeline
 computed. The two linkage clips drive each mechanism out to the last pose the
@@ -209,10 +268,26 @@ comma-separated image names to the selected renderer. Leave it blank for all
 images in that group. When images change, the workflow pushes a new branch and
 links to a page where you can open a pull request.
 
+## Assemblies and export
+
+The `parts` package names the placed bodies of one document and the joints
+between them. `Set.Explode` pulls each part away along its joint axis and
+returns the offsets, label anchors and leader lines for an exploded view.
+`parts.WithDerivedExplode` works out the removal order from the tessellated
+parts. `Set.Check` compares each declared joint with the faces of the parts it
+joins, `Set.BOM` returns the bill of materials, and `Set.Graph` writes the
+connection diagram as a Mermaid flowchart. See
+[`examples/parts_summary_example_test.go`](examples/parts_summary_example_test.go).
+
+The `export` package writes a body or a whole assembly to STEP, IGES, STL, OBJ,
+3MF, glTF, DXF, PNG or G-code. `export.STEPItems` and `export.ThreeMFItems`
+write several bodies as named, placed parts of one file.
+
 ## Layering
 
 ```
 decad    3D bodies, features, verification   (this module)
+         subpackages: export, dynamics, parts, decadtest
   |
 sketch   parametric 2D constraint solving    github.com/lestrrat-3d/sketch
   |
@@ -221,26 +296,33 @@ r3       vectors, frames, rigid transforms   github.com/lestrrat-3d/r3
 units    typed quantities (Value, Kind)      github.com/lestrrat-3d/units
 ```
 
-decad owns the 3D side. It builds solids and sheet bodies, records their
-topology, applies features and booleans, and runs the verification checks
-(watertightness, volume, interference, wall thickness). Every measurement it
-returns is a `units.Value`.
+decad builds solids and sheet bodies, records their topology, applies features
+and booleans, and runs the verification checks (solid validity, interference,
+clearance, wall thickness). Every scalar measurement it returns, and every
+error bound, is a `units.Value`. Positions are `r3.Vec` in millimetres.
 
-`sketch` answers every 2D question: whether a profile closes, whether a sketch
-is fully constrained or over-constrained, where two curves intersect, and how a
-set of curves divides a plane into regions. decad also builds private `sketch`
-scenes from its own recorded geometry and reads the regions back. decad
-consumes these answers. When `sketch` reports a curve fragment as
-approximate, decad rejects the input instead of repairing it.
+decad asks `sketch` its 2D questions: whether a profile closes, whether a
+sketch is fully constrained or over-constrained, where two curves intersect,
+and how a set of curves divides a plane into regions. decad also builds
+private `sketch` scenes from its own recorded geometry and reads the regions
+back. When `sketch` reports a curve fragment as approximate, decad rejects
+the input instead of repairing it.
 
-`r3` owns vectors, frames and rigid transforms. decad does all coordinate
-math, including local-to-world conversion, through `r3`. `r3` excludes shapes
-by charter: *"if it lives in ℝ³ it belongs here; if it **is** a shape, it does
-not"*.
+`r3` provides vectors, frames and rigid transforms. decad does all coordinate
+math, including local-to-world conversion, through `r3`. `r3` leaves shapes
+out of its scope; its README states the rule as *"if it lives in ℝ³, it
+belongs here; if it is a shape, it does not."*
 
-[`units`](https://github.com/lestrrat-3d/units) owns typed quantities (`Value`
+[`units`](https://github.com/lestrrat-3d/units) provides typed quantities (`Value`
 and `Kind`). decad and `sketch` share it, so lengths, angles and error bounds
 use one unit system.
+
+## Documentation
+
+- [API reference](docs/api.md): every public function, by task.
+- [Data structures](docs/data-structures.md): the exported types.
+- [`examples/`](examples): runnable Go examples with verified output.
+- [`docs/README.md`](docs/README.md): the index of user documentation.
 
 ## License
 
