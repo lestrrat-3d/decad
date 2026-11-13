@@ -2,6 +2,7 @@ package retainedblend
 
 import (
 	"math"
+	"math/rand/v2"
 	"slices"
 	"testing"
 
@@ -144,4 +145,49 @@ func TestRetriangulateRefusesCoincidentProjection(t *testing.T) {
 	err := w.retriangulate(n, [][]int{f.outer, f.hole}, 0)
 	require.ErrorIs(t, err, decaderr.ErrUnsupported)
 	require.ErrorContains(t, err, "read one point in its plane")
+}
+
+// TestSortRingOrdersEqualAngles sorts a wall's cut ring whose two vertices,
+// 2e-16 mm apart, read one float angle. Their order must follow their exact
+// turn about the rim centre and never the order the ring was collected in.
+func TestSortRingOrdersEqualAngles(t *testing.T) {
+	for _, n := range []r3.Vec{r3.NewVec(0, 0, -1), r3.NewVec(0, 0, 1)} {
+		u, ok := perpendicular(n)
+		require.True(t, ok)
+		rm := rim{center: r3.NewVec(0, 0, 4), n: n, u: u, w: n.Cross(u)}
+		const radius = 3.0
+		verts := []r3.Vec{r3.NewVec(radius, 0, 4), r3.NewVec(radius, -2e-16, 4)}
+		for k := 1; k < 16; k++ {
+			a := 2 * math.Pi * float64(k) / 16
+			verts = append(verts, r3.NewVec(radius*math.Cos(a), radius*math.Sin(a), 4))
+		}
+		for _, dir := range []float64{1, -1} {
+			w := &work{r: rm, verts: verts, dir: dir}
+			require.Equal(t, w.angleOf(verts[0]), w.angleOf(verts[1]), "the pair reads one float angle")
+			var want []int
+			for trial := range 20 {
+				ring := make([]ringPt, len(verts))
+				for i, p := range verts {
+					ring[i] = ringPt{idx: i, ang: w.angleOf(p)}
+				}
+				rng := rand.New(rand.NewPCG(uint64(trial), 7))
+				rng.Shuffle(len(ring), func(i, j int) { ring[i], ring[j] = ring[j], ring[i] })
+				w.sortRing(ring)
+				got := make([]int, len(ring))
+				for i, p := range ring {
+					got[i] = p.idx
+				}
+				if want == nil {
+					want = got
+				}
+				require.Equal(t, want, got, "normal %v dir %g trial %d", n, dir, trial)
+			}
+			i0, i1 := slices.Index(want, 0), slices.Index(want, 1)
+			require.True(t, i0-i1 == 1 || i1-i0 == 1, "the close pair stays adjacent")
+			// Vertex 1 lies just clockwise of vertex 0 about +Z, so it comes first when the ring turns
+			// counter-clockwise about +Z.
+			ccwAboutZ := w.r.u.Cross(w.r.w).Dot(r3.NewVec(0, 0, 1))*dir > 0
+			require.Equal(t, ccwAboutZ, i1 < i0, "normal %v dir %g: exact turn order", n, dir)
+		}
+	}
 }

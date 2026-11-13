@@ -453,7 +453,7 @@ func (w *work) rewriteWall(fi int, tb, bandRadius float64, blendDist func(r3.Vec
 		seen[c] = true
 		ring = append(ring, ringPt{idx: c, ang: w.angleOf(w.verts[c])})
 	}
-	sort.Slice(ring, func(i, j int) bool { return ring[i].ang < ring[j].ang })
+	w.sortRing(ring)
 	if len(ring) < 3 {
 		return nil, 0, fmt.Errorf("%w: the wall's cut leaves fewer than three vertices", decaderr.ErrUnsupported)
 	}
@@ -467,6 +467,11 @@ func (w *work) rewriteWall(fi int, tb, bandRadius float64, blendDist func(r3.Vec
 		}
 	}
 	return ring, group, nil
+}
+
+// sortRing orders a wall's cut ring by angle in the rim's own sense.
+func (w *work) sortRing(ring []ringPt) {
+	sort.Slice(ring, func(i, j int) bool { return ring[i].ang < ring[j].ang })
 }
 
 // angleOf is the angle of p about the axis, measured in the rim loop's own
