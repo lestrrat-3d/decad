@@ -12,9 +12,10 @@ import (
 // keeps, so a scan visits the same pairs in the same order without touching
 // the rest.
 type boxTree struct {
-	boxes []floatBox
-	order []int
-	nodes []boxTreeNode
+	boxes   []floatBox
+	centres [][3]float64
+	order   []int
+	nodes   []boxTreeNode
 }
 
 // boxTreeNode holds the union box of order[lo:hi]. An inner node has two
@@ -30,12 +31,16 @@ const boxTreeLeaf = 8
 
 func newBoxTree(boxes []floatBox) *boxTree {
 	t := &boxTree{
-		boxes: boxes,
-		order: make([]int, len(boxes)),
-		nodes: make([]boxTreeNode, 0, boxTreeNodeCount(len(boxes))),
+		boxes:   boxes,
+		centres: make([][3]float64, len(boxes)),
+		order:   make([]int, len(boxes)),
+		nodes:   make([]boxTreeNode, 0, boxTreeNodeCount(len(boxes))),
 	}
 	for i := range t.order {
 		t.order[i] = i
+		for axis := range 3 {
+			t.centres[i][axis] = boxCentre(boxes[i], axis)
+		}
 	}
 	if len(boxes) > 0 {
 		t.build(0, len(boxes))
@@ -64,7 +69,7 @@ func (t *boxTree) build(lo, hi int) int {
 		for axis := range 3 {
 			node.box.lo[axis] = math.Min(node.box.lo[axis], b.lo[axis])
 			node.box.hi[axis] = math.Max(node.box.hi[axis], b.hi[axis])
-			c := boxCentre(b, axis)
+			c := t.centres[at][axis]
 			if i == 0 || c < cmin[axis] {
 				cmin[axis] = c
 			}
@@ -85,7 +90,7 @@ func (t *boxTree) build(lo, hi int) int {
 		}
 	}
 	slices.SortFunc(t.order[lo:hi], func(x, y int) int {
-		cx, cy := boxCentre(t.boxes[x], axis), boxCentre(t.boxes[y], axis)
+		cx, cy := t.centres[x][axis], t.centres[y][axis]
 		switch {
 		case cx < cy:
 			return -1

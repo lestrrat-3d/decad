@@ -4,6 +4,7 @@ import (
 	"math"
 	"math/rand/v2"
 	"slices"
+	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -22,6 +23,22 @@ func TestBoxTreeNodeCount(t *testing.T) {
 		{n: 41, want: 15},
 	} {
 		require.Equal(t, tc.want, boxTreeNodeCount(tc.n), "n=%d", tc.n)
+	}
+}
+
+func TestBoxTreeCentersSanitizeNonFiniteValues(t *testing.T) {
+	t.Parallel()
+	boxes := []floatBox{
+		{lo: [3]float64{-2, math.Inf(1), math.Inf(-1)}, hi: [3]float64{4, 3, 1}},
+		{lo: [3]float64{math.NaN(), math.MaxFloat64, 2}, hi: [3]float64{5, math.MaxFloat64, 6}},
+		{lo: [3]float64{-3, 6, -math.MaxFloat64}, hi: [3]float64{3, 10, math.MaxFloat64}},
+	}
+	tree := newBoxTree(boxes)
+	require.Equal(t, [][3]float64{{1, 0, 0}, {0, 0, 4}, {0, 8, 0}}, tree.centres)
+	for i, box := range boxes {
+		for axis := range 3 {
+			require.Equal(t, boxCentre(box, axis), tree.centres[i][axis])
+		}
 	}
 }
 
@@ -73,4 +90,27 @@ func TestBoxTreeQueryMatchesFullScan(t *testing.T) {
 		require.Positive(t, hits, "premise: trial %d has hits", trial)
 	}
 	require.Empty(t, newBoxTree(nil).query(floatBox{}, nil))
+}
+
+func BenchmarkNewBoxTreeCold(b *testing.B) {
+	for _, n := range []int{64, 512, 4096} {
+		b.Run(strconv.Itoa(n), func(b *testing.B) {
+			boxes := make([]floatBox, n)
+			for i := range boxes {
+				x := float64((i * 37) % n)
+				y := float64((i * 53) % n)
+				z := float64((i * 97) % n)
+				w := float64(i%7) / 10
+				boxes[i] = floatBox{
+					lo: [3]float64{x - w, y - w, z - w},
+					hi: [3]float64{x + w, y + w, z + w},
+				}
+			}
+			b.ReportAllocs()
+			b.ResetTimer()
+			for range b.N {
+				_ = newBoxTree(boxes)
+			}
+		})
+	}
 }
