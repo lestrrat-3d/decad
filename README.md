@@ -19,25 +19,22 @@ application, no GUI and no network.
 
 ## Why use it
 
-- **A model is a program.** Dimensioned sketches and ordered features build a
-  body. Change a dimension, run the program again, and the same inputs rebuild
-  the same part.
-- **A check, not a render.** `Document.Verify` returns a report whose status
-  is, from best to worst, `Sound`, `Suspect`, `Violating`, `Interfering` or
-  `Unsound`. Every volume, area and centroid carries an error bound. A check
-  decad cannot decide keeps the report from being `Sound`, and
-  `Report.Passed` is true only for `Sound`.
-- **A verification step for coding agents.** An agent can model a part here and
-  prove it sound before it writes the add-in that builds the part in Autodesk
-  Fusion or another CAD application. The agent finds a bad dimension in a
-  test run, not inside the CAD application.
-- **It checks motion too.** A motion check proves each interval it reports
-  clear free of collision at every pose in it, not only at sampled poses. The `dynamics`
-  package simulates impact and friction for a listed set of shapes. See
+- **Rebuild the same part on demand.** Dimensioned sketches and ordered features
+  are Go code. Change a dimension, run the program again, and it builds the
+  part from scratch with the new value.
+- **Get a verdict, not a picture.** `Document.Verify` tells you whether each
+  body is a closed solid, whether bodies interfere, and whether a wall is
+  thinner than the minimum you set. `Report.Passed` is true only when every
+  check was proven. Volumes and centroids come with an error bound.
+- **Catch mistakes before the CAD app does.** A coding agent can model a part
+  here and prove it sound, then write the Autodesk Fusion add-in that builds
+  it. A bad dimension then shows up in a test run, not inside Fusion.
+- **Check moving parts.** `VerifyLinkage` proves a linkage clear of collisions
+  over whole stretches of its motion, not only at sampled poses. The `dynamics`
+  package drops bodies under gravity and simulates impact and friction. See
   [Motion and collisions](#motion-and-collisions).
-- **It reads and writes common CAD and mesh formats.** It writes STEP, IGES,
-  STL, OBJ, 3MF, glTF, DXF, PNG and G-code. It reads STL, OBJ, 3MF, STEP and
-  IGES files into mesh bodies.
+- **Exchange files.** decad writes STEP, IGES, STL, OBJ, 3MF, glTF, DXF, PNG and
+  G-code, and reads STL, OBJ, 3MF, STEP and IGES.
 
 ## Quick start
 
