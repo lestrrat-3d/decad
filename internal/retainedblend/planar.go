@@ -146,6 +146,36 @@ func bridgeNearest(ps []pt2, merged []int, holes [][]int) ([]int, [][]int, error
 			break
 		}
 	}
+	var best candidate
+	unique := true
+	haveBest := false
+	for hi, hole := range holes {
+		for hk, hv := range hole {
+			for mi, mv := range merged {
+				du, dw := ps[hv].u-ps[mv].u, ps[hv].w-ps[mv].w
+				c := candidate{d: du*du + dw*dw, m: mi, h: hk, holeIdx: hi}
+				if !haveBest {
+					best, haveBest = c, true
+					continue
+				}
+				switch cmp.Compare(c.d, best.d) {
+				case -1:
+					best, unique = c, true
+				case 0:
+					unique = false
+				}
+			}
+		}
+	}
+	if haveBest && unique && bridgeClear(ps, merged, holes, best.holeIdx, best.m, best.h) {
+		hole := holes[best.holeIdx]
+		a, b := ps[merged[best.m]], ps[hole[best.h]]
+		mid := pt2{(a.u + b.u) / 2, (a.w + b.w) / 2}
+		if insidePolygon(ps, merged, mid) {
+			spliced, rest := spliceBridge(merged, holes, best.holeIdx, best.m, best.h)
+			return spliced, rest, nil
+		}
+	}
 	if count > 0 {
 		cands = make([]candidate, 0, count)
 	}
@@ -154,35 +184,6 @@ func bridgeNearest(ps []pt2, merged []int, holes [][]int) ([]int, [][]int, error
 			for mi, mv := range merged {
 				du, dw := ps[hv].u-ps[mv].u, ps[hv].w-ps[mv].w
 				cands = append(cands, candidate{d: du*du + dw*dw, m: mi, h: hk, holeIdx: hi})
-			}
-		}
-	}
-	if len(cands) > 0 {
-		best := cands[0]
-		unique := true
-		for _, c := range cands[1:] {
-			switch cmp.Compare(c.d, best.d) {
-			case -1:
-				best, unique = c, true
-			case 0:
-				unique = false
-			}
-		}
-		if unique && bridgeClear(ps, merged, holes, best.holeIdx, best.m, best.h) {
-			hole := holes[best.holeIdx]
-			a, b := ps[merged[best.m]], ps[hole[best.h]]
-			mid := pt2{(a.u + b.u) / 2, (a.w + b.w) / 2}
-			if insidePolygon(ps, merged, mid) {
-				spliced := make([]int, 0, len(merged)+len(hole)+2)
-				spliced = append(spliced, merged[:best.m+1]...)
-				for k := range len(hole) + 1 {
-					spliced = append(spliced, hole[(best.h+k)%len(hole)])
-				}
-				spliced = append(spliced, merged[best.m])
-				spliced = append(spliced, merged[best.m+1:]...)
-				rest := append([][]int(nil), holes[:best.holeIdx]...)
-				rest = append(rest, holes[best.holeIdx+1:]...)
-				return spliced, rest, nil
 			}
 		}
 	}
@@ -198,18 +199,24 @@ func bridgeNearest(ps []pt2, merged []int, holes [][]int) ([]int, [][]int, error
 		if !insidePolygon(ps, merged, mid) {
 			continue
 		}
-		spliced := make([]int, 0, len(merged)+len(hole)+2)
-		spliced = append(spliced, merged[:c.m+1]...)
-		for k := range len(hole) + 1 {
-			spliced = append(spliced, hole[(c.h+k)%len(hole)])
-		}
-		spliced = append(spliced, merged[c.m])
-		spliced = append(spliced, merged[c.m+1:]...)
-		rest := append([][]int(nil), holes[:c.holeIdx]...)
-		rest = append(rest, holes[c.holeIdx+1:]...)
+		spliced, rest := spliceBridge(merged, holes, c.holeIdx, c.m, c.h)
 		return spliced, rest, nil
 	}
 	return nil, nil, fmt.Errorf("%w: no segment joins a hole of the face to its outer boundary", decaderr.ErrUnsupported)
+}
+
+func spliceBridge(merged []int, holes [][]int, holeIdx, mergedIdx, holePos int) ([]int, [][]int) {
+	hole := holes[holeIdx]
+	spliced := make([]int, 0, len(merged)+len(hole)+2)
+	spliced = append(spliced, merged[:mergedIdx+1]...)
+	for k := range len(hole) + 1 {
+		spliced = append(spliced, hole[(holePos+k)%len(hole)])
+	}
+	spliced = append(spliced, merged[mergedIdx])
+	spliced = append(spliced, merged[mergedIdx+1:]...)
+	rest := append([][]int(nil), holes[:holeIdx]...)
+	rest = append(rest, holes[holeIdx+1:]...)
+	return spliced, rest
 }
 
 func addCandidateCount(count, merged, hole int) (int, bool) {
