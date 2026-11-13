@@ -1,9 +1,10 @@
 package retainedblend
 
 import (
+	"cmp"
 	"fmt"
 	"math"
-	"sort"
+	"slices"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
@@ -469,9 +470,25 @@ func (w *work) rewriteWall(fi int, tb, bandRadius float64, blendDist func(r3.Vec
 	return ring, group, nil
 }
 
-// sortRing orders a wall's cut ring by angle in the rim's own sense.
+// sortRing orders a wall's cut ring by angle in the rim's own sense. Two
+// vertices whose float angles agree are ordered by their exact turn about the
+// rim centre, read along the rim frame's axes, and then by index, so the order
+// never depends on how the ring was collected.
 func (w *work) sortRing(ring []ringPt) {
-	sort.Slice(ring, func(i, j int) bool { return ring[i].ang < ring[j].ang })
+	proj := func(p r3.Vec) pt2 { return pt2{p.Dot(w.r.u), p.Dot(w.r.w)} }
+	c := proj(w.r.center)
+	slices.SortFunc(ring, func(a, b ringPt) int {
+		if x := cmp.Compare(a.ang, b.ang); x != 0 {
+			return x
+		}
+		if o := orient(c, proj(w.verts[a.idx]), proj(w.verts[b.idx])); o != 0 {
+			if float64(o)*w.dir > 0 {
+				return -1
+			}
+			return 1
+		}
+		return cmp.Compare(a.idx, b.idx)
+	})
 }
 
 // angleOf is the angle of p about the axis, measured in the rim loop's own
