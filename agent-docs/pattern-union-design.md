@@ -213,14 +213,23 @@ and it widens every reading of the result.
 
 The reference operand contributes `δ = 0`, and so does an operand on the reference's own frame. An operand's `Delta` is
 its section's `δ` plus the off-plane distance, its two end-plane gaps and any `JoinDelta` it already carries. The result
-adds each operand's lateral offset and the reference's, since the result keeps the reference's end frame. The scale term of an arc is conservative: the three
+adds each operand's lateral offset and the reference's, since the result keeps the reference's end frame.
+
+An operand's `PlaneGap` bounds how far its true end planes sit from the recorded ones along the normal. `Place` adds to
+it the larger of the two end-plane height gaps and the off-plane charge (`patternrecord.RegionNormalCharge`) over the
+section's extent widened by the operand's own `Delta`, on top of any `PlaneGap` the operand inherits from a join. A prism
+reference (`Operand.AsReference`) charges the gap between each raised frame's plane and the exact level plane into its
+`PlaneGap`, not into `Delta`. The scale term of an arc is conservative: the three
 pinned points of the image arc are the exact images, so the three-times argument already covers the arc.
 
 ### 4. The result
 
 `UnionMany` runs `Place` first, then the route of axial-section-boolean §2 over the moved sections. The loft it builds
 carries `loftrecord.Payload.JoinDelta`, the largest `Delta` of its operands (an operand that is itself a join
-contributes its own).
+contributes its own), and `loftrecord.Payload.JoinPlaneGap`, the largest `PlaneGap` plus that operand's lateral offset,
+plus the reference's lateral offset (`JoinPlaneGap`). `loftrecord.Build` states it as the `AxialDelta` of every cap that
+lies exactly on its section plane (loft-design §18); any other cap adds it to its vertex displacement. A loft that is
+no join has a zero gap.
 
 `loftrecord.Build` adds `JoinDelta` to the held-vertex displacement, the chord displacement and the matched
 displacement of the join body, so every reading of that body encloses the ideal union of the placed operands. A body
@@ -257,7 +266,12 @@ second one.
   point is the rotated source point; misses for a tilt, a lift and a placed reference; each height and plane guard fires
   alone (shown to fail by disabling it); a section of quarter-millimetre coordinates slid by whole millimetres is charged
   exactly zero, spline included (`TestPlaceChargesNothingWhenTheMapIsExact`), so the charge is nonzero only where a
-  placement rounds.
+  placement rounds. `TestPlaceChargesPlaneGapAlongTheNormalOnly`: `PlaneGap` stays 0 for a turn that keeps the z axis
+  exact and is positive and below 1e-12 for one that rounds it, `JoinPlaneGap` adds both lateral offsets, and an
+  inherited gap is kept. `TestAsReferenceChargesTheRaisedPlane`: a raised origin that rounds gets a positive gap.
+- `apitest.TestAxialSectionUnionExactTurnsKeepExactCaps`: a join of quarter turns keeps `Exact` caps.
+  `TestAxialSectionUnionCounterboreRimChamfers`: a blind counterbore cut into a join cap has a `Circle3` rim that
+  `Chamfer` takes.
 - `apitest.TestPatternUnionManyCopies` joins 64 and 128 lobes to a disc and checks the sum of the parts.
 - `apitest.TestPatternedLobesJoinADisc`: one lobe patterned 8 and 12 times and joined to a disc has the volume
   of the same lobes drawn at their angles within both bounds, with a larger bound, and a `VerifyAll` mesh whose boundary

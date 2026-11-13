@@ -3049,3 +3049,5 @@
 8	0.30	TestChamferWindowLoops
 8	19.42	TestChamferWindowLoopsAfterBossUnion
 8	1.00	TestChamferWindowLoopsRefusals
+12	0.00	TestAxialSectionUnionExactTurnsKeepExactCaps
+12	0.00	TestAxialSectionUnionCounterboreRimChamfers

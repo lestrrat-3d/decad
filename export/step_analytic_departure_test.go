@@ -67,7 +67,7 @@ func departureFrame(t *testing.T, origin, u r3.Vec) r3.Frame {
 // supportsAnalyticSTEP's tagsUndeparted gate deleted (every departed body was
 // written analytic), with TagDeparts' Denoted leg deleted (the frustum was
 // written analytic), with tagIsDenoted always false (the tube was written
-// faceted), and with the loft build's clearExactCapLevels call deleted (the
+// faceted), and with the loft build's stateCapLevels call deleted (the
 // exact loft was written faceted).
 func TestAnalyticSTEPRefusesADepartedTag(t *testing.T) {
 	t.Parallel()

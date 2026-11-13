@@ -67,7 +67,13 @@ type Payload struct {
 	// a copy of this payload keeps the term as extra slack; it denotes its own
 	// record, and its bounds make no claim about the operation applied to the
 	// ideal join.
-	JoinDelta            float64
+	JoinDelta float64
+	// JoinPlaneGap bounds, in mm, how far the end planes of the ideal join sit
+	// from this record's section planes, along their normal
+	// (agent-docs/pattern-union-design.md §4). Zero for a loft that is no join.
+	// A cap CapOnRecord admits states it as its AxialDelta; any other cap adds it
+	// to the vertex displacement. Copies keep it as they keep JoinDelta.
+	JoinPlaneGap         float64
 	ConstructionArcUpper map[int]float64
 	// A trimmed carrier can gain length when its ideal tangent parameter
 	// replaces the recorded float trim. Each value bounds that increase for

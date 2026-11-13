@@ -230,8 +230,8 @@ func TestAxialSectionUnionPlateAndTongue(t *testing.T) {
 // exactly, but the joined record stands for operands whose end planes do not
 // all sit there: the lifted lobe's top rounds to a float above 2. The pin's
 // top vertices must state a bound covering that gap. Shown to fail with the
-// loft build's JoinDelta gate on clearing exact cap levels deleted (the top
-// vertices read Exact at z = 2).
+// join plane gap dropped from the cap level (stateCapLevels given 0): the top
+// vertices read Exact at z = 2.
 func TestAxialSectionUnionLiftedLobeKeepsCapLevel(t *testing.T) {
 	t.Parallel()
 	const r, height, n = 3.0, 2.0, 8
@@ -275,4 +275,107 @@ func TestAxialSectionUnionLiftedLobeKeepsCapLevel(t *testing.T) {
 		require.GreaterOrEqual(t, p.Bound.Base(), liftedTop-height, "the top must cover the lifted lobe's end plane")
 	}
 	require.Positive(t, tops)
+}
+
+// TestAxialSectionUnionExactTurnsKeepExactCaps joins a lobe and its three
+// quarter-turn copies to a disc and extrudes a pin up to the join's end cap.
+// r3 keeps the z axis of every quarter turn exact (measured), so the join's
+// plane gap is 0 and the pin's top vertices read Exact at z = 2. Shown to fail
+// with the old JoinDelta == 0 gate: the vertices read Approximate, bound 5.8e-15.
+func TestAxialSectionUnionExactTurnsKeepExactCaps(t *testing.T) {
+	t.Parallel()
+	const r, height, n = 3.0, 2.0, 4
+	doc := decad.New()
+	disc := circleBodyAtZ(t, doc, 0, r, 0, height)
+	lobe := lobeLoft(t, doc, r, 0, 0.4*math.Pi/n, height)
+	copies, err := decad.PatternCopies(t.Context(), lobe,
+		decad.CircularPattern{Center: r3.Vec{}, Axis: r3.NewVec(0, 0, 1), Count: n})
+	require.NoError(t, err)
+	joined, err := decad.Union(t.Context(), disc, append([]*decad.Body{lobe}, copies...)...)
+	require.NoError(t, err)
+
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	s.CreateCircle(s.Origin(), 0.5)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	pin, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.ToFace{Body: joined, Face: capEndFace(joined)})
+	require.NoError(t, err)
+	tops := 0
+	for _, v := range pin.Vertices() {
+		p := v.Position()
+		if p.Value.Z < height/2 {
+			continue
+		}
+		tops++
+		require.Equal(t, decad.Exact, p.Exactness)
+		require.Zero(t, p.Bound.Base())
+		require.Equal(t, height, p.Value.Z)
+	}
+	require.Positive(t, tops)
+}
+
+// TestAxialSectionUnionCounterboreRimChamfers joins a lobe and 16 turned copies
+// to a disc, cuts a blind 0.5 mm counterbore into the rear cap and chamfers its
+// rim. The rim is a Circle3, which Chamfer takes. The disc radius 12 is the
+// smallest measured one (of 3, 6, 12) whose loft displacement exceeds the circle
+// rim's arithmetic allowance, so the old gate reaches the declined branch. Shown
+// to fail with the old JoinDelta == 0 gate: the rim reads decad.FacetedCurve.
+func TestAxialSectionUnionCounterboreRimChamfers(t *testing.T) {
+	t.Parallel()
+	const r, height, n, bore, setback = 12.0, 2.0, 17, 0.5, 0.2
+	doc := decad.New()
+	disc := circleBodyAtZ(t, doc, 0, r, 0, height)
+	lobe := lobeLoft(t, doc, r, 0, 0.4*math.Pi/n, height)
+	copies, err := decad.PatternCopies(t.Context(), lobe,
+		decad.CircularPattern{Center: r3.Vec{}, Axis: r3.NewVec(0, 0, 1), Count: n})
+	require.NoError(t, err)
+	joined, err := decad.Union(t.Context(), disc, append([]*decad.Body{lobe}, copies...)...)
+	require.NoError(t, err)
+
+	w := sketch.NewWorld()
+	plane, err := w.CreateOffsetPlane(w.XY(), -1)
+	require.NoError(t, err)
+	s, err := w.CreateSketch(plane)
+	require.NoError(t, err)
+	centre := s.CreatePoint(0, 0)
+	s.Fix(centre)
+	s.CreateCircle(centre, bore)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	tool, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(2), Dir: decad.Along})
+	require.NoError(t, err)
+	cut, err := decad.Cut(t.Context(), joined, tool)
+	require.NoError(t, err)
+
+	var rim *decad.Edge
+	rims := 0
+	for _, e := range cut.Edges() {
+		p := e.Start().Position().Value
+		if math.Abs(p.Z) > 1e-9 || math.Abs(math.Hypot(p.X, p.Y)-bore) > 1e-3 {
+			continue
+		}
+		rim = e
+		rims++
+	}
+	require.Equal(t, 1, rims)
+	c, ok := rim.Curve().(decad.Circle3)
+	require.True(t, ok, "the rim reads %T", rim.Curve())
+	require.InDelta(t, bore, c.Radius.Base(), 1e-12)
+	require.InDelta(t, 0, c.Center.X, 1e-12)
+	require.InDelta(t, 0, c.Center.Y, 1e-12)
+	require.InDelta(t, 0, c.Center.Z, 1e-12)
+
+	v0, err := cut.Volume()
+	require.NoError(t, err)
+	chamfered, err := decad.Chamfer(t.Context(), cut,
+		decad.Edges(decad.EndpointAt(rim.Start().Position().Value), decad.Circular()).Exactly(1),
+		units.Millimeters(setback))
+	require.NoError(t, err)
+	require.True(t, chamfered.IsSolid())
+	v1, err := chamfered.Volume()
+	require.NoError(t, err)
+	want := math.Pi * (bore + setback/3) * setback * setback
+	require.InDelta(t, want, v0.Value.Base()-v1.Value.Base(), 0.01*want)
 }

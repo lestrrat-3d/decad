@@ -136,3 +136,36 @@ func TestCapOnRecord(t *testing.T) {
 		}
 	})
 }
+
+func TestStateCapLevels(t *testing.T) {
+	t.Parallel()
+	x, y := r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0)
+	exact := func() *topo.Face {
+		return capLevelFace(t, 0, capLevelFrame(t, r3.Vec{}, x, y), r3.Vec{}, r3.Identity())
+	}
+	departed := func() *topo.Face {
+		f := exact()
+		f.Loops[0].CoEdges[2].Edge.Start.Position.Z = math.Nextafter(0, 1)
+		return f
+	}
+
+	t.Run("admitted cap states the plane gap", func(t *testing.T) {
+		t.Parallel()
+		f := exact()
+		loftrecord.StateCapLevels(0, f)
+		require.Equal(t, 0.0, f.AxialDelta)
+		f = exact()
+		loftrecord.StateCapLevels(3e-16, f)
+		require.Equal(t, 3e-16, f.AxialDelta)
+	})
+
+	t.Run("departed cap adds the plane gap", func(t *testing.T) {
+		t.Parallel()
+		f := departed()
+		loftrecord.StateCapLevels(0, f)
+		require.Equal(t, 1e-15, f.AxialDelta)
+		f = departed()
+		loftrecord.StateCapLevels(3e-16, f)
+		require.GreaterOrEqual(t, f.AxialDelta, 1e-15+3e-16)
+	})
+}

@@ -109,6 +109,9 @@ func buildPaired(ctx context.Context, env topo.Env, pl Payload, budget *proofbou
 		sectionMatchedDelta = proofbound.AbsSumUpper(sectionMatchedDelta, pl.JoinDelta)
 		stationRound = proofbound.AbsSumUpper(stationRound, pl.JoinDelta)
 	}
+	if pl.JoinPlaneGap < 0 || proofbound.IsNonFinite(pl.JoinPlaneGap) {
+		return nil, fmt.Errorf(`%w: the loft join plane gap is not finite`, decaderr.ErrUnsupported)
+	}
 	if pl.ConstructionDelta > 0 {
 		if proofbound.IsNonFinite(pl.ConstructionDelta) {
 			return nil, fmt.Errorf(`%w: the loft fillet construction displacement is not finite`, decaderr.ErrUnsupported)
@@ -247,15 +250,12 @@ func buildPaired(ctx context.Context, env topo.Env, pl Payload, budget *proofbou
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	// A cap whose tag and loops lie exactly on its section plane is not
-	// displaced from it, whatever the in-plane station rounding. This runs
-	// after the hole rewrites above, so it reads each cap's final rim edges.
-	// A join loft's JoinDelta also carries how far each placed operand's end
-	// plane sits from the reference's (axialsection.Place), so its
-	// caps keep the whole displacement: their record is not the ideal join's.
-	if pl.JoinDelta == 0 {
-		clearExactCapLevels(capStart, capEnd)
-	}
+	// A cap whose tag and loops lie exactly on its section plane is displaced
+	// from it only by how far the joined operands' end planes sit from that
+	// plane (JoinPlaneGap, zero for a loft that is no join). In-plane station,
+	// section and join charges do not move it. This runs after the hole
+	// rewrites above, so it reads each cap's final rim edges.
+	stateCapLevels(pl.JoinPlaneGap, capStart, capEnd)
 	// Each cap holds a plane-local area, so it takes its section map's charge
 	// before any reading below composes its bound.
 	capStretch, err := chargeCapMaps(pl, capStart, capEnd)

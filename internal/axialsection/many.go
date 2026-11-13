@@ -113,6 +113,7 @@ func unionMany(ctx context.Context, env topo.Env, payloads []topo.Payload, prism
 		Xform:                       r3.Identity(),
 		AuthenticatedReconstruction: true,
 		JoinDelta:                   JoinDelta(ops, loft),
+		JoinPlaneGap:                JoinPlaneGap(ops, loft),
 		RecordArea:                  [2]float64{recordArea0, recordArea1},
 	}, proofbound.NewWorkBudget(ctx), work0, work1)
 	if err != nil {
