@@ -17,24 +17,30 @@ decad is the 3D modeling layer above the
 [r3](https://github.com/lestrrat-3d/r3) coordinate-math layer. It needs no CAD
 application, no GUI and no network.
 
-## Why use it
+## What decad does
 
-- **Rebuild the same part on demand.** Dimensioned sketches and ordered features
-  are Go code. Change a dimension, run the program again, and it builds the
-  part from scratch with the new value.
-- **Get a verdict, not a picture.** `Document.Verify` tells you whether each
-  body is a closed solid, whether bodies interfere, and whether a wall is
-  thinner than the minimum you set. `Report.Passed` is true only when every
-  check was proven. Volumes and centroids come with an error bound.
-- **Catch mistakes before the CAD app does.** A coding agent can model a part
-  here and prove it sound, then write the Autodesk Fusion add-in that builds
-  it. A bad dimension then shows up in a test run, not inside Fusion.
-- **Check moving parts.** `VerifyLinkage` proves a linkage clear of collisions
-  over whole stretches of its motion, not only at sampled poses. The `dynamics`
-  package drops bodies under gravity and simulates impact and friction. See
-  [Motion and collisions](#motion-and-collisions).
-- **Exchange files.** decad writes STEP, IGES, STL, OBJ, 3MF, glTF, DXF, PNG and
-  G-code, and reads STL, OBJ, 3MF, STEP and IGES.
+In decad you describe a part the way you would in a CAD application, but as a
+Go program. You draw a 2D sketch and give it dimensions, then apply features
+to it one after another: extrude it, cut a hole, round an edge, join it to
+another body. Running the program builds the part. Change a dimension and run
+it again, and decad rebuilds the whole part with the new value, the same way
+every time.
+
+What sets decad apart from a program that only produces a shape is that it can
+tell you whether the shape is right. `Document.Verify` checks that each body is
+a closed, valid solid, that no two bodies overlap, and that no wall is thinner
+than the minimum you set. Volumes, areas and centroids come with a stated
+error bound, so you know how far to trust the number. A check that decad
+cannot settle is reported as undecided, never silently passed, and
+`Report.Passed` is true only when every check was proven.
+
+decad also checks parts that move. `VerifyLinkage` follows a chain of joints,
+including closed loops such as a four-bar linkage, and proves that no two
+parts collide anywhere in a stretch of the motion, not only at the poses it
+sampled. The `dynamics` package drops bodies under gravity and simulates
+impact and friction (see [Motion and collisions](#motion-and-collisions)).
+When you need the result elsewhere, decad writes STEP, IGES, STL, OBJ, 3MF,
+glTF, DXF, PNG and G-code, and reads STL, OBJ, 3MF, STEP and IGES files.
 
 ## Quick start
 
@@ -100,9 +106,12 @@ interfere or have enough clearance, and ask whether a wall is too thin for a
 cutting tool. An agent can change a dimension or feature, run the program
 again, and read the new verification report.
 
-decad does not try to match the speed of a CAD application, so an agent may
-still build the final model there. The agent checks the part in that
-application too, because it may interpret the steps differently.
+decad suits trying a design before committing to it. An agent can model a part
+here, prove it sound, and only then write the add-in that builds it in Autodesk
+Fusion or another CAD application, so a wrong dimension shows up in a test run.
+Decad does not try to match the speed of a CAD application, and the agent still
+checks the part in that application, because it may interpret the steps
+differently.
 
 ## Gallery
 
