@@ -369,13 +369,12 @@ func rewriteLineEdge(ctx context.Context, env topo.Env, fp facetedrecord.Payload
 		f     faceLoops
 		loops [][]int
 		pl    plane
-		o     r3.Vec
 		takes bool
-	}{{fA, aLoops, l.a, e0, false}, {fB, bLoops, l.b, e0, false},
-		{fG[0], gLoops[0], l.ends[0].g, l.ends[0].exact, takes[0]},
-		{fG[1], gLoops[1], l.ends[1].g, l.ends[1].exact, takes[1]}} {
+	}{{fA, aLoops, l.a, false}, {fB, bLoops, l.b, false},
+		{fG[0], gLoops[0], l.ends[0].g, takes[0]},
+		{fG[1], gLoops[1], l.ends[1].g, takes[1]}} {
 		from := len(w.out)
-		if err := w.retriangulate(c.pl.n, c.o, c.loops, c.f.group); err != nil {
+		if err := w.retriangulate(c.pl.n, c.loops, c.f.group); err != nil {
 			return nil, err
 		}
 		if c.takes {

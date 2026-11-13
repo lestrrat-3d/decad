@@ -449,7 +449,7 @@ func rewriteCorners(ctx context.Context, env topo.Env, fp facetedrecord.Payload,
 	var touched []faceLoops
 	for _, f := range order {
 		st := states[f]
-		if err := w.retriangulate(st.pl.n, st.pl.o, st.loops, st.fl.group); err != nil {
+		if err := w.retriangulate(st.pl.n, st.loops, st.fl.group); err != nil {
 			return nil, err
 		}
 		w.removed = append(w.removed, st.fl.facets...)

@@ -805,7 +805,12 @@ faces `G₀` and `G₁`. Everything else in the held mesh is copied unchanged.
    the region is triangulated again by ear clipping over those loops, with one
    bridge from each hole to the outer loop. The ear clipping uses every loop
    vertex, collinear ones included, so the face keeps the vertices its
-   neighbours share. A face with a vertex off its boundary loops refuses
+   neighbours share. The ear clipping reads each vertex in world coordinates
+   along the plane frame's axes, not relative to the rim. For a plane normal to
+   a coordinate axis that reading is exact, so two distinct boundary vertices
+   stay distinct however close a mesh Boolean left them; on a tilted plane far
+   from the world origin the reading rounds. Two neighbouring loop vertices that
+   read one point refuse (SR5). A face with a vertex off its boundary loops refuses
    (SR5), except a plane face's vertex exactly on its plane (§2), and the straight edge's own two faces' vertex exactly on that face's retained plane: the rewrite triangulates those faces again from their loops, so the point a mesh adds to fan a face is dropped. The wall's facets are cut by the setback plane: a facet wholly beyond
    it stays, one wholly before it goes, and a crossing facet is clipped, with one
    new vertex per cut mesh edge shared by the facets on either side. A new wall
@@ -815,7 +820,8 @@ faces `G₀` and `G₁`. Everything else in the held mesh is copied unchanged.
    need (§6.3, Strip triangles).
 3. **Strip.** The blend face is a grid of rings. The first ring is the plane
    face's new polygon and the last is the wall's cut vertices, sorted by angle
-   about the axis. A fillet has `m − 1` rings between them on the exact torus,
+   about the axis; vertices of equal float angle are ordered by their exact
+   turn about the centre, then by index. A fillet has `m − 1` rings between them on the exact torus,
    with `m` the smallest count whose arc sagitta `r·(1 − cos(Δα/2))` is at most
    `τ/2`, with `τ = 2⁻¹⁰·r` (not below `64·2⁻⁵²·scale`). A chamfer has none.
    The plane's polygon steps so that its sagitta on the largest of the rows'
@@ -1604,6 +1610,8 @@ published bound, never with a pinned literal.
 | R7 fillet outside both cylinders (`TestRetainedSaddleFilletOutside`): a block 80 × 60 × 20 with a radius-5 `Hole` down through it crossed by a radius-3 blind `Hole`, both mouths, ρ = 0.5 (convex, removes); a radius-5 `Boss` 8 high on a radius-15 rod, ρ = 1 (concave, adds); a radius-3 pin joined through the R = 10 Revolve shaft, both roots, ρ = 1.5 (concave, a left-handed pose) | the volume falls (block) or grows (rod, pin) by the tube-coordinate integral per mouth (0.540755, 4.701377 and 6.619077 mm³) within both bodies' bounds; `VerifyAll` verifies the result; on its mesh the point midway between the arc and the edge reads outside for the block and inside for the rod and pin, farther than the mesh bound from every facet, and the point 0.3·ρ inside the ball keeps its side, at 8 stations of each mouth; under `-race` the rod only | expect ρ/2 or σ1 = −1 in the test: all three fail, at the ball's points or the volume; flip σ1 in the route: every build refuses, "the bore's cut leaves fewer than three vertices" |
 | R7 fillet refusals | `ρ = 3.5` (`2ρ = R − r`) refuses `ErrDegenerate` "no ball of that radius touches both walls of the saddle"; ρ = 3.4 refuses "folds: the pipe is not regular there"; a pin moved 0.5 off the shaft's axis, the pin's part inside the shaft (`Intersect`, σ = (−1, −1)) and a concave pin root inside a tube's bore (`Chamfer` and `Fillet`) refuse with the canal-surface reason; a flat milled beside a mouth refuses "another face of the body comes within the saddle fillet's reach", as does a boss 1 high on the radius-15 rod at ρ = 1, whose top face lies inside the bore's cut (`TestRetainedSaddleFilletRefusals`) | drop the route's existence test: ρ = 3.5 refuses at `saddlecanal.Prove`'s own, "the saddle canal's offset cylinders do not meet in a loop" (a unit test pins that site's text); drop the Convex flag from `saddleKey.built`: the tube root's `Chamfer` builds and removes material where a concave blend adds it, and both recognition unit tests fail; drop the Jacobian test: ρ = 3.4 refuses at the progress test instead; drop the clearance check: the flat refuses later, "a corner of the saddle fillet's window lies on no facet of the shaft wall", and the short boss "the bore's cut leaves fewer than three vertices"; admit every σ: the tube root's `Fillet` builds and the clipped pin refuses "a corner of the saddle fillet's window lies on no facet of the shaft wall"; drop the exact axis meeting: the moved pin refuses with "a held seam vertex is off the two cylinders" |
 | R7 refusals | `d > r/2` refuses; a pin moved 0.5 off the shaft's axis, a pin with r/R = 0.75 and a pin joined through the shaft refuse with the canal-surface reason; a flat milled beside a mouth refuses "another face of the body comes within the saddle chamfer's reach"; `Chamfer` of a pin's roots and of a boss's root on a rod keeps the canal-surface reason (`apitest/blend_refusal_names_test.go`) | drop the clearance check: the flat builds; admit a bore that is not `Reversed`: the joined pin builds; drop the exact axis meeting: the moved pin refuses with "a held seam vertex is off the two cylinders"; drop `2r² < R²`: r/R = 0.75 builds |
+| Close boundary vertices (`internal/retainedblend/rewrite_close_vertices_internal_test.go` `TestRetriangulateKeepsCloseBoundaryVertices`) | a plane face whose hole loop holds two vertices closer than the rounding of an offset frame re-triangulates with every loop edge kept and its area unchanged, for normals −z, +z and +x; two neighbouring vertices that differ only along the normal refuse | subtract the rim centre before projecting: the pair collides and ear clipping ends on a degenerate triangle |
+| Wall ring order (`TestSortRingOrdersEqualAngles`) | two cut vertices of one float angle sort by their exact turn, the same for every input order, both senses and both normals | sort by float angle alone: the order follows the input order |
 
 ## 10. Files and fallout
 

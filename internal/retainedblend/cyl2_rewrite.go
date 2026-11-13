@@ -149,9 +149,9 @@ func rewriteCylCyl(ctx context.Context, env topo.Env, fp facetedrecord.Payload, 
 		gLoops[i] = loops
 	}
 	for i, f := range []struct {
-		n, o r3.Vec
-	}{{c.ends[0].g.n, k0}, {c.ends[1].g.n, k1}} {
-		if err := w.retriangulate(f.n, f.o, gLoops[i], fG[i].group); err != nil {
+		n r3.Vec
+	}{{c.ends[0].g.n}, {c.ends[1].g.n}} {
+		if err := w.retriangulate(f.n, gLoops[i], fG[i].group); err != nil {
 			return nil, err
 		}
 		w.removed = append(w.removed, fG[i].facets...)
