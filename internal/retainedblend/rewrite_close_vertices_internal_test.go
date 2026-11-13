@@ -102,7 +102,7 @@ func TestRetriangulateKeepsCloseBoundaryVertices(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			f := newCloseVerticesFace(tc.n, tc.at, tc.centre, tc.pairA, tc.pairB)
 			w := &work{verts: f.verts}
-			require.NoError(t, w.retriangulate(tc.n, r3.NewVec(0, 50, 10), [][]int{f.outer, f.hole}, 0))
+			require.NoError(t, w.retriangulate(tc.n, [][]int{f.outer, f.hole}, 0))
 
 			count := map[[2]int]int{}
 			area := 0.0
@@ -141,7 +141,7 @@ func TestRetriangulateRefusesCoincidentProjection(t *testing.T) {
 	at := func(a, b float64) r3.Vec { return r3.NewVec(a, b, 10) }
 	f := newCloseVerticesFace(n, at, [2]float64{0, 0}, r3.NewVec(3, 0, 10), r3.NewVec(3, 0, 10+1e-12))
 	w := &work{verts: f.verts}
-	err := w.retriangulate(n, r3.NewVec(0, 50, 10), [][]int{f.outer, f.hole}, 0)
+	err := w.retriangulate(n, [][]int{f.outer, f.hole}, 0)
 	require.ErrorIs(t, err, decaderr.ErrUnsupported)
 	require.ErrorContains(t, err, "read one point in its plane")
 }

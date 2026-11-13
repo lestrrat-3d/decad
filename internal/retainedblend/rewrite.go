@@ -270,7 +270,7 @@ func (w *work) rewritePlane(fi int, g plane, ta, rhoHi float64) ([]ringPt, int, 
 			kept = append(kept, loop)
 		}
 	}
-	if err := w.retriangulate(r.n, r.center, append(kept, cpoly), group); err != nil {
+	if err := w.retriangulate(r.n, append(kept, cpoly), group); err != nil {
 		return nil, 0, err
 	}
 	w.removed = append(w.removed, facets...)
@@ -285,10 +285,13 @@ func (w *work) plane2(p r3.Vec) pt2 {
 }
 
 // retriangulate emits the triangulation of the planar face with outward
-// normal n through origin over its boundary loops, which wind outward: the
-// outer loop counter-clockwise seen from outside and the holes clockwise. Every
-// loop vertex appears in the output.
-func (w *work) retriangulate(n, origin r3.Vec, loops [][]int, group int) error {
+// normal n over its boundary loops, which wind outward: the outer loop
+// counter-clockwise seen from outside and the holes clockwise. Every loop
+// vertex appears in the output. Each vertex is read in world coordinates along
+// the plane frame's axes. For a plane normal to a coordinate axis that reading
+// is exact, so distinct boundary vertices stay distinct however close they are;
+// two neighbouring loop vertices that read one point refuse.
+func (w *work) retriangulate(n r3.Vec, loops [][]int, group int) error {
 	u, ok := perpendicular(n)
 	if !ok {
 		return fmt.Errorf("%w: a face has no plane frame", decaderr.ErrUnsupported)
@@ -303,7 +306,7 @@ func (w *work) retriangulate(n, origin r3.Vec, loops [][]int, group int) error {
 		}
 		local[vi] = len(global)
 		global = append(global, vi)
-		q := w.verts[vi].Sub(origin)
+		q := w.verts[vi]
 		ps = append(ps, pt2{q.Dot(u), q.Dot(v)})
 		return local[vi]
 	}
@@ -313,6 +316,11 @@ func (w *work) retriangulate(n, origin r3.Vec, loops [][]int, group int) error {
 		poly := make([]int, len(loop))
 		for i, vi := range loop {
 			poly[i] = use(vi)
+		}
+		for i, a := range poly {
+			if ps[a] == ps[poly[(i+1)%len(poly)]] {
+				return fmt.Errorf("%w: two boundary vertices of a face read one point in its plane", decaderr.ErrUnsupported)
+			}
 		}
 		if signedArea2(ps, poly) > 0 {
 			if outer != nil {

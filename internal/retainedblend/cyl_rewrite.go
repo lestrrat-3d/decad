@@ -522,13 +522,13 @@ func rewriteCylLine(ctx context.Context, env topo.Env, fp facetedrecord.Payload,
 	var taken [][2]int
 	for _, f := range []struct {
 		loops [][]int
-		n, o  r3.Vec
+		n     r3.Vec
 		fl    faceLoops
 		takes bool
-	}{{aLoops, nA, k0, fA, false}, {gLoops[0], c.ends[0].g.n, k0, fG[0], extB[0]},
-		{gLoops[1], c.ends[1].g.n, k1, fG[1], extB[1]}} {
+	}{{aLoops, nA, fA, false}, {gLoops[0], c.ends[0].g.n, fG[0], extB[0]},
+		{gLoops[1], c.ends[1].g.n, fG[1], extB[1]}} {
 		from := len(w.out)
-		if err := w.retriangulate(f.n, f.o, f.loops, f.fl.group); err != nil {
+		if err := w.retriangulate(f.n, f.loops, f.fl.group); err != nil {
 			return nil, err
 		}
 		if f.takes {

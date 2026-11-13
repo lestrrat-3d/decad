@@ -280,11 +280,11 @@ func rewriteArc(ctx context.Context, env topo.Env, fp facetedrecord.Payload, a a
 	}
 	for _, f := range []struct {
 		loops [][]int
-		n, o  r3.Vec
+		n     r3.Vec
 		fl    faceLoops
-	}{{aLoops, n, a.center, fA}, {gLoops[0], a.ends[0].g.n, a.ends[0].exact, fG[0]},
-		{gLoops[1], a.ends[1].g.n, a.ends[1].exact, fG[1]}} {
-		if err := w.retriangulate(f.n, f.o, f.loops, f.fl.group); err != nil {
+	}{{aLoops, n, fA}, {gLoops[0], a.ends[0].g.n, fG[0]},
+		{gLoops[1], a.ends[1].g.n, fG[1]}} {
+		if err := w.retriangulate(f.n, f.loops, f.fl.group); err != nil {
 			return nil, err
 		}
 		w.removed = append(w.removed, f.fl.facets...)

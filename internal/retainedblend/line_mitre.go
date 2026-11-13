@@ -642,13 +642,13 @@ baseDone:
 
 	// Re-triangulate every face the run rewrites.
 	touched := []faceLoops{fBase}
-	if err := w.retriangulate(basePlane.n, basePlane.o, baseLoops, fBase.group); err != nil {
+	if err := w.retriangulate(basePlane.n, baseLoops, fBase.group); err != nil {
 		return nil, err
 	}
 	w.removed = append(w.removed, fBase.facets...)
 	for k := range run.edges {
 		wp := run.edges[k].wall()
-		if err := w.retriangulate(wp.n, wp.o, wallLoops[k], walls[k].group); err != nil {
+		if err := w.retriangulate(wp.n, wallLoops[k], walls[k].group); err != nil {
 			return nil, err
 		}
 		w.removed = append(w.removed, walls[k].facets...)
@@ -657,15 +657,14 @@ baseDone:
 	for _, face := range endOrder {
 		fl := endFaces[face]
 		var gp plane
-		var corner r3.Vec
 		for k := range run.edges {
 			for i := range 2 {
 				if run.edges[k].joint[i] < 0 && run.edges[k].l.ends[i].face == face {
-					gp, corner = run.edges[k].l.ends[i].g, run.edges[k].l.ends[i].exact
+					gp = run.edges[k].l.ends[i].g
 				}
 			}
 		}
-		if err := w.retriangulate(gp.n, corner, fl.loops, fl.group); err != nil {
+		if err := w.retriangulate(gp.n, fl.loops, fl.group); err != nil {
 			return nil, err
 		}
 		w.removed = append(w.removed, fl.facets...)

@@ -494,7 +494,7 @@ func rewriteChain(ctx context.Context, env topo.Env, fp facetedrecord.Payload, c
 	} else {
 		loops = append(loops, ringA)
 	}
-	if err := w.retriangulate(nP, oP, loops, fl.group); err != nil {
+	if err := w.retriangulate(nP, loops, fl.group); err != nil {
 		return nil, err
 	}
 	w.removed = append(w.removed, fl.facets...)

@@ -383,7 +383,7 @@ func (w *work) rebuildEnds(ends []*chainEndCut, seqs [][]int, fillet bool, r, tP
 			total += ec.capArea(fillet, r, tP, tW)
 		}
 		from := len(w.out)
-		if err := w.retriangulate(first.g.n, first.exact, loops, first.fl.group); err != nil {
+		if err := w.retriangulate(first.g.n, loops, first.fl.group); err != nil {
 			return 0, nil, err
 		}
 		if takes {
