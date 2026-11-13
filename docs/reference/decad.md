@@ -507,6 +507,7 @@ package.
   - [func (\*Document) Param](<#Document.Param>)
   - [func (\*Document) ParamInt](<#Document.ParamInt>)
   - [func (\*Document) Params](<#Document.Params>)
+  - [func (\*Document) ProvePairSeparated](<#Document.ProvePairSeparated>)
   - [func (\*Document) Root](<#Document.Root>)
   - [func (\*Document) SweepPair](<#Document.SweepPair>)
   - [func (\*Document) SweptBox](<#Document.SweptBox>)
@@ -4594,6 +4595,17 @@ parameter that carries a unit, is ErrDegenerate.
 Params returns the document's parameter table. Define parameters on it with
 Set, SetExpr or SetValue, then read them with Param and Expr. Changing the
 table and running the builder again is how a model is edited.
+
+<a name="Document.ProvePairSeparated"></a>
+#### func (\*Document) ProvePairSeparated
+
+<pre>func (d *<a href="#Document">Document</a>) ProvePairSeparated(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>, a, b *<a href="#Body">Body</a>, poseA, poseB r3.Transform,
+    req <a href="#ContactRequest">ContactRequest</a>) (<a href="https://pkg.go.dev/builtin#bool">bool</a>, <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
+
+ProvePairSeparated reports whether an exact planar proof certifies a
+strictly positive gap between two posed solids. False means that the caller
+must use ContactPair or another complete relation check. Both bodies must be
+non-nil, distinct, live members of d.
 
 <a name="Document.Root"></a>
 #### func (\*Document) Root

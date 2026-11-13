@@ -46,11 +46,13 @@ parts knows nothing of how a part is made.
   - [func WithExplodeStages](<#WithExplodeStages>)
   - [func WithPartGap](<#WithPartGap>)
   - [func WithRemoval](<#WithRemoval>)
+  - [func WithoutExplodeSpread](<#WithoutExplodeSpread>)
 - [type Exploded](<#Exploded>)
   - [func (\*Exploded) Hidden](<#Exploded.Hidden>)
 - [type ExplodedPart](<#ExplodedPart>)
 - [type Graph](<#Graph>)
   - [func (Graph) WriteMermaid](<#Graph.WriteMermaid>)
+- [type Guide](<#Guide>)
 - [type InferredJoint](<#InferredJoint>)
 - [type Joint](<#Joint>)
 - [type JointKind](<#JointKind>)
@@ -93,6 +95,7 @@ parts knows nothing of how a part is made.
   - [func (\*Set) Part](<#Set.Part>)
   - [func (\*Set) Parts](<#Set.Parts>)
   - [func (\*Set) Views](<#Set.Views>)
+- [type Spread](<#Spread>)
 - [type Stage](<#Stage>)
 - [type Summary](<#Summary>)
   - [func (Summary) WriteMarkdown](<#Summary.WriteMarkdown>)
@@ -330,7 +333,9 @@ walking the joints. Explicit stages run first, unchanged. A part leaves along
 a joint axis, a stated pull or a world axis once no part still present stands
 in its way; parts that block each other leave together as one rigid group. A
 pair the tessellation cannot decide counts as free, so the result is a layout
-and not a proof (agent-docs/parts-design.md §5.8).
+and not a proof (agent-docs/parts-design.md §5.8). For a thin assembly whose
+layers are not coaxial, the layers are laid out compactly (§5.9);
+WithoutExplodeSpread keeps them stacked.
 
 <a name="WithExplodeGap"></a>
 #### func WithExplodeGap
@@ -386,6 +391,15 @@ part an explicit stage names is decad.ErrDegenerate at the query, as is a
 constraint the search cannot meet. A later WithRemoval for the same part
 replaces the earlier one.
 
+<a name="WithoutExplodeSpread"></a>
+#### func WithoutExplodeSpread
+
+<pre>func WithoutExplodeSpread() <a href="#ExplodeOption">ExplodeOption</a></pre>
+
+WithoutExplodeSpread keeps a derived explode's layers stacked along their
+axis: the layer spread of agent-docs/parts-design.md §5.9 does not run, and
+[Exploded](<#Exploded>).Spread still reports its gate. It needs WithDerivedExplode.
+
 <a name="Exploded"></a>
 ### type Exploded
 
@@ -397,6 +411,13 @@ replaces the earlier one.
     Stages   []<a href="https://pkg.go.dev/builtin#string">string</a>    // the stage names in the order they ran; &#34;&#34; is the last, implicit stage
     Scale    units.Value // the WithExplodeScale multiplier, Dimensionless
     Short    []<a href="https://pkg.go.dev/builtin#string">string</a>    // parts whose Clearance is below their Gap, in Set order
+    // Guides lists one line per moved part, from where it assembles on its joint partner to its Anchor,
+    // in Parts order (agent-docs/parts-design.md §5.10). decad draws nothing: the caller draws them as
+    // segments.
+    Guides []<a href="#Guide">Guide</a>
+    // Spread reports the layer spread of a derived explode (§5.9). It is nil without WithDerivedExplode
+    // and when no derived part leaves along a world axis.
+    Spread *<a href="#Spread">Spread</a>
 
     // Derived is true when WithDerivedExplode ran. The removal order of the parts no explicit stage
     // names was then read from tessellations, so the layout is layout-grade: a picture, not a proof
@@ -425,7 +446,10 @@ Hidden lists the pairs of exploded parts where one may hide the other seen along
 view, which points from the camera into the scene: each part's box is projected
 orthographically along view to a rectangle, and a pair whose rectangles overlap
 is listed with the nearer part (the one whose box centre is nearer the camera)
-as Front, and the share of Back's rectangle Front's covers. A pair absent from
+as Front, and the share of Back's rectangle Front's covers. The rectangles must
+overlap with positive area for the boxes' exact projections, so two boxes that
+only meet in the corners of their bounding rectangles are not listed
+(agent-docs/parts-design.md §5.10 H1). A pair absent from
 the list cannot hide one another; a listed pair may, since a box is larger than
 its part. Hidden moves nothing. A zero view is decad.ErrDegenerate and a
 non-finite one decad.ErrNotFinite. Pairs come in Parts order.
@@ -453,6 +477,19 @@ non-finite one decad.ErrNotFinite. Pairs come in Parts order.
     // WithDerivedExplode. For a derived part Pull is AxisFromFaces, AxisDeclared, PullDeclared,
     // WorldAxis or RemovalDirection.
     Order, Round <a href="https://pkg.go.dev/builtin#int">int</a>
+    // Layer is the part&#39;s layer in the spread (agent-docs/parts-design.md §5.9 L2): +k or -k for the
+    // k-th layer from the base on the +Spread.Axis or -Spread.Axis side, the layers of explicit stages
+    // first, then the derived rounds, the round removed last first; 0 for the base. It is 0 when Spread
+    // is nil.
+    Layer <a href="https://pkg.go.dev/builtin#int">int</a>
+    // Slide is what the spread added to Offset: the push of a stacked group&#39;s member (L4a), the layer&#39;s
+    // step across Spread.Axis (L4) and its settling push along it (L5), after WithExplodeScale. It is
+    // zero when the spread did not run. Moved does not include it.
+    Slide r3.Vec
+    // Stack is the part&#39;s 1-based place in a stacked group (§5.9 L4a): 1 for the member that stays where
+    // its round placed the group, 2 and up for the members stacked outward along Spread.Axis. It is 0
+    // for a part in no stacked group and when the spread did not run.
+    Stack <a href="https://pkg.go.dev/builtin#int">int</a>
 }</pre>
 
 ExplodedPart is one part's place in the exploded layout.
@@ -478,6 +515,28 @@ purchased one, and one edge per joint from A to B labelled with its kind, its
 motion when not fixed, its status when known and, when the joint is not
 Confirmed, its cause in brackets. A Contradicted edge ends in a cross (--x) and
 an Undecided one is dotted; the others keep the plain arrow.
+
+<a name="Guide"></a>
+### type Guide
+
+<pre>type Guide struct {
+    Part, Partner <a href="https://pkg.go.dev/builtin#string">string</a>
+    Joint         <a href="https://pkg.go.dev/builtin#string">string</a>
+    From, To      r3.Vec
+    Size          units.Value // Length
+    // Inline is true when To - From lies along the part&#39;s Dir, or along its partner&#39;s Dir when the
+    // part&#39;s is zero, within WithAxisTolerance.
+    Inline <a href="https://pkg.go.dev/builtin#bool">bool</a>
+}</pre>
+
+Guide is a dotted guide line from the place one part assembles to on its joint partner, as the
+partner sits in the exploded layout, to the part's own exploded place
+(agent-docs/parts-design.md §5.10). Partner is the part's parent in the joint walk, else the ground,
+and [Joint](<#Joint>) the joint that made it the parent, empty when no joint reaches the part. From is the centre
+of the part's assembled box moved by the partner's Offset; To is the part's Anchor. Both are in
+millimetres, after the layer spread and WithExplodeScale. Size is the longest edge of the part's box,
+so a caller can leave out the guides of small parts, and Inline says whether the part sits on the line
+it left its partner by, so a caller can leave out the guides a reader does not need.
 
 <a name="InferredJoint"></a>
 ### type InferredJoint
@@ -920,7 +979,10 @@ is the travel that clears the parent plus WithExplodeGap.
 WithExplodeStages runs that in ordered stages, WithPartGap and
 WithExplodeScale tune the distances, and [Joint](<#Joint>).Pull states a direction
 (agent-docs/parts-design.md §5.3). WithDerivedExplode derives the order and
-direction of the parts no stage names from their tessellations (§5.8).
+direction of the parts no stage names from their tessellations (§5.8); for a
+thin assembly whose layers are not coaxial it also lays the layers out compactly: rigid groups stacked
+along their shaft, a layer stepped sideways where a part joined to it would be covered, and the layers
+settled along their axis (§5.9). Guides gives each moved part a line to its joint partner (§5.10).
 
 <a name="Set.Graph"></a>
 #### func (\*Set) Graph
@@ -1030,6 +1092,44 @@ centre of the two parts' box overlap (the midpoint of the shortest segment
 between their boxes when they do not overlap), or the part's own box centre
 when the other part has no body. Dir is the axis, or the part's own face
 normal for a FaceContact; it is zero for the box fallback.
+
+<a name="Spread"></a>
+### type Spread
+
+<pre>type Spread struct {
+    // Ran is true when the layers were laid out. Shear, Width, Depth, Height
+    // and View are zero when it is false.
+    Ran <a href="https://pkg.go.dev/builtin#bool">bool</a>
+    // Axis is the positive world axis the derived layers leave along.
+    Axis r3.Vec
+    // Thinness is the assembled extent along Axis over the larger assembled
+    // extent across it, Dimensionless. The spread needs it below 1/3.
+    Thinness units.Value
+    // Coaxial is true when the centre of every layer&#39;s footprint lies inside
+    // every layer&#39;s footprint. The spread needs it false.
+    Coaxial <a href="https://pkg.go.dev/builtin#bool">bool</a>
+    // Layers counts the layers, the base included.
+    Layers <a href="https://pkg.go.dev/builtin#int">int</a>
+    // Shear is the positive world axis across Axis along which a layer on the
+    // +Axis side steps where a part joined to it would be covered; a layer on
+    // the -Axis side steps along -Shear.
+    Shear r3.Vec
+    // Width, Depth and Height are the extents of the exploded layout, every
+    // part&#39;s box at its final Offset, along Shear, along the third world axis
+    // and along Axis, as Length values after WithExplodeScale.
+    Width, Depth, Height units.Value
+    // View is a unit view direction, pointing from the camera into the scene,
+    // from which no part wholly hides a part of a nearer layer it is joined to,
+    // unless the two share an axis (§5.9 L7): Shear - Axis, normalised. Every
+    // view v at right angles to the third world axis with
+    // (v·Axis)(v·Shear) &lt;= 0 has the same property for the layers on the side
+    // of the base the camera looks from.
+    View r3.Vec
+}</pre>
+
+Spread reports the layer spread of a derived explode (§5.9). [Exploded](<#Exploded>).Spread
+is nil without WithDerivedExplode, and when no derived part leaves along a
+world axis.
 
 <a name="Stage"></a>
 ### type Stage
