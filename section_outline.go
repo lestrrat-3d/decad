@@ -7,6 +7,8 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/decaderr"
+	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/meshslice"
 	"github.com/lestrrat-3d/decad/internal/outlineclear"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -75,6 +77,18 @@ func (b *Body) SectionOutline(ctx context.Context, plane r3.Frame, tol units.Val
 		return SectionOutline{}, fmt.Errorf(`%w: a section outline needs a sound solid`, ErrNotSolid)
 	}
 	mesh, err := tessellateContext(ctx, b, tol, VerifyBoundary)
+	var floorErr *MeshBoundError
+	if errors.As(err, &floorErr) {
+		// A faceted body refuses a tolerance below its mesh bound, but the
+		// section may touch only facets that carry less. Read the held
+		// mesh at its floor and judge the tolerance against the slab below.
+		mesh, err = tessellateContext(ctx, b, floorErr.Floor(), VerifyBoundary)
+		if err != nil {
+			return SectionOutline{}, errors.Join(floorErr, err)
+		}
+	} else {
+		floorErr = nil
+	}
 	if err != nil {
 		return SectionOutline{}, err
 	}
@@ -94,7 +108,26 @@ func (b *Body) SectionOutline(ctx context.Context, plane r3.Frame, tol units.Val
 	}
 	o := plane.Origin()
 	scale = max(scale, o.X, o.Y, o.Z, -o.X, -o.Y, -o.Z)
-	out := SectionOutline{Plane: plane, OffSurface: units.Millimeters(sectionRoundingUp(mesh.n.Bound, scale))}
+	bound := mesh.n.Bound
+	if _, faceted := b.n.Payload.(facetedrecord.Payload); faceted {
+		// The cut's points lie on facets that meet the plane, and a reading
+		// of the true section's nearness to the loops can reach facets within
+		// the global bound of it, so the slab of that half-width about the
+		// plane holds every facet the bound must cover. Its largest facet
+		// bound replaces the whole mesh's.
+		halfWidth := sectionRoundingUp(mesh.n.Bound, scale)
+		if local, ok := facetedrecord.SlabFacetBound(mesh.n.Vertices, mesh.n.Triangles, mesh.n.VertexBound, o, plane.N(), halfWidth); ok {
+			bound = min(bound, local)
+		} else if floorErr != nil {
+			return SectionOutline{}, floorErr
+		}
+	} else if floorErr != nil {
+		return SectionOutline{}, floorErr
+	}
+	if floorErr != nil && bound > tol.Base() {
+		return SectionOutline{}, decaderr.NewMeshBoundError(tol.Base(), bound)
+	}
+	out := SectionOutline{Plane: plane, OffSurface: units.Millimeters(sectionRoundingUp(bound, scale))}
 	for _, outline := range outlines {
 		out.Loops = append(out.Loops, outline.Points)
 	}

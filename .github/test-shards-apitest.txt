@@ -3055,3 +3055,5 @@
 12	0.00	TestPatternedPairwiseRingOverlap
 12	0.00	TestFacetedShortStepArc
 12	0.00	TestFacetedShortStepArcAtCapRound
+12	0.00	TestSectionOutlineLocalBoundBelowTheGlobalFloor
+12	0.00	TestSectionOutlineLocalBoundStillChargesFacetsInTheSlab
