@@ -26,7 +26,7 @@ func (b *Body) SectionOutline(ctx context.Context, plane r3.Frame, tol units.Val
 | O4 | Segments chain by the identity of the mesh edge they cross, not by coordinates. A point on an edge is computed from the edge's vertices in index order, so the two triangles that share the edge compute the same point. A segment that starts no loop or ends at no segment makes the cut open, which is `ErrUnsupported`. |
 | O5 | An outer loop runs counter-clockwise seen from the tip of the plane's normal and a hole clockwise, when the mesh winds counter-clockwise seen from outside. |
 | O6 | `Loops` are in world millimetres and each loop's last point joins its first. A plane that misses the body gives no loop and no error. |
-| O7 | `OffSurface` is the mesh's proven displacement bound plus eight units of float64 rounding at the largest coordinate magnitude of the vertices, the loop points and the plane origin. Every loop point lies within `OffSurface` of the body's true boundary and of the plane. |
+| O7 | `OffSurface` is the mesh's proven displacement bound plus eight units of float64 rounding at the largest coordinate magnitude of the vertices, the loop points and the plane origin. Every loop point lies within `OffSurface` of the body's true boundary and of the plane. For a faceted body with a per-vertex record the bound is local: the largest facet bound over every facet that meets the slab about the plane whose half-width is the mesh's global bound plus that rounding (§6). |
 | O8 | `PolygonArea` sums the shoelace area of each loop seen from the plane's normal, an outer loop positive and a hole negative. It is the polygons' area and no more. |
 
 ## 2. What the bound does not say
@@ -87,3 +87,23 @@ The tests check two squares at a known gap, a corner gap, touching squares, over
 square, a square in a hole and a plate with a hole and an island, the bound arithmetic, the refusals, and two boxes
 built in decad and cut by one plane. A property test compares the result with an O(n*m) brute force on random
 polygons, and a timing test runs two circles of 5,000 segments.
+
+## 6. Local bound
+
+A faceted body (a mesh Boolean result, say) holds its mesh at a floor, the largest facet bound anywhere on it.
+`Tessellate` refuses a tolerance below that floor. `SectionOutline` instead reads the held mesh at the floor and judges
+the tolerance against the facets near the plane.
+
+| Decision | Rule |
+|---|---|
+| L1 | A faceted body whose mesh carries a per-vertex record has `OffSurface` charged the largest facet bound (the largest record entry over a facet's three corners) among the facets that meet the slab of half-width `G` about the plane. `G` is the mesh's global bound plus the rounding allowance of O7. The slab holds every facet the plane crosses, and every facet within the global bound of the plane. |
+| L2 | The slab is wider than the crossed facets because `Clearance` and the seat proofs read `OffSurface` as how near the true section lies to the loops. A true section point can sit near a facet that does not cross the plane but lies within `G` of it. |
+| L3 | A tolerance below the floor succeeds when the local bound is at most the tolerance. Otherwise the result is a `MeshBoundError` whose `Floor` is the local bound, so `Floor` depends on the plane. |
+| L4 | A body with no per-vertex record, an analytic payload, or a held mesh restated under surface bounds (`Refine`) behaves as before: the global bound, and a `MeshBoundError` carrying the mesh's floor. |
+| L5 | `Tessellate` states a body-wide claim and keeps the global bound. |
+
+The tests cut a plate with a blind cylindrical pocket. A plane far above the pocket succeeds at a tolerance just below
+the floor, which the whole-mesh bound refused. A plane through the pocket wall, through its top face, or just beside its
+rim within `G`, still reads the floor, and a plane beyond `G` of the rim reads the plate's own bound.
+`internal/facetedrecord`'s slab test checks that a facet inside the slab with a larger bound is charged and a far facet
+is not.
