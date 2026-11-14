@@ -341,25 +341,31 @@ func circleRim(centre, n r3.Vec, r float64, chain []r3.Vec, bounds []float64, cl
 
 // sweepSign reads which way round an open rim runs from the angles of its chain
 // vertices about the rim's axis (E7, E9). It returns +1 for a counter-clockwise
-// run and −1 for a clockwise one. The rim needs an interior vertex, every
-// step must clear what the bounds can move an angle (4·(max bound + slack)/r,
-// with r the smallest radius of curvature the angle is measured on), stay below
-// π, share one sign, and the steps must sum below 2π.
+// run and −1 for a clockwise one. The rim needs an interior vertex. The floor
+// is what the bounds can move an angle (4·(max bound + slack)/r, with r the
+// smallest radius of curvature the angle is measured on). A vertex within the
+// floor of the last kept vertex decides nothing and is skipped; every kept
+// step must stay below π − floor and share one sign, at least one step must be
+// kept, and the kept steps must sum below 2π − floor.
 func sweepSign(theta []float64, maxBound, r, slack float64) (float64, bool) {
 	if len(theta) < 3 {
 		return 0, false
 	}
 	floor := 4*(maxBound+slack)/r + 1e-9
 	sum, sign := 0.0, 0.0
+	anchor := theta[0]
 	for i := 1; i < len(theta); i++ {
-		step := theta[i] - theta[i-1]
+		step := theta[i] - anchor
 		for step > math.Pi {
 			step -= 2 * math.Pi
 		}
 		for step <= -math.Pi {
 			step += 2 * math.Pi
 		}
-		if math.Abs(step) < floor || math.Abs(step) > math.Pi-floor {
+		if math.Abs(step) < floor {
+			continue
+		}
+		if math.Abs(step) > math.Pi-floor {
 			return 0, false
 		}
 		if sign == 0 {
@@ -368,8 +374,9 @@ func sweepSign(theta []float64, maxBound, r, slack float64) (float64, bool) {
 			return 0, false
 		}
 		sum += math.Abs(step)
+		anchor = theta[i]
 	}
-	if sum > 2*math.Pi-floor {
+	if sign == 0 || sum > 2*math.Pi-floor {
 		return 0, false
 	}
 	return sign, true

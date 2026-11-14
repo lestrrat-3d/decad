@@ -505,3 +505,48 @@ func TestRetainedEdgeCurveParallelCylinders(t *testing.T) {
 	_, ok = facetedrecord.RetainedEdgeCurve(left, cylinder(0, r3.NewVec(0, 0, 1)), generator(0), bounds, false)
 	require.False(t, ok, "one axis cannot carry two cylinders' meeting")
 }
+
+func TestRetainedEdgeCurveArcSkipsSubFloorSteps(t *testing.T) {
+	t.Parallel()
+	floor := retained(planeAt(t, r3.Vec{}, r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0)))
+	bore := retained(surfacegeom.Cylinder{Origin: r3.NewVec(10, 10, 0), Axis: r3.NewVec(0, 0, 1), Radius: units.Millimeters(4)})
+	centre := r3.NewVec(10, 10, 0)
+	at := func(a float64) r3.Vec {
+		return centre.Add(r3.NewVec(arcRadius*math.Cos(a), arcRadius*math.Sin(a), 0))
+	}
+	// The angular floor here is 4·1e-6/4 rad, so two vertices 1e-7 rad apart decide nothing.
+	bounds := func(n int) []float64 {
+		b := make([]float64, n)
+		for i := range b {
+			b[i] = 1e-6
+		}
+		return b
+	}
+	run := []float64{0, math.Pi / 4, math.Pi/4 + 1e-7, math.Pi / 2}
+	chain := make([]r3.Vec, len(run))
+	for i, a := range run {
+		chain[i] = at(a)
+	}
+	curve, ok := facetedrecord.RetainedEdgeCurve(floor, bore, chain, bounds(len(chain)), false)
+	require.True(t, ok, "a sub-floor step between two good steps is skipped")
+	require.Equal(t, 1.0, curve.(surfacegeom.Arc3).Axis.Z)
+
+	for i, a := range run {
+		chain[len(run)-1-i] = at(a)
+	}
+	curve, ok = facetedrecord.RetainedEdgeCurve(floor, bore, chain, bounds(len(chain)), false)
+	require.True(t, ok)
+	require.Equal(t, -1.0, curve.(surfacegeom.Arc3).Axis.Z, "a clockwise run keeps its sense")
+
+	back := []r3.Vec{at(0), at(math.Pi / 4), at(math.Pi/4 - 1e-7), at(math.Pi / 2)}
+	_, ok = facetedrecord.RetainedEdgeCurve(floor, bore, back, bounds(len(back)), false)
+	require.True(t, ok, "a sub-floor step backwards is skipped as well")
+
+	reverse := []r3.Vec{at(0), at(math.Pi / 2), at(math.Pi / 4)}
+	_, ok = facetedrecord.RetainedEdgeCurve(floor, bore, reverse, bounds(len(reverse)), false)
+	require.False(t, ok, "a chain that doubles back by more than the floor stays declined")
+
+	still := []r3.Vec{at(0), at(2e-7), at(4e-7)}
+	_, ok = facetedrecord.RetainedEdgeCurve(floor, bore, still, bounds(len(still)), false)
+	require.False(t, ok, "a chain whose vertices all lie within the floor has no sense")
+}

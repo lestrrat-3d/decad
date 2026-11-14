@@ -3053,3 +3053,5 @@
 12	0.00	TestAxialSectionUnionCounterboreRimChamfers
 12	0.00	TestPatternedPairwiseRing
 12	0.00	TestPatternedPairwiseRingOverlap
+12	0.00	TestFacetedShortStepArc
+12	0.00	TestFacetedShortStepArcAtCapRound
