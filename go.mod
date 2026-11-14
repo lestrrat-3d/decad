@@ -4,7 +4,7 @@ go 1.27.4
 
 require (
 	github.com/lestrrat-3d/r3 v0.0.0-20261014125509-3c90eee135e1
-	github.com/lestrrat-3d/sketch v0.0.0-20261106060024-fe873315de3d
+	github.com/lestrrat-3d/sketch v0.0.0-20261114062900-54b8b67f9a93
 	github.com/lestrrat-3d/step v0.0.0-20261106110739-71e2bbb5a26d
 	github.com/lestrrat-3d/units v0.0.0-20261004210137-572d4a3c7f0a
 	github.com/lestrrat-go/option/v3 v3.0.0-alpha1
