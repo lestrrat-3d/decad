@@ -3051,3 +3051,5 @@
 8	1.00	TestChamferWindowLoopsRefusals
 12	0.00	TestAxialSectionUnionExactTurnsKeepExactCaps
 12	0.00	TestAxialSectionUnionCounterboreRimChamfers
+12	0.00	TestPatternedPairwiseRing
+12	0.00	TestPatternedPairwiseRingOverlap
