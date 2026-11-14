@@ -44,18 +44,25 @@ func clipOverlapDiameter(a, b *topo.Body) (float64, bool) {
 		return r3.Vec{X: q.Dot(u), Y: q.Dot(v), Z: q.Dot(n)}
 	}
 	boxLo, boxHi := r3.Vec{X: lo[0], Y: lo[1], Z: z0}, r3.Vec{X: hi[0], Y: hi[1], Z: z1}
-	var tris [][3]r3.Vec
-	if fp, isF := a.Payload.(facetedrecord.Payload); isF && len(fp.Tris) > 0 {
-		for _, t := range fp.Tris {
-			tris = append(tris, [3]r3.Vec{fp.Verts[t[0]], fp.Verts[t[1]], fp.Verts[t[2]]})
-		}
-	} else {
-		tris = boxFaces(a.Bounds.Min, a.Bounds.Max)
+	fp, isF := a.Payload.(facetedrecord.Payload)
+	useFacets := isF && len(fp.Tris) > 0
+	var boxTris [][3]r3.Vec
+	triangleCount := len(fp.Tris)
+	if !useFacets {
+		boxTris = boxFaces(a.Bounds.Min, a.Bounds.Max)
+		triangleCount = len(boxTris)
 	}
 	seenLo := r3.Vec{X: math.Inf(1), Y: math.Inf(1), Z: math.Inf(1)}
 	seenHi := r3.Vec{X: math.Inf(-1), Y: math.Inf(-1), Z: math.Inf(-1)}
 	seen := false
-	for _, t := range tris {
+	for i := range triangleCount {
+		var t [3]r3.Vec
+		if useFacets {
+			indices := fp.Tris[i]
+			t = [3]r3.Vec{fp.Verts[indices[0]], fp.Verts[indices[1]], fp.Verts[indices[2]]}
+		} else {
+			t = boxTris[i]
+		}
 		poly := []r3.Vec{local(t[0]), local(t[1]), local(t[2])}
 		for axis := range 3 {
 			poly = clipAxis(poly, axis, coord(boxLo, axis), true)
