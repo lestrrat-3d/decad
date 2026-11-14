@@ -528,8 +528,30 @@ cells sharing a walked vertex and any point sketch's own intersection
 queries report between two instances' entities (stacked §2.2). Touching
 instances take rule 3, where `Union` takes the mesh path. Three or more
 tangent copies in a row can be refused there with `ErrUnsupported`: the
-first join's held mesh is coarser than the next pair's chord tolerance. The scene is capped by `prismMaxArrangementSegments`
-(prism-boolean §10); exhaustion is `ErrUnsupported`.
+first join's held mesh is coarser than the next pair's chord tolerance.
+
+The scene is capped by `prismMaxArrangementSegments` (prism-boolean §10). A
+group whose one scene fits the cap takes it. A group over the cap (a ring of
+20 rounded ports charges 20560 segments) is proven by cases instead,
+`prismcells.ProveGroupApartPairwise`: each outer gets a conservative box (line
+endpoints, and the full circle box of each circle or arc), inflated by the
+instances' charged displacement and a relative 1e-9 slack. Two regions whose
+boxes have a positive gap cannot meet and need no scene. Each pair with
+overlapping boxes is put to `ProveGroupApart` as a two-region scene, which
+keeps the per-scene cap, and a region in no pair is put to a one-region scene
+for its validity. The proof refuses with `ErrUnsupported` past four scenes per
+region or 16 × the cap of segments over all scenes. The cap is not raised: it
+also bounds the entity-quadratic contact passes of `RegionContact`, which a
+larger scene would run over every line pair.
+
+The box test is a decad-side 2D proof, a stated exception to CLAUDE.md's "ask
+`sketch`" default. It wins on cost (the pairwise proof of 20 to 36 discs takes
+7 to 11 ms, `BenchmarkGroupApartPairwise`, where one scene refuses) and is exact in the one direction it is used:
+separation of two closed sets by an axis-aligned gap proves them apart, and
+the inflation makes the boxes contain every point the displaced record can
+reach. It never admits a pair that is not separated: anything overlapping,
+unreadable (a non-finite coordinate) or nearer than the slack goes to
+`sketch`.
 
 Topology, roles and measurements are stacked §3–§4 with the region index
 alive: a wall is `slab(0).region(r).side(i, j)`, the caps are `capStart` /
@@ -566,7 +588,7 @@ loop clearance proven per slab, which is the one slab. `Lumps()` reports
 | Simplicity, orientation, nesting of the assembled record | modify §5 audit, empty blend map | the diameter-anchored floor is verification §4's | S7 refuses near contact; S8/S9 refuse a decided break; none admits |
 | Instance translation | exact rational offset on the placed axes, per-coordinate interval sums | `δ_pattern`: `IntervalFloatError` per coordinate, covering offset, enclosure, conversion and sum, into `sectionDelta` | — |
 | Instance rotation | `TurnSinCosInterval` enclosures over an exact centre, exact quarter and half turns | `IntervalFloatError` per coordinate into `δ_pattern` | — |
-| Disjointness of a group | `sketch` arrangement of the outers, read structurally | — | any `Partial` edge, hole or invalid cell, a vertex two cells share, or a point sketch's intersection queries report between two instances refuses the group; nothing admits one but `Count` whole valid cells |
+| Disjointness of a group | `sketch` arrangement of the outers, read structurally | — | any `Partial` edge, hole or invalid cell, a vertex two cells share, or a point sketch's intersection queries report between two instances refuses the group; nothing admits one but `Count` whole valid cells, or, over the cap, a positive box gap or a two-region scene that proves the pair |
 | Group measurements | stacked §4 bounded sums | each term's own bound; `exactSumRound` on the sum | — |
 
 No step evaluates a residual against a curve to decide anything. The two

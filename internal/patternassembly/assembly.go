@@ -145,6 +145,27 @@ func FrameKeepingInstance(ctx context.Context, env topo.Env, rp patternrecord.Sp
 	}
 }
 
+// proveApart asks prismcells.ProveGroupApart for one scene of every outer when
+// that scene fits the arranger cap, and otherwise proves the instances apart
+// pair by pair (prismcells.ProveGroupApartPairwise). A group within the cap
+// takes the same single scene it always did. inflate is the instances' charged
+// displacement, which the pairwise boxes absorb.
+func proveApart(ctx context.Context, budget *proofbound.WorkBudget,
+	regions []momentinput.Profile, inflate float64) (bool, float64, error) {
+	outers := make([]momentinput.Profile, len(regions))
+	for i, region := range regions {
+		outers[i] = momentinput.Profile{Outer: region.Outer}
+	}
+	_, within, err := prismcells.RegionsWithinWorkCap(budget, outers...)
+	if err != nil {
+		return false, 0, err
+	}
+	if within {
+		return prismcells.ProveGroupApart(ctx, budget, regions)
+	}
+	return prismcells.ProveGroupApartPairwise(ctx, budget, regions, inflate)
+}
+
 // Group applies §6.1's rules 1 and 2 on the frame-keeping arm. For a prism
 // or a prism group it moves every region into every instance (§6.2) and asks
 // prismcells.ProveGroupApart whether sketch proves the outers pairwise
@@ -203,7 +224,7 @@ func Group(ctx context.Context, rp patternrecord.Spec, payload topo.Payload) (st
 			delta = math.Max(delta, charge)
 		}
 	}
-	disjoint, walk, err := prismcells.ProveGroupApart(ctx, budget, all)
+	disjoint, walk, err := proveApart(ctx, budget, all, math.Max(delta, sectionDelta))
 	if err != nil || !disjoint {
 		return stackedrecord.Payload{}, false, err
 	}
