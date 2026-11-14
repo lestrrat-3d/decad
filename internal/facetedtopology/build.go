@@ -375,8 +375,7 @@ func buildWithPlanar(
 		chain, pos     int
 		hasChain, used bool
 	}
-	var chainOf, posInChain map[[2]int]int
-	var usedEdge map[[2]int]struct{}
+	var edges map[[2]int]edgeState
 	var fixedEdges *replayEdgeTable[edgeState]
 	if budget.Replay {
 		var err error
@@ -385,30 +384,20 @@ func buildWithPlanar(
 			return err
 		}
 	} else {
-		chainOf = map[[2]int]int{}
-		posInChain = map[[2]int]int{}
-		usedEdge = map[[2]int]struct{}{}
+		edges = map[[2]int]edgeState{}
 	}
 	getEdge := func(key [2]int) (edgeState, error) {
 		if budget.Replay {
 			v, _, err := fixedEdges.get(key)
 			return v, err
 		}
-		ci, ok := chainOf[key]
-		_, used := usedEdge[key]
-		return edgeState{chain: ci, pos: posInChain[key], hasChain: ok, used: used}, nil
+		return edges[key], nil
 	}
 	setEdge := func(key [2]int, v edgeState) error {
 		if budget.Replay {
 			return fixedEdges.set(key, v)
 		}
-		if v.hasChain {
-			chainOf[key] = v.chain
-			posInChain[key] = v.pos
-		}
-		if v.used {
-			usedEdge[key] = struct{}{}
-		}
+		edges[key] = v
 		return nil
 	}
 	var chains []chainRec
