@@ -94,39 +94,29 @@ func TestFacetedRetainedBlendArcEndPlane(t *testing.T) {
 		})
 	})
 
-	// A plate's pocket open through x = 0, its two corners at x = x1 rounded
-	// to radius 3, so the corner axes lie 3 − x1 from x = 0. The mouth's
-	// outline runs arc, line, arc with both arcs ending on x = 0: the chain
-	// route with arc ends on the hole side, κ = +1. At x1 = 0.5 the wall's row
-	// meets x = 0 at the sine √(1 − (2.5/3)²) ≈ 0.55.
-	t.Run("the chain route at a pocket mouth", func(t *testing.T) {
-		t.Parallel()
-		const r, x1 = 2.0, 0.5
-		h := openBoxR - x1
-		body := pocketMouth(t, x1)
-		out, err := decad.Fillet(t.Context(), body, arcSeedAt(t, body, 10),
-			units.Millimeters(r), decad.WithTangentChain())
-		require.NoError(t, err)
-		for _, end := range []struct{ y, dir float64 }{{13, -1}, {27, 1}} {
-			requireEndCurveCovered(t, out, func(alpha float64) r3.Vec {
-				rho := openBoxR + r - r*math.Sin(alpha)
-				return r3.NewVec(0, end.y+end.dir*math.Sqrt(rho*rho-h*h), 10-r*(1-math.Cos(alpha)))
-			})
-		}
-	})
-
-	// At x1 = 0.25 the rim meets x = 0 at the sine ≈ 0.40, and the walk that
-	// expands the seed refuses (modify-reach SX2) before any row is built
-	// (agent-docs/missing-features.md).
-	t.Run("the chain walk refuses a pocket mouth cut near its corners' axes", func(t *testing.T) {
-		t.Parallel()
-		body := pocketMouth(t, 0.25)
-		_, err := decad.Fillet(t.Context(), body, arcSeedAt(t, body, 10), units.Millimeters(1),
-			decad.WithTangentChain())
-		require.ErrorIs(t, err, decad.ErrUnsupported)
-		require.ErrorContains(t, err, "the tangent chain branches or cannot be decided here")
-		require.ErrorContains(t, err, "(modify-reach SX2)")
-	})
+	// A plate's pocket open through x = 0, its two corners at x1 rounded to
+	// radius 3, so the corner axes lie 3 − x1 from x = 0. The mouth's outline
+	// runs arc, line, arc with both arcs ending on x = 0: the chain route with
+	// arc ends on the hole side, κ = +1. At x1 = 0.5 the wall's row meets
+	// x = 0 at the sine √(1 − (2.5/3)²) ≈ 0.55; at x1 = 0.25 the sine is
+	// ≈ 0.40, and the held chain's short steps near the arcs' ends no longer
+	// decline the arc (retention E7), so the walk reads the arc end there too.
+	for _, c := range []struct{ r, x1 float64 }{{2.0, 0.5}, {1.0, 0.25}} {
+		t.Run(fmt.Sprintf("the chain route at a pocket mouth, x1 = %g", c.x1), func(t *testing.T) {
+			t.Parallel()
+			h := openBoxR - c.x1
+			body := pocketMouth(t, c.x1)
+			out, err := decad.Fillet(t.Context(), body, arcSeedAt(t, body, 10),
+				units.Millimeters(c.r), decad.WithTangentChain())
+			require.NoError(t, err)
+			for _, end := range []struct{ y, dir float64 }{{13, -1}, {27, 1}} {
+				requireEndCurveCovered(t, out, func(alpha float64) r3.Vec {
+					rho := openBoxR + c.r - c.r*math.Sin(alpha)
+					return r3.NewVec(0, end.y+end.dir*math.Sqrt(rho*rho-h*h), 10-c.r*(1-math.Cos(alpha)))
+				})
+			}
+		})
+	}
 }
 
 // pocketMouth is a 40×40×10 plate with a placed tool x ∈ [−10, x1],

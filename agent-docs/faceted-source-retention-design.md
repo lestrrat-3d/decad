@@ -420,7 +420,7 @@ chord chain; nothing refuses.
 | E4 | `Plane` and `Cylinder` with the axis in the plane (`|axis · n| ≤ 10⁻¹²`) and the plane at distance `s` from the axis with `R² − s²` not below `−slack·R` | `Line3`. Two generators exist at `±√(R² − s²)` from the axis's foot, and a tangent plane gives one; either passes if the falsifier accepts it |
 | E5 | `Plane` and `Sphere` with `R² > d²` for `d` the centre's distance from the plane | `Circle3` or `Arc3`: centre the foot of the sphere's centre, radius `√(R² − d²)` |
 | E6 | The falsifier: every chain vertex lies within `bound(v) + slack` of the curve, `slack = 64·2⁻⁵²·max(1, |coordinate|)` | |
-| E7 | For an `Arc3`, the chain has an interior vertex, every angular step about the axis clears `4(max bound + slack)/R`, stays below `π`, has one sign, and the steps sum below `2π` | the sign picks `Axis = ±n` so the run is counter-clockwise |
+| E7 | For an `Arc3`, the chain has an interior vertex. A vertex whose angle about the axis lies within `4(max bound + slack)/R` of the last kept vertex decides nothing and is skipped. At least one step is kept, each kept step stays below `π` less that floor, the kept steps have one sign, and they sum below `2π` less the floor | the sign picks `Axis = ±n` so the run is counter-clockwise |
 | E8 | `Plane` and `Cylinder` with the axis oblique to the plane: `|axis × n| > 10⁻¹²` and `|axis · n| ≥ 10⁻³` | `Ellipse3`, §10.5 |
 | E10 | `Cylinder` and `Cylinder` with parallel axes (`|a1 × a2| ≤ 10⁻¹²`) at distance `s` with `|R1 − R2| < s < R1 + R2` within slack | `Line3`. Two generators exist, at the cross-section's circle intersections; either passes if the falsifier accepts it (reach §8) |
 | E11 | `Cylinder` of radius `r` and `Torus` of tube radius `r` (equal within slack) with the cylinder axis `d` normal to the torus axis `a` (`|d · a| ≤ 10⁻¹²`), where `c` is the point of the cylinder's axis nearest the torus centre `C`: `c − C` lies in the torus's equatorial plane (`|(c − C) · a| ≤ slack`) at distance `Major` from `C` (within slack) | `Arc3` about `c` of radius `r`, axis `±d`, or `Circle3` for a closed rim. This is the junction of two retained blends (reach §5.4); the falsifier E6 and the sweep rule E7 apply |
@@ -435,6 +435,15 @@ or a chain that does not follow the intersection), and the edge stays a chord
 chain. A vertex near the curve proves nothing; the curve is trusted because
 Claim R holds for both faces. This is the direction CLAUDE.md allows for a
 residual.
+
+E7 skips a short step, it does not refuse the arc for it. A vertex within the
+floor of the last kept vertex has an angle the bounds can move by that much
+either way, so its order against that vertex decides nothing, and the arc's
+sense is read from the kept vertices alone. Each kept step stays below `π`, so
+consecutive kept vertices are still joined the short way round, and the skipped
+vertex lies within the floor band of its anchor. E6 still places every vertex,
+skipped or kept, within its bound of the circle, and stays reject-only. E7 only
+picks the sign of `Axis`; the curve is trusted through Claim R.
 
 ### 10.2 What the curve says and does not say
 
