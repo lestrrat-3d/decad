@@ -45,3 +45,38 @@ func TestFacetedRetainedBlendSlantedEndBound(t *testing.T) {
 		})
 	}
 }
+
+// TestFacetedRetainedBlendArcSlantedEndBound is the arc route's counterpart of the test
+// above: earBody with the rib widened so its side faces y = ±half, the arc's end planes,
+// meet the round (r 3) at sine √(1 − (half/3)²), 0.60 and 0.50 for half 2.4 and 2.6. The
+// mesh bound must reach the held bound over the sine. Drop the slant from the arc
+// route's end planes (arc_band.go) and the rows at half 2.4 with size 0.3 and at half 2.6
+// fall short of it.
+func TestFacetedRetainedBlendArcSlantedEndBound(t *testing.T) {
+	t.Parallel()
+
+	for _, half := range []float64{2.4, 2.6} {
+		for _, size := range []float64{1, 0.3} {
+			t.Run(fmt.Sprintf("half %v size %v", half, size), func(t *testing.T) {
+				t.Parallel()
+				sine := math.Sqrt(1 - (half/3)*(half/3))
+				sc := newRetentionScene()
+				bar := xCylinderAt(t, sc.doc, 0, 0, 3, -15, 15)
+				box := placed(t, rectBox(t, sc.w, sc.doc, 0, -half, earLen, half, 4), -5)
+				body, err := decad.Union(t.Context(), bar, box)
+				require.NoError(t, err)
+				held, err := body.Tessellate(t.Context(), units.Millimeters(0.1))
+				require.NoError(t, err)
+
+				out, err := decad.Fillet(t.Context(), body, earArc(t, body), units.Millimeters(size))
+				require.NoError(t, err)
+				mesh, err := out.Tessellate(t.Context(), units.Millimeters(0.1), decad.WithVerification(decad.VerifyAll))
+				require.NoError(t, err)
+				require.True(t, mesh.BoundaryVerified())
+				require.True(t, mesh.VolumeVerified())
+				require.GreaterOrEqual(t, revolveMeshBound(t, mesh), revolveMeshBound(t, held)/sine,
+					"the bound reaches the held bound over the slant's sine %.4f", sine)
+			})
+		}
+	}
+}

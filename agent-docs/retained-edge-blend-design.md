@@ -346,8 +346,12 @@ is normal to the chain edge, whose wall's plane contains it, so both meet the wa
 square to `s ≥ √(1 − 10⁻¹⁸)`. The excess `b·(1/s − 1) ≤ 10⁻¹⁸·b` lies far inside `τ`
 for a point on `G`, and inside the `2·slack` of `cutOffset` for a corner. The planes
 of the main, rim, base and guard cross the wall square, because they are normal to
-the axis or contain it. Those planes, R1, R5 and the rim routes make no cut on a
-slanted end plane.
+the axis or contain it. R1, R5 and R6 make no cut on a slanted end plane. The rim
+routes do: the height cut of a trimming arc end or a chain arc end without `extendsW`
+(`clipArcWall`, `clipChainWall`, the chain's seam cut) cuts the wall's boundary generator
+along `G`. Both ends of that held edge lie on one Line3 edge of `G`, so their true points
+lie on one generator, and the cut keeps the old bound by the straight-line argument of
+the same-side rule below.
 
 `cylSlant.reach(b, e)` (`wall_slant.go`) is a proven bound on the distance from a
 point within `b` of the true wall and within `e` of `G` to the generator `L` where the
@@ -364,7 +368,13 @@ side, `Z ∈ [Z⁻, Z⁺]` for `Z⁻ = √(R² − h⁺²)` and `Z⁺ = √(R² 
 `|x′ − z′|² = (|X| − Z)² + (Y − h)² ≤ max(X⁺ − Z⁻, Z⁺ − X⁻)² + e²`, and `L` runs along
 the axis through `z′`, so the distance from `x` to `L` is `|x′ − z′|`. `L` lies in the
 closure of the kept wall. Every operation rounds outward, and `reach` refuses when
-`R − b ≤ y⁺`, so it carries no further assumption than the tag. It is tight: the
+`R − b ≤ y⁺`. The end plane's own displacement from its tag (`plane.delta`, which a draft
+or brep record states) moves the true generator, so it is charged into `h` (`wallSlant`)
+and into `e` (`slantBound`): the bound does not rest on the band's slack covering it.
+`wallSine`, and so the H2 reading, has the same omission and relies on that slack
+(`planeCharge`, at least `4·delta/minSine`); charging it there is a known follow-up. The
+crossing is a generator only up to `|n·a| ≤ parallelTol`, which the `|n·a|·far` term of
+`h` charges per section. It is tight: the
 worst ratio of the true distance to the published bound reaches 0.988 to 0.999 on the
 adversarial cylinder rows (`TestCrossingBoundCoversCylinder`).
 
@@ -394,7 +404,8 @@ bound `β` (the ends' and the facet's largest) and `e = |v| + slack` for the poi
   both ends lie on `G` by provenance, so their true points lie on `G ∩ wall`, which is
   one straight generator when both lie on one side of the axis's foot, and the segment
   between them then lies on it. The cut keeps `old` when the ends' coordinates along `G`
-  from the axis exceed their bounds with the same sign (`sameSide`); otherwise the ends
+  from the axis exceed their bounds with the same sign (`sameSide`) and the cutting plane
+  is normal to the axis (`tilt`, so it cuts the generator square); otherwise the ends
   may lie on different generators and the point publishes as a corner.
 
 `max(old, ·)` never lowers a bound, so no claim that read `old` weakens, and every new
@@ -413,7 +424,12 @@ fails when `e` leaves the hypotenuse or `X⁻` reads `y⁻`. `TestSlantBoundCorn
 without the offset's or the tilt's term, `TestCornerBandChargeCarriesSlant` without the
 band charge's delta, `TestCornerOnHeldEdgeAlongSlantedPlane` without the same-side check
 in either direction or without its margin, and `TestSlantRefusals` without the refusals.
+`TestCrossingBoundCoversPlaneDelta` reads a cut point against the generator on a plane
+displaced by `delta`, and fails without `delta` in the offset.
 `TestSlantSquarePlanesKeepBytes` holds a square plane's bound at its old value.
+`TestFacetedRetainedBlendArcSlantedEndBound` does the same through the arc route (a rib
+of half-width 2.4 and 2.6 on a round of radius 3, sine 0.60 and 0.50) and fails without
+the arc route's slant mark.
 `TestFacetedRetainedBlendSlantedEndBound` builds the notched round's back root at sine
 0.71, 0.60 and 0.53 and requires the mesh bound to reach the held bound over the sine; it
 falls short at 0.60 and 0.53 without the slant. Two first-order partners of the

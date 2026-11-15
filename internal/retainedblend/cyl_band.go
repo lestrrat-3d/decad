@@ -430,11 +430,11 @@ func (b *wallBand) crossing(u, v bandPt, q int, facetBound float64) (bandPt, err
 		along := b.alongBoth(a, c, q)
 		beta := max(a.bound, c.bound, facetBound)
 		bound, pos := beta+b.slack+b.w.tau, 0.0
-		// A cut of a held edge along a slanted end plane by another plane lies on the
-		// plane's crossing line whenever both ends' true points do: the line is straight,
-		// so the cut is within the old bound of the true corner (alongBoth).
-		if e := b.slantedEnd(along); e == nil || isEnd(q) || e.slant == nil ||
-			!e.slant.sameSide(a.p, c.p, a.bound, c.bound) {
+		// A cut of a held edge along a slanted end plane by a plane normal to the wall's
+		// axis lies on the plane's crossing line whenever both ends' true points do: the
+		// line is straight, so the cut is within the old bound of the true corner
+		// (alongBoth).
+		if !b.alongSameLine(q, along, a, c) {
 			var err error
 			if bound, pos, err = b.slantBound(p, q, along, beta, bound); err != nil {
 				return bandPt{}, err

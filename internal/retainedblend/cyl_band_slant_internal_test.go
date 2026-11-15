@@ -147,6 +147,9 @@ func TestCrossingBoundCoversCylinder(t *testing.T) {
 								truth = math.Hypot(p.X-h, p.Y-yt)
 							}
 						}
+						// A cut point of the end plane is also within its bound of the generator the
+						// wall crosses the plane on, which is what the section bound proves.
+						require.GreaterOrEqual(t, w.beta[id], math.Hypot(p.X-h, p.Y-yt), "generator, cut %d", id)
 						checked++
 						if slack == 0 {
 							worst = math.Max(worst, truth/w.beta[id])
@@ -442,4 +445,35 @@ func cylBand(hr, side float64) (*work, *wallBand, faceLoops, float64) {
 	}
 	b.ends[0] = &bandEnd{g: plane{n: r3.NewVec(1, 0, 0), o: r3.NewVec(h, 0, 0)}, sign: side}
 	return w, b, faceLoops{facets: facets}, h
+}
+
+// TestCrossingBoundCoversPlaneDelta reads a cut point on an end plane whose true place
+// lies up to delta off its tag (plane.delta, as a draft or brep record states it)
+// against the generator of the wall on the true plane, with the band's slack zero, so
+// nothing but delta covers the displacement. The point lies on the plane's tag and within
+// beta of the wall. Drop delta from the axis distance of wallSlant, or from the offset
+// of slantBound, and the rows fail.
+func TestCrossingBoundCoversPlaneDelta(t *testing.T) {
+	t.Parallel()
+
+	const radius, delta, beta = 3.0, 0.003, 0.002
+	for _, hr := range []float64{0.3, 0.6, 0.8, 0.9, 0.95} {
+		h := hr * radius
+		g := plane{n: r3.NewVec(1, 0, 0), o: r3.NewVec(h, 0, 0), delta: delta}
+		cyl := surfacegeom.Cylinder{Origin: r3.Vec{}, Axis: r3.NewVec(0, 0, 1), Radius: units.Millimeters(radius)}
+		slant := wallWork(tagged(cyl)).wallSlant(0, g)
+		require.NotNil(t, slant)
+		b := &wallBand{w: &work{}}
+		b.ends[0] = &bandEnd{g: g, sign: 1, slanted: true, slant: slant}
+		for _, rho := range []float64{radius - beta, radius, radius + beta} {
+			y := math.Sqrt(rho*rho - h*h)
+			bound, _, err := b.slantBound(r3.NewVec(h, y, 0), bandEnd0, -1, beta, 0)
+			require.NoError(t, err, "h/R %v", hr)
+			for _, xt := range []float64{h - delta, h + delta} {
+				yt := math.Sqrt(radius*radius - xt*xt)
+				truth := math.Hypot(h-xt, y-yt)
+				require.GreaterOrEqual(t, bound, truth, "h/R %v rho %v true plane at %v", hr, rho, xt)
+			}
+		}
+	}
 }

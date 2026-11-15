@@ -50,7 +50,9 @@ type cylSlant struct {
 // none follows from its tag. The wall must be an exact cylinder whose axis runs
 // parallel to g (|n·a| ≤ parallelTol, the arc reader's gate, arc.go), and its tag
 // must state no positional departure and no axial delta: Retention Claim R then
-// puts every true point of the wall on the tag's cylinder.
+// puts every true point of the wall on the tag's cylinder. The plane's own displacement
+// from its tag (plane.delta) moves the true generator, so it is charged into the axis
+// distance (r) here and into the offset e of every reach call (slantBound).
 func (w *work) wallSlant(fi int, g plane) wallSlant {
 	f := w.faceAt(fi)
 	if f == nil || !f.RetainedTag || f.TagDeparture != 0 || (f.HasAxialDelta && f.AxialDelta != 0) {
@@ -77,7 +79,7 @@ func (w *work) wallSlant(fi int, g plane) wallSlant {
 	far := proofbound.AbsSumUpper(w.r.scale, sf.Origin.Len())
 	hc := math.Abs(g.n.Dot(sf.Origin.Sub(g.o)))
 	r := proofbound.AbsSumUpper(proofbound.ProductUpper(rounding, proofbound.AbsSumUpper(far, g.o.Len())),
-		proofbound.ProductUpper(along, far))
+		proofbound.ProductUpper(along, far), g.delta)
 	return &cylSlant{radius: radius, hc: hc, r: r, axis: axis, o: sf.Origin, u: u, far: far}
 }
 
@@ -187,7 +189,7 @@ func (b *wallBand) slantBound(p r3.Vec, q, other int, beta, old float64) (float6
 		return 0, 0, errSlant()
 	}
 	bb := proofbound.AbsSumUpper(beta, b.slack)
-	ee := proofbound.AbsSumUpper(math.Abs(b.value(g, p)), b.slack)
+	ee := proofbound.AbsSumUpper(math.Abs(b.value(g, p)), b.slack, e.g.delta)
 	d, ok := e.slant.reach(bb, ee)
 	if !ok {
 		return 0, 0, errSlant()
@@ -224,4 +226,19 @@ func (b *wallBand) planeNormal(q int) r3.Vec {
 // The strip's slack is the band's own.
 func (b *wallBand) cutDelta(pt *bandPt, facetBound float64) float64 {
 	return max(facetBound, pt.slantPos-2*b.slack)
+}
+
+// alongSameLine reports whether the cut of the held edge ac by plane q, which also
+// lies on the slanted end plane along, keeps the old bound: both ends' true points lie
+// on one generator of the wall (sameSide), and q is normal to it (tilt), so the cut's
+// distance to the true corner is its in-section error and its offset from q.
+func (b *wallBand) alongSameLine(q, along int, a, c bandPt) bool {
+	e := b.slantedEnd(along)
+	if e == nil || isEnd(q) || e.slant == nil {
+		return false
+	}
+	if _, ok := e.slant.tilt(b.planeNormal(q)); !ok {
+		return false
+	}
+	return e.slant.sameSide(a.p, c.p, a.bound, c.bound)
 }
