@@ -533,7 +533,40 @@ func rewriteChain(ctx context.Context, env topo.Env, fp facetedrecord.Payload, c
 		if open && t == n-1 {
 			near[ecuts[1].faceIx] = true
 		}
-		cutsOf[t], wallGroups[t], err = w.clipChainWall(en, nP.Scale(side), oP, tW, topSet, near, faceVerts, slack)
+		var wallEnds [2]*chainEndCut
+		if open && t == 0 {
+			wallEnds[0] = ecuts[0]
+		}
+		if open && t == n-1 {
+			wallEnds[1] = ecuts[1]
+		}
+		up := nP.Scale(side)
+		if w.chainWallNeedsBand(en, facetsOfFace(w.fp.FaceOf, en.wallIx), up, oP, topSet, wallEnds, slack) {
+			own := map[int]bool{hv[en.ja]: true, hv[en.jb]: true}
+			for _, v := range en.run {
+				own[v] = true
+			}
+			var bc bandCuts
+			cutsOf[t], wallGroups[t], bc, err = w.clipChainWallBand(en, up, oP, tW, own, near, faceVerts,
+				wallEnds, slack)
+			if err != nil {
+				return nil, err
+			}
+			// Where the wall extends past an end plane, the band's corner there
+			// is the wall's last row, and its run along the plane joins the end
+			// face's loop.
+			for i, ec := range wallEnds {
+				if ec == nil || !ec.extendsW {
+					continue
+				}
+				ec.corner = bc.corner[i]
+				if ec.wallRun, err = bc.endRun(i, ec.v); err != nil {
+					return nil, err
+				}
+			}
+			continue
+		}
+		cutsOf[t], wallGroups[t], err = w.clipChainWall(en, up, oP, tW, topSet, near, faceVerts, slack)
 		if err != nil {
 			return nil, err
 		}
@@ -542,7 +575,9 @@ func rewriteChain(ctx context.Context, env topo.Env, fp facetedrecord.Payload, c
 	seam := make([]int, nj)
 	for t := range entries {
 		if open && t == 0 {
-			if ecuts[0].arc != nil {
+			if ecuts[0].extendsW {
+				seam[0] = ecuts[0].corner
+			} else if ecuts[0].arc != nil {
 				seam[0], err = w.seamCut(ecuts[0], cutsOf[0])
 			} else {
 				seam[0], err = w.findEndCut(cutsOf[0], jp[0], nP, slack)
@@ -564,7 +599,9 @@ func rewriteChain(ctx context.Context, env topo.Env, fp facetedrecord.Payload, c
 		seam[t] = common[0]
 	}
 	if open {
-		if ecuts[1].arc != nil {
+		if ecuts[1].extendsW {
+			seam[n] = ecuts[1].corner
+		} else if ecuts[1].arc != nil {
 			seam[n], err = w.seamCut(ecuts[1], cutsOf[n-1])
 		} else {
 			seam[n], err = w.findEndCut(cutsOf[n-1], jp[n], nP, slack)
@@ -752,7 +789,10 @@ func (w *work) readChainEdge(en *chainEntry, fp facetedrecord.Payload, faceIndex
 			}
 		}
 	case surfacegeom.Arc3:
-		r, err := readRim(en.edge, fp, faceIndex)
+		// A wall that lies on both sides of the base is read by the facets along
+		// the rim and cut by the band (chain_band.go); only a concave arc builds
+		// it.
+		r, err := readChainRim(en.edge, fp, faceIndex)
 		if err != nil {
 			return err
 		}

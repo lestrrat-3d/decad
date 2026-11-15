@@ -350,6 +350,13 @@ func (w *work) cutBand(f faceLoops, b *wallBand) (bandCuts, error) {
 				pt.id = id
 				return nil
 			}
+			if id, ok := w.cuts[pt.edge]; ok && pt.planes[0] == bandGen {
+				// The wall beside this one already cut the edge they share: the
+				// two walls' strips meet at that one vertex.
+				pt.id = id
+				edgePts[k] = id
+				return nil
+			}
 			pt.id = w.vertex(pt.p, pt.bound)
 			edgePts[k] = pt.id
 			if pt.planes[0] == bandGen {

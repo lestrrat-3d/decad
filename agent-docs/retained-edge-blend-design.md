@@ -278,9 +278,10 @@ whole wall face lies on both sides of the rim's plane. Two readings change
   edge, so the true piece of such a facet lies on the wall's side near the rim,
   and the convexity check that follows stays the falsifier. The rim records
   `twoSided`; R2 and R6 read the whole face only and refuse it, and a convex
-  arc keeps the refusal too. The band is built for one arc, so an arc reads
-  the local side only when it is the one edge selected; among several selected
-  edges it keeps the whole-face refusal, as before.
+  arc keeps the refusal too. A single arc
+  reads the local side only when it is the one edge selected, and among several
+  selected edges it keeps the whole-face refusal, as before; an arc of a tangent
+  chain reads it too, and only a concave one (`readChainRim`).
 - *The wall's band.* A wall that is two-sided, or extends at an end, is cut by
   the band of `cutBand` (`cyl_band.go`, shared with R3) instead
   of by height alone: the part of the wall between the plane `P` and the plane
@@ -302,6 +303,19 @@ whole wall face lies on both sides of the rim's plane. Two readings change
 
 At an end where the wall extends the end face keeps its corner `V` and takes the
 blend's end cap (§5.0).
+
+**A chain's walls.** The same band cuts the walls of a concave tangent chain
+(retained-modify-reach §5.5 step 5; `chain_band.go`): for each chain edge the
+prism between `P` and `P′`, inside the end plane of each free end where the wall
+extends. A junction has no plane, because the wall face ends at the seam it
+shares with the next wall; both walls cut the seam's held edge once. There is no
+guard: a wall facet on the far side of the axis inside the prism would hold a
+vertex strictly inside the band or a boundary chord meeting it, and refuses
+(SR5). The wall's boundary along the chain edge, its seams and its chain along
+an extending end plane are exempt; every other chord must miss the band widened
+by its bound, the slack and `τ`. The band's corner on an extending end plane is
+the wall's last row at that end, and its run along the plane joins the end
+face's loop.
 
 The faces are rewritten as in R2 for the plane (a polygon on the setback arc)
 and the wall (the cut at the setback height), and as in R1 for the ends.
@@ -1693,7 +1707,7 @@ published bound, never with a pinned literal.
 
 | Area | Change |
 |---|---|
-| `internal/retainedblend/` | new: classification (Table RR), exact geometry (§4), clip, strip and end construction (§5), gates (§6); R6 in `sphere.go`, its exact-record rule in `denoted.go`; R3's wall band in `cyl_band.go`, which also cuts an R4 arc's wall by the planes of `arc_band.go`; the strip triangles' bounds, the band's charge and the corner patch's in `strip_bound.go` |
+| `internal/retainedblend/` | new: classification (Table RR), exact geometry (§4), clip, strip and end construction (§5), gates (§6); R6 in `sphere.go`, its exact-record rule in `denoted.go`; R3's wall band in `cyl_band.go`, which also cuts an R4 arc's wall by the planes of `arc_band.go` and a concave chain's wall by those of `chain_band.go`; the strip triangles' bounds, the band's charge and the corner patch's in `strip_bound.go` |
 | `internal/facetedrecord/` | an entry that builds a payload from new vertices, triangles, groups and bounds; no change to `Build` |
 | `internal/retainedblend/saddle.go`, `saddle_tool.go`, `internal/crossbore/saddle_tool.go` | R7 (§4.9): recognition, tool, band proof, outside and clearance proofs, the Cut |
 | `internal/brepmodify/chamfer.go` | calls `retainedblend.SaddleChamfer` with the hooks' mesher before `retainedblend.Chamfer` |

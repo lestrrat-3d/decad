@@ -33,7 +33,7 @@ type arcEnd struct {
 // three tags meet at the held vertex.
 func (w *work) readArcEndCorner(v *topo.Vertex, e *topo.Edge, base, wall *topo.Face,
 	fp facetedrecord.Payload, faceIndex map[*topo.Face]int) (*chainEndCut, error) {
-	r, err := readRim(e, fp, faceIndex)
+	r, err := readChainRim(e, fp, faceIndex)
 	if err != nil {
 		return nil, err
 	}
@@ -262,4 +262,19 @@ func (en chainEntry) areasFree(tP, tW float64) (base, wall, blend float64) {
 		blend += rhoM * en.sigma * (toAngle - fromAngle) * math.Hypot(rho1-rho0, z1-z0)
 	}
 	return base, wall, blend
+}
+
+// readChainRim is readRim for a chain's arc, whose wall may lie on both sides
+// of the base when the arc is concave: the wall's facets along the arc then
+// decide its side (readSide), and the band cuts the wall (chain_band.go). A
+// convex arc keeps the whole-face refusal.
+func readChainRim(e *topo.Edge, fp facetedrecord.Payload, faceIndex map[*topo.Face]int) (rim, error) {
+	r, err := readRimSide(e, fp, faceIndex, true)
+	if err != nil {
+		return rim{}, err
+	}
+	if r.twoSided && r.convex {
+		return rim{}, fmt.Errorf("%w: the rim's wall does not lie on one side of its plane", decaderr.ErrUnsupported)
+	}
+	return r, nil
 }

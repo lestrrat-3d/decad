@@ -115,6 +115,30 @@ func TestCheckEndTurns(t *testing.T) {
 		require.ErrorContains(t, err, "a chain end's base or wall is reflex at the corner")
 	})
 
+	t.Run("a concave chain's wall that continues past the end face is read as extending", func(t *testing.T) {
+		t.Parallel()
+		// The same wall turn as the step's, marked by readEndCut for a concave
+		// chain whose wall's chain along G leaves against the setback.
+		ec := &chainEndCut{rP: y, rW: z, wallN: neg(y), extendsW: true}
+		require.NoError(t, checkEndTurns(ec, x, z, true))
+	})
+
+	t.Run("a base and a wall that both extend are refused", func(t *testing.T) {
+		t.Parallel()
+		ec := &chainEndCut{rP: y, rW: z, wallN: y, wraps: true, extendsW: true}
+		err := checkEndTurns(ec, x, z, false)
+		require.ErrorIs(t, err, decaderr.ErrUnsupported)
+		require.ErrorContains(t, err, "a chain end's base and wall both extend past the end face")
+	})
+
+	t.Run("a wall read as extending that turns convex is undecided", func(t *testing.T) {
+		t.Parallel()
+		ec := &chainEndCut{rP: y, rW: neg(z), wallN: neg(y), extendsW: true}
+		err := checkEndTurns(ec, x, z, true)
+		require.ErrorIs(t, err, decaderr.ErrUnsupported)
+		require.ErrorContains(t, err, "a chain end's wall turn at the corner is undecided")
+	})
+
 	t.Run("an undecided turn is refused with its own text", func(t *testing.T) {
 		t.Parallel()
 		ec := &chainEndCut{rP: x, rW: neg(z), wallN: neg(y)}
@@ -169,6 +193,24 @@ func TestReadEndFaceKind(t *testing.T) {
 		err := ec.readEndFaceKind()
 		require.ErrorIs(t, err, decaderr.ErrUnsupported)
 		require.ErrorContains(t, err, "a chain end's base and end face are both reflex at the corner")
+	})
+
+	t.Run("a convex end face beside an extending wall takes the cap", func(t *testing.T) {
+		t.Parallel()
+		ec := convex
+		ec.extendsW = true
+		require.NoError(t, ec.readEndFaceKind())
+		require.False(t, ec.reflex)
+		require.True(t, ec.takesCap())
+	})
+
+	t.Run("a reflex end face beside an extending wall is refused", func(t *testing.T) {
+		t.Parallel()
+		ec := reflex
+		ec.extendsW = true
+		err := ec.readEndFaceKind()
+		require.ErrorIs(t, err, decaderr.ErrUnsupported)
+		require.ErrorContains(t, err, "a chain end's wall extends past an end face that is reflex at the corner")
 	})
 
 	t.Run("a convex chain's arc end on a reflex end face is refused with its own text", func(t *testing.T) {
@@ -260,6 +302,9 @@ func TestChainEndCapArea(t *testing.T) {
 		{"a reflex end face takes a chamfer's cap", chainEndCut{reflex: true}, false, -tP * tW / 2},
 		{"a convex end face beside a wrapping base takes a fillet's cap", chainEndCut{wraps: true}, true, -fillet},
 		{"a convex end face beside a wrapping base takes a chamfer's cap", chainEndCut{wraps: true}, false,
+			-tP * tW / 2},
+		{"a convex end face beside an extending wall takes a fillet's cap", chainEndCut{extendsW: true}, true, -fillet},
+		{"a convex end face beside an extending wall takes a chamfer's cap", chainEndCut{extendsW: true}, false,
 			-tP * tW / 2},
 		{"an arc end gives up its own corner", chainEndCut{arc: &arcEnd{cornerArea: 0.3}}, true, 0.3},
 	}
