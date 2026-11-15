@@ -972,6 +972,25 @@ does not run, and every reading is the one `dc` alone gives.
 With no option, or with `otherDistance` equal to `d` in the same unit, the
 band reads `dc = ds = d` and builds the same body bit for bit.
 
+#### 8.3.2 Whole runs of a cap loop
+
+A `Chamfer` that selects part of a cap loop's edges, which routes E and L above refuse (SX4), takes this route when the
+selection is a set of whole runs. A run is a maximal chain of selected edges, lines and circular arcs, that continue one
+another tangentially. Every junction between a selected edge and an unselected one is a sharp corner, so no run stops
+inside a tangent chain; two runs may meet at a sharp corner, where they mitre as the whole-loop chamfer does.
+`WithTangentChain` makes such a set from one seed edge. A loop selected whole stays with the loop routes.
+
+Every wall beside a run is a plane normal to the cap or a cylinder with its axis normal to it. A run is cut from the
+receiver by one cutter: the region within `t` of the run, inside the cap, above the bevel plane that leaves the wall at
+depth `dc` and the cap at `dc`. The cutter reaches `dc` past each end of the run along the run's tangent, so the bevel
+ends on the wall beside the next edge. That extension holds no material only where the next edge leaves at a convex
+corner turned by 90 degrees or more; a run that ends at any other corner, including a concave one, is `ErrUnsupported`,
+as is a run whose extension would meet material of the cap or whose offset empties an arc.
+
+The cutter is a polyhedron held exactly as a mesh solid, with arc chords within 0.0002 mm of their circle, and the
+result is a Boolean Cut: faceted, with the Cut's own readings. `internal/brepmodify/partial_loop_chamfer.go` owns it.
+It runs after every exact route has declined, and only for a symmetric chamfer.
+
 ### 8.4 Measurements + tessellation
 
 `capBlendPayload` owns analytic patches. Report each exactly representable

@@ -90,7 +90,7 @@ func TestCapBlendChamferCircularRim(t *testing.T) {
 	require.Greater(t, area.Value.Mag(), 0.0)
 }
 
-func TestCapBlendPartialLoopSelectionRefused(t *testing.T) {
+func TestCapBlendPartialLoopSelectionChamfers(t *testing.T) {
 	t.Parallel()
 	_, box := capBlendBox(t)
 	// The 100x60 plate's end-cap loop has two edges parallel to X and two
@@ -100,9 +100,11 @@ func TestCapBlendPartialLoopSelectionRefused(t *testing.T) {
 	matched, err := q.SelectEdges(box)
 	require.NoError(t, err)
 	require.Len(t, matched, 2, `a proper subset of the four-edge loop`)
-	_, err = decad.Chamfer(t.Context(), box, q, units.Millimeters(5))
-	require.Error(t, err)
-	require.ErrorIs(t, err, decad.ErrUnsupported)
+	// Each X-parallel edge is a run of its own that ends at 90 degree corners, so a cutter takes it
+	// (modify-reach §8.3.2).
+	out, err := decad.Chamfer(t.Context(), box, q, units.Millimeters(5))
+	require.NoError(t, err)
+	require.True(t, out.IsSolid())
 }
 
 func TestCapBlendMixedCapAndLateralSelectionRefused(t *testing.T) {
