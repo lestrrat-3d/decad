@@ -23,9 +23,10 @@ import (
 
 // The planes that bound the band.
 const (
-	bandGen  = iota // the half-plane through the axis and the setback generator
-	bandEnd0        // the end plane at end 0, where the wall extends past it
-	bandEnd1        // likewise at end 1
+	bandGen   = iota // the main plane: the half-plane through the axis and the setback generator, or an exact plane
+	bandEnd0         // the end plane at end 0, where the wall extends past it
+	bandEnd1         // likewise at end 1
+	bandOther        // the first of wallBand.others, further exact planes
 )
 
 // wallBand is the band and the frame its planes are read in.
@@ -37,13 +38,22 @@ type wallBand struct {
 	o0, u1, u2, nu r3.Vec
 	radius, thetaT float64
 	slack          float64
-	ends           [2]*bandEnd
+	// main, when set, is the main plane in place of the setback generator's
+	// half-plane: an exact plane, whose cut row is the strip's last row (the
+	// arc route, arc_band.go). The generator's fields are then unused.
+	main *bandEnd
+	ends [2]*bandEnd
+	// others are further exact planes, bandOther on, that bound the band.
+	others []*bandEnd
+	// noteCuts records each vertex a cut on the main plane makes with its facet
+	// bound (noteCut), for the strip's band charge.
+	noteCuts bool
 	// side caches each held vertex's side of each plane.
-	side [3]map[int]int
+	side []map[int]int
 }
 
-// bandEnd is the end plane of an end where the wall extends past the edge's
-// corner.
+// bandEnd is an exact plane of the band: the end plane of an end where the wall
+// extends past the edge's corner, or a plane the arc route adds.
 type bandEnd struct {
 	g plane
 	// sign is +1 when the band lies on g's positive side.
@@ -51,7 +61,23 @@ type bandEnd struct {
 	// on holds the held vertices that lie on the plane by construction: the
 	// edge's corner and the wall's chain along the end face.
 	on map[int]bool
+	// what names the plane in a refusal; empty reads "an end face's plane".
+	what string
 }
+
+// exact is the exact plane q, or nil for the setback generator's half-plane.
+func (b *wallBand) exact(q int) *bandEnd {
+	switch {
+	case q == bandGen:
+		return b.main
+	case q < bandOther:
+		return b.ends[q-bandEnd0]
+	}
+	return b.others[q-bandOther]
+}
+
+// isEnd reports whether q is an end plane.
+func isEnd(q int) bool { return q == bandEnd0 || q == bandEnd1 }
 
 // bandPt is a point of a facet being cut: a held vertex, a cut point on a held
 // facet edge, or a corner of the band inside the facet.
@@ -85,10 +111,10 @@ type bandEdgeKey struct {
 
 // value is the signed distance of p from plane q, positive inside the band.
 func (b *wallBand) value(q int, p r3.Vec) float64 {
-	if q == bandGen {
+	e := b.exact(q)
+	if e == nil {
 		return -b.nu.Dot(p.Sub(b.o0))
 	}
-	e := b.ends[q-bandEnd0]
 	return e.sign * e.g.offset(p)
 }
 
@@ -131,18 +157,22 @@ func (b *wallBand) sideOf(pt bandPt, q int) (int, error) {
 	}
 	var s int
 	var err error
-	if q == bandGen {
+	if e := b.exact(q); e == nil {
 		s, err = b.angleSide(pt.p, pt.bound)
 	} else {
+		what := e.what
+		if what == "" {
+			what = "an end face's plane"
+		}
 		switch v := b.value(q, pt.p); {
-		case pt.held && b.ends[q-bandEnd0].on[pt.id]:
+		case pt.held && e.on[pt.id]:
 			s = 0
 		case v > b.tolerance(pt.bound):
 			s = 1
 		case v < -b.tolerance(pt.bound):
 			s = -1
 		default:
-			err = fmt.Errorf("%w: a vertex of the wall lies on an end face's plane", decaderr.ErrUnsupported)
+			err = fmt.Errorf("%w: a vertex of the wall lies on %s", decaderr.ErrUnsupported, what)
 		}
 	}
 	if err != nil {
@@ -182,9 +212,9 @@ func (b *wallBand) planesOf(pt bandPt) []int {
 		return out
 	}
 	var out []int
-	for i, e := range b.ends {
-		if e != nil && e.on[pt.id] {
-			out = append(out, bandEnd0+i)
+	for q := bandGen; q < bandOther+len(b.others); q++ {
+		if e := b.exact(q); e != nil && e.on[pt.id] {
+			out = append(out, q)
 		}
 	}
 	return out
@@ -220,7 +250,7 @@ func (b *wallBand) crossing(u, v bandPt, q int, facetBound float64) (bandPt, err
 		}
 		fa, fc := b.value(q, a.p), b.value(q, c.p)
 		if sa*sc >= 0 || (fa > 0) != (sa > 0) || (fc > 0) != (sc > 0) || fa == 0 || fc == 0 {
-			if q == bandGen {
+			if b.exact(q) == nil {
 				return bandPt{}, fmt.Errorf("%w: a wall facet reaches across half the cylinder", decaderr.ErrUnsupported)
 			}
 			return bandPt{}, fmt.Errorf("%w: a wall facet edge crosses an end face's plane where its ends do not",
@@ -281,6 +311,7 @@ func (b *wallBand) clip(poly []bandPt, q int, facetBound float64) ([]bandPt, err
 func (w *work) cutBand(f faceLoops, b *wallBand) (bandCuts, error) {
 	tris := w.fp.Tris
 	b.w = w
+	b.side = make([]map[int]int, bandOther+len(b.others))
 	for q := range b.side {
 		b.side[q] = map[int]int{}
 	}
@@ -291,6 +322,9 @@ func (w *work) cutBand(f faceLoops, b *wallBand) (bandCuts, error) {
 			planes = append(planes, bandEnd0+i)
 			out.runs[i] = map[int][]int{}
 		}
+	}
+	for i := range b.others {
+		planes = append(planes, bandOther+i)
 	}
 	planes = append(planes, bandGen)
 	beyond := b.beyondEnds(f.facets)
@@ -306,7 +340,7 @@ func (w *work) cutBand(f faceLoops, b *wallBand) (bandCuts, error) {
 	}
 	edgePts := map[bandEdgeKey]int{}
 	corners := map[[2]int]int{}
-	make1 := func(pt *bandPt) error {
+	make1 := func(pt *bandPt, facetBound float64) error {
 		if pt.held {
 			return nil
 		}
@@ -320,6 +354,9 @@ func (w *work) cutBand(f faceLoops, b *wallBand) (bandCuts, error) {
 			edgePts[k] = pt.id
 			if pt.planes[0] == bandGen {
 				w.cuts[pt.edge] = pt.id
+				if b.noteCuts {
+					w.noteCut(pt.id, facetBound)
+				}
 			}
 			return nil
 		}
@@ -328,8 +365,11 @@ func (w *work) cutBand(f faceLoops, b *wallBand) (bandCuts, error) {
 		}
 		pt.id = w.vertex(pt.p, pt.bound)
 		corners[pt.planes] = pt.id
-		if pt.planes[0] == bandGen {
+		if pt.planes[0] == bandGen && isEnd(pt.planes[1]) {
 			out.corner[pt.planes[1]-bandEnd0] = pt.id
+		}
+		if pt.planes[0] == bandGen && b.noteCuts {
+			w.noteCut(pt.id, facetBound)
 		}
 		return nil
 	}
@@ -340,7 +380,7 @@ func (w *work) cutBand(f faceLoops, b *wallBand) (bandCuts, error) {
 			if beyond[v] {
 				// Its side of the generator may be undecided: count it inside,
 				// so the facet is clipped, and the end plane drops it.
-				s, err := b.angleSide(w.verts[v], w.beta[v])
+				s, err := b.sideOf(w.heldPt(v), bandGen)
 				inside = inside || err != nil || s > 0
 				continue
 			}
@@ -367,7 +407,7 @@ func (w *work) cutBand(f faceLoops, b *wallBand) (bandCuts, error) {
 			continue
 		}
 		for k := range poly {
-			if err := make1(&poly[k]); err != nil {
+			if err := make1(&poly[k], facetBound); err != nil {
 				return bandCuts{}, err
 			}
 		}
@@ -511,7 +551,7 @@ func (w *work) keepOutside(t [3]int, group int, in []bandPt, b *wallBand, out *b
 		var inner []int
 		e := s
 		for chord[e%n] {
-			if p := b.chordPlane(in[e%n], in[(e+1)%n]); p > bandGen {
+			if p := b.chordPlane(in[e%n], in[(e+1)%n]); isEnd(p) {
 				i := p - bandEnd0
 				x, y := in[e%n].id, in[(e+1)%n].id
 				out.runs[i][x] = append(out.runs[i][x], y)

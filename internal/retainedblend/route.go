@@ -177,7 +177,7 @@ func blend(ctx context.Context, env topo.Env, b *topo.Body, fp facetedrecord.Pay
 			}
 			targets[i].lineKey, targets[i].kind = l.key(), straightLine
 		case looksLikeArc(e):
-			a, err := readArc(e, fp, faceIndex)
+			a, err := readArc(e, fp, faceIndex, len(edges) == 1)
 			if err != nil {
 				// An arc this route cannot read is left to the generic refusal, which
 				// names the whole selection.
@@ -274,7 +274,7 @@ func blend(ctx context.Context, env topo.Env, b *topo.Body, fp facetedrecord.Pay
 			}
 		case openArc:
 			var a arcRim
-			if a, err = readArc(e, curFP, faceIndex); err == nil {
+			if a, err = readArc(e, curFP, faceIndex, len(edges) == 1); err == nil {
 				step, err = spec.assign(targets[i].ref, a.planeFace, a.wallFace)
 			}
 			if err == nil {

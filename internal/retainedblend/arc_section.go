@@ -169,6 +169,16 @@ func (e endSection) shift(s0, s1 float64) float64 {
 // certifies within tau and apart, when not nil, accepts the gap. It refuses a
 // blend that needs more than maxSectionRows rows.
 func sectionRows(m int, tau float64, ends []endSection, apart func(s0, s1 float64) bool) ([]float64, error) {
+	grid := make([]float64, m+1)
+	for j := range grid {
+		grid[j] = float64(j) / float64(m)
+	}
+	return sectionGrid(grid, tau, ends, apart)
+}
+
+// sectionGrid is sectionRows over the gaps between the parameters of grid, in
+// increasing order: each gap is halved until it certifies.
+func sectionGrid(grid []float64, tau float64, ends []endSection, apart func(s0, s1 float64) bool) ([]float64, error) {
 	refuse := fmt.Errorf("%w: the blend's end curve on an end face needs more than %d rows",
 		decaderr.ErrUnsupported, maxSectionRows)
 	for _, e := range ends {
@@ -178,7 +188,7 @@ func sectionRows(m int, tau float64, ends []endSection, apart func(s0, s1 float6
 			return nil, refuse
 		}
 	}
-	out := []float64{0}
+	out := []float64{grid[0]}
 	var fill func(s0, s1 float64) error
 	fill = func(s0, s1 float64) error {
 		ok := apart == nil || apart(s0, s1)
@@ -198,8 +208,8 @@ func sectionRows(m int, tau float64, ends []endSection, apart func(s0, s1 float6
 		}
 		return fill(mid, s1)
 	}
-	for j := range m {
-		if err := fill(float64(j)/float64(m), float64(j+1)/float64(m)); err != nil {
+	for j := range len(grid) - 1 {
+		if err := fill(grid[j], grid[j+1]); err != nil {
 			return nil, err
 		}
 	}
@@ -225,7 +235,14 @@ func arcRows(spec blendSpec, tau, sag float64, ends []endSection) ([]float64, er
 	if spec.fillet {
 		m = max(2, int(math.Ceil(math.Pi/2/rowStep(sag, spec.r, 1))))
 	}
-	apart := func(s0, s1 float64) bool {
+	return sectionRows(m, tau, ends, arcApart(spec, tau, ends))
+}
+
+// arcApart is the spacing arcRows asks of a gap between rows: the azimuth of
+// its ends on each end plane moves by at most a share of the step its allowance
+// gives.
+func arcApart(spec blendSpec, tau float64, ends []endSection) func(s0, s1 float64) bool {
+	return func(s0, s1 float64) bool {
 		budget, part := tau-filletSag(spec, (s1-s0)*math.Pi/2), 2.0
 		if s1 == 1 {
 			near := 2.0
@@ -243,5 +260,4 @@ func arcRows(spec blendSpec, tau, sag float64, ends []endSection) ([]float64, er
 		}
 		return true
 	}
-	return sectionRows(m, tau, ends, apart)
 }

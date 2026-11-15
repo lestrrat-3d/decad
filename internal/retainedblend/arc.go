@@ -55,12 +55,20 @@ func (a arcRim) ringAzimuths(rho float64, g plane, ref float64) ([2]float64, boo
 // at is the point at radius rho, signed angle theta and height z.
 func (a arcRim) atTheta(rho, theta, z float64) r3.Vec { return a.at(rho, a.sign*theta, z) }
 
-// looksLikeArcEdge is looksLikeArc.
-func readArc(edge *topo.Edge, fp facetedrecord.Payload, faceIndex map[*topo.Face]int) (arcRim, error) {
+// readArc reads the open arc of edge. A concave arc whose wall lies on both
+// sides of its plane reads only when local is set, which the routes set for a
+// selection of one edge: the band that cuts such a wall (arc_band.go) is built
+// for a single arc.
+func readArc(edge *topo.Edge, fp facetedrecord.Payload, faceIndex map[*topo.Face]int, local bool) (arcRim, error) {
 	var a arcRim
-	r, err := readRim(edge, fp, faceIndex)
+	r, err := readRimSide(edge, fp, faceIndex, local)
 	if err != nil {
 		return arcRim{}, err
+	}
+	// Only a concave arc builds a wall cut by a local band (arc_band.go); a convex
+	// arc on a two-sided wall keeps the whole-face refusal.
+	if r.twoSided && r.convex {
+		return arcRim{}, fmt.Errorf("%w: the rim's wall does not lie on one side of its plane", decaderr.ErrUnsupported)
 	}
 	a.rim = r
 	arc, ok := edge.Curve.(surfacegeom.Arc3)

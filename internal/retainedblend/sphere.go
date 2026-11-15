@@ -107,7 +107,7 @@ func readSphereRim(edge *topo.Edge, fp facetedrecord.Payload, faceIndex map[*top
 	}
 	s.w = s.n.Cross(s.u)
 	s.matOutside = s.wallFace.Reversed
-	if err := s.readSide(edge, fp, faceIndex[s.wallFace]); err != nil {
+	if err := s.readSide(edge, fp, faceIndex[s.wallFace], false); err != nil {
 		return sphereRim{}, err
 	}
 	return s, nil
