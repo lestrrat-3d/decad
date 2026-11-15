@@ -278,7 +278,7 @@ func nearTangentChargeTerms(t *testing.T, cbp capblend.Payload, lms []capblend.L
 			continue
 		}
 		amounts := cbp.WalkAmounts(lm.LoopIndex, lm.Walks, cbp.LoopOffset(lm.LoopIndex))
-		charges, err := capband.NearTangentCharges(proofbound.NewWorkBudget(t.Context()), lm.Loop, lm.Walks, amounts, cbp.LoopSetback(lm.LoopIndex).DcDelta)
+		charges, err := capband.NearTangentCharges(proofbound.NewWorkBudget(t.Context()), lm.Loop, lm.Walks, amounts, cbp.LoopSetback(lm.LoopIndex).DcDelta, false)
 		require.NoError(t, err)
 		minU, minV := math.Inf(1), math.Inf(1)
 		maxU, maxV := math.Inf(-1), math.Inf(-1)

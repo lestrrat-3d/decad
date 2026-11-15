@@ -41,7 +41,8 @@ import (
 // capblend.OccupiedVolumeAdmission — this one before the mesh is built, and
 // the cap-blend tessellation through symDiffOK after it — so a payload whose
 // every band agent-docs/tessellation-reach-design.md §7 admits (whole turns,
-// line-line miters, exactly G1 joins) passes here and publishes its proof
+// line-line miters, exactly G1 joins, and on a draft or chamfer band the
+// near-tangent joins and restated off-radius arcs its mesh charges) passes here and publishes its proof
 // there, and every other one refuses here with the loop and corner it fails
 // on. Meshing a refused operand for a boolean only to refuse it afterwards
 // buys nothing and costs the whole tessellation and its facet-pair audit —

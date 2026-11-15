@@ -123,7 +123,7 @@ func OccupiedVolumeAdmission(budget *proofbound.WorkBudget, bp breprecord.Payloa
 			// shared vertices are the record's exact contour endpoints.
 			continue
 		}
-		refusal, err := capblend.OccupiedVolumeAdmission(budget, b.TessView(bp.Faces[b.Face], bp.Xform))
+		refusal, err := capblend.ExactOccupiedVolumeAdmission(budget, b.TessView(bp.Faces[b.Face], bp.Xform))
 		if err != nil || refusal != nil {
 			return refusal, err
 		}

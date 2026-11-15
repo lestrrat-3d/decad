@@ -3057,3 +3057,4 @@
 12	0.00	TestFacetedShortStepArcAtCapRound
 12	0.00	TestSectionOutlineLocalBoundBelowTheGlobalFloor
 12	0.00	TestSectionOutlineLocalBoundStillChargesFacetsInTheSlab
+12	0.00	TestCapBlendCutAfterTangentArcChamfer

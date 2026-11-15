@@ -225,19 +225,35 @@ func TessellateMesh(ctx context.Context, b *topo.Body, cbp Payload, chord float6
 	if err != nil {
 		return nil, nil, err
 	}
+	// agent-docs/tessellation-reach-design.md §7.1: a restated arc moves B1's
+	// stations onto the restated circle, so every vertex may stand that much
+	// farther from its ideal point.
+	shift, err := OffRadiusMotion(cbp, lms)
+	if err != nil {
+		return nil, nil, err
+	}
+	motionMax = proofbound.AbsSumUpper(motionMax, shift)
 	terms := []float64{
 		ChordVolume(cbp, lms),
 		proofbound.SweptVolumeAllow(motionMax, proofbound.PerturbedAreaUpper(mesh.Vertices, mesh.Triangles, motionMax)),
 	}
-	// A draft band's near-tangent joins (agent-docs/draft-design.md §9.1.1) leave
-	// B1's slices short of chord polygons near each such corner; a band with
-	// none adds no term, so its sum is unchanged.
+	// A draft or chamfer band's near-tangent joins (agent-docs/draft-design.md
+	// §9.1.1) leave B1's slices short of chord polygons near each such
+	// corner, and a restated arc (§7.1) moves the body B1 stands for; a band
+	// with neither adds no term, so its sum is unchanged.
 	corner, err := NearTangentVolume(budget, cbp, lms)
 	if err != nil {
 		return nil, nil, err
 	}
 	if corner > 0 {
 		terms = append(terms, corner)
+	}
+	restated, err := OffRadiusVolume(cbp, lms)
+	if err != nil {
+		return nil, nil, err
+	}
+	if restated > 0 {
+		terms = append(terms, restated)
 	}
 	total, err := tessellation.SymDiff(terms)
 	if err != nil {

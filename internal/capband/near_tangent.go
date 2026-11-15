@@ -2,6 +2,7 @@ package capband
 
 import (
 	"fmt"
+	"math"
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/capcontour"
@@ -13,7 +14,7 @@ import (
 )
 
 // This file is agent-docs/draft-design.md §9.1.1: the near-tangent join of a
-// draft band, a line–arc or arc–arc corner the build reads as G1 whose exact
+// draft or cap-loop chamfer band, a line–arc or arc–arc corner the build reads as G1 whose exact
 // tangents turn by a sliver θ. Its true corner m(t), where the moved line
 // meets the moved circle or the two moved circles meet, leaves the radial
 // foot f(t) the ideal polyhedron B1 holds there, and the slice-wise proof
@@ -21,12 +22,13 @@ import (
 // Every test here is exact rational arithmetic over the record's floats, and
 // every published number is rounded upward from a rational.
 
-// SharpAmounts states a draft band's per-walk offset amounts for loop li,
-// walk i moved amounts[i] into the material (zero for a wall a subset draft
-// keeps), and the half-width of every nonzero amount's span. A chamfer band
-// passes none: its offset family is the shell's (agent-docs/modify-design.md
-// §7), whose reflex sliver takes a connector arc the near-tangent proof does
-// not follow.
+// SharpAmounts states a band's per-walk offset amounts for loop li, walk i
+// moved amounts[i] into the material (zero for a wall a subset draft keeps),
+// and the half-width of every nonzero amount's span. A draft band passes its
+// sharp rule's amounts; a cap-loop chamfer passes its setback on every walk,
+// since its shell offset meets a convex sliver at the sharp corner and closes
+// a reflex one with a connector arc the same charge covers
+// (agent-docs/draft-design.md §9.1.1, "On a cap-loop chamfer band").
 type SharpAmounts func(li int, walks []survey2d.SideWalk) ([]float64, float64)
 
 // NearTangentCharge is one corner's terms in the near-tangent volume charge:
@@ -66,6 +68,17 @@ var nearTangentSinSqLimit = new(big.Rat).SetFrac(big.NewInt(1), new(big.Int).Lsh
 // sin²θ = 2⁻⁶⁴, two walks moving by different amounts, or a moved circle
 // within the charge of the corner each refuses by name.
 func NearTangentCorner(prev, cur sectionrecord.CurveSegment, prevAmount, curAmount, amountDelta float64) (NearTangentCharge, string, string) {
+	pc, okP := recordedCorner(prev)
+	cc, okC := recordedCorner(cur)
+	if !okP || !okC {
+		return NearTangentCharge{}, notTangentWhy, notTangentHint
+	}
+	return nearTangentCorner(pc, cc, prevAmount, curAmount, amountDelta)
+}
+
+// nearTangentCorner is NearTangentCorner over two segments read about the
+// centres they carry.
+func nearTangentCorner(prev, cur cornerSegment, prevAmount, curAmount, amountDelta float64) (NearTangentCharge, string, string) {
 	p, okP := joinEnds(prev)
 	c, okC := joinEnds(cur)
 	if !okP || !okC {
@@ -113,7 +126,7 @@ func NearTangentCorner(prev, cur sectionrecord.CurveSegment, prevAmount, curAmou
 // ρ + R·sin²θ at every level, which keeps the miter's discriminant positive
 // and the arc from f to m under a quarter turn. ok is false where it does not,
 // or where a number does not lift.
-func nearTangentCharge(arc sectionrecord.ArcSeg, v [2]*big.Rat, sinSq *big.Rat, amount, amountDelta float64) (NearTangentCharge, bool) {
+func nearTangentCharge(arc cornerSegment, v [2]*big.Rat, sinSq *big.Rat, amount, amountDelta float64) (NearTangentCharge, bool) {
 	rho, eps, width, ok := nearTangentReach(sinSq, amount, amountDelta)
 	if !ok {
 		return NearTangentCharge{}, false
@@ -166,12 +179,12 @@ const nearTangentArcsWhy = `a near-tangent join of two circular walls whose move
 // corner under a quarter turn and, with sin θ ≤ 2⁻³², the two moved circles
 // meeting in two distinct points at every level. ok is false where it does
 // not, or where a number does not lift.
-func twoArcCharge(first, second sectionrecord.ArcSeg, v [2]*big.Rat, sinSq *big.Rat, amount, amountDelta float64) (NearTangentCharge, bool) {
+func twoArcCharge(first, second cornerSegment, v [2]*big.Rat, sinSq *big.Rat, amount, amountDelta float64) (NearTangentCharge, bool) {
 	rho, _, width, ok := nearTangentReach(sinSq, amount, amountDelta)
 	if !ok {
 		return NearTangentCharge{}, false
 	}
-	for _, arc := range []sectionrecord.ArcSeg{first, second} {
+	for _, arc := range []cornerSegment{first, second} {
 		_, movedLo, ok := movedRadius(arc, v, amount, width)
 		if !ok || movedLo.Cmp(rho) <= 0 {
 			return NearTangentCharge{}, false
@@ -187,7 +200,10 @@ func twoArcCharge(first, second sectionrecord.ArcSeg, v [2]*big.Rat, sinSq *big.
 // carries none. A lone closed circle has no corner and returns nil. A corner
 // NearTangentCorner refuses is ErrUnsupported, which the admission rules out
 // before any mesh reads this.
-func NearTangentCharges(budget *proofbound.WorkBudget, loop sectionrecord.LoopRecord, walks []survey2d.SideWalk, amounts []float64, amountDelta float64) ([]NearTangentCharge, error) {
+//
+// restate reads every off-radius arc about its restatedCentre, as a chamfer
+// band's admission does (agent-docs/tessellation-reach-design.md §7.1).
+func NearTangentCharges(budget *proofbound.WorkBudget, loop sectionrecord.LoopRecord, walks []survey2d.SideWalk, amounts []float64, amountDelta float64, restate bool) ([]NearTangentCharge, error) {
 	n := len(walks)
 	if n == 1 && walks[0].Closed {
 		return nil, nil
@@ -213,10 +229,15 @@ func NearTangentCharges(budget *proofbound.WorkBudget, loop sectionrecord.LoopRe
 		if err != nil {
 			return nil, err
 		}
-		if JoinIsG1(prevSeg, curSeg) {
+		pc, okP := readCorner(prevSeg, restate)
+		cc, okC := readCorner(curSeg, restate)
+		if !okP || !okC {
+			return nil, fmt.Errorf(`%w: %s at %s`, decaderr.ErrUnsupported, restateRefusal, cornerAt(prev, cur))
+		}
+		if joinIsG1(pc, cc) {
 			continue
 		}
-		charge, why, _ := NearTangentCorner(prevSeg, curSeg, amounts[p], amounts[i], amountDelta)
+		charge, why, _ := nearTangentCorner(pc, cc, amounts[p], amounts[i], amountDelta)
 		if why != "" {
 			return nil, fmt.Errorf(`%w: %s at %s`, decaderr.ErrUnsupported, why, cornerAt(prev, cur))
 		}
@@ -225,26 +246,26 @@ func NearTangentCharges(budget *proofbound.WorkBudget, loop sectionrecord.LoopRe
 	return out, nil
 }
 
-// lineArcPair returns the ArcSeg of a corner joining one LineSeg and one
+// lineArcPair returns the arc of a corner joining one LineSeg and one
 // ArcSeg, in either order, and ok == false for any other pair.
-func lineArcPair(prev, cur sectionrecord.CurveSegment) (sectionrecord.ArcSeg, bool) {
-	if _, ok := prev.(sectionrecord.LineSeg); ok {
-		arc, isArc := cur.(sectionrecord.ArcSeg)
-		return arc, isArc
+func lineArcPair(prev, cur cornerSegment) (cornerSegment, bool) {
+	if _, ok := prev.seg.(sectionrecord.LineSeg); ok {
+		_, isArc := cur.seg.(sectionrecord.ArcSeg)
+		return cur, isArc
 	}
-	if _, ok := cur.(sectionrecord.LineSeg); ok {
-		arc, isArc := prev.(sectionrecord.ArcSeg)
-		return arc, isArc
+	if _, ok := cur.seg.(sectionrecord.LineSeg); ok {
+		_, isArc := prev.seg.(sectionrecord.ArcSeg)
+		return prev, isArc
 	}
-	return sectionrecord.ArcSeg{}, false
+	return cornerSegment{}, false
 }
 
-// arcArcPair returns the two ArcSegs of a corner joining two arcs, the one
+// arcArcPair returns the two arcs of a corner joining two arcs, the one
 // arriving first, and ok == false for any other pair.
-func arcArcPair(prev, cur sectionrecord.CurveSegment) (sectionrecord.ArcSeg, sectionrecord.ArcSeg, bool) {
-	first, okP := prev.(sectionrecord.ArcSeg)
-	second, okC := cur.(sectionrecord.ArcSeg)
-	return first, second, okP && okC
+func arcArcPair(prev, cur cornerSegment) (cornerSegment, cornerSegment, bool) {
+	_, okP := prev.seg.(sectionrecord.ArcSeg)
+	_, okC := cur.seg.(sectionrecord.ArcSeg)
+	return prev, cur, okP && okC
 }
 
 // ratDot is a·b over the rationals.
@@ -258,9 +279,10 @@ func ratDot(a, b [2]*big.Rat) *big.Rat {
 // holds its material inside, so its circle moves to R − t; a clockwise one
 // moves to R + t. The radius falls by at most the largest inward step any
 // level takes.
-func movedRadius(arc sectionrecord.ArcSeg, v [2]*big.Rat, amount float64, width *big.Rat) (*big.Rat, *big.Rat, bool) {
-	center, ok := ratPoint2(arc.Center)
-	if !ok {
+func movedRadius(arc cornerSegment, v [2]*big.Rat, amount float64, width *big.Rat) (*big.Rat, *big.Rat, bool) {
+	rec, isArc := arc.seg.(sectionrecord.ArcSeg)
+	center := arc.center
+	if !isArc || center[0] == nil || center[1] == nil {
 		return nil, nil, false
 	}
 	du := new(big.Rat).Sub(v[0], center[0])
@@ -273,7 +295,7 @@ func movedRadius(arc sectionrecord.ArcSeg, v [2]*big.Rat, amount float64, width 
 		return nil, nil, false
 	}
 	inside := big.NewRat(1, 1)
-	if arc.TStart == 1 {
+	if rec.TStart == 1 {
 		inside = big.NewRat(-1, 1)
 	}
 	shrink := new(big.Rat)
@@ -314,7 +336,13 @@ func ratPoint2(p sectionrecord.Point2) ([2]*big.Rat, bool) {
 // at a straight one, and the enclosure's least advance is compared against the
 // upward root of the recorded length. It returns the refusal's reason, or ""
 // when the wall survives.
-func NearTangentWallRefusal(loop sectionrecord.LoopRecord, walks []survey2d.SideWalk, i int, amounts []float64, amountDelta, rhoStart, rhoEnd float64) string {
+//
+// restate reads every off-radius arc about its restatedCentre
+// (agent-docs/tessellation-reach-design.md §7.1). B1's foot on a restated
+// circular neighbour then sits within that arc's OffRadiusShift of the foot
+// the held neighbour's enclosure states, so a straight wall's charge grows by
+// each restated neighbour's shift.
+func NearTangentWallRefusal(loop sectionrecord.LoopRecord, walks []survey2d.SideWalk, i int, amounts []float64, amountDelta, rhoStart, rhoEnd float64, restate bool) string {
 	const why = nearTangentWallWhy
 	n := len(walks)
 	w := walks[i]
@@ -322,7 +350,7 @@ func NearTangentWallRefusal(loop sectionrecord.LoopRecord, walks []survey2d.Side
 		return why
 	}
 	if w.IsCircular() {
-		return nearTangentArcRefusal(loop, w, amounts[i], amountDelta, rhoStart, rhoEnd)
+		return nearTangentArcRefusal(loop, w, amounts[i], amountDelta, rhoStart, rhoEnd, restate)
 	}
 	first, err := sectionrecord.NormalizeSegment(loop.Segments[w.Segs[0]])
 	if err != nil {
@@ -332,14 +360,30 @@ func NearTangentWallRefusal(loop sectionrecord.LoopRecord, walks []survey2d.Side
 	if err != nil {
 		return why
 	}
-	fe, okF := joinEnds(first)
-	le, okL := joinEnds(last)
+	fc, okFC := recordedCorner(first)
+	lc, okLC := recordedCorner(last)
+	fe, okF := joinEnds(fc)
+	le, okL := joinEnds(lc)
 	rs, re := proofarith.FloatRat(rhoStart), proofarith.FloatRat(rhoEnd)
-	if !okF || !okL || rs == nil || re == nil {
+	if !okFC || !okLC || !okF || !okL || rs == nil || re == nil {
+		return why
+	}
+	p, q := (i+n-1)%n, (i+1)%n
+	slack := 0.0
+	if restate {
+		before, okB := neighbourShift(loop, walks[p], false, amounts[p], amountDelta)
+		after, okA := neighbourShift(loop, walks[q], true, amounts[q], amountDelta)
+		if !okB || !okA {
+			return why
+		}
+		slack = proofbound.AbsSumUpper(before, after)
+	}
+	slackRat := proofarith.FloatRat(slack)
+	if slackRat == nil {
 		return why
 	}
 	dir := [2]*big.Rat{new(big.Rat).Sub(le.end[0], fe.start[0]), new(big.Rat).Sub(le.end[1], fe.start[1])}
-	need := new(big.Rat).Add(rs, re)
+	need := new(big.Rat).Add(new(big.Rat).Add(rs, re), slackRat)
 	lengthSq := ratDot(dir, dir)
 	if lengthSq.Cmp(new(big.Rat).Mul(need, need)) <= 0 {
 		return why
@@ -351,7 +395,6 @@ func NearTangentWallRefusal(loop sectionrecord.LoopRecord, walks []survey2d.Side
 		}
 		return capcontour.OffsetSpan(amounts[k], width)
 	}
-	p, q := (i+n-1)%n, (i+1)%n
 	start, okS := farCorner(walks[p], w, span, p, i, true)
 	end, okE := farCorner(w, walks[q], span, i, q, false)
 	lengthUp := proofarith.FloatRat(proofbound.RatSqrtUp(lengthSq))
@@ -423,7 +466,7 @@ const (
 // chord of length c subtends 2·asin(c/2R) >= c/R), so the gate asks for
 // (π/2)(ρ_start + ρ_end) < W_lo·r_lo over the rationals with π/2 rounded up
 // and π rounded down.
-func nearTangentArcRefusal(loop sectionrecord.LoopRecord, w survey2d.SideWalk, amount, amountDelta, rhoStart, rhoEnd float64) string {
+func nearTangentArcRefusal(loop sectionrecord.LoopRecord, w survey2d.SideWalk, amount, amountDelta, rhoStart, rhoEnd float64, restate bool) string {
 	first, err := sectionrecord.NormalizeSegment(loop.Segments[w.Segs[0]])
 	if err != nil {
 		return nearTangentArcWhy
@@ -432,27 +475,29 @@ func nearTangentArcRefusal(loop sectionrecord.LoopRecord, w survey2d.SideWalk, a
 	if err != nil {
 		return nearTangentArcWhy
 	}
-	arc, okA := first.(sectionrecord.ArcSeg)
-	fe, okF := joinEnds(first)
-	le, okL := joinEnds(last)
+	firstArc, okA := first.(sectionrecord.ArcSeg)
+	arc, okR := readCorner(first, restate)
+	lastC, okRL := readCorner(last, restate)
+	fe, okF := joinEnds(arc)
+	le, okL := joinEnds(lastC)
 	rs, re := proofarith.FloatRat(rhoStart), proofarith.FloatRat(rhoEnd)
 	width := new(big.Rat)
 	if amount != 0 {
 		width = proofarith.FloatRat(amountDelta)
 	}
-	if !okA || !okF || !okL || rs == nil || re == nil || width == nil {
+	if !okA || !okR || !okRL || !okF || !okL || rs == nil || re == nil || width == nil {
 		return nearTangentArcWhy
 	}
 	v1, v2 := fe.start, le.end
 	radiusHi, movedLo, ok := movedRadius(arc, v1, amount, width)
-	center, okC := ratPoint2(arc.Center)
-	if !ok || !okC || movedLo.Sign() <= 0 {
+	center := arc.center
+	if !ok || movedLo.Sign() <= 0 {
 		return nearTangentArcWhy
 	}
 	a := [2]*big.Rat{new(big.Rat).Sub(v1[0], center[0]), new(big.Rat).Sub(v1[1], center[1])}
 	b := [2]*big.Rat{new(big.Rat).Sub(v2[0], center[0]), new(big.Rat).Sub(v2[1], center[1])}
 	cross := new(big.Rat).Sub(new(big.Rat).Mul(a[0], b[1]), new(big.Rat).Mul(a[1], b[0]))
-	if arc.TStart == 1 {
+	if firstArc.TStart == 1 {
 		cross.Neg(cross)
 	}
 	// 1.5708 > π/2 and 3 < π.
@@ -474,4 +519,31 @@ func nearTangentArcRefusal(loop sectionrecord.LoopRecord, w survey2d.SideWalk, a
 		return nearTangentArcWhy
 	}
 	return ""
+}
+
+// neighbourShift is the OffRadiusShift of the recorded segment of walk w
+// that meets a straight neighbour: w's first segment when atStart, else its
+// last, at the walk's own amount span. It is zero for a straight walk and for
+// an arc whose ends lie on one circle.
+func neighbourShift(loop sectionrecord.LoopRecord, w survey2d.SideWalk, atStart bool, amount, amountDelta float64) (float64, bool) {
+	if !w.IsCircular() || len(w.Segs) == 0 {
+		return 0, true
+	}
+	si := w.Segs[len(w.Segs)-1]
+	if atStart {
+		si = w.Segs[0]
+	}
+	seg, err := sectionrecord.NormalizeSegment(loop.Segments[si])
+	if err != nil {
+		return 0, false
+	}
+	arc, ok := seg.(sectionrecord.ArcSeg)
+	if !ok {
+		return 0, true
+	}
+	reach := math.Abs(amount)
+	if amount != 0 {
+		reach = proofbound.AbsSumUpper(reach, amountDelta)
+	}
+	return OffRadiusShift(arc, reach)
 }

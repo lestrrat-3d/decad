@@ -37,7 +37,7 @@ The rules for rows live in `agent-docs/layout.md`.
 | `internal/massmoment/` | Rational moments, inertia, prism composition, translation enclosure, and axis placement charges. See dynamic-mass §2, contained-cut-moments-design, and exact-copy-moments-design. |
 | `internal/capcontour/` | Cap contour displacement, shell offset intervals, and edge and arc bounds. See modify-reach §8.3-§8.4. |
 | `internal/offset2d/` | Offset carriers, proofs, profile offsets and corner loops, rewrite and offset audits, offset displacement, and the draft near and far section stages. See modify §5–§9, shell-opening §3–§5, draft §2, §7. |
-| `internal/capband/` | Cap-band loop walks, offset joins, contour, loop boundary, patch, locus, volume, first-moment and centroid bounds, and cap-loop chamfer refusals. See modify-reach §8.3–§8.4. |
+| `internal/capband/` | Cap-band loop walks, offset joins, contour, loop boundary, patch, locus, volume, first-moment and centroid bounds, cap-loop chamfer refusals, and the occupied-volume admission with its near-tangent and off-radius restatement terms. See modify-reach §8.3–§8.4 and tessellation-reach §7, §7.1. |
 | `internal/filletband/` | Loop-fillet closed forms and reference-frame band mass. See loop-fillet §5. |
 | `internal/decaderr/` | The sentinel error values and the `MeshBoundError` type `errors.go` re-exports, so internal packages can return them. |
 | `internal/parambind/` | The ledger of parameter reads behind `Document.Bindings`. See param-binding §3. |

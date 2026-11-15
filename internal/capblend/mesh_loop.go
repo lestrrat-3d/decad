@@ -115,32 +115,45 @@ func ChordVolume(cbp Payload, lms []LoopMesh) float64 {
 }
 
 // NearTangentVolume is agent-docs/draft-design.md §9.1.1's corner charge for a
-// draft view's mesh: over the whole sweep, every near-tangent line–arc join's
-// disc πρ²/4, for every straight walk with a near-tangent end the strip 3ελ,
-// and for every near-tangent join of two arcs ρλ + 2.08ρ² (its last cell's
-// twist and the curvilinear triangle between the two radial feet and the
-// true corner), with λ the loop's held span plus twice its largest vertex
-// motion and twice its largest ρ. It is zero for a chamfer view and for a band
-// with no near-tangent join, so such a band's proof is unchanged, and a band
-// with no join of two arcs sums only its line–arc terms. lms must carry
-// CapMotion.
+// draft view's or a cap-loop chamfer's mesh: over the band's height, every
+// near-tangent line–arc join's disc πρ²/4, for every straight walk with a
+// near-tangent end the strip 3ελ, and for every near-tangent join of two arcs
+// ρλ + 2.08ρ² (its last cell's twist and the curvilinear triangle between the
+// two radial feet and the true corner, or the segment the chamfer's connector
+// arc closes there), with λ the loop's held span plus twice its largest
+// vertex motion and restatement shift (OffRadiusMotion) and twice its largest
+// ρ. A draft's height is its whole sweep; a chamfer loop's is the sum of its
+// bands' axial setbacks, since its trimmed wall meets every corner at the
+// recorded point. It is zero for a payload whose mesh charges no near-tangent
+// join (cornerClass) and for a band with none, so such a band's proof is
+// unchanged, and a band with no join of two arcs sums only its line–arc
+// terms. lms must carry CapMotion.
 func NearTangentVolume(budget *proofbound.WorkBudget, cbp Payload, lms []LoopMesh) (float64, error) {
-	if !cbp.Draft {
+	sharp, restate := cbp.cornerClass()
+	if sharp == nil {
 		return 0, nil
 	}
 	// 0.79 > π/4 and 2.08 > (1 + π)/2.
 	const quarterPiUpper, twoArcSquareUpper = 0.79, 2.08
-	height := cbp.DraftBandHeightUpper()
 	total := 0.0
 	for li := range lms {
 		lm := &lms[li]
 		if !lm.Chamfered || lm.Whole {
 			continue
 		}
-		amounts, amountDelta := cbp.sharpAmounts(lm.LoopIndex, lm.Walks)
-		charges, err := capband.NearTangentCharges(budget, lm.Loop, lm.Walks, amounts, amountDelta)
+		height := cbp.bandHeightUpper(lm)
+		amounts, amountDelta := sharp(lm.LoopIndex, lm.Walks)
+		charges, err := capband.NearTangentCharges(budget, lm.Loop, lm.Walks, amounts, amountDelta, restate)
 		if err != nil {
 			return 0, err
+		}
+		shift := 0.0
+		if restate {
+			terms, ok := capband.OffRadiusLoop(lm.Loop, cbp.loopReach(lm))
+			if !ok {
+				return 0, fmt.Errorf(`%w: this %s's restated arcs state no finite shift`, decaderr.ErrUnsupported, cbp.Noun())
+			}
+			shift = terms.Shift
 		}
 		rhoMax, discs, arcRho, arcSquares := 0.0, 0.0, 0.0, 0.0
 		for _, c := range charges {
@@ -163,7 +176,7 @@ func NearTangentVolume(budget *proofbound.WorkBudget, cbp Payload, lms []LoopMes
 		if discs == 0 && epsSum == 0 && arcRho == 0 {
 			continue
 		}
-		lambda := proofbound.AbsSumUpper(loopSpanUpper(lm), 2*loopMotionUpper(lm), 2*rhoMax)
+		lambda := proofbound.AbsSumUpper(loopSpanUpper(lm), 2*proofbound.AbsSumUpper(loopMotionUpper(lm), shift), 2*rhoMax)
 		strips := proofbound.ProductUpper(3, proofbound.ProductUpper(epsSum, lambda))
 		slice := proofbound.AbsSumUpper(discs, strips)
 		if arcRho > 0 {
