@@ -58,6 +58,11 @@ type wallBand struct {
 	// its exact offset, charging the offset (signRead). The cut turns it on only
 	// where reading without it refuses.
 	sign bool
+	// lean bounds, in radians, how far the wall's generators lean from the main plane's
+	// normal (wallTilt), and leanOK says the tags give it. The route sets both. Without
+	// it a sign reading keeps its slant bound alone (setbackBound).
+	lean   float64
+	leanOK bool
 }
 
 // bandEnd is an exact plane of the band: the end plane of an end where the wall
@@ -254,10 +259,12 @@ func (b *wallBand) sideAt(pt *bandPt, q int) (int, error) {
 // wall publishes c/s_lo. On a curved wall the path bends, and the triangle
 // inequality gives β (to the true point) plus c/s_lo (from it to the boundary), so
 // a curved wall publishes β + c/s_lo. A kept vertex carries the bound; a cut point
-// carries it, and a cut of a held edge reads its two ends' raised bounds. That
-// read can raise an end that another plane already puts outside the band: it only
-// widens a bound. When s_lo is below minSine, or the end plane has none, the
-// reading refuses.
+// carries it. A cut of a held edge reads its two ends' input bounds, never their
+// raises (crossing): a raise is the end's own distance to the boundary under the side
+// chosen for it, so charges are made once and never compound. Where the tags prove the
+// wall square to the setback plane (wallTilt), the bound is the smaller of that and the
+// distance to the setback line (setbackBound). When s_lo is below minSine, or the end
+// plane has none, the reading refuses.
 //
 // The input β of a cut point is its crossing bound, which has no slant term of its
 // own (see the follow-up in the design doc); a held vertex's β does not depend on it.
@@ -285,6 +292,12 @@ func (b *wallBand) signRead(pt *bandPt, q int, v float64) (int, bool) {
 	if !e.planarWall {
 		bound = proofbound.AbsSumUpper(beta, bound)
 	}
+	// Only a cut point on the setback plane takes the cap: a held vertex keeps the facets
+	// that run down the wall from it, and their points lie farther from the true result
+	// than the vertex does (setbackBound).
+	if near, ok := b.setbackBound(pt.p, beta); ok && !pt.held && (pt.planes[0] == bandGen || pt.planes[1] == bandGen) {
+		bound = min(bound, near)
+	}
 	s := 0
 	switch {
 	case v > 0:
@@ -300,6 +313,33 @@ func (b *wallBand) signRead(pt *bandPt, q int, v float64) (int, bool) {
 	pt.bound = bound
 	pt.signed[q-bandEnd0] = int8(s + 2)
 	return s, true
+}
+
+// setbackBound is the second bound a sign reading may publish: the distance from a point
+// of the wall within beta of its true place to the setback line, where the true wall
+// meets the setback plane (the band's main plane). It is false when the tags give no
+// lean for the wall (wallTilt).
+//
+// The wall above the setback plane is kept at every azimuth, inside the end plane and
+// past it, so the setback line lies in the closure of the kept wall, and in the true
+// result. Take the foot x* of the point on the true wall: |x − x*| ≤ beta, and x − x*
+// runs along the wall's normal, which leans from square to the setback plane's normal by
+// at most the wall's lean λ, so x* is at most |value| + λ·beta from the setback plane,
+// |value| the point's offset from the plane (plus the plane's slack). A generator of the
+// wall runs from x* to the line, leaning λ from the plane's normal, so it is at most
+// (|value| + λ·beta + slack)/√(1 − λ²) long. The line is that far from x*. This is a
+// distance to the true result, not a distance along the wall to an end plane: it does
+// not depend on the slant of the wall to that plane, so a point close to the setback
+// plane has a small bound however shallow its crossing of the end plane is. The sign
+// reading publishes the smaller of this and slantBound's bound; both are distances to
+// points of the closure of the kept wall.
+func (b *wallBand) setbackBound(p r3.Vec, beta float64) (float64, bool) {
+	if !b.leanOK || b.main == nil {
+		return 0, false
+	}
+	a := proofbound.AbsSumUpper(math.Abs(b.value(bandGen, p)), proofbound.ProductUpper(b.lean, beta), b.slack)
+	along := proofbound.DivUpper(a, math.Sqrt(1-proofbound.ProductUpper(b.lean, b.lean))*(1-4*ulp))
+	return proofbound.AbsSumUpper(beta, along), true
 }
 
 // slantBound is the distance c/s along a wall to the boundary of a band whose end
@@ -412,9 +452,11 @@ func (b *wallBand) crossing(u, v bandPt, q int, facetBound float64) (bandPt, err
 		if err != nil {
 			return bandPt{}, err
 		}
-		// A sign reading above may have charged an end into the work's bounds: the cut
-		// takes the bounds as they now stand.
-		a.bound, c.bound = b.w.beta[e[0]], b.w.beta[e[1]]
+		// A sign reading above may have raised an end in the work's bounds. The raise is
+		// that end's own distance to the band's boundary under the side chosen for it,
+		// not a claim about the facet the cut lies on, so the cut reads the ends' input
+		// bounds and charges its own slant once (inputBeta).
+		a.bound, c.bound = b.w.inputBeta(e[0]), b.w.inputBeta(e[1])
 		fa, fc := b.value(q, a.p), b.value(q, c.p)
 		if sa*sc >= 0 || (fa > 0) != (sa > 0) || (fc > 0) != (sc > 0) || fa == 0 || fc == 0 {
 			if b.exact(q) == nil {
@@ -588,7 +630,7 @@ func (w *work) cutBand(f faceLoops, b *wallBand) (bandCuts, error) {
 			w.emit(t, f.group)
 			continue
 		}
-		facetBound := max(w.beta[t[0]], w.beta[t[1]], w.beta[t[2]])
+		facetBound := w.inputFacetBound(t)
 		poly, err := b.clipAll([]bandPt{w.heldPt(t[0]), w.heldPt(t[1]), w.heldPt(t[2])}, facetBound)
 		if err != nil {
 			return bandCuts{}, b.reword(err, t[:]...)

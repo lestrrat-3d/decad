@@ -33,6 +33,7 @@ func (a arcRim) newWallBand(w *work, f faceLoops, tb float64, run edgeRun, kind 
 	band := &wallBand{slack: a.slack(), noteCuts: true}
 	band.main = &bandEnd{g: plane{n: a.n, o: a.center.Add(a.n.Scale(a.side * tb))}, sign: -a.side,
 		what: "the blend's setback plane"}
+	band.lean, band.leanOK = w.wallTilt(f.index, a.n)
 	onRim := map[int]bool{}
 	for _, facet := range f.facets {
 		for _, v := range w.fp.Tris[facet] {

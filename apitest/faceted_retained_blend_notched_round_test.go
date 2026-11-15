@@ -347,19 +347,14 @@ func filletSharedRoots(t *testing.T, ears [][6]float64, groups ...[]float64) {
 	filletRoots(t, ears, sharedRootFill, groups...)
 }
 
-// filletRoots is filletSharedRoots with the fill of each root given by fill.
+// filletRoots is filletSharedRoots with the fill of each root given by fill. Where the
+// band reads a vertex within its bound of an end plane by the sign of its offset
+// (retained-edge-blend §4.3), the vertex's bound is raised to its distance to the
+// setback line, or to the end plane's boundary on the wall where that is nearer, and a
+// cut of a held edge reads its ends' input bounds. The published bound then stays
+// within the strips' own terms: the rows that read by sign build in the same bound as
+// the rows that do not.
 func filletRoots(t *testing.T, ears [][6]float64, fill func(size, x float64) float64, groups ...[]float64) {
-	t.Helper()
-	filletChargedRoots(t, ears, fill, 0, groups...)
-}
-
-// filletChargedRoots is filletRoots for roots whose band reads a vertex within its
-// bound of an end plane by the sign of its offset (retained-edge-blend §4.3): the
-// offset is charged into that vertex's bound, so the published bound grows past
-// the strips' own terms by at most charge. A charge above zero says the charge
-// shows: the bound exceeds the strips' own terms.
-func filletChargedRoots(t *testing.T, ears [][6]float64, fill func(size, x float64) float64, charge float64,
-	groups ...[]float64) {
 	t.Helper()
 	const size = 1.0
 	body := notchedBody(t, ears...)
@@ -399,10 +394,8 @@ func filletChargedRoots(t *testing.T, ears [][6]float64, fill func(size, x float
 	mesh, err := body.Tessellate(t.Context(), units.Millimeters(0.1), decad.WithVerification(decad.VerifyAll))
 	require.NoError(t, err)
 	own := revolveMeshBound(t, held) + float64(roots)*2*math.Ldexp(size, -10)
-	require.LessOrEqual(t, revolveMeshBound(t, mesh), own+charge)
-	if charge > 0 {
-		require.Greater(t, revolveMeshBound(t, mesh), own, "the charge shows in the bound")
-	}
+	require.LessOrEqual(t, revolveMeshBound(t, mesh), own)
+	require.GreaterOrEqual(t, revolveMeshBound(t, mesh), revolveMeshBound(t, held), "a blend never lowers the bound")
 	require.True(t, mesh.BoundaryVerified())
 	require.True(t, mesh.VolumeVerified())
 	rep, err := body.Document().Verify(t.Context())
@@ -526,8 +519,6 @@ func TestFacetedRetainedBlendSharedEndPlanes(t *testing.T) {
 		name   string
 		ears   [][6]float64
 		groups [][]float64
-		// charge is the offset of the vertex the band reads by sign, when there is one.
-		charge float64
 	}{
 		{name: "one ear's side root", ears: flushEars, groups: [][]float64{{12}}},
 		{name: "the other ear's side root", ears: flushEars, groups: [][]float64{{22}}},
@@ -537,17 +528,18 @@ func TestFacetedRetainedBlendSharedEndPlanes(t *testing.T) {
 			groups: [][]float64{{12, 15.5}}},
 		// The first blend's cut of the round lies a few thousandths off the front plane,
 		// joined to the next ear's corner on the plane by a long facet edge along it:
-		// the later band reads that cut by the sign of its offset and charges the offset.
-		{name: "facing side roots in turn", ears: flushEars, groups: [][]float64{{12}, {22}}, charge: 0.003},
+		// the later band reads that cut by the sign of its offset and charges the offset,
+		// which the vertex's distance to the setback line caps.
+		{name: "facing side roots in turn", ears: flushEars, groups: [][]float64{{12}, {22}}},
 		{name: "facing side roots in turn, the other way", ears: flushEars, groups: [][]float64{{22}, {12}}},
 		// A vertex of the round beside the other ear's corner lies 0.003 from the front
 		// plane, and the band's cut of the edge to it lies on the plane within that bound.
 		{name: "facing side roots 1.5 apart", ears: [][6]float64{earBoxA, {13.5, 1.5, 21.5, 13.5, -6, 1}},
-			groups: [][]float64{{12}}, charge: 0.004},
+			groups: [][]float64{{12}}},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()
-			filletChargedRoots(t, c.ears, flushRootFill, c.charge, c.groups...)
+			filletRoots(t, c.ears, flushRootFill, c.groups...)
 		})
 	}
 }

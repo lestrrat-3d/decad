@@ -1,6 +1,7 @@
 package retainedblend
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
@@ -21,7 +22,7 @@ func flatBand(verts ...r3.Vec) (*work, *wallBand, faceLoops) {
 		beta[i] = 0.001
 	}
 	w := &work{
-		fp:    facetedrecord.Payload{Tris: [][3]int{{0, 1, 2}}, FaceOf: []int{0}},
+		fp:    facetedrecord.Payload{Tris: [][3]int{{0, 1, 2}}, FaceOf: []int{0}, VertexBound: slices.Clone(beta)},
 		verts: verts, beta: beta, tau: 0.001, cuts: map[[2]int]int{},
 	}
 	side := func(n, o r3.Vec, sign float64) *bandEnd { return &bandEnd{g: plane{n: n, o: o}, sign: sign} }

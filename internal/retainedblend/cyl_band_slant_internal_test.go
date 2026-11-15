@@ -3,6 +3,7 @@ package retainedblend
 import (
 	"fmt"
 	"math"
+	"slices"
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
@@ -277,7 +278,7 @@ func edgeAlongG(t *testing.T, y1, y2 float64) (*work, *wallBand, faceLoops) {
 	w, b, _, h := slantedCylBand(t, 0.8, 1, false)
 	w.verts = []r3.Vec{r3.NewVec(h, y1, 0.55), r3.NewVec(h, y2, 1.45), r3.NewVec(h+0.05, y1, 1.45)}
 	w.beta = []float64{0.002, 0.002, 0.002}
-	w.fp = facetedrecord.Payload{Tris: [][3]int{{0, 1, 2}}, FaceOf: []int{0}}
+	w.fp = facetedrecord.Payload{Tris: [][3]int{{0, 1, 2}}, FaceOf: []int{0}, VertexBound: slices.Clone(w.beta)}
 	b.ends[0].on = map[int]bool{0: true, 1: true}
 	b.noteCuts, b.slack = true, 1e-6
 	return w, b, faceLoops{facets: []int{0}}
@@ -435,7 +436,7 @@ func cylBand(hr, side float64) (*work, *wallBand, faceLoops, float64) {
 		facets[i] = i
 	}
 	w := &work{
-		fp:    facetedrecord.Payload{Tris: tris, FaceOf: make([]int, len(tris))},
+		fp:    facetedrecord.Payload{Tris: tris, FaceOf: make([]int, len(tris)), VertexBound: slices.Clone(beta)},
 		verts: verts, beta: beta, tau: 0.001, cuts: map[[2]int]int{},
 	}
 	z := r3.NewVec(0, 0, 1)

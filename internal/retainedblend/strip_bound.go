@@ -152,6 +152,23 @@ func (w *work) facetBound(t [3]int) float64 {
 	return max(w.beta[t[0]], w.beta[t[1]], w.beta[t[2]])
 }
 
+// inputBeta is held vertex v's bound as the input claims it: the bound the input
+// mesh carries for it, or, for a vertex this work made, the bound it was made with.
+// A raise a sign reading made since (signRead) is no part of it. A cut of a held
+// facet rests on the facet's input claim, so it reads this and never the raise;
+// the charge is then made once, on the cut's own offset.
+func (w *work) inputBeta(v int) float64 {
+	if v < len(w.fp.VertexBound) {
+		return w.fp.VertexBound[v]
+	}
+	return w.beta[v]
+}
+
+// inputFacetBound is facetBound over the input bounds (inputBeta).
+func (w *work) inputFacetBound(t [3]int) float64 {
+	return max(w.inputBeta(t[0]), w.inputBeta(t[1]), w.inputBeta(t[2]))
+}
+
 // noteCut records that vertex c was cut from a held wall facet whose facet
 // bound is delta. A vertex two facets cut keeps the first one's: either
 // facet's bound places the vertex within it of the true wall.
