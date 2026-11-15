@@ -114,9 +114,13 @@ type rim struct {
 	side       float64
 	convex     bool
 	matOutside bool
-	planeFace  *topo.Face
-	wallFace   *topo.Face
-	scale      float64
+	// twoSided is set when the whole wall face lies on both sides of the rim's
+	// plane and side was read from the wall facets along the rim alone
+	// (readSide). Only a route that cuts the wall by a local band accepts it.
+	twoSided  bool
+	planeFace *topo.Face
+	wallFace  *topo.Face
+	scale     float64
 	// charge is the plane displacement the rim's and end planes add to slack.
 	charge float64
 }
@@ -183,6 +187,12 @@ func circleOf(curve surfacegeom.Curve) (r3.Vec, units.Value, bool) {
 // readRim reads the rim of edge from its two tags and the held wall. It
 // refuses (SR1, SR6) an edge whose tags and held mesh do not describe one rim.
 func readRim(edge *topo.Edge, fp facetedrecord.Payload, faceIndex map[*topo.Face]int) (rim, error) {
+	return readRimSide(edge, fp, faceIndex, false)
+}
+
+// readRimSide is readRim, which reads a wall that lies on both sides of the
+// plane by its facets along the rim when local is set (readSide).
+func readRimSide(edge *topo.Edge, fp facetedrecord.Payload, faceIndex map[*topo.Face]int, local bool) (rim, error) {
 	var r rim
 	for _, f := range edge.Faces {
 		if _, ok := f.Surface.(surfacegeom.Plane); ok {
@@ -238,7 +248,7 @@ func readRim(edge *topo.Edge, fp facetedrecord.Payload, faceIndex map[*topo.Face
 	}
 	r.w = n.Cross(r.u)
 	r.matOutside = r.wallFace.Reversed
-	if err := r.readSide(edge, fp, faceIndex[r.wallFace]); err != nil {
+	if err := r.readSide(edge, fp, faceIndex[r.wallFace], local); err != nil {
 		return rim{}, err
 	}
 	return r, nil
@@ -248,8 +258,10 @@ func readRim(edge *topo.Edge, fp facetedrecord.Payload, faceIndex map[*topo.Face
 // with it the rim's convexity and the side of the rim the plane face lies on.
 // The wall extends away from the plane's outward normal into the material (a
 // hole, a shaft end, a ball's cap) or toward it (a boss, a pocket floor). It
-// refuses a wall on both sides and a convexity the edge's flag contradicts.
-func (r *rim) readSide(edge *topo.Edge, fp facetedrecord.Payload, wall int) error {
+// refuses a wall on both sides, unless local is set and the wall's facets along
+// the rim decide the side (localSide), and a convexity the edge's flag
+// contradicts.
+func (r *rim) readSide(edge *topo.Edge, fp facetedrecord.Payload, wall int, local bool) error {
 	slack := r.slack()
 	below, above := 0, 0
 	for i, tri := range fp.Tris {
@@ -271,6 +283,12 @@ func (r *rim) readSide(edge *topo.Edge, fp facetedrecord.Payload, wall int) erro
 		r.side = -1
 	case above > 0 && below == 0:
 		r.side = 1
+	case below > 0 && above > 0 && local:
+		side, err := r.localSide(fp, wall)
+		if err != nil {
+			return err
+		}
+		r.side, r.twoSided = side, true
 	default:
 		return fmt.Errorf("%w: the rim's wall does not lie on one side of its plane", decaderr.ErrUnsupported)
 	}
@@ -287,6 +305,58 @@ func (r *rim) readSide(edge *topo.Edge, fp facetedrecord.Payload, wall int) erro
 		r.kappa = 1
 	}
 	return nil
+}
+
+// localSide reads the side of the rim's plane the wall extends to, for a wall
+// that lies on both sides of it, from the wall's own facets along the rim: the
+// facets that hold a boundary edge of the wall face with both ends on the rim
+// circle. The rim is a boundary edge of the wall between the wall and the
+// plane, and a solid's wall cannot lie on both sides of the plane along such an
+// edge, so the true wall piece of a facet on it lies on the wall's side near the
+// rim. The facet's third vertex lies on that side when its height exceeds its
+// bound plus the slack. A vertex that close to the plane decides nothing. At
+// least one facet must decide and every deciding one must agree; any other
+// outcome refuses with the whole-face text. The convexity check that follows
+// stays the falsifier.
+func (r *rim) localSide(fp facetedrecord.Payload, wall int) (float64, error) {
+	refuse := fmt.Errorf("%w: the rim's wall does not lie on one side of its plane", decaderr.ErrUnsupported)
+	slack := r.slack()
+	uses := map[[2]int]int{}
+	var facets []int
+	for i, tri := range fp.Tris {
+		if fp.FaceOf[i] != wall {
+			continue
+		}
+		facets = append(facets, i)
+		for k := range 3 {
+			a, b := tri[k], tri[(k+1)%3]
+			uses[[2]int{min(a, b), max(a, b)}]++
+		}
+	}
+	onRim := func(v int) bool { return r.onRim(fp.Verts[v], fp.VertexBound[v]) }
+	below, above := 0, 0
+	for _, i := range facets {
+		tri := fp.Tris[i]
+		for k := range 3 {
+			a, b, c := tri[k], tri[(k+1)%3], tri[(k+2)%3]
+			if uses[[2]int{min(a, b), max(a, b)}] != 1 || !onRim(a) || !onRim(b) {
+				continue
+			}
+			switch z := r.height(fp.Verts[c]); {
+			case z < -slack-fp.VertexBound[c]:
+				below++
+			case z > slack+fp.VertexBound[c]:
+				above++
+			}
+		}
+	}
+	switch {
+	case below > 0 && above == 0:
+		return -1, nil
+	case above > 0 && below == 0:
+		return 1, nil
+	}
+	return 0, refuse
 }
 
 func perpendicular(n r3.Vec) (r3.Vec, bool) {

@@ -9,6 +9,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/measurement"
+	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
@@ -111,18 +112,29 @@ func rewriteArc(ctx context.Context, env topo.Env, fp facetedrecord.Payload, a a
 	if err != nil {
 		return nil, err
 	}
+	// At each end the wall's chain along the end plane either climbs the wall,
+	// away from the plane (the wall trims there), or runs back past the plane
+	// (the wall extends past the end plane, which only a concave arc admits,
+	// agent-docs/retained-edge-blend-design.md Table E).
+	var kindB [2]sideKind
 	for i := range 2 {
 		dir := tA[i]
 		if w.verts[runA.chain[i][len(runA.chain[i])-1]].Sub(a.ends[i].exact).Dot(dir) < 0 {
 			dir = dir.Scale(-1)
 		}
 		runA.dir[i] = dir
-		// The wall's chain must climb the wall, away from the plane.
-		toward := w.verts[runB.chain[i][len(runB.chain[i])-1]].Sub(a.ends[i].exact).Dot(n)
-		if toward*a.side <= margin {
+		last := runB.chain[i][len(runB.chain[i])-1]
+		toward := w.verts[last].Sub(a.ends[i].exact).Dot(n) * a.side
+		switch {
+		case toward > margin:
+			kindB[i] = trims
+		case !a.convex && -toward > margin+w.beta[last]:
+			kindB[i] = extends
+		default:
 			return nil, fmt.Errorf("%w: the wall's generator at an arc end leaves the wrong way", decaderr.ErrUnsupported)
 		}
 	}
+	bandMode := a.twoSided || kindB[0] == extends || kindB[1] == extends
 
 	// The profile and its rows.
 	profile, _ := a.profile(spec)
@@ -191,9 +203,80 @@ func rewriteArc(ctx context.Context, env topo.Env, fp facetedrecord.Payload, a a
 			generator[v] = true
 		}
 	}
-	cutIDs, remB, pB, err := w.clipArcWall(fB, a, tb, generator, runB, margin)
+	var cutIDs []int
+	var remB [2][]int
+	var pB [2]int
+	var cuts bandCuts
+	if bandMode {
+		cutIDs, remB, pB, cuts, err = w.clipArcWallBand(fB, a, tb, runB, kindB, margin)
+	} else {
+		cutIDs, remB, pB, err = w.clipArcWall(fB, a, tb, generator, runB, margin)
+	}
 	if err != nil {
 		return nil, err
+	}
+	// Where the wall extends past an end plane, a fillet's end cap closes in a
+	// cusp at the wall's tangent point. If the cap the profile's own rows make is
+	// not simple, the rows are spaced again so the last row before the wall's lies
+	// farther from the wall's cut than that cut can stray (clearCusp in
+	// cyl_rewrite.go). The widened last gap's chord on each end plane is charged
+	// below.
+	widened := 0.0
+	if spec.fillet && (kindB[0] == extends || kindB[1] == extends) {
+		reach, simple := 0.0, true
+		for i := range 2 {
+			if kindB[i] != extends {
+				continue
+			}
+			run, err := cuts.endRun(i, a.ends[i].v)
+			if err != nil {
+				return nil, err
+			}
+			reach = max(reach, w.beta[cuts.corner[i]])
+			pts := make([]r3.Vec, 0, m+len(run)+2)
+			for _, row := range rows[:m] {
+				pts = append(pts, a.atTheta(row.rho, row.theta[i], row.z))
+			}
+			pts = append(pts, w.verts[cuts.corner[i]])
+			for _, v := range run {
+				reach = max(reach, w.beta[v])
+				pts = append(pts, w.verts[v])
+			}
+			pts = append(pts, w.verts[a.ends[i].v])
+			simple = simple && capSimplePts(a.ends[i].g.n, pts, m) == nil
+		}
+		if !simple {
+			need := proofbound.AbsSumUpper(reach, margin)
+			sStar := 1.0
+			for i := range 2 {
+				if kindB[i] != extends {
+					continue
+				}
+				s, err := a.cuspParam(spec, ends[i], need)
+				if err != nil {
+					return nil, err
+				}
+				sStar = min(sStar, s)
+			}
+			if ss[m-1] > sStar {
+				if ss, err = widenRows(spec, w.tau, ends, ss, sStar); err != nil {
+					return nil, err
+				}
+				m = len(ss) - 1
+				rows = rows[:0]
+				prev = ref
+				for _, s := range ss {
+					th, err := a.rowAngles(profile, s, prev)
+					if err != nil {
+						return nil, err
+					}
+					rho, z := profile(s)
+					rows = append(rows, arcRow{rho: rho, z: z, theta: th})
+					prev = th
+				}
+				widened = sStar
+			}
+		}
 	}
 
 	// The plane's row, the wall's row, and the rows between them. Each row's
@@ -222,6 +305,24 @@ func rewriteArc(ctx context.Context, env topo.Env, fp facetedrecord.Payload, a a
 	}
 	rowCols[m][0].t, rowCols[m][len(cutIDs)-1].t = 0, 1
 	_ = pB
+	if widened > 0 {
+		// The last gap's chord on each end plane no longer lies within tau of its
+		// end curve. Its two ends state how far it does, and how far the wall's cut
+		// vertex at the other end of the chord may lie from the exact point
+		// (cuspCharge's argument: a chord end that moves by eps moves the chord's
+		// points by at most eps).
+		for i, e := range ends {
+			chord, err := endChord(e, widened, 1, w.tau)
+			if err != nil {
+				return nil, err
+			}
+			row, cut := rowCols[m-1][0].idx, rowCols[m][0].idx
+			if i == 1 {
+				row, cut = rowCols[m-1][len(rowCols[m-1])-1].idx, rowCols[m][len(rowCols[m])-1].idx
+			}
+			w.beta[row] = max(w.beta[row], proofbound.AbsSumUpper(chord, w.beta[cut], slack))
+		}
+	}
 
 	// The plane's loops: the arc gives way to the setback arc.
 	seqA := make([]int, len(colsA))
@@ -271,21 +372,43 @@ func rewriteArc(ctx context.Context, env topo.Env, fp facetedrecord.Payload, a a
 			endIDs[j] = c.idx
 			reach[j] = w.verts[c.idx]
 		}
-		loops, _, err := w.endFace(a.ends[i], fG[i], runA.chain[i], runB.chain[i], [2]sideKind{trims, trims},
-			remA[i], remB[i], endIDs, reach, margin, a.convex, nil)
+		// Where the wall extends past the end plane, the end face keeps the corner
+		// and takes the blend's end cap: the rows, the wall's cut along the end
+		// plane back to the corner, and the plane's line to the first row. The cap
+		// must be a simple polygon.
+		var wallRun []int
+		if kindB[i] == extends {
+			if wallRun, err = cuts.endRun(i, a.ends[i].v); err != nil {
+				return nil, err
+			}
+			capLoop := append(append(append([]int(nil), endIDs...), wallRun...), a.ends[i].v)
+			if err := w.capSimple(a.ends[i].g.n, capLoop, m); err != nil {
+				return nil, err
+			}
+		}
+		loops, _, err := w.endFaceRun(a.ends[i], fG[i], runA.chain[i], runB.chain[i], [2]sideKind{trims, kindB[i]},
+			remA[i], remB[i], endIDs, wallRun, reach, margin, a.convex, nil)
 		if err != nil {
 			return nil, err
 		}
 		gLoops[i] = loops
 	}
+	// An end face that takes the cap is new surface where the cap lies: its
+	// rebuilt facets are cleared against the rest of the body as the strip is.
+	var taken [][2]int
 	for _, f := range []struct {
 		loops [][]int
 		n     r3.Vec
 		fl    faceLoops
-	}{{aLoops, n, fA}, {gLoops[0], a.ends[0].g.n, fG[0]},
-		{gLoops[1], a.ends[1].g.n, fG[1]}} {
+		takes bool
+	}{{aLoops, n, fA, false}, {gLoops[0], a.ends[0].g.n, fG[0], kindB[0] == extends},
+		{gLoops[1], a.ends[1].g.n, fG[1], kindB[1] == extends}} {
+		from := len(w.out)
 		if err := w.retriangulate(f.n, f.loops, f.fl.group); err != nil {
 			return nil, err
+		}
+		if f.takes {
+			taken = append(taken, [2]int{from, len(w.out)})
 		}
 		w.removed = append(w.removed, f.fl.facets...)
 	}
@@ -321,7 +444,10 @@ func rewriteArc(ctx context.Context, env topo.Env, fp facetedrecord.Payload, a a
 		groups[f.group].HasCentroid = false
 		groups[f.group].Centroid = measurement.VecMeasurement{}
 	}
-	return w.buildClear(ctx, env, groups, stripFrom, tag, faceIndex)
+	if err := w.checkStripClear(ctx, stripFrom, taken); err != nil {
+		return nil, err
+	}
+	return w.build(ctx, env, groups, stripFrom, tag, faceIndex)
 }
 
 // arcRowSteps is rowSteps for the rows of an arc route, the plane's row

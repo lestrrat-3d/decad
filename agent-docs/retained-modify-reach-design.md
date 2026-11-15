@@ -381,7 +381,11 @@ the largest vertex bound of the tested chord. The inflation only refuses more.
   test like any other. A G1 neighbour leaves `V_J` beyond `Π_J`, so it clears the band.
 - **Walls.** Every held boundary vertex of every wall that lies on no chain edge and no seam has height at least
   `t_W + b + slack` from `P` on the chain's side `s`. Height above a plane is affine, so the chords between such
-  vertices clear `P'` as well. A concave pocket shallower than `t_W` fails it (SR4).
+  vertices clear `P'` as well. A concave pocket shallower than `t_W` fails it (SR4). A wall that lies on both
+  sides of `P`, or runs on past an end plane, has boundary legitimately behind `P` and past `G`, so a single
+  R4 arc (blend §4.4) tests every boundary chord of the wall against the band between `P` and `P'`, inside the end
+  planes it extends past and the guard, widened by `b + slack`: a chord meeting it refuses (SR5), and a vertex
+  strictly inside it other than the rim's and the chain's refuses too. A chain's walls keep the height test.
 - **Seams.** Each seam's far end lies at height at least `t_W + b + slack` from `P` on side `s`, so `S_J` cuts it.
 - **Sizes.** Blend SR3 per edge: an R4 edge whose base lies inside its circle (`κ = −1`: a convex edge whose
   material lies inside its cylinder, or a concave pocket floor's arc) needs `R − r > 0` (fillet) or `R − t_P > 0`
@@ -721,6 +725,7 @@ Each increment is one PR. M1 ships this document.
 | M5 | §7: `ScaledAt` keeps curved tags | the two scale rows pass |
 | M6 | §8: E10 and R5 | the R5 row passes |
 | M7 | C1 concave: the chain side `s` of §5.1 in the rows, wall bands and tags | the concave chain rows of §12 pass |
+| M4c | a single concave R4 arc whose wall extends past its end planes, read by the local side of blend §4.4 | the `arc_extends` rows pass |
 | M8 | C2 end corners: open concave chains, reflex feet and blind ends, the same-face end rebuild and the whole-loop base contour of §5.5 step 5; SM8, SM9 | the chain-end rows of §12 pass |
 
 Chains are built for closed and open outlines of lines and arcs, convex or concave.

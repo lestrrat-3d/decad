@@ -91,7 +91,7 @@ Table RR lists the edges a blend can be built on. The others are refused.
 | **R1** | `Line3`, convex or concave | two retained `Plane`s, not parallel, ending at three-face corners whose third face is a retained `Plane` | `Cylinder` / `Plane` | increment B2; equal or two-distance chamfer |
 | **R2** | `Circle3`, closed, centre on the axis | retained `Plane` and coaxial retained `Cylinder` | `Torus` / `Cone` | increment B1; equal or two-distance chamfer |
 | **R3** | `Line3` of retention E4 | retained `Plane` and a `Cylinder` whose axis lies in the plane, ending on retained planes normal to the axis | `Cylinder` / `Plane` | increment B3; equal or two-distance chamfer |
-| **R4** | `Arc3` | as R2, open, ending on planes parallel to the axis | as R2 | ends on two distinct retained planes; equal or two-distance chamfer; an arc whose ends meet one face is refused |
+| **R4** | `Arc3` | as R2, open, ending on planes parallel to the axis | as R2 | ends on two distinct retained planes; equal or two-distance chamfer; an arc whose ends meet one face is refused; a concave arc's wall may run on past an end plane and lie on both sides of the plane (§4.4) |
 | **R5** | `Line3` of retention E10 | two retained `Cylinder`s with parallel axes, ending on retained planes normal to the axes | `Cylinder` / `Plane` | reach §8; equal or two-distance chamfer |
 | **R6** | `Circle3` of retention E5, closed | retained `Plane` and a retained `Sphere` whose tag is exactly its record (§4.5) | `Torus` / `Cone` | §4.5; equal or two-distance chamfer |
 | **R7** | closed saddle, any held curve | a retained `Cylinder` shaft (material inside) and a retained `Cylinder` bore of radius `r` (material outside), unit coordinate axes on two coordinates meeting exactly, `2r² < R²` | (next row) / ruled band held `Faceted` | §4.9; equal-setback `Chamfer`, by a mesh `Cut` |
@@ -259,6 +259,49 @@ An open tangent chain whose arc ends lie on such a plane takes the same rows
 The walk reads a held arc whose chain has short steps (retention E7 skips them),
 so a pocket mouth whose 3 mm corners' axes lie 2.55 mm or nearer to the end plane
 builds as well (`apitest/faceted_retained_blend_arc_end_plane_test.go`).
+
+**A wall that runs on past an end plane.** A concave arc may end where the
+cylinder continues beyond `G_i`, as the end face of a rib standing on a round
+meets the round in an arc between the rib's two side faces: the round runs on
+past each side face, and, where the rib is not, behind the end face, so the
+whole wall face lies on both sides of the rim's plane. Two readings change
+(`arc_band.go`):
+
+- *The wall's side.* `readSide` first counts the whole wall face, as for every
+  rim. Only when the face lies on both sides does an arc read the side from the
+  wall's facets along the rim: each facet that holds a boundary edge of the wall
+  face with both ends on the rim circle has a third vertex that lies on the
+  wall's side when its height from the plane exceeds its bound plus the slack. A
+  vertex that close to the plane decides nothing; at least one facet must
+  decide, and every deciding one must agree, else SR5 with the whole-face text.
+  A solid's wall cannot lie on both sides of the plane along its own boundary
+  edge, so the true piece of such a facet lies on the wall's side near the rim,
+  and the convexity check that follows stays the falsifier. The rim records
+  `twoSided`; R2 and R6 read the whole face only and refuse it, and a convex
+  arc keeps the refusal too. The band is built for one arc, so an arc reads
+  the local side only when it is the one edge selected; among several selected
+  edges it keeps the whole-face refusal, as before.
+- *The wall's band.* A wall that is two-sided, or extends at an end, is cut by
+  the band of `cutBand` (`cyl_band.go`, shared with R3) instead
+  of by height alone: the part of the wall between the plane `P` and the plane
+  `P′` at `t_B` on the wall's side, inside the end plane of each end where the
+  wall extends (the held vertices on the rim and on the wall's chain along
+  `G_i` lie on their planes by construction), and on the arc's side of the
+  guard, the plane through the axis normal to the arc's middle direction, which
+  keeps the band off the far half of the cylinder. Each held facet meets the
+  band in a convex polygon, and every crossing is made once per held edge and
+  plane, so the facets on either side of an edge share the point. A vertex
+  within its bound plus the slack and `τ` of a plane it is not on by
+  construction, other than the rim's own, refuses (SR5); one strictly inside
+  the band other than the rim's and the chain's, or a wall boundary chord that
+  meets the band widened by its bound, the slack and `τ`, refuses (SR5): the
+  blend may consume a feature of the wall it cannot see. Every wall that is one
+  sided and trims at both ends keeps the whole-face height cut, so every case
+  admitted before is built from the same vertices, in the same order. An arc
+  that spans `π` or more refuses.
+
+At an end where the wall extends the end face keeps its corner `V` and takes the
+blend's end cap (§5.0).
 
 The faces are rewritten as in R2 for the plane (a polygon on the setback arc)
 and the wall (the cut at the setback height), and as in R1 for the ends.
@@ -943,6 +986,34 @@ which must lie farther along the circle's tangent at `V` than its bound plus
 the slack, else SR5; `A`'s chain takes its sense from its last vertex the same
 way.
 
+**A wall that extends past the corner (R4).** A concave arc's wall may run on
+past an end plane `G_i` that is convex at `V`: the wall's chain along `G_i`
+leaves `V` against the way the wall climbs from the plane, farther than its
+bound plus the slack, and the plane `A` trims there. Which of the two the chain
+does is read from its last vertex, not from a residual. Only the band between
+the two end planes goes (§4.4), so the wall keeps `V` and its whole chain, and
+its new boundary gains the cut along `G_i`'s plane from the band's corner to
+`V`. Beyond `G_i` the corner region stays void, so `G_i` takes the corner
+region of the torus (or cone) section its plane cuts as the blend's end cap:
+its loop runs from `P_A` along the end curve to the band's corner, along the
+wall's cut back to `V` and along `A ∩ G_i` to `P_A`. The cap's rebuilt facets
+are new surface cleared by `checkStripClear`, and the cap must be a simple
+polygon (`capSimple`, SR5) as for R3. A fillet's end curve nears the wall's cut
+in `G_i`'s plane without touching it, `X(s) − X_R = κ·(√(ρ(s)² − h²) −
+√(R² − h²))`, tangent at the wall's tangent point, so its cap closes in a cusp
+exactly as R3's does; where the cap on the profile's own rows is not simple
+the rows are spaced again (`cuspParam`, `widenRows`): the last row before the
+wall's lies `need` from the generator, `need` the largest bound of the band's
+corner and the wall's run in `G_i`'s plane plus `τ` and the slack, and the
+rows below keep their certified spacing. A fillet whose end curve lies within
+`need` of the generator at the plane's row refuses SR5. The widened gap's chord
+on each end plane lies within `endChord` of the end curve (the smallest
+`τ·2^k` that `certify` accepts), and each last-row vertex on an end plane
+states that plus the bound of the wall's cut vertex at the chord's other end,
+which moves the chord's points by at most that much, plus the slack. Convex
+arcs, an arc whose plane or both faces extend, and an arc whose end face is
+reflex at `V` keep SR5.
+
 **`G`'s turn at `V`.** On the R1 route the turn is read from the tag lines
 `A ∩ G` and `B ∩ G`, not from held vertices: each line's direction is the cross
 of two retained normals, and its sense comes from the chain's last vertex,
@@ -1002,7 +1073,7 @@ of that computation.
 | **SR2** | two selected edges share a vertex and are neither a mitre run (§4.7) nor corners of perpendicular faces (§4.8), or a selected edge continues tangentially into a neighbour | no transition built | `ErrUnsupported` |
 | **SR3** | no blend of that size exists: `R − r ≤ 0` for an inside ball (§4.2), `φ` within 10⁻⁹ of 0 or π, a chamfer distance of zero or below, an R6 setback that reaches the axis or runs past the sphere's pole (§4.5), or an R7 fillet inside the larger cylinder with `2ρ ≥ R − r`, where no ball touches both walls (§4.10) | no regular blend | `ErrDegenerate` |
 | **SR4** | the setback does not fit (§6.2) and the held bounds prove it does not | the blend consumes the face | `ErrDegenerate` |
-| **SR5** | the setback might not fit and the held bounds cannot decide it, or a plane that crosses an R6 sphere below `minSine` (§4.5), or an end vertex of an R1 edge is not a three-face corner with a retained planar `G`, or a chain's sense or `G`'s turn at the vertex is undecided (§5.0), or `G` turns the wrong way: a concave edge needs a reflex corner of `G`, or a convex one where `A` or `B` is reflex at the vertex, and a convex edge outside the R1 route (plane–cylinder, arc, cylinder–cylinder, mitre run) needs a convex one; or both `A` and `B` turn reflex at the vertex, or a convex edge meets a reflex face other than an R3 wall that extends past the vertex beside a plane that trims there (§5.0), or another part of `G` comes within the blend's reach of the vertex, or a vertex of an R3 wall lies within its bound of an end plane the band is clipped by, or, unless it lies outside such a plane, of the band's generator (§4.3), or the end cap an R3 end face takes is not a simple polygon, or an R3 fillet's tangent point on the plane lies no farther from the wall's circle than the wall's held cut may at the cap (§5.0), or another feature comes within an R7 chamfer's or fillet's reach, or an R7 fillet's cell, window, cut ring or band test fails (§4.9, §4.10), or an arc's rows need more than 1,024 rows for their chords in an end plane to certify within `τ` (§6.3), or a corner's sphere patch needs more than 1,024 rows to stay within the corner route's tolerance, or a revolve strip's row needs more than 4,096 columns for its azimuth term's share of `τ` (§6.3, Strip triangles) | body exists; the evaluator cannot prove its construction | `ErrUnsupported` |
+| **SR5** | the setback might not fit and the held bounds cannot decide it, or a plane that crosses an R6 sphere below `minSine` (§4.5), or an end vertex of an R1 edge is not a three-face corner with a retained planar `G`, or a chain's sense or `G`'s turn at the vertex is undecided (§5.0), or `G` turns the wrong way: a concave edge needs a reflex corner of `G`, or a convex one where `A` or `B` is reflex at the vertex, and a convex edge outside the R1 route (plane–cylinder, arc, cylinder–cylinder, mitre run) needs a convex one; or both `A` and `B` turn reflex at the vertex, or a convex edge meets a reflex face other than an R3 wall that extends past the vertex beside a plane that trims there (§5.0), or another part of `G` comes within the blend's reach of the vertex, or a vertex of an R3 wall lies within its bound of an end plane the band is clipped by, or, unless it lies outside such a plane, of the band's generator (§4.3), or the end cap an R3 or an R4 end face takes is not a simple polygon, or an R3 fillet's tangent point on the plane lies no farther from the wall's circle than the wall's held cut may at the cap (§5.0), or an R4 fillet's end curve lies no farther from the wall's cut in an end plane than that cut may, or a vertex of an R4 wall that lies on both sides of its plane lies within its bound of the band's planes, or another part of such a wall, or a chord of its boundary, comes within the band's reach, or the wall's facets along the rim decide no side or disagree (§4.4), or another feature comes within an R7 chamfer's or fillet's reach, or an R7 fillet's cell, window, cut ring or band test fails (§4.9, §4.10), or an arc's rows need more than 1,024 rows for their chords in an end plane to certify within `τ` (§6.3), or a corner's sphere patch needs more than 1,024 rows to stay within the corner route's tolerance, or a revolve strip's row needs more than 4,096 columns for its azimuth term's share of `τ` (§6.3, Strip triangles) | body exists; the evaluator cannot prove its construction | `ErrUnsupported` |
 | **SR6** | the held mesh disagrees with the exact vertex of its three tags by more than the vertex bound plus slack (§6.3) | the record and the mesh do not describe one solid | `ErrUnsupported` |
 | **SR7** | a facet the rewrite keeps outside the new strip meets a strip facet it shares no vertex with (the strip clearance of retained-modify-reach §5.6, run before the build), or the rewritten mesh fails the held audit (watertight, shells nested with consistent signs; the audit tests no facet pair for intersection) | the result is invalid | `ErrDegenerate` when the audit proves a face inside out (modify S8), else `ErrUnsupported` |
 
@@ -1608,6 +1679,9 @@ published bound, never with a pinned literal.
 | R7 fillet outside both cylinders (`TestRetainedSaddleFilletOutside`): a block 80 × 60 × 20 with a radius-5 `Hole` down through it crossed by a radius-3 blind `Hole`, both mouths, ρ = 0.5 (convex, removes); a radius-5 `Boss` 8 high on a radius-15 rod, ρ = 1 (concave, adds); a radius-3 pin joined through the R = 10 Revolve shaft, both roots, ρ = 1.5 (concave, a left-handed pose) | the volume falls (block) or grows (rod, pin) by the tube-coordinate integral per mouth (0.540755, 4.701377 and 6.619077 mm³) within both bodies' bounds; `VerifyAll` verifies the result; on its mesh the point midway between the arc and the edge reads outside for the block and inside for the rod and pin, farther than the mesh bound from every facet, and the point 0.3·ρ inside the ball keeps its side, at 8 stations of each mouth; under `-race` the rod only | expect ρ/2 or σ1 = −1 in the test: all three fail, at the ball's points or the volume; flip σ1 in the route: every build refuses, "the bore's cut leaves fewer than three vertices" |
 | R7 fillet refusals | `ρ = 3.5` (`2ρ = R − r`) refuses `ErrDegenerate` "no ball of that radius touches both walls of the saddle"; ρ = 3.4 refuses "folds: the pipe is not regular there"; a pin moved 0.5 off the shaft's axis, the pin's part inside the shaft (`Intersect`, σ = (−1, −1)) and a concave pin root inside a tube's bore (`Chamfer` and `Fillet`) refuse with the canal-surface reason; a flat milled beside a mouth refuses "another face of the body comes within the saddle fillet's reach", as does a boss 1 high on the radius-15 rod at ρ = 1, whose top face lies inside the bore's cut (`TestRetainedSaddleFilletRefusals`) | drop the route's existence test: ρ = 3.5 refuses at `saddlecanal.Prove`'s own, "the saddle canal's offset cylinders do not meet in a loop" (a unit test pins that site's text); drop the Convex flag from `saddleKey.built`: the tube root's `Chamfer` builds and removes material where a concave blend adds it, and both recognition unit tests fail; drop the Jacobian test: ρ = 3.4 refuses at the progress test instead; drop the clearance check: the flat refuses later, "a corner of the saddle fillet's window lies on no facet of the shaft wall", and the short boss "the bore's cut leaves fewer than three vertices"; admit every σ: the tube root's `Fillet` builds and the clipped pin refuses "a corner of the saddle fillet's window lies on no facet of the shaft wall"; drop the exact axis meeting: the moved pin refuses with "a held seam vertex is off the two cylinders" |
 | R7 refusals | `d > r/2` refuses; a pin moved 0.5 off the shaft's axis, a pin with r/R = 0.75 and a pin joined through the shaft refuse with the canal-surface reason; a flat milled beside a mouth refuses "another face of the body comes within the saddle chamfer's reach"; `Chamfer` of a pin's roots and of a boss's root on a rod keeps the canal-surface reason (`apitest/blend_refusal_names_test.go`) | drop the clearance check: the flat builds; admit a bore that is not `Reversed`: the joined pin builds; drop the exact axis meeting: the moved pin refuses with "a held seam vertex is off the two cylinders"; drop `2r² < R²`: r/R = 0.75 builds |
+| Arc whose wall extends past its end planes (`apitest/faceted_retained_blend_arc_extends_test.go`): a round bar r = 3 along x with a 6 × 2 box notched into its underside, a tube (bore r = 3, outer r = 6) with the same rib standing on its bore's underside, so the plane lies outside and inside the arc's circle, and a rod r = 5 standing beside a plate's corner, whose top meets it in an arc between the plate's two perpendicular faces; fillet r = 1 and chamfer 1 of each arc, a fillet r = 0.3 of the tube, r = 0.1 of the bar and r = 0.2 of the rod | the result is a solid and `VerifyAll` and `Verify` pass; the volume gains the corner region swept between the two end planes, `∫∫ ρ·Δφ(ρ)` over it, within the bound's growth; each end plane's face gains the cap, `∫∫ ρ/√(ρ² − h²)`, within the area bound's growth; the blend face is one torus with `Major = R + κr`; the bound grows by at most `2τ` past the held one at size 1, as a hole mouth's arc does | drop the local side: F1's text; cut the wall by height alone: the wall behind the end face and past the side faces is deleted |
+| Arc whose wall extends, refusals (same file) | a 0.5 mm hole through the bar inside the band refuses "another part of the wall lies within the blend's reach of the edge"; r = 2.5 refuses "the blend consumes the plane beside the arc"; a 0.1 mm cube floating across the side face's plane inside the corner region and clear of the strip refuses "the cap an end face takes meets another facet of the body" | skip the wall gate: the hole is consumed unseen; clear the cap by the strip alone: the cube is accepted |
+| R4 local side, band and cusp (`internal/retainedblend/rim_internal_test.go`, `arc_section_internal_test.go`) | the side comes from the facets along the rim that agree, undecided within the bound refuses, disagreeing facets refuse, a closed rim keeps the whole-face text; a chord through, within the widening of, and clear of a band; `cuspParam` puts the end curve `need` from the generator, `widenRows` keeps the earlier gaps certified and widens only the last, `endChord` bounds its chord | |
 | Close boundary vertices (`internal/retainedblend/rewrite_close_vertices_internal_test.go` `TestRetriangulateKeepsCloseBoundaryVertices`) | a plane face whose hole loop holds two vertices closer than the rounding of an offset frame re-triangulates with every loop edge kept and its area unchanged, for normals −z, +z and +x; two neighbouring vertices that differ only along the normal refuse | subtract the rim centre before projecting: the pair collides and ear clipping ends on a degenerate triangle |
 | Wall ring order (`TestSortRingOrdersEqualAngles`) | two cut vertices of one float angle sort by their exact turn, the same for every input order, both senses and both normals | sort by float angle alone: the order follows the input order |
 
@@ -1615,7 +1689,7 @@ published bound, never with a pinned literal.
 
 | Area | Change |
 |---|---|
-| `internal/retainedblend/` | new: classification (Table RR), exact geometry (§4), clip, strip and end construction (§5), gates (§6); R6 in `sphere.go`, its exact-record rule in `denoted.go`; R3's wall band in `cyl_band.go`; the strip triangles' bounds, the band's charge and the corner patch's in `strip_bound.go` |
+| `internal/retainedblend/` | new: classification (Table RR), exact geometry (§4), clip, strip and end construction (§5), gates (§6); R6 in `sphere.go`, its exact-record rule in `denoted.go`; R3's wall band in `cyl_band.go`, which also cuts an R4 arc's wall by the planes of `arc_band.go`; the strip triangles' bounds, the band's charge and the corner patch's in `strip_bound.go` |
 | `internal/facetedrecord/` | an entry that builds a payload from new vertices, triangles, groups and bounds; no change to `Build` |
 | `internal/retainedblend/saddle.go`, `saddle_tool.go`, `internal/crossbore/saddle_tool.go` | R7 (§4.9): recognition, tool, band proof, outside and clearance proofs, the Cut |
 | `internal/brepmodify/chamfer.go` | calls `retainedblend.SaddleChamfer` with the hooks' mesher before `retainedblend.Chamfer` |

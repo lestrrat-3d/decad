@@ -476,3 +476,44 @@ func TestColumnCountRefusesPastTheLimit(t *testing.T) {
 	_, err = ringCount(9, 0.004/2048, 0.004)
 	require.ErrorIs(t, err, decaderr.ErrUnsupported)
 }
+
+// TestArcCuspWidensLastGap places the last row before an extending wall's cut at
+// the profile parameter where the fillet's end curve lies need from the wall's
+// generator in the end plane (cuspParam), widens only the last gap there
+// (widenRows) and bounds its chord (endChord). The curve's distance from the
+// generator is sampled from the fixture, without the route's code.
+func TestArcCuspWidensLastGap(t *testing.T) {
+	t.Parallel()
+	for _, f := range []endPlaneFixture{
+		{R: 3, kappa: 1, side: 1, h: 1, spec: blendSpec{fillet: true, r: 1}},
+		{R: 3, kappa: -1, side: 1, h: 1, spec: blendSpec{fillet: true, r: 1}},
+	} {
+		sec := f.section(t)
+		xr := math.Sqrt(f.R*f.R - f.h*f.h)
+		for _, need := range []float64{0.002, 0.01} {
+			s, err := f.rim().cuspParam(f.spec, sec, need)
+			require.NoError(t, err)
+			require.Greater(t, s, 0.0)
+			require.Less(t, s, 1.0)
+			require.InDelta(t, need, math.Abs(f.point(s).Y-xr), 1e-9)
+			// Nearer the wall, the curve lies closer to the generator than need.
+			require.Less(t, math.Abs(f.point(s+0.01).Y-xr), need)
+
+			tau := math.Ldexp(f.spec.r, -10)
+			ss, err := widenRows(f.spec, tau, []endSection{sec}, uniform(40), s)
+			require.NoError(t, err)
+			require.Equal(t, 1.0, ss[len(ss)-1])
+			require.Equal(t, s, ss[len(ss)-2])
+			require.Less(t, ss[len(ss)-3], s)
+			// The gaps before the last stay certified.
+			require.LessOrEqual(t, f.worstChord(ss[:len(ss)-1]), tau*(1+1e-6))
+			// The last gap's chord lies within the bound endChord states.
+			chord, err := endChord(sec, s, 1, tau)
+			require.NoError(t, err)
+			require.LessOrEqual(t, f.worstChord(ss[len(ss)-2:]), chord)
+		}
+		// A generator too near the plane's row to leave room refuses.
+		_, err := f.rim().cuspParam(f.spec, sec, 10)
+		require.ErrorIs(t, err, decaderr.ErrUnsupported)
+	}
+}
