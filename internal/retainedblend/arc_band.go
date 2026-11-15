@@ -64,7 +64,8 @@ func (a arcRim) newWallBand(w *work, f faceLoops, tb float64, run edgeRun, kind 
 			on[v] = true
 		}
 		sine, planar := w.wallSine(f.index, g)
-		band.ends[i] = &bandEnd{g: g, sign: sign, on: on, sine: sine, planarWall: planar}
+		band.ends[i] = &bandEnd{g: g, sign: sign, on: on, sine: sine, planarWall: planar,
+			slanted: true, slant: w.wallSlant(f.index, g)}
 	}
 	return band
 }
