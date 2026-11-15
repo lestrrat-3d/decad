@@ -269,7 +269,9 @@ func readChamferLoop(f *topo.Face, plane surfacegeom.Plane, loop *topo.Loop, exa
 	l.depth = math.Inf(1)
 	for _, ce := range loop.CoEdges {
 		e := ce.Edge
-		if e == nil || !e.Convex || len(e.Faces) != 2 || e.Start == nil || e.End == nil {
+		// A prism's cap edge always meets its wall at a right angle. There e.Convex is only the rim's 2D turn, which a
+		// concave circular wall clears, so the exact route does not require it.
+		if e == nil || (!e.Convex && !exact) || len(e.Faces) != 2 || e.Start == nil || e.End == nil {
 			return nil, false
 		}
 		wall := e.Faces[0]
