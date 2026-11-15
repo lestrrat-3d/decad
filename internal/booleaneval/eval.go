@@ -686,15 +686,7 @@ func evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 		}
 	}
 	if err == nil && rimsplit.Of(ctx) {
-		var charge meshbool.BudgetFunc
-		if replay != nil {
-			charge = func(work, records uint64) error {
-				if err := replay.SpendWork(ctx, work); err != nil {
-					return err
-				}
-				return replay.ReserveRecords(ctx, records)
-			}
-		}
+		charge := meshbool.ReplaySpreadBudget(ctx, replay)
 		kept, err = meshbool.SplitSpread(ctx, kept, bmA, bmB, tolMM, charge)
 	}
 	if err != nil {

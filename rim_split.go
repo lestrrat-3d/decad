@@ -15,12 +15,16 @@ type identRimSplit struct{}
 // rim. A boolean that cuts a curved face leaves a rim whose bound is larger
 // than the face's own, and the facets the rim touches run on to the far end of
 // the face, so a later boolean that crosses them far from the rim reads that
-// bound again and amplifies it. With this option each such facet is split near
-// the rim, and the later boolean reads the face's own bound there. Every bound
-// the result carries is still proven. The result
-// holds more facets, and a face that was split is refused by a Fillet or
-// Chamfer that reads it, so a document that edge-finishes its mesh results
-// should not set it. A planar face is never split.
+// bound again and amplifies it. With this option such a facet is split near the
+// rim, and the later boolean reads the face's own bound on the far piece. A
+// facet is split only where the whole far piece is proven, by an exact
+// distance, to stand clear of the other operand's boundary by the bounds both
+// operands hold; a facet with no such split stays whole and keeps the rim's
+// bound. The result holds more facets. A Fillet or Chamfer that reads a split
+// face may refuse it, since a split adds a vertex that no boundary loop of the
+// face reaches; one that succeeds reads the split facets' own bounds, which are
+// proven in the same way. A document that edge-finishes its mesh results
+// should leave the option off. A planar face is never split.
 func WithRimSplit() DocumentOption {
 	return rimSplitOption{option.New(identRimSplit{}, true)}
 }

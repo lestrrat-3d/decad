@@ -2,6 +2,7 @@ package meshbool
 
 import (
 	"errors"
+	"math"
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/proof"
@@ -188,13 +189,13 @@ func TestSplitSpreadChargesItsWork(t *testing.T) {
 		r3.Vec{}, r3.Vec{Z: 20}, r3.Vec{X: 1, Z: 20})
 	work := uint64(0)
 	_, err := SplitSpread(t.Context(), []KeptFacet{piece}, curvedMesh(t), farMesh(t),
-		0, func(w, _ uint64) error { work += w; return nil })
+		0, func(w, _, _ uint64) error { work += w; return nil })
 	require.NoError(t, err)
 	require.Positive(t, work)
 
 	stop := errors.New("budget spent")
 	_, err = SplitSpread(t.Context(), []KeptFacet{piece}, curvedMesh(t), farMesh(t),
-		0, func(uint64, uint64) error { return stop })
+		0, func(uint64, uint64, uint64) error { return stop })
 	require.ErrorIs(t, err, stop)
 }
 
@@ -213,4 +214,218 @@ func TestSplitSpreadMovesPastTheNearPartOfTheEdge(t *testing.T) {
 	split := out[0].V[1].Vec()
 	require.Equal(t, 0.0, split.X)
 	require.Greater(t, split.Z, 7.5)
+}
+
+// spreadWedge is a convex wedge below the plane z = 0 whose top is
+// z = -a*Y - b*|X|, a ridge along X = 0. It crosses z = 0 along the V
+// Y = -(b/a)|X| with its apex at the origin, so the region Y > 0 of the plane
+// lies outside it. The distance from a plane point (X, Y) with Y > 0 to the
+// wedge grows like a*Y + b*|X|, so it is not affine along a segment that
+// crosses X = 0: it dips between two points that both clear the operand.
+func spreadWedge(t *testing.T, a, b, beta float64) *BoolMesh {
+	t.Helper()
+	top := func(x, y float64) r3.Vec { return r3.Vec{X: x, Y: y, Z: -a*y - b*max(x, -x)} }
+	verts := []r3.Vec{
+		top(-1, -1), top(0, -1), top(1, -1),
+		top(-1, 1), top(0, 1), top(1, 1),
+		{X: -1, Y: -1, Z: -1}, {X: 1, Y: -1, Z: -1}, {X: 1, Y: 1, Z: -1}, {X: -1, Y: 1, Z: -1},
+	}
+	tris := [][3]int{
+		{0, 1, 4}, {0, 4, 3},
+		{1, 2, 5}, {1, 5, 4},
+		{6, 9, 8}, {6, 8, 7},
+		{6, 7, 2}, {6, 2, 1}, {6, 1, 0},
+		{9, 3, 4}, {9, 4, 5}, {9, 5, 8},
+		{6, 0, 3}, {6, 3, 9},
+		{7, 8, 5}, {7, 5, 2},
+	}
+	src := []int{0, 0, 1, 1, 2, 2, 3, 3, 3, 4, 4, 4, 5, 5, 6, 6}
+	m, err := PrepContext(t.Context(), verts, tris, src)
+	require.NoError(t, err)
+	bounds := make([]float64, len(verts))
+	for i := range bounds {
+		bounds[i] = beta
+	}
+	m.SetVertexBounds(bounds)
+	return m
+}
+
+// spreadWedgePiece is a piece in the plane z = 0 with its rim corner at the
+// wedge's apex and the far corners 20 mm out.
+func spreadWedgePiece() KeptFacet {
+	return spreadFacet([3]float64{0.074, spreadDelta, spreadDelta},
+		r3.Vec{}, r3.Vec{X: 20, Y: 1}, r3.Vec{X: -20, Y: 1})
+}
+
+// Both split points of the piece clear the other operand, but the far piece
+// between them reaches within the clearance of it: a point on the segment
+// between the split points is 0.0004 mm from the wedge's held boundary, and the
+// clearance is 0.002 mm. The far piece's facet bound would be unproven there,
+// so the nearest split is not emitted. Any split SplitSpread does emit stands
+// farther out, and every sampled point of every far piece it makes clears.
+func TestSplitSpreadProvesTheFarPieceNotItsSplitPoints(t *testing.T) {
+	t.Parallel()
+	const clearance = 2 * spreadDelta
+	other := spreadWedge(t, 0.025, 0.01, spreadDelta)
+	piece := spreadWedgePiece()
+
+	// Both nearest split points pass the point test alone.
+	nearest := []r3.Vec{{X: 0.3125, Y: 0.015625}, {X: -0.3125, Y: 0.015625}}
+	hint := -1
+	for _, split := range nearest {
+		require.True(t, depthBeyond(proof.XptOf(split), other, clearance, &hint), "split point %v", split)
+	}
+	// The point between them does not.
+	dip := proof.XptOf(r3.Vec{Y: 0.015625})
+	require.Less(t, CertifiedInteriorDepth(dip, other), clearance)
+
+	out, err := SplitSpread(t.Context(), []KeptFacet{piece}, curvedMesh(t), other, 0, nil)
+	require.NoError(t, err)
+	for _, f := range out {
+		for _, v := range f.V {
+			require.NotContains(t, nearest, v.Vec(), "the nearest split point is not used")
+		}
+		if max(f.Beta[0], f.Beta[1], f.Beta[2]) > spreadDelta {
+			continue
+		}
+		const n = 60
+		c := [3]r3.Vec{f.V[0].Vec(), f.V[1].Vec(), f.V[2].Vec()}
+		for i := 0; i <= n; i++ {
+			for j := 0; i+j <= n; j++ {
+				l0, l1 := float64(i)/n, float64(j)/n
+				p := c[0].Scale(l0).Add(c[1].Scale(l1)).Add(c[2].Scale(1 - l0 - l1))
+				require.Greater(t, CertifiedInteriorDepth(proof.XptOf(p), other), clearance,
+					"a far piece reaches within the clearance at %v", p)
+			}
+		}
+	}
+}
+
+// A piece whose far corners stand 0.0005 mm outside the other operand, inside
+// the clearance, stays whole although every level finds candidate split points
+// deep inside it: only the proof over the far piece refuses it.
+func TestSplitSpreadKeepsAPieceWhenNoFarPieceClears(t *testing.T) {
+	t.Parallel()
+	// The box spans z in [0, 20]; the far corners lie at z = 20.0005.
+	other := boxMesh(t, r3.Vec{X: 50, Y: 50, Z: 10}, spreadIdentity, r3.Vec{Z: 10})
+	piece := spreadFacet([3]float64{0.05, spreadDelta, spreadDelta},
+		r3.Vec{Z: 5}, r3.Vec{Z: 20.0005}, r3.Vec{X: 1, Z: 20.0005})
+	piece.Keys = [3]string{"u", "v", "w"}
+	const clearance = 2 * spreadDelta
+	hint := -1
+	for level, margin := range spreadMargins {
+		_, ok, err := spreadPoints(t.Context(), &piece, []int{0}, []int{1, 2}, other, clearance*margin, level,
+			map[spreadEdge]*proof.Xpt{}, &hint, nil)
+		require.NoError(t, err)
+		require.True(t, ok, "level %d has candidate points", level)
+	}
+	out, err := SplitSpread(t.Context(), []KeptFacet{piece}, curvedMesh(t), other, 0, nil)
+	require.NoError(t, err)
+	require.Len(t, out, 1)
+	require.Equal(t, piece.V, out[0].V)
+	require.Equal(t, piece.Beta, out[0].Beta)
+}
+
+// The plain appends of unsplit pieces reserve their storage too: eight pieces,
+// four of them split, reserve the ten slots of the first split and the twenty
+// the output grows to, and the output never outgrows what was reserved.
+func TestSplitSpreadReservesTheStorageOfUnsplitPieces(t *testing.T) {
+	t.Parallel()
+	split := func(x float64) KeptFacet {
+		return spreadFacet([3]float64{0.05, spreadDelta, spreadDelta},
+			r3.Vec{X: x}, r3.Vec{X: x, Z: 20}, r3.Vec{X: x + 1, Z: 20})
+	}
+	plain := spreadFacet([3]float64{spreadDelta, spreadDelta, spreadDelta},
+		r3.Vec{}, r3.Vec{Z: 20}, r3.Vec{X: 1, Z: 20})
+	kept := []KeptFacet{split(0), split(5), plain, split(10), plain, plain, plain, plain}
+	var slots []uint64
+	out, err := SplitSpread(t.Context(), kept, curvedMesh(t), farMesh(t), 0,
+		func(_, _, facets uint64) error {
+			if facets != 0 {
+				slots = append(slots, facets)
+			}
+			return nil
+		})
+	require.NoError(t, err)
+	require.Len(t, out, 14)
+	require.Equal(t, []uint64{10, 20}, slots)
+	require.LessOrEqual(t, uint64(cap(out)), slots[len(slots)-1])
+}
+
+// triGapAbove admits a pair only with the float margin charged: two parallel
+// triangles 1 mm apart clear a slack of 0.9 and do not clear 1.0, nor a slack
+// inside the 2^-26 relative margin.
+func TestTriGapAboveChargesItsMargin(t *testing.T) {
+	t.Parallel()
+	ta := [3]r3.Vec{{}, {X: 1}, {Y: 1}}
+	tb := [3]r3.Vec{{Z: 1}, {X: 1, Z: 1}, {Y: 1, Z: 1}}
+	require.True(t, triGapAbove(ta, tb, 0.9))
+	require.False(t, triGapAbove(ta, tb, 1))
+	require.False(t, triGapAbove(ta, tb, 1-0x1p-27))
+	require.False(t, triGapAbove(ta, ta, 0))
+	require.False(t, triGapAbove(ta, tb, math.NaN()))
+}
+
+// A piece whose far corner is a chain corner, a vertex on the other operand's
+// boundary that carries only the operand facet's bound, never splits: the far
+// piece holding it touches the boundary and no distance above the clearance
+// can be proven for it, although every split point stands deep inside the
+// other operand.
+func TestSplitSpreadKeepsAPieceHoldingALowBoundChainCorner(t *testing.T) {
+	t.Parallel()
+	// The box spans z in [0, 20] and is 100 mm across: the piece's rim corner is
+	// 5 mm inside it, and its other two corners lie on its top face.
+	other := boxMesh(t, r3.Vec{X: 50, Y: 50, Z: 10}, spreadIdentity, r3.Vec{Z: 10})
+	piece := spreadFacet([3]float64{0.05, spreadDelta, spreadDelta},
+		r3.Vec{Z: 5}, r3.Vec{Z: 20}, r3.Vec{X: 1, Z: 20})
+	hint := -1
+	for _, split := range []r3.Vec{{Z: 5 + 15.0/64}, {X: 1.0 / 64, Z: 5 + 15.0/64}} {
+		require.True(t, depthBeyond(proof.XptOf(split), other, 2*spreadDelta, &hint), "split point %v", split)
+	}
+
+	out, err := SplitSpread(t.Context(), []KeptFacet{piece}, curvedMesh(t), other, 0, nil)
+	require.NoError(t, err)
+	require.Len(t, out, 1)
+	require.Equal(t, piece.V, out[0].V)
+	require.Equal(t, piece.Beta, out[0].Beta)
+}
+
+// The replay charge covers the output storage: the facets the output slice
+// holds and the one it grows to are reserved before they are allocated, and a
+// refusal at either stops the split.
+func TestSplitSpreadReservesItsOutputStorage(t *testing.T) {
+	t.Parallel()
+	one := spreadFacet([3]float64{0.05, spreadDelta, spreadDelta},
+		r3.Vec{}, r3.Vec{Z: 20}, r3.Vec{X: 1, Z: 20})
+	two := spreadFacet([3]float64{0.05, spreadDelta, spreadDelta},
+		r3.Vec{X: 5}, r3.Vec{X: 5, Z: 20}, r3.Vec{X: 6, Z: 20})
+	var slots []uint64
+	out, err := SplitSpread(t.Context(), []KeptFacet{one, two}, curvedMesh(t), farMesh(t), 0,
+		func(_, _, facets uint64) error {
+			if facets != 0 {
+				slots = append(slots, facets)
+			}
+			return nil
+		})
+	require.NoError(t, err)
+	require.Len(t, out, 6)
+	// 2 + 2/4 slots fit the first split's three pieces only, and the second split grows.
+	require.Equal(t, []uint64{3, 6}, slots)
+
+	stop := errors.New("storage spent")
+	for refuse := range 2 {
+		seen := 0
+		_, err = SplitSpread(t.Context(), []KeptFacet{one, two}, curvedMesh(t), farMesh(t), 0,
+			func(_, _, facets uint64) error {
+				if facets == 0 {
+					return nil
+				}
+				seen++
+				if seen > refuse {
+					return stop
+				}
+				return nil
+			})
+		require.ErrorIs(t, err, stop)
+	}
 }

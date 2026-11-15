@@ -235,32 +235,65 @@ rim's bound stands for the whole piece. A facet that runs the height of a tube w
 height, and the next boolean that crosses the piece, however far from the rim, reads it and amplifies it again.
 
 `meshbool.SplitSpread` splits such a piece. On each edge from a rim corner `u` to another corner `v` it places a
-point `x` at `1/2^j` of the edge from `u`, with the largest `j` that keeps `x` at least `4 β(u)` from `u`. The piece
-becomes a small piece at `u` and pieces whose corners are operand corners and split points. A split point takes
-`β(x) = δ(t)` (§3.3), because it lies on the held facet `t`. The facets away from `u` then carry `δ(t)`.
+candidate point `x` at `1/2^j` of the edge from `u`, with the largest `j` that keeps `x` at least `4 β(u)` from `u`
+and deeper than a multiple of the clearance below from the other operand's held boundary. The piece becomes a rim
+piece, which keeps `β(u)`, and far pieces: those with no rim corner. The corners of a far piece are operand corners
+and split points. A split point takes `β(x) = δ(t)` (§3.3), because it lies on the held facet `t`.
 
-`x` takes `δ(t)` only where the claim is proven. The true piece of `t` within `δ(t)` of `x` is a point `p*` of the
-true surface. It is part of the result's boundary only if the other operand's true boundary does not trim it.
-`x` lies on the kept side of the held other operand, the held and true boundaries of the other operand differ by at
-most `δ_o`, the largest facet bound it holds, and the segment `x p*` is at most `δ(t)` long. So when
-`CertifiedInteriorDepth(x) > δ(t) + δ_o`, every point of the segment is farther than `δ_o` from the held other
-boundary. The segment then meets neither boundary, and `p*` is on the same side of the true other boundary as `x`.
-`SplitSpread` places a point only after `depthBeyond` proves that depth, and tries the next point away from `u`
-where it fails. A piece with no point that passes stays whole, which is the result before this section.
+The claim is over the far piece, not over its split points. A far piece's facet bound is `δ(t)`, the largest corner
+bound, and the next boolean reads it for every point of the piece. The distance from a point of the piece to a convex
+other operand is not concave along a segment, so it can dip below the clearance between two points that both clear it,
+and a proof at the split points leaves the points between them unproven.
+
+A far piece `T` carries `δ(t)` when every point `q` of it is farther than `δ(t) + δ_o` from the held boundary of the
+other operand, `δ_o` the largest bound that operand holds. The true piece of `t` within `δ(t)` of `q` is a point `p*`
+of the true surface, and it is part of the result's boundary only if the other operand's true boundary does not trim
+it. The held and the true boundary of the other operand differ by at most `δ_o`, and the segment `q p*` is at most
+`δ(t)` long. So when every point of `T` is farther than `δ(t) + δ_o` from the held other boundary, the segment meets
+neither boundary, and `p*` is on the same side of the true other boundary as `q`.
+
+`SplitSpread` proves that for the whole closed triangle `T`. `farPiecesClear` takes each facet of the other operand
+whose box comes within the clearance of `T`'s box, grown by the corners' rounding. It proves the distance from `T` to
+that facet above `δ(t) + δ_o`, first by a float separating axis with its rounding charged (`triGapAbove`), then by
+`DisjointTriDistanceAbove`, the exact rational distance. A facet neither proof clears, whether it crosses `T`,
+touches it or stands too near, refuses the split. A candidate split is emitted only when every far piece it makes is
+proven. Otherwise the next candidate, deeper from the other operand by a factor of 8, is tried, up to four
+candidates, and a piece with none that passes stays whole, which is the result before this section. The test is
+reject-only: a float distance at or below the clearance refuses without the exact proof, and only an axis gap or the
+exact distance admits.
+
+Which pieces never pass:
+
+- A far piece with a corner on the other operand's boundary, such as a chain corner that holds a low bound, never
+  passes: its distance to the other operand is 0 there. The piece stays whole and keeps the rim's bound.
+- A far piece that reaches within the clearance of the rim `u` or of the chain beside it never passes. A flat triangle
+  whose rim corner lies almost on the opposite edge makes such a piece however far the split points stand, and it
+  stays whole.
 
 Further conditions:
 
 - The pieces keep the orientation, the source face and the operand facet's bound. They only add vertices, and a
   rim corner, an operand corner and every other bound of the piece are unchanged. The stitch's conforming pass
-  inserts a split point into the facet across a shared edge, and that facet keeps its own bound.
+  inserts a split point into the facet across a shared edge, and that facet keeps its own bound. A neighbour that
+  is not split at that point takes the point with the neighbour's own facet bound, which is at least `β(u)`, so
+  the insertion undoes the split for the far pieces that use that point and never lowers a bound.
 - A piece on a planar face is never split. A split point lies on no boundary loop of its face, and
   `internal/retainedblend` re-triangulates a face from its boundary loops and refuses a vertex off them
   (`a face holds a vertex off its boundary`).
 - Only a document that sets `decad.WithRimSplit` is split. A vertex that no boundary loop of a curved face reaches
   is refused by the retained-blend reading too (`a face holds a vertex off its boundary`, or `the blend consumes the
-  wall`), so a document that edge-finishes its mesh results keeps the faces that reading expects. Only a rim corner
-  above the pair's chord tolerance is split.
-- A bounded replay applies the same pass and charges its work.
+  wall`), so a document that edge-finishes its mesh results keeps the faces that expect it. Only a rim corner
+  above the pair's chord tolerance is split. `Fillet` and `Chamfer` may refuse a split face. A blend that succeeds
+  reads the far pieces' facet bounds, which the proof above covers, and its result bound is lower for it.
+  `WithRimSplit` adds no refusal for bounds, because no bound a blend reads is unproven. The refusals that remain come
+  from the split vertex lying off the face's boundary loops.
+- A bounded replay applies the same pass. It charges the scan of the other operand's facets once per far piece, a
+  flat 64 work per exact distance proof, and the records of each split. It reserves the output slice's storage
+  before it allocates it or grows it, and every append to that slice goes through the reservation. The exact-arithmetic
+  temporaries (`proof.Xlerp`, `PointRoundBound`, the rationals inside `DisjointTriDistanceAbove`) reserve no bytes;
+  they are bounded by a constant multiple of the corner sizes, and their cost is the flat 64 work.
+- The rim-split choice lives on the evaluation context, not in the recorded body. A replay of a recorded boolean must
+  run under the same option, or it builds a different mesh.
 
 ## 4. Consumers
 
