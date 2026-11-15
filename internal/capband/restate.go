@@ -249,3 +249,37 @@ func OffRadiusLoop(loop sectionrecord.LoopRecord, reach float64) (OffRadiusTerms
 	}
 	return out, true
 }
+
+// OffRadius reports whether arc is a whole arc whose recorded End is off the
+// circle its Start states (agent-docs/tessellation-reach-design.md §7.1).
+func OffRadius(arc sectionrecord.ArcSeg) bool { return offRadius(arc) }
+
+// RestatedCentre is the centre a restating band reads arc about: the
+// recorded Centre for an arc whose two ends lie on one circle about it, and
+// otherwise the point of the two ends' perpendicular bisector nearest that
+// Centre. ok is false for a coordinate that denotes no rational or two equal
+// ends.
+func RestatedCentre(arc sectionrecord.ArcSeg) ([2]*big.Rat, bool) { return restatedCentre(arc) }
+
+// RestatedJoinIsG1 is JoinIsG1 with every off-radius arc read about its
+// RestatedCentre.
+func RestatedJoinIsG1(prev, cur sectionrecord.CurveSegment) bool {
+	pc, okP := readCorner(prev, true)
+	cc, okC := readCorner(cur, true)
+	return okP && okC && joinIsG1(pc, cc)
+}
+
+// RestatedNearTangentCorner is NearTangentCorner with every off-radius arc
+// read about its RestatedCentre, as a cap-loop chamfer's admission reads it.
+// A corner whose arc admits no restated centre keeps the restatement refusal.
+func RestatedNearTangentCorner(prev, cur sectionrecord.CurveSegment, prevAmount, curAmount, amountDelta float64) (NearTangentCharge, string, string) {
+	pc, okP := readCorner(prev, true)
+	cc, okC := readCorner(cur, true)
+	if !okP || !okC {
+		return NearTangentCharge{}, restateRefusal, ""
+	}
+	return nearTangentCorner(pc, cc, prevAmount, curAmount, amountDelta)
+}
+
+// RestateRefusal is the reason an off-radius arc admits no restatement.
+const RestateRefusal = restateRefusal

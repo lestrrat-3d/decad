@@ -79,6 +79,27 @@ func InwardRange(w SideWalk, m PlacedFrameMap, pull r3.Vec, coef int64) (PullBra
 	return PullBracket{}, false
 }
 
+// WidenPullBracket widens every end of b for an inward normal that strays by
+// at most turn (a unit-vector distance) from the normals b ranges over: such
+// a normal moves coef·(û·pull) by at most turn·(|Du·pull| + |Dv·pull|), F's
+// plane holding û. A loop fillet's near-tangent corner reads it
+// (agent-docs/loop-fillet-design.md §5.5).
+func WidenPullBracket(b PullBracket, m PlacedFrameMap, pull r3.Vec, turn *big.Rat) (PullBracket, bool) {
+	pv, ok := proofbound.IvVec3Of(pull)
+	if !ok || turn == nil || turn.Sign() < 0 {
+		return PullBracket{}, false
+	}
+	reach := new(big.Rat)
+	for _, d := range []proofbound.RatInterval{proofbound.IvVec3Dot(m.Du, pv), proofbound.IvVec3Dot(m.Dv, pv)} {
+		reach.Add(reach, proofbound.RatMax(new(big.Rat).Abs(d.Lo), new(big.Rat).Abs(d.Hi)))
+	}
+	reach.Mul(reach, turn)
+	return PullBracket{
+		MinLo: new(big.Rat).Sub(b.MinLo, reach), MinHi: new(big.Rat).Add(b.MinHi, reach),
+		MaxLo: new(big.Rat).Sub(b.MaxLo, reach), MaxHi: new(big.Rat).Add(b.MaxHi, reach),
+	}, true
+}
+
 // inwardAt is the exact inward normal of w at its start (atEnd false) or end.
 func inwardAt(w SideWalk, atEnd bool) ([2]*big.Rat, bool) {
 	su, sv := proofarith.FloatRat(w.StartU), proofarith.FloatRat(w.StartV)

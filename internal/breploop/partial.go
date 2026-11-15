@@ -180,9 +180,17 @@ func (r *State) RewritePartialFillet(sel Sel, selected []bool, blends []*breprec
 			amounts[i] = r.Setback.Dc
 		}
 	}
-	fr, err := breprecord.FilletLoopOf(r.Budget, orig, r.Setback.Dc, f.Role, freeform.NewFreeformWork())
+	fr, err := breprecord.FilletLoopOf(r.Budget, orig, r.Setback.Dc, r.Setback.DcDelta, f.Role, freeform.NewFreeformWork())
 	if err != nil {
 		return breprecord.Payload{}, err
+	}
+	// A partial band charges no near-tangent reach, radial step or restated
+	// arc (agent-docs/loop-fillet-design.md §5.5), so a selection that
+	// touches one refuses.
+	for i, on := range selected {
+		if on && (fr.Loop.Charged(i) || fr.Loop.Charged((i+1)%len(selected))) {
+			return breprecord.Payload{}, r.Refuse("SL2", `a selected walk meets a near-tangent join or an arc whose recorded end is off its start's circle, which a partial loop does not charge`)
+		}
 	}
 	sphere := make([]bool, len(selected))
 	for i, on := range selected {

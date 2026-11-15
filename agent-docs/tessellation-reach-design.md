@@ -609,10 +609,12 @@ proof adds the corner charge `capblend.NearTangentVolume` to `volSymDiff` below;
 §9.1.1 states and proves it. A chamfer band moves every walk by its cap's `dc`, so the one-amount condition
 holds; its shell offset meets a convex sliver at the same corner and closes a reflex sliver with a connector arc,
 and §9.1.1's "On a cap-loop chamfer band" shows the same charge covers both (`capblend.Payload.cornerClass`).
-Neither a cap-loop fillet nor a loft-source band charges it, and a loop chamfered on both caps with two
-different setbacks takes the exact class. A route L band of a brep body (`brepbandmesh`) composes its own
-terms without the corner or restatement charge, so its admission (`capblend.ExactOccupiedVolumeAdmission`)
-keeps the exact class.
+Neither a fillet band's view (`capblend.Payload.Fillet`) nor a loft-source band charges it here, and a loop
+chamfered on both caps with two different setbacks takes the exact class. A route L chamfer band of a brep
+body (`brepbandmesh`) composes its own terms without the corner or restatement charge, so its admission
+(`capblend.ExactOccupiedVolumeAdmission`) keeps the exact class. A route L fillet band takes no admission
+here: `brepfilletmesh` meshes it and charges its own near-tangent joins (`agent-docs/loop-fillet-design.md`
+§5.5).
 
 A reflex corner (`cornerJoin.arc`) is not admitted. Every test is exact rational arithmetic over the record's
 own floats; none is a tolerance, so the predicate classifies the denoted geometry and never admits on a
@@ -770,7 +772,8 @@ Lemma 3 assumes `X′` stays a simple loop at the same clearance from the other 
 loop gates read for both. Nothing here proves it: the window gate bounds `Δ` only below the chord, so a very short
 restated arc beside another loop is the case it leaves open.
 
-A loop with no off-radius arc adds nothing. The 20 mm plate of the apitest below (two R4.5 corners and an R22
+A loop with no off-radius arc adds nothing. A complete-loop fillet reads the same restatement, shift and
+level-set perimeter for its strip (`agent-docs/loop-fillet-design.md` §5.6). The 20 mm plate of the apitest below (two R4.5 corners and an R22
 end arc, 8 mm thick, 0.5 mm chamfer) restates two arcs with `Δ ≈ 1.5·10⁻¹⁵` mm and `Perim ≈ 274` mm, so its
 `Noff` is near `7·10⁻¹²` mm³.
 

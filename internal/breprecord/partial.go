@@ -34,7 +34,7 @@ func attachPartialFilletBand(ctx context.Context, alloc topo.Alloc, body *topo.B
 	if err != nil {
 		return nil, bandMass{}, err
 	}
-	fr, err := FilletLoopOf(proofbound.NewWorkBudget(ctx), b.Orig, r, f.Role, work)
+	fr, err := FilletLoopOf(proofbound.NewWorkBudget(ctx), b.Orig, r, b.Setback.DcDelta, f.Role, work)
 	if err != nil {
 		return nil, bandMass{}, err
 	}
