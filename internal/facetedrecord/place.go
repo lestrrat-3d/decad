@@ -89,6 +89,12 @@ func ExactGroupPlaced(g *Group, q *exactrotation.Rotation, delta r3.Transform, v
 		g.Retained = false
 		return nil
 	}
+	if _, plane := source.(surfacegeom.Plane); plane && record == nil {
+		// A displacement stated with no record is relative to the tag alone.
+		// The float image of the tag keeps it, and its NormalBound states the
+		// image's own departure.
+		g.AxialDelta, g.HasAxialDelta = axial, hasAxial
+	}
 	switch source.(type) {
 	case surfacegeom.Plane, surfacegeom.Cylinder, surfacegeom.Cone, surfacegeom.Sphere, surfacegeom.Torus:
 	default:

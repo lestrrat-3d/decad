@@ -229,9 +229,14 @@ func (fp Payload) placedWithReplay(ctx context.Context, env topo.Env, composed r
 						next.Groups[i].NormalBound = min(2, proofbound.AbsSumUpper(fp.Groups[i].NormalBound, add))
 					}
 				}
-				next.Groups[i].CapRecord = next.Groups[i].CapRecord.Under(delta)
-				if next.Groups[i].CapRecord == nil {
-					next.Groups[i].AxialDelta, next.Groups[i].HasAxialDelta = 0, false
+				// A displacement stated with no record is relative to the tag
+				// alone and moves with it; one relative to a record is dropped
+				// with the record.
+				if next.Groups[i].CapRecord != nil {
+					next.Groups[i].CapRecord = next.Groups[i].CapRecord.Under(delta)
+					if next.Groups[i].CapRecord == nil {
+						next.Groups[i].AxialDelta, next.Groups[i].HasAxialDelta = 0, false
+					}
 				}
 				// Only a Plane normal is U x V, which a reflection negates.
 				if _, planar := tag.(surfacegeom.Plane); planar && delta.IsReflection() {

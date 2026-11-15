@@ -256,6 +256,17 @@ func TestExactGroupPlacedKeepsFixedPlane(t *testing.T) {
 		require.False(t, g.HasAxialDelta)
 	})
 
+	t.Run("a displacement stated with no record survives a charged placement", func(t *testing.T) {
+		t.Parallel()
+		g := group(tilted, nil)
+		g.HasAxialDelta = true
+		require.NoError(t, facetedrecord.ExactGroupPlaced(&g, q, delta, verts, 1e-9))
+		require.Positive(t, g.NormalBound)
+		require.Nil(t, g.CapRecord)
+		require.True(t, g.HasAxialDelta)
+		require.Equal(t, 1e-9, g.AxialDelta)
+	})
+
 	t.Run("a flat tag over a tilted record loses the record and keeps no bound 0", func(t *testing.T) {
 		t.Parallel()
 		g := group(frame, &topo.CapRecord{Frame: tilted, Xform: r3.Identity(), Z: 0})
