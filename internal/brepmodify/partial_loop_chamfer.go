@@ -171,7 +171,8 @@ func readChamferRuns(body *topo.Body, edges []*topo.Edge, exact bool) (runs []ch
 			}
 			rs, err := l.runs(sel)
 			if err != nil {
-				return nil, true, err
+				// A selection this route cannot take keeps the refusal the exact routes gave it.
+				return nil, false, nil
 			}
 			runs = append(runs, rs...)
 			for _, ce := range loop.CoEdges {
