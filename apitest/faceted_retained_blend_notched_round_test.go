@@ -320,11 +320,17 @@ func sharedBackSeed(xs ...float64) *decad.EdgeQuery {
 // where a row at radius rho sweeps asin(offset/rho) up to the ear's front face.
 // Ear A's front face is 1.5 from the round's axis and ear B's 1.
 func sharedRootFill(size, x float64) float64 {
-	n1 := notchedRoots[0]
 	offset := 1.5
 	if x > 20 {
 		offset = 1
 	}
+	return rootFill(size, offset)
+}
+
+// rootFill is the fill of a fillet of the given size at a side root whose ear's
+// front face lies offset from the round's axis.
+func rootFill(size, offset float64) float64 {
+	n1 := notchedRoots[0]
 	af := size * size * (1 - math.Pi/4)
 	return af*n1.lineLen + earRegion(n1.radius, 1, size, true, func(rho float64) float64 {
 		return rho * math.Asin(offset/rho)
@@ -336,6 +342,12 @@ func sharedRootFill(size, x float64) float64 {
 // whose held bound grew by the strips' own terms alone.
 func filletSharedRoots(t *testing.T, ears [][6]float64, groups ...[]float64) {
 	t.Helper()
+	filletRoots(t, ears, sharedRootFill, groups...)
+}
+
+// filletRoots is filletSharedRoots with the fill of each root given by fill.
+func filletRoots(t *testing.T, ears [][6]float64, fill func(size, x float64) float64, groups ...[]float64) {
+	t.Helper()
 	const size = 1.0
 	body := notchedBody(t, ears...)
 	volBefore, err := body.Volume()
@@ -344,7 +356,7 @@ func filletSharedRoots(t *testing.T, ears [][6]float64, groups ...[]float64) {
 	require.NoError(t, err)
 
 	roots := 0
-	fill := 0.0
+	filled := 0.0
 	var heldRun map[string]struct{}
 	for k, group := range groups {
 		seed := sharedBackSeed(group...)
@@ -352,7 +364,7 @@ func filletSharedRoots(t *testing.T, ears [][6]float64, groups ...[]float64) {
 		require.NoError(t, err, "group %d", k)
 		roots += len(group)
 		for _, x := range group {
-			fill += sharedRootFill(size, x)
+			filled += fill(size, x)
 		}
 		if k == 0 {
 			heldRun = backPlaneVertices(t, body)
@@ -362,7 +374,7 @@ func filletSharedRoots(t *testing.T, ears [][6]float64, groups ...[]float64) {
 	n1 := notchedRoots[0]
 	volAfter, err := body.Volume()
 	require.NoError(t, err)
-	requireVolumeChange(t, volBefore, volAfter, -fill)
+	requireVolumeChange(t, volBefore, volAfter, -filled)
 
 	cylinders, tori, majors := blendKinds(body, size)
 	require.Equal(t, roots, cylinders)
@@ -437,22 +449,20 @@ func TestFacetedRetainedBlendSharedBackPlane(t *testing.T) {
 		t.Parallel()
 		filletSharedRoots(t, both, []float64{4}, []float64{12}, []float64{22}, []float64{30})
 	})
+	t.Run("ears 1.5 apart on one plane", func(t *testing.T) {
+		t.Parallel()
+		// The facing sides lie 1.5 apart. The mesh joins the blend's corner on the
+		// back plane to the other ear's corner by a facet edge along the plane, and
+		// the band's generator cuts that edge: the cut lies on the plane because
+		// both ends of the edge do, by the tags of their faces. The band ends 0.5
+		// short of the other ear.
+		filletSharedRoots(t, [][6]float64{earBoxA, {13.5, 2, 21.5, 13.5, -6, 1}}, []float64{12})
+	})
 }
 
 func TestFacetedRetainedBlendSharedBackPlaneRefusals(t *testing.T) {
 	t.Parallel()
 
-	t.Run("ears 1.5 apart on one plane", func(t *testing.T) {
-		t.Parallel()
-		// The facing sides lie 1.5 apart. The mesh joins the blend's corner on the
-		// back plane to the other ear's corner by a facet edge along the plane, the
-		// band's generator cuts that edge, and the cut lies on the plane within its
-		// bound: no band plane decides it.
-		body := notchedBody(t, earBoxA, [6]float64{13.5, 2, 21.5, 13.5, -6, 1})
-		_, err := decad.Fillet(t.Context(), body, sharedBackSeed(12), units.Millimeters(1), decad.WithTangentChain())
-		require.ErrorIs(t, err, decad.ErrUnsupported)
-		require.ErrorContains(t, err, "a vertex of the wall lies on an end face's plane")
-	})
 	t.Run("the same root twice", func(t *testing.T) {
 		t.Parallel()
 		body := notchedBody(t, earBoxA, earBoxB)
@@ -463,5 +473,118 @@ func TestFacetedRetainedBlendSharedBackPlaneRefusals(t *testing.T) {
 			decad.WithTangentChain())
 		require.ErrorIs(t, err, decad.ErrNoMatch)
 		require.ErrorContains(t, err, "matched 0 edges")
+	})
+}
+
+// Ears whose front faces and back faces both share planes: a facet edge of the
+// round runs along an end plane from one ear's corner to the next ear's, and the
+// band's setback plane cuts that edge. Each ear's corners lie on the end plane
+// by their own faces' tags, which equal the blend's end plane exactly, and the
+// cut inherits the plane from the edge's two ends
+// (agent-docs/retained-edge-blend-design.md §4.3).
+var (
+	// earBoxFlush is earBoxA's twin, whose front face lies in the plane y = 1.5
+	// too, 10 away.
+	earBoxFlush = [6]float64{22, 1.5, 30, 13.5, -6, 1}
+	flushEars   = [][6]float64{earBoxA, earBoxFlush}
+)
+
+// flushRootFill is the fill of a root whose ear's front face lies 1.5 from the
+// round's axis.
+func flushRootFill(size, _ float64) float64 { return rootFill(size, 1.5) }
+
+func TestFacetedRetainedBlendSharedEndPlanes(t *testing.T) {
+	t.Parallel()
+
+	for _, c := range []struct {
+		name   string
+		ears   [][6]float64
+		groups [][]float64
+	}{
+		{"one ear's side root", flushEars, [][]float64{{12}}},
+		{"the other ear's side root", flushEars, [][]float64{{22}}},
+		{"each outer side root", flushEars, [][]float64{{4}}},
+		{"all four side roots in one call", flushEars, [][]float64{{4, 12, 22, 30}}},
+		{"facing side roots 3.5 apart in one call", [][6]float64{earBoxA, {15.5, 1.5, 23.5, 13.5, -6, 1}},
+			[][]float64{{12, 15.5}}},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			filletRoots(t, c.ears, flushRootFill, c.groups...)
+		})
+	}
+}
+
+func TestFacetedRetainedBlendSharedEndPlanesRefusals(t *testing.T) {
+	t.Parallel()
+
+	const (
+		plane   = "a vertex of the wall lies on an end face's plane"
+		earlier = "an earlier cut on an end face's plane lies within the blend's reach"
+	)
+	// refuses fillets the groups of roots in turn and requires the last call to
+	// refuse with text, the earlier ones to build.
+	refuses := func(t *testing.T, body *decad.Body, text string, groups ...[]float64) {
+		t.Helper()
+		var err error
+		for k, group := range groups {
+			body, err = decad.Fillet(t.Context(), body, sharedBackSeed(group...), units.Millimeters(1),
+				decad.WithTangentChain())
+			if k < len(groups)-1 {
+				require.NoError(t, err, "group %d", k)
+			}
+		}
+		require.ErrorIs(t, err, decad.ErrUnsupported)
+		require.ErrorContains(t, err, text)
+	}
+	// A vertex that the blend itself made on the plane lies on it within its
+	// bound, and no face's tag says so: it is not read as on the plane.
+	t.Run("a later blend's facing root on the first blend's cut", func(t *testing.T) {
+		t.Parallel()
+		refuses(t, notchedBody(t, flushEars...), plane, []float64{12}, []float64{22})
+	})
+	t.Run("a round vertex within its bound of the plane that the cut leaves undecided", func(t *testing.T) {
+		t.Parallel()
+		// 1.5 apart on both planes: a vertex of the round beside the other ear's
+		// corner lies 0.003 from the front plane, and the band's cut of the edge
+		// to it lies on the plane within that bound.
+		refuses(t, notchedBody(t, earBoxA, [6]float64{13.5, 1.5, 21.5, 13.5, -6, 1}), plane, []float64{12})
+	})
+	t.Run("facing roots whose bands overlap", func(t *testing.T) {
+		t.Parallel()
+		// The second root's band starts 0.5 inside the first blend's setback, on
+		// the back plane both ears share.
+		ears := [][6]float64{earBoxA, {13.5, 2, 21.5, 13.5, -6, 1}}
+		refuses(t, notchedBody(t, ears...), earlier, []float64{12}, []float64{13.5})
+	})
+	t.Run("facing roots whose bands overlap on shared planes in one call", func(t *testing.T) {
+		t.Parallel()
+		refuses(t, notchedBody(t, earBoxA, [6]float64{13.5, 1.5, 21.5, 13.5, -6, 1}), earlier, []float64{12, 13.5})
+	})
+	t.Run("a hole in the round inside the band on shared planes", func(t *testing.T) {
+		t.Parallel()
+		w, doc := sketch.NewWorld(), decad.New(decad.WithChainTolerance(units.Millimeters(0.1)))
+		body, err := decad.Cut(t.Context(), notchedBlock(t, w, doc, flushEars...),
+			zCylinderAt(t, &retentionScene{w: w, doc: doc}, 12.5, 2.2, 0.3, -1, 5))
+		require.NoError(t, err)
+		_, err = decad.Fillet(t.Context(), body, sharedBackSeed(12), units.Millimeters(1), decad.WithTangentChain())
+		require.ErrorIs(t, err, decad.ErrUnsupported)
+		require.ErrorContains(t, err, "another part of the wall lies within the blend's reach of the edge")
+	})
+	t.Run("a back face one float step off the end plane is not on it", func(t *testing.T) {
+		t.Parallel()
+		// The same ears 1.5 apart as the build above, but the second ear's back
+		// face lies one float step off y = 13.5: its tag is not the blend's end
+		// plane, so its corner on the plane's edge is not read as on it.
+		for _, y := range []float64{13.5, math.Nextafter(13.5, 14), math.Nextafter(13.5, 13)} {
+			body := notchedBody(t, earBoxA, [6]float64{13.5, 2, 21.5, y, -6, 1})
+			_, err := decad.Fillet(t.Context(), body, sharedBackSeed(12), units.Millimeters(1), decad.WithTangentChain())
+			if y == 13.5 {
+				require.NoError(t, err)
+				continue
+			}
+			require.ErrorIs(t, err, decad.ErrUnsupported)
+			require.ErrorContains(t, err, plane)
+		}
 	})
 }

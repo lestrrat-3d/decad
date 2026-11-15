@@ -73,6 +73,7 @@ func rewriteArc(ctx context.Context, env topo.Env, fp facetedrecord.Payload, a a
 		return nil, err
 	}
 	w := newWork(fp, a.rim, spec)
+	w.faceIx = faceIndex
 	slack := a.slack()
 	margin := w.tau + slack
 	n := a.n

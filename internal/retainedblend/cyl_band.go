@@ -246,6 +246,25 @@ func (b *wallBand) chordPlane(u, v bandPt) int {
 	return -1
 }
 
+// alongBoth is a band plane other than q that both held points lie on, or -1.
+// A cut of a held edge whose two ends lie on a plane lies on it too: by the
+// facet's claim the point lies within its facet bound of the affine segment
+// between the ends' true points, which lies on the plane, and the bound the cut
+// carries covers it. Only a band with an exact main plane (the arc and the
+// chain routes) reads it; the angle-main band of R3 keeps its rule.
+func (b *wallBand) alongBoth(u, v bandPt, q int) int {
+	if b.main == nil {
+		return -1
+	}
+	of := b.planesOf(v)
+	for _, p := range b.planesOf(u) {
+		if p != q && slices.Contains(of, p) {
+			return p
+		}
+	}
+	return -1
+}
+
 // crossing is the point where plane q crosses the polygon edge uv, whose ends
 // lie on opposite sides of it. On a held facet edge the point is read from
 // the edge's two held vertices, so the facets on either side of the edge make
@@ -275,7 +294,7 @@ func (b *wallBand) crossing(u, v bandPt, q int, facetBound float64) (bandPt, err
 		// The point lies on the held facet, which claims its true piece of the
 		// curved wall within its facet bound, the largest of its three
 		// corners'; the edge's two ends alone do not carry that claim.
-		return bandPt{p: p, id: -1, edge: e, planes: [2]int{q, -1},
+		return bandPt{p: p, id: -1, edge: e, planes: [2]int{q, b.alongBoth(a, c, q)},
 			bound: max(a.bound, c.bound, facetBound) + b.slack + b.w.tau}, nil
 	}
 	along := b.chordPlane(u, v)
@@ -363,7 +382,10 @@ func (w *work) cutBand(f faceLoops, b *wallBand) (bandCuts, error) {
 				pt.id = id
 				return nil
 			}
-			if id, ok := w.cuts[pt.edge]; ok && pt.planes[0] == bandGen {
+			// A cut of the main plane on a held edge along an end plane is the band's
+			// corner there: the cuts of the wall's row do not hold it.
+			corner := pt.planes[0] == bandGen && isEnd(pt.planes[1])
+			if id, ok := w.cuts[pt.edge]; ok && pt.planes[0] == bandGen && !corner {
 				// The wall beside this one already cut the edge they share: the
 				// two walls' strips meet at that one vertex.
 				pt.id = id
@@ -372,15 +394,31 @@ func (w *work) cutBand(f faceLoops, b *wallBand) (bandCuts, error) {
 			}
 			pt.id = w.vertex(pt.p, pt.bound)
 			edgePts[k] = pt.id
-			if pt.planes[0] == bandGen {
+			if pt.planes[0] == bandGen && !corner {
 				w.cuts[pt.edge] = pt.id
-				if b.noteCuts {
-					w.noteCut(pt.id, facetBound)
+			}
+			if pt.planes[1] >= 0 {
+				if w.seam == nil {
+					w.seam = map[[2]int][]int{}
 				}
+				w.seam[pt.edge] = append(w.seam[pt.edge], pt.id)
+			}
+			if corner {
+				i := pt.planes[1] - bandEnd0
+				if out.corner[i] >= 0 {
+					return fmt.Errorf("%w: a corner of the blend's band lies on a wall facet's edge", decaderr.ErrUnsupported)
+				}
+				out.corner[i] = pt.id
+			}
+			if pt.planes[0] == bandGen && b.noteCuts {
+				w.noteCut(pt.id, facetBound)
 			}
 			return nil
 		}
 		if _, ok := corners[pt.planes]; ok {
+			return fmt.Errorf("%w: a corner of the blend's band lies on a wall facet's edge", decaderr.ErrUnsupported)
+		}
+		if pt.planes[0] == bandGen && isEnd(pt.planes[1]) && out.corner[pt.planes[1]-bandEnd0] >= 0 {
 			return fmt.Errorf("%w: a corner of the blend's band lies on a wall facet's edge", decaderr.ErrUnsupported)
 		}
 		pt.id = w.vertex(pt.p, pt.bound)
@@ -565,6 +603,7 @@ func (w *work) keepOutside(t [3]int, group int, in []bandPt, b *wallBand, out *b
 		chord[k] = !onEdge
 		crosses = crosses || chord[k]
 	}
+	b.noteBoundaryRuns(in, chord, out)
 	if !crosses {
 		for _, pt := range in {
 			if !pt.held {
@@ -677,6 +716,33 @@ func (w *work) keepOutside(t [3]int, group int, in []bandPt, b *wallBand, out *b
 		}
 	}
 	return nil
+}
+
+// noteBoundaryRuns records the polygon edges that lie on the facet's own
+// boundary and along an end plane, whose two ends both lie on it: a held edge
+// along the plane inside the band is part of the cut along the plane, as a chord
+// inside the facet is. Only a band with an exact main plane reads it.
+func (b *wallBand) noteBoundaryRuns(in []bandPt, chord []bool, out *bandCuts) {
+	if b.main == nil {
+		return
+	}
+	n := len(in)
+	for k := range n {
+		if chord[k] {
+			continue
+		}
+		p := b.chordPlane(in[k], in[(k+1)%n])
+		if !isEnd(p) {
+			continue
+		}
+		x, y := in[k].id, in[(k+1)%n].id
+		g := out.runs[p-bandEnd0]
+		if x == y || slices.Contains(g[x], y) {
+			continue
+		}
+		g[x] = append(g[x], y)
+		g[y] = append(g[y], x)
+	}
 }
 
 // endRun is the cut along extending end i's plane, from the corner where the

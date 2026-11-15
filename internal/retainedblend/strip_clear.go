@@ -91,7 +91,10 @@ func (w *work) checkStripClear(ctx context.Context, stripFrom int, taken [][2]in
 			held = append(held, t)
 		}
 	}
+	// A facet that keeps a held edge a band cut a vertex on meets the strip at
+	// that vertex until it is split (splitSeams), as build splits it.
 	rest := append(append(make([][3]int, 0, len(held)+stripFrom), held...), w.out[:stripFrom]...)
+	rest, _ = w.splitSeams(rest, nil)
 	if err := w.clearOf(ctx, w.out[stripFrom:], rest, "the blend", "the blend's", nil); err != nil {
 		return err
 	}
@@ -105,6 +108,7 @@ func (w *work) checkStripClear(ctx context.Context, stripFrom int, taken [][2]in
 	for _, r := range taken {
 		rest := append(append(append(make([][3]int, 0, len(held)+stripFrom), held...), w.out[:r[0]]...),
 			w.out[r[1]:stripFrom]...)
+		rest, _ = w.splitSeams(rest, nil)
 		if err := w.clearOf(ctx, w.out[r[0]:r[1]], rest, "the cap an end face takes", "the taken cap's",
 			made); err != nil {
 			return err

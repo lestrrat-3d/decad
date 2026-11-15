@@ -1,6 +1,7 @@
 package retainedblend
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"maps"
@@ -387,6 +388,7 @@ func (w *work) build(ctx context.Context, env topo.Env, groups []facetedrecord.G
 	}
 	facets = append(facets, w.out...)
 	src = append(src, w.outSrc...)
+	facets, src = w.splitSeams(facets, src)
 
 	verts, beta, facets := compact(w.verts, w.beta, facets)
 	meshBound := facetproof.FacetBoundMax(facets, beta)
@@ -405,6 +407,52 @@ func (w *work) build(ctx context.Context, env topo.Env, groups []facetedrecord.G
 		ExactPlaced: fp.ExactPlaced,
 	}
 	return buildCharged(ctx, env, next, oldGeom)
+}
+
+// splitSeams (src may be nil) splits every facet that keeps a held edge a band cut made a vertex
+// on along an end plane (w.seam), of any face and whether the cut emitted it
+// unchanged or the mesh kept it: the facet is fanned from its opposite corner
+// through the vertices on the edge, in order along it. The vertex lies on the
+// held edge within its bound, so the facet's region and claims do not change;
+// without the split the facet meets the strip across a T-junction.
+func (w *work) splitSeams(facets [][3]int, src []int) ([][3]int, []int) {
+	if len(w.seam) == 0 {
+		return facets, src
+	}
+	var outF [][3]int
+	var outS []int
+	var split func(t [3]int, s int)
+	split = func(t [3]int, s int) {
+		for k := range 3 {
+			a, b, c := t[k], t[(k+1)%3], t[(k+2)%3]
+			ids := w.seam[[2]int{min(a, b), max(a, b)}]
+			if len(ids) == 0 {
+				continue
+			}
+			dir := w.verts[b].Sub(w.verts[a])
+			pts := slices.Clone(ids)
+			slices.SortFunc(pts, func(x, y int) int {
+				return cmp.Compare(w.verts[x].Sub(w.verts[a]).Dot(dir), w.verts[y].Sub(w.verts[a]).Dot(dir))
+			})
+			pts = append(append([]int{a}, pts...), b)
+			for j := range len(pts) - 1 {
+				split([3]int{pts[j], pts[j+1], c}, s)
+			}
+			return
+		}
+		outF, outS = append(outF, t), append(outS, s)
+	}
+	for i, t := range facets {
+		s := 0
+		if src != nil {
+			s = src[i]
+		}
+		split(t, s)
+	}
+	if src == nil {
+		outS = nil
+	}
+	return outF, outS
 }
 
 // buildCharged builds the rewritten body from next and charges the shortfall
