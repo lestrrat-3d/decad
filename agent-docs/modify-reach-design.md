@@ -1299,7 +1299,12 @@ the material):
    cutter lofts the first one's two rings at the other cap. Its records match the first cutter's bit for bit, so it
    takes the first cutter's area falsifiers and pairing from `loftrecord.PairingReuse`. It runs again only the
    coplanar-plane gate (loft S5) and the build steps that read the planes.
-3. `Cut` removes it. The cut's result is held as a mesh, so its readings and bounds are the Boolean's own.
+3. One `Cut` removes it, and with both rims selected one `Cut` removes both: the two cutters lie at the two ends
+   of the sweep and touch nothing, so their `Union` is one tool that holds both. Two `Cut`s would cross the second
+   rim's wall facets after the first had left them carrying its rim bound. Each rim crosses the wall at 45°, which
+   amplifies the bound it meets, and the wall's facets run the whole sweep, so the second rim would read about
+   twice the first's bound. One `Cut` meets fresh wall facets at every rim and holds the one-rim bound. The cut's
+   result is held as a mesh, so its readings and bounds are the Boolean's own.
 
 Which `o` and `scale` build depends on the shape. `rimAttempts` tries `(0.5d, 1.5)`, then `(0.35d, 1.5)` for a
 Boolean that refuses a cutter close to the receiver's edges, then circles of 2 and 3 times for a loft whose

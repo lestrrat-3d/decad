@@ -108,11 +108,10 @@ func cutRims(ctx context.Context, env topo.Env, hooks Hooks, body *topo.Body, pp
 		used++
 		return step
 	}
-	out := body
-	var warnings opdiagnostic.CompositeSummaries
 	// Every rim's cutter lofts the same two rings, so a later rim's cutter reads
 	// the first one's record-only work (loftrecord.PairingReuse).
 	reuse := new(loftrecord.PairingReuse)
+	cutters := make([]*topo.Body, 0, len(rims))
 	for _, r := range rims {
 		// The cutter runs from the level beyond the cap, where its hole is the deepest offset, to the level
 		// beyond the bevel's far edge, where its hole is the outline pushed outward.
@@ -124,11 +123,27 @@ func cutRims(ctx context.Context, env topo.Env, hooks Hooks, body *topo.Body, pp
 		if err != nil {
 			return nil, used, true, err
 		}
-		if out, err = hooks.Boolean(ctx, meshbool.OpCut, next(), out, cutter); err != nil {
+		cutters = append(cutters, cutter)
+	}
+	// One Cut removes every rim. A Cut per rim would cross the second rim's wall facets after the first Cut left
+	// them carrying its rim bound, and each rim crosses the wall at 45°, which amplifies the bound it meets. The
+	// cutters lie at the two ends of the sweep and touch nothing of each other, so their Union only holds both.
+	tool := cutters[0]
+	if len(cutters) > 1 {
+		var err error
+		if tool, err = hooks.Boolean(ctx, meshbool.OpUnion, next(), cutters[0], cutters[1]); err != nil {
 			return nil, used, true, err
 		}
-		warnings.Add(out.OperationWarnings, 0)
 	}
+	out, err := hooks.Boolean(ctx, meshbool.OpCut, next(), body, tool)
+	if err != nil {
+		return nil, used, true, err
+	}
+	var warnings opdiagnostic.CompositeSummaries
+	if tool != cutters[0] {
+		warnings.Add(tool.OperationWarnings, 0)
+	}
+	warnings.Add(out.OperationWarnings, 0)
 	out.OperationWarnings = warnings.Records()
 	return out, used, false, ctx.Err()
 }

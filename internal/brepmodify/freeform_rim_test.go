@@ -27,16 +27,18 @@ import (
 // The real rim cutter builder runs in both cases. The Boolean hook supplies
 // bounded accepted-step summaries to test their transport independently of
 // which repairs a particular cutter's contact arrangement happens to require.
-func TestCutRimsAggregatesOnlyAnAcceptedAttempt(t *testing.T) {
+// Both rims are one Cut of the two cutters' Union, so a Cut never meets the
+// facets another rim's Cut left.
+func TestCutRimsCutsBothRimsOnceAndAggregatesOnlyAnAcceptedAttempt(t *testing.T) {
 	t.Parallel()
 	frame, err := r3.NewFrame(r3.Vec{}, r3.Vec{X: 1}, r3.Vec{Y: 1})
 	require.NoError(t, err)
 	pp := prismrecord.Payload{Profile: momentinput.Profile{Outer: rimWarningCircle()},
 		Frame: frame, Z0: 0, Z1: 10, Xform: r3.Identity()}
-	refusal := errors.New("the second private Cut refused")
-	for _, failSecond := range []bool{false, true} {
-		name := "both accepted"
-		if failSecond {
+	refusal := errors.New("the private Cut refused")
+	for _, failCut := range []bool{false, true} {
+		name := "accepted"
+		if failCut {
 			name = "later failure"
 		}
 		t.Run(name, func(t *testing.T) {
@@ -44,33 +46,36 @@ func TestCutRimsAggregatesOnlyAnAcceptedAttempt(t *testing.T) {
 			source := &topo.Body{OperationWarnings: []opdiagnostic.Record{
 				{Code: opdiagnostic.CodeStitchMergeApplied, DisplacementBound: 8},
 			}}
-			calls := 0
+			var ops []meshbool.OperationKind
 			hooks := Hooks{Boolean: func(_ context.Context, op meshbool.OperationKind,
-				_ topo.Env, _, tool *topo.Body) (*topo.Body, error) {
-				calls++
-				require.Equal(t, meshbool.OpCut, op)
+				_ topo.Env, receiver, tool *topo.Body) (*topo.Body, error) {
+				ops = append(ops, op)
 				require.True(t, tool.Solid)
 				require.Positive(t, tool.Volume.Value.Base())
-				if failSecond && calls == 2 {
+				if op == meshbool.OpUnion {
+					// The Union of two cutters is one solid that holds both.
+					require.True(t, receiver.Solid)
+					return &topo.Body{Solid: true, Volume: tool.Volume, OperationWarnings: []opdiagnostic.Record{{
+						Code: opdiagnostic.CodeGapShiftApplied, Operand: 1, DisplacementBound: 0.0005, AllowedReach: 0.01,
+					}}}, nil
+				}
+				require.Equal(t, meshbool.OpCut, op)
+				require.Same(t, source, receiver)
+				if failCut {
 					return nil, refusal
 				}
 				return &topo.Body{OperationWarnings: []opdiagnostic.Record{{
 					Code: opdiagnostic.CodeGapShiftApplied, Operand: 1,
-					DisplacementBound: float64(calls) * 0.001, AllowedReach: 0.01,
+					DisplacementBound: 0.001, AllowedReach: 0.01,
 				}}}, nil
 			}}
 			out, used, retry, err := cutRims(t.Context(), env, hooks, source, pp,
 				[]rim{{start: true}, {start: false}}, 0.5, rimAttempts[len(rimAttempts)-1], 0)
-			if failSecond {
-				require.ErrorIs(t, err, refusal)
-			} else {
-				require.NoError(t, err)
-			}
-			require.Equal(t, 2, calls)
-			require.Equal(t, 4, used)
+			require.Equal(t, []meshbool.OperationKind{meshbool.OpUnion, meshbool.OpCut}, ops, "both rims are one Cut")
+			require.Equal(t, 4, used, "two cutters, their Union and the Cut")
 			require.Len(t, source.OperationWarnings, 1)
 			require.Equal(t, opdiagnostic.CodeStitchMergeApplied, source.OperationWarnings[0].Code)
-			if failSecond {
+			if failCut {
 				require.ErrorIs(t, err, refusal)
 				require.Nil(t, out)
 				require.True(t, retry)
@@ -82,10 +87,31 @@ func TestCutRimsAggregatesOnlyAnAcceptedAttempt(t *testing.T) {
 			warning := out.OperationWarnings[0]
 			require.Equal(t, opdiagnostic.CodeGapShiftApplied, warning.Code)
 			require.Equal(t, -1, warning.Operand)
-			require.GreaterOrEqual(t, warning.DisplacementBound, 0.003)
-			require.Less(t, warning.DisplacementBound, 0.0031)
+			require.GreaterOrEqual(t, warning.DisplacementBound, 0.0015)
+			require.Less(t, warning.DisplacementBound, 0.0016)
 		})
 	}
+}
+
+// A single rim is one Cut of its own cutter, with no Union.
+func TestCutRimsCutsOneRimWithoutAUnion(t *testing.T) {
+	t.Parallel()
+	frame, err := r3.NewFrame(r3.Vec{}, r3.Vec{X: 1}, r3.Vec{Y: 1})
+	require.NoError(t, err)
+	pp := prismrecord.Payload{Profile: momentinput.Profile{Outer: rimWarningCircle()},
+		Frame: frame, Z0: 0, Z1: 10, Xform: r3.Identity()}
+	env := topo.Env{Doc: &topo.Document{}, Ref: 3, Alloc: topotest.Alloc{}}
+	var ops []meshbool.OperationKind
+	hooks := Hooks{Boolean: func(_ context.Context, op meshbool.OperationKind,
+		_ topo.Env, _, _ *topo.Body) (*topo.Body, error) {
+		ops = append(ops, op)
+		return &topo.Body{}, nil
+	}}
+	_, used, _, err := cutRims(t.Context(), env, hooks, &topo.Body{}, pp,
+		[]rim{{start: false}}, 0.5, rimAttempts[len(rimAttempts)-1], 0)
+	require.NoError(t, err)
+	require.Equal(t, []meshbool.OperationKind{meshbool.OpCut}, ops)
+	require.Equal(t, 2, used)
 }
 
 func rimWarningCircle() sectionrecord.LoopRecord {
