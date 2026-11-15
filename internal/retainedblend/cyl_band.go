@@ -292,7 +292,10 @@ func (b *wallBand) signRead(pt *bandPt, q int, v float64) (int, bool) {
 	if !e.planarWall {
 		bound = proofbound.AbsSumUpper(beta, bound)
 	}
-	if near, ok := b.setbackBound(pt.p, beta); ok {
+	// Only a cut point on the setback plane takes the cap: a held vertex keeps the facets
+	// that run down the wall from it, and their points lie farther from the true result
+	// than the vertex does (setbackBound).
+	if near, ok := b.setbackBound(pt.p, beta); ok && !pt.held && (pt.planes[0] == bandGen || pt.planes[1] == bandGen) {
 		bound = min(bound, near)
 	}
 	s := 0

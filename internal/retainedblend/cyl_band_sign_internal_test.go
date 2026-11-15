@@ -443,36 +443,25 @@ func TestSetbackBoundCoversSetbackLine(t *testing.T) {
 	require.GreaterOrEqual(t, worst, 0.99, "the bound is tight")
 }
 
-// TestSignReadPublishesTheSmallerOfSlantAndSetback reads a held vertex 0.0015 from an
-// end plane the wall meets at sine 0.3, where the slant bound c/s is 0.0083, and d from
-// the setback plane. Close to the setback plane its distance to the line is the bound
-// (0.004 at d = 0.003); far from it the slant bound is. A band with no lean from the
-// tags keeps the slant bound, as before.
-func TestSignReadPublishesTheSmallerOfSlantAndSetback(t *testing.T) {
+// TestSignReadKeepsSlantBoundForHeldVertices reads a held vertex 0.0015 from an end plane
+// the wall meets at sine 0.3, d from the setback plane. A held vertex keeps its facets
+// down the wall, whose points lie farther from the true result than the vertex does
+// from the setback line, so it publishes the slant bound c/s however close it is to the
+// plane, with or without a lean from the tags.
+func TestSignReadKeepsSlantBoundForHeldVertices(t *testing.T) {
 	t.Parallel()
 
 	const s, beta, off = 0.3, 0.001, 0.0015
 	slant := (beta + off) / s
-	for _, c := range []struct {
-		name string
-		d    float64
-		lean bool
-		want float64
-	}{
-		{name: "close to the setback plane", d: 0.003, lean: true, want: beta + 0.003},
-		{name: "far from the setback plane", d: 0.02, lean: true, want: slant},
-		{name: "no lean from the tags", d: 0.003, lean: false, want: slant},
-	} {
-		t.Run(c.name, func(t *testing.T) {
-			t.Parallel()
-			w, b, f := setbackBand(s, 0, r3.NewVec(1-c.d, off/s, 0), r3.NewVec(0.6, 2, 0), r3.NewVec(0.7, 4, 0))
-			b.leanOK = c.lean
+	for _, d := range []float64{0.003, 0.02} {
+		for _, lean := range []bool{true, false} {
+			w, b, f := setbackBand(s, 0, r3.NewVec(1-d, off/s, 0), r3.NewVec(0.6, 2, 0), r3.NewVec(0.7, 4, 0))
+			b.leanOK = lean
 			cuts, err := w.cutBand(f, b)
 			require.NoError(t, err)
 			require.True(t, cuts.removed[0], "the vertex is read inside the band on the side of its offset")
-			require.InDelta(t, c.want, w.beta[0], 1e-9)
-			require.Less(t, 0.001, w.beta[0])
-		})
+			require.InDelta(t, slant, w.beta[0], 1e-9, "d %v lean %v", d, lean)
+		}
 	}
 }
 
@@ -533,4 +522,24 @@ func TestCutBoundCoversTrueSetbackLineAfterSignRead(t *testing.T) {
 	require.Positive(t, rows)
 	require.Greater(t, worst, 0.1)
 	t.Logf("rows %d worst ratio %.4f", rows, worst)
+}
+
+// TestCutTakesTheFacetsLargestInputBound gives the corner opposite the cut edge a larger
+// input bound: the cut carries the facet's bound, the largest of its three corners'
+// input bounds, not just its edge's two. Drop the facet term and it reads 0.002.
+func TestCutTakesTheFacetsLargestInputBound(t *testing.T) {
+	t.Parallel()
+
+	w, b, f := flatBand(r3.NewVec(0.5, 1, 0), r3.NewVec(1.5, 1, 0), r3.NewVec(0.7, 4, 0))
+	w.beta[2], w.fp.VertexBound[2] = 0.003, 0.003
+	_, err := w.cutBand(f, b)
+	require.NoError(t, err)
+	found := false
+	for id := 3; id < len(w.verts); id++ {
+		if p := w.verts[id]; math.Abs(p.X-1) < 1e-12 && math.Abs(p.Y-1) < 1e-12 {
+			found = true
+			require.InDelta(t, 0.004, w.beta[id], 1e-12)
+		}
+	}
+	require.True(t, found)
 }
