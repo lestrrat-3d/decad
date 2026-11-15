@@ -98,6 +98,19 @@ func TestCapBlendCapMotionReflexConnector(t *testing.T) {
 			require.Less(t, motion[k], 1e-12, `station %d`, k)
 		}
 	})
+	t.Run("restatement shift that swamps the margin refuses", func(t *testing.T) {
+		t.Parallel()
+		in := connectorFixture([2]float64{30, 60})
+		in.RestateShift = 0.5
+		motion := connectorMotion(t, in)
+		for _, k := range []int{1, 2, 3} {
+			require.True(t, math.IsInf(motion[k], 1), `station %d`, k)
+		}
+		in.RestateShift = 1e-12
+		for _, k := range []int{1, 2, 3} {
+			require.Less(t, connectorMotion(t, in)[k], 1e-6, `station %d`, k)
+		}
+	})
 	t.Run("junction bound that swamps the margin refuses", func(t *testing.T) {
 		t.Parallel()
 		in := connectorFixture([2]float64{30, 60})

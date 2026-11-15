@@ -688,7 +688,7 @@ every station lies inside it and the stations are strictly increasing. Each test
 held floats (`big.Rat`), and it passes only when `s·cross` exceeds the change the operands' own displacements can
 make to it: for vectors `u`, `w` displaced by at most `e_u`, `e_w`, that is `e_u·|w| + e_w·|u| + e_u·e_w`. An
 interior station's displacement is the junction's bound (the angle of `p_k` about the denoted `V'` is all the
-projection reads), and `PA`, `PB` carry `band.delta` beside it, because they stand for the exact feet. The check
+projection reads), and `PA`, `PB` carry `band.delta` beside it, because they stand for the exact feet. A chamfer band's restatement shift (§7.1, `capband.OffRadiusLoop`) is added to every operand's displacement, since the restated section moves each station and the junction by at most that shift. The check
 can only refuse: a held loop is admitted only with margin, never on a residual, so a degenerate window (a cusp,
 a station crossing a neighbour) refuses and never composes. The held sample angles run monotonically by
 construction (`circleStation`), so the check fails in practice only for a hand-built or degenerate record.

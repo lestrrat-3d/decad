@@ -117,7 +117,16 @@ func connectorOrdered(in CapBlendMotionInput, i, start int, miter, eV float64) b
 		errs[k] = eV
 	}
 	pts[m] = in.CapPts[next]
-	endErr := proofbound.AbsSumUpper(miter, eV)
+	// A chamfer band restates an off-radius arc about its bisector centre
+	// (agent-docs/tessellation-reach-design.md §7.1), so B1' stands on the
+	// restated section and every station, the junction included, may sit
+	// RestateShift from where the held record places it. The shift is
+	// charged to every operand of the cross tests, the ends and the interior
+	// stations alike, so the order is proven for the restated geometry too.
+	for k := range errs {
+		errs[k] = proofbound.AbsSumUpper(errs[k], in.RestateShift)
+	}
+	endErr := proofbound.AbsSumUpper(miter, errs[0])
 	errs[0], errs[m] = endErr, endErr
 	type vec struct {
 		x, y *big.Rat
@@ -197,7 +206,8 @@ func CapBlendConnectorVolume(bandHeight [2]float64, in CapBlendMotionInput, capP
 				distanceUpper(capPts[a], capPts[b]),
 				capMotion[a], capMotion[b])
 			cube := proofbound.ProductUpper(c, proofbound.ProductUpper(c, c))
-			slice = proofbound.AbsSumUpper(slice, proofbound.UpRound(proofbound.ProductUpper(32.0, cube)/(96*rhoLo)))
+			// The denominator is rounded down so the quotient rounds strictly up.
+			slice = proofbound.AbsSumUpper(slice, proofbound.DivUpper(proofbound.ProductUpper(32.0, cube), proofarith.NextDown(96*rhoLo)))
 		}
 	}
 	total := 0.0

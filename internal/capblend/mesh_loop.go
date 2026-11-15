@@ -88,7 +88,18 @@ func connectorsAdmitted(cbp Payload) bool {
 
 // CapMotion reads the loop's numeric record through internal/tessellation.
 func CapMotion(budget *proofbound.WorkBudget, cbp Payload, lm *LoopMesh) error {
+	// A restated arc moves every connector station by at most its shift, which
+	// the connector's order check charges (§7.1).
+	shift := 0.0
+	if _, restate := cbp.cornerClass(); restate {
+		terms, ok := capband.OffRadiusLoop(lm.Loop, cbp.loopReach(lm))
+		if !ok {
+			return fmt.Errorf(`%w: this %s's restated arcs state no finite shift`, decaderr.ErrUnsupported, cbp.Noun())
+		}
+		shift = terms.Shift
+	}
 	in := tessellation.CapBlendMotionInput{
+		RestateShift:      shift,
 		CapBlendLoopProof: lm.Proof(),
 		Loop:              lm.LoopIndex, Segments: lm.Loop.Segments,
 		CapPts: slices.Clone(lm.CapPts), CapWallStart: lm.CapWallStart,
@@ -108,7 +119,8 @@ func CapMotion(budget *proofbound.WorkBudget, cbp Payload, lm *LoopMesh) error {
 	return nil
 }
 
-// ChordVolume adapts the resolved loops to the slice-wise proof.
+// ChordVolume adapts the resolved loops to the slice-wise proof. Every
+// lm.CapMotion must be filled first (CapMotion): the connector term reads it.
 func ChordVolume(cbp Payload, lms []LoopMesh) float64 {
 	loops := make([]tessellation.CapBlendLoopProof, len(lms))
 	for i := range lms {

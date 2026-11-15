@@ -132,12 +132,15 @@ type CapBlendMotionInput struct {
 	// SideBound and SideStart are the loop's sample record
 	// (SampleCapBlend), which names each connector station and the gap of
 	// each held sample from its offset circle.
-	Connectors  bool
-	Joins       []CapBlendJoin
-	CapArcStart []int
-	CapBound    []proofbound.WalkEndBound
-	SideBound   []proofbound.WalkEndBound
-	SideStart   []int
+	Connectors bool
+	// RestateShift is the loop's largest arc restatement shift
+	// (capband.OffRadiusLoop), zero when nothing is restated.
+	RestateShift float64
+	Joins        []CapBlendJoin
+	CapArcStart  []int
+	CapBound     []proofbound.WalkEndBound
+	SideBound    []proofbound.WalkEndBound
+	SideStart    []int
 }
 
 // CapBlendCapMotion bounds each cap sample against the ideal chord
