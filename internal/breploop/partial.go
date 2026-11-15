@@ -180,7 +180,7 @@ func (r *State) RewritePartialFillet(sel Sel, selected []bool, blends []*breprec
 			amounts[i] = r.Setback.Dc
 		}
 	}
-	fr, err := breprecord.FilletLoopOf(r.Budget, orig, r.Setback.Dc, f.Role, freeform.NewFreeformWork())
+	fr, err := breprecord.FilletLoopOf(r.Budget, orig, r.Setback.Dc, r.Setback.DcDelta, f.Role, freeform.NewFreeformWork())
 	if err != nil {
 		return breprecord.Payload{}, err
 	}

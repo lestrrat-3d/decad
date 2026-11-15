@@ -3071,3 +3071,6 @@
 12	0.00	TestFacetedRetainedBlendNotchedRoundRefusals
 12	0.00	TestFacetedRetainedBlendSharedBackPlane
 12	0.00	TestFacetedRetainedBlendSharedBackPlaneRefusals
+12	0.00	TestFilletLoopNearTangentJoins
+12	0.00	TestFilletLoopNearTangentArcJoins
+12	0.00	TestFilletLoopNearTangentCut

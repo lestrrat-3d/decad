@@ -489,8 +489,10 @@ term, never by admitting a small cross product: the term is a proven upper
 bound, and a corner it does not cover refuses.
 
 **The class** (`capband.NearTangentCorner`, exact rational arithmetic over
-the record's floats). A draft band, or a cap-loop chamfer band ("On a cap-loop
-chamfer band" below), admits the corner when all six hold:
+the record's floats). A complete-loop fillet reads the same class and Lemmas
+1 and 1′ with its own charges (`agent-docs/loop-fillet-design.md` §5.5). A
+draft band, or a cap-loop chamfer band ("On a cap-loop chamfer band" below),
+admits the corner when all six hold:
 
 1. one walk is a `LineSeg` and the other an `ArcSeg`, or both are `ArcSeg`s;
 2. the two recorded junction points are one rational point `v`;

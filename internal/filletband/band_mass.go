@@ -16,6 +16,7 @@ type BandMassInput struct {
 	Pieces              []Piece
 	Walks               []survey2d.SideWalk
 	Corners             []Corner
+	Rho                 []float64
 	Radius              proofbound.RatInterval
 	Level, LevelDelta   float64
 	MaterialSign, Sigma float64
@@ -39,8 +40,9 @@ func RadiusInterval(held, delta float64) (proofbound.RatInterval, error) {
 }
 
 // MassOf integrates the fillet strip and widens every changed term at curved
-// miters. The curved corner's sign is unknown, so its disk allowance widens
-// both ends of each interval.
+// miters and LF5′ corners (Rho, agent-docs/loop-fillet-design.md §5.5). The
+// sign of either corner's change is unknown, so its allowance widens both
+// ends of each interval.
 func MassOf(in BandMassInput) (BandMass, error) {
 	h, err := HeightsOf(in.Radius)
 	if err != nil {
@@ -68,13 +70,27 @@ func MassOf(in BandMassInput) (BandMass, error) {
 	zReach := new(big.Rat).Add(new(big.Rat).Abs(level), delta)
 	zReach.Add(zReach, in.Radius.Hi)
 	for k, class := range in.Corners {
-		if class != CurvedMiter {
+		var volume, mu, mv *big.Rat
+		var ok bool
+		switch class {
+		case CurvedMiter:
+			prev := in.Walks[(k+len(in.Walks)-1)%len(in.Walks)]
+			volume, mu, mv, ok = CurvedMiterMassAllowance(prev, in.Walks[k], in.Radius)
+			if !ok {
+				return BandMass{}, fmt.Errorf(`%w: a curved fillet's strip has no mass allowance`, decaderr.ErrUnsupported)
+			}
+		case NearTangent:
+			if k >= len(in.Rho) {
+				return BandMass{}, fmt.Errorf(`%w: a near-tangent fillet corner has no reach`, decaderr.ErrUnsupported)
+			}
+			w := in.Walks[k]
+			volume, mu, mv, ok = NearTangentMassAllowance(w.StartU, w.StartV,
+				proofbound.WalkEndBoundAllow(w.StartBound), in.Rho[k], in.Radius)
+			if !ok {
+				return BandMass{}, fmt.Errorf(`%w: a near-tangent fillet's strip has no mass allowance`, decaderr.ErrUnsupported)
+			}
+		default:
 			continue
-		}
-		prev := in.Walks[(k+len(in.Walks)-1)%len(in.Walks)]
-		volume, mu, mv, ok := CurvedMiterMassAllowance(prev, in.Walks[k], in.Radius)
-		if !ok {
-			return BandMass{}, fmt.Errorf(`%w: a curved fillet's strip has no mass allowance`, decaderr.ErrUnsupported)
 		}
 		out.Volume3 = proofbound.IntervalWiden(out.Volume3, new(big.Rat).Mul(volume, big.NewRat(3, 1)))
 		out.Moments[in.Embed.Axis[0]] = proofbound.IntervalWiden(out.Moments[in.Embed.Axis[0]], mu)

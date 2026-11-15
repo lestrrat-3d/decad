@@ -38,7 +38,7 @@ The rules for rows live in `agent-docs/layout.md`.
 | `internal/capcontour/` | Cap contour displacement, shell offset intervals, and edge and arc bounds. See modify-reach §8.3-§8.4. |
 | `internal/offset2d/` | Offset carriers, proofs, profile offsets and corner loops, rewrite and offset audits, offset displacement, and the draft near and far section stages. See modify §5–§9, shell-opening §3–§5, draft §2, §7. |
 | `internal/capband/` | Cap-band loop walks, offset joins, contour, loop boundary, patch, locus, volume, first-moment and centroid bounds, cap-loop chamfer refusals, and the occupied-volume admission with its near-tangent and off-radius restatement terms. See modify-reach §8.3–§8.4 and tessellation-reach §7, §7.1. |
-| `internal/filletband/` | Loop-fillet closed forms and reference-frame band mass. See loop-fillet §5. |
+| `internal/filletband/` | Loop-fillet closed forms, reference-frame band mass, and the near-tangent (LF5′) corner allowances. See loop-fillet §5, §5.5. |
 | `internal/decaderr/` | The sentinel error values and the `MeshBoundError` type `errors.go` re-exports, so internal packages can return them. |
 | `internal/parambind/` | The ledger of parameter reads behind `Document.Bindings`. See param-binding §3. |
 | `internal/holeplan/` | Plans `Hole`: places the axis on the face plane, gates sizes, and returns the bore, counterbore and countersink tool shapes. See hole design. |

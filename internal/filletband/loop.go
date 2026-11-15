@@ -49,14 +49,21 @@ const (
 	Reflex
 	// CurvedMiter is LF8: a sharp convex corner involving a circular walk.
 	CurvedMiter
+	// NearTangent is LF5′: a line–arc or arc–arc join the offset reads as G1
+	// whose exact tangents turn by a sliver (agent-docs/loop-fillet-design.md
+	// §5.5). It is built as LF5, and Loop.Rho charges the sliver.
+	NearTangent
 )
 
 // Loop is ℓ as the band reads it: its walks, and Corners[k] the class of the
-// corner at Walks[k].Start, between walk k−1 and walk k. A loop of one whole
+// corner at Walks[k].Start, between walk k−1 and walk k. Rho[k] is an LF5′
+// corner's reach ρ (capband.NearTangentCorner) and zero at every other
+// corner; Rho is nil when the loop has no LF5′ corner. A loop of one whole
 // circle (LF7) has no corner.
 type Loop struct {
 	Walks   []Walk
 	Corners []Corner
+	Rho     []float64
 }
 
 // WholeTurn reports whether ℓ is one whole circle (LF7).

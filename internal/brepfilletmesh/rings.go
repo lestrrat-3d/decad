@@ -38,7 +38,8 @@ type Rings struct {
 // at F's level, not about the cap ring's plan points at the side level: a
 // boss shell's root transition, whose axis is the source root edge
 // (agent-docs/modify-general-design.md §3.1a). SideDelta is the side level's
-// displacement.
+// displacement. Near is each corner's LF5′ reach (filletband.Loop.Rho), nil
+// when the band has none.
 type Input struct {
 	Band        breprecord.LoopBand
 	Face        breprecord.Face
@@ -49,6 +50,7 @@ type Input struct {
 	SideDelta   float64
 	SideV, CapV []int
 	Curved      []bool
+	Near        []float64
 	RootAxis    bool
 }
 
@@ -171,6 +173,21 @@ func (fr *Rings) Place(in Input, e brepgeom.Embed,
 	N := len(lm.CapPts)
 	if len(fr.SeamGap) == 0 {
 		fr.SeamGap = make([]float64, len(lm.Walks))
+	}
+	if len(in.Near) > 0 {
+		if in.RootAxis || len(in.Near) != len(fr.SeamGap) {
+			return fmt.Errorf(`%w: a fillet band's near-tangent corners do not match its walks`, decaderr.ErrUnsupported)
+		}
+		// An LF5′ column stands on the G1 foot's affine ring. Every true band
+		// point near that corner lies, in its own level, within twice the
+		// corner's reach of the column and of both patches' stated ends, so
+		// each patch beside the corner adds that distance
+		// (agent-docs/loop-fillet-design.md §5.5).
+		for k, rho := range in.Near {
+			if rho > 0 {
+				fr.SeamGap[k] = proofbound.AbsSumUpper(fr.SeamGap[k], filletband.NearTangentReach([]float64{rho}))
+			}
+		}
 	}
 	fr.Match = match
 	fr.Cells, fr.Patches = cells, patches

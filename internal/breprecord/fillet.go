@@ -46,30 +46,35 @@ type FilletLoopRead struct {
 }
 
 // FilletLoopOf classifies every corner of loop, walked with face F's material
-// on its left, for a fillet of radius r (loop-fillet §4 step 2). The class is
-// the exact sign of the turn the record's own coordinates take there
-// (filletband.Turn): a right turn the cap contour closes with a connector arc
-// is LF6; a left turn between two straight walks the contour mitres is LF4; a
-// tangent join capband.JoinIsG1 proves on the recorded segments, which the
-// contour reads as a G1 foot, is LF5. A sharp left turn involving a circular
-// walk is LF8 when its offset locus is regular. A class that disagrees with
-// the contour join, or a cusp, is SF1. A loop of one whole circle (LF7) has
-// no corner. role names
-// F in the refusal.
-func FilletLoopOf(budget *proofbound.WorkBudget, loop sectionrecord.LoopRecord, r float64, role string, work *freeform.FreeformWork) (FilletLoopRead, error) {
+// on its left, for a fillet of radius r with conversion bound rDelta
+// (loop-fillet §4 step 2). The class is the exact sign of the turn the
+// record's own coordinates take there (filletband.Turn): a right turn the cap
+// contour closes with a connector arc is LF6; a left turn between two straight
+// walks the contour mitres is LF4; a tangent join capband.JoinIsG1 proves on
+// the recorded segments, which the contour reads as a G1 foot, is LF5, and a
+// join the contour reads as G1 that capband.NearTangentCorner admits is LF5′
+// (loop-fillet §5.5). A sharp left turn involving a circular walk is LF8 when
+// its offset locus is regular. A class that disagrees with the contour join,
+// a cusp, or a near-tangent join or wall that near-tangent rule refuses is
+// SF1. A loop of one whole circle (LF7) has no corner. role names F in the
+// refusal.
+func FilletLoopOf(budget *proofbound.WorkBudget, loop sectionrecord.LoopRecord, r, rDelta float64, role string, work *freeform.FreeformWork) (FilletLoopRead, error) {
 	cl, err := capblend.OneLoopCornerLoop(budget, loop, work)
 	if err != nil {
 		return FilletLoopRead{}, err
 	}
-	read, joins, pieces, bad, err := filletband.ReadLoop(budget, loop, cl.Walks, r, offset2d.ShellTol)
+	read, joins, pieces, bad, why, err := filletband.ReadLoop(budget, loop, cl.Walks, r, rDelta, offset2d.ShellTol)
 	if err != nil {
 		return FilletLoopRead{}, err
 	}
 	if bad >= 0 {
 		n := len(cl.Walks)
-		return FilletLoopRead{}, fmt.Errorf(`%w: a fillet of a complete loop of brep face %s has no supported join at corner (%s, %s) between recorded segments %d and %d (loop-fillet SF1)`,
+		if why != "" {
+			why = ": " + why
+		}
+		return FilletLoopRead{}, fmt.Errorf(`%w: a fillet of a complete loop of brep face %s has no supported join at corner (%s, %s) between recorded segments %d and %d%s (loop-fillet SF1)`,
 			decaderr.ErrUnsupported, role, selectorquery.RenderCoord(cl.Walks[bad].StartU), selectorquery.RenderCoord(cl.Walks[bad].StartV),
-			cl.Walks[(bad+n-1)%n].Segs[len(cl.Walks[(bad+n-1)%n].Segs)-1], cl.Walks[bad].Segs[0])
+			cl.Walks[(bad+n-1)%n].Segs[len(cl.Walks[(bad+n-1)%n].Segs)-1], cl.Walks[bad].Segs[0], why)
 	}
 	return FilletLoopRead{Loop: read, Walks: cl.Walks, Joins: joins, Pieces: pieces}, nil
 }
@@ -155,7 +160,7 @@ func attachFilletBand(ctx context.Context, alloc topo.Alloc, body *topo.Body, re
 		return nil, bandMass{}, err
 	}
 	budget := proofbound.NewWorkBudget(ctx)
-	fr, err := FilletLoopOf(budget, b.Orig, r, f.Role, work)
+	fr, err := FilletLoopOf(budget, b.Orig, r, b.Setback.DcDelta, f.Role, work)
 	if err != nil {
 		return nil, bandMass{}, err
 	}
@@ -176,13 +181,19 @@ func attachFilletBand(ctx context.Context, alloc topo.Alloc, body *topo.Body, re
 		if piece.Walk >= 0 && len(fr.Loop.Corners) > 0 {
 			i := piece.Walk
 			for _, k := range [2]int{i, (i + 1) % n} {
-				if fr.Loop.Corners[k] != filletband.CurvedMiter {
+				var allow *big.Rat
+				var ok bool
+				switch fr.Loop.Corners[k] {
+				case filletband.CurvedMiter:
+					prev := fr.Walks[(k+n-1)%n]
+					allow, ok = filletband.CurvedMiterPatchAreaAllowance(piece, fr.Walks[i], prev, fr.Walks[k], i == k, rIv)
+				case filletband.NearTangent:
+					allow, ok = filletband.NearTangentAreaAllowance(fr.Loop.Rho[k], rIv)
+				default:
 					continue
 				}
-				prev := fr.Walks[(k+n-1)%n]
-				allow, ok := filletband.CurvedMiterPatchAreaAllowance(piece, fr.Walks[i], prev, fr.Walks[k], i == k, rIv)
 				if !ok {
-					return fmt.Errorf(`%w: a curved fillet patch has no area allowance`, decaderr.ErrUnsupported)
+					return fmt.Errorf(`%w: a curved or near-tangent fillet patch has no area allowance`, decaderr.ErrUnsupported)
 				}
 				areaIv = proofbound.IntervalWiden(areaIv, allow)
 			}
@@ -310,7 +321,9 @@ func attachFilletBand(ctx context.Context, alloc topo.Alloc, body *topo.Body, re
 				prev := fr.Walks[(k+n-1)%n]
 				trail[k] = meridian(j.PA, w, straightWalk(prev, nil), arc.Start, sideV)
 				lead[k] = meridian(j.PB, w, straightWalk(w, nil), arc.End, sideV)
-			case filletband.Tangent:
+			case filletband.Tangent, filletband.NearTangent:
+				// An LF5′ join is built as LF5, on the G1 foot the contour
+				// holds; its sliver is charged in the readings (§5.5).
 				prev := fr.Walks[(k+n-1)%n]
 				lead[k] = meridian(j.M, w, straightWalk(prev, &w), capAt(k), sideV)
 				trail[k] = lead[k]
@@ -398,7 +411,7 @@ func attachFilletBand(ctx context.Context, alloc topo.Alloc, body *topo.Body, re
 		return nil, bandMass{}, fmt.Errorf(`%w: fillet band %d built %d patches for %d pieces`, decaderr.ErrUnsupported, bi, len(patches), len(fr.Pieces))
 	}
 	terms, err := filletband.MassOf(filletband.BandMassInput{
-		Pieces: fr.Pieces, Walks: fr.Walks, Corners: fr.Loop.Corners,
+		Pieces: fr.Pieces, Walks: fr.Walks, Corners: fr.Loop.Corners, Rho: fr.Loop.Rho,
 		Radius: rIv, Level: f.Z0, LevelDelta: f.Z0Delta,
 		MaterialSign: m, Sigma: b.Sigma, Embed: e,
 	})
@@ -505,7 +518,7 @@ func filletBandExtent(ctx context.Context, b LoopBand, f Face, xform r3.Transfor
 	if err != nil {
 		return 0, 0, 0, err
 	}
-	fr, err := FilletLoopOf(proofbound.NewWorkBudget(ctx), b.Orig, b.Setback.Dc, f.Role, work)
+	fr, err := FilletLoopOf(proofbound.NewWorkBudget(ctx), b.Orig, b.Setback.Dc, b.Setback.DcDelta, f.Role, work)
 	if err != nil {
 		return 0, 0, 0, err
 	}
@@ -518,7 +531,7 @@ func filletBandExtent(ctx context.Context, b LoopBand, f Face, xform r3.Transfor
 	sideIv := proofbound.IntervalAdd(proofbound.PointInterval(level), proofbound.IntervalScale(rIv, big.NewRat(int64(m), 1)))
 	base := pl.Xform.Apply(pl.Frame.Origin()).Dot(g)
 	coeff := [3]float64{pl.Dir(1, 0, 0).Dot(g), pl.Dir(0, 1, 0).Dot(g), pl.Dir(0, 0, 1).Dot(g)}
-	loIv, hiIv, err := filletband.ExtentsOf(fr.Pieces, fr.Walks, fr.Loop.Corners,
+	loIv, hiIv, err := filletband.ExtentsOf(fr.Pieces, fr.Walks, fr.Loop.Corners, fr.Loop.Rho,
 		m, b.Setback.Dc, rIv, sideIv, coeff)
 	if err != nil {
 		return 0, 0, 0, err

@@ -110,9 +110,12 @@ type FilletOption interface{ filletOption() }
 // brep body whose patches carry filletLoop(f,l,p). Selected straight edges
 // on part of one planar loop form a partial band; a swept common wall can be
 // restated as that planar loop. Loops sharing an edge are SL1; complete loops
-// mixed with independent straight edges take route V. A neighbour route L
-// cannot trim SL2, and an offset miter that folds or cannot be bounded is
-// SF1 (both ErrUnsupported).
+// mixed with independent straight edges take route V. A line–arc or arc–arc
+// join tangent only to the record's rounding, as a sketch fillet or tangent
+// constraint records it (sin²θ ≤ 2⁻⁶⁴), builds as a tangent join and its
+// sliver widens the published bounds. A neighbour route L cannot trim SL2,
+// and an offset miter that folds or cannot be bounded, or a join read as
+// tangent that turns more, is SF1 (both ErrUnsupported).
 // A prism's complete cap loops take the same arm through its face view and
 // return a brep body (RF3). A single cap edge on a strictly convex straight
 // prism uses a bounded faceted cutter when that edge or its terminal walls

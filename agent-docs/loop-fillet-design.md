@@ -70,6 +70,7 @@ yields one patch or one edge:
 | **LF3** | a circular walk, material outside the circle (a hole rim) | `Torus{Center: C; Axis: F's normal; Major: R + r; Minor: r}`, the quarter from the top (radius `R + r` at `L_F`) to the inner equator (radius `R` at `sideZ`) | the same |
 | **LF4** | a convex corner where two straight walks meet at interior angle `θ` (material side) | no patch: the two cylinders meet along their intersection | the edge is a planar quarter ellipse in the corner's bisector plane, `Ellipse3{Center: the ball centre at the corner, c = corner + (r / sin(θ/2))·b̂ at sideZ; Axis: the bisector plane's normal; Major: b̂; SemiMajor: r / sin(θ/2); SemiMinor: r}`, from the corner vertex at `sideZ` to the contour corner at `L_F`; `b̂` is the in-plane bisector into the material |
 | **LF5** | a G1 join (a line tangent to an arc, or two tangent arcs), route L's dead-zone rule | no patch: the two pipes share a meridian | `Arc3`, the quarter circle of radius `r` in the plane through the join normal to `ℓ`, from the join vertex at `sideZ` to the contour foot `v + r·n̂` at `L_F` |
+| **LF5′** | a near-tangent join: a line and an arc, or two arcs, that the offset reads as G1 while their exact tangents turn by a sliver (§5.5) | LF5's two pipes, meeting at the G1 foot the contour holds | LF5's `Arc3` meridian on that foot; §5.5 charges the sliver in every reading |
 | **LF6** | a reflex corner of `F`'s region with turn `ψ` (a hole or pocket mouth's corner, a square boss root's corner) | `Torus{Center: the corner at sideZ; Axis: F's normal; Major: r; Minor: r}`, the horn torus whose tube runs from the connector arc of radius `r` at `L_F` to the apex on its own axis at `sideZ`, over azimuth `ψ`; both joins to the neighbouring patches are G1 | two LF5 `Arc3` meridians, at the connector arc's two ends `pA`, `pB`, each in the plane normal, at the corner, to the walk whose wall it bounds: `pA`'s Axis is the corner tangent of the walk before the corner, `pB`'s that of the walk after it, which for a straight walk is the walk's own direction |
 | **LF7** | a whole circle | LF2 or LF3 over `2π`; two `Circle3` edges and no seam | — |
 | **LF8** | a sharp convex corner involving a circular walk | no patch: the two analytic pipes meet along their intersection | `FilletMiter3` follows the proven offset-foot locus from the side vertex to the cap foot; SF1 refuses a fold or an unbounded locus |
@@ -185,7 +186,9 @@ rDelta, dsDelta: rDelta}`), sense `σ` from LB6:
 2. **Corner classes.** Each corner of `ℓ`'s coalesced walk is classified from
    the record's own floats as `capband.OccupiedVolumeAdmission` classifies
    them: a reflex corner (`joins[i].arc`) is LF6; a line–line miter is LF4;
-   a join `capband.JoinIsG1` proves tangent is LF5; a whole turn is LF7; any
+   a join `capband.JoinIsG1` proves tangent is LF5; a join the offset reads
+   as G1 that `capband.NearTangentCorner` admits, every wall beside it passing
+   `capband.NearTangentWallRefusal`, is LF5′ (§5.5); a whole turn is LF7; any
    other corner is SF1. The classification is exact rational arithmetic on
    recorded coordinates and admits nothing on a residual.
 3. **Band record.** `brepLoopBand` gains `kind` (`"chamfer"` | `"fillet"`);
@@ -243,7 +246,7 @@ shared normal, a reflex foot along each wall's own normal; reach §8.3). The
 coefficients sum over the loop's pieces. A straight walk from `P` to `Q`
 has length `ℓᵢ`, unit tangent `τ`, inward unit normal `ν` (into `F`'s
 material), and end rates `κ₀` at `P`, `κ₁` at `Q`, where `κ = cot(θ/2)` at
-an LF4 corner of interior angle `θ` and `κ = 0` at an LF5 or LF6 corner; its
+an LF4 corner of interior angle `θ` and `κ = 0` at an LF5, LF5′ or LF6 corner; its
 strip piece is the trapezoid `{P + s·τ + w·ν : 0 ≤ w ≤ t, κ₀·w ≤ s ≤ ℓᵢ −
 κ₁·w}`. A circular walk has centre `C`, radius `R`, sweep `β > 0`, and
 `E = (sin α₁ − sin α₀, cos α₀ − cos α₁)` over its angular interval
@@ -257,7 +260,7 @@ leaving walk's, `E_V` likewise.
 | **CF2** | circular walk, material inside | `β·R` | `−β/2` | `β·R·C + R²·E` | `−(β/2)·C − R·E` | `E/3` |
 | **CF3** | circular walk, material outside | `β·R` | `+β/2` | `β·R·C + R²·E` | `+(β/2)·C + R·E` | `E/3` |
 | **CF4** | reflex corner (LF6) | 0 | `ψ/2` | 0 | `(ψ/2)·V` | `E_V/3` |
-| **CF5** | LF4 corner, LF5 join | 0 | 0 (its share is in `κ`) | 0 | 0 | 0 |
+| **CF5** | LF4 corner, LF5 or LF5′ join | 0 | 0 (its share is in `κ`) | 0 | 0 | 0 |
 
 At an LF8 corner, these coefficients describe the untrimmed walk pieces.
 The true strip differs only near the shared corner. A proven disk contains
@@ -365,13 +368,119 @@ Every stationary point is isolated (a sinusoid has one per quarter), so no
 maximum by the changed corner disk and uses existing boundary vertices as
 lower witnesses. `ThroughAll`/`ToFace` read the same extents.
 
+### 5.5 LF5′ — near-tangent joins
+
+A sketch solve places tangent points by rounding, so an outline drawn with
+tangent constraints or `sketch.CreateFillet` records line–arc and arc–arc
+joins whose exact tangents turn by a sliver θ. The offset's held-tangent rule
+(`offset2d.CornerJoin` within `offset2d.ShellTol`) reads such a join as G1,
+and the contour holds one foot there; `capband.JoinIsG1` refuses it.
+
+**The class.** Corner `k` is LF5′ when the offset reads it as G1 and
+`capband.NearTangentCorner` admits it with both walks moving by `r` over
+`[0, T]`, `T = r + rDelta`: the six conditions of
+`agent-docs/draft-design.md` §9.1.1 (a line and an arc or two arcs, one
+recorded junction point, exact tangents running the same way,
+`sin²θ ≤ 2⁻⁶⁴`, one amount, each moved circle clear of the corner). Every
+wall with an LF5′ end must also pass `capband.NearTangentWallRefusal` with
+every walk at `r`. Both tests are exact rational arithmetic over the record's
+floats, and the arc ends are read as the LF5 test reads them, about the
+recorded centre through the recorded junction. `filletband.CornerClass`
+returns the corner's `ρ = T·sinUp·(1 + S)`, and `filletband.Loop.Rho` holds
+it.
+
+**Geometry.** At offset `t ∈ [0, T]` write `v` for the corner and `f_p`,
+`f_c` for the arriving and leaving walks' radial feet `v + t·n`. Lemmas 1
+and 1′ give `|f_p − f_c| ≤ ρ` (`2t·sin(θ/2) ≤ ρ` for a line and an arc). At
+a convex sliver the true corner `m(t)` lies within `ρ` of the arc's foot (a
+line and an arc) or of both feet (two arcs), so within `2ρ` of each foot. At
+a reflex sliver the offset closes the gap with the connector arc of radius
+`t` about `v` from `f_p` to `f_c`, whose every point lies within `ρ` of both
+feet. `2ρ` is the corner's reach (`filletband.NearTangentReach`).
+
+**Build.** LF5′ is built as LF5: one `Arc3` meridian on the contour's G1
+foot, the two patches meeting there, `κ = 0` in Table CF, and no horn patch,
+so the record's faces, edges and roles are LF5's. Every reading below states
+that structure's value and widens it by a proven upper bound rounded up from
+a rational.
+
+**Strip.** At offset `t` the strip pieces of Table CF and the true strip
+differ by one closed chain at the corner: `v → f_p`, along the arriving
+carrier to `m`, along the leaving carrier to `f_c`, `→ v` at a convex sliver,
+and `v → f_p`, along the connector arc to `f_c`, `→ v` at a reflex one. The
+rest of both boundaries coincide, since every wall survives. The first chain
+encloses at most the triangle `v f_p f_c` (`½·t·ρ`), the triangle
+`f_p m f_c` (`ρ²`), and each carrier arc's segment against its chord: the
+chord is at most `ρ`, below the moved radius, so the arc stays under a sixth
+of a turn and its segment under `πρ²/4` (Thales). The second encloses the
+sector `t²θ/2 ≤ (π/4)·t·ρ`, since `θ ≤ π·sin(θ/2)`. So
+`|A_CF(t) − A(t)| ≤ t·ρ + 3ρ²`, and the difference lies within `t + 2ρ` of
+`v`. Over the quarter (`t ≤ r_hi`, `filletband.NearTangentMassAllowance`):
+
+```text
+ΔV        ≤ r_hi·ρ·(r_hi + 3ρ)
+ΔM_u      ≤ ΔV·(|v_u| + e_v + r_hi + 2ρ)        (ΔM_v likewise)
+ΔM_axial  ≤ ΔV·(|L_F| + L_F.delta + r_hi)
+```
+
+with `e_v` the corner's recorded end bound. `filletband.MassOf` widens both
+ends of the volume and every moment by them, as it does at LF8.
+
+**Patch area.** Each patch beside an LF5′ corner widens its area by
+`π·r_hi·ρ` (`filletband.NearTangentAreaAllowance`). At a convex sliver the
+patch's level curve at meridian angle `φ` ends at `m(t)` instead of its own
+foot, along its own carrier: at most `2ρ` on a line, an arc of chord at most
+`ρ`, so of length at most `(π/2)·ρ`, on a circle. A cylinder's or torus's
+area element is that level length times `r·dφ`, so the change is at most
+`π·r·ρ`. At a reflex sliver each patch keeps its own foot exactly, and the
+absent horn, `θ·r²·(π/2 − 1) ≤ (π/2)(π/2 − 1)·r·ρ`, fits in either patch's
+widening.
+
+**Extents.** Every true band point lies, in its own level, within the reach
+of a point of the stated patches, and each stated point within it of a true
+one, so `filletband.WidenNearTangentExtent` widens both ends of §5.4's
+enclosure by the largest reach times the direction's planar length.
+
+**Cap contour.** The contour holds the G1 foot, and
+`capband.ContourDisplacement` encloses it against the hull of both feet. The
+true contour's corner points lie within the reach of both feet, so
+`filletband.LoopContourDelta` adds the largest reach to `F.delta`. The cap
+vertex, `F`'s area and mesh, and the LF5′ meridian, whose centre is that
+foot, read it there.
+
+**Mesh.** The corner's ring column interpolates the side corner and the G1
+foot. Every true band point near the corner lies, in its own level, within
+the reach of the column and of both patches' stated ends, so
+`brepfilletmesh` adds corner `k`'s reach to its seam gap, which each patch
+beside it adds to its stated distance (§7.1). That distance enters the
+patch's `Bound` and the area-times-distance term of `volSymDiff`.
+
+**Undercut survey (DF7).** Near an LF5′ corner the true band's normals stray
+from the two patches' by at most `filletband.NearTangentNormalTurn`: `ρ/r_lo`
+between the two walks' normals at a reflex sliver (`2·sin(θ/2) ≤ ρ/T`), and
+`ρ` over the least moved radius along a toroidal patch at a convex one; a
+cylinder's normal does not change. `survey2d.WidenPullBracket` widens each
+patch's bracket by that turn times `|Du·pull| + |Dv·pull|`.
+
+**Unchanged readings.** The concave-radius survey (DF8): a convex sliver adds
+no surface, and a reflex sliver's horn is LF6's over the turn `θ`, whose
+vanishing azimuthal radius sits on the receiver's own reflex edge of turn
+`θ`, which enters no aggregate, as at LF6. Clearance (DF6) stays `Suspect`. STEP
+(DF10) reads the record's LF5 structure under its own analytic test. A
+partial fillet admits only LF4, LF5 and LF6 at a corner it selects, so an
+LF5′ corner it selects refuses there.
+
+The rounded hexagon of §8 (corner circle 2.51, corner rounds 0.8, fillet 0.6)
+has twelve LF5′ joins of both signs, with `ρ` at most about `1.6·10⁻¹⁶` mm;
+their strip allowance sums to about `3·10⁻¹⁶` mm³.
+
 ## 6. Table SF — refusals and gate order
 
 Modify §1's test picks every sentinel.
 
 | SF | Call | Exists? | Sentinel |
 |---|---|---|---|
-| **SF1** | a corner whose exact turn disagrees with the offset contour's join, or an LF8 corner whose offset locus folds or cannot be bounded | no regular miter can be proved | `ErrUnsupported`, naming the corner |
+| **SF1** | a corner whose exact turn disagrees with the offset contour's join; an LF8 corner whose offset locus folds or cannot be bounded; a G1-read join outside LF5′ (a turn past `sin²θ ≤ 2⁻⁶⁴`, a moved circle within its reach, a wall not proven to survive) | no regular miter can be proved | `ErrUnsupported`, naming the corner and, for LF5′, the near-tangent reason |
 | **SF2** | `Face.NormalAt` at an LF6 apex vertex, which lies on the horn torus's own axis | the point exists; the surface normal there does not | `ErrDegenerate` (the survey samples interior points only) |
 
 Everything else is an existing row: SL1 (a partial loop outside the
@@ -407,9 +516,9 @@ modify §4's stage 1 and reach SX10:
 | **DF2** | `Bounds`, `ThroughAll`/`ToFace` | §5.4 |
 | **DF3** | `Verify` validity, tolerance gate | by construction; the bands' vertices are body vertices; `brepGateDiameter` reads every vertex |
 | **DF4** | `Tessellate`, STL/OBJ/3MF | §7.1 |
-| **DF5** | mesh boolean operand | admitted for every band: every ring of §7.1 lies on the denoted surface up to `F.delta` and interpolation rounding, so the slice-wise argument of tessellation-reach §7 holds with the per-vertex store as the vertex-motion allowance and §7.1's sagitta terms as the chord term. `capband.OccupiedVolumeAdmission`'s reflex refusal does not apply: the LF6 fan's stations are the connector arc's azimuths at every ring |
+| **DF5** | mesh boolean operand | admitted for every band: every ring of §7.1 lies on the denoted surface up to `F.delta` and interpolation rounding, so the slice-wise argument of tessellation-reach §7 holds with the per-vertex store as the vertex-motion allowance and §7.1's sagitta terms as the chord term; an LF5′ corner adds its reach to its two patches' distance (§5.5). `capband.OccupiedVolumeAdmission`'s reflex refusal does not apply: the LF6 fan's stations are the connector arc's azimuths at every ring |
 | **DF6** | clearance | no model: the pair reads `Suspect` unless its boxes decide it (DG6); a later increment may add the LF1 cylinder carrier, whose axis is in-plane |
-| **DF7** | undercut survey | per patch through `Face.NormalAt`: the normal of an LF1 patch sweeps the quarter from `n̂_F` to the wall's outward normal, an LF2/LF3 patch the quarter at every azimuth of its window, an LF6 patch the quarter at every azimuth of `ψ` short of the apex; the component range along the pull is the closed-form range of `A·cos φ + B·sin φ` over the window, read with reach DX7's three-valued rule and its arithmetic allowance alone, since the stamped departure is zero |
+| **DF7** | undercut survey | per patch through `Face.NormalAt`, a patch beside an LF5′ corner widened by §5.5's normal turn: the normal of an LF1 patch sweeps the quarter from `n̂_F` to the wall's outward normal, an LF2/LF3 patch the quarter at every azimuth of its window, an LF6 patch the quarter at every azimuth of `ψ` short of the apex; the component range along the pull is the closed-form range of `A·cos φ + B·sin φ` over the window, read with reach DX7's three-valued rule and its arithmetic allowance alone, since the stamped departure is zero |
 | **DF8** | concave-radius survey | a band with `σ = +1` (a fill) contributes `r` exactly, the tag's `Minor`/`Radius`, which a placement leaves unchanged; a band with `σ = −1` is convex in its tube direction and contributes nothing; an LF6 patch's other principal radius is `ρ/sin φ`, which vanishes at the apex where the receiver's own sharp reflex edge already reads as `brepMinRadius` reads it today (a sharp corner enters no aggregate), so it adds nothing. `brepMinRadius` drops its `capblend.PatchWindowSkew`/`normalBound` refusal for fillet bands, keeps it for chamfer bands |
 | **DF9** | wall survey | staged `Suspect`, as for every brep |
 | **DF10** | STEP | analytic: `supportsAnalyticSTEP` takes a whole-turn torus (LF7), a four-arc torus patch (LF2/LF3) whose arcs each hold both their vertices in their own plane, a horn torus patch (LF6, a three-edge loop closing on the axis at its apex vertex) whose vertices are `Exact`, and a straight-walk cylinder patch closed by `Ellipse3` edges (`agent-docs/step-export-design.md`). `Body.Tessellate` admits a banded body (F-2), so `export.STEP` reaches the writer |
@@ -437,7 +546,8 @@ every `j` of the connector). So every ring vertex lies on the denoted
 surface within `F.delta·t_k/r ≤ F.delta` plus the interpolation's rounding,
 which the vertex store carries. At LF8, each seam station uses the proven
 offset-foot intersection at `t_k`; its chord gap is bounded by the seam's
-global speed and the meridian step.
+global speed and the meridian step. At LF5′ the column stays on the G1
+foot's affine ring, and its seam gap is the corner's reach (§5.5).
 
 Counts: one count per walk shared by the trimmed wall, every ring and `F`'s
 contour (`capblend.ChordLoop`, with `n(w) = max(chordCount(w),
@@ -608,6 +718,18 @@ term unexercised. The volume's own bound
 is the enclosures' reach alone and cannot be made to fail by deleting one
 term, which the test records.
 
+Near-tangent fixtures (§5.5), each shown to refuse SF1 before LF5′:
+`apitest/fillet_near_tangent_loop_test.go` fillets the start cap loop of a
+rounded hexagon (corner circle 2.51, `sketch.CreateFillet` corner rounds 0.8,
+3 tall) by 0.6 and encloses its Pappus closed form, fillets the R4.5/R22
+tangent-arc plate's start loop by 0.5 (arc–arc joins) and encloses Table
+CF's closed form, and cuts a cap-chamfered 12 × 10 × 4 arm with the filleted
+hexagon prism, removing its closed-form volume below the arm's top within
+both bodies' bounds. `internal/filletband/near_tangent_test.go` classifies a
+slot's near-tangent joins as LF5′ with `capband.NearTangentCorner`'s `ρ`,
+refuses a turn past `sin²θ ≤ 2⁻⁶⁴` and a 2⁻⁴⁰ rad arc between near-tangent
+walls, and pins each §5.5 term.
+
 Refusals: a partial loop outside the selected-chain route → SL1;
 P8's top loop at `r = 4` → SX6; the P2 mouth at `r = 5` → SX7;
 a partial revolve's cap loop → SX5; a stacked
@@ -647,6 +769,10 @@ revolve route rounds (reach §7), so no full-turn revolve fixture refuses here.
   receiver's level and region (`filletRestored`), but with the level and
   section displacements the rewritten record states, which are never less
   than the receiver's: sound, and zero for every fixture of §8.
+- **A near-tangent join is LF5′, built as LF5 and charged, not LF8 and not
+  a residual.** LF8's corner disk has radius near `r` and would swamp the
+  bound; LF5′ reads `capband.NearTangentCorner`'s exact class and charges
+  the sliver's own reach `ρ` in every reading (§5.5).
 - **SF1 also refuses a corner whose exact class disagrees with the
   contour's join.** The class is the exact turn of the recorded walks; a
   right turn the cap contour does not close with a connector arc, or a left

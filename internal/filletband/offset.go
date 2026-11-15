@@ -141,34 +141,62 @@ func OffsetLoop(budget *proofbound.WorkBudget, walks []survey2d.SideWalk, joins 
 	return segs, nil
 }
 
-// CornerClass is Table LF's class of corner k, or zero for SF1.
-func CornerClass(loop sectionrecord.LoopRecord, walks []survey2d.SideWalk, fw []Walk, joins []offset2d.Join, k int) (Corner, error) {
+// CornerClass is Table LF's class of corner k for a fillet of radius r with
+// conversion bound rDelta, beside the corner's near-tangent reach ρ (zero for
+// every class but LF5′). It returns zero for SF1, with the reason
+// capband.NearTangentCorner gives when the offset reads the join as G1 but
+// that class refuses it, and "" otherwise.
+//
+// A join the offset reads as G1 is LF5 when capband.JoinIsG1 proves it exactly
+// tangent, and LF5′ when capband.NearTangentCorner admits it with both walks
+// moving by r over its conversion span: a line and an arc, or two arcs, at one
+// recorded point whose exact tangents run the same way and turn by
+// sin²θ <= 2⁻⁶⁴, each moved circle clear of the corner
+// (agent-docs/loop-fillet-design.md §5.5). Both tests are exact rational
+// arithmetic over the record's floats; neither admits on a residual.
+func CornerClass(loop sectionrecord.LoopRecord, walks []survey2d.SideWalk, fw []Walk, joins []offset2d.Join, k int,
+	r, rDelta float64) (Corner, float64, string, error) {
 	n := len(walks)
 	prev, cur := walks[(k+n-1)%n], walks[k]
 	turn, err := Turn(fw[(k+n-1)%n], fw[k])
 	if err != nil {
-		return 0, err
+		return 0, 0, "", err
 	}
 	j := joins[k]
 	switch {
 	case turn < 0 && j.Arc:
-		return Reflex, nil
+		return Reflex, 0, "", nil
 	case turn > 0 && prev.IsLine() && cur.IsLine() && !j.Arc && !j.G1:
-		return Miter, nil
+		return Miter, 0, "", nil
 	case turn > 0 && (prev.IsCircular() || cur.IsCircular()) && !j.Arc && !j.G1:
-		return CurvedMiter, nil
-	case turn == 0 && j.G1:
-		prevSeg, err := sectionrecord.NormalizeSegment(loop.Segments[prev.Segs[len(prev.Segs)-1]])
+		return CurvedMiter, 0, "", nil
+	case j.G1 && !j.Arc:
+		prevSeg, curSeg, err := cornerSegments(loop, prev, cur)
 		if err != nil {
-			return 0, err
+			return 0, 0, "", err
 		}
-		curSeg, err := sectionrecord.NormalizeSegment(loop.Segments[cur.Segs[0]])
-		if err != nil {
-			return 0, err
+		if turn == 0 && capband.JoinIsG1(prevSeg, curSeg) {
+			return Tangent, 0, "", nil
 		}
-		if capband.JoinIsG1(prevSeg, curSeg) {
-			return Tangent, nil
+		charge, why, hint := capband.NearTangentCorner(prevSeg, curSeg, r, r, rDelta)
+		if why != "" {
+			return 0, 0, why + hint, nil
 		}
+		return NearTangent, charge.Rho, "", nil
 	}
-	return 0, nil
+	return 0, 0, "", nil
+}
+
+// cornerSegments is the normalized recorded segment that ends walk prev and
+// the one that starts walk cur.
+func cornerSegments(loop sectionrecord.LoopRecord, prev, cur survey2d.SideWalk) (sectionrecord.CurveSegment, sectionrecord.CurveSegment, error) {
+	prevSeg, err := sectionrecord.NormalizeSegment(loop.Segments[prev.Segs[len(prev.Segs)-1]])
+	if err != nil {
+		return nil, nil, err
+	}
+	curSeg, err := sectionrecord.NormalizeSegment(loop.Segments[cur.Segs[0]])
+	if err != nil {
+		return nil, nil, err
+	}
+	return prevSeg, curSeg, nil
 }

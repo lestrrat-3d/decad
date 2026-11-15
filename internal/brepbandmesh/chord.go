@@ -57,13 +57,16 @@ type Band struct {
 	// curved marks LF8 seams at the start of each walk. Their interior ring
 	// positions follow offset-carrier intersections instead of affine ends.
 	curved []bool
+	// near is the LF5′ reach of each corner (filletband.Loop.Rho), nil when
+	// the band has none (agent-docs/loop-fillet-design.md §5.5).
+	near []float64
 }
 
 func (bc *Band) filletInput() brepfilletmesh.Input {
 	return brepfilletmesh.Input{
 		Band: bc.band, Face: bc.face, Payload: bc.cbp, Loop: &bc.lm,
 		Start: bc.start, SideZ: bc.sideZ, SideDelta: bc.sideDelta, SideV: bc.sideV, CapV: bc.capV,
-		Curved: bc.curved, RootAxis: bc.bossShell,
+		Curved: bc.curved, Near: bc.near, RootAxis: bc.bossShell,
 	}
 }
 
@@ -144,11 +147,12 @@ func Chord(ctx context.Context, bp breprecord.Payload, btopo *breprecord.Topolog
 		}
 		if b.Kind == breprecord.BandFillet {
 			rings := tessellation.FilletRingCount(b.Setback.AxialUpper(), chord)
-			fr, err := breprecord.FilletLoopOf(budget, b.Orig, b.Setback.Dc, f.Role, work)
+			fr, err := breprecord.FilletLoopOf(budget, b.Orig, b.Setback.Dc, b.Setback.DcDelta, f.Role, work)
 			if err != nil {
 				return nil, nil, err
 			}
 			bc.curved = make([]bool, len(fr.Walks))
+			bc.near = fr.Loop.Rho
 			for k, class := range fr.Loop.Corners {
 				if class != filletband.CurvedMiter {
 					continue

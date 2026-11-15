@@ -354,7 +354,7 @@ func (r *State) RewriteLoopFaces(ctx context.Context, sels []Sel) (breprecord.Pa
 		// Table LF.
 		if r.Kind == breprecord.BandFillet {
 			f := r.Payload.Faces[sel.Face]
-			if _, err := breprecord.FilletLoopOf(r.Budget, f.RegionLoop(sel.Loop), setback.Dc, f.Role, work); err != nil {
+			if _, err := breprecord.FilletLoopOf(r.Budget, f.RegionLoop(sel.Loop), setback.Dc, setback.DcDelta, f.Role, work); err != nil {
 				return breprecord.Payload{}, r.WrapFace(sel.Face, err)
 			}
 		}

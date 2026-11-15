@@ -78,7 +78,7 @@ func blindPocket(ctx context.Context, env topo.Env, sp stackedrecord.Payload, vi
 	if delta != 0 {
 		return refuse("needs an exact rounded-pocket offset")
 	}
-	read, err := breprecord.FilletLoopOf(budget, rounded.Outer, t, "pocket floor", freeform.NewFreeformWork())
+	read, err := breprecord.FilletLoopOf(budget, rounded.Outer, t, 0, "pocket floor", freeform.NewFreeformWork())
 	if err != nil {
 		return nil, true, err
 	}
