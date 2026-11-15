@@ -369,6 +369,7 @@ expression) and not a printed number.
 | `internal/contactfaceted/floor.go` | predicate of §4 |
 | `internal/facetedrecord/edge_curve.go`, `topology.go`, `internal/topo/edge.go` | edge curves and their witness flag (§10, increment 3) |
 | `internal/meshbool/plane_slab.go`, `internal/booleaneval/retained_plane.go` | slab bound of a retained plane facet (§11, increment 5) |
+| `internal/booleaneval/chorded_loft_plane.go` | states a chorded loft wall's displacement (§11) |
 | `mirror.go`, `internal/extent` | admit a retained `Plane` per §4 |
 | `internal/selectorquery/topo_views.go` | no code change expected; the existing views read the tag |
 | Tests | the `Faceted` assertions of §7's last row |
@@ -593,6 +594,19 @@ Then `|x_T − y| ≤ β + δ` for the foot `x_T` of the true point on `T`, and 
 true piece lies within `h + β·sin φ + 2δ` of `P`.
 `meshbool.BoolMesh.SetChargedSlabBounds` adds `2δ`; a negative or non-finite δ
 applies no slab, so `FacetBound` stays in force.
+
+**Chorded loft walls.** A wall face of a loft is a `Plane` through its own three
+held vertices. For a circular or free-form pair (`loftrecord.Payload.Chorded`)
+that triangle only chords a ruled patch, so the plane is not the surface the
+loft denotes, and Claim R does not hold for it with the displacement zero. The
+group of such a wall states the loft's own facet departure
+(`loftmesh.MeshProof.FacetDeparture`) as its `AxialDelta`
+(`booleaneval.chordedLoftPlane`), and the displaced-plane reading above charges
+it: a chorded wall's slab bound carries `2δ`, so a facet that sits within `δ`
+of its operand's chord reads `β`, not zero. The statement needs no `CapRecord`: `SourceTag` carries an `AxialDelta`
+from a retained face with no record, and a translation, a placement and a
+moved piece keep a displacement stated with no record, because it is relative
+to the tag alone. A cap of a loft is a true plane and states none.
 
 A rim between a displaced plane and another plane or a cylinder parallel to
 the plane's normal moves by at most `4000δ` (planes meeting at a sine of at

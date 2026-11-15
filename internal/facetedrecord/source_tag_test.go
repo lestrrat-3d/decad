@@ -48,6 +48,22 @@ func TestSourceTag(t *testing.T) {
 		require.Same(t, denoted, g.Denoted)
 		require.Equal(t, 0.5, g.NormalBound)
 	})
+	t.Run("a retained plane passes a displacement it states with no record on", func(t *testing.T) {
+		t.Parallel()
+		g, ok := facetedrecord.SourceTag(&topo.Face{Surface: plane, RetainedTag: true,
+			AxialDelta: 0.0137, HasAxialDelta: true}, false)
+		require.True(t, ok)
+		require.True(t, g.HasAxialDelta)
+		require.Equal(t, 0.0137, g.AxialDelta)
+		require.Nil(t, g.CapRecord)
+	})
+	t.Run("a built plane with no record states no displacement", func(t *testing.T) {
+		t.Parallel()
+		g, ok := facetedrecord.SourceTag(&topo.Face{Surface: plane, AxialDelta: 0.0137, HasAxialDelta: true}, false)
+		require.True(t, ok)
+		require.False(t, g.HasAxialDelta)
+		require.Zero(t, g.AxialDelta)
+	})
 	t.Run("a retained face passes its tag departure on, not its held term", func(t *testing.T) {
 		t.Parallel()
 		g, ok := facetedrecord.SourceTag(&topo.Face{Surface: cyl, RetainedTag: true,

@@ -13,6 +13,9 @@ import (
 // ShiftDirections exposes shiftDirections to the external test package.
 var ShiftDirections = shiftDirections
 
+// ChordedLoftPlane exposes chordedLoftPlane to the external test package.
+var ChordedLoftPlane = chordedLoftPlane
+
 // ShiftNeed exposes shiftNeed to the external test package.
 var ShiftNeed = shiftNeed
 

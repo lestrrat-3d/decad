@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
+	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/stretchr/testify/require"
 )
@@ -34,31 +35,32 @@ func chordedFrustum(t *testing.T, doc *decad.Document, cx, r0, r1, h float64) *d
 	return body
 }
 
-// frustumRim measures the rim a plane cut x >= cutX leaves on the wall of the
-// frustum of chordedFrustum(0, 10, 8, 20): the vertices on the cut plane at
-// wall height. It returns the largest claimed vertex bound, and the largest
-// distance of such a vertex from the true rim, the cone's own intersection
-// with the plane.
-func frustumRim(t *testing.T, body *decad.Body, cutX float64) (claimed, actual float64, count int) {
+// frustumRim measures the rim a plane cut x >= cutX leaves on the wall of
+// chordedFrustum(cx, 10, 8, 20) standing on height z0: the vertices on the cut
+// plane at wall height. It returns the largest claimed vertex bound and the
+// largest distance of such a vertex from the true rim, the cone's own
+// intersection with the plane.
+func frustumRim(t *testing.T, body *decad.Body, cx, z0, cutX float64) (claimed, actual float64, count int) {
 	t.Helper()
-	// The true wall radius at height z is 10 - z/10, so the true rim at z has
-	// y = sqrt(r(z)^2 - cutX^2).
+	// The true wall radius at height z is 10 - (z-z0)/10, so the true rim at z
+	// has y = sqrt(r(z)^2 - (cutX-cx)^2).
 	rim := func(z float64) (float64, bool) {
-		r := 10 - z/10
-		if r*r <= cutX*cutX {
+		r := 10 - (z-z0)/10
+		d := cutX - cx
+		if r*r <= d*d {
 			return 0, false
 		}
-		return math.Sqrt(r*r - cutX*cutX), true
+		return math.Sqrt(r*r - d*d), true
 	}
 	for _, v := range body.Vertices() {
 		p := v.Position()
-		if math.Abs(p.Value.X-cutX) > 1e-9 || p.Value.Z < 2.5 || p.Value.Z > 13.5 {
+		if math.Abs(p.Value.X-cutX) > 1e-9 || p.Value.Z < z0+2.5 || p.Value.Z > z0+13.5 {
 			continue
 		}
 		// Distance to the rim curve (z, +-y(z)), searched on a fine grid of z.
 		best := math.Inf(1)
-		for k := 0; k <= 20000; k++ {
-			z := 2 + 12*float64(k)/20000
+		for k := range 20001 {
+			z := z0 + 2 + 12*float64(k)/20000
 			y, ok := rim(z)
 			if !ok {
 				continue
@@ -75,35 +77,67 @@ func frustumRim(t *testing.T, body *decad.Body, cutX float64) (claimed, actual f
 	return claimed, actual, count
 }
 
-// Unioning chorded lofts must not make a later Cut claim a rim bound smaller
-// than the fresh loft's: a chorded wall facet holds the cone patch it chords
-// only within the loft's chord bound, so it is no exact plane.
+// A chorded wall facet holds the cone patch it chords only within the loft's
+// chord bound, so it is no exact plane: a Cut of a Union of chorded lofts must
+// state a rim bound that covers the vertices' real distance from the true rim,
+// and no smaller a bound than the fresh loft's own Cut.
 func TestChordedLoftUnionKeepsRimBoundOnLaterCut(t *testing.T) {
 	t.Parallel()
 	const cutX = 8.8
-	doc := decad.New()
-	a := chordedFrustum(t, doc, 0, 10, 8, 20)
-	b := chordedFrustum(t, doc, 40, 10, 8, 20)
-	tool := boxBodyAtZ(t, doc, cutX, -20, 20, 20, 2, 14)
-	freshTool, err := decad.Copy(t.Context(), tool)
-	require.NoError(t, err)
-	freshLoft, err := decad.Copy(t.Context(), a)
-	require.NoError(t, err)
+	// Every case builds its own bodies: a Union and a Cut retire their operands.
+	build := func(t *testing.T, unions int, placedBy float64) (*decad.Body, *decad.Body) {
+		t.Helper()
+		doc := decad.New()
+		target := chordedFrustum(t, doc, 0, 10, 8, 20)
+		for k := 1; k <= unions; k++ {
+			var err error
+			target, err = decad.Union(t.Context(), target, chordedFrustum(t, doc, 40*float64(k), 10, 8, 20))
+			require.NoError(t, err)
+		}
+		if placedBy != 0 {
+			move, err := r3.Translation(r3.Vec{Z: placedBy})
+			require.NoError(t, err)
+			target, err = decad.Copy(t.Context(), target, decad.WithCopyPlacement(move))
+			require.NoError(t, err)
+		}
+		return target, boxBodyAtZ(t, doc, cutX, -20, 20, 20, 2+placedBy, 14)
+	}
 
-	fresh, err := decad.Cut(t.Context(), freshLoft, freshTool)
+	target, tool := build(t, 0, 0)
+	fresh, err := decad.Cut(t.Context(), target, tool)
 	require.NoError(t, err)
-	union, err := decad.Union(t.Context(), a, b)
-	require.NoError(t, err)
-	cut, err := decad.Cut(t.Context(), union, tool)
-	require.NoError(t, err)
-
-	freshClaimed, freshActual, freshCount := frustumRim(t, fresh, cutX)
-	cutClaimed, cutActual, cutCount := frustumRim(t, cut, cutX)
+	freshClaimed, freshActual, freshCount := frustumRim(t, fresh, 0, 0, cutX)
 	require.Positive(t, freshCount)
-	require.Positive(t, cutCount)
-	// Each rim vertex lies within its claimed bound of the true rim.
 	require.LessOrEqual(t, freshActual, freshClaimed)
-	require.LessOrEqual(t, cutActual, cutClaimed, "the unioned loft's rim vertices stand farther from the true rim than they claim")
-	// And the unioned loft's rim states at least the fresh loft's bound.
-	require.GreaterOrEqual(t, cutClaimed, freshClaimed)
+
+	for _, tc := range []struct {
+		name     string
+		unions   int
+		placedBy float64
+		// refusable admits the evaluator's refusal as the sound outcome: the
+		// chorded wall's facet bound exceeds this pair's chord tolerance.
+		refusable bool
+	}{
+		{"one union", 1, 0, false},
+		// The next union reads the chorded walls from a retained result.
+		{"union of a union", 2, 0, true},
+		// A placed result keeps stating the chord bound.
+		{"placed union", 2, 5, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			target, tool := build(t, tc.unions, tc.placedBy)
+			cut, err := decad.Cut(t.Context(), target, tool)
+			if tc.refusable && err != nil {
+				require.ErrorIs(t, err, decad.ErrUnsupported)
+				return
+			}
+			require.NoError(t, err)
+			claimed, actual, count := frustumRim(t, cut, 0, tc.placedBy, cutX)
+			require.Positive(t, count)
+			require.LessOrEqual(t, actual, claimed,
+				"the rim vertices stand farther from the true rim than they claim")
+			require.GreaterOrEqual(t, claimed, freshClaimed)
+		})
+	}
 }

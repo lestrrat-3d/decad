@@ -19,6 +19,7 @@ func sourceGroup(owner *topo.Body, operand, ordinal int, f *topo.Face, flip bool
 	placed placedDepartures) facetedrecord.Group {
 	group, _ := facetedrecord.SourceTag(f, flip)
 	group = placed.charge(group, f, ordinal)
+	group = chordedLoftPlane(group, owner, f)
 	// A mesh result face descends from f, so it carries every role f is
 	// selected by: its own as Origins, which recognizers match faces by,
 	// and those an analytic Boolean attributed to it as Upstream.

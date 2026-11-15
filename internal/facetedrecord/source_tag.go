@@ -39,7 +39,10 @@ func SourceTag(f *topo.Face, flip bool) (Group, bool) {
 		// the tilt: the tag is a ruled stand-in, not the face's geometry.
 		return Group{}, false
 	}
-	if _, plane := f.Surface.(surfacegeom.Plane); plane && f.CapRecord != nil && f.HasAxialDelta {
+	if _, plane := f.Surface.(surfacegeom.Plane); plane && f.HasAxialDelta && (f.CapRecord != nil || f.RetainedTag) {
+		// A retained face that states a displacement without a record (a
+		// plane a chorded loft stands in for, or a charged blend face) keeps
+		// stating it in every later Boolean.
 		g.CapRecord, g.AxialDelta, g.HasAxialDelta = f.CapRecord, f.AxialDelta, true
 	}
 	return g, true
