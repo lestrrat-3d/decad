@@ -45,6 +45,19 @@ type chainEndCut struct {
 	// G ∩ P, away from G's chain along G ∩ P. G is convex there and takes the
 	// cap.
 	wraps bool
+	// extendsW is set when the wall continues past G at the corner of a concave
+	// chain: the wall's chain along G ∩ wall leaves the corner against the
+	// blend's setback on the wall. G is convex there and takes the cap, keeps
+	// the corner and the whole chain of G ∩ wall, and its loop gains the run
+	// along the wall's cut in G's plane from the wall's setback corner back to
+	// the corner (the wall's band, chain_band.go).
+	extendsW bool
+	// wallChain is G's chain along G ∩ wall that extendsW keeps whole; wallRun
+	// and corner are the band's run along G's plane and the vertex where the
+	// setback plane meets it, set once the wall is cut.
+	wallChain []int
+	wallRun   []int
+	corner    int
 	// rP and rW are the unit directions from the corner along G ∩ P and
 	// G ∩ wall toward the end face's chains.
 	rP, rW r3.Vec
@@ -182,6 +195,23 @@ func (w *work) readEndCut(ec *chainEndCut, nP, rc r3.Vec, uP int, leaves, concav
 		if tau(w.verts[last], ec.exact, dirs[k]) < 0 {
 			dirs[k] = dirs[k].Scale(-1)
 		}
+		if k == 1 && concave {
+			// The wall's setback runs along the base's normal, into the void.
+			// G's chain along G ∩ wall leaves the corner with it (the wall
+			// trims) or against it (the wall continues past G).
+			along := dirs[1].Dot(nP)
+			if math.Abs(along) <= minSine {
+				return fmt.Errorf("%w: a face leaves an edge end along the edge's own line", decaderr.ErrUnsupported)
+			}
+			if along < 0 {
+				if err := clearance(tau(w.verts[last], ec.exact, dirs[1]), w.beta[last]+margin,
+					"the end face"); err != nil {
+					return err
+				}
+				ec.extendsW, ec.wallChain = true, chain
+				continue
+			}
+		}
 		if k == 0 && ec.arc != nil {
 			// The plane's setback point is where the setback circle meets
 			// G ∩ P, not a fixed distance from the corner.
@@ -274,6 +304,10 @@ func (ec *chainEndCut) readEndFaceKind() error {
 		}
 		if ec.wraps {
 			return fmt.Errorf("%w: a chain end's base and end face are both reflex at the corner",
+				decaderr.ErrUnsupported)
+		}
+		if ec.extendsW {
+			return fmt.Errorf("%w: a chain end's wall extends past an end face that is reflex at the corner",
 				decaderr.ErrUnsupported)
 		}
 		ec.reflex = true
@@ -374,8 +408,16 @@ func checkEndTurns(ec *chainEndCut, rc, nP r3.Vec, leaves bool) error {
 	if base == 0 || wall == 0 {
 		return fmt.Errorf("%w: a chain end's base or wall turn at the corner is undecided", decaderr.ErrUnsupported)
 	}
-	if (base < 0 && !ec.wraps) || wall < 0 {
+	// A wall that continues past G is reflex at the corner; readEndCut read
+	// that from G's chain, and the loop's own turn must agree.
+	if (base < 0 && !ec.wraps) || (wall < 0 && !ec.extendsW) {
 		return fmt.Errorf("%w: a chain end's base or wall is reflex at the corner", decaderr.ErrUnsupported)
+	}
+	if ec.extendsW && ec.wraps {
+		return fmt.Errorf("%w: a chain end's base and wall both extend past the end face", decaderr.ErrUnsupported)
+	}
+	if ec.extendsW && wall > 0 {
+		return fmt.Errorf("%w: a chain end's wall turn at the corner is undecided", decaderr.ErrUnsupported)
 	}
 	return nil
 }
@@ -434,6 +476,11 @@ func (w *work) rebuildEnds(ends []*chainEndCut, seqs [][]int, fillet bool, r, tP
 				return 0, nil, err
 			}
 			repl := append([]int(nil), seqs[j]...)
+			if ec.extendsW {
+				// The wall continues past G: G keeps the corner, which follows
+				// the wall's cut along G's plane back from the setback corner.
+				repl = append(append(repl, ec.wallRun...), ec.v)
+			}
 			if !ec.prevP {
 				slices.Reverse(repl)
 			}
@@ -470,9 +517,9 @@ func (ec *chainEndCut) capArea(fillet bool, r, tP, tW float64) float64 {
 }
 
 // takesCap reports whether G takes the end cap: where G is reflex at the
-// corner, and where the base wraps the corner so that the section lies outside
-// G's held face.
-func (ec *chainEndCut) takesCap() bool { return ec.reflex || ec.wraps }
+// corner, and where the base wraps the corner or the wall continues past it,
+// so that the section lies outside G's held face.
+func (ec *chainEndCut) takesCap() bool { return ec.reflex || ec.wraps || ec.extendsW }
 
 // wrapLoop is G's loop with the end column of a wrapping end put in: the
 // chain's wall removes the run of G ∩ wall below its setback, G keeps the
