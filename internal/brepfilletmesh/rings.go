@@ -38,8 +38,9 @@ type Rings struct {
 // at F's level, not about the cap ring's plan points at the side level: a
 // boss shell's root transition, whose axis is the source root edge
 // (agent-docs/modify-general-design.md §3.1a). SideDelta is the side level's
-// displacement. Near is each corner's LF5′ reach (filletband.Loop.Rho), nil
-// when the band has none.
+// displacement. Near is each corner's local reach
+// (filletband.Loop.LocalReach), nil when the band has no LF5′ corner and no
+// radial step.
 type Input struct {
 	Band        breprecord.LoopBand
 	Face        breprecord.Face
@@ -178,14 +179,15 @@ func (fr *Rings) Place(in Input, e brepgeom.Embed,
 		if in.RootAxis || len(in.Near) != len(fr.SeamGap) {
 			return fmt.Errorf(`%w: a fillet band's near-tangent corners do not match its walks`, decaderr.ErrUnsupported)
 		}
-		// An LF5′ column stands on the G1 foot's affine ring. Every true band
-		// point near that corner lies, in its own level, within twice the
-		// corner's reach of the column and of both patches' stated ends, so
-		// each patch beside the corner adds that distance
-		// (agent-docs/loop-fillet-design.md §5.5).
-		for k, rho := range in.Near {
-			if rho > 0 {
-				fr.SeamGap[k] = proofbound.AbsSumUpper(fr.SeamGap[k], filletband.NearTangentReach([]float64{rho}))
+		// An LF5′ column stands on the G1 foot's affine ring, and a corner
+		// beside an off-radius arc on its recorded join. Every true band
+		// point near such a corner lies, in its own level, within the corner's
+		// local reach of the column and of both patches' stated ends, so each
+		// patch beside it adds that distance (agent-docs/loop-fillet-design.md
+		// §5.7).
+		for k, reach := range in.Near {
+			if reach > 0 {
+				fr.SeamGap[k] = proofbound.AbsSumUpper(fr.SeamGap[k], reach)
 			}
 		}
 	}
@@ -283,7 +285,7 @@ func (fr *Rings) Emit(in Input, mesh *topo.Mesh,
 		fr.FinishPatch(mesh, faces[p], eps, delta, levelDelta, axial, first[p], last[p], bump)
 		p++
 		if ni := (i + 1) % n; lm.Joins != nil && lm.Joins[ni].Arc {
-			eps := proofbound.AbsSumUpper(sPhi, lm.ArcSag[ni], twist[p])
+			eps := proofbound.AbsSumUpper(sPhi, lm.ArcSag[ni], twist[p], fr.SeamGap[ni])
 			fr.FinishPatch(mesh, faces[p], eps, delta, levelDelta, axial, first[p], last[p], bump)
 			p++
 		}

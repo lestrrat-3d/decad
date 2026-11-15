@@ -17,6 +17,7 @@ type BandMassInput struct {
 	Walks               []survey2d.SideWalk
 	Corners             []Corner
 	Rho                 []float64
+	Restate             RestateTerms
 	Radius              proofbound.RatInterval
 	Level, LevelDelta   float64
 	MaterialSign, Sigma float64
@@ -40,7 +41,8 @@ func RadiusInterval(held, delta float64) (proofbound.RatInterval, error) {
 }
 
 // MassOf integrates the fillet strip and widens every changed term at curved
-// miters and LF5′ corners (Rho, agent-docs/loop-fillet-design.md §5.5). The
+// miters, at LF5′ corners (Rho, agent-docs/loop-fillet-design.md §5.5), and
+// for the loop's restated off-radius arcs (Restate, §5.6). The
 // sign of either corner's change is unknown, so its allowance widens both
 // ends of each interval.
 func MassOf(in BandMassInput) (BandMass, error) {
@@ -69,6 +71,16 @@ func MassOf(in BandMassInput) (BandMass, error) {
 	}
 	zReach := new(big.Rat).Add(new(big.Rat).Abs(level), delta)
 	zReach.Add(zReach, in.Radius.Hi)
+	if in.Restate.Arcs > 0 {
+		volume, moment, ok := RestateMassAllowance(in.Restate, WalkCoordUpper(in.Walks, 0), in.Radius)
+		if !ok {
+			return BandMass{}, fmt.Errorf(`%w: a fillet's restated arcs state no mass allowance`, decaderr.ErrUnsupported)
+		}
+		out.Volume3 = proofbound.IntervalWiden(out.Volume3, new(big.Rat).Mul(volume, big.NewRat(3, 1)))
+		out.Moments[in.Embed.Axis[0]] = proofbound.IntervalWiden(out.Moments[in.Embed.Axis[0]], moment)
+		out.Moments[in.Embed.Axis[1]] = proofbound.IntervalWiden(out.Moments[in.Embed.Axis[1]], moment)
+		out.Moments[in.Embed.Axis[2]] = proofbound.IntervalWiden(out.Moments[in.Embed.Axis[2]], new(big.Rat).Mul(volume, zReach))
+	}
 	for k, class := range in.Corners {
 		var volume, mu, mv *big.Rat
 		var ok bool

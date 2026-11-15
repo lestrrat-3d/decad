@@ -56,14 +56,21 @@ const (
 )
 
 // Loop is ℓ as the band reads it: its walks, and Corners[k] the class of the
-// corner at Walks[k].Start, between walk k−1 and walk k. Rho[k] is an LF5′
-// corner's reach ρ (capband.NearTangentCorner) and zero at every other
-// corner; Rho is nil when the loop has no LF5′ corner. A loop of one whole
+// corner at Walks[k].Start, between walk k−1 and walk k. A loop of one whole
 // circle (LF7) has no corner.
+//
+// Rho, RhoRec and Gap hold, per corner, the LF5′ reach read about restated
+// centres (§5.5, §5.6), the near-tangent reach read about the recorded
+// centres, and the radial step an off-radius arc's record holds at the corner
+// (§5.7); Restate holds the loop's restatement terms. The three slices are
+// nil, and Restate zero, for a loop with no LF5′ corner and no off-radius arc.
 type Loop struct {
 	Walks   []Walk
 	Corners []Corner
 	Rho     []float64
+	RhoRec  []float64
+	Gap     []float64
+	Restate RestateTerms
 }
 
 // WholeTurn reports whether ℓ is one whole circle (LF7).

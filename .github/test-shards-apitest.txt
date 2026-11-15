@@ -3074,3 +3074,6 @@
 12	0.00	TestFilletLoopNearTangentJoins
 12	0.00	TestFilletLoopNearTangentArcJoins
 12	0.00	TestFilletLoopNearTangentCut
+12	0.00	TestFilletLoopNearTangentHole
+12	0.00	TestFilletLoopNearTangentBossRoot
+12	0.00	TestFilletLoopNearTangentInchRadius

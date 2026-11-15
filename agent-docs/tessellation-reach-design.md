@@ -772,7 +772,8 @@ Lemma 3 assumes `X′` stays a simple loop at the same clearance from the other 
 loop gates read for both. Nothing here proves it: the window gate bounds `Δ` only below the chord, so a very short
 restated arc beside another loop is the case it leaves open.
 
-A loop with no off-radius arc adds nothing. The 20 mm plate of the apitest below (two R4.5 corners and an R22
+A loop with no off-radius arc adds nothing. A complete-loop fillet reads the same restatement, shift and
+level-set perimeter for its strip (`agent-docs/loop-fillet-design.md` §5.6). The 20 mm plate of the apitest below (two R4.5 corners and an R22
 end arc, 8 mm thick, 0.5 mm chamfer) restates two arcs with `Δ ≈ 1.5·10⁻¹⁵` mm and `Perim ≈ 274` mm, so its
 `Noff` is near `7·10⁻¹²` mm³.
 

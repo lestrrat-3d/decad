@@ -174,28 +174,39 @@ func attachFilletBand(ctx context.Context, alloc topo.Alloc, body *topo.Body, re
 
 	var patches []*topo.Face
 	area := proofbound.BoundedScalar{}
+	levels := fr.Loop.LevelLength(rIv)
+	excess, ok := fr.Loop.MeridianExcess(fr.Walks, rIv)
+	if !ok {
+		return nil, bandMass{}, fmt.Errorf(`%w: fillet band %d's near-tangent or stepped seams state no length bound`, decaderr.ErrUnsupported, bi)
+	}
 	newPatch := func(surf surfacegeom.Surface, loops []*topo.Loop, capV *topo.Vertex) error {
 		p := len(patches)
 		piece := fr.Pieces[p]
 		areaIv := filletband.PatchArea(piece, rIv)
-		if piece.Walk >= 0 && len(fr.Loop.Corners) > 0 {
-			i := piece.Walk
-			for _, k := range [2]int{i, (i + 1) % n} {
-				var allow *big.Rat
-				var ok bool
-				switch fr.Loop.Corners[k] {
-				case filletband.CurvedMiter:
-					prev := fr.Walks[(k+n-1)%n]
-					allow, ok = filletband.CurvedMiterPatchAreaAllowance(piece, fr.Walks[i], prev, fr.Walks[k], i == k, rIv)
-				case filletband.NearTangent:
-					allow, ok = filletband.NearTangentAreaAllowance(fr.Loop.Rho[k], rIv)
-				default:
-					continue
-				}
-				if !ok {
-					return fmt.Errorf(`%w: a curved or near-tangent fillet patch has no area allowance`, decaderr.ErrUnsupported)
-				}
+		turn := new(big.Rat)
+		for _, k := range patchCorners(piece, n) {
+			var allow *big.Rat
+			ok := true
+			switch {
+			case fr.Loop.Corners[k] == filletband.CurvedMiter && piece.Walk >= 0:
+				i := piece.Walk
+				prev := fr.Walks[(k+n-1)%n]
+				allow, ok = filletband.CurvedMiterPatchAreaAllowance(piece, fr.Walks[i], prev, fr.Walks[k], i == k, rIv)
+			case levels != nil && levels[k] > 0:
+				allow, ok = filletband.LevelAreaAllowance(levels[k], rIv)
+			}
+			if !ok {
+				return fmt.Errorf(`%w: a curved, near-tangent or stepped fillet patch has no area allowance`, decaderr.ErrUnsupported)
+			}
+			if allow != nil {
 				areaIv = proofbound.IntervalWiden(areaIv, allow)
+			}
+			t, ok := fr.Loop.NormalTurn(fr.Walks, k, rIv)
+			if !ok {
+				return fmt.Errorf(`%w: a near-tangent or stepped fillet patch has no normal turn`, decaderr.ErrUnsupported)
+			}
+			if t.Cmp(turn) > 0 {
+				turn = t
 			}
 		}
 		held, bound := heldOf(areaIv)
@@ -213,6 +224,12 @@ func attachFilletBand(ctx context.Context, alloc topo.Alloc, body *topo.Body, re
 		}
 		if b.Sigma > 0 {
 			face.Reversed = !face.Reversed
+		}
+		// Beside an LF5′ corner or a radial step the true band tilts from the
+		// patch's tag by up to the corner's normal turn (loop-fillet §5.5,
+		// §5.7); set after the orientation reading, which reads the tag.
+		if turn.Sign() > 0 {
+			face.NormalBound = math.Max(face.NormalBound, proofbound.RatFloatUp(turn))
 		}
 		for _, l := range loops {
 			for _, ce := range l.CoEdges {
@@ -288,7 +305,11 @@ func attachFilletBand(ctx context.Context, alloc topo.Alloc, body *topo.Body, re
 		// passes the first straight walk of the two it joins; an LF6 meridian
 		// passes only the one walk whose wall it bounds, so it keeps the cross
 		// product whenever that walk is circular, even beside a straight walk.
-		meridian := func(foot sectionrecord.Point2, v survey2d.SideWalk, straight *survey2d.SideWalk, capV, sideV *topo.Vertex) *topo.Edge {
+		meridian := func(k int, foot sectionrecord.Point2, v survey2d.SideWalk, straight *survey2d.SideWalk, capV, sideV *topo.Vertex) *topo.Edge {
+			bound := meridianBound
+			if excess != nil {
+				bound = proofbound.AbsSumUpper(bound, excess[k])
+			}
 			nu, nv := foot.U-v.StartU, foot.V-v.StartV
 			l := math.Hypot(nu, nv)
 			normal := pl.Dir(nu/l, nv/l, 0)
@@ -301,7 +322,7 @@ func attachFilletBand(ctx context.Context, alloc topo.Alloc, body *topo.Body, re
 				}
 				axis = tangent
 			}
-			return topobuild.NewEdge(alloc, topo.Edge{Convex: convex, Length: meridianLen, LengthBound: meridianBound, Curve: surfacegeom.Arc3{Center: pl.Point(foot.U, foot.V, sideZ), Axis: axis, Radius: units.Millimeters(r)}, Start: capV, End: sideV})
+			return topobuild.NewEdge(alloc, topo.Edge{Convex: convex, Length: meridianLen, LengthBound: bound, Curve: surfacegeom.Arc3{Center: pl.Point(foot.U, foot.V, sideZ), Axis: axis, Radius: units.Millimeters(r)}, Start: capV, End: sideV})
 		}
 		lead, trail := make([]*topo.Edge, n), make([]*topo.Edge, n)
 		for k := range n {
@@ -319,13 +340,13 @@ func attachFilletBand(ctx context.Context, alloc topo.Alloc, body *topo.Body, re
 				// PA to this walk's PB, so the trailing meridian stands on the
 				// previous walk's wall and takes that walk's axis.
 				prev := fr.Walks[(k+n-1)%n]
-				trail[k] = meridian(j.PA, w, straightWalk(prev, nil), arc.Start, sideV)
-				lead[k] = meridian(j.PB, w, straightWalk(w, nil), arc.End, sideV)
+				trail[k] = meridian(k, j.PA, w, straightWalk(prev, nil), arc.Start, sideV)
+				lead[k] = meridian(k, j.PB, w, straightWalk(w, nil), arc.End, sideV)
 			case filletband.Tangent, filletband.NearTangent:
 				// An LF5′ join is built as LF5, on the G1 foot the contour
 				// holds; its sliver is charged in the readings (§5.5).
 				prev := fr.Walks[(k+n-1)%n]
-				lead[k] = meridian(j.M, w, straightWalk(prev, &w), capAt(k), sideV)
+				lead[k] = meridian(k, j.M, w, straightWalk(prev, &w), capAt(k), sideV)
 				trail[k] = lead[k]
 			case filletband.CurvedMiter:
 				prev := fr.Walks[(k+n-1)%n]
@@ -411,7 +432,7 @@ func attachFilletBand(ctx context.Context, alloc topo.Alloc, body *topo.Body, re
 		return nil, bandMass{}, fmt.Errorf(`%w: fillet band %d built %d patches for %d pieces`, decaderr.ErrUnsupported, bi, len(patches), len(fr.Pieces))
 	}
 	terms, err := filletband.MassOf(filletband.BandMassInput{
-		Pieces: fr.Pieces, Walks: fr.Walks, Corners: fr.Loop.Corners, Rho: fr.Loop.Rho,
+		Pieces: fr.Pieces, Walks: fr.Walks, Corners: fr.Loop.Corners, Rho: fr.Loop.Rho, Restate: fr.Loop.Restate,
 		Radius: rIv, Level: f.Z0, LevelDelta: f.Z0Delta,
 		MaterialSign: m, Sigma: b.Sigma, Embed: e,
 	})
@@ -531,7 +552,7 @@ func filletBandExtent(ctx context.Context, b LoopBand, f Face, xform r3.Transfor
 	sideIv := proofbound.IntervalAdd(proofbound.PointInterval(level), proofbound.IntervalScale(rIv, big.NewRat(int64(m), 1)))
 	base := pl.Xform.Apply(pl.Frame.Origin()).Dot(g)
 	coeff := [3]float64{pl.Dir(1, 0, 0).Dot(g), pl.Dir(0, 1, 0).Dot(g), pl.Dir(0, 0, 1).Dot(g)}
-	loIv, hiIv, err := filletband.ExtentsOf(fr.Pieces, fr.Walks, fr.Loop.Corners, fr.Loop.Rho,
+	loIv, hiIv, err := filletband.ExtentsOf(fr.Pieces, fr.Walks, fr.Loop.Corners, fr.Loop.LocalReach(rIv),
 		m, b.Setback.Dc, rIv, sideIv, coeff)
 	if err != nil {
 		return 0, 0, 0, err
@@ -555,6 +576,18 @@ func (bp Payload) HasFilletBand() bool {
 		}
 	}
 	return false
+}
+
+// patchCorners is the corners a patch meets: a walk's patch the corners at
+// its two ends, an LF6 horn its own corner, in Table LF's index.
+func patchCorners(piece filletband.Piece, n int) []int {
+	if piece.Walk >= 0 {
+		if piece.WholeTurn {
+			return nil
+		}
+		return []int{piece.Walk, (piece.Walk + 1) % n}
+	}
+	return []int{piece.Corner}
 }
 
 // walkTangent is a straight side walk's unit direction in its plane's (u, v).

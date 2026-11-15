@@ -5,11 +5,9 @@ import (
 	"math"
 	"math/big"
 
-	"github.com/lestrrat-3d/decad/internal/capband"
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
-	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 )
 
@@ -47,44 +45,22 @@ func NearTangentMassAllowance(cornerU, cornerV, cornerError, rho float64, radius
 	return volume, new(big.Rat).Mul(volume, u), new(big.Rat).Mul(volume, v), true
 }
 
-// NearTangentAreaAllowance bounds the area change an LF5′ corner makes to
-// each pipe patch beside it: π·r_hi·ρ. At a convex sliver the patch's level
-// curve at meridian angle φ ends at m(t) instead of its radial foot, along
-// its own carrier: at most 2ρ along a line, an arc of chord at most ρ (under
-// (π/2)·ρ long) on a circle, and the area element is that length times r·dφ.
-// At a reflex sliver each patch keeps its radial foot exactly, and the horn
-// between the two feet, θ·r²·(π/2 − 1) with θ <= π·ρ/(2r), is under
-// (π/2)(π/2 − 1)·r·ρ.
-func NearTangentAreaAllowance(rho float64, radius proofbound.RatInterval) (*big.Rat, bool) {
-	d := proofarith.FloatRat(rho)
-	if d == nil || d.Sign() < 0 || radius.Hi.Sign() <= 0 {
-		return nil, false
-	}
-	out := new(big.Rat).Mul(proofbound.PiUpper, radius.Hi)
-	return out.Mul(out, d), true
-}
-
-// NearTangentReach is twice the largest LF5′ reach of the loop, the distance
-// within which every true corner point lies of each radial foot at every
-// offset. It is zero for a loop with no LF5′ corner.
-func NearTangentReach(rho []float64) float64 {
+// WidenNearTangentExtent widens an extent's enclosure by the loop's largest
+// local reach (Loop.LocalReach, agent-docs/loop-fillet-design.md §5.7) along
+// the planar part of direction g: every true band point lies, in its own
+// level, within it of a point of the stated patches, and each stated point
+// within it of a true one. reach is nil for a loop with no LF5′ corner and no
+// radial step.
+func WidenNearTangentExtent(reach []float64, g [3]*big.Rat, old Interval) (Interval, error) {
 	largest := 0.0
-	for _, d := range rho {
+	for _, d := range reach {
 		largest = math.Max(largest, d)
 	}
-	return proofbound.ProductUpper(2, largest)
-}
-
-// WidenNearTangentExtent widens an extent's enclosure by the LF5′ corners'
-// reach along the planar part of direction g: every true band point lies
-// within NearTangentReach, in its own level, of a point of the patches the
-// structure states, and each of those within it of a true one.
-func WidenNearTangentExtent(rho []float64, g [3]*big.Rat, old Interval) (Interval, error) {
-	reach := proofarith.FloatRat(NearTangentReach(rho))
-	if reach == nil {
+	r := proofarith.FloatRat(largest)
+	if r == nil {
 		return Interval{}, fmt.Errorf(`%w: a near-tangent fillet extent has no corner reach`, decaderr.ErrNotFinite)
 	}
-	if reach.Sign() == 0 {
+	if r.Sign() == 0 {
 		return old, nil
 	}
 	planar, ok := proofbound.SqrtInterval(proofbound.PointInterval(new(big.Rat).Add(
@@ -92,7 +68,7 @@ func WidenNearTangentExtent(rho []float64, g [3]*big.Rat, old Interval) (Interva
 	if !ok {
 		return Interval{}, fmt.Errorf(`%w: a near-tangent fillet extent has no planar direction bound`, decaderr.ErrUnsupported)
 	}
-	return proofbound.IntervalWiden(old, new(big.Rat).Mul(planar.Hi, reach)), nil
+	return proofbound.IntervalWiden(old, new(big.Rat).Mul(planar.Hi, r)), nil
 }
 
 // NearTangentNormalTurn bounds how far the in-plane outward normal of the
@@ -145,46 +121,4 @@ func movedRadiusLower(w survey2d.SideWalk, u, v float64, reach *big.Rat) (*big.R
 		lo.Sub(lo, reach)
 	}
 	return lo, lo.Sign() > 0
-}
-
-// LoopNearTangentRho reads the LF5′ reach of every corner of a loop the offset
-// joins resolve as G1: ρ where capband.NearTangentCorner admits a join that
-// capband.JoinIsG1 does not prove exactly tangent, and zero at every other
-// corner, including a G1 join the near-tangent rule refuses (the build's SF1
-// refuses that loop). It returns nil for a loop with no LF5′ corner.
-func LoopNearTangentRho(budget *proofbound.WorkBudget, loop sectionrecord.LoopRecord, walks []survey2d.SideWalk,
-	r, rDelta, tol float64) ([]float64, error) {
-	n := len(walks)
-	if n == 0 || (n == 1 && walks[0].Closed) {
-		return nil, nil
-	}
-	joins, err := OffsetJoins(budget, walks, r, 0, tol)
-	if err != nil {
-		return nil, err
-	}
-	var rho []float64
-	for k, j := range joins {
-		if err := survey2d.WallBudgetStep(budget); err != nil {
-			return nil, err
-		}
-		if !j.G1 || j.Arc {
-			continue
-		}
-		prevSeg, curSeg, err := cornerSegments(loop, walks[(k+n-1)%n], walks[k])
-		if err != nil {
-			return nil, err
-		}
-		if capband.JoinIsG1(prevSeg, curSeg) {
-			continue
-		}
-		charge, why, _ := capband.NearTangentCorner(prevSeg, curSeg, r, r, rDelta)
-		if why != "" {
-			continue
-		}
-		if rho == nil {
-			rho = make([]float64, n)
-		}
-		rho[k] = charge.Rho
-	}
-	return rho, nil
 }

@@ -97,7 +97,8 @@ func TestReadLoopNearTangentRefusals(t *testing.T) {
 // TestNearTangentAllowances pins §5.5's closed forms on one corner of reach
 // ρ = 2⁻⁴⁰ at (3, −4), radius 2 within 2⁻²⁰: the volume r_hi·ρ·(r_hi + 3ρ),
 // each in-plane moment that times |coordinate| + r_hi + 2ρ, the patch area
-// π·r_hi·ρ, an extent widened by 2ρ times the direction's planar length, and
+// (π/2)·r_hi times a level-length change of 2ρ, an extent widened by a reach
+// times the direction's planar length, and
 // MassOf widening an LF5′ corner's three-times volume by three times the
 // volume where an LF5 corner adds nothing.
 func TestNearTangentAllowances(t *testing.T) {
@@ -115,16 +116,16 @@ func TestNearTangentAllowances(t *testing.T) {
 	require.Zero(t, mu.Cmp(new(big.Rat).Mul(wantVol, new(big.Rat).Add(big.NewRat(3, 1), reach))))
 	require.Zero(t, mv.Cmp(new(big.Rat).Mul(wantVol, new(big.Rat).Add(big.NewRat(4, 1), reach))))
 
-	area, ok := filletband.NearTangentAreaAllowance(rho, rIv)
+	area, ok := filletband.LevelAreaAllowance(2*rho, rIv)
 	require.True(t, ok)
-	require.Zero(t, area.Cmp(new(big.Rat).Mul(new(big.Rat).Mul(proofbound.PiUpper, rHi), d)))
+	require.Zero(t, area.Cmp(new(big.Rat).Mul(new(big.Rat).Mul(proofbound.HalfPiInterval().Hi, rHi), new(big.Rat).Mul(big.NewRat(2, 1), d))))
 
 	old := proofbound.Interval(big.NewRat(1, 1), big.NewRat(2, 1))
 	g := [3]*big.Rat{big.NewRat(3, 5), big.NewRat(4, 5), big.NewRat(7, 1)}
 	widened, err := filletband.WidenNearTangentExtent([]float64{0, rho}, g, old)
 	require.NoError(t, err)
 	grow := new(big.Rat).Sub(old.Lo, widened.Lo)
-	require.GreaterOrEqual(t, grow.Cmp(new(big.Rat).Mul(big.NewRat(2, 1), d)), 0, "the extent grows by at least 2ρ")
+	require.GreaterOrEqual(t, grow.Cmp(d), 0, "the extent grows by at least the reach")
 	require.Zero(t, grow.Cmp(new(big.Rat).Sub(widened.Hi, old.Hi)))
 	same, err := filletband.WidenNearTangentExtent(nil, g, old)
 	require.NoError(t, err)
@@ -157,8 +158,8 @@ func TestNearTangentAllowances(t *testing.T) {
 }
 
 // TestLoopContourDeltaChargesNearTangentReach reads the slot's cap contour
-// bound at radius 1: the G1 contour proof's bound plus twice the larger LF5′
-// reach, and the exact slot's bound alone.
+// bound at radius 1: the G1 contour proof's bound plus the largest local
+// reach (2ρ at an LF5′ corner with no step), and the exact slot's bound alone.
 func TestLoopContourDeltaChargesNearTangentReach(t *testing.T) {
 	t.Parallel()
 	shift := 5 * math.Ldexp(1, -34)
@@ -178,7 +179,12 @@ func TestLoopContourDeltaChargesNearTangentReach(t *testing.T) {
 			require.Equal(t, base, got)
 			continue
 		}
-		require.Equal(t, proofbound.AbsSumUpper(base, filletband.NearTangentReach(read.Rho)), got)
+		r1, err := filletband.RadiusInterval(1, 0)
+		require.NoError(t, err)
+		reach := read.LocalReach(r1)
+		require.Equal(t, proofbound.AbsSumUpper(base, math.Max(reach[1], reach[2])), got)
+		require.GreaterOrEqual(t, math.Max(reach[1], reach[2]), 2*math.Max(read.Rho[1], read.Rho[2]))
+		require.InEpsilon(t, 2*math.Max(read.Rho[1], read.Rho[2]), math.Max(reach[1], reach[2]), 1e-12)
 		require.Greater(t, got, base)
 	}
 }

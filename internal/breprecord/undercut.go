@@ -34,10 +34,10 @@ func ListVerdict(faces *[]*topo.Face, undecided *bool, f *topo.Face, verdict sur
 // through the turn of a reflex corner (survey2d.CornerRange), decided by the
 // three-valued rule every undercut reading uses. The patch tags are the built
 // surfaces (their stamped departure is zero), so no allowance beyond that
-// arithmetic arises, except beside an LF5′ corner: there the true band's
-// normals stray from the two patches' by at most
-// filletband.NearTangentNormalTurn, and each patch's bracket widens by it
-// (loop-fillet §5.5). It reports false, a total refusal, when a patch's face is
+// arithmetic arises, except beside an LF5′ corner or a radial step: there the
+// true band's normals stray from the patches' by at most
+// filletband.Loop.NormalTurn, and each patch's bracket widens by it
+// (loop-fillet §5.5, §5.7). It reports false, a total refusal, when a patch's face is
 // missing or a range cannot be enclosed.
 func FilletUndercuts(budget *proofbound.WorkBudget, roles map[string]*topo.Face, bp Payload, band LoopBand, pull r3.Vec,
 	faces *[]*topo.Face, undecided *bool, work *freeform.FreeformWork) bool {
@@ -76,14 +76,14 @@ func FilletUndercuts(budget *proofbound.WorkBudget, roles map[string]*topo.Face,
 	}
 	for i, w := range fr.Walks {
 		rng, ok := survey2d.InwardRange(w, m, pull, sigma)
-		if ok && len(fr.Loop.Rho) > 0 {
+		if ok && !fr.Loop.WholeTurn() {
 			for _, k := range [2]int{i, (i + 1) % n} {
-				if fr.Loop.Corners[k] != filletband.NearTangent {
-					continue
-				}
-				turn, okT := filletband.NearTangentNormalTurn(fr.Walks, k, fr.Loop.Rho[k], rIv)
+				turn, okT := fr.Loop.NormalTurn(fr.Walks, k, rIv)
 				if !okT {
 					return false
+				}
+				if turn.Sign() == 0 {
+					continue
 				}
 				if rng, ok = survey2d.WidenPullBracket(rng, m, pull, turn); !ok {
 					return false
@@ -94,7 +94,15 @@ func FilletUndercuts(budget *proofbound.WorkBudget, roles map[string]*topo.Face,
 			return false
 		}
 		if ni := (i + 1) % n; !fr.Loop.WholeTurn() && fr.Loop.Corners[ni] == filletband.Reflex {
-			if !patch(survey2d.CornerRange(w, fr.Walks[ni], m, pull, sigma)) {
+			rng, ok := survey2d.CornerRange(w, fr.Walks[ni], m, pull, sigma)
+			turn, okT := fr.Loop.NormalTurn(fr.Walks, ni, rIv)
+			if !okT {
+				return false
+			}
+			if ok && turn.Sign() > 0 {
+				rng, ok = survey2d.WidenPullBracket(rng, m, pull, turn)
+			}
+			if !patch(rng, ok) {
 				return false
 			}
 		}
