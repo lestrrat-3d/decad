@@ -1,6 +1,7 @@
 package retainedblend
 
 import (
+	"errors"
 	"fmt"
 	"math"
 	"slices"
@@ -50,6 +51,8 @@ type wallBand struct {
 	noteCuts bool
 	// side caches each held vertex's side of each plane.
 	side []map[int]int
+	// active are the planes cutBand applies, in the order it applies them.
+	active []int
 }
 
 // bandEnd is an exact plane of the band: the end plane of an end where the wall
@@ -176,13 +179,25 @@ func (b *wallBand) sideOf(pt bandPt, q int) (int, error) {
 		}
 	}
 	if err != nil {
-		return 0, err
+		return 0, &undecidedError{err: err, plane: q, id: pt.id, held: pt.held}
 	}
 	if pt.held {
 		b.side[q][pt.id] = s
 	}
 	return s, nil
 }
+
+// undecidedError is a refusal because a point lies within its bound of plane
+// q, which therefore does not decide its side.
+type undecidedError struct {
+	err   error
+	plane int
+	id    int
+	held  bool
+}
+
+func (e *undecidedError) Error() string { return e.err.Error() }
+func (e *undecidedError) Unwrap() error { return e.err }
 
 // sharedEdge is the held facet edge both points lie on.
 func sharedEdge(u, v bandPt) ([2]int, bool) {
@@ -308,6 +323,15 @@ func (b *wallBand) clip(poly []bandPt, q int, facetBound float64) ([]bandPt, err
 // made once, for both facets beside the edge, and takes the larger bound of
 // the edge's two vertices plus the rounding; a corner of the band inside a
 // facet takes the facet's bound.
+//
+// A held vertex's membership is decided by every band plane (readSides): a
+// plane that puts it outside by more than its bound proves it outside, and the
+// vertex's readings on the band's other planes are then never used, so a vertex
+// within its bound of one plane, such as a run of cut vertices an earlier blend
+// left along an end face, does not refuse where another plane puts it well
+// outside the band. A facet whose three corners lie outside one plane is
+// emitted unchanged, and a facet that is cut meets the planes that decide its
+// corners first (clipAll).
 func (w *work) cutBand(f faceLoops, b *wallBand) (bandCuts, error) {
 	tris := w.fp.Tris
 	b.w = w
@@ -316,28 +340,17 @@ func (w *work) cutBand(f faceLoops, b *wallBand) (bandCuts, error) {
 		b.side[q] = map[int]int{}
 	}
 	out := bandCuts{removed: map[int]bool{}, corner: [2]int{-1, -1}}
-	var planes []int
+	b.active = b.active[:0]
 	for i, e := range b.ends {
 		if e != nil {
-			planes = append(planes, bandEnd0+i)
+			b.active = append(b.active, bandEnd0+i)
 			out.runs[i] = map[int][]int{}
 		}
 	}
 	for i := range b.others {
-		planes = append(planes, bandOther+i)
+		b.active = append(b.active, bandOther+i)
 	}
-	planes = append(planes, bandGen)
-	beyond := b.beyondEnds(f.facets)
-	for _, fi := range f.facets {
-		for _, v := range tris[fi] {
-			if beyond[v] {
-				continue
-			}
-			if _, err := b.sideOf(w.heldPt(v), bandGen); err != nil {
-				return bandCuts{}, err
-			}
-		}
-	}
+	b.active = append(b.active, bandGen)
 	edgePts := map[bandEdgeKey]int{}
 	corners := map[[2]int]int{}
 	make1 := func(pt *bandPt, facetBound float64) error {
@@ -382,32 +395,14 @@ func (w *work) cutBand(f faceLoops, b *wallBand) (bandCuts, error) {
 	}
 	for _, fi := range f.facets {
 		t := tris[fi]
-		inside := false
-		for _, v := range t {
-			if beyond[v] {
-				// Its side of the generator may be undecided: count it inside,
-				// so the facet is clipped, and the end plane drops it.
-				s, err := b.sideOf(w.heldPt(v), bandGen)
-				inside = inside || err != nil || s > 0
-				continue
-			}
-			s, _ := b.sideOf(w.heldPt(v), bandGen)
-			inside = inside || s > 0
-		}
-		if !inside {
+		if b.facetOutside(t) {
 			w.emit(t, f.group)
 			continue
 		}
 		facetBound := max(w.beta[t[0]], w.beta[t[1]], w.beta[t[2]])
-		poly := []bandPt{w.heldPt(t[0]), w.heldPt(t[1]), w.heldPt(t[2])}
-		var err error
-		for _, q := range planes {
-			if poly, err = b.clip(poly, q, facetBound); err != nil {
-				return bandCuts{}, err
-			}
-			if len(poly) < 3 {
-				break
-			}
+		poly, err := b.clipAll([]bandPt{w.heldPt(t[0]), w.heldPt(t[1]), w.heldPt(t[2])}, facetBound)
+		if err != nil {
+			return bandCuts{}, b.reword(err, t[:]...)
 		}
 		if len(poly) < 3 {
 			w.emit(t, f.group)
@@ -422,18 +417,16 @@ func (w *work) cutBand(f faceLoops, b *wallBand) (bandCuts, error) {
 			return bandCuts{}, err
 		}
 	}
+	seen := map[int]bool{}
 	for _, fi := range f.facets {
 		for _, v := range tris[fi] {
-			if beyond[v] {
+			if seen[v] {
 				continue
 			}
-			in := true
-			for k := len(planes) - 1; k >= 0 && in; k-- {
-				s, err := b.sideOf(w.heldPt(v), planes[k])
-				if err != nil {
-					return bandCuts{}, err
-				}
-				in = s > 0
+			seen[v] = true
+			in, err := b.inside(v)
+			if err != nil {
+				return bandCuts{}, b.reword(err, v)
 			}
 			if in {
 				out.removed[v] = true
@@ -443,32 +436,115 @@ func (w *work) cutBand(f faceLoops, b *wallBand) (bandCuts, error) {
 	return out, nil
 }
 
-// beyondEnds marks the wall's vertices that lie outside an extending end plane
-// by more than their bound, and records that side. The band lies inside every
-// such plane, so a marked vertex is never in it, and a facet clipped by the
-// band loses the vertex to that plane's clip before the generator's is
-// applied: its side of the generator is never read there, except where a
-// crossing on a held edge reads both of the edge's vertices, which still
-// refuses an undecided one. cutBand therefore tests no marked vertex against
-// the generator and removes none, and a feature on the wall past an end
-// plane, such as a cross hole, does not refuse. A vertex within its bound of
-// the plane is not marked, and cutBand tests it against the generator.
-func (b *wallBand) beyondEnds(facets []int) map[int]bool {
-	beyond := map[int]bool{}
-	for _, fi := range facets {
-		for _, v := range b.w.fp.Tris[fi] {
-			for i, e := range b.ends {
-				if e == nil || e.on[v] {
-					continue
-				}
-				if b.value(bandEnd0+i, b.w.verts[v]) < -b.tolerance(b.w.beta[v]) {
-					beyond[v] = true
-					b.side[bandEnd0+i][v] = -1
-				}
-			}
+// read is held vertex v's side of plane q, and false when the vertex lies
+// within its bound of q and q does not decide it.
+func (b *wallBand) read(v, q int) (int, bool) {
+	s, err := b.sideOf(b.w.heldPt(v), q)
+	return s, err == nil
+}
+
+// facetOutside reports whether the band misses the facet: its three corners
+// lie outside one band plane, or on or outside the main plane, the band's
+// first bound. Each reading is decided; an undecided corner proves nothing.
+// The band is the meeting of the planes' half-spaces, so a facet inside the
+// closed outer side of one plane meets none of it.
+func (b *wallBand) facetOutside(t [3]int) bool {
+	for _, q := range b.active {
+		out := true
+		for _, v := range t {
+			s, ok := b.read(v, q)
+			out = out && ok && (s < 0 || (s == 0 && q == bandGen))
+		}
+		if out {
+			return true
 		}
 	}
-	return beyond
+	return false
+}
+
+// clipAll keeps the part of the convex polygon poly inside every band plane.
+// The planes are applied in their fixed order, except that a plane whose clip
+// refuses, because a corner within its bound of the plane is undecided there,
+// is deferred: another plane may put that corner outside the band and drop it
+// from the polygon, after which the plane never reads it. A plane that still
+// refuses once every other plane is applied has no order that avoids it, and
+// the call refuses with its text.
+func (b *wallBand) clipAll(poly []bandPt, facetBound float64) ([]bandPt, error) {
+	rest := slices.Clone(b.active)
+	for len(rest) > 0 && len(poly) >= 3 {
+		var first error
+		applied := -1
+		for i, q := range rest {
+			cut, err := b.clip(poly, q, facetBound)
+			if err != nil {
+				if first == nil {
+					first = err
+				}
+				continue
+			}
+			poly, applied = cut, i
+			break
+		}
+		if applied < 0 {
+			return nil, first
+		}
+		rest = slices.Delete(rest, applied, applied+1)
+	}
+	return poly, nil
+}
+
+// inside reports whether held vertex v lies strictly inside every band plane.
+// A vertex that any plane decides on or outside is not inside, whatever the
+// other planes read; one that none puts outside and some leaves undecided
+// refuses.
+func (b *wallBand) inside(v int) (bool, error) {
+	var first error
+	for _, q := range slices.Backward(b.active) {
+		s, err := b.sideOf(b.w.heldPt(v), q)
+		switch {
+		case err != nil:
+			if first == nil {
+				first = err
+			}
+		case s <= 0:
+			return false, nil
+		}
+	}
+	return first == nil, first
+}
+
+// reword names the overlap of two blends where err is a refusal on an end
+// plane and one of the held vertices (a facet's corners, or the vertex whose
+// side refused) lies within its bound of that plane and on the inside of, or
+// on, every other band plane: the vertex belongs to an earlier cut along the
+// plane, and the band reaches it. Any other refusal keeps its text.
+func (b *wallBand) reword(err error, vs ...int) error {
+	var u *undecidedError
+	if !errors.As(err, &u) || !isEnd(u.plane) {
+		return err
+	}
+	if e := b.exact(u.plane); e == nil || e.what != "" {
+		return err
+	}
+	for _, v := range vs {
+		if _, ok := b.read(v, u.plane); ok || !b.insideOthers(v, u.plane) {
+			continue
+		}
+		return fmt.Errorf("%w: an earlier cut on an end face's plane lies within the blend's reach",
+			decaderr.ErrUnsupported)
+	}
+	return err
+}
+
+// insideOthers reports whether every band plane but q decides held vertex v
+// inside or on it.
+func (b *wallBand) insideOthers(v, q int) bool {
+	for _, o := range b.active {
+		if s, ok := b.read(v, o); o != q && (!ok || s < 0) {
+			return false
+		}
+	}
+	return true
 }
 
 func (w *work) heldPt(v int) bandPt {
