@@ -297,3 +297,35 @@ func TestChamferFreeformRimRefusals(t *testing.T) {
 		require.Equal(t, []*decad.Body{body}, doc.Bodies())
 	})
 }
+
+// largestVertexBound is the largest bound any vertex of body states.
+func largestVertexBound(body *decad.Body) float64 {
+	largest := 0.0
+	for _, v := range body.Vertices() {
+		largest = math.Max(largest, v.Position().Bound.Base())
+	}
+	return largest
+}
+
+// Both rims are one Cut, so the second rim meets wall facets no earlier rim left carrying its bound: the held
+// mesh of a two-rim chamfer is as fine as a one-rim chamfer's. Two Cuts cross the wall's facets, which run the
+// whole sweep, a second time at 45°, and that held the two-rim body above twice the one-rim bound.
+func TestChamferFreeformBothRimsHoldTheOneRimBound(t *testing.T) {
+	t.Parallel()
+	f := flower{base: 20, amp: 1, lobes: 12}
+	const c = 0.5
+	chamfer := func(t *testing.T, rims func(*decad.Body) *decad.EdgeQuery) *decad.Body {
+		t.Helper()
+		doc := decad.New(decad.WithChainTolerance(units.Millimeters(0.1)))
+		body := f.prism(t, doc)
+		out, err := decad.Chamfer(t.Context(), body, rims(body), units.Millimeters(c))
+		require.NoError(t, err)
+		return out
+	}
+	one := largestVertexBound(chamfer(t, func(b *decad.Body) *decad.EdgeQuery {
+		return decad.Edges(decad.OuterLoopOf(decad.CapStart(b)))
+	}))
+	both := largestVertexBound(chamfer(t, bothRims))
+	require.Positive(t, one)
+	require.LessOrEqual(t, both, 1.1*one, "the second rim carries the first rim's bound")
+}

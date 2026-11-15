@@ -3063,3 +3063,4 @@
 12	0.00	TestRefineSectorJoinKeepsLaterOperations
 12	0.00	TestRefineSectorJoinRefusals
 12	0.00	TestRefineSectorJoinNeverLoosens
+12	0.00	TestChamferFreeformBothRimsHoldTheOneRimBound
