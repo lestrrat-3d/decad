@@ -511,7 +511,8 @@ with `c_L` bounding the loop's plane-local coordinates
 (`filletband.WalkCoordUpper`). `filletband.MassOf` widens the volume and
 every moment by them. §7.1's Lemma 3 assumes X′ stays a simple loop at the
 same clearance from the other loops, and so does this bound; the window gate
-of `OffRadiusShift` bounds `Δ` only below the chord.
+of `OffRadiusShift` bounds `Δ` only below the chord. That premise is inherited
+from §7.1 and is not proven here.
 
 The restated section serves the strip alone. The patches, the contour and
 the mesh are the record's, built about `C`, and §5.7 charges each of them
@@ -524,7 +525,10 @@ radial step there: the segment from `v` to each neighbouring arc's own end
 point on the circle its Start states. `δ_k`, the sum of the two arcs'
 `||v − C| − |Start − C||` (`filletband.cornerGap`, each read as
 `|r_v² − r_S²|/(r_v + r_S)` with both roots rounded down), bounds how far `J`
-reaches from `v`. `δ_k` is zero at a corner whose arcs end on their circles.
+reaches from `v`. `δ_k` is zero at a corner whose arcs end on their circles,
+and a corner whose `δ_k` reaches `T/4` refuses (SF1). The cone term below
+needs that gate: with `δ < T/4` and `θ ≤ π·ρ̃/(2T)`,
+`(t + δ)·θ ≤ (5π/8)·ρ̃ < 2ρ̃`.
 Write `ρ̃ = max(ρ′, ρ_rec)` (zero away from LF5′ and recorded near-tangent
 joins). The recorded reading sees each arc's tangent at `v` about `C`, which
 is the arc's own tangent at its end on the circle, since that end lies on the
@@ -581,9 +585,11 @@ its level length times `r·dφ`. Outside the disk of radius `t + δ + ρ̃` abou
 `v` the two level curves coincide. Inside it, the stated and true pieces that
 differ consist of the following:
 
-- the carrier pieces above, each at most `stepRoot`, for both curves;
-- arcs of radius `t` about points of `J`, in the walks' windows, each under
-  `stepRoot`;
+- the stated carrier pieces above, each at most `stepRoot`, two in all;
+- the true pieces in the walks' windows: the moved carrier's part that stays
+  true lies inside the stated piece, and the arcs of radius `t` about points
+  of `J` that replace the rest span no more than the stated piece's chord, so
+  each window adds at most another `stepRoot`;
 - in the cone, a curve star-shaped about `v`, with radius between `t` and
   `t + δ`, against the stated connector of radius `t`;
 - the straight sides of `J`'s offset, `2δ` in all.
@@ -602,11 +608,16 @@ term `π·r·ρ`, which also covers a reflex sliver's absent horn
 `θ·r²·(π/2 − 1) ≤ (π/2)(π/2 − 1)·r·ρ`.
 
 **Normals.** At a corner with no step whose `ρ̃` is positive, the true band's
-normals stray from the two patches' by at most
-`filletband.NearTangentNormalTurn` read at `ρ̃`. That is
-`ρ/r_lo` between the two walks' normals at a reflex sliver
-(`2·sin(θ/2) ≤ ρ/T`), and `ρ` over the least moved radius along a toroidal
-patch at a convex one; a cylinder's normal does not change. Beside a step,
+normals stray from the normal a patch beside the corner states at the same
+point by at most `filletband.NearTangentNormalTurn` read at `ρ̃`. A stated face
+that runs past the true corner carries the neighbour's surface there, so the
+tilt is the turn between the two walls, `2·sin(θ/2) ≤ ρ/T ≤ ρ/r_lo`, plus
+the rotation of each circular carrier's normal over the stretch between its
+radial foot and the true corner or the other foot. That stretch is a chord
+of at most `ρ` on a moved circle of radius at least `R_lo`, and a chord bounds
+the unit-normal distance it turns through, so each adds `ρ/R_lo`. The charge
+is `ρ/r_lo + Σ ρ/R_lo` over the circular walks. At a reflex sliver the
+horn's normals lie between the two walls', inside the same sum. Beside a step,
 the true band wraps round the step's own corner at levels near `δ`. There
 its normals run from the wall's to the step's, a quarter turn plus θ, so the
 turn charged is `3/2 > √2` (`filletband.Loop.NormalTurn`).
@@ -648,7 +659,7 @@ Modify §1's test picks every sentinel.
 
 | SF | Call | Exists? | Sentinel |
 |---|---|---|---|
-| **SF1** | a corner whose exact turn disagrees with the offset contour's join; an LF8 corner whose offset locus folds or cannot be bounded; a G1-read join outside LF5′ in either reading (a turn past `sin²θ ≤ 2⁻⁶⁴`, a moved circle within its reach, a wall not proven to survive, a wall whose other end is LF8 or LF6); a sharp convex corner beside an off-radius arc; a reflex corner whose turn changes sign on restatement; an off-radius arc `capband.OffRadiusShift` does not bound or that shares its walk (§5.5–§5.6) | no regular miter can be proved | `ErrUnsupported`, naming the corner and the rule's reason |
+| **SF1** | a corner whose exact turn disagrees with the offset contour's join; an LF8 corner whose offset locus folds or cannot be bounded; a G1-read join outside LF5′ in either reading (a turn past `sin²θ ≤ 2⁻⁶⁴`, a moved circle within its reach, a wall not proven to survive, a wall whose other end is LF8 or LF6); a sharp convex corner beside an off-radius arc; a reflex corner whose turn changes sign on restatement; a radial step of a quarter of `r + rDelta` or more; an off-radius arc `capband.OffRadiusShift` does not bound or that shares its walk (§5.5–§5.6) | no regular miter can be proved | `ErrUnsupported`, naming the corner and the rule's reason |
 | **SF2** | `Face.NormalAt` at an LF6 apex vertex, which lies on the horn torus's own axis | the point exists; the surface normal there does not | `ErrDegenerate` (the survey samples interior points only) |
 
 Everything else is an existing row: SL1 (a partial loop outside the

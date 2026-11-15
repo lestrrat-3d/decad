@@ -72,13 +72,16 @@ func WidenNearTangentExtent(reach []float64, g [3]*big.Rat, old Interval) (Inter
 }
 
 // NearTangentNormalTurn bounds how far the in-plane outward normal of the
-// true band strays, near LF5′ corner k, from the normals of the two patches
-// beside it: at a reflex sliver the horn's normals lie between the two walks'
-// normals, at most 2·sin(θ/2) <= ρ/r_lo apart; at a convex sliver a toroidal
-// patch's true window ends at m(t), at most ρ along a moved circle of radius
-// at least its least moved radius, and a cylinder's normal does not change.
-// radius is the fillet radius's span. ok is false where a moved radius is not
-// proven positive or a number does not lift.
+// true band strays, near near-tangent corner k, from the normal a patch
+// beside it states at the same point (agent-docs/loop-fillet-design.md
+// §5.7): the turn between the two walks' normals, 2·sin(θ/2) <= ρ/r_lo, plus,
+// for each circular walk, the rotation its moved circle's normal takes over
+// the stretch between the radial foot and the true corner or the other foot,
+// a chord of at most ρ on a circle of radius at least its least moved radius,
+// so at most ρ/R_lo. A stated face that runs past the true corner carries the
+// neighbour's surface there, which is the sum away. radius is the fillet
+// radius's span. ok is false where a moved radius is not proven positive or a
+// number does not lift.
 func NearTangentNormalTurn(walks []survey2d.SideWalk, k int, rho float64, radius proofbound.RatInterval) (*big.Rat, bool) {
 	d := proofarith.FloatRat(rho)
 	if d == nil || d.Sign() < 0 || radius.Lo.Sign() <= 0 {
@@ -94,9 +97,7 @@ func NearTangentNormalTurn(walks []survey2d.SideWalk, k int, rho float64, radius
 		if !ok {
 			return nil, false
 		}
-		if q := new(big.Rat).Quo(d, lo); q.Cmp(out) > 0 {
-			out = q
-		}
+		out.Add(out, new(big.Rat).Quo(d, lo))
 	}
 	return out, true
 }

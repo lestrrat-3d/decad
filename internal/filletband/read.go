@@ -70,6 +70,12 @@ func ReadLoop(budget *proofbound.WorkBudget, record sectionrecord.LoopRecord,
 			step = step || g > 0
 		}
 		reach := proofbound.AbsSumUpper(radius, radiusDelta)
+		for k, g := range gap {
+			// §5.7's cone term needs the step below a quarter of the reach.
+			if proofbound.ProductUpper(4, g) >= reach {
+				return Loop{}, nil, nil, k, stepTooLargeWhy, nil
+			}
+		}
 		restate, k, why, err := restateLoop(record, walks, loop.Corners, reach)
 		if err != nil {
 			return Loop{}, nil, nil, -1, "", err
@@ -215,6 +221,11 @@ func nearTangentWalls(budget *proofbound.WorkBudget, record sectionrecord.LoopRe
 	}
 	return -1, "", nil
 }
+
+// stepTooLargeWhy refuses a corner whose arc's recorded end sits a quarter of
+// the fillet's reach or more off the circle its start states, past the step
+// §5.7's local bounds cover.
+const stepTooLargeWhy = `an arc whose recorded end sits a quarter of the fillet radius or more off the circle its start states, past the step this evaluator's local bounds cover`
 
 // nearTangentOtherEndWhy refuses a wall with an LF5′ end whose other end is an
 // LF8 or LF6 corner, which the near-tangent survival gate does not enclose.

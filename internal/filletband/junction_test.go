@@ -472,3 +472,35 @@ func TestChargedCorners(t *testing.T) {
 		require.False(t, exact.Charged(k), "corner %d", k)
 	}
 }
+
+// TestNearTangentNormalTurnCoversTorusTilt samples the tilt §5.7 charges at
+// the slot's convex near-tangent corner, where the bottom line meets the
+// right arc: the stated cylinder face runs on to its own foot f_ℓ = (15, −5 + t)
+// at the full offset t = 1, past the true corner, and there the true surface
+// is the torus about the arc's centre C. The unit-vector distance between the
+// cylinder's normal (0, 1) and the torus's (C − f_ℓ)/|C − f_ℓ|, read in 256-bit
+// arithmetic, is about θ·R/(R − t). It stays within NearTangentNormalTurn,
+// whose wall turn alone would miss it.
+func TestNearTangentNormalTurnCoversTorusTilt(t *testing.T) {
+	t.Parallel()
+	shift := 5 * math.Ldexp(1, -34)
+	read, walks, bad, why := readLoop(t, slotLoop(shift))
+	require.Equal(t, -1, bad, why)
+	r1, err := filletband.RadiusInterval(1, 0)
+	require.NoError(t, err)
+	turn, ok := filletband.NearTangentNormalTurn(walks, 1, read.Rho[1], r1)
+	require.True(t, ok)
+	const prec = 256
+	f := func(x float64) *big.Float { return new(big.Float).SetPrec(prec).SetFloat64(x) }
+	du := f(shift) // C − f_ℓ along u: (15 + shift) − 15
+	dv := f(5 - 1) // C − f_ℓ along v: 0 − (−5 + 1)
+	norm := new(big.Float).SetPrec(prec).Sqrt(new(big.Float).SetPrec(prec).Add(new(big.Float).SetPrec(prec).Mul(du, du), new(big.Float).SetPrec(prec).Mul(dv, dv)))
+	ux := new(big.Float).SetPrec(prec).Quo(du, norm)
+	uy := new(big.Float).SetPrec(prec).Sub(new(big.Float).SetPrec(prec).Quo(dv, norm), f(1))
+	tilt, _ := new(big.Float).SetPrec(prec).Sqrt(new(big.Float).SetPrec(prec).Add(new(big.Float).SetPrec(prec).Mul(ux, ux), new(big.Float).SetPrec(prec).Mul(uy, uy))).Float64()
+	got, _ := turn.Float64()
+	require.Positive(t, tilt)
+	require.LessOrEqual(t, tilt, got)
+	wall, _ := new(big.Rat).Quo(new(big.Rat).SetFloat64(read.Rho[1]), r1.Lo).Float64()
+	require.Greater(t, tilt, wall, "the wall turn alone misses the torus's tilt")
+}

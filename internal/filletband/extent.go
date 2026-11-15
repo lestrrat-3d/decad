@@ -14,7 +14,7 @@ import (
 // ExtentsOf encloses both ends of a band's projection in its face frame.
 // Direction coefficients are the held projections of the world direction
 // onto that frame; their placement error is charged by the caller. rho is
-// the loop's LF5′ reach per corner (Loop.Rho), nil when it has none.
+// the loop's local reach per corner (Loop.LocalReach), nil when it has none.
 func ExtentsOf(pieces []Piece, walks []survey2d.SideWalk, corners []Corner, rho []float64,
 	materialSign, heldRadius float64, radius, side Interval, coeff [3]float64) (Interval, Interval, error) {
 	var positive, negative [3]*big.Rat

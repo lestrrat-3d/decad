@@ -206,8 +206,8 @@ func (l Loop) stepCurvature(k int, T float64) (float64, bool) {
 // stated point within it of a true one. It is 2ρ̃ + 3δ plus, at a radial step
 // δ > 0, stepRoot, with ρ̃ the larger near-tangent reading and T the largest
 // offset. A corner whose curvature factor does not lift reads +Inf, which
-// every consumer refuses. It returns nil for a loop with no LF5′ corner and
-// no step.
+// every consumer refuses. It returns nil for a loop with no near-tangent
+// reach, no step and no restated arc.
 func (l Loop) LocalReach(radius proofbound.RatInterval) []float64 {
 	if l.Gap == nil {
 		return nil
