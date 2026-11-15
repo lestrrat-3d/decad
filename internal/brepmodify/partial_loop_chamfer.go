@@ -47,12 +47,9 @@ func PartialLoopChamfer(ctx context.Context, env topo.Env, hooks Hooks, body *to
 	if _, isPrism := body.Payload.(prismrecord.Payload); !isPrism {
 		return Result{}, false, nil
 	}
-	runs, ok, err := readChamferRuns(body, edges, true)
+	runs, ok := readChamferRuns(body, edges, true)
 	if !ok {
 		return Result{}, false, nil
-	}
-	if err != nil {
-		return Result{}, true, err
 	}
 	for _, r := range runs {
 		if err := r.fits(d); err != nil {
@@ -103,7 +100,7 @@ func (r chamferRun) fits(d float64) error { return r.loop.fits(d) }
 
 // readChamferRuns reads edges as whole runs of loops of planar faces. ok is false when the selection is not one this
 // route recognises. A recognised selection that cannot be chamfered returns its refusal.
-func readChamferRuns(body *topo.Body, edges []*topo.Edge, exact bool) (runs []chamferRun, ok bool, err error) {
+func readChamferRuns(body *topo.Body, edges []*topo.Edge, exact bool) (runs []chamferRun, ok bool) {
 	selected := make(map[*topo.Edge]bool, len(edges))
 	for _, e := range edges {
 		selected[e] = true
@@ -143,7 +140,7 @@ func readChamferRuns(body *topo.Body, edges []*topo.Edge, exact bool) (runs []ch
 			}
 		}
 		if best < 0 {
-			return nil, false, nil
+			return nil, false
 		}
 		c := cands[best]
 		cands = slices.Delete(cands, best, best+1)
@@ -159,20 +156,20 @@ func readChamferRuns(body *topo.Body, edges []*topo.Edge, exact bool) (runs []ch
 			}
 			if n == len(loop.CoEdges) {
 				// A whole loop belongs to the loop routes.
-				return nil, false, nil
+				return nil, false
 			}
 			l, ok := readChamferLoop(c.face, c.plane, loop, exact)
 			if !ok || l.circle || len(l.segs) != len(loop.CoEdges) {
-				return nil, false, nil
+				return nil, false
 			}
 			sel := make([]bool, len(loop.CoEdges))
 			for i, ce := range loop.CoEdges {
 				sel[i] = left[ce.Edge]
 			}
-			rs, err := l.runs(sel)
-			if err != nil {
+			rs, ok := l.runs(sel)
+			if !ok {
 				// A selection this route cannot take keeps the refusal the exact routes gave it.
-				return nil, false, nil
+				return nil, false
 			}
 			runs = append(runs, rs...)
 			for _, ce := range loop.CoEdges {
@@ -180,7 +177,7 @@ func readChamferRuns(body *topo.Body, edges []*topo.Edge, exact bool) (runs []ch
 			}
 		}
 	}
-	return runs, len(runs) > 0, nil
+	return runs, len(runs) > 0
 }
 
 // continues reports whether the walk leaves the end of prev along the tangent it arrived on: the junction is smooth.
@@ -191,7 +188,7 @@ func continues(prev, next loopSeg) bool {
 }
 
 // runs splits the selected segments sel of the loop into runs, and checks each run's two ends.
-func (l *chamferLoop) runs(sel []bool) ([]chamferRun, error) {
+func (l *chamferLoop) runs(sel []bool) ([]chamferRun, bool) {
 	n := len(l.segs)
 	// A run starts at a selected segment whose predecessor is not selected, or is selected but met at a sharp corner.
 	var out []chamferRun
@@ -213,12 +210,10 @@ func (l *chamferLoop) runs(sel []bool) ([]chamferRun, error) {
 		// A selected neighbour that continues the run is part of it, so one left over means the selection stops
 		// short of a smooth chain, which no CAD chamfer builds.
 		if next := (r.first + r.count) % n; !sel[next] && continues(l.segs[(next+n-1)%n], l.segs[next]) {
-			return nil, fmt.Errorf(`%w: the selection stops inside a tangent chain of the cap loop; select every edge that continues the run`,
-				decaderr.ErrUnsupported)
+			return nil, false
 		}
 		if prev := (r.first + n - 1) % n; !sel[prev] && continues(l.segs[prev], l.segs[r.first]) {
-			return nil, fmt.Errorf(`%w: the selection stops inside a tangent chain of the cap loop; select every edge that continues the run`,
-				decaderr.ErrUnsupported)
+			return nil, false
 		}
 	}
 	if total := func() int {
@@ -228,15 +223,14 @@ func (l *chamferLoop) runs(sel []bool) ([]chamferRun, error) {
 		}
 		return c
 	}(); total == n {
-		return nil, fmt.Errorf(`%w: the selection chains every edge of a cap loop through sharp corners; select the loop whole`,
-			decaderr.ErrUnsupported)
+		return nil, false
 	}
 	for _, r := range out {
-		if err := r.checkEnds(); err != nil {
-			return nil, err
+		if !r.endsConvex() {
+			return nil, false
 		}
 	}
-	return out, nil
+	return out, true
 }
 
 // polygon samples the loop as a closed polygon.
@@ -276,24 +270,17 @@ func contains(poly []pt2, p pt2) bool {
 // partialExtension is how far a cutter reaches past the end of its run along the tangent, in setbacks.
 const partialExtension = 1.0
 
-// checkEnds refuses a run whose end the cutter's tangent extension cannot serve: the next edge must leave at a
-// convex corner that turns by 90 degrees or more, so that the extension lies outside the material.
-func (r chamferRun) checkEnds() error {
+// endsConvex reports whether the cutter's tangent extension can serve both ends of the run: the next edge must leave at
+// a convex corner that turns by 90 degrees or more, so that the extension lies outside the material.
+func (r chamferRun) endsConvex() bool {
 	l := r.loop
-	end := func(prev, next loopSeg) error {
+	end := func(prev, next loopSeg) bool {
 		v := next.p0
 		tin, tout := tangent(prev, v), tangent(next, v)
 		cross := tin.cross(tout)
-		if (cross > 0) != l.materialLeft || math.Abs(cross) < 1e-9 || tin.dot(tout) > 1e-9 {
-			return fmt.Errorf(`%w: a chamfered run ends at a corner that is not convex and turned by 90 degrees or more; the bevel's end there is not built`,
-				decaderr.ErrUnsupported)
-		}
-		return nil
+		return (cross > 0) == l.materialLeft && math.Abs(cross) >= 1e-9 && tin.dot(tout) <= 1e-9
 	}
-	if err := end(r.seg(r.count-1), r.after()); err != nil {
-		return err
-	}
-	return end(r.before(), r.seg(0))
+	return end(r.seg(r.count-1), r.after()) && end(r.before(), r.seg(0))
 }
 
 // checkExtension samples the region each cutter end reaches past its run, to the depth the cutter cuts, and refuses a
