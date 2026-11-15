@@ -16,9 +16,10 @@ import (
 // occupied-volume proof covers a cap-blend payload. The proof holds where every
 // band section of the ideal polyhedron B1 is the chord polygon of the true
 // offset section at the same azimuths: a whole turn, a line-line miter, and a
-// join whose two walks meet exactly tangent (G1). A draft band also admits a
-// near-tangent line–arc or arc–arc join, whose sliver its mesh charges
-// (near_tangent.go, agent-docs/draft-design.md §9.1.1). Every test here is exact
+// join whose two walks meet exactly tangent (G1). A draft or cap-loop chamfer
+// band also admits a near-tangent line–arc or arc–arc join, whose sliver its
+// mesh charges (near_tangent.go, agent-docs/draft-design.md §9.1.1), and a
+// chamfer band restates an off-radius arc (restate.go, §7.1). Every test here is exact
 // rational arithmetic over the record's own floats. None is a tolerance or a
 // residual, so the predicate classifies the denoted geometry and never admits
 // a band because its float readings happen to sit close together.
@@ -39,11 +40,20 @@ import (
 // corner joins are checked only on a loop chamfered on at least one cap, since
 // only a band has an offset foot whose locus the proof must follow.
 //
-// sharp is a draft band's per-walk amounts, nil for a chamfer band. With it, a
-// corner JoinIsG1 rejects is admitted when NearTangentCorner reads it as a
-// near-tangent join (agent-docs/draft-design.md §9.1.1), and refused with that
-// function's reason otherwise; every wall with such a join at an end
-// must then pass NearTangentWallRefusal.
+// sharp is the band's per-walk amounts: a draft band's sharp rule, or a cap-loop
+// chamfer's one setback on every walk; nil for a band whose mesh charges no
+// near-tangent corner. With it, a corner JoinIsG1 rejects is admitted when
+// NearTangentCorner reads it as a near-tangent join
+// (agent-docs/draft-design.md §9.1.1), and refused with that function's reason
+// otherwise; every wall with such a join at an end must then pass
+// NearTangentWallRefusal.
+//
+// restate admits a whole arc whose recorded end is off the circle its start
+// states, read about its restatedCentre (agent-docs/tessellation-reach-design.md
+// §7.1), when that arc is its walk's only recorded segment (every arc is
+// today: only exactly collinear lines coalesce) and OffRadiusShift bounds it;
+// every corner and wall of the loop is then read about the restated centres. Only a cap-loop chamfer's mesh charges what the
+// restatement moves, so only it passes restate.
 func OccupiedVolumeAdmission(
 	budget *proofbound.WorkBudget,
 	noun string,
@@ -51,6 +61,7 @@ func OccupiedVolumeAdmission(
 	startLoops, endLoops map[int]bool,
 	resolve func(int, sectionrecord.LoopRecord) ([]survey2d.SideWalk, func() ([]bool, error), error),
 	sharp SharpAmounts,
+	restate bool,
 ) (error, error) {
 	for li, loop := range loops {
 		walks, joinArcs, err := resolve(li, loop)
@@ -80,9 +91,17 @@ func OccupiedVolumeAdmission(
 				if err != nil {
 					return nil, err
 				}
-				if why := SegmentRefusal(seg); why != "" {
-					return admissionRefusal(noun, li, fmt.Sprintf(`recorded segment %d`, si), why), nil
+				why := SegmentRefusal(seg)
+				if why == "" {
+					continue
 				}
+				if arc, isArc := seg.(sectionrecord.ArcSeg); restate && isArc && offRadius(arc) {
+					if _, ok := OffRadiusShift(arc, 0); ok && len(w.Segs) == 1 {
+						continue
+					}
+					why = restateRefusal
+				}
+				return admissionRefusal(noun, li, fmt.Sprintf(`recorded segment %d`, si), why), nil
 			}
 		}
 		if !startLoops[li] && !endLoops[li] {
@@ -116,15 +135,21 @@ func OccupiedVolumeAdmission(
 			if err != nil {
 				return nil, err
 			}
-			if JoinIsG1(prevSeg, curSeg) {
+			prevC, okP := readCorner(prevSeg, restate)
+			curC, okC := readCorner(curSeg, restate)
+			if !okP || !okC {
+				return admissionRefusal(noun, li, cornerAt(prev, cur), restateRefusal), nil
+			}
+			if joinIsG1(prevC, curC) {
 				continue
 			}
 			// A join the build's held-tangent rule read as tangent lands here
 			// too when the recorded floats do not make it exactly tangent: the
 			// true corner then turns by a sliver and its foot locus is a conic.
-			// A chamfer band has no term for the volume between that locus and
-			// the ruled cells; a draft band charges it for a near-tangent
-			// line–arc or arc–arc join (agent-docs/draft-design.md §9.1.1).
+			// A band passed no amounts has no term for the volume between that
+			// locus and the ruled cells; a draft or cap-loop chamfer band charges
+			// it for a near-tangent line–arc or arc–arc join
+			// (agent-docs/draft-design.md §9.1.1).
 			if sharp == nil {
 				return admissionRefusal(noun, li, cornerAt(prev, cur), notTangentWhy, notTangentHint), nil
 			}
@@ -134,7 +159,7 @@ func OccupiedVolumeAdmission(
 					return nil, fmt.Errorf(`%w: %d offset amounts for the %d walks of loop %d`, decaderr.ErrDegenerate, len(amounts), n, li)
 				}
 			}
-			charge, why, hint := NearTangentCorner(prevSeg, curSeg, amounts[(i+n-1)%n], amounts[i], amountDelta)
+			charge, why, hint := nearTangentCorner(prevC, curC, amounts[(i+n-1)%n], amounts[i], amountDelta)
 			if why != "" {
 				return admissionRefusal(noun, li, cornerAt(prev, cur), why, hint), nil
 			}
@@ -163,7 +188,7 @@ func OccupiedVolumeAdmission(
 			if end != nil {
 				rhoEnd = end.Rho
 			}
-			if why := NearTangentWallRefusal(loop, walks, i, amounts, amountDelta, rhoStart, rhoEnd); why != "" {
+			if why := NearTangentWallRefusal(loop, walks, i, amounts, amountDelta, rhoStart, rhoEnd, restate); why != "" {
 				return admissionRefusal(noun, li, wallAt(w), why), nil
 			}
 		}
@@ -262,6 +287,13 @@ func ratSub(a, b float64) *big.Rat {
 // (−y, x). Any other kind, or a coordinate that denotes no rational, is not a
 // join this test can prove.
 func JoinIsG1(prev, cur sectionrecord.CurveSegment) bool {
+	pc, okP := recordedCorner(prev)
+	cc, okC := recordedCorner(cur)
+	return okP && okC && joinIsG1(pc, cc)
+}
+
+// joinIsG1 is JoinIsG1 over two segments read about the centres they carry.
+func joinIsG1(prev, cur cornerSegment) bool {
 	p, ok := joinEnds(prev)
 	if !ok {
 		return false
@@ -290,14 +322,15 @@ type joinEnd struct {
 	tanStart, tanEnd [2]*big.Rat
 }
 
-// joinEnds reads one segment's joinEnd, ok == false for a kind
-// JoinIsG1 does not pair or a coordinate that denotes no rational.
-func joinEnds(seg sectionrecord.CurveSegment) (joinEnd, bool) {
+// joinEnds reads one segment's joinEnd, an arc's tangents about the centre
+// cs carries, ok == false for a kind JoinIsG1 does not pair or a coordinate
+// that denotes no rational.
+func joinEnds(cs cornerSegment) (joinEnd, bool) {
 	ratPoint := func(p sectionrecord.Point2) ([2]*big.Rat, bool) {
 		u, v := proofarith.FloatRat(p.U), proofarith.FloatRat(p.V)
 		return [2]*big.Rat{u, v}, u != nil && v != nil
 	}
-	switch s := seg.(type) {
+	switch s := cs.seg.(type) {
 	case sectionrecord.LineSeg:
 		a, b := s.Start, s.End
 		if s.TStart == 1 {
@@ -319,7 +352,8 @@ func joinEnds(seg sectionrecord.CurveSegment) (joinEnd, bool) {
 		}
 		ra, okA := ratPoint(a)
 		rb, okB := ratPoint(b)
-		rc, okC := ratPoint(s.Center)
+		rc := cs.center
+		okC := rc[0] != nil && rc[1] != nil
 		if !okA || !okB || !okC {
 			return joinEnd{}, false
 		}

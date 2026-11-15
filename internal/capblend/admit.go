@@ -31,14 +31,49 @@ func RequireNotReceiver(payload topo.Payload, op string) error {
 // a reflex line-line corner there is the miter it is built as, never the
 // chamfer's apex arc, and its per-walk amounts let capband admit a
 // near-tangent line–arc or arc–arc join whose sliver NearTangentVolume
-// charges.
+// charges. A cap-loop chamfer passes its one setback on every walk, so it
+// admits the same joins, and restates an arc whose recorded end is off its
+// start's circle, which OffRadiusVolume and OffRadiusMotion charge
+// (agent-docs/tessellation-reach-design.md §7, §7.1).
 // The delayed join builder runs only after the wall checks, preserving the
 // proof budget charges and the first refusal reported.
 func OccupiedVolumeAdmission(budget *proofbound.WorkBudget, cbp Payload) (error, error) {
-	var sharp capband.SharpAmounts
-	if cbp.Draft {
-		sharp = cbp.sharpAmounts
+	sharp, restate := cbp.cornerClass()
+	return admission(budget, cbp, sharp, restate)
+}
+
+// ExactOccupiedVolumeAdmission is OccupiedVolumeAdmission for a band whose
+// mesh proof charges no near-tangent corner and no restated arc: a route L
+// band of a brep body (brepbandmesh), whose volume terms are its own. It
+// admits only line-line miters, exactly tangent joins and whole turns.
+func ExactOccupiedVolumeAdmission(budget *proofbound.WorkBudget, cbp Payload) (error, error) {
+	return admission(budget, cbp, nil, false)
+}
+
+// cornerClass is the near-tangent amounts and the restatement a payload's
+// own mesh charges: a draft view's sharp amounts, a cap-loop chamfer's one
+// setback per loop with its arcs restated, and none for a cap-loop fillet
+// or a loft-source band, whose proofs charge neither. A loop chamfered on
+// both caps with two different setbacks takes neither, so one set of amounts
+// reads every band of every loop.
+func (cbp Payload) cornerClass() (capband.SharpAmounts, bool) {
+	switch {
+	case cbp.Draft:
+		return cbp.sharpAmounts, false
+	case cbp.Fillet || cbp.LoftSource != nil:
+		return nil, false
 	}
+	if cbp.Start != cbp.End {
+		for li := range cbp.Loops() {
+			if cbp.StartLoops[li] && cbp.EndLoops[li] {
+				return nil, false
+			}
+		}
+	}
+	return cbp.sharpAmounts, true
+}
+
+func admission(budget *proofbound.WorkBudget, cbp Payload, sharp capband.SharpAmounts, restate bool) (error, error) {
 	return capband.OccupiedVolumeAdmission(budget, cbp.Noun(), cbp.Loops(), cbp.StartLoops, cbp.EndLoops,
 		func(li int, loop sectionrecord.LoopRecord) ([]survey2d.SideWalk, func() ([]bool, error), error) {
 			cl, err := OneLoopCornerLoop(budget, loop, freeform.NewFreeformWork())
@@ -56,12 +91,12 @@ func OccupiedVolumeAdmission(budget *proofbound.WorkBudget, cbp Payload) (error,
 				}
 				return arcs, nil
 			}, nil
-		}, sharp)
+		}, sharp, restate)
 }
 
 // sharpAmounts is a draft view's per-walk amounts for loop li and the
 // half-width of every moved walk's span, the numbers its cap motion reads
-// (CapMotion).
+// (CapMotion). A cap-loop chamfer's are its setback dc on every walk.
 func (cbp Payload) sharpAmounts(li int, walks []survey2d.SideWalk) ([]float64, float64) {
 	return cbp.WalkAmounts(li, walks, cbp.LoopOffset(li)), cbp.LoopSetback(li).DcDelta
 }

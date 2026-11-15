@@ -466,10 +466,11 @@ held coordinates. The closed-mesh audit refuses a mismatch in the two middle
 rings. The outer facets retain their source faces and displacement bounds;
 area slack and occupied-volume difference bounds add over the two slabs.
 
-The admission refuses what it refuses for a chamfer, less the near-tangent
-joins of §9.1.1: a trimmed segment, an arc whose recorded end is off its
-circle, and a circular wall whose join is G1 by the held-tangent rule but not
-exactly tangent over the rationals, unless §9.1.1 admits that join. That mesh
+The admission refuses a trimmed segment, an arc whose recorded end is off its
+circle (a cap-loop chamfer restates that arc,
+`agent-docs/tessellation-reach-design.md` §7.1; a draft does not), and a
+circular wall whose join is G1 by the held-tangent rule but not exactly
+tangent over the rationals, unless §9.1.1 admits that join. That mesh
 serves export, and every boolean, interference and mass reading refuses it,
 naming the loop, the corner's plane-local point and the two recorded segments
 that meet there (or the one segment).
@@ -488,7 +489,8 @@ term, never by admitting a small cross product: the term is a proven upper
 bound, and a corner it does not cover refuses.
 
 **The class** (`capband.NearTangentCorner`, exact rational arithmetic over
-the record's floats). A draft band admits the corner when all six hold:
+the record's floats). A draft band, or a cap-loop chamfer band ("On a cap-loop
+chamfer band" below), admits the corner when all six hold:
 
 1. one walk is a `LineSeg` and the other an `ArcSeg`, or both are `ArcSeg`s;
 2. the two recorded junction points are one rational point `v`;
@@ -511,9 +513,7 @@ circular walls whose moved circles do not both clear the near-tangent corner
 charge" for two arcs. The limit in 4 is a stated class, not a soundness step:
 a join a sketch tangent constraint solves turns by rounding, orders below
 `2⁻³²`, and a corner turning more was drawn as a corner and keeps the
-refusal a genuine miter has. A chamfer band admits no near-tangent join: its
-offset family is the shell's (modify §7), whose reflex sliver takes a
-connector arc this proof does not follow.
+refusal a genuine miter has.
 
 **B1 at the corner.** At a line and an arc, write `n_ℓ` and `n_c` for the two
 walks' unit left normals at `v`, `cos θ = n_ℓ·n_c`. The ideal polyhedron B1 of
@@ -696,6 +696,32 @@ and below `r_lo` (condition 6), so as for the line and arc each arc stays
 under a quarter turn and its segment under `πρ²/4`. The corner encloses at
 most `ρλ + (1 + π)ρ²/2`.
 
+**On a cap-loop chamfer band.** A chamfer's in-plane section at axial
+fraction `s` is the erosion `P ⊖ s·d` (modify §7), so every walk moves by the
+cap's one `d` and condition 5 holds. At a convex sliver the erosion's two
+moved carriers meet at `m(t)`, the sharp family's corner, so Lemmas 1, 1′ and
+2 hold as stated. At a reflex sliver the erosion keeps each moved carrier up
+to its own radial foot and closes the gap with the connector arc of radius
+`|t|` about `v`. Only the corner chains of Lemma 2 change:
+
+- a line and an arc: the straight wall's true end is `m := f_ℓ = v + t·n_ℓ`,
+  on ℓ(t) and `2|t|·sin(θ/2) ≤ ρ` from `f`. The corner chain is the chord
+  `f → m` closed by the connector arc, which turns by θ, under a quarter turn,
+  so Thales still bounds it by `πρ²/4`. The straight walk's path keeps its
+  `3ελ`, since `m` lies on ℓ;
+- two arcs: the polygon `P → q → f₂ → f₁ → P` is unchanged. The curvilinear
+  triangle becomes the segment the connector arc closes against the chord
+  `f₁ → f₂`, at most `ρ` long, so at most `πρ²/4 < 2.08ρ²`.
+
+Each wall's true end still lies within its ρ of B1's corner, so the survival
+gate stands. The charge below therefore covers a chamfer band as written. Its
+height is the sum of the loop's chamfered caps' axial setbacks, not the
+whole sweep: on the trimmed wall the corner is the recorded point, which lies
+on both curves, so the chord polygon there has no corner term. A chamfer arc
+whose recorded end is off its start's circle is read about its restated
+centre first (`agent-docs/tessellation-reach-design.md` §7.1), and every
+corner and wall test reads that centre.
+
 **The charge.** Integrated over the sweep,
 
 ```text
@@ -704,9 +730,9 @@ Ncorner = hUpper · Σ_loops [ Σ_{line–arc corners} πρ²/4 + Σ_{straight w
 volSymDiff = upRound(Mchord + sweptVolumeAllow(motionMax, …) + Ncorner)
 ```
 
-with `hUpper` the draft's `draftBandHeightUpper`, `2.08 > (1 + π)/2`, and a
-straight walk's `ε` the
-larger of its two ends'. `capblend.NearTangentVolume` composes it from
+with `hUpper` the draft's `draftBandHeightUpper` (a chamfer loop's summed
+band setbacks, `capblend.Payload.bandHeightUpper`), `2.08 > (1 + π)/2`, and a
+straight walk's `ε` the larger of its two ends'. `capblend.NearTangentVolume` composes it from
 `capband.NearTangentCharges`, which reads every corner as the admission does.
 A band with no near-tangent join adds no term, so its `volSymDiff` is the sum
 it was, and a band without a corner of two arcs sums only its line–arc

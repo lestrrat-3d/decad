@@ -470,8 +470,9 @@ derivation from one, stated below. The occupied-volume proof is complete for a b
 line-line miter or an exactly tangent (G1) join, and for the cornerless whole turn: there the band's true
 section at every axial fraction is the exact offset section, and the held cells' section is its chord polygon
 at fixed azimuths, so the proof is the prism's own two legs — a slice-wise circular-segment integral and a
-vertex-motion `sweptVolumeAllow`. A draft band's near-tangent join adds a third, its corner charge
-(Admission below). Every other band — a circular wall at a genuine miter, a reflex corner —
+vertex-motion `sweptVolumeAllow`. A draft or cap-loop chamfer band's near-tangent join adds a third, its corner
+charge, and a chamfer band's arc whose recorded end is off its start's circle adds a fourth, its restatement
+charge (Admission below, §7.1). Every other band — a circular wall at a genuine miter, a reflex corner —
 keeps `symDiffOK == false`, which tess §2 permits for an export-only mesh. DX3's "a strip whose densities
 disagree is not watertight" is answered by sharing ONE count per wall walk across the side wall, the band
 patch and the cap contour (below).
@@ -591,20 +592,27 @@ built, and `tessellateCapBlend` when it publishes. Every loop of the payload mus
 - a single closed `CircleSeg` walk (the whole turn), or
 - a loop whose every walk is a natural-bounded (`TStart`, `TEnd` ∈ {0, 1}) `LineSeg` or `ArcSeg`, whose
   every `ArcSeg` satisfies `|End − Center|² == |Start − Center|²` exactly over the rationals (so the denoted
-  arc passes through both recorded endpoints and the pinned junction vertex lies on it), and whose every
+  arc passes through both recorded endpoints and the pinned junction vertex lies on it) or, on a cap-loop
+  chamfer band, is read about its restated centre (§7.1), and whose every
   corner join is either (i) a line-line miter — both walks straight — or (ii) an exactly G1 join: the two
   walks' recorded junction points are the same rational point, and their exact tangent directions there have
   a zero cross product and a positive dot product, where a line's direction is `end − start` and an arc's is
   its walk sense times `rot90(P − Center)`.
 
-A draft band (`capblend.Payload.Draft`) also admits (iii) a near-tangent join: a `LineSeg` and an `ArcSeg`, or two
+A draft band (`capblend.Payload.Draft`) or a cap-loop chamfer band also admits (iii) a near-tangent join: a
+`LineSeg` and an `ArcSeg`, or two
 `ArcSeg`s, with one recorded junction point whose exact tangents run the same way, turn by `sin²θ ≤ 2⁻⁶⁴`, and move
 by one amount, each moved circle clear of the corner (`capband.NearTangentCorner`), and each wall at it proven to
 survive every level (`capband.NearTangentWallRefusal`). At two arcs B1's corner is the leaving arc's radial foot, so
 the arriving arc's last cell is not a planar trapezoid; the charge covers that cell's twist beside the sliver. Its
 proof adds the corner charge `capblend.NearTangentVolume` to `volSymDiff` below; `agent-docs/draft-design.md`
-§9.1.1 states and proves it. A chamfer band admits none, since its shell offset takes a connector arc at a reflex
-sliver.
+§9.1.1 states and proves it. A chamfer band moves every walk by its cap's `dc`, so the one-amount condition
+holds; its shell offset meets a convex sliver at the same corner and closes a reflex sliver with a connector arc,
+and §9.1.1's "On a cap-loop chamfer band" shows the same charge covers both (`capblend.Payload.cornerClass`).
+Neither a cap-loop fillet nor a loft-source band charges it, and a loop chamfered on both caps with two
+different setbacks takes the exact class. A route L band of a brep body (`brepbandmesh`) composes its own
+terms without the corner or restatement charge, so its admission (`capblend.ExactOccupiedVolumeAdmission`)
+keeps the exact class.
 
 A reflex corner (`cornerJoin.arc`) is not admitted. Every test is exact rational arithmetic over the record's
 own floats; none is a tolerance, so the predicate classifies the denoted geometry and never admits on a
@@ -656,12 +664,13 @@ from the held offset circle, versus its displacement from the exact-fraction poi
 it with. Then
 
 ```text
-volSymDiff = upRound(Mchord + sweptVolumeAllow(motionMax, perturbedAreaUpper(M, motionMax)) [+ Ncorner])
+volSymDiff = upRound(Mchord + sweptVolumeAllow(motionMax, perturbedAreaUpper(M, motionMax)) [+ Ncorner] [+ Noff])
 symDiffOK  = true
 ```
 
-where `Ncorner` is a draft band's near-tangent corner charge (`agent-docs/draft-design.md` §9.1.1), present only
-when it is positive, so every other band's sum is unchanged.
+where `Ncorner` is a draft or chamfer band's near-tangent corner charge (`agent-docs/draft-design.md` §9.1.1),
+and `Noff`, with the shift `motionMax` adds, is §7.1's restatement charge; each is present only when it is
+positive, so every other band's sum is unchanged.
 
 A non-finite term refuses (tess §12). The cap-blend path runs no facet-contact audit
 (`payloadAuditsFacetContact`), so `boundaryOK` is true at every level and `operandSymDiff` reads the proof
@@ -687,6 +696,83 @@ motion terms cover the rest of the polygon band. The source loft's global
 payload publishes `symDiffOK` only when every term is finite, and the Boolean
 precheck admits the same payload. The general cap-band admission above still
 refuses reflex corners in other receivers.
+
+### 7.1 Off-radius arc ends — restatement
+
+An `ArcSeg` denotes Start's radius at End's angle, and the loop closes the junction from that point to the
+next walk's start with a straight chord (`agent-docs/evaluator-design.md` §4). A sketch solve places tangent
+points by rounding, so an ordinary sketched outline records corner arcs whose `End` sits a few ulps off the
+circle `Start` states (the preflight refuses more than 1024 ulps). The exact-radius test above refuses every
+such arc. A cap-loop chamfer band instead **restates** each one (`capband.OffRadiusShift`,
+`internal/capband/restate.go`):
+
+```text
+C′ = C + μ·(End − Start),   μ = (|End − C|² − |Start − C|²) / (2·|End − Start|²)
+```
+
+`C′` is the point of the two ends' perpendicular bisector nearest the recorded centre `C`, a rational, and
+both recorded ends lie on the circle about it exactly. Write `X` for the section the record denotes and `X′`
+for the section with every off-radius arc read about its `C′`. `X′` has no junction step, so the admission
+reads it: every corner of a restated arc is tested about `C′`, as exactly G1 or as a near-tangent join, every
+wall survival gate reads `C′`, and a restated arc must be its walk's only segment (every arc is today; only
+exactly collinear lines coalesce). Let `B1′` be the ideal polyhedron of `X′` and `B0′` the chamfer of `X′`. Then
+
+```text
+volume(M △ B0) <= volume(M △ B1′) + volume(B1′ △ B0′) + volume(B0′ △ B0)
+```
+
+**The shift.** For `c = |C − C′| = |r_E² − r_S²| / (2·|End − Start|)`, the point `X` denotes at fraction `φ` of
+its window and in-plane offset `τ`, `C + (r − ιτ)·e(θ_S + φ·W)`, and the point `X′` denotes there,
+`C′ + (r′ − ιτ)·e(θ′_S + φ·W′)`, are at most
+
+```text
+Δ = 2c + (R_hi + T)·(π/2)·c / r′_lo
+```
+
+apart for `|τ| <= T`: `|r − r′| <= c` since both radii reach `Start`, and each end's angle about `C` and about `C′`
+differs by at most `(π/2)·c/r′`, because the sine of the angle at `Start` between `Start − C` and `Start − C′` is
+`|(Start − C) × (C − C′)| / (r·r′) <= c/r′` (at `End` likewise), so the angle at every fraction does too. The bound
+refuses (`ok` false, the admission's restatement refusal) unless `2c < r′_lo` and `π·c/r′_lo` is below
+`|End − Start|/R_hi`, the least window that chord subtends from either side, so both windows run the same way
+round. `Δ` is zero for an arc whose ends lie on one circle.
+
+**Three charges** (`capblend.OffRadiusMotion`, `capblend.OffRadiusVolume`), with `H` the body's height and
+`Δ_L` a loop's largest shift:
+
+- **Vertex motion.** Every station of `B1′` lies within `Δ` of the matching station of `B1`, which the held
+  mesh's motion bound is measured against, so `motionMax` adds the largest `Δ`. `NearTangentVolume`'s `λ` adds
+  twice the loop's `Δ_L` beside twice its motion.
+- **Chord segments.** `Mchord` integrates the circular segments of `X`'s walks. Each chord segment of a restated
+  arc of `X′` lies inside the matching segment of `X` grown by `Δ`, a convex set whose area grows by at most its
+  perimeter times `Δ` plus `πΔ²` (Steiner). Its segments' perimeters sum to at most twice the arc's length at its
+  largest radius, `4π·(R_hi + T)`, so each restated arc adds `H·(4π·(R_hi + T)·Δ + n·π·Δ²)`, with `n` the loop's
+  side-ring sample count bounding its chord count.
+- **The two denoted bodies.** For each level's in-plane offset `t`, let `Ω` and `Ω′` be the loop's region in `X`
+  and `X′`, and `E` the offset that loop takes (the erosion of an outer loop's region, the dilation of a hole's).
+  `Ω △ Ω′` lies in the set `K` the segments from each point of `X`'s arc to its `X′` point sweep, with the
+  junction chord within `|End − P(1)| <= Δ` of `End`; every point of `K` is within `Δ_L` of both `∂Ω` and
+  `∂Ω′`. A point `x` in `E_t(Ω)` but not `E_t(Ω′)` has a point `y ∈ K` within `t` of it, so its signed distance
+  `s′(x)` to `∂Ω′` is at most `t + Δ_L`, and no point of `Ω′`'s complement within `t − Δ_L`, since that point would
+  lie in `K` within `Δ_L` of `∂Ω` and so within `t` of `x`; the other way round is the same. So both differences
+  lie in `{t − Δ_L <= s′ <= t + Δ_L}`, whose area is `∫ H¹({s′ = τ}) dτ` by the coarea formula, the signed
+  distance having unit gradient almost everywhere. A level set `{s′ = τ}` lies in the union of each walk's
+  parallel at `|τ|` over its own window and an arc of radius `|τ|` about each junction within its normal cone,
+  under a half turn, so its length is at most
+  `Perim_L = Σ_lines L + Σ_arcs 2π·(R + T + Δ_L) + Σ_junctions π·(T + Δ_L)` (`capband.OffRadiusLoop`). The
+  other loops are the same in both sections, so the section difference lies in the loop's own, and each level
+  adds at most `2·Δ_L·Perim_L`.
+
+```text
+Noff = H · Σ_loops [ 2·Δ_L·Perim_L + Σ_{restated arcs} (4π·(R_hi + T)·Δ + n·π·Δ²) ]
+```
+
+Lemma 3 assumes `X′` stays a simple loop at the same clearance from the other loops as `X`, so the build's own
+loop gates read for both. Nothing here proves it: the window gate bounds `Δ` only below the chord, so a very short
+restated arc beside another loop is the case it leaves open.
+
+A loop with no off-radius arc adds nothing. The 20 mm plate of the apitest below (two R4.5 corners and an R22
+end arc, 8 mm thick, 0.5 mm chamfer) restates two arcs with `Δ ≈ 1.5·10⁻¹⁵` mm and `Perim ≈ 274` mm, so its
+`Noff` is near `7·10⁻¹²` mm³.
 
 ### Refusals
 
@@ -725,6 +811,12 @@ refuses reflex corners in other receivers.
   and the message names the loop and corner; `Verify` reads an overlapping pair `Suspect` with
   `DiagUnsupportedPairPayload`.
 - `Verify` on an overlapping pair of admitted cap-blend bodies publishes an `Interference` row.
+- The tangent-arc plate (§7.1, `apitest/capblend_tangent_arcs_test.go`): both cap loops chamfered, then a box
+  cut clear of both bands removes exactly the 48 mm³ it overlaps within the published bound. In
+  `internal/capband/restate_test.go`: the chamfer class admits the plate's recorded loop while the exact and
+  draft classes refuse its off-radius arc; a restated corner turning past the near-tangent class refuses by
+  name, which reading corners about the recorded centres would admit; `OffRadiusShift` covers a 256-bit
+  sampled reference and refuses an arc too short to restate.
 - Each leg of `volSymDiff` is shown to fail: deleting `Mchord`'s band term, its trimmed term, the cap
   `motion` enclosure, the side `L.bound` term or `prismrecord.Payload.PointRound` makes a named fixture's result
   volume fall outside its published bound, recorded in the test file.
