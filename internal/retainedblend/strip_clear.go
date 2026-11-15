@@ -24,10 +24,13 @@ import (
 // meshbool's exact triangle/triangle classification on the held floats. A
 // pair that shares a vertex is the construction's own seam, along the base's
 // setback contour, a wall's cut or an end face's trim, and is not tested. The
-// test only refuses. An end face that is reflex at an open chain's corner, or
-// at a convex straight edge's end, takes the blend's end cap, which closes the
-// region K on that side: its rebuilt facets are new surface too, and are
-// tested the same way against every facet the result keeps outside them.
+// test only refuses. An end face that gains the blend's end cap closes the
+// region K on that side: a chain's reflex or base-wrap end, a convex straight
+// edge's reflex end, a plane-cylinder end whose wall runs past the corner, and
+// every end of a concave single edge. Its rebuilt facets are new surface too,
+// and are tested the same way against every facet the result keeps outside
+// them. buildClear serves only the routes without end caps: rims and the
+// mitre run.
 
 // facetBox is a facet's float bounding box. Its corners are exact
 // coordinates, so two boxes that miss prove the facets miss.

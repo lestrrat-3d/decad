@@ -99,6 +99,20 @@ func slotWithCube(t *testing.T, x0, x1, y0 float64) *decad.Body {
 	return joined
 }
 
+// runOutSlot is the 40x40x10 plate cut by a placed box over x = −10 … 50, y = 10 … 30 from z = 5, joined with a
+// box over x = x0 … x1, y = 10.05 … 10.15, z = 5.05 … 5.15. The slot's floor edge along y = 10 is concave and runs
+// out through the x = 0 and x = 40 faces, which are reflex at its ends, so a single-edge fillet adds a cap to each.
+func runOutSlot(t *testing.T, x0, x1 float64) *decad.Body {
+	t.Helper()
+	w, doc := sketch.NewWorld(), decad.New()
+	plate := rectBox(t, w, doc, 0, 0, 40, 40, 10)
+	slot, err := decad.Cut(t.Context(), plate, placed(t, rectBox(t, w, doc, -10, 10, 50, 30, 20), 5))
+	require.NoError(t, err)
+	joined, err := decad.Union(t.Context(), slot, placed(t, rectBox(t, w, doc, x0, 10.05, x1, 10.15, 0.1), 5.05))
+	require.NoError(t, err)
+	return joined
+}
+
 // ledgeWithCavity is ledgeOnWall(t, 5, 2) with a closed cavity over
 // x = 9.9 … 10.9, y = y0 … y0 + 0.1, z = 9.85 … 9.95: it crosses the x = 10
 // plane inside the cap the wall takes at the ledge's corner (10,10,10) for
@@ -212,6 +226,29 @@ func arcEndSlot(t *testing.T) *decad.Body {
 
 func TestFacetedRetainedBlendChainEnds(t *testing.T) {
 	t.Parallel()
+
+	// A single concave edge gains the same caps at a run-out (no chain).
+	t.Run("a solid crossing the cap the run-out end gains is refused", func(t *testing.T) {
+		t.Parallel()
+		b := runOutSlot(t, -0.9, 0.1)
+		_, err := decad.Fillet(t.Context(), b, xEdgeAt(r3.NewVec(0, 10, 5)), units.Millimeters(1))
+		require.ErrorIs(t, err, decad.ErrUnsupported)
+		require.Regexp(t, `the cap an end face takes meets another facet of the body at \{0 `, err.Error())
+	})
+
+	t.Run("a solid clear of the cap the run-out end gains is kept", func(t *testing.T) {
+		t.Parallel()
+		b := runOutSlot(t, -1, -0.2)
+		before, err := b.Volume()
+		require.NoError(t, err)
+		out, err := decad.Fillet(t.Context(), b, xEdgeAt(r3.NewVec(0, 10, 5)), units.Millimeters(1))
+		require.NoError(t, err)
+		after, err := out.Volume()
+		require.NoError(t, err)
+		requireVolumeChange(t, before, after, -40*(1-math.Pi/4))
+		requireVerifiedMesh(t, out)
+		requireNoCrossingTriangles(t, out)
+	})
 
 	t.Run("a reflex foot fillets and its wall takes both caps", func(t *testing.T) {
 		t.Parallel()

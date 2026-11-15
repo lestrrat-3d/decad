@@ -51,6 +51,70 @@ func requireVerifiedMesh(t *testing.T, b *decad.Body) {
 	require.True(t, mesh.VolumeVerified())
 }
 
+// requireNoCrossingTriangles tessellates b and checks, in plain floats and apart from the engine's own audit, that no
+// two triangles of the mesh that share no vertex position cross: no edge of one passes strictly through the inside of
+// the other. A solid that reaches through the boundary of a rebuilt face makes such pairs.
+func requireNoCrossingTriangles(t *testing.T, b *decad.Body) {
+	t.Helper()
+	mesh, err := b.Tessellate(t.Context(), units.Millimeters(0.1))
+	require.NoError(t, err)
+	vs, tris := mesh.Vertices(), mesh.Triangles()
+	const eps = 1e-9
+	same := func(p, q r3.Vec) bool { return p.Sub(q).Len() <= eps }
+	shares := func(a, b [3]int) bool {
+		for _, i := range a {
+			for _, j := range b {
+				if same(vs[i], vs[j]) {
+					return true
+				}
+			}
+		}
+		return false
+	}
+	// crosses reports whether segment p-q passes through the inside of triangle abc.
+	crosses := func(p, q, a, b, c r3.Vec) bool {
+		d, e1, e2 := q.Sub(p), b.Sub(a), c.Sub(a)
+		h := d.Cross(e2)
+		det := e1.Dot(h)
+		if math.Abs(det) < 1e-15 {
+			return false
+		}
+		s := p.Sub(a)
+		u := s.Dot(h) / det
+		qv := s.Cross(e1)
+		v := d.Dot(qv) / det
+		w := e2.Dot(qv) / det
+		return u > eps && v > eps && u+v < 1-eps && w > eps && w < 1-eps
+	}
+	lo := make([]r3.Vec, len(tris))
+	hi := make([]r3.Vec, len(tris))
+	for i, tr := range tris {
+		a, b, c := vs[tr[0]], vs[tr[1]], vs[tr[2]]
+		lo[i] = r3.NewVec(min(a.X, b.X, c.X), min(a.Y, b.Y, c.Y), min(a.Z, b.Z, c.Z))
+		hi[i] = r3.NewVec(max(a.X, b.X, c.X), max(a.Y, b.Y, c.Y), max(a.Z, b.Z, c.Z))
+	}
+	pairs := 0
+	for i := range tris {
+		for j := i + 1; j < len(tris); j++ {
+			if lo[i].X > hi[j].X || lo[j].X > hi[i].X || lo[i].Y > hi[j].Y || lo[j].Y > hi[i].Y ||
+				lo[i].Z > hi[j].Z || lo[j].Z > hi[i].Z || shares(tris[i], tris[j]) {
+				continue
+			}
+			hit := false
+			for _, o := range [][2]int{{i, j}, {j, i}} {
+				e, f := tris[o[0]], tris[o[1]]
+				for k := range 3 {
+					hit = hit || crosses(vs[e[k]], vs[e[(k+1)%3]], vs[f[0]], vs[f[1]], vs[f[2]])
+				}
+			}
+			if hit {
+				pairs++
+			}
+		}
+	}
+	require.Zero(t, pairs, "triangle pairs of the mesh that cross each other")
+}
+
 // blendKinds counts the cylinders of the given radius and the tori of the
 // given tube radius.
 func blendKinds(b *decad.Body, radius float64) (cylinders, tori int, majors []float64) {

@@ -46,7 +46,12 @@ const figureEightHeight = 10.0
 // both ends are concave.
 func figureEight(t *testing.T) *decad.Body {
 	t.Helper()
-	sc := newRetentionScene()
+	return figureEightIn(t, newRetentionScene())
+}
+
+// figureEightIn is figureEight built in sc.
+func figureEightIn(t *testing.T, sc *retentionScene) *decad.Body {
+	t.Helper()
 	b, err := decad.Union(t.Context(), zCylinderAt(t, sc, pairAxes[0][0], pairAxes[0][1], pairRad, 0, 20),
 		zCylinderAt(t, sc, pairAxes[1][0], pairAxes[1][1], pairRad, 0, 20))
 	require.NoError(t, err)
@@ -152,6 +157,39 @@ func TestFacetedRetainedBlendParallelCylindersConcave(t *testing.T) {
 		requireVolumeChange(t, before, after, -figureEightHeight*shoelaceArea(region))
 		requireBevelThrough(t, chamfered, p, q, 10)
 		requireVerifiedMesh(t, chamfered)
+	})
+
+	// A 0.1 x 0.1 x 1 box beside the valley at y = 7.8 … 7.9 stands on the fill's end plane z = 15.001 from z0. The
+	// end face gains the blend's cap there, and the box's top lies outside the fill, so the held audit alone
+	// does not refuse it.
+	valleyWithBox := func(t *testing.T, z0 float64) *decad.Body {
+		t.Helper()
+		sc := newRetentionScene()
+		b, err := decad.Union(t.Context(), figureEightIn(t, sc), placed(t, rectBox(t, sc.w, sc.doc, 17.45, 7.8, 17.55, 7.9, 1), z0))
+		require.NoError(t, err)
+		return b
+	}
+
+	t.Run("a solid crossing the cap the valley's end face gains is refused", func(t *testing.T) {
+		t.Parallel()
+		b := valleyWithBox(t, 14.95)
+		_, err := decad.Fillet(t.Context(), b, valleyEdge(t, b), units.Millimeters(1))
+		require.ErrorIs(t, err, decad.ErrUnsupported)
+		require.Regexp(t, `the cap an end face takes meets another facet of the body at \{[0-9.]+ [0-9.]+ 15\.001\}`, err.Error())
+	})
+
+	t.Run("a solid clear of the cap the valley's end face gains is kept", func(t *testing.T) {
+		t.Parallel()
+		b := valleyWithBox(t, 15.2)
+		before, err := b.Volume()
+		require.NoError(t, err)
+		filleted, err := decad.Fillet(t.Context(), b, valleyEdge(t, b), units.Millimeters(1))
+		require.NoError(t, err)
+		after, err := filleted.Volume()
+		require.NoError(t, err)
+		requireVolumeChange(t, before, after, -figureEightHeight*cornerRegionArea(1))
+		requireVerifiedMesh(t, filleted)
+		requireNoCrossingTriangles(t, filleted)
 	})
 }
 

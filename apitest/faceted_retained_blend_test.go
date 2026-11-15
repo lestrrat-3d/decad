@@ -892,6 +892,30 @@ func shoelaceArea(pts [][2]float64) float64 {
 	return math.Abs(sum) / 2
 }
 
+// rodOnPlate is the plate joined with a Ø8 rod along x from 10 to 30 whose axis sits 2 mm above the plate's top
+// face: it rises out of the plate along two lines, and the plate's top face wraps the rod's footprint, so it is
+// reflex at each end.
+func rodOnPlate(t *testing.T, sc *retentionScene) *decad.Body {
+	t.Helper()
+	plate := blendPlate(t, sc)
+	s, err := sc.w.CreateSketch(sc.w.YZ())
+	require.NoError(t, err)
+	c := s.CreatePoint(10, 22)
+	s.Fix(c)
+	s.CreateCircle(c, 4)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	rod, err := decad.Extrude(t.Context(), sc.doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
+	require.NoError(t, err)
+	shift, err := r3.Translation(r3.Vec{X: 10})
+	require.NoError(t, err)
+	rod, err = decad.Transform(t.Context(), rod, shift)
+	require.NoError(t, err)
+	joined, err := decad.Union(t.Context(), plate, rod)
+	require.NoError(t, err)
+	return joined
+}
+
 func TestFacetedRetainedBlendCylinderLine(t *testing.T) {
 	t.Parallel()
 	// The groove's edge on the near side of the top face, in (y, z).
@@ -998,23 +1022,7 @@ func TestFacetedRetainedBlendCylinderLine(t *testing.T) {
 		// A Ø8 rod along x from 10 to 30 whose axis sits 2 mm above the plate's
 		// top face: it rises out of the plate along two lines. The plate's top
 		// face wraps the rod's footprint, so it is reflex at each end.
-		sc := newRetentionScene()
-		plate := blendPlate(t, sc)
-		s, err := sc.w.CreateSketch(sc.w.YZ())
-		require.NoError(t, err)
-		c := s.CreatePoint(10, 22)
-		s.Fix(c)
-		s.CreateCircle(c, rad)
-		_, err = s.Solve(t.Context())
-		require.NoError(t, err)
-		rod, err := decad.Extrude(t.Context(), sc.doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
-		require.NoError(t, err)
-		shift, err := r3.Translation(r3.Vec{X: 10})
-		require.NoError(t, err)
-		rod, err = decad.Transform(t.Context(), rod, shift)
-		require.NoError(t, err)
-		joined, err := decad.Union(t.Context(), plate, rod)
-		require.NoError(t, err)
+		joined := rodOnPlate(t, newRetentionScene())
 		before, err := joined.Volume()
 		require.NoError(t, err)
 		const r = 1.0
@@ -1051,6 +1059,30 @@ func TestFacetedRetainedBlendCylinderLine(t *testing.T) {
 		require.NoError(t, err)
 		require.True(t, mesh.BoundaryVerified())
 		require.True(t, mesh.VolumeVerified())
+	})
+
+	// The plate's top face gains the blend's end cap at x = 10 and x = 30, on the plane x = 10 here.
+	t.Run("a solid crossing a cap the foot fillet gains is refused", func(t *testing.T) {
+		t.Parallel()
+		sc := newRetentionScene()
+		joined, err := decad.Union(t.Context(), rodOnPlate(t, sc), placed(t, rectBox(t, sc.w, sc.doc, 9, 6.3, 10.05, 6.4, 0.1), 20.05))
+		require.NoError(t, err)
+		_, err = decad.Fillet(t.Context(), joined, straightEdge(t, joined, r3.NewVec(10, k[0], 20), r3.NewVec(1, 0, 0)),
+			units.Millimeters(1))
+		require.ErrorIs(t, err, decad.ErrUnsupported)
+		require.Regexp(t, `the cap an end face takes meets another facet of the body at \{10 `, err.Error())
+	})
+
+	t.Run("a solid clear of a cap the foot fillet gains is kept", func(t *testing.T) {
+		t.Parallel()
+		sc := newRetentionScene()
+		joined, err := decad.Union(t.Context(), rodOnPlate(t, sc), placed(t, rectBox(t, sc.w, sc.doc, 8, 6.3, 9, 6.4, 0.1), 20.05))
+		require.NoError(t, err)
+		filleted, err := decad.Fillet(t.Context(), joined, straightEdge(t, joined, r3.NewVec(10, k[0], 20), r3.NewVec(1, 0, 0)),
+			units.Millimeters(1))
+		require.NoError(t, err)
+		requireVerifiedMesh(t, filleted)
+		requireNoCrossingTriangles(t, filleted)
 	})
 }
 
@@ -1187,5 +1219,56 @@ func TestFacetedRetainedBlendArc(t *testing.T) {
 		require.NotNil(t, sel)
 		_, err = decad.Fillet(t.Context(), flat, sel, units.Millimeters(1))
 		require.ErrorIs(t, err, decad.ErrUnsupported)
+	})
+
+	// A Ø8 bore at (2, 2) with its floor at z = 5.001 breaks out through the x = 0 and y = 0 faces. Its floor
+	// rim is a concave open arc from the x = 0 face to the y = 0 face, and each end face gains the blend's cap.
+	// The 0.1 x 0.1 x 1 box over y = 5 … 5.1 floats in the void and the air beside the x = 0 face.
+	cornerBore := func(t *testing.T, x0, x1 float64) (*decad.Body, decad.EdgeSelector) {
+		t.Helper()
+		sc := newRetentionScene()
+		b, err := decad.Cut(t.Context(), blendPlate(t, sc), zCylinderAt(t, sc, 2, 2, 4, 5, 30))
+		require.NoError(t, err)
+		if x1 > x0 {
+			b, err = decad.Union(t.Context(), b, placed(t, rectBox(t, sc.w, sc.doc, x0, 5, x1, 5.1, 0.1), 5.05))
+			require.NoError(t, err)
+		}
+		for _, e := range b.Edges() {
+			if arc, ok := e.Curve().(decad.Arc3); ok && math.Abs(arc.Center.Z-5.001) < 1e-6 {
+				return b, decad.Edges(decad.Circular(), decad.EndpointAt(e.Start().Position().Value)).Exactly(1)
+			}
+		}
+		require.Fail(t, "no arc at the floor")
+		return nil, nil
+	}
+
+	t.Run("a solid crossing the cap a concave arc's end face gains is refused", func(t *testing.T) {
+		t.Parallel()
+		b, sel := cornerBore(t, -0.9, 0.1)
+		_, err := decad.Fillet(t.Context(), b, sel, units.Millimeters(1))
+		require.ErrorIs(t, err, decad.ErrUnsupported)
+		require.Regexp(t, `the cap an end face takes meets another facet of the body at \{0 `, err.Error())
+	})
+
+	t.Run("a solid clear of the cap a concave arc's end face gains is kept", func(t *testing.T) {
+		t.Parallel()
+		plain, plainSel := cornerBore(t, 0, 0)
+		plainBefore, err := plain.Volume()
+		require.NoError(t, err)
+		plainOut, err := decad.Fillet(t.Context(), plain, plainSel, units.Millimeters(1))
+		require.NoError(t, err)
+		plainAfter, err := plainOut.Volume()
+		require.NoError(t, err)
+		b, sel := cornerBore(t, -1, -0.2)
+		before, err := b.Volume()
+		require.NoError(t, err)
+		out, err := decad.Fillet(t.Context(), b, sel, units.Millimeters(1))
+		require.NoError(t, err)
+		after, err := out.Volume()
+		require.NoError(t, err)
+		// The fill is the same with the box beside it.
+		requireVolumeChange(t, before, after, plainBefore.Value.Mag()-plainAfter.Value.Mag())
+		requireVerifiedMesh(t, out)
+		requireNoCrossingTriangles(t, out)
 	})
 }

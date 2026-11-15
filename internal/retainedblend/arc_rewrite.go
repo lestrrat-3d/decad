@@ -361,6 +361,7 @@ func rewriteArc(ctx context.Context, env topo.Env, fp facetedrecord.Payload, a a
 
 	// The end faces.
 	var gLoops [2][][]int
+	var gainsG [2]bool
 	for i := range 2 {
 		endIDs := make([]int, m+1)
 		reach := make([]r3.Vec, m+1)
@@ -386,12 +387,13 @@ func rewriteArc(ctx context.Context, env topo.Env, fp facetedrecord.Payload, a a
 				return nil, err
 			}
 		}
-		loops, _, err := w.endFaceRun(a.ends[i], fG[i], runA.chain[i], runB.chain[i], [2]sideKind{trims, kindB[i]},
+		loops, gains, err := w.endFaceRun(a.ends[i], fG[i], runA.chain[i], runB.chain[i], [2]sideKind{trims, kindB[i]},
 			remA[i], remB[i], endIDs, wallRun, reach, margin, a.convex, nil)
 		if err != nil {
 			return nil, err
 		}
 		gLoops[i] = loops
+		gainsG[i] = gains
 	}
 	// An end face that takes the cap is new surface where the cap lies: its
 	// rebuilt facets are cleared against the rest of the body as the strip is.
@@ -400,14 +402,14 @@ func rewriteArc(ctx context.Context, env topo.Env, fp facetedrecord.Payload, a a
 		loops [][]int
 		n     r3.Vec
 		fl    faceLoops
-		takes bool
-	}{{aLoops, n, fA, false}, {gLoops[0], a.ends[0].g.n, fG[0], kindB[0] == extends},
-		{gLoops[1], a.ends[1].g.n, fG[1], kindB[1] == extends}} {
+		gains bool
+	}{{aLoops, n, fA, false}, {gLoops[0], a.ends[0].g.n, fG[0], gainsG[0] || kindB[0] == extends},
+		{gLoops[1], a.ends[1].g.n, fG[1], gainsG[1] || kindB[1] == extends}} {
 		from := len(w.out)
 		if err := w.retriangulate(f.n, f.loops, f.fl.group); err != nil {
 			return nil, err
 		}
-		if f.takes {
+		if f.gains {
 			taken = append(taken, [2]int{from, len(w.out)})
 		}
 		w.removed = append(w.removed, f.fl.facets...)

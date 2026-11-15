@@ -476,6 +476,7 @@ func rewriteCylLine(ctx context.Context, env topo.Env, fp facetedrecord.Payload,
 
 	// The end faces.
 	var gLoops [2][][]int
+	var gainsG [2]bool
 	for i := range 2 {
 		col := 0
 		if i == 1 {
@@ -506,12 +507,13 @@ func rewriteCylLine(ctx context.Context, env topo.Env, fp facetedrecord.Payload,
 				return nil, err
 			}
 		}
-		loops, _, err := w.endFaceRun(c.ends[i], fG[i], runA.chain[i], runB.chain[i], kinds, remA[i], remB[i], rows,
+		loops, gains, err := w.endFaceRun(c.ends[i], fG[i], runA.chain[i], runB.chain[i], kinds, remA[i], remB[i], rows,
 			run, reach, margin, convex, dirs)
 		if err != nil {
 			return nil, err
 		}
 		gLoops[i] = loops
+		gainsG[i] = gains
 	}
 	aLoops, err := replaceRun(fA, runA, [2]int{c.ends[0].v, c.ends[1].v}, remA, kindA, rowIdx[0])
 	if err != nil {
@@ -525,8 +527,8 @@ func rewriteCylLine(ctx context.Context, env topo.Env, fp facetedrecord.Payload,
 		n     r3.Vec
 		fl    faceLoops
 		takes bool
-	}{{aLoops, nA, fA, false}, {gLoops[0], c.ends[0].g.n, fG[0], extB[0]},
-		{gLoops[1], c.ends[1].g.n, fG[1], extB[1]}} {
+	}{{aLoops, nA, fA, false}, {gLoops[0], c.ends[0].g.n, fG[0], extB[0] || gainsG[0]},
+		{gLoops[1], c.ends[1].g.n, fG[1], extB[1] || gainsG[1]}} {
 		from := len(w.out)
 		if err := w.retriangulate(f.n, f.loops, f.fl.group); err != nil {
 			return nil, err

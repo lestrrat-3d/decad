@@ -127,6 +127,8 @@ func rewriteCylCyl(ctx context.Context, env topo.Env, fp facetedrecord.Payload, 
 
 	// The end faces.
 	var gLoops [2][][]int
+	var gainsG [2]bool
+	var taken [][2]int
 	for i := range 2 {
 		pick := func(r []int) int {
 			if i == 0 {
@@ -141,18 +143,23 @@ func rewriteCylCyl(ctx context.Context, env topo.Env, fp facetedrecord.Payload, 
 			reach[j] = w.verts[end[j]]
 		}
 		kinds := [2]sideKind{trims, trims}
-		loops, _, err := w.endFace(c.ends[i], fG[i], runs[0].chain[i], runs[1].chain[i], kinds,
+		loops, gains, err := w.endFace(c.ends[i], fG[i], runs[0].chain[i], runs[1].chain[i], kinds,
 			cuts[0].rem[i], cuts[1].rem[i], end, reach, margin, convex, nil)
 		if err != nil {
 			return nil, err
 		}
 		gLoops[i] = loops
+		gainsG[i] = gains
 	}
 	for i, f := range []struct {
 		n r3.Vec
 	}{{c.ends[0].g.n}, {c.ends[1].g.n}} {
+		from := len(w.out)
 		if err := w.retriangulate(f.n, gLoops[i], fG[i].group); err != nil {
 			return nil, err
+		}
+		if gainsG[i] {
+			taken = append(taken, [2]int{from, len(w.out)})
 		}
 		w.removed = append(w.removed, fG[i].facets...)
 	}
@@ -192,7 +199,10 @@ func rewriteCylCyl(ctx context.Context, env topo.Env, fp facetedrecord.Payload, 
 		groups[f.group].HasCentroid = false
 		groups[f.group].Centroid = measurement.VecMeasurement{}
 	}
-	return w.buildClear(ctx, env, groups, stripFrom, tag, faceIndex)
+	if err := w.checkStripClear(ctx, stripFrom, taken); err != nil {
+		return nil, err
+	}
+	return w.build(ctx, env, groups, stripFrom, tag, faceIndex)
 }
 
 // tag is the exact surface of the blend face.
