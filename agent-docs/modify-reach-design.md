@@ -977,19 +977,41 @@ band reads `dc = ds = d` and builds the same body bit for bit.
 A `Chamfer` that selects part of a cap loop's edges, which routes E and L above refuse (SX4), takes this route when the
 selection is a set of whole runs. A run is a maximal chain of selected edges, lines and circular arcs, that continue one
 another tangentially. Every junction between a selected edge and an unselected one is a sharp corner, so no run stops
-inside a tangent chain; two runs may meet at a sharp corner, where they mitre as the whole-loop chamfer does.
-`WithTangentChain` makes such a set from one seed edge. A loop selected whole stays with the loop routes.
+inside a tangent chain. `WithTangentChain` makes such a set from one seed edge. A loop selected whole stays with the loop
+routes. A prism's cap edge always meets its wall at a right angle, so this route does not read `Edge.Convex`, which on a
+prism is only the rim's two-dimensional turn: a loop with clockwise (concave) arc walls outside the selection is read
+like any other.
 
-Every wall beside a run is a plane normal to the cap or a cylinder with its axis normal to it. A run is cut from the
-receiver by one cutter: the region within `t` of the run, inside the cap, above the bevel plane that leaves the wall at
-depth `dc` and the cap at `dc`. The cutter reaches `dc` past each end of the run along the run's tangent, so the bevel
-ends on the wall beside the next edge. That extension holds no material only where the next edge leaves at a convex
-corner turned by 90 degrees or more; a run that ends at any other corner, including a concave one, is `ErrUnsupported`,
-as is a run whose extension would meet material of the cap or whose offset empties an arc.
+Every wall beside a chain is a plane normal to the cap or a cylinder with its axis normal to it. A chain is one maximal
+set of selected segments, so segments that meet at a sharp corner mitre inside one cutter, as the whole-loop chamfer
+mitres them. The cutter is the region within `t` of the chain, inside the cap, above the bevel plane that leaves the wall
+at depth `dc` and the cap at `dc`. A moved arc is swept between its own end points, which a mitre moves off the source
+radials. Each end of a chain is read on its own, with `reach = dc + over` the cutter's overshoot above the cap:
+
+- A convex end turned by 45 degrees or more reaches past the end along the run's tangent, so the bevel ends on the wall
+  beside the next edge, where it runs out onto that wall over `dc` times the cotangent of the turn. The cutter reaches
+  `max(dc, 1.5 reach cot(turn))`. A turn under 90 degrees needs the next edge at least `1.5 reach / sin(turn)` long, and
+  an arc run's tangent must stay within 0.0002 mm of its circle over the run-out. The run-out removes `dc^3 cot(turn)/6`
+  beyond the perpendicular end's wedge (a negative amount past 90 degrees).
+- A concave end turned by up to 90 degrees beside a line stops the bevel on the next face's plane, carried back over the
+  run's band. The cutter loses a sector of a disc about the corner, bounded by the next wall's line carried back over the
+  band and by the bisector of the corner's empty wedge, so the bevel tapers to the corner's vertical edge, shortens at
+  the cap by `dc / sin(turn)` along that plane, and leaves no square end. The next face grows by a triangle coplanar
+  with it, and nothing is removed on the neighbour's side. A turn of exactly 90 degrees stops the bevel on the corner's
+  perpendicular. The result removes `dc^3 cot(turn)/6` less than the perpendicular end's wedge. The sector's radius is
+  `1.5 (reach/sin(turn) + dc + over)`, local to the corner.
+
+Any other end is `ErrUnsupported`: a convex end turned by less than 45 degrees, a concave end turned by more than 90
+degrees, a concave end beside an arc, a run-out longer than the next edge, an arc run whose tangent extension leaves its
+circle by more than 0.0002 mm, and a chain that curls back into the end sector. So is a chain whose extension would meet
+material of the cap or whose offset empties an arc.
 
 The cutter is a polyhedron held exactly as a mesh solid, with arc chords within 0.0002 mm of their circle, and the
-result is a Boolean Cut: faceted, with the Cut's own readings. `internal/brepmodify/partial_loop_chamfer.go` owns it.
-It runs after every exact route has declined, and only for a symmetric chamfer.
+result is a Boolean Cut: faceted, with the Cut's own readings. A faceted arc run reads about 0.07 mm3 more volume than
+its exact value on a cutter of hub size (arc radius near 13 mm, 22 mm long), so a test of an arc run reads a section or
+allows that excess. A concave end's clip is a second mesh Boolean, which leaves about 5e-6 mm3 on a straight edge.
+`internal/brepmodify/partial_loop_chamfer.go` owns it. It runs after every exact route has declined, and only for a
+symmetric chamfer.
 
 ### 8.4 Measurements + tessellation
 
