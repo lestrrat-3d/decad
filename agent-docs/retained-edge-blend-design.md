@@ -287,9 +287,10 @@ between the wall and `G` (`signRead`, `slantBound`). A held vertex's bound is ra
 is raised. The reading applies to end planes only and only to a band with an exact
 main plane, so R3's band, the main plane, the further planes and the guard keep
 their refusals. It is on only where reading without it refuses, so no clip that
-builds without it changes. A cut of a held edge reads its two ends first, and a
-sign reading there raises an end that another plane may already have put outside;
-that only widens the bound, and the cut takes the raised bounds.
+builds without it changes. A cut of a held edge reads its two ends' sides first, and a
+sign reading there raises an end that another plane may already have put outside; that
+only widens the end's bound. The cut itself reads the ends' input bounds, never the
+raises (below).
 
 The side is a choice, not a claim, and no residual admits an input claim. The held
 bound `β` says the vertex's true point lies within `β` of it; that holds as before.
@@ -314,7 +315,11 @@ The published bound is the distance from the *held* point:
 The flat counterexample (a kept vertex whose foot on the true wall lies on the band's
 side) and the cylinder cases (foot on the band's side, the point inside and outside
 the circle, the axis on either side of `G`, a bore wall) are tests
-(`TestSignReadBoundCoversSlant`, `TestSlantBoundCoversCylinderExactly`).
+(`TestSignReadBoundCoversSlant`, `TestSlantBoundCoversCylinderExactly`). The input-bound read and the setback cap
+are tested in `cyl_band_sign_internal_test.go` (`TestCutOfHeldEdgeReadsInputBounds`, `TestCutFacetBoundReadsInputBounds`,
+`TestCutBoundCoversTrueSetbackLineAfterSignRead`, `TestSetbackBoundFormula`, `TestSetbackBoundCoversSetbackLine`,
+`TestSignReadPublishesTheSmallerOfSlantAndSetback`) and `wall_sine_internal_test.go` (`TestWallTilt`,
+`TestSetbackBoundCoversKeptCylinder`, `TestRoutesSetTheWallLean`).
 
 `s_lo` (`wall_sine.go`) comes from the wall face's retained tag, which must state
 no departure (`TagDeparture` and `AxialDelta` zero): Claim R then puts the true
@@ -343,6 +348,37 @@ overlaps an earlier cut or reaches another part of the wall refuses with their
 text, not with an end plane's. A vertex exactly on the plane in floats but on no
 face's tag reads as on the plane without being a corner or a run vertex, so a cut
 whose corner it should be refuses at the setback corner.
+
+**A cut reads input bounds.** A cut point of a held edge, and each facet's bound in `cutBand`, take
+`max` of the corners' *input* bounds (`fp.VertexBound`, `work.inputBeta`), not the work's bounds as
+a sign reading has raised them. A cut's claim is where it lies on its facet: the facet lies within
+the input bounds of the true wall (vertex bounds §2), the cut lies on the plane `q` within the
+rounding, and so the cut is within `max(β_in) + slack + τ` of the true line where the true wall meets
+`q` (and the slant term of the crossing, where `q` is a slanted end plane). The raise of an end is
+something else: the end's own distance to the band's boundary under the side chosen for it. It
+is published on the end, and the output facets that touch the end take it through their corners'
+`max`. A cut does not inherit it, because nothing the cut publishes depends on another point's side
+choice. If the cut itself lies within its bound of another end plane, it is read by sign on its own
+offset, once. Charges therefore never compound: before this reading a cut on an edge whose ends an
+earlier reading had charged took `β + c/s` of the raised end and was then charged again. A vertex
+the work made keeps the bound it was made with (`inputBeta` has no input record for it).
+
+**The setback line caps a sign reading.** A sign reading publishes the smaller of `β + c/s_lo` (above) and
+`β + (|v_m| + λ·β + slack)/√(1 − λ²)`, where `v_m` is the point's offset from the setback plane (the band's
+main plane), `λ` is the lean of the wall's generators from that plane's normal (`wallTilt`, from the wall's
+tag; `wallBand.leanOK` is false, and the cap off, where the tag gives none) and `β` is the point's input bound (a cut point's crossing bound)
+(`setbackBound`). The wall above the setback plane is kept at every azimuth, inside `G` and past it, so the
+setback line, where the true wall meets the setback plane, lies in the closure of the kept wall and in the true
+result. Take the foot `x*` of the held point `x` on the true wall: `|x − x*| ≤ β`, and `x − x*` runs along the
+wall's normal, which leans from square to the plane's normal by `λ`, so the foot is at most `|v_m| + λβ + slack`
+from the plane. A generator of the wall, leaning `λ` from the plane's normal, takes the foot to the line in at
+most `(|v_m| + λβ + slack)/√(1 − λ²)`. The bound is a distance from the held point to the true result and it does
+not depend on the slant of `G`: a point near the setback plane is near the line however shallow its crossing of
+`G` is. The tags give `λ` only where the wall is a plane or a cylinder that states no departure and no axial
+delta: the arc route's wall is coaxial with the rim's plane (`newWallBand`), and the chain route's wall is normal to its
+base within `10⁻⁹` (`chainEntry`), so `λ` is the tag's `NormalBound` plus a few ulp. The cap never lowers a bound
+below `β`, only replaces a larger one, and only for a point whose sign reading already succeeded, so it never admits an
+input claim or builds a body that refused.
 
 **The slant of the crossing bound.** A cut point on an end plane `G` publishes
 `max(ends, facet) + slack + τ`, a distance to the plane. Where the true wall meets `G`

@@ -50,6 +50,7 @@ func (w *work) newChainBand(en chainEntry, facets []int, up, oP r3.Vec, tW float
 	ends [2]*chainEndCut, slack float64) (*wallBand, error) {
 	band := &wallBand{slack: slack, noteCuts: true}
 	band.main = &bandEnd{g: plane{n: up, o: oP.Add(up.Scale(tW))}, sign: -1, what: "the blend's setback plane"}
+	band.lean, band.leanOK = w.wallTilt(en.wallIx, up)
 	onP := map[int]bool{}
 	for _, f := range facets {
 		for _, v := range w.fp.Tris[f] {

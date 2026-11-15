@@ -5,6 +5,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
+	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
 
@@ -71,3 +72,40 @@ func (w *work) wallSine(fi int, g plane) (sine func(reach float64) float64, plan
 	}
 	return nil, false
 }
+
+// wallTilt is a proven bound, in radians, on how far the true wall face fi leans from
+// square to a plane of unit normal n: the angle between n and the direction of the
+// wall's generators through any point, or false when none follows from the tag. The wall
+// must be an exact plane or a cylinder whose tag states no positional departure and no
+// axial delta (Retention Claim R then puts the true wall on the tag). A plane wall
+// contains the direction of n's projection on it, which leans from n by asin|n·m|, m the
+// wall's unit normal; a cylinder's generators run along its axis a, and lean by
+// asin|n × a|. The tag's NormalBound adds. The bound is false above maxTilt, so the
+// callers' factors stay within a few ulp of one.
+func (w *work) wallTilt(fi int, n r3.Vec) (float64, bool) {
+	f := w.faceAt(fi)
+	if f == nil || !f.RetainedTag || f.TagDeparture != 0 || !(f.NormalBound >= 0) ||
+		(f.HasAxialDelta && f.AxialDelta != 0) {
+		return 0, false
+	}
+	var lean float64
+	switch sf := f.Surface.(type) {
+	case surfacegeom.Plane:
+		lean = math.Abs(sf.Frame.N().Dot(n))
+	case surfacegeom.Cylinder:
+		axis, ok := sf.Axis.Normalize()
+		if !ok {
+			return 0, false
+		}
+		lean = axis.Cross(n).Len()
+	default:
+		return 0, false
+	}
+	// asin x ≤ x + x³ for x ≤ 1/2.
+	tilt := proofbound.AbsSumUpper(lean, proofbound.ProductUpper(lean, proofbound.ProductUpper(lean, lean)),
+		f.NormalBound, 64*ulp)
+	return tilt, tilt <= maxTilt
+}
+
+// maxTilt is the largest wall lean wallTilt accepts, in radians.
+const maxTilt = 0.1
