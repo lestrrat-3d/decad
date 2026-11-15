@@ -227,8 +227,8 @@ func (w *work) readEndCut(ec *chainEndCut, nP, rc r3.Vec, uP int, leaves, concav
 	// the lines' senses, and the turns read from them, are certain.
 	ec.rP, ec.rW = dirs[0], dirs[1]
 	// G's turn at the corner picks the side of the cap: a convex G gives the
-	// cap up, a reflex G takes it (§5.5 step 5). An arc end is built on a
-	// convex G only.
+	// cap up, a reflex G takes it (§5.5 step 5). A concave chain's arc end
+	// takes either; a convex chain's arc end is built on a convex G only.
 	if err := ec.readEndFaceKind(); err != nil {
 		return err
 	}
@@ -259,7 +259,8 @@ func (w *work) readEndCut(ec *chainEndCut, nP, rc r3.Vec, uP int, leaves, concav
 }
 
 // readEndFaceKind reads G's turn at the corner (§5.5 step 5): a convex G gives
-// the cap up, a reflex G takes it, and an arc end is built on a convex G only.
+// the cap up, a reflex G takes it. A convex chain's arc end is built on a convex
+// G only; a concave chain's arc end takes either.
 // Where the base wraps the corner G must be convex: it then takes the cap, and
 // a reflex G beside a wrapping base has no end section to take.
 func (ec *chainEndCut) readEndFaceKind() error {
@@ -267,7 +268,7 @@ func (ec *chainEndCut) readEndFaceKind() error {
 	case 0:
 		return fmt.Errorf("%w: an end face's turn at the chain's corner is undecided", decaderr.ErrUnsupported)
 	case -1:
-		if ec.arc != nil {
+		if ec.arc != nil && ec.arc.a.convex {
 			return fmt.Errorf("%w: an arc end of a tangent chain needs an end face convex at the corner",
 				decaderr.ErrUnsupported)
 		}

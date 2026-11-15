@@ -200,7 +200,12 @@ func stepBlock(t *testing.T) *decad.Body {
 // face cuts the slot's x = −2 arcs, so the floor's outline ends on arcs.
 func arcEndSlot(t *testing.T) *decad.Body {
 	t.Helper()
-	w, doc := sketch.NewWorld(), decad.New()
+	return arcEndSlotIn(t, sketch.NewWorld(), decad.New())
+}
+
+// arcEndSlotIn is arcEndSlot built in the given world and document.
+func arcEndSlotIn(t *testing.T, w *sketch.World, doc *decad.Document) *decad.Body {
+	t.Helper()
 	plate := rectBox(t, w, doc, 0, 0, 40, 40, 10)
 	tool, err := decad.Fillet(t.Context(), rectBox(t, w, doc, -2, 10, 30, 30, 20),
 		decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1))).Exactly(4), units.Millimeters(concaveR))
@@ -359,14 +364,6 @@ func TestFacetedRetainedBlendChainEnds(t *testing.T) {
 			decad.WithTangentChain())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.ErrorContains(t, err, "a chain end's base or wall is reflex at the corner")
-	})
-
-	t.Run("a concave open chain that ends on an arc is refused", func(t *testing.T) {
-		t.Parallel()
-		_, err := decad.Fillet(t.Context(), arcEndSlot(t), xEdgeAt(r3.NewVec(27, 10, 5)), units.Millimeters(1),
-			decad.WithTangentChain())
-		require.ErrorIs(t, err, decad.ErrUnsupported)
-		require.ErrorContains(t, err, "a concave open tangent chain ends on an arc; only a straight end is built")
 	})
 
 	t.Run("an arc end on a reflex end face is refused", func(t *testing.T) {
