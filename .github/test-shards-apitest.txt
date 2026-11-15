@@ -3077,3 +3077,5 @@
 12	0.00	TestFilletLoopNearTangentHole
 12	0.00	TestFilletLoopNearTangentBossRoot
 12	0.00	TestFilletLoopNearTangentInchRadius
+12	0.00	TestUnionArcToothSectorJoin
+12	0.00	TestUnionArcToothSectorJoinRefusals
