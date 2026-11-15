@@ -117,7 +117,7 @@ func NextSectorUnion(ctx context.Context, op meshbool.OperationKind,
 	if !RevolveSectorSourcesSeparate(sectors, axis) {
 		return nil, false, nil
 	}
-	body, err := BuildSectorsJoin(ctx, env,
-		record.Certificate, sectors)
+	body, err := buildSectorsJoin(ctx, env,
+		record.Certificate, sectors, RecordCeiling(record))
 	return body, true, err
 }

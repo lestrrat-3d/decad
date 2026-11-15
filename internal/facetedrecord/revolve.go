@@ -161,6 +161,9 @@ type RevolveLoftJoinRecord struct {
 	Placed                                []Payload
 	CapRing                               *RevolvedSectionRing
 	BoundaryBound, VolumeBound, AreaBound float64
+	// Ceiling is the boundary bound, in mm, the join was built to stay under
+	// when a caller set one below the default 0.1 mm. Zero means the default.
+	Ceiling float64
 }
 
 type RevolveLoftSectorPlacement struct {

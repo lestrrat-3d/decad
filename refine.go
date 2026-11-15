@@ -6,6 +6,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/occupancy"
+	"github.com/lestrrat-3d/decad/internal/revolveshell"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/units"
 )
@@ -35,6 +36,12 @@ const refineWorkLimit = 1 << 28
 // reads. Placing the refined result instead keeps its bound, grown by the
 // rounding the placement charges. A later Boolean on the result reads
 // the bounds source published, so refining never loosens what a chain admits.
+//
+// A straight-bevel sector join (a Union of a revolve blank and copies of one
+// point-Loft tooth, still carrying its join record) is the exception to
+// "moves no vertex": its cone caps stop refining at a 0.1 mm bound, so Refine
+// rebuilds it with finer caps until its bound is at most maxBound. The result
+// has new vertices and readings and keeps the bound for later Unions and Cuts.
 //
 // maxBound is a length: wrong kind is ErrUnitKind, non-finite ErrNotFinite,
 // negative ErrNegativeMagnitude and zero ErrDegenerate. A nil context or body
@@ -66,6 +73,9 @@ func Refine(ctx context.Context, source *Body, maxBound units.Value) (result *Bo
 	if !ok {
 		return nil, fmt.Errorf(`%w: Refine takes a mesh Union result`, ErrUnsupported)
 	}
+	if fp.RevolveLoftJoin != nil {
+		return refineSectorJoin(ctx, d, source, fp, target)
+	}
 	sigma, err := fp.RefinedSurfaceBounds(ctx, target, refineWorkLimit)
 	if err != nil {
 		return nil, err
@@ -77,6 +87,26 @@ func Refine(ctx context.Context, source *Body, maxBound units.Value) (result *Bo
 		return nil, err
 	}
 	node, err := facetedrecord.Build(ectx, envOf(documentNode(d), d.producerID(ectx)), fp)
+	if err != nil {
+		return nil, err
+	}
+	return commitModifyResult(ctx, OperationRefine, source, bodyHandle(node))
+}
+
+// refineSectorJoin rebuilds a straight-bevel sector join (Union of a revolve
+// blank and copies of one point-Loft tooth) with its cone caps subdivided
+// until the join's boundary bound is at most target. Unlike every other
+// Refine it builds a new mesh from the join's retained sources, so the result
+// has new vertices, triangles and Volume. The root adapter owns the document
+// environment and the history commit that the internal rebuild needs.
+func refineSectorJoin(ctx context.Context, d *Document, source *Body,
+	fp facetedPayload, target float64) (*Body, error) {
+	ectx, err := d.evalContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+	node, err := revolveshell.RebuildSectorsJoin(ectx,
+		envOf(documentNode(d), d.producerID(ectx)), fp.RevolveLoftJoin, target)
 	if err != nil {
 		return nil, err
 	}
