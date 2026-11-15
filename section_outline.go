@@ -43,11 +43,7 @@ func (s SectionOutline) PolygonArea() units.Value {
 	normal := s.Plane.N()
 	total := 0.0
 	for _, loop := range s.Loops {
-		var twice r3.Vec
-		for i, p := range loop {
-			twice = twice.Add(p.Cross(loop[(i+1)%len(loop)]))
-		}
-		total += twice.Dot(normal) / 2
+		total += (meshslice.Outline{Points: loop}).Area(normal)
 	}
 	return units.SquareMillimeters(total)
 }
@@ -212,11 +208,11 @@ func (s SectionOutline) Clearance(other SectionOutline) (SectionClearance, error
 	if !(offA >= 0) || !(offB >= 0) || math.IsInf(offA, 0) || math.IsInf(offB, 0) {
 		return SectionClearance{}, fmt.Errorf(`%w: an outline's OffSurface must be finite and not negative`, ErrDegenerate)
 	}
-	scale := math.Max(vecMaxAbs(s.Plane.Origin()), vecMaxAbs(other.Plane.Origin()))
+	scale := math.Max(proofbound.VecMaxAbs(s.Plane.Origin()), proofbound.VecMaxAbs(other.Plane.Origin()))
 	for _, loops := range [2][][]r3.Vec{s.Loops, other.Loops} {
 		for _, loop := range loops {
 			for _, p := range loop {
-				scale = math.Max(scale, vecMaxAbs(p))
+				scale = math.Max(scale, proofbound.VecMaxAbs(p))
 			}
 		}
 	}
@@ -236,10 +232,6 @@ func (s SectionOutline) Clearance(other SectionOutline) (SectionClearance, error
 		B:        res.B,
 		Overlaps: res.Overlap,
 	}, nil
-}
-
-func vecMaxAbs(v r3.Vec) float64 {
-	return math.Max(math.Abs(v.X), math.Max(math.Abs(v.Y), math.Abs(v.Z)))
 }
 
 // clearanceBound returns a float no less than offA + offB, thirty-two units of

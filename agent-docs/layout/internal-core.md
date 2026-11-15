@@ -22,7 +22,6 @@ The rules for rows live in `agent-docs/layout.md`.
 | `internal/contactbox/` | Source-box and oriented-box admission over body nodes, with their exact classification and the face, point and normal manifolds they publish into a contact report: axis, contained, clipped and oblique patches. See contact-geometry §4. |
 | `internal/contactround/` | Source sphere and cylinder admission over body nodes and their contact classification against boxes, spheres and oriented boxes. See contact-sweep §4–§5. |
 | `internal/planarpose/` | Planar admission of a body at a query pose: snapshots by payload, the held-mesh arm through a mesher, the convexity cache and the exact pair classification published through `internal/planarband/`. See multibody §9–§10. |
-| `internal/contactruling/` | Placed ruling contact of a source cylinder against an exact planar body: side faces, the ruling set, normals and the manifolds published into a contact report. See contact-geometry §4.5. |
 | `internal/contactfaceted/` | Exact faceted support-face proof, bounded strict separation from a source-box floor, and the floor contact classification. See contact-geometry §4. |
 | `internal/contactpair/` | The contact-pair classifier and its proof-only strict-separation query. It routes source-box, sphere, cylinder, faceted-floor, planar and placed-ruling pairs. See contact-geometry §1 and §4. |
 | `internal/massdispatch/` | Mass properties and mesh ladder; contained-Cut quantities and exact-Copy moments. See operation-history and exact-copy-moments designs. |
@@ -66,8 +65,9 @@ The rules for rows live in `agent-docs/layout.md`.
 | `internal/tessellation/` | Recorded-loop and band chording, cap-band motion and slab volume, BRep wall strip triangulation, section loop and walk clearance refusals, mesh topology and joined-mesh orientation, chain-sweep proof readings, bounds and audits. See tessellation-design. |
 | `internal/tessaudit/` | Names the payload classes whose tessellation runs a facet-contact audit that a lower verification level may decline. See tessellation-design. |
 | `internal/verifiedmesh/` | Names the one tessellation internal builders borrow from the root: a body's mesh at VerifyAll. See tessellation-design. |
-| `internal/partialband/` | Selected cap-edge fillet band sample layouts and open boundary polylines, and exact partial-chamfer quad gates and mass. See loop-fillet §7.1, modify-general §4.3a. |
-| `internal/stationbound/` | Bounds circular chord stations, offset cap stations and chain-sweep arc stations against their exact recorded parameters. |
+| `internal/partialband/` | Selected cap-edge fillet band sample layouts and open boundary polylines. See loop-fillet §7.1. |
+| `internal/partialchamfer/` | Exact partial-chamfer quad gates and mass. See modify-general §4.3a. |
+| `internal/stationbound/` | Bounds circular chord stations and offset cap stations against their exact recorded parameters. |
 | `internal/breprecord/` | BRep records, route E gates and rewrite, reference-face identity, all-edge chamfer records, their admission and node builders; root payloads alias them. See general-boolean §4, brep-modify §5, modify-general §4, evaluator §8. |
 | `internal/alledgechamfermesh/` | Builds the all-edge Chamfer mesh and its face, area and occupied-volume bounds. See modify-general §4.3b and tessellation §2. |
 | `internal/breploop/` | Route L/V selected-edge matching, loop decisions, asymmetric assignments, record topology, reach, contours and rewrite over one budget, and the partial-loop fillet and chamfer rewrites. Root binds public selectors and face references. See modify-general §4 and §4.3a. |

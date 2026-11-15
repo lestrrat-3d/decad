@@ -15,7 +15,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/sectionaudit"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
-	"github.com/lestrrat-3d/decad/internal/stitchweld"
+	"github.com/lestrrat-3d/decad/internal/stitchbounds"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/surfaceplace"
 	"github.com/lestrrat-3d/decad/internal/topo"
@@ -140,10 +140,10 @@ func BuildBody(ctx context.Context, env topo.Env, srcFaces []*topo.Face, srcBoun
 
 	// Bounds is the receiver's own already-proven box: every new face's
 	// boundary is already receiver geometry, and a bounded planar region
-	// lies inside its own boundary's box, so stitchweld.UnstitchBounds's own
+	// lies inside its own boundary's box, so stitchbounds.UnstitchBounds's own
 	// reasoning — reuse the operand's own extent rather than re-deriving a
 	// tighter one — carries unchanged from one face to a whole rebuilt face set.
-	bounds, err := stitchweld.UnstitchBounds(srcBounds, xform, delta)
+	bounds, err := stitchbounds.UnstitchBounds(srcBounds, xform, delta)
 	if err != nil {
 		return nil, err
 	}

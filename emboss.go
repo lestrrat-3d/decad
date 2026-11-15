@@ -7,7 +7,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/embossplan"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
-	"github.com/lestrrat-3d/decad/internal/ribplan"
+	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
@@ -251,10 +251,11 @@ func requireReliefChangesVolume(before, after *Body, mode EmbossMode) error {
 		return err
 	}
 	b0, bb, a0, ab := vb.Value.Base(), vb.Bound.Base(), va.Value.Base(), va.Bound.Base()
-	if mode == EmbossRaised && ribplan.AddsNothing(b0, bb, a0, ab) {
+	volumeAfter, volumeBefore := proofbound.MeasuredScalar(a0, ab), proofbound.MeasuredScalar(b0, bb)
+	if mode == EmbossRaised && proofbound.ProvesAtMost(volumeAfter, volumeBefore) {
 		return fmt.Errorf(`%w: the raised relief lies inside the body and adds no material`, ErrDegenerate)
 	}
-	if mode == EmbossEngraved && embossplan.RemovesNothing(b0, bb, a0, ab) {
+	if mode == EmbossEngraved && proofbound.ProvesAtLeast(volumeAfter, volumeBefore) {
 		return fmt.Errorf(`%w: the engraving lies outside the material and removes none`, ErrDegenerate)
 	}
 	return nil

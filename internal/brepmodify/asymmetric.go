@@ -5,7 +5,6 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/capblend"
 	"github.com/lestrrat-3d/decad/internal/decaderr"
-	"github.com/lestrrat-3d/decad/internal/modifyoption"
 	"github.com/lestrrat-3d/decad/internal/modifyselect"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 	"github.com/lestrrat-3d/decad/internal/topo"
@@ -39,8 +38,8 @@ func (a *Asymmetric) Setbacks(loop survey2d.CornerLoop, li, ci int, e *topo.Edge
 	}
 	segs := faceSideSegments(a.Body, ref, li)
 	n := len(loop.Walks)
-	arriving := modifyoption.WalkHoldsAny(loop.Walks[(ci+n-1)%n].Segs, segs)
-	leaving := modifyoption.WalkHoldsAny(loop.Walks[ci].Segs, segs)
+	arriving := walkHoldsAny(loop.Walks[(ci+n-1)%n].Segs, segs)
+	leaving := walkHoldsAny(loop.Walks[ci].Segs, segs)
 	switch {
 	case arriving && !leaving:
 		return a.D, a.Other, nil
@@ -111,5 +110,5 @@ func faceSideSegments(b *topo.Body, f *topo.Face, li int) map[int]struct{} {
 			roles = append(roles, o.Role)
 		}
 	}
-	return modifyoption.SideSegments(roles, li)
+	return sideSegments(roles, li)
 }

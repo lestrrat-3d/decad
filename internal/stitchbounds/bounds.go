@@ -1,4 +1,4 @@
-package stitchweld
+package stitchbounds
 
 import (
 	"fmt"

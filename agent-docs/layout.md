@@ -36,8 +36,10 @@ first.
 - `agent-docs/layout/internal-core.md`: internal packages for arithmetic, records,
   geometry and mesh construction.
 - `agent-docs/layout/internal-revolve-sweep.md`: Revolve, Sweep, coil and pair-sweep path internal packages.
-- `agent-docs/layout/internal-checks.md`: internal packages for bounds, surveys,
-  sweeps and clearance.
+- `agent-docs/layout/internal-checks.md`: internal packages for bounds, surveys and sweeps.
+- `agent-docs/layout/internal-clearance.md`: clearance cell and ruling packages.
+- `agent-docs/layout/internal-stitch.md`: Stitch and Unstitch internal packages.
+- `agent-docs/layout/internal-contact.md`: internal contact packages.
 - `agent-docs/layout/internal-features.md`: Loft, prism, Shell, placement, trim-graph and edge-blend internal packages.
 
 ## Splitting oversized agent files

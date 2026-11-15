@@ -12,7 +12,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/provenance"
-	"github.com/lestrrat-3d/decad/internal/stitchweld"
+	"github.com/lestrrat-3d/decad/internal/stitchbounds"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/surfaceplace"
 	"github.com/lestrrat-3d/decad/internal/topo"
@@ -336,7 +336,7 @@ func facePolygonBounds(nf *topo.Face) (measurement.Box, error) {
 
 // unstitchBounds publishes one unstitched face's box as the retiring
 // receiver's own already-proven Bounds, inflated by its own Bound and then
-// carried through xform by its 8 corners (stitchweld.BoxCorners) —
+// carried through xform by its 8 corners (stitchbounds.BoxCorners) —
 // the same reasoning bounds already states for a curved Stitch
 // operand, applied here to a single face of the body being split rather
 // than to a whole operand body. The published Bound is exactly delta, on
@@ -345,7 +345,7 @@ func facePolygonBounds(nf *topo.Face) (measurement.Box, error) {
 // planar (see faceBounds's own doc comment for why the box it returns is
 // sound but not necessarily tight).
 func unstitchBounds(srcBounds measurement.Box, xform r3.Transform, delta float64) (measurement.Box, error) {
-	return stitchweld.UnstitchBounds(srcBounds, xform, delta)
+	return stitchbounds.UnstitchBounds(srcBounds, xform, delta)
 }
 
 // chargePlacement widens a face-copy body's readings for its placement's own

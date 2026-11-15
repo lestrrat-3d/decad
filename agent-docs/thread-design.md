@@ -2,7 +2,7 @@
 
 `Thread` cuts an ISO metric thread into a cylindrical face. It sketches the groove's axial section, `Coil`s it and
 `Cut`s the coil from the body, as `agent-docs/helix-design.md` §9 states the thread use case. It adds a tool-building
-wrapper and no geometry kernel. The groove arithmetic is plain-data code in `internal/threadplan/`.
+wrapper and no geometry kernel. The groove and helix-sampling arithmetic is plain-data code in `internal/threadplan/`.
 
 ## 1. Contract
 

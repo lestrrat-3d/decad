@@ -6,6 +6,7 @@ import (
 	"slices"
 
 	"github.com/lestrrat-3d/decad/internal/meshbool"
+	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/ribplan"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/r3"
@@ -317,7 +318,9 @@ func requireRibAddsVolume(before, after *Body) error {
 	if err != nil {
 		return err
 	}
-	if ribplan.AddsNothing(vb.Value.Base(), vb.Bound.Base(), va.Value.Base(), va.Bound.Base()) {
+	volumeBefore := proofbound.MeasuredScalar(vb.Value.Base(), vb.Bound.Base())
+	volumeAfter := proofbound.MeasuredScalar(va.Value.Base(), va.Bound.Base())
+	if proofbound.ProvesAtMost(volumeAfter, volumeBefore) {
 		return fmt.Errorf(`%w: the rib lies inside the body and adds no material`, ErrDegenerate)
 	}
 	return nil

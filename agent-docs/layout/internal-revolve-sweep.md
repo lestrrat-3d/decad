@@ -12,7 +12,8 @@ The rules for rows live in `agent-docs/layout.md`.
 | `internal/sweeppath/` | Pair paths, validation, rounded poses, motion travel bounds, and the node's checked rotational radius reader. |
 | `internal/planarsweep/` | Prepared sweep body paths (ideal pose, point deviation, rounded box, corner spans and their memo), support-plane records, motion, vertex rates and depth bounds, and the §10.2–§10.4 departure, band, track and rolling certificates with their replay checks. See contact-sweep §3, §7 and multibody §10. |
 | `internal/sweepdeparture/` | Exact source-box departure proofs. See multibody §10.2. |
-| `internal/sweepmemo/` | Sweep path replay coverage, pose bits, path memo tables and corner-span hull gaps. See contact-sweep §6–§7 and multibody §10.4. |
+| `internal/sweepmemo/` | Sweep path memo tables, pose bits, corner spans and hull gaps. See contact-sweep §6–§7. |
+| `internal/sweepreplay/` | Replay fraction keys, pose memo values and outcome coverage checks. See contact-sweep §6–§7. |
 | `internal/coneaxis/` | Exact axis vector of a Revolve about a coordinate-plane line, the frame and axis predicates, A-scaled readings, their millimetre conversions, the exact triangle clearance and the recorded `AxisVec`. See revolve-axis §3, §9.5. |
 | `internal/revolveaxis/` | Axis frames, walks, side/contact gates, snap and section charges, extent readings, the simple-revolution radial proof, and wall and cap denotations. See evaluator §6. |
 | `internal/revolveshell/` | Shells a Revolve; surveys shell walls; certifies Revolve sections, conical roots and trimmed sectors; routes the Revolve/point-Loft sector Unions; builds and audits their joins from rings, caps, plans and bounds; admits a cylinder Cut. See modify-reach §9.3, revolve-loft-sector, revolve-axis. |
@@ -26,11 +27,11 @@ The rules for rows live in `agent-docs/layout.md`.
 | `internal/sweeprecord/` | The sweep and chain sweep records, their span payloads, builders over nodes (`BuildComposite`, `BuildArc`, `BuildClosedCyclic`, `ReplayChainWork`, `Placed`, finishing roles) and chain reductions. Root `sweepPayload` aliases it. See sweep §3, §15, evaluator §8. |
 | `internal/sweepbuild/` | The profile-fed and chain-fed Sweep builds over nodes: twisted, mitred, closed, composite, arc and straight paths. See sweep §3–§17. |
 | `internal/coil/` | Coil magnitude, profile side and pitch gates, preflight gates, stations, axis coordinates, moments and closed forms. See helix §4, §5, §7. |
-| `internal/threadplan/` | The ISO metric groove polygon and coil turns of a thread, from radius, pitch and length; plain millimetre data. See thread design. |
+| `internal/threadplan/` | Thread groove polygons, coil turns, and profile-based helix sampling density from plain millimetre data. See thread design. |
 | `internal/coilshell/` | The coil payload and its builder over nodes: the held shell, Table CB topology, Table CM readings, the held-shell mesh, its proofs and wall-area enclosures. Root `coilPayload` aliases it. See helix §5, §7, §8, evaluator §8. |
 | `internal/sweeptransport/` | Bounded rotation-minimizing endpoint frames over recorded line and arc spans, and frames along a recorded path. See sweep §3.2. |
 | `internal/revolvemesh/` | Revolve rings, cells, caps, cap frames, construction and area proofs, quarter-turn cap-rim blend stations, faceted mesh and bounds, and sector-bore cap fans, station steps and projected patches. |
-| `internal/revolvetess/` | Assembles Revolve and chain Sweep angular meshes over topology nodes, including retries, sheet and solid audits, and proof publication. See tessellation §8–§11 and sweep §15.8–§15.9. |
+| `internal/revolvetess/` | Assembles Revolve and chain Sweep angular meshes over topology nodes, including station coordinates, retries, sheet and solid audits, and proof publication. See tessellation §8–§11 and sweep §15.8–§15.9. |
 | `internal/revolveplan/` | Revolve and chain records, node builders, mesh walks, pair gates and complete ring proof. Root `revolvePayload` aliases its record. See evaluator §6, §8; general-boolean §3; surface-intersection §2.1; revolve-axis. |
 | `internal/revolvebore/` | Operand gates for an axial prism bore through a Revolve. |
 | `internal/revolveboretess/` | Cap rim extraction and exact held-plane checks for Revolve bore meshes. |

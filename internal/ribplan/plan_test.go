@@ -53,13 +53,6 @@ func TestDisjoint(t *testing.T) {
 	require.False(t, ribplan.Disjoint(lo, hi, r3.Vec{X: 10}, r3.Vec{X: 12, Y: 1, Z: 1}, 0), "touching boxes are not disjoint")
 }
 
-func TestAddsNothing(t *testing.T) {
-	t.Parallel()
-	require.True(t, ribplan.AddsNothing(100, 0, 100, 0))
-	require.False(t, ribplan.AddsNothing(100, 0, 100.5, 0))
-	require.False(t, ribplan.AddsNothing(100, 1, 100, 0), "a bound on the reading before keeps the answer open")
-}
-
 func TestArcBandQuarterTurn(t *testing.T) {
 	t.Parallel()
 	// A quarter of the radius-10 circle about (1, 2), from angle 0 to 90 degrees.

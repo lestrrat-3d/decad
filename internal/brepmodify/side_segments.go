@@ -1,11 +1,11 @@
-package modifyoption
+package brepmodify
 
 import "fmt"
 
-// SideSegments returns the recorded segments of loop li named by roles of the
+// sideSegments returns the recorded segments of loop li named by roles of the
 // exact form "side(li,j)". Any other role, including one with trailing text
 // or a different loop, is skipped.
-func SideSegments(roles []string, li int) map[int]struct{} {
+func sideSegments(roles []string, li int) map[int]struct{} {
 	out := map[int]struct{}{}
 	for _, role := range roles {
 		var i, j int
@@ -20,9 +20,9 @@ func SideSegments(roles []string, li int) map[int]struct{} {
 	return out
 }
 
-// WalkHoldsAny reports whether any recorded segment of a coalesced walk is
+// walkHoldsAny reports whether any recorded segment of a coalesced walk is
 // in segs.
-func WalkHoldsAny(walkSegs []int, segs map[int]struct{}) bool {
+func walkHoldsAny(walkSegs []int, segs map[int]struct{}) bool {
 	for _, s := range walkSegs {
 		if _, ok := segs[s]; ok {
 			return true

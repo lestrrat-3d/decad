@@ -157,6 +157,18 @@ func BoundedEnds(q BoundedScalar) (float64, float64) {
 		math.Nextafter(q.Value+q.Bound, math.Inf(1))
 }
 
+// ProvesAtMost reports whether q's upper endpoint is no greater than limit's
+// lower endpoint.
+func ProvesAtMost(q, limit BoundedScalar) bool {
+	return q.Value+q.Bound <= limit.Value-limit.Bound
+}
+
+// ProvesAtLeast reports whether q's lower endpoint is no less than limit's
+// upper endpoint.
+func ProvesAtLeast(q, limit BoundedScalar) bool {
+	return q.Value-q.Bound >= limit.Value+limit.Bound
+}
+
 // AdmitAbove reads `q > t`.
 func AdmitAbove(q BoundedScalar, t float64) SurvAdmission {
 	lo, hi := BoundedEnds(q)

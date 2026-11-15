@@ -144,3 +144,34 @@ func TestComputeFormWithAnAsymmetricGroove(t *testing.T) {
 	_, err = threadplan.ComputeForm(5, 3, 20, true, false, threadplan.Form{Slope: 1, BackSlope: 1.5, Depth: 1.5, Flat: 0.4})
 	require.ErrorIs(t, err, decaderr.ErrDegenerate)
 }
+
+func TestStationsPerTurnFitsTheProfileDeparture(t *testing.T) {
+	const maxStations = 256
+	for _, tc := range []struct {
+		name   string
+		radius float64
+		pitch  float64
+		want   int64
+	}{
+		{name: "fine pitch", radius: 5, pitch: 0.1, want: 96},
+		{name: "standard pitch", radius: 5, pitch: 1.5, want: 128},
+		{name: "large radius", radius: 20, pitch: 1.5, want: maxStations},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			plan, err := threadplan.Compute(tc.radius, tc.pitch, 20, true, false)
+			require.NoError(t, err)
+			require.Equal(t, tc.want, threadplan.StationsPerTurn(plan, tc.pitch, maxStations))
+		})
+	}
+}
+
+func TestStationsPerTurnKeepsMaximumForADeepProfileStep(t *testing.T) {
+	plan, err := threadplan.ComputeForm(4, 3, 20, true, false, threadplan.Form{
+		Slope: 0.1,
+		Depth: 2,
+		Flat:  0.4,
+	})
+	require.NoError(t, err)
+	require.Equal(t, int64(256), threadplan.StationsPerTurn(plan, 3, 256))
+}

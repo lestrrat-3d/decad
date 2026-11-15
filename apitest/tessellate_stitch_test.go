@@ -665,7 +665,7 @@ func TestStitchSolidUnionComposesTheCorrectVolume(t *testing.T) {
 // agent-docs/surface-design.md's T73: T58's own zero-bound box, Placed under a
 // non-identity rigid motion, still refuses a boolean — the placement's own
 // RigidRoundAllow widens every vertex bound (internal/stitchrecord/build.go), so
-// stitchweld.ZeroBound no longer holds and booloperand.RequireVolumeProof
+// stitchbounds.ZeroBound no longer holds and booloperand.RequireVolumeProof
 // keeps refusing this operand exactly as it did before this increment. This
 // reaches the gate by the PLACEMENT route; T74 reaches it by the
 // CERTIFICATE-WELD route, and neither alone would prove the gate reads the

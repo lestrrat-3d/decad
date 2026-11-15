@@ -140,23 +140,19 @@ func (s *circlePlacementSnapshot) compositionBound(ctx context.Context, d *Docum
 	u := proofbound.AbsSumUpper(c.Center.U, radius)
 	v := proofbound.AbsSumUpper(c.Center.V, radius)
 	z := math.Max(math.Abs(p.Z0), math.Abs(p.Z1))
-	local := proofbound.AbsSumUpper(circleMaxAbs(p.Frame.Origin()),
-		proofbound.ProductUpper(circleMaxAbs(p.Frame.U()), u),
-		proofbound.ProductUpper(circleMaxAbs(p.Frame.V()), v),
-		proofbound.ProductUpper(circleMaxAbs(p.Frame.N()), z))
+	local := proofbound.AbsSumUpper(proofbound.VecMaxAbs(p.Frame.Origin()),
+		proofbound.ProductUpper(proofbound.VecMaxAbs(p.Frame.U()), u),
+		proofbound.ProductUpper(proofbound.VecMaxAbs(p.Frame.V()), v),
+		proofbound.ProductUpper(proofbound.VecMaxAbs(p.Frame.N()), z))
 	basis := p.Xform.Basis()
-	input := math.Max(circleMaxAbs(basis.EX), math.Max(circleMaxAbs(basis.EY), circleMaxAbs(basis.EZ)))
+	input := math.Max(proofbound.VecMaxAbs(basis.EX), math.Max(proofbound.VecMaxAbs(basis.EY), proofbound.VecMaxAbs(basis.EZ)))
 	column := proofbound.RigidRoundAllow(input, 0)
-	translation := proofbound.RigidRoundAllow(circleMaxAbs(p.Xform.Translation()), circleMaxAbs(s.motion.Translation()))
+	translation := proofbound.RigidRoundAllow(proofbound.VecMaxAbs(p.Xform.Translation()), proofbound.VecMaxAbs(s.motion.Translation()))
 	bound := proofbound.AbsSumUpper(translation, proofbound.ProductUpper(proofbound.ProductUpper(3, local), column))
 	if proofbound.IsNonFinite(bound) {
 		return 0, errCirclePlacementReplay
 	}
 	return bound, nil
-}
-
-func circleMaxAbs(v r3.Vec) float64 {
-	return math.Max(math.Abs(v.X), math.Max(math.Abs(v.Y), math.Abs(v.Z)))
 }
 
 // linearCompositionBound bounds the operator norm of this Then call's
@@ -169,7 +165,7 @@ func (s *circlePlacementSnapshot) linearCompositionBound(ctx context.Context, d 
 		return 0, err
 	}
 	basis := s.source.n.Payload.Transform().Basis()
-	input := math.Max(circleMaxAbs(basis.EX), math.Max(circleMaxAbs(basis.EY), circleMaxAbs(basis.EZ)))
+	input := math.Max(proofbound.VecMaxAbs(basis.EX), math.Max(proofbound.VecMaxAbs(basis.EY), proofbound.VecMaxAbs(basis.EZ)))
 	// RigidRoundAllow bounds each of the three column errors in 3D. Their
 	// sum bounds the difference matrix's Frobenius and operator norms.
 	bound := proofbound.ProductUpper(3, proofbound.RigidRoundAllow(input, 0))

@@ -1,4 +1,4 @@
-package wallsurvey
+package revolveclearance
 
 import (
 	"context"
@@ -10,6 +10,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/revolveaxis"
 	"github.com/lestrrat-3d/decad/internal/revolvemesh"
+	"github.com/lestrrat-3d/decad/internal/wallsurvey"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -20,7 +21,7 @@ import (
 func RevolveCarrierInput(budget *proofbound.WorkBudget, profile momentinput.Profile, ax revolveaxis.Frame,
 	lift revolvemesh.RevolveLift, axis revolvemesh.AxisBound, xform r3.Transform, full bool,
 	phi0, phi1 float64) (clearance.RevolveCarrierInput, bool, error) {
-	loops, planes, err := RevolveLoopsPlane(budget, profile, ax)
+	loops, planes, err := wallsurvey.RevolveLoopsPlane(budget, profile, ax)
 	if err != nil {
 		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 			return clearance.RevolveCarrierInput{}, false, err

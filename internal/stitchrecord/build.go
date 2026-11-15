@@ -12,6 +12,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
+	"github.com/lestrrat-3d/decad/internal/stitchbounds"
 	"github.com/lestrrat-3d/decad/internal/stitchweld"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/surfaceplace"
@@ -655,7 +656,7 @@ func hasFreeEdge(faces []*topo.Face) bool {
 // distinct vertex's held position and proven bound. A touching or nested pair
 // cannot prove separation (agent-docs/surface-design.md Table C/R20).
 func FaceLumpsProvenSeparate(components [][]*topo.Face) bool {
-	return stitchweld.LumpsProvenSeparate(components,
+	return stitchbounds.LumpsProvenSeparate(components,
 		func(f *topo.Face, visit func(*topo.Vertex)) {
 			for _, l := range f.Loops {
 				for _, ce := range l.CoEdges {
@@ -825,7 +826,7 @@ func bounds(srcFaces []*topo.Face, xform r3.Transform, delta, merged float64) (m
 	for _, b := range bodies {
 		box := b.Bounds
 		inflate := proofbound.AbsSumUpper(box.Bound.Base(), merged)
-		for _, c := range stitchweld.BoxCorners(box.Min, box.Max, inflate) {
+		for _, c := range stitchbounds.BoxCorners(box.Min, box.Max, inflate) {
 			p := xform.Apply(c)
 			if !proofbound.FiniteVec(p) {
 				return measurement.Box{}, fmt.Errorf(`%w: a placed stitch bound is not representable`, decaderr.ErrUnsupported)

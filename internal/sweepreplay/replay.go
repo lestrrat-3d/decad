@@ -1,4 +1,5 @@
-package sweepmemo
+// Package sweepreplay stores replay pose keys and checks against sweep certificates.
+package sweepreplay
 
 import (
 	"math/big"

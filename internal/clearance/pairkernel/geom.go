@@ -7,13 +7,13 @@ import (
 	"github.com/lestrrat-3d/decad/internal/clearance"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/revolveclearance"
 	"github.com/lestrrat-3d/decad/internal/revolveplan"
+	"github.com/lestrrat-3d/decad/internal/stitchbounds"
 	"github.com/lestrrat-3d/decad/internal/stitchrecord"
 	"github.com/lestrrat-3d/decad/internal/stitchtess"
-	"github.com/lestrrat-3d/decad/internal/stitchweld"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/decad/internal/topobuild"
-	"github.com/lestrrat-3d/decad/internal/wallsurvey"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -111,8 +111,8 @@ func newBodyGeomBudget(budget *proofbound.WorkBudget, b *topo.Body) (*bodyGeom, 
 			// not. Only a plain, solid revolve reaches the builder.
 			return nil, false, nil
 		}
-		var built wallsurvey.RevolveClearanceCarriers
-		built, ok, err = wallsurvey.BuildRevolveClearanceCarriers(budget, pl)
+		var built revolveclearance.RevolveClearanceCarriers
+		built, ok, err = revolveclearance.BuildRevolveClearanceCarriers(budget, pl)
 		if ok && err == nil {
 			g.faces = append(g.faces, built.Faces...)
 			g.verts = append(g.verts, built.Vertices...)
@@ -132,14 +132,14 @@ func newBodyGeomBudget(budget *proofbound.WorkBudget, b *topo.Body) (*bodyGeom, 
 		// vertex bound) or closed by the CURVE weld certificate at a nonzero
 		// class bound — does not refuse on that alone: bodyGeom.delta
 		// exists for it to charge its own worst vertex bound against
-		// (stitchweld.MaxBound over stitchtess.VertexBounds), the
+		// (stitchbounds.MaxBound over stitchtess.VertexBounds), the
 		// identical charge a placed prism's frame/placement rounding takes
 		// (bodyGeom's own doc comment), so this arm needs no standing narrower
 		// than the prism arm's.
 		if pl.Tris == nil {
 			return nil, false, nil
 		}
-		maxVertexBound, mErr := stitchweld.MaxBound(budget, stitchtess.VertexBounds(b))
+		maxVertexBound, mErr := stitchbounds.MaxBound(budget, stitchtess.VertexBounds(b))
 		if mErr != nil {
 			return nil, false, mErr
 		}
