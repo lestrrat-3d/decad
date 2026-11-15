@@ -11,8 +11,8 @@ import (
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/revolveplan"
 	"github.com/lestrrat-3d/decad/internal/revolvetess"
+	"github.com/lestrrat-3d/decad/internal/stitchbounds"
 	"github.com/lestrrat-3d/decad/internal/stitchrecord"
-	"github.com/lestrrat-3d/decad/internal/stitchweld"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/decad/internal/topo"
@@ -46,7 +46,7 @@ import (
 // exactly when every one of them is; its areaSlack is the matching
 // proofbound.PerturbedTriangleAreaAllow sum. A CLOSED body (b.Kind == topo.BodySolid)
 // whose every vertex carries a proven bound of exactly zero
-// (stitchweld.ZeroBound over VertexBounds) publishes a zero occupied-volume proof
+// (stitchbounds.ZeroBound over VertexBounds) publishes a zero occupied-volume proof
 // (symDiffOK == true) — see the comment at that publication below for the
 // three-step argument. Every other stitched body — open, curved/mixed,
 // placed, or certificate-welded — keeps symDiffOK false, so Union, Cut and
@@ -264,7 +264,7 @@ func Restate(ctx context.Context, b *topo.Body, sp stitchrecord.Payload,
 	// triangle this mesh restates, or the claim does not:
 	//
 	//  1. Every held vertex IS the true boundary vertex, not merely near it.
-	//     stitchweld.ZeroBound (internal/stitchweld/bounds.go) proves every
+	//     stitchbounds.ZeroBound (internal/stitchbounds/bounds.go) proves every
 	//     vertex's bound is exactly zero. That rules out both a nonzero
 	//     placement delta (internal/stitchrecord/build.go's proofbound.RigidRoundAllow, stitchrecord.Build)
 	//     and a certificate-welded class bound (agent-docs/surface-design.md §6.4's
@@ -297,7 +297,7 @@ func Restate(ctx context.Context, b *topo.Body, sp stitchrecord.Payload,
 	mesh.VolSymDiff = 0
 	mesh.SymDiffOK = false
 	if b.Kind == topo.BodySolid {
-		zeroBound, err := stitchweld.ZeroBound(budget, VertexBounds(b))
+		zeroBound, err := stitchbounds.ZeroBound(budget, VertexBounds(b))
 		if err != nil {
 			return nil, err
 		}

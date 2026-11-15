@@ -1,4 +1,4 @@
-package wallsurvey_test
+package revolveclearance_test
 
 import (
 	"context"
@@ -7,9 +7,9 @@ import (
 	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/revolveaxis"
+	"github.com/lestrrat-3d/decad/internal/revolveclearance"
 	"github.com/lestrrat-3d/decad/internal/revolvemesh"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
-	"github.com/lestrrat-3d/decad/internal/wallsurvey"
 	"github.com/lestrrat-3d/r3"
 	"github.com/stretchr/testify/require"
 )
@@ -31,7 +31,7 @@ func TestRevolveCarrierInput(t *testing.T) {
 	axis := revolvemesh.AxisBound{}
 	xform := r3.Identity()
 
-	in, ok, err := wallsurvey.RevolveCarrierInput(proofbound.NewWorkBudget(t.Context()), profile, ax,
+	in, ok, err := revolveclearance.RevolveCarrierInput(proofbound.NewWorkBudget(t.Context()), profile, ax,
 		lift, axis, xform, false, 0.25, 1.5)
 	require.NoError(t, err)
 	require.True(t, ok)
@@ -51,7 +51,7 @@ func TestRevolveCarrierInput(t *testing.T) {
 		StepFn: func() error { return context.Canceled },
 		ErrFn:  func() error { return context.Canceled },
 	}
-	_, ok, err = wallsurvey.RevolveCarrierInput(canceled, profile, ax,
+	_, ok, err = revolveclearance.RevolveCarrierInput(canceled, profile, ax,
 		lift, axis, xform, false, 0.25, 1.5)
 	require.ErrorIs(t, err, context.Canceled)
 	require.False(t, ok)

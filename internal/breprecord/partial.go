@@ -11,7 +11,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/filletband"
 	"github.com/lestrrat-3d/decad/internal/freeform"
-	"github.com/lestrrat-3d/decad/internal/partialband"
+	"github.com/lestrrat-3d/decad/internal/partialchamfer"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
@@ -354,7 +354,7 @@ func attachPartialChamferBand(ctx context.Context, alloc topo.Alloc, body *topo.
 				e.Canon(cw.EndU, cw.EndV, f.Z0), e.Canon(cw.StartU, cw.StartV, f.Z0),
 			}, cap: capEdge, side: sideEdge,
 		}
-		if err := partialband.ChamferQuadExact(quads[i].points, b.Setback.Dc, b.Setback.Ds, e); err != nil {
+		if err := partialchamfer.ChamferQuadExact(quads[i].points, b.Setback.Dc, b.Setback.Ds, e); err != nil {
 			return nil, bandMass{}, err
 		}
 		sideOrdinal++
@@ -419,7 +419,7 @@ func attachPartialChamferBand(ctx context.Context, alloc topo.Alloc, body *topo.
 			{Edge: end, Forward: end.Start == sideE.End}, {Edge: capE, Forward: false},
 			{Edge: start, Forward: start.Start == capE.Start}},
 		})
-		areaIv, volume3, moments, err := partialband.ChamferQuadMass(quads[i].points)
+		areaIv, volume3, moments, err := partialchamfer.ChamferQuadMass(quads[i].points)
 		if err != nil {
 			return nil, bandMass{}, err
 		}

@@ -20,7 +20,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/sweeppath"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
-	"github.com/lestrrat-3d/decad/internal/sweepmemo"
+	"github.com/lestrrat-3d/decad/internal/sweepreplay"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
@@ -65,7 +65,7 @@ type Proof struct {
 	BracketGap                 *big.Rat // a rotating bracket's proven lower gap at its left edge
 	BracketTravel              *big.Rat // both bodies' travel bound per unit fraction, rotating brackets
 	GrazingAt                  *big.Rat
-	poses                      ringmemo.Memo[string, sweepmemo.ReplayPoses] // certifiedPosesAtFraction's answers; changes no outcome
+	poses                      ringmemo.Memo[string, sweepreplay.ReplayPoses] // certifiedPosesAtFraction's answers; changes no outcome
 }
 
 // Snapshot records the sweep's outcome.
@@ -79,7 +79,7 @@ func (p *Proof) SetBracket(left, right *big.Rat) {
 	p.BracketHi = new(big.Rat).Set(right)
 }
 
-// SetRotatingBracketGap records what sweepmemo.BracketDepthWithin needs from a
+// SetRotatingBracketGap records what sweepreplay.BracketDepthWithin needs from a
 // rotating source-box impact: the left sample's certified lower gap and both
 // bodies' travel bound per unit fraction. A left sample without a positive
 // gap leaves the bracket replayable only through its left edge.
@@ -175,12 +175,12 @@ func (p *Proof) PosesAtInterval(time, start, end units.Value) (r3.Transform, r3.
 // certifiedPosesAtFraction answers from the replay's memo when it holds f,
 // and replays f otherwise.
 func (p *Proof) posesAtFraction(f *big.Rat) (r3.Transform, r3.Transform, error) {
-	key := sweepmemo.ReplayFractionKey(f)
+	key := sweepreplay.ReplayFractionKey(f)
 	if value, ok := p.poses.Load(key); ok {
 		return value.A, value.B, value.Err
 	}
 	a, b, err := p.replayPosesAtFraction(f)
-	p.poses.Store(key, sweepmemo.ReplayPoses{A: a, B: b, Err: err}, sweepmemo.ReplayPoseCap)
+	p.poses.Store(key, sweepreplay.ReplayPoses{A: a, B: b, Err: err}, sweepreplay.ReplayPoseCap)
 	return a, b, err
 }
 
@@ -189,7 +189,7 @@ func (p *Proof) replayPosesAtFraction(f *big.Rat) (r3.Transform, r3.Transform, e
 	if p.Track != nil && (p.Track.Planar != nil || p.Track.Rolling != nil) {
 		trackEnd = p.Track.To
 	}
-	if !sweepmemo.FractionCovered(p.Outcome, f, trackEnd, p.BracketLo,
+	if !sweepreplay.FractionCovered(p.Outcome, f, trackEnd, p.BracketLo,
 		p.BracketHi, p.BracketGap, p.Rotation != nil) {
 		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: replay time is outside the certified sweep prefix", decaderr.ErrUnsupported)
 	}
@@ -241,7 +241,7 @@ func (p *Proof) replayPosesAtFraction(f *big.Rat) (r3.Transform, r3.Transform, e
 	}
 	contact := &contactReport{Request: p.Request}
 	contactbox.ClassifySourceBoxes(contact, actualA, actualB)
-	if !sweepmemo.RelationCovered(p.Outcome, f, p.BracketLo,
+	if !sweepreplay.RelationCovered(p.Outcome, f, p.BracketLo,
 		resolution, contact.Relation, actualA.AxisBox(), actualB.AxisBox()) {
 		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: rounded replay pose changes the certified relation", decaderr.ErrUnsupported)
 	}
@@ -419,7 +419,7 @@ func (p *Proof) certifiedOrientedSpherePosesAtFraction(f *big.Rat,
 	threshold := new(big.Rat).Mul(radius2, proofarith.DvDot(outward, outward).Rat())
 	idealSign := ideal2.Cmp(threshold)
 	observedSign := observed2.Cmp(radius2)
-	if ideal.Sign() <= 0 || !sweepmemo.OrientedSphereRelationCovered(p.Outcome, f,
+	if ideal.Sign() <= 0 || !sweepreplay.OrientedSphereRelationCovered(p.Outcome, f,
 		p.BracketLo, p.BracketHi, idealSign, observedSign) {
 		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: rounded rotated sphere changes the certified relation", decaderr.ErrUnsupported)
 	}
@@ -461,7 +461,7 @@ func (p *Proof) certifiedRotationalPosesAtFraction(f *big.Rat) (
 	}
 	if p.Outcome == vocab.SweepImpactBracket && p.BracketLo != nil && f.Cmp(p.BracketLo) > 0 {
 		deviation := new(big.Rat).Add(proofarith.FloatRat(deviation[0]), proofarith.FloatRat(deviation[1]))
-		if !sweepmemo.BracketDepthWithin(f, deviation, resolution, p.BracketLo,
+		if !sweepreplay.BracketDepthWithin(f, deviation, resolution, p.BracketLo,
 			p.BracketHi, p.BracketGap, p.BracketTravel) {
 			return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: rounded rotating impact pose leaves the point resolution of contact", decaderr.ErrUnsupported)
 		}
@@ -625,7 +625,7 @@ func (p *Proof) certifiedSpherePosesAtFraction(f *big.Rat, poseA, poseB r3.Trans
 	observedGap := proofarith.DySubScalar(faceDistance, sphere.Radius).Rat()
 	idealGap := new(big.Rat).Add(p.SphereGap.Rat(), new(big.Rat).Mul(p.SphereSlope.Rat(), f))
 	difference := new(big.Rat).Sub(observedGap, idealGap)
-	if difference.Abs(difference).Cmp(resolution) > 0 || !sweepmemo.SphereRelationCovered(p.Outcome,
+	if difference.Abs(difference).Cmp(resolution) > 0 || !sweepreplay.SphereRelationCovered(p.Outcome,
 		f, p.BracketLo, p.BracketHi, idealGap, observedGap, resolution) {
 		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: rounded sphere changes the certified relation", decaderr.ErrUnsupported)
 	}
@@ -680,7 +680,7 @@ func (p *Proof) certifiedPlanarPosesAtFraction(f *big.Rat) (r3.Transform, r3.Tra
 		return poses[0], poses[1], nil
 	}
 	if p.BracketLo != nil && f.Cmp(p.BracketLo) > 0 {
-		if !sweepmemo.BracketDepthWithin(f, new(big.Rat).Add(deviation, displacement), resolution,
+		if !sweepreplay.BracketDepthWithin(f, new(big.Rat).Add(deviation, displacement), resolution,
 			p.BracketLo, p.BracketHi, p.BracketGap, p.BracketTravel) {
 			return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: rounded planar impact pose leaves the point resolution of contact", decaderr.ErrUnsupported)
 		}

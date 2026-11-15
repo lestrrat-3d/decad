@@ -17,6 +17,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/sweepdeparture"
 	"github.com/lestrrat-3d/decad/internal/sweepmemo"
 	"github.com/lestrrat-3d/decad/internal/sweeppath"
+	"github.com/lestrrat-3d/decad/internal/sweepreplay"
 	"github.com/lestrrat-3d/units"
 )
 
@@ -325,7 +326,7 @@ func (r *rotationalPairSweep) narrowBracket(ctx context.Context, left, right *sw
 
 // bracketRightReplays reports whether replay accepts the bracket's right
 // edge: (hi − lo)·T − g plus the rounded poses' deviation there fits
-// PointResolution (sweepmemo.BracketDepthWithin), with g the left
+// PointResolution (sweepreplay.BracketDepthWithin), with g the left
 // sample's proven lower gap and T both travel bounds per unit fraction. The
 // deviation is the one replay charges, read at the same rounded poses. A left
 // sample without a positive gap, or a right edge whose deviation has no finite
@@ -350,7 +351,7 @@ func (r *rotationalPairSweep) bracketRightReplays(left, right *sweepSample) bool
 		charge.Add(charge, deviation)
 		charge.Add(charge, displacement)
 	}
-	return sweepmemo.BracketDepthWithin(hi, charge, resolution, lo, hi, gap,
+	return sweepreplay.BracketDepthWithin(hi, charge, resolution, lo, hi, gap,
 		new(big.Rat).Add(r.a.FullTravel, r.b.FullTravel))
 }
 

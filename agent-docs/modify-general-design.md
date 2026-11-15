@@ -737,6 +737,9 @@ check, the record rewrite and the end-face terminals for this chamfer and
 for the selected-chain fillet: a terminal line for the chamfer and a
 terminal arc for the fillet. `internal/brepmodify/partial_route.go` passes the
 selected edges to route E's preparation and builds the body.
+`internal/partialchamfer/` checks each patch's exact plane, winding and
+setback, and supplies its bounded area and exact mass integrals to
+`internal/breprecord/partial.go`.
 
 ### 4.3b Simultaneous outer-edge chamfer of a box
 

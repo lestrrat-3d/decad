@@ -181,8 +181,11 @@ var (
 		layoutPartSpec("verification.md"),
 		layoutPartSpec("output-repository.md"),
 		layoutPartSpec("internal-core.md"),
+		layoutPartSpec("internal-contact.md"),
 		layoutPartSpec("internal-revolve-sweep.md"),
 		layoutPartSpec("internal-checks.md"),
+		layoutPartSpec("internal-clearance.md"),
+		layoutPartSpec("internal-stitch.md"),
 		layoutPartSpec("internal-features.md"),
 	}
 )

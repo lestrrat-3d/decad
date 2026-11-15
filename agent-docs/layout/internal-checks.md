@@ -25,7 +25,7 @@ The rules for rows live in `agent-docs/layout.md`.
 | `internal/tolerance/` | Relative tolerance comparisons, body reference formulas, and reading diagnostics. See verification §2-§3. |
 | `internal/verifyoption/` | Verify options. See verification §2. |
 | `internal/featureoption/` | Profile-fed feature option records and validation. See evaluator §5–§6, sweep §2/§16, loft §2. |
-| `internal/modifyoption/` | Fillet, Chamfer and Shell option codecs and side-role segment reading. See modify-reach §2. |
+| `internal/modifyoption/` | Fillet, Chamfer and Shell option codecs. See modify-reach §2. |
 | `internal/tangentchain/` | Ordered tangent-chain walk and analytic continuation decisions over topology nodes. See modify-reach §5. |
 | `internal/orderedwork/` | Runs independent jobs and returns results in input order. |
 | `internal/hwfault/` | Test guard that skips on Windows the tests that provoke and recover a hardware fault, which corrupts the heap there under Go 1.27. |
@@ -66,14 +66,8 @@ The rules for rows live in `agent-docs/layout.md`.
 | `internal/boolshift/` | Labels mesh pieces, builds moved meshes and source tags, and meters replay movement. See gap-tolerance §5.2. |
 | `internal/pointquery/` | Exact point-to-mesh distance and nearest point, the body and face distance and closest-point readings, the occupied-volume transfer proof, exact prism and line-only A7 Cut classifiers, and their Boolean-history combination. See point-containment design. |
 | `internal/facetedtopology/` | Chains audited mesh face boundaries, proves axial chain directions, selects loops, resolves source-group faces and matches cap patches. See evaluator §9. |
-| `internal/clearance/` | Clearance geometry, edge carriers, shell witnesses and cell sums. See clearance design. |
-| `internal/clearance/facepair/` | Face-pair cells. See clearance §4 and clearance-band §4–§5. |
-| `internal/clearance/curvecells/` | Face-edge and edge-edge cells. See clearance §4 and clearance-band §4–§5. |
-| `internal/clearance/tier/` | Vertex cells and ruling proofs. See clearance §3/§6. |
-| `internal/clearance/spine/` | Point, line and circle spine cell pairs. See clearance §4. |
 | `internal/stitchflux/` | Stitch exact revolve tag admission, face flux and mass proofs. See surface §6.4. |
 | `internal/stitchrecord/` | Stitch/Unstitch payloads and node builders, weld/topology/flux proofs, one-face copies, and sibling-revolve source identity for tessellation. Root aliases its payloads. See surface §6, §10 and evaluator §8. |
-| `internal/stitchweld/` | Stitch welds, topology and bounds. See surface §6.2–6.4. |
 | `internal/denotation/` | Level and curve identity certificates. See surface §5.2, §6.2. |
 | `internal/surfacenormal/` | Exact enclosures and error bounds for analytic face normals. See `normal_bound.go`. |
 | `internal/edgewedge/` | The material-wedge reading behind `Edge.Wedge` and the `Reflex`/`Salient` predicates, and the selector edge view that carries it. See API §6.1, §9. |

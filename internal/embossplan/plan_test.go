@@ -57,10 +57,3 @@ func TestPlanRefusals(t *testing.T) {
 	_, err = embossplan.Plan(top, top, r3.Vec{Z: 1}, 0, true)
 	require.ErrorContains(t, err, "height")
 }
-
-func TestRemovesNothing(t *testing.T) {
-	t.Parallel()
-	require.True(t, embossplan.RemovesNothing(100, 0, 100, 0))
-	require.False(t, embossplan.RemovesNothing(100, 0, 99, 0))
-	require.False(t, embossplan.RemovesNothing(100, 1, 100, 0), "a bound on the reading before keeps the answer open")
-}

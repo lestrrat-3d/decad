@@ -13,7 +13,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/seal"
 
-	"github.com/lestrrat-3d/decad/internal/contactruling"
+	placed "github.com/lestrrat-3d/decad/internal/contactruling/placed"
 	"github.com/lestrrat-3d/decad/internal/planarpose"
 	"github.com/lestrrat-3d/decad/internal/planarsweep"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -30,13 +30,13 @@ import (
 // SweepContactTrack.
 
 // rollingPairSweep continues a source cylinder's ruling touch, or its placed
-// band (contactruling.ClassifyPlacedRuling), on an exact planar body. paths are in sweep
+// band (placed.ClassifyPlacedRuling), on an exact planar body. paths are in sweep
 // order.
 type rollingPairSweep struct {
 	hooks      Hooks
 	paths      [2]rotationalSweepPath
 	m, s       int
-	cylinder   contactruling.PlacedCylinder // M staged through its start pose
+	cylinder   placed.PlacedCylinder // M staged through its start pose
 	req        vocab.SweepRequest
 	report     *sweepReport
 	resolution *big.Rat
@@ -56,10 +56,10 @@ func sweepRollingPair(ctx context.Context, h Hooks, a, b *topo.Body,
 	pa, pb affinePairPath, req vocab.SweepRequest, resolution *big.Rat,
 	report *sweepReport) (*sweepReport, bool, error) {
 	m, bodyM, bodyS, pathM, pathS := 0, a, b, pa, pb
-	start, ok := contactruling.PlacedCylinderAt(a, pa.From)
+	start, ok := placed.PlacedCylinderAt(a, pa.From)
 	if !ok {
 		m, bodyM, bodyS, pathM, pathS = 1, b, a, pb, pa
-		if start, ok = contactruling.PlacedCylinderAt(b, pb.From); !ok {
+		if start, ok = placed.PlacedCylinderAt(b, pb.From); !ok {
 			return nil, false, nil
 		}
 	}
@@ -111,7 +111,7 @@ func (r *rollingPairSweep) execute(ctx context.Context) (*sweepReport, error) {
 		return r.report, nil
 	case vocab.ContactTouching, vocab.ContactBand:
 		// A ContactBand start is a placed cylinder whose pose basis rounds
-		// its section (contactruling.ClassifyPlacedRuling); the track charges that band.
+		// its section (placed.ClassifyPlacedRuling); the track charges that band.
 		r.report.InitialEvent = &first.Ideal
 		switch r.req.StartPolicy {
 		case vocab.StopAtInitialContact:

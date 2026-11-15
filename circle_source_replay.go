@@ -52,12 +52,12 @@ func (s *circleSourceSnapshot) liftRoundBound(ctx context.Context, d *Document, 
 	v := proofbound.AbsSumUpper(c.Center.V, radius)
 	z := math.Max(math.Abs(p.Z0), math.Abs(p.Z1))
 	maxCoordinate := math.Max(u, math.Max(v, z))
-	frameRound := proofbound.RigidRoundAllow(maxCoordinate, circleMaxAbs(p.Frame.Origin()))
-	local := proofbound.AbsSumUpper(circleMaxAbs(p.Frame.Origin()),
-		proofbound.ProductUpper(circleMaxAbs(p.Frame.U()), u),
-		proofbound.ProductUpper(circleMaxAbs(p.Frame.V()), v),
-		proofbound.ProductUpper(circleMaxAbs(p.Frame.N()), z), frameRound)
-	placementRound := proofbound.RigidRoundAllow(local, circleMaxAbs(p.Xform.Translation()))
+	frameRound := proofbound.RigidRoundAllow(maxCoordinate, proofbound.VecMaxAbs(p.Frame.Origin()))
+	local := proofbound.AbsSumUpper(proofbound.VecMaxAbs(p.Frame.Origin()),
+		proofbound.ProductUpper(proofbound.VecMaxAbs(p.Frame.U()), u),
+		proofbound.ProductUpper(proofbound.VecMaxAbs(p.Frame.V()), v),
+		proofbound.ProductUpper(proofbound.VecMaxAbs(p.Frame.N()), z), frameRound)
+	placementRound := proofbound.RigidRoundAllow(local, proofbound.VecMaxAbs(p.Xform.Translation()))
 	// A validated rigid placement has norm below 2, including its accepted
 	// floating-point orthogonality tolerance.
 	bound := proofbound.AbsSumUpper(proofbound.ProductUpper(2, frameRound), placementRound)

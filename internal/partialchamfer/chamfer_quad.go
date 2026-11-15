@@ -1,4 +1,4 @@
-package partialband
+package partialchamfer
 
 import (
 	"fmt"

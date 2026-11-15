@@ -11,9 +11,9 @@ import (
 	"github.com/lestrrat-3d/decad/internal/draftrecord"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/stitchbounds"
 	"github.com/lestrrat-3d/decad/internal/stitchrecord"
 	"github.com/lestrrat-3d/decad/internal/stitchtess"
-	"github.com/lestrrat-3d/decad/internal/stitchweld"
 	"github.com/lestrrat-3d/decad/internal/topo"
 )
 
@@ -64,7 +64,7 @@ import (
 // A stitched operand narrows rather than refuses outright: a CLOSED,
 // all-planar body (Tris != nil; an open one is a sheet and refused above)
 // whose every vertex carries a proven bound of exactly zero
-// (stitchweld.ZeroBound over stitchtess.VertexBounds) passes here, because
+// (stitchbounds.ZeroBound over stitchtess.VertexBounds) passes here, because
 // that is the vertex gate stitchtess.Restate applies before it publishes the
 // occupied-volume proof. Restate also requires its lumps proven separate
 // (stitchrecord.FaceLumpsProvenSeparate), so a body passing here may still be
@@ -132,7 +132,7 @@ func RequireVolumeProof(ctx context.Context, b *topo.Body, index int) error {
 		}
 	case stitchrecord.Payload:
 		if pl.Tris != nil {
-			zeroBound, zErr := stitchweld.ZeroBound(proofbound.NewWorkBudget(ctx), stitchtess.VertexBounds(b))
+			zeroBound, zErr := stitchbounds.ZeroBound(proofbound.NewWorkBudget(ctx), stitchtess.VertexBounds(b))
 			if zErr != nil {
 				return zErr
 			}

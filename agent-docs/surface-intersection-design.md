@@ -608,7 +608,7 @@ reads the reservation beside the two coordinate stages.
 **What stays undecided.** The consumers that read the recorded meridian as
 exact and carry no term for its displacement refuse or answer `Suspect`, each on
 the displaced prism's own precedent: the clearance kernel builds no model
-(`wallsurvey.BuildRevolveClearanceCarriers`), so a pair holding the body is
+(`revolveclearance.BuildRevolveClearanceCarriers`), so a pair holding the body is
 undecided and the tolerance
 gate's revolve arm is withheld; the wall, minimum-radius and undercut surveys
 are undecided, the last because a planar wall recorded off a rounded miter

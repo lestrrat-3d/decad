@@ -1,4 +1,4 @@
-package wallsurvey
+package revolveclearance
 
 import (
 	"github.com/lestrrat-3d/decad/internal/clearance"

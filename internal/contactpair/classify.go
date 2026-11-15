@@ -14,6 +14,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/contactfaceted"
 	"github.com/lestrrat-3d/decad/internal/contactround"
 	"github.com/lestrrat-3d/decad/internal/contactruling"
+	placedcontact "github.com/lestrrat-3d/decad/internal/contactruling/placed"
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/planarband"
@@ -115,7 +116,7 @@ func Classify(ctx context.Context, mesher verifiedmesh.Mesher, a, b *topo.Body, 
 		}
 		identity := poseA == r3.Identity() && poseB == r3.Identity()
 		if !planar && !identity {
-			placed, err := contactruling.ClassifyPlacedRuling(ctx, mesher, report)
+			placed, err := placedcontact.ClassifyPlacedRuling(ctx, mesher, report)
 			if err != nil {
 				return nil, err
 			}
@@ -192,7 +193,7 @@ func classifyPlanarManifold(ctx context.Context, mesher verifiedmesh.Mesher, rep
 
 // classifyUndecidedCylinder completes a source cylinder report the box
 // proofs left undecided: at identity query poses the analytic kernel's
-// verdict, elsewhere the placed ruling of contactruling.ClassifyPlacedRuling.
+// verdict, elsewhere the placed ruling of placedcontact.ClassifyPlacedRuling.
 func classifyUndecidedCylinder(ctx context.Context, mesher verifiedmesh.Mesher, report *contactReport) error {
 	if report.Relation != vocab.ContactUndecided {
 		return nil
@@ -201,7 +202,7 @@ func classifyUndecidedCylinder(ctx context.Context, mesher verifiedmesh.Mesher, 
 		report.Reason = vocab.ContactNoReason
 		return classifyAnalyticContact(ctx, report)
 	}
-	_, err := contactruling.ClassifyPlacedRuling(ctx, mesher, report)
+	_, err := placedcontact.ClassifyPlacedRuling(ctx, mesher, report)
 	return err
 }
 

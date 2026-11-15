@@ -6,6 +6,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/clearance"
 	"github.com/lestrrat-3d/decad/internal/clearance/curvecells"
 	"github.com/lestrrat-3d/decad/internal/clearance/facepair"
+	"github.com/lestrrat-3d/decad/internal/clearance/ruling"
 	"github.com/lestrrat-3d/decad/internal/clearance/tier"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/topo"
@@ -154,15 +155,13 @@ func (k *pairKernel) rulingContactCertified(ctx context.Context) (*clearance.Rul
 
 func (k *pairKernel) planeCylinderRuling(ctx context.Context, plane, cyl *clearance.CFace,
 	planeBody, cylBody *topo.Body, cylinderFirst bool) *clearance.RulingContact {
-	cells := tier.New(ctx, k.tol, k.slack)
-	return cells.PlaneCylinderRuling(plane, cyl,
+	return ruling.PlaneCylinderRuling(k.tol, plane, cyl,
 		func(dir r3.Vec) (float64, float64, bool) { return payloadExtent(ctx, planeBody, dir) },
 		func(dir r3.Vec) (float64, float64, bool) { return payloadExtent(ctx, cylBody, dir) }, cylinderFirst)
 }
 
 func (k *pairKernel) cylinderPairRuling(ctx context.Context, ca, cb *clearance.CFace) *clearance.RulingContact {
-	cells := tier.New(ctx, k.tol, k.slack)
-	return cells.CylinderPairRuling(ca, cb,
+	return ruling.CylinderPairRuling(k.tol, ca, cb,
 		func(dir r3.Vec) (float64, float64, bool) { return payloadExtent(ctx, k.a.body, dir) },
 		func(dir r3.Vec) (float64, float64, bool) { return payloadExtent(ctx, k.b.body, dir) })
 }

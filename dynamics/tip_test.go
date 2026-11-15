@@ -39,7 +39,7 @@ import (
 //   - the impact manifold read at the rounded event poses: the first rotating
 //     impact stops the step with StepManifoldMissing;
 //   - the planar replay inside a rotating impact bracket
-//     (sweepmemo.BracketDepthWithin): the first rotating
+//     (sweepreplay.BracketDepthWithin): the first rotating
 //     impact stops the step with StepPairUndecided;
 //   - the oriented-box planar manifold (contact_pair.go's
 //     contactpair.classifyPlanarManifold): the initial edge contact stops the first step

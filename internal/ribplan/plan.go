@@ -109,11 +109,4 @@ func Disjoint(aLo, aHi, bLo, bHi r3.Vec, slack float64) bool {
 		aHi.Z+slack < bLo.Z-slack || bHi.Z+slack < aLo.Z-slack
 }
 
-// AddsNothing reports whether a volume reading of after, value ± bound, is
-// certifiably no larger than a reading of before. A true answer is certain; a
-// false answer proves nothing.
-func AddsNothing(before, beforeBound, after, afterBound float64) bool {
-	return after+afterBound <= before-beforeBound
-}
-
 func positive(x float64) bool { return x > 0 && !math.IsInf(x, 0) && !math.IsNaN(x) }

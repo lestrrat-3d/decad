@@ -140,7 +140,7 @@ its own builder would otherwise hand back.
 **A revolve's carriers are measured against the record they were
 re-expressed from** (`clearance.RevolveCarrierResult`'s `AxisGap`,
 `internal/clearance/revolve_axis_gap.go`).
-`wallsurvey.BuildRevolveClearanceCarriers` builds every carrier from the
+`revolveclearance.BuildRevolveClearanceCarriers` builds every carrier from the
 walk's float axis coordinates (z, ρ): a float
 re-expression of the recorded plane-local point that rounds, snaps an
 endpoint within the contact tolerance onto the axis, and reads an arc whose
@@ -205,7 +205,7 @@ It is admitted whenever the recorded triangle set exists (an all-planar body,
 open or closed); a placement's own widened vertex bound (`internal/stitchrecord/build.go`'s
 `RigidRoundAllow`) or a certificate weld's own nonzero class bound does not
 refuse it. Instead, `newBodyGeomBudget` charges the body's own largest
-proven vertex bound into `bodyGeom.delta` (`stitchweld.MaxBound` over
+proven vertex bound into `bodyGeom.delta` (`stitchbounds.MaxBound` over
 `stitchtess.VertexBounds`). The prism and revolve carrier builders likewise charge their
 own frame/placement rounding, axial or angular displacement, per-face tilt
 and, for a revolve, the carriers' axis gap into that per-body displacement.
@@ -948,7 +948,7 @@ triangle set has §2's carrier model, `clearance.BuildStitchBodyCarriers`, whate
 bounds: a bounded body charges its largest vertex bound into `bodyGeom.delta`
 (§2). Its mesh publishes a zero occupied-volume proof only when the body is
 CLOSED, every vertex carries a proven bound of exactly zero
-(`stitchweld.ZeroBound`), and its lumps are proven separate
+(`stitchbounds.ZeroBound`), and its lumps are proven separate
 (`agent-docs/tessellation-design.md` §2's `stitchPayload` row). Such a body passes
 `booloperand.RequireVolumeProof` (`internal/booloperand/volume_proof.go`), so a
 pair the kernel proves `boundaryaudit.PairOverlapping` for it reaches a real

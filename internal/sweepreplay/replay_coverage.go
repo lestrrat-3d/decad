@@ -1,4 +1,4 @@
-package sweepmemo
+package sweepreplay
 
 import (
 	"math/big"

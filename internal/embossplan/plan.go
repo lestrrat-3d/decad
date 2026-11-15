@@ -67,10 +67,3 @@ func PlanCurved(sketch r3.Frame, face r3.Frame, outward r3.Vec, height float64, 
 	}
 	return Sweep{Along: in, Against: out}, nil
 }
-
-// RemovesNothing reports whether a volume reading of after, value ± bound, is
-// certifiably no smaller than a reading of before. A true answer is certain; a
-// false answer proves nothing.
-func RemovesNothing(before, beforeBound, after, afterBound float64) bool {
-	return after-afterBound >= before+beforeBound
-}
