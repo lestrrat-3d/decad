@@ -7,6 +7,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/chaintol"
 	"github.com/lestrrat-3d/decad/internal/gaptol"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/rimsplit"
 	"github.com/lestrrat-3d/units"
 	"github.com/lestrrat-go/option/v3"
 )
@@ -56,6 +57,9 @@ func gapReachOf(opts []DocumentOption) (float64, error) {
 		if _, ok := opt.(chainOption); ok {
 			continue
 		}
+		if _, ok := opt.(rimSplitOption); ok {
+			continue
+		}
 		if g, ok := opt.(gapOption); ok && g.Interface == nil {
 			return 0, fmt.Errorf(`%w: a zero document option names nothing to apply`, ErrDegenerate)
 		}
@@ -90,5 +94,6 @@ func (d *Document) evalContext(ctx context.Context) (context.Context, error) {
 	}
 	// An internal route that has proven what its cut meets (the loop chamfer) hands down an allowance of its own on
 	// ctx. It never lowers the document's.
+	ctx = rimsplit.With(ctx, d.rimSplit || rimsplit.Of(ctx))
 	return chaintol.With(gaptol.With(ctx, d.gapReach), max(d.chainTol, chaintol.Of(ctx))), nil
 }

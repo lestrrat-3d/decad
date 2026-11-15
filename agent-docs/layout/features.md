@@ -22,6 +22,7 @@ The rules for rows live in `agent-docs/layout.md`.
 | `operation_diagnostics.go` | Public operation diagnostic values, typed error accessors and body warning snapshots. See operation-diagnostics-design. |
 | `params.go` | `WithParams`, `Document.Params`, `Param`, `Expr`, `ParamInt`, `Bindings`. See param-binding §2. |
 | `chain_tolerance.go` | `WithChainTolerance`, the document option that moves the chain-depth refusal. See faceted-vertex-bounds §5. |
+| `rim_split.go` | `WithRimSplit`, the document option that keeps a rim's bound beside the rim. See faceted-vertex-bounds §3.7. |
 | `gap_tolerance.go` | `WithGapTolerance`, `ExactOnly` and the context the root hands the evaluator. See gap-tolerance §1. |
 | `mirror.go` | `MirrorPlane` and `Mirrored`/`MirroredCopy`. See mirror-pattern §4. |
 | `mirror_join.go` | `WithJoin`, face selection and document commit around `internal/mirrorjoin/`'s record rewrite. See mirror-pattern §5. |

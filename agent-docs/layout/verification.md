@@ -34,5 +34,6 @@ history and diagnostics internals. The rules for rows live in `agent-docs/layout
 | `internal/meshthick/` | Ray-cast wall thickness and pull undercuts of a closed triangle mesh through a bounding-volume tree. See mesh-wall-survey design. |
 | `internal/gaptol/` | The gap tolerance a root operation puts on its context, and the default. See gap-tolerance §1. |
 | `internal/chaintol/` | The chain tolerance carried by Boolean evaluation contexts. See operation-diagnostics-design. |
+| `internal/rimsplit/` | The rim split choice carried by Boolean evaluation contexts. See faceted-vertex-bounds §3.7. |
 | `internal/opdiagnostic/` | Bounded plain-data summaries and aggregation for accepted Boolean and Stitch adjustments. See operation-diagnostics-design. |
 | `internal/boolchain/` | Flattens a refused two-body Boolean over mesh Boolean results into source-body literals and runs the regrouped plan; `Expandable` also gates point location through history. See boolean-chain-regroup-design. |

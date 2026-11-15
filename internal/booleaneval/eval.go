@@ -33,6 +33,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/opdiagnostic"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/provenance"
+	"github.com/lestrrat-3d/decad/internal/rimsplit"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/decad/internal/topobuild"
@@ -683,6 +684,18 @@ func evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 		if trackOccupancy && bmA.Bulge != nil {
 			deepTerm, sites = localDeepTerm(op, occA, occB, pokesA, pokesB, ma, mb, stats.Contacts)
 		}
+	}
+	if err == nil && rimsplit.Of(ctx) {
+		var charge meshbool.BudgetFunc
+		if replay != nil {
+			charge = func(work, records uint64) error {
+				if err := replay.SpendWork(ctx, work); err != nil {
+					return err
+				}
+				return replay.ReserveRecords(ctx, records)
+			}
+		}
+		kept, err = meshbool.SplitSpread(ctx, kept, bmA, bmB, tolMM, charge)
 	}
 	if err != nil {
 		return Evaluation{}, meshbool.StagingError(op, err)

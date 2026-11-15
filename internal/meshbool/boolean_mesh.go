@@ -141,6 +141,13 @@ type KeptFacet struct {
 	// empty entry. A producer that fills an entry must fill exactly
 	// V[k].Key(): the stitch never checks it.
 	Keys [3]string
+	// Delta is δ of the operand facet this piece lies on, the bound a point of
+	// that facet that is no rim point takes (§3.3). Second is set for a piece of
+	// the second operand.
+	Delta  float64
+	Second bool
+	// Facet is the index in its operand of the facet this piece lies on.
+	Facet int
 }
 
 // BooleanKeep is the classification table of §9: which side of the other
@@ -298,6 +305,9 @@ func meshBooleanStats(ctx context.Context, op OperationKind, ma, mb *BoolMesh, m
 	if err != nil {
 		return nil, Stats{}, err
 	}
+	for i := range keepB {
+		keepB[i].Second = true
+	}
 	return append(keepA, keepB...), Stats{MaxRim: cuts.MaxRim, MinSin: cuts.MinSin, DeepTerm: cuts.DeepTerm, Contacts: cuts.Contacts}, nil
 }
 
@@ -390,13 +400,13 @@ func newKeyMemo() func(proof.Xpt) string {
 // keepSide is KeepSide with the exact-point key function supplied.
 func keepSide(ctx context.Context, m, other *BoolMesh, cuts map[int][]Xseg, blocked map[[2]int]struct{}, rims map[string]float64, wantInside, flip bool, keyOf func(proof.Xpt) string) ([]KeptFacet, error) {
 	kept := make([]KeptFacet, 0, len(m.Tris))
-	emit := func(tri [3]proof.Xpt, beta [3]float64, keys [3]string, src int) {
+	emit := func(tri [3]proof.Xpt, beta [3]float64, keys [3]string, src int, facet int) {
 		if flip {
 			tri[1], tri[2] = tri[2], tri[1]
 			beta[1], beta[2] = beta[2], beta[1]
 			keys[1], keys[2] = keys[2], keys[1]
 		}
-		kept = append(kept, KeptFacet{V: tri, Src: src, Beta: beta, Keys: keys})
+		kept = append(kept, KeptFacet{V: tri, Src: src, Beta: beta, Keys: keys, Delta: m.FacetBound[facet], Facet: facet})
 	}
 
 	// The cut facets: exact subdivision along the contact chains, then the
@@ -443,7 +453,7 @@ func keepSide(ctx context.Context, m, other *BoolMesh, cuts map[int][]Xseg, bloc
 						keys[k] = keyOf(p)
 						beta[k] = CutCornerBound(m, i, cornerKeys, keys[k], rims)
 					}
-					emit(tri, beta, keys, m.Src[i])
+					emit(tri, beta, keys, m.Src[i], i)
 				}
 			}
 		}
@@ -514,7 +524,7 @@ func keepSide(ctx context.Context, m, other *BoolMesh, cuts map[int][]Xseg, bloc
 			t := m.Tris[f]
 			x := XtriCorners(m, f)
 			emit(x, [3]float64{m.VertexBound[t[0]], m.VertexBound[t[1]], m.VertexBound[t[2]]},
-				[3]string{keyOf(x[0]), keyOf(x[1]), keyOf(x[2])}, m.Src[f])
+				[3]string{keyOf(x[0]), keyOf(x[1]), keyOf(x[2])}, m.Src[f], f)
 		}
 	}
 	return kept, nil
