@@ -22,10 +22,12 @@ import (
 // its area and its identity stay as they were published.
 
 // refineTargetScale sets the per-cell departure a refinement aims at, as a
-// fraction of the profile's largest L1 radius. It is a tenth of the stationed
-// build's own 4% target (StationedTwistCellCounts), so a refined sweep holds
-// its wall within about 0.25% of the profile radius.
-const refineTargetScale = 0.0025
+// fraction of the profile's largest L1 radius. It is about a twenty-seventh of
+// the stationed build's own 4% target (StationedTwistCellCounts), so a refined
+// sweep holds its wall within about 0.15% of the profile radius. A cut
+// rim where the refined walls cross a held surface obliquely carries about
+// twice this departure, so the finer target keeps that rim near 0.03 mm.
+const refineTargetScale = 0.0015
 
 // maxRefinedTwistCells is the cell ceiling of a refinement. A sweep whose
 // target needs more cells is refined to this count instead, when that is

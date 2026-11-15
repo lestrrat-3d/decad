@@ -117,14 +117,14 @@ ratio, up to `MaxFacetPairTestsPerCall`, which still refuses an excess.
 
 - apply to a sweep that already holds a stationed mesh, not only a one-cell
   sweep, so a twist of more than one radian refines too;
-- aim at `refineTargetScale` = 0.25% of the profile's largest L1 radius, a
-  tenth of the stationed build's 4% target;
+- aim at `refineTargetScale` = 0.15% of the profile's largest L1 radius, about
+  a twenty-seventh of the stationed build's 4% target;
 - use `refinedCellCount`: the fewest cells that reach the target, else the
   most the ceilings allow (`maxRefinedTwistCells` = 512 and the facet-pair
   ceiling). A refinement that is no closer than the sweep's own `Delta` is
   still not offered.
 
-For the sleeve tool this is about 220 cells and a `Delta` of about 0.025 mm,
+For the sleeve tool this is about 350 cells and a `Delta` of about 0.015 mm,
 against 0.43 mm.
 The proofs are the stationed build's own and are unchanged
 (twist-sweep-cut §3, Soundness): `RefinedMesh` refuses when the mesh proves
@@ -142,8 +142,8 @@ Measured on the sleeve (apitest `TestCutChainedTwistedBoresAndWindows`):
   within its certified bound of the tube minus an independently integrated
   overlap.
 - Certified figures for the chain: volume 20020 mm3 with bound 104 mm3 (0.5% of
-  the tube; 26 mm3 per bore), boundary bound 0.051 mm (`Mesh.Bound`). A bore
-  clearance of 0.2 mm is proven four times over by the boundary bound.
+  the tube; 26 mm3 per bore), boundary bound 0.031 mm (`Mesh.Bound`). A bore
+  clearance of 0.2 mm is proven six times over by the boundary bound.
 - A window wide enough to reach a bore's rim is refused by default with the
   chain-depth message (it meets rimmed strips, §2 item 3) and admitted with
   `WithChainTolerance(0.1 mm)`, with the same volume check
