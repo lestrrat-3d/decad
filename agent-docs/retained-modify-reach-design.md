@@ -169,7 +169,7 @@ retained cylinder wall `W_k` whose axis is normal to `P`, and consecutive edges 
 | RC | Chain | Ends | Staged |
 |---|---|---|---|
 | **C1** | closed: every edge of one loop of `P` | none | increment M3 |
-| **C2** | open | each end at a three-face corner of a straight R1 edge, on an end plane `G` normal to the edge where the base and the wall are convex and `G` is convex or reflex (§5.5 step 5), or of a convex chain's R4 arc that blend §4.4 admits, on an end plane parallel to its axis and convex at the corner | increments M4, M4b, M8 |
+| **C2** | open | each end at a three-face corner of a straight R1 edge, on an end plane `G` normal to the edge where the wall is convex, the base is convex (or, for a concave chain, wraps the corner and `G` is convex) and `G` is convex or reflex (§5.5 step 5), or of a convex chain's R4 arc that blend §4.4 admits, on an end plane parallel to its axis and convex at the corner | increments M4, M4b, M8 |
 
 At a junction both walls are perpendicular to `P`: a cylinder wall's axis is normal to `P`, and a plane wall
 tangent to it along a generator contains that generator. So every edge of a chain has dihedral angle `π/2`, and
@@ -316,7 +316,9 @@ The rewrite touches `P`, every wall `W_k`, every seam between consecutive walls,
    | −1 | convex | convex | reflex | reflex foot: a ledge standing out of a wall | gains |
    | +1 | convex | convex | reflex | run-out: a slot leaving through a face | gains |
    | +1 | convex | convex | convex | blind end: a pocket floor ending at a sharp pocket corner | loses |
-   | any | reflex | any | any | the base wraps the corner | refuse (SM8) |
+   | +1 | reflex | convex | convex | the base wraps the corner: a block's root ending at the block's sharp vertical edge | gains |
+   | −1 | reflex | any | any | the base wraps the corner of a convex chain | refuse (SM8) |
+   | +1 | reflex | any | reflex | the base and `G` both wrap the corner | refuse (SM8) |
    | any | any | reflex | any | the wall wraps the corner | refuse (SM8) |
 
    The end column lies in `G`'s plane, in the quadrant between `G ∩ P` and `G ∩ W` that holds the blend's
@@ -326,6 +328,24 @@ The rewrite touches `P`, every wall `W_k`, every seam between consecutive walls,
    its loop the splice shrinks a convex corner and grows a reflex one. The exact area `G` loses is the cap,
    `A_f = r²(1 − π/4)` for a fillet or `t_P·t_W/2` for a chamfer, with sign `+` for a convex `G` and `−` for a
    reflex one. A cap `G` takes is new surface on the far side of `K_k`, and §5.6 tests it as it tests the strip.
+
+   **A base that wraps the corner** (a concave chain on a plate, ending at a block's sharp vertical edge). `P`
+   is then reflex at `V`, and its remaining region at `V` is the half plane on the far side of `G ∩ P` from the
+   chain. The blend's strip ends on `G`'s plane, so `P` keeps `V`: nothing of `G`'s chain along `G ∩ P` is
+   removed, and `P`'s new boundary runs from `V` along `G ∩ P`, away from `G`'s chain, to the setback point
+   (the end column's first row), then along the offset contour. `readEndCut` reads the base's turn before the
+   chains, from `P`'s neighbour of `V` on `G ∩ P` (its distance along that line must exceed its bound plus the
+   margin, else the end keeps today's reading and refuses), and marks the end `wraps` only for a concave
+   chain's straight end. `W` still trims, so `G`'s chain along `G ∩ wall` gives way below the wall's setback as
+   at any end. `G` must be convex (a reflex `G` beside a wrapping base refuses, SM8) and takes the cap: the
+   section lies in `G`'s plane on the side of the chain's wall away from `G`'s held face, so it is new surface
+   beside `G`'s held vertical edge at `V`. `G` keeps `V`, drops its chain below the wall's setback, and gains the
+   column after `V` where its loop reaches `V` from `P`'s side, or before `V` otherwise (`wrapLoop`). The exact
+   area `G` loses is `−A_cap`. `P`'s contour, with `V` kept at each wrapping end, is tested as a path, or as a
+   closed polygon when both ends lie on one `G` and the chain is the whole loop; it checks the end segment from
+   `V` to the setback point as well. The base's clearance test (§5.6) already covers that segment, which lies
+   within `t_P` of `V`. A convex chain keeps SM8 at a wrapping base: the blend cuts into the material there, and
+   its section has no end face to lie in.
 
    When both ends lie on one `G`, its loops are read once and both splices are applied in turn before `G` is
    triangulated once. Each end's run holds only the vertices nearer its corner than the setbacks, and the end
@@ -593,7 +613,7 @@ Rows narrow blend Table SR and reach SX2/SX9; sentinels follow those tables.
 | **SM5** | the chain gates of §5.6: undecided; a strip facet, or a facet of an end face that takes a cap, that meets another facet of the body; or a chain whose resolved references mix `P` and walls | `ErrUnsupported` (SR5; SX3 first for the mix) |
 | **SM6** | R5: the offset circles do not meet | `ErrDegenerate` (SR3) |
 | **SM7** | R5: the walls meet at `K` below `minSine` | `ErrUnsupported` (SR5) |
-| **SM8** | a straight end of an open chain whose base or wall is reflex at the corner: "a chain end's base or wall is reflex at the corner"; a turn there too near straight to read: "a chain end's base or wall turn at the corner is undecided"; an end face whose loop runs its edge with the base the way the base's loop does (a guard: an oriented held mesh never reaches it) | `ErrUnsupported` |
+| **SM8** | a straight end of an open chain whose wall is reflex at the corner, or whose base is reflex and the chain is convex: "a chain end's base or wall is reflex at the corner"; a concave chain's end whose base and `G` are both reflex: "a chain end's base and end face are both reflex at the corner"; a turn there too near straight to read: "a chain end's base or wall turn at the corner is undecided"; an end face whose loop runs its edge with the base the way the base's loop does (a guard: an oriented held mesh never reaches it) | `ErrUnsupported` |
 | **SM9** | an open concave chain that ends on an arc, or an arc end on an end face reflex at the corner | `ErrUnsupported` |
 
 Kept refusals: `Shell` (the `shell.go` text, SX9), `Draft` (SD23), `Offset` (R37), the many-body `Union` (text J), crossing cylinders outside blend R7's chamfer and fillet, `Cone`, `Torus` and oblique plane/cylinder rims
@@ -648,8 +668,9 @@ shown red first by the change named. `A_f = r²(1 − π/4)` is a fillet's corne
 | Chain ends: run-out (the slot of `roundedPocket` leaving through `x = 0`), fillet and chamfer `1` | fill `A_f·(68 + π·(R − x̄))` and `(1/2)·(68 + π·(R − 1/3))`; the `x = 0` face grows by two caps and holds a point just inside each; blend normals point into the void | keep a reflex `G` refusing: refused; rebuild each end alone: the strip meets the duplicated `G` facets |
 | Chain ends: blind end (pocket `10…30` with only its `x = 30` corners `r = 3`, floor `z = 5`), fillet `r = 1` | fill `A_f·(48 + π·(R − x̄))`; the `x = 10` wall shrinks by `2A_f` and lies more than 0.1 from a point just inside each cap | admit only a reflex `G` for a concave chain: refused; drop the whole-loop base branch: "a face boundary holds no run to replace" |
 | Chain ends: tongue (40×20×20, `x = 40` corners `r = 3`, bored), fillet `r = 1`, both ends on `x = 0` | removed `A_f·(88 + π·(R − x̄))`; 3 `Cylinder`, 2 `Torus` (`Major = R − r`); the `x = 0` face shrinks by `2A_f` and gives up both caps | drop the whole-loop base branch, or rebuild each end alone |
-| Chain end gates | the step (block 40×20×30 with `x = 40` corners `r = 3`, cut to `z = 10` for `x > 10`) and the blind pocket's mouth refuse SM8; the slot `−2…30` with four `r = 3` corners refuses SM9 for its concave arc ends, and a ledge `8…30` with four corners for its arc ends on the reflex wall; unit tests read convex, reflex and undecided turns, `G`'s turn at both ends of the tongue and the reflex foot, and the cap's sign | drop the wall's turn: the step refuses SR4; drop the base's turn: the mouth builds a flat-ended notch; drop either arc gate: the other arc text, or the ledge builds; read `G`'s turn one way at both ends: the unit test fails; drop the cap's sign: the unit test fails |
-| Taken cap clearance | a 0.1 box joined across `x = 0` in the run-out slot's void, and a 0.1 cavity cut across `x = 10` in the reflex foot's ledge corner, each at either corner, refuse SM5 "the cap an end face takes meets another facet of the body"; the box moved clear of the cap builds with the run-out's fill; unit tests refuse a facet that crosses a taken cap but not the strip, one that shares a held vertex with the cap and crosses it beyond, and one coplanar with the cap beside a shared edge, while facets meeting the cap only at a shared vertex or along a shared edge pass, and `checkEndSense` refuses an end face's loop sense that matches the base's | skip the taken caps: the box builds, and the cavity refuses SR7 "a result shell has inconsistent orientation"; skip every pair that shares a vertex: the held-vertex unit case builds; refuse every contact of a sharing pair, or every point contact: the run-out, its chamfer and the reflex foot refuse; drop the loop-sense test from `checkEndSense`: its unit test builds; drop the call from `rewriteChain`: nothing goes red, because no oriented held mesh reaches it |
+| Chain ends: base wrap (plate `30×26×10` joined with a block `10…20 × 10…16 × 10…16`, `x = 20` corners `r = 2`), fillet `r = 1` and chamfer `1` of the root along `y = 10` through both corners | fill `A_f·(18 + (π/2)·2·(R + x̄))` and `(1/2)·(18 + π·(R + 1/3))`; 3 `Cylinder`, 2 `Torus` (`Major = R + r`); the `x = 10` face grows by `2A_f` (`2·(1/2)`) and holds a point just inside each cap; `VerifyAll` passes. With only one corner rounded the two ends lie on two faces: fill `A_f·(12 + (π/2)(R + x̄))`, the `x = 10` face grows by `A_f` | keep a wrapping base refusing: SM8; leave the cap out of the taken caps: the box across it builds; drop the kept corner from the base's contour: the build refuses |
+| Chain end gates | the step (block 40×20×30 with `x = 40` corners `r = 3`, cut to `z = 10` for `x > 10`) and the blind pocket's mouth (a convex chain) refuse SM8; a unit test refuses a wrapping base beside a reflex `G` and a wrapping base beside a wall that wraps; the slot `−2…30` with four `r = 3` corners refuses SM9 for its concave arc ends, and a ledge `8…30` with four corners for its arc ends on the reflex wall; unit tests read convex, reflex and undecided turns, `G`'s turn at both ends of the tongue and the reflex foot, and the cap's sign | drop the wall's turn: the step refuses SR4; drop the base's turn: the mouth builds a flat-ended notch; drop either arc gate: the other arc text, or the ledge builds; read `G`'s turn one way at both ends: the unit test fails; drop the cap's sign: the unit test fails |
+| Taken cap clearance | a 0.1 box joined across `x = 10` beside the base-wrap block's corner refuses SM5 (the box moved clear builds), a second block standing in the base's setback band refuses SR4 "the blend consumes the base face"; a 0.1 box joined across `x = 0` in the run-out slot's void, and a 0.1 cavity cut across `x = 10` in the reflex foot's ledge corner, each at either corner, refuse SM5 "the cap an end face takes meets another facet of the body"; the box moved clear of the cap builds with the run-out's fill; unit tests refuse a facet that crosses a taken cap but not the strip, one that shares a held vertex with the cap and crosses it beyond, and one coplanar with the cap beside a shared edge, while facets meeting the cap only at a shared vertex or along a shared edge pass, and `checkEndSense` refuses an end face's loop sense that matches the base's | skip the taken caps: the box builds, and the cavity refuses SR7 "a result shell has inconsistent orientation"; skip every pair that shares a vertex: the held-vertex unit case builds; refuse every contact of a sharing pair, or every point contact: the run-out, its chamfer and the reflex foot refuse; drop the loop-sense test from `checkEndSense`: its unit test builds; drop the call from `rewriteChain`: nothing goes red, because no oriented held mesh reaches it |
 | Chain clearance | a pocket whose chord crosses a band while its vertices lie outside it refuses SM5; a hole deep inside a band refuses SM4 | test vertices only: the crossing chord builds and SR7 or the volume check fails |
 | `internal/tangentchain` retained oracle | exactly tangent plane/cylinder tags prove "tangent"; tags a few float steps off prove it too (round-off); tags 1e-12 relative off are undecided; a clear miss is "not tangent" | widen round-off to the angular band: the 1e-12 case proves "tangent"; drop it: the one-step case is undecided |
 | Exact-rotation copy of P3, 20° | 6 `Plane`, 5 `Cylinder`; `NormalAt` at an interior facet centroid within its bound plus 64 float steps of the rotated source normal; bounds below 1 | keep `ExactGroupPlaced`'s drop: `Faceted` |
@@ -707,7 +728,7 @@ Chains are built for closed and open outlines of lines and arcs, convex or conca
 (`chain.go`) and `rewriteChain` builds one chain (`chain_rewrite.go`); the ends of an open chain live in
 `chain_open.go`, an arc end in `chain_arc_end.go`, and the strip's clearance from the rest of the body, for every
 route, in `strip_clear.go`. A closed chain has at least three edges and an open chain at least two. A straight end
-whose base or wall is reflex at the corner, a straight end on a face that is not normal to its edge, an arc end of
+whose wall is reflex at the corner, or whose base is reflex on a convex chain or beside a reflex `G`, a straight end on a face that is not normal to its edge, an arc end of
 a concave chain, an arc end on a face reflex at the corner and an arc end on a face that is not parallel to the
 axis are refused. The edge between a `Cylinder` and a `Torus` blend of a fillet chain is an `Arc3`
 (retention §10.1 E11).

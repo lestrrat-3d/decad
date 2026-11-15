@@ -441,7 +441,7 @@ func rewriteChain(ctx context.Context, env topo.Env, fp facetedrecord.Payload, c
 		uP := [2]int{loop[(pos[0]+k-1)%k], loop[(pos[n]+1)%k]}
 		rc := [2]r3.Vec{entries[0].d, entries[n-1].d.Scale(-1)}
 		for i, ec := range ecuts {
-			if err := w.readEndCut(ec, nP, uP[i], tP, tW, margin, slack); err != nil {
+			if err := w.readEndCut(ec, nP, rc[i], uP[i], i == 0, side > 0, tP, tW, margin, slack); err != nil {
 				return nil, err
 			}
 			if err := checkEndSense(ec, i == 1); err != nil {
@@ -479,17 +479,30 @@ func rewriteChain(ctx context.Context, env topo.Env, fp facetedrecord.Payload, c
 		// both ends lie on one G and the contour closes along G ∩ P between
 		// its two setback points.
 		whole := !slices.ContainsFunc(loop, func(v int) bool { return !run[v] })
-		if whole && ecuts[0].faceIx == ecuts[1].faceIx {
-			if err := w.checkContour(ringA, nP, oP, false); err != nil {
+		// A wrapping end keeps the corner, so the base's boundary runs from it
+		// to the setback point on G ∩ P: the contour is bracketed by the
+		// corners it keeps.
+		ring := ringA
+		if ecuts[0].wraps {
+			ring = append([]int{ecuts[0].v}, ring...)
+		}
+		if ecuts[1].wraps {
+			ring = append(append([]int(nil), ring...), ecuts[1].v)
+		}
+		closes := whole && ecuts[0].faceIx == ecuts[1].faceIx
+		if ecuts[0].wraps || ecuts[1].wraps || closes {
+			if err := w.checkContour(ring, nP, oP, !closes); err != nil {
 				return nil, err
 			}
-			loops = append(loops, ringA)
+		}
+		if closes {
+			loops = append(loops, ring)
 		} else {
 			outside, _, err := splice(loop, run)
 			if err != nil {
 				return nil, err
 			}
-			loops = append(loops, append(outside, ringA...))
+			loops = append(loops, append(outside, ring...))
 		}
 	} else {
 		loops = append(loops, ringA)
