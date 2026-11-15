@@ -466,7 +466,8 @@ func requireCapBlendBooleanRefused(t *testing.T, build func(*testing.T) *decad.B
 }
 
 // TestCapBlendBooleanRefusesMiteredBand keeps the bands §7 does not cover out
-// of every boolean: a circular wall at a genuine miter, and a reflex corner.
+// of every boolean: a circular wall at a genuine miter. A prism cap-loop
+// chamfer's reflex corner is admitted (TestCapBlendReflexLBodyBoolean).
 func TestCapBlendBooleanRefusesMiteredBand(t *testing.T) {
 	t.Parallel()
 	t.Run("mitered circular wall", func(t *testing.T) {
@@ -477,15 +478,6 @@ func TestCapBlendBooleanRefusesMiteredBand(t *testing.T) {
 			require.NoError(t, err)
 			return chamfered
 		}, "line-line miter or an exactly tangent join")
-	})
-	t.Run("reflex corner", func(t *testing.T) {
-		t.Parallel()
-		requireCapBlendBooleanRefused(t, func(t *testing.T) *decad.Body {
-			body := reflexLBody(t)
-			chamfered, err := decad.Chamfer(t.Context(), body, capLoopEdges(body), units.Millimeters(3))
-			require.NoError(t, err)
-			return chamfered
-		}, "reflex")
 	})
 }
 

@@ -58,7 +58,7 @@ func chamferAdmission(t *testing.T, loop sectionrecord.LoopRecord, amount float6
 				return nil, nil, err
 			}
 			return cl.Walks, func() ([]bool, error) { return make([]bool, len(cl.Walks)), nil }, nil
-		}, amounts, restate)
+		}, amounts, restate, false)
 	require.NoError(t, err)
 	return refusal
 }
