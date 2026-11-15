@@ -292,6 +292,44 @@ func (r chamferRun) ends() ([2]runEnd, bool) {
 	return [2]runEnd{a, b}, ok1 && ok2
 }
 
+// clipSector is the angular range of the end clip about the corner of a concave end: from the bisector of the corner's
+// empty wedge, clear of both walls, to the next wall's line carried back over the run, on the side away from the run.
+func (e runEnd) clipSector() (from, sweep float64) {
+	r1, r2 := e.e2away.scale(-1), e.e2away.sub(e.away).unit()
+	a1, a2 := math.Atan2(r1.y, r1.x), math.Atan2(r2.y, r2.x)
+	aw := math.Atan2(e.away.y, e.away.x)
+	mod := func(x float64) float64 {
+		for x < 0 {
+			x += 2 * math.Pi
+		}
+		for x >= 2*math.Pi {
+			x -= 2 * math.Pi
+		}
+		return x
+	}
+	from, sweep = a2, mod(a1-a2)
+	if mod(aw-a2) > sweep {
+		from, sweep = a1, mod(a2-a1)
+	}
+	return from, sweep
+}
+
+// inClip reports whether p lies in the end clip of the concave end e, whose sector has radius clip.
+func (e runEnd) inClip(p pt2, clip float64) bool {
+	if p.dist(e.v) > clip {
+		return false
+	}
+	from, sweep := e.clipSector()
+	a := math.Atan2(p.y-e.v.y, p.x-e.v.x) - from
+	for a < 0 {
+		a += 2 * math.Pi
+	}
+	for a >= 2*math.Pi {
+		a -= 2 * math.Pi
+	}
+	return a <= sweep
+}
+
 // clipRadius is the radius of the sector the end clip removes about the corner of a concave end.
 func (e runEnd) clipRadius(d, over float64) float64 {
 	return 1.5 * ((d+2*over)/math.Sin(math.Min(e.turn, math.Pi/2)) + d + over)
@@ -615,11 +653,13 @@ func cutRuns(ctx context.Context, env topo.Env, hooks Hooks, body *topo.Body, ru
 }
 
 // checkClipLocal refuses a run that comes back into the end clip of the concave end e (the run's start when atStart).
-// The clip removes the cutter's part within clipRadius of the corner outside a wedge, so any other stretch of the
-// cutter that lies that close would be removed too. The cutter lies within pad of the run, so the run's stretches are
-// measured against clipRadius + pad. Only the smooth stretch that leaves the corner may pass close to it, as it does
-// near the corner itself, so a stretch past the first sharp corner never does; a convex arc leaving the corner crosses
-// the next wall's plane carried back, 2 R sin(turn) from the corner, and that crossing is refused when it is near.
+// The clip removes whatever the cutter holds inside its sector about the corner, which is meant to be the bevel's taper
+// beside the corner alone. The cutter lies within pad of the run, so a point of the run whose band of that width meets
+// the sector is refused unless it lies in the smooth stretch leaving the corner, within pad/sin(turn) of it along the
+// run, where the taper is. That covers a stretch past the first sharp corner, a smooth stretch that doubles back, and
+// an arc leaving the corner that curls onto the next wall's plane carried back. For an arc at the corner the plane's
+// second crossing of the bevel's circle at the cap, lambda2, must also lie beyond the sector and the cutter's width,
+// and the plane must meet that circle at all.
 func (r chamferRun) checkClipLocal(e runEnd, atStart bool, d, over float64) error {
 	refuse := fmt.Errorf(`%w: a chamfered run comes back into the clip at its concave end`, decaderr.ErrUnsupported)
 	clip := e.clipRadius(d, over)
@@ -631,9 +671,18 @@ func (r chamferRun) checkClipLocal(e runEnd, atStart bool, d, over float64) erro
 		}
 		return r.seg(n - 1 - i)
 	}
-	if end := at(0); end.arc && r.loop.toward(end) && 2*end.r*math.Sin(e.turn) < clip+2*pad {
-		return refuse
+	l := r.loop
+	if end := at(0); end.arc && l.toward(end) {
+		// The bevel's inner circle at the cap, met by the next wall's plane carried back from the corner.
+		u := e.e2away.scale(-1)
+		cv := end.c.sub(e.v)
+		cu := cv.dot(u)
+		disc := cu*cu - (cv.dot(cv) - (end.r-d)*(end.r-d))
+		if disc < 0 || cu+math.Sqrt(disc) < clip+pad {
+			return refuse
+		}
 	}
+	nearLen := pad / math.Sin(math.Min(e.turn, math.Pi/2))
 	const step = 0.2
 	smooth, along := true, 0.0
 	for i := range n {
@@ -651,20 +700,20 @@ func (r chamferRun) checkClipLocal(e runEnd, atStart bool, d, over float64) erro
 		}
 		pieces := max(1, int(math.Ceil(length/step)))
 		for k := 0; k <= pieces; k++ {
-			if smooth && !sg.arc {
-				break
-			}
 			frac := float64(k) / float64(pieces)
 			p := segPoint(sg, frac)
 			from := frac
 			if !atStart {
 				from = 1 - frac
 			}
-			if smooth && along+from*length > clip+pad && p.dist(e.v) < clip+pad {
-				return refuse
+			if smooth && along+from*length <= nearLen {
+				continue
 			}
-			if !smooth && p.dist(e.v) < clip+pad {
-				return refuse
+			in := l.materialNormal(sg, p)
+			for _, off := range []float64{-over, 0, d / 2, d, d + over/2, d + over} {
+				if e.inClip(p.add(in.scale(off)), clip) {
+					return refuse
+				}
 			}
 		}
 		along += length
@@ -690,7 +739,7 @@ func segPoint(s loopSeg, f float64) pt2 {
 
 // checkMargin refuses a run whose cutter would reach material beside the run. The cutter reaches over past the wall,
 // outside the receiver, so material there is the wall of another part of the loop that stands that close. The ends
-// are probed by checkExtension, the stretch within a concave end's clip is removed by it, and the stretch close to a
+// are probed by checkExtension, the part of the strip inside a concave end's clip sector is removed by it, and the stretch close to a
 // corner inside the chain is trimmed by the chain's mitre.
 func (r chamferRun) checkMargin(ends [2]runEnd, d, over float64) error {
 	l := r.loop
@@ -709,13 +758,14 @@ func (r chamferRun) checkMargin(ends [2]runEnd, d, over float64) error {
 				continue
 			}
 			p := segPoint(sg, float64(k)/float64(pieces))
-			if (ends[0].concave && p.dist(ends[0].v) < ends[0].clipRadius(d, over)) ||
-				(ends[1].concave && p.dist(ends[1].v) < ends[1].clipRadius(d, over)) {
-				continue
-			}
 			out := l.materialNormal(sg, p).scale(-1)
 			for _, u := range []float64{0.5, 0.75, 1} {
-				if contains(poly, p.add(out.scale(u*over))) == l.outer {
+				q := p.add(out.scale(u * over))
+				if (ends[0].concave && ends[0].inClip(q, ends[0].clipRadius(d, over))) ||
+					(ends[1].concave && ends[1].inClip(q, ends[1].clipRadius(d, over))) {
+					continue
+				}
+				if contains(poly, q) == l.outer {
 					return fmt.Errorf(`%w: material of the cap lies within the cutter's margin beside a chamfered run`,
 						decaderr.ErrUnsupported)
 				}
@@ -729,23 +779,7 @@ func (r chamferRun) checkMargin(ends [2]runEnd, d, over float64) error {
 // wedge between the next wall's plane carried back over the run and the bisector of the corner's empty wedge. What it
 // leaves ends the bevel on the next wall's plane, the way a CAD chamfer extends the unselected neighbour.
 func (l *chamferLoop) endClipMesh(ctx context.Context, e runEnd, d, over float64) (cutterMesh, error) {
-	// The outside boundary bisects the corner's empty wedge, clear of both walls.
-	r1, r2 := e.e2away.scale(-1), e.e2away.sub(e.away).unit()
-	a1, a2 := math.Atan2(r1.y, r1.x), math.Atan2(r2.y, r2.x)
-	aw := math.Atan2(e.away.y, e.away.x)
-	mod := func(x float64) float64 {
-		for x < 0 {
-			x += 2 * math.Pi
-		}
-		for x >= 2*math.Pi {
-			x -= 2 * math.Pi
-		}
-		return x
-	}
-	from, sweep := a2, mod(a1-a2)
-	if mod(aw-a2) > sweep {
-		from, sweep = a1, mod(a2-a1)
-	}
+	from, sweep := e.clipSector()
 	s := e.clipRadius(d, over)
 	ring := []pt2{e.v}
 	const cells = 24

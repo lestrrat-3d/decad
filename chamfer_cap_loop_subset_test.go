@@ -439,8 +439,8 @@ func TestChamferCapLoopSubsetEnds(t *testing.T) {
 				band*band*(cot(theta)+cot(turnR1))/2
 			got := before.PolygonArea().Base() - after.PolygonArea().Base()
 			// The held mesh reads within about 0.0055 mm of the arc's wall, which over its 4.2 mm length moves the area by up
-			// to 0.025; measured, the two mirrors differ from the formula by 0.006 and 0.033.
-			require.InDelta(t, removed, got, 0.04)
+			// to 0.025; measured, the two mirrors differ from the formula by 0.006 and 0.033, so 0.05 leaves room.
+			require.InDelta(t, removed, got, 0.05)
 
 			// The bevel's inner edge ends on the next wall's plane carried back over the band at the concave end, and on
 			// the next wall at the acute convex end.
@@ -489,41 +489,110 @@ func TestChamferCapLoopSubsetEnds(t *testing.T) {
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 	})
 
-	// A convex arc run that ends at a concave corner meets the next wall's plane carried back again, 2 R sin(phi)
-	// from the corner. R = 5 puts that crossing inside the clip, and R = 13 well outside it.
-	for _, R := range []float64{5, 13} {
-		t.Run(fmt.Sprintf("convex arc of radius %v into a 22.5 degree concave end", R), func(t *testing.T) {
+	// A convex arc run (radius R, 60 degrees, or 25 degrees from R = 20), then a tangent line of length l0, ends at a
+	// concave corner turned phi beside a 10 mm line. The next wall's plane carried back crosses the arc again, and
+	// where the cutter lies beyond that crossing within the end clip, the clip would cut a bevel the run needs.
+	arcIntoConcave := func(t *testing.T, R, phi, l0 float64) (*decad.Body, *decad.EdgeQuery) {
+		t.Helper()
+		rad := func(x float64) float64 { return x * math.Pi / 180 }
+		sig := 60.0
+		if R >= 20 {
+			sig = 25
+		}
+		ae := [2]float64{20 + R*math.Sin(rad(sig)), R - R*math.Cos(rad(sig))}
+		v := [2]float64{ae[0] + l0*math.Cos(rad(sig)), ae[1] + l0*math.Sin(rad(sig))}
+		q := [2]float64{v[0] + 10*math.Cos(rad(sig-phi)), v[1] + 10*math.Sin(rad(sig-phi))}
+		top := math.Max(q[1], v[1]) + 15
+		body := capLoopSubsetBody(t, func(s *sketch.Sketch) {
+			a, b, ap, vp, qp, tp, lp := s.CreatePoint(0, 0), s.CreatePoint(20, 0), s.CreatePoint(ae[0], ae[1]),
+				s.CreatePoint(v[0], v[1]), s.CreatePoint(q[0], q[1]), s.CreatePoint(q[0], top), s.CreatePoint(0, top)
+			cc := s.CreatePoint(20, R)
+			s.CreateLine(a, b)
+			s.CreateArc(cc, b, ap)
+			pts := []*sketch.Point{a, b, ap, qp, tp, lp, cc}
+			if l0 > 0 {
+				s.CreateLine(ap, vp)
+				s.CreateLine(vp, qp)
+				pts = append(pts, vp)
+			} else {
+				s.CreateLine(ap, qp)
+			}
+			s.CreateLine(qp, tp)
+			s.CreateLine(tp, lp)
+			s.CreateLine(lp, a)
+			for _, x := range pts {
+				s.Fix(x)
+			}
+		})
+		sel := topEdges(topEdge{r3.Vec{}, r3.Vec{X: 1}}).Or(decad.EndpointAt(r3.Vec{X: 20, Z: 5}), decad.Circular())
+		if l0 > 0 {
+			sel = sel.Or(decad.EndpointAt(r3.Vec{X: v[0], Y: v[1], Z: 5}),
+				decad.ParallelTo(r3.Vec{X: math.Cos(rad(sig)), Y: math.Sin(rad(sig))}))
+		}
+		return body, sel
+	}
+	for _, c := range []struct{ R, phi, l0 float64 }{{5, 22.5, 0}, {5, 22.5, 1}, {35, 10, 0}, {8, 10, 1}, {8, 15, 1}} {
+		t.Run(fmt.Sprintf("refuses convex arc of radius %v into a %v degree concave end after %v mm", c.R, c.phi, c.l0),
+			func(t *testing.T) {
+				t.Parallel()
+				body, sel := arcIntoConcave(t, c.R, c.phi, c.l0)
+				_, err := chamfer(t, body, sel)
+				require.ErrorIs(t, err, decad.ErrUnsupported)
+			})
+	}
+	t.Run("convex arc of radius 13 into a 22.5 degree concave end", func(t *testing.T) {
+		t.Parallel()
+		const R, phi = 13.0, 22.5
+		body, sel := arcIntoConcave(t, R, phi, 0)
+		out, err := chamfer(t, body, sel)
+		require.NoError(t, err)
+		want := 20*d*d/2 + math.Pi/3*(R*d*d/2-d*d*d/6) - d*d*d*cot(phi)/6
+		// The convex arc's facets read high, so the removed volume reads a few hundredths low.
+		require.InDelta(t, volumeOf(t, body)-want, volumeOf(t, out), 0.06)
+	})
+
+	// A tongue 1.8 mm wide with a round end, chained smoothly: its top line passes 1.8 mm from the concave corner that
+	// ends the chain, inside the end clip, so the chain is refused.
+	for _, sx := range []float64{1, -1} {
+		t.Run(fmt.Sprintf("refuses a round-ended tongue back past the concave end, mirror %v", sx), func(t *testing.T) {
 			t.Parallel()
-			rad := func(x float64) float64 { return x * math.Pi / 180 }
-			const phi = 22.5
-			p := [2]float64{20 + R*math.Sin(rad(60)), R - R*math.Cos(rad(60))}
-			q := [2]float64{p[0] + 10*math.Cos(rad(60-phi)), p[1] + 10*math.Sin(rad(60-phi))}
 			body := capLoopSubsetBody(t, func(s *sketch.Sketch) {
-				a, b, pp, qq, top, lt := s.CreatePoint(0, 0), s.CreatePoint(20, 0), s.CreatePoint(p[0], p[1]),
-					s.CreatePoint(q[0], q[1]), s.CreatePoint(q[0], 25), s.CreatePoint(0, 25)
-				cc := s.CreatePoint(20, R)
+				p := func(x, y float64) *sketch.Point { return s.CreatePoint(sx*x, y) }
+				v, a, b, c, e, f := p(0, 0), p(0, -10), p(10, -10), p(10, 1.8), p(-0.5, 1.8), p(-0.5, 0)
+				cc := p(-0.5, 0.9)
+				s.CreateLine(v, a)
 				s.CreateLine(a, b)
-				s.CreateArc(cc, b, pp)
-				s.CreateLine(pp, qq)
-				s.CreateLine(qq, top)
-				s.CreateLine(top, lt)
-				s.CreateLine(lt, a)
-				for _, x := range []*sketch.Point{a, b, pp, qq, top, lt, cc} {
-					s.Fix(x)
+				s.CreateLine(b, c)
+				s.CreateLine(c, e)
+				if sx > 0 {
+					s.CreateArc(cc, e, f)
+				} else {
+					s.CreateArc(cc, f, e)
+				}
+				s.CreateLine(f, v)
+				for _, q := range []*sketch.Point{v, a, b, c, e, f, cc} {
+					s.Fix(q)
 				}
 			})
-			sel := topEdges(topEdge{r3.Vec{}, r3.Vec{X: 1}}).Or(decad.EndpointAt(r3.Vec{X: 20, Z: 5}), decad.Circular())
-			out, err := chamfer(t, body, sel)
-			if R == 5 {
-				require.ErrorIs(t, err, decad.ErrUnsupported)
-				return
-			}
-			require.NoError(t, err)
-			want := 20*d*d/2 + math.Pi/3*(R*d*d/2-d*d*d/6) - d*d*d*cot(phi)/6
-			// The convex arc's facets read high, so the removed volume reads a few hundredths low.
-			require.InDelta(t, volumeOf(t, body)-want, volumeOf(t, out), 0.06)
+			sel := topEdges(topEdge{r3.Vec{X: sx * 10, Y: 1.8}, r3.Vec{X: 1}}, topEdge{r3.Vec{X: sx * -0.5}, r3.Vec{X: 1}}).
+				Or(decad.EndpointAt(r3.Vec{X: sx * -0.5, Z: 5}), decad.Circular())
+			_, err := chamfer(t, body, sel)
+			require.ErrorIs(t, err, decad.ErrUnsupported)
 		})
 	}
+
+	// A slot that ends within the end clip's radius of the corner: cut exactly or refused, never cut into.
+	t.Run("concave end beside a short slot inside the clip radius", func(t *testing.T) {
+		t.Parallel()
+		pts := [][2]float64{{0, 0}, {30, 0}, {30, 10}, {10, 10}, {10, 10.2}, {12, 10.2}, {12, 20}, {0, 20}}
+		body := polyBody(t, 1, pts)
+		out, err := chamfer(t, body, topEdges(lineEdge(1, pts[2], pts[3])))
+		if err != nil {
+			require.ErrorIs(t, err, decad.ErrUnsupported)
+			return
+		}
+		require.InDelta(t, volumeOf(t, body)-20*d*d/2, volumeOf(t, out), 1e-4)
+	})
 
 	// The cutter reaches 0.25 mm past a wall, so a far wall closer than that is probed. A slot 0.3 mm wide is clear of
 	// it, and one 0.2 mm wide is cut either exactly or refused, never cut into.
