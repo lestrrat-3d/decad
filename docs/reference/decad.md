@@ -140,7 +140,7 @@ Union/Cut/Intersect  prism/revolve/loft/faceted/mitred sweep/coil,
   boolean-result operand coarser than the pair
     tolerance where the pair meets it                     ErrUnsupported
   cap-loop chamfer operand whose band has a mitered
-    circular wall or a reflex corner                      ErrUnsupported
+    circular wall                                         ErrUnsupported
   brep operand carrying complete-loop chamfer bands
     of such a wall or corner                              ErrUnsupported
   curved-surface tangent, facets never meet               ErrUnsupported
@@ -2202,9 +2202,12 @@ side level and the face holding it to its offset contour; the result is a
 brep body whose patches carry filletLoop(f,l,p). Selected straight edges
 on part of one planar loop form a partial band; a swept common wall can be
 restated as that planar loop. Loops sharing an edge are SL1; complete loops
-mixed with independent straight edges take route V. A neighbour route L
-cannot trim SL2, and an offset miter that folds or cannot be bounded is
-SF1 (both ErrUnsupported).
+mixed with independent straight edges take route V. A line–arc or arc–arc
+join tangent only to the record's rounding, as a sketch fillet or tangent
+constraint records it (sin²θ ≤ 2⁻⁶⁴), builds as a tangent join and its
+sliver widens the published bounds. A neighbour route L cannot trim SL2,
+and an offset miter that folds or cannot be bounded, or a join read as
+tangent that turns more, is SF1 (both ErrUnsupported).
 A prism's complete cap loops take the same arm through its face view and
 return a brep body (RF3). A single cap edge on a strictly convex straight
 prism uses a bounded faceted cutter when that edge or its terminal walls
@@ -2667,6 +2670,12 @@ its last Union is outside the class: placement drops the record Refine
 reads. Placing the refined result instead keeps its bound, grown by the
 rounding the placement charges. A later Boolean on the result reads
 the bounds source published, so refining never loosens what a chain admits.
+
+A straight-bevel sector join (a Union of a revolve blank and copies of one
+point-Loft tooth, still carrying its join record) is the exception to
+"moves no vertex": its cone caps stop refining at a 0.1 mm bound, so Refine
+rebuilds it with finer caps until its bound is at most maxBound. The result
+has new vertices and readings and keeps the bound for later Unions and Cuts.
 
 maxBound is a length: wrong kind is ErrUnitKind, non-finite ErrNotFinite,
 negative ErrNegativeMagnitude and zero ErrDegenerate. A nil context or body
