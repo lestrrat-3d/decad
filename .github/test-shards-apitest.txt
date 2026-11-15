@@ -21,7 +21,7 @@
 #   shard 9:  125.28s over 240 tests
 #   shard 10:  121.67s over 232 tests
 #   shard 11:  124.79s over 236 tests
-#   shard 12:  123.36s over 237 tests
+#   shard 12:  125.56s over 238 tests
 #
 0	0.01	FuzzFillet
 0	0.00	TestArrangeLayersRefusals
@@ -2894,6 +2894,7 @@
 12	0.02	TestCrossingBlindPocketOnDisplacedPlate
 12	0.01	TestCupInchWallEnclosesDenotedCup
 12	8.79	TestCutTwistedSweepCrossesTubeWall
+12	2.20	TestCutTwistedSweepRefinementRimBound
 12	0.00	TestDegenerateSplineRecordRefuses
 12	0.03	TestDenotedLevelNestedPocketEndsOnTheFloor
 12	1.01	TestDirectLoftRotatedCircleFramesPublishRuledHole
