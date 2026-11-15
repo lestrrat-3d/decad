@@ -159,6 +159,21 @@ func TestCutBandSmallFacetFrame(t *testing.T) {
 		require.InDelta(t, 0.1*(0.3+0.225)/2, area, 1e-12)
 	})
 
+	t.Run("a near-collinear facet whose float normal is rounding noise has no plane", func(t *testing.T) {
+		t.Parallel()
+		// Edges of about 100 mm along y and z with x within 1e-12: the exact normal is
+		// 2.4e-13 to 5.8e-13 long, and the float cross product, 1.8e-12 long and of the
+		// wrong sign, passes Normalize's cutoff. The proven bound on the cross product
+		// refuses it. endFaceBand takes (y, z, x) of the facet.
+		w, b, f := endFaceBand(
+			r3.NewVec(-42.354631120916444, -45.57109819819535, -4.557109819819535e-13),
+			r3.NewVec(38.90042164821563, 60.701450137120396, 6.07014501371204e-13),
+			r3.NewVec(50.89431860466475, 76.3881299261864, 7.638812992618639e-13))
+		_, err := w.cutBand(f, b)
+		require.ErrorIs(t, err, decaderr.ErrUnsupported)
+		require.ErrorContains(t, err, "a wall facet has no plane")
+	})
+
 	for name, pts := range map[string][3]r3.Vec{
 		"a facet whose corners are collinear": {
 			r3.NewVec(-0.1, 0.1, 0), r3.NewVec(0.3, 0.1, 0), r3.NewVec(0.5, 0.1, 0),
