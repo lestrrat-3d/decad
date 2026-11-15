@@ -285,10 +285,13 @@ Further conditions:
   wall`), so a document that edge-finishes its mesh results keeps the faces that expect it. Only a rim corner
   above the pair's chord tolerance is split. `Fillet` and `Chamfer` may refuse a split face. A blend that succeeds
   reads the far pieces' facet bounds, which the proof above covers, and its result bound is lower for it.
-  `WithRimSplit` does not make a blend refuse a split face, because no bound a blend reads is unproven.
+  `WithRimSplit` adds no refusal for bounds, because no bound a blend reads is unproven. The refusals that remain come
+  from the split vertex lying off the face's boundary loops.
 - A bounded replay applies the same pass. It charges the scan of the other operand's facets once per far piece, a
-  fixed work per exact distance proof, and the records of each split, and it reserves the output slice's storage
-  before it allocates it or grows it.
+  flat 64 work per exact distance proof, and the records of each split. It reserves the output slice's storage
+  before it allocates it or grows it, and every append to that slice goes through the reservation. The exact-arithmetic
+  temporaries (`proof.Xlerp`, `PointRoundBound`, the rationals inside `DisjointTriDistanceAbove`) reserve no bytes;
+  they are bounded by a constant multiple of the corner sizes, and their cost is the flat 64 work.
 - The rim-split choice lives on the evaluation context, not in the recorded body. A replay of a recorded boolean must
   run under the same option, or it builds a different mesh.
 

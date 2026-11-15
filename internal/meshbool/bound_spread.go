@@ -102,6 +102,7 @@ func SplitSpread(ctx context.Context, kept []KeptFacet, a, b *BoolMesh, floor fl
 		}
 	}
 	var out []KeptFacet
+	var err error
 	var cut [2]map[spreadEdge]*proof.Xpt
 	cut[0], cut[1] = map[spreadEdge]*proof.Xpt{}, map[spreadEdge]*proof.Xpt{}
 	var hint int
@@ -123,7 +124,9 @@ func SplitSpread(ctx context.Context, kept []KeptFacet, a, b *BoolMesh, floor fl
 		}
 		if len(hi) == 0 || len(hi) == 3 {
 			if out != nil {
-				out = append(out, *f)
+				if out, err = appendKept(out, charge, *f); err != nil {
+					return nil, err
+				}
 			}
 			continue
 		}
@@ -138,11 +141,14 @@ func SplitSpread(ctx context.Context, kept []KeptFacet, a, b *BoolMesh, floor fl
 		}
 		if !curved {
 			if out != nil {
-				out = append(out, *f)
+				if out, err = appendKept(out, charge, *f); err != nil {
+					return nil, err
+				}
 			}
 			continue
 		}
-		clearance := f.Delta + maxDelta[1-side]
+		// Rounded up, so the sum is never below the true δ(t) + δ_o.
+		clearance := proofbound.AbsSumUpper(f.Delta, maxDelta[1-side])
 		var pieces [3]KeptFacet
 		split := false
 		for level, margin := range spreadMargins {
@@ -151,7 +157,8 @@ func SplitSpread(ctx context.Context, kept []KeptFacet, a, b *BoolMesh, floor fl
 				return nil, err
 			}
 			if !ok {
-				continue
+				// A deeper level asks for more depth and finds no more points.
+				break
 			}
 			var far [3]bool
 			pieces, far = splitPieces(f, hi, lo, pts)
@@ -165,7 +172,9 @@ func SplitSpread(ctx context.Context, kept []KeptFacet, a, b *BoolMesh, floor fl
 		}
 		if !split {
 			if out != nil {
-				out = append(out, *f)
+				if out, err = appendKept(out, charge, *f); err != nil {
+					return nil, err
+				}
 			}
 			continue
 		}
@@ -184,19 +193,9 @@ func SplitSpread(ctx context.Context, kept []KeptFacet, a, b *BoolMesh, floor fl
 				return nil, err
 			}
 		}
-		if len(out)+3 > cap(out) {
-			// Grow by hand, so the storage append would allocate is reserved first.
-			capacity := 2 * cap(out)
-			if charge != nil {
-				if err := charge(0, 0, uint64(capacity)); err != nil {
-					return nil, err
-				}
-			}
-			grown := make([]KeptFacet, len(out), capacity)
-			copy(grown, out)
-			out = grown
+		if out, err = appendKept(out, charge, pieces[:]...); err != nil {
+			return nil, err
 		}
-		out = append(out, pieces[:]...)
 	}
 	if out == nil {
 		return kept, nil
@@ -303,8 +302,8 @@ func farPiecesClear(ctx context.Context, pieces [3]KeptFacet, far [3]bool, other
 			if TriTriDistance(fl, TriCorners(other, i)) <= clearance {
 				return false, nil
 			}
-			// A separating axis along either facet's normal, read in floats with
-			// their rounding charged, proves the distance without the exact proof.
+			// A separating axis (triGapAbove), read in floats with their rounding
+			// charged, proves the distance without the exact proof.
 			// The float corners of the piece sit within round of its exact ones.
 			if triGapAbove(fl, TriCorners(other, i), clearance+round*(1+0x1p-20)) {
 				continue
@@ -320,6 +319,23 @@ func farPiecesClear(ctx context.Context, pieces [3]KeptFacet, far [3]bool, other
 		}
 	}
 	return true, nil
+}
+
+// appendKept appends items to out, reserving the storage a growth allocates
+// before it allocates it. Growth doubles the capacity, as append does.
+func appendKept(out []KeptFacet, charge BudgetFunc, items ...KeptFacet) ([]KeptFacet, error) {
+	if len(out)+len(items) > cap(out) {
+		capacity := max(2*cap(out), len(out)+len(items))
+		if charge != nil {
+			if err := charge(0, 0, uint64(capacity)); err != nil {
+				return nil, err
+			}
+		}
+		grown := make([]KeptFacet, len(out), capacity)
+		copy(grown, out)
+		out = grown
+	}
+	return append(out, items...), nil
 }
 
 // triGapAbove reports whether the float triangles ta and tb stand farther than
