@@ -677,3 +677,42 @@ func TestFacetedRetainedBlendEndRoundChordRow(t *testing.T) {
 		}
 	}
 }
+
+// TestFacetedRetainedBlendEarOverEndRound joins an ear that overhangs the end
+// round by twice the blend size and rises above the round, so the back root runs on
+// the floor, up the end round and 1.3 up the end face. The end face's facets under
+// the band are small, and each has a raw normal along x shorter than the unit
+// vector the frame of its cut needs (retained-edge-blend §4.3).
+func TestFacetedRetainedBlendEarOverEndRound(t *testing.T) {
+	t.Parallel()
+
+	const size = 1.0
+	c := notchedRoots[1]
+	c.ear = [6]float64{-2, 5, 12.8, 13, -6, 3.3}
+	body := notchedBody(t, c.ear)
+	volBefore, err := body.Volume()
+	require.NoError(t, err)
+
+	out, err := decad.Fillet(t.Context(), body, c.seed(), units.Millimeters(size), decad.WithTangentChain())
+	require.NoError(t, err)
+
+	// The root's section is the square's corner the fillet leaves: its area times the
+	// straight run on the floor and the run up the end face (12.8 - 2 and 3.3 - 2),
+	// plus the corner region on the round, a quarter turn about its axis.
+	af := size * size * (1 - math.Pi/4)
+	added := af*(10.8+1.3) + earRegion(c.radius, 1, size, true, func(rho float64) float64 { return rho * math.Pi / 2 })
+	volAfter, err := out.Volume()
+	require.NoError(t, err)
+	requireVolumeChange(t, volBefore, volAfter, -added)
+
+	mesh, err := out.Tessellate(t.Context(), units.Millimeters(0.1), decad.WithVerification(decad.VerifyAll))
+	require.NoError(t, err)
+	require.True(t, mesh.BoundaryVerified())
+	require.True(t, mesh.VolumeVerified())
+	rep, err := out.Document().Verify(t.Context())
+	require.NoError(t, err)
+	br, err := rep.ForBody(out)
+	require.NoError(t, err)
+	require.Equal(t, decad.Sound, br.Status)
+	requireNoCrossingTriangles(t, out)
+}

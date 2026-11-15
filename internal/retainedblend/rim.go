@@ -359,6 +359,9 @@ func (r *rim) localSide(fp facetedrecord.Payload, wall int) (float64, error) {
 	return 0, refuse
 }
 
+// perpendicular is a unit vector perpendicular to n, which must be a unit
+// vector: it picks the axis from n's X component, so a shorter n can pick an
+// axis parallel to it, and then the vector is zero and the result false.
 func perpendicular(n r3.Vec) (r3.Vec, bool) {
 	pick := r3.NewVec(1, 0, 0)
 	if math.Abs(n.X) > 0.9 {
