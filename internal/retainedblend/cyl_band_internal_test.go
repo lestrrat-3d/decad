@@ -31,7 +31,7 @@ func flatBand(verts ...r3.Vec) (*work, *wallBand, faceLoops) {
 		others: []*bandEnd{side(r3.NewVec(1, 0, 0), r3.Vec{}, 1)},
 	}
 	// The wall z = 0 meets the end plane square.
-	b.ends[0].sine = func(float64) float64 { return 1 }
+	b.ends[0].sine, b.ends[0].planarWall = func(float64) float64 { return 1 }, true
 	return w, b, faceLoops{facets: []int{0}}
 }
 

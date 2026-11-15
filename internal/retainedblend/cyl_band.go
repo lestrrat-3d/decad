@@ -76,6 +76,9 @@ type bandEnd struct {
 	// tag, or 0 when there is none (wallSine). A sign reading (signRead) needs
 	// it; an end plane without one refuses as before.
 	sine func(reach float64) float64
+	// planarWall says the wall is a plane, where the distance bound of a sign
+	// reading is c/s from the held point; on a curved wall it is β + c/s.
+	planarWall bool
 }
 
 // exact is the exact plane q, or nil for the setback generator's half-plane.
@@ -215,25 +218,37 @@ func (b *wallBand) sideAt(pt *bandPt, q int) (int, error) {
 }
 
 // signRead puts pt, which lies within its bound of end plane q at offset v, on
-// the side of v's sign, and raises its bound to cover the distance along the wall
-// to the band's boundary: a held vertex's bound in the work (and w.raised), or the
+// the side of v's sign, and raises its bound to cover the distance to the band's
+// boundary on the wall: a held vertex's bound in the work (and w.raised), or the
 // cut point's own. It reports false, and changes nothing, when the end plane
 // carries no proven lower bound on the sine of the wall's slant to it (bandEnd.sine)
 // or that bound is below minSine, so the reading refuses as before.
 //
-// The side is a choice, not a claim. No residual admits an input claim here: the
-// true point of pt lies within its bound β of pt, as before. pt lies within |v|
-// plus the plane's slack of the plane the exact band is cut at, so its true point
-// lies within c = β + |v| + slack of that plane, on whichever side. The wall meets
-// the plane at a slant of sine s, and the band's boundary on the wall is the line
-// where it crosses the plane, so a true point within c of the plane lies within
-// c/s of that boundary measured along the wall: c is the distance to the plane,
-// c/s only along the wall. s_lo is a proven lower bound of s over the wall within
-// a reach r that c/s_lo(r) lies within (slantBound), so the published bound is
-// c/s_lo rounded up. A kept vertex carries it; a cut point carries it, and a cut
-// of a held edge reads its two ends' raised bounds. That read can raise an end
-// that another plane already puts outside the band: it only widens a bound. When
-// s_lo is below minSine, or the end plane has none, the reading refuses.
+// The side is a choice, not a claim. No residual admits an input claim here. The
+// true point of pt lies within its input bound β of pt, as before. pt lies within
+// |v| plus the plane's slack of the plane the exact band is cut at, so the true
+// point lies within c = β + |v| + slack of that plane, on whichever side: a
+// distance to the plane. The band's boundary on the wall is where the wall
+// crosses the plane. Measured along the wall the true point is at most c/s from it,
+// s_lo the sine of the wall's slant to the plane over the path from the true point
+// to the plane; every point of that path lies within c of the plane, because the
+// offset falls along it, so s_lo(c) holds there (slantBound).
+//
+// The published bound is the distance from the held point to the boundary. On a
+// plane wall, split the held point's error x − v into a part normal to the wall,
+// at most β, and a part across the boundary line within the wall, at most
+// (a + β·cos θ)/s for a = |v| + slack; their root-sum-square is at most
+// √(β² + ((a + β cos θ)/s)²) ≤ (β + a)/s = c/s, since 2aβ cos θ ≤ 2aβ. So a plane
+// wall publishes c/s_lo. On a curved wall the path bends, and the triangle
+// inequality gives β (to the true point) plus c/s_lo (from it to the boundary), so
+// a curved wall publishes β + c/s_lo. A kept vertex carries the bound; a cut point
+// carries it, and a cut of a held edge reads its two ends' raised bounds. That
+// read can raise an end that another plane already puts outside the band: it only
+// widens a bound. When s_lo is below minSine, or the end plane has none, the
+// reading refuses.
+//
+// The input β of a cut point is its crossing bound, which has no slant term of its
+// own (see the follow-up in the design doc); a held vertex's β does not depend on it.
 func (b *wallBand) signRead(pt *bandPt, q int, v float64) (int, bool) {
 	e := b.exact(q)
 	if e == nil || e.sine == nil {
@@ -255,6 +270,9 @@ func (b *wallBand) signRead(pt *bandPt, q int, v float64) (int, bool) {
 	if !ok {
 		return 0, false
 	}
+	if !e.planarWall {
+		bound = proofbound.AbsSumUpper(beta, bound)
+	}
 	s := 0
 	switch {
 	case v > 0:
@@ -274,28 +292,17 @@ func (b *wallBand) signRead(pt *bandPt, q int, v float64) (int, bool) {
 
 // slantBound is the distance c/s along a wall to the boundary of a band whose end
 // plane the wall meets at sine s, for a point within c of the plane. sine(reach)
-// is a proven lower bound on the slant's sine over the wall within reach of the
-// plane. A reach r is accepted when the bound it gives, c/sine(r), lies within r:
-// then the boundary lies within r of the point, where sine(r) holds, and c/sine(r)
-// is the distance to it. The reaches start at twice c/sine(0) and double. It is
-// false when no reach is accepted, or the sine falls below minSine.
+// is a proven lower bound on the slant's sine at wall points within reach of the
+// plane. The path along the wall from the point's foot to the plane stays within c
+// of the plane, because its offset falls along it while the sine stays above zero,
+// so sine(c) bounds the sine on the whole path and the distance is at most
+// c/sine(c). It is false when sine(c) is below minSine.
 func slantBound(c float64, sine func(reach float64) float64) (float64, bool) {
-	s0 := sine(0)
-	if !(s0 >= minSine) {
+	s := sine(c)
+	if !(s >= minSine) {
 		return 0, false
 	}
-	r := 2 * proofbound.DivUpper(c, s0)
-	for range 24 {
-		s := sine(r)
-		if !(s >= minSine) {
-			return 0, false
-		}
-		if bound := proofbound.DivUpper(c, s); bound <= r {
-			return max(c, bound), true
-		}
-		r *= 2
-	}
-	return 0, false
+	return max(c, proofbound.DivUpper(c, s)), true
 }
 
 // undecidedError is a refusal because a point lies within its bound of plane

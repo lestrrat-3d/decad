@@ -228,7 +228,7 @@ func TestSignReadChargeReachesCrossing(t *testing.T) {
 func tiltedBand(s float64, verts ...r3.Vec) (*work, *wallBand, faceLoops) {
 	w, b, f := flatBand(verts...)
 	b.ends[0] = &bandEnd{g: plane{n: r3.NewVec(0, s, math.Sqrt(1-s*s)), o: r3.Vec{}}, sign: 1,
-		sine: func(float64) float64 { return s }}
+		sine: func(float64) float64 { return s }, planarWall: true}
 	return w, b, f
 }
 

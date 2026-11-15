@@ -270,9 +270,9 @@ sign reading on (`clipBySign`); the final test of a held vertex's membership
 (`inside`) does the same. A point that lies within its bound of the end plane
 at an offset `v`, which no face's tag puts on the plane, is then put on the side
 of `v`'s sign (on the plane when `v` is zero), and its bound is raised to
-`c / s_lo`, rounded up, where `c = β + |v| + slack` and `s_lo` is a proven lower
-bound on the sine of the angle between the wall and `G` (`signRead`,
-`slantBound`). A held vertex's bound is raised in the work and reported through
+`c / s_lo` (a plane wall) or `β + c / s_lo` (a curved wall), rounded up, where
+`c = β + |v| + slack` and `s_lo` is a proven lower bound on the sine of the angle
+between the wall and `G` (`signRead`, `slantBound`). A held vertex's bound is raised in the work and reported through
 `raised`, like the raised inner vertices of a curved wall; a cut point's own bound
 is raised. The reading applies to end planes only and only to a band with an exact
 main plane, so R3's band, the main plane, the further planes and the guard keep
@@ -282,17 +282,29 @@ sign reading there raises an end that another plane may already have put outside
 that only widens the bound, and the cut takes the raised bounds.
 
 The side is a choice, not a claim, and no residual admits an input claim. The held
-bound says the vertex's true point lies within `β` of it; that holds as before.
+bound `β` says the vertex's true point lies within `β` of it; that holds as before.
 The vertex lies within `|v|` plus the slack (the plane's own arithmetic and
 displacement charge) of the plane the exact band is cut at, so its true point lies
-within `c` of that plane, on whichever side it is on. That is a distance to the
-plane. The band's boundary on the wall is where the wall crosses the plane, and
-when the wall meets `G` at a slant of sine `s` that line is `c / s` away along
-the wall, not `c`. With the true wall allowed to lie anywhere within the held
-bounds of the held facet, a kept vertex whose foot on the true wall falls on the
-band's side has its nearest point of the true result's boundary at `c / s` (flat
-model; a curved wall adds nothing once `s_lo` is taken over the reach below). The
-published bound is `c / s_lo` for that reason.
+within `c = β + |v| + slack` of that plane, on whichever side it is on. That is a
+distance to the plane. The band's boundary on the wall is where the wall crosses
+the plane, and when the wall meets `G` at a slant of sine `s` it lies `c / s` away
+along the wall from the true point, not `c`. The path along the wall from the true
+point to the plane stays within `c` of the plane, because its offset falls along it
+while the sine stays above zero, so `s_lo(c)` bounds the sine over the whole path.
+The published bound is the distance from the *held* point:
+
+- **Plane wall: `c / s_lo`.** Split the held point's error into a part normal to
+  the wall, at most `β`, and a part across the boundary line within the wall, at
+  most `(a + β·cos θ) / s` for `a = |v| + slack`. Their root-sum-square is at most
+  `√(β² + ((a + β·cos θ)/s)²) ≤ (β + a)/s = c/s`, because `2aβ·cos θ ≤ 2aβ`.
+- **Curved wall: `β + c / s_lo`.** The path bends, so the triangle inequality is
+  used: `β` to the true point and `c / s_lo` from it to the boundary. No curvature
+  term is proven. (At sine 0.866 this is about 2.15 β where a plane gives 1.15 β.)
+
+The flat counterexample (a kept vertex whose foot on the true wall lies on the band's
+side) and the cylinder cases (foot on the band's side, the point inside and outside
+the circle, the axis on either side of `G`, a bore wall) are tests
+(`TestSignReadBoundCoversSlant`, `TestSlantBoundCoversCylinderExactly`).
 
 `s_lo` (`wall_sine.go`) comes from the wall face's retained tag, which must state
 no departure (`TagDeparture` and `AxialDelta` zero): Claim R then puts the true
@@ -301,8 +313,8 @@ wall on it, and its `NormalBound` lowers the sine by at most itself, since
 
 - A plane wall meets `G` at the length of the cross product of the two unit
   normals, less its rounding.
-- A cylinder wall whose axis runs parallel to `G` (`|n·a| ≤ 64 ulp`; the term
-  `|n·a|·scale` is charged) meets it, at a point with unit radial direction `r`, at
+- A cylinder wall whose axis, normalized, runs parallel to `G` (`|n·a| ≤ 64 ulp`;
+  the axial term `|n·a|·(scale + |origin|)` and the rounding of `n·(origin − o)` are charged) meets it, at a point with unit radial direction `r`, at
   `√(1 − (r·n)²)`. A wall point within `reach` of `G` has `|r·n| ≤ (h + reach) / R`,
   `h` the axis's distance from `G`, because `n·(p − o) = n·(c − o) + R·(r·n)` when
   the axial term vanishes. This is `√(R² − (h + reach)²) / R`, the arc route's
@@ -312,10 +324,9 @@ wall on it, and its `NormalBound` lowers the sine by at most itself, since
 - Any other wall, a cylinder with a tilted axis, a cone, a sphere and a wall whose
   tag states a departure, has no `s_lo`, and the reading refuses.
 
-The reach is chosen so the bound is self-consistent: a reach `r` is accepted when
-`c / s_lo(r) ≤ r`, so the boundary lies within `r` of the point, where `s_lo(r)`
-holds. The reaches start at `2c / s_lo(0)` and double. The reading refuses when no
-reach is accepted or `s_lo` falls below `minSine`. What decides the result is
+`reach` is a distance from `G`: `s_lo(reach)` holds at wall points within `reach`
+of `G`. The reading takes `s_lo(c)`, valid on the path above, and refuses when it
+is below `minSine`. What decides the result is
 still what the gates check afterwards, and they only reject: the wall test, the
 strip and taken-cap clearance and the nesting parity are unchanged, so a band that
 overlaps an earlier cut or reaches another part of the wall refuses with their
@@ -325,7 +336,12 @@ whose corner it should be refuses at the setback corner.
 
 The crossing bound of a cut point on an end plane (`max(ends, facet) + slack + τ`)
 and the band corner's carry no slant term either, with or without a sign reading.
-That predates the reading and is recorded as a follow-up.
+That predates the reading and is recorded as a follow-up. H2 relies on it only
+through the input bound `β` of a sign-read cut point, which is its crossing bound:
+on the arc route only cut points made on the other end plane (the main, rim and
+guard planes meet the wall square), on the chain route it depends on how the base
+and setback planes meet the wall. A held vertex's `β` is the held bound and does
+not depend on it.
 
 The facet keeps the rest, triangulated again with every point
 where the band's boundary crosses a held facet edge and every corner of the
