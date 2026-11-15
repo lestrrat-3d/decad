@@ -986,7 +986,10 @@ Every wall beside a chain is a plane normal to the cap or a cylinder with its ax
 set of selected segments, so segments that meet at a sharp corner mitre inside one cutter, as the whole-loop chamfer
 mitres them. The cutter is the region within `t` of the chain, inside the cap, above the bevel plane that leaves the wall
 at depth `dc` and the cap at `dc`. A moved arc is swept between its own end points, which a mitre moves off the source
-radials. Each end of a chain is read on its own, with `reach = dc + over` the cutter's overshoot above the cap:
+radials. A moved arc whose end points the mitres have turned past each other is `ErrUnsupported`. Each end of a chain is
+read on its own, with `over` the cutter's overshoot above the cap and outside the wall (the margin) and
+`reach = dc + 2 over` how far the cutter reaches into the material at its top plus that margin; one `reach` serves the
+extension and the probe of its end:
 
 - A convex end turned by 45 degrees or more reaches past the end along the run's tangent, so the bevel ends on the wall
   beside the next edge, where it runs out onto that wall over `dc` times the cotangent of the turn. The cutter reaches
@@ -999,17 +1002,26 @@ radials. Each end of a chain is read on its own, with `reach = dc + over` the cu
   the cap by `dc / sin(turn)` along that plane, and leaves no square end. The next face grows by a triangle coplanar
   with it, and nothing is removed on the neighbour's side. A turn of exactly 90 degrees stops the bevel on the corner's
   perpendicular. The result removes `dc^3 cot(turn)/6` less than the perpendicular end's wedge. The sector's radius is
-  `1.5 (reach/sin(turn) + dc + over)`, local to the corner.
+  `S = 1.5 (reach/sin(turn) + dc + over)`, local to the corner. The cutter lies within `reach` of its run, so anything
+  of the chain within `S + reach` of the corner would lose material to the clip: only the smooth stretch that leaves
+  the corner may be that close, a stretch past the first sharp corner never, and a convex arc leaving the corner is
+  refused when it crosses the next wall's plane carried back (`2 R sin(turn)` from the corner) within `S + 2 reach`.
 
 Any other end is `ErrUnsupported`: a convex end turned by less than 45 degrees, a concave end turned by more than 90
 degrees, a concave end beside an arc, a run-out longer than the next edge, an arc run whose tangent extension leaves its
-circle by more than 0.0002 mm, and a chain that curls back into the end sector. So is a chain whose extension would meet
-material of the cap or whose offset empties an arc.
+circle by more than 0.0002 mm, and a chain that comes back into the end sector. So is a chain whose extension would
+meet material of the cap, within `reach` of the run's end, or whose margin strip beside the run (the `over` outside
+its wall, except within a concave end's sector and near a corner inside the chain) holds material of another wall of
+the loop, or whose offset empties an arc. The overshoot list retries a smaller `over` after such a refusal, so a slot
+narrower than `over` is cut with a smaller margin when that clears it.
+
+A hole loop of the cap is read the same way as an outer loop: its edges chain, mitre and end like any other, and a
+reflex corner of the material inside a chain (a hole's corner) mitres by removing `dc^3/3` more than the two wedges.
 
 The cutter is a polyhedron held exactly as a mesh solid, with arc chords within 0.0002 mm of their circle, and the
-result is a Boolean Cut: faceted, with the Cut's own readings. A faceted arc run reads about 0.07 mm3 more volume than
-its exact value on a cutter of hub size (arc radius near 13 mm, 22 mm long), so a test of an arc run reads a section or
-allows that excess. A concave end's clip is a second mesh Boolean, which leaves about 5e-6 mm3 on a straight edge.
+result is a Boolean Cut: faceted, with the Cut's own readings. On a concave arc wall (material outside
+the circle) the faceted result reads about 0.07 mm3 more volume per arc run than its exact value on a cutter of hub
+size (arc radius near 13 mm, 22 mm long), so a test of such a run reads a section or allows that excess. A concave end's clip is a second mesh Boolean, which leaves about 5e-6 mm3 on a straight edge.
 `internal/brepmodify/partial_loop_chamfer.go` owns it. It runs after every exact route has declined, and only for a
 symmetric chamfer.
 

@@ -438,8 +438,9 @@ func TestChamferCapLoopSubsetEnds(t *testing.T) {
 			removed := (10+12+20)*band + math.Pi/6*(r*band+band*band/2) - band*band*cot(phi)/2 +
 				band*band*(cot(theta)+cot(turnR1))/2
 			got := before.PolygonArea().Base() - after.PolygonArea().Base()
-			// The held mesh reads within about 0.005 mm of the arc's wall, so the areas agree to a few hundredths.
-			require.InDelta(t, removed, got, 0.05)
+			// The held mesh reads within about 0.0055 mm of the arc's wall, which over its 4.2 mm length moves the area by up
+			// to 0.025; measured, the two mirrors differ from the formula by 0.006 and 0.033.
+			require.InDelta(t, removed, got, 0.04)
 
 			// The bevel's inner edge ends on the next wall's plane carried back over the band at the concave end, and on
 			// the next wall at the acute convex end.
@@ -477,6 +478,144 @@ func TestChamferCapLoopSubsetEnds(t *testing.T) {
 			require.ErrorIs(t, err, decad.ErrUnsupported)
 		})
 	}
+
+	// A chain that comes back near a concave end would lose that stretch to the end's clip, so it is refused.
+	t.Run("refuses a chain that wraps a tab back past the concave end", func(t *testing.T) {
+		t.Parallel()
+		pts := [][2]float64{{-3, 0}, {0, 0}, {0, -10}, {10, -10}, {10, 2}, {-3, 2}}
+		body := polyBody(t, 1, pts)
+		_, err := chamfer(t, body, topEdges(lineEdge(1, pts[4], pts[5]), lineEdge(1, pts[5], pts[0]),
+			lineEdge(1, pts[0], pts[1])))
+		require.ErrorIs(t, err, decad.ErrUnsupported)
+	})
+
+	// A convex arc run that ends at a concave corner meets the next wall's plane carried back again, 2 R sin(phi)
+	// from the corner. R = 5 puts that crossing inside the clip, and R = 13 well outside it.
+	for _, R := range []float64{5, 13} {
+		t.Run(fmt.Sprintf("convex arc of radius %v into a 22.5 degree concave end", R), func(t *testing.T) {
+			t.Parallel()
+			rad := func(x float64) float64 { return x * math.Pi / 180 }
+			const phi = 22.5
+			p := [2]float64{20 + R*math.Sin(rad(60)), R - R*math.Cos(rad(60))}
+			q := [2]float64{p[0] + 10*math.Cos(rad(60-phi)), p[1] + 10*math.Sin(rad(60-phi))}
+			body := capLoopSubsetBody(t, func(s *sketch.Sketch) {
+				a, b, pp, qq, top, lt := s.CreatePoint(0, 0), s.CreatePoint(20, 0), s.CreatePoint(p[0], p[1]),
+					s.CreatePoint(q[0], q[1]), s.CreatePoint(q[0], 25), s.CreatePoint(0, 25)
+				cc := s.CreatePoint(20, R)
+				s.CreateLine(a, b)
+				s.CreateArc(cc, b, pp)
+				s.CreateLine(pp, qq)
+				s.CreateLine(qq, top)
+				s.CreateLine(top, lt)
+				s.CreateLine(lt, a)
+				for _, x := range []*sketch.Point{a, b, pp, qq, top, lt, cc} {
+					s.Fix(x)
+				}
+			})
+			sel := topEdges(topEdge{r3.Vec{}, r3.Vec{X: 1}}).Or(decad.EndpointAt(r3.Vec{X: 20, Z: 5}), decad.Circular())
+			out, err := chamfer(t, body, sel)
+			if R == 5 {
+				require.ErrorIs(t, err, decad.ErrUnsupported)
+				return
+			}
+			require.NoError(t, err)
+			want := 20*d*d/2 + math.Pi/3*(R*d*d/2-d*d*d/6) - d*d*d*cot(phi)/6
+			// The convex arc's facets read high, so the removed volume reads a few hundredths low.
+			require.InDelta(t, volumeOf(t, body)-want, volumeOf(t, out), 0.06)
+		})
+	}
+
+	// The cutter reaches 0.25 mm past a wall, so a far wall closer than that is probed. A slot 0.3 mm wide is clear of
+	// it, and one 0.2 mm wide is cut either exactly or refused, never cut into.
+	for _, gap := range []float64{0.2, 0.3} {
+		t.Run(fmt.Sprintf("concave end beside a short edge opening a %v mm slot", gap), func(t *testing.T) {
+			t.Parallel()
+			pts := [][2]float64{{0, 0}, {30, 0}, {30, 10}, {10, 10}, {10, 10 + gap}, {25, 10 + gap}, {25, 20}, {0, 20}}
+			body := polyBody(t, 1, pts)
+			out, err := chamfer(t, body, topEdges(lineEdge(1, pts[2], pts[3])))
+			if gap < 0.25 && err != nil {
+				require.ErrorIs(t, err, decad.ErrUnsupported)
+				return
+			}
+			require.NoError(t, err)
+			require.InDelta(t, volumeOf(t, body)-20*d*d/2, volumeOf(t, out), 1e-4)
+		})
+	}
+
+	// Material of a lobe lies 1.2 mm past a 45 degree convex end, inside the cutter's reach but not within d + over.
+	t.Run("refuses material just past the run-out of a convex end", func(t *testing.T) {
+		t.Parallel()
+		pts := [][2]float64{{-20, -3}, {2, -3}, {2, 0.4}, {1.2, 0.4}, {1.2, -1}, {-19, -1}, {-19, 0}, {0, 0}, {5, 5}, {-20, 5}}
+		body := polyBody(t, 1, pts)
+		_, err := chamfer(t, body, topEdges(lineEdge(1, pts[6], pts[7])))
+		require.ErrorIs(t, err, decad.ErrUnsupported)
+	})
+
+	// A 4 degree arc between two 60 degree corners has its offset consumed by the mitres: a clean refusal, not a sweep
+	// the long way round.
+	t.Run("refuses an arc consumed by its mitres", func(t *testing.T) {
+		t.Parallel()
+		rad := func(x float64) float64 { return x * math.Pi / 180 }
+		c := [2]float64{20 - 5*math.Sin(rad(60)), 5 * math.Cos(rad(60))}
+		q := [2]float64{c[0] + 5*math.Cos(rad(-26)), c[1] + 5*math.Sin(rad(-26))}
+		e := [2]float64{q[0] + 10*math.Cos(rad(124)), q[1] + 10*math.Sin(rad(124))}
+		body := capLoopSubsetBody(t, func(s *sketch.Sketch) {
+			a, b, qq, ee, g := s.CreatePoint(0, 0), s.CreatePoint(20, 0), s.CreatePoint(q[0], q[1]),
+				s.CreatePoint(e[0], e[1]), s.CreatePoint(0, e[1])
+			cc := s.CreatePoint(c[0], c[1])
+			s.CreateLine(a, b)
+			s.CreateArc(cc, b, qq)
+			s.CreateLine(qq, ee)
+			s.CreateLine(ee, g)
+			s.CreateLine(g, a)
+			for _, p := range []*sketch.Point{a, b, qq, ee, g, cc} {
+				s.Fix(p)
+			}
+		})
+		sel := topEdges(topEdge{r3.Vec{}, r3.Vec{X: 1}}, lineEdge(1, q, e)).Or(decad.EndpointAt(r3.Vec{X: 20, Z: 5}),
+			decad.Circular())
+		_, err := chamfer(t, body, sel)
+		require.ErrorIs(t, err, decad.ErrUnsupported)
+	})
+
+	// Two edges of a rectangular hole's loop meet at a corner that is reflex in the material: the two bevels meet along
+	// a mitre that removes d^3/3 more than the edges' wedges.
+	t.Run("two chained edges of a hole", func(t *testing.T) {
+		t.Parallel()
+		ctx := t.Context()
+		w := sketch.NewWorld()
+		f, err := r3.NewFrame(r3.Vec{}, r3.Vec{X: 1}, r3.Vec{Y: 1})
+		require.NoError(t, err)
+		pl, err := w.CreatePlaneFromFrame(f)
+		require.NoError(t, err)
+		s, err := w.CreateSketch(pl)
+		require.NoError(t, err)
+		for _, poly := range [][][2]float64{{{0, 0}, {30, 0}, {30, 20}, {0, 20}}, {{10, 5}, {20, 5}, {20, 15}, {10, 15}}} {
+			ps := make([]*sketch.Point, len(poly))
+			for i, p := range poly {
+				ps[i] = s.CreatePoint(p[0], p[1])
+				s.Fix(ps[i])
+			}
+			for i := range ps {
+				s.CreateLine(ps[i], ps[(i+1)%len(ps)])
+			}
+		}
+		_, err = s.Solve(ctx)
+		require.NoError(t, err)
+		var pr *sketch.Profile
+		for _, p := range s.Profiles() {
+			if p.Valid && len(p.Holes) == 1 {
+				pr = p
+			}
+		}
+		require.NotNil(t, pr)
+		body, err := decad.Extrude(ctx, decad.New(), s, pr, decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
+		require.NoError(t, err)
+		out, err := chamfer(t, body, topEdges(topEdge{r3.Vec{X: 10, Y: 5}, r3.Vec{X: 1}}, topEdge{r3.Vec{X: 20, Y: 5}, r3.Vec{Y: 1}}))
+		require.NoError(t, err)
+		require.True(t, out.IsSolid())
+		require.InDelta(t, volumeOf(t, body)-(20*d*d/2+d*d*d/3), volumeOf(t, out), 1e-4)
+	})
 
 	t.Run("refuses a concave end beside an arc", func(t *testing.T) {
 		t.Parallel()
