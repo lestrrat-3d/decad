@@ -155,8 +155,12 @@ connector-line crossings next to one strictly inside root arc. The second
 has two fitted-spline crossings with strict source-side transitions and a
 strict local coordinate derivative. All other whole entities need strict
 Sketch side certificates with margins above the source-fan displacement and
-finite-meridian allowance. A missing, stale, approximate or ambiguous answer
-refuses the route. A Partial edge is admitted only on the fitted route and only
+finite-meridian allowance. A whole arc takes its side from Sketch's general
+arc proof, which covers any counter-clockwise arc shorter than a half turn at
+any position, such as a tooth's concave fillet arcs between its flanks and its
+run-out lines. decad reads the certificate's side and margin and never
+re-proves them. A missing, stale, approximate or ambiguous answer refuses the
+route, and so does an arc whose margin is not above the allowance. A Partial edge is admitted only on the fitted route and only
 when Sketch reports its bounds exact (`TExact`). Two kinds qualify. A fitted
 spline fragment must record exactly the span Sketch reports, in the edge's walk
 direction, and its cone crossing must lie strictly inside that span. A circle

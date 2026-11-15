@@ -214,8 +214,9 @@ convex polygon: the facet is clipped by `G`'s exact tag plane at each such
 end, then by the half-plane that holds the axis and the generator. A vertex
 is placed on a side of a plane only when it lies farther from the plane than its
 bound plus the slack and `τ`; one within that distance is undecided there,
-except the edge's corner and the wall's chain along `G`, which lie on `G`'s
-plane by construction. Every band plane reads each held vertex, and a plane
+except the edge's corner, the wall's chain along `G`, and, on the arc and chain
+routes, the vertices that bound a face whose retained plane tag is `G`'s tag
+exactly, which lie on `G`'s plane by construction (below). Every band plane reads each held vertex, and a plane
 that places it outside proves it outside the band: the vertex's readings on the
 other planes are then never used, so a feature of the wall past an end plane,
 such as a cross hole, and the run of cut vertices an earlier blend left along
@@ -229,12 +230,42 @@ from the polygon, and the deferred plane then never reads it. A plane still
 refusing after every other plane is applied refuses the cut (SR5): "a vertex of
 the wall lies on an end face's plane", or, where the undecided vertex lies on
 or inside every other band plane, "an earlier cut on an end face's plane lies
-within the blend's reach". No record of which vertices an earlier blend made
-is kept, so a vertex on `G` that no other plane puts outside is never read as
-lying on `G`. A crossing of a held edge reads both of the edge's vertices, and
-so does a corner of the band the clip made on a chord along `G`: a cut of a
-facet edge that runs along `G` between a vertex on `G` and a vertex that only
-lies within its bound of `G` is undecided, and refuses. The facet keeps the rest, triangulated again with every point
+within the blend's reach". A vertex on `G` that no other plane puts outside and
+that no face's tag puts on `G` is never read as lying on `G`, and no record of
+which vertices an earlier blend made is kept: a cut vertex an earlier blend made on `G`
+is not read as on it.
+
+On the arc and chain routes (an exact main plane; R3's angle-main band keeps the
+rules above) the end plane's `on` set also holds every vertex of the boundary of
+a face whose retained tag is `G`'s exactly (`band_provenance.go`). The tags are
+equal when their normals are parallel and one origin lies on the other's plane,
+both read on the tags' floats as rationals, and the face states no departure
+(`TagDeparture`, `NormalBound` and `AxialDelta` zero, the tag its own record).
+This is sound by retention Claim R, which puts every true point of a retained
+face's patch on its tag, and by the vertex bound, which puts a boundary vertex's
+true point in the closure of every face it bounds: that point lies on `G`, and the
+vertex's bound already covers its distance from it. It charges nothing. A vertex
+inside a face's fan, and a vertex of a face whose tag is one float step off, is
+not admitted. Two consequences follow:
+
+- A cut of a held edge whose two ends both lie on a band plane lies on it too:
+  the point lies within its facet bound of the affine segment between the ends'
+  true points, which lies on the plane, and the bound the cut carries covers
+  that. The cut records both planes (`crossing`). When it is the main plane's cut
+  along an end plane it is the band's corner there, and it is not a vertex of the
+  wall's row. A polygon edge on a facet's own boundary whose two ends lie on an
+  end plane joins that plane's run, as a chord inside a facet does.
+- A held edge that receives such a cut vertex is split in every facet that keeps
+  it, of any face and whether the cut emitted the facet unchanged or the mesh
+  kept it: the facet is fanned from its opposite corner through the vertices on
+  the edge (`splitSeams`, applied before the strip's clearance test and in the
+  build). The vertex lies on the held edge within its bound, so the facet's
+  region and claims do not change. Without the split the facet meets the strip
+  across a T-junction.
+
+A cut that lies within its bound of `G` on an edge that is not along `G` still
+has no decided side, and a vertex an earlier blend made on `G` is such a cut.
+The facet keeps the rest, triangulated again with every point
 where the band's boundary crosses a held facet edge and every corner of the
 band inside it. A crossing point is read from the held edge's two vertices,
 so the two facets beside the edge make the same point, and takes the larger of
@@ -1105,7 +1136,7 @@ of that computation.
 | **SR2** | two selected edges share a vertex and are neither a mitre run (§4.7) nor corners of perpendicular faces (§4.8), or a selected edge continues tangentially into a neighbour | no transition built | `ErrUnsupported` |
 | **SR3** | no blend of that size exists: `R − r ≤ 0` for an inside ball (§4.2), `φ` within 10⁻⁹ of 0 or π, a chamfer distance of zero or below, an R6 setback that reaches the axis or runs past the sphere's pole (§4.5), or an R7 fillet inside the larger cylinder with `2ρ ≥ R − r`, where no ball touches both walls (§4.10) | no regular blend | `ErrDegenerate` |
 | **SR4** | the setback does not fit (§6.2) and the held bounds prove it does not | the blend consumes the face | `ErrDegenerate` |
-| **SR5** | the setback might not fit and the held bounds cannot decide it, or a plane that crosses an R6 sphere below `minSine` (§4.5), or an end vertex of an R1 edge is not a three-face corner with a retained planar `G`, or a chain's sense or `G`'s turn at the vertex is undecided (§5.0), or `G` turns the wrong way: a concave edge needs a reflex corner of `G`, or a convex one where `A` or `B` is reflex at the vertex, and a convex edge outside the R1 route (plane–cylinder, arc, cylinder–cylinder, mitre run) needs a convex one; or both `A` and `B` turn reflex at the vertex, or a convex edge meets a reflex face other than an R3 wall that extends past the vertex beside a plane that trims there (§5.0), or another part of `G` comes within the blend's reach of the vertex, or a vertex of an R3 wall lies within its bound of an end plane the band is clipped by, or of the band's generator, unless another band plane puts it outside the band (§4.3), or the end cap an R3 or an R4 end face takes is not a simple polygon, or an R3 fillet's tangent point on the plane lies no farther from the wall's circle than the wall's held cut may at the cap (§5.0), or an R4 fillet's end curve lies no farther from the wall's cut in an end plane than that cut may, or a vertex of an R4 wall that lies on both sides of its plane lies within its bound of the band's planes, or another part of such a wall, or a chord of its boundary, comes within the band's reach, or the wall's facets along the rim decide no side or disagree (§4.4), or another feature comes within an R7 chamfer's or fillet's reach, or an R7 fillet's cell, window, cut ring or band test fails (§4.9, §4.10), or an arc's rows need more than 1,024 rows for their chords in an end plane to certify within `τ` (§6.3), or a corner's sphere patch needs more than 1,024 rows to stay within the corner route's tolerance, or a revolve strip's row needs more than 4,096 columns for its azimuth term's share of `τ` (§6.3, Strip triangles) | body exists; the evaluator cannot prove its construction | `ErrUnsupported` |
+| **SR5** | the setback might not fit and the held bounds cannot decide it, or a plane that crosses an R6 sphere below `minSine` (§4.5), or an end vertex of an R1 edge is not a three-face corner with a retained planar `G`, or a chain's sense or `G`'s turn at the vertex is undecided (§5.0), or `G` turns the wrong way: a concave edge needs a reflex corner of `G`, or a convex one where `A` or `B` is reflex at the vertex, and a convex edge outside the R1 route (plane–cylinder, arc, cylinder–cylinder, mitre run) needs a convex one; or both `A` and `B` turn reflex at the vertex, or a convex edge meets a reflex face other than an R3 wall that extends past the vertex beside a plane that trims there (§5.0), or another part of `G` comes within the blend's reach of the vertex, or a vertex of an R3 wall lies within its bound of an end plane the band is clipped by, or of the band's generator, unless another band plane puts it outside the band or, on an arc or chain band, a face whose tag is that end plane's puts it on the plane (§4.3), or the end cap an R3 or an R4 end face takes is not a simple polygon, or an R3 fillet's tangent point on the plane lies no farther from the wall's circle than the wall's held cut may at the cap (§5.0), or an R4 fillet's end curve lies no farther from the wall's cut in an end plane than that cut may, or a vertex of an R4 wall that lies on both sides of its plane lies within its bound of the band's planes, or another part of such a wall, or a chord of its boundary, comes within the band's reach, or the wall's facets along the rim decide no side or disagree (§4.4), or another feature comes within an R7 chamfer's or fillet's reach, or an R7 fillet's cell, window, cut ring or band test fails (§4.9, §4.10), or an arc's rows need more than 1,024 rows for their chords in an end plane to certify within `τ` (§6.3), or a corner's sphere patch needs more than 1,024 rows to stay within the corner route's tolerance, or a revolve strip's row needs more than 4,096 columns for its azimuth term's share of `τ` (§6.3, Strip triangles) | body exists; the evaluator cannot prove its construction | `ErrUnsupported` |
 | **SR6** | the held mesh disagrees with the exact vertex of its three tags by more than the vertex bound plus slack (§6.3) | the record and the mesh do not describe one solid | `ErrUnsupported` |
 | **SR7** | a facet the rewrite keeps outside the new strip meets a strip facet, or a facet of an end face that gains a cap, that it shares no vertex with (the strip clearance of retained-modify-reach §5.6, run before the build), or the rewritten mesh fails the held audit (watertight, shells nested with consistent signs; the audit tests no facet pair for intersection) | the result is invalid | `ErrDegenerate` when the audit proves a face inside out (modify S8), else `ErrUnsupported` |
 

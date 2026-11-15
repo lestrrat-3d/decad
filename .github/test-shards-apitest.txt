@@ -3071,6 +3071,8 @@
 12	0.00	TestFacetedRetainedBlendNotchedRoundRefusals
 12	0.00	TestFacetedRetainedBlendSharedBackPlane
 12	0.00	TestFacetedRetainedBlendSharedBackPlaneRefusals
+12	0.00	TestFacetedRetainedBlendSharedEndPlanes
+12	0.00	TestFacetedRetainedBlendSharedEndPlanesRefusals
 12	0.00	TestFilletLoopNearTangentJoins
 12	0.00	TestFilletLoopNearTangentArcJoins
 12	0.00	TestFilletLoopNearTangentCut
@@ -3079,3 +3081,5 @@
 12	0.00	TestFilletLoopNearTangentInchRadius
 12	0.00	TestCapBlendReflexDBoreCut
 12	0.00	TestCapBlendReflexLBodyBoolean
+12	0.00	TestUnionArcToothSectorJoin
+12	0.00	TestUnionArcToothSectorJoinRefusals

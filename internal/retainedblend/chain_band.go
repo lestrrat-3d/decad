@@ -80,6 +80,9 @@ func (w *work) newChainBand(en chainEntry, facets []int, up, oP r3.Vec, tW float
 		for _, v := range ec.wallChain {
 			on[v] = true
 		}
+		for v := range w.onTagPlane(w.faceAt(ec.faceIx)) {
+			on[v] = true
+		}
 		band.ends[i] = &bandEnd{g: ec.g, sign: sign, on: on}
 	}
 	return band, nil
