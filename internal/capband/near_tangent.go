@@ -203,7 +203,7 @@ func twoArcCharge(first, second cornerSegment, v [2]*big.Rat, sinSq *big.Rat, am
 //
 // restate reads every off-radius arc about its restatedCentre, as a chamfer
 // band's admission does (agent-docs/tessellation-reach-design.md §7.1).
-func NearTangentCharges(budget *proofbound.WorkBudget, loop sectionrecord.LoopRecord, walks []survey2d.SideWalk, amounts []float64, amountDelta float64, restate bool) ([]NearTangentCharge, error) {
+func NearTangentCharges(budget *proofbound.WorkBudget, loop sectionrecord.LoopRecord, walks []survey2d.SideWalk, amounts []float64, amountDelta float64, restate bool, reflex []bool) ([]NearTangentCharge, error) {
 	n := len(walks)
 	if n == 1 && walks[0].Closed {
 		return nil, nil
@@ -219,6 +219,9 @@ func NearTangentCharges(budget *proofbound.WorkBudget, loop sectionrecord.LoopRe
 		p := (i + n - 1) % n
 		prev, cur := walks[p], walks[i]
 		if prev.IsLine() && cur.IsLine() {
+			continue
+		}
+		if reflex != nil && reflex[i] {
 			continue
 		}
 		prevSeg, err := sectionrecord.NormalizeSegment(loop.Segments[prev.Segs[len(prev.Segs)-1]])

@@ -78,14 +78,36 @@ func (lm *LoopMesh) Proof() tessellation.CapBlendLoopProof {
 	}
 }
 
+// connectorsAdmitted reports whether the payload's mesh charges a reflex
+// corner's apex fan: a prism cap-loop chamfer. A draft, a fillet and a
+// loft-source band keep every connector station unbounded, so a reflex corner
+// there stays refused by the admission (cornerClass).
+func connectorsAdmitted(cbp Payload) bool {
+	return !cbp.Draft && !cbp.Fillet && cbp.LoftSource == nil
+}
+
 // CapMotion reads the loop's numeric record through internal/tessellation.
 func CapMotion(budget *proofbound.WorkBudget, cbp Payload, lm *LoopMesh) error {
+	// A restated arc moves every connector station by at most its shift, which
+	// the connector's order check charges (§7.1).
+	shift := 0.0
+	if _, restate := cbp.cornerClass(); restate {
+		terms, ok := capband.OffRadiusLoop(lm.Loop, cbp.loopReach(lm))
+		if !ok {
+			return fmt.Errorf(`%w: this %s's restated arcs state no finite shift`, decaderr.ErrUnsupported, cbp.Noun())
+		}
+		shift = terms.Shift
+	}
 	in := tessellation.CapBlendMotionInput{
+		RestateShift:      shift,
 		CapBlendLoopProof: lm.Proof(),
 		Loop:              lm.LoopIndex, Segments: lm.Loop.Segments,
 		CapPts: slices.Clone(lm.CapPts), CapWallStart: lm.CapWallStart,
 		Whole: lm.Whole, D: cbp.LoopOffset(lm.LoopIndex), DDelta: cbp.LoopSetback(lm.LoopIndex).DcDelta,
-		Amounts: cbp.WalkAmounts(lm.LoopIndex, lm.Walks, cbp.LoopOffset(lm.LoopIndex)),
+		Amounts:    cbp.WalkAmounts(lm.LoopIndex, lm.Walks, cbp.LoopOffset(lm.LoopIndex)),
+		Connectors: connectorsAdmitted(cbp),
+		Joins:      SampleJoins(lm.Joins), CapArcStart: lm.CapArcStart, CapBound: lm.CapBound,
+		SideBound: lm.SideBound, SideStart: lm.SideStart,
 	}
 	in.BandDelta[0], in.HasBandDelta[0] = cbp.BandDelta[BandKey{Loop: lm.LoopIndex, Start: true}]
 	in.BandDelta[1], in.HasBandDelta[1] = cbp.BandDelta[BandKey{Loop: lm.LoopIndex, Start: false}]
@@ -97,7 +119,8 @@ func CapMotion(budget *proofbound.WorkBudget, cbp Payload, lm *LoopMesh) error {
 	return nil
 }
 
-// ChordVolume adapts the resolved loops to the slice-wise proof.
+// ChordVolume adapts the resolved loops to the slice-wise proof. Every
+// lm.CapMotion must be filled first (CapMotion): the connector term reads it.
 func ChordVolume(cbp Payload, lms []LoopMesh) float64 {
 	loops := make([]tessellation.CapBlendLoopProof, len(lms))
 	for i := range lms {
@@ -111,7 +134,21 @@ func ChordVolume(cbp Payload, lms []LoopMesh) float64 {
 		h := cbp.DraftBandHeightUpper()
 		height = [2]float64{h, h}
 	}
-	return tessellation.CapBlendChordVolume(height, loops)
+	total := tessellation.CapBlendChordVolume(height, loops)
+	if !connectorsAdmitted(cbp) {
+		return total
+	}
+	// The apex fan of every reflex connector: its chord term is part of
+	// Mchord (agent-docs/tessellation-reach-design.md §7, "Reflex connector").
+	for i := range lms {
+		lm := &lms[i]
+		in := tessellation.CapBlendMotionInput{
+			CapBlendLoopProof: lm.Proof(), CapWallStart: lm.CapWallStart, CapArcStart: lm.CapArcStart,
+		}
+		total = proofbound.AbsSumUpper(total, tessellation.CapBlendConnectorVolume(
+			height, in, lm.CapPts, lm.CapMotion, cbp.LoopOffset(lm.LoopIndex), cbp.LoopSetback(lm.LoopIndex).DcDelta))
+	}
+	return total
 }
 
 // NearTangentVolume is agent-docs/draft-design.md §9.1.1's corner charge for a
@@ -143,7 +180,16 @@ func NearTangentVolume(budget *proofbound.WorkBudget, cbp Payload, lms []LoopMes
 		}
 		height := cbp.bandHeightUpper(lm)
 		amounts, amountDelta := sharp(lm.LoopIndex, lm.Walks)
-		charges, err := capband.NearTangentCharges(budget, lm.Loop, lm.Walks, amounts, amountDelta, restate)
+		// A reflex corner's connector is charged by ChordVolume and CapMotion,
+		// not here: only a chamfer (restate) admits it.
+		var reflex []bool
+		if restate && lm.Joins != nil {
+			reflex = make([]bool, len(lm.Joins))
+			for k, j := range lm.Joins {
+				reflex[k] = j.Arc
+			}
+		}
+		charges, err := capband.NearTangentCharges(budget, lm.Loop, lm.Walks, amounts, amountDelta, restate, reflex)
 		if err != nil {
 			return 0, err
 		}

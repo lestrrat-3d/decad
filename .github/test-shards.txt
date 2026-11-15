@@ -12,16 +12,16 @@
 #   shard 0:   65.22s over 23 tests
 #   shard 1:   10.29s over 23 tests
 #   shard 2:   38.75s over 24 tests
-#   shard 3:    9.95s over 21 tests
-#   shard 4:    6.75s over 19 tests
-#   shard 5:   12.06s over 20 tests
+#   shard 3:    9.95s over 22 tests
+#   shard 4:    6.75s over 20 tests
+#   shard 5:   12.06s over 21 tests
 #   shard 6:   11.79s over 22 tests
 #   shard 7:   42.39s over 28 tests
 #   shard 8:    9.25s over 22 tests
 #   shard 9:   10.37s over 18 tests
 #   shard 10:   13.98s over 25 tests
 #   shard 11:   10.87s over 21 tests
-#   shard 12:   12.29s over 23 tests
+#   shard 12:   12.29s over 20 tests
 #
 0	0.00	Example_quickstart
 0	0.00	TestAxialLoftPrismUnionRefusesUnequalCapsAndCancellation
@@ -29,18 +29,18 @@
 0	0.00	TestCICPUClassShard3
 0	0.16	TestCLAUDEMDLayoutStaysCompact
 0	3.07	TestCertifyFacetedCopiesPassesExactMaps
+0	0.00	TestConeFromFaceCancelled
 0	41.81	TestConeHeelBooleanGates
-0	0.00	TestContactBoxAdmissionGates
 0	0.01	TestContactPairPlacedFacetedFloorExactTouch
 0	0.03	TestContainedCutMomentEvidenceRollback
 0	0.13	TestExactCopyUsesContainedCutSourceMassProperties
 0	4.15	TestFacetedSourcePatchFallback
-0	0.00	TestLoftContactOccupancyReadsVaryingRecordedWalls
+0	0.00	TestLoftCertifiedRewriteWorkLimitKeepsDefault
 0	0.02	TestLoftContactPartitionOtherPrismCarrier
 0	0.23	TestLoftFacesConeTangentEndCancelledDuringEvaluation
-0	0.00	TestOffsetAdmissionGates
+0	0.00	TestLoftVolumeHullCoverIndependentTetra
+0	0.00	TestPointConeOutsideWitnessRejectsUncertainContact
 0	0.01	TestPointConeSourceGates
-0	0.00	TestPointPlaneCapDroppedCoordinateAcceptsNonReducedByValue
 0	8.26	TestPrismPatternFilletPastShortRadialLine
 0	0.11	TestQuarterSourceHeldY3ReverseOrder
 0	0.31	TestRetainedBlendGroupsRecordSource
@@ -53,18 +53,18 @@
 1	0.00	TestCICPUClassShard4
 1	3.01	TestCertifySectorAboutTiltedAxis
 1	0.01	TestCircleSourceCandidateMutationDuringReplay
+1	0.00	TestContactBoxAdmissionGates
 1	0.23	TestCounterboreShellMeshVolumeProof
-1	0.00	TestDirectLoftCircleGateRejectsEqualBaseDifferentRecord
 1	0.23	TestExactCopyMassQueriesAreReadOnly
 1	1.61	TestFacetedCopyLineageDirectTransfer
 1	0.09	TestLoftCapBandNoBoreChamfersBothOuterLoops
-1	0.00	TestLoftContactOrderReadsVaryingRecordedLines
+1	0.00	TestLoftCircleSourceSpanRefusesInvalidRecord
 1	0.01	TestLoftContactPartitionInteriorCutIsNotCapChord
 1	0.70	TestLoftCylinderCommonPlacementBoreEligibilityPrecedesRebuild
 1	0.80	TestLoftCylinderCommonPlacementLargeRepeatedShift
-1	0.00	TestOperationDiagnosticEnumsAndBooleanError
+1	0.00	TestLoftVolumeHullZeroWidthAndMidWorkCancellation
 1	3.18	TestPointConeBooleanGates
-1	0.00	TestPrivateConstructionKeepsBodiesAndProducerNumbersLocal
+1	0.00	TestPointConeUpperCapNodeMatchingFaces
 1	0.01	TestPublicCirclePrimitiveActiveCancellation
 1	0.12	TestQuarterSourceHeldY1RealProducerGate
 1	0.02	TestShiftedRetryGroupsKeepSource
@@ -72,19 +72,19 @@
 2	0.04	TestBlindPocketShellMeshVolumeProof
 2	0.00	TestCICPUClassShard0
 2	0.00	TestCICPUClassShard5
-2	0.00	TestDyadicDirectedRoundingMatchesTheRationalOnes
+2	0.00	TestDirectLoftCircleGateRejectsEqualBaseDifferentRecord
 2	0.11	TestExactCopyMomentScope
 2	0.24	TestLoftCapBandReflexVolumeProofAndSharpBore
-2	0.00	TestLoftContactPartitionBentPhysicalSeamKeepsRationalTrace
+2	0.00	TestLoftContactOccupancyReadsVaryingRecordedWalls
 2	0.01	TestLoftContactPartitionCapMapRefusesAmbiguousFragments
 2	0.02	TestLoftContactPartitionRealVaryingCapJunctions
 2	0.16	TestLoftCurvedSourceCapsRealIndependentWedgeRefusesWithoutBoundaryProof
 2	0.40	TestLoftCylinderCommonPlacementRefusesUnequalPoses
-2	0.00	TestOperationErrorCopiesOptionalDetailsAndUnwrapsOriginal
+2	0.00	TestMirrorFaceStatedAxialDelta
+2	0.00	TestPointConeUpperFarPlaneNodeRequiresCapCharge
 2	0.01	TestPointPlaneCapDroppedCoordinateMatchesRawRat
 2	0.13	TestPositiveBoundFacetedUnionRefusesToolBelowLowerFace
 2	0.23	TestPrismPatternUnionOfTangentRootJoinsBySectionUnion
-2	0.00	TestQuarterRootBracketPreflight
 2	0.11	TestRegroupSurfacesInvariantBreaks
 2	0.64	TestReplayTrialChordRealPublicProducers
 2	26.41	TestRimToothPatternJoinsBySectionUnion
@@ -98,14 +98,15 @@
 3	0.06	TestCircleExactAffineAllowance
 3	0.01	TestCombineToolsAdditionalConsumptionIsAtomic
 3	0.34	TestConeFromFaceCancelledDuringConstruction
-3	0.00	TestDyadicSqrtBracketsMatchTheRationalOnes
+3	0.00	TestDyadicDirectedRoundingMatchesTheRationalOnes
 3	0.05	TestExactCopyMomentEvidenceRollback
+3	0.00	TestLoftContactOrderReadsVaryingRecordedLines
 3	0.01	TestLoftContactPartitionRealProducerRefusals
-3	0.00	TestLoftContactPartitionSourceAndWorkRefusals
 3	0.89	TestLoftFaceRatHelpersMatchRawRat
 3	3.15	TestLoftFacesThreeCapConeContinuationKeepsSource
 3	0.75	TestLoftVolumeComposeRealVaryingTabBothOrders
-3	0.00	TestOperationErrorPreservesKnownFailureAndSkipsTypedErrors
+3	0.00	TestOffsetAdmissionGates
+3	0.00	TestPointPlaneCapDroppedCoordinateAcceptsNonReducedByValue
 3	2.58	TestPrismPatternFilletBodyGates
 3	0.22	TestPrismPatternUnionOfCopiedExtrudes
 3	0.01	TestPublicCirclePrimitiveMutationDuringReplay
@@ -117,35 +118,37 @@
 4	0.01	TestCircleSourceCandidateChordConsumedByPlacement
 4	0.01	TestContactCylinderAdmissionGates
 4	0.06	TestDirectLoftRuledCircleWallHasBodyNode
-4	0.00	TestEmptyBooleanDiagnosticsKeepAnAcceptedShift
+4	0.00	TestDyadicSqrtBracketsMatchTheRationalOnes
 4	0.12	TestExactCopyMomentHistoryAndRetiredSource
 4	1.47	TestGroupUnionInputsUsesPublicHistory
 4	0.05	TestLoftContactOutputBoundarySourceRefusals
-4	0.00	TestLoftContactSeamReadsVaryingRecordedLines
+4	0.00	TestLoftContactPartitionBentPhysicalSeamKeepsRationalTrace
 4	0.95	TestLoftCylinderBoreCentroidDiameter
 4	0.69	TestLoftCylinderUnionCentroidDiameter
 4	0.10	TestLoftFitSplineSourceCapsRealWedge
 4	0.62	TestObliqueBossJunctionFilletPublicWorkflow
 4	0.01	TestObliqueBossRejectsPartialJunctionSource
-4	0.00	TestOperationHistoryRemovePublishesZeroOutput
+4	0.00	TestOperationDiagnosticEnumsAndBooleanError
 4	1.73	TestPointConeBooleanDeclinesMixedAxes
 4	0.22	TestPrismPatternUnionSelectsProvenAxialChains
+4	0.00	TestPrivateConstructionKeepsBodiesAndProducerNumbersLocal
 4	0.01	TestSweepPairPlacedFacetedFloorImpactAndDeparture
 4	0.00	TestThickenAdmissionGates
 4	0.70	TestTwistLocalAreaRealBooleanArcSubset
 5	0.00	TestCICPUClassShard1
 5	0.00	TestCICPUClassShard7
 5	0.01	TestContactSphereAdmissionGates
-5	0.00	TestExactRotationAtTinyAngleHasHiddenTranslation
-5	0.00	TestLoftCylinderCommonPlacementRejectsOrdinaryQuarterTurn
+5	0.00	TestEmptyBooleanDiagnosticsKeepAnAcceptedShift
+5	0.00	TestLoftContactPartitionSourceAndWorkRefusals
 5	0.11	TestLoftFacesConeTangentEndBuildsExactEnd
 5	0.02	TestLoftFacesConeTangentEndRefuses
 5	2.54	TestLoftFacesTangentHeelRefusesOtherCone
 5	0.04	TestLoftQuarterWallOrderRealSketchPair
-5	0.00	TestOperationHistorySnapshotAndFaceCoverage
+5	0.00	TestOperationErrorCopiesOptionalDetailsAndUnwrapsOriginal
 5	1.63	TestPlacedProxyShellsChargeExactCopies
 5	0.01	TestPointConeSourceReadsGeneralAxis
 5	0.43	TestPrismPatternFilletOfCopiedExtrudes
+5	0.00	TestQuarterRootBracketPreflight
 5	0.11	TestQuarterSourceHeldPairRealProducerGate
 5	0.41	TestRevolveBoreBoundaryBothSweepDirections
 5	4.64	TestRimToothPatternFilletVolumeBound
@@ -158,16 +161,16 @@
 6	0.02	TestCircleAffineLargeRadius
 6	0.02	TestCircleSourceCandidateNearChord
 6	0.01	TestConeFromFaceNonConvexSectionIsAccepted
-6	0.00	TestFaceDepartureReader
+6	0.00	TestExactRotationAtTinyAngleHasHiddenTranslation
 6	0.12	TestLoftBoundedProfilesRealRightXPrismFirst
 6	0.25	TestLoftContactOutputBoundaryRealVaryingTab
+6	0.00	TestLoftContactSeamReadsVaryingRecordedLines
 6	3.18	TestLoftCylinderCommonPlacementConsumers
-6	0.00	TestLoftCylinderTriangleMinRadiusMatchesRational
 6	5.03	TestLoftFacesTangentHeelRefusesWrongSide
 6	0.71	TestLoftMirrorCylinderPlaceTeethMatchesSerialPlacement
 6	0.08	TestLoftQuarterOriginalHeldY1RealProducer
 6	0.01	TestLoftVolumeSourceRefusesNonbinaryJunction
-6	0.00	TestOperationWorkLimitHasTypedArrangementCounts
+6	0.00	TestOperationErrorPreservesKnownFailureAndSkipsTypedErrors
 6	0.06	TestPrismPatternUnionRefusesOutwardRootWithoutRetiringSources
 6	0.46	TestPrismUnionBossShellGates
 6	0.22	TestQuarterSourceHeldPairWrongSource
@@ -182,16 +185,16 @@
 7	0.02	TestCompositeChainSweepAreaSlackEnclosesTheAnalyticSheet
 7	0.01	TestConeFromFaceShallowGeneratorKeepsDocument
 7	0.03	TestContainedCutUsesCertifiedSourceCentroid
-7	0.00	TestFaceTagDepartsOnRevolveRecords
+7	0.00	TestFaceDepartureReader
 7	0.17	TestLoftCapConeRecordDoesNotSurviveRoundTripPlacement
 7	0.06	TestLoftContactOutputBoundaryLimitsAndCancellation
 7	0.30	TestLoftContactTwoLineCapsNarrowTranslated524
 7	0.12	TestLoftContactTwoLineCapsRealTrapezoid524
-7	0.00	TestLoftFaceDivByZeroPanicsLikeQuo
+7	0.00	TestLoftCylinderCommonPlacementRejectsOrdinaryQuarterTurn
 7	0.87	TestLoftMirrorCylinderPlaceTeethCancelled
 7	0.71	TestLoftVolumeSourceEqualityRealAndRefusals
 7	0.01	TestLoftVolumeSourceRefusesRealTriangleFractionalSeam
-7	0.00	TestParseCLAUDEMDAcceptsTheShapesTheFormatMakesSafe
+7	0.00	TestOperationHistoryRemovePublishesZeroOutput
 7	0.31	TestPointLoftSourceStaysCurrentOnATiltedPlane
 7	0.08	TestPointPlaneCapCentroidMatchesThreeMoments
 7	0.96	TestPrismPatternUnionManyGates
@@ -208,17 +211,17 @@
 8	0.00	TestClosedRingCoverage
 8	0.01	TestConeFromFaceIsStrictlyOffBlankFaces
 8	0.78	TestExactShiftProducerGate
+8	0.00	TestFaceTagDepartsOnRevolveRecords
 8	3.61	TestFacetedSourcePatchBlendThenCut
 8	0.56	TestGeneralPlanInputReadsRadiusAndFrameAboutAxis
-8	0.00	TestGroupDirectPrismSourceHistory
 8	0.12	TestLoftBoundedProfilesRealRightXLoftFirst
 8	0.25	TestLoftContactDirectShellUnionRealVaryingTab
-8	0.00	TestLoftFaceRatHelpersAcceptNonReducedOperandsByValue
+8	0.00	TestLoftCylinderTriangleMinRadiusMatchesRational
 8	0.01	TestLoftFacesConeTangentEndCancelled
 8	0.06	TestLoftFacesConeTangentEndRefusalKeepsProvenance
 8	0.28	TestLoftQuarterJunctionOneRealCase
 8	0.59	TestObliqueBossJunctionFilletXTiltPublicWorkflow
-8	0.00	TestParseLayoutRowsRefusesTextItWouldNotReach
+8	0.00	TestOperationHistorySnapshotAndFaceCoverage
 8	2.46	TestPointConeTrimRejectsRoundTrippedPointLoft
 8	0.32	TestPointLoftAuditsDecideCapsAsFamilies
 8	0.10	TestQuarterSourceHeldY1WrongRealRadius
@@ -230,13 +233,13 @@
 9	0.00	TestClosedSphereCoverage
 9	0.01	TestCoverageTargetsRefusesAnEmptyEnumeration
 9	2.01	TestFacetedCopyTransferSeparation
-9	0.00	TestLayoutPartGuardsRefuse
+9	0.00	TestGroupDirectPrismSourceHistory
 9	5.85	TestLoftCylinderUnionCommonPlacement
-9	0.00	TestLoftFacesCapRecordChecksVariableSourceShape
+9	0.00	TestLoftFaceDivByZeroPanicsLikeQuo
 9	0.61	TestLoftMirrorCylinderPairsRefusalPlacesNothingPastIt
 9	0.11	TestLoftQuarterHeldPairRealProducerGate
 9	0.04	TestLoftVolumeComposeBudgetAndCancellation
-9	0.00	TestParseLayoutRowsRejectsMalformedRows
+9	0.00	TestOperationWorkLimitHasTypedArrangementCounts
 9	0.01	TestPointConeSourceRefusesInexactAxisAndFrame
 9	0.40	TestPrismPatternFilletAcrossCircularWallStations
 9	0.11	TestQuarterSourceHeldPairReverseOrder
@@ -247,18 +250,18 @@
 10	0.00	TestCommitExactPointConeRefusalKeepsDocument
 10	0.07	TestContainedCutSourceMassProperties
 10	0.02	TestFacetedAreaBoundsCoverSliverFacet
+10	0.00	TestLayoutPartGuardsRefuse
 10	0.01	TestLocatePointRechecksSolidAfterExactQuery
-10	0.00	TestLoftCapBandMotionRequiresReflexVertexIndices
 10	0.22	TestLoftCircleSourceCapsRealDiscRefusesWithoutBoundaryProof
 10	0.99	TestLoftCylinderCommonPlacementRejectsRoundedComposition
+10	0.00	TestLoftFaceRatHelpersAcceptNonReducedOperandsByValue
 10	3.44	TestLoftFacesTangentHeelIntersectKeepsTrimRecord
 10	2.50	TestLoftFacesTangentHeelRefusesMissingToolFace
 10	0.04	TestLoftVolumeComposeKeepsBoundaryOperationBudget
 10	0.38	TestLoftVolumeComposeRealDisplacedNonjunction
-10	0.00	TestLoftVolumeHullCoverIndependentTetra
 10	0.66	TestObliqueBossJunctionFilletDiagonalTiltPublicWorkflow
+10	0.00	TestParseCLAUDEMDAcceptsTheShapesTheFormatMakesSafe
 10	0.11	TestPlacedLoftBoreChargesPlacement
-10	0.00	TestPointConeOutsideWitnessRejectsUncertainContact
 10	2.99	TestPointConeTrimAboutPermutedAxisMatchesX
 10	0.01	TestPointPlaneCapCentroidRefusalsMatchThreeMoments
 10	0.58	TestPositiveBoundFacetedUnionRetainsExactLowerFace
@@ -275,25 +278,23 @@
 11	0.03	TestContainedCutCentroidEvidenceFailureKeepsDocumentUnchanged
 11	0.03	TestContainedCutUsesCertifiedSourceVolumeAndRecordsHistory
 11	1.67	TestFacetedSourcePatchSlabControl
-11	0.00	TestLoftCertifiedRewriteWorkLimitKeepsDefault
+11	0.00	TestLoftCapBandMotionRequiresReflexVertexIndices
 11	1.80	TestLoftCylinderCommonPlacementDifferentLoftSourceFallsBack
 11	2.63	TestLoftCylinderCommonPlacementNativeYZConsumers
+11	0.00	TestLoftFacesCapRecordChecksVariableSourceShape
 11	2.55	TestLoftMirrorCylinderPairsParallelMatchesSerial
 11	0.12	TestLoftThroughBoreCutGates
-11	0.00	TestLoftVolumeHullZeroWidthAndMidWorkCancellation
 11	0.01	TestParseCLAUDEMDRefusesEverySpellingOfTheAnchors
+11	0.00	TestParseLayoutRowsRefusesTextItWouldNotReach
 11	0.07	TestPlanarPoseAdmissionGates
-11	0.00	TestPointConeUpperCapNodeMatchingFaces
 11	0.23	TestQuarterSourceHeldY1Refusals
 11	0.57	TestRetainedBlendStripPatchCovered
 11	0.00	TestRevolveSectorNearUnitAxisPlacement
 11	0.01	TestSweepPairRealFacetedUnionClearAndImpact
 11	0.17	TestTwistWideThinRectangleTransform
 12	0.01	TestCircleAffineDeltaBoundary
-12	0.00	TestConeFromFaceCancelled
 12	0.01	TestConeFromFaceMoreRefusals
 12	0.30	TestImplicitMarginAboutAxisScalesCost
-12	0.00	TestLoftCircleSourceSpanRefusesInvalidRecord
 12	1.18	TestLoftContactDirectShellUnionVaryingRectangleBothOrders
 12	0.05	TestLoftContactOutputBoundaryMiddleRegionContact
 12	1.34	TestLoftCylinderCommonPlacementLeavesArbitraryAngleGeneric
@@ -301,9 +302,8 @@
 12	0.01	TestLoftFacesConeTangentEndRefusesGeneralAxis
 12	0.08	TestLoftOutputBoundaryRefusesTinyTranslatedSeam
 12	0.22	TestLoftVolumeComposeRefusesUnprovedShells
-12	0.00	TestMirrorFaceStatedAxialDelta
+12	0.00	TestParseLayoutRowsRejectsMalformedRows
 12	0.85	TestPointConeTrimAboutTiltedAxis
-12	0.00	TestPointConeUpperFarPlaneNodeRequiresCapCharge
 12	0.38	TestPrismPatternFilletSectorBeyondRootDisk
 12	0.01	TestPublicCirclePrimitiveFaceTokenMutations
 12	0.09	TestQuarterSourceHeldY3MissingRealJunction

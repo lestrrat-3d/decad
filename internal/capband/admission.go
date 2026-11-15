@@ -19,7 +19,9 @@ import (
 // join whose two walks meet exactly tangent (G1). A draft or cap-loop chamfer
 // band also admits a near-tangent line–arc or arc–arc join, whose sliver its
 // mesh charges (near_tangent.go, agent-docs/draft-design.md §9.1.1), and a
-// chamfer band restates an off-radius arc (restate.go, §7.1). Every test here is exact
+// chamfer band restates an off-radius arc (restate.go, §7.1). A prism cap-loop
+// chamfer band also admits a reflex corner, whose apex fan its mesh charges
+// (§7, "Reflex connector"). Every test here is exact
 // rational arithmetic over the record's own floats. None is a tolerance or a
 // residual, so the predicate classifies the denoted geometry and never admits
 // a band because its float readings happen to sit close together.
@@ -54,6 +56,13 @@ import (
 // today: only exactly collinear lines coalesce) and OffRadiusShift bounds it;
 // every corner and wall of the loop is then read about the restated centres. Only a cap-loop chamfer's mesh charges what the
 // restatement moves, so only it passes restate.
+//
+// reflex admits a reflex corner (a join the resolver reports as an arc: the
+// cap-loop chamfer's apex fan about a convex corner of a hole, or a notch of
+// an outer loop). It is true only for a band whose mesh charges the connector
+// (agent-docs/tessellation-reach-design.md §7, "Reflex connector"): a prism
+// cap-loop chamfer. A band that does not charge it (route L brep bands, draft,
+// fillet, loft) passes false and keeps the refusal.
 func OccupiedVolumeAdmission(
 	budget *proofbound.WorkBudget,
 	noun string,
@@ -62,6 +71,7 @@ func OccupiedVolumeAdmission(
 	resolve func(int, sectionrecord.LoopRecord) ([]survey2d.SideWalk, func() ([]bool, error), error),
 	sharp SharpAmounts,
 	restate bool,
+	reflex bool,
 ) (error, error) {
 	for li, loop := range loops {
 		walks, joinArcs, err := resolve(li, loop)
@@ -120,6 +130,9 @@ func OccupiedVolumeAdmission(
 			}
 			prev, cur := walks[(i+n-1)%n], walks[i]
 			if arcs[i] {
+				if reflex {
+					continue
+				}
 				return admissionRefusal(noun, li, cornerAt(prev, cur), `a reflex corner, whose apex fan's stations no recorded window states`), nil
 			}
 			if prev.IsLine() && cur.IsLine() {

@@ -126,7 +126,7 @@
 //	  boolean-result operand coarser than the pair
 //	    tolerance where the pair meets it                     ErrUnsupported
 //	  cap-loop chamfer operand whose band has a mitered
-//	    circular wall or a reflex corner                      ErrUnsupported
+//	    circular wall                                         ErrUnsupported
 //	  brep operand carrying complete-loop chamfer bands
 //	    of such a wall or corner                              ErrUnsupported
 //	  curved-surface tangent, facets never meet               ErrUnsupported

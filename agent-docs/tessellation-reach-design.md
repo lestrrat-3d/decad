@@ -472,7 +472,8 @@ section at every axial fraction is the exact offset section, and the held cells'
 at fixed azimuths, so the proof is the prism's own two legs — a slice-wise circular-segment integral and a
 vertex-motion `sweptVolumeAllow`. A draft or cap-loop chamfer band's near-tangent join adds a third, its corner
 charge, and a chamfer band's arc whose recorded end is off its start's circle adds a fourth, its restatement
-charge (Admission below, §7.1). Every other band — a circular wall at a genuine miter, a reflex corner —
+charge (Admission below, §7.1). A prism cap-loop chamfer band's reflex corner adds a fifth, its connector's
+vertex motion and chord term ("Reflex connector" below). Every other band — a circular wall at a genuine miter —
 keeps `symDiffOK == false`, which tess §2 permits for an export-only mesh. DX3's "a strip whose densities
 disagree is not watertight" is answered by sharing ONE count per wall walk across the side wall, the band
 patch and the cap contour (below).
@@ -616,7 +617,10 @@ body (`brepbandmesh`) composes its own terms without the corner or restatement c
 here: `brepfilletmesh` meshes it and charges its own near-tangent joins (`agent-docs/loop-fillet-design.md`
 §5.5).
 
-A reflex corner (`cornerJoin.arc`) is not admitted. Every test is exact rational arithmetic over the record's
+A reflex corner (`cornerJoin.arc`) is admitted for a prism cap-loop chamfer band only (`capband.OccupiedVolumeAdmission`'s
+`reflex` parameter, which `capblend` passes as `restate`, so it is true exactly when `Payload.cornerClass` returns the
+chamfer class). A draft, fillet or loft-source band, a loop chamfered on both caps with two setbacks, and a route L
+brep band (`ExactOccupiedVolumeAdmission`) keep the refusal. Every test is exact rational arithmetic over the record's
 own floats; none is a tolerance, so the predicate classifies the denoted geometry and never admits on a
 residual. A band it does not prove is export-only, and a boolean over it is the staging `ErrUnsupported`
 routed through `booleanExpectedVolumeProof`, naming the loop and the corner.
@@ -644,10 +648,50 @@ Mchord = Σ_loops [ hTrimUpper(loop) · Σ_{circular walks} walkSegmentArea(w, n
 hTrimUpper = |zHi − zLo| + zLo.bound + zHi.bound        dUpper = d + dDelta
 ```
 
+plus the reflex connector's term (below) when the loop has one.
+
 because a chord polygon whose vertices lie on the curve differs from the region it chords by the union of
 its circular segments — overlapping segments only make the union smaller than the sum — and a segment's
 area `ρ²(Δθ − sin Δθ)/2` is monotone in `ρ`, so the larger of the two radii bounds every level of the band
 over the one shared window.
+
+**Reflex connector.** At a reflex corner of the material (a hole's convex corner, or an outer loop's notch) the
+band's section at axial fraction `s` is the loop offset by `s·d`, and the offset closes the corner with an arc of
+radius `s·d` about the junction `V`. The band patch there is the apex cone (`sideRadius == 0`), meshed as a fan from
+the side-ring junction vertex (at `sideZ`) to the connector's cap stations (at `capZ`). Put `B1`'s vertices as
+follows. The apex is the denoted `V`, already the side ring's `B1` vertex. The end stations `PA` and `PB` are the
+exact wall feet `V + d·n̂_prev` and `V + d·n̂_cur`, already the adjacent walls' `B1` vertices. Interior station `k`
+is the radial projection of the held station onto the denoted circle of radius `d` about `V`. A fan triangle
+`(V, e_k, e_{k+1})` cut at fraction `s` is the segment from `V + s(e_k − V)` to `V + s(e_{k+1} − V)`, whose ends
+both lie on the true arc of radius `s·d`. `B1`'s section is therefore still the chord polygon of the true section
+with every vertex on the true boundary, so the two legs cover the fan:
+
+- *Chord term.* Over the band height each fan chord omits one circular segment. A chord `c` on a circle of radius
+  `ρ` omits at most `π³c³/(96ρ)`, because `Δ − sin Δ ≤ Δ³/6` and `Δ = 2·asin(c/2ρ) ≤ πc/(2ρ)`. Down the cone `c`
+  and `ρ` both scale by `s`, so the area scales as `s²` and the cap level bounds every slice. The term is
+  `Σ_chamfered caps bandHeight[cap] · Σ_cells 32·c_k³/(96·(d − dDelta))`, with `32 ≥ π³` and `c_k` the held chord
+  plus both ends' motion (`tessellation.CapBlendConnectorVolume`).
+- *Vertex motion.* The rows above. The gap from an interior station to its radial projection is at most its gap to
+  any point of the circle, including the held circle station `capBound` measures, moved by at most the junction's
+  own bound and the setback's rounding.
+
+The trimmed wall meets the corner sharply at every level, so the trimmed term is unchanged, and §7.1's restatement
+charge already counts a junction's normal cone in `Perim_L`, so restated arcs need nothing more.
+
+*The order check.* The chord-polygon claim holds only when the projected stations run in order inside the arc's
+window, so `tessellation.CapBlendCapMotion` gives a connector `+Inf` motion (a non-finite term, so the boolean
+refuses `ErrUnsupported`, tess §12) unless this passes. About the held junction `V`, with `u_k = p_k − V` for the
+stations `PA = p_0, …, p_m = PB` and `s = ±1` the turn sign of the recorded sweep `ArcTh1 − ArcTh0`, require
+`s·cross(u_0, u_m) > 0`, and for every interior `k`, `s·cross(u_0, u_k) > 0` and `s·cross(u_k, u_m) > 0`, and for
+every `k`, `s·cross(u_k, u_{k+1}) > 0`. The first says the window is under half a turn and the other three that
+every station lies inside it and the stations are strictly increasing. Each test is evaluated exactly over the
+held floats (`big.Rat`), and it passes only when `s·cross` exceeds the change the operands' own displacements can
+make to it: for vectors `u`, `w` displaced by at most `e_u`, `e_w`, that is `e_u·|w| + e_w·|u| + e_u·e_w`. An
+interior station's displacement is the junction's bound (the angle of `p_k` about the denoted `V'` is all the
+projection reads), and `PA`, `PB` carry `band.delta` beside it, because they stand for the exact feet. A chamfer band's restatement shift (§7.1, `capband.OffRadiusLoop`) is added to every operand's displacement, since the restated section moves each station and the junction by at most that shift. The check
+can only refuse: a held loop is admitted only with margin, never on a residual, so a degenerate window (a cusp,
+a station crossing a neighbour) refuses and never composes. The held sample angles run monotonically by
+construction (`circleStation`), so the check fails in practice only for a hand-built or degenerate record.
 
 `volume(M △ B1)` is vertex motion: `M` and `B1` share a triangle index set and differ vertex by vertex, so
 `sweptVolumeAllow(motionMax, perturbedAreaUpper(M, motionMax))` (internal/proofbound/bounds.go) bounds it, with `motionMax`
@@ -659,6 +703,9 @@ the largest per-vertex displacement:
 | cap ring, station `k` of a circular walk (`k = 0` is the foot verbatim) | `walkEndBoundAllow(stationbound.CapOffsetStationBound(seg, k, n, ∓d))` — `circularEndpointInterval`'s enclosure with the exact offset `∓d` (`capcontour.CapWallRadiusOffset`) added to the record's radius `R`, read at the exact fraction `k/n` of the SIDE window — plus `prismrecord.Payload.PointRound` plus `capBandLevel(capZ).bound` |
 | cap ring, a straight walk's foot preceded by a circular walk | the same enclosure on the PRECEDING walk at `k = n`, plus the same two terms |
 | cap ring, a line-line miter foot | `band.delta` (`capContourDelta`'s enclosure of the exact miter point) plus the same two terms |
+| cap ring, a straight wall's first station when its start join is a reflex connector | `band.delta`: the station is the wall's own exact foot `PB`, not the previous arc's end |
+| cap ring, connector end stations `PA`, `PB` | `band.delta` (`capcontour.Displacement`'s `Arc` arm encloses the exact feet `V + d·n̂`) plus the same two terms |
+| cap ring, connector interior station `k` | `walkEndBoundAllow(capBound[k])` (held station against the held circle) plus `walkEndBoundAllow(sideBound[V])` (the junction's bound) plus `dcDelta`, plus the same two terms; `+Inf` unless the order check below passes |
 
 The per-vertex figure is a NEW `motion` array beside `store`: `store` keeps publishing `sourceBound` and
 `areaSlack` exactly as above, because the two answer different questions — a cap station's Hausdorff gap
@@ -682,9 +729,8 @@ read here.
 **What is not admitted, and why.** A circular wall meeting a genuine (non-G1) miter has its cap window
 trimmed inside its side window, its true foot locus is a conic, and the ruled cells' sections are no longer
 chord polygons of the true offset sections: the sliver at the corner is covered by none of the terms above
-and needs §9's per-cell certified integral. A reflex corner's apex fan has an interval window — the two
-exact unit normals' azimuths, which no record states — rather than a recorded one, so its stations need an
-interval-window station enclosure this increment does not build. Both keep `symDiffOK == false`.
+and needs §9's per-cell certified integral. It keeps `symDiffOK == false`. A reflex corner of a route L brep band,
+a draft band or a fillet band also stays refused: their mesh proofs charge no connector term.
 
 The matching axial loft's zero-or-one-bore, both-outer-cap chamfer is a narrow
 exception (§7's `tessellate_capblend.go`; `agent-docs/loft-design.md` §18). Its band
@@ -696,8 +742,8 @@ volume of two enclosing cap slabs. The ordinary chord and finite vertex
 motion terms cover the rest of the polygon band. The source loft's global
 `VolSymDiff` is added for comparison with its original spline flanks. This
 payload publishes `symDiffOK` only when every term is finite, and the Boolean
-precheck admits the same payload. The general cap-band admission above still
-refuses reflex corners in other receivers.
+precheck admits the same payload. The general cap-band admission above admits reflex corners
+for the prism cap-loop chamfer only, and refuses them in other receivers.
 
 ### 7.1 Off-radius arc ends — restatement
 
@@ -809,10 +855,23 @@ end arc, 8 mm thick, 0.5 mm chamfer) restates two arcs with `Δ ≈ 1.5·10⁻¹
   bound, where `V_flange = 16·(6528 − (4 − π)·144 − 324π) − (116 + 30π)`; the bound is below a stated
   ceiling and positive; the result is `Approximate`.
 - A chamfered pin as the TOOL of a `Cut`: the plate's volume minus the cylinder it removes, within bound.
-- A band with a genuine miter at a circular wall (a circular-segment section: one chord, one arc) and a
-  band with a reflex corner: every boolean refuses `ErrUnsupported`, `errors.As` finds no `*BooleanError`,
-  and the message names the loop and corner; `Verify` reads an overlapping pair `Suspect` with
-  `DiagUnsupportedPairPayload`.
+- A band with a genuine miter at a circular wall (a circular-segment section: one chord, one arc): every
+  boolean refuses `ErrUnsupported`, `errors.As` finds no `*BooleanError`, and the message names the loop and
+  corner; `Verify` reads an overlapping pair `Suspect` with `DiagUnsupportedPairPayload`.
+- Reflex corners (`apitest/capblend_reflex_test.go`). `TestCapBlendReflexDBoreCut`: a circle R18.1 plate with a D
+  bore (arc r4.1, flat at y = 3.6) and three r1.3 holes, 5 mm thick, every start-cap loop chamfered 0.5 mm. The
+  chamfered volume equals its closed form, a box cut clear of every band and a second cut on that result each
+  equal the closed form less the box within the result's own published bound (positive, under 0.6 mm³,
+  `Approximate`), the result tessellates watertight at 0.01 mm, and `Cut` plus `Intersect` of a box across the D's
+  corner band add back to the chamfered volume within the two bounds. `TestCapBlendReflexLBodyBoolean`: the same
+  for the 3 mm chamfered L section across its line-line reflex corner. Unit tests:
+  `internal/tessellation/capblend_connector_test.go` (finite connector motion, `+Inf` when connectors are off and
+  for each way the order check fails, the reflex-preceded wall reading `band.delta`, and a connector chord term
+  at least the true omitted segments), `internal/capband/reflex_test.go` (admission by the `reflex` flag, and
+  `NearTangentCharges` skipping a flagged corner). Dropping the connector term or the interior-station motion
+  does not move a published bound out of its apitest tolerance: the connector's share of the D plate's bound
+  is about 0.005 mm³ per corner against 0.5 mm³ of existing chord shortfall, so no fixture here leaves its bound
+  without it. The unit tests pin each piece directly.
 - `Verify` on an overlapping pair of admitted cap-blend bodies publishes an `Interference` row.
 - The tangent-arc plate (§7.1, `apitest/capblend_tangent_arcs_test.go`): both cap loops chamfered, then a box
   cut clear of both bands removes exactly the 48 mm³ it overlaps within the published bound. In
@@ -839,11 +898,9 @@ design decision; R1 rewrites it to say the payload stores the COMPOSED proof ter
 ## 9. Open questions
 
 - **R6 occupied volume for the bands §7 does not admit.** §7's slice-wise proof admits a band of line-line
-  miters, exactly G1 joins and whole turns. A circular wall at a genuine miter needs a per-cell certified
+  miters, exactly G1 joins, whole turns and a prism chamfer's reflex corners. A circular wall at a genuine miter needs a per-cell certified
   interval integral over the explicit homotopy held-facet → bilinear → ruled → cone, tess §11's `Icell`
-  shape — the complete answer. A reflex corner's apex fan needs only an interval-window station enclosure
-  (the fan's connector stations read against the two exact unit normals' enclosed azimuths), which reaches
-  it without the integral.
+  shape — the complete answer.
 
 ## 10. Tasks
 
