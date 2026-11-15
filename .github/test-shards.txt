@@ -15,7 +15,7 @@
 #   shard 3:    9.95s over 22 tests
 #   shard 4:    6.75s over 20 tests
 #   shard 5:   12.06s over 21 tests
-#   shard 6:   11.79s over 22 tests
+#   shard 6:   11.79s over 23 tests
 #   shard 7:   42.39s over 28 tests
 #   shard 8:    9.25s over 22 tests
 #   shard 9:   10.37s over 18 tests
@@ -175,6 +175,7 @@
 6	0.46	TestPrismUnionBossShellGates
 6	0.22	TestQuarterSourceHeldPairWrongSource
 6	0.10	TestQuarterSourceHeldY3WrongRealRadius
+6	0.00	TestRevolveChainBuiltEnds
 6	0.28	TestSectionAboutAxisRefusals
 6	0.00	TestSelectionErrorHasSelectorDiagnostic
 6	0.01	TestSweepPairFacetedFloorRefusesUnprovedPath
@@ -292,6 +293,7 @@
 11	0.00	TestRevolveSectorNearUnitAxisPlacement
 11	0.01	TestSweepPairRealFacetedUnionClearAndImpact
 11	0.17	TestTwistWideThinRectangleTransform
+12	0.00	TestChamferCapLoopSubsetEnds
 12	0.01	TestCircleAffineDeltaBoundary
 12	0.01	TestConeFromFaceMoreRefusals
 12	0.30	TestImplicitMarginAboutAxisScalesCost
@@ -307,7 +309,6 @@
 12	0.38	TestPrismPatternFilletSectorBeyondRootDisk
 12	0.01	TestPublicCirclePrimitiveFaceTokenMutations
 12	0.09	TestQuarterSourceHeldY3MissingRealJunction
-12	0.00	TestRevolveChainBuiltEnds
 12	0.70	TestSplitPlaneSharesOneSourceRecord
 12	3.19	TestTopoDocumentWriteGuard
 12	0.53	TestTopologyHandlesAreBorn
