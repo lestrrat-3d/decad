@@ -186,6 +186,9 @@ type SectorJoinBoundInput struct {
 	SectionSag, ConeGap, ToolGap, FarRound, Lip            float64
 	UpperBound, LowerBound, UpperLip, LowerLip             float64
 	CapArea, CapFactor                                     float64
+	// Ceiling is the largest boundary bound the join may publish, in mm. It
+	// sets how much cap bound the cap refinement leaves to the other terms.
+	Ceiling float64
 }
 
 // SectorJoinBounds accumulates source and output bounds in sector order.
@@ -223,7 +226,7 @@ func AccumulateSectorJoinBounds(state *SectorJoinBounds, plan SectorJoinPlan,
 	capTerm := proofbound.ProductUpper(max(upperBound, lowerBound), stretch)
 	otherBound := proofbound.AbsSumUpper(plan.Snap, plan.NodeRound,
 		farTerm, baseTerm, input.ConeGap, toolGap)
-	remaining := 0.1 - sectionSag - otherBound
+	remaining := input.Ceiling - sectionSag - otherBound
 	if remaining <= 0 || proofbound.IsNonFinite(remaining) {
 		capRefinePossible = false
 	} else {
