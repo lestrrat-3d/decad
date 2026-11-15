@@ -99,6 +99,22 @@ func TestCheckEndTurns(t *testing.T) {
 		require.ErrorContains(t, err, "a chain end's base or wall is reflex at the corner")
 	})
 
+	t.Run("a concave chain's base that wraps the corner is read as wrapping", func(t *testing.T) {
+		t.Parallel()
+		// The same base turn as the pocket mouth's, marked by readEndCut for a
+		// concave chain.
+		ec := &chainEndCut{rP: y, rW: neg(z), wallN: y, wraps: true}
+		require.NoError(t, checkEndTurns(ec, x, z, false))
+	})
+
+	t.Run("a wrapping base does not excuse a wall that wraps", func(t *testing.T) {
+		t.Parallel()
+		ec := &chainEndCut{rP: y, rW: z, wallN: y, wraps: true}
+		err := checkEndTurns(ec, x, z, false)
+		require.ErrorIs(t, err, decaderr.ErrUnsupported)
+		require.ErrorContains(t, err, "a chain end's base or wall is reflex at the corner")
+	})
+
 	t.Run("an undecided turn is refused with its own text", func(t *testing.T) {
 		t.Parallel()
 		ec := &chainEndCut{rP: x, rW: neg(z), wallN: neg(y)}
@@ -111,6 +127,101 @@ func TestCheckEndTurns(t *testing.T) {
 		t.Parallel()
 		ec := &chainEndCut{rP: y, rW: z, wallN: neg(y), arc: &arcEnd{}}
 		require.NoError(t, checkEndTurns(ec, x, z, true))
+	})
+}
+
+func TestReadEndFaceKind(t *testing.T) {
+	t.Parallel()
+	x, y, z := r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0), r3.NewVec(0, 0, 1)
+	neg := func(v r3.Vec) r3.Vec { return v.Scale(-1) }
+	convex := chainEndCut{rP: y, rW: neg(z), g: plane{n: neg(x)}}
+	reflex := chainEndCut{rP: y, rW: neg(z), g: plane{n: x}}
+
+	t.Run("a convex end face gives the cap up", func(t *testing.T) {
+		t.Parallel()
+		ec := convex
+		require.NoError(t, ec.readEndFaceKind())
+		require.False(t, ec.reflex)
+		require.False(t, ec.takesCap())
+	})
+
+	t.Run("a reflex end face takes the cap", func(t *testing.T) {
+		t.Parallel()
+		ec := reflex
+		require.NoError(t, ec.readEndFaceKind())
+		require.True(t, ec.reflex)
+		require.True(t, ec.takesCap())
+	})
+
+	t.Run("a convex end face beside a wrapping base takes the cap", func(t *testing.T) {
+		t.Parallel()
+		ec := convex
+		ec.wraps = true
+		require.NoError(t, ec.readEndFaceKind())
+		require.False(t, ec.reflex)
+		require.True(t, ec.takesCap())
+	})
+
+	t.Run("a reflex end face beside a wrapping base is refused", func(t *testing.T) {
+		t.Parallel()
+		ec := reflex
+		ec.wraps = true
+		err := ec.readEndFaceKind()
+		require.ErrorIs(t, err, decaderr.ErrUnsupported)
+		require.ErrorContains(t, err, "a chain end's base and end face are both reflex at the corner")
+	})
+
+	t.Run("an arc end on a reflex end face is refused with its own text", func(t *testing.T) {
+		t.Parallel()
+		ec := reflex
+		ec.arc = &arcEnd{}
+		err := ec.readEndFaceKind()
+		require.ErrorIs(t, err, decaderr.ErrUnsupported)
+		require.ErrorContains(t, err, "an arc end of a tangent chain needs an end face convex at the corner")
+	})
+}
+
+func TestWrapLoop(t *testing.T) {
+	t.Parallel()
+	column := []int{20, 21, 22}
+
+	t.Run("a loop that reaches the corner from the base's side", func(t *testing.T) {
+		t.Parallel()
+		// Corner 1; the wall's run 2, 3 below the setback goes; 4 stays.
+		ec := &chainEndCut{v: 1, prevP: true, remW: []int{2, 3}}
+		got, err := ec.wrapLoop([]int{0, 1, 2, 3, 4, 5}, column)
+		require.NoError(t, err)
+		require.Equal(t, []int{0, 1, 20, 21, 22, 4, 5}, got)
+	})
+
+	t.Run("a loop that leaves the corner toward the base's side", func(t *testing.T) {
+		t.Parallel()
+		ec := &chainEndCut{v: 4, remW: []int{2, 3}}
+		got, err := ec.wrapLoop([]int{0, 1, 2, 3, 4, 5}, column)
+		require.NoError(t, err)
+		require.Equal(t, []int{0, 1, 22, 21, 20, 4, 5}, got)
+	})
+
+	t.Run("a wall with no run below the setback", func(t *testing.T) {
+		t.Parallel()
+		ec := &chainEndCut{v: 0, prevP: true}
+		got, err := ec.wrapLoop([]int{0, 1, 2}, column)
+		require.NoError(t, err)
+		require.Equal(t, []int{0, 20, 21, 22, 1, 2}, got)
+	})
+
+	t.Run("a loop without the corner is refused", func(t *testing.T) {
+		t.Parallel()
+		ec := &chainEndCut{v: 9, remW: []int{2}}
+		_, err := ec.wrapLoop([]int{0, 1, 2, 3}, column)
+		require.ErrorIs(t, err, decaderr.ErrUnsupported)
+	})
+
+	t.Run("a run that is not in the loop is refused", func(t *testing.T) {
+		t.Parallel()
+		ec := &chainEndCut{v: 0, remW: []int{7}}
+		_, err := ec.wrapLoop([]int{0, 1, 2, 3}, column)
+		require.ErrorIs(t, err, decaderr.ErrUnsupported)
 	})
 }
 
@@ -129,6 +240,9 @@ func TestChainEndCapArea(t *testing.T) {
 		{"a reflex end face takes a fillet's cap", chainEndCut{reflex: true}, true, -fillet},
 		{"a convex end face gives up a chamfer's cap", chainEndCut{}, false, tP * tW / 2},
 		{"a reflex end face takes a chamfer's cap", chainEndCut{reflex: true}, false, -tP * tW / 2},
+		{"a convex end face beside a wrapping base takes a fillet's cap", chainEndCut{wraps: true}, true, -fillet},
+		{"a convex end face beside a wrapping base takes a chamfer's cap", chainEndCut{wraps: true}, false,
+			-tP * tW / 2},
 		{"an arc end gives up its own corner", chainEndCut{arc: &arcEnd{cornerArea: 0.3}}, true, 0.3},
 	}
 	for _, c := range cases {
