@@ -265,6 +265,17 @@ func Chamfer(ctx context.Context, b *Body, sel EdgeSelector, d units.Value,
 				return commitResult(ctx, OperationChamfer, b, res)
 			}
 		}
+		// A chamfer of whole runs of a cap loop's edges, each ending at a sharp corner (agent-docs/modify-reach-design.md
+		// §8.3.2), is cut by one cutter per run.
+		if errors.Is(err, ErrUnsupported) && asym == nil {
+			if res, matched, perr := brepmodify.PartialLoopChamfer(ctx, envOf(b.n.Doc, b.n.Doc.NextProducer), modifyHooks(),
+				&b.n, edgeNodes(edges), dmm, dDelta, nil); matched {
+				if perr != nil {
+					return nil, perr
+				}
+				return commitResult(ctx, OperationChamfer, b, res)
+			}
+		}
 		return nil, err
 	}
 	return commitResult(ctx, OperationChamfer, b, res)

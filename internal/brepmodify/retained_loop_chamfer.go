@@ -183,6 +183,8 @@ type chamferLoop struct {
 	origin, u, v, n r3.Vec
 	// depth is the smallest distance from the face to the far end of the loop's walls.
 	depth float64
+	// exact is set for a receiver whose faces carry their own exact surfaces and no retained tags, a prism.
+	exact bool
 }
 
 // to2 reads a point of the face's plane.
@@ -225,7 +227,7 @@ func readChamferLoops(body *topo.Body, edges []*topo.Edge) ([]*chamferLoop, bool
 			if !some || !all {
 				continue
 			}
-			l, ok := readChamferLoop(f, plane, loop)
+			l, ok := readChamferLoop(f, plane, loop, false)
 			if !ok {
 				return nil, false
 			}
@@ -250,7 +252,7 @@ func retainedTag(f *topo.Face) bool {
 }
 
 // readChamferLoop reads loop of the planar face f.
-func readChamferLoop(f *topo.Face, plane surfacegeom.Plane, loop *topo.Loop) (*chamferLoop, bool) {
+func readChamferLoop(f *topo.Face, plane surfacegeom.Plane, loop *topo.Loop, exact bool) (*chamferLoop, bool) {
 	n := plane.Frame.N()
 	if f.Reversed {
 		n = n.Scale(-1)
@@ -263,7 +265,7 @@ func readChamferLoop(f *topo.Face, plane surfacegeom.Plane, loop *topo.Loop) (*c
 	if !ok {
 		return nil, false
 	}
-	l := &chamferLoop{outer: loop.Outer, origin: plane.Frame.Origin(), u: u, v: n.Cross(u), n: n}
+	l := &chamferLoop{exact: exact, outer: loop.Outer, origin: plane.Frame.Origin(), u: u, v: n.Cross(u), n: n}
 	l.depth = math.Inf(1)
 	for _, ce := range loop.CoEdges {
 		e := ce.Edge
@@ -378,7 +380,7 @@ func isNormalTo(w, n r3.Vec) bool {
 // wallDepth reads the wall beside a loop edge: a retained plane normal to the face or a retained cylinder whose axis
 // is normal to it. It returns how far the wall reaches below the face.
 func (l *chamferLoop) wallDepth(wall *topo.Face) (float64, bool) {
-	if !retainedTag(wall) {
+	if !l.exact && !retainedTag(wall) {
 		return 0, false
 	}
 	switch s := wall.Surface.(type) {

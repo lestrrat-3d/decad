@@ -813,12 +813,12 @@ func TestModifyRefusalLeadsWithItsReason(t *testing.T) {
 	})
 
 	t.Run(`cap edge`, func(t *testing.T) {
-		// A partial cap loop still refuses a chamfer with a leading reason.
-		capEdges := decad.Edges(decad.ParallelTo(r3.NewVec(1, 0, 0)))
+		// Cap edges mixed with lateral edges still refuse a chamfer with a leading reason.
+		capEdges := decad.Edges(decad.ParallelTo(r3.NewVec(1, 0, 0))).Or(decad.ParallelTo(r3.NewVec(0, 0, 1)))
 		_, box := filletBox(t)
 		_, err := decad.Chamfer(t.Context(), box, capEdges, units.Millimeters(5))
 		require.ErrorIs(t, err, decad.ErrUnsupported)
-		requireReasonLeads(t, err, `the selection covers only part of a cap loop`)
+		requireReasonLeads(t, err, `the selection mixes lateral edges with prism cap-loop edges`)
 	})
 
 	t.Run(`audit failure`, func(t *testing.T) {

@@ -493,8 +493,8 @@ func TestChamferRefusals(t *testing.T) {
 	_, err = decad.Chamfer(t.Context(), box, decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1)), decad.Concave()), units.Millimeters(5))
 	require.ErrorIs(t, err, decad.ErrNoMatch, `a box has no concave lateral edge`)
 
-	// A cap-edge selector is the vertex-blend problem: S1, staged.
-	capEdges := decad.Edges(decad.ParallelTo(r3.NewVec(1, 0, 0)))
+	// Cap edges mixed with lateral edges are the vertex-blend problem: S1, staged.
+	capEdges := decad.Edges(decad.ParallelTo(r3.NewVec(1, 0, 0))).Or(decad.ParallelTo(r3.NewVec(0, 0, 1)))
 	_, err = decad.Chamfer(t.Context(), box, capEdges, units.Millimeters(5))
 	require.ErrorIs(t, err, decad.ErrUnsupported, `a chamfer of a cap edge is not supported`)
 
