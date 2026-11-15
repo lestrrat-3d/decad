@@ -388,9 +388,10 @@ every off-radius arc read about its restated centre (§5.6). The same corner
 is also read about the recorded centres through the recorded junction, as
 the LF5 test reads it; that reading's class must admit it too, and its
 reach is `ρ_rec`, zero at a join exactly tangent there. Every wall with an
-LF5′ end must pass `capband.NearTangentWallRefusal` with restated centres
-and every walk at `r`, and its other end must not be LF8 or LF6, whose true
-end that gate does not enclose. Every test is exact rational arithmetic over
+end whose `ρ′` or `ρ_rec` is positive must pass
+`capband.NearTangentWallRefusal` with every walk at `r`, read with restated
+centres for `ρ′` and with the recorded ones for `ρ_rec`. Its other end must
+not be LF8 or LF6, whose true end that gate does not enclose. Every test is exact rational arithmetic over
 the record's floats. `filletband.CornerClass` returns the corner's
 `ρ′ = T·sinUp·(1 + S)` and `ρ_rec`; `filletband.Loop.Rho` and `RhoRec` hold
 them.
@@ -440,10 +441,12 @@ level curve's length by at most `2ρ̃` (patch areas), turns the normals by
 `filletband.NearTangentNormalTurn` (undercut survey, `Face.NormalBound`), and
 lengthens the seam by at most `(π/2)·r_hi·γ²/4`.
 
-**Unchanged readings.** Clearance (DF6) stays `Suspect`. STEP (DF10) reads
-the record's LF5 structure under its own analytic test. A partial fillet
-admits only LF4, LF5 and LF6 at a corner it selects, so an LF5′ corner it
-selects refuses there.
+**Unchanged readings.** Clearance (DF6) stays `Suspect`. STEP (DF10) writes
+a patch whose `Face.NormalBound` §5.7 sets as faceted, since
+`facedeparture` reads that bound as a tag departure. A partial fillet charges
+none of §5.5–§5.7's terms, so a selection that meets a corner with a
+near-tangent reach in either reading, a radial step, or a restated arc on
+either side refuses (`filletband.Loop.Charged`, SL2).
 
 The rounded hexagon of §8 (corner circle 2.51, corner rounds 0.8, fillet 0.6)
 has twelve LF5′ joins of both signs, with `ρ′` at most about `1.6·10⁻¹⁶` mm.
@@ -472,8 +475,7 @@ only recorded segment, and `capband.OffRadiusShift` must bound it at reach
 `T`, giving its shift `Δ_a`; `filletband.Loop.Restate` keeps
 `capband.OffRadiusLoop`'s largest shift `Δ`, level-set perimeter `P` and
 largest radius `R_hi`, and how many LF6 corners sit beside a restated arc.
-This charges an exactly tangent (LF5) corner beside an off-radius arc too,
-which the band read before without a term.
+This charges an exactly tangent (LF5) corner beside an off-radius arc too.
 
 **The strip.** Write `A`, `A′` for the strip areas of X and X′ at offset `t`
 and `A_CF`, `A′_CF` for Table CF's pieces of each. Then
@@ -546,9 +548,15 @@ point `x` and its nearest point `y` on X.
 
 A stated point that differs from the true curve lies on its moved carrier,
 within `t + δ + ρ̃` of `v` (§5.5 bounds the convex sliver's overlap), while the
-carrier passes at least `t − δ` from `v`. That piece's chord is therefore at
-most `2·√((2t + ρ̃)(2δ + ρ̃)) ≤ 4·√((T + δ + ρ̃)(δ + ρ̃))`, and its arc, under a
-sixth of a turn, is at most `stepRoot = 2π·√((T + δ + ρ̃)(δ + ρ̃))`. It starts
+carrier passes at least `t − δ` from `v`. On a line, or on a circle that holds
+its material inside (moved radius `R − t`, curving away from `v`), the piece's
+chord is at most `2·√((2t + ρ̃)(2δ + ρ̃)) ≤ 4·√((T + δ + ρ̃)(δ + ρ̃))`. On a
+circle that holds its material outside (a hole rim's arc, moved radius
+`R + t`, curving round `v`), the power of `v` about the moved circle scales
+the squared chord by at most `(R + t)/R_v`. So the chord carries the factor
+`√k`, `k = (R_hi + T)/R_lo`, read from the recorded centre to both recorded
+ends (`stepCurvature`), and `k = 1` otherwise. The piece's arc, under a sixth
+of a turn, is at most `stepRoot = 2π·√(k·(T + δ + ρ̃)(δ + ρ̃))`, and it starts
 at a point the two curves share. With `δ = 0`, §5.5's `2ρ` bounds it instead.
 So the two curves are within
 
@@ -593,8 +601,9 @@ Each patch beside the corner widens its area by `(π/2)·r_hi·L_k`
 term `π·r·ρ`, which also covers a reflex sliver's absent horn
 `θ·r²·(π/2 − 1) ≤ (π/2)(π/2 − 1)·r·ρ`.
 
-**Normals.** At an LF5′ corner with no step, the true band's normals stray
-from the two patches' by at most `filletband.NearTangentNormalTurn`. That is
+**Normals.** At a corner with no step whose `ρ̃` is positive, the true band's
+normals stray from the two patches' by at most
+`filletband.NearTangentNormalTurn` read at `ρ̃`. That is
 `ρ/r_lo` between the two walks' normals at a reflex sliver
 (`2·sin(θ/2) ≤ ρ/T`), and `ρ` over the least moved radius along a toroidal
 patch at a convex one; a cylinder's normal does not change. Beside a step,
@@ -680,7 +689,7 @@ modify §4's stage 1 and reach SX10:
 | **DF7** | undercut survey | per patch through `Face.NormalAt`, a patch beside an LF5′ corner or a radial step widened by §5.7's normal turn: the normal of an LF1 patch sweeps the quarter from `n̂_F` to the wall's outward normal, an LF2/LF3 patch the quarter at every azimuth of its window, an LF6 patch the quarter at every azimuth of `ψ` short of the apex; the component range along the pull is the closed-form range of `A·cos φ + B·sin φ` over the window, read with reach DX7's three-valued rule and its arithmetic allowance alone, since the stamped departure is zero |
 | **DF8** | concave-radius survey | undecided for a band with a patch beside an LF5′ corner or a radial step, whose `NormalBound` §5.7 sets; otherwise a band with `σ = +1` (a fill) contributes `r` exactly, the tag's `Minor`/`Radius`, which a placement leaves unchanged; a band with `σ = −1` is convex in its tube direction and contributes nothing; an LF6 patch's other principal radius is `ρ/sin φ`, which vanishes at the apex where the receiver's own sharp reflex edge already reads as `brepMinRadius` reads it today (a sharp corner enters no aggregate), so it adds nothing. `brepMinRadius` drops its `capblend.PatchWindowSkew`/`normalBound` refusal for fillet bands, keeps it for chamfer bands |
 | **DF9** | wall survey | staged `Suspect`, as for every brep |
-| **DF10** | STEP | analytic: `supportsAnalyticSTEP` takes a whole-turn torus (LF7), a four-arc torus patch (LF2/LF3) whose arcs each hold both their vertices in their own plane, a horn torus patch (LF6, a three-edge loop closing on the axis at its apex vertex) whose vertices are `Exact`, and a straight-walk cylinder patch closed by `Ellipse3` edges (`agent-docs/step-export-design.md`). `Body.Tessellate` admits a banded body (F-2), so `export.STEP` reaches the writer |
+| **DF10** | STEP | faceted for a band with a patch whose `NormalBound` §5.7 sets; otherwise analytic: `supportsAnalyticSTEP` takes a whole-turn torus (LF7), a four-arc torus patch (LF2/LF3) whose arcs each hold both their vertices in their own plane, a horn torus patch (LF6, a three-edge loop closing on the axis at its apex vertex) whose vertices are `Exact`, and a straight-walk cylinder patch closed by `Ellipse3` edges (`agent-docs/step-export-design.md`). `Body.Tessellate` admits a banded body (F-2), so `export.STEP` reaches the writer |
 | **DF11** | a later `Fillet`/`Chamfer`/`Shell` | DG11: Tables RB/EB/SB/TC/LB over the rewritten record; a patch's edge is in no record and matches nothing (SL1); a trimmed wall's rim at `sideZ` ends on a patch, so route E's SB7 refuses an edge there; a record carrying bands reads as no prism (route P and Table TC refuse); a second loop fillet or chamfer on another loop appends to `loopBands`, provided the first left `delta = 0` |
 | **DF12** | `Transform`, `Mirrored`, `PatternCopies` | re-lifts every face frame; `loopBands` re-attach on re-evaluation; a reflection flips `outward` and the ellipse's `Axis` sense with every winding (general-boolean A4) |
 
@@ -878,8 +887,7 @@ term unexercised. The volume's own bound
 is the enclosures' reach alone and cannot be made to fail by deleting one
 term, which the test records.
 
-Near-tangent and off-radius fixtures (§5.5–§5.7). Every apitest below
-refused SF1 before LF5′ and the restatement.
+Near-tangent and off-radius fixtures (§5.5–§5.7).
 `apitest/fillet_near_tangent_loop_test.go` covers the following cases:
 
 - It fillets the start cap loop of a rounded hexagon (corner circle 2.51,
@@ -902,7 +910,9 @@ following:
   `capband.NearTangentCorner`'s `ρ`.
 - They read a stepped loop's gap against a 256-bit `||v| − 5|`.
 - They sample the true level curves of that loop, stepping both into and out
-  of the material, against `LocalReach` and `LevelLength`.
+  of the material, against `LocalReach` and `LevelLength`, and the width of
+  the notch a step cuts beside a radius-5 arc and a radius-0.03 hole-rim arc
+  against `stepRoot`.
 - They compare a restated arc's Table CF piece against §5.6's tube, and
   enclose Lemma 1's seam excess, integrated in 256-bit arithmetic, by
   `MeridianExcess`.

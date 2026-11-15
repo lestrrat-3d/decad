@@ -82,7 +82,7 @@ func ReadLoop(budget *proofbound.WorkBudget, record sectionrecord.LoopRecord,
 			loop.Rho, loop.RhoRec, loop.Gap = rho, rhoRec, gap
 		}
 		if near {
-			k, why, err := nearTangentWalls(budget, record, walks, loop.Corners, rho, radius, radiusDelta)
+			k, why, err := nearTangentWalls(budget, record, walks, loop.Corners, rho, rhoRec, radius, radiusDelta)
 			if err != nil {
 				return Loop{}, nil, nil, -1, "", err
 			}
@@ -157,7 +157,7 @@ func restateLoop(record sectionrecord.LoopRecord, walks []survey2d.SideWalk, cor
 	if !ok {
 		return RestateTerms{}, 0, capband.RestateRefusal, nil
 	}
-	out := RestateTerms{OffRadiusTerms: terms}
+	out := RestateTerms{OffRadiusTerms: terms, Walks: restated}
 	for k, c := range corners {
 		if c == Reflex && (restated[k] || restated[(k+n-1)%n]) {
 			out.ReflexBeside++
@@ -166,42 +166,51 @@ func restateLoop(record sectionrecord.LoopRecord, walks []survey2d.SideWalk, cor
 	return out, -1, "", nil
 }
 
-// nearTangentWalls runs capband.NearTangentWallRefusal on every wall with an
-// LF5′ end, every walk moving by radius over radiusDelta. It returns the LF5′
-// corner a failing wall names and the refusal's reason, or "" when every such
-// wall survives; err is a budget or context error.
+// nearTangentWalls runs capband.NearTangentWallRefusal on every wall with a
+// near-tangent end, every walk moving by radius over radiusDelta: once with
+// restated centres and the ρ′ reaches rho, and once with the recorded centres
+// and the ρ_rec reaches rhoRec, wherever either is positive at an end
+// (agent-docs/loop-fillet-design.md §5.5). It returns the near-tangent corner
+// a failing wall names and the refusal's reason, or "" when every such wall
+// survives; err is a budget or context error.
 func nearTangentWalls(budget *proofbound.WorkBudget, record sectionrecord.LoopRecord, walks []survey2d.SideWalk,
-	corners []Corner, rho []float64, radius, radiusDelta float64) (int, string, error) {
+	corners []Corner, rho, rhoRec []float64, radius, radiusDelta float64) (int, string, error) {
 	n := len(walks)
 	amounts := make([]float64, n)
 	for i := range amounts {
 		amounts[i] = radius
 	}
+	near := func(k int) bool { return rho[k] > 0 || rhoRec[k] > 0 }
 	for i := range walks {
 		if err := survey2d.WallBudgetStep(budget); err != nil {
 			return -1, "", err
 		}
 		next := (i + 1) % n
-		if corners[i] != NearTangent && corners[next] != NearTangent {
+		if !near(i) && !near(next) {
 			continue
+		}
+		end := i
+		if !near(i) {
+			end = next
 		}
 		// The gate reads a far end as the carriers' miter or a circular
 		// neighbour's radial foot, which an LF8 or LF6 end is not, so such a
 		// wall is refused rather than gated on the wrong end.
 		for _, k := range [2]int{i, next} {
 			if corners[k] == CurvedMiter || corners[k] == Reflex {
-				end := i
-				if corners[i] != NearTangent {
-					end = next
-				}
 				return end, nearTangentOtherEndWhy, nil
 			}
 		}
-		if why := capband.NearTangentWallRefusal(record, walks, i, amounts, radiusDelta, rho[i], rho[next], true); why != "" {
-			if corners[i] == NearTangent {
-				return i, why, nil
+		for _, reading := range []struct {
+			reach   []float64
+			restate bool
+		}{{rho, true}, {rhoRec, false}} {
+			if reading.reach[i] == 0 && reading.reach[next] == 0 {
+				continue
 			}
-			return next, why, nil
+			if why := capband.NearTangentWallRefusal(record, walks, i, amounts, radiusDelta, reading.reach[i], reading.reach[next], reading.restate); why != "" {
+				return end, why, nil
+			}
 		}
 	}
 	return -1, "", nil

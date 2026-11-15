@@ -186,6 +186,9 @@ func (fr *Rings) Place(in Input, e brepgeom.Embed,
 		// patch beside it adds that distance (agent-docs/loop-fillet-design.md
 		// §5.7).
 		for k, reach := range in.Near {
+			if proofbound.IsNonFinite(reach) {
+				return fmt.Errorf(`%w: a fillet band's corner reach is not finite`, decaderr.ErrUnsupported)
+			}
 			if reach > 0 {
 				fr.SeamGap[k] = proofbound.AbsSumUpper(fr.SeamGap[k], reach)
 			}

@@ -102,13 +102,15 @@ func NearTangentNormalTurn(walks []survey2d.SideWalk, k int, rho float64, radius
 }
 
 // movedRadiusLower is the least radius circular walk w's carrier reaches
-// over offsets up to reach, read about its recorded centre through the corner
-// (u, v): |v − C| − reach for a walk that holds its material inside, |v − C|
-// otherwise. ok is false where that is not positive.
+// over offsets up to reach: the lesser of |v − C| through the corner (u, v)
+// and the walk's own held radius less its bound, less reach for a walk that
+// holds its material inside. ok is false where that is not positive.
 func movedRadiusLower(w survey2d.SideWalk, u, v float64, reach *big.Rat) (*big.Rat, bool) {
 	pu, pv := proofarith.FloatRat(u), proofarith.FloatRat(v)
 	cu, cv := proofarith.FloatRat(w.CU), proofarith.FloatRat(w.CV)
-	if pu == nil || pv == nil || cu == nil || cv == nil {
+	held := proofarith.FloatRat(w.Radius)
+	bound := proofarith.FloatRat(w.RadiusBound)
+	if pu == nil || pv == nil || cu == nil || cv == nil || held == nil || bound == nil {
 		return nil, false
 	}
 	du, dv := new(big.Rat).Sub(pu, cu), new(big.Rat).Sub(pv, cv)
@@ -117,6 +119,9 @@ func movedRadiusLower(w survey2d.SideWalk, u, v float64, reach *big.Rat) (*big.R
 		return nil, false
 	}
 	lo := new(big.Rat).Set(r.Lo)
+	if own := new(big.Rat).Sub(held, bound); own.Cmp(lo) < 0 {
+		lo = own
+	}
 	if w.Th1 > w.Th0 {
 		lo.Sub(lo, reach)
 	}

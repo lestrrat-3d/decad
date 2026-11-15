@@ -52,5 +52,8 @@ func LoopContourDelta(ctx context.Context, loop sectionrecord.LoopRecord, r, rDe
 	if reach == 0 {
 		return delta, nil
 	}
+	if proofbound.IsNonFinite(reach) {
+		return 0, fmt.Errorf(`%w: a fillet contour's corner reach is not finite (loop-fillet §5.7)`, decaderr.ErrUnsupported)
+	}
 	return proofbound.AbsSumUpper(delta, reach), nil
 }

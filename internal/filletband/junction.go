@@ -25,6 +25,19 @@ import (
 type RestateTerms struct {
 	capband.OffRadiusTerms
 	ReflexBeside int
+	// Walks marks the restated walks, nil for a loop that restates nothing.
+	Walks []bool
+}
+
+// Charged reports whether corner k carries a near-tangent reach, a radial
+// step, or a restated arc on either side: a reading the partial-fillet route
+// does not charge (agent-docs/loop-fillet-design.md §5.5).
+func (l Loop) Charged(k int) bool {
+	n := len(l.Walks)
+	if l.Restate.Walks != nil && (l.Restate.Walks[k] || l.Restate.Walks[(k+n-1)%n]) {
+		return true
+	}
+	return l.Gap != nil && (l.Rho[k] > 0 || l.RhoRec[k] > 0 || l.Gap[k] > 0)
 }
 
 // segmentOffRadius reports whether seg is an off-radius whole arc.
@@ -136,23 +149,65 @@ func (l Loop) localRho(k int) float64 {
 	return math.Max(l.Rho[k], l.RhoRec[k])
 }
 
-// stepRoot is 2π·√((T + δ + ρ)(δ + ρ)), the lateral reach of a radial step δ
-// at offset up to T (§5.7), rounded upward; zero when δ is.
-func stepRoot(T, delta, rho float64) float64 {
+// stepRoot is 2π·√(k·(T + δ + ρ)(δ + ρ)), the lateral reach of a radial step δ
+// at offset up to T (§5.7), rounded upward; zero when δ is. k is
+// stepCurvature's factor for the corner's two walks.
+func stepRoot(T, delta, rho, k float64) float64 {
 	if delta == 0 {
 		return 0
 	}
-	prod := proofbound.ProductUpper(proofbound.AbsSumUpper(T, delta, rho), proofbound.AbsSumUpper(delta, rho))
+	prod := proofbound.ProductUpper(k, proofbound.ProductUpper(proofbound.AbsSumUpper(T, delta, rho), proofbound.AbsSumUpper(delta, rho)))
 	root := proofbound.RatSqrtUp(proofarith.FloatRat(prod))
 	// 6.2832 > 2π.
 	return proofbound.ProductUpper(6.2832, root)
+}
+
+// stepCurvature is the factor a circular walk with its material outside
+// (a hole rim's arc) puts on a step's lateral reach at corner k: its moved
+// circle, of radius R + t, curves round v, so a chord of it reaching within
+// t + δ + ρ of v is longer than a line's by √((R + T)/R) (§5.7). It is the
+// larger of (R_hi + T)/R_lo over the corner's two walks, R read from the
+// walk's recorded centre to its two recorded ends, and 1 for a line or a walk
+// holding its material inside. ok is false where R_lo is not positive.
+func (l Loop) stepCurvature(k int, T float64) (float64, bool) {
+	n := len(l.Walks)
+	out := 1.0
+	for _, w := range []Walk{l.Walks[(k+n-1)%n], l.Walks[k]} {
+		if !w.Circular || w.CCW {
+			continue
+		}
+		c, err := ratPoint(w.Center)
+		if err != nil {
+			return 0, false
+		}
+		lo, hi := math.Inf(1), 0.0
+		for _, p := range []Point{w.Start, w.End} {
+			q, err := ratPoint(p)
+			if err != nil {
+				return 0, false
+			}
+			d := q.sub(c)
+			sq := d.dot(d)
+			lo = math.Min(lo, proofbound.RatSqrtDown(sq))
+			hi = math.Max(hi, proofbound.RatSqrtUp(sq))
+		}
+		if !(lo > 0) {
+			return 0, false
+		}
+		num := proofarith.FloatRat(proofbound.AbsSumUpper(hi, T))
+		f := proofbound.RatFloatUp(new(big.Rat).Quo(num, proofarith.FloatRat(lo)))
+		out = math.Max(out, f)
+	}
+	return out, true
 }
 
 // LocalReach is each corner's reach (§5.7): every point of the true band near
 // the corner lies, in its own level, within it of the stated patches, and each
 // stated point within it of a true one. It is 2ρ̃ + 3δ plus, at a radial step
 // δ > 0, stepRoot, with ρ̃ the larger near-tangent reading and T the largest
-// offset. It returns nil for a loop with no LF5′ corner and no step.
+// offset. A corner whose curvature factor does not lift reads +Inf, which
+// every consumer refuses. It returns nil for a loop with no LF5′ corner and
+// no step.
 func (l Loop) LocalReach(radius proofbound.RatInterval) []float64 {
 	if l.Gap == nil {
 		return nil
@@ -161,7 +216,12 @@ func (l Loop) LocalReach(radius proofbound.RatInterval) []float64 {
 	out := make([]float64, len(l.Gap))
 	for k, delta := range l.Gap {
 		rho := l.localRho(k)
-		out[k] = proofbound.AbsSumUpper(proofbound.ProductUpper(2, rho), proofbound.ProductUpper(3, delta), stepRoot(T, delta, rho))
+		curv, ok := l.stepCurvature(k, T)
+		if !ok {
+			out[k] = math.Inf(1)
+			continue
+		}
+		out[k] = proofbound.AbsSumUpper(proofbound.ProductUpper(2, rho), proofbound.ProductUpper(3, delta), stepRoot(T, delta, rho, curv))
 	}
 	return out
 }
@@ -178,9 +238,14 @@ func (l Loop) LevelLength(radius proofbound.RatInterval) []float64 {
 	out := make([]float64, len(l.Gap))
 	for k, delta := range l.Gap {
 		rho := l.localRho(k)
+		curv, ok := l.stepCurvature(k, T)
+		if !ok {
+			out[k] = math.Inf(1)
+			continue
+		}
 		step := 0.0
 		if delta > 0 {
-			step = proofbound.AbsSumUpper(proofbound.ProductUpper(4, stepRoot(T, delta, rho)), proofbound.ProductUpper(10, delta))
+			step = proofbound.AbsSumUpper(proofbound.ProductUpper(4, stepRoot(T, delta, rho, curv)), proofbound.ProductUpper(10, delta))
 		}
 		out[k] = proofbound.AbsSumUpper(proofbound.ProductUpper(2, rho), step)
 	}
@@ -256,8 +321,8 @@ var stepNormalTurn = big.NewRat(3, 2)
 
 // NormalTurn bounds, for corner k, how far the true band's in-plane outward
 // normals near the corner stray from the normals of the two patches beside
-// it: stepNormalTurn at a radial step, NearTangentNormalTurn at an LF5′ corner,
-// and zero elsewhere. ok is false where that function refuses.
+// it: stepNormalTurn at a radial step, NearTangentNormalTurn at a corner with a
+// near-tangent reach in either reading, and zero elsewhere. ok is false where that function refuses.
 func (l Loop) NormalTurn(walks []survey2d.SideWalk, k int, radius proofbound.RatInterval) (*big.Rat, bool) {
 	if l.Gap == nil {
 		return new(big.Rat), true
@@ -265,7 +330,7 @@ func (l Loop) NormalTurn(walks []survey2d.SideWalk, k int, radius proofbound.Rat
 	if l.Gap[k] > 0 {
 		return new(big.Rat).Set(stepNormalTurn), true
 	}
-	if l.Corners[k] != NearTangent {
+	if l.localRho(k) == 0 {
 		return new(big.Rat), true
 	}
 	return NearTangentNormalTurn(walks, k, l.localRho(k), radius)

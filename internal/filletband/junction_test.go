@@ -358,3 +358,117 @@ func TestReadLoopOffRadiusRefusals(t *testing.T) {
 	// that refuses it reads the restated one.
 	require.True(t, capband.JoinIsG1(line(-15, -5, 15, -5), ccwArc(15, 0, 15, -5, right, 0)))
 }
+
+// stepNotchWidth samples, at offset t, how far either side of the stepped
+// corner the true level curve departs from the stated one by more than a
+// thousandth of the step, for a quarter arc of radius R about the origin
+// ending at (0, −R) and a line leaving (0, −R − δ) to the right. outside puts
+// the material outside the arc's circle and below the line, as at a hole
+// rim's arc, so the stated arc is the moved circle of radius R + t; otherwise
+// the material sits inside and above, at radius R − t.
+func stepNotchWidth(R, delta, t float64, outside bool) float64 {
+	dist := func(px, py float64) float64 {
+		var arc float64
+		if px <= 0 && py <= 0 {
+			arc = math.Abs(R - math.Hypot(px, py))
+		} else {
+			arc = math.Min(math.Hypot(px+R, py), math.Hypot(px, py+R))
+		}
+		stepY := math.Max(math.Min(-R, -R-delta), math.Min(math.Max(-R, -R-delta), py))
+		step := math.Hypot(px, py-stepY)
+		bottom := math.Abs(py - (-R - delta))
+		if px < 0 {
+			bottom = math.Hypot(px, py-(-R-delta))
+		}
+		return math.Min(arc, math.Min(step, bottom))
+	}
+	sign := 1.0
+	if outside {
+		sign = -1
+	}
+	level := func(px float64) float64 {
+		base := math.Min(-R, -R-delta)
+		if !outside {
+			base = math.Max(math.Min(-R, -R-delta), -R-delta)
+		}
+		lo, hi := base, base+sign*2*t
+		for range 200 {
+			mid := (lo + hi) / 2
+			if dist(px, mid) < t {
+				lo = mid
+			} else {
+				hi = mid
+			}
+		}
+		return (lo + hi) / 2
+	}
+	stated := func(px float64) float64 {
+		if px <= 0 {
+			return -math.Sqrt((R-sign*t)*(R-sign*t) - px*px)
+		}
+		return -R - delta + sign*t
+	}
+	w := 0.0
+	span := 64 * math.Sqrt(t*math.Abs(delta)*(R+t)/R)
+	const n = 20000
+	for i := 0; i <= n; i++ {
+		x := -span + 2*span*float64(i)/n
+		if math.Abs(level(x)-stated(x)) > math.Abs(delta)/1000 && math.Abs(x) > w {
+			w = math.Abs(x)
+		}
+	}
+	return w
+}
+
+// TestStepRootCoversHoleArcNotch builds the step's corner as a two-walk loop
+// by hand and checks that the lateral width of the notch the true level curve
+// cuts, sampled at the full offset 1, stays within LocalReach less its 3δ
+// term (the stepRoot share, which bounds the differing stated piece). The
+// rows cover a radius-5 arc with its material inside and a radius-0.03 arc
+// with its material outside, a hole rim's corner round, whose moved circle of
+// radius R + t curves round the corner. Without stepCurvature's √((R + T)/R)
+// the second row's bound falls below its sampled notch.
+func TestStepRootCoversHoleArcNotch(t *testing.T) {
+	t.Parallel()
+	r1, err := filletband.RadiusInterval(1, 0)
+	require.NoError(t, err)
+	for _, tc := range []struct {
+		name    string
+		R       float64
+		outside bool
+	}{{"material inside", 5, false}, {"hole rim", 0.03, true}} {
+		for _, delta := range []float64{stepDelta, -stepDelta} {
+			R := tc.R
+			loop := filletband.Loop{
+				Walks: []filletband.Walk{
+					{Circular: true, CCW: !tc.outside, Start: filletband.Point{U: -R}, End: filletband.Point{V: -R - delta}, Radius: R},
+					{Start: filletband.Point{V: -R - delta}, End: filletband.Point{U: 10, V: -R - delta}},
+				},
+				Corners: []filletband.Corner{filletband.Tangent, filletband.Tangent},
+				Rho:     []float64{0, 0}, RhoRec: []float64{0, 0}, Gap: []float64{0, math.Abs(delta)},
+			}
+			bound := loop.LocalReach(r1)[1] - 3*math.Abs(delta)
+			width := stepNotchWidth(R, delta, 1, tc.outside)
+			require.LessOrEqual(t, width, bound, "%s, step %g", tc.name, delta)
+		}
+	}
+}
+
+// TestChargedCorners pins filletband.Loop.Charged, which the partial-fillet
+// route refuses on: on the stepped loop both corners of the restated arc are
+// charged, as is any corner with a near-tangent reach or a step, and the
+// three right-angle miters away from the arc are not.
+func TestChargedCorners(t *testing.T) {
+	t.Parallel()
+	read, walks, bad, why := readLoop(t, steppedLoop(stepDelta))
+	require.Equal(t, -1, bad, why)
+	for k := range walks {
+		arcAt := walks[k].IsCircular() || walks[(k+len(walks)-1)%len(walks)].IsCircular()
+		require.Equal(t, arcAt, read.Charged(k), "corner %d", k)
+	}
+	exact, _, bad, why := readLoop(t, slotLoop(0))
+	require.Equal(t, -1, bad, why)
+	for k := range exact.Corners {
+		require.False(t, exact.Charged(k), "corner %d", k)
+	}
+}
