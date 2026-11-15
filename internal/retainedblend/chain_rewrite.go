@@ -95,6 +95,7 @@ func rewriteChain(ctx context.Context, env topo.Env, fp facetedrecord.Payload, c
 		}
 	}
 	w := newWork(fp, rim{scale: scale, charge: charge}, spec)
+	w.faceIx = faceIndex
 	slack := chargedSlack(scale, charge)
 	margin := w.tau + slack
 

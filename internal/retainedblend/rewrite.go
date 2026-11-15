@@ -10,6 +10,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -50,6 +51,13 @@ type work struct {
 	// triangle's azimuth term, and rowTau the bound the rows between the
 	// plane's and the wall's state (§6.3, Strip triangles).
 	share, rowTau float64
+	// faceIx numbers the held body's faces as fp.FaceOf does, for the routes
+	// whose band reads an end plane's provenance (onTagPlane); nil otherwise.
+	faceIx map[*topo.Face]int
+	// seam holds, for a held edge along an end plane that a band cut made a
+	// vertex on, those vertices; build splits every facet that keeps the edge
+	// (splitSeams).
+	seam map[[2]int][]int
 }
 
 type ringPt struct {
