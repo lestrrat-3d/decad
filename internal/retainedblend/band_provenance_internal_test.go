@@ -173,13 +173,18 @@ func TestCutBandAlongEndPlane(t *testing.T) {
 		require.InDelta(t, 3, area, 1e-12, "the pieces keep the facet's area and winding")
 	})
 
-	t.Run("one vertex on the plane by provenance is not enough", func(t *testing.T) {
+	t.Run("one vertex on the plane by provenance does not make the cut a corner", func(t *testing.T) {
 		t.Parallel()
+		// B lies on the plane too, but no face's tag says so: it is read by sign,
+		// at no charge, and the cuts along AB are no band corner and no run.
 		w, band, f := flatBand(a, b, c)
 		band.ends[0].on = map[int]bool{0: true}
-		_, err := w.cutBand(f, band)
+		cuts, err := w.cutBand(f, band)
+		require.NoError(t, err)
+		require.Equal(t, -1, cuts.corner[0])
+		require.Empty(t, w.seam)
+		_, err = cuts.endRun(0, 1)
 		require.ErrorIs(t, err, decaderr.ErrUnsupported)
-		require.ErrorContains(t, err, "a vertex of the wall lies on an end face's plane")
 	})
 
 	t.Run("the angle-main band reads no plane along both points", func(t *testing.T) {

@@ -230,10 +230,11 @@ from the polygon, and the deferred plane then never reads it. A plane still
 refusing after every other plane is applied refuses the cut (SR5): "a vertex of
 the wall lies on an end face's plane", or, where the undecided vertex lies on
 or inside every other band plane, "an earlier cut on an end face's plane lies
-within the blend's reach". A vertex on `G` that no other plane puts outside and
-that no face's tag puts on `G` is never read as lying on `G`, and no record of
-which vertices an earlier blend made is kept: a cut vertex an earlier blend made on `G`
-is not read as on it.
+within the blend's reach". On the arc and chain routes an undecided end plane is
+read by sign first (below), and only a vertex that stays undecided refuses. No
+record of which vertices an earlier blend made is kept: a vertex on `G` that no
+other plane puts outside and that no face's tag puts on `G` is not read as lying
+on it, and a cut vertex an earlier blend made on `G` is such a vertex.
 
 On the arc and chain routes (an exact main plane; R3's angle-main band keeps the
 rules above) the end plane's `on` set also holds every vertex of the boundary of
@@ -263,8 +264,85 @@ not admitted. Two consequences follow:
   region and claims do not change. Without the split the facet meets the strip
   across a T-junction.
 
-A cut that lies within its bound of `G` on an edge that is not along `G` still
-has no decided side, and a vertex an earlier blend made on `G` is such a cut.
+**Sign reading with a charge.** When every remaining plane of a polygon refuses,
+the clip applies the first remaining end plane of an exact-main band once more with
+sign reading on (`clipBySign`); the final test of a held vertex's membership
+(`inside`) does the same. A point that lies within its bound of the end plane
+at an offset `v`, which no face's tag puts on the plane, is then put on the side
+of `v`'s sign (on the plane when `v` is zero), and its bound is raised to
+`c / s_lo` (a plane wall) or `β + c / s_lo` (a curved wall), rounded up, where
+`c = β + |v| + slack` and `s_lo` is a proven lower bound on the sine of the angle
+between the wall and `G` (`signRead`, `slantBound`). A held vertex's bound is raised in the work and reported through
+`raised`, like the raised inner vertices of a curved wall; a cut point's own bound
+is raised. The reading applies to end planes only and only to a band with an exact
+main plane, so R3's band, the main plane, the further planes and the guard keep
+their refusals. It is on only where reading without it refuses, so no clip that
+builds without it changes. A cut of a held edge reads its two ends first, and a
+sign reading there raises an end that another plane may already have put outside;
+that only widens the bound, and the cut takes the raised bounds.
+
+The side is a choice, not a claim, and no residual admits an input claim. The held
+bound `β` says the vertex's true point lies within `β` of it; that holds as before.
+The vertex lies within `|v|` plus the slack (the plane's own arithmetic and
+displacement charge) of the plane the exact band is cut at, so its true point lies
+within `c = β + |v| + slack` of that plane, on whichever side it is on. That is a
+distance to the plane. The band's boundary on the wall is where the wall crosses
+the plane, and when the wall meets `G` at a slant of sine `s` it lies `c / s` away
+along the wall from the true point, not `c`. The path along the wall from the true
+point to the plane stays within `c` of the plane, because its offset falls along it
+while the sine stays above zero, so `s_lo(c)` bounds the sine over the whole path.
+The published bound is the distance from the *held* point:
+
+- **Plane wall: `c / s_lo`.** Split the held point's error into a part normal to
+  the wall, at most `β`, and a part across the boundary line within the wall, at
+  most `(a + β·cos θ) / s` for `a = |v| + slack`. Their root-sum-square is at most
+  `√(β² + ((a + β·cos θ)/s)²) ≤ (β + a)/s = c/s`, because `2aβ·cos θ ≤ 2aβ`.
+- **Curved wall: `β + c / s_lo`.** The path bends, so the triangle inequality is
+  used: `β` to the true point and `c / s_lo` from it to the boundary. No curvature
+  term is proven. (At sine 0.866 this is about 2.15 β where a plane gives 1.15 β.)
+
+The flat counterexample (a kept vertex whose foot on the true wall lies on the band's
+side) and the cylinder cases (foot on the band's side, the point inside and outside
+the circle, the axis on either side of `G`, a bore wall) are tests
+(`TestSignReadBoundCoversSlant`, `TestSlantBoundCoversCylinderExactly`).
+
+`s_lo` (`wall_sine.go`) comes from the wall face's retained tag, which must state
+no departure (`TagDeparture` and `AxialDelta` zero): Claim R then puts the true
+wall on it, and its `NormalBound` lowers the sine by at most itself, since
+`sin(θ − δ) ≥ sin θ − δ`.
+
+- A plane wall meets `G` at the length of the cross product of the two unit
+  normals, less its rounding.
+- A cylinder wall whose axis, normalized, runs parallel to `G` (`|n·a| ≤ 64 ulp`;
+  the axial term `|n·a|·(scale + |origin|)` and the rounding of `n·(origin − o)` are charged) meets it, at a point with unit radial direction `r`, at
+  `√(1 − (r·n)²)`. A wall point within `reach` of `G` has `|r·n| ≤ (h + reach) / R`,
+  `h` the axis's distance from `G`, because `n·(p − o) = n·(c − o) + R·(r·n)` when
+  the axial term vanishes. This is `√(R² − (h + reach)²) / R`, the arc route's
+  `√(R² − h²) / R` at reach zero (0.866 for the notched round's side roots, 0.66
+  to 0.87 for the end-round chord-row fixture). The axis may lie on either side
+  of `G`, and a bore wall is the same surface.
+- Any other wall, a cylinder with a tilted axis, a cone, a sphere and a wall whose
+  tag states a departure, has no `s_lo`, and the reading refuses.
+
+`reach` is a distance from `G`: `s_lo(reach)` holds at wall points within `reach`
+of `G`. The reading takes `s_lo(c)`, valid on the path above, and refuses when it
+is below `minSine`. What decides the result is
+still what the gates check afterwards, and they only reject: the wall test, the
+strip and taken-cap clearance and the nesting parity are unchanged, so a band that
+overlaps an earlier cut or reaches another part of the wall refuses with their
+text, not with an end plane's. A vertex exactly on the plane in floats but on no
+face's tag reads as on the plane without being a corner or a run vertex, so a cut
+whose corner it should be refuses at the setback corner.
+
+The crossing bound of a cut point on an end plane (`max(ends, facet) + slack + τ`)
+and the band corner's carry no slant term either, with or without a sign reading.
+That predates the reading and is recorded as a follow-up. H2 relies on it only
+through the input bound `β` of a sign-read cut point, which is its crossing bound:
+on the arc route only cut points made on the other end plane (the main, rim and
+guard planes meet the wall square), on the chain route it depends on how the base
+and setback planes meet the wall. A held vertex's `β` is the held bound and does
+not depend on it.
+
 The facet keeps the rest, triangulated again with every point
 where the band's boundary crosses a held facet edge and every corner of the
 band inside it. A crossing point is read from the held edge's two vertices,
@@ -1136,7 +1214,7 @@ of that computation.
 | **SR2** | two selected edges share a vertex and are neither a mitre run (§4.7) nor corners of perpendicular faces (§4.8), or a selected edge continues tangentially into a neighbour | no transition built | `ErrUnsupported` |
 | **SR3** | no blend of that size exists: `R − r ≤ 0` for an inside ball (§4.2), `φ` within 10⁻⁹ of 0 or π, a chamfer distance of zero or below, an R6 setback that reaches the axis or runs past the sphere's pole (§4.5), or an R7 fillet inside the larger cylinder with `2ρ ≥ R − r`, where no ball touches both walls (§4.10) | no regular blend | `ErrDegenerate` |
 | **SR4** | the setback does not fit (§6.2) and the held bounds prove it does not | the blend consumes the face | `ErrDegenerate` |
-| **SR5** | the setback might not fit and the held bounds cannot decide it, or a plane that crosses an R6 sphere below `minSine` (§4.5), or an end vertex of an R1 edge is not a three-face corner with a retained planar `G`, or a chain's sense or `G`'s turn at the vertex is undecided (§5.0), or `G` turns the wrong way: a concave edge needs a reflex corner of `G`, or a convex one where `A` or `B` is reflex at the vertex, and a convex edge outside the R1 route (plane–cylinder, arc, cylinder–cylinder, mitre run) needs a convex one; or both `A` and `B` turn reflex at the vertex, or a convex edge meets a reflex face other than an R3 wall that extends past the vertex beside a plane that trims there (§5.0), or another part of `G` comes within the blend's reach of the vertex, or a vertex of an R3 wall lies within its bound of an end plane the band is clipped by, or of the band's generator, unless another band plane puts it outside the band or, on an arc or chain band, a face whose tag is that end plane's puts it on the plane (§4.3), or the end cap an R3 or an R4 end face takes is not a simple polygon, or an R3 fillet's tangent point on the plane lies no farther from the wall's circle than the wall's held cut may at the cap (§5.0), or an R4 fillet's end curve lies no farther from the wall's cut in an end plane than that cut may, or a vertex of an R4 wall that lies on both sides of its plane lies within its bound of the band's planes, or another part of such a wall, or a chord of its boundary, comes within the band's reach, or the wall's facets along the rim decide no side or disagree (§4.4), or another feature comes within an R7 chamfer's or fillet's reach, or an R7 fillet's cell, window, cut ring or band test fails (§4.9, §4.10), or an arc's rows need more than 1,024 rows for their chords in an end plane to certify within `τ` (§6.3), or a corner's sphere patch needs more than 1,024 rows to stay within the corner route's tolerance, or a revolve strip's row needs more than 4,096 columns for its azimuth term's share of `τ` (§6.3, Strip triangles) | body exists; the evaluator cannot prove its construction | `ErrUnsupported` |
+| **SR5** | the setback might not fit and the held bounds cannot decide it, or a plane that crosses an R6 sphere below `minSine` (§4.5), or an end vertex of an R1 edge is not a three-face corner with a retained planar `G`, or a chain's sense or `G`'s turn at the vertex is undecided (§5.0), or `G` turns the wrong way: a concave edge needs a reflex corner of `G`, or a convex one where `A` or `B` is reflex at the vertex, and a convex edge outside the R1 route (plane–cylinder, arc, cylinder–cylinder, mitre run) needs a convex one; or both `A` and `B` turn reflex at the vertex, or a convex edge meets a reflex face other than an R3 wall that extends past the vertex beside a plane that trims there (§5.0), or another part of `G` comes within the blend's reach of the vertex, or a vertex of an R3 wall lies within its bound of an end plane the band is clipped by, or of the band's generator, unless another band plane puts it outside the band or, on an arc or chain band, a face whose tag is that end plane's puts it on the plane or a charged sign reading puts it on a side (§4.3), or the end cap an R3 or an R4 end face takes is not a simple polygon, or an R3 fillet's tangent point on the plane lies no farther from the wall's circle than the wall's held cut may at the cap (§5.0), or an R4 fillet's end curve lies no farther from the wall's cut in an end plane than that cut may, or a vertex of an R4 wall that lies on both sides of its plane lies within its bound of the band's planes, or another part of such a wall, or a chord of its boundary, comes within the band's reach, or the wall's facets along the rim decide no side or disagree (§4.4), or another feature comes within an R7 chamfer's or fillet's reach, or an R7 fillet's cell, window, cut ring or band test fails (§4.9, §4.10), or an arc's rows need more than 1,024 rows for their chords in an end plane to certify within `τ` (§6.3), or a corner's sphere patch needs more than 1,024 rows to stay within the corner route's tolerance, or a revolve strip's row needs more than 4,096 columns for its azimuth term's share of `τ` (§6.3, Strip triangles) | body exists; the evaluator cannot prove its construction | `ErrUnsupported` |
 | **SR6** | the held mesh disagrees with the exact vertex of its three tags by more than the vertex bound plus slack (§6.3) | the record and the mesh do not describe one solid | `ErrUnsupported` |
 | **SR7** | a facet the rewrite keeps outside the new strip meets a strip facet, or a facet of an end face that gains a cap, that it shares no vertex with (the strip clearance of retained-modify-reach §5.6, run before the build), or the rewritten mesh fails the held audit (watertight, shells nested with consistent signs; the audit tests no facet pair for intersection) | the result is invalid | `ErrDegenerate` when the audit proves a face inside out (modify S8), else `ErrUnsupported` |
 
