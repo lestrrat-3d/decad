@@ -26,7 +26,7 @@ func TestBlindPocketFloorBandHasFourSphereOctants(t *testing.T) {
 	delta, err := offset2d.OffsetSectionDelta(budget, pocket, -1, 1, 0, offset2d.ShellTol)
 	require.NoError(t, err)
 	require.Zero(t, delta)
-	read, err := breprecord.FilletLoopOf(budget, rounded.Outer, 1, "pocket floor", freeform.NewFreeformWork())
+	read, err := breprecord.FilletLoopOf(budget, rounded.Outer, 1, 0, "pocket floor", freeform.NewFreeformWork())
 	require.NoError(t, err)
 	joins, err := filletband.OffsetJoins(budget, read.Walks, 1, 0, offset2d.ShellTol)
 	require.NoError(t, err)

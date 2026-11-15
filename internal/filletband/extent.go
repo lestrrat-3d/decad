@@ -13,8 +13,9 @@ import (
 
 // ExtentsOf encloses both ends of a band's projection in its face frame.
 // Direction coefficients are the held projections of the world direction
-// onto that frame; their placement error is charged by the caller.
-func ExtentsOf(pieces []Piece, walks []survey2d.SideWalk, corners []Corner,
+// onto that frame; their placement error is charged by the caller. rho is
+// the loop's local reach per corner (Loop.LocalReach), nil when it has none.
+func ExtentsOf(pieces []Piece, walks []survey2d.SideWalk, corners []Corner, rho []float64,
 	materialSign, heldRadius float64, radius, side Interval, coeff [3]float64) (Interval, Interval, error) {
 	var positive, negative [3]*big.Rat
 	for i, c := range coeff {
@@ -32,11 +33,19 @@ func ExtentsOf(pieces []Piece, walks []survey2d.SideWalk, corners []Corner,
 	if err != nil {
 		return Interval{}, Interval{}, err
 	}
+	hi, err = WidenNearTangentExtent(rho, positive, hi)
+	if err != nil {
+		return Interval{}, Interval{}, err
+	}
 	lo, err := Extreme(pieces, radius, side, int64(materialSign), negative)
 	if err != nil {
 		return Interval{}, Interval{}, err
 	}
 	lo, err = WidenCurvedMiterExtent(walks, corners, heldRadius, radius, side, materialSign, negative, lo)
+	if err != nil {
+		return Interval{}, Interval{}, err
+	}
+	lo, err = WidenNearTangentExtent(rho, negative, lo)
 	if err != nil {
 		return Interval{}, Interval{}, err
 	}

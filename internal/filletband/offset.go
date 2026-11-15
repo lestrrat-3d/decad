@@ -141,34 +141,107 @@ func OffsetLoop(budget *proofbound.WorkBudget, walks []survey2d.SideWalk, joins 
 	return segs, nil
 }
 
-// CornerClass is Table LF's class of corner k, or zero for SF1.
-func CornerClass(loop sectionrecord.LoopRecord, walks []survey2d.SideWalk, fw []Walk, joins []offset2d.Join, k int) (Corner, error) {
+// CornerRead is Table LF's class of one corner beside the corner's
+// near-tangent reaches: Rho read with every off-radius arc about its restated
+// centre (the class's own ρ, agent-docs/loop-fillet-design.md §5.5–§5.6) and
+// RhoRec read about the recorded centres through the recorded junction (the
+// local terms of §5.7). Both are zero at a join exactly tangent in that
+// reading. Class is zero for SF1, with Why the reason when a near-tangent,
+// restatement or curved-miter rule names one.
+type CornerRead struct {
+	Class       Corner
+	Rho, RhoRec float64
+	Why         string
+}
+
+// CornerClass is Table LF's class of corner k for a fillet of radius r with
+// conversion bound rDelta.
+//
+// The turn is the exact sign of the cross product of the two walks' tangents,
+// read about the recorded centres (Turn). At a reflex corner beside an
+// off-radius arc (capband.OffRadius) it is read about the restated centre too,
+// and two signs that disagree refuse. A join the offset reads as G1 is LF5 when
+// capband.RestatedJoinIsG1 proves it exactly tangent with every off-radius arc
+// read about its restated centre, and LF5′ when
+// capband.RestatedNearTangentCorner admits it with both walks moving by r over
+// its conversion span (§5.5). Either way the corner is also read about the
+// recorded centres (RhoRec), and a join that reading's near-tangent class
+// refuses is SF1. A sharp corner beside an off-radius arc (LF8 there) is SF1:
+// the curved-miter allowance reads the recorded centre (§5.6). Every test is
+// exact rational arithmetic over the record's floats; none admits on a
+// residual.
+func CornerClass(loop sectionrecord.LoopRecord, walks []survey2d.SideWalk, fw []Walk, joins []offset2d.Join, k int,
+	r, rDelta float64) (CornerRead, error) {
 	n := len(walks)
 	prev, cur := walks[(k+n-1)%n], walks[k]
 	turn, err := Turn(fw[(k+n-1)%n], fw[k])
 	if err != nil {
-		return 0, err
+		return CornerRead{}, err
 	}
+	prevSeg, curSeg, err := cornerSegments(loop, prev, cur)
+	if err != nil {
+		return CornerRead{}, err
+	}
+	offRadius := segmentOffRadius(prevSeg) || segmentOffRadius(curSeg)
 	j := joins[k]
 	switch {
 	case turn < 0 && j.Arc:
-		return Reflex, nil
+		if offRadius {
+			restated, ok := restatedTurn(prevSeg, curSeg)
+			if !ok {
+				return CornerRead{Why: capband.RestateRefusal}, nil
+			}
+			if restated != turn {
+				return CornerRead{Why: restatedTurnWhy}, nil
+			}
+		}
+		return CornerRead{Class: Reflex}, nil
 	case turn > 0 && prev.IsLine() && cur.IsLine() && !j.Arc && !j.G1:
-		return Miter, nil
+		return CornerRead{Class: Miter}, nil
 	case turn > 0 && (prev.IsCircular() || cur.IsCircular()) && !j.Arc && !j.G1:
-		return CurvedMiter, nil
-	case turn == 0 && j.G1:
-		prevSeg, err := sectionrecord.NormalizeSegment(loop.Segments[prev.Segs[len(prev.Segs)-1]])
-		if err != nil {
-			return 0, err
+		if offRadius {
+			return CornerRead{Why: offRadiusMiterWhy}, nil
 		}
-		curSeg, err := sectionrecord.NormalizeSegment(loop.Segments[cur.Segs[0]])
-		if err != nil {
-			return 0, err
+		return CornerRead{Class: CurvedMiter}, nil
+	case j.G1 && !j.Arc:
+		rec := 0.0
+		if !capband.JoinIsG1(prevSeg, curSeg) {
+			charge, why, hint := capband.NearTangentCorner(prevSeg, curSeg, r, r, rDelta)
+			if why != "" {
+				return CornerRead{Why: why + hint}, nil
+			}
+			rec = charge.Rho
 		}
-		if capband.JoinIsG1(prevSeg, curSeg) {
-			return Tangent, nil
+		if capband.RestatedJoinIsG1(prevSeg, curSeg) {
+			return CornerRead{Class: Tangent, RhoRec: rec}, nil
 		}
+		charge, why, hint := capband.RestatedNearTangentCorner(prevSeg, curSeg, r, r, rDelta)
+		if why != "" {
+			return CornerRead{Why: why + hint}, nil
+		}
+		return CornerRead{Class: NearTangent, Rho: charge.Rho, RhoRec: rec}, nil
 	}
-	return 0, nil
+	return CornerRead{}, nil
+}
+
+// restatedTurnWhy and offRadiusMiterWhy are SF1's reasons for a corner beside
+// an off-radius arc whose turn changes sign when the arc is read about its
+// restated centre, and for a sharp corner beside such an arc.
+const (
+	restatedTurnWhy   = `a corner beside an arc whose recorded end is off the circle its start states, whose exact turn changes sign when the arc is read about the centre that puts both its ends on one circle`
+	offRadiusMiterWhy = `a curved miter beside an arc whose recorded end is off the circle its start states, which the curved-miter allowance does not cover`
+)
+
+// cornerSegments is the normalized recorded segment that ends walk prev and
+// the one that starts walk cur.
+func cornerSegments(loop sectionrecord.LoopRecord, prev, cur survey2d.SideWalk) (sectionrecord.CurveSegment, sectionrecord.CurveSegment, error) {
+	prevSeg, err := sectionrecord.NormalizeSegment(loop.Segments[prev.Segs[len(prev.Segs)-1]])
+	if err != nil {
+		return nil, nil, err
+	}
+	curSeg, err := sectionrecord.NormalizeSegment(loop.Segments[cur.Segs[0]])
+	if err != nil {
+		return nil, nil, err
+	}
+	return prevSeg, curSeg, nil
 }
