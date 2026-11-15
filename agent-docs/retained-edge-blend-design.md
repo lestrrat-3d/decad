@@ -236,6 +236,16 @@ record of which vertices an earlier blend made is kept: a vertex on `G` that no
 other plane puts outside and that no face's tag puts on `G` is not read as lying
 on it, and a cut vertex an earlier blend made on `G` is such a vertex.
 
+A facet the band cuts is framed from its own plane to place the cut in two
+dimensions (`keepOutside`), and the frame must wind as the facet does. Its
+normal is the float cross product of two edges, accepted only when it is longer
+than twice `proofbound.FacetAreaTermSlop` of the facet's corners: the float and
+exact normals then make an angle under 90 degrees, so the frame's winding agrees
+with the facet's exact winding. A shorter normal may be rounding noise of the
+wrong sign, as the cross product of a near-collinear facet of edges about 100 mm
+is, and the facet refuses (SR5, "a wall facet has no plane"). The check only
+refuses; no facet of the retained-blend suites comes within seven orders of it.
+
 On the arc and chain routes (an exact main plane; R3's angle-main band keeps the
 rules above) the end plane's `on` set also holds every vertex of the boundary of
 a face whose retained tag is `G`'s exactly (`band_provenance.go`). The tags are
