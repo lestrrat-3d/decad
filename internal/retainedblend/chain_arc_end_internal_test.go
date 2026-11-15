@@ -109,3 +109,83 @@ func TestArcEndAreasMatchAnIndependentSum(t *testing.T) {
 	require.InDelta(t, R*cover(R)*r, gotWall, 1e-12)
 	require.InDelta(t, blend, gotBlend, 1e-4)
 }
+
+// concaveArcEndFixture is the root of a boss on the plane z = 10: the rim's
+// centre (1,13,10), radius 3, the plane outside the rim (kappa +1) and the
+// wall above it. G is the plane x = 0, one mm from the centre. The end's
+// exact point is where the rim meets G on the side of the chain's tangent
+// point (1,10,10).
+func concaveArcEndFixture(t *testing.T, rowsM int) (arcRim, *chainEndCut, []float64) {
+	t.Helper()
+	n := r3.NewVec(0, 0, 1)
+	u, ok := perpendicular(n)
+	require.True(t, ok)
+	rm := rim{center: r3.NewVec(1, 13, 10), n: n, u: u, w: n.Cross(u), radius: 3, kappa: 1, side: 1,
+		convex: false, scale: 40}
+	a := arcRim{rim: rm, sign: 1}
+	g := plane{n: r3.NewVec(1, 0, 0), o: r3.Vec{}}
+	exact := r3.NewVec(0, 13-math.Sqrt(8), 10)
+	ec := &chainEndCut{exact: exact, g: g, arc: &arcEnd{a: a, g: g}}
+	step := blendSpec{fillet: true, r: 1}
+	p, _ := a.profile(step)
+	ss := make([]float64, rowsM)
+	for j := range ss {
+		ss[j] = float64(j) / float64(rowsM)
+	}
+	var err error
+	ec.arc.ang, err = ec.arc.endAngles(p, ss, exact)
+	require.NoError(t, err)
+	return a, ec, ss
+}
+
+func TestConcaveArcEndRowsTakeTheRootOnTheVoidSide(t *testing.T) {
+	t.Parallel()
+	const rowsM = 12
+	a, ec, ss := concaveArcEndFixture(t, rowsM)
+	p, _ := a.profile(blendSpec{fillet: true, r: 1})
+	for j, s := range ss {
+		rho, z := p(s)
+		at := a.atTheta(rho, ec.arc.ang[j], z)
+		require.InDelta(t, 0, ec.g.offset(at), 1e-12, "row %d lies on G", j)
+		// The circle of the row meets G twice, mirrored about the axis's foot on
+		// G: the end of the arc is the one on the tangent point's side, below
+		// the axis in y.
+		require.Less(t, at.Y, 13.0, "row %d takes the root on the chain's side", j)
+		// Rows of a concave blend outside the rim's circle lie farther from the
+		// axis than the rim.
+		require.GreaterOrEqual(t, rho, 3.0-1e-12, "row %d", j)
+	}
+}
+
+func TestConcaveArcEndCornerAreaMatchesAnIndependentSum(t *testing.T) {
+	t.Parallel()
+	a, ec, _ := concaveArcEndFixture(t, 4)
+	p, _ := a.profile(blendSpec{fillet: true, r: 1})
+	got := ec.arc.cornerAreaOf(p, ec.exact)
+	// The corner region of G in (y, z): between the end curve and the two lines
+	// through the corner. The profile runs from the plane's setback point
+	// (rho = R + r, z = 0) to the wall's (rho = R, z = r).
+	const n, r, R, h = 200000, 1.0, 3.0, 1.0
+	y := func(rho float64) float64 { return 13 - math.Sqrt(rho*rho-h*h) }
+	pts := [][2]float64{{y(R), 0}}
+	for i := 0; i <= n; i++ {
+		al := math.Pi / 2 * float64(i) / n
+		pts = append(pts, [2]float64{y(R + r - r*math.Sin(al)), r * (1 - math.Cos(al))})
+	}
+	twice := 0.0
+	for i := range pts {
+		q := pts[(i+1)%len(pts)]
+		twice += pts[i][0]*q[1] - q[0]*pts[i][1]
+	}
+	require.InDelta(t, math.Abs(twice)/2, got, 1e-6)
+	require.Greater(t, got, 0.1)
+}
+
+func TestArcEndCapSign(t *testing.T) {
+	t.Parallel()
+	_, ec, _ := concaveArcEndFixture(t, 4)
+	ec.arc.cornerArea = 0.3
+	require.InDelta(t, 0.3, ec.capArea(true, 1, 1, 1), 1e-15, "a convex end face gives up the cap")
+	ec.reflex = true
+	require.InDelta(t, -0.3, ec.capArea(true, 1, 1, 1), 1e-15, "a reflex end face takes the cap")
+}

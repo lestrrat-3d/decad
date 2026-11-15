@@ -171,13 +171,31 @@ func TestReadEndFaceKind(t *testing.T) {
 		require.ErrorContains(t, err, "a chain end's base and end face are both reflex at the corner")
 	})
 
-	t.Run("an arc end on a reflex end face is refused with its own text", func(t *testing.T) {
+	t.Run("a convex chain's arc end on a reflex end face is refused with its own text", func(t *testing.T) {
 		t.Parallel()
 		ec := reflex
-		ec.arc = &arcEnd{}
+		ec.arc = &arcEnd{a: arcRim{rim: rim{convex: true}}}
 		err := ec.readEndFaceKind()
 		require.ErrorIs(t, err, decaderr.ErrUnsupported)
 		require.ErrorContains(t, err, "an arc end of a tangent chain needs an end face convex at the corner")
+	})
+
+	t.Run("a concave chain's arc end on a reflex end face takes the cap", func(t *testing.T) {
+		t.Parallel()
+		ec := reflex
+		ec.arc = &arcEnd{a: arcRim{rim: rim{convex: false}}}
+		require.NoError(t, ec.readEndFaceKind())
+		require.True(t, ec.reflex)
+		require.True(t, ec.takesCap())
+	})
+
+	t.Run("a concave chain's arc end on a convex end face gives the cap up", func(t *testing.T) {
+		t.Parallel()
+		ec := convex
+		ec.arc = &arcEnd{a: arcRim{rim: rim{convex: false}}}
+		require.NoError(t, ec.readEndFaceKind())
+		require.False(t, ec.reflex)
+		require.False(t, ec.takesCap())
 	})
 }
 
