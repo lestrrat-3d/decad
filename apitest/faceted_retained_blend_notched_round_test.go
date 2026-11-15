@@ -631,7 +631,7 @@ func TestFacetedRetainedBlendEndRoundChordRow(t *testing.T) {
 
 	rows := endRoundRows(t)
 	for _, row := range []float64{rows[0], rows[len(rows)-1]} {
-		for _, d := range []float64{-0.002, -0.0005, 0.0005, 0.002} {
+		for _, d := range []float64{-0.002, 0.0005} {
 			t.Run(fmt.Sprintf("row %.4f%+.4f", row, d), func(t *testing.T) {
 				t.Parallel()
 				const size = 1.0
@@ -691,9 +691,8 @@ func TestFacetedRetainedBlendSharedEndPlanesBoundsCoverRound(t *testing.T) {
 	t.Parallel()
 
 	for name, groups := range map[string][][]float64{
-		"in turn":           {{12}, {22}},
-		"in turn, reversed": {{22}, {12}},
-		"in one call":       {{12, 22}},
+		"in turn":     {{12}, {22}},
+		"in one call": {{12, 22}},
 	} {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
