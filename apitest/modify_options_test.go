@@ -311,7 +311,7 @@ func TestTangentChainNearTangentStops(t *testing.T) {
 	doc, slot := slotBody(t, [2]float64{9.9, 5})
 	_, err := decad.Chamfer(t.Context(), slot, slotSeed(slot), units.Millimeters(1), decad.WithTangentChain())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
-	require.ErrorContains(t, err, "only part of a cap loop")
+	require.ErrorContains(t, err, "a chamfered run ends at a corner that is not convex")
 	require.NotContains(t, err.Error(), "SX2")
 	require.Equal(t, []*decad.Body{slot}, doc.Bodies())
 }

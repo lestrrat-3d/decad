@@ -9,13 +9,12 @@ import (
 	"slices"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
-	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/opdiagnostic"
+	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/topo"
-	"github.com/lestrrat-3d/decad/internal/topobuild"
 	"github.com/lestrrat-3d/decad/internal/triangulation"
 )
 
@@ -35,7 +34,7 @@ import (
 // A cutter is a polyhedron held exactly as a mesh solid, as RetainedLoopChamfer's is; its facets sit within
 // cutterSagitta of an arc. The result is a Boolean Cut: faceted, with the Cut's own readings.
 //
-// It reports false, leaving the other routes in charge, for any receiver or selection it does not recognise,
+// It takes a straight prism receiver only. It reports false, leaving the other routes in charge, for any receiver or selection it does not recognise,
 // including a selection that holds a whole loop. A recognised selection that cannot be cut is refused as
 // ErrUnsupported or ErrDegenerate.
 func PartialLoopChamfer(ctx context.Context, env topo.Env, hooks Hooks, body *topo.Body, edges []*topo.Edge,
@@ -44,8 +43,11 @@ func PartialLoopChamfer(ctx context.Context, env topo.Env, hooks Hooks, body *to
 		hooks.Boolean == nil {
 		return Result{}, false, nil
 	}
-	_, faceted := body.Payload.(facetedrecord.Payload)
-	runs, ok, err := readChamferRuns(body, edges, !faceted)
+	// Only a straight prism takes this route: every other receiver has its own exact gates, which a cutter would bypass.
+	if _, isPrism := body.Payload.(prismrecord.Payload); !isPrism {
+		return Result{}, false, nil
+	}
+	runs, ok, err := readChamferRuns(body, edges, true)
 	if !ok {
 		return Result{}, false, nil
 	}
@@ -106,19 +108,20 @@ func readChamferRuns(body *topo.Body, edges []*topo.Edge, exact bool) (runs []ch
 	for _, e := range edges {
 		selected[e] = true
 	}
-	// Each selected edge lies in the cap that holds most of the selection; a wall holds the edge too, but only the
-	// cap's loops hold a chain of them.
+	// Every selected edge must lie in a loop of one of the prism's two caps.
 	type candidate struct {
 		face  *topo.Face
 		plane surfacegeom.Plane
 	}
 	var cands []candidate
-	for _, f := range topobuild.Faces(body) {
-		plane, isPlane := f.Surface.(surfacegeom.Plane)
-		if !isPlane || (!exact && !retainedTag(f)) {
+	caps := CapsOf(body)
+	for _, f := range []*topo.Face{caps.Start, caps.End} {
+		if f == nil {
 			continue
 		}
-		cands = append(cands, candidate{f, plane})
+		if plane, isPlane := f.Surface.(surfacegeom.Plane); isPlane && (exact || retainedTag(f)) {
+			cands = append(cands, candidate{f, plane})
+		}
 	}
 	count := func(c candidate, left map[*topo.Edge]bool) int {
 		n := 0
