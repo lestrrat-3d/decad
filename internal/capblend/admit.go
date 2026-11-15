@@ -34,7 +34,9 @@ func RequireNotReceiver(payload topo.Payload, op string) error {
 // charges. A cap-loop chamfer passes its one setback on every walk, so it
 // admits the same joins, and restates an arc whose recorded end is off its
 // start's circle, which OffRadiusVolume and OffRadiusMotion charge
-// (agent-docs/tessellation-reach-design.md §7, §7.1).
+// (agent-docs/tessellation-reach-design.md §7, §7.1), and admits a reflex
+// corner, whose apex fan ChordVolume and CapMotion charge (§7, "Reflex
+// connector"). A draft, fillet or loft-source band keeps refusing it.
 // The delayed join builder runs only after the wall checks, preserving the
 // proof budget charges and the first refusal reported.
 func OccupiedVolumeAdmission(budget *proofbound.WorkBudget, cbp Payload) (error, error) {
@@ -45,7 +47,8 @@ func OccupiedVolumeAdmission(budget *proofbound.WorkBudget, cbp Payload) (error,
 // ExactOccupiedVolumeAdmission is OccupiedVolumeAdmission for a band whose
 // mesh proof charges no near-tangent corner and no restated arc: a route L
 // band of a brep body (brepbandmesh), whose volume terms are its own. It
-// admits only line-line miters, exactly tangent joins and whole turns.
+// admits only line-line miters, exactly tangent joins and whole turns, and
+// refuses a reflex corner, whose connector term its volume terms do not carry.
 func ExactOccupiedVolumeAdmission(budget *proofbound.WorkBudget, cbp Payload) (error, error) {
 	return admission(budget, cbp, nil, false)
 }
@@ -55,7 +58,9 @@ func ExactOccupiedVolumeAdmission(budget *proofbound.WorkBudget, cbp Payload) (e
 // setback per loop with its arcs restated, and none for a cap-loop fillet
 // or a loft-source band, whose proofs charge neither. A loop chamfered on
 // both caps with two different setbacks takes neither, so one set of amounts
-// reads every band of every loop.
+// reads every band of every loop. The chamfer class (restate true) is also the
+// one whose mesh charges a reflex connector, so the admission takes its reflex
+// flag from it.
 func (cbp Payload) cornerClass() (capband.SharpAmounts, bool) {
 	switch {
 	case cbp.Draft:
@@ -91,7 +96,7 @@ func admission(budget *proofbound.WorkBudget, cbp Payload, sharp capband.SharpAm
 				}
 				return arcs, nil
 			}, nil
-		}, sharp, restate)
+		}, sharp, restate, restate)
 }
 
 // sharpAmounts is a draft view's per-walk amounts for loop li and the

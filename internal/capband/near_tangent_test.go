@@ -173,7 +173,7 @@ func draftAdmission(t *testing.T, loop sectionrecord.LoopRecord, amount float64)
 				amounts[i] = amount
 			}
 			return amounts, 1e-16
-		}, false)
+		}, false, false)
 	require.NoError(t, err)
 	return refusal
 }

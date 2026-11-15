@@ -126,10 +126,23 @@ type CapBlendMotionInput struct {
 	Amounts      []float64
 	BandDelta    [2]float64
 	HasBandDelta [2]bool
+	// Connectors admits a reflex corner's apex fan to the proof
+	// (agent-docs/tessellation-reach-design.md §7, "Reflex connector"). The
+	// fields below are read only then. Joins, CapArcStart, CapBound,
+	// SideBound and SideStart are the loop's sample record
+	// (SampleCapBlend), which names each connector station and the gap of
+	// each held sample from its offset circle.
+	Connectors  bool
+	Joins       []CapBlendJoin
+	CapArcStart []int
+	CapBound    []proofbound.WalkEndBound
+	SideBound   []proofbound.WalkEndBound
+	SideStart   []int
 }
 
 // CapBlendCapMotion bounds each cap sample against the ideal chord
-// polyhedron's matching point. Reflex connectors retain an infinite bound.
+// polyhedron's matching point. A reflex connector's stations retain an
+// infinite bound unless in.Connectors admits them (connectorMotion).
 func CapBlendCapMotion(budget *proofbound.WorkBudget, in CapBlendMotionInput,
 	stationBound func(sectionrecord.CurveSegment, int, int, *big.Rat, float64, float64) proofbound.WalkEndBound,
 ) ([]float64, error) {
@@ -198,6 +211,10 @@ func CapBlendCapMotion(budget *proofbound.WorkBudget, in CapBlendMotionInput,
 		base := in.CapWallStart[i]
 		if !w.IsCircular() {
 			prev := in.Walks[(i+n-1)%n]
+			if in.Connectors && in.Joins != nil && in.Joins[i].Arc {
+				capMotion[base] = miter
+				continue
+			}
 			if !prev.IsCircular() {
 				capMotion[base] = miter
 				continue
@@ -217,6 +234,11 @@ func CapBlendCapMotion(budget *proofbound.WorkBudget, in CapBlendMotionInput,
 			}
 			p := in.CapPts[base+k]
 			capMotion[base+k] = circular(i, stationBound(seg, k, in.Count[i], off, p.U, p.V))
+		}
+	}
+	if in.Connectors {
+		if err := connectorMotion(budget, in, miter, capMotion); err != nil {
+			return nil, err
 		}
 	}
 	return capMotion, nil
