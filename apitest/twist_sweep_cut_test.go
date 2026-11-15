@@ -102,6 +102,23 @@ func TestCutTwistedSweepThroughBothCaps(t *testing.T) {
 	}
 }
 
+// A twisted tool's refinement holds the cut's rim within 0.04 mm for every
+// twist: the rim bound is the refined tool's departure amplified at the
+// crossing, and the refinement targets 0.15% of the profile radius.
+func TestCutTwistedSweepRefinementRimBound(t *testing.T) {
+	t.Parallel()
+	for _, deg := range []float64{30, 60, 87} {
+		doc := decad.New()
+		tool := twistBoreTool(t, doc, deg)
+		plate := circleBodyAtZ(t, doc, 0, 18.5, 1, 4)
+		out, err := decad.Cut(t.Context(), plate, tool)
+		require.NoError(t, err, "%g degrees", deg)
+		mesh, err := out.Tessellate(t.Context(), units.Millimeters(3), decad.WithVerification(decad.VerifyAll))
+		require.NoError(t, err, "%g degrees", deg)
+		require.Less(t, mesh.Bound().Base(), 0.04, "%g degrees", deg)
+	}
+}
+
 // The tool crosses the tube wall off-axis, so its twisted walls meet the
 // outer and inner cylinders obliquely and never reach either cap.
 func TestCutTwistedSweepCrossesTubeWall(t *testing.T) {
