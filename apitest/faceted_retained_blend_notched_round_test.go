@@ -2,7 +2,9 @@ package apitest_test
 
 import (
 	"fmt"
+	"maps"
 	"math"
+	"slices"
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
@@ -348,6 +350,17 @@ func filletSharedRoots(t *testing.T, ears [][6]float64, groups ...[]float64) {
 // filletRoots is filletSharedRoots with the fill of each root given by fill.
 func filletRoots(t *testing.T, ears [][6]float64, fill func(size, x float64) float64, groups ...[]float64) {
 	t.Helper()
+	filletChargedRoots(t, ears, fill, 0, groups...)
+}
+
+// filletChargedRoots is filletRoots for roots whose band reads a vertex within its
+// bound of an end plane by the sign of its offset (retained-edge-blend §4.3): the
+// offset is charged into that vertex's bound, so the published bound grows past
+// the strips' own terms by at most charge. A charge above zero says the charge
+// shows: the bound exceeds the strips' own terms.
+func filletChargedRoots(t *testing.T, ears [][6]float64, fill func(size, x float64) float64, charge float64,
+	groups ...[]float64) {
+	t.Helper()
 	const size = 1.0
 	body := notchedBody(t, ears...)
 	volBefore, err := body.Volume()
@@ -385,8 +398,11 @@ func filletRoots(t *testing.T, ears [][6]float64, fill func(size, x float64) flo
 
 	mesh, err := body.Tessellate(t.Context(), units.Millimeters(0.1), decad.WithVerification(decad.VerifyAll))
 	require.NoError(t, err)
-	require.LessOrEqual(t, revolveMeshBound(t, mesh),
-		revolveMeshBound(t, held)+float64(roots)*2*math.Ldexp(size, -10))
+	own := revolveMeshBound(t, held) + float64(roots)*2*math.Ldexp(size, -10)
+	require.LessOrEqual(t, revolveMeshBound(t, mesh), own+charge)
+	if charge > 0 {
+		require.Greater(t, revolveMeshBound(t, mesh), own, "the charge shows in the bound")
+	}
 	require.True(t, mesh.BoundaryVerified())
 	require.True(t, mesh.VolumeVerified())
 	rep, err := body.Document().Verify(t.Context())
@@ -458,6 +474,16 @@ func TestFacetedRetainedBlendSharedBackPlane(t *testing.T) {
 		// short of the other ear.
 		filletSharedRoots(t, [][6]float64{earBoxA, {13.5, 2, 21.5, 13.5, -6, 1}}, []float64{12})
 	})
+	t.Run("ears 1.5 apart, the second's back face one float step off the plane", func(t *testing.T) {
+		t.Parallel()
+		// The second ear's back face lies one float step off y = 13.5: its tag is not
+		// the blend's end plane, so its corner on the plane's edge is not on the plane
+		// by provenance. The band reads the cut of that edge by the sign of its offset
+		// and charges the offset, a float step, instead of reading it as exact.
+		for _, y := range []float64{math.Nextafter(13.5, 14), math.Nextafter(13.5, 13)} {
+			filletSharedRoots(t, [][6]float64{earBoxA, {13.5, 2, 21.5, y, -6, 1}}, []float64{12})
+		}
+	})
 }
 
 func TestFacetedRetainedBlendSharedBackPlaneRefusals(t *testing.T) {
@@ -500,17 +526,28 @@ func TestFacetedRetainedBlendSharedEndPlanes(t *testing.T) {
 		name   string
 		ears   [][6]float64
 		groups [][]float64
+		// charge is the offset of the vertex the band reads by sign, when there is one.
+		charge float64
 	}{
-		{"one ear's side root", flushEars, [][]float64{{12}}},
-		{"the other ear's side root", flushEars, [][]float64{{22}}},
-		{"each outer side root", flushEars, [][]float64{{4}}},
-		{"all four side roots in one call", flushEars, [][]float64{{4, 12, 22, 30}}},
-		{"facing side roots 3.5 apart in one call", [][6]float64{earBoxA, {15.5, 1.5, 23.5, 13.5, -6, 1}},
-			[][]float64{{12, 15.5}}},
+		{name: "one ear's side root", ears: flushEars, groups: [][]float64{{12}}},
+		{name: "the other ear's side root", ears: flushEars, groups: [][]float64{{22}}},
+		{name: "each outer side root", ears: flushEars, groups: [][]float64{{4}}},
+		{name: "all four side roots in one call", ears: flushEars, groups: [][]float64{{4, 12, 22, 30}}},
+		{name: "facing side roots 3.5 apart in one call", ears: [][6]float64{earBoxA, {15.5, 1.5, 23.5, 13.5, -6, 1}},
+			groups: [][]float64{{12, 15.5}}},
+		// The first blend's cut of the round lies a few thousandths off the front plane,
+		// joined to the next ear's corner on the plane by a long facet edge along it:
+		// the later band reads that cut by the sign of its offset and charges the offset.
+		{name: "facing side roots in turn", ears: flushEars, groups: [][]float64{{12}, {22}}},
+		{name: "facing side roots in turn, the other way", ears: flushEars, groups: [][]float64{{22}, {12}}},
+		// A vertex of the round beside the other ear's corner lies 0.003 from the front
+		// plane, and the band's cut of the edge to it lies on the plane within that bound.
+		{name: "facing side roots 1.5 apart", ears: [][6]float64{earBoxA, {13.5, 1.5, 21.5, 13.5, -6, 1}},
+			groups: [][]float64{{12}}, charge: 0.003},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()
-			filletRoots(t, c.ears, flushRootFill, c.groups...)
+			filletChargedRoots(t, c.ears, flushRootFill, c.charge, c.groups...)
 		})
 	}
 }
@@ -518,10 +555,7 @@ func TestFacetedRetainedBlendSharedEndPlanes(t *testing.T) {
 func TestFacetedRetainedBlendSharedEndPlanesRefusals(t *testing.T) {
 	t.Parallel()
 
-	const (
-		plane   = "a vertex of the wall lies on an end face's plane"
-		earlier = "an earlier cut on an end face's plane lies within the blend's reach"
-	)
+	const wall = "another part of the wall lies within the blend's reach of the edge"
 	// refuses fillets the groups of roots in turn and requires the last call to
 	// refuse with text, the earlier ones to build.
 	refuses := func(t *testing.T, body *decad.Body, text string, groups ...[]float64) {
@@ -537,29 +571,24 @@ func TestFacetedRetainedBlendSharedEndPlanesRefusals(t *testing.T) {
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.ErrorContains(t, err, text)
 	}
-	// A vertex that the blend itself made on the plane lies on it within its
-	// bound, and no face's tag says so: it is not read as on the plane.
-	t.Run("a later blend's facing root on the first blend's cut", func(t *testing.T) {
-		t.Parallel()
-		refuses(t, notchedBody(t, flushEars...), plane, []float64{12}, []float64{22})
-	})
-	t.Run("a round vertex within its bound of the plane that the cut leaves undecided", func(t *testing.T) {
-		t.Parallel()
-		// 1.5 apart on both planes: a vertex of the round beside the other ear's
-		// corner lies 0.003 from the front plane, and the band's cut of the edge
-		// to it lies on the plane within that bound.
-		refuses(t, notchedBody(t, earBoxA, [6]float64{13.5, 1.5, 21.5, 13.5, -6, 1}), plane, []float64{12})
-	})
+	// Facing roots whose bands overlap are refused by the wall gate, not by an end
+	// plane's reading: the first blend's setback line is a boundary chord of the
+	// wall, and it meets the later band.
 	t.Run("facing roots whose bands overlap", func(t *testing.T) {
 		t.Parallel()
 		// The second root's band starts 0.5 inside the first blend's setback, on
 		// the back plane both ears share.
 		ears := [][6]float64{earBoxA, {13.5, 2, 21.5, 13.5, -6, 1}}
-		refuses(t, notchedBody(t, ears...), earlier, []float64{12}, []float64{13.5})
+		refuses(t, notchedBody(t, ears...), wall, []float64{12}, []float64{13.5})
 	})
 	t.Run("facing roots whose bands overlap on shared planes in one call", func(t *testing.T) {
 		t.Parallel()
-		refuses(t, notchedBody(t, earBoxA, [6]float64{13.5, 1.5, 21.5, 13.5, -6, 1}), earlier, []float64{12, 13.5})
+		refuses(t, notchedBody(t, earBoxA, [6]float64{13.5, 1.5, 21.5, 13.5, -6, 1}), wall, []float64{12, 13.5})
+	})
+	t.Run("facing roots 0.8 apart in one call", func(t *testing.T) {
+		t.Parallel()
+		refuses(t, notchedBody(t, flushEars[0], [6]float64{12.8, 1.5, 20.8, 13.5, -6, 1}), wall,
+			[]float64{12, 12.8})
 	})
 	t.Run("a hole in the round inside the band on shared planes", func(t *testing.T) {
 		t.Parallel()
@@ -571,20 +600,77 @@ func TestFacetedRetainedBlendSharedEndPlanesRefusals(t *testing.T) {
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.ErrorContains(t, err, "another part of the wall lies within the blend's reach of the edge")
 	})
-	t.Run("a back face one float step off the end plane is not on it", func(t *testing.T) {
-		t.Parallel()
-		// The same ears 1.5 apart as the build above, but the second ear's back
-		// face lies one float step off y = 13.5: its tag is not the blend's end
-		// plane, so its corner on the plane's edge is not read as on it.
-		for _, y := range []float64{13.5, math.Nextafter(13.5, 14), math.Nextafter(13.5, 13)} {
-			body := notchedBody(t, earBoxA, [6]float64{13.5, 2, 21.5, y, -6, 1})
-			_, err := decad.Fillet(t.Context(), body, sharedBackSeed(12), units.Millimeters(1), decad.WithTangentChain())
-			if y == 13.5 {
-				require.NoError(t, err)
-				continue
-			}
-			require.ErrorIs(t, err, decad.ErrUnsupported)
-			require.ErrorContains(t, err, plane)
+}
+
+// endRoundRows reads the x of each row of vertices the held round along y at the
+// block's end carries between x = 0.5 and 1: the rows run the whole tray's length,
+// and an ear's outer side that lies within a few thousandths of one has the row's
+// vertices within their bound of its plane.
+func endRoundRows(t *testing.T) []float64 {
+	t.Helper()
+	mesh, err := notchedBody(t).Tessellate(t.Context(), units.Millimeters(0.1))
+	require.NoError(t, err)
+	seen := map[float64]struct{}{}
+	for _, p := range mesh.Vertices() {
+		if p.X > 0.5 && p.X < 1 && p.Z < 2 {
+			seen[p.X] = struct{}{}
 		}
-	})
+	}
+	rows := slices.Sorted(maps.Keys(seen))
+	require.GreaterOrEqual(t, len(rows), 2)
+	return rows
+}
+
+// TestFacetedRetainedBlendEndRoundChordRow places the outer side of the back
+// root's ear (the end plane where the arc ends) a few thousandths from a row of
+// the end round's vertices, on either side of it: the row's vertices and the cuts
+// of the band on its edges lie within their bounds of that plane, and the band
+// reads them by the sign of their offset (retained-edge-blend §4.3).
+func TestFacetedRetainedBlendEndRoundChordRow(t *testing.T) {
+	t.Parallel()
+
+	rows := endRoundRows(t)
+	for _, row := range []float64{rows[0], rows[len(rows)-1]} {
+		for _, d := range []float64{-0.002, -0.0005, 0.0005, 0.002} {
+			t.Run(fmt.Sprintf("row %.4f%+.4f", row, d), func(t *testing.T) {
+				t.Parallel()
+				const size = 1.0
+				c := notchedRoots[1]
+				c.ear[0] = row + d
+				offset := notchShortR - c.ear[0]
+				body := notchedBody(t, c.ear)
+				volBefore, err := body.Volume()
+				require.NoError(t, err)
+				held, err := body.Tessellate(t.Context(), units.Millimeters(0.1))
+				require.NoError(t, err)
+
+				out, err := decad.Fillet(t.Context(), body, c.seed(), units.Millimeters(size), decad.WithTangentChain())
+				require.NoError(t, err)
+
+				af := size * size * (1 - math.Pi/4)
+				added := af*c.lineLen + earRegion(c.radius, 1, size, true, func(rho float64) float64 {
+					return rho * math.Asin(offset/rho)
+				})
+				volAfter, err := out.Volume()
+				require.NoError(t, err)
+				requireVolumeChange(t, volBefore, volAfter, -added)
+
+				// The bound grows by the strip's own terms and the charge: the offset of a
+				// vertex from the plane, which feeds the bound of the cuts made from it, so
+				// at most twice the offset d.
+				mesh, err := out.Tessellate(t.Context(), units.Millimeters(0.1), decad.WithVerification(decad.VerifyAll))
+				require.NoError(t, err)
+				own := revolveMeshBound(t, held) + 2*math.Ldexp(size, -10)
+				require.LessOrEqual(t, revolveMeshBound(t, mesh), own+2*math.Abs(d))
+				require.True(t, mesh.BoundaryVerified())
+				require.True(t, mesh.VolumeVerified())
+				rep, err := out.Document().Verify(t.Context())
+				require.NoError(t, err)
+				br, err := rep.ForBody(out)
+				require.NoError(t, err)
+				require.Equal(t, decad.Sound, br.Status)
+				requireNoCrossingTriangles(t, out)
+			})
+		}
+	}
 }

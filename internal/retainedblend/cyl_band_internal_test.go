@@ -86,14 +86,16 @@ func TestCutBandMembershipByEveryPlane(t *testing.T) {
 		require.InDelta(t, 0.25/1.1, area, 1e-12)
 	})
 
-	t.Run("a corner no other plane drops refuses, and names the earlier cut when it is inside them", func(t *testing.T) {
+	t.Run("a corner no other plane drops is read by its sign", func(t *testing.T) {
 		t.Parallel()
-		// (0.5, 0) lies on y = 0 within its bound and inside every other plane: no
-		// order of the planes decides it.
-		w, b, f := flatBand(r3.NewVec(0.5, 0, 0), r3.NewVec(0.6, 2, 0), r3.NewVec(0.7, 4, 0))
-		_, err := w.cutBand(f, b)
-		require.ErrorIs(t, err, decaderr.ErrUnsupported)
-		require.ErrorContains(t, err, "an earlier cut on an end face's plane lies within the blend's reach")
+		// (0.5, 0.0015) lies on y = 0 within its bound and inside every other
+		// plane: no order of the planes decides it, so the end plane reads it by the
+		// sign of its offset and charges the offset (cyl_band_sign_internal_test.go).
+		w, b, f := flatBand(r3.NewVec(0.5, 0.0015, 0), r3.NewVec(0.6, 2, 0), r3.NewVec(0.7, 4, 0))
+		cuts, err := w.cutBand(f, b)
+		require.NoError(t, err)
+		require.Equal(t, map[int]bool{0: true, 1: true, 2: true}, cuts.removed)
+		require.InDelta(t, 0.0025, w.beta[0], 1e-12)
 	})
 
 	t.Run("a corner two planes leave undecided keeps the plain text", func(t *testing.T) {
@@ -113,17 +115,5 @@ func TestCutBandMembershipByEveryPlane(t *testing.T) {
 		cuts, err := w.cutBand(f, b)
 		require.NoError(t, err)
 		require.Equal(t, map[int]bool{1: true}, cuts.removed)
-	})
-
-	t.Run("a cut along the plane a vertex lies on is refused", func(t *testing.T) {
-		t.Parallel()
-		// Both corners of the facet's edge along y = 0 lie within their bound of
-		// it and outside x ≥ 0 and x ≤ 1 respectively. The cuts of those planes
-		// on the edge lie on y = 0 within their bound too, and no plane decides
-		// them.
-		w, b, f := flatBand(r3.NewVec(-0.5, 0, 0), r3.NewVec(1.5, 0, 0), r3.NewVec(0.5, 3, 0))
-		_, err := w.cutBand(f, b)
-		require.ErrorIs(t, err, decaderr.ErrUnsupported)
-		require.ErrorContains(t, err, "a vertex of the wall lies on an end face's plane")
 	})
 }
