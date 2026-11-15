@@ -334,14 +334,91 @@ text, not with an end plane's. A vertex exactly on the plane in floats but on no
 face's tag reads as on the plane without being a corner or a run vertex, so a cut
 whose corner it should be refuses at the setback corner.
 
-The crossing bound of a cut point on an end plane (`max(ends, facet) + slack + τ`)
-and the band corner's carry no slant term either, with or without a sign reading.
-That predates the reading and is recorded as a follow-up. H2 relies on it only
-through the input bound `β` of a sign-read cut point, which is its crossing bound:
-on the arc route only cut points made on the other end plane (the main, rim and
-guard planes meet the wall square), on the chain route it depends on how the base
-and setback planes meet the wall. A held vertex's `β` is the held bound and does
-not depend on it.
+**The slant of the crossing bound.** A cut point on an end plane `G` publishes
+`max(ends, facet) + slack + τ`, a distance to the plane. Where the true wall meets `G`
+at sine `s` the true boundary lies about `β / s` away along the wall, so a slanted end
+plane needs a slant term; a square one needs none. Each route marks its end planes
+from its own gate (`bandEnd.slanted`), never from a number. The arc route's ends are
+always slanted: the wall's cylinder is parallel to `G` (`|n·a| ≤ parallelTol`, the arc
+reader's gate). A chain end is slanted only where the end is an arc. R3's ends are
+normal to the cylinder's axis (`cyl.go`, `|n × a| ≤ 10⁻⁹`) and a chain's straight end
+is normal to the chain edge, whose wall's plane contains it, so both meet the wall
+square to `s ≥ √(1 − 10⁻¹⁸)`. The excess `b·(1/s − 1) ≤ 10⁻¹⁸·b` lies far inside `τ`
+for a point on `G`, and inside the `2·slack` of `cutOffset` for a corner. The planes
+of the main, rim, base and guard cross the wall square, because they are normal to
+the axis or contain it. Those planes, R1, R5 and the rim routes make no cut on a
+slanted end plane.
+
+`cylSlant.reach(b, e)` (`wall_slant.go`) is a proven bound on the distance from a
+point within `b` of the true wall and within `e` of `G` to the generator `L` where the
+true wall crosses `G` on the point's side. The wall's tag must state no departure and no
+axial delta, so Claim R puts the true wall on the tag's cylinder of radius `R`. Work in
+the section normal to the axis, where `G` is a line at distance `h` from the axis,
+`h ∈ [h⁻, h⁺]` (the tag's `|n·(c − o)|` with the rounding and axial charges `wallSine`
+makes). The point `x′ = (X, Y)`, `Y` measured along `G`'s normal from the axis, has
+`|Y − h| ≤ e`, so `|Y| ∈ [y⁻, y⁺]` for `y⁺ = h⁺ + e`, `y⁻ = max(0, h⁻ − e)`, and its
+distance `ρ` from the axis has `|ρ − R| ≤ b`. Then `X² = ρ² − Y² ∈ [X⁻², X⁺²]` with
+`X⁻ = √((R − b)² − y⁺²)` and `X⁺ = √((R + b)² − y⁻²)`. `X⁻ > 0` puts `x′` on one side of
+the axis's foot, so the generator it is near is the one at `Z = √(R² − h²)` on that
+side, `Z ∈ [Z⁻, Z⁺]` for `Z⁻ = √(R² − h⁺²)` and `Z⁺ = √(R² − h⁻²)`. Then
+`|x′ − z′|² = (|X| − Z)² + (Y − h)² ≤ max(X⁺ − Z⁻, Z⁺ − X⁻)² + e²`, and `L` runs along
+the axis through `z′`, so the distance from `x` to `L` is `|x′ − z′|`. `L` lies in the
+closure of the kept wall. Every operation rounds outward, and `reach` refuses when
+`R − b ≤ y⁺`, so it carries no further assumption than the tag. It is tight: the
+worst ratio of the true distance to the published bound reaches 0.988 to 0.999 on the
+adversarial cylinder rows (`TestCrossingBoundCoversCylinder`).
+
+What a cut point publishes (`slantBound`), with `b = β + slack` for the held input
+bound `β` (the ends' and the facet's largest) and `e = |v| + slack` for the point's offset
+`v` from `G`:
+
+- A cut point on a slanted end plane alone, a held edge's crossing: `max(old, reach(b, e))`,
+  with `old = β + slack + τ`. A point whose old bound already covers `reach` keeps its
+  bytes.
+- A corner of `G` and another plane `P′` whose normal runs along `L` (`tilt`, the sine
+  of the angle between the normal and the axis, at most `parallelTol`): the true corner
+  is where `L` meets `P′`. With `δ` the point's offset from `L` in the section and `α`
+  the axial offset, `n·(x − z) = v` gives `|α − t| ≤ (|v| + tilt·|δ|)/√(1 − tilt²)`, so
+  the corner publishes `max(old, D_c)` for
+  `D_c = reach + (|v| + slack + tilt·reach)/√(1 − tilt²)`. The main, rim and base
+  planes qualify. A corner of `G` and a plane that does not qualify, which is the
+  guard, or of two end planes, refuses: "the wall meets an end face's plane at a slant the
+  tags cannot bound". A slanted end whose wall has no section (a tag that states a
+  departure or an axial delta, or a wall that is not a cylinder parallel to `G`)
+  refuses the same way.
+- The band charge. The corner's `noteCut` delta is `max(facet, D_c − 2·slack)` in place of
+  the facet bound, so `cutOffset(v, δ, e) = δ + 2e` covers `D_c` and the strip
+  triangles at the corner charge the distance from the corner to its true point, not
+  to the square-cut surrogate. The band's slack is the strip's.
+- A cut of a held edge along `G` by another plane (the band's corner on a held edge):
+  both ends lie on `G` by provenance, so their true points lie on `G ∩ wall`, which is
+  one straight generator when both lie on one side of the axis's foot, and the segment
+  between them then lies on it. The cut keeps `old` when the ends' coordinates along `G`
+  from the axis exceed their bounds with the same sign (`sameSide`); otherwise the ends
+  may lie on different generators and the point publishes as a corner.
+
+`max(old, ·)` never lowers a bound, so no claim that read `old` weakens, and every new
+gate only rejects. The H2 reading (`signRead`) keeps its `β + c / s_lo` form. Its
+input `β` for a cut point is its crossing bound, slant term included; a held vertex's
+`β` is the held bound and does not depend on it.
+
+The slant is tested in `cyl_band_slant_internal_test.go` and `apitest`:
+`TestCrossingBoundCoversSlant` (a flat wall, edge and corner, sine 1 to 0.2) and
+`TestCrossingBoundCoversCylinder` (the arc route's shape, band on either side, `h/R` 0.7 to
+0.98, the setback plane off its place by its slack; the worst ratio of the true distance
+to the published bound is at most 1 and at least 0.98) read every cut point against the
+true walls the held bounds allow; dropping the slant at the held-edge crossing or the
+corner fails them. `TestSectionBoundCoversTheCrossing` searches the section densely, and
+fails when `e` leaves the hypotenuse or `X⁻` reads `y⁻`. `TestSlantBoundCorners` fails
+without the offset's or the tilt's term, `TestCornerBandChargeCarriesSlant` without the
+band charge's delta, `TestCornerOnHeldEdgeAlongSlantedPlane` without the same-side check
+in either direction or without its margin, and `TestSlantRefusals` without the refusals.
+`TestSlantSquarePlanesKeepBytes` holds a square plane's bound at its old value.
+`TestFacetedRetainedBlendSlantedEndBound` builds the notched round's back root at sine
+0.71, 0.60 and 0.53 and requires the mesh bound to reach the held bound over the sine; it
+falls short at 0.60 and 0.53 without the slant. Two first-order partners of the
+section's ranges (`X⁺` against `Z⁺`, the outer radius against the inner) cover each
+other, so dropping one of them alone is not caught.
 
 The facet keeps the rest, triangulated again with every point
 where the band's boundary crosses a held facet edge and every corner of the

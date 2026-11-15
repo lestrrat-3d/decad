@@ -79,6 +79,15 @@ type bandEnd struct {
 	// planarWall says the wall is a plane, where the distance bound of a sign
 	// reading is c/s from the held point; on a curved wall it is β + c/s.
 	planarWall bool
+	// slanted says the wall meets this plane at a slant: an arc end's cylinder runs
+	// parallel to the plane, not along its normal. The route sets it from its own
+	// gate, never from a number. Every cut point on the plane then carries the
+	// slant (slantBound); a plane that is not slanted meets the wall square, so the
+	// distance to the plane is the distance along the wall.
+	slanted bool
+	// slant bounds the distance along the wall to the plane's crossing, or is nil when
+	// the tags give none; a cut on a slanted plane without it refuses.
+	slant wallSlant
 }
 
 // exact is the exact plane q, or nil for the setback generator's half-plane.
@@ -106,6 +115,9 @@ type bandPt struct {
 	// planes are the band planes a cut point lies on; -1 marks none.
 	planes [2]int
 	bound  float64
+	// slantPos is, for a corner on a slanted end plane, the bound on its distance to
+	// its true place (slantBound), or zero.
+	slantPos float64
 	// signed is, for each end plane, the side signRead put this cut point on,
 	// plus 2 (1 outside, 2 on, 3 inside), or 0 when it was never read by sign.
 	// The point's bound already holds the charge.
@@ -415,8 +427,20 @@ func (b *wallBand) crossing(u, v bandPt, q int, facetBound float64) (bandPt, err
 		// The point lies on the held facet, which claims its true piece of the
 		// curved wall within its facet bound, the largest of its three
 		// corners'; the edge's two ends alone do not carry that claim.
-		return bandPt{p: p, id: -1, edge: e, planes: [2]int{q, b.alongBoth(a, c, q)},
-			bound: max(a.bound, c.bound, facetBound) + b.slack + b.w.tau}, nil
+		along := b.alongBoth(a, c, q)
+		beta := max(a.bound, c.bound, facetBound)
+		bound, pos := beta+b.slack+b.w.tau, 0.0
+		// A cut of a held edge along a slanted end plane by another plane lies on the
+		// plane's crossing line whenever both ends' true points do: the line is straight,
+		// so the cut is within the old bound of the true corner (alongBoth).
+		if e := b.slantedEnd(along); e == nil || isEnd(q) || e.slant == nil ||
+			!e.slant.sameSide(a.p, c.p, a.bound, c.bound) {
+			var err error
+			if bound, pos, err = b.slantBound(p, q, along, beta, bound); err != nil {
+				return bandPt{}, err
+			}
+		}
+		return bandPt{p: p, id: -1, edge: e, planes: [2]int{q, along}, bound: bound, slantPos: pos}, nil
 	}
 	along := b.chordPlane(u, v)
 	if along < 0 {
@@ -427,8 +451,12 @@ func (b *wallBand) crossing(u, v bandPt, q int, facetBound float64) (bandPt, err
 		return bandPt{}, fmt.Errorf("%w: two cuts of the wall meet on a facet's boundary", decaderr.ErrUnsupported)
 	}
 	p := u.p.Add(v.p.Sub(u.p).Scale(fu / (fu - fv)))
+	bound, pos, err := b.slantBound(p, q, along, facetBound, facetBound+b.slack+b.w.tau)
+	if err != nil {
+		return bandPt{}, err
+	}
 	return bandPt{p: p, id: -1, edge: [2]int{-1, -1}, planes: [2]int{min(q, along), max(q, along)},
-		bound: facetBound + b.slack + b.w.tau}, nil
+		bound: bound, slantPos: pos}, nil
 }
 
 // clip keeps the part of the convex polygon poly inside plane q.
@@ -534,7 +562,7 @@ func (w *work) cutBand(f faceLoops, b *wallBand) (bandCuts, error) {
 				out.corner[i] = pt.id
 			}
 			if pt.planes[0] == bandGen && b.noteCuts {
-				w.noteCut(pt.id, facetBound)
+				w.noteCut(pt.id, b.cutDelta(pt, facetBound))
 			}
 			return nil
 		}
@@ -550,7 +578,7 @@ func (w *work) cutBand(f faceLoops, b *wallBand) (bandCuts, error) {
 			out.corner[pt.planes[1]-bandEnd0] = pt.id
 		}
 		if pt.planes[0] == bandGen && b.noteCuts {
-			w.noteCut(pt.id, facetBound)
+			w.noteCut(pt.id, b.cutDelta(pt, facetBound))
 		}
 		return nil
 	}

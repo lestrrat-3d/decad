@@ -2916,6 +2916,7 @@
 12	2.32	TestFacetedRetainedBlendAreaCharge
 12	0.47	TestFacetedRetainedBlendChainBaseWrap
 12	20.06	TestFacetedRetainedBlendSharedEndPlanes
+12	3.61	TestFacetedRetainedBlendSlantedEndBound
 12	3.66	TestFacetedShortStepArc
 12	0.00	TestFilletChordRefusesMixedAngles
 12	0.23	TestFilletLoopNearTangentBossRoot
