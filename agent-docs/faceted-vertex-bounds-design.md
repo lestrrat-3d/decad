@@ -227,6 +227,41 @@ payloads, which have no vertex record), an exact rational clearance check of eve
 against the ball, and a redefined meaning of the bound with every consumer updated. Until then the rule above
 stays as §3.2 states it.
 
+### 3.7 Keeping a rim's bound beside the rim
+
+A kept piece of an operand facet has a rim corner `u` whose bound is far above the facet's own `δ(t)` and, as its
+other corners, operand corners or points `δ(t)` covers. The piece's facet bound is the largest corner bound, so the
+rim's bound stands for the whole piece. A facet that runs the height of a tube wall carries it along the whole
+height, and the next boolean that crosses the piece, however far from the rim, reads it and amplifies it again.
+
+`meshbool.SplitSpread` splits such a piece. On each edge from a rim corner `u` to another corner `v` it places a
+point `x` at `1/2^j` of the edge from `u`, with the largest `j` that keeps `x` at least `4 β(u)` from `u`. The piece
+becomes a small piece at `u` and pieces whose corners are operand corners and split points. A split point takes
+`β(x) = δ(t)` (§3.3), because it lies on the held facet `t`. The facets away from `u` then carry `δ(t)`.
+
+`x` takes `δ(t)` only where the claim is proven. The true piece of `t` within `δ(t)` of `x` is a point `p*` of the
+true surface. It is part of the result's boundary only if the other operand's true boundary does not trim it.
+`x` lies on the kept side of the held other operand, the held and true boundaries of the other operand differ by at
+most `δ_o`, the largest facet bound it holds, and the segment `x p*` is at most `δ(t)` long. So when
+`CertifiedInteriorDepth(x) > δ(t) + δ_o`, every point of the segment is farther than `δ_o` from the held other
+boundary. The segment then meets neither boundary, and `p*` is on the same side of the true other boundary as `x`.
+`SplitSpread` places a point only after `depthBeyond` proves that depth, and tries the next point away from `u`
+where it fails. A piece with no point that passes stays whole, which is the result before this section.
+
+Further conditions:
+
+- The pieces keep the orientation, the source face and the operand facet's bound. They only add vertices, and a
+  rim corner, an operand corner and every other bound of the piece are unchanged. The stitch's conforming pass
+  inserts a split point into the facet across a shared edge, and that facet keeps its own bound.
+- A piece on a planar face is never split. A split point lies on no boundary loop of its face, and
+  `internal/retainedblend` re-triangulates a face from its boundary loops and refuses a vertex off them
+  (`a face holds a vertex off its boundary`).
+- Only a document that sets `decad.WithRimSplit` is split. A vertex that no boundary loop of a curved face reaches
+  is refused by the retained-blend reading too (`a face holds a vertex off its boundary`, or `the blend consumes the
+  wall`), so a document that edge-finishes its mesh results keeps the faces that reading expects. Only a rim corner
+  above the pair's chord tolerance is split.
+- A bounded replay applies the same pass and charges its work.
+
 ## 4. Consumers
 
 ### 4.1 The faceted payload record

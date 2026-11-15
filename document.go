@@ -36,6 +36,9 @@ type Document struct {
 	// (chain_tolerance.go), and chainErr the error an invalid option named.
 	chainTol float64
 	chainErr error
+	// rimSplit is whether its mesh booleans split pieces beside their rims
+	// (rim_split.go).
+	rimSplit bool
 	// params is the parameter table Param and Expr read (params.go), and
 	// ledger the reads they have made.
 	params *param.Table
@@ -59,7 +62,7 @@ type Document struct {
 }
 
 // DocumentOption configures New. WithGapTolerance, ExactOnly,
-// WithChainTolerance and WithParams are its options. An option from another package cannot implement this sealed tier.
+// WithChainTolerance, WithRimSplit and WithParams are its options. An option from another package cannot implement this sealed tier.
 type DocumentOption interface {
 	option.Interface
 	documentOption()
@@ -74,6 +77,7 @@ func New(opts ...DocumentOption) *Document {
 	d.circlePlacements = make(map[*Body]*circlePlacementWitness)
 	d.gapReach, d.gapErr = gapReachOf(opts)
 	d.chainTol, d.chainErr = chainToleranceOf(opts)
+	d.rimSplit = rimSplitOf(opts)
 	d.params = paramsOf(opts)
 	return d
 }

@@ -169,7 +169,6 @@ func TestCutTwistedSweepCrossesTubeWall(t *testing.T) {
 	}
 }
 
-//nolint:unparam // the radii are inputs so a case can bore a different tube
 func twistBoreTube(t *testing.T, doc *decad.Document, outer, inner, height float64) *decad.Body {
 	t.Helper()
 	w := sketch.NewWorld()

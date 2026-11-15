@@ -51,6 +51,9 @@ func MeshBooleanReplayWithKeys(ctx context.Context, op OperationKind, ma, mb *Bo
 	if err := budget.ReserveBytes(ctx, uint64(len(a)+len(b)), uint64(unsafe.Sizeof(KeptFacet{}))); err != nil {
 		return nil, 0, err
 	}
+	for i := range b {
+		b[i].Second = true
+	}
 	out := make([]KeptFacet, 0, len(a)+len(b))
 	out = append(out, a...)
 	out = append(out, b...)
@@ -69,7 +72,7 @@ func brakeKeepSideReplay(ctx context.Context, m, other *BoolMesh, cuts map[int][
 		v, ok := cuts[i]
 		return v, ok
 	}
-	emit := func(tri [3]proof.Xpt, beta [3]float64, keys [3]string, src int) error {
+	emit := func(tri [3]proof.Xpt, beta [3]float64, keys [3]string, src int, facet int) error {
 		if shared != nil {
 			if err := shared.SpendWork(ctx, 1); err != nil {
 				return err
@@ -98,7 +101,7 @@ func brakeKeepSideReplay(ctx context.Context, m, other *BoolMesh, cuts map[int][
 			beta[1], beta[2] = beta[2], beta[1]
 			keys[1], keys[2] = keys[2], keys[1]
 		}
-		kept = append(kept, KeptFacet{V: tri, Src: src, Beta: beta, Keys: keys})
+		kept = append(kept, KeptFacet{V: tri, Src: src, Beta: beta, Keys: keys, Delta: m.FacetBound[facet], Facet: facet})
 		return nil
 	}
 
@@ -213,7 +216,7 @@ func brakeKeepSideReplay(ctx context.Context, m, other *BoolMesh, cuts map[int][
 							beta[k] = CutCornerBound(m, i, cornerKeys, keys[k], rims)
 						}
 					}
-					if err := emit(tri, beta, keys, m.Src[i]); err != nil {
+					if err := emit(tri, beta, keys, m.Src[i], i); err != nil {
 						return nil, err
 					}
 				}
@@ -364,7 +367,7 @@ func brakeKeepSideReplay(ctx context.Context, m, other *BoolMesh, cuts map[int][
 					return nil, err
 				}
 			}
-			if err := emit(x, [3]float64{m.VertexBound[t[0]], m.VertexBound[t[1]], m.VertexBound[t[2]]}, keys, m.Src[f]); err != nil {
+			if err := emit(x, [3]float64{m.VertexBound[t[0]], m.VertexBound[t[1]], m.VertexBound[t[2]]}, keys, m.Src[f], f); err != nil {
 				return nil, err
 			}
 		}
