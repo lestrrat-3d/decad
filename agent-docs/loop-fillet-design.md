@@ -383,7 +383,8 @@ and the contour holds one foot there; `capband.JoinIsG1` refuses it.
 recorded junction point, exact tangents running the same way,
 `sin²θ ≤ 2⁻⁶⁴`, one amount, each moved circle clear of the corner). Every
 wall with an LF5′ end must also pass `capband.NearTangentWallRefusal` with
-every walk at `r`. Both tests are exact rational arithmetic over the record's
+every walk at `r`, and its other end must not be LF8 or LF6, whose true end
+that gate does not enclose. Both tests are exact rational arithmetic over the record's
 floats, and the arc ends are read as the LF5 test reads them, about the
 recorded centre through the recorded junction. `filletband.CornerClass`
 returns the corner's `ρ = T·sinUp·(1 + S)`, and `filletband.Loop.Rho` holds

@@ -17,8 +17,9 @@ import (
 //
 // Every wall with an LF5′ end must pass capband.NearTangentWallRefusal, the
 // survival gate §5.5's corner terms assume: its true edge runs from its start
-// corner to its end corner at every level. A wall that fails names the LF5′
-// corner at its start, or at its end when only that one is LF5′.
+// corner to its end corner at every level. A wall whose other end is LF8 or
+// LF6 refuses, since that gate does not enclose such an end. A wall that fails
+// names the LF5′ corner at its start, or at its end when only that one is LF5′.
 func ReadLoop(budget *proofbound.WorkBudget, record sectionrecord.LoopRecord,
 	walks []survey2d.SideWalk, radius, radiusDelta, tol float64) (loop Loop, joins []offset2d.Join,
 	pieces []Piece, badCorner int, badWhy string, err error) {
@@ -89,6 +90,18 @@ func nearTangentWalls(budget *proofbound.WorkBudget, record sectionrecord.LoopRe
 		if corners[i] != NearTangent && corners[next] != NearTangent {
 			continue
 		}
+		// The gate reads a far end as the carriers' miter or a circular
+		// neighbour's radial foot, which an LF8 or LF6 end is not, so such a
+		// wall is refused rather than gated on the wrong end.
+		for _, k := range [2]int{i, next} {
+			if corners[k] == CurvedMiter || corners[k] == Reflex {
+				end := i
+				if corners[i] != NearTangent {
+					end = next
+				}
+				return end, nearTangentOtherEndWhy, nil
+			}
+		}
 		if why := capband.NearTangentWallRefusal(record, walks, i, amounts, radiusDelta, rho[i], rho[next], false); why != "" {
 			if corners[i] == NearTangent {
 				return i, why, nil
@@ -98,6 +111,10 @@ func nearTangentWalls(budget *proofbound.WorkBudget, record sectionrecord.LoopRe
 	}
 	return -1, "", nil
 }
+
+// nearTangentOtherEndWhy refuses a wall with an LF5′ end whose other end is an
+// LF8 or LF6 corner, which the near-tangent survival gate does not enclose.
+const nearTangentOtherEndWhy = `a wall at a near-tangent join whose other end is a curved miter or a reflex corner, which the near-tangent survival gate does not enclose`
 
 // ContourDelta bounds the contour after sphere poles consume their inward
 // arcs. The surviving carriers meet at each recorded pole centre.
