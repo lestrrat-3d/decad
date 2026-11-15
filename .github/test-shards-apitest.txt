@@ -3059,3 +3059,7 @@
 12	0.00	TestSectionOutlineLocalBoundStillChargesFacetsInTheSlab
 12	0.00	TestCapBlendCutAfterTangentArcChamfer
 12	0.00	TestChordedLoftUnionKeepsRimBoundOnLaterCut
+12	0.00	TestRefineSectorJoinReachesTargetBound
+12	0.00	TestRefineSectorJoinKeepsLaterOperations
+12	0.00	TestRefineSectorJoinRefusals
+12	0.00	TestRefineSectorJoinNeverLoosens

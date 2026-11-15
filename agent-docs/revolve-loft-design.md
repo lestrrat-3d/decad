@@ -218,7 +218,8 @@ Serial and variadic `Union` use the same constructor; serial joins retain the
 original Revolve, source certificate, placed sources, and dynamic ring IDs.
 
 Each construction must pass connected orientation, vertex links, the exact
-triangle contact audit, a 0.1 mm boundary bound, finite area and occupied
+triangle contact audit, a boundary bound within the join's ceiling (0.1 mm unless
+`Refine` set a smaller one, `agent-docs/body-refine-design.md` §4), finite area and occupied
 volume bounds, and a measured-volume increase over the original Revolve.
 For each cap whose held triangles form a single graph over the plane normal
 to the Revolve axis, the audit may omit pairs within that cap. It proves
@@ -237,12 +238,15 @@ structured Loft audits continue to prepare their complete exact tables.
 The audit triangle allowance follows the section-ring and cap cell counts,
 with a 1.2-million-triangle memory ceiling. The crossing scan allowance is
 the smaller of all triangle pairs and 25 million scans per admitted sector.
-If the cone cap interpolation term exceeds the remaining 0.1 mm boundary
-budget, the builder splits only cap cells above that term's target. Shared
+If the cone cap interpolation term exceeds the remaining boundary
+budget (the ceiling less the other terms), the builder splits only cap cells above that term's target. Shared
 edges split together, including root edges. It rebuilds the shared ring and
 recomputes the cone cap and full boundary bounds after refinement. Each
 construction attempt permits at most three additional cap passes within the
 same mesh ceiling; a cap that still exceeds the budget refuses the join.
+`Refine` of a join that still carries its record rebuilds it from the record's
+certificate and sources under a smaller ceiling, and the record retains that
+ceiling for a later serial `Union`. Every other build uses the 0.1 mm ceiling.
 A cap station of the tool's upper cone whose Q falls short of 1 by more than the
 sample's error is refused, because the cone cap would then reach the far source
 plane. When the Boolean that recorded the cone was called with

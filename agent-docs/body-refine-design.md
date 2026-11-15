@@ -121,6 +121,24 @@ trigonometry, widened by a relative `1e-12` of their magnitude plus the record's
 exceeds float evaluation by four orders of magnitude, but it is a charged allowance, not an exact proof. The
 cylinder reading is exact.
 
+### Sector joins
+
+A second input class is outside the occupancy certificate: a straight-bevel sector join, the `Union` of a revolve
+blank and copies of one point-Loft tooth trimmed by cones (`agent-docs/revolve-loft-design.md`). The join writes one
+uniform bound to every vertex, and its cone-cap term dominates. The join stops refining its cone caps once its bound
+fits a ceiling, 0.1 mm for an ordinary `Union`, so a join can hold 0.08 to 0.1 mm.
+
+`Refine` of a body whose payload still carries its `RevolveLoftJoin` record (a bore `Cut`, a placement or any other
+rewrite drops it) rebuilds the join from the record's certificate and sources with the ceiling set to
+min(`maxBound`, the record's ceiling, 0.1 mm). The cap refinement then splits cap cells until the join's bound is at
+most the ceiling. The result keeps the ceiling in its record, so a later serial `Union` of one more tooth and a later
+bore `Cut` keep the refined bound. A ceiling the join cannot meet within the cap-pass and 1.2-million-triangle
+audit limits is `ErrUnsupported` naming the ceiling and the bound reached. The rebuild never loosens the source.
+
+This case does not keep the held vertices: the rebuilt mesh has more triangles (1.8 to 2.6 times at 0.05 to 0.03 mm
+on a 31 tooth gear) and its own `Volume` and `Area` readings, in the same solid. No other `Refine` input moves
+vertices. A body whose join record is gone, such as one a bore cut produced, is refused as any other body.
+
 ## 5. The certificate
 
 `X` is the true solid: the union of the record's leaves less the union of its holes. `X'` is the held mesh. The
@@ -218,7 +236,8 @@ func Refine(ctx context.Context, source *Body, maxBound units.Value) (*Body, err
   or swept circles, then Cuts by extruded circles. Anything else, or a certificate
   above `maxBound` within the ceilings, returns `ErrUnsupported` naming the facet bound reached.
 - On success the result belongs to `source`'s document, has fresh face identities and the same held vertices,
-  triangles, topology, `Volume`, `Area`, vertex and edge readings. The operation records as `Refine` and retires
+  triangles, topology, `Volume`, `Area`, vertex and edge readings. A sector join (§4, Sector joins) is the one
+  exception: it is rebuilt with finer cone caps, so its vertices, triangles and readings are new. The operation records as `Refine` and retires
   `source`. Failure or cancellation changes no history and no live body. `ctx.Err()` is returned unchanged.
 - `Tessellate(tol)` on the result succeeds for every `tol ≥ max σ`. Below the crossing floor its `Mesh.Bound()`
   is `max σ`. At or above the floor it is the crossing bound, as before.

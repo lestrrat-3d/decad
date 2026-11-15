@@ -21,6 +21,10 @@ import (
 	"github.com/lestrrat-3d/r3"
 )
 
+// SectorJoinDefaultCeiling is the boundary bound, in mm, a sector join may
+// publish unless a caller sets a smaller one through RebuildSectorsJoin.
+const SectorJoinDefaultCeiling = 0.1
+
 const (
 	sectorJoinMaxAuditTriangles = 1_200_000
 	sectorJoinStreamTriangles   = 1_000_000
@@ -80,12 +84,49 @@ func TraceSectorLoop(cert *facetedrecord.RevolveLoftSectorCertificate) error {
 // from them and a later Cut reads the ring.
 func BuildSectorsJoin(ctx context.Context, env topo.Env,
 	cert *facetedrecord.RevolveLoftSectorCertificate, sources []facetedrecord.Payload) (*topo.Body, error) {
+	return buildSectorsJoin(ctx, env, cert, sources, SectorJoinDefaultCeiling)
+}
+
+// RebuildSectorsJoin rebuilds the join retained in rec with the cap
+// refinement run until the join's boundary bound is at most ceiling, in mm.
+// It reads rec's certificate, first source and placed sources, never the held
+// mesh, so the result has new vertices and the same solid. The result retains
+// ceiling, so a later serial union keeps it. ceiling is clamped to
+// [0, SectorJoinDefaultCeiling] and to the record's own ceiling, so a rebuild
+// never loosens what rec holds. A ceiling the join cannot meet is
+// decaderr.ErrUnsupported naming it.
+func RebuildSectorsJoin(ctx context.Context, env topo.Env,
+	rec *facetedrecord.RevolveLoftJoinRecord, ceiling float64) (*topo.Body, error) {
+	if rec == nil || rec.Certificate == nil {
+		return nil, fmt.Errorf("%w: sector join has no retained source", decaderr.ErrUnsupported)
+	}
+	ceiling = min(ceiling, SectorJoinDefaultCeiling, RecordCeiling(rec))
+	if !(ceiling > 0) {
+		return nil, fmt.Errorf("%w: sector join ceiling %g mm admits no mesh", decaderr.ErrUnsupported, ceiling)
+	}
+	sources := make([]facetedrecord.Payload, 0, 1+len(rec.Placed))
+	sources = append(sources, rec.First)
+	sources = append(sources, rec.Placed...)
+	return buildSectorsJoin(ctx, env, rec.Certificate, sources, ceiling)
+}
+
+// RecordCeiling returns the boundary-bound ceiling rec was built under.
+func RecordCeiling(rec *facetedrecord.RevolveLoftJoinRecord) float64 {
+	if rec.Ceiling > 0 {
+		return rec.Ceiling
+	}
+	return SectorJoinDefaultCeiling
+}
+
+func buildSectorsJoin(ctx context.Context, env topo.Env,
+	cert *facetedrecord.RevolveLoftSectorCertificate, sources []facetedrecord.Payload,
+	ceiling float64) (*topo.Body, error) {
 	if cert == nil || cert.Trim == nil || cert.Blank == nil ||
 		len(sources) == 0 || len(sources) > 128 ||
 		!facetedrecord.PointSourceCurrent(cert.Trim.Base.PointSection) {
 		return nil, fmt.Errorf("%w: sector source is incomplete or stale", decaderr.ErrUnsupported)
 	}
-	body, ring, err := buildSectorsJoinRefined(ctx, env, cert, sources)
+	body, ring, err := buildSectorsJoinRefined(ctx, env, cert, sources, ceiling)
 	if err != nil {
 		return nil, err
 	}
@@ -98,6 +139,9 @@ func BuildSectorsJoin(ctx context.Context, env topo.Env,
 		Placed: append([]facetedrecord.Payload(nil), sources[1:]...), CapRing: ring,
 		BoundaryBound: payload.MeshBound, VolumeBound: payload.VolSymDiff,
 		AreaBound: payload.AreaSlack}
+	if ceiling < SectorJoinDefaultCeiling {
+		payload.RevolveLoftJoin.Ceiling = ceiling
+	}
 	body.Payload = payload
 	return body, nil
 }
@@ -108,7 +152,7 @@ func BuildSectorsJoin(ctx context.Context, env topo.Env,
 // 0.1 to 0.5 set by the measured margin before the next attempt.
 func buildSectorsJoinRefined(ctx context.Context, env topo.Env,
 	cert *facetedrecord.RevolveLoftSectorCertificate,
-	sources []facetedrecord.Payload) (*topo.Body, *facetedrecord.RevolvedSectionRing, error) {
+	sources []facetedrecord.Payload, ceiling float64) (*topo.Body, *facetedrecord.RevolvedSectionRing, error) {
 	sag := 0.01
 	if cert.Boundary.FitRoute {
 		sag = 0.0025
@@ -121,7 +165,7 @@ func buildSectorsJoinRefined(ctx context.Context, env topo.Env,
 	attempt := -1
 	for {
 		attempt++
-		body, ring, err := buildSectorsJoinAtSag(ctx, env, cert, sources, sag, capLimit, rounds)
+		body, ring, err := buildSectorsJoinAtSag(ctx, env, cert, sources, sag, capLimit, rounds, ceiling)
 		if err == nil {
 			return body, ring, nil
 		}
@@ -164,7 +208,7 @@ func buildSectorsJoinRefined(ctx context.Context, env topo.Env,
 
 func buildSectorsJoinAtSag(ctx context.Context, env topo.Env,
 	cert *facetedrecord.RevolveLoftSectorCertificate, sources []facetedrecord.Payload,
-	sagAllowance, capLimit float64, capRounds int) (*topo.Body, *facetedrecord.RevolvedSectionRing, error) {
+	sagAllowance, capLimit float64, capRounds int, ceiling float64) (*topo.Body, *facetedrecord.RevolvedSectionRing, error) {
 	section, record, base := cert.Section, cert.Trim, cert.Base
 	regularSource, sourceSector, err := RevolveSectionAngles(section, cert.Sector, sagAllowance)
 	if err != nil {
@@ -293,7 +337,7 @@ func buildSectorsJoinAtSag(ctx context.Context, env topo.Env,
 		BaseAreaSlack: base.AreaSlack, BaseArea: baseArea,
 		SectionSag: sectionSag, ConeGap: section.ConeGap, ToolGap: toolGap,
 		FarRound: farRound, Lip: lip, UpperBound: upperBound, LowerBound: lowerBound,
-		UpperLip: upperLip, LowerLip: lowerLip, CapArea: capArea, CapFactor: capFactor,
+		UpperLip: upperLip, LowerLip: lowerLip, CapArea: capArea, CapFactor: capFactor, Ceiling: ceiling,
 	}
 	bounds := NewSectorJoinBounds()
 	var samples SectorSamples
@@ -316,12 +360,13 @@ func buildSectorsJoinAtSag(ctx context.Context, env topo.Env,
 		}
 	}
 	bound := proofbound.AbsSumUpper(sectionSag, bounds.LocalBound)
-	if proofbound.IsNonFinite(bound) || bound > 0.1 {
+	if proofbound.IsNonFinite(bound) || bound > ceiling {
 		if bounds.CapRefinePossible && bounds.RefineCapLimit > 0 &&
 			bounds.RefineCapLimit < capLimit && max(upperBound, lowerBound) > bounds.RefineCapLimit {
 			return nil, nil, &sectorCapRefineError{limit: bounds.RefineCapLimit}
 		}
-		return nil, nil, fmt.Errorf("%w: joined sectors cannot meet the 0.1 mm boundary proof", decaderr.ErrUnsupported)
+		return nil, nil, fmt.Errorf("%w: joined sectors cannot meet the %g mm boundary proof (reached %g mm)",
+			decaderr.ErrUnsupported, ceiling, bound)
 	}
 	if err := tessellation.OrientJoinedMesh(mesh.Verts, mesh.Tris); err != nil {
 		return nil, nil, err
