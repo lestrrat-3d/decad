@@ -4,8 +4,11 @@ import (
 	"context"
 	"math"
 	"math/big"
+	"unsafe"
 
 	"github.com/lestrrat-3d/decad/internal/proof"
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/r3"
 )
 
 // This file keeps a rim vertex's large bound next to the rim. A kept piece of
@@ -23,11 +26,45 @@ const (
 	// spreadReach is how many times a rim corner's bound the nearest split
 	// point stands from it, at the least.
 	spreadReach = 4.0
+	// spreadExactWork is the work one exact triangle-to-triangle distance
+	// proof is charged, beyond the facet scan that finds its candidates.
+	spreadExactWork = 64
 )
 
-// BudgetFunc charges the work and the records of a bounded replay. A nil
+// spreadMargins are the multiples of the clearance a split point must stand
+// from the other operand's held boundary, tried in turn. A point just past the
+// clearance can leave a far piece that reaches within it, so a piece that
+// fails is cut again farther from the other operand before it is kept whole.
+var spreadMargins = [...]float64{1, 8, 64, 512}
+
+// BudgetFunc charges the work, the records and the KeptFacet slots of a
+// bounded replay. facets slots are reserved as backing storage. A nil
 // BudgetFunc charges nothing.
-type BudgetFunc func(work, records uint64) error
+type BudgetFunc func(work, records, facets uint64) error
+
+// ReplaySpreadBudget returns the BudgetFunc that charges SplitSpread's work to
+// replay, or nil when replay is nil.
+func ReplaySpreadBudget(ctx context.Context, replay *proofbound.ReplayBudget) BudgetFunc {
+	if replay == nil {
+		return nil
+	}
+	return func(work, records, facets uint64) error {
+		if work != 0 {
+			if err := replay.SpendWork(ctx, work); err != nil {
+				return err
+			}
+		}
+		if records != 0 {
+			if err := replay.ReserveRecords(ctx, records); err != nil {
+				return err
+			}
+		}
+		if facets != 0 {
+			return replay.ReserveArray(ctx, facets, uint64(unsafe.Sizeof(KeptFacet{})))
+		}
+		return nil
+	}
+}
 
 // SplitSpread returns kept with each piece that has rim corners and operand
 // corners split so that the facets away from the rim hold only the operand
@@ -37,15 +74,22 @@ type BudgetFunc func(work, records uint64) error
 // above twice the operand facet's bound.
 //
 // A split point x stands on an edge from a rim corner u to another corner v
-// of one piece of operand facet t, so it lies on t. It takes β(x) = δ(t)
-// (agent-docs/faceted-vertex-bounds-design.md §3.3) only where the true piece
-// of t within δ(t) of x is still part of the result boundary: where x is
+// of one piece of operand facet t, so it lies on t. The piece is cut into a
+// rim piece at u and far pieces, those with no rim corner, and a far piece
+// carries δ(t) (agent-docs/faceted-vertex-bounds-design.md §3.3, §3.7) for
+// every point of it. That holds where each point of the far piece stands
 // farther than δ(t) + δ_o from the held boundary of the other operand, δ_o the
-// largest bound that operand holds. The held and the true boundary of the
-// other operand differ by at most δ_o, so the segment from x to that true point
-// meets neither. Where no point of the edge passes the test, the piece is kept
-// whole, which is the result without this pass. The split adds vertices and
-// never lowers a bound a rim vertex or an operand corner carries.
+// largest bound that operand holds: the held and the true boundary of the
+// other operand then differ by at most δ_o, and the segment from the point to
+// the true point of t within δ(t) meets neither. The distance to a convex
+// other operand dips between two points that both clear it, so the proof is
+// over the far piece, not its corners. A split is emitted only when
+// farPiecesClear proves, by an exact triangle-to-triangle distance against
+// every facet of the other operand near the piece, that every far piece it
+// makes clears that distance. A far piece with a corner on the other operand's
+// boundary, such as a chain corner, never does. A piece with no such split is
+// kept whole, which is the result without this pass. The split adds vertices
+// and never lowers a bound a rim vertex or an operand corner carries.
 //
 // A piece on a planar face is never split: a split point lies on no boundary
 // loop of its face, and a retained blend re-triangulates a face from its loops.
@@ -98,40 +142,61 @@ func SplitSpread(ctx context.Context, kept []KeptFacet, a, b *BoolMesh, floor fl
 			}
 			continue
 		}
-		pts := map[[2]int]proof.Xpt{}
-		whole := false
-		for _, h := range hi {
-			for _, l := range lo {
-				x, ok, err := spreadPoint(ctx, f, h, l, other, f.Delta+maxDelta[1-side], cut[side], &hint, charge)
-				if err != nil {
-					return nil, err
-				}
-				if !ok {
-					whole = true
-					break
-				}
-				pts[[2]int{h, l}] = x
+		clearance := f.Delta + maxDelta[1-side]
+		var pieces [3]KeptFacet
+		split := false
+		for level, margin := range spreadMargins {
+			pts, ok, err := spreadPoints(ctx, f, hi, lo, other, clearance*margin, level, cut[side], &hint, charge)
+			if err != nil {
+				return nil, err
 			}
-			if whole {
+			if !ok {
+				continue
+			}
+			var far [3]bool
+			pieces, far = splitPieces(f, hi, lo, pts)
+			split, err = farPiecesClear(ctx, pieces, far, other, clearance, charge)
+			if err != nil {
+				return nil, err
+			}
+			if split {
 				break
 			}
 		}
-		if whole {
+		if !split {
 			if out != nil {
 				out = append(out, *f)
 			}
 			continue
 		}
 		if out == nil {
-			out = make([]KeptFacet, i, len(kept)+len(kept)/4)
+			capacity := max(len(kept)+len(kept)/4, i+3)
+			if charge != nil {
+				if err := charge(0, 0, uint64(capacity)); err != nil {
+					return nil, err
+				}
+			}
+			out = make([]KeptFacet, i, capacity)
 			copy(out, kept[:i])
 		}
 		if charge != nil {
-			if err := charge(3, 3); err != nil {
+			if err := charge(3, 3, 0); err != nil {
 				return nil, err
 			}
 		}
-		out = appendSplitPieces(out, f, hi, lo, pts)
+		if len(out)+3 > cap(out) {
+			// Grow by hand, so the storage append would allocate is reserved first.
+			capacity := 2 * cap(out)
+			if charge != nil {
+				if err := charge(0, 0, uint64(capacity)); err != nil {
+					return nil, err
+				}
+			}
+			grown := make([]KeptFacet, len(out), capacity)
+			copy(grown, out)
+			out = grown
+		}
+		out = append(out, pieces[:]...)
 	}
 	if out == nil {
 		return kept, nil
@@ -161,47 +226,171 @@ func ownsCurvedFace(m *BoolMesh, i int) bool {
 	return false
 }
 
-// appendSplitPieces appends the pieces of f cut at pts, which holds the split
-// point of every edge from a rim corner in hi to a corner in lo. The pieces
-// keep f's orientation.
-func appendSplitPieces(out []KeptFacet, f *KeptFacet, hi, lo []int, pts map[[2]int]proof.Xpt) []KeptFacet {
+// splitPieces returns the three pieces of f cut at pts, which holds the split
+// point of every edge from a rim corner in hi to a corner in lo, and which of
+// them are far pieces, those with no rim corner. The pieces keep f's
+// orientation.
+func splitPieces(f *KeptFacet, hi, lo []int, pts map[[2]int]proof.Xpt) ([3]KeptFacet, [3]bool) {
 	d := f.Delta
-	add := func(v [3]proof.Xpt, beta [3]float64) {
-		out = append(out, KeptFacet{V: v, Src: f.Src, Beta: beta, Delta: d, Second: f.Second})
+	var out [3]KeptFacet
+	var far [3]bool
+	add := func(n int, isFar bool, v [3]proof.Xpt, beta [3]float64) {
+		out[n] = KeptFacet{V: v, Src: f.Src, Beta: beta, Delta: d, Second: f.Second, Facet: f.Facet}
+		far[n] = isFar
 	}
 	if len(hi) == 1 {
 		u := hi[0]
 		p, q := (u+1)%3, (u+2)%3
 		x, y := pts[[2]int{u, p}], pts[[2]int{u, q}]
-		add([3]proof.Xpt{f.V[u], x, y}, [3]float64{f.Beta[u], d, d})
-		add([3]proof.Xpt{x, f.V[p], f.V[q]}, [3]float64{d, f.Beta[p], f.Beta[q]})
-		add([3]proof.Xpt{x, f.V[q], y}, [3]float64{d, f.Beta[q], d})
-		return out
+		add(0, false, [3]proof.Xpt{f.V[u], x, y}, [3]float64{f.Beta[u], d, d})
+		add(1, true, [3]proof.Xpt{x, f.V[p], f.V[q]}, [3]float64{d, f.Beta[p], f.Beta[q]})
+		add(2, true, [3]proof.Xpt{x, f.V[q], y}, [3]float64{d, f.Beta[q], d})
+		return out, far
 	}
 	w := lo[0]
 	u1, u2 := (w+1)%3, (w+2)%3
 	x1, x2 := pts[[2]int{u1, w}], pts[[2]int{u2, w}]
-	add([3]proof.Xpt{f.V[u1], f.V[u2], x2}, [3]float64{f.Beta[u1], f.Beta[u2], d})
-	add([3]proof.Xpt{f.V[u1], x2, x1}, [3]float64{f.Beta[u1], d, d})
-	add([3]proof.Xpt{x1, x2, f.V[w]}, [3]float64{d, d, f.Beta[w]})
-	return out
+	add(0, false, [3]proof.Xpt{f.V[u1], f.V[u2], x2}, [3]float64{f.Beta[u1], f.Beta[u2], d})
+	add(1, false, [3]proof.Xpt{f.V[u1], x2, x1}, [3]float64{f.Beta[u1], d, d})
+	add(2, true, [3]proof.Xpt{x1, x2, f.V[w]}, [3]float64{d, d, f.Beta[w]})
+	return out, far
+}
+
+// farPiecesClear reports whether every piece marked far stands farther than
+// clearance from every facet of other, proven by DisjointTriDistanceAbove's
+// exact distance. A piece's box, grown by clearance and the corners' rounding,
+// prunes the facets whose box is out of reach; a facet it keeps must pass the
+// exact proof, and one the proof refuses (a facet the piece touches or
+// crosses, or one too near) makes the answer false.
+func farPiecesClear(ctx context.Context, pieces [3]KeptFacet, far [3]bool, other *BoolMesh, clearance float64,
+	charge BudgetFunc) (bool, error) {
+	if !(clearance > 0) || math.IsInf(clearance, 0) {
+		return false, nil
+	}
+	for n := range pieces {
+		if !far[n] {
+			continue
+		}
+		if charge != nil {
+			if err := charge(uint64(len(other.Tris)), 1, 0); err != nil {
+				return false, err
+			}
+		}
+		if err := ctx.Err(); err != nil {
+			return false, err
+		}
+		tri := pieces[n].V
+		lo, hi := tri[0].Vec(), tri[0].Vec()
+		round := 0.0
+		for _, c := range tri {
+			v := c.Vec()
+			lo = r3.Vec{X: min(lo.X, v.X), Y: min(lo.Y, v.Y), Z: min(lo.Z, v.Z)}
+			hi = r3.Vec{X: max(hi.X, v.X), Y: max(hi.Y, v.Y), Z: max(hi.Z, v.Z)}
+			round = max(round, PointRoundBound(c, v))
+		}
+		scale := max(math.Abs(lo.X), math.Abs(lo.Y), math.Abs(lo.Z), math.Abs(hi.X), math.Abs(hi.Y), math.Abs(hi.Z))
+		reach := clearance*(1+0x1p-30) + round + scale*0x1p-40
+		box := [2]r3.Vec{lo, hi}
+		fl := [3]r3.Vec{tri[0].Vec(), tri[1].Vec(), tri[2].Vec()}
+		for i := range other.Tris {
+			if !BoxesWithin(box, other.Boxes[i], reach) {
+				continue
+			}
+			// A float distance at or under the clearance refuses without the exact
+			// proof. It only ever refuses, so a pair it misreads (the float distance
+			// of a crossing pair is no distance) goes on to the proof, which refuses
+			// a crossing pair itself.
+			if TriTriDistance(fl, TriCorners(other, i)) <= clearance {
+				return false, nil
+			}
+			// A separating axis along either facet's normal, read in floats with
+			// their rounding charged, proves the distance without the exact proof.
+			// The float corners of the piece sit within round of its exact ones.
+			if triGapAbove(fl, TriCorners(other, i), clearance+round*(1+0x1p-20)) {
+				continue
+			}
+			if charge != nil {
+				if err := charge(spreadExactWork, 0, 0); err != nil {
+					return false, err
+				}
+			}
+			if !DisjointTriDistanceAbove(tri, XtriCorners(other, i), clearance) {
+				return false, nil
+			}
+		}
+	}
+	return true, nil
+}
+
+// triGapAbove reports whether the float triangles ta and tb stand farther than
+// slack apart, proven by a gap along one of seventeen axes: the two facet
+// normals, the nine edge-edge cross products and the six edge-normal cross
+// products. Any direction n separates the triangles by at least the gap of
+// their projections over |n|, so the axes need no exactness of their own;
+// axisGapExceeds charges each projection's float error as
+// TriTriDistanceExceeds does. It never answers true for a pair that crosses or
+// comes within slack, and it answers false for a pair no such axis separates.
+func triGapAbove(ta, tb [3]r3.Vec, slack float64) bool {
+	m, ok := triPairScale(ta, tb)
+	if !ok || !(slack >= 0 && slack <= math.MaxFloat64) {
+		return false
+	}
+	thr := slack + (slack+m)*0x1p-26 + 0x1p-199
+	na, nb := triNormal(ta), triNormal(tb)
+	if axisGapExceeds(na, ta, tb, m, thr) || axisGapExceeds(nb, ta, tb, m, thr) {
+		return true
+	}
+	for i := range 3 {
+		ea, eb := ta[(i+1)%3].Sub(ta[i]), tb[(i+1)%3].Sub(tb[i])
+		if axisGapExceeds(ea.Cross(na), ta, tb, m, thr) || axisGapExceeds(eb.Cross(nb), ta, tb, m, thr) {
+			return true
+		}
+		for j := range 3 {
+			ej := tb[(j+1)%3].Sub(tb[j])
+			if axisGapExceeds(ea.Cross(ej), ta, tb, m, thr) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // spreadEdge names a split edge: its rim corner and other corner by exact key,
-// and the bound of the operand facet it lies on, which sets the clearance.
+// the bound of the operand facet it lies on, which sets the clearance, and the
+// margin level the point was sought at.
 type spreadEdge struct {
 	hi, lo string
 	delta  float64
+	level  int
+}
+
+// spreadPoints finds the split point of every edge from a rim corner in hi to
+// a corner in lo at depth from other's held boundary, and reports whether every
+// edge has one.
+func spreadPoints(ctx context.Context, f *KeptFacet, hi, lo []int, other *BoolMesh, depth float64, level int,
+	memo map[spreadEdge]*proof.Xpt, hint *int, charge BudgetFunc) (map[[2]int]proof.Xpt, bool, error) {
+	pts := map[[2]int]proof.Xpt{}
+	for _, h := range hi {
+		for _, l := range lo {
+			x, ok, err := spreadPoint(ctx, f, h, l, other, depth, level, memo, hint, charge)
+			if err != nil || !ok {
+				return nil, false, err
+			}
+			pts[[2]int{h, l}] = x
+		}
+	}
+	return pts, true, nil
 }
 
 // spreadPoint finds the split point of the edge from corner hi to corner lo of
 // f: the point at 1/2^j of the edge from hi with the largest j that keeps it at
-// least spreadReach times hi's bound from hi and farther than clearance from
-// other's held boundary. The answer is memoized per edge by the corner keys.
-func spreadPoint(ctx context.Context, f *KeptFacet, hi, lo int, other *BoolMesh, clearance float64,
+// least spreadReach times hi's bound from hi and deeper than depth from other's
+// held boundary. The point is a candidate only: farPiecesClear proves the
+// pieces it makes. The answer is memoized per edge and level by the corner keys.
+func spreadPoint(ctx context.Context, f *KeptFacet, hi, lo int, other *BoolMesh, depth float64, level int,
 	memo map[spreadEdge]*proof.Xpt, hint *int, charge BudgetFunc) (proof.Xpt, bool, error) {
 	u, v := f.V[hi], f.V[lo]
-	key := spreadEdge{hi: f.Keys[hi], lo: f.Keys[lo], delta: f.Delta}
+	key := spreadEdge{hi: f.Keys[hi], lo: f.Keys[lo], delta: f.Delta, level: level}
 	memoized := key.hi != "" && key.lo != ""
 	if memoized {
 		if p, ok := memo[key]; ok {
@@ -217,7 +406,7 @@ func spreadPoint(ctx context.Context, f *KeptFacet, hi, lo int, other *BoolMesh,
 	if length > 2*reach && !math.IsInf(length, 0) {
 		for j := int(math.Floor(math.Log2(length / reach))); j >= 1; j-- {
 			if charge != nil {
-				if err := charge(uint64(len(other.Tris)), 1); err != nil {
+				if err := charge(uint64(len(other.Tris)), 1, 0); err != nil {
 					return proof.Xpt{}, false, err
 				}
 			}
@@ -225,7 +414,7 @@ func spreadPoint(ctx context.Context, f *KeptFacet, hi, lo int, other *BoolMesh,
 				return proof.Xpt{}, false, err
 			}
 			x := proof.Xlerp(u, v, big.NewInt(1), new(big.Int).Lsh(big.NewInt(1), uint(j)))
-			if depthBeyond(x, other, clearance, hint) {
+			if depthBeyond(x, other, depth, hint) {
 				found = &x
 				break
 			}
