@@ -16,7 +16,8 @@ import (
 // plane that no other plane drops is read by the sign of its exact offset, and
 // the offset is charged into its bound (retained-edge-blend §4.3).
 
-// charged is bound grown by the offset d, as signRead charges it with no slack.
+// charged is bound grown by the offset d, as signRead charges it where the wall meets
+// the end plane square and the slack is zero.
 func charged(bound, d float64) float64 { return proofbound.AbsSumUpper(bound, d) }
 
 // TestSignReadChargesHeldVertex reads a held vertex within its bound of the end
@@ -43,9 +44,10 @@ func TestSignReadChargesHeldVertex(t *testing.T) {
 			require.NoError(t, err)
 
 			want := charged(0.001, math.Abs(off))
-			require.Equal(t, want, w.beta[0], "the offset is charged into the held bound")
+			require.GreaterOrEqual(t, w.beta[0], want, "the offset is charged into the held bound")
+			require.InDelta(t, want, w.beta[0], 1e-14)
 			require.Greater(t, w.beta[0], 0.001)
-			require.Equal(t, want, w.raised, "a raised held bound is reported")
+			require.Equal(t, w.beta[0], w.raised, "a raised held bound is reported")
 			require.Equal(t, 0.001, w.beta[1], "a vertex that no reading undecided keeps its bound")
 			require.Equal(t, 0.001, w.beta[2])
 
@@ -219,4 +221,81 @@ func TestSignReadChargeReachesCrossing(t *testing.T) {
 		require.InDelta(t, 0.0035, w.beta[id], 1e-12, "the cut of the edge by the end plane")
 	}
 	require.True(t, found)
+}
+
+// tiltedBand is flatBand with the end plane turned about x so that the wall z = 0
+// meets it at the angle whose sine is s: n = (0, s, √(1−s²)).
+func tiltedBand(s float64, verts ...r3.Vec) (*work, *wallBand, faceLoops) {
+	w, b, f := flatBand(verts...)
+	b.ends[0] = &bandEnd{g: plane{n: r3.NewVec(0, s, math.Sqrt(1-s*s)), o: r3.Vec{}}, sign: 1,
+		sine: func(float64) float64 { return s }}
+	return w, b, f
+}
+
+// keptDistance is the distance from p to the kept part {n·x ≤ 0} of the plane
+// z = h, a true wall that lies h above the held facet plane z = 0 (below it for h
+// negative). Every held bound of 0.001 allows h = ±0.001, so each is a world the
+// held claims permit.
+func keptDistance(p r3.Vec, s, h float64) float64 {
+	c := math.Sqrt(1 - s*s)
+	q := r3.NewVec(p.X, p.Y, h)
+	if s*q.Y+c*q.Z <= 0 {
+		return math.Abs(p.Z - h)
+	}
+	ys := -c * h / s
+	return math.Hypot(p.Y-ys, p.Z-h)
+}
+
+// TestSignReadBoundCoversSlant publishes, for a kept vertex read by sign beside an
+// end plane that the wall meets at a slant, a bound that reaches the nearest point
+// of the true boundary measured along the wall: c/s for c = β + |v| + slack, not
+// c. The vertex's own true wall lies on either side of the held facet (the foot
+// of the vertex on the wall falls on the band's side, or not). Drop the slant
+// term and every slanted row fails.
+func TestSignReadBoundCoversSlant(t *testing.T) {
+	t.Parallel()
+
+	const beta = 0.001
+	for _, s := range []float64{1, 0.866, 0.66, 0.4, 0.2} {
+		for _, eps := range []float64{0, 0.0001, 0.0005, 0.0015} {
+			for _, h := range []float64{beta, -beta} {
+				w, b, f := tiltedBand(s, r3.NewVec(0.5, -eps/s, 0), r3.NewVec(0.6, 2, 0), r3.NewVec(0.7, 4, 0))
+				cuts, err := w.cutBand(f, b)
+				require.NoError(t, err, "s %v eps %v", s, eps)
+				require.False(t, cuts.removed[0], "the vertex is read outside and kept")
+				truth := keptDistance(w.verts[0], s, h)
+				require.GreaterOrEqual(t, w.beta[0], truth, "s %v eps %v h %v", s, eps, h)
+				if s < 1 && eps == 0 && h == beta {
+					// The distance to the plane alone does not reach it.
+					require.Less(t, beta+eps, truth, "the unslanted charge falls short at s %v", s)
+				}
+			}
+		}
+	}
+}
+
+// TestSignReadRefusesBelowMinSine refuses a sign reading where the wall meets the
+// end plane at a sine below minSine, or where the end plane has no proven sine.
+func TestSignReadRefusesBelowMinSine(t *testing.T) {
+	t.Parallel()
+
+	for name, sine := range map[string]func(float64) float64{
+		"below minSine": func(float64) float64 { return minSine / 2 },
+		"no bound":      nil,
+		"proof fails at the reach": func(reach float64) float64 {
+			if reach > 0 {
+				return 0
+			}
+			return 1
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			w, b, f := flatBand(r3.NewVec(0.5, 0.0015, 0), r3.NewVec(0.6, 2, 0), r3.NewVec(0.7, 4, 0))
+			b.ends[0].sine = sine
+			_, err := w.cutBand(f, b)
+			require.ErrorIs(t, err, decaderr.ErrUnsupported)
+			require.Equal(t, 0.001, w.beta[0], "nothing is charged")
+		})
+	}
 }

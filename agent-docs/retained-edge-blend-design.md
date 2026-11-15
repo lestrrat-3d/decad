@@ -269,36 +269,63 @@ the clip applies the first remaining end plane of an exact-main band once more w
 sign reading on (`clipBySign`); the final test of a held vertex's membership
 (`inside`) does the same. A point that lies within its bound of the end plane
 at an offset `v`, which no face's tag puts on the plane, is then put on the side
-of `v`'s sign (on the plane when `v` is zero), and the charge `|v|` plus the
-route's slack, rounded up, is added to its bound (`signRead`): a held vertex's
-bound in the work, reported through `raised` like the raised inner vertices of a
-curved wall, or the bound of the cut point itself. A cut of a held edge reads its
-two ends first, so it takes their charged bounds. A vertex of a facet the cut keeps
-whole keeps the charge, so the facet claims it. It
-applies to end planes only and only to a band with an exact main plane, so R3's
-band, the main plane, the further planes and the guard keep their refusals, and
-it is on only where reading without it refuses, so no clip that builds without it
-changes (a vertex that another plane puts outside is never read by sign).
+of `v`'s sign (on the plane when `v` is zero), and its bound is raised to
+`c / s_lo`, rounded up, where `c = β + |v| + slack` and `s_lo` is a proven lower
+bound on the sine of the angle between the wall and `G` (`signRead`,
+`slantBound`). A held vertex's bound is raised in the work and reported through
+`raised`, like the raised inner vertices of a curved wall; a cut point's own bound
+is raised. The reading applies to end planes only and only to a band with an exact
+main plane, so R3's band, the main plane, the further planes and the guard keep
+their refusals. It is on only where reading without it refuses, so no clip that
+builds without it changes. A cut of a held edge reads its two ends first, and a
+sign reading there raises an end that another plane may already have put outside;
+that only widens the bound, and the cut takes the raised bounds.
 
-The side is a choice, not a claim, and no reading of a residual admits an input
-claim here. The held bound `β` says the vertex's true point lies within `β` of it;
-that holds as before, and the charge widens a published bound only. The point
-lies within `|v|` plus the slack (the plane's own arithmetic and displacement
-charge) of the exact plane the band is cut at, so its true point lies within
-`β + |v| + slack` of that plane, whichever side the true point is on. Suppose
-the true point is on the other side from the one chosen. The true band boundary
-near the point then differs from the cut the clip made by at most that distance,
-because every cut vertex is built from the exact planes and the held edges' ends,
-and each facet the clip keeps or cuts near the point states a bound, the largest
-of its corners', that includes the charged bound of the vertex that is kept or of
-the end a cut vertex is built from. The result's reported bound therefore stays an
-upper bound on its distance from the true body. What decides the result is still
-what the gates check afterwards, and they only reject: the wall test, the strip
-and taken-cap clearance and the nesting parity are unchanged, so a band that
+The side is a choice, not a claim, and no residual admits an input claim. The held
+bound says the vertex's true point lies within `β` of it; that holds as before.
+The vertex lies within `|v|` plus the slack (the plane's own arithmetic and
+displacement charge) of the plane the exact band is cut at, so its true point lies
+within `c` of that plane, on whichever side it is on. That is a distance to the
+plane. The band's boundary on the wall is where the wall crosses the plane, and
+when the wall meets `G` at a slant of sine `s` that line is `c / s` away along
+the wall, not `c`. With the true wall allowed to lie anywhere within the held
+bounds of the held facet, a kept vertex whose foot on the true wall falls on the
+band's side has its nearest point of the true result's boundary at `c / s` (flat
+model; a curved wall adds nothing once `s_lo` is taken over the reach below). The
+published bound is `c / s_lo` for that reason.
+
+`s_lo` (`wall_sine.go`) comes from the wall face's retained tag, which must state
+no departure (`TagDeparture` and `AxialDelta` zero): Claim R then puts the true
+wall on it, and its `NormalBound` lowers the sine by at most itself, since
+`sin(θ − δ) ≥ sin θ − δ`.
+
+- A plane wall meets `G` at the length of the cross product of the two unit
+  normals, less its rounding.
+- A cylinder wall whose axis runs parallel to `G` (`|n·a| ≤ 64 ulp`; the term
+  `|n·a|·scale` is charged) meets it, at a point with unit radial direction `r`, at
+  `√(1 − (r·n)²)`. A wall point within `reach` of `G` has `|r·n| ≤ (h + reach) / R`,
+  `h` the axis's distance from `G`, because `n·(p − o) = n·(c − o) + R·(r·n)` when
+  the axial term vanishes. This is `√(R² − (h + reach)²) / R`, the arc route's
+  `√(R² − h²) / R` at reach zero (0.866 for the notched round's side roots, 0.66
+  to 0.87 for the end-round chord-row fixture). The axis may lie on either side
+  of `G`, and a bore wall is the same surface.
+- Any other wall, a cylinder with a tilted axis, a cone, a sphere and a wall whose
+  tag states a departure, has no `s_lo`, and the reading refuses.
+
+The reach is chosen so the bound is self-consistent: a reach `r` is accepted when
+`c / s_lo(r) ≤ r`, so the boundary lies within `r` of the point, where `s_lo(r)`
+holds. The reaches start at `2c / s_lo(0)` and double. The reading refuses when no
+reach is accepted or `s_lo` falls below `minSine`. What decides the result is
+still what the gates check afterwards, and they only reject: the wall test, the
+strip and taken-cap clearance and the nesting parity are unchanged, so a band that
 overlaps an earlier cut or reaches another part of the wall refuses with their
-text, not with an end plane's. A vertex exactly on the plane in floats but on no face's
-tag reads as on the plane without being a corner or a run vertex, so a cut whose
-corner it should be refuses at the setback corner.
+text, not with an end plane's. A vertex exactly on the plane in floats but on no
+face's tag reads as on the plane without being a corner or a run vertex, so a cut
+whose corner it should be refuses at the setback corner.
+
+The crossing bound of a cut point on an end plane (`max(ends, facet) + slack + τ`)
+and the band corner's carry no slant term either, with or without a sign reading.
+That predates the reading and is recorded as a follow-up.
 
 The facet keeps the rest, triangulated again with every point
 where the band's boundary crosses a held facet edge and every corner of the

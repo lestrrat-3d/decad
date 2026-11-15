@@ -655,13 +655,16 @@ func TestFacetedRetainedBlendEndRoundChordRow(t *testing.T) {
 				require.NoError(t, err)
 				requireVolumeChange(t, volBefore, volAfter, -added)
 
-				// The bound grows by the strip's own terms and the charge: the offset of a
-				// vertex from the plane, which feeds the bound of the cuts made from it, so
-				// at most twice the offset d.
+				// The bound grows by the strip's own terms and the charge: a vertex within
+				// held + |d| of the plane has its bound raised to that over the sine s of
+				// the round's slant to the plane, and the cuts made from it carry it, the
+				// walls of two bands reading it once each: at most four times that.
 				mesh, err := out.Tessellate(t.Context(), units.Millimeters(0.1), decad.WithVerification(decad.VerifyAll))
 				require.NoError(t, err)
 				own := revolveMeshBound(t, held) + 2*math.Ldexp(size, -10)
-				require.LessOrEqual(t, revolveMeshBound(t, mesh), own+2*math.Abs(d))
+				sine := math.Sqrt(1 - (offset/c.radius)*(offset/c.radius))
+				require.LessOrEqual(t, revolveMeshBound(t, mesh),
+					own+4*(revolveMeshBound(t, held)+math.Abs(d))/sine)
 				require.True(t, mesh.BoundaryVerified())
 				require.True(t, mesh.VolumeVerified())
 				rep, err := out.Document().Verify(t.Context())
@@ -672,5 +675,64 @@ func TestFacetedRetainedBlendEndRoundChordRow(t *testing.T) {
 				requireNoCrossingTriangles(t, out)
 			})
 		}
+	}
+}
+
+// TestFacetedRetainedBlendSharedEndPlanesBoundsCoverRound samples the result of
+// facing roots filleted in turn against the exact cylinder of the block's round
+// (axis y = z = 3, r = 3) near the end plane y = 1.5, where the second band reads
+// the first blend's cut by sign and charges it. Each vertex of the held round that
+// the result keeps, and each centroid of a facet of three such vertices, lies
+// within the published mesh bound of the cylinder. The held vertices lie on the
+// cylinder, so the vertex samples are a floor; the facet centroids lie inside it
+// by the chord's sagitta, which the bound must cover. The sign-read vertices' own
+// bounds are checked in the unit tests against every world the held claims allow.
+func TestFacetedRetainedBlendSharedEndPlanesBoundsCoverRound(t *testing.T) {
+	t.Parallel()
+
+	for name, groups := range map[string][][]float64{
+		"in turn":           {{12}, {22}},
+		"in turn, reversed": {{22}, {12}},
+		"in one call":       {{12, 22}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			body := notchedBody(t, flushEars...)
+			heldMesh, err := body.Tessellate(t.Context(), units.Millimeters(0.1))
+			require.NoError(t, err)
+			held := map[r3.Vec]struct{}{}
+			for _, p := range heldMesh.Vertices() {
+				held[p] = struct{}{}
+			}
+			for _, g := range groups {
+				body, err = decad.Fillet(t.Context(), body, sharedBackSeed(g...), units.Millimeters(1), decad.WithTangentChain())
+				require.NoError(t, err)
+			}
+			mesh, err := body.Tessellate(t.Context(), units.Millimeters(0.1))
+			require.NoError(t, err)
+			bound := revolveMeshBound(t, mesh)
+			off := func(p r3.Vec) float64 { return math.Abs(math.Hypot(p.Y-3, p.Z-3) - 3) }
+			near := func(p r3.Vec) bool {
+				_, ok := held[p]
+				return ok && p.X > 4 && p.X < 36 && math.Abs(p.Y-1.5) < 0.2 && p.Z < 3.2 && off(p) < 0.01
+			}
+			verts, samples := mesh.Vertices(), 0
+			for _, p := range verts {
+				if near(p) {
+					samples++
+					require.LessOrEqual(t, off(p), bound, "vertex %v", p)
+				}
+			}
+			for _, tri := range mesh.Triangles() {
+				a, b, c := verts[tri[0]], verts[tri[1]], verts[tri[2]]
+				if !near(a) || !near(b) || !near(c) {
+					continue
+				}
+				samples++
+				mid := a.Add(b).Add(c).Scale(1.0 / 3)
+				require.LessOrEqual(t, off(mid), bound, "facet centroid %v", mid)
+			}
+			require.Positive(t, samples, "no kept vertex of the round near the end plane")
+		})
 	}
 }
