@@ -21,12 +21,32 @@ func TestLineEndFaceTurn(t *testing.T) {
 	// the other three, and its loop runs the other way.
 	convexG := faceLoops{loops: [][]int{{0, 1, 2, 3}}}
 	reflexG := faceLoops{loops: [][]int{{0, 3, 2, 1}}}
-	read := func(g faceLoops, dirs *[2]r3.Vec) (bool, error) {
+	readAt := func(g faceLoops, convex bool, kinds [2]sideKind, dirs *[2]r3.Vec) (bool, error) {
 		w := &work{verts: verts, beta: make([]float64, len(verts))}
-		_, takes, err := w.endFace(end, g, []int{1}, []int{3}, [2]sideKind{trims, trims}, nil, nil, []int{4, 5},
-			[]r3.Vec{x, y}, 1e-9, true, dirs)
+		_, takes, err := w.endFace(end, g, []int{1}, []int{3}, kinds, nil, nil, []int{4, 5},
+			[]r3.Vec{x, y}, 1e-9, convex, dirs)
 		return takes, err
 	}
+	read := func(g faceLoops, dirs *[2]r3.Vec) (bool, error) {
+		return readAt(g, true, [2]sideKind{trims, trims}, dirs)
+	}
+
+	t.Run("every end face of a concave edge gains the cap", func(t *testing.T) {
+		t.Parallel()
+		for name, c := range map[string]struct {
+			g     faceLoops
+			kinds [2]sideKind
+			dirs  *[2]r3.Vec
+		}{
+			"reflex G with dirs":       {reflexG, [2]sideKind{trims, trims}, &[2]r3.Vec{x, y}},
+			"reflex G without dirs":    {reflexG, [2]sideKind{trims, trims}, nil},
+			"convex G, a wall extends": {convexG, [2]sideKind{extends, trims}, nil},
+		} {
+			gains, err := readAt(c.g, false, c.kinds, c.dirs)
+			require.NoError(t, err, name)
+			require.True(t, gains, name)
+		}
+	})
 
 	t.Run("a convex end face gives up the corner", func(t *testing.T) {
 		t.Parallel()

@@ -170,4 +170,42 @@ func TestFacetedRetainedBlendChainBaseWrap(t *testing.T) {
 		requireVolumeChange(t, before, after, -wrapFill(r, 18, 2))
 		requireVerifiedMesh(t, out)
 	})
+
+	// With sharp corners the single-edge route ends on the same corners and
+	// gains the same caps; the strip test alone does not cover them.
+	t.Run("a solid crossing a cap the single-edge fillet gains is refused", func(t *testing.T) {
+		t.Parallel()
+		for _, c := range []struct {
+			name   string
+			x0, x1 float64
+			at     string
+		}{
+			{"first end", 9, 10.05, `\{10 `},
+			{"far end", 19.95, 21, `\{20 `},
+		} {
+			t.Run(c.name, func(t *testing.T) {
+				t.Parallel()
+				_, err := decad.Fillet(t.Context(), wrapBlockWithCube(t, 0, c.x0, c.x1, 9.85), wrapRoot(),
+					units.Millimeters(1))
+				require.ErrorIs(t, err, decad.ErrUnsupported)
+				require.Regexp(t, `the cap an end face takes meets another facet of the body at `+c.at, err.Error())
+			})
+		}
+	})
+
+	t.Run("a solid clear of a cap the single-edge fillet gains is kept", func(t *testing.T) {
+		t.Parallel()
+		joined := wrapBlockWithCube(t, 0, 8, 9, 8.5)
+		before, err := joined.Volume()
+		require.NoError(t, err)
+		const r = 1.0
+		out, err := decad.Fillet(t.Context(), joined, wrapRoot(), units.Millimeters(r))
+		require.NoError(t, err)
+		after, err := out.Volume()
+		require.NoError(t, err)
+		// The fill's section area times the root edge's length.
+		requireVolumeChange(t, before, after, -10*r*r*(1-math.Pi/4))
+		requireVerifiedMesh(t, out)
+		requireNoCrossingTriangles(t, out)
+	})
 }

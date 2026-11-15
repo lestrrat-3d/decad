@@ -339,10 +339,10 @@ func rewriteLineEdge(ctx context.Context, env topo.Env, fp facetedrecord.Payload
 		}
 	}
 
-	// The end faces: each loses the corner or takes the end cap, keeps clear of
+	// The end faces: each loses the corner or gains the end cap, keeps clear of
 	// it, and agrees with the faces beside the edge about the chains.
 	var gLoops [2][][]int
-	var takes [2]bool
+	var gains [2]bool
 	for i := range 2 {
 		dirs := [2]r3.Vec{runA.dir[i], runB.dir[i]}
 		loops, t, err := w.endFace(l.ends[i], fG[i], runA.chain[i], runB.chain[i], kind[i], remA[i], remB[i],
@@ -350,7 +350,7 @@ func rewriteLineEdge(ctx context.Context, env topo.Env, fp facetedrecord.Payload
 		if err != nil {
 			return nil, err
 		}
-		gLoops[i], takes[i] = loops, t
+		gLoops[i], gains[i] = loops, t
 	}
 
 	// The faces beside the edge swap the edge for its setback edge.
@@ -362,22 +362,22 @@ func rewriteLineEdge(ctx context.Context, env topo.Env, fp facetedrecord.Payload
 	if err != nil {
 		return nil, err
 	}
-	// An end face that takes the cap is new surface where the cap lies: its
+	// An end face that gains the cap is new surface where the cap lies: its
 	// rebuilt facets are cleared against the rest of the body as the strip is.
 	var taken [][2]int
 	for _, c := range []struct {
 		f     faceLoops
 		loops [][]int
 		pl    plane
-		takes bool
+		gains bool
 	}{{fA, aLoops, l.a, false}, {fB, bLoops, l.b, false},
-		{fG[0], gLoops[0], l.ends[0].g, takes[0]},
-		{fG[1], gLoops[1], l.ends[1].g, takes[1]}} {
+		{fG[0], gLoops[0], l.ends[0].g, gains[0]},
+		{fG[1], gLoops[1], l.ends[1].g, gains[1]}} {
 		from := len(w.out)
 		if err := w.retriangulate(c.pl.n, c.loops, c.f.group); err != nil {
 			return nil, err
 		}
-		if c.takes {
+		if c.gains {
 			taken = append(taken, [2]int{from, len(w.out)})
 		}
 		w.removed = append(w.removed, c.f.facets...)
@@ -399,7 +399,7 @@ func rewriteLineEdge(ctx context.Context, env topo.Env, fp facetedrecord.Payload
 			w.emit(t, blendGroup)
 		}
 	}
-	w.removedTrue, tag.trueArea = w.lineAreas(l, spec, convex, center, baseA, baseB, rowIdx, takes)
+	w.removedTrue, tag.trueArea = w.lineAreas(l, spec, convex, center, baseA, baseB, rowIdx, gains)
 
 	groups := append([]facetedrecord.Group(nil), fp.Groups...)
 	groups = append(groups, w.tagGroup(facetedrecord.Group{
@@ -426,8 +426,9 @@ func rewriteLineEdge(ctx context.Context, env topo.Env, fp facetedrecord.Payload
 // turn at the corner is read from those directions, not from held vertices,
 // and refuses when they are too near parallel to tell. On the straight-edge
 // route a convex edge may end on a face reflex at the corner, which takes the
-// blend's end cap: takes reports that it does, and the caller must clear the
-// face's rebuilt facets with checkStripClear. The other routes pass nil, read
+// blend's end cap, and a concave edge adds the cap to every end face. gains
+// reports that G takes the blend's end cap, either way, and the caller must
+// clear the face's rebuilt facets with checkStripClear. The other routes pass nil, read
 // the turn from the loop's vertices beside the corner, and refuse a reflex end
 // face under a convex edge; the plane–cylinder route's dirs come only with an
 // extending wall, whose end face must be convex.
@@ -556,7 +557,7 @@ func (w *work) endFaceRun(end lineEnd, g faceLoops, chainA, chainB []int, kinds 
 		}
 		out2 = append(out2, lp)
 	}
-	return out2, takes, nil
+	return out2, takes || !convex, nil
 }
 
 // replaceEdge swaps the edge's run in face f's loops for the setback edge,
@@ -719,17 +720,17 @@ func polyArea(ps ...r3.Vec) float64 {
 }
 
 // lineAreas returns the exact area the blend removes from the four faces and
-// the exact area of the blend face (design §5.0). takes marks each end whose
-// end face takes the blend's end cap.
+// the exact area of the blend face (design §5.0). gains marks each end whose
+// end face gains the blend's end cap.
 func (w *work) lineAreas(l line, spec blendSpec, convex bool, center, baseA, baseB r3.Vec,
-	rows [2][]int, takes [2]bool) (removed, blend float64) {
-	return w.lineAreasAt(l, spec, convex, center, baseA, baseB, rows, [2]bool{}, takes)
+	rows [2][]int, gains [2]bool) (removed, blend float64) {
+	return w.lineAreasAt(l, spec, convex, center, baseA, baseB, rows, [2]bool{}, gains)
 }
 
 // lineAreasAt is lineAreas for an edge one of whose ends is a mitre joint (line_mitre.go): the end plane there is the
 // mitre plane, and no notch is taken from it, because the mitre trims no end face.
 func (w *work) lineAreasAt(l line, spec blendSpec, convex bool, center, baseA, baseB r3.Vec,
-	rows [2][]int, mitred, takes [2]bool) (removed, blend float64) {
+	rows [2][]int, mitred, gains [2]bool) (removed, blend float64) {
 	m := len(rows[0]) - 1
 	pt := func(i, j int) r3.Vec { return w.verts[rows[i][j]] }
 	v0, v1 := l.ends[0].exact, l.ends[1].exact
@@ -737,13 +738,13 @@ func (w *work) lineAreasAt(l line, spec blendSpec, convex bool, center, baseA, b
 	for i := range 2 {
 		g := l.ends[i].g
 		// A convex edge takes the corner out of its end face, unless that face
-		// is reflex at the corner and takes the corner as the blend's end cap; a
+		// is reflex at the corner and gains the corner as the blend's end cap; a
 		// concave edge adds the notch's fill to it.
 		corner := polyArea(l.ends[i].exact, pt(i, 0), pt(i, m))
 		if spec.fillet {
 			corner = spec.r * spec.r * (math.Tan(l.phi/2) - l.phi/2) / math.Abs(l.d.Dot(g.n))
 		}
-		if !convex || takes[i] {
+		if !convex || gains[i] {
 			corner = -corner
 		}
 		if mitred[i] {
