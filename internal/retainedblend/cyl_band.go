@@ -789,11 +789,18 @@ func (w *work) keepOutside(t [3]int, group int, in []bandPt, b *wallBand, out *b
 		return nil
 	}
 	nrm := w.verts[t[1]].Sub(w.verts[t[0]]).Cross(w.verts[t[2]].Sub(w.verts[t[0]]))
+	nu, unit := nrm.Normalize()
 	u, ok := perpendicular(nrm)
+	if !ok && unit {
+		// perpendicular needs a unit normal. A small facet normal to x has a raw
+		// normal shorter than 0.9, so it picks X and crosses to zero. Only that
+		// refusal retries on the unit normal, so every facet that framed from the
+		// raw normal keeps its frame.
+		u, ok = perpendicular(nu)
+	}
 	if !ok {
 		return fmt.Errorf("%w: a wall facet has no plane", decaderr.ErrUnsupported)
 	}
-	nu, _ := nrm.Normalize()
 	v := nu.Cross(u)
 	to2 := func(id int) pt2 {
 		q := w.verts[id].Sub(w.verts[t[0]])

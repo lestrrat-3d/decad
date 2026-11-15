@@ -119,3 +119,60 @@ func TestCutBandMembershipByEveryPlane(t *testing.T) {
 		require.Equal(t, map[int]bool{1: true}, cuts.removed)
 	})
 }
+
+// endFaceBand is flatBand turned so the facet plane z = 0 becomes the end
+// face x = 0: each coordinate (x, y, z) maps to (z, x, y), the planes with it.
+func endFaceBand(pts ...r3.Vec) (*work, *wallBand, faceLoops) {
+	rot := func(v r3.Vec) r3.Vec { return r3.NewVec(v.Z, v.X, v.Y) }
+	turned := make([]r3.Vec, len(pts))
+	for i, p := range pts {
+		turned[i] = rot(p)
+	}
+	w, b, f := flatBand(turned...)
+	for _, e := range append([]*bandEnd{b.main, b.ends[0]}, b.others...) {
+		e.g = plane{n: rot(e.g.n), o: rot(e.g.o)}
+	}
+	return w, b, f
+}
+
+// TestCutBandSmallFacetFrame cuts a facet whose raw normal is short (retained
+// edge blend §4.3): the frame of the cut comes from the unit normal, so a
+// small facet normal to x is cut like any other, and a facet with no normal
+// still refuses.
+func TestCutBandSmallFacetFrame(t *testing.T) {
+	t.Parallel()
+
+	t.Run("a small facet normal to x is cut", func(t *testing.T) {
+		t.Parallel()
+		// The corner triangle (-0.1, 0.1), (0.3, 0.1), (-0.1, 0.4) has area 0.06, so
+		// its raw normal is 0.12 long. The band x ≥ 0 of flatBand turns into y ≥ 0.
+		w, b, f := endFaceBand(r3.NewVec(-0.1, 0.1, 0), r3.NewVec(0.3, 0.1, 0), r3.NewVec(-0.1, 0.4, 0))
+		cuts, err := w.cutBand(f, b)
+		require.NoError(t, err)
+		require.Equal(t, map[int]bool{1: true}, cuts.removed)
+		// What stays outside is a trapezoid of width 0.1 between heights 0.3 and 0.225.
+		area := 0.0
+		for _, tri := range w.out {
+			a, c, d := w.verts[tri[0]], w.verts[tri[1]], w.verts[tri[2]]
+			area += c.Sub(a).Cross(d.Sub(a)).Len() / 2
+		}
+		require.InDelta(t, 0.1*(0.3+0.225)/2, area, 1e-12)
+	})
+
+	for name, pts := range map[string][3]r3.Vec{
+		"a facet whose corners are collinear": {
+			r3.NewVec(-0.1, 0.1, 0), r3.NewVec(0.3, 0.1, 0), r3.NewVec(0.5, 0.1, 0),
+		},
+		"a facet of zero area": {
+			r3.NewVec(-0.1, 0.1, 0), r3.NewVec(-0.1, 0.1, 0), r3.NewVec(0.3, 0.1, 0),
+		},
+	} {
+		t.Run(name+" still has no plane", func(t *testing.T) {
+			t.Parallel()
+			w, b, f := endFaceBand(pts[:]...)
+			_, err := w.cutBand(f, b)
+			require.ErrorIs(t, err, decaderr.ErrUnsupported)
+			require.ErrorContains(t, err, "a wall facet has no plane")
+		})
+	}
+}
