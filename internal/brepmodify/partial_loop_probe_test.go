@@ -165,3 +165,49 @@ func TestArcRunOutAngleStopsTheMarginPastTheWall(t *testing.T) {
 		}
 	}
 }
+
+// TestClipRadiusStopsAtTheFootOfTheNextWall reads the end clip of an arc that meets a concave corner. The clip stops at
+// the foot of the perpendicular from the arc's centre onto the next wall's line when that lies inside the sector, and
+// keeps the sector's radius otherwise.
+func TestClipRadiusStopsAtTheFootOfTheNextWall(t *testing.T) {
+	t.Parallel()
+	// An arc of radius R about the origin, counterclockwise with the material inside, ends at (0, R) and turns right by
+	// the angle phi onto a line: a concave corner. The loop is closed well away from the corner.
+	end := func(R, phi float64) runEnd {
+		q := pt2{-30 * math.Cos(phi), R + 30*math.Sin(phi)}
+		l := testLoop(
+			arcSeg(pt2{}, R, pt2{R, 0}, pt2{0, R}, true),
+			lineSeg(pt2{0, R}, q),
+			lineSeg(q, pt2{-60, -60}),
+			lineSeg(pt2{-60, -60}, pt2{R + 10, -60}),
+			lineSeg(pt2{R + 10, -60}, pt2{R + 10, 0}),
+			lineSeg(pt2{R + 10, 0}, pt2{R, 0}),
+		)
+		ends, _ := chamferRun{loop: l, first: 0, count: 1}.ends()
+		require.True(t, ends[1].concave)
+		return ends[1]
+	}
+	const d, over = 0.25, 0.25
+	t.Run("foot inside the sector", func(t *testing.T) {
+		t.Parallel()
+		R, phi := 13.2, 11.43*math.Pi/180
+		e := end(R, phi)
+		require.InDelta(t, R*math.Sin(phi), e.foot, 1e-9)
+		require.InDelta(t, R*math.Sin(phi), e.clipRadius(d, over), 1e-9)
+	})
+	t.Run("foot outside the sector", func(t *testing.T) {
+		t.Parallel()
+		R, phi := 13.95, 22.49*math.Pi/180
+		e := end(R, phi)
+		require.InDelta(t, R*math.Sin(phi), e.foot, 1e-9)
+		sector := 1.5 * ((d+2*over)/math.Sin(phi) + d + over)
+		require.Less(t, sector, e.foot)
+		require.InDelta(t, sector, e.clipRadius(d, over), 1e-9)
+	})
+	t.Run("a line end keeps the sector's radius", func(t *testing.T) {
+		t.Parallel()
+		phi := 20 * math.Pi / 180
+		e := runEnd{concave: true, turn: phi}
+		require.InDelta(t, 1.5*((d+2*over)/math.Sin(phi)+d+over), e.clipRadius(d, over), 1e-9)
+	})
+}

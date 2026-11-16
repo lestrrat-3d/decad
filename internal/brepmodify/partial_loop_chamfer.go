@@ -40,10 +40,11 @@ import (
 //     the run's band: the cutter loses a local sector about the corner, so the bevel tapers to the corner's vertical
 //     edge and the next face grows by a coplanar triangle. There is no square end. The material continues past a
 //     concave corner, so a cutter that reaches past the end would carve it. A chain that comes back within the sector's
-//     reach is refused.
+//     reach is refused. Beside an arc that curves toward the material the sector stops at the foot of the next wall's
+//     line, and a plane that misses the bevel's top edge cannot cap it and is refused.
 //
 // Any other end is refused rather than guessed: a convex end turned by less than 45 degrees, a concave end turned by
-// more than 90 degrees, or a concave end beside an arc. So is a chain whose cutter would reach material of the loop's
+// more than 90 degrees, or a concave end beside an arc whose next wall's plane misses the bevel. So is a chain whose cutter would reach material of the loop's
 // other walls, past an end or in its margin beside the run, and a chain whose offset consumes an arc.
 //
 // A cutter is a polyhedron held exactly as a mesh solid, as RetainedLoopChamfer's is; its facets sit within
@@ -294,6 +295,10 @@ type runEnd struct {
 	concave         bool
 	turn            float64
 	e2Len           float64
+	// foot is set at a concave end whose run segment is an arc curving toward the material: the distance from v, along
+	// the next wall's line carried back over the run, to the foot of the perpendicular from the arc's centre. Past the
+	// foot that line turns back toward the arc, so the end clip stops there.
+	foot float64
 }
 
 const (
@@ -323,6 +328,15 @@ func (r chamferRun) ends() ([2]runEnd, bool) {
 			other = prev
 		}
 		e.e2Len = other.p0.dist(other.p1)
+		runSeg := prev
+		if !atEnd {
+			runSeg = next
+		}
+		if e.concave && runSeg.arc && l.toward(runSeg) {
+			if cu := runSeg.c.sub(v).dot(e.e2away.scale(-1)); cu > 0 {
+				e.foot = cu
+			}
+		}
 		if e.concave {
 			return e, e.turn <= maxConcaveTurn+1e-9 && !other.arc
 		}
@@ -373,7 +387,11 @@ func (e runEnd) inClip(p pt2, clip float64) bool {
 
 // clipRadius is the radius of the sector the end clip removes about the corner of a concave end.
 func (e runEnd) clipRadius(d, over float64) float64 {
-	return 1.5 * ((d+2*over)/math.Sin(math.Min(e.turn, math.Pi/2)) + d + over)
+	s := 1.5 * ((d+2*over)/math.Sin(math.Min(e.turn, math.Pi/2)) + d + over)
+	if e.foot > 0 {
+		return math.Min(s, e.foot)
+	}
+	return s
 }
 
 // extFor is how far the cutter reaches past a convex end so that its end face lies outside the material.
@@ -909,8 +927,9 @@ func cutRuns(ctx context.Context, env topo.Env, hooks Hooks, body *topo.Body, ru
 // the sector is refused unless it lies in the smooth stretch leaving the corner, within pad/sin(turn) of it along the
 // run, where the taper is. That covers a stretch past the first sharp corner, a smooth stretch that doubles back, and
 // an arc leaving the corner that curls onto the next wall's plane carried back. For an arc at the corner the plane's
-// second crossing of the bevel's circle at the cap, lambda2, must also lie beyond the sector and the cutter's width,
-// and the plane must meet that circle at all.
+// plane must meet the bevel's circle at the cap at all, or it cannot cap the chamfer and the run is refused. Its second
+// crossing, lambda2, must lie beyond the sector and the cutter's width, unless the clip stops at the foot of the plane's
+// line (runEnd.foot): past the foot the line turns back toward the arc, and the clip does not reach it.
 func (r chamferRun) checkClipLocal(e runEnd, atStart bool, d, over float64) error {
 	refuse := fmt.Errorf(`%w: a chamfered run comes back into the clip at its concave end`, decaderr.ErrUnsupported)
 	clip := e.clipRadius(d, over)
@@ -923,14 +942,25 @@ func (r chamferRun) checkClipLocal(e runEnd, atStart bool, d, over float64) erro
 		return r.seg(n - 1 - i)
 	}
 	l := r.loop
+	offsets := []float64{-over, 0, d / 2, d, d + over/2, d + over}
 	if end := at(0); end.arc && l.toward(end) {
 		// The bevel's inner circle at the cap, met by the next wall's plane carried back from the corner.
 		u := e.e2away.scale(-1)
 		cv := end.c.sub(e.v)
 		cu := cv.dot(u)
 		disc := cu*cu - (cv.dot(cv) - (end.r-d)*(end.r-d))
-		if disc < 0 || cu+math.Sqrt(disc) < clip+pad {
+		footBounded := e.foot > 0 && clip == e.foot
+		if disc <= 0 {
+			return fmt.Errorf(`%w: the next wall's plane misses the bevel at a concave end beside an arc, `+
+				`so it cannot cap the chamfer`, decaderr.ErrUnsupported)
+		}
+		if !footBounded && cu+math.Sqrt(disc) < clip+pad {
 			return refuse
+		}
+		if footBounded {
+			// The clip stops at the foot, and beyond it the line turns back out of the band, so only the material the
+			// cutter takes inside the body counts: offsets 0 to d from the wall.
+			offsets = []float64{0, d / 2, d}
 		}
 	}
 	nearLen := pad / math.Sin(math.Min(e.turn, math.Pi/2))
@@ -961,7 +991,7 @@ func (r chamferRun) checkClipLocal(e runEnd, atStart bool, d, over float64) erro
 				continue
 			}
 			in := l.materialNormal(sg, p)
-			for _, off := range []float64{-over, 0, d / 2, d, d + over/2, d + over} {
+			for _, off := range offsets {
 				if e.inClip(p.add(in.scale(off)), clip) {
 					return refuse
 				}
