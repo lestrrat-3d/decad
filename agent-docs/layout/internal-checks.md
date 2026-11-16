@@ -9,6 +9,7 @@ The rules for rows live in `agent-docs/layout.md`.
 
 | Path | Responsibility |
 |---|---|
+| `internal/orthoshell/` | Orthogonal mesh admission, section extraction, wall offsets, and shell construction over vertex and triangle data. Root adapters unwrap body and face handles. See orthogonal-design B21. |
 | `internal/chainrecord/` | The chain ribbon record, with denoted sweep levels, and its builder over nodes (`Build`, `Placed`, `Prism` view, walk capture, bounds walks); builds one wall face per recorded segment of every walk and restates the walls as a mesh. Root `chainPayload` aliases it. See surface §13.4, evaluator §8. |
 | `internal/draftrecord/` | Draft and two-sided draft records and their builder over nodes (`Build`, `BuildTwoSided`, `FromPrism`, `Extrude`, gates `Receiver`, `NeutralCap`, `KeptWalls`, `Placed`, band view, mesh, measurements, bounded meridians). Root `draftPayload` aliases it. See draft §5–§10.6, evaluator §8. |
 | `internal/twistsweep/` | The twisted sweep payloads and their builder over nodes, with polygon admission, stations, Loft cell sewing, wall areas, offset source, cup mesh and the faceted shell body. Root `twistedSweepPayload` and `compositeTwistedSweepPayload` alias it. See sweep §17, evaluator §8. |
