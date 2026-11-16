@@ -6,6 +6,7 @@ import (
 	"math"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/capblend"
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
@@ -78,5 +79,15 @@ func TestPairChordReplayBudgetAndRefusals(t *testing.T) {
 	work, _ = meter.Usage()
 	if work != 3 {
 		t.Fatalf("work=%d", work)
+	}
+}
+
+// The bounded chord reads no displaced cap-loop chamfer: its default arm
+// refuses (agent-docs/carrier-record-design.md §8.8).
+func TestChordShareReplayRefusesDisplacedCapBlend(t *testing.T) {
+	b := &topo.Body{Payload: capblend.DisplacedPayload{LoopDelta: []float64{0.01}}}
+	_, err := ChordShareReplay(t.Context(), b, proofbound.NewReplayTrialBudget())
+	if !errors.Is(err, decaderr.ErrUnsupported) {
+		t.Fatalf("a displaced cap blend must be refused as unsupported, got %v", err)
 	}
 }

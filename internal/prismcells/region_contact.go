@@ -33,7 +33,7 @@ type contactSegment struct {
 // so a kept loop is tested against a rewritten one. ok=false (err nil) is a
 // refusal; the string names the failing pair or bound for the caller's message.
 func CertifiedContact(budget *proofbound.WorkBudget, loops []sectionrecord.LoopRecord, hMax float64) (ok bool, why string, err error) {
-	return certifiedContact(budget, loops, hMax, nil, nil)
+	return certifiedContact(budget, loops, hMax, nil, nil, true)
 }
 
 // CertifiedContactLoops is CertifiedContact with a displacement per loop
@@ -52,14 +52,32 @@ func CertifiedContactLoops(budget *proofbound.WorkBudget, loops []sectionrecord.
 	for _, h := range hLoop {
 		hMax = math.Max(hMax, h)
 	}
-	return certifiedContact(budget, loops, hMax, hLoop, extra)
+	return certifiedContact(budget, loops, hMax, hLoop, extra, true)
+}
+
+// CertifiedGapsLoops is CertifiedContactLoops without its T1 check of the
+// largest hLoop against the contact floor: the 4·c_e < F test of every segment
+// and the certified gaps of every tested pair (T2) only. A caller that states
+// T1 itself, to switch it off apart from T2 in a test, reads this.
+func CertifiedGapsLoops(budget *proofbound.WorkBudget, loops []sectionrecord.LoopRecord,
+	hLoop, extra []float64) (ok bool, why string, err error) {
+	return certifiedContact(budget, loops, 0, hLoop, extra, false)
+}
+
+// ContactFloorOf is the contact floor F of the section the loops form.
+func ContactFloorOf(budget *proofbound.WorkBudget, loops []sectionrecord.LoopRecord) (float64, error) {
+	entries, err := sectionaudit.EntriesOf(budget, loops)
+	if err != nil {
+		return 0, err
+	}
+	return sectionaudit.ContactFloor(budget, entries)
 }
 
 // certifiedContact is the one body of CertifiedContact and
 // CertifiedContactLoops. A nil hLoop tests every pair with every loop at hMax;
 // a non-nil hLoop skips the pairs whose two loops both carry zero.
 func certifiedContact(budget *proofbound.WorkBudget, loops []sectionrecord.LoopRecord,
-	hMax float64, hLoop, extra []float64) (ok bool, why string, err error) {
+	hMax float64, hLoop, extra []float64, checkT1 bool) (ok bool, why string, err error) {
 	if hLoop != nil && len(hLoop) != len(loops) || extra != nil && len(extra) != len(loops) {
 		return false, "the per-loop displacements do not match the loops", nil
 	}
@@ -71,7 +89,7 @@ func certifiedContact(budget *proofbound.WorkBudget, loops []sectionrecord.LoopR
 	if err != nil {
 		return false, "", err
 	}
-	if !(proofbound.ProductUpper(4, hMax) < floor) {
+	if checkT1 && !(proofbound.ProductUpper(4, hMax) < floor) {
 		return false, fmt.Sprintf(`four times the largest loop displacement %g is not below the contact floor %g`, hMax, floor), nil
 	}
 	var segs []contactSegment

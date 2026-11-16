@@ -11,6 +11,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
+	"github.com/lestrrat-3d/decad/internal/survey2d"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/decad/internal/topo/topotest"
 	"github.com/lestrrat-3d/decad/internal/topobuild"
@@ -249,8 +250,12 @@ func TestDisplacedTransfer(t *testing.T) {
 		cbp := dispPayload(t)
 		err := capblend.RequireTransfer(t.Context(), cbp, mixedOf(cbp), []float64{1e-6, 0})
 		require.ErrorIs(t, err, decaderr.ErrUnsupported)
-		require.Contains(t, err.Error(), "T1 and T2")
-		defer capblend.DisableTransfer("T1T2")()
+		require.Contains(t, err.Error(), "T1)")
+		restore := capblend.DisableTransfer("T2")
+		err = capblend.RequireTransfer(t.Context(), cbp, mixedOf(cbp), []float64{1e-6, 0})
+		restore()
+		require.ErrorIs(t, err, decaderr.ErrUnsupported, "T2 off: T1 alone still refuses")
+		defer capblend.DisableTransfer("T1")()
 		require.NoError(t, capblend.RequireTransfer(t.Context(), cbp, mixedOf(cbp), []float64{1e-6, 0}))
 	})
 	t.Run("T2 refuses a displaced outer loop certified within the floor of a contour", func(t *testing.T) {
@@ -262,8 +267,8 @@ func TestDisplacedTransfer(t *testing.T) {
 		mixed := mixedOf(cbp)
 		err := capblend.RequireTransfer(t.Context(), cbp, mixed, []float64{1e-12, 0})
 		require.ErrorIs(t, err, decaderr.ErrUnsupported)
-		require.Contains(t, err.Error(), "T1 and T2")
-		defer capblend.DisableTransfer("T1T2")()
+		require.Contains(t, err.Error(), "T2)")
+		defer capblend.DisableTransfer("T2")()
 		require.NoError(t, capblend.RequireTransfer(t.Context(), cbp, mixed, []float64{1e-12, 0}))
 	})
 	t.Run("T2 charges the contour's own displacement", func(t *testing.T) {
@@ -297,4 +302,12 @@ func TestDisplacedTransfer(t *testing.T) {
 		cbp := dispPayload(t)
 		require.NoError(t, capblend.RequireTransfer(t.Context(), cbp, mixedOf(cbp), []float64{1e-12, 0}))
 	})
+}
+
+func TestSameWalkSegments(t *testing.T) {
+	t.Parallel()
+	walk := func(segs ...int) survey2d.SideWalk { return survey2d.SideWalk{Segs: segs} }
+	require.True(t, capblend.SameWalkSegments([]survey2d.SideWalk{walk(0, 1), walk(2)}, []survey2d.SideWalk{walk(0, 1), walk(2)}))
+	require.False(t, capblend.SameWalkSegments([]survey2d.SideWalk{walk(0, 1), walk(2)}, []survey2d.SideWalk{walk(0), walk(1, 2)}))
+	require.False(t, capblend.SameWalkSegments([]survey2d.SideWalk{walk(0)}, nil))
 }

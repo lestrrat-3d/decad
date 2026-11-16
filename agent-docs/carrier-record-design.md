@@ -97,7 +97,8 @@ of a receiver with a valid record, built as a separate payload type
 chamfers the wheel's window rims on both caps with exact analytic faces. PR 2
 also measures a lateral blend's arc ends at their read ends (§7.7, "Arc read
 ends" and "Seam snap"), and declines a mesh `Boolean`'s source tag on every
-displaced wall (§8.7, rule DW). Nothing in PR 1 depends on it.
+displaced wall of a `DisplacedPayload` (§8.7, rule DW; displaced prisms keep
+today's tags). Nothing in PR 1 depends on it.
 
 ### 2.2 Alternatives considered
 
@@ -1058,12 +1059,12 @@ displacement (`emitted.sd`, a connector's included), `ReadEnd` to its end
 displacement (`emitted.ed`), and `Carrier` to its `ε`. `junctionEntry` returns
 the receiver's `endJ` alone only when neither neighbour moved on that side.
 
-The two rules compose in one order. "Arc read ends" measures every read-end
-distance on the emitted segment as the rewrite produced it, before the snap:
-`carrierRewriteRecord` receives the pre-snap profile beside the snapped one and
-`closeSeams`' moves. The snap then adds its own move through `seamMove`
-(`Read`, `ReadEnd`, `Carrier`), so no distance counts the snap twice and none
-misses it.
+"Arc read ends" measures every read-end distance on the emitted segment after
+the snap, the segment the record describes, and the snap's moves (`Read`,
+`ReadEnd`, `Carrier`) are still added on top. A snapped segment's move is then
+counted twice: once inside the post-snap distance and once through `seamMove`.
+That overcharges by at most the snap's own move, a few ulps, and is sound;
+`carrierRewriteRecord` needs no pre-snap profile.
 
 On main the record charges `WalkEndBoundAllow` (zero there) at an untouched
 `End`-side end, adds only `ρ_new` (and none on the `unchanged` arm), and
@@ -1186,9 +1187,11 @@ passes, with `F` the contact floor of `M` (`sectionaudit.ContactFloor` over
   `capblend.Payload.LoopContourDelta`. On `BuildChecked`'s profile the
   arguments are `(ctx, l, loop, Dc, DcDelta)` of the loop's setback, the number
   `Build` later stores as the loop's `BandDelta` and `LoopBandDelta` reads. On
-  `AuditSetbackSpan`'s span-top profile they are `(ctx, l, loop, top.Dc, 0)`,
-  with `top` from `setbackSpanTop`: that profile is the held offset at
-  `top.Dc`, and the family argument below covers every smaller offset. The term
+  `AuditSetbackSpan`'s span-top profile they are `(ctx, l, loop, top.Dc,
+  DcDelta)`, with `top` from `setbackSpanTop`. That profile is the held offset
+  at `top.Dc`, and the family argument below covers every smaller offset, so a
+  zero span would suffice; keeping `DcDelta` encloses the contour over a wider
+  span of offsets and is conservative. The term
   bounds the contour `MixedOffsetProfile` builds: both it and
   `capband.LoopContourDelta` offset the loop by `offset2d.BuildLoop(walks, 1,
   d, offset2d.ShellTol)`, and `capband.ContourDisplacement` bounds every point
@@ -1371,62 +1374,39 @@ retained with `NormalBound` 0 breaks faceted-source-retention Claim R, and an
 with no bound, and `MirrorFace` and the retained-blend plane model extrapolate
 `AxialDelta` as a parallel offset.
 
-Only a displaced CARRIER tilts or offsets the wall's surface. Where the denoted
-segment lies on the recorded carrier itself (CR2 with `ε = 0`: the same line, or
-the same circle), the denoted wall lies on exactly the face's recorded `Plane` or
-`Cylinder`, and only its boundary slides, by at most the junction entries `δ`.
-The face's rim vertices and edges already carry `SectionDelta` in their bounds
-(`BuildLoopSidesAs`), and the mesh's vertex bounds carry those, so Claim R holds
-for that tag with zero departure. This is prism-boolean §7's "Exact carriers"
-reasoning, applied per segment.
-
 Rule DW therefore declines the tag (no surface, not retained, no `AxialDelta`)
-on every wall whose carrier is displaced, `Plane` and `Cylinder` alike. A face
-is such a wall when its owner is:
-
-- a `DisplacedPayload` and the face is a `side(l, j)` wall of a loop with
-  `LoopDelta[l] > 0`, or any other non-cap face whose roles name no single side
-  loop and no band patch of a selected loop. The band-patch roles are those
-  `Base.Patches` lists. This arm stays per loop: a `DisplacedPayload` holds no
-  per-segment record;
-- a `prismrecord.Payload` with `SectionDelta > 0`, and the face is not a cap and
-  is not a wall whose every `side(l, j)` role names a segment on an exact
-  carrier. Segment `j` of loop `l` is on an exact carrier when `CarrierExact`
-  lists loop `l`, or when the body's valid owned record
-  (`CarrierRecordOf`) has `Segment[l][j] == 0`. A face that carries any blend
-  role (`fillet(l, j)`, `chamfer(l, j)`) is declined, even beside side roles,
-  and so is any other face whose roles name no side segment.
-
-Every other face keeps its tag. The prism arm is finer than brep-modify §2.2's
-`displacedSideFaces`, which drops every wall of a loop that is not exact for its
-faceted view and keeps doing so. `faceLoop`, extended to report the side
-segments a face names, and both rules move from `internal/brepmodify` into a
-package both `brepmodify` and `booleaneval` can import (`brepmodify` imports
-`booleaneval`), which also holds the `DisplacedPayload` arm.
+on every displaced wall of a `DisplacedPayload`, `Plane` and `Cylinder` alike: a
+`side(l, j)` wall of a loop with `LoopDelta[l] > 0`, and any other non-cap face
+whose roles name no single side loop and no band patch of a selected loop (the
+band-patch roles are those `Base.Patches` lists). The rule is per loop: a
+`DisplacedPayload` holds no per-segment record. Every other face keeps its tag.
+`faceLoop` moves from `internal/brepmodify` into a package both `brepmodify`
+and `booleaneval` can import (`brepmodify` imports `booleaneval`), which holds
+the rule.
 
 `sourceGroup` (defined in `internal/booleaneval/eval_mesh.go`) takes no context
-or budget, while `CarrierExact` and `CarrierRecordOf` need one, so the decision
-is made once per operand where the operand's faces are walked and handed to
-`sourceGroup` as a per-face lookup. The rule runs at both `sourceGroup` callers:
-the mesh `Boolean` evaluator's operand-face loop (`internal/booleaneval/eval.go`)
-and `booleaneval.View` (`view.go`), the faceted view the retained edge blend
-reads. The evaluator's loop also runs under a replay budget (`replay != nil`),
-and `booloperand.ChordShareReplay` admits a displaced prism there, so the
-decision draws its work from `replay.WorkBudget(ctx)` when a replay budget is
-present and from a `proofbound.NewWorkBudget(ctx)` otherwise. A
-`DisplacedPayload` operand never reaches the replay path: `ChordShareReplay`'s
-default arm refuses it.
+or budget, so the decision is made once per operand where the operand's faces
+are walked and handed to `sourceGroup` as a per-face lookup. It reads only the
+payload's `LoopDelta` and the faces' roles. The rule runs at both `sourceGroup`
+callers: the mesh `Boolean` evaluator's operand-face loop
+(`internal/booleaneval/eval.go`) and `booleaneval.View` (`view.go`), the faceted
+view the retained edge blend reads. A `DisplacedPayload` operand never reaches
+the evaluator's replay path, since `booloperand.ChordShareReplay`'s default arm
+refuses it, so the rule needs no replay metering.
 
-On main the rule covers exactly these two payload classes. It changes a
-displaced prism's tags only on walls whose carrier is displaced (a rotated
-pattern copy's walls, or any wall of a displaced prism with no valid record
-and no `CarrierExact` listing), which reach a mesh `Boolean` today with an
-uncharged tag. A wall on an exact carrier, such as every wall of a pair
-`Union` of two undisplaced operands (§5.2, every `ε` zero), keeps its tag as
-today.
-Other displaced classes still reach `sourceGroup` uncharged, and face-level
-readers outside the mesh `Boolean` still read a displaced wall as exact
-(`agent-docs/missing-features.md`).
+**Displaced prisms keep today's tags.** A `prismrecord.Payload` with
+`SectionDelta > 0` reaches `sourceGroup` as it does on main: its walls keep
+their retained tags with zero departure, which Claim R does not support for a
+wall whose carrier is displaced. Neither a per-loop nor a per-segment prism arm
+ships in PR 2. A per-segment arm would keep a wall on an exact carrier
+(record entry `ε = 0`, the reasoning of prism-boolean §7's "Exact carriers") and
+decline the rest, but a fillet's feet leave ulp-sized carrier entries on the
+adjacent line walls of a faceted retained blend's operand, so it declines tags
+that `TestFacetedRetainedBlendConcaveArcEnd` and two other faceted-retained-blend
+apitests need. The prism half stays an open gap in
+`agent-docs/missing-features.md`, in the row on displaced classes that reach
+`sourceGroup` with uncharged tags, beside the face-level readers outside the
+mesh `Boolean` that read a displaced wall as exact.
 
 ### 8.8 Readers
 
@@ -1443,7 +1423,7 @@ readers outside the mesh `Boolean` still read a displaced wall as exact
 | pair gate points (`gatediameter.BodyGatePoints`) | the default arm reads the witness arm above through `diameter.PrismGatePoints`, else the body's vertices with their published bounds, which carry `LoopDelta[l]` on every vertex of a displaced loop (§8.5) |
 | `booloperand.sectionDisplacement` (an operand's chord floor) | `max_l LoopDelta[l]` (§8.7) |
 | `booloperand.ChordShareReplay` (a replayed mesh `Boolean`) | the default arm: `ErrUnsupported` |
-| mesh `Boolean` source tags and the faceted view (`booleaneval.sourceGroup`, called from the evaluator in `eval.go` and from `booleaneval.View`) | rule DW (§8.7): every wall of a loop with `LoopDelta[l] > 0`, `Plane` or `Cylinder`, keeps no tag (a displaced prism's walls are decided per segment by their carrier entry) |
+| mesh `Boolean` source tags and the faceted view (`booleaneval.sourceGroup`, called from the evaluator in `eval.go` and from `booleaneval.View`) | rule DW (§8.7): every wall of a loop with `LoopDelta[l] > 0`, `Plane` or `Cylinder`, keeps no tag; a displaced prism's walls keep today's tags (an open gap) |
 | brep route (`brepmodify.brepModifyRecord`) | not a brep record: no route |
 | `payloadclass.TypeName`, `verifypublish` | `SurveyClass` |
 
@@ -1601,44 +1581,26 @@ PR 2, each beside the code it covers. The twin of a displaced build is the same
   displacement; it refuses a zero-displacement loop's segment whose `c_e` is at
   least `F/4`; `CertifiedContact` answers as before.
 - `brepmodify` arc read ends: a lateral blend of a recorded receiver whose arc's
-  `End` sits off `Start`'s radius (`ρ_recv > 0`), blended at its `Start` end
-  only, records at the untouched `End`-side junction an entry of at least
-  `δ + |R_emit − R_recv|`, the exact distance between the two read ends, and
-  main's charge (`δ` plus `WalkEndBoundAllow` plus `ρ_new`) is shown to
-  undercharge it. The undercharge `|R_emit − R_recv| − ρ_new` is positive only
-  when the receiver's `End` lies nearer the emitted radius than the receiver's,
-  and it is at most the foot's own radial rounding, a few ulps of `R`. The case
-  is built in two steps. First, blend a receiver whose `End` lies on its radius,
-  over a short scan of corner angles, and keep a corner whose emitted `Start`
-  has `|R_emit − R_recv|` above four ulps of `R` (exact rationals). Then move
-  the receiver's `End` along its own bearing to the float nearest radius
-  `R_emit`, which leaves the corner and the emitted `Start` bit-identical (the
-  test checks this) and makes `ρ_new` at most one ulp. The test asserts, from
-  exact rationals, that the lower end of `|R_emit − R_recv|` exceeds the upper
-  end of main's `ρ_new` (`circularbounds.ArcRadialResidualUpper`) before it
-  asserts the entries, so the outward rounding cannot hide the gap.
-- `brepmodify` seam snap: a snap that moves a natural `ArcSeg`'s `Start` charges
-  its `End`-side read-end move into that segment's end displacement and the
-  junction after it, and a snap that moves a reversed `ArcSeg`'s `End` charges
-  the move of the read end on that side, `ρ_old` included; each is shown to
-  undercharge when `ReadEnd` or that term is dropped.
+  `End` sits a few ulps off `Start`'s radius (`ρ_recv > 0`), blended at its
+  `Start` end only, records at the untouched `End`-side junction an entry of at
+  least `δ + |R_emit − R_recv|`, the exact distance between the two read ends,
+  checked against exact rationals.
+- `brepmodify` seam snap: a snap that moves a natural `ArcSeg`'s `Start`, and one
+  that moves a reversed `ArcSeg`'s `End`, each record an entry on that side of at
+  least the exact distance the read end moved (`ρ_old` included for the
+  reversed arc).
 - `booleaneval` rule DW. Each case calls the `booleaneval` evaluator directly,
   so the mesh path runs even where a public `Cut` would take an analytic route.
-  A mesh `Cut` by a box of a `DisplacedPayload` gives
-  every facet from a displaced loop's `Plane` or `Cylinder` wall a group with no
-  tag, while walls of exact loops, caps and selected-loop band patches keep
-  their tags. The same `Cut` of a disc united with a tooth and a rotated copy
-  gives the copy's flank walls (carrier entry `δ_pattern > 0`) no tag, while
-  the disc's circle and the source tooth's flanks (carrier entry zero) keep
-  theirs. The pair `Union` of two undisplaced cylinders (every carrier entry
-  zero, §5.2) keeps both `Cylinder` tags. Without the rule the copy's walls read
-  retained with zero departure. A prism face carrying a `fillet(l, j)` role
-  beside side roles is declined. `booleaneval.View` of the same bodies decides
-  the same faces, and so does the evaluator under a replay budget.
-- No regression: `apitest/chamfer_pattern_socket_test.go` and
+  A mesh `Cut` by a box of a `DisplacedPayload` gives every facet from a
+  displaced loop's `Plane` or `Cylinder` wall a group with no tag, while walls of
+  exact loops, caps and selected-loop band patches keep their tags; without the
+  rule the displaced walls read retained with zero departure. A displaced
+  prism's walls (a disc united with a tooth and a rotated copy) keep today's
+  tags. `booleaneval.View` of the same bodies decides the same faces.
+- No regression: `apitest/chamfer_pattern_socket_test.go`,
   `apitest/faceted_retained_blend_cylinders_gaps_test.go` (two exact cylinders
-  unioned, mesh-cut, then a retained-tag fillet or chamfer of the valley) pass
-  unchanged.
+  unioned, mesh-cut, then a retained-tag fillet or chamfer of the valley) and
+  `TestFacetedRetainedBlendConcaveArcEnd` pass unchanged.
 - `booloperand`: `sectionDisplacement` answers `max LoopDelta` for the result,
   and `ChordShare`'s floor is at least twice it.
 - `brepmodify` dispatch: a cap-loop `Chamfer` of an exact hole loop on both caps

@@ -7,7 +7,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 )
 
-// DisableTransfer switches transfer checks ("T1T2", "T3", "ContourDelta") off
+// DisableTransfer switches transfer checks ("T1", "T2", "T3", "ContourDelta") off
 // and returns the function that restores them.
 func DisableTransfer(checks ...string) func() {
 	disabledTransfer.Store(&checks)
@@ -19,3 +19,6 @@ func DisableTransfer(checks ...string) func() {
 func RequireTransfer(ctx context.Context, cbp Payload, mixed momentinput.Profile, loopDelta []float64) error {
 	return requireTransfer(ctx, proofbound.NewWorkBudget(ctx), cbp, mixed, loopDelta)
 }
+
+// SameWalkSegments exposes sameWalkSegments to the external test package.
+var SameWalkSegments = sameWalkSegments

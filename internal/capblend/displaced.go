@@ -7,6 +7,10 @@ import (
 	"slices"
 	"sync/atomic"
 
+	"github.com/lestrrat-3d/decad/internal/capband"
+	"github.com/lestrrat-3d/decad/internal/offset2d"
+	"github.com/lestrrat-3d/decad/internal/survey2d"
+
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
@@ -112,7 +116,7 @@ func (dp DisplacedPayload) ExtentBoundedAlong(ctx context.Context, g r3.Vec, wor
 }
 
 // disabledTransfer names the transfer checks a test switched off to show each
-// one matters ("T1T2", "T3" and "ContourDelta", the contour displacement of a
+// one matters ("T1", "T2", "T3" and "ContourDelta", the contour displacement of a
 // selected loop's segments); nothing in production sets it.
 var disabledTransfer atomic.Pointer[[]string]
 
@@ -153,16 +157,28 @@ func requireTransfer(ctx context.Context, budget *proofbound.WorkBudget, cbp Pay
 		}
 		extra[li] = delta
 	}
-	apart, why, err := true, "", error(nil)
-	if transferOn("T1T2") {
-		apart, why, err = prismcells.CertifiedContactLoops(budget, loops, loopDelta, extra)
-	}
-	if err != nil {
+	if err := requireSameWalks(budget, cbp); err != nil {
 		return err
 	}
-	if !apart {
-		return fmt.Errorf(`%w: the chamfered section's displaced loops are not certified clear of the rest of the section (agent-docs/carrier-record-design.md §8.3, T1 and T2): %s`,
-			decaderr.ErrUnsupported, why)
+	if transferOn("T1") {
+		floor, err := prismcells.ContactFloorOf(budget, loops)
+		if err != nil {
+			return err
+		}
+		if !(proofbound.ProductUpper(4, maxOf(loopDelta)) < floor) {
+			return fmt.Errorf(`%w: four times the largest loop displacement %g is not below the contact floor %g (agent-docs/carrier-record-design.md §8.3, T1)`,
+				decaderr.ErrUnsupported, maxOf(loopDelta), floor)
+		}
+	}
+	if transferOn("T2") {
+		apart, why, err := prismcells.CertifiedGapsLoops(budget, loops, loopDelta, extra)
+		if err != nil {
+			return err
+		}
+		if !apart {
+			return fmt.Errorf(`%w: the chamfered section's displaced loops are not certified clear of the rest of the section (agent-docs/carrier-record-design.md §8.3, T2): %s`,
+				decaderr.ErrUnsupported, why)
+		}
 	}
 	for li, loop := range loops {
 		if loopDelta[li] == 0 || !transferOn("T3") {
@@ -178,4 +194,34 @@ func requireTransfer(ctx context.Context, budget *proofbound.WorkBudget, cbp Pay
 		}
 	}
 	return nil
+}
+
+// requireSameWalks is T2's walk-list check: the contour displacement read for a
+// selected loop belongs to the walks capband.LoopWalks builds, while the
+// mixed profile was offset from the walks offset2d.ProfileCornerLoopsBudget
+// builds. The two must name the same segments walk for walk, else the
+// displacement describes another decomposition.
+func requireSameWalks(budget *proofbound.WorkBudget, cbp Payload) error {
+	cornerLoops, err := offset2d.ProfileCornerLoopsBudget(budget, cbp.Profile)
+	if err != nil {
+		return err
+	}
+	for li, loop := range cbp.Loops() {
+		if !cbp.StartLoops[li] && !cbp.EndLoops[li] {
+			continue
+		}
+		walks, err := capband.LoopWalks(budget, loop, freeform.NewFreeformWork())
+		if err != nil {
+			return err
+		}
+		if !sameWalkSegments(cornerLoops[li].Walks, walks) {
+			return fmt.Errorf(`%w: loop %d's corner walks and its cap-band walks name different segments (agent-docs/carrier-record-design.md §8.3, T2)`,
+				decaderr.ErrUnsupported, li)
+		}
+	}
+	return nil
+}
+
+func sameWalkSegments(a, b []survey2d.SideWalk) bool {
+	return slices.EqualFunc(a, b, func(x, y survey2d.SideWalk) bool { return slices.Equal(x.Segs, y.Segs) })
 }
