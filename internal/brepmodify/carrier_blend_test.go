@@ -823,9 +823,47 @@ func TestCarrierCB5WidenedCutbacksRefuse(t *testing.T) {
 // centre and End are shared (agent-docs/carrier-record-design.md §7.7, "Arc
 // read ends"). A walk-end allowance alone is zero there.
 func TestCarrierArcReadEndEntry(t *testing.T) {
-	const radius, c, off = 5.0, 3.0, 4e-15
+	arcReadEndProbe(t, 3.0, 4e-15, 0).requireEntry(t)
+}
+
+// TestCarrierArcReadEndEntryBeyondResidual: the fixture where the radial
+// residual alone falls short. The new arc's End sits within a few ulps of the
+// emitted Start's radius, so ρ_new = |R_end − R_emit| is far below the
+// outward |R_emit − R_recv| the entry must carry as well. Found by scanning
+// the arc's corner x and End's offset in ulps (c = 4.16 and 5 ulps below the
+// receiver's Start radius): there ρ_new is 1.2e-17 and the gap is 1.24e-15.
+// With chargeArcRadius disabled the entry is δ + ρ_new and this fails.
+func TestCarrierArcReadEndEntryBeyondResidual(t *testing.T) {
+	p := arcReadEndProbe(t, 4.16, 0, 5)
+	require.Greater(t, p.gap, p.rho+1e-16, `the fixture has ρ_new below |R_emit − R_recv|`)
+	p.requireEntry(t)
+	require.GreaterOrEqual(t, p.entry, carrierJunc+p.rho, `the residual alone is no longer the whole entry`)
+	require.Greater(t, p.entry, carrierJunc+p.rho, `the entry exceeds δ + ρ_new, which would be the uncharged value`)
+}
+
+type arcReadEndResult struct {
+	gap, rho, entry float64
+}
+
+func (p arcReadEndResult) requireEntry(t *testing.T) {
+	t.Helper()
+	require.GreaterOrEqual(t, p.entry, carrierJunc+p.gap, `the entry carries the exact read-end distance`)
+	require.GreaterOrEqual(t, p.entry, carrierJunc+p.rho, `and the new segment's own residual`)
+}
+
+// arcReadEndProbe fillets the Start end of a hole loop's clockwise arc on a
+// circle of radius 5 whose Start is (c, √(25 − c²)) and whose End is (c, −y)
+// lowered by off and then ulps further floats, and reports the exact outward |R_emit −
+// R_recv|, ρ_new and the junction entry at the arc's untouched End.
+func arcReadEndProbe(t *testing.T, c, off float64, ulps int) arcReadEndResult {
+	t.Helper()
+	const radius = 5.0
 	y := math.Sqrt(radius*radius - c*c)
-	top, bottom := sectionrecord.Point2{U: c, V: y}, sectionrecord.Point2{U: c, V: -y - off}
+	bv := y + off
+	for range ulps {
+		bv = math.Nextafter(bv, math.Inf(1))
+	}
+	top, bottom := sectionrecord.Point2{U: c, V: y}, sectionrecord.Point2{U: c, V: -bv}
 	outer := polygonReceiver(t, carrierDelta, 0, sectionrecord.Point2{U: -20, V: -20}, sectionrecord.Point2{U: 20, V: -20},
 		sectionrecord.Point2{U: 20, V: 20}, sectionrecord.Point2{U: -20, V: 20})
 	profile := outer.Profile
@@ -853,6 +891,7 @@ func TestCarrierArcReadEndEntry(t *testing.T) {
 		return new(big.Float).SetPrec(300).Sqrt(sq)
 	}
 	recvR := radiusOf(profile.Holes[0].Segments[1].(sectionrecord.ArcSeg))
+	var out arcReadEndResult
 	found := false
 	for k, seg := range got.Profile.Holes[0].Segments {
 		arc, ok := seg.(sectionrecord.ArcSeg)
@@ -860,13 +899,13 @@ func TestCarrierArcReadEndEntry(t *testing.T) {
 			continue
 		}
 		found = true
-		gap, _ := new(big.Float).SetPrec(300).Sub(radiusOf(arc), recvR).Abs(new(big.Float).SetPrec(300).Sub(radiusOf(arc), recvR)).Float64()
+		diff := new(big.Float).SetPrec(300).Sub(radiusOf(arc), recvR)
+		out.gap, _ = diff.Abs(diff).Float64()
+		out.rho = circularbounds.ArcRadialResidualUpper(arc)
 		// The junction before the arc is the one at its End (walk start).
 		n := len(got.Profile.Holes[0].Segments)
-		entry := rec.Junction[1][(k+n-1)%n]
-		require.GreaterOrEqual(t, entry, carrierJunc+gap, `the entry carries the exact read-end distance`)
-		require.GreaterOrEqual(t, entry, carrierJunc+circularbounds.ArcRadialResidualUpper(arc),
-			`and the new segment's own residual`)
+		out.entry = rec.Junction[1][(k+n-1)%n]
 	}
 	require.True(t, found)
+	return out
 }
