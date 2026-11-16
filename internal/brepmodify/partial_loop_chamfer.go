@@ -29,10 +29,11 @@ import (
 // above the plane that leaves the wall at depth d and the cap at d. Segments of a chain that meet at a sharp corner are
 // mitred inside the cutter, the same as at a corner of a whole loop. Each end of a chain is read on its own:
 //
-//   - A convex end turned by 45 degrees or more is served by the cutter reaching past the end along the run's tangent,
-//     so the bevel ends on the wall beside the next edge as a chamfer's bevel does. Below 90 degrees the bevel runs out
-//     onto that wall, so the next edge must be at least 1.5 reach/sin(turn) long, and an arc run's tangent must stay
-//     within partialSagitta of its circle over the run-out.
+//   - A convex end turned by 45 degrees or more is served by the cutter reaching past the end, so the bevel ends on the
+//     wall beside the next edge as a chamfer's bevel does. A line run's cutter reaches along the run's tangent. An arc
+//     run's cutter follows its own moved circle, the same angle on every ring, so the bevel runs out as the cone itself
+//     does. Below 90 degrees the bevel runs out onto that wall, so the next edge must be at least 1.5 reach/sin(turn)
+//     long.
 //   - A concave end turned by up to 90 degrees beside a line stops the bevel on the next face's plane, carried back over
 //     the run's band: the cutter loses a local sector about the corner, so the bevel tapers to the corner's vertical
 //     edge and the next face grows by a coplanar triangle. There is no square end. The material continues past a
@@ -44,7 +45,10 @@ import (
 // other walls, past an end or in its margin beside the run, and a chain whose offset consumes an arc.
 //
 // A cutter is a polyhedron held exactly as a mesh solid, as RetainedLoopChamfer's is; its facets sit within
-// cutterSagitta of an arc. The result is a Boolean Cut: faceted, with the Cut's own readings.
+// partialSagitta of an arc. Between its rings a sharp corner of the chain beside an arc moves along a conic and the
+// arc's cells twist, so such a chain steps through enough layers of rings to bring layerDeparture, a closed-form bound
+// on how far the facets leave the bevel there, under partialSagitta, and charges it in the cutter's bound. A chain
+// without such a corner keeps two rings. The result is a Boolean Cut: faceted, with the Cut's own readings.
 //
 // It takes a straight prism receiver only. It reports false, leaving the other routes in charge, for any receiver or selection it does not recognise,
 // including a selection that holds a whole loop. A recognised selection that cannot be cut is refused as
@@ -397,18 +401,16 @@ func (r chamferRun) checkExtension(d, reach float64) error {
 			return nil
 		}
 		if e.turn < math.Pi/2-1e-9 {
-			// The bevel runs out onto the next wall, which must be long enough to hold the run-out, and an arc run's
-			// tangent stands in for its cone over that stretch.
+			// The bevel runs out onto the next wall, which must be long enough to hold the run-out.
 			if e.e2Len < 1.5*reach/math.Sin(e.turn) {
 				return fmt.Errorf(`%w: a chamfered run ends at a corner whose next edge is shorter than the bevel's run-out`,
 					decaderr.ErrUnsupported)
 			}
-			if run := reach / math.Tan(e.turn); seg.arc && run*run/(2*seg.r) > partialSagitta {
-				return fmt.Errorf(`%w: a chamfered arc run ends at a corner too acute for its tangent extension`,
-					decaderr.ErrUnsupported)
-			}
 		}
 		ext := e.extFor(d, reach)
+		if seg.arc {
+			return l.probeArcExtension(e, seg, ext, reach, poly)
+		}
 		// The material the next segment's wall bounds near v is the bevel's run-out onto that wall.
 		e2in := e.e2away.leftNormal()
 		if e2in.dot(e.away.scale(-1)) < 0 {
@@ -435,17 +437,116 @@ func (r chamferRun) checkExtension(d, reach float64) error {
 	return probe(ends[1], last, tangent(last, last.p1), l.materialNormal(last, last.p1))
 }
 
-// polyline is the run's section moved by t into the material, with each end reaching ext past the run along its
-// tangent, as the points of a polyline and the arc each span between two points follows (arcAt[i] is the moved radius
-// of the span from point i to i+1, or 0 for a line). cells[j] is the number of pieces an arc segment j is cut into.
-func (r chamferRun) polyline(t, extStart, extEnd float64, cells []int) ([]pt2, error) {
+// arcPastEnd is the angle, signed counter-clockwise, that an arc run's cutter turns past its convex end at v along the
+// circle of seg, which leaves the run along away there, to reach ext past it along the source arc.
+func arcPastEnd(seg loopSeg, v, away pt2, ext float64) float64 {
+	alpha := ext / seg.r
+	if v.sub(seg.c).cross(away) < 0 {
+		return -alpha
+	}
+	return alpha
+}
+
+// arcRunOutCells is how many chords the run-out of an arc run's cutter over the angle alpha takes about a circle of
+// radius up to rmax. The count follows the largest ring, so every ring holds the same number of points.
+func arcRunOutCells(alpha, rmax float64) int {
+	step := 2 * math.Acos(1-partialSagitta/rmax)
+	return max(1, int(math.Ceil(math.Abs(alpha)/step)))
+}
+
+// arcRunOut is the n points of the circle through from about the centre of seg that follow from, turning alpha: nearest
+// first.
+func arcRunOut(seg loopSeg, from pt2, alpha float64, n int) []pt2 {
+	rho := from.dist(seg.c)
+	a0 := math.Atan2(from.y-seg.c.y, from.x-seg.c.x)
+	out := make([]pt2, n)
+	for k := 1; k <= n; k++ {
+		phi := a0 + alpha*float64(k)/float64(n)
+		out[k-1] = pt2{seg.c.x + rho*math.Cos(phi), seg.c.y + rho*math.Sin(phi)}
+	}
+	return out
+}
+
+// probeArcExtension samples the region an arc run's cutter reaches past its convex end e along its own circle, to the
+// cutter's reach on both sides of the circle, and refuses a run whose extension holds material of the cap other than
+// the bevel's run-out onto the next wall.
+func (l *chamferLoop) probeArcExtension(e runEnd, seg loopSeg, ext, reach float64, poly []pt2) error {
+	alpha := arcPastEnd(seg, e.v, e.away, ext)
+	if math.Abs(alpha) > maxArcRunOut {
+		return fmt.Errorf(`%w: a chamfered arc run's extension turns more than a half turn past its end`, decaderr.ErrUnsupported)
+	}
+	a0 := math.Atan2(e.v.y-seg.c.y, e.v.x-seg.c.x)
+	e2in := e.e2away.leftNormal()
+	if e2in.dot(e.away.scale(-1)) < 0 {
+		e2in = e2in.scale(-1)
+	}
+	in := 1.0
+	if l.toward(seg) {
+		in = -1
+	}
+	for _, s := range []float64{0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1} {
+		for _, u := range []float64{-1, -0.5, 0.05, 0.15, 0.25, 0.35, 0.5, 0.65, 0.8, 1} {
+			rho := seg.r + in*u*reach
+			phi := a0 + s*alpha
+			p := pt2{seg.c.x + rho*math.Cos(phi), seg.c.y + rho*math.Sin(phi)}
+			// The material the next segment's wall bounds near v is the bevel's run-out onto that wall.
+			if p.sub(e.v).dot(e2in) > -1e-9 && p.sub(e.v).dot(e.e2away) < e.e2Len {
+				continue
+			}
+			if contains(poly, p) == l.outer {
+				return fmt.Errorf(`%w: material of the cap lies beside a chamfered arc run's end, where the bevel would cut it`,
+					decaderr.ErrUnsupported)
+			}
+		}
+	}
+	return nil
+}
+
+// maxArcRunOut is the largest angle an arc run's cutter turns past a convex end.
+const maxArcRunOut = math.Pi
+
+// runOutArcs is how each end of a run reaches past it along the run's own circle: the angle it turns and how many
+// chords that takes, or 0 cells for an end served by the tangent.
+type runOutArcs struct {
+	cells [2]int
+	alpha [2]float64
+}
+
+// runOutArcs reads the ends that follow their own circle: those whose run segment is an arc at a convex corner. ext is
+// how far each end reaches, and reach is how far the cutter extends from the run on its material side, plus its
+// margin, which bounds the radius of every ring.
+func (r chamferRun) runOutArcs(ends [2]runEnd, ext [2]float64, reach float64) runOutArcs {
+	var out runOutArcs
+	segs := [2]loopSeg{r.seg(0), r.seg(r.count - 1)}
+	for i, e := range ends {
+		if !segs[i].arc || e.concave {
+			continue
+		}
+		out.alpha[i] = arcPastEnd(segs[i], e.v, e.away, ext[i])
+		out.cells[i] = arcRunOutCells(out.alpha[i], segs[i].r+reach)
+	}
+	return out
+}
+
+// polyline is the run's section moved by t into the material, with each end reaching past the run, as the points of a
+// polyline and the arc each span between two points follows. A line end reaches extStart or extEnd along its tangent.
+// An arc end at a convex corner follows its moved circle through runOut.cells points, turning runOut.alpha. cells[j] is
+// the number of pieces an arc segment j is cut into.
+func (r chamferRun) polyline(t, extStart, extEnd float64, cells []int, runOut runOutArcs) ([]pt2, error) {
 	l := r.loop
 	first, last := r.seg(0), r.seg(r.count-1)
 	start := first.p0.add(l.materialNormal(first, first.p0).scale(t))
 	end := last.p1.add(l.materialNormal(last, last.p1).scale(t))
-	pts := []pt2{start.sub(tangent(first, first.p0).scale(extStart))}
-	if first.arc {
-		pts = append(pts, start)
+	var pts []pt2
+	if n := runOut.cells[0]; n > 0 {
+		out := arcRunOut(first, start, runOut.alpha[0], n)
+		slices.Reverse(out)
+		pts = append(out, start)
+	} else {
+		pts = []pt2{start.sub(tangent(first, first.p0).scale(extStart))}
+		if first.arc {
+			pts = append(pts, start)
+		}
 	}
 	for j := range r.count {
 		s := r.seg(j)
@@ -508,6 +609,9 @@ func (r chamferRun) polyline(t, extStart, extEnd float64, cells []int) ([]pt2, e
 			pts = append(pts, to)
 		}
 	}
+	if n := runOut.cells[1]; n > 0 {
+		return append(pts, arcRunOut(last, end, runOut.alpha[1], n)...), nil
+	}
 	return append(pts, end.add(tangent(last, last.p1).scale(extEnd))), nil
 }
 
@@ -539,14 +643,22 @@ func (r chamferRun) cutterMesh(ctx context.Context, d, over float64) (cutterMesh
 			rmin = min(rmin, s.r)
 		}
 	}
-	rings := make([][]pt2, 2)
-	heights := []float64{top, bottom}
+	runOut := r.runOutArcs(ends, [2]float64{extS, extE}, reach)
+	layers, departure, err := r.layers(d, top, bottom)
+	if err != nil {
+		return cutterMesh{}, err
+	}
+	rings := make([][]pt2, layers+1)
+	heights := make([]float64, layers+1)
+	for k := range heights {
+		heights[k] = top + (bottom-top)*float64(k)/float64(layers)
+	}
 	for k, h := range heights {
-		inner, err := r.polyline(d+h, extS, extE, cells)
+		inner, err := r.polyline(d+h, extS, extE, cells, runOut)
 		if err != nil {
 			return cutterMesh{}, err
 		}
-		outer, err := r.polyline(-margin, extS, extE, cells)
+		outer, err := r.polyline(-margin, extS, extE, cells, runOut)
 		if err != nil {
 			return cutterMesh{}, err
 		}
@@ -560,7 +672,7 @@ func (r chamferRun) cutterMesh(ctx context.Context, d, over float64) (cutterMesh
 	}
 	m := cutterMesh{}
 	if !math.IsInf(rmin, 1) {
-		m.bound = partialSagitta
+		m.bound = partialSagitta + departure
 	}
 	n := len(rings[0])
 	idx := make([][]int, len(rings))
@@ -571,12 +683,14 @@ func (r chamferRun) cutterMesh(ctx context.Context, d, over float64) (cutterMesh
 			idx[k][j] = len(m.verts) - 1
 		}
 	}
-	for j := range n {
-		a, b := idx[0][j], idx[0][(j+1)%n]
-		c, e := idx[1][(j+1)%n], idx[1][j]
-		m.tris = append(m.tris, [3]int{a, c, b}, [3]int{a, e, c})
+	for k := range layers {
+		for j := range n {
+			a, b := idx[k][j], idx[k][(j+1)%n]
+			c, e := idx[k+1][(j+1)%n], idx[k+1][j]
+			m.tris = append(m.tris, [3]int{a, c, b}, [3]int{a, e, c})
+		}
 	}
-	for k := range rings {
+	for ci, k := range []int{0, layers} {
 		pts := make([]triangulation.Point2, n)
 		loop := make([]int, n)
 		for j, p := range rings[k] {
@@ -589,7 +703,7 @@ func (r chamferRun) cutterMesh(ctx context.Context, d, over float64) (cutterMesh
 		}
 		for _, t := range tris {
 			a, b, c := idx[k][t[0]], idx[k][t[1]], idx[k][t[2]]
-			if k == 1 {
+			if ci == 1 {
 				b, c = c, b
 			}
 			m.tris = append(m.tris, [3]int{a, b, c})

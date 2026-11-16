@@ -991,11 +991,14 @@ read on its own, with `over` the cutter's overshoot above the cap and outside th
 `reach = dc + 2 over` how far the cutter reaches into the material at its top plus that margin; one `reach` serves the
 extension and the probe of its end:
 
-- A convex end turned by 45 degrees or more reaches past the end along the run's tangent, so the bevel ends on the wall
-  beside the next edge, where it runs out onto that wall over `dc` times the cotangent of the turn. The cutter reaches
-  `max(dc, 1.5 reach cot(turn))`. A turn under 90 degrees needs the next edge at least `1.5 reach / sin(turn)` long, and
-  an arc run's tangent must stay within 0.0002 mm of its circle over the run-out. The run-out removes `dc^3 cot(turn)/6`
-  beyond the perpendicular end's wedge (a negative amount past 90 degrees).
+- A convex end turned by 45 degrees or more reaches past the end, so the bevel ends on the wall beside the next edge,
+  where it runs out onto that wall over `dc` times the cotangent of the turn. The cutter reaches
+  `max(dc, 1.5 reach cot(turn))`. A line run's cutter reaches along the run's tangent. An arc run's cutter follows its
+  own circle, moved with each ring, by the angle `ext / r`: the same angle and the same chord count (read at the largest
+  ring's radius) on every ring, so the rings pair vertex for vertex, and the bevel runs out as the cone itself does. A
+  turn under 90 degrees needs the next edge at least `1.5 reach / sin(turn)` long. The probe of an arc end samples the
+  moved circle's band past the end. The run-out removes `dc^3 cot(turn)/6` beyond the perpendicular end's wedge (a
+  negative amount past 90 degrees).
 - A concave end turned by up to 90 degrees beside a line stops the bevel on the next face's plane, carried back over the
   run's band. The cutter loses a sector of a disc about the corner, bounded by the next wall's line carried back over the
   band and by the bisector of the corner's empty wedge, so the bevel tapers to the corner's vertical edge, shortens at
@@ -1010,8 +1013,8 @@ extension and the probe of its end:
   plane must meet that circle at all.
 
 Any other end is `ErrUnsupported`: a convex end turned by less than 45 degrees, a concave end turned by more than 90
-degrees, a concave end beside an arc, a run-out longer than the next edge, an arc run whose tangent extension leaves its
-circle by more than 0.0002 mm, and a chain that comes back into the end sector. So is a chain whose extension would
+degrees, a concave end beside an arc, a run-out longer than the next edge, an arc run whose extension turns more than a
+half turn, and a chain that comes back into the end sector. So is a chain whose extension would
 meet material of the cap, within `reach` of the run's end, or whose margin strip beside the run (the `over` outside
 its wall, except within a concave end's sector and near a corner inside the chain) holds material of another wall of
 the loop outside a concave end's sector, or whose offset empties an arc. The overshoot list retries a smaller `over` after such a refusal, so a slot
@@ -1021,7 +1024,17 @@ A hole loop of the cap is read the same way as an outer loop: its edges chain, m
 reflex corner of the material inside a chain (a hole's corner) mitres by removing `dc^3/3` more than the two wedges.
 
 The cutter is a polyhedron held exactly as a mesh solid, with arc chords within 0.0002 mm of their circle, and the
-result is a Boolean Cut: faceted, with the Cut's own readings. On a concave arc wall (material outside
+result is a Boolean Cut: faceted, with the Cut's own readings. A chain with two rings (a top and a bottom) holds the
+bevel exactly except where it holds a sharp corner beside an arc. There the offset's corner moves along a conic with the
+setback, and an arc's cells twist between rings, so a straight rule between two rings leaves the bevel. Such a chain
+steps through `L` layers of rings, `L` doubling from 2 until `layerDeparture` is within 0.0002 mm, and refuses past 32.
+`layerDeparture` is closed form, the largest over the corners and layers of two terms. The first is the corner path's
+bound `B^2 dt^2 / (32 v^3)` for a line and an arc (`v` the corner's distance along the line from the foot of the arc's
+centre, `B` the rate of `v^2` per unit of setback, which is constant) and `|4ac - b^2| dt^2 / (32 y^3)` for two arcs
+(`y^2 = a + b t + c t^2` the squared distance from the line of centres), each at its smallest `v` or `y` over the layer.
+The second is the twist `rho dphi^2 / 8`, with `dphi` the turn of the corner about the arc's centre over the layer. A
+corner that reaches the arc's foot, or an arc-arc corner that changes sides of the line of centres in a layer, is
+`ErrUnsupported`. The cutter's bound is 0.0002 mm plus that departure. On a concave arc wall (material outside
 the circle) the faceted result reads about 0.07 mm3 more volume per arc run than its exact value on a cutter of hub
 size (arc radius near 13 mm, 22 mm long), so a test of such a run reads a section or allows that excess. A concave end's clip is a second mesh Boolean, which leaves about 5e-6 mm3 on a straight edge.
 `internal/brepmodify/partial_loop_chamfer.go` owns it. It runs after every exact route has declined, and only for a
