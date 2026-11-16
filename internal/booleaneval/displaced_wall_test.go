@@ -125,3 +125,116 @@ func TestDisplacedWallsInAMeshCut(t *testing.T) {
 	require.Equal(t, 4, seen["exact wall"])
 	require.Positive(t, seen["band patch"])
 }
+
+// tagOf is what a group says of its face's tag: the plain-data reading the
+// two callers of rule DW are compared by.
+type tagOf struct {
+	Retained bool
+	Surface  bool
+}
+
+// tagsByRole reads each group's tag by the role of the target face it came
+// from, for the faces whose role starts with one of prefixes.
+func tagsByRole(t *testing.T, target *topo.Body, groups []facetedrecord.Group, prefixes ...string) map[string]tagOf {
+	t.Helper()
+	out := map[string]tagOf{}
+	for _, g := range groups {
+		for _, o := range g.Origins {
+			if o.Producer != target.Origin.Producer {
+				continue
+			}
+			for _, p := range prefixes {
+				if strings.HasPrefix(o.Role, p) {
+					out[o.Role] = tagOf{Retained: g.Retained, Surface: g.Surface != nil}
+				}
+			}
+		}
+	}
+	return out
+}
+
+func displacedCutOperands(t *testing.T) (target, tool *topo.Body) {
+	t.Helper()
+	frame, err := r3.NewFrame(r3.Vec{}, r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
+	require.NoError(t, err)
+	env := topo.Env{Doc: &topo.Document{}, Ref: 3, Alloc: topotest.Alloc{}}
+	set := capblend.Setback{Dc: 0.5, Ds: 0.5}
+	target, err = capblend.BuildDisplaced(t.Context(), env, capblend.Payload{
+		Profile: momentinput.Profile{Outer: dispSquare(20, false, 0, 0), Holes: []sectionrecord.LoopRecord{dispSquare(4, true, 8, 8)}},
+		Frame:   frame, Z1: 10, Xform: r3.Identity(), Start: set, End: set,
+		StartLoops: map[int]bool{1: true}, EndLoops: map[int]bool{1: true},
+	}, []float64{0.01, 0})
+	require.NoError(t, err)
+	env.Ref = 4
+	tool, err = prismrecord.Build(t.Context(), env, prismrecord.Payload{
+		Profile: momentinput.Profile{Outer: dispSquare(4, false, 17, 3)}, Frame: frame, Z0: -1, Z1: 11, Xform: r3.Identity(),
+	}, freeform.NewFreeformWork())
+	require.NoError(t, err)
+	return target, tool
+}
+
+// TestDisplacedWallViewMatchesEvaluator: rule DW runs at both of
+// sourceGroup's callers, so booleaneval.View, the faceted view a retained
+// edge blend reads, declines the same faces the evaluator's mesh path does and
+// keeps the same tags on every other face of the target.
+func TestDisplacedWallViewMatchesEvaluator(t *testing.T) {
+	t.Parallel()
+	target, tool := displacedCutOperands(t)
+	ev, err := booleaneval.Evaluate(t.Context(), meshbool.OpCut, target, tool, cutMesher{}, 1, nil, nil)
+	require.NoError(t, err)
+	view, _, err := booleaneval.View(t.Context(), target, cutMesher{})
+	require.NoError(t, err)
+
+	prefixes := []string{"side(", "chamferCap(", "cap", "start", "end"}
+	fromView := tagsByRole(t, target, view.Groups, prefixes...)
+	fromEval := tagsByRole(t, target, ev.Payload.Groups, prefixes...)
+	require.NotEmpty(t, fromEval)
+	declined, kept := 0, 0
+	for role, got := range fromEval {
+		require.Equal(t, got, fromView[role], "the view and the evaluator read %s alike", role)
+		if strings.HasPrefix(role, "side(0,") {
+			require.Equal(t, tagOf{}, got, "the displaced outer wall %s keeps no tag", role)
+			declined++
+		}
+		if strings.HasPrefix(role, "side(1,") {
+			require.True(t, got.Retained, role)
+			kept++
+		}
+	}
+	require.Equal(t, 4, declined)
+	require.Equal(t, 4, kept)
+}
+
+// TestDisplacedPrismKeepsItsTagsInAMeshCut pins that rule DW covers a
+// DisplacedPayload only: a displaced prismrecord.Payload reaches the mesh
+// path as on main, and its walls keep their retained tags (§8.7, "Displaced
+// prisms keep today's tags"). The same Cut of a DisplacedPayload declines
+// the displaced outer wall's tag, so the two answers differ on the rule alone.
+func TestDisplacedPrismKeepsItsTagsInAMeshCut(t *testing.T) {
+	t.Parallel()
+	frame, err := r3.NewFrame(r3.Vec{}, r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
+	require.NoError(t, err)
+	env := topo.Env{Doc: &topo.Document{}, Ref: 3, Alloc: topotest.Alloc{}}
+	profile := momentinput.Profile{Outer: dispSquare(20, false, 0, 0), Holes: []sectionrecord.LoopRecord{dispSquare(4, true, 8, 8)}}
+	cr := prismrecord.UniformCarrierRecord(profile, 1e-13)
+	cr.SectionDelta = 1e-12
+	pp := prismrecord.Payload{Profile: profile, Frame: frame, Z1: 10, Xform: r3.Identity(), SectionDelta: 1e-12, Carriers: &cr}
+	target, err := prismrecord.BuildWithRecord(t.Context(), env, pp, cr)
+	require.NoError(t, err)
+	require.NotZero(t, target.Payload.(prismrecord.Payload).SectionDelta, "the receiver is a displaced prism")
+	_, tool := displacedCutOperands(t)
+
+	ev, err := booleaneval.Evaluate(t.Context(), meshbool.OpCut, target, tool, cutMesher{}, 1, nil, nil)
+	require.NoError(t, err)
+	tags := tagsByRole(t, target, ev.Payload.Groups, "side(")
+	require.NotEmpty(t, tags)
+	faces := topobuild.FacesByRole(target)
+	for role, got := range tags {
+		base, _ := facetedrecord.SourceTag(faces[role], false)
+		require.True(t, base.Retained, role)
+		require.True(t, got.Retained, "the displaced prism's wall %s keeps its tag", role)
+		require.True(t, got.Surface, role)
+	}
+	require.Contains(t, tags, "side(0,0)")
+	require.Contains(t, tags, "side(1,0)")
+}
