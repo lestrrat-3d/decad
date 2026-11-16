@@ -909,3 +909,89 @@ func arcReadEndProbe(t *testing.T, c, off float64, ulps int) arcReadEndResult {
 	require.True(t, found)
 	return out
 }
+
+// seamArcProfile is the half disc of radius 5 about the origin (below the
+// x axis when natural, above it when reversed), a line and an arc, whose
+// seam between the line's end (−5, 0) and the arc's walk start is open by g:
+// radially for a natural arc (its Start sits at radius 5 + g) and
+// tangentially for a reversed one (its End sits at (−5, g)).
+func seamArcProfile(g float64, reversed bool) momentinput.Profile {
+	p := func(u, v float64) sectionrecord.Point2 { return sectionrecord.Point2{U: u, V: v} }
+	line := sectionrecord.LineSeg{Start: p(5, 0), End: p(-5, 0), TStart: 0, TEnd: 1}
+	arc := sectionrecord.ArcSeg{Start: p(-5-g, 0), End: p(5, 0), TStart: 0, TEnd: 1}
+	if reversed {
+		arc = sectionrecord.ArcSeg{Start: p(5, 0), End: p(-5, g), TStart: 1, TEnd: 0}
+	}
+	return momentinput.Profile{Outer: sectionrecord.LoopRecord{Segments: []sectionrecord.CurveSegment{line, arc}}}
+}
+
+// arcReadEnd is the exact read end of an ArcSeg on End's side: Start's
+// radius on End's bearing (agent-docs/carrier-record-design.md §3.2).
+func arcReadEnd(arc sectionrecord.ArcSeg) (*big.Float, *big.Float) {
+	f := func(x float64) *big.Float { return new(big.Float).SetPrec(300).SetFloat64(x) }
+	sub := func(a, b *big.Float) *big.Float { return new(big.Float).SetPrec(300).Sub(a, b) }
+	norm := func(u, v *big.Float) *big.Float {
+		sq := new(big.Float).SetPrec(300).Add(new(big.Float).SetPrec(300).Mul(u, u), new(big.Float).SetPrec(300).Mul(v, v))
+		return new(big.Float).SetPrec(300).Sqrt(sq)
+	}
+	su, sv := sub(f(arc.Start.U), f(arc.Center.U)), sub(f(arc.Start.V), f(arc.Center.V))
+	eu, ev := sub(f(arc.End.U), f(arc.Center.U)), sub(f(arc.End.V), f(arc.Center.V))
+	scale := new(big.Float).SetPrec(300).Quo(norm(su, sv), norm(eu, ev))
+	return new(big.Float).SetPrec(300).Mul(eu, scale), new(big.Float).SetPrec(300).Mul(ev, scale)
+}
+
+// readEndMove is the exact distance the End-side read end of arc moved from
+// the receiver's arc to the snapped one.
+func readEndMove(recv, snapped sectionrecord.ArcSeg) float64 {
+	ru, rv := arcReadEnd(recv)
+	su, sv := arcReadEnd(snapped)
+	du, dv := new(big.Float).SetPrec(300).Sub(su, ru), new(big.Float).SetPrec(300).Sub(sv, rv)
+	sq := new(big.Float).SetPrec(300).Add(new(big.Float).SetPrec(300).Mul(du, du), new(big.Float).SetPrec(300).Mul(dv, dv))
+	d, _ := new(big.Float).SetPrec(300).Sqrt(sq).Float64()
+	return d
+}
+
+// TestCarrierSeamSnapArcReadEnds: a seam snap that moves an ArcSeg's walk
+// start moves the arc's End-side read end, Start's radius on End's bearing
+// (§7.7, "Seam snap"), and the record's entry on that side covers the exact
+// distance it moved.
+//
+//   - A natural arc's Start moves radially by g: the read end on End's side
+//     moves by g (seamMove.ReadEnd), and its junction at the arc's end
+//     carries it. §7.7 counts that move twice: the arc-radius charge of the
+//     post-snap arc covers it as well, so the entry holds with ReadEnd
+//     dropped and only the seamMove value is pinned for this case.
+//   - A reversed arc's End (its walk start) moves tangentially by g: the read
+//     end turns with End's bearing by about g (seamMove.Read), and the junction
+//     at the arc's start carries it. The arc's own residual before and after
+//     is far smaller than g, so only the charge for the turn covers it.
+func TestCarrierSeamSnapArcReadEnds(t *testing.T) {
+	const g = 1e-14
+	for _, reversed := range []bool{false, true} {
+		name := "natural arc"
+		if reversed {
+			name = "reversed arc"
+		}
+		t.Run(name, func(t *testing.T) {
+			prof := seamArcProfile(g, reversed)
+			snapped, moves := brepmodify.CloseSeams(prof, []bool{true})
+			recvArc := prof.Outer.Segments[1].(sectionrecord.ArcSeg)
+			newArc := snapped.Outer.Segments[1].(sectionrecord.ArcSeg)
+			require.NotEqual(t, recvArc, newArc, `the seam snap moved the arc`)
+			move := readEndMove(recvArc, newArc)
+			require.InDelta(t, g, move, 1e-15, `the read end moved by about g`)
+			cr := prismrecord.UniformCarrierRecord(prof, carrierJunc)
+			cr.SectionDelta = carrierDelta
+			got, err := brepmodify.CarrierKeptRecord(proofbound.NewWorkBudget(t.Context()), cr, prof, snapped, moves)
+			require.NoError(t, err)
+			if reversed {
+				require.GreaterOrEqual(t, moves[0][1].Read, move, `Read covers the turn of the read end`)
+				// The arc's start junction is the line's end junction (index 0).
+				require.GreaterOrEqual(t, got.Junction[0][0], carrierJunc+move)
+				return
+			}
+			require.GreaterOrEqual(t, moves[0][1].ReadEnd, move, `ReadEnd covers the radius move`)
+			require.GreaterOrEqual(t, got.Junction[0][1], carrierJunc+move)
+		})
+	}
+}
