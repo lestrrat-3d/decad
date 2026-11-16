@@ -29,6 +29,15 @@ import (
 // prism construction. One shell, one lump, watertight by the same argument
 // evalPrism's is (every edge bounds exactly two faces).
 func Build(ctx context.Context, env topo.Env, cbp Payload) (*topo.Body, error) {
+	return build(ctx, env, cbp, nil)
+}
+
+// build is the one builder of Build and BuildDisplaced. loopDelta is nil for a
+// plain payload; otherwise it is BuildDisplaced's validated per-loop
+// displacement with at least one nonzero entry, charged as §8.5 of
+// agent-docs/carrier-record-design.md states, and the body stores a
+// DisplacedPayload.
+func build(ctx context.Context, env topo.Env, cbp Payload, loopDelta []float64) (*topo.Body, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -96,6 +105,10 @@ func Build(ctx context.Context, env topo.Env, cbp Payload) (*topo.Body, error) {
 		// end's displacement goes in with it: the wall vertices, the vertical
 		// edge lengths and the side face areas all read a level the setback
 		// computed, never one they can claim was recorded.
+		ld := 0.0
+		if loopDelta != nil {
+			ld = loopDelta[li]
+		}
 		ppFor := prismrecord.Payload{
 			Frame:   cbp.Frame,
 			Z0:      zLo.Value,
@@ -103,6 +116,9 @@ func Build(ctx context.Context, env topo.Env, cbp Payload) (*topo.Body, error) {
 			Z0Delta: zLo.Bound,
 			Z1Delta: zHi.Bound,
 			Xform:   cbp.Xform,
+			// A displaced loop's walks, rim vertices and side faces carry its own
+			// displacement as a prism's carry SectionDelta (§8.5).
+			SectionDelta: ld,
 		}
 		sideFaces, bottomCo, topCo, loopLen, err := prismrecord.BuildLoopSidesAs(ctx, env, body, ppFor, li, li != 0, loop, work, nil, denotation.LevelToken{}, denotation.LevelToken{}, false)
 		if err != nil {
@@ -112,11 +128,27 @@ func Build(ctx context.Context, env topo.Env, cbp Payload) (*topo.Body, error) {
 		for _, f := range sideFaces {
 			sideArea = proofbound.BoundedAdd(sideArea, proofbound.MeasuredScalar(f.Area, f.AreaBound))
 		}
-		_ = loopLen
 
 		loopArea, loopMu, loopMv, err := momentinput.LoopEnclosedMoments(ctx, loop)
 		if err != nil {
 			return nil, err
+		}
+		// A displaced loop's enclosed area moves by at most A_l, which the slab
+		// multiply carries into the volume and the axial moment; a first moment
+		// moves by at most A_l times the largest |u| or |v| of the region the
+		// two sections differ in (§8.5).
+		var loopDispArea float64
+		if ld > 0 {
+			loopDispArea = proofbound.SectionDisplacementArea(ld, len(loop.Segments),
+				proofbound.AbsSumUpper(loopLen.Value, loopLen.Bound))
+			envelope, err := momentinput.CoordinateEnvelope(momentinput.Profile{Outer: loop}, work, nil)
+			if err != nil {
+				return nil, err
+			}
+			moment := proofbound.ProductUpper(loopDispArea, proofbound.AbsSumUpper(envelope, ld))
+			loopArea.Bound = proofbound.AbsSumUpper(loopArea.Bound, loopDispArea)
+			loopMu.Bound = proofbound.AbsSumUpper(loopMu.Bound, moment)
+			loopMv.Bound = proofbound.AbsSumUpper(loopMv.Bound, moment)
 		}
 		straightHeight := proofbound.BoundedSub(zHi, zLo)
 		loopSlab := proofbound.BoundedMul(loopArea, straightHeight)
@@ -215,7 +247,7 @@ func Build(ctx context.Context, env topo.Env, cbp Payload) (*topo.Body, error) {
 		// displacement changes which regions the offset merged, charged
 		// against this loop's own held boundary via ContourPerimeterUpper
 		// so it stands whatever the corner geometry did.
-		sBound := proofbound.AbsSumUpper(sArea.Bound,
+		sBound := proofbound.AbsSumUpper(sArea.Bound, loopDispArea,
 			proofbound.SectionDisplacementArea(startBand.Delta, len(loop.Segments), ContourPerimeterUpper(startBand.CapCo)))
 		startArea = proofbound.BoundedAdd(startArea, proofbound.MeasuredScalar(sign*sArea.Value, sBound))
 
@@ -230,7 +262,7 @@ func Build(ctx context.Context, env topo.Env, cbp Payload) (*topo.Body, error) {
 		if err != nil {
 			return nil, err
 		}
-		eBound := proofbound.AbsSumUpper(eArea.Bound,
+		eBound := proofbound.AbsSumUpper(eArea.Bound, loopDispArea,
 			proofbound.SectionDisplacementArea(endBand.Delta, len(loop.Segments), ContourPerimeterUpper(endBand.CapCo)))
 		endArea = proofbound.BoundedAdd(endArea, proofbound.MeasuredScalar(sign*eArea.Value, eBound))
 	}
@@ -294,7 +326,7 @@ func Build(ctx context.Context, env topo.Env, cbp Payload) (*topo.Body, error) {
 	// volume (agent-docs/modify-reach-design.md §8.4), lifted to world through the
 	// SAME frame/placement lift a prism centroid uses, backed by the
 	// geometry safety-net ceiling every analytic centroid falls back to.
-	bounds, err := Bounds(ctx, cbp, work)
+	bounds, err := bounds(ctx, cbp, work, loopDelta)
 	if err != nil {
 		return nil, err
 	}
@@ -324,6 +356,10 @@ func Build(ctx context.Context, env topo.Env, cbp Payload) (*topo.Body, error) {
 	}
 	cbp.Patches = patchGeoms
 	cbp.BandDelta = bandDeltas
+	if loopDelta != nil {
+		body.Payload = DisplacedPayload{Base: cbp, LoopDelta: append([]float64(nil), loopDelta...)}
+		return body, nil
+	}
 	body.Payload = cbp
 	return body, nil
 }

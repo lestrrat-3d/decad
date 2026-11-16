@@ -431,10 +431,50 @@ func otherRoot(dec offset2d.FilletDecisions) ([2]float64, bool) {
 	return [2]float64{}, false
 }
 
-// seamMove is what closeSeams charges to one segment it moved: read is how
-// far its walk-start read point moved, carrier how far the recorded field it
-// rewrote moved (a line's carrier end, or an arc's radius).
-type seamMove struct{ Read, Carrier float64 }
+// seamMove is what closeSeams charges to one segment it moved: Read is how far
+// its walk-start read end moved, ReadEnd how far its walk-end read end moved,
+// both from enclosures rounded up (agent-docs/carrier-record-design.md §7.7,
+// "Seam snap"), and Carrier how far the recorded field it rewrote moved (a
+// line's carrier end, or an arc's radius).
+type seamMove struct{ Read, ReadEnd, Carrier float64 }
+
+// seamReadMoves bounds how far the two read ends of seg moved when closeSeams
+// rewrote the field the walk starts at from old to the new value that moved
+// holds. A line's read ends are its fields. A natural ArcSeg's Start is its
+// walk start, and its End-side read end, Start's radius on End's bearing,
+// moves by at most the field's move as the radius changes. A reversed
+// ArcSeg's End is its walk start: its read end, Start's radius on End's
+// bearing, turns by at most 2·R·|ΔEnd|/|End − Center| (|a/|a| − b/|b|| ≤
+// 2|a − b|/|a|). ok is false when that bound cannot be stated.
+func seamReadMoves(moved sectionrecord.CurveSegment, old sectionrecord.Point2, startMove, field float64) (read, readEnd float64, ok bool) {
+	arc, isArc := moved.(sectionrecord.ArcSeg)
+	if !isArc {
+		return startMove, 0, true
+	}
+	if naturalArc(arc) {
+		return startMove, field, true
+	}
+	if arc.TStart != 1 || arc.TEnd != 0 {
+		return 0, 0, false // a narrowed arc: no bound is stated for it
+	}
+	cu, cv, ok1 := ratOf2(arc.Center.U, arc.Center.V)
+	su, sv, ok2 := ratOf2(arc.Start.U, arc.Start.V)
+	eu, ev, ok3 := ratOf2(old.U, old.V)
+	if !ok1 || !ok2 || !ok3 {
+		return 0, 0, false
+	}
+	radius := pointDistUp(su, sv, cu, cv)
+	toEnd := proofbound.RatSqrtDown(proofbound.RatAdd(new(big.Rat).Mul(new(big.Rat).Sub(eu, cu), new(big.Rat).Sub(eu, cu)),
+		new(big.Rat).Mul(new(big.Rat).Sub(ev, cv), new(big.Rat).Sub(ev, cv))))
+	if !(toEnd > 0) {
+		return 0, 0, false
+	}
+	turn := proofbound.DivUpper(proofbound.ProductUpper(2*radius, field), toEnd)
+	if proofbound.IsNonFinite(turn) {
+		return 0, 0, false
+	}
+	return turn, 0, true
+}
 
 // seamEnds reads a line or arc's walk ends in walk order, as the record reads
 // them.
@@ -528,13 +568,17 @@ func closeSeams(p momentinput.Profile, rewritten []bool) (momentinput.Profile, [
 			if !okN {
 				continue
 			}
-			read, ok1 := seamDistUp(nsu, nsv, su, sv)
+			startMove, ok1 := seamDistUp(nsu, nsv, su, sv)
 			field, ok2 := seamDistUp(eu, ev, old.U, old.V)
 			if !ok1 || !ok2 {
 				continue
 			}
+			read, readEnd, ok3 := seamReadMoves(moved, old, startMove, field)
+			if !ok3 {
+				continue
+			}
 			segs[k] = moved
-			mv[k] = seamMove{Read: read, Carrier: field}
+			mv[k] = seamMove{Read: read, ReadEnd: readEnd, Carrier: field}
 		}
 		return sectionrecord.LoopRecord{Segments: segs}
 	}

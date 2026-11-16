@@ -595,6 +595,8 @@ true piece lies within `h + β·sin φ + 2δ` of `P`.
 `meshbool.BoolMesh.SetChargedSlabBounds` adds `2δ`; a negative or non-finite δ
 applies no slab, so `FacetBound` stays in force.
 
+**Displaced walls (rule DW).** The recorded `Plane` or `Cylinder` of a side wall of a displaced loop lies only within that loop's bound of the wall the body denotes, offset and tilted, and a tag publishes its normal with no bound. `booleaneval.sourceGroup` therefore keeps no tag on a side wall of a `capblend.DisplacedPayload` loop with `LoopDelta[l] > 0`, nor on any non-cap face that is not a band patch of a selected loop (`internal/displacedface.Walls`, decided once per operand with that call's context, at both the mesh `Boolean` and `booleaneval.View`). A displaced prism's walls keep their tags.
+
 **Chorded loft walls.** A wall face of a loft is a `Plane` through its own three
 held vertices. For a circular or free-form pair (`loftrecord.Payload.Chorded`)
 that triangle only chords a ruled patch, so the plane is not the surface the

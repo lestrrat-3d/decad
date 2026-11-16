@@ -758,6 +758,8 @@ unplaced axis-aligned profile has zero bound. `VerifyAll` sums one cap
 segment-area allowance per curved walk and the per-triangle coordinate
 movement allowance. A Patch sheet has no occupied-volume proof.
 
+A `capblend.DisplacedPayload` reserves its largest `LoopDelta` the same way (`capblend.TessellateDisplacedMesh`): a tolerance at or below it refuses with `ErrUnsupported`, and the chord budget is `DownRound(DownRound(chord − max LoopDelta))`.
+
 ## 6. Cup
 
 A cup is the outer prism `O` minus the cavity prism `C` over their own

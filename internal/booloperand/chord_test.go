@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/booloperand"
+	"github.com/lestrrat-3d/decad/internal/capblend"
 	"github.com/lestrrat-3d/decad/internal/coilshell"
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
@@ -109,4 +110,14 @@ func TestPairChord(t *testing.T) {
 		_, _, err := booloperand.PairChord(t.Context(), a, a)
 		require.ErrorIs(t, err, decaderr.ErrDegenerate)
 	})
+}
+
+// A displaced cap-loop chamfer's chord floor is at least twice its largest
+// LoopDelta (agent-docs/carrier-record-design.md §8.7).
+func TestChordShareFloorOfDisplacedCapBlend(t *testing.T) {
+	dp := capblend.DisplacedPayload{LoopDelta: []float64{0.25, 0, 0.125}}
+	share := booloperand.ChordShare(t.Context(), boxBody(r3.Vec{}, r3.NewVec(1, 1, 1), 0, dp))
+	require.GreaterOrEqual(t, share.Floor, 0.5)
+	plain := booloperand.ChordShare(t.Context(), boxBody(r3.Vec{}, r3.NewVec(1, 1, 1), 0, capblend.Payload{}))
+	require.Zero(t, plain.Floor)
 }

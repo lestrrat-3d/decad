@@ -4,6 +4,9 @@ import (
 	"context"
 	"slices"
 
+	"github.com/lestrrat-3d/decad/internal/displacedface"
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+
 	"github.com/lestrrat-3d/r3"
 
 	"github.com/lestrrat-3d/decad/internal/booloperand"
@@ -45,6 +48,10 @@ func View(ctx context.Context, a *topo.Body, meshes OperandMesher) (facetedrecor
 	if err != nil {
 		return facetedrecord.Payload{}, nil, err
 	}
+	walls, err := displacedface.Walls(proofbound.NewWorkBudget(ctx), a)
+	if err != nil {
+		return facetedrecord.Payload{}, nil, err
+	}
 	faces := topobuild.Faces(a)
 	groups := make([]facetedrecord.Group, 0, len(faces))
 	sourceID := make(map[*topo.Face]int, len(faces))
@@ -55,7 +62,7 @@ func View(ctx context.Context, a *topo.Body, meshes OperandMesher) (facetedrecor
 			}
 		}
 		sourceID[f] = len(groups)
-		groups = append(groups, sourceGroup(a, 0, i, f, false, placed))
+		groups = append(groups, sourceGroup(a, 0, i, f, false, placed, walls))
 	}
 	src, err := meshbool.SourceIDs(ctx, m.Source, sourceID)
 	if err != nil {

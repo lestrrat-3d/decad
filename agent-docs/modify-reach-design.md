@@ -145,7 +145,7 @@ more specific SX row replaces that base refusal.
 | **SX7** | cap-loop center paths cross/touch non-adjacent paths, a patch self-intersects, two cap bands meet, or trims need merging | body exists under trimming/merge kernel | `ErrUnsupported` |
 | **SX8** | a side opening on a holed prism section; a non-empty side selection is not one proper outer-loop run; offset changes topology; partial revolve keeps either angular cap; revolve meridian is holed or meets the axis along more than one walk; a revolve wall's offset reaches the axis | body exists outside extension | `ErrUnsupported` |
 | **SX9** | any modify op on `facetedPayload` outside RX6's certified classes and the closed inward `Shell` of a convex planar mesh Boolean result (`agent-docs/trim-graph-design.md`) | body exists; no admitted source and topology certificate for the selected modification | `ErrUnsupported` |
-| **SX10** | another modify op on `capBlendPayload`, or on a `stackedPrismPayload` whose face view refuses (`agent-docs/brep-modify-design.md` SB2) | body exists; compound feature composition not built | `ErrUnsupported` |
+| **SX10** | another modify op on `capBlendPayload` or `capblend.DisplacedPayload`, or on a `stackedPrismPayload` whose face view refuses (`agent-docs/brep-modify-design.md` SB2) | body exists; compound feature composition not built | `ErrUnsupported` |
 | **SX11** | inward closed/side-opening prism shell leaves axial cavity height `h - k*t <= 0`, where `k` is kept cap count; or section cavity is empty | no cavity | `ErrDegenerate` |
 | **SX12** | cap chamfer ruled patches intersect away from shared boundaries or cannot be certified disjoint | body exists under trim kernel | `ErrUnsupported` |
 | **SX13** | a cap-loop chamfer whose setback rounds away against the level it displaces: the cap contour's offset radius rounds back onto a circular wall's own radius (`R -/+ d == R`), or the band's side level rounds back onto its own cap level (`z1 - d == z1` on the end cap, `z0 + d == z0` on the start cap) | body exists; its taper is real but finer than float64 names at that radius or at that sweep level, so the band's patches cannot be told from a cylinder or from the cap plane | `ErrUnsupported` |
@@ -1082,6 +1082,8 @@ symmetric chamfer.
 
 ### 8.4 Measurements + tessellation
 
+**Displaced receiver (`capblend.DisplacedPayload`).** A cap-loop chamfer of exact loops of a prism whose recorded section is displaced from the one it denotes stores a `DisplacedPayload{Base, LoopDelta}` (carrier-record-design §8). `LoopDelta[l]` is the receiver record's `h_loop` of loop `l`, zero on every selected loop. `capblend.BuildDisplaced` charges each displaced loop's walls, rim vertices, wall lengths, enclosed area, in-plane first moments, both cap areas and the box through the same builder as `Build`. `ExtentBoundedAlong` adds `LoopDelta[l]` times the in-plane norm of the direction to that loop's candidates and widens the placement envelope by the largest entry. `ExtentAlong` refuses with `ErrUnsupported`, so a through-all stop with the body live refuses. A mesh reserves `max LoopDelta` from the chord budget, adds each loop's bound to its facet bounds, and charges the tube area to area slack and occupied volume (tessellation-reach §7). The type is not `Payload`: readers that do not name it give their answer for an unknown payload class.
+
 `capBlendPayload` owns analytic patches. Report each exactly representable
 result as `Exact`; report every float/transcendental result with a proven bound.
 
@@ -1970,7 +1972,7 @@ one constant section at one height. The existing 2D spanning-disk proof does
 not decide them. The modify call still builds an exact solid; only an
 explicitly asked wall survey reports the staged refusal, published as an
 explicit unsupported-payload dispatch rather than a generic undecided result
-(verification design §1.1). No open implementation claim remains.
+(verification design §1.1). A `capblend.DisplacedPayload` is staged the same way in DX7 to DX9: the surveys' payload switches have no arm for it, so each answers `DiagUnsupportedSurveyPayload` naming `displacedCapBlendPayload` and the body reads `Suspect`. No open implementation claim remains.
 
 Clearance may also return undecided for surface cells its certified kernel does
 not solve. This is the existing `Verify` contract, not a modify-build refusal.

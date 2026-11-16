@@ -92,6 +92,12 @@ func readBandMassWithSideArea(ctx context.Context, li int, loop sectionrecord.Lo
 // extentBoundedAlong keeps the two apart per candidate, so a contour that loses
 // the extremization contributes nothing here.
 func Bounds(ctx context.Context, cbp Payload, work *freeform.FreeformWork) (measurement.Box, error) {
+	return bounds(ctx, cbp, work, nil)
+}
+
+// bounds is Bounds with a displaced payload's per-loop displacement (nil for a
+// plain payload): each axis reads extentBoundedAlong's displaced reading.
+func bounds(ctx context.Context, cbp Payload, work *freeform.FreeformWork, loopDelta []float64) (measurement.Box, error) {
 	axes := []r3.Vec{r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0), r3.NewVec(0, 0, 1)}
 	deltas := make([]float64, len(cbp.Loops()))
 	deltaReady := make([]bool, len(deltas))
@@ -101,7 +107,7 @@ func Bounds(ctx context.Context, cbp Payload, work *freeform.FreeformWork) (meas
 		if err := ctx.Err(); err != nil {
 			return measurement.Box{}, err
 		}
-		lo, hi, axisBound, err := cbp.extentBoundedAlong(ctx, axis, work, deltas, deltaReady)
+		lo, hi, axisBound, err := cbp.extentBoundedAlong(ctx, axis, work, deltas, deltaReady, loopDelta)
 		if err != nil {
 			return measurement.Box{}, err
 		}

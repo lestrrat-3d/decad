@@ -101,6 +101,12 @@ func Prisms(payload topo.Payload) ([]prismrecord.Payload, float64, bool) {
 	if pl, ok := payload.(capblend.Payload); ok {
 		return capblend.WitnessPrisms(pl), pl.AxialDelta(), true
 	}
+	if dp, ok := payload.(capblend.DisplacedPayload); ok {
+		// Each witness point lies within its loop's LoopDelta of a point of the
+		// denoted body in the plane and within the axial term along the sweep
+		// (agent-docs/carrier-record-design.md §8.8).
+		return capblend.WitnessPrisms(dp.Base), proofbound.AbsSumUpper(dp.Base.AxialDelta(), capblend.MaxLoopDelta(dp)), true
+	}
 	if pl, ok := payload.(stackedrecord.Payload); ok {
 		runs := pl.OuterRuns()
 		for i := range runs {

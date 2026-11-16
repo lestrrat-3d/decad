@@ -18,6 +18,8 @@ import (
 	"math/big"
 	"unsafe"
 
+	"github.com/lestrrat-3d/decad/internal/displacedface"
+
 	"github.com/lestrrat-3d/r3"
 
 	"github.com/lestrrat-3d/decad/internal/booloperand"
@@ -426,6 +428,14 @@ func evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 			return Evaluation{}, err
 		}
 	}
+	// Rule DW (agent-docs/carrier-record-design.md §8.7): the displaced walls of
+	// each operand, decided once with this call's context.
+	var walls [2]map[*topo.Face]struct{}
+	for k, owner := range [2]*topo.Body{a, b} {
+		if walls[k], err = displacedface.Walls(proofbound.NewWorkBudget(ctx), owner); err != nil {
+			return Evaluation{}, err
+		}
+	}
 	for i := range totalFaces {
 		var f *topo.Face
 		if i < targetFaces {
@@ -461,7 +471,7 @@ func evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 				return Evaluation{}, err
 			}
 		}
-		group := sourceGroup(owner, operand, ordinal, f, op == meshbool.OpCut && i >= targetFaces, placed[operand])
+		group := sourceGroup(owner, operand, ordinal, f, op == meshbool.OpCut && i >= targetFaces, placed[operand], walls[operand])
 		if fixed != nil && i >= targetFaces {
 			if ordinal >= len(fixed.groups) {
 				return Evaluation{}, fmt.Errorf("%w: shifted tool source groups changed", decaderr.ErrUnsupported)

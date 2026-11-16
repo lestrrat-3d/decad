@@ -745,6 +745,10 @@ payload publishes `symDiffOK` only when every term is finite, and the Boolean
 precheck admits the same payload. The general cap-band admission above admits reflex corners
 for the prism cap-loop chamfer only, and refuses them in other receivers.
 
+### 7.0 Displaced loops
+
+`capblend.TessellateDisplacedMesh` builds a `capblend.DisplacedPayload` (carrier-record-design §8.7) through the core `TessellateMesh` uses, with `D = max LoopDelta`. It reserves `D` from the chord budget before any chord. A side face of loop `l` adds `LoopDelta[l]` to its facet bound and each cap adds `D`. Per displaced loop the area slack takes `SectionDisplacementLength(LoopDelta[l], n)` times the wall height for its walls and `SectionDisplacementArea(LoopDelta[l], n, P')` for each cap, `P'` the chorded perimeter. Where the occupied-volume proof is built, the volume term adds `SectionDisplacementArea` times `|Z1 − Z0|` plus both level displacements. `booloperand.RequireVolumeProof` reads the base payload's admission.
+
 ### 7.1 Off-radius arc ends — restatement
 
 An `ArcSeg` denotes Start's radius at End's angle, and the loop closes the junction from that point to the

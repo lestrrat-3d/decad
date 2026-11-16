@@ -16,6 +16,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/decad/internal/topobuild"
 	"github.com/lestrrat-3d/decad/internal/triangulation"
+	"github.com/lestrrat-3d/units"
 )
 
 // This builder owns tessellation increment T7 (agent-docs/tessellation-reach-design.md
@@ -27,8 +28,46 @@ import (
 // arguments must not be nil. Loft occupied-volume proof stays with the root
 // handle and runs after this common build returns.
 func TessellateMesh(ctx context.Context, b *topo.Body, cbp Payload, chord float64, proveVolume bool, mesh *topo.Mesh) ([]LoopMesh, []float64, error) {
+	return tessellateMesh(ctx, b, cbp, chord, proveVolume, mesh, nil)
+}
+
+// TessellateDisplacedMesh is TessellateMesh for a displaced cap-loop chamfer
+// (agent-docs/carrier-record-design.md §8.7): the same core with the payload's
+// LoopDelta reserved from the chord budget and charged into every facet bound,
+// area slack and occupied-volume term.
+func TessellateDisplacedMesh(ctx context.Context, b *topo.Body, dp DisplacedPayload, chord float64,
+	proveVolume bool, mesh *topo.Mesh) ([]LoopMesh, []float64, error) {
+	if err := validateLoopDelta(dp.Base, dp.LoopDelta); err != nil {
+		return nil, nil, err
+	}
+	return tessellateMesh(ctx, b, dp.Base, chord, proveVolume, mesh, dp.LoopDelta)
+}
+
+// tessellateMesh is the core of TessellateMesh and TessellateDisplacedMesh.
+// loopDelta is nil for a plain payload.
+func tessellateMesh(ctx context.Context, b *topo.Body, cbp Payload, chord float64, proveVolume bool,
+	mesh *topo.Mesh, loopDelta []float64) ([]LoopMesh, []float64, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, nil, err
+	}
+	// Every mesh vertex of a displaced loop lands on the RECORDED section, which
+	// lies within that loop's displacement of the section it denotes. The largest
+	// displacement is reserved from the chord budget before a chord is chosen, as
+	// internal/prismtess reserves a prism's SectionDelta (agent-docs/
+	// tessellation-design.md §5): both downward nudges are proven margin.
+	maxDelta := maxOf(loopDelta)
+	if maxDelta > 0 {
+		chord = freeform.DownRound(freeform.DownRound(chord - maxDelta))
+		if chord <= 0 {
+			return nil, nil, fmt.Errorf(`%w: the requested tolerance leaves no chord budget above the body's own section displacement %s; retry with a tolerance greater than %s`,
+				decaderr.ErrUnsupported, units.Millimeters(maxDelta), units.Millimeters(maxDelta))
+		}
+	}
+	ldAt := func(li int) float64 {
+		if loopDelta == nil {
+			return 0
+		}
+		return loopDelta[li]
 	}
 	if b == nil {
 		return nil, nil, fmt.Errorf("%w: cap-blend mesh body is nil", decaderr.ErrDegenerate)
@@ -117,7 +156,7 @@ func TessellateMesh(ctx context.Context, b *topo.Body, cbp Payload, chord float6
 				if err != nil {
 					return nil, nil, err
 				}
-				bump(face, proofbound.AbsSumUpper(lm.SideSag[i], axial))
+				bump(face, proofbound.AbsSumUpper(lm.SideSag[i], axial, ldAt(li)))
 				mesh.AreaSlack = proofbound.AbsSumUpper(mesh.AreaSlack, tessellation.WalkWallSlack(w.SegmentWalk, lm.Count[i], height))
 				for k := range lm.Count[i] {
 					g0 := lm.SideStart[i] + k
@@ -151,10 +190,10 @@ func TessellateMesh(ctx context.Context, b *topo.Body, cbp Payload, chord float6
 	// Cap faces. Each is bounded, per loop, by that loop's contour ring where it
 	// is chamfered on this cap and by its original ring where it is not — the
 	// mixed profile capblend.Build builds the same two faces from.
-	if err := emitCap(ctx, mesh, cbp, lms, true, capStart, bump); err != nil {
+	if err := emitCap(ctx, mesh, cbp, lms, true, capStart, bump, maxDelta); err != nil {
 		return nil, nil, err
 	}
-	if err := emitCap(ctx, mesh, cbp, lms, false, capEnd, bump); err != nil {
+	if err := emitCap(ctx, mesh, cbp, lms, false, capEnd, bump, maxDelta); err != nil {
 		return nil, nil, err
 	}
 
@@ -193,6 +232,31 @@ func TessellateMesh(ctx context.Context, b *topo.Body, cbp Payload, chord float6
 			topobuild.SetFaceBound(mesh, face, proofbound.AbsSumUpper(bound, cbp.LoftSource.Proof.FacetDeparture))
 		}
 		mesh.AreaSlack = proofbound.AbsSumUpper(mesh.AreaSlack, cbp.LoftSource.Proof.AreaSlack)
+	}
+	var tubes []float64
+	if proveVolume && maxDelta > 0 {
+		// Per displaced loop (never a chamfered one): the tube its recorded
+		// boundary can differ from the denoted one by, over the loop's chorded
+		// walks. The walls take it through the loop's own wall height, each cap
+		// takes it once (§8.7).
+		tubes = make([]float64, len(lms))
+		for li := range lms {
+			ld := ldAt(li)
+			if ld <= 0 {
+				continue
+			}
+			lm := &lms[li]
+			n := len(lm.Loop.Segments)
+			perimeter := proofbound.BoundedScalar{}
+			for _, w := range lm.Walks {
+				perimeter = proofbound.BoundedAdd(perimeter, proofbound.MeasuredScalar(w.Length, w.LengthBound))
+			}
+			tube := proofbound.SectionDisplacementArea(ld, n, proofbound.AbsSumUpper(perimeter.Value, perimeter.Bound))
+			tubes[li] = tube
+			wallHeight := math.Abs(lm.ZHi.Value - lm.ZLo.Value)
+			mesh.AreaSlack = proofbound.AbsSumUpper(mesh.AreaSlack,
+				proofbound.ProductUpper(proofbound.SectionDisplacementLength(ld, n), wallHeight), tube, tube)
+		}
 	}
 	if proofbound.IsNonFinite(mesh.AreaSlack) {
 		return nil, nil, fmt.Errorf(`%w: this %s mesh states no finite area slack`, decaderr.ErrUnsupported, cbp.Noun())
@@ -254,6 +318,17 @@ func TessellateMesh(ctx context.Context, b *topo.Body, cbp Payload, chord float6
 	}
 	if restated > 0 {
 		terms = append(terms, restated)
+	}
+	if tubes != nil {
+		// The occupied volume between the recorded and the denoted section is
+		// the displacement tube over the sweep, each level's axial displacement
+		// included in its height (§8.7).
+		heightUp := proofbound.AbsSumUpper(proofbound.UpRound(math.Abs(cbp.Z1-cbp.Z0)), cbp.Z0Delta, cbp.Z1Delta)
+		for _, tube := range tubes {
+			if tube > 0 {
+				terms = append(terms, proofbound.ProductUpper(tube, heightUp))
+			}
+		}
 	}
 	total, err := tessellation.SymDiff(terms)
 	if err != nil {
@@ -332,7 +407,8 @@ func Vertices(budget *proofbound.WorkBudget, cbp Payload, pl prismrecord.Payload
 // original ring where it is not. The rings must clear one another by more than
 // their own sagitta tubes, or a cap at this tolerance cannot prove it represents
 // the region's topology and refuses rather than return a pinched mesh.
-func emitCap(ctx context.Context, m *topo.Mesh, cbp Payload, lms []LoopMesh, start bool, face *topo.Face, bump func(*topo.Face, float64)) error {
+func emitCap(ctx context.Context, m *topo.Mesh, cbp Payload, lms []LoopMesh, start bool, face *topo.Face,
+	bump func(*topo.Face, float64), displaced float64) error {
 	var pts []sectionrecord.Point2
 	var vtx []int
 	var loopIdx [][]int
@@ -405,6 +481,6 @@ func emitCap(ctx context.Context, m *topo.Mesh, cbp Payload, lms []LoopMesh, sta
 	if !start {
 		axial = cbp.Z1Delta
 	}
-	bump(face, proofbound.AbsSumUpper(trim, delta, axial))
+	bump(face, proofbound.AbsSumUpper(trim, delta, axial, displaced))
 	return nil
 }

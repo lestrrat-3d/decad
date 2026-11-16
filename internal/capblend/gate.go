@@ -141,6 +141,14 @@ func RequireLevelsSeparate(cbp Payload) error {
 // the audit's own error is folded in with %v so the refusal answers to one
 // sentinel only.
 func AuditSetbackSpan(budget *proofbound.WorkBudget, profile momentinput.Profile, cbp Payload) error {
+	return auditSetbackSpan(context.Background(), budget, profile, cbp, nil)
+}
+
+// auditSetbackSpan is AuditSetbackSpan with a displaced receiver's per-loop
+// displacement: when loopDelta is non-nil the top-of-span mixed profile also
+// passes the transfer condition (agent-docs/carrier-record-design.md §8.3).
+func auditSetbackSpan(ctx context.Context, budget *proofbound.WorkBudget, profile momentinput.Profile,
+	cbp Payload, loopDelta []float64) error {
 	top, ok := cbp.setbackSpanTop()
 	if !ok {
 		return nil
@@ -148,6 +156,11 @@ func AuditSetbackSpan(budget *proofbound.WorkBudget, profile momentinput.Profile
 	mixed, err := MixedOffsetProfile(budget, top)
 	if err == nil {
 		err = offset2d.AuditOffsetSectionBudget(budget, profile, mixed)
+	}
+	transfer := false
+	if err == nil && loopDelta != nil {
+		err = requireTransfer(ctx, budget, top, mixed, loopDelta)
+		transfer = err != nil
 	}
 	if err == nil {
 		return nil
@@ -157,6 +170,9 @@ func AuditSetbackSpan(budget *proofbound.WorkBudget, profile momentinput.Profile
 	}
 	if errors.Is(err, context.DeadlineExceeded) {
 		return context.DeadlineExceeded
+	}
+	if transfer {
+		return fmt.Errorf(`%w: the chamfer setback across the cap converts to a float within its own rounding of the stated value, and at the top of that span the displaced section fails the transfer condition of agent-docs/carrier-record-design.md §8.3 (%v); this evaluator cannot decide whether the stated setback builds`, decaderr.ErrUnsupported, err)
 	}
 	return fmt.Errorf(`%w: the chamfer setback across the cap converts to a float within its own rounding of the stated value, and at the top of that span the cap contour fails the offset audit (%v); this evaluator cannot decide whether the stated setback builds`, decaderr.ErrUnsupported, err)
 }
