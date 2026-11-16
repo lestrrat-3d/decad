@@ -192,25 +192,24 @@ func TestArcRunOutFollowsItsCircle(t *testing.T) {
 		run := chamferRun{loop: keyholeLoop(r, 0), first: 2, count: 1}
 		ends, ok := run.ends()
 		require.True(t, ok)
-		reach := partialReach(d, over)
-		ext := [2]float64{ends[0].extFor(d, reach), ends[1].extFor(d, reach)}
-		runOut := run.runOutArcs(ends, ext, reach)
+		runOut, err := run.runOutArcs(ends, d, over)
+		require.NoError(t, err)
 		cells := []int{1 + int(math.Ceil(run.seg(0).sweep()/0.01))}
 		seg := run.seg(0)
 		var counts []int
 		for _, tt := range []float64{-0.25, 0, 0.2, d + over} {
-			pts, err := run.polyline(tt, ext[0], ext[1], cells, runOut)
+			pts, err := run.polyline(tt, 0, 0, cells, runOut)
 			require.NoError(t, err)
 			counts = append(counts, len(pts))
 			for _, p := range pts {
 				require.InDelta(t, r+tt, p.dist(seg.c), 1e-9, "radius %v moved by %v", r, tt)
 			}
-			// The first and last points turn ext/r past the arc's own ends, along the circle.
+			// The first and last points turn the run-out angle past the arc's own ends, along the circle.
 			a0 := math.Atan2(seg.p0.y, seg.p0.x)
 			a1 := math.Atan2(seg.p1.y, seg.p1.x)
 			first, last := pts[0], pts[len(pts)-1]
-			require.InDelta(t, ext[0]/r, math.Abs(math.Remainder(math.Atan2(first.y, first.x)-a0, 2*math.Pi)), 1e-9)
-			require.InDelta(t, ext[1]/r, math.Abs(math.Remainder(math.Atan2(last.y, last.x)-a1, 2*math.Pi)), 1e-9)
+			require.InDelta(t, math.Abs(runOut.alpha[0]), math.Abs(math.Remainder(math.Atan2(first.y, first.x)-a0, 2*math.Pi)), 1e-9)
+			require.InDelta(t, math.Abs(runOut.alpha[1]), math.Abs(math.Remainder(math.Atan2(last.y, last.x)-a1, 2*math.Pi)), 1e-9)
 		}
 		for _, n := range counts {
 			require.Equal(t, counts[0], n)

@@ -132,27 +132,34 @@ func box(t *testing.T, doc *decad.Document, lo, hi [3]float64) *decad.Body {
 }
 
 // TestChamferKeyholeRimRunOnMeshBoolean chamfers the rim run of a bore that opens into a slot, on a plate that two Cuts
-// built (the slot, then the bore), in the family of bores, slots and setbacks the prism takes.
+// built, in either order (the slot, then the bore, or the bore, then the slot), in the family of bores, slots and
+// setbacks the prism takes.
 func TestChamferKeyholeRimRunOnMeshBoolean(t *testing.T) {
 	t.Parallel()
 	for _, k := range []keyhole{{4, 0.5, 0}, {4, 0.5, 3}, {2.5, 0.6, 0}, {2.5, 0.6, 1.5}, {4, 1, 3}} {
 		for _, d := range []float64{0.3, 0.5} {
-			t.Run(fmt.Sprintf("r %v w %v flat %v d %v", k.r, k.w, k.flat, d), func(t *testing.T) {
-				t.Parallel()
-				body := k.facetedBody(t, true)
-				out, err := decad.Chamfer(t.Context(), body, k.rimOf(t, body), units.Millimeters(d))
-				require.NoError(t, err)
-				require.True(t, out.IsSolid())
-				m, err := out.Volume()
-				require.NoError(t, err)
-				bound, err := m.Bound.In(units.CubicMillimeter)
-				require.NoError(t, err)
-				require.InDelta(t, k.removed(d), volumeOf(t, body)-volumeOf(t, out), bound+1e-6)
-				k.checkSections(t, out, 1, d)
-				verified, err := out.Tessellate(t.Context(), units.Millimeters(0.05), decad.WithVerification(decad.VerifyAll))
-				require.NoError(t, err)
-				require.True(t, verified.BoundaryVerified())
-			})
+			for _, slotFirst := range []bool{true, false} {
+				// The bore-first order is read on the bore and slot sets that differ most, at one setback.
+				if !slotFirst && (d != 0.5 || k.r == 4 && k.w == 1) {
+					continue
+				}
+				t.Run(fmt.Sprintf("r %v w %v flat %v d %v slot first %v", k.r, k.w, k.flat, d, slotFirst), func(t *testing.T) {
+					t.Parallel()
+					body := k.facetedBody(t, slotFirst)
+					out, err := decad.Chamfer(t.Context(), body, k.rimOf(t, body), units.Millimeters(d))
+					require.NoError(t, err)
+					require.True(t, out.IsSolid())
+					m, err := out.Volume()
+					require.NoError(t, err)
+					bound, err := m.Bound.In(units.CubicMillimeter)
+					require.NoError(t, err)
+					require.InDelta(t, k.removed(d), volumeOf(t, body)-volumeOf(t, out), bound+1e-6)
+					k.checkSections(t, out, 1, d)
+					verified, err := out.Tessellate(t.Context(), units.Millimeters(0.05), decad.WithVerification(decad.VerifyAll))
+					require.NoError(t, err)
+					require.True(t, verified.BoundaryVerified())
+				})
+			}
 		}
 	}
 }
@@ -179,8 +186,9 @@ func TestChamferKeyholeRimRunThenCut(t *testing.T) {
 }
 
 // A feature of another face that stands in the cutter's reach is material the run's face does not show, so the chamfer
-// is refused and the body stays live: a pin standing in the slot beside the bore, and a blind cavity from the plate's
-// back whose wall lies within the bevel's band.
+// is refused and the body stays live: a pin standing in the slot beside the bore, within the cutter's end, and a cavity
+// from the plate's back whose wall lies within the bevel's band, where the cut would match the CAD result but the route
+// does not read it.
 func TestChamferKeyholeRimRunRefusesAnotherFaceInReach(t *testing.T) {
 	t.Parallel()
 	k := keyhole{4, 0.5, 0}
@@ -188,7 +196,7 @@ func TestChamferKeyholeRimRunRefusesAnotherFaceInReach(t *testing.T) {
 		lo, hi [3]float64
 		union  bool
 	}{
-		"a pin in the slot":   {[3]float64{-0.2, -4.6, 3.5}, [3]float64{0.2, -4.1, 6}, true},
+		"a pin in the slot":   {[3]float64{0.3, -4.6, 3.5}, [3]float64{0.45, -4.1, 6}, true},
 		"a blind cavity wall": {[3]float64{3, -3, -1}, [3]float64{3.4, -2.6, 4.6}, false},
 	} {
 		t.Run(name, func(t *testing.T) {

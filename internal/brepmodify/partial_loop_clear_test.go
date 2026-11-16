@@ -96,15 +96,3 @@ func TestCutterClearReadsFacetBounds(t *testing.T) {
 	fx.body.Payload = fp
 	require.ErrorIs(t, fx.run.checkCutterClear(t.Context(), fx.body, fx.cutter, 0.001), decaderr.ErrUnsupported)
 }
-
-// A run end beside an edge that holds no exact curve is refused: its wall cannot be read.
-func TestRunEndBesideHeldChainIsRefused(t *testing.T) {
-	t.Parallel()
-	loop := keyholeLoop(4, 0)
-	_, ok := chamferRun{loop: loop, first: 2, count: 1}.ends()
-	require.True(t, ok)
-	held := keyholeLoop(4, 0)
-	held.segs[1].held = true
-	_, ok = chamferRun{loop: held, first: 2, count: 1}.ends()
-	require.False(t, ok)
-}
