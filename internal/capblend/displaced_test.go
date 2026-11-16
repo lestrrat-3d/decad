@@ -8,6 +8,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/capblend"
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
+	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
@@ -310,4 +311,34 @@ func TestSameWalkSegments(t *testing.T) {
 	require.True(t, capblend.SameWalkSegments([]survey2d.SideWalk{walk(0, 1), walk(2)}, []survey2d.SideWalk{walk(0, 1), walk(2)}))
 	require.False(t, capblend.SameWalkSegments([]survey2d.SideWalk{walk(0, 1), walk(2)}, []survey2d.SideWalk{walk(0), walk(1, 2)}))
 	require.False(t, capblend.SameWalkSegments([]survey2d.SideWalk{walk(0)}, nil))
+}
+
+// TestDisplacedSpanTopTransferRefusal: a setback held with a conversion rounding
+// whose top-of-span section fails §8.3's transfer condition (T2 here) is
+// refused as undecidable, and the message names the transfer condition rather
+// than the offset audit, which passed. The hole's contour stands 7e-9 beyond
+// the contact floor from the outer wall at the held setback, so the held
+// numbers build; the span's top moves it 5e-9 closer and its own
+// displacement is charged.
+func TestDisplacedSpanTopTransferRefusal(t *testing.T) {
+	t.Parallel()
+	floor := 1e-9 * 20 * math.Sqrt2
+	build := func(dcDelta float64) error {
+		set := capblend.Setback{Dc: 0.5, DcDelta: dcDelta, Ds: 0.5}
+		pp := prismrecord.Payload{
+			Profile: momentinput.Profile{Outer: squareLoop(20),
+				Holes: []sectionrecord.LoopRecord{holeLoop(20-4-0.5-floor-7e-9, 8, 4)}},
+			Frame: dispFrame(t), Z1: 10, Xform: r3.Identity(),
+		}
+		_, err := capblend.BuildCheckedDisplaced(t.Context(), dispEnv(), pp, set, set,
+			map[int]bool{1: true}, map[int]bool{1: true}, []float64{1e-12, 0})
+		return err
+	}
+	require.NoError(t, build(0), "the held setback alone builds")
+	err := build(5e-9)
+	require.ErrorIs(t, err, decaderr.ErrUnsupported)
+	require.Contains(t, err.Error(), "at the top of that span")
+	require.Contains(t, err.Error(), "fails the transfer condition")
+	require.Contains(t, err.Error(), "T2)")
+	require.NotContains(t, err.Error(), "fails the offset audit")
 }

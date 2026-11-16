@@ -157,8 +157,10 @@ func auditSetbackSpan(ctx context.Context, budget *proofbound.WorkBudget, profil
 	if err == nil {
 		err = offset2d.AuditOffsetSectionBudget(budget, profile, mixed)
 	}
+	transfer := false
 	if err == nil && loopDelta != nil {
 		err = requireTransfer(ctx, budget, top, mixed, loopDelta)
+		transfer = err != nil
 	}
 	if err == nil {
 		return nil
@@ -168,6 +170,9 @@ func auditSetbackSpan(ctx context.Context, budget *proofbound.WorkBudget, profil
 	}
 	if errors.Is(err, context.DeadlineExceeded) {
 		return context.DeadlineExceeded
+	}
+	if transfer {
+		return fmt.Errorf(`%w: the chamfer setback across the cap converts to a float within its own rounding of the stated value, and at the top of that span the displaced section fails the transfer condition of agent-docs/carrier-record-design.md §8.3 (%v); this evaluator cannot decide whether the stated setback builds`, decaderr.ErrUnsupported, err)
 	}
 	return fmt.Errorf(`%w: the chamfer setback across the cap converts to a float within its own rounding of the stated value, and at the top of that span the cap contour fails the offset audit (%v); this evaluator cannot decide whether the stated setback builds`, decaderr.ErrUnsupported, err)
 }
