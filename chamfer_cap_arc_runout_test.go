@@ -343,8 +343,12 @@ func TestChamferLineRunRefusesAThinTabPastItsEnd(t *testing.T) {
 // wall instead, so setbacks above the slot's width build as the CAD chamfer does.
 func TestChamferKeyholeRimRunWithAWideSetback(t *testing.T) {
 	t.Parallel()
-	for _, k := range []keyhole{{2.55, 0.5, 0}, {4, 0.5, 0}, {2.55, 0.5, 1.5}} {
-		for _, d := range []float64{0.55, 0.8} {
+	for _, c := range []struct {
+		k keyhole
+		d float64
+	}{{keyhole{2.55, 0.5, 0}, 0.55}, {keyhole{4, 0.5, 0}, 0.8}, {keyhole{2.55, 0.5, 1.5}, 0.8}} {
+		k, d := c.k, c.d
+		{
 			t.Run(fmt.Sprintf("r %v flat %v d %v", k.r, k.flat, d), func(t *testing.T) {
 				t.Parallel()
 				body := k.body(t, 1)

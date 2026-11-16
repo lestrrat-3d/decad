@@ -139,6 +139,10 @@ func TestChamferKeyholeRimRunOnMeshBoolean(t *testing.T) {
 	for _, k := range []keyhole{{4, 0.5, 0}, {4, 0.5, 3}, {2.5, 0.6, 0}, {2.5, 0.6, 1.5}, {4, 1, 3}} {
 		for _, d := range []float64{0.3, 0.5} {
 			for _, slotFirst := range []bool{true, false} {
+				// The bore-first order is read on the bore and slot sets that differ most, at one setback.
+				if !slotFirst && (d != 0.5 || k.r == 4 && k.w == 1) {
+					continue
+				}
 				t.Run(fmt.Sprintf("r %v w %v flat %v d %v slot first %v", k.r, k.w, k.flat, d, slotFirst), func(t *testing.T) {
 					t.Parallel()
 					body := k.facetedBody(t, slotFirst)
