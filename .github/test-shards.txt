@@ -313,7 +313,7 @@
 12	3.19	TestTopoDocumentWriteGuard
 12	0.53	TestTopologyHandlesAreBorn
 12	0.68	TestTryAllEdgeChamferGates
-12	0.50	TestChamferKeyholeRimRun
+6	0.50	TestChamferKeyholeRimRun
 12	0.50	TestChamferKeyholeRimRunRefusesNarrowSlot
 12	0.50	TestChamferConvexArcRunOutOnNextWall
 11	1.00	TestChamferKeyholeRimRunOnMeshBoolean
