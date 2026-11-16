@@ -110,6 +110,7 @@ admits takes it unchanged.
 | A6 | a split boundary under a non-identity re-expression, a prior section displacement or a walk charge | S9 (45° in plane), rotated and translated overlaps; not P1 (A6 below) | `prismPayload` carrying a certified crossing-sensitivity charge |
 | A7 | one blind pocket crossing one through hole, opening at either cap, clipped to the target, every loop of axis-aligned lines, circles and arcs | a pocket that partly overlaps a through opening: a rectangle across a round hole or a slot, a round pocket across a square hole | `brepPayload` with split hole walls and a partial floor |
 | A8 | a blind pocket ending exactly at an interface of a stack, overlapping in plan an opposed pocket that ends there, every exclusive hole a loop of axis-aligned lines, circles and arcs | pockets from opposite faces that meet at one level: rectangles, a round pocket across a rectangle, a slot, a counterbore drilled from both faces | `brepPayload` with a partial floor and ceiling |
+| A9 | after the mesh path refuses: a blind tool crossing or touching the target's outer wall (a side notch), or crossing holes of a target with any number of them; loops of lines, circles and arcs, an oblique line only where no scene cuts it | a side notch tangent to the outline at recorded vertices (a watch lever's fork) | `brepPayload` from A7's build |
 
 #### A1 — stacked union
 
@@ -726,7 +727,8 @@ assembly splits a partially shared hole wall at the floor. The generic BRep
 face and topology checks run before publication; `Tessellate(VerifyAll)`
 checks the occupied volume. A pocket crossing the body's outer boundary, a
 second source hole, a displaced section, a rotated footprint, and later Cuts of
-the result remain outside this bounded path.
+the result remain outside this bounded path; A9 takes the first two where the
+mesh path refuses them.
 
 Circles and arcs reach the same build with no new 2D answer. Each crossing of
 a pocket line with a hole circle, or of a pocket circle or arc with a hole
@@ -848,6 +850,73 @@ that meet, a displaced level or section, and a union-built or multi-region
 stack stay outside this path. So does a side whose second exclusive hole
 meets nothing of the other side: no shared edge carries membership to its
 cell, which classification cannot reach.
+
+#### A9 — side notch and pockets across holes
+
+`prismboolean.TrySideNotchCut` admits `Cut(target, tool)` for a prism target
+with any number of holes and a hole-free prism tool whose loops hold lines,
+circles and arcs (`momentinput.LineArcLoops`), and runs A7's admission and
+build otherwise unchanged: zero section displacement, the identity relative
+map, and one of A7's two arms read by `stackedrecord.CrossingBlindLevels`.
+
+**A9 runs after the mesh path.** `booleandispatch.BodyScaled` tries it only
+when the mesh path has refused the `Cut` with `ErrUnsupported`, and returns the
+mesh path's refusal when A9 misses or refuses on its own (a cancelled context
+excepted). A pair any route builds today keeps that
+result: an ordinary side notch stays a mesh result, whose `Body.Section` from
+history and retained edge blends (a `Chamfer` of its `Reflex` edges) read it,
+where the BRep's consumers do not yet. What A9 takes is the side notch the
+mesh path cannot decide: a tool tangent to the outline at recorded vertices
+(below), whose contact the proximity gate refuses. Its body takes the operand
+roles `boolupstream.Attach` gives every analytic hit. Which payload such a
+notch gets therefore follows the mesh path's contact gate: a change there (a
+gap tolerance that opens the contact) moves the pair off A9, and
+`TestSideNotchCutTangentFork` pins today's route.
+
+A9 lifts A7's scope gates, not its soundness. A7's engine already states a
+wall split at an interface on the outer ring as on a hole ring, and every
+shape it cannot record misses. `stackedunion.Cut` takes A9's rules in its
+`sideNotch` mode; A7 keeps its own (one outer and one hole). Three rules keep
+A7's guarantees where its gates no longer stand:
+
+- **No cut on an oblique line.** A7's build states a cut vertex exactly only on
+  an axis-aligned line (its fixed coordinate exact) or on a circle. In a Cut
+  build, any scene edge that is a `Partial` fragment of an oblique line misses
+  (`ubBuild.scene`). An oblique record reaches the result only whole, at its
+  recorded vertices: the lever's slot and frame lines, and a tool wall lying
+  in the void.
+- **One cell.** The reached slab's region is the cells inside the target and
+  outside the tool. Two such cells share no edge, since a target edge has
+  target material on one side only and a tool edge has the tool on one side;
+  several of them are separate lumps or touch at a point, and miss
+  (`ubBuild.cutSlabRegion`).
+- **No pinch.** `prismcells.RingContact` over that one cell refuses two rings
+  touching at a point the arrangement leaves uncut (a round pocket tangent to
+  a hole). A ring touching itself there (a round notch tangent inside the outer
+  wall) is refused by the section audit (`AuditMergeSection`), which every cut
+  slab region runs. The cell may then carry any number of holes.
+
+The last two rules are reject-only defenses that no current A9 fixture
+reaches: the shapes they name (a notch across the whole width, a round pocket
+tangent to a hole or to the wall from inside) build on the mesh path before A9
+runs, and in direct probes of the build the slab merge and the section audit
+decline them first.
+
+**Tangent contact at recorded vertices.** A tool whose boundary meets the
+target's only at recorded vertices of both, tangentially, builds: the
+arrangement cuts nothing there, the vertex is one canonical vertex, and the
+walls meeting at it (the target's corner round over both slabs, the gap round
+below the floor, the tool's arc above it) are swept pieces joined at that
+vertex. Where two arcs end at such a vertex along one tangent ray, sketch
+certifies the vertex for exact port order (sketch's `certifySharedCuspEnds`),
+without which the face walk lost the cells. The floor cell narrows to a
+zero-angle point there. A line-only A9 result keeps its source prisms
+(`PointQueryCut`) as A7's does, and point containment reads them for a target
+with one hole.
+
+`apitest/side_notch_cut_test.go` builds the watch lever's tangent fork notch
+with no, one and two oblique slot holes, declines a notch whose oblique walls
+cross the corner rounds, and pins the results the earlier routes keep.
 
 ### Class B — perpendicular prism pairs with planar contacts
 

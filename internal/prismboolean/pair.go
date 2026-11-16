@@ -246,13 +246,35 @@ func TryCrossingBlindCut(ctx context.Context, a, b topo.Payload) (breprecord.Pay
 	if !targetOK || !toolOK || len(target.Profile.Holes) != 1 || len(tool.Profile.Holes) != 0 {
 		return breprecord.Payload{}, false, nil
 	}
+	return blindBrepCut(ctx, a, b, momentinput.CrossingBlindLoops, false)
+}
+
+// TrySideNotchCut builds a blind tool that crosses or touches the target's
+// outer wall, or crosses holes of a target with any number of them
+// (agent-docs/general-boolean-design.md §3 A9): A7's BRep build with its scope
+// gates lifted. Every loop holds lines, circles and arcs; an oblique line may
+// stand only where no scene cuts it, which the build checks per fragment. The
+// dispatch tries it only after the mesh path has refused the pair, so every
+// pair that builds today keeps its result.
+func TrySideNotchCut(ctx context.Context, a, b topo.Payload) (breprecord.Payload, bool, error) {
+	_, targetOK := a.(prismrecord.Payload)
+	tool, toolOK := b.(prismrecord.Payload)
+	if !targetOK || !toolOK || len(tool.Profile.Holes) != 0 {
+		return breprecord.Payload{}, false, nil
+	}
+	return blindBrepCut(ctx, a, b, momentinput.LineArcLoops, true)
+}
+
+// blindBrepCut runs A7's admission and BRep build for a target and a hole-free
+// tool whose profiles both pass loops; sideNotch selects A9's cut slab rules.
+// Every miss is silent.
+func blindBrepCut(ctx context.Context, a, b topo.Payload, loops func(momentinput.Profile) bool, sideNotch bool) (breprecord.Payload, bool, error) {
 	budget := proofbound.NewWorkBudget(ctx)
 	pa, pb, admitted, err := prismcells.AdmitPairBudget(budget, meshbool.OpCut, a, b)
 	if err != nil || !admitted {
 		return breprecord.Payload{}, false, err
 	}
-	if pa.SectionDelta != 0 || pb.SectionDelta != 0 ||
-		!momentinput.CrossingBlindLoops(pa.Profile) || !momentinput.CrossingBlindLoops(pb.Profile) {
+	if pa.SectionDelta != 0 || pb.SectionDelta != 0 || !loops(pa.Profile) || !loops(pb.Profile) {
 		return breprecord.Payload{}, false, nil
 	}
 	reexpress, err := prismcells.NewReexpression(pa.PlacementOperand(), pb.PlacementOperand())
@@ -273,7 +295,7 @@ func TryCrossingBlindCut(ctx context.Context, a, b topo.Payload) (breprecord.Pay
 	if !topArm && !bottomArm {
 		return breprecord.Payload{}, false, nil
 	}
-	result, err := stackedunion.Cut(ctx, budget, va, vb, reexpress, levels, reach)
+	result, err := stackedunion.Cut(ctx, budget, va, vb, reexpress, levels, reach, sideNotch)
 	// A merged loop whose recorded junctions do not meet (a pocket drawn with
 	// lines overshooting its corners) is a scene this build cannot record. The
 	// pair keeps its later routes, ending at the mesh path, as it does for

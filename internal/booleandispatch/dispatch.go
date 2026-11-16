@@ -380,7 +380,42 @@ func BodyScaled(ctx context.Context, op meshbool.OperationKind, env topo.Env, a,
 			return body, err
 		}
 	}
-	return meshBody(booleaneval.WithoutOverlapChord(ctx), op, env, a, b, hooks, scale)
+	body, err := meshBody(booleaneval.WithoutOverlapChord(ctx), op, env, a, b, hooks, scale)
+	if err == nil || ctx.Err() != nil || op != meshbool.OpCut || !errors.Is(err, decaderr.ErrUnsupported) {
+		return body, err
+	}
+	// agent-docs/general-boolean-design.md §3 A9: a blind side notch, or a
+	// blind pocket across holes of a target with any number of them, the mesh
+	// path refused (a tool tangent to the outline at recorded vertices). It
+	// runs after the mesh path, so a pair the mesh path builds keeps that
+	// result and the readings that depend on it (Section from history, the
+	// retained edge blend). A miss, or any refusal of its own, returns the mesh
+	// path's refusal, so the caller's error is the one it got before A9.
+	notched, ok, notchErr := sideNotch(ctx, env, a, b)
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		return nil, ctxErr
+	}
+	if notchErr == nil && ok {
+		return notched, nil
+	}
+	return nil, err
+}
+
+// sideNotch builds general-boolean §3 A9's BRep for a Cut, with the planar
+// faces' operand roles Analytic attaches to every analytic hit.
+func sideNotch(ctx context.Context, env topo.Env, a, b *topo.Body) (*topo.Body, bool, error) {
+	bp, ok, err := prismboolean.TrySideNotchCut(ctx, a.Payload, b.Payload)
+	if err != nil || !ok {
+		return nil, false, err
+	}
+	body, err := prismboolean.AnalyticBody(ctx, env, bp)
+	if err != nil {
+		return nil, false, err
+	}
+	if err := boolupstream.Attach(ctx, meshbool.OpCut, body, a, b); err != nil {
+		return nil, false, err
+	}
+	return body, true, nil
 }
 
 // meshBody is BodyScaled's mesh pipeline at the chord ctx selects.

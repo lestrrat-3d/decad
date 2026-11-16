@@ -2,8 +2,9 @@
 
 A blind `Cut` whose tool meets the target's outer wall only at recorded vertices, tangentially, and the `Fillet` of
 the concave arc it leaves on the notch floor. The gallery reports that Fusion 360 builds both (not checked here; §6
-gate G0). decad refuses both. Status: design only, not
-approved. Nothing in §6 is built.
+gate G0). Status: approved (option O1). T1 is built (sketch `9216dee`, decad pin `68d12a1916`). T2 is built as
+general-boolean §3 A9 on A7's build: the cut builds as a BRep, and the fillet refuses until T3 and T4. §2 and §3 record
+why `main` at `06df1932f5` refused both.
 
 Navigation (not authority): the failing case → §1; why the cut refuses → §2; why the fillet refuses → §3; the target
 result → §4; soundness → §5; increments and size → §6; options → §7.
@@ -154,7 +155,7 @@ Each increment is one PR, merged after green CI and an independent review of its
 | # | Increment | Unlocks | Estimate |
 |---|---|---|---|
 | T1 | `sketch`: exact port order at a shared endpoint of two curved fragments on one tangent ray, no chord overlap there, and `Degenerate` where the ports cannot be ordered (§2.3); `sketch` release and pin bump here | correct cells for tangent arcs sharing an endpoint; no silently wrong `Valid` cell | 1 to 2 weeks: the densification change moves the golden scenes that depend on it |
-| T2 | general-boolean A9, the side notch on A7's BRep build: a tool meeting the outer loop only at recorded vertices (tangent or not), any number of untouched target holes, oblique lines in untouched records, a cut slab of one outer and any holes, a floor with cusps, G1 wall junctions at those vertices (boss-root-overflow P2a refusal 5, its main open risk); occupied-volume proof through `Tessellate(VerifyAll)` on the cusped floor | the lever body; side notches whose crossings are recorded vertices | 3 to 6 weeks: the first BRep route across the outer boundary, which A7 excludes; boss P2 is sized at 4 to 7 |
+| T2 (built) | general-boolean §3 A9: A7's BRep build, tried after the mesh path refuses, with A7's scope gates lifted (any number of target holes, oblique lines only where no scene cuts them, the tool across or touching the outer wall, one result cell with no pinch). A7's engine already splits walls at an interface on the outer ring, so no new geometry was needed | the lever body; side notches of line, circle and arc outlines | built |
 | T3 | a faceted-view fillet entry for a stacked BRep result (boss-root-overflow P3, shared) | fillets on T2's results | 3 to 5 days |
 | T4 | C3 tangent ends (boss-root-overflow P6) generalized to an inner wall and to §3's end topology (`G` below, `K` beside), the floor-row cliff crossing on an inner wall, and §5's A7 gate change | the dart-root fillet; the balance-wheel boss at Ø14 once its P2 and P5 exist | 2 to 3 weeks (P6 alone: 1.5 to 2.5) |
 | T5 | the lever's later steps on T2's result: the D bore `Cut` (an A7 BRep admits no later analytic Boolean, general-boolean §3 A7, so it takes the mesh path) and the edge-finish chamfers over the `K`–`B` G1 joints | the finished lever | unknown until probed on T2's result |

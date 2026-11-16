@@ -86,9 +86,13 @@ func (sc *ubScene) key(ref ubRef) (prismcells.RegionKey, bool) {
 
 // ubBuild is one brep build over the stacked union's slabs.
 type ubBuild struct {
-	st     *stackedUnionState
-	cut    bool
-	levels []stackedrecord.UnionLevel
+	st  *stackedUnionState
+	cut bool
+	// sideNotch relaxes the cut slab to general-boolean §3 A9's rules: one
+	// cell, no ring contact, any number of holes. A7 keeps one outer and one
+	// hole.
+	sideNotch bool
+	levels    []stackedrecord.UnionLevel
 	// reach names, per result slab, each operand's slab reaching it (−1
 	// when it does not).
 	reach  [][2]int
@@ -157,12 +161,13 @@ func (st *stackedUnionState) brep(ctx context.Context, levels []stackedrecord.Un
 	return bp, true, nil
 }
 
-// Cut builds the already-admitted crossing blind cut from its two prism slabs.
-// It returns the builder's original miss or refusal for prismboolean.TryCrossingBlindCut to map.
+// Cut builds the already-admitted blind cut from its two prism slabs: A7's
+// crossing blind cut, or with sideNotch A9's side notch (general-boolean §3). It
+// returns the builder's original miss or refusal for prismboolean to map.
 func Cut(ctx context.Context, budget *proofbound.WorkBudget, va, vb Operand,
-	reexpress *prismReexpression, levels []stackedrecord.UnionLevel, reach [][2]int) (breprecord.Payload, error) {
+	reexpress *prismReexpression, levels []stackedrecord.UnionLevel, reach [][2]int, sideNotch bool) (breprecord.Payload, error) {
 	state := &stackedUnionState{budget: budget, va: va, vb: vb, reexpress: reexpress}
-	build := &ubBuild{st: state, cut: true, levels: levels, reach: reach,
+	build := &ubBuild{st: state, cut: true, sideNotch: sideNotch, levels: levels, reach: reach,
 		scenes: map[string]*ubScene{}, geom: stackedbrep.NewEngine([]float64{
 			levels[0].Held, levels[1].Held, levels[2].Held,
 		})}
@@ -384,6 +389,13 @@ func (b *ubBuild) scene(ctx context.Context, refsA, refsB []ubRef) (*ubScene, er
 					if edge.Partial && !edge.TExact {
 						return nil, errUBMiss
 					}
+					// The build states a cut vertex exactly only on an
+					// axis-aligned line or a circle (A7); an oblique record
+					// may reach a cut result only whole (A9).
+					if line, ok := edge.Entity.(*sketch.Line); ok && edge.Partial &&
+						line.Start.X() != line.End.X() && line.Start.Y() != line.End.Y() {
+						return nil, errUBMiss
+					}
 				}
 			}
 		}
@@ -546,11 +558,30 @@ func (b *ubBuild) cutSlabRegion(sc *ubScene) ([]profileRecord, error) {
 			selected = append(selected, cell)
 		}
 	}
+	if b.sideNotch {
+		// Two cells inside the target and outside the tool share no edge: a
+		// target edge has target material on one side only, and a tool edge
+		// has the tool on one side. Several such cells are separate lumps, or
+		// touch at a point, which no single region states. The one cell's
+		// rings must not touch each other at a point the arrangement leaves
+		// uncut (a round pocket tangent to a hole); a ring touching itself
+		// there is the section audit's below.
+		if len(selected) != 1 {
+			return nil, errUBMiss
+		}
+		touch, err := prismcells.RingContact(b.st.budget, selected[0])
+		if err != nil {
+			return nil, err
+		}
+		if touch {
+			return nil, errUBMiss
+		}
+	}
 	loops, cutDelta, resolved, err := prismcells.MergeLoops(b.st.budget, selected, "cut")
 	if err != nil {
 		return nil, err
 	}
-	if !resolved || len(loops) != 2 {
+	if !resolved || len(loops) == 0 || !b.sideNotch && len(loops) != 2 {
 		return nil, errUBMiss
 	}
 	b.cutDelta = math.Max(b.cutDelta, cutDelta)
@@ -571,7 +602,7 @@ func (b *ubBuild) cutSlabRegion(sc *ubScene) ([]profileRecord, error) {
 			return nil, errUBMiss
 		}
 	}
-	if len(region.Outer.Segments) == 0 || len(region.Holes) != 1 {
+	if len(region.Outer.Segments) == 0 || !b.sideNotch && len(region.Holes) != 1 {
 		return nil, errUBMiss
 	}
 	if err := prismcells.AuditMergeSection(b.st.budget, prismrecord.Payload{Profile: region}, region); err != nil {
