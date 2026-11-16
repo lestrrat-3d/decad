@@ -1020,6 +1020,19 @@ cloned and keeps its entries. Per emitted segment:
   1024-chord test is needed; `S*`'s path enters only through the receiver's
   CR3.
 
+**Seam snap.** Before the record is made, `closeSeams`
+(`internal/brepmodify/carrier_blend.go`) moves a rewritten segment's walk start
+onto the previous segment's walk end where the two differ only by a walk end's
+rounding (a circle's seam reads `sin(2π)·R` at parameter 1). Its
+`seamMove.Read` is the distance the read start moved plus
+`proofbound.WalkEndBoundAllow` of the moved segment's new walk start, read from
+that segment's new walk; `seamMove.Carrier` is how far the rewritten field moved.
+`carrierRewriteRecord` adds `Read` to the moved segment's start displacement
+(`emitted.sd`, a connector's included) and `Carrier` to its `ε`. Without the
+allowance term, a clockwise arc whose `End` (its walk start) moved would publish
+a junction entry short by about one ulp times `R`; PR 2 adds the term, with
+§10's test.
+
 `SectionDelta_out` is the larger of the largest entry and `max_l h_loop[l]`
 (CR4), rounded up, and zero when every entry is zero. Kept loops (cloned, not
 rewritten) count with the receiver's entries, so a displaced kept loop keeps the
@@ -1053,8 +1066,9 @@ record once, with `prismrecord.CarrierRecordOf(budget, b)` on the receiver body
 another body (a `Transform` or `Copy` of the receiver, §3.4) answers false, and
 both routes are skipped. The lateral route runs first, unchanged, and keeps its
 `asym == nil` condition. The cap-loop route (`brepmodify.CarrierCapLoopChamfer`)
-runs when the lateral route did not match, for a symmetric or an asymmetric
-chamfer (reach §8.3.1):
+runs when the lateral route did not match or returned a `*CarrierRefusal` (a
+Table CB refusal, which a `Chamfer` lets through), for a symmetric or an
+asymmetric chamfer (reach §8.3.1):
 
 1. A single straight cap edge (`straightPrismCapEdge`) does not match.
 2. `ClassifyChamferSelection(ctx, pp, CapsOf(b), sel, edges)` runs. An error
@@ -1072,15 +1086,16 @@ chamfer (reach §8.3.1):
    condition and builds §8.4's payload through the shared builder.
 
 A route that does not match continues to `RequireExactSection` and brep-modify
-§2.2's faceted view exactly as today. Of the route's own refusals, two are
-returned: cancellation, and SX6's `ErrDegenerate` (`capband.ChamferDropError`
-of `capblend.MixedOffsetProfile`), which reads only selected loops and so states
-that the denoted body does not exist, as S4 does in §7.1.
-`BuildCheckedDisplaced` marks that refusal so the route can tell it from the
-offset audits' S8/S9 `ErrDegenerate`. Every other refusal falls through to the
-faceted view: each `ErrUnsupported` gate, both offset audits (their verdicts
-speak about `S`, not `S*`), and §8.3's transfer condition. So no chamfer that
-builds today stops building.
+§2.2's faceted view exactly as today. Of the route's own refusals only
+cancellation is returned. Every other refusal falls through to the faceted
+view: each `ErrUnsupported` gate, both offset audits (their verdicts speak about
+`S`, not `S*`), §8.3's transfer condition, and SX6's `ErrDegenerate`
+(`capband.ChamferDropError` of `capblend.MixedOffsetProfile`). SX6 reads only
+selected loops, so it does say the denoted chamfer does not exist; it falls
+through all the same, so the route changes no answer except by building an
+exact body, and the faceted view gives that selection its own answer as today.
+So no chamfer that builds today stops building, and `BuildCheckedDisplaced`
+needs no marker to tell SX6 from the audits' S8/S9 `ErrDegenerate`.
 
 ### 8.2 What the result denotes
 
@@ -1126,16 +1141,25 @@ passes, with `F` the contact floor of `M` (`sectionaudit.ContactFloor` over
 - **T1.** `4·max_l LoopDelta[l] < F`.
 - **T2.** Every two segments of `M` that share no vertex, at least one of them on
   a loop with a nonzero `LoopDelta`, have certified gap `G > F` (§6.2:
-  `sectionaudit.SegGapLower` of their walks less both walk allowances `c_e`,
-  after the bounding-box prefilter), and each such segment has `4·c_e < F`.
+  `sectionaudit.SegGapLower` of their walks less both allowances `c_e`, after
+  the bounding-box prefilter). Every segment of `M` has `4·c_e < F`. A segment
+  of a selected loop's cap contour is computed, not recorded, so its `c_e` is
+  §6.2's walk allowance plus that loop's contour displacement
+  (`capblend.Payload.LoopContourDelta` at the profile's setback, the number
+  `Build` later stores as the loop's `BandDelta` and `LoopBandDelta` reads).
 - **T3.** Every loop with a nonzero `LoopDelta` has an area enclosure
   `prismcells.LoopAreaEnclosure(budget, loop, LoopDelta[l])` that excludes zero.
 
 T2 is `prismcells.CertifiedContact`'s test with a per-loop displacement:
-`CertifiedContactLoops(budget, loops, hLoop []float64)` checks T1 against the
-largest `hLoop` and skips a pair whose two loops both carry zero.
+`CertifiedContactLoops(budget, loops, hLoop, extra []float64)` checks T1
+against the largest `hLoop`, adds `extra[l]` to the `c_e` of every segment of
+loop `l`, and skips a pair whose two loops both carry zero `hLoop`. Its
+`4·c_e < F` check runs on every segment, those of zero-displacement loops
+included: whenever some loop is displaced, every segment of every other loop
+enters a tested pair with it (two loops' segments share no vertex), so a
+narrower check would skip no segment that a tested pair reads.
 `CertifiedContact(budget, loops, hMax)` stays CB7's and §5.3's call, with every
-loop at `hMax`. T3 is the area loop of `carrierAuditTransfer`
+loop at `hMax` and no extra. T3 is the area loop of `carrierAuditTransfer`
 (`internal/brepmodify/carrier_result.go`). A failure falls through (§8.1).
 
 Proof. A pair from two exact loops is the same pair on `S*`, so the audit's
@@ -1234,7 +1258,10 @@ on each loop with a nonzero `LoopDelta`, `ProductUpper(inPlane, LoopDelta[l])`
 added to that loop's `planeAllow` in both of its `take` calls. `inPlane` is the
 reading's own upward-rounded in-plane norm of `g`, the factor it already applies
 to a contour's displacement. Contour candidates belong to selected loops and
-take nothing. `DisplacedPayload.ExtentAlong` refuses with `ErrUnsupported`, as
+take nothing. The `coordUpper` that the reading hands
+`prismrecord.PlacementCoeffAllow` is widened by `max_l LoopDelta[l]`, since a
+denoted coordinate can exceed the recorded envelope by that much.
+`DisplacedPayload.ExtentAlong` refuses with `ErrUnsupported`, as
 `prismrecord.Payload.ExtentAlong` refuses a nonzero `SectionDelta`, so a
 through-all stop with this body live refuses as it does for a displaced prism
 (prism-boolean §12). `capblend.Bounds` reads the displaced reading on each axis,
@@ -1265,13 +1292,40 @@ LoopDelta[l]`:
   each cap.
 - **Occupied volume.** Where the proof is built (`proveVolume`, and
   `OccupiedVolumeAdmission(dp.Base)` admits), `terms` takes
-  `Σ_l ProductUpper(A'_l, H)`. Where the admission refuses, `SymDiffOK` stays
-  false, as today.
+  `Σ_l ProductUpper(A'_l, H_up)`, with `H_up` the sweep height `|Z1 − Z0|`
+  rounded up plus `Z0Delta + Z1Delta`, rounded up. Where the admission refuses,
+  `SymDiffOK` stays false, as today.
 
 `booloperand.RequireVolumeProof` takes the plain payload's arm on `dp.Base`, so
 it and `meshbool.OperandSymDiff` keep naming the same classes: a body the
 admission passes composes in a mesh `Boolean`, and any other refuses before it
-is meshed.
+is meshed. `booloperand.sectionDisplacement`, which sets an operand's chord
+floor (`ChordShare`), answers `max_l LoopDelta[l]` for a `DisplacedPayload`.
+
+**Mesh Boolean source tags (rule DW, displaced walls).** A mesh `Boolean` copies
+each operand face's surface onto its facets as a retained tag
+(`booleaneval.sourceGroup`, `facetedrecord.SourceTag`), and `SourceTag` reads the
+face alone. A side wall of a displaced loop has a recorded `Plane` or `Cylinder`
+that lies only within the loop's bound of the denoted wall, so tagging it with
+`NormalBound` 0 and no `AxialDelta` breaks faceted-source-retention Claim R. Rule
+DW is applied in `sourceGroup` beside `chordedLoftPlane`
+(`internal/booleaneval/chorded_loft_plane.go`) and has the same form. It reads
+the owner body and the loop `l` the face's role names (`side(l, j)`, or a blend
+wall's `fillet(l, j)` or `chamfer(l, j)`). A cap face and a band patch of a
+selected loop take no bound; any other face whose roles name no single loop
+takes the largest loop bound. The loop bound `b_l` is:
+
+- for a `DisplacedPayload`, `b_l = LoopDelta[l]`;
+- for a `prismrecord.Payload` with `SectionDelta > 0`, on a loop that
+  `CarrierExact` does not list, `b_l = h_loop[l]` of the body's valid owned
+  record (`CarrierRecordOf`), else `SectionDelta`.
+
+Where `b_l > 0`, a `Plane` tag takes `AxialDelta = max(AxialDelta, b_l)` with
+`HasAxialDelta` set, so the retained-plane slab charges it
+(faceted-source-retention §11, "Displaced plane"), and a `Cylinder` tag is
+declined (no surface, not retained). Every other face keeps its tag. The rule
+also repairs displaced prisms on main, whose displaced walls reach a mesh
+`Boolean` today with an uncharged tag.
 
 ### 8.8 Readers
 
@@ -1283,8 +1337,11 @@ is meshed.
 | `extent.ThroughAll` | `ExtentAlong` refuses with `ErrUnsupported` (§8.6) |
 | `verifyrun` wall, undercut and minimum-radius surveys | the default arm: staged, `Suspect` |
 | clearance kernel (`pairkernel.newBodyGeomBudget`, `payloadExtent`) | the default arm: no model, so a pair reads `Suspect` unless its boxes decide it |
-| tolerance-gate diameter (`gatediameter.DirectBodyGateDiameter`, then `FallbackGateDiameter` through `gatewitness.Prisms`) | no arm: no diameter (`ok` false) |
-| pair gate points (`gatediameter.BodyGatePoints`) | the default arm: the body's vertices with their published bounds, which carry `LoopDelta[l]` on every vertex of a displaced loop (§8.5) |
+| tolerance-gate witnesses (`gatewitness.Prisms`) | a new arm: `capblend.WitnessPrisms(dp.Base)` with displacement `AbsSumUpper(Base.AxialDelta(), max_l LoopDelta[l])`. Each witness point lies within that displacement of a point of the denoted body: its loop moves at most `LoopDelta[l]` in the plane, its level at most the axial term |
+| tolerance-gate diameter (`gatediameter.DirectBodyGateDiameter`, then `FallbackGateDiameter`) | no direct arm; the clearance kernel builds no model, so `FallbackGateDiameter` reads the witness arm above |
+| pair gate points (`gatediameter.BodyGatePoints`) | the default arm reads the witness arm above through `diameter.PrismGatePoints`, else the body's vertices with their published bounds, which carry `LoopDelta[l]` on every vertex of a displaced loop (§8.5) |
+| `booloperand.sectionDisplacement` (an operand's chord floor) | `max_l LoopDelta[l]` (§8.7) |
+| mesh `Boolean` source tags (`booleaneval.sourceGroup`) | rule DW (§8.7): a displaced loop's `Plane` wall states `LoopDelta[l]` as `AxialDelta`, and its `Cylinder` wall keeps no tag |
 | brep route (`brepmodify.brepModifyRecord`) | not a brep record: no route |
 | `payloadclass.TypeName`, `verifypublish` | `SurveyClass` |
 
@@ -1304,8 +1361,7 @@ The packages that build `capblend.Payload` views internally (`breprecord`,
 | §7.6 | CB0–CB7 on `Chamfer` | today's route (`RequireExactSection`, brep-modify §2.2) |
 | §7.4, §7.5 | S4 and S5 themselves | `ErrDegenerate`, before any CB row (modify §4) |
 | §8.1 | a selection that is not complete cap loops, a selected loop with a nonzero entry, or no valid record | today's answer |
-| §8.1 | SX6: a selected loop's offset drops a feature | `ErrDegenerate` |
-| §8.1, §8.3 | any other refusal of the route, the offset audits and T1–T3 included | today's route (`RequireExactSection`, brep-modify §2.2) |
+| §8.1, §8.3 | any refusal of the route other than cancellation: SX6, every gate, the offset audits and T1–T3 | today's route (`RequireExactSection`, brep-modify §2.2) |
 | §8.4 | a malformed `LoopDelta`, or a base with `Draft`, `Fillet` or `LoftSource` | `ErrUnsupported` |
 | §8.6 | `DisplacedPayload.ExtentAlong` | `ErrUnsupported` |
 | §8.7 | a tolerance at or below the largest `LoopDelta` | `ErrUnsupported`, prismtess's message |
@@ -1430,27 +1486,45 @@ PR 2, each beside the code it covers. The twin of a displaced build is the same
   shown to matter by disabling them, as Table CB's rows are. T2's case is a
   displaced outer loop certified less than `F` from a chamfered hole's contour
   while the float audit passes, including a near-end crossing that
-  `segMinDist` reads as a gap; T3's is a sliver loop whose enclosure holds zero.
+  `segMinDist` reads as a gap, and a contour segment whose gap clears `F` only
+  without its contour displacement in `c_e`. T3's case is a displaced loop whose
+  segment pairs are all adjacent, so T2 tests none of them: a thin triangle of
+  height below `8·LoopDelta`, whose area enclosure holds zero.
 - `capblend` tessellation: a tolerance at or below `max LoopDelta` refuses.
   Above it, a `VerifyAll` mesh closes, every outer-wall facet and both caps state
   a bound of at least `LoopDelta[0]`, and `VolSymDiff` is at least
-  `A'_0·H` above its twin's.
+  `A'_0·H_up` above its twin's.
 - `prismcells`: `CertifiedContactLoops` passes a pair of two zero-displacement
   loops closer than `F` and refuses the same pair when one loop carries a
-  displacement; `CertifiedContact` answers as before.
+  displacement; it refuses a zero-displacement loop's segment whose `c_e` is at
+  least `F/4`; `CertifiedContact` answers as before.
+- `brepmodify` seam snap: a lateral blend at a hole-loop corner whose clockwise
+  arc's `End` (its walk start) `closeSeams` moves records, at the junction before
+  that arc, an entry at least `WalkEndBoundAllow` of the moved arc's new walk
+  start above the read-start move; computing `Read` without that term is shown
+  to undercharge it.
+- `booleaneval` rule DW: a mesh `Cut` of a `DisplacedPayload` (and of a displaced
+  prism on main, a PR 1 recorded union) by a box gives each result facet from a
+  displaced loop's `Plane` wall a group with `AxialDelta` at least the loop
+  bound, and each facet from its `Cylinder` wall a group with no tag; walls of
+  exact loops keep their tags with no `AxialDelta`. Without the rule the same
+  groups read retained with zero departure.
+- `booloperand`: `sectionDisplacement` answers `max LoopDelta` for the result,
+  and `ChordShare`'s floor is at least twice it.
 - `brepmodify` dispatch: a cap-loop `Chamfer` of an exact hole loop on both caps
   of a recorded receiver builds a `DisplacedPayload`, and so does an asymmetric
   one. Each of these keeps today's answer, compared with the same call with the
   route switched off: a selected loop with a nonzero entry, a partial or mixed
-  selection, a `Placed` copy of the receiver (it carries no record), and a T2
-  failure (it falls through to the faceted view). SX6's `ErrDegenerate` and
-  cancellation are returned.
+  selection, a `Placed` copy of the receiver (it carries no record), a T2
+  failure, and an SX6 drop (a hole loop whose setback reaches its radius), each
+  of the last two falling through to the faceted view. Cancellation is returned.
 - §8.8's readers: `Chamfer`, `Fillet` and `Shell` of the result refuse with
   SX10; `ThroughAll` with the result live refuses; the three surveys answer
-  staged; the clearance kernel builds no model; the tolerance-gate diameter
-  answers none; `BodyGatePoints`' vertex allowances cover `LoopDelta` on the
-  outer loop; `booloperand.RequireVolumeProof` agrees with the mesh's
-  `SymDiffOK`, and a mesh `Cut` of the result by a box at `VerifyAll` composes.
+  staged; the clearance kernel builds no model; `gatewitness.Prisms` answers
+  one witness prism per loop with displacement at least `max LoopDelta` plus
+  the axial term, and the tolerance-gate diameter reads it through
+  `FallbackGateDiameter`; `booloperand.RequireVolumeProof` agrees with the mesh's `SymDiffOK`,
+  and a mesh `Cut` of the result by a box at `VerifyAll` composes.
 
 PR 2, `apitest` (public API only): `TestCarrierRecordWheelUnionFilletAndBore`'s
 part (two windows, a tooth and two rotated `PatternCopies`, the six roots
@@ -1493,8 +1567,16 @@ PR 2:
 - `agent-docs/prism-boolean-design.md` §12: the `Fillet` / `Chamfer` row (a
   cap-loop `Chamfer` of exact loops builds a `DisplacedPayload`) and §8.8's
   readers.
-- `agent-docs/brep-modify-design.md` §2.2 (a cap-loop `Chamfer` of exact loops of
-  a recorded receiver reaches the faceted view only through §8.1's fall-through).
+- `agent-docs/brep-modify-design.md` Table RB row RB6 and §2.2 (a cap-loop
+  `Chamfer` of exact loops of a recorded receiver reaches the faceted view only
+  through §8.1's fall-through).
+- `agent-docs/modify-reach-design.md` Table SX row SX10 (it also refuses a
+  `DisplacedPayload` receiver) and Table DX's survey rows DX7 to DX9 (a
+  `DisplacedPayload` is staged).
+- `agent-docs/tessellation-reach-design.md` §7 (T7: the `LoopDelta` reservation,
+  facet charges, area slack and volume term).
+- `agent-docs/faceted-source-retention-design.md` §3 and §11 (rule DW, for
+  `DisplacedPayload` walls and displaced prism walls alike).
 - `agent-docs/missing-features.md`, the displaced-receiver modify row.
 
 ## 12. Decisions the user may want to overturn
@@ -1525,9 +1607,17 @@ PR 2:
   tooth, keeps its `SectionDelta`.
 - **Convention-corner feet are charged** their residual `r_f`, so case 1's
   fillet carries a `SectionDelta` of a few ulps instead of zero.
-- **A §8 refusal falls through** to the faceted view, except SX6's
-  `ErrDegenerate`. Returning `ErrUnsupported` instead would name §8's limit, at
-  the cost of a window chamfer that builds faceted today refusing.
+- **Every §8 refusal falls through** to the faceted view, SX6's `ErrDegenerate`
+  included; only cancellation is returned. Returning §8's refusals would name its
+  limit, at the cost of window chamfers that build faceted today refusing, and
+  returning SX6 alone would change today's answer for a dropping hole loop.
+- **`DisplacedPayload.ExtentAlong` refuses**, as a displaced prism's does, though
+  its bounded reading already charges `LoopDelta`. The cost: a `ThroughAll` or
+  `ThroughAllSide` extrude refuses while the chamfered part is live. Returning
+  the bounded reading would let the stop charge it instead.
+- **The tolerance gate reads witness prisms** (`capblend.WitnessPrisms` with the
+  axial term plus `max LoopDelta`) rather than declining, so a displaced
+  cap-loop chamfer gets a gate diameter, shrunk by twice that displacement.
 - **The displaced cap-loop chamfer keeps a mesh volume proof.** Its tessellation
   charges the `LoopDelta` tube and `booloperand` admits it as it admits a plain
   cap-loop chamfer, so it composes in a mesh `Boolean` as a displaced prism
