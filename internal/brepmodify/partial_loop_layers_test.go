@@ -162,10 +162,10 @@ func TestPartialLayersFollowTheCorners(t *testing.T) {
 			require.LessOrEqual(t, layers, maxPartialLayers)
 			require.LessOrEqual(t, dep, partialSagitta)
 			// One layer fewer would not have held the bound.
-			if layers > 2 {
-				heights := make([]float64, layers/2+1)
+			if layers >= 2 {
+				heights := make([]float64, layers)
 				for k := range heights {
-					heights[k] = top + (bottom-top)*float64(k)/float64(layers/2)
+					heights[k] = top + (bottom-top)*float64(k)/float64(layers-1)
 				}
 				fewer, err := r.layerDeparture(d, heights)
 				require.NoError(t, err)
@@ -198,7 +198,7 @@ func TestArcRunOutFollowsItsCircle(t *testing.T) {
 		seg := run.seg(0)
 		var counts []int
 		for _, tt := range []float64{-0.25, 0, 0.2, d + over} {
-			pts, err := run.polyline(tt, 0, 0, cells, runOut)
+			pts, _, err := run.polyline(tt, 0, 0, cells, runOut)
 			require.NoError(t, err)
 			counts = append(counts, len(pts))
 			for _, p := range pts {

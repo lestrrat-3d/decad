@@ -24,13 +24,14 @@ func (r chamferRun) sharpArcCorner() bool {
 
 // layers is how many layers of rings the chain's cutter steps through between the heights top and bottom, and how far
 // its facets then leave the bevel (layerDeparture). A chain without a sharp corner beside an arc keeps one layer, two
-// rings, which holds the bevel exactly there. Otherwise the layers double from 2 until the departure is within
-// partialSagitta, and the cutter's bound carries it.
+// rings, which holds the bevel exactly there. Otherwise the layers step up from 2 by one until the departure is within
+// partialSagitta, the fewest that hold it, and the cutter's bound carries it. Only the cells beside a curved column
+// carry the rings between (cutterMesh).
 func (r chamferRun) layers(d, top, bottom float64) (int, float64, error) {
 	if !r.sharpArcCorner() {
 		return 1, 0, nil
 	}
-	for layers := 2; layers <= maxPartialLayers; layers *= 2 {
+	for layers := 2; layers <= maxPartialLayers; layers++ {
 		heights := make([]float64, layers+1)
 		for k := range heights {
 			heights[k] = top + (bottom-top)*float64(k)/float64(layers)

@@ -585,21 +585,32 @@ func (l *chamferLoop) arcRunOutAngle(e runEnd, seg loopSeg, d, over float64) (fl
 // polyline and the arc each span between two points follows. A line end reaches extStart or extEnd along its tangent.
 // An arc end at a convex corner follows its moved circle through runOut.cells points, turning runOut.alpha. cells[j] is
 // the number of pieces an arc segment j is cut into.
-func (r chamferRun) polyline(t, extStart, extEnd float64, cells []int, runOut runOutArcs) ([]pt2, error) {
+func (r chamferRun) polyline(t, extStart, extEnd float64, cells []int, runOut runOutArcs) ([]pt2, []bool, error) {
 	l := r.loop
 	first, last := r.seg(0), r.seg(r.count-1)
 	start := first.p0.add(l.materialNormal(first, first.p0).scale(t))
 	end := last.p1.add(l.materialNormal(last, last.p1).scale(t))
 	var pts []pt2
+	// curved[i] marks the point pts[i] whose column moves off a straight line as the setback t changes: a sharp corner
+	// beside an arc, and the samples of an arc that ends at one, which are spread between that moving corner and the
+	// arc's other end. The other points move along straight lines: the chain's ends and their extensions, the run-out
+	// points (each along its radial line), a corner of two lines and a tangent junction.
+	var curved []bool
 	if n := runOut.cells[0]; n > 0 {
 		out := arcRunOut(first, start, runOut.alpha[0], n)
 		slices.Reverse(out)
 		pts = append(out, start)
+		curved = make([]bool, len(pts))
 	} else {
 		pts = []pt2{start.sub(tangent(first, first.p0).scale(extStart))}
 		if first.arc {
 			pts = append(pts, start)
 		}
+		curved = make([]bool, len(pts))
+	}
+	sharp := func(j int) bool {
+		a, b := r.seg(j), r.seg(j+1)
+		return (a.arc || b.arc) && !continues(a, b)
 	}
 	for j := range r.count {
 		s := r.seg(j)
@@ -609,14 +620,14 @@ func (r chamferRun) polyline(t, extStart, extEnd float64, cells []int, runOut ru
 		} else {
 			c, err := l.corner(s, r.seg(j+1), t)
 			if err != nil {
-				return nil, err
+				return nil, nil, err
 			}
 			to = c
 		}
 		if s.arc {
 			mv, err := l.moved(s, t)
 			if err != nil {
-				return nil, err
+				return nil, nil, err
 			}
 			from := pts[len(pts)-1]
 			a0 := math.Atan2(from.y-s.c.y, from.x-s.c.x)
@@ -647,43 +658,55 @@ func (r chamferRun) polyline(t, extStart, extEnd float64, cells []int, runOut ru
 				}
 			}
 			if delta < 1e-9 {
-				return nil, fmt.Errorf(`%w: the offset of a chamfered arc is consumed by its neighbouring corners`,
+				return nil, nil, fmt.Errorf(`%w: the offset of a chamfered arc is consumed by its neighbouring corners`,
 					decaderr.ErrUnsupported)
 			}
 			if !s.ccw {
 				delta = -delta
 			}
+			bends := (j > 0 && sharp(j-1)) || (j < r.count-1 && sharp(j))
 			for k := 1; k < cells[j]; k++ {
 				phi := a0 + delta*float64(k)/float64(cells[j])
 				pts = append(pts, pt2{s.c.x + mv.r*math.Cos(phi), s.c.y + mv.r*math.Sin(phi)})
+				curved = append(curved, bends)
 			}
 		}
 		if j < r.count-1 || last.arc {
 			pts = append(pts, to)
+			curved = append(curved, j < r.count-1 && sharp(j))
 		}
 	}
 	if n := runOut.cells[1]; n > 0 {
-		return append(pts, arcRunOut(last, end, runOut.alpha[1], n)...), nil
+		pts = append(pts, arcRunOut(last, end, runOut.alpha[1], n)...)
+	} else {
+		pts = append(pts, end.add(tangent(last, last.p1).scale(extEnd)))
 	}
-	return append(pts, end.add(tangent(last, last.p1).scale(extEnd))), nil
+	return pts, append(curved, make([]bool, len(pts)-len(curved))...), nil
 }
 
-// cutterMesh is the removed region of a run as a closed polyhedron. At height h above the cap the section is the band
-// between the run moved outward by margin and the run moved by d + h into the material, with each end extended past
-// the run. The bevel is the ruled surface between the top section, over above the cap, and the bottom one, which is
-// still outside the wall; the cutter's other faces lie outside the receiver.
-func (r chamferRun) cutterMesh(ctx context.Context, d, over float64) (cutterMesh, error) {
-	l := r.loop
+// cutterRings is the rings of a run's cutter: its heights from the top down, the section at each, the columns that bend
+// between them (curved, parallel to a ring's points) and the layers and departure that the bound charges.
+type cutterRings struct {
+	layers    int
+	departure float64
+	// arcs is set when the chain holds an arc, whose chords the bound charges.
+	arcs    bool
+	heights []float64
+	rings   [][]pt2
+	curved  []bool
+}
+
+func (r chamferRun) cutterRings(d, over float64) (cutterRings, error) {
 	margin := over
 	top, bottom := over, -(d + margin/2)
 	ends, _ := r.ends()
 	reach := partialReach(d, over)
 	extS, extE := ends[0].extFor(d, reach), ends[1].extFor(d, reach)
 	if err := r.checkExtension(d, reach); err != nil {
-		return cutterMesh{}, err
+		return cutterRings{}, err
 	}
 	if err := r.checkMargin(ends, d, over); err != nil {
-		return cutterMesh{}, err
+		return cutterRings{}, err
 	}
 	cells := make([]int, r.count)
 	rmin := math.Inf(1)
@@ -698,51 +721,106 @@ func (r chamferRun) cutterMesh(ctx context.Context, d, over float64) (cutterMesh
 	}
 	runOut, err := r.runOutArcs(ends, d, over)
 	if err != nil {
-		return cutterMesh{}, err
+		return cutterRings{}, err
 	}
 	layers, departure, err := r.layers(d, top, bottom)
 	if err != nil {
-		return cutterMesh{}, err
+		return cutterRings{}, err
 	}
-	rings := make([][]pt2, layers+1)
-	heights := make([]float64, layers+1)
-	for k := range heights {
-		heights[k] = top + (bottom-top)*float64(k)/float64(layers)
+	out := cutterRings{layers: layers, departure: departure, arcs: !math.IsInf(rmin, 1),
+		rings: make([][]pt2, layers+1), heights: make([]float64, layers+1)}
+	for k := range out.heights {
+		out.heights[k] = top + (bottom-top)*float64(k)/float64(layers)
 	}
-	for k, h := range heights {
-		inner, err := r.polyline(d+h, extS, extE, cells, runOut)
+	// curved marks the columns of the rings that move off a straight line between the rings. A column is the path of
+	// one ring point as the setback changes, and it is the same at every height. The margin side is held at one setback,
+	// so its columns are vertical lines.
+	for k, h := range out.heights {
+		inner, innerCurved, err := r.polyline(d+h, extS, extE, cells, runOut)
 		if err != nil {
-			return cutterMesh{}, err
+			return cutterRings{}, err
 		}
-		outer, err := r.polyline(-margin, extS, extE, cells, runOut)
+		outer, _, err := r.polyline(-margin, extS, extE, cells, runOut)
 		if err != nil {
-			return cutterMesh{}, err
+			return cutterRings{}, err
 		}
 		slices.Reverse(outer)
-		rings[k] = append(inner, outer...)
-	}
-	if ringArea(rings[0]) < 0 {
-		for k := range rings {
-			slices.Reverse(rings[k])
+		out.rings[k] = append(inner, outer...)
+		if k == 0 {
+			out.curved = append(innerCurved, make([]bool, len(outer))...)
 		}
 	}
+	if ringArea(out.rings[0]) < 0 {
+		for k := range out.rings {
+			slices.Reverse(out.rings[k])
+		}
+		slices.Reverse(out.curved)
+	}
+	return out, nil
+}
+
+// cutterMesh is the removed region of a run as a closed polyhedron. At height h above the cap the section is the band
+// between the run moved outward by margin and the run moved by d + h into the material, with each end extended past
+// the run. The bevel is the ruled surface between the top section, over above the cap, and the bottom one, which is
+// still outside the wall; the cutter's other faces lie outside the receiver.
+func (r chamferRun) cutterMesh(ctx context.Context, d, over float64) (cutterMesh, error) {
+	l := r.loop
+	cr, err := r.cutterRings(d, over)
+	if err != nil {
+		return cutterMesh{}, err
+	}
+	layers, heights, rings, curved := cr.layers, cr.heights, cr.rings, cr.curved
 	m := cutterMesh{}
-	if !math.IsInf(rmin, 1) {
-		m.bound = partialSagitta + departure
+	if cr.arcs {
+		m.bound = partialSagitta + cr.departure
 	}
 	n := len(rings[0])
+	// Two neighbouring straight columns bound a planar cell, which the two end rings hold exactly, as they do in a cutter
+	// of two rings. Only a cell beside a curved column needs the rings between, so only a curved column and the columns
+	// beside it carry them.
+	full := make([]bool, n)
+	for j := range n {
+		full[j] = layers == 1 || curved[j] || curved[(j+n-1)%n] || curved[(j+1)%n]
+	}
 	idx := make([][]int, len(rings))
-	for k, ring := range rings {
+	for k := range rings {
 		idx[k] = make([]int, n)
+	}
+	for k, ring := range rings {
 		for j, p := range ring {
+			if k != 0 && k != layers && !full[j] {
+				idx[k][j] = -1
+				continue
+			}
 			m.verts = append(m.verts, l.to3(p, heights[k]))
 			idx[k][j] = len(m.verts) - 1
 		}
 	}
-	for k := range layers {
-		for j := range n {
-			a, b := idx[k][j], idx[k][(j+1)%n]
-			c, e := idx[k+1][(j+1)%n], idx[k+1][j]
+	for j := range n {
+		j1 := (j + 1) % n
+		switch {
+		case full[j] && full[j1]:
+			for k := range layers {
+				a, b := idx[k][j], idx[k][j1]
+				c, e := idx[k+1][j1], idx[k+1][j]
+				m.tris = append(m.tris, [3]int{a, c, b}, [3]int{a, e, c})
+			}
+		case full[j]:
+			// A fan over the planar cell from the bottom of the straight column j1.
+			apex := idx[layers][j1]
+			for k := range layers {
+				m.tris = append(m.tris, [3]int{idx[k][j], idx[k+1][j], apex})
+			}
+			m.tris = append(m.tris, [3]int{idx[0][j], apex, idx[0][j1]})
+		case full[j1]:
+			apex := idx[0][j]
+			for k := range layers {
+				m.tris = append(m.tris, [3]int{apex, idx[k+1][j1], idx[k][j1]})
+			}
+			m.tris = append(m.tris, [3]int{apex, idx[layers][j], idx[layers][j1]})
+		default:
+			a, b := idx[0][j], idx[0][j1]
+			c, e := idx[layers][j1], idx[layers][j]
 			m.tris = append(m.tris, [3]int{a, c, b}, [3]int{a, e, c})
 		}
 	}
