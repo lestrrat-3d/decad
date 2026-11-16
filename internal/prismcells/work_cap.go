@@ -19,26 +19,5 @@ const MaxArrangementSegments = 4096
 // RegionsWithinWorkCap counts the densified segments over every region a
 // private scene will hold. A prism group's lumps are separate regions.
 func RegionsWithinWorkCap(budget *proofbound.WorkBudget, profiles ...momentinput.Profile) (int, bool, error) {
-	segments := 0
-	for _, profile := range profiles {
-		for _, loop := range append([]momentinput.LoopRecord{profile.Outer}, profile.Holes...) {
-			for _, seg := range loop.Segments {
-				if err := budget.Step(); err != nil {
-					return segments, false, err
-				}
-				switch seg.(type) {
-				case momentinput.LineSeg:
-					segments++
-				case momentinput.CircleSeg, momentinput.ArcSeg:
-					segments += 256
-				default:
-					return segments, false, nil // G4 already excluded this case.
-				}
-				if segments > MaxArrangementSegments {
-					return segments, false, nil
-				}
-			}
-		}
-	}
-	return segments, true, nil
+	return RegionsWithinSegmentCap(budget, MaxArrangementSegments, profiles...)
 }

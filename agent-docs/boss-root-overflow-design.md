@@ -1,7 +1,8 @@
 # Boss root fillet overflow design
 
 A `Boss` root fillet whose blend runs off its face (boss-design §6). The blend ends where it meets another face of the
-body, as Fusion 360 ends it. Status: approved for building in the increments of §7; nothing is built yet.
+body, as Fusion 360 ends it. Status: approved for building in the increments of §7. P2 is built: the Ø14 union is an
+A1 brep with `B` on one carrier (general-boolean §3 "A1 as a brep", holed operands); P3 to P7 are not.
 
 Navigation (not authority): target result → §2; the gate before any build → §2.4; which configurations build → §4;
 why each admission is sound → §5; what must exist first → §6; size and options → §7, §8.

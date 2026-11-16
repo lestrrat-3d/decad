@@ -67,6 +67,7 @@ func (b *Engine) LoopOf(region brepgeom.Profile, budget *proofbound.WorkBudget) 
 		if err != nil {
 			return Loop{}, err
 		}
+		carriers[i] = b.Canonical(carriers[i])
 		starts[i], ends[i], err = ubEnds(seg, w)
 		if err != nil {
 			return Loop{}, err
@@ -159,7 +160,11 @@ func (b *Engine) junction(ci Carrier, ei ubEnd, cj Carrier, sj ubEnd) (Point2, f
 	}
 	if ci.Kind == ubCircle && cj.Kind == ubCircle {
 		if ei.p != sj.p {
-			return Point2{}, 0, brepgeom.ErrStackedWallMiss
+			nat, ok := b.spanEndJunction(ci, ei, cj, sj)
+			if !ok {
+				return Point2{}, 0, brepgeom.ErrStackedWallMiss
+			}
+			return b.recordedJunction(ci, cj, nat, nat, circleSide(ci, cj, nat.p))
 		}
 		return b.recordedJunction(ci, cj, ei, sj, circleSide(ci, cj, ei.p))
 	}
@@ -233,6 +238,10 @@ func (b *Engine) junction(ci Carrier, ei ubEnd, cj Carrier, sj ubEnd) (Point2, f
 	entry, ok := b.table[key]
 	if !ok {
 		entry = ubEntry{p: p, delta: hint.allow}
+		b.table[key] = entry
+	}
+	if ok && b.holedUnion {
+		entry.delta = max(entry.delta, hint.allow)
 		b.table[key] = entry
 	}
 	b.allow = math.Max(b.allow, entry.delta)
@@ -573,6 +582,9 @@ func (b *Engine) FaceRecord(f Face) (brepgeom.Profile, error) {
 			return brepgeom.Profile{}, err
 		}
 		region.Holes = append(region.Holes, ring)
+	}
+	if b.holedUnion {
+		return b.auditedRegion(region), nil
 	}
 	return region, nil
 }

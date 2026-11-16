@@ -24,7 +24,9 @@ import (
 // from admitted operand slabs. It handles operands that already require a
 // BRep, slabs whose records stay apart (separate bosses on a plate), and
 // interfaces that clean nesting cannot state as a stacked-prism record, such
-// as a flush or crossing boss.
+// as a flush or crossing boss. An operand with holed regions enters only under
+// the shared-span gate (holed_gate.go, holed_scenes.go, holed_merge.go): a
+// hole of one operand must share a span with an outer of the other.
 //
 // Every 2D answer is a private scene's: a slab both operands reach arranges
 // every record reaching it and its regions are the select-all merge's loops,
@@ -97,6 +99,14 @@ type ubBuild struct {
 	cutDelta float64
 	walk     float64
 	crossing float64
+
+	// holedUnion marks a union with a holed record that passed the
+	// pre-filter (holed_gate.go); Cut never sets it. segmentCap is the
+	// arrangement cap of its scenes, and aliasCharge the carrier alias's
+	// charge (holed_scenes.go).
+	holedUnion  bool
+	segmentCap  int
+	aliasCharge float64
 }
 
 // errUBMiss marks a topology this build does not cover, found after a scene
@@ -122,8 +132,23 @@ func (st *stackedUnionState) brep(ctx context.Context, levels []stackedrecord.Un
 	}
 	b := &ubBuild{st: st, levels: levels, reach: reach,
 		scenes: map[string]*ubScene{}, geom: stackedbrep.NewEngine(held)}
+	if st.hasHoledRecord() {
+		if !holedCandidate(st.va, st.vb) {
+			return nil, false, nil
+		}
+		b.holedUnion, b.segmentCap = true, gatedArrangementSegments
+		b.geom.SetHoledUnion(func(p brepgeom.Profile) error {
+			rec := profileRecord{Outer: p.Outer, Holes: p.Holes}
+			return prismcells.AuditMergeSection(st.budget, prismrecord.Payload{Profile: rec}, rec)
+		})
+	}
 	bp, err := b.run(ctx)
 	if errors.Is(err, errUBMiss) || errors.Is(err, decaderr.ErrUnsupported) {
+		return nil, false, nil
+	}
+	if b.holedUnion && err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) {
+		// A holed pair the build does not cover takes the mesh path
+		// whatever the build's refusal was.
 		return nil, false, nil
 	}
 	if err != nil {
@@ -145,6 +170,11 @@ func Cut(ctx context.Context, budget *proofbound.WorkBudget, va, vb Operand,
 }
 
 func (b *ubBuild) run(ctx context.Context) (brepPayload, error) {
+	if b.holedUnion {
+		if err := b.prepareHoled(ctx); err != nil {
+			return brepPayload{}, err
+		}
+	}
 	// Slab loops first: their recorded corners seed the table, so a scene's
 	// computed crossing at a recorded corner takes the record's own point.
 	n := len(b.reach)
@@ -190,9 +220,12 @@ func (b *ubBuild) run(ctx context.Context) (brepPayload, error) {
 		}
 	}
 	b.geom.RecordJunctions(n)
-	if b.walk != 0 || b.crossing != 0 {
+	if b.walk != 0 || (b.crossing != 0 && !b.holedUnion) {
 		// A walked endpoint or an amplified crossing moves a carrier, not
-		// just a vertex on it; only a swept face carries that as a band.
+		// just a vertex on it; only a swept face carries that as a band. A
+		// holed union carries the width of its shared spans as that band
+		// (aliasCharge), and no displacement enters it, so its crossing is
+		// that width alone.
 		return brepPayload{}, errUBMiss
 	}
 	// Every vertex lies on exact carriers: an axis-aligned plane at its
@@ -207,6 +240,9 @@ func (b *ubBuild) run(ctx context.Context) (brepPayload, error) {
 	// are the only record that reads a merge's cut parameter verbatim, so
 	// the stack carries cutDelta on top of that allowance.
 	faceDelta := b.geom.Allow()
+	if b.holedUnion {
+		faceDelta = proofbound.AbsSumUpper(faceDelta, b.aliasCharge)
+	}
 	stackDelta := proofbound.AbsSumUpper(b.cutDelta, faceDelta)
 	faceLevels := make([]stackedbrep.Level, len(b.levels))
 	for i, level := range b.levels {
@@ -313,7 +349,11 @@ func (b *ubBuild) scene(ctx context.Context, refsA, refsB []ubRef) (*ubScene, er
 	for _, ref := range refsB {
 		regionsB = append(regionsB, b.record(ref))
 	}
-	segments, within, err := prismcells.RegionsWithinWorkCap(b.st.budget,
+	segCap := prismcells.MaxArrangementSegments
+	if b.segmentCap != 0 {
+		segCap = b.segmentCap
+	}
+	segments, within, err := prismcells.RegionsWithinSegmentCap(b.st.budget, segCap,
 		append(append([]profileRecord{}, regionsA...), regionsB...)...)
 	if err != nil {
 		return nil, err
@@ -321,7 +361,7 @@ func (b *ubBuild) scene(ctx context.Context, refsA, refsB []ubRef) (*ubScene, er
 	if !within {
 		return nil, prismcells.WithWorkLimit(fmt.Errorf(
 			`%w: the analytic union scene charges at least %d arranger segments against this evaluator's cap of %d (each circle or arc costs 256, each line 1)`,
-			decaderr.ErrUnsupported, segments, prismcells.MaxArrangementSegments), segments)
+			decaderr.ErrUnsupported, segments, segCap), segments)
 	}
 	s, tags, delta, err := prismcells.BuildProfileScene(b.st.budget, regionsA, regionsB, &prismReexpression{Identity: true})
 	if err != nil {
@@ -405,6 +445,9 @@ func (b *ubBuild) slabRegions(ctx context.Context, k int) ([]profileRecord, erro
 	if err := b.charge(sc); err != nil {
 		return nil, err
 	}
+	if b.holedUnion && b.sceneHasHoles(sc) {
+		return b.holedSlabRegions(ctx, sc)
+	}
 	if b.cut {
 		return b.cutSlabRegion(sc)
 	}
@@ -437,7 +480,8 @@ func (b *ubBuild) slabRegions(ctx context.Context, k int) ([]profileRecord, erro
 		}
 		if !(area > 0) {
 			// A clockwise loop would be a hole of a merged region, which the
-			// void check already refuses; nothing here owns one.
+			// void check already refuses; a holed union's merge is
+			// holedSlabRegions, which owns its holes.
 			return nil, errUBMiss
 		}
 		out[i] = profileRecord{Outer: loop}
@@ -445,20 +489,28 @@ func (b *ubBuild) slabRegions(ctx context.Context, k int) ([]profileRecord, erro
 			return nil, err
 		}
 	}
-	if len(out) > 1 {
-		// Several loops are separate lumps of the slab only when they are
-		// apart as well as disjoint (A5): two tangent boss circles close as
-		// two whole loops that meet at a point no loop names.
-		apart, walk, err := prismcells.ProveGroupApart(ctx, b.st.budget, out)
-		if err != nil {
-			return nil, err
-		}
-		if !apart {
-			return nil, errUBMiss
-		}
-		b.walk = math.Max(b.walk, walk)
+	if err := b.proveApart(ctx, out); err != nil {
+		return nil, err
 	}
 	return out, nil
+}
+
+// proveApart requires several loops to be separate lumps of the slab: apart
+// as well as disjoint (A5). Two tangent boss circles close as two whole loops
+// that meet at a point no loop names.
+func (b *ubBuild) proveApart(ctx context.Context, out []profileRecord) error {
+	if len(out) <= 1 {
+		return nil
+	}
+	apart, walk, err := prismcells.ProveGroupApart(ctx, b.st.budget, out)
+	if err != nil {
+		return err
+	}
+	if !apart {
+		return errUBMiss
+	}
+	b.walk = math.Max(b.walk, walk)
+	return nil
 }
 
 // cutSlabRegion keeps the cells inside the target and outside the tool.
@@ -560,55 +612,9 @@ func sameRegion(budget *proofbound.WorkBudget, a, b profileRecord) (bool, error)
 // cut's holed cell misses. A stacked operand's equal regions on both sides,
 // outer and holes alike (sameRegion), enter once.
 func (b *ubBuild) interfaceFaces(ctx context.Context, k int) error {
-	type side struct {
-		ref          ubRef
-		below, above bool
-	}
-	var sides [2][]side
-	add := func(ref ubRef, below bool) error {
-		op := 0
-		if ref.isB {
-			op = 1
-		}
-		for i := range sides[op] {
-			have := &sides[op][i]
-			if have.ref == ref {
-				have.below, have.above = have.below || below, have.above || !below
-				return nil
-			}
-			equal, err := sameRegion(b.st.budget, b.record(have.ref), b.record(ref))
-			if err != nil {
-				return err
-			}
-			if equal {
-				have.below, have.above = have.below || below, have.above || !below
-				return nil
-			}
-		}
-		sides[op] = append(sides[op], side{ref: ref, below: below, above: !below})
-		return nil
-	}
-	for op := range 2 {
-		for _, ref := range b.refs(op == 1, b.reach[k-1][op]) {
-			if err := add(ref, true); err != nil {
-				return err
-			}
-		}
-		for _, ref := range b.refs(op == 1, b.reach[k][op]) {
-			if err := add(ref, false); err != nil {
-				return err
-			}
-		}
-	}
-	if len(sides[0])+len(sides[1]) < 2 {
-		return nil
-	}
-	var refsA, refsB []ubRef
-	for _, sd := range sides[0] {
-		refsA = append(refsA, sd.ref)
-	}
-	for _, sd := range sides[1] {
-		refsB = append(refsB, sd.ref)
+	sides, refsA, refsB, ok, err := b.interfaceRefs(k)
+	if err != nil || !ok {
+		return err
 	}
 	sc, err := b.scene(ctx, refsA, refsB)
 	if err != nil {
@@ -686,4 +692,65 @@ func (b *ubBuild) interfaceFaces(ctx context.Context, k int) error {
 		}
 	}
 	return nil
+}
+
+// ifaceSide is one record entering an interface scene and which side of the
+// interface it reaches.
+type ifaceSide struct {
+	ref          ubRef
+	below, above bool
+}
+
+// interfaceRefs is the record set of the interface at level k: each
+// operand's records reaching the slab below or above it, a stacked operand's
+// equal regions on both sides (sameRegion) entering once. ok is false when
+// fewer than two records meet there, which has no interface scene.
+func (b *ubBuild) interfaceRefs(k int) ([2][]ifaceSide, []ubRef, []ubRef, bool, error) {
+	var sides [2][]ifaceSide
+	add := func(ref ubRef, below bool) error {
+		op := 0
+		if ref.isB {
+			op = 1
+		}
+		for i := range sides[op] {
+			have := &sides[op][i]
+			if have.ref == ref {
+				have.below, have.above = have.below || below, have.above || !below
+				return nil
+			}
+			equal, err := sameRegion(b.st.budget, b.record(have.ref), b.record(ref))
+			if err != nil {
+				return err
+			}
+			if equal {
+				have.below, have.above = have.below || below, have.above || !below
+				return nil
+			}
+		}
+		sides[op] = append(sides[op], ifaceSide{ref: ref, below: below, above: !below})
+		return nil
+	}
+	for op := range 2 {
+		for _, ref := range b.refs(op == 1, b.reach[k-1][op]) {
+			if err := add(ref, true); err != nil {
+				return sides, nil, nil, false, err
+			}
+		}
+		for _, ref := range b.refs(op == 1, b.reach[k][op]) {
+			if err := add(ref, false); err != nil {
+				return sides, nil, nil, false, err
+			}
+		}
+	}
+	if len(sides[0])+len(sides[1]) < 2 {
+		return sides, nil, nil, false, nil
+	}
+	var refsA, refsB []ubRef
+	for _, sd := range sides[0] {
+		refsA = append(refsA, sd.ref)
+	}
+	for _, sd := range sides[1] {
+		refsB = append(refsB, sd.ref)
+	}
+	return sides, refsA, refsB, true, nil
 }
