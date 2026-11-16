@@ -531,7 +531,7 @@ func TestChamferCapLoopSubsetEnds(t *testing.T) {
 		}
 		return body, sel
 	}
-	for _, c := range []struct{ R, phi, l0 float64 }{{5, 22.5, 0}, {5, 22.5, 1}, {35, 10, 0}, {8, 10, 1}, {8, 15, 1}} {
+	for _, c := range []struct{ R, phi, l0 float64 }{{5, 22.5, 0}, {5, 22.5, 1}, {8, 10, 1}, {8, 15, 1}} {
 		t.Run(fmt.Sprintf("refuses convex arc of radius %v into a %v degree concave end after %v mm", c.R, c.phi, c.l0),
 			func(t *testing.T) {
 				t.Parallel()
@@ -549,6 +549,60 @@ func TestChamferCapLoopSubsetEnds(t *testing.T) {
 		want := 20*d*d/2 + math.Pi/3*(R*d*d/2-d*d*d/6) - d*d*d*cot(phi)/6
 		// The convex arc's facets read high, so the removed volume reads a few hundredths low.
 		require.InDelta(t, volumeOf(t, body)-want, volumeOf(t, out), 0.06)
+	})
+
+	// The next wall's plane carried back meets the bevel's top edge here (R - d - D = 0.032), so it caps the bevel and
+	// the end clip stops at the foot of the plane's line. The wedge of the cutter on the head's side of the plane
+	// between the corner and the foot, integrated numerically, is the volume the clip keeps.
+	t.Run("convex arc of radius 35 into a 10 degree concave end", func(t *testing.T) {
+		t.Parallel()
+		const R, phi, kept = 35.0, 10.0, 0.1389
+		body, sel := arcIntoConcave(t, R, phi, 0)
+		out, err := chamfer(t, body, sel)
+		require.NoError(t, err)
+		want := 20*d*d/2 + 25*math.Pi/180*(R*d*d/2-d*d*d/6) - kept
+		// The convex arc's facets read high, so the removed volume reads a few hundredths low.
+		require.InDelta(t, volumeOf(t, body)-want, volumeOf(t, out), 0.06)
+	})
+
+	// The hub's corner of the one-way clutch: an arc of radius 13.2 meets a flank at 11.43 degrees. The plane misses
+	// the bevel's top edge at 0.5 mm and caps it at 0.25 mm.
+	t.Run("convex arc of radius 13.2 into an 11.43 degree concave end", func(t *testing.T) {
+		t.Parallel()
+		const R, phi, sig, dc, kept = 13.2, 11.43, 60.0, 0.25, 0.01519
+		body, sel := arcIntoConcave(t, R, phi, 0)
+		out, err := decad.Chamfer(t.Context(), body, sel, units.Millimeters(dc))
+		require.NoError(t, err)
+		want := 20*dc*dc/2 + sig*math.Pi/180*(R*dc*dc/2-dc*dc*dc/6) - kept
+		require.InDelta(t, volumeOf(t, body)-want, volumeOf(t, out), 0.06)
+
+		// Below the top by h the outline follows the next wall's line from the corner back to the bevel's top circle
+		// at the plane's first crossing, lambda1 = cu - sqrt((R - dc + h)^2 - D^2), then the cone's circle.
+		rad := func(x float64) float64 { return x * math.Pi / 180 }
+		cx, cy := 20.0, R
+		vx, vy := cx+R*math.Sin(rad(sig)), cy-R*math.Cos(rad(sig))
+		fx, fy := math.Cos(rad(sig-phi)), math.Sin(rad(sig-phi))
+		D, cu := R*math.Cos(rad(phi)), R*math.Sin(rad(phi))
+		for _, h := range []float64{0.05, 0.1} {
+			o := sectionAt(t, out, h, 0.03)
+			off, err := o.OffSurface.In(units.Millimeter)
+			require.NoError(t, err)
+			lam := cu - math.Sqrt((R-dc+h)*(R-dc+h)-D*D)
+			require.Less(t, nearestLoopPoint(o, vx-lam*fx, vy-lam*fy), off+1e-3, fmt.Sprintf("flank at depth %v", h))
+			a := rad(sig-90) - 6/R
+			// The sample lies between mesh vertices of the circle, so allow the chord tolerance.
+			require.Less(t, nearestLoopPoint(o, cx+(R-dc+h)*math.Cos(a), cy+(R-dc+h)*math.Sin(a)), off+0.03,
+				fmt.Sprintf("cone circle at depth %v", h))
+		}
+	})
+
+	// At 0.5 mm the plane's distance from the centre, D = 12.938, exceeds R - d = 12.7, so it cannot cap the bevel.
+	t.Run("refuses convex arc of radius 13.2 into an 11.43 degree concave end at 0.5 mm", func(t *testing.T) {
+		t.Parallel()
+		body, sel := arcIntoConcave(t, 13.2, 11.43, 0)
+		_, err := chamfer(t, body, sel)
+		require.ErrorIs(t, err, decad.ErrUnsupported)
+		require.ErrorContains(t, err, "cannot cap the chamfer")
 	})
 
 	// A tongue 1.8 mm wide with a round end, chained smoothly: its top line passes 1.8 mm from the concave corner that

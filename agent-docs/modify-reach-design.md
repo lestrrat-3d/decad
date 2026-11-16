@@ -1014,9 +1014,13 @@ extension and the probe of its end:
   `S = 1.5 (reach/sin(turn) + dc + over)`, local to the corner. The cutter lies within `reach` of its run, so a point of the chain whose band of that width
   meets the sector is refused unless it lies in the smooth stretch leaving the corner within `reach / sin(turn)` of it along
   the chain, where the taper is. That refuses a stretch past the first sharp corner, a smooth stretch that doubles
-  back, and an arc that curls onto the next wall's plane carried back. For an arc at the corner the plane's second
-  crossing of the bevel's circle at the cap (radius `R - dc`) must lie farther than `S + reach` from the corner, and the
-  plane must meet that circle at all.
+  back, and an arc that curls onto the next wall's plane carried back. For an arc at the corner the clip stops
+  at the foot of the next wall's line, so its radius is `min(S, R sin(turn))`, where `R sin(turn)` is the distance from the
+  corner along that line to the foot of the perpendicular from the arc's centre. Past the foot the line turns back toward
+  the arc, and the clip does not reach it. The plane must also meet the bevel's circle at the cap (radius `R - dc`),
+  that is `R - dc` must not be below the plane's distance from the centre; otherwise it cannot cap the chamfer and the
+  run is refused. Where `S` is the smaller radius the clip keeps it, and the plane's second crossing must lie farther
+  than `S + reach` from the corner.
 
 Any other end is `ErrUnsupported`: a convex end turned by less than 45 degrees, a concave end turned by more than 90
 degrees, a concave end beside an arc, a run-out longer than the next edge, an arc run whose extension turns more than a
