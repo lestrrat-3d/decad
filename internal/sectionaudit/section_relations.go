@@ -153,8 +153,12 @@ func Nesting(budget *proofbound.WorkBudget, segs []Entry, nLoops int) error {
 		return nil
 	}
 	bounds := make([][]survey2d.SurveyElem, nLoops)
-	pts := make([][2]float64, nLoops)
-	hasPt := make([]bool, nLoops)
+	// Every walk start of a loop is a point of it, and once no two loops
+	// cross or touch (S7) any one of them classifies the whole loop. The
+	// first is tried first; a later one is read only where the ray test
+	// cannot decide the earlier ones, as where a start lies on another
+	// loop's carrier circle and every ray from it is ambiguous.
+	cands := make([][][2]float64, nLoops)
 	for _, s := range segs {
 		if err := survey2d.WallBudgetStep(budget); err != nil {
 			return err
@@ -162,9 +166,13 @@ func Nesting(budget *proofbound.WorkBudget, segs []Entry, nLoops int) error {
 		if e, ok := elemOf(s.w); ok {
 			bounds[s.loop] = append(bounds[s.loop], e)
 		}
-		if !hasPt[s.loop] {
-			pts[s.loop] = [2]float64{s.w.StartU, s.w.StartV}
-			hasPt[s.loop] = true
+		cands[s.loop] = append(cands[s.loop], [2]float64{s.w.StartU, s.w.StartV})
+	}
+	pts := make([][2]float64, nLoops)
+	hasPt := make([]bool, nLoops)
+	for l := range cands {
+		if len(cands[l]) > 0 {
+			pts[l], hasPt[l] = cands[l][0], true
 		}
 	}
 	minU, minV, maxU, maxV, ok, err := sectionBBoxBudget(budget, segs)
@@ -176,6 +184,17 @@ func Nesting(budget *proofbound.WorkBudget, segs []Entry, nLoops int) error {
 	}
 	scale := math.Max(1, math.Max(math.Max(math.Abs(minU), math.Abs(maxU)), math.Max(math.Abs(minV), math.Abs(maxV))))
 	tol := contactEps * scale
+	// contains classifies the first decidable candidate of loop p against
+	// loop c, and reports the candidate it read.
+	contains := func(c, p int) (bool, bool, [2]float64, error) {
+		for _, pt := range cands[p] {
+			inside, decided, err := loopContains(budget, bounds[c], pt[0], pt[1], tol)
+			if err != nil || decided {
+				return inside, decided, pt, err
+			}
+		}
+		return false, false, pts[p], nil
+	}
 
 	undecidable := func(container, pointLoop int, point [2]float64) error {
 		legacy := fmt.Errorf(`%w: the rewrite's nesting cannot be decided; a resolving kernel is not available`, ErrUnsupported)
@@ -191,10 +210,11 @@ func Nesting(budget *proofbound.WorkBudget, segs []Entry, nLoops int) error {
 		if !hasPt[h] {
 			continue
 		}
-		inside, decided, err := loopContains(budget, bounds[0], pts[h][0], pts[h][1], tol)
+		inside, decided, at, err := contains(0, h)
 		if err != nil {
 			return err
 		}
+		pts[h] = at
 		if !decided {
 			return undecidable(0, h, pts[h])
 		}
@@ -215,13 +235,16 @@ func Nesting(budget *proofbound.WorkBudget, segs []Entry, nLoops int) error {
 				continue
 			}
 			for _, pr := range [2]struct {
-				in int
-				pt [2]float64
-			}{{a, pts[b]}, {b, pts[a]}} {
-				inside, decided, err := loopContains(budget, bounds[pr.in], pr.pt[0], pr.pt[1], tol)
+				in, of int
+			}{{a, b}, {b, a}} {
+				inside, decided, at, err := contains(pr.in, pr.of)
 				if err != nil {
 					return err
 				}
+				pr := struct {
+					in int
+					pt [2]float64
+				}{pr.in, at}
 				if !decided {
 					pointLoop := a
 					if pr.in == a {

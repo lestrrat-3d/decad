@@ -39,9 +39,20 @@ type offCurve struct {
 	cx, cy, rr float64
 }
 
-// carrierOf builds the carrier of a walk at a corner: (tx, ty) is the walk's
-// unit travel tangent there.
-func carrierOf(w survey2d.SideWalk, tx, ty float64) carrier {
+// carrierFrom builds the carrier of a walk at a corner: (tx, ty) is the walk's
+// unit travel tangent there. A non-nil ov replaces the walk's own geometry
+// with the recorded carrier it names.
+func carrierFrom(w survey2d.SideWalk, tx, ty float64, ov *CornerCarrier) carrier {
+	if ov != nil {
+		if ov.Line {
+			return carrier{isLine: true, px: ov.SU, py: ov.SV, tx: tx, ty: ty}
+		}
+		inside := 1.0
+		if w.Th1 < w.Th0 {
+			inside = -1.0
+		}
+		return carrier{cx: ov.CU, cy: ov.CV, radius: ov.R, insideSign: inside}
+	}
 	if !w.IsCircular() {
 		return carrier{isLine: true, px: w.StartU, py: w.StartV, tx: tx, ty: ty}
 	}
@@ -108,14 +119,22 @@ type FilletDecisions struct {
 // so a caller that holds a margin on each decision reads the same numbers the
 // construction used.
 func FilletWithRoots(walks []survey2d.SideWalk, ci int, r, tol float64) (*Blend, FilletDecisions, error) {
+	return FilletWithCarriers(walks, ci, r, tol, nil, nil)
+}
+
+// FilletWithCarriers is FilletWithRoots reading the corner's two carriers from
+// recorded segment data (agent-docs/carrier-record-design.md §7.2) instead of
+// the walks: carA for the arriving walk and carB for the leaving one. A nil
+// override reads that walk as FilletWithRoots does.
+func FilletWithCarriers(walks []survey2d.SideWalk, ci int, r, tol float64, ovA, ovB *CornerCarrier) (*Blend, FilletDecisions, error) {
 	n := len(walks)
 	arrive := walks[(ci+n-1)%n] // walk A, arriving at the corner
 	leave := walks[ci]          // walk B, leaving the corner
 	px, py := leave.StartU, leave.StartV
 
 	// Unit travel tangents at the corner: A's outgoing, B's incoming.
-	ax, ay, la := Normalize(arrive.TanOutU, arrive.TanOutV)
-	bx, by, lb := Normalize(leave.TanInU, leave.TanInV)
+	ax, ay, la := cornerTangent(arrive, ovA, px, py, true)
+	bx, by, lb := cornerTangent(leave, ovB, px, py, false)
 	if la == 0 || lb == 0 {
 		return nil, FilletDecisions{}, fmt.Errorf(`%w: a corner walk has no direction`, decaderr.ErrDegenerate)
 	}
@@ -129,8 +148,8 @@ func FilletWithRoots(walks []survey2d.SideWalk, ci int, r, tol float64) (*Blend,
 		offsetSign = -1.0 // concave: fill material in
 	}
 
-	carA := carrierOf(arrive, ax, ay)
-	carB := carrierOf(leave, bx, by)
+	carA := carrierFrom(arrive, ax, ay, ovA)
+	carB := carrierFrom(leave, bx, by, ovB)
 	offA, err := offsetOf(carA, offsetSign, r, tol)
 	if err != nil {
 		return nil, FilletDecisions{}, err
@@ -171,9 +190,17 @@ func FilletWithRoots(walks []survey2d.SideWalk, ci int, r, tol float64) (*Blend,
 // CornerCross is the cross product of corner ci's two unit travel tangents,
 // the number S4 reads; false when a walk has no direction there.
 func CornerCross(walks []survey2d.SideWalk, ci int) (float64, bool) {
+	return CornerCrossWithCarriers(walks, ci, nil, nil)
+}
+
+// CornerCrossWithCarriers is CornerCross reading the tangents from recorded
+// carrier data where an override is given (agent-docs/carrier-record-design.md
+// §7.2).
+func CornerCrossWithCarriers(walks []survey2d.SideWalk, ci int, ovA, ovB *CornerCarrier) (float64, bool) {
 	n := len(walks)
-	ax, ay, la := Normalize(walks[(ci+n-1)%n].TanOutU, walks[(ci+n-1)%n].TanOutV)
-	bx, by, lb := Normalize(walks[ci].TanInU, walks[ci].TanInV)
+	px, py := walks[ci].StartU, walks[ci].StartV
+	ax, ay, la := cornerTangent(walks[(ci+n-1)%n], ovA, px, py, true)
+	bx, by, lb := cornerTangent(walks[ci], ovB, px, py, false)
 	if la == 0 || lb == 0 {
 		return 0, false
 	}
@@ -279,12 +306,19 @@ func RewriteLoop(budget *proofbound.WorkBudget, walks []survey2d.SideWalk, blend
 // same construction (§7). An over-large setback is left to the §5 S6 audit,
 // never clipped here.
 func Chamfer(walks []survey2d.SideWalk, ci int, dA, dB, tol float64) (*Blend, error) {
+	return ChamferWithCarriers(walks, ci, dA, dB, tol, nil, nil)
+}
+
+// ChamferWithCarriers is Chamfer whose S4 turn reads the tangents of recorded
+// carrier data where an override is given (agent-docs/carrier-record-design.md
+// §7.2). The feet stay set back from the walked corner.
+func ChamferWithCarriers(walks []survey2d.SideWalk, ci int, dA, dB, tol float64, ovA, ovB *CornerCarrier) (*Blend, error) {
 	n := len(walks)
 	arrive := walks[(ci+n-1)%n] // walk A, arriving at the corner
 	leave := walks[ci]          // walk B, leaving the corner
 
-	ax, ay, la := Normalize(arrive.TanOutU, arrive.TanOutV)
-	bx, by, lb := Normalize(leave.TanInU, leave.TanInV)
+	ax, ay, la := cornerTangent(arrive, ovA, leave.StartU, leave.StartV, true)
+	bx, by, lb := cornerTangent(leave, ovB, leave.StartU, leave.StartV, false)
 	if la == 0 || lb == 0 {
 		return nil, fmt.Errorf(`%w: a corner walk has no direction`, decaderr.ErrDegenerate)
 	}

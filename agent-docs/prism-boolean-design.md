@@ -387,7 +387,16 @@ For an admitted pair, decad builds one private `sketch.Sketch` (the same
   refuses a pair carrying one before the scene is even built
   (`prismProfileHasTrimmedCircularSource`) rather than publish an
   under-charged bound for it; the routing is the same silent §3.4
-  fallback as every other entry-gate miss.
+  fallback as every other entry-gate miss. A `Cut` of a bore tool out of a
+  union's merged outer loop, which holds trimmed `CircleSeg`s, therefore takes
+  the mesh path. The bore `Cut` instead follows the root `Fillet` of that
+  union: the fillet rewrite (`offset2d.OriginalSegment`) re-emits every walk
+  of a filleted loop as a whole `LineSeg` or `ArcSeg` and clones every other
+  loop, so the filleted part enters the `Cut` scene with whole segments, and
+  the tool records its own circular segments whole (a D bore as a whole
+  `ArcSeg` and a line). A clean-nesting `Cut` of a target with a valid
+  carrier record keeps a record of its own
+  (`agent-docs/carrier-record-design.md` §5.4).
 - Operand B's `ProfileRecord` is **re-expressed into A's frame** before its
   entities are created, through the **composed relative map**: B's frame to
   world, B's placement, A's placement inverted and A's frame inverted are folded
@@ -756,9 +765,23 @@ same-frame, same-placement prisms whose sweep intervals G5 proves equal
 (`prismplacement.UnionZIntervalMatches`: equal held floats and one shared
 denoted rational at each end), and the result keeps that shared denotation.
 Every
-input section must have no holes, zero section displacement, and only whole
-`LineSeg` edges. Two input edges on the same infinite line carrier are
-refused because this path has no proof for their shared source span. A
+input section of the **line class** (`prismboolean.UnionMany`'s own gate) has
+no holes, zero section displacement, and only whole `LineSeg` edges. Two input
+edges on the same infinite line carrier are refused because this path has no
+proof for their shared source span.
+
+Every other set of prisms that meets U1 is the **extended class**
+(`agent-docs/carrier-record-design.md` §5.3): whole `LineSeg`, `CircleSeg` and
+`ArcSeg` sections, holed operands, and displaced operands whose own body
+carries a valid carrier record (`prismrecord.CarrierRecordOf`; an operand with an
+unowned record, or an arc whose Lemma H bound is infinite, is a miss). It runs one arrangement under the identity re-expression,
+reads every arranged vertex where two operands meet through Lemma T, audits
+the arrangement's stability under each operand's displacement (V1 to V3 and
+carrier-record-design §6), and records the result's carriers. The extended
+class never refuses. Every failure is a silent miss to the next `Union`
+route (`unionmany.Routes`), as A6's `AmplifiedFallback` is for a pair, and
+only cancellation returns an error. `StraightLoftUnionMany` reaches it too
+when a converted set leaves the line class. A
 circular prism joined to radial copies of one fitted section has a separate
 certified path in `agent-docs/pattern-union-design.md`. Other multi-prism
 classes enter `Union`'s certified two-body evaluator in source order after
@@ -1178,7 +1201,7 @@ needed for each.
 |---|---|---|
 | 1. No chaining | Removed. Result is `prismPayload`; no `MeshBound` to compose, so no chord tolerance for the next pair to fall below. A chained boolean re-checks §3's gate on the new pair, carries the greater incoming displacement plus its new re-expression and cut displacement, and retains the greater incoming axial displacement at each end (§7). | Unchanged — general-position or non-analytic pairs still degrade per evaluator §9. |
 | 2. Coplanar contact refuses | Removed. Coplanar, co-directional contact is the admitted case's whole premise. | Unchanged — non-coplanar or non-prism coplanar contact (e.g. a prism against a revolve cap) stays on the mesh path. |
-| 3. Analytic identity dies | Removed where `δ == 0` — a merge that cut nothing. Result is `prismPayload`: Fillet/Chamfer/Shell, all three surveys, and the clearance kernel already dispatch on payload class and need zero new code for it. Where `δ > 0` — which every cut-bearing merge is, §7 — the result is a `prismPayload` still, and every consumer's reach there is §12's own rows to state, `Verify`'s tolerance gate included; the reference that gate anchors against is verification design §3's to define. Restoring the reach §12 stages, for a displacement whose CARRIERS are exact, is a separate design change, not a consequence this design removes. | Unchanged for mesh-path results — `facetedPayload` still permanently refuses modify ops (modify-reach SX9) and all three surveys. |
+| 3. Analytic identity dies | Removed where `δ == 0` — a merge that cut nothing. Result is `prismPayload`: Fillet/Chamfer/Shell, all three surveys, and the clearance kernel already dispatch on payload class and need zero new code for it. Where `δ > 0` — which every cut-bearing merge is, §7 — the result is a `prismPayload` still, and every consumer's reach there is §12's own rows to state, `Verify`'s tolerance gate included; the reference that gate anchors against is verification design §3's to define. A `Fillet` or `Chamfer` of a displaced result reaches its lateral corners where the result carries a valid carrier record (`agent-docs/carrier-record-design.md` §3, §7): the pair `Union` of two undisplaced operands, the extended one-scene `Union` (§4.6), a clean-nesting `Cut` and a frame-keeping pattern instance set one. Any other displacement, and any cap-loop selection, keeps §12's rows. | Unchanged for mesh-path results — `facetedPayload` still permanently refuses modify ops (modify-reach SX9) and all three surveys. |
 
 ## 9. Refusals
 
@@ -1223,7 +1246,16 @@ single code-owned pre-`Profiles` cap: it bounds the private arrangers'
 tiny-segment pair work for the pinned line/circle/arc density. That pair work
 is one `O(n^2)` pass with no broadphase, so the cap bounds a single
 uninterruptible arrangement; the value in `internal/prismcells/work_cap.go` states what it
-costs and what it admits. `sketch.Sketch.Profiles` is synchronous and has no
+costs and what it admits. The screen `prismcells.RegionsWithinWorkCap` counts a
+line as 1 and a circular segment as `prismcells.CircularSegmentCount`: 257 for
+a whole circle, and for an arc `min(257, max(2, ⌈256·(turn + 2⁻⁴⁰)⌉ + 1))`
+with `turn` the sweep as sketch's `wrapSweep` reads it (`math.Mod`), times a
+narrowed range. The scene builders (`prismcells.BuildScene`,
+`BuildSceneRegions`, `classbgeom.CreateNaturalSegment`) then recount every
+entity they create with sketch's own densification over the entity's floats and
+return `prismcells.WithWorkLimit` when the sum exceeds the cap. A caller whose
+over-cap answer is a silent miss maps that `*WorkLimitError` to its miss;
+every other caller returns it (`agent-docs/carrier-record-design.md` §4). `sketch.Sketch.Profiles` is synchronous and has no
 context parameter, so a capped private
 scene runs in one worker while the caller selects its result against
 `ctx.Done()`. On cancellation, the caller waits for that bounded arrangement
@@ -1304,6 +1336,7 @@ face this rule leaves unnamed selects by geometric predicate (`Facing`,
 | Interference (`Verify`) | **Wired to the analytic path (PR4), over two read-only entry points tried in order.** After its containment and represented-set-equality certificates, `internal/verifyrun/interference.go`'s `measuredInterference` calls `booleandispatch.AnalyticIntersect` (`boolean.go`) — a read-only twin of `performBoolean`'s analytic dispatch that runs `prismboolean.Try`/`prismrecord.Build` under a temporary producer identity and never commits, so it consumes neither operand — and publishes the built payload's own volume. A pair that twin does not admit (`ok == false`) next reaches §4.5's overlap-area reading (PR5), which measures a selection covering any number of disjoint regions and publishes a volume with no body at all; the two-stage order keeps every pair the twin already answers byte-identical. A pair neither admits falls back unchanged to `evaluateBoolean`'s read-only mesh intersection. Both analytic answers are still subject to §6's positive-volume gate (`agent-docs/interference-design.md` §6). "Admitted" covers `Union`'s select-all path, `Cut`/`Intersect`'s clean-nesting sub-case, the crossing sub-case (PR3), and since PR5 a multi-region coplanar overlap. `agent-docs/interference-design.md` §5.2 records the boundary this closes. |
 | Surveys (wall/undercut/min-radius) | No new code — they dispatch on payload class, and support is immediate where `δ == 0`. The undercut reading is a normal-direction membership and is unaffected at any `δ`. The wall and min-radius readings publish the bound their own arithmetic proves at `δ == 0` — a candidate's own division or square root, never the section displacement — and are staged at `δ > 0`, answering undecided (`Suspect`, never a silent pass): `δ` is not a term either reading may absorb into that bound, because the wall reading is not a quantity a displacement widens by a fixed amount — its allowance-angle contact families (verification §6) can change membership under a boundary perturbation, so a proven displaced reading needs the survey's own theory extended, not a term added to a bound. |
 | `Verify`'s structural/tolerance gates | Structurally unchanged — `prismPayload` is valid by construction as always. The TOLERANCE gate anchors each reading against a reference the body's own geometry supplies, and at `δ > 0` it cannot read that geometry through the clearance kernel's model, which the row above declines to build. It reads station witnesses on the body's OWN recorded section instead (`gatewitness.Prism`), each charged its own lift's gap, and hands them to the same shared reader every arm publishes through: `pointSetDiameterWithBudget` states the winning pair's own distance computed over exact rationals and rounded toward zero, never the float scan's norm. The gate then shrinks that station maximum by twice the SUM of `δ`, the axial displacement and the widest station gap, rounding the shrunken value toward zero as well (`lowerDiameterForDisplacement`), which verification design §3 proves a lower bound on the denoted body's own diameter. A displaced body is therefore judged on the same terms as any other: a reading passes when its bound meets the tolerance and reports `Suspect` with a stated `Required` threshold when it does not. |
+| `Fillet` / `Chamfer` | A result with `δ > 0` and no valid carrier record keeps `prismrecord.Payload.RequireExactSection`'s refusal (brep-modify RB6). A result with a valid record (`agent-docs/carrier-record-design.md` §3; the record is bound to the body that `prismrecord.BuildWithRecord` minted it for, `prismrecord.Build` and `Placed` drop it, and readers use `prismrecord.CarrierRecordOf`) takes the lateral carrier route for lateral edges (§7): a `Fillet` refusal of Table CB is `ErrUnsupported`, and a `Chamfer` refusal falls through to RB6's route. A cap-loop `Chamfer` keeps RB6. |
 | Export (STL/OBJ) | Reads `Tessellate`'s output. Its size-derived default tolerance is raised past `δ`, which tessellation reserves from the tolerance before chording, so a default export of an assembled body still writes its mesh rather than refusing. |
 | Immediate calls | Public `Union`/`Cut`/`Intersect` signatures and consuming behavior stay unchanged. Qualified pairs use the analytic path internally; other pairs keep the mesh path. |
 

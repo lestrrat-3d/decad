@@ -231,10 +231,7 @@ func displacedLateralBlend(ctx context.Context, env topo.Env, pp prismrecord.Pay
 		return Result{}, err
 	}
 
-	kind := "chamfer"
-	if fillet {
-		kind = "fillet"
-	}
+	kind := carrierBlendKind(fillet)
 	for _, corner := range matched {
 		if err := survey2d.WallBudgetStep(budget); err != nil {
 			return Result{}, err

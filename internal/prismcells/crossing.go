@@ -181,6 +181,12 @@ func junctionCharge(tags map[sketch.Entity]Origin, a, b vertexEnd, deltaA, delta
 	if o2.IsB {
 		d2 = deltaB
 	}
+	return junctionChargeDeltas(a, b, d1, d2)
+}
+
+// junctionChargeDeltas is junctionCharge for two entities whose denoted
+// carriers sit within d1 and d2 of their recorded ones.
+func junctionChargeDeltas(a, b vertexEnd, d1, d2 float64) (float64, bool) {
 	if d1 == 0 && d2 == 0 {
 		return 0, true
 	}
@@ -287,7 +293,8 @@ func lineJunctionPoint(e sketch.BoundaryEdge, l LineSeg, t float64) ([2]*big.Rat
 type carrier struct {
 	line       bool
 	du, dv     *big.Rat // line: End − Start
-	cu, cv, r2 *big.Rat // circle or arc: centre and squared radius
+	cu, cv, r2 *big.Rat // circle or arc: centre and squared radius (its lower bound)
+	r2hi       *big.Rat // circle or arc: the squared radius's upper bound (r2 when exact)
 }
 
 func carrierOf(seg CurveSegment) (carrier, error) {
@@ -317,14 +324,16 @@ func carrierOf(seg CurveSegment) (carrier, error) {
 		if !ok {
 			break
 		}
-		return carrier{cu: v[0], cv: v[1], r2: new(big.Rat).Mul(v[2], v[2])}, nil
+		r2 := new(big.Rat).Mul(v[2], v[2])
+		return carrier{cu: v[0], cv: v[1], r2: r2, r2hi: r2}, nil
 	case ArcSeg:
 		v, ok := rat(s.Center.U, s.Center.V, s.Start.U, s.Start.V)
 		if !ok {
 			break
 		}
 		du, dv := new(big.Rat).Sub(v[2], v[0]), new(big.Rat).Sub(v[3], v[1])
-		return carrier{cu: v[0], cv: v[1], r2: dot(du, dv, du, dv)}, nil
+		r2 := dot(du, dv, du, dv)
+		return carrier{cu: v[0], cv: v[1], r2: r2, r2hi: r2}, nil
 	default:
 		return carrier{}, fmt.Errorf(`%w: a %T carrier has no crossing angle this evaluator states`, decaderr.ErrUnsupported, seg)
 	}
@@ -368,6 +377,43 @@ func sinLower(seg1, seg2 CurveSegment, pt [2]*big.Rat, rho float64) (float64, er
 	if err != nil {
 		return 0, err
 	}
+	return sinLowerCarriers(c1, c2, pt, rho)
+}
+
+// BoundCarrier is a carrier whose circle radius is known only as an
+// enclosure: an offset circle's radius R ± r is irrational for an ArcSeg.
+// Seg supplies the exact centre (or the line); RadiusLo and RadiusHi, when
+// RadiusHi is positive, replace the circle's radius with that enclosure.
+type BoundCarrier struct {
+	Seg                CurveSegment
+	RadiusLo, RadiusHi float64
+}
+
+// SinLowerBounds is sinLower for carriers whose circle radii are enclosures
+// (agent-docs/carrier-record-design.md §7.5, CB2). Every circle form of the
+// bound falls as the radius grows, so it reads the numerator and the
+// denominator at RadiusHi, and the half-radius test at RadiusLo.
+func SinLowerBounds(a, b BoundCarrier, pt [2]*big.Rat, rho float64) (float64, error) {
+	c := [2]carrier{}
+	for i, bc := range [2]BoundCarrier{a, b} {
+		ci, err := carrierOf(bc.Seg)
+		if err != nil {
+			return 0, err
+		}
+		if !ci.line && bc.RadiusHi > 0 {
+			lo, hi := proofarith.FloatRat(bc.RadiusLo), proofarith.FloatRat(bc.RadiusHi)
+			if lo == nil || hi == nil || lo.Sign() <= 0 || lo.Cmp(hi) > 0 {
+				return 0, nil
+			}
+			ci.r2 = new(big.Rat).Mul(lo, lo)
+			ci.r2hi = new(big.Rat).Mul(hi, hi)
+		}
+		c[i] = ci
+	}
+	return sinLowerCarriers(c[0], c[1], pt, rho)
+}
+
+func sinLowerCarriers(c1, c2 carrier, pt [2]*big.Rat, rho float64) (float64, error) {
 	if math.IsInf(rho, 0) || math.IsNaN(rho) {
 		return 0, nil
 	}
@@ -403,7 +449,7 @@ func sinLower(seg1, seg2 CurveSegment, pt [2]*big.Rat, rho float64) (float64, er
 		// lowers the difference.
 		num = new(big.Rat).Abs(dot(c1.du, c1.dv, au, av))
 		num.Sub(num, new(big.Rat).Mul(dLenR, rhoR))
-		den = proofbound.ProductUpper(dLen, proofbound.RatSqrtUp(c2.r2))
+		den = proofbound.ProductUpper(dLen, proofbound.RatSqrtUp(c2.r2hi))
 	default:
 		a1u, a1v := new(big.Rat).Sub(pt[0], c1.cu), new(big.Rat).Sub(pt[1], c1.cv)
 		a2u, a2v := new(big.Rat).Sub(pt[0], c2.cu), new(big.Rat).Sub(pt[1], c2.cv)
@@ -416,7 +462,7 @@ func sinLower(seg1, seg2 CurveSegment, pt [2]*big.Rat, rho float64) (float64, er
 		num = new(big.Rat).Abs(cross(a1u, a1v, a2u, a2v))
 		num.Sub(num, new(big.Rat).Mul(rhoR, new(big.Rat).Add(a1, a2)))
 		num.Sub(num, new(big.Rat).Mul(rhoR, rhoR))
-		den = proofbound.ProductUpper(proofbound.RatSqrtUp(c1.r2), proofbound.RatSqrtUp(c2.r2))
+		den = proofbound.ProductUpper(proofbound.RatSqrtUp(c1.r2hi), proofbound.RatSqrtUp(c2.r2hi))
 	}
 	if num.Sign() <= 0 || math.IsInf(den, 0) || den <= 0 {
 		return 0, nil
@@ -424,3 +470,15 @@ func sinLower(seg1, seg2 CurveSegment, pt [2]*big.Rat, rho float64) (float64, er
 	denR := proofarith.FloatRat(den)
 	return proofbound.RatFloatDown(num.Quo(num, denR)), nil
 }
+
+// SinLower is sinLower for a caller outside this package: a proven lower
+// bound on |sin| of the angle between any tangent of seg1's carrier and any
+// tangent of seg2's carrier within rho of pt. A blend of a recorded receiver
+// reads it over the two offset carriers of a corner
+// (agent-docs/carrier-record-design.md §5.3).
+func SinLower(seg1, seg2 CurveSegment, pt [2]*big.Rat, rho float64) (float64, error) {
+	return sinLower(seg1, seg2, pt, rho)
+}
+
+// AboveNoiseFloor is A6's noise floor test for a caller outside this package.
+func AboveNoiseFloor(s float64) bool { return aboveNoiseFloor(s) }

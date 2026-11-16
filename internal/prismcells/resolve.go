@@ -91,31 +91,39 @@ func SceneProfiles(regions []momentinput.Profile) []SceneProfile {
 // the mesh path with no error. A non-nil error — including ctx cancellation
 // surfacing through budget — is genuine and must propagate.
 func ResolveUnion(ctx context.Context, budget *proofbound.WorkBudget, pa, pb momentinput.Profile, deltaA, deltaB float64, reexpress *Reexpression) (momentinput.Profile, SceneDelta, float64, bool, error) {
+	merged, sceneDelta, cutDelta, _, resolved, err := resolveUnion(ctx, budget, pa, pb, deltaA, deltaB, reexpress)
+	return merged, sceneDelta, cutDelta, resolved, err
+}
+
+// resolveUnion is ResolveUnion, also returning the merged loop's edges in
+// record order.
+func resolveUnion(ctx context.Context, budget *proofbound.WorkBudget, pa, pb momentinput.Profile, deltaA, deltaB float64,
+	reexpress *Reexpression) (momentinput.Profile, SceneDelta, float64, []sketch.BoundaryEdge, bool, error) {
 	s, tags, sceneDelta, err := BuildScene(budget, pa, pb, reexpress)
 	if err != nil {
-		return momentinput.Profile{}, SceneDelta{}, 0, false, err
+		return momentinput.Profile{}, SceneDelta{}, 0, nil, false, err
 	}
 	if err := budget.Err(); err != nil {
-		return momentinput.Profile{}, SceneDelta{}, 0, false, err
+		return momentinput.Profile{}, SceneDelta{}, 0, nil, false, err
 	}
 	profiles, err := CellProfiles(ctx, budget, s)
 	if err != nil {
-		return momentinput.Profile{}, SceneDelta{}, 0, false, err
+		return momentinput.Profile{}, SceneDelta{}, 0, nil, false, err
 	}
 	if err := budget.Err(); err != nil {
-		return momentinput.Profile{}, SceneDelta{}, 0, false, err
+		return momentinput.Profile{}, SceneDelta{}, 0, nil, false, err
 	}
 	if err := budget.Step(); err != nil {
-		return momentinput.Profile{}, SceneDelta{}, 0, false, err
+		return momentinput.Profile{}, SceneDelta{}, 0, nil, false, err
 	}
 	if len(profiles) == 0 {
-		return momentinput.Profile{}, SceneDelta{}, 0, false, nil // §4.4: the scene holds no bounded cell at all
+		return momentinput.Profile{}, SceneDelta{}, 0, nil, false, nil // §4.4: the scene holds no bounded cell at all
 	}
 	// agent-docs/general-boolean-design.md §3 A6: every crossing the arrangement
 	// cut is charged the input displacement it amplifies; a crossing too
 	// close to tangent for that charge sends the pair to the mesh path.
 	if ok, err := sceneDelta.ChargeCrossings(budget, tags, profiles, deltaA, deltaB, reexpress.Delta); err != nil || !ok {
-		return momentinput.Profile{}, SceneDelta{}, 0, false, err
+		return momentinput.Profile{}, SceneDelta{}, 0, nil, false, err
 	}
 
 	// Union, hole-free operands (G6): select every returned cell, which is
@@ -126,22 +134,22 @@ func ResolveUnion(ctx context.Context, budget *proofbound.WorkBudget, pa, pb mom
 	// reuses over its OWN, narrower selected cell set.
 	voidFree, err := CellsHaveNoVoid(budget, tags, profiles)
 	if err != nil {
-		return momentinput.Profile{}, SceneDelta{}, 0, false, err
+		return momentinput.Profile{}, SceneDelta{}, 0, nil, false, err
 	}
 	if !voidFree {
-		return momentinput.Profile{}, SceneDelta{}, 0, false, nil
+		return momentinput.Profile{}, SceneDelta{}, 0, nil, false, nil
 	}
 	if ok, err := sceneDelta.SharedSpansBounded(budget, profiles); err != nil || !ok {
-		return momentinput.Profile{}, SceneDelta{}, 0, false, err
+		return momentinput.Profile{}, SceneDelta{}, 0, nil, false, err
 	}
-	merged, cutDelta, resolved, err := Merge(budget, profiles, "union")
+	merged, cutDelta, chain, resolved, err := MergeWithChain(budget, profiles, "union")
 	if fallBack, err := AmplifiedFallback(sceneDelta.Amplified, err); fallBack || err != nil {
-		return momentinput.Profile{}, SceneDelta{}, 0, false, err
+		return momentinput.Profile{}, SceneDelta{}, 0, nil, false, err
 	}
 	if !resolved {
-		return momentinput.Profile{}, SceneDelta{}, 0, false, nil // §4.4: not a shape this increment covers
+		return momentinput.Profile{}, SceneDelta{}, 0, nil, false, nil // §4.4: not a shape this increment covers
 	}
-	return merged, sceneDelta, cutDelta, true, nil
+	return merged, sceneDelta, cutDelta, chain, true, nil
 }
 
 // ResolveCrossing is the shared resolution shape behind both builders
@@ -344,7 +352,7 @@ func RequireRegionsWithinCap(budget *proofbound.WorkBudget, pa, pb momentinput.P
 	}
 	if !withinCap {
 		return WithWorkLimit(fmt.Errorf(
-			`%w: the analytic union scene charges at least %d arranger segments against this evaluator's cap of %d (each circle or arc costs 256, each line 1)`,
+			`%w: the analytic union scene charges at least %d arranger segments against this evaluator's cap of %d (each line costs 1, each circle or arc up to 256 by its turn)`,
 			decaderr.ErrUnsupported, segments, MaxArrangementSegments), segments)
 	}
 	return nil

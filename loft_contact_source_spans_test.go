@@ -202,18 +202,20 @@ func TestLoftCurvedSourceCapsRealIndependentWedgeRefusesWithoutBoundaryProof(t *
 		conservativeSegments := len(arcSource.PrismCaps[0]) +
 			len(arcSource.LoftCaps[0]) - arcCount + 256*arcCount
 		require.Greater(t, conservativeSegments, prismcells.MaxArrangementSegments)
-		steps := 0
-		operation := &proofbound.WorkBudget{
-			StepFn: func() error { steps++; return nil },
-			ErrFn:  t.Context().Err,
+		// The cap counts each arc's own densification
+		// (agent-docs/carrier-record-design.md §4), so seventeen short arcs
+		// that a flat 256 per arc would refuse now fit and certify.
+		perArc := len(arcSource.PrismCaps[0]) + len(arcSource.LoftCaps[0]) - arcCount
+		for _, span := range arcSource.LoftCaps[0] {
+			if _, isArc := span.Curve.(sectionrecord.ArcSeg); isArc {
+				perArc += prismcells.CircularSegmentCount(span.Curve)
+			}
 		}
+		require.Less(t, perArc, prismcells.MaxArrangementSegments)
 		_, admitted, capErr := loftdirect.CertifyLoftCapSourceOrder(t.Context(),
-			proofbound.NewWallWorkBudgetWithOperation(4096, operation), arcSource)
+			proofbound.NewWallWorkBudgetWithOperation(4096, proofbound.NewWorkBudget(t.Context())), arcSource)
 		require.NoError(t, capErr)
-		require.False(t, admitted)
-		require.Positive(t, steps)
-		require.Less(t, steps,
-			len(arcSource.PrismCaps[0])+len(arcSource.LoftCaps[0]))
+		require.True(t, admitted)
 	})
 	for _, tc := range []struct {
 		name          string

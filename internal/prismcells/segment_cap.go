@@ -21,7 +21,7 @@ func RegionsWithinSegmentCap(budget *proofbound.WorkBudget, limit int, profiles 
 				case momentinput.LineSeg:
 					segments++
 				case momentinput.CircleSeg, momentinput.ArcSeg:
-					segments += 256
+					segments += CircularSegmentCount(seg)
 				default:
 					return segments, false, nil // G4 already excluded this case.
 				}

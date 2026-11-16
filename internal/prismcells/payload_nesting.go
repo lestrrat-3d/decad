@@ -41,7 +41,7 @@ import (
 // comes back unresolved, this tries internal/prismcells/payload_resolve.go's
 // edge-orientation classifier before giving up.
 func ResolveAndBuildCut(ctx context.Context, budget *proofbound.WorkBudget, target, tool prismrecord.Payload, reexpress *Reexpression) (prismrecord.Payload, bool, error) {
-	s, match, sceneDelta, resolved, err := ResolveCut(ctx, budget, target.Profile, tool.Profile, reexpress)
+	s, match, tags, sceneDelta, resolved, err := ResolveCutWithTags(ctx, budget, target.Profile, tool.Profile, reexpress)
 	if err != nil {
 		return prismrecord.Payload{}, false, err
 	}
@@ -95,6 +95,23 @@ func ResolveAndBuildCut(ctx context.Context, budget *proofbound.WorkBudget, targ
 	// tool leaves the target's exact carriers exact (§7, "Exact carriers").
 	if result.ExactCarriers, err = prismrecord.ListExactCarriers(budget, result, target); err != nil {
 		return prismrecord.Payload{}, false, err
+	}
+	// A displaced target with a valid carrier record keeps one through a
+	// clean-nesting Cut (agent-docs/carrier-record-design.md §5.4); any failed
+	// condition leaves the result with no record.
+	cr, raised, ok, err := CleanCutRecord(budget, CutRecordInput{
+		Target: target, Tool: tool, Reexpress: reexpress, SceneDelta: sceneDelta,
+		Match: match, Tags: tags, Profile: profile, SectionDelta: result.SectionDelta,
+		Apart: func(tr prismrecord.CarrierRecord, h func(loop, seg int) float64) (bool, error) {
+			return cutToolApart(budget, target, tool, tr, sceneDelta)
+		},
+	})
+	if err != nil {
+		return prismrecord.Payload{}, false, err
+	}
+	if ok {
+		result.SectionDelta, cr.SectionDelta = raised, raised
+		result.Carriers = cr
 	}
 	return result, true, nil
 }

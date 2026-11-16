@@ -29,9 +29,11 @@ type Region struct {
 // larger endpoint charge, a circle's centre charge, and an arc's largest
 // point charge tripled, since its centre and radius both move with its three
 // points' rounding (the argument offset2d.OffsetSectionDelta states for a recorded
-// arc).
-func MoveRegion(budget *proofbound.WorkBudget, region Region, mv PointMotion) (Region, float64, error) {
-	delta := 0.0
+// arc). The third result is the largest single point charge e the motion took,
+// the quantity agent-docs/carrier-record-design.md §5.1 states a record's
+// entries in.
+func MoveRegion(budget *proofbound.WorkBudget, region Region, mv PointMotion) (Region, float64, float64, error) {
+	delta, pointCharge := 0.0, 0.0
 	moveLoop := func(loop LoopRecord) (LoopRecord, error) {
 		out := make([]CurveSegment, len(loop.Segments))
 		for i, seg := range loop.Segments {
@@ -47,6 +49,7 @@ func MoveRegion(budget *proofbound.WorkBudget, region Region, mv PointMotion) (R
 						return nil, 0, err
 					}
 					moved[k], worst = m, math.Max(worst, e)
+					pointCharge = math.Max(pointCharge, e)
 				}
 				return moved, worst, nil
 			}
@@ -80,17 +83,17 @@ func MoveRegion(budget *proofbound.WorkBudget, region Region, mv PointMotion) (R
 	}
 	outer, err := moveLoop(region.Outer)
 	if err != nil {
-		return Region{}, 0, err
+		return Region{}, 0, 0, err
 	}
 	out := Region{Outer: outer}
 	for _, hole := range region.Holes {
 		moved, err := moveLoop(hole)
 		if err != nil {
-			return Region{}, 0, err
+			return Region{}, 0, 0, err
 		}
 		out.Holes = append(out.Holes, moved)
 	}
-	return out, delta, nil
+	return out, delta, pointCharge, nil
 }
 
 // WithDelta adds an instance's motion charge to the receiver's own

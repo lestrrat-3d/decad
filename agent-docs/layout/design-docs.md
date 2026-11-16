@@ -50,6 +50,7 @@ The rules for rows live in `agent-docs/layout.md`.
 | `agent-docs/axial-section-boolean-design.md` | Union of axial extrusions as the extrusion of the 2D union of their sections, through sketch loop containment. |
 | `agent-docs/pattern-union-design.md` | Joining prism and axial Loft pattern copies to a base through `Union`. |
 | `agent-docs/prism-boolean-design.md` | Analytic `Union`/`Cut`/`Intersect` over co-directional prisms. |
+| `agent-docs/carrier-record-design.md` | Carrier records of displaced prisms; their producers, lateral blends and exact-loop cap chamfers. |
 | `agent-docs/stacked-prism-design.md` | Stacked slabs, walls, measurements, mesh and consumers. |
 | `agent-docs/mirror-pattern-design.md` | Mirror and pattern entry points, the exact mirror join, the prism group. |
 | `agent-docs/general-boolean-design.md` | Boolean classes past the prism pair, and `brepPayload`. |

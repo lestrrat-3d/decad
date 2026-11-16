@@ -92,6 +92,9 @@ func CertifyLoftCapSourceOrder(ctx context.Context, budget *proofbound.WorkBudge
 			[]prismcells.SceneProfile{{Outer: pp.Profile.Outer}},
 			[]prismcells.SceneProfile{{Outer: loftLoop}},
 			&prismcells.Reexpression{Identity: true})
+		if prismcells.IsWorkLimit(err) {
+			return no, false, nil
+		}
 		if err != nil {
 			return no, false, err
 		}

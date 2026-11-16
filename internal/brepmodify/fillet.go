@@ -178,6 +178,21 @@ func Fillet(ctx context.Context, env topo.Env, b *topo.Body, call FilletCall) (R
 		return Result{}, fmt.Errorf(`%w: this evaluator fillets a straight prism, its one-line Sweep reduction, a revolve, or a matching-section axial loft only%s; selector %s matched [%s]`,
 			decaderr.ErrUnsupported, unreadNote(b.Payload, edges), sel, modifyselect.EdgesContext(edges))
 	}
+	// A displaced receiver whose carrier record is valid fillets its lateral
+	// corners from the recorded carriers (agent-docs/carrier-record-design.md
+	// §5); any other displaced receiver keeps the refusal.
+	if pp.SectionDelta != 0 && route.Prism == nil && !sweepReduction {
+		cr, valid, err := prismrecord.CarrierRecordOf(proofbound.NewWorkBudget(ctx), b)
+		if err != nil {
+			return Result{}, err
+		}
+		if valid {
+			out, matched, err := CarrierLateralBlend(ctx, env, pp, cr, sel, edges, rmm, true)
+			if matched || err != nil {
+				return out, err
+			}
+		}
+	}
 	if err := pp.RequireExactSection("fillets"); err != nil {
 		return Result{}, err
 	}

@@ -3102,3 +3102,8 @@
 12	0.00	TestBossRootFilletRefusesArcEndsOnOneFace
 12	0.00	TestBossRootFilletRefusesHalfCircleArc
 12	0.00	TestBossRootFilletSpokedHub
+12	0.00	TestCarrierRecordWheelUnionFilletAndBore
+12	0.00	TestCarrierRecordHoledPlateWithTranslatedBlocks
+12	0.00	TestCarrierRecordUnionKeepsTheCopiedPrismJoinRoute
+12	0.00	TestCarrierRecordArcHeavyPairReachesItsRoute
+12	0.00	TestCarrierRecordDiscWithTeeth

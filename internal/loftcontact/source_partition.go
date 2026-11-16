@@ -225,6 +225,9 @@ func CertifySourcePartition(ctx context.Context, operation *proofbound.WorkBudge
 			[]prismcells.SceneProfile{{Outer: pp.Profile.Outer}},
 			[]prismcells.SceneProfile{{Outer: loftLoop}},
 			&prismcells.Reexpression{Identity: true})
+		if prismcells.IsWorkLimit(err) {
+			return no, false, nil // the scene recount is over the arrangement cap: a miss
+		}
 		if err != nil {
 			return no, false, err
 		}

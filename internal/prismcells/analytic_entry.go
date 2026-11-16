@@ -76,6 +76,20 @@ import (
 // per §3.2's table. prismboolean.Try calls it after its holed Intersect
 // route misses.
 func TryAnalytic(ctx context.Context, op meshbool.OperationKind, a, b topo.Payload) (prismrecord.Payload, bool, error) {
+	result, ok, err := tryAnalytic(ctx, op, a, b)
+	// A record is minted by its producer (agent-docs/carrier-record-design.md
+	// §3.4). A result that carries an operand's own record by pointer passed
+	// it through with no proof that it denotes the operand's section, so it
+	// keeps none.
+	for _, operand := range []topo.Payload{a, b} {
+		if pp, isPrism := operand.(prismrecord.Payload); isPrism && pp.Carriers != nil && result.Carriers == pp.Carriers {
+			result.Carriers = nil
+		}
+	}
+	return result, ok, err
+}
+
+func tryAnalytic(ctx context.Context, op meshbool.OperationKind, a, b topo.Payload) (prismrecord.Payload, bool, error) {
 	if op == meshbool.OpIntersect {
 		budget, pa, pb, reexpress, ok, err := AdmitIntersectPair(ctx, a, b)
 		if err != nil {
@@ -146,7 +160,7 @@ func TryAnalytic(ctx context.Context, op meshbool.OperationKind, a, b topo.Paylo
 	}
 	if !withinCap {
 		return prismrecord.Payload{}, false, WithWorkLimit(fmt.Errorf(
-			`%w: the analytic %s scene charges at least %d arranger segments against this evaluator's cap of %d (each circle or arc costs 256, each line 1); combine the sections into one profile instead of applying this op once per feature, or accept the mesh path by making the pair non-coplanar`,
+			`%w: the analytic %s scene charges at least %d arranger segments against this evaluator's cap of %d (each line costs 1, each circle or arc up to 256 by its turn); combine the sections into one profile instead of applying this op once per feature, or accept the mesh path by making the pair non-coplanar`,
 			decaderr.ErrUnsupported, op, segments, MaxArrangementSegments), segments)
 	}
 
@@ -221,7 +235,7 @@ func AdmitIntersectPair(ctx context.Context, a, b topo.Payload) (budget *proofbo
 	}
 	if !withinCap {
 		return nil, prismrecord.Payload{}, prismrecord.Payload{}, nil, false, WithWorkLimit(fmt.Errorf(
-			`%w: the analytic %s scene charges at least %d arranger segments against this evaluator's cap of %d (each circle or arc costs 256, each line 1); combine the sections into one profile instead of applying this op once per feature, or accept the mesh path by making the pair non-coplanar`,
+			`%w: the analytic %s scene charges at least %d arranger segments against this evaluator's cap of %d (each line costs 1, each circle or arc up to 256 by its turn); combine the sections into one profile instead of applying this op once per feature, or accept the mesh path by making the pair non-coplanar`,
 			decaderr.ErrUnsupported, meshbool.OpIntersect, segments, MaxArrangementSegments), segments)
 	}
 

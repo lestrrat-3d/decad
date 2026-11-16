@@ -66,6 +66,12 @@ func StraightLoftUnionMany(ctx context.Context, env topo.Env,
 // result charges only the arrangement's new cut parameters.
 func UnionMany(ctx context.Context, env topo.Env,
 	operands []*topo.Body) (*topo.Body, bool, error) {
+	if !lineClass(operands) {
+		// Circles, holes or displaced operands: the extended class
+		// (agent-docs/carrier-record-design.md §5.3), which misses rather
+		// than refuses.
+		return unionRegions(ctx, env, operands)
+	}
 	budget := proofbound.NewWorkBudget(ctx)
 	if err := budget.Err(); err != nil {
 		return nil, true, err
@@ -214,6 +220,15 @@ func UnionMany(ctx context.Context, env topo.Env,
 func AnalyticBody(ctx context.Context, env topo.Env, payload topo.Payload) (*topo.Body, error) {
 	switch p := payload.(type) {
 	case prismrecord.Payload:
+		// A freshly minted record (no owner yet) is bound to its new body; a
+		// record already bound to another body was passed through and is dropped
+		// by Build (agent-docs/carrier-record-design.md §3.4).
+		if p.Carriers != nil && !p.Carriers.Minted() {
+			return prismrecord.Build(ctx, env, p, freeform.NewFreeformWork())
+		}
+		if p.Carriers != nil {
+			return prismrecord.BuildWithRecord(ctx, env, p, *p.Carriers)
+		}
 		return prismrecord.Build(ctx, env, p, freeform.NewFreeformWork())
 	case stackedrecord.Payload:
 		return stackedrecord.Build(ctx, env, p, stackedrecord.OwnPlan{})
