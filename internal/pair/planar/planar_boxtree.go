@@ -152,6 +152,9 @@ func (t *boxTree) query(q floatBox, out []int) []int {
 // limit from q. A node box holds its boxes and the gap only grows as a box
 // shrinks, so a node past limit holds none that is not.
 func (t *boxTree) queryWithin(q floatBox, limit float64, out []int) []int {
+	if limit == 0 {
+		return t.queryZero(q, out)
+	}
 	out = out[:0]
 	if len(t.nodes) == 0 {
 		return out
@@ -167,6 +170,60 @@ func (t *boxTree) queryWithin(q floatBox, limit float64, out []int) []int {
 		if n.left < 0 {
 			for _, at := range t.order[n.lo:n.hi] {
 				if !(gapSquaredBelowLimit(q, t.boxes[at], limit) > limit) {
+					out = append(out, at)
+				}
+			}
+			continue
+		}
+		stack[top], stack[top+1] = n.left, n.right
+		top += 2
+	}
+	slices.Sort(out)
+	return out
+}
+
+// gapPastZero agrees with gapSquaredBelowLimit(a, b, 0) > 0. A rounded
+// gap above 2^-500 stays at least 2^-500 after subDown; its square is normal
+// and remains positive after mulDown and addDown. An infinite gap follows the
+// same path through NextDown(+Inf), and comparisons skip NaN axes in both
+// predicates. Smaller gaps need the original calculation because squared gaps
+// and their sums can underflow.
+func gapPastZero(a, b floatBox) bool {
+	smallGap := false
+	for axis := range 3 {
+		var gap float64
+		switch {
+		case a.hi[axis] < b.lo[axis]:
+			gap = b.lo[axis] - a.hi[axis]
+		case b.hi[axis] < a.lo[axis]:
+			gap = a.lo[axis] - b.hi[axis]
+		default:
+			continue
+		}
+		if gap > 0x1p-500 {
+			return true
+		}
+		smallGap = true
+	}
+	return smallGap && gapSquaredBelowLimit(a, b, 0) > 0
+}
+
+func (t *boxTree) queryZero(q floatBox, out []int) []int {
+	out = out[:0]
+	if len(t.nodes) == 0 {
+		return out
+	}
+	var stack [64]int
+	top := 1
+	for top > 0 {
+		top--
+		n := &t.nodes[stack[top]]
+		if gapPastZero(q, n.box) {
+			continue
+		}
+		if n.left < 0 {
+			for _, at := range t.order[n.lo:n.hi] {
+				if !gapPastZero(q, t.boxes[at]) {
 					out = append(out, at)
 				}
 			}
