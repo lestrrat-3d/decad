@@ -90,7 +90,7 @@ func PrismSideFaces(budget *proofbound.WorkBudget, b *topo.Body, pp prismrecord.
 }
 
 // Walls is the set of displaced walls of body b, read once for the body: the
-// faces a mesh Boolean's source tag must decline (rule DW). It is nil for a
+// faces a mesh Boolean's source tag must decline (rule DW). It is empty for a
 // body that is not a DisplacedPayload. A displaced prism's walls are not read: a
 // per-segment carrier test (declining a wall whose record entry Segment[l][j]
 // is nonzero) still declines the line walls beside a fillet's feet, whose
@@ -111,7 +111,7 @@ func Walls(budget *proofbound.WorkBudget, b *topo.Body) (map[*topo.Face]struct{}
 		}
 		return out, nil
 	default:
-		return nil, nil
+		return map[*topo.Face]struct{}{}, nil
 	}
 }
 

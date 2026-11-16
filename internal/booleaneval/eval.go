@@ -13,11 +13,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/lestrrat-3d/decad/internal/displacedface"
 	"maps"
 	"math"
 	"math/big"
 	"unsafe"
+
+	"github.com/lestrrat-3d/decad/internal/displacedface"
 
 	"github.com/lestrrat-3d/r3"
 

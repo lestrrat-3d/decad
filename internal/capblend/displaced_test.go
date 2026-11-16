@@ -178,7 +178,8 @@ func TestDisplacedExtent(t *testing.T) {
 	t.Parallel()
 	twin := dispTwin(t).Payload.(capblend.Payload)
 	dp := dispBuild(t, []float64{dispLoopDelta, 0}).Payload.(capblend.DisplacedPayload)
-	_, _, _, err := dp.ExtentAlong(r3.NewVec(1, 0, 0))
+	_, _, refusedBound, err := dp.ExtentAlong(r3.NewVec(1, 0, 0))
+	require.Zero(t, refusedBound)
 	require.ErrorIs(t, err, decaderr.ErrUnsupported)
 
 	extent := func(g r3.Vec) (float64, float64, float64) {

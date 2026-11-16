@@ -21,6 +21,8 @@ import (
 // loops of a receiver whose outer loop carries the teeth's displacement, so
 // the chamfer builds a displaced cap-loop payload with analytic faces.
 
+const surveyWall = "wall"
+
 const (
 	capChamferSize    = 0.4
 	capChamferWindows = 2
@@ -209,7 +211,7 @@ func TestDisplacedCapChamferReaders(t *testing.T) {
 	})
 	t.Run("the surveys are staged", func(t *testing.T) {
 		for name, opt := range map[string]decad.VerifyOption{
-			"wall":           decad.WithMinWallThickness(units.Millimeters(1)),
+			surveyWall:       decad.WithMinWallThickness(units.Millimeters(1)),
 			"pull":           decad.WithPullDirection(r3.NewVec(0, 0, 1)),
 			"concave-radius": decad.WithConcaveRadius(),
 		} {

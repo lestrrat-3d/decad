@@ -2,9 +2,10 @@ package booleaneval
 
 import (
 	"context"
+	"slices"
+
 	"github.com/lestrrat-3d/decad/internal/displacedface"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
-	"slices"
 
 	"github.com/lestrrat-3d/r3"
 

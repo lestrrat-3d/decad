@@ -2,10 +2,11 @@ package brepmodify_test
 
 import (
 	"errors"
-	"github.com/lestrrat-3d/decad/internal/circularbounds"
 	"math"
 	"math/big"
 	"testing"
+
+	"github.com/lestrrat-3d/decad/internal/circularbounds"
 
 	"github.com/lestrrat-3d/decad/internal/brepmodify"
 	"github.com/lestrrat-3d/decad/internal/decaderr"

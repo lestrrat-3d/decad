@@ -267,7 +267,7 @@ func radiusGapUp(a, b sectionrecord.ArcSeg) float64 {
 		dv := new(big.Rat).Sub(ratOrZero(s.Start.V), ratOrZero(s.Center.V))
 		sq := proofbound.RatAdd(new(big.Rat).Mul(du, du), new(big.Rat).Mul(dv, dv))
 		return proofbound.RatSqrtDown(sq), proofbound.RatSqrtUp(sq),
-			!proofbound.IsNonFinite(s.Start.U+s.Start.V+s.Center.U+s.Center.V)
+			!proofbound.IsNonFinite(s.Start.U + s.Start.V + s.Center.U + s.Center.V)
 	}
 	aLo, aHi, okA := enclose(a)
 	bLo, bHi, okB := enclose(b)

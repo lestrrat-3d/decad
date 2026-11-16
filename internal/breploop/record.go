@@ -370,7 +370,7 @@ func (r *State) RewriteLoopFaces(ctx context.Context, sels []Sel) (breprecord.Pa
 		if err := offset2d.AuditOffsetSectionBudget(r.Budget, region, mixed[fi]); err != nil {
 			return breprecord.Payload{}, r.WrapFace(fi, capband.ChamferAuditError(err))
 		}
-		if err := capblend.AuditSetbackSpan(r.Budget, region, views[fi]); err != nil {
+		if err := capblend.AuditSetbackSpan(r.Budget, region, views[fi]); err != nil { //nolint:contextcheck // the span audit reads no context-bound contour displacement; r.Budget carries the cancellation
 			return breprecord.Payload{}, r.WrapFace(fi, err)
 		}
 	}
