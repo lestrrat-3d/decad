@@ -327,7 +327,7 @@ func TestDisplacedSpanTopTransferRefusal(t *testing.T) {
 		set := capblend.Setback{Dc: 0.5, DcDelta: dcDelta, Ds: 0.5}
 		pp := prismrecord.Payload{
 			Profile: momentinput.Profile{Outer: squareLoop(20),
-				Holes: []sectionrecord.LoopRecord{holeLoop(20-4-0.5-floor-7e-9, 8, 4)}},
+				Holes: []sectionrecord.LoopRecord{holeLoop(20-3-0.5-floor-7e-9, 6, 3)}},
 			Frame: dispFrame(t), Z1: 10, Xform: r3.Identity(),
 		}
 		_, err := capblend.BuildCheckedDisplaced(t.Context(), dispEnv(), pp, set, set,
