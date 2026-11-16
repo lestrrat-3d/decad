@@ -25,6 +25,30 @@ func (k *planarKernel) offer(d frac) {
 	}
 }
 
+// endpointOfferPruned skips an endpoint-to-segment offer only when one outward
+// box axis proves the endpoint farther than the current best. The one-axis
+// lower bound is deliberately cheaper than the general box distance test.
+func (k *planarKernel) endpointOfferPruned(point, segment *floatBox) bool {
+	if !k.hasBest {
+		return false
+	}
+	for axis := range 3 {
+		var gap float64
+		switch {
+		case point.hi[axis] < segment.lo[axis]:
+			gap = nonnegative(subDown(segment.lo[axis], point.hi[axis]))
+		case segment.hi[axis] < point.lo[axis]:
+			gap = nonnegative(subDown(point.lo[axis], segment.hi[axis]))
+		default:
+			continue
+		}
+		if nonnegative(mulDown(gap, gap)) > k.bestUp {
+			return true
+		}
+	}
+	return false
+}
+
 // pruned reports whether a box pair is provably farther than the current
 // minimum, or than the cap, so no candidate inside it can lower the minimum or
 // touch. Every offered candidate has a nonnegative numerator, so boxes that
@@ -125,7 +149,7 @@ func (k *planarKernel) scan() error {
 		}
 	}
 	tree := k.b.edgeBoxTree()
-	for ea, edgeA := range k.a.edges {
+	for ea := range k.a.edges {
 		near = tree.queryWithin(k.a.edgeBox[ea], k.limitUp(), near)
 		if err := k.poll(); err != nil {
 			return err
@@ -138,7 +162,7 @@ func (k *planarKernel) scan() error {
 				continue
 			}
 			k.cur = PlanarHint{kind: hintEdgeEdge, i: ea, j: eb}
-			k.edgeEdge(edgeA, k.b.edges[eb])
+			k.edgeEdge(ea, eb)
 			if k.stopAtCap && k.hasBest && fracCmp(k.best, k.cap) <= 0 {
 				k.withinCap = true
 				return nil
@@ -221,16 +245,25 @@ func (k *planarKernel) vertexFacet(verts *planarPrep, v int, tris *planarPrep, t
 // endpoint-to-segment distances, and the line distance when the closest pair
 // is interior to both. An interior crossing records a site at the crossing; a
 // collinear overlap records a site at its midpoint along its direction.
-func (k *planarKernel) edgeEdge(edgeA, edgeB [2]int) {
+func (k *planarKernel) edgeEdge(edgeAI, edgeBI int) {
+	edgeA, edgeB := k.a.edges[edgeAI], k.b.edges[edgeBI]
 	p0, p1 := k.a.s.Verts[edgeA[0]], k.a.s.Verts[edgeA[1]]
 	q0, q1 := k.b.s.Verts[edgeB[0]], k.b.s.Verts[edgeB[1]]
 	d1, d2 := proof.DvSub(p1, p0), proof.DvSub(q1, q0)
 	r := proof.DvSub(p0, q0)
 	a, c := proof.DvDot(d1, d1), proof.DvDot(d2, d2)
-	k.offer(pointSegmentRelative(r, d2, c))
-	k.offer(pointSegmentRelative(proof.DvSub(p1, q0), d2, c))
-	k.offer(pointSegmentRelative(proof.DvSub(q0, p0), d1, a))
-	k.offer(pointSegmentRelative(proof.DvSub(q1, p0), d1, a))
+	if !k.endpointOfferPruned(&k.a.vertBox[edgeA[0]], &k.b.edgeBox[edgeBI]) {
+		k.offer(pointSegmentRelative(r, d2, c))
+	}
+	if !k.endpointOfferPruned(&k.a.vertBox[edgeA[1]], &k.b.edgeBox[edgeBI]) {
+		k.offer(pointSegmentRelative(proof.DvSub(p1, q0), d2, c))
+	}
+	if !k.endpointOfferPruned(&k.b.vertBox[edgeB[0]], &k.a.edgeBox[edgeAI]) {
+		k.offer(pointSegmentRelative(proof.DvSub(q0, p0), d1, a))
+	}
+	if !k.endpointOfferPruned(&k.b.vertBox[edgeB[1]], &k.a.edgeBox[edgeAI]) {
+		k.offer(pointSegmentRelative(proof.DvSub(q1, p0), d1, a))
+	}
 	cross := proof.DvCross(d1, d2)
 	contact := PlanarContact{A: PlanarFeature{Kind: FeatureEdge, Edge: edgeA},
 		B: PlanarFeature{Kind: FeatureEdge, Edge: edgeB}}

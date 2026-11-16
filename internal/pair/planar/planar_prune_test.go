@@ -934,8 +934,8 @@ func (k *planarKernel) scanPlain() error {
 			}
 		}
 	}
-	for ea, edgeA := range k.a.edges {
-		for eb, edgeB := range k.b.edges {
+	for ea := range k.a.edges {
+		for eb := range k.b.edges {
 			if err := k.poll(); err != nil {
 				return err
 			}
@@ -943,7 +943,7 @@ func (k *planarKernel) scanPlain() error {
 				continue
 			}
 			k.cur = PlanarHint{kind: hintEdgeEdge, i: ea, j: eb}
-			k.edgeEdge(edgeA, edgeB)
+			k.edgeEdgeUnfiltered(ea, eb)
 		}
 	}
 	return nil
