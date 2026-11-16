@@ -221,12 +221,7 @@ func readChamferRuns(body *topo.Body, edges []*topo.Edge, exact bool) (runs []ch
 		cands = slices.Delete(cands, best, best+1)
 		rs, ok := readFace(c, left)
 		if !ok {
-			if exact {
-				return nil, false
-			}
-			// An edge between two planar faces is a loop edge of either, so the next face that holds selected edges is
-			// tried: the bevel is the same, and the run's ends are read in that face's loop.
-			continue
+			return nil, false
 		}
 		runs = append(runs, rs...)
 		for _, loop := range c.face.Loops {
@@ -312,10 +307,6 @@ func (r chamferRun) ends() ([2]runEnd, bool) {
 	l := r.loop
 	first, last := r.seg(0), r.seg(r.count-1)
 	read := func(prev, next loopSeg, atEnd bool) (runEnd, bool) {
-		if prev.held || next.held {
-			// The next edge carries no exact curve, so the bevel's run-out or stop on its wall cannot be read.
-			return runEnd{}, false
-		}
 		v := next.p0
 		tin, tout := tangent(prev, v), tangent(next, v)
 		cross := tin.cross(tout)
@@ -434,14 +425,14 @@ func partialReach(d, over float64) float64 { return d + 2*over }
 // partialExtension is how far a cutter reaches past the end of its run along the tangent, in setbacks.
 const partialExtension = 1.0
 
-// checkExtension samples the region each cutter end reaches past its run, to the depth the cutter cuts, and refuses a
-// run whose extension holds material of the cap.
+// checkExtension refuses a run whose cutter, past either end, reaches material of the cap: the region each end reaches
+// is tested exactly (probeRegion), and the cutter's end face of an arc run must clear the next wall (arcRunOutAngle).
 func (r chamferRun) checkExtension(d, reach float64) error {
 	l := r.loop
-	poly := l.polygon()
+	poly := l.fineBoundary()
 	ends, _ := r.ends()
+	over := (reach - d) / 2
 	probe := func(e runEnd, seg loopSeg, tan, in pt2) error {
-		v := e.v
 		if e.concave {
 			// The end clip removes what lies past the run's end.
 			return nil
@@ -453,44 +444,23 @@ func (r chamferRun) checkExtension(d, reach float64) error {
 					decaderr.ErrUnsupported)
 			}
 		}
-		ext := e.extFor(d, reach)
+		var reg probeRegion
 		if seg.arc {
-			return l.probeArcExtension(e, seg, ext, reach, poly)
-		}
-		// The material the next segment's wall bounds near v is the bevel's run-out onto that wall.
-		e2in := e.e2away.leftNormal()
-		if e2in.dot(e.away.scale(-1)) < 0 {
-			e2in = e2in.scale(-1)
-		}
-		for _, s := range []float64{0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1} {
-			for _, u := range []float64{0.05, 0.15, 0.25, 0.35, 0.5, 0.65, 0.8, 1} {
-				p := v.add(tan.scale(s * ext)).add(in.scale(u * reach))
-				if p.sub(v).dot(e2in) > -1e-9 && p.sub(v).dot(e.e2away) < e.e2Len {
-					continue
-				}
-				if contains(poly, p) == l.outer {
-					return fmt.Errorf(`%w: material of the cap lies beside a chamfered run's end, where the bevel would cut it`,
-						decaderr.ErrUnsupported)
-				}
+			alpha, err := l.arcRunOutAngle(e, seg, d, over)
+			if err != nil {
+				return err
 			}
+			reg = arcProbeRegion(e, seg, alpha, reach)
+		} else {
+			reg = lineProbeRegion(e, tan, in, e.extFor(d, reach), reach)
 		}
-		return nil
+		return reg.refuseMaterial(l, poly)
 	}
 	first, last := r.seg(0), r.seg(r.count-1)
 	if err := probe(ends[0], first, tangent(first, first.p0).scale(-1), l.materialNormal(first, first.p0)); err != nil {
 		return err
 	}
 	return probe(ends[1], last, tangent(last, last.p1), l.materialNormal(last, last.p1))
-}
-
-// arcPastEnd is the angle, signed counter-clockwise, that an arc run's cutter turns past its convex end at v along the
-// circle of seg, which leaves the run along away there, to reach ext past it along the source arc.
-func arcPastEnd(seg loopSeg, v, away pt2, ext float64) float64 {
-	alpha := ext / seg.r
-	if v.sub(seg.c).cross(away) < 0 {
-		return -alpha
-	}
-	return alpha
 }
 
 // arcRunOutCells is how many chords the run-out of an arc run's cutter over the angle alpha takes about a circle of
@@ -513,40 +483,8 @@ func arcRunOut(seg loopSeg, from pt2, alpha float64, n int) []pt2 {
 	return out
 }
 
-// probeArcExtension samples the region an arc run's cutter reaches past its convex end e along its own circle, to the
-// cutter's reach on both sides of the circle, and refuses a run whose extension holds material of the cap other than
-// the bevel's run-out onto the next wall.
-func (l *chamferLoop) probeArcExtension(e runEnd, seg loopSeg, ext, reach float64, poly []pt2) error {
-	alpha := arcPastEnd(seg, e.v, e.away, ext)
-	if math.Abs(alpha) > maxArcRunOut {
-		return fmt.Errorf(`%w: a chamfered arc run's extension turns more than a half turn past its end`, decaderr.ErrUnsupported)
-	}
-	a0 := math.Atan2(e.v.y-seg.c.y, e.v.x-seg.c.x)
-	e2in := e.e2away.leftNormal()
-	if e2in.dot(e.away.scale(-1)) < 0 {
-		e2in = e2in.scale(-1)
-	}
-	in := 1.0
-	if l.toward(seg) {
-		in = -1
-	}
-	for _, s := range []float64{0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1} {
-		for _, u := range []float64{-1, -0.5, 0.05, 0.15, 0.25, 0.35, 0.5, 0.65, 0.8, 1} {
-			rho := seg.r + in*u*reach
-			phi := a0 + s*alpha
-			p := pt2{seg.c.x + rho*math.Cos(phi), seg.c.y + rho*math.Sin(phi)}
-			// The material the next segment's wall bounds near v is the bevel's run-out onto that wall.
-			if p.sub(e.v).dot(e2in) > -1e-9 && p.sub(e.v).dot(e.e2away) < e.e2Len {
-				continue
-			}
-			if contains(poly, p) == l.outer {
-				return fmt.Errorf(`%w: material of the cap lies beside a chamfered arc run's end, where the bevel would cut it`,
-					decaderr.ErrUnsupported)
-			}
-		}
-	}
-	return nil
-}
+// minArcRunOut is the smallest angle an arc run's cutter turns past a convex end.
+const minArcRunOut = 1e-6
 
 // maxArcRunOut is the largest angle an arc run's cutter turns past a convex end.
 const maxArcRunOut = math.Pi
@@ -558,20 +496,89 @@ type runOutArcs struct {
 	alpha [2]float64
 }
 
-// runOutArcs reads the ends that follow their own circle: those whose run segment is an arc at a convex corner. ext is
-// how far each end reaches, and reach is how far the cutter extends from the run on its material side, plus its
-// margin, which bounds the radius of every ring.
-func (r chamferRun) runOutArcs(ends [2]runEnd, ext [2]float64, reach float64) runOutArcs {
+// runOutArcs reads the ends that follow their own circle: those whose run segment is an arc at a convex corner, each
+// turning the angle arcRunOutAngle gives.
+func (r chamferRun) runOutArcs(ends [2]runEnd, d, over float64) (runOutArcs, error) {
 	var out runOutArcs
+	reach := partialReach(d, over)
 	segs := [2]loopSeg{r.seg(0), r.seg(r.count - 1)}
 	for i, e := range ends {
 		if !segs[i].arc || e.concave {
 			continue
 		}
-		out.alpha[i] = arcPastEnd(segs[i], e.v, e.away, ext[i])
-		out.cells[i] = arcRunOutCells(out.alpha[i], segs[i].r+reach)
+		alpha, err := r.loop.arcRunOutAngle(e, segs[i], d, over)
+		if err != nil {
+			return runOutArcs{}, err
+		}
+		out.alpha[i] = alpha
+		out.cells[i] = arcRunOutCells(alpha, segs[i].r+reach)
 	}
-	return out
+	return out, nil
+}
+
+// arcRunOutAngle is the angle, signed counter-clockwise, that an arc run's cutter turns past its convex end e along the
+// circle of seg: the first angle at which the cutter's end face clears the next wall. The end face is the radial
+// segment between the outermost ring, moved by the margin over, and the innermost ring that still meets material, moved
+// by d. It clears when both of its ends lie the margin past the next wall's line, on the side away from the material,
+// where the cutter crosses void alone. Both ends of one arc stop there, so they do not reach each other across a slot.
+// An arc whose bevel circle never gets there within a half turn has no run-out onto the wall: the cutter's end face
+// would lie in the wall's material, and it is refused.
+func (l *chamferLoop) arcRunOutAngle(e runEnd, seg loopSeg, d, over float64) (float64, error) {
+	refuse := fmt.Errorf(`%w: a chamfered arc run's bevel does not clear the next wall within a half turn`,
+		decaderr.ErrUnsupported)
+	sign := 1.0
+	if e.v.sub(seg.c).cross(e.away) < 0 {
+		sign = -1
+	}
+	// e2in leads into the material from the next wall's line, so w leads out of it, to the side the cutter ends on.
+	e2in := e.e2away.leftNormal()
+	if e2in.dot(e.away.scale(-1)) < 0 {
+		e2in = e2in.scale(-1)
+	}
+	w := e2in.scale(-1)
+	sigma := 1.0
+	if l.toward(seg) {
+		sigma = -1
+	}
+	var rhos []float64
+	for _, t := range []float64{-over, d} {
+		rhos = append(rhos, max(seg.r+sigma*t, 0))
+	}
+	a0 := math.Atan2(e.v.y-seg.c.y, e.v.x-seg.c.x)
+	offset := w.dot(seg.c.sub(e.v))
+	psi := math.Atan2(w.y, w.x)
+	wrap := func(x float64) float64 { return math.Mod(math.Mod(x, 2*math.Pi)+2*math.Pi, 2*math.Pi) }
+	clears := func(theta float64) bool {
+		for _, rho := range rhos {
+			if offset+rho*math.Cos(a0+sign*theta-psi) < over {
+				return false
+			}
+		}
+		return true
+	}
+	best := math.Inf(1)
+	if clears(minArcRunOut) {
+		best = minArcRunOut
+	}
+	for _, rho := range rhos {
+		q := (over - offset) / rho
+		if !(rho > 0) || q > 1 {
+			return 0, refuse
+		}
+		if q <= -1 {
+			continue
+		}
+		for _, edge := range []float64{psi - math.Acos(q), psi + math.Acos(q)} {
+			theta := wrap(sign*(edge-a0)) * (1 + 1e-9)
+			if theta > 0 && clears(theta) {
+				best = min(best, theta)
+			}
+		}
+	}
+	if best > maxArcRunOut {
+		return 0, refuse
+	}
+	return sign * best, nil
 }
 
 // polyline is the run's section moved by t into the material, with each end reaching past the run, as the points of a
@@ -689,7 +696,10 @@ func (r chamferRun) cutterMesh(ctx context.Context, d, over float64) (cutterMesh
 			rmin = min(rmin, s.r)
 		}
 	}
-	runOut := r.runOutArcs(ends, [2]float64{extS, extE}, reach)
+	runOut, err := r.runOutArcs(ends, d, over)
+	if err != nil {
+		return cutterMesh{}, err
+	}
 	layers, departure, err := r.layers(d, top, bottom)
 	if err != nil {
 		return cutterMesh{}, err

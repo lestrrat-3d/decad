@@ -995,10 +995,15 @@ extension and the probe of its end:
 - A convex end turned by 45 degrees or more reaches past the end, so the bevel ends on the wall beside the next edge,
   where it runs out onto that wall over `dc` times the cotangent of the turn. The cutter reaches
   `max(dc, 1.5 reach cot(turn))`. A line run's cutter reaches along the run's tangent. An arc run's cutter follows its
-  own circle, moved with each ring, by the angle `ext / r`: the same angle and the same chord count (read at the largest
-  ring's radius) on every ring, so the rings pair vertex for vertex, and the bevel runs out as the cone itself does. A
-  turn under 90 degrees needs the next edge at least `1.5 reach / sin(turn)` long. The probe of an arc end samples the
-  moved circle's band past the end. The run-out removes `dc^3 cot(turn)/6` beyond the perpendicular end's wedge (a
+  own circle, moved with each ring, past the end: the same angle and the same chord count (read at the largest ring's
+  radius) on every ring, so the rings pair vertex for vertex, and the bevel runs out as the cone itself does. The angle
+  is the first one at which the cutter's end face, the radial segment between the ring moved out by `over` and the ring
+  moved by `dc`, lies `over` past the next wall's line on its void side, where the cutter crosses void alone, solved in
+  closed form from the two radii. Both ends of one arc stop there, so they do not reach each other across a slot. An arc
+  whose bevel circle at the cap does not get `over` past that line within a half turn, a convex arc of radius `R` with
+  `R - dc` below the next wall's distance from its centre plus `over`, has no run-out onto the wall (the cutter would
+  carve a sector of the wall's material and leave a step) and is `ErrUnsupported`. A turn under 90 degrees needs the next
+  edge at least `1.5 reach / sin(turn)` long. The run-out removes `dc^3 cot(turn)/6` beyond the perpendicular end's wedge (a
   negative amount past 90 degrees).
 - A concave end turned by up to 90 degrees beside a line stops the bevel on the next face's plane, carried back over the
   run's band. The cutter loses a sector of a disc about the corner, bounded by the next wall's line carried back over the
@@ -1016,7 +1021,10 @@ extension and the probe of its end:
 Any other end is `ErrUnsupported`: a convex end turned by less than 45 degrees, a concave end turned by more than 90
 degrees, a concave end beside an arc, a run-out longer than the next edge, an arc run whose extension turns more than a
 half turn, and a chain that comes back into the end sector. So is a chain whose extension would
-meet material of the cap, within `reach` of the run's end, or whose margin strip beside the run (the `over` outside
+meet material of the cap, within `reach` of the run's end (the region past the end, less the run-out zone beside the
+next wall, which is the strip a line end reaches or the annular sector an arc end reaches, is tested exactly against the
+loop's boundary, read within 1e-6 mm of its arcs: no boundary edge may have a stretch in it, and where none does, one
+point of each cell of the region must lie in void, so a feature of any thickness is seen), or whose margin strip beside the run (the `over` outside
 its wall, except within a concave end's sector and near a corner inside the chain) holds material of another wall of
 the loop outside a concave end's sector, or whose offset empties an arc. The overshoot list retries a smaller `over` after such a refusal, so a slot
 narrower than `over` is cut with a smaller margin when that clears it.
@@ -1024,7 +1032,7 @@ narrower than `over` is cut with a smaller margin when that clears it.
 A hole loop of the cap is read the same way as an outer loop: its edges chain, mitre and end like any other, and a
 reflex corner of the material inside a chain (a hole's corner) mitres by removing `dc^3/3` more than the two wedges.
 
-On a faceted body the run lies in any retained planar face, and a face that holds the most selected edges is read first.
+On a faceted body the run lies in any retained planar face, and a face that holds the most selected edges is read, and a selection that face does not read is declined.
 The selected edges and the edge beside each end must be exact lines or arcs (`Line3`, `Arc3`), convex, with a wall that
 is a retained plane normal to the face or a retained cylinder whose axis is normal to it; the edge beside an end
 that carries no exact curve is `ErrUnsupported`. Every other edge of the loop is read for the probes' polygon alone, as
@@ -1052,7 +1060,9 @@ steps through `L` layers of rings, `L` doubling from 2 until `layerDeparture` is
 bound `B^2 dt^2 / (32 v^3)` for a line and an arc (`v` the corner's distance along the line from the foot of the arc's
 centre, `B` the rate of `v^2` per unit of setback, which is constant) and `|4ac - b^2| dt^2 / (32 y^3)` for two arcs
 (`y^2 = a + b t + c t^2` the squared distance from the line of centres), each at its smallest `v` or `y` over the layer.
-The second is the twist `rho dphi^2 / 8`, with `dphi` the turn of the corner about the arc's centre over the layer. A
+The second is the twist, with `dphi` the turn of the corner about the arc's centre over the layer: a cell's diagonal
+spans that turn and the arc's chord step together, so its sag is `rho (step + dphi)^2 / 8`, and the twist charges
+`rho dphi^2 / 8 + 2 sqrt(0.0002 rho dphi^2 / 8)`, the part of it the sagitta does not already hold. A
 corner that reaches the arc's foot, or an arc-arc corner that changes sides of the line of centres in a layer, is
 `ErrUnsupported`. The cutter's bound is 0.0002 mm plus that departure. On a concave arc wall (material outside
 the circle) the faceted result reads about 0.07 mm3 more volume per arc run than its exact value on a cutter of hub

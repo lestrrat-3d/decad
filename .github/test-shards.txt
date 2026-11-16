@@ -319,3 +319,7 @@
 12	1.00	TestChamferKeyholeRimRunOnMeshBoolean
 12	1.00	TestChamferKeyholeRimRunThenCut
 12	0.10	TestChamferKeyholeRimRunRefusesAnotherFaceInReach
+12	0.50	TestChamferConvexArcRunOutRefusesASmallArc
+12	0.50	TestChamferKeyholeRimRunRefusesAThinPeninsula
+12	0.50	TestChamferLineRunRefusesAThinTabPastItsEnd
+12	0.50	TestChamferKeyholeRimRunWithAWideSetback

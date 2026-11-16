@@ -105,7 +105,11 @@ func (r chamferRun) layerDeparture(d float64, heights []float64) (float64, error
 func twist(s loopSeg, p, q pt2) float64 {
 	rho := max(p.dist(s.c), q.dist(s.c))
 	dphi := math.Abs(math.Remainder(math.Atan2(q.y-s.c.y, q.x-s.c.x)-math.Atan2(p.y-s.c.y, p.x-s.c.x), 2*math.Pi))
-	return rho * dphi * dphi / 8
+	// Each quad of the cutter is split along a diagonal that spans the chord step of the arc, whose sagitta is at most
+	// partialSagitta, and the turn dphi together: its sag is rho (step + dphi)^2 / 8 = (sqrt(sagitta) + sqrt(twist))^2.
+	// The sagitta itself is charged apart, so the twist carries the rest, with the cross term.
+	own := rho * dphi * dphi / 8
+	return own + 2*math.Sqrt(partialSagitta*own)
 }
 
 // cornerPathDeparture is the largest magnitude of the second derivative, with respect to the offset t, of the path of

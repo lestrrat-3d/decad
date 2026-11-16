@@ -132,6 +132,14 @@ func (k keyhole) checkSections(t *testing.T, out *decad.Body, sx, d float64) {
 			}
 		}
 		require.Greater(t, near, 8)
+		// The slot is void: no outline point lies inside it, so the bevel runs out on the walls and nowhere else.
+		for _, loop := range o.Loops {
+			for _, p := range loop {
+				if math.Hypot(p.X, p.Y) < k.r+d+0.4 && p.Y < 0 {
+					require.GreaterOrEqual(t, math.Abs(p.X), k.w-tol, "depth %v: outline point %v,%v inside the slot", z, p.X, p.Y)
+				}
+			}
+		}
 		wall := -math.Sqrt(rad*rad - k.w*k.w)
 		for _, side := range []float64{-1, 1} {
 			require.Less(t, nearestLoopPoint(o, sx*side*k.w, wall), tol, "depth %v, wall %v", z, side)
@@ -241,5 +249,114 @@ func TestChamferConvexArcRunOutOnNextWall(t *testing.T) {
 				require.Less(t, nearestLoopPoint(o, sx*(p2[0]+tt*dir[0]), p2[1]+tt*dir[1]), tol, "depth %v", z)
 			}
 		})
+	}
+}
+
+// A convex arc small enough that its bevel's circle at the cap never reaches the next wall has no run-out: the cutter
+// would carve a sector from the wall's material and leave a step. The layout is TestChamferConvexArcRunOutOnNextWall's.
+func TestChamferConvexArcRunOutRefusesASmallArc(t *testing.T) {
+	t.Parallel()
+	rad := func(deg float64) float64 { return deg * math.Pi / 180 }
+	// The bevel's circle at the cap has radius r - d, and the next wall lies r cos(turn) from the arc's centre.
+	for _, c := range []struct{ r, turn, d float64 }{{1.2, 45, 0.5}, {0.9, 60, 0.5}} {
+		require.Less(t, c.r-c.d, c.r*math.Cos(rad(c.turn)))
+		t.Run(fmt.Sprintf("r %v turn %v", c.r, c.turn), func(t *testing.T) {
+			t.Parallel()
+			p1 := [2]float64{20, 0}
+			cx, cy := p1[0]-c.r*math.Sin(rad(c.turn)), p1[1]+c.r*math.Cos(rad(c.turn))
+			a1 := c.turn - 90 + 60
+			p2 := [2]float64{cx + c.r*math.Cos(rad(a1)), cy + c.r*math.Sin(rad(a1))}
+			dir := [2]float64{math.Cos(rad(a1 + 90 + c.turn)), math.Sin(rad(a1 + 90 + c.turn))}
+			p3 := [2]float64{p2[0] + 8*dir[0], p2[1] + 8*dir[1]}
+			body := capLoopSubsetBody(t, func(s *sketch.Sketch) {
+				p := func(q [2]float64) *sketch.Point { return s.CreatePoint(q[0], q[1]) }
+				o, b, e, f, g, cc := p([2]float64{0, 0}), p(p1), p(p2), p(p3), p([2]float64{0, 12}), p([2]float64{cx, cy})
+				s.CreateLine(o, b)
+				s.CreateArc(cc, b, e)
+				s.CreateLine(e, f)
+				s.CreateLine(f, g)
+				s.CreateLine(g, o)
+				for _, q := range []*sketch.Point{o, b, e, f, g, cc} {
+					s.Fix(q)
+				}
+			})
+			sel := decad.Edges(decad.EndpointAt(r3.Vec{X: p1[0], Y: p1[1], Z: 5}), decad.Circular())
+			_, err := decad.Chamfer(t.Context(), body, sel, units.Millimeters(c.d))
+			require.ErrorIs(t, err, decad.ErrUnsupported)
+		})
+	}
+}
+
+// The keyhole's slot holds a thin peninsula of material, 0.02 mm wide, rising from its floor to 0.3 mm below the bore,
+// inside the cutter's end and between the samples a grid of points would take. A CAD chamfer of the rim leaves it alone,
+// and the route refuses a chamfer whose cutter would cut it.
+func TestChamferKeyholeRimRunRefusesAThinPeninsula(t *testing.T) {
+	t.Parallel()
+	const r, w, d = 4.0, 0.5, 0.5
+	y0 := math.Sqrt(r*r - w*w)
+	for _, pen := range [][2]float64{{0.31, 0.33}} {
+		t.Run(fmt.Sprintf("peninsula x %v to %v", pen[0], pen[1]), func(t *testing.T) {
+			t.Parallel()
+			const top = -4.3
+			body := capLoopSubsetBody(t, func(s *sketch.Sketch) {
+				p := func(x, y float64) *sketch.Point { return s.CreatePoint(x, y) }
+				centre := p(0, 0)
+				pts := []*sketch.Point{
+					p(-10, -10), p(pen[1], -10), p(pen[1], top), p(pen[0], top), p(pen[0], -8), p(-w, -8),
+					p(-w, -y0), p(w, -y0), p(w, -10), p(10, -10), p(10, 10), p(-10, 10),
+				}
+				for i := range pts {
+					if i == 6 {
+						// Counter-clockwise from the right wall to the left one, the long way over the top.
+						s.CreateArc(centre, pts[7], pts[6])
+						continue
+					}
+					s.CreateLine(pts[i], pts[(i+1)%len(pts)])
+				}
+				for _, q := range append(pts, centre) {
+					s.Fix(q)
+				}
+			})
+			sel := decad.Edges(decad.EndpointAt(r3.Vec{X: w, Y: -y0, Z: 5}), decad.Circular())
+			_, err := decad.Chamfer(t.Context(), body, sel, units.Millimeters(d))
+			require.ErrorIs(t, err, decad.ErrUnsupported)
+		})
+	}
+}
+
+// A tab 0.03 mm thick stands off the wall past the end of a line run, between the strip's old sample rows.
+func TestChamferLineRunRefusesAThinTabPastItsEnd(t *testing.T) {
+	t.Parallel()
+	body := capLoopSubsetBody(t, func(s *sketch.Sketch) {
+		p := func(x, y float64) *sketch.Point { return s.CreatePoint(x, y) }
+		pts := []*sketch.Point{p(0, 0), p(30, 0), p(30, 0.26), p(31, 0.26), p(31, 0.29), p(30, 0.29), p(30, 10), p(0, 10)}
+		for i, q := range pts {
+			s.CreateLine(q, pts[(i+1)%len(pts)])
+			s.Fix(q)
+		}
+	})
+	_, err := decad.Chamfer(t.Context(), body, topEdges(topEdge{r3.Vec{}, r3.Vec{X: 1}}), units.Millimeters(0.5))
+	require.ErrorIs(t, err, decad.ErrUnsupported)
+}
+
+// The two run-out ends of one arc, uncapped, would reach across the slot and overlap: each stops the margin past its
+// wall instead, so setbacks above the slot's width build as the CAD chamfer does.
+func TestChamferKeyholeRimRunWithAWideSetback(t *testing.T) {
+	t.Parallel()
+	for _, k := range []keyhole{{2.55, 0.5, 0}, {4, 0.5, 0}, {2.55, 0.5, 1.5}} {
+		for _, d := range []float64{0.55, 0.8} {
+			t.Run(fmt.Sprintf("r %v flat %v d %v", k.r, k.flat, d), func(t *testing.T) {
+				t.Parallel()
+				body := k.body(t, 1)
+				out, err := decad.Chamfer(t.Context(), body, k.rim(1), units.Millimeters(d))
+				require.NoError(t, err)
+				m, err := out.Volume()
+				require.NoError(t, err)
+				bound, err := m.Bound.In(units.CubicMillimeter)
+				require.NoError(t, err)
+				require.InDelta(t, k.removed(d), volumeOf(t, body)-volumeOf(t, out), bound+1e-6)
+				k.checkSections(t, out, 1, d)
+			})
+		}
 	}
 }
