@@ -261,7 +261,8 @@ boss wall continues the window wall below the plate's face.
 - *Width band.* With every walk charge and section displacement zero, the
   build's crossing charge is the largest span width (A3). Every face's
   displacement adds `3·D` plus the canonical radius's proven rounding, with
-  `D = (largest class size − 1)·crossing`: a piece about the canonical centre
+  `D = (largest class size − 1)·crossing` rounded up, and never less than
+  the crossing itself: a piece about the canonical centre
   `c0` whose radius is read from a vertex on member `Cj` sits from its own
   member `Ck` within `|rj − rk| + |cj − ck| + 2·|ck − c0|` of its allowance. A
   canonical radius read from an arc carries the exact bound on its distance

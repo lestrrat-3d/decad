@@ -636,7 +636,7 @@ regardless of who authored the input curves it was cut from.
 | Interface-aligned blind `Cut` whose displaced tool end or interface has no recorded denoted level, whose denoted levels differ, touching opposed holes, or section displacement | Equal denoted levels with monotone holes and proved separate opposed holes build, and overlapping opposed holes of axis-aligned lines, circles and arcs at an undisplaced level build general-boolean §3 A8's BRep; these cases take the mesh path (stacked §2.1, §7 stage 3) |
 | `Cut` whose tool crosses an existing hole's boundary instead of enclosing it whole | no whole-loop match, mesh path; `agent-docs/stacked-prism-design.md` §7 stage 2 |
 | `Intersect` with disjoint intervals | G5, mesh path (result is empty; unchanged `BooleanEmpty`) |
-| `Union` with a holed operand | G6, mesh path; §9 PR3 |
+| `Union` with a holed operand | G6, mesh path; §9 PR3; unequal intervals with a hole sharing a span with the other outline build as an A1 brep (general-boolean §3 "A1 as a brep", holed operands) |
 | A split arranged boundary with a nonzero source displacement, a nonzero walk charge, or a nonidentity re-expression — any one of the three alone | §3.4 safety routing, mesh path; a future crossing-sensitivity proof may admit it |
 | `Cut` with a holed tool | G6, mesh path; the surviving material inside each tool hole is a separate lump, so it waits on the multi-lump prism payload of the row below, not on PR3 |
 | `Intersect` with a holed operand outside §3.1's one-hole clean-nesting arm | G6, mesh path; the result may require several regions or a split boundary |

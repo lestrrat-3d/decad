@@ -344,6 +344,10 @@ func (b *ubBuild) aliasOf(spans []circularSpan) (holedAlias, error) {
 		}
 	}
 	if largest < 2 {
+		// No two carriers join, but a span between two carriers equal bit for
+		// bit can still carry a width (an arc whose end sits off the radius
+		// its start defines), so the charge never falls below the crossing.
+		out.charge = b.crossing
 		return out, nil
 	}
 	radiusBound := 0.0
@@ -362,8 +366,8 @@ func (b *ubBuild) aliasOf(spans []circularSpan) (holedAlias, error) {
 		}
 		radiusBound = max(radiusBound, prismcells.CircleRadiusBound(seg, canon.R))
 	}
-	d := float64(largest-1) * b.crossing
-	out.charge = proofbound.AbsSumUpper(3*d, radiusBound)
+	d := proofbound.ProductUpper(float64(largest-1), b.crossing)
+	out.charge = proofbound.AbsSumUpper(d, d, d, radiusBound, b.crossing)
 	if proofbound.IsNonFinite(out.charge) {
 		return out, errUBMiss
 	}

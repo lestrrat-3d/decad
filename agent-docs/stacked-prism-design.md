@@ -454,7 +454,7 @@ reads its `sectionDelta` through `booloperand.sectionDisplacement`, as it reads 
 | `Transform` / `Copy` | re-evaluates the payload under the composed motion |
 | `ScaledAt` | Exact line-only solid sections with zero section and level displacement become a certified faceted image; source roles and planar tags follow the scale (evaluator §8). |
 | later `Cut` with a prism tool | A spanning tool or a blind tool ending inside a slab or exactly at an interface builds when each reached slab holds one region and proves a clean cut or no change inside a hole; a reached slab of several regions leaves the pair to another route; opposed interface holes require exact, separated sections, and overlapping ones build a BRep (§7). |
-| `Union` with a stacked operand | `agent-docs/general-boolean-design.md` §3 A1: every slab region hole-free, the stack splits at every level of both operands; a prism-group operand over the partner's interval is A5's |
+| `Union` with a stacked operand | `agent-docs/general-boolean-design.md` §3 A1: every slab region hole-free, or holed under §3 "A1 as a brep"'s holed-operand gate (a brep result), the stack splits at every level of both operands; a prism-group operand over the partner's interval is A5's |
 | `Cut` by a prism-group tool | `agent-docs/general-boolean-design.md` §3 A5 on a prism target: one arrangement for every lump |
 | `Intersect` with a stacked operand | mesh path, over this payload's own tessellation |
 | `Tessellate`, `export.STL` / `OBJ` / `STEP` | §5; a body with one shell meets STEP's one-shell rule, and a closed shell's void shell is STEP's refusal |
