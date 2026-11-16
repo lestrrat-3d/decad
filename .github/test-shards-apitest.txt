@@ -3092,3 +3092,10 @@
 12	0.01	TestWallConcentricRingCarriesRadiusDifferenceBound
 12	0.00	TestWallHeightCarriesAxialDelta
 12	0.01	TestWallThinPieWedge
+12	0.00	TestUnionHoledNoSharedSpanBossKeepsMeshPath
+12	0.00	TestUnionHoledSharedSpanBoss
+12	0.00	TestUnionHoledSharedSpanNearEqualPillarChargesItsWidth
+12	0.00	TestUnionHoledSharedSpanExactLines
+12	0.00	TestUnionHoledSharedSpanKidneySlot
+12	0.00	TestUnionHoledSharedSpanScaleRefusesCharged
+12	0.00	TestUnionHoledSharedSpanSharpSector

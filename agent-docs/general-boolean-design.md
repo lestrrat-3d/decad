@@ -113,7 +113,8 @@ admits takes it unchanged.
 
 #### A1 — stacked union
 
-Admission is prism-boolean's G1–G4 and G6 (hole-free operands until A5), G3
+Admission is prism-boolean's G1–G4 and G6 (hole-free operands until A5; a
+holed operand goes to the brep build alone, under "Holed operands" below), G3
 in any arm, and G5 read for `Union` as "the intervals overlap or touch"
 (`z0_b' <= z1_a && z0_a <= z1_b'`, exact over `big.Rat`). The distinct levels
 `{z0_a, z1_a, z0_b', z1_b'}` sorted exactly cut the union into at most three
@@ -193,16 +194,78 @@ only where every carrier it records is exact: the identity re-expression
 once per scene, at floats no two scenes share), both operands'
 `sectionDelta` zero (class B's B5: a straight wall becomes a planar face at
 its recorded level, and a planar face states no band for a wall that
-moved), and every scene's walk and crossing charge zero. Every miss is
-silent.
+moved), and every scene's walk and crossing charge zero, except the shared
+span width a holed union carries as a band (below). Every miss is silent.
 
 **Operands.** An operand is a prism (one region over one interval), a
 stacked prism (one region per slab), or a brep that keeps the slabs it was
 built from (§4.1's `stack`: the A1 build's own result, with one or more
-hole-free regions per slab and the section displacement they carry). A
+regions per slab, holed only where the holed-operand gate admitted them, and
+the section displacement they carry). A
 class-B brep keeps no stack and is not an operand here. The levels of both
 operands cut the union into slabs, and every slab names the records
 reaching it: each operand's regions in its slab there.
+
+**Holed operands.** A union whose operand holds a region with holes builds
+here only where one of those holes shares a span with the other operand's
+outline, as sketch resolves it (A3); every other holed pair takes the mesh
+path silently, whatever the build's refusal. A boss standing on a plate
+across a window whose inner wall lies on the boss circle is the case: the
+boss wall continues the window wall below the plate's face.
+
+- *Pre-filter.* Before any scene, a hole segment of one operand and an outer
+  segment of the other must lie on one carrier kind within a loose band
+  (circles: centre distance plus radius difference at most `1e-9·max(1, r)`;
+  lines: both hole endpoints that close to the outer line). It computes in
+  decad for cost alone, sparing the arrangement for pairs that cannot share
+  a span, and only rejects.
+- *Cap.* Every scene of a build that passes the pre-filter arranges under
+  twice the global segment cap (`gatedArrangementSegments`, 8192). The
+  arrangement measures near linear in the counted segments: 4 ms for a
+  6,664-segment scene of a spoked disc and its boss, 59 ms for 32 mutually
+  crossing circles at 8,192.
+- *Gate.* Every scene the build uses is arranged and charged first. Some
+  scene must report a span between a hole entity of one operand and an
+  outer entity of the other. A span between two records of one operand must
+  have zero width, and a line span between the operands too.
+- *Slab merge.* A slab both operands reach where a record has holes keeps
+  the cells `ClassifyRegions` puts inside some record. Every other cell
+  must carry an edge of a record's hole loop with the cell on that loop's
+  void side, so it lies inside an operand's own hole; a cell outside every
+  record without one is a new enclosed void and a miss. The kept cells merge
+  (`MergeLoopsExactLineCuts`) into one counter-clockwise outer that takes
+  every clockwise loop as a hole; several outers with a hole miss, several
+  without one are proven apart as above. Each holed region is audited by
+  ring rotation: the first rotation of its rings' starting segments, among
+  at most eight, that modify §5's audit passes is kept. A rotation changes
+  no geometry, only the loop point the nesting test classifies, and that
+  test's disjointness proof makes every point classify alike.
+- *One carrier.* The two record carriers of every circular span join one
+  class whose canonical carrier is the least member; every loop reads its
+  segments' carriers through that class, so a wall piece below the
+  interface and the other operand's piece above it on the same circle join
+  into one swept face or meet at a side-line split.
+- *Span-end junction.* Where sketch puts a span's end at the named arc's
+  own bound (its parameter exactly 0 or 1, on a whole reported edge), the
+  arc's recorded endpoint is a span end of its class. A circle-circle
+  junction whose two walked ends differ, one a natural end at such a corner
+  and the other a cut on a carrier of the same class, stands at that corner.
+  Its allowance is the larger walk allowance plus the outward L1 distance
+  between the two walked ends: the cut end walks within its allowance of the
+  point its circle denotes at sketch's certified cut. The published vertex
+  is the recorded corner, a few ulps from sketch's own vertex position and
+  inside that allowance. It rests on A3's one-carrier reading: without it,
+  a tangent contact between a corner round and the boss circle could put
+  the true vertex about `sqrt(2·ρ·gap)` away. A round sketch cuts has a cut
+  end and never matches, so that pair takes the mesh path.
+- *Width band.* With every walk charge and section displacement zero, the
+  build's crossing charge is the largest span width (A3). Every face's
+  displacement adds `3·D` plus the canonical radius's proven rounding, with
+  `D = (largest class size − 1)·crossing`: a piece about the canonical centre
+  `c0` whose radius is read from a vertex on member `Cj` sits from its own
+  member `Ck` within `|rj − rk| + |cj − ck| + 2·|ck − c0|` of its allowance. A
+  canonical radius read from an arc carries the exact bound on its distance
+  from every member segment's recorded radii. The stack carries the same.
 
 **Scenes.** A slab both operands reach arranges every record reaching it,
 operand A's as the scene's A regions and operand B's as its B regions, and
@@ -1361,10 +1424,12 @@ face view of §B1 is this record, built on demand from either payload and
 never stored for them. A class-B result stores it. Every face's frame is
 stated in the payload's unplaced coordinates and `xform` places the whole
 body, as every payload does. An A1 result additionally keeps its `stack`:
-the slabs it was built from, each slab's regions in the reference frame
-with the section displacement they carry, read only by a further
-co-directional `Union` (§3 "A1 as a brep"), never by a consumer, and
-unchanged by a placement, which moves `xform` alone.
+the slabs it was built from, each slab's regions in the reference frame,
+holed where §3's holed-operand gate admitted them, with the section
+displacement they carry, read by a further co-directional `Union` (§3 "A1
+as a brep"), and by `Body.Section`, `ScaledAt` and point containment only
+where that displacement is zero, and unchanged by a placement, which moves
+`xform` alone.
 
 `wallCarrier` is set by the class-B crossing build alone
 (`internal/classbgeom/crossing_cut.go`), on each cylinder piece whose operand

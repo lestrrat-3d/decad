@@ -25,8 +25,10 @@ import (
 // cell, whose exposed record is that wider region with the hole.
 //
 // Admission is reject-only and silent up to the first private scene: G1-G4
-// on the two operands' outer prisms, G4 and G6 (hole-free) on every slab
-// region, prism-boolean's trimmed-circular refusal, and the interval relation
+// on the two operands' outer prisms, G4 on every slab region (a holed region
+// goes to the brep build, which admits it only under the shared-span gate,
+// general-boolean §3 "A1 as a brep"), prism-boolean's trimmed-circular
+// refusal, and the interval relation
 // `z0_b' <= z1_a && z0_a <= z1_b'` over big.Rat. Past that point an
 // unresolved topology still falls back to the mesh path, as prism-boolean
 // §4.4 states: a disjoint overlap, and a cell the match cannot find.
@@ -65,8 +67,10 @@ func TryStackedUnion(ctx context.Context, a, b topo.Payload) (topo.Payload, bool
 				brepOnly = true
 			}
 			for _, region := range slab.Regions {
-				if len(region.Holes) != 0 { // G6
-					return nil, false, nil
+				if len(region.Holes) != 0 {
+					// A holed region is the brep build's alone, which admits it
+					// only under the shared-span gate.
+					brepOnly = true
 				}
 				analytic, err := prismcells.ProfileAnalytic(budget, region) // G4
 				if err != nil || !analytic {

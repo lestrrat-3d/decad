@@ -120,6 +120,11 @@ type Engine struct {
 	table     map[ubKey]ubEntry
 	verts     map[Point2]*ubVertex
 	junctions map[Point2]map[int][2]Carrier
+
+	alias      map[Carrier]Carrier
+	spanEnds   map[Carrier]map[Point2]struct{}
+	holedUnion bool
+	audit      func(brepgeom.Profile) error
 }
 
 // NewEngine creates one record builder for the supplied levels.
@@ -130,6 +135,8 @@ func NewEngine(levels []float64) *Engine {
 		table:     map[ubKey]ubEntry{},
 		verts:     map[Point2]*ubVertex{},
 		junctions: map[Point2]map[int][2]Carrier{},
+		alias:     map[Carrier]Carrier{},
+		spanEnds:  map[Carrier]map[Point2]struct{}{},
 	}
 	for i, level := range levels {
 		b.LevelAt[level] = i

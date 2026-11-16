@@ -1,9 +1,9 @@
 package stackedunion
 
 // An internal test: sameRegion is unexported, and no public operand pair
-// reaches it with two holed records of one operand today (A1's Union admits
-// hole-free regions, and A7's two prism operands each hold one slab), so only
-// this reading shows the hole comparison deciding.
+// reaches it with two holed records of one operand today (A1's Union admits a
+// holed region only under the shared-span gate, and A7's two prism operands
+// each hold one slab), so only this reading shows the hole comparison deciding.
 
 import (
 	"testing"

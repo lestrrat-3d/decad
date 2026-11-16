@@ -8,11 +8,12 @@ import (
 // Origin is BuildScene's own tag map value (§4.1's "tagged, in
 // a side map, with its origin"): which operand a created scene entity traces
 // to, and which of that operand's loops it came from — -1 for Outer, else the
-// index into ProfileRecord.Holes. Union's resolution never reads it — every
-// operand it admits is hole-free (G6), so only "which operand" would ever
-// vary. Cut/Intersect's clean-nesting match (§4.2) is what needs the loop half
-// too: proving §4.2's nesting relation is a pure data comparison against this
-// map, never a geometric test. AuthoredReversed is the crossing sub-case's own
+// index into ProfileRecord.Holes. Union's resolution reads only "which operand"
+// for a hole-free operand; a holed operand enters A1's brep build only under
+// its shared-span gate, which reads the hole index. Cut/Intersect's
+// clean-nesting match (§4.2) is what needs the loop half too: proving §4.2's
+// nesting relation is a pure data comparison against this map, never a
+// geometric test. AuthoredReversed is the crossing sub-case's own
 // addition (membership.go): whether this operand's own recorded
 // walk of the entity runs backwards relative to the entity's own natural
 // parameterization — the fixed fact BuildScene computes once at creation
