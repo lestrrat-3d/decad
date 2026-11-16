@@ -146,3 +146,10 @@ func CarrierKeptRecord(budget *proofbound.WorkBudget, cr prismrecord.CarrierReco
 	blendAt[0][0] = nil
 	return carrierRewriteRecord(cr, sections, loops, blendAt, corners, rewritten, seams)
 }
+
+// DisableCapLoopRoute switches the cap-loop route of §8.1 off and returns the
+// function that restores it.
+func DisableCapLoopRoute() func() {
+	capLoopRouteDisabled.Store(true)
+	return func() { capLoopRouteDisabled.Store(false) }
+}

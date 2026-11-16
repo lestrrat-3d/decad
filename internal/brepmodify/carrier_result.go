@@ -140,6 +140,8 @@ func carrierRewriteRecord(cr prismrecord.CarrierRecord, sections []sectionrecord
 				e.ed = ce.dfA
 			}
 			e.sd = proofbound.AbsSumUpper(e.sd, e.seam.Read)
+			e.ed = proofbound.AbsSumUpper(e.ed, e.seam.ReadEnd)
+			chargeArcRadius(&e, sections[li].Segments, w, cs != nil, ce != nil)
 			switch {
 			case e.unchanged:
 				e.eps = proofbound.AbsSumUpper(eps, e.seam.Carrier)
@@ -210,7 +212,7 @@ func junctionEntry(cr prismrecord.CarrierRecord, section sectionrecord.LoopRecor
 		return math.Max(e.ed, next.sd) // through a connector: a chord or a point
 	}
 	_, _, endJ, _ := walkEntries(cr, li, walks[wi], nseg) //nolint:dogsled // only the end junction is read
-	if e.unchanged && next.unchanged && next.seam.Read == 0 {
+	if e.unchanged && next.unchanged && next.seam.Read == 0 && e.seam.ReadEnd == 0 {
 		return endJ
 	}
 	// A seam snap moved next's start: the receiver's path there may close
@@ -222,6 +224,76 @@ func junctionEntry(cr prismrecord.CarrierRecord, section sectionrecord.LoopRecor
 		return proofbound.AbsSumUpper(endJ, tau)
 	}
 	return math.Max(e.ed, next.sd)
+}
+
+// chargeArcRadius is the radial part of an emitted ArcSeg's End-side
+// displacement (agent-docs/carrier-record-design.md §7.7): the read end on
+// ArcSeg.End's side stands at Start's radius, so it moves by the outward
+// difference of the emitted and the receiver's radius (at most the distance of
+// the two Start-to-centre vectors) on top of the receiver's junction entry. A
+// seam snap's move of that read end is charged separately (seamMove.ReadEnd).
+// A blended end carries its foot's displacement instead and takes neither term.
+func chargeArcRadius(e *emitted, recv []sectionrecord.CurveSegment, w survey2d.SideWalk, blendedStart, blendedEnd bool) {
+	arc, ok := e.seg.(sectionrecord.ArcSeg)
+	if !ok {
+		return
+	}
+	natural := naturalArc(arc)
+	// The walk end that is the ArcSeg.End side: the walk's end for a natural arc.
+	blended, receiverSeg := blendedStart, recv[w.Segs[0]]
+	if natural {
+		blended, receiverSeg = blendedEnd, recv[w.Segs[len(w.Segs)-1]]
+	}
+	extra := 0.0
+	if !blended {
+		if recvArc, isArc := receiverSeg.(sectionrecord.ArcSeg); isArc {
+			extra = proofbound.AbsSumUpper(extra, radiusGapUp(arc, recvArc))
+		}
+		// A circle re-emitted as an arc has no recorded Start radius; its radius
+		// moves through the carrier entry (ε) the arc rule charges.
+	}
+	if natural {
+		e.ed = proofbound.AbsSumUpper(e.ed, extra)
+		return
+	}
+	e.sd = proofbound.AbsSumUpper(e.sd, extra)
+}
+
+// radiusGapUp bounds | |a.Start − a.Center| − |b.Start − b.Center| | from
+// above, from outward-rounded enclosures of the two radii.
+func radiusGapUp(a, b sectionrecord.ArcSeg) float64 {
+	enclose := func(s sectionrecord.ArcSeg) (lo, hi float64, ok bool) {
+		du := new(big.Rat).Sub(ratOrZero(s.Start.U), ratOrZero(s.Center.U))
+		dv := new(big.Rat).Sub(ratOrZero(s.Start.V), ratOrZero(s.Center.V))
+		sq := proofbound.RatAdd(new(big.Rat).Mul(du, du), new(big.Rat).Mul(dv, dv))
+		return proofbound.RatSqrtDown(sq), proofbound.RatSqrtUp(sq),
+			!proofbound.IsNonFinite(s.Start.U+s.Start.V+s.Center.U+s.Center.V)
+	}
+	aLo, aHi, okA := enclose(a)
+	bLo, bHi, okB := enclose(b)
+	if !okA || !okB {
+		return math.Inf(1)
+	}
+	gap := func(hi, lo float64) *big.Rat {
+		r := new(big.Rat).Sub(ratOrZero(hi), ratOrZero(lo))
+		if r.Sign() < 0 {
+			return new(big.Rat)
+		}
+		return r
+	}
+	x, y := gap(aHi, bLo), gap(bHi, aLo)
+	if x.Cmp(y) < 0 {
+		x = y
+	}
+	return proofbound.RatFloatUp(x)
+}
+
+func ratOrZero(f float64) *big.Rat {
+	r, _ := proofbound.RatOf(f)
+	if r == nil {
+		return new(big.Rat)
+	}
+	return r
 }
 
 func isArc(seg sectionrecord.CurveSegment) bool {

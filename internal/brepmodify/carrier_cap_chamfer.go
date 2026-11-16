@@ -3,11 +3,16 @@ package brepmodify
 import (
 	"context"
 	"errors"
+	"sync/atomic"
 
 	"github.com/lestrrat-3d/decad/internal/capblend"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/topo"
 )
+
+// capLoopRouteDisabled switches the cap-loop route off so a test can compare
+// today's answer with the route's; nothing in production sets it.
+var capLoopRouteDisabled atomic.Bool
 
 // CarrierCapLoopChamfer is the cap-loop route of
 // agent-docs/carrier-record-design.md §8.1: a Chamfer whose selection is every
@@ -25,7 +30,7 @@ import (
 // faceted view as before the route existed.
 func CarrierCapLoopChamfer(ctx context.Context, env topo.Env, pp prismrecord.Payload, caps PrismCaps,
 	cr prismrecord.CarrierRecord, sel string, edges []*topo.Edge, dmm, dDelta float64, asym *Asymmetric) (Result, bool, error) {
-	if straightPrismCapEdge(caps, edges) {
+	if capLoopRouteDisabled.Load() || straightPrismCapEdge(caps, edges) {
 		return Result{}, false, nil
 	}
 	startLoops, endLoops, lateral, err := ClassifyChamferSelection(ctx, pp, caps, sel, edges)

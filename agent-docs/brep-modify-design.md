@@ -151,6 +151,8 @@ corner's diagonal and removes `4·20·9·(1 − π/4)` mm³. At `r = 7`, past
 
 ### 2.2 A displaced prism: the faceted view with exact carriers
 
+A complete cap-loop `Chamfer` of exact loops of a receiver with a valid carrier record reaches this view only after `brepmodify.CarrierCapLoopChamfer` declines or refuses (carrier-record-design §8.1): a selected loop with a nonzero entry, a partial or mixed selection, a gate, offset audit or transfer-condition refusal, and SX6's drop all fall through to it, and only cancellation is returned.
+
 A `prismPayload` with a section displacement refuses the corner rewrite
 (`prismrecord.Payload.RequireExactSection`), since the rewrite reads the
 displaced coordinates. The usual source is a `Cut` by rotated pattern copies:
@@ -191,7 +193,7 @@ result is a
 | **RB3** | `brepPayload` or stacked receiver with a section displacement | route P's displaced reading (§4.4) for a lateral Fillet or symmetric Chamfer that passes Table PD; otherwise SB1 | SB1 |
 | **RB4** | `facetedPayload` | reach SX9 (permanent) | reach SX9 |
 | **RB5** | `brepPayload` carrying a boss or pocket shell band | the faceted view's retained edge blend (§2.1), else SB11 | SB11; a closed shell is modify-general SG2 |
-| **RB6** | `prismPayload` with a section displacement | With a valid `CarrierRecord` of the receiver body (`prismrecord.CarrierRecordOf`) and a lateral selection (carrier-record-design §7): the carrier route; a Table CB refusal is `Fillet`'s `ErrUnsupported`, and `Chamfer` falls through. Otherwise `Chamfer`: the faceted view's retained edge blend over loops with exact carriers (§2.2; a loop is exact when `ExactCarriers` lists it or the body's own record holds every entry of it at zero), else `RequireExactSection`'s refusal; `Fillet`: that refusal | that refusal |
+| **RB6** | `prismPayload` with a section displacement | With a valid `CarrierRecord` of the receiver body (`prismrecord.CarrierRecordOf`) and a lateral selection (carrier-record-design §7): the carrier route; a Table CB refusal is `Fillet`'s `ErrUnsupported`, and `Chamfer` falls through. Otherwise `Chamfer`: the faceted view's retained edge blend over loops with exact carriers (§2.2; a loop is exact when `ExactCarriers` lists it or the body's own record holds every entry of it at zero), else `RequireExactSection`'s refusal; `Fillet`: that refusal. A `Chamfer` that selects every edge of complete cap loops, each exact in that record, builds a `capblend.DisplacedPayload` (carrier-record-design §8.1); every refusal of that route but cancellation falls through to the rows above | that refusal |
 
 RB1's zero-displacement rule is prism-boolean §13's displaced-receiver rule,
 the one `prismrecord.Payload.RequireExactSection` enforces for a prism: a rewrite of a record that

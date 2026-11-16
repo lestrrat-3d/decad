@@ -3107,3 +3107,6 @@
 12	0.00	TestCarrierRecordUnionKeepsTheCopiedPrismJoinRoute
 12	0.00	TestCarrierRecordArcHeavyPairReachesItsRoute
 12	0.00	TestCarrierRecordDiscWithTeeth
+12	0.00	TestDisplacedCapChamferWheelWindows
+12	0.00	TestDisplacedCapChamferMeshCutByBoxComposes
+12	0.00	TestDisplacedCapChamferReaders

@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"slices"
+	"sync/atomic"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/freeform"
@@ -109,6 +111,16 @@ func (dp DisplacedPayload) ExtentBoundedAlong(ctx context.Context, g r3.Vec, wor
 	return dp.Base.extentBoundedAlong(ctx, g, work, nil, nil, dp.LoopDelta)
 }
 
+// disabledTransfer names the transfer checks a test switched off to show each
+// one matters ("T1T2", "T3" and "ContourDelta", the contour displacement of a
+// selected loop's segments); nothing in production sets it.
+var disabledTransfer atomic.Pointer[[]string]
+
+func transferOn(check string) bool {
+	off := disabledTransfer.Load()
+	return off == nil || !slices.Contains(*off, check)
+}
+
 // requireTransfer is §8.3's transfer condition on a mixed profile, run right
 // after the offset audit of that profile passes. It makes the audit's verdict,
 // which speaks about the recorded section, hold for the section the receiver
@@ -131,6 +143,9 @@ func requireTransfer(ctx context.Context, budget *proofbound.WorkBudget, cbp Pay
 		if !cbp.StartLoops[li] && !cbp.EndLoops[li] {
 			continue
 		}
+		if !transferOn("ContourDelta") {
+			continue
+		}
 		setback := cbp.LoopSetback(li)
 		delta, err := cbp.LoopContourDelta(ctx, li, recorded[li], setback.Dc, setback.DcDelta)
 		if err != nil {
@@ -138,7 +153,10 @@ func requireTransfer(ctx context.Context, budget *proofbound.WorkBudget, cbp Pay
 		}
 		extra[li] = delta
 	}
-	apart, why, err := prismcells.CertifiedContactLoops(budget, loops, loopDelta, extra)
+	apart, why, err := true, "", error(nil)
+	if transferOn("T1T2") {
+		apart, why, err = prismcells.CertifiedContactLoops(budget, loops, loopDelta, extra)
+	}
 	if err != nil {
 		return err
 	}
@@ -147,7 +165,7 @@ func requireTransfer(ctx context.Context, budget *proofbound.WorkBudget, cbp Pay
 			decaderr.ErrUnsupported, why)
 	}
 	for li, loop := range loops {
-		if loopDelta[li] == 0 {
+		if loopDelta[li] == 0 || !transferOn("T3") {
 			continue
 		}
 		enc, ok, err := prismcells.LoopAreaEnclosure(budget, loop, loopDelta[li])

@@ -83,3 +83,5 @@ func GrowFolded(ctx context.Context, refusal error, op meshbool.OperationKind, c
 		return attempt(grows)
 	})
 }
+
+var DisplacedWall = displacedWall

@@ -2,6 +2,7 @@ package brepmodify_test
 
 import (
 	"errors"
+	"github.com/lestrrat-3d/decad/internal/circularbounds"
 	"math"
 	"math/big"
 	"testing"
@@ -811,4 +812,60 @@ func TestCarrierCB5WidenedCutbacksRefuse(t *testing.T) {
 	if refusal, ok := errors.AsType[*brepmodify.CarrierRefusal](err); ok {
 		require.NotEqual(t, "CB5", refusal.Row)
 	}
+}
+
+// TestCarrierArcReadEndEntry: a hole loop's clockwise arc whose End (the walk
+// start) sits off Start's radius by more than rounding is blended at its Start
+// end only. The untouched End side reads Start's radius on End's bearing, so
+// its junction entry is at least the receiver's entry plus the exact distance
+// between the receiver's and the emitted read ends, |R_emit − R_recv| where the
+// centre and End are shared (agent-docs/carrier-record-design.md §7.7, "Arc
+// read ends"). A walk-end allowance alone is zero there.
+func TestCarrierArcReadEndEntry(t *testing.T) {
+	const radius, c, off = 5.0, 3.0, 4e-15
+	y := math.Sqrt(radius*radius - c*c)
+	top, bottom := sectionrecord.Point2{U: c, V: y}, sectionrecord.Point2{U: c, V: -y - off}
+	outer := polygonReceiver(t, carrierDelta, 0, sectionrecord.Point2{U: -20, V: -20}, sectionrecord.Point2{U: 20, V: -20},
+		sectionrecord.Point2{U: 20, V: 20}, sectionrecord.Point2{U: -20, V: 20})
+	profile := outer.Profile
+	profile.Holes = []sectionrecord.LoopRecord{{Segments: []sectionrecord.CurveSegment{
+		sectionrecord.LineSeg{Start: top, End: bottom, TStart: 0, TEnd: 1},
+		sectionrecord.ArcSeg{Start: top, End: bottom, TStart: 1, TEnd: 0},
+	}}}
+	cr := prismrecord.ZeroCarrierRecord(profile)
+	cr.SectionDelta = carrierDelta
+	junctionRecord(carrierJunc)(&cr)
+	recorded := prismrecord.Payload{Profile: profile, Frame: carrierFrame(t), Z1: 10, Xform: r3.Identity(),
+		SectionDelta: carrierDelta, Carriers: &cr}
+	body, env := buildReceiver(t, recorded)
+	// The corner at top is the arc's Start end; bottom is its untouched End.
+	res, err := blendCarrier(t, body, env, verticalEdgesAt(t, body, []sectionrecord.Point2{top}), true, 0.5)
+	require.NoError(t, err)
+	got := payloadOf(t, res.Body)
+	rec, valid, err := got.CarrierRecord(proofbound.NewWorkBudget(t.Context()))
+	require.NoError(t, err)
+	require.True(t, valid)
+	radiusOf := func(arc sectionrecord.ArcSeg) *big.Float {
+		du := new(big.Float).SetPrec(300).Sub(new(big.Float).SetFloat64(arc.Start.U), new(big.Float).SetFloat64(arc.Center.U))
+		dv := new(big.Float).SetPrec(300).Sub(new(big.Float).SetFloat64(arc.Start.V), new(big.Float).SetFloat64(arc.Center.V))
+		sq := new(big.Float).SetPrec(300).Add(new(big.Float).SetPrec(300).Mul(du, du), new(big.Float).SetPrec(300).Mul(dv, dv))
+		return new(big.Float).SetPrec(300).Sqrt(sq)
+	}
+	recvR := radiusOf(profile.Holes[0].Segments[1].(sectionrecord.ArcSeg))
+	found := false
+	for k, seg := range got.Profile.Holes[0].Segments {
+		arc, ok := seg.(sectionrecord.ArcSeg)
+		if !ok || arc.TStart != 1 || arc.TEnd != 0 || arc.End != bottom {
+			continue
+		}
+		found = true
+		gap, _ := new(big.Float).SetPrec(300).Sub(radiusOf(arc), recvR).Abs(new(big.Float).SetPrec(300).Sub(radiusOf(arc), recvR)).Float64()
+		// The junction before the arc is the one at its End (walk start).
+		n := len(got.Profile.Holes[0].Segments)
+		entry := rec.Junction[1][(k+n-1)%n]
+		require.GreaterOrEqual(t, entry, carrierJunc+gap, `the entry carries the exact read-end distance`)
+		require.GreaterOrEqual(t, entry, carrierJunc+circularbounds.ArcRadialResidualUpper(arc),
+			`and the new segment's own residual`)
+	}
+	require.True(t, found)
 }
