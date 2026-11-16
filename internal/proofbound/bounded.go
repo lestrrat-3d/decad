@@ -160,13 +160,37 @@ func BoundedEnds(q BoundedScalar) (float64, float64) {
 // ProvesAtMost reports whether q's upper endpoint is no greater than limit's
 // lower endpoint.
 func ProvesAtMost(q, limit BoundedScalar) bool {
-	return q.Value+q.Bound <= limit.Value-limit.Bound
+	qUpper, okQ := scalarEndpoint(q, true)
+	limitLower, okLimit := scalarEndpoint(limit, false)
+	return okQ && okLimit && qUpper <= limitLower
 }
 
 // ProvesAtLeast reports whether q's lower endpoint is no less than limit's
 // upper endpoint.
 func ProvesAtLeast(q, limit BoundedScalar) bool {
-	return q.Value-q.Bound >= limit.Value+limit.Bound
+	qLower, okQ := scalarEndpoint(q, false)
+	limitUpper, okLimit := scalarEndpoint(limit, true)
+	return okQ && okLimit && qLower >= limitUpper
+}
+
+// scalarEndpoint reads one endpoint, rounding outward only when the held
+// addition is inexact. Exact endpoint ties remain provable.
+func scalarEndpoint(q BoundedScalar, upper bool) (float64, bool) {
+	if IsNonFinite(q.Value) || IsNonFinite(q.Bound) || q.Bound < 0 {
+		return 0, false
+	}
+	delta, direction := q.Bound, math.Inf(1)
+	if !upper {
+		delta, direction = -delta, math.Inf(-1)
+	}
+	endpoint := q.Value + delta
+	if IsNonFinite(endpoint) {
+		return 0, false
+	}
+	if proofarith.AddRoundError(q.Value, delta, endpoint) > 0 {
+		endpoint = math.Nextafter(endpoint, direction)
+	}
+	return endpoint, true
 }
 
 // AdmitAbove reads `q > t`.
