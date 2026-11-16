@@ -154,6 +154,10 @@ func blend(ctx context.Context, env topo.Env, b *topo.Body, fp facetedrecord.Pay
 			}
 		}
 	}
+	// Several arcs of one wall each read their wall by its facets along the arc
+	// (readArc's local) only when every selected edge is an open arc; any other
+	// selection keeps the single-edge rule.
+	local := len(edges) == 1 || !slices.ContainsFunc(edges, func(e *topo.Edge) bool { return !looksLikeArc(e) })
 	var corners []r3.Vec
 	claim := func(ends [2]lineEnd, scale float64) error {
 		for _, end := range ends {
@@ -178,11 +182,16 @@ func blend(ctx context.Context, env topo.Env, b *topo.Body, fp facetedrecord.Pay
 			}
 			targets[i].lineKey, targets[i].kind = l.key(), straightLine
 		case looksLikeArc(e):
-			a, err := readArc(e, fp, faceIndex, len(edges) == 1)
+			a, err := readArc(e, fp, faceIndex, local)
 			if err != nil {
 				// An arc this route cannot read is left to the generic refusal, which
 				// names the whole selection.
 				return nil, false, nil //nolint:nilerr // declining is the generic refusal's cue, not a swallowed failure
+			}
+			// Several arcs share a two-sided wall only where their ends are cylinders; plane-ended arcs
+			// keep the whole-face refusal when more than one edge is selected.
+			if len(edges) > 1 && a.twoSided && a.cyl[0] == nil {
+				return nil, false, nil
 			}
 			if err := a.checkSize(spec); err != nil {
 				return nil, true, err
@@ -275,7 +284,7 @@ func blend(ctx context.Context, env topo.Env, b *topo.Body, fp facetedrecord.Pay
 			}
 		case openArc:
 			var a arcRim
-			if a, err = readArc(e, curFP, faceIndex, len(edges) == 1); err == nil {
+			if a, err = readArc(e, curFP, faceIndex, local); err == nil {
 				step, err = spec.assign(targets[i].ref, a.planeFace, a.wallFace)
 			}
 			if err == nil {
@@ -609,6 +618,12 @@ func (w *work) measureChange(tag blendTag, stripFrom int) (float64, float64) {
 	}
 	volSymDiff := proofbound.AbsSumUpper(proofbound.ProductUpper(eps, proofbound.AbsSumUpper(stripArea, tag.trueArea)),
 		64*0x1p-52*eps*scale)
+	// An end cap on a cylinder is new surface bounding K, and the split of G's held
+	// facets moves their volume (arc_end_cyl_cap.go).
+	if w.capEps > 0 || w.splitVol > 0 {
+		capVol := proofbound.ProductUpper(w.capEps, proofbound.AbsSumUpper(w.capHeld, w.capTrue))
+		volSymDiff = proofbound.AbsSumUpper(volSymDiff, capVol, w.splitVol)
+	}
 	return areaSlack, volSymDiff
 }
 

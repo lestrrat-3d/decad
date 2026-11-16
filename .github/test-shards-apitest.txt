@@ -3099,3 +3099,6 @@
 12	0.00	TestUnionHoledSharedSpanKidneySlot
 12	0.00	TestUnionHoledSharedSpanScaleRefusesCharged
 12	0.00	TestUnionHoledSharedSpanSharpSector
+12	0.00	TestBossRootFilletRefusesArcEndsOnOneFace
+12	0.00	TestBossRootFilletRefusesHalfCircleArc
+12	0.00	TestBossRootFilletSpokedHub

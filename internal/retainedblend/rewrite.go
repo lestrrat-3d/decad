@@ -58,6 +58,10 @@ type work struct {
 	// vertex on, those vertices; build splits every facet that keeps the edge
 	// (splitSeams).
 	seam map[[2]int][]int
+	// capHeld, capTrue and capEps are the held area, the exact area and the
+	// largest corner bound of the end caps an arc end on a cylinder adds to G, and
+	// splitVol the volume the split of G's held facets can move (measureChange).
+	capHeld, capTrue, capEps, splitVol float64
 }
 
 type ringPt struct {

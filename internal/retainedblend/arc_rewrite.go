@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"slices"
 	"sort"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
@@ -54,14 +55,11 @@ func (a arcRim) rowAngles(p arcProfile, s float64, ref [2]float64) ([2]float64, 
 	rho, _ := p(s)
 	var out [2]float64
 	for i := range 2 {
-		roots, ok := a.ringAzimuths(rho, a.ends[i].g, ref[i])
+		t, ok := a.endAzimuths(i, rho, ref[i])
 		if !ok {
 			return out, fmt.Errorf("%w: a blend circle does not reach an end face", decaderr.ErrUnsupported)
 		}
-		out[i] = roots[0]
-		if math.Abs(roots[1]-ref[i]) < math.Abs(roots[0]-ref[i]) {
-			out[i] = roots[1]
-		}
+		out[i] = t
 	}
 	return out, nil
 }
@@ -69,6 +67,10 @@ func (a arcRim) rowAngles(p arcProfile, s float64, ref [2]float64) ([2]float64, 
 // rewriteArc blends one open arc and builds the body over the rewritten mesh.
 func rewriteArc(ctx context.Context, env topo.Env, fp facetedrecord.Payload, a arcRim, spec blendSpec,
 	role string, ord int, faceIndex map[*topo.Face]int) (*topo.Body, error) {
+	cyl := a.cyl[0] != nil
+	if cyl && !spec.fillet {
+		return nil, fmt.Errorf("%w: a chamfer of an arc that ends on a cylinder is not built", decaderr.ErrUnsupported)
+	}
 	if err := a.checkSize(spec); err != nil {
 		return nil, err
 	}
@@ -82,10 +84,16 @@ func rewriteArc(ctx context.Context, env topo.Env, fp facetedrecord.Payload, a a
 	for k, f := range []*topo.Face{a.planeFace, a.wallFace, a.ends[0].face, a.ends[1].face} {
 		var err error
 		var end *plane
-		if k >= 2 {
+		if k >= 2 && !cyl {
 			end = &a.ends[k-2].g
 		}
-		if faces[k], err = w.faceLoops(faceIndex[f], end); err != nil {
+		if k >= 2 && cyl {
+			// A cylinder end face keeps its facets and its interior vertices.
+			faces[k], err = w.cylFaceLoops(faceIndex[f])
+		} else {
+			faces[k], err = w.faceLoops(faceIndex[f], end)
+		}
+		if err != nil {
 			return nil, err
 		}
 	}
@@ -97,13 +105,17 @@ func rewriteArc(ctx context.Context, env topo.Env, fp facetedrecord.Payload, a a
 	var tA [2]r3.Vec
 	for i := range 2 {
 		end := a.ends[i]
+		onGen[i] = func(v int) bool { return distToLine(w.verts[v], end.exact, n) <= w.beta[v]+slack }
+		if cyl {
+			onLineA[i] = a.chainWalker(w, i, fG[i])
+			continue
+		}
 		t, ok := n.Cross(end.g.n).Normalize()
 		if !ok {
 			return nil, fmt.Errorf("%w: an end face is parallel to the plane", decaderr.ErrUnsupported)
 		}
 		tA[i] = t
 		onLineA[i] = func(v int) bool { return distToLine(w.verts[v], end.exact, t) <= w.beta[v]+slack }
-		onGen[i] = func(v int) bool { return distToLine(w.verts[v], end.exact, n) <= w.beta[v]+slack }
 	}
 	runA, err := w.locateBy(fA, a.ends[0].v, a.ends[1].v, onArc, onLineA)
 	if err != nil {
@@ -119,11 +131,17 @@ func rewriteArc(ctx context.Context, env topo.Env, fp facetedrecord.Payload, a a
 	// agent-docs/retained-edge-blend-design.md Table E).
 	var kindB [2]sideKind
 	for i := range 2 {
-		dir := tA[i]
-		if w.verts[runA.chain[i][len(runA.chain[i])-1]].Sub(a.ends[i].exact).Dot(dir) < 0 {
-			dir = dir.Scale(-1)
+		if cyl {
+			if err := a.readCylChain(w, i, runA.chain[i], margin); err != nil {
+				return nil, err
+			}
+		} else {
+			dir := tA[i]
+			if w.verts[runA.chain[i][len(runA.chain[i])-1]].Sub(a.ends[i].exact).Dot(dir) < 0 {
+				dir = dir.Scale(-1)
+			}
+			runA.dir[i] = dir
 		}
-		runA.dir[i] = dir
 		last := runB.chain[i][len(runB.chain[i])-1]
 		toward := w.verts[last].Sub(a.ends[i].exact).Dot(n) * a.side
 		switch {
@@ -133,6 +151,9 @@ func rewriteArc(ctx context.Context, env topo.Env, fp facetedrecord.Payload, a a
 			kindB[i] = extends
 		default:
 			return nil, fmt.Errorf("%w: the wall's generator at an arc end leaves the wrong way", decaderr.ErrUnsupported)
+		}
+		if cyl && kindB[i] != extends {
+			return nil, fmt.Errorf("%w: a root arc ends on a cylinder its wall does not run on past", decaderr.ErrUnsupported)
 		}
 	}
 	bandMode := a.twoSided || kindB[0] == extends || kindB[1] == extends
@@ -144,7 +165,7 @@ func rewriteArc(ctx context.Context, env topo.Env, fp facetedrecord.Payload, a a
 	ref := [2]float64{a.theta0, a.theta0 + a.span}
 	var ends []endSection
 	for i := range 2 {
-		sec, err := a.section(spec, a.ends[i].g)
+		sec, err := a.endSectionAt(spec, i)
 		if err != nil {
 			return nil, err
 		}
@@ -177,6 +198,12 @@ func rewriteArc(ctx context.Context, env topo.Env, fp facetedrecord.Payload, a a
 	for i := range 2 {
 		end := a.ends[i]
 		p := a.atTheta(rows[0].rho, rows[0].theta[i], 0)
+		if cyl {
+			if remA[i], err = a.cylSetback(w, i, p, runA.chain[i], margin); err != nil {
+				return nil, err
+			}
+			continue
+		}
 		tp := tau(p, end.exact, runA.dir[i])
 		chain := runA.chain[i]
 		last := tau(w.verts[chain[len(chain)-1]], end.exact, runA.dir[i])
@@ -241,10 +268,24 @@ func rewriteArc(ctx context.Context, env topo.Env, fp facetedrecord.Payload, a a
 			pts = append(pts, w.verts[cuts.corner[i]])
 			for _, v := range run {
 				reach = max(reach, w.beta[v])
+			}
+			closeAt := a.ends[i].v
+			if cyl {
+				// The cap reads its loop without the vertices beside V read as on its
+				// radial plane, and closes at the last of them (capFacets).
+				if run, closeAt, err = a.closeCap(i, run); err != nil {
+					return nil, err
+				}
+			}
+			for _, v := range run {
 				pts = append(pts, w.verts[v])
 			}
-			pts = append(pts, w.verts[a.ends[i].v])
-			simple = simple && capSimplePts(a.ends[i].g.n, pts, m) == nil
+			pts = append(pts, w.verts[closeAt])
+			if cyl {
+				simple = simple && capSimple2(a.capPoly(i, pts), m) == nil
+			} else {
+				simple = simple && capSimplePts(a.ends[i].g.n, pts, m) == nil
+			}
 		}
 		if !simple {
 			need := proofbound.AbsSumUpper(reach, margin)
@@ -334,7 +375,15 @@ func rewriteArc(ctx context.Context, env topo.Env, fp facetedrecord.Payload, a a
 	if err != nil {
 		return nil, err
 	}
-	// The plane keeps clear of the strip.
+	// The plane keeps clear of the strip. On a cylinder end the plane also loses the
+	// region between its rim arc's ends and the setback arc's, along G, so the zone
+	// is the union of the two angular spans.
+	zone := rows[0].theta
+	if cyl {
+		zone = [2]float64{
+			min(zone[0], a.theta(a.ends[0].exact, zone[0])), max(zone[1], a.theta(a.ends[1].exact, zone[1])),
+		}
+	}
 	{
 		exempt := map[int]bool{a.ends[0].v: true, a.ends[1].v: true}
 		for _, v := range runA.inner {
@@ -353,7 +402,7 @@ func rewriteArc(ctx context.Context, env topo.Env, fp facetedrecord.Payload, a a
 				}
 				lo, hi := w.segmentRadialRange(w.verts[v], w.verts[q])
 				if hi > math.Min(a.radius, rhoA)-margin-w.beta[v] && lo < math.Max(a.radius, rhoA)+margin+w.beta[v] &&
-					w.nearArcZone(a, w.verts[v], w.verts[q], rhoA, rows[0].theta, margin+w.beta[v]) {
+					w.nearArcZone(a, w.verts[v], w.verts[q], rhoA, zone, margin+w.beta[v]) {
 					return nil, fmt.Errorf("%w: a face boundary comes within the blend's reach of the arc", decaderr.ErrUnsupported)
 				}
 			}
@@ -363,6 +412,7 @@ func rewriteArc(ctx context.Context, env topo.Env, fp facetedrecord.Payload, a a
 	// The end faces.
 	var gLoops [2][][]int
 	var gainsG [2]bool
+	var capEnds, wallRuns [2][]int
 	for i := range 2 {
 		endIDs := make([]int, m+1)
 		reach := make([]r3.Vec, m+1)
@@ -383,10 +433,32 @@ func rewriteArc(ctx context.Context, env topo.Env, fp facetedrecord.Payload, a a
 			if wallRun, err = cuts.endRun(i, a.ends[i].v); err != nil {
 				return nil, err
 			}
-			capLoop := append(append(append([]int(nil), endIDs...), wallRun...), a.ends[i].v)
-			if err := w.capSimple(a.ends[i].g.n, capLoop, m); err != nil {
+			closeAt := a.ends[i].v
+			if cyl {
+				if wallRun, closeAt, err = a.closeCap(i, wallRun); err != nil {
+					return nil, err
+				}
+			}
+			capLoop := append(append(append([]int(nil), endIDs...), wallRun...), closeAt)
+			if cyl {
+				pts := make([]r3.Vec, len(capLoop))
+				for k, id := range capLoop {
+					pts[k] = w.verts[id]
+				}
+				if err := capSimple2(a.capPoly(i, pts), m); err != nil {
+					return nil, err
+				}
+			} else if err := w.capSimple(a.ends[i].g.n, capLoop, m); err != nil {
 				return nil, err
 			}
+		}
+		if cyl {
+			capEnds[i], wallRuns[i] = endIDs, wallRun
+			reachIDs := append(slices.Clone(endIDs), wallRun...)
+			if err := a.cylEndChecks(w, i, fG[i], runA.chain[i], runB.chain[i], reachIDs, margin); err != nil {
+				return nil, err
+			}
+			continue
 		}
 		loops, gains, err := w.endFaceRun(a.ends[i], fG[i], runA.chain[i], runB.chain[i], [2]sideKind{trims, kindB[i]},
 			remA[i], remB[i], endIDs, wallRun, reach, margin, a.convex, nil)
@@ -399,13 +471,28 @@ func rewriteArc(ctx context.Context, env topo.Env, fp facetedrecord.Payload, a a
 	// An end face that takes the cap is new surface where the cap lies: its
 	// rebuilt facets are cleared against the rest of the body as the strip is.
 	var taken [][2]int
-	for _, f := range []struct {
+	faceList := []struct {
 		loops [][]int
 		n     r3.Vec
 		fl    faceLoops
 		gains bool
-	}{{aLoops, n, fA, false}, {gLoops[0], a.ends[0].g.n, fG[0], gainsG[0] || kindB[0] == extends},
-		{gLoops[1], a.ends[1].g.n, fG[1], gainsG[1] || kindB[1] == extends}} {
+	}{{aLoops, n, fA, false}}
+	if !cyl {
+		faceList = append(faceList,
+			struct {
+				loops [][]int
+				n     r3.Vec
+				fl    faceLoops
+				gains bool
+			}{gLoops[0], a.ends[0].g.n, fG[0], gainsG[0] || kindB[0] == extends},
+			struct {
+				loops [][]int
+				n     r3.Vec
+				fl    faceLoops
+				gains bool
+			}{gLoops[1], a.ends[1].g.n, fG[1], gainsG[1] || kindB[1] == extends})
+	}
+	for _, f := range faceList {
 		from := len(w.out)
 		if err := w.retriangulate(f.n, f.loops, f.fl.group); err != nil {
 			return nil, err
@@ -414,6 +501,17 @@ func rewriteArc(ctx context.Context, env topo.Env, fp facetedrecord.Payload, a a
 			taken = append(taken, [2]int{from, len(w.out)})
 		}
 		w.removed = append(w.removed, f.fl.facets...)
+	}
+	// A cylinder end face is not retriangulated: its held facets stay but for the ones a
+	// cap column splits, and the cap is new surface, cleared as a taken cap is.
+	if cyl {
+		for i := range 2 {
+			r, err := a.capFacets(w, i, fG[i], runA.chain[i], remA[i], capEnds[i], wallRuns[i])
+			if err != nil {
+				return nil, err
+			}
+			taken = append(taken, r)
+		}
 	}
 
 	// The strip, and its tag.
@@ -436,6 +534,11 @@ func rewriteArc(ctx context.Context, env topo.Env, fp facetedrecord.Payload, a a
 	w.chargeBand(stripFrom, bandAxis{o: a.center, n: n, ok: true}, max(a.radius, rows[m-1].rho),
 		filletSag(spec, (1-ss[m-1])*math.Pi/2), slack)
 	w.removedTrue, tag.trueArea = a.arcAreas(profile, rows, tb)
+	if cyl {
+		for i := range 2 {
+			w.capTrue = proofbound.AbsSumUpper(w.capTrue, a.capArea(profile, i))
+		}
+	}
 
 	groups := append([]facetedrecord.Group(nil), fp.Groups...)
 	groups = append(groups, w.tagGroup(facetedrecord.Group{
@@ -679,18 +782,17 @@ func (a arcRim) arcAreas(p arcProfile, rows []arcRow, tb float64) (removed, blen
 		ref := ref0[i]
 		for s := 0; s <= samples; s++ {
 			rho, z := p(float64(s) / samples)
-			roots, ok := a.ringAzimuths(rho, a.ends[i].g, ref)
+			t, ok := a.endAzimuths(i, rho, ref)
 			if !ok {
 				continue
-			}
-			t := roots[0]
-			if math.Abs(roots[1]-ref) < math.Abs(roots[0]-ref) {
-				t = roots[1]
 			}
 			ref = t
 			pts = append(pts, a.atTheta(rho, t, z))
 		}
 		corner := polyArea(pts...)
+		if a.cyl[i] != nil {
+			corner = a.capArea(p, i)
+		}
 		if !a.convex {
 			corner = -corner
 		}
@@ -710,10 +812,18 @@ func (a arcRim) arcAreas(p arcProfile, rows []arcRow, tb float64) (removed, blen
 		x1, y1 := xy(q1)
 		return (x0*y1 - x1*y0) / 2
 	}
+	// A cylinder end's side is the arc of G's circle from the corner to the setback
+	// point, not the straight line.
+	side := func(i int, p0, p1 r3.Vec) float64 {
+		if a.cyl[i] != nil {
+			return a.gArc(i, p0, p1)
+		}
+		return line(p0, p1)
+	}
 	region := a.radius*a.radius*a.sign*a.span/2 +
-		line(a.ends[1].exact, a.atTheta(rhoA, t1, 0)) -
+		side(1, a.ends[1].exact, a.atTheta(rhoA, t1, 0)) -
 		rhoA*rhoA*a.sign*(t1-t0)/2 +
-		line(a.atTheta(rhoA, t0, 0), a.ends[0].exact)
+		side(0, a.atTheta(rhoA, t0, 0), a.ends[0].exact)
 	removed += math.Abs(region)
 	// The wall loses a band whose sides are generators.
 	removed += a.radius * a.span * tb

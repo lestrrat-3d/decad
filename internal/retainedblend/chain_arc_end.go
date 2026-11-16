@@ -41,7 +41,7 @@ func (w *work) readArcEndCorner(v *topo.Vertex, e *topo.Edge, base, wall *topo.F
 		return nil, fmt.Errorf("%w: a chain arc does not border the base and its wall", decaderr.ErrUnsupported)
 	}
 	a := arcRim{rim: r, sign: 1}
-	end, err := a.readEnd(v, fp, faceIndex, faceIndex[base], faceIndex[wall])
+	end, err := a.readPlaneEnd(v, fp, faceIndex, faceIndex[base], faceIndex[wall])
 	if err != nil {
 		return nil, err
 	}
