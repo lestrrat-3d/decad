@@ -431,7 +431,7 @@ func (k *planarKernel) applyHint() {
 		if h.i < 0 || h.i >= len(k.a.edges) || h.j < 0 || h.j >= len(k.b.edges) {
 			return
 		}
-		scratch.edgeEdge(k.a.edges[h.i], k.b.edges[h.j])
+		scratch.edgeEdge(h.i, h.j)
 	default:
 		return
 	}
