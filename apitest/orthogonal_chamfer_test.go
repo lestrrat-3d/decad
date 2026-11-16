@@ -67,19 +67,47 @@ func TestChamferOfEdgesSharingCornersRefusesWhatItWouldOvercut(t *testing.T) {
 	require.Equal(t, []*decad.Body{b}, doc.Bodies(), "a refusal leaves the box live")
 }
 
-func TestChamferOfEdgesMeetingAtAReflexCornerIsRefused(t *testing.T) {
-	t.Parallel()
-	doc := decad.New()
-	// An L: a 20 x 10 slab and a 10 x 20 slab, 10 mm tall. The two top edges at its inside corner (10, 10, 10) run on
-	// into material past that corner, so a wedge longer than the edge would cut more than the wedge.
+// An L: a 20 x 10 slab and a 10 x 20 slab, 10 mm tall. The two top edges at its inside corner (10, 10, 10) run on into
+// material past that corner, so a wedge longer than the edge would cut more than the wedge: the wedge route's fit check
+// declines them, and the chamfer of runs of a face's loop (agent-docs/modify-reach-design.md §8.3.2) builds them.
+func lShape(t *testing.T, doc *decad.Document) *decad.Body {
+	t.Helper()
 	a := blockIn(t, doc, r3.NewVec(0, 0, 0), r3.NewVec(20, 10, 10))
 	c := blockIn(t, doc, r3.NewVec(0, 0, 0), r3.NewVec(10, 20, 10))
 	l, err := decad.Union(t.Context(), a, c)
 	require.NoError(t, err)
+	return l
+}
+
+func TestChamferOfEdgesMeetingAtAReflexCornerRemovesTheirWedges(t *testing.T) {
+	t.Parallel()
+	doc := decad.New()
+	l := lShape(t, doc)
 	sel := decad.Edges(decad.Convex(), decad.EndpointAt(r3.NewVec(10, 10, 10)))
-	_, err = decad.Chamfer(t.Context(), l, sel, units.Millimeters(1))
+	out, err := decad.Chamfer(t.Context(), l, sel, units.Millimeters(1))
+	require.NoError(t, err)
+	require.Equal(t, []*decad.Body{out}, doc.Bodies())
+	volume, err := out.Volume()
+	require.NoError(t, err)
+	// Each 10 mm edge loses its wedge, d^2 L / 2 = 5 mm³, and the corner where the bevels meet is mitred: the wedges
+	// leave d^3/3 more.
+	require.InDelta(t, 2000+1000-(2*10*0.5+1.0/3), volume.Value.Base(), volume.Bound.Base()+1e-9)
+	require.Less(t, volume.Bound.Base(), 1e-9, "the mitred cut of an axis-square corner carries only rounding")
+}
+
+// A lug on the face of the slab, standing in the band that the L's two bevels cut, is material of another face that the
+// wedge route's fit check refuses and the cutter's clearance check refuses too: the chamfer is refused, and the box
+// stays live.
+func TestChamferOfEdgesMeetingAtAReflexCornerRefusesALugInTheirBand(t *testing.T) {
+	t.Parallel()
+	doc := decad.New()
+	lug := blockIn(t, doc, r3.NewVec(13, 10, 8.5), r3.NewVec(15, 12, 9.5))
+	joined, err := decad.Union(t.Context(), lShape(t, doc), lug)
+	require.NoError(t, err)
+	sel := decad.Edges(decad.Convex(), decad.EndpointAt(r3.NewVec(10, 10, 10)))
+	_, err = decad.Chamfer(t.Context(), joined, sel, units.Millimeters(1))
 	require.ErrorIs(t, err, decad.ErrUnsupported)
-	require.Equal(t, []*decad.Body{l}, doc.Bodies(), "a refusal leaves the L live")
+	require.Equal(t, []*decad.Body{joined}, doc.Bodies(), "a refusal leaves the body live")
 }
 
 func pocketSlab(t *testing.T, doc *decad.Document) *decad.Body {

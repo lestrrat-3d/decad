@@ -836,6 +836,9 @@ retained plane"). `brepmodify.RetainedLoopChamfer` (`internal/brepmodify/retaine
   from bounds those facets already carry. Without it the gate compares them with a chord tolerance that follows the
   pair's size and refuses a face whose facets reach a coarse circle elsewhere, such as a boss ring on the cover.
 
+Part of a loop, as whole runs ending at sharp corners, takes `brepmodify.PartialLoopChamfer` after the routes above
+refuse or decline it, on a faceted body whose face is a retained plane: see `agent-docs/modify-reach-design.md` §8.3.2.
+
 The result is a Boolean Cut: faceted, with the Cut's own readings. Tests are in `apitest/chamfer_planar_loops_test.go`:
 windows of a cover before and after a boss is joined (both faces, with the rim and bore in one call), refusals for a
 setback past the walls and for part of a loop, and measured removed volume against `L·d²/2`.

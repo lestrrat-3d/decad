@@ -9,12 +9,14 @@ import (
 	"slices"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
+	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/opdiagnostic"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/topo"
+	"github.com/lestrrat-3d/decad/internal/topobuild"
 	"github.com/lestrrat-3d/decad/internal/triangulation"
 )
 
@@ -50,8 +52,12 @@ import (
 // on how far the facets leave the bevel there, under partialSagitta, and charges it in the cutter's bound. A chain
 // without such a corner keeps two rings. The result is a Boolean Cut: faceted, with the Cut's own readings.
 //
-// It takes a straight prism receiver only. It reports false, leaving the other routes in charge, for any receiver or selection it does not recognise,
-// including a selection that holds a whole loop. A recognised selection that cannot be cut is refused as
+// It takes a straight prism, and a faceted body (a mesh Boolean result) whose run lies in a retained planar face. On a
+// faceted receiver the loop's other edges are read for the loop's polygon alone: an edge of no exact curve reads as its
+// held chain, and only the selected edges and the edge beside each run end must be exact lines or arcs between the face
+// and a wall normal to it. The polygon holds the face's own material alone, so a held facet of any other face that
+// meets or lies within bounds of the cutter refuses the run (checkCutterClear). It reports false, leaving the other
+// routes in charge, for any receiver or selection it does not recognise, including a selection that holds a whole loop. A recognised selection that cannot be cut is refused as
 // ErrUnsupported or ErrDegenerate.
 func PartialLoopChamfer(ctx context.Context, env topo.Env, hooks Hooks, body *topo.Body, edges []*topo.Edge,
 	d, dDelta float64, asym *Asymmetric) (Result, bool, error) {
@@ -59,11 +65,14 @@ func PartialLoopChamfer(ctx context.Context, env topo.Env, hooks Hooks, body *to
 		hooks.Boolean == nil {
 		return Result{}, false, nil
 	}
-	// Only a straight prism takes this route: every other receiver has its own exact gates, which a cutter would bypass.
-	if _, isPrism := body.Payload.(prismrecord.Payload); !isPrism {
+	// A straight prism and a mesh Boolean result take this route: every other receiver has its own exact gates, which a
+	// cutter would bypass.
+	_, isPrism := body.Payload.(prismrecord.Payload)
+	_, isFaceted := body.Payload.(facetedrecord.Payload)
+	if !isPrism && !isFaceted {
 		return Result{}, false, nil
 	}
-	runs, ok := readChamferRuns(body, edges, true)
+	runs, ok := readChamferRuns(body, edges, isPrism)
 	if !ok {
 		return Result{}, false, nil
 	}
@@ -114,21 +123,27 @@ func (r chamferRun) after() loopSeg { return r.loop.segs[(r.first+r.count)%len(r
 
 func (r chamferRun) fits(d float64) error { return r.loop.fits(d) }
 
-// readChamferRuns reads edges as whole runs of loops of planar faces. ok is false when the selection is not one this
-// route recognises. A recognised selection that cannot be chamfered returns its refusal.
+// readChamferRuns reads edges as whole runs of loops of planar faces: the caps of a prism when exact, or any retained
+// planar face of a faceted body. ok is false when the selection is not one this route recognises. A recognised
+// selection that cannot be chamfered returns its refusal.
 func readChamferRuns(body *topo.Body, edges []*topo.Edge, exact bool) (runs []chamferRun, ok bool) {
 	selected := make(map[*topo.Edge]bool, len(edges))
 	for _, e := range edges {
 		selected[e] = true
 	}
-	// Every selected edge must lie in a loop of one of the prism's two caps.
 	type candidate struct {
 		face  *topo.Face
 		plane surfacegeom.Plane
 	}
 	var cands []candidate
-	caps := CapsOf(body)
-	for _, f := range []*topo.Face{caps.Start, caps.End} {
+	var faces []*topo.Face
+	if exact {
+		caps := CapsOf(body)
+		faces = []*topo.Face{caps.Start, caps.End}
+	} else {
+		faces = topobuild.Faces(body)
+	}
+	for _, f := range faces {
 		if f == nil {
 			continue
 		}
@@ -147,19 +162,19 @@ func readChamferRuns(body *topo.Body, edges []*topo.Edge, exact bool) (runs []ch
 		}
 		return n
 	}
-	left := maps.Clone(selected)
-	for len(left) > 0 {
-		best, bestN := -1, 0
-		for i, c := range cands {
-			if n := count(c, left); n > bestN {
-				best, bestN = i, n
+	// readFace reads the runs of the selected edges in the loops of c.
+	readFace := func(c candidate, left map[*topo.Edge]bool) ([]chamferRun, bool) {
+		var reading *loopReading
+		if !exact {
+			fp, isFaceted := body.Payload.(facetedrecord.Payload)
+			index := slices.Index(faces, c.face)
+			held, ok := newHeldFace(fp, index)
+			if !isFaceted || !ok {
+				return nil, false
 			}
+			reading = &loopReading{selected: left, held: held}
 		}
-		if best < 0 {
-			return nil, false
-		}
-		c := cands[best]
-		cands = slices.Delete(cands, best, best+1)
+		var out []chamferRun
 		for _, loop := range c.face.Loops {
 			n := 0
 			for _, ce := range loop.CoEdges {
@@ -174,20 +189,47 @@ func readChamferRuns(body *topo.Body, edges []*topo.Edge, exact bool) (runs []ch
 				// A whole loop belongs to the loop routes.
 				return nil, false
 			}
-			l, ok := readChamferLoop(c.face, c.plane, loop, exact)
-			if !ok || l.circle || len(l.segs) != len(loop.CoEdges) {
+			l, ok := readChamferLoop(c.face, c.plane, loop, exact, reading)
+			if !ok || l.circle {
 				return nil, false
 			}
-			sel := make([]bool, len(loop.CoEdges))
-			for i, ce := range loop.CoEdges {
-				sel[i] = left[ce.Edge]
+			sel := make([]bool, len(l.segs))
+			for i, e := range l.edges {
+				sel[i] = left[e]
 			}
 			rs, ok := l.runs(sel)
 			if !ok {
 				// A selection this route cannot take keeps the refusal the exact routes gave it.
 				return nil, false
 			}
-			runs = append(runs, rs...)
+			out = append(out, rs...)
+		}
+		return out, true
+	}
+	left := maps.Clone(selected)
+	for len(left) > 0 {
+		best, bestN := -1, 0
+		for i, c := range cands {
+			if n := count(c, left); n > bestN {
+				best, bestN = i, n
+			}
+		}
+		if best < 0 {
+			return nil, false
+		}
+		c := cands[best]
+		cands = slices.Delete(cands, best, best+1)
+		rs, ok := readFace(c, left)
+		if !ok {
+			if exact {
+				return nil, false
+			}
+			// An edge between two planar faces is a loop edge of either, so the next face that holds selected edges is
+			// tried: the bevel is the same, and the run's ends are read in that face's loop.
+			continue
+		}
+		runs = append(runs, rs...)
+		for _, loop := range c.face.Loops {
 			for _, ce := range loop.CoEdges {
 				delete(left, ce.Edge)
 			}
@@ -270,6 +312,10 @@ func (r chamferRun) ends() ([2]runEnd, bool) {
 	l := r.loop
 	first, last := r.seg(0), r.seg(r.count-1)
 	read := func(prev, next loopSeg, atEnd bool) (runEnd, bool) {
+		if prev.held || next.held {
+			// The next edge carries no exact curve, so the bevel's run-out or stop on its wall cannot be read.
+			return runEnd{}, false
+		}
 		v := next.p0
 		tin, tout := tangent(prev, v), tangent(next, v)
 		cross := tin.cross(tout)
@@ -753,6 +799,9 @@ func cutRuns(ctx context.Context, env topo.Env, hooks Hooks, body *topo.Body, ru
 				return nil, used, fmt.Errorf("%w: clip the partial chamfer's cutter at a concave end: %v",
 					decaderr.ErrUnsupported, err)
 			}
+		}
+		if err := r.checkCutterClear(ctx, body, cutter, mesh.bound); err != nil {
+			return nil, used, err
 		}
 		if out, err = hooks.Boolean(allowCoarse(ctx, out), meshbool.OpCut, next(), out, cutter); err != nil {
 			return nil, used, err
