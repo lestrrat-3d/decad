@@ -150,6 +150,9 @@ func Body(ctx context.Context, b *topo.Body, chord float64, verify Verify, opts 
 	if cbp, ok := b.Payload.(capblend.Payload); ok {
 		return capBlendMesh(ctx, b, cbp, chord, verify)
 	}
+	if dp, ok := b.Payload.(capblend.DisplacedPayload); ok {
+		return displacedCapBlendMesh(ctx, b, dp, chord, verify)
+	}
 	if dp, ok := b.Payload.(draftrecord.Payload); ok {
 		return draftrecord.Tessellate(ctx, b, dp, chord, verify >= All)
 	}
@@ -287,6 +290,21 @@ func capBlendMesh(ctx context.Context, b *topo.Body, cbp capblend.Payload, chord
 		if err := capblend.ProveLoftBandVolume(ctx, mesh, b, cbp, lms, motion); err != nil {
 			return nil, err
 		}
+	}
+	return mesh, nil
+}
+
+// displacedCapBlendMesh is capBlendMesh for a displaced cap-loop chamfer: it
+// reserves the largest LoopDelta from the chord budget and charges each loop's
+// own into the facet bounds, area slack and occupied volume
+// (agent-docs/carrier-record-design.md §8.7).
+func displacedCapBlendMesh(ctx context.Context, b *topo.Body, dp capblend.DisplacedPayload, chord float64, verify Verify) (*topo.Mesh, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	mesh := new(topo.Mesh)
+	if _, _, err := capblend.TessellateDisplacedMesh(ctx, b, dp, chord, verify >= All, mesh); err != nil {
+		return nil, err
 	}
 	return mesh, nil
 }

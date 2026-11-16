@@ -224,19 +224,26 @@ func Chamfer(ctx context.Context, env topo.Env, b *topo.Body, call ChamferCall) 
 	// view's retained edge blend instead (brep-modify §2.2).
 	// A displaced receiver whose carrier record is valid bevels its lateral
 	// corners from the recorded carriers (agent-docs/carrier-record-design.md
-	// §5); a cap-loop selection or an asymmetric chamfer keeps the routes below.
-	if pp.SectionDelta != 0 && route.Prism == nil && !sweepStraight && asym == nil {
+	// §7), or chamfers complete cap loops that are exact on the section it
+	// denotes (§8.1). The record is read once for both routes.
+	if pp.SectionDelta != 0 && route.Prism == nil && !sweepStraight {
 		cr, valid, err := prismrecord.CarrierRecordOf(proofbound.NewWorkBudget(ctx), b)
 		if err != nil {
 			return Result{}, err
 		}
 		if valid {
-			out, matched, err := CarrierLateralBlend(ctx, env, pp, cr, sel, edges, dmm, false)
-			// A Table CB refusal of a chamfer falls through to
-			// RequireExactSection and the faceted view, as for a receiver with
-			// no record (agent-docs/carrier-record-design.md §7.1).
-			var refusal *CarrierRefusal
-			if !errors.As(err, &refusal) && (matched || err != nil) {
+			if asym == nil {
+				out, matched, err := CarrierLateralBlend(ctx, env, pp, cr, sel, edges, dmm, false)
+				// A Table CB refusal of a chamfer falls through to the cap-loop
+				// route, then RequireExactSection and the faceted view, as for a
+				// receiver with no record (§7.1, §8.1).
+				var refusal *CarrierRefusal
+				if !errors.As(err, &refusal) && (matched || err != nil) {
+					return out, err
+				}
+			}
+			out, matched, err := CarrierCapLoopChamfer(ctx, env, pp, caps, cr, sel, edges, dmm, dDelta, asym)
+			if matched || err != nil {
 				return out, err
 			}
 		}

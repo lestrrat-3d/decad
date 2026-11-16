@@ -315,11 +315,17 @@ func (cbp Payload) ExtentAlong(g r3.Vec) (float64, float64, float64, error) {
 // placement can leave every coefficient exactly right and still round when the
 // terms are added.
 func (cbp Payload) ExtentBoundedAlong(ctx context.Context, g r3.Vec, work *freeform.FreeformWork) (float64, float64, float64, error) {
-	return cbp.extentBoundedAlong(ctx, g, work, nil, nil)
+	return cbp.extentBoundedAlong(ctx, g, work, nil, nil, nil)
 }
 
+// extentBoundedAlong is ExtentBoundedAlong over an optional per-loop
+// displacement (agent-docs/carrier-record-design.md §8.6): a loop with a
+// nonzero loopDelta entry adds the in-plane norm of g times that entry to the
+// plane allowance of both its level candidates, and the coordinate envelope the
+// placement coefficients read widens by the largest entry. Contour candidates
+// belong to selected loops, whose entry is zero, and take nothing.
 func (cbp Payload) extentBoundedAlong(ctx context.Context, g r3.Vec, work *freeform.FreeformWork,
-	deltas []float64, deltaReady []bool) (float64, float64, float64, error) {
+	deltas []float64, deltaReady []bool, loopDelta []float64) (float64, float64, float64, error) {
 	pl := cbp.PrismLike(0, 0)
 	base := cbp.Xform.Apply(cbp.Frame.Origin()).Dot(g)
 	gu := pl.Dir(1, 0, 0).Dot(g)
@@ -379,6 +385,9 @@ func (cbp Payload) extentBoundedAlong(ctx context.Context, g r3.Vec, work *freef
 		if err != nil {
 			return 0, 0, 0, err
 		}
+		if loopDelta != nil && loopDelta[li] > 0 {
+			planeAllow = proofbound.AbsSumUpper(planeAllow, proofbound.ProductUpper(inPlane, loopDelta[li]))
+		}
 		// The original loop bounds the straight slab at both its own levels;
 		// a chamfered end's level is also that band's side-level directrix, and
 		// that level is a float sum whose rounding moves the candidate.
@@ -436,6 +445,11 @@ func (cbp Payload) extentBoundedAlong(ctx context.Context, g r3.Vec, work *freef
 	coordUpper, err := momentinput.CoordinateEnvelope(cbp.Profile, work, nil)
 	if err != nil {
 		return 0, 0, 0, err
+	}
+	// A denoted coordinate can exceed the recorded envelope by a loop's
+	// displacement.
+	if maxDelta := maxOf(loopDelta); maxDelta > 0 {
+		coordUpper = proofbound.AbsSumUpper(coordUpper, maxDelta)
 	}
 	zUpper := math.Max(math.Abs(cbp.Z0), math.Abs(cbp.Z1))
 	placeAllow := prismrecord.PlacementCoeffAllow(pl, g, base, gu, gv, gz, coordUpper, zUpper)

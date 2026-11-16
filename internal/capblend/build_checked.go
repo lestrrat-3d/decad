@@ -21,6 +21,27 @@ import (
 // caps' own setbacks (§8.3.1); a cap with no selected loop reads neither.
 func BuildChecked(ctx context.Context, env topo.Env, pp prismrecord.Payload,
 	start, end Setback, startLoops, endLoops map[int]bool, source *LoftSource) (*topo.Body, error) {
+	return buildChecked(ctx, env, pp, start, end, startLoops, endLoops, source, nil)
+}
+
+// BuildCheckedDisplaced is BuildChecked for a receiver whose recorded section
+// is displaced from the section it denotes (agent-docs/carrier-record-design.md
+// §8): loopDelta is the receiver record's h_loop per loop, zero on every
+// selected loop. It runs BuildChecked's gates, each offset audit followed by
+// §8.3's transfer condition T1 to T3 on the audited mixed profile, and builds
+// the body through BuildDisplaced. Every refusal, the offset audits' and the
+// transfer's included, is an error the caller may fall through on; only
+// cancellation is not.
+func BuildCheckedDisplaced(ctx context.Context, env topo.Env, pp prismrecord.Payload,
+	start, end Setback, startLoops, endLoops map[int]bool, loopDelta []float64) (*topo.Body, error) {
+	if loopDelta == nil {
+		loopDelta = []float64{}
+	}
+	return buildChecked(ctx, env, pp, start, end, startLoops, endLoops, nil, loopDelta)
+}
+
+func buildChecked(ctx context.Context, env topo.Env, pp prismrecord.Payload,
+	start, end Setback, startLoops, endLoops map[int]bool, source *LoftSource, loopDelta []float64) (*topo.Body, error) {
 	height := pp.Z1 - pp.Z0
 	loops := append([]sectionrecord.LoopRecord{pp.Profile.Outer}, pp.Profile.Holes...)
 	cbp := Payload{
@@ -92,7 +113,15 @@ func BuildChecked(ctx context.Context, env topo.Env, pp prismrecord.Payload,
 	if err := offset2d.AuditOffsetSectionBudget(budget, pp.Profile, mixed); err != nil {
 		return nil, capband.ChamferAuditError(err)
 	}
-	if err := AuditSetbackSpan(budget, pp.Profile, cbp); err != nil {
+	if loopDelta != nil {
+		if err := validateLoopDelta(cbp, loopDelta); err != nil {
+			return nil, err
+		}
+		if err := requireTransfer(ctx, budget, cbp, mixed, loopDelta); err != nil {
+			return nil, err
+		}
+	}
+	if err := auditSetbackSpan(ctx, budget, pp.Profile, cbp, loopDelta); err != nil {
 		return nil, err
 	}
 	if err := RequireLevelsSeparate(cbp); err != nil {
@@ -100,6 +129,9 @@ func BuildChecked(ctx context.Context, env topo.Env, pp prismrecord.Payload,
 	}
 	if err := RequireCornerLoci(budget, cbp); err != nil {
 		return nil, err
+	}
+	if loopDelta != nil {
+		return BuildDisplaced(ctx, env, cbp, loopDelta)
 	}
 	return Build(ctx, env, cbp)
 }

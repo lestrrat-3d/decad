@@ -11,6 +11,7 @@ import (
 	"fmt"
 
 	"github.com/lestrrat-3d/decad/internal/breprecord"
+	"github.com/lestrrat-3d/decad/internal/capblend"
 	"github.com/lestrrat-3d/decad/internal/coilshell"
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
@@ -106,6 +107,11 @@ func sectionDisplacement(payload topo.Payload) float64 {
 		return p.SectionDelta
 	case breprecord.Payload:
 		return p.SectionDelta()
+	case capblend.DisplacedPayload:
+		// A displaced cap-loop chamfer's recorded loops lie within the largest
+		// LoopDelta of the section it denotes (agent-docs/carrier-record-design.md
+		// §8.7).
+		return capblend.MaxLoopDelta(p)
 	default:
 		return 0
 	}

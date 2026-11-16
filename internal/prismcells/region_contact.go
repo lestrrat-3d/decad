@@ -2,6 +2,7 @@ package prismcells
 
 import (
 	"fmt"
+	"math"
 
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -32,6 +33,36 @@ type contactSegment struct {
 // so a kept loop is tested against a rewritten one. ok=false (err nil) is a
 // refusal; the string names the failing pair or bound for the caller's message.
 func CertifiedContact(budget *proofbound.WorkBudget, loops []sectionrecord.LoopRecord, hMax float64) (ok bool, why string, err error) {
+	return certifiedContact(budget, loops, hMax, nil, nil)
+}
+
+// CertifiedContactLoops is CertifiedContact with a displacement per loop
+// (agent-docs/carrier-record-design.md §8.3, T1 and T2): hLoop[l] is loop l's
+// own h_loop and extra[l] is added to the allowance c_e of every segment of
+// loop l (a selected loop's computed cap contour passes its contour
+// displacement there; a nil extra adds nothing). It checks T1 against the
+// largest hLoop, runs the 4·c_e < F check on every segment, and skips a pair
+// whose two loops both carry a zero hLoop: such a pair is the same on the
+// denoted section, which the caller's float audit decides as for an exact
+// receiver. A loop with a nonzero hLoop is tested against every loop,
+// itself included. hLoop and extra, when non-nil, hold one entry per loop.
+func CertifiedContactLoops(budget *proofbound.WorkBudget, loops []sectionrecord.LoopRecord,
+	hLoop, extra []float64) (ok bool, why string, err error) {
+	hMax := 0.0
+	for _, h := range hLoop {
+		hMax = math.Max(hMax, h)
+	}
+	return certifiedContact(budget, loops, hMax, hLoop, extra)
+}
+
+// certifiedContact is the one body of CertifiedContact and
+// CertifiedContactLoops. A nil hLoop tests every pair with every loop at hMax;
+// a non-nil hLoop skips the pairs whose two loops both carry zero.
+func certifiedContact(budget *proofbound.WorkBudget, loops []sectionrecord.LoopRecord,
+	hMax float64, hLoop, extra []float64) (ok bool, why string, err error) {
+	if hLoop != nil && len(hLoop) != len(loops) || extra != nil && len(extra) != len(loops) {
+		return false, "the per-loop displacements do not match the loops", nil
+	}
 	entries, err := sectionaudit.EntriesOf(budget, loops)
 	if err != nil {
 		return false, "", err
@@ -52,6 +83,9 @@ func CertifiedContact(budget *proofbound.WorkBudget, loops []sectionrecord.LoopR
 				return false, "a segment has no readable walk", nil //nolint:nilerr // an unreadable walk is a refusal
 			}
 			c := loopWalkAllowance(loop, j, w)
+			if extra != nil {
+				c = proofbound.AbsSumUpper(c, extra[li])
+			}
 			if !(proofbound.ProductUpper(4, c) < floor) {
 				return false, fmt.Sprintf(`four times the walk allowance %g of segment %d of loop %d is not below the contact floor %g`, c, j, li, floor), nil
 			}
@@ -64,6 +98,9 @@ func CertifiedContact(budget *proofbound.WorkBudget, loops []sectionrecord.LoopR
 		for _, b := range segs[i+1:] {
 			if err := survey2d.WallBudgetStep(budget); err != nil {
 				return false, "", err
+			}
+			if hLoop != nil && hLoop[a.loop] == 0 && hLoop[b.loop] == 0 {
+				continue
 			}
 			if a.loop == b.loop {
 				d := b.idx - a.idx

@@ -432,8 +432,8 @@ func otherRoot(dec offset2d.FilletDecisions) ([2]float64, bool) {
 }
 
 // seamMove is what closeSeams charges to one segment it moved: read is how
-// far its walk-start read point moved, carrier how far the recorded field it
-// rewrote moved (a line's carrier end, or an arc's radius).
+// far its walk-start read point moved plus the allowance of the new walk start
+// itself, carrier how far the recorded field it rewrote moved (a line's carrier end, or an arc's radius).
 type seamMove struct{ Read, Carrier float64 }
 
 // seamEnds reads a line or arc's walk ends in walk order, as the record reads
@@ -524,16 +524,20 @@ func closeSeams(p momentinput.Profile, rewritten []bool) (momentinput.Profile, [
 			if !ok {
 				continue
 			}
-			nsu, nsv, _, _, okN := seamEnds(moved)
-			if !okN {
+			mw, err := boundarywalk.WalkOf(moved, nil)
+			if err != nil {
 				continue
 			}
-			read, ok1 := seamDistUp(nsu, nsv, su, sv)
+			read, ok1 := seamDistUp(mw.StartU, mw.StartV, su, sv)
 			field, ok2 := seamDistUp(eu, ev, old.U, old.V)
 			if !ok1 || !ok2 {
 				continue
 			}
 			segs[k] = moved
+			// The moved segment's new walk start is itself a float read of its
+			// recorded field (agent-docs/carrier-record-design.md §7.7, "Seam
+			// snap"), so its allowance joins the distance the read start moved.
+			read = proofbound.AbsSumUpper(read, proofbound.WalkEndBoundAllow(mw.StartBound))
 			mv[k] = seamMove{Read: read, Carrier: field}
 		}
 		return sectionrecord.LoopRecord{Segments: segs}

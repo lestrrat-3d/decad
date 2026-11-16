@@ -20,10 +20,12 @@ import (
 // Called before the ordinary prism payload cast in Fillet/Chamfer/Shell so the
 // more specific reason leads the generic "not a prism" refusal.
 func RequireNotReceiver(payload topo.Payload, op string) error {
-	if _, ok := payload.(Payload); ok {
+	switch payload.(type) {
+	case Payload, DisplacedPayload:
 		return fmt.Errorf(`%w: this evaluator does not yet compose another modify op onto a cap-loop chamfer result; %s a receiver this evaluator built directly`, decaderr.ErrUnsupported, op)
+	default:
+		return nil
 	}
-	return nil
 }
 
 // OccupiedVolumeAdmission lets capband inspect the payload's loops.

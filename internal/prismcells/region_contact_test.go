@@ -89,3 +89,60 @@ func TestWidenedBoxIsBuiltFromTheGapReading(t *testing.T) {
 	require.InDelta(t, r*math.Sin(1.0)+c, box[3], 1e-9)
 	require.Less(t, w.StartU, r*math.Cos(0.2), "the float end alone would give a smaller box")
 }
+
+// CertifiedContactLoops (carrier-record-design §8.3, T1 and T2): a pair of two
+// zero-displacement loops is skipped, a displaced loop is tested against every
+// loop, and a per-loop extra joins every segment's allowance.
+func TestCertifiedContactLoops(t *testing.T) {
+	t.Parallel()
+	pt := func(u, v float64) sectionrecord.Point2 { return sectionrecord.Point2{U: u, V: v} }
+	budget := func() *proofbound.WorkBudget { return proofbound.NewWorkBudget(t.Context()) }
+	square := rgLoop(pt(0, 0), pt(10, 0), pt(10, 10), pt(0, 10))
+	web := func(g float64) []sectionrecord.LoopRecord {
+		return []sectionrecord.LoopRecord{square, rgLoop(pt(10-g, 5), pt(5, 3), pt(5, 7))}
+	}
+	entries, err := sectionaudit.EntriesOf(budget(), web(1))
+	require.NoError(t, err)
+	floor, err := sectionaudit.ContactFloor(budget(), entries)
+	require.NoError(t, err)
+	thin := web(floor / 2)
+
+	t.Run("two zero-displacement loops closer than the floor pass", func(t *testing.T) {
+		ok, why, err := CertifiedContactLoops(budget(), thin, []float64{0, 0}, nil)
+		require.NoError(t, err)
+		require.True(t, ok, why)
+		ok, _, err = CertifiedContact(budget(), thin, 0)
+		require.NoError(t, err)
+		require.False(t, ok, "CertifiedContact tests every pair")
+	})
+	t.Run("the same pair refuses once one loop is displaced", func(t *testing.T) {
+		ok, why, err := CertifiedContactLoops(budget(), thin, []float64{floor / 20, 0}, nil)
+		require.NoError(t, err)
+		require.False(t, ok)
+		require.Contains(t, why, "contact floor")
+	})
+	t.Run("a segment allowance of a quarter of the floor refuses", func(t *testing.T) {
+		wide := web(1e-3)
+		ok, _, err := CertifiedContactLoops(budget(), wide, []float64{0, 0}, []float64{0, floor / 2})
+		require.NoError(t, err)
+		require.False(t, ok)
+		ok, _, err = CertifiedContactLoops(budget(), wide, []float64{0, 0}, []float64{0, floor / 20})
+		require.NoError(t, err)
+		require.True(t, ok)
+	})
+	t.Run("the extra of a zero-displacement loop widens a tested pair", func(t *testing.T) {
+		wide := web(1e-3)
+		ok, _, err := CertifiedContactLoops(budget(), wide, []float64{floor / 20, 0}, []float64{0, 0})
+		require.NoError(t, err)
+		require.True(t, ok)
+		gap := 1e-3
+		ok, _, err = CertifiedContactLoops(budget(), wide, []float64{floor / 20, 0}, []float64{0, gap})
+		require.NoError(t, err)
+		require.False(t, ok)
+	})
+	t.Run("a length mismatch refuses", func(t *testing.T) {
+		ok, _, err := CertifiedContactLoops(budget(), thin, []float64{0}, nil)
+		require.NoError(t, err)
+		require.False(t, ok)
+	})
+}
