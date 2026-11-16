@@ -114,3 +114,73 @@ func BenchmarkNewBoxTreeCold(b *testing.B) {
 		})
 	}
 }
+
+// TestGapPastZeroMatchesDistancePredicate covers the threshold, underflow,
+// infinities, NaNs, touching boxes, and arbitrary bit patterns.
+func TestGapPastZeroMatchesDistancePredicate(t *testing.T) {
+	t.Parallel()
+	values := []float64{0, math.Copysign(0, -1), math.SmallestNonzeroFloat64, 0x1p-600,
+		0x1p-501, 0x1p-500, math.Nextafter(0x1p-500, math.Inf(1)), 1,
+		math.MaxFloat64, math.Inf(1), math.Inf(-1), math.NaN()}
+	rng := rand.New(rand.NewPCG(1, 2))
+	for n := range 200000 {
+		var a, b floatBox
+		for axis := range 3 {
+			pick := func() float64 {
+				if n%2 == 0 {
+					return values[rng.IntN(len(values))]
+				}
+				return math.Float64frombits(rng.Uint64())
+			}
+			a.lo[axis], a.hi[axis], b.lo[axis], b.hi[axis] = pick(), pick(), pick(), pick()
+		}
+		want := gapSquaredBelowLimit(a, b, 0) > 0
+		got := gapPastZero(a, b)
+		require.Equal(t, want, got, "sample %d: a=%v b=%v", n, a, b)
+	}
+}
+
+// TestBoxTreeZeroQueryMatchesDistanceTraversal checks the exact old traversal,
+// including node pruning, leaf membership and ascending triangle order.
+func TestBoxTreeZeroQueryMatchesDistanceTraversal(t *testing.T) {
+	t.Parallel()
+	rng := rand.New(rand.NewPCG(3, 4))
+	values := []float64{0, 0x1p-600, 0x1p-500, 1, math.Inf(1), math.Inf(-1), math.NaN()}
+	for trial := range 300 {
+		boxes := make([]floatBox, 1+rng.IntN(80))
+		randomBox := func() floatBox {
+			var b floatBox
+			for axis := range 3 {
+				b.lo[axis], b.hi[axis] = values[rng.IntN(len(values))], values[rng.IntN(len(values))]
+			}
+			return b
+		}
+		for i := range boxes {
+			boxes[i] = randomBox()
+		}
+		tree := newBoxTree(boxes)
+		q := randomBox()
+		var want []int
+		var visit func(int)
+		visit = func(i int) {
+			n := tree.nodes[i]
+			if gapSquaredBelowLimit(q, n.box, 0) > 0 {
+				return
+			}
+			if n.left < 0 {
+				for _, at := range tree.order[n.lo:n.hi] {
+					if !(gapSquaredBelowLimit(q, tree.boxes[at], 0) > 0) {
+						want = append(want, at)
+					}
+				}
+				return
+			}
+			visit(n.left)
+			visit(n.right)
+		}
+		visit(0)
+		slices.Sort(want)
+		got := tree.queryWithin(q, 0, nil)
+		require.True(t, slices.Equal(want, got), "trial %d: want %d indices, got %d", trial, len(want), len(got))
+	}
+}
