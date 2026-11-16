@@ -1703,7 +1703,6 @@
 7	0.02	TestChamferAllEdgesOfCrossDrilledBarKeepsItsBore
 7	0.00	TestChamferAngleOnAHexagonEdge
 7	0.01	TestChamferOfConcaveEdgesLargerThanTheirWallsIsRefused
-7	0.00	TestChamferOfEdgesMeetingAtAReflexCornerIsRefused
 7	0.00	TestClearanceFrameOriginGapEnclosesExactGap
 7	0.03	TestClearancePlacedPinThatFillsItsBore
 7	0.02	TestClearanceRevolveAxisSnapContainsTruth
@@ -2914,7 +2913,6 @@
 12	0.01	TestExtrudeRejectsOverflowedVolume
 12	0.00	TestExtrudeThroughAllStacked
 12	0.00	TestExtrudeToPartialRevolveStartCapWithUncertainAxisRefuses
-12	0.01	TestFacetedPrismUnionChamferRefusesInexactFoot
 12	0.02	TestFacetedPrismUnionFilletReversedSources
 12	0.72	TestFacetedRetainedBlendArcSlantedEndBound
 12	2.32	TestFacetedRetainedBlendAreaCharge
@@ -3091,3 +3089,6 @@
 12	0.01	TestVerifyTouchingAndDisjointPairsEmitNoInterference
 12	0.00	TestVertexAxisAlignedUnplacedBoundStaysZero
 12	0.01	TestWallSolidCylinder
+7	0.01	TestChamferOfEdgesMeetingAtAReflexCornerRemovesTheirWedges
+7	0.01	TestChamferOfEdgesMeetingAtAReflexCornerRefusesALugInTheirBand
+12	0.01	TestFacetedPrismUnionChamferOfEdgeBesideFarLugBuilds

@@ -65,7 +65,8 @@ func (k keyhole) rim(sx float64) *decad.EdgeQuery {
 	y0 := k.footY()
 	sel := decad.Edges(decad.EndpointAt(r3.Vec{X: sx * k.w, Y: -y0, Z: 5}), decad.Circular())
 	if k.flat == 0 {
-		return sel
+		// A mesh Boolean result may hold the bore's circle as two arcs, split where its recorded seam lies.
+		return sel.Or(decad.EndpointAt(r3.Vec{X: sx * k.r, Z: 5}), decad.Circular())
 	}
 	qx := math.Sqrt(k.r*k.r - k.flat*k.flat)
 	return sel.Or(decad.EndpointAt(r3.Vec{X: sx * -qx, Y: k.flat, Z: 5}), decad.Circular()).

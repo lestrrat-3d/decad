@@ -975,7 +975,8 @@ band reads `dc = ds = d` and builds the same body bit for bit.
 #### 8.3.2 Whole runs of a cap loop
 
 A `Chamfer` that selects part of a cap loop's edges, which routes E and L above refuse (SX4), takes this route when the
-selection is a set of whole runs. A run is a maximal chain of selected edges, lines and circular arcs, that continue one
+selection is a set of whole runs, on a straight prism or on a faceted body (a mesh Boolean result) whose face is a
+retained plane. A run is a maximal chain of selected edges, lines and circular arcs, that continue one
 another tangentially. Every junction between a selected edge and an unselected one is a sharp corner, so no run stops
 inside a tangent chain. `WithTangentChain` makes such a set from one seed edge. A loop selected whole stays with the loop
 routes. A prism's cap edge always meets its wall at a right angle, so this route does not read `Edge.Convex`, which on a
@@ -1022,6 +1023,25 @@ narrower than `over` is cut with a smaller margin when that clears it.
 
 A hole loop of the cap is read the same way as an outer loop: its edges chain, mitre and end like any other, and a
 reflex corner of the material inside a chain (a hole's corner) mitres by removing `dc^3/3` more than the two wedges.
+
+On a faceted body the run lies in any retained planar face, and a face that holds the most selected edges is read first.
+The selected edges and the edge beside each end must be exact lines or arcs (`Line3`, `Arc3`), convex, with a wall that
+is a retained plane normal to the face or a retained cylinder whose axis is normal to it; the edge beside an end
+that carries no exact curve is `ErrUnsupported`. Every other edge of the loop is read for the probes' polygon alone, as
+its curve, or as the chain of held boundary vertices between its end points when it has no exact one (a `FacetedCurve`),
+and needs no wall. A loop selected whole stays with the loop routes.
+
+The polygon holds the face's own material, so on a faceted body it cannot see a feature that stands in the cutter's
+band from another face. Every held facet of a face other than the run's own faces must miss the cutter
+(`internal/brepmodify/partial_loop_clear.go`). The own faces are the loop's face, both faces of each selected edge and
+both faces of the edge beside each end, where the bevel runs out onto the next wall or stops on its plane. The test is
+exact and refuses only: no such facet may touch a facet of the cutter (the cutter after any end clip, so the sector a
+clip removes is not tested), by meshbool's exact triangle classification on the held floats; a facet within its
+vertices' bounds plus the cutter's bound of a cutter facet refuses; a facet that crosses nothing may lie wholly inside
+the cutter, so one corner of each is placed by the exact parity of a ray through the cutter's mesh, and a corner inside,
+on its boundary or undecided refuses. A facet with collinear corners near the cutter refuses. A feature of another face
+in the band is therefore `ErrUnsupported`: a pin standing in a slot beside the run, a lug through a wall, or a blind
+cavity whose wall comes within the bevel's reach.
 
 The cutter is a polyhedron held exactly as a mesh solid, with arc chords within 0.0002 mm of their circle, and the
 result is a Boolean Cut: faceted, with the Cut's own readings. A chain with two rings (a top and a bottom) holds the

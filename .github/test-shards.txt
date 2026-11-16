@@ -316,3 +316,6 @@
 12	0.50	TestChamferKeyholeRimRun
 12	0.50	TestChamferKeyholeRimRunRefusesNarrowSlot
 12	0.50	TestChamferConvexArcRunOutOnNextWall
+12	1.00	TestChamferKeyholeRimRunOnMeshBoolean
+12	1.00	TestChamferKeyholeRimRunThenCut
+12	0.10	TestChamferKeyholeRimRunRefusesAnotherFaceInReach

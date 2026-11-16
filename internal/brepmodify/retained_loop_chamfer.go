@@ -168,6 +168,8 @@ type loopSeg struct {
 	c      pt2
 	r      float64
 	ccw    bool
+	// held marks a chord of an unselected edge's held mesh chain, read for a polygon alone: no cutter meets it.
+	held bool
 }
 
 // chamferLoop is one selected loop of a planar face, read into the face's own plane.
@@ -185,6 +187,19 @@ type chamferLoop struct {
 	depth float64
 	// exact is set for a receiver whose faces carry their own exact surfaces and no retained tags, a prism.
 	exact bool
+	// face is the face the loop bounds, and edges[i] the edge segs[i] was read from, for the partial route's clearance
+	// gate. The chords of one held chain share an edge.
+	face  *topo.Face
+	edges []*topo.Edge
+}
+
+// loopReading tells readChamferLoop which edges of a loop a cutter serves, for a loop of which only some are chamfered.
+// A selected edge and the edge beside it must be exact lines or arcs between the face and a wall normal to it; any
+// other edge is read for the loop's polygon alone, a held chain's chords for an edge of no exact curve.
+type loopReading struct {
+	selected map[*topo.Edge]bool
+	// held reads the mesh chain of the face's boundary between an edge's end points.
+	held *heldFace
 }
 
 // to2 reads a point of the face's plane.
@@ -227,7 +242,7 @@ func readChamferLoops(body *topo.Body, edges []*topo.Edge) ([]*chamferLoop, bool
 			if !some || !all {
 				continue
 			}
-			l, ok := readChamferLoop(f, plane, loop, false)
+			l, ok := readChamferLoop(f, plane, loop, false, nil)
 			if !ok {
 				return nil, false
 			}
@@ -251,8 +266,9 @@ func retainedTag(f *topo.Face) bool {
 	return f != nil && f.RetainedTag && f.TagDeparture == 0 && f.AxialDelta == 0 && retainedblend.TagIsRecord(f)
 }
 
-// readChamferLoop reads loop of the planar face f.
-func readChamferLoop(f *topo.Face, plane surfacegeom.Plane, loop *topo.Loop, exact bool) (*chamferLoop, bool) {
+// readChamferLoop reads loop of the planar face f. A nil reading serves every edge of the loop.
+func readChamferLoop(f *topo.Face, plane surfacegeom.Plane, loop *topo.Loop, exact bool,
+	reading *loopReading) (*chamferLoop, bool) {
 	n := plane.Frame.N()
 	if f.Reversed {
 		n = n.Scale(-1)
@@ -265,28 +281,35 @@ func readChamferLoop(f *topo.Face, plane surfacegeom.Plane, loop *topo.Loop, exa
 	if !ok {
 		return nil, false
 	}
-	l := &chamferLoop{exact: exact, outer: loop.Outer, origin: plane.Frame.Origin(), u: u, v: n.Cross(u), n: n}
+	l := &chamferLoop{exact: exact, outer: loop.Outer, origin: plane.Frame.Origin(), u: u, v: n.Cross(u), n: n, face: f}
 	l.depth = math.Inf(1)
-	for _, ce := range loop.CoEdges {
+	for i, ce := range loop.CoEdges {
 		e := ce.Edge
-		// A prism's cap edge always meets its wall at a right angle. There e.Convex is only the rim's 2D turn, which a
-		// concave circular wall clears, so the exact route does not require it.
-		if e == nil || (!e.Convex && !exact) || len(e.Faces) != 2 || e.Start == nil || e.End == nil {
+		if e == nil || e.Start == nil || e.End == nil {
 			return nil, false
 		}
-		wall := e.Faces[0]
-		if wall == f {
-			wall = e.Faces[1]
+		exactEdge := reading == nil || reading.serves(loop, i)
+		if exactEdge {
+			// A prism's cap edge always meets its wall at a right angle. There e.Convex is only the rim's 2D turn, which
+			// a concave circular wall clears, so the exact route does not require it.
+			if (!e.Convex && !exact) || len(e.Faces) != 2 {
+				return nil, false
+			}
+			wall := e.Faces[0]
+			if wall == f {
+				wall = e.Faces[1]
+			}
+			depth, ok := l.wallDepth(wall)
+			if !ok {
+				return nil, false
+			}
+			l.depth = min(l.depth, depth)
 		}
-		depth, ok := l.wallDepth(wall)
-		if !ok {
-			return nil, false
-		}
-		l.depth = min(l.depth, depth)
 		from, to := e.Start.Position, e.End.Position
 		if !ce.Forward {
 			from, to = to, from
 		}
+		before := len(l.segs)
 		switch c := e.Curve.(type) {
 		case surfacegeom.Line3:
 			l.segs = append(l.segs, loopSeg{p0: l.to2(from), p1: l.to2(to)})
@@ -311,7 +334,19 @@ func readChamferLoop(f *topo.Face, plane surfacegeom.Plane, loop *topo.Loop, exa
 			l.segs = append(l.segs, loopSeg{arc: true, p0: l.to2(from), p1: l.to2(from), c: l.to2(c.Center), r: r,
 				ccw: (axis.Dot(n) > 0) == ce.Forward})
 		default:
-			return nil, false
+			if exactEdge {
+				return nil, false
+			}
+			chain, ok := reading.held.chain(loop, from, to)
+			if !ok {
+				return nil, false
+			}
+			for k := 0; k+1 < len(chain); k++ {
+				l.segs = append(l.segs, loopSeg{p0: l.to2(chain[k]), p1: l.to2(chain[k+1]), held: true})
+			}
+		}
+		for range len(l.segs) - before {
+			l.edges = append(l.edges, e)
 		}
 	}
 	if len(l.segs) == 0 || math.IsInf(l.depth, 1) {
@@ -848,4 +883,16 @@ func (l *chamferLoop) box(margin float64) [4]pt2 {
 	}
 	lo, hi = lo.sub(pt2{margin, margin}), hi.add(pt2{margin, margin})
 	return [4]pt2{lo, {hi.x, lo.y}, hi, {lo.x, hi.y}}
+}
+
+// serves reports whether the cutter of the partial route reads the edge at index i of loop as exact: a selected edge,
+// and an edge beside one, which the run's end reads.
+func (r *loopReading) serves(loop *topo.Loop, i int) bool {
+	n := len(loop.CoEdges)
+	for _, k := range []int{i, (i + 1) % n, (i + n - 1) % n} {
+		if r.selected[loop.CoEdges[k].Edge] {
+			return true
+		}
+	}
+	return false
 }
