@@ -521,6 +521,7 @@ package.
   - [func WithChainTolerance](<#WithChainTolerance>)
   - [func WithGapTolerance](<#WithGapTolerance>)
   - [func WithParams](<#WithParams>)
+  - [func WithRimSplit](<#WithRimSplit>)
 - [type DraftOption](<#DraftOption>)
 - [type Drive](<#Drive>)
 - [type Edge](<#Edge>)
@@ -4815,7 +4816,7 @@ ctx.Err() and no report.
 }</pre>
 
 DocumentOption configures New. WithGapTolerance, ExactOnly,
-WithChainTolerance and WithParams are its options. An option from another package cannot implement this sealed tier.
+WithChainTolerance, WithRimSplit and WithParams are its options. An option from another package cannot implement this sealed tier.
 
 <a name="ExactOnly"></a>
 #### func ExactOnly
@@ -4868,6 +4869,26 @@ a sketch World returns from Params, so a sketch dimension and a feature
 value derive from the same definitions. The document does not copy t: a
 later Set on it changes what the next read returns. A nil t is ignored. A
 document with no option owns a fresh table.
+
+<a name="WithRimSplit"></a>
+#### func WithRimSplit
+
+<pre>func WithRimSplit() <a href="#DocumentOption">DocumentOption</a></pre>
+
+WithRimSplit makes a document's mesh booleans keep a rim's bound beside the
+rim. A boolean that cuts a curved face leaves a rim whose bound is larger
+than the face's own, and the facets the rim touches run on to the far end of
+the face, so a later boolean that crosses them far from the rim reads that
+bound again and amplifies it. With this option such a facet is split near the
+rim, and the later boolean reads the face's own bound on the far piece. A
+facet is split only where the whole far piece is proven, by an exact
+distance, to stand clear of the other operand's boundary by the bounds both
+operands hold; a facet with no such split stays whole and keeps the rim's
+bound. The result holds more facets. A Fillet or Chamfer that reads a split
+face may refuse it, since a split adds a vertex that no boundary loop of the
+face reaches; one that succeeds reads the split facets' own bounds, which are
+proven in the same way. A document that edge-finishes its mesh results
+should leave the option off. A planar face is never split.
 
 <a name="DraftOption"></a>
 ### type DraftOption
