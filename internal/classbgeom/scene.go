@@ -4,6 +4,7 @@ import (
 	"slices"
 
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
+	"github.com/lestrrat-3d/decad/internal/prismcells"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 	"github.com/lestrrat-3d/sketch"
@@ -70,18 +71,25 @@ func CreateNaturalSegment(s *sketch.Sketch, point func(sectionrecord.Point2) *sk
 	if err != nil {
 		return nil, err
 	}
+	var ent sketch.Entity
 	switch {
 	case w.IsLine():
-		return s.CreateLine(point(sectionrecord.Point2{U: w.StartU, V: w.StartV}), point(sectionrecord.Point2{U: w.EndU, V: w.EndV})), nil
+		ent = s.CreateLine(point(sectionrecord.Point2{U: w.StartU, V: w.StartV}), point(sectionrecord.Point2{U: w.EndU, V: w.EndV}))
 	case w.Closed:
-		return s.CreateCircle(point(sectionrecord.Point2{U: w.CU, V: w.CV}), w.Radius), nil
+		ent = s.CreateCircle(point(sectionrecord.Point2{U: w.CU, V: w.CV}), w.Radius)
 	default:
 		lo, hi := sectionrecord.Point2{U: w.StartU, V: w.StartV}, sectionrecord.Point2{U: w.EndU, V: w.EndV}
 		if w.Th1 < w.Th0 {
 			lo, hi = hi, lo
 		}
-		return s.CreateArc(point(sectionrecord.Point2{U: w.CU, V: w.CV}), point(lo), point(hi)), nil
+		ent = s.CreateArc(point(sectionrecord.Point2{U: w.CU, V: w.CV}), point(lo), point(hi))
 	}
+	// The scene's own densified count over the cap is a work-limit refusal
+	// (agent-docs/carrier-record-design.md §4).
+	if err := prismcells.CheckSceneWithinCap(s); err != nil {
+		return nil, err
+	}
+	return ent, nil
 }
 
 // CarriersOf identifies the input carrier of every segment in each result

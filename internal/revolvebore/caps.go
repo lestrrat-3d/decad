@@ -28,6 +28,9 @@ func CapProfiles(ctx context.Context, mer Meridian, tool prismrecord.Payload) ([
 			return result, false, err
 		}
 		scene, match, tags, delta, resolved, err := prismcells.ResolveCutWithTags(ctx, budget, outer, tool.Profile, reexpress)
+		if prismcells.IsWorkLimit(err) {
+			return result, false, nil
+		}
 		if err != nil || !resolved || delta.A != 0 || delta.B != 0 {
 			return result, false, err
 		}

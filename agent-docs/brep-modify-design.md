@@ -172,7 +172,11 @@ one, so its facets are plain obstacles. The tessellation charges the section
 displacement into every facet bound (tessellation §2, §5), so the strip check
 (SR7) clears the true holes, not only the recorded ones. The retained blend
 rewrites only faces with an exact tag, so a selection on a displaced loop is
-not recognized and keeps the `RequireExactSection` refusal. The result is a
+not recognized and keeps the `RequireExactSection` refusal. A receiver whose
+carrier record is valid (`agent-docs/carrier-record-design.md` §3) first tries
+the lateral carrier route (§7 there); when Table CB refuses a `Chamfer`, the
+call falls through to this view exactly as for a receiver with no record. The
+result is a
 `facetedPayload`, as in §2.1. For the 3 mm rounded-triangle plate of
 `apitest/chamfer_pattern_socket_test.go` with three pattern-copied sockets, a
 0.5 mm chamfer of both outlines in one call builds; its volume bound is about
@@ -187,7 +191,7 @@ not recognized and keeps the `RequireExactSection` refusal. The result is a
 | **RB3** | `brepPayload` or stacked receiver with a section displacement | route P's displaced reading (§4.4) for a lateral Fillet or symmetric Chamfer that passes Table PD; otherwise SB1 | SB1 |
 | **RB4** | `facetedPayload` | reach SX9 (permanent) | reach SX9 |
 | **RB5** | `brepPayload` carrying a boss or pocket shell band | the faceted view's retained edge blend (§2.1), else SB11 | SB11; a closed shell is modify-general SG2 |
-| **RB6** | `prismPayload` with a section displacement | `Chamfer`: the faceted view's retained edge blend over loops with exact carriers (§2.2), else `RequireExactSection`'s refusal; `Fillet`: that refusal | that refusal |
+| **RB6** | `prismPayload` with a section displacement | With a valid `CarrierRecord` of the receiver body (`prismrecord.CarrierRecordOf`) and a lateral selection (carrier-record-design §7): the carrier route; a Table CB refusal is `Fillet`'s `ErrUnsupported`, and `Chamfer` falls through. Otherwise `Chamfer`: the faceted view's retained edge blend over loops with exact carriers (§2.2; a loop is exact when `ExactCarriers` lists it or the body's own record holds every entry of it at zero), else `RequireExactSection`'s refusal; `Fillet`: that refusal | that refusal |
 
 RB1's zero-displacement rule is prism-boolean §13's displaced-receiver rule,
 the one `prismrecord.Payload.RequireExactSection` enforces for a prism: a rewrite of a record that

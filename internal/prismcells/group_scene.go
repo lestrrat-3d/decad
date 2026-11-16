@@ -83,7 +83,7 @@ func groupWithinCap(budget *proofbound.WorkBudget, op string, regions ...[]momen
 	}
 	if !withinCap {
 		return WithWorkLimit(fmt.Errorf(
-			`%w: the analytic %s scene charges at least %d arranger segments against this evaluator's cap of %d (each circle or arc costs 256, each line 1)`,
+			`%w: the analytic %s scene charges at least %d arranger segments against this evaluator's cap of %d (each line costs 1, each circle or arc up to 256 by its turn)`,
 			decaderr.ErrUnsupported, op, segments, MaxArrangementSegments), segments)
 	}
 	return nil

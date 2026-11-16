@@ -157,7 +157,7 @@ func BuildSceneRegions(budget *proofbound.WorkBudget, regionsA, regionsB []Scene
 				return nil, nil, SceneWalkCharge{}, err
 			}
 		}
-		return s, tags, sceneDelta, nil
+		return finishScene(s, tags, sceneDelta)
 	}
 	// A reflection reverses each loop's winding. Map and rewind B's
 	// records before creating entities or recording authored direction.
@@ -171,5 +171,15 @@ func BuildSceneRegions(budget *proofbound.WorkBudget, regionsA, regionsB []Scene
 			return nil, nil, SceneWalkCharge{}, err
 		}
 	}
-	return s, tags, sceneDelta, nil
+	return finishScene(s, tags, sceneDelta)
+}
+
+// finishScene recounts the built scene with the arranger's own densification
+// over each entity's floats (agent-docs/carrier-record-design.md §4) and
+// refuses one over the cap with a *WorkLimitError.
+func finishScene(s *sketch.Sketch, tags map[sketch.Entity]Origin, charge SceneWalkCharge) (*sketch.Sketch, map[sketch.Entity]Origin, SceneWalkCharge, error) {
+	if err := CheckSceneWithinCap(s); err != nil {
+		return nil, nil, SceneWalkCharge{}, err
+	}
+	return s, tags, charge, nil
 }

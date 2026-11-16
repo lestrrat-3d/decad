@@ -495,6 +495,20 @@ under an in-plane motion of the section:
   wider one by construction, which no audit re-proves, so a rounding motion
   copies through `Copy` instead.
 
+An instance of a source with `sectionDelta == 0` also carries a carrier record
+(`agent-docs/carrier-record-design.md` §5.1): every segment and junction entry
+is the instance's `sectionDelta`, except a junction at an `ArcSeg`'s `End`,
+which takes `δ_End = up(3e + 4e·(R + 2e)/(R_E − 2e))` (`e` the largest point
+charge, `R` the recorded radius, `R_E` a lower bound on the moved
+`|End − Center|`), and the instance's `sectionDelta` is raised to the largest
+entry and every loop's `h_loop`. A source with a line–line junction whose two
+read ends differ (two narrowed lines), and a displaced source, give no record.
+The producer mints the record with `prismrecord.BuildWithRecord`, which binds it to
+the instance's body. `prismrecord.Build` always clears a record, and `Placed`
+re-evaluates through `Build`, so a `Transform` or `Copy` of a recorded instance
+carries none. The record lets `Fillet` and `Chamfer` read the instance's lateral
+corners through `prismrecord.CarrierRecordOf` (carrier-record-design §3.4, §7).
+
 `PatternCopies` builds exactly these records too, one `prismPayload` per
 instance under the receiver's frame and placement, so a copy and a group
 instance are the same geometry with the same bound.

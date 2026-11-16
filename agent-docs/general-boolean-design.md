@@ -636,10 +636,22 @@ distance instead of prism-boolean §3.4 rerouting the pair
   every topology it leaves unresolved. Cancellation still propagates, and a
   pair that brings no displacement keeps its §9 refusals.
 
+A6's distance bound is also, in the carrier-record design's own readings, an
+existence and uniqueness statement (`agent-docs/carrier-record-design.md` §6.1,
+Lemma T). With
+`q1 ≥ dist(p, γ1)`, `q2 ≥ dist(p, γ2)`, `L = (q1 + q2)/s + min(q1, q2)` and a
+ball of radius `ρ ≤ R/2` for each circle where the tangent sine is at least
+`s > 0`, `2L ≤ ρ` means the two carriers meet in `B(p, ρ/2)` at exactly one
+point `c`, with `|c − p| ≤ L`, and cross there. Only the readings that design
+makes (its vertex reading, ASA2 and CB2) carry that proof; an A6 reading of
+`sin θ_low` elsewhere states the distance bound alone.
+
 With A6 a rotated tooth whose root sits inside the hub builds analytically
-with a bound of a few ulps times `1/sin θ`, `Approximate`; `Fillet` on that
-result refuses (prism-boolean §13's displaced-receiver rule), as it does for
-every cut-bearing merge without A1's exact line-junction proof. P1's own tooth
+with a bound of a few ulps times `1/sin θ`, `Approximate`. A union result that
+carries a valid carrier record (carrier-record-design §5.2, §5.3) fillets its
+lateral corners through the carrier route (§7). A cut-bearing merge without a
+record, or without A1's exact line-junction proof, still refuses
+(prism-boolean §13's displaced-receiver rule). P1's own tooth
 does not build. Its root arc lies on
 the hub's circle (a coincident carrier, which `sketch` merges), the rotation
 displaces the tooth, and the shared arc lies inside the union, where A3 has

@@ -96,6 +96,9 @@ func cutSteppedBore(ctx context.Context, steps []prismrecord.Payload, payload to
 			return nil, false, err
 		}
 		scene, match, tags, delta, resolved, err := prismcells.ResolveCutWithTags(ctx, budget, step.Profile, tool.Profile, reexpress)
+		if prismcells.IsWorkLimit(err) {
+			return nil, false, nil
+		}
 		if err != nil || !resolved || delta.A != 0 || delta.B != 0 {
 			return nil, false, err
 		}

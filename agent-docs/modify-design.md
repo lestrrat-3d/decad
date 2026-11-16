@@ -343,7 +343,13 @@ closed form over decad's own line and arc segments:
    **undecided** outcome. A build-time audit has no `Suspect` to fall back on, so
    an undecided containment is **S9** — the evaluator declines. The audit passes
    only when the outer loop is proven to contain each hole and the holes are
-   proven mutually disjoint.
+   proven mutually disjoint. Once no two loops cross or touch, every point of a
+   loop classifies the whole loop, so `sectionaudit.Nesting` tries the loop's
+   first walk start and reads a later start only where the ray test cannot
+   decide the earlier one (a start on another loop's carrier circle, as a
+   window's start on a concentric window's circle). Every candidate is a point
+   of the loop, so the verdict is the same whichever start decides it
+   (`agent-docs/carrier-record-design.md` §6.5).
 
 A residual proves nothing and admits nothing; a crossing, boundary-contact or
 containment test on exactly represented line and arc segments is a **decided**

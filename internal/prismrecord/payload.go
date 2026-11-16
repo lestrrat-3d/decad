@@ -98,6 +98,11 @@ type Payload struct {
 	BlendKind     string
 	SectionDelta  float64
 	ExactCarriers *ExactCarriers
+	// Carriers is the section's carrier record (carrier_record.go,
+	// agent-docs/carrier-record-design.md §3): per segment and junction, how far
+	// the denoted section's carriers and junctions sit from the recorded ones.
+	// Read it through CarrierRecord, which answers false for a stale record.
+	Carriers      *CarrierRecord
 	Walks         *momentinput.ProfileWalks
 	SurfaceResult bool
 	// Upstream is the operand roles an analytic Boolean attributed to this

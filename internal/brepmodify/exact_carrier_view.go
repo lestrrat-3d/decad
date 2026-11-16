@@ -31,10 +31,21 @@ func exactCarrierViewBlend(ctx context.Context, env topo.Env, hooks Hooks, b *to
 	refs map[*topo.Edge]*topo.Face, blend viewBlendFunc,
 ) (*topo.Body, bool, error) {
 	pp, ok := b.Payload.(prismrecord.Payload)
-	if !ok || pp.SectionDelta == 0 || pp.ExactCarriers == nil || pp.SurfaceResult || len(edges) == 0 {
+	if !ok || pp.SectionDelta == 0 || pp.SurfaceResult || len(edges) == 0 {
 		return nil, false, nil
 	}
-	untag, kept, err := displacedSideFaces(proofbound.NewWorkBudget(ctx), b, pp)
+	record, hasRecord, err := prismrecord.CarrierRecordOf(proofbound.NewWorkBudget(ctx), b)
+	if err != nil {
+		return nil, false, err
+	}
+	if pp.ExactCarriers == nil && !hasRecord {
+		return nil, false, nil
+	}
+	var recorded *prismrecord.CarrierRecord
+	if hasRecord {
+		recorded = &record
+	}
+	untag, kept, err := displacedSideFaces(proofbound.NewWorkBudget(ctx), b, pp, recorded)
 	if err != nil || !kept {
 		return nil, false, err
 	}
@@ -46,7 +57,7 @@ func exactCarrierViewBlend(ctx context.Context, env topo.Env, hooks Hooks, b *to
 // that is neither a cap nor a side face of a loop with exact carriers, a face
 // whose roles name no single loop included. kept reports whether some side
 // face keeps its tag.
-func displacedSideFaces(budget *proofbound.WorkBudget, b *topo.Body, pp prismrecord.Payload) (map[int]struct{}, bool, error) {
+func displacedSideFaces(budget *proofbound.WorkBudget, b *topo.Body, pp prismrecord.Payload, record *prismrecord.CarrierRecord) (map[int]struct{}, bool, error) {
 	exact := map[int]bool{}
 	untag := map[int]struct{}{}
 	kept := false
@@ -68,6 +79,9 @@ func displacedSideFaces(budget *proofbound.WorkBudget, b *topo.Body, pp prismrec
 			if isExact, err = pp.CarrierExact(budget, li); err != nil {
 				return nil, false, err
 			}
+			// An exact loop of the body's own record (all entries zero) holds that
+			// loop of the section unchanged (§3.4).
+			isExact = isExact || (record != nil && record.ExactLoop(li))
 			exact[li] = isExact
 		}
 		if !isExact {

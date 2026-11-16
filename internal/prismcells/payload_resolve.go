@@ -52,7 +52,7 @@ import (
 // exactness. Split out of TryAnalytic only so each op's own resolve+build
 // sequence reads as one unit.
 func ResolveAndBuildUnion(ctx context.Context, budget *proofbound.WorkBudget, pa, pb prismrecord.Payload, reexpress *Reexpression) (prismrecord.Payload, bool, error) {
-	merged, sceneDelta, cutDelta, resolved, err := ResolveUnion(ctx, budget, pa.Profile, pb.Profile,
+	merged, sceneDelta, cutDelta, chain, resolved, err := resolveUnion(ctx, budget, pa.Profile, pb.Profile,
 		pa.SectionDelta, pb.SectionDelta, reexpress)
 	if err != nil {
 		return prismrecord.Payload{}, false, err
@@ -91,6 +91,24 @@ func ResolveAndBuildUnion(ctx context.Context, budget *proofbound.WorkBudget, pa
 		// (sceneDelta.Crossing). A chained union must not discard any of
 		// the five.
 		SectionDelta: sceneDelta.Merged(pa.SectionDelta, pb.SectionDelta, reexpress.Delta, cutDelta),
+	}
+	// Two undisplaced operands on one frame with whole consumed segments and
+	// no shared span denote their exact carriers, so the result records them
+	// (agent-docs/carrier-record-design.md §5.2).
+	if result.SectionDelta != 0 && pa.SectionDelta == 0 && pb.SectionDelta == 0 && reexpress.Identity &&
+		sceneDelta.A == 0 && sceneDelta.B == 0 && !sceneDelta.HasSharedSpans() {
+		cr, ok, err := ExactOperandsRecord(chain, merged, result.SectionDelta)
+		if err != nil {
+			return prismrecord.Payload{}, false, err
+		}
+		if ok {
+			// CR4: the displacement is at least every loop's Lemma H bound, and
+			// a trimmed arc's is twice its larger junction entry.
+			if raised := max(result.SectionDelta, cr.HMax()); !proofbound.IsNonFinite(raised) {
+				result.SectionDelta, cr.SectionDelta = raised, raised
+				result.Carriers = cr
+			}
+		}
 	}
 	return result, true, nil
 }

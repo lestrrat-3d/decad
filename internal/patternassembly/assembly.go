@@ -72,13 +72,13 @@ func KeepsFrame(budget *proofbound.WorkBudget, rp patternrecord.Spec, payload to
 }
 
 func moveRegion(budget *proofbound.WorkBudget, region momentinput.Profile,
-	mv patternrecord.PointMotion) (momentinput.Profile, float64, error) {
-	moved, delta, err := patternrecord.MoveRegion(budget,
+	mv patternrecord.PointMotion) (momentinput.Profile, float64, float64, error) {
+	moved, delta, pointCharge, err := patternrecord.MoveRegion(budget,
 		patternrecord.Region{Outer: region.Outer, Holes: region.Holes}, mv)
 	if err != nil {
-		return momentinput.Profile{}, 0, err
+		return momentinput.Profile{}, 0, 0, err
 	}
-	return momentinput.Profile{Outer: moved.Outer, Holes: moved.Holes}, delta, nil
+	return momentinput.Profile{Outer: moved.Outer, Holes: moved.Holes}, delta, pointCharge, nil
 }
 
 // FrameKeepingInstance builds instance i on the receiver's frame and
@@ -95,15 +95,31 @@ func FrameKeepingInstance(ctx context.Context, env topo.Env, rp patternrecord.Sp
 	}
 	switch p := payload.(type) {
 	case prismrecord.Payload:
-		moved, delta, err := moveRegion(budget, p.Profile, mv)
+		moved, delta, pointCharge, err := moveRegion(budget, p.Profile, mv)
 		if err != nil {
 			return nil, false, err
 		}
+		sourceExact := p.SectionDelta == 0
 		p.Profile = moved
 		p.SectionDelta = patternrecord.WithDelta(p.SectionDelta, delta)
-		// The listing names the receiver's loops, not the moved ones.
+		// The listing and the record name the receiver's loops, not the
+		// moved ones (§3.4: every copy clears the record except a producer).
 		p.ExactCarriers = nil
+		p.Carriers = nil
+		if sourceExact && p.SectionDelta != 0 {
+			// An undisplaced source's instance denotes the source moved by the
+			// exact motion, and every datum moved by at most the motion's charge
+			// (agent-docs/carrier-record-design.md §5.1).
+			if cr, raised, ok := instanceRecord(moved, p.SectionDelta, pointCharge); ok {
+				p.SectionDelta = raised
+				p.Carriers = &cr
+			}
+		}
 		p.Walks = nil
+		if p.Carriers != nil {
+			body, err := prismrecord.BuildWithRecord(ctx, env, p, *p.Carriers)
+			return body, false, err
+		}
 		body, err := prismrecord.Build(ctx, env, p, freeform.NewFreeformWork())
 		return body, false, err
 	case stackedrecord.Payload:
@@ -113,7 +129,7 @@ func FrameKeepingInstance(ctx context.Context, env topo.Env, rp patternrecord.Sp
 			slabs[k] = slab
 			slabs[k].Regions = make([]momentinput.Profile, len(slab.Regions))
 			for r, region := range slab.Regions {
-				moved, charge, err := moveRegion(budget, region, mv)
+				moved, charge, _, err := moveRegion(budget, region, mv)
 				if err != nil {
 					return nil, false, err
 				}
@@ -161,7 +177,11 @@ func proveApart(ctx context.Context, budget *proofbound.WorkBudget,
 		return false, 0, err
 	}
 	if within {
-		return prismcells.ProveGroupApart(ctx, budget, regions)
+		apart, delta, err := prismcells.ProveGroupApart(ctx, budget, regions)
+		if !prismcells.IsWorkLimit(err) {
+			return apart, delta, err
+		}
+		// The scene's own count is over the cap: take the pairwise proof.
 	}
 	return prismcells.ProveGroupApartPairwise(ctx, budget, regions, inflate)
 }
@@ -216,7 +236,7 @@ func Group(ctx context.Context, rp patternrecord.Spec, payload topo.Payload) (st
 			return stackedrecord.Payload{}, false, err
 		}
 		for _, region := range regions {
-			moved, charge, err := moveRegion(budget, region, mv)
+			moved, charge, _, err := moveRegion(budget, region, mv)
 			if err != nil {
 				return stackedrecord.Payload{}, false, err
 			}

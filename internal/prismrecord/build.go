@@ -344,6 +344,9 @@ func Build(ctx context.Context, env topo.Env, pp Payload, work *freeform.Freefor
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
+	// A record never survives a Build: only BuildWithRecord binds one to the
+	// body it mints (agent-docs/carrier-record-design.md §3.4).
+	pp.Carriers = nil
 	body.Payload = pp
 	if witness != nil && witness.valid && len(witness.Walls) == len(pp.Profile.Outer.Segments) {
 		witness.Body, witness.CapStart, witness.CapEnd = body, capStart, capEnd

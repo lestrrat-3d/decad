@@ -59,6 +59,9 @@ func PrepareCommonAxis(ctx context.Context, op meshbool.OperationKind,
 		return Payload{}, false, false, nil
 	}
 	s, tags, sceneDelta, err := prismcells.BuildScene(budget, ra.Profile, rb.Profile, reexpress)
+	if prismcells.IsWorkLimit(err) {
+		return Payload{}, false, false, nil
+	}
 	if err != nil {
 		return Payload{}, false, false, err
 	}

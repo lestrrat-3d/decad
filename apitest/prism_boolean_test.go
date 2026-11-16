@@ -483,8 +483,9 @@ func TestPrismUnionChainedBooleanCarriesNoAccumulatedBound(t *testing.T) {
 // facetedPayload permanently refuses both (modify-reach SX9,
 // payload-verification's survey wiring). A merge that cuts is a different
 // receiver: its section is the section it denotes only within §7's cut
-// displacement, so every reading that rewrites or measures that section
-// withholds rather than answer for the wrong one (§12).
+// displacement. Its pair route's carrier record lets Fillet build from the
+// recorded carriers (agent-docs/carrier-record-design.md §7), while the wall
+// survey withholds rather than answer for the wrong section (§12).
 func TestPrismUnionDownstreamFilletAndWallSurvey(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
@@ -504,9 +505,10 @@ func TestPrismUnionDownstreamFilletAndWallSurvey(t *testing.T) {
 	require.Len(t, report.Bodies, 1)
 	require.NotNil(t, report.Bodies[0].Wall.Minimum)
 
-	// A cut-bearing merge of the same two shapes carries §7's displacement, and
-	// both readings withhold. The refusal names the displacement rather than
-	// the payload class, so it is the section's own state being reported.
+	// A cut-bearing merge of the same two shapes carries §7's displacement and
+	// the pair route's carrier record, so its fillet builds from the recorded
+	// carriers (agent-docs/carrier-record-design.md §7), while the wall survey
+	// reading withholds.
 	cutDoc := decad.New()
 	cutA := boxBody(t, cutDoc, 0, 0, 10, 10, 10)
 	cutB := boxBody(t, cutDoc, 5, 5, 15, 15, 10)
@@ -514,9 +516,13 @@ func TestPrismUnionDownstreamFilletAndWallSurvey(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, tookMeshPath(cutGot), "the analytic reduction must still own this pair")
 
-	_, err = decad.Fillet(t.Context(), cutGot, verticalConvexEdge(), units.Millimeters(1))
-	require.ErrorIs(t, err, decad.ErrUnsupported)
-	require.Contains(t, err.Error(), "proven displacement")
+	cutFilleted, err := decad.Fillet(t.Context(), cutGot, verticalConvexEdge(), units.Millimeters(1))
+	require.NoError(t, err)
+	cutVol, err := cutFilleted.Volume()
+	require.NoError(t, err)
+	// The union is 175·10 mm³; each of its six convex corners loses (1 − π/4)·r²
+	// of section area over the 10 mm height.
+	require.InDelta(t, 1750-60*(1-math.Pi/4), volumeMM(t, cutVol), boundMM3(t, cutVol)+1e-6)
 
 	cutReport, err := cutDoc.Verify(t.Context(), decad.WithMinWallThickness(units.Millimeters(1)))
 	require.NoError(t, err)

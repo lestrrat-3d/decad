@@ -180,13 +180,13 @@ func analyticRoutes(ctx context.Context, op meshbool.OperationKind, env topo.Env
 	// BooleanUnsupportedContact below, preserving errors.Is(err,
 	// decaderr.ErrUnsupported); ErrDegenerate and ErrUnrecordableProfile pass through
 	// unwrapped, keeping their own documented sentinels.
-	if pp, ok, err := prismboolean.Try(ctx, op, a.Payload, b.Payload); err != nil {
+	if pp, ok, err := prismboolean.Try(ctx, op, prismrecord.OwnedPayload(a), prismrecord.OwnedPayload(b)); err != nil {
 		if errors.Is(err, decaderr.ErrUnsupported) {
 			return nil, false, hooks.AsBooleanError(op, meshbool.ExpectedBoolean(meshbool.BooleanExpectedUnsupported, err))
 		}
 		return nil, false, err
 	} else if ok {
-		body, err := prismrecord.Build(ctx, env, pp, freeform.NewFreeformWork())
+		body, err := prismboolean.AnalyticBody(ctx, env, pp)
 		if err != nil {
 			return nil, false, err
 		}
@@ -487,7 +487,7 @@ func commonAxisRevolve(ctx context.Context, op meshbool.OperationKind, env topo.
 // returned as a *meshbool.BooleanExpectedError so the caller can share the mesh
 // path's expected-outcome classification.
 func AnalyticIntersect(ctx context.Context, env topo.Env, a, b *topo.Body) (*topo.Body, bool, error) {
-	pp, ok, err := prismboolean.Try(ctx, meshbool.OpIntersect, a.Payload, b.Payload)
+	pp, ok, err := prismboolean.Try(ctx, meshbool.OpIntersect, prismrecord.OwnedPayload(a), prismrecord.OwnedPayload(b))
 	if err != nil {
 		if errors.Is(err, decaderr.ErrUnsupported) {
 			return nil, false, meshbool.ExpectedBoolean(meshbool.BooleanExpectedUnsupported, err)
