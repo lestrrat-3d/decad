@@ -1070,7 +1070,8 @@ On main the record charges `WalkEndBoundAllow` (zero there) at an untouched
 `End`-side end, adds only `ρ_new` (and none on the `unchanged` arm), and
 charges no snap move to `ed`. A published junction entry can then fall short by
 `ρ_recv`, `ρ_old`, or a snap's `End`-side move, each a few ulps times `R`. PR 2
-replaces those charges with the two rules above, with §10's test.
+replaces those charges with the two rules above, with §10's tests that each
+entry covers its read-end distance.
 
 `SectionDelta_out` is the larger of the largest entry and `max_l h_loop[l]`
 (CR4), rounded up, and zero when every entry is zero. Kept loops (cloned, not
@@ -1670,9 +1671,9 @@ PR 2:
 - `agent-docs/tessellation-reach-design.md` §7 (T7: the `LoopDelta` reservation,
   facet charges, area slack and volume term).
 - `agent-docs/faceted-source-retention-design.md` §3 and §11 (rule DW declines
-  the tag of every wall whose carrier is displaced: per loop on a
-  `DisplacedPayload`, per segment on a displaced prism, with the exact-carrier
-  argument that keeps the rest; at both `sourceGroup` callers).
+  the tag of every displaced wall of a `DisplacedPayload`, per loop, at both
+  `sourceGroup` callers; a displaced prism's walls keep today's tags, an open
+  gap).
 - `agent-docs/missing-features.md`: the displaced-receiver modify row changes in
   the same commit as the code, since its "Today" cell names the cap-loop
   `Chamfer`'s current answer. Its rows for chorded loft plane normals, other
@@ -1715,15 +1716,21 @@ PR 2:
   its bounded reading already charges `LoopDelta`. The cost: a `ThroughAll` or
   `ThroughAllSide` extrude refuses while the chamfered part is live. Returning
   the bounded reading would let the stop charge it instead.
-- **Rule DW declines the tag of a wall whose carrier is displaced** instead of
-  charging it as an `AxialDelta`. A later retained edge blend or plane reading
-  at that wall then has no retained surface there and refuses; charging it
-  would need a bounded tag normal that `facetedrecord` does not publish. A
-  displaced prism's wall on an exact carrier (record entry `ε = 0`, or a
-  `CarrierExact` loop) keeps its tag, so pair-`Union` results keep their
-  retained blends. A `DisplacedPayload` is decided per loop, which declines
-  some exact-carrier walls of a displaced loop; a per-segment rule there would
-  need the payload to carry the receiver's carrier entries.
+- **Rule DW declines a `DisplacedPayload`'s displaced walls** instead of charging
+  them as an `AxialDelta`. A later retained edge blend or plane reading at such
+  a wall then has no retained surface there and refuses; charging it would need
+  a bounded tag normal that `facetedrecord` does not publish. The rule is per
+  loop, which declines some exact-carrier walls of a displaced loop; a
+  per-segment rule would need the payload to carry the receiver's carrier
+  entries.
+- **Displaced prisms keep today's tags in PR 2.** Declining them, per loop or
+  per segment, would make three faceted-retained-blend apitests refuse
+  (`TestFacetedRetainedBlendConcaveArcEnd` among them: a fillet's feet leave
+  ulp-sized carrier entries on the adjacent line walls). The cost: a displaced
+  prism's wall with a displaced carrier still enters a mesh `Boolean` as a
+  retained tag with zero departure, which Claim R does not support. The remedy
+  is a retained edge blend that accepts a bounded tag, so such a wall can be
+  tagged with its displacement instead of being declined.
 - **The tolerance gate reads witness prisms** (`capblend.WitnessPrisms` with the
   axial term plus `max LoopDelta`) rather than declining, so a displaced
   cap-loop chamfer gets a gate diameter, shrunk by twice that displacement.
