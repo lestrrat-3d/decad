@@ -834,8 +834,18 @@ func TestCarrierArcReadEndEntry(t *testing.T) {
 // receiver's Start radius): there ρ_new is 1.2e-17 and the gap is 1.24e-15.
 // With chargeArcRadius disabled the entry is δ + ρ_new and this fails.
 func TestCarrierArcReadEndEntryBeyondResidual(t *testing.T) {
-	p := arcReadEndProbe(t, 4.16, 0, 5)
-	require.Greater(t, p.gap, p.rho+1e-16, `the fixture has ρ_new below |R_emit − R_recv|`)
+	// The emitted foot's rounding differs between platforms (arm64 fuses
+	// multiply-adds), so the fixture is searched for rather than fixed: the
+	// first corner and End offset whose ρ_new lies below |R_emit − R_recv|.
+	var p arcReadEndResult
+	found := false
+	for i := 0; i < 200 && !found; i++ {
+		for ulps := 1; ulps <= 6 && !found; ulps++ {
+			p = arcReadEndProbe(t, 3+float64(i)*0.01, 0, ulps)
+			found = p.gap > p.rho+1e-16
+		}
+	}
+	require.True(t, found, `some fixture has ρ_new below |R_emit − R_recv|`)
 	p.requireEntry(t)
 	require.GreaterOrEqual(t, p.entry, carrierJunc+p.rho, `the residual alone is no longer the whole entry`)
 	require.Greater(t, p.entry, carrierJunc+p.rho, `the entry exceeds δ + ρ_new, which would be the uncharged value`)
