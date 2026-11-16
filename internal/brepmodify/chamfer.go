@@ -228,10 +228,13 @@ func Chamfer(ctx context.Context, env topo.Env, b *topo.Body, call ChamferCall) 
 	// denotes (§8.1). The record is read once for both routes.
 	if pp.SectionDelta != 0 && route.Prism == nil && !sweepStraight {
 		cr, valid, err := prismrecord.CarrierRecordOf(proofbound.NewWorkBudget(ctx), b)
-		if err != nil {
+		// An asymmetric chamfer read no record before the cap-loop route, so
+		// only a cancellation ends it; any other error falls through to the
+		// route it took then (§8.1).
+		if err != nil && (asym == nil || cancellation(ctx, err) != nil) {
 			return Result{}, err
 		}
-		if valid {
+		if err == nil && valid {
 			if asym == nil {
 				out, matched, err := CarrierLateralBlend(ctx, env, pp, cr, sel, edges, dmm, false)
 				// A Table CB refusal of a chamfer falls through to the cap-loop
