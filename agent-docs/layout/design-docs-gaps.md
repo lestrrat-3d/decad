@@ -24,6 +24,7 @@ The rules for rows live in `agent-docs/layout.md`.
 | `agent-docs/section-outline-design.md` | `Body.SectionOutline`: the mesh cut by a plane as closed outlines, its on-plane rule and its bound. |
 | `agent-docs/boss-design.md` | `Boss`: a round boss and its blind pilot hole in one atomic union-and-cut commit. |
 | `agent-docs/boss-root-overflow-design.md` | Design only: a `Boss` root fillet that runs off its face and ends on the cliff faces, as Fusion ends it. |
+| `agent-docs/tangent-notch-design.md` | Design only: a blind side-notch `Cut` meeting the outer wall tangentially at recorded vertices, and its floor-arc fillet. |
 | `agent-docs/mesh-wall-survey-design.md` | The wall and undercut surveys of a faceted body by rays through its held mesh: what they prove and what they cannot. |
 | `agent-docs/dxf-export-design.md` | `export.DXF`: feature-edge projection, hidden-line runs and the release-12 file. |
 | `agent-docs/png-export-design.md` | `export.PNG` and `export.PNGBodies`: the orthographic flat-shaded renderer, its camera and shading rules. |
