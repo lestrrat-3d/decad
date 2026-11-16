@@ -454,6 +454,9 @@ func seamReadMoves(moved sectionrecord.CurveSegment, old sectionrecord.Point2, s
 	if naturalArc(arc) {
 		return startMove, field, true
 	}
+	if arc.TStart != 1 || arc.TEnd != 0 {
+		return 0, 0, false // a narrowed arc: no bound is stated for it
+	}
 	cu, cv, ok1 := ratOf2(arc.Center.U, arc.Center.V)
 	su, sv, ok2 := ratOf2(arc.Start.U, arc.Start.V)
 	eu, ev, ok3 := ratOf2(old.U, old.V)
