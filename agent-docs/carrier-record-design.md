@@ -1568,9 +1568,11 @@ PR 2, each beside the code it covers. The twin of a displaced build is the same
 - `capblend` transfer: T1, T2 and T3 each refuse a constructed case and are
   shown to matter by disabling them, as Table CB's rows are. T2's case is a
   displaced outer loop certified less than `F` from a chamfered hole's contour
-  while the float audit passes, including a near-end crossing that
-  `segMinDist` reads as a gap, and a contour segment whose gap clears `F` only
-  without its contour displacement in `c_e`. T3's case is a displaced loop whose
+  while the float audit passes, and a contour segment whose gap clears `F` only
+  without its contour displacement in `c_e`. A near-end crossing that
+  `segMinDist` reads as a gap is not reachable through `Chamfer`, because the
+  offset audit refuses the crossing first; `prismcells` tests it on
+  `CertifiedContact` directly. T3's case is a displaced loop whose
   segment pairs are all adjacent, so T2 tests none of them: a thin triangle of
   height below `8·LoopDelta`, whose area enclosure holds zero.
 - `capblend` tessellation: a tolerance at or below `max LoopDelta` refuses.
