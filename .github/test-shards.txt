@@ -323,3 +323,5 @@
 12	0.50	TestChamferKeyholeRimRunRefusesAThinPeninsula
 12	0.50	TestChamferLineRunRefusesAThinTabPastItsEnd
 11	0.50	TestChamferKeyholeRimRunWithAWideSetback
+6	25.00	TestChamferHubPawlRunsClockwise
+9	25.00	TestChamferHubPawlRunsCounterClockwise

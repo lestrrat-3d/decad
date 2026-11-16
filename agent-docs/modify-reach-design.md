@@ -1055,7 +1055,13 @@ The cutter is a polyhedron held exactly as a mesh solid, with arc chords within 
 result is a Boolean Cut: faceted, with the Cut's own readings. A chain with two rings (a top and a bottom) holds the
 bevel exactly except where it holds a sharp corner beside an arc. There the offset's corner moves along a conic with the
 setback, and an arc's cells twist between rings, so a straight rule between two rings leaves the bevel. Such a chain
-steps through `L` layers of rings, `L` doubling from 2 until `layerDeparture` is within 0.0002 mm, and refuses past 32.
+steps through `L` layers of rings, `L` stepping up from 2 by one to the first value at which `layerDeparture` is within
+0.0002 mm, and refuses past 32. A column is the path of one ring point as the setback changes. Only a sharp corner
+beside an arc, and the samples of an arc that ends at one, move off a straight line; every other column is straight,
+and two neighbouring straight columns bound a planar cell, which the two end rings hold exactly. So only a column that
+bends and the columns beside it carry the rings between: a cell between two such columns takes `2L` triangles, a cell
+between one of them and a column of two vertices is a fan of `L + 1`, and every other cell is the two triangles of the
+two-ring cutter. The bound is the same, since the cells that keep every ring are the ones `layerDeparture` bounds.
 `layerDeparture` is closed form, the largest over the corners and layers of two terms. The first is the corner path's
 bound `B^2 dt^2 / (32 v^3)` for a line and an arc (`v` the corner's distance along the line from the foot of the arc's
 centre, `B` the rate of `v^2` per unit of setback, which is constant) and `|4ac - b^2| dt^2 / (32 y^3)` for two arcs
