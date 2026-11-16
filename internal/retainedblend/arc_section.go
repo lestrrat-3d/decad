@@ -44,6 +44,9 @@ type endSection struct {
 	// angle is certify's allowance on a tangent angle: the rounding of
 	// atan(slope·q), 4·ulp·(1/q + S/(ρ_lo·q²)) with ρ_lo the smallest ρ.
 	angle float64
+	// cyl is set for an end curve on a cylinder (arc_end_cyl.go); then h is
+	// unused and the curve's coordinates are G's unrolled ones.
+	cyl *cylCurve
 }
 
 // section is the end curve the blend of spec cuts in the end plane g. It
@@ -73,22 +76,42 @@ func (a arcRim) section(spec blendSpec, g plane) (endSection, error) {
 	e.margin = 32*ulp*size*(1+1/q) + 2*tilt*zHi*(1+1/q)
 	e.angle = 4 * ulp * (1/q + size/(min(rho0, rho1)*q*q))
 	if fillet {
-		e.slope = func(s float64) float64 {
+		e.slope = profileSlope(spec, true)
+		return e, nil
+	}
+	e.slope = profileSlope(spec, false)
+	return e, nil
+}
+
+// profileSlope is |dz/ds| / |dρ/ds|: tan(s·π/2) for the torus, dB/dA for the
+// cone.
+func profileSlope(spec blendSpec, fillet bool) func(s float64) float64 {
+	if fillet {
+		return func(s float64) float64 {
 			if s >= 1 {
 				return math.Inf(1)
 			}
 			return math.Tan(s * math.Pi / 2)
 		}
-		return e, nil
 	}
 	ratio := spec.dB / spec.dA
-	e.slope = func(float64) float64 { return ratio }
-	return e, nil
+	return func(float64) float64 { return ratio }
+}
+
+// endSectionAt is the end curve the blend of spec cuts on end i.
+func (a arcRim) endSectionAt(spec blendSpec, i int) (endSection, error) {
+	if c := a.cyl[i]; c != nil {
+		return a.cylEndSection(spec, c)
+	}
+	return a.section(spec, a.ends[i].g)
 }
 
 // at is the end curve's point at s in (u, v), and q = X/ρ there.
 func (e endSection) at(s float64) (u, v, q float64) {
 	rho, z := e.p(s)
+	if e.cyl != nil {
+		return -e.kappa * e.cyl.rG * e.cyl.psi(rho), e.side * z, e.cyl.q(rho)
+	}
 	x := math.Sqrt(rho*rho - e.h*e.h)
 	return -e.kappa * x, e.side * z, x / rho
 }
@@ -109,8 +132,14 @@ func (e endSection) at(s float64) (u, v, q float64) {
 // split in two; certify gives up after maxSectionLeaves pieces. A piece
 // certifies when its corners lie within tau less the margin, its angles
 // widened by the angle allowance.
+//
+// On a cylinder the chord between the placed row vertices is a 3D chord and the
+// curve's image on G is an arc: the chord strays from the image of the unrolled
+// chord by at most curv, once per gap (agent-docs/retained-edge-blend-design.md
+// §6.3), which every piece's test charges.
 func (e endSection) certify(s0, s1, tau float64) bool {
-	if !(e.margin < tau) {
+	curv := e.curv(s0, s1)
+	if !(e.margin+curv < tau) {
 		return false
 	}
 	au, av, _ := e.at(s0)
@@ -132,7 +161,7 @@ func (e endSection) certify(s0, s1, tau float64) bool {
 		pu, pv, q0 := e.at(pc.t0)
 		qu, qv, q1 := e.at(pc.t1)
 		lo := math.Max(0, math.Atan(e.slope(pc.t0)*math.Min(q0, q1))-e.angle)
-		hi := math.Min(math.Pi/2, math.Atan(e.slope(pc.t1)*math.Max(q0, q1))+e.angle)
+		hi := math.Min(math.Pi/2, math.Atan(e.slope(pc.t1)*e.qHi(pc.t0, pc.t1, q0, q1))+e.angle)
 		d := math.Max(dist(pu, pv), dist(qu, qv))
 		if hi > lo {
 			// The corners P + |PQ|·sin(hi − ψ)/sin(hi − lo) along lo and
@@ -143,7 +172,7 @@ func (e endSection) certify(s0, s1, tau float64) bool {
 			d = math.Max(d, dist(pu+k1*math.Cos(lo), pv+k1*math.Sin(lo)))
 			d = math.Max(d, dist(pu+k2*math.Cos(hi), pv+k2*math.Sin(hi)))
 		}
-		if d+e.margin <= tau {
+		if d+e.margin+curv <= tau {
 			continue
 		}
 		mid := (pc.t0 + pc.t1) / 2
@@ -160,6 +189,9 @@ func (e endSection) certify(s0, s1, tau float64) bool {
 func (e endSection) shift(s0, s1 float64) float64 {
 	rho0, _ := e.p(s0)
 	rho1, _ := e.p(s1)
+	if e.cyl != nil {
+		return math.Abs(e.cyl.azimuth(rho1) - e.cyl.azimuth(rho0))
+	}
 	return math.Abs(math.Acos(e.h/rho1) - math.Acos(e.h/rho0))
 }
 

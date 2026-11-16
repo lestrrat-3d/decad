@@ -744,10 +744,21 @@ func capSimplePts(n r3.Vec, pts []r3.Vec, tb int) error {
 	v := n.Cross(u)
 	k := len(pts)
 	ps := make([]pt2, k)
-	idx := make([]int, k)
 	for i, p := range pts {
 		q := p.Sub(pts[0])
-		ps[i], idx[i] = pt2{q.Dot(u), q.Dot(v)}, i
+		ps[i] = pt2{q.Dot(u), q.Dot(v)}
+	}
+	return capSimple2(ps, tb)
+}
+
+// capSimple2 is capSimplePts on the loop's points already in a plane's
+// coordinates: an arc end on a cylinder reads its cap in the end face's
+// unrolled coordinates (arc_end_cyl_cap.go).
+func capSimple2(ps []pt2, tb int) error {
+	k := len(ps)
+	idx := make([]int, k)
+	for i := range idx {
+		idx[i] = i
 	}
 	folds := fmt.Errorf("%w: the blend's end cap folds where its rows meet the wall's facets", decaderr.ErrUnsupported)
 	area := signedArea2(ps, idx)

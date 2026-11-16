@@ -49,7 +49,7 @@ func (a arcRim) newWallBand(w *work, f faceLoops, tb float64, run edgeRun, kind 
 		{g: plane{n: dir, o: a.center}, sign: 1, what: "the guard plane through the arc's axis"},
 	}
 	for i := range 2 {
-		if kind[i] != extends {
+		if kind[i] != extends || a.cyl[i] != nil {
 			continue
 		}
 		g := a.ends[i].g
@@ -85,7 +85,26 @@ func (w *work) clipArcWallBand(f faceLoops, a arcRim, tb float64, run edgeRun, k
 		return fail(fmt.Errorf("%w: an arc this wide reaches across half the cylinder", decaderr.ErrUnsupported))
 	}
 	band := a.newWallBand(w, f, tb, run, kind)
+	// A cylinder end's band plane is the radial plane through V (cylBandEnd); the
+	// band's slack carries the rounding of that plane (e_V).
+	ev := 0.0
+	for i := range 2 {
+		if kind[i] != extends || a.cyl[i] == nil {
+			continue
+		}
+		var err error
+		if band.ends[i], err = a.cylBandEnd(w, f, i, run); err != nil {
+			return fail(err)
+		}
+		ev = max(ev, a.cyl[i].eV)
+	}
+	if ev > 0 {
+		band.slack = proofbound.AbsSumUpper(a.slack(), ev)
+	}
 	cuts, err := w.cutBand(f, band)
+	if err == nil {
+		err = a.linkNoise(&cuts, kind)
+	}
 	if err != nil {
 		return fail(err)
 	}
@@ -230,12 +249,24 @@ func (b *wallBand) chordMeets(p, q r3.Vec, infl float64) bool {
 // the last row before the wall's row must not pass.
 func (a arcRim) cuspParam(spec blendSpec, e endSection, need float64) (float64, error) {
 	r := spec.r
-	xr := math.Sqrt(a.radius*a.radius - e.h*e.h)
-	x := xr + a.kappa*need
-	if !(x > 0) {
-		return 0, fmt.Errorf("%w: the fillet's arc is too near the wall's generator at an end face", decaderr.ErrUnsupported)
+	tooNear := fmt.Errorf("%w: the fillet's arc is too near the wall's generator at an end face", decaderr.ErrUnsupported)
+	var rho float64
+	if c := e.cyl; c != nil {
+		// On G the curve is need from the generator, measured along G's circle:
+		// r_G·|ψ(s) − ψ(1)| = need, and cos ψ gives ρ.
+		psi := c.psi(a.radius) + a.kappa*need/c.rG
+		if !(psi > 0 && psi < math.Pi) {
+			return 0, tooNear
+		}
+		rho = math.Sqrt(math.Max(0, c.d*c.d+c.rG*c.rG-2*c.d*c.rG*math.Cos(psi)))
+	} else {
+		xr := math.Sqrt(a.radius*a.radius - e.h*e.h)
+		x := xr + a.kappa*need
+		if !(x > 0) {
+			return 0, tooNear
+		}
+		rho = math.Sqrt(x*x + e.h*e.h)
 	}
-	rho := math.Sqrt(x*x + e.h*e.h)
 	sin := 1 - (rho-a.radius)/(a.kappa*r)
 	alpha := math.Asin(math.Max(-1, math.Min(1, sin)))
 	if !(sin < 1) || !(alpha > minSine) {

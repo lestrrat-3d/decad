@@ -2,7 +2,8 @@
 
 A `Boss` root fillet whose blend runs off its face (boss-design §6). The blend ends where it meets another face of the
 body, as Fusion 360 ends it. Status: approved for building in the increments of §7. P2 is built: the Ø14 union is an
-A1 brep with `B` on one carrier (general-boolean §3 "A1 as a brep", holed operands); P3 to P7 are not.
+A1 brep with `B` on one carrier (general-boolean §3 "A1 as a brep", holed operands). P4 is built: C2 root arcs ending
+on window or slot corner rounds. P3, P5, P6 and P7 are not.
 
 Navigation (not authority): target result → §2; the gate before any build → §2.4; which configurations build → §4;
 why each admission is sound → §5; what must exist first → §6; size and options → §7, §8.
@@ -200,9 +201,13 @@ the exact-equality row decides, and a near-equal pair refuses (X4).
 - C2: the torus rows end on `G`. For a plane `G` the row end solves `n_G · x = h_G` in the azimuth (R4). For a cylinder
   `G` parallel to the axis it solves a circle-circle intersection in plan, a quadratic. Each row is a circle of the torus
   at a tube angle the blend picks, not a recorded entity, so the row ends are not a 2D answer about records. R4 computes
-  its plane row ends decad-side for the same reason. The increment that builds P4 must state that reason in
-  retained-edge-blend, or move the computation into a `sketch` scene. The root on the arc's side is chosen by the sign of
-  the exact discriminant and the arc's direction, and a discriminant whose charged sign is undecided refuses (X4).
+  its plane row ends decad-side for the same reason; retained-edge-blend §4.4 ("An end on a cylinder") states it for
+  the cylinder ends. The root on the arc's side is chosen by the side rule: the arc runs on material outside the corner round, so in
+  the arc's direction it leaves the round's disk at the centre's azimuth plus `α` (end 0) and enters it at the centre's
+  azimuth minus `α` (end 1), where `cos α = (R² + d² − r_G²)/(2·R·d)`. The distance to the held vertex never chooses.
+  A discriminant whose charged sign is undecided refuses (X4). A plane end keeps the root nearest the held vertex, and
+  the other root must lie farther from it than the vertex's bound, the slack and the roots' rounding, else the end
+  refuses ("an arc end lies between two meetings of its tags").
 - C3: only the row on `B` has a double root. In the fixture `cos φ = (77 + r²)/(18r)` at plan radius `r`, so the
   azimuth `φ` of the end grows linearly in `ρ − z` near the end point on `B` at height `ρ`. The torus section is a
   regular curve, and the row ends lie along it. The construction picks each row's root by continuity from the rows
@@ -288,7 +293,7 @@ increment leaves `main` green and every result outside its gate unchanged.
 | P1 | this design, with §6.3's route decision and §6.4's probe | the plan | done with this PR |
 | P2 | §6.4's refusals 1 to 5 under §6.3's narrow gate | the Ø14 union with `B` on one carrier | 4 to 7 weeks |
 | P3 | a faceted-view fillet entry for a holed A1 brep result, placed before `Receiver` in `brepmodify/fillet.go` and limited to such results, so R2 and R4 run there as on a mesh result | `Boss` root fillets on P2's results | 3 to 5 days |
-| P4 | C2: R4 with cylinder end faces, `B` running on past a cylinder end face below `A` (the footing), several arcs on one wall, caps on cylinders | Ø15 and every transversal root end | 2 to 3 weeks |
+| P4 (built) | C2: R4 with cylinder end faces, `B` running on past a cylinder end face below `A` (the footing), several arcs on one wall, caps on cylinders | Ø15 and transversal root ends on window or slot corner rounds | 2 to 3 weeks |
 | P5 | §5.4's cylinder charge on `B` in the retained edge blend | near-equal carriers at Ø14 | about 1 week |
 | P6 | C3 tangent ends with §5.2's tangency proof | Ø14, the gallery case | 1.5 to 2.5 weeks |
 | P7 | C1 with §5.2's coincidence proof | exact-equal C1 only; the fixture's Ø13 (near-equal, on the mesh path under the narrow gate) refuses until a history read exists | 1 to 2 weeks |
