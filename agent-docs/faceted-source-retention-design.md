@@ -127,10 +127,30 @@ A group takes the tag only when all of these hold; a group that fails stays
 | # | Condition | Why |
 |---|---|---|
 | A1 | The operand face's surface is `Plane`, `Cylinder`, `Cone`, `Sphere` or `Torus` | Each has a normal whose sensitivity to a displaced point reads from its radii and, for a cone, its axial range (§3.3) |
-| A2 | A built operand face with no denoted patch has `NormalBound == 0`; a retained face or a face with a denoted patch is admitted | A built face with a stated tilt (a ruled chamfer band, a tilted-frame cylinder) departs from its tag by more than the tilt, so its tag is not its geometry. A denoted patch proves the normal against the surface it denotes, which the result's patch still lies on, so the group carries the patch and `NormalAt` keeps judging against it |
+| A2 | A built operand face with no denoted patch has `NormalBound == 0`, or is a flat patch that Claim F bounds; a retained face or a face with a denoted patch is admitted | A built face with a stated tilt (a ruled chamfer band's cone, a tilted-frame cylinder) departs from its tag by more than the tilt, so its tag is not its geometry. A flat patch (`topo.Face.FlatPatch`) is the exception: its true patch is planar, so the tilt and Claim F's extent say where it is, and the group keeps the tag as an oblique plane with `NormalBound` the tilt and `ExtentDelta` the extent, the form charged-window-chamfer §2.2 gives a stacked view's oblique wall. A denoted patch proves the normal against the surface it denotes, which the result's patch still lies on, so the group carries the patch and `NormalAt` keeps judging against it |
 | A3 | A `Sphere` group's patches all have a loop | A loop-less `Sphere` face is a closed analytic surface to `AuditSolidBoundary` (`internal/boundaryaudit/audit.go`) |
 | A4 | After assembly, `2·δ_f / R < 1` for a curved group (§3.3) | Past that the normal bound is the trivial 2 and the tag says nothing a reader can use |
 | A5 | The operand face is not already `Faceted` with no retained tag | Nothing to carry |
+
+**Claim F (a flat patch's extent).** A route-L chamfer band's flat patch (`internal/capblend`, modify-reach §8) states
+`FlatPatch`: its true patch lies in one plane `P*`, the region its one loop's true counterpart bounds, each true vertex
+within its vertex's `Bound` and each true edge no longer than its edge's `Length + LengthBound`, and `P*`'s unit
+normal lies within `NormalBound` of the tag's (the stamp is the ruled patch's departure from the tag plus its turn from
+the denoted patch, so the triangle inequality bounds the denoted normal against the tag; the flag is set only while
+the stamp is a sum of proven terms, below its cap). Write `θ = min(1, NormalBound)`, `P = Σ (Length + LengthBound)`
+over the loop's edges and `d_v = dist(v, T) + Bound(v)` for each vertex `v`, `T` the tag plane. Then every point of
+the true patch lies within `E = min_v d_v + θ·P/2` of `T` (`facetedrecord.FlatPatchExtent`).
+
+*Proof.* Two unit normals at a distance `s` make an angle whose sine is at most `min(1, s)`, so the distance to `T`,
+restricted to `P*`, is an affine function whose gradient has length at most `θ`. Its largest value over the planar
+region lies on the region's boundary, the true loop, a closed curve of length at most `P`. Every point `q` of that
+curve lies within `P/2` of the true vertex `v*` of any `v`, along the curve and so in space, and
+`dist(q, T) ≤ dist(v*, T) + θ·P/2 ≤ d_v + θ·P/2`. ∎
+
+`dist(v, T)` is read exactly in rationals from the held position and `T`'s frame normal and origin, and every sum and
+product rounds up. The result's patch is a piece of the true operand patch, so `E` bounds it too, and §11's slab and
+every reader of charged-window-chamfer §4 read the group as they read an oblique wall. A flat patch's face that fails
+any premise (a stamp at its cap, two loops, a length or bound that is not finite) keeps no tag, as before.
 
 A4 is evaluated per built face, not per group: the group's patches may carry
 different `δ_f`. A patch that fails it reads `Faceted`, and the group's other

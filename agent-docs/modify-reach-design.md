@@ -759,6 +759,10 @@ term:
   bottom of its span. It is zero only where every one of those displacements
   is. Without it, a 0.1 mm chamfer on a 20 mm square drawn at `v = 10⁶` publishes
   a `1.7e-16` bound on walls that sit `1.2e-10` from the exact 45° normal.
+- A flat patch also states `topo.Face.FlatPatch` while its stamp is below the cap: it denotes the plane through its
+  straight side directrix and the parallel cap directrix over the window its one loop bounds, so a mesh Boolean
+  bounds where its true patch lies from its vertices' bounds, its edges' lengths and the stamp, and keeps its tag
+  as an oblique plane (faceted-source-retention §3.2, A2, Claim F). A circular patch states none.
 - DX7 widens its own window reading by that bound. A point proven to oppose
   lists the patch; only an all-clear needs every point to clear. For the tagged
   normal-component range `[mn, mx]` and allowance `allow`, it lists when

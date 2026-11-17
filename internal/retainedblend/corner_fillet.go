@@ -158,6 +158,10 @@ func planCorners(edges []*topo.Edge, fp facetedrecord.Payload, faceIndex map[*to
 		if err != nil {
 			return nil, true, err
 		}
+		if l.tilted() {
+			// An oblique end plane is read by the single-edge route alone.
+			return nil, true, errEndNotRetained()
+		}
 		if !l.edgeConvex || math.Abs(l.a.n.Dot(l.b.n)) > 1e-9 {
 			return nil, false, nil
 		}

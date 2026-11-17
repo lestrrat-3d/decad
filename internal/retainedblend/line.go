@@ -81,7 +81,24 @@ type lineEnd struct {
 	g     plane
 	exact r3.Vec // the meeting of the planes A, B and G
 	v     int    // the held vertex
+	// tilt is the departure of an oblique end plane's tag, zero for a retained
+	// plane: G's true plane may turn from its tag by that much, and lie within
+	// g.delta (its ExtentDelta) of it over G (readEnd).
+	tilt float64
 }
+
+// maxEndTilt is the largest tag departure an oblique end plane may state: below
+// it a planar region's true area exceeds its projection onto the tag by at most
+// θ² of the projection (obliqueCapArea).
+const maxEndTilt = 0.5
+
+// errEndNotRetained refuses an edge end whose end face is no plane the route reads.
+func errEndNotRetained() error {
+	return fmt.Errorf("%w: an edge end meets a face that is not a retained plane", decaderr.ErrUnsupported)
+}
+
+// tilted reports whether either end of the edge meets an oblique end plane.
+func (l line) tilted() bool { return l.ends[0].tilt != 0 || l.ends[1].tilt != 0 }
 
 // line is a straight edge between two retained planes, read from the tags
 // (§4.1).
@@ -235,7 +252,19 @@ func (l *line) readEnd(vertex *topo.Vertex, fp facetedrecord.Payload, faceIndex 
 	}
 	g, ok := retainedPlane(end.face)
 	if !ok {
-		return lineEnd{}, fmt.Errorf("%w: an edge end meets a face that is not a retained plane", decaderr.ErrUnsupported)
+		// An oblique plane: a tag that states its tilt as TagDeparture and its
+		// extent over the face as ExtentDelta (a stacked view's oblique wall, a
+		// chamfer band's flat patch kept by a mesh Boolean). Its extent is the
+		// plane's charge, as a displaced plane's AxialDelta is
+		// (retained-edge-blend §6.1, "An oblique end plane").
+		if g, ok = chainPlane(end.face); !ok {
+			return lineEnd{}, errEndNotRetained()
+		}
+		end.tilt = end.face.TagDeparture
+		if !(end.tilt <= maxEndTilt) {
+			return lineEnd{}, fmt.Errorf("%w: an edge end meets a face whose tag turns more than %g from its plane",
+				decaderr.ErrUnsupported, maxEndTilt)
+		}
 	}
 	end.g = g
 	l.charge = addCharge(l.charge, g)

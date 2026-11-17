@@ -70,13 +70,23 @@ type Face struct {
 	// ExtentDelta is how far the true patch of a retained Plane tag lies from
 	// the tag plane over this face's own extent: every point of the true patch
 	// is within it of the tag. It does not hold away from the face, so it is
-	// not an AxialDelta: a parallel offset everywhere. Only the stacked brep's
-	// faceted view sets it, on an oblique swept wall (agent-docs/
-	// charged-window-chamfer-design.md §2), which also states the wall's tilt as
-	// NormalBound and TagDeparture. A mesh Boolean carries it with the tag; a
+	// not an AxialDelta: a parallel offset everywhere. The stacked brep's
+	// faceted view sets it on an oblique swept wall (agent-docs/
+	// charged-window-chamfer-design.md §2), and a mesh Boolean on the face it
+	// keeps of a flat patch that states a tilt (FlatPatch); both also state the
+	// tilt as NormalBound and TagDeparture. A mesh Boolean carries it with the tag; a
 	// placement, the shifted retry, an exact rotation and a similarity drop it
 	// and keep the departed tag. Zero for every other face.
 	ExtentDelta float64
+	// FlatPatch marks a built Plane face whose true patch is a planar region
+	// bounded by one loop, the true counterpart of its own loop: each true
+	// vertex within its vertex's Bound, each true edge no longer than its
+	// edge's Length plus LengthBound, and the true plane's unit normal within
+	// NormalBound of the tag's. A route-L chamfer band's flat patch states it
+	// (internal/capblend). A mesh Boolean reads it to keep the tag of such a
+	// face that states a tilt (agent-docs/faceted-source-retention-design.md
+	// §3.2, A2). It says nothing about a face it is not set on.
+	FlatPatch bool
 	// HeldPlanar records that a Faceted face descends only from PLANAR source
 	// faces, so the face it stands for in the true result is flat — and a rim
 	// between two such faces is a straight line, whose chord length is honest.

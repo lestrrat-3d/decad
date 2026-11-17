@@ -65,6 +65,10 @@ func planMitre(edges []*topo.Edge, fp facetedrecord.Payload, faceIndex map[*topo
 		if err != nil {
 			return nil, true, err
 		}
+		if l.tilted() {
+			// An oblique end plane is read by the single-edge route alone.
+			return nil, true, errEndNotRetained()
+		}
 		if !l.edgeConvex {
 			return nil, false, nil
 		}

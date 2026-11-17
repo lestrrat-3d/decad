@@ -36,8 +36,17 @@ func SourceTag(f *topo.Face, flip bool) (Group, bool) {
 		g.NormalBound = f.TagDeparture
 	case f.NormalBound != 0:
 		// A built face with a stated tilt departs from its tag by more than
-		// the tilt: the tag is a ruled stand-in, not the face's geometry.
-		return Group{}, false
+		// the tilt: the tag is a ruled stand-in, not the face's geometry. A
+		// flat patch is the exception (A2, Claim F): its true patch is planar,
+		// tilted by at most the tilt and within the extent FlatPatchExtent
+		// reads of the tag over the face, so the group keeps the tag as an
+		// oblique plane, departure and extent stated as a stacked view's
+		// oblique wall states them.
+		extent, ok := FlatPatchExtent(f)
+		if !ok {
+			return Group{}, false
+		}
+		g.NormalBound, g.ExtentDelta = f.NormalBound, extent
 	}
 	if _, plane := f.Surface.(surfacegeom.Plane); plane && f.HasAxialDelta && (f.CapRecord != nil || f.RetainedTag) {
 		// A retained face that states a displacement without a record (a

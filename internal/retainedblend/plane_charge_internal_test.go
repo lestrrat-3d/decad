@@ -244,3 +244,23 @@ func TestArcRefusesDisplacedEndPlaneBelowMinSine(t *testing.T) {
 	_, err = a.section(spec, at(rhoMin*math.Sqrt(1-4e-6), 1e-9))
 	require.NoError(t, err)
 }
+
+func TestObliqueCapArea(t *testing.T) {
+	t.Parallel()
+	// A right triangle of legs 0.5 in an end plane, as a chamfer's cap.
+	cp := planePiece(r3.NewVec(0, 0, 0), r3.NewVec(0.5, 0, 0), r3.NewVec(0, 0.5, 0))
+	require.Zero(t, obliqueCapArea(cp, 1e-9, 0), "an end plane with no tilt adds nothing")
+
+	// The true cap at the largest admitted tilt: its plane turns by the angle whose sine is the tilt, and the
+	// projection of its area onto the tag is the piece's own. The term covers the excess with the piece's charge.
+	const tilt = maxEndTilt
+	excess := cp.area * (1/math.Sqrt(1-tilt*tilt) - 1)
+	got := obliqueCapArea(cp, 0, tilt)
+	require.Greater(t, got, excess)
+	require.InDelta(t, cp.area*tilt*tilt, got, 1e-15)
+
+	// A piece that states no area reads the isoperimetric bound of its perimeter.
+	corner := cornerPiece(2, piRound)
+	require.InDelta(t, isoArea(2)*1e-4, obliqueCapArea(corner, 0, 1e-2), 1e-15)
+	require.Greater(t, obliqueCapArea(cp, 1e-6, 1e-2), obliqueCapArea(cp, 0, 1e-2), "the plane charge widens it")
+}

@@ -182,6 +182,23 @@ func cornerPiece(per, arcTurn float64) chargePiece {
 	return chargePiece{perimeter: per, turning: sumUp(mulUp(4, piRound), arcTurn)}
 }
 
+// obliqueCapArea bounds how much more area the true cap of an oblique end plane holds than the cap's projection
+// onto the tag (retained-edge-blend §6.3, "An oblique end plane"). The true plane turns from the tag by an angle α
+// whose sine is at most the tag's departure θ (two unit normals at a distance θ make such an angle), and a planar
+// region's area is its projection's over cos α. For sin α ≤ θ ≤ maxEndTilt, 1/cos α − 1 ≤ θ². The projection holds
+// at most the piece's exact area plus its plane charge (planeAreaCharge), or, for a piece that states no area, the
+// isoperimetric bound of its perimeter. It is zero for a plane that states no tilt.
+func obliqueCapArea(p chargePiece, c, tilt float64) float64 {
+	if !(tilt > 0) {
+		return 0
+	}
+	area := p.area
+	if !(area > 0) {
+		area = isoArea(p.perimeter)
+	}
+	return mulUp(sumUp(area, planeAreaCharge([]chargePiece{p}, c)), mulUp(tilt, tilt))
+}
+
 // lineAreaPieces records the pieces of a straight edge's rewrite (lineAreasAt): the two regions A and B lose, the
 // corner each end plane gains or loses, and the blend face.
 func (w *work) lineAreaPieces(l line, spec blendSpec, rows [2][]int, mitred [2]bool, blend float64) {
@@ -197,15 +214,17 @@ func (w *work) lineAreaPieces(l line, spec blendSpec, rows [2][]int, mitred [2]b
 		if mitred[i] {
 			continue
 		}
-		if !spec.fillet {
-			w.addPlanePiece(planePiece(l.ends[i].exact, pt(i, 0), pt(i, m)))
-			continue
+		var cp chargePiece
+		if spec.fillet {
+			// The fillet's end curve on G is the ball's circle stretched along the edge by 1/|d·n_G| at most.
+			stretch := proofbound.DivUpper(1, down(math.Abs(l.d.Dot(l.ends[i].g.n))))
+			arc := mulUp(mulUp(spec.r, l.phi), stretch)
+			cp = cornerPiece(sumUp(lenUp(l.ends[i].exact, pt(i, 0)), lenUp(l.ends[i].exact, pt(i, m)), arc), piRound)
+		} else {
+			cp = planePiece(l.ends[i].exact, pt(i, 0), pt(i, m))
 		}
-		// The fillet's end curve on G is the ball's circle stretched along the edge by 1/|d·n_G| at most.
-		stretch := proofbound.DivUpper(1, down(math.Abs(l.d.Dot(l.ends[i].g.n))))
-		arc := mulUp(mulUp(spec.r, l.phi), stretch)
-		w.addPlanePiece(cornerPiece(sumUp(lenUp(l.ends[i].exact, pt(i, 0)), lenUp(l.ends[i].exact, pt(i, m)), arc),
-			piRound))
+		w.addPlanePiece(cp)
+		w.tiltArea = sumUp(w.tiltArea, obliqueCapArea(cp, w.r.charge, l.ends[i].tilt))
 	}
 	if !spec.fillet {
 		w.addPlanePiece(planePiece(pt(0, 0), pt(1, 0), pt(1, m), pt(0, m)))

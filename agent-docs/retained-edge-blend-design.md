@@ -1489,7 +1489,7 @@ of that computation.
 
 | SR | Call | Existence | Sentinel |
 |---|---|---|---|
-| **SR1** | an edge outside Table RR: a curve that is not `Line3` or `Circle3`, a face that is not `RetainedTag`, a face with `NormalBound != 0`, a cylinder that states an `AxialDelta` outside the closed rim, a tangent-ended arc and a closed chamfer chain (§6.1), or a denoted patch whose tag is not exactly the surface it denotes (for R6's sphere, its record's exact centre and radius, §4.5), or a `Convex` flag that disagrees with §4.1 | body exists; no admitted source for the selected edge | `ErrUnsupported` (reach SX9's text) |
+| **SR1** | an edge outside Table RR: a curve that is not `Line3` or `Circle3`, a face that is not `RetainedTag`, a face with `NormalBound != 0` (except R1's end plane, below), a cylinder that states an `AxialDelta` outside the closed rim, a tangent-ended arc and a closed chamfer chain (§6.1), or a denoted patch whose tag is not exactly the surface it denotes (for R6's sphere, its record's exact centre and radius, §4.5), or a `Convex` flag that disagrees with §4.1 | body exists; no admitted source for the selected edge | `ErrUnsupported` (reach SX9's text) |
 | **SR2** | two selected edges share a vertex and are neither a mitre run (§4.7) nor corners of perpendicular faces (§4.8), or a selected edge continues tangentially into a neighbour | no transition built | `ErrUnsupported` |
 | **SR3** | no blend of that size exists: `R − r ≤ 0` for an inside ball (§4.2), `φ` within 10⁻⁹ of 0 or π, a chamfer distance of zero or below, an R6 setback that reaches the axis or runs past the sphere's pole (§4.5), or an R7 fillet inside the larger cylinder with `2ρ ≥ R − r`, where no ball touches both walls (§4.10) | no regular blend | `ErrDegenerate` |
 | **SR4** | the setback does not fit (§6.2) and the held bounds prove it does not | the blend consumes the face | `ErrDegenerate` |
@@ -1511,6 +1511,20 @@ skips the saddles §4.9 reads, the patterns both blends build; the canal-surface
 reason names the crossing rims outside R7. The fillet's σ = (+1, +1) saddles
 (§4.10) reach `Unread` only in a selection that mixes them with an edge no
 route reads, and it names them with the canal-surface reason too.
+
+**An oblique end plane.** R1's end face `G` may be an oblique plane: a retained `Plane` tag whose `TagDeparture`
+`θ` equals its `NormalBound` and that states `ExtentDelta` `E` with no `AxialDelta` or denoted patch (a stacked view's
+oblique wall, charged-window-chamfer §2.2, or a chamfer band's flat patch a mesh Boolean kept, faceted-source-retention
+Claim F). Over `G` the true plane lies within `E` of the tag and turns from it by an angle whose sine is at most `θ`.
+R1 reads `E` as the plane's charge, as it reads a displaced plane's δ below, so the corner, the rows on `G` and every
+bound of §6.3 carry `4E/minSine`, and `θ` as the end's tilt. A tilt above `0.5` refuses ("an edge end meets a face
+whose tag turns more than 0.5 from its plane"). `ExtentDelta` holds over `G` alone, so an oblique `G` that takes
+the blend's end cap, new surface beside its held face, refuses ("an oblique end plane that takes the blend's end
+cap is not built"); one that gives the cap up builds. The cap's true region lies on the tilted true plane, whose
+area exceeds its projection onto the tag by at most `θ²` of it for `θ ≤ 0.5` (`1/cos α − 1 ≤ sin²α` there), so the
+area bound adds `θ²` times the cap's exact area plus its plane charge (`obliqueCapArea`, §6.3). `A` and `B` stay
+exact retained planes, and the mitre and corner routes refuse an oblique end plane with SR1's text. This is the end a
+Fusion chamfer meets where a ramp's top edge runs into a chamfered outline's flat band.
 
 **Displaced planes and walls.** A retained `Plane` tag may state `AxialDelta` δ, the
 proven distance of the true plane from the tag along its normal. A route never
@@ -2212,7 +2226,8 @@ end plane states a displacement refuses unless every row meets that plane at a
 sine of `minSine` or more ("an arc's rows meet a displaced end plane below
 `minSine`"), since a row at sine `q` moves its end by `δ/q`. A closed rim (R2)
 only moves along its axis with its plane, so its areas do not change and it adds
-nothing. So the area
+nothing. An oblique
+end plane (§6.1) adds, for its cap, `θ²·(A_cap + 2·P_cap·c + (π + Φ_cap)·c²)`, the tilt's area term. So the area
 slack adds, per changed piece `g`, `2·P_g·c + (π + Φ_g)·c² + A_g·c/r_g` (the form of
 boss-root-overflow §5.5.6), with `P_g` an upper bound on the piece's perimeter
 from its exact curves, `Φ_g` its total turning (at most `2π` plus each arc's
@@ -2307,6 +2322,7 @@ published bound, never with a pinned literal.
 | R4 end on a cylinder (`internal/retainedblend/arc_end_cyl_internal_test.go`, `apitest/boss_root_cliff_test.go`) | `TestCylEndCrossingSine` and `TestCylEndSideRule`: a grazing crossing (R = 7.5, r_G = 2, d = 9.5 − 10⁻⁷) refuses and a transversal one reads, and the root is the side rule's at both ends; `TestCylEndRootBoundCoversRounding`, `TestCylEndSectionMarginCoversRounding` and `TestCylEndSectionTiltCharge` measure `e_V`, `δ`, `ε_ψ` and the tilt term in 200-bit arithmetic under a quarter of each bound; `TestCylEndCertifyChargesCurvature` refuses a chord whose `curv` alone exceeds `τ`; `TestCylEndCuspParam` puts the end curve `need` from the generator along `G`; `TestCapFacetsChargeCoversSagitta` (`arc_end_cyl_cap_internal_test.go`) checks sample points of cap triangles against the exact cylinder under their charged bound, `TestCapFacetsRefusesFoldingChain` refuses a zip with no positive move, `TestSplitChainEdge` refuses feet that are equal or off the edge and fans a facet with feet in order, and `TestCapFacetsNoiseVertexBesideV` closes a vertex beside `V` with the closing triangle, within its facet bound of the arc, one boundary loop and every other edge used once each way; `TestBossRootFilletSpokedHub`: a Ø15 boss on the spoked disc builds four `Torus` faces (`Major` 8, `Minor` 0.5), its volume equals the boss's without the fillet plus the fillet's wedge integral within the result's bound, and `ClosestPoint` of two probes at `r = 7.6`, `z = 5.02`, 0.6° either side of the window boundary, lies on the corner round's cylinder within its off-surface bound and the result's mesh bound, its `z` in `(5, 5.5)`, with its distance within the reported bound of the probe's exact distance to the round (`LocatePoint` cannot decide there: it needs `4r³` above the volume bound, `r` over 0.68 mm); Ø12 builds one torus; Ø13 and Ø14 refuse `ErrUnsupported`; `TestBossRootFilletRefusesArcEndsOnOneFace` and `TestBossRootFilletRefusesHalfCircleArc` refuse a root arc whose ends meet one face and one of π or more | skip the side rule: the fillet ends on the wrong root; drop `curv`: a chord of 4 `τ` certifies; drop the cap: the volume misses the wedge; drop the cap charge's sagitta: the sagitta test fails; read the vertex beside `V` by its held sign: the Ø15 build refuses "the wall's cut along an end face does not run from the setback line to the corner" |
 | Close boundary vertices (`internal/retainedblend/rewrite_close_vertices_internal_test.go` `TestRetriangulateKeepsCloseBoundaryVertices`) | a plane face whose hole loop holds two vertices closer than the rounding of an offset frame re-triangulates with every loop edge kept and its area unchanged, for normals −z, +z and +x; two neighbouring vertices that differ only along the normal refuse | subtract the rim centre before projecting: the pair collides and ear clipping ends on a degenerate triangle |
 | Wall ring order (`TestSortRingOrdersEqualAngles`) | two cut vertices of one float angle sort by their exact turn, the same for every input order, both senses and both normals | sort by float angle alone: the order follows the input order |
+| Oblique end plane (`faceted_retained_blend_tilted_end_test.go`): a 20 × 60 plate with `r = 4.5` corners drawn with tangent and radius constraints, both cap outlines chamfered 0.5, cut to 8 beyond a 30° ramp; the same plate with every point fixed; the gallery-shaped arm (round pin end, `r = 4.5` corner arcs closed by an `R = 22` arc, all joins by constraint) | the cap chamfer's 45° flat patches beside the ramp's top edge keep `Plane` tags through the cut; the top edge's chamfer removes `A·(19 + 2·h̄)` with `A = 0.25·sin 150°/2`, `h̄ = 0.5·sin 30°/3`, within the bound, as much as the exact plate's within both bounds; `VerifyAll` passes; the arm's top edge then its outline, and both in one call, build. Unit tests: `FlatPatchExtent`'s value and every declined premise, `SourceTag` keeping a flat patch and declining any other tilted face, `obliqueCapArea` covering `1/cos α − 1` at the largest tilt | keep A2 strict, or read `G` through `retainedPlane` alone: "an edge end meets a face that is not a retained plane"; drop the perimeter term or the vertex bound from Claim F: the unit value fails; drop the tilt term: its unit test fails |
 
 ## 10. Files and fallout
 
