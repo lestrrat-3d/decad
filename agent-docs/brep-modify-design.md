@@ -184,6 +184,36 @@ result is a
 0.5 mm chamfer of both outlines in one call builds; its volume bound is about
 ±2 mm³.
 
+### 2.3 A stacked or slab-cut BRep: the faceted view after the receivers
+
+A `Fillet` of a `brepPayload` that keeps its slabs (`Stack`: an A1 union,
+general-boolean §3 "A1 as a brep") or that a blind Cut built through the same
+build (`SlabCut`: general-boolean §3 A7, A9) first takes every route of
+Table RB. When those refuse, the call runs the retained edge blend on the
+body's faceted view (`stackedViewBlend`, `internal/brepmodify/stacked_view.go`)
+by §2.1's steps. A selection the blend does not recognize keeps the receivers'
+refusal; a recognized selection the blend cannot build takes the blend's own
+refusal. So every selection the receivers build keeps its result, and a
+section displacement (a pocket crossing a round hole) or a partial loop
+route L declines reaches the blend.
+
+A planar record face (`face(k)`: a cap, an interface face, a wall on an
+axis-aligned plane) lies on its recorded plane and keeps its retained tag. A
+swept wall (`wall(k)`: a circular or oblique wall) is rewritten between
+canonical vertices: an arc takes its radius from its first vertex and an
+oblique plane passes through its walked ends, so it lies only within the
+record's section displacement of the wall it denotes, and a holed union's
+merged circle carrier lies `CarrierCharge` from it. Where either is nonzero,
+every swept wall stays in the view untagged, a plain faceted obstacle as in
+§2.2, until the retained blend carries such a charge (boss-root-overflow P5);
+no current fixture's selection reaches the retained blend on such a wall, so
+the rule only withholds a tag. A boundary's vertex allowance is charged into
+the facets' bounds. A refusal raised while building the view, before the blend
+reads the selection, keeps the receivers' refusal. The result is a
+`facetedPayload`. `apitest/stacked_brep_view_fillet_test.go` fillets a plate
+edge of an A7 result and of an A1 union this way and pins the selections that
+reach the blend.
+
 ## 3. Table RB — receivers
 
 | RB | Receiver | `Fillet` / `Chamfer` | `Shell` |

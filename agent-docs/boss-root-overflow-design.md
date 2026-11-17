@@ -292,7 +292,7 @@ increment leaves `main` green and every result outside its gate unchanged.
 |---|---|---|---|
 | P1 | this design, with §6.3's route decision and §6.4's probe | the plan | done with this PR |
 | P2 | §6.4's refusals 1 to 5 under §6.3's narrow gate | the Ø14 union with `B` on one carrier | 4 to 7 weeks |
-| P3 | a faceted-view fillet entry for a holed A1 brep result, placed before `Receiver` in `brepmodify/fillet.go` and limited to such results, so R2 and R4 run there as on a mesh result | `Boss` root fillets on P2's results | 3 to 5 days |
+| P3 | built as tangent-notch-design T3 (brep-modify §2.3): the faceted-view fillet of a stacked or slab-cut BRep after the receiver routes refuse. A holed union with a carrier charge keeps its curved faces untagged until P5 | `Boss` root fillets on P2's results, after P5 | built |
 | P4 (built) | C2: R4 with cylinder end faces, `B` running on past a cylinder end face below `A` (the footing), several arcs on one wall, caps on cylinders | Ø15 and transversal root ends on window or slot corner rounds | 2 to 3 weeks |
 | P5 | §5.4's cylinder charge on `B` in the retained edge blend | near-equal carriers at Ø14 | about 1 week |
 | P6 | C3 tangent ends with §5.2's tangency proof | Ø14, the gallery case | 1.5 to 2.5 weeks |
