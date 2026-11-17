@@ -682,6 +682,11 @@ func (w *work) measureChange(tag blendTag, stripFrom int) (float64, float64) {
 		areaSlack = proofbound.AbsSumUpper(areaSlack, planeArea)
 		trueArea = proofbound.AbsSumUpper(trueArea, planeArea)
 	}
+	// An oblique end plane's true cap is tilted from its tag (obliqueCapArea); zero without one.
+	if w.tiltArea != 0 {
+		areaSlack = proofbound.AbsSumUpper(areaSlack, w.tiltArea)
+		trueArea = proofbound.AbsSumUpper(trueArea, w.tiltArea)
+	}
 
 	// A raised inner vertex of a curved wall bounds the facets beside the
 	// strip that now face the blend.

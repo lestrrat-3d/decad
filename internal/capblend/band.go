@@ -828,6 +828,11 @@ func setPatchReadings(f *topo.Face, g capband.Patch, built capband.PatchBuilt, d
 	}
 	denoted := capband.DenotedNormalAllow(delta, capDelta, g.LevelDelta, g.CapZ-g.SideZ, dr)
 	f.NormalBound = math.Min(ruledNormalAllowUnbounded, proofbound.AbsSumUpper(patchNormalAllow(f, g, built), denoted))
+	// A flat patch denotes the plane through its straight side directrix and the parallel cap directrix, over the
+	// window its own loop bounds: the side edge, the cap edge and the two rulings, whose true loci lie in that plane
+	// within their edges' published lengths. Its normal stamp bounds the true plane against the tag only while it
+	// is a sum of proven terms, not the cap.
+	f.FlatPatch = !g.Circular && f.NormalBound < ruledNormalAllowUnbounded
 }
 
 // SlantEdge is one cap-level contour point's slant edge down to the

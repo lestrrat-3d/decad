@@ -226,12 +226,15 @@ arithmetic allowance (retained-edge-blend §6.1), so W2 reaches charges inside t
 ## 4. Readers of an oblique wall's tag
 
 A published oblique wall's face states `TagDeparture = NormalBound ≥ θ` on every path, because nothing that keeps a
-plane tag lowers `NormalBound`. `ExtentDelta` travels only where §2.4 carries it. Each reader below that receives a
+plane tag lowers `NormalBound`. `ExtentDelta` travels only where §2.4 carries it. A mesh Boolean also mints the same
+tag from a route-L chamfer band's flat patch that states a tilt (faceted-source-retention §3.2, A2, Claim F), and every
+reader below reads that face as it reads an oblique wall. Each reader below that receives a
 faceted body charges the wall, refuses it, or is listed in `agent-docs/missing-features.md`.
 
 | Reader | With an oblique wall |
 |---|---|
-| plane routes of `internal/retainedblend` (R1 line, corner and mitre through `retainedPlane`; R2 and R4 through `planeAndWall`; R3, R5, R6; tangent ends; open chains' ends; wall sine and slant; band provenance) | refuse `TagDeparture ≠ 0` |
+| plane routes of `internal/retainedblend` (R1's faces `A` and `B`, corner and mitre through `retainedPlane`; R2 and R4 through `planeAndWall`; R3, R5, R6; tangent ends; open chains' ends; wall sine and slant; band provenance) | refuse `TagDeparture ≠ 0` |
+| R1's end plane `G` (retained-edge-blend §6.1, "An oblique end plane") | reads the plane with `ExtentDelta` as its charge and `TagDeparture` as its tilt, when the tilt is at most `0.5` and `G` gives up the cap |
 | a closed chamfer chain's walls (§3) | read the wall with `ExtentDelta` as its charge |
 | `facetedrecord.RetainedEdgeCurve` E2 | publishes a `Line3` between two planes; its falsifier slack adds `planeRimAmp·ExtentDelta` per plane as it adds `AxialDelta`, which only widens a reject-only test |
 | `NormalAt`, `edgewedge` | charge `NormalBound` |

@@ -72,6 +72,9 @@ type work struct {
 	// (planeAreaCharge); measureChange adds both (plane_charge.go).
 	planeVol    float64
 	planePieces []chargePiece
+	// tiltArea is the area an oblique end plane's cap may hold beyond its projection onto the tag
+	// (obliqueCapArea); measureChange adds it.
+	tiltArea float64
 }
 
 type ringPt struct {

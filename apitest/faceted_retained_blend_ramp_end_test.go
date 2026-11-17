@@ -62,6 +62,20 @@ func rampArm(t *testing.T, riser, capChamfer bool, skew float64) *decad.Body {
 		body, err = decad.Chamfer(t.Context(), body, loops, units.Millimeters(rampArmSize))
 		require.NoError(t, err)
 	}
+	return rampCutOf(t, w, doc, body, riser, skew)
+}
+
+// rampCut cuts body down to rampArmFace beyond a ramp of rampArmAngle that rises from rampArmFoot to the top at
+// y = rampArmHalf, across the whole width of a body that lies within x = ±15.
+func rampCut(t *testing.T, w *sketch.World, doc *decad.Document, body *decad.Body) *decad.Body {
+	t.Helper()
+	return rampCutOf(t, w, doc, body, false, 0)
+}
+
+// rampCutOf is rampCut with an upright riser at the foot in place of the ramp (riser), and the tool turned by skew
+// radians about z.
+func rampCutOf(t *testing.T, w *sketch.World, doc *decad.Document, body *decad.Body, riser bool, skew float64) *decad.Body {
+	t.Helper()
 	// The tool's section lies in the plane x = −15, with u along +y and v along +z, turned by skew.
 	across := r3.Vec{X: math.Cos(skew), Y: math.Sin(skew)}
 	along := r3.Vec{X: -math.Sin(skew), Y: math.Cos(skew)}

@@ -351,6 +351,12 @@ func rewriteLineEdge(ctx context.Context, env topo.Env, fp facetedrecord.Payload
 			return nil, err
 		}
 		gLoops[i], gains[i] = loops, t
+		if t && l.ends[i].tilt != 0 {
+			// A cap an end face takes is new surface beside its held face, where an oblique
+			// plane's extent says nothing of the true plane.
+			return nil, fmt.Errorf("%w: an oblique end plane that takes the blend's end cap is not built",
+				decaderr.ErrUnsupported)
+		}
 	}
 
 	// The faces beside the edge swap the edge for its setback edge.

@@ -73,9 +73,10 @@ type Group struct {
 	// and SourceTag never copies it.
 	ViewCharge bool
 	// ExtentDelta is topo.Face.ExtentDelta: on a retained Plane group, how far
-	// the true patch lies from the tag over the face's own extent. Only the
-	// stacked view sets it, on an oblique swept wall, which also states its
-	// tilt through NormalBound. SourceTag carries it. A placement, the shifted
+	// the true patch lies from the tag over the face's own extent. The stacked
+	// view sets it on an oblique swept wall, and SourceTag on the group of a
+	// flat patch that states a tilt (FlatPatchExtent); both state the tilt
+	// through NormalBound. SourceTag carries it. A placement, the shifted
 	// retry, an exact rotation and a similarity drop it and keep the tag.
 	ExtentDelta float64
 	Denoted     *surfacenormal.Revolved
