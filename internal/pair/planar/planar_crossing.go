@@ -40,7 +40,7 @@ func (k *planarKernel) crossings() error {
 					k.crossed = append(k.crossed, crossing)
 					continue
 				}
-				if sp == 0 && sq == 0 {
+				if sp == 0 && sq == 0 && !sidePlanesRejectEdge(edges, e, tris, t) {
 					k.edgeInFacet(edges, edge, tris, t)
 				}
 			}
@@ -85,6 +85,19 @@ func (k *planarKernel) crossings() error {
 		}
 	}
 	return nil
+}
+
+// sidePlanesRejectEdge skips the exact coplanar edge test only when one
+// outward interval proves the whole edge box lies outside a triangle side.
+func sidePlanesRejectEdge(edges *planarPrep, e int, tris *planarPrep, t int) bool {
+	_, sideBoxes := tris.sidePlanes(t)
+	tri := tris.s.Tris[t]
+	for i := range 3 {
+		if sign, decided := floatDotSign(edges.edgeBox[e], tris.vertBox[tri[i]], sideBoxes[i]); decided && sign < 0 {
+			return true
+		}
+	}
+	return false
 }
 
 // edgeThroughInterior reports whether the line pq passes strictly inside
