@@ -25,9 +25,9 @@ func (r chamferRun) sharpArcCorner() bool {
 // layers is how many layers of rings the chain's cutter steps through between the heights top and bottom, and how far
 // its facets then leave the bevel (layerDeparture). A chain without a sharp corner beside an arc keeps one layer, two
 // rings, which holds the bevel exactly there. Otherwise the layers step up from 2 by one until the departure is within
-// partialSagitta, the fewest that hold it, and the cutter's bound carries it. A count that puts a ring within a quarter
-// of a layer of the wall's level is passed over (ringNearWall). Only the cells beside a curved column carry the rings
-// between (cutterMesh).
+// partialSagitta, the fewest that hold it among the counts not passed over, and the cutter's bound carries it. A count
+// that puts an inner ring within a quarter of a layer of the wall's level is passed over (ringNearWall). Only the cells
+// beside a curved column carry the rings between (cutterMesh).
 func (r chamferRun) layers(d, top, bottom float64) (int, float64, error) {
 	if !r.sharpArcCorner() {
 		return 1, 0, nil
@@ -54,8 +54,12 @@ func (r chamferRun) layers(d, top, bottom float64) (int, float64, error) {
 
 // ringNearWall reports whether an inner ring of a cutter of the given layers between top and bottom lies within a
 // quarter of a layer of the wall's level, d below the cap. A ring there holds the run on the wall itself, so the cells
-// below it run along the wall outside the material. The mesh Boolean cannot tell that touch from a crossing, and the
-// shifted retry it then takes moves the whole cutter, end clip included (endClipMesh).
+// below it touch the wall along the ring, outside the material. Beside a concave end the end clip's Boolean leaves
+// those cells as a face of their own, the mesh Boolean cannot tell that touch from a crossing, and the shifted retry it
+// then takes moves the whole cutter, end clip included (endClipMesh). A quarter layer is about 0.01 mm at the counts
+// chamfers take, several times the gate's slack, the two faces' bounds of about 0.001 to 0.002 mm; a shortfall only
+// brings back the shifted retry. Every chain with layers passes such counts over, not only one with a concave end, so
+// a chain's layers do not depend on its ends.
 func ringNearWall(d, top, bottom float64, layers int) bool {
 	step := (top - bottom) / float64(layers)
 	k := math.Round((top + d) / step)

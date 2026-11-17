@@ -1041,15 +1041,16 @@ extension and the probe of its end:
   faceted receiver take no relief; their Cut takes the gap shift where the tolerance allows it.
 
 Any other end is `ErrUnsupported`: a convex end turned by less than 45 degrees, a concave end turned by more than 90
-degrees, a concave end beside an arc, a run-out longer than the next edge, an arc run whose extension turns more than a
-half turn, and a chain that comes back into the end sector. So is a chain whose extension would
-meet material of the cap, within `reach` of the run's end (the region past the end, less the run-out zone beside the
-next wall, which is the strip a line end reaches or the annular sector an arc end reaches, is tested exactly against the
-loop's boundary, read within 1e-6 mm of its arcs: no boundary edge may have a stretch in it, and where none does, one
-point of each cell of the region must lie in void, so a feature of any thickness is seen), or whose margin strip beside the run (the `over` outside
-its wall, except within a concave end's sector and near a corner inside the chain) holds material of another wall of
-the loop outside a concave end's sector, or whose offset empties an arc. The overshoot list retries a smaller `over` after such a refusal, so a slot
-narrower than `over` is cut with a smaller margin when that clears it.
+degrees, a concave end beside an arc whose next wall's plane misses the bevel, a run-out longer than the next edge, an
+arc run whose extension turns more than a half turn, and a chain that comes back into the end sector. So is a chain
+whose extension would meet material of the cap, within `reach` of the run's end (the region past the end, less the
+run-out zone beside the next wall, which is the strip a line end reaches or the annular sector an arc end reaches, is
+tested exactly against the loop's boundary, read within 1e-6 mm of its arcs: no boundary edge may have a stretch in
+it, and where none does, one point of each cell of the region must lie in void, so a feature of any thickness is
+seen), or whose margin strip beside the run (the `over` outside its wall, except within a concave end's sector and
+near a corner inside the chain) holds material of another wall of the loop outside a concave end's sector, or whose
+offset empties an arc. The overshoot list retries a smaller `over` after such a refusal, so a slot narrower than
+`over` is cut with a smaller margin when that clears it.
 
 A hole loop of the cap is read the same way as an outer loop: its edges chain, mitre and end like any other, and a
 reflex corner of the material inside a chain (a hole's corner) mitres by removing `dc^3/3` more than the two wedges.
@@ -1075,37 +1076,38 @@ cavity whose wall comes within the bevel's reach.
 
 The cutter is a polyhedron held exactly as a mesh solid, with arc chords within 0.0002 mm of their circle, and the
 result is a Boolean Cut: faceted, with the Cut's own readings. A chain with two rings (a top and a bottom) holds the
-bevel exactly except where it holds a sharp corner beside an arc. There the offset's corner moves along a conic with the
-setback, and an arc's cells twist between rings, so a straight rule between two rings leaves the bevel. Such a chain
-steps through `L` layers of rings, `L` stepping up from 2 by one to the first value at which `layerDeparture` is within
-0.0002 mm, and refuses past 32. A value that puts an inner ring within a quarter of a layer of the wall's level, `dc`
-below the cap, is passed over (`ringNearWall`). A ring at that level holds the run on the wall itself, so the cells
-below it run along the wall outside the material. Near a concave end the end clip's Boolean leaves those cells as a
-face of their own that touches the wall without crossing it, the Cut refuses the touch, and its gap shift moves the
-clip face across the run's wall at the corner's turn. With an overshoot of half the setback the wall's level lies six
-sevenths of the way down, so every seventh value puts a ring on it, and the values beside those are passed over too
-(6 to 8, 13 to 15, 20 to 22 and 27 to 29).
-A column is the path of one ring point as the setback changes. Only a sharp corner
-beside an arc, and the samples of an arc that ends at one, move off a straight line; every other column is straight,
-and two neighbouring straight columns bound a planar cell, which the two end rings hold exactly. So only a column that
-bends and the columns beside it carry the rings between: a cell between two such columns takes `2L` triangles, a cell
+bevel exactly except where it holds a sharp corner beside an arc. There the offset's corner moves along a conic with
+the setback, and an arc's cells twist between rings, so a straight rule between two rings leaves the bevel. Such a
+chain steps through `L` layers of rings, `L` stepping up from 2 by one to the first value at which `layerDeparture` is
+within 0.0002 mm, and refuses past 32. A value that puts an inner ring within a quarter of a layer of the wall's
+level, `dc` below the cap, is passed over (`ringNearWall`). A ring at that level holds the run on the wall itself, so
+the cells below it touch the wall along the ring, outside the material. Near a concave end the end clip's Boolean
+leaves those cells as a face of their own that touches the wall without crossing it, the Cut refuses the touch, and
+its gap shift moves the clip face across the run's wall at the corner's turn. With an overshoot of half the setback
+the wall's level lies six sevenths of the way down, so every seventh value puts a ring on it, and the values beside
+those are passed over too (6 to 8, 13 to 15, 20 to 22 and 27 to 29); the overshoots of 0.35 and 0.7 pass over other
+runs, and none passes over 32. A quarter layer is about 0.01 mm at the counts chamfers take, several times the gate's
+slack of about 0.001 to 0.002 mm, and a shortfall only brings back the shift. Every chain with layers takes the rule,
+whatever its ends. A column is the path of one ring point as the setback changes. Only a sharp corner beside an arc,
+and the samples of an arc that ends at one, move off a straight line; every other column is straight, and two
+neighbouring straight columns bound a planar cell, which the two end rings hold exactly. So only a column that bends
+and the columns beside it carry the rings between: a cell between two such columns takes `2L` triangles, a cell
 between one of them and a column of two vertices is a fan of `L + 1`, and every other cell is the two triangles of the
 two-ring cutter. The bound is the same, since the cells that keep every ring are the ones `layerDeparture` bounds.
 `layerDeparture` is closed form, the largest over the corners and layers of two terms. The first is the corner path's
 bound `B^2 dt^2 / (32 v^3)` for a line and an arc (`v` the corner's distance along the line from the foot of the arc's
 centre, `B` the rate of `v^2` per unit of setback, which is constant) and `|4ac - b^2| dt^2 / (32 y^3)` for two arcs
-(`y^2 = a + b t + c t^2` the squared distance from the line of centres), each at its smallest `v` or `y` over the layer.
-The second is the twist, with `dphi` the turn of the corner about the arc's centre over the layer: a cell's diagonal
-spans that turn and the arc's chord step together, so its sag is `rho (step + dphi)^2 / 8`, and the twist charges
-`rho dphi^2 / 8 + 2 sqrt(0.0002 rho dphi^2 / 8)`, the part of it the sagitta does not already hold. A
-corner that reaches the arc's foot, or an arc-arc corner that changes sides of the line of centres in a layer, is
-`ErrUnsupported`. The cutter's bound is 0.0002 mm plus that departure. On a concave arc wall (material outside
-the circle) the faceted result reads about 0.07 mm3 more volume per arc run than its exact value on a cutter of hub
-size (arc radius near 13 mm, 22 mm long), so a test of such a run reads a section or allows that excess.
-A concave end's clip is a second mesh Boolean; without a relief its gap shift leaves about 5e-6 mm3 on a straight
-edge, and with one the relief keeps what it states above.
-`internal/brepmodify/partial_loop_chamfer.go` owns it. It runs after every exact route has declined, and only for a
-symmetric chamfer.
+(`y^2 = a + b t + c t^2` the squared distance from the line of centres), each at its smallest `v` or `y` over the
+layer. The second is the twist, with `dphi` the turn of the corner about the arc's centre over the layer: a cell's
+diagonal spans that turn and the arc's chord step together, so its sag is `rho (step + dphi)^2 / 8`, and the twist
+charges `rho dphi^2 / 8 + 2 sqrt(0.0002 rho dphi^2 / 8)`, the part of it the sagitta does not already hold. A corner
+that reaches the arc's foot, or an arc-arc corner that changes sides of the line of centres in a layer, is
+`ErrUnsupported`. The cutter's bound is 0.0002 mm plus that departure. On a concave arc wall (material outside the
+circle) the faceted result reads about 0.07 mm3 more volume per arc run than its exact value on a cutter of hub size
+(arc radius near 13 mm, 22 mm long), so a test of such a run reads a section or allows that excess. A concave end's
+clip is a second mesh Boolean; without a relief its gap shift leaves about 5e-6 mm3 on a straight edge, and with one
+the relief keeps what it states above. `internal/brepmodify/partial_loop_chamfer.go` owns it. It runs after every
+exact route has declined, and only for a symmetric chamfer.
 
 ### 8.4 Measurements + tessellation
 

@@ -20,7 +20,8 @@ import (
 // turn, where the result's bound divides the wall's chord bound by the sine of the turn. On the outline of radius 14.5
 // turned 15 degrees, the layered cutter's fewest layers at a setback of 0.19 mm are seven, which put a ring on the
 // wall's level; the cutter takes the next count that does not, so the bottom cap's cells beside the corner cross the
-// wall instead of touching it.
+// wall instead of touching it. It is the smallest outline found that takes seven layers and, without the rule, a gap
+// shift.
 func TestChamferConcaveArcEndHoldsItsBound(t *testing.T) {
 	t.Parallel()
 	for _, c := range []struct {
