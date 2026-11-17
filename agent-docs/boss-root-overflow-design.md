@@ -3,8 +3,9 @@
 A `Boss` root fillet whose blend runs off its face (boss-design §6). The blend ends where it meets another face of the
 body, as Fusion 360 ends it. Status: approved for building in the increments of §7. P2 is built: the Ø14 union is an
 A1 brep with `B` on one carrier (general-boolean §3 "A1 as a brep", holed operands). P4 is built: C2 root arcs ending
-on window or slot corner rounds. P3 is built as tangent-notch T3. P5 is built for closed rims (§5.4). P6 and P7 are
-not.
+on window or slot corner rounds. P3 is built as tangent-notch T3. P5 is built for closed rims (§5.4). P6 is built:
+C3 tangent root ends (§5.5), so the Ø14 gallery boss builds. C3 is accepted on the expected outcome of §2.4 until gate
+G0 runs. P7 is not built.
 
 Navigation (not authority): target result → §2; the gate before any build → §2.4; which configurations build → §4;
 why each admission is sound → §5; what must exist first → §6; size and options → §7, §8.
@@ -151,7 +152,7 @@ A `Boss` with `RootFillet` builds by rule CO when every row holds. The first fai
 | A4 | Every cliff face whose edge with `A` meets `D` is a retained `Plane` or `Cylinder` parallel to the boss axis, convex to `A` along that edge. |
 | A5 | Each arc end is C2 or C3, decided as §5.2 states. A C2 end crosses `B` at an angle whose charged sine exceeds `minSine` (retained-edge-blend §4.5). |
 | A6 | Each C1 arc is decided coincident as §5.2 states. Away from C1 arcs, every boundary point of `A` inside `D` lies on a cliff edge of A4 that runs from a C2 or C3 end out of `D`. |
-| A7 | No face of `S` other than `A`, `B` and the cliff faces meets `P`. No cliff face holds another edge inside `P`'s reach (retained-edge-blend SR5's end-face rule). |
+| A7 | No face of `S` other than `A`, `B`, the cliff faces and a C3 end's side face `K` (proved G1 to `B` and `G`, meeting `P` only along the generator through the arc end, §5.5.1) meets `P`. No cliff face holds another edge inside `P`'s reach (retained-edge-blend SR5's end-face rule). |
 | A8 | The cap on each cliff face is a simple region of that face, and the held audit of the rewritten mesh passes (retained-edge-blend SR7). |
 
 ### 4.2 Refused
@@ -190,7 +191,7 @@ CLAUDE.md's rule governs every admission: a decad-side residual may only falsify
 |---|---|---|
 | C1, or C3's coincidence of the inner arc with `B`, between tags equal in rationals with zero departure | the exact equality itself | — |
 | C1 between near-equal carriers | `sketch`'s coincident-carrier reading from the records (`carriersIdentical`, prism-boolean §4.1), through general-boolean A3's shared span, charged by the span's width | a radius residual below a tolerance |
-| C3's tangency at the arc end | the joint between the window loop's inner arc and its corner round, proved exactly tangent by `capband.JoinIsG1` or admitted near-tangent with its sliver charged by `capband.NearTangentCorner` (draft-design §9.1.1, loop-fillet §5.5), plus the shared span of §6.1 that makes the inner arc part of `B`; the arc end is the span's end vertex; a joint neither admits refuses (X4) | an angle residual below a tolerance; a new `sketch` query (no API reports tangent contact apart from a crossing; `prismcells.RegionContact` returns a bool) |
+| C3's tangency at the arc end | the joint between the window loop's inner arc and its corner round, proved exactly tangent by `capband.JoinIsG1` or admitted near-tangent by `capband.NearTangentCorner` (draft-design §9.1.1, loop-fillet §5.5) with its turn `θ_up` charged into the end (§5.5.3), plus `JoinIsG1` from the full-height wall `K` to `B` at the same recorded point (§5.5.2); a joint neither admits refuses (X4) | an angle residual below a tolerance; a new `sketch` query (no API reports tangent contact apart from a crossing; `prismcells.RegionContact` returns a bool) |
 | C2's transversal crossing | the charged sine of the crossing angle exceeds `minSine` | a sine reading without its charge |
 
 A mesh Boolean result keeps retained tags, not the records `sketch` reads. So near-equal C1 and C3 need the records the
@@ -211,10 +212,8 @@ the exact-equality row decides, and a near-equal pair refuses (X4).
   refuses ("an arc end lies between two meetings of its tags").
 - C3: only the row on `B` has a double root. In the fixture `cos φ = (77 + r²)/(18r)` at plan radius `r`, so the
   azimuth `φ` of the end grows linearly in `ρ − z` near the end point on `B` at height `ρ`. The torus section is a
-  regular curve, and the row ends lie along it. The construction picks each row's root by continuity from the rows
-  above `B`, or parameterizes the end curve by `z`. The cap on `G` is the curved triangle bounded by `A`'s plane, `G`'s
-  generator where it touches `B`, and the torus section. The torus section meets that generator at height `ρ` only
-  where `G` touches `B` exactly. Under a rounding-level miss, §5.2's tangency proof decides, and `capband.NearTangentCorner`'s sliver charge enters the cap's bounds.
+  regular curve, and the row ends lie along it. The cap on `G` is the curved triangle bounded by `A`'s plane, `G`'s
+  generator where it touches `B`, and the torus section. §5.5 states the construction.
 
 ### 5.4 Charges
 
@@ -226,13 +225,234 @@ stays `Faceted`. Every other route refuses a charged wall, an open arc (R4) incl
 charged wall. In the fixture two of four inner arcs carry such a charge, so at Ø13 and Ø14 the fillet face is
 `Faceted` unless the torus tag gains a field for a positional bound.
 
-At Ø14 the root arcs reach the retained edge blend and stop at the tangent junction where each arc meets a window
-corner round, read on the charged tags for refusal only. Below that gate R4 cannot read them yet: each arc end is a
-four-face corner (`A`, the boss wall above the arm, the full wall piece that continues the window wall, the corner
-round), which `cornerOf` refuses. The same corner stops every root arc of a holed A1 union whose wall continues a
-window wall, charged or not, so P6 reads that corner and charges an arc's span and ends. A charged wall's fillet that
-builds today is a closed rim of the same union, such as a round hole's rim
+At Ø14 each root arc ends at a four-face corner (`A`, the boss wall above the arm, the full wall piece that continues
+the window wall, the corner round). §5.5 reads that corner from the record's tangency proof and charges the arc's span
+and ends (§5.5.6). A closed rim of the same union, such as a round hole's rim, takes R2's charge
 (`apitest/stacked_brep_view_charged_wall_test.go`).
+
+A blend result publishes no charged wall (retained-edge-blend §6.1), so every swept circular wall of the Ø14 union,
+the far ones included, leaves the fillet untagged with `FacetedCurve` edges. A later `Chamfer` or `Fillet` that
+selects such an edge refuses; the gallery's balance wheel edge chamfers on the rim are such a selection.
+
+### 5.5 The C3 construction (P6)
+
+One construction serves the convex boss wall and the concave notch wall (tangent-notch-design T4). It is R4's cylinder
+end (retained-edge-blend §4.4, "An end on a cylinder") with three changes: the corner is four faces, the crossing at
+the arc end is a proven tangency instead of a charged sine, and the wall ends at its own seam instead of running on.
+Only a C3 end takes it. A C2 end keeps R4's reading, and a C2 end on a charged wall keeps refusing. An arc with one
+C3 end and one C2 end refuses ("an arc with one tangent and one crossing cylinder end is not built"): a C2 end needs
+the band, a C3 end the whole-face cut.
+
+#### 5.5.1 The four-face corner
+
+| Face | Boss (Ø14) | Notch (fork) |
+|---|---|---|
+| `A` | arm top, a record planar face | floor, a record planar face |
+| `B` | boss wall above the arm, `wall(k)` over `[A, top]` | notch wall above the floor |
+| `G` | window corner round, below `A`, `Reversed` | gap round, below the floor, `Reversed` |
+| `K` | the window's inner wall over the full height, on `B`'s carrier, tangent to `B` and `G` | the fork's corner round over the full height, tangent to `B` and `G` |
+
+- The arc end `V` is a vertex of exactly these four faces. `B` and `K` meet along the generator through `V` above
+  `A`; `G` and `K` meet along it below `A`. `G` meets `A` along a convex edge leaving `V`.
+- `readArc` reads such an end only when the caller hands it a proof for the corner (§5.5.2). Without one, the
+  four-face corner keeps `cornerOf`'s refusal. So a mesh result, which has no records, never builds C3 (§5.2, last
+  paragraph).
+- `G` is the face of the four that shares an edge with `A` at `V`; `K` the one that shares no edge with `A` there.
+  Reject-only cross-checks: `G` and `K` share a held edge from `V` below `A`, and `B` and `K` one above it.
+- `K` must be one record wall across `A`'s level (`K.Z0 < A < K.Z1`). §6.1's per-slab option (a face per slab on one
+  carrier) would put five faces at `V` and refuses there; P6 needs P2's one-face option, which P2 built.
+- `K` is not rewritten. Its facets that hold the seam edge crossing height `t_B` are split at the wall's cut vertex
+  there (the existing `work.seam` split), so the cap meets `K` along the generator from `A` to `t_B` without a
+  T-junction. `K` meets `P` only along that generator; A7 admits it (§4.1), and `checkStripClear`'s exact test of
+  `K`'s facets against the strip and the cap still refuses any other contact.
+- The notch's root arc is the whole semicircle, span exactly `π`. R4's height-cut path admits it; only band mode
+  needs a span below `π − minSine`. A3 and X11 are `Boss`'s own gates (`bossRootEdges`).
+
+#### 5.5.2 The tangency proof
+
+`brepmodify` proves the corner from the stacked or slab-cut record before it runs the view blend
+(`stackedViewBlend`), and hands the proofs to the blend as a `retainedblend.TangentEnds`. A proof is keyed by the
+origin-role triple of `(B, G, K)` under the record's producer (`wall(k)`), never by position, so it still matches the
+faces each arc's rewrite rebuilds.
+
+| Check | Proof | Refuses |
+|---|---|---|
+| `K` and `G` meet at one recorded point `V_r` | the walls' recorded segments share an endpoint, equal floats; one walk ends there and the other starts there | a pair that shares no endpoint, or both |
+| `K → G` (or `G → K`) is G1 | `capband.JoinIsG1` on the two record walls; else `capband.NearTangentCorner(prev, cur, 0, 0, 0)`, which admits `sin²θ ≤ 2⁻⁶⁴` | a joint neither admits: no proof, so the corner keeps the refusal it meets without one (the junction or charged-arc gate, or `cornerOf`) |
+| `K → B` (or `B → K`) is G1 at the same `V_r` | `capband.JoinIsG1` only: `B` and `K` are one carrier (boss) or a recorded tangent joint (notch) | any other joint |
+| the levels | `G.Z1 = B.Z0` and `K.Z0 < G.Z1 < K.Z1`, exact floats in one record frame (all three walls' frames equal); `A` is the face the four-face topology and the placed `V_r`'s check against `T` tie to that level | anything else |
+
+- The floor loop's own joint `B → G` is a cusp (the tangents are opposite), and both capband tests refuse it. The
+  proof never reads it (tangent-notch-design §5).
+- Two G1 joints at `V_r` with the walk sense agreeing put `B`, `G` and `K` on one tangent line at `V_r` with one
+  outward normal. So `G` is externally tangent to `B` when exactly one of `B`, `G` is `Reversed` (`d' = R + r_G`), and
+  internally tangent otherwise (`d' = |R − r_G|`).
+- The proof carries `V` (`V_r` placed by the record's `Xform` and frame), used only as a reject-only cross-check, and
+  `θ_up`, an upper bound on the `K → G` turn: zero for `JoinIsG1`, else `asin` of `√(sin²θ)` rounded up.
+  `capband.JoinTurnSinSq` returns that `sin²θ` from the same rationals `NearTangentCorner` reads.
+
+#### 5.5.3 The ideal end
+
+The construction uses the ideal configuration: `B`'s tag (axis `O`, radius `R`) and `G*`, the circle of `G`'s tag
+radius `r_G` whose centre is `c* = O + d'·û`, `û` the unit direction from `O` to `G`'s tag centre `c` in the rim's
+plane. `G*` touches `B` at the tangent point `T = O + R·û`. The end's `cylEnd` stores `c := c*` and `d := d'`, so every
+R4 reader of `cylEnd.c` and `rG` (`chainWalker`, `alongG`, `outwardG`, `gArc`, `capFacets`, `cylEndChecks`) reads `G*`.
+
+- `e_c = δ_B + δ_G + (r_G + δ_G)·θ_up` is the charge part, `δ` each tag's `AxialDelta` (zero when it states none).
+  `e_r = |d − d'|↑ + e_d` is the rounding part, `e_d = 16·ulp·S_far`. `e = e_c + e_r`.
+- `e` bounds how far `G*` and `B`'s tag lie from the true walls: each tag lies within its `δ` of its wall, `c*` lies
+  `|d − d'|` from `c`, and the true `G` turns at most `θ_up` from the circle tangent to `K` at `V_r`, which moves its
+  centre by at most `(r_G + δ_G)·θ_up`.
+- The tag check refuses, reject-only: `|d − d'| > e_c + e_d` ("an arc end's tags disagree with its proven tangency").
+- The held vertex at `V` must lie within its bound, the slack and `e·(1 + 2R/d') + e_d` of `T`, else SR6. The placed
+  `V_r` must lie within the same of `T`, else SR6.
+- Every R4 test that reads `G`'s circle with the slack (the chain walk, `readCylChain`'s uncertainty test, the reach
+  test, `cylSetback`'s clearance and its `4·margin` vertex test) adds
+  `e` to its allowance. On the C3 path `e_V`'s readers are the band (not used) and the held-vertex check (replaced
+  above), so `e_V` is not computed.
+- `lineEnd.exact` of a C3 end is `T`. Every reader of it (`onGen`, `alongG`, `theta0`/`span`, `arcKey`/`findArc`,
+  `gArc`, `capArea`, the plane's zone, the reach test) reads `T`; the ones that compare a held point with it by the
+  slack (`onGen`) add `e·(1 + 2R/d') + e_d`. `findArc` finds a later arc by its computed end points, which the
+  rewrite does not move, with its own allowance; a miss there refuses and builds nothing wrong.
+- "Within `e`" means a circle's centre offset plus radius difference is at most `e`, `wall_charge.go`'s convention.
+- An internal end requires `r_G < R`, so `T = O + R·û` is the touching point; otherwise it refuses.
+- Row ends: the row of radius `ρ` at `s < 1` meets `G*` at `θ_c ± α(ρ)`, `cos α = (ρ² + d'² − r_G²)/(2ρd')`, on R4's side
+  rule (end 0 at `+α`, end 1 at `−α`).
+- The wall's row is identified by `s = 1`, never by `ρ`: it takes `ρ = R`, `α = 0` and `ψ = 0` (external) or `ψ = π`
+  (internal) without calling `acos`, in `rowAngles`, `endSection.at`, `curv`, `shift`, `qHi`, `capArea` and `arcAreas`.
+  The profile's float `ρ(1)` is not used there.
+- `G` touches `B` at one point of the rim's circle, so there is no second root; the `Π` band and its on-set test
+  against the second root's generator do not apply.
+- Every admitted true row meets the true `G`: the record puts `V_r` on both walls, so `d_t − r_t ≤ R_t ≤ d_t + r_t`, and
+  the rows lie on the side of `B` where `G` reaches. A near tangent (`θ > 0`) makes the true walls cross at `V_r`; the
+  side rule then picks the true root at `V_r`'s side, which §5.5.6's `σ` covers.
+
+#### 5.5.4 The end curve's rows
+
+`cylEndSection` keeps R4's certification for every piece of the profile that ends before the wall's row, with these
+changes for a tangent end.
+
+- `H(h) = 2·asin(min(1, √(h/2)))`, rounded up, is the modulus of continuity of `acos`: `|acos x̃ − acos x| ≤ H(|x̃ − x|)`
+  for `x, x̃ ∈ [−1, 1]`, with equality at `x = 1`.
+- `q = sin∠OPC`: under R4's fold check `ρ_lo² + d'² > r_G²`, which stays, `cos∠OPC` grows with `ρ`, so `q` has a
+  single peak over the profile and its least value over a piece lies at one of the piece's ends. A piece `[s0, s1]` with `s1 < 1` reads its angle allowance and margin from
+  `q_lo = min(q(s0), q(s1))` rounded down, not once from the profile's ends, where `q(1) = 0`.
+- A piece with `s1 = 1` takes the cone `[0, π/2]` and no angle allowance. `u = −κ·r_G·ψ(ρ)` and `v = side·z` are both
+  monotone in `s` (`ψ` is monotone in `ρ` on `[|d' − r_G|, d' + r_G]`, `ρ` and `z` are monotone in `s`, and `−κ`
+  orients `u`), so the curve between the piece's ends lies in their box, the parallelogram `certify` reads for
+  `lo = 0`, `hi = π/2`. The piece is split until the box corners lie within `τ` less the margin.
+- The margin of a tangent end's piece, with R4's `S = S_far`, `r_lo`, `z_hi` and `ε` (G's tilt):
+  `m = 64·ulp·S·(S/r_lo) + 2ε·(z_hi + r_G) + min(X/q_lo, r_G·H(err_ψ) + ρ_hi·H(err_α))`, with
+  `X = 64·ulp·S·(S/r_lo) + 2ε·(z_hi + r_G)` and `q_lo` as above. The first branch reads `(1 + 2⁻¹⁰)·X/q_lo` and is
+  taken only when `X ≤ 2⁻¹²·q_lo²·min(ρ_lo, r_G)`, as `σ₁` is (§5.5.6), which keeps the crossing's curvature remainder
+  inside the factor; otherwise, and on the last piece, the piece takes the second branch.
+  With `D = 2ε·(z_hi + r_G)` (G's tilt as a move of its section) and `e_d` both read as moves of `d'` and `r_G`:
+  `err_ψ = 16·ulp·(d'² + r_G² + ρ_hi²)/(2d'·r_G) + (1 + 2⁻¹⁰)·(D + e_d)·2·(1/r_G + 1/d')` bounds the error of
+  `cos ψ`'s argument (`|∂/∂d'| + |∂/∂r_G| ≤ 2(1/r_G + 1/d')`), and
+  `err_α = 16·ulp·(ρ_hi² + d'² + r_G²)/(2ρ_lo·d') + (1 + 2⁻¹⁰)·(D + e_d)·2r_G/(ρ_lo·d')` that of `cos α`'s. The `α`
+  term of `m` adds `ρ_hi·asin↑(D/(d' − D))` for the turn of `θ_c` under a sideways shift of `G`'s section, inside the
+  second branch. The end
+  refuses unless `D + e_d ≤ 2⁻²⁰·min(d', r_G)`, which keeps the second-order remainder inside the `2⁻¹⁰` factor.
+- `curv`'s widening `2·e.angle` on the last piece is `2·H(err_ψ)`.
+- `sectionGrid`'s up-front test (`margin < τ`) and `certify`'s gap test (`margin + curv < τ`) read the piece's own
+  margin; the up-front test reads the first-branch margin of the profile's first piece.
+- The strict range checks `ρ > |d' − r_G|` and `ρ < d' + r_G` apply to `s < 1` only.
+- A tangent end has no cusp: `u` grows linearly in `ρ_f − z` (`ρ_f` the fillet radius) near the apex (§5.3), so the
+  cap is a triangle with a nonzero angle at `(T, t_B)`. `cuspParam` and `widenRows` do not run. `capSimple2` runs on the cap, as it does where
+  the wall extends; a cap it refuses refuses.
+
+#### 5.5.5 The wall, the plane and the cap
+
+- `rewriteArc`'s refusal "a root arc ends on a cylinder its wall does not run on past" is lifted for a proven C3 end
+  only. A proven C3 end does not run `readCylEnd`; its reading keeps `readCylEnd`'s gates that apply to a tangent end
+  (a `Cylinder` with `RetainedTag`, `TagDeparture` 0, `Reversed`, tilt within `parallelTol`, `d > 64·slack`) with the
+  displacement clause replaced by `wallRecord` (a usable `faceDelta` and `recordTag`), as `readRimSide` requires of
+  `B`. §5.5.3 replaces the crossing sine, `rootBound`, `cylRoots` and the `e_V` vertex check. A proven corner whose
+  `G` is not a cylinder refuses.
+- `B` lies on one side of `A` and its chain at each end climbs the seam with `K` (`kindB = trims`). It takes R4's
+  whole-face height cut (`clipArcWall`), not the band. The cut vertex on the seam edge that crosses `t_B` is entered in
+  `work.seam` for that held edge, so `K`'s facet across it is split.
+- `A` is R4's cylinder end on `G*`: the chain along `A ∩ G` from `V` (`chainWalker`), `P_A` on `G*` (`cylSetback`),
+  the region lost along `G*`'s arc (`gArc`).
+- `G`'s checks (`cylEndChecks`) read `G`'s loop at `V` between `A`'s chain and the `G`–`K` seam below `A`, which
+  takes the place of `B`'s chain; the convex turn and the reach test are otherwise unchanged.
+- The cap (`capFacets`) is R4's with the wall's run replaced by the `B`–`K` seam vertices strictly between `V` and the
+  cut vertex, from the cut down to `V`. These are held vertices shared with `K`, so the cap runs those edges against
+  `K`'s facets. The cut vertex is the wall's row end.
+
+#### 5.5.6 Bounds and the arc charge
+
+- The torus is published as its tag only when `e_c = 0` (no charge on `B` or `G` and an exact `K → G` joint; the
+  notch, whose A9 record states no section displacement), together with §2.5's condition on `A`; otherwise it stays
+  `Faceted`, as R2's charged rim does.
+- Every strip and cut vertex adds `cylCharge(δ_B)` through the rim's slack (§5.4, R2's rule).
+- Each row-end vertex and each cap vertex on `G*` adds `σ = min(σ₁, σ₂) + e`:
+  - `σ₂ = ρ_max·(H(a_e) + asin↑(2e/(d' − 2e)))`. `H(a_e)` bounds the move of `α`; the `asin` term the turn of `θ_c`
+    when `O` and `c*` each move by `e`.
+  - `σ₁ = 2e·(1 + 2⁻¹⁰)/q_row`, the first-order move of a crossing at sine `q_row` when both circles move by at most
+    `e`, used only when `e ≤ 2⁻¹²·q_row²·min(ρ_min, r_G)`, which keeps the curvature remainder inside the `2⁻¹⁰`
+    factor. `q_row` is a rounded-down lower bound of `cylCurve.q` at the row's `ρ`; the wall's row has `q_row = 0` and
+    takes `σ₂`.
+- `a_e` bounds how far `e` moves `arg = (ρ² + d'² − r_G²)/(2ρd')`: `ρ` moves by `e`, `d'` by `2e` and `r_G` by `e`.
+  With `S² = ρ_max² + d'² + r_G²`, `a_e = (1 + 2⁻¹⁰)·e·(S²/(2ρ_min²·d') + S²/(ρ_min·d'²) + r_G/(ρ_min·d'))`, the
+  first-order bound; the end refuses unless `e ≤ 2⁻²⁰·min(ρ_min, d', r_G)`, which keeps the second-order remainder
+  inside the `2⁻¹⁰` factor.
+- `arcAreaCharge` replaces `rimAreaCharge` for an arc (`readRimSide` sets `wallDelta` on a charged arc, and
+  `measureChange` adds the arc's charge instead). It adds to the area slack, per rewritten piece (the region `A`
+  loses, `B`'s band, the torus strip, each cap): `2P·σ_max + (π + Φ)·σ_max² + A·e/r_min`. `P` is an upper bound on
+  the piece's perimeter from its exact curves (an arc's `ρ·Δθ`; a monotone end curve's `|Δu| + |Δv|`; a generator's
+  height), `Φ` the total turning of its boundary in its own unrolled coordinates (bounded by `2π` plus each arc's
+  `Δθ`), `A` its exact area and `r_min` its smallest radius of curvature (`R` for `B`, `r_G` for a cap, the smallest
+  row radius for the torus, no term for `A`). The `2P·σ` and `Φ` terms hold for a piece that is not convex, as the
+  region `A` loses and the cap are not.
+- The volume bound multiplies the largest strip, row-end and cap vertex bound by the blend's exact area plus that
+  term, as R2's does.
+- `refuseChargedArc` stays before `readArc` and lets an arc pass only when both its ends are four-face corners whose
+  `(B, G, K)` triple `TangentEnds` proves. A plane-ended arc or a C2 end on a charged wall keeps refusing ("an arc on a
+  wall whose tag states a displacement is not built"), and `Fillet` without proofs refuses every charged arc.
+
+#### 5.5.7 The tangent junction
+
+A selected arc meets the unselected edge `A ∩ G` at `V` tangentially. That continuation is convex while the arc is
+concave, so it is no tangent chain. `planChains` and `refuseChargedJunctions` skip a junction at `V` when the faces at
+`V` are `{A, B, G, K}` and `TangentEnds` proves `(B, G, K)`; the arc end then takes §5.5.3. Every other junction keeps
+SM2's refusal, so a mesh result's tangent junctions refuse as before. The brep receiver's SB7 note is refusal text
+only and is unchanged.
+
+#### 5.5.8 The root arcs of a brep union
+
+`bossRootEdges` takes an arc whose `Edge.Wedge` reads reflex, as well as one `IsConvex` reports concave. `IsConvex` is
+the walked convention, and by its own contract a Union's boss root walks the boss wall's sense and reads convex;
+`Wedge` reads the material angle, which is what a root is. A mesh result's arcs keep the `IsConvex` reading, where
+`Wedge` can be undecided. `edgesQuery` is unchanged: it selects by each edge's own `IsConvex`.
+
+#### 5.5.9 Tests
+
+- The spoked disc at Ø14 with `RootFillet` 0.5, and `leverForkSketch`'s fork notch with its floor arc filleted, each
+  build. Each volume lies within the result's own bound of `vol(S) + vol(reg(W ∩ P))`, integrated in the test from
+  the fixture's own radii (§2.2), and points just inside and outside a cap read on the right side.
+- Internal tests: the record proof (exact, near-tangent, kinked and cusped joints); the tangent end's rows measured
+  against 200-bit roots, each within its margin; the apex box; refusals for a four-face corner with no proof and for a
+  joint neither capband test admits.
+- Existing tests that change: `TestStackedBrepViewFilletReachesRetainedBlend` (both subtests build; the fork at radius
+  0.5, while at 0.6 its setback point falls within `4·margin` of a held vertex and refuses by R4's name) and
+  `TestBossRootFilletSpokedHub`'s "14 is refused" (it builds). Every other test is unchanged.
+
+#### 5.5.10 Files
+
+| File | Holds |
+|---|---|
+| `internal/retainedblend/arc_end_tangent.go` | `TangentEnds`, `TangentProof`, the four-face corner reading, the ideal end, `σ` |
+| `internal/retainedblend/arc_end_tangent_section.go` | the tangent end curve's per-piece margins and the apex box |
+| `internal/retainedblend/arc_rewrite_tangent.go` | the seam split, `G`'s loop at `V` and the cap's wall run along `K` |
+| `internal/retainedblend/arc_charge.go` | `arcAreaCharge` and the charged-arc gate for proven ends |
+| `internal/brepmodify/stacked_view_tangent.go` | the record proof of §5.5.2 |
+| `internal/capband/join_turn.go` | `JoinTurnSinSq` |
+| `boss_fillet.go` | §5.5.8 |
+
+`retainedblend.FilletTangent` takes the proofs; `Fillet` is `FilletTangent` with none. `route.go`, `arc.go`,
+`arc_rewrite.go`, `arc_end_cyl.go`, `arc_section.go`, `chain.go`, `wall_charge.go` and `brepmodify/fillet.go` change
+only to call into the new files.
 
 ## 6. Prerequisites
 
@@ -305,11 +525,11 @@ increment leaves `main` green and every result outside its gate unchanged.
 | P2 | §6.4's refusals 1 to 5 under §6.3's narrow gate | the Ø14 union with `B` on one carrier | 4 to 7 weeks |
 | P3 | built as tangent-notch-design T3 (brep-modify §2.3): the faceted-view fillet of a stacked or slab-cut BRep after the receiver routes refuse. A holed union with a carrier charge keeps its curved faces untagged until P5 | `Boss` root fillets on P2's results, after P5 | built |
 | P4 (built) | C2: R4 with cylinder end faces, `B` running on past a cylinder end face below `A` (the footing), several arcs on one wall, caps on cylinders | Ø15 and transversal root ends on window or slot corner rounds | 2 to 3 weeks |
-| P5 (built) | §5.4's cylinder charge on `B` in the retained edge blend, for the closed rim; the Ø14 root arcs reach the blend and stop at the tangent junction | near-equal carriers at Ø14 | about 1 week |
-| P6 | C3 tangent ends with §5.2's tangency proof, the four-face arc end of §5.4, and the charge on an arc's span and ends | Ø14, the gallery case | 1.5 to 2.5 weeks |
+| P5 (built) | §5.4's cylinder charge on `B` in the retained edge blend, for the closed rim | near-equal carriers at Ø14 | about 1 week |
+| P6 (built) | C3 tangent ends with §5.2's tangency proof, the four-face arc end of §5.5, and the charge on an arc's span and ends | Ø14, the gallery case; the lever's dart root (tangent-notch T4) | 1.5 to 2.5 weeks |
 | P7 | C1 with §5.2's coincidence proof | exact-equal C1 only; the fixture's Ø13 (near-equal, on the mesh path under the narrow gate) refuses until a history read exists | 1 to 2 weeks |
 
-The Ø14 gallery case needs P2 to P6: about 9 to 14.5 weeks. Gate G0 runs whenever Fusion is available. The estimates
+The Ø14 gallery case needed P2 to P6. Gate G0 runs whenever Fusion is available. The estimates
 scale from the existing R4 code (`internal/retainedblend`: `arc*.go`, `cyl_band.go`, `chain_open.go`, about 3,000 lines
 with tests) and from A1's brep build (`internal/stackedunion`, about 3,000 lines). P4 and P2 touch disjoint packages and
 may proceed in parallel.

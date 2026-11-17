@@ -33,8 +33,10 @@ type chainLink struct {
 // (agent-docs/retained-modify-reach-design.md §5). handled is false when no
 // selected edge ends at a proven tangent junction, and the caller keeps its
 // per-edge routes. Each chain lists its edges in cyclic order and carries the
-// junction between each edge and the next.
-func planChains(b *topo.Body, edges []*topo.Edge) (chains []chainCycle, handled bool, err error) {
+// junction between each edge and the next. A junction at the end of an arc that
+// tangent proves a C3 corner (boss-root-overflow-design §5.5.7) is no chain
+// link: the arc end takes the corner's own reading.
+func planChains(b *topo.Body, edges []*topo.Edge, tangent TangentEnds) (chains []chainCycle, handled bool, err error) {
 	all := topobuild.Edges(b)
 	selected := map[*topo.Edge]struct{}{}
 	for _, e := range edges {
@@ -46,6 +48,9 @@ func planChains(b *topo.Body, edges []*topo.Edge) (chains []chainCycle, handled 
 			continue
 		}
 		for _, v := range []*topo.Vertex{e.Start, e.End} {
+			if provenEnd(tangent, all, e, v) {
+				continue
+			}
 			var found []chainLink
 			for _, c := range all {
 				if c == e || c.Start == c.End || (c.Start != v && c.End != v) || len(c.Faces) != 2 {
@@ -69,7 +74,7 @@ func planChains(b *topo.Body, edges []*topo.Edge) (chains []chainCycle, handled 
 			}
 		}
 	}
-	if err := refuseChargedJunctions(all, edges, selected); err != nil {
+	if err := refuseChargedJunctionsSkipping(all, edges, selected, tangent); err != nil {
 		return nil, true, err
 	}
 	if len(links) == 0 {

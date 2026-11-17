@@ -75,7 +75,16 @@ func rimAreaCharge(r rim, spec blendSpec) float64 {
 // refuseChargedArc refuses an open arc a face of which is a curved tag that
 // states a displacement: the displacement moves the arc's ends and span, which
 // no arc route charges yet (agent-docs/boss-root-overflow-design.md §5.4, P6).
-func refuseChargedArc(edge *topo.Edge) error {
+func refuseChargedArc(edge *topo.Edge) error { return refuseChargedArcProven(edge, nil, nil) }
+
+// refuseChargedArcProven is refuseChargedArc, except that an arc passes when
+// both its ends are four-face corners whose (B, G, K) tangent proves
+// (agent-docs/boss-root-overflow-design.md §5.5.6). A nil tangent refuses as
+// before.
+func refuseChargedArcProven(edge *topo.Edge, all []*topo.Edge, tangent TangentEnds) error {
+	if provenArc(tangent, all, edge) {
+		return nil
+	}
 	if !slices.ContainsFunc(edge.Faces, func(f *topo.Face) bool { return f != nil && chargedCurve(f) }) {
 		return nil
 	}
@@ -133,11 +142,22 @@ func unpublishChargedWalls(ctx context.Context, env topo.Env, body *topo.Body) (
 // chain edge, at a junction that reading proves or cannot decide, is refused
 // with the reason, so the per-edge routes never blend half a chain.
 func refuseChargedJunctions(all, edges []*topo.Edge, selected map[*topo.Edge]struct{}) error {
+	return refuseChargedJunctionsSkipping(all, edges, selected, nil)
+}
+
+// refuseChargedJunctionsSkipping is refuseChargedJunctions that reads no
+// junction at an end of an edge that tangent proves a C3 corner
+// (agent-docs/boss-root-overflow-design.md §5.5.7).
+func refuseChargedJunctionsSkipping(all, edges []*topo.Edge, selected map[*topo.Edge]struct{},
+	tangent TangentEnds) error {
 	for _, e := range edges {
 		if !chainShape(e) || Chainable(e) || !chainableMode(e, true) {
 			continue
 		}
 		for _, v := range []*topo.Vertex{e.Start, e.End} {
+			if provenEnd(tangent, all, e, v) {
+				continue
+			}
 			for _, c := range all {
 				if c == e || c.Start == c.End || (c.Start != v && c.End != v) || len(c.Faces) != 2 {
 					continue

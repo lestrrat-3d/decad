@@ -3,8 +3,8 @@
 A blind `Cut` whose tool meets the target's outer wall only at recorded vertices, tangentially, and the `Fillet` of
 the concave arc it leaves on the notch floor. The gallery reports that Fusion 360 builds both (not checked here; §6
 gate G0). Status: approved (option O1). T1 is built (sketch `9216dee`, decad pin `68d12a1916`). T2 is built as
-general-boolean §3 A9 on A7's build: the cut builds as a BRep, and the fillet refuses until T3 and T4. §2 and §3 record
-why `main` at `06df1932f5` refused both.
+general-boolean §3 A9 on A7's build: the cut builds as a BRep. T3 and T4 are built: the dart-root fillet builds as
+boss-root-overflow §5.5's C3 construction. §2 and §3 record why `main` at `06df1932f5` refused both.
 
 Navigation (not authority): the failing case → §1; why the cut refuses → §2; why the fillet refuses → §3; the target
 result → §4; soundness → §5; increments and size → §6; options → §7.
@@ -114,7 +114,7 @@ wherever the ports cannot be ordered (equal curvature, or a line and an arc on o
   27.86° from each end of `B`, where the crescent becomes narrower than `ρ` (a transversal crossing of a cliff
   cylinder, C2's construction on a floor row rather than at an arc end). From there to `a` the ring is trimmed by `G`
   extended upward, and at `a` the cap on `G` narrows to the point where `G` touches `B`. That is configuration C3, the
-  class boss-root-overflow rates least likely to be built by Fusion and builds in P6, not yet built.
+  class boss-root-overflow rates least likely to be built by Fusion, built by its §5.5 (T4).
 - C3 here differs from the boss's: `B` does not continue below the floor. Below `a` lies `G`; beside it `K` runs the
   full height, tangent to both `B` and `G` along the generator through `a`. The cap on `G` therefore meets `K` along
   that generator from 5.80 to 6.40.
@@ -129,8 +129,9 @@ wherever the ports cannot be ordered (equal curvature, or a line and an arc on o
   and the two crescents). No wall is split: `B` meets the target loop only at its recorded vertices `a` and `a'`.
 - Faces at `a`: `K` over the full height; `G` from 3.30 to 5.80; `B` from 5.80 to 9.80; the floor with a cusp at `a`.
   `K`–`G` and `K`–`B` are G1 edges along the generator through `a`.
-- Fillet: rule CO (boss-root-overflow §2.2) with `A` the floor, `B` the notch wall, `D` the annulus
-  `r_n − ρ ≤ r ≤ r_n`, and `G` the cliff faces. The torus is inside `B`.
+- Fillet: rule CO (boss-root-overflow §2.2) with `A` the floor, `B` the notch wall, `D` the annular sector
+  `r_n − ρ ≤ r ≤ r_n` over the root arc's angular range (the semicircle; the full ring would also cover the dart top
+  beyond `B`'s ends, where no wall stands), and `G` the cliff faces. The torus is inside `B`.
 
 ## 5. Soundness
 
@@ -140,7 +141,7 @@ CLAUDE.md governs every admission: a decad-side residual may only falsify.
 |---|---|---|
 | the band F cells | `sketch`'s arrangement, after §2.3's fix, with `TExact` on every `Partial` edge and `ClassifyRegions` on recorded edge orientation | a point-in-region test in decad |
 | `B` meets the target loop only at `a` and `a'` | `sketch`'s intersection query for every pair of a tool entity and a target entity with a curved member (the query `prismcells.ProveGroupApart` reads, prism-boolean §4.2), every reported point being the shared recorded endpoint (equal floats in both records; probe: `(1.6676711944252536, 38.874650636459869)` for `K`, `G` and `B`). Whole edges alone prove nothing: the arrangement neither cuts nor flags a clean tangency | a distance below a tolerance |
-| `B`–`G` tangency at `a` for C3 | not the floor loop's joint `B → G`: that joint is a cusp (B arrives along `+y`, `G` leaves along `−y`), and `capband.JoinIsG1` and `NearTangentCorner` both refuse `dot ≤ 0`. Prove it through `K` at the one exact vertex: `JoinIsG1(K → G)` on the target outline and `JoinIsG1(K → B)` on the result's band F outline; or add a reject-only cusp predicate (cross product zero, dot product negative) to `capband` | an angle residual below a tolerance |
+| `B`–`G` tangency at `a` for C3 | not the floor loop's joint `B → G`: that joint is a cusp (B arrives along `+y`, `G` leaves along `−y`), and `capband.JoinIsG1` and `NearTangentCorner` both refuse `dot ≤ 0`. Prove it through `K` at the one exact vertex: `JoinIsG1(K → G)` on the target outline (or `NearTangentCorner`'s near-tangent admission with its turn charged, boss-root-overflow §5.5.2) and `JoinIsG1(K → B)` on the result's band F outline; or add a reject-only cusp predicate (cross product zero, dot product negative) to `capband` | an angle residual below a tolerance |
 | `K` meets the fillet prism `P` only along the generator through `a`, from 5.80 to 5.80 + ρ | boss-root-overflow A7 refuses any other face meeting `P`; T4 changes that gate for a side face G1 to both `B` and `G` at the arc end, proved by the row above | a clearance read from held facets |
 | C2 crossing of the floor row with `G` | its charged sine above `minSine` (retained-edge-blend §4.5) | a sine without its charge |
 
@@ -157,12 +158,10 @@ Each increment is one PR, merged after green CI and an independent review of its
 | T1 | `sketch`: exact port order at a shared endpoint of two curved fragments on one tangent ray, no chord overlap there, and `Degenerate` where the ports cannot be ordered (§2.3); `sketch` release and pin bump here | correct cells for tangent arcs sharing an endpoint; no silently wrong `Valid` cell | 1 to 2 weeks: the densification change moves the golden scenes that depend on it |
 | T2 (built) | general-boolean §3 A9: A7's BRep build, tried after the mesh path refuses, with A7's scope gates lifted (any number of target holes, oblique lines only where no scene cuts them, the tool across or touching the outer wall, one result cell with no pinch). A7's engine already splits walls at an interface on the outer ring, so no new geometry was needed | the lever body; side notches of line, circle and arc outlines | built |
 | T3 (built) | brep-modify §2.3: the retained edge blend on the faceted view of a stacked or slab-cut BRep (`SlabCut`), after the receiver routes refuse; a holed union's circular walls carry its charge on their tags (boss-root-overflow P5). Replaces boss-root-overflow P3 | fillets on T2's results reach the retained edge blend | built |
-| T4 | C3 tangent ends (boss-root-overflow P6) generalized to an inner wall and to §3's end topology (`G` below, `K` beside), the floor-row cliff crossing on an inner wall, and §5's A7 gate change | the dart-root fillet; the balance-wheel boss at Ø14 once its P2 and P5 exist | 2 to 3 weeks (P6 alone: 1.5 to 2.5) |
-| T5 | the lever's later steps on T2's result: the D bore `Cut` (an A7 BRep admits no later analytic Boolean, general-boolean §3 A7, so it takes the mesh path) and the edge-finish chamfers over the `K`–`B` G1 joints | the finished lever | unknown until probed on T2's result |
+| T4 (built) | C3 tangent ends (boss-root-overflow P6, §5.5) generalized to an inner wall and to §3's end topology (`G` below, `K` beside), the floor-row cliff crossing on an inner wall, and §5's A7 gate change | the dart-root fillet; the balance-wheel boss at Ø14 | built |
+| T5 | the lever's later steps on T2's result: the D bore `Cut` (an A7 BRep admits no later analytic Boolean, general-boolean §3 A7, so it takes the mesh path) and the edge-finish chamfers over the `K`–`B` G1 joints | the finished lever | no code: on T4's result the gallery lever's bore `Cut` and edge chamfers build (probe, 2026-11-17) |
 
-The lever with its fillet needs T1 to T5: about 7 to 12 weeks, T5 unsized. T4 has no real fixture until T2 and T3
-land, so the order is T1, T2, T3, T4. Before sizing T2 finally, re-probe the hole-free two-extrude `Union` (§1) on T1:
-it is A1's case, and "A1 as a brep" may absorb part of T2. The estimates scale from A7's build
+The lever with its fillet needed T1 to T4; T5 needed no code. The estimates scaled from A7's build
 (`internal/stackedunion` and `internal/stackedbrep`, about 4,500 lines with tests) and boss-root-overflow §7.
 
 Gate G0 of boss-root-overflow §2.4 applies to T4: record in Fusion the faces the lever fillet produces. A Fusion result

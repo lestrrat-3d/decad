@@ -82,32 +82,35 @@ func TestStackedBrepViewFillet(t *testing.T) {
 	}
 }
 
-// TestStackedBrepViewFilletReachesRetainedBlend checks which selections the
-// receiver routes refuse reach the retained edge blend on the faceted view. The
-// A9 tangent fork notch's floor arc reaches it and stops at the blend's
-// tangent-junction rule (retained-modify-reach SM2) until boss-root-overflow P6
-// builds its tangent ends. The holed A1 union of the spoked disc and its Ø14
-// boss (TestUnionHoledSharedSpanBoss) merged two near-equal circles into one
-// carrier, which may lie the span's width from the wall it denotes; the view
-// states that charge on the curved faces' tags, so its root arcs reach the
-// retained edge blend and stop at the tangent junction where each arc meets a
-// window corner round, which boss-root-overflow P6 builds as C3.
+// TestStackedBrepViewFilletReachesRetainedBlend checks that selections the receiver routes refuse reach the retained
+// edge blend on the faceted view, and that it builds both of the tangent-ended arcs it is given. The A9 tangent fork
+// notch's floor arc ends where the gap round touches the notch wall from inside. The holed A1 union of the spoked disc
+// and its Ø14 boss (TestUnionHoledSharedSpanBoss) merged two near-equal circles into one carrier, which may lie the
+// span's width from the wall it denotes; the view states that charge on the curved faces' tags, and each root arc ends
+// where a window corner round touches the boss wall. Both arcs are four-face corners whose tangency the record proves
+// (boss-root-overflow §5.5), so each fillet builds, and a fillet fills material: the volume grows. The fork's fillet
+// of radius 0.6 refuses, as a setback point falls on a vertex of its face's boundary.
 //
-// Shown red: without the view fallback the fork refuses with route L's SL1;
-// without the charged junction reading the boss arcs keep the receivers'
-// refusal.
+// Shown red: without the view fallback the fork refuses with route L's SL1; without the tangent proof the boss arcs
+// keep the receivers' refusal.
 func TestStackedBrepViewFilletReachesRetainedBlend(t *testing.T) {
 	t.Parallel()
 	mm := units.Millimeters
 	t.Run("boss14-charged-carrier", func(t *testing.T) {
 		t.Parallel()
 		_, disc := spokedHubDisc(t)
-		out, err := bossOnCap(t, disc, 14)
+		part, err := bossOnCap(t, disc, 14)
 		require.NoError(t, err)
-		_, err = decad.Fillet(t.Context(), out, decad.Edges(decad.Reflex(), decad.Circular()), mm(0.5))
-		require.ErrorIs(t, err, decad.ErrUnsupported)
-		require.ErrorContains(t, err, "whose continuation is not selected")
-		require.ErrorContains(t, err, "(read on tags that state a displacement)")
+		before, err := part.Volume()
+		require.NoError(t, err)
+		out, err := decad.Fillet(t.Context(), part, decad.Edges(decad.Reflex(), decad.Circular()), mm(0.5))
+		require.NoError(t, err)
+		require.True(t, out.IsSolid())
+		after, err := out.Volume()
+		require.NoError(t, err)
+		require.Greater(t, volumeMM(t, after), volumeMM(t, before))
+		_, err = out.Tessellate(t.Context(), mm(0.01), decad.WithVerification(decad.VerifyAll))
+		require.NoError(t, err)
 	})
 	t.Run("fork", func(t *testing.T) {
 		t.Parallel()
@@ -116,8 +119,20 @@ func TestStackedBrepViewFilletReachesRetainedBlend(t *testing.T) {
 		notch := forkBody(t, doc, 2.5, mm(5), 0, leverForkSketch(true, forkOptions{}))
 		part, err := decad.Cut(t.Context(), fork, notch)
 		require.NoError(t, err)
-		_, err = decad.Fillet(t.Context(), part, decad.Edges(decad.Reflex(), decad.Circular()).Exactly(1), mm(0.6))
+		before, err := part.Volume()
+		require.NoError(t, err)
+		edge := decad.Edges(decad.Reflex(), decad.Circular()).Exactly(1)
+		// A refusal leaves the body in place for the build below.
+		_, err = decad.Fillet(t.Context(), part, edge, mm(0.6))
 		require.ErrorIs(t, err, decad.ErrUnsupported)
-		require.ErrorContains(t, err, "whose continuation is not selected")
+		require.ErrorContains(t, err, "a setback point falls on a vertex of its face's boundary")
+		out, err := decad.Fillet(t.Context(), part, edge, mm(0.5))
+		require.NoError(t, err)
+		require.True(t, out.IsSolid())
+		after, err := out.Volume()
+		require.NoError(t, err)
+		require.Greater(t, volumeMM(t, after), volumeMM(t, before))
+		_, err = out.Tessellate(t.Context(), mm(0.05), decad.WithVerification(decad.VerifyAll))
+		require.NoError(t, err)
 	})
 }

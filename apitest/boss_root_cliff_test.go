@@ -1,7 +1,6 @@
 package apitest_test
 
 import (
-	"fmt"
 	"math"
 	"testing"
 
@@ -174,14 +173,29 @@ func TestBossRootFilletSpokedHub(t *testing.T) {
 		require.InDelta(t, 6.5, majors[0], 1e-9)
 		require.InDelta(t, 0.5, minors[0], 1e-9)
 	})
-	for _, diameter := range []float64{13, 14} {
-		t.Run(fmt.Sprintf("%g is refused", diameter), func(t *testing.T) {
-			t.Parallel()
-			disc := spokedDisc(t)
-			_, err := bossOnTop(t, disc, diameter, 0.5)
-			require.ErrorIs(t, err, decad.ErrUnsupported)
-		})
-	}
+	t.Run("13 is refused", func(t *testing.T) {
+		t.Parallel()
+		disc := spokedDisc(t)
+		_, err := bossOnTop(t, disc, 13, 0.5)
+		require.ErrorIs(t, err, decad.ErrUnsupported)
+	})
+	// At 14 each root arc ends where a window corner round touches the boss wall (boss-root-overflow C3, §5.5). The
+	// volume gains rule CO's bead, integrated in boss_root_tangent_test.go.
+	t.Run("14 builds with tangent ends", func(t *testing.T) {
+		t.Parallel()
+		plain := spokedDisc(t)
+		s, err := bossOnTop(t, plain, 14, 0)
+		require.NoError(t, err)
+		sv, sb := volumeAndBound(t, s)
+		disc := spokedDisc(t)
+		out, err := bossOnTop(t, disc, 14, 0.5)
+		require.NoError(t, err)
+		require.True(t, out.IsSolid())
+		_, bead, quadErr := spokedHubBead(0.5)
+		rv, rb := volumeAndBound(t, out)
+		t.Logf("V(S) %v (bound %v), bead %v, V(result) %v (bound %v)", sv, sb, bead, rv, rb)
+		require.InDelta(t, sv+bead, rv, rb+sb+quadErr)
+	})
 	t.Run("15 builds four capped tori", func(t *testing.T) {
 		t.Parallel()
 		plain := spokedDisc(t)

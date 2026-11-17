@@ -698,6 +698,15 @@ rim's radius and `θ_c` for `c`'s azimuth in the arc's signed angle `θ` (`arc_e
   chain's first vertex `b₁`, wound against the held facets that keep the path `V → n₁ → …` so the
   mesh closes (the cap must run it the other way, else SR5).
 
+**A tangent end (C3).** Where `G` touches the wall at the arc end instead of
+crossing it, the end is a corner of four faces: the plane, the wall, `G` below
+the plane and a full-height side face `K` tangent to both. The route reads it
+only with a proof from the records the faces came from (`TangentEnds`, which the
+stacked view's fillet passes), builds on the ideal circle `G*` tangent to the
+wall, cuts the wall by height to its seam with `K`, and runs the cap's top chain
+up that seam (boss-root-overflow-design §5.5). Without a proof the four-face
+corner refuses ("an edge end is not a corner of exactly three faces").
+
 The arc's end values are computed decad-side, not by a `sketch` scene (the ask
 sketch rule in `CLAUDE.md`). On a mesh result `V`, `V*`, the bottom points, the
 crossing sine and the rows' ends come from retained tags, not from records a
@@ -1480,7 +1489,7 @@ of that computation.
 
 | SR | Call | Existence | Sentinel |
 |---|---|---|---|
-| **SR1** | an edge outside Table RR: a curve that is not `Line3` or `Circle3`, a face that is not `RetainedTag`, a face with `NormalBound != 0`, a cylinder that states an `AxialDelta` outside the closed rim (§6.1), or a denoted patch whose tag is not exactly the surface it denotes (for R6's sphere, its record's exact centre and radius, §4.5), or a `Convex` flag that disagrees with §4.1 | body exists; no admitted source for the selected edge | `ErrUnsupported` (reach SX9's text) |
+| **SR1** | an edge outside Table RR: a curve that is not `Line3` or `Circle3`, a face that is not `RetainedTag`, a face with `NormalBound != 0`, a cylinder that states an `AxialDelta` outside the closed rim and a tangent-ended arc (§6.1), or a denoted patch whose tag is not exactly the surface it denotes (for R6's sphere, its record's exact centre and radius, §4.5), or a `Convex` flag that disagrees with §4.1 | body exists; no admitted source for the selected edge | `ErrUnsupported` (reach SX9's text) |
 | **SR2** | two selected edges share a vertex and are neither a mitre run (§4.7) nor corners of perpendicular faces (§4.8), or a selected edge continues tangentially into a neighbour | no transition built | `ErrUnsupported` |
 | **SR3** | no blend of that size exists: `R − r ≤ 0` for an inside ball (§4.2), `φ` within 10⁻⁹ of 0 or π, a chamfer distance of zero or below, an R6 setback that reaches the axis or runs past the sphere's pole (§4.5), or an R7 fillet inside the larger cylinder with `2ρ ≥ R − r`, where no ball touches both walls (§4.10) | no regular blend | `ErrDegenerate` |
 | **SR4** | the setback does not fit (§6.2) and the held bounds prove it does not | the blend consumes the face | `ErrDegenerate` |
@@ -1516,8 +1525,10 @@ displaced plane.
 A retained `Cylinder` tag may state `AxialDelta` δ too: the true wall is a
 cylinder parallel to the tag whose axis offset and radius difference sum to at
 most δ. A stacked brep's faceted view states it on each swept circular wall
-(brep-modify §2.3). Only the closed rim (R2) reads such a wall
-(`internal/retainedblend/wall_charge.go`). The rim circle is the plane's
+(brep-modify §2.3). The closed rim (R2) reads such a wall
+(`internal/retainedblend/wall_charge.go`), and so does an open arc whose two ends
+are proven tangent ends (§4.4, "A tangent end"), with the charge of
+boss-root-overflow-design §5.5.6. The rim circle is the plane's
 meeting with the cylinder, so a true wall within δ moves the circle, and the
 torus or cone built about it, rigidly by at most δ. R2 adds `4δ/minSine`
 (`cylCharge`, the plane rule's amplification) to the rim's slack, so SR6, the
@@ -1527,8 +1538,8 @@ the annulus, 2πt_B for the band, π²ρ for a torus and 2πL ≤ 2√2π·max(t
 for a cone. So the area bound adds `(π² + 4π)·max(ρ, t_A, t_B)·δ`, and the volume
 bound multiplies the strip's largest vertex bound by the blend's exact area plus
 that term. Every other reader refuses a charged cylinder with its existing text
-(`tagIsRecord`), an open arc (R4) included ("an arc on a wall whose tag states a
-displacement is not built"). `facetedrecord.RetainedEdgeCurve` publishes an edge curve from
+(`tagIsRecord`), every other open arc (R4) included ("an arc on a wall whose
+tag states a displacement is not built"). `facetedrecord.RetainedEdgeCurve` publishes an edge curve from
 a charged cylinder for any finite δ ≥ 0, while a displaced plane's circle still
 declines past the arithmetic allowance. Such a curve is seen only by the view's
 build, the blend's intermediate builds and the blend's readers: edge lengths and
@@ -1543,7 +1554,10 @@ selected edge stops at, the junction test reads a charged cylinder's tag for
 refusal only: a proven tangent junction to an unselected edge refuses with SM2's
 text, read on tags that state a displacement, and one to a selected edge refuses
 "a tangent chain whose walls state a displacement is not built". No outcome of
-that reading admits a chain.
+that reading admits a chain. A junction at a proven tangent end (§4.4) is no
+chain junction, charged or not: the arc's continuation along `G` is convex while
+the arc is concave, and the arc end takes the tangent end's reading
+(boss-root-overflow-design §5.5.7).
 
 A blend face built from displaced planes or walls may lie off its own tag by
 the same charge. A chamfer plane states it as its `AxialDelta`. A fillet cylinder, a
