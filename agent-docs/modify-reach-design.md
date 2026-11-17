@@ -1029,20 +1029,15 @@ extension and the probe of its end:
   in the circle of that radius about the corner, one chord per sixteenth of a turn over the angles the sector leaves
   out. The cutter then stays at least `0.004 cos(turn/2)` mm from the next wall, more than the two faces' bounds, and
   the Cut needs no shift. The bevel stops short of the corner's edge and keeps material within 0.004 mm of it, at most
-  `0.004^2 turn dc / 2` mm3 (`turn` in radians), 6.1e-6 mm3 at a right angle and a setback of 0.5 mm; a setback under
-  about `0.004 sin(turn)` loses its whole taper to it. `chargeCornerReliefs`
-  (`internal/brepmodify/partial_loop_relief.go`) restates the Cut against the chamfer without reliefs, so the result's
-  bounds hold for the chamfer this section states. The kept material lies in the cylinder of radius 0.004 mm about
-  the corner's edge, from the cap to `dc + over` below it, and that edge lies on both results' boundaries, where the
-  corner's empty wedge meets the material. So each held facet whose box, widened by its own bound, meets the
-  cylinder's box adds 0.004 mm to each of its corners' bounds; the symmetric-difference volume adds the cylinder's
-  volume; and the area slack adds eight times the cylinder's surface area, since the boundaries differ only on the kept
-  material's boundary, which is made of at most seven pieces (the cylinder's surface, the cap, the far cap, the next
-  wall, the run's wall and the bevel) none holding more area inside the cylinder than its surface. The faceted body is
-  then assembled again from the charged payload, which keeps the mesh, its groups and tags and its proof terms and drops
-  each group's centroid and the Boolean's similarity, occupancy, refinement and exact-source records. A document whose
-  gap tolerance is under 0.004 mm, an exact-only one included, and a faceted receiver take no relief; their Cut takes
-  the gap shift where the tolerance allows it, as before.
+  `0.004^2 turn dc / 2` mm3 per corner (`turn` in radians), 6.3e-6 mm3 at a right angle and a setback of 0.5 mm, and
+  a setback under about `0.004 sin(turn)` loses its whole taper to it. That relieved chamfer is the result's true
+  solid, a use of the gap tolerance like the shifted retry's (gap-tolerance §5.4): its bounds, tags and edges describe
+  it, and no charge is added for the relief. Against the chamfer without the relief, the edge where the run's wall
+  meets the next wall runs up to the cap instead of stopping at the bevel, and the relief adds faces and edges about
+  `dc` tall and at most 0.004 mm wide. Probes inside the relief polygon count as inside the clip, so a run of a setback
+  under about 0.002 mm at a right-angle concave end is refused (`checkClipLocal`). A document whose gap tolerance is
+  under 0.004 mm, an exact-only one included, and a faceted receiver take no relief; their Cut takes the gap shift
+  where the tolerance allows it.
 
 Any other end is `ErrUnsupported`: a convex end turned by less than 45 degrees, a concave end turned by more than 90
 degrees, a concave end beside an arc, a run-out longer than the next edge, an arc run whose extension turns more than a
@@ -1100,7 +1095,7 @@ corner that reaches the arc's foot, or an arc-arc corner that changes sides of t
 the circle) the faceted result reads about 0.07 mm3 more volume per arc run than its exact value on a cutter of hub
 size (arc radius near 13 mm, 22 mm long), so a test of such a run reads a section or allows that excess.
 A concave end's clip is a second mesh Boolean; without a relief its gap shift leaves about 5e-6 mm3 on a straight
-edge, and with one the relief's charge covers what it keeps.
+edge, and with one the relief keeps what it states above.
 `internal/brepmodify/partial_loop_chamfer.go` owns it. It runs after every exact route has declined, and only for a
 symmetric chamfer.
 

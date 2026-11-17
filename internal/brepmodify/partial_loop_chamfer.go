@@ -40,11 +40,11 @@ import (
 //     the run's band: the cutter loses a local sector about the corner, so the bevel tapers toward the corner's
 //     vertical edge and the next face grows by a coplanar triangle. There is no square end. On a prism whose
 //     document's gap tolerance reaches partialCornerRelief the cutter also loses a polygon within that radius of the
-//     corner, so it never lies flush with the next wall along the corner's edge, and the result's bounds are charged
-//     for the material it keeps there (chargeCornerReliefs). The material continues past a concave corner, so a cutter
-//     that reaches past the end would carve it. A chain that comes back within the sector's
-//     reach is refused. Beside an arc that curves toward the material the sector stops at the foot of the next wall's
-//     line, and a plane that misses the bevel's top edge cannot cap it and is refused.
+//     corner, so it never lies flush with the next wall along the corner's edge. The result's true solid is then the
+//     relieved chamfer, which keeps material within partialCornerRelief of the corner's edge. The material continues
+//     past a concave corner, so a cutter that reaches past the end would carve it. A chain that comes back within the
+//     sector's reach is refused. Beside an arc that curves toward the material the sector stops at the foot of the
+//     next wall's line, and a plane that misses the bevel's top edge cannot cap it and is refused.
 //
 // Any other end is refused rather than guessed: a convex end turned by less than 45 degrees, a concave end turned by
 // more than 90 degrees, or a concave end beside an arc whose next wall's plane misses the bevel. So is a chain whose cutter would reach material of the loop's
@@ -111,13 +111,14 @@ const partialSagitta = 0.0002
 
 // partialCornerRelief is the radius, in millimetres, of the circle about a concave end's corner within which the end
 // clip also takes a polygon from a prism's cutter (endClipMesh) when the document's gap tolerance reaches it. The bevel
-// then stops short of the corner's vertical edge and leaves material at most that wide there, which
-// chargeCornerReliefs adds to the result's bounds. Without it the clipped cutter lies flush with the next wall's plane
-// along that edge. The mesh Boolean cannot classify that touch, and its shifted retry moves the cutter off the plane,
-// so that the moved clip face crosses the run's wall at the corner's turn. Beside an arc the rim there divides the
-// wall's chord bound by the sine of the turn: a turn of 10 degrees multiplies it by almost six. The relief keeps the
-// cutter at least partialCornerRelief cos(turn/2) from the next wall, several times the bound of the clipped cutter's
-// faces, so the Boolean decides the pair without a shift.
+// then stops short of the corner's vertical edge and keeps material within that radius of it. That relieved chamfer is
+// the result's true solid, a use of the gap tolerance like the shifted Boolean retry's
+// (agent-docs/gap-tolerance-design.md §5.4). Without it the clipped cutter lies flush with the next wall's plane along
+// that edge. The mesh Boolean cannot classify that touch, and its shifted retry moves the cutter off the plane, so that
+// the moved clip face crosses the run's wall at the corner's turn. Beside an arc the rim there divides the wall's chord
+// bound by the sine of the turn: a turn of 10 degrees multiplies it by almost six. The relief keeps the cutter at least
+// partialCornerRelief cos(turn/2) from the next wall, several times the bound of the clipped cutter's faces, so the
+// Boolean decides the pair without a shift.
 const partialCornerRelief = 0.004
 
 // partialOvershoots are how far, in setbacks, a cutter reaches above the cap and outside the wall, tried in turn
@@ -906,7 +907,6 @@ func cutRuns(ctx context.Context, env topo.Env, hooks Hooks, body *topo.Body, ru
 	}
 	out := body
 	var warnings opdiagnostic.CompositeSummaries
-	var reliefs []cornerRelief
 	for _, r := range runs {
 		mesh, err := r.cutterMesh(ctx, d, over)
 		if err != nil {
@@ -923,9 +923,6 @@ func cutRuns(ctx context.Context, env topo.Env, hooks Hooks, body *topo.Body, ru
 			}
 			if err := r.checkClipLocal(e, i == 0, d, over); err != nil {
 				return nil, used, err
-			}
-			if r.loop.relief > 0 {
-				reliefs = append(reliefs, r.loop.reliefRegion(e, d, over))
 			}
 			clip, err := r.loop.endClipMesh(ctx, e, d, over)
 			if err != nil {
@@ -952,13 +949,6 @@ func cutRuns(ctx context.Context, env topo.Env, hooks Hooks, body *topo.Body, ru
 		return nil, used, fmt.Errorf(`%w: the partial chamfer removed no material`, decaderr.ErrUnsupported)
 	}
 	out.OperationWarnings = warnings.Records()
-	if len(reliefs) > 0 {
-		charged, err := chargeCornerReliefs(ctx, next(), out, reliefs)
-		if err != nil {
-			return nil, used, err
-		}
-		out = charged
-	}
 	return out, used, ctx.Err()
 }
 

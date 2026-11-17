@@ -17,8 +17,7 @@ import (
 // concave corner turned 10 degrees beside a line, the next wall, and turns a sharp 90 degree corner from the arc into
 // the line. The end clip stops the bevel short of the concave corner, so the cutter never lies flush with the next
 // wall, and the Cut needs no gap shift. A gap shift would move the clip face across the arc's wall at the corner's 10
-// degree turn, where the result's bound divides the wall's chord bound by sin(10 degrees). The relief is charged to
-// the vertices near the corner instead.
+// degree turn, where the result's bound divides the wall's chord bound by sin(10 degrees).
 func TestChamferConcaveArcEndHoldsItsBound(t *testing.T) {
 	t.Parallel()
 	const (
@@ -69,20 +68,10 @@ func TestChamferConcaveArcEndHoldsItsBound(t *testing.T) {
 			for _, diag := range out.OperationDiagnostics() {
 				require.NotEqual(t, decad.OpDiagGapShiftApplied, diag.Code)
 			}
-			// The box's bound reads about 0.0125 mm here, the relief's charge included, and about 0.02 mm after a gap
-			// shift on this outline.
+			// The box's bound reads about 0.006 mm here, and about 0.02 mm after a gap shift on this outline.
 			box, err := out.Bounds()
 			require.NoError(t, err)
-			require.Less(t, box.Bound.Base(), 0.016)
-			// The vertices beside the top corner carry the relief.
-			corner := 0.0
-			for _, vx := range out.Vertices() {
-				pos := vx.Position()
-				if math.Hypot(pos.Value.X-v[0], pos.Value.Y-v[1]) < 0.01 && pos.Value.Z > 5-d {
-					corner = max(corner, pos.Bound.Base())
-				}
-			}
-			require.GreaterOrEqual(t, corner, 0.004)
+			require.Less(t, box.Bound.Base(), 0.01)
 
 			// Below the top by h the outline follows the next wall's line from the corner to the bevel's top circle,
 			// radius r - d + h, at the line's first crossing lambda1 = cu - sqrt((r - d + h)^2 - D^2), D and cu the
@@ -99,12 +88,12 @@ func TestChamferConcaveArcEndHoldsItsBound(t *testing.T) {
 	}
 }
 
-// TestChamferConcaveEndChargesItsRelief chamfers a line run that ends at a concave corner, turned 90 or 45 degrees, in
-// documents whose gap tolerance does and does not reach the corner relief. Either way the result's volume lies within
-// its bound of the chamfer whose bevel stops on the next wall's plane, without the relief: the relief keeps about
-// 6e-6 mm3 at the right angle, which its charge covers, and without it the gap shift's charge covers the shift. A
-// document whose gap tolerance is under the relief takes the shift.
-func TestChamferConcaveEndChargesItsRelief(t *testing.T) {
+// TestChamferConcaveEndKeepsItsRelief chamfers a line run that ends at a concave corner, turned 90 or 45 degrees, in
+// documents whose gap tolerance does and does not reach the corner relief. With the relief the result is the relieved
+// chamfer: within its volume bound, its volume is the volume of the chamfer whose bevel stops on the next wall's plane
+// plus between zero and 0.004^2 turn d / 2, the material the relief keeps. A document whose gap tolerance is under the
+// relief takes the gap shift instead, whose charge covers the shift.
+func TestChamferConcaveEndKeepsItsRelief(t *testing.T) {
 	t.Parallel()
 	const d = 0.5
 	cot := func(deg float64) float64 { return 1 / math.Tan(deg*math.Pi/180) }
@@ -162,7 +151,12 @@ func TestChamferConcaveEndChargesItsRelief(t *testing.T) {
 			v, err := out.Volume()
 			require.NoError(t, err)
 			want := before - 20*d*d/2 + d*d*d*cot(c.phi)/6
-			require.LessOrEqual(t, math.Abs(v.Value.Base()-want), v.Bound.Base())
+			kept := 0.0
+			if !c.shift {
+				kept = 0.004 * 0.004 * (c.phi * math.Pi / 180) * d / 2
+			}
+			require.GreaterOrEqual(t, v.Value.Base(), want-v.Bound.Base())
+			require.LessOrEqual(t, v.Value.Base(), want+kept+v.Bound.Base())
 			require.Less(t, v.Bound.Base(), 1e-3)
 		})
 	}

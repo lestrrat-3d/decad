@@ -15,6 +15,7 @@ never permits, how every use is charged, and which operations read it.
 | Which operations read it? | §5 |
 | How does a Boolean use it on a coplanar contact? | §5.2 |
 | How does `Stitch` use it? | §5.3 |
+| How does a partial `Chamfer` use it at a concave corner? | §5.4 |
 | Which refusals does it leave in place? | §6 |
 
 This router is navigation, not authority.
@@ -28,7 +29,8 @@ A `Document` carries one gap tolerance, a length in millimetres. `decad.New` tak
 - With no option the tolerance is `gaptol.Default`, 0.01 mm (§2).
 - Several gap options in one `New` call: the last one wins.
 
-The tolerance is the **reach** of two repairs, and each runs only after the exact path has refused:
+The tolerance is the **reach** of two repairs, each run only after the exact path has refused, and the budget of
+one construction choice made up front, the partial chamfer's corner relief (§5.4):
 
 - The held-mesh embedding repair (§5.1). A result whose exact vertices round to float64 so that facets fold through
   each other is first repaired among the float-box corners of each exact point
@@ -37,8 +39,10 @@ The tolerance is the **reach** of two repairs, and each runs only after the exac
 - The shifted Boolean retry (§5.2). A mesh Boolean whose operands meet in coplanar facets is run again with the
   second operand moved by up to the reach, and one whose stitched result the embedding repair leaves folded is run
   again with the second operand grown by up to the reach (§5.2 item 7).
+- The partial chamfer's corner relief (§5.4). A prism's chamfer run that ends at a concave corner stops 0.004 mm
+  short of the corner when the reach is at least that, so its Cut meets no flush contact.
 
-With reach zero neither runs, and the refusal is the one the exact path gives.
+With reach zero none runs, and the refusal is the one the exact path gives.
 
 An invalid option is reported by every operation that reads the tolerance, because `New` returns no error:
 
@@ -97,8 +101,9 @@ result the gap tolerance kept can still read `Suspect`.
 The root reads the tolerance in `placePayload`, `booleanBodyWith`, `performUnionMany`, `ScaledAt` and
 `Document.Verify`, and puts it on the context. `Verify` hands it to the read-only boolean that measures each pair's
 overlap, so a pair the exact predicates could not classify reads the overlap it has, with a bound that covers the
-shift, instead of `DiagUnsupportedPairContact`. Every other operation, such as `Fillet`, `Shell` and `Loft`, reads no tolerance of its own. Four evaluator
-sites read it:
+shift, instead of `DiagUnsupportedPairContact`. `Chamfer` reads it through `brepmodify.Hooks.GapReach` for the
+partial chamfer's corner relief (§5.4). Every other operation, such as `Fillet`, `Shell` and `Loft`, reads no
+tolerance of its own. Four evaluator sites read it:
 
 | Site | Operations that reach it |
 |---|---|
@@ -282,6 +287,28 @@ The bounds that follow from a bounded class are the ones the shared-denotation w
 bound grows by `d·P + n·d²` for its perimeter `P` and `n` vertices. The volume is never `Exact`. A face that no merge
 touched keeps its own bounds. A stitch with no vertex within reach of another, and an `ExactOnly` stitch, are the
 exact stitch.
+
+### 5.4 Chamfer corner relief
+
+A partial cap-loop chamfer (`agent-docs/modify-reach-design.md` §8.3) ends a run at a concave corner by stopping the
+bevel on the next wall's plane. Its cutter, clipped there, lies flush with the next wall along the corner's vertical
+edge, and the Cut refuses that touch and takes §5.2's shift. On a prism whose document tolerance is at least
+0.004 mm, the clip instead also removes a polygon inscribed in the circle of radius 0.004 mm about the corner
+(`partialCornerRelief`), so the cutter clears the next wall and the Cut needs no shift.
+
+What a relieved result states, and what it does not:
+
+- Its true solid is the relieved chamfer, as `A∘(B+s)` is the shifted Boolean's (§5.2). Its bounds, retained tags,
+  edge curves and every operation built on it describe that solid, and no charge is added for the relief.
+- It differs from the chamfer without the relief only within 0.004 mm of each concave corner's vertical edge: it
+  keeps material there, at most `0.004^2 turn dc / 2` mm3 per corner (`turn` in radians, `dc` the setback), 6.3e-6
+  mm3 at a right angle and 0.5 mm. The edge where the run's wall meets the next wall runs up to the cap instead of
+  stopping at the bevel, and the relief adds faces and edges about `dc` tall and at most 0.004 mm wide.
+- The relief is a construction choice within the reach, not a move of a decided geometry: no predicate is widened and
+  nothing is welded (§3).
+
+A document whose tolerance is under 0.004 mm, an `ExactOnly` one included, and a faceted receiver take no relief, and
+their Cut takes §5.2's shift where the tolerance allows it.
 
 ## 6. What stays refused
 
