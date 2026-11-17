@@ -65,6 +65,12 @@ func ToFaceAngularStop(face *topo.Face, stop AngularStop, travel float64) (float
 		// why.
 		return 0, fmt.Errorf(`%w: ToFaceAngular requires a stop face with an analytic Plane surface whose plane contains the revolve axis, not merely a flat face; this face's surface is %s, which this evaluator cannot use as a stop even when flat — choose any analytic planar face whose plane contains the axis, or use an angle extent (AngleExtent, or AngleSide inside a TwoSidedAngle extent)`, decaderr.ErrUnsupported, surfacegeom.SurfaceTypeName(face.Surface))
 	}
+	if face.ExtentDelta != 0 {
+		// An oblique wall's tag may lie off the true plane (ExtentDelta, over
+		// the face only). A rotated copy's departed radial face is not refused:
+		// only a face that states the extent is.
+		return 0, fmt.Errorf(`%w: ToFaceAngular cannot read this stop face as its plane: its tag is an oblique wall of a stacked solid that lies off the true plane by an offset the body states (ExtentDelta), over the face only, so the tag may not contain the revolve axis where the wall is`, decaderr.ErrUnsupported)
+	}
 	nf := pl.Frame.N()
 	if math.Abs(nf.Dot(stop.W)) > stopTol {
 		return 0, fmt.Errorf(`%w: ToFaceAngular requires the stop face's plane to contain the revolve axis; this plane is not parallel to the axis — choose a radial face or use an angle extent (AngleExtent, or AngleSide inside a TwoSidedAngle extent)`, decaderr.ErrUnsupported)

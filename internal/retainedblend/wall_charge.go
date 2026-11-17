@@ -147,6 +147,7 @@ func publishChargedWalls(ctx context.Context, env topo.Env, body *topo.Body) (*t
 			g.CapRecord = nil
 			g.AxialDelta = 0
 			g.HasAxialDelta = false
+			g.ExtentDelta = 0
 		}
 		fp.Groups[i] = g
 	}

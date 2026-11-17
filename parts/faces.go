@@ -102,6 +102,13 @@ func meshOf(ctx context.Context, b *decad.Body, verified bool) (*decad.Mesh, flo
 }
 
 func (bf *bodyFaces) addPlane(f *decad.Face, verts []r3.Vec, idx []int) {
+	if facedeparture.Charged(f) {
+		// An oblique wall states an extent: its true patch lies off the tag by
+		// it, tilted by NormalAt's bound, so the plane the tag names is not
+		// read as the wall's.
+		bf.markUnread(verts, idx)
+		return
+	}
 	v0 := verts[idx[0]]
 	n, err := f.NormalAt(v0)
 	if err != nil {

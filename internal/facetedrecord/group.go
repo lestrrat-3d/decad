@@ -72,7 +72,13 @@ type Group struct {
 	// any finite AxialDelta. The retained edge blend clears it on publication,
 	// and SourceTag never copies it.
 	ViewCharge bool
-	Denoted    *surfacenormal.Revolved
+	// ExtentDelta is topo.Face.ExtentDelta: on a retained Plane group, how far
+	// the true patch lies from the tag over the face's own extent. Only the
+	// stacked view sets it, on an oblique swept wall, which also states its
+	// tilt through NormalBound. SourceTag carries it. A placement, the shifted
+	// retry, an exact rotation and a similarity drop it and keep the tag.
+	ExtentDelta float64
+	Denoted     *surfacenormal.Revolved
 	// NormalBound covers the tag's normal departure from its denoted patch.
 	// A placed planar tag conservatively uses the maximum distance of two
 	// unit normals when its rounded frame has no tighter certificate.

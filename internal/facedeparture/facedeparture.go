@@ -41,12 +41,17 @@ func Charged(face any) bool {
 	return ChargedReader(face)
 }
 
-// ChargedTag reports whether f's tag is not a plane and states a nonzero
-// AxialDelta (a retained Cylinder wall whose true surface lies within it).
-// NaN is nonzero. A plane's displacement is read by TagDeparts.
+// ChargedTag reports whether f's tag states a charge: a nonzero AxialDelta on
+// a tag that is not a plane (a retained Cylinder wall whose true surface lies
+// within it), or a nonzero ExtentDelta on a plane (an oblique wall whose true
+// patch lies within it of the tag over the face). NaN is nonzero. A plane's
+// AxialDelta is read by TagDeparts.
 func ChargedTag(f *topo.Face) bool {
 	if _, plane := f.Surface.(surfacegeom.Plane); plane {
-		return false
+		// An oblique wall's tag lies off its true plane by ExtentDelta over
+		// the face's extent and not beyond it, so a reader that takes the tag
+		// as the plane must not read it. NaN is nonzero.
+		return f.ExtentDelta != 0
 	}
 	return f.HasAxialDelta && f.AxialDelta != 0
 }

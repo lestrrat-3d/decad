@@ -59,7 +59,10 @@ func TestChordedLoftPlaneStatesTheFacetDeparture(t *testing.T) {
 	t.Run("a departure no slab can charge drops the tag", func(t *testing.T) {
 		t.Parallel()
 		for _, departure := range []float64{math.NaN(), math.Inf(1), -1} {
-			g := booleaneval.ChordedLoftPlane(retained, loft(true, departure), wall)
+			stated := retained
+			stated.ExtentDelta = 5e-15
+			g := booleaneval.ChordedLoftPlane(stated, loft(true, departure), wall)
+			require.Zero(t, g.ExtentDelta, "an extent drops with the tag")
 			require.Nil(t, g.Surface)
 			require.False(t, g.Retained)
 			require.False(t, g.HasAxialDelta)

@@ -67,6 +67,16 @@ type Face struct {
 	// beside an unmarked one it admits only a displacement within the chain's
 	// arithmetic allowance. The retained edge blend clears it on publication.
 	ViewCharge bool
+	// ExtentDelta is how far the true patch of a retained Plane tag lies from
+	// the tag plane over this face's own extent: every point of the true patch
+	// is within it of the tag. It does not hold away from the face, so it is
+	// not an AxialDelta: a parallel offset everywhere. Only the stacked brep's
+	// faceted view sets it, on an oblique swept wall (agent-docs/
+	// charged-window-chamfer-design.md §2), which also states the wall's tilt as
+	// NormalBound and TagDeparture. A mesh Boolean carries it with the tag; a
+	// placement, the shifted retry, an exact rotation and a similarity drop it
+	// and keep the departed tag. Zero for every other face.
+	ExtentDelta float64
 	// HeldPlanar records that a Faceted face descends only from PLANAR source
 	// faces, so the face it stands for in the true result is flat — and a rim
 	// between two such faces is a straight line, whose chord length is honest.

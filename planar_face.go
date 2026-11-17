@@ -24,6 +24,11 @@ func resolvePlanarFace(b *Body, sel FaceSelector, feature string) (Plane, VecMea
 		return Plane{}, VecMeasurement{}, fmt.Errorf(`%w: %s needs an analytic planar face, this one is %T`,
 			decaderr.ErrUnsupported, feature, faces[0].Surface())
 	}
+	if faces[0].n.ExtentDelta != 0 {
+		return Plane{}, VecMeasurement{}, fmt.Errorf(`%w: %s cannot read this planar face as its plane: its tag is an `+
+			`oblique wall of a stacked solid that lies off the true plane by an offset the body states (ExtentDelta), `+
+			`over the face only, so the plane's frame may not be where the wall is`, decaderr.ErrUnsupported, feature)
+	}
 	normal, err := faces[0].NormalAt(plane.Frame.Origin())
 	if err != nil {
 		return Plane{}, VecMeasurement{}, err

@@ -345,6 +345,11 @@ func resolveHoleSite(ctx context.Context, b *Body, spec HoleSpec) (holeSite, err
 	}
 	switch surface := faces[0].Surface().(type) {
 	case Plane:
+		if faces[0].n.ExtentDelta != 0 {
+			return holeSite{}, fmt.Errorf(`%w: Hole cannot read this planar face as its plane: its tag is an oblique wall `+
+				`of a stacked solid that lies off the true plane by an offset the body states (ExtentDelta), over the `+
+				`face only, so the plane's frame may not be where the wall is`, ErrUnsupported)
+		}
 		normal, err := faces[0].NormalAt(surface.Frame.Origin())
 		if err != nil {
 			return holeSite{}, err

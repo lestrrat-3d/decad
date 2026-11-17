@@ -46,6 +46,7 @@ func chordedLoftPlane(group facetedrecord.Group, owner *topo.Body, f *topo.Face)
 	if !(delta >= 0) || math.IsInf(delta, 0) {
 		group.Surface, group.Retained, group.Reversed, group.NormalBound = nil, false, false, 0
 		group.CapRecord, group.AxialDelta, group.HasAxialDelta = nil, 0, false
+		group.ExtentDelta = 0
 		return group
 	}
 	group.AxialDelta, group.HasAxialDelta = max(group.AxialDelta, delta), true

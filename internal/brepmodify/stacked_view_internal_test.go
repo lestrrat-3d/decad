@@ -39,10 +39,10 @@ func stackedViewBody() *topo.Body {
 // carrier charge.
 func TestStackedViewUntag(t *testing.T) {
 	b := stackedViewBody()
-	require.Nil(t, stackedViewUntag(b, breprecord.Payload{Faces: []breprecord.Face{{}, {}}}))
+	require.Nil(t, stackedViewUntag(b, breprecord.Payload{Faces: []breprecord.Face{{}, {}}}, nil))
 	all := map[int]struct{}{1: {}, 2: {}, 3: {}}
-	require.Equal(t, all, stackedViewUntag(b, breprecord.Payload{Faces: []breprecord.Face{{Delta: 1e-15}, {}}}))
-	require.Equal(t, all, stackedViewUntag(b, breprecord.Payload{CarrierCharge: 1e-15}))
+	require.Equal(t, all, stackedViewUntag(b, breprecord.Payload{Faces: []breprecord.Face{{Delta: 1e-15}, {}}}, nil))
+	require.Equal(t, all, stackedViewUntag(b, breprecord.Payload{CarrierCharge: 1e-15}, nil))
 }
 
 // TestViewMissed reads only a view-build refusal on a live context as a miss.
@@ -79,7 +79,7 @@ func TestStackedViewCharge(t *testing.T) {
 	t.Run("section displacement under the carrier charge", func(t *testing.T) {
 		bp := breprecord.Payload{Faces: []breprecord.Face{{Delta: 2e-14}}, CarrierCharge: 1e-14}
 		require.Equal(t, map[int]float64{1: 2e-14}, stackedViewCharge(b, bp))
-		require.Equal(t, map[int]struct{}{2: {}, 3: {}, 4: {}}, stackedViewUntag(b, bp))
+		require.Equal(t, map[int]struct{}{2: {}, 3: {}, 4: {}}, stackedViewUntag(b, bp, nil))
 	})
 	t.Run("carrier charge over the section displacement", func(t *testing.T) {
 		bp := breprecord.Payload{Faces: []breprecord.Face{{Delta: 2e-14}}, CarrierCharge: 3e-14}
@@ -88,11 +88,11 @@ func TestStackedViewCharge(t *testing.T) {
 	t.Run("exact record", func(t *testing.T) {
 		bp := breprecord.Payload{Faces: []breprecord.Face{{}}}
 		require.Nil(t, stackedViewCharge(b, bp))
-		require.Nil(t, stackedViewUntag(b, bp))
+		require.Nil(t, stackedViewUntag(b, bp, nil))
 	})
 	t.Run("NaN displacement", func(t *testing.T) {
 		bp := breprecord.Payload{Faces: []breprecord.Face{{Delta: math.NaN()}}}
 		require.Nil(t, stackedViewCharge(b, bp))
-		require.Equal(t, map[int]struct{}{1: {}, 2: {}, 3: {}, 4: {}}, stackedViewUntag(b, bp))
+		require.Equal(t, map[int]struct{}{1: {}, 2: {}, 3: {}, 4: {}}, stackedViewUntag(b, bp, nil))
 	})
 }

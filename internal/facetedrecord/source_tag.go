@@ -45,6 +45,16 @@ func SourceTag(f *topo.Face, flip bool) (Group, bool) {
 		// stating it in every later Boolean.
 		g.CapRecord, g.AxialDelta, g.HasAxialDelta = f.CapRecord, f.AxialDelta, true
 	}
+	if _, plane := f.Surface.(surfacegeom.Plane); plane && f.RetainedTag && f.ExtentDelta != 0 {
+		// A retained oblique wall states how far its true patch lies from the
+		// tag over its own extent (charged-window-chamfer-design §2.4): the
+		// true result patch is a piece of the true operand face, so the group
+		// keeps stating it. A bound that bounds nothing gives the group no tag.
+		if !(f.ExtentDelta > 0) || math.IsInf(f.ExtentDelta, 0) {
+			return Group{}, false
+		}
+		g.ExtentDelta = f.ExtentDelta
+	}
 	if _, cyl := f.Surface.(surfacegeom.Cylinder); cyl && f.RetainedTag && f.HasAxialDelta {
 		// A retained cylinder wall that states a displacement keeps stating it
 		// (retained-edge-blend §6.1, "Publishing a charged wall"): the true

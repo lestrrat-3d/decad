@@ -221,6 +221,9 @@ func (fp Payload) placedWithReplay(ctx context.Context, env topo.Env, composed r
 				}
 				next.Groups[i].Surface = moved
 				next.Groups[i].NormalBound = 2
+				// The tag moved by the float image, which the extent bound
+				// does not describe: it drops and the departed tag stays.
+				next.Groups[i].ExtentDelta = 0
 				if next.Groups[i].Retained && replay != nil {
 					next.Groups[i].NormalBound = min(2, proofbound.AbsSumUpper(fp.Groups[i].NormalBound, replayDeparture))
 				} else if next.Groups[i].Retained {

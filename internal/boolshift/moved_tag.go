@@ -96,6 +96,9 @@ func MovedGroupWithShift(g facetedrecord.Group, piece int, ok bool, sh PieceShif
 	}
 	g.Surface = tag
 	g.NormalBound = min(2, proofbound.AbsSumUpper(g.NormalBound, add))
+	// The extent bound describes the unmoved tag: it drops, the departed tag
+	// stays.
+	g.ExtentDelta = 0
 	// A stated displacement with no record is relative to the tag alone, so
 	// the translation keeps it; one relative to a record is dropped with it.
 	if g.CapRecord != nil {

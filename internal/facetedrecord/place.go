@@ -81,6 +81,10 @@ func ExactGroupPlaced(g *Group, q *exactrotation.Rotation, delta r3.Transform, v
 	record, axial, hasAxial := g.CapRecord, g.AxialDelta, g.HasAxialDelta
 	g.Surface, g.Denoted, g.NormalBound = nil, nil, 0
 	g.CapRecord, g.AxialDelta, g.HasAxialDelta, g.ViewCharge = nil, 0, false, false
+	// The exact rotation moves the true wall, but the float image of the tag
+	// is not the tag the extent bound described: it drops, the departed tag
+	// stays.
+	g.ExtentDelta = 0
 	if plane, ok := source.(surfacegeom.Plane); ok && g.Retained && !denoted && sourceBound == 0 &&
 		planeGroupFixedBy(plane, record, q.Linear(), q.Translation()) {
 		g.Surface, g.CapRecord, g.AxialDelta, g.HasAxialDelta = source, record, axial, hasAxial

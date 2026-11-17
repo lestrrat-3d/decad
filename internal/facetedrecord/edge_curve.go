@@ -101,7 +101,22 @@ func RetainedEdgeCurve(a, b *topo.Face, chain []r3.Vec, bounds []float64, closed
 	lineSlack := slack
 	displaced := false
 	for _, f := range []*topo.Face{a, b} {
-		if _, isPlane := f.Surface.(surfacegeom.Plane); !isPlane || !f.HasAxialDelta {
+		if _, isPlane := f.Surface.(surfacegeom.Plane); !isPlane {
+			continue
+		}
+		// An oblique wall's true patch lies within ExtentDelta of its tag over
+		// the face's extent (charged-window-chamfer-design §2.3). The rim
+		// between its tag and another plane moves by at most planeRimAmp times
+		// it, as for an AxialDelta, and the widening only loosens a reject-only
+		// test. A wall states no AxialDelta, so this reads outside that check.
+		if f.ExtentDelta != 0 {
+			if !(f.ExtentDelta > 0) || math.IsInf(f.ExtentDelta, 0) {
+				return nil, false
+			}
+			displaced = displaced || f.ExtentDelta > slack
+			lineSlack = proofbound.AbsSumUpper(lineSlack, proofbound.ProductUpper(planeRimAmp, f.ExtentDelta))
+		}
+		if !f.HasAxialDelta {
 			continue
 		}
 		if !(f.AxialDelta >= 0) || math.IsInf(f.AxialDelta, 0) {

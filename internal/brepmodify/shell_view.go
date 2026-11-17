@@ -37,7 +37,7 @@ func shellViewBlend(ctx context.Context, env topo.Env, hooks Hooks, b *topo.Body
 	if !ok || (bp.BossShell == nil && bp.PocketShell == nil) || len(edges) == 0 {
 		return nil, false, nil
 	}
-	return retainedViewBlend(ctx, env, hooks, b, edges, refs, nil, nil, blend)
+	return retainedViewBlend(ctx, env, hooks, b, edges, refs, nil, nil, nil, blend)
 }
 
 // viewBlendFunc runs the retained edge blend on a faceted view: view is the
@@ -52,15 +52,19 @@ type viewBlendFunc func(view *topo.Body, fp facetedrecord.Payload, edges []*topo
 // charge, when non-nil, maps a face of b (by the same index) to the axial
 // displacement its retained Cylinder tag states (facetedrecord Group
 // HasAxialDelta, AxialDelta); a charged face that is not a retained Cylinder
-// group is untagged instead. matched follows shellViewBlend's rule.
+// group is untagged instead. tilt, when non-nil, maps an oblique planar wall of
+// b (by the same index) to the tilt its retained Plane tag states
+// (applyViewTilt); a face that is not such a group is untagged instead. matched
+// follows shellViewBlend's rule.
 func retainedViewBlend(ctx context.Context, env topo.Env, hooks Hooks, b *topo.Body, edges []*topo.Edge,
-	refs map[*topo.Edge]*topo.Face, untag map[int]struct{}, charge map[int]float64, blend viewBlendFunc,
+	refs map[*topo.Edge]*topo.Face, untag map[int]struct{}, charge map[int]float64,
+	tilt map[int]viewTilt, blend viewBlendFunc,
 ) (*topo.Body, bool, error) {
 	fp, audit, err := booleaneval.View(ctx, b, hooks.Mesher)
 	if err != nil {
 		return nil, true, viewBuildError{err}
 	}
-	if len(untag) > 0 || len(charge) > 0 {
+	if len(untag) > 0 || len(charge) > 0 || len(tilt) > 0 {
 		groups := slices.Clone(fp.Groups)
 		for gi := range untag {
 			if gi < 0 || gi >= len(groups) {
@@ -79,6 +83,9 @@ func retainedViewBlend(ctx context.Context, env topo.Env, hooks Hooks, b *topo.B
 				continue
 			}
 			groups[gi] = untagged(groups[gi])
+		}
+		if !applyViewTilt(groups, tilt) {
+			return nil, false, nil
 		}
 		fp.Groups = groups
 	}

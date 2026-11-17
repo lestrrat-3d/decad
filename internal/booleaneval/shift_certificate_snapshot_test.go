@@ -16,6 +16,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/surfacenormal"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
+	"github.com/stretchr/testify/require"
 )
 
 func shiftSnapshotFixture() (*ShiftCertificate, *topo.Body, *topo.Body, *topo.Body) {
@@ -353,4 +354,15 @@ func TestShiftSnapshotTamperRefusalAccounting(t *testing.T) {
 			}
 		})
 	}
+}
+
+// The shifted retry's certificate compares a group's extent (topo.Face.ExtentDelta), so a changed one is a
+// different group.
+func TestSameShiftGroupComparesExtentDelta(t *testing.T) {
+	t.Parallel()
+	a := facetedrecord.Group{Retained: true, NormalBound: 3e-14, ExtentDelta: 5e-15}
+	require.True(t, sameShiftGroup(a, a))
+	b := a
+	b.ExtentDelta = 6e-15
+	require.False(t, sameShiftGroup(a, b))
 }

@@ -824,6 +824,7 @@ func sameShiftGroup(a, b facetedrecord.Group) bool {
 		a.Retained == b.Retained &&
 		sameFloat(a.AxialDelta, b.AxialDelta) &&
 		a.HasAxialDelta == b.HasAxialDelta &&
+		sameFloat(a.ExtentDelta, b.ExtentDelta) &&
 		sameDenoted(a.Denoted, b.Denoted) &&
 		sameFloat(a.NormalBound, b.NormalBound) &&
 		a.Reversed == b.Reversed &&
