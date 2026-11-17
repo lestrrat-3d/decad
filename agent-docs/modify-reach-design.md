@@ -1021,13 +1021,28 @@ extension and the probe of its end:
   that is `R - dc` must not be below the plane's distance from the centre; otherwise it cannot cap the chamfer and the
   run is refused. Where `S` is the smaller radius the clip keeps it, and the plane's second crossing must lie farther
   than `S + reach` from the corner.
-  The clip also holds the disc of radius 0.004 mm about the corner (`partialCornerRelief`), so the bevel stops that far
-  short of the corner's vertical edge and leaves a sliver at most that wide. Without it the clipped cutter lies flush
-  with the next wall along that edge. The mesh Boolean cannot classify that touch, and its gap shift (gap-tolerance
-  §5.2) moves the cutter outward off the next wall's plane. The moved clip face then crosses the run's wall at the
-  corner's turn, and beside an arc the rim there divides the wall's chord bound by `sin(turn)`: about 0.08 mm at a
-  turn of 10 degrees on a body 40 mm across. The relief keeps the cutter clear of the next wall by more than the two
-  faces' bounds, so the Cut needs no shift.
+  Without more, the clipped cutter lies flush with the next wall along the corner's vertical edge. The mesh Boolean
+  cannot classify that touch, and its gap shift (gap-tolerance §5.2) moves the cutter outward off the next wall's
+  plane. The moved clip face then crosses the run's wall at the corner's turn, and beside an arc the rim there divides
+  the wall's chord bound by `sin(turn)`: about 0.08 mm at a turn of 10 degrees on a body 40 mm across. So on a prism
+  whose document's gap tolerance is at least 0.004 mm (`partialCornerRelief`), the clip also holds a polygon inscribed
+  in the circle of that radius about the corner, one chord per sixteenth of a turn over the angles the sector leaves
+  out. The cutter then stays at least `0.004 cos(turn/2)` mm from the next wall, more than the two faces' bounds, and
+  the Cut needs no shift. The bevel stops short of the corner's edge and keeps material within 0.004 mm of it, at most
+  `0.004^2 turn dc / 2` mm3 (`turn` in radians), 6.1e-6 mm3 at a right angle and a setback of 0.5 mm; a setback under
+  about `0.004 sin(turn)` loses its whole taper to it. `chargeCornerReliefs`
+  (`internal/brepmodify/partial_loop_relief.go`) restates the Cut against the chamfer without reliefs, so the result's
+  bounds hold for the chamfer this section states. The kept material lies in the cylinder of radius 0.004 mm about
+  the corner's edge, from the cap to `dc + over` below it, and that edge lies on both results' boundaries, where the
+  corner's empty wedge meets the material. So each held facet whose box, widened by its own bound, meets the
+  cylinder's box adds 0.004 mm to each of its corners' bounds; the symmetric-difference volume adds the cylinder's
+  volume; and the area slack adds eight times the cylinder's surface area, since the boundaries differ only on the kept
+  material's boundary, which is made of at most seven pieces (the cylinder's surface, the cap, the far cap, the next
+  wall, the run's wall and the bevel) none holding more area inside the cylinder than its surface. The faceted body is
+  then assembled again from the charged payload, which keeps the mesh, its groups and tags and its proof terms and drops
+  each group's centroid and the Boolean's similarity, occupancy, refinement and exact-source records. A document whose
+  gap tolerance is under 0.004 mm, an exact-only one included, and a faceted receiver take no relief; their Cut takes
+  the gap shift where the tolerance allows it, as before.
 
 Any other end is `ErrUnsupported`: a convex end turned by less than 45 degrees, a concave end turned by more than 90
 degrees, a concave end beside an arc, a run-out longer than the next edge, an arc run whose extension turns more than a
@@ -1067,11 +1082,7 @@ result is a Boolean Cut: faceted, with the Cut's own readings. A chain with two 
 bevel exactly except where it holds a sharp corner beside an arc. There the offset's corner moves along a conic with the
 setback, and an arc's cells twist between rings, so a straight rule between two rings leaves the bevel. Such a chain
 steps through `L` layers of rings, `L` stepping up from 2 by one to the first value at which `layerDeparture` is within
-0.0002 mm, and refuses past 32. A value that puts an inner ring within a quarter of a layer of the wall's level, `dc`
-below the cap, is passed over (`ringNearWall`): that ring holds the run on the wall itself, the cells below it run along
-the wall outside the material, and the Boolean refuses that touch and shifts the cutter. With an overshoot of half the
-setback every seventh `L` puts a ring exactly there.
-A column is the path of one ring point as the setback changes. Only a sharp corner
+0.0002 mm, and refuses past 32. A column is the path of one ring point as the setback changes. Only a sharp corner
 beside an arc, and the samples of an arc that ends at one, move off a straight line; every other column is straight,
 and two neighbouring straight columns bound a planar cell, which the two end rings hold exactly. So only a column that
 bends and the columns beside it carry the rings between: a cell between two such columns takes `2L` triangles, a cell
@@ -1088,8 +1099,8 @@ corner that reaches the arc's foot, or an arc-arc corner that changes sides of t
 `ErrUnsupported`. The cutter's bound is 0.0002 mm plus that departure. On a concave arc wall (material outside
 the circle) the faceted result reads about 0.07 mm3 more volume per arc run than its exact value on a cutter of hub
 size (arc radius near 13 mm, 22 mm long), so a test of such a run reads a section or allows that excess.
-A concave end's clip is a second mesh Boolean, which leaves about 5e-6 mm3 on a straight edge, and its relief keeps
-at most `0.004^2 turn dc / 2` mm3 (`turn` in radians), 6.3e-6 mm3 at a right angle and a setback of 0.5 mm.
+A concave end's clip is a second mesh Boolean; without a relief its gap shift leaves about 5e-6 mm3 on a straight
+edge, and with one the relief's charge covers what it keeps.
 `internal/brepmodify/partial_loop_chamfer.go` owns it. It runs after every exact route has declined, and only for a
 symmetric chamfer.
 

@@ -17,7 +17,8 @@ import (
 // concave corner turned 10 degrees beside a line, the next wall, and turns a sharp 90 degree corner from the arc into
 // the line. The end clip stops the bevel short of the concave corner, so the cutter never lies flush with the next
 // wall, and the Cut needs no gap shift. A gap shift would move the clip face across the arc's wall at the corner's 10
-// degree turn, where the result's bound divides the wall's chord bound by sin(10 degrees).
+// degree turn, where the result's bound divides the wall's chord bound by sin(10 degrees). The relief is charged to
+// the vertices near the corner instead.
 func TestChamferConcaveArcEndHoldsItsBound(t *testing.T) {
 	t.Parallel()
 	const (
@@ -68,10 +69,20 @@ func TestChamferConcaveArcEndHoldsItsBound(t *testing.T) {
 			for _, diag := range out.OperationDiagnostics() {
 				require.NotEqual(t, decad.OpDiagGapShiftApplied, diag.Code)
 			}
-			// The box's bound reads about 0.006 mm here, and about 0.02 mm after a gap shift.
+			// The box's bound reads about 0.0125 mm here, the relief's charge included, and about 0.02 mm after a gap
+			// shift on this outline.
 			box, err := out.Bounds()
 			require.NoError(t, err)
-			require.Less(t, box.Bound.Base(), 0.01)
+			require.Less(t, box.Bound.Base(), 0.016)
+			// The vertices beside the top corner carry the relief.
+			corner := 0.0
+			for _, vx := range out.Vertices() {
+				pos := vx.Position()
+				if math.Hypot(pos.Value.X-v[0], pos.Value.Y-v[1]) < 0.01 && pos.Value.Z > 5-d {
+					corner = max(corner, pos.Bound.Base())
+				}
+			}
+			require.GreaterOrEqual(t, corner, 0.004)
 
 			// Below the top by h the outline follows the next wall's line from the corner to the bevel's top circle,
 			// radius r - d + h, at the line's first crossing lambda1 = cu - sqrt((r - d + h)^2 - D^2), D and cu the
@@ -84,6 +95,75 @@ func TestChamferConcaveArcEndHoldsItsBound(t *testing.T) {
 				lam := cu - math.Sqrt((r-d+h)*(r-d+h)-D*D)
 				require.Less(t, nearestLoopPoint(o, v[0]+lam*u[0], v[1]+lam*u[1]), off+1e-3, "next wall at depth %v", h)
 			}
+		})
+	}
+}
+
+// TestChamferConcaveEndChargesItsRelief chamfers a line run that ends at a concave corner, turned 90 or 45 degrees, in
+// documents whose gap tolerance does and does not reach the corner relief. Either way the result's volume lies within
+// its bound of the chamfer whose bevel stops on the next wall's plane, without the relief: the relief keeps about
+// 6e-6 mm3 at the right angle, which its charge covers, and without it the gap shift's charge covers the shift. A
+// document whose gap tolerance is under the relief takes the shift.
+func TestChamferConcaveEndChargesItsRelief(t *testing.T) {
+	t.Parallel()
+	const d = 0.5
+	cot := func(deg float64) float64 { return 1 / math.Tan(deg*math.Pi/180) }
+	ell := [][2]float64{{0, 0}, {30, 0}, {30, 10}, {10, 10}, {10, 30}, {0, 30}}
+	for _, c := range []struct {
+		name  string
+		pts   [][2]float64
+		phi   float64
+		gap   float64
+		shift bool
+	}{
+		{"right angle", ell, 90, 0.01, false},
+		{"45 degrees", [][2]float64{{0, 0}, {30, 0}, {30, 10}, {10, 10}, {0, 20}}, 45, 0.01, false},
+		{"right angle under a fine gap tolerance", ell, 90, 0.003, true},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			ctx := t.Context()
+			w := sketch.NewWorld()
+			f, err := r3.NewFrame(r3.Vec{}, r3.Vec{X: 1}, r3.Vec{Y: 1})
+			require.NoError(t, err)
+			pl, err := w.CreatePlaneFromFrame(f)
+			require.NoError(t, err)
+			s, err := w.CreateSketch(pl)
+			require.NoError(t, err)
+			ps := make([]*sketch.Point, len(c.pts))
+			for i, p := range c.pts {
+				ps[i] = s.CreatePoint(p[0], p[1])
+				s.Fix(ps[i])
+			}
+			for i, p := range ps {
+				s.CreateLine(p, ps[(i+1)%len(ps)])
+			}
+			_, err = s.Solve(ctx)
+			require.NoError(t, err)
+			var pr *sketch.Profile
+			for _, p := range s.Profiles() {
+				if p.Valid {
+					pr = p
+				}
+			}
+			require.NotNil(t, pr)
+			doc := decad.New(decad.WithGapTolerance(units.Millimeters(c.gap)))
+			body, err := decad.Extrude(ctx, doc, s, pr, decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
+			require.NoError(t, err)
+			before := volumeOf(t, body)
+
+			out, err := decad.Chamfer(ctx, body, topEdges(lineEdge(1, c.pts[2], c.pts[3])), units.Millimeters(d))
+			require.NoError(t, err)
+			shifted := false
+			for _, diag := range out.OperationDiagnostics() {
+				shifted = shifted || diag.Code == decad.OpDiagGapShiftApplied
+			}
+			require.Equal(t, c.shift, shifted)
+			v, err := out.Volume()
+			require.NoError(t, err)
+			want := before - 20*d*d/2 + d*d*d*cot(c.phi)/6
+			require.LessOrEqual(t, math.Abs(v.Value.Base()-want), v.Bound.Base())
+			require.Less(t, v.Bound.Base(), 1e-3)
 		})
 	}
 }

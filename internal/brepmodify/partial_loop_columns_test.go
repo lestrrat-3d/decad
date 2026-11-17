@@ -59,8 +59,15 @@ func TestPartialCutterLayersOnlyBesideCurvedColumns(t *testing.T) {
 				require.Equal(t, c.layers, layers)
 			}
 			require.LessOrEqual(t, cr.departure, partialSagitta)
-			// The cutter steps through no more layers than it needs.
-			requireFewestLayers(t, r, d, over, -(d + over/2), layers)
+			// One layer fewer misses the bound, so the cutter steps through no more layers than it needs.
+			top, bottom := over, -(d + over/2)
+			fewer := make([]float64, layers)
+			for k := range fewer {
+				fewer[k] = top + (bottom-top)*float64(k)/float64(layers-1)
+			}
+			missed, err := r.layerDeparture(d, fewer)
+			require.NoError(t, err)
+			require.Greater(t, missed, partialSagitta)
 
 			// Every column that is not flagged curved is a straight line through all the heights.
 			n := len(cr.rings[0])

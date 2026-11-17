@@ -30,6 +30,9 @@ type Hooks struct {
 	MeshSolid func(ctx context.Context, env topo.Env, verts []r3.Vec, tris [][3]int, bound float64) (*topo.Body, error)
 	// CurveName names a curve in the public API's vocabulary.
 	CurveName func(surfacegeom.Curve) string
+	// GapReach is the gap tolerance of env's document in millimetres (agent-docs/gap-tolerance-design.md), zero for
+	// an exact-only document or one whose option is invalid. A nil GapReach reads zero.
+	GapReach func(env topo.Env) float64
 }
 
 // Result is a modify op's body and the number of consecutive producer

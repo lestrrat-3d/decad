@@ -326,3 +326,4 @@
 12	0.08	TestRoundBossShellMeshVolumeProof
 12	0.01	TestSweepPairRealFacetedUnionClearAndImpact
 12	0.00	TestChamferConcaveArcEndHoldsItsBound
+12	0.00	TestChamferConcaveEndChargesItsRelief
