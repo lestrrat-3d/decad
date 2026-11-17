@@ -821,16 +821,33 @@ retained plane"). `brepmodify.RetainedLoopChamfer` (`internal/brepmodify/retaine
   a loft allows. Their edges in the result are found again by their ends and curve kind.
 - Each remaining loop is cut by a polyhedral cutter, held exactly as a mesh solid and cut with a mesh Boolean. At
   height `h` above the face the cutter's section is the loop moved `d + h` into the material with a mitre at each
-  corner, so the bevel is 45° and meets the wall at depth `d`. The sections are taken at six equal steps from `d/2`
-  above the face to `d/2` below the bevel's far end, and each arc is sampled so a chord lies within 0.002 mm of its
+  corner, so the bevel is 45° and meets the wall at depth `d`. The default cutter takes its sections at six equal steps from `d/2`
+  above the face to `d/2` below the bevel's far end, and samples each arc so a chord lies within 0.002 mm of its
   circle. A face's outer loop takes the ring between a rectangle and the moved loop; a hole loop takes the region
-  inside it. Between two steps the cutter is ruled, so at a line-arc corner the bevel patches meet along a straight
-  ruling where the exact patches meet along a conic; the departure is about `d²/(R·6²)`. Every cutter vertex carries
-  the chord sagitta plus that departure (about 0.0024 mm for the cover windows) as its bound. A lofted cutter of two
+  inside it. Between two steps the cutter is ruled, so at a sharp corner beside an arc the bevel patches meet along a
+  straight ruling where the exact patches meet along a conic, and an arc's cells twist as the corner turns about its
+  centre. Every cutter vertex carries the chord sagitta plus the layer departure the shared closed form proves
+  (`chamferRun.layerDepartureWith`, the partial route's `layerDeparture` with the cutter's own sagitta, modify-reach
+  §8.3.2), over the layers that meet the material: zero for a loop whose arcs meet their neighbours tangentially. This
+  replaces the earlier `d²/(R·6²)` charge, which assumed a layer step of `d/6` where the step is `d/3`; the default
+  cutter's bound can rise at sharp corners beside an arc and falls to the chord sagitta on tangent loops. A lofted cutter of two
   sections is not used: its twisted arc cells carry a facet bound of 0.013 mm at `d` = 0.5 mm, which the Boolean's rim
   rule `(δ_A + δ_B)/sin θ` turns into a 0.022 mm body bound; the polyhedral cutter leaves the body's bound at the
   value its target already had.
-- The setback reaching the far end of a wall is `ErrUnsupported`, and one that empties a loop is `ErrDegenerate`.
+- The cutter above the face and beyond the bevel's far end removes no material: it keeps the caps clear of the face
+  and the walls. Moving the loop on past its narrowest feature (a dart whose width is twice the reach, a convex round
+  whose radius the reach passes) crosses the moved loop over itself. Each of the two overshoots is therefore halved,
+  up to ten times, until the section there is a simple ring (no two non-adjacent chords meet); the section at the face
+  and at the bevel's far end must be simple, and every section between them is checked too.
+- A receiver held finer than that cutter (small rounds beside a small bore) refuses it at the Cut's chain-depth gate.
+  Every attempt with the default cutter runs first, so a chamfer that builds with it keeps its geometry; then each
+  attempt runs again with a cutter built within the receiver's own mesh bound `B` (`chaintol`, or the faceted body's
+  `MeshBound`): the chord sagitta at most `B/2`, and the layers stepped up from six, to at most 256, until the layer
+  departure is within `B/2`. A loop whose fine cutter equals its default one is cut with it, and a fine attempt whose
+  every loop's cutter does is not run again. A cutter past the loft audit's
+  triangle ceiling is refused before its rings are built.
+- The setback reaching the far end of a wall is `ErrUnsupported`, and one that empties a loop or crosses it over
+  itself (a dart narrower than twice the setback) is `ErrDegenerate`.
 - The cut allows the chain-depth gate the body's own mesh bound (`chaintol` on the context, which the document's
   tolerance never lowers). The cutter meets only the face and the walls beside the loop, so the rims it makes compose
   from bounds those facets already carry. Without it the gate compares them with a chord tolerance that follows the
@@ -842,6 +859,8 @@ refuse or decline it, on a faceted body whose face is a retained plane: see `age
 The result is a Boolean Cut: faceted, with the Cut's own readings. Tests are in `apitest/chamfer_planar_loops_test.go`:
 windows of a cover before and after a boss is joined (both faces, with the rim and bore in one call), refusals for a
 setback past the walls and for part of a loop, and measured removed volume against `L·d²/2`.
+`apitest/loop_chamfer_narrow_feature_test.go` chamfers a watch lever's fork, a mesh result, whose dart and corner rounds
+the default cutter's overshoot crossed and whose fine mesh the default cutter's bound exceeded.
 
 ## 16. Decisions the user may want to overturn
 

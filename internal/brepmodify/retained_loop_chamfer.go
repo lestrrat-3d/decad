@@ -13,6 +13,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/chaintol"
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
+	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/opdiagnostic"
 	"github.com/lestrrat-3d/decad/internal/provenance"
@@ -39,7 +40,7 @@ import (
 //
 // It reports false, leaving the other routes in charge, for any receiver or selection it does not recognise.
 // A recognised selection whose setback cannot be cut is refused as ErrUnsupported (the setback reaches the far end
-// of a wall) or ErrDegenerate (the setback empties a loop).
+// of a wall) or ErrDegenerate (the setback empties a loop, or crosses it over itself).
 func RetainedLoopChamfer(ctx context.Context, env topo.Env, hooks Hooks, body *topo.Body, edges []*topo.Edge,
 	d, dDelta float64, asym *Asymmetric) (Result, bool, error) {
 	fp, isFaceted := body.Payload.(facetedrecord.Payload)
@@ -103,15 +104,25 @@ func RetainedLoopChamfer(ctx context.Context, env topo.Env, hooks Hooks, body *t
 	}
 	span := used
 	var last error
-	for _, attempt := range rimAttempts {
-		out, spent, retry, err := cutLoops(ctx, env, hooks, body, chains, d, attempt, span)
-		span += spent
-		if err == nil {
-			return Result{Body: out, Span: span}, true, nil
-		}
-		last = err
-		if !retry || ctx.Err() != nil || !errors.Is(err, decaderr.ErrUnsupported) {
-			break
+	// The default cutter runs first, so a chamfer that builds with it keeps its
+	// geometry. A receiver held finer than that cutter (small rounds beside a
+	// small bore) refuses it at the Cut's chain-depth gate; the cutter is then
+	// built within the receiver's own mesh bound.
+	for _, fine := range []bool{false, true} {
+		for _, attempt := range rimAttempts {
+			out, spent, retry, err := cutLoops(ctx, env, hooks, body, chains, d, attempt, span, fine)
+			span += spent
+			if err == nil {
+				return Result{Body: out, Span: span}, true, nil
+			}
+			if errors.Is(err, errSameCutter) {
+				// The fine cutter would repeat the default attempts.
+				return Result{}, true, last
+			}
+			last = err
+			if !retry || ctx.Err() != nil || !errors.Is(err, decaderr.ErrUnsupported) {
+				return Result{}, true, last
+			}
 		}
 	}
 	return Result{}, true, last
@@ -638,7 +649,7 @@ func (l *chamferLoop) sectionAt(t float64) (section, error) {
 // under producer identities from env.Ref+first on. It returns the body, how many identities it used, and whether an
 // error came from the Boolean.
 func cutLoops(ctx context.Context, env topo.Env, hooks Hooks, body *topo.Body, loops []*chamferLoop, d float64,
-	attempt rimAttempt, first int) (*topo.Body, int, bool, error) {
+	attempt rimAttempt, first int, fine bool) (*topo.Body, int, bool, error) {
 	over := attempt.overshoot * d
 	used := 0
 	next := func() topo.Env {
@@ -648,11 +659,32 @@ func cutLoops(ctx context.Context, env topo.Env, hooks Hooks, body *topo.Body, l
 	}
 	out := body
 	var warnings opdiagnostic.CompositeSummaries
-	for _, l := range loops {
-		mesh, err := l.cutterMesh(ctx, d, over, attempt.scale)
+	// The Cut admits a tool held as coarsely as the receiver's own mesh
+	// (allowCoarse), so a fine cutter is built within that bound.
+	var target float64
+	if fine {
+		target = chaintol.Of(ctx)
+		if fp, ok := out.Payload.(facetedrecord.Payload); ok {
+			target = max(target, fp.MeshBound)
+		}
+	}
+	// Every loop's cutter is built before any Cut. A fine cutter that equals
+	// its loop's default cutter is that cutter, so the loop is cut with it; the
+	// fine attempt is skipped only when every loop's is.
+	meshes := make([]cutterMesh, len(loops))
+	allSame := true
+	for i, l := range loops {
+		mesh, same, err := l.cutterMesh(ctx, d, over, attempt.scale, target)
 		if err != nil {
 			return nil, used, true, err
 		}
+		meshes[i] = mesh
+		allSame = allSame && same
+	}
+	if fine && allSame {
+		return nil, used, true, errSameCutter
+	}
+	for _, mesh := range meshes {
 		cutter, err := hooks.MeshSolid(ctx, next(), mesh.verts, mesh.tris, mesh.bound)
 		if err != nil {
 			return nil, used, true, fmt.Errorf("%w: the loop chamfer's cutter: %v", decaderr.ErrUnsupported, err)
@@ -689,6 +721,9 @@ const (
 	// cutterSagitta is how far a chord of a cutter arc may lie inside its circle, in millimetres. The cutter is a
 	// polyhedron, held exactly, and every vertex carries this plus the layer departure as its bound.
 	cutterSagitta = 0.002
+	// maxCutterLayers caps the layers a cutter takes to meet its receiver's mesh
+	// bound.
+	maxCutterLayers = 256
 )
 
 // cutterMesh is the triangles of a cutter and the bound every vertex carries.
@@ -730,33 +765,72 @@ func (l *chamferLoop) cutterRing(sec section, cells []int) []pt2 {
 }
 
 // cutterMesh builds the removed region of the loop as a closed polyhedron. At height h above the face the section is
-// the loop moved by d + h into the material, in cutterLayers equal steps from over above the face to over below the
-// bevel's far end. The outer boundary of a face bounds material inside it, so its cutter is the ring between a
-// rectangle scale times the loop's reach and the moved loop; any other loop's cutter is the whole region inside the
-// moved loop.
-func (l *chamferLoop) cutterMesh(ctx context.Context, d, over, scale float64) (cutterMesh, error) {
-	top, bottom := over, -(d + over)
+// the loop moved by d + h into the material, in equal steps from an overshoot above the face to an overshoot below the
+// bevel's far end, each at most over (boundedOvershoot). The outer boundary of a face bounds material inside it, so
+// its cutter is the ring between a rectangle scale times the loop's reach and the moved loop; any other loop's cutter
+// is the whole region inside the moved loop.
+//
+// The default cutter (target 0) takes cutterLayers layers and cutterSagitta chords. A fine cutter (target > 0) holds
+// both its chord sagitta and its layer departure within target/2. Either way every vertex carries the sagitta plus
+// the layer departure the shared closed form proves (chamferRun.layerDepartureWith): the ruling between rings at the
+// loop's sharp corners beside an arc, and the twist of those arcs' cells, over the layers that meet the material.
+// same reports a fine cutter identical to the default one.
+func (l *chamferLoop) cutterMesh(ctx context.Context, d, over, scale, target float64) (cutterMesh, bool, error) {
+	fine := target > 0
+	sagitta := cutterSagitta
+	if fine {
+		sagitta = min(sagitta, target/2)
+	}
 	cells := make([]int, len(l.segs))
-	rmin := math.Inf(1)
+	ringLen := 0
 	for i, s := range l.segs {
 		cells[i] = 1
-		if !s.arc {
-			continue
+		if s.arc {
+			rmax := s.r + d + over
+			step := 2 * math.Acos(1-sagitta/rmax)
+			cells[i] = max(2, int(math.Ceil(s.sweep()/step)))
 		}
-		rmax := s.r + d + over
-		step := 2 * math.Acos(1-cutterSagitta/rmax)
-		cells[i] = max(2, int(math.Ceil(s.sweep()/step)))
-		rmin = min(rmin, s.r)
+		ringLen += cells[i]
 	}
-	rings := make([][]pt2, cutterLayers+1)
-	heights := make([]float64, cutterLayers+1)
+	// The cutter above the face and beyond the bevel's far end removes no
+	// material; it only keeps the cutter's caps clear of the face and the walls.
+	// Moving the loop on past its narrowest feature (a dart of width 2·d', a
+	// convex round of radius r) crosses the moved loop over itself, so each
+	// overshoot shrinks until its sections are simple rings.
+	topOver, err := l.boundedOvershoot(d, d, over, cells, 1)
+	if err != nil {
+		return cutterMesh{}, false, err
+	}
+	bottomOver, err := l.boundedOvershoot(0, d, over, cells, -1)
+	if err != nil {
+		return cutterMesh{}, false, err
+	}
+	top, bottom := topOver, -(d + bottomOver)
+	layers, departure, err := l.cutterLayersFor(d, top, bottom, sagitta, target)
+	if err != nil {
+		return cutterMesh{}, false, err
+	}
+	same := fine && sagitta == cutterSagitta && layers == cutterLayers
+	// Each layer contributes two triangles per ring edge, and the caps about
+	// two per ring vertex; a cutter past the audit's triangle ceiling is
+	// refused before any ring is built.
+	if tris := 2*ringLen*layers + 4*ringLen + 16; tris > loftmesh.MaxLoftAuditTriangles {
+		return cutterMesh{}, false, fmt.Errorf(`%w: the loop chamfer's cutter needs about %d triangles, more than %d`,
+			decaderr.ErrUnsupported, tris, loftmesh.MaxLoftAuditTriangles)
+	}
+	rings := make([][]pt2, layers+1)
+	heights := make([]float64, layers+1)
 	for k := range rings {
-		heights[k] = top + (bottom-top)*float64(k)/cutterLayers
+		heights[k] = top + (bottom-top)*float64(k)/float64(layers)
 		sec, err := l.sectionAt(d + heights[k])
 		if err != nil {
-			return cutterMesh{}, err
+			return cutterMesh{}, false, err
 		}
 		rings[k] = l.cutterRing(sec, cells)
+		if !ringSimple(rings[k]) {
+			return cutterMesh{}, false, fmt.Errorf(`%w: a chamfer of %.6g mm crosses its loop over itself`,
+				decaderr.ErrDegenerate, d)
+		}
 	}
 	// Walk every ring counter-clockwise about the face's outward normal.
 	ccw := ringArea(rings[0]) > 0
@@ -765,10 +839,7 @@ func (l *chamferLoop) cutterMesh(ctx context.Context, d, over, scale float64) (c
 			slices.Reverse(rings[k])
 		}
 	}
-	m := cutterMesh{bound: cutterSagitta}
-	if !math.IsInf(rmin, 1) {
-		m.bound += d * d / (rmin * cutterLayers * cutterLayers)
-	}
+	m := cutterMesh{bound: sagitta + departure}
 	n := len(rings[0])
 	add := func(p pt2, h float64) int {
 		m.verts = append(m.verts, l.to3(p, h))
@@ -783,7 +854,7 @@ func (l *chamferLoop) cutterMesh(ctx context.Context, d, over, scale float64) (c
 	}
 	// Side faces of the moved loop between consecutive layers: outward from the cutter's region, which for a filled
 	// cutter is away from the loop's inside and for a ring is into it.
-	for k := range cutterLayers {
+	for k := range layers {
 		for j := range n {
 			a, b := idx[k][j], idx[k][(j+1)%n]
 			c, e := idx[k+1][(j+1)%n], idx[k+1][j]
@@ -798,7 +869,7 @@ func (l *chamferLoop) cutterMesh(ctx context.Context, d, over, scale float64) (c
 	if l.outer {
 		box := l.box(scale * (d + over))
 		for c, corner := range box {
-			boxTop[c], boxBottom[c] = add(corner, heights[0]), add(corner, heights[cutterLayers])
+			boxTop[c], boxBottom[c] = add(corner, heights[0]), add(corner, heights[layers])
 		}
 		// The rectangle's four walls face outward.
 		for c := range box {
@@ -849,12 +920,136 @@ func (l *chamferLoop) cutterMesh(ctx context.Context, d, over, scale float64) (c
 		return nil
 	}
 	if err := capTris(0, true); err != nil {
-		return cutterMesh{}, err
+		return cutterMesh{}, false, err
 	}
-	if err := capTris(cutterLayers, false); err != nil {
-		return cutterMesh{}, err
+	if err := capTris(layers, false); err != nil {
+		return cutterMesh{}, false, err
 	}
-	return m, nil
+	return m, same, nil
+}
+
+// boundedOvershoot is the overshoot, at most over, of the cutter past the
+// section at t0 (the face at t0 = d, sense 1; the bevel's far end at t0 = 0,
+// sense -1) whose sections at t0 + sense·k·overshoot/4, k = 1 to 4, are simple
+// rings. It halves over until they are. The section at t0 itself must be a
+// simple ring: otherwise the chamfer of size d crosses its loop over itself and
+// is ErrDegenerate.
+func (l *chamferLoop) boundedOvershoot(t0, d, over float64, cells []int, sense float64) (float64, error) {
+	if !l.ringValidAt(t0, cells) {
+		return 0, fmt.Errorf(`%w: a chamfer of %.6g mm crosses its loop over itself`, decaderr.ErrDegenerate, d)
+	}
+	for range maxOvershootHalvings {
+		simple := true
+		for k := 1; k <= 4 && simple; k++ {
+			simple = l.ringValidAt(t0+sense*over*float64(k)/4, cells)
+		}
+		if simple {
+			return over, nil
+		}
+		over /= 2
+	}
+	return 0, fmt.Errorf(`%w: the loop chamfer's cutter finds no clearance past its loop's narrowest feature`,
+		decaderr.ErrUnsupported)
+}
+
+// maxOvershootHalvings bounds boundedOvershoot's search: 2^-10 of the cutter's
+// first overshoot.
+const maxOvershootHalvings = 10
+
+// cutterLayersFor is how many layers a cutter of chord sagitta takes between
+// the heights top and bottom, and the layer departure the shared closed form
+// proves for them (chamferRun.layerDepartureWith over the whole loop). The
+// default cutter (target 0) takes cutterLayers. A fine cutter steps the layers
+// up from cutterLayers until the departure is within target/2, up to
+// maxCutterLayers.
+func (l *chamferLoop) cutterLayersFor(d, top, bottom, sagitta, target float64) (int, float64, error) {
+	run := chamferRun{loop: l, count: len(l.segs) + 1}
+	// Only the layers that overlap the material band, -d ≤ h ≤ 0, meet the
+	// body; the overshoot layers carry no departure that a contact reads.
+	departure := func(layers int) (float64, error) {
+		heights := make([]float64, layers+1)
+		for k := range heights {
+			heights[k] = top + (bottom-top)*float64(k)/float64(layers)
+		}
+		lo, hi := 0, layers
+		for lo+1 <= layers && heights[lo+1] >= 0 {
+			lo++
+		}
+		for hi-1 >= 0 && heights[hi-1] <= -d {
+			hi--
+		}
+		return run.layerDepartureWith(d, heights[lo:hi+1], sagitta)
+	}
+	if target <= 0 {
+		dep, err := departure(cutterLayers)
+		return cutterLayers, dep, err
+	}
+	for layers := cutterLayers; layers <= maxCutterLayers; layers++ {
+		dep, err := departure(layers)
+		if err != nil {
+			return 0, 0, err
+		}
+		if dep <= target/2 {
+			return layers, dep, nil
+		}
+	}
+	return 0, 0, fmt.Errorf(`%w: the loop chamfer's cutter needs more than %d layers to hold its loop within %.3g mm`,
+		decaderr.ErrUnsupported, maxCutterLayers, target)
+}
+
+// errSameCutter is cutLoops's answer for a fine attempt whose every cutter
+// would be the default one: the caller has already run it.
+var errSameCutter = errors.New("the fine cutter is the default cutter")
+
+// ringValidAt reports whether the loop moved by t is a section whose sampled
+// ring is simple.
+func (l *chamferLoop) ringValidAt(t float64, cells []int) bool {
+	sec, err := l.sectionAt(t)
+	if err != nil {
+		return false
+	}
+	return ringSimple(l.cutterRing(sec, cells))
+}
+
+// ringSimple reports whether the closed polygon ring meets itself only where
+// consecutive edges share their vertex: no two other edges cross or touch. The
+// test only refuses: a ring it calls simple is then triangulated and meshed
+// under their own checks.
+func ringSimple(ring []pt2) bool {
+	n := len(ring)
+	if n < 3 {
+		return false
+	}
+	for i := range n {
+		a, b := ring[i], ring[(i+1)%n]
+		for j := i + 1; j < n; j++ {
+			if j == i+1 || (i == 0 && j == n-1) {
+				continue
+			}
+			c, e := ring[j], ring[(j+1)%n]
+			if segmentsMeet(a, b, c, e) {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+// segmentsMeet reports whether the closed segments ab and ce share a point.
+func segmentsMeet(a, b, c, e pt2) bool {
+	d1 := b.sub(a).cross(c.sub(a))
+	d2 := b.sub(a).cross(e.sub(a))
+	d3 := e.sub(c).cross(a.sub(c))
+	d4 := e.sub(c).cross(b.sub(c))
+	if ((d1 > 0 && d2 < 0) || (d1 < 0 && d2 > 0)) && ((d3 > 0 && d4 < 0) || (d3 < 0 && d4 > 0)) {
+		return true
+	}
+	onSegment := func(p, q, r pt2) bool {
+		return math.Min(p.x, q.x) <= r.x && r.x <= math.Max(p.x, q.x) &&
+			math.Min(p.y, q.y) <= r.y && r.y <= math.Max(p.y, q.y)
+	}
+	return (d1 == 0 && onSegment(a, b, c)) || (d2 == 0 && onSegment(a, b, e)) ||
+		(d3 == 0 && onSegment(c, e, a)) || (d4 == 0 && onSegment(c, e, b))
 }
 
 // ringArea is the signed area of a closed polygon, positive when it runs counter-clockwise.
