@@ -238,3 +238,24 @@ func TestDisplacedPrismKeepsItsTagsInAMeshCut(t *testing.T) {
 	require.Contains(t, tags, "side(0,0)")
 	require.Contains(t, tags, "side(1,0)")
 }
+
+func obliqueGroup(t *testing.T) facetedrecord.Group {
+	t.Helper()
+	frame, err := r3.NewFrame(r3.Vec{}, r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
+	require.NoError(t, err)
+	return facetedrecord.Group{Surface: surfacegeom.Plane{Frame: frame}, Retained: true,
+		NormalBound: 3e-14, ExtentDelta: 5e-15}
+}
+
+// A displaced wall's mesh-Boolean tag is declined whole: the extent drops with the tag and its tilt.
+func TestDisplacedWallDropsExtentDelta(t *testing.T) {
+	t.Parallel()
+	f := &topo.Face{}
+	g := obliqueGroup(t)
+	kept := booleaneval.DisplacedWall(g, f, map[*topo.Face]struct{}{})
+	require.Equal(t, g, kept, "a face that is not a displaced wall keeps its group")
+	dropped := booleaneval.DisplacedWall(g, f, map[*topo.Face]struct{}{f: {}})
+	require.Nil(t, dropped.Surface)
+	require.Zero(t, dropped.ExtentDelta)
+	require.Zero(t, dropped.NormalBound)
+}

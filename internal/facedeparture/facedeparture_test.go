@@ -46,6 +46,9 @@ func TestChargedTag(t *testing.T) {
 		"a cylinder with a zero charge":      {&topo.Face{Surface: cyl, HasAxialDelta: true}, false},
 		"a cylinder with no charge":          {&topo.Face{Surface: cyl, AxialDelta: 1e-9}, false},
 		"a displaced plane":                  {&topo.Face{Surface: plane, HasAxialDelta: true, AxialDelta: 1e-9}, false},
+		"a plane that states an extent":      {&topo.Face{Surface: plane, ExtentDelta: 1e-14}, true},
+		"a plane with an unusable extent":    {&topo.Face{Surface: plane, ExtentDelta: math.NaN()}, true},
+		"a plane with no extent":             {&topo.Face{Surface: plane}, false},
 	} {
 		require.Equal(t, tc.want, facedeparture.ChargedTag(tc.face), name)
 	}

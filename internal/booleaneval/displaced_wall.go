@@ -18,5 +18,6 @@ func displacedWall(group facetedrecord.Group, f *topo.Face, walls map[*topo.Face
 	}
 	group.Surface, group.Retained, group.Reversed, group.NormalBound = nil, false, false, 0
 	group.Denoted, group.CapRecord, group.AxialDelta, group.HasAxialDelta = nil, nil, 0, false
+	group.ExtentDelta = 0
 	return group
 }

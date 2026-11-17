@@ -75,6 +75,17 @@ func TestToFaceAngularStop(t *testing.T) {
 		require.InDelta(t, math.Pi/2, got, 1e-12)
 	})
 
+	// Only a face that states an extent is refused: a rotated copy's radial face departs from its tag
+	// (NormalBound) and keeps building.
+	t.Run("a departed radial face keeps building", func(t *testing.T) {
+		t.Parallel()
+		face := radialFace(t, math.Pi/2)
+		face.RetainedTag, face.NormalBound, face.TagDeparture = true, 1e-12, 1e-12
+		got, err := extent.ToFaceAngularStop(face, stop, 0)
+		require.NoError(t, err)
+		require.InDelta(t, math.Pi/2, got, 1e-12)
+	})
+
 	refusals := []struct {
 		name string
 		face func(*testing.T) *topo.Face
@@ -86,6 +97,18 @@ func TestToFaceAngularStop(t *testing.T) {
 			face: func(t *testing.T) *topo.Face {
 				f := radialFace(t, math.Pi/2)
 				f.Surface = surfacegeom.Faceted{}
+				return f
+			}},
+		{name: "oblique wall that states an extent", want: decaderr.ErrUnsupported, msg: "oblique wall of a stacked solid", stop: stop,
+			face: func(t *testing.T) *topo.Face {
+				f := radialFace(t, math.Pi/2)
+				f.ExtentDelta = 1e-14
+				return f
+			}},
+		{name: "oblique wall with an unusable extent", want: decaderr.ErrUnsupported, msg: "(ExtentDelta)", stop: stop,
+			face: func(t *testing.T) *topo.Face {
+				f := radialFace(t, math.Pi/2)
+				f.ExtentDelta = math.NaN()
 				return f
 			}},
 		{name: "plane not parallel to the axis", want: decaderr.ErrUnsupported, msg: "not parallel to the axis",

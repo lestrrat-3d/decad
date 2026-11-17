@@ -147,6 +147,7 @@ func ScaleImageWithSummary(ctx context.Context, body *topo.Body, fp Payload, anc
 			group.NormalBound = 2
 			group.CapRecord, group.AxialDelta, group.HasAxialDelta = nil, 0, false
 			group.ViewCharge = false
+			group.ExtentDelta = 0
 		}
 	}
 	if pointSlab {

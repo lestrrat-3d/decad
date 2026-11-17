@@ -210,9 +210,12 @@ CarrierCharge)` as the tag's `AxialDelta` (`stackedViewCharge`,
 the circle it denotes all the way round, since the record's bound covers their
 centre offset plus radius difference (general-boolean §3, Width band). The retained blend charges that
 wall in a closed rim and refuses it elsewhere (retained-edge-blend §6.1,
-"Displaced planes and walls"), and its result keeps each charged wall with its charge. Every
-other swept wall, an oblique plane whose tag also tilts among them, stays in the
-view untagged, a plain faceted obstacle as in §2.2. A boundary's vertex
+"Displaced planes and walls"), and its result keeps each charged wall with its charge. An
+oblique swept plane keeps its `Plane` tag with its tilt as `TagDeparture` and
+its offset over the face as `ExtentDelta` (`stackedViewTilt`,
+`agent-docs/charged-window-chamfer-design.md` §2). Every other swept wall, an
+oblique plane that fails that section's gates among them, stays in the view
+untagged, a plain faceted obstacle as in §2.2. A boundary's vertex
 allowance is charged into the facets' bounds. A refusal raised while building
 the view, before the blend reads the selection, keeps the receivers' refusal.
 The result is a `facetedPayload`. `apitest/stacked_brep_view_fillet_test.go`

@@ -47,7 +47,7 @@ func exactCarrierViewBlend(ctx context.Context, env topo.Env, hooks Hooks, b *to
 	if err != nil || !kept {
 		return nil, false, err
 	}
-	return retainedViewBlend(ctx, env, hooks, b, edges, refs, untag, nil, blend)
+	return retainedViewBlend(ctx, env, hooks, b, edges, refs, untag, nil, nil, blend)
 }
 
 // displacedSideFaces lists, by index in topobuild.Faces order, every face of
@@ -68,5 +68,6 @@ func untagged(g facetedrecord.Group) facetedrecord.Group {
 	g.CapRecord = nil
 	g.AxialDelta = 0
 	g.HasAxialDelta = false
+	g.ExtentDelta = 0
 	return g
 }

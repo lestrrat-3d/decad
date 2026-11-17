@@ -2971,6 +2971,7 @@
 12	0.00	TestMirroredCopyFlipsTheLsFacing
 12	0.06	TestModifyOptionGates
 12	0.00	TestNormalAtExactnessIsProven
+12	0.00	TestObliqueWallReaders
 12	0.01	TestOffsetPrismCircle
 12	0.00	TestOrthogonalBooleanDisjointIntersectionKeepsItsError
 12	0.01	TestParallelDirsExtremeDirections
@@ -3044,6 +3045,7 @@
 12	0.00	TestSolidFromMeshReadsATetrahedron
 12	0.02	TestStackBrepScaledAtPlacedAndRepeated
 12	1.00	TestStackedUnionTouchingBosses
+12	0.00	TestStackedViewObliqueWallTag
 12	0.00	TestStitchClosesABoundedPatchedWallWithChargedVolumeBound
 12	0.01	TestStitchCurvedMeshRefusesUnsharedChording
 12	0.00	TestStitchPlacedSolidTessellateBoundReadsVertexBound

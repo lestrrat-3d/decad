@@ -48,6 +48,9 @@ func heldGroupTerm(g Group, delta, rhoLower float64) (float64, bool) {
 // record (a Cylinder, or a Plane with no CapRecord) scales by |s|, rounded up;
 // one stated against a record drops with the record.
 func scaleDisplacement(g *Group, s float64) {
+	// An extent bound is relative to the tag over the face's own extent, which
+	// the scale does not keep as stated: it drops and the departed tag stays.
+	g.ExtentDelta = 0
 	if g.HasAxialDelta && g.CapRecord == nil {
 		g.AxialDelta = proofbound.ProductUpper(math.Abs(s), g.AxialDelta)
 		return
