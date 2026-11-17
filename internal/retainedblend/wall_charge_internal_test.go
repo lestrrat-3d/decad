@@ -163,9 +163,16 @@ func TestChargedArcAndAreaCharge(t *testing.T) {
 	})
 }
 
-// chargedJunction is the top-front line and the top corner arc of a rounded box, with a corner cylinder of the given
-// radius that states a displacement.
-func chargedJunction(t *testing.T, radius, delta float64) (line, arc *topo.Edge, v *topo.Vertex) {
+// chargedJunction is the top-front line and the top corner arc of a rounded box, with a radius 3 corner cylinder
+// that states the given displacement.
+func chargedJunction(t *testing.T, delta float64) (line, arc *topo.Edge, v *topo.Vertex) {
+	t.Helper()
+	return chargedJunctionRadius(t, 3, delta)
+}
+
+// chargedJunctionRadius is chargedJunction with the corner cylinder's radius given; a radius other than 3 leaves the
+// junction no longer exactly tangent.
+func chargedJunctionRadius(t *testing.T, radius, delta float64) (line, arc *topo.Edge, v *topo.Vertex) {
 	t.Helper()
 	top := chargedPlane(t, r3.NewVec(0, 0, 20), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0), 0)
 	front := chargedPlane(t, r3.Vec{}, r3.NewVec(1, 0, 0), r3.NewVec(0, 0, 1), 0)
@@ -180,72 +187,57 @@ func chargedJunction(t *testing.T, radius, delta float64) (line, arc *topo.Edge,
 	return line, arc, v
 }
 
-func TestRefuseChargedJunctions(t *testing.T) {
+func TestStrictChainReadersOfChargedWall(t *testing.T) {
 	t.Parallel()
-	selection := func(edges ...*topo.Edge) map[*topo.Edge]struct{} {
-		m := map[*topo.Edge]struct{}{}
-		for _, e := range edges {
-			m[e] = struct{}{}
-		}
-		return m
-	}
 
 	t.Run("the strict readers never read a charged wall", func(t *testing.T) {
 		t.Parallel()
-		line, arc, v := chargedJunction(t, 3, 1e-14)
+		line, arc, v := chargedJunction(t, 1e-14)
 		require.True(t, Chainable(line))
 		require.False(t, Chainable(arc))
-		require.True(t, chainableMode(arc, true))
 		require.NotEqual(t, clr.DegYes, Tangent(line, arc, v))
-		_, state, _ := tangentStateMode(line, arc, v, true)
-		require.Equal(t, clr.DegYes, state, "the charged reading proves the junction")
+		_, state, _ := tangentStateIn(line, arc, v, tagChain)
+		require.Equal(t, clr.DegYes, state, "the chain reading proves the junction")
 	})
 
 	t.Run("an uncharged twin is chainable", func(t *testing.T) {
 		t.Parallel()
-		line, arc, v := chargedJunction(t, 3, 0)
+		line, arc, v := chargedJunction(t, 0)
 		require.True(t, Chainable(arc))
 		require.Equal(t, clr.DegYes, Tangent(line, arc, v))
-		all := []*topo.Edge{line, arc}
-		require.NoError(t, refuseChargedJunctions(all, []*topo.Edge{arc}, selection(arc)))
 	})
 
-	t.Run("the arc alone is refused with its continuation", func(t *testing.T) {
+	t.Run("an unusable displacement is read by no mode", func(t *testing.T) {
 		t.Parallel()
-		line, arc, _ := chargedJunction(t, 3, 1e-14)
-		err := refuseChargedJunctions([]*topo.Edge{line, arc}, []*topo.Edge{arc}, selection(arc))
-		require.ErrorIs(t, err, decaderr.ErrUnsupported)
-		require.ErrorContains(t, err, "whose continuation is not selected")
-		require.ErrorContains(t, err, "(read on tags that state a displacement)")
+		_, arc, _ := chargedJunction(t, math.NaN())
+		require.False(t, Chainable(arc))
+		require.False(t, chainableIn(arc, tagChain))
 	})
+}
 
-	t.Run("the arc and the line are refused as a chain", func(t *testing.T) {
-		t.Parallel()
-		line, arc, _ := chargedJunction(t, 3, 1e-14)
-		err := refuseChargedJunctions([]*topo.Edge{line, arc}, []*topo.Edge{arc, line}, selection(arc, line))
-		require.ErrorIs(t, err, decaderr.ErrUnsupported)
-		require.ErrorContains(t, err, "a tangent chain whose walls state a displacement is not built")
-	})
+func TestPlanChainsRefusesNearTangentChargedJunction(t *testing.T) {
+	t.Parallel()
+	plan := func(t *testing.T, radius float64) error {
+		t.Helper()
+		line, arc, _ := chargedJunctionRadius(t, radius, 1e-14)
+		body := &topo.Body{Lumps: []*topo.Lump{{Shells: []*topo.FaceShell{{Faces: []*topo.Face{{
+			Loops: []*topo.Loop{{CoEdges: []topo.CoEdge{{Edge: line}, {Edge: arc}}}}}}}}}}}
+		_, _, _, err := planChains(body, []*topo.Edge{line, arc}, nil, false)
+		return err
+	}
 
-	t.Run("a near tangent charged junction is refused as undecided", func(t *testing.T) {
+	t.Run("a radius outside the roundoff band and inside the noise band is refused", func(t *testing.T) {
 		t.Parallel()
-		line, arc, _ := chargedJunction(t, 3*(1+1e-12), 1e-14)
-		err := refuseChargedJunctions([]*topo.Edge{line, arc}, []*topo.Edge{arc}, selection(arc))
+		err := plan(t, 3*(1+1e-12))
 		require.ErrorIs(t, err, decaderr.ErrUnsupported)
 		require.ErrorContains(t, err, "is nearly tangent and the tags cannot decide it")
-		require.ErrorContains(t, err, "(read on tags that state a displacement)")
 	})
 
-	t.Run("a cylinder far from tangent falls through", func(t *testing.T) {
+	t.Run("the exact radius forms the link", func(t *testing.T) {
 		t.Parallel()
-		line, arc, _ := chargedJunction(t, 4, 1e-14)
-		require.NoError(t, refuseChargedJunctions([]*topo.Edge{line, arc}, []*topo.Edge{arc}, selection(arc)))
-	})
-
-	t.Run("an unusable displacement falls through to the strict refusal", func(t *testing.T) {
-		t.Parallel()
-		line, arc, _ := chargedJunction(t, 3, math.NaN())
-		require.False(t, chainableMode(arc, true))
-		require.NoError(t, refuseChargedJunctions([]*topo.Edge{line, arc}, []*topo.Edge{arc}, selection(arc)))
+		// The link forms, so planning runs on to the later refusal of an open chain on charged walls.
+		err := plan(t, 3)
+		require.ErrorContains(t, err, "an open tangent chain on walls that state a displacement is not built")
+		require.NotContains(t, err.Error(), "nearly tangent")
 	})
 }

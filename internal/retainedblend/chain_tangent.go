@@ -89,15 +89,21 @@ type chainWall struct {
 	fn, fa r3.Vec
 	fo, fc r3.Vec
 	fr     float64
+	// delta is the charge the face states (charged-window-chamfer-design.md §3.1): the cylinder's or plane's
+	// AxialDelta, or an oblique plane's ExtentDelta. It is zero for a face read as exact, and only the chain-mode
+	// reader (readChargedChainFace) sets it.
+	delta float64
+	// departure is an oblique plane's TagDeparture, zero for every other face.
+	departure float64
 }
 
 // readChainTagMode reads a retained plane or cylinder face. It returns false for
 // any other face and for a face with a stated tag departure, a stated AxialDelta (the exact tangency decision reads
 // the tag as the surface, as facedeparture.TagDeparts does: any nonzero delta declines, a unit-conversion sized one
 // included), or a denoted patch its tag does not equal. With charged set it also
-// admits a cylinder face that states a displacement (wallRecord), which
-// refuseChargedJunctions reads for refusal only; a plane with a stated
-// AxialDelta stays unread in both modes.
+// admits a cylinder face that states a displacement (wallRecord); a plane with a stated
+// AxialDelta stays unread in both modes. readChargedChainFace, the closed chamfer chain's
+// reader, builds on the charged reading.
 func readChainTagMode(f *topo.Face, charged bool) (chainWall, bool) {
 	admitted := false
 	if charged && f != nil {
@@ -108,6 +114,12 @@ func readChainTagMode(f *topo.Face, charged bool) (chainWall, bool) {
 	if !admitted && (f == nil || !f.RetainedTag || f.TagDeparture != 0 || f.AxialDelta != 0 || !tagIsRecord(f)) {
 		return chainWall{}, false
 	}
+	return chainGeometry(f)
+}
+
+// chainGeometry reads the surface of f's tag as exact rationals. It judges nothing about the face's stated
+// displacements, which its callers decide.
+func chainGeometry(f *topo.Face) (chainWall, bool) {
 	w := chainWall{face: f, reversed: f.Reversed}
 	switch s := f.Surface.(type) {
 	case surfacegeom.Plane:
@@ -135,10 +147,10 @@ func readChainTagMode(f *topo.Face, charged bool) (chainWall, bool) {
 // Chainable reports whether e is an edge that tangent-chain expansion on a
 // retained body reads (§5.3): a retained Line3 or Arc3 between two faces that
 // carry a retained plane or cylinder tag with no stated departure.
-func Chainable(e *topo.Edge) bool { return chainableMode(e, false) }
+func Chainable(e *topo.Edge) bool { return chainableIn(e, tagExact) }
 
-// chainableMode is Chainable, reading the faces by readChainTagMode.
-func chainableMode(e *topo.Edge, charged bool) bool {
+// chainableIn is Chainable, reading the faces in the given mode (readChainFace).
+func chainableIn(e *topo.Edge, mode tagMode) bool {
 	if e == nil || e.Start == nil || e.End == nil || e.Start == e.End || !e.RetainedCurve || len(e.Faces) != 2 {
 		return false
 	}
@@ -148,7 +160,7 @@ func chainableMode(e *topo.Edge, charged bool) bool {
 		return false
 	}
 	for _, f := range e.Faces {
-		if _, ok := readChainTagMode(f, charged); !ok {
+		if _, ok := readChainFace(f, mode); !ok {
 			return false
 		}
 	}
@@ -170,15 +182,14 @@ func Tangent(e, c *topo.Edge, v *topo.Vertex) clr.DegState {
 	if c == nil || c.Start == c.End || (c.Start != v && c.End != v) || len(e.Faces) != 2 || len(c.Faces) != 2 {
 		return clr.DegNo
 	}
-	_, state, _ := tangentStateMode(e, c, v, false)
+	_, state, _ := tangentStateIn(e, c, v, tagExact)
 	return state
 }
 
-// tangentStateMode decides the junction and reports whether an undecided answer
-// is a near tangent: two readable chain edges whose tags nearly meet. With
-// charged set it reads a cylinder that states a displacement as exact, which
-// only refuseChargedJunctions does, for refusal.
-func tangentStateMode(e, c *topo.Edge, v *topo.Vertex, charged bool) (junction, clr.DegState, bool) {
+// tangentStateIn decides the junction and reports whether an undecided answer is a near tangent: two readable
+// chain edges whose tags nearly meet. It reads the faces in the given mode. In tagChain mode a base that states a
+// departure is no chain base.
+func tangentStateIn(e, c *topo.Edge, v *topo.Vertex, mode tagMode) (junction, clr.DegState, bool) {
 	var base *topo.Face
 	shared := 0
 	for _, f := range e.Faces {
@@ -202,15 +213,15 @@ func tangentStateMode(e, c *topo.Edge, v *topo.Vertex, charged bool) (junction, 
 	if w1 == w2 {
 		return junction{}, clr.DegNo, false
 	}
-	if !chainableMode(e, charged) || !chainableMode(c, charged) {
+	if !chainableIn(e, mode) || !chainableIn(c, mode) {
 		return junction{}, clr.DegUnknown, false
 	}
-	bt, _ := readChainTagMode(base, charged)
-	if !bt.isPlane {
+	bt, _ := readChainFace(base, mode)
+	if !bt.isPlane || bt.departure != 0 {
 		return junction{}, clr.DegNo, false
 	}
-	t1, _ := readChainTagMode(w1, charged)
-	t2, _ := readChainTagMode(w2, charged)
+	t1, _ := readChainFace(w1, mode)
+	t2, _ := readChainFace(w2, mode)
 	if t1.isPlane && t2.isPlane {
 		return junction{}, clr.DegNo, false
 	}

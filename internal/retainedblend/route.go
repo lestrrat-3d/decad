@@ -83,10 +83,16 @@ func blend(ctx context.Context, env topo.Env, b *topo.Body, fp facetedrecord.Pay
 	if len(edges) == 0 || !b.Solid {
 		return nil, false, nil
 	}
+	// chainOnly are the edges no per-edge route recognises, which only a charged chain may read
+	// (chainCandidate): planChains decides them, and they never reach a per-edge route.
+	var chainOnly []*topo.Edge
 	for _, e := range edges {
 		if !looksLikeRim(e) && !looksLikeSphereRim(e) && !looksLikeLine(e) && !looksLikeCylLine(e) &&
 			!looksLikeArc(e) && !looksLikeCylCyl(e) {
-			return nil, false, nil
+			if !chainCandidate(e) {
+				return nil, false, nil
+			}
+			chainOnly = append(chainOnly, e)
 		}
 	}
 	if delta != 0 {
@@ -117,17 +123,39 @@ func blend(ctx context.Context, env topo.Env, b *topo.Body, fp facetedrecord.Pay
 		}
 		targets[i].ref = tagOf(f)
 	}
-	chains, handled, err := planChains(b, edges, spec.tangent)
+	chains, rest, handled, err := planChains(b, edges, spec.tangent, spec.fillet)
 	if err != nil {
 		return nil, true, err
 	}
+	if !handled && len(chainOnly) > 0 {
+		return nil, false, nil
+	}
+	ords := make([]int, len(edges))
+	for i := range ords {
+		ords[i] = i
+	}
+	var mixed *mixedChains
 	if handled {
 		refs := make([]refTag, len(edges))
 		for i := range edges {
 			refs[i] = targets[i].ref
 		}
-		out, err := blendChains(ctx, env, b, fp, edges, refs, chains, spec, op)
-		return out, true, err
+		if len(rest) == 0 {
+			out, err := blendChains(ctx, env, b, fp, edges, refs, chains, spec, op, false)
+			return out, true, err
+		}
+		// The other edges take their own routes on b first (chain_mixed.go).
+		if slices.ContainsFunc(rest, func(e *topo.Edge) bool { return slices.Contains(chainOnly, e) }) {
+			return nil, false, nil
+		}
+		mixed = &mixedChains{edges: edges, refs: refs, chains: chains}
+		sub := make([]target, len(rest))
+		ords = make([]int, len(rest))
+		for k, e := range rest {
+			ords[k] = slices.Index(edges, e)
+			sub[k] = targets[ords[k]]
+		}
+		edges, targets = rest, sub
 	}
 	if spec.fillet && spec.asym == nil && len(edges) >= 2 {
 		// Straight convex edges that meet end to end on one face, at corners of three perpendicular faces, are
@@ -290,7 +318,8 @@ func blend(ctx context.Context, env topo.Env, b *topo.Body, fp facetedrecord.Pay
 			}
 		}
 		faceIndex = faceIndexOf(cur)
-		role := fmt.Sprintf("%s(%d)", op, i)
+		ord := ords[i]
+		role := fmt.Sprintf("%s(%d)", op, ord)
 		var next *topo.Body
 		var err error
 		step := spec
@@ -301,7 +330,7 @@ func blend(ctx context.Context, env topo.Env, b *topo.Body, fp facetedrecord.Pay
 				step, err = spec.assign(targets[i].ref, l.faceA, l.faceB)
 			}
 			if err == nil {
-				next, err = rewriteLineEdge(ctx, env, curFP, l, step, role, i, faceIndex)
+				next, err = rewriteLineEdge(ctx, env, curFP, l, step, role, ord, faceIndex)
 			}
 		case openArc:
 			var a arcRim
@@ -309,7 +338,7 @@ func blend(ctx context.Context, env topo.Env, b *topo.Body, fp facetedrecord.Pay
 				step, err = spec.assign(targets[i].ref, a.planeFace, a.wallFace)
 			}
 			if err == nil {
-				next, err = rewriteArc(ctx, env, curFP, a, step, role, i, faceIndex)
+				next, err = rewriteArc(ctx, env, curFP, a, step, role, ord, faceIndex)
 			}
 		case cylinderPair:
 			var c cylCyl
@@ -317,7 +346,7 @@ func blend(ctx context.Context, env topo.Env, b *topo.Body, fp facetedrecord.Pay
 				step, err = spec.assign(targets[i].ref, c.wall[0].face, c.wall[1].face)
 			}
 			if err == nil {
-				next, err = rewriteCylCyl(ctx, env, curFP, c, step, role, i, faceIndex)
+				next, err = rewriteCylCyl(ctx, env, curFP, c, step, role, ord, faceIndex)
 			}
 		case cylinderLine:
 			var c cylLine
@@ -325,7 +354,7 @@ func blend(ctx context.Context, env topo.Env, b *topo.Body, fp facetedrecord.Pay
 				step, err = spec.assign(targets[i].ref, c.faceA, c.faceB)
 			}
 			if err == nil {
-				next, err = rewriteCylLine(ctx, env, curFP, c, step, role, i, faceIndex)
+				next, err = rewriteCylLine(ctx, env, curFP, c, step, role, ord, faceIndex)
 			}
 		case sphereRimKind:
 			var s sphereRim
@@ -333,7 +362,7 @@ func blend(ctx context.Context, env topo.Env, b *topo.Body, fp facetedrecord.Pay
 				step, err = spec.assign(targets[i].ref, s.planeFace, s.wallFace)
 			}
 			if err == nil {
-				next, err = rewriteSphereRim(ctx, env, curFP, s, step, role, i, faceIndex)
+				next, err = rewriteSphereRim(ctx, env, curFP, s, step, role, ord, faceIndex)
 			}
 		default:
 			var r rim
@@ -341,7 +370,7 @@ func blend(ctx context.Context, env topo.Env, b *topo.Body, fp facetedrecord.Pay
 				step, err = spec.assign(targets[i].ref, r.planeFace, r.wallFace)
 			}
 			if err == nil {
-				next, err = rewriteRim(ctx, env, curFP, r, step, role, i, faceIndex)
+				next, err = rewriteRim(ctx, env, curFP, r, step, role, ord, faceIndex)
 			}
 		}
 		if err != nil {
@@ -352,6 +381,10 @@ func blend(ctx context.Context, env topo.Env, b *topo.Body, fp facetedrecord.Pay
 		if curFP, ok = next.Payload.(facetedrecord.Payload); !ok {
 			return nil, true, fmt.Errorf("%w: the blended body lost its payload", decaderr.ErrBooleanFailed)
 		}
+	}
+	if mixed != nil {
+		out, err := blendChains(ctx, env, cur, curFP, mixed.edges, mixed.refs, mixed.chains, spec, op, true)
+		return out, true, err
 	}
 	return cur, true, nil
 }
@@ -668,9 +701,12 @@ func pick(all [][3]int, idx []int) [][3]int {
 }
 
 // blendChains blends each closed tangent chain in turn. The edges of a later
-// chain are found again on the partly blended body by their end points.
+// chain are found again on the partly blended body by their end points, and with
+// refind so are the first chain's: b is then the body the selection's other edges
+// have already blended (chain_mixed.go), and edges, refs and chains are those of the
+// body they were planned on.
 func blendChains(ctx context.Context, env topo.Env, b *topo.Body, fp facetedrecord.Payload, edges []*topo.Edge,
-	refs []refTag, chains []chainCycle, spec blendSpec, op string) (*topo.Body, error) {
+	refs []refTag, chains []chainCycle, spec blendSpec, op string, refind bool) (*topo.Body, error) {
 	ordOf := map[*topo.Edge]int{}
 	for i, e := range edges {
 		ordOf[e] = i
@@ -689,15 +725,12 @@ func blendChains(ctx context.Context, env topo.Env, b *topo.Body, fp facetedreco
 	cur, curFP := b, fp
 	for ci, c := range chains {
 		cyc := c
-		if ci > 0 {
+		again := ci > 0 || refind
+		if again {
 			cyc = chainCycle{}
 			var found []*topo.Edge
 			for _, k := range keys[ci] {
-				ok := looksLikeLine
-				if k.arc {
-					ok = looksLikeArc
-				}
-				e, found1 := findEdge(cur, k.k, 64*ulp*math.Max(1, math.Abs(k.k.p0.X)), ok)
+				e, found1 := findEdge(cur, k.k, 64*ulp*math.Max(1, math.Abs(k.k.p0.X)), chainEdgeFinder(k.arc))
 				if !found1 {
 					return nil, fmt.Errorf("%w: a chain edge is no longer an edge of the partly blended body",
 						decaderr.ErrUnsupported)
@@ -705,21 +738,26 @@ func blendChains(ctx context.Context, env topo.Env, b *topo.Body, fp facetedreco
 				found = append(found, e)
 			}
 			var err error
-			if cyc, _, err = replanChain(cur, found); err != nil {
+			if cyc, _, err = replanChain(cur, found, spec.fillet); err != nil {
 				return nil, err
 			}
 		}
 		ords := make([]int, len(cyc.edges))
 		cref := make([]refTag, len(cyc.edges))
 		for i, e := range cyc.edges {
-			if ci == 0 {
+			if !again {
 				ords[i], cref[i] = ordOf[e], refs[ordOf[e]]
 				continue
 			}
+			matched := false
 			for _, e0 := range chains[ci].edges {
 				if sameEdgeKey(e0, e) {
 					ords[i], cref[i] = ordOf[e0], refs[ordOf[e0]]
+					matched = true
 				}
+			}
+			if !matched {
+				return nil, fmt.Errorf("%w: a chain edge's selection ordinal is not found", decaderr.ErrUnsupported)
 			}
 		}
 		next, err := rewriteChain(ctx, env, curFP, cyc, ords, cref, spec, op, faceIndexOf(cur))
@@ -744,12 +782,12 @@ func sameEdgeKey(a, b *topo.Edge) bool {
 }
 
 // replanChain orders edges of body that form one chain.
-func replanChain(body *topo.Body, edges []*topo.Edge) (chainCycle, bool, error) {
-	chains, _, err := planChains(body, edges, nil)
+func replanChain(body *topo.Body, edges []*topo.Edge, fillet bool) (chainCycle, bool, error) {
+	chains, rest, _, err := planChains(body, edges, nil, fillet)
 	if err != nil {
 		return chainCycle{}, false, err
 	}
-	if len(chains) != 1 {
+	if len(chains) != 1 || len(rest) != 0 {
 		return chainCycle{}, false, fmt.Errorf("%w: a chain changed shape under an earlier blend", decaderr.ErrUnsupported)
 	}
 	return chains[0], true, nil

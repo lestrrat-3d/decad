@@ -2892,11 +2892,16 @@
 12	0.03	TestCapBlendTangentJunctionAndWholeTurnBoundsStayTight
 12	0.01	TestCapBlendThroughAllBehindPlaneRefused
 12	0.00	TestChainGateDiameterPlacedRevolveHasToleranceReference
+12	1.00	TestChainWithTouchingEdgeKeepsItsRefusal
 12	0.00	TestChamferAngleSetsTheOtherDistance
 12	22.98	TestChamferFreeformBothRimsHoldTheOneRimBound
 12	0.01	TestChamferOfEdgesMeetingAtAReflexCornerRemovesTheirWedges
 12	0.00	TestChamferPartOfBareBoxEdgesStaysRefused
 12	0.20	TestChamferWindowLoops
+12	1.00	TestChargedChainChamferEveryRimAndWindow
+12	1.00	TestChargedChainChamferMixed
+12	1.00	TestChargedChainChamferRefusals
+12	1.00	TestChargedChainChamferWindowLoop
 12	0.09	TestClassBBridgingPinUnion
 12	0.04	TestClassBFlushPinUnion
 12	0.02	TestClearanceBallCenteredInHole

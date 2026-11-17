@@ -81,6 +81,10 @@ func TestStackedViewObliqueWallTag(t *testing.T) {
 		require.Equal(t, 2, rims, "a Line3 rim with each cap")
 	}
 
+	// The mesh Cut below retires part, so the Chamfer subtest reads its own copy.
+	chamferPart, err := decad.Copy(t.Context(), part)
+	require.NoError(t, err)
+
 	t.Run("the uncharged twin states no tilt", func(t *testing.T) {
 		t.Parallel()
 		twin := obliqueWalls(t, spokedDisc(t))
@@ -90,7 +94,7 @@ func TestStackedViewObliqueWallTag(t *testing.T) {
 		}
 	})
 
-	t.Run("a Chamfer of a side rim refuses", func(t *testing.T) {
+	t.Run("a Chamfer of a side rim alone refuses at its tangent junction", func(t *testing.T) {
 		t.Parallel()
 		w := walls[0]
 		for _, e := range w.face.Edges() {
@@ -103,9 +107,12 @@ func TestStackedViewObliqueWallTag(t *testing.T) {
 					continue
 				}
 				edge := decad.Edges(decad.EndpointAt(e.Start().Position().Value), decad.EndpointAt(e.End().Position().Value)).Exactly(1)
-				_, err := decad.Chamfer(t.Context(), part, edge, units.Millimeters(0.5))
+				_, err := decad.Chamfer(t.Context(), chamferPart, edge, units.Millimeters(0.5))
 				require.ErrorIs(t, err, decad.ErrUnsupported)
-				require.ErrorContains(t, err, "a face whose retained tag states a departure from the true surface")
+				// The side's rim ends at a tangent junction with a corner round. A closed chamfer chain reads the
+				// oblique wall (charged-window-chamfer-design §3), so the selection is one edge of a chain whose
+				// continuation is not selected.
+				require.ErrorContains(t, err, "whose continuation is not selected")
 				return
 			}
 		}

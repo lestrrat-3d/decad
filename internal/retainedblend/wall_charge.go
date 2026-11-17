@@ -6,11 +6,9 @@ import (
 	"math"
 	"slices"
 
-	clr "github.com/lestrrat-3d/decad/internal/clearance"
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
-	"github.com/lestrrat-3d/decad/internal/selectorquery"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/topo"
 )
@@ -18,8 +16,8 @@ import (
 // This file holds the charged cylinder wall. A retained Cylinder face (or
 // faceted group) may state HasAxialDelta/AxialDelta delta >= 0: the true wall
 // is a cylinder parallel to the tag whose axis offset plus radius difference
-// is at most delta. Only the closed-rim route (R2) reads it; every other route
-// refuses it. A blend result keeps the tag with its delta (publishChargedWalls),
+// is at most delta. Only the closed-rim route (R2) and a closed chamfer tangent
+// chain (chain_charge.go) read it; every other route refuses it. A blend result keeps the tag with its delta (publishChargedWalls),
 // and the readers outside this package charge it or refuse it
 // (agent-docs/retained-edge-blend-design.md §6.1, "Publishing a charged wall").
 
@@ -152,53 +150,4 @@ func publishChargedWalls(ctx context.Context, env topo.Env, body *topo.Body) (*t
 		fp.Groups[i] = g
 	}
 	return buildCharged(ctx, env, fp, oldGeom)
-}
-
-// refuseChargedJunctions reads the tangent junctions of the selected chain
-// edges as if a cylinder tag that states a displacement were exact, for
-// refusal only. Every outcome is a refusal or today's fall-through; a charged
-// reading never admits a chain. An edge that only the charged reading makes a
-// chain edge, at a junction that reading proves or cannot decide, is refused
-// with the reason, so the per-edge routes never blend half a chain.
-func refuseChargedJunctions(all, edges []*topo.Edge, selected map[*topo.Edge]struct{}) error {
-	return refuseChargedJunctionsSkipping(all, edges, selected, nil)
-}
-
-// refuseChargedJunctionsSkipping is refuseChargedJunctions that reads no
-// junction at an end of an edge that tangent proves a C3 corner
-// (agent-docs/boss-root-overflow-design.md §5.5.7).
-func refuseChargedJunctionsSkipping(all, edges []*topo.Edge, selected map[*topo.Edge]struct{},
-	tangent TangentEnds) error {
-	for _, e := range edges {
-		if !chainShape(e) || Chainable(e) || !chainableMode(e, true) {
-			continue
-		}
-		for _, v := range []*topo.Vertex{e.Start, e.End} {
-			if provenEnd(tangent, all, e, v) {
-				continue
-			}
-			for _, c := range all {
-				if c == e || c.Start == c.End || (c.Start != v && c.End != v) || len(c.Faces) != 2 {
-					continue
-				}
-				_, state, near := tangentStateMode(e, c, v, true)
-				pos := selectorquery.RenderVec(v.Position)
-				if near {
-					return fmt.Errorf("%w: the junction at %s is nearly tangent and the tags cannot decide it "+
-						"(read on tags that state a displacement)", decaderr.ErrUnsupported, pos)
-				}
-				if state != clr.DegYes {
-					continue
-				}
-				if _, ok := selected[c]; ok {
-					return fmt.Errorf("%w: a tangent chain whose walls state a displacement is not built "+
-						"(retained-edge-blend §6.1)", decaderr.ErrUnsupported)
-				}
-				return fmt.Errorf("%w: the selected edge ends at the tangent junction %s whose continuation is not "+
-					"selected; WithTangentChain selects the whole chain (read on tags that state a displacement)",
-					decaderr.ErrUnsupported, pos)
-			}
-		}
-	}
-	return nil
 }

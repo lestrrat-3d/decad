@@ -1489,7 +1489,7 @@ of that computation.
 
 | SR | Call | Existence | Sentinel |
 |---|---|---|---|
-| **SR1** | an edge outside Table RR: a curve that is not `Line3` or `Circle3`, a face that is not `RetainedTag`, a face with `NormalBound != 0`, a cylinder that states an `AxialDelta` outside the closed rim and a tangent-ended arc (§6.1), or a denoted patch whose tag is not exactly the surface it denotes (for R6's sphere, its record's exact centre and radius, §4.5), or a `Convex` flag that disagrees with §4.1 | body exists; no admitted source for the selected edge | `ErrUnsupported` (reach SX9's text) |
+| **SR1** | an edge outside Table RR: a curve that is not `Line3` or `Circle3`, a face that is not `RetainedTag`, a face with `NormalBound != 0`, a cylinder that states an `AxialDelta` outside the closed rim, a tangent-ended arc and a closed chamfer chain (§6.1), or a denoted patch whose tag is not exactly the surface it denotes (for R6's sphere, its record's exact centre and radius, §4.5), or a `Convex` flag that disagrees with §4.1 | body exists; no admitted source for the selected edge | `ErrUnsupported` (reach SX9's text) |
 | **SR2** | two selected edges share a vertex and are neither a mitre run (§4.7) nor corners of perpendicular faces (§4.8), or a selected edge continues tangentially into a neighbour | no transition built | `ErrUnsupported` |
 | **SR3** | no blend of that size exists: `R − r ≤ 0` for an inside ball (§4.2), `φ` within 10⁻⁹ of 0 or π, a chamfer distance of zero or below, an R6 setback that reaches the axis or runs past the sphere's pole (§4.5), or an R7 fillet inside the larger cylinder with `2ρ ≥ R − r`, where no ball touches both walls (§4.10) | no regular blend | `ErrDegenerate` |
 | **SR4** | the setback does not fit (§6.2) and the held bounds prove it does not | the blend consumes the face | `ErrDegenerate` |
@@ -1538,9 +1538,10 @@ the rim's exact area change is linear in the wall radius, with slopes 2πt_A for
 the annulus, 2πt_B for the band, π²ρ for a torus and 2πL ≤ 2√2π·max(t_A, t_B)
 for a cone. So the area bound adds `(π² + 4π)·max(ρ, t_A, t_B)·δ`, and the volume
 bound multiplies the strip's largest vertex bound by the blend's exact area plus
-that term. Every other reader refuses a charged cylinder with its existing text
-(`tagIsRecord`), every other open arc (R4) included ("an arc on a wall whose
-tag states a displacement is not built").
+that term. A closed chamfer tangent chain charges it too
+(`agent-docs/charged-window-chamfer-design.md` §3). Every other reader refuses a
+charged cylinder with its existing text (`tagIsRecord`), every other open arc
+(R4) included ("an arc on a wall whose tag states a displacement is not built").
 
 **Publishing a charged wall.** A blend result keeps every charged `Cylinder`
 tag with its δ (`publishChargedWalls`), so a later `Fillet`, `Chamfer` or
@@ -1578,7 +1579,8 @@ as reading the tag as the wall.
 | `ScaledAt` (`point_plane_scale.go`) | scales δ by `|s|`, rounded up. The scaled tag adds only its rounding to `NormalBound` |
 | `edgewedge` (`Edge.Wedge`, its selector) | reads `Undecided` at a charged wall |
 | `RetainedEdgeCurve` | the published rule above |
-| `retained_loop_chamfer.go`, `partial_loop_chamfer.go`, the tangent chain, `trimgraph` | refuse a nonzero δ already |
+| `retained_loop_chamfer.go`, `partial_loop_chamfer.go`, `trimgraph`, open and fillet tangent chains | refuse a nonzero δ |
+| a closed chamfer tangent chain | charges δ (`agent-docs/charged-window-chamfer-design.md` §3) |
 | `export/step_analytic.go` | `facedeparture.TagDeparts` reads δ as a departure, so the body takes the faceted writer |
 | `parts` joint inference (`parts/faces.go` `addCylinder`) | reads a charged wall as an unread face (`facedeparture.Charged`, installed by the root package), so a joint on it is `Undecided` with `CauseUnreadFace`. Its clearance measurement would otherwise take the tag's radius and axis as the true wall's |
 | `Face.Surface()` and the site builders that read it (`Hole`, `Boss`, `Emboss`, `Thread`, `planarDihedral`) | see the tag with no positional bound, as for a displaced plane or a departed tag (api-design §5, "Surface parameters carry no `Exactness`"). `planarDihedral` reads a design angle from it. `Hole`, `Boss`, `Emboss` and `Thread` take the tag's radius and axis as the true wall's, so a feature placed on a charged wall may sit up to its charge off it; `agent-docs/missing-features.md` lists that gap. `NormalAt` carries the charge |
@@ -1588,12 +1590,14 @@ stitch, prism, brep and capblend routes) never receive a faceted body
 (retention §4). `contactfaceted.AxisSupportAtPose` does receive one and reads
 only `HeldPlanar` faces.
 
-The tangent chain does not read a charged cylinder either. To name the gate a
-selected edge stops at, the junction test reads a charged cylinder's tag for
-refusal only: a proven tangent junction to an unselected edge refuses with SM2's
-text, read on tags that state a displacement, and one to a selected edge refuses
-"a tangent chain whose walls state a displacement is not built". No outcome of
-that reading admits a chain. A junction at a proven tangent end (§4.4) is no
+A closed chamfer tangent chain reads charged walls, a displaced or charged
+base and an oblique wall's `ExtentDelta`, and charges them
+(`agent-docs/charged-window-chamfer-design.md` §3). Any other chain does not:
+the junction test reads a charged tag to name the gate a selected edge stops
+at, so a proven tangent junction to an unselected edge refuses with SM2's text,
+read on tags that state a displacement, an open chain refuses "an open tangent
+chain on walls that state a displacement is not built", and a fillet chain "a
+tangent chain fillet on walls that state a displacement is not built". A junction at a proven tangent end (§4.4) is no
 chain junction, charged or not: the arc's continuation along `G` is convex while
 the arc is concave, and the arc end takes the tangent end's reading
 (boss-root-overflow-design §5.5.7).
@@ -1602,10 +1606,9 @@ A blend face built from displaced planes or walls may lie off its own tag by
 the same charge. A chamfer plane states it as its `AxialDelta`. A fillet
 cylinder, a rim torus or cone and a corner sphere built from a charged face are
 not published as retained tags, so the face stays faceted; only a wall the view
-charged states a cylinder's `AxialDelta`. With no charge every tag is published as built. The tangent
-chain (retained-modify-reach-design.md §5.3) reads its tags as exact, so a
-plane with any nonzero `AxialDelta` is no chain wall, as
-`facedeparture.TagDeparts` reads it.
+charged states a cylinder's `AxialDelta`. With no charge every tag is published as built. A tangent
+chain other than a closed chamfer chain (retained-modify-reach-design.md §5.3) reads its tags as exact, so a
+plane with any nonzero `AxialDelta` is no wall of it, as `facedeparture.TagDeparts` reads it.
 
 Gate order: base gates of modify §4 stage 1, then SR1, SR2, SR3, SR6, SR5, SR4,
 then the construction, then SR7. R7 runs its own order (§4.9): recognition,

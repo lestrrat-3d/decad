@@ -62,8 +62,9 @@ type work struct {
 	// largest corner bound of the end caps an arc end on a cylinder adds to G, and
 	// splitVol the volume the split of G's held facets can move (measureChange).
 	capHeld, capTrue, capEps, splitVol float64
-	// arcCharged is set for an arc with C3 ends: measureChange then adds arcCharge (arc_charge.go) to the
-	// area bound instead of rimAreaCharge, and noTorus keeps the blend face faceted (tagGroup).
+	// arcCharged is set for an arc with C3 ends or a charged closed chain: measureChange then adds arcCharge
+	// (arc_charge.go, chain_charge.go) to the area bound instead of rimAreaCharge, and noTorus keeps the blend
+	// face faceted (tagGroup).
 	arcCharged, noTorus bool
 	arcCharge           float64
 }

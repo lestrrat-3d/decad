@@ -216,7 +216,7 @@ func wallPlane(en chainEntry) *plane {
 	if en.arc {
 		return nil
 	}
-	p, ok := retainedPlane(en.wall)
+	p, ok := chainPlane(en.wall)
 	if !ok {
 		return nil
 	}

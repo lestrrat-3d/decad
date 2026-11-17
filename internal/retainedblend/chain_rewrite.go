@@ -21,7 +21,9 @@ import (
 // This file builds a tangent chain (agent-docs/retained-modify-reach-design.md
 // §5.5): every edge of one loop of the base plane P, or an open run of them, is
 // blended as one chain.
-// Section points of a junction are computed once and shared by both strips.
+// Section points of a junction are computed once and shared by both strips. A closed chamfer chain
+// may hold walls and a base that state a displacement (chain_charge.go): its slack, its junction
+// rows' bounds and its area bound then carry the charges.
 
 // chainEntry is one chain edge in walk order, which is the direction of the
 // base loop.
@@ -88,16 +90,14 @@ func rewriteChain(ctx context.Context, env topo.Env, fp facetedrecord.Payload, c
 	// bounds must not depend on map iteration.
 	sort.Slice(held, func(i, j int) bool { return faceIndex[held[i]] < faceIndex[held[j]] })
 	for _, f := range held {
-		if d, ok := faceDelta(f); !ok {
-			return nil, fmt.Errorf("%w: a face states no usable plane displacement", decaderr.ErrUnsupported)
-		} else if _, plane := f.Surface.(surfacegeom.Plane); plane {
-			charge = proofbound.AbsSumUpper(charge, proofbound.ProductUpper(planeAmp, d))
+		var err error
+		if charge, err = heldCharge(charge, f); err != nil {
+			return nil, err
 		}
 	}
 	w := newWork(fp, rim{scale: scale, charge: charge}, spec)
 	w.faceIx = faceIndex
 	slack := chargedSlack(scale, charge)
-	margin := w.tau + slack
 
 	// The base: the one face every chain edge borders.
 	var base *topo.Face
@@ -167,6 +167,18 @@ func rewriteChain(ctx context.Context, env topo.Env, fp facetedrecord.Payload, c
 			return nil, fmt.Errorf("%w: a chain junction is not where its tags meet", decaderr.ErrUnsupported)
 		}
 	}
+	// A charged closed chamfer chain widens its bounds by what its junctions and walls state
+	// (chain_charge.go); every other chain reads no charge, and cc is then the zero value.
+	cc, err := newChainCharges(cyc, base, fp, hv, jp, max(spec.dA, spec.dB))
+	if err != nil {
+		return nil, err
+	}
+	if cc.charged && spec.fillet {
+		return nil, fmt.Errorf("%w: a tangent chain fillet on walls that state a displacement is not built",
+			decaderr.ErrUnsupported)
+	}
+	slack = proofbound.AbsSumUpper(slack, cc.crease)
+	margin := w.tau + slack
 	fl, err := w.faceLoops(faceIndex[base], &bp)
 	if err != nil {
 		return nil, err
@@ -268,7 +280,7 @@ func rewriteChain(ctx context.Context, env topo.Env, fp facetedrecord.Payload, c
 			en.run = append(en.run, v)
 		}
 		covered += 1 + len(en.run)
-		if err := w.readChainEdge(en, fp, faceIndex, nP, ats, slack); err != nil {
+		if err := w.readChainEdge(en, fp, faceIndex, nP, ats, slack, cc.charged); err != nil {
 			return nil, err
 		}
 		if open && t == 0 {
@@ -359,6 +371,7 @@ func rewriteChain(ctx context.Context, env topo.Env, fp facetedrecord.Payload, c
 		}
 		prev := entries[(t-1+n)%n]
 		jrows[entries[t].ja] = newRows(entries[t].p0, prev.m[1])
+		cc.raise(w, entries[t].ja, jrows[entries[t].ja]...)
 	}
 	if open && ecuts[1].arc != nil {
 		if jrows[n], err = w.arcEndColumn(ecuts[1], entries[n-1].step, rowS[:rowsM], bound); err != nil {
@@ -612,6 +625,9 @@ func rewriteChain(ctx context.Context, env topo.Env, fp facetedrecord.Payload, c
 		}
 	}
 	for t := range entries {
+		cc.raise(w, entries[t].ja, seam[t])
+	}
+	for t := range entries {
 		en := entries[t]
 		first, last := seam[t], seam[(t+1)%n]
 		if open {
@@ -706,11 +722,18 @@ func rewriteChain(ctx context.Context, env topo.Env, fp facetedrecord.Payload, c
 		}
 		removedTrue += pa + wa
 		blendTrue += ba
-		groups = append(groups, w.tagGroup(facetedrecord.Group{
+		bg := facetedrecord.Group{
 			Origins: []provenance.Ref{{Producer: env.Ref, Role: fmt.Sprintf("%s(%d)", op, en.ord)}},
 			Source:  facetedrecord.BlendSource(env.Ref, en.ord),
 			Planar:  planar,
-		}, tag))
+		}
+		// A strip beside an oblique wall is not published as a tag: its true plane tilts with the wall,
+		// which no plane AxialDelta states (charged-window-chamfer-design.md §3.3, "Strips beside an
+		// oblique wall").
+		if !chainObliqueWall(en.wall) {
+			bg = w.tagGroup(bg, tag)
+		}
+		groups = append(groups, bg)
 	}
 	if open {
 		for _, ec := range ecuts {
@@ -722,6 +745,9 @@ func rewriteChain(ctx context.Context, env topo.Env, fp facetedrecord.Payload, c
 		groups[g].Centroid = measurement.VecMeasurement{}
 	}
 	w.removedTrue = removedTrue
+	if cc.charged {
+		w.arcCharged, w.arcCharge = true, cc.areaCharge(entries, tP, tW, spec)
+	}
 	if err := w.checkStripClear(ctx, stripFrom, taken); err != nil {
 		return nil, err
 	}
@@ -754,10 +780,10 @@ func (en chainEntry) param(p r3.Vec) float64 {
 // readChainEdge fills in the entry's geometry and checks that the base loop's
 // run between its junctions lies on the edge.
 func (w *work) readChainEdge(en *chainEntry, fp facetedrecord.Payload, faceIndex map[*topo.Face]int,
-	nP r3.Vec, ats []*topo.Vertex, slack float64) error {
+	nP r3.Vec, ats []*topo.Vertex, slack float64, charged bool) error {
 	switch curve := en.edge.Curve.(type) {
 	case surfacegeom.Line3:
-		wp, ok := retainedPlane(en.wall)
+		wp, ok := chainPlane(en.wall)
 		if !ok {
 			return fmt.Errorf("%w: a chain wall is not a retained plane", decaderr.ErrUnsupported)
 		}
@@ -802,6 +828,12 @@ func (w *work) readChainEdge(en *chainEntry, fp facetedrecord.Payload, faceIndex
 		}
 		if err := r.checkSize(en.step); err != nil {
 			return err
+		}
+		// On a charged chain the true radius may be R − δ, so the setback must fit inside the circle by
+		// more than the chain's slack (charged-window-chamfer-design.md §3.3, "Sizes").
+		if charged && r.kappa < 0 && !(r.radius-en.step.planeSetback() > slack) {
+			return fmt.Errorf("%w: the blend reaches the rim's axis: setback %g mm against radius %g mm",
+				decaderr.ErrDegenerate, en.step.planeSetback(), r.radius)
 		}
 		// readSide ties the rim's side to the edge's convexity.
 		en.arc, en.rim, en.sigma, en.side = true, r, -r.kappa, r.side
