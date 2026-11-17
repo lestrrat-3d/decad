@@ -366,24 +366,17 @@ func kinkedHubDisc(t *testing.T, shrink float64) *decad.Body {
 }
 
 // TestBossRootTangentRefusesKinkedJoint draws the spoked disc's hub corners as rounds that cross the hub arc at an
-// angle instead of touching it, from the hand-drawn disc whose shrink 0 is tangent and builds. The Ø14 boss then ends
-// each root arc at a joint that neither tangent proof admits, so the fillet refuses. A kink of 1e-8 is still read by
-// the junction rule as nearly tangent; 3e-8 reaches the charged-arc gate that only a proven corner passes; a kink the
-// union's shared-span gate cannot resolve takes the mesh path, whose boss has no root edge to fillet. The sketch's
-// arrangement does not return a valid profile for kinks between 1e-7 and 3e-5.
+// angle instead of touching it. The Ø14 boss then ends each root arc at a joint that neither tangent proof admits, so
+// the fillet refuses: a kink of 3e-8 reaches the charged-arc gate that only a proven corner passes, and a kink the
+// union's shared-span gate cannot resolve takes the mesh path, whose boss has no root edge to fillet. The hand-drawn
+// disc's corners are tangent only as closely as its float construction makes them, which differs between platforms,
+// so no case here asserts a build; TestBossRootTangentSpokedHub builds the sketch-filleted disc.
 func TestBossRootTangentRefusesKinkedJoint(t *testing.T) {
 	t.Parallel()
-	t.Run("tangent control builds", func(t *testing.T) {
-		t.Parallel()
-		out, err := bossOnTop(t, kinkedHubDisc(t, 0), 14, 0.5)
-		require.NoError(t, err)
-		require.True(t, out.IsSolid())
-	})
 	for _, tc := range []struct {
 		shrink float64
 		text   string
 	}{
-		{1e-8, "is nearly tangent and the tags cannot decide it"},
 		{3e-8, "an arc on a wall whose tag states a displacement is not built"},
 		{6e-5, "the boss's root circle is not an edge of the result"},
 	} {
