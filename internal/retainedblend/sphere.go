@@ -308,6 +308,7 @@ func rewriteSphereRim(ctx context.Context, env topo.Env, fp facetedrecord.Payloa
 	if err != nil {
 		return nil, err
 	}
+	w.sphereRimPieces(s, spec, m, s.side*m.zB)
 	return w.finishRim(ctx, env, s.tag(spec, m), ringA, ringB, [2]int{groupA, groupB}, role, ord, faceIndex)
 }
 

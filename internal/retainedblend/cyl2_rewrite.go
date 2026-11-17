@@ -188,6 +188,7 @@ func rewriteCylCyl(ctx context.Context, env topo.Env, fp facetedrecord.Payload, 
 	} else {
 		tag.trueArea = sec.t[1].Sub(sec.t[0]).Len() * length
 	}
+	w.cylCylPieces(c, spec, sec, length, math.Abs(corner))
 
 	groups := append([]facetedrecord.Group(nil), fp.Groups...)
 	groups = append(groups, w.tagGroup(facetedrecord.Group{
