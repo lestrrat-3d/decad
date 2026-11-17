@@ -38,7 +38,8 @@ func TestChamferConcaveArcEndHoldsItsBound(t *testing.T) {
 	// The chain's other end turns 60 degrees, from the inward line onto a line along -X. The outline then reaches up to
 	// y = 20, so the pair's chord tolerance, a fixed share of its diameter, passes the cutter's bound.
 	q, f := [2]float64{p[0] - 10, p[1]}, [2]float64{p[0] - 10, 20}
-	body := capLoopSubsetBody(t, func(s *sketch.Sketch) {
+	// Chamfer retires its receiver from the document, so each setback draws its own body.
+	draw := func(s *sketch.Sketch) {
 		pt := func(c [2]float64) *sketch.Point { return s.CreatePoint(c[0], c[1]) }
 		ap, vp, wp, pp, qp, fp, o := pt(a), pt(v), pt(w), pt(p), pt(q), pt(f), pt([2]float64{})
 		s.CreateLine(ap, vp)
@@ -50,7 +51,7 @@ func TestChamferConcaveArcEndHoldsItsBound(t *testing.T) {
 		for _, x := range []*sketch.Point{ap, vp, wp, pp, qp, fp, o} {
 			s.Fix(x)
 		}
-	})
+	}
 	inward := r3.Vec{X: p[0] - w[0], Y: p[1] - w[1]}
 	sel := topEdges(topEdge{r3.Vec{X: w[0], Y: w[1]}, inward}).
 		Or(decad.EndpointAt(r3.Vec{X: v[0], Y: v[1], Z: 5}), decad.Circular()).
@@ -61,7 +62,7 @@ func TestChamferConcaveArcEndHoldsItsBound(t *testing.T) {
 	for _, d := range []float64{0.2121, 0.2, 0.19, 0.15, 0.12} {
 		t.Run(fmt.Sprintf("setback %v", d), func(t *testing.T) {
 			t.Parallel()
-			out, err := decad.Chamfer(t.Context(), body, sel, units.Millimeters(d))
+			out, err := decad.Chamfer(t.Context(), capLoopSubsetBody(t, draw), sel, units.Millimeters(d))
 			require.NoError(t, err)
 			require.True(t, out.IsSolid())
 			for _, diag := range out.OperationDiagnostics() {
