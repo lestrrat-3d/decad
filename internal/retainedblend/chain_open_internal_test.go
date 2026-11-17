@@ -307,6 +307,14 @@ func TestChainEndCapArea(t *testing.T) {
 		{"a convex end face beside an extending wall takes a chamfer's cap", chainEndCut{extendsW: true}, false,
 			-tP * tW / 2},
 		{"an arc end gives up its own corner", chainEndCut{arc: &arcEnd{cornerArea: 0.3}}, true, 0.3},
+		// An oblique G holds the section's corner projected along the edge: the
+		// cap grows by 1/|d·n_G|.
+		{"an oblique end face beside an extending wall takes a chamfer's stretched cap",
+			chainEndCut{extendsW: true, oblique: true, cosine: 0.5}, false, -tP * tW},
+		{"an oblique convex end face gives up a fillet's stretched cap",
+			chainEndCut{oblique: true, cosine: 0.25}, true, 4 * fillet},
+		{"an arc end keeps its own corner whatever the cosine",
+			chainEndCut{arc: &arcEnd{cornerArea: 0.3}, oblique: true, cosine: 0.5}, true, 0.3},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -314,4 +322,25 @@ func TestChainEndCapArea(t *testing.T) {
 			require.InDelta(t, c.want, c.ec.capArea(c.fillet, r, tP, tW), 1e-15)
 		})
 	}
+}
+
+func TestObliqueEndAreas(t *testing.T) {
+	t.Parallel()
+
+	// The ramp end of a convex chain chamfered 0.5: a row at depth h below the
+	// base meets a 30° ramp h·cot(30°) nearer the junction, so kappa is −cot(30°)
+	// and the wall's band and the bevel both shrink.
+	kappa := -1 / math.Tan(math.Pi/6)
+	wall, blend := obliqueEndAreas(kappa, 0.5, 0.5, blendSpec{dA: 0.5, dB: 0.5})
+	require.InDelta(t, kappa*0.125, wall, 1e-15, "the wall's band is a trapezoid")
+	require.InDelta(t, kappa*0.25*math.Sqrt2/2, blend, 1e-15, "the bevel is a trapezoid")
+
+	// A fillet's arc row at height r(1 − cos α) adds kappa·r²·∫(1 − cos α)dα over the quarter.
+	wall, blend = obliqueEndAreas(2, 1, 1, blendSpec{fillet: true, r: 1})
+	require.InDelta(t, 1.0, wall, 1e-15)
+	require.InDelta(t, 2*(math.Pi/2-1), blend, 1e-15)
+
+	wall, blend = obliqueEndAreas(0, 1, 1, blendSpec{dA: 1, dB: 1})
+	require.Zero(t, wall, "a normal end face adds nothing")
+	require.Zero(t, blend, "a normal end face adds nothing")
 }

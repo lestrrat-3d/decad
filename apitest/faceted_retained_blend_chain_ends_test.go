@@ -386,12 +386,22 @@ func TestFacetedRetainedBlendChainEnds(t *testing.T) {
 		}
 	})
 
-	t.Run("an end whose wall wraps the corner is refused", func(t *testing.T) {
+	t.Run("a step's top outline fillets and its riser takes both caps", func(t *testing.T) {
 		t.Parallel()
-		_, err := decad.Fillet(t.Context(), stepBlock(t), xEdgeAt(r3.NewVec(37, 0, 10)), units.Millimeters(1),
+		// The convex chain's side walls run on up past the riser at x = 10: the
+		// riser takes each end's cap, and the walls keep their corners.
+		step := stepBlock(t)
+		before, err := step.Volume()
+		require.NoError(t, err)
+		out, err := decad.Fillet(t.Context(), step, xEdgeAt(r3.NewVec(37, 0, 10)), units.Millimeters(concaveFilletR),
 			decad.WithTangentChain())
-		require.ErrorIs(t, err, decad.ErrUnsupported)
-		require.ErrorContains(t, err, "a chain end's base or wall is reflex at the corner")
+		require.NoError(t, err)
+		after, err := out.Volume()
+		require.NoError(t, err)
+		requireVolumeChange(t, before, after, chainEndFillet(27+14+27))
+		requireFaceAreaChange(t, step, out, 10, 2*chainEndCap)
+		requireCapSide(t, out, 10, true, r3.NewVec(10, 0.05, 9.95), r3.NewVec(10, 19.95, 9.95))
+		requireVerifiedMesh(t, out)
 	})
 
 	t.Run("an end whose base wraps the corner is refused", func(t *testing.T) {

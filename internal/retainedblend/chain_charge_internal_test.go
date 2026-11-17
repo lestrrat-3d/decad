@@ -177,16 +177,20 @@ func TestCheckRestApart(t *testing.T) {
 
 	require.NoError(t, checkRestApart([]chainCycle{chain}, nil, false))
 	require.NoError(t, checkRestApart([]chainCycle{chain}, []*topo.Edge{apart}, false), "an edge apart from the chain")
+	open := chainCycle{edges: chain.edges[:2], open: true}
+	require.NoError(t, checkRestApart([]chainCycle{open}, []*topo.Edge{apart}, false), "an edge apart from an open chain")
+	require.NoError(t, checkRestApart([]chainCycle{chain, open}, []*topo.Edge{apart}, false),
+		"an edge apart from a closed chain and an open one")
 	for name, c := range map[string]struct {
 		chains []chainCycle
 		rest   []*topo.Edge
 		fillet bool
 	}{
-		"an edge that shares a vertex":      {[]chainCycle{chain}, []*topo.Edge{apart, touching}, false},
-		"an edge that ends at a vertex":     {[]chainCycle{chain}, []*topo.Edge{{Start: a, End: far1}}, false},
-		"a fillet":                          {[]chainCycle{chain}, []*topo.Edge{apart}, true},
-		"an open chain":                     {[]chainCycle{{edges: chain.edges, open: true}}, []*topo.Edge{apart}, false},
-		"a closed chain beside an open one": {[]chainCycle{chain, {edges: chain.edges, open: true}}, []*topo.Edge{apart}, false},
+		"an edge that shares a vertex":        {[]chainCycle{chain}, []*topo.Edge{apart, touching}, false},
+		"an edge that ends at a vertex":       {[]chainCycle{chain}, []*topo.Edge{{Start: a, End: far1}}, false},
+		"a fillet":                            {[]chainCycle{chain}, []*topo.Edge{apart}, true},
+		"an edge at an open chain's free end": {[]chainCycle{open}, []*topo.Edge{{Start: c, End: far1}}, false},
+		"a fillet of an open chain":           {[]chainCycle{open}, []*topo.Edge{apart}, true},
 	} {
 		err := checkRestApart(c.chains, c.rest, c.fillet)
 		require.ErrorIs(t, err, decaderr.ErrUnsupported, name)

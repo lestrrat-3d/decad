@@ -195,13 +195,15 @@ reflex side within the junction's slab. `σ = 3δ + δ_P + max_J c_J` is the she
 
 ### 3.4 A selection with chains and other edges
 
-The wheel's one `Chamfer` names its window loops and its rim circles together. A selection that holds closed chains
-and other edges builds when no other edge shares a vertex with a chain edge: the other edges take their own routes
-first, one at a time on the evolving mesh as today, each keeping its ordinal in the selection for its blend role, and
-every chain, the first included, is then found again on the result by its edges' end points and built. The rim's
-base clearance keeps a window loop out of a rim's annulus, and the chain's base band then tests the rim's new
-setback circle. An edge that touches a chain keeps today's refusal ("a selection that holds a tangent chain
-names only chain edges").
+The wheel's one `Chamfer` names its window loops and its rim circles together. A chamfer selection that holds closed
+or open chains and other edges builds when no other edge shares a vertex with a chain edge: the other edges take their
+own routes first, one at a time on the evolving mesh as today, each keeping its ordinal in the selection for its blend
+role, and every chain, the first included, is then found again on the result by its edges' end points and built. The
+rim's base clearance keeps a window loop out of a rim's annulus, and the chain's base band then tests the rim's new
+setback circle. An open chain reads its end faces on that result, so an end face another edge's blend rewrote is read
+as a later call would read it (a ramp whose top edge is chamfered in the same call, retained-modify-reach §5.5 step 5).
+An edge that touches a chain, and any fillet selection that mixes them, keeps today's refusal ("a selection that holds
+a tangent chain names only chain edges").
 
 ### 3.5 Refusals
 

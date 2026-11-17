@@ -2870,6 +2870,7 @@
 12	0.00	TestArcEdgeAxisFollowsWalkSense
 12	0.01	TestArrangeAngleLaysADiagonalBarSquareToTheBed
 12	0.00	TestAsymmetricChamferOverrunEachSide
+12	0.00	TestBlendChainEndsOnRamp
 12	0.01	TestBlindPocketCanEnterMeshBoolean
 12	0.00	TestBodyPatchCapsBothRimsOfATubeInOneCall
 12	0.02	TestBodyPatchCircularPrismPlacementAndReflection

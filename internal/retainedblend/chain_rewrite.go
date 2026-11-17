@@ -325,7 +325,16 @@ func rewriteChain(ctx context.Context, env topo.Env, fp facetedrecord.Payload, c
 		ends = append(ends, sec)
 	}
 	if fillet || len(ends) > 0 {
-		if rowS, err = arcRows(spec, w.tau, profileShare(w.tau), ends); err != nil {
+		// A straight end on an oblique G stretches each row chord's sagitta by up to
+		// 1/|d·n_G| where the rows meet G, so the profile steps by that much finer
+		// (blend §5.0 step 1, rowStep).
+		share := profileShare(w.tau)
+		for _, ec := range ecuts {
+			if ec != nil && ec.arc == nil && ec.oblique {
+				share = math.Min(share, profileShare(w.tau)*ec.cosine)
+			}
+		}
+		if rowS, err = arcRows(spec, w.tau, share, ends); err != nil {
 			return nil, err
 		}
 	}
@@ -455,7 +464,21 @@ func rewriteChain(ctx context.Context, env topo.Env, fp facetedrecord.Payload, c
 		uP := [2]int{loop[(pos[0]+k-1)%k], loop[(pos[n]+1)%k]}
 		rc := [2]r3.Vec{entries[0].d, entries[n-1].d.Scale(-1)}
 		for i, ec := range ecuts {
-			if err := w.readEndCut(ec, nP, rc[i], uP[i], i == 0, side > 0, tP, tW, margin, slack); err != nil {
+			var pW r3.Vec
+			if ec.arc == nil {
+				// The blend's last row at the corner, slid along the edge onto G.
+				en, m := entries[0], entries[0].m[0]
+				if i == 1 {
+					en, m = entries[n-1], entries[n-1].m[1]
+				}
+				pW = setbackPoint(rowPoint(ec.exact, m, rowsM), en.d, ec.g)
+				if ec.oblique {
+					// A row at height h on the chain's side runs h·kappa longer than
+					// the edge, from G to the next junction.
+					ec.kappa = side * nP.Dot(ec.g.n) / rc[i].Dot(ec.g.n)
+				}
+			}
+			if err := w.readEndCut(ec, nP, rc[i], pW, uP[i], i == 0, side > 0, tP, tW, margin, slack); err != nil {
 				return nil, err
 			}
 			if err := checkEndSense(ec, i == 1); err != nil {
@@ -594,7 +617,7 @@ func rewriteChain(ctx context.Context, env topo.Env, fp facetedrecord.Payload, c
 			} else if ecuts[0].arc != nil {
 				seam[0], err = w.seamCut(ecuts[0], cutsOf[0])
 			} else {
-				seam[0], err = w.findEndCut(cutsOf[0], jp[0], nP, slack)
+				seam[0], err = w.findEndCut(cutsOf[0], ecuts[0], nP, slack)
 			}
 			if err != nil {
 				return nil, err
@@ -618,7 +641,7 @@ func rewriteChain(ctx context.Context, env topo.Env, fp facetedrecord.Payload, c
 		} else if ecuts[1].arc != nil {
 			seam[n], err = w.seamCut(ecuts[1], cutsOf[n-1])
 		} else {
-			seam[n], err = w.findEndCut(cutsOf[n-1], jp[n], nP, slack)
+			seam[n], err = w.findEndCut(cutsOf[n-1], ecuts[1], nP, slack)
 		}
 		if err != nil {
 			return nil, err
@@ -719,6 +742,17 @@ func rewriteChain(ctx context.Context, env topo.Env, fp facetedrecord.Payload, c
 		pa, wa, ba := en.areas(tP, tW, spec)
 		if en.freeStart != nil || en.freeEnd != nil {
 			pa, wa, ba = en.areasFree(tP, tW)
+		}
+		if open {
+			// A straight end on an oblique G lengthens or shortens each row by its
+			// height times kappa (§5.7).
+			for i, ec := range ecuts {
+				if ec.arc == nil && ec.oblique && t == i*(n-1) {
+					dw, db := obliqueEndAreas(ec.kappa, tP, tW, spec)
+					wa += dw
+					ba += db
+				}
+			}
 		}
 		removedTrue += pa + wa
 		blendTrue += ba
@@ -1090,6 +1124,22 @@ func (w *work) chainTag(en chainEntry, nP r3.Vec, tP, tW float64) (blendTag, boo
 		tag.reversed = frame.N().Dot(outward) < 0
 	}
 	return tag, true
+}
+
+// obliqueEndAreas are what a straight end on an oblique G adds to its entry's
+// wall band and blend face (retained-modify-reach §5.7). A row at height h on
+// the chain's side runs from G to the next junction h·kappa longer than the
+// edge, and G meets the wall square, so the base's band keeps its rectangle:
+// the wall's band gains kappa·tW²/2, a chamfer's bevel at height tW·s gains
+// kappa·tW·hypot(tP, tW)/2, and a fillet's arc at height r(1 − cos α) gains
+// kappa·r²·(π/2 − 1).
+func obliqueEndAreas(kappa, tP, tW float64, spec blendSpec) (wall, blend float64) {
+	wall = kappa * tW * tW / 2
+	if spec.fillet {
+		r := spec.r
+		return wall, kappa * r * r * (math.Pi/2 - 1)
+	}
+	return wall, kappa * tW * math.Hypot(tP, tW) / 2
 }
 
 // areas are the exact areas the entry takes from the base and from its wall,

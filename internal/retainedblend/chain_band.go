@@ -86,8 +86,9 @@ func (w *work) newChainBand(en chainEntry, facets []int, up, oP r3.Vec, tW float
 		}
 		sine, planar := w.wallSine(en.wallIx, ec.g)
 		end := &bandEnd{g: ec.g, sign: sign, on: on, sine: sine, planarWall: planar}
-		// A straight end's plane is normal to the chain edge, and the wall's plane
-		// contains it, so they meet square; an arc end's wall meets it at a slant.
+		// A straight end's plane is normal to the chain edge or tilts about its line
+		// on the base, and meets the wall's plane square either way
+		// (readEndCorner); an arc end's wall meets it at a slant.
 		if ec.arc != nil {
 			end.slanted, end.slant = true, w.wallSlant(en.wallIx, ec.g)
 		}

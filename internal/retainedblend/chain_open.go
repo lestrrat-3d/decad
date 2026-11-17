@@ -15,11 +15,14 @@ import (
 // This file holds the ends of an open tangent chain
 // (agent-docs/retained-modify-reach-design.md §5.1 C2, §5.5 step 5). An end is
 // the corner where the chain's first or last straight edge meets the base P,
-// its wall and an end face G. G is a retained plane normal to the edge, so the
-// edge's blend ends on G in blend §5.0's end curve, the quarter circle (or the
-// setback segment) in G's plane. The base and the wall must be convex at the
-// corner; G gives the blend's end cap up where it is convex there and takes it
-// where it is reflex, for a convex chain and a concave one alike.
+// its wall and an end face G. G is a retained plane normal to the edge, or one
+// that meets the wall square and so tilts only about its line on the base (a
+// ramp), and the edge's blend ends on G in blend §5.0's end curve, the quarter
+// circle (or the setback segment) projected along the edge into G's plane. The
+// base must be convex at the corner, and the wall convex or running on past G;
+// G gives the blend's end cap up where it is convex there and takes it where it
+// is reflex or the wall runs on past it, for a convex chain and a concave one
+// alike.
 
 // chainEndCut is one end of an open chain: the corner, the end face G and, once
 // read, the vertices of G's loop that the blend removes or keeps.
@@ -45,9 +48,11 @@ type chainEndCut struct {
 	// G ∩ P, away from G's chain along G ∩ P. G is convex there and takes the
 	// cap.
 	wraps bool
-	// extendsW is set when the wall continues past G at the corner of a concave
-	// chain: the wall's chain along G ∩ wall leaves the corner against the
-	// blend's setback on the wall. G is convex there and takes the cap, keeps
+	// extendsW is set when the wall continues past G at the corner: the wall's
+	// chain along G ∩ wall leaves the corner away from the blend's setback point
+	// on G ∩ wall (a concave chain's floor running on behind a block, a convex
+	// chain's side wall running on up a riser or a ramp). G is convex there and
+	// takes the cap, keeps
 	// the corner and the whole chain of G ∩ wall, and its loop gains the run
 	// along the wall's cut in G's plane from the wall's setback corner back to
 	// the corner (the wall's band, chain_band.go).
@@ -61,6 +66,16 @@ type chainEndCut struct {
 	// rP and rW are the unit directions from the corner along G ∩ P and
 	// G ∩ wall toward the end face's chains.
 	rP, rW r3.Vec
+
+	// oblique is set when the straight end's face G is not normal to the edge:
+	// it meets the wall square and tilts about its line on the base, and cosine
+	// is |d·n_G|, the cosine of the edge's angle to G's normal (1 for a normal
+	// G). kappa is the slide along the edge, into the chain, per unit of height
+	// on the chain's side at which a row meets G, negated: a row at height h runs
+	// h·kappa longer than the edge (rewriteChain).
+	oblique bool
+	cosine  float64
+	kappa   float64
 
 	// arc is set when the chain's end edge is an arc: the end curve is then a
 	// chain of exact points, not a quarter circle (chain_arc_end.go).
@@ -105,14 +120,30 @@ func (w *work) readEndCorner(v *topo.Vertex, e *topo.Edge, base *topo.Face, bp p
 		return nil, fmt.Errorf("%w: an open tangent chain's end is not where its three tags meet",
 			decaderr.ErrUnsupported)
 	}
-	// The end face is normal to the edge: the closed forms of blend §5.0 with
-	// no end-plane skew apply.
-	d := bp.n.Cross(wp.n)
-	if d.Cross(g.n).Len() > 1e-9*d.Len() {
-		return nil, fmt.Errorf("%w: an open tangent chain's end face is not normal to its edge",
+	ec := &chainEndCut{faceIx: faceIndex[third], g: g, exact: exact, wallN: wp.n, v: held, cosine: 1}
+	// An end face normal to the edge takes the closed forms of blend §5.0 with
+	// no end-plane skew. Any other end face must meet the wall square, so that it
+	// tilts only about its line on the base, as a ramp or a drafted end wall
+	// does: the base's setback point stays on that line at tP from the corner,
+	// and the rows slide along the edge onto G by an amount that grows with
+	// their height (§5.5 step 5, "An oblique end face").
+	d, ok := bp.n.Cross(wp.n).Normalize()
+	if !ok {
+		return nil, fmt.Errorf("%w: an open tangent chain's end edge has no direction", decaderr.ErrDegenerate)
+	}
+	if d.Cross(g.n).Len() <= 1e-9 {
+		return ec, nil
+	}
+	if math.Abs(g.n.Dot(wp.n)) > 1e-9 {
+		return nil, fmt.Errorf("%w: an open tangent chain's end face does not meet its wall square",
 			decaderr.ErrUnsupported)
 	}
-	return &chainEndCut{faceIx: faceIndex[third], g: g, exact: exact, wallN: wp.n, v: held}, nil
+	if ec.cosine = math.Abs(d.Dot(g.n)); ec.cosine < minSine {
+		return nil, fmt.Errorf("%w: an open tangent chain meets its end face at a grazing angle",
+			decaderr.ErrUnsupported)
+	}
+	ec.oblique = true
+	return ec, nil
 }
 
 // readEndCut reads the end face's loop around the corner: the chains leaving
@@ -124,8 +155,11 @@ func (w *work) readEndCorner(v *topo.Vertex, e *topo.Edge, base *topo.Face, bp p
 // way G's loop leaves along G ∩ P. rc is the unit direction from the corner
 // along the chain's end edge and leaves is set for the chain's first end, as
 // for checkEndTurns; concave is set for a concave chain, whose end may be one
-// where the base wraps the corner.
-func (w *work) readEndCut(ec *chainEndCut, nP, rc r3.Vec, uP int, leaves, concave bool,
+// where the base wraps the corner. pW is the exact point where the blend's
+// last row meets G: the wall's setback point, on the line G ∩ wall. Where G's
+// chain along that line leaves the corner away from it, the wall continues past
+// G (extendsW).
+func (w *work) readEndCut(ec *chainEndCut, nP, rc, pW r3.Vec, uP int, leaves, concave bool,
 	tP, tW, margin, slack float64) error {
 	var err error
 	if ec.fl, err = w.faceLoops(ec.faceIx, &ec.g); err != nil {
@@ -195,13 +229,27 @@ func (w *work) readEndCut(ec *chainEndCut, nP, rc r3.Vec, uP int, leaves, concav
 		if tau(w.verts[last], ec.exact, dirs[k]) < 0 {
 			dirs[k] = dirs[k].Scale(-1)
 		}
-		if k == 1 && concave {
-			// The wall's setback runs along the base's normal, into the void.
-			// G's chain along G ∩ wall leaves the corner with it (the wall
-			// trims) or against it (the wall continues past G).
-			along := dirs[1].Dot(nP)
+		if k == 1 && (concave || ec.arc == nil) {
+			// The wall's setback point lies on G ∩ wall: along the base's normal
+			// on the chain's side where G is normal to the edge (into the void
+			// for a concave chain, into the material for a convex one), slid
+			// along the edge onto an oblique G. G's chain along G ∩ wall leaves
+			// the corner toward it (the wall trims) or away from it (the wall
+			// continues past G). An arc end's wall is a generator along the
+			// base's normal, and only a concave arc end's wall continues.
+			toward := nP
+			if ec.arc == nil {
+				var ok bool
+				if toward, ok = pW.Sub(ec.exact).Normalize(); !ok {
+					return fmt.Errorf("%w: a blend's setback point lies on its edge's corner", decaderr.ErrUnsupported)
+				}
+			}
+			along := dirs[1].Dot(toward)
 			if math.Abs(along) <= minSine {
 				return fmt.Errorf("%w: a face leaves an edge end along the edge's own line", decaderr.ErrUnsupported)
+			}
+			if ec.oblique {
+				setback[1] = tau(pW, ec.exact, dirs[1])
 			}
 			if along < 0 {
 				if err := clearance(tau(w.verts[last], ec.exact, dirs[1]), w.beta[last]+margin,
@@ -262,8 +310,14 @@ func (w *work) readEndCut(ec *chainEndCut, nP, rc r3.Vec, uP int, leaves, concav
 	if err := ec.readEndFaceKind(); err != nil {
 		return err
 	}
-	// Nothing else of the end face comes near the corner.
-	reach := math.Max(tP, tW)*math.Sqrt2 + margin
+	// Nothing else of the end face comes near the corner. The cap lies within the
+	// triangle of the corner and the two setback points, so within the farther of
+	// them; an oblique G puts the wall's farther than tW.
+	far := tW
+	if ec.oblique {
+		far = pW.Sub(ec.exact).Len()
+	}
+	reach := math.Max(tP, far)*math.Sqrt2 + margin
 	if ec.arc != nil {
 		reach = ec.arc.reach + margin
 	}
@@ -327,11 +381,19 @@ func (w *work) seamCut(ec *chainEndCut, cuts map[int]bool) (int, error) {
 }
 
 // findEndCut picks, among the vertices a wall's cut made, the one on the line
-// through the corner normal to the base: where the cut meets the end face.
-func (w *work) findEndCut(cuts map[int]bool, corner, nP r3.Vec, slack float64) (int, error) {
+// G ∩ wall through the end's corner: where the cut meets the end face. That line
+// is the base's normal where G is normal to the edge.
+func (w *work) findEndCut(cuts map[int]bool, ec *chainEndCut, nP r3.Vec, slack float64) (int, error) {
+	line := nP
+	if ec.oblique {
+		var ok bool
+		if line, ok = ec.wallN.Cross(ec.g.n).Normalize(); !ok {
+			return 0, fmt.Errorf("%w: an end face is parallel to a face of the chain", decaderr.ErrUnsupported)
+		}
+	}
 	found := -1
 	for c := range cuts {
-		if distToLine(w.verts[c], corner, nP) <= w.beta[c]+slack {
+		if distToLine(w.verts[c], ec.exact, line) <= w.beta[c]+slack {
 			if found >= 0 {
 				return 0, fmt.Errorf("%w: a wall's cut meets the end face twice", decaderr.ErrUnsupported)
 			}
@@ -387,9 +449,10 @@ func (ec *chainEndCut) endFaceTurn() int {
 
 // checkEndTurns refuses a straight chain end whose base or wall is not convex
 // at the corner (SM8): the base or the wall then wraps the corner, and the
-// blend's section has no end face to lie in. The one exception is a concave
-// chain's base, which readEndCut marks wraps: the section then lies in G's
-// plane outside G's held face, which G takes. rc is the unit direction from the
+// blend's section has no end face to lie in. The exceptions are a concave
+// chain's base, which readEndCut marks wraps, and a wall of either chain that
+// runs on past G, which it marks extendsW: the section then lies in G's plane
+// outside G's held face, which G takes. rc is the unit direction from the
 // corner along the chain's end edge, and leaves is set when the base loop
 // leaves the corner along that edge (the chain's first end). The held mesh is
 // oriented, so the base loop runs the edge to G one way and G's loop the other,
@@ -501,7 +564,9 @@ func (w *work) rebuildEnds(ends []*chainEndCut, seqs [][]int, fillet bool, r, tP
 
 // capArea is the signed exact area the end face loses at this end: the
 // blend's section corner, positive when G is convex at the corner and gives it
-// up, negative when G is reflex and takes it.
+// up, negative when G is reflex and takes it. A straight end's cap is the
+// section's corner projected along the edge onto G, so an oblique G's is the
+// section's over the cosine |d·n_G| (blend §5.0, "Exact areas").
 func (ec *chainEndCut) capArea(fillet bool, r, tP, tW float64) float64 {
 	area := tP * tW / 2
 	switch {
@@ -509,6 +574,9 @@ func (ec *chainEndCut) capArea(fillet bool, r, tP, tW float64) float64 {
 		area = ec.arc.cornerArea
 	case fillet:
 		area = r * r * (1 - math.Pi/4)
+	}
+	if ec.arc == nil && ec.oblique {
+		area /= ec.cosine
 	}
 	if ec.takesCap() {
 		return -area
