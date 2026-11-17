@@ -1005,22 +1005,40 @@ extension and the probe of its end:
   carve a sector of the wall's material and leave a step) and is `ErrUnsupported`. A turn under 90 degrees needs the next
   edge at least `1.5 reach / sin(turn)` long. The run-out removes `dc^3 cot(turn)/6` beyond the perpendicular end's wedge (a
   negative amount past 90 degrees).
-- A concave end turned by up to 90 degrees beside a line stops the bevel on the next face's plane, carried back over the
-  run's band. The cutter loses a sector of a disc about the corner, bounded by the next wall's line carried back over the
-  band and by the bisector of the corner's empty wedge, so the bevel tapers to the corner's vertical edge, shortens at
-  the cap by `dc / sin(turn)` along that plane, and leaves no square end. The next face grows by a triangle coplanar
-  with it, and nothing is removed on the neighbour's side. A turn of exactly 90 degrees stops the bevel on the corner's
+- A concave end turned by up to 90 degrees beside a line stops the bevel on the next face's plane, carried back over
+  the run's band. The cutter loses a sector of a disc about the corner, bounded by the next wall's line carried back
+  over the band and by the bisector of the corner's empty wedge, so the bevel tapers toward the corner's vertical
+  edge, shortens at the cap by `dc / sin(turn)` along that plane, and leaves no square end. A triangle coplanar with
+  the next face closes the bevel's end; the mesh result holds it as a face of its own beside the next face, and
+  nothing is removed on the neighbour's side. A turn of exactly 90 degrees stops the bevel on the corner's
   perpendicular. The result removes `dc^3 cot(turn)/6` less than the perpendicular end's wedge. The sector's radius is
-  `S = 1.5 (reach/sin(turn) + dc + over)`, local to the corner. The cutter lies within `reach` of its run, so a point of the chain whose band of that width
-  meets the sector is refused unless it lies in the smooth stretch leaving the corner within `reach / sin(turn)` of it along
-  the chain, where the taper is. That refuses a stretch past the first sharp corner, a smooth stretch that doubles
-  back, and an arc that curls onto the next wall's plane carried back. For an arc at the corner the clip stops
-  at the foot of the next wall's line, so its radius is `min(S, R sin(turn))`, where `R sin(turn)` is the distance from the
-  corner along that line to the foot of the perpendicular from the arc's centre. Past the foot the line turns back toward
-  the arc, and the clip does not reach it. The plane must also meet the bevel's circle at the cap (radius `R - dc`),
-  that is `R - dc` must not be below the plane's distance from the centre; otherwise it cannot cap the chamfer and the
-  run is refused. Where `S` is the smaller radius the clip keeps it, and the plane's second crossing must lie farther
-  than `S + reach` from the corner.
+  `S = 1.5 (reach/sin(turn) + dc + over)`, local to the corner. The cutter lies within `reach` of its run, so a point
+  of the chain whose band of that width meets the sector is refused unless it lies in the smooth stretch leaving the
+  corner within `reach / sin(turn)` of it along the chain, where the taper is. That refuses a stretch past the first
+  sharp corner, a smooth stretch that doubles back, and an arc that curls onto the next wall's plane carried back. For
+  an arc at the corner the clip stops at the foot of the next wall's line, so its radius is `min(S, R sin(turn))`,
+  where `R sin(turn)` is the distance from the corner along that line to the foot of the perpendicular from the arc's
+  centre. Past the foot the line turns back toward the arc, and the clip does not reach it. The plane must also meet
+  the bevel's circle at the cap (radius `R - dc`), that is `R - dc` must not be below the plane's distance from the
+  centre; otherwise it cannot cap the chamfer and the run is refused. Where `S` is the smaller radius the clip keeps
+  it, and the plane's second crossing must lie farther than `S + reach` from the corner. Without more, the clipped
+  cutter lies flush with the next wall along the corner's vertical edge. The mesh Boolean cannot classify that touch,
+  and its gap shift (gap-tolerance §5.2) moves the cutter outward off the next wall's plane. The moved clip face then
+  crosses the run's wall at the corner's turn, and beside an arc the rim there divides the wall's chord bound by
+  `sin(turn)`: about 0.08 mm at a turn of 10 degrees on a body 40 mm across. So on a prism whose document's gap
+  tolerance is at least 0.004 mm (`partialCornerRelief`), the clip also holds a polygon inscribed in the circle of
+  that radius about the corner, one chord per sixteenth of a turn over the angles the sector leaves out. The cutter
+  then stays at least `0.004 min(cos(turn/2), cos(c/2))` mm from the next wall, `c` the angle each chord spans, more
+  than the two faces' bounds, and the Cut needs no shift. The bevel stops short of the corner's edge and keeps
+  material within 0.004 mm of it, at most `0.004^2 turn dc / 2` mm3 per corner (`turn` in radians), 6.3e-6 mm3 at a
+  right angle and a setback of 0.5 mm, for a line run or an arc that curves toward the material (an arc of radius `R`
+  curving away keeps up to `0.004^3 dc / (6 R)` more), and a setback under about `0.004 sin(turn)` loses its whole
+  taper to it. That relieved chamfer is the result's true solid, a use of the gap tolerance like the shifted retry's
+  (gap-tolerance §5.4): its bounds, tags and edges describe it, and no charge is added for the relief, so its bounds
+  do not cover the chamfer without it. Against the chamfer without the relief, the edge where the run's wall meets the
+  next wall runs up to the cap instead of stopping at the bevel, and the relief adds faces and edges about `dc` tall
+  and at most 0.004 mm wide. A document whose gap tolerance is under 0.004 mm, an exact-only one included, and a
+  faceted receiver take no relief; their Cut takes the gap shift where the tolerance allows it.
 
 Any other end is `ErrUnsupported`: a convex end turned by less than 45 degrees, a concave end turned by more than 90
 degrees, a concave end beside an arc, a run-out longer than the next edge, an arc run whose extension turns more than a
@@ -1076,7 +1094,9 @@ spans that turn and the arc's chord step together, so its sag is `rho (step + dp
 corner that reaches the arc's foot, or an arc-arc corner that changes sides of the line of centres in a layer, is
 `ErrUnsupported`. The cutter's bound is 0.0002 mm plus that departure. On a concave arc wall (material outside
 the circle) the faceted result reads about 0.07 mm3 more volume per arc run than its exact value on a cutter of hub
-size (arc radius near 13 mm, 22 mm long), so a test of such a run reads a section or allows that excess. A concave end's clip is a second mesh Boolean, which leaves about 5e-6 mm3 on a straight edge.
+size (arc radius near 13 mm, 22 mm long), so a test of such a run reads a section or allows that excess.
+A concave end's clip is a second mesh Boolean; without a relief its gap shift leaves about 5e-6 mm3 on a straight
+edge, and with one the relief keeps what it states above.
 `internal/brepmodify/partial_loop_chamfer.go` owns it. It runs after every exact route has declined, and only for a
 symmetric chamfer.
 

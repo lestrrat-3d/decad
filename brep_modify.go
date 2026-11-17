@@ -75,5 +75,12 @@ func modifyHooks() brepmodify.Hooks {
 			return bodyNode(out), err
 		},
 		CurveName: publicCurveName,
+		GapReach: func(env topo.Env) float64 {
+			d := documentHandle(env.Doc)
+			if d == nil || d.gapErr != nil {
+				return 0
+			}
+			return d.gapReach
+		},
 	}
 }

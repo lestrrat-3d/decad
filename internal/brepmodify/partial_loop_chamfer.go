@@ -37,11 +37,14 @@ import (
 //     does. Below 90 degrees the bevel runs out onto that wall, so the next edge must be at least 1.5 reach/sin(turn)
 //     long.
 //   - A concave end turned by up to 90 degrees beside a line stops the bevel on the next face's plane, carried back over
-//     the run's band: the cutter loses a local sector about the corner, so the bevel tapers to the corner's vertical
-//     edge and the next face grows by a coplanar triangle. There is no square end. The material continues past a
-//     concave corner, so a cutter that reaches past the end would carve it. A chain that comes back within the sector's
-//     reach is refused. Beside an arc that curves toward the material the sector stops at the foot of the next wall's
-//     line, and a plane that misses the bevel's top edge cannot cap it and is refused.
+//     the run's band: the cutter loses a local sector about the corner, so the bevel tapers toward the corner's
+//     vertical edge and the next face grows by a coplanar triangle. There is no square end. On a prism whose
+//     document's gap tolerance reaches partialCornerRelief the cutter also loses a polygon within that radius of the
+//     corner, so it never lies flush with the next wall along the corner's edge. The result's true solid is then the
+//     relieved chamfer, which keeps material within partialCornerRelief of the corner's edge. The material continues
+//     past a concave corner, so a cutter that reaches past the end would carve it. A chain that comes back within the
+//     sector's reach is refused. Beside an arc that curves toward the material the sector stops at the foot of the
+//     next wall's line, and a plane that misses the bevel's top edge cannot cap it and is refused.
 //
 // Any other end is refused rather than guessed: a convex end turned by less than 45 degrees, a concave end turned by
 // more than 90 degrees, or a concave end beside an arc whose next wall's plane misses the bevel. So is a chain whose cutter would reach material of the loop's
@@ -82,6 +85,12 @@ func PartialLoopChamfer(ctx context.Context, env topo.Env, hooks Hooks, body *to
 			return Result{}, true, err
 		}
 	}
+	// A prism's concave ends take the corner relief when the document's gap tolerance reaches it.
+	if isPrism && hooks.GapReach != nil && hooks.GapReach(env) >= partialCornerRelief {
+		for _, r := range runs {
+			r.loop.relief = partialCornerRelief
+		}
+	}
 	var last error
 	for _, over := range partialOvershoots {
 		out, used, err := cutRuns(ctx, env, hooks, body, runs, d, over*d)
@@ -99,6 +108,19 @@ func PartialLoopChamfer(ctx context.Context, env topo.Env, hooks Hooks, body *to
 // partialSagitta is how far a chord of a partial chamfer's cutter arc may lie inside its circle, in millimetres. It is
 // finer than the loop cutter's, since the receiver is held exactly and the Cut's chord tolerance follows the pair's size.
 const partialSagitta = 0.0002
+
+// partialCornerRelief is the radius, in millimetres, of the circle about a concave end's corner within which the end
+// clip also takes a polygon from a prism's cutter (endClipMesh) when the document's gap tolerance reaches it. The bevel
+// then stops short of the corner's vertical edge and keeps material within that radius of it. That relieved chamfer is
+// the result's true solid, a use of the gap tolerance like the shifted Boolean retry's
+// (agent-docs/gap-tolerance-design.md §5.4). Without it the clipped cutter lies flush with the next wall's plane along
+// that edge. The mesh Boolean cannot classify that touch, and its shifted retry moves the cutter off the plane, so that
+// the moved clip face crosses the run's wall at the corner's turn. Beside an arc the rim there divides the wall's chord
+// bound by the sine of the turn: a turn of 10 degrees multiplies it by almost six. The relief keeps the cutter at least
+// partialCornerRelief times the smaller of cos(turn/2) and the cosine of half a chord's angle from the next wall,
+// several times the bound of the clipped cutter's faces, so the Boolean decides the pair without a shift. The result's
+// bounds describe the relieved chamfer and do not cover the chamfer without the relief.
+const partialCornerRelief = 0.004
 
 // partialOvershoots are how far, in setbacks, a cutter reaches above the cap and outside the wall, tried in turn
 // while the Boolean refuses a cutter as unsupported.
@@ -372,11 +394,10 @@ func (e runEnd) clipSector() (from, sweep float64) {
 	return from, sweep
 }
 
-// inClip reports whether p lies in the end clip of the concave end e, whose sector has radius clip.
-func (e runEnd) inClip(p pt2, clip float64) bool {
-	if p.dist(e.v) > clip {
-		return false
-	}
+// inClip reports whether p lies in the end clip of the concave end e: within clip of the corner inside the sector's
+// angles, and otherwise within the circle the relief polygon of radius relief holds (endClipMesh), which a zero relief
+// leaves empty.
+func (e runEnd) inClip(p pt2, clip, relief float64) bool {
 	from, sweep := e.clipSector()
 	a := math.Atan2(p.y-e.v.y, p.x-e.v.x) - from
 	for a < 0 {
@@ -385,8 +406,19 @@ func (e runEnd) inClip(p pt2, clip float64) bool {
 	for a >= 2*math.Pi {
 		a -= 2 * math.Pi
 	}
-	return a <= sweep
+	if a <= sweep {
+		return p.dist(e.v) <= clip
+	}
+	if relief <= 0 {
+		return false
+	}
+	rest := 2*math.Pi - sweep
+	return p.dist(e.v) <= relief*math.Cos(rest/float64(reliefCells(rest))/2)
 }
+
+// reliefCells is how many chords the relief polygon takes over rest radians, the angles the end clip's sector leaves
+// out: one per sixteenth of a turn or part of one.
+func reliefCells(rest float64) int { return max(1, int(math.Ceil(rest/(math.Pi/8)))) }
 
 // clipRadius is the radius of the sector the end clip removes about the corner of a concave end.
 func (e runEnd) clipRadius(d, over float64) float64 {
@@ -995,7 +1027,7 @@ func (r chamferRun) checkClipLocal(e runEnd, atStart bool, d, over float64) erro
 			}
 			in := l.materialNormal(sg, p)
 			for _, off := range offsets {
-				if e.inClip(p.add(in.scale(off)), clip) {
+				if e.inClip(p.add(in.scale(off)), clip, l.relief) {
 					return refuse
 				}
 			}
@@ -1045,8 +1077,8 @@ func (r chamferRun) checkMargin(ends [2]runEnd, d, over float64) error {
 			out := l.materialNormal(sg, p).scale(-1)
 			for _, u := range []float64{0.5, 0.75, 1} {
 				q := p.add(out.scale(u * over))
-				if (ends[0].concave && ends[0].inClip(q, ends[0].clipRadius(d, over))) ||
-					(ends[1].concave && ends[1].inClip(q, ends[1].clipRadius(d, over))) {
+				if (ends[0].concave && ends[0].inClip(q, ends[0].clipRadius(d, over), l.relief)) ||
+					(ends[1].concave && ends[1].inClip(q, ends[1].clipRadius(d, over), l.relief)) {
 					continue
 				}
 				if contains(poly, q) == l.outer {
@@ -1061,11 +1093,24 @@ func (r chamferRun) checkMargin(ends [2]runEnd, d, over float64) error {
 
 // endClipMesh is the region a run's cutter loses at a concave end: a sector of a disc about the corner v, outside the
 // wedge between the next wall's plane carried back over the run and the bisector of the corner's empty wedge. What it
-// leaves ends the bevel on the next wall's plane, the way a CAD chamfer extends the unselected neighbour.
+// leaves ends the bevel on the next wall's plane, the way a CAD chamfer extends the unselected neighbour. With a relief
+// the region also holds a polygon inscribed in the circle of that radius about v, so the bevel stops short of the
+// corner's vertical edge.
 func (l *chamferLoop) endClipMesh(ctx context.Context, e runEnd, d, over float64) (cutterMesh, error) {
 	from, sweep := e.clipSector()
 	s := e.clipRadius(d, over)
 	ring := []pt2{e.v}
+	if l.relief > 0 {
+		// The relief arc runs from the sector's last side round the run's side to its first, through the angles the
+		// sector leaves out.
+		rest := 2*math.Pi - sweep
+		reliefN := reliefCells(rest)
+		ring = make([]pt2, 0, reliefN+26)
+		for k := 0; k <= reliefN; k++ {
+			phi := from + sweep + rest*float64(k)/float64(reliefN)
+			ring = append(ring, e.v.add(pt2{math.Cos(phi), math.Sin(phi)}.scale(l.relief)))
+		}
+	}
 	const cells = 24
 	for k := 0; k <= cells; k++ {
 		phi := from + sweep*float64(k)/cells

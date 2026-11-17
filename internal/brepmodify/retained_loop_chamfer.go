@@ -202,6 +202,9 @@ type chamferLoop struct {
 	// gate. The chords of one held chain share an edge.
 	face  *topo.Face
 	edges []*topo.Edge
+	// relief is the radius of the disc about a concave run end's corner that the partial route's end clip also takes
+	// from the cutter (endClipMesh), zero for none.
+	relief float64
 }
 
 // loopReading tells readChamferLoop which edges of a loop a cutter serves, for a loop of which only some are chamfered.
