@@ -1525,7 +1525,8 @@ displaced plane.
 A retained `Cylinder` tag may state `AxialDelta` δ too: the true wall is a
 cylinder parallel to the tag whose axis offset and radius difference sum to at
 most δ. A stacked brep's faceted view states it on each swept circular wall
-(brep-modify §2.3). The closed rim (R2) reads such a wall
+(brep-modify §2.3), and the blend's result and every later Boolean keep it
+("Publishing a charged wall", below). The closed rim (R2) reads such a wall
 (`internal/retainedblend/wall_charge.go`), and so does an open arc whose two ends
 are proven tangent ends (§4.4, "A tangent end"), with the charge of
 boss-root-overflow-design §5.5.6. The rim circle is the plane's
@@ -1539,15 +1540,52 @@ for a cone. So the area bound adds `(π² + 4π)·max(ρ, t_A, t_B)·δ`, and th
 bound multiplies the strip's largest vertex bound by the blend's exact area plus
 that term. Every other reader refuses a charged cylinder with its existing text
 (`tagIsRecord`), every other open arc (R4) included ("an arc on a wall whose
-tag states a displacement is not built"). `facetedrecord.RetainedEdgeCurve` publishes an edge curve from
-a charged cylinder for any finite δ ≥ 0, while a displaced plane's circle still
-declines past the arithmetic allowance. Such a curve is seen only by the view's
-build, the blend's intermediate builds and the blend's readers: edge lengths and
-bounds come from the held chain, R2 checks the circle against the tags with the
-charge in its slack, and every other reader refuses the charged wall. A blend result publishes no charged
-cylinder: every face whose group states one is untagged and the body rebuilt
-with the area shortfall charged (`unpublishChargedWalls`), so no reader outside
-this package reads one.
+tag states a displacement is not built").
+
+**Publishing a charged wall.** A blend result keeps every charged `Cylinder`
+tag with its δ (`publishChargedWalls`), so a later `Fillet`, `Chamfer` or
+Boolean reads the wall as it reads a displaced plane: R2 charges it and every
+other route refuses it by the texts above. The charge is a statement about the
+wall, not about the blend, so the blend that kept the wall leaves it unchanged.
+A curved group that states a displacement and is no `Cylinder`, or whose δ is
+negative or not finite, is untagged, with the area shortfall charged.
+
+The view marks each wall it charges (`Group.ViewCharge`, copied to
+`topo.Face.ViewCharge`), and the mark is the one difference between a wall
+inside the blend and a published one:
+
+- *Edge curves.* `facetedrecord.RetainedEdgeCurve` publishes a curve beside a
+  marked wall for any finite δ ≥ 0, as R2 needs inside the view. Beside an
+  unmarked charged wall it applies the displaced plane's rule: every curve
+  declines when δ exceeds the chain's arithmetic allowance
+  (`64·2⁻⁵²·max(1, |coordinate|)`, retention §10.1 E6), so a published
+  `Circle3`, `Arc3` or `Line3` lies within that allowance of the tags' meeting, as
+  a displaced plane's circle does. A larger δ leaves the rim `FacetedCurve`.
+- *Clearing.* `publishChargedWalls` clears the mark on every kept wall and
+  rebuilds the body, so its edges take the published rule. A body is rebuilt
+  only when some group carried a mark or was untagged.
+
+A published charged wall reaches these readers outside this package. Each
+charges δ or refuses the wall; none reads it as exact.
+
+| Reader | With a charged `Cylinder` |
+|---|---|
+| `facetedrecord.SourceTag` (every mesh Boolean) | carries δ with the tag, as for a plane with no record. The true result patch is a piece of the true operand face, so it lies within δ of the tag. A negative or non-finite δ gives the group no tag. The shifted retry translates the tag and keeps δ (`boolshift`), since a translation moves the true wall with it |
+| `facetedrecord` assembly, `NormalAt` | the held normal term is `HeldNormalTerm(T, 2·(δ_f + δ))`. A held point lies within `δ_f + δ` of the tag's radial line, and the true radius is at least `R − δ`, so the normal moves by at most `2(δ_f + δ)/(R − δ)`, which `4(δ_f + δ)/R` covers while the term stays below 1 (A4) |
+| `facetedrecord.ExactGroupPlaced` (an exact rotation copy) | keeps δ with the moved tag: an exactly orthogonal map moves the true wall rigidly. The float image's own departure enters `NormalBound`, as for any placed tag |
+| float placement (`placed.go`: `Copy`, `MirroredCopy`, `Pattern`, motion) | keeps δ, as for a plane with no record. A placement that rounds states a nonzero `TagDeparture`, which every positional reader refuses (E12, SR1) |
+| `ScaledAt` (`point_plane_scale.go`) | scales δ by `|s|`, rounded up. The scaled tag adds only its rounding to `NormalBound` |
+| `edgewedge` (`Edge.Wedge`, its selector) | reads `Undecided` at a charged wall |
+| `RetainedEdgeCurve` | the published rule above |
+| `retained_loop_chamfer.go`, `partial_loop_chamfer.go`, the tangent chain, `trimgraph` | refuse a nonzero δ already |
+| `export/step_analytic.go` | `facedeparture.TagDeparts` reads δ as a departure, so the body takes the faceted writer |
+| `parts` joint inference (`parts/faces.go` `addCylinder`) | reads a charged wall as an unread face (`facedeparture.Charged`, installed by the root package), so a joint on it is `Undecided` with `CauseUnreadFace`. Its clearance measurement would otherwise take the tag's radius and axis as the true wall's |
+| `Face.Surface()` and the site builders that read it (`Hole`, `Boss`, `Emboss`, `Thread`, `planarDihedral`) | see the tag with no positional bound, as for a displaced plane or a departed tag (api-design §5, "Surface parameters carry no `Exactness`"). Each places a new feature or reads a design angle from the tag; the feature's own result bounds come from its operands as built, so no measurement reads the tag as the true wall. `NormalAt` carries the charge |
+
+Readers gated by payload class (contact geometry, clearance, gate diameter,
+stitch, prism, brep and capblend routes) never receive a faceted body
+(retention §4). `contactfaceted.AxisSupportAtPose` does receive one and reads
+only `HeldPlanar` faces.
 
 The tangent chain does not read a charged cylinder either. To name the gate a
 selected edge stops at, the junction test reads a charged cylinder's tag for
@@ -1560,10 +1598,10 @@ the arc is concave, and the arc end takes the tangent end's reading
 (boss-root-overflow-design §5.5.7).
 
 A blend face built from displaced planes or walls may lie off its own tag by
-the same charge. A chamfer plane states it as its `AxialDelta`. A fillet cylinder, a
-rim torus or cone and a corner sphere have no field for a positional offset, so
-with a nonzero charge they are not published as retained tags and the face
-stays faceted. With no charge every tag is published as built. The tangent
+the same charge. A chamfer plane states it as its `AxialDelta`. A fillet
+cylinder, a rim torus or cone and a corner sphere built from a charged face are
+not published as retained tags, so the face stays faceted; only a wall the view
+charged states a cylinder's `AxialDelta`. With no charge every tag is published as built. The tangent
 chain (retained-modify-reach-design.md §5.3) reads its tags as exact, so a
 plane with any nonzero `AxialDelta` is no chain wall, as
 `facedeparture.TagDeparts` reads it.

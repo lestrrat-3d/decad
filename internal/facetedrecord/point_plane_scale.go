@@ -126,7 +126,7 @@ func ScaleImageWithSummary(ctx context.Context, body *topo.Body, fp Payload, anc
 			if moved, add, stated := ScaleTag(group.Surface, anchor, s); stated {
 				group.Surface = moved
 				group.NormalBound = min(2, proofbound.AbsSumUpper(group.NormalBound, add))
-				group.CapRecord, group.AxialDelta, group.HasAxialDelta = nil, 0, false
+				scaleDisplacement(group, s)
 				continue
 			}
 		}
@@ -146,6 +146,7 @@ func ScaleImageWithSummary(ctx context.Context, body *topo.Body, fp Payload, anc
 			// keeps its old normal; two unit normals differ by at most 2.
 			group.NormalBound = 2
 			group.CapRecord, group.AxialDelta, group.HasAxialDelta = nil, 0, false
+			group.ViewCharge = false
 		}
 	}
 	if pointSlab {

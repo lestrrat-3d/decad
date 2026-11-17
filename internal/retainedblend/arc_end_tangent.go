@@ -49,7 +49,7 @@ func FilletTangent(ctx context.Context, env topo.Env, b *topo.Body, fp facetedre
 	radius, radiusDelta float64, tangent TangentEnds) (*topo.Body, bool, error) {
 	out, recognized, err := blend(ctx, env, b, fp, edges, blendSpec{fillet: true, r: radius, tangent: tangent},
 		radiusDelta, "fillet")
-	return unpublishCharged(ctx, env, out, recognized, err)
+	return publishCharged(ctx, env, out, recognized, err)
 }
 
 // tangentCorner is a four-face arc end that the prover proved: the faces of

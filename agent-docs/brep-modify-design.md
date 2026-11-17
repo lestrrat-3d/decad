@@ -210,7 +210,7 @@ CarrierCharge)` as the tag's `AxialDelta` (`stackedViewCharge`,
 the circle it denotes all the way round, since the record's bound covers their
 centre offset plus radius difference (general-boolean §3, Width band). The retained blend charges that
 wall in a closed rim and refuses it elsewhere (retained-edge-blend §6.1,
-"Displaced planes and walls"), and its result publishes no charged wall. Every
+"Displaced planes and walls"), and its result keeps each charged wall with its charge. Every
 other swept wall, an oblique plane whose tag also tilts among them, stays in the
 view untagged, a plain faceted obstacle as in §2.2. A boundary's vertex
 allowance is charged into the facets' bounds. A refusal raised while building

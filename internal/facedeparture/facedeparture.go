@@ -24,6 +24,33 @@ func Stated(face any) bool {
 	return Reader(face)
 }
 
+// ChargedReader reports whether a *decad.Face holds a charged wall (ChargedTag
+// on the node it holds). Any other value, which it cannot read, reports true.
+// The root package sets it once at load time.
+var ChargedReader func(face any) bool
+
+// Charged reports whether face is a curved face whose tag states a nonzero wall
+// charge: the true wall may lie off the tag by that charge, so a reader that
+// takes the tag's radius and axis as the wall's must not read it. Before the
+// root package has installed ChargedReader it reports true, so a reader that
+// only refuses on it refuses every face rather than admitting one unread.
+func Charged(face any) bool {
+	if ChargedReader == nil {
+		return true
+	}
+	return ChargedReader(face)
+}
+
+// ChargedTag reports whether f's tag is not a plane and states a nonzero
+// AxialDelta (a retained Cylinder wall whose true surface lies within it).
+// NaN is nonzero. A plane's displacement is read by TagDeparts.
+func ChargedTag(f *topo.Face) bool {
+	if _, plane := f.Surface.(surfacegeom.Plane); plane {
+		return false
+	}
+	return f.HasAxialDelta && f.AxialDelta != 0
+}
+
 // TagDeparts reports whether f's tag is not proven to be the surface f
 // carries: f states a nonzero NormalBound or HeldNormalBound, a nonzero
 // AxialDelta (a planar face displaced along its own normal from the level its

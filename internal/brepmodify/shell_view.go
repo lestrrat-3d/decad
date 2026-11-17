@@ -75,6 +75,7 @@ func retainedViewBlend(ctx context.Context, env topo.Env, hooks Hooks, b *topo.B
 			if _, isCyl := groups[gi].Surface.(surfacegeom.Cylinder); isCyl && groups[gi].Retained {
 				groups[gi].AxialDelta = delta
 				groups[gi].HasAxialDelta = true
+				groups[gi].ViewCharge = true
 				continue
 			}
 			groups[gi] = untagged(groups[gi])

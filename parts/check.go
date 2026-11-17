@@ -206,7 +206,7 @@ func (s *Set) checkPin(r *JointResult, a, b *bodyFaces, c config) {
 	if !matched {
 		s.declaredAxis(r)
 		if unreadNear(a, b, c.maxFit) {
-			r.settlef(Undecided, CauseUnreadFace, "a face near the pair reads as neither a plane nor a cylinder, or a body would not mesh")
+			r.settlef(Undecided, CauseUnreadFace, "a face near the pair reads as neither a plane nor an uncharged cylinder, or a body would not mesh")
 			return
 		}
 		r.settlef(Contradicted, CauseNoMatch, "%s", noMatchReason(j.Kind, a, b))
@@ -343,7 +343,7 @@ func checkFace(r *JointResult, a, b *bodyFaces, c config) {
 	}
 	switch {
 	case unreadNear(a, b, c.maxFit):
-		r.settlef(Undecided, CauseUnreadFace, "a face near the pair reads as neither a plane nor a cylinder, or a body would not mesh")
+		r.settlef(Undecided, CauseUnreadFace, "a face near the pair reads as neither a plane nor an uncharged cylinder, or a body would not mesh")
 	case coincident:
 		r.settlef(Undecided, CauseNoWitness, "opposed planes coincide but no triangle shows shared area")
 	case straddle:

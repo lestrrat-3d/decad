@@ -17,7 +17,7 @@ const (
 	CauseInterference         // a pin larger than its bore with no declared press fit
 	CauseApart                // the parts are proven farther apart than the joint allows
 	CauseTooClose             // a keepout pair is proven closer than its minimum gap
-	CauseUnreadFace           // a face near the pair reads Faceted or the body would not mesh
+	CauseUnreadFace           // a face near the pair reads Faceted or is a charged cylinder, or the body would not mesh
 	CauseNoWitness            // no point proves the contact or the face overlap
 	CauseNeedsPairProof       // only a pair proof could decide it
 )

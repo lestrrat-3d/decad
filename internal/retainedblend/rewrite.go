@@ -537,9 +537,8 @@ type blendTag struct {
 // tagGroup completes g, the group of a blend face, with the tag's surface. The
 // blend is built from planes that may lie off their tags by up to w.r.charge
 // (planeCharge), so its own surface may lie that far off the tag too. A plane
-// states that as its AxialDelta. A curved surface has no field for a
-// positional offset, so it is not published as a retained tag: the face stays
-// faceted. With no charge the tag is published exactly as built.
+// states that as its AxialDelta. A curved blend surface is not published as a
+// retained tag with a charge: the face stays faceted. With no charge the tag is published exactly as built.
 func (w *work) tagGroup(g facetedrecord.Group, tag blendTag) facetedrecord.Group {
 	if w.noTorus {
 		return g

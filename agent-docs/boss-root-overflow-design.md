@@ -221,8 +221,8 @@ A shared span's width charge (general-boolean A3) is a stated departure of `B`. 
 record's section displacement, as the `AxialDelta` of every swept circular wall's `Cylinder` tag (brep-modify §2.3).
 The retained edge blend charges it as it charges a displaced plane (retained-edge-blend §6.1, "Displaced planes and
 walls"): the closed rim (R2) adds `4δ/minSine` to its slack and a radius term to its area bound, and its blend face
-stays `Faceted`. Every other route refuses a charged wall, an open arc (R4) included, and the result publishes no
-charged wall. In the fixture two of four inner arcs carry such a charge, so at Ø13 and Ø14 the fillet face is
+stays `Faceted`. Every other route refuses a charged wall, an open arc (R4) included. The result keeps each charged
+wall with its charge (retained-edge-blend §6.1, "Publishing a charged wall"). In the fixture two of four inner arcs carry such a charge, so at Ø13 and Ø14 the fillet face is
 `Faceted` unless the torus tag gains a field for a positional bound.
 
 At Ø14 each root arc ends at a four-face corner (`A`, the boss wall above the arm, the full wall piece that continues
@@ -230,9 +230,12 @@ the window wall, the corner round). §5.5 reads that corner from the record's ta
 and ends (§5.5.6). A closed rim of the same union, such as a round hole's rim, takes R2's charge
 (`apitest/stacked_brep_view_charged_wall_test.go`).
 
-A blend result publishes no charged wall (retained-edge-blend §6.1), so every swept circular wall of the Ø14 union,
-the far ones included, leaves the fillet untagged with `FacetedCurve` edges. A later `Chamfer` or `Fillet` that
-selects such an edge refuses; the gallery's balance wheel edge chamfers on the rim are such a selection.
+Every swept circular wall of the Ø14 union, the far ones included, leaves the fillet as a `Cylinder` tag that states
+its charge (retained-edge-blend §6.1, "Publishing a charged wall"). Its rims publish `Circle3` or `Arc3` where the
+charge lies within the chain's arithmetic allowance, as the fixture's does. A later closed-rim `Chamfer` or `Fillet`
+of such a wall builds with the charge in its bounds, and a mesh Boolean such as the gallery wheel's bore cut carries
+the charge on. The wheel's window rims refuse: the window sides are oblique swept planes, which the view leaves
+untagged, and a window's rim is a tangent chain, which refuses a charged wall (retained-edge-blend §6.1).
 
 ### 5.5 The C3 construction (P6)
 

@@ -53,13 +53,20 @@ type Face struct {
 	// normal. A body-relative ToFace stop carries this selected face's bound
 	// into the level it computes; HasAxialDelta distinguishes an exact zero
 	// from a face whose payload does not state an axial bound. On a retained
-	// Cylinder tag it bounds the sum of the true wall's axis offset and radius
-	// difference from the tag, the axes parallel; only a stacked brep's
-	// faceted view states it there, and only the retained edge blend reads it
-	// (agent-docs/retained-edge-blend-design.md §6.1).
+	// Cylinder tag it is the wall charge: it bounds the sum of the true wall's
+	// axis offset and radius difference from the tag, the axes parallel. A
+	// stacked brep's faceted view states it, and a retained edge blend's result,
+	// every later Boolean, placement and similarity keep it (scaled by |s| under
+	// a similarity; agent-docs/retained-edge-blend-design.md §6.1).
 	AxialDelta float64
 	// HasAxialDelta reports whether the face's payload states an axial bound.
 	HasAxialDelta bool
+	// ViewCharge marks a charged Cylinder wall that the stacked brep's faceted
+	// view set. Only that view's charge loop sets it. An edge curve beside a
+	// marked wall admits any finite AxialDelta (facetedrecord.RetainedEdgeCurve);
+	// beside an unmarked one it admits only a displacement within the chain's
+	// arithmetic allowance. The retained edge blend clears it on publication.
+	ViewCharge bool
 	// HeldPlanar records that a Faceted face descends only from PLANAR source
 	// faces, so the face it stands for in the true result is flat — and a rim
 	// between two such faces is a straight line, whose chord length is honest.

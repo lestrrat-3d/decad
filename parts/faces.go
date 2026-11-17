@@ -7,6 +7,7 @@ import (
 
 	"github.com/lestrrat-3d/decad"
 	"github.com/lestrrat-3d/decad/internal/explodeplan"
+	"github.com/lestrrat-3d/decad/internal/facedeparture"
 	"github.com/lestrrat-3d/decad/internal/jointinfer"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -20,7 +21,7 @@ type bodyFaces struct {
 	planes     []jointinfer.Plane
 	planeFaces []*decad.Face
 	planeTris  [][][3]r3.Vec     // parallel to planes: the mesh triangles of each plane face
-	unread     []explodeplan.Box // vertex boxes of the faces whose tag is neither a plane nor a cylinder
+	unread     []explodeplan.Box // vertex boxes of the faces whose tag is neither a plane nor an uncharged cylinder
 	unmeshed   bool              // the body would not tessellate, so no face could be read
 	box        decad.Box
 	meshTol    float64  // the chord tolerance the faces were read at, millimetres
@@ -125,7 +126,9 @@ func (bf *bodyFaces) addPlane(f *decad.Face, verts []r3.Vec, idx []int) {
 
 func (bf *bodyFaces) addCylinder(f *decad.Face, s decad.Cylinder, verts []r3.Vec, idx []int) {
 	axis, ok := s.Axis.Normalize()
-	if !ok {
+	if !ok || facedeparture.Charged(f) {
+		// A charged wall's true radius and axis may differ from the tag's by its
+		// charge, so the clearance measurement must not read the tag as the wall.
 		bf.markUnread(verts, idx)
 		return
 	}

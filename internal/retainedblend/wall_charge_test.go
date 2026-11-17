@@ -81,6 +81,8 @@ func holedPlate(t *testing.T, wallDelta float64, hasDelta bool) (*topo.Body, fac
 	hole.Surface = surfacegeom.Cylinder{Origin: r3.Vec{}, Axis: r3.NewVec(0, 0, 1), Radius: units.Millimeters(holeRadius)}
 	hole.Reversed = true
 	hole.HasAxialDelta, hole.AxialDelta = hasDelta, wallDelta
+	// The fixture stands for the stacked view, whose charge loop marks the wall it charges.
+	hole.ViewCharge = hasDelta
 	fp.Groups = append(fp.Groups, hole)
 	fp.DPair = r3.NewVec(2*plateHalf, 2*plateHalf, plateHeight).Len()
 	b, err := facetedrecord.Build(t.Context(), axialEnv(), fp)
@@ -135,10 +137,13 @@ func requireChargedBlend(t *testing.T, exact, out *topo.Body, delta float64) {
 	blend := blendGroup(of)
 	require.False(t, blend.Retained, "a curved blend of a charged wall is not published")
 	require.Nil(t, blend.Surface)
+	// The wall is published: it stays a retained Cylinder stating delta, and the view's mark is cleared.
 	wall := of.Groups[6]
-	require.False(t, wall.Retained)
-	require.Nil(t, wall.Surface)
-	require.False(t, wall.HasAxialDelta)
+	require.True(t, wall.Retained)
+	require.IsType(t, surfacegeom.Cylinder{}, wall.Surface)
+	require.True(t, wall.HasAxialDelta)
+	require.Equal(t, delta, wall.AxialDelta)
+	require.False(t, wall.ViewCharge)
 
 	last := len(of.Groups) - 1
 	strip := 0
@@ -156,12 +161,20 @@ func requireChargedBlend(t *testing.T, exact, out *topo.Body, delta float64) {
 		require.GreaterOrEqual(t, of.VertexBound[i], b, "vertex %d", i)
 	}
 	require.GreaterOrEqual(t, out.Volume.Bound.Base(), exact.Volume.Bound.Base())
-	// The result's edges are rebuilt from the untagged wall, so none beside it keeps a retained curve.
+	// The wall's own faces read delta, unmarked.
+	for _, f := range topobuild.Faces(out) {
+		if _, cyl := f.Surface.(surfacegeom.Cylinder); cyl {
+			require.True(t, f.HasAxialDelta)
+			require.Equal(t, delta, f.AxialDelta)
+			require.False(t, f.ViewCharge)
+		}
+	}
+	// The result's edges beside the untagged blend face keep no retained curve.
 	beside := 0
 	for _, e := range topobuild.Edges(out) {
 		for _, f := range e.Faces {
 			if f.Surface != nil && f.Surface.Kind() == surfacegeom.KindFaceted && math.Abs(math.Hypot(e.Start.Position.X,
-				e.Start.Position.Y)-holeRadius) < 1e-6 {
+				e.Start.Position.Y)-holeRadius) < 1e-2 {
 				require.False(t, e.RetainedCurve, "edge at %v beside the untagged wall", e.Start.Position)
 				beside++
 				break
@@ -180,7 +193,7 @@ func TestFilletChargesCylinderWall(t *testing.T) {
 	}
 
 	for name, delta := range map[string]float64{"a rounding-sized": 1e-14, "a stated": 1e-6} {
-		t.Run(name+" displacement is charged and the tags are not published", func(t *testing.T) {
+		t.Run(name+" displacement is charged and the wall is published", func(t *testing.T) {
 			t.Parallel()
 			exact, recognized, err := fillet(t, 0, false)
 			require.True(t, recognized)
@@ -201,12 +214,14 @@ func TestFilletChargesCylinderWall(t *testing.T) {
 		})
 	}
 
+	// A displacement no bound can cover is declined when the body is assembled, so no wall carries it.
 	for name, wallDelta := range map[string]float64{"negative": -1, "infinite": math.Inf(1), "NaN": math.NaN()} {
-		t.Run("a "+name+" displacement names no wall", func(t *testing.T) {
+		t.Run("a "+name+" displacement is declined at assembly", func(t *testing.T) {
 			t.Parallel()
-			out, recognized, err := fillet(t, wallDelta, true)
-			require.False(t, recognized && err == nil, "a displacement no bound can cover was admitted")
-			require.Nil(t, out)
+			b, _ := holedPlate(t, wallDelta, true)
+			for _, f := range topobuild.Faces(b) {
+				require.NotEqual(t, surfacegeom.KindCylinder, f.Surface.Kind())
+			}
 		})
 	}
 }

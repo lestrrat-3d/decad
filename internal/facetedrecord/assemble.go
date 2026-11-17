@@ -439,10 +439,11 @@ func assembleBody(ctx context.Context, shared *proofbound.WorkBudget, env topo.E
 			if cone, isCone := group.Surface.(surfacegeom.Cone); isCone {
 				rho = ConeRhoLower(cone, axial, delta)
 			}
-			if term, ok := HeldNormalTerm(group.Surface, delta, rho); ok {
+			if term, ok := heldGroupTerm(group, delta, rho); ok {
 				f.Surface = group.Surface
 				f.RetainedTag = true
 				f.CapRecord, f.AxialDelta, f.HasAxialDelta = group.CapRecord, group.AxialDelta, group.HasAxialDelta
+				f.ViewCharge = group.ViewCharge
 				if group.Denoted != nil {
 					// The denoted proof replaces the tag's departure; the held
 					// displacement adds on top of it (topobuild.NormalAt).
@@ -482,7 +483,7 @@ func assembleBody(ctx context.Context, shared *proofbound.WorkBudget, env topo.E
 			f.Surface = surfacegeom.Faceted{Bound: units.Millimeters(delta)}
 			f.RetainedTag, f.TagDeparture, f.NormalBound, f.HeldNormalBound, f.Reversed = false, 0, 0, 0, false
 			f.Denoted = nil
-			f.CapRecord, f.AxialDelta, f.HasAxialDelta = nil, 0, false
+			f.CapRecord, f.AxialDelta, f.HasAxialDelta, f.ViewCharge = nil, 0, false, false
 		}
 	}
 

@@ -14,6 +14,7 @@ package edgewedge
 
 import (
 	"math"
+	"slices"
 
 	"github.com/lestrrat-3d/decad/internal/selectorquery"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
@@ -75,6 +76,12 @@ type station struct {
 // package cannot integrate are Undecided.
 func Of(e *topo.Edge) Wedge {
 	if len(e.Faces) != 2 || e.Faces[0] == e.Faces[1] || e.Start == nil || e.End == nil {
+		return Undecided
+	}
+	// A Cylinder tag that states a wall charge stands for a wall that may lie
+	// off it, so its angle across the edge is not read
+	// (agent-docs/retained-edge-blend-design.md §6.1, "Publishing a charged wall").
+	if slices.ContainsFunc(e.Faces, chargedCylinder) {
 		return Undecided
 	}
 	stations, ok := stationsOf(e)
@@ -410,4 +417,16 @@ func coaxial(center, axis, origin, dir r3.Vec, r float64) (float64, bool) {
 		return 0, false
 	}
 	return axis.Cross(dir).Len() + rel.Cross(dir).Len()/r, true
+}
+
+// chargedCylinder reports whether f is a Cylinder face whose tag states a
+// nonzero wall charge. NaN is nonzero.
+func chargedCylinder(f *topo.Face) bool {
+	if f == nil {
+		return false
+	}
+	if _, cyl := f.Surface.(surfacegeom.Cylinder); !cyl {
+		return false
+	}
+	return f.HasAxialDelta && f.AxialDelta != 0
 }

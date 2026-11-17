@@ -19,6 +19,18 @@ func init() {
 	}
 }
 
+// init installs the reader parts' joint inference calls to read a charged
+// wall as an unread face (agent-docs/retained-edge-blend-design.md §6.1).
+func init() {
+	facedeparture.ChargedReader = func(face any) bool {
+		f, ok := face.(*Face)
+		if !ok || f == nil {
+			return true
+		}
+		return facedeparture.ChargedTag(&f.n)
+	}
+}
+
 // init installs the reader decadtest.PayloadClass calls. Tests need it because
 // a Boolean result that keeps its operands' surfaces and curves
 // (agent-docs/faceted-source-retention-design.md) no longer reveals the mesh path
