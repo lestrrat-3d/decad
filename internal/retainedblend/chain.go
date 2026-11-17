@@ -36,7 +36,13 @@ type chainLink struct {
 // junction between each edge and the next. A junction at the end of an arc that
 // tangent proves a C3 corner (boss-root-overflow-design §5.5.7) is no chain
 // link: the arc end takes the corner's own reading.
-func planChains(b *topo.Body, edges []*topo.Edge, tangent TangentEnds) (chains []chainCycle, handled bool, err error) {
+//
+// The faces are read in tagChain mode: a chain may hold walls and a base that state a
+// charge, which only a closed chamfer chain builds (refuseChargedChain; fillet says
+// which). A selected edge with no link is returned in rest, for the caller to blend on
+// its own when it touches no chain (checkRestApart).
+func planChains(b *topo.Body, edges []*topo.Edge, tangent TangentEnds, fillet bool) (chains []chainCycle,
+	rest []*topo.Edge, handled bool, err error) {
 	all := topobuild.Edges(b)
 	selected := map[*topo.Edge]struct{}{}
 	for _, e := range edges {
@@ -44,7 +50,7 @@ func planChains(b *topo.Body, edges []*topo.Edge, tangent TangentEnds) (chains [
 	}
 	links := map[*topo.Edge][]chainLink{}
 	for _, e := range edges {
-		if !chainShape(e) || !Chainable(e) {
+		if !chainCandidate(e) {
 			continue
 		}
 		for _, v := range []*topo.Vertex{e.Start, e.End} {
@@ -56,9 +62,9 @@ func planChains(b *topo.Body, edges []*topo.Edge, tangent TangentEnds) (chains [
 				if c == e || c.Start == c.End || (c.Start != v && c.End != v) || len(c.Faces) != 2 {
 					continue
 				}
-				j, state, near := tangentStateMode(e, c, v, false)
+				j, state, near := tangentStateIn(e, c, v, tagChain)
 				if near {
-					return nil, true, fmt.Errorf("%w: the junction at %s is nearly tangent and the tags cannot decide it",
+					return nil, nil, true, fmt.Errorf("%w: the junction at %s is nearly tangent and the tags cannot decide it",
 						decaderr.ErrUnsupported, selectorquery.RenderVec(v.Position))
 				}
 				if state == clr.DegYes {
@@ -66,7 +72,7 @@ func planChains(b *topo.Body, edges []*topo.Edge, tangent TangentEnds) (chains [
 				}
 			}
 			if len(found) > 1 {
-				return nil, true, fmt.Errorf("%w: the tangent chain branches at %s", decaderr.ErrUnsupported,
+				return nil, nil, true, fmt.Errorf("%w: the tangent chain branches at %s", decaderr.ErrUnsupported,
 					selectorquery.RenderVec(v.Position))
 			}
 			if len(found) == 1 {
@@ -74,21 +80,18 @@ func planChains(b *topo.Body, edges []*topo.Edge, tangent TangentEnds) (chains [
 			}
 		}
 	}
-	if err := refuseChargedJunctionsSkipping(all, edges, selected, tangent); err != nil {
-		return nil, true, err
-	}
 	if len(links) == 0 {
-		return nil, false, nil
+		return nil, nil, false, nil
 	}
 	for _, e := range edges {
 		ls := links[e]
 		if len(ls) == 0 {
-			return nil, true, fmt.Errorf("%w: a selection that holds a tangent chain names only chain edges",
-				decaderr.ErrUnsupported)
+			rest = append(rest, e)
+			continue
 		}
 		for _, l := range ls {
 			if _, ok := selected[l.other]; !ok {
-				return nil, true, fmt.Errorf("%w: the selected edge ends at the tangent junction %s whose "+
+				return nil, nil, true, fmt.Errorf("%w: the selected edge ends at the tangent junction %s whose "+
 					"continuation is not selected; WithTangentChain selects the whole chain",
 					decaderr.ErrUnsupported, selectorquery.RenderVec(l.at.Position))
 			}
@@ -118,13 +121,13 @@ func planChains(b *topo.Body, edges []*topo.Edge, tangent TangentEnds) (chains [
 			cyc.joins = append(cyc.joins, *next)
 			cur, via = next.other, next.at
 			if seen[cur] {
-				return nil, true, fmt.Errorf("%w: a tangent chain does not close", decaderr.ErrUnsupported)
+				return nil, nil, true, fmt.Errorf("%w: a tangent chain does not close", decaderr.ErrUnsupported)
 			}
 		}
 		chains = append(chains, cyc)
 	}
 	for _, e := range edges {
-		if seen[e] {
+		if seen[e] || len(links[e]) == 0 {
 			continue
 		}
 		var cyc chainCycle
@@ -139,7 +142,7 @@ func planChains(b *topo.Body, edges []*topo.Edge, tangent TangentEnds) (chains [
 				}
 			}
 			if next == nil {
-				return nil, true, fmt.Errorf("%w: a tangent chain does not close", decaderr.ErrUnsupported)
+				return nil, nil, true, fmt.Errorf("%w: a tangent chain does not close", decaderr.ErrUnsupported)
 			}
 			cyc.joins = append(cyc.joins, *next)
 			cur, via = next.other, next.at
@@ -147,16 +150,24 @@ func planChains(b *topo.Body, edges []*topo.Edge, tangent TangentEnds) (chains [
 				break
 			}
 			if seen[cur] {
-				return nil, true, fmt.Errorf("%w: a tangent chain does not close", decaderr.ErrUnsupported)
+				return nil, nil, true, fmt.Errorf("%w: a tangent chain does not close", decaderr.ErrUnsupported)
 			}
 		}
 		if len(cyc.edges) < 3 {
-			return nil, true, fmt.Errorf("%w: a closed tangent chain needs at least three edges",
+			return nil, nil, true, fmt.Errorf("%w: a closed tangent chain needs at least three edges",
 				decaderr.ErrUnsupported)
 		}
 		chains = append(chains, cyc)
 	}
-	return chains, true, nil
+	for _, cyc := range chains {
+		if err := refuseChargedChain(cyc, fillet); err != nil {
+			return nil, nil, true, err
+		}
+	}
+	if err := checkRestApart(chains, rest, fillet); err != nil {
+		return nil, nil, true, err
+	}
+	return chains, rest, true, nil
 }
 
 // chainCycle is one chain: edges[i] meets edges[i+1] at joins[i]. A closed

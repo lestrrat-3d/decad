@@ -234,8 +234,9 @@ Every swept circular wall of the Ø14 union, the far ones included, leaves the f
 its charge (retained-edge-blend §6.1, "Publishing a charged wall"). Its rims publish `Circle3` or `Arc3` where the
 charge lies within the chain's arithmetic allowance, as the fixture's does. A later closed-rim `Chamfer` or `Fillet`
 of such a wall builds with the charge in its bounds, and a mesh Boolean such as the gallery wheel's bore cut carries
-the charge on. The wheel's window rims refuse: a window's rim is a tangent chain whose oblique sides are plane tags
-that state a tilt and whose arcs are charged walls, and the chain refuses both (charged-window-chamfer-design).
+the charge on. A window's rim is a closed tangent chain whose oblique sides are plane tags that state a tilt and whose
+arcs are charged walls, and a chamfer of it builds with those charges (charged-window-chamfer-design §3). On the top
+face a window run that meets the root fillet is open and refuses (charged-window-chamfer-design §5).
 
 ### 5.5 The C3 construction (P6)
 

@@ -164,7 +164,8 @@ A tangent chain (§5) takes one assignment for the whole chain; SX3 forces it (�
 A **chain** is a run of selected edges `e_1 … e_n` that all lie on one retained plane face `P` (the **base**),
 where each `e_k` is an R1 edge between `P` and a retained plane wall `W_k`, or an R4 edge between `P` and a
 retained cylinder wall `W_k` whose axis is normal to `P`, and consecutive edges meet at a **tangent junction**
-(§5.2).
+(§5.2). A closed chamfer chain may also have walls and a base that state a positional charge
+(`agent-docs/charged-window-chamfer-design.md` §3); every other chain reads only exact tags.
 
 | RC | Chain | Ends | Staged |
 |---|---|---|---|
@@ -254,7 +255,9 @@ and `g`, so both are `Π`, and the argument repeats. ∎
 
 Both blend surfaces contain the common section, and both tangent planes along it hold `d_V` and the section's
 tangent, so the blends meet G1. Claim J needs identity 2 of §5.2 exactly; without it the two sections differ and no
-shared row exists, which is why near tangency is SX2 and not a charge (§16 lists the alternative).
+shared row exists, which is why near tangency is SX2 and not a charge (§16 lists the alternative). A closed chamfer chain on charged walls keeps
+identity 2 on the tags and bounds the true walls' departure from them by Claim J′
+(`agent-docs/charged-window-chamfer-design.md` §3.2).
 
 ### 5.5 Construction
 
@@ -491,7 +494,8 @@ body that the held audit passes when its probe point lies outside the fill, and 
 Claim K (blend §6.3) holds with `K = ∪ K_k`: outside it the rewritten mesh equals the held one; inside each `K_k`
 the strip's facets leave the exact blend by at most `τ`, and the band beside the walls' cut by its cut vertices'
 raised bounds (blend §6.3, Strip triangles). The shared junction rows add no term, because both neighbouring strips
-use the same vertices, which lie on both exact blend surfaces (Claim J). A junction vertex takes `τ` plus the
+use the same vertices, which lie on both exact blend surfaces (Claim J). On charged walls a junction vertex also takes
+the junction's shift (`agent-docs/charged-window-chamfer-design.md` §3.3). A junction vertex takes `τ` plus the
 rounding of its computation. `VolSymDiff` and `AreaSlack` add each edge's terms as blend §6.3
 states them, and `AreaSlack` the shortfall of the chain's rebuilt body's geometric terms against the old body's, by
 source group, once per chain (blend §6.3, Area). The exact areas are

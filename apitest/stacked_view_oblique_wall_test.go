@@ -90,7 +90,7 @@ func TestStackedViewObliqueWallTag(t *testing.T) {
 		}
 	})
 
-	t.Run("a Chamfer of a side rim refuses", func(t *testing.T) {
+	t.Run("a Chamfer of a side rim alone refuses at its tangent junction", func(t *testing.T) {
 		t.Parallel()
 		w := walls[0]
 		for _, e := range w.face.Edges() {
@@ -105,7 +105,10 @@ func TestStackedViewObliqueWallTag(t *testing.T) {
 				edge := decad.Edges(decad.EndpointAt(e.Start().Position().Value), decad.EndpointAt(e.End().Position().Value)).Exactly(1)
 				_, err := decad.Chamfer(t.Context(), part, edge, units.Millimeters(0.5))
 				require.ErrorIs(t, err, decad.ErrUnsupported)
-				require.ErrorContains(t, err, "a face whose retained tag states a departure from the true surface")
+				// The side's rim ends at a tangent junction with a corner round. A closed chamfer chain reads the
+				// oblique wall (charged-window-chamfer-design §3), so the selection is one edge of a chain whose
+				// continuation is not selected.
+				require.ErrorContains(t, err, "whose continuation is not selected")
 				return
 			}
 		}
