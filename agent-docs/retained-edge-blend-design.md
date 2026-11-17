@@ -1566,7 +1566,8 @@ inside the blend and a published one:
   only when some group carried a mark or was untagged.
 
 A published charged wall reaches these readers outside this package. Each
-charges δ or refuses the wall; none reads it as exact.
+charges δ, refuses the wall, or is listed in `agent-docs/missing-features.md`
+as reading the tag as the wall.
 
 | Reader | With a charged `Cylinder` |
 |---|---|
@@ -1580,7 +1581,7 @@ charges δ or refuses the wall; none reads it as exact.
 | `retained_loop_chamfer.go`, `partial_loop_chamfer.go`, the tangent chain, `trimgraph` | refuse a nonzero δ already |
 | `export/step_analytic.go` | `facedeparture.TagDeparts` reads δ as a departure, so the body takes the faceted writer |
 | `parts` joint inference (`parts/faces.go` `addCylinder`) | reads a charged wall as an unread face (`facedeparture.Charged`, installed by the root package), so a joint on it is `Undecided` with `CauseUnreadFace`. Its clearance measurement would otherwise take the tag's radius and axis as the true wall's |
-| `Face.Surface()` and the site builders that read it (`Hole`, `Boss`, `Emboss`, `Thread`, `planarDihedral`) | see the tag with no positional bound, as for a displaced plane or a departed tag (api-design §5, "Surface parameters carry no `Exactness`"). Each places a new feature or reads a design angle from the tag; the feature's own result bounds come from its operands as built, so no measurement reads the tag as the true wall. `NormalAt` carries the charge |
+| `Face.Surface()` and the site builders that read it (`Hole`, `Boss`, `Emboss`, `Thread`, `planarDihedral`) | see the tag with no positional bound, as for a displaced plane or a departed tag (api-design §5, "Surface parameters carry no `Exactness`"). `planarDihedral` reads a design angle from it. `Hole`, `Boss`, `Emboss` and `Thread` take the tag's radius and axis as the true wall's, so a feature placed on a charged wall may sit up to its charge off it; `agent-docs/missing-features.md` lists that gap. `NormalAt` carries the charge |
 
 Readers gated by payload class (contact geometry, clearance, gate diameter,
 stitch, prism, brep and capblend routes) never receive a faceted body
