@@ -55,7 +55,7 @@ func TestReadChargedChainFace(t *testing.T) {
 		require.True(t, ok)
 		require.Equal(t, 2e-9, w.delta)
 		require.Equal(t, 1e-6, w.departure)
-		for _, mode := range []tagMode{tagExact, tagRefuse} {
+		for _, mode := range []tagMode{tagExact} {
 			_, ok := readChainFace(f, mode)
 			require.False(t, ok, "mode %d", mode)
 		}
@@ -121,7 +121,7 @@ func TestReadChargedChainFace(t *testing.T) {
 
 func TestChainCandidateAndCharged(t *testing.T) {
 	t.Parallel()
-	line, arc, _ := chargedJunction(t, 3, 1e-9)
+	line, arc, _ := chargedJunction(t, 1e-9)
 	require.False(t, looksLikeArc(arc) && !wallRecord(arc.Faces[1]))
 	require.True(t, chainCandidate(line))
 	require.True(t, chainCandidate(arc))
@@ -130,7 +130,7 @@ func TestChainCandidateAndCharged(t *testing.T) {
 
 	t.Run("an oblique side is a candidate no per-edge route reads", func(t *testing.T) {
 		t.Parallel()
-		line, _, _ := chargedJunction(t, 3, 0)
+		line, _, _ := chargedJunction(t, 0)
 		line.Faces[1] = obliquePlane(t, r3.NewVec(1, 0, 0), r3.NewVec(0, 0, 1), 1e-6, 1e-9)
 		require.False(t, looksLikeLine(line))
 		require.True(t, chainCandidate(line))
@@ -139,7 +139,7 @@ func TestChainCandidateAndCharged(t *testing.T) {
 
 	t.Run("a face the chain reader declines makes no candidate", func(t *testing.T) {
 		t.Parallel()
-		line, _, _ := chargedJunction(t, 3, 0)
+		line, _, _ := chargedJunction(t, 0)
 		line.Faces[1].TagDeparture = 1e-6
 		require.False(t, chainCandidate(line))
 	})
@@ -147,7 +147,7 @@ func TestChainCandidateAndCharged(t *testing.T) {
 
 func TestRefuseChargedChain(t *testing.T) {
 	t.Parallel()
-	line, arc, _ := chargedJunction(t, 3, 1e-9)
+	line, arc, _ := chargedJunction(t, 1e-9)
 	closed := chainCycle{edges: []*topo.Edge{line, arc}}
 	open := chainCycle{edges: []*topo.Edge{line, arc}, open: true}
 
@@ -161,7 +161,7 @@ func TestRefuseChargedChain(t *testing.T) {
 	require.ErrorIs(t, err, decaderr.ErrUnsupported)
 	require.ErrorContains(t, err, "a tangent chain fillet on walls that state a displacement is not built")
 
-	plain, plainArc, _ := chargedJunction(t, 3, 0)
+	plain, plainArc, _ := chargedJunction(t, 0)
 	for _, fillet := range []bool{false, true} {
 		require.NoError(t, refuseChargedChain(chainCycle{edges: []*topo.Edge{plain, plainArc}}, fillet))
 		require.NoError(t, refuseChargedChain(chainCycle{edges: []*topo.Edge{plain, plainArc}, open: true}, fillet))
@@ -427,7 +427,7 @@ func TestChainAreaCharge(t *testing.T) {
 
 func TestChainJunctionOfObliqueWall(t *testing.T) {
 	t.Parallel()
-	line, arc, v := chargedJunction(t, 3, 1e-9)
+	line, arc, v := chargedJunction(t, 1e-9)
 
 	t.Run("the chain reader proves the junction of a charged wall", func(t *testing.T) {
 		t.Parallel()
@@ -439,11 +439,11 @@ func TestChainJunctionOfObliqueWall(t *testing.T) {
 
 	t.Run("an oblique wall beside a cylinder is a junction in chain mode only", func(t *testing.T) {
 		t.Parallel()
-		line, arc, v := chargedJunction(t, 3, 1e-9)
+		line, arc, v := chargedJunction(t, 1e-9)
 		line.Faces[1] = obliquePlane(t, r3.NewVec(1, 0, 0), r3.NewVec(0, 0, 1), 1e-6, 1e-9)
 		_, state, _ := tangentStateIn(line, arc, v, tagChain)
 		require.Equal(t, clr.DegYes, state)
-		for _, mode := range []tagMode{tagExact, tagRefuse} {
+		for _, mode := range []tagMode{tagExact} {
 			_, state, _ := tangentStateIn(line, arc, v, mode)
 			require.NotEqual(t, clr.DegYes, state, "mode %d", mode)
 		}
@@ -451,7 +451,7 @@ func TestChainJunctionOfObliqueWall(t *testing.T) {
 
 	t.Run("a base that states a departure is no chain base", func(t *testing.T) {
 		t.Parallel()
-		line, arc, v := chargedJunction(t, 3, 0)
+		line, arc, v := chargedJunction(t, 0)
 		base := line.Faces[0]
 		base.TagDeparture, base.NormalBound, base.ExtentDelta = 1e-6, 1e-6, 1e-9
 		_, state, _ := tangentStateIn(line, arc, v, tagChain)

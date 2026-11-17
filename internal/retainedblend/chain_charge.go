@@ -16,7 +16,7 @@ import (
 // This file reads the charged walls of a closed chamfer chain and charges them
 // (agent-docs/charged-window-chamfer-design.md §3). A face that states a
 // displacement is read only on the chain path, through tagChain. Every other
-// route keeps refusing it by its own gate.
+// route reads in tagExact mode and keeps refusing it by its own gate.
 
 // tagMode is how a chain reader treats a face that states a displacement.
 type tagMode uint8
@@ -24,27 +24,14 @@ type tagMode uint8
 const (
 	// tagExact reads a face as an exact tag and declines any stated displacement or departure.
 	tagExact tagMode = iota
-	// tagRefuse also reads a cylinder that states a displacement, for refusal only
-	// (refuseChargedJunctions).
-	tagRefuse
 	// tagChain reads every face of charged-window-chamfer-design.md §3.1, with its charge.
 	tagChain
 )
 
-func tagModeOf(charged bool) tagMode {
-	if charged {
-		return tagRefuse
-	}
-	return tagExact
-}
-
 // readChainFace reads a retained plane or cylinder face in the given mode.
 func readChainFace(f *topo.Face, mode tagMode) (chainWall, bool) {
-	switch mode {
-	case tagExact:
+	if mode == tagExact {
 		return readChainTagMode(f, false)
-	case tagRefuse:
-		return readChainTagMode(f, true)
 	}
 	return readChargedChainFace(f)
 }
@@ -237,8 +224,8 @@ func newChainCharges(cyc chainCycle, base *topo.Face, fp facetedrecord.Payload, 
 		eJ := proofbound.AbsSumUpper(fp.VertexBound[hv[i]], up(dist))
 		cc.eJ[i] = eJ
 		// ψ_max = Σ_k ψ_k + ψ_0, where ψ_0 is the angle the tangentRoundoff gap between the tags
-		// allows: a plane or cylinder wall that lies off a cylinder by g meets it at a turn of at
-		// most √(2g/R).
+		// allows: a wall that lies off a cylinder by g meets it at a turn of at most √(2g(1/R1+1/R2)),
+		// which for two cylinders, externally tangent ones included, is at most √(4g/R_min).
 		scale, rMin := 1.0, math.Inf(1)
 		psi := 0.0
 		for _, w := range walls {
@@ -249,7 +236,7 @@ func newChainCharges(cyc chainCycle, base *topo.Face, fp facetedrecord.Payload, 
 			}
 		}
 		gap := up(tangentRoundoff * ulp * scale)
-		psi0 := up(math.Sqrt(up(proofbound.DivUpper(proofbound.ProductUpper(2, gap), down(rMin)))))
+		psi0 := up(math.Sqrt(up(proofbound.DivUpper(proofbound.ProductUpper(4, gap), down(rMin)))))
 		psi = proofbound.AbsSumUpper(psi, psi0)
 		if !(psi <= 1) {
 			return cc, fmt.Errorf("%w: the true walls of a chain junction may turn there by more than a radian",
@@ -285,6 +272,14 @@ type chainPiece struct {
 	width     float64
 }
 
+// rhoBounds brackets the setback circle radius ρ = r + κ·tP of an arc entry: the float sum
+// lies within a few ulps of the magnitudes it adds, so the pair holds the true ρ.
+func rhoBounds(en chainEntry, tP float64) (lo, hi float64) {
+	rho := en.rim.radius + en.rim.kappa*tP
+	slack := up(4 * ulp * (math.Abs(en.rim.radius) + math.Abs(en.rim.kappa*tP)))
+	return math.Nextafter(rho-slack, math.Inf(-1)), math.Nextafter(rho+slack, math.Inf(1))
+}
+
 // areaCharge is the area bound a charged chain adds (§3.3, "Area"): per changed group
 // 2·P·σ + (π + Φ)·σ² + A·σ/r + w·max(1, ρ_max/r_min)·Σ e_J. The chain's blend groups, the base
 // and each wall are the changed groups. ρ_max and r_min are the largest and smallest radius over
@@ -301,9 +296,9 @@ func (cc chainCharges) areaCharge(entries []chainEntry, tP, tW float64, spec ble
 		if !en.arc {
 			continue
 		}
-		rho := en.rim.radius + en.rim.kappa*tP
-		rhoMax = max(rhoMax, en.rim.radius, rho)
-		rMin = min(rMin, en.rim.radius, rho)
+		rhoLo, rhoHi := rhoBounds(en, tP)
+		rhoMax = max(rhoMax, en.rim.radius, rhoHi)
+		rMin = min(rMin, en.rim.radius, rhoLo)
 	}
 	factor := 1.0
 	if !math.IsInf(rMin, 1) {
@@ -317,16 +312,17 @@ func (cc chainCharges) areaCharge(entries []chainEntry, tP, tW float64, spec ble
 	var pieces []chainPiece
 	for _, en := range entries {
 		pa, wa, ba := en.areas(tP, tW, spec)
-		outer, inner, span := en.length, en.length, 0.0
+		length := math.Nextafter(en.length, math.Inf(1))
+		outer, inner, span := length, length, 0.0
 		wall := chainPiece{junctions: []int{en.ja, en.jb}, width: tW}
 		blend := chainPiece{junctions: []int{en.ja, en.jb}, width: hyp}
 		if en.arc {
-			rho := en.rim.radius + en.rim.kappa*tP
+			rhoLo, rhoHi := rhoBounds(en, tP)
 			span = en.span
 			outer = proofbound.ProductUpper(en.rim.radius, span)
-			inner = proofbound.ProductUpper(math.Abs(rho), span)
+			inner = proofbound.ProductUpper(max(math.Abs(rhoLo), math.Abs(rhoHi)), span)
 			wall.geo.rMin = down(en.rim.radius)
-			blend.geo.rMin = down(min(en.rim.radius, rho))
+			blend.geo.rMin = down(min(en.rim.radius, rhoLo))
 		}
 		base.geo.perimeter = proofbound.AbsSumUpper(base.geo.perimeter, outer, inner)
 		base.geo.turning = proofbound.AbsSumUpper(base.geo.turning, 2*span)

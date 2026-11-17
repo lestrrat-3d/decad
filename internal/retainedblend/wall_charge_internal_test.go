@@ -163,13 +163,13 @@ func TestChargedArcAndAreaCharge(t *testing.T) {
 	})
 }
 
-// chargedJunction is the top-front line and the top corner arc of a rounded box, with a corner cylinder of the given
-// radius that states a displacement.
-func chargedJunction(t *testing.T, radius, delta float64) (line, arc *topo.Edge, v *topo.Vertex) {
+// chargedJunction is the top-front line and the top corner arc of a rounded box, with a radius 3 corner cylinder
+// that states the given displacement.
+func chargedJunction(t *testing.T, delta float64) (line, arc *topo.Edge, v *topo.Vertex) {
 	t.Helper()
 	top := chargedPlane(t, r3.NewVec(0, 0, 20), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0), 0)
 	front := chargedPlane(t, r3.Vec{}, r3.NewVec(1, 0, 0), r3.NewVec(0, 0, 1), 0)
-	cyl := chargedCylinder(radius, delta)
+	cyl := chargedCylinder(3, delta)
 	v = &topo.Vertex{Position: r3.NewVec(3, 0, 20), Bound: units.Millimeters(1e-9)}
 	far := &topo.Vertex{Position: r3.NewVec(37, 0, 20)}
 	side := &topo.Vertex{Position: r3.NewVec(0, 3, 20)}
@@ -180,72 +180,30 @@ func chargedJunction(t *testing.T, radius, delta float64) (line, arc *topo.Edge,
 	return line, arc, v
 }
 
-func TestRefuseChargedJunctions(t *testing.T) {
+func TestStrictChainReadersOfChargedWall(t *testing.T) {
 	t.Parallel()
-	selection := func(edges ...*topo.Edge) map[*topo.Edge]struct{} {
-		m := map[*topo.Edge]struct{}{}
-		for _, e := range edges {
-			m[e] = struct{}{}
-		}
-		return m
-	}
 
 	t.Run("the strict readers never read a charged wall", func(t *testing.T) {
 		t.Parallel()
-		line, arc, v := chargedJunction(t, 3, 1e-14)
+		line, arc, v := chargedJunction(t, 1e-14)
 		require.True(t, Chainable(line))
 		require.False(t, Chainable(arc))
-		require.True(t, chainableMode(arc, true))
 		require.NotEqual(t, clr.DegYes, Tangent(line, arc, v))
-		_, state, _ := tangentStateMode(line, arc, v, true)
-		require.Equal(t, clr.DegYes, state, "the charged reading proves the junction")
+		_, state, _ := tangentStateIn(line, arc, v, tagChain)
+		require.Equal(t, clr.DegYes, state, "the chain reading proves the junction")
 	})
 
 	t.Run("an uncharged twin is chainable", func(t *testing.T) {
 		t.Parallel()
-		line, arc, v := chargedJunction(t, 3, 0)
+		line, arc, v := chargedJunction(t, 0)
 		require.True(t, Chainable(arc))
 		require.Equal(t, clr.DegYes, Tangent(line, arc, v))
-		all := []*topo.Edge{line, arc}
-		require.NoError(t, refuseChargedJunctions(all, []*topo.Edge{arc}, selection(arc)))
 	})
 
-	t.Run("the arc alone is refused with its continuation", func(t *testing.T) {
+	t.Run("an unusable displacement is read by no mode", func(t *testing.T) {
 		t.Parallel()
-		line, arc, _ := chargedJunction(t, 3, 1e-14)
-		err := refuseChargedJunctions([]*topo.Edge{line, arc}, []*topo.Edge{arc}, selection(arc))
-		require.ErrorIs(t, err, decaderr.ErrUnsupported)
-		require.ErrorContains(t, err, "whose continuation is not selected")
-		require.ErrorContains(t, err, "(read on tags that state a displacement)")
-	})
-
-	t.Run("the arc and the line are refused as a chain", func(t *testing.T) {
-		t.Parallel()
-		line, arc, _ := chargedJunction(t, 3, 1e-14)
-		err := refuseChargedJunctions([]*topo.Edge{line, arc}, []*topo.Edge{arc, line}, selection(arc, line))
-		require.ErrorIs(t, err, decaderr.ErrUnsupported)
-		require.ErrorContains(t, err, "a tangent chain whose walls state a displacement is not built")
-	})
-
-	t.Run("a near tangent charged junction is refused as undecided", func(t *testing.T) {
-		t.Parallel()
-		line, arc, _ := chargedJunction(t, 3*(1+1e-12), 1e-14)
-		err := refuseChargedJunctions([]*topo.Edge{line, arc}, []*topo.Edge{arc}, selection(arc))
-		require.ErrorIs(t, err, decaderr.ErrUnsupported)
-		require.ErrorContains(t, err, "is nearly tangent and the tags cannot decide it")
-		require.ErrorContains(t, err, "(read on tags that state a displacement)")
-	})
-
-	t.Run("a cylinder far from tangent falls through", func(t *testing.T) {
-		t.Parallel()
-		line, arc, _ := chargedJunction(t, 4, 1e-14)
-		require.NoError(t, refuseChargedJunctions([]*topo.Edge{line, arc}, []*topo.Edge{arc}, selection(arc)))
-	})
-
-	t.Run("an unusable displacement falls through to the strict refusal", func(t *testing.T) {
-		t.Parallel()
-		line, arc, _ := chargedJunction(t, 3, math.NaN())
-		require.False(t, chainableMode(arc, true))
-		require.NoError(t, refuseChargedJunctions([]*topo.Edge{line, arc}, []*topo.Edge{arc}, selection(arc)))
+		_, arc, _ := chargedJunction(t, math.NaN())
+		require.False(t, Chainable(arc))
+		require.False(t, chainableIn(arc, tagChain))
 	})
 }

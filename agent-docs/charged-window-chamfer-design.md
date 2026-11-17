@@ -161,8 +161,10 @@ the tags are tangent at `V` to `tangentRoundoff`, and the true tangents at `V_r`
 `ψ ≤ ψ_max = Σ_k ψ_k + ψ_0`, rounded up, summed over the junction's two walls: `ψ_k = (e_J + 2δ)/R_k` for a
 cylinder of tag radius `R_k` (its tag tangent turns by `(e_J + δ)/R_k` between `V` and `V_r`'s foot, and the true
 wall's shift adds `δ/R_k`), `ψ_k = θ_k` for an oblique plane (its `TagDeparture`), `ψ_k = 0` for a displaced plane;
-`ψ_0 = √(2g/R_min)` is the turn at which a line or cylinder off a cylinder of radius `R_min` by the tags'
-`tangentRoundoff` gap `g` meets it. A kernel mitres such a corner where the
+`ψ_0 = √(4g/R_min)` bounds the turn at which two walls whose tags are off by the `tangentRoundoff` gap `g` meet,
+`√(2g(1/R_1 + 1/R_2))` for two cylinders (a line counts as `1/R = 0`). `ψ_k` reads the chord `e_J + 2δ` as an angle;
+for `e_J + 2δ ≪ R_k` the arc exceeds it by a factor near 1, inside the factor 2 between `c_J` and the corner's
+leading term `t·ψ²/8`. A kernel mitres such a corner where the
 sublevel set rounds it; the two differ by at most `c_J = t·(1/cos(ψ_max/2) − 1) ≤ t·ψ_max²/4` (for `ψ_max ≤ 1`), on the
 reflex side within the junction's slab. `σ = 3δ + δ_P + max_J c_J` is the shell half-width that every bound below uses.
 
@@ -174,8 +176,8 @@ reflex side within the junction's slab. `σ = 3δ + δ_P + max_J c_J` is the she
   §5.6, SR6 and every strip and cut vertex's bound then carry it. Nothing admits on a residual.
 - **Junction rows.** Each junction row's points, `P_J` and `S_J` included, take `τ + slack + e_J`: the true section
   lies at `V_r`, up to `e_J` along the curve from the tags' `V`.
-- **Sizes.** On a charged chain, an arc whose base lies inside its circle needs `R − t_P > slack` (or `R − t_W` as
-  §5.6's size gate reads it), since the true radius may be `R − δ`; the sublevel model needs the setback inside it.
+- **Sizes.** On a charged chain, an arc whose base lies inside its circle needs `R − t_P > slack`, the form of
+  §5.6's size gate, since the true radius may be `R − δ`; the sublevel model needs the setback inside it.
 - **Strips beside an oblique wall.** A line strip whose wall states `ExtentDelta` is not published as a tag: its true
   plane tilts with the wall, which no plane `AxialDelta` states. It stays `Faceted`, with its area shortfall charged.
   A strip beside a charged cylinder stays `Faceted` as retained-edge-blend §6.1 states; a strip beside a displaced
@@ -184,9 +186,10 @@ reflex side within the junction's slab. `σ = 3δ + δ_P + max_J c_J` is the she
   `2·P_g·σ + (π + Φ_g)·σ² + A_g·σ/r_g + w_g·Σ_J e_J`, with `σ` as §3.2 defines it, rounded up, `P_g` an upper bound on the
   piece's perimeter from its exact curves, `Φ_g` its total turning, `A_g` its exact area, `r_g` its smallest radius of
   curvature (no term for a plane), the sum over the junctions the piece meets, and `w_g` the piece's width there:
-  `√(t_P² + t_W²)` for a strip, the setback for a wall or base band, times `max(1, ρ_max/r_g)` for a piece on or
-  beside an arc, `ρ_max` its largest distance from the arc's axis (the slice between the planes through `V` and
-  `V_r` widens away from the axis). It is the form of boss-root-overflow §5.5.6's arc charge with the junction's shift
+  `√(t_P² + t_W²)` for a strip, the setback for a wall or base band, times `max(1, ρ_max/r_min)`, `ρ_max` the
+  largest distance of any of the chain's arc pieces from its axis and `r_min` the chain's smallest arc radius (the
+  slice between the planes through `V` and `V_r` widens away from an arc's axis; the chain-wide ratio bounds every
+  piece's own). It is the form of boss-root-overflow §5.5.6's arc charge with the junction's shift
   added.
 - **Volume.** Claim K (retained-edge-blend §6.3) with every strip vertex's bound raised by the slack.
 

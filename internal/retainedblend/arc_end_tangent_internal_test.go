@@ -27,7 +27,7 @@ func (f *fakeTangent) Prove(b, g, k *topo.Face) (TangentProof, bool) {
 // charged corner wall, G the front and K the new face.
 func fourFaceCorner(t *testing.T) (all []*topo.Edge, arc *topo.Edge, v *topo.Vertex, a, b, g, k *topo.Face) {
 	t.Helper()
-	line, arc, v := chargedJunction(t, 3, 1e-14)
+	line, arc, v := chargedJunction(t, 1e-14)
 	a, b, g = arc.Faces[0], arc.Faces[1], line.Faces[1]
 	k = &topo.Face{Surface: surfacegeom.Cylinder{Origin: r3.NewVec(0, 0, 0), Axis: r3.NewVec(0, 0, 1)}}
 	seam := &topo.Edge{Curve: surfacegeom.Line3{}, Start: v, End: &topo.Vertex{Position: r3.NewVec(3, 0, 0)},
@@ -111,13 +111,23 @@ func TestProvenEnd(t *testing.T) {
 	t.Run("a proven end is no junction", func(t *testing.T) {
 		t.Parallel()
 		all, arc, _, _, _, _, _ := fourFaceCorner(t)
-		selected := map[*topo.Edge]struct{}{arc: {}}
-		err := refuseChargedJunctionsSkipping(all, []*topo.Edge{arc}, selected, nil)
-		require.ErrorContains(t, err, "whose continuation is not selected")
-		require.ErrorIs(t, refuseChargedJunctions(all, []*topo.Edge{arc}, selected), decaderr.ErrUnsupported)
+		body := &topo.Body{Lumps: []*topo.Lump{{Shells: []*topo.FaceShell{{Faces: []*topo.Face{{
+			Loops: []*topo.Loop{{CoEdges: []topo.CoEdge{{Edge: all[0]}, {Edge: all[1]}, {Edge: all[2]}}}}}}}}}}}
+		edges := []*topo.Edge{arc}
 
-		// Only the shared end is proven; the arc's other end has no continuation.
-		require.NoError(t, refuseChargedJunctionsSkipping(all, []*topo.Edge{arc}, selected, &fakeTangent{ok: true}))
-		require.Error(t, refuseChargedJunctionsSkipping(all, []*topo.Edge{arc}, selected, &fakeTangent{}))
+		// Red leg: with no prover the shared end is a junction whose continuation is not selected.
+		_, _, _, err := planChains(body, edges, nil, false)
+		require.ErrorIs(t, err, decaderr.ErrUnsupported)
+		require.ErrorContains(t, err, "whose continuation is not selected")
+
+		// Only the shared end is proven; the arc's other end has no continuation, so no link forms.
+		chains, rest, handled, err := planChains(body, edges, &fakeTangent{ok: true}, false)
+		require.NoError(t, err)
+		require.False(t, handled)
+		require.Empty(t, chains)
+		require.Empty(t, rest)
+
+		_, _, _, err = planChains(body, edges, &fakeTangent{}, false)
+		require.ErrorIs(t, err, decaderr.ErrUnsupported)
 	})
 }

@@ -749,10 +749,15 @@ func blendChains(ctx context.Context, env topo.Env, b *topo.Body, fp facetedreco
 				ords[i], cref[i] = ordOf[e], refs[ordOf[e]]
 				continue
 			}
+			matched := false
 			for _, e0 := range chains[ci].edges {
 				if sameEdgeKey(e0, e) {
 					ords[i], cref[i] = ordOf[e0], refs[ordOf[e0]]
+					matched = true
 				}
+			}
+			if !matched {
+				return nil, fmt.Errorf("%w: a chain edge's selection ordinal is not found", decaderr.ErrUnsupported)
 			}
 		}
 		next, err := rewriteChain(ctx, env, curFP, cyc, ords, cref, spec, op, faceIndexOf(cur))
