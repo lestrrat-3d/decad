@@ -30,10 +30,13 @@ func stackedViewBlend(ctx context.Context, env topo.Env, hooks Hooks, b *topo.Bo
 	// vertices: an arc takes its radius from its first vertex and an oblique
 	// plane passes through its walked ends, so it lies only within the record's
 	// section displacement of the wall it denotes, and a holed union's merged
-	// carrier lies CarrierCharge from it. Where either is nonzero, every swept
-	// wall stays in the view untagged, a plain faceted obstacle as a displaced
-	// prism's side faces are (brep-modify §2.2).
-	out, matched, err := retainedViewBlend(ctx, env, hooks, b, edges, nil, stackedViewUntag(b, bp), blend)
+	// carrier lies CarrierCharge from it. Where either is nonzero, a circular
+	// wall keeps its Cylinder tag and states that displacement on it, for the
+	// retained edge blend to charge or refuse (stackedViewCharge); every other
+	// swept wall stays in the view untagged, a plain faceted obstacle as a
+	// displaced prism's side faces are (brep-modify §2.2).
+	out, matched, err := retainedViewBlend(ctx, env, hooks, b, edges, nil, stackedViewUntag(b, bp),
+		stackedViewCharge(b, bp), blend)
 	if viewMissed(ctx, err) {
 		// The view never read the selection: the receivers' refusal stands.
 		return nil, false, nil
@@ -43,17 +46,20 @@ func stackedViewBlend(ctx context.Context, env topo.Env, hooks Hooks, b *topo.Bo
 
 // stackedViewUntag lists, by index in topobuild.Faces order, the faces of b
 // whose surface the view must not keep as a retained tag: every face but a
-// planar record face once the record bp carries a section displacement or a
-// carrier charge, and none otherwise.
+// planar record face and a charged circular wall (stackedViewCharge) once the
+// record bp carries a section displacement or a carrier charge, and none
+// otherwise.
 func stackedViewUntag(b *topo.Body, bp breprecord.Payload) map[int]struct{} {
 	if bp.SectionDelta() == 0 && bp.CarrierCharge == 0 {
 		return nil
 	}
+	charge := stackedViewCharge(b, bp)
 	untag := map[int]struct{}{}
 	for i, f := range topobuild.Faces(b) {
-		if !recordPlanarFace(b, f) {
-			untag[i] = struct{}{}
+		if _, charged := charge[i]; charged || recordPlanarFace(b, f) {
+			continue
 		}
+		untag[i] = struct{}{}
 	}
 	return untag
 }

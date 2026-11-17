@@ -3,7 +3,8 @@
 A `Boss` root fillet whose blend runs off its face (boss-design §6). The blend ends where it meets another face of the
 body, as Fusion 360 ends it. Status: approved for building in the increments of §7. P2 is built: the Ø14 union is an
 A1 brep with `B` on one carrier (general-boolean §3 "A1 as a brep", holed operands). P4 is built: C2 root arcs ending
-on window or slot corner rounds. P3, P5, P6 and P7 are not.
+on window or slot corner rounds. P3 is built as tangent-notch T3. P5 is built for closed rims (§5.4). P6 and P7 are
+not.
 
 Navigation (not authority): target result → §2; the gate before any build → §2.4; which configurations build → §4;
 why each admission is sound → §5; what must exist first → §6; size and options → §7, §8.
@@ -217,11 +218,21 @@ the exact-equality row decides, and a near-equal pair refuses (X4).
 
 ### 5.4 Charges
 
-A shared span's width charge (general-boolean A3) is a stated departure of `B`. retained-edge-blend charges displaced
-planes through `planeCharge` and refuses a displaced cylinder (SR1). Rule CO on a charged `B` needs a cylinder charge of
-the same kind, carried into the strip's bounds. Its fillet face is then not published as a `Torus` tag (retained-edge-blend
-§6.1, displaced planes) and stays `Faceted`. In the fixture two of four inner arcs carry such a charge, so at Ø13 and
-Ø14 the fillet face is `Faceted` unless the torus tag gains a field for a positional bound.
+A shared span's width charge (general-boolean A3) is a stated departure of `B`. The stacked view states it, with the
+record's section displacement, as the `AxialDelta` of every swept circular wall's `Cylinder` tag (brep-modify §2.3).
+The retained edge blend charges it as it charges a displaced plane (retained-edge-blend §6.1, "Displaced planes and
+walls"): the closed rim (R2) adds `4δ/minSine` to its slack and a radius term to its area bound, and its blend face
+stays `Faceted`. Every other route refuses a charged wall, an open arc (R4) included, and the result publishes no
+charged wall. In the fixture two of four inner arcs carry such a charge, so at Ø13 and Ø14 the fillet face is
+`Faceted` unless the torus tag gains a field for a positional bound.
+
+At Ø14 the root arcs reach the retained edge blend and stop at the tangent junction where each arc meets a window
+corner round, read on the charged tags for refusal only. Below that gate R4 cannot read them yet: each arc end is a
+four-face corner (`A`, the boss wall above the arm, the full wall piece that continues the window wall, the corner
+round), which `cornerOf` refuses. The same corner stops every root arc of a holed A1 union whose wall continues a
+window wall, charged or not, so P6 reads that corner and charges an arc's span and ends. A charged wall's fillet that
+builds today is a closed rim of the same union, such as a round hole's rim
+(`apitest/stacked_brep_view_charged_wall_test.go`).
 
 ## 6. Prerequisites
 
@@ -294,8 +305,8 @@ increment leaves `main` green and every result outside its gate unchanged.
 | P2 | §6.4's refusals 1 to 5 under §6.3's narrow gate | the Ø14 union with `B` on one carrier | 4 to 7 weeks |
 | P3 | built as tangent-notch-design T3 (brep-modify §2.3): the faceted-view fillet of a stacked or slab-cut BRep after the receiver routes refuse. A holed union with a carrier charge keeps its curved faces untagged until P5 | `Boss` root fillets on P2's results, after P5 | built |
 | P4 (built) | C2: R4 with cylinder end faces, `B` running on past a cylinder end face below `A` (the footing), several arcs on one wall, caps on cylinders | Ø15 and transversal root ends on window or slot corner rounds | 2 to 3 weeks |
-| P5 | §5.4's cylinder charge on `B` in the retained edge blend | near-equal carriers at Ø14 | about 1 week |
-| P6 | C3 tangent ends with §5.2's tangency proof | Ø14, the gallery case | 1.5 to 2.5 weeks |
+| P5 (built) | §5.4's cylinder charge on `B` in the retained edge blend, for the closed rim; the Ø14 root arcs reach the blend and stop at the tangent junction | near-equal carriers at Ø14 | about 1 week |
+| P6 | C3 tangent ends with §5.2's tangency proof, the four-face arc end of §5.4, and the charge on an arc's span and ends | Ø14, the gallery case | 1.5 to 2.5 weeks |
 | P7 | C1 with §5.2's coincidence proof | exact-equal C1 only; the fixture's Ø13 (near-equal, on the mesh path under the narrow gate) refuses until a history read exists | 1 to 2 weeks |
 
 The Ø14 gallery case needs P2 to P6: about 9 to 14.5 weeks. Gate G0 runs whenever Fusion is available. The estimates

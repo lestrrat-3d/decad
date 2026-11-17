@@ -10,6 +10,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/breprecord"
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/measurement"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/decad/internal/topobuild"
 )
@@ -36,7 +37,7 @@ func shellViewBlend(ctx context.Context, env topo.Env, hooks Hooks, b *topo.Body
 	if !ok || (bp.BossShell == nil && bp.PocketShell == nil) || len(edges) == 0 {
 		return nil, false, nil
 	}
-	return retainedViewBlend(ctx, env, hooks, b, edges, refs, nil, blend)
+	return retainedViewBlend(ctx, env, hooks, b, edges, refs, nil, nil, blend)
 }
 
 // viewBlendFunc runs the retained edge blend on a faceted view: view is the
@@ -48,19 +49,33 @@ type viewBlendFunc func(view *topo.Body, fp facetedrecord.Payload, edges []*topo
 // images of edges and refs there. untag, when non-nil, lists the faces of b
 // (by index in topobuild.Faces order) whose surface the view must not keep as
 // a retained tag; their facets stay in the view as plain faceted obstacles.
-// matched follows shellViewBlend's rule.
+// charge, when non-nil, maps a face of b (by the same index) to the axial
+// displacement its retained Cylinder tag states (facetedrecord Group
+// HasAxialDelta, AxialDelta); a charged face that is not a retained Cylinder
+// group is untagged instead. matched follows shellViewBlend's rule.
 func retainedViewBlend(ctx context.Context, env topo.Env, hooks Hooks, b *topo.Body, edges []*topo.Edge,
-	refs map[*topo.Edge]*topo.Face, untag map[int]struct{}, blend viewBlendFunc,
+	refs map[*topo.Edge]*topo.Face, untag map[int]struct{}, charge map[int]float64, blend viewBlendFunc,
 ) (*topo.Body, bool, error) {
 	fp, audit, err := booleaneval.View(ctx, b, hooks.Mesher)
 	if err != nil {
 		return nil, true, viewBuildError{err}
 	}
-	if len(untag) > 0 {
+	if len(untag) > 0 || len(charge) > 0 {
 		groups := slices.Clone(fp.Groups)
 		for gi := range untag {
 			if gi < 0 || gi >= len(groups) {
 				return nil, false, nil
+			}
+			groups[gi] = untagged(groups[gi])
+		}
+		for gi, delta := range charge {
+			if gi < 0 || gi >= len(groups) {
+				return nil, false, nil
+			}
+			if _, isCyl := groups[gi].Surface.(surfacegeom.Cylinder); isCyl && groups[gi].Retained {
+				groups[gi].AxialDelta = delta
+				groups[gi].HasAxialDelta = true
+				continue
 			}
 			groups[gi] = untagged(groups[gi])
 		}

@@ -51,7 +51,7 @@ func planChains(b *topo.Body, edges []*topo.Edge) (chains []chainCycle, handled 
 				if c == e || c.Start == c.End || (c.Start != v && c.End != v) || len(c.Faces) != 2 {
 					continue
 				}
-				j, state, near := tangentState(e, c, v)
+				j, state, near := tangentStateMode(e, c, v, false)
 				if near {
 					return nil, true, fmt.Errorf("%w: the junction at %s is nearly tangent and the tags cannot decide it",
 						decaderr.ErrUnsupported, selectorquery.RenderVec(v.Position))
@@ -68,6 +68,9 @@ func planChains(b *topo.Body, edges []*topo.Edge) (chains []chainCycle, handled 
 				links[e] = append(links[e], found[0])
 			}
 		}
+	}
+	if err := refuseChargedJunctions(all, edges, selected); err != nil {
+		return nil, true, err
 	}
 	if len(links) == 0 {
 		return nil, false, nil

@@ -53,6 +53,25 @@ func RetainedEdgeCurve(a, b *topo.Face, chain []r3.Vec, bounds []float64, closed
 			return nil, false
 		}
 	}
+	// A Cylinder tag that states a displacement (AxialDelta: the true wall is a
+	// parallel cylinder within it) exists only in a stacked brep's faceted view
+	// and in the intermediate bodies one retained edge blend builds from it. The
+	// blend untags every such wall and rebuilds its result, recomputing every
+	// edge, so no curve published from one here outlives the blend. Inside it,
+	// edge lengths and bounds come from the chain, not the curve; the closed-rim
+	// reader checks the circle against the tags with the displacement charged
+	// into its slack, and every other reader refuses a charged wall
+	// (agent-docs/retained-edge-blend-design.md §6.1). A displaced plane's
+	// circle still declines below, because a plane's displacement reaches later
+	// results. A negative or non-finite displacement bounds nothing and declines.
+	for _, f := range []*topo.Face{a, b} {
+		if _, isCyl := f.Surface.(surfacegeom.Cylinder); !isCyl || !f.HasAxialDelta {
+			continue
+		}
+		if !(f.AxialDelta >= 0) || math.IsInf(f.AxialDelta, 0) {
+			return nil, false
+		}
+	}
 	if circle, ok := cylinderTorusRim(ta, tb, chain, bounds, closed); ok {
 		return circle, true
 	}

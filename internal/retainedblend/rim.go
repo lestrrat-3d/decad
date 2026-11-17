@@ -121,8 +121,11 @@ type rim struct {
 	planeFace *topo.Face
 	wallFace  *topo.Face
 	scale     float64
-	// charge is the plane displacement the rim's and end planes add to slack.
+	// charge is the plane and wall displacement the rim's and end planes add to slack.
 	charge float64
+	// wallDelta is the wall tag's stated displacement, charged by cylCharge and
+	// by rimAreaCharge.
+	wallDelta float64
 }
 
 // slack is the arithmetic allowance for a value computed from the tags.
@@ -153,21 +156,32 @@ func looksLikeArc(edge *topo.Edge) bool {
 
 // planeAndWall reports whether edge is a retained curve between exactly one
 // retained Plane and one retained Cylinder, neither with a stated tag
-// departure.
+// departure. The wall may state a displacement (wallRecord), which the rim route
+// charges; a plane's displacement is read by the plane rule (tagIsRecord).
 func planeAndWall(edge *topo.Edge) bool {
 	if !edge.RetainedCurve || len(edge.Faces) != 2 {
 		return false
 	}
 	planes, cylinders := 0, 0
 	for _, f := range edge.Faces {
-		if f == nil || !f.RetainedTag || f.TagDeparture != 0 || !tagIsRecord(f) {
+		if f == nil || !f.RetainedTag || f.TagDeparture != 0 {
 			return false
 		}
 		switch f.Surface.(type) {
 		case surfacegeom.Plane:
+			if !tagIsRecord(f) {
+				return false
+			}
 			planes++
 		case surfacegeom.Cylinder:
+			if !wallRecord(f) {
+				return false
+			}
 			cylinders++
+		default:
+			if !tagIsRecord(f) {
+				return false
+			}
 		}
 	}
 	return planes == 1 && cylinders == 1
@@ -238,6 +252,14 @@ func readRimSide(edge *topo.Edge, fp facetedrecord.Payload, faceIndex map[*topo.
 		return rim{}, fmt.Errorf("%w: the rim's plane states no usable displacement", decaderr.ErrUnsupported)
 	}
 	r.charge = proofbound.ProductUpper(planeAmp, planeDelta)
+	wallDelta, wallOK := faceDelta(r.wallFace)
+	if !wallOK {
+		return rim{}, fmt.Errorf("%w: the rim's wall states no usable displacement", decaderr.ErrUnsupported)
+	}
+	r.wallDelta = wallDelta
+	if wallDelta != 0 {
+		r.charge = proofbound.AbsSumUpper(r.charge, cylCharge(wallDelta))
+	}
 	slack := r.slack()
 	if center.Sub(circleCentre).Len() > slack || math.Abs(circleRadius-radius) > slack {
 		return rim{}, fmt.Errorf("%w: the rim's circle is not the meeting of its two tags", decaderr.ErrUnsupported)

@@ -89,12 +89,13 @@ func TestStackedBrepViewFillet(t *testing.T) {
 // builds its tangent ends. The holed A1 union of the spoked disc and its Ø14
 // boss (TestUnionHoledSharedSpanBoss) merged two near-equal circles into one
 // carrier, which may lie the span's width from the wall it denotes; the view
-// keeps no tag on its curved faces, so its root arcs keep the receiver's
-// refusal until boss-root-overflow P5 states that charge on the tag.
+// states that charge on the curved faces' tags, so its root arcs reach the
+// retained edge blend and stop at the tangent junction where each arc meets a
+// window corner round, which boss-root-overflow P6 builds as C3.
 //
 // Shown red: without the view fallback the fork refuses with route L's SL1;
-// without the curved-face untag the boss reaches the blend on a tag that
-// states no charge.
+// without the charged junction reading the boss arcs keep the receivers'
+// refusal.
 func TestStackedBrepViewFilletReachesRetainedBlend(t *testing.T) {
 	t.Parallel()
 	mm := units.Millimeters
@@ -105,7 +106,8 @@ func TestStackedBrepViewFilletReachesRetainedBlend(t *testing.T) {
 		require.NoError(t, err)
 		_, err = decad.Fillet(t.Context(), out, decad.Edges(decad.Reflex(), decad.Circular()), mm(0.5))
 		require.ErrorIs(t, err, decad.ErrUnsupported)
-		require.ErrorContains(t, err, "brep-modify SB1")
+		require.ErrorContains(t, err, "whose continuation is not selected")
+		require.ErrorContains(t, err, "(read on tags that state a displacement)")
 	})
 	t.Run("fork", func(t *testing.T) {
 		t.Parallel()

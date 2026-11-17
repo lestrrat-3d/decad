@@ -3117,3 +3117,4 @@
 12	0.00	TestStackedBrepViewFilletReachesRetainedBlend
 11	80.00	TestLoopChamferNarrowFeatures
 12	2.00	TestLoopChamferDartWiderThanHalf
+12	0.00	TestStackedBrepViewFilletChargedWall

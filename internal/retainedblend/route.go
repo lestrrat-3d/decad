@@ -26,7 +26,22 @@ import (
 // refusal. All edges must be non-nil.
 func Fillet(ctx context.Context, env topo.Env, b *topo.Body, fp facetedrecord.Payload, edges []*topo.Edge,
 	radius, radiusDelta float64) (*topo.Body, bool, error) {
-	return blend(ctx, env, b, fp, edges, blendSpec{fillet: true, r: radius}, radiusDelta, "fillet")
+	out, recognized, err := blend(ctx, env, b, fp, edges, blendSpec{fillet: true, r: radius}, radiusDelta, "fillet")
+	return unpublishCharged(ctx, env, out, recognized, err)
+}
+
+// unpublishCharged drops the tags of a built body that state a displacement
+// (unpublishChargedWalls) and passes any other result through.
+func unpublishCharged(ctx context.Context, env topo.Env, out *topo.Body, recognized bool,
+	err error) (*topo.Body, bool, error) {
+	if err != nil || out == nil {
+		return out, recognized, err
+	}
+	out, err = unpublishChargedWalls(ctx, env, out)
+	if err != nil {
+		return nil, true, err
+	}
+	return out, recognized, nil
 }
 
 // Reference is a resolved two-distance chamfer (agent-docs/retained-modify-reach-design.md
@@ -48,7 +63,8 @@ func Chamfer(ctx context.Context, env topo.Env, b *topo.Body, fp facetedrecord.P
 		spec.asym = &asymSpec{refs: ref.Refs, other: ref.Other}
 		dDelta = math.Max(math.Abs(dDelta), math.Abs(ref.OtherDelta))
 	}
-	return blend(ctx, env, b, fp, edges, spec, dDelta, "chamfer")
+	out, recognized, err := blend(ctx, env, b, fp, edges, spec, dDelta, "chamfer")
+	return unpublishCharged(ctx, env, out, recognized, err)
 }
 
 // edgeKind is the class of a selected edge.
@@ -182,6 +198,9 @@ func blend(ctx context.Context, env topo.Env, b *topo.Body, fp facetedrecord.Pay
 			}
 			targets[i].lineKey, targets[i].kind = l.key(), straightLine
 		case looksLikeArc(e):
+			if err := refuseChargedArc(e); err != nil {
+				return nil, true, err
+			}
 			a, err := readArc(e, fp, faceIndex, local)
 			if err != nil {
 				// An arc this route cannot read is left to the generic refusal, which
@@ -609,6 +628,13 @@ func (w *work) measureChange(tag blendTag, stripFrom int) (float64, float64) {
 	// Every term is a float evaluation; charge the areas' own rounding.
 	scale := math.Max(math.Abs(deltaHeld), math.Abs(deltaTrue)) + oldArea + newArea + w.removedTrue
 	areaSlack := proofbound.AbsSumUpper(math.Abs(deltaHeld-deltaTrue), oldSlop, newSlop, 64*0x1p-52*scale)
+	// A charged wall moves the exact area change (rimAreaCharge); the charge is
+	// zero on every route whose wall states no displacement.
+	trueArea := tag.trueArea
+	if charge := rimAreaCharge(w.r, w.spec); charge != 0 {
+		areaSlack = proofbound.AbsSumUpper(areaSlack, charge)
+		trueArea = proofbound.AbsSumUpper(tag.trueArea, charge)
+	}
 
 	// A raised inner vertex of a curved wall bounds the facets beside the
 	// strip that now face the blend.
@@ -616,7 +642,7 @@ func (w *work) measureChange(tag blendTag, stripFrom int) (float64, float64) {
 	for _, t := range w.out[stripFrom:] {
 		eps = max(eps, w.beta[t[0]], w.beta[t[1]], w.beta[t[2]])
 	}
-	volSymDiff := proofbound.AbsSumUpper(proofbound.ProductUpper(eps, proofbound.AbsSumUpper(stripArea, tag.trueArea)),
+	volSymDiff := proofbound.AbsSumUpper(proofbound.ProductUpper(eps, proofbound.AbsSumUpper(stripArea, trueArea)),
 		64*0x1p-52*eps*scale)
 	// An end cap on a cylinder is new surface bounding K, and the split of G's held
 	// facets moves their volume (arc_end_cyl_cap.go).
