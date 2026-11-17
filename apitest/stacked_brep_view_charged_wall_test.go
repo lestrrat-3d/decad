@@ -78,13 +78,19 @@ func windowedHolePlate(t *testing.T) *decad.Body {
 // displacement of the cylinder it denotes. The view keeps its Cylinder tag and
 // states that displacement on it, so the retained edge blend builds the rim
 // round and keeps the blend face faceted. The removed volume is that of a
-// fillet of radius 0.5 on a rim of radius 2, and the charged wall is not
-// published as an analytic face. The charge's growth of the bounds against an
-// uncharged twin is shown in internal/retainedblend (TestFilletChargesCylinderWall).
+// fillet of radius 0.5 on a rim of radius 2. The blend publishes the charged
+// wall: the result's hole wall is still a Cylinder of radius 2, stating the
+// displacement. Later operations read it again: the hole's bottom rim chamfers
+// with the exact ring volume removed, a mesh Cut away from the hole keeps the
+// wall and the rim still chamfers, and an open arc on a charged wall (a
+// window's bottom inner arc) is refused. The charge's growth of the bounds
+// against an uncharged twin is shown in internal/retainedblend
+// (TestFilletChargesCylinderWall, TestFilletPublishesChargedCylinderWall).
 //
 // Shown red: without the view's wall charge the hole wall is untagged in the
 // view and the rim keeps the receivers' section-displacement refusal
-// (brep-modify SB1).
+// (brep-modify SB1). Without the blend's publication the wall reads Faceted
+// after the fillet and the subtests find no Cylinder of radius 2.
 func TestStackedBrepViewFilletChargedWall(t *testing.T) {
 	t.Parallel()
 	mm := units.Millimeters
@@ -120,13 +126,102 @@ func TestStackedBrepViewFilletChargedWall(t *testing.T) {
 	removed := volumeMM(t, before) - volumeMM(t, after)
 	require.InDelta(t, 2*math.Pi*(1-math.Pi/4)*rho*rho*(r+k*rho), removed, boundMM3(t, before)+boundMM3(t, after))
 
+	var wall *decad.Cylinder
 	for _, f := range filleted.Faces() {
 		_, torus := f.Surface().(decad.Torus)
 		require.False(t, torus, "the charged blend face stays faceted")
-		if c, ok := f.Surface().(decad.Cylinder); ok {
-			radius, err := c.Radius.In(units.Millimeter)
-			require.NoError(t, err)
-			require.NotEqual(t, r, radius, "the charged wall is not published")
+		c, ok := f.Surface().(decad.Cylinder)
+		if !ok {
+			continue
+		}
+		radius, err := c.Radius.In(units.Millimeter)
+		require.NoError(t, err)
+		if math.Abs(radius-r) < 1e-9 {
+			wall = &c
 		}
 	}
+	require.NotNil(t, wall, "the hole wall is published as a Cylinder of radius 2")
+
+	// bottomRim is the hole's rim at z = 0, a circle of radius 2 about (-14, -14).
+	bottomRim := func(t *testing.T, b *decad.Body) r3.Vec {
+		t.Helper()
+		var at r3.Vec
+		n := 0
+		for _, e := range b.Edges() {
+			c, ok := e.Curve().(decad.Circle3)
+			if !ok || e.Start().Position().Value.Z != 0 {
+				continue
+			}
+			radius, err := c.Radius.In(units.Millimeter)
+			require.NoError(t, err)
+			if math.Abs(radius-r) < 1e-9 && math.Abs(c.Center.X+14) < 1e-9 && math.Abs(c.Center.Y+14) < 1e-9 {
+				at = e.Start().Position().Value
+				n++
+			}
+		}
+		require.Equal(t, 1, n, "the hole's bottom rim is one Circle3 of radius 2 about (-14, -14)")
+		return at
+	}
+	// chamfered is the body with the hole's bottom rim chamfered by 0.5. The removed ring has a right triangle
+	// of legs d and area d^2/2 as its section, with its centroid at radius r + d/3.
+	chamfered := func(t *testing.T, b *decad.Body) {
+		t.Helper()
+		const d = 0.5
+		beforeVol, err := b.Volume()
+		require.NoError(t, err)
+		edge := decad.Edges(decad.EndpointAt(bottomRim(t, b)), decad.Circular()).Exactly(1)
+		out, err := decad.Chamfer(t.Context(), b, edge, mm(d))
+		require.NoError(t, err)
+		afterVol, err := out.Volume()
+		require.NoError(t, err)
+		removedVol := volumeMM(t, beforeVol) - volumeMM(t, afterVol)
+		require.InDelta(t, 2*math.Pi*(r+d/3)*d*d/2, removedVol, boundMM3(t, beforeVol)+boundMM3(t, afterVol))
+	}
+
+	t.Run("the published wall's bottom rim chamfers", func(t *testing.T) {
+		t.Parallel()
+		chamfered(t, filleted)
+	})
+
+	t.Run("a mesh Cut away from the hole keeps the wall and the rim chamfers", func(t *testing.T) {
+		t.Parallel()
+		doc := filleted.Document()
+		tool := translated(t, boxBody(t, doc, 0, 0, 4, 4, 7), 10, 10, -1)
+		cut, err := decad.Cut(t.Context(), filleted, tool)
+		require.NoError(t, err)
+		require.Equal(t, "decad.facetedPayload", decadtest.PayloadClass(cut))
+		var kept bool
+		for _, f := range cut.Faces() {
+			if c, ok := f.Surface().(decad.Cylinder); ok {
+				radius, err := c.Radius.In(units.Millimeter)
+				require.NoError(t, err)
+				kept = kept || math.Abs(radius-r) < 1e-9
+			}
+		}
+		require.True(t, kept, "the Cut keeps the charged hole wall as a Cylinder of radius 2")
+		chamfered(t, cut)
+	})
+
+	t.Run("a window's bottom inner arc on the charged wall is refused", func(t *testing.T) {
+		t.Parallel()
+		var at r3.Vec
+		n := 0
+		for _, e := range filleted.Edges() {
+			c, ok := e.Curve().(decad.Arc3)
+			if !ok || e.Start().Position().Value.Z != 0 {
+				continue
+			}
+			radius, err := c.Radius.In(units.Millimeter)
+			require.NoError(t, err)
+			if math.Abs(radius-7) < 0.01 {
+				at = e.Start().Position().Value
+				n++
+			}
+		}
+		require.Positive(t, n, "the windows' bottom inner arcs are Arc3 edges")
+		edge := decad.Edges(decad.EndpointAt(at), decad.Circular()).Exactly(1)
+		_, err := decad.Chamfer(t.Context(), filleted, edge, mm(0.5))
+		require.ErrorIs(t, err, decad.ErrUnsupported)
+		require.ErrorContains(t, err, "an arc on a wall whose tag states a displacement is not built")
+	})
 }

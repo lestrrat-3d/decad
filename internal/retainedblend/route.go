@@ -29,14 +29,14 @@ func Fillet(ctx context.Context, env topo.Env, b *topo.Body, fp facetedrecord.Pa
 	return FilletTangent(ctx, env, b, fp, edges, radius, radiusDelta, nil)
 }
 
-// unpublishCharged drops the tags of a built body that state a displacement
-// (unpublishChargedWalls) and passes any other result through.
-func unpublishCharged(ctx context.Context, env topo.Env, out *topo.Body, recognized bool,
+// publishCharged publishes the charged walls of a built body
+// (publishChargedWalls) and passes any other result through.
+func publishCharged(ctx context.Context, env topo.Env, out *topo.Body, recognized bool,
 	err error) (*topo.Body, bool, error) {
 	if err != nil || out == nil {
 		return out, recognized, err
 	}
-	out, err = unpublishChargedWalls(ctx, env, out)
+	out, err = publishChargedWalls(ctx, env, out)
 	if err != nil {
 		return nil, true, err
 	}
@@ -63,7 +63,7 @@ func Chamfer(ctx context.Context, env topo.Env, b *topo.Body, fp facetedrecord.P
 		dDelta = math.Max(math.Abs(dDelta), math.Abs(ref.OtherDelta))
 	}
 	out, recognized, err := blend(ctx, env, b, fp, edges, spec, dDelta, "chamfer")
-	return unpublishCharged(ctx, env, out, recognized, err)
+	return publishCharged(ctx, env, out, recognized, err)
 }
 
 // edgeKind is the class of a selected edge.

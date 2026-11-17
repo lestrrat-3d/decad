@@ -244,6 +244,33 @@ func TestOfCircle(t *testing.T) {
 	})
 }
 
+// A plane-cylinder rim reads decided on a wall that states a zero charge and
+// Undecided on one that states any other, because the true wall may lie off
+// the tag by the charge (retained-edge-blend §6.1).
+func TestOfChargedWall(t *testing.T) {
+	t.Parallel()
+	rim := func(t *testing.T, set bool, delta float64) *topo.Edge {
+		v := &topo.Vertex{Position: r3.Vec{X: 2}}
+		e := &topo.Edge{
+			Curve: surfacegeom.Circle3{Axis: ez, Radius: units.Millimeters(2)},
+			Start: v, End: v, CurveBounded: true,
+		}
+		frame, err := r3.NewFrame(r3.Vec{}, ex, ey)
+		require.NoError(t, err)
+		plane := &topo.Face{Surface: surfacegeom.Plane{Frame: frame},
+			Loops: []*topo.Loop{{Outer: true, CoEdges: []topo.CoEdge{{Edge: e, Forward: true}}}}}
+		wall := &topo.Face{Surface: surfacegeom.Cylinder{Axis: ez, Radius: units.Millimeters(2)},
+			HasAxialDelta: set, AxialDelta: delta}
+		e.Faces = []*topo.Face{wall, plane}
+		return e
+	}
+	require.Equal(t, edgewedge.Salient, edgewedge.Of(rim(t, false, 0)))
+	require.Equal(t, edgewedge.Salient, edgewedge.Of(rim(t, true, 0)))
+	for _, delta := range []float64{1e-14, 1e-6, math.NaN()} {
+		require.Equal(t, edgewedge.Undecided, edgewedge.Of(rim(t, true, delta)), "delta %v", delta)
+	}
+}
+
 // roundCircle builds a whole-circle edge through p about center and axis,
 // with vertex bound delta, between a disk on the plane through origin
 // spanned by u and v and a face carrying round.

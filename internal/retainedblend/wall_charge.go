@@ -3,6 +3,7 @@ package retainedblend
 import (
 	"context"
 	"fmt"
+	"math"
 	"slices"
 
 	clr "github.com/lestrrat-3d/decad/internal/clearance"
@@ -18,7 +19,9 @@ import (
 // faceted group) may state HasAxialDelta/AxialDelta delta >= 0: the true wall
 // is a cylinder parallel to the tag whose axis offset plus radius difference
 // is at most delta. Only the closed-rim route (R2) reads it; every other route
-// refuses it, and no body leaves the blend with such a tag.
+// refuses it. A blend result keeps the tag with its delta (publishChargedWalls),
+// and the readers outside this package charge it or refuse it
+// (agent-docs/retained-edge-blend-design.md §6.1, "Publishing a charged wall").
 
 // rimAreaSlope bounds how fast a closed rim's exact area change moves with the
 // wall radius: (pi^2 + 4*pi) < 22.44, per unit of the larger setback.
@@ -103,15 +106,30 @@ func chargedGroup(g facetedrecord.Group) bool {
 	return g.HasAxialDelta && g.AxialDelta != 0
 }
 
-// unpublishChargedWalls drops the tag of every curved group of body that
-// states a displacement. A curved tag with a stated displacement is a reading
-// aid of R2 only; no body leaves the blend with one, so no reader outside this
-// package (facetedrecord.SourceTag, which carries only a plane's AxialDelta,
-// edge curves, contact readers) ever reads it as exact. The faces keep their
-// facets and bounds. It clears the fields brepmodify's untagged clears.
-func unpublishChargedWalls(ctx context.Context, env topo.Env, body *topo.Body) (*topo.Body, error) {
+// keptWall reports whether g is a charged Cylinder group the blend publishes
+// with its tag: a retained Cylinder whose displacement is finite and not
+// negative.
+func keptWall(g facetedrecord.Group) bool {
+	if _, cyl := g.Surface.(surfacegeom.Cylinder); !cyl || !g.Retained {
+		return false
+	}
+	return g.AxialDelta >= 0 && !math.IsInf(g.AxialDelta, 0)
+}
+
+// publishChargedWalls publishes the charged walls of body. A retained Cylinder
+// group that states a finite displacement delta >= 0 keeps its tag and delta, as
+// a displaced plane does, so a later Fillet, Chamfer or Boolean reads the wall
+// again (agent-docs/retained-edge-blend-design.md §6.1, "Publishing a charged
+// wall"). It clears the group's ViewCharge mark, so the rebuilt body's edge
+// curves take the published rule. Any other curved group that states a
+// displacement is untagged: the tag, its record and its displacement drop, and
+// the faces keep their facets and bounds. It clears the fields brepmodify's
+// untagged clears. body is rebuilt only when some group changed.
+func publishChargedWalls(ctx context.Context, env topo.Env, body *topo.Body) (*topo.Body, error) {
 	fp, ok := body.Payload.(facetedrecord.Payload)
-	if !ok || !slices.ContainsFunc(fp.Groups, chargedGroup) {
+	if !ok || !slices.ContainsFunc(fp.Groups, func(g facetedrecord.Group) bool {
+		return g.ViewCharge || chargedGroup(g) && !keptWall(g)
+	}) {
 		return body, nil
 	}
 	oldGeom, err := groupGeom(ctx, faceIndexOf(body), fp, true)
@@ -120,16 +138,16 @@ func unpublishChargedWalls(ctx context.Context, env topo.Env, body *topo.Body) (
 	}
 	fp.Groups = slices.Clone(fp.Groups)
 	for i, g := range fp.Groups {
-		if !chargedGroup(g) {
-			continue
+		g.ViewCharge = false
+		if chargedGroup(g) && !keptWall(g) {
+			g.Surface = nil
+			g.Retained = false
+			g.Denoted = nil
+			g.NormalBound = 0
+			g.CapRecord = nil
+			g.AxialDelta = 0
+			g.HasAxialDelta = false
 		}
-		g.Surface = nil
-		g.Retained = false
-		g.Denoted = nil
-		g.NormalBound = 0
-		g.CapRecord = nil
-		g.AxialDelta = 0
-		g.HasAxialDelta = false
 		fp.Groups[i] = g
 	}
 	return buildCharged(ctx, env, fp, oldGeom)

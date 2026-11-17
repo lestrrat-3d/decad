@@ -53,22 +53,30 @@ func RetainedEdgeCurve(a, b *topo.Face, chain []r3.Vec, bounds []float64, closed
 			return nil, false
 		}
 	}
+	scale := 1.0
+	for _, v := range chain {
+		scale = max(scale, math.Abs(v.X), math.Abs(v.Y), math.Abs(v.Z))
+	}
+	slack := 64 * edgeEps * scale
 	// A Cylinder tag that states a displacement (AxialDelta: the true wall is a
-	// parallel cylinder within it) exists only in a stacked brep's faceted view
-	// and in the intermediate bodies one retained edge blend builds from it. The
-	// blend untags every such wall and rebuilds its result, recomputing every
-	// edge, so no curve published from one here outlives the blend. Inside it,
-	// edge lengths and bounds come from the chain, not the curve; the closed-rim
-	// reader checks the circle against the tags with the displacement charged
-	// into its slack, and every other reader refuses a charged wall
-	// (agent-docs/retained-edge-blend-design.md §6.1). A displaced plane's
-	// circle still declines below, because a plane's displacement reaches later
-	// results. A negative or non-finite displacement bounds nothing and declines.
+	// parallel cylinder within it) is a published wall once a retained edge
+	// blend keeps it (agent-docs/retained-edge-blend-design.md §6.1, "Publishing
+	// a charged wall"). A circle, arc or line is published with no room for the
+	// displacement, so beside an unmarked charged wall every rule applies the
+	// displaced plane's rule: a displacement above the chain's arithmetic
+	// allowance declines, and a larger one keeps the chord chain. A wall the
+	// stacked brep's faceted view marks (ViewCharge) admits any finite
+	// displacement, as the closed-rim reader needs inside the view; the mark never
+	// leaves the blend. A negative or non-finite displacement bounds nothing and
+	// declines.
 	for _, f := range []*topo.Face{a, b} {
 		if _, isCyl := f.Surface.(surfacegeom.Cylinder); !isCyl || !f.HasAxialDelta {
 			continue
 		}
 		if !(f.AxialDelta >= 0) || math.IsInf(f.AxialDelta, 0) {
+			return nil, false
+		}
+		if !f.ViewCharge && f.AxialDelta > slack {
 			return nil, false
 		}
 	}
@@ -85,11 +93,6 @@ func RetainedEdgeCurve(a, b *topo.Face, chain []r3.Vec, bounds []float64, closed
 	if !ok {
 		return nil, false
 	}
-	scale := 1.0
-	for _, v := range chain {
-		scale = max(scale, math.Abs(v.X), math.Abs(v.Y), math.Abs(v.Z))
-	}
-	slack := 64 * edgeEps * scale
 	// A plane tag may lie off the true plane by its stated AxialDelta. A Line3
 	// rim moves by at most planeRimAmp times that, so a line's falsifier slack
 	// widens by it (lineSlack); the widening never admits by itself. A circle or

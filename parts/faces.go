@@ -7,6 +7,7 @@ import (
 
 	"github.com/lestrrat-3d/decad"
 	"github.com/lestrrat-3d/decad/internal/explodeplan"
+	"github.com/lestrrat-3d/decad/internal/facedeparture"
 	"github.com/lestrrat-3d/decad/internal/jointinfer"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -125,7 +126,9 @@ func (bf *bodyFaces) addPlane(f *decad.Face, verts []r3.Vec, idx []int) {
 
 func (bf *bodyFaces) addCylinder(f *decad.Face, s decad.Cylinder, verts []r3.Vec, idx []int) {
 	axis, ok := s.Axis.Normalize()
-	if !ok {
+	if !ok || facedeparture.Charged(f) {
+		// A charged wall's true radius and axis may differ from the tag's by its
+		// charge, so the clearance measurement must not read the tag as the wall.
 		bf.markUnread(verts, idx)
 		return
 	}

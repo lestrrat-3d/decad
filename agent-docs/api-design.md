@@ -646,8 +646,13 @@ surface it names. A face whose built geometry is that surface is exact; a tagged
 analytic variant may instead be a bounded stand-in and carry its departure in
 computed measurements (`agent-docs/modify-reach-design.md` §8.3). A face whose held
 geometry is faceted is `Faceted`, and `Faceted` is the flag; the one exception
-is a tagged analytic variant on a faceted face, a float-image stand-in whose
-departure is carried in `NormalAt`, never in `Surface()`'s parameters.
+is a tagged analytic variant on a faceted face, a stand-in whose departure is
+carried in `NormalAt` and in the bounds of the measurements that read it, never
+in `Surface()`'s parameters. The stand-in is a float image of the true surface,
+or a tag whose true surface lies within a stated positional offset of it: a
+displaced plane, or a cylinder wall a retained edge blend keeps with its charge
+(`agent-docs/retained-edge-blend-design.md` §6.1). A reader that would take such
+a tag's parameters as the true surface's charges the offset or refuses the face.
 `Transform` and `Copy` carry such a tag to the float image of the source tag,
 and unless the placement is exactly the identity, `NormalAt` charges a placed
 group that has no denoted patch the tag's own departure plus the float image's

@@ -79,7 +79,7 @@ func ExactGroupPlaced(g *Group, q *exactrotation.Rotation, delta r3.Transform, v
 	source, sourceBound, denoted := g.Surface, g.NormalBound, g.Denoted != nil
 	record, axial, hasAxial := g.CapRecord, g.AxialDelta, g.HasAxialDelta
 	g.Surface, g.Denoted, g.NormalBound = nil, nil, 0
-	g.CapRecord, g.AxialDelta, g.HasAxialDelta = nil, 0, false
+	g.CapRecord, g.AxialDelta, g.HasAxialDelta, g.ViewCharge = nil, 0, false, false
 	if plane, ok := source.(surfacegeom.Plane); ok && g.Retained && !denoted && sourceBound == 0 &&
 		planeGroupFixedBy(plane, record, q.Linear(), q.Translation()) {
 		g.Surface, g.CapRecord, g.AxialDelta, g.HasAxialDelta = source, record, axial, hasAxial
@@ -93,6 +93,10 @@ func ExactGroupPlaced(g *Group, q *exactrotation.Rotation, delta r3.Transform, v
 		// A displacement stated with no record is relative to the tag alone.
 		// The float image of the tag keeps it, and its NormalBound states the
 		// image's own departure.
+		g.AxialDelta, g.HasAxialDelta = axial, hasAxial
+	}
+	if _, cyl := source.(surfacegeom.Cylinder); cyl {
+		// An exactly orthogonal map moves the true wall rigidly with its tag.
 		g.AxialDelta, g.HasAxialDelta = axial, hasAxial
 	}
 	switch source.(type) {

@@ -60,13 +60,19 @@ type Group struct {
 	// each plane where it is, so the record transfers verbatim. A plane the
 	// shifted retry translates, and every placement and similarity, drops it
 	// (topo.CapRecord.Under) because the image is no longer that record. On a
-	// retained Cylinder group, AxialDelta states the wall displacement that
-	// topo.Face.AxialDelta describes; a stacked brep's faceted view sets it and
-	// the retained edge blend never publishes it.
+	// retained Cylinder group, AxialDelta is the wall charge that
+	// topo.Face.AxialDelta describes: a stacked view states it, and a retained
+	// edge blend's result, every later Boolean, placement and similarity keep
+	// it (scaled by |s| under a similarity).
 	CapRecord     *topo.CapRecord
 	AxialDelta    float64
 	HasAxialDelta bool
-	Denoted       *surfacenormal.Revolved
+	// ViewCharge marks a charged Cylinder group that the stacked view's charge
+	// loop set (topo.Face.ViewCharge). Edge curves beside a marked wall admit
+	// any finite AxialDelta. The retained edge blend clears it on publication,
+	// and SourceTag never copies it.
+	ViewCharge bool
+	Denoted    *surfacenormal.Revolved
 	// NormalBound covers the tag's normal departure from its denoted patch.
 	// A placed planar tag conservatively uses the maximum distance of two
 	// unit normals when its rounded frame has no tighter certificate.
