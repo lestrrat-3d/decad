@@ -24,7 +24,8 @@ type InferredJoint struct {
 // directions and returns each match, longest engagement first within a pair,
 // with the clearance it measured. A match is a convex cylinder face of one part
 // in a coaxial concave one of the other, or between two parallel planar faces; a
-// face that reads as neither a plane nor a cylinder never matches. Joint names
+// face that reads as neither a plane nor a cylinder, or a cylinder that states a
+// positional charge, never matches. Joint names
 // are "A~B", with "#2", "#3" for further matches of one pair. Infer adds nothing
 // to the Set. Coplanar face contacts are not inferred.
 func (s *Set) Infer(ctx context.Context, opts ...CheckOption) ([]InferredJoint, error) {

@@ -60,7 +60,8 @@ func SourceDiameterUpper(verts []r3.Vec, departure float64) float64 {
 // the source's exact record still denotes the plane of the copy. When the group
 // has a CapRecord, the record's plane must be fixed by q as well. Any other
 // retained Plane, Cylinder, Sphere or Torus group with no denoted patch keeps
-// its tag. The tag becomes its float image under delta, the float placement
+// its tag, and a Cylinder keeps its AxialDelta, since q moves the true wall
+// rigidly. The tag becomes its float image under delta, the float placement
 // that moved the held mesh, and the group's NormalBound becomes its own plus
 // PlacedTagDepartureBy against q with defect 0 (retention design §3.4), where
 // verts and reach are the held mesh and its reach before the placement. A

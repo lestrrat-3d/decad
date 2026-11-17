@@ -1572,7 +1572,7 @@ charges δ or refuses the wall; none reads it as exact.
 |---|---|
 | `facetedrecord.SourceTag` (every mesh Boolean) | carries δ with the tag, as for a plane with no record. The true result patch is a piece of the true operand face, so it lies within δ of the tag. A negative or non-finite δ gives the group no tag. The shifted retry translates the tag and keeps δ (`boolshift`), since a translation moves the true wall with it |
 | `facetedrecord` assembly, `NormalAt` | the held normal term is `HeldNormalTerm(T, 2·(δ_f + δ))`. A held point lies within `δ_f + δ` of the tag's radial line, and the true radius is at least `R − δ`, so the normal moves by at most `2(δ_f + δ)/(R − δ)`, which `4(δ_f + δ)/R` covers while the term stays below 1 (A4) |
-| `facetedrecord.ExactGroupPlaced` (an exact rotation copy) | keeps δ with the moved tag: an exactly orthogonal map moves the true wall rigidly. The float image's own departure enters `NormalBound` as today |
+| `facetedrecord.ExactGroupPlaced` (an exact rotation copy) | keeps δ with the moved tag: an exactly orthogonal map moves the true wall rigidly. The float image's own departure enters `NormalBound`, as for any placed tag |
 | float placement (`placed.go`: `Copy`, `MirroredCopy`, `Pattern`, motion) | keeps δ, as for a plane with no record. A placement that rounds states a nonzero `TagDeparture`, which every positional reader refuses (E12, SR1) |
 | `ScaledAt` (`point_plane_scale.go`) | scales δ by `|s|`, rounded up. The scaled tag adds only its rounding to `NormalBound` |
 | `edgewedge` (`Edge.Wedge`, its selector) | reads `Undecided` at a charged wall |
@@ -1598,10 +1598,10 @@ the arc is concave, and the arc end takes the tangent end's reading
 (boss-root-overflow-design §5.5.7).
 
 A blend face built from displaced planes or walls may lie off its own tag by
-the same charge. A chamfer plane states it as its `AxialDelta`. A fillet cylinder, a
-rim torus or cone and a corner sphere have no field for a positional offset, so
-with a nonzero charge they are not published as retained tags and the face
-stays faceted. With no charge every tag is published as built. The tangent
+the same charge. A chamfer plane states it as its `AxialDelta`. A fillet
+cylinder, a rim torus or cone and a corner sphere built from a charged face are
+not published as retained tags, so the face stays faceted; only a wall the view
+charged states a cylinder's `AxialDelta`. With no charge every tag is published as built. The tangent
 chain (retained-modify-reach-design.md §5.3) reads its tags as exact, so a
 plane with any nonzero `AxialDelta` is no chain wall, as
 `facedeparture.TagDeparts` reads it.

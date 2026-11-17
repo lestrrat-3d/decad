@@ -178,16 +178,23 @@ func TestStackedBrepViewFilletChargedWall(t *testing.T) {
 		require.InDelta(t, 2*math.Pi*(r+d/3)*d*d/2, removedVol, boundMM3(t, beforeVol)+boundMM3(t, afterVol))
 	}
 
+	// Each subtest takes its own copy: a Chamfer or Cut retires the body it reads.
+	copies := make([]*decad.Body, 3)
+	for i := range copies {
+		copies[i], err = decad.Copy(t.Context(), filleted)
+		require.NoError(t, err)
+	}
+
 	t.Run("the published wall's bottom rim chamfers", func(t *testing.T) {
 		t.Parallel()
-		chamfered(t, filleted)
+		chamfered(t, copies[0])
 	})
 
 	t.Run("a mesh Cut away from the hole keeps the wall and the rim chamfers", func(t *testing.T) {
 		t.Parallel()
-		doc := filleted.Document()
+		doc := copies[1].Document()
 		tool := translated(t, boxBody(t, doc, 0, 0, 4, 4, 7), 10, 10, -1)
-		cut, err := decad.Cut(t.Context(), filleted, tool)
+		cut, err := decad.Cut(t.Context(), copies[1], tool)
 		require.NoError(t, err)
 		require.Equal(t, "decad.facetedPayload", decadtest.PayloadClass(cut))
 		var kept bool
@@ -206,7 +213,7 @@ func TestStackedBrepViewFilletChargedWall(t *testing.T) {
 		t.Parallel()
 		var at r3.Vec
 		n := 0
-		for _, e := range filleted.Edges() {
+		for _, e := range copies[2].Edges() {
 			c, ok := e.Curve().(decad.Arc3)
 			if !ok || e.Start().Position().Value.Z != 0 {
 				continue
@@ -220,7 +227,7 @@ func TestStackedBrepViewFilletChargedWall(t *testing.T) {
 		}
 		require.Positive(t, n, "the windows' bottom inner arcs are Arc3 edges")
 		edge := decad.Edges(decad.EndpointAt(at), decad.Circular()).Exactly(1)
-		_, err := decad.Chamfer(t.Context(), filleted, edge, mm(0.5))
+		_, err := decad.Chamfer(t.Context(), copies[2], edge, mm(0.5))
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.ErrorContains(t, err, "an arc on a wall whose tag states a displacement is not built")
 	})

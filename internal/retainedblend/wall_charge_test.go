@@ -214,21 +214,14 @@ func TestFilletChargesCylinderWall(t *testing.T) {
 		})
 	}
 
-	// An infinite displacement is declined when the body is assembled, so no wall carries it.
-	t.Run("an infinite displacement is declined at assembly", func(t *testing.T) {
-		t.Parallel()
-		b, _ := holedPlate(t, math.Inf(1), true)
-		for _, f := range topobuild.Faces(b) {
-			require.NotEqual(t, surfacegeom.KindCylinder, f.Surface.Kind())
-		}
-	})
-
-	for name, wallDelta := range map[string]float64{"negative": -1, "NaN": math.NaN()} {
-		t.Run("a "+name+" displacement names no wall", func(t *testing.T) {
+	// A displacement no bound can cover is declined when the body is assembled, so no wall carries it.
+	for name, wallDelta := range map[string]float64{"negative": -1, "infinite": math.Inf(1), "NaN": math.NaN()} {
+		t.Run("a "+name+" displacement is declined at assembly", func(t *testing.T) {
 			t.Parallel()
-			out, recognized, err := fillet(t, wallDelta, true)
-			require.False(t, recognized && err == nil, "a displacement no bound can cover was admitted")
-			require.Nil(t, out)
+			b, _ := holedPlate(t, wallDelta, true)
+			for _, f := range topobuild.Faces(b) {
+				require.NotEqual(t, surfacegeom.KindCylinder, f.Surface.Kind())
+			}
 		})
 	}
 }

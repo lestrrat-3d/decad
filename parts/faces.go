@@ -21,7 +21,7 @@ type bodyFaces struct {
 	planes     []jointinfer.Plane
 	planeFaces []*decad.Face
 	planeTris  [][][3]r3.Vec     // parallel to planes: the mesh triangles of each plane face
-	unread     []explodeplan.Box // vertex boxes of the faces whose tag is neither a plane nor a cylinder
+	unread     []explodeplan.Box // vertex boxes of the faces whose tag is neither a plane nor an uncharged cylinder
 	unmeshed   bool              // the body would not tessellate, so no face could be read
 	box        decad.Box
 	meshTol    float64  // the chord tolerance the faces were read at, millimetres

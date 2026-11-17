@@ -190,7 +190,7 @@ Cause names why a joint is not Confirmed.
     CauseInterference         // a pin larger than its bore with no declared press fit
     CauseApart                // the parts are proven farther apart than the joint allows
     CauseTooClose             // a keepout pair is proven closer than its minimum gap
-    CauseUnreadFace           // a face near the pair reads Faceted or the body would not mesh
+    CauseUnreadFace           // a face near the pair reads Faceted or is a charged cylinder, or the body would not mesh
     CauseNoWitness            // no point proves the contact or the face overlap
     CauseNeedsPairProof       // only a pair proof could decide it
 )</pre>
@@ -1013,7 +1013,8 @@ bodies whose boxes, grown by MaxFit, meet, it runs the matching of §7.1 in both
 directions and returns each match, longest engagement first within a pair,
 with the clearance it measured. A match is a convex cylinder face of one part
 in a coaxial concave one of the other, or between two parallel planar faces; a
-face that reads as neither a plane nor a cylinder never matches. [Joint](<#Joint>) names
+face that reads as neither a plane nor a cylinder, or a cylinder that states a
+positional charge, never matches. [Joint](<#Joint>) names
 are "A\~B", with "#2", "#3" for further matches of one pair. Infer adds nothing
 to the [Set](<#Set>). Coplanar face contacts are not inferred.
 

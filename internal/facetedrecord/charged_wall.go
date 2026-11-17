@@ -8,12 +8,13 @@ import (
 )
 
 // chargedWall reports whether g is a retained Cylinder group that states a
-// positive wall charge (AxialDelta) beside its tag.
+// nonzero wall charge (AxialDelta) beside its tag. NaN is nonzero, so such a
+// group takes chargedWallTerm, which declines it.
 func chargedWall(g Group) bool {
 	if _, cyl := g.Surface.(surfacegeom.Cylinder); !cyl {
 		return false
 	}
-	return g.HasAxialDelta && g.AxialDelta > 0
+	return g.HasAxialDelta && g.AxialDelta != 0
 }
 
 // chargedWallTerm returns the normal bound a charged Cylinder tag adds for
@@ -26,6 +27,10 @@ func chargedWall(g Group) bool {
 // 2(delta_f + delta), rounded up (agent-docs/retained-edge-blend-design.md
 // §6.1, "Publishing a charged wall").
 func chargedWallTerm(surface surfacegeom.Surface, delta, axial float64) (float64, bool) {
+	// A negative or non-finite charge bounds nothing: the tag is declined.
+	if !(axial >= 0) || math.IsInf(axial, 0) {
+		return 0, false
+	}
 	return HeldNormalTerm(surface, proofbound.ProductUpper(2, proofbound.AbsSumUpper(delta, axial)), 0)
 }
 
