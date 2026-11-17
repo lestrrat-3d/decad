@@ -3118,6 +3118,6 @@
 11	80.00	TestLoopChamferNarrowFeatures
 12	2.00	TestLoopChamferDartWiderThanHalf
 12	0.00	TestStackedBrepViewFilletChargedWall
-12	0.00	TestBossRootTangentSpokedHub
-12	0.00	TestBossRootTangentFork
-12	0.00	TestBossRootTangentRefusesKinkedJoint
+0	19.47	TestBossRootTangentSpokedHub
+1	1.93	TestBossRootTangentFork
+1	25.36	TestBossRootTangentRefusesKinkedJoint
