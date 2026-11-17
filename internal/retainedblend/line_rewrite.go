@@ -727,9 +727,9 @@ func (w *work) lineAreas(l line, spec blendSpec, convex bool, center, baseA, bas
 	return w.lineAreasAt(l, spec, convex, center, baseA, baseB, rows, [2]bool{}, gains)
 }
 
-// lineAreasAt is lineAreas for an edge one of whose ends is a mitre joint (line_mitre.go): the end plane there is the
+// lineAreasExact is lineAreas for an edge one of whose ends is a mitre joint (line_mitre.go): the end plane there is the
 // mitre plane, and no notch is taken from it, because the mitre trims no end face.
-func (w *work) lineAreasAt(l line, spec blendSpec, convex bool, center, baseA, baseB r3.Vec,
+func (w *work) lineAreasExact(l line, spec blendSpec, convex bool, center, baseA, baseB r3.Vec,
 	rows [2][]int, mitred, gains [2]bool) (removed, blend float64) {
 	m := len(rows[0]) - 1
 	pt := func(i, j int) r3.Vec { return w.verts[rows[i][j]] }

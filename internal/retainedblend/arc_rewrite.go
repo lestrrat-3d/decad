@@ -583,6 +583,7 @@ func rewriteArc(ctx context.Context, env topo.Env, fp facetedrecord.Payload, a a
 	w.chargeBand(stripFrom, bandAxis{o: a.center, n: n, ok: true}, max(a.radius, rows[m-1].rho),
 		filletSag(spec, (1-ss[m-1])*math.Pi/2), slack)
 	w.removedTrue, tag.trueArea = a.arcAreas(profile, rows, tb)
+	w.arcPlanePieces(a, rows, ends, tb, tag.trueArea, spec)
 	if cyl {
 		var capAreas [2]float64
 		for i := range 2 {

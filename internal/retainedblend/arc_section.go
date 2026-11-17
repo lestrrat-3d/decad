@@ -72,6 +72,12 @@ func (a arcRim) section(spec blendSpec, g plane) (endSection, error) {
 	zHi := max(math.Abs(z0), math.Abs(z1))
 	size := max(rho0, rho1) + h + zHi
 	q := min(q0, q1)
+	// A row that meets a displaced end plane at sine q moves its end by δ/q along the row, so the area
+	// and volume terms of a displaced plane (plane_charge.go) read q at least minSine (§6.3).
+	if g.delta > 0 && !(down(q) >= minSine) {
+		return endSection{}, fmt.Errorf("%w: an arc's rows meet a displaced end plane below minSine",
+			decaderr.ErrUnsupported)
+	}
 	tilt := math.Abs(g.n.Dot(a.n))
 	e.margin = 32*ulp*size*(1+1/q) + 2*tilt*zHi*(1+1/q)
 	e.angle = 4 * ulp * (1/q + size/(min(rho0, rho1)*q*q))

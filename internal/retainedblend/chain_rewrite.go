@@ -747,6 +747,8 @@ func rewriteChain(ctx context.Context, env topo.Env, fp facetedrecord.Payload, c
 	w.removedTrue = removedTrue
 	if cc.charged {
 		w.arcCharged, w.arcCharge = true, cc.areaCharge(entries, tP, tW, spec)
+	} else {
+		w.chainPlanePieces(entries, tP, tW, spec, open)
 	}
 	if err := w.checkStripClear(ctx, stripFrom, taken); err != nil {
 		return nil, err

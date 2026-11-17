@@ -290,6 +290,24 @@ func (cc chainCharges) areaCharge(entries []chainEntry, tP, tW float64, spec ble
 		return 0
 	}
 	sigma := cc.sigma()
+	pieces, factor := chainPieces(entries, tP, tW, spec)
+	cps := make([]chargePiece, len(pieces))
+	total := 0.0
+	for i, p := range pieces {
+		cps[i] = p.geo
+		sum := 0.0
+		for _, j := range p.junctions {
+			sum = proofbound.AbsSumUpper(sum, cc.eJ[j])
+		}
+		total = proofbound.AbsSumUpper(total,
+			proofbound.ProductUpper(proofbound.ProductUpper(p.width, factor), sum))
+	}
+	return proofbound.AbsSumUpper(total, arcAreaCharge(cps, sigma, sigma))
+}
+
+// chainPieces lists the groups a closed chain rewrites (each entry's wall and blend, and the base) with their
+// exact perimeters, turning and areas, and the factor max(1, ρ_max/r_min) of the chain's arcs.
+func chainPieces(entries []chainEntry, tP, tW float64, spec blendSpec) ([]chainPiece, float64) {
 	hyp := up(math.Hypot(tP, tW))
 	rhoMax, rMin := 0.0, math.Inf(1)
 	for _, en := range entries {
@@ -339,16 +357,5 @@ func (cc chainCharges) areaCharge(entries []chainEntry, tP, tW float64, spec ble
 		pieces = append(pieces, wall, blend)
 	}
 	pieces = append(pieces, base)
-	cps := make([]chargePiece, len(pieces))
-	total := 0.0
-	for i, p := range pieces {
-		cps[i] = p.geo
-		sum := 0.0
-		for _, j := range p.junctions {
-			sum = proofbound.AbsSumUpper(sum, cc.eJ[j])
-		}
-		total = proofbound.AbsSumUpper(total,
-			proofbound.ProductUpper(proofbound.ProductUpper(p.width, factor), sum))
-	}
-	return proofbound.AbsSumUpper(total, arcAreaCharge(cps, sigma, sigma))
+	return pieces, factor
 }

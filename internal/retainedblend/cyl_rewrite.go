@@ -566,6 +566,8 @@ func rewriteCylLine(ctx context.Context, env topo.Env, fp facetedrecord.Payload,
 	} else {
 		tag.trueArea = sec.tb.Sub(sec.ta).Len() * length
 	}
+	w.cylLinePieces(c, spec, sec, k0, k1, w.verts[rowIdx[0][0]], w.verts[rowIdx[0][len(cols)-1]], length,
+		c.cornerArea(spec, sec, k0, o0, wA))
 
 	groups := append([]facetedrecord.Group(nil), fp.Groups...)
 	groups = append(groups, w.tagGroup(facetedrecord.Group{

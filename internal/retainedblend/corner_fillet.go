@@ -504,6 +504,7 @@ func rewriteCorners(ctx context.Context, env topo.Env, fp facetedrecord.Payload,
 		}
 		removedTrue += 3 * r * r
 		blendTrue += patch
+		w.cornerPatchPieces(r, patch)
 	}
 	w.removedTrue = removedTrue
 	for _, f := range touched {

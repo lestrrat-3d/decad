@@ -67,6 +67,11 @@ type work struct {
 	// face faceted (tagGroup).
 	arcCharged, noTorus bool
 	arcCharge           float64
+	// planeVol is the volume the facets of every re-triangulated plane face can add over the true plane
+	// (retriangulate, planeFacetVolume), and planePieces the exact pieces a displaced plane of the route moves
+	// (planeAreaCharge); measureChange adds both (plane_charge.go).
+	planeVol    float64
+	planePieces []chargePiece
 }
 
 type ringPt struct {
@@ -308,7 +313,8 @@ func (w *work) plane2(p r3.Vec) pt2 {
 // vertex appears in the output. Each vertex is read in world coordinates along
 // the plane frame's axes. For a plane normal to a coordinate axis that reading
 // is exact, so distinct boundary vertices stay distinct however close they are;
-// two neighbouring loop vertices that read one point refuse.
+// two neighbouring loop vertices that read one point refuse. The new facets add to the volume term of the
+// plane the face's source group states (chargePlaneFace), so no route misses one.
 func (w *work) retriangulate(n r3.Vec, loops [][]int, group int) error {
 	u, ok := perpendicular(n)
 	if !ok {
@@ -356,10 +362,11 @@ func (w *work) retriangulate(n r3.Vec, loops [][]int, group int) error {
 	if err != nil {
 		return err
 	}
+	from := len(w.out)
 	for _, t := range tris {
 		w.emit([3]int{global[t[0]], global[t[1]], global[t[2]]}, group)
 	}
-	return nil
+	return w.chargePlaneFace(group, from)
 }
 
 // segmentRadialRange returns the smallest and largest distance from the rim
