@@ -161,16 +161,7 @@ func TestPartialLayersFollowTheCorners(t *testing.T) {
 			require.Greater(t, layers, 1)
 			require.LessOrEqual(t, layers, maxPartialLayers)
 			require.LessOrEqual(t, dep, partialSagitta)
-			// One layer fewer would not have held the bound.
-			if layers >= 2 {
-				heights := make([]float64, layers)
-				for k := range heights {
-					heights[k] = top + (bottom-top)*float64(k)/float64(layers-1)
-				}
-				fewer, err := r.layerDeparture(d, heights)
-				require.NoError(t, err)
-				require.Greater(t, fewer, partialSagitta)
-			}
+			requireFewestLayers(t, r, d, top, bottom, layers)
 		})
 	}
 	t.Run("line then arc", func(t *testing.T) {
@@ -181,6 +172,47 @@ func TestPartialLayersFollowTheCorners(t *testing.T) {
 		require.Greater(t, layers, 2)
 		require.LessOrEqual(t, dep, partialSagitta)
 	})
+}
+
+// requireFewestLayers checks that layers is the fewest layers of rings between top and bottom that hold the bevel: it
+// puts no ring near the wall's level, and every smaller count that also puts none there misses partialSagitta.
+func requireFewestLayers(t *testing.T, r chamferRun, d, top, bottom float64, layers int) {
+	t.Helper()
+	require.False(t, ringNearWall(d, top, bottom, layers))
+	for fewer := 2; fewer < layers; fewer++ {
+		if ringNearWall(d, top, bottom, fewer) {
+			continue
+		}
+		heights := make([]float64, fewer+1)
+		for k := range heights {
+			heights[k] = top + (bottom-top)*float64(k)/float64(fewer)
+		}
+		dep, err := r.layerDeparture(d, heights)
+		require.NoError(t, err)
+		require.Greater(t, dep, partialSagitta, "%d layers", fewer)
+	}
+}
+
+// TestRingNearWallPassesOverRingsAtTheWall reads the layer counts a cutter between top and bottom passes over. With an
+// overshoot of half the setback, the wall's level lies six sevenths of the way down, so every seventh count puts a ring
+// on the wall itself. A count whose nearest ring lies within a quarter of a layer of that level is passed over, and one
+// whose nearest ring lies farther is kept.
+func TestRingNearWallPassesOverRingsAtTheWall(t *testing.T) {
+	t.Parallel()
+	const d, over = 0.2, 0.1
+	top, bottom := over, -(d + over/2)
+	for layers := 2; layers <= maxPartialLayers; layers++ {
+		step := (top - bottom) / float64(layers)
+		nearest := math.Inf(1)
+		for k := 1; k < layers; k++ {
+			nearest = min(nearest, math.Abs(top-float64(k)*step+d))
+		}
+		require.Equal(t, nearest < step/4, ringNearWall(d, top, bottom, layers), "%d layers", layers)
+		if layers%7 == 0 {
+			require.True(t, ringNearWall(d, top, bottom, layers), "%d layers", layers)
+		}
+	}
+	require.False(t, ringNearWall(d, top, bottom, 1))
 }
 
 // TestArcRunOutFollowsItsCircle reads the points an arc run's cutter holds past its convex ends: every ring holds the

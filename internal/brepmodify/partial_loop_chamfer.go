@@ -37,9 +37,11 @@ import (
 //     does. Below 90 degrees the bevel runs out onto that wall, so the next edge must be at least 1.5 reach/sin(turn)
 //     long.
 //   - A concave end turned by up to 90 degrees beside a line stops the bevel on the next face's plane, carried back over
-//     the run's band: the cutter loses a local sector about the corner, so the bevel tapers to the corner's vertical
-//     edge and the next face grows by a coplanar triangle. There is no square end. The material continues past a
-//     concave corner, so a cutter that reaches past the end would carve it. A chain that comes back within the sector's
+//     the run's band: the cutter loses a local sector about the corner, so the bevel tapers toward the corner's
+//     vertical edge and the next face grows by a coplanar triangle. There is no square end. The cutter also loses a
+//     disc of radius partialCornerRelief about the corner, so the bevel stops that far short of the corner's edge and
+//     the cutter never lies flush with the next wall along it. The material continues past a concave corner, so a
+//     cutter that reaches past the end would carve it. A chain that comes back within the sector's
 //     reach is refused. Beside an arc that curves toward the material the sector stops at the foot of the next wall's
 //     line, and a plane that misses the bevel's top edge cannot cap it and is refused.
 //
@@ -99,6 +101,16 @@ func PartialLoopChamfer(ctx context.Context, env topo.Env, hooks Hooks, body *to
 // partialSagitta is how far a chord of a partial chamfer's cutter arc may lie inside its circle, in millimetres. It is
 // finer than the loop cutter's, since the receiver is held exactly and the Cut's chord tolerance follows the pair's size.
 const partialSagitta = 0.0002
+
+// partialCornerRelief is the radius, in millimetres, of the disc about a concave end's corner that the end clip also
+// takes from the cutter (endClipMesh), so the bevel stops that far short of the corner's vertical edge. Without it the
+// clipped cutter lies flush with the next wall's plane along that edge. The mesh Boolean cannot classify that touch,
+// and its shifted retry moves the cutter off the plane, so that the moved clip face crosses the run's wall at the
+// corner's turn. Beside an arc the rim there divides the wall's chord bound by the sine of the turn: a turn of 10
+// degrees multiplies it by almost six. The relief is several times the bound of the clipped cutter's faces, so the
+// cutter clears the next wall by more than the two faces' bounds and the Boolean decides the pair without a shift. The
+// material it leaves at the corner is at most partialCornerRelief wide.
+const partialCornerRelief = 0.004
 
 // partialOvershoots are how far, in setbacks, a cutter reaches above the cap and outside the wall, tried in turn
 // while the Boolean refuses a cutter as unsupported.
@@ -372,9 +384,14 @@ func (e runEnd) clipSector() (from, sweep float64) {
 	return from, sweep
 }
 
-// inClip reports whether p lies in the end clip of the concave end e, whose sector has radius clip.
+// inClip reports whether p lies in the end clip of the concave end e, whose sector has radius clip, or in its relief
+// disc about the corner (endClipMesh).
 func (e runEnd) inClip(p pt2, clip float64) bool {
-	if p.dist(e.v) > clip {
+	dist := p.dist(e.v)
+	if dist <= partialCornerRelief {
+		return true
+	}
+	if dist > clip {
 		return false
 	}
 	from, sweep := e.clipSector()
@@ -1060,12 +1077,21 @@ func (r chamferRun) checkMargin(ends [2]runEnd, d, over float64) error {
 }
 
 // endClipMesh is the region a run's cutter loses at a concave end: a sector of a disc about the corner v, outside the
-// wedge between the next wall's plane carried back over the run and the bisector of the corner's empty wedge. What it
-// leaves ends the bevel on the next wall's plane, the way a CAD chamfer extends the unselected neighbour.
+// wedge between the next wall's plane carried back over the run and the bisector of the corner's empty wedge, together
+// with the disc of radius partialCornerRelief about v. What it leaves ends the bevel on the next wall's plane, the way
+// a CAD chamfer extends the unselected neighbour, and stops it partialCornerRelief short of the corner's vertical edge.
 func (l *chamferLoop) endClipMesh(ctx context.Context, e runEnd, d, over float64) (cutterMesh, error) {
 	from, sweep := e.clipSector()
 	s := e.clipRadius(d, over)
-	ring := []pt2{e.v}
+	// The relief arc runs from the sector's last side round the run's side to its first, through the angles the sector
+	// leaves out.
+	rest := 2*math.Pi - sweep
+	reliefCells := max(1, int(math.Ceil(rest/(math.Pi/8))))
+	ring := make([]pt2, 0, reliefCells+26)
+	for k := 0; k <= reliefCells; k++ {
+		phi := from + sweep + rest*float64(k)/float64(reliefCells)
+		ring = append(ring, e.v.add(pt2{math.Cos(phi), math.Sin(phi)}.scale(partialCornerRelief)))
+	}
 	const cells = 24
 	for k := 0; k <= cells; k++ {
 		phi := from + sweep*float64(k)/cells
