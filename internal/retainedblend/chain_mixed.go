@@ -2,7 +2,6 @@ package retainedblend
 
 import (
 	"fmt"
-	"slices"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
@@ -23,16 +22,17 @@ type mixedChains struct {
 }
 
 // checkRestApart refuses a selection whose unlinked edges may not be blended beside its
-// chains: a fillet, an open chain, or an edge that shares a vertex with a chain edge keeps
-// the refusal of a selection that names a chain and other edges. With no unlinked edge it
-// accepts.
+// chains: a fillet, or an edge that shares a vertex with a chain edge, keeps the refusal of a
+// selection that names a chain and other edges. An open chain's end faces may be among the
+// faces the other edges' blends rewrite; the chain is found again on their result and reads
+// its end faces there, as a later call would. With no unlinked edge it accepts.
 func checkRestApart(chains []chainCycle, rest []*topo.Edge, fillet bool) error {
 	if len(rest) == 0 {
 		return nil
 	}
 	refuse := fmt.Errorf("%w: a selection that holds a tangent chain names only chain edges",
 		decaderr.ErrUnsupported)
-	if fillet || slices.ContainsFunc(chains, func(c chainCycle) bool { return c.open }) {
+	if fillet {
 		return refuse
 	}
 	onChain := map[*topo.Vertex]struct{}{}
