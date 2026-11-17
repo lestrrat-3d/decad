@@ -177,6 +177,57 @@ func TestStackedViewTilt(t *testing.T) {
 		requireTiltCovers(t, surfacegeom.Plane{Frame: turned}, 1, got[1])
 		require.Greater(t, got[1].theta, 0.4, "a tilt of 29 degrees is stated, not rounded away")
 	})
+	t.Run("held vertices displaced by their full bound", func(t *testing.T) {
+		t.Parallel()
+		// Each boundary vertex of wall(1) sits e = 1 from the corner it denotes, at the corner's height, and the
+		// tag is the plane through the held ends. The two ends are pushed along the true outward normal in opposite
+		// directions, which turns the tag away from the true wall as far as the bounds allow and puts each true
+		// corner e from the tag. The +e of E and the -2e of the tilt's room are the only terms that cover this.
+		const e = 1.0
+		wall := tiltCorners[1:3]
+		side := r3.NewVec(wall[1].U-wall[0].U, wall[1].V-wall[0].V, 0)
+		outward := r3.NewVec(side.Y, -side.X, 0).Scale(1 / math.Hypot(side.X, side.Y))
+		for _, sign := range []float64{1, -1} {
+			body := buildTilt(t, bp)
+			face := body.Lumps[0].Shells[0].Faces[1]
+			moved := 0
+			for _, v := range topobuild.Vertices(body) {
+				v.Bound = units.Millimeters(e)
+			}
+			verts, _, ok := boundaryVertices(face)
+			require.True(t, ok)
+			for _, v := range verts {
+				for i, c := range wall {
+					if math.Hypot(v.Position.X-c.U, v.Position.Y-c.V) > 1e-9 {
+						continue
+					}
+					// The first corner moves out and the second in, or the reverse.
+					push := sign * e
+					if i == 1 {
+						push = -push
+					}
+					v.Position = v.Position.Add(outward.Scale(push))
+					moved++
+				}
+			}
+			require.Equal(t, 4, moved, "both heights of both corners")
+			p, q, ok := walkedEnds(face)
+			require.True(t, ok)
+			span := q.Position.Sub(p.Position)
+			span.Z = 0
+			u := span.Scale(1 / math.Hypot(span.X, span.Y))
+			tagFrame, err := r3.NewFrame(p.Position, u, r3.NewVec(0, 0, 1))
+			require.NoError(t, err)
+			tag := surfacegeom.Plane{Frame: tagFrame}
+			require.Zero(t, tag.Frame.N().Z)
+			face.Surface = tag
+			got := stackedViewTilt(body, bp)
+			require.Contains(t, got, 1, "sign %v", sign)
+			requireTiltCovers(t, tag, 1, got[1])
+			// The true corners lie e from the tag, so the extent is at least e.
+			require.GreaterOrEqual(t, got[1].extent, e, "sign %v", sign)
+		}
+	})
 	t.Run("a face with no walk order", func(t *testing.T) {
 		t.Parallel()
 		// Moving a side line first reads the loop out of the record's order: the first coedge is not a rim. The

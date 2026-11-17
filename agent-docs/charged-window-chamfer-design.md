@@ -55,6 +55,8 @@ For each swept planar wall `F` of a stacked or slab-cut record that is not a pla
   rounded down.
 - `θ = min(2, √2·x)`, rounded up, with `x = 2E/(L − 2e)`: the distance between the two unit normals, which is the
   measure `NormalBound` states. `F` stays untagged unless `L > 4E` and every value is finite.
+- The walked ends `p`, `q` (below) must lie more than `2e` apart at right angles to `a`, which tells the wall's rim
+  from a side line whose ends differ only by rounding; else `F` stays untagged.
 - Orientation: with `p → q` the wall's walked start and end in walk order, the tag's outward normal (`N`, negated when
   `Reversed`) must satisfy `N · (s·(q − p) × a) > 0` exactly, `s = −1` when the placement reflects and `+1`
   otherwise, which is the record's own outward rule (tangent × axis for a counter-clockwise outer walk and a clockwise
@@ -71,8 +73,11 @@ within `e` of a boundary vertex `p`, `q` of `F`. Because `n · a = 0`, a point's
 along `a`, and it is affine along the trace, so its largest value on the strip is at `p*` or `q*`, where it is at most
 `dist(p, T) + e ≤ E`. Both planes contain the direction `a`, so their angle is the angle between the traces at right
 angles to `a`, whose sine is at most `(d(p*) + d(q*)) / |p* − q*|_⊥ ≤ 2E/(L − 2e) = x`. The held and the true trace run
-the same way, since `|(q* − p*) − (q − p)| ≤ 2e < L/2`, and both outward normals are their trace turned the same way
-about `a` (the true one by the record's rule, the tag's by the orientation check), so `φ < π/2`. Two unit normals at
+the same way: put the tag's trace on the x-axis, with `u = q − p` and `u* = q* − p*` measured at right angles to `a`.
+Then `|u_y| ≤ 2(E − e)`, `|u*_y| ≤ 2E`, `|u*| ≥ L − 2e > 4E − 2e` and `|u − u*| ≤ 2e`, and opposite signs of `u_x`
+and `u*_x` would need `12E² − 16E·e + 4e² ≤ 0`, which `E ≥ e` rules out except at `E = e`, where `L > 4E` does. Both
+outward normals are their trace turned the same way about `a` (the true one by the record's rule, the tag's by the
+orientation check), so `φ < π/2`. Two unit normals at
 angle `φ ≤ π/2` lie `2·sin(φ/2) ≤ √2·sin φ` apart. ∎
 
 `ExtentDelta` holds only over the face. A reader that needs the plane elsewhere refuses the face, which every plane
@@ -89,8 +94,8 @@ caps after the fillet, which a selector names by direction.
 
 A retained edge blend's result keeps the group as it keeps any plane group (`publishChargedWalls` reads curved groups
 only). A mesh Boolean carries `ExtentDelta` with the tag (`SourceTag`): the true result patch is a piece of the true
-operand face. A placement, the shifted retry, an exact rotation copy and `ScaledAt` drop `ExtentDelta` and keep the
-departed tag, so the face stays refused by every plane route and W2 does not read it. Every list that clears a tag's
+operand face. A placement, the shifted retry, an exact rotation copy, `ScaledAt`, and the face copies of `Stitch`,
+`Unstitch` and a patch chain drop `ExtentDelta` and keep the departed tag (the face copies keep its `NormalBound`), so the face stays refused by every plane route and W2 does not read it. Every list that clears a tag's
 `AxialDelta` (assembly's loop-less faces, the blend's and the view's untagging, the displaced-wall and chorded-loft
 readers) clears `ExtentDelta` with it. A snapshot key that compares a faceted group's or face's `AxialDelta` compares
 `ExtentDelta` too.

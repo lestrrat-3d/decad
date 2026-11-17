@@ -30,8 +30,9 @@ func Stated(face any) bool {
 var ChargedReader func(face any) bool
 
 // Charged reports whether face is a curved face whose tag states a nonzero wall
-// charge: the true wall may lie off the tag by that charge, so a reader that
-// takes the tag's radius and axis as the wall's must not read it. Before the
+// charge, or a plane whose tag states an ExtentDelta: the true wall may lie off
+// the tag by that amount, so a reader that takes the tag's parameters as the
+// wall's must not read it. Before the
 // root package has installed ChargedReader it reports true, so a reader that
 // only refuses on it refuses every face rather than admitting one unread.
 func Charged(face any) bool {
