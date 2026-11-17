@@ -312,7 +312,10 @@ func (cc chainCharges) areaCharge(entries []chainEntry, tP, tW float64, spec ble
 	var pieces []chainPiece
 	for _, en := range entries {
 		pa, wa, ba := en.areas(tP, tW, spec)
-		length := math.Nextafter(en.length, math.Inf(1))
+		// The length is a float sum of end point differences: bound its own rounding by 8 ulps of the
+		// coordinate scale.
+		scale := max(1, proofbound.VecMaxAbs(en.p0), proofbound.VecMaxAbs(en.p1))
+		length := up(en.length + 8*ulp*scale)
 		outer, inner, span := length, length, 0.0
 		wall := chainPiece{junctions: []int{en.ja, en.jb}, width: tW}
 		blend := chainPiece{junctions: []int{en.ja, en.jb}, width: hyp}

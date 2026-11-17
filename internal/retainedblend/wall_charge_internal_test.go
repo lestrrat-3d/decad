@@ -167,9 +167,16 @@ func TestChargedArcAndAreaCharge(t *testing.T) {
 // that states the given displacement.
 func chargedJunction(t *testing.T, delta float64) (line, arc *topo.Edge, v *topo.Vertex) {
 	t.Helper()
+	return chargedJunctionRadius(t, 3, delta)
+}
+
+// chargedJunctionRadius is chargedJunction with the corner cylinder's radius given; a radius other than 3 leaves the
+// junction no longer exactly tangent.
+func chargedJunctionRadius(t *testing.T, radius, delta float64) (line, arc *topo.Edge, v *topo.Vertex) {
+	t.Helper()
 	top := chargedPlane(t, r3.NewVec(0, 0, 20), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0), 0)
 	front := chargedPlane(t, r3.Vec{}, r3.NewVec(1, 0, 0), r3.NewVec(0, 0, 1), 0)
-	cyl := chargedCylinder(3, delta)
+	cyl := chargedCylinder(radius, delta)
 	v = &topo.Vertex{Position: r3.NewVec(3, 0, 20), Bound: units.Millimeters(1e-9)}
 	far := &topo.Vertex{Position: r3.NewVec(37, 0, 20)}
 	side := &topo.Vertex{Position: r3.NewVec(0, 3, 20)}
@@ -205,5 +212,32 @@ func TestStrictChainReadersOfChargedWall(t *testing.T) {
 		_, arc, _ := chargedJunction(t, math.NaN())
 		require.False(t, Chainable(arc))
 		require.False(t, chainableIn(arc, tagChain))
+	})
+}
+
+func TestPlanChainsRefusesNearTangentChargedJunction(t *testing.T) {
+	t.Parallel()
+	plan := func(t *testing.T, radius float64) error {
+		t.Helper()
+		line, arc, _ := chargedJunctionRadius(t, radius, 1e-14)
+		body := &topo.Body{Lumps: []*topo.Lump{{Shells: []*topo.FaceShell{{Faces: []*topo.Face{{
+			Loops: []*topo.Loop{{CoEdges: []topo.CoEdge{{Edge: line}, {Edge: arc}}}}}}}}}}}
+		_, _, _, err := planChains(body, []*topo.Edge{line, arc}, nil, false)
+		return err
+	}
+
+	t.Run("a radius outside the roundoff band and inside the noise band is refused", func(t *testing.T) {
+		t.Parallel()
+		err := plan(t, 3*(1+1e-12))
+		require.ErrorIs(t, err, decaderr.ErrUnsupported)
+		require.ErrorContains(t, err, "is nearly tangent and the tags cannot decide it")
+	})
+
+	t.Run("the exact radius forms the link", func(t *testing.T) {
+		t.Parallel()
+		// The link forms, so planning runs on to the later refusal of an open chain on charged walls.
+		err := plan(t, 3)
+		require.ErrorContains(t, err, "an open tangent chain on walls that state a displacement is not built")
+		require.NotContains(t, err.Error(), "nearly tangent")
 	})
 }
