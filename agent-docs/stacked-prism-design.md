@@ -545,8 +545,9 @@ Each admitted arm ships its implementation and tests together.
    stacked payload.
 
 Not planned here: a blind tool crossing the target's boundary (a side notch),
-whose per-slab walls split at the crossing and need column-wise edge splitting;
-`Fillet`/`Chamfer` on a stacked body (`agent-docs/brep-modify-design.md` takes it
+whose per-slab walls split at the crossing; it takes the mesh path, and
+general-boolean §3 A9 builds it as a BRep where the mesh path refuses.
+Also not planned: `Fillet`/`Chamfer` on a stacked body (`agent-docs/brep-modify-design.md` takes it
 through the face view).
 
 ## 8. Required tests

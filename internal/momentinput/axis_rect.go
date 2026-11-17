@@ -36,6 +36,24 @@ func CrossingBlindLoops(p Profile) bool {
 	return true
 }
 
+// LineArcLoops accepts profiles whose loops hold only line, circle and arc
+// records, for the side-notch Cut route (agent-docs/general-boolean-design.md
+// §3 A9). Unlike CrossingBlindLoops it admits an oblique line: the BRep build
+// misses any scene that cuts one, so an oblique record reaches the result only
+// whole, at its recorded vertices. An ellipse or a free-form segment is refused.
+func LineArcLoops(p Profile) bool {
+	for _, loop := range append([]LoopRecord{p.Outer}, p.Holes...) {
+		for _, segment := range loop.Segments {
+			switch segment.(type) {
+			case sectionrecord.LineSeg, sectionrecord.CircleSeg, sectionrecord.ArcSeg:
+			default:
+				return false
+			}
+		}
+	}
+	return true
+}
+
 // AxisRectangle accepts only four complete line records, one on each side
 // of a nondegenerate axis-aligned rectangle. Profile validation already proves
 // a closed outer walk; this check proves its precise rectangular footprint.
