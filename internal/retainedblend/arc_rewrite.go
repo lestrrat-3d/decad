@@ -55,7 +55,7 @@ func (a arcRim) rowAngles(p arcProfile, s float64, ref [2]float64) ([2]float64, 
 	rho, _ := p(s)
 	var out [2]float64
 	for i := range 2 {
-		t, ok := a.endAzimuths(i, rho, ref[i])
+		t, ok := a.endAzimuthsAt(i, s, rho, ref[i])
 		if !ok {
 			return out, fmt.Errorf("%w: a blend circle does not reach an end face", decaderr.ErrUnsupported)
 		}
@@ -105,7 +105,8 @@ func rewriteArc(ctx context.Context, env topo.Env, fp facetedrecord.Payload, a a
 	var tA [2]r3.Vec
 	for i := range 2 {
 		end := a.ends[i]
-		onGen[i] = func(v int) bool { return distToLine(w.verts[v], end.exact, n) <= w.beta[v]+slack }
+		genSlack := slack + a.cyl[i].reachTan()
+		onGen[i] = func(v int) bool { return distToLine(w.verts[v], end.exact, n) <= w.beta[v]+genSlack }
 		if cyl {
 			onLineA[i] = a.chainWalker(w, i, fG[i])
 			continue
@@ -132,7 +133,7 @@ func rewriteArc(ctx context.Context, env topo.Env, fp facetedrecord.Payload, a a
 	var kindB [2]sideKind
 	for i := range 2 {
 		if cyl {
-			if err := a.readCylChain(w, i, runA.chain[i], margin); err != nil {
+			if err := a.readCylChain(w, i, runA.chain[i], a.marginTan(i, margin)); err != nil {
 				return nil, err
 			}
 		} else {
@@ -152,9 +153,13 @@ func rewriteArc(ctx context.Context, env topo.Env, fp facetedrecord.Payload, a a
 		default:
 			return nil, fmt.Errorf("%w: the wall's generator at an arc end leaves the wrong way", decaderr.ErrUnsupported)
 		}
-		if cyl && kindB[i] != extends {
+		if cyl && kindB[i] != extends && (a.tangentAt(i) == nil || kindB[i] != trims) {
 			return nil, fmt.Errorf("%w: a root arc ends on a cylinder its wall does not run on past", decaderr.ErrUnsupported)
 		}
+	}
+	tangent, err := a.tangentKinds(kindB)
+	if err != nil {
+		return nil, err
 	}
 	bandMode := a.twoSided || kindB[0] == extends || kindB[1] == extends
 
@@ -199,7 +204,7 @@ func rewriteArc(ctx context.Context, env topo.Env, fp facetedrecord.Payload, a a
 		end := a.ends[i]
 		p := a.atTheta(rows[0].rho, rows[0].theta[i], 0)
 		if cyl {
-			if remA[i], err = a.cylSetback(w, i, p, runA.chain[i], margin); err != nil {
+			if remA[i], err = a.cylSetback(w, i, p, runA.chain[i], a.marginTan(i, margin)); err != nil {
 				return nil, err
 			}
 			continue
@@ -242,6 +247,15 @@ func rewriteArc(ctx context.Context, env topo.Env, fp facetedrecord.Payload, a a
 	}
 	if err != nil {
 		return nil, err
+	}
+	if tangent {
+		// K keeps the held edge the wall's cut crossed on its seam with the wall: its facets
+		// across it are split at the cut vertex (§5.5.5).
+		for i := range 2 {
+			if err := w.noteSeamCut(pB[i]); err != nil {
+				return nil, err
+			}
+		}
 	}
 	// Where the wall extends past an end plane, a fillet's end cap closes in a
 	// cusp at the wall's tangent point. If the cap the profile's own rows make is
@@ -347,6 +361,17 @@ func rewriteArc(ctx context.Context, env topo.Env, fp facetedrecord.Payload, a a
 	}
 	rowCols[m][0].t, rowCols[m][len(cutIDs)-1].t = 0, 1
 	_ = pB
+	sigmaMax := 0.0
+	if tangent {
+		// Each row's end on G* lies within σ of the true crossing (§5.5.6).
+		if sigmaMax, err = a.chargeTangentEnds(w, rows, ss, rowCols, ends); err != nil {
+			return nil, err
+		}
+		w.arcCharged = true
+		for i := range 2 {
+			w.noTorus = w.noTorus || a.cyl[i].tan.eC > 0
+		}
+	}
 	if widened > 0 {
 		// The last gap's chord on each end plane no longer lies within tau of its
 		// end curve. Its two ends state how far it does, and how far the wall's cut
@@ -452,6 +477,30 @@ func rewriteArc(ctx context.Context, env topo.Env, fp facetedrecord.Payload, a a
 				return nil, err
 			}
 		}
+		if tangent {
+			// The wall's run of the cap is the seam's vertices between V and the cut, and G's loop
+			// at V runs between A's chain and G's seam with K (§5.5.5).
+			wallRun = tangentWallRun(remB[i])
+			capLoop := append(append(append([]int(nil), endIDs...), wallRun...), a.ends[i].v)
+			pts := make([]r3.Vec, len(capLoop))
+			for k, id := range capLoop {
+				pts[k] = w.verts[id]
+			}
+			if err := capSimple2(a.capPoly(i, pts), m); err != nil {
+				return nil, err
+			}
+			below, err := a.seamBelow(w, i, fG[i], runA.chain[i], a.marginTan(i, margin))
+			if err != nil {
+				return nil, err
+			}
+			capEnds[i], wallRuns[i] = endIDs, wallRun
+			reachIDs := append(slices.Clone(endIDs), wallRun...)
+			if err := a.cylEndChecks(w, i, fG[i], runA.chain[i], []int{below}, reachIDs,
+				a.marginTan(i, margin)); err != nil {
+				return nil, err
+			}
+			continue
+		}
 		if cyl {
 			capEnds[i], wallRuns[i] = endIDs, wallRun
 			reachIDs := append(slices.Clone(endIDs), wallRun...)
@@ -535,8 +584,13 @@ func rewriteArc(ctx context.Context, env topo.Env, fp facetedrecord.Payload, a a
 		filletSag(spec, (1-ss[m-1])*math.Pi/2), slack)
 	w.removedTrue, tag.trueArea = a.arcAreas(profile, rows, tb)
 	if cyl {
+		var capAreas [2]float64
 		for i := range 2 {
-			w.capTrue = proofbound.AbsSumUpper(w.capTrue, a.capArea(profile, i))
+			capAreas[i] = a.capArea(profile, i)
+			w.capTrue = proofbound.AbsSumUpper(w.capTrue, capAreas[i])
+		}
+		if tangent {
+			w.arcCharge = a.arcChargeOf(rows, ends, tb, tag.trueArea, sigmaMax, capAreas)
 		}
 	}
 
@@ -782,7 +836,7 @@ func (a arcRim) arcAreas(p arcProfile, rows []arcRow, tb float64) (removed, blen
 		ref := ref0[i]
 		for s := 0; s <= samples; s++ {
 			rho, z := p(float64(s) / samples)
-			t, ok := a.endAzimuths(i, rho, ref)
+			t, ok := a.endAzimuthsAt(i, float64(s)/samples, rho, ref)
 			if !ok {
 				continue
 			}
@@ -798,9 +852,30 @@ func (a arcRim) arcAreas(p arcProfile, rows []arcRow, tb float64) (removed, blen
 		}
 		removed += corner
 	}
-	// The plane loses the region between the rim and the setback arc, bounded
-	// by the two lines along the end faces: Green's theorem over the two arcs
-	// and the two lines.
+	removed += a.planeRegion(rows)
+	// The wall loses a band whose sides are generators.
+	removed += a.radius * a.span * tb
+	prev := 0.0
+	for k := 1; k <= samples; k++ {
+		s := float64(k) / samples
+		sm := (prev + s) / 2
+		rho0, z0 := p(prev)
+		rho1, z1 := p(s)
+		rhoM, _ := p(sm)
+		ang, err := a.rowAngles(p, sm, ref0)
+		prev = s
+		if err != nil {
+			continue
+		}
+		blend += rhoM * (ang[1] - ang[0]) * math.Hypot(rho1-rho0, z1-z0)
+	}
+	return removed, blend
+}
+
+// planeRegion is the exact area the plane loses: the region between the rim and the
+// setback arc, bounded by the two lines along the end faces (Green's theorem over the
+// two arcs and the two sides).
+func (a arcRim) planeRegion(rows []arcRow) float64 {
 	rhoA := rows[0].rho
 	t0, t1 := rows[0].theta[0], rows[0].theta[1]
 	xy := func(q r3.Vec) (float64, float64) {
@@ -824,22 +899,5 @@ func (a arcRim) arcAreas(p arcProfile, rows []arcRow, tb float64) (removed, blen
 		side(1, a.ends[1].exact, a.atTheta(rhoA, t1, 0)) -
 		rhoA*rhoA*a.sign*(t1-t0)/2 +
 		side(0, a.atTheta(rhoA, t0, 0), a.ends[0].exact)
-	removed += math.Abs(region)
-	// The wall loses a band whose sides are generators.
-	removed += a.radius * a.span * tb
-	prev := 0.0
-	for k := 1; k <= samples; k++ {
-		s := float64(k) / samples
-		sm := (prev + s) / 2
-		rho0, z0 := p(prev)
-		rho1, z1 := p(s)
-		rhoM, _ := p(sm)
-		ang, err := a.rowAngles(p, sm, ref0)
-		prev = s
-		if err != nil {
-			continue
-		}
-		blend += rhoM * (ang[1] - ang[0]) * math.Hypot(rho1-rho0, z1-z0)
-	}
-	return removed, blend
+	return math.Abs(region)
 }

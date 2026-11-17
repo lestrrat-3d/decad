@@ -58,11 +58,14 @@ func (a arcRim) ringAzimuths(rho float64, g plane, ref float64) ([2]float64, boo
 // at is the point at radius rho, signed angle theta and height z.
 func (a arcRim) atTheta(rho, theta, z float64) r3.Vec { return a.at(rho, a.sign*theta, z) }
 
-// readArc reads the open arc of edge. A concave arc whose wall lies on both
+// readArcTangent reads the open arc of edge. A concave arc whose wall lies on both
 // sides of its plane reads only when local is set, which the route sets for a
 // selection of one edge or of open arcs only: the band that cuts such a wall
-// (arc_band.go) is local to its arc's wedge.
-func readArc(edge *topo.Edge, fp facetedrecord.Payload, faceIndex map[*topo.Face]int, local bool) (arcRim, error) {
+// (arc_band.go) is local to its arc's wedge. A four-face corner at an end reads as a
+// C3 end when tr proves it (agent-docs/boss-root-overflow-design.md §5.5.1); a nil tr
+// reads none.
+func readArcTangent(edge *topo.Edge, fp facetedrecord.Payload, faceIndex map[*topo.Face]int, local bool,
+	tr *tangentRead) (arcRim, error) {
 	var a arcRim
 	r, err := readRimSide(edge, fp, faceIndex, local)
 	if err != nil {
@@ -84,7 +87,7 @@ func readArc(edge *topo.Edge, fp facetedrecord.Payload, faceIndex map[*topo.Face
 	}
 	fa, fb := faceIndex[r.planeFace], faceIndex[r.wallFace]
 	for i, vertex := range []*topo.Vertex{edge.Start, edge.End} {
-		end, cyl, err := a.readEnd(i, vertex, fp, faceIndex, fa, fb)
+		end, cyl, err := a.readEnd(i, vertex, fp, faceIndex, fa, fb, tr)
 		if err != nil {
 			return arcRim{}, err
 		}
@@ -96,6 +99,9 @@ func readArc(edge *topo.Edge, fp facetedrecord.Payload, faceIndex map[*topo.Face
 	if (a.cyl[0] == nil) != (a.cyl[1] == nil) {
 		return arcRim{}, fmt.Errorf("%w: a root arc with one end on a plane and the other on a cylinder is not built",
 			decaderr.ErrUnsupported)
+	}
+	if err := a.mixedTangent(); err != nil {
+		return arcRim{}, err
 	}
 	a.theta0 = a.sign * a.angle(a.ends[0].exact)
 	span := a.sign*a.angle(a.ends[1].exact) - a.theta0
@@ -114,10 +120,13 @@ func readArc(edge *topo.Edge, fp facetedrecord.Payload, faceIndex map[*topo.Face
 // plane reading (readPlaneEnd); any other face must be a retained cylinder, read
 // by readCylEnd, and the result's cylEnd is then set.
 func (a *arcRim) readEnd(i int, vertex *topo.Vertex, fp facetedrecord.Payload, faceIndex map[*topo.Face]int,
-	fa, fb int) (lineEnd, *cylEnd, error) {
+	fa, fb int, tr *tangentRead) (lineEnd, *cylEnd, error) {
 	var end lineEnd
 	var err error
 	if end.v, end.face, err = cornerOf(vertex, fp, faceIndex, fa, fb); err != nil {
+		if tend, tcyl, ok, terr := a.readTangentEnd(i, vertex, fp, faceIndex, tr); ok || terr != nil {
+			return tend, tcyl, terr
+		}
 		return lineEnd{}, nil, err
 	}
 	if g, ok := retainedPlane(end.face); ok {
@@ -188,12 +197,16 @@ func (a *arcRim) planeEnd(end lineEnd, g plane, fp facetedrecord.Payload) (lineE
 	return end, nil
 }
 
-// endAzimuths is the signed angle at which the circle of radius rho meets end i,
-// within π of ref, and false when it does not meet it. On a plane the root
-// nearest ref, as rowAngles picks it; on a cylinder the root the side rule
-// names (arc_end_cyl.go).
-func (a arcRim) endAzimuths(i int, rho, ref float64) (float64, bool) {
+// endAzimuthsAt is the signed angle at which the circle of radius rho at profile
+// parameter s meets end i, within π of ref, and false when it does not meet it.
+// On a plane the root nearest ref, as rowAngles picks it; on a cylinder the root
+// the side rule names (arc_end_cyl.go), and a C3 end reads its wall's row, s = 1,
+// without the row's radius (arc_end_tangent.go).
+func (a arcRim) endAzimuthsAt(i int, s, rho, ref float64) (float64, bool) {
 	if c := a.cyl[i]; c != nil {
+		if c.tan != nil && s >= 1 {
+			return c.wallAzimuth(ref), true
+		}
 		return c.azimuth(rho, ref)
 	}
 	roots, ok := a.ringAzimuths(rho, a.ends[i].g, ref)

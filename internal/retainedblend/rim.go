@@ -35,6 +35,8 @@ type blendSpec struct {
 	// asym is set for a two-distance chamfer: dA is then the positional
 	// distance, and assign gives dA and dB their per-edge meaning.
 	asym *asymSpec
+	// tangent proves the C3 arc ends of a fillet (FilletTangent); nil reads none.
+	tangent TangentEnds
 }
 
 // asymSpec is a two-distance chamfer's second distance and the reference face

@@ -56,7 +56,8 @@ func edgesQuery(edges []*Edge) *EdgeQuery {
 // exactly one circular edge of the boss's radius about its axis. That edge is returned alone.
 //
 // A boss whose root circle runs off its face has no such loop. Its root is then every concave arc of the boss's
-// circle, about the boss axis and parallel to the plane, on any planar face in that plane. An arc ends where the
+// circle, about the boss axis and parallel to the plane, on any planar face in that plane. A root arc is one whose
+// IsConvex reads concave or whose Wedge reads reflex (bossRootArc). An arc ends where the
 // face ends, on a cliff face (boss-root-overflow-design rule CO, C2). Each edge is counted once, though it borders
 // two faces. A root arc that sweeps half its circle or more is refused with ErrUnsupported.
 func bossRootEdges(body *Body, in bossRequest) ([]*Edge, error) {
@@ -117,11 +118,14 @@ func bossRootEdges(body *Body, in bossRequest) ([]*Edge, error) {
 	return arcs, nil
 }
 
-// bossRootArc returns the arc of e when e is a concave arc of the circle of the given radius about centre, whose
-// axis is parallel to normal.
+// bossRootArc returns the arc of e when e is a root arc of the circle of the given radius about centre, whose axis
+// is parallel to normal. A root arc is concave by IsConvex or reflex by Wedge. IsConvex is the walked convention,
+// and by its own contract a Union's boss root walks the boss wall's sense and reads convex; Wedge reads the material
+// angle, which is what a root is (boss-root-overflow-design §5.5.8). A mesh result's arcs keep the IsConvex reading,
+// where Wedge can be undecided.
 func bossRootArc(e *Edge, normal, centre r3.Vec, radius float64) (Arc3, bool) {
 	arc, ok := e.Curve().(Arc3)
-	if !ok || e.IsConvex() {
+	if !ok || (e.IsConvex() && e.Wedge() != WedgeReflex) {
 		return Arc3{}, false
 	}
 	r, err := arc.Radius.In(units.Millimeter)

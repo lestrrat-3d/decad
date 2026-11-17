@@ -62,6 +62,10 @@ type work struct {
 	// largest corner bound of the end caps an arc end on a cylinder adds to G, and
 	// splitVol the volume the split of G's held facets can move (measureChange).
 	capHeld, capTrue, capEps, splitVol float64
+	// arcCharged is set for an arc with C3 ends: measureChange then adds arcCharge (arc_charge.go) to the
+	// area bound instead of rimAreaCharge, and noTorus keeps the blend face faceted (tagGroup).
+	arcCharged, noTorus bool
+	arcCharge           float64
 }
 
 type ringPt struct {
@@ -537,6 +541,9 @@ type blendTag struct {
 // positional offset, so it is not published as a retained tag: the face stays
 // faceted. With no charge the tag is published exactly as built.
 func (w *work) tagGroup(g facetedrecord.Group, tag blendTag) facetedrecord.Group {
+	if w.noTorus {
+		return g
+	}
 	if w.r.charge == 0 {
 		g.Surface, g.Retained, g.Reversed = tag.surface, true, tag.reversed
 		return g

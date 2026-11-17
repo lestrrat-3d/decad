@@ -110,6 +110,9 @@ func (a arcRim) endSectionAt(spec blendSpec, i int) (endSection, error) {
 func (e endSection) at(s float64) (u, v, q float64) {
 	rho, z := e.p(s)
 	if e.cyl != nil {
+		if e.cyl.tan != nil && s >= 1 {
+			return -e.kappa * e.cyl.rG * e.cyl.tan.psiWall(), e.side * z, 0
+		}
 		return -e.kappa * e.cyl.rG * e.cyl.psi(rho), e.side * z, e.cyl.q(rho)
 	}
 	x := math.Sqrt(rho*rho - e.h*e.h)
@@ -139,7 +142,7 @@ func (e endSection) at(s float64) (u, v, q float64) {
 // §6.3), which every piece's test charges.
 func (e endSection) certify(s0, s1, tau float64) bool {
 	curv := e.curv(s0, s1)
-	if !(e.margin+curv < tau) {
+	if !(e.minMargin()+curv < tau) {
 		return false
 	}
 	au, av, _ := e.at(s0)
@@ -160,8 +163,15 @@ func (e endSection) certify(s0, s1, tau float64) bool {
 		stack = stack[:len(stack)-1]
 		pu, pv, q0 := e.at(pc.t0)
 		qu, qv, q1 := e.at(pc.t1)
-		lo := math.Max(0, math.Atan(e.slope(pc.t0)*math.Min(q0, q1))-e.angle)
-		hi := math.Min(math.Pi/2, math.Atan(e.slope(pc.t1)*e.qHi(pc.t0, pc.t1, q0, q1))+e.angle)
+		margin := e.margin
+		var lo, hi float64
+		if e.cyl != nil && e.cyl.tan != nil {
+			margin = e.pieceMargin(pc.t0, pc.t1)
+			lo, hi = e.tangentCone(pc.t0, pc.t1, q0, q1)
+		} else {
+			lo = math.Max(0, math.Atan(e.slope(pc.t0)*math.Min(q0, q1))-e.angle)
+			hi = math.Min(math.Pi/2, math.Atan(e.slope(pc.t1)*e.qHi(pc.t0, pc.t1, q0, q1))+e.angle)
+		}
 		d := math.Max(dist(pu, pv), dist(qu, qv))
 		if hi > lo {
 			// The corners P + |PQ|·sin(hi − ψ)/sin(hi − lo) along lo and
@@ -172,7 +182,7 @@ func (e endSection) certify(s0, s1, tau float64) bool {
 			d = math.Max(d, dist(pu+k1*math.Cos(lo), pv+k1*math.Sin(lo)))
 			d = math.Max(d, dist(pu+k2*math.Cos(hi), pv+k2*math.Sin(hi)))
 		}
-		if d+e.margin+curv <= tau {
+		if d+margin+curv <= tau {
 			continue
 		}
 		mid := (pc.t0 + pc.t1) / 2
@@ -190,7 +200,7 @@ func (e endSection) shift(s0, s1 float64) float64 {
 	rho0, _ := e.p(s0)
 	rho1, _ := e.p(s1)
 	if e.cyl != nil {
-		return math.Abs(e.cyl.azimuth(rho1) - e.cyl.azimuth(rho0))
+		return math.Abs(e.alphaAt(s1) - e.alphaAt(s0))
 	}
 	return math.Abs(math.Acos(e.h/rho1) - math.Acos(e.h/rho0))
 }

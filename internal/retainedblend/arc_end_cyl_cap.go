@@ -76,7 +76,7 @@ func (a arcRim) chainWalker(w *work, i int, g faceLoops) func(int) bool {
 		}
 	}
 	prev := a.ends[i].v
-	slack := a.slack()
+	slack := a.slack() + c.eTan()
 	return func(v int) bool {
 		p := prev
 		prev = v
@@ -301,7 +301,7 @@ func (a arcRim) capArea(p arcProfile, i int) float64 {
 	ref := [2]float64{a.theta0, a.theta0 + a.span}[i]
 	for s := 0; s <= samples; s++ {
 		rho, z := p(float64(s) / samples)
-		t, ok := a.endAzimuths(i, rho, ref)
+		t, ok := a.endAzimuthsAt(i, float64(s)/samples, rho, ref)
 		if !ok {
 			continue
 		}
@@ -380,7 +380,7 @@ func (a arcRim) capFacets(w *work, i int, g faceLoops, chainA, remA, endIDs, wal
 		}
 		psi := a.angleAbout(c.c, a.ends[i].exact) + c.dir*xs[j]/c.rG
 		p := c.c.Add(a.u.Scale(c.rG * math.Cos(psi))).Add(a.w.Scale(c.rG * math.Sin(psi)))
-		fresh = append(fresh, w.vertex(p, 0))
+		fresh = append(fresh, w.vertex(p, c.tan.sigmaBound()))
 	}
 	newPts := append(slices.Clone(fresh), pa)
 	edges := map[int]*splitEdge{}

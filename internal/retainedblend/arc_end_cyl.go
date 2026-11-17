@@ -50,6 +50,8 @@ type cylEnd struct {
 	// their bounds of the end's radial plane and are read as on it (cylBandEnd), from
 	// V outward.
 	noise []int
+	// tan is set for a C3 end (arc_end_tangent.go): c, d and rG then read G*.
+	tan *tangentEnd
 }
 
 // farScale is S_far: an upper bound on the coordinates and lengths an end's
@@ -159,6 +161,9 @@ func (a *arcRim) readCylEnd(i int, end lineEnd, fp facetedrecord.Payload) (lineE
 // It refuses a row circle that does not cross G's circle or a profile where
 // ρ² + d² ≤ r_G², where cos∠OPC is not monotone in s.
 func (a arcRim) cylEndSection(spec blendSpec, c *cylEnd) (endSection, error) {
+	if c.tan != nil {
+		return a.tangentEndSection(spec, c)
+	}
 	p, fillet := a.profile(spec)
 	rho0, z0 := p(0)
 	rho1, z1 := p(1)
@@ -188,7 +193,12 @@ func (a arcRim) cylEndSection(spec blendSpec, c *cylEnd) (endSection, error) {
 
 // cylCurve holds what an end curve on a cylinder needs besides the profile:
 // G's radius and the distance of its axis from the rim's.
-type cylCurve struct{ rG, d float64 }
+type cylCurve struct {
+	rG, d float64
+	// tan and ts are set for a C3 end (arc_end_tangent_section.go).
+	tan *tangentEnd
+	ts  *tangentSection
+}
 
 func clampUnit(x float64) float64 { return math.Max(-1, math.Min(1, x)) }
 
@@ -222,10 +232,16 @@ func (e endSection) curv(s0, s1 float64) float64 {
 	if e.cyl == nil {
 		return 0
 	}
-	rho0, _ := e.p(s0)
-	rho1, _ := e.p(s1)
-	dpsi := math.Abs(e.cyl.psi(rho1)-e.cyl.psi(rho0)) + 2*e.angle
+	dpsi := math.Abs(e.psiAt(s1)-e.psiAt(s0)) + 2*e.curvAngle(s0, s1)
 	return e.cyl.rG * dpsi * dpsi / 2 * (1 + 16*ulp)
+}
+
+// curvAngle is the angle allowance curv widens the span of ψ by.
+func (e endSection) curvAngle(s0, s1 float64) float64 {
+	if e.cyl.tan != nil {
+		return e.pieceAngle(s0, s1)
+	}
+	return e.angle
 }
 
 // qHi is the largest q over [t0, t1], given q at the piece's ends: on a

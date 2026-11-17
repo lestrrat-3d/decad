@@ -26,8 +26,7 @@ import (
 // refusal. All edges must be non-nil.
 func Fillet(ctx context.Context, env topo.Env, b *topo.Body, fp facetedrecord.Payload, edges []*topo.Edge,
 	radius, radiusDelta float64) (*topo.Body, bool, error) {
-	out, recognized, err := blend(ctx, env, b, fp, edges, blendSpec{fillet: true, r: radius}, radiusDelta, "fillet")
-	return unpublishCharged(ctx, env, out, recognized, err)
+	return FilletTangent(ctx, env, b, fp, edges, radius, radiusDelta, nil)
 }
 
 // unpublishCharged drops the tags of a built body that state a displacement
@@ -118,7 +117,7 @@ func blend(ctx context.Context, env topo.Env, b *topo.Body, fp facetedrecord.Pay
 		}
 		targets[i].ref = tagOf(f)
 	}
-	chains, handled, err := planChains(b, edges)
+	chains, handled, err := planChains(b, edges, spec.tangent)
 	if err != nil {
 		return nil, true, err
 	}
@@ -198,14 +197,17 @@ func blend(ctx context.Context, env topo.Env, b *topo.Body, fp facetedrecord.Pay
 			}
 			targets[i].lineKey, targets[i].kind = l.key(), straightLine
 		case looksLikeArc(e):
-			if err := refuseChargedArc(e); err != nil {
+			if err := refuseChargedArcProven(e, allEdges(b, spec.tangent), spec.tangent); err != nil {
 				return nil, true, err
 			}
-			a, err := readArc(e, fp, faceIndex, local)
+			a, err := readArcTangent(e, fp, faceIndex, local, newTangentRead(spec.tangent, b, e))
 			if err != nil {
+				if isTangentRefusal(err) {
+					return nil, true, err
+				}
 				// An arc this route cannot read is left to the generic refusal, which
 				// names the whole selection.
-				return nil, false, nil //nolint:nilerr // declining is the generic refusal's cue, not a swallowed failure
+				return nil, false, nil
 			}
 			// Several arcs share a two-sided wall only where their ends are cylinders; plane-ended arcs
 			// keep the whole-face refusal when more than one edge is selected.
@@ -303,7 +305,7 @@ func blend(ctx context.Context, env topo.Env, b *topo.Body, fp facetedrecord.Pay
 			}
 		case openArc:
 			var a arcRim
-			if a, err = readArc(e, curFP, faceIndex, local); err == nil {
+			if a, err = readArcTangent(e, curFP, faceIndex, local, newTangentRead(spec.tangent, cur, e)); err == nil {
 				step, err = spec.assign(targets[i].ref, a.planeFace, a.wallFace)
 			}
 			if err == nil {
@@ -631,7 +633,11 @@ func (w *work) measureChange(tag blendTag, stripFrom int) (float64, float64) {
 	// A charged wall moves the exact area change (rimAreaCharge); the charge is
 	// zero on every route whose wall states no displacement.
 	trueArea := tag.trueArea
-	if charge := rimAreaCharge(w.r, w.spec); charge != 0 {
+	charge := rimAreaCharge(w.r, w.spec)
+	if w.arcCharged {
+		charge = w.arcCharge
+	}
+	if charge != 0 {
 		areaSlack = proofbound.AbsSumUpper(areaSlack, charge)
 		trueArea = proofbound.AbsSumUpper(tag.trueArea, charge)
 	}
@@ -739,7 +745,7 @@ func sameEdgeKey(a, b *topo.Edge) bool {
 
 // replanChain orders edges of body that form one chain.
 func replanChain(body *topo.Body, edges []*topo.Edge) (chainCycle, bool, error) {
-	chains, _, err := planChains(body, edges)
+	chains, _, err := planChains(body, edges, nil)
 	if err != nil {
 		return chainCycle{}, false, err
 	}
