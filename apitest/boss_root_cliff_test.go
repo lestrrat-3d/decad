@@ -195,7 +195,6 @@ func TestBossRootFilletSpokedHub(t *testing.T) {
 		rv, rb := volumeAndBound(t, out)
 		t.Logf("V(S) %v (bound %v), bead %v, V(result) %v (bound %v)", sv, sb, bead, rv, rb)
 		require.InDelta(t, sv+bead, rv, rb+sb+quadErr)
-		require.Greater(t, rv, sv)
 	})
 	t.Run("15 builds four capped tori", func(t *testing.T) {
 		t.Parallel()

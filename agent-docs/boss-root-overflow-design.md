@@ -278,9 +278,9 @@ faces each arc's rewrite rebuilds.
 | Check | Proof | Refuses |
 |---|---|---|
 | `K` and `G` meet at one recorded point `V_r` | the walls' recorded segments share an endpoint, equal floats; one walk ends there and the other starts there | a pair that shares no endpoint, or both |
-| `K → G` (or `G → K`) is G1 | `capband.JoinIsG1` on the two record walls; else `capband.NearTangentCorner(prev, cur, 0, 0, 0)`, which admits `sin²θ ≤ 2⁻⁶⁴` | a joint neither admits ("the arc end's cliff joint is neither exactly nor near tangent") |
+| `K → G` (or `G → K`) is G1 | `capband.JoinIsG1` on the two record walls; else `capband.NearTangentCorner(prev, cur, 0, 0, 0)`, which admits `sin²θ ≤ 2⁻⁶⁴` | a joint neither admits: no proof, so the corner keeps the refusal it meets without one (the junction or charged-arc gate, or `cornerOf`) |
 | `K → B` (or `B → K`) is G1 at the same `V_r` | `capband.JoinIsG1` only: `B` and `K` are one carrier (boss) or a recorded tangent joint (notch) | any other joint |
-| the levels | `G.Z1 = B.Z0 = A`'s level and `K.Z0 < A < K.Z1`, exact floats in one record frame (all three walls' frames equal) | anything else |
+| the levels | `G.Z1 = B.Z0` and `K.Z0 < G.Z1 < K.Z1`, exact floats in one record frame (all three walls' frames equal); `A` is the face the four-face topology and the placed `V_r`'s check against `T` tie to that level | anything else |
 
 - The floor loop's own joint `B → G` is a cusp (the tangents are opposite), and both capband tests refuse it. The
   proof never reads it (tangent-notch-design §5).
@@ -312,7 +312,8 @@ R4 reader of `cylEnd.c` and `rG` (`chainWalker`, `alongG`, `outwardG`, `gArc`, `
   above), so `e_V` is not computed.
 - `lineEnd.exact` of a C3 end is `T`. Every reader of it (`onGen`, `alongG`, `theta0`/`span`, `arcKey`/`findArc`,
   `gArc`, `capArea`, the plane's zone, the reach test) reads `T`; the ones that compare a held point with it by the
-  slack (`onGen`, the `findArc` key) add `e·(1 + 2R/d') + e_d`.
+  slack (`onGen`) add `e·(1 + 2R/d') + e_d`. `findArc` finds a later arc by its computed end points, which the
+  rewrite does not move, with its own allowance; a miss there refuses and builds nothing wrong.
 - "Within `e`" means a circle's centre offset plus radius difference is at most `e`, `wall_charge.go`'s convention.
 - An internal end requires `r_G < R`, so `T = O + R·û` is the touching point; otherwise it refuses.
 - Row ends: the row of radius `ρ` at `s < 1` meets `G*` at `θ_c ± α(ρ)`, `cos α = (ρ² + d'² − r_G²)/(2ρd')`, on R4's side
@@ -433,7 +434,8 @@ the walked convention, and by its own contract a Union's boss root walks the bos
 - Internal tests: the record proof (exact, near-tangent, kinked and cusped joints); the tangent end's rows measured
   against 200-bit roots, each within its margin; the apex box; refusals for a four-face corner with no proof and for a
   joint neither capband test admits.
-- Existing tests that change: `TestStackedBrepViewFilletReachesRetainedBlend` (both subtests build) and
+- Existing tests that change: `TestStackedBrepViewFilletReachesRetainedBlend` (both subtests build; the fork at radius
+  0.5, while at 0.6 its setback point falls within `4·margin` of a held vertex and refuses by R4's name) and
   `TestBossRootFilletSpokedHub`'s "14 is refused" (it builds). Every other test is unchanged.
 
 #### 5.5.10 Files

@@ -25,7 +25,8 @@ type tangentSection struct {
 	base float64
 }
 
-// minMargin is a lower bound of every piece's margin.
+// minMargin is at least the q-free part of every piece's margin, so a test that
+// reads it can only refuse earlier than the piece's own margin would.
 func (e endSection) minMargin() float64 {
 	if e.cyl != nil && e.cyl.ts != nil {
 		return e.cyl.ts.base
@@ -109,9 +110,9 @@ func (e endSection) pieceMargin(t0, t1 float64) float64 {
 	if t1 >= 1 {
 		return up(x + second)
 	}
-	_, _, q0 := e.at(t0)
-	_, _, q1 := e.at(t1)
-	qLo := math.Min(q0, q1) * (1 - 8*ulp)
+	r0, _ := e.p(t0)
+	r1, _ := e.p(t1)
+	qLo := math.Min(c.rowQ(r0), c.rowQ(r1))
 	// The first branch holds only where the crossing's curvature remainder
 	// stays inside its (1 + 2⁻¹⁰) factor.
 	if !(qLo > 0) || !(x <= 0x1p-12*qLo*qLo*math.Min(rhoLo, c.rG)) {
@@ -143,9 +144,9 @@ func (e endSection) pieceAngle(t0, t1 float64) float64 {
 		errPsi, _ := c.tangentErrors(rhoLo, rhoHi, dm)
 		return hUp(errPsi)
 	}
-	_, _, q0 := e.at(t0)
-	_, _, q1 := e.at(t1)
-	q := math.Min(q0, q1) * (1 - 8*ulp)
+	r0, _ := e.p(t0)
+	r1, _ := e.p(t1)
+	q := math.Min(e.cyl.rowQ(r0), e.cyl.rowQ(r1))
 	if !(q > 0) {
 		return math.Pi
 	}
