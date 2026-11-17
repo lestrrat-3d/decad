@@ -53,7 +53,9 @@ exact rational sum, whether it moved the Boolean result or an analytic operand
 before the Boolean (retention §3.5), and the tags of a piece the shifted Boolean retry
 translates (`agent-docs/gap-tolerance-design.md` §5.2), whose snapped shift makes that
 sum exact for ordinary coordinates (retention §3.4). Such a blend is built on
-the moved solid `A∘(B+s)`.
+the moved solid `A∘(B+s)`. A positional displacement stated in `AxialDelta`
+is read as a charge, not refused: on a plane by every route, and on a
+cylinder wall by the closed rim alone (§6.1, "Displaced planes and walls").
 
 A face with a denoted patch (every Revolve wall and end face, `topo.Face.Denoted`)
 is read only where its tag IS the surface its record denotes, decided by
@@ -1478,7 +1480,7 @@ of that computation.
 
 | SR | Call | Existence | Sentinel |
 |---|---|---|---|
-| **SR1** | an edge outside Table RR: a curve that is not `Line3` or `Circle3`, a face that is not `RetainedTag`, a face with `NormalBound != 0` or a denoted patch whose tag is not exactly the surface it denotes (for R6's sphere, its record's exact centre and radius, §4.5), or a `Convex` flag that disagrees with §4.1 | body exists; no admitted source for the selected edge | `ErrUnsupported` (reach SX9's text) |
+| **SR1** | an edge outside Table RR: a curve that is not `Line3` or `Circle3`, a face that is not `RetainedTag`, a face with `NormalBound != 0`, a cylinder that states an `AxialDelta` outside the closed rim (§6.1), or a denoted patch whose tag is not exactly the surface it denotes (for R6's sphere, its record's exact centre and radius, §4.5), or a `Convex` flag that disagrees with §4.1 | body exists; no admitted source for the selected edge | `ErrUnsupported` (reach SX9's text) |
 | **SR2** | two selected edges share a vertex and are neither a mitre run (§4.7) nor corners of perpendicular faces (§4.8), or a selected edge continues tangentially into a neighbour | no transition built | `ErrUnsupported` |
 | **SR3** | no blend of that size exists: `R − r ≤ 0` for an inside ball (§4.2), `φ` within 10⁻⁹ of 0 or π, a chamfer distance of zero or below, an R6 setback that reaches the axis or runs past the sphere's pole (§4.5), or an R7 fillet inside the larger cylinder with `2ρ ≥ R − r`, where no ball touches both walls (§4.10) | no regular blend | `ErrDegenerate` |
 | **SR4** | the setback does not fit (§6.2) and the held bounds prove it does not | the blend consumes the face | `ErrDegenerate` |
@@ -1501,7 +1503,7 @@ reason names the crossing rims outside R7. The fillet's σ = (+1, +1) saddles
 (§4.10) reach `Unread` only in a selection that mixes them with an edge no
 route reads, and it names them with the canal-surface reason too.
 
-**Displaced planes.** A retained `Plane` tag may state `AxialDelta` δ, the
+**Displaced planes and walls.** A retained `Plane` tag may state `AxialDelta` δ, the
 proven distance of the true plane from the tag along its normal. A route never
 reads the tag as exact past δ. Each reader adds `4δ/minSine` per plane it reads
 (`planeCharge`) to its slack, which the vertex-agreement test of SR6 and the
@@ -1511,8 +1513,40 @@ the face no retained plane, so the edge is outside Table RR (SR1). The charge
 widens the published bound or the route refuses; no residual admits a
 displaced plane.
 
-A blend face built from displaced planes may lie off its own tag by the same
-charge. A chamfer plane states it as its `AxialDelta`. A fillet cylinder, a
+A retained `Cylinder` tag may state `AxialDelta` δ too: the true wall is a
+cylinder parallel to the tag whose axis offset and radius difference sum to at
+most δ. A stacked brep's faceted view states it on each swept circular wall
+(brep-modify §2.3). Only the closed rim (R2) reads such a wall
+(`internal/retainedblend/wall_charge.go`). The rim circle is the plane's
+meeting with the cylinder, so a true wall within δ moves the circle, and the
+torus or cone built about it, rigidly by at most δ. R2 adds `4δ/minSine`
+(`cylCharge`, the plane rule's amplification) to the rim's slack, so SR6, the
+clearance of §6.2 and every strip and cut vertex of §6.3 carry it. Every term of
+the rim's exact area change is linear in the wall radius, with slopes 2πt_A for
+the annulus, 2πt_B for the band, π²ρ for a torus and 2πL ≤ 2√2π·max(t_A, t_B)
+for a cone. So the area bound adds `(π² + 4π)·max(ρ, t_A, t_B)·δ`, and the volume
+bound multiplies the strip's largest vertex bound by the blend's exact area plus
+that term. Every other reader refuses a charged cylinder with its existing text
+(`tagIsRecord`), an open arc (R4) included ("an arc on a wall whose tag states a
+displacement is not built"). `facetedrecord.RetainedEdgeCurve` publishes an edge curve from
+a charged cylinder for any finite δ ≥ 0, while a displaced plane's circle still
+declines past the arithmetic allowance. Such a curve is seen only by the view's
+build, the blend's intermediate builds and the blend's readers: edge lengths and
+bounds come from the held chain, R2 checks the circle against the tags with the
+charge in its slack, and every other reader refuses the charged wall. A blend result publishes no charged
+cylinder: every face whose group states one is untagged and the body rebuilt
+with the area shortfall charged (`unpublishChargedWalls`), so no reader outside
+this package reads one.
+
+The tangent chain does not read a charged cylinder either. To name the gate a
+selected edge stops at, the junction test reads a charged cylinder's tag for
+refusal only: a proven tangent junction to an unselected edge refuses with SM2's
+text, read on tags that state a displacement, and one to a selected edge refuses
+"a tangent chain whose walls state a displacement is not built". No outcome of
+that reading admits a chain.
+
+A blend face built from displaced planes or walls may lie off its own tag by
+the same charge. A chamfer plane states it as its `AxialDelta`. A fillet cylinder, a
 rim torus or cone and a corner sphere have no field for a positional offset, so
 with a nonzero charge they are not published as retained tags and the face
 stays faceted. With no charge every tag is published as built. The tangent

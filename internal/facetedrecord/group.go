@@ -59,7 +59,10 @@ type Group struct {
 	// record onto a retained Plane group. A Boolean of unmoved operands keeps
 	// each plane where it is, so the record transfers verbatim. A plane the
 	// shifted retry translates, and every placement and similarity, drops it
-	// (topo.CapRecord.Under) because the image is no longer that record.
+	// (topo.CapRecord.Under) because the image is no longer that record. On a
+	// retained Cylinder group, AxialDelta states the wall displacement that
+	// topo.Face.AxialDelta describes; a stacked brep's faceted view sets it and
+	// the retained edge blend never publishes it.
 	CapRecord     *topo.CapRecord
 	AxialDelta    float64
 	HasAxialDelta bool

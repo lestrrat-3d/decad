@@ -19,11 +19,15 @@ import (
 // these routes read no cone, sphere or torus. A widened patch, a partial-sweep
 // cap, a rotated placement or an off-axis sketch line fails the test, so those
 // faces stay refused. The test reads recorded data by exact equality and never
-// admits on a residual.
+// admits on a residual. A curved tag that states a displacement is refused here;
+// the closed-rim route reads it through wallRecord.
 // TagIsRecord reports whether the retained plane or cylinder tag of f is the surface its face stands for.
 func TagIsRecord(f *topo.Face) bool { return tagIsRecord(f) }
 
-func tagIsRecord(f *topo.Face) bool {
+func tagIsRecord(f *topo.Face) bool { return !chargedCurve(f) && recordTag(f) }
+
+// recordTag is the record test of tagIsRecord without the displacement clause.
+func recordTag(f *topo.Face) bool {
 	if f.Denoted == nil {
 		return true
 	}

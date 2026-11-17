@@ -52,7 +52,11 @@ type Face struct {
 	// AxialDelta is the proven displacement of this planar face along its own
 	// normal. A body-relative ToFace stop carries this selected face's bound
 	// into the level it computes; HasAxialDelta distinguishes an exact zero
-	// from a face whose payload does not state an axial bound.
+	// from a face whose payload does not state an axial bound. On a retained
+	// Cylinder tag it bounds the sum of the true wall's axis offset and radius
+	// difference from the tag, the axes parallel; only a stacked brep's
+	// faceted view states it there, and only the retained edge blend reads it
+	// (agent-docs/retained-edge-blend-design.md §6.1).
 	AxialDelta float64
 	// HasAxialDelta reports whether the face's payload states an axial bound.
 	HasAxialDelta bool

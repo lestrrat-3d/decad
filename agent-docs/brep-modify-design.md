@@ -204,15 +204,22 @@ canonical vertices: an arc takes its radius from its first vertex and an
 oblique plane passes through its walked ends, so it lies only within the
 record's section displacement of the wall it denotes, and a holed union's
 merged circle carrier lies `CarrierCharge` from it. Where either is nonzero,
-every swept wall stays in the view untagged, a plain faceted obstacle as in
-§2.2, until the retained blend carries such a charge (boss-root-overflow P5);
-no current fixture's selection reaches the retained blend on such a wall, so
-the rule only withholds a tag. A boundary's vertex allowance is charged into
-the facets' bounds. A refusal raised while building the view, before the blend
-reads the selection, keeps the receivers' refusal. The result is a
-`facetedPayload`. `apitest/stacked_brep_view_fillet_test.go` fillets a plate
-edge of an A7 result and of an A1 union this way and pins the selections that
-reach the blend.
+a circular wall keeps its `Cylinder` tag and states `w = max(SectionDelta,
+CarrierCharge)` as the tag's `AxialDelta` (`stackedViewCharge`,
+`internal/brepmodify/stacked_view_charge.go`): its circle lies within `w` of
+the circle it denotes all the way round, since the two differ only in a centre
+and a radius each within the record's bound. The retained blend charges that
+wall in a closed rim and refuses it elsewhere (retained-edge-blend §6.1,
+"Displaced planes and walls"), and its result publishes no charged wall. Every
+other swept wall, an oblique plane whose tag also tilts among them, stays in the
+view untagged, a plain faceted obstacle as in §2.2. A boundary's vertex
+allowance is charged into the facets' bounds. A refusal raised while building
+the view, before the blend reads the selection, keeps the receivers' refusal.
+The result is a `facetedPayload`. `apitest/stacked_brep_view_fillet_test.go`
+fillets a plate edge of an A7 result and of an A1 union this way and pins the
+selections that reach the blend, and
+`apitest/stacked_brep_view_charged_wall_test.go` fillets a round hole's rim on a
+charged holed union.
 
 ## 3. Table RB — receivers
 

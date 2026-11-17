@@ -48,7 +48,7 @@ func tagFaceOf(f *topo.Face) tagFace {
 	if f.Surface == nil {
 		return tagFace{kind: surfacegeom.KindFaceted}
 	}
-	t := tagFace{kind: f.Surface.Kind(), retained: f.RetainedTag, departs: f.TagDeparture != 0}
+	t := tagFace{kind: f.Surface.Kind(), retained: f.RetainedTag, departs: f.TagDeparture != 0 || chargedCurve(f)}
 	if f.RetainedTag && !t.departs {
 		// Only the kinds a class reads against a revolve record are judged: a
 		// Cone or Torus with a record is named by its kind instead.

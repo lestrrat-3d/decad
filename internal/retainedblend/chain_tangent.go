@@ -91,12 +91,21 @@ type chainWall struct {
 	fr     float64
 }
 
-// readChainTag reads a retained plane or cylinder face. It returns false for
+// readChainTagMode reads a retained plane or cylinder face. It returns false for
 // any other face and for a face with a stated tag departure, a stated AxialDelta (the exact tangency decision reads
 // the tag as the surface, as facedeparture.TagDeparts does: any nonzero delta declines, a unit-conversion sized one
-// included), or a denoted patch its tag does not equal.
-func readChainTag(f *topo.Face) (chainWall, bool) {
-	if f == nil || !f.RetainedTag || f.TagDeparture != 0 || f.AxialDelta != 0 || !tagIsRecord(f) {
+// included), or a denoted patch its tag does not equal. With charged set it also
+// admits a cylinder face that states a displacement (wallRecord), which
+// refuseChargedJunctions reads for refusal only; a plane with a stated
+// AxialDelta stays unread in both modes.
+func readChainTagMode(f *topo.Face, charged bool) (chainWall, bool) {
+	admitted := false
+	if charged && f != nil {
+		_, cyl := f.Surface.(surfacegeom.Cylinder)
+		admitted = cyl && f.HasAxialDelta && f.AxialDelta != 0 &&
+			f.RetainedTag && f.TagDeparture == 0 && wallRecord(f)
+	}
+	if !admitted && (f == nil || !f.RetainedTag || f.TagDeparture != 0 || f.AxialDelta != 0 || !tagIsRecord(f)) {
 		return chainWall{}, false
 	}
 	w := chainWall{face: f, reversed: f.Reversed}
@@ -126,7 +135,10 @@ func readChainTag(f *topo.Face) (chainWall, bool) {
 // Chainable reports whether e is an edge that tangent-chain expansion on a
 // retained body reads (§5.3): a retained Line3 or Arc3 between two faces that
 // carry a retained plane or cylinder tag with no stated departure.
-func Chainable(e *topo.Edge) bool {
+func Chainable(e *topo.Edge) bool { return chainableMode(e, false) }
+
+// chainableMode is Chainable, reading the faces by readChainTagMode.
+func chainableMode(e *topo.Edge, charged bool) bool {
 	if e == nil || e.Start == nil || e.End == nil || e.Start == e.End || !e.RetainedCurve || len(e.Faces) != 2 {
 		return false
 	}
@@ -136,7 +148,7 @@ func Chainable(e *topo.Edge) bool {
 		return false
 	}
 	for _, f := range e.Faces {
-		if _, ok := readChainTag(f); !ok {
+		if _, ok := readChainTagMode(f, charged); !ok {
 			return false
 		}
 	}
@@ -158,13 +170,15 @@ func Tangent(e, c *topo.Edge, v *topo.Vertex) clr.DegState {
 	if c == nil || c.Start == c.End || (c.Start != v && c.End != v) || len(e.Faces) != 2 || len(c.Faces) != 2 {
 		return clr.DegNo
 	}
-	_, state, _ := tangentState(e, c, v)
+	_, state, _ := tangentStateMode(e, c, v, false)
 	return state
 }
 
-// tangentState decides the junction and reports whether an undecided answer
-// is a near tangent: two readable chain edges whose tags nearly meet.
-func tangentState(e, c *topo.Edge, v *topo.Vertex) (junction, clr.DegState, bool) {
+// tangentStateMode decides the junction and reports whether an undecided answer
+// is a near tangent: two readable chain edges whose tags nearly meet. With
+// charged set it reads a cylinder that states a displacement as exact, which
+// only refuseChargedJunctions does, for refusal.
+func tangentStateMode(e, c *topo.Edge, v *topo.Vertex, charged bool) (junction, clr.DegState, bool) {
 	var base *topo.Face
 	shared := 0
 	for _, f := range e.Faces {
@@ -188,15 +202,15 @@ func tangentState(e, c *topo.Edge, v *topo.Vertex) (junction, clr.DegState, bool
 	if w1 == w2 {
 		return junction{}, clr.DegNo, false
 	}
-	if !Chainable(e) || !Chainable(c) {
+	if !chainableMode(e, charged) || !chainableMode(c, charged) {
 		return junction{}, clr.DegUnknown, false
 	}
-	bt, _ := readChainTag(base)
+	bt, _ := readChainTagMode(base, charged)
 	if !bt.isPlane {
 		return junction{}, clr.DegNo, false
 	}
-	t1, _ := readChainTag(w1)
-	t2, _ := readChainTag(w2)
+	t1, _ := readChainTagMode(w1, charged)
+	t2, _ := readChainTagMode(w2, charged)
 	if t1.isPlane && t2.isPlane {
 		return junction{}, clr.DegNo, false
 	}

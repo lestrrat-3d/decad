@@ -3,12 +3,16 @@ package brepmodify
 import (
 	"context"
 	"errors"
+	"math"
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/breprecord"
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/provenance"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/topo"
+	"github.com/lestrrat-3d/r3"
+	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
 )
 
@@ -51,4 +55,44 @@ func TestViewMissed(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 	require.False(t, viewMissed(ctx, built))
+}
+
+// TestStackedViewCharge states the record's displacement on each swept circular
+// wall of the producer and untags every other face that is not a planar record
+// face.
+func TestStackedViewCharge(t *testing.T) {
+	face := func(producer provenance.Producer, role string, surface surfacegeom.Surface) *topo.Face {
+		f := &topo.Face{Surface: surface}
+		if role != "" {
+			f.Origins = []provenance.Ref{{Producer: producer, Role: role}}
+		}
+		return f
+	}
+	cylinder := surfacegeom.Cylinder{Axis: r3.NewVec(0, 0, 1), Radius: units.Millimeters(3)}
+	plane := surfacegeom.Plane{}
+	b := &topo.Body{Origin: provenance.Ref{Producer: 7, Role: provenance.RoleBody}}
+	b.Lumps = []*topo.Lump{{Shells: []*topo.FaceShell{{Faces: []*topo.Face{
+		face(7, "face(0)", plane), face(7, "wall(1)", cylinder), face(7, "wall(2)", plane),
+		face(8, "wall(3)", cylinder), face(7, "", cylinder),
+	}}}}}
+
+	t.Run("section displacement under the carrier charge", func(t *testing.T) {
+		bp := breprecord.Payload{Faces: []breprecord.Face{{Delta: 2e-14}}, CarrierCharge: 1e-14}
+		require.Equal(t, map[int]float64{1: 2e-14}, stackedViewCharge(b, bp))
+		require.Equal(t, map[int]struct{}{2: {}, 3: {}, 4: {}}, stackedViewUntag(b, bp))
+	})
+	t.Run("carrier charge over the section displacement", func(t *testing.T) {
+		bp := breprecord.Payload{Faces: []breprecord.Face{{Delta: 2e-14}}, CarrierCharge: 3e-14}
+		require.Equal(t, map[int]float64{1: 3e-14}, stackedViewCharge(b, bp))
+	})
+	t.Run("exact record", func(t *testing.T) {
+		bp := breprecord.Payload{Faces: []breprecord.Face{{}}}
+		require.Nil(t, stackedViewCharge(b, bp))
+		require.Nil(t, stackedViewUntag(b, bp))
+	})
+	t.Run("NaN displacement", func(t *testing.T) {
+		bp := breprecord.Payload{Faces: []breprecord.Face{{Delta: math.NaN()}}}
+		require.Nil(t, stackedViewCharge(b, bp))
+		require.Equal(t, map[int]struct{}{1: {}, 2: {}, 3: {}, 4: {}}, stackedViewUntag(b, bp))
+	})
 }

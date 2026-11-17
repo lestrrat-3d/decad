@@ -47,7 +47,7 @@ func exactCarrierViewBlend(ctx context.Context, env topo.Env, hooks Hooks, b *to
 	if err != nil || !kept {
 		return nil, false, err
 	}
-	return retainedViewBlend(ctx, env, hooks, b, edges, refs, untag, blend)
+	return retainedViewBlend(ctx, env, hooks, b, edges, refs, untag, nil, blend)
 }
 
 // displacedSideFaces lists, by index in topobuild.Faces order, every face of
