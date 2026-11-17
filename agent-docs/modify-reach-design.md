@@ -1078,7 +1078,14 @@ result is a Boolean Cut: faceted, with the Cut's own readings. A chain with two 
 bevel exactly except where it holds a sharp corner beside an arc. There the offset's corner moves along a conic with the
 setback, and an arc's cells twist between rings, so a straight rule between two rings leaves the bevel. Such a chain
 steps through `L` layers of rings, `L` stepping up from 2 by one to the first value at which `layerDeparture` is within
-0.0002 mm, and refuses past 32. A column is the path of one ring point as the setback changes. Only a sharp corner
+0.0002 mm, and refuses past 32. A value that puts an inner ring within a quarter of a layer of the wall's level, `dc`
+below the cap, is passed over (`ringNearWall`). A ring at that level holds the run on the wall itself, so the cells
+below it run along the wall outside the material. Near a concave end the end clip's Boolean leaves those cells as a
+face of their own that touches the wall without crossing it, the Cut refuses the touch, and its gap shift moves the
+clip face across the run's wall at the corner's turn. With an overshoot of half the setback the wall's level lies six
+sevenths of the way down, so every seventh value puts a ring on it, and the values beside those are passed over too
+(6 to 8, 13 to 15, 20 to 22 and 27 to 29).
+A column is the path of one ring point as the setback changes. Only a sharp corner
 beside an arc, and the samples of an arc that ends at one, move off a straight line; every other column is straight,
 and two neighbouring straight columns bound a planar cell, which the two end rings hold exactly. So only a column that
 bends and the columns beside it carry the rings between: a cell between two such columns takes `2L` triangles, a cell
