@@ -290,7 +290,31 @@ func (cc chainCharges) areaCharge(entries []chainEntry, tP, tW float64, spec ble
 		return 0
 	}
 	sigma := cc.sigma()
+	pieces, factor := chainPieces(entries, tP, tW, spec, false)
+	cps := make([]chargePiece, len(pieces))
+	total := 0.0
+	for i, p := range pieces {
+		cps[i] = p.geo
+		sum := 0.0
+		for _, j := range p.junctions {
+			sum = proofbound.AbsSumUpper(sum, cc.eJ[j])
+		}
+		total = proofbound.AbsSumUpper(total,
+			proofbound.ProductUpper(proofbound.ProductUpper(p.width, factor), sum))
+	}
+	return proofbound.AbsSumUpper(total, arcAreaCharge(cps, sigma, sigma))
+}
+
+// chainPieces lists the groups a closed chain rewrites (each entry's wall and blend, and the base) with their
+// perimeters, turning and areas (each an upper bound), and the factor max(1, ρ_max/r_min) of the chain's arcs. An
+// open chain's base also has its two end sides, each at most tP wide, and a fillet's end side is its cross-section
+// r·π/2, which tP + tW bounds from above (tP = tW = r), where a chamfer's is the hypotenuse.
+func chainPieces(entries []chainEntry, tP, tW float64, spec blendSpec, open bool) ([]chainPiece, float64) {
 	hyp := up(math.Hypot(tP, tW))
+	endSide := hyp
+	if spec.fillet {
+		endSide = max(hyp, proofbound.AbsSumUpper(tP, tW))
+	}
 	rhoMax, rMin := 0.0, math.Inf(1)
 	for _, en := range entries {
 		if !en.arc {
@@ -333,22 +357,14 @@ func (cc chainCharges) areaCharge(entries []chainEntry, tP, tW float64, spec ble
 		wall.geo.perimeter = proofbound.AbsSumUpper(proofbound.ProductUpper(2, outer), proofbound.ProductUpper(2, tW))
 		wall.geo.turning = proofbound.AbsSumUpper(proofbound.TwoPiUpper(), 2*span)
 		wall.geo.area = wa
-		blend.geo.perimeter = proofbound.AbsSumUpper(outer, inner, proofbound.ProductUpper(2, hyp))
+		blend.geo.perimeter = proofbound.AbsSumUpper(outer, inner, proofbound.ProductUpper(2, endSide))
 		blend.geo.turning = proofbound.AbsSumUpper(proofbound.TwoPiUpper(), 2*span)
 		blend.geo.area = ba
 		pieces = append(pieces, wall, blend)
 	}
-	pieces = append(pieces, base)
-	cps := make([]chargePiece, len(pieces))
-	total := 0.0
-	for i, p := range pieces {
-		cps[i] = p.geo
-		sum := 0.0
-		for _, j := range p.junctions {
-			sum = proofbound.AbsSumUpper(sum, cc.eJ[j])
-		}
-		total = proofbound.AbsSumUpper(total,
-			proofbound.ProductUpper(proofbound.ProductUpper(p.width, factor), sum))
+	if open {
+		base.geo.perimeter = proofbound.AbsSumUpper(base.geo.perimeter, proofbound.ProductUpper(2, tP))
 	}
-	return proofbound.AbsSumUpper(total, arcAreaCharge(cps, sigma, sigma))
+	pieces = append(pieces, base)
+	return pieces, factor
 }

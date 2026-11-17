@@ -1493,7 +1493,7 @@ of that computation.
 | **SR2** | two selected edges share a vertex and are neither a mitre run (§4.7) nor corners of perpendicular faces (§4.8), or a selected edge continues tangentially into a neighbour | no transition built | `ErrUnsupported` |
 | **SR3** | no blend of that size exists: `R − r ≤ 0` for an inside ball (§4.2), `φ` within 10⁻⁹ of 0 or π, a chamfer distance of zero or below, an R6 setback that reaches the axis or runs past the sphere's pole (§4.5), or an R7 fillet inside the larger cylinder with `2ρ ≥ R − r`, where no ball touches both walls (§4.10) | no regular blend | `ErrDegenerate` |
 | **SR4** | the setback does not fit (§6.2) and the held bounds prove it does not | the blend consumes the face | `ErrDegenerate` |
-| **SR5** | the setback might not fit and the held bounds cannot decide it, or a plane that crosses an R6 sphere below `minSine` (§4.5), or an end vertex of an R1 edge is not a three-face corner with a retained planar `G`, or a chain's sense or `G`'s turn at the vertex is undecided (§5.0), or `G` turns the wrong way: a concave edge needs a reflex corner of `G`, or a convex one where `A` or `B` is reflex at the vertex, and a convex edge outside the R1 route (plane–cylinder, arc, cylinder–cylinder, mitre run) needs a convex one; or both `A` and `B` turn reflex at the vertex, or a convex edge meets a reflex face other than an R3 wall that extends past the vertex beside a plane that trims there (§5.0), or another part of `G` comes within the blend's reach of the vertex, or a vertex of an R3 wall lies within its bound of an end plane the band is clipped by, or of the band's generator, unless another band plane puts it outside the band or, on an arc or chain band, a face whose tag is that end plane's puts it on the plane or a charged sign reading puts it on a side (§4.3), or the end cap an R3 or an R4 end face takes is not a simple polygon, or an R3 fillet's tangent point on the plane lies no farther from the wall's circle than the wall's held cut may at the cap (§5.0), or an R4 fillet's end curve lies no farther from the wall's cut in an end plane than that cut may, or a vertex of an R4 wall that lies on both sides of its plane lies within its bound of the band's planes, or another part of such a wall, or a chord of its boundary, comes within the band's reach, or the wall's facets along the rim decide no side or disagree (§4.4), or an R4 arc's end on a cylinder that is not parallel to the axis, that is coaxial with the wall, that the wall crosses at a charged sine of `minSine` or less, whose material lies inside it, or past which the wall does not run, or a chain of the wall off the end's generator, or a cap column that falls on a vertex of the end face's top edge, or a cap that folds, or a vertex beside `V` whose cut along `Π` does not end at one of them, or whose boundary runs against the cap, or a plane at one end and a cylinder at the other, or a chamfer at a cylinder end, or an end that lies between two meetings of its tags (§4.4), or another feature comes within an R7 chamfer's or fillet's reach, or an R7 fillet's cell, window, cut ring or band test fails (§4.9, §4.10), or an arc's rows need more than 1,024 rows for their chords in an end plane to certify within `τ` (§6.3), or a corner's sphere patch needs more than 1,024 rows to stay within the corner route's tolerance, or a revolve strip's row needs more than 4,096 columns for its azimuth term's share of `τ` (§6.3, Strip triangles) | body exists; the evaluator cannot prove its construction | `ErrUnsupported` |
+| **SR5** | the setback might not fit and the held bounds cannot decide it, or a plane that crosses an R6 sphere below `minSine` (§4.5), or an end vertex of an R1 edge is not a three-face corner with a retained planar `G`, or a chain's sense or `G`'s turn at the vertex is undecided (§5.0), or `G` turns the wrong way: a concave edge needs a reflex corner of `G`, or a convex one where `A` or `B` is reflex at the vertex, and a convex edge outside the R1 route (plane–cylinder, arc, cylinder–cylinder, mitre run) needs a convex one; or both `A` and `B` turn reflex at the vertex, or a convex edge meets a reflex face other than an R3 wall that extends past the vertex beside a plane that trims there (§5.0), or another part of `G` comes within the blend's reach of the vertex, or a vertex of an R3 wall lies within its bound of an end plane the band is clipped by, or of the band's generator, unless another band plane puts it outside the band or, on an arc or chain band, a face whose tag is that end plane's puts it on the plane or a charged sign reading puts it on a side (§4.3), or the end cap an R3 or an R4 end face takes is not a simple polygon, or an R3 fillet's tangent point on the plane lies no farther from the wall's circle than the wall's held cut may at the cap (§5.0), or an R4 fillet's end curve lies no farther from the wall's cut in an end plane than that cut may, or a vertex of an R4 wall that lies on both sides of its plane lies within its bound of the band's planes, or another part of such a wall, or a chord of its boundary, comes within the band's reach, or the wall's facets along the rim decide no side or disagree (§4.4), or an R4 arc's end on a cylinder that is not parallel to the axis, that is coaxial with the wall, that the wall crosses at a charged sine of `minSine` or less, whose material lies inside it, or past which the wall does not run, or a chain of the wall off the end's generator, or a cap column that falls on a vertex of the end face's top edge, or a cap that folds, or a vertex beside `V` whose cut along `Π` does not end at one of them, or whose boundary runs against the cap, or a plane at one end and a cylinder at the other, or a chamfer at a cylinder end, or rows that meet an end plane stating a displacement at a sine below `minSine` (§6.3), or an end that lies between two meetings of its tags (§4.4), or another feature comes within an R7 chamfer's or fillet's reach, or an R7 fillet's cell, window, cut ring or band test fails (§4.9, §4.10), or an arc's rows need more than 1,024 rows for their chords in an end plane to certify within `τ` (§6.3), or a corner's sphere patch needs more than 1,024 rows to stay within the corner route's tolerance, or a revolve strip's row needs more than 4,096 columns for its azimuth term's share of `τ` (§6.3, Strip triangles) | body exists; the evaluator cannot prove its construction | `ErrUnsupported` |
 | **SR6** | the held mesh disagrees with the exact vertex of its three tags by more than the vertex bound plus slack (§6.3) | the record and the mesh do not describe one solid | `ErrUnsupported` |
 | **SR7** | a facet the rewrite keeps outside the new strip meets a strip facet, or a facet of an end face that gains a cap, that it shares no vertex with (the strip clearance of retained-modify-reach §5.6, run before the build), or the rewritten mesh fails the held audit (watertight, shells nested with consistent signs; the audit tests no facet pair for intersection) | the result is invalid | `ErrDegenerate` when the audit proves a face inside out (modify S8), else `ErrUnsupported` |
 
@@ -1670,13 +1670,27 @@ vertex keeps its bound.
 
 **Claim K.** Let `H` be the held solid with `VolSymDiff = v`, `H'` the rewritten
 held solid, and `S'` the true blended solid. Then
-`vol(H' △ S') ≤ v + ε·(area(strip) + area(blend)) + ρ`, with `ε` the largest
-vertex bound of the strip's facets (Strip triangles) and `ρ` the rounding of
-the new vertices times the area of the faces they touch.
+`vol(H' △ S') ≤ v + ε·(area(strip) + area(blend)) + Σ_t (h_t + δ_t)·area(t) + ρ`,
+with `ε` the largest vertex bound of the strip's facets (Strip triangles), the
+sum over every facet `t` of every plane face the route rebuilds by re-triangulating
+it (`retriangulate`, §5; on every route, mitre runs and corners included), `h_t`
+the largest exact distance of `t`'s corners from that face's tag plane, rounded
+up, `δ_t` the face's `AxialDelta` plus its `ExtentDelta` (each zero when it states
+none), and `ρ` the rounding of the new vertices times the area of the faces they
+touch.
 
-*Proof.* Outside `K`, `H'` equals `H` and `S'` equals the true solid `S`,
-because the gates of §6.2 show that no other face enters `K`. So the difference
-outside `K` lies inside `H △ S`. Inside `K`, `S'` is the exact blended region and
+*Proof.* Outside `K` and the re-triangulated plane faces, `H'` equals `H` and
+`S'` equals the true solid `S`, because the gates of §6.2 show that no other
+face enters `K`. So the difference there lies inside `H △ S`. Let `Y` be the slab
+between a re-triangulated face's new facets and its true plane. Then
+`vol(H' △ S') ≤ v + vol(Y \ (H △ S))`: the slab between the face's old facets and
+the true plane lies in `H △ S`, so only the new slab can add. A new facet `t`
+lies within `h_t` of the tag plane and so within `h_t + δ_t` of the true plane,
+and its slab has volume at most that times `area(t)`. This holds for a cap an end
+face gains (new surface on the far side of `K`) as for any other facet of the
+face, since the term reads its corners' actual distances, not their bounds. Each
+blend charges a rebuilt face again, so `n` blends on one displaced face add its
+`δ·area` `n` times; the published bound stays sound. Inside `K`, `S'` is the exact blended region and
 `H'` is the polyhedron on the strip's chords; every strip facet lies within its
 own bound, at most `ε`, of the blend face and the blend face within it of the
 facets, so they differ by at most `ε` times the larger of the two areas, plus
@@ -2178,8 +2192,35 @@ takes their corners' raised bounds.
 **Volume.** The new `VolSymDiff` is the old one plus `ε·(A_strip + A_true)`, with
 `ε` the largest vertex bound of the strip's facets, the band's raised cut
 vertices included, and `A_strip`, `A_true` the held and exact areas of the
-blend face. Two surfaces within `ε` of each other enclose at
-most `ε` times the larger area between them.
+blend face (with the wall and plane area charges below added to `A_true`), plus
+`Σ_t (h_t + δ_t)·area(t)` over the re-triangulated plane faces' facets (Claim K),
+each term rounded up. Two surfaces within `ε` of each other
+enclose at most `ε` times the larger area between them. A cap on a cylinder end
+keeps its own term (The cap on a cylinder end).
+
+**A displaced plane in the area bound.** Every exact area of `Δ_true` (the regions
+`A` and `B` lose, the blend face, each end cap) is computed on the tags. When a
+plane the route reads states `AxialDelta` δ (any plane it reads: `A`, `B`, an end
+plane `G`, a mitre or corner face), the true pieces' boundaries lie within the
+route's plane charge `c` (built from `planeCharge`, `4δ/minSine` per plane, as the
+route builds its slack) of the tags' pieces, each in the
+piece's own coordinates: a corner or rim moves by at most `2δ/det` per plane with
+`det ≥ minSine` (R1's `intersect3` and `|d·n_G|` gates; R3's and R5's end planes
+are normal to the axis), an R6 rim's radius `√(R_s² − z_s²)` moves by at most
+`|z_s|·δ/R_rim ≤ δ/minSine` under its crossing gate, and an R4 or chain arc whose
+end plane states a displacement refuses unless every row meets that plane at a
+sine of `minSine` or more ("an arc's rows meet a displaced end plane below
+`minSine`"), since a row at sine `q` moves its end by `δ/q`. A closed rim (R2)
+only moves along its axis with its plane, so its areas do not change and it adds
+nothing. So the area
+slack adds, per changed piece `g`, `2·P_g·c + (π + Φ_g)·c² + A_g·c/r_g` (the form of
+boss-root-overflow §5.5.6), with `P_g` an upper bound on the piece's perimeter
+from its exact curves, `Φ_g` its total turning (at most `2π` plus each arc's
+span), `A_g` its exact area and `r_g` its smallest radius of curvature (no term
+for a planar piece). It is added on top of the rim's or arc's wall charge. The
+term reads the route's whole charge `c`, which also holds a charged wall's and,
+on a chain, every held face's charge; charging more is safe. With no charge it is
+zero.
 
 The `Verify` and `VerifyAll` results come from the faceted audit of the rebuilt
 body, not from these terms.

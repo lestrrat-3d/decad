@@ -7,6 +7,8 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
+	"github.com/lestrrat-3d/decad/internal/facetedrecord"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/r3"
 	"github.com/stretchr/testify/require"
 )
@@ -102,7 +104,13 @@ func TestRetriangulateKeepsCloseBoundaryVertices(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			f := newCloseVerticesFace(tc.n, tc.at, tc.centre, tc.pairA, tc.pairB)
-			w := &work{verts: f.verts}
+			// A re-triangulated face reads its plane tag from its source group (chargePlaneFace).
+			u, ok := perpendicular(tc.n)
+			require.True(t, ok)
+			frame, err := r3.NewFrame(tc.at(0, 0), u, tc.n.Cross(u))
+			require.NoError(t, err)
+			w := &work{verts: f.verts, fp: facetedrecord.Payload{Groups: []facetedrecord.Group{
+				{Surface: surfacegeom.Plane{Frame: frame}}}}}
 			require.NoError(t, w.retriangulate(tc.n, [][]int{f.outer, f.hole}, 0))
 
 			count := map[[2]int]int{}

@@ -651,8 +651,11 @@ func heldArea(verts []r3.Vec, facets [][3]int) (float64, float64) {
 // measureChange returns the area slack and volume bound the rewrite adds
 // (agent-docs/retained-edge-blend-design.md §6.3, Claim K). The area change of the
 // held mesh is compared with the exact change: the annulus and band removed
-// and the blend face added. The shortfall of the rebuilt faces' geometric
-// terms is charged after the build (buildCharged).
+// and the blend face added, widened by the pieces a displaced plane moves
+// (planeAreaCharge). The volume bound adds the slab each re-triangulated plane
+// face's facets can span over its true plane (planeFacetVolume). The shortfall
+// of the rebuilt faces' geometric terms is charged after the build
+// (buildCharged).
 func (w *work) measureChange(tag blendTag, stripFrom int) (float64, float64) {
 	oldArea, oldSlop := heldArea(w.fp.Verts, pick(w.fp.Tris, w.removed))
 	newArea, newSlop := heldArea(w.verts, w.out)
@@ -674,6 +677,11 @@ func (w *work) measureChange(tag blendTag, stripFrom int) (float64, float64) {
 		areaSlack = proofbound.AbsSumUpper(areaSlack, charge)
 		trueArea = proofbound.AbsSumUpper(tag.trueArea, charge)
 	}
+	// A displaced plane moves the exact pieces' boundaries (plane_charge.go); the term is zero without one.
+	if planeArea := planeAreaCharge(w.planePieces, w.r.charge); planeArea != 0 {
+		areaSlack = proofbound.AbsSumUpper(areaSlack, planeArea)
+		trueArea = proofbound.AbsSumUpper(trueArea, planeArea)
+	}
 
 	// A raised inner vertex of a curved wall bounds the facets beside the
 	// strip that now face the blend.
@@ -689,6 +697,9 @@ func (w *work) measureChange(tag blendTag, stripFrom int) (float64, float64) {
 		capVol := proofbound.ProductUpper(w.capEps, proofbound.AbsSumUpper(w.capHeld, w.capTrue))
 		volSymDiff = proofbound.AbsSumUpper(volSymDiff, capVol, w.splitVol)
 	}
+	// The facets of every re-triangulated plane face lie off the true plane by their height over the tag plane
+	// and the face's stated displacement (Claim K, plane_charge.go).
+	volSymDiff = proofbound.AbsSumUpper(volSymDiff, w.planeVol)
 	return areaSlack, volSymDiff
 }
 
