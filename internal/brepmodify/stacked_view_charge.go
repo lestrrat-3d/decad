@@ -17,10 +17,11 @@ import (
 // nonnegative number.
 //
 // A swept circular wall is an arc pinned about its recorded centre with its
-// radius read from its first vertex, so the circle it lies on is within the
-// record's section displacement (which holds a holed union's CarrierCharge) of
-// the circle it denotes, on the whole circle (general-boolean §3 "A1 as a
-// brep", Displacements and Width band). The view keeps its Cylinder tag and
+// radius read from its first vertex, so the circle it lies on has a centre
+// offset plus radius difference from the circle it denotes within the record's
+// section displacement, which holds a holed union's CarrierCharge (general-boolean
+// §3 "A1 as a brep": Displacements, and the width band's |rj − rk| + |cj − ck| +
+// 2·|ck − c0|). That bounds the two circles apart all the way round. The view keeps its Cylinder tag and
 // states that bound as the tag's AxialDelta; the retained edge blend charges
 // it (R2) or refuses it.
 func stackedViewCharge(b *topo.Body, bp breprecord.Payload) map[int]float64 {
@@ -28,7 +29,7 @@ func stackedViewCharge(b *topo.Body, bp breprecord.Payload) map[int]float64 {
 		return nil
 	}
 	w := max(bp.SectionDelta(), bp.CarrierCharge)
-	if math.IsNaN(w) || w < 0 || math.IsInf(w, 0) {
+	if !(w > 0) || math.IsInf(w, 0) {
 		return nil
 	}
 	var out map[int]float64

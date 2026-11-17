@@ -62,9 +62,6 @@ type work struct {
 	// largest corner bound of the end caps an arc end on a cylinder adds to G, and
 	// splitVol the volume the split of G's held facets can move (measureChange).
 	capHeld, capTrue, capEps, splitVol float64
-	// areaCharge bounds how far a charged wall moves the exact area change
-	// (rimAreaCharge); zero on every other route.
-	areaCharge float64
 }
 
 type ringPt struct {

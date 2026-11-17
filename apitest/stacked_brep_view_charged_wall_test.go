@@ -77,10 +77,10 @@ func windowedHolePlate(t *testing.T) *decad.Body {
 // a swept circular wall of the record, which lies within the record's
 // displacement of the cylinder it denotes. The view keeps its Cylinder tag and
 // states that displacement on it, so the retained edge blend builds the rim
-// round, charges the displacement into the round's vertex bounds, and keeps
-// the blend face faceted. The removed volume is that of a fillet of radius
-// 0.5 on a rim of radius 2, and the charged wall is not published as an
-// analytic face.
+// round and keeps the blend face faceted. The removed volume is that of a
+// fillet of radius 0.5 on a rim of radius 2, and the charged wall is not
+// published as an analytic face. The charge's growth of the bounds against an
+// uncharged twin is shown in internal/retainedblend (TestFilletChargesCylinderWall).
 //
 // Shown red: without the view's wall charge the hole wall is untagged in the
 // view and the rim keeps the receivers' section-displacement refusal
@@ -89,20 +89,6 @@ func TestStackedBrepViewFilletChargedWall(t *testing.T) {
 	t.Parallel()
 	mm := units.Millimeters
 	plate := windowedHolePlate(t)
-	var g float64
-	for _, e := range plate.Edges() {
-		a, ok := e.Curve().(decad.Arc3)
-		if !ok || e.Start().Position().Value.Z != 5 {
-			continue
-		}
-		r, err := a.Radius.In(units.Millimeter)
-		require.NoError(t, err)
-		if math.Abs(r-7) < 1e-9 {
-			g = max(g, r-7)
-		}
-	}
-	require.Greater(t, g, 0.0)
-
 	out, err := bossOnCap(t, plate, 14)
 	require.NoError(t, err)
 	require.Equal(t, "decad.brepPayload", decadtest.PayloadClass(out))
@@ -143,32 +129,4 @@ func TestStackedBrepViewFilletChargedWall(t *testing.T) {
 			require.NotEqual(t, r, radius, "the charged wall is not published")
 		}
 	}
-
-	// The fillet's reach is the band of radius 2 to 2.5 about the hole axis,
-	// z 4.5 to 5. Every vertex of a face that lies wholly in it carries at
-	// least 4·g/1e-3 of bound, the wall charge.
-	const tol = 1e-6
-	inReach := func(p r3.Vec) bool {
-		d := math.Hypot(p.X+14, p.Y+14)
-		return d >= r-tol && d <= r+rho+tol && p.Z >= 5-rho-tol && p.Z <= 5+tol
-	}
-	var reached int
-	for _, f := range filleted.Faces() {
-		var vertices []*decad.Vertex
-		within := true
-		for _, e := range f.Edges() {
-			vertices = append(vertices, e.Start(), e.End())
-			within = within && inReach(e.Start().Position().Value) && inReach(e.End().Position().Value)
-		}
-		if !within {
-			continue
-		}
-		for _, v := range vertices {
-			bound, err := v.Position().Bound.In(units.Millimeter)
-			require.NoError(t, err)
-			require.GreaterOrEqual(t, bound, 4*g/1e-3, "vertex %v", v.Position().Value)
-			reached++
-		}
-	}
-	require.NotZero(t, reached, "a vertex within the fillet's reach")
 }

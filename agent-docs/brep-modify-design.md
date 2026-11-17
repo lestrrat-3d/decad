@@ -207,8 +207,8 @@ merged circle carrier lies `CarrierCharge` from it. Where either is nonzero,
 a circular wall keeps its `Cylinder` tag and states `w = max(SectionDelta,
 CarrierCharge)` as the tag's `AxialDelta` (`stackedViewCharge`,
 `internal/brepmodify/stacked_view_charge.go`): its circle lies within `w` of
-the circle it denotes all the way round, since the two differ only in a centre
-and a radius each within the record's bound. The retained blend charges that
+the circle it denotes all the way round, since the record's bound covers their
+centre offset plus radius difference (general-boolean §3, Width band). The retained blend charges that
 wall in a closed rim and refuses it elsewhere (retained-edge-blend §6.1,
 "Displaced planes and walls"), and its result publishes no charged wall. Every
 other swept wall, an oblique plane whose tag also tilts among them, stays in the

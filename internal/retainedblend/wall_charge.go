@@ -72,11 +72,11 @@ func rimAreaCharge(r rim, spec blendSpec) float64 {
 	return proofbound.ProductUpper(proofbound.ProductUpper(rimAreaSlope, size), r.wallDelta)
 }
 
-// refuseChargedArc refuses an open arc whose wall tag states a displacement:
-// the displacement moves the arc's ends and span, which no arc route charges
-// yet (agent-docs/boss-root-overflow-design.md §5.4, P6).
-func refuseChargedArc(r rim) error {
-	if r.wallDelta == 0 {
+// refuseChargedArc refuses an open arc a face of which is a curved tag that
+// states a displacement: the displacement moves the arc's ends and span, which
+// no arc route charges yet (agent-docs/boss-root-overflow-design.md §5.4, P6).
+func refuseChargedArc(edge *topo.Edge) error {
+	if !slices.ContainsFunc(edge.Faces, func(f *topo.Face) bool { return f != nil && chargedCurve(f) }) {
 		return nil
 	}
 	return fmt.Errorf("%w: an arc on a wall whose tag states a displacement is not built", decaderr.ErrUnsupported)

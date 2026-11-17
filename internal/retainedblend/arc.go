@@ -68,9 +68,6 @@ func readArc(edge *topo.Edge, fp facetedrecord.Payload, faceIndex map[*topo.Face
 	if err != nil {
 		return arcRim{}, err
 	}
-	if err := refuseChargedArc(r); err != nil {
-		return arcRim{}, err
-	}
 	// Only a concave arc builds a wall cut by a local band (arc_band.go); a convex
 	// arc on a two-sided wall keeps the whole-face refusal.
 	if r.twoSided && r.convex {

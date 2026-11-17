@@ -198,6 +198,9 @@ func blend(ctx context.Context, env topo.Env, b *topo.Body, fp facetedrecord.Pay
 			}
 			targets[i].lineKey, targets[i].kind = l.key(), straightLine
 		case looksLikeArc(e):
+			if err := refuseChargedArc(e); err != nil {
+				return nil, true, err
+			}
 			a, err := readArc(e, fp, faceIndex, local)
 			if err != nil {
 				// An arc this route cannot read is left to the generic refusal, which
@@ -358,7 +361,6 @@ func rewriteRim(ctx context.Context, env topo.Env, fp facetedrecord.Payload, r r
 		return nil, err
 	}
 	w := newWork(fp, r, spec)
-	w.areaCharge = rimAreaCharge(r, spec)
 	// looksLikeRim admitted the face, so its plane tag reads.
 	planeTag, _ := retainedPlane(r.planeFace)
 	ringA, groupA, err := w.rewritePlane(faceIndex[r.planeFace], planeTag, spec.planeSetback(),
@@ -626,10 +628,12 @@ func (w *work) measureChange(tag blendTag, stripFrom int) (float64, float64) {
 	// Every term is a float evaluation; charge the areas' own rounding.
 	scale := math.Max(math.Abs(deltaHeld), math.Abs(deltaTrue)) + oldArea + newArea + w.removedTrue
 	areaSlack := proofbound.AbsSumUpper(math.Abs(deltaHeld-deltaTrue), oldSlop, newSlop, 64*0x1p-52*scale)
+	// A charged wall moves the exact area change (rimAreaCharge); the charge is
+	// zero on every route whose wall states no displacement.
 	trueArea := tag.trueArea
-	if w.areaCharge != 0 {
-		areaSlack = proofbound.AbsSumUpper(areaSlack, w.areaCharge)
-		trueArea = proofbound.AbsSumUpper(tag.trueArea, w.areaCharge)
+	if charge := rimAreaCharge(w.r, w.spec); charge != 0 {
+		areaSlack = proofbound.AbsSumUpper(areaSlack, charge)
+		trueArea = proofbound.AbsSumUpper(tag.trueArea, charge)
 	}
 
 	// A raised inner vertex of a curved wall bounds the facets beside the

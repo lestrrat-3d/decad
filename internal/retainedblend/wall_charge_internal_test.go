@@ -6,6 +6,7 @@ import (
 
 	clr "github.com/lestrrat-3d/decad/internal/clearance"
 	"github.com/lestrrat-3d/decad/internal/decaderr"
+	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
@@ -111,12 +112,39 @@ func TestChargedTagReaders(t *testing.T) {
 func TestChargedArcAndAreaCharge(t *testing.T) {
 	t.Parallel()
 
-	t.Run("refuseChargedArc", func(t *testing.T) {
+	t.Run("an open arc on a charged wall is refused by name", func(t *testing.T) {
 		t.Parallel()
-		require.NoError(t, refuseChargedArc(rim{}))
-		err := refuseChargedArc(rim{wallDelta: 1e-14})
+		plane := chargedPlane(t, r3.NewVec(0, 0, 5), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0), 0)
+		cyl := chargedCylinder(3, 1e-14)
+		arc := &topo.Edge{Curve: surfacegeom.Arc3{Center: r3.NewVec(3, 3, 5), Axis: r3.NewVec(0, 0, 1),
+			Radius: units.Millimeters(3)}, RetainedCurve: true, Start: &topo.Vertex{Position: r3.NewVec(6, 3, 5)},
+			End: &topo.Vertex{Position: r3.NewVec(3, 6, 5)}, Faces: []*topo.Face{plane, cyl}}
+		require.True(t, looksLikeArc(arc), "the arc is a candidate; its wall is charged")
+		b := &topo.Body{Solid: true, Lumps: []*topo.Lump{{Shells: []*topo.FaceShell{{Faces: []*topo.Face{plane, cyl}}}}}}
+		out, recognized, err := Fillet(t.Context(), topo.Env{}, b, facetedrecord.Payload{}, []*topo.Edge{arc}, 0.5, 0)
+		require.Nil(t, out)
+		require.True(t, recognized)
 		require.ErrorIs(t, err, decaderr.ErrUnsupported)
 		require.ErrorContains(t, err, "an arc on a wall whose tag states a displacement is not built")
+
+		arc.Faces[1] = chargedCylinder(3, 0)
+		require.NoError(t, refuseChargedArc(arc))
+	})
+
+	t.Run("measureChange charges the wall's area term", func(t *testing.T) {
+		t.Parallel()
+		spec := blendSpec{fillet: true, r: 0.5}
+		measure := func(wallDelta float64) (float64, float64) {
+			w := newWork(facetedrecord.Payload{}, rim{scale: 1, wallDelta: wallDelta}, spec)
+			w.raised = 1e-3
+			return w.measureChange(blendTag{trueArea: 2}, 0)
+		}
+		area0, vol0 := measure(0)
+		area1, vol1 := measure(1e-6)
+		charge := rimAreaCharge(rim{wallDelta: 1e-6}, spec)
+		require.Positive(t, charge)
+		require.GreaterOrEqual(t, area1-area0, 0.99*charge)
+		require.GreaterOrEqual(t, vol1-vol0, 0.99*1e-3*charge)
 	})
 
 	t.Run("rimAreaCharge", func(t *testing.T) {
