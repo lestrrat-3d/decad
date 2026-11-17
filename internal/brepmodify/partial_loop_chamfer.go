@@ -117,8 +117,9 @@ const partialSagitta = 0.0002
 // that edge. The mesh Boolean cannot classify that touch, and its shifted retry moves the cutter off the plane, so that
 // the moved clip face crosses the run's wall at the corner's turn. Beside an arc the rim there divides the wall's chord
 // bound by the sine of the turn: a turn of 10 degrees multiplies it by almost six. The relief keeps the cutter at least
-// partialCornerRelief cos(turn/2) from the next wall, several times the bound of the clipped cutter's faces, so the
-// Boolean decides the pair without a shift.
+// partialCornerRelief times the smaller of cos(turn/2) and the cosine of half a chord's angle from the next wall,
+// several times the bound of the clipped cutter's faces, so the Boolean decides the pair without a shift. The result's
+// bounds describe the relieved chamfer and do not cover the chamfer without the relief.
 const partialCornerRelief = 0.004
 
 // partialOvershoots are how far, in setbacks, a cutter reaches above the cap and outside the wall, tried in turn
@@ -407,6 +408,9 @@ func (e runEnd) inClip(p pt2, clip, relief float64) bool {
 	}
 	if a <= sweep {
 		return p.dist(e.v) <= clip
+	}
+	if relief <= 0 {
+		return false
 	}
 	rest := 2*math.Pi - sweep
 	return p.dist(e.v) <= relief*math.Cos(rest/float64(reliefCells(rest))/2)
