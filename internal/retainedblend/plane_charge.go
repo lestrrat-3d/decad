@@ -373,7 +373,7 @@ func (w *work) chainPlanePieces(entries []chainEntry, tP, tW float64, spec blend
 	if !open || !(w.r.charge > 0) {
 		return
 	}
-	pieces, _ := chainPieces(entries, tP, tW, spec)
+	pieces, _ := chainPieces(entries, tP, tW, spec, open)
 	rMin := math.Inf(1)
 	for _, p := range pieces {
 		w.addPlanePiece(p.geo)

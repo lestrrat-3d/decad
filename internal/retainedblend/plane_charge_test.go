@@ -16,8 +16,9 @@ import (
 // on the true end planes G*, each moved outward by delta along its normal, by sliding every end vertex along the
 // edge direction x (so every side plane keeps its place). With tagged set the end plane tags are the displaced
 // planes' own and state nothing (the twin, an exact solid); else they are the unmoved planes G, which state
-// AxialDelta delta.
-func shearedPlate(t *testing.T, k, delta float64, tagged bool) (*topo.Body, facetedrecord.Payload) {
+// AxialDelta delta. With onTags set (and tagged clear) the held mesh stays on the tag planes instead of the true
+// planes, and every end vertex states a bound of the slide, which the true plane G* is from it.
+func shearedPlate(t *testing.T, k, delta float64, tagged, onTags bool) (*topo.Body, facetedrecord.Payload) {
 	t.Helper()
 	norm := math.Hypot(1, k)
 	slide := delta * norm
@@ -30,8 +31,12 @@ func shearedPlate(t *testing.T, k, delta float64, tagged bool) (*topo.Body, face
 			if x > 0 {
 				off = slide
 			}
+			bound := 0.0
+			if onTags {
+				off, bound = 0, slide
+			}
 			fp.Verts = append(fp.Verts, r3.NewVec(x+k*p[1]+off, p[0], p[1]))
-			fp.VertexBound = append(fp.VertexBound, 0)
+			fp.VertexBound = append(fp.VertexBound, bound)
 		}
 	}
 	tri := func(g, a, b, c int) {
@@ -74,9 +79,9 @@ func shearedPlate(t *testing.T, k, delta float64, tagged bool) (*topo.Body, face
 func TestChamferEndPlaneDisplacementIsInAreaSlack(t *testing.T) {
 	t.Parallel()
 	const k, delta = 3.0, 1e-5
-	chamfer := func(t *testing.T, delta float64, tagged bool) (before, after facetedrecord.Payload) {
+	chamfer := func(t *testing.T, delta float64, tagged, onTags bool) (before, after facetedrecord.Payload) {
 		t.Helper()
-		b, built := shearedPlate(t, k, delta, tagged)
+		b, built := shearedPlate(t, k, delta, tagged, onTags)
 		out, recognized, err := retainedblend.Chamfer(t.Context(), axialEnv(), b, built,
 			[]*topo.Edge{topBevelEdge(t, b)}, 1, 0, nil)
 		require.True(t, recognized)
@@ -85,11 +90,18 @@ func TestChamferEndPlaneDisplacementIsInAreaSlack(t *testing.T) {
 	}
 	change := func(before, after facetedrecord.Payload) float64 { return meshArea(after) - meshArea(before) }
 	// The exact twins: end planes at the tags, and at the true planes.
-	atTag := change(chamfer(t, 0, true))
-	atTrue := change(chamfer(t, delta, true))
-	before, after := chamfer(t, delta, false)
+	atTag := change(chamfer(t, 0, true, false))
+	atTrue := change(chamfer(t, delta, true, false))
+	before, after := chamfer(t, delta, false, false)
 	held := change(before, after)
 	slack := after.AreaSlack - before.AreaSlack
+	// The twin whose held mesh stands on the tag planes, delta short of the true planes G*, with vertex bounds that
+	// cover the slide: its held change is the tags' own, so only the area term lets it reach the true change.
+	beforeTags, afterTags := chamfer(t, delta, false, true)
+	heldTags := change(beforeTags, afterTags)
+	slackTags := afterTags.AreaSlack - beforeTags.AreaSlack
+	t.Logf("on tags: held %.9g slack %.3g gap to true %.3g", heldTags, slackTags, math.Abs(heldTags-atTrue))
+	require.LessOrEqual(t, math.Abs(heldTags-atTrue), slackTags)
 	measured, move := math.Abs(held-atTag), math.Abs(atTrue-atTag)
 	t.Logf("tag %.9g true %.9g held %.9g measured %.3g move %.3g slack %.3g", atTag, atTrue, held, measured, move, slack)
 	require.LessOrEqual(t, math.Abs(held-atTrue), slack)

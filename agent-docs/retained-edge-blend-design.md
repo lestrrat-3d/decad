@@ -2217,8 +2217,10 @@ slack adds, per changed piece `g`, `2·P_g·c + (π + Φ_g)·c² + A_g·c/r_g` (
 boss-root-overflow §5.5.6), with `P_g` an upper bound on the piece's perimeter
 from its exact curves, `Φ_g` its total turning (at most `2π` plus each arc's
 span), `A_g` its exact area and `r_g` its smallest radius of curvature (no term
-for a planar piece). It is added on top of the rim's or arc's wall charge. With
-no displaced plane it is zero.
+for a planar piece). It is added on top of the rim's or arc's wall charge. The
+term reads the route's whole charge `c`, which also holds a charged wall's and,
+on a chain, every held face's charge; charging more is safe. With no charge it is
+zero.
 
 The `Verify` and `VerifyAll` results come from the faceted audit of the rebuilt
 body, not from these terms.
