@@ -1566,7 +1566,8 @@ inside the blend and a published one:
   only when some group carried a mark or was untagged.
 
 A published charged wall reaches these readers outside this package. Each
-charges δ or refuses the wall; none reads it as exact.
+charges δ, refuses the wall, or is listed in `agent-docs/missing-features.md`
+as reading the tag as the wall.
 
 | Reader | With a charged `Cylinder` |
 |---|---|
