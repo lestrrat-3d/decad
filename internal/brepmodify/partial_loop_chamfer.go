@@ -235,6 +235,9 @@ func readChamferRuns(body *topo.Body, edges []*topo.Edge, exact bool) (runs []ch
 }
 
 // continues reports whether the walk leaves the end of prev along the tangent it arrived on: the junction is smooth.
+// It reads a junction as tangent below a sine of 1e-7, wider than the
+// 1e-9 under which chamferLoop.corner takes its tangent shortcut. Between the two
+// a corner's ruling departure is not charged; it is below about 1e-8 mm there.
 func continues(prev, next loopSeg) bool {
 	v := next.p0
 	tin, tout := tangent(prev, v), tangent(next, v)

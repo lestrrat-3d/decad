@@ -67,6 +67,12 @@ func (r chamferRun) layers(d, top, bottom float64) (int, float64, error) {
 // A corner that reaches the arc's foot, where v or y is not positive over the layer, is refused: the bound has no
 // finite value there.
 func (r chamferRun) layerDeparture(d float64, heights []float64) (float64, error) {
+	return r.layerDepartureWith(d, heights, partialSagitta)
+}
+
+// layerDepartureWith is layerDeparture for a cutter whose arc chords lie within
+// sagitta of their circles: the twist's cross term reads that sagitta.
+func (r chamferRun) layerDepartureWith(d float64, heights []float64, sagitta float64) (float64, error) {
 	l := r.loop
 	worst := 0.0
 	for j := 0; j+1 < r.count; j++ {
@@ -88,7 +94,7 @@ func (r chamferRun) layerDeparture(d float64, heights []float64) (float64, error
 			dep := 0.0
 			for _, s := range []loopSeg{a, b} {
 				if s.arc {
-					dep = max(dep, twist(s, p, q))
+					dep = max(dep, twistWith(s, p, q, sagitta))
 				}
 			}
 			path, err := l.cornerPathDeparture(a, b, d+heights[k], d+heights[k+1], p, q)
@@ -101,16 +107,17 @@ func (r chamferRun) layerDeparture(d float64, heights []float64) (float64, error
 	return worst, nil
 }
 
-// twist is how far a chord of the arc segment s, whose end at the corner moves from p to q, lies inside the cone: the
+// twistWith is how far a chord of the arc segment s, whose end at the corner moves from p to q, lies inside the cone: the
 // larger radius times the square of the turn about the arc's centre, over 8.
-func twist(s loopSeg, p, q pt2) float64 {
+// The cutter's chords lie within sagitta of their circles.
+func twistWith(s loopSeg, p, q pt2, sagitta float64) float64 {
 	rho := max(p.dist(s.c), q.dist(s.c))
 	dphi := math.Abs(math.Remainder(math.Atan2(q.y-s.c.y, q.x-s.c.x)-math.Atan2(p.y-s.c.y, p.x-s.c.x), 2*math.Pi))
 	// Each quad of the cutter is split along a diagonal that spans the chord step of the arc, whose sagitta is at most
 	// partialSagitta, and the turn dphi together: its sag is rho (step + dphi)^2 / 8 = (sqrt(sagitta) + sqrt(twist))^2.
 	// The sagitta itself is charged apart, so the twist carries the rest, with the cross term.
 	own := rho * dphi * dphi / 8
-	return own + 2*math.Sqrt(partialSagitta*own)
+	return own + 2*math.Sqrt(sagitta*own)
 }
 
 // cornerPathDeparture is the largest magnitude of the second derivative, with respect to the offset t, of the path of
