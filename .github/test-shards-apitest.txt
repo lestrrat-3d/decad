@@ -3113,3 +3113,5 @@
 12	0.00	TestSideNotchCutKeepsEarlierResults
 12	0.00	TestSideNotchCutDeclinesObliqueCut
 12	0.00	TestSideNotchCutTangentFork
+12	0.00	TestStackedBrepViewFillet
+12	0.00	TestStackedBrepViewFilletReachesRetainedBlend

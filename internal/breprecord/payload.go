@@ -101,6 +101,17 @@ type Payload struct {
 	// PointQueryCut keeps the exact source prisms of a line-only crossing blind
 	// cut for point queries. Generic rebuilds drop it.
 	PointQueryCut *CutOperands
+	// SlabCut marks a record a blind Cut built through stackedunion's BRep build
+	// (general-boolean §3 A7, A9). Like Stack, it admits the record to the
+	// faceted-view fillet that runs after the receiver routes refuse
+	// (agent-docs/tangent-notch-design.md T3).
+	SlabCut bool
+	// CarrierCharge is the carrier alias charge a holed A1 union records
+	// (general-boolean §3 "A1 as a brep", width band): the shared span width
+	// that one circle carrier merging near-equal circles may lie from the walls
+	// it stands for, or the scene's crossing charge where no class merges. It is
+	// zero for every other record.
+	CarrierCharge float64
 	LoopBands     []LoopBand
 	BossShell     *prismshell.BossShellBand
 	PocketShell   *prismshell.PocketShellBand

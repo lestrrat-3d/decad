@@ -54,7 +54,7 @@ func retainedViewBlend(ctx context.Context, env topo.Env, hooks Hooks, b *topo.B
 ) (*topo.Body, bool, error) {
 	fp, audit, err := booleaneval.View(ctx, b, hooks.Mesher)
 	if err != nil {
-		return nil, true, err
+		return nil, true, viewBuildError{err}
 	}
 	if len(untag) > 0 {
 		groups := slices.Clone(fp.Groups)
@@ -68,13 +68,13 @@ func retainedViewBlend(ctx context.Context, env topo.Env, hooks Hooks, b *topo.B
 	}
 	volF, volBound, volRat, err := booleaneval.VolumeReading(ctx, audit, fp.VolSymDiff)
 	if err != nil {
-		return nil, true, err
+		return nil, true, viewBuildError{err}
 	}
 	volume := measurement.Measurement{Value: units.CubicMillimeters(volF),
 		Exactness: measurement.ExactnessOf(volBound), Bound: units.CubicMillimeters(volBound)}
 	view, err := facetedrecord.BuildWithProof(ctx, env, fp, audit, volume, volRat)
 	if err != nil {
-		return nil, true, err
+		return nil, true, viewBuildError{err}
 	}
 	fp, ok := view.Payload.(facetedrecord.Payload)
 	if !ok {
@@ -106,6 +106,14 @@ func retainedViewBlend(ctx context.Context, env topo.Env, hooks Hooks, b *topo.B
 	}
 	return blend(view, fp, mapped, viewRefs)
 }
+
+// viewBuildError marks a refusal raised while building the faceted view,
+// before any blend read the selection. It reads and unwraps as the refusal it
+// carries.
+type viewBuildError struct{ err error }
+
+func (e viewBuildError) Error() string { return e.err.Error() }
+func (e viewBuildError) Unwrap() error { return e.err }
 
 // viewFaces maps each face of b to the faces of its view that the face's own
 // group built (facetedrecord.Payload FaceOf and Src). The view's groups are b's

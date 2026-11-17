@@ -257,6 +257,8 @@ func (b *ubBuild) run(ctx context.Context) (brepPayload, error) {
 	if err != nil {
 		return brepPayload{}, err
 	}
+	out.SlabCut = b.cut
+	out.CarrierCharge = b.aliasCharge
 	if !b.cut {
 		// A1's union result keeps its slabs for a further co-directional
 		// Union (§4.1). The crossing Cut's holed slabs are not A1 operands.

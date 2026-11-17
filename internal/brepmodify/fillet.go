@@ -93,6 +93,17 @@ func Fillet(ctx context.Context, env topo.Env, b *topo.Body, call FilletCall) (R
 	}
 	route, err := Receiver(ctx, env, b, loopCall)
 	if err != nil {
+		// A stacked or slab-cut BRep result whose selection the receiver
+		// routes refuse takes the retained edge blend on its faceted view
+		// (agent-docs/tangent-notch-design.md T3). It runs after them, so every
+		// selection they build keeps its result.
+		out, matched, viewErr := stackedViewBlend(ctx, env, hooks, b, edges,
+			func(view *topo.Body, fp facetedrecord.Payload, edges []*topo.Edge, _ map[*topo.Edge]*topo.Face) (*topo.Body, bool, error) {
+				return retainedblend.Fillet(ctx, env, view, fp, edges, rmm, rDelta)
+			})
+		if matched || viewErr != nil {
+			return Result{Body: out}, viewErr
+		}
 		return Result{}, err
 	}
 	if route.Body != nil {
