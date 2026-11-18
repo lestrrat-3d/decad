@@ -59,10 +59,10 @@ boxes, or it marks the sink unsure. Two features whose boxes meet then
 contribute a zero lower bound, `Pair` reads `lo ≤ tol` and the pair is
 undecided. The pruning of `clearance-design.md` §5 skips a cell whose box
 distance exceeds the best upper bound, so the failure shows only when the
-features' boxes are close, whatever the placement angle. A pin and its bore rotated
-5° about Y keep their rim boxes 1.45 mm apart and the rim cell is pruned; at
-20° the boxes meet and the pair reads undecided. The same pin with its rims
-5 mm from the bore's rims reads a measured gap at 20°.
+features' boxes are close. Measured on one pin-in-bore case: rotated 5° about
+Y, the pin and bore keep their rim boxes 1.45 mm apart and the rim cell is
+pruned; at 20° the boxes meet and the pair reads undecided. The same pin with
+its rims 5 mm from the bore's rims reads a measured gap at 20°.
 
 ## 3. Shared rules
 
@@ -359,12 +359,13 @@ directly, as `curvecells/cells_test.go` and `facepair/cells_test.go` do.
 **Shards and cost.** New `apitest/` names go in the last numbered shard of
 `.github/test-shards-apitest.txt`; run `go test . ./apitest/ -run '^TestCI'`.
 Internal package tests run in their packages' own jobs and need no manifest
-entry. A pin-in-bore `Verify` takes milliseconds; each reading adds at most 38
-samples to one cell. No benchmark is added.
+entry. A pin-in-bore `Verify` takes milliseconds; each reading samples at most 19
+azimuths (16 uniform, plus a partial arc's window ends and midpoint). There is
+no benchmark.
 
 ## 9. Increments
 
 | PR | lands | still `Suspect` after it |
 |---|---|---|
 | 1 (implemented) | §4: the circle pair band, the crossing annulus with `AnnulusRegionMiss`, the rim height band, the shared `circleAxisBand`, and §8's unit tests and pin-in-bore API tests | §5's flat features in the undecided band; §6 |
-| 2 (planned) | §5: the six flat-feature readings and their tests | §6 less the near-parallel plane faces |
+| 2 (not implemented) | §5: the six flat-feature readings and their tests | §6 less the near-parallel plane faces |
