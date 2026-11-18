@@ -59,6 +59,9 @@ type crossEnd struct {
 	reach [2]float64
 	// tilt is an oblique G's stated tag departure, zero for an exact plane.
 	tilt float64
+	// past holds, for a held corner the column takes on faces[k], the lines from it that the boundary of faces[k] and
+	// of G runs on along, the third face's edges with them (coincident).
+	past [2]struct{ onX, onG polyRay }
 }
 
 // crossEdge is one chain edge in walk order.

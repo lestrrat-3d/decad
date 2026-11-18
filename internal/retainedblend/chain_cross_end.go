@@ -2,6 +2,7 @@ package retainedblend
 
 import (
 	"fmt"
+	"math"
 	"math/big"
 	"slices"
 
@@ -230,6 +231,24 @@ func (cx *crossChain) coincident(c, x int, ce *crossEdge, end *crossEnd) (bool, 
 	if ch := sumUp(planeCharge(end.g), planeCharge(tp)); ch > 0 {
 		cx.w.beta[c] = sumUp(cx.w.beta[c], mulUp(2, ch))
 	}
+	// Beyond the corner the boundaries of x and of G run on along their edges with T, away from G and from x: a
+	// held vertex inside such an edge lies on that line, outside what the chamfer removes (gateChords).
+	away := func(m, n, from r3.Vec) (polyRay, error) {
+		d, ok := m.Cross(n).Normalize()
+		if s := d.Dot(from); !ok || !(math.Abs(s) > minSine) {
+			return polyRay{}, refuseCross("meets an end face's corner whose edges it cannot read")
+		} else if s > 0 {
+			d = d.Scale(-1)
+		}
+		return polyRay{o: corner, dir: d}, nil
+	}
+	var err error
+	if end.past[x].onX, err = away(tp.n, ce.pl[x].n, end.g.n); err != nil {
+		return false, err
+	}
+	if end.past[x].onG, err = away(tp.n, end.g.n, ce.pl[x].n); err != nil {
+		return false, err
+	}
 	return true, nil
 }
 
@@ -311,6 +330,7 @@ func (cx *crossChain) rewriteEndFace(f *topo.Face) (int, error) {
 		for x := range 2 {
 			if end.held[x] {
 				poly.keepAt[end.vert[x]] = x + 1
+				poly.rays = append(poly.rays, end.past[x].onG)
 				continue
 			}
 			repl = append(repl, end.vert[x])
