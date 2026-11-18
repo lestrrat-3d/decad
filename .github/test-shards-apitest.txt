@@ -15,8 +15,8 @@
 #   shard 3:  139.29s over 234 tests
 #   shard 4:  169.85s over 240 tests
 #   shard 5:  126.34s over 240 tests
-#   shard 6:  108.95s over 238 tests
-#   shard 7:  161.44s over 245 tests
+#   shard 6:  135.92s over 239 tests
+#   shard 7:  134.47s over 244 tests
 #   shard 8:  141.31s over 245 tests
 #   shard 9:  132.83s over 242 tests
 #   shard 10:  152.95s over 241 tests
@@ -1733,7 +1733,7 @@
 7	0.12	TestCapLoopChamferRefusesNearTangentCorner
 7	0.00	TestChainGateDiameterLoftHasToleranceReference
 7	0.00	TestChamferAngleRefusesWhatHasNoSecondDistance
-7	26.97	TestChamferFreeformBothRimsHoldTheOneRimBound
+6	26.97	TestChamferFreeformBothRimsHoldTheOneRimBound
 7	0.06	TestChamferOfAPocketsFloorEdgesFillsTheirWedges
 7	0.00	TestChamferPartOfBareBoxEdgesStaysRefused
 7	0.01	TestCircularRimConvexity
