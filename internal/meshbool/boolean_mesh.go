@@ -74,7 +74,11 @@ type BoolMesh struct {
 	RimEdge [][3]bool
 	// RimVert holds the vertices of RimEdge's edges.
 	RimVert map[int]bool
-	Seats   map[int][]rimSeat
+	// AcrossFlat, set on an Intersect's second operand, has the proximity gate read a contact between a curved face of
+	// the first operand and a flat face of this one along the flat face's normal (flatAcross,
+	// agent-docs/gap-tolerance-design.md §5.2 item 8).
+	AcrossFlat bool
+	Seats      map[int][]rimSeat
 	// Gate is the pair's chord tolerance when this operand restates a held
 	// mesh (a boolean result or a mitred sweep), and zero for every other
 	// operand. A gated operand's facets that meet the other operand, or come
