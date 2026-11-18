@@ -116,6 +116,10 @@ func RefuseUndecidableProximity(ctx context.Context, ma, mb *topo.Mesh, bmA, bmB
 			if !BoxesWithin(ga.box, gb.box, slack*(1+1e-9)) {
 				continue
 			}
+			// A seat face against a wall that leaves its plane meets it only along the wall's rims (§16).
+			if seatSkip(bmA, ga.facets, bmB, gb.facets) || seatSkip(bmB, gb.facets, bmA, ga.facets) {
+				continue
+			}
 			broadSlack := slack * (1 + 1e-9)
 			broad, deferred, err := GatherNearContacts(ctx, bmA, ga.facets, bmB, gb.facets, broadSlack, memo)
 			if err != nil {

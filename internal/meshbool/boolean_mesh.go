@@ -66,6 +66,13 @@ type BoolMesh struct {
 	// piece (agent-docs/coplanar-contact-design.md §3.1). SetExactFacets fills
 	// it; nil reads as all false.
 	Exact []bool
+	// Carrier, RimEdge and Seats are an unshifted Intersect's seat readings (agent-docs/coplanar-contact-design.md
+	// §16, SetSeats): Carrier[t] reports that facet t's true piece lies in its own plane, RimEdge[t][k] that edge k of
+	// facet t is a wall's rim in a carrier-exact neighbour's plane, and Seats lists each wall's seat planes by source
+	// id. nil when the boolean reads no seats.
+	Carrier []bool
+	RimEdge [][3]bool
+	Seats   map[int][]rimSeat
 	// Gate is the pair's chord tolerance when this operand restates a held
 	// mesh (a boolean result or a mitred sweep), and zero for every other
 	// operand. A gated operand's facets that meet the other operand, or come

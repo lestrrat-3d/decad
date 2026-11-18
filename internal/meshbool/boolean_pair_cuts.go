@@ -85,7 +85,7 @@ func pairCuts(ctx context.Context, ma, mb *BoolMesh, memo *ContactMemo, keyOf fu
 		ta := TriCorners(ma, i)
 		tb := TriCorners(mb, j)
 		if c.Kind == ContactRegion {
-			admitted := ma.isExact(i) && mb.isExact(j)
+			admitted := ma.isExact(i) && mb.isExact(j) || seatPair(ma, mb, i, j)
 			if !admitted {
 				refused = true
 			}
@@ -103,8 +103,14 @@ func pairCuts(ctx context.Context, ma, mb *BoolMesh, memo *ContactMemo, keyOf fu
 		if c.Kind == ContactNone {
 			return nil
 		}
-		touchedA = append(touchedA, i)
-		touchedB = append(touchedB, j)
+		// A contact along a wall's rim against a carrier-exact facet is decided by the seat (§16), not by how
+		// finely the wall is held: the held-mesh gate does not read the wall's facet there.
+		if !rimOnCarrier(mb, j, c.EdgeB, ma, i) {
+			touchedB = append(touchedB, j)
+		}
+		if !rimOnCarrier(ma, i, c.EdgeA, mb, j) {
+			touchedA = append(touchedA, i)
+		}
 		if c.Kind == ContactPoint {
 			pointTouches = append(pointTouches, c.P0)
 			pointFacets = append(pointFacets, [2]int{i, j})
@@ -218,7 +224,8 @@ func pairCuts(ctx context.Context, ma, mb *BoolMesh, memo *ContactMemo, keyOf fu
 			if err != nil {
 				return pairCutsResult{}, err
 			}
-			if side == EdgeCoplanarBounded && ma.isExact(p.I) && mb.isExact(p.J) {
+			if side == EdgeCoplanarBounded && (ma.isExact(p.I) && mb.isExact(p.J) ||
+				rimEdge(ma, p.I, p.C.EdgeA) && slices.Contains(cp.coplanarA[adjacent], p.J)) {
 				if err := cp.acceptEdge(p, adjacent, p.J, keyOf); err != nil {
 					return pairCutsResult{}, err
 				}
@@ -238,7 +245,8 @@ func pairCuts(ctx context.Context, ma, mb *BoolMesh, memo *ContactMemo, keyOf fu
 			if err != nil {
 				return pairCutsResult{}, err
 			}
-			if side == EdgeCoplanarBounded && ma.isExact(p.I) && mb.isExact(p.J) {
+			if side == EdgeCoplanarBounded && (ma.isExact(p.I) && mb.isExact(p.J) ||
+				rimEdge(mb, p.J, p.C.EdgeB) && slices.Contains(cp.coplanarA[p.I], adjacent)) {
 				if err := cp.acceptEdge(p, p.I, adjacent, keyOf); err != nil {
 					return pairCutsResult{}, err
 				}
@@ -318,7 +326,7 @@ func pairCuts(ctx context.Context, ma, mb *BoolMesh, memo *ContactMemo, keyOf fu
 			if len(every) < maxTouchContacts {
 				every = append(every, touchOf(ma, pointFacets[k][0], pointFacets[k][1]))
 			}
-			if ma.isExact(pointFacets[k][0]) && mb.isExact(pointFacets[k][1]) {
+			if seatPoint(ma, mb, pointFacets[k][0], pointFacets[k][1]) {
 				_, owned := cp.owned[key]
 				if pointCoplanar[k] || owned {
 					cp.owned[key] = struct{}{}
