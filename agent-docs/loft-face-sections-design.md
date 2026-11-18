@@ -445,8 +445,6 @@ radii and a certified sweep shorter than a half-turn. Exact control hulls
 and arc boxes must separate nonadjacent cells. Adjacent cells must meet at
 one exact endpoint and lie on opposite strict sides of one coordinate.
 One arc that alone passes an axis extremum determines the loop direction.
-A dated measurement of the real Sketch profile in the focused neutral case gave
-eight cells; no test pins it.
 This gate does not decide which tool-cap angles the source occupies.
 
 For a heel-tool circle on a vertical blank side, a positive-determinant
@@ -525,8 +523,7 @@ chord sagitta is at most `maxRadius/(2*n*n)`. Straight ideal meridians have
 zero twist. The face bound adds this sagitta and the largest exact radial
 and rounding displacement of any vertex. The constructor requires a closed,
 oriented, connected genus-zero mesh with positive exact volume and no exact
-facet crossings. A dated measurement of the neutral producer gave 494 vertices and 984 triangles;
-no test pins it.
+facet crossings.
 The shell is an internal construction piece; it does not admit `Union`.
 
 The cap-ring constructor derives the live face-pair census and splits that shell
@@ -535,14 +532,11 @@ the endpoint-binding check above does, requires its exact circle to lie strictly
 and orders multiple cuts by their exact meridian fractions. Both bands next
 to a cut reuse the same ring vertex indices. The complete shell then repeats
 the crossing, Euler, volume, and face-bound audits. A changed arc refuses.
-A dated measurement of the neutral producer gave two cap rings, 690 vertices and
-1376 triangles; no test pins it.
 The shell still does not admit `Union`.
 
 For each occupied heel arc, the endpoint builder checks its live source
 record the same way. It projects each source-box center onto the exact circle
 and bounds the full movement to every point in that box, including float rounding.
-The focused neutral test requires all four endpoint bounds below 0.1 mm.
 The builder inserts those four angular rays into every blank ring and uses
 the same bounded held point on each owning heel circle. Each cap source box
 must stay strictly between its neighboring rays, including another cap ray
@@ -550,7 +544,7 @@ or a seam ray with its source movement bound. A collision with a grid, seam,
 or cap ray refuses. The two occupied ring walks follow the source arc's
 positive-Y selection and retain live side-cell ties. Adding rays cannot
 increase the blank circle chord gap; endpoint movement enters the shell's
-face bound. The cap-ring constructor requires that bound below 0.1 mm and
+face bound. The cap-ring constructor
 repeats the exact crossing, Euler, and volume audits. LoftFaces wall and cap
 facets need separate source-curve, chord,
 and rounding bounds before they can be welded to these vertices.
