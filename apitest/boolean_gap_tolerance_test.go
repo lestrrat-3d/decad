@@ -328,7 +328,12 @@ func TestBooleanGapToleranceEdgeAndPointTouches(t *testing.T) {
 			a, b = tc.make(doc)
 			cut, err := decad.Cut(t.Context(), a, b)
 			require.NoError(t, err)
-			requireVolumeWithin(t, cut, tc.cut)
+			// A shared corner of exact boxes leaves the target untouched, so its
+			// Cut is classified exactly; the wedges still take the retry.
+			cutVolume, err := cut.Volume()
+			require.NoError(t, err)
+			require.LessOrEqual(t, math.Abs(volumeMM(t, cutVolume)-tc.cut), cutVolume.Bound.Base(),
+				"volume %v is farther from %v than its bound", volumeMM(t, cutVolume), tc.cut)
 
 			doc = decad.New()
 			a, b = tc.make(doc)
