@@ -694,7 +694,10 @@ func (b *ubBuild) interfaceFaces(ctx context.Context, k int) error {
 		}
 		sc.matter = matter
 	}
-	for i, p := range sc.profiles {
+	// exposed holds each cell's material side: +1 a floor (material below
+	// only), −1 a ceiling (above only), 0 neither.
+	exposed := make([]int, len(sc.profiles))
+	for i := range sc.profiles {
 		var sideMatter [2][2]bool
 		for op := range 2 {
 			for _, sd := range sides[op] {
@@ -717,9 +720,23 @@ func (b *ubBuild) interfaceFaces(ctx context.Context, k int) error {
 			below = sideMatter[0][0] && !sideMatter[1][0]
 			above = sideMatter[0][1] && !sideMatter[1][1]
 		}
-		if below == above {
+		switch {
+		case below && !above:
+			exposed[i] = 1
+		case above && !below:
+			exposed[i] = -1
+		}
+	}
+	if !b.cut {
+		if err := b.interfaceManifold(sc, sides, exposed); err != nil {
+			return err
+		}
+	}
+	for i, p := range sc.profiles {
+		if exposed[i] == 0 {
 			continue
 		}
+		below := exposed[i] > 0
 		region, err := prismcells.RecordArrangedProfileContext(ctx, p)
 		if fallBack, err := prismcells.AmplifiedFallback(sc.delta.Amplified, err); fallBack || err != nil {
 			if err != nil {
@@ -753,6 +770,169 @@ func (b *ubBuild) interfaceFaces(ctx context.Context, k int) error {
 		if err := b.geom.AddFace(loop, k, below); err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+// interfaceManifold refuses a union interface whose floors and ceilings meet
+// at a point where the body meets itself (general-boolean §3 "A1 as a brep").
+// One connected group of cells can touch itself so: a U-shaped bridge resting
+// on a tower by one arm while its other arm's corner meets the tower's top
+// corner, or rests there on the tower's edge from outside, or is tangent to a
+// boss's top circle. The cells' membership still resolves, the record pairs
+// every edge, and nothing else reads that point. A floor and a ceiling meet
+// only where a record reaching just the slab below and one reaching just the
+// slab above both pass; a record reaching both sides changes neither side's
+// material there unless its own boundary passes the point too. So:
+//
+//   - every point where a record of one side touches a record of the other, a
+//     record reaching both sides read against each, is a vertex the scene
+//     cut, so every cell round it walks it (prismcells.ContactsCut). A
+//     transverse crossing inside both records' entities is exempt: its four
+//     half-edges alternate round it, cut or not;
+//   - at a vertex a floor and a ceiling both walk, exactly one record
+//     reaching only the slab below and one reaching only the slab above have
+//     edges ending there, a shared span's edge counting for both its records,
+//     and none reaching both. Each record's boundary
+//     passes the point once, so the material below there is the one sector of
+//     the first record and the material above that of the second;
+//   - every floor and ceiling corner there turns from one of those records'
+//     edges to the other's, on no span two records share (opposedManifold).
+//     Two sectors whose four bounding edges alternate between the records are
+//     a transverse crossing, where the body is manifold. Any other order puts
+//     a floor or a ceiling between two edges of one record: the floor and
+//     ceiling of a corner touch, or two notches whose outsides meet.
+//
+// Every point and edge is sketch's own, matched by exact equality; the check
+// only refuses.
+func (b *ubBuild) interfaceManifold(sc *ubScene, sides [2][]ifaceSide, exposed []int) error {
+	const (
+		reachBoth = iota
+		reachBelow
+		reachAbove
+	)
+	reachOf := map[prismcells.RegionKey]int{}
+	for op := range 2 {
+		for _, sd := range sides[op] {
+			key, ok := sc.key(sd.ref)
+			if !ok {
+				return errUBMiss
+			}
+			switch {
+			case sd.below && sd.above:
+				reachOf[key] = reachBoth
+			case sd.below:
+				reachOf[key] = reachBelow
+			default:
+				reachOf[key] = reachAbove
+			}
+		}
+	}
+	reach := func(e sketch.Entity) (prismcells.RegionKey, int, bool) {
+		origin, ok := sc.tags[e]
+		if !ok {
+			return prismcells.RegionKey{}, 0, false
+		}
+		key := prismcells.RegionKey{IsB: origin.IsB, Region: origin.Region}
+		r, ok := reachOf[key]
+		return key, r, ok
+	}
+	coincident, ok, err := prismcells.CoincidentEdgesRegions(b.st.budget, sc.tags, sc.profiles)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return errUBMiss
+	}
+	for _, bothBelow := range []bool{true, false} {
+		tags := map[sketch.Entity]prismcells.Origin{}
+		for e := range sc.tags {
+			_, r, ok := reach(e)
+			if !ok {
+				return errUBMiss
+			}
+			tags[e] = prismcells.Origin{IsB: r == reachAbove || r == reachBoth && !bothBelow}
+		}
+		cut, err := prismcells.ContactsCut(b.st.budget, tags, sc.profiles, coincident)
+		if err != nil {
+			return err
+		}
+		if !cut {
+			return errUBMiss
+		}
+	}
+	type point struct {
+		floor, ceiling bool
+		records        map[prismcells.RegionKey]struct{}
+	}
+	points := map[[2]float64]*point{}
+	for i, cell := range sc.profiles {
+		for _, ring := range append([][]sketch.BoundaryEdge{cell.Outer}, cell.Holes...) {
+			for _, e := range ring {
+				if err := b.st.budget.Step(); err != nil {
+					return err
+				}
+				key, _, ok := reach(e.Entity)
+				if !ok || len(e.Polyline) == 0 {
+					return errUBMiss
+				}
+				keys := []prismcells.RegionKey{key}
+				if c, shared := coincident.Lookup(e.Entity, e.TStart, e.TEnd); shared {
+					// The span's partner record passes here too.
+					partner, _, ok := reach(c.Partner)
+					if !ok {
+						return errUBMiss
+					}
+					keys = append(keys, partner)
+				}
+				for _, at := range [][2]float64{e.Polyline[0], e.Polyline[len(e.Polyline)-1]} {
+					pt := points[at]
+					if pt == nil {
+						pt = &point{records: map[prismcells.RegionKey]struct{}{}}
+						points[at] = pt
+					}
+					pt.floor = pt.floor || exposed[i] > 0
+					pt.ceiling = pt.ceiling || exposed[i] < 0
+					for _, k := range keys {
+						pt.records[k] = struct{}{}
+					}
+				}
+			}
+		}
+	}
+	for _, pt := range points {
+		if !pt.floor || !pt.ceiling {
+			continue
+		}
+		var count [3]int
+		for key := range pt.records {
+			count[reachOf[key]]++
+		}
+		if count[reachBoth] != 0 || count[reachBelow] != 1 || count[reachAbove] != 1 {
+			return errUBMiss
+		}
+	}
+	turnTags := map[sketch.Entity]prismcells.Origin{}
+	for e := range sc.tags {
+		if _, r, _ := reach(e); r != reachBoth {
+			turnTags[e] = prismcells.Origin{IsB: r == reachAbove}
+		}
+	}
+	classes := make([]opposedClass, len(exposed))
+	for i, x := range exposed {
+		switch {
+		case x > 0:
+			classes[i] = opposedFloor
+		case x < 0:
+			classes[i] = opposedCeiling
+		}
+	}
+	manifold, err := opposedManifold(b.st.budget, turnTags, coincident, sc.profiles, classes)
+	if err != nil {
+		return err
+	}
+	if !manifold {
+		return errUBMiss
 	}
 	return nil
 }
