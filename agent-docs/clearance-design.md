@@ -829,7 +829,7 @@ two axial windows overlap with positive length. Each tangent azimuth must lie
 inside its cylinder's angular trim with margin, so a ruling on a trim edge
 stays undecided. The kernel keeps the two faces, the separating plane and the
 exact ruling ends for the contact manifold
-(`agent-docs/contact-geometry-design.md` §4.5). A ruling certificate reads only
+(`agent-docs/multibody-dynamics-design.md` Part G §4.5). A ruling certificate reads only
 carriers and exact payload extents, so its gate is each body's carrier
 displacement rather than the whole `bodyGeom.delta`: a full revolve's
 end-angle displacement places only seams and witnesses on its complete

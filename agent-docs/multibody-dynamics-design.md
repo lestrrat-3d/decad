@@ -8,11 +8,26 @@ every solid payload; the interface the `_gallery` module needs from `kinetograph
 phases, filmable exit scenes and PR order that deliver all of it.
 
 It owns the N-body ALGORITHMS and their certificates. The response law, step configuration and conservation
-readings stay with `agent-docs/rigid-dynamics-design.md`; the claims `ContactPair` and `SweepPair` make stay with
-`agent-docs/contact-geometry-design.md` and `agent-docs/contact-sweep-design.md`; the mass integrals stay with
-`agent-docs/dynamic-mass-design.md`; the system map stays with `agent-docs/collision-dynamics-design.md`. Where this
-document adds an outcome, a relation value, a reason or a field to one of those contracts, that document
+readings stay with Part R; the claims `ContactPair` and `SweepPair` make stay with
+Part G and Part S; the mass integrals stay with
+Part M; the system map stays with Part C. Where this
+document adds an outcome, a relation value, a reason or a field to one of those contracts, that part
 carries the addition and points here for the algorithm.
+
+## Parts
+
+This file holds 6 parts. A section number with no part prefix is a section of Part N.
+`Part X §N` is section N of part X. Short names such as `collision-dynamics §3` in comments and design docs
+mean the same part. The parts keep their own section numbers.
+
+| Part | Former document | Short name | Owns |
+|---|---|---|---|
+| Part N | the unprefixed sections of this file | `multibody-dynamics` | N-body world, pair schedule, islands, projected-solver certificates, `Timeline`, delivery order |
+| Part C | Collision and rigid dynamics system map | `collision-dynamics` | System map, package boundary, delivery order |
+| Part R | Rigid dynamics | `rigid-dynamics` | `dynamics` world, state, step, response and trace contracts |
+| Part M | Dynamic mass | `dynamic-mass` | Mass, center-of-mass and inertia readings |
+| Part G | Contact geometry | `contact-geometry` | Pair pose query, manifolds, source-box proofs |
+| Part S | Two-body contact sweep | `contact-sweep` | `Document.SweepPair`: first impact, departure, persistent contact |
 
 Current state: every PR of §13's delivery order has shipped, PRs 1 to 21 with 14a–14f and 20a–20g.
 `dynamics.World` holds any number of bodies, the canonical pair table and
@@ -89,7 +104,7 @@ pose at every sampled time is backed by a geometry certificate, filmed through `
 3. **The viewer bridge is a new kinetograph node kind** that takes a time-varying transform (§11).
    kinetograph's own implementation of that node is outside this document.
 4. **One general island solver.** The fixed-order projected iterative solve that
-   `agent-docs/rigid-dynamics-design.md` "Response" specifies replaces the closed-form responders. Every shipped
+   Part R "Response" specifies replaces the closed-form responders. Every shipped
    closed-form fixture becomes a regression fixture of the general solver and keeps producing the same
    certified numbers (§6.5).
 
@@ -97,12 +112,12 @@ Non-goals, each with the reason it is out:
 
 | Not in this program | Why |
 |---|---|
-| Joints, deformation, fracture | `agent-docs/collision-dynamics-design.md` §2 limits the first stage to rigid solids; nothing here needs more. |
+| Joints, deformation, fracture | Part C §2 limits the first stage to rigid solids; nothing here needs more. |
 | Sleeping or deactivation | A sleeping body publishes poses no certificate backs; a resting island costs one persistent track per pair and stays certified. |
-| A continuous-force integrator between events | The step's force law is the one semi-implicit kick `agent-docs/rigid-dynamics-design.md` "Step and event schedule" defines; the caller picks `dt`. A tumbling body therefore moves at constant `ω` between kicks, and §10.3's band track is what lets it rest. |
+| A continuous-force integrator between events | The step's force law is the one semi-implicit kick Part R "Step and event schedule" defines; the caller picks `dt`. A tumbling body therefore moves at constant `ω` between kicks, and §10.3's band track is what lets it rest. |
 | A manifold for every contact of two non-convex bodies | §9 proves a manifold when one body of the pair is convex, and §10.5's guest rule when every contact of two non-convex bodies lies on one face of one of them (§2's cup on the tray's floor). Any other touch or overlap of two non-convex bodies gets a relation and no manifold (`ContactNonConvex`); a non-convex FIXED or kinematic body against a convex dynamic one is fine, since only its faces enter. |
 | kinetograph interpolating between certified poses | §11: the viewer asks for a pose at a frame time and shows that pose; it never blends two. |
-| Uncertified mass from a render mesh | `agent-docs/dynamic-mass-design.md` §2.2: a `VerifyNone`/`VerifyBoundary` mesh never supplies inertia. |
+| Uncertified mass from a render mesh | Part M §2.2: a `VerifyNone`/`VerifyBoundary` mesh never supplies inertia. |
 
 ## 2. Phases and exit scenes
 
@@ -215,7 +230,7 @@ func (w *World) Bodies() []RigidBody   // copies, world order
 func (w *World) Pairs() []BodyPair     // every pair in canonical order, excluded ones included
 ```
 
-Pair material mixes per pair exactly as `agent-docs/rigid-dynamics-design.md` "World and State" states; the
+Pair material mixes per pair exactly as Part R "World and State" states; the
 `frictionCoefficient` interval lives on the pair, never on the world. An excluded pair is not mixed. A
 Fixed/Fixed pair enters no response, so a friction mean outside the finite nonzero range is refused only for a
 pair with a moving body. `NewWorld` returns `ErrUnsupported` for a positive-friction pair with a kinematic
@@ -349,7 +364,7 @@ candidates need a fresh sweep, decided by §5.3.
 
 ### 4.2 Swept boxes in decad
 
-The whole-path swept box of `agent-docs/contact-sweep-design.md` §4.2 becomes a public read-only query so one
+The whole-path swept box of Part S §4.2 becomes a public read-only query so one
 implementation owns the certificate and `dynamics` consumes it:
 
 ```go
@@ -392,7 +407,7 @@ exact ones, that body's exact `x` interval is then strictly apart from the next 
 later one. That is `StrictlyDisjoint`'s own certificate on the `x` axis, so the float walk discards no pair
 the exact test would keep; boxes that merely meet stay in the set and reach `StrictlyDisjoint`. The candidate list is
 sorted into canonical pair order before use, so no sort tie or walk order reaches a published result;
-`agent-docs/contact-sweep-design.md` §4.2 already permits a sweep-and-prune that discards only by the strict
+Part S §4.2 already permits a sweep-and-prune that discards only by the strict
 box certificate and changes no order. A pair the boxes exclude is recorded in the slice as
 `pairProof{boxClear: true}` and is never swept.
 
@@ -406,7 +421,7 @@ makes the step `Undecided` with `StepPairUndecided`.
 
 ## 5. Event schedule
 
-The step keeps the structure `agent-docs/rigid-dynamics-design.md` "Step and event schedule" specifies — one
+The step keeps the structure Part R "Step and event schedule" specifies — one
 full-step kick, then event-driven drift — and generalizes the body count. In order:
 
 1. Validate inputs, drivers and loads; reject before reading `ctx`. Kick every dynamic body once.
@@ -510,7 +525,7 @@ most `k·TimeResolution` after its closed-form time.
 | In the contact set, every solved normal speed `> VelocityResidual` at the last solve, and the event's post poses read exactly `Touching` | `ContinueSeparatingTouch` |
 | In the contact set otherwise: a resting solve, or any event whose post poses read a `ContactBand` within `PenetrationResidual`, whatever the solved speeds (§10.7) | `ContinueCertifiedTouch` |
 
-These are the three policies `agent-docs/contact-sweep-design.md` §5.1 defines; nothing here adds one. A pair
+These are the three policies Part S §5.1 defines; nothing here adds one. A pair
 gathered at a band end or from a track that enters no solve, because every point separates faster than
 `VelocityResidual` (§6.1), keeps `ContinueCertifiedTouch` when its rounded event poses read `Touching` or
 a `ContactBand` within the residual, and leaves the contact set when they read `Separated` (§10.7).
@@ -545,7 +560,7 @@ exclusions of its pairs are its certificate for the slice, and `Trace.Sample` ev
 
 ## 6. Islands and the certified projected solver
 
-`agent-docs/rigid-dynamics-design.md` "Response" owns the law: the relative velocity, the restitution target
+Part R "Response" owns the law: the relative velocity, the restitution target
 with `ImpactSpeed`, nonnegative normal impulses, complementarity, the Coulomb disk, the deterministic
 tangent basis, fixed processing order, no hidden tolerance, and residual gating at `MaxIterations`. This
 section owns how an island is formed, how the solve proposes impulses, and how every published number is
@@ -691,7 +706,7 @@ relative normal speed at every manifold point, reads its two participants and it
 
 Inputs read as intervals: each dynamic body's mass `[m_lo, m_hi]` and six inertia components, rotated into
 world axes with the pose basis read as exact rationals and widened by the basis's orthonormality defect
-(`agent-docs/dynamic-mass-design.md` §4); each manifold point's `OnA`, `OnB` and `Normal` with their balls; the
+(Part M §4); each manifold point's `OnA`, `OnB` and `Normal` with their balls; the
 pair's `frictionCoefficient` interval `[μ_lo, μ_hi]`; the published pre-solve velocities as exact rationals;
 and each kinematic participant's exact driver velocity, which the event does not change. The proposal's
 published outputs are the per-point impulses `(λn_k, λt_k)` and each body's post velocities `(v', ω')`,
@@ -1012,7 +1027,7 @@ builds the scene (§11.2), so no render worker ever overlaps an `Advance`.
 
 ## 8. Mass-property extensions
 
-`agent-docs/dynamic-mass-design.md` owns the integrals and admission gates; this section fixes which path each
+Part M owns the integrals and admission gates; this section fixes which path each
 payload's mass takes. Each item carries the computed test of dynamic-mass §6 for that shape.
 
 ### 8.1 Prism with a non-cardinal frame or placement basis
@@ -1121,7 +1136,7 @@ A dynamic body whose payload matches no item returns `ErrUnsupported` from `Body
 
 ## 9. Exact planar faceted contact
 
-This is `agent-docs/contact-geometry-design.md` §7's stage C3 made concrete for the solids whose held boundary
+This is Part G §7's stage C3 made concrete for the solids whose held boundary
 is exact: every vertex an exact dyadic rational at the query pose (the recorded coordinates times the
 placement and query transforms with exact products and sums, as `sourceOrientedBoxAtPose` does for a
 box) and every face planar with a source normal read exactly off its vertices. That is: a prism whose
@@ -2067,7 +2082,7 @@ Rejected alternatives:
   the prism and the wedge to the bracket change above.
 - A band track returned under `ContinueSeparatingTouch` when the departure's search fails. It moves a
   policy decision into the sweep, which would then publish a track under a policy whose contract
-  (`agent-docs/contact-sweep-design.md` §5.1) asks for a departure.
+  (Part S §5.1) asks for a departure.
 
 ### 10.8 Rest inside the band
 
@@ -2193,7 +2208,7 @@ Rejected alternatives:
   band and the rest alternates between the edges. `RestSpeed = VelocityResidual` tells the vertex the solve
   rested from the one that arrives.
 - Admitting a vertex below the plane into the support set, so a sweep could continue from an `Overlapping`
-  start. It changes the contract of both continuation policies (`agent-docs/contact-sweep-design.md` §5.1) for a
+  start. It changes the contract of both continuation policies (Part S §5.1) for a
   case two rules of the step cover at the poses the step publishes.
 - Transferring the overlapping manifold on the rotating source-box path at zero deviation instead of
   reading the rounded poses in `dynamics`. Sound, and it may land later; the step's rule covers every
@@ -3049,7 +3064,7 @@ PRs 14b, 14c and 14e touch disjoint files and may land in any order; PR 14d foll
   `WitnessTorque` (the island's largest `T_β`, `AngularMomentum` kind) and `WitnessSpin` (the largest
   `T_β / λ_lo(I_β)`, `AngularVelocity` kind), both rounded up. The mass-center ball, the normal ball and the
   velocity rows are unchanged. Rigid-dynamics "Response" names the term and the two fields and points here.
-- Files: `dynamics/island_certify.go`, `dynamics/step.go`, `agent-docs/rigid-dynamics-design.md`.
+- Files: `dynamics/island_certify.go`, `dynamics/step.go`, Part R.
 - Test (`dynamics`): `dynamics/contact_band_test.go` gains `TestDisplacedBottleRestsOnTray`: the §2 bottle
   dropped `8 mm` onto the §2 tray at §2's Phase 3 residuals, landing through a `ContactBand` initial contact
   on every vertex of its held base, bouncing at restitution `0.3`, bouncing again below `ImpactSpeed` and
@@ -3120,7 +3135,7 @@ scene's sweep; PRs 20c and 20d follow 20b; PR 20g follows 20c.
 Every PR's test asserts computed geometry and dynamics — impulses, velocities, poses, event times, gaps,
 tensor components — through the real producer and the real consumer, never an enum alone and never a
 hand-written manifold, event or pose (CLAUDE.md "Correctness must be observable";
-`agent-docs/contact-sweep-design.md` §8; `agent-docs/rigid-dynamics-design.md` "Verification"). Beyond that:
+Part S §8; Part R "Verification"). Beyond that:
 
 - **Every bound leg is shown to fail.** For each new certificate (travel bound, pose deviation, band
   depth, orthonormality defect, cone and slip gates, `E·R²` widening) the test file records that each
@@ -3152,3 +3167,3618 @@ hand-written manifold, event or pose (CLAUDE.md "Correctness must be observable"
   prefix and refusal as a known regression (§6.6).
 - **Scene tests** run in both modules (§11.3); the gallery test is the one that also renders a smoke
   frame.
+
+## Part C — Collision and rigid dynamics system map
+
+This part is the system map and delivery order for collision-aware rigid
+motion. Current code certifies source-box contact, source sphere-to-box face
+contact, affine two-body sweeps,
+persistent face contact and its first edge transition, and mass properties for
+source boxes, admitted untapered prisms, full source spheres, and full
+source cylinders revolved from axis-incident rectangles. It steps one
+frictionless pair with a fixed and dynamic body or two centered dynamic bodies.
+A three-body world with one, two, or three dynamic bodies steps one active pair
+when every other pair has a certified clear path. It also orders separated
+frictionless positive-restitution source-box face impacts, re-sweeps active pairs after each response,
+and replays the rounded path between events. A full circular source prism or a full
+revolve of a rectangular half-profile can advance along a strictly separated
+axial path above or below a source-box face and replay that clear path. The
+two cylinders can also contact a wide source-box face along their axes,
+bracket first impact, and rebound from that fixed face using supplied or
+density-derived mass. The sweep and step replay the clear path before and after
+impact. The revolved
+cylinder publishes an axial disk-face manifold at a contained source-box
+floor touch or shallow crossing.
+A vertical full circular source prism also proves its sidewall's axial line
+contact against a broad source-box wall. Its exact transverse support gap
+brackets a horizontal first impact and certifies separating departure. A
+density-backed, centered, frictionless cylinder rebounds from the fixed wall
+with positive restitution; the trace replays the rounded approach and rebound.
+A fixed source-box floor can hold two centered dynamic source boxes stacked
+vertically. With zero friction and restitution, one gravity kick is followed
+by a coupled two-contact response; all three pair paths receive continuous
+proofs, and the trace replays two repeated resting steps.
+A zero-bound faceted Boolean union with one certified rectangular lower face
+can sweep vertically toward a wide source-box floor, depart from initial
+touch, or retain a persistent face track. Its sweep can certify the first
+exact touch. With supplied or density-derived mass and centered
+frictionless motion, the rigid
+solver consumes that first-impact bracket, rebounds or rests on the floor, and
+replays the rounded path on either side of impact.
+The same zero-bound Boolean can retain its exact lower-face proof after
+translation-only `Transform` widens its held mesh. `ContactPair` recognizes that
+placed face at floor touch. Its exact-source sweep brackets first axial impact
+and certifies separating departure. A density-backed dynamic placed union
+with centered frictionless motion and positive restitution rebounds from a
+fixed floor; its trace replays the rounded approach and departure.
+A positive-bound mesh `Union` can also keep an exact source-box lower face
+when the other operand's certified lower extent lies strictly above it. Its
+density-backed dynamic body rebounds or rests on the fixed floor after the
+four-point contact and vertical first-impact sweep pass their proofs; the
+trace replays both sides of the event.
+Positive-bound faceted bodies without an exact lower-face certificate can
+certify only strict clear motion here.
+It also steps two orthogonal, frictionless
+initial face contacts and their repeated resting response after real manifolds
+and full-span tracks certify both pairs. A dynamic source sphere can touch
+a fixed floor and source sphere at the same initial instant when its two
+frictionless zero-restitution normal impulses pass one coupled response check;
+each pair then needs a certified persistent or separating remainder. A source
+sphere can also touch two orthogonal fixed source-box faces while
+closing along both normals and slipping along their shared Y tangent. Exact
+mass and inertia give two coupled sticking friction impulses, and both
+rotating sphere-box proofs replay the persistent contacts. Three equal
+dynamic source spheres can start with two exact orthogonal point contacts
+and a clear outer pair. A symmetric positive-friction sticking solve produces
+two coupled impulses; both active pairs certify rotating departure, and the
+outer pair certifies rotating clear motion. All three rounded pair
+certificates replay the returned state. A later all-clear step can continue
+all three spinning spheres when all three pair certificates replay. A
+source box can hit a fixed floor
+obliquely while retaining tangential velocity. A fixed floor and
+dynamic source box can complete an initial resting contact after a full-step
+gravity kick or a zero-restitution impact. A stationary touching pair also
+advances without an impulse. An initially touching box can slide tangentially
+across a fixed floor without an impulse while full-span ideal and rounded
+contact tracks certify the same face patch. Each touching interval requires a
+certified contact track. A dynamic body's mass can come from
+density or a caller-supplied bounded mass record. A full source sphere can use
+its density-derived mass and inertia in a real fixed-floor rebound. One
+world-frame center force and torque per dynamic body contribute to the step's
+full-duration velocity kick.
+Two co-oriented boxes at a 45-degree pose can resolve a centered frictionless
+initial impulse from their four-point manifold. Zero restitution requires
+full-span persistent tracks; positive restitution requires ideal and rounded
+one-sided departure proofs. Tilted off-center impacts remain `Undecided`.
+A horizontal source-box face rotated 45 degrees against an axis-aligned face
+can publish all eight vertices of their clipped touching patch. A centered
+zero-restitution fixed/dynamic impact stops after its persistent track proves
+the complete step; an off-center patch requiring spin remains `Undecided`.
+Two equal-mass source boxes with a half-width offset face patch can rebound
+as a frictionless dynamic pair with equal nonzero Y spin when the rotating
+sweep proves departure.
+A fixed source box and a dynamic half-offset source box can also rebound with
+Y spin when supplied mass places the dynamic center beyond the patch edge.
+Two edge vertices receive the impulse, and a rotating sweep proves the
+separating remainder.
+Separated source boxes can rotate through a certified clear drift and advance
+again from the returned spinning state. A Z-axis torque-driven box can also
+rebound from a wide fixed horizontal box face and continue spinning from the
+returned state when the real sweep certifies its impact and departure.
+The source-sphere face corridor carries a real sphere-to-box point manifold
+through an affine first-impact sweep and a centered fixed-floor rebound with
+supplied or density-derived sphere mass. Two source spheres also have a bounded
+center-line point manifold, an affine first-impact sweep including transverse
+motion, and a centered dynamic-pair response at cardinal or off-axis contact
+with a certified clear remainder. An interior off-axis impact can also advance
+at zero restitution when its corrected gap and both remainder sweeps certify
+separation. An exact isolated sphere-pair graze records
+one zero-impulse event and replays the separated path on both sides.
+An initially touching off-axis pair of dynamic source spheres rebounds under
+positive restitution or resolves zero restitution to persistent touch or
+tangential departure when its bounded point and full-span sweeps certify the
+response and trace.
+An initial cardinal X touch between two dynamic source spheres with exact
+centered supplied mass can resolve a positive-restitution one-point friction
+impulse. The response changes both linear velocities and both Z spins, then
+the rotating sphere-pair sweep certifies separation and trace replay. Zero
+friction retains the tangent velocities and zero spin on the same path.
+A zero-friction, zero-restitution pair uses the existing response.
+A separated pair can also resolve an interior positive-friction impact when its
+certified bracket contains an exact cardinal source-sphere touch at a dyadic
+time. Separate rounded prefix and rotating remainder sweeps certify replay.
+An off-axis XY source-sphere pair with exact centered isotropic supplied mass
+can also resolve an initial or exactly timed interior positive-friction impact.
+Its exact center offset and source radii determine the normal; the bounded
+contact and rounded witnesses must enclose that exact point and direction.
+The planar Coulomb response changes both linear velocities and Z spins.
+The rotating departure sweep certifies the remaining path and trace replay.
+An exactly orthogonal source box at a 45-degree Y pose also gives the sphere a
+bounded oblique point, an affine first-impact sweep, and a centered
+positive-restitution rebound with interior trace replay.
+Other curved contact families still lack source
+witnesses and continuous proofs.
+The first separated edge exit records a zero-impulse contact transition and
+advances through a certified clear remainder.
+An affine kinematic driver can push an initially touching dynamic source box
+through a certified persistent contact path, depart without an impulse, or
+produce a centered interior impact with a certified separating or
+persistent-contact remainder. A driver with a cardinal screw axis can produce
+a centered interior face impact and a certified separating remainder. The event
+records the driver's contact-point velocity and bounded work while its stored
+velocity stays zero. A fixed floor and dynamic source box in either world order
+with positive pair friction can slide repeatedly after a
+four-corner Coulomb response. Body coefficients combine by geometric mean;
+an explicit pair coefficient replaces them. The response checks rational
+bounds around a nonexact mean. `World.Step` requires full ideal and rounded
+persistent-contact tracks and reports normal and tangent impulses. A centered
+zero-slip box receives normal support with zero tangent impulse. `World.Step`
+also consumes an interior first-impact bracket for a centered translating
+source box above a fixed floor with zero restitution and positive friction.
+The corrected four-corner touch supplies a bounded normal and tangent response;
+ideal and rounded sweeps certify the remaining persistent contact.
+An initially touching source sphere with exact centered isotropic mass can
+receive a one-point Coulomb impulse from an identity-placed fixed box floor.
+The response publishes tangent impulse and Y spin, then a rotating sphere
+sweep certifies the full persistent point track and trace replay. A later
+step can apply the same response while the sphere is already spinning.
+Every advanced step reports bounded dynamic-body kinetic energy, linear momentum, and angular
+momentum at input, after the force kick, and at completion, plus gravity,
+center-force, torque, and fixed/kinematic contact impulses, plus bounded
+kinematic driver work.
+Before publishing an advanced step, isolated responses check each contact
+event's dynamic-body linear momentum against its impulse and reject an impact
+whose kinetic energy gain exceeds its driver work plus the computed numerical
+allowance. The coupled sphere islands and centered two-box stack check their
+simultaneous impulses together. Other frictional contacts, other rotating
+kinematic drivers, broader stacks, and payload paths remain design
+contracts. Each companion document owns its detail.
+
+| Design | Ownership |
+|---|---|
+| [Contact geometry](Part G) | `Document.ContactPair`, pair relation, and certified contact manifold. |
+| [Contact sweep](Part S) | `Document.SweepPair`, two-body paths, continuous proof, and first-contact bracket. |
+| [Dynamic mass](Part M) | `Body.MassProperties`, bounded center and inertia, and mass admission. |
+| [Rigid dynamics](Part R) | `dynamics.World`, state, stepping, response, and replay trace. |
+| [Multibody dynamics](Part N) | The N-body program: pair schedule and certified broad phase, islands and solver certification, `Timeline`, the extension order for mass, manifolds and sweeps, band tracks, the kinetograph bridge, and the phased PR order. |
+
+### 1. System boundary
+
+`decad` owns immutable solid geometry and the proof that a pair is separated,
+touching, or overlapping. It also owns a read-only sweep that finds the first
+certifiable contact interval for two moving bodies. The `dynamics` subpackage
+owns body roles, material parameters, loads, velocity changes, and the state
+produced by each step. It consumes `decad` pair reports and sweep certificates.
+The current `Document.VerifyMotion` remains a prescribed-motion verification
+API with no response calculation. A viewer such as `kinetograph` may replay a
+dynamics trace; it does not decide contact or change the solver result. The
+`_gallery` module replays a `dynamics.Timeline` through the kinetograph node
+kind Part N §11 specifies; the viewer shows the
+certified pose at each frame time and blends none.
+
+The detailed designs define the report fields, input gates, units, refusal
+reasons, and numerical algorithms. If this system map omits or conflicts with a
+detailed rule, the owning design controls that rule.
+
+### 2. Shared rules
+
+- Queries and steps do not mutate a `Document`, `Body`, or evaluator payload.
+  A step returns a new state and a trace; the caller decides whether to retain
+  them.
+- Geometry certifies its claims. A numerical response may use a certified
+  manifold, but an approximate impulse cannot establish that contact occurred.
+  An unresolved pair stops a step with an explicit result and interval.
+- Clear, touching, and overlapping are distinct relations. Touching alone
+  does not prove an incoming impact. A resting or sliding pair needs its own
+  certified continuation across time.
+- Every dynamic body has a positive mass and invertible inertia with proved
+  bounds. `units.Value` carries physical scalar kinds; `decad.QuantityVec`
+  carries vectors whose components share a kind.
+- Time resolution, pose evaluation limits, and response iteration limits are
+  explicit. Running out of proof or work budget never silently means clear.
+- Physics admits proper rigid transforms. The first stage handles rigid
+  solids; joints, deformation, and fracture are outside this design.
+
+### 3. Required dependencies
+
+The pinned `units` dependency provides Time, Velocity, Acceleration, AngularVelocity,
+Force, Torque, Impulse, and AngularMomentum for the public sweep and step APIs. The pinned `r3`
+dependency provides a symmetric tensor with rotation and inversion support;
+inertia-based angular response still needs its dynamics integration. The dynamics API is a subpackage of
+this module, so it does not need a separate module or a geometry dependency
+pointing back to it.
+
+### 4. First real integration slice
+
+Implement source-box contact and a two-body sweep, then pass their real
+reports into one dynamics step. The first fixture uses a fixed box with its
+top at `z=0` and a dynamic `10×10×10 mm` box starting at `z=[10,20] mm`.
+The dynamic box moves down at `100 mm/s`; restitution is `0.5`, gravity is
+zero, and the step lasts `0.2 s`. Contact occurs at `0.1 s`. The box leaves
+at `50 mm/s` upward and finishes with its bottom at `z=5 mm`. A fixture that
+constructs a manifold by hand cannot validate the geometry-to-solver boundary.
+
+The source-box proof must cover posed face contact, the immediate departure
+after rebound, and persistent planar contact for later resting and sliding
+fixtures. It must report when a feature transition ends its proof. The
+dynamic path uses linear center-of-mass travel and angular drift; endpoint
+screw interpolation is reserved for prescribed kinematic motion.
+
+### 5. Delivery order
+
+1. Use the pinned physical units and add the tensor operations needed for
+   angular response, plus their focused tests.
+2. Complete exact source-box contact and sweep, then run the real rebound
+   fixture through `dynamics.Step` before expanding shape coverage.
+3. Add independent movers, kinematic paths, friction, resting contact, and
+   contact transitions. Keep every state transition behind a sweep or contact
+   certificate.
+4. Extend mass and contact proofs to supported curved and mesh payloads,
+   using each evaluator's existing bounds and refusal rules.
+5. Improve candidate filtering and work limits without changing certified
+   outcomes. Add replay checks against the same returned trace consumed by a
+   viewer.
+6. Generalize from pairs to N bodies in three phases — source primitives, exact
+   planar solids under rotation, every remaining payload — each ending in one
+   filmable scene. Part N §2 owns the phases and
+   §13 the PR order; stages 4 and 5 above land inside those PRs.
+
+Each stage has focused local tests for the contracts it changes. The first
+end-to-end run must use the real producer and consumer before adding a wider
+test matrix or more payload kinds.
+
+## Part R — Rigid dynamics
+
+This part owns the `dynamics` subpackage's world, state, step, response,
+and trace contracts. Part C owns the package
+boundary; Part G and Part S own
+geometry results. Part N owns the N-body world,
+pair schedule, island formation, the certification of the projected solver
+this part's "Response" section specifies, the multi-event trace and
+`Timeline`. Every world steps through Part N's §5 and §6; the slices
+below are fixtures that step reproduces, not separate code paths. A two-body world steps one pair with at least one dynamic
+body using density-derived or supplied mass. An axis-aligned
+certified contact normal determines the response component; tangent velocity
+continues through an oblique impact. Centered impacts of two dynamic bodies
+apply equal and opposite impulses. An affine source-sphere pair with one
+exact interior tangent advances with unchanged velocity, one zero-impulse
+contact event, and full-span trace replay.
+An initial frictionless, half-width offset face impact between two dynamic
+source boxes can produce equal Y spin. Four equal normal point impulses pass
+the bounded velocity, angular, energy, and momentum checks before a rotating
+departure sweep supplies both endpoint poses.
+A fixed box and a dynamic source box at matching 45-degree Y poses can resolve
+an initial centered frictionless face impact. The solver checks the bounded
+normal and four point impulses against its momentum and angular residuals.
+Zero restitution stops the box and requires ideal and rounded persistent-contact
+tracks. Positive restitution reverses and scales its normal velocity; both
+paths must certify one-sided departure and a separated endpoint. A second step
+from that endpoint must certify a clear path. Tangential incoming motion and
+off-center contact return `Undecided` in this tilted-pose path.
+At a horizontal partly overhanging source-box face, a centered frictionless
+fixed/dynamic pair with zero restitution can stop against the exact clipped
+polygon. The response checks omitted spin and requires an ideal and rounded
+persistent-contact track. An off-center patch requiring spin returns
+`Undecided`.
+`Trace.Sample` also returns interior states on a persistent-contact path. The
+rounded source-box poses must stay within the cached oblique sweep's point
+resolution and keep its bounded face track; otherwise replay returns
+`ErrUnsupported`. Interior departure replay is not yet certified.
+A source semicircle sphere with supplied or density-derived mass can rebound
+from a fixed source box on an isolated face-point contact when its affine sweep
+stays within that face corridor.
+A centered sphere can also hit a fixed source box rotated 45 degrees about Y.
+Its one-point manifold, exact affine first-impact bracket, mass and inertia
+bounds, and frictionless positive-restitution response must all pass. The
+solver bounds incoming normal speed on both sides of `ImpactSpeed` before
+choosing restitution. An interval crossing that threshold returns
+`Undecided`. The source-sphere response also bounds omitted angular speed,
+contact-point speed, rotational energy, and full-step displacement. Its
+angular-energy allowance is the dynamic mass upper bound times half the
+squared `VelocityResidual`; full-step displacement must fit
+`PointResolution`, `ContactSlop`, and `PenetrationResidual`. A supplied mass
+center 2 mm off the source center with inertia 5e8 kg·mm² is refused because
+its omitted point speed exceeds `VelocityResidual`, even though the omitted
+angular speed fits `AngularVelocityResidual`. With zero friction, the impulse
+changes only the bounded contact-normal component of velocity. The incoming
+tangent component continues through the impact. The response bounds normal
+restitution error, tangent change from normal uncertainty, mass-interval
+momentum error, and omitted spin against the configured residuals. It records
+zero tangent impulse and corrects the shallow overlap to a bounded positive
+gap. Ideal and rounded clear sweeps must certify the full rebound remainder.
+`Trace.Sample` replays both sides from those cached rounded sweeps. Zero
+restitution, edge/corner approach, skew read rotation, incoming spin, and
+an unproved tangent corridor return `Undecided` in this path.
+A full circular source prism or a full rectangular-profile source revolve can
+rebound from a fixed source-box face with supplied or density-derived mass when
+its affine sweep proves the first axial face impact and separating remainder.
+The zero-spin response bounds omitted angular speed,
+point speed over the complete source body, rotational energy, and travel over
+the full step. A supplied center 5 mm off the source axis with inertia
+1e8 kg·mm² fails the point-motion bound even when its angular speed meets
+`AngularVelocityResidual`.
+A vertical full circular source prism can also strike the side of a broad
+fixed source box along its cylindrical wall. The line-contact proof supplies
+one centered witness and an exact horizontal normal. A frictionless positive
+restitution response uses density-derived mass, bounds omitted whole-body
+spin travel, and requires ideal and rounded separating sweeps before its
+trace replays the approach and rebound. A line reaching the box-face edge or
+relative axial translation returns `Undecided` on this path.
+A verified faceted Boolean union with one complete rectangular lower support
+face can hit a fixed source-box floor vertically with supplied mass and zero
+spin. Its four-point source-face manifold and exact affine first-impact
+bracket enter the same centered frictionless response. Positive restitution
+requires ideal and rounded separating sweeps; zero restitution requires ideal
+and rounded persistent-contact tracks. The trace replays both impact sides
+from those certificates. A mass-center bound that permits an omitted spin
+above `AngularVelocityResidual` stops the step.
+At zero restitution against one fixed body, the dynamic body's published
+normal velocity equals the fixed body's exactly after the bounded response
+check, so floating-point cancellation cannot turn rest into departure.
+A translation-only placed copy of that zero-bound union may carry positive
+held-mesh and occupied-volume bounds while preserving the exact lower face.
+With density-derived bounded mass and center readings, zero spin, zero friction,
+and positive restitution, the same fixed-floor response consumes its exact
+axial impact bracket. Ideal and rounded departure sweeps certify the rebound;
+the trace replays the approach, touch, and separating remainder. A placed
+Boolean without the exact source-face proof returns `Undecided` at impact.
+A mesh `Union` with positive boundary and occupied-volume bounds can also
+rebound or rest on the fixed floor when its exact source-box lower face survives
+an operand certified strictly above that face. Its four-point live faceted
+manifold and vertical sweep enter the same response with density-derived mass.
+The configured impulse and angular residuals must contain the mass and center
+bounds; otherwise the step returns `Undecided`.
+Two source semicircle spheres with supplied or density-derived mass can
+rebound as a centered dynamic pair when the impact has a cardinal manifold.
+Their approach may
+include transverse motion when the sweep certifies first impact.
+At an initial cardinal touch with zero restitution, publish one shared
+mass-weighted normal velocity only when the bounded pair impulse and both
+response intervals admit it. The ideal and rounded persistent-contact sweeps
+must still certify the full step.
+An isolated frictionless off-axis sphere-pair impact also admits a bounded
+center-line normal with density-derived or supplied bounded mass and center
+readings when neither body starts with spin. The solver checks both mass
+interval endpoints against the impulse law and bounds torque from the contact
+witness, center, and normal intervals against `AngularVelocityResidual`.
+The center restitution error plus both omitted contact-point speeds must fit
+one `VelocityResidual` budget. Both omitted rotational energies share the
+impulse-times-remaining-residual allowance, and their full-step point travel
+shares one `PointResolution` budget.
+The impulse changes both velocity vectors along that normal. A small
+separated position correction within the certified
+bracket and contact slop is allowed when a full clear remainder sweep proves
+the pair cannot meet again. Unresolved tangency or a noncentral mass stops the
+step when its angular response exceeds that residual.
+At zero restitution, an interior first-impact bracket may leave zero
+normal departure speed. The response admits that speed within
+`VelocityResidual`, including one exactly shared velocity when the bounded
+impulse, momentum, and energy checks admit it. The bounded correction must
+produce a separated pair, and both ideal and rounded remainder sweeps must
+certify `SweepClear`. The trace replays the rounded impact prefix and clear
+remainder; a failed correction or sweep returns `Undecided` without a state.
+When two dynamic source spheres start at one certified off-axis point touch,
+have zero spin and friction, and have bounded closing normal speed, the
+bounded two-body impulse admits positive or zero restitution. The event has
+time zero and a zero-width bracket at the initial `SweepInstant`. No position
+correction is made. A positive-restitution response needs ideal and rounded
+`SweepDepartedClear` paths and a separated endpoint. At zero restitution,
+the response may certify the same departure through tangential relative
+motion or a full-span `SweepPersistentTouch` with a touching endpoint. A
+resting response may set both post velocities to one exactly equal value only
+when their bounded impulse, momentum, energy, and contact-point residuals
+admit that value. Both paths use the real ideal drift and rounded endpoint
+sweep. A missing initial float witness, a failed response bound, or an
+unproved continuation returns `Undecided` with no event or `Next`.
+An initial cardinal X point touch between two dynamic source spheres can
+also receive a positive-restitution one-point impulse with zero or positive
+friction.
+Both source centers, exact supplied mass centers, and query translations
+must coincide; both exact inertia tensors must be positive and isotropic.
+The pair starts without spin or Z velocity, and the effective friction
+coefficient must have equal exact bounds. The rational response first solves
+the normal restitution impulse, then applies the smaller of the tangent
+sticking impulse and the Coulomb limit. It rounds and checks both linear
+velocities, both Z spins, restitution, tangent slip or sliding direction,
+the friction cone, and each point impulse against configured residuals.
+Zero friction leaves the tangent velocities and spin unchanged. A zero-friction,
+zero-restitution pair uses the existing response. The event records equal
+and opposite linear impulses and both spin responses. The
+rotating `SweepDepartedClear` report must prove ideal and rounded separation
+at its endpoint and certify trace replay.
+A planar off-axis source-sphere pair can use the same positive-restitution
+Coulomb law when its exact center offset has nonzero X and Y components, Z is
+zero, and its squared length equals the squared sum of its source radii.
+The exact offset divided by that radius sum selects the normal; the bounded
+ideal and rounded witnesses must enclose the exact point and normal. Both
+source sphere centers and supplied mass centers coincide, both exact inertia
+tensors are isotropic, and both incoming spins and Z velocities are zero.
+The tangent is the in-plane perpendicular to the normal. Solve rational normal
+and tangent impulses, update both linear velocities and Z spins, then check
+restitution, Coulomb cone, stick or slide, and rounding residuals before
+publishing the rotating separating sweep, event, and trace.
+A separated source-sphere pair can enter either response at an interior impact
+when its real `SweepImpactBracket` contains a dyadic fraction with at most 53
+fractional bits.
+The solver selects the coarsest such interior fraction. A rounded prefix sweep
+must end at the same source faces within `PenetrationResidual`, and a real
+`ContactPair` and second `SweepPair` must prove the exact touching point there.
+Both bodies must have exact centered isotropic supplied mass,
+zero initial spin, positive restitution, and an exact effective friction
+coefficient. The contact response uses the remaining duration and its rotating
+departure sweep. The event retains the original bracket and exact touch time;
+the trace replays the prefix and remainder from separate cached proofs. A
+candidate without exact touch returns `Undecided` without an event or state.
+An initially touching off-axis pair with exactly shared linear velocity and
+zero spin keeps a full-span certified persistent track without an impulse,
+including when effective friction is positive. Other positive-friction
+sphere-pair inputs outside these paths return `Undecided`.
+A two-body world's pair may be excluded; its bodies drift independently even
+through overlap, and no pair material is mixed.
+Three-body fixtures cover one dynamic body and two fixed bodies, two dynamic
+bodies and one fixed body, and three dynamic bodies: sequential impacts, a
+centered stack, an isolated zero-restitution sphere impact and simultaneous
+sphere islands, each resolved by the general step. An excluded pair is not
+queried and does not mix material.
+This first two-dynamic path returns `Undecided` for other initial contacts and
+nonzero angular velocity.
+Three dynamic source spheres also resolve one symmetric simultaneous
+positive-friction island at the initial time. Body zero touches body one on
+its positive X side and body two on its positive Y side; the outer pair has
+a certified clear full-step path. All three use equal exact centered isotropic
+supplied masses and equal source radii. They start without spin or Z motion.
+After the full-step force kick, the outer spheres are still, and body zero
+has equal positive X and Y speeds. Both exact one-point manifolds have zero
+normal and witness bounds. The effective materials have equal exact positive
+friction, equal restitution strictly between zero and one, and a sticking
+solution inside both Coulomb cones.
+For mass `m`, inertia `I`, radius `r`, closing speed `v`, and restitution
+`e`, the two equal normal impulses `N` and tangent impulses `T` satisfy
+`2N+T=m(1+e)v` and `N+(2+mr²/I)T=mv`. The step checks rounded per-body
+linear and angular impulse equations, both restitution speeds, both zero-slip
+point speeds, and whole-island kinetic energy. It records two ordered events
+for the simultaneous solve; `MaxEvents` must exceed two. The two active
+rotating sphere-pair sweeps must certify departure, and the rotating outer
+pair sweep must certify clear motion. Their replay certificates must agree
+exactly on each shared body pose. The trace uses those three certificates.
+On a later step, three exact centered source spheres with admitted supplied
+mass can continue spinning without another contact when all three real pair
+sweeps certify clear motion and their replay endpoints agree on every body.
+The clear step records no event and keeps each kicked linear and angular
+velocity while the three rounded certificates replay the complete drift.
+Asymmetric speeds, unequal masses or radii, sliding impulses, and unproved
+pair paths return `Undecided` without a next state.
+Two dynamic source boxes can start in a centered vertical stack on a fixed
+source-box floor. Both face pairs must start at certified four-point contact,
+and the floor-to-upper pair must be clear. After the single full-step force
+kick, both boxes must move strictly downward without lateral velocity or spin.
+Both contact pairs have zero effective friction and restitution. The
+floor-to-lower and lower-to-upper normals must point upward in physical stack
+order.
+Let `mL`, `mU` be the two mass readings and `vL`, `vU` their kicked vertical
+velocities. The simultaneous normal impulses are `JU = −mU vU` from lower to
+upper and `JF = −mL vL + JU` from floor to lower. The published zero final
+velocities and both impulses must pass the mass-interval and impulse residual
+checks. Four equal point impulses per face must pass the bounded angular
+residual and whole-step omitted-spin travel checks. Two initial-time events
+share one coupled response; their intermediate velocity records account for
+each impulse, while the energy check applies to the full coupled result.
+With time remaining, `MaxEvents` must exceed two. Both ideal and rounded
+face paths must report full-span persistent contact with bounded manifolds;
+the floor-to-upper path must remain clear. Endpoint `ContactPair` calls must
+confirm both touches and the gap. `Trace.Sample` replays all three rounded
+pair sweeps. A second gravity step repeats the same response from the resting
+state. Other source-box stacks, lateral motion, spin, positive friction or
+restitution remain unsupported.
+With one dynamic body, it sweeps each non-excluded dynamic/fixed pair. One active pair advances only
+when every other pair has a certified clear path through the response. Two
+strictly ordered, frictionless positive-restitution source-box face impacts can advance within one
+step. The full-duration force kick occurs once. Each impact restarts both pair
+sweeps, and every drift slice stores both rounded pair certificates for replay.
+An overlapping later impact bracket remains `Undecided`. Two
+simultaneous initial face contacts also advance when their certified normals
+lie on distinct coordinate axes, both effective pair friction coefficients
+are zero, and the fixed/fixed pair is separated or excluded. It applies each
+zero-restitution normal impulse to the shared dynamic body, bounds their
+combined omitted spin and whole-step point travel, and certifies both ideal
+and rounded persistent tracks through the endpoint. Resting constraints may
+receive zero impulse. Each impulse produces an ordered event; the step reports
+their summed contact impulse and the dynamic body's conservation readings.
+An initial source sphere touching a fixed source-box face and a fixed source
+sphere also advances when the face normal is cardinal, the sphere-pair normal
+is oblique, and both pairs have one bounded point. Both effective pair
+coefficients are zero. The two-normal solve checks all four active sets; a
+positive impulse requires zero post-contact normal speed within the velocity
+and normal bounds, while a zero impulse requires nonclosing speed. The shared
+mass interval, both normal bounds, and both omitted-spin bounds must fit the
+response residuals. Both torque bounds act on one body: add their angular
+speed bounds before squaring against its common inertia ceiling. Each active
+pair needs ideal and rounded full-span
+persistent-contact tracks. A separating pair needs ideal and rounded
+one-sided departure, and each endpoint must retain its certified relation.
+The trace checks both rounded pair certificates at every interior sample and
+retains the after-kick velocity when no contact impulse occurs.
+The two ordered events describe arithmetic stages of one simultaneous solve.
+The combined momentum and kinetic-energy checks cover both impulses together;
+an intermediate stage can gain energy while the completed island loses it.
+An initial source sphere touching two fixed, orthogonal source-box faces can also
+resolve two positive-friction point impulses together. Both fixed poses are
+identity, the sphere has exact centered isotropic mass, and the two exact
+normals point along positive X and Z toward its center. It starts without spin,
+closes along both normals, and slips along Y. Both pairs have zero restitution
+and exact positive friction. The joint sticking solution uses the same linear
+mass and spherical inertia for both contacts. Each normal impulse stops its
+closing component, while both Y impulses share the Y speed and create X and Z
+spin. It accepts the solution only when each impulse fits its Coulomb disk,
+both rounded contact-point speeds fit `VelocityResidual`, and the combined
+linear, angular, and energy readings fit their configured residuals. Each
+rotating sweep certifies its ideal persistent track and rounded pose replay.
+Both certificates must yield the same exact endpoint sphere pose, which the
+step publishes. The trace replays both rounded paths. A sliding joint
+solution, later simultaneous impacts, and other coupled normals return
+`Undecided`. An excluded pair may overlap or cross without a contact
+event or material mixing.
+At an initial face touch, a fixed floor and dynamic source box can receive a
+full-step kick from gravity and any center force, then a zero-restitution
+support impulse. A zero-restitution impact can continue as certified
+persistent contact, and a stationary touching pair can advance without an
+impulse. These paths require full-span ideal and rounded contact
+tracks. Each dynamic body accepts at most one center force and world-frame
+torque; mass and inertia intervals must fit the kicked velocities within their
+respective velocity residuals.
+An initially touching pair with exactly zero relative normal speed can slide
+without an impulse when both full-span paths certify persistent contact. The
+first edge-exit step accepts a transition whose right bracket sample is
+separated, then certifies a clear remainder. A transition with a touching
+right sample or insufficient `MaxEvents` remains `Undecided`.
+An affine translating kinematic driver can move through a certified clear
+step, push an initially touching dynamic box with a zero-restitution response,
+depart from an initially touching box without an impulse, or cause a centered
+interior impact. Departure requires ideal and rounded full-path certificates;
+a zero-restitution response requires certified persistent touch.
+An axis-screw rotating driver can cross a centered source-box face and
+rebound the dynamic box when its oriented contact witness and separating
+remainder certify the step. Its event records the contact-point derivative,
+while the prescribed body's stored velocity stays zero.
+The driver's stored velocity remains zero while its derivative enters the
+response. `World.Step` admits a positive effective pair friction coefficient
+for a fixed floor and a dynamic source box in either world order. An initial
+four-corner face touch
+with zero incoming spin, positive X slip, and closing Z speed can use the joint
+Coulomb solver. The response publishes zero Y/Z velocity, bounded corner and
+aggregate impulses, a residual report, and a persistent-touch trace after
+both ideal and rounded sweeps certify the full remainder. Zero X slip uses
+the centered normal support path with zero tangent impulse.
+The floor stays at identity placement. The box can start from any pure
+translation whose real four-corner track passes the same bounds, including
+the endpoint of a previous step. Its mass center is translated with exact
+rational coordinate sums for the lever and torque certificates.
+A centered source sphere can instead receive one point impulse on an
+identity-placed fixed box floor when the source sphere center is its query
+origin, mass and isotropic inertia have exact zero bounds, restitution is zero,
+and the positive pair friction coefficient has exact equal bounds. The
+initial contact may have incoming Y spin. A full-step gravity kick must give
+negative Z speed, with Y linear speed and X/Z spin zero. The normal impulse
+stops Z motion. The tangent impulse opposes X contact-point slip and is the
+smaller of the exact sticking impulse and the Coulomb limit. Check its rounded
+linear and angular results against their configured residuals and the cone.
+Publish the Y spin and one point impulse in world order. A rotating source
+sphere sweep must prove the full persistent contact track and replayable
+endpoint before the step advances. A later step can reuse the returned spin.
+The same point response admits an interior first-impact bracket for a
+translated, nonspinning source sphere with X velocity, negative Z velocity,
+and zero Y velocity. The sweep and a separate rounded prefix must identify
+the same sphere and floor features. Correct the bracket-right pose only within
+the certified normal travel and `ContactSlop`, then query `ContactPair` for a
+touching point with those features. The exact mass, isotropic inertia,
+restitution, friction, and point gates above still apply. The one-point
+normal and Coulomb impulses stop Z velocity and change X velocity and Y spin.
+The rotating sphere sweep must certify persistent contact and its replayable
+endpoint for the remaining time. `Trace.Sample` uses the rounded prefix before
+the event and that rotating certificate afterward. A bracket that cannot be
+corrected to touch, a changed contact feature, insufficient event budget, or
+a failed remainder returns `Undecided` without a next state.
+An interior first-impact bracket admits the same centered fixed-floor box with
+zero restitution, positive X and negative Z velocity, zero initial spin, and
+zero Y velocity. Correct the bracket's touching pose within the certified
+penetration allowance, then use its real four-corner manifold. A symmetric
+pressure distribution gives positive point normal impulses and tangential
+impulses within each Coulomb cone. It shifts the normal pressure toward the
+direction of motion so the friction torque and normal torque cancel. The
+rational mass, point, impulse, and torque certificate must bound zero outgoing
+spin and the outgoing X velocity; the response can stick or keep positive X
+slip. Both ideal and rounded full-span persistent tracks must certify the
+remainder, and the event's rounded prefix must certify interior trace replay.
+Positive restitution, a nonrectangular or off-center patch, insufficient
+event budget, or a failed response or path bound returns `Undecided`.
+An initial horizontal fixed/dynamic source-box patch can resolve a frictionless
+off-center impact when supplied mass puts the dynamic center beyond one patch
+edge. Two symmetric vertices on that edge receive the normal impulse; the
+other vertices must separate at or above the restitution target. The bounded
+linear and angular response, event conservation, rotating departure sweep,
+and interior trace replay must pass. A centered mass at the patch edge, a
+mass or inertia interval exceeding the configured residual, and a remainder
+without certified departure return `Undecided`.
+An initial two-dynamic face impact can publish bounded spin when its rotational
+departure sweep certifies the full remainder. The step reports bounded
+kinetic energy, linear momentum, and angular momentum for dynamic bodies
+at input, after the full-step force kick, and at completion. It also reports
+gravity, center-force, and fixed/kinematic contact impulses separately, plus
+the drift-only energy, linear momentum, and angular momentum changes.
+Torque-driven rotation advances when `SweepPair` certifies a clear full-span
+drift and its rounded endpoint. Its trace replays clear interior poses against
+the cached rotating source-box proof. A source box spinning about world Z can also
+rebound from a wide fixed horizontal source-box face with positive
+restitution and zero friction. Its normal impulse leaves the admitted spin
+unchanged within `AngularVelocityResidual`; the returned pose uses the
+certified rotating departure sweep. A rotating contact that lacks these
+proofs returns `Undecided`. Other rotating kinematic drivers, broader
+frictional stepping, stacks, broader contact-transition stepping, broader
+spin response, and interior trace sampling across contacts remain design
+contracts.
+
+Navigation only; the named sections own the rules:
+
+| Question | Section |
+|---|---|
+| Which bodies and state values can enter a world? | World and State |
+| Which loads, drivers, and limits does a step take? | Step input and configuration |
+| How does time advance to the next event? | Step and event schedule |
+| How are impact, friction, and resting contact solved? | Response |
+| What does failure return, and how is motion replayed? | Completion, conservation, and trace |
+| Which computed fixtures gate implementation? | Verification |
+
+### World and State
+
+`World` copies one document's ordered rigid-body definitions, pair exclusions,
+material overrides, and `StepConfig`. It stores no changing pose or velocity.
+Construction rejects a nil/duplicate/foreign/retired/non-solid body. It checks
+each body's liveness again at every step. A fixed or kinematic body needs no
+mass properties; a dynamic body needs one of these complete sources:
+
+- A positive exact density → call `Body.MassProperties(ctx, density)` once and
+  cache its bounded mass, center, and six inertia components.
+- A supplied `decad.MassProperties` → use the same bounded shapes. Its center
+  and tensor refer to the body's committed world placement, with the tensor
+  about that center in committed world axes. Reject a partial supplied record.
+
+The density and supplied modes are exclusive. World construction copies the
+selected input, including a supplied record, so later caller edits do not
+change a world. It rejects an unknown exactness value and an `Exact` reading
+with a nonzero bound. World construction requires
+mass's lower bound to be positive and a certified positive lower eigenvalue of
+the complete inertia interval tensor. A nominal positive determinant is
+insufficient. Each of the six components enters as the exact rational
+interval `value ± bound`. Either of two sound proofs certifies the tensor:
+row dominance, whose floor is the smallest diagonal lower end less that row's
+largest product magnitudes; or Sylvester's criterion, where each leading
+principal minor evaluated in rational interval arithmetic has a strictly
+positive lower end and the floor is `4·det_lo/trace_hi²`, since
+`λ_min = det/(λ_mid·λ_max)` and `λ_mid·λ_max ≤ (trace/2)²`. The larger floor
+is the certified eigenvalue. The minors admit an elongated body at an oblique
+placement, whose products of inertia defeat row dominance. Reject
+inconsistent bounds, a tensor neither proof establishes, or a floor whose
+reciprocal is not a finite `float64` as `ErrInvalidMassProperties`. The mass design owns the
+integrals and their bounds; `r3` owns symmetric-tensor rotation and inversion.
+At a state pose, transform the certified center and tensor from the committed
+placement into world coordinates. Recompute world inverse inertia after every
+change of orientation.
+
+```go
+type BodyRole int // Fixed, Kinematic, Dynamic
+
+type QuantityVec = decad.QuantityVec
+// Each use validates all components against its required Kind and finiteness.
+
+type Material struct {
+    Restitution units.Value // Dimensionless, [0, 1]
+    Friction    units.Value // Dimensionless, >= 0
+}
+
+type RigidBody struct {
+    Body       *decad.Body
+    Role       BodyRole
+    Material   Material
+    Density    *units.Value         // exactly one mass source for Dynamic
+    Supplied   *decad.MassProperties
+}
+
+type BodyPair struct { A, B *decad.Body }
+type PairMaterial struct { Pair BodyPair; Restitution, Friction units.Value }
+
+type WorldConfig struct {
+    Bodies    []RigidBody
+    Excluded  []BodyPair
+    Overrides []PairMaterial
+    Step      StepConfig
+}
+
+func NewWorld(ctx context.Context, doc *decad.Document, cfg WorldConfig) (*World, error)
+func (w *World) NewState(entries []BodyState) (State, error)
+
+type BodyState struct {
+    Body            *decad.Body
+    Pose            r3.Transform // composes onto committed placement
+    LinearVelocity  QuantityVec  // world Velocity
+    AngularVelocity QuantityVec  // world Angle / Time
+}
+```
+
+`NewState` requires exactly one entry for each world body, in any caller order;
+it stores them in world insertion order and binds the state to that world.
+`State` provides read-only, copy-returning accessors. `Step` rejects a state
+from another world. Every pose must be valid and orientation-preserving:
+`r3.Transform.IsValid()` true and `IsReflection()` false. `NewState` rejects
+fixed and kinematic entries with nonzero velocity. A fixed pose is constant;
+a kinematic pose comes from its step driver, and its stored velocity stays
+zero. A dynamic pose and both velocity vectors must be finite. World order
+fixes pair enumeration, event order, and trace order. The complete excluded
+pair list appears in `World` inspection and each step report; an override for
+an excluded pair is an input error.
+
+The effective pair restitution is the smaller body's coefficient; pair
+friction is the geometric mean. An explicit `PairMaterial` replaces both
+values for that pair. Pair names are canonicalized by world order. Duplicate
+or unknown exclusions/overrides fail construction. A pair with neither body
+dynamic can still be checked when a kinematic driver moves; it cannot be
+resolved by an impulse if closing contact occurs.
+
+`NewWorld` accepts two or more bodies and holds every body pair, with its
+exclusion and effective material, in a canonical pair table
+(Part N §3.1), in any role mix. Every world takes
+the scheduled step of Part N §5, which drifts from
+event to event and solves the contacts at each event time as certified Coulomb
+islands (§6).
+The typed `StepDiagnostic` fields are Part N §12.
+Every pair of a world can be excluded or given one material override. `NewWorld`
+rejects a pair naming a body outside the world, including nil or repeated
+bodies, with `ErrInvalidInput`. It also rejects a second override or exclusion
+for the same pair, including reverse order. An override for an excluded pair
+returns `ErrInvalidInput`. An excluded pair skips effective material mixing;
+each body's material still passes input validation. Held exclusions and
+reported event pairs use world order. `World.Excluded()` and
+`StepReport.Excluded` return separate copies.
+
+The current positive-friction slice accepts a fixed floor and dynamic box or
+source sphere in either world order, two dynamic source boxes at an initial
+opposed face touch, or the initial and interior sphere pairs above. Without an
+override, the pair coefficient is the geometric
+mean of the held body coefficients. The solver proposes impulses with a nominal
+rounded mean, then checks the friction cone and slip law against rational
+bounds that enclose the exact mean. A zero body coefficient selects the
+frictionless response. A positive mean below the smallest positive float64 or
+above the largest finite float64 returns `ErrUnsupported` at `NewWorld` for a
+pair with a non-fixed body; a fixed/fixed pair enters no response, so its mean
+is not refused.
+With an override, its exact held coefficient replaces
+the body values; a positive override goes to the patch solver even when both
+body coefficients are zero. A zero override selects the frictionless response
+even when the body coefficients differ. Other positive-friction body pairs
+return `ErrUnsupported` at `NewWorld` when the pair is not excluded.
+The fixed-body patch solver reads a floor-to-box witness in both orders. The
+two-dynamic solver applies equal and opposite impulses through both masses
+and inertias, then bounds each body's angular response. A nonzero outgoing
+spin requires a certified rotational remainder before the step publishes it.
+Each event keeps its original world-order manifold. Its normal impulse is nonnegative,
+and its tangent and point impulses describe the impulse on world-order B.
+
+### Step input and configuration
+
+```go
+type StepConfig struct {
+    Contact             decad.ContactRequest
+    TimeResolution      units.Value // positive Time
+    ContactSlop         units.Value // nonnegative Length
+    VelocityResidual    units.Value // positive Velocity
+    AngularVelocityResidual units.Value // positive AngularVelocity
+    ImpulseResidual     units.Value // positive Impulse
+    PenetrationResidual units.Value // positive Length
+    ImpactSpeed         units.Value // nonnegative Velocity
+    MaxPoseEvaluations  uint64      // >= 2, per pair sweep
+    MaxIterations       int         // positive, per event
+    MaxEvents           int         // positive, per step
+    MaxPairSweeps       uint64      // positive, SweptBox and SweepPair calls per step
+}
+
+type BodyLoad struct {
+    Body   *decad.Body
+    Force  QuantityVec // world Force, at center of mass
+    Torque QuantityVec // world Torque, about center of mass
+}
+
+type KinematicDriver struct {
+    Body *decad.Body
+    Path decad.PairPath // defined over the entire dt
+}
+
+type StepInput struct {
+    Gravity QuantityVec // world Acceleration
+    Loads   []BodyLoad
+    Drivers []KinematicDriver
+}
+
+func (w *World) Step(ctx context.Context, from State,
+    input StepInput, dt units.Value) (*StepReport, error)
+```
+
+The pinned `units` dependency provides Time and the composed kinds used above,
+including AngularVelocity, Force, Torque, and Impulse, with named units for
+public input.
+All scalar public values use `units.Value`; no configuration tolerance or
+material coefficient is implicit. Reject wrong kinds, non-finite values,
+negative slop or impact speed, nonpositive resolutions or residual limits,
+and nonpositive limits. `MaxPoseEvaluations < 2` is invalid. `dt` is positive
+Time. A pair sweep uses `min(TimeResolution, remaining span)` as its time
+resolution and passes `MaxPoseEvaluations` to `decad.SweepRequest`.
+
+`Loads` has at most one entry per dynamic body. Missing loads mean zero;
+loads on fixed or kinematic bodies are invalid. Gravity applies to every
+dynamic body; force and torque are held constant in world coordinates for
+this step. A force acts at the current center of mass. The caller converts
+an off-center force to force plus torque. `Drivers` has exactly one path per
+kinematic body and no path for another role. Each driver's duration equals
+`dt`, its start pose equals the state's pose, and its start/end poses are
+proper rotations. The driver supplies contact-point velocity as the
+path's time derivative, with its certified numerical bound; absent or
+unbounded derivatives make a potential contact undecided. It receives no
+impulse. A fixed body has zero contact-point velocity.
+
+The step accepts one typed, finite center force and torque per dynamic body.
+A nil, duplicate, foreign, or nondynamic load body or a wrong-kind/non-finite
+vector returns `ErrInvalidInput`. It bounds the linear kick over the admitted
+mass interval and the angular kick over every admitted inertia component. A
+published kick outside `VelocityResidual` or `AngularVelocityResidual` returns
+`Undecided`.
+
+The kinematic slice admits one `PoseSegment` with either constant orientation
+and an exactly representable affine derivative or a cardinal read screw axis
+with exactly representable full-step linear and angular rates. Its start and
+duration must exactly match the state and step. A missing, duplicate, or
+nonkinematic driver is `ErrInvalidInput`; a rotating path outside this proof or
+a derivative that cannot meet the full-step speed proof is `ErrUnsupported`. An initially
+touching, closing kinematic/dynamic pair can receive a zero-restitution
+support impulse. An initially touching pair with strictly separating relative
+normal speed can advance without an event only when the initial manifold is
+bounded, both full-step sweeps certify departure, and the endpoint is separated.
+This path does not consume `MaxEvents`. A centered interior impact can use
+the bounded bracket-right sample and correct only the dynamic pose. A
+separating response needs ideal and rounded sliced paths that certify
+departure. A zero-restitution response
+needs full-span bounded persistent-contact tracks on both sliced paths and a
+bounded touching endpoint. A sliced affine driver derivative must equal the
+admitted full-step derivative exactly.
+Other contact schedules remain `Undecided`. The driver's effective contact
+speed appears in the event, while `State` and `Trace` store zero kinematic
+velocity. A separated pair can complete a clear driver path without an event.
+For a cardinal rotating screw, the collision uses the full path's axial
+translation rate at an axis-normal face. A bounded one-point oriented manifold
+can supply an interior impact. The event's driver velocity is the screw's
+linear derivative plus `ω×(point−axisPoint)` at that witness; the dynamic
+body receives the impulse and the kinematic body receives none. A sliced
+remainder may differ from the full-step read screw only within the configured
+linear and angular velocity residuals. Its axis line must lie within
+`PointResolution`, and its contact-point velocity must agree within
+`VelocityResidual`. The original screw's support-plane gap must increase
+strictly after the impact. Both ideal and rounded sliced sweeps must certify
+departure. A rotated persistent contact, off-axis normal, or
+unbounded contact-point derivative returns `Undecided`.
+
+`units.Angle` is dimensionally distinct from `units.Dimensionless`. At the
+physics boundary, validate every AngularVelocity component as Angle/Time,
+convert its base-unit radians per second to an internal scalar, then use
+`r3` vector operations for `ω×r`, torque, and `Iω`. Convert the result back
+to Angle/Time before publishing state. The same explicit radian-to-scalar
+rule applies to angular acceleration and angular impulse. Do not use
+`Kind.Mul` to treat Angle/Time × Length as Velocity. Internal numeric vectors
+carry a declared physical kind; conversion cannot silently change one.
+
+### Step and event schedule
+
+`Step` uses one semi-implicit force kick for the complete `dt`, then an
+event-driven drift. It evaluates each dynamic body's world acceleration at
+the initial state: `a = g + F/m` and `α = I_world^-1(τ − ω×I_world ω)`.
+The gyroscopic term uses the initial orientation and radian scalar angular
+speed. Set the kicked velocities to `v + a dt` and `ω + α dt` once. The
+step's discrete force law is this kick; contact-event restarts do not repeat
+it. Report the applied force and torque impulses. An overflow, an invalid
+updated tensor, or a non-finite kicked velocity is undecided with no state.
+Every event's pre-impact velocity is the kicked velocity plus impulses from
+earlier events in this step. It is not a claim about velocity under a
+continuous force law at that physical time.
+
+For each remaining interval, construct a `decad.RigidDriftSegment` for each
+dynamic body from its current pose, world center of mass, kicked/current
+linear and angular velocity, and remaining duration. Its ideal center follows
+`c(t)=c0+v t`; its orientation follows a world-axis rotation at constant
+`ω`. This path is not generally the read screw between endpoint poses when
+`v` has a component perpendicular to `ω`. `SweepPair` must consume the real
+drift segment and certify that trajectory. Kinematic bodies retain their
+original whole-step paths and are evaluated on the same elapsed-time slice;
+fixed bodies use constant paths. All path poses compose onto each body's
+committed placement. The geometry query's pair order is world order.
+
+Sweep all non-excluded pairs that have a moving body. Do not discard a pair
+from endpoint samples. New pairs use `StopAtInitialContact`. A pair whose
+contact was just solved uses `ContinueSeparatingTouch` when every solved
+normal speed exceeds `VelocityResidual`; otherwise it uses
+`ContinueCertifiedTouch`. These policies require the one-sided departure
+or persistent-touch proof owned by contact-sweep §5.1. They never skip an
+initial touch by sampling at a positive time. `SweepDepartedClear` permits
+the rest of the drift. `SweepPersistentTouch` permits the rest only when
+the solver's normal/friction residuals stay within limits throughout its
+`ContactTrack`. The first source-box implementation checks the track's
+affine patch and constant normal/velocity; unsupported varying tracks are
+undecided. `SweepContactTransitionBracket` stops the drift at the first
+feature or patch change. It is a solver restart, not necessarily an impulse.
+
+When the one world pair is excluded, validate input, driver, and force kick as
+usual. Drift each dynamic body independently; put a kinematic body at its
+driver endpoint. Do not call `SweepPair` or `ContactPair` for that pair, even
+when its source solids overlap or cross. Publish no contact event and typed
+zero contact impulse and kinematic work. The trace and conservation readings
+still describe the completed step.
+
+Every world sweeps its candidate pairs through the broad phase of
+Part N §4.3 and counts every event against one
+`MaxEvents` limit. A dynamic body outside a responding pair drifts and replays
+through every slice, and its mass, loads, energy and momentum enter the world
+report. A dynamic/dynamic impulse contributes zero to total external contact
+impulse; a fixed/dynamic impulse contributes its signed value.
+
+A `SweepPair` `Undecided` that could precede the next event makes the step
+`Undecided`; a later undecided interval can be revisited after an earlier
+event changes the drift. `Clear` permits advancement across its whole span.
+`InitiallyTouching` enters the contact set if closing or resting; separating
+touch receives no impulse and needs a continuation proof before advancement.
+`InitiallyOverlapping` is accepted only within the correction allowance
+below. `ImpactBracket` provides a proven-clear lower time and a contact upper
+time, not an exact impact time. Compare impact and contact-transition brackets
+in world order, choose the earliest upper time, and gather every event whose
+uncertainty interval overlaps that time.
+The solver consumes each `SweepEvent.Manifold`, whose bounds include the
+path-pose transfer.
+`ContactPair` at the chosen float poses can refine a missing manifold only
+if the sweep transfers its bounds to the ideal path. If any gathered pair
+still has no adequate manifold, stop undecided. Recheck any pair whose bracket
+starts before the chosen time but whose upper time lies later; do not advance
+past a possible earlier contact. `MaxEvents` counts impacts and contact
+transitions and grazing touches. Reaching it with remaining time returns
+`Undecided` and no `Next`.
+
+#### Grazing touch
+
+A pair whose sweep reports `SweepGrazingTouch` inside a slice publishes a
+`ContactGraze` event without cutting the slice
+(Part N §5): its sweep replays the whole slice,
+through the touch and the separation after it. The pair must be frictionless,
+its manifold must lie within `StepConfig.Contact`, its poses at the graze are
+the ones its sweep replays, and its relative contact-point normal speed,
+enclosed over the bounded event normal, must lie within `VelocityResidual` of
+zero; a nominal zero alone cannot pass. A kinematic participant must
+translate. Any other graze is `Undecided` with `StepUnsupported`.
+
+The event carries the bounded manifold, the exact event time, a zero-width
+`Bracket` at `SweepReport.Event.At`, typed zero normal, tangent and point
+impulses, and a nil `Solver`. Its pre and post velocities and poses are
+identical and its position changes are zero. It applies no impulse or
+correction, counts once against `MaxEvents`, and adds nothing to the
+conservation report's contact impulse.
+
+Advance poses along the same certified paths to the chosen upper time. That
+time is the numerical event time; the report retains the original bracket.
+Every bracket's travel uncertainty contributes to the allowed penetration
+and correction. If another pair impacts before a persistent track ends,
+advance every body and sample that track's manifold at the earlier time.
+Include its active constraints in the simultaneous solve, then discard the
+unused track suffix and sweep all pairs under the new velocities. At a
+contact-transition bracket, advance to the chosen time, recheck contact
+features, and solve only constraints now closing or resting; the transition
+itself applies no impulse. After solving, rebuild each remaining dynamic
+drift from the new pose and velocity, and sweep again. No minimum time
+quantum may silently skip a persistent contact: a zero-time repeat enters
+the resting contact solve or stops undecided at `MaxEvents`. On an event-free
+remainder, advance to `dt`. Run `ContactPair` on every active contact at
+the completed pose and reject penetration beyond the configured residual.
+
+### Response
+
+At a contact point let `n` point from A to B; let `rA` and `rB` run from
+each world center of mass to the geometry-certified point. Use the bounded
+manifold's representative point and normal only when its point and angular
+bounds meet `StepConfig.Contact`. A source feature may supply several
+required normal constraints; solve them together in stable feature order.
+Never derive a normal from overlap volume or a render mesh.
+
+The relative velocity is
+`u = (vB + ωB×rB) − (vA + ωA×rA)`. Closing means `u·n < 0`.
+For one isolated frictionless contact, let
+`K = mA^-1 + mB^-1 + (rA×n)·I_A^-1(rA×n) +
+(rB×n)·I_B^-1(rB×n)`. Fixed and kinematic inverse mass and inertia are
+zero. If pre-impact `u·n < −ImpactSpeed`, the target post-impact normal
+speed is `−e(u·n)`; otherwise its target is zero. The isolated impulse is
+`Jn=max(0,(target−u·n)/K)`. Apply `−Jn n` to A and `+Jn n` to B, with angular
+impulses `r×J`. Reject `K <= 0` for a closing pair. Separating contacts
+with no resting constraint receive zero impulse.
+
+For simultaneous points, solve normal complementarity and the Coulomb disk
+jointly, rather than applying the isolated formula point by point. Each
+normal impulse is nonnegative. Each post-solve normal speed is at least its
+target; an impulse above zero requires speed equal to the target within
+`VelocityResidual`. Two orthogonal tangential components satisfy
+`||J_t|| <= μ J_n`; sticking requires near-zero tangential velocity, while
+slipping requires friction opposite tangent motion within the same velocity
+gate. Construct the tangent basis deterministically from the least-aligned
+world axis and `n`. Use a fixed-order projected iterative solve over the
+whole contact island. Process islands, pairs, and manifold features in world
+and source-feature order. Warm-start only from the input state's immutable
+contact cache, keyed by body pair and certified source features; do not
+key by topology slice index. Restart only an island whose whole problem
+matches a cached one exactly, from that island's final proposal state, so
+the warm start never changes a published impulse
+(Part N §6.2).
+
+Publish the maximum normal-velocity, tangent-velocity, friction-cone
+(Impulse kind), and penetration residuals, the witness torque and spin, plus
+iteration count, for each island. `VelocityResidual`, `ImpulseResidual`, and
+`PenetrationResidual` gate success. If a residual exceeds its limit when
+`MaxIterations` is reached, return `Undecided`. Use no random ordering or
+solver tolerance hidden from `StepConfig`. Island formation, the proposal
+order, and the exact-interval statement of every gate above are
+Part N §6. Resting contact uses zero
+restitution, persists in the state's contact set, and passes the same gate every
+step. The initial off-axis sphere-pair impact above also admits zero
+restitution when its full continuation is certified.
+A closing contact with no dynamic participant is undecided because
+its prescribed trajectory cannot receive an impulse.
+Evaluate each residual over the admitted mass/inertia, contact-point, and
+normal bounds; a nominal solution whose uncertainty can exceed a limit is
+`Undecided`. Exact source boxes and analytic mass can make these bounds
+narrow; the arithmetic residual still applies. The angular law's limit also
+carries each contact point's witness ball times its impulse, the witness
+torque, which the island publishes as `WitnessTorque` with its spin
+equivalent `WitnessSpin`; the mass-center and normal balls stay in the
+residual (Part N §6.3).
+
+The fixed/dynamic frictional step uses the identity-placed floor's real
+four-corner manifold, exact-rational impulse and torque sums, and the
+mass/inertia bounds. It checks that the entire body cannot expose a larger
+contact-point lever than the solver audited at the contact corners. It also
+bounds omitted-spin travel over the full step. A narrow floor patch, an
+off-center interior frictional impact, a rotating state, and a contact transition
+return `Undecided`.
+
+The two-dynamic solver uses the same real four-point manifold but includes
+both inverse inertias and both mass intervals in each impulse and residual.
+For zero friction and zero incoming tangent speed, it proposes equal normal
+impulses at all four points. It publishes only when every point reaches its
+restitution target within `VelocityResidual`, the bounded angular laws pass,
+and the rotational remainder proves departure.
+It publishes neither a completed state nor an event when the solved outgoing
+spin lacks a certified rotational remainder. The corresponding `World.Step`
+returns `Undecided` with `Next == nil`.
+
+The fixed/dynamic off-center solver accepts a horizontal four-point patch,
+fixed body A, dynamic body B, zero incoming spin and tangent velocity, zero
+friction, positive restitution, and identity poses. The dynamic mass center
+must lie strictly beyond the patch's positive-X edge. Two vertices on that
+edge must be symmetric about the mass center's Y coordinate. The solver splits
+one normal impulse equally between them, bounds the complete supplied mass
+and inertia response, checks the restitution target at both active vertices,
+and checks nonclosing speed at the other two. The event publishes all four
+point impulses, including zero at inactive vertices. The full
+`RigidDriftSegment` and fixed `PoseSegment` must prove one-sided departure and
+a separated fraction-one sample before the step publishes an endpoint.
+
+For an admitted spinning response, the rotational `RigidDriftSegment` sweep
+must certify departure and every later interval through the requested end.
+`World.Step` takes each returned endpoint pose from that sweep's fraction-one
+sample. The sample's relation must be certified separated after charging its
+float-pose deviation against the ideal path. The trace records the same two
+rigid drift paths and their sweep report. It returns stored event and endpoint
+checkpoints; an interior sample requires a separate rotational replay proof.
+An absent fraction-one sample, a nonpositive endpoint gap, or a trace path
+that differs from the swept path returns `Undecided` with no `Next`.
+
+The fixed-floor Z-spin impact uses the rotating sweep's four-point horizontal
+manifold. Its spin axis is the certified contact normal, so contact-point
+spin contributes no normal speed. The bounded four-corner lever check limits
+unpublished angular impulse. The event records the pre-impact poses, pre/post
+angular velocities, and equal normal point impulses so conservation checks
+both angular momentum and rotational energy. If float position correction
+leaves a positive exact gap within the original correction allowance, move the dynamic box
+back by that gap and accept only a rechecked `Touching` relation. The
+remaining `RigidDriftSegment` must prove immediate departure and a separated
+fraction-one sample that equals the published endpoint. Zero-restitution
+spinning support still needs a contact-track proof and returns `Undecided`.
+
+The fixed/dynamic translating-box slice publishes zero spin. It bounds the
+omitted angular speed from the real manifold's patch-center offset and point
+bounds, the mass-center bound, an impulse upper bound, and a certified lower
+inertia eigenvalue. It returns `Undecided` when that upper speed exceeds
+`AngularVelocityResidual`. The impulse and velocity response residuals compare
+the published floats with exact rational evaluation of the held input values;
+one final arithmetic ULP does not cover all intermediate rounding.
+For zero-slip support, four equal normal corner impulses use the same bounded
+witnesses. The sum of their horizontal levers and each point and center bound
+set an upper angular speed through the certified inertia lower bound. The step
+also checks that this speed can move no box point beyond
+`PenetrationResidual` over the full duration. A bound that exceeds either
+limit returns `Undecided`.
+
+Position correction may move a dynamic body by at most the sum of certified
+geometry displacement, the sweep bracket's point-travel bound, and
+`ContactSlop`. An initial overlap beyond that allowance is undecided.
+Correct all simultaneous contacts together. Record every correction in the
+event and trace; sweep the correction path against every other pair and
+reject a new contact or undecided interval. Active contacts may remain
+touching while their penetration decreases. A post-correction `ContactPair`
+bounds residual penetration. At a separating impact at the final step time,
+a separated corrected pose is accepted only when the contact report's upper gap is within
+the same correction allowance. A nonzero remainder still requires a corrected
+pose that touches, or lies within the request's `SupportBand`
+(Part N §10.5), and a certified continuation. A correction does not alter
+velocity and cannot claim to conserve mechanical energy. A failed correction
+or new uncertain pair returns `Undecided`.
+
+### Completion, conservation, and trace
+
+`ContactEvent.Kind` distinguishes `ContactImpact`, `ContactTransition`, and
+`ContactGraze`.
+An impact carries a bounded manifold and a normal impulse. A separated
+contact transition carries its original bracket, the chosen right time,
+unchanged velocities, and zero impulse; its `Manifold` is empty because the
+right state is separated. `Trace.Sample` at that time returns the right state.
+The frictional patch event also carries a typed aggregate tangent impulse,
+one typed impulse per cloned manifold point, and bounded solver residuals with
+the iteration count. A frictionless event and the centered static support
+event carry a typed zero tangent impulse; the static support has no joint
+solver report.
+An isolated graze carries its bounded touching point and exact event time,
+with zero-width bracket, typed zero impulses, and unchanged pre/post state.
+
+```go
+type StepStatus int // Advanced, Undecided
+
+type StepReport struct {
+    Status      StepStatus
+    Next        *State // non-nil exactly for Advanced
+    Events      []ContactEvent
+    Excluded    []BodyPair // canonical world order; copied per report
+    Trace       Trace
+    Diagnostics []StepDiagnostic
+    Conservation *StepConservation // non-nil for Advanced
+    // Effective input/config, elapsed time, residuals,
+    // angular momentum, and other conservation diagnostics.
+}
+```
+
+Input validation runs before reading `ctx`. Invalid input returns a typed
+error and nil report; cancellation after validation returns `ctx.Err()` and
+nil report. A valid call whose geometry, mass, arithmetic, event limit, or
+solver cannot settle returns an `Undecided` report with `Next == nil`.
+The diagnostic names the pair or island, time interval, failing certificate
+or residual, and requested limit. `from`, `World`, and `Document` never
+change. The report owns copies of all slices and state data. A report with
+`Next == nil` may contain a diagnostic trace prefix for inspection, but it
+cannot be passed as an advanced state.
+
+`StepConservation.Input`, `AfterKick`, and `Completion` each contain a bounded
+`KineticEnergy` scalar, `LinearMomentum` vector, and `AngularMomentum` vector
+summed over dynamic bodies. `KineticEnergy` uses `units.Torque` because the
+registered torque unit has the same `kg·mm²/s²` dimension as energy; the field
+denotes energy, not a turning moment. Linear momentum components and bounds
+have kind `units.Impulse`; angular momentum components and bounds have kind
+`units.AngularMomentum`. Angular momentum sums the orbital term
+`mass × (world mass center × linear velocity)` and the rotated inertia tensor
+times world angular velocity. Source mass-center and inertia bounds widen
+the reading.
+`GravityImpulse`, `LoadImpulse`, and `ContactImpulse` are separate bounded
+linear vectors. `TorqueImpulse` reports the exact held world torque times
+step duration as an `AngularMomentum` vector. `KinematicWork` is a signed
+bounded energy reading with kind
+`units.Torque`. For each kinematic contact event, it sums the exact held
+aggregate impulse delivered to the dynamic body dotted with the driver's
+published effective event velocity. A step without a kinematic impact has
+typed zero work. Contact impulse sums only events against fixed or kinematic
+bodies;
+the two impulses of a dynamic pair cancel in the world total. These readings
+describe the discrete step and exclude fixed/kinematic bodies' own energy and
+momentum. The contact reading encloses the published numerical event impulses;
+it does not claim to enclose an uncomputed physical impulse. Mass uncertainty
+and conversion rounding widen energy, momentum, and gravity readings. A
+reading that cannot be enclosed by finite typed values makes the step
+`Undecided` with no `Next`.
+
+`StepConservation.DriftChange` contains bounded energy, linear momentum, and
+angular momentum changes over recorded trace slices. Without an event,
+it uses `AfterKick → Completion`. With an event, it sums `AfterKick → pre-event`
+and `post-event → Completion`. It excludes the force kick, event impulse, and
+event position correction. Each body's translation and velocity coefficients
+sum before the one held mass interval is applied, so the same source-center
+uncertainty cancels across each pure-translation slice. Energy and linear
+momentum change by zero on pure-translation slices. A rotating slice subtracts
+separately enclosed endpoint readings, including rotated inertia. A changed
+velocity within a drift slice makes the reading `Undecided`.
+
+Kinetic energy includes translation and spin. Each advanced contact event
+checks every dynamic body's published velocity change
+against its signed aggregate normal and tangent impulse. It checks both ends
+of the body's held mass interval against `ImpulseResidual + massHigh ×
+VelocityResidual` on each component. A zero-impulse transition must preserve
+the published velocities exactly. A `ContactGraze` separately requires zero
+aggregate and per-point impulses, identical pre/post velocities and poses,
+and zero position change before its event conservation check succeeds.
+Impacts also check kinetic energy at the event. For each body, the code first
+subtracts squared pre-event speed from squared post-event speed, then
+multiplies this one difference by
+the mass endpoint that gives the largest energy change. The allowed numerical
+gain is the sum, over each dynamic body and Cartesian component, of
+`(massHigh × VelocityResidual + ImpulseResidual) ×
+(|preVelocity| + |postVelocity| + VelocityResidual)`. A failed gate makes the
+step `Undecided`. The full-step force kick remains outside these event checks.
+For a kinematic impact, the energy gate subtracts the driver's work from the
+dynamic energy gain. It adds `ImpulseResidual` times the sum of the absolute
+driver velocity components to the numerical allowance. Events that publish
+angular velocity and event poses also check spin-energy change against the
+same held inertia interval and compare angular-momentum change with the
+signed torque from every published point impulse. Angular-velocity and
+contact-point residuals widen that comparison.
+
+`Trace` contains the starting state, each certified drift slice, each
+event's pre/post states, each position correction, and the ending state.
+`Trace.Sample(t)` evaluates the recorded paths without running geometry or
+the solver. The N-body slice record, how a sample reads a body covered by
+several pair certificates or by none, and the multi-step `Timeline` are
+Part N §3.4 and §7. At a numerical event time it returns the post-event velocity
+and pose; an event exposes the pre-event values separately. Its event stores
+the pair's original bodies, the sweep time bracket, chosen numerical time,
+certified manifold and its bounds, impulses, residuals, and pre/post
+velocities. `Trace.Sample` refuses a time outside `[0, dt]`. Feed `Next` to
+the next `Step` for deterministic replay with the same inputs and config.
+The trace never labels the chosen numerical time as an exact physical impact.
+`ContactEvent.Bracket` retains the producing pair sweep's local fraction and
+elapsed readings. `SliceStart` and `SliceDuration` state that sweep's global
+start and requested duration; `ContactEvent.Time` is measured from the start
+of the complete step. Compare bracket order using exact held values:
+`SliceStart + Bracket.<end>.Fraction × SliceDuration`. A rounded global event
+time must stay within that bracket and its rounded pose must pass the same
+contact transfer checks before the event is published.
+Contact transitions appear in the trace with zero impulse unless the
+restarted solver finds a closing constraint at that transition.
+
+The translating first slice re-sweeps every returned rounded drift endpoint
+as a `PoseSegment`. A numerical path that lacks `Clear` or
+`DepartedClear` proof returns `Undecided`, even if its ideal drift was clear.
+The rotational response uses the certified `RigidDriftSegment` as its stored
+path and returns that sweep's certified fraction-one float pose. It does not
+claim that an independently interpolated `PoseSegment` is clear.
+`Trace.Sample` evaluates clear, departed, persistent-contact, and transition
+slices against each stored rounded sweep's cached source-box, source-sphere,
+or certified faceted support-face certificate.
+An isolated graze uses one full-span rounded sphere-pair certificate across
+both open sides and checks exact touch at its event time.
+For an off-axis sphere-pair impact, the rounded impact prefix must reach its
+own certified bracket endpoint with the same source faces, bounded normal,
+and separation within `PenetrationResidual`. Interior trace samples before
+and after the event use the corresponding sphere-pair sweep certificates.
+For an off-axis sphere-pair impact at time zero, no prefix is needed.
+`Trace.Sample(0)` returns the post-impact state; each positive interior time
+uses the certified rounded departure or persistent-contact path, and
+`Trace.Sample(dt)` returns `Next`.
+It compares the exact held time values when selecting an event or endpoint.
+An event at a proved final sweep fraction retains the input `dt` value;
+interior event times must lie strictly inside the exact held duration.
+For each slice it maps the exact time between its recorded global endpoints
+onto the certified rounded path fraction, so subtraction rounding leaves no
+unsampled gap before the step endpoint.
+It returns `ErrUnsupported` for a slice without a rounded certificate, or
+when the requested float pose exceeds the sweep's resolution. Impact prefixes
+have a separate rounded sweep ending at the published pre-event pose, so
+samples on both sides of an impact consume their own certificates. The
+spinning source-box impact uses the original full-step rotating sweep for its
+clear prefix and maps pre-event trace time against the full step duration.
+An event-free clear rotating source-box drift also replays its interior poses.
+The sweep retains its exact held source corners and path inputs. Each requested
+rounded pose must lie within `PointResolution` of the ideal path under the
+same staged source-corner transform used by contact geometry. The
+rounded pair's exact separating-axis gap must exceed that pose error.
+For a co-moving oriented source-box face track, replay checks the rounded
+four-point manifold against the producer's face identities and point and
+normal bounds. A fixed-floor spinning impact replays clear times before its
+unresolved bracket from the original full-step sweep. Its separating
+remainder replays from the cached departure sweep. Samples inside the
+unresolved bracket return `ErrUnsupported`.
+
+Publish kinetic energy, linear momentum, and angular momentum at the input,
+after the full-step force kick, and at completion as typed numeric readings;
+angular momentum includes orbital and spin terms about the fixed world
+origin. Publish gravity/load impulse and kinematic/fixed contact impulse
+separately. The full-step kick's energy and momentum change is charged once,
+before any event. For an isolated dynamic pair, compare momentum immediately
+before and after each impulse: equal/opposite impulses must leave total
+linear momentum within the published numerical residual. Check angular
+momentum about one world origin using both lever arms at that event. With
+restitution in `[0,1]` and no kinematic participant, compare kinetic energy
+immediately before and after an impulse; frictional impact cannot increase
+it beyond its computed numerical residual. A failed event gate is undecided.
+Also publish drift-only changes separately, since this first-order rotation
+update need not conserve an asymmetric body's angular momentum exactly.
+Kinematic work, the discrete force kick, and position correction are reported
+so an energy difference in those cases is not mislabeled as collision loss.
+These numeric checks apply to this discrete integrator; they are not
+certified bounds on real continuous-force motion.
+
+### Verification
+
+The isolated three-dynamic fixture uses three real radius-5 mm source
+spheres with exact supplied mass `1 kg` each. A and B start at
+`(-6,-8,0)` and `(6,8,0) mm`, moving at `(30,40,0)` and
+`(-30,-40,0) mm/s`; C starts at `(0,0,100) mm` and moves at
+`(1,0,0) mm/s`. With restitution `0.5`, zero friction, and `dt=0.2 s`,
+the real A/B sweep brackets one impact near `0.1 s` while both C pair
+sweeps stay clear. `Step` publishes one A/B event with normal impulse
+`75 kg·mm/s`; C ends at `x=0.2 mm` and its trace samples at `0.05`,
+`0.1`, and `0.15 s` have `x=0.05`, `0.1`, and `0.15 mm`. Total input
+and completion kinetic energies are `2500.5` and `625.5 kg·mm²/s²`,
+and total linear X momentum is `1 kg·mm/s` at both ends. A force of
+`10 kg·mm/s²` applied only to C makes its full-step kick `2 mm/s`;
+C ends at `x=0.6 mm` with `3 mm/s` velocity, while the A/B event
+remains unchanged. With `MaxEvents=1`, the step returns `Undecided`
+and no `Next` because time remains after the impact.
+
+Two real radius-5 mm source spheres start with centers at `(0,0,0)` and
+`(6,8,0)` mm. Both have supplied mass `1 kg` and zero spin. B approaches at
+`(-30,-40,0) mm/s`, A starts still, restitution is `0.5`, friction is zero,
+and `dt=0.1 s`. The real `ContactPair` must return a bounded point touch,
+and `SweepPair` must return `SweepInitiallyTouching`. `World.Step` must publish
+one time-zero impact with a zero-width bracket and normal impulse
+`37.5 kg·mm/s`; A leaves at `(-22.5,-30,0) mm/s`, and B leaves at
+`(-7.5,-10,0) mm/s` within the stated response residuals. The ideal and
+rounded full-span sweeps must both return `SweepDepartedClear`. The final
+centers are `(-2.25,-3,0)` and `(5.25,7,0)` mm, 12.5 mm apart. `Trace.Sample`
+at zero, an interior time, and `dt` must return the certified post-impact
+velocities and poses. Reverse world order and reject an off-center supplied
+mass whose omitted spin exceeds `AngularVelocityResidual`.
+
+The isolated-graze fixture uses two real radius-5 mm source spheres. A stays
+at `(0,0,0)` and B starts at `(20,10,0)` with velocity `(-40,0,0) mm/s`
+for `1 s`. Give B positive admitted mass and A either positive admitted mass
+or the fixed role. The real `ContactPair` at `0.5 s` must report touch with
+one bounded point; the real ideal and rounded `SweepPair` reports must both
+return `SweepGrazingTouch` at exact fraction `1/2`. `World.Step` must advance
+to B at `(-20,10,0)` with its velocity unchanged and one `ContactGraze`
+event at `0.5 s`. All event impulses and contact conservation impulses are
+typed zero. `Trace.Sample` before, at, and after `0.5 s` must return the
+certified poses and the same velocities; the event sample is touching and
+the other samples are separated. Repeat with A/B world order reversed and
+with two dynamic bodies to check the normal and momentum signs.
+
+A `y=11 mm` near miss must advance without an event after `SweepClear`; a
+`y=9 mm` crossing must enter impact response or return `Undecided`, never
+`ContactGraze`. Refuse a tangent at `t=0` or `t=dt` on this path, as well as
+any rounded endpoint path whose exact minimum differs from the ideal one.
+With a two-pose sweep budget or an event time that cannot be represented
+exactly, `Step` returns `Undecided` and `Next == nil`. A trace replay query
+whose rounded pose loses strict separation or exact event touch returns
+`ErrUnsupported`. The tests use the real source-body producer, sweep, world,
+and trace; they do not supply a hand-written event.
+Start from that real event and change one conservation field at a time: the
+aggregate normal or tangent impulse, the point normal or tangent impulse,
+one pre/post linear or angular velocity, one event or trace pose, and one
+position-change component. The `ContactGraze` conservation branch must reject
+each change. It must also reject a missing point-impulse record or a non-nil
+solver report. The unchanged real event must pass and publish zero event
+energy, momentum, and contact impulse.
+
+First use a real `decad` box with top `z=0 mm` and a dynamic `10×10×10 mm`
+box initially spanning `z=[10,20] mm`. Give the dynamic box density
+`0.001 kg/mm³` → mass `1 kg`; set gravity and friction to zero, initial
+downward velocity `100 mm/s`, restitution `0.5`, and `dt=0.2 s`. The real
+`SweepPair` bracket and `ContactPair` manifold must reach the solver. The
+contact time lies within the requested time resolution of `0.1 s`; normal
+impulse is `150 kg·mm/s`; the final upward velocity is `50 mm/s`; and the
+bottom ends at `z=5 mm`, within the stated integration/geometry tolerance.
+Initial/final kinetic energies are `5000` and `1250 kg·mm²/s²`. The document
+body set and placements are unchanged. A hand-written manifold does not
+exercise this boundary.
+With `dt=0.1 s`, the same real path impacts at the final fraction. Its
+`150 kg·mm/s` impulse leaves upward velocity `50 mm/s`; any separated rounded
+endpoint gap must fit the certified correction allowance.
+
+The supplied-mass fixture passes that box's real `Body.MassProperties` result
+through `RigidBody.Supplied`, `NewWorld`, `SweepPair`, and `Step`. It has the same
+`150 kg·mm/s` impulse, `50 mm/s` outgoing speed, and `z=5 mm` final bottom.
+Changing the caller's record after world construction does not change the step.
+
+The oblique fixture uses a wide fixed floor and the same `1 kg` box, starting
+`10 mm` above the floor with velocity `(50, 0, −100) mm/s`. At `0.1 s`, the
+real sweep brackets face contact and the step applies `150 kg·mm/s` along the
+certified vertical normal. At `0.2 s`, the box has velocity `(50, 0, 50) mm/s`
+and translation `(10, 0, 5) mm`. The tangent speed stays `50 mm/s`; the ideal
+and rounded departure paths are both certified.
+
+The tilted-pose fixture rotates two touching `10 mm` boxes by 45 degrees
+around world Y. One box is fixed; the `1 kg` dynamic box enters at
+`(-50, 0, 50) mm/s`. Its four-point bounded manifold and initial-touch sweep
+produce a `sqrt(5000) kg·mm/s` support impulse. The dynamic box stops and
+both the ideal and rounded sweeps prove persistent contact through `0.01 s`.
+The reported contact-impulse bound is positive; another stationary step
+advances without an event. With restitution `0.5`, the initial impulse is
+`1.5 sqrt(5000) kg·mm/s`, the outgoing velocity is `(25, 0, −25) mm/s`, and
+the box translates `(0.25, 0, −0.25) mm` over `0.01 s`. Both ideal and rounded
+paths prove one-sided departure; a second step advances clear without an event.
+
+The center-force fixture starts the same `1 kg` box `10 mm` above the floor at
+rest. A `−500 kg·mm/s²` center force over `0.2 s` gives a full-step kick of
+`−100 mm/s`. The real sweep brackets contact at `0.1 s`; the step reports a
+`150 kg·mm/s` contact impulse and finishes at `+50 mm/s` with its bottom at
+`z=5 mm`. A supplied mass interval of `1 ± 0.01 kg` returns `Undecided` at a
+`1e−6 mm/s` velocity residual because its kick cannot be bounded that tightly.
+
+The torque fixture starts a `1 kg`, `10×10×10 mm` source box `100 mm` above
+the floor. A `100 kg·mm²/s²` world-Z torque over `0.1 s` produces `0.6 rad/s`
+spin and a `0.06 rad` drift rotation. The real full-span rotating sweep proves
+separation; the step reports `10 kg·mm²/s` torque impulse and bounded spin
+energy and angular momentum. A second step from its rotated endpoint, with
+zero load, advances another `0.06 rad`. An approaching torque-driven box
+returns `Undecided` when the rotating sweep cannot certify the contact.
+
+The implemented resting-contact fixture starts a `1 kg` source box at rest on
+a fixed floor and applies gravity `−1000 mm/s²` for `0.1 s`. The full-step
+kick gives `v_z=−100 mm/s` before the zero-time contact event. The support
+impulse is `100 kg·mm/s`, and the box finishes with zero velocity and its
+bottom at `z=0 mm`. The second step repeats those results from the returned
+state. Both steps consume the real face manifold and require a full-span
+`SweepPersistentTouch` track for the ideal and rounded drift paths.
+
+The zero-restitution impact fixture drops the same box from `10 mm` above
+the floor at `100 mm/s` for `0.2 s`. It reaches contact at about `0.1 s`,
+receives `100 kg·mm/s`, and finishes at rest with its bottom at `z=0 mm`.
+The remaining drift passes ideal and rounded `SweepPersistentTouch` checks.
+The stationary-touch fixture starts with the box already on the floor, uses
+zero gravity for `0.1 s`, and returns the same pose and velocity with no
+contact event or impulse. It also checks both full-span contact tracks.
+
+The frictionless-slide fixture starts the same `1 kg` box touching a wide
+fixed floor with `(50, 0, 0) mm/s` velocity and zero gravity. At `0.1 s`,
+it has translated `(5, 0, 0) mm` with unchanged velocity and no contact
+event or impulse. Real ideal and rounded sweeps each return a full-span
+`SweepPersistentTouch` track, and `ContactPair` confirms both endpoints.
+A narrower floor that changes the contact patch during the step returns
+`Undecided` when the step cannot certify the transition and remainder. The
+first implemented edge-exit case has a `10 mm` wide floor and touching box,
+with the box moving at `5 mm/s` for `3 s`. The transition brackets `2 s`,
+and a certified clear remainder ends at `x=15 mm` with unchanged velocity.
+It reports one zero-impulse transition event. `MaxEvents=1` refuses the
+remaining `1 s`; `MaxEvents=2` admits the step.
+The solver also sweeps the rounded prefix directly to its published right
+pose. The full-step rounded segment can sample a different pose by one ULP
+at that time; the direct prefix must certify the same separated transition.
+
+The kinematic-push fixture has two touching `10 mm` source boxes. Body A
+follows a `PoseSegment` of `+1.25 mm` in `0.125 s`; body B has mass `1 kg`
+and starts at rest. With zero restitution, friction, and gravity, the real
+initial face manifold produces a `10 kg·mm/s` impulse. The ideal driver and
+dynamic drift and their rounded paths certify persistent touch. Both bodies
+finish `1.25 mm` to the right, B moves at `10 mm/s`, and A stores zero velocity.
+
+The interior kinematic-impact fixture starts A at `x=[0,10] mm` and B at
+`x=[20,30] mm`. A's driver moves `+20 mm` in `0.25 s` at `80 mm/s`; B has
+mass `1 kg` and starts at rest. With restitution `0.5`, friction zero, and
+gravity zero, the real sweep brackets impact near `0.125 s`. The step consumes
+the bracket-right sample, applies `120 kg·mm/s`, and certifies departure on
+both sliced remainder paths. B ends near `x=[35,45] mm` at `120 mm/s`; A ends
+at `x=[20,30] mm` with zero stored velocity. The tiny difference from B's
+ideal final coordinates is bounded by the impact bracket and correction.
+
+With the same bodies and driver but restitution zero, the bracket-right
+correction and `80 kg·mm/s` impulse give B `80 mm/s`. Both sliced remainder
+paths certify persistent face touch. B ends near `x=[30,40] mm` and A ends at
+`x=[20,30] mm`; the bracket and correction bound B's small offset from the
+ideal coordinates. A still stores zero velocity.
+
+For the no-impulse departure fixture, A starts at `x=[0,10] mm` touching B
+at `x=[10,20] mm`. A's driver moves `−5 mm` in `0.125 s`, and B starts at
+rest. Both full-step paths certify `SweepDepartedClear`. The step reports no
+event, moves A to `x=[−5,5] mm`, leaves B at `x=[10,20] mm`, and stores zero
+velocity for both. It advances with `MaxEvents=1` because no event occurs.
+
+For the sliding-friction increment, put the same `1 kg` box
+on a fixed floor wide enough for a `5 mm` slide. With gravity
+`−1000 mm/s²`, initial horizontal speed `100 mm/s`, friction `0.5`, and
+`dt=0.1 s`, the full-step kick gives `v_z=−100 mm/s`. The support impulse
+is `100 kg·mm/s`; the friction impulse is `50 kg·mm/s` opposite motion.
+The box then slides at `50 mm/s` and moves `5 mm` horizontally while its
+bottom stays at `z=0 mm`. `SweepPersistentTouch` must certify the full
+face-contact track. A second `0.05 s` step from that endpoint receives a
+`50 kg·mm/s` support impulse and `25 kg·mm/s` friction impulse. It ends at
+`x=6.25 mm` with `25 mm/s` horizontal speed. A run starting with zero
+horizontal velocity must end with zero velocity and the same bottom height.
+Every run uses the real contact manifold and sweep continuation, not a
+touching sample alone.
+
+Then run focused checks for an off-center impact with spin, two independent
+moving bodies, a kinematic push, three simultaneous bodies, Coulomb stick
+and slip, a resting stack across two steps, and exact trace replay. For each,
+assert computed position or velocity, event ordering, the stated residuals,
+and the unchanged document. Exercise reflected/invalid poses, bad mass
+bounds, mixed units, missing drivers, an unresolved sweep, an inadequate
+manifold, event/iteration limits, initial overlap, and cancellation. Test
+energy and momentum on isolated dynamic pairs and report external work in
+forced/kinematic cases. Run the real geometry producer through the real
+solver in every integration check; direct impulse-equation unit tests may
+use constructed contact data but cannot claim pair-query integration.
+The first box-contact increment may end the off-center spin check at the
+impact event. A longer remainder needs a real pair-clearance certificate;
+co-oriented oblique source-box face contact has a bounded manifold, while
+other rotated face arrangements may still return `Undecided`.
+
+## Part M — Dynamic mass
+
+This part owns mass, center-of-mass, and inertia readings used by rigid
+dynamics. It supplies the mass gate in Part C §2.
+The source-box query, bounded section-moment integration for admitted
+untapered prisms under any frame and rigid placement, including displaced
+section and level records, full source-sphere integration, and full source-cylinder
+integration for a revolved axis-incident rectangle are implemented, as is
+third-order section-moment integration for a full or partial revolve about
+an exact in-plane axis under any frame and rigid placement, and the sweeps and
+cups those prism and revolve integrals compose. Faceted
+Boolean solids with verified occupied-volume bounds publish density-derived
+mass and inertia when their resulting volume and tensor intervals pass the
+positive admission gates, and so does every other solid whose `VerifyAll`
+mesh carries an occupied-volume proof, through §2.2's curved path.
+Other payload paths remain design contracts; Part N
+§8 owns the order in which they land and which of §2.1 or §2.2 each takes.
+`agent-docs/evaluator-design.md` §4 owns
+the existing planar area moments; this document owns the additional volume
+moments and their use by dynamics.
+
+### 1. Boundary and inputs
+
+`decad` computes mass properties of its immutable `BodySolid` geometry for a
+uniform density. `dynamics` chooses one of two explicit input modes per dynamic
+body: density-derived properties or caller-supplied mass, center, and inertia.
+The modes cannot be combined. Fixed and kinematic bodies need neither mode.
+Multiple lumps and void shells contribute to one body's net mass properties;
+they do not become separate dynamic bodies.
+
+```go
+func (b *Body) MassProperties(ctx context.Context, density units.Value) (MassProperties, error)
+
+type MassProperties struct {
+    Mass    Measurement        // units.Mass
+    Center  VecMeasurement     // world position, millimetres
+    Inertia InertiaReading      // about Center, in world axes
+}
+
+type InertiaReading struct {
+    XX, YY, ZZ Measurement     // units.MomentOfInertia
+    XY, XZ, YZ Measurement     // units.MomentOfInertia; signed products
+}
+```
+
+Each `Measurement.Bound` is an absolute, nonnegative error of the same kind as
+its value. `Center.Bound` is a length radius of a ball around `Center.Value`.
+An `Exact` component has a zero bound; an inexact component is `Approximate`.
+The six inertia components describe the symmetric tensor
+`[[XX,XY,XZ],[XY,YY,YZ],[XZ,YZ,ZZ]]`. The products already include the
+physical inertia sign: for example, `XY = -ρ∫(x-Cx)(y-Cy)dV`. Callers do not
+negate them again. Each component has its own bound; one bound for all six
+would hide which entries are certified tightly enough to invert.
+
+`density` has kind `units.Density`, is finite, and is strictly positive. It is
+the caller's stated uniform material parameter, not a measured interval.
+Conversion from its registered unit to the base `kg/mm³` charges any numerical
+rounding in the computed readings. A caller with uncertain physical density
+must widen the returned readings itself or use a future bounded-density input;
+the current signature cannot represent that uncertainty. The same density
+applies to all material lumps and excludes all cavities.
+
+`MassProperties` is a read-only query. It may read a retired body, as `Volume`
+and `Centroid` do; the `dynamics.World` live-body gate is separate. A nil body,
+a body without an evaluator payload, or a sheet is rejected. The method does
+not call `Transform`, commit a body, consume a producer identity, or change the
+document. An uncanceled repeated call on the same body and density produces
+the same values, bounds, and error.
+
+### 2. Geometric integrals
+
+Choose a finite anchor `O` near the body's proven bounds, before integration.
+For coordinates `q = x - O`, compute certified intervals for
+
+```text
+V       = ∫ dV
+P_i     = ∫ q_i dV
+Q_ij    = ∫ q_i q_j dV, i <= j
+C       = O + P/V
+S_ij    = Q_ij - P_i P_j/V
+I_ij    = ρ (trace(S) δ_ij - S_ij)
+M       = ρ V
+```
+
+`V` has kind Volume, `P` has Length × Volume, and `Q` has Length² × Volume.
+`S` is the second volume moment about `C`; `I` has kind MomentOfInertia.
+All interval operations round outward, including division and conversion to
+the public `float64` readings. The body publishes no `MassProperties` unless
+the certified volume interval has a strictly positive lower end. Signed
+shell, cell, and lump contributions may cancel algebraically only after each
+contribution has its own outward interval. An uncertainty term never cancels
+because a neighboring term has the opposite sign.
+
+The evaluator computes the integrals from its own admitted records. It does
+not ask `sketch` to infer a missing cut or replace an uncertain curve with a
+sampled one. The existing `Volume()` and `Centroid()` readings remain
+independent public calls; the new query may reuse their certified internal
+integrals when those carry every term needed for `P` and `Q`. It must not infer
+`Q` from volume, centroid, `Bounds`, or a bounding box's inertia.
+
+#### 2.1 Analytic records
+
+An untapered prism integrates each section's area, first moments, and second
+moments over its signed axial interval. For a section at `(u,v)` and axial
+coordinate `z`, `∫u²dV = (z1-z0)∫u²dA`, `∫uzdV =
+(z1²-z0²)∫u dA/2`, and `∫z²dV = (z1³-z0³)A/3` before rotation into world
+axes. The corresponding `v` and `uv` terms follow the same rule. Holes use
+their recorded winding. `internal/momentregion` already owns section moments through
+second order; this path must reuse that validated record and its bounds.
+Part N §8.1 owns the rotation of the local
+tensor through a non-cardinal frame or placement basis, and §8.2 the
+occupied-volume charge of a displaced section or level.
+
+A revolve requires section integrals through third polynomial order because
+the cylindrical Jacobian contributes one radius and a transverse second
+volume moment contributes two more. Extend the recorded-section moment engine
+for `r³`, `r²z`, and `rz²`, then integrate the stated angular interval with
+certified trigonometric intervals. Full turns may simplify terms by symmetry;
+partial turns must retain their nonzero mixed terms. Circular and free-form
+segments retain their existing exactness tiers and admission rules. A sphere,
+cylinder, cone, or torus may use an equivalent closed-form primitive integral
+only when it represents that payload's exact denotation, including its cuts,
+holes, and placement.
+
+The implemented general revolve path (`internal/massmoment/revolve_properties.go`) keeps the
+third-order sum as rational intervals about the plane origin, every segment
+kind in the boundary form `∮u^(p+1)·v^q dv/(p+1)`. It re-expresses the plane
+moments in the exact axis frame and multiplies them by the sweep's own
+denoted angular factors. It forms `S` from one common `V`, `P`, `Q` enclosure
+and proves the interval tensor positive definite by its leading principal
+minors. It refuses a payload whose readings carry a term it does not charge:
+an axis with a nonzero anchor or direction bound, a nonzero axis-snap or
+admitted-band allowance, a sweep end without a denotation, or a section
+displacement. The local tensor reaches world axes through the exact rational
+product of the placement basis and the local axis, radial, and sweep
+directions, widened by its orthonormality defect as the rotated prism is.
+
+The full source-sphere path accepts a full revolution of one exact
+semicircle and its on-axis diameter when its source and closed spherical face
+prove the occupied ball. It integrates `V = 4πr³/3` and the isotropic tensor
+`I = 2Mr²/5` with the in-tree rational π enclosure. It uses the evaluator's
+bounded world centroid. Any rigid placement leaves its centroidal tensor
+unchanged; a partial revolution takes the general revolve path.
+
+The full source-cylinder path accepts a full revolution of an axis-incident
+rectangular half-profile when its source, cardinal axis, and closed faces
+prove the occupied cylinder. Its exact axial and radial extrema give `r` and
+`h`; the in-tree π enclosure bounds `M = ρπr²h`, axial inertia `Mr²/2`, and
+transverse inertia `M(3r²+h²)/12`. The evaluator's bounded centroid supplies
+the world center. Cardinal rigid placements reorder the tensor entries.
+Partial, annular, toroidal, and obliquely placed revolves take the general
+revolve path above.
+
+Other analytic payloads may provide certified `V`, `P`, and `Q` directly.
+Otherwise they use §2.2 if they have a suitable occupied-volume proof. A
+payload with neither path returns `ErrUnsupported`; it does not borrow a nearby
+primitive's formula merely because the boundary looks similar.
+
+#### 2.2 Faceted and curved records
+
+For a truly faceted solid, audit its closed, consistently outward, embedded
+boundary before integrating signed tetrahedra from `O` to its oriented
+triangles. Exact arithmetic over held vertex coordinates yields each
+tetrahedron's `V`, `P`, and `Q`, followed by outward conversion. A signed
+tetrahedron sum alone is insufficient if the mesh self-intersects or fails
+the solid topology audit. The faceted body may also carry a separate
+displacement from its held triangles to its denoted solid; charge that
+displacement through a certified occupied-volume error.
+
+The implemented faceted arm requires a `VerifyAll` mesh with both boundary and
+occupied-volume proofs. It reruns shell closure and orientation, vertex-link,
+and exact facet-crossing audits on the held triangles. A failed or capped audit
+returns `ErrUnsupported`. It integrates held `V`, `P`, and `Q` as exact rationals
+anchored at one held vertex. The body's bounded box and all held vertices give
+an exact rational extent `R_i` per axis with `|x_i - O_i| <= R_i` over both
+occupied regions. The payload's certified `volSymDiff = E` widens held `V`,
+each `P_i`, and each `Q_ij` by `E`, `R_i E`, and `R_i R_j E`, which never
+exceeds the `R E` and `R² E` of any radius `R` enclosing both regions.
+Interval division forms the center and centroidal tensor; final readings
+round outward. A volume interval containing zero or a
+tensor interval without a positive row-dominance proof returns
+`ErrUnsupported`. A faceted payload without a matching verified mesh or finite
+`E` and `R` also returns `ErrUnsupported`.
+
+An admitted contained Cut retains source V/P/Q moments for the existing
+audited-mesh comparison. A direct exact-rotation Copy of that original Cut
+transports the frozen moments with its exact rational map before the same
+comparison. See `contained-cut-moments-design.md` "Exact rotation copy"; later placements and
+modifications do not inherit this evidence.
+
+For a curved or approximated body, request a `VerifyAll` tessellation with
+`BoundaryVerified()` and `VolumeVerified()`. Read its private certified
+`volSymDiff = E`, where `E` bounds the occupied volume of
+`TrueBody △ MeshSolid`. Both regions must lie within a proven radius `R`
+about `O`, derived from the body's bounded `Bounds()`, the mesh vertices, and
+their displacement bounds. Widen the mesh integrals by at least `E` for `V`,
+`R E` for each `P_i`, and `R² E` for each `Q_ij`, plus outward arithmetic and
+coordinate-construction terms. These are componentwise absolute bounds;
+signed-volume closeness and a two-sided boundary distance alone do not imply
+them. Refine the tessellation when permitted and useful. If the payload does
+not publish an occupied-volume proof, or a finite `R` or finite moment bound
+cannot be certified, return `ErrUnsupported`. The implemented curved path
+anchors at the body box's midpoint, widens per axis as the faceted arm does,
+and refines along Part N §8.5's tolerance ladder.
+
+`VolumeVerified()` is a proof about the mesh and its source body, not a license
+to use its triangles without the embedding and provenance audits. A render
+mesh at `VerifyNone` or `VerifyBoundary` cannot provide density-derived
+inertia. The same rule applies to placed faceted bodies and Boolean results:
+their inherited occupied-volume allowances contribute to `E`.
+
+An admitted faceted result of a strictly contained Cut also carries immutable
+source `V`, `P`, and `Q` intervals for a rectangular-prism target minus a
+whole circular-prism tool. `MassProperties` still computes the verified-mesh
+tuple first. It publishes and selects the source tuple only when every mass
+and inertia interval overlaps the mesh result, both center balls overlap, all
+eight source bounds are no larger, and one is smaller. Other source classes
+continue to use the verified-mesh path. The source evidence contains no
+density or query cache.
+
+### 3. Center, tensor, and numerical admission
+
+Compute `S` with interval arithmetic from one common `V`, `P`, and `Q`
+enclosure. Subtracting `P_iP_j/V` using point floats and attaching an error
+afterward can lose the center-of-mass uncertainty. The near-body anchor limits
+cancellation from a distant world origin; interval width still decides
+whether a reading is usable. Center bounds include division by uncertain
+volume and the anchor's coordinate or placement bound. Each inertia bound
+includes density conversion, the `V/P/Q` intervals, center subtraction, and
+the final tensor conversion.
+
+Prove the entire admissible inertia interval positive definite before a
+density-derived result is accepted for dynamics. A positive center tensor
+alone is insufficient if its component bounds admit a singular tensor.
+Use a certified lower eigenvalue bound or interval Cholesky test on the
+six-component interval. Its lower bound must be strictly positive. A failed
+proof may trigger tighter analytic arithmetic or a finer certified mesh;
+exhausting a stated work limit returns `ErrUnsupported`. Inversion in
+`dynamics` uses the certified interval, and the solver rejects a step if
+resulting acceleration or impulse uncertainty cannot meet its residual gate.
+All diagnostics identify whether volume positivity, a moment bound, or tensor
+positivity blocked admission.
+
+The parallel-axis rule is applied to each separate lump or primitive before
+combining it about the body's common center: `I_at_C = I_at_c +
+m[(d·d)1 - ddᵀ]`, where `d = c-C`. A cavity subtracts its `V`, `P`, and `Q`
+before the body's final center and tensor are formed. A void is never a
+negative-mass dynamic body. A disjoint-lump body with a common uniform density
+returns one combined mass, center, and tensor.
+
+### 4. Placement and supplied properties
+
+The returned center and inertia refer to the body's **current world
+placement**. For a later rigid pose `T`, transform the center with `T.Apply`
+and rotate the centroidal tensor as `R I Rᵀ` using `T`'s orthogonal basis.
+Translation leaves centroidal inertia unchanged. Reflection follows the same
+tensor rule; it does not change mass. Carry interval bounds through each
+basis product and its rounding. `Copy` or `Transform` must agree
+with that transformed reading within both reported bounds. The dynamics state
+applies its pose to the body's current placement exactly once.
+
+The caller-supplied mode in `dynamics` contains a positive bounded `Mass`
+reading, a bounded `Center` world position at the body's current placement,
+and six bounded `Inertia` readings about that center in current world axes.
+It is not an unlabelled diagonal or an inertia about the origin. All six
+components and their bounds have kind `units.MomentOfInertia`; the mass value
+and bound have kind `units.Mass`; the center bound has kind `units.Length`.
+The lower mass endpoint and certified lower tensor eigenvalue are strictly
+positive, and their reciprocals must fit in a finite `float64`. Every reading
+has `Exact` or `Approximate` exactness; an `Exact` reading has a zero bound.
+`dynamics.World` copies the supplied record during construction. The mode is
+explicit, so a zero density value never means “use the
+supplied tensor.” The caller may use measured values that differ from the
+geometry-derived values; dynamics reports that input mode in its world
+description and does not silently replace them with geometric readings.
+
+`r3` needs a symmetric 3×3 numerical tensor with rotation by an orthogonal
+transform, positive-definite validation, inversion, and vector action.
+`decad` and `dynamics` use those operations rather than duplicating coordinate
+algebra. The public six-component readings stay typed `units.Value`; `r3`'s
+numerical tensor is an internal arithmetic representation, not a public
+physical quantity.
+
+### 5. Refusals and cancellation
+
+Validation runs before reading `ctx`. A nil or payload-less receiver returns
+`ErrDegenerate` or `ErrUnsupported`, respectively. A non-solid receiver
+returns `ErrNotSolid`. Wrong density kind returns `ErrUnitKind`; non-finite
+density returns `ErrNotFinite`; negative density returns
+`ErrNegativeMagnitude`; zero density returns `ErrDegenerate`. A valid but
+unsupported payload, absent occupied-volume certificate, interval volume
+containing zero, or unproved positive tensor returns `ErrUnsupported` with
+the specific cause. Arithmetic overflow that prevents a finite computed
+reading returns `ErrNotFinite`. No failure returns partial properties.
+
+After validation, every potentially long integration, tessellation,
+refinement, and proof loop polls `ctx`. Cancellation returns `ctx.Err()` and
+zero properties, including when cancellation arrives before publication.
+The query leaves the document and body's geometric measurements unchanged on
+success, refusal, and cancellation. `dynamics` validates caller-supplied
+readings before a step; wrong kinds and non-finite values use its typed input
+errors, and a mass or inertia interval that is not provably positive uses
+`ErrInvalidMassProperties`.
+
+### 6. Dependencies and computed checks
+
+The pinned `units` version in `go.mod` already defines `Mass`, `Density`, and
+`MomentOfInertia`. The time-based `dynamics` API separately needs the planned
+`units` upgrade; this document does not require time for the query itself.
+The pinned `r3` version has rigid transforms and a symmetric-tensor type with
+rotation, positive-definite validation, inversion, and vector action. Dynamics
+still needs to consume those operations with certified mass and inertia bounds.
+
+Computed tests must cover these results, with independent formulas or
+quadrature and assertions against the published bounds:
+
+| Body and input | Expected geometric result |
+|---|---|
+| `a × b × c` box with density `ρ` | `M = ρabc`; center at box midpoint; diagonal inertia `M(b²+c²)/12`, `M(a²+c²)/12`, `M(a²+b²)/12`; zero mixed terms in aligned axes. |
+| Same box after a non-axis-aligned rigid rotation and translation | Mass unchanged; center transformed; all six components enclosed by `R I Rᵀ`; translation adds no centroidal inertia. |
+| Full solid cylinder, radius `r`, height `h` | Axial inertia `Mr²/2`; transverse inertia `M(3r²+h²)/12`; bounds enclose the independent π-based values. |
+| Partial revolve with an off-axis section | At least one nonzero mixed component agrees with independently integrated `r³`, `r²z`, and `rz²` terms. |
+| Two separated equal boxes in one body | Common-center inertia includes the `m d²` parallel-axis contribution; no per-lump tensor is returned as the body tensor. |
+| Hollow solid with a centered cavity | Mass and tensor equal outer solid minus cavity integrals; cavity material contributes no positive mass. |
+| Faceted Boolean over boxes, with zero or certified positive error | Overlapping, disjoint, cavity, and placed results enclose independent box inclusion-exclusion mass, center, and all tensor components. |
+| Verified faceted box and a curved body at coarse and fine tessellation | True mass and every true tensor component lie in both reported intervals; refined proof narrows at least one bound. |
+| Curved body without occupied-volume proof | Query returns `ErrUnsupported`; a render mesh never supplies an inertia estimate. |
+| Bad density, sheet, cancellation, and ill-conditioned tensor interval | Each returns the specified typed refusal and publishes no partial properties. |
+
+The first end-to-end dynamics check uses a real decad box, its density-derived
+mass and inertia, a real pair sweep, and the real contact solver. Supplying a
+hand-written tensor or contact to that check would not exercise this seam.
+
+## Part G — Contact geometry
+
+Navigation: pair verdict → §1–§2; manifold → §3; source-box proofs → §4;
+contact cases → §5; refusal → §6; delivery tests → §7.
+
+This part owns the pair pose query and the geometry passed to rigid-body
+response. Part C maps the overall system, and
+Part S owns the two-body sweep. `agent-docs/clearance-design.md`
+owns boundary-distance and touching proofs; `agent-docs/interference-design.md`
+owns positive-volume overlap;
+`agent-docs/tessellation-design.md` owns source-face displacement and mesh audits.
+This part adds witnesses and normal certificates without weakening any of
+those admission gates.
+
+Current code certifies relations and face manifolds for source boxes at
+signed-permutation poses. An oriented source-box path also certifies relations
+under arbitrary proper read poses by projecting the exact transformed corners
+on all face and edge-cross axes. Two boxes whose three source edge directions
+match can publish a four-point manifold at one isolated oblique face touch.
+One horizontal rotated box face strictly inside an axis-aligned face publishes
+a four-point manifold. At isolated touch, a partly overhanging horizontal
+face publishes every vertex of its exact clipped polygon. Two opposed
+axis-normal faces can publish
+one bounded interior witness when one projected face center lies strictly
+inside the other face. Other rotated box-box contacts publish no
+manifold. A full source semicircle sphere against a source box also receives
+an exact rational relation proof and a point manifold at one isolated face
+support. When a query rotates the source box into an exactly orthogonal
+parallelotope, the source sphere also gets an exact complete-box distance
+proof and a bounded point manifold inside one rotated face. At identity query
+poses, the analytic clearance kernel can certify
+a relation for other admitted solids without a contact manifold. When it
+proves a touch with a ruling certificate, a full source cylinder against a
+planar face, or two parallel full source cylinders, publish the two ends of
+the contact ruling (§4.5). Other curved
+and broader faceted witness and normal proofs remain design contracts.
+An internal reader can certify one complete rectangular axis support face of a
+zero-bound faceted Boolean result. It requires zero boundary displacement,
+zero occupied-volume difference, one outward-oriented planar source Face at
+the extremum, and exact triangle area equal to the footprint rectangle. A
+second support patch or nonrectangular footprint is refused. A zero-bound
+Boolean may carry the same exact source mesh through translation-only `Transform`.
+The rebuilt body has a positive held-mesh bound, but its saved source mesh and
+exact accumulated translation still prove the true support plane and rectangle.
+The reader checks that every rebuilt vertex lies within the published bound of
+its exact source position and maps the support triangles to one placed Face.
+An inherited positive bound, non-translation placement, or mismatched mesh
+provenance cannot use this proof.
+One mesh `Union` can instead retain an exact source-box lower face even when
+its own boundary and occupied-volume bounds are positive. The other operand's
+`Bounds` lower Z reading minus its position bound must lie strictly above the
+box's exact lower plane. The result's lower-plane facets must all map to the
+source box's lower-face group and one live faceted Face, with exact triangle
+area and footprint equal to the source rectangle. The mesh bound widens the
+rest of the result's held extents before the floor-footprint check. A later
+`Transform` drops this source-box certificate; a tool reaching the lower plane
+never receives it.
+`ContactPair` uses the lower Z support against the upper face of a source-box
+floor when the support rectangle lies strictly inside the floor face. Exact
+support-plane equality proves `Touching` and publishes all four footprint
+corners with the original faceted Face and an exact vertical normal. Positive
+axial separation publishes the exact gap. A crossing support plane, floor
+edge, lateral approach, or missing support proof remains `Undecided`.
+When a faceted Boolean carries a positive finite boundary displacement without
+an exact lower support proof, a signed-axis pose can still prove strict separation
+above a source-box floor.
+The held vertex extrema bound the whole held solid, and the certified two-sided
+boundary displacement widens each extent. The widened X and Y extents must lie
+strictly inside the floor face. The held lower Z extent minus the displacement
+must stay strictly above the floor's upper face. The resulting gap reading
+charges the boundary displacement and its own float conversion. This path
+publishes no support face or manifold; a near touch or crossing it leaves
+undecided falls to the band rule below.
+
+A full circular source prism at a signed-axis pose can certify separation
+from a source box across one axial face. Its complete projected disk must lie
+strictly inside that box face. The source circle, prism extent, and placement
+produce an exact outer box, and the axial support gap is the true pair gap.
+The same proof admits a full revolve of a rectangular half-profile whose
+inner radial edge lies exactly on the resolved axis. It requires exact
+cardinal frame and axis readings, zero section displacement, and signed-axis
+placements. The recorded rectangle and axis determine the exact axial limits
+and radius; the resulting solid has two planar disks and one cylindrical wall.
+Both source paths identify their original planar disk faces by exact signed
+world normals. At axial touch, each publishes a bounded disk-center witness
+and the opposed original face identities. A shallow crossing of the opposed
+axial supports also proves overlap and publishes the same witnesses. A full
+circular vertical source prism can also meet a broad box face along its
+sidewall when the complete axial line and transverse diameter lie inside that
+face. The
+source cylindrical Face and box Face give one midpoint witness and an exact
+transverse normal. Embedded cylinders, edge contact, revolved sidewalls, and
+tilted axes remain `Undecided` on this source path.
+
+Two full source semicircle spheres receive the exact relation proof from their
+recorded centers and radii. A nonzero center offset with crossing sphere
+surfaces publishes one bounded point manifold along the center line. Coincident
+centers keep the relation and withhold the manifold.
+
+Two exact planar solids receive an exact relation at any query pose whose
+basis has a positive determinant. A solid is admitted as a prism over whole
+`LineSeg` edges with zero deltas, or as a zero-bound faceted Boolean, directly
+or through a translation-only placement. The relation is separation with an
+enclosed gap, touch, or overlap, decided by the exact facet tests of
+Part N §9.1. With neither body carrying §9.2's
+convexity certificate, a touch or overlap has no manifold and the reason
+`ContactNonConvex`. Otherwise a touch publishes §9.3's manifold: clipped
+face patches, edge ends and vertices inside a face with that face's normal,
+and crease crossings, or `ContactAmbiguousFeature` when a contact falls
+outside that table. An overlap of two convex bodies publishes the patch at
+depth through one unique shallowest pair of crossing faces, or, when only one
+body has a face across that shallowest push, the other body's deepest edge
+or vertex with its feet on that face; any other overlap keeps
+`ContactNoNormalProof`. When the faceted floor-support proof leaves a
+pair undecided, this relation decides it.
+
+A positive-bound faceted Boolean that no exact source mesh covers, and a
+cap-loop chamfer whose every face is planar, enter the same relation
+through their held meshes. Each held mesh is exact, and its true boundary
+lies within the mesh's two-sided displacement δ of it. The held relation
+becomes the published one by Part N §10.4: a
+held gap past the summed δ is a gap with δ charged, a held vertex deeper
+than δ proves overlap, and a held touch, gap or shallow depth within δ is
+`ContactBand` with `Gap` [−2δ, 2δ]. A band's manifold is the held one with
+each witness ball widened by its body's δ, published only where an exact
+face of a body with no displacement supplies the normal.
+
+### 1. Claims and entry point
+
+```go
+func (d *Document) ContactPair(ctx context.Context, a, b *Body,
+    poseA, poseB r3.Transform, req ContactRequest) (*ContactReport, error)
+
+func (d *Document) ProvePairSeparated(ctx context.Context, a, b *Body,
+    poseA, poseB r3.Transform, req ContactRequest) (bool, error)
+
+type ContactRequest struct {
+    PointResolution  units.Value // positive Length
+    NormalResolution units.Value // positive Angle
+    SupportBand      units.Value // nonnegative Length; zero publishes the exact contact set alone (multibody §10.5)
+    HeldChord        units.Value // nonnegative Length; zero admits no curved held mesh
+}
+
+type ContactRelation int // Separated, Touching, Overlapping, Undecided,
+                         // ContactBand (appended; multibody §10.4)
+
+type ContactReport struct {
+    A, B       *Body
+    PoseA      r3.Transform
+    PoseB      r3.Transform
+    Request    ContactRequest
+    Relation   ContactRelation
+    Gap        *Measurement // Separated or Touching only
+    Overlap    *Measurement // bounded Volume if proven; optional on Overlapping
+    Manifold   *ContactManifold
+    Reason     ContactReason // typed, only for Undecided or absent manifold
+}
+```
+
+The actual Go names may change, but these fields and their absence rules are
+required. The report always names the original bodies and their caller-supplied
+poses. Poses act **after** each body's recorded placement, as `Transform`
+does. Two identical body pointers, a nil or foreign body, a retired body, a
+sheet, an unsound solid, an invalid transform, or an invalid request is an
+input error with no report. Use the existing typed errors for the relevant
+cause. A valid solid payload that cannot be classified is `Undecided`, not an
+input error. Validate bodies, poses, kinds, finiteness, and positive
+resolutions before reading `ctx`; then propagate `ctx.Err()` unchanged.
+
+`Separated` proves disjoint interiors and a strictly positive minimum
+boundary gap. `Touching` proves disjoint interiors with the complete
+zero-distance set certified by clearance's touching gate or §4's source-box
+proof; `Gap` is `Exact` zero. `Overlapping` proves shared interior. An
+optional `Overlap` volume is
+present only after interference's independent volume gate passes; a boundary
+crossing or containment witness alone may prove the relation. `Undecided`
+asserts none of those three relations and has no gap or manifold. A known
+relation may still have no usable manifold. `Reason` then names the missing
+certificate, for example `ContactNoNormalProof`, `ContactAmbiguousFeature`,
+`ContactPointTooCoarse`, `ContactPayloadUnsupported`, or `ContactNonConvex`
+(appended; a dynamic body without Part N §9.2's
+convexity certificate); callers branch on
+that code, not its message. Do not reuse `Diagnostic` or `Verify.Status` as
+the pair verdict. `ContactBand` is the one relation that is neither of the
+three exact relations nor `Undecided`: it states a published band around zero
+that the pair's separation lies in, for a body whose held boundary carries a
+positive displacement, or for an exact pair apart by at most the request's
+`SupportBand`. Part N §10.4 owns when a displaced
+pair publishes it and §10.5 when an exact pair does, and what `Gap` and the
+manifold carry in each case.
+
+`ContactPair` always asks the analytic distance kernel for a gap on a
+separated pair; box separation alone does not supply a minimum. If the
+analytic kernel proves separation but cannot measure the gap, return
+`Undecided` with a gap-specific reason. Keep the private four-way
+`boundaryaudit.PairVerdict` separate from the public `ContactRelation`; map it only after
+the transient pose's own displacement has been charged. A later overlap
+volume proof may upgrade an undecided analytic relation, but may not weaken a
+stronger earlier certificate.
+
+`ProvePairSeparated` is a read-only proof query for callers that need only a
+strict positive gap. It repeats `ContactPair`'s input validation and error
+priority, reads both bodies at the supplied query poses and `HeldChord`, and
+charges the same summed boundary displacement. It returns true only when an
+exact planar relation proves the held gap greater than that displacement. At
+zero `SupportBand` it uses `ClassifyPlanarWithin` with the displacement as its
+distance limit, so it avoids measuring a positive gap. A nonzero `SupportBand`
+or a non-planar snapshot returns false without claiming separation. Touching,
+overlapping, `ContactBand`, ambiguous, and work-limited results also return
+false; false means that the caller must use its existing `ContactPair` path.
+The query does not read or write `ContactPair`'s completed-report memo.
+
+### 2. Transient pose and proof transfer
+
+Build both transient bodies through the same private payload placement path
+that `VerifyMotion` uses. Reserve a transient producer identity; never call
+public `Transform`, `Copy`, `Intersect`, or `commit`. The true
+query pose is the exact composition of the read `r3.Transform` entries with
+the body's read placement entries. Bound the difference between that exact
+composition and the float transient payload with the existing
+`poseDeviation`/placement machinery. Charge each body's displacement once
+into every separation, witness-point, and contact-set bound. A held positive
+gap becomes a proven positive gap only if its lower endpoint remains above
+zero after both charges.
+
+Transfer a held overlap to the query pose by subtracting the two bodies'
+conservative swept-volume allowances from its lower volume bound. The
+allowances use each body's area upper bound and its own pose deviation, as in
+`agent-docs/motion-check-design.md` §5.1. A positive remainder proves overlap;
+otherwise return `Undecided` unless another exact set certificate applies.
+Transfer a held exact touch only if the complete contact and material-side
+certificate also applies to the exact query poses. A nonzero placement or
+composition displacement does not turn an `Exact` zero into an approximate
+touch: the relation becomes `Undecided` unless a new exact posed certificate
+proves it. In particular, the first box-impact slice requires an exact
+axis-aligned posed-box contact path rather than relying on the existing
+zero-displacement coplanar certificate alone.
+
+For that path, admit only a rectangular prism whose recorded closed section
+and extent prove its **occupied set** is exactly one box, with zero source
+boundary displacement. A body's `Bounds()` rectangle or a box around its
+facets does not pass this gate. Admit its existing placement and both query
+poses only when every read rotation is an exact signed permutation of the
+coordinate axes. Interpret their finite float entries as exact dyadic
+rationals. Apply the composed transforms to the source box corners with
+exact rational products and sums, without taking the rounded transient
+payload's AABB as the answer. This constructs the exact occupied axis-aligned
+box at the caller's query pose. The rational box can certify a face touch
+despite nonzero `bodyGeom.delta` on a separately built transient body. If a
+pose comes from a `PoseSegment`, also enclose the difference between its read
+float transform and that segment's ideal screw pose using the
+`VerifyMotion` pose-deviation machinery. A relation is transferred to the
+ideal path only if the charged enclosure proves it; an exact rational touch
+of the float pose by itself does not certify an ideal-path touch. Endpoint
+equality has a separate exact check against the endpoint the caller stated.
+
+### 3. Manifold contract
+
+```go
+type ContactManifold struct {
+    Points []ContactPoint // nonempty, stable feature order
+}
+
+type ContactPoint struct {
+    OnA, OnB       VecMeasurement // world positions; Length ball bounds
+    Normal         VecMeasurement // unit vector A toward B; Dimensionless bound
+    NormalAngle    units.Value    // proven angular radius, Angle
+    Separation     Measurement    // signed Length, B minus A along Normal
+    FaceA, FaceB   *Face          // original live faces when certified
+    FeatureA, FeatureB ContactFeature // stable face/edge/vertex source identity
+}
+```
+
+The public representation must keep all scalar quantities typed. `OnA` and
+`OnB` each enclose a point on the corresponding true trimmed boundary. The
+normal's ball bound and `NormalAngle` both enclose every true normal assigned
+to that entry; the angular radius is at most the requested
+`NormalResolution`. The point bounds are each at most `PointResolution`.
+`Separation` encloses the signed normal projection of the two true witness
+points, including their point and normal errors; positive means apart,
+negative means penetration. For a certified touch its interval contains
+zero, except at a lifted vertex of a support set (multibody §10.5), whose
+interval encloses that vertex's positive exact height. A report may omit `FaceA` or `FaceB` only when the contact feature has no
+single certified owning face; it must still carry stable source identity.
+Neither a mesh triangle index nor a transient face pointer crosses the API.
+
+`Manifold != nil` means every published entry passes these bounds and the
+set is sufficient for the response law over the whole certified contact set.
+For a planar patch, derive the exact trimmed intersection region and publish
+all extremal vertices, including holes and disconnected components, in
+deterministic loop order. A line contact publishes its clipped endpoints.
+A point contact publishes one point. A finite solver reduction for a curved
+contact must bound the force and torque effect of the omitted continuum; until
+that reduction exists, relation proof may be published with `Manifold == nil`.
+Duplicate geometric points from neighboring faces are merged only under a
+certified equality; near coordinates never define identity. The manifold is
+read-only, deterministic, and never implies a particular impulse.
+
+One outward material normal per side is needed to orient the contact normal
+from A toward B. A face interior with a smooth analytic normal can supply
+one. At an edge or vertex, enumerate every adjacent face normal and its
+material side; the candidate set is a cone, not an average. Publish a normal
+only if a unique direction or a bounded cone meets `NormalResolution` and
+the solver can consume all its admissible directions. Otherwise omit the
+manifold with `ContactAmbiguousFeature`. A concave rim, multiple simultaneous
+features, and zero-area coplanar trims follow this rule. Normal orientation
+comes from body material sides, not triangle winding alone. Where one side
+of the contact is a face interior and the touching certificate proves that
+face's plane supports the other body at the feature, the face normal is the
+unique admissible direction and is published, whatever the other side's
+cone; two non-parallel crossing edges have one direction up to sign.
+Part N §9.3 owns the per-feature table.
+
+An overlapping pair may have a usable manifold only when the kernel proves
+the boundary contact features and a bounded penetration direction/depth
+that the response correction can use. A positive `Interference.Volume`, a
+nesting witness, or intersecting held facets cannot manufacture those data.
+Full containment without a separating boundary contact has no manifold.
+The solver must decline that event rather than choosing a closest face.
+
+### 4. Geometry paths
+
+| Path | Relation proof | Witness and normal proof |
+|---|---|---|
+| Source-certified boxes at admitted poses | Exact rational interval relation | Rational face patches and clipped lines/points; exact material-side axis normals. |
+| Analytic prism/revolve carriers | Existing clearance tiers, casts, and certified contact families | Retain admitted stationary feet and complete contact-set geometry; evaluate analytic normals with trim and orientation bounds. |
+| Verified faceted boundary | Existing bounded pair proofs | Map candidates to original faces; charge source displacement and pose error; require source normal enclosures. |
+| Unsupported or coarse payload | Existing box separation may still prove clear | Return relation with no manifold, or `Undecided` if the relation itself lacks proof. |
+
+The analytic path extends private candidate results; it does not infer a
+manifold from a public `Clearance` row. A candidate on an unbounded carrier is
+admitted only when its feet are proved inside the trimmed source faces.
+Enumerate face-interior, face-edge, edge-edge, face-vertex, edge-vertex, and
+vertex-vertex tiers, including cone apex and spindle-axis singularities, as
+`agent-docs/clearance-design.md` §3 requires. Proof of a global minimum still needs
+every rival's lower bound. Stationary feet supply upper witnesses, never a
+global minimum or a contact by themselves.
+
+The bounded-mesh path requires `BoundaryVerified()` and finite private
+`sourceBound(face)` for each candidate. `VolumeVerified()` is additionally
+required for an occupied-volume overlap proof, but alone proves neither a
+point nor a normal. A source-face displacement is a two-sided position bound,
+not a normal bound: obtain a source analytic derivative enclosure, a
+certified local normal cone, or refuse. A triangle normal with no such source
+proof cannot enter a manifold. The source-face mapping, oriented material
+side, and trim audit must pass; an inconsistent mapping is an evaluator error
+with no report. Refine tessellation when a chord bound covers possible
+contact and point/normal bounds may yet meet the request. At the deterministic
+work or resolution floor, return an explicit undecided relation or absent
+manifold according to which proof is missing.
+
+The exact faceted lower-support path reads the Boolean payload's zero boundary
+and occupied-volume bounds and its complete source Face map. It checks every
+held vertex against the support plane, every support triangle's oriented
+normal, and exact area coverage of one rectangular footprint. The source-box
+floor's complete occupied interval lies on the opposite side of that plane.
+The strict footprint containment gate makes the shared support rectangle the
+whole contact set and supplies both original Face identities. Witness rounding
+must fit `PointResolution`; failure keeps the proven `Touching` relation but
+omits the manifold with `ContactPointTooCoarse`.
+For a translation-only placed copy of a zero-bound Boolean, run the same exact
+face proof on its saved pre-placement mesh after applying its exact accumulated
+translation. Confirm that each current held vertex lies within the payload's
+published boundary bound, that the triangle indices still match the source,
+and that one rebuilt Face owns the whole support patch. This admits an exact
+touch despite positive placement rounding and occupied-volume bounds. It does
+not admit an arbitrary positive-bound Boolean or any rotated placement.
+
+For two admitted rational boxes, compare all three axis intervals exactly.
+`internal/pair/box` owns that interval classification and the bounded face-patch
+calculation. The root contact path admits source bodies, maps face slots back
+to original `*Face` values, and publishes the typed report.
+A positive gap on any axis excludes contact, but a global minimum distance
+still needs the full box-distance calculation. Strictly positive overlap on
+all axes proves `Overlapping`; equality on at least one axis with no positive
+separation proves `Touching` because the complete boxes have disjoint
+interiors and their boundaries meet. Two or three equal axes are valid
+edge/vertex **relation** certificates, even when the normal cone makes the
+manifold unavailable. A single equality axis with strict projected overlap
+gives an opposed-face patch. Clip the two rectangles with exact rational
+arithmetic and use that patch for the manifold. Convert each rational point
+to `r3.Vec` with an outward Length ball bound; its axis normal is exact.
+
+For shallow box penetration, calculate the six directed translations that
+would move B clear of A. A manifold is available only when exactly one
+strictly smallest positive translation is certified, the selected faces
+cross rather than one box being fully contained in the other, and their
+projected overlap is strictly two-dimensional. Use the two original true
+face points at each clipped patch vertex and the chosen A-to-B axis normal;
+their signed separation is the negative translation depth, bounded by the
+point conversion. A tied minimum, strict containment, edge-only projection,
+or requested point resolution below the conversion bound leaves the
+`Overlapping` relation intact and the manifold absent. This is the C1 box
+penetration path consumed by a sweep's later proven-overlap endpoint.
+
+For a source box at a general read pose, transform all eight recorded corners
+with exact dyadic operations. The resulting parallelotope is tested on both
+sets of face-normal axes and all nonzero edge-cross axes. Positive separation
+on one axis proves `Separated`; equality on at least one axis with no positive
+separation proves `Touching`; strict projected overlap on every axis proves
+`Overlapping`. A separated report bounds the minimum distance from below by
+the largest normalized axis gap and from above by a certified vertex-to-face
+or vertex-to-vertex witness. If those bounds cannot publish a positive gap,
+the relation is `Undecided`. For one opposed face equality, two boxes with
+parallel corresponding edges use the first box's rational dual basis to clip
+their complete face rectangles. Each clipped corner records its original
+face identities, a rational point with outward conversion bound, and a
+face normal with outward vector and angular bounds. A second equality axis,
+nonparallel source edges, or a request tighter than those bounds withholds
+the manifold. Two oriented boxes are also exact planar solids, so a touch or
+overlap their box patches leave without a manifold takes the planar one
+(Part N §9.3) when that relation agrees and
+every point is an edge or vertex in, on or crossing the other box: an edge
+of a rotated box on a floor, or that edge poking slightly through it. Face
+pairs stay with the box patches, which withhold the degenerate ones. A
+convex body's corner or edge poking through one face of a non-convex planar
+body, a tray's floor, takes the face-local patch of Part N's §9.6:
+the one crossed face, its deepest feature, the sunk part over the face, and
+a clear column above it, each proved exactly.
+
+The horizontal rotated-face path requires one source box at a signed-axis
+pose and another whose transformed source edges keep one face horizontal.
+At isolated touch, clip the rotated face's exact dyadic corners against all
+four signed-axis face half-planes with exact rational intersections. Publish
+every distinct polygon vertex when its signed area is nonzero and every
+rounded witness meets `PointResolution`. Preserve both original face
+identities and the exact vertical material normal. A zero-area projected
+intersection keeps the proven relation without a manifold.
+
+For penetration, the existing contained-face path requires all four rotated
+corners strictly inside the other projected face. Its depth must be strictly
+smaller than every side margin, and the bodies must cross at opposed Z
+supports rather than contain one another. It publishes the four rotated
+corners. A partly overhanging penetration or tilted face keeps its proven
+relation without a clipped manifold.
+
+#### 4.1 Source-box contact set for sweeps
+
+Keep a private `sourceBoxContactProof` with the exact occupied interval of
+each box on **all three** world axes at the certified pose. Retain the source
+box corners, exact read start placements, original face identities, every
+axis where opposed supports are equal, and each remaining axis's exact
+projected overlap interval. It is a proof about the complete occupied sets,
+not just the manifold's sampled patch. At one face touch, its contact set is
+the Cartesian product of the two projected overlap intervals on the common
+support plane. If one projected interval shrinks to a point, retain the
+edge-contact set; if both do, retain the vertex-contact set. The public
+`ContactPair` report states only the relation at this pose. Its manifold
+may be absent at an edge or vertex even when this private set is complete.
+
+The sweep may consume this private proof only when it certifies that its
+ideal time-zero poses are the same exact read placements. For a path proved
+to be pure affine translation, the sweep can advance every interval endpoint
+by the certified translation at time `u`. The contact kernel supplies exact
+support-plane and projected-interval facts; the sweep owns all comparisons
+over time, event times, and status. In particular, the sweep can use an
+outward lower bound `w > 0` on the relative translation rate along an opposed
+support axis. The whole-body gap along that axis is then at least `w*u` for
+every `u > 0`. This is a one-sided departure proof even though the gap at
+`u = 0` is exactly zero. Keep the product symbolic until a positive lower
+gap at a chosen `h` is representable; a rounded zero proves nothing.
+
+When the normal support gap stays zero, the exact projected intervals let
+the sweep prove persistent face contact during tangential sliding. At an
+exact projected-overlap endpoint equality, the complete contact set becomes
+an edge or vertex. The sweep may resume clear-interval proof only after a
+separate axis has a strictly positive gap. A positive normal velocity at a
+single manifold point, sampled separated poses, a rounded near-equality,
+or a rotating path cannot substitute for these whole-box proofs. If no
+strict interval claim follows, the sweep returns its undecided outcome.
+
+#### 4.2 Source semicircle sphere against a source box
+
+Admit a full-revolution solid with one untrimmed spherical face only when its
+recorded section is one complete semicircular arc and its on-axis diameter.
+The arc's center and endpoints must lie exactly on an axis with exact cardinal
+direction; the two axial radii must match as rationals. Require zero section
+displacement and signed-permutation frame and placement. A query pose with an
+arbitrary proper rotation is admitted when the placed sphere center is exactly
+the query origin; the occupied ball then depends only on the query translation.
+Other sphere query poses require a signed-permutation rotation. A sphere
+surface tag without this occupied-set record cannot enter this path.
+The exactly orthogonal rotated-box extension keeps the sphere pose gate and
+allows the source box's query pose through its exact read-corner proof.
+
+Map the recorded center and radius to exact rational world coordinates. Clamp
+the center to the exact box intervals and compare squared distance to squared
+radius. A strict excess proves separation, equality proves touch, and a
+strict deficit proves overlap. A separated report encloses the true gap after
+outward square-root and float conversion. A one-axis exterior center with its
+whole projected radius strictly inside the other box intervals can publish
+the opposed box face and spherical point. Shallow penetration also requires
+the sphere not to reach the opposite box face. An edge, corner, internal
+center, or wider patch keeps the proven relation but withholds the manifold.
+Reversing body order reverses the exact axis normal and witness fields.
+
+For an exactly orthogonal rotated source box, minimize squared distance from
+the source sphere center to its exact read-pose parallelotope. Project the
+center onto each pairwise orthogonal, nonzero edge with exact rational dot
+products, clamp each coefficient to `[0, 1]`, and sum the squared distance to
+the resulting point. Compare it with the exact squared radius to classify the
+complete occupied sets. Bound a positive gap with outward square-root conversion.
+An isolated face manifold requires the center outside one face, an orthogonal
+projection strictly inside that face, and the projected sphere disk strictly
+inside both face intervals. The opposite support must remain farther than one
+radius during penetration. Convert the plane foot and spherical point with
+outward position bounds; normalize the exact face cross product with a bounded
+normal and angle. A skew exact read box returns `Undecided`; an edge/corner
+projection, internal center, or coarse manifold request keeps any relation
+proved by the exact closest-point calculation without inventing a point.
+
+#### 4.3 Two source semicircle spheres
+
+Admit each sphere through §4.2's source record and pose gates. Compare the
+exact squared distance between their centers with the square of the radius
+sum. A strict excess proves separation; equality proves touch; a deficit
+proves overlap. Enclose a separated gap by outward square-root conversion.
+Publish one point manifold when the center difference is nonzero and its
+distance exceeds the absolute radius difference. The latter gate excludes a
+sphere wholly inside the other. Enclose the center-line unit normal by a
+bounded square root of the exact squared distance. Both witnesses lie on the
+original spherical faces along that direction, with point bounds including
+normal conversion. Their signed separation encloses center distance minus
+radius sum and both witness errors. A request tighter than the normal or point
+bounds keeps the relation but withholds the manifold. Reversing body order
+reverses the normal and swaps witnesses.
+
+#### 4.4 Source cylinder against a box face
+
+Admit the full circular source prism or the full rectangular-profile source
+revolve of the source-cylinder path only at signed-axis poses. Each occupied
+set is the exact product of the recorded disk and axial interval. Require the
+complete projected disk to lie strictly inside both projected intervals of
+one source-box face. An axial support gap then
+measures the true minimum distance. Equality proves the complete circular
+face touching the box face. Strict crossing of the near supports proves
+overlap only while the cylinder's far support remains beyond the same box
+face and its near support remains outside the opposite box face.
+
+Identify the original planar cylinder end face by its signed world material
+normal. Reject a missing, duplicate, or non-axial end face.
+The disk center is an exact interior point of both opposed faces and supplies
+one bounded representative witness per body. The private disk and axial
+interval certify the complete contact set. Reverse body order by swapping
+the witnesses and reversing the normal. Withhold the manifold if a face
+identity, point bound, or shallow-crossing proof fails.
+
+For the full circular source prism's sidewall with vertical cylinder axis,
+require its complete axial interval and other transverse diameter strictly
+inside one box face. The
+exact circle support on that face's normal axis identifies the complete
+axial contact line and the source cylindrical Face. Publish one bounded
+midpoint witness on the line, the opposed original Face identities, and the
+exact transverse normal. A shallow crossing must leave the far support
+outside the same box face and the near support outside the opposite face.
+Lateral edge contact, tilted axes, revolved sidewalls, and an embedded
+cylinder return `Undecided`; the identity-pose analytic fallback may prove a
+relation without a manifold.
+
+#### 4.5 Analytic ruling contact
+
+At identity query poses, `ContactPair` reads the clearance kernel's verdict;
+placed poses take the direct proof at the end of this section.
+A touch the kernel proves with a ruling certificate (`agent-docs/clearance-design.md`
+§6) keeps the two carriers, the exact separating plane and the exact ends of
+the ruling segment on it: a plane face against a cylinder face along the
+tangent ruling, or two parallel external cylinder faces along their common
+ruling. The kernel admits the relation for any body pair it models. The
+manifold needs the complete contact set as well.
+
+Each cylinder side must be a full source cylinder, read through §4.4's source
+record: the exact disk-by-interval box gives its axis, radius and axial
+interval. Its occupied set then meets the separating plane in exactly its
+tangent ruling, between the two cap rims. A plane side holds that whole ruling
+inside its own trimmed face, which the certificate proved, so the contact set
+of a plane and a cylinder is the cylinder's ruling. Two cylinders touch on the
+overlap of their two rulings, which must have positive length. The exact ends
+recomputed from the source records must equal the kernel's ends; any
+difference withholds the manifold. A plane side maps to the one original
+planar Face whose outward normal and plane offset equal the certificate's
+exactly; a cylinder side maps to its one cylindrical Face.
+
+The manifold publishes the two ends in exact coordinate order, each one
+point on both bodies with an outward rational-to-float position bound. Each
+entry's normal is the tighter of the two sides' `Face.NormalAt` balls at the
+witness, oriented from A toward B. A cylinder reading taken at a rounded
+witness also charges the radial tilt to the true end: radial vectors at most
+`e` apart, the true one of length `r`, have unit directions at most `2e/r`
+apart. Both balls must contain the exact separating normal, or the entry is
+refused. The angular radius is four times the ball radius, as for the
+oriented-box normal. `Separation` is an `Exact` zero, since both witnesses
+are the same true point. A body that is not a full source cylinder keeps the
+proven touch with `ContactPayloadUnsupported`; an unmatched face or end gives
+`ContactAmbiguousFeature`; a point or normal bound beyond the request gives
+`ContactPointTooCoarse` or `ContactNoNormalProof`. Reversing body order swaps
+faces and reverses the normal; the ends keep their order.
+
+**Transformed poses.** Elsewhere, a full source cylinder `M` at any pose with a
+positive determinant against an exact planar body `S` with zero held
+displacement (multibody §9, §10.4), at its own pose, reads the plane/cylinder
+ruling directly (`contactruling/placed.ClassifyPlacedRuling`). `M`'s identity record gives its
+axis `â`, radius `r`, length `L` and end-disk centers; the query pose maps
+the centers exactly to `c±`. The pose's float basis `B` is orthonormal only
+to rounding, so the occupied set is the identity cylinder's image under the
+exact float map, whose section is the disk's image under `B`. With `gram`
+the largest absolute row sum of `BᵀB − I`, every unit `m` has `|Bᵀm|²` in
+`[1 − gram, 1 + gram]`; `gram` must be at most `1/16`, which every valid
+`r3.Transform` meets. The support plane is the face plane of `S` whose
+outward normal `n̂` is a signed axis, with `|α| <= 1/4` for `α = n̂·Bâ` and
+its triangles in one face, whose larger `|H±|` is least,
+`H± = n̂·c± − d − r`; the first in triangle order wins a tie. A plane with a
+vertex of `S` strictly in front of it, a tray's floor, is face-local and must
+pass multibody §10.6's column test over the coordinate box of `M`'s eight
+staged identity-box corners, which records its lateral clearance `m`.
+Height is affine along the axis, so `M`'s least height above the plane is the
+lesser of its end disks', each `n̂·c± − d − r·ρ` with `ρ = |P·Bᵀn̂|`, `P`
+removing `â`. A signed-axis pose has `ρ = 1` and `α = 0` exactly, so the
+least height is the lesser `H±` and proves `Touching` or `Separated` exactly.
+At any other pose, `|ρ² − 1| <= gram + α²` gives
+`|r − r·ρ| <= r·(gram + α²)`; with `δ = r·(gram + α²) + |α|·L`, a least
+height above `δ` is `Separated` with its interval as the gap, and one within
+`δ` of zero is `ContactBand` with `Gap = [−c₀, c₀]`,
+`c₀ = max|H±| + r·(gram + α²)`. A depth beyond `δ` stays `Undecided`. Each
+end's true lowest point lies within `r·(3·gram + (3/2)·|α|)` of `c± − r·n̂`
+(with `AAᵀ = I + E`, `‖E‖ <= gram`, the lowest point is `c − r·Ay/|y|`,
+`y = P·Aᵀn̂`, and `|Ay − |y|·n̂| <= 2·gram + α² + |α|·√(1 + gram)` over
+`|y| >= √(7/8)`), and both points' feet, grown by that drift, must lie inside
+`S`'s face, so the plane holds the whole contact ruling and the gap is the
+least height. The manifold publishes the two points in exact coordinate
+order, each with that drift as its ball and its foot on the plane as the `S`
+witness; the normal is `S`'s exact face normal, which is `M`'s own normal at
+its true lowest point, and `Separation` is the band, or an exact zero for a
+touch. Reversing body order swaps witnesses and reverses the normal. On a
+face-local plane a gap's lower end is the lesser of the least height's and
+`m`, its upper end unchanged, and a touch or band publishes only when `m`
+exceeds its half-width; a cylinder nearer a wall than that is `Undecided`.
+
+### 5. Contact cases and ordering
+
+| Case | Required result |
+|---|---|
+| Positive gap, including a body inside a cavity | `Separated` only after nesting or shell tests exclude shared interior; publish a bounded global minimum gap. |
+| Strict full containment of a solid in material | `Overlapping`; no contact manifold from containment alone. |
+| Coplanar positive-area patch with opposed material normals | `Touching` after all other crossings are excluded; publish the full trimmed patch reduction if its bounds meet the request. |
+| Coplanar patch with matching material sides | `Overlapping` only when shared interior is proven; no touch manifold from the patch alone. |
+| Edge-only or vertex-only meeting | `Touching` on the exact source-box and exact planar paths; `Undecided` under today's other clearance paths. A manifold requires a resolved normal cone. |
+| Smooth tangency or ruling contact | `Touching` only for a complete certified family in clearance §6; the manifold may still be unavailable if point or normal bounds fail. |
+| Transversal boundary crossing | `Overlapping` if the proof transfers to both exact query poses; the unique shallow source-box penetration path above may yield a manifold. Other crossings require a separate proof. |
+| Near miss inside displacement bounds | `Undecided`; never promote a held-mesh gap or sample to `Separated`. |
+
+Input order is preserved: reversing A and B swaps point and face fields,
+reverses normals, and leaves the geometric relation and gap interval
+unchanged within bounded arithmetic. No contact point order may depend on a
+map iteration, BVH traversal, worker completion, or tessellation cache hit.
+Sort source features by original body topology order, then exact parameter
+order along each feature, then exact rational coordinate order for tied
+generated points. Stable tie breaks use A before B. Repeated calls with the
+same inputs publish identical reports, including reasons and bounds.
+
+### 6. Refusal, cancellation, and non-mutation
+
+Expected geometric limits return `Undecided` or a known relation with an
+absent manifold and a typed `ContactReason`. These include a staged payload,
+an uncertain trim, bounds spanning zero, a missing normal enclosure, an
+ambiguous edge cone, and a requested resolution the current proof cannot
+reach. An internal invariant failure, such as a missing source face or a
+broken exact predicate, returns an error and no report. A point/normal bound
+must be finite; an unbounded result is absence, never `+Inf` in a published
+manifold. Context cancellation at any phase returns `ctx.Err()` and no
+report. Poll within candidate, tessellation, containment, and refinement
+loops under the shared work-counter discipline of clearance §3 and
+interference §7.2.
+
+The query changes no document membership, liveness, topology, payload,
+measurement, or producer identity. Per-body tessellation caches may accept
+only a complete successful mesh under their existing contract; partial or
+canceled work never enters a cache. The report holds copies of result slices
+and values. It may point only to original bodies and their original source
+features, never transient ones. `ContactPair` is safe for concurrent reads
+under the existing `Document.Verify` concurrency rule. Each body keeps the
+last 1024 reports it was the first operand of (`contact_pair.go`),
+keyed exactly on the second body, the bits of both poses and the request;
+a body is immutable, so a repeat reads the stored report and changes no
+outcome. Only a completed query is stored, never an error or a
+cancellation, and every call returns its own copy of the report.
+
+The proof paths fill the report's node form: `report.ContactReportOf`
+instantiated with topology nodes, which each kernel package names
+`contactReport`. The public `ContactReport` is the same generic type
+instantiated with the root handles, so the two forms share one definition and
+one set of readings. `ContactPair` lifts a completed report to the handle
+instantiation once, with `report.Lift`, before the memo stores it: each node
+maps to the handle that holds it, so every body, face, edge and vertex a
+report names is the very pointer the body's own accessors return, and a nil
+manifold, gap or overlap stays nil. A sweep that runs the same proof paths
+lifts their reports in the same way where it publishes a `SweepEvent`, a
+contact track's features or a track manifold.
+
+### 7. Delivery and computed tests
+
+| Stage | Delivered path | Computed obligation |
+|---|---|---|
+| C1 | Exact posed source boxes and read-only pair report | Check 3 mm gap, face touch, shallow overlap, containment refusal, tied depth, and document state. |
+| C2 | Analytic prism/revolve contact families | Check point, ruling, patch, void-wall orientation, and near-tangent refusal against calculated geometry. |
+| C3 | Verified faceted source witnesses and certified normal cones; the exact planar algorithm is Part N §9 | A curved source lies within each point ball; its analytic normal lies within the angular cone; a render-only mesh and a displacement bound without normal proof yield no manifold. |
+| C4 | Remaining shipped solid payloads and cost pass | Each payload computes certified contact or gives its typed missing-proof reason. |
+
+C1 uses two 10 mm boxes 3 mm apart and reads a 3 mm gap. A face touch
+reads zero and four patch corners. A unique shallow overlap reads negative
+separation and the expected axis normal. Strict containment and tied
+translation depths have no manifold. No C1 query changes the next producer
+identity. C2 evaluates a plane/sphere point, a plane/cylinder ruling, and an
+opposed coplanar patch, including void-wall orientation and near-tangent
+refusal. C4 runs prism, cup, revolve, loft, faceted, cap blend, stitched
+solid, and admitted sweep payloads.
+
+C1 also checks the private complete-set certificate with two opposed boxes.
+An outward relative translation proves positive gap for every positive
+time. A tangential translation retains a face patch until its projected
+overlap ends, reports an exact edge-contact set at the exit, and proves
+positive gap only afterward. A point's positive normal velocity alone must
+not pass either test.
+
+Every stage also checks pair reversal, deterministic ordering, wrong kinds,
+invalid/retired/foreign/sheet bodies, cancellation during a real candidate
+walk, and non-mutation. At least one test passes a real `ContactPair`
+manifold into a dynamics response and checks the resulting position and
+velocity; a hand-written manifold does not cover that boundary. Tests at
+the point and normal resolution thresholds assert both sides of the gate:
+a finite bound just within the request publishes an entry, and a wider bound
+omits it without changing a proven relation. A small positive held gap whose
+placement allowance spans zero must never report `Separated`.
+
+## Part S — Two-body contact sweep
+
+This part specifies the `Document.SweepPair` contract. Current affine
+source-box sweeps certify first impact, immediate departure, persistent face
+contact, and the first edge transition of a sliding patch. A source semicircle
+sphere against a source box certifies affine or centered rotating first impact
+and face-point departure or persistent touch while its projected radius remains strictly
+inside one box face. A sphere against an exactly orthogonal rotated source
+box also certifies a strict single-face affine clear span, first impact, or
+separating departure. A full source cylinder certifies a clear path,
+first face impact, and separating departure inside a source-box face, including
+transverse translation that stays inside the face, and a persistent track for
+an end disk resting or sliding on that face. A full circular vertical
+source prism also certifies the same outcomes at its sidewall when its complete
+axial contact line stays inside a broad source-box face.
+One zero-bound faceted Boolean solid with a certified rectangular lower face
+can certify an affine vertical clear path, first exact face touch, separating
+departure, or persistent face contact against a containing source-box floor.
+The same path accepts a translation-only `Transform` result when its saved exact
+source mesh proves the complete lower face despite positive held-mesh and
+occupied-volume bounds. The event and replay retain the placed body's Face.
+A positive-bound mesh `Union` also takes this path when an exact source-box
+lower face survives a second operand whose certified lower extent is strictly
+above that face. Its lower patch must still map to one live faceted Face.
+Both bodies must translate equally in X and Y, so the complete support patch
+stays strictly inside the floor face. The lower support plane must start at or
+above the floor's upper plane. A first-impact bracket ends at exact touch;
+if its rational contact fraction is not a representable dyadic grid point,
+the sweep returns `Undecided`. A bracket ending after support-plane crossing,
+a lateral path, an unproved support face, and a footprint reaching the floor
+edge also return `Undecided`. The contact track retains the original faceted
+Face. Rounded replay checks the exact support-plane path and footprint proof.
+A positive-bound faceted Boolean without an exact lower support proof can certify
+only a strict clear span above a source-box floor. Both signed-axis paths must
+have zero angular and transverse motion. The held vertex extrema, widened by
+the certified boundary
+displacement, stay inside the floor's projected face. The lower Z gap is affine;
+both endpoints must exceed the displacement, including conversion error.
+Both real endpoint contact queries must report separation. Replay charges the
+rounded pose deviation and requires the widened actual extents to stay inside
+the floor face with a positive gap. A path reaching the boundary allowance,
+moving transversely, or rotating returns `SweepUndecided`, unless both bodies
+are exact planar solids, which take the general sweep below.
+Two source semicircle spheres certify affine first impact
+through exact squared-distance motion, including transverse crossing, and
+separating departure. Their exact isolated interior tangent publishes a
+bounded point with strict separation on both sides. A touching source-sphere
+pair with equal exact affine displacement certifies a full-span point track.
+When one or both source spheres follow rigid drifts that spin about their own
+centers, the same proofs certify a clear path, first impact, isolated graze,
+and separating departure. Their sampled poses retain spin; the occupied balls
+follow exact affine center paths.
+Rotating source-box rigid drifts can also certify a clear path or bracket an
+impact after exact oriented-box pose relations, a bounded float-to-ideal pose
+difference, and whole-body travel bounds. An initial source-box face touch also certifies immediate
+departure when both bodies have the same angular velocity and the bounded
+normal separation rate is positive. Fixed oblique poses of co-oriented source
+boxes also certify initial face touch and a persistent face patch when both
+affine paths have the same translation. A partly overhanging horizontal
+source-box face also certifies initial touch and a persistent clipped polygon
+under the same translation. If their exact support-plane gap has
+positive affine slope, the sweep certifies immediate departure and checks the
+rounded endpoint against its ideal path. A box spinning about world Z can also
+reach a contained horizontal face on a stationary box, then depart under
+positive vertical velocity. A rotating `PoseSegment` whose read screw axis is
+cardinal can certify a clear path or first impact. An axis-normal source face
+can also certify departure when its support-plane gap increases throughout
+the step. A source box spinning about Y can depart from a stationary horizontal
+source-box face when every source corner has a positive bounded outward height
+through the certified interval. Two exact planar solids
+(Part N §9) that no path above admits run the
+same search over every vertex under any rotating or affine path: a clear
+path, a first impact bracketed onto an overlapping sample, or an initial
+touch or overlap; the general rotating sweep, §10.1 there, owns it. From an
+initial touch it proves §10.2's departure or, under `ContinueCertifiedTouch`,
+§10.3's persistent touch or band track; two source boxes whose box proofs
+cannot continue a touch rerun on that path. Its reports replay rounded poses
+from recorded gap bounds and pose deviations. A body whose held mesh carries
+a positive displacement takes the same run with §10.4's band: an impact
+brackets onto a `ContactBand` sample, a band start never departs, and its
+track's depth widens by twice the displacement. A full source cylinder whose
+ruling touches a face of an exact planar body, or lies in the placed band of
+contact-geometry §4.5 at a turned start, continues, under
+`ContinueCertifiedTouch` and a spinning drift, with §10.4's rolling band
+track over the ruling's two ends. Other unequal spins, rotating paths, and
+payloads remain design contracts.
+An extruded circular source prism or a full revolve of an axis-incident
+rectangular half-profile can certify a strictly separated axial affine path
+against a containing source-box face. The sweep uses the source-derived outer
+disk box at both endpoints and over the full translation, and replay charges
+the rounded pose deviation before returning a clear sample. Both sources
+can also certify a first face impact, separating departure, and an end-disk
+persistent track. Near contact,
+lateral motion outside the containing face, partial revolutions, and other
+revolved profiles return `Undecided` on this path.
+Part C owns the package
+boundary and Part G owns relation and manifold
+proofs at one pose. This document owns the paths, continuous clear certificate,
+first-contact search, and sweep report. `agent-docs/motion-check-design.md` supplies
+the existing one-mover proof pattern; its `VerifyMotion` API stays separate.
+
+Navigation only: paths and API → §1–2; pose accounting → §3; continuous bounds
+→ §4; search and report → §5–6; work and errors → §7; computed tests → §8.
+
+### 1. Claim and ownership
+
+`SweepPair` reads two live, sound solid bodies of one `Document`, each under its
+own prescribed path over one shared positive duration. It changes neither body
+nor document. It returns the earliest **certifiable** outcome:
+
+| Outcome | Claim |
+|---|---|
+| `SweepClear` | The bodies have strictly positive separation at every time in the closed step. |
+| `SweepDepartedClear` | The pair starts in certified touch, departs immediately, and has strictly positive separation at every later time in the step. |
+| `SweepPersistentTouch` | The pair stays in certified touch throughout the step, with a stable source feature set and a bounded manifold track. |
+| `SweepPersistentBand` | Appended after `SweepGrazingTouch`. The pair stays within a published depth of one certified normal throughout the track, with stable source features and a bounded manifold track; Part N §10.3 owns the certificate. |
+| `SweepContactTransitionBracket` | The pair starts touching and a bracket encloses the first change in contact features, patch structure, or departure from touch. The preceding contact track is certified. |
+| `SweepImpactBracket` | The clear prefix may follow a certified departure from initial touch. The left pose is separated and the right pose certifies touch or overlap. Width is at most `TimeResolution`. |
+| `SweepGrazingTouch` | One exact interior instant has certified touch. Both open sides of the closed step are strictly separated; no overlap or other touch occurs. |
+| `SweepInitiallyTouching` | Contact is certified at time zero. It says nothing about closing velocity or a later impact. |
+| `SweepInitiallyOverlapping` | Interior overlap is certified at time zero. |
+| `SweepUndecided` | The available proof cannot establish one of the above. The earliest unresolved interval and a structured reason are returned. |
+
+The pair order is the caller's `(a, b)` order. Normal directions in any contact
+report therefore point from A toward B. A certified relation does not imply
+that the contact kernel supplied a manifold usable for dynamics. The solver
+must inspect manifold availability separately; it never steps through an
+undecided interval or treats a later overlap sample as the first impact.
+
+### 2. Paths and entry point
+
+```go
+func (d *Document) SweepPair(ctx context.Context, a, b *Body,
+    pathA, pathB PairPath, req SweepRequest) (*SweepReport, error)
+
+// PairPath is sealed. The permitted values are PoseSegment and
+// RigidDriftSegment. Each has one Duration of Kind Time.
+type PairPath interface {
+    pairPath()
+}
+
+type PoseSegment struct {
+    From, To r3.Transform // relative to the body's current placement
+    Duration units.Value // positive Time
+}
+
+// QuantityVec belongs to decad so geometry cannot import dynamics.
+// Every component has the stated kind; all constructors validate it.
+type QuantityVec struct { X, Y, Z units.Value }
+
+type RigidDriftSegment struct {
+    From            r3.Transform // relative start pose
+    Center          r3.Vec       // world pivot at the start, millimetres
+    LinearVelocity  QuantityVec  // Velocity, world coordinates
+    AngularVelocity QuantityVec  // Angle / Time, world coordinates
+    Duration        units.Value  // positive Time
+}
+
+type SweepRequest struct {
+    ContactRequest
+    TimeResolution    units.Value // positive Time, <= Duration
+    MaxPoseEvaluations uint64     // >= 2; counts distinct pair times
+    StartPolicy       SweepStartPolicy
+}
+
+type SweepStartPolicy int // StopAtInitialContact (zero),
+                          // ContinueSeparatingTouch, ContinueCertifiedTouch
+```
+
+Both paths must name equal physical durations, compared as exact rational base
+time values read from their units, without a tolerance. Their time fraction
+`s = t / Duration` is shared; their transforms are evaluated independently at
+that fraction. A stationary path is legal. `PoseSegment{From: p, To: p}` is
+constant, and a drift with both velocity vectors zero is constant. A mixed
+handedness screw segment is invalid; two proper endpoints or two reflected
+endpoints are legal. A drift composes proper rotations onto its `From`, so a
+reflected start stays reflected. Dynamics may impose a narrower no-reflection
+gate on its own state.
+
+For a `PoseSegment`, read `rel = From.Inverse().Then(To)` and `rel.Screw()` once.
+At `s` the float pose is `From.Then(screw.At(s))`. At exactly `s = 0` and `1`,
+return the stated `From` and `To`, as `Between.PoseAt` does. `From == To` skips
+decomposition and returns `From` at every sample. A nonidentical pair whose
+read screw has zero angle and slide is likewise constant; its endpoint
+deviation still covers the stated `To`. The path takes r3's deterministic
+shorter arc, including its half-turn axis choice. A caller needing a longer
+rotation splits it into segments.
+
+For `RigidDriftSegment`, let `u` be elapsed time. Its world-space step rotates
+by `|ω|u` about the line through `Center` along `ω`, then translates by `v u`.
+The resulting pose is `From.Then(step)`, where `r3.RotationAround`,
+`r3.Translation`, and `Transform.Then` construct the float step. A zero `ω`
+uses translation alone. `Center` is a path pivot, not an inferred mass property;
+the dynamics layer ensures it matches its bounded center-of-mass state. This
+path realizes `c(u) = Center + v u` and `R(u) = Rotation(ω, u) R(0)` for an
+isolated rigid drift. Replacing it with endpoint screw interpolation would
+move the center along a different path when `v` is perpendicular to `ω`.
+
+Both variants compose onto each body's existing placement in the same order
+as `Transform`. No path is constructed by subtracting one body's pose from
+the other's at the endpoints. The relative transform can have nonlinear
+motion even when both individual paths are simple.
+
+### 3. Exact path and sampled pose
+
+Treat every finite input float as the exact rational it denotes, and interpret
+its unit through the exact or outward-enclosed unit factor. For a screw path,
+the ideal transform is the exact screw of the **read** `Axis`, `Point`, `Angle`,
+and `Slide`, composed after the exact `From`, exactly as motion-check §5.1
+defines. For a drift, the ideal transform uses the stated world pivot and the
+exact typed velocity components, with the axis normalization, angle, sine,
+cosine, and any unit factor enclosed outward. The ideal body at each `s` is
+that transform composed onto the exact read current placement.
+
+The evaluator sees a float `r3.Transform` instead. For body `i` and evaluated
+fraction `s`, calculate a point-displacement allowance `η_i(s)` between the
+float placed body and its ideal body. Use motion-check §5.1's matrix-difference
+times record-coordinate radius plus translation-difference form, with rational
+intervals for every operation. Both bodies contribute: the ideal pair gap
+interval is the float-pair gap interval widened by `η_A + η_B`. If either
+radius or deviation is unbounded, the pose cannot prove a gap or contact.
+For a rotating source box, compare all eight exact staged source corners under
+the read query pose with their ideal-path intervals. The largest outward-rounded
+corner distance bounds every point of the box. This uses the same staged
+placement and pose operations as `ContactPair`; a float-composed transform can
+round away an error that remains in those source corners. An exact planar
+body compares every vertex of its snapshot the same way; the body lies in
+their hull, where the affine difference of the two images is largest at a
+vertex.
+The stated screw `To` gets the motion-check §5.1 endpoint allowance against
+both the ideal end and exact `To`; a drift has no separate `To` promise.
+
+A float-pose touching result is not automatically ideal touching. The
+contact kernel must supply a certificate that survives both pose deviations
+or evaluates the exact source geometry under the stated pose. Otherwise the
+ideal relation is `Undecided`. A float-pose overlap transfers when both pose
+deviations are zero, or when its bounded volume exceeds both bodies'
+boundary-sweep allowances, using motion-check §5.1's area scaling for each.
+A separate exact source-set proof may establish overlap at the ideal pose.
+An overlap known only by a witness cannot cross a nonzero pose deviation
+without such a proof.
+Contact geometry's exact-rational source-box path provides the first placed
+box touching certificate; ordinary `bodyGeom.delta` clearance §6 alone does
+not certify touch under a displaced transient placement.
+
+`ContactPair` speaks about the exact query pose named by its two read float
+transforms. `SweepPair` separately transfers its result to the ideal paths and
+records that adapted relation in `SweepEvent`. A manifold's point and normal
+bounds must include placement and path-pose deviation before the sweep can
+publish it. The adapted relation may be certified while those bounds are too
+wide for the requested `PointResolution` or `NormalResolution`. Never infer a
+contact normal from an overlap volume or from the direction between centers.
+
+### 4. Conservative continuous bounds
+
+#### 4.1 Travel of each body
+
+Read each body's `Bounds()` at its current placement, inflate its coordinates
+by its outward `Bound`, and map all eight corners through the exact `From`.
+Their coordinate hull contains the ideal start body. For a screw with axis line
+through `Point` along `Axis`, let `ρ` be the maximum distance of those mapped
+corners from that line, rooted upward. Distance from a line is convex, so no
+interior point has a larger radius. Let `θ` and `d` be the read screw's angle
+and slide. Over a fraction span `h`, every point travels at most
+
+```text
+τ_screw(h) = h (ρ θ + |d|).
+```
+
+For a drift, let `ρ` be the maximum distance of the same mapped corners from
+`Center`; this is convex too. Let `V` and `Ω` be outward bounds on the norms
+of the exact world linear and angular velocity vectors in mm/s and rad/s.
+Over elapsed span `q`, every point travels at most
+
+```text
+τ_drift(q) = q (V + ρ Ω).
+```
+
+The same radius works throughout each path: screw motion preserves distance
+to its axis; drift rotation preserves distance to its moving center, and the
+center's translation is charged separately. Reflections in `From` do not alter
+either argument. A stationary path has zero travel. Roots, products,
+trigonometric factors, and final travel are rounded outward, never merely
+evaluated in float and compared as though exact. If a finite bound cannot be
+formed, the result is `SweepUndecided`, not a clear certificate.
+
+The mapped corners, the pivot and the axis are all dyadic, so every corner's
+squared cross product with the axis is exact dyadic arithmetic over the one
+denominator `|axis|²`; the largest is chosen by that numerator and divided
+once before the upward root, which is the rational the per-corner quotients'
+maximum is. A step reads a path's radius for its swept box and again for its
+sweep, so each body keeps its last 256 radii, keyed by the `From` and pivot
+bits and the exact axis (`internal/sweeppath/radius_reader.go`).
+
+#### 4.2 Swept boxes
+
+Build one conservative box per body from the exact `From`-mapped inflated
+corner hull, expanded on every axis by its full-path travel bound. Compare
+the two boxes using exact rational extremes. Strict separation on any axis
+proves `SweepClear` without pair-pose evaluations. Box faces merely meeting
+does not prove touch, clear, or overlap. Reading the original rest boxes and
+expanding only by `To - From` is invalid when either `From` moves a body before
+the path begins. A BVH or sweep-and-prune may discard only with this strict
+box certificate; it cannot change pair or sample order. The box is a public
+read-only query, `Document.SweptBox`, with `SweptBox.StrictlyDisjoint`;
+Part N §4.2 owns its shape and §4.3 the
+sort-and-sweep `dynamics` runs over it.
+
+#### 4.3 Time interval certificate
+
+At interval ends `l, r`, obtain proven positive lower gap bounds `g_l, g_r`
+for the **ideal** placed pair. Let `T_A(l,r)` and `T_B(l,r)` be each body's
+travel bound over the interval, and `T = T_A + T_B`, rounded upward. For every
+time `u` inside, the true pair distance is at least each endpoint's lower gap
+minus the travel from that endpoint. The interval has strictly positive gap
+throughout when
+
+```text
+g_l + g_r > T.
+```
+
+The comparison uses exact rationals with outward bounds. A conservative lower
+bound on the interval gap is `(g_l + g_r - T)/2`, rounded downward, and may be
+loose. Neither two separated endpoint samples nor touching boxes prove this
+inequality. No tolerance turns a failed strict comparison into `Clear`.
+If an endpoint is touching, overlapping, or undecided, this positive-gap
+certificate cannot use it. A different continuous geometric proof may settle
+the interval only if the contact kernel explicitly supplies one.
+
+For a Z-axis rigid drift against a stationary source box, compare the two
+exact source-box Z supports after the stated vertical displacement at each
+dyadic fraction. Rotation leaves these supports unchanged. A float-pose
+horizontal manifold transfers to the ideal path only when every rotating
+face corner stays strictly inside the stationary face after both pose
+deviations and witness bounds are charged. A negative exact support gap
+proves a shallow ideal overlap even if the rounded pose touches. A zero gap
+proves ideal touch. Widen every transferred point by both pose deviations.
+An exact initial support equality and positive vertical relative speed prove
+a whole-body open-time gap; then the usual interval bounds certify the
+remaining path. A partial patch or a tilted rotation has no such proof.
+
+#### 4.4 Source sphere and box face corridor
+
+For the source ball admitted by contact geometry §4.2, an affine sweep can
+use one box face when the sphere center plus and minus its radius stays
+strictly inside both projected box intervals at the start and end. The four
+signed endpoint inequalities prove that containment for every intervening
+time. The normal support gap is then one exact affine function. Its positive
+sign throughout proves clear; a positive start gap and a decreasing gap give
+the exact first-contact root. Choose a dyadic bracket with a strictly clear
+left endpoint and a right endpoint beyond that root, no wider than the caller's
+time resolution. The right margin keeps the float query on the overlapping
+side when ideal and rounded poses differ by a small amount.
+
+For a shortened impact prefix, the final fraction may replace the usual right
+dyadic sample when the root lies before that endpoint and the shortened
+bracket fits `TimeResolution`. The real endpoint sample must still report a
+matching shallow sphere manifold. Replay caches the original sphere and box,
+the face corridor, and the exact affine support gap. At an interior fraction,
+check the rounded placements against the ideal path within `PointResolution`,
+then require the same face corridor and the outcome's support-gap relation.
+Refuse replay when either check fails.
+
+At each sample, classify the ideal rational sphere and box independently of
+the float `ContactPair` query. Transfer the float manifold only when relation,
+source features, and normal agree; widen its two witness bounds and separation
+bound by the exact pose difference. An initial touch with an increasing normal
+gap proves immediate departure. A zero normal gap and the same face corridor
+prove a full-span point track. A path leaving the corridor returns
+`SweepUndecided`; a center sample alone cannot certify the missing span.
+
+A `RigidDriftSegment` may rotate the sphere when its pivot equals the source
+sphere center, that center equals the query pose translation, and the other
+path is affine. Its angular velocity changes the
+sampled pose, but the occupied ball follows the exact affine center path from
+its linear velocity. Form the sampled proper rotation through `r3`, then set
+the center translation from that affine path so rotation rounding cannot turn
+an exact touch into a crossing. Use the same face-corridor, support-gap, and
+point-track proof as the translating sphere. Replay recomputes the rotating
+pose and checks its center against the cached affine path and point resolution.
+Refuse a different pivot, an unrepresentable center displacement, a rotating
+box, or a path outside the face corridor.
+
+For an exactly orthogonal rotated box, require the same exterior source face,
+strict projected disk margins, and opposite-face clearance at both affine
+endpoints. Those inequalities are affine, so both endpoint proofs cover the
+whole span. Compare the squared exact center-to-face support with squared
+radius times squared face normal; this decides clear, touch, and overlap
+without rounding the normal length. Binary search dyadic fractions for the
+first sign change, then leave a right-side overlap margin within
+`TimeResolution`. The real right sample must retain the same bounded point
+manifold. Replay compares rounded source corners and sphere center against
+the cached ideal affine path, then rechecks the same face corridor and support
+relation. A skew box, edge/corner corridor, non-affine pose, or lost rounded
+manifold returns `SweepUndecided` or `ErrUnsupported` as appropriate.
+
+#### 4.5 Affine source-sphere pair
+
+For two source balls admitted by contact geometry §4.3, require the relative
+center displacement and initial center difference to use the same sole
+cardinal axis. The signed center distance minus the radius sum is affine up
+to first contact. A positive value throughout proves clear; an initial touch
+with an increasing gap proves immediate departure. A decreasing positive
+start gap has one exact first-contact root. Bracket it with dyadic fractions,
+including a root at the final endpoint, with a clear left sample and a
+touching or overlapping right sample. The endpoint can be ideal overlap
+while the rounded pose is touch. Transfer the source manifold only when both
+queries name the same source faces. For a cardinal center line, keep the exact
+normal when both queries retain the same cardinal direction. For an off-axis
+center line, bound the change in unit normal from the exact center-pose
+difference and shorter center-line length. Charge that change to normal,
+witness, angle, and separation bounds before publishing the event manifold.
+
+For a transverse relative displacement, compare the exact quadratic squared
+center distance minus squared radius sum over the held affine path. Its minimum
+proves a full clear span or locates the earliest possible impact. Search the
+decreasing side with dyadic fractions; require a separated left endpoint, a
+touching or overlapping right endpoint, and width at most `TimeResolution`.
+Find a hidden pass-through before reporting clear. An unrepresentable shallow
+overlap returns `SweepUndecided`. An exact isolated tangent can use §4.5.1;
+other tangent paths remain undecided. The bounded
+center-line source manifold gate applies at the right sample. A zero-gap touch
+with equal exact affine displacements and one bounded source point publishes a
+full-span track. Its exact center-distance polynomial is identically zero.
+Both endpoint samples must retain the same source faces. An interior track
+query translates both cached spheres by their common exact displacement and
+reduces them to a bounded point manifold. Replay requires exact touch of the
+rounded pair. Unequal displacements remain undecided for persistent
+continuation.
+
+A centered rotating `RigidDriftSegment` may enter this sphere-pair proof under
+`StopAtInitialContact`, or after initial point touch under
+`ContinueSeparatingTouch`. Require each rotating sphere's exact source center
+to equal both its query translation and stated pivot. Require each full linear
+displacement to be representable as a dyadic rational. §2's drift rotates
+about the line through its pivot and then translates, so a pivot at the ball's
+center moves that center along exactly `Center + v u`; the rotation leaves the
+occupied ball unchanged. An off-center pivot moves the center on a circle and
+returns `SweepUndecided`. The exact squared center-distance polynomial of the
+affine paths then decides every outcome above: a clear path, an initial touch
+or overlap, a first-impact bracket, an isolated graze by §4.5.1, or a
+departure. Each sample keeps the real rotation and rebuilds its center from
+the exact affine path, rounding each coordinate once, so rotation rounding
+cannot move it. The usual float-to-ideal manifold transfer charges the
+remaining center difference. The real start pose must report the ideal
+relation, and a clear path's real end pose separation. Replay checks rounded
+poses against the same polynomial.
+A separated or overlapping start under `ContinueSeparatingTouch`, and an
+unresolved or closing departure, return `SweepUndecided`.
+
+#### 4.5.1 Isolated sphere-pair graze
+
+For a separated affine source-sphere pair, form the exact rational polynomial
+`q(s) = |(centerB−centerA) + s(deltaB−deltaA)|² − (radiusA+radiusB)²`
+from the held source centers, radii, and translations. Publish
+`SweepGrazingTouch` only when its quadratic coefficient is positive, its
+discriminant is exactly zero, and its sole minimum `s*` is strictly inside
+`(0,1)`. Prove `q(0)>0` and `q(1)>0`. These facts prove `q(s)>0` on both open
+sides of `s*` and `q(s*)=0`; separated endpoint samples alone do not prove it.
+The same source-sphere pair proof must classify the exact minimum as touching
+with one bounded point manifold. The manifold's normal, source faces, and
+witness bounds pass §4.5's float-to-ideal transfer at the minimum.
+
+Require `s*` to have an exact finite `units.Scalar` representation and an
+exactly representable positive event time `Duration × s*` before publishing
+the outcome. The report keeps the private rational fraction even though its
+public `SweepInstant` uses `units.Value`. Evaluate the real `ContactPair` at
+`0`, `s*`, and `1`; require separated endpoints and a touching float pose at
+`s*` with the same source faces. A float overlap, missing manifold, or
+insufficient point or normal resolution makes the sweep `Undecided` with its
+earliest unresolved interval. `MaxPoseEvaluations` must fund all three poses;
+the request's existing minimum of two remains valid, but two poses cannot
+certify this outcome.
+Use `SweepEventUnrepresentable` when the exact fraction or event time cannot
+be published, `SweepPoseBudget` when a required pose cannot be evaluated,
+`SweepPoseRelation` when the float relation disagrees, and
+`SweepContactUnsupported` when the event manifold cannot be transferred.
+The unresolved interval contains `s*` and no later event is published.
+
+This outcome applies to affine `PoseSegment` and `RigidDriftSegment` paths
+admitted by §4.5, including centered spinning drifts. It does not infer a
+graze for another rotating path, source-box pair, sphere-box pair, nonrepresentable minimum,
+initial touch, or final-instant touch. A positive quadratic minimum is
+`SweepClear`; a negative minimum enters the existing earliest-impact search.
+An initial touch follows §5.1, regardless of later motion. If a different
+pair kernel cannot prove the full two-sided relation, it returns
+`SweepUndecided` rather than this outcome.
+
+#### 4.6 Source-cylinder box-face path
+
+For a full circular source prism or axis-incident rectangular full revolve
+and one source box at signed-axis poses, construct exact outer boxes from the
+source disk, axial limits, and recorded placements. Admit an affine clear
+sweep only when the cylinder's projected disk stays strictly inside the box
+face at both path endpoints. Check that
+one axial gap between the complete swept outer boxes exceeds
+`PointResolution`. The two endpoint `ContactPair` queries must also prove
+separation, and their rounded pose differences must fit `PointResolution`.
+Both admitted source cylinders enter the axial impact path after an
+outer-box intersection. The impact path admits transverse relative translation
+when the cylinder's outer disk box stays strictly inside the same box face at
+both endpoints. Each transverse edge difference is affine, so strict endpoint
+containment proves containment throughout the interval. The initial axial
+support gap must be nonnegative.
+The signed axial support gap is affine. A decreasing positive gap supplies
+its exact first-contact root, including equality at the final endpoint. Use a
+dyadic bracket with a separated left
+sample and a touching or shallow-overlapping right sample whose original
+face identities and signed normal match the posed `ContactPair` query.
+Transfer that query's bounded witness to the ideal path by charging the
+rounded pose difference. Under either continuation policy, an initial touch
+with increasing support gap proves immediate departure. Under
+`ContinueCertifiedTouch`, an initial end-disk touch whose support gap has
+zero slope (equal axial displacement, any transverse translation inside the
+corridor) is a full-span persistent track: the gap is zero at every fraction,
+and strict endpoint containment keeps the complete disk inside the same face,
+so the same two original faces and exact normal hold throughout. Every
+coordinate of the disk-center witness lies within the endpoint envelope of
+both outer boxes. One outward ULP at its largest magnitude, as a point-ball
+radius, must fit `PointResolution`, so `ManifoldAt` can read a bounded point
+at any fraction. The final real sample must also touch with the same faces.
+`ManifoldAt` translates both cached sources by the exact fraction, reclassifies
+them, and returns the single disk-center point. A closing touch, a stationary
+touch under `ContinueSeparatingTouch` (`SweepDepartureUnproved`), a sidewall
+line touch, a near gap without a clear margin, or a path leaving the face
+corridor returns `SweepUndecided`. Exhausting the pose budget at the bracket's
+right sample returns `SweepUndecided` with `SweepPoseBudget` and the
+unresolved bracket.
+
+Replay translates the cached source outer boxes with the held affine paths.
+At each requested fraction, the rounded cylinder projection must remain
+inside the rounded box face and the pose difference must fit
+`PointResolution`. A clear path keeps a support gap above that difference.
+Departure requires exact touch at the start and positive ideal and rounded
+gaps afterward. A persistent track's rounded gap must lie within the pose
+difference of its zero ideal gap. Before an impact bracket, replay requires a
+positive gap; inside the bracket, the ideal support gap must fit
+`PointResolution`.
+
+For one full circular source prism with a vertical cylinder axis, the same
+affine proof may select a horizontal axis instead of the cylinder axis. Its
+relative axial displacement must be zero. Its complete axial interval
+and other transverse diameter must stay strictly inside the box face at
+both endpoints. The contact query supplies the source cylindrical Face,
+box Face, one bounded midpoint on the complete axial contact line, and the
+exact transverse normal. The selected circle support is the exact outer-box
+extremum, so its signed gap is affine and the impact, departure, and replay
+checks above apply. A revolved sidewall, rotating cylinder, or line reaching
+the face edge returns `SweepUndecided` on this path.
+
+### 5. Earliest-event search
+
+Evaluate time zero first unless swept-box exclusion has already proven the
+whole path clear. Return `InitiallyOverlapping` on certified initial overlap.
+At initial touch, the default `StopAtInitialContact` returns
+`SweepInitiallyTouching`; the two continuation policies use §5.1. If the zero
+pose is undecided, return `SweepUndecided` with its cause. Evaluate the far
+endpoint next and maintain the samples in increasing dyadic fraction order.
+
+Process intervals from left to right. A certified clear interval extends the
+clear prefix. For the first interval not certified clear:
+
+1. If it has a separated left endpoint, a certified touching or overlapping
+   right endpoint, and exact duration no greater than `TimeResolution`, return
+   `SweepImpactBracket`. Its left endpoint is the end of the clear prefix.
+2. If its duration exceeds `TimeResolution`, evaluate its dyadic midpoint and
+   process the left half before the right half. This order searches for an
+   earlier hidden contact even when the old right endpoint overlaps.
+3. If its duration is at the floor, and no right endpoint certifies contact
+   or overlap, return `SweepUndecided` for that interval.
+
+Continue only when an interval has become certified clear. If every interval
+becomes clear, return `SweepClear`, or `SweepDepartedClear` after a certified
+departure from initial touch. A tangential graze may have no overlap
+sample. The exact sphere-pair proof in §4.5.1 can publish
+`SweepGrazingTouch`; otherwise it leaves an undecided floor interval.
+Separated samples alone cannot turn it into `Clear`.
+If midpoint arithmetic cannot produce a distinct dyadic fraction, return
+`SweepUndecided` with `SweepFractionFloor`. The search never skips an earlier
+uncertified interval to publish a later collision as the first event.
+
+The procedure also handles two moving bodies that pass through one another
+and separate between initial and final samples: their combined travel keeps
+the interval undecided until a contact sample is found or the floor reports
+uncertainty. A contact's impulse decision remains with dynamics; the sweep
+proves only the geometric continuation of the stated paths.
+
+#### 5.1 Continuation from initial touch
+
+`ContinueSeparatingTouch` and `ContinueCertifiedTouch` both require a new
+one-sided certificate after an initial `Touching` relation. A private
+departure proof supplies a duration `h > 0`, a proven positive gap lower bound
+at `h`, and a global lower-gap function `L(u) > 0` for every `0 < u <= h`.
+The proof must cover the **complete** initial contact set and all other body
+features. Positive normal velocity at one manifold point is insufficient.
+A general admissible form is `L(u) >= c*u - K*u*u` with proven `c > 0`,
+`K >= 0`, and `c - K*h > 0`; a kernel may instead provide a stronger direct
+bound. Select the largest representable dyadic fraction `h/Duration` within
+the proved horizon, and evaluate its endpoint. If no positive fraction can be
+represented, return `SweepUndecided` with `SweepFractionFloor`.
+
+The initial source-box path in contact-geometry §4.1 proves departure for
+certified pure affine translations. At time zero, an opposed support axis `n`
+has equal A maximum and B minimum. An outward lower bound `w > 0` on
+`(v_B - v_A)·n` proves the **whole-body** gap at least `w*u` for every `u > 0`.
+Either body may move. The exact source boxes and placed poses are required;
+transient AABBs with displacement bounds cannot establish the equality. A
+rotation, tangential speed on that axis, an uncertain equality, or `w <= 0`
+does not pass this source-box departure path.
+
+For co-oriented source boxes at a fixed oblique pose, use the exact dyadic
+cross product of two source edges as the common support-plane normal. A
+four-point initial face manifold and exact equality of opposed support
+projections identify the complete touching face. A positive exact dot product
+of relative affine displacement with the outward normal proves a strictly
+positive support gap for every positive path fraction. Check the chosen
+rounded departure sample with its float-to-ideal pose bound. Every later
+clear interval must keep this exact support gap positive at both endpoints;
+affine motion then proves it positive throughout the interval.
+
+For a stationary horizontal source-box face and a moving source box whose
+only angular component is about world Y, read all eight exact staged moving
+corners and the exact drift pivot. The initial four-point manifold must have
+the same exact vertical normal at every point, and opposed full-box Z supports
+must be equal. For each corner, bound its outward height derivative by the
+exact `sign * (v_z - omega_y * (corner.x - center.x))`. Require the minimum
+derivative `c` over all eight corners to be strictly positive. Bound the
+absolute height acceleration of each corner by
+`omega_y^2 * (abs(corner.x - center.x) + abs(corner.z - center.z))` and use the
+maximum as `K`. The stationary support plane and the initially nonnegative
+corner heights then give a full-body gap at least `c*u - K*u*u/2`. Admit a
+dyadic horizon only when `K*h < c`; reduce the horizon when the full duration
+fails. The rounded horizon sample must retain a positive gap after pose
+deviation, and later intervals need their own continuous clear certificates.
+The same `c`, `K` form over every vertex of any exact planar body, with both
+bodies moving, is Part N §10.2; its band track
+for a contact whose `c` is zero within the solver's residual is §10.3, and
+a start within the request's `SupportBand` continues over the support set
+of §10.5, holding a lifted vertex that closes no faster than the request's
+`RestSpeed` on both sides of the plane (§10.8). The support plane may be one face of an owner with material in
+front of it, a tray's floor, under the column test of Part N's §10.6,
+which also caps the lower-gap function by the lateral clearance.
+
+After departure, mark `(0,h]` as certified clear, put a separated sample at
+`h`, and run §5's earliest-first search on `[h, Duration]`. If no later
+contact appears, return `SweepDepartedClear`; if later contact appears, return
+`SweepImpactBracket` with the initial touch retained separately. The clear
+claim is open at zero: neither result calls the closed `[0, Duration]` path
+strictly separated. If the departure proof fails under
+`ContinueSeparatingTouch`, return `SweepUndecided` with
+`SweepDepartureUnproved`; never discard the initial touching pose and start
+searching at a positive time by sample choice alone.
+
+`ContinueCertifiedTouch` first accepts the same departure proof. Otherwise
+it asks for a complete persistent-contact track. A valid track proves that
+the pair stays `Touching`, with opposed material sides and no overlap, at
+every instant in its interval. It must provide a bounded manifold at every
+instant that the dynamics solver will use. If the track reaches `Duration`
+without changing source features or patch structure, return
+`SweepPersistentTouch`. A stationary resting stack is this case. If no such
+track can be proved, return `SweepUndecided` with
+`SweepContactTrackUnproved`. Tangential velocity alone is no proof of
+persistent contact.
+
+For two source-certified boxes under pure affine translation, contact-geometry
+§4.1 supplies exact axis intervals. Persistent face touch requires equality
+on one opposed support axis for the whole tracked interval and strictly
+positive projected overlaps on both other axes. Each projected overlap is
+the minimum of two affine upper endpoints minus the maximum of two affine
+lower endpoints. Enumerate exact rational roots where endpoint order changes
+or projected overlap reaches zero. Between consecutive roots, the active
+source features and clipped patch vertices follow fixed affine formulas;
+check their inequalities at both ends with outward bounds. This certifies
+the complete contact set and a manifold track for resting or planar sliding.
+An endpoint-order tie at time zero is resolved by its right-sided derivative
+when the patch and normal are continuous. It is recorded in the initial
+track, rather than returning a zero-time transition that a solver would hit
+again on every restart. If the right-sided contact set or normal cannot be
+certified, return `SweepContactTrackUnproved`.
+If an edge or vertex limit occurs, classify that exact limit as touching,
+then test the next open interval for persistent contact or positive gap.
+Do not infer separation merely because the face patch shrank to zero.
+
+Return `SweepContactTransitionBracket` at the **first** root that changes a
+source feature, clipped patch structure, or touching/separated relation.
+Bracket the exact rational root by adjacent representable dyadic times with
+width at most `TimeResolution`; a dyadic root may use a zero-width bracket.
+The report certifies the contact track before the bracket and the relation
+at both bracket samples. This is a solver restart point, not an impulse by
+itself. On edge exit, an exact equality at the root and a strict projected
+gap afterward prove the one-sided departure; a later recontact is searched
+on the remaining interval after the restart. If a root cannot be bracketed
+within the resolution or budget, return `SweepUndecided` with the earliest
+unresolved interval. Curved, rotating, or non-box contact may remain
+undecided until their own contact-track proof exists.
+
+The dynamics solver invokes `ContinueSeparatingTouch` after resolving an
+impact whose next drift begins at certified touch. It invokes
+`ContinueCertifiedTouch` for supported resting or sliding contacts. It may
+advance across a contact transition bracket only when its time-travel and
+state residual gates cover the bracket; otherwise the step is undecided.
+
+### 6. Report shape and ordering
+
+```go
+type SweepOutcome int // Clear, DepartedClear, PersistentTouch,
+                      // ContactTransitionBracket, ImpactBracket,
+                      // InitiallyTouching, InitiallyOverlapping, Undecided,
+                      // GrazingTouch, PersistentBand; zero is invalid
+
+type SweepCause int // None, PoseRelation, MissingBound, TimeFloor,
+                    // FractionFloor, PoseBudget, ContactUnsupported,
+                    // DepartureUnproved, ContactTrackUnproved,
+                    // EventUnrepresentable
+
+type SweepInstant struct {
+    Fraction units.Value // Dimensionless dyadic fraction, canonical time
+    Elapsed  Measurement // Time, outward bound on Fraction × Duration
+}
+
+type SweepInterval struct {
+    From, To SweepInstant
+}
+
+type SweepDeparture struct {
+    Until SweepInstant
+    GapAtUntil Measurement // strictly positive lower gap at Until
+}
+
+// SweepContactTrack holds an immutable private continuous certificate.
+// Accessors return copies; no exported field can change that certificate.
+type SweepContactTrack struct { /* private source snapshot and proof */ } // report.SweepContactTrackOf, handle instantiation
+
+func (t *SweepContactTrack) Start() SweepInstant
+func (t *SweepContactTrack) End() SweepInstant
+func (t *SweepContactTrack) Features() (ContactFeature, ContactFeature)
+func (t *SweepContactTrack) Normal() VecMeasurement
+func (t *SweepContactTrack) ManifoldAt(fraction units.Value) (*ContactManifold, error)
+func (t *SweepContactTrack) Band() *Measurement // nil for an exact touch track; multibody §10.3
+func (t *SweepContactTrack) BandAt(fraction units.Value) (*Measurement, error) // the band over [start, fraction]; nil for an exact touch track
+
+type SweepSample struct {
+    At           SweepInstant
+    PoseA        r3.Transform
+    PoseB        r3.Transform
+    FloatContact *ContactReport // query at the two read float transforms
+    Ideal        SweepEvent     // relation transferred to the ideal paths
+}
+
+type SweepEvent struct {
+    At       SweepInstant
+    Relation ContactRelation
+    Gap      *Measurement // separated or certified touching only
+    Overlap  *Measurement // bounded ideal overlap, when proven
+    Manifold *ContactManifold
+    Reason   ContactReason // when relation or manifold is unavailable
+}
+
+type SweepReport struct {
+    A, B            *Body
+    PathA, PathB    PairPath
+    Request         SweepRequest
+    Outcome         SweepOutcome
+    Bracket         *SweepInterval // ImpactBracket or ContactTransitionBracket
+    Unresolved      *SweepInterval // only for Undecided
+    InitialEvent    *SweepEvent // certified touch/overlap at time zero
+    Event           *SweepEvent // later impact, graze, initial event, or transition right sample
+    Departure       *SweepDeparture // only after one-sided proof
+    ContactTrack    *SweepContactTrack // complete certified touching prefix
+    Cause           SweepCause     // only for Undecided
+    Samples         []SweepSample  // increasing Fraction, no duplicate time
+    BoxExcluded     bool           // true only when both swept boxes prove clear
+    PoseEvaluations uint64
+}
+
+func (r *SweepReport) HasAffineReplayProof() bool
+func (r *SweepReport) BracketEndsAtDuration() bool
+func (r *SweepReport) CertifiedPosesAt(elapsed units.Value) (r3.Transform, r3.Transform, error)
+func (r *SweepReport) CertifiedPosesAtInterval(time, start, end units.Value) (r3.Transform, r3.Transform, error)
+```
+
+`SweepReport` is `report.SweepReportOf` instantiated with the root handles,
+and `SweepEvent` and `SweepSample` are its event and sample records; the
+fields and methods above are defined there. The record also carries the
+producer's replay proof and exact bracket right fraction, and a sample its
+exact fraction, behind accessors that take an `internal/seal.Key`, so only
+decad's own producers can read or set them.
+
+`SweepPair` validates the bodies, paths and request, builds the report over
+the bodies' topology nodes, and hands it to `internal/sweeprun`, which selects
+the producer and fills it. The run takes two hooks from the document:
+`ContactPair` in node form, with its recent-report memo, and the verified
+mesher the held-body paths use. `report.LiftSweepReport` then maps the finished
+node report to the root handles, keeping an event that is also the initial
+event as one event.
+
+`BracketEndsAtDuration` compares the producer's private exact bracket right
+fraction with one. The public `Fraction` may be rounded.
+
+For `SweepGrazingTouch`, `Event` is the exact interior touching sample.
+`Bracket`, `Unresolved`, `InitialEvent`, `Departure`, and `ContactTrack` are
+nil; `Cause` is `SweepNoCause`. `Samples` includes the separated start and end
+and the touching event in increasing fraction order. The outcome is not an
+impact bracket: it supplies no closing velocity and authorizes no impulse.
+Append its public enum value after `SweepUndecided` to preserve existing
+numeric values. Append `SweepEventUnrepresentable` after the existing cause
+values for the same reason. Reversing A and B keeps the same event fraction
+and reverses the bounded contact normal.
+
+`CertifiedPosesAt` evaluates the same float path used by the sweep at
+the requested elapsed time. For affine paths it checks the read float poses
+against the cached exact source boxes, spheres, or cylinder outer box.
+The sphere-pair path keeps
+both source centers, radii, exact translations, and impact bracket. At an
+arbitrary interior fraction it compares both rounded centers with their ideal
+rational centers, then checks the exact squared center distance against the
+radius sum. For a centered rotating drift, it evaluates the recorded rigid
+rotation and exact affine center displacement before the same comparison. A
+clear or departing sample must retain a positive gap after
+charging the center displacement; an impact prefix stays clear before the
+bracket and stays near contact at its right endpoint. A sample beyond the
+bracket is unsupported. It refuses when total displacement exceeds
+`PointResolution` or changes a clear or departing relation. For source-box
+persistent contact and event brackets, it accepts only a rounded relation
+within that resolution of the exact source-box relation. It does not call `ContactPair` or
+read the document. It refuses times outside the sweep or outside a certified
+event prefix. `CertifiedPosesAtInterval` maps exact held time values in a
+specified interval onto the certified spatial path. A dynamics trace uses
+its recorded event and step endpoints for that interval, avoiding a gap
+when the rounded sweep duration differs from their exact difference.
+For a grazing outcome, replay compares the exact squared center distance
+with the squared radius sum on the whole interval. At `s*`, both ideal and
+rounded squared center distances must equal the squared radius sum, and the
+rounded source faces must match the event. At every other fraction, both
+squared distances must be strictly greater than the squared radius sum, and
+the rounded center deviation must fit `PointResolution`. The cached
+quadratic establishes the ideal sign between queried times. If floating pose
+construction moves the rounded pair across or away from touch at `s*`, replay
+returns `ErrUnsupported`. The proof never turns a near graze into an exact
+event.
+For a clear rotating source-box drift, the report retains the sweep's exact
+source corners and ideal-path bounds. Replay checks the rounded oriented boxes
+with the exact separating-axis test. Their positive gap must exceed the total
+bounded corner difference from the ideal poses, and that difference must fit
+`PointResolution`. A rotating impact report replays its certified clear
+prefix through the bracket's left edge `lo`, and inside the bracket through
+its right edge it replays a fraction `f` when `(f − lo)·T − g + η` fits
+`PointResolution`: `g` the left sample's proven lower gap, `T` both bodies'
+travel bound per unit fraction, and `η` the rounded pose's deviation. Every
+ideal point lies within `(f − lo)·T` of its place at `lo`, where the pair was
+`g` apart, so the rounded pair lies within that bound of a separated pair,
+the claim the affine source-box replay makes inside its bracket. A left
+sample without a positive gap replays only through `lo`. `T` bounds every
+point's travel in any direction, so for a fast or far-reaching body a bracket
+`TimeResolution` wide can carry more travel than `g` plus `PointResolution`,
+and its right edge would refuse. The rotating search therefore narrows a
+found bracket below `TimeResolution` while its right edge fails that check,
+read with the deviation replay will charge there: a meeting midpoint becomes
+the right edge, and a separated one the clear certificate joins to the left
+edge becomes the left edge. The bracket found stands when narrowing reaches
+the float floor or the pose budget, or meets a midpoint that settles neither,
+so narrowing never turns a bracket into `SweepUndecided`. The check that
+stops narrowing admits nothing; replay's own check stays the gate.
+Rotating departure reports replay their separated interior after the
+producer's one-sided departure proof. Both paths check the exact oriented-box
+gap against their staged corner deviation before returning a rounded pose.
+For a co-moving oriented source-box persistent face track, replay uses the
+same cached source corners and exact time fraction. The rounded poses must
+fit `PointResolution` and yield a four-point patch on the producer's face
+pair within its point and normal bounds. A changed face, missing patch, or
+exceeded bound returns `ErrUnsupported`.
+A general planar sweep (Part N §10.1) replays
+without rerunning the pair relation, so its cost is one pass over both
+vertex sets. Both rounded poses must fit `PointResolution` of their ideal
+poses. On a clear interval or a departure the rounded pair must keep a gap:
+the sweep's proven lower gap at that time must exceed the summed vertex
+deviation, plus each positive-displacement body's displacement times its
+rounded pose's stretch plus one. Inside an impact bracket the bracket bound
+above applies with that deviation and displacement charge as `η`. A touch or
+band track checks every rounded held vertex height against the held band
+widened by that deviation.
+Each report keeps its last 32 replay answers, poses or refusal, keyed by
+the exact fraction (`internal/sweepreplay/`). The replay proof is complete
+before the report reaches a caller and reads none of its public fields, so a
+repeat returns the same answer and changes no outcome. A mutex guards the
+memo, since `Trace.Sample` and `Step` may replay one report concurrently.
+
+`Fraction` and the input `Duration` define the exact search time; `Elapsed`
+is a bounded convenience reading for callers. Bracket width is checked from
+those exact fractions and the exact read duration, not by subtracting rounded
+`Elapsed.Value` fields. A solver uses the fractions and duration to make its
+own conservative time choice. `SweepSample.FloatContact` is non-nil for every
+evaluated pair pose, including an undecided one, and names the original bodies.
+Samples are sorted after refinement, independent of evaluation order. The
+bracket's right sample and `Event` are the same ideal-path finding. `InitialEvent`
+keeps the time-zero relation when continuation finds a later event. A
+`Departure` certifies positive gap on `(0, Until]`, not at time zero. A
+`ContactTrack` certifies touch from time zero through `End()`. It owns copies
+of the source geometry and proof, so changing fields in another report or
+retiring a body later cannot alter its result. `ManifoldAt` requires a
+Dimensionless fraction in `[Start().Fraction, End().Fraction]` and returns a
+fresh bounded manifold. A
+`ContactTransitionBracket` carries both `ContactTrack` and `Bracket`, and
+`Event` holds the right sample's new relation. `BoxExcluded`
+reports the whole-path shortcut; its `Samples` is empty and
+`PoseEvaluations` is zero.
+
+For an undecided pose at time zero, `Unresolved` is the zero-width interval at
+zero. For a missing continuous proof, it is the earliest floor interval. For
+budget exhaustion, it is the earliest not-yet-certified interval. The cause
+does not replace the contact kernel's structured diagnostic; `Event` is nil
+when no contact is proven. Repeated calls with identical inputs produce the
+same outcome, sample order, bracket, and diagnostic order. Any spatial index
+or parallel work must preserve that published order.
+
+### 7. Validation, cancellation, and cost
+
+Validate both bodies, both path variants, durations, request units, finite
+values, and positive limits before reading `ctx`. Reject identical body
+pointers, foreign or retired bodies, non-solid bodies, a zero/invalid
+transform, a nonpositive duration, unequal durations, mixed-handedness screw
+endpoints, a nonfinite pivot or velocity component, wrong quantity kinds, an
+invalid resolution, or `MaxPoseEvaluations < 2` with the matching existing
+sentinel (`ErrDegenerate`, `ErrForeignBody`, `ErrRetiredBody`, `ErrUnitKind`,
+`ErrNotFinite`, `ErrNegativeMagnitude`, or `ErrUnsupported`). A valid sound
+solid whose pair kernel lacks a proof returns `SweepUndecided`, not an input
+error. An internal invariant failure remains an error with no report.
+
+`SweepPair` passes the validated request, a `report.SweepRequest`, to the sweep
+path it selects. The public `SweepRequest` is an alias of that type, so the
+request, its contact request and its start policy have one definition. When a
+rotating source-box run ends undecided with `SweepDepartureUnproved` or
+`SweepContactTrackUnproved` at a touching or `ContactBand` start,
+`planarContinuation` reruns the pair through `sweepPlanarPair` with the
+report's saved `Request`. The report's `Request` holds the caller's own value.
+A `ContactPair` query made by a sweep receives the contact request unchanged;
+the departure-gap query of a rotating run clears its `SupportBand` first.
+
+The dyadic grid depth is `ceil(log2(Duration / TimeResolution))`. Fully
+exploring it evaluates at most `2^depth + 1` distinct times, if that count is
+representable. `MaxPoseEvaluations` caps this work without silently relaxing
+`TimeResolution`. When the cap is reached, return `SweepUndecided` with
+`SweepPoseBudget` and the earliest unresolved interval. Reuse one contact
+result per pair time; use the existing bounded kernel work counter and
+`ctx` checks within each pose. A caller controls expensive kernel work with
+the context deadline, as interference §7.2 does. Do not claim that a pose
+budget caps each pose's geometric cost.
+
+A rotating run re-reads the same fractions and poses as it refines, samples
+and tracks: each prepared path keeps a memo of its ideal pose by fraction,
+its staged points' deviation by pose and fraction, and its point spans by
+fraction span (`planarsweep.BodyPath`, `internal/planarsweep/body_path.go`).
+A served deviation still charges the poll once per point. The run closes
+both memos before it returns, so the path copies a proof keeps compute
+afresh and hold no memory. The radian
+sine and cosine enclosures behind them are a pure function of the exact
+angle, read through one process-wide memo of 4096 entries guarded by a mutex
+(`internal/motionbound/`). Every memo hands out copies, so no caller can
+change what another reads, and none changes a value.
+
+After validation, check `ctx` before each pose and at each subdivision;
+pass it into the contact kernel. Cancellation returns `ctx.Err()` and a nil
+report, even if an earlier prefix was clear. A contact-kernel invariant error
+also returns no report. Never call public `Transform`, `Copy`, `Intersect`,
+or a commit path. Snapshot tests must show that document membership/order,
+body liveness, and next producer identity are unchanged after clear, impact,
+undecided, error, and cancellation results.
+
+### 8. Computed tests and first increment
+
+Use real decad bodies, real pose evaluation, and the real contact kernel.
+Assert computed locations, brackets, and bounds, not only enum values.
+
+| Fixture | Required assertion |
+|---|---|
+| Two 10 mm boxes: A moves `+100 mm/s` from `x=[0,10]`; B is fixed at `x=[20,30]`; duration `0.2 s` | First contact is `0.1 s`. At `0.001 s` resolution, the bracket encloses it and names the original bodies. |
+| Both boxes move: A as above, B starts at `x=[30,40]` and moves `-100 mm/s` | First contact is `0.1 s`. Dropping B's travel from the interval certificate must make the test fail. |
+| A and B both drift at `+100 mm/s` with a 10 mm initial gap | `SweepClear` holds despite both bodies moving. |
+| A box starts under `From=Translation(100,0,0)` and moves 30 mm toward a wall at `x=125` | Swept boxes cannot exclude the wall. A slab beside the original rest box at `x=[20,30]` is excluded. |
+| A thin blade rotates while a small pin moves across its path | Coarse separated samples yield `SweepUndecided`; a finer resolution finds a bracket. Neither path may be replaced by endpoint relative interpolation. |
+| A drift has `v=(10,0,0) mm/s`, `ω=(0,0,π) rad/s`, and center at the origin | At `0.5 s`, its center is `(5,0,0)` and an initial point `(1,0,0)` reaches `(5,1,0)`. Endpoint screw interpolation disagrees. |
+| Initial cap touch, initial positive overlap, and an unsupported tangent graze | Touch and overlap return their distinct initial outcomes; the graze returns `Undecided`, never `Clear` from samples. |
+| Two radius-5 mm source spheres: A stays at `(0,0,0)`, B starts at `(20,10,0)` and moves `(-40,0,0)` mm in 1 s | The exact polynomial is `1600(s−1/2)²`; `SweepGrazingTouch` reports a bounded point at `s=1/2`, separated endpoints, no bracket, and full-span interior replay. Reverse pair order and compare event time and reversed normal. |
+| The same pair with B starting at `y=11`, `y=9`, or `y=10` and `x=20` moving to `x=0` at the final instant | The first path is `SweepClear`; the second enters impact search; the endpoint tangent remains `Undecided` in this increment. |
+| Two radius-5 source spheres spin about their own off-grid centers while their centers close transversely or along X | The bracket holds the closed-form root of the affine center paths, and the event's witnesses, normal and separation bound the exact ideal pair. Replay keeps spin and refuses past the bracket; an off-center pivot is `Undecided`. |
+| A graze with an event fraction or elapsed time that `units.Value` cannot represent exactly, a rounded event pose that loses exact touch, or a two-pose budget | Return `SweepUndecided` with the earliest interval and specific cause; never publish `SweepClear` or a false graze. |
+| A 10 mm box touches a fixed floor, then moves upward at `50 mm/s` for `0.1 s` | Default mode returns `InitiallyTouching`. `ContinueSeparatingTouch` returns `DepartedClear`, with a positive final gap enclosing `5 mm`. |
+| The same touching boxes slide tangentially while their face patches overlap | `ContinueSeparatingTouch` returns `Undecided`; `ContinueCertifiedTouch` returns `PersistentTouch` until the first patch-feature change. |
+| A radius-5 source cylinder rests on its end disk on a fixed floor, still or sliding `(8,-4,0) mm/s` for `1 s` | `ContinueCertifiedTouch` returns `PersistentTouch`; `ManifoldAt` puts the disk-center point at the slid center on the floor plane in both body orders. A closing path or a disk leaving the face is `Undecided`. |
+| A top box starts at `x=[0,10]` on an equal fixed box, then slides `+5 mm/s` for `3 s` | The right-sided initial patch is admitted. `ContactTransitionBracket` encloses the edge exit at `2 s`; no earlier transition occurs. |
+| A rotating body starts in touch without a one-sided contact-set proof | Both continuation policies return `Undecided`; positive velocity at one witness cannot certify the complete contact set. |
+| Equal stationary segments and two same-handed reflected segments | Stationary paths are valid; reflected paths are accepted by geometry when the kernel can prove their relation. A mixed-handedness screw path returns `ErrDegenerate`. |
+| Missing contact manifold at a proven overlap endpoint | The report keeps `ImpactBracket` and marks the event manifold unavailable. The four-body step takes the manifold `ContactPair` publishes at the rounded right-end poses, the poses it publishes (multibody §5 step 7), and refuses when that has none either. |
+| Tight pose budget and cancellation during pair evaluation | The budget returns `Undecided` with earliest unresolved interval; cancellation returns `ctx.Err()` and nil report. Both preserve document state. |
+
+The first end-to-end slice uses the first box fixture. It must send the
+production sweep's certified contact event and manifold to the production
+dynamics solver, then assert the computed post-impact position and velocity
+from Part R's Verification section. A hand-written
+event fixture does not prove that
+boundary. Later tests cover angular drift, graze, reflected geometry, and
+kernel staging. Root-package test names update `.github/test-shards.txt`, and `apitest/` test names
+update `.github/test-shards-apitest.txt`.

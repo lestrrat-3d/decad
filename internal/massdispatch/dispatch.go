@@ -124,7 +124,7 @@ func analyticOrMeshMassProperties(ctx context.Context, mesher verifiedmesh.Meshe
 
 // This file owns the mass properties read off an audited triangle set whose
 // occupied volume differs from the denoted solid by a certified E
-// (agent-docs/dynamic-mass-design.md §2.2, agent-docs/multibody-dynamics-design.md §8.3-§8.5):
+// (agent-docs/multibody-dynamics-design.md Part M §2.2, agent-docs/multibody-dynamics-design.md §8.3-§8.5):
 //
 //   - internal/massmoment integrates exact signed tetrahedra and widens their
 //     moments by E, R_i·E and R_i·R_j·E;

@@ -29,7 +29,7 @@ Three things do not belong in `VerifyMotion`, and this design keeps them out:
 |---|---|---|
 | Animation, frame generation, rendering | Core §4 rejects GUI and view state on the geometry model; nothing here produces an image or a frame sequence | A separate module that imports decad and calls `Motion.PoseAt` (§2) for the poses it wants to draw |
 | Kinematic chains, joints, linkages, more than one independent motion | One rigid moving set has one path | `Document.SweepPair` checks two source-box paths; `Document.VerifyLinkage` checks a tree of joints (`agent-docs/linkage-check-design.md`) |
-| Dynamics, contact forces, time | `VerifyMotion` measures geometry; its parameter `s` is an angle, a length or a dimensionless fraction of the path, never a time | The `dynamics` subpackage; see `agent-docs/collision-dynamics-design.md` |
+| Dynamics, contact forces, time | `VerifyMotion` measures geometry; its parameter `s` is an angle, a length or a dimensionless fraction of the path, never a time | The `dynamics` subpackage; see `agent-docs/multibody-dynamics-design.md` Part C |
 
 The layering rule holds unchanged: `decad -> sketch -> r3 -> units`. Every pose is an `r3.Transform` built by
 `r3.RotationAround`, `r3.Translation` or, for a `Between`, `r3.Transform.Screw` read once and `r3.Screw.At`

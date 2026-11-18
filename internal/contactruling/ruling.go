@@ -27,7 +27,7 @@ type rulingSide struct {
 }
 
 // PublishRulingManifold publishes the manifold of
-// agent-docs/contact-geometry-design.md §4.5 from the clearance kernel's ruling
+// agent-docs/multibody-dynamics-design.md Part G §4.5 from the clearance kernel's ruling
 // certificate. Each cylinder side must be a full source cylinder, so its
 // occupied set meets the separating plane in exactly its tangent ruling; a
 // plane side holds the whole certified ruling inside its trim. The complete

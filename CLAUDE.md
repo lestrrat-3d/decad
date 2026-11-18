@@ -29,7 +29,7 @@ APIs are design-only.**
 | Any file, to find what owns what | `agent-docs/layout.md` — one row per root `.go` file and design doc |
 | Production code or its design/review | `agent-docs/module-boundary.md` — Module boundary gate |
 | Any public type | `agent-docs/api-design.md`, and every companion design listed in `agent-docs/layout/` |
-| Collision geometry or rigid-body dynamics | `agent-docs/collision-dynamics-design.md`, `agent-docs/multibody-dynamics-design.md` |
+| Collision geometry or rigid-body dynamics | `agent-docs/multibody-dynamics-design.md` |
 | Linkages and joints | `agent-docs/linkage-check-design.md` |
 | Evaluator, topology or feature code | `agent-docs/evaluator-design.md` |
 | Tessellation, export or mesh-boolean operands | `agent-docs/tessellation-design.md` |

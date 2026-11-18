@@ -78,7 +78,7 @@ type bandReading struct {
 // impulses are held per pair and manifold point, and each point's
 // ContactFeature pair is part of the problem a restart must match, so a
 // restart never keys by a topology slice index
-// (agent-docs/rigid-dynamics-design.md "Response").
+// (agent-docs/multibody-dynamics-design.md Part R "Response").
 type warmIsland struct {
 	bodies  []int
 	pre     []BodyState     // island body order

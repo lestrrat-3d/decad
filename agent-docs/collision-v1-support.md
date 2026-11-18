@@ -401,5 +401,5 @@ floor without proving a touching support face. Sphere contacts at box edges,
 tilted cylinders, posed or swept cylinders on their sides against anything
 but a signed-axis face of an exact planar solid, and other rotating contacts
 also stop at their first missing proof. The detailed gates and algorithms are
-in the [collision design](collision-dynamics-design.md) and its linked
+in the [collision design (Part C)](multibody-dynamics-design.md) and its linked
 contact, sweep, mass, and rigid-dynamics designs.
