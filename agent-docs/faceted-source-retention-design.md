@@ -73,9 +73,11 @@ What Claim R does not say:
 - The held facets of `g` lie on `T`. They lie within the face's `Faceted`
   displacement `δ_f` of the true patch, which lies on `T`.
 - `T` is fitted to polygons. The surface comes from the operand face's
-  recorded `Surface` at Boolean time. A `Faceted` operand face, a
-  `NURBSSurface` face and a face with a `Denoted` patch contribute no surface
-  (§3.2). Provenance roles are never used to rebuild one (payload §5.2).
+  recorded `Surface` at Boolean time. A `Faceted` operand face and a
+  `NURBSSurface` face contribute no surface (§3.2). A face with a `Denoted`
+  patch contributes its tag and carries the patch with it
+  (`facetedrecord.SourceTag`), and its true patch lies on the surface the
+  patch denotes. Provenance roles are never used to rebuild one (payload §5.2).
 - `T` is the design intent. The operand's own displacement of what it
   denotes from its design intent is already inside `sourceBound`
   (payload §5.3) and enters the result through `δ_f`. Claim R takes `T` to be
@@ -645,9 +647,35 @@ boundary stays in `β`: the slope term charges it, so the claim needs no
 statement about where the true patch ends.
 
 **Where it applies.** A facet takes the slab bound only when its source face is
-a `RetainedTag` `Plane` with `NormalBound == 0` and no denoted patch. A placed
-tag with a stated departure (§3.4) is a float image whose plane may differ from
-the true one by an offset, so it keeps `β`. The slab bound replaces `β` in the
+a `RetainedTag` `Plane` with `NormalBound == 0` and either no denoted patch or
+a denoted revolve patch whose tag is exactly the plane the patch sweeps. A
+placed tag with a stated departure (§3.4) is a float image whose plane may
+differ from the true one by an offset, so it keeps `β`.
+
+**Denoted revolve planes.** A revolve wall swept from a meridian segment
+perpendicular to the axis is a planar ring or disc, tagged `Plane` and carrying
+its record as `Denoted`. By Claim R its true result patch lies on the surface
+the record denotes, not on the float tag. `stitchflux.TagIsDenoted` decides in
+exact rationals whether the two coincide: the record's leaves are points, its
+basis is exactly orthonormal, every recorded meridian end lies at one axial
+level, the tag's `U` and `V` are exactly perpendicular to the recorded axis,
+and the tag's origin lies exactly at that level. When it holds, the true patch
+lies on the tag plane and Claim S applies unchanged
+(`booleaneval.retainedPlaneOf`). A tag that only re-expresses the record in
+floats (a tilted or rounded axis, a level no float holds, a cap's record)
+keeps `β`. The check reads only the face's own record and tag, so it adds no
+admission by geometry: a facet whose corners stray from the plane still pays
+`h + β·sin φ`.
+
+A revolved disc with a bore shows what the slab gives. Its planar faces are
+fans of long facets from the bore's rim to the outer edge. The bore's rim
+vertices carry about twice the pair's chord tolerance, and each fan facet
+takes that corner bound over its whole length, so `β` alone would refuse a
+later small hole that lands on such a facet however far from the bore. A fan
+facet whose corners lie exactly in the plane has a slab of zero, so the hole
+builds.
+
+**What reads the slab.** The slab bound replaces `β` in the
 held-mesh gate (`RefuseCoarseHeldContact`) and in `RimBound`. A vertex the
 cutter places on a facet's interior keeps `β`, because its true boundary point
 may sit anywhere in the plane within `β`. A curved retained group has no such
@@ -664,9 +692,11 @@ worst facet was a cylinder stay refused.
 - **Retain the tag and set `NormalBound` to 0 for curved faces.** `NormalAt`
   would claim the radial direction of the held point exactly while the point
   sits up to `δ_f` off the surface.
-- **Retain an operand's `Denoted` patch.** The patch proof reads the
-  operand's record, which the generic Boolean does not copy. The face stays
-  `Faceted` instead of carrying a stale proof.
+- **Read a denoted face's float tag as its true surface.** A revolve tag
+  can be a float re-expression of the surface its record denotes, so a reader
+  that needs the true surface (`NormalAt`, §11's slab) reads the copied
+  `Denoted` patch, or the tag only where `stitchflux.TagIsDenoted` proves the
+  two equal.
 - **Refuse the Boolean when a group fails admission.** Admission affects what
   a face reports. The Boolean's own proof is unchanged, so refusing would
   remove a result that builds today.
