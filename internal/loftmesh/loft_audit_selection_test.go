@@ -2,9 +2,11 @@ package loftmesh
 
 import (
 	"math"
+	"sync/atomic"
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/meshbool"
+	"github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/stretchr/testify/require"
 )
@@ -90,6 +92,59 @@ func TestSelectedLoftTablesReachTheSamePairVerdict(t *testing.T) {
 			var unchanged LoftAuditWork
 			_, _, err := parallelLoftPairs(unlimitedBudget(t), owned, boxes, data, loftGenericShortcuts, cands, &unchanged)
 			require.NoError(t, err, "caller writes changed the cached proof's owned geometry")
+		}
+	}
+}
+
+func TestPreparedLoftSelectorKeepsMasksAndBudgetReplay(t *testing.T) {
+	t.Parallel()
+	for _, crossing := range []bool{false, true} {
+		f := selectedLoftFixture(crossing)
+		boxes := make([][2]r3.Vec, len(f.tris))
+		for i, tri := range f.tris {
+			boxes[i] = meshbool.TriBox(f.verts, tri)
+		}
+		members := allMembers(len(f.tris))
+		tree := newTreeScan(boxes, members)
+		sc, err := sweepCandidateCounts(unlimitedBudget(t), tree, len(f.tris), keepEveryPair, math.MaxUint64)
+		require.NoError(t, err)
+		var total uint64
+		require.NoError(t, preflightLoftRowsWorkers(countingBudget(math.MaxUint64, &total), tree,
+			members, sc.starts, math.MaxUint64, 1))
+		prepared := &loftFloatPreparedPlanes{
+			verts: f.verts, tris: f.tris, planes: make([]proof.FloatOrientationPlaneWithOriginalAssociation, len(f.tris)),
+		}
+		for i, tri := range f.tris {
+			prepared.planes[i] = proof.NewFloatOrientationPlaneWithOriginalAssociation(
+				f.verts[tri[0]], f.verts[tri[1]], f.verts[tri[2]])
+		}
+		for _, workers := range []int{1, 4} {
+			for _, ceiling := range []uint64{total / 2, total, math.MaxUint64} {
+				for _, limit := range []uint64{0, total / 2, total, math.MaxUint64} {
+					run := func(planes *loftFloatPreparedPlanes) (uint64, []bool, error) {
+						var steps uint64
+						selector := &loftFacetSelector{
+							verts: f.verts, tris: f.tris, flat: loftFlatSelection(f.verts, f.tris),
+							uncertain: make([]atomic.Bool, len(f.tris)), shortcuts: loftGenericShortcuts, planes: planes,
+						}
+						gotErr := preflightLoftRowsWorkers(countingBudget(limit, &steps), tree, members,
+							sc.starts, ceiling, workers, selector)
+						mask := make([]bool, len(f.tris))
+						for i := range mask {
+							mask[i] = selector.flat[i] || selector.uncertain[i].Load()
+						}
+						return steps, mask, gotErr
+					}
+					wantSteps, wantMask, wantErr := run(nil)
+					gotSteps, gotMask, gotErr := run(prepared)
+					require.Equal(t, wantSteps, gotSteps, "crossing %v workers %d ceiling %d limit %d",
+						crossing, workers, ceiling, limit)
+					require.Equal(t, wantErr, gotErr, "crossing %v workers %d ceiling %d limit %d",
+						crossing, workers, ceiling, limit)
+					require.Equal(t, wantMask, gotMask, "crossing %v workers %d ceiling %d limit %d",
+						crossing, workers, ceiling, limit)
+				}
+			}
 		}
 	}
 }

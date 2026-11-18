@@ -44,13 +44,14 @@ type loftFacetSelector struct {
 	flat      []bool
 	uncertain []atomic.Bool
 	shortcuts LoftAuditShortcuts
+	planes    *loftFloatPreparedPlanes
 }
 
 func (s *loftFacetSelector) Observe(i, j int) {
 	if s.flat[i] && s.flat[j] {
 		return
 	}
-	if loftFloatPairProof(s.verts, s.tris, i, j, s.shortcuts) == loftFloatUnknown {
+	if loftFloatPairProofPrepared(s.verts, s.tris, i, j, s.shortcuts, s.planes) == loftFloatUnknown {
 		s.uncertain[i].Store(true)
 		s.uncertain[j].Store(true)
 	}

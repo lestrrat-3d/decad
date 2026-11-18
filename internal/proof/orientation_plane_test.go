@@ -76,3 +76,38 @@ func TestFloatOrientationPlaneGuards(t *testing.T) {
 	require.False(t, certain)
 	require.Zero(t, sign)
 }
+
+func TestFloatOrientationPlaneOriginalAssociationMatchesReference(t *testing.T) {
+	t.Parallel()
+	rng := rand.New(rand.NewPCG(0x2f4c91d7, 0x810c7a63))
+	exponents := [...]int{-1074, -301, -300, -250, -20, 0, 20, 150, 249, 250, 251, 1000}
+	coord := func() float64 {
+		return math.Ldexp(float64(rng.IntN(9)-4)/4, exponents[rng.IntN(len(exponents))])
+	}
+	check := func(a, b, c, d r3.Vec, index int) {
+		t.Helper()
+		want, wantCertain := proof.OrientSignFloat(a, b, c, d)
+		plane := proof.NewFloatOrientationPlaneWithOriginalAssociation(a, b, c)
+		got, gotCertain := plane.SignWithOriginalAssociation(b, c, d)
+		require.Equal(t, wantCertain, gotCertain, "case %d certainty", index)
+		require.Equal(t, want, got, "case %d sign", index)
+		if gotCertain {
+			require.Equal(t, proof.OrientSignExact(proof.XptOf(a), proof.XptOf(b),
+				proof.XptOf(c), proof.XptOf(d)), got, "case %d exact sign", index)
+		}
+	}
+
+	check(r3.Vec{}, r3.Vec{X: 1}, r3.Vec{Y: 1}, r3.Vec{Z: 1}, 0)
+	check(r3.Vec{}, r3.Vec{X: 0x1p900}, r3.Vec{Y: 1}, r3.Vec{X: 1, Y: 1}, 1)
+	check(r3.Vec{}, r3.Vec{X: 1, Z: 1}, r3.Vec{Y: 1, Z: 1},
+		r3.Vec{X: 0.25, Y: 0.25, Z: math.Nextafter(0.5, 1)}, 2)
+	check(r3.Vec{}, r3.Vec{X: 0x1p-300}, r3.Vec{Y: 0x1p250},
+		r3.Vec{Z: math.Nextafter(0x1p-300, 0)}, 3)
+	for i := 4; i < 10_004; i++ {
+		var points [4]r3.Vec
+		for k := range points {
+			points[k] = r3.NewVec(coord(), coord(), coord())
+		}
+		check(points[0], points[1], points[2], points[3], i)
+	}
+}

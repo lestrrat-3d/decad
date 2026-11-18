@@ -4,6 +4,7 @@ import (
 	"math/rand/v2"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/stretchr/testify/require"
 )
@@ -35,6 +36,31 @@ func TestLoftFloatProjectionProofsMatchExactReference(t *testing.T) {
 	}
 	for verdict, count := range counts {
 		require.Positive(t, count, "proof %d was never exercised", verdict)
+	}
+}
+
+func TestPreparedLoftFloatProjectionProofsMatchReference(t *testing.T) {
+	t.Parallel()
+	rng := rand.New(rand.NewPCG(109, 113))
+	fixtures := []vertexFixture{
+		selectedLoftFixture(false), selectedLoftFixture(true),
+		prism(7, 2, 3), randomSoup(rng, "soup", 12, 24, 1, 1e-15),
+	}
+	for _, f := range fixtures {
+		prepared := &loftFloatPreparedPlanes{
+			verts: f.verts, tris: f.tris, planes: make([]proof.FloatOrientationPlaneWithOriginalAssociation, len(f.tris)),
+		}
+		for i, tri := range f.tris {
+			prepared.planes[i] = proof.NewFloatOrientationPlaneWithOriginalAssociation(
+				f.verts[tri[0]], f.verts[tri[1]], f.verts[tri[2]])
+		}
+		for i := range f.tris {
+			for j := i + 1; j < len(f.tris); j++ {
+				want := loftFloatPairProof(f.verts, f.tris, i, j, loftGenericShortcuts)
+				got := loftFloatPairProofPrepared(f.verts, f.tris, i, j, loftGenericShortcuts, prepared)
+				require.Equal(t, want, got, "%s pair %d,%d", f.name, i, j)
+			}
+		}
 	}
 }
 

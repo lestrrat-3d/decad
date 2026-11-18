@@ -4,6 +4,7 @@ import (
 	"slices"
 	"sync/atomic"
 
+	"github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
 )
@@ -24,8 +25,15 @@ func prepareLoftStreamAuditData(budget *proofbound.WorkBudget, tree loftRowScan,
 		if !slices.Contains(selected, false) {
 			selected = nil
 		} else {
+			prepared := &loftFloatPreparedPlanes{
+				verts: verts, tris: tris, planes: make([]proof.FloatOrientationPlaneWithOriginalAssociation, len(tris)),
+			}
+			for i, tri := range tris {
+				prepared.planes[i] = proof.NewFloatOrientationPlaneWithOriginalAssociation(
+					verts[tri[0]], verts[tri[1]], verts[tri[2]])
+			}
 			selector = &loftFacetSelector{verts: verts, tris: tris, flat: selected,
-				uncertain: make([]atomic.Bool, len(tris)), shortcuts: shortcuts}
+				uncertain: make([]atomic.Bool, len(tris)), shortcuts: shortcuts, planes: prepared}
 			observe = selector
 		}
 	}

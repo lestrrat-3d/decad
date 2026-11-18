@@ -16,11 +16,53 @@ const (
 	loftFloatVertex
 )
 
+// loftFloatPreparedPlanes reuses the triangle-only differences in one loft
+// selector preflight. Its tables are immutable while row workers observe them.
+type loftFloatPreparedPlanes struct {
+	verts  []r3.Vec
+	tris   [][3]int
+	planes []proof.FloatOrientationPlaneWithOriginalAssociation
+}
+
+func (p *loftFloatPreparedPlanes) sign(planeIndex int, plane [3]r3.Vec, d r3.Vec) (int, bool) {
+	if p == nil {
+		return proof.OrientSignFloat(plane[0], plane[1], plane[2], d)
+	}
+	tri := p.tris[planeIndex]
+	return p.planes[planeIndex].SignWithOriginalAssociation(p.verts[tri[1]], p.verts[tri[2]], d)
+}
+
+func (p *loftFloatPreparedPlanes) signs(planeIndex int, plane, other [3]r3.Vec,
+	otherTri [3]int, shared int,
+) ([3]int, bool) {
+	if p == nil {
+		return floatPlaneSigns(plane, other, otherTri, shared)
+	}
+	var signs [3]int
+	for k := range signs {
+		if otherTri[k] == shared {
+			continue
+		}
+		s, ok := p.sign(planeIndex, plane, other[k])
+		if !ok {
+			return signs, false
+		}
+		signs[k] = s
+	}
+	return signs, true
+}
+
 // loftFloatPairProof reads only float vertices, whose exact lifts are the
 // geometry being audited. Every nonzero orientation is certified by its
 // existing error bound; zero or uncertainty proves nothing. ExactInput
 // disables this path because its rational vertices may differ from the floats.
 func loftFloatPairProof(verts []r3.Vec, tris [][3]int, i, j int, shortcuts LoftAuditShortcuts) loftFloatVerdict {
+	return loftFloatPairProofPrepared(verts, tris, i, j, shortcuts, nil)
+}
+
+func loftFloatPairProofPrepared(verts []r3.Vec, tris [][3]int, i, j int,
+	shortcuts LoftAuditShortcuts, planes *loftFloatPreparedPlanes,
+) loftFloatVerdict {
 	if shortcuts.ExactInput {
 		return loftFloatUnknown
 	}
@@ -28,11 +70,11 @@ func loftFloatPairProof(verts []r3.Vec, tris [][3]int, i, j int, shortcuts LoftA
 	ta, tb := LoftTriCorners(verts, tris[i]), LoftTriCorners(verts, tris[j])
 	switch count {
 	case 0:
-		if shortcuts.BroadPhase && loftFloatSeparated(ta, tb) {
+		if shortcuts.BroadPhase && loftFloatSeparated(ta, tb, i, j, planes) {
 			return loftFloatApart
 		}
 	case 1:
-		if shortcuts.Certificates && loftFloatVertexProof(ta, tb, tris[i], tris[j], shared[0]) {
+		if shortcuts.Certificates && loftFloatVertexProof(ta, tb, tris[i], tris[j], shared[0], i, j, planes) {
 			return loftFloatVertex
 		}
 	case 2:
@@ -40,7 +82,7 @@ func loftFloatPairProof(verts []r3.Vec, tris [][3]int, i, j int, shortcuts LoftA
 			return loftFloatUnknown
 		}
 		apex := verts[tessellation.TriangleApexIndex(tris[j], shared[0], shared[1])]
-		if sign, certain := proof.OrientSignFloat(ta[0], ta[1], ta[2], apex); certain && sign != 0 {
+		if sign, certain := planes.sign(i, ta, apex); certain && sign != 0 {
 			return loftFloatEdge
 		}
 		pa := verts[tessellation.TriangleApexIndex(tris[i], shared[0], shared[1])]
@@ -67,11 +109,11 @@ func loftProjectFloat(v r3.Vec, axes [2]int) [2]float64 {
 // Thus a projected strict separator proves 3D disjointness, even when the
 // triangles are not coplanar. Two shared-edge apexes on opposite strict sides
 // likewise prove that the whole 3D intersection is the expected edge.
-func loftFloatSeparated(ta, tb [3]r3.Vec) bool {
-	if signs, certain := floatPlaneSigns(ta, tb, [3]int{}, -1); certain && meshbool.AllOneSide(signs) {
+func loftFloatSeparated(ta, tb [3]r3.Vec, i, j int, planes *loftFloatPreparedPlanes) bool {
+	if signs, certain := planes.signs(i, ta, tb, [3]int{}, -1); certain && meshbool.AllOneSide(signs) {
 		return true
 	}
-	if signs, certain := floatPlaneSigns(tb, ta, [3]int{}, -1); certain && meshbool.AllOneSide(signs) {
+	if signs, certain := planes.signs(j, tb, ta, [3]int{}, -1); certain && meshbool.AllOneSide(signs) {
 		return true
 	}
 	for _, axes := range [3][2]int{{0, 1}, {0, 2}, {1, 2}} {
@@ -110,11 +152,13 @@ func loftFloatSeparated(ta, tb [3]r3.Vec) bool {
 // other triangle's two remaining corners are strictly on the other, the
 // other triangle meets the plane only at the shared vertex. Convexity confines
 // the whole intersection to that vertex. Coplanarity is not required.
-func loftFloatVertexProof(ta, tb [3]r3.Vec, a, b [3]int, shared int) bool {
-	if signs, certain := floatPlaneSigns(ta, tb, b, shared); certain && IsolatedSharedVertex(b, shared, signs) {
+func loftFloatVertexProof(ta, tb [3]r3.Vec, a, b [3]int, shared, i, j int,
+	planes *loftFloatPreparedPlanes,
+) bool {
+	if signs, certain := planes.signs(i, ta, tb, b, shared); certain && IsolatedSharedVertex(b, shared, signs) {
 		return true
 	}
-	if signs, certain := floatPlaneSigns(tb, ta, a, shared); certain && IsolatedSharedVertex(a, shared, signs) {
+	if signs, certain := planes.signs(j, tb, ta, a, shared); certain && IsolatedSharedVertex(a, shared, signs) {
 		return true
 	}
 	var v r3.Vec
