@@ -329,6 +329,10 @@ counts in brackets).
 
 A3, A4 and A7 were not all measured. If any of them refuses, or its result is not a Faceted mesh result (check
 in a root test as §10.2 does), stop and report; do not change production code to force the route.
+Measured on Task 4: A4 takes the prism route and a mesh-path variant refuses the coplanar overlap, so A4 pins the
+route's own one-face result and the mesh merge has no Intersect coverage. A7 with a box pocket takes the orthogonal
+route, which mints fresh roles, so Task 4 uses a cylindrical pocket (radius 1 at (5, 5), z from 19 to 21), which
+stays on the mesh path.
 
 ### 10.4 Existing tests this change flips
 
