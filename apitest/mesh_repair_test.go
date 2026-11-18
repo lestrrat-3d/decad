@@ -10,8 +10,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file is agent-docs/mesh-repair-design.md's public-surface tests for
-// RepairMesh, on a 2 mm cube whose volume is 8 mm³.
+// This file holds the public-surface tests for RepairMesh
+// (agent-docs/mesh-import-design.md §7), on a 2 mm cube whose volume is 8 mm³.
 
 // repairCube returns the cube's corners and its twelve triangles, wound
 // counter-clockwise seen from outside.

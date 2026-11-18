@@ -12,7 +12,7 @@ import (
 
 // This file reads the coincident carriers sketch resolves in a scene: two
 // operands' lines on one carrier line (sketch's
-// agent-docs/coincident-carrier-resolution-design.md, "Coincident line carriers"),
+// docs/coincident-carrier-resolution-design.md, "Coincident line carriers"),
 // or two operands' arcs and circles on one carrier circle (the same document's
 // circular case). Where two such entities share a span, sketch emits the span
 // once, under the entity it names, and withdraws it from the other — the
