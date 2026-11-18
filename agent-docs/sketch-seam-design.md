@@ -7,9 +7,9 @@ Companion to `agent-docs/api-design.md`, the core design, which owns the
 immediate-mode evaluator and the feature calls that consume a profile.
 "core §N" refers to that document.
 
-Every capability this contract consumes exists in `sketch` today, so there is no
-open dependency gap. The mapping table (§2), the core design's seam rules
-(core §7) and `ErrUnrecordableProfile` (§3) are all built on it.
+Every capability this contract consumes exists in `sketch`, so there is no open
+dependency gap. The mapping table (§2), the core design's seam rules (core §7)
+and `ErrUnrecordableProfile` (§3) are built on it.
 
 ## 1. The trim contract
 
@@ -42,11 +42,12 @@ Inside an all line/circle/arc sketch the second stage applies:
 
 - A cut bound is exact where `sketch`'s closed-form kernel placed it. That
   kernel places a cut for **any** crossing pair among the three.
-- Among line/circle/arc sources a tangency is never a cut. The kernel
-  classifies it as a **non-splitting** contact: a shared-endpoint tangency is a
-  smooth join, and an interior touch splits neither curve. Analytically
-  tangent entities therefore arrive as whole edges (two externally tangent
-  circles are two whole one-edge loops).
+- Among line/circle/arc sources a tangency is a **non-splitting** contact: a
+  shared-endpoint tangency is a smooth join, and an interior touch splits
+  neither curve. Analytically tangent entities therefore arrive as whole edges
+  (two externally tangent circles are two whole one-edge loops). The one
+  exception is an arc's own end touching a line's interior: that contact splits
+  the line, so the line's fragments are bounded at the touch.
 - A grazing contact involving any other curve kind has no such rule. It is
   resolved on the sampled polylines below, which can cut at the touch.
 - A **curve-against-curve** crossing (a circle or arc against a circle or arc)
@@ -72,9 +73,9 @@ evaluated from the curve. The one exception is an elliptical arc's two end
 vertices, which are its pinned ends (§2). A sampled cut is the crossing of a
 **chord** between two such vertices. As the crossing approaches an evaluated
 vertex, the cut point approaches the curve and its residual goes to zero. It
-can reach zero: in a rectangle-and-spline arrangement a line fragment reads
-`TExact == false` while evaluating its reported range reproduces its `Polyline`
-endpoints with a residual of exactly **0.0**. That sampled cut sits precisely
+can reach zero: a sampled cut that falls on an evaluated vertex is that
+vertex, and a vertex lies on the curve. The fragment still reads
+`TExact == false`, and its residual is zero. That sampled cut sits precisely
 where an exact one would, so no threshold can separate it from an exact cut.
 Exactly-cut and sampled endpoints are not separated populations, and an
 endpoint-residual test is **unsound as an admission gate**. It is not a
@@ -133,11 +134,12 @@ per-entity flag or any rule keyed on entity kind would be wrong on one of them.
 The whole-sketch gate takes precedence and withholds the flag from every edge
 without changing the underlying range.
 
-**No shorthand on one source survives that, and the whole-sketch gate answers before any
-pair rule does.** "Line-involved" is not a shorthand for exactness, and neither is "both
-sources are a line, a circle or an arc": in a sketch that also holds an ellipse, a conic, a
-spline or a NURBS every fragment of every profile reads `false`, whatever pair cut it.
-decad reads the flag on the fragment it is recording, and derives it from nothing.
+No shorthand on one source predicts the flag, and the whole-sketch gate answers
+before any pair rule does. "Line-involved" is not exactness, and neither is
+"both sources are a line, a circle or an arc": in a sketch that also holds an
+ellipse, a conic, a spline or a NURBS outside the certificate, every fragment of
+every profile reads `false`, whatever pair cut it. decad reads the flag on the
+fragment it is recording and derives it from nothing.
 
 **Whole (non-`Partial`) edges never consult `TExact`.** A whole edge records
 from the entity's own defining data. There is no trim to recover, so the flag
@@ -205,9 +207,9 @@ For fragments, that is:
   scene.
 
 Whole edges of every recordable kind also record, from entity data with no cut
-to certify. Tangencies add nothing: among lines, circles and arcs a tangency
-splits nothing (above), so no fragment is bounded at one. A tangent entity
-arrives whole, or in fragments whose every bound is a crossing. Every fragment
+to certify. Tangencies add nothing: apart from the arc-end-on-line contact
+(above) they split nothing, so a tangent entity arrives whole or in fragments
+bounded by crossings and that contact. Every fragment
 in an uncertified free-form scene carries `TExact == false` and is
 `ErrUnrecordableProfile`, whatever pair cut it. So is a fragment bounded by an
 uncertified curve-against-curve cut. That is not decad declining to record it:
@@ -437,15 +439,14 @@ variant records it. Whole edges never consult the flag (§1).
 
 **Every row records a certified fragment, and every row rejects an uncertified one.**
 Every row records the entity's fields verbatim, and the two columns differ only
-in the range. There is no per-row parameter mapping: every variant records
-`sketch`'s normalized `t` itself (`geom.BoundaryEdge`'s published contract), so
-the range is handed over, never converted. Nothing is solved for, no point is
-evaluated from a parameter, and no point is inverted to one (core §7).
+in the range. Every variant records `sketch`'s normalized `t` itself
+(`geom.BoundaryEdge`'s published contract), so the range is handed over, never
+converted. Nothing is solved for, no point is evaluated from a parameter, and
+no point is inverted to one (core §7).
 
-Fragments that carry `TExact == true` are the ones §1's last paragraph lists
-for `sketch`'s exact kernel and the certified fit-spline/root-circle scene. A
-circle cut by a rectangle edge records. An ellipse cut by anything is
-`ErrUnrecordableProfile` because `sketch` could not certify its range.
+The fragments that carry `TExact == true` are the ones §1's last list names.
+An ellipse cut by anything is `ErrUnrecordableProfile`, because `sketch` could
+not certify its range.
 
 Conversion is mechanical, and it happens once, in the feature call.
 `momentinput.RecordProfileWithArea` first rejects every nil boundary entity and
@@ -559,8 +560,11 @@ builds from a `ChainRecord` and the whole of that reasoning.
 *authenticated valid* profile: a region `sketch` has proven closed, whose
 boundary decad nonetheless cannot record exactly. It is not a validity or
 snapshot-integrity judgement (those are separate gates, core §7), and it is
-a sentinel error the caller can branch on (core §12). It is returned in exactly
-three cases:
+a sentinel error the caller can branch on (core §12). It is returned in
+three exactness cases, listed below. It is also returned for three malformed
+inputs: a fragment with no `Polyline` endpoints to check, a source entity that
+cannot be evaluated at its range, and an entity kind with no `CurveSegment`
+variant.
 
 - **a `Partial` fragment `sketch` could not certify** — `TExact == false`
   (§1). The sampled arrangement fallback can produce such a range, and the
