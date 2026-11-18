@@ -24,6 +24,7 @@ The rules for rows live in `agent-docs/layout.md`.
 | `agent-docs/section-design.md` | Read-only planar section gate and Sketch reconstruction proof. |
 | `agent-docs/interference-design.md` | Read-only pair overlap and bounded volume proofs. |
 | `agent-docs/coplanar-contact-design.md` | Exact coplanar contact classification in the mesh boolean and exact planar faces of its results. |
+| `agent-docs/union-face-merge-design.md` | Merging adjacent coplanar same-facing faces of different operands in a mesh Boolean result into one face. |
 | `agent-docs/hole-design.md` | `Hole`: face and point placement, size gates, tool shapes and the atomic cut. |
 | `agent-docs/rib-design.md` | `WebPath`: line and arc outlines, extent, overrun, draft, touch and volume checks, and the merged join. |
 | `agent-docs/emboss-design.md` | `Emboss`: face-derived sweep, plane checks, margin, volume checks and the shared join. |
