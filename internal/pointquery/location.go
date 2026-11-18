@@ -149,7 +149,16 @@ func locate(ctx context.Context, p r3.Vec, verts []r3.Vec, tris [][3]int,
 	ballLowerBound.Mul(ballLowerBound, radius)
 	ballLowerBound.Mul(ballLowerBound, big.NewRat(4, 1))
 	if ballLowerBound.Cmp(proof.FloatRat(symDiffBound)) <= 0 {
-		return Undecided, nil
+		// The ball is too small for the body's whole symmetric-difference bound. A point the held mesh puts outside
+		// may still reach the outside of both solids by a free path (escape.go), which reads no volume bound.
+		if inside {
+			return Undecided, nil
+		}
+		free, err := escapeOutside(ctx, p, verts, tris, boundaryBound, distanceSquared)
+		if err != nil || !free {
+			return Undecided, err
+		}
+		return Outside, nil
 	}
 	if inside {
 		return Inside, nil

@@ -452,7 +452,11 @@ a prism Boolean result whose section moved,
 a pocket crossing a through hole, a partial or radian-stated revolve, every
 other body except the mesh Boolean results described next, and a point on an
 arc's chord or on two loops at once are classified through the verified mesh
-at the given tolerance and can read `PointUndecided` near the boundary.
+at the given tolerance and can read `PointUndecided` near the boundary. A point the
+mesh puts outside, near a bore or slot of a large body, still reads
+`PointOutside` when a chain of points clear of the mesh by more than its bound
+leads out of the body's box, and `Body.DistanceToPoint` then reads within the
+mesh bound of the exact distance.
 
 A mesh `Union`, `Cut` or `Intersect` result first combines its operands'
 exact answers through the operation history. A point inside either operand

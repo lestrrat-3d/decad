@@ -3134,3 +3134,4 @@
 12	0.00	TestCoplanarContactRoundedFixtureKeepsRetry
 12	0.00	TestStackedOpposedObliqueLoops
 12	0.00	TestVerifyReadsAnExactFlushPairExactly
+12	0.00	TestDistanceToPointFreePath
