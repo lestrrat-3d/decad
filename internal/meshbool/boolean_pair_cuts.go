@@ -2,9 +2,13 @@ package meshbool
 
 import (
 	"context"
+	"fmt"
 	"math"
+	"slices"
 	"sort"
 
+	"github.com/lestrrat-3d/decad/internal/coplanarcontact"
+	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
@@ -22,6 +26,18 @@ type pairCutsResult struct {
 	DeepTerm float64
 	// Contacts is Stats.Contacts.
 	Contacts []ContactSite
+	// CoplanarA and CoplanarB map each facet of an operand to the facets of
+	// the other that form an admitted coplanar pair with it
+	// (agent-docs/coplanar-contact-design.md §3.2). Both are nil unless a pair
+	// was admitted.
+	CoplanarA, CoplanarB map[int][]int
+	// Owned holds the exact key of every point the coplanar pass accepted, and
+	// is nil unless some pair or edge was admitted.
+	Owned map[string]struct{}
+	// Legacy is the refusal the pass returns with the coplanar switch off for
+	// the same operands, kept for the manifold audit (§5); nil when Owned is
+	// empty.
+	Legacy error
 }
 
 func pairCuts(ctx context.Context, ma, mb *BoolMesh, memo *ContactMemo, keyOf func(proof.Xpt) string) (pairCutsResult, error) {
@@ -30,6 +46,7 @@ func pairCuts(ctx context.Context, ma, mb *BoolMesh, memo *ContactMemo, keyOf fu
 	cutsB := map[int][]Xseg{}
 	var pointTouches []proof.Xpt
 	var pointFacets [][2]int
+	var pointCoplanar []bool
 	var inPlane []PairContact
 	// rims maps each rim vertex (a contact segment's endpoint, by exact key)
 	// to the largest RimBound over the facet pairs whose segment ends there.
@@ -47,6 +64,16 @@ func pairCuts(ctx context.Context, ma, mb *BoolMesh, memo *ContactMemo, keyOf fu
 	// coplanar collects the coplanar facet pairs the scan meets, up to
 	// maxTouchContacts, so the refusal can say which planes are involved.
 	var coplanar []TouchContact
+	// The coplanar pass (agent-docs/coplanar-contact-design.md §3.2) runs only
+	// under the switch. refused is set when a coplanar pair holds an inexact
+	// facet: that pair, and so the pass, refuses exactly as it does with the
+	// switch off. The legacy lists are the contacts the switch-off pass would
+	// have collected for the admitted pairs, edges and points.
+	var cp *coplanarPass
+	if coplanarcontact.Of(ctx) {
+		cp = &coplanarPass{coplanarA: map[int][]int{}, coplanarB: map[int][]int{}, owned: map[string]struct{}{}}
+	}
+	refused := false
 	work := 0
 	boxTree := newBoxTree(mb.Boxes)
 	candidates := make([]int, 0, 64)
@@ -55,9 +82,18 @@ func pairCuts(ctx context.Context, ma, mb *BoolMesh, memo *ContactMemo, keyOf fu
 		ta := TriCorners(ma, i)
 		tb := TriCorners(mb, j)
 		if c.Kind == ContactRegion {
-			coplanar = append(coplanar, coplanarContactOf(ma, mb, i, j))
-			if len(coplanar) >= maxTouchContacts {
+			admitted := cp != nil && ma.isExact(i) && mb.isExact(j)
+			if !admitted {
+				refused = true
+			}
+			if len(coplanar) < maxTouchContacts {
+				coplanar = append(coplanar, coplanarContactOf(ma, mb, i, j))
+			}
+			if refused && len(coplanar) >= maxTouchContacts {
 				return ExpectedBoolean(BooleanExpectedContact, &TouchContactError{What: touchCoplanar, Contacts: coplanar})
+			}
+			if admitted {
+				return cp.admit(ma, mb, i, j, keyOf, cutsA, cutsB)
 			}
 			return nil
 		}
@@ -69,6 +105,9 @@ func pairCuts(ctx context.Context, ma, mb *BoolMesh, memo *ContactMemo, keyOf fu
 		if c.Kind == ContactPoint {
 			pointTouches = append(pointTouches, c.P0)
 			pointFacets = append(pointFacets, [2]int{i, j})
+			// A coplanar point touch of two exact facets is accepted unless a
+			// crossing segment ends there, which the rim map settles below.
+			pointCoplanar = append(pointCoplanar, c.Coplanar && cp != nil && ma.isExact(i) && mb.isExact(j))
 			return nil
 		}
 		sin := 0.0
@@ -134,7 +173,7 @@ func pairCuts(ctx context.Context, ma, mb *BoolMesh, memo *ContactMemo, keyOf fu
 	if err := contacts.Done(); err != nil {
 		return pairCutsResult{}, err
 	}
-	if len(coplanar) > 0 {
+	if refused {
 		return pairCutsResult{}, ExpectedBoolean(BooleanExpectedContact, &TouchContactError{What: touchCoplanar, Contacts: coplanar})
 	}
 	// The held-mesh gate runs on the classification's own answer and before
@@ -164,31 +203,50 @@ func pairCuts(ctx context.Context, ma, mb *BoolMesh, memo *ContactMemo, keyOf fu
 				return pairCutsResult{}, err
 			}
 		}
+		// skipCut is set by an edge that bounds an admitted coplanar patch: the
+		// segment runs on the facet's own edge and the admitted pair already
+		// cut the partner.
+		skipCut, grazed := false, false
 		if p.C.EdgeA >= 0 {
-			key, crossing, err := EdgeCrosses(ma, p.I, p.C.EdgeA, p.Tb)
+			key, side, adjacent, err := EdgeSide(ma, p.I, p.C.EdgeA, p.Tb)
 			if err != nil {
 				return pairCutsResult{}, err
 			}
-			if !crossing {
+			if side == EdgeCoplanarBounded && cp != nil && ma.isExact(p.I) && mb.isExact(p.J) {
+				if err := cp.acceptEdge(ma, p, adjacent, p.J, keyOf, &grazed); err != nil {
+					return pairCutsResult{}, err
+				}
+				skipCut = true
+			} else if side != EdgeCrossing {
 				if len(grazes) < maxTouchContacts {
 					grazes = append(grazes, touchOf(ma, p.I, p.J))
 				}
 				continue
+			} else {
+				blockedA[key] = struct{}{}
 			}
-			blockedA[key] = struct{}{}
 		}
 		if p.C.EdgeB >= 0 {
-			key, crossing, err := EdgeCrosses(mb, p.J, p.C.EdgeB, p.Ta)
+			key, side, adjacent, err := EdgeSide(mb, p.J, p.C.EdgeB, p.Ta)
 			if err != nil {
 				return pairCutsResult{}, err
 			}
-			if !crossing {
+			if side == EdgeCoplanarBounded && cp != nil && ma.isExact(p.I) && mb.isExact(p.J) {
+				if err := cp.acceptEdge(ma, p, p.I, adjacent, keyOf, &grazed); err != nil {
+					return pairCutsResult{}, err
+				}
+				skipCut = true
+			} else if side != EdgeCrossing {
 				if len(grazes) < maxTouchContacts {
 					grazes = append(grazes, touchOf(ma, p.I, p.J))
 				}
 				continue
+			} else {
+				blockedB[key] = struct{}{}
 			}
-			blockedB[key] = struct{}{}
+		}
+		if skipCut {
+			continue
 		}
 		// A crossing segment subdivides whichever facet does NOT already own it
 		// as an edge — a segment lying along a facet's own boundary cuts nothing
@@ -222,7 +280,23 @@ func pairCuts(ctx context.Context, ma, mb *BoolMesh, memo *ContactMemo, keyOf fu
 	if len(pointTouches) > 0 {
 		var isolated []TouchContact
 		for k, p := range pointTouches {
-			if _, ok := rims[keyOf(p)]; !ok && len(isolated) < maxTouchContacts {
+			key := keyOf(p)
+			if _, ok := rims[key]; ok {
+				continue
+			}
+			if cp != nil && ma.isExact(pointFacets[k][0]) && mb.isExact(pointFacets[k][1]) {
+				_, owned := cp.owned[key]
+				if pointCoplanar[k] || owned {
+					// Accepted here, refused with the switch off: the contact
+					// list keeps the switch-off pass's order.
+					cp.owned[key] = struct{}{}
+					if len(cp.legacyPoints) < maxTouchContacts {
+						cp.legacyPoints = append(cp.legacyPoints, touchOf(ma, pointFacets[k][0], pointFacets[k][1]))
+					}
+					continue
+				}
+			}
+			if len(isolated) < maxTouchContacts {
 				isolated = append(isolated, touchOf(ma, pointFacets[k][0], pointFacets[k][1]))
 			}
 		}
@@ -231,7 +305,16 @@ func pairCuts(ctx context.Context, ma, mb *BoolMesh, memo *ContactMemo, keyOf fu
 		}
 	}
 
-	return pairCutsResult{cutsA, cutsB, blockedA, blockedB, rims, maxRim, minSin, deepTerm, contactSites}, nil
+	res := pairCutsResult{CutsA: cutsA, CutsB: cutsB, BlockedA: blockedA, BlockedB: blockedB, Rims: rims,
+		MaxRim: maxRim, MinSin: minSin, DeepTerm: deepTerm, Contacts: contactSites}
+	if cp != nil && len(cp.coplanarA) > 0 {
+		res.CoplanarA, res.CoplanarB = cp.coplanarA, cp.coplanarB
+	}
+	if cp != nil && len(cp.owned) > 0 {
+		res.Owned = cp.owned
+		res.Legacy = cp.legacy(coplanar)
+	}
+	return res, nil
 }
 
 // segmentSite is a float box that holds the exact contact segment p0–p1:
@@ -243,4 +326,112 @@ func segmentSite(p0, p1 proof.Xpt) [2]r3.Vec {
 		{X: math.Nextafter(math.Min(a.X, b.X), -inf), Y: math.Nextafter(math.Min(a.Y, b.Y), -inf), Z: math.Nextafter(math.Min(a.Z, b.Z), -inf)},
 		{X: math.Nextafter(math.Max(a.X, b.X), inf), Y: math.Nextafter(math.Max(a.Y, b.Y), inf), Z: math.Nextafter(math.Max(a.Z, b.Z), inf)},
 	}
+}
+
+// isExact reports whether facet t is exact (BoolMesh.Exact); a mesh that never
+// had its facets read has none.
+func (bm *BoolMesh) isExact(t int) bool { return bm.Exact != nil && bm.Exact[t] }
+
+// coplanarPass is the state of the exact coplanar pass over one pairCuts call
+// (agent-docs/coplanar-contact-design.md §3.2–§3.3).
+type coplanarPass struct {
+	coplanarA, coplanarB map[int][]int
+	owned                map[string]struct{}
+	// legacyGrazes and legacyPoints are the contacts the switch-off pass would
+	// have collected for what this pass accepted; the coplanar facet pairs
+	// themselves are pairCuts' own list.
+	legacyGrazes, legacyPoints []TouchContact
+}
+
+// admit records the admitted coplanar pair (i, j): it inserts each operand's
+// patch-boundary edges, clipped to the other facet, as cuts, and owns the
+// clipped end points.
+func (cp *coplanarPass) admit(ma, mb *BoolMesh, i, j int, keyOf func(proof.Xpt) string, cutsA, cutsB map[int][]Xseg) error {
+	cp.coplanarA[i] = append(cp.coplanarA[i], j)
+	cp.coplanarB[j] = append(cp.coplanarB[j], i)
+	if err := cp.clipEdges(mb, j, ma, i, keyOf, cutsA); err != nil {
+		return err
+	}
+	return cp.clipEdges(ma, i, mb, j, keyOf, cutsB)
+}
+
+// clipEdges clips the patch-boundary edges of facet src of from to the closed
+// facet dst of into and appends each surviving piece to cuts[dst].
+func (cp *coplanarPass) clipEdges(from *BoolMesh, src int, into *BoolMesh, dst int, keyOf func(proof.Xpt) string, cuts map[int][]Xseg) error {
+	xs, xd := XtriCorners(from, src), XtriCorners(into, dst)
+	partner := TriCorners(from, src)
+	for k := range 3 {
+		boundary, err := patchBoundaryEdge(from, src, k)
+		if err != nil {
+			return err
+		}
+		if !boundary {
+			continue
+		}
+		piece, ok, err := CoplanarClip([2]proof.Xpt{xs[k], xs[(k+1)%3]}, xd, into.Norms[dst])
+		if err != nil {
+			return err
+		}
+		if !ok {
+			continue
+		}
+		cuts[dst] = append(cuts[dst], Xseg{
+			A: piece.P0, B: piece.P1,
+			AOnEdge: piece.P0OnA, BOnEdge: piece.P1OnA,
+			Partner: partner, ViaParity: true,
+		})
+		cp.owned[keyOf(piece.P0)] = struct{}{}
+		cp.owned[keyOf(piece.P1)] = struct{}{}
+	}
+	return nil
+}
+
+// patchBoundaryEdge reports whether edge k of facet f bounds a planar patch of
+// its operand: the facet across it is not coplanar with f. An edge between two
+// coplanar facets is a triangulation diagonal and is never inserted
+// (agent-docs/coplanar-contact-design.md §3.2).
+func patchBoundaryEdge(m *BoolMesh, f, k int) (bool, error) {
+	twin, ok := m.TwinFacet(f, k)
+	if !ok {
+		return false, fmt.Errorf(`%w: a coplanar facet edge has no twin facet`, decaderr.ErrBooleanFailed)
+	}
+	t, tt := m.Tris[f], m.Tris[twin]
+	u, v := t[k], t[(k+1)%3]
+	apex := m.Verts[tt[0]+tt[1]+tt[2]-u-v]
+	return proof.OrientSign(m.Verts[t[0]], m.Verts[t[1]], m.Verts[t[2]], apex) != 0, nil
+}
+
+// acceptEdge accepts an in-plane edge that bounds a coplanar patch (§3.3). The
+// facet of the first operand is a, of the second b; adjacent is the facet of
+// the edge's own operand that lies in the plane, and the pair it forms with the
+// partner facet must be one the pair pass admitted. It owns the contact segment's end points.
+func (cp *coplanarPass) acceptEdge(ma *BoolMesh, p PairContact, a, b int, keyOf func(proof.Xpt) string, grazed *bool) error {
+	recorded := cp.coplanarA[a]
+	if !slices.Contains(recorded, b) {
+		return fmt.Errorf(`%w: an in-plane edge bounds a coplanar patch no admitted pair recorded`, decaderr.ErrBooleanFailed)
+	}
+	cp.owned[keyOf(p.C.P0)] = struct{}{}
+	cp.owned[keyOf(p.C.P1)] = struct{}{}
+	// The switch-off pass records one graze per contact, however many of its
+	// edges graze.
+	if !*grazed && len(cp.legacyGrazes) < maxTouchContacts {
+		cp.legacyGrazes = append(cp.legacyGrazes, touchOf(ma, p.I, p.J))
+	}
+	*grazed = true
+	return nil
+}
+
+// legacy is the refusal the pass returns with the switch off for the contacts
+// this one accepted, in that pass's order: coplanar facet pairs, then edge
+// grazes, then isolated points (§5).
+func (cp *coplanarPass) legacy(coplanar []TouchContact) error {
+	switch {
+	case len(coplanar) > 0:
+		return ExpectedBoolean(BooleanExpectedContact, &TouchContactError{What: touchCoplanar, Contacts: coplanar})
+	case len(cp.legacyGrazes) > 0:
+		return ExpectedBoolean(BooleanExpectedContact, &TouchContactError{What: touchGraze, Contacts: cp.legacyGrazes})
+	case len(cp.legacyPoints) > 0:
+		return ExpectedBoolean(BooleanExpectedContact, &TouchContactError{What: touchPoint, Contacts: cp.legacyPoints})
+	}
+	return nil
 }

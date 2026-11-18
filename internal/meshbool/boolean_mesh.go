@@ -298,6 +298,14 @@ func meshBooleanStats(ctx context.Context, op OperationKind, ma, mb *BoolMesh, m
 	if err != nil {
 		return nil, Stats{}, err
 	}
+	if len(cuts.CoplanarA) > 0 || len(cuts.Owned) > 0 {
+		// The side pass does not read the admitted pairs yet, so the pair is
+		// refused as the switch-off pass refuses it.
+		if cuts.Legacy != nil {
+			return nil, Stats{}, cuts.Legacy
+		}
+		return nil, Stats{}, fmt.Errorf(`%w: an admitted coplanar pair has no side pass yet`, decaderr.ErrBooleanFailed)
+	}
 
 	if err := ctx.Err(); err != nil {
 		return nil, Stats{}, err
@@ -316,26 +324,62 @@ func meshBooleanStats(ctx context.Context, op OperationKind, ma, mb *BoolMesh, m
 	return append(keepA, keepB...), Stats{MaxRim: cuts.MaxRim, MinSin: cuts.MinSin, DeepTerm: cuts.DeepTerm, Contacts: cuts.Contacts}, nil
 }
 
-// EdgeCrosses decides whether edge k of facet f — which lies exactly in the
-// partner facet's plane — GRAZES that plane or genuinely CROSSES it, and
-// returns the undirected mesh-edge key either way. The verdict is read off the
-// edge's two adjacent facets: their apex vertices strictly on one side is a
-// graze; straddling is a crossing. An apex exactly ON the plane proves nothing
-// (the facet lies in it), so it reads as a graze — reject-only.
-func EdgeCrosses(m *BoolMesh, f, k int, partner [3]r3.Vec) ([2]int, bool, error) {
+// EdgeOutcome is EdgeSide's reading of an in-plane facet edge.
+type EdgeOutcome int
+
+const (
+	// EdgeCrossing: the edge's two adjacent facets straddle the partner's plane.
+	EdgeCrossing EdgeOutcome = iota
+	// EdgeGraze: both adjacent apexes lie strictly on one side of the plane.
+	EdgeGraze
+	// EdgeCoplanarBounded: the adjacent facet across the edge lies IN the
+	// plane, so the edge is the rim of a coplanar patch
+	// (agent-docs/coplanar-contact-design.md §3.3).
+	EdgeCoplanarBounded
+)
+
+// EdgeSide decides whether edge k of facet f — which lies exactly in the
+// partner facet's plane — CROSSES that plane, GRAZES it, or bounds a coplanar
+// patch, and returns the undirected mesh-edge key in every case. The verdict
+// is read off the edge's two adjacent facets: their apex vertices strictly on
+// opposite sides is a crossing, strictly on one side is a graze, and an apex
+// exactly ON the plane means that facet lies in it. inPlane is then the index
+// of the facet that lies in the plane, and -1 otherwise. Both apexes on the
+// plane is impossible for a facet that is not itself coplanar with the
+// partner, and returns ErrBooleanFailed.
+func EdgeSide(m *BoolMesh, f, k int, partner [3]r3.Vec) ([2]int, EdgeOutcome, int, error) {
 	tri := m.Tris[f]
 	u, v := tri[k], tri[(k+1)%3]
 	key := [2]int{min(u, v), max(u, v)}
 	twin, ok := m.TwinFacet(f, k)
 	if !ok {
-		return key, false, fmt.Errorf(`%w: an in-plane facet edge has no twin facet`, decaderr.ErrBooleanFailed)
+		return key, EdgeGraze, -1, fmt.Errorf(`%w: an in-plane facet edge has no twin facet`, decaderr.ErrBooleanFailed)
 	}
 	tt := m.Tris[twin]
 	apex := m.Verts[tri[0]+tri[1]+tri[2]-u-v]
 	apexTwin := m.Verts[tt[0]+tt[1]+tt[2]-u-v]
 	s0 := proof.OrientSign(partner[0], partner[1], partner[2], apex)
 	s1 := proof.OrientSign(partner[0], partner[1], partner[2], apexTwin)
-	return key, s0*s1 < 0, nil
+	switch {
+	case s0 == 0 && s1 == 0:
+		return key, EdgeGraze, -1, fmt.Errorf(`%w: an in-plane facet edge has both adjacent facets in the plane`, decaderr.ErrBooleanFailed)
+	case s0 == 0:
+		return key, EdgeCoplanarBounded, f, nil
+	case s1 == 0:
+		return key, EdgeCoplanarBounded, twin, nil
+	case s0*s1 < 0:
+		return key, EdgeCrossing, -1, nil
+	default:
+		return key, EdgeGraze, -1, nil
+	}
+}
+
+// EdgeCrosses is EdgeSide for a caller that does not read a coplanar patch:
+// it reports whether the edge crosses the plane, and reads an edge that bounds
+// a coplanar patch as a graze (reject-only), as the bounded replay does.
+func EdgeCrosses(m *BoolMesh, f, k int, partner [3]r3.Vec) ([2]int, bool, error) {
+	key, side, _, err := EdgeSide(m, f, k, partner)
+	return key, side == EdgeCrossing, err
 }
 
 // BlockedBetween reports whether the mesh edge two adjacent facets share
