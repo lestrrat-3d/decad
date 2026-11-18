@@ -1380,7 +1380,19 @@ work intervals inside quadratic/refinement loops, as interference §7 specifies.
   edge midpoints and centroid, then at points walked from each contact
   segment's midpoint toward the corners of the segment's two facets, halving
   the step each time. The walk is needed: a long facet can cross the other
-  operand deeply while all seven of its fixed points lie outside it. A pair
+  operand deeply while all seven of its fixed points lie outside it. Last,
+  for each pair of near facets, one of each face, whose boxes come within `b`,
+  the gate looks at the point of each facet nearest each of the other facet's
+  seven sample points (`meshbool.NearestWitness`). The walk can miss where a
+  long facet runs deep into a part of the other operand that is thin along
+  the facet: a cylinder's chord facet beside a flat face touches it along the
+  tangent line, and its depth lies across the facet, which the walk toward the
+  facet's far corners leaves the thin part before reaching. The nearest point
+  to a sample of the other face lies across the facet inside that face's
+  extent. It is found in floats and rebuilt as an exact convex combination of
+  the facet's exact corners, so it lies on the facet whatever the rounding,
+  and it is certified as every other candidate is. At most
+  `MaxDepthWitnessPairs` pairs are probed. A pair
   with no witness is refused. Reject-only in the undecidable band: it may
   refuse a valid model whose operands genuinely pass that close, and that is
   the accepted price.
@@ -1454,7 +1466,8 @@ work intervals inside quadratic/refinement loops, as interference §7 specifies.
   the original broad depth check and the separate tight-contact depth check.
   The caps matter because the witness search stops after its fixed facet limit;
   an unbounded broad set could otherwise crowd out a tight contact and lose a
-  witness.
+  witness. A broad set under the facet caps can still reach the nearest-point
+  search's pair cap, which can only lose a witness and refuse.
 - **A strict held-triangle gap uses exact distance when projection gaps are too
   small.** `meshbool.DisjointTriDistanceAbove` first proves the two closed
   triangles disjoint with exact separating axes, including in-plane axes for
