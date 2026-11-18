@@ -80,14 +80,25 @@ func TestPlacedAxisPrismBooleans(t *testing.T) {
 		require.NoError(t, err)
 		verify(t, got, 820)
 	})
-	t.Run("off-axis translation refuses", func(t *testing.T) {
+	t.Run("off-axis translation overlaps", func(t *testing.T) {
 		doc := decad.New(decad.ExactOnly())
 		a := boxBody(t, doc, 0, 0, 10, 10, 10)
 		b := placed(t, a, 0.5, 0, 5)
-		_, err := decad.Union(t.Context(), a, b)
-		requireCoplanarFaceRefusal(t, err)
+		got, err := decad.Union(t.Context(), a, b)
+		require.NoError(t, err, "exact boxes sharing wall planes are classified exactly")
+		require.True(t, tookMeshPath(got))
+		volume, err := got.Volume()
+		require.NoError(t, err)
+		require.InDelta(t, 2000-9.5*10*5, volumeMM(t, volume), boundMM3(t, volume)+1e-9)
 	})
-	t.Run("rotated basis refuses", func(t *testing.T) {
+	t.Run("off-axis translation of a rounded box refuses", func(t *testing.T) {
+		doc := decad.New(decad.ExactOnly())
+		a := roundTrip(t, boxBody(t, doc, 0, 0, 10, 10, 10))
+		b := placed(t, a, 0.5, 0, 5)
+		_, err := decad.Union(t.Context(), a, b)
+		requireRoundedContactRefusal(t, err)
+	})
+	t.Run("rotated basis meets face to face", func(t *testing.T) {
 		doc := decad.New(decad.ExactOnly())
 		a := boxBody(t, doc, 0, 0, 10, 10, 10)
 		motion, err := r3.FromBasis(r3.Basis{
@@ -98,7 +109,10 @@ func TestPlacedAxisPrismBooleans(t *testing.T) {
 		require.NoError(t, err)
 		b, err := decad.Copy(t.Context(), a, decad.WithCopyPlacement(motion))
 		require.NoError(t, err)
-		_, err = decad.Union(t.Context(), a, b)
-		requireCoplanarFaceRefusal(t, err)
+		got, err := decad.Union(t.Context(), a, b)
+		require.NoError(t, err, "exact boxes meeting face to face are classified exactly")
+		volume, err := got.Volume()
+		require.NoError(t, err)
+		require.InDelta(t, 2000.0, volumeMM(t, volume), boundMM3(t, volume)+1e-9)
 	})
 }

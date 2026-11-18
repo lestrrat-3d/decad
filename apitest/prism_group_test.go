@@ -188,10 +188,12 @@ func TestPrismGroupUnionLeavesAnEnclosedVoidToTheMeshPath(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, ring.Lumps(), 2)
 
-	// The mesh path refuses the pair's coplanar caps; an analytic fill would
-	// have returned a body with the void's 6·6·3 mm³ added.
-	_, err = decad.Union(t.Context(), group, ring)
-	var be *decad.BooleanError
-	require.ErrorAs(t, err, &be)
-	require.Equal(t, decad.BooleanUnsupportedContact, be.Code)
+	// The mesh path classifies the pair's coplanar caps exactly. The union's
+	// section is 40 + 20 + 20 = 80 mm² over 3 mm, 240 mm³; an analytic fill
+	// would have added the void's 6·6·3 mm³.
+	got, err := decad.Union(t.Context(), group, ring)
+	require.NoError(t, err)
+	volume, err := got.Volume()
+	require.NoError(t, err)
+	require.InDelta(t, 240.0, volumeMM(t, volume), boundMM3(t, volume)+1e-9)
 }

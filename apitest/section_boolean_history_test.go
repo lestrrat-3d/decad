@@ -214,10 +214,11 @@ func TestSectionMeshBooleanHistoryRefusals(t *testing.T) {
 	}
 	t.Run("gap-shifted result", func(t *testing.T) {
 		t.Parallel()
-		// The tool's top face is flush with the cube's, so the mesh path
-		// shifts it: the result no longer denotes cube minus tool.
+		// The tool's top face is flush with the cube's and its corners are
+		// rounded, so the mesh path shifts it: the result no longer denotes
+		// cube minus tool.
 		doc := decad.New()
-		notched, err := decad.Cut(t.Context(), historyCube(t, doc), boxBodyAtZ(t, doc, 5, 2, 15, 8, 5, 5))
+		notched, err := decad.Cut(t.Context(), historyCube(t, doc), roundedBoxBodyAtZ(t, doc, 5, 2, 15, 8, 5, 5))
 		require.NoError(t, err)
 		diagnostics := notched.OperationDiagnostics()
 		require.Len(t, diagnostics, 1)

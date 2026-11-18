@@ -412,12 +412,16 @@ func TestCapBlendBooleanAdmitsPlanarBand(t *testing.T) {
 	for _, tc := range []struct {
 		name string
 		want float64
-		run  func(chamfered, tool *decad.Body) (*decad.Body, error)
+		// exactness is what the result's volume reads: the Intersect's held
+		// corners are all floats, so its planar faces are re-triangulated
+		// on their corners alone and the volume is the exact closed form.
+		exactness decad.Exactness
+		run       func(chamfered, tool *decad.Body) (*decad.Body, error)
 	}{
-		{"intersect", planarBandOverlap, func(a, b *decad.Body) (*decad.Body, error) { return decad.Intersect(t.Context(), a, b) }},
-		{"cut", chamferedPlateVolume - planarBandOverlap, func(a, b *decad.Body) (*decad.Body, error) { return decad.Cut(t.Context(), a, b) }},
-		{"union", chamferedPlateVolume + 8000 - planarBandOverlap, func(a, b *decad.Body) (*decad.Body, error) { return decad.Union(t.Context(), a, b) }},
-		{"union as second operand", chamferedPlateVolume + 8000 - planarBandOverlap, func(a, b *decad.Body) (*decad.Body, error) { return decad.Union(t.Context(), b, a) }},
+		{"intersect", planarBandOverlap, decad.Exact, func(a, b *decad.Body) (*decad.Body, error) { return decad.Intersect(t.Context(), a, b) }},
+		{"cut", chamferedPlateVolume - planarBandOverlap, decad.Approximate, func(a, b *decad.Body) (*decad.Body, error) { return decad.Cut(t.Context(), a, b) }},
+		{"union", chamferedPlateVolume + 8000 - planarBandOverlap, decad.Approximate, func(a, b *decad.Body) (*decad.Body, error) { return decad.Union(t.Context(), a, b) }},
+		{"union as second operand", chamferedPlateVolume + 8000 - planarBandOverlap, decad.Approximate, func(a, b *decad.Body) (*decad.Body, error) { return decad.Union(t.Context(), b, a) }},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
@@ -428,7 +432,7 @@ func TestCapBlendBooleanAdmitsPlanarBand(t *testing.T) {
 			vol, err := got.Volume()
 			require.NoError(t, err)
 			require.InDelta(t, tc.want, volumeMM(t, vol), 1e-9)
-			require.Equal(t, decad.Approximate, vol.Exactness)
+			require.Equal(t, tc.exactness, vol.Exactness)
 			require.Less(t, boundMM3(t, vol), 1e-8)
 			requireBodyWatertight(t, got)
 		})

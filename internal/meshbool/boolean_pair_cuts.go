@@ -7,7 +7,6 @@ import (
 	"slices"
 	"sort"
 
-	"github.com/lestrrat-3d/decad/internal/coplanarcontact"
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -64,15 +63,11 @@ func pairCuts(ctx context.Context, ma, mb *BoolMesh, memo *ContactMemo, keyOf fu
 	// coplanar collects the coplanar facet pairs the scan meets, up to
 	// maxTouchContacts, so the refusal can say which planes are involved.
 	var coplanar []TouchContact
-	// The coplanar pass (agent-docs/coplanar-contact-design.md §3.2) runs only
-	// under the switch. refused is set when a coplanar pair holds an inexact
-	// facet: that pair, and so the pass, refuses exactly as it does with the
-	// switch off. The legacy lists are the contacts the switch-off pass would
-	// have collected for the admitted pairs, edges and points.
-	var cp *coplanarPass
-	if coplanarcontact.Of(ctx) {
-		cp = &coplanarPass{coplanarA: map[int][]int{}, coplanarB: map[int][]int{}, owned: map[string]struct{}{}}
-	}
+	// The coplanar pass (agent-docs/coplanar-contact-design.md §3.2). refused
+	// is set when a coplanar pair holds an inexact facet: that pair, and so the
+	// pass, refuses with TouchCoplanar. The legacy lists are the contacts a
+	// refusing pass collects for the admitted pairs, edges and points.
+	cp := &coplanarPass{coplanarA: map[int][]int{}, coplanarB: map[int][]int{}, owned: map[string]struct{}{}}
 	refused := false
 	work := 0
 	boxTree := newBoxTree(mb.Boxes)
@@ -82,7 +77,7 @@ func pairCuts(ctx context.Context, ma, mb *BoolMesh, memo *ContactMemo, keyOf fu
 		ta := TriCorners(ma, i)
 		tb := TriCorners(mb, j)
 		if c.Kind == ContactRegion {
-			admitted := cp != nil && ma.isExact(i) && mb.isExact(j)
+			admitted := ma.isExact(i) && mb.isExact(j)
 			if !admitted {
 				refused = true
 			}
@@ -107,7 +102,7 @@ func pairCuts(ctx context.Context, ma, mb *BoolMesh, memo *ContactMemo, keyOf fu
 			pointFacets = append(pointFacets, [2]int{i, j})
 			// A coplanar point touch of two exact facets is accepted unless a
 			// crossing segment ends there, which the rim map settles below.
-			pointCoplanar = append(pointCoplanar, c.Coplanar && cp != nil && ma.isExact(i) && mb.isExact(j))
+			pointCoplanar = append(pointCoplanar, c.Coplanar && ma.isExact(i) && mb.isExact(j))
 			return nil
 		}
 		sin := 0.0
@@ -197,6 +192,9 @@ func pairCuts(ctx context.Context, ma, mb *BoolMesh, memo *ContactMemo, keyOf fu
 	// grazes collects the facets of the first operand at every graze, so the
 	// refusal can say where the operands touch.
 	var grazes []TouchContact
+	// realGraze is set by a graze no coplanar patch accounts for; only then
+	// do the grazes refuse, and the refusal lists every contact in order.
+	realGraze := false
 	for i, p := range inPlane {
 		if i%256 == 0 {
 			if err := ctx.Err(); err != nil {
@@ -212,15 +210,16 @@ func pairCuts(ctx context.Context, ma, mb *BoolMesh, memo *ContactMemo, keyOf fu
 			if err != nil {
 				return pairCutsResult{}, err
 			}
-			if side == EdgeCoplanarBounded && cp != nil && ma.isExact(p.I) && mb.isExact(p.J) {
-				if err := cp.acceptEdge(ma, p, adjacent, p.J, keyOf, &grazed); err != nil {
+			if side == EdgeCoplanarBounded && ma.isExact(p.I) && mb.isExact(p.J) {
+				if err := cp.acceptEdge(p, adjacent, p.J, keyOf); err != nil {
 					return pairCutsResult{}, err
 				}
-				skipCut = true
+				skipCut, grazed = true, true
 			} else if side != EdgeCrossing {
 				if len(grazes) < maxTouchContacts {
 					grazes = append(grazes, touchOf(ma, p.I, p.J))
 				}
+				realGraze = true
 				continue
 			} else {
 				blockedA[key] = struct{}{}
@@ -231,19 +230,25 @@ func pairCuts(ctx context.Context, ma, mb *BoolMesh, memo *ContactMemo, keyOf fu
 			if err != nil {
 				return pairCutsResult{}, err
 			}
-			if side == EdgeCoplanarBounded && cp != nil && ma.isExact(p.I) && mb.isExact(p.J) {
-				if err := cp.acceptEdge(ma, p, p.I, adjacent, keyOf, &grazed); err != nil {
+			if side == EdgeCoplanarBounded && ma.isExact(p.I) && mb.isExact(p.J) {
+				if err := cp.acceptEdge(p, p.I, adjacent, keyOf); err != nil {
 					return pairCutsResult{}, err
 				}
-				skipCut = true
+				skipCut, grazed = true, true
 			} else if side != EdgeCrossing {
 				if len(grazes) < maxTouchContacts {
 					grazes = append(grazes, touchOf(ma, p.I, p.J))
 				}
+				realGraze = true
 				continue
 			} else {
 				blockedB[key] = struct{}{}
 			}
+		}
+		if grazed && len(grazes) < maxTouchContacts {
+			// The refusal the pair gives with no accepted edge records one
+			// graze per contact, however many of its edges graze.
+			grazes = append(grazes, touchOf(ma, p.I, p.J))
 		}
 		if skipCut {
 			continue
@@ -269,48 +274,57 @@ func pairCuts(ctx context.Context, ma, mb *BoolMesh, memo *ContactMemo, keyOf fu
 		}
 	}
 
-	if len(grazes) > 0 {
+	if realGraze {
+		if len(coplanar) > 0 {
+			// The pair always refused its coplanar contacts first, and the
+			// retry reads that refusal.
+			return pairCutsResult{}, ExpectedBoolean(BooleanExpectedContact, &TouchContactError{What: touchCoplanar, Contacts: coplanar})
+		}
 		return pairCutsResult{}, ExpectedBoolean(BooleanExpectedContact, &TouchContactError{What: touchGraze, Contacts: grazes})
 	}
+	cp.legacyGrazes = grazes
 
 	// A point contact is legitimate only as the endpoint of some crossing
 	// segment (a chain passing exactly through a vertex). An isolated one is a
 	// tangency the boolean cannot classify: the operands pinch at a point, and
 	// stitching it would emit a non-manifold result — refuse, never a wrong mesh.
 	if len(pointTouches) > 0 {
-		var isolated []TouchContact
+		// every lists each point contact no crossing segment ends at, in order,
+		// the accepted ones too, so a refusal reads as it does with none accepted.
+		var every []TouchContact
+		isolated := false
 		for k, p := range pointTouches {
 			key := keyOf(p)
 			if _, ok := rims[key]; ok {
 				continue
 			}
-			if cp != nil && ma.isExact(pointFacets[k][0]) && mb.isExact(pointFacets[k][1]) {
+			if len(every) < maxTouchContacts {
+				every = append(every, touchOf(ma, pointFacets[k][0], pointFacets[k][1]))
+			}
+			if ma.isExact(pointFacets[k][0]) && mb.isExact(pointFacets[k][1]) {
 				_, owned := cp.owned[key]
 				if pointCoplanar[k] || owned {
-					// Accepted here, refused with the switch off: the contact
-					// list keeps the switch-off pass's order.
 					cp.owned[key] = struct{}{}
-					if len(cp.legacyPoints) < maxTouchContacts {
-						cp.legacyPoints = append(cp.legacyPoints, touchOf(ma, pointFacets[k][0], pointFacets[k][1]))
-					}
 					continue
 				}
 			}
-			if len(isolated) < maxTouchContacts {
-				isolated = append(isolated, touchOf(ma, pointFacets[k][0], pointFacets[k][1]))
+			isolated = true
+		}
+		if isolated {
+			if len(coplanar) > 0 {
+				return pairCutsResult{}, ExpectedBoolean(BooleanExpectedContact, &TouchContactError{What: touchCoplanar, Contacts: coplanar})
 			}
+			return pairCutsResult{}, ExpectedBoolean(BooleanExpectedContact, &TouchContactError{What: touchPoint, Contacts: every})
 		}
-		if len(isolated) > 0 {
-			return pairCutsResult{}, ExpectedBoolean(BooleanExpectedContact, &TouchContactError{What: touchPoint, Contacts: isolated})
-		}
+		cp.legacyPoints = every
 	}
 
 	res := pairCutsResult{CutsA: cutsA, CutsB: cutsB, BlockedA: blockedA, BlockedB: blockedB, Rims: rims,
 		MaxRim: maxRim, MinSin: minSin, DeepTerm: deepTerm, Contacts: contactSites}
-	if cp != nil && len(cp.coplanarA) > 0 {
+	if len(cp.coplanarA) > 0 {
 		res.CoplanarA, res.CoplanarB = cp.coplanarA, cp.coplanarB
 	}
-	if cp != nil && len(cp.owned) > 0 {
+	if len(cp.owned) > 0 {
 		res.Owned = cp.owned
 		res.Legacy = cp.legacy(coplanar)
 	}
@@ -405,19 +419,13 @@ func patchBoundaryEdge(m *BoolMesh, f, k int) (bool, error) {
 // facet of the first operand is a, of the second b; adjacent is the facet of
 // the edge's own operand that lies in the plane, and the pair it forms with the
 // partner facet must be one the pair pass admitted. It owns the contact segment's end points.
-func (cp *coplanarPass) acceptEdge(ma *BoolMesh, p PairContact, a, b int, keyOf func(proof.Xpt) string, grazed *bool) error {
+func (cp *coplanarPass) acceptEdge(p PairContact, a, b int, keyOf func(proof.Xpt) string) error {
 	recorded := cp.coplanarA[a]
 	if !slices.Contains(recorded, b) {
 		return fmt.Errorf(`%w: an in-plane edge bounds a coplanar patch no admitted pair recorded`, decaderr.ErrBooleanFailed)
 	}
 	cp.owned[keyOf(p.C.P0)] = struct{}{}
 	cp.owned[keyOf(p.C.P1)] = struct{}{}
-	// The switch-off pass records one graze per contact, however many of its
-	// edges graze.
-	if !*grazed && len(cp.legacyGrazes) < maxTouchContacts {
-		cp.legacyGrazes = append(cp.legacyGrazes, touchOf(ma, p.I, p.J))
-	}
-	*grazed = true
 	return nil
 }
 

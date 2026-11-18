@@ -1,7 +1,6 @@
 package apitest_test
 
 import (
-	"errors"
 	"math"
 	"math/big"
 	"testing"
@@ -297,55 +296,43 @@ func TestVerifyFacetedMultiRegionPairReadsOnItsGrid(t *testing.T) {
 	require.Less(t, report.Interferences[0].Volume.Bound.Base(), 1e-9)
 }
 
-// TestPublicBooleansUnchangedOnMultiRegionPair is §15's "public booleans
-// unchanged" row: decad.Intersect of the U prism and the bar still returns
-// the mesh path's existing refusal, since the public surface owes its caller
-// a Body and §4.5's reading builds none (agent-docs/prism-boolean-design.md §13).
-// Cut hits the identical mesh-path coplanar-contact refusal (neither the
-// clean-nesting match nor the crossing sub-case resolves a genuinely
-// multi-region selection, §4.4), and Union — whose select-all path merges
-// every arrangement cell into ONE simple loop regardless of how many
-// disjoint regions the pair's INTERSECTION would cover — is unaffected and
-// keeps building analytically. None of the three is touched by this PR: it
-// adds no capability to performBoolean's dispatch at all (§4.5's own "The
-// reading runs only from the read-only interference path, never from
-// performBoolean").
-func TestPublicBooleansUnchangedOnMultiRegionPair(t *testing.T) {
+// TestPublicBooleansOnMultiRegionPair is §15's "public booleans" row for the U
+// prism and the bar: neither operand is a prism the analytic paths take as a
+// pair, so each public boolean runs the mesh path, which classifies the pair's
+// shared coplanar caps exactly (agent-docs/coplanar-contact-design.md). The
+// results follow inclusion-exclusion over the 120 mm^3 overlap the interference
+// reading gives, and Union leaves the enclosed 2×3 notch cell empty, which
+// Union's select-all analytic merge would fill.
+func TestPublicBooleansOnMultiRegionPair(t *testing.T) {
 	t.Parallel()
-	t.Run("intersect refuses through the mesh path", func(t *testing.T) {
+	volumes := func(t *testing.T) (u, bar float64, do func(func(a, b *decad.Body) (*decad.Body, error)) float64) {
 		doc := decad.New(decad.ExactOnly())
-		u, bar := uAndBarBodies(t, doc)
-		_, err := decad.Intersect(t.Context(), u, bar)
-		require.Error(t, err)
-		require.ErrorIs(t, err, decad.ErrUnsupported)
-		var be *decad.BooleanError
-		require.True(t, errors.As(err, &be))
-		require.Equal(t, decad.BooleanUnsupportedContact, be.Code)
+		ub, bb := uAndBarBodies(t, doc)
+		uv, err := ub.Volume()
+		require.NoError(t, err)
+		bv, err := bb.Volume()
+		require.NoError(t, err)
+		return volumeMM(t, uv), volumeMM(t, bv), func(op func(a, b *decad.Body) (*decad.Body, error)) float64 {
+			got, err := op(ub, bb)
+			require.NoError(t, err)
+			v, err := got.Volume()
+			require.NoError(t, err)
+			require.Less(t, boundMM3(t, v), 1e-6)
+			return volumeMM(t, v)
+		}
+	}
+	const overlap = 120.0
+	t.Run("intersect is the overlap", func(t *testing.T) {
+		_, _, do := volumes(t)
+		require.InDelta(t, overlap, do(func(a, b *decad.Body) (*decad.Body, error) { return decad.Intersect(t.Context(), a, b) }), 1e-6)
 	})
-
-	t.Run("cut refuses through the same mesh-path contact refusal", func(t *testing.T) {
-		doc := decad.New(decad.ExactOnly())
-		u, bar := uAndBarBodies(t, doc)
-		_, err := decad.Cut(t.Context(), u, bar)
-		require.Error(t, err)
-		require.ErrorIs(t, err, decad.ErrUnsupported)
-		var be *decad.BooleanError
-		require.True(t, errors.As(err, &be))
-		require.Equal(t, decad.BooleanUnsupportedContact, be.Code)
+	t.Run("cut removes the overlap", func(t *testing.T) {
+		u, _, do := volumes(t)
+		require.InDelta(t, u-overlap, do(func(a, b *decad.Body) (*decad.Body, error) { return decad.Cut(t.Context(), a, b) }), 1e-6)
 	})
-
-	t.Run("union leaves the enclosed notch to the mesh path", func(t *testing.T) {
-		// The bar closes the U's notch between y = 5 and y = 8: a 2×3 cell
-		// neither operand covers. Union's select-all merge would fill it, so
-		// the analytic path declines (prism-boolean §4.2) and the mesh path
-		// refuses the shared caps.
-		doc := decad.New(decad.ExactOnly())
-		u, bar := uAndBarBodies(t, doc)
-		_, err := decad.Union(t.Context(), u, bar)
-		require.ErrorIs(t, err, decad.ErrUnsupported)
-		var be *decad.BooleanError
-		require.True(t, errors.As(err, &be))
-		require.Equal(t, decad.BooleanUnsupportedContact, be.Code)
+	t.Run("union leaves the enclosed notch empty", func(t *testing.T) {
+		u, bar, do := volumes(t)
+		require.InDelta(t, u+bar-overlap, do(func(a, b *decad.Body) (*decad.Body, error) { return decad.Union(t.Context(), a, b) }), 1e-6)
 	})
 }
 

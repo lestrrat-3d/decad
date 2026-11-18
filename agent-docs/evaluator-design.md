@@ -1288,10 +1288,12 @@ work intervals inside quadratic/refinement loops, as interference §7 specifies.
   sets, so their intersection is empty, a point, a segment, or a 2-D region —
   and the pair pass computes exactly *which*, never "how many of A's vertices
   sit on B's plane, and whose geometry do I look on". A 2-D region is a
-  coplanar face-on-face tangency: classifying material side over every
-  positive-area coplanar patch is the designed route
-  (`agent-docs/interference-design.md` §5.2), staged as that document's §11 PR4, and
-  this evaluator refuses the case until that increment lands. A point is
+  coplanar face-on-face contact. When both facets are exact it is classified
+  exactly: the pair pass inserts each operand's patch-boundary edges clipped
+  to the other facet, and the side pass keeps or drops each covered region by
+  the facing of the coincident normals (`agent-docs/coplanar-contact-design.md`
+  §3; `agent-docs/interference-design.md` §5.2). A pair holding an inexact
+  facet is refused. A point is
   carried and refused unless some crossing chain owns it as an endpoint; a
   segment is a rim. When the operands name valid solids, an unlanded 2-D
   region and an unowned point are contacts this evaluator refuses, so the

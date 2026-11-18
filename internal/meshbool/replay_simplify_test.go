@@ -8,7 +8,6 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/lestrrat-3d/decad/internal/coplanarcontact"
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -27,7 +26,7 @@ func replayStitch(t *testing.T, ctx context.Context, kept []KeptFacet, budget *p
 // slanted-slot fixture, where the simplification acts, and on a crossing box
 // pair, where it does nothing.
 func TestReplaySimplifyMatchesLive(t *testing.T) {
-	ctx := coplanarcontact.With(t.Context(), true)
+	ctx := t.Context()
 	cross := func() []KeptFacet {
 		a := boxMesh(t, r3.Vec{X: 1, Y: 1, Z: 1}, func(v r3.Vec) r3.Vec { return v }, r3.Vec{})
 		b := boxMesh(t, r3.Vec{X: 1, Y: 1, Z: 1}, func(v r3.Vec) r3.Vec { return v }, r3.Vec{X: 0.5, Y: 0.4, Z: 0.3})
@@ -48,14 +47,6 @@ func TestReplaySimplifyMatchesLive(t *testing.T) {
 			require.Equal(t, live.Round, got.Round)
 		})
 	}
-	// With the switch off the replay holds the unsimplified mesh.
-	kept := dovetailCut(t, 0.125)
-	plain, err := replayStitch(t, t.Context(), kept, proofbound.NewReplayTrialBudget())
-	require.NoError(t, err)
-	simple, err := replayStitch(t, ctx, kept, proofbound.NewReplayTrialBudget())
-	require.NoError(t, err)
-	require.Positive(t, plain.Round)
-	require.Zero(t, simple.Round)
 }
 
 // TestReplaySimplifyBudgetExhaustion pins that the simplification charges the
@@ -127,7 +118,7 @@ func needlePrism() []KeptFacet {
 // needle the simplified top holds, which the bounded stitch cannot, so the
 // bounded stitch declines instead of holding a different mesh.
 func TestReplaySimplifyDeclinesWhatLiveFlips(t *testing.T) {
-	ctx := coplanarcontact.With(t.Context(), true)
+	ctx := t.Context()
 	kept := needlePrism()
 	_, err := StitchFacetsWith(ctx, kept, StitchOptions{SimplifyPlanar: true})
 	require.NoError(t, err)
@@ -141,7 +132,7 @@ func TestReplaySimplifyDeclinesWhatLiveFlips(t *testing.T) {
 // a sweep of work limits every run either builds the simplified mesh or returns
 // a WorkLimitError, never the plain mesh and never another refusal.
 func TestReplaySimplifyStitchBudget(t *testing.T) {
-	ctx := coplanarcontact.With(t.Context(), true)
+	ctx := t.Context()
 	kept := dovetailCut(t, 0.125)
 	full := proofbound.NewReplayTrialBudget()
 	_, err := replayStitch(t, ctx, kept, full)

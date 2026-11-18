@@ -2,6 +2,7 @@ package meshbool
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"math/big"
@@ -308,12 +309,12 @@ func meshBooleanStats(ctx context.Context, op OperationKind, ma, mb *BoolMesh, m
 	keepA, err := keepSideWith(ctx, ma, mb, cuts.CutsA, cuts.BlockedA, cuts.Rims, wantA, false, keyOf,
 		keepOptions{Coplanar: cuts.CoplanarA, Op: op})
 	if err != nil {
-		return nil, Stats{}, err
+		return nil, Stats{}, coplanarRefusal(cuts, err)
 	}
 	keepB, err := keepSideWith(ctx, mb, ma, cuts.CutsB, cuts.BlockedB, cuts.Rims, wantB, flipB, keyOf,
 		keepOptions{Coplanar: cuts.CoplanarB, Op: op, Second: true})
 	if err != nil {
-		return nil, Stats{}, err
+		return nil, Stats{}, coplanarRefusal(cuts, err)
 	}
 	for i := range keepB {
 		keepB[i].Second = true
@@ -323,6 +324,17 @@ func meshBooleanStats(ctx context.Context, op OperationKind, ma, mb *BoolMesh, m
 		stats.Coplanar = &ContactKeys{Owned: cuts.Owned, Legacy: cuts.Legacy}
 	}
 	return append(keepA, keepB...), stats, nil
+}
+
+// coplanarRefusal maps a side-pass refusal of a pair the coplanar pass admitted
+// to the refusal the pair gave before the pass existed, so the gap-tolerance
+// retry reads the contacts it always read. A refusal of a pair the pass admitted
+// nothing of, and any error that is no expected contact, return as they are.
+func coplanarRefusal(cuts pairCutsResult, err error) error {
+	if cuts.Legacy == nil || !errors.Is(err, decaderr.ErrUnsupported) {
+		return err
+	}
+	return cuts.Legacy
 }
 
 // EdgeOutcome is EdgeSide's reading of an in-plane facet edge.

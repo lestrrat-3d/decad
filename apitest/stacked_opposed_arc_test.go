@@ -1,6 +1,7 @@
 package apitest_test
 
 import (
+	"fmt"
 	"math/big"
 	"testing"
 
@@ -69,7 +70,7 @@ func opposedArcPockets(t *testing.T, doc *decad.Document, plate, top, bottom opp
 //
 // Shown red: restoring the axis-line gate (stackedrecord's opposedLoop
 // refusing circles and arcs) sends every case to the mesh path, which
-// refuses the coplanar contact. Zeroing the vertex allowance OpposedCut
+// classifies the coplanar contact of exact lines but refuses a curved one. Zeroing the vertex allowance OpposedCut
 // hands breprecord.StackedRecord fails round-across-rect/wide in both
 // orders: the volume misses its closed form by more than the bound left.
 func TestStackedOpposedArcLoops(t *testing.T) {
@@ -164,7 +165,8 @@ func TestStackedOpposedArcLoops(t *testing.T) {
 //     rectangle's edge x = 0 and touches its edges y = ±2 from inside.
 //   - crossing-circles: two r = 2 pockets whose circles cross, which no exact
 //     vertex record states.
-//   - oblique: a top pocket with an oblique edge crossing a bottom rectangle.
+//   - oblique: a top pocket with an oblique edge crossing a bottom rectangle;
+//     see TestStackedOpposedObliqueLoops.
 //   - slot-tangent-edge: a bottom slot under a top rectangle whose edge
 //     y = 2 runs along the slot's straight edge and on past the arc's end
 //     (3, 2), tangent to the arc there. The arrangement places a vertex at
@@ -184,10 +186,6 @@ func TestStackedOpposedArcLoopsRefuse(t *testing.T) {
 			[2]float64{-6, -7}, [2]float64{5, -7}, [2]float64{5, -3}, [2]float64{-2, -3},
 			[2]float64{-2, 7}, [2]float64{-6, 7}))
 	}
-	oblique := func(t *testing.T, doc *decad.Document) *decad.Body {
-		return arcPocketBody(t, doc, 4, units.Millimeters(6), decad.Along, drawPolygon(
-			[2]float64{-6, -3}, [2]float64{0, -3}, [2]float64{-2, 3}, [2]float64{-6, 3}))
-	}
 	for _, tc := range []struct {
 		name        string
 		top, bottom opposedArcBody
@@ -195,7 +193,6 @@ func TestStackedOpposedArcLoopsRefuse(t *testing.T) {
 		{name: "l-tangent", top: lPocket, bottom: opposedArcRound(0, 3, 0, 4)},
 		{name: "tangent-inside", top: opposedArcBox(-6, -2, 0, 2, 4, 6), bottom: opposedArcRound(-1, 2, 0, 4)},
 		{name: "crossing-circles", top: opposedArcRound(-2, 2, 4, 6), bottom: opposedArcRound(0, 2, 0, 4)},
-		{name: "oblique", top: oblique, bottom: opposedArcBox(-3, -1, 2, 1, 0, 4)},
 		{name: "slot-tangent-edge", top: opposedArcBox(-1, -1, 8, 2, 4, 6), bottom: func(t *testing.T, doc *decad.Document) *decad.Body {
 			return arcPocketBody(t, doc, 0, units.Millimeters(4), decad.Along, drawCrossSlot)
 		}},
@@ -212,5 +209,32 @@ func TestStackedOpposedArcLoopsRefuse(t *testing.T) {
 				require.Equal(t, decad.BooleanUnsupportedContact, be.Code)
 			})
 		}
+	}
+}
+
+// obliquePocket is the top pocket with an oblique edge: a 30 mm² quadrilateral
+// 6 deep from z = 4.
+func obliquePocket(t *testing.T, doc *decad.Document) *decad.Body {
+	return arcPocketBody(t, doc, 4, units.Millimeters(6), decad.Along, drawPolygon(
+		[2]float64{-6, -3}, [2]float64{0, -3}, [2]float64{-2, 3}, [2]float64{-6, 3}))
+}
+
+// TestStackedOpposedObliqueLoops cuts the oblique top pocket and a 5 x 2 x 4
+// bottom pocket from the plate, in both orders. They share no volume, so the
+// result is the plate less both: 4000 - 180 - 40 = 3780. The mesh path
+// classifies the pockets' coplanar contact at z = 4 exactly.
+func TestStackedOpposedObliqueLoops(t *testing.T) {
+	t.Parallel()
+	bottom := opposedArcBox(-3, -1, 2, 1, 0, 4)
+	for _, topFirst := range []bool{true, false} {
+		t.Run(fmt.Sprintf("top-first=%t", topFirst), func(t *testing.T) {
+			t.Parallel()
+			doc := decad.New(decad.ExactOnly())
+			got, err := opposedArcPockets(t, doc, opposedArcPlate, obliquePocket, bottom, topFirst)
+			require.NoError(t, err)
+			volume, err := got.Volume()
+			require.NoError(t, err)
+			require.InDelta(t, 3780.0, volumeMM(t, volume), boundMM3(t, volume)+1e-9)
+		})
 	}
 }

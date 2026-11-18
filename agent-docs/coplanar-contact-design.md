@@ -37,14 +37,12 @@ Navigation, not authority.
   coplanar pair keep today's refusals.
 - A shifted, grown or fixed-tool attempt (`hasShifts || fixed != nil` in `booleaneval.evaluate`) admits no coplanar
   pair: its `BoolMesh.Exact` stays nil. The retry ladder therefore behaves exactly as today.
-- The bounded replay path keeps refusing coplanar contacts until Task 12 ports §3 and §5. A replay refusal is a
-  decline. §7 is ported to replay (Task 9) before it is turned on (Task 10), so live and replay held meshes stay equal
-  for every boolean both paths build.
+- The bounded replay path refuses coplanar contacts until Task 12 ports §3 and §5. A replay refusal is a decline. §7
+  runs on the replay stitch as well, so live and replay held meshes are equal for every boolean both paths build.
 - Planar face simplification (§7) leaves any face region with a hole untouched in this design.
 - decad tests use minimal box and prism fixtures and name no consumer model (`agent-docs/testing.md` "Test scope").
   The consumer dovetail check runs outside this repository (§11.4).
-- Tasks 2–9 land behind a private context switch, `internal/coplanarcontact` (`With`/`Of`, pattern
-  `internal/rimsplit/rimsplit.go`), default off. Task 10 turns the behavior on and deletes the switch.
+- The behavior has no switch: the exact coplanar pass and planar face simplification run on every mesh boolean.
 
 ## 1. Problem and root cause
 
@@ -257,7 +255,7 @@ growth) behaves as it does today.
 // ContactKeys is what the stitch needs to tell a contact pinch from a broken mesh.
 type ContactKeys struct {
 	Owned  map[string]struct{} // exact keys of every point §3.2–§3.3 accepted
-	Legacy error              // the refusal the pair pass returns with the switch off
+	Legacy error              // the refusal the pair gives with no exact facet
 }
 ```
 
@@ -272,7 +270,11 @@ with the same `NormalA`, `Decisive`, `FacetsB` and Slack 0, so the retry reads a
 2. Vertex audit: the facets around every vertex form one cycle through shared edges.
 
 A failing edge or vertex whose exact keys are all in `Owned` returns `Legacy`. Any other failure keeps today's
-`ErrBooleanFailed`. The audit reads only stitched vertex keys, so it needs no operand normals and no map back to kept
+`ErrBooleanFailed`.
+
+The retry reads the same refusal wherever the exact classification stops. A graze or isolated point found beside a coplanar
+pair, and an expected-contact refusal of the side pass for a pair whose points the pass accepted, return the coplanar
+refusal or `Legacy` the pair gave before the classification existed, because the retry ladder starts from it. The audit reads only stitched vertex keys, so it needs no operand normals and no map back to kept
 facets. `StitchFacetsContext(ctx, kept)` delegates to `StitchFacetsWith` with zero options and keeps its behavior.
 
 ## 6. Proximity gate obligations

@@ -11,7 +11,7 @@ import (
 )
 
 // TestStitchManifoldContact pins that a Union of boxes touching only along an
-// edge, or only at a vertex, stitches to the refusal the switch-off pass gives,
+// edge, or only at a vertex, stitches to the refusal of the same operands with no exact facet,
 // not to an invariant failure or a pinched mesh.
 //
 // Leg shown to fail: stitching without the audit returns ErrBooleanFailed for
@@ -27,7 +27,7 @@ func TestStitchManifoldContact(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			a := exactBoxMesh(t, r3.Vec{}, r3.Vec{X: 10, Y: 10, Z: 10})
 			b := exactBoxMesh(t, tc.loB, r3.Vec{X: tc.loB.X + 10, Y: tc.loB.Y + 10, Z: tc.loB.Z + 10})
-			kept, stats, err := MeshBooleanStats(coplanarCtx(t), OpUnion, a, b, NewContactMemo(a, b))
+			kept, stats, err := MeshBooleanStats(t.Context(), OpUnion, a, b, NewContactMemo(a, b))
 			require.NoError(t, err)
 			require.NotNil(t, stats.Coplanar)
 
@@ -35,9 +35,8 @@ func TestStitchManifoldContact(t *testing.T) {
 			got, ok := errors.AsType[*TouchContactError](err)
 			require.True(t, ok, "want the legacy refusal, got %v", err)
 
-			_, off := pairCuts(t.Context(), a, b, NewContactMemo(a, b), newKeyMemo())
-			want, ok := errors.AsType[*TouchContactError](off)
-			require.True(t, ok, "%v", off)
+			want, ok := errors.AsType[*TouchContactError](refusalOf(a, b))
+			require.True(t, ok)
 			require.Equal(t, want.What, got.What)
 			require.Equal(t, want.Contacts, got.Contacts)
 
@@ -54,7 +53,7 @@ func TestStitchManifoldContact(t *testing.T) {
 func TestStitchManifoldAuditPassesAClosedResult(t *testing.T) {
 	a := exactBoxMesh(t, r3.Vec{}, r3.Vec{X: 10, Y: 10, Z: 10})
 	b := exactBoxMesh(t, r3.Vec{X: 0.5, Z: 10}, r3.Vec{X: 10.5, Y: 10, Z: 20})
-	kept, stats, err := MeshBooleanStats(coplanarCtx(t), OpUnion, a, b, NewContactMemo(a, b))
+	kept, stats, err := MeshBooleanStats(t.Context(), OpUnion, a, b, NewContactMemo(a, b))
 	require.NoError(t, err)
 	require.NotNil(t, stats.Coplanar)
 	with, err := StitchFacetsWith(t.Context(), kept, StitchOptions{Coplanar: stats.Coplanar})

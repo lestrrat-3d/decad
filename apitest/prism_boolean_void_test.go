@@ -20,11 +20,11 @@ var (
 
 func requireMeshPathVerdict(t *testing.T, err error) {
 	t.Helper()
-	// Every operand shares the z = 0 cap plane, which the mesh path refuses as
-	// a coplanar contact; an analytic fill would have returned a body.
-	var be *decad.BooleanError
-	require.ErrorAs(t, err, &be)
-	require.Equal(t, decad.BooleanUnsupportedContact, be.Code)
+	// Every operand shares the z = 0 cap plane. The mesh path classifies that
+	// coplanar contact of exact faces (agent-docs/coplanar-contact-design.md), so
+	// it answers; the volume checks of the callers hold the answer to the void
+	// left empty, which an analytic fill would have published as 122.
+	require.NoError(t, err)
 }
 
 func TestPrismUnionEnclosedVoidTakesMeshPath(t *testing.T) {

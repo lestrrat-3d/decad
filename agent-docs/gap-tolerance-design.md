@@ -36,7 +36,8 @@ one construction choice made up front, the partial chamfer's corner relief (§5.
   each other is first repaired among the float-box corners of each exact point
   (`agent-docs/evaluator-design.md` §9). A mesh that search leaves folded gets a second stage in which each movable
   vertex of a failing pair may also sit up to the reach from its exact point.
-- The shifted Boolean retry (§5.2). A mesh Boolean whose operands meet in coplanar facets is run again with the
+- The shifted Boolean retry (§5.2). A mesh Boolean whose operands meet in coplanar facets of a face with a positive bound, or
+  only along an edge or at a vertex, is run again with the
   second operand moved by up to the reach, and one whose stitched result the embedding repair leaves folded is run
   again with the second operand grown by up to the reach (§5.2 item 7).
 - The partial chamfer's corner relief (§5.4). A prism's chamfer run that ends at a concave corner stops 0.004 mm
@@ -139,7 +140,11 @@ reach, and zero keeps the float-box search alone.
 ### 5.2 The shifted Boolean retry
 
 A mesh Boolean refuses four contacts the exact predicates cannot classify. Two operand facets can overlap in one
-plane, so no side of the other operand is proven for the shared region. An edge of one operand can graze along a facet
+plane, so no side of the other operand is proven for the shared region, unless both facets are exact: the exact
+facets of two zero-bound faces are classified without a retry (`agent-docs/coplanar-contact-design.md`), so this
+retry meets a coplanar overlap only on a face with a positive bound, or when the exact classification leaves an
+operand meeting itself along an edge or at a vertex, in which case the refusal it returns is the one the retry reads
+here. An edge of one operand can graze along a facet
 of the other. The operands can touch at an isolated point. Facets of a curved face of one operand can come within the
 chord tolerance of the other operand's facets without provably crossing deeper than it (the proximity gate,
 `meshbool.RefuseUndecidableProximity`). `meshbool.TouchContactError` carries every such contact it met (up to 64) as
@@ -360,13 +365,14 @@ owns that refusal in the same change.
 | `facetedrecord.TestPlacedTagDeparture` | An exact translation of a Plane, Cylinder, Sphere or Torus tag states zero departure, and an inexact one of a Cylinder at x = 0.1 states a positive one. |
 | `meshbool.TestRefuseUndecidableProximityLocalSlack` | A pair the faces' bounds cannot decide is decided by its close facets' own bounds, and a refusal names its contacts with their Slack. |
 | `booleaneval.TestShiftDirections` | Which sense each operation wants for each kind of contact, a Union's inward pull on contacts that are not Decisive when none is, the outward tie beside a Decisive contact, and when no direction exists. |
-| `apitest.TestBooleanGapTolerance` | Union, Cut and Intersect of boxes that touch or sit flush: the result, the bound that covers the true volume, a tighter bound from a smaller tolerance, and the refusals `ExactOnly` and a slot keep. |
+| `apitest.TestCoplanarContactRoundedFixtureKeepsRetry` | A box rounded by two turns about the body diagonal keeps the retry and its `ExactOnly` refusal; exact boxes are classified without it. |
+| `apitest.TestBooleanGapTolerance` | Union, Cut and Intersect of rounded boxes that touch or sit flush: the result, the bound that covers the true volume, a tighter bound from a smaller tolerance, and the refusals `ExactOnly` and a slot keep. |
 | `apitest.TestBooleanGapToleranceEdgeAndPointTouches` | A shared corner, a knife edge inside a wider wedge and two crossing edges: Union, Cut and Intersect, the volume bound, and the `ExactOnly` refusal. |
 | `apitest.TestBooleanGapToleranceRestingBossJoinsPlate` | A `Transform`ed boss resting on a plate unions into one lump whose volume bound covers `60000 + 288π`, with the boss's top below z = 18, and `Verify` reads `Sound`. |
 | `apitest.TestBooleanGapShiftKeepsTranslatedTags` | A `Transform`ed boss on a plate, and a second sketched boss on a plate and boss, join through the retry: the moved wall reads as a radius-6 `Cylinder` about the boss's axis moved by `s`, the top as a `Plane` at `18 + s.z`, and the root and rim as `Circle3` edges. |
 | `apitest.TestBooleanGapShiftFilletsRestingBoss` | A radius-1 `Fillet` of every root and rim of the same bodies builds one `Torus` per edge, its volume bound covers the hand volume `60000 + n·(288π + 4π·A·d)` and the moved solid's, smaller by `36π·|s.z|`, and `Verify` reads `Sound`. |
 | `apitest.TestBooleanGapToleranceStaysExactForCurvedContact` | A tangent cylinder on a plate stays refused under `ExactOnly`. |
-| `apitest.TestVerifyGapToleranceDecidesAFlushPair` | `Verify` reads a flush pair's overlap with a covering bound, leaves it staged under `ExactOnly`, and reports an invalid tolerance. |
+| `apitest.TestVerifyGapToleranceDecidesAFlushPair` | `Verify` reads a rounded flush pair's overlap with a covering bound, leaves it staged under `ExactOnly`, and reports an invalid tolerance. |
 | `examples.Example_gap_tolerance` | The documented use. |
 | `TestChamferConcaveEndKeepsItsRelief` | A concave chamfer end under a 0.01 mm tolerance takes the relief and no shift, and its volume is the chamfer's without the relief plus at most the stated amount; under 0.003 mm it takes the shift. |
 | `TestChamferConcaveArcEndHoldsItsBound` | An arc run into a 10 degree concave end takes no shift, and its box bound stays under 0.01 mm. |

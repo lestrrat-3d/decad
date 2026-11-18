@@ -61,7 +61,7 @@ func runCoplanarBoolean(t *testing.T, tc coplanarCase, op OperationKind) ([]Kept
 	t.Helper()
 	a := exactBoxMesh(t, tc.loA, tc.hiA)
 	b := exactBoxMesh(t, tc.loB, tc.hiB)
-	return MeshBooleanStats(coplanarCtx(t), op, a, b, NewContactMemo(a, b))
+	return MeshBooleanStats(t.Context(), op, a, b, NewContactMemo(a, b))
 }
 
 // TestKeepSideCoplanarEqualFootprints pins boxes meeting face to face: the
@@ -166,7 +166,7 @@ func TestKeepSideCoplanarMixedSides(t *testing.T) {
 func TestKeepSideCoplanarNoSegment(t *testing.T) {
 	a := exactBoxMesh(t, r3.Vec{}, r3.Vec{X: 10, Y: 10, Z: 10})
 	b := exactBoxMesh(t, r3.Vec{Z: 10}, r3.Vec{X: 10, Y: 10, Z: 20})
-	res, err := pairCuts(coplanarCtx(t), a, b, NewContactMemo(a, b), newKeyMemo())
+	res, err := pairCuts(t.Context(), a, b, NewContactMemo(a, b), newKeyMemo())
 	require.NoError(t, err)
 	covered := 0
 	for i, js := range res.CoplanarA {
@@ -194,4 +194,18 @@ func TestCoplanarKeepTable(t *testing.T) {
 	} {
 		require.Equal(t, tc.keeps, coplanarKeep(tc.op, tc.second, tc.same), "%v second=%v same=%v", tc.op, tc.second, tc.same)
 	}
+}
+
+// TestCoplanarRefusalKeepsTheOldRefusal pins that an expected-contact refusal
+// of the side pass, for a pair the coplanar pass accepted a point of, is the
+// refusal the pair gave before, and that other errors and other pairs are left
+// alone.
+func TestCoplanarRefusalKeepsTheOldRefusal(t *testing.T) {
+	t.Parallel()
+	legacy := ExpectedBoolean(BooleanExpectedContact, &TouchContactError{What: touchCoplanar})
+	refusal := ErrUnclassifiableContact("intersection curves branch on a facet")
+	require.Equal(t, legacy, coplanarRefusal(pairCutsResult{Legacy: legacy}, refusal))
+	require.Equal(t, refusal, coplanarRefusal(pairCutsResult{}, refusal), "no accepted point, no change")
+	broken := errors.New("broken")
+	require.Equal(t, broken, coplanarRefusal(pairCutsResult{Legacy: legacy}, broken), "only expected contacts map")
 }
