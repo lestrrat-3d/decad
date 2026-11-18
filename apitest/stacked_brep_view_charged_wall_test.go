@@ -178,7 +178,8 @@ func TestStackedBrepViewFilletChargedWall(t *testing.T) {
 		require.InDelta(t, 2*math.Pi*(r+d/3)*d*d/2, removedVol, boundMM3(t, beforeVol)+boundMM3(t, afterVol))
 	}
 
-	// Each subtest takes its own copy: a Chamfer or Cut retires the body it reads.
+	// Each subtest takes its own copy: a Chamfer or Cut retires the body it reads. The copies share one Document,
+	// which is not safe for concurrent use, so the subtests run in turn.
 	copies := make([]*decad.Body, 3)
 	for i := range copies {
 		copies[i], err = decad.Copy(t.Context(), filleted)
@@ -186,12 +187,10 @@ func TestStackedBrepViewFilletChargedWall(t *testing.T) {
 	}
 
 	t.Run("the published wall's bottom rim chamfers", func(t *testing.T) {
-		t.Parallel()
 		chamfered(t, copies[0])
 	})
 
 	t.Run("a mesh Cut away from the hole keeps the wall and the rim chamfers", func(t *testing.T) {
-		t.Parallel()
 		doc := copies[1].Document()
 		tool := translated(t, boxBody(t, doc, 0, 0, 4, 4, 7), 10, 10, -1)
 		cut, err := decad.Cut(t.Context(), copies[1], tool)
@@ -210,7 +209,6 @@ func TestStackedBrepViewFilletChargedWall(t *testing.T) {
 	})
 
 	t.Run("a window's bottom inner arc on the charged wall is refused", func(t *testing.T) {
-		t.Parallel()
 		var at r3.Vec
 		n := 0
 		for _, e := range copies[2].Edges() {

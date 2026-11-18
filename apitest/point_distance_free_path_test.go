@@ -31,6 +31,7 @@ func TestDistanceToPointFreePath(t *testing.T) {
 		name string
 		xf   r3.Transform
 	}{{"as built", r3.Identity()}, {"rotated and moved", placed}}
+	// The moves copy one body within its Document, which is not safe for concurrent use: run them in turn.
 	for _, m := range moves {
 		// Both subtests mutate body's document through Copy and Transform, and a
 		// Document is not safe for concurrent mutation, so they run in sequence.
