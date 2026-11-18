@@ -530,12 +530,22 @@ faces `G0`, `G1`:
 2. **The same blend in `G1`.** The blend is recomputed on `G1`'s corner at
    `V1`. Mapped to reference coordinates with the `a` coordinate dropped, its
    centre and two feet must equal `G0`'s bit for bit; a disagreement is SB9.
-   The agreement is expected, not assumed: the operations `computeFillet` and
-   `computeChamfer` perform on coordinates — differences, sums, products by
-   `±1`, `hypot`, the offset solve — commute with a signed permutation of the
-   inputs, and the two end faces hold the same two carriers; SB9 refuses
-   wherever that expectation fails. (The `Atan2`-based cutbacks may differ by
-   rounding; each face's audit reads its own.) `G1`'s rewrite takes its own
+   The agreement is expected, not assumed. Each end face reads its corner in
+   fixed roles: a fillet takes the walk beside `F1` (the edge's first
+   adjacent face) as the arriving walk, reversing both walks where the face's
+   loop runs the other way round the corner, and every straight carrier
+   passes through the corner itself (`offset2d.FilletAtCorner`). The two end
+   faces then hold the same two carriers in the same roles, and the
+   operations the construction performs on coordinates — differences, sums,
+   products, `hypot`, the offset solve — commute with a signed permutation of
+   them; under a reflection the corner's cross product, the side the offsets
+   take and each line's left normal change sign together. A chamfer's feet
+   are set back from the corner along each walk separately, so it needs no
+   fixed roles. SB9 refuses wherever the expectation fails. Read in each
+   face's own loop order through each walk's far end instead, the line
+   solve's base point and the order of its operands differ between the faces,
+   and the feet part by an ulp on an ordinary box. (The `Atan2`-based cutbacks
+   may differ by rounding; each face's audit reads its own.) `G1`'s rewrite takes its own
    recomputed blend, so its connector is already walked in `G1`'s loop sense;
    nothing is transported from `G0` into `G1`'s record. Steps 4 and 5 read
    `G0`'s feet and centre.
@@ -768,6 +778,14 @@ Route E:
   the inner vertical edge at `(15, −15)`, `r = 1`: concave between two planar
   walls, and `Edge.IsConvex()` reads it concave; volume within its bound of
   `17140 − 15π/4`.
+- A 7×10 box sketched on `y = 0` (and one on `y = 9.2` at `z ∈ [42.5, 60.5]`)
+  and extruded 3.6 along `y`, each edge along `z` filleted alone at
+  `r = 0.3` (`apitest/brep_route_e_fillet_end_faces_test.go`): every edge
+  builds, the floor's and top's feet agreeing bit for bit, the volume within
+  its bound of the box less `ℓ·r²(1 − π/4)`. Read in each face's own loop
+  order through the walks' far ends, the edges at the sketch plane refuse
+  SB9; `internal/offset2d/blend_test.go` pins the fixed-role reading against a
+  reflected corner whose walk runs to another far end.
 - S1, chamfer the edge along `x` at `(y, z) = (0, 0)`, `d = 2`: the `x = 0`
   and `x = 40` walls are restated, volume within its bound of
   `16000 − 180π − 80`.

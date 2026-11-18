@@ -66,10 +66,16 @@ type Request struct {
 // corner ci of loop, whose index in the recorded section is li, and the
 // selected edge e that mapped to it; an asymmetric chamfer reads li and e to
 // assign its two setbacks (agent-docs/modify-reach-design.md §6), and every other
-// construction ignores them.
+// construction ignores them. AtCorner, where set, is Corner read the same way
+// in every face that holds one solid corner, with the corner's walks exchanged
+// when swap is true (offset2d.FilletAtCorner); route E reads each end face's
+// corner through it (agent-docs/brep-modify-design.md §5.3 step 2). A
+// construction that is already independent of the walks' roles and far ends,
+// as a chamfer's setbacks from the corner are, leaves it nil.
 type BlendOp struct {
-	Kind   string
-	Corner func(loop survey2d.CornerLoop, li, ci int, e *topo.Edge) (*offset2d.Blend, error)
+	Kind     string
+	Corner   func(loop survey2d.CornerLoop, li, ci int, e *topo.Edge) (*offset2d.Blend, error)
+	AtCorner func(loop survey2d.CornerLoop, ci int, swap bool) (*offset2d.Blend, error)
 }
 
 // Route is what the brep route hands back to the op. It is empty for a

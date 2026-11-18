@@ -187,6 +187,70 @@ func FilletWithCarriers(walks []survey2d.SideWalk, ci int, r, tol float64, ovA, 
 	return blend, FilletDecisions{Cross: cross, Roots: roots, Center: [2]float64{ox, oy}, Sense: sense}, nil
 }
 
+// FilletAtCorner is Fillet read the same way in every face that holds one
+// solid corner (agent-docs/brep-modify-design.md §5.3 step 2). Two changes make
+// the reading depend on the corner alone. A straight carrier passes through
+// the corner itself, not through its walk's far end, which differs between
+// faces. When swap is true the corner is read with its walks exchanged: the
+// leaving walk, reversed, arrives and the arriving walk, reversed, leaves. A
+// caller that swaps exactly where a face's loop runs the other way round the
+// corner hands every face the same two carriers in the same roles. The blend
+// comes back in the loop's own sense.
+//
+// The construction's arithmetic, read in fixed roles, is equivariant under a
+// signed permutation of the coordinates: negation and exchange of
+// coordinates commute with rounding, a sum of two products is commutative,
+// and under a reflection the corner's cross product, the side the offsets
+// take and each line's left normal all change sign together. Two faces
+// whose carriers are signed-permutation images of each other therefore
+// compute images of one centre and one pair of feet, bit for bit. A circular
+// walk's tangent comes from the walk's own angles, which do not map exactly,
+// but the construction reads it only for signs (S4's corner and the arc's
+// sense).
+func FilletAtCorner(walks []survey2d.SideWalk, ci int, r, tol float64, swap bool) (*Blend, error) {
+	n := len(walks)
+	arrive, leave := walks[(ci+n-1)%n], walks[ci]
+	if swap {
+		arrive, leave = reverseWalk(leave), reverseWalk(arrive)
+	}
+	px, py := leave.StartU, leave.StartV
+	ovA := cornerLine(arrive, px, py, arrive.TanOutU, arrive.TanOutV)
+	ovB := cornerLine(leave, px, py, leave.TanInU, leave.TanInV)
+	b, _, err := FilletWithCarriers([]survey2d.SideWalk{arrive, leave}, 1, r, tol, ovA, ovB)
+	if err != nil || !swap {
+		return b, err
+	}
+	connector := b.Connector
+	if arc, ok := connector.(sectionrecord.ArcSeg); ok {
+		arc.TStart, arc.TEnd = arc.TEnd, arc.TStart
+		connector = arc
+	}
+	return &Blend{FA: b.FB, FB: b.FA, CutbackA: b.CutbackB, CutbackB: b.CutbackA, Connector: connector}, nil
+}
+
+// cornerLine is the carrier of a straight walk through the corner (px, py)
+// along its travel tangent (du, dv) there, and nil for any other walk, whose
+// carrier the walk states itself.
+func cornerLine(w survey2d.SideWalk, px, py, du, dv float64) *CornerCarrier {
+	if !w.IsLine() {
+		return nil
+	}
+	return &CornerCarrier{Line: true, SU: px, SV: py, DU: du, DV: dv}
+}
+
+// reverseWalk is w walked the other way: its ends, end bounds and tangents
+// exchange, each tangent negated, and a circular walk's angles exchange, so
+// its turn reverses with it.
+func reverseWalk(w survey2d.SideWalk) survey2d.SideWalk {
+	w.StartU, w.StartV, w.EndU, w.EndV = w.EndU, w.EndV, w.StartU, w.StartV
+	w.StartBound, w.EndBound = w.EndBound, w.StartBound
+	w.TanInU, w.TanInV, w.TanOutU, w.TanOutV = -w.TanOutU, -w.TanOutV, -w.TanInU, -w.TanInV
+	w.TanInBound, w.TanOutBound = w.TanOutBound, w.TanInBound
+	w.Th0, w.Th1 = w.Th1, w.Th0
+	w.Reversed = !w.Reversed
+	return w
+}
+
 // CornerCross is the cross product of corner ci's two unit travel tangents,
 // the number S4 reads; false when a walk has no direction there.
 func CornerCross(walks []survey2d.SideWalk, ci int) (float64, bool) {
