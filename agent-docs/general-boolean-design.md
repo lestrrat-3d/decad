@@ -338,6 +338,36 @@ one operand sharing a wall in one scene enter that scene as two regions and
 read as A3 reads them; two records whose identical segment the scene
 builder would make one entity read as unresolved and miss.
 
+**No pinch at an interface.** A `Union`'s floors and ceilings must not meet
+where the body would meet itself, even inside one connected piece: a U-shaped
+bridge resting on a tower by one arm, whose other arm's corner meets the
+tower's top corner, rests on the tower's top edge from outside, or is tangent
+to a boss's top circle. Every cell still classifies and the record pairs every
+edge, so `interfaceManifold` (`internal/stackedunion/brep.go`) reads the
+interface scene and misses on any of these:
+
+- a point where a record reaching only one side touches a record of the other
+  side (a record reaching both is read against each) that is no scene vertex
+  where an edge of each ends (`prismcells.ContactsCut`). The points are
+  sketch's line, line-circle and circle queries'; a transverse crossing inside
+  both entities is exempt, so a tangency or a point at an entity's end must be
+  a vertex. A shared span's partner counts as ending where the span's edges
+  end, so a window's corner round meeting the boss circle at a span's end
+  passes;
+- a vertex a floor and a ceiling both walk where edges of a record reaching
+  both sides end, or of more than one record reaching only the slab below or
+  only the slab above, a shared span's edge counting for both its records;
+- at such a vertex, a floor or ceiling corner that does not turn from the
+  below record's edge to the above record's, or that walks a shared span
+  (`opposedManifold`).
+
+A floor and a ceiling meet only where both sides' boundaries pass. With one
+record per side there, each passing once, the material below is one sector and
+the material above another; their four bounding edges alternate between the
+records exactly at a transverse crossing, where the body is manifold, as at a
+boss crossing the plate's outline. Every other order puts a floor or ceiling
+corner between two edges of one record. The check only refuses.
+
 **Vertices.** decad restates the records it holds and computes no 2D
 answer. Consecutive fragments of one carrier — a circle cut at its seam, a
 line run restated at other cells' vertices — are one unit. Each junction
@@ -1931,6 +1961,17 @@ are relations, never literals.
   interval, is `ErrUnsupported`/`ErrDegenerate`. Misses: an operand
   carrying a section displacement, and a boss drawn on a plane offset in
   the plate's plane.
+- **A1 interface pinch**: a bridge over z 25..30 resting on a tower over a
+  60 × 40 × 10 plate keeps the mesh path or refuses where it also touches the
+  tower's top at a point: a U's bar corner on the tower's corner in either
+  operand order, a peak's apex on the tower's edge from outside, a notch's
+  apex on a wider tower's edge, or a bar's edge tangent to a round boss's top
+  circle. Each twin moved 1 mm clear builds the brep, `Exact` and `Sound`
+  for the straight bridges (`apitest/stacked_union_self_pinch_test.go`).
+  A lower L and an upper L whose missing quadrants meet opposite each other
+  at one point keep the mesh path; so do the same Ls each joined first by a
+  wedge pointing at that point in its operand's other slab, in either order,
+  where only the count of records with edges there reads the pinch.
 - **A1 separate bosses**: a 100 × 60 × 10 plate with radius-6, 8 mm round
   bosses standing apart (`apitest/stacked_union_separate_bosses_test.go`):
   `PatternCopies` and `Union` of three at 30 mm, `Union` of two, three in
