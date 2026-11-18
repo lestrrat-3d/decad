@@ -25,12 +25,10 @@ the next boolean would divide the SUM of the two operands' global bounds by the 
 anywhere in the pair (tessellation §11 step 7).
 
 So one union's rim bound would become the whole body's bound, and the next union would amplify it again at every
-vertex, whether or not the new pair touches the old rim. The factor per union is `1/sin θ_min` plus the weld:
-×1.5–1.9 on the 40°-tilted branch tree of §6, ×4 on placed 16-gon prisms crossing more shallowly (mtilt
-hand-off). A global chain-depth gate would refuse the result as an operand once `MeshBound` exceeds the next
-pair's chord tolerance (`2e-5 ×` the pair diameter, `meshbool.ChordFactor`), reached at the 46th union of that
-tree. Long before, the published volume, box and vertex bounds would grow from `1e-14 mm` to `1e-3 mm` for a
-body whose held vertices never moved.
+vertex, whether or not the new pair touches the old rim. The factor per union is `1/sin θ_min` plus the weld, so
+a chain of shallow crossings compounds geometrically. A global chain-depth gate would refuse the result as an operand
+once `MeshBound` exceeds the next pair's chord tolerance (`meshbool.ChordFactor` `×` the pair diameter). Long before,
+the published volume, box and vertex bounds would grow for a body whose held vertices never moved.
 
 Tessellation §2 allows a `facetedPayload` to "retain a tighter displacement per live faceted face". A per-FACE
 bound is not enough: a trunk wall is one face cut by every branch that enters it, and a cone wall is one face
@@ -197,11 +195,9 @@ never reads the geometry to admit.
 ### 3.6 Shallow crossings
 
 A rim vertex's bound divides the pair's summed facet bounds by `sin θ`, so two facets that cross at a shallow
-angle give a large bound however small their own bounds are. In a dated measurement, a spiral bevel member built
-with a 30 mm cutter radius had rim pairs with `sin θ` between 0.0064 and 0.0095, facet bounds 0.0066 mm and
-0.0026 mm, and a largest rim bound of 1.43 mm. `VerifyAll` at 0.1 mm then refuses with "requested tolerance ... is
-below the faceted body's minimum mesh bound". A 20 degree spiral angle and a 14.5 degree pressure angle refuse the
-same way.
+angle give a large bound however small their own bounds are. A spiral bevel member whose rim pairs cross at
+a very small `sin θ` therefore carries a large rim bound, and `VerifyAll` at a tolerance below it refuses with
+"requested tolerance ... is below the faceted body's minimum mesh bound".
 
 These pairs have nearly equal outward normals, so for Union and Intersect the result's corner at the rim is
 nearly flat, and the nearest point of the true boundary is much closer than `(δ_A + δ_B)/sin θ`. A flat-corner
@@ -457,54 +453,28 @@ the answer. It can refuse a pair whose rims would have been fine, as a global co
 
 **What changes for a caller.** A chain of booleans over planar-faced bodies
 is refused only where a new contact lands on earlier rim geometry whose bound has outgrown the pair tolerance;
-§6 measured no such refusal over fifty unions. A result can carry a `Bound` above the next pair's tolerance in
+A result can carry a `Bound` above the next pair's tolerance in
 untouched regions and still serve as an operand. Core §8's "The chain depth"
 paragraph, evaluator §9's operand and rim bullets and tessellation §7/§11
 state this rule.
 
 ## 6. Measured growth
 
-Dated illustration, measured on 2026-10-06 against `c19a0468` with an uncommitted post-processing prototype of
-§3's rules, on a tree of
-mitred sweeps: a 16-gon trunk of circumradius 5 mm along a two-span path
-`(0,0,0)→(0,0,30)→(3,0,60)` scaled `1, 0.9`, and fifty 16-gon branches
-tapering 1.5 → 1 mm along a three-span path, each tilted 40° from the trunk
-axis, its root 2.6 mm from the axis, 1.1 mm higher than the previous root and
+The fixture used by §8's tests is a tree of mitred sweeps: a 16-gon trunk of circumradius 5 mm along a two-span
+path `(0,0,0)→(0,0,30)→(3,0,60)` scaled `1, 0.9`, and fifty 16-gon branches tapering 1.5 → 1 mm along a three-span
+path, each tilted 40° from the trunk axis, its root 2.6 mm from the axis, 1.1 mm higher than the previous root and
 turned by the golden angle. Each union is `Union(tree, branch)`.
 
-| Union | today's `MeshBound` | pair `tol` | §3 max `β` | max `β` among that union's rims | trunk `δ(t)` at the contact |
-|---|---|---|---|---|---|
-| 1 | 1.4e-14 | 1.26e-3 | 1.4e-14 | 1.4e-14 | 6.2e-15 |
-| 10 | 3.0e-12 | 1.31e-3 | 3.3e-14 | 3.3e-14 | 1.7e-14 |
-| 20 | 7.4e-10 | 1.32e-3 | 6.2e-14 | 5.5e-14 | 2.6e-14 |
-| 30 | 2.1e-7 | 1.32e-3 | 7.6e-14 | 6.4e-14 | 2.4e-14 |
-| 40 | 8.2e-5 | 1.32e-3 | 1.8e-13 | 1.8e-13 | 6.2e-14 |
-| 45 | 2.2e-3 | 1.33e-3 | 2.2e-13 | 2.2e-13 | 8.2e-14 |
-| 50 | 1.9e-2 | 1.43e-3 | 2.5e-13 | 2.5e-13 | 1.9e-13 |
+Under §3, a trunk facet that a new branch cuts carries its own `δ(t)`, so a rim `β` stays near the operand's own
+rounding gap. A global bound grows by `1/sin θ` plus the weld per union (§1). The comparison is the pair
+tolerance against the per-vertex maximum.
 
-All figures in millimetres. Today's bound grows ×1.5–1.9 per union and core
-§8's gate refuses the 46th union; the per-vertex maximum grows ×18 over all
-fifty, and the trunk facets each new branch cuts carry at most `1.9e-13`,
-seven orders under the tolerance. The final body holds 5712 vertices; a union
-took 20 ms at the start and 560 ms at the end, unchanged by the bookkeeping.
-
-Two clustered variants put consecutive branches 7° apart at 2.2 mm steps and
-25° apart at 1.1 mm steps, so that branches cut each other and the same trunk
-walls repeatedly: after 22 and 10 unions today's bound reached `8.4e-10` and
-`2.2e-10` against per-vertex maxima of `3.8e-13` and `4.8e-14`. Both runs
-then stopped on an `ErrBooleanFailed` from the facet cutter
-("a boolean subdivision polygon closed clockwise"; "exact ear clipping
-stalled"), an invariant failure outside this design's scope.
-
-Interpolating the corner bounds at the cut point instead of taking their
-maximum (an affine bound over the facet, with the rim denominator reduced by
-the two facets' bound gradients) gave `1.1e-13` instead of `2.5e-13` after
-fifty unions and at most ×2.5 in the clustered runs; it is not scheduled.
+Interpolating the corner bounds at the cut point instead of taking their maximum (an affine bound over the facet,
+with the rim denominator reduced by the two facets' bound gradients) would tighten rim bounds; it is not scheduled.
 
 **Curved operands, estimated.** A chorded cone wall's facets carry
 `δ(t) ≈ tol` (the sagitta), so a cone-to-cone union's rims carry
-`≈ 2·tol/sin θ`, about `8·tol` at the hand-off's crossings, exactly what
-the hand-off measured (`0.0093 → 0.051 mm` over two unions). Under §5's rule
+`≈ 2·tol/sin θ`, about `8·tol` where `sin θ ≈ 1/4` (the hand-off's crossings). Under §5's rule
 the next union is refused only when its contacts touch those rims; a branch
 whose root is buried in the previous segment's END region touches facets that
 still carry their own `≈ tol`, so an end-to-end chain of cones continues at
@@ -516,7 +486,7 @@ exactly as a global bound would.
 
 | Option | Gains | Costs |
 |---|---|---|
-| **A. Per-vertex bounds, chain-depth gate stays global** (PRs 1–3 alone) | planar chains run to fifty unions and beyond with bounds near `1e-13`; no contract change; `Bound`s shrink for every faceted body | a curved operand's result still carries `≈ 8·tol` as its global bound and is refused at the next union, so mtilt's request 1 stays refused |
+| **A. Per-vertex bounds, chain-depth gate stays global** (PRs 1–3 alone) | planar chains run to fifty unions and beyond with per-vertex bounds; no contract change; `Bound`s shrink for every faceted body | a curved operand's result still carries `≈ 8·tol` as its global bound and is refused at the next union, so mtilt's request 1 stays refused |
 | **B. Per-vertex bounds and the local gate of §5** (PRs 1–4) | curved chains continue wherever a new contact avoids earlier rims, with the rim ceiling `2·tol/sin θ` certified per union; planar chains are additionally protected against one coarse rim far from the contact | core §8's chain-depth paragraph, evaluator §9 and tessellation §7/§11 are rewritten; a result can publish a `Bound` above the next pair's tolerance and still be an operand, which callers judging with `WithTolerance` at `Verify` already handle |
 | **C. Drop the chain-depth gate** | simplest code; nothing is ever refused before contact | the only ceiling left is the pair-diameter refusal of `RimBound`, so a chain can publish a bound of millimetres on a part of centimetres without any refusal naming it; core §8's promise that a chain is limited by a stated comparison is gone |
 
@@ -540,7 +510,7 @@ cutter and the stitch) together with `internal/booleaneval/eval_mesh.go`, which 
 
 | Decision | Default | Alternative |
 |---|---|---|
-| Rim rule | corner maximum (§3.2) | interpolated corner bounds, ×2–2.5 tighter in the clustered runs, with a gradient-corrected denominator to prove |
+| Rim rule | corner maximum (§3.2) | interpolated corner bounds, with a gradient-corrected denominator to prove |
 | Gate scope | restating operands only; chorded analytic operands keep tessellation §1's Tolerance row | gate every operand's contacted facets, which would newly refuse an analytic operand whose `deltaStore` exceeds `tol` |
 | Whether the gate exists | §7's option B | option C |
 | Weld and placement rounding | per vertex (§3.4, §4.3) | the global maximum at every vertex, the global composition of §1 |
