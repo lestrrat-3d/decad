@@ -391,7 +391,7 @@ func TestCoplanarContactKeepsRecords(t *testing.T) {
 	u, err := decad.Union(t.Context(), a, b)
 	require.NoError(t, err)
 	require.Empty(t, u.OperationDiagnostics())
-	require.Len(t, u.Faces(), 12, "each operand keeps its six faces: neither top or bottom is covered whole")
+	require.Len(t, u.Faces(), 10, "the two flush y walls are one face each, so ten faces remain")
 	for i, f := range u.Faces() {
 		_, ok := f.Surface().(decad.Plane)
 		require.True(t, ok, "face %d keeps its Plane record", i)

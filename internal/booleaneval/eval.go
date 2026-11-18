@@ -56,11 +56,14 @@ type OperandMesher interface {
 // payload with the occupied volume, its proven bound and exact value, and the
 // closure audit. It holds no document reference or public model state.
 type Evaluation struct {
-	Payload          facetedrecord.Payload
-	Volume           float64
-	VolumeBound      float64
-	VolumeRat        *big.Rat
-	Audit            *facetproof.MeshAudit
+	Payload     facetedrecord.Payload
+	Volume      float64
+	VolumeBound float64
+	VolumeRat   *big.Rat
+	Audit       *facetproof.MeshAudit
+	// OperandAGroups is the number of leading Payload.Groups that came from the first operand's faces; the
+	// groups after them came from the second operand's.
+	OperandAGroups   int
 	Shift            *ShiftSummary
 	ShiftCertificate *ShiftCertificate
 	Chain            *ChainAllowanceSummary
@@ -855,7 +858,7 @@ func evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 	if err := ctx.Err(); err != nil {
 		return Evaluation{}, err
 	}
-	ev := Evaluation{Payload: payload, Volume: volume, VolumeBound: volumeBound, VolumeRat: volumeRat, Audit: audit}
+	ev := Evaluation{Payload: payload, Volume: volume, VolumeBound: volumeBound, VolumeRat: volumeRat, Audit: audit, OperandAGroups: targetFaces}
 	ev.EmbeddingReach = stitched.EmbeddingReach
 	if hasShifts {
 		if replay != nil {

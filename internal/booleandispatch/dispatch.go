@@ -17,6 +17,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/classbgeom"
 	"github.com/lestrrat-3d/decad/internal/crossbore"
 	"github.com/lestrrat-3d/decad/internal/decaderr"
+	"github.com/lestrrat-3d/decad/internal/facemerge"
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/loftcylinder"
@@ -431,6 +432,24 @@ func meshBody(ctx context.Context, op meshbool.OperationKind, env topo.Env, a, b
 	}
 	if op == meshbool.OpCut {
 		eval.Payload.CrossCylinderBore = crossbore.RecognizeBore(a, b)
+	}
+
+	// Adjacent exact coplanar faces of the two operands become one face (agent-docs/union-face-merge-design.md).
+	// A record proved against the unmerged face set (oblique boss, cross bore) and a shifted result's faces,
+	// which carry the move, are left alone. PrismUnionFillet does not block the merge: its consumers re-check single-role faces at the selected
+	// edge and decline on a merged face.
+	if eval.Shift == nil && eval.Audit != nil && eval.Payload.ObliqueBoss == nil &&
+		eval.Payload.CrossCylinderBore == nil {
+		src, groups, changed, err := facemerge.Merge(ctx, facemerge.Input{
+			Verts: eval.Payload.Verts, VertexBound: eval.Payload.VertexBound, Tris: eval.Payload.Tris,
+			Src: eval.Payload.Src, Groups: eval.Payload.Groups, Adj: eval.Audit.Adj, OperandAGroups: eval.OperandAGroups,
+		})
+		if err != nil {
+			return nil, hooks.AsBooleanError(op, err)
+		}
+		if changed {
+			eval.Payload.Src, eval.Payload.Groups = src, groups
+		}
 	}
 
 	volume := measurement.Measurement{Value: units.CubicMillimeters(eval.Volume),
