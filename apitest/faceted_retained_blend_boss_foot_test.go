@@ -305,8 +305,13 @@ func TestFacetedRetainedBlendBossFoot(t *testing.T) {
 		require.NoError(t, err)
 		after, err := out.Volume()
 		require.NoError(t, err)
-		// The 20 mm edge loses the corner region all along it.
+		// The 20 mm edge loses the corner region all along it. The wall's top
+		// gives up the corner and the plate's top takes the same corner as the
+		// cap, so the area changes by the quarter cylinder less the two strips.
 		requireVolumeChange(t, before, after, 20*r*r*(1-math.Pi/4))
+		caps := r * r * (1 - math.Pi/4)
+		requireCapsTaken(t, stepped, out, 20*r*(math.Pi/2-2), caps)
+		requireCapCharged(t, stepped, out, caps)
 		mesh, err := out.Tessellate(t.Context(), units.Millimeters(0.1), decad.WithVerification(decad.VerifyAll))
 		require.NoError(t, err)
 		require.True(t, mesh.BoundaryVerified())

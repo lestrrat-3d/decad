@@ -1,6 +1,7 @@
 package apitest_test
 
 import (
+	"fmt"
 	"math"
 	"testing"
 
@@ -80,8 +81,8 @@ func TestFacetedRetainedBlendReflexSide(t *testing.T) {
 		grown float64
 		// setback is P_A1, where the face y = 0 now meets the underside.
 		setback r3.Vec
-		// cap is the area of the end cap the underside takes.
-		cap float64
+		// capArea is the area of the end cap the underside takes.
+		capArea float64
 	}{
 		{"a flat underside", [][2]float64{{0, 0}, {10, 0}, {10, 10}, {20, 10}, {20, 14}, {0, 14}}, area * 10,
 			-20 + 10*math.Pi/2, r3.NewVec(9, 0, 10), area},
@@ -100,7 +101,8 @@ func TestFacetedRetainedBlendReflexSide(t *testing.T) {
 			after, err := out.Volume()
 			require.NoError(t, err)
 			requireVolumeChange(t, before, after, tc.removed)
-			requireCapsTaken(t, body, out, tc.grown, tc.cap)
+			requireCapsTaken(t, body, out, tc.grown, tc.capArea)
+			requireCapCharged(t, body, out, tc.capArea)
 
 			cylinders := 0
 			for _, f := range out.Faces() {
@@ -169,4 +171,32 @@ func TestFacetedRetainedBlendReflexSide(t *testing.T) {
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.ErrorContains(t, err, "the cap an end face takes meets another facet of the body at")
 	})
+
+	// An underside that rises steeply from the corner, z = 10 + k·(x − 10),
+	// meets the setback line on the face y = 0, x = 9, at z = 10 − k. At k = 10
+	// that is the floor, where the strip's first row has no length; at k = 12 it
+	// lies below the floor and the row runs backwards. Both refuse.
+	for _, k := range []float64{10, 12} {
+		t.Run(fmt.Sprintf("an underside of slope %g refuses", k), func(t *testing.T) {
+			t.Parallel()
+			body := steppedArm(t, [][2]float64{{0, 0}, {10, 0}, {10, 10}, {11, 10 + k}, {11, 12 + k}, {0, 12 + k}})
+			_, err := decad.Fillet(t.Context(), body, straightEdge(t, body, r3.NewVec(10, 0, 0), r3.NewVec(0, 0, 1)),
+				units.Millimeters(r))
+			require.ErrorIs(t, err, decad.ErrUnsupported)
+			require.ErrorContains(t, err, "a row of the blend's strip is no longer than its bounds along the edge")
+		})
+	}
+}
+
+// requireCapCharged checks that the area bound grew by less than the cap an
+// end face takes. A cap charged as zero, neither gained nor given up, puts the
+// exact area change one cap off the held one, and the bound would have to
+// grow past it.
+func requireCapCharged(t *testing.T, before, after *decad.Body, capArea float64) {
+	t.Helper()
+	beforeArea, err := before.Area()
+	require.NoError(t, err)
+	afterArea, err := after.Area()
+	require.NoError(t, err)
+	require.Less(t, afterArea.Bound.Mag()-beforeArea.Bound.Mag(), capArea)
 }

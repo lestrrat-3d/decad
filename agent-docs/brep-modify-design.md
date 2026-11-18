@@ -879,6 +879,13 @@ Refusals:
 - **Shell of a non-prism brep**: route S of `agent-docs/modify-general-design.md`
   for a prism cut by through tools; SB10 for the rest.
 - **Hand-offs**: none. No capability is needed from `sketch`, `r3` or `units`.
+- **An edge that ends on a sloped end face**: route E keeps SB7. The record
+  holds an oblique plane only as a swept wall, so the end cap, an ellipse
+  arc in that plane, and the blend face cut at an angle have no face this
+  record holds. A body that a mesh Boolean built takes the retained edge
+  blend instead, whose straight route ends rows on any retained plane and
+  takes the end cap where a face beside the edge is reflex
+  (`agent-docs/retained-edge-blend-design.md` §5.0).
 
 ## 12. PR split
 

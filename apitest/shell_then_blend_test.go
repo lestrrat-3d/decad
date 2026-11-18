@@ -236,7 +236,7 @@ func TestShellBossThenFilletOpeningRim(t *testing.T) {
 func TestShellBossThenFilletOpeningInnerRim(t *testing.T) {
 	t.Parallel()
 	doc, shell, _ := shellBoxBoss(t, openBossTop)
-	const r = 0.5
+	const r = 1.0
 	rim := decad.Edges(decad.ParallelTo(r3.NewVec(1, 0, 0)), decad.EndpointAt(r3.NewVec(22, 12, 30))).Exactly(1)
 	filleted, err := decad.Fillet(t.Context(), shell, rim, units.Millimeters(r))
 	require.NoError(t, err)
@@ -251,12 +251,18 @@ func TestShellBossThenFilletOpeningInnerRim(t *testing.T) {
 		require.InDelta(t, 12-r, c.Origin.Y, 1e-12)
 		require.InDelta(t, 30-r, c.Origin.Z, 1e-12)
 	}
-	require.True(t, found, "the fillet wall is a radius-0.5 cylinder")
+	require.True(t, found, "the fillet wall is a radius-1 cylinder")
 	corner := (1 - math.Pi/4) * r * r * 16
 	vol, err := filleted.Volume()
 	require.NoError(t, err)
 	require.Less(t, vol.Bound.Base(), corner/2, "the volume bound resolves the corner piece")
 	requireRemoved(t, shell, filleted, corner)
+	// Each inner wall takes the corner region as a cap and nothing gives one
+	// up: the area changes by the quarter cylinder less the two strips plus
+	// both caps.
+	caps := 2 * (1 - math.Pi/4) * r * r
+	requireCapsTaken(t, shell, filleted, 16*r*(math.Pi/2-2)+caps, caps)
+	requireCapCharged(t, shell, filleted, caps)
 	requireBlendVerified(t, doc, filleted)
 }
 

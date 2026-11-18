@@ -304,6 +304,18 @@ func rewriteLineEdge(ctx context.Context, env topo.Env, fp facetedrecord.Payload
 			}
 		}
 	}
+	// Every row of the strip must run forward along the edge from its end on
+	// G0 to its end on G1. Where a face runs on past a corner, the rows end on
+	// G's plane outside the edge's own span, and a steep enough end plane
+	// brings a row's two ends together or past each other: that strip folds,
+	// and its end caps cross.
+	for j := range rowsAt {
+		a, b := rowIdx[0][j], rowIdx[1][j]
+		if w.verts[b].Sub(w.verts[a]).Dot(l.d) <= w.beta[a]+w.beta[b]+margin {
+			return nil, fmt.Errorf("%w: a row of the blend's strip is no longer than its bounds along the edge",
+				decaderr.ErrUnsupported)
+		}
+	}
 
 	// The faces beside the edge keep clear of the strip: no boundary segment of
 	// a face comes within the held bounds of the region the blend rewrites.
