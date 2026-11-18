@@ -156,11 +156,11 @@ Rules:
   This keeps
   `side(i,j,0)`/`side(i,j,1)` distinct within a cell and preserves every
   cross-cell rung between coplanar Loft triangles. A full cylinder is one
-  face with two circular-edge loops and no seam edge. The mesh Boolean also merges adjacent, exactly coplanar,
+  face with two circular-edge loops and no seam edge. v1 counts already match
+  the analytic answer, so vN does not churn them (core §3). The mesh Boolean also merges adjacent, exactly coplanar,
   same-facing planar faces of different operands into one face that carries every merged role
-  (`agent-docs/union-face-merge-design.md`). Two coplanar faces of one operand, Loft rungs included, join only when a
-  face of the other operand is adjacent to both. v1 counts already match
-  the analytic answer, so vN does not churn them (core §3).
+  (`agent-docs/union-face-merge-design.md`). Two coplanar faces of one operand, Loft rungs included, join only
+  through faces of the other operand: one adjacent to both, or a chain of such joins.
 - **Every vertex carries its bound.** Exactness is decided by what the
   coordinate was READ FROM, never by which builder placed it. A coordinate the
   record states is exact (bound zero); every computed one carries its own
