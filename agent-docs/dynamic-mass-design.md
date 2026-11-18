@@ -185,7 +185,7 @@ tensor interval without a positive row-dominance proof returns
 An admitted contained Cut retains source V/P/Q moments for the existing
 audited-mesh comparison. A direct exact-rotation Copy of that original Cut
 transports the frozen moments with its exact rational map before the same
-comparison. See `exact-copy-moments-design.md`; later placements and
+comparison. See `contained-cut-moments-design.md` "Exact rotation copy"; later placements and
 modifications do not inherit this evidence.
 
 For a curved or approximated body, request a `VerifyAll` tessellation with
