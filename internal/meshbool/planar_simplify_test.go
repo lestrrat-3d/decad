@@ -14,7 +14,7 @@ import (
 // prismMesh is the prism of the xy polygon poly (counter-clockwise) from z0 to
 // z1, every corner a float, with one source id per side: the bottom is 0, the
 // top 1 and wall k is 2+k. Its walls are exactly planar quads.
-func prismMesh(t *testing.T, poly [][2]float64, z0, z1 float64) *BoolMesh {
+func prismMesh(t testing.TB, poly [][2]float64, z0, z1 float64) *BoolMesh {
 	t.Helper()
 	n := len(poly)
 	var verts []r3.Vec
