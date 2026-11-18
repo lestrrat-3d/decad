@@ -345,3 +345,133 @@ func TestSimplifyPlanarTentTop(t *testing.T) {
 	require.False(t, changed, "a tent top is not planar")
 	require.Equal(t, in.Tris, out.Tris)
 }
+
+// tentWithCollinearFirst: box [0,2]^3, top (src 1) is a tent with apex
+// 8=(1,1,3); vertex 9=(1,0,2) splits the top-front edge; the first top facet
+// is the degenerate (4,9,5).
+func tentWithCollinearFirst() PlanarMesh {
+	var verts []r3.Vec
+	for _, z := range []float64{0, 2} {
+		verts = append(verts, r3.Vec{Z: z}, r3.Vec{X: 2, Z: z}, r3.Vec{X: 2, Y: 2, Z: z}, r3.Vec{Y: 2, Z: z})
+	}
+	verts = append(verts, r3.Vec{X: 1, Y: 1, Z: 3}, r3.Vec{X: 1, Z: 2})
+	in := PlanarMesh{Approx: verts, Xbeta: make([]float64, len(verts))}
+	for _, v := range verts {
+		in.Xverts = append(in.Xverts, proof.XptOf(v))
+	}
+	add := func(s int, tri ...[3]int) {
+		for _, tr := range tri {
+			in.Tris = append(in.Tris, tr)
+			in.Src = append(in.Src, s)
+			in.FacetBound = append(in.FacetBound, 0)
+		}
+	}
+	add(0, [3]int{0, 2, 1}, [3]int{0, 3, 2})
+	add(1, [3]int{4, 9, 5}, [3]int{4, 5, 8}, [3]int{5, 6, 8}, [3]int{6, 7, 8}, [3]int{7, 4, 8})
+	// front wall y=0 with 9 on its top edge
+	add(2, [3]int{0, 1, 9}, [3]int{1, 5, 9}, [3]int{0, 9, 4})
+	for k := 1; k < 4; k++ {
+		a, b := k, (k+1)%4
+		add(2+k, [3]int{a, b, 4 + b}, [3]int{a, 4 + b, 4 + a})
+	}
+	return in
+}
+
+func TestSimplifyPlanarCollinearFirstFacet(t *testing.T) {
+	in := tentWithCollinearFirst()
+	require.True(t, stitchEdgesPaired(in.Tris, map[[2]int]uint8{}), "fixture closed")
+	_, changed, err := SimplifyPlanarFaces(t.Context(), in)
+	require.NoError(t, err)
+	require.False(t, changed)
+}
+
+// Two coplanar top faces (src 1 left x<=1, src 10 right x>=1) sharing the
+// seam 9=(1,0,2) .. 10=(1,2,2) with midpoint 11=(1,1,2); 11 is a collinear
+// seam vertex and must leave both faces.
+func TestSimplifyPlanarCoplanarFacesSeam(t *testing.T) {
+	var verts []r3.Vec
+	for _, z := range []float64{0, 2} {
+		verts = append(verts, r3.Vec{Z: z}, r3.Vec{X: 2, Z: z}, r3.Vec{X: 2, Y: 2, Z: z}, r3.Vec{Y: 2, Z: z})
+	}
+	verts = append(verts, r3.Vec{}, r3.Vec{X: 1, Z: 2}, r3.Vec{X: 1, Y: 2, Z: 2}, r3.Vec{X: 1, Y: 1, Z: 2})
+	// index 8 unused placeholder (orphan)
+	in := PlanarMesh{Approx: verts, Xbeta: make([]float64, len(verts))}
+	for _, v := range verts {
+		in.Xverts = append(in.Xverts, proof.XptOf(v))
+	}
+	add := func(s int, tri ...[3]int) {
+		for _, tr := range tri {
+			in.Tris = append(in.Tris, tr)
+			in.Src = append(in.Src, s)
+			in.FacetBound = append(in.FacetBound, 0)
+		}
+	}
+	add(0, [3]int{0, 2, 1}, [3]int{0, 3, 2})
+	// left top: 4(0,0) 9(1,0) 11(1,1) 10(1,2) 7(0,2)
+	add(1, [3]int{4, 9, 11}, [3]int{4, 11, 7}, [3]int{7, 11, 10})
+	// right top: 9(1,0) 5(2,0) 6(2,2) 10(1,2) 11(1,1)
+	add(10, [3]int{9, 5, 11}, [3]int{5, 6, 11}, [3]int{6, 10, 11})
+	// front wall y=0: 0 1 5 9 4
+	add(2, [3]int{0, 1, 9}, [3]int{1, 5, 9}, [3]int{0, 9, 4})
+	// right wall x=2
+	add(3, [3]int{1, 2, 6}, [3]int{1, 6, 5})
+	// back wall y=2: 2 3 7 10 6
+	add(4, [3]int{2, 3, 10}, [3]int{2, 10, 6}, [3]int{3, 7, 10})
+	// left wall x=0
+	add(5, [3]int{3, 0, 4}, [3]int{3, 4, 7})
+	require.True(t, stitchEdgesPaired(in.Tris, map[[2]int]uint8{}), "fixture closed")
+	out, changed, err := SimplifyPlanarFaces(t.Context(), in)
+	require.NoError(t, err)
+	require.True(t, changed)
+	for _, p := range out.Approx {
+		require.False(t, p == (r3.Vec{X: 1, Y: 1, Z: 2}))
+	}
+	require.True(t, stitchEdgesPaired(out.Tris, map[[2]int]uint8{}))
+	require.Equal(t, signedVol(in), signedVol(out))
+}
+
+func signedVol(m PlanarMesh) float64 {
+	v := 0.0
+	for _, t := range m.Tris {
+		a, b, c := m.Approx[t[0]], m.Approx[t[1]], m.Approx[t[2]]
+		v += a.Dot(b.Cross(c))
+	}
+	return v / 6
+}
+
+// The top holds an interior vertex 9 that is removable and the centre 8 that a
+// tetrahedron also uses; dropping 9 must not re-triangulate the top over 8.
+func TestSimplifyPlanarTouchingBodyWithRemovable(t *testing.T) {
+	in := planarBox(0)
+	in.Xverts = append(in.Xverts, proof.XptOf(r3.Vec{X: 0.5, Y: 0.5, Z: 2}))
+	in.Approx = append(in.Approx, r3.Vec{X: 0.5, Y: 0.5, Z: 2})
+	in.Xbeta = append(in.Xbeta, 0)
+	var tris [][3]int
+	var src []int
+	for i, tr := range in.Tris {
+		if in.Src[i] == 1 {
+			continue
+		}
+		tris, src = append(tris, tr), append(src, in.Src[i])
+	}
+	for _, tr := range [][3]int{{4, 5, 9}, {5, 8, 9}, {8, 7, 9}, {7, 4, 9}, {5, 6, 8}, {6, 7, 8}} {
+		tris, src = append(tris, tr), append(src, 1)
+	}
+	in.Tris, in.Src = tris, src
+	in.FacetBound = make([]float64, len(tris))
+	base := len(in.Xverts)
+	for _, p := range []r3.Vec{{X: 5, Y: 5, Z: 0}, {X: 6, Y: 5, Z: 0}, {X: 5, Y: 6, Z: 0}} {
+		in.Xverts = append(in.Xverts, proof.XptOf(p))
+		in.Approx = append(in.Approx, p)
+		in.Xbeta = append(in.Xbeta, 0)
+	}
+	for k, tr := range [][3]int{{base, base + 2, base + 1}, {base, base + 1, 8}, {base + 1, base + 2, 8}, {base + 2, base, 8}} {
+		in.Tris = append(in.Tris, tr)
+		in.Src = append(in.Src, 50+k)
+		in.FacetBound = append(in.FacetBound, 0)
+	}
+	require.True(t, stitchEdgesPaired(in.Tris, map[[2]int]uint8{}), "fixture closed")
+	_, changed, err := SimplifyPlanarFaces(t.Context(), in)
+	require.NoError(t, err)
+	require.False(t, changed)
+}
