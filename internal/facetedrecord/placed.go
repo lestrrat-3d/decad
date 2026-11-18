@@ -174,6 +174,11 @@ func (fp Payload) placedWithReplay(ctx context.Context, env topo.Env, composed r
 	}
 	reach = proofbound.AbsSumUpper(reach, fp.MeshBound)
 	for i := range next.Groups {
+		// A placement proves PlacedPlane again or drops it: a move too small to change the tag's floats still moves
+		// the true plane.
+		if delta != r3.Identity() {
+			next.Groups[i].PlacedPlane = nil
+		}
 		if exact != nil {
 			if err := ExactGroupPlaced(&next.Groups[i], exact, delta, fp.Verts, reach); err != nil {
 				return nil, err
@@ -227,6 +232,7 @@ func (fp Payload) placedWithReplay(ctx context.Context, env topo.Env, composed r
 				if next.Groups[i].Retained && replay != nil {
 					next.Groups[i].NormalBound = min(2, proofbound.AbsSumUpper(fp.Groups[i].NormalBound, replayDeparture))
 				} else if next.Groups[i].Retained {
+					next.Groups[i].PlacedPlane = placedPlane(fp.Groups[i], moved, delta)
 					add, stated := PlacedTagDeparture(tag, moved, delta, fp.Verts, reach)
 					if stated {
 						next.Groups[i].NormalBound = min(2, proofbound.AbsSumUpper(fp.Groups[i].NormalBound, add))

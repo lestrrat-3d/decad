@@ -610,8 +610,16 @@ func evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 			// An unshifted Intersect also reads its seats: carrier-exact faces resting on each other, and the walls
 			// that leave their planes (agent-docs/coplanar-contact-design.md §16).
 			if op == meshbool.OpIntersect {
-				bmA.SetSeats(ma)
-				bmB.SetSeats(mb)
+				placedA, err := placedCarriers(ctx, a, ma)
+				if err != nil {
+					return Evaluation{}, err
+				}
+				placedB, err := placedCarriers(ctx, b, mb)
+				if err != nil {
+					return Evaluation{}, err
+				}
+				bmA.SetSeats(ma, placedA)
+				bmB.SetSeats(mb, placedB)
 			}
 		}
 	} else if replay != nil && fixed == nil && !hasShifts {

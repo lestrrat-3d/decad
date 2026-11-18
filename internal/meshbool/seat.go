@@ -41,11 +41,25 @@ type rimSeat struct {
 //     farther from the plane than W's largest facet bound plus the arithmetic slack.
 //
 // Each such edge of W is marked in RimEdge.
-func (bm *BoolMesh) SetSeats(m *topo.Mesh) {
+func (bm *BoolMesh) SetSeats(m *topo.Mesh, placed []bool) {
 	n := len(bm.Tris)
 	bm.Carrier = make([]bool, n)
 	for t := range n {
-		bm.Carrier[t] = bm.SlabBound[t] == 0 || bm.analyticPlaneFacet(m, t)
+		bm.Carrier[t] = bm.SlabBound[t] == 0 || bm.analyticPlaneFacet(m, t) || t < len(placed) && placed[t]
+	}
+	// A placed face's true plane is read exactly from its record, once per face (§17).
+	planes := map[*topo.Face]*exactPlane{}
+	for t := range n {
+		if bm.Carrier[t] || t >= len(m.Source) || m.Source[t] == nil {
+			continue
+		}
+		f := m.Source[t]
+		pl, seen := planes[f]
+		if !seen {
+			pl = trueFacePlane(f)
+			planes[f] = pl
+		}
+		bm.Carrier[t] = pl != nil && pl.holds(bm.Verts[bm.Tris[t][0]], bm.Verts[bm.Tris[t][1]], bm.Verts[bm.Tris[t][2]])
 	}
 	bm.RimEdge = make([][3]bool, n)
 	bm.Seats = map[int][]rimSeat{}
@@ -125,14 +139,110 @@ func (bm *BoolMesh) SetSeats(m *topo.Mesh) {
 	}
 }
 
-// analyticPlaneFacet reports whether facet t's source face is a plane of an analytic operand, whose surface is the
-// face itself (a plane that is no retained tag, states no departure and a zero displacement), and the facet lies exactly
-// in it: its true piece then lies in the facet's own plane (planeSlab reads zero).
+// exactPlane is the plane through o normal to n, both exact rationals.
+type exactPlane struct {
+	o, n [3]*big.Rat
+}
+
+// holds reports whether the held points lie exactly in the plane.
+func (p *exactPlane) holds(pts ...r3.Vec) bool {
+	for _, x := range pts {
+		e := ratVec(x)
+		s := new(big.Rat)
+		for i := range 3 {
+			s.Add(s, new(big.Rat).Mul(p.n[i], new(big.Rat).Sub(e[i], p.o[i])))
+		}
+		if s.Sign() != 0 {
+			return false
+		}
+	}
+	return true
+}
+
+// trueFacePlane returns the plane a Plane face's true piece lies in exactly, read from its record (§17), or nil:
+//
+//   - a placed retained plane (topo.Face.PlacedPlane) whose tag still equals the plane the placement proved;
+//   - a denoted revolve plane: every meridian segment of its record (topo.Face.Denoted) at one exact level z₀, so the
+//     true piece lies in the plane through O + z₀·W spanned by the record's E₀ and E₁, all exact point leaves.
+func trueFacePlane(f *topo.Face) *exactPlane {
+	tag, ok := f.Surface.(surfacegeom.Plane)
+	if !ok || !f.RetainedTag {
+		return nil
+	}
+	if f.PlacedPlane != nil && *f.PlacedPlane == tag && f.AxialDelta == 0 {
+		o := ratVec(tag.Frame.Origin())
+		n := ratCross(ratVec(tag.Frame.U()), ratVec(tag.Frame.V()))
+		if n[0].Sign() == 0 && n[1].Sign() == 0 && n[2].Sign() == 0 {
+			return nil
+		}
+		return &exactPlane{o: o, n: n}
+	}
+	if f.Denoted != nil {
+		return denotedPlane(f.Denoted)
+	}
+	return nil
+}
+
+// denotedPlane reads the plane of a revolve record whose meridian runs at one exact level, or nil.
+func denotedPlane(r *surfacenormal.Revolved) *exactPlane {
+	if !r.Valid || r.Circular || r.Cap || len(r.Ends) == 0 {
+		return nil
+	}
+	point := func(iv proofbound.RatInterval) *big.Rat {
+		if iv.Lo == nil || iv.Hi == nil || iv.Lo.Cmp(iv.Hi) != 0 {
+			return nil
+		}
+		return iv.Lo
+	}
+	vec := func(iv proofbound.IvVec3) ([3]*big.Rat, bool) {
+		var out [3]*big.Rat
+		for k := range 3 {
+			if out[k] = point(iv[k]); out[k] == nil {
+				return out, false
+			}
+		}
+		return out, true
+	}
+	var level *big.Rat
+	for _, seg := range r.Ends {
+		for _, end := range seg {
+			z := point(end[0])
+			if z == nil || level != nil && z.Cmp(level) != 0 {
+				return nil
+			}
+			level = z
+		}
+	}
+	o, ok0 := vec(r.Origin)
+	e0, ok1 := vec(r.Basis[0])
+	e1, ok2 := vec(r.Basis[1])
+	w, ok3 := vec(r.Basis[2])
+	if !ok0 || !ok1 || !ok2 || !ok3 {
+		return nil
+	}
+	n := ratCross(e0, e1)
+	if n[0].Sign() == 0 && n[1].Sign() == 0 && n[2].Sign() == 0 {
+		return nil
+	}
+	for k := range 3 {
+		o[k] = new(big.Rat).Add(o[k], new(big.Rat).Mul(level, w[k]))
+	}
+	return &exactPlane{o: o, n: n}
+}
+
+// analyticPlaneFacet reports whether facet t's source face is a plane of an unplaced analytic operand, whose surface is
+// the face itself (a plane that is no retained tag, states no departure and a zero displacement), and the facet lies
+// exactly in it: its true piece then lies in the facet's own plane (planeSlab reads zero). A placed operand denotes its
+// record carried through the placement read as exact rationals, whose image the float tag only approximates; §17 reads
+// it from that image instead.
 func (bm *BoolMesh) analyticPlaneFacet(m *topo.Mesh, t int) bool {
 	if t >= len(m.Source) || m.Source[t] == nil {
 		return false
 	}
 	f := m.Source[t]
+	if f.Body == nil || f.Body.Payload == nil || f.Body.Payload.Transform() != r3.Identity() {
+		return false
+	}
 	pl, ok := f.Surface.(surfacegeom.Plane)
 	if !ok || f.RetainedTag || f.TagDeparture != 0 || f.NormalBound != 0 || f.AxialDelta != 0 || f.Denoted != nil {
 		return false
