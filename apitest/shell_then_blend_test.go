@@ -229,6 +229,37 @@ func TestShellBossThenFilletOpeningRim(t *testing.T) {
 	require.False(t, meshEncloses(mesh, r3.NewVec(30, 10.15, 29.85)), "the rim corner is cut away")
 }
 
+// The opening's inner rim edge along x at y = 12 fillets on the view too. The
+// annular top face wraps the opening's corners, so it is reflex at both ends
+// of the edge, and each inner wall across an end takes the blend's end cap.
+// The fillet removes the corner piece (1 − π/4)·r²·16 along the 16 mm edge.
+func TestShellBossThenFilletOpeningInnerRim(t *testing.T) {
+	t.Parallel()
+	doc, shell, _ := shellBoxBoss(t, openBossTop)
+	const r = 0.5
+	rim := decad.Edges(decad.ParallelTo(r3.NewVec(1, 0, 0)), decad.EndpointAt(r3.NewVec(22, 12, 30))).Exactly(1)
+	filleted, err := decad.Fillet(t.Context(), shell, rim, units.Millimeters(r))
+	require.NoError(t, err)
+	found := false
+	for _, f := range filleted.Faces() {
+		c, ok := f.Surface().(decad.Cylinder)
+		if !ok || !c.Radius.Equal(units.Millimeters(r), 1e-12) {
+			continue
+		}
+		found = true
+		require.InDelta(t, 1, math.Abs(c.Axis.X), 1e-12)
+		require.InDelta(t, 12-r, c.Origin.Y, 1e-12)
+		require.InDelta(t, 30-r, c.Origin.Z, 1e-12)
+	}
+	require.True(t, found, "the fillet wall is a radius-0.5 cylinder")
+	corner := (1 - math.Pi/4) * r * r * 16
+	vol, err := filleted.Volume()
+	require.NoError(t, err)
+	require.Less(t, vol.Bound.Base(), corner/2, "the volume bound resolves the corner piece")
+	requireRemoved(t, shell, filleted, corner)
+	requireBlendVerified(t, doc, filleted)
+}
+
 // The outer verticals of a shelled blind pocket fillet the same way: the
 // 10×10×10 block with its 4×4×4 pocket, shelled 1 mm with the top removed,
 // loses (1 − π/4) per unit length at r = 1 over the four 10 mm edges.

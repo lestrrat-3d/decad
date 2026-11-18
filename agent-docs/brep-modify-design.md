@@ -128,9 +128,10 @@ succeeds. A selection the retained blend recognizes but cannot build refuses
 with the retained blend's own row (Table SR of
 `agent-docs/retained-edge-blend-design.md`). On the box below, a cavity
 vertical or floor edge refuses with "an end face's corner does not match the
-edge's convexity", the opening's inner rim with "a convex edge ends where a
-face is reflex", and an edge at the band's ring with "an edge end meets a face
-that is not a retained plane". An unmapped selection, or one the retained
+edge's convexity", and an edge at the band's ring with "an edge end meets a face
+that is not a retained plane". The opening's inner rim builds: the annular top
+is reflex at the rim's ends, and the inner walls across them take the blend's
+end caps. An unmapped selection, or one the retained
 blend does not recognize, falls through to SB11. A placed shell whose held
 vertices do not equal its view's vertices exactly maps nothing: the box shell
 translated by 12.7 along x, or turned 30° or 90° about z by
