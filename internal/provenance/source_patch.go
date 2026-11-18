@@ -1,5 +1,7 @@
 package provenance
 
+import "slices"
+
 // SourcePatch records where one group of a faceted payload came from, one
 // step back (agent-docs/operation-history-design.md, Phase 7 Task 7.3). It is
 // immutable once built and holds no topology node, body, document, context or
@@ -26,4 +28,17 @@ type SourcePatch struct {
 	// Parent is the operand face's own record when the operand is faceted,
 	// and nil for a built face and for a blend group.
 	Parent *SourcePatch
+	// Members is set only on the record of a group a canonicalization merge
+	// joined (agent-docs/union-face-merge-design.md §4.6). It lists each
+	// member group's own record in group order. Producer, Operand and Ordinal
+	// copy Members[0], and Parent is nil, so an ancestry reader walks Members.
+	Members []*SourcePatch
+}
+
+// Same reports whether p and q hold equal scalar fields and the same Parent
+// pointer, and Members of equal length with the same element pointers. The
+// Members slice makes SourcePatch non-comparable with ==.
+func (p SourcePatch) Same(q SourcePatch) bool {
+	return p.Producer == q.Producer && p.Operand == q.Operand && p.Ordinal == q.Ordinal &&
+		p.Blend == q.Blend && p.Parent == q.Parent && slices.Equal(p.Members, q.Members)
 }

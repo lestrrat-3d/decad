@@ -20,7 +20,8 @@ const shiftBudgetBytesCase = "bytes"
 func captureSealFixture(t *testing.T) *ShiftCertificate {
 	t.Helper()
 	c, _, _, _ := shiftSnapshotFixture() //nolint:dogsled // Only the stored certificate is needed.
-	c.groups[0].Source = &provenance.SourcePatch{Producer: 2, Parent: &provenance.SourcePatch{Producer: 1}}
+	c.groups[0].Source = &provenance.SourcePatch{Producer: 2, Parent: &provenance.SourcePatch{Producer: 1},
+		Members: []*provenance.SourcePatch{{Producer: 3, Ordinal: 1}}}
 	c.groups[0].CapRecord = &topo.CapRecord{ZDenoted: big.NewRat(7, 3)}
 	c.groups[0].Denoted = &surfacenormal.Revolved{Valid: true}
 	c.groups[0].Denoted.Radius.Lo = big.NewRat(1, 3)
@@ -110,6 +111,8 @@ func TestPrivateUnionAdjustmentSealBindsFreshGrowthWarning(t *testing.T) {
 func TestShiftCaptureSealRejectsPriorMutation(t *testing.T) {
 	cases := map[string]func(*ShiftCertificate){
 		"source":             func(c *ShiftCertificate) { c.groups[0].Source.Parent.Ordinal++ },
+		"member":             func(c *ShiftCertificate) { c.groups[0].Source.Members[0].Ordinal++ },
+		"member pointer":     func(c *ShiftCertificate) { v := *c.groups[0].Source.Members[0]; c.groups[0].Source.Members[0] = &v },
 		"origin":             func(c *ShiftCertificate) { c.groups[0].Origins[0].Role = "changed" },
 		"group scalar":       func(c *ShiftCertificate) { c.groups[0].NormalBound = 1 },
 		"cap level pointer":  func(c *ShiftCertificate) { c.groups[0].CapRecord.ZDenoted = big.NewRat(7, 3) },
