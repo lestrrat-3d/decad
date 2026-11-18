@@ -170,6 +170,11 @@ operand vertex (§3.1), and
 β_result(v) = upRound( β_pre(v) + weld(v) )
 ```
 
+A face of the result whose held facets are exactly coplanar, hole-free, with
+every vertex claim zero and float corners is re-triangulated on its corners
+before the weld, so it holds no vertex the cutter placed and its vertices
+weld at zero (`agent-docs/coplanar-contact-design.md` §7).
+
 `StitchedMesh.RoundingVolumeBound` charges occupied-volume error. Its global
 bound is `SweptVolumeAllow(round, preArea)`. After positive-reach repair it
 also sums each pre-round triangle's swept-volume bound using the largest

@@ -40,13 +40,13 @@ func TestCoplanarGateInexactFace(t *testing.T) {
 	for _, f := range b.FacetBound {
 		require.Zero(t, f, "every facet bound is zero")
 	}
-	_, _, err := MeshBooleanStats(coplanarCtx(t), OpUnion, a, b, NewContactMemo(a, b))
+	_, _, err := MeshBooleanStats(t.Context(), OpUnion, a, b, NewContactMemo(a, b))
 	touch, ok := errors.AsType[*TouchContactError](err)
 	require.True(t, ok, "%v", err)
 	require.Equal(t, touchCoplanar, touch.What)
 
 	// The same pair with an exact face reading is classified.
 	require.NoError(t, b.SetExactFacets(boxTessellation([6]float64{})))
-	_, _, err = MeshBooleanStats(coplanarCtx(t), OpUnion, a, b, NewContactMemo(a, b))
+	_, _, err = MeshBooleanStats(t.Context(), OpUnion, a, b, NewContactMemo(a, b))
 	require.NoError(t, err)
 }

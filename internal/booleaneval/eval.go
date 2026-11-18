@@ -25,7 +25,6 @@ import (
 	"github.com/lestrrat-3d/decad/internal/booloperand"
 	"github.com/lestrrat-3d/decad/internal/boolshift"
 	"github.com/lestrrat-3d/decad/internal/chaintol"
-	"github.com/lestrrat-3d/decad/internal/coplanarcontact"
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/facetproof"
@@ -598,7 +597,7 @@ func evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 		surfaceSlabs(b, mb, bmB, shiftDisplacement)
 		// A shifted, grown or fixed-tool attempt admits no coplanar pair, so
 		// the facets stay not exact (agent-docs/coplanar-contact-design.md §3.1).
-		if !hasShifts && coplanarcontact.Of(ctx) {
+		if !hasShifts {
 			if err := bmA.SetExactFacets(ma); err != nil {
 				return Evaluation{}, err
 			}
@@ -731,7 +730,7 @@ func evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 	if replay != nil {
 		stitched, err = meshbool.StitchFacetsReplayWithKeys(ctx, kept, replay, replayKeys)
 	} else {
-		stitched, err = meshbool.StitchFacetsWith(ctx, kept, meshbool.StitchOptions{Coplanar: coplanarKeys, SimplifyPlanar: coplanarcontact.Of(ctx)})
+		stitched, err = meshbool.StitchFacetsWith(ctx, kept, meshbool.StitchOptions{Coplanar: coplanarKeys, SimplifyPlanar: true})
 	}
 	if err != nil {
 		_, folded := errors.AsType[*meshbool.HeldFoldError](err)

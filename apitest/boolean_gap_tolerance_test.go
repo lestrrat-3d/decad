@@ -24,12 +24,15 @@ func requireVolumeWithin(t *testing.T, b *decad.Body, truth float64) decad.Measu
 }
 
 // gapBoxes returns a 10×10×10 box and a second box placed at (dx, dy, dz) of the
-// given size, in a document made with opts.
+// given size, in a document made with opts. The second box is rounded by
+// roundTrip, so its faces read a positive bound and a coplanar contact with it
+// is decided by the gap-tolerance retry; exact boxes are classified exactly
+// (agent-docs/coplanar-contact-design.md, TestCoplanarContact).
 func gapBoxes(t *testing.T, dx, dy, dz, sx, sy, sz float64, opts ...decad.DocumentOption) (*decad.Body, *decad.Body) {
 	t.Helper()
 	doc := decad.New(opts...)
 	a := boxBody(t, doc, 0, 0, 10, 10, 10)
-	b := translated(t, boxBody(t, doc, 0, 0, sx, sy, sz), dx, dy, dz)
+	b := translated(t, roundTrip(t, boxBody(t, doc, 0, 0, sx, sy, sz)), dx, dy, dz)
 	return a, b
 }
 
@@ -189,19 +192,20 @@ func TestBooleanGapTolerance(t *testing.T) {
 		t.Parallel()
 		a, b := touching(decad.ExactOnly())
 		_, err := decad.Union(t.Context(), a, b)
-		requireCoplanarFaceRefusal(t, err)
+		requireRoundedContactRefusal(t, err)
 
 		a, b = touching(decad.WithGapTolerance(units.Millimeters(0)))
 		_, err = decad.Cut(t.Context(), a, b)
-		requireCoplanarFaceRefusal(t, err)
+		requireRoundedContactRefusal(t, err)
 	})
 
-	t.Run("a tool flush with both walls of a slot is grown", func(t *testing.T) {
+	t.Run("a rounded tool flush with both walls of a slot is moved aside", func(t *testing.T) {
 		t.Parallel()
-		// No translation pokes the tool through both walls, so the retry grows it about its centre.
+		// The rounded tool is decided by a translation of the retry. Growth, which a tool exactly flush on a face with a positive
+		// bound needs, is covered by TestCutByAToolFlushWithBothFacesOfAMeshPlate and the resting-boss test.
 		doc := decad.New()
 		a := boxBody(t, doc, 0, 0, 10, 10, 10)
-		slot := translated(t, boxBody(t, doc, 0, 0, 4, 10, 4), 3, 0, 6)
+		slot := translated(t, roundTrip(t, boxBody(t, doc, 0, 0, 4, 10, 4)), 3, 0, 6)
 		out, err := decad.Cut(t.Context(), a, slot)
 		require.NoError(t, err)
 		volume, err := out.Volume()
@@ -210,13 +214,13 @@ func TestBooleanGapTolerance(t *testing.T) {
 		require.Less(t, volume.Bound.Base(), 1.0)
 	})
 
-	t.Run("ExactOnly leaves a tool flush with both walls refused", func(t *testing.T) {
+	t.Run("ExactOnly leaves a rounded tool flush with both walls refused", func(t *testing.T) {
 		t.Parallel()
 		doc := decad.New(decad.ExactOnly())
 		a := boxBody(t, doc, 0, 0, 10, 10, 10)
-		slot := translated(t, boxBody(t, doc, 0, 0, 4, 10, 4), 3, 0, 6)
+		slot := translated(t, roundTrip(t, boxBody(t, doc, 0, 0, 4, 10, 4)), 3, 0, 6)
 		_, err := decad.Cut(t.Context(), a, slot)
-		requireCoplanarFaceRefusal(t, err)
+		requireRoundedContactRefusal(t, err)
 		require.Len(t, doc.Bodies(), 2, "a refusal leaves the operands live")
 	})
 }

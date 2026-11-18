@@ -381,19 +381,6 @@ func TestUnionSweepDisplacementChangesEnclosedSolid(t *testing.T) {
 	})
 }
 
-// requireCoplanarFaceRefusal asserts a mesh-path shared-area coplanar face
-// contact: a valid model this evaluator cannot classify, so
-// BooleanUnsupportedContact wraps ErrUnsupported.
-func requireCoplanarFaceRefusal(t *testing.T, err error) {
-	t.Helper()
-	require.ErrorIs(t, err, decad.ErrUnsupported)
-	require.NotErrorIs(t, err, decad.ErrDegenerate)
-	require.ErrorContains(t, err, `overlap in one plane`, `the refusal is the shared face area, not some other contact`)
-	var be *decad.BooleanError
-	require.ErrorAs(t, err, &be)
-	require.Equal(t, decad.BooleanUnsupportedContact, be.Code)
-}
-
 func TestIntersectOverlappingCubes(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
@@ -603,11 +590,12 @@ func TestBooleanRejections(t *testing.T) {
 		_ = got
 	})
 	t.Run("CoplanarContact", func(t *testing.T) {
-		// Two cubes meet face on face after an in-plane shift. G3 excludes that
-		// shift, and the mesh path cannot classify the shared planar area.
+		// Two cubes meet face on face after an in-plane shift, the second with
+		// rounded corners (roundTrip). G3 excludes that shift, and the mesh path
+		// cannot classify the contact of a face that reads a positive bound.
 		doc := decad.New(decad.ExactOnly())
 		a := boxBody(t, doc, 0, 0, 10, 10, 10)
-		b := translated(t, boxBody(t, doc, 0, 0, 10, 10, 10), 0.5, 0, 10)
+		b := translated(t, roundTrip(t, boxBody(t, doc, 0, 0, 10, 10, 10)), 0.5, 0, 10)
 		_, err := decad.Union(t.Context(), a, b)
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.NotErrorIs(t, err, decad.ErrDegenerate)

@@ -869,15 +869,12 @@ This section owes the hidden-tangency gate (`meshbool.FacesNearMiss`, `internal/
 `agent-docs/evaluator-design.md` §9) a **constraint**, not a permission. That gate
 returns `near = false` for the whole face pair on the first facet pair it
 classifies as a positive-area coplanar overlap, deferring the pair to the mesh
-pass's own refusal of a coplanar face-on-face tangency. The deferral is sound
-only while that refusal happens. Once §11's PR4 classifies material sides over a
-patch instead of refusing it, the same `near = false` rests on a refusal that no
-longer runs, and the whole face pair clears the gate with no near-miss proof
-behind it.
-
-§11's PR4 MUST therefore settle the near-miss question for a coplanar carrier
-pair before it removes that refusal, and carrier coplanarity ALONE does not
-settle it. A planar face's carrier plane is exact, but its outline is not: near
+pass. The deferral is sound only where the mesh pass either refuses the pair or
+classifies it exactly. The mesh pass classifies a coplanar pair only when both
+facets are exact (a zero facet bound on a face the tessellation reads at zero,
+`agent-docs/coplanar-contact-design.md` §3.1), which is the reading the gate
+itself skips on, and it refuses every other coplanar pair. Carrier coplanarity
+ALONE settles nothing. A planar face's carrier plane is exact, but its outline is not: near
 a curved rim the held outline is inscribed, so two operands whose true rims
 touch can leave their held outlines a chord apart, and the arrangement above —
 projected triangle boundaries split into maximal positive-area cells — then has
@@ -985,7 +982,8 @@ These outcomes do **not** emit a row:
 |---|---|---|
 | held intersection empty after a gap shift | the shift moved a held mesh off the true operand, so the empty result says nothing of the true pair | `Suspect` unless an earlier path proved disjoint/touching |
 | `V - E <= 0` | interval admits zero; held overlap is below this evaluator's proof reach | `Suspect` |
-| tangent/grazing/coplanar contact refused | topology classifier did not prove a positive-volume intersection | `Suspect` unless clearance certified touching |
+| tangent/grazing contact refused, or a coplanar contact of a face with a positive bound refused | topology classifier did not prove a positive-volume intersection | `Suspect` unless clearance certified touching |
+| coplanar contact of exact faces | classified exactly: an empty intersection proves disjoint interiors | `Sound` when no other finding |
 | operand/result unsupported | evaluator lacks a complete path | `Suspect` |
 
 An unshifted empty held intersection proves the interiors disjoint
@@ -1033,8 +1031,10 @@ gate (`meshbool.RefuseUndecidableProximity`), and kept no facet
   either it proves an interpenetration of the held facets deeper than that
   slack, or it finds no facet pair within it, or it refuses. A face pair with
   zero slack is held exactly, and the mesh pass's exact predicates decide it.
-  A coplanar face-on-face overlap is deferred to the mesh pass, which refuses
-  it ("two operand facets overlap in one plane") instead of returning empty.
+  A coplanar face-on-face overlap is deferred to the mesh pass. The pass
+  classifies it exactly when both facets are exact and otherwise refuses it
+  ("two operand facets overlap in one plane") instead of returning empty
+  (`agent-docs/coplanar-contact-design.md` §3, §6).
 - P3, the mesh pass. `OpIntersect` over the held solids keeps every facet of
   `HA` inside `HB`, every facet of `HB` inside `HA`, and the cut pieces of
   every crossing. It keeps none exactly when `HA ∩ HB` has no interior and no
@@ -1043,8 +1043,9 @@ gate (`meshbool.RefuseUndecidableProximity`), and kept no facet
 **Step 1: no held facets are close.** A gate witness of interpenetration
 deeper than the slack places held material of one solid strictly inside the
 other, so P3 would keep facets. The result kept none, so the gate found no
-such witness. It did not refuse either, and no coplanar overlap reached the
-mesh pass (P2). So every held facet pair `(a, b)` stands farther apart than
+such witness. It did not refuse either, and every coplanar overlap that reached
+the mesh pass was either refused or classified exactly (P2), so none of them
+left held material of one solid inside the other unseen. So every held facet pair `(a, b)` stands farther apart than
 `d(a) + d(b)`, or both facets are exact and the exact predicates saw them meet
 in no interior point.
 
@@ -1302,7 +1303,7 @@ Each row is a PR-sized stage. An unanswered verification question reads
 | 1 | four-way pair relation; read-only `evaluateBoolean`; shared shell audit and rational volume/bound helper; transversal intersections for operands the mesh boolean accepts; stable ordering; context propagation | containment without a measurable mesh intersection; coincident/broad-coplanar arrangements; operands without tessellation |
 | 2 | strict full-containment certificate for shipped single-lump analytic payloads; whole-contained-body volume reuse | all multi-lump containment unless the Boolean measures the complete intersection |
 | 3 | exact structural equality certificate for analytic payloads, reusing the first equal body's volume | harmless alternate record spellings; non-identical broad coplanar overlap |
-| 4 | coplanar breadth in the mesh classifier: classify material sides over every positive-area coplanar patch, keep crossing/overlap patches, and retain pure opposite-side contact as touching; settle the near-miss question §5.2 states this increment owes a coplanar carrier pair before removing the refusal that pair is deferred to | unsupported curved operands and unresolved curved tangencies |
+| 4 | coplanar breadth in the mesh classifier: classify material sides over every positive-area coplanar patch of exact faces, keep crossing/overlap patches, and retain pure opposite-side contact as touching; the near-miss question is settled by admitting exact faces only (`agent-docs/coplanar-contact-design.md`) | unsupported curved operands and unresolved curved tangencies |
 | 5 | curved read-only intersection coverage after revolve tessellation, with chord bounds and the hidden-tangency refusal intact | contact or overlap whose proven interval still admits both zero and positive volume |
 | 6 | multi-region analytic overlap: `agent-docs/prism-boolean-design.md` §4.5's overlap-area reading, entered after the §5 twin declines, measuring an admitted coplanar prism pair whose overlap covers any number of disjoint regions | a coplanar pair the prism entry gate or the region classification declines, an exactly-tangent pair, and every faceted or non-coplanar operand |
 | 7 | §3.2's exact planar arm: a mitred sweep or a faceted Boolean result, against a prism, a stitched solid or each other, and a coil against a prism or a stitched solid, partitioned by the exact planar relation under the displacement band | a held touch or a held gap or overlap within the summed displacement; every pair holding a cup, a loft, a composite sweep, a cap-loop chamfer or a curved body |

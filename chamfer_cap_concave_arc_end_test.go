@@ -105,8 +105,8 @@ func chamferConcaveArcEnd(t *testing.T, r, turn, d float64) {
 // TestChamferConcaveEndKeepsItsRelief chamfers a line run that ends at a concave corner, turned 90 or 45 degrees, in
 // documents whose gap tolerance does and does not reach the corner relief. With the relief the result is the relieved
 // chamfer: within its volume bound, its volume is the volume of the chamfer whose bevel stops on the next wall's plane
-// plus between zero and 0.004^2 turn d / 2, the material the relief keeps. A document whose gap tolerance is under the
-// relief takes the gap shift instead, whose charge covers the shift.
+// plus between zero and 0.004^2 turn d / 2, the material the relief keeps. The chamfer's flush Union of exact faces is
+// classified exactly, so no gap shift is applied under any tolerance.
 func TestChamferConcaveEndKeepsItsRelief(t *testing.T) {
 	t.Parallel()
 	const d = 0.5
@@ -121,7 +121,7 @@ func TestChamferConcaveEndKeepsItsRelief(t *testing.T) {
 	}{
 		{"right angle", ell, 90, 0.01, false},
 		{"45 degrees", [][2]float64{{0, 0}, {30, 0}, {30, 10}, {10, 10}, {0, 20}}, 45, 0.01, false},
-		{"right angle under a fine gap tolerance", ell, 90, 0.003, true},
+		{"right angle under a fine gap tolerance", ell, 90, 0.003, false},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()

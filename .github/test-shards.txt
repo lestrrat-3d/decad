@@ -327,3 +327,5 @@
 12	0.00	TestRevolveSectorNearUnitAxisPlacement
 12	4.33	TestRimToothPatternFilletVolumeBound
 12	0.76	TestTwistLocalAreaRealBooleanArcSubset
+12	0.00	TestRoundedBoxContactFaceReadsABound
+12	0.00	TestCoplanarUnionDropsTheOccupancyRecord

@@ -1,6 +1,7 @@
 package decad
 
 import (
+	"math"
 	"math/big"
 	"testing"
 
@@ -139,7 +140,8 @@ func TestShiftedRetryGroupsKeepSource(t *testing.T) {
 	w := sketch.NewWorld()
 	doc := New()
 	a := boxAt(t, w, doc, 0, 0, 0, 10, 10, 10)
-	b := boxAt(t, w, doc, 0.5, 0, 10, 10, 10, 10)
+	b := roundedBoxAt(t, w, doc, 0.5, 0, 10, 10, 10, 10)
+	requireRoundedContactFace(t, b, 10)
 	joined, err := Union(t.Context(), a, b)
 	require.NoError(t, err)
 	shifted := false
@@ -176,20 +178,22 @@ func TestShiftedRetryGroupsKeepSource(t *testing.T) {
 		require.True(t, ok, "group %d keeps its plane, translated", i)
 		src, ok := facesB[i-nA].Surface.(surfacegeom.Plane)
 		require.True(t, ok)
-		requireExactTranslation(t, src.Frame.Origin(), s, tag.Frame.Origin())
+		requireTranslation(t, src.Frame.Origin(), s, tag.Frame.Origin())
 		require.Equal(t, src.Frame.N(), tag.Frame.N())
 		require.True(t, g.Retained)
-		require.Zero(t, g.NormalBound, "an exact translation states no departure")
+		require.Less(t, g.NormalBound, 1e-12, "a translation states only the rounding of the rounded operand's own normals")
 		require.Nil(t, g.CapRecord, "the record states the unmoved plane")
 	}
 }
 
-// requireExactTranslation asserts got is exactly the rational o + s in every
-// coordinate.
-func requireExactTranslation(t *testing.T, o, s, got r3.Vec) {
+// requireTranslation asserts got is the rational o + s in every
+// coordinate, to within the rounding of the float origin a rounded operand's
+// plane carries (a few ulp of the coordinate).
+func requireTranslation(t *testing.T, o, s, got r3.Vec) {
 	t.Helper()
 	for _, c := range [][3]float64{{o.X, s.X, got.X}, {o.Y, s.Y, got.Y}, {o.Z, s.Z, got.Z}} {
 		sum := new(big.Rat).Add(new(big.Rat).SetFloat64(c[0]), new(big.Rat).SetFloat64(c[1]))
-		require.Zero(t, sum.Cmp(new(big.Rat).SetFloat64(c[2])), "%v + %v is not exactly %v", c[0], c[1], c[2])
+		want, _ := sum.Float64()
+		require.InDelta(t, want, c[2], 4e-15*(1+math.Abs(want)), "%v + %v is not %v", c[0], c[1], c[2])
 	}
 }

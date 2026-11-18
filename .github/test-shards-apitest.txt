@@ -1703,7 +1703,7 @@
 7	0.00	TestPrismCutG5BuildsAnalyticBlindPocket
 7	0.01	TestPrismIntersectRotatedBoxBuildsAnalyticOctagon
 7	0.00	TestPrismUnionSharedWallMirroredL
-7	0.02	TestPublicBooleansUnchangedOnMultiRegionPair
+7	0.02	TestPublicBooleansOnMultiRegionPair
 7	0.83	TestQuarterTurnAgreesWithTheTurnedCubes
 7	0.00	TestQueryStringNonFiniteIsTotal
 7	0.01	TestReadIGESReadsASolidWithAVoid
@@ -3131,3 +3131,6 @@
 12	0.00	TestWallPlacedBodyReadsThePart
 12	0.04	TestWebCrossesRibs
 12	0.01	TestWebPathOfOneLineIsARib
+12	0.00	TestCoplanarContactRoundedFixtureKeepsRetry
+12	0.00	TestStackedOpposedObliqueLoops
+12	0.00	TestVerifyReadsAnExactFlushPairExactly

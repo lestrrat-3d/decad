@@ -875,10 +875,11 @@ func TestVerifyDiagnosticsInterference(t *testing.T) {
 	require.Len(t, report.Interferences, 1, `the diagnostic mirrors the Interference row`)
 }
 
-// coplanarContactPairDocument builds two 10×10×10 boxes, the second
-// translated to (0,5,5): they overlap with positive volume while sharing
-// coplanar side faces, so the read-only intersect stages the face-on-face
-// contact (meshbool.BooleanExpectedContact).
+// coplanarContactPairDocument builds two 10×10×10 boxes, the second rounded by
+// roundTrip and translated to (0,5,5): they overlap with positive volume while
+// sharing coplanar side planes, and the second's faces read a positive bound, so
+// the read-only intersect stages the face-on-face contact
+// (meshbool.BooleanExpectedContact). The same pair of exact boxes is decided.
 func coplanarContactPairDocument(t *testing.T) *decad.Document {
 	t.Helper()
 	ws := sketch.NewWorld()
@@ -898,7 +899,7 @@ func coplanarContactPairDocument(t *testing.T) *decad.Document {
 
 	shift, err := r3.Translation(r3.NewVec(0, 5, 5))
 	require.NoError(t, err)
-	_, err = decad.Transform(t.Context(), box2, shift)
+	_, err = decad.Transform(t.Context(), roundTrip(t, box2), shift)
 	require.NoError(t, err)
 	return doc
 }
@@ -957,9 +958,9 @@ func TestVerifyDiagnosticsUnsupportedPairStagedContact(t *testing.T) {
 	require.Nil(t, d.Body)
 	require.NotNil(t, d.Pair, `an unsupported pair names its pair`)
 	require.Equal(t,
-		`the pair reaches a contact or near-contact that the read-only intersection cannot classify, and the operands share a face plane; offset the operands so no face plane is shared, or adjust the geometry to create clear separation or deeper overlap, or wait for contact support`,
+		`the pair reaches a contact or near-contact that the read-only intersection cannot classify; adjust the geometry to create clear separation or deeper overlap, or wait for contact support`,
 		d.Message,
-		`the contact diagnostic names contact and near-contact cases, names the shared-plane cause, and gives accurate corrective guidance`)
+		`the contact diagnostic names contact and near-contact cases and gives accurate corrective guidance; the rounded operand shares no exact face plane`)
 
 	_, undecided := findDiagnostic(report.Diagnostics, decad.DiagUndecidedPair)
 	require.False(t, undecided, `a staged contact is not an undecided partition`)

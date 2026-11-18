@@ -6,7 +6,6 @@ import (
 	"slices"
 	"unsafe"
 
-	"github.com/lestrrat-3d/decad/internal/coplanarcontact"
 	"github.com/lestrrat-3d/decad/internal/gaptol"
 	"github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -237,7 +236,7 @@ func stitchFacetsContext(ctx context.Context, kept []KeptFacet, shared *PairCuts
 		}
 	}
 
-	if shared != nil && shared.replay != nil && coplanarcontact.Of(ctx) {
+	if shared != nil && shared.replay != nil {
 		// The planar simplification of agent-docs/coplanar-contact-design.md §7,
 		// on the replay meter. The live stitch flips the needles and folds the
 		// simplified mesh leaves; the bounded stitch has no such flips, so it

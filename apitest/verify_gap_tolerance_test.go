@@ -11,12 +11,45 @@ import (
 
 // pocketDocument holds a 10×10×10 block and a 6×6×5 block inside it whose top
 // face is flush with the block's. Their true overlap is the inner block, 180 mm³.
+// The inner block is rounded by roundTrip, so its faces read a positive bound and
+// the flush contact is not classified exactly (see exactPocketDocument).
 func pocketDocument(t *testing.T, opts ...decad.DocumentOption) *decad.Document {
+	t.Helper()
+	doc := decad.New(opts...)
+	boxBody(t, doc, 0, 0, 10, 10, 10)
+	translated(t, roundTrip(t, boxBody(t, doc, 0, 0, 6, 6, 5)), 2, 2, 5)
+	return doc
+}
+
+// exactPocketDocument is pocketDocument with an exact inner block: its flush top
+// is classified exactly.
+func exactPocketDocument(t *testing.T, opts ...decad.DocumentOption) *decad.Document {
 	t.Helper()
 	doc := decad.New(opts...)
 	boxBody(t, doc, 0, 0, 10, 10, 10)
 	translated(t, boxBody(t, doc, 0, 0, 6, 6, 5), 2, 2, 5)
 	return doc
+}
+
+// TestVerifyReadsAnExactFlushPairExactly pins the exact fixture: with or
+// without a gap tolerance the flush pocket reads Interfering with the exact 180
+// mm³ overlap and no staged contact.
+func TestVerifyReadsAnExactFlushPairExactly(t *testing.T) {
+	t.Parallel()
+	for name, opts := range map[string][]decad.DocumentOption{"default": nil, "ExactOnly": {decad.ExactOnly()}} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			report, err := exactPocketDocument(t, opts...).Verify(t.Context())
+			require.NoError(t, err)
+			require.Equal(t, decad.Interfering, report.Status)
+			require.Len(t, report.Interferences, 1)
+			row := report.Interferences[0]
+			require.Equal(t, decad.Exact, row.Volume.Exactness)
+			require.InDelta(t, 180, row.Volume.Value.Base(), 1e-9)
+			_, staged := findDiagnostic(report.Diagnostics, decad.DiagUnsupportedPairContact)
+			require.False(t, staged)
+		})
+	}
 }
 
 // TestVerifyGapToleranceDecidesAFlushPair pins Verify reading a pair the exact
@@ -66,7 +99,7 @@ func TestVerifyDoesNotChangeOperationWarnings(t *testing.T) {
 	doc := decad.New()
 	a := boxBody(t, doc, 0, 0, 10, 10, 10)
 	require.Empty(t, a.OperationDiagnostics(), "exact construction adds no adjustment warning")
-	b := translated(t, boxBody(t, doc, 0, 0, 10, 10, 10), 0.5, 0, 10)
+	b := translated(t, roundTrip(t, boxBody(t, doc, 0, 0, 10, 10, 10)), 0.5, 0, 10)
 	joined, err := decad.Union(t.Context(), a, b)
 	require.NoError(t, err)
 	before := joined.OperationDiagnostics()

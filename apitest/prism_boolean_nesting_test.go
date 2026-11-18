@@ -452,8 +452,9 @@ func TestPrismCutG5BuildsAnalyticBlindPocket(t *testing.T) {
 // Intersect: a coplanar pair drawn on the same sketch plane always shares
 // the plane's own z = 0, so the only reachable "disjoint interval" shape for
 // an admitted-by-G3 pair is exactly touching there (Along meets Against at
-// z = 0) rather than truly separated — this is the mesh path's own
-// pre-existing coplanar-cap contact limitation, unaffected by this design.
+// z = 0) rather than truly separated. The mesh path classifies that coplanar
+// cap contact exactly (agent-docs/coplanar-contact-design.md): the Intersect is
+// empty.
 func TestPrismIntersectG5FallsBackOnDisjointZIntervals(t *testing.T) {
 	t.Parallel()
 	doc := decad.New(decad.ExactOnly())
@@ -469,11 +470,10 @@ func TestPrismIntersectG5FallsBackOnDisjointZIntervals(t *testing.T) {
 	require.NoError(t, err)
 
 	_, err = decad.Intersect(t.Context(), a, b)
-	require.ErrorIs(t, err, decad.ErrUnsupported)
 	var be *decad.BooleanError
 	require.ErrorAs(t, err, &be)
-	require.Equal(t, decad.BooleanUnsupportedContact, be.Code)
-	require.Len(t, doc.Bodies(), 2, `a refused boolean leaves both operands live`)
+	require.Equal(t, decad.BooleanEmpty, be.Code, `boxes that meet face to face share no volume`)
+	require.Len(t, doc.Bodies(), 2, `an empty boolean leaves both operands live`)
 }
 
 // TestPrismCutG6HoledToolFallsBackKeepingTheStandingPost is §15's own named
