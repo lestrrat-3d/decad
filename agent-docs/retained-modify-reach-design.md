@@ -16,6 +16,7 @@ Navigation only; the sections own the content.
 | Which gaps build and which stay refused | §3 |
 | Two-distance chamfer of a retained edge | §4 |
 | Fillet or chamfer of a rounded outline (line, arc, line …) | §5 |
+| Chamfer of a tangent chain whose edges share no base plane | §15b |
 | `Copy` with `WithCopyRotation` | §6 |
 | `ScaledAt` | §7 |
 | Edge between two parallel cylinders | §8 |
@@ -685,7 +686,7 @@ Rows narrow blend Table SR and reach SX2/SX9; sentinels follow those tables.
 |---|---|---|
 | **SM1** | a chain junction whose tangency §5.2 cannot decide | `ErrUnsupported` (reach SX2's text) |
 | **SM2** | a selected edge ends at a proven tangent junction whose continuation is not selected and `WithTangentChain` is absent, on a `Fillet` or on a `Chamfer` whose expansion (§5.3) was undecided; the message names the junction point and `WithTangentChain` | `ErrUnsupported` |
-| **SM3** | a chain whose edges share no base plane outside §15b's cutter, a junction of two plane walls, a cylinder wall whose axis is not exactly normal to `P`, an R4 chain edge spanning more than `π`, or a chain that mixes convex and concave edges | `ErrUnsupported` |
+| **SM3** | a chain whose edges share no base plane, other than an equal-setback `Chamfer` (§15b), a junction of two plane walls, a cylinder wall whose axis is not exactly normal to `P`, an R4 chain edge spanning more than `π`, or a chain that mixes convex and concave edges | `ErrUnsupported` |
 | **SM4** | the chain gates of §5.6: proven overlap | `ErrDegenerate` (SR4) |
 | **SM5** | the chain gates of §5.6: undecided; a strip facet, or a facet of an end face that takes a cap, that meets another facet of the body; or a chain whose resolved references mix `P` and walls | `ErrUnsupported` (SR5; SX3 first for the mix) |
 | **SM6** | R5: the offset circles do not meet | `ErrDegenerate` (SR3) |
@@ -776,6 +777,7 @@ shown red first by the change named. `A_f = r²(1 − π/4)` is a fillet's corne
 | `internal/retainedblend/cyl_rewrite.go` | the wall setback reads `dB` (§4.1) |
 | `internal/retainedblend/chain.go`, `chain_rewrite.go` | new: Table RC, §5.2 junctions, Claim J rows, §5.5 construction, §5.6 gates |
 | `internal/retainedblend/cyl2.go`, `cyl2_rewrite.go` | new: R5 |
+| `internal/retainedblend/chain_cross.go`, `chain_cross_face.go`, `chain_cross_end.go`, `chain_cross_bevel.go` | new: §15b.1, the exact chamfer of a chain across planes |
 | `internal/brepmodify/chamfer.go`, `asymmetric.go` | pass the resolved reference into `retainedblend.Chamfer` |
 | `internal/tangentchain/` | the retained continuation test of §5.3 |
 | `brep_modify_partial.go` | admit a retained `facetedPayload` and dispatch the retained test |
@@ -902,25 +904,107 @@ the default cutter's overshoot crossed and whose fine mesh the default cutter's 
 The chain route of §5 builds a chain whose edges all border one base plane. A chain whose junctions have different
 bases has none: a bar rounded about z at one end and about y at the other, whose rim runs round both caps and both
 sides; a slot whose rim runs along its sides, round the bar's end on both sides and round the slot's end on the top
-and bottom faces; a step whose floor's rim runs on round the step's round and up its wall. The chain route refuses
-them ("the chain's edges share no base plane", SM3). `brepmodify.ChainCutterChamfer`
-(`internal/brepmodify/chain_cutter_chamfer.go`) chamfers them when that refusal stands, with or without
-`WithTangentChain`.
+and bottom faces; a step whose floor's rim runs on round the step's round and up its wall. §5's base search finds no
+face for them ("the chain's edges share no base plane", SM3). An equal-setback `Chamfer` of such a chain is rewritten
+exactly on the held mesh by `rewriteCrossChain` (`internal/retainedblend/chain_cross.go`, `chain_cross_face.go`,
+`chain_cross_end.go`, `chain_cross_bevel.go`; §15b.1), with or without `WithTangentChain`. When the rewrite refuses
+with `ErrUnsupported`, `brepmodify.ChainCutterChamfer` cuts the chain (§15b.2). A fillet and a two-distance chamfer
+keep SM3: a two-distance chamfer's setbacks belong to the base and the walls, which swap where the base changes.
+
+### 15b.1 Exact rewrite
 
 Accepted input:
 
-- The receiver is a solid mesh Boolean result. The call is an equal-setback `Chamfer`.
-- Every selected edge is a convex retained line or arc between two faces with retained plane or cylinder tags
-  (`retainedblend.Chainable`).
-- The edges group into chains whose junctions §5.2 proves tangent, and every proven continuation of a selected edge
-  is selected. Each junction proves both walls normal to its base, so both faces of every edge meet at a right angle
-  along its whole length, whatever base its other junction has.
-- No face borders every edge of a chain; such a chain belongs to §5. A chain has two edges or more, and chains share
-  no vertex.
-- A chain is closed, or open with each end at a straight edge whose end vertex is a corner of exactly three faces: the
-  edge's two faces and one end face `G`, joined by two convex edges. `G` is a plane there: its plane tag, or its held
-  facets at the vertex when it is faceted, all coplanar. `G` faces away from the chain: `n_G · t ≥ 10⁻³`, with `t` the
-  edge's direction out of the chain.
+- The receiver is a solid mesh Boolean result. The call is a `Chamfer` with one setback `d` and no reference.
+- Every chain edge is convex and reads exact tags: a line between two retained planes, or an arc between a retained
+  plane and a cylinder about its normal (a convex rim, blend §4.2). No face of a chain edge states a charge.
+- The edges group into chains whose junctions §5.2 proves tangent, and no face borders every edge of a chain (such a
+  chain belongs to §5). Each junction proves its walls normal to its base, so both faces of every edge meet square.
+- A chain is closed, or open with each end at a straight edge whose end vertex is a corner of exactly three faces:
+  the edge's planes `A` and `B` and an end plane `G`, whose two edges at the corner are convex. `G` faces along the
+  edge, `n_G · t > minSine` with `t` the edge's direction out of the chain. `G` is an exact plane, or one that states
+  a charge: a displacement, or an oblique plane's tilt (at most `maxEndTilt`) and extent (blend §6.1, "An oblique end
+  plane").
+
+Construction:
+
+1. **Rows.** Each junction `J`, with base `P_J` and walls meeting along `g`, gives one row: `a_J = V − d·n_g` on
+   `P_J` and `b_J = V − d·n_P` on `g` (Claim J's chamfer row with `t_P = t_W = d`). The row is symmetric in the base
+   and the walls, so an edge whose faces are base at one junction and wall at the other takes each row as it stands:
+   its vertex on face `X` at `J` is `a_J` where `X = P_J` and `b_J` otherwise, which is `V − d·n` of the edge's other
+   face in both cases. Each row is computed once and both edges at `J` share it.
+2. **Bevels.** A line's bevel is the plane quadrilateral of its two end rows, and each of its faces loses a strip of
+   width `d`. An arc's bevel joins its columns on the plane, at the setback circle and spaced as §5.5 step 2, directly
+   to the cylinder's cut along the setback plane, which runs from `b_J` at one junction to `b_J` at the other, as a
+   chain chamfer's strip on one base does. A separate row on the cylinder would put the cut of a held generator
+   outside the row's chords, and the cylinder's facet would then meet the bevel. Each bevel is its own group with
+   role `chamfer(k)`, tagged with its plane, or blend §4.2's cone. Both read only the chain's exact faces, so they
+   are published with no charge.
+3. **Plane faces.** Each plane face gives way along each run of consecutive chain edges on its loop. The run's held
+   vertices, from its first chain point to its last, are replaced by the run's setback contour: the face's row vertex
+   at each chain point and, where the face is an arc's plane, the arc's columns. At a run end that is a junction the
+   face is a wall, and its seam with the next wall runs from `V` along `−n_P`: the seam's vertices nearer than `d` go
+   and `b_J` takes their place. At a free end the face's edge with `G` loses its vertices nearer than the column
+   point. The face is triangulated again over its loops (blend §5 step 2); a face whose runs remove its whole loop
+   takes the contours alone.
+4. **Cylinder faces.** Each cylinder face is cut at the setback plane of each arc it borders, one arc after the
+   other: the round at a bar's end borders its top rim's arc and its bottom rim's. The seam at each end of the arc is
+   the face's boundary edge on `g` that the plane crosses, and its cut is `b_J`, which the face across the seam takes
+   too. An inner edge near `g`, such as a sliver's diagonal, is no seam.
+5. **Ends.** The column at a free end `V` is the segment between `q_A` and `q_B`, the setback points `V − d·n_B` on
+   `A` and `V − d·n_A` on `B` slid along the edge onto `G`; `q_X` lies on `X ∩ G`. `G` gives up the triangle `V`,
+   `q_A`, `q_B`: its corner and the vertices of its chains along `A ∩ G` and `B ∩ G` nearer than the column points
+   give way to the column, and `G` is triangulated again.
+6. **Held vertices on a straight boundary.** A vertex inside a seam or inside an edge `X ∩ G`, bordering only that
+   line's two faces, is no corner of either: it goes or stays by its held place along the line, which moves no part
+   of the solid. One closer to the setback than the margin refuses. A corner of a face (a vertex of three faces) on
+   such a line stays where it lies beyond the setback by four times its bound plus the margin, and otherwise refuses,
+   except at a setback point exactly at a corner of `G`.
+
+**A setback point exactly at a corner of `G`.** Where an open chain ends on an earlier bevel of the same setback (a
+step's wall edges ending on the bevel of the top rim, a tongue's shoulder edges ending on the cap's bevel), the old
+bevel `G` meets the wall `X` square and passes through the corner where `G`, `X` and the face `T` beyond meet, at
+setback `d` from the chain's other face. `q_X` is then that corner: the column takes the held corner as its vertex on
+`X`, the setback contour on `X` ends at it, `G`'s loop runs from the other column point to it, and nothing of `X ∩ G`
+remains. The coincidence is decided by an exact identity on the tags' floats read as rationals: the point where `G`,
+`X` and `T` meet equals `q_X` computed from the tags of `A`, `B` and `G` and from `d`. A near miss proves nothing and
+refuses ("a setback point falls on a vertex of the end face's boundary"). The falsifier holds the held corner within
+its bound plus the slack of that point. `T` is an exact plane or states a charge, as `G` may. When either does, the
+tags meet exactly and the true planes lie within their charges of them, so the true corner and the true setback point
+lie within twice the amplified charges (`planeCharge`) of each other, and the held corner's bound grows by that. A
+mesh Cut cannot build this end: the old corner is held only within the earlier Cut's bound, so the Cut cannot tell
+the new bevel's touch there from a crossing ("the operands' held facets come within the chord tolerance").
+
+Gates, each `ErrUnsupported` unless stated:
+
+- A junction's held vertex is not a corner of exactly its base and its two walls, or lies farther from `V` than its
+  bound plus the slack.
+- A run does not follow its face's loop, or a held vertex on a run borders a third face.
+- A seam vertex inside the setback borders another face; a seam ends, or a corner of a wall lies, inside the
+  setback; the bounds cannot place a vertex against the setback.
+- A kept boundary chord of a plane face meets the region a run removes, the face's form of §5.6's base band: the
+  run's exact points and its contour back, widened by the chord's vertex bounds, the margin and the sagitta of an
+  arc's chords. A chord with an end inside the region consumes the face (SR4, `ErrDegenerate`), and one within the
+  widening is undecided (SR5). A chord along a seam or along `X ∩ G` beyond the setback runs on in line with the
+  region's edge and passes. A chord leaving a held corner the column takes must leave it outward of the region.
+- The cylinder cut takes §5.6's wall gates: a vertex on the arc's plane off the arc refuses, and a vertex inside the
+  band that lies on no seam refuses (SR4 or SR5).
+- The strip test of §5.6 (`checkStripClear`) and the held audit (SR7).
+
+Bounds follow §5.7. The exact areas are a line's rectangles `L·d` on each face and its bevel `L·d·√2`; an arc's
+annular sector, wall band and cone over its span as §5.7 states them; and for an end edge, the quadrilaterals each
+face loses, the bevel's quadrilateral and `G`'s triangle, each as the polygon of its exact points. A charged `G` adds
+`planeAreaCharge` of the pieces that end on it, and an oblique `G` adds `obliqueCapArea` of its triangle, to the
+area bound.
+
+### 15b.2 Cutter fallback
+
+`brepmodify.ChainCutterChamfer` (`internal/brepmodify/chain_cutter_chamfer.go`) chamfers a chain across planes that
+the rewrite refuses with `ErrUnsupported`, such as one with a charged wall. It takes every selected edge that is a
+convex retained line or arc between two faces with retained plane or cylinder tags (`retainedblend.Chainable`), in
+chains that share no vertex and whose open ends are straight edges at a convex corner of three faces. Its end face
+`G` is a plane there: its plane tag, or its held facets at the vertex when it is faceted, all coplanar, and it faces
+away from the chain, `n_G · t ≥ 10⁻³`.
 
 Construction. At a point `p` of an edge, with outward normals `n_A` and `n_B` of its faces ordered so that
 `n_A × n_B` runs along the walk, the body near `p` is `a, b ≤ 0` in the frame along `(n_A, n_B)` and the chamfer
@@ -942,18 +1026,22 @@ is built and tested against the receiver before any Cut.
 
 The result is a Boolean Cut: faceted, with the Cut's own readings.
 
-An open chain that ends on an earlier bevel of the same setback, the usual end of a step's or a tongue's rim on a
-part whose outline was chamfered first, is refused by the Cut. The new bevel passes through the far corner of the old
-one, on the next face's rim, and that rim is held only within the earlier Cut's bound (about 0.01 mm), so the Cut
-cannot tell the touch there from a crossing ("the operands' held facets come within the chord tolerance"). The gap
-tolerance's shifted retry does not clear it. Building it needs the end's bevel rewritten exactly, as §5's chain
-route does on one base plane, or a relief larger than the document's gap tolerance (gap-tolerance §5.4).
-
 Tests: `apitest/chamfer_tangent_chain_planes_test.go` chamfers the bar at two sizes from its caps' edges, from its
-sides' arcs and from one seed under `WithTangentChain`; a step's floor rim open to the top face; a slot through the
-bar's rounded end, before and after the bar's rim was chamfered; a slot and a tongue through a stadium link; and the
-two refusals at an earlier bevel. Each checks the removed volume against Pappus within the readings' bounds, that no
-chain edge survives, and that every vertex the chamfer made lies `d` from a chain edge's line or circle.
+sides' arcs and from one seed under `WithTangentChain`; a step's floor rim open to the top face, and ending on an
+earlier bevel of the top rim of the same setback (the column takes the old bevel's far corner) and of a wider one
+(the wall's edge with the old bevel keeps its far part); a slot through the bar's rounded end, before and after the
+bar's rim was chamfered; a slot, a tongue open to uncut caps and a tongue ending on the caps' earlier bevels through
+a stadium link; and the link's tongue and fork faces in one call. Each checks the removed volume against Pappus
+(with `d³/6` for each end on a 45° bevel that meets the wall square) within the readings' bounds, that no chain edge
+survives, that every vertex the chamfer made lies `d` from a chain edge's line or circle, and that each line's bevel
+is a new oblique plane and each arc's a new cone with no new faceted face. The ends on an earlier bevel also check
+the column's two vertices. `internal/retainedblend/chain_cross_internal_test.go` checks the identity
+(`columnAtCorner`): the same setback meets the old bevel's corner, and a wider bevel, a setback one float step off and
+the other face's column do not; and the direction test for a chord that leaves a held corner. Red legs: without the
+coincidence the ends on an earlier bevel of the same setback fall back to the cutter, whose Cut refuses them; with the
+seam read from every edge near `g` the step open to the top face falls back to the cutter and its bevels are faceted;
+with a row of its own on the cylinder an arc's bevel meets the cylinder's facets at a generator's cut and the strip
+test refuses.
 
 ## 16. Decisions the user may want to overturn
 

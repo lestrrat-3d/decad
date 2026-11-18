@@ -114,6 +114,10 @@ func rewriteChain(ctx context.Context, env topo.Env, fp facetedrecord.Payload, c
 		}
 	}
 	if base == nil {
+		// A chain whose junctions have different bases is chamfered by the cross-plane rewrite (§15b).
+		if crossEligible(spec) {
+			return rewriteCrossChain(ctx, env, fp, cyc, ords, spec, op, faceIndex)
+		}
 		return nil, fmt.Errorf("%w: the chain's edges share no base plane", decaderr.ErrUnsupported)
 	}
 	bp, ok := retainedPlane(base)
