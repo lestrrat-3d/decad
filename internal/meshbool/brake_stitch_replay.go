@@ -6,6 +6,7 @@ import (
 	"slices"
 	"unsafe"
 
+	"github.com/lestrrat-3d/decad/internal/coplanarcontact"
 	"github.com/lestrrat-3d/decad/internal/gaptol"
 	"github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -236,6 +237,40 @@ func stitchFacetsContext(ctx context.Context, kept []KeptFacet, shared *PairCuts
 		}
 	}
 
+	if shared != nil && shared.replay != nil && coplanarcontact.Of(ctx) {
+		// The planar simplification of agent-docs/coplanar-contact-design.md §7,
+		// on the replay meter, so a replayed boolean holds what the live one
+		// holds. A refusal on the simplified mesh runs the plain tail.
+		approx := make([]r3.Vec, len(xverts))
+		for i, p := range xverts {
+			v, err := proof.ReplayXptVec(ctx, p, replayExactWork{work: work})
+			if err != nil {
+				return nil, err
+			}
+			approx[i] = v
+		}
+		simplified, changed, err := SimplifyPlanarFacesBudget(ctx, work, PlanarMesh{Xverts: xverts, Approx: approx,
+			Xbeta: xbeta, Tris: tris, Src: src, FacetBound: facetBound})
+		if err != nil {
+			return nil, err
+		}
+		if changed {
+			out, err := stitchRoundBudgeted(ctx, shared, work, simplified.Xverts, simplified.Xbeta, simplified.Tris, simplified.Src)
+			if err == nil {
+				return out, nil
+			}
+			if ctx.Err() != nil {
+				return nil, err
+			}
+		}
+	}
+	return stitchRoundBudgeted(ctx, shared, work, xverts, xbeta, tris, src)
+}
+
+// stitchRoundBudgeted is the rest of the bounded stitch for a conformed exact
+// mesh: the closure audit, the rounding and the embedding proof.
+func stitchRoundBudgeted(ctx context.Context, shared *PairCutsBudget, work *proofbound.WorkBudget,
+	xverts []proof.Xpt, xbeta []float64, tris [][3]int, src []int) (*StitchedMesh, error) {
 	if shared != nil {
 		// Closure and weld component checks visit bounded multiples of each
 		// facet; the subsequent embedding search charges its own candidates.
