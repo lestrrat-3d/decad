@@ -1,10 +1,12 @@
-# Contained Cut moment composition design
+# Contained Cut and exact copy moment design
 
 ## Status and owners
 
 The contained-Cut source-moment consumer is implemented for a rectangular
 prism target and whole circular-prism tool. The implementation follows this
-design's admission, interval, selection, and fallback rules.
+design's admission, interval, selection, and fallback rules. "Exact rotation
+copy" transfers the captured evidence through one direct public
+`Copy(..., WithCopyRotation(...))` and is implemented too.
 
 `operation-history-design.md` "Contained Cut centroid" owns the existing
 source-volume and source-centroid calculations. This document owns the
@@ -85,6 +87,8 @@ Build each source's intervals through the following existing algorithms:
    per coordinate, where `e` is the origin's rounding radius. Apply the
    interval shift below to the moments from step 5.
 
+### Interval translation shift
+
 For an uncertain translation `D`, read every right-hand term from the same
 unshifted snapshot:
 
@@ -97,7 +101,7 @@ Q'_ij = Q_ij + D_i P_j + P_i D_j + V D_i D_j
 Use `proofbound.RatInterval` arithmetic throughout. Interval multiplication
 can lose correlations but must enclose them. Fill the second-moment matrix
 symmetrically. With `e == 0`, return the exact-shift result without widening.
-Keep this small interval-shift helper in `massmoment`; it is proof arithmetic,
+`massmoment.WidenTranslation` implements this shift; it is proof arithmetic,
 not a new coordinate transform. All held coordinate lifts use `r3`.
 
 The determinant in `Transform` accounts for the denoted map's volume scaling.
@@ -153,7 +157,7 @@ reading, and the difference to overlap both parent result readings.
 
 Transform, MirroredCopy, and ScaledAt descendants do not transfer this record.
 One direct exact-rotation Copy transfers a frozen source record under
-exact-copy-moments-design.md; default Copy and all later descendants keep
+"Exact rotation copy"; default Copy and all later descendants keep
 their existing mesh readings. A stale record with a different result producer
 is an error, not permission to consume its source moments.
 
@@ -218,19 +222,240 @@ isolation. Use bounded scalar diagnostics; never deep-diff a topology graph.
 
 Preserve `MeshBound`, vertex bounds, `VolSymDiff`, `AreaSlack`, topology,
 provenance, public history, and existing selected Volume and centroid readings.
-The direct exact-rotation Copy exception is owned by
-exact-copy-moments-design.md and does not extend this Cut's source admission.
+The direct exact-rotation Copy exception is owned by "Exact rotation copy"
+and does not extend this Cut's source admission.
 No general analytic reconstruction, chained-Cut proof, external kernel,
 OCCT source, new module, or public API belongs to this slice.
 
-## Design decisions and implementation stop
+## Exact rotation copy
 
-The source class, common anchor, translation enclosure, immutable record,
-whole-result selection, and unchanged mesh admission are decided here.
-No caller policy choice is required to implement them.
+A direct public exact-rotation Copy of an admitted original contained Cut
+transfers the Cut's retained moments through the exact rotation record. It
+retains the existing source and mesh checks and consumes the transferred
+moments in `MassProperties`. It adds no source class, containment algorithm,
+Boolean route or public API.
 
-The unmeasured question is whether the complete source candidate passes the
-comparison for the real fixture. Run that producer-to-consumer instance
-before expanding tests or source classes. If it fails, report the failing
-component and its two bounds. Do not weaken acceptance or enlarge scope to
-make the result win.
+Use `evaluator-design.md` §8 and `mirror-pattern-design.md` "Exact rotation
+copies" for the copy's denoted solid and its existing placement proof. Use
+`operation-history-design.md` "Atomic publication and storage" for commit and
+public history. Moment meanings, density and positivity come from
+`dynamic-mass-design.md` §2–§3, as above.
+
+### Selected calculation and alternatives
+
+The copy's certified mass and inertia bounds are tighter than its
+independently audited mesh result. The retained difference moments are rotated
+by the exact rational rotation the real copy denotes, and the complete
+candidate is compared with that mesh result under "Selection". Recording more
+ancestry without improving a computed reading does not satisfy this section.
+Runtime reduction is not an acceptance claim.
+
+- More contained-Cut source profiles improve initial parts but need new
+  integration and admission proofs for every profile.
+- A second contained Cut improves machining histories but needs a new
+  whole-material containment proof for its faceted target.
+- General Copy and Transform cover more placements but must transfer the
+  actual float delta, including determinant and stretch.
+- Direct exact rotation Copy reuses the existing exact image map, admitted
+  source and query gates. This is the selected route.
+
+### Copy admission and scope
+
+Attempt capture only in `Body.copyUnder` when all these facts hold:
+
+- The public operation kind is `OperationCopy` and its final selected option
+  supplied a non-nil `exactrotation.Rotation` to `facetedrecord.PlacedWith`.
+- The source is an original solid faceted contained-Cut result with present,
+  valid `VolumeLineage.Moments` matching its own producer.
+- The source payload has identity `Xform`, nil `CopyLineage`, nil
+  `ExactCopyMoments`, and `ExactPlaced == false`.
+- The real copy rebuild succeeded. Its direct `CopyLineage` identifies that
+  exact source, source producer and placements, and the same immutable exact
+  rotation passed to the rebuild.
+- The original moment record validates against its original source-volume
+  lineage, including its strict containment facts and source identities.
+
+Source admission is inherited from the validated contained-Cut record.
+Do not infer a cylinder, box, cavity or containment from a copied mesh,
+bounding box, public operation kind, ancestry, or a small residual.
+
+Default Copy, `WithCopyPlacement`, Transform, MirroredCopy, ScaledAt,
+patterns, modified bodies, a copy of a copy, and another Cut do not transfer
+moments. A zero-angle `WithCopyRotation` is admitted through the same exact
+record path. Repeated Copy options keep their existing last-option rule.
+An unsupported source or absent evidence preserves existing behavior.
+Present malformed source evidence in this admitted route fails before commit.
+
+### Copy evidence and layering
+
+Add `ExactCopyMoments *ExactCopyMomentRecord` to `facetedrecord.Payload`.
+The record lives in `internal/facetedrecord/exact_copy_moments.go`.
+`topo.Body`, `prooflineage.VolumeLineage` and the topology dependency floor
+stay unchanged. In particular, `prooflineage` must not import
+`exactrotation`, `massmoment` or `facetedrecord`.
+
+The record freezes these values behind unexported fields:
+
+- The original Cut producer, receiving copy producer, and their held
+  placements.
+- A copied original `VolumeLineage` with only its scalar source/result
+  readings, source producer identities, containment facts and a freshly
+  frozen `ContainedCutMoments`. Its unused centroid lineage is omitted.
+- The same immutable `exactrotation.Rotation` used by the real rebuild.
+
+The constructor validates the original moment record, reads independent
+source snapshots, and rebuilds its private contained-Cut moment record with
+`prooflineage.NewContainedCutMoments`, so every rational endpoint is copied
+as "Immutable evidence and layering" requires. The exact rotation is shared:
+its fields are private and its accessors return fresh rational copies.
+
+`Read` validates the receiving producer and placement, then validates the
+frozen original moment record again and returns its difference snapshot
+and independent rotation coefficients. Check non-nil rational coefficients,
+exact orthogonality and determinant +1. Never use a float tolerance to admit
+the map. The record stores no density, selected tuple, query cache, source
+body, topology node, document, context, or caller option.
+
+The existing `FacetedCopyLineage` has separate live-source consumers. Use it
+only to check this call's direct rebuild during capture. Mass queries use
+the frozen record after the original Cut body is removed or retired.
+`CertifyCopies` and its live-source requirements are unchanged.
+
+### Moment transport
+
+Let the validated source difference be V/P/Q about held world anchor O.
+Let the copy denote `x' = Q x + t`, using the exact record, not the float
+placement or its accumulated basis. Q is exactly orthogonal with determinant
++1. About the exact image anchor `O* = Q O + t`, compute:
+
+```text
+V*    = V
+P*    = Q P
+Q*    = Q Q_source Q^T
+```
+
+Use `massmoment.Transform(source, rotation.Linear())`. Its determinant
+factor is exactly one. Source uncertainty already belongs to each input
+interval; do not cancel it or replace it with a point estimate.
+
+Choose a finite held anchor A near O* with the existing
+`facetedrecord.PlacedCapCentroidBy` routine. Supply an Exact zero-radius
+reading whose value is O, and the exact rotation and translation. The
+returned bound e encloses only rounding from O* to A; O is an arbitrary
+integration anchor, so the source body's centroid uncertainty is irrelevant.
+This reuses the existing exact-map arithmetic and adds no coordinate
+transform implementation.
+
+Enclose `D = O* - A` by `D_i = [-e,e]` and apply "Interval translation shift"
+(`massmoment.WidenTranslation`) to the rotated moments. The returned snapshot
+uses A. The independent interval enclosure may be wider than an exact
+correlated shift; the comparison under "Selection" decides whether it is
+useful. The held mesh's vertex rounding, embedding correction and `VolSymDiff`
+are not charged again: they describe its distance to the exact image, not a
+change of that image's source moments.
+
+Do not substitute a float rotation, a nominal sine/cosine rotation by the
+requested angle, a bounding-box tensor, or the source's published inertia.
+The exact rotation selected by `WithCopyRotation` is the copy's denotation.
+
+### Capture and query flow
+
+`massdispatch.CaptureExactCopyMoments` runs after the real copy rebuild and
+direct copy-lineage binding, before the final context check and
+`commitOperationIn`. It validates and freezes the record, transports the
+moments, checks its volume against the rebuilt body's cached Volume and its
+computed center ball against the rebuilt body's cached centroid, then
+returns the optional record. Disjoint certified evidence fails the Copy.
+An unrepresentable finite anchor or center omits this optional evidence.
+Capture does not call public `MassProperties`, rerun containment, or create an
+extra public operation.
+
+Root attaches the returned record to the pending copy's payload by value.
+The rebuilt body's Volume, centroid, topology, bounds and mesh proofs and the
+source's lineage stay unchanged.
+
+For faceted `MassProperties`, obtain `facetedMassProperties` first, including
+its matching VerifyAll certificate and complete existing audits. Then read
+either the original contained-Cut moments or this exact-copy record. Both
+present at once is contradictory evidence. Transport the exact-copy record
+as above and pass its snapshot to the existing source publication code.
+Center, central tensor and density scaling come from that one V/P/Q
+enclosure, under the same positivity and finite-reading gates.
+
+Apply "Selection" to the resulting complete tuple, using the receiving copy's
+cached centroid in its consistency check. The ordinary candidate remains
+available. A mesh failure is not rescued by source evidence. Ties, wider
+consistent source bounds and optional publication limits return the ordinary
+tuple unchanged. No component mixing or density-dependent caching is
+permitted.
+
+### Dropping evidence on descendants
+
+`Payload.PlacedWith` clears `ExactCopyMoments` unconditionally before any
+rebuild, and `ScaleImage` clears it before returning its new payload. Only the
+authorized direct public Copy capture can attach a new record afterward.
+Every Boolean or modify result starts without this record. The payload-copy
+rewrite in `loftcylinder/chamfer_build.go` clears the record too, and fresh
+payload literals omit it.
+
+Identity and placement validation stay even though those builders drop the
+record. An accidentally retained record fails as contradictory evidence
+instead of publishing the previous body's moments. `ExactPlaced` and the
+existing motion-query refusals are preserved independently of this field.
+
+### Copy errors, context and atomicity
+
+| Condition | Outcome |
+|---|---|
+| Operation, source or evidence is outside "Copy admission and scope" | Keep ordinary behavior and omit the new record. |
+| Any required evidence or identity is malformed | Return an evidence error wrapping `ErrBooleanFailed`. |
+| Certified capture volume intervals or center balls are disjoint | Fail before Copy commit with `ErrBooleanFailed`. |
+| Capture cannot publish a finite anchor or center | Omit optional evidence and keep the rebuilt copy. |
+| Ordinary mass mesh admission fails | Return its existing error and zero properties. |
+| Query finds contradictory or disjoint evidence | Return `ErrBooleanFailed` and zero properties. |
+| Valid source publication cannot prove positivity or finite readings | Return the ordinary successful tuple. |
+| Cancellation after existing input validation | Return `ctx.Err()` unchanged and no partial output. |
+
+Copy keeps its normal operation error wrapper and has no BooleanError
+classification. Contradictory evidence never selects fallback.
+
+Poll context before reading/integrating evidence, after transport and before
+publication. The public input-validation order is unchanged. Fixed-size
+moment transport adds no mesh refinement or separate work-budget policy.
+
+All capture and consistency checks precede commit. Failure leaves source
+liveness, ordered live bodies, producer allocation, container membership
+and operation history unchanged. Successful Copy references its source and
+adds exactly one Copy operation. Queries add no operations and do not change
+geometric measurements. Concurrent queries read immutable evidence only.
+
+### Copy acceptance and boundaries
+
+The first fixture builds the sources with `containedCutCentroidSources` and
+runs the real public Cut from `TestContainedCutSourceMassProperties`. It
+copies that result with `WithCopyRotation`, center `(10,10,10)`, axis
+`(1,2,3)`, angle 37 degrees, and uses the real rebuild, original moment
+producer, frozen copy evidence, verified mesh and public `MassProperties`.
+No fixture invents a proof.
+
+The fixture requires one material lump, one closed void shell, a direct exact
+copy, and a new Copy history entry with its source still live. It compares
+against the same copy's ordinary mass result with only this consumer disabled
+in a sequential test-local payload copy. Both results must enclose the
+independent box-minus-cylinder reference after the exact rational rotation.
+Mass, center in 3D and all six inertia entries are checked. All eight selected
+bounds must be no larger, and at least one diagonal inertia bound must be
+strictly smaller. Exact pi is not required. A failing fixture is reported with
+its failing component and both bounds; the comparison is not weakened and
+source admission is not widened to make it pass.
+
+Further tests cover density rescaling, a nonzero anchor-rounding enclosure,
+non-cardinal rotation, repeated and concurrent read-only queries, source
+removal, copied endpoint isolation, stale identities and placements,
+malformed source lineage, disjoint evidence, optional fallback and
+cancellation. Unsupported placement paths are tested without changing their
+existing geometry behavior.
+
+General placement transfer, chained moment records, reconstruction,
+face-history expansion, new dependencies and OCCT code are outside this
+section.

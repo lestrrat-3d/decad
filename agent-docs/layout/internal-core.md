@@ -30,7 +30,7 @@ The rules for rows live in `agent-docs/layout.md`.
 | `internal/planarsnapshot/` | Planar contact snapshots, cached records, pose gates and placement. See multibody §9.1–§9.2. |
 | `internal/placedruling/` | Placed cylinder staging, support and relation proofs. See contact-geometry §4.5. |
 | `internal/facetproof/` | Faceted shell audits, placement, similarity and revolve sector-separation proofs, sector seams, angular gaps, and the centroid allowance. See `agent-docs/evaluator-design.md` §9. |
-| `internal/facetedrecord/` | Faceted payloads, source records, bounds, placement, mesh and exact-copy moments. Root aliases its records. See evaluator §8 and exact-copy-moments-design. |
+| `internal/facetedrecord/` | Faceted payloads, source records, bounds, placement, mesh and exact-copy moments. Root aliases its records. See evaluator §8 and contained-cut-moments-design. |
 | `internal/sectionrecord/` | Curve records and validation. |
 | `internal/selectorquery/` | Selector matching on node views, query rendering, residual counts, face-role indexes. See API §9. |
 | `internal/modifyselect/` | Modify's selected-edge context and corner match. See modify §6. |

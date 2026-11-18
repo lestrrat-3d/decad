@@ -246,7 +246,7 @@ prism. It checks the source tuple against the independently audited mesh tuple
 before selecting it. A direct exact-rotation Copy of that original Cut
 transports its frozen moments through the exact map and repeats the same mesh
 comparison. The transfer does not support chains or ordinary placements; see
-`agent-docs/exact-copy-moments-design.md`.
+`agent-docs/contained-cut-moments-design.md` "Exact rotation copy".
 
 The hard rule "Ask `sketch` for 2D answers by default" forbids re-deciding what
 sketch has decided: closure, validity, cuts, intersections, projections. It does
