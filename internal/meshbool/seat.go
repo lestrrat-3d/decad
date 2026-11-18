@@ -62,6 +62,7 @@ func (bm *BoolMesh) SetSeats(m *topo.Mesh, placed []bool) {
 		bm.Carrier[t] = pl != nil && pl.holds(bm.Verts[bm.Tris[t][0]], bm.Verts[bm.Tris[t][1]], bm.Verts[bm.Tris[t][2]])
 	}
 	bm.RimEdge = make([][3]bool, n)
+	bm.RimVert = map[int]bool{}
 	bm.Seats = map[int][]rimSeat{}
 	facetsOf := map[int][]int{}
 	var order []int
@@ -134,6 +135,8 @@ func (bm *BoolMesh) SetSeats(m *topo.Mesh, placed []bool) {
 			}
 			for _, e := range edges {
 				bm.RimEdge[e[0]][e[1]] = true
+				tri := bm.Tris[e[0]]
+				bm.RimVert[tri[e[1]]], bm.RimVert[tri[(e[1]+1)%3]] = true, true
 			}
 		}
 	}
@@ -547,6 +550,27 @@ func rimEdge(m *BoolMesh, t, k int) bool { return m.RimEdge != nil && k >= 0 && 
 // rimOnCarrier reports whether edge k of facet t of m is a wall's rim and facet x of other is carrier-exact (§16.3).
 func rimOnCarrier(m *BoolMesh, t, k int, other *BoolMesh, x int) bool {
 	return rimEdge(m, t, k) && other.Carrier != nil && other.Carrier[x]
+}
+
+// rimPointOnCarrier reports whether contact c is a single point at a vertex of facet t of m that lies on a wall's rim,
+// and facet x of other is carrier-exact (§16.3).
+func rimPointOnCarrier(m *BoolMesh, t int, c TriContact, other *BoolMesh, x int, keyOf func(proof.Xpt) string) bool {
+	if c.Kind != ContactPoint || m.RimVert == nil || other.Carrier == nil || !other.Carrier[x] {
+		return false
+	}
+	key := ""
+	for _, v := range m.Tris[t] {
+		if !m.RimVert[v] {
+			continue
+		}
+		if key == "" {
+			key = keyOf(c.P0)
+		}
+		if keyOf(proof.XptOf(m.Verts[v])) == key {
+			return true
+		}
+	}
+	return false
 }
 
 // seatPoint reports whether a point contact of facets i of ma and j of mb may be owned by the coplanar pass: two

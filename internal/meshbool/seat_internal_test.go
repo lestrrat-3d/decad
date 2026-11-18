@@ -4,6 +4,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/surfacenormal"
@@ -94,4 +95,28 @@ func TestTrueFacePlane(t *testing.T) {
 		t.Parallel()
 		require.Nil(t, trueFacePlane(&topo.Face{Surface: tag, RetainedTag: true, Denoted: revolvedSegment(t, 1, 3)}))
 	})
+}
+
+// TestRimPointOnCarrier reads a point contact at a wall's rim vertex against a carrier-exact facet as a rim contact
+// (§16.3), and nothing else.
+func TestRimPointOnCarrier(t *testing.T) {
+	t.Parallel()
+	// Wall facet 0 has one corner, vertex 0, on the rim; facet 1 of the other mesh is carrier-exact, facet 0 not.
+	wall := &BoolMesh{
+		Verts:   []r3.Vec{r3.NewVec(1, 0, 0), r3.NewVec(1, 0, -3), r3.NewVec(1.1, 0.4, -3)},
+		Tris:    [][3]int{{0, 1, 2}},
+		RimVert: map[int]bool{0: true},
+	}
+	other := &BoolMesh{Carrier: []bool{false, true}}
+	keyOf := func(p proof.Xpt) string { return p.Key() }
+	at := func(v r3.Vec) TriContact {
+		return TriContact{Kind: ContactPoint, P0: proof.XptOf(v), P1: proof.XptOf(v)}
+	}
+	require.True(t, rimPointOnCarrier(wall, 0, at(r3.NewVec(1, 0, 0)), other, 1, keyOf))
+	// Rejected: a point off the rim, a carrier that is not exact, a contact that is not a single point.
+	require.False(t, rimPointOnCarrier(wall, 0, at(r3.NewVec(1, 0, -3)), other, 1, keyOf))
+	require.False(t, rimPointOnCarrier(wall, 0, at(r3.NewVec(1, 0, 0)), other, 0, keyOf))
+	seg := at(r3.NewVec(1, 0, 0))
+	seg.Kind = ContactSegment
+	require.False(t, rimPointOnCarrier(wall, 0, seg, other, 1, keyOf))
 }

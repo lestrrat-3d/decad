@@ -804,8 +804,11 @@ The pass reads this in three places:
 - **Proximity gate.** `RefuseUndecidableProximity` skips the face pair (`seatSkip`): every facet of `X` is
   carrier-exact, lies on the seat plane exactly and faces opposite the seat facet. S3 leaves nothing for a chord to
   hide.
-- **Held-mesh gate.** A contact along a marked rim edge against a carrier-exact facet does not enter the touched
-  lists the chain-depth gate (`RefuseCoarseHeldContact`) reads. By S3 the contact lies in `P` and adds no volume.
+- **Held-mesh gate.** A contact along a marked rim edge, or a single-point contact at a vertex of a marked rim edge
+  (`rimPointOnCarrier`), against a carrier-exact facet does not enter the touched lists the chain-depth gate
+  (`RefuseCoarseHeldContact`) reads. By S3 the contact lies in `P` and adds no volume. A wall held coarser than the
+  pair's chord tolerance then meets the seat without tripping the gate; every other contact of its facets still
+  enters the lists.
 - **In-plane edges.** An `EdgeCoplanarBounded` rim edge (§3.3) is accepted when the facet across it is admitted as
   coplanar with the facet it lies in: a seat pair. A point contact may be owned by the coplanar pass when both facets
   are exact, or one is carrier-exact and the other carrier-exact or on a marked rim (`seatPoint`).
@@ -907,7 +910,17 @@ document's stated tolerance.
 - **Held planar walls.** §16.2 admits a planar wall only when it is exact. A placed planar wall is held within a bound,
   and its rim is an open segment, which S2's closed-rim argument does not cover.
 
-### 17.5 Tests
+### 17.5 The J2 bolt and swivel
+
+Bolt J2 refused against the swivel in both orders on the chain-depth gate, after #3318 as before. The swivel's J2 hole
+is cut while the operands are swivel-sized, so its wall is held to about 0.0105 mm, while the bolt and swivel pair's
+chord tolerance is 0.0019 mm. The wall earns a seat on the pocket floor (§16.2), but its long facets fan from the rim,
+and many touch the bolt's bearing face only at one rim vertex. Those single-point contacts carried no rim edge, so they
+entered the touched lists and the gate refused the coarse wall. A point at a rim vertex is a rim contact by S3, so
+`rimPointOnCarrier` now leaves it out (§16.3), and the pair proves empty in both orders. `TestRimPointOnCarrier` covers
+the predicate, including a point off the rim, a carrier that is not exact and a segment contact, which it rejects.
+
+### 17.6 Tests
 
 | Test | Case | Expect |
 |---|---|---|
