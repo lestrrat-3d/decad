@@ -13,7 +13,9 @@
 // it now is — real Face/Loop/Edge/Vertex topology chained along the face
 // boundaries, shells and voids decided by exact signed volume and exact
 // containment parity, and measurements integrated exactly over the held mesh,
-// reported Approximate with the proven composed bounds. An ordinary Boolean
+// reported Approximate with the proven composed bounds. The mesh Boolean first
+// relabels adjacent, exactly coplanar patches of its two operands to one
+// appended group (internal/facemerge), so such patches are one face. An ordinary Boolean
 // face is Faceted; a structural source with its own surface proof can retain
 // that analytic tag while the polygons remain the held boundary.
 package facetedrecord

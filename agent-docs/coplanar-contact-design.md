@@ -364,8 +364,8 @@ With no refusal, `Evaluate` returns the first attempt:
 - No piece is grown, so every source face of both operands keeps its group, retained tag, `CapRecord` and `AxialDelta`
   (`facetedrecord.SourceTag`).
 - `RetainedEdgeCurve` publishes `Line3` for every rim between two retained non-parallel planes (E2, E6).
-- A rim between two coplanar faces of different operands (flush walls of a `Union`) stays `FacetedCurve`, because E2
-  needs non-parallel normals. The two faces stay separate faces on one plane.
+- Two coplanar faces of different operands that share an edge (flush walls of a `Union`) become one face
+  (`agent-docs/union-face-merge-design.md`), so no rim lies between them. Faces with a positive bound stay separate.
 - Vertex bounds are the measured weld gaps: zero for every float vertex, and §7 leaves no artifact vertex on a
   simplified face.
 
@@ -516,7 +516,7 @@ repository after a decad release.
 | Worst-case `O(n·m)` clipping on fine coplanar faces | slower booleans | Task 8; §13 D2 |
 | Replay diverges from live on coplanar pairs | a re-tessellation or certificate declines on a coplanar-built body | Task 12; the decline is sound meanwhile |
 | Simplified faces change facet counts | tests or tools that count facets | counts are not public contract; flips in Task 10 |
-| Two faces on one plane after a flush `Union` | later face selection sees two faces | stated in §8; §15 Q1 |
+| Two faces on one plane after a flush `Union` | later face selection sees two faces | merged by the union face merge; §8, §15 Q1 |
 
 ## 13. Decisions for the user
 
@@ -710,9 +710,8 @@ between exact planar faces of mesh boolean operands" (Tasks 2–6, 12) or "plana
 
 ## 15. Open questions
 
-- **Q1.** Should a flush `Union` merge two coplanar faces of different operands into one face? Decide between leaving
-  two faces (current design; edge `FacetedCurve`) and a merge pass in `facetedrecord` (one face, but a new topology
-  rule and retained-tag merge), because later face selection and fillets see the difference.
+- **Q1.** Resolved: the mesh Boolean merges two coplanar faces of different operands into one face
+  (`agent-docs/union-face-merge-design.md`).
 - **Q2.** Should §7 handle holed faces? Decide between leaving them untouched (current design) and an exact hole bridge
   before `EarClipX`, because a plate with a through hole cut by a mesh boolean stays inexact until then.
 - **Q3.** Should the branch refusal of §3.2 ("Remaining refusals") be lifted with a planar-arrangement cutter? Decide

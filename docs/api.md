@@ -418,6 +418,9 @@ Features choose edges and faces with queries.
   that lies inside the boss's end cap and inside no other operand face on that plane, such as the top of a boss joined
   to a plate. A face two operands share, such as the floor of two flush blocks, names neither operand, and a face on a
   plane parallel to an operand's extrude direction may name none.
+- A mesh `Union`, `Cut` or `Intersect` merges adjacent, exactly coplanar faces of its two operands into one face, so
+  `decad.FaceCreatedBy` with either operand's role selects that one face, and a count such as
+  `Faces(decad.Facing(v)).Exactly(2)` sees one face where the operands had two.
 - A query that matches nothing, or the wrong count, returns a `*decad.SelectionError` that lists how many
   elements each clause matched.
 
