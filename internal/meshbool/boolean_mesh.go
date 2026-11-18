@@ -238,6 +238,9 @@ type Stats struct {
 	// Contacts lists every contact segment, its facet pair, proven sine and
 	// a float box holding it; nil when either operand tracks no bulge.
 	Contacts []ContactSite
+	// Coplanar is non-nil if and only if the coplanar pass accepted a point
+	// (agent-docs/coplanar-contact-design.md §5).
+	Coplanar *ContactKeys
 }
 
 // ContactSite is one contact segment of facet I of the first operand and J of
@@ -298,30 +301,28 @@ func meshBooleanStats(ctx context.Context, op OperationKind, ma, mb *BoolMesh, m
 	if err != nil {
 		return nil, Stats{}, err
 	}
-	if len(cuts.CoplanarA) > 0 || len(cuts.Owned) > 0 {
-		// The side pass does not read the admitted pairs yet, so the pair is
-		// refused as the switch-off pass refuses it.
-		if cuts.Legacy != nil {
-			return nil, Stats{}, cuts.Legacy
-		}
-		return nil, Stats{}, fmt.Errorf(`%w: an admitted coplanar pair has no side pass yet`, decaderr.ErrBooleanFailed)
-	}
 
 	if err := ctx.Err(); err != nil {
 		return nil, Stats{}, err
 	}
-	keepA, err := keepSide(ctx, ma, mb, cuts.CutsA, cuts.BlockedA, cuts.Rims, wantA, false, keyOf)
+	keepA, err := keepSideWith(ctx, ma, mb, cuts.CutsA, cuts.BlockedA, cuts.Rims, wantA, false, keyOf,
+		keepOptions{Coplanar: cuts.CoplanarA, Op: op})
 	if err != nil {
 		return nil, Stats{}, err
 	}
-	keepB, err := keepSide(ctx, mb, ma, cuts.CutsB, cuts.BlockedB, cuts.Rims, wantB, flipB, keyOf)
+	keepB, err := keepSideWith(ctx, mb, ma, cuts.CutsB, cuts.BlockedB, cuts.Rims, wantB, flipB, keyOf,
+		keepOptions{Coplanar: cuts.CoplanarB, Op: op, Second: true})
 	if err != nil {
 		return nil, Stats{}, err
 	}
 	for i := range keepB {
 		keepB[i].Second = true
 	}
-	return append(keepA, keepB...), Stats{MaxRim: cuts.MaxRim, MinSin: cuts.MinSin, DeepTerm: cuts.DeepTerm, Contacts: cuts.Contacts}, nil
+	stats := Stats{MaxRim: cuts.MaxRim, MinSin: cuts.MinSin, DeepTerm: cuts.DeepTerm, Contacts: cuts.Contacts}
+	if len(cuts.Owned) > 0 {
+		stats.Coplanar = &ContactKeys{Owned: cuts.Owned, Legacy: cuts.Legacy}
+	}
+	return append(keepA, keepB...), stats, nil
 }
 
 // EdgeOutcome is EdgeSide's reading of an in-plane facet edge.
@@ -448,6 +449,21 @@ func newKeyMemo() func(proof.Xpt) string {
 
 // keepSide is KeepSide with the exact-point key function supplied.
 func keepSide(ctx context.Context, m, other *BoolMesh, cuts map[int][]Xseg, blocked map[[2]int]struct{}, rims map[string]float64, wantInside, flip bool, keyOf func(proof.Xpt) string) ([]KeptFacet, error) {
+	return keepSideWith(ctx, m, other, cuts, blocked, rims, wantInside, flip, keyOf, keepOptions{})
+}
+
+// keepSideWith is keepSide that also reads coplanar side evidence
+// (agent-docs/coplanar-contact-design.md §3.4). Every facet with a coplanar
+// partner takes the cut path, even with no surviving segment, and counts as cut
+// for the uncut-component flood fill; a region it covers by a partner is kept
+// or dropped by coplanarKeep, never by parity or anchor.
+func keepSideWith(ctx context.Context, m, other *BoolMesh, cuts map[int][]Xseg, blocked map[[2]int]struct{}, rims map[string]float64, wantInside, flip bool, keyOf func(proof.Xpt) string, opts keepOptions) ([]KeptFacet, error) {
+	isCut := func(i int) bool {
+		if _, ok := cuts[i]; ok {
+			return true
+		}
+		return len(opts.Coplanar[i]) > 0
+	}
 	kept := make([]KeptFacet, 0, len(m.Tris))
 	emit := func(tri [3]proof.Xpt, beta [3]float64, keys [3]string, src int, facet int) {
 		if flip {
@@ -456,6 +472,18 @@ func keepSide(ctx context.Context, m, other *BoolMesh, cuts map[int][]Xseg, bloc
 			keys[1], keys[2] = keys[2], keys[1]
 		}
 		kept = append(kept, KeptFacet{V: tri, Src: src, Beta: beta, Keys: keys, Delta: m.FacetBound[facet], Facet: facet})
+	}
+
+	emitRegion := func(reg CutRegion, i int, cornerKeys [3]string) {
+		for _, tri := range reg.Tris {
+			var beta [3]float64
+			var keys [3]string
+			for k, p := range tri {
+				keys[k] = keyOf(p)
+				beta[k] = CutCornerBound(m, i, cornerKeys, keys[k], rims)
+			}
+			emit(tri, beta, keys, m.Src[i], i)
+		}
 	}
 
 	// The cut facets: exact subdivision along the contact chains, then the
@@ -467,7 +495,7 @@ func keepSide(ctx context.Context, m, other *BoolMesh, cuts map[int][]Xseg, bloc
 				return nil, err
 			}
 		}
-		if _, ok := cuts[i]; ok {
+		if isCut(i) {
 			cutFacets = append(cutFacets, i)
 		}
 	}
@@ -476,7 +504,7 @@ func keepSide(ctx context.Context, m, other *BoolMesh, cuts map[int][]Xseg, bloc
 	const cutBatchSize = 128
 	for start := 0; start < len(cutFacets); start += cutBatchSize {
 		facets := cutFacets[start:min(start+cutBatchSize, len(cutFacets))]
-		results, err := subdivideCutFacets(ctx, m, cuts, facets)
+		results, err := subdivideBatch(ctx, m, cuts, facets)
 		if err != nil {
 			return nil, err
 		}
@@ -488,6 +516,22 @@ func keepSide(ctx context.Context, m, other *BoolMesh, cuts map[int][]Xseg, bloc
 			corners := m.Tris[i]
 			cornerKeys := [3]string{keyOf(m.Xverts[corners[0]]), keyOf(m.Xverts[corners[1]]), keyOf(m.Xverts[corners[2]])}
 			for _, reg := range result.regions {
+				if partners := opts.Coplanar[i]; len(partners) > 0 {
+					cover, err := coverOf(other, partners, reg.Probe)
+					if err != nil {
+						return nil, err
+					}
+					if len(cover) > 0 {
+						same, err := coverFacing(m, i, other, cover)
+						if err != nil {
+							return nil, err
+						}
+						if coplanarKeep(opts.Op, opts.Second, same) {
+							emitRegion(reg, i, cornerKeys)
+						}
+						continue
+					}
+				}
 				inside, err := ClassifyRegion(ctx, reg, other)
 				if err != nil {
 					return nil, err
@@ -495,15 +539,7 @@ func keepSide(ctx context.Context, m, other *BoolMesh, cuts map[int][]Xseg, bloc
 				if inside != wantInside {
 					continue
 				}
-				for _, tri := range reg.Tris {
-					var beta [3]float64
-					var keys [3]string
-					for k, p := range tri {
-						keys[k] = keyOf(p)
-						beta[k] = CutCornerBound(m, i, cornerKeys, keys[k], rims)
-					}
-					emit(tri, beta, keys, m.Src[i], i)
-				}
+				emitRegion(reg, i, cornerKeys)
 			}
 		}
 	}
@@ -526,7 +562,7 @@ func keepSide(ctx context.Context, m, other *BoolMesh, cuts map[int][]Xseg, bloc
 				return nil, err
 			}
 		}
-		if _, cut := cuts[i]; cut || comp[i] != -1 {
+		if isCut(i) || comp[i] != -1 {
 			continue
 		}
 		id := next
@@ -545,7 +581,7 @@ func keepSide(ctx context.Context, m, other *BoolMesh, cuts map[int][]Xseg, bloc
 			queue = queue[1:]
 			members = append(members, f)
 			for _, nb := range adj[f] {
-				if _, cut := cuts[nb]; cut || comp[nb] != -1 {
+				if isCut(nb) || comp[nb] != -1 {
 					continue
 				}
 				if BlockedBetween(m, f, nb, blocked) {

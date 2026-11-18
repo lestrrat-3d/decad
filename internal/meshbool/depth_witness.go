@@ -17,8 +17,9 @@ import (
 // face-on-face overlap is a tangency the exact mesh pass refuses as an
 // unclassifiable contact (BooleanUnsupportedContact / ErrUnsupported), so it is
 // left to that verdict rather than pre-empted here. That deferral is sound only
-// while that refusal happens: agent-docs/interference-design.md §5.2 states what must
-// settle such a pair before the refusal is removed.
+// while that refusal happens, or while the pair is one the mesh pass admits and
+// classifies exactly: two exact faces, with a summed reading of zero, which the
+// caller skips before this call (agent-docs/coplanar-contact-design.md §6).
 func FacesNearMiss(ctx context.Context, bmA *BoolMesh, fis []int, bmB *BoolMesh, fjs []int, slack float64, memo *ContactMemo) (bool, error) {
 	nc, deferred, err := GatherNearContacts(ctx, bmA, fis, bmB, fjs, slack, memo)
 	if err != nil || deferred {
