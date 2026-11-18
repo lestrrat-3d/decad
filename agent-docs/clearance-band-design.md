@@ -59,10 +59,9 @@ boxes, or it marks the sink unsure. Two features whose boxes meet then
 contribute a zero lower bound, `Pair` reads `lo ≤ tol` and the pair is
 undecided. The pruning of `clearance-design.md` §5 skips a cell whose box
 distance exceeds the best upper bound, so the failure shows only when the
-features' boxes are close. Measured on one pin-in-bore case: rotated 5° about
-Y, the pin and bore keep their rim boxes 1.45 mm apart and the rim cell is
-pruned; at 20° the boxes meet and the pair reads undecided. The same pin with
-its rims 5 mm from the bore's rims reads a measured gap at 20°.
+features' boxes are close. Nearby rims are pruned while their boxes stay
+apart; once a rotation makes the boxes meet, the pair reads undecided. Placed
+pin-in-bore cases pin this in `apitest/clearance_band_test.go`.
 
 ## 3. Shared rules
 
@@ -73,10 +72,9 @@ rules (`clearance-design.md` §4), stated once.
   from every point of one feature's untrimmed carrier (a full circle, an
   infinite line, a whole plane) to the other's. A trimmed feature is a
   subset, so the bound holds for every trim.
-- **Every float term carries its charge.** The reading's floats take fewer
-  than 128 additions, multiplications, divisions and correctly rounded square
-  roots at the magnitude of an envelope of every coordinate and radius it
-  reads. `clearance.EnvelopeCharge` over that envelope covers their rounding.
+- **Every float term carries its charge.** The reading's floats are additions,
+  multiplications, divisions and correctly rounded square roots at the
+  magnitude of an envelope of every coordinate and radius it reads. `clearance.EnvelopeCharge` over that envelope covers their rounding.
   A lower bound subtracts the charge and rounds down (`freeform.DownRound`);
   an upper bound adds it and rounds up (`proofbound.AbsSumUpper`).
 - **The tilt is bounded, never assumed.** For two float unit directions `a`
@@ -177,7 +175,7 @@ A miss contributes nothing: the minimum between the plane face and the
 cylinder face lies on the hole's rim or on the cylinder's rims, which §4.1,
 §4.3 and the windowed edge cell read. Any other outcome keeps the unsure
 answer: a sample of the annulus is not a point of the crossing, so the reading
-never proves a crossing. The annulus holds for every tilt up to 60°, so the
+never proves a crossing. The annulus holds wherever `|n·a| ≥ ½`, so the
 reading also runs where the oracle proves the axis not parallel and the cell
 has no other exclusion.
 
@@ -318,7 +316,7 @@ directly, as `curvecells/cells_test.go` and `facepair/cells_test.go` do.
   (unsure kept).
 - `facepair`: the crossing annulus. A plane with a hole of radius `3.2`
   crossed by a cylinder of radius `3`, tilted `1e-12` rad and `0.01` rad, is
-  excluded. The same tilt `0.6` rad (ellipse semi-major `3.6`) stays unsure;
+  excluded. The same tilt `0.6` rad (ellipse semi-major `3.634`) stays unsure;
   red when `R'` reads `R`. A hole of radius `3` stays unsure.
 - `clearance`: `AnnulusRegionMiss` against a disk, a hole and a rectangle,
   with an annulus inside, outside and straddling each boundary.
