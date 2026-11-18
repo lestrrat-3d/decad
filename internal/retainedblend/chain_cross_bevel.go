@@ -14,8 +14,8 @@ import (
 )
 
 // This file emits the bevels of a cross-plane chain (agent-docs/retained-modify-reach-design.md §15b) and their exact
-// areas: a line's bevel is the plane through its two end rows, an arc's the cone through its columns, with the band
-// between its last row and the cylinder's cut, as §5.5 step 2 builds them.
+// areas: a line's bevel is the plane through its two end rows, an arc's the cone between its columns on the plane and
+// the cylinder's cut, as §5.5 step 2 builds a chain chamfer's.
 
 // emitBevel emits edge ei's bevel as source group gi and returns that group. cuts are the vertices the
 // cylinder's cut made or used along an arc.
