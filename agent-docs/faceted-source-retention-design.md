@@ -645,9 +645,32 @@ boundary stays in `β`: the slope term charges it, so the claim needs no
 statement about where the true patch ends.
 
 **Where it applies.** A facet takes the slab bound only when its source face is
-a `RetainedTag` `Plane` with `NormalBound == 0` and no denoted patch. A placed
-tag with a stated departure (§3.4) is a float image whose plane may differ from
-the true one by an offset, so it keeps `β`. The slab bound replaces `β` in the
+a `RetainedTag` `Plane` with `NormalBound == 0` and either no denoted patch or
+a denoted revolve patch whose tag is exactly the plane the patch sweeps. A
+placed tag with a stated departure (§3.4) is a float image whose plane may
+differ from the true one by an offset, so it keeps `β`.
+
+**Denoted revolve planes.** A revolve wall swept from a meridian segment
+perpendicular to the axis is a planar ring or disc, tagged `Plane` and carrying
+its record as `Denoted`. By Claim R its true result patch lies on the surface
+the record denotes, not on the float tag. `stitchflux.TagIsDenoted` decides in
+exact rationals whether the two coincide: the record's leaves are points, its
+basis is exactly orthonormal, every recorded meridian end lies at one axial
+level, the tag's `U` and `V` are exactly perpendicular to the recorded axis,
+and the tag's origin lies exactly at that level. When it holds, the true patch
+lies on the tag plane and Claim S applies unchanged
+(`booleaneval.retainedPlaneOf`). A tag that only re-expresses the record in
+floats (a tilted or rounded axis, a level no float holds, a cap's record)
+keeps `β`. The check reads only the face's own record and tag, so it adds no
+admission by geometry: a facet whose corners stray from the plane still pays
+`h + β·sin φ`.
+
+A revolved disc with a bore shows why this matters. Its planar faces are fans
+of long facets from the bore's rim to the outer edge. The bore's rim vertices
+carry about twice the pair's chord tolerance, and each fan facet takes that
+corner bound over its whole length. A later small hole that lands on such a
+facet, however far from the bore, was refused by the held-mesh gate. With the
+slab, a fan facet whose corners lie exactly in the plane reads zero. The slab bound replaces `β` in the
 held-mesh gate (`RefuseCoarseHeldContact`) and in `RimBound`. A vertex the
 cutter places on a facet's interior keeps `β`, because its true boundary point
 may sit anywhere in the plane within `β`. A curved retained group has no such
