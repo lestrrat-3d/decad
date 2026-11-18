@@ -165,3 +165,64 @@ func ratSqrt(q *big.Rat) (proofbound.RatInterval, bool) {
 	}
 	return proofbound.SqrtFixed(q)
 }
+
+// chamferCarriers picks cA_i and cB_i (§4.1) from the runs and end-face loops, or ok false. Each is the first
+// vertex of its run's chain at end i with bound 0 that a loop of the end face G_i also holds; the edge's own end
+// V_i must be a vertex of G_i too, and both ends must have bound 0. A face whose tag states a plane displacement
+// keeps today's feet: those charge it into the vertex bounds, and the exact path does not read the tags.
+func (w *work) chamferCarriers(l line, runA, runB edgeRun, fG [2]faceLoops) (onA, onB [2]int, ok bool) {
+	if l.a.delta != 0 || l.b.delta != 0 {
+		return onA, onB, false
+	}
+	for i := range 2 {
+		if w.beta[l.ends[i].v] != 0 || l.ends[i].tilt != 0 || l.ends[i].g.delta != 0 ||
+			!holds(fG[i], l.ends[i].v) {
+			return onA, onB, false
+		}
+		var okA, okB bool
+		onA[i], okA = w.zeroCarrier(runA.chain[i], fG[i])
+		onB[i], okB = w.zeroCarrier(runB.chain[i], fG[i])
+		if !okA || !okB {
+			return onA, onB, false
+		}
+	}
+	return onA, onB, true
+}
+
+// zeroCarrier is the first vertex of chain, walking out from the edge end, with bound 0 that a loop of g holds.
+func (w *work) zeroCarrier(chain []int, g faceLoops) (int, bool) {
+	for _, v := range chain {
+		if w.beta[v] == 0 && holds(g, v) {
+			return v, true
+		}
+	}
+	return 0, false
+}
+
+// holds reports whether a loop of f holds the vertex v.
+func holds(f faceLoops, v int) bool {
+	for _, loop := range f.loops {
+		if indexIn(loop, v) >= 0 {
+			return true
+		}
+	}
+	return false
+}
+
+// exactLineFeet is the exact setback points of an R1 chamfer (§4.3), or ok false where the edge keeps today's
+// feet: the carriers of §4.1 are missing or the exact construction refuses them. wA and wB are the float ways into
+// the faces, tA and tB the setbacks on them.
+func (w *work) exactLineFeet(l line, runA, runB edgeRun, fG [2]faceLoops,
+	wA, wB r3.Vec, tA, tB float64) ([2][2]lineFoot, bool) {
+	onA, onB, ok := w.chamferCarriers(l, runA, runB, fG)
+	if !ok {
+		return [2][2]lineFoot{}, false
+	}
+	var in chamferFeetInput
+	for i := range 2 {
+		in.v[i] = w.verts[l.ends[i].v]
+		in.onA[i], in.onB[i] = w.verts[onA[i]], w.verts[onB[i]]
+	}
+	in.intoA, in.intoB, in.tA, in.tB = wA, wB, tA, tB
+	return exactChamferFeet(in)
+}

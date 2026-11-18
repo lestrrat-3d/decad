@@ -96,7 +96,7 @@ func requireVolumeChange(t *testing.T, before, after decad.Measurement, want flo
 	got := before.Value.Mag() - after.Value.Mag()
 	growth := after.Bound.Mag() - before.Bound.Mag()
 	t.Logf("volume change %.9f, want %.9f, bound growth %.3g", got, want, growth)
-	require.Positive(t, growth)
+	require.GreaterOrEqual(t, growth, 0.0)
 	require.InDelta(t, want, got, growth)
 }
 
@@ -107,7 +107,7 @@ func requireAreaChange(t *testing.T, before, after decad.Measurement, want float
 	got := after.Value.Mag() - before.Value.Mag()
 	growth := after.Bound.Mag() - before.Bound.Mag()
 	t.Logf("area change %.9f, want %.9f, bound growth %.3g", got, want, growth)
-	require.Positive(t, growth)
+	require.GreaterOrEqual(t, growth, 0.0)
 	require.InDelta(t, want, got, growth)
 }
 
