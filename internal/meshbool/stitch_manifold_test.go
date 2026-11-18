@@ -20,10 +20,9 @@ func TestStitchManifoldContact(t *testing.T) {
 	for _, tc := range []struct {
 		name string
 		loB  r3.Vec
-		what string
 	}{
-		{"edge only", r3.Vec{X: 10, Y: 0.5, Z: 10}, touchCoplanar},
-		{"vertex only", r3.Vec{X: 10, Y: 10, Z: 10}, touchCoplanar},
+		{"edge only", r3.Vec{X: 10, Y: 0.5, Z: 10}},
+		{"vertex only", r3.Vec{X: 10, Y: 10, Z: 10}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			a := exactBoxMesh(t, r3.Vec{}, r3.Vec{X: 10, Y: 10, Z: 10})
@@ -93,4 +92,8 @@ func TestManifoldDefects(t *testing.T) {
 	require.Len(t, bad, 1)
 	_, ok := bad[0]
 	require.True(t, ok)
+	// A pinch is found even when an edge elsewhere fails too.
+	open := append(append([][3]int{}, pinched...), [3]int{10, 11, 12})
+	_, ok = manifoldDefects(open)[0]
+	require.True(t, ok, "the pinched vertex is reported beside an open edge")
 }

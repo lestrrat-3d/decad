@@ -61,10 +61,8 @@ func manifoldDefects(tris [][3]int) map[int]struct{} {
 			bad[key[1]] = struct{}{}
 		}
 	}
-	if len(bad) > 0 {
-		return bad
-	}
-	// Vertex fans. A facet (v, a, b) leaves v along v->a and enters along
+	// Vertex fans. Every vertex is read, so a pinch is found even when an edge
+	// elsewhere also fails. A facet (v, a, b) leaves v along v->a and enters along
 	// b->v; the next facet around v is the one entering along a->v.
 	incident := map[int][]int{}
 	for f, tri := range tris {
@@ -73,6 +71,9 @@ func manifoldDefects(tris [][3]int) map[int]struct{} {
 		}
 	}
 	for v, fs := range incident {
+		if _, ok := bad[v]; ok {
+			continue
+		}
 		enters := make(map[int]int, len(fs)) // neighbour a -> facet entering v along a->v
 		leaves := make(map[int]int, len(fs)) // facet -> neighbour it leaves toward
 		for _, f := range fs {
