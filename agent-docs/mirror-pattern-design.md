@@ -6,8 +6,7 @@ repeating a body in a linear or circular pattern. Companion to
 and copies), `agent-docs/prism-boolean-design.md` (the analytic boolean a pattern
 tool feeds), `agent-docs/prism-boolean-design.md` Part S (the payload a prism pattern
 builds) and `agent-docs/prism-boolean-design.md` Part G (the boolean classes a mirror or
-pattern result needs next). Every number in §2 was measured with the probe
-under `.tmp/probe/` at `8cc06f90`.
+pattern result needs next).
 
 ## 1. Problem
 
@@ -20,20 +19,19 @@ re-evaluates under it:
 arc senses through `reflected()`; `loftPayload` re-decides its whole-shell
 orientation from the placed triangles; `facetedPayload` reverses every
 triangle and re-embeds the held mesh (`internal/facetedrecord/placed.go`).
-§2 measures that this is sound: volume, centroid, convexity, `Facing`, the
-mesh winding, the analytic STEP writer and `Verify` all read a mirrored body
-correctly.
+Rows M1 and M7–M12 of §2 show volume, centroid, convexity, `Facing`, the mesh
+winding, the analytic STEP writer and `Verify` reading a mirrored body correctly.
 
-What is missing is everything a caller does WITH a mirror image:
+`Transform` and `Copy` alone leave three problems with what a caller does WITH a mirror image:
 
 - there is no vocabulary for the plane. A caller builds an `r3.Frame` by hand,
   where the natural statement is "this planar face of the part";
 - the common symmetric-part workflow — model one half ending on the mirror
-  plane, mirror, join — refuses at the join. The two halves are co-directional
+  plane, mirror, join — refuses at a `Union`. The two halves are co-directional
   prisms sharing a wall, and the analytic boolean excludes a reflected operand
   (prism-boolean §3.1 G2), so the pair takes the mesh path and refuses on the
-  coplanar contact. With G2 lifted and the shared wall resolved
-  (general-boolean §3 A3) the same pair still takes the mesh path: the image
+  coplanar contact. Even with G2 lifted and the shared wall resolved
+  (general-boolean §3 A3) the same pair takes the mesh path: the image
   carries the placement's rounding, and a displaced pair's wall inside the
   union is a sliver no recorded edge bounds;
 - a pattern built from `Copy` and `Union` ends in one of three places:
@@ -52,27 +50,31 @@ one record set, so a pattern of N holes is one analytic arrangement.
 
 ## 2. Measured current behaviour
 
+These rows are the baseline scenes that prism-boolean Part G cites by label. Results for M2–M5, T1, T2, W1–W4 and W6
+are the outcomes before general-boolean classes A3 and A4 and the mirror join (§5) admitted them. Part G §3's
+"Clears" column and §3's `Union`/`Cut`/`Intersect` row give the current outcome of each.
+
 | Row | Scene | Result |
 |---|---|---|
 | M1 | L prism (1750 mm³) `Copy` across the plane x = 30 | analytic, `Exact` 1750 mm³, centroid x = 53.2143 (= 60 − 6.7857), bounds `Exact`, `Facing(+x)` one face, 17 of 18 edges convex on both bodies, mesh signed volume +1750, `Verify` `Sound`, wall measured, `Fillet` OK |
-| M1 | STEP of the mirrored L | analytic writer path, 7617 bytes |
+| M1 | STEP of the mirrored L | analytic writer path |
 | M2 | `Union(L, mirror across the wall x = 20)` (touching along the wall) | `BooleanUnsupportedContact`: coplanar facets |
 | M3 | `Union(L, mirror across x = 15)` (overlapping) | `BooleanUnsupportedContact`: coplanar facets |
 | M4 | `Union(mirrored L, same-plane box)` | `BooleanUnsupportedContact`: coplanar facets |
-| M5 | `Cut(mirrored L, same-plane cylinder)` | mesh path: 8 `Faceted` faces, bound 0.05 mm³ |
+| M5 | `Cut(mirrored L, same-plane cylinder)` | mesh path: 8 `Faceted` faces |
 | M6 | `Transform(ctx, body, reflection)` | analytic, input retired, one live body |
 | T1 | `Cut(mirrored L, mirrored cylinder)` (both reflected, proper relative map) | `BooleanUnsupportedContact`: G2 refuses either reflected operand |
 | T2 | `Verify` on L beside an overlapping mirror | `Suspect`, `unsupported_pair_contact` |
 | T3 | `Verify` on L beside a separated mirror | `Sound`, clearance 20 mm |
 | M7 | partial revolve (270°) mirrored | same volume and bound, mesh winding outward, `Verify` `Sound` |
-| M8 | loft mirrored | volume 1100 `Approximate` (bound 2.6e-10; the unmirrored loft is `Exact`), mesh outward |
+| M8 | loft mirrored | volume 1100 `Approximate` (the unmirrored loft is `Exact`), mesh outward |
 | M9 | cross-drilled (faceted) body mirrored | same volume and bound, mesh outward |
 | M10 | blind-cut (stacked) body mirrored | same volume, mesh outward |
 | M11 | filleted prism mirrored | same volume, `Verify` `Sound`, wall measured |
 | M12 | cup mirrored | `Exact` 1952 mm³, mesh outward |
-| S5 | plate cut by six `Copy`-translated cylinders | six analytic cuts, bound 5e-10 mm³, `Fillet` refuses (section displacement), wall `undecided` |
-| S5b | the same six holes each drawn in its own sketch | bound 2e-12 mm³, `Fillet` OK |
-| S5c | six cylinders `Copy`-rotated about the plate normal (60° steps) | six analytic cuts (every rotation here keeps the normal exact), bound 5e-10 mm³ |
+| S5 | plate cut by six `Copy`-translated cylinders | six analytic cuts, `Fillet` refuses (section displacement), wall `undecided` |
+| S5b | the same six holes each drawn in its own sketch | `Fillet` OK |
+| S5c | six cylinders `Copy`-rotated about the plate normal (60° steps) | six analytic cuts (every rotation here keeps the normal exact) |
 | P1 | hub ∪ six teeth placed by `RotationAround` (60° steps) | tooth 1 analytic; tooth 2 `BooleanUnsupportedContact` (§3.4 reroute, then coplanar facets) |
 | P2 | four disjoint pegs by `Copy` + `Union` | `Faceted`, 4 lumps, `Exact` 500 mm³, wall `unavailable`; as a `Cut` tool: `BooleanUnsupportedContact` |
 | W1–W4 | `Union` of two boxes sharing a wall (whole, partial, longer, 1 mm overlap with collinear walls) | `ErrUnsupported`: "the union scene's arrangement reports an invalid region" (RB1) |
@@ -103,8 +105,9 @@ placement a float composition the caller never asked for, orthonormalised by
 | Clearance kernel | `internal/clearance/pairkernel/geom.go` reads `reflected()`; measured T3 |
 | Interference | a reflected prism beside a coplanar prism enters the analytic Intersect and overlap readings (`agent-docs/prism-boolean-design.md` Part G class A4); a pair whose outlines cross under a one-sided reflection is charged its crossings (general-boolean A6); T2's shared collinear walls are read as one carrier (general-boolean A3), and its overlap is measured: `Interfering`, 500 mm³ |
 | `Union`/`Cut`/`Intersect` | a reflected operand enters the analytic path with its record re-wound (general-boolean class A4: M5, T1); M3's shared walls bound its union and build analytically (A3); M2's shared wall lies inside its union and the image is displaced, so `Union` takes the mesh path's coplanar refusal, and the mirror join builds it (§5) |
-| `Trim`/`Extend`/`Split` | refuse a reflected operand (`surface_trim.go`). Unchanged by this design |
-| `VerifyMotion`, contact sweeps | a reflection joined to a proper motion is `ErrDegenerate` (`motion.go`): no rigid path exists. `internal/contactround/sphere.go` and `contact_sweep_replay.go` refuse a reflected pose. Both unchanged |
+| `Trim`/`Extend`/`Split` | refuse a reflected operand (`internal/prismcells/surface_admission.go`) |
+| `VerifyMotion`, contact sweeps | a reflection joined to a proper motion is `ErrDegenerate` (`internal/motionbound/motion_path.go`): no rigid path exists. `internal/contactround/sphere.go` and
+`internal/sweepproof/replay.go` refuse a reflected pose |
 | Loft | `loftPayload.Placed` re-lifts every vertex under the full composed transform (M8's bound is the re-lift rounding, the same term any placed loft carries) |
 
 **`r3` needs nothing new.** `r3.Reflection(mirror Frame)` and
@@ -266,7 +269,7 @@ Every exact placement, at any angle including zero, also marks the payload
 `ExactPlaced`. Every later placement, `Copy`, `Transform` and `ScaledAt` keeps
 the mark, whatever happens to the lineage and whether the source stays live.
 `VerifyMotion` and `VerifyLinkage` refuse to re-place a marked body with
-`ErrUnsupported` (`motionRun.place`): the pose deviation model describes a
+`ErrUnsupported` (`motionengine.Run.place`): the pose deviation model describes a
 mover as a float pose applied to its record points, which does not cover
 re-placing `Q*S + t`. The refusal is on re-placement, so a fixed mover or one
 with no evaluated pair never reaches it.
@@ -316,7 +319,7 @@ fallback to `Union`:
 | J3 | Every selected wall's segment lies on ONE line: the exact rational cross product of each segment's recorded endpoints against the first's is zero (`internal/proof`). | `ErrDegenerate` |
 | J4 | Every selected segment is WHOLE (`TStart`/`TEnd` the natural domain). | `ErrUnsupported` (a fragment of a longer carrier would mirror a wall the record does not state whole) |
 | J5 | Every selected wall walks the first one's way, every region's outer loop holds a selected wall, and every other segment of every loop is a `LineSeg`, `ArcSeg` or `CircleSeg` in the closed half-plane on the material side of the line: both recorded endpoints (and a narrowed line's walked endpoints) have a non-negative exact signed distance, and an `ArcSeg`/`CircleSeg` additionally has its circle on that side — exact rational comparison of the centre's signed distance against the radius squared, an arc's radius the larger of its two recorded ones. A segment with an endpoint ON the line that is not a selected wall is admitted only as the neighbour of a selected wall at that junction. | `ErrUnsupported` (a loop crossing the line would need an arrangement, which §5.2 never asks for) |
-| J6 | No `ArcSeg`/`CircleSeg` of the receiver is recorded over a narrowed range (`prismProfileHasTrimmedCircularSource`, prism-boolean §4.1). | `ErrUnsupported` |
+| J6 | No `ArcSeg`/`CircleSeg` of the receiver is recorded over a narrowed range (`prismcells.ProfileHasTrimmedCircularSource`, prism-boolean §4.1). | `ErrUnsupported` |
 | J7 | `sectionDelta == 0` on the receiver. | `ErrUnsupported` (a reflection amplifies nothing, but the §5.3 audit proves closure on recorded coordinates and a displaced record states none) |
 
 J5 is exact arithmetic over the record's own floats and decides, so it is a
@@ -362,7 +365,7 @@ between selected (on-line) segments are the material's own boundary arcs; each
 run `R` closes with its own reflection: `R` followed by `m(R)` walked
 backwards, each segment mirrored. That is the per-loop re-winding rule a
 reflected boolean operand takes (`agent-docs/prism-boolean-design.md` Part G §3 A4,
-`rewindLoop`), run under the exact reflection:
+`prismcells.RewindLoop`), run under the exact reflection:
 
 | Segment | Mirrored, reversed |
 |---|---|
@@ -457,8 +460,8 @@ under an in-plane motion of the section:
   millimetres, read on the placed frame axes as the exact rationals
   `(t_i · U_w, t_i · V_w)`, with `U_w`, `V_w` the frame's axes under the
   placement's basis, taken over the held floats. `step` is the exact rational
-  the caller's `Step` denotes in millimetres (`exactConversion`, the value
-  `conversionRound` compares against), and `1/|Dir|` is a certified rational
+  the caller's `Step` denotes in millimetres (`extent.ExactConversion`, the value
+  `extent.ConversionRound` compares against), and `1/|Dir|` is a certified rational
   enclosure (`RatSqrtDown`/`RatSqrtUp` over the exact `Dir · Dir`),
   zero-width when `Dir · Dir` is a float's square — every stored axis is.
   Each moved coordinate `u + du_i`, `v + dv_i` is therefore an exact
@@ -489,7 +492,7 @@ under an in-plane motion of the section:
   carry over unchanged: a translation or a proper rotation changes no sense,
   and the reflection of a reflected receiver stays in `xform`. A stacked
   receiver's interfaces are re-derived from its moved regions
-  (`stackedInterfaces`), each changed-outer interface of a union-built stack
+  (`stackedrecord.Derive`), each changed-outer interface of a union-built stack
   on the side its receiver records. A union-built stack keeps its frame only
   under a motion with `δ_pattern == 0`: its narrower outer lies inside the
   wider one by construction, which no audit re-proves, so a rounding motion
@@ -516,12 +519,10 @@ instance are the same geometry with the same bound.
 ### 6.3 The prism group
 
 A prism group is a `stackedPrismPayload` with one slab and `Count` regions.
-Stacked §2.2's I1 and I2 read differently for it, and the implementation PR
-changes that document on the same branch: I1 — a one-slab stack with one
-region is a prism (`ErrUnsupported` as today); with two or more regions it is
-a prism group. I2 — a slab holds one region, except the single slab of a
-prism group, whose regions must be proven pairwise disjoint (below). I3–I7
-are unchanged (no interfaces exist). Each region carries the receiver's
+Stacked §2.2's I1 and I2 admit it: a one-slab stack with one region is a prism
+(`ErrUnsupported`), with two or more regions a prism group, and a slab holds
+one region except the single slab of a prism group, whose regions must be
+proven pairwise disjoint (below). I3–I7 apply unchanged (no interfaces exist). Each region carries the receiver's
 holes, translated or rotated with its outer.
 
 **Disjointness is `sketch`'s answer, read structurally, and the check may only
@@ -544,7 +545,7 @@ instances take rule 3, where `Union` takes the mesh path. Three or more
 tangent copies in a row can be refused there with `ErrUnsupported`: the
 first join's held mesh is coarser than the next pair's chord tolerance.
 
-The scene is capped by `prismMaxArrangementSegments` (prism-boolean §10). A
+The scene is capped by `prismcells.MaxArrangementSegments`, 4096 segments (prism-boolean §10). A
 group whose one scene fits the cap takes it. A group over the cap (a ring of
 20 rounded ports charges 20560 segments) is proven by cases instead,
 `prismcells.ProveGroupApartPairwise`: each outer gets a conservative box (line
@@ -559,8 +560,7 @@ also bounds the entity-quadratic contact passes of `RegionContact`, which a
 larger scene would run over every line pair.
 
 The box test is a decad-side 2D proof, a stated exception to CLAUDE.md's "ask
-`sketch`" default. It wins on cost (the pairwise proof of 20 to 36 discs takes
-7 to 11 ms, `BenchmarkGroupApartPairwise`, where one scene refuses) and is exact in the one direction it is used:
+`sketch`" default. It wins on cost (`BenchmarkGroupApartPairwise` proves 20 and 36 discs where one scene refuses) and is exact in the one direction it is used:
 separation of two closed sets by an axis-aligned gap proves them apart, and
 the inflation makes the boxes contain every point the displaced record can
 reach. It never admits a pair that is not separated: anything overlapping,
@@ -582,11 +582,11 @@ loop clearance proven per slab, which is the one slab. `Lumps()` reports
 | Consumer | Behaviour |
 |---|---|
 | `Cut(target, group)` | the N-hole case. `agent-docs/prism-boolean-design.md` Part G class A5 admits a prism-group tool: its regions enter one private scene as `Count` hole candidates, and the clean-nesting match requires the target's outer whole plus `Count` new holes each reproducing one region whole. One arrangement, one result, `Exact` where the target and `δ_pattern` are |
-| `Union(group, other)` / `Intersect` | general-boolean class A5; until it lands, the mesh path over the group's own tessellation (stacked §6) |
+| `Union(group, other)` / `Intersect` | general-boolean class A5; a pair it does not admit takes the mesh path over the group's own tessellation (stacked §6) |
 | `Patterned` of a group (a grid) | the frame-keeping arm applies to every region at once; the disjointness scene holds `Count_1 · Count_2` outers |
 | `Mirrored` / `MirroredCopy` | reflection in `xform` (§3) |
 | `WithJoin` | `ErrUnsupported` (J1): the join does not splice a group's lumps one by one |
-| `Fillet` / `Chamfer` / `Shell` | `ErrUnsupported` (modify-reach RX3 / SX10 for a stacked receiver), as today |
+| `Fillet` / `Chamfer` / `Shell` | `ErrUnsupported` (modify-reach RX3 / SX10 for a stacked receiver) |
 | `Verify` surveys, clearance, tolerance gate | stacked §6 |
 | `Tessellate`, STL/OBJ/3MF/STEP | stacked §5; STEP refuses several shells (`agent-docs/step-export-design.md`) and a group has `Count`, so STEP of a group is `ErrUnsupported` until that writer takes several solids |
 
@@ -715,44 +715,20 @@ Every test asserts computed geometry; bounds are asserted as relations
 
 ## 10. Open questions
 
-- **Should `WithJoin` accept a `MirrorFrame` whose plane exactly contains a
-  recorded wall?** Recommendation: no. The exact identity between a frame
-  the caller built and a recorded carrier is a bit comparison that rarely
-  holds; `MirrorFace` names the wall directly and is the natural statement.
-- **Should a prism group of non-prism receivers (revolves, faceted lumps)
-  exist?** Recommendation: not now. It needs a group payload every consumer
-  reads; `PatternCopies` covers the use, and the pattern's efficiency case
-  (N holes) is a prism tool.
-- **Should `Patterned` return `[]*Body` for rule 3 instead of running
-  `Union`?** Recommendation: run `Union`. A pattern that returns several
-  bodies is `PatternCopies`; two shapes of one call would make a caller
-  branch on a hidden decision.
-- **Count semantics (receiver included).** Recommendation: included, as the
-  definition states; Fusion's quantity counts the original too, and the
-  Fusion add-in a caller writes next mirrors the number.
-- **Order of lifting prism-boolean G2 against this design's join.**
-  Recommendation: the join first (PR 2), since it needs no boolean and no
-  upstream change; G2's lift (general-boolean A4) then covers the general
-  reflected pair.
+None are open. The decisions they settled live where the code is owned:
+
+- `WithJoin` refuses a `MirrorFrame` (J2, §5.1), since `MirrorFace` names the wall directly.
+- A prism group exists for prism receivers only (§6.1 rule 2); `PatternCopies` keeps other instances as bodies.
+- `Patterned` runs `Union` for instances not proven disjoint and returns that boolean's verdict (§6.1 rule 3).
+- `Count` includes the receiver (§4.3), as Fusion's quantity does.
+- The mirror join builds without a boolean, and general-boolean class A4 covers the general reflected pair.
 
 ## 11. PR split
 
-Each PR ships code and tests; this document ships with PR 1.
+All four pieces have shipped. Each piece and its owner:
 
-1. **`Mirrored`, `MirroredCopy`, `MirrorPlane`.** The sealed plane
-   vocabulary, `MirrorFace` resolution through the implicit exactly-one
-   rule, both methods over `Transform`/`Copy` with `r3.Reflection`, the
-   §3 consumer table verified by §8's every-payload test, an executable
-   example, Layout rows.
-2. **`WithJoin`.** J1–J7, the exact reflection and splice (§5.2) over prism
-   and stacked receivers, `δ_mirror`, the modify §5 audit reuse, §8's join
-   tests, and the stacked §2.2 wording for a joined stacked payload.
-3. **`PatternCopies`, `LinearPattern`, `CircularPattern`.** The frame-keeping
-   instance records (§6.2) with `δ_pattern`, certified trig and the exact
-   quarter/half turns, `Copy` for every other case, §8's pattern tests.
-4. **`Patterned` and the prism group.** Stacked §2.2's I1/I2 reading, the
-   disjointness scene, multi-region slab topology, measurements and
-   tessellation, rule 3's `Union` fallback, and the N-hole `Cut` admission
-   shared with `agent-docs/prism-boolean-design.md` Part G class A5 (that PR lands the
-   boolean side; this one lands the tool and the test that pins the two
-   together).
+1. `Mirrored`, `MirroredCopy`, `MirrorPlane` (§4.1, §4.2): `mirror.go`, tested by `apitest/mirror_test.go`.
+2. `WithJoin` (§5): `mirror_join.go` and `internal/mirrorjoin`, tested by `apitest/mirror_join_test.go`.
+3. `PatternCopies`, `LinearPattern`, `CircularPattern` (§4.3, §6.2): `pattern.go` and `internal/patternrecord`.
+4. `Patterned` and the prism group (§6.1, §6.3): `pattern.go` and `internal/patternassembly`; the N-hole `Cut`
+   admission is general-boolean class A5, which pins the tool and the boolean together.

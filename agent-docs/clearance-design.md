@@ -99,10 +99,9 @@ only when the isolation certifies it. A cast is
 admissible only when every crossing is certified transversal and interior to
 its face; a cast that grazes an edge, a vertex or a tangency retries the next
 direction on a fixed ladder — deterministic, never random, so a replay
-resolves identically (evaluator §8). Interference PR 1 MUST return any witness
-strictly inside as proven nesting — `boundaryaudit.PairOverlapping`, never the same state as
-a failed cast; all
-witnesses mutually outside, with `g > 0`, is the disjointness proof. Preserve
+resolves identically (evaluator §8). A witness strictly inside is proven
+nesting (`boundaryaudit.PairOverlapping`), never the same state as a failed
+cast; all witnesses mutually outside, with `g > 0`, is the disjointness proof. Preserve
 inside / outside / undecided for the shipped single-lump analytic payloads, per
 shell. `agent-docs/interference-design.md` §4 owns which combination of these
 per-shell classifications certifies strict full containment; a single shell's
@@ -121,12 +120,12 @@ two-term `absSumUpper(delta, sectionDelta)` those boxes carry (loft §5.2 owns
 when that sum is zero), may decide a box-disjoint partition. A distance
 measured against a held FACET carries the payload's wider facet departure
 `absSumUpper(matchedDelta, maxTwistOffsetUpper)` instead (loft §5.2);
-a requested `WithClearances` gap remains `Suspect` until its analytic adapter
-lands and reads that term.
+a requested `WithClearances` gap remains `Suspect`, since no analytic adapter
+reads that term.
 Payload verification §3/§7 owns the cup/faceted
 adapters and their tests; §13/§14.1 own the loft staging and tests.
-The cup adapter has not landed, per §8's increment table and payload
-verification §13's own stage list. The faceted adapter is not a carrier model
+The cup adapter has not landed (`pairkernel` builds no model for it; payload
+verification §13 lists its stage). The faceted adapter is not a carrier model
 in this kernel at all: a faceted Boolean result, and a mitred sweep and a coil with it,
 is partitioned by the exact planar arm of `agent-docs/interference-design.md`
 §3.2 (`internal/verifyrun/clearance.go`), which runs after this kernel leaves such a
@@ -167,7 +166,7 @@ compared through their region elements in the same form. The revolve carrier
 builder adds the largest of these to both `bodyGeom.delta` and its carrier part, and
 adds nothing when it is zero, which it is for an integer profile about a
 coordinate axis. The junction vertices and the `Circle3`/`Arc3` edges the
-kernel reads through `newCEdge` are built from the same walk values, so they
+kernel reads through `clearance.NewCEdge` are built from the same walk values, so they
 share this displacement and add only the float evaluation of their own
 centre (`agent-docs/evaluator-design.md` §6). A cone carrier holds the slope the
 comparison reads (`clearance.CFace`'s `Rise` and `Run`), never a half angle:
@@ -572,8 +571,7 @@ trimmed inner face alone and asks the oracle nothing:
   lower and the smaller upper bound, and a band that does not clear leaves
   the coarse enclosure as it stands.
 - **What it costs and what it reads.** Two point-to-line distances and at
-  most `3 × 22` witness pairs, closed form: about `0.1` ms for a pin pair.
-  A pin of radius `r` in a bore of radius `R`, a rounding error off
+  most `3 × 22` witness pairs, all closed form. A pin of radius `r` in a bore of radius `R`, a rounding error off
   concentric, reads `Gap ∈ [R − r − d_sup, R − r + d_sup]` before the body
   deltas and `η` widen it, with `d_sup` of order `1e-12` once charged,
   against deltas of the same order: the row the exact ring family would have
@@ -743,8 +741,7 @@ trimmed inner face alone and asks the oracle nothing:
   gate reads a wide `Bound` `Suspect`. Never a tightened number, never a
   silent pass.
 - **Held bounds subtract before anything is proven.** A body whose held
-  boundary carries a nonzero proven bound — a `Faceted` body (increment 4,
-  not yet landed), or a feature-built body placed, swept off a
+  boundary carries a nonzero proven bound — a feature-built body placed, swept off a
   non-axis-aligned sketch plane, drawn on a plane whose origin the carrier
   lift adds to inexactly, or stitched from a bounded topology
   (`bodyGeom.delta`, §2) — clears only what exceeds the summed bounds
@@ -873,7 +870,7 @@ the caller is owed unasked; no rung needs a gap the caller never asked for.
   **pair's** diameter exactly as verification §3 defines it — the greatest
   distance between two points drawn from either body. The evaluator READS
   that `D` from points each body proves lie on it, each charged its own
-  proven gap (`pairGateDiameter`, verification §3), and the reading may
+  proven gap (`pairkernel.PairGateDiameter`, verification §3), and the reading may
   understate the true diameter; verification §4 already
   admits exactly this for its own body-diameter reading, which understates a
   curved body by the chord error and by its own rounding step, because a
@@ -914,7 +911,7 @@ reads `Suspect`, never an error, never a silent pass:
 | 1 | the tier enumeration + exact admission, every CF cell, the P4/P8 certified brackets, the nesting exclusion, coplanar `Plane` × `Plane` contact, report wiring — rows, the empty list, the `Gap` gate, pair `D` | cone-involved pairs near contact (coarse enclosure interval only: proven disjoint with a wide honest row when even the coarse `lo` clears zero, undecided when it does not); every non-coplanar contact type |
 | 2 | the `BB` refiner (the 1- and 2-variable azimuth searches; the `Minor ≥ Major` torus downgrade path), the coaxial and co-directional 2D reductions | non-coplanar contacts |
 | 3 | the remaining §6 certified contact types | osculating and edge/vertex contacts (§9) |
-| 4 | the windowed nested cell (§4): a sphere or cylinder face whose spine window lies strictly inside a sphere or cylinder carrier, read without an oracle answer, and its edge-tier twin for a circular edge about the same axis; its band test (two cylinder faces, anchors `1e-14` apart, `Gap` within `2·tol` of `0.5`, with a ball in a bore, a pin in a ball, a ball in a ball and a pin tilted `1e-12` rad in both orders, red when the cell is deleted: undecided; and a pin that fills its bore undecided, red when a lower bound at or below `tol` is admitted), its tilt test (a pin of radius `5` and half-height `5` turned `1e-6` rad about `X` through its centre in a bore of radius `5.5`, `Gap` within `1e-7` of `0.5 − 5e-6` and the lower bound at or below the true minimum, red when `d_sup` reads the window's midpoint instead of its ends), its rim test (a bore's rim outside a pin, a pin's rim inside a bore, a bore's rim around a ball and a tilted pin inside a rim, each `1e-14` off, `Gap` within `2·tol` of `0.5`, red when the twin is deleted: the coarse zero), its coarse-enclosure tests (a rim of radius `30` axially clear of a pin and a short pin axially clear of a bore, each lower bound at least the boxes' `12` with a finite upper bound, red when the windowed bound replaces the coarse enclosure), and `agent-docs/linkage-check-design.md` §11's scene 8 | a pin that fills its bore; a circle spine in the undecided band |
+| 4 | the windowed nested cell (§4): a sphere or cylinder face whose spine window lies strictly inside a sphere or cylinder carrier, read without an oracle answer, and its edge-tier twin for a circular edge about the same axis. Tests: `TestWindowedNestedBand` (two cylinder faces, anchors `1e-14` apart, `Gap` within `2·tol` of `0.5`, with a ball in a bore, a pin in a ball, a ball in a ball and a pin tilted `1e-12` rad in both orders, red when the cell is deleted: undecided; a pin that fills its bore stays undecided, red when a lower bound at or below `tol` is admitted); `TestWindowedNestedTilt` (a pin of radius `5` and half-height `5` turned `1e-6` rad about `X` through its centre in a bore of radius `5.5`, `Gap` within `1e-7` of `0.5 − 5e-6` and the lower bound at or below the true minimum, red when `d_sup` reads the window's midpoint instead of its ends); `TestWindowedCircleEdge` (a bore's rim outside a pin, a pin's rim inside a bore, a bore's rim around a ball and a tilted pin inside a rim, each `1e-14` off, `Gap` within `2·tol` of `0.5`, red when the twin is deleted: the coarse zero); `TestWindowedNestedKeepsTheCoarseEnclosure` and `TestWindowedCircleKeepsTheCoarseEnclosure` (a rim of radius `30` axially clear of a pin and a short pin axially clear of a bore, each lower bound at least the boxes' `12` with a finite upper bound, red when the windowed bound replaces the coarse enclosure); `agent-docs/linkage-check-design.md` §11's scene 8 | a pin that fills its bore; a circle spine in the undecided band |
 | 5 | the pin-in-bore band readings of `agent-docs/clearance-band-design.md` §4: the circle pair band, the crossing annulus and the rim height band | that document's §5 and §6 |
 | 6 (planned) | the flat-feature readings of `agent-docs/clearance-band-design.md` §5 | that document's §6 less the near-parallel plane faces |
 
@@ -929,17 +926,16 @@ held displacement into the published interval rather than discarding it. A
 The staged test MUST prove a bounds-disjoint loft pair has no `Clearance` row
 and reports `Suspect` before the adapter lands.
 
-Modify reach DX6 adds boundary readers for `capBlendPayload` and
-`stackedPrismPayload`; it does not add a weaker clearance proof. Readers emit
-only exposed analytic faces and omit cancelled slab interfaces. Any new face
+Modify reach DX6 specifies boundary readers for `capBlendPayload` and
+`stackedPrismPayload` without a weaker clearance proof. A reader emits
+only exposed analytic faces and omits cancelled slab interfaces. Any new face
 cell this kernel cannot certify follows §7's existing undecided result.
 
-Neither reader has landed. The cap-loop chamfer's DX6 cell is staged: this
+Neither reader exists. The cap-loop chamfer's DX6 cell is staged: this
 kernel builds no boundary model for a `capBlendPayload`, so boxes may still
 prove a pair disjoint on their own, and every other requested pair involving one
 returns `Suspect` until trimmed patch faces have a certified kernel reader.
-That staging is the same one the cup payload took before its own model landed,
-and for the same reason: admitting a trimmed patch face without a proof of its
+The cup payload is staged the same way, for the same reason: admitting a trimmed patch face without a proof of its
 trim would yield a false disjointness certificate, which is worse than an
 undecided pair — `Verify` would report a clearance the geometry does not have.
 

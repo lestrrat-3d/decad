@@ -23,8 +23,8 @@ This document ("trim §N" elsewhere) is the companion to `agent-docs/api-design.
 Fillet, Chamfer, Shell and Draft build only on recognised shape classes, and a mesh Boolean result reaches them
 only through per-surface-pair routes (blend R1–R6, reach §4–§8). Shell, Draft and Offset of a mesh Boolean result
 refuse outright, because the held mesh records polygons and no face trims. Blends between crossing cylinders outside
-blend R7's saddles, on cones or tori, and on oblique plane–cylinder rims refuse because their blend surface is outside the vocabulary.
-Variable-radius and face-to-face fillets have no entry point. This design adds one general path: lift any body whose
+blend R7's saddles, on cones or tori, and on oblique plane–cylinder rims refuse because their blend surface is outside
+the vocabulary. Variable-radius and face-to-face fillets have no entry point. This design adds one general path: lift any body whose
 faces carry exact analytic tags into a **trim graph** (faces on tags, edges on exact or certified curves, vertices
 with bounds), run the modify operation on the graph, mesh only the faces it changed, and prove the result.
 
@@ -64,11 +64,10 @@ export of the new blend surfaces; topology-changing offsets (merge, split, vanis
 - Shell keeps two corner semantics after increment 3a, split by receiver: an axis-square faceted solid with no vertex
   bound keeps the orthogonal shell's mitred cube erosion (`shell_orthogonal.go`, which runs first), and every
   trim-graph receiver takes ball erosion. `shell.go` and trim §1 state the split. Decisions records it.
-- Increments 2 and 3a carry staged tasks (Staged tasks). Increments 3b–12 are outlines: the PR that implements one
-  first replaces its outline with tasks in this document, in the same PR.
-- New internal packages get rows in `agent-docs/layout/internal-features.md`, because
-  `agent-docs/layout/internal-core.md` (12208 bytes) and `internal-checks.md` (11939 bytes) are near the 12288-byte
-  budget.
+- Increment 1 is implemented. Increments 2 and 3a carry staged tasks (Staged tasks). Increments 3b–12 are outlines;
+  the PR that implements one replaces its outline with tasks in this document.
+- New internal packages take rows in `agent-docs/layout/internal-features.md`, because `internal-core.md` and
+  `internal-checks.md` in the same directory are near their 12288-byte budget.
 - Fixtures reuse the apitest helpers `wedgedPlate`, `blendPlate` and `newRetentionScene`
   (`apitest/faceted_retained_blend_test.go`, `apitest/faceted_source_retention_test.go`).
 
@@ -83,10 +82,10 @@ polygons, so every face-moving operation refuses on a mesh result.
 
 | Row | Refusal site |
 |---|---|
-| Modify: "`Shell` of a mesh Boolean result outside the two-prism nested-boss Union route" | `internal/brepmodify/shell.go:151` "this evaluator shells a straight prism or its one-line Sweep reduction only" |
-| Modify: "Closed shell (`WithNoOpenings`) outside a full revolve, a straight prism…" (faceted part) | `internal/stackedshell/closed_refusal.go:29` (SX9) |
-| Feature: "`Draft` of a mesh Boolean result" | `internal/draftrecord/gates.go:25` (SD23) |
-| Sheets: "`Offset` of a solid other than an axis-square faceted one" | `offset.go:149` |
+| Modify: "`Shell` of a mesh Boolean result outside the two-prism nested-boss Union route" | `internal/brepmodify/shell.go` "this evaluator shells a straight prism or its one-line Sweep reduction only" |
+| Modify: "Closed shell (`WithNoOpenings`) outside a full revolve, a straight prism…" (faceted part) | `internal/stackedshell/closed_refusal.go` `RefuseClosed`, "this evaluator modifies no faceted boolean result" (SX9) |
+| Feature: "`Draft` of a mesh Boolean result" | `internal/draftrecord/gates.go` (SD23) |
+| Sheets: "`Offset` of a solid other than an axis-square faceted one" | `offset.go` `offsetSolid` |
 | Also consider: "Direct edits: … move a face of a solid that is not an orthogonal mesh solid" | `move_face.go` (orthogonal only) |
 
 ### RC2 — blend geometry enumerated per surface pair
@@ -109,8 +108,8 @@ trims the new face by other faces.
 
 | Row | Refusal site |
 |---|---|
-| Modify: "Retained edge blend or tangent chain whose new strip would cross another part" | `internal/retainedblend/strip_clear.go:173` |
-| Modify: "Open tangent chain on a mesh Boolean result whose concave end edge is an arc" | `internal/retainedblend/chain_arc_end.go:45`, `chain_open.go` |
+| Modify: "Retained edge blend or tangent chain whose new strip would cross another part" | `internal/retainedblend/strip_clear.go` |
+| Modify: "Open tangent chain on a mesh Boolean result whose concave end edge is an arc" | `internal/retainedblend/chain_arc_end.go`, `chain_open.go` |
 | (blend SR2) two selected edges sharing a vertex | `internal/retainedblend/route.go` "two selected edges share a corner" |
 
 ### RC4 — a held mesh cannot be re-tessellated
@@ -120,7 +119,7 @@ mesh refuses.
 
 | Row | Refusal site |
 |---|---|
-| Booleans: "Held mesh operand coarser than the pair tolerance after a Boolean chain" | `internal/meshbool/staging_error.go:21` |
+| Booleans: "Held mesh operand coarser than the pair tolerance after a Boolean chain" | `internal/meshbool/staging_error.go` |
 | Booleans: "A body whose boolean rims cross at a shallow angle … verified at a tolerance below its mesh bound" | `faceted-vertex-bounds-design.md` §3.6 refusal |
 
 ### RC5 — analytic receivers whose specific routes do not reach the selection
@@ -210,7 +209,7 @@ type Graph struct {
 	Vertices []Vertex
 }
 
-// Face is one receiver face on its exact tag.
+// Face is one receiver face on its exact tag. Its method PlaneTag returns the tag as a surfacegeom.Plane.
 type Face struct {
 	Node     *topo.Face
 	Group    int                 // the fp.Groups index its facets carry (fp.Src)
@@ -260,7 +259,7 @@ Lift rules (Table L). A failed rule returns `ErrNotLiftable`.
 | # | Rule | Increment |
 |---|---|---|
 | L1 | `b.Solid`; `len(b.Lumps) == 1`; the lump has one shell, not open | 1 (later: several shells) |
-| L2 | Every face has `RetainedTag`, `TagDeparture == 0`, `NormalBound == 0`, `Denoted == nil`, no stated `AxialDelta` above zero (`HasAxialDelta && AxialDelta != 0` declines: the true plane may sit off the tag), and a `Plane` tag | 1 (3b adds `Cylinder`, `Sphere`, `Cone`, `Torus` and denoted faces whose tag is the record, by `retainedblend`'s `tagIsRecord` rule) |
+| L2 | Every face has `RetainedTag`, `TagDeparture == 0`, `NormalBound == 0`, `HeldNormalBound == 0`, `Denoted == nil`, no stated `AxialDelta` above zero (`HasAxialDelta && AxialDelta != 0` declines: the true plane may sit off the tag), and a `Plane` tag | 1 (3b adds `Cylinder`, `Sphere`, `Cone`, `Torus` and denoted faces whose tag is the record, by `retainedblend`'s `tagIsRecord` rule) |
 | L3 | Every topo edge has exactly two distinct faces and curve `Line3` | 1 (3b: the closed forms of retention §10.1; 5: certified curves) |
 | L5 | Every vertex has valence 3. A valence-2 vertex cannot come from `facetedrecord.Build` except where the held hinge sign changes (`internal/facetedtopology/build.go` `breakAt`), which L6 rejects anyway, so it declines here | 1 (5 admits higher valence with a certified vertex) |
 | L6 | Convexity from tags: for edge `e` with faces `a = Faces[0]`, `b = Faces[1]`, exact outward normals `Na`, `Nb` (`U×V` of the tag frame, negated when `Reversed`) and held end points `p0`, `p1`, let `s = (Na × Nb) · (p1 − p0)` in exact rationals. Require `|s| > |Na × Nb|_up · (β0 + β1)`; `e` is convex when `s > 0`. The result must equal `topo.Edge.Convex`, else ErrNotLiftable ("the tags and the held mesh disagree on the edge's convexity") | 1 |
@@ -285,7 +284,8 @@ Interface (increment 1, planes):
 ```go
 package anasurf
 
-// ErrSingular marks three planes whose normals are linearly dependent in exact arithmetic.
+// ErrSingular marks three planes whose normals are linearly dependent in exact arithmetic, and a plane frame with no
+// usable normal.
 var ErrSingular = errors.New("anasurf: the planes do not meet in one point")
 
 // Plane is {x : N·x = c} for one c in C, with the material on the side N·x < c. N is exact and not unit.
@@ -297,8 +297,10 @@ type Plane struct {
 // PlaneOf reads a tag: N = U×V of the frame in exact rationals, negated when reversed; C is the point interval N·O.
 func PlaneOf(tag surfacegeom.Plane, reversed bool) (Plane, error)
 
-// Inward moves p a distance t into its material: C − t·|N|, |N| enclosed by proofbound.IntervalSqrt of N·N.
-// t must be positive.
+// Norm encloses |N| (proofbound.IntervalSqrt of N·N).
+func (p Plane) Norm() (proofbound.RatInterval, error)
+
+// Inward moves p a distance t into its material: C − t·|N|. t must be positive.
 func (p Plane) Inward(t *big.Rat) (Plane, error)
 
 // Point is an enclosure of one exact point.
@@ -382,10 +384,9 @@ type Loop struct {
 // Planar triangulates a planar face. n is the exact outward normal (anasurf.Plane.N); u, v is the tag frame used only
 // to project for internal/triangulation.Triangulate. When (u×v)·n < 0 it projects with (v, u) instead, so the outer
 // loop is counter-clockwise in the projection, as Triangulate requires. Indices refer to the concatenated loop
-// points. It refuses
-// (ErrUnsupported, TG5) when Triangulate drops a loop point, or when a triangle (a, b, c) fails the orientation
-// margin: s = n·((b−a)×(c−a)) exact must satisfy s > |n|_up·(2β(|b−a|_up + |c−a|_up) + 4β²), β the largest of its
-// corner bounds.
+// points. It refuses (ErrDropped when Triangulate drops a loop point, ErrMargin when a triangle (a, b, c) fails the
+// orientation margin; both wrap ErrUnsupported, TG5): s = n·((b−a)×(c−a)) exact must satisfy
+// s > |n|_up·(2β(|b−a|_up + |c−a|_up) + 4β²), β the largest of its corner bounds.
 func Planar(ctx context.Context, n [3]*big.Rat, u, v r3.Vec, loops []Loop) ([][3]int, error)
 ```
 
@@ -415,7 +416,9 @@ type NewFace struct {
 	Tris  [][3]int
 }
 
-// Splice is the rebuilt held mesh: the receiver's kept facets plus the new faces.
+// Splice is the rebuilt held mesh: the receiver's kept facets plus the new faces. Build refuses a splice whose Keep
+// omits a receiver facet, because the AreaSlack shortfall of a dropped facet needs the receiver's faces, which Build
+// does not take.
 type Splice struct {
 	Keep   []int     // receiver facet indices kept unchanged, with their groups
 	Verts  []r3.Vec  // new vertices; index len(fp.Verts)+i in NewFace.Tris
@@ -463,14 +466,16 @@ type Call struct {
 }
 
 // Closed builds the closed shell of b over fp. matched is false when b does not lift (trimgraph.ErrNotLiftable),
-// when Call.Inward is false, or when some edge of the graph is concave; the caller then keeps its refusal.
+// when Call.Inward is false, when some edge of the graph is concave, or when some face has more than one loop; the
+// caller then keeps its refusal.
 func Closed(ctx context.Context, env topo.Env, b *topo.Body, fp facetedrecord.Payload, call Call) (*topo.Body, bool, error)
 ```
 
 Construction:
 
-1. `g := trimgraph.Lift(ctx, b, fp)`; decline on `ErrNotLiftable`, on `!call.Inward`, or on any `!Edge.Convex`.
-2. `call.TDelta != 0` → TG7. `t, ok := proofbound.RatOf(call.T)`; `!ok` → TG7.
+1. `g := trimgraph.Lift(ctx, b, fp)`; decline on `ErrNotLiftable`, on `!call.Inward`, on any `!Edge.Convex`, or on a
+   face with more than one loop.
+2. `call.TDelta != 0` → TG7. `t, ok := proofbound.RatOf(call.T)`; `!ok` or `t ≤ 0` → TG7.
 3. For each face `i`: `P_i = anasurf.PlaneOf(tag, Reversed)`, `Q_i = P_i.Inward(t)`.
 4. For each vertex `v` with faces `a, b, c`: `w_v = anasurf.Meet3(Q_a, Q_b, Q_c)`; `ErrSingular` → TG3.
 5. Gate C1: for every vertex `v` and every face `j` not incident to `v`, `anasurf.StrictlyInside(w_v, Q_j)`; else TG6.
@@ -612,8 +617,7 @@ Each message ends with its code in parentheses, so a test asserts its own gate f
 ## Performance
 
 - Increment 1 adds one Lift (linear in topology), `O(V·F)` exact half-space tests for gate C1, and one held-fold scan
-  over the new facets (box tree, `internal/meshbool/held_embedding_tree.go`). Expected cost is below the receiver's
-  own Boolean.
+  over the new facets (box tree, `internal/meshbool/held_embedding_tree.go`).
 - Claim T's T-far is box-pruned to pairs within `t + δ` of each other.
 - Krawczyk work is per vertex and per chord; widen intervals with `proofbound.RatFloorGrid` to bound rational growth,
   and poll `ctx` per box (evaluator §9's polling rule).
@@ -621,8 +625,7 @@ Each message ends with its code in parentheses, so a test asserts its own gate f
 
 ## Rollout
 
-Each increment is one PR carrying its tests and the doc changes. Increment 1's PR also carries
-`agent-docs/trim-graph-design.md`.
+Each increment is one PR carrying its tests and the doc changes.
 
 | Inc | Lands | `missing-features.md` rows | Gate to start the next |
 |---|---|---|---|
@@ -655,7 +658,7 @@ refusal.
 
 ## Staged tasks
 
-Increment 1 has landed. Increment 2 is Tasks 8-9. Increment 3a is Tasks 10-13. Later increments are the outline rows
+Increment 1 is implemented. Increment 2 is Tasks 8-9. Increment 3a is Tasks 10-13. Later increments are the outline rows
 of Component 6; the PR that implements one adds its tasks here first.
 
 ### Task 8: `trimshell.Open` for convex planar receivers
@@ -665,7 +668,7 @@ of Component 6; the PR that implements one adds its tasks here first.
 - **What:** Component 6 increment 2: removed planes unshifted, Claim C1 over `C`, one lip face per removed face (outer
   loop the face's, one hole the cavity's face on that plane, reversed), groups `lip(k)` keeping the removed face's tag,
   `Reversed` and `CapRecord`. Adjacent removed faces and "all faces removed" decline.
-- **Depends on:** 7.
+- **Depends on:** increment 1.
 - **Tests:** hand-built pentagonal prism with the top removed, `t = 1`: lip face has 2 loops; cavity vertices on the
   top plane are exact meets of the top plane with two offset planes.
 - **Done when:** `go test ./internal/trimshell/` passes.
@@ -691,7 +694,7 @@ of Component 6; the PR that implements one adds its tasks here first.
   table; closed-form curves: foot line, cylinder ∩ plane (`Circle3`/`Arc3` when the axis is normal, `Ellipse3` per
   retention §10.5 when oblique with `k ≥ 10⁻³`, else TG3), sphere–cylinder tangency great circle; each returns
   enclosed sample points at a requested angular step.
-- **Depends on:** 7.
+- **Depends on:** increment 1.
 - **Tests:** an ellipse arc's enclosed points lie on both surfaces within their bounds and match the retention §10.5
   closed form; `k = 5·10⁻⁴` refuses TG3.
 - **Done when:** `go test ./internal/anasurf/` passes.

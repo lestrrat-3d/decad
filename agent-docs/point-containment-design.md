@@ -70,13 +70,15 @@ is undecided. The calculation compares exact rationals and uses no sampled
 distance or tolerance-based predicate.
 
 **Free path.** `S` bounds the whole body's symmetric difference, so on a large
-faceted result the ball rule decides only far from the boundary: a point 0.3 mm
-inside a bore of a 140 mm mesh Boolean result has `4R³ ≈ 0.09` against `S ≈ 11`.
+faceted result the ball rule decides only far from the boundary: a point in a
+bore of a large mesh Boolean result can have `4R³` far below `S`.
 `S` is composed by set algebra over the operations that made the body and
 names no region, so no part of it can be read as the share near `p`. A point the
 held mesh puts outside is then proved outside, for a distance query, by a free
 path, which reads `B` and no volume. Point location keeps the ball rule alone,
-since its callers ask many points of fine meshes, such as a lattice's. Take points `q_0 = p, q_1, …, q_k` with exact held-mesh distances
+since its callers ask many points of fine meshes, such as a lattice's.
+
+Take points `q_0 = p, q_1, …, q_k` with exact held-mesh distances
 `L_i` (rounded down) and `R_i = L_i − B > 0`. The open ball of radius `R_i` about
 `q_i` meets neither boundary: `M`'s lies at least `L_i` from `q_i`, and every
 point of `T`'s lies within `B` of `M`'s, so at least `L_i − B` from `q_i`. When
@@ -91,7 +93,9 @@ along trial directions: the six axis directions and both ways along each edge
 of the held triangle nearest `p`, which follow a bore's or a slot's wall out of
 it. A direction takes at most 64 balls and is dropped when a ball falls below
 1/8 of the first or the balls stop overlapping; a query spends at most 128 exact
-mesh distances on chains. The directions only steer the search; each chain is checked exactly. A
+mesh distances on chains (`maxEscapeSteps`, `maxEscapeScans`, `escapeShrink` in
+`internal/pointquery/escape.go`). The directions only steer the search; each
+chain is checked exactly. A
 point the held mesh puts inside, or one whose chains all stop, stays
 undecided. The proof is only as sound as `B`: an understated `B` lets a chain
 pass a true boundary the held mesh does not show (`TestLocateByFreePath`).
@@ -207,8 +211,8 @@ func (b *Body) ClosestPoint(ctx context.Context, p r3.Vec, tol units.Value) (Clo
 func (f *Face) ClosestPoint(ctx context.Context, p r3.Vec, tol units.Value) (ClosestPoint, error)
 ```
 
-Both methods take `DistanceToPoint`'s inputs and return its input and tessellation errors. `Distance` is the reading
-`DistanceToPoint` gives for the same call, and `Point` is the mesh point that attains it.
+Both methods take `DistanceToPoint`'s inputs and return its input and tessellation errors. `Distance` is the
+reading `DistanceToPoint` gives for the same call, and `Point` is the mesh point that attains it.
 
 | Decision | Rule |
 |---|---|
@@ -270,8 +274,8 @@ Correctness: the question is whether an exact rational point lies in the
 region the record denotes, and every boundary piece this route reads is exact
 rational data, so a fixed set of sign tests over exact rationals decides it
 with no rounding, sampling or tolerance. `sketch` publishes no
-point-in-profile query (`sketch@b8117fc` exposes `Profile.Containment(*Loop)`
-only), and a private scene rebuilt from the record would rebuild its boundary
+point-in-profile query (`Profile.Containment(*Loop)` is the only containment
+query it exposes), and a private scene rebuilt from the record would rebuild its boundary
 from floats and could not say on which side of an exact boundary an exact
 point lies. Performance: one query reads each recorded segment once, where a
 scene would be built and arranged per point.

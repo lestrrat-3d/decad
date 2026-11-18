@@ -275,7 +275,7 @@ the next route.
 
 ### Admission
 
-`Union` dispatches to `tryLoftCylinderUnion` for one exact circular prism
+`Union` dispatches to `loftcylinder.JoinUnion` for one exact circular prism
 and one or more axial Loft copies. The circular prism has one centered circle,
 an XY frame, and no section displacement. The Loft copies share one
 authenticated source identity. Each copy has two flush XY sections, an axial
@@ -309,7 +309,7 @@ result must still meet the 0.1 mm boundary limit. Its source record names the
 actual blank and teeth plus the private local proof bodies and pose. A later
 tooth join rebuilds the local certificate from those proof bodies and an
 exactly matched new tooth. Ordinary `Transform` or `Copy` of the joined result
-clears the record as before.
+clears the record.
 The source record keeps private local source bodies, not a second joined mesh.
 A later centered bore rebuilds the canonical join from those sources only
 after its cheap source and pose checks pass.
@@ -408,10 +408,10 @@ matching directed edges and exact area. `LoftCrossingAudit` checks the entire
 constructed shell before the payload records `ContactAudited=true`. The
 faceted-body audit then checks manifold closure and orientation.
 The structural join uses a 16-million candidate-pair scan ceiling in this
-audit; other callers keep the generic eight-million ceiling. The triangle
-ceiling and all exact pair classifications are unchanged. A full structural
-ring join scans more candidate pairs than the generic eight-million ceiling
-allows; `AuditMaxScans` in `internal/loftcylinder/xy.go` owns the value.
+audit, because a full structural ring join scans more candidate pairs than the
+generic eight-million ceiling allows. Other callers keep the generic ceiling.
+The triangle ceiling and all exact pair classifications are unchanged.
+`AuditMaxScans` in `internal/loftcylinder/xy.go` owns the value.
 An exact midpoint and outline-contact audit keeps every omitted held root
 chord inside its filled cap; only the two global root endpoints may touch
 the outline.
@@ -669,9 +669,7 @@ as its hole. The new inward wall keeps the tool's cylinder face provenance.
 The final mesh passes orientation, vertex-link, and exact crossing audits.
 This specialized bore uses the structural join's 16-million scan ceiling;
 other `LoftCrossingAudit` callers keep their generic eight-million ceiling.
-The exact pair classifications and triangle ceiling are unchanged. The real
-17-tooth, 1 mm centered bore audited 10,408 triangles, 11,281,630 box scans,
-and 3,555,085 overlapping candidate pairs in a diagnostic run.
+The exact pair classifications and triangle ceiling are unchanged.
 An exact cap audit also checks that each cap group's triangles have the
 area of its outer polygon less its inner polygon, and that their directed
 edges pair internally and match both recorded boundary loops. The result
@@ -814,26 +812,24 @@ exceeds the cap, the axis uses the plain scan. Every skipped duplicate keeps
 its original facet position, so exact scanning still polls cancellation on the
 plain scan's schedule.
 
-The placement runs under a range guard. Each projected vertex coordinate is
-zero or between `2⁻³⁰⁰` and `2²⁴⁰` in magnitude; each coordinate difference
-and run offset is zero or between `2⁻³⁰⁰` and `2²⁵⁰`; each slope and product
-is between `2⁻⁶⁰⁰` and `2⁵⁰⁰`, a slope being zero exactly when its
-difference is zero and a product exactly when a factor is. A mesh with any
-quantity outside the guard gets no index on that swept axis, and the scan on
-that axis is the plain all-facets scan, so the guard can only choose the
-exact scan. Inside it no multiplication or division underflows or overflows
-and a subtraction with a subnormal result is exact, so every operation has a
-relative error of at most `2⁻⁵³` and the computed slope has the exact slope's
-sign. On a line through `(a, b)` with float slope `s`, the margin is
-`1e-12·K + 2⁻¹⁰⁰⁰` with `K = |b| + (|x|+|a|)·(1+|s|)`. The computed height is
-within `8·2⁻⁵³·K` of the exact one, and rounding a band end adds at most
-`2⁻⁵³` of its magnitude plus of the margin, so the total is below
-`9.5·2⁻⁵³·K` plus `2⁻⁵³` of the margin. `K` is zero or at least `2⁻³⁰⁰`, so
-`1e-12·K` is a normal float. The computed margin is within a relative
-`7·2⁻⁵³` of the real `1e-12·K + 2⁻¹⁰⁰⁰` (four roundings in the computed `K`,
-two more for the product and the floor sum), so it is at least
-`(1-7·2⁻⁵³)·1e-12·K`, about 900 times the total; the floor only serves the
-case `K = 0`. Every cell strip is also widened by one
+The grid is `internal/meshbool/parity_index.go`'s parity index, and that file's
+comments own the derivations below. Its placement runs under a range guard.
+Each projected vertex coordinate is zero or between `2⁻³⁰⁰` and `2²⁴⁰` in
+magnitude; each coordinate difference and run offset is zero or between `2⁻³⁰⁰`
+and `2²⁵⁰`; each slope and product is between `2⁻⁶⁰⁰` and `2⁵⁰⁰`, a slope being
+zero exactly when its difference is zero and a product exactly when a factor is.
+A mesh with any quantity outside the guard gets no index on that swept axis,
+and the scan on that axis is the plain all-facets scan, so the guard can only
+choose the exact scan. Inside it no multiplication or division underflows or
+overflows and a subtraction with a subnormal result is exact, so every
+operation has a relative error of at most `2⁻⁵³` and the computed slope has
+the exact slope's sign. On a line through `(a, b)` with float slope `s`, the
+margin is `1e-12·K + 2⁻¹⁰⁰⁰` with `K = |b| + (|x|+|a|)·(1+|s|)`. The computed
+height is within `8·2⁻⁵³·K` of the exact one, and rounding a band end adds at
+most `2⁻⁵³` of its magnitude plus of the margin, so the total is below
+`9.5·2⁻⁵³·K` plus `2⁻⁵³` of the margin. The computed margin is within a
+relative `7·2⁻⁵³` of the real margin, so it is about 900 times the total; the
+floor only serves the case `K = 0`. Every cell strip is also widened by one
 float step on each side (`2⁻²⁹⁹` around an edge of magnitude at most `2⁻³⁰⁰`),
 because the query's coordinate is the nearest float to an exact value that
 may lie just outside a cell edge. The grid is built once per parity mesh and
@@ -842,19 +838,19 @@ and polls the context at every multiple of 256 in original facet position,
 as the plain scan does.
 
 An axis whose placement would list more than `2²³` (cell, facet) memberships
-gets no index and the scan on that axis is the plain one. The placement
-collects each facet's cells as runs, one per grid column (one per grid row for
-a steep segment), and the runs are expanded in ascending facet order into a
-counting sort, so the lists are those one append per membership would build. A
-run costs 8 bytes and lists at least one membership, the run slice is
-allocated once at its final bound, and a facet adds at most 258 runs before the
-check, so the cap bounds the collected runs at about 64 MiB; the built index
-costs 4 bytes per membership, at most 32 MiB. The shells here list about 43
-thousand per index. This bounds the memberships only: the build also holds the
-facet boxes (40 bytes per facet), the facet kinds and run offsets, two per-cell
-count arrays and the vertex projection cache of segment facets. The count is
-checked after every facet, before any offset is summed, so the 32-bit offsets
-cannot overflow, and an index of exactly the cap is built.
+(`ParityIndexMaxMemberships`) gets no index and the scan on that axis is the
+plain one. The placement collects each facet's cells as runs, one per grid
+column (one per grid row for a steep segment), and expands the runs in
+ascending facet order into a counting sort, so the lists are those one append
+per membership would build. A run costs 8 bytes and lists at least one
+membership, and a facet adds at most 258 runs before the check, so the cap
+bounds the collected runs at about 64 MiB; the built index costs 4 bytes per
+membership, at most 32 MiB. The shells here list about 43 thousand per index.
+The bound covers memberships only: the build also holds the facet boxes
+(40 bytes per facet), the facet kinds and run offsets, two per-cell count
+arrays and the vertex projection cache of segment facets. The count is checked
+after every facet, before any offset is summed, so the 32-bit offsets cannot
+overflow, and an index of exactly the cap is built.
 An outward-rounded box gap can omit a held wall triangle only when it strictly
 exceeds that tooth's matched Loft departure; all remaining pairs use the exact
 triangle clearance check.

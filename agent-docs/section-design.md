@@ -85,11 +85,9 @@ or a stack whose profile carries a displacement, returns `ErrUnsupported`.
 
 For each slab, use the parallel prism gate above with its recorded frame,
 placement and two levels. The requested plane must lie strictly inside one
-slab; an interface, cap, exterior level or unsupported frame is refused.
-The selected region is reconstructed on a fresh Sketch and checked against its
-record through the same seam proof as an exact prism. This is an exact planar
-section, including any recorded holes, and can enter ordinary profile
-consumers. It does not treat a tessellated BRep face as a source profile.
+slab. The selected region is reconstructed and checked as for an exact prism.
+The result is an exact planar section, holes included, and can enter ordinary
+profile consumers. A tessellated BRep face is never a source profile.
 
 ## Mesh Boolean result read through its operation history
 
@@ -107,7 +105,7 @@ that `boolchain.Expandable` accepts (`agent-docs/prism-boolean-design.md` Part R
 warning naming an accepted change, such as a gap shift or an embedding reach.
 Its producer must be a public `Cut`, `Union` or `Intersect` with exactly two
 consumed inputs; a `Cut` reads its target, then its tool. Such a body denotes
-`A op B` over its two recorded inputs exactly (same document, "Assumptions").
+`A op B` over its two recorded inputs exactly (`agent-docs/prism-boolean-design.md` Part R, "Assumptions").
 This is the set-equality certificate that `agent-docs/operation-history-design.md`
 requires before a source payload is reused. A gap-shifted result, a `Copy` or
 `Transform` of a result, a many-body `Union` and a body without a Boolean
@@ -163,7 +161,7 @@ Write `X°` for the interior of a closed set X in R³, and `int_P`, `cl_P` for
 interior and closure inside the plane P. The section of a solid X is its
 material region `σ(X) = cl_P(int_P(X ∩ P))`: the slice with any
 lower-dimensional pieces removed. The Booleans are regularized: `A ∪ B`,
-`cl(A° ∩ B°)` and `cl(A° \ B)` (boolean-chain-regroup-design, "Assumptions").
+`cl(A° ∩ B°)` and `cl(A° \ B)` (`agent-docs/prism-boolean-design.md` Part R, "Assumptions").
 The 2D operations on regions in P are the same regularized operations.
 
 **Hypothesis H for an operand X at P.** (H1) `X° ∩ P = int_P(X ∩ P)`, and
@@ -442,7 +440,7 @@ circle returns `ErrUnsupported`.
 
 ## Cardinal plane of an authenticated source sphere
 
-This class reads the occupied-ball certificate from `sourceSphereAtPose` for a
+This class reads the occupied-ball certificate from `contactround.SphereAtPose` for a
 solid, full `Revolve` of one complete semicircle and its on-axis diameter. The
 certificate rejects a displaced meridian, altered face topology, and a placed
 body whose motion does not map signed world axes to signed world axes. A sphere
@@ -633,7 +631,7 @@ including `Extrude`.
 
 ## Oblique plane of an authenticated source sphere
 
-This class uses the same `sourceSphereAtPose` occupied-ball certificate. It
+This class uses the same `contactround.SphereAtPose` occupied-ball certificate. It
 requires a noncardinal requested frame and a strictly interior plane cut.
 A sphere placed by an unsupported rotation still fails the source certificate.
 
