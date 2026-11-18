@@ -2,12 +2,12 @@
 
 `Trim`, `Extend` and the original `Split` arms take bodies whose sweeps share one
 generator: the 3D intersection reduces to the 2D crossings of the two
-operands' recorded sections, routed entirely through `sketch` — decad selects
+operands' recorded sections, routed entirely through `sketch`. decad selects
 among the fragments and cells `sketch`'s arrangement returns and rebuilds a
-swept payload from the selection; it never computes a crossing, a cut
+swept payload from the selection. It never computes a crossing, a cut
 parameter, or a side of its own. Companion to
 `agent-docs/prism-boolean-design.md`, whose entry gate, private scene, region
-classifier and displacement bounds this design reuses rather than restates,
+classifier and displacement bounds this design reuses,
 and to `agent-docs/surface-design.md`, which owns the sheet body every one of these
 operations produces or consumes. References of the form "core §N" are to
 `agent-docs/api-design.md`; "surface §N" to `agent-docs/surface-design.md`; "prism §N" to
@@ -18,7 +18,7 @@ operations produces or consumes. References of the form "core §N" are to
 Trim, Extend and a sheet operand in a boolean each need surface-surface or
 surface-solid intersection, and trimming a sheet with another sheet would
 decide topology from a fitted
-curve. Core §2.1 states the general case behind it — cylinder against
+curve. Core §2.1 states the general case: cylinder against
 cylinder at an arbitrary angle is a quartic space curve with no closed form,
 and a flipped floating-point sign on a fit gives a solid with a hole in its
 skin rather than a slightly wrong answer.
@@ -74,12 +74,12 @@ this evaluator cannot build.
 | # | Condition | Why exact, not tolerant |
 |---|---|---|
 | S1 | Both operands carry a payload of the same sweep family: prism-family (`prismPayload`, including a `surfaceResult` sheet, or `chainPayload`) or revolve-family (`revolvePayload`, `chainRevolvePayload`). | Structural. A mixed pair has two different generators and no common 2D section space, so its intersection is a genuine space curve (§4's own row). |
-| S2 | Neither operand's accumulated placement is a reflection (`!xform.IsReflection()`). | Prism G2's reason verbatim: a reflected operand flips winding and arc sense through the arrangement, and threading a sign correction through §3's selection is deferred rather than guessed. |
+| S2 | Neither operand's accumulated placement is a reflection (`!xform.IsReflection()`). | A reflected operand flips winding and arc sense through the arrangement. Prism G2 re-winds the record to admit it, but §3's selection has no sign correction, so this design refuses. |
 | S3 | Every segment of both operands' records is a `LineSeg`, `CircleSeg` or `ArcSeg`. | Prism G4's reason verbatim: `TExact`'s own contract is a whole-scene gate (seam §1), so one free-form segment anywhere in the private arrangement makes every bound in it read `false`, including the line and arc bounds beside it. |
-| S4 | **The generators are the same, exactly.** Prism-family: prism G3's test unchanged — `worldNormalA == worldNormalB` (Go `==` on the stored `r3.Vec` floats) and `(worldOriginB − worldOriginA)·worldNormalA == 0.0` against the literal zero. Revolve-family: `frameA == frameB` and the resolved AXIS equal component-wise — its anchor `aU`/`aV`, its direction `dU`/`dV` and each of those four fields' own proven bound, the eight `axisInPlane` resolves and the side flip orients — both under Go `==` on the stored floats, with both meridians on the side `internal/revolveplan/axis_side.go` already resolved. For `Trim` and `Extend` both meridians must also be proven clear of the axis, read off the axis snap that has ALREADY run (no walk endpoint sits at `ρ == 0`) rather than off a fresh measurement; `Split` does not take that clause (§2.2). The remaining `axisFrame` fields — `snapTol`, `radialAdmitAllow`, `axialExtentUpper`, `snap` — are each operand's own admission allowances, derived from its OWN section rather than from the generator, so two genuinely co-axial operands differ in them by construction and comparing them would refuse every admissible pair. | This is decad's own admission decision, so CLAUDE.md's reject-only rule binds it directly and a residual test here would be the admission gate on a residual that rule forbids. Prism §3.3 states what the exactness excludes and why loosening it is not the repair; the same reading governs here, and the revolve arm's frame equality is what makes §3.1's re-expression the identity by construction rather than by a computation. |
+| S4 | **The generators are the same, exactly.** Prism-family: prism G3's test unchanged — `worldNormalA == worldNormalB` (Go `==` on the stored `r3.Vec` floats) and `(worldOriginB − worldOriginA)·worldNormalA == 0.0` against the literal zero. Revolve-family: `frameA == frameB` and the resolved AXIS equal component-wise — its anchor `aU`/`aV`, its direction `dU`/`dV` and each of those four fields' own proven bound, the eight `axisInPlane` resolves and the side flip orients — both under Go `==` on the stored floats, with both meridians on the side `internal/revolveplan/axis_side.go` already resolved. For `Trim` and `Extend` both meridians must also be proven clear of the axis, read off the axis snap that has ALREADY run (no walk endpoint sits at `ρ == 0`) rather than off a fresh measurement; `Split` does not take that clause (§2.2). The remaining `revolveaxis.Frame` fields — `SnapTol`, `RadialAdmitAllow`, `AxialExtentUpper`, `Snap` — are each operand's own admission allowances, derived from its OWN section rather than from the generator, so two genuinely co-axial operands differ in them by construction and comparing them would refuse every admissible pair. | This is decad's own admission decision, so CLAUDE.md's reject-only rule binds it directly and a residual test here would be the admission gate on a residual that rule forbids. Prism §3.3 states what the exactness excludes and why loosening it is not the repair; the same reading governs here, and the revolve arm's frame equality is what makes §3.1's re-expression the identity by construction rather than by a computation. |
 | S5 | **For `Trim`, the tool's section is one closed hole-free loop** — for a prism-family tool that is `ProfileRecord.Outer` with `Holes` empty, and a `chainPayload` tool fails the row. `Extend` and `Split` do not take it. | The side reading (§3.2) is "does this cell lie inside the tool's own loop", and `sketch` answers it by which cells its arrangement publishes. A holed tool publishes its hole's interior as a bounded cell of its own, which that reading would misread as material; an open tool's section bounds no region, so there is no inside to name. `Extend` reads the nearest crossing and `Split` returns every piece, so neither reads a side and neither hazard reaches them. |
 | S6 | **The tool spans the receiver over the sweep parameter.** Prism-family: `z0_tool' <= z0_recv && z1_tool' >= z1_recv` after prism G5's origin shift `z' = z + (originB − originA)·normalA`. Revolve-family: the same relation over `phi0`/`phi1`. | A tool that stops inside the receiver ends its cut at a level the receiver's own record does not state, so the result would carry a face at that level and stop being the sweep of one section over one interval. The comparison is prism G5's: exact over each level's held float, displacement and denoted rational, so a tool end within its displacement of a receiver end, with no shared denoted rational, does not span. A chain sheet records its extent's denoted levels as `prismPayload` does, so a chain tool or receiver at 0.2 in or 0.3 in spans a receiver at the same denoted level. The shift is bookkeeping on an axis S4 certified. |
-| S7 | **Both operands carry a zero section displacement, the re-expression is the identity in the stored floats, and every segment either operand's own record CONSUMES spans its entity's natural domain** (prism's `wholeSegmentRange` reading, taken off the recorded range and never off the walk's closed-ness). `Extend`'s one exception is the segment being extended, whose recorded range must be narrower (§2.2) and whose entity §3.1 recreates over its full domain instead of walking it. | Prism §3.4 reroutes a split boundary to the mesh path under exactly these three causes — a source displacement, a walk charge, a nonidentity re-expression — because each can move a transverse cut by its displacement divided by the crossing sine and no certified crossing-sensitivity bound exists. A trim always splits a boundary, so the condition is never vacuous, and with no mesh path to reroute to the same three causes refuse. Stating the third as a record property rather than as a scene-time charge makes it decidable before the arrangement runs, which is what lets every miss be one refusal at the call. §5 states the cost and what would lift it. |
+| S7 | **Both operands carry a zero section displacement, the re-expression is the identity in the stored floats, and every segment either operand's own record CONSUMES spans its entity's natural domain** (`prismcells.WholeSegmentRange`, taken off the recorded range and never off the walk's closed-ness). `Extend`'s one exception is the segment being extended, whose recorded range must be narrower (§2.2) and whose entity §3.1 recreates over its full domain instead of walking it. | Prism §3.4 reroutes a split boundary to the mesh path under exactly these three causes — a source displacement, a walk charge, a nonidentity re-expression — because each can move a transverse cut by its displacement divided by the crossing sine and no certified crossing-sensitivity bound exists. A trim always splits a boundary, so the condition is never vacuous, and with no mesh path to reroute to the same three causes refuse. Stating the third as a record property rather than as a scene-time charge makes it decidable before the arrangement runs, which is what lets every miss be one refusal at the call. §5 states the cost and what would lift it. |
 
 S1–S7, with §2.2's receiver rows, are what the gate checks before touching
 `sketch`. Passing them admits the pair to §3's resolution, which has
@@ -153,7 +153,7 @@ code:
   entity's full-domain data (record.go's contract: a cut fragment carries the
   entity's unchanged defining data and a narrower range), so the recreation
   introduces no coordinate at all — and it needs no `cos`/`sin` walk, which is
-  why `prismProfileHasTrimmedCircularSource`'s refusal does not reach this
+  why `prismcells.ProfileHasTrimmedCircularSource`'s refusal does not reach this
   path.
 - **The recreated range is ALWAYS ascending, `t` from 0 to 1**, whichever way
   the receiver's own recorded range runs. This is what makes the scene entity's
@@ -276,28 +276,26 @@ assembly runs at all.
 
 ### 3.4 What the result carries
 
-A trimmed sheet's section is a SET of open walks, and no payload holds one
-today: `chainPayload` (`extrude.go`) holds a single `ChainRecord` and carries
-no section displacement, and `chainRevolvePayload` (`revolve.go`) is its
-angular twin. **Both gain a walk set and a section displacement**, and a
-single-walk ribbon becomes the one-element case:
+A trimmed sheet's section is a SET of open walks. `chainPayload` (`chainrecord.Payload`) and
+`chainRevolvePayload` (`revolveplan.ChainPayload`, its angular twin) both carry a walk set
+and a section displacement, and a single-walk ribbon is the one-element case:
 
-- `chains []ChainRecord` in place of `chain ChainRecord`. Surface §2.2 already
+- `Chains []ChainRecord`. Surface §2.2 already
   gives a sheet one lump per connected piece of boundary, so each walk is one
   lump holding one shell, and `Body.Lumps()` reporting more than one still
   means the body is disconnected.
-- `sectionDelta float64`, on `prismPayload`'s own terms (prism §7): the proven
+- `SectionDelta float64`, on `prismPayload`'s own terms (prism §7): the proven
   upper bound on how far any recorded boundary coordinate of the section sits
   from the section its construction denotes. It is zero for every ribbon a
-  caller builds through a chain `Extrude` or a chain `Revolve`, and this design's
-  trim is the first construction that sets it nonzero.
+  caller builds through a chain `Extrude` or a chain `Revolve`, and a trim is the only
+  construction that sets it nonzero.
 
 A prism-family ribbon also carries `prismPayload`'s two level denotations
 (`Z0Denoted`, `Z1Denoted`, `agent-docs/prism-boolean-design.md` Part S §2.1). A chain
 `Extrude` records them as `Extrude` does, a placed copy and `Extend`'s result
 keep them, and a trimmed ribbon records none.
 
-The alternative — a new payload type per arm — was rejected: it would put a
+A separate payload type per arm is not used: it would put a
 second owner on the ribbon's own wall build, its extent readings and its mesh,
 every one of which reads the walk set and nothing else.
 
@@ -370,14 +368,14 @@ point pointing here.
 | RS5 | A fragment of the receiver's section lies on the tool's own boundary | `ErrUnsupported` | No |
 | RS6 | `Trim` keeps every fragment of the receiver, or none | `ErrDegenerate` | No |
 | RS7 | `Split`'s tool separates no part of the target | `ErrDegenerate` | No |
-| RS8 | The private scene exceeds `prismMaxArrangementSegments`, or the work budget exhausts before resolution completes | `ErrUnsupported` | No — a simpler input clears it |
+| RS8 | The private scene exceeds `prismcells.MaxArrangementSegments` (4096), or the work budget exhausts before resolution completes | `ErrUnsupported` | No — a simpler input clears it |
 | RS9 | `recordEdge`/`falsifyRange` rejects a surviving fragment (`TExact` disproven — an internal `sketch` inconsistency, reported upstream per seam §3) | `ErrUnrecordableProfile` | No, and it should not occur on a certified arrangement; a defensive check |
 | RS10 | A surviving walk's recorded segments do not join at an interior junction (`falsifyLoopJoins`, seam §3, run at interior junctions only per seam §2.2) | `ErrUnrecordableProfile` | No — a differently-drawn operand closes |
 | RS11 | `Trim`, `Extend` or `Split` handed a retired body, or bodies owned by different documents | `ErrRetiredBody` / `ErrForeignBody` | The existing uniform terms (core §6) |
 | RS12 | `Extend` handed a receiver whose section is a closed walk, or an edge that is not one of the two sweep edges its free ends carry | `ErrUnsupported` | Permanent for the closed receiver — the operation it wants is an extent, not an intersection |
 | RS14 | `Extend` handed a revolve pair either of whose meridians touches the resolved axis | `ErrUnsupported` | No — a cut fragment ending on the axis needs pole topology |
 
-The work budget and cancellation are `internal/proofbound/budget.go`'s existing `workBudget` and
+The work budget and cancellation are `internal/proofbound/budget.go`'s existing `WorkBudget` and
 prism §10's discipline unchanged: one counter per attempt, charged per created
 entity and per candidate cell or edge touched, polled at phase boundaries, and
 `s.Profiles()` run in one bounded worker while the caller selects against
@@ -397,8 +395,8 @@ Every recorded field of a result is one of:
   endpoint.
 
 So **one term displaces the result, and it is prism §7's `δ_cut`**: the
-parameter allowance `internal/proofbound/bounds.go`'s `cutParamUlps` states, times the carrier's
-own speed over its parameterisation through `cutDisplacementAllow` — the chord
+parameter allowance `internal/proofbound/bounds.go`'s `proofbound.CutParamUlps` (8 ulps) states, times the carrier's
+own speed over its parameterisation through `proofbound.CutDisplacementAllow` — the chord
 for a line, `2πR` for a circle or an arc. `δ_cut` is the largest such
 allowance over the surviving fragments, and the result's `sectionDelta` is
 `δ_cut` up-rounded. Prism §7's other three terms are all zero by S7 and S4:
@@ -431,17 +429,17 @@ radial integrand and the arc length together. The term therefore folds INTO the
 moment rather than sitting beside it.
 
 `δ_cut` itself is family-generic: it is derived in the meridian plane, over the
-same carriers S3 admits, and `trimCutChargeUV`'s per-component reading applies
+same carriers S3 admits, and `prismcells.TrimCutChargeUV`'s per-component reading applies
 unchanged — charged at exactly the endpoint whose own recorded parameter is not
 a natural bound, and at neither endpoint of a segment the arrangement did not
 cut. What differs is that a revolve measures in AXIS coordinates `(z, ρ)`
 rather than in the plane-local `(u, v)` the record states, and
-`axisFrame.toAxisRhoBound` reads `(u, v)` as exact leaves by its own stated
+`revolveaxis.Frame.ToAxisRhoBound` reads `(u, v)` as exact leaves by its own stated
 contract. That contract already names the caller this design supplies: "a
 caller whose (u, v) is itself only bounded folds that in separately". This is
 that caller, and the fold is below.
 
-**The fold.** `axisFrame.toAxis` is the stored-float rotation
+**The fold.** `revolveaxis.Frame.ToAxis` is the stored-float rotation
 `z = Δu·dU + Δv·dV`, `ρ = Δv·dU − Δu·dV` about the resolved anchor. It is
 linear, so a plane-local endpoint displacement `(δu, δv)` moves the two axis
 coordinates by at most
@@ -449,7 +447,7 @@ coordinates by at most
 - `δz ≤ |δu·dU| + |δv·dV|`
 - `δρ ≤ |δv·dU| + |δu·dV|`
 
-each composed outward through `absSumUpper` over `productUpper` of the two
+each composed outward through `proofbound.AbsSumUpper` over `proofbound.ProductUpper` of the two
 stored factors. No square root and no transcendental appears, so no step here
 needs an accuracy contract `math` does not give.
 
@@ -457,39 +455,39 @@ needs an accuracy contract `math` does not give.
 every reading downstream is already composed from those three, so no reading
 gains arithmetic of its own:
 
-- `startVBound`/`endVBound` gain `δρ` for their own endpoint, composed BEFORE
-  the axis snap, so the snap's own discarded magnitude (`snapToZeroAllow`, the
+- `StartVBound`/`EndVBound` gain `δρ` for their own endpoint, composed BEFORE
+  the axis snap, so the snap's own discarded magnitude (`proofbound.SnapToZeroAllow`, the
   snapped-pole charge) composes on top of the widened figure rather than under
   it.
 - `lengthBound` gains both endpoints' total displacement `absSumUpper(δz, δρ)`,
   which is the chord's own triangle inequality: a segment whose two ends each
   move by at most that much changes length by at most their sum.
-- `coordUpper` and `lengthUpper` — the ENVELOPES — gain the same figures, so
+- `CoordUpper` and `LengthUpper` — the ENVELOPES — gain the same figures, so
   `radialUpper` and `axisMomentUpper` enclose the TRUE section rather than only
   the recorded one. This step is what makes the charge survive at all:
-  `walkAxisMoment` clamps its composed bound with `math.Min` against
+  `revolvemass.WallAxisMoment` clamps its composed bound with `math.Min` against
   `conservativeValueError(value, axisMomentUpper)`, and an envelope covering
   only the recorded meridian would clamp the charge straight back off.
 
-`Area` then needs no new term. `walkAxisMoment` composes `∫ρ ds` from exactly
-`startVBound`, `endVBound`, `lengthBound` and the envelope, and the wall build
+`Area` then needs no new term. `revolvemass.WallAxisMoment` composes `∫ρ ds` from exactly
+`StartVBound`, `EndVBound`, `LengthBound` and the envelope, and the wall build
 multiplies it by the bounded sweep, so the fold reaches the published area
 through arithmetic that already exists.
 
-`Bounds` takes one term of its own, because `extentBoundedAlong` reads the
+`Bounds` takes one term of its own, because `revolveplan.Payload.ExtentBoundedAlong` reads the
 recorded profile's envelope directly rather than the walks. A revolve's extreme
 along `g` is the extreme of the linear functional `wg·z + m·ρ` over the
 recorded meridian, so an endpoint displaced by `(δz, δρ)` moves that functional
 by at most `|wg|·δz + |m|·δρ`, and `wg² + c0² + c1² = 1` for a unit `g` over
 the orthonormal basis bounds both coefficients by one. That is a FIFTH
-mechanism in `extentBoundedAlong`'s own enumeration, composed per end through
-the same `absSumUpper` the other four take. The envelope
+mechanism in `revolveplan.Payload.ExtentBoundedAlong`'s own enumeration, composed per end through
+the same `proofbound.AbsSumUpper` the other four take. The envelope
 `momentinput.CoordinateUpper` states is widened by the same per-component figure
 wherever the axis-frame and sweep-extreme terms read it, so those two are
 charged at an envelope covering the true section too.
 
 **The axis-contact audit reads the record, not the denotation.**
-`auditAxisContact`'s `regionSnapAllow` compares the faces built from the
+`revolveaxis.AuditAxisContact`'s region snap allowance compares the faces built from the
 SNAPPED meridian with the region integrated over the RECORDED one, and both
 are the record's own coordinates, so its exact-leaf reading of a plane-local
 coordinate is right for what it bounds. A trimmed body reuses the receiver's
@@ -500,7 +498,7 @@ neither is read as covering the other.
 
 **A zero charge stays a zero charge.** Every one of these folds is taken only
 where the payload's own `sectionDelta` is nonzero, on the prism ribbon's own
-precedent. `absSumUpper` up-rounds each term it folds, so composing a literal
+precedent. `proofbound.AbsSumUpper` up-rounds each term it folds, so composing a literal
 zero would still nudge a published bound by an ulp per term; gating on the
 payload field instead leaves an untrimmed revolve's every reading on the path
 it takes today, bit for bit.
@@ -541,7 +539,7 @@ recorded boundary's length (each segment's walk length plus its own bound) and
 **The envelope.** Every point of the band moves each plane-local coordinate by
 at most `δ` from the recorded boundary, so `revolveaxis.SectionCoordUpper`
 widens the recorded L1 coordinate envelope by `2δ`, and
-`axisFrame.radialUpper` turns it into `E`, a proven upper bound on the
+`revolveaxis.Frame.RadialUpper` turns it into `E`, a proven upper bound on the
 distance from the true axis anchor to any band point. For a unit axis
 direction both `|z|` and `|ρ|` are at most that distance.
 
@@ -716,36 +714,15 @@ predicate, exactly as it must after a mesh boolean produces several lumps.
 
 ## 11. Increments
 
-1. **PR1 — the gate and `Trim` over the prism family.** S1–S7,
-   `prismcells.BuildScene`'s `ChainRecord` arm, §3.2's side reading over
-   `prismcells.Classify` unchanged, §3.3's open-walk chaining, `chainPayload`'s
-   walk set and section displacement, §7's exactness, and `Trim`. Tests:
-   surface §15's T170–T174 and T181.
-2. **PR2 — `Split` over the prism family.** §3.2's cell selection,
-   per-cell recording of the private arrangement, and one `prismPayload` per piece
-   through `evalPrism` unchanged. Tests: T175–T177.
-3. **PR3 — `Extend` over the prism family.** §3.1's full-domain entity
-   recreation, §3.2's nearest-cut reading, and RS4's refusal. Tests:
-   T178–T179.
-4. **PR4 — `Trim` and `Extend` over the revolve family.** S1's and S4's revolve
-   arms over `chainRevolvePayload`'s own walk set, the angular span relation of
-   S6, the meridian scene, and §7.1's fold into the axis-coordinate walk. Tests:
-   T180, T182 and T183. A trimmed revolve sheet's own mesh waits on surface
-   increment 4, exactly as a profile-fed revolve sheet's does.
-5. **PR5 — `Split` over the revolve family** (landed).
-   `revolvePayload.SectionDelta` reaches the Pappus volume, the centroid and
-   every other solid reading (§7.2). `surfacetrim.SplitRevolve` runs PR2's
-   `prismcells.SplitPieces` over the two meridian views, reruns the axis gates per piece
-   (§2.2) and builds one `revolvePayload` per cell; the deterministic order is
-   PR2's. Tests: T184–T186.
+All five arms are implemented. Tests are surface §15's rows.
 
-PR1 depends on surface increments 1 and 6 alone — increment 1 for `BodyKind`,
-`Edge.IsFree` and the sheet validity audit, increment 6 for `ChainRecord` and
-the ribbon wall build every result is assembled by. It depends on none of
-surface increments 2 through 5, and none of them depends on it. PR2 and PR3
-depend on PR1 for the scene and the gate; PR4 depends on PR1 for both and on
-neither PR2 nor PR3; PR5 depends on PR2 for the cell selection and on PR4 for
-the revolve gate and §7.1's fold.
+| Arm | What exists | Tests |
+|---|---|---|
+| `Trim`, prism family | The S1–S7 gate, `prismcells.BuildScene`'s `ChainRecord` arm, §3.2's side reading over `prismcells.Classify`, §3.3's open-walk chaining, the walk set and section displacement of §3.4, §7's exactness | T170–T174, T181 |
+| `Split`, prism family | §3.2's cell selection, per-cell recording of the private arrangement, one `prismPayload` per piece through `evalPrism` | T175–T177 |
+| `Extend`, prism family | §3.1's full-domain entity recreation, §3.2's nearest-cut reading, RS4's refusal | T178–T179 |
+| `Trim` and `Extend`, revolve family | S1's and S4's revolve arms over `chainRevolvePayload`'s walk set, S6's angular span relation, the meridian scene, §7.1's fold into the axis-coordinate walk. A trimmed revolve sheet's mesh waits on surface increment 4, as every revolve sheet's does | T180, T182, T183 |
+| `Split`, revolve family | `revolvePayload.SectionDelta` reaches the Pappus volume, the centroid and every other solid reading (§7.2). `surfacetrim.SplitRevolve` runs `prismcells.SplitPieces` over the two meridian views, reruns the axis gates per piece (§2.2) and builds one `revolvePayload` per cell. The piece order is the prism arm's | T184–T186 |
 
 ## 12. Required tests
 
@@ -759,8 +736,8 @@ one-space reading §3.2 rests on. Each asserts on computed geometry:
 | Row | Fixture | Expected |
 |---|---|---|
 | TI1 | a receiver whose recorded `LineSeg` runs against its line's authored direction — `sketch` publishes the fragment `Reversed`, so the record holds `TStart` > `TEnd` — extended in both directions in turn | a tool lying entirely INSIDE the ribbon is RS4, naming the carrier and its domain; a tool genuinely past the named end lengthens the ribbon to the nearer of its two crossings, with `Bounds` and `Area` enclosing that answer and the untouched end's `Point2` fields byte-identical to the pre-extend record's |
-| TI2 | an `ArcSeg` receiver, likewise recorded in the reversed sense, extended against a tool crossing its carrier twice beyond the receiver's own end | the nearer crossing wins; `Bounds` reaches it and `Area` encloses the analytic arc-length product. The arc arm needs no map, so this fixture holds both before and after the recreation's order is fixed — which is what proves the `LineSeg` arm was the only broken one |
-| TI3 | each admitted kind in BOTH recorded senses, taken through `fullExtendSegment` and `prismcells.BuildScene`, sampled against the record's own parameterisation | the scene entity passes through the same point at every sampled parameter. This is the table in §3.1 checked as geometry rather than argued. It is the only fixture the `CircleSeg` arm has: a circle fragment separates the disk's interior from the exterior, so it is never a bridge in `sketch`'s arrangement and never reaches `Chains()`, and a chain `Extrude` is the one producer of an undisplaced `chainPayload` — S7 refuses `Trim`'s, which always carries a displacement. The arm stays for a receiver's non-extended circle segments and for a future producer, proven rather than unexercised |
+| TI2 | an `ArcSeg` receiver, likewise recorded in the reversed sense, extended against a tool crossing its carrier twice beyond the receiver's own end | the nearer crossing wins; `Bounds` reaches it and `Area` encloses the analytic arc-length product. The arc arm needs no map, so this fixture isolates the reversed `LineSeg` as the only kind whose recreation order matters |
+| TI3 | each admitted kind in BOTH recorded senses, taken through `prismcells.FullExtendSegment` and `prismcells.BuildScene`, sampled against the record's own parameterisation | the scene entity passes through the same point at every sampled parameter. This is the table in §3.1 checked as geometry rather than argued. It is the only fixture the `CircleSeg` arm has: a circle fragment separates the disk's interior from the exterior, so it is never a bridge in `sketch`'s arrangement and never reaches `Chains()`, and a chain `Extrude` is the one producer of an undisplaced `chainPayload` — S7 refuses `Trim`'s, which always carries a displacement. The arm stays for a receiver's non-extended circle segments and for a future producer, proven rather than unexercised |
 
 The untouched-end obligation of T178 and TI1 is read by ELIMINATION against the
 end that moved, never by a selector clause keyed on the untouched coordinate:
