@@ -138,17 +138,25 @@ func TestClassBBridgingPinMisses(t *testing.T) {
 		})
 	}
 	// A pin bridging the gap meets the plate in its two end disks alone. The
-	// mesh path decides its Cut and Intersect.
-	for _, op := range []func(*testing.T, *decad.Body, *decad.Body) (*decad.Body, error){
-		cut,
-		func(t *testing.T, a, b *decad.Body) (*decad.Body, error) { return decad.Intersect(t.Context(), a, b) },
+	// mesh path decides its Cut and Intersect. The Cut keeps the disks' chorded
+	// outlines and refuses; the Intersect reads each disk as a seat on the
+	// gap's wall and proves the bodies disjoint
+	// (agent-docs/coplanar-contact-design.md §16).
+	for _, tc := range []struct {
+		op   func(*testing.T, *decad.Body, *decad.Body) (*decad.Body, error)
+		want decad.BooleanErrorCode
+	}{
+		{op: cut, want: decad.BooleanUnsupportedContact},
+		{op: func(t *testing.T, a, b *decad.Body) (*decad.Body, error) {
+			return decad.Intersect(t.Context(), a, b)
+		}, want: decad.BooleanEmpty},
 	} {
 		doc := decad.New()
 		a, b := uAnd(10, units.Millimeters(20), 5)(t, doc)
-		got, err := op(t, a, b)
+		got, err := tc.op(t, a, b)
 		require.Nil(t, got)
 		var boolean *decad.BooleanError
 		require.ErrorAs(t, err, &boolean)
-		require.Equal(t, decad.BooleanUnsupportedContact, boolean.Code)
+		require.Equal(t, tc.want, boolean.Code)
 	}
 }
