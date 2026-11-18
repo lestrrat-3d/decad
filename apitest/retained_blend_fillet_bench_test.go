@@ -115,3 +115,66 @@ func benchRetainedPlaced(b *testing.B, body *decad.Body, dz float64) *decad.Body
 	}
 	return out
 }
+
+// BenchmarkRetainedLineChamfer measures one chamfer call on both lip edges of a
+// mesh Cut socket (agent-docs/exact-chamfer-design.md §7): a block
+// x ∈ [−10, 10], y ∈ [0, 16], z ∈ [0, 10] cut from below by a prism sketched on
+// XZ through (−5, −6), (4, −6), (6, 6), (−5, 6), whose different extrusion axis
+// keeps the Cut on the mesh path. The scene is rebuilt while timing is stopped
+// on each iteration.
+func BenchmarkRetainedLineChamfer(b *testing.B) {
+	for range b.N {
+		b.StopTimer()
+		sc := newRetentionScene()
+		socket := benchRetainedLipSocket(b, sc)
+		lips := decad.Edges(decad.EndpointAt(r3.NewVec(-5, 0, 0)), decad.ParallelTo(r3.NewVec(0, 1, 0))).
+			Or(decad.EndpointAt(r3.NewVec(5, 0, 0)), decad.ParallelTo(r3.NewVec(0, 1, 0))).Exactly(2)
+		b.StartTimer()
+		_, err := decad.Chamfer(b.Context(), socket, lips, units.Millimeters(0.5))
+		b.StopTimer()
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+// benchRetainedLipSocket cuts the lip socket of BenchmarkRetainedLineChamfer.
+func benchRetainedLipSocket(b *testing.B, sc *retentionScene) *decad.Body {
+	block := benchRetainedRect(b, sc, -10, 0, 10, 16, 10)
+	s, err := sc.w.CreateSketch(sc.w.XZ())
+	if err != nil {
+		b.Fatal(err)
+	}
+	corners := [][2]float64{{-5, -6}, {4, -6}, {6, 6}, {-5, 6}}
+	first := s.CreatePoint(corners[0][0], corners[0][1])
+	s.Fix(first)
+	prev := first
+	for _, c := range corners[1:] {
+		p := s.CreatePoint(c[0], c[1])
+		s.CreateLine(prev, p)
+		prev = p
+	}
+	s.CreateLine(prev, first)
+	if _, err = s.Solve(b.Context()); err != nil {
+		b.Fatal(err)
+	}
+	// The prism runs from y = 0 to 18 against the sketch normal; shifted down by 1
+	// it spans y ∈ [−1, 17], past both ends of the block.
+	tool, err := decad.Extrude(b.Context(), sc.doc, s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(18), Dir: decad.Against})
+	if err != nil {
+		b.Fatal(err)
+	}
+	tr, err := r3.Translation(r3.Vec{Y: -1})
+	if err != nil {
+		b.Fatal(err)
+	}
+	if tool, err = decad.Transform(b.Context(), tool, tr); err != nil {
+		b.Fatal(err)
+	}
+	socket, err := decad.Cut(b.Context(), block, tool)
+	if err != nil {
+		b.Fatal(err)
+	}
+	return socket
+}
