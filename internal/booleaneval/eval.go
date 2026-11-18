@@ -611,6 +611,9 @@ func evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 		if err := replay.SpendWork(ctx, uint64(len(bmA.Tris)+len(bmB.Tris))); err != nil {
 			return Evaluation{}, err
 		}
+		if err := replay.ReserveRecords(ctx, uint64(len(bmA.Tris)+len(bmB.Tris))); err != nil {
+			return Evaluation{}, err
+		}
 		if err := bmA.SetExactFacets(ma); err != nil {
 			return Evaluation{}, err
 		}

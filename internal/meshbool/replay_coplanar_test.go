@@ -166,9 +166,14 @@ func TestReplayCoplanarDeclinesWhatLiveClassifies(t *testing.T) {
 		b := exactBoxMesh(t, r3.Vec{X: 5, Y: 5, Z: 10}, r3.Vec{X: 15, Y: 15, Z: 20})
 		for _, op := range []OperationKind{OpUnion, OpIntersect, OpCut} {
 			_, _, err := replayBoolean(t, t.Context(), op, a, b, proofbound.NewReplayTrialBudget())
-			if err != nil {
-				require.ErrorIs(t, err, decaderr.ErrUnsupported, "%v is a decline", op)
+			if err == nil {
+				continue
 			}
+			// The live pass builds this pair, so a failure is a decline, not a
+			// contact refusal the shifted retry would act on.
+			var touch *TouchContactError
+			require.False(t, errors.As(err, &touch), "%v: a decline is no contact refusal: %v", op, err)
+			require.ErrorIs(t, err, decaderr.ErrUnsupported, "%v is a decline", op)
 		}
 	})
 	t.Run("branching chains", func(t *testing.T) {

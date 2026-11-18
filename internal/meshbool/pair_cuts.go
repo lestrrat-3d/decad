@@ -732,6 +732,9 @@ func pairCutsImpl(ctx context.Context, ma, mb *BoolMesh, memo *ContactMemo, keyO
 			_, ok, err := fixedEnds.Get(ctx, key)
 			return ok, err
 		}
+		if err := budget.ReserveRecords(ctx, uint64(len(pointTouches))); err != nil {
+			return nil, err
+		}
 		keys := make([]string, len(pointTouches))
 		for k, p := range pointTouches {
 			if err := budget.SpendWork(ctx, 1); err != nil {

@@ -5,7 +5,6 @@ import (
 	"errors"
 	"unsafe"
 
-	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 )
@@ -545,14 +544,15 @@ func emitReplayRegion(ctx context.Context, reg CutRegion, i int, cornerKeys [3]s
 	return nil
 }
 
-// replayCoplanarRefusal maps a side-pass refusal of a pair the coplanar pass
-// accepted a point of to the refusal the pair gave before it existed, as the
-// live pass does, so the shifted retry reads the contacts it always read. A
-// budget error is never remapped: it says the meter ran out, not that the
-// contact is unclassifiable.
+// replayCoplanarRefusal maps an expected-contact refusal of the side pass, for a
+// pair the coplanar pass accepted a point of, to the refusal the pair gave
+// before it existed, as the live pass does, so the shifted retry reads the
+// contacts it always read. Only a contact refusal is mapped. A decline of the
+// bounded pass (an ambiguous probe, a cap, a budget error) is no statement about
+// the contact and returns as it is, so the retry never runs on it.
 func replayCoplanarRefusal(cuts *PairCutsResult, err error) error {
-	var limit *proofbound.WorkLimitError
-	if cuts.Legacy == nil || errors.As(err, &limit) || !errors.Is(err, decaderr.ErrUnsupported) {
+	var expected *BooleanExpectedError
+	if cuts.Legacy == nil || !errors.As(err, &expected) || expected.Kind != BooleanExpectedContact {
 		return err
 	}
 	return cuts.Legacy

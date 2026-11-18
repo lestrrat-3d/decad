@@ -475,6 +475,15 @@ func patchBoundaryEdgeBy(m *BoolMesh, f, k int, lookup func(m *BoolMesh, f, k in
 // the edge's own operand that lies in the plane, and the pair it forms with the
 // partner facet must be one the pair pass admitted. It owns the contact segment's end points.
 func (cp *coplanarPass) acceptEdge(p PairContact, a, b int, keyOf func(proof.Xpt) string) error {
+	if cp.charge != nil {
+		// Two exact keys and two owned entries.
+		if err := cp.charge(128); err != nil {
+			return err
+		}
+		if err := cp.reserve(4); err != nil {
+			return err
+		}
+	}
 	recorded := cp.coplanarA[a]
 	if !slices.Contains(recorded, b) {
 		return fmt.Errorf(`%w: an in-plane edge bounds a coplanar patch no admitted pair recorded`, decaderr.ErrBooleanFailed)
