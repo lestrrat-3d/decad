@@ -66,6 +66,24 @@ func (m *StitchedMesh) RoundingVolumeBound() float64 {
 // and rounds to float64. The audit is the §9 guarantee: every directed edge
 // pairs with its reverse, or the boolean fails — never a cracked mesh.
 func StitchFacetsContext(ctx context.Context, kept []KeptFacet) (*StitchedMesh, error) {
+	return StitchFacetsWith(ctx, kept, StitchOptions{})
+}
+
+// StitchOptions are the optional stages of StitchFacetsWith. The zero value is
+// StitchFacetsContext.
+type StitchOptions struct {
+	// Coplanar, when non-nil, adds the manifold audit of
+	// agent-docs/coplanar-contact-design.md §5 after the conforming passes: a
+	// result that meets itself along an edge or at a vertex the coplanar pass
+	// accepted returns Coplanar.Legacy, the refusal the switch-off pass gives.
+	Coplanar *ContactKeys
+	// SimplifyPlanar re-triangulates the planar faces of the result on their
+	// corners alone (agent-docs/coplanar-contact-design.md §7).
+	SimplifyPlanar bool
+}
+
+// StitchFacetsWith is StitchFacetsContext with the stages opts selects.
+func StitchFacetsWith(ctx context.Context, kept []KeptFacet, opts StitchOptions) (*StitchedMesh, error) {
 	if len(kept) == 0 {
 		return nil, fmt.Errorf(`%w: the operation leaves no boundary at all`, decaderr.ErrBooleanFailed)
 	}
@@ -155,6 +173,11 @@ func StitchFacetsContext(ctx context.Context, kept []KeptFacet) (*StitchedMesh, 
 		}
 		if !split {
 			break
+		}
+	}
+	if opts.Coplanar != nil {
+		if err := auditContactManifold(tris, xverts, opts.Coplanar); err != nil {
+			return nil, err
 		}
 	}
 	// A needle's apex can round across its longest edge, which no float-box
