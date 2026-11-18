@@ -25,6 +25,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/booloperand"
 	"github.com/lestrrat-3d/decad/internal/boolshift"
 	"github.com/lestrrat-3d/decad/internal/chaintol"
+	"github.com/lestrrat-3d/decad/internal/coplanarcontact"
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/facetproof"
@@ -595,6 +596,16 @@ func evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 	if replay == nil && fixed == nil {
 		surfaceSlabs(a, ma, bmA, 0)
 		surfaceSlabs(b, mb, bmB, shiftDisplacement)
+		// A shifted, grown or fixed-tool attempt admits no coplanar pair, so
+		// the facets stay not exact (agent-docs/coplanar-contact-design.md §3.1).
+		if !hasShifts && coplanarcontact.Of(ctx) {
+			if err := bmA.SetExactFacets(ma); err != nil {
+				return Evaluation{}, err
+			}
+			if err := bmB.SetExactFacets(mb); err != nil {
+				return Evaluation{}, err
+			}
+		}
 	}
 	// A restating operand's facets where the pair meets must hold within the
 	// pair tolerance; the gate reads them on the contact classification below

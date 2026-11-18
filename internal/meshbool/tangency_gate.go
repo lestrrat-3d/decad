@@ -309,12 +309,9 @@ func facesOfMesh(budget *proofbound.WorkBudget, m *topo.Mesh, boxes [][2]r3.Vec,
 		}
 		k, ok := index[f]
 		if !ok {
-			delta, stated := m.FaceBound[f]
+			delta, stated := FaceGateDelta(m, surface, f)
 			if !stated {
 				return nil, fmt.Errorf(`%w: an operand's tessellation states no displacement bound for one of its own source faces`, decaderr.ErrBooleanFailed)
-			}
-			if sigma, ok := surface[f]; ok && sigma < delta {
-				delta = sigma
 			}
 			k = len(out)
 			index[f] = k
