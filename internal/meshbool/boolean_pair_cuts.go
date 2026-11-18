@@ -293,6 +293,15 @@ func pairCuts(ctx context.Context, ma, mb *BoolMesh, memo *ContactMemo, keyOf fu
 		// the accepted ones too, so a refusal reads as it does with none accepted.
 		var every []TouchContact
 		isolated := false
+		// A point a coplanar pair of exact facets touches is owned whatever the
+		// order its contacts arrive in.
+		for k, p := range pointTouches {
+			if pointCoplanar[k] {
+				if _, ok := rims[keyOf(p)]; !ok {
+					cp.owned[keyOf(p)] = struct{}{}
+				}
+			}
+		}
 		for k, p := range pointTouches {
 			key := keyOf(p)
 			if _, ok := rims[key]; ok {

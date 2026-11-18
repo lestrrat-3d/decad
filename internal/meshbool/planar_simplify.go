@@ -294,9 +294,13 @@ func planarCandidate(ctx context.Context, budget *proofbound.WorkBudget, in Plan
 		if boundary < 3 {
 			return none, nil, false, nil
 		}
-		start := in.Tris[out[i].facets[0]][0]
+		// The walk starts at the least boundary vertex, not at a corner of the
+		// first facet, which may lie inside the region.
+		start := -1
 		for u := range next {
-			start = min(start, u)
+			if start < 0 || u < start {
+				start = u
+			}
 		}
 		var loop []int
 		for v := start; ; {

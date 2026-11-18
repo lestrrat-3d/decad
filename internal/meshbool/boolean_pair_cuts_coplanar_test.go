@@ -203,3 +203,45 @@ func TestPairCutsCoplanarPointOnRim(t *testing.T) {
 	require.False(t, owned)
 	require.Nil(t, res.Legacy)
 }
+
+// reversedFacets is the mesh with its facets in the opposite order, so the
+// facet pairs of a contact reach the pass in another order.
+func reversedFacets(t *testing.T, bm *BoolMesh) *BoolMesh {
+	t.Helper()
+	n := len(bm.Tris)
+	tris, src := make([][3]int, n), make([]int, n)
+	for i := range n {
+		tris[i], src[i] = bm.Tris[n-1-i], bm.Src[n-1-i]
+	}
+	out, err := PrepContext(t.Context(), bm.Verts, tris, src)
+	require.NoError(t, err)
+	out.SetVertexBounds(make([]float64, len(out.Verts)))
+	out.Exact = make([]bool, n)
+	for i := range out.Exact {
+		out.Exact[i] = true
+	}
+	return out
+}
+
+// TestPairCutsCoplanarPointOwnedInAnyOrder pins that a point two exact boxes
+// touch at is accepted whichever contact reaches the pass first: a point contact
+// of a non-coplanar facet pair at the corner, arriving before the coplanar one,
+// is no isolated point. Each box is tried with its facets in either order.
+// The public Cut and Intersect of corner-touching boxes (A4) are the red leg:
+// their tessellation orders the contacts so that the corner arrives early.
+func TestPairCutsCoplanarPointOwnedInAnyOrder(t *testing.T) {
+	for _, at := range []r3.Vec{{X: 10, Y: 10, Z: 10}, {X: -10, Y: -10, Z: -10}, {X: 10, Y: -10, Z: 10}, {X: -10, Y: 10, Z: -10}} {
+		for _, reverse := range [][2]bool{{false, false}, {true, false}, {false, true}, {true, true}} {
+			a := exactBoxMesh(t, r3.Vec{}, r3.Vec{X: 10, Y: 10, Z: 10})
+			b := exactBoxMesh(t, at, r3.Vec{X: at.X + 10, Y: at.Y + 10, Z: at.Z + 10})
+			if reverse[0] {
+				a = reversedFacets(t, a)
+			}
+			if reverse[1] {
+				b = reversedFacets(t, b)
+			}
+			_, err := pairCuts(t.Context(), a, b, NewContactMemo(a, b), newKeyMemo())
+			require.NoError(t, err, "second box at %v, reversed %v", at, reverse)
+		}
+	}
+}

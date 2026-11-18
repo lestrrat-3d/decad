@@ -3140,7 +3140,13 @@
 12	0.00	TestWallPlacedBodyReadsThePart
 12	0.04	TestWebCrossesRibs
 12	0.01	TestWebPathOfOneLineIsARib
-12	0.00	TestCoplanarContactRoundedFixtureKeepsRetry
+0	0.00	TestCoplanarContactRoundedFixtureKeepsRetry
 12	0.00	TestStackedOpposedObliqueLoops
 12	0.00	TestVerifyReadsAnExactFlushPairExactly
+0	0.00	TestCoplanarContactFaceToFace
+0	0.00	TestCoplanarContactOverlapBeyondZero
+0	0.00	TestCoplanarContactEdgeAndVertexOnly
+0	0.00	TestCoplanarContactMadeByCut
+0	0.00	TestCoplanarContactKeepsRecords
+0	0.00	TestCoplanarContactRandomBoxPairs
 12	0.00	TestDistanceToPointFreePath
