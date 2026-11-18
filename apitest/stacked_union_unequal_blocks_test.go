@@ -201,3 +201,50 @@ func TestStackedUnionApartGroupsMustNotTouch(t *testing.T) {
 		})
 	}
 }
+
+// TestStackedUnionApartFloatingPiece joins a plate with one 15 mm block and,
+// as the other operand, two blocks over z 20 to 30: one stands in the tower's
+// top, the other floats clear of everything. The operands meet, so the apart
+// reading is tried, and the floating block is a second lump of an exact brep.
+// The result is correct and accepted, in either operand order.
+func TestStackedUnionApartFloatingPiece(t *testing.T) {
+	t.Parallel()
+	for _, swap := range []bool{false, true} {
+		t.Run(map[bool]string{false: "plate first", true: "blocks first"}[swap], func(t *testing.T) {
+			t.Parallel()
+			doc := decad.New()
+			body := unionUnequalBlocks(t, doc, []unequalBlock{{10, 10, 20, 20, 15}})
+			blocks, err := decad.Union(t.Context(), boxBodyAtZ(t, doc, 12, 12, 18, 18, 20, 10),
+				boxBodyAtZ(t, doc, 40, 10, 50, 20, 20, 10))
+			require.NoError(t, err)
+			a, b := body, blocks
+			if swap {
+				a, b = blocks, body
+			}
+			got, err := decad.Union(t.Context(), a, b)
+			require.NoError(t, err)
+			require.False(t, tookMeshPath(got))
+			require.Len(t, got.Lumps(), 2)
+			requireEdgesOnTwoFacesAnyLumps(t, got)
+			volume, err := got.Volume()
+			require.NoError(t, err)
+			require.Equal(t, decad.Exact, volume.Exactness)
+			// Plate 24000, tower 1500, the inset block's 6 × 6 × 5 above the tower, the floating block 1000.
+			require.Equal(t, 24000.0+1500+36*5+1000, volumeMM(t, volume))
+			report, err := doc.Verify(t.Context())
+			require.NoError(t, err)
+			reading, err := report.ForBody(got)
+			require.NoError(t, err)
+			require.Equal(t, decad.Sound, reading.Status)
+		})
+	}
+}
+
+// requireEdgesOnTwoFacesAnyLumps is requireEveryEdgeOnTwoFaces for a body of
+// any number of lumps.
+func requireEdgesOnTwoFacesAnyLumps(t *testing.T, body *decad.Body) {
+	t.Helper()
+	for _, e := range body.Edges() {
+		require.Equal(t, 2, len(e.Faces()))
+	}
+}

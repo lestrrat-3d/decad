@@ -313,10 +313,14 @@ two, or a `RegionContact` point between entities of two groups (a block's
 corner on another's, a block's edge tangent to a boss circle) is a contact
 that would pinch the result, and the scene stays unresolved and misses.
 Only a `Union`'s interface reads cells so, and only when some interface cell
-lies inside a record of each operand. That guard limits the reading's scope
-to operands that meet somewhere; it is not what makes the result correct.
-Two blocks that stand apart on no common plate share no such cell and keep
-the mesh path. A cell unreached in a record whose edges its group does hold
+lies inside a record of each operand. That guard narrows where the reading
+is tried; it is not what makes the result correct, and it does not keep the
+result in one piece. Two blocks that stand apart on no common plate share no
+such cell and keep the mesh path, but an operand that is itself two pieces
+can meet the other with one piece while its other piece floats clear: a
+plate with a tower, and as the other operand two blocks over z 20 to 30, one
+on the tower and one clear of everything, build an exact two-lump brep. That
+result is correct, and it is accepted. A cell unreached in a record whose edges its group does hold
 stays unresolved and misses.
 A cell inside some record reaching one side and inside
 none reaching the other is that side's exposed face, recorded from the cell

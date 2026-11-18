@@ -116,9 +116,11 @@ type ubBuild struct {
 	// apart marks a union interface whose classification read a cell outside
 	// a record it shares no edge with (prismcells.ClassifyRegionsApart), and
 	// touch an interface cell inside a record of each operand. A build with
-	// apart and no touch misses. The guard keeps the reading to operands that
-	// meet somewhere; it limits scope and is not what makes the result
-	// correct, which ClassifyRegionsApart's own contact check decides.
+	// apart and no touch misses. The guard narrows where the reading is tried;
+	// it neither makes the result correct, which ClassifyRegionsApart's own
+	// contact check decides, nor keeps it in one piece: an operand of two
+	// pieces meeting the other with one of them builds an exact two-lump
+	// brep, which is accepted.
 	apart, touch bool
 }
 
@@ -160,8 +162,8 @@ func (st *stackedUnionState) brep(ctx context.Context, levels []stackedrecord.Un
 		return nil, false, nil
 	}
 	if err == nil && b.apart && !b.touch {
-		// No interface cell lies in both operands: they may stand apart
-		// altogether, and the apart reading is kept to operands that meet.
+		// No interface cell lies in both operands: the apart reading is not
+		// tried for operands that meet nowhere.
 		return nil, false, nil
 	}
 	if b.holedUnion && err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) {
