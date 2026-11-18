@@ -436,7 +436,8 @@ func meshBody(ctx context.Context, op meshbool.OperationKind, env topo.Env, a, b
 
 	// Adjacent exact coplanar faces of the two operands become one face (agent-docs/union-face-merge-design.md).
 	// A record proved against the unmerged face set (oblique boss, cross bore) and a shifted result's faces,
-	// which carry the move, are left alone. PrismUnionFillet only names the two source prisms.
+	// which carry the move, are left alone. PrismUnionFillet does not block the merge: its consumers re-check single-role faces at the selected
+	// edge and decline on a merged face.
 	if eval.Shift == nil && eval.Audit != nil && eval.Payload.ObliqueBoss == nil &&
 		eval.Payload.CrossCylinderBore == nil {
 		src, groups, changed, err := facemerge.Merge(ctx, facemerge.Input{

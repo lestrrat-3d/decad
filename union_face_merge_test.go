@@ -39,7 +39,7 @@ func mergeFaceted(t *testing.T, b *Body) facetedPayload {
 	return fp
 }
 
-// mergedGroupOn returns the groups holding a facet whose vertices all lie on the plane coord = at.
+// mergedGroupsOn returns the groups holding a facet whose vertices all lie on the plane coord = at.
 func mergedGroupsOn(fp facetedPayload, axis int, at float64) map[int]struct{} {
 	out := map[int]struct{}{}
 	for i, tri := range fp.Tris {
@@ -125,6 +125,12 @@ func TestUnionFaceMergeDovetailEnds(t *testing.T) {
 			require.Len(t, fp.Groups[g].Source.Members, 2)
 			ops := []int{fp.Groups[g].Source.Members[0].Operand, fp.Groups[g].Source.Members[1].Operand}
 			require.ElementsMatch(t, []int{0, 1}, ops)
+			roles := map[string]bool{}
+			for _, o := range fp.Groups[g].Origins {
+				roles[o.Role] = true
+			}
+			require.True(t, roles["capStart"] || roles["capEnd"], "the tool's cap role")
+			require.True(t, roles["side(0,0)"] || roles["side(0,1)"] || roles["side(0,2)"] || roles["side(0,3)"], "the host's side role")
 		}
 	}
 	// Each end face has one loop, which is outer.

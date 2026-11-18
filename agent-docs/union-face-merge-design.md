@@ -33,8 +33,11 @@ Navigation, not authority.
   is adjacent to both (§4.4).
 - "Exact" means the result's own vertex bound `β(v) == 0` for every vertex of every facet of the group
   (`Payload.VertexBound`, `agent-docs/faceted-vertex-bounds-design.md` §2). No new exactness notion.
-- A payload carrying a structural record (`ObliqueBoss`, `PrismUnionFillet`, `CrossCylinderBore`) is not merged.
-  Those records feed record-based rebuild routes proved against the unmerged face set.
+- A payload carrying a structural record (`ObliqueBoss`, `CrossCylinderBore`) is not merged. Those records feed
+  record-based rebuild routes proved against the unmerged face set. `PrismUnionFillet` does not block the merge:
+  every Union of two prism bodies carries it, its consumers require single-role faces at the selected edge and
+  decline on a merged face, and its rebuild runs a fresh Boolean from the source prisms. An edge beside a merged face
+  therefore takes the ordinary route, whose volume bound is looser.
 - decad tests use neutral minimal fixtures and name no consumer model (`agent-docs/testing.md` "Test scope").
 
 ## 1. Current behavior
@@ -446,7 +449,7 @@ faces of a generic mesh Boolean result (Union, Cut, Intersect)", the focused tes
   `.github/test-shards.txt`, every test file §10.4's rule updates (list each in the PR).
 - **What:** Add `Evaluation.OperandAGroups int`, set to `targetFaces` in `evaluate`. In `booleandispatch.meshBody`,
   after the recognizers and before `facetedrecord.BuildWithProof`: when `eval.Shift == nil`, `eval.Audit != nil`, and
-  `ObliqueBoss`, `PrismUnionFillet` and `CrossCylinderBore` are all nil, call `facemerge.Merge` with `eval.Audit.Adj`
+  `ObliqueBoss` and `CrossCylinderBore` are both nil, call `facemerge.Merge` with `eval.Audit.Adj`
   and store the returned `Src` and `Groups` in `eval.Payload`. The audit stays valid for `BuildWithProof`: it reads
   only `Verts` and `Tris`. A `Merge` error returns through `hooks.AsBooleanError` like a `BuildWithProof` error.
 - **Depends on:** 2, and coplanar contact Task 11 merged on `origin/main` (Task 10 removes `internal/coplanarcontact/`;
