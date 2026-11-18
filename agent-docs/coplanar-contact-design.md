@@ -79,7 +79,7 @@ with axis-aligned walls, history certificates). Every pair that reaches the mesh
    `Union`/`Intersect` return `BooleanUnsupportedContact`. The refusal is correct for the data held. The fix is to
    classify exact flush contact (§3) and stop producing inexact faces where the true face is exact (§7).
 
-Measured on the reproductions (`/home/lestrrat/dev/src/github.com/lestrrat-3d/decad/.worktrees/fix-exact-contact-pair/.tmp/repro/exp_test.go`;
+Measured on the reproductions (`.tmp/repro/exp_test.go`;
 dated illustration, 2026-11-18):
 
 | Pair | `Verify` | `Intersect` | `Union` |
@@ -492,7 +492,7 @@ after Task 10's switch removal. Rules:
 
 ### 11.4 End-to-end acceptance (consumer; not committed here)
 
-Run, in `/home/lestrrat/dev/src/github.com/lestrrat-3d/decad/.worktrees/fix-exact-contact-pair/.tmp/repro`,
+Run, in `.tmp/repro`,
 `go test -run 'TestDovetailPair|TestExp' -v -count=1 .` (its `go.mod` replaces decad with that worktree and the
 consumer with `.tmp/gallery-snap`). Required for all six dovetail parameter sets: `Verify` status `Sound` with no
 diagnostic; `Intersect` returns `BooleanEmpty`; `Union` succeeds with volume equal to `first + second` within the
