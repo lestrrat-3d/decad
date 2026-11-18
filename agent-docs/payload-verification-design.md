@@ -12,7 +12,8 @@ Companion to:
 - `agent-docs/evaluator-design.md` — mesh boolean + evaluator staging.
 
 This document owns payload adaptation, bounded mesh proofs, survey certificates,
-implementation order, and required tests. It changes no public signature.
+stage order, and required tests. It changes no public signature. §1's "Implementation
+status" says which parts exist in code and which are design only.
 
 ## 1. Coverage contract
 
@@ -24,14 +25,25 @@ case into nil, an empty list, or `Sound`.
 |---|---|---|---|---|---|
 | `prismPayload` | exact construction proof | analytic kernel | exact 2D reduction | exact normal range | exact curvature |
 | `revolvePayload` | exact construction proof | analytic kernel | exact meridian reduction | exact normal range | exact curvature |
-| `cupPayload` | exact construction proof | exact analytic adapter (§3) | exact shell theorem (§4) | existing exact cup walk | existing exact cup walk |
+| `cupPayload` | exact construction proof | exact analytic adapter (§3), not implemented: a pair holding a cup stays `Suspect` | exact shell theorem (§4) | existing exact cup walk | existing exact cup walk |
 | `loftPayload` | exact construction audit | bounds-disjoint shortcut over each body's own `Bounds` and the bound it carries; `WithClearances` stays `Suspect` until an analytic adapter lands; mesh path staged | `Unavailable` | `Unavailable` | `Unavailable` |
 | `sweepPayload` | exact construction audit | bounds-disjoint shortcut; all other pair and requested-clearance proofs are staged | `Unavailable` | `Unavailable` | `Unavailable` |
 | `twistedSweepPayload` | bounded one-cell or stationed construction and held-shell audit (§17 of `agent-docs/sweep-design.md`) | bounds-disjoint shortcut; overlapping pair and requested-clearance proofs are staged | `Unavailable` | `Unavailable` | `Unavailable` |
 | `compositeTwistedSweepPayload` | bounded construction, sewn topology and held-facet contact audit (§17.2 of `agent-docs/sweep-design.md`) | bounds-disjoint shortcut; overlapping pair and requested-clearance proofs are staged | `Unavailable` | `Unavailable` | `Unavailable` |
 | `mitredSweepPayload` | exact construction audit | bounds-disjoint shortcut; the exact planar arm (§7) against a prism, a stitched solid, a faceted result or another mitred sweep; overlap volume through the mesh-boolean path | `Unavailable` | `Unavailable` | `Unavailable` |
 | `coilPayload` | exact construction proof (`agent-docs/helix-design.md` CP5) and the build's held-shell audit | bounds-disjoint shortcut; `WithClearances` against a prism or a stitched solid reads the exact planar arm (`agent-docs/helix-design.md` CD5), and stays `Suspect` against every other payload; overlap volume through the mesh-boolean path, for a partner whose pair tolerance the coil's facets meet | `Unavailable` | `Unavailable` | `Unavailable` |
-| `facetedPayload` | bounded boundary proof (§6) | the exact planar arm (§7) against the same partners | bounded medial survey (§10) | certified normal patches (§8) | certified curvature patches (§9) |
+| `facetedPayload` | held-mesh boundary audit; the §6 feature-scale proof is design only | the exact planar arm (§7) against the same partners | ray-sampled upper bound (`agent-docs/mesh-wall-survey-design.md`); the §10 medial survey is design only | ray-sampled, proves undercuts only (`agent-docs/mesh-wall-survey-design.md` §6); §8's certified normal patches are design only | orthogonal faceted bodies only; §9's certified curvature patches are design only |
+
+### Implementation status
+
+- Implemented: the cup wall theorem (§4, `cupwall.Evaluate` in `internal/cupwall/wall.go`); the cup undercut and
+  radius readings; the exact planar arm for faceted and mitred-sweep clearance (§7); the faceted held-mesh
+  validity audit (`verifyrun.BodyValidityEvidence`); the faceted wall and undercut readings by ray sampling.
+- Design only: the cup pair adapter (§3; `internal/clearance/pairkernel` has no cup carrier), the faceted
+  `boundaryCert` and its per-facet certificates (§5), the feature-scale validity verdict (§6.2 to §6.4),
+  certified normal and radius patches (§8, §9) and the medial wall survey (§10). The faceted payload carries one
+  length, `facetedrecord.Payload.MeshBound`, plus `VertexBound` per vertex, instead of `boundaryCert`.
+- Every design-only answer stays `Suspect`, as the rule at the top of this section requires.
 
 The `prismPayload` row's own four right-hand columns are the ANALYTIC-walled
 case. A free-form (Tier A NURBS) wall answers `Suspect` in all four instead —
@@ -146,6 +158,9 @@ same payload bound per face, edge, candidate, or refinement level.
 
 ## 3. Cup boundary adapter
 
+Design only. No builder below exists: `internal/clearance/pairkernel/geom.go` has prism and revolve carriers and
+no cup carrier, so a pair holding a cup stays `Suspect` (`agent-docs/clearance-design.md`).
+
 ### 3.1 Record
 
 For open end above closed end, cup solid is:
@@ -218,9 +233,7 @@ For accepted cup shell thickness `t` and draft allowance `alpha`:
   conversion's own proven displacement as its bound.
 
 A cup always has a wall. `Wall.Outcome` is never `ScalarAbsent` for a cup
-whose exact morphology recheck succeeds — it is `ScalarMeasured`. The
-theorem itself — which value the wall reading takes — is unchanged; only the
-number `t`'s own exactness depends on the unit conversion that produced it.
+whose exact morphology recheck succeeds: it is `ScalarMeasured`.
 
 ### 4.2 Proof
 
@@ -256,7 +269,8 @@ from the input value alone.
 
 ### 4.3 Algorithm
 
-`internal/cupwall.Evaluate(cp, alpha)`:
+`cupwall.Evaluate(budget, cup, alpha, ops)` (`internal/cupwall/wall.go`; `ops` supplies the section offset,
+equality, audit and loop reversal):
 
 1. Read positive finite `t` and the valid shell sense from the private morphology
    certificate. Reconfirm the exact axial construction relation used by that
@@ -266,7 +280,7 @@ from the input value alone.
    exact offset relation.
 3. Walk every loop of `O` in natural material-left sense.
 4. Walk every loop of `C` reversed, matching cavity material-left sense.
-5. Run existing `junctionPinch` on each non-smooth junction.
+5. Run `survey2d.JunctionPinch` on each non-smooth junction.
 6. Return exact zero on any qualifying pinch; else `t` carrying the shell
    thickness's own millimetre-conversion displacement as its bound, `Exact`
    only when that displacement is zero (§4.1).
@@ -279,6 +293,9 @@ Do not count:
   curvature, not edge radius.
 
 ## 5. Faceted boundary certificate
+
+Design only. The shipped payload carries `MeshBound` and `VertexBound` (§1, Implementation status), not the
+types below. `sourceBound` in this section is not implemented either.
 
 `Faceted.Bound` exposes one length. Verification needs a stronger internal proof
 behind it. Add no public field.
@@ -392,6 +409,8 @@ Strengthen existing meanings; add no API:
 
 ## 6. Faceted validity
 
+The held audit of §6.1 is what `verifyrun.BodyValidityEvidence` runs. §6.2 to §6.4 are design only.
+
 ### 6.1 Held audit
 
 Audit held mesh exactly:
@@ -469,14 +488,14 @@ Approximate does NOT imply `Suspect`; only failed bound gate does.
 `agent-docs/interference-design.md` §3.2), not as a `bodyGeom` carrier model: a
 `facetedPayload`, or a `mitredSweepPayload`, is read off its own held
 triangle set as an exact dyadic snapshot with its displacement `δ`
-(`planarFacetedSolid` and `planarpose.heldMeshSolid`, `internal/planarpose/pose.go`),
+(`planarsnapshot.FacetedSolid` and `planarpose.heldMeshSolid`, `internal/planarsnapshot/faceted.go`, `internal/planarpose/pose.go`),
 its partner — a prism, a stitched solid, or another of the two — the same
 way, and the pair is decided by the exact planar relation of
 `agent-docs/multibody-dynamics-design.md` §9.1, over which §7.2's rules below hold
 unchanged: the held interval is widened once by `DeltaPair`, a held touch
 certifies only at `DeltaPair == 0`, and a held nesting or crossing routes to
 the interference path, with a positive displacement admitting it only
-through a vertex deeper than `DeltaPair` (`pair.PlanarDeepVertex`). The arm
+through a vertex deeper than `DeltaPair` (`planar.PlanarDeepVertex`, `internal/pair/planar`). The arm
 runs only after the analytic kernel leaves the pair undecided, so no pair
 that kernel decides changes. §7.1's `bodyGeom` adapter is the design this
 replaces for that pair shape; it is kept as the shape a carrier model would
@@ -527,6 +546,9 @@ when held interval is a point and `DeltaPair == 0`.
   points from both bodies. Do not inflate it to loosen tolerance gate.
 
 ## 8. Faceted undercuts
+
+Design only. The shipped faceted undercut reading is ray sampling that proves undercuts and never an all-clear
+(`agent-docs/mesh-wall-survey-design.md` §6).
 
 ### 8.1 Normal certificate
 
@@ -591,6 +613,9 @@ patch to the face and clear only a face proven exactly antiparallel at every poi
 
 ## 9. Faceted minimum radius
 
+Design only for faceted bodies, except orthogonal ones (`verifyrun.orthogonalRadius`). The extremum rule at the
+end of §9.2 applies to every shipped survey that reduces candidates.
+
 ### 9.1 Radius certificate
 
 Each `radiusCert` is one of:
@@ -638,6 +663,9 @@ Do not infer radius from faceted hinge angle or fit circles to vertices. Boolean
 rim edges add no radius: `ConcaveRadius` reads face principal curvature.
 
 ## 10. Faceted wall thickness
+
+Design only. The shipped faceted wall reading is ray sampling (`agent-docs/mesh-wall-survey-design.md` §1), which
+proves a wall too thin and never thick enough.
 
 Nearest remote skins alone are not wall thickness. Survey MUST enforce maximal
 inscribed ball, material containment, and draft-opposed contacts.
@@ -720,6 +748,9 @@ lands, overlapping pairs remain `Suspect` by verification's pair-partition rule.
 
 ## 12. Implementation map
 
+Rows naming `addCupFaces`, `addFacetedFaces`, `boundaryCert`, `sourceBound`, `verify_mesh.go`, `survey_mesh.go` and
+`boolean_mesh.go` are design only; none exists in the tree.
+
 | File | Change |
 |---|---|
 | `internal/proofbound/bounds.go` | interval expansion, distance slop, direction-bound composition |
@@ -737,7 +768,8 @@ lands, overlapping pairs remain `Suspect` by verification's pair-partition rule.
 
 ## 13. Stages
 
-Each row leaves every later question staged as `Suspect`.
+Each row leaves every later question staged as `Suspect`. Implemented rows: cup wall, faceted clearance and
+loft verification. The other rows are design only (§1, Implementation status).
 
 | Stage | Lands |
 |---|---|
@@ -756,6 +788,8 @@ bounds pass. These local stages do not allocate global evaluator increment
 numbers.
 
 ## 14. Required tests
+
+Tests for the design-only parts (§1, Implementation status) are required when those parts land.
 
 ### 14.1 Loft
 
