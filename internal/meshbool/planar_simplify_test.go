@@ -475,3 +475,40 @@ func TestSimplifyPlanarTouchingBodyWithRemovable(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, changed)
 }
+
+// TestSimplifyPlanarStartsAtABoundaryVertex pins that a face whose first facet
+// has an interior vertex with the lowest id is still simplified: the box top is
+// a fan round vertex 0, an interior vertex with a lower id than every corner.
+func TestSimplifyPlanarStartsAtABoundaryVertex(t *testing.T) {
+	in := planarBox(0)
+	// Renumber so the fan's centre is vertex 0.
+	perm := []int{1, 2, 3, 4, 5, 6, 7, 8, 0}
+	var xv []proof.Xpt
+	var ap []r3.Vec
+	var xb []float64
+	for range perm {
+		xv, ap, xb = append(xv, proof.Xpt{}), append(ap, r3.Vec{}), append(xb, 0)
+	}
+	for old, nw := range perm {
+		xv[nw], ap[nw], xb[nw] = in.Xverts[old], in.Approx[old], in.Xbeta[old]
+	}
+	in.Xverts, in.Approx, in.Xbeta = xv, ap, xb
+	for i, tri := range in.Tris {
+		in.Tris[i] = [3]int{perm[tri[0]], perm[tri[1]], perm[tri[2]]}
+	}
+	// The first top facet now starts at the centre.
+	for i := range in.Tris {
+		if in.Src[i] == 1 {
+			in.Tris[0], in.Tris[i] = in.Tris[i], in.Tris[0]
+			in.Src[0], in.Src[i] = in.Src[i], in.Src[0]
+			// Rotate it to start at the centre, which keeps its winding.
+			f := in.Tris[0]
+			in.Tris[0] = [3]int{f[2], f[0], f[1]}
+			break
+		}
+	}
+	out, changed, err := SimplifyPlanarFaces(t.Context(), in)
+	require.NoError(t, err)
+	require.True(t, changed)
+	require.Len(t, out.Xverts, 8, "the centre vertex is dropped")
+}
