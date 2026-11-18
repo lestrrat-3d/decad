@@ -198,8 +198,9 @@ func rewriteLineEdge(ctx context.Context, env topo.Env, fp facetedrecord.Payload
 	}
 	// At each end a face either leaves the edge on its own side (convex at the
 	// corner: the blend trims it) or turns back past the edge's line (reflex
-	// there: only a concave edge's fill, which extends the end face, can end
-	// there).
+	// there: the blend's setback edge runs on to the end plane past the corner,
+	// and the end face takes the blend's end cap, for a concave fill and a
+	// convex cut alike).
 	var kind [2][2]sideKind
 	for i := range 2 {
 		for f, c := range []struct {
@@ -215,9 +216,6 @@ func rewriteLineEdge(ctx context.Context, env topo.Env, fp facetedrecord.Payload
 			default:
 				return nil, fmt.Errorf("%w: a face leaves an edge end along the edge's own line", decaderr.ErrUnsupported)
 			}
-		}
-		if (kind[i][0] == extends || kind[i][1] == extends) && convex {
-			return nil, fmt.Errorf("%w: a convex edge ends where a face is reflex", decaderr.ErrUnsupported)
 		}
 		if kind[i][0] == extends && kind[i][1] == extends {
 			return nil, fmt.Errorf("%w: both faces are reflex at an edge end", decaderr.ErrUnsupported)
@@ -306,6 +304,18 @@ func rewriteLineEdge(ctx context.Context, env topo.Env, fp facetedrecord.Payload
 			}
 		}
 	}
+	// Every row of the strip must run forward along the edge from its end on
+	// G0 to its end on G1. Where a face runs on past a corner, the rows end on
+	// G's plane outside the edge's own span, and a steep enough end plane
+	// brings a row's two ends together or past each other: that strip folds,
+	// and its end caps cross.
+	for j := range rowsAt {
+		a, b := rowIdx[0][j], rowIdx[1][j]
+		if w.verts[b].Sub(w.verts[a]).Dot(l.d) <= w.beta[a]+w.beta[b]+margin {
+			return nil, fmt.Errorf("%w: a row of the blend's strip is no longer than its bounds along the edge",
+				decaderr.ErrUnsupported)
+		}
+	}
 
 	// The faces beside the edge keep clear of the strip: no boundary segment of
 	// a face comes within the held bounds of the region the blend rewrites.
@@ -350,6 +360,10 @@ func rewriteLineEdge(ctx context.Context, env topo.Env, fp facetedrecord.Payload
 		if err != nil {
 			return nil, err
 		}
+		// Under a convex edge, a face beside it that extends past the corner
+		// leaves the blend's end cap beside G's corner, across G's chain on the
+		// other face: G takes it, as it takes a concave edge's fill.
+		t = t || (convex && (kind[i][0] == extends || kind[i][1] == extends))
 		gLoops[i], gains[i] = loops, t
 		if t && l.ends[i].tilt != 0 {
 			// A cap an end face takes is new surface beside its held face, where an oblique
@@ -434,7 +448,10 @@ func rewriteLineEdge(ctx context.Context, env topo.Env, fp facetedrecord.Payload
 // route a convex edge may end on a face reflex at the corner, which takes the
 // blend's end cap, and a concave edge adds the cap to every end face. gains
 // reports that G takes the blend's end cap, either way, and the caller must
-// clear the face's rebuilt facets with checkStripClear. The other routes pass nil, read
+// clear the face's rebuilt facets with checkStripClear. Under a convex edge
+// whose face A or B extends past the corner, G also takes the cap, but gains
+// stays false: each caller decides that case itself, as the plane–cylinder
+// route does for its extending wall. The other routes pass nil, read
 // the turn from the loop's vertices beside the corner, and refuse a reflex end
 // face under a convex edge; the plane–cylinder route's dirs come only with an
 // extending wall, whose end face must be convex.

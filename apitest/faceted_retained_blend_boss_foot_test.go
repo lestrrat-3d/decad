@@ -266,11 +266,15 @@ func TestFacetedRetainedBlendBossFoot(t *testing.T) {
 		_, err := decad.Fillet(t.Context(), body, bossSides(t, body, near.corners()[:1]), units.Millimeters(3))
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.ErrorContains(t, err, "another part of an end face comes within the blend's reach of the corner")
+	})
 
+	t.Run("a wall edge whose front face is reflex at the step", func(t *testing.T) {
+		t.Parallel()
 		// An L section extruded 20 mm along y: a 10 mm wall over x = 10..20
 		// rises from z = 10 to 30 on a plate 40 mm long. The wall's convex
 		// edge along z at (20, 0) ends at the step z = 10, where the front
-		// face y = 0 carries on below the corner: that face is reflex there.
+		// face y = 0 carries on below the corner: that face is reflex there,
+		// and the plate's top takes the blend's end cap.
 		sc := newRetentionScene()
 		s, err := sc.w.CreateSketch(sc.w.XZ())
 		require.NoError(t, err)
@@ -293,9 +297,24 @@ func TestFacetedRetainedBlendBossFoot(t *testing.T) {
 		require.NoError(t, err)
 		stepped, err := decad.Cut(t.Context(), prism, zCylinderAt(t, sc, 30, 10, 3, -30, 30))
 		require.NoError(t, err)
-		_, err = decad.Fillet(t.Context(), stepped, straightEdge(t, stepped, r3.NewVec(20, 0, 30), zAxis),
-			units.Millimeters(2))
-		require.ErrorIs(t, err, decad.ErrUnsupported)
-		require.ErrorContains(t, err, "a convex edge ends where a face is reflex")
+		before, err := stepped.Volume()
+		require.NoError(t, err)
+		const r = 2.0
+		out, err := decad.Fillet(t.Context(), stepped, straightEdge(t, stepped, r3.NewVec(20, 0, 30), zAxis),
+			units.Millimeters(r))
+		require.NoError(t, err)
+		after, err := out.Volume()
+		require.NoError(t, err)
+		// The 20 mm edge loses the corner region all along it. The wall's top
+		// gives up the corner and the plate's top takes the same corner as the
+		// cap, so the area changes by the quarter cylinder less the two strips.
+		requireVolumeChange(t, before, after, 20*r*r*(1-math.Pi/4))
+		caps := r * r * (1 - math.Pi/4)
+		requireCapsTaken(t, stepped, out, 20*r*(math.Pi/2-2), caps)
+		requireCapCharged(t, stepped, out, caps)
+		mesh, err := out.Tessellate(t.Context(), units.Millimeters(0.1), decad.WithVerification(decad.VerifyAll))
+		require.NoError(t, err)
+		require.True(t, mesh.BoundaryVerified())
+		require.True(t, mesh.VolumeVerified())
 	})
 }

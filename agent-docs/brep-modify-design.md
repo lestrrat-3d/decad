@@ -128,9 +128,10 @@ succeeds. A selection the retained blend recognizes but cannot build refuses
 with the retained blend's own row (Table SR of
 `agent-docs/retained-edge-blend-design.md`). On the box below, a cavity
 vertical or floor edge refuses with "an end face's corner does not match the
-edge's convexity", the opening's inner rim with "a convex edge ends where a
-face is reflex", and an edge at the band's ring with "an edge end meets a face
-that is not a retained plane". An unmapped selection, or one the retained
+edge's convexity", and an edge at the band's ring with "an edge end meets a face
+that is not a retained plane". The opening's inner rim builds: the annular top
+is reflex at the rim's ends, and the inner walls across them take the blend's
+end caps. An unmapped selection, or one the retained
 blend does not recognize, falls through to SB11. A placed shell whose held
 vertices do not equal its view's vertices exactly maps nothing: the box shell
 translated by 12.7 along x, or turned 30° or 90° about z by
@@ -878,6 +879,13 @@ Refusals:
 - **Shell of a non-prism brep**: route S of `agent-docs/modify-general-design.md`
   for a prism cut by through tools; SB10 for the rest.
 - **Hand-offs**: none. No capability is needed from `sketch`, `r3` or `units`.
+- **An edge that ends on a sloped end face**: route E keeps SB7. The record
+  holds an oblique plane only as a swept wall, so the end cap, an ellipse
+  arc in that plane, and the blend face cut at an angle have no face this
+  record holds. A body that a mesh Boolean built takes the retained edge
+  blend instead, whose straight route ends rows on any retained plane and
+  takes the end cap where a face beside the edge is reflex
+  (`agent-docs/retained-edge-blend-design.md` §5.0).
 
 ## 12. PR split
 
