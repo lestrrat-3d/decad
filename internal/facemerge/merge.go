@@ -70,7 +70,11 @@ func Merge(ctx context.Context, in Input) (src []int, groups []facetedrecord.Gro
 	groups = slices.Clone(in.Groups)
 	for _, facets := range comps {
 		id := len(groups)
-		groups = append(groups, mergedGroup(in, facets))
+		g, err := mergedGroup(budget, in, facets)
+		if err != nil {
+			return nil, nil, false, err
+		}
+		groups = append(groups, g)
 		for _, t := range facets {
 			src[t] = id
 		}
@@ -328,10 +332,13 @@ func (u unionFind) union(a, b int) {
 }
 
 // mergedGroup builds the group of one admitted component (design §4.6) from the distinct groups of its facets.
-func mergedGroup(in Input, facets []int) facetedrecord.Group {
+func mergedGroup(budget *proofbound.WorkBudget, in Input, facets []int) (facetedrecord.Group, error) {
 	seen := make(map[int]struct{})
 	var members []int
 	for _, t := range facets {
+		if err := budget.Step(); err != nil {
+			return facetedrecord.Group{}, err
+		}
 		g := in.Src[t]
 		if _, ok := seen[g]; !ok {
 			seen[g] = struct{}{}
@@ -341,11 +348,12 @@ func mergedGroup(in Input, facets []int) facetedrecord.Group {
 	slices.Sort(members)
 	merged := facetedrecord.Group{Planar: true}
 	var sources []*facetedrecord.SourcePatch
+	seenOrigin, seenUpstream := map[provenance.Ref]struct{}{}, map[provenance.Ref]struct{}{}
 	donor := -1
 	for _, g := range members {
 		group := in.Groups[g]
-		merged.Origins = appendNew(merged.Origins, group.Origins)
-		merged.Upstream = appendNew(merged.Upstream, group.Upstream)
+		merged.Origins = appendNew(merged.Origins, seenOrigin, group.Origins)
+		merged.Upstream = appendNew(merged.Upstream, seenUpstream, group.Upstream)
 		if group.Source != nil {
 			sources = append(sources, group.Source)
 		}
@@ -365,13 +373,14 @@ func mergedGroup(in Input, facets []int) facetedrecord.Group {
 		merged.AxialDelta, merged.HasAxialDelta = d.AxialDelta, d.HasAxialDelta
 		merged.NormalBound, merged.Reversed = d.NormalBound, d.Reversed
 	}
-	return merged
+	return merged, nil
 }
 
-// appendNew appends the refs of add that dst does not hold yet, keeping first occurrences in order.
-func appendNew(dst, add []provenance.Ref) []provenance.Ref {
+// appendNew appends the refs of add that seen does not hold yet, keeping first occurrences in order.
+func appendNew(dst []provenance.Ref, seen map[provenance.Ref]struct{}, add []provenance.Ref) []provenance.Ref {
 	for _, r := range add {
-		if !slices.Contains(dst, r) {
+		if _, ok := seen[r]; !ok {
+			seen[r] = struct{}{}
 			dst = append(dst, r)
 		}
 	}
