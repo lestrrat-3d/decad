@@ -84,3 +84,70 @@ func TestBrepRouteEFilletEndFacesAgree(t *testing.T) {
 		}
 	}
 }
+
+// xyPrism extrudes the polygon pts, sketched on the plane z = z0, along +z by
+// height.
+func xyPrism(t *testing.T, doc *decad.Document, z0, height float64, pts [][2]float64) *decad.Body {
+	t.Helper()
+	f, err := r3.NewFrame(r3.Vec{Z: z0}, r3.Vec{X: 1}, r3.Vec{Y: 1})
+	require.NoError(t, err)
+	return framePrism(t, doc, f, height, decad.Along, pts)
+}
+
+// framePrism extrudes the polygon pts, sketched with fixed corners on the
+// plane f, by depth in direction dir.
+func framePrism(t *testing.T, doc *decad.Document, f r3.Frame, depth float64, dir decad.Direction,
+	pts [][2]float64) *decad.Body {
+	t.Helper()
+	w := sketch.NewWorld()
+	pl, err := w.CreatePlaneFromFrame(f)
+	require.NoError(t, err)
+	s, err := w.CreateSketch(pl)
+	require.NoError(t, err)
+	ps := make([]*sketch.Point, len(pts))
+	for i, p := range pts {
+		ps[i] = s.CreatePoint(p[0], p[1])
+		s.Fix(ps[i])
+	}
+	for i := range ps {
+		s.CreateLine(ps[i], ps[(i+1)%len(ps)])
+	}
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(depth), Dir: dir})
+	require.NoError(t, err)
+	return body
+}
+
+// TestBrepRouteEFilletObliqueBossEdges fillets, one at a time, the vertical
+// edges of trapezoid bosses united with a plate. Each edge lies between two
+// walls, one or both oblique, so its carriers are not axis-aligned, and its
+// end faces, the boss's top and the plate's top, hold its corner in opposite
+// senses. Both read the corner with the same walk arriving; read in each
+// face's own loop order instead, some of these edges refuse SB9.
+func TestBrepRouteEFilletObliqueBossEdges(t *testing.T) {
+	t.Parallel()
+	const r = 0.3
+	for _, lean := range []float64{0.7, 1.3, 2.9, 3.1} {
+		for _, top := range []float64{4.9, 6.2, 7.3} {
+			boss := [][2]float64{{-5, -5}, {5, -5}, {5 - lean, top}, {-5 + 1.7*lean, top}}
+			for _, corner := range boss {
+				doc := decad.New()
+				plate := xyPrism(t, doc, 0, 10, [][2]float64{{-20, -20}, {20, -20}, {20, 20}, {-20, 20}})
+				body, err := decad.Union(t.Context(), plate, xyPrism(t, doc, 10, 15, boss))
+				require.NoError(t, err)
+				before, err := body.Volume()
+				require.NoError(t, err)
+				out, err := decad.Fillet(t.Context(), body, decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1)),
+					decad.EndpointAt(r3.NewVec(corner[0], corner[1], 25))).Exactly(1), units.Millimeters(r))
+				require.NoError(t, err, "lean %g, top %g, corner %v", lean, top, corner)
+				after, err := out.Volume()
+				require.NoError(t, err)
+				// A convex corner loses material along the 15 mm edge.
+				require.Less(t, after.Value.Base(), before.Value.Base())
+				require.Less(t, before.Value.Base()-after.Value.Base(), 15*r*r+before.Bound.Base()+after.Bound.Base())
+			}
+		}
+	}
+}

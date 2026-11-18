@@ -197,16 +197,18 @@ func FilletWithCarriers(walks []survey2d.SideWalk, ci int, r, tol float64, ovA, 
 // corner hands every face the same two carriers in the same roles. The blend
 // comes back in the loop's own sense.
 //
-// The construction's arithmetic, read in fixed roles, is equivariant under a
-// signed permutation of the coordinates: negation and exchange of
-// coordinates commute with rounding, a sum of two products is commutative,
-// and under a reflection the corner's cross product, the side the offsets
-// take and each line's left normal all change sign together. Two faces
-// whose carriers are signed-permutation images of each other therefore
-// compute images of one centre and one pair of feet, bit for bit. A circular
-// walk's tangent comes from the walk's own angles, which do not map exactly,
-// but the construction reads it only for signs (S4's corner and the arc's
-// sense).
+// Read in fixed roles, the construction's arithmetic commutes with negating
+// coordinates: negation commutes with rounding, also inside a fused
+// multiply-add, and under a reflection the corner's cross product, the side
+// the offsets take and each line's left normal all change sign together. Two
+// faces whose carriers differ by sign flips of the coordinates therefore
+// compute images of one centre and one pair of feet, bit for bit. Where the
+// map also exchanges the two coordinates the agreement is bit for bit only
+// without fused multiply-adds: Go may fuse a·b − c·d (on arm64, for one), and
+// the exchange moves which product is fused. A disagreement there is a
+// refusal (SB9), never a wrong blend. A circular walk's tangent comes from
+// the walk's own angles, which do not map exactly, but the construction reads
+// it only for signs (S4's corner and the arc's sense).
 func FilletAtCorner(walks []survey2d.SideWalk, ci int, r, tol float64, swap bool) (*Blend, error) {
 	n := len(walks)
 	arrive, leave := walks[(ci+n-1)%n], walks[ci]

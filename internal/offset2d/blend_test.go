@@ -33,19 +33,19 @@ func cornerFillet(t *testing.T, at [2]float64, swap bool, pts ...[2]float64) *of
 // TestFilletAtCornerAgreesAcrossFaces rounds one solid corner as two end
 // faces of a route E edge hold it (agent-docs/brep-modify-design.md §5.3 step
 // 2). G0 is the face x ∈ [−3.5, 3.5], y ∈ [0, 3.6]. G1 holds the same corner
-// (−3.5, 0) through a frame that exchanges the axes, (u, v) = (y, x), so it
-// reflects, and its region runs on to x = 7. G0's loop arrives at the corner
-// along the wall x = −3.5 and G1's along the cap y = 0, so G0 swaps and G1
-// does not: both read the cap's walk arriving. The two blends are mirror
-// images bit for bit, though the cap's far ends differ: read through a far
-// end, the two cap feet part by an ulp.
+// (−3.5, 0) through a frame that flips y, (u, v) = (x, −y), so it reflects,
+// and its region runs on to x = 7. G0's loop arrives at the corner along the
+// wall x = −3.5 and G1's along the cap y = 0, so G0 swaps and G1 does not:
+// both read the cap's walk arriving. The two blends are mirror images bit for
+// bit, though the cap's far ends differ: read through a far end, or with each
+// face's own walk arriving, the two faces' feet part by an ulp.
 func TestFilletAtCornerAgreesAcrossFaces(t *testing.T) {
 	t.Parallel()
 	g0 := cornerFillet(t, [2]float64{-3.5, 0}, true,
 		[2]float64{-3.5, 0}, [2]float64{3.5, 0}, [2]float64{3.5, 3.6}, [2]float64{-3.5, 3.6})
-	g1 := cornerFillet(t, [2]float64{0, -3.5}, false,
-		[2]float64{0, -3.5}, [2]float64{3.6, -3.5}, [2]float64{3.6, 7}, [2]float64{0, 7})
-	mirror := func(p sectionrecord.Point2) sectionrecord.Point2 { return sectionrecord.Point2{U: p.V, V: p.U} }
+	g1 := cornerFillet(t, [2]float64{-3.5, 0}, false,
+		[2]float64{-3.5, 0}, [2]float64{-3.5, -3.6}, [2]float64{7, -3.6}, [2]float64{7, 0})
+	mirror := func(p sectionrecord.Point2) sectionrecord.Point2 { return sectionrecord.Point2{U: p.U, V: -p.V} }
 
 	// G0 arrives on the wall and leaves on the cap; G1 the other way round.
 	require.Equal(t, g0.FA, mirror(g1.FB))

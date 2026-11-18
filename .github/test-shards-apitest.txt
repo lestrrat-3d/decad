@@ -3156,3 +3156,4 @@
 12	0.00	TestFacetedRetainedBlendReflexSide
 12	0.00	TestShellBossThenFilletOpeningInnerRim
 12	0.00	TestBrepRouteEFilletEndFacesAgree
+12	0.00	TestBrepRouteEFilletObliqueBossEdges

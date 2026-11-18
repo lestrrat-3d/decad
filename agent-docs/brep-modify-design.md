@@ -537,9 +537,14 @@ faces `G0`, `G1`:
    passes through the corner itself (`offset2d.FilletAtCorner`). The two end
    faces then hold the same two carriers in the same roles, and the
    operations the construction performs on coordinates — differences, sums,
-   products, `hypot`, the offset solve — commute with a signed permutation of
-   them; under a reflection the corner's cross product, the side the offsets
-   take and each line's left normal change sign together. A chamfer's feet
+   products, `hypot`, the offset solve — commute with negating them, also
+   inside a fused multiply-add; under a reflection the corner's cross
+   product, the side the offsets take and each line's left normal change
+   sign together. Where the map between the faces also exchanges the two
+   coordinates, the agreement is bit for bit only without fused
+   multiply-adds, since Go may fuse `a·b − c·d` (on arm64, for one) and the
+   exchange moves which product is fused; a disagreement there refuses SB9
+   and never admits a wrong blend. A chamfer's feet
    are set back from the corner along each walk separately, so it needs no
    fixed roles. SB9 refuses wherever the expectation fails. Read in each
    face's own loop order through each walk's far end instead, the line
@@ -786,6 +791,11 @@ Route E:
   order through the walks' far ends, the edges at the sketch plane refuse
   SB9; `internal/offset2d/blend_test.go` pins the fixed-role reading against a
   reflected corner whose walk runs to another far end.
+- Trapezoid bosses on the 40×40 plate, each vertical edge filleted alone at
+  `r = 0.3` (`TestBrepRouteEFilletObliqueBossEdges`): every edge builds.
+  The walls beside these edges are oblique, so their carriers are not
+  axis-aligned, and read with each face's own walk arriving some edges
+  refuse SB9.
 - S1, chamfer the edge along `x` at `(y, z) = (0, 0)`, `d = 2`: the `x = 0`
   and `x = 40` walls are restated, volume within its bound of
   `16000 − 180π − 80`.
