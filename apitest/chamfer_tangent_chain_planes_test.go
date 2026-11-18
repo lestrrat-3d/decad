@@ -216,15 +216,85 @@ const tcD = 0.5
 
 func tcChamfer(t *testing.T, b *decad.Body, edges []*decad.Edge, opts ...decad.ChamferOption) (*decad.Body, error) {
 	t.Helper()
-	return decad.Chamfer(t.Context(), b, tcSelect(t, edges), units.Millimeters(tcD), opts...)
+	return tcChamferBy(t, b, edges, tcD, opts...)
+}
+
+func tcChamferBy(t *testing.T, b *decad.Body, edges []*decad.Edge, d float64, opts ...decad.ChamferOption) (*decad.Body, error) {
+	t.Helper()
+	return decad.Chamfer(t.Context(), b, tcSelect(t, edges), units.Millimeters(d), opts...)
+}
+
+// tcEndPiece is the volume a chamfer of setback tcD removes beyond its full wedge where its straight end runs onto an
+// earlier 45° bevel that meets the edge's wall square: the wedge's section shrinks as (h)²/2 over the last tcD of
+// height h, which adds tcD³/6.
+const tcEndPiece = tcD * tcD * tcD / 6
+
+// tcSurfaceKinds counts b's faces by surface: oblique planes (a normal off every axis), cones and faceted faces.
+func tcSurfaceKinds(b *decad.Body) (oblique, cones, faceted int) {
+	for _, f := range b.Faces() {
+		switch s := f.Surface().(type) {
+		case decad.Plane:
+			n := s.Frame.N()
+			axis := 0
+			for _, c := range []float64{n.X, n.Y, n.Z} {
+				if math.Abs(math.Abs(c)-1) < 1e-12 {
+					axis++
+				}
+			}
+			if axis == 0 {
+				oblique++
+			}
+		case decad.Cone:
+			cones++
+		case decad.Faceted:
+			faceted++
+		}
+	}
+	return oblique, cones, faceted
+}
+
+// tcRequireExact checks that out bevels each edge of chain with an exact surface, as the chain rewrite builds it
+// (agent-docs/retained-modify-reach-design.md §15b): one new oblique plane per line, one new cone per arc, and no new
+// faceted face, which a Boolean Cut would leave.
+func tcRequireExact(t *testing.T, before, out *decad.Body, chain []*decad.Edge) {
+	t.Helper()
+	lines, arcs := 0, 0
+	for _, e := range chain {
+		if tcIsArc(e) {
+			arcs++
+			continue
+		}
+		lines++
+	}
+	o0, c0, f0 := tcSurfaceKinds(before)
+	o1, c1, f1 := tcSurfaceKinds(out)
+	require.Equal(t, lines, o1-o0, "new oblique plane faces")
+	require.Equal(t, arcs, c1-c0, "new cone faces")
+	require.Equal(t, f0, f1, "faceted faces")
+}
+
+// tcRequireVertexAt checks that p is a vertex of b, to the tolerance the held mesh reads it with.
+func tcRequireVertexAt(t *testing.T, b *decad.Body, p r3.Vec) {
+	t.Helper()
+	best := math.Inf(1)
+	for _, e := range b.Edges() {
+		for _, q := range []r3.Vec{e.Start().Position().Value, e.End().Position().Value} {
+			best = math.Min(best, q.Sub(p).Len())
+		}
+	}
+	require.Less(t, best, 1e-6, "no vertex at %v", p)
 }
 
 func tcAll(*decad.Edge) bool { return true }
 
-// tcLink is a stadium link of length l between its end axes, 20 thick along y, with both y caps chamfered when
-// capped, and cut to a tongue |y| <= 4 at x < 20 and a fork slot |y| < 4.26 at its far end.
-func tcLink(t *testing.T, sc *tcScene, l float64, capped bool) *decad.Body {
+// tcLinkLength is the distance between a stadium link's end axes.
+const tcLinkLength = 120
+
+// tcLink is a stadium link of length tcLinkLength between its end axes, 20 thick along y, with both y caps chamfered
+// when capped, and cut to a tongue |y| <= 4 at x < 20 and a fork slot |y| < 4.26 at its far end.
+func tcLink(t *testing.T, sc *tcScene, capped bool) *decad.Body {
 	t.Helper()
+	const l = tcLinkLength
 	b := sc.prism(t, r3.Vec{}, tcX, tcZ, []tcSeg{
 		tcLine(0, -10, l, -10), tcArc(l, 0, l, -10, l, 10), tcLine(l, 10, 0, 10), tcArc(0, 0, 0, 10, 0, -10),
 	}, decad.Symmetric{D: units.Millimeters(10)})
@@ -292,6 +362,7 @@ func tcRequireChamfer(t *testing.T, before, out *decad.Body, chain []*decad.Edge
 		}
 	}
 	require.Positive(t, made)
+	tcRequireExact(t, before, out, chain)
 }
 
 // tcCurveDistance is the distance from q to the line or the circle that carries e.
@@ -343,7 +414,7 @@ func tcEdgesWhere(b *decad.Body, keep func(e *decad.Edge, mid r3.Vec) bool) []*d
 func tcNear(a, b float64) bool { return math.Abs(a-b) < 1e-6 }
 
 // TestChamferTangentChainAcrossPlanes chamfers tangent chains of mesh Boolean results whose edges share no one base
-// plane (agent-docs/retained-modify-reach-design.md §15b).
+// plane (agent-docs/retained-modify-reach-design.md §15b), each exactly: every bevel is a plane or a cone.
 func TestChamferTangentChainAcrossPlanes(t *testing.T) {
 	t.Parallel()
 
@@ -415,20 +486,41 @@ func TestChamferTangentChainAcrossPlanes(t *testing.T) {
 		want := tcWedge(2*26+2*8, [][2]float64{{10, math.Pi}}, [][2]float64{{4, math.Pi / 2}, {4, math.Pi / 2}})
 		tcRequireChamfer(t, b, out, chain, want)
 	})
-	t.Run("a step's floor rim ending on an earlier bevel of the same setback refuses", func(t *testing.T) {
-		t.Parallel()
-		sc := newTCScene()
-		bar := tcBar(t, sc, 10, 70)
-		capped, err := tcChamfer(t, bar, tcFacesEdges(t, bar, tcZ, []float64{0, 20}, tcNot(tcSkipAlong(tcY))))
-		require.NoError(t, err)
-		b := tcCut(t, capped, tcStepTool(t, sc, 10, 8, 30, 4))
-		require.Len(t, stepRim(b), 7)
-		// The wall's bevel ends on the top's bevel and passes through the far corner of it, on the top face's rim,
-		// which the earlier Cut holds only within its bound: the Cut cannot tell a touch there from a crossing.
-		_, err = tcChamfer(t, b, tcFacesEdges(t, b, tcZ, []float64{8}, tcNot(tcSkipAlong(tcY))))
-		require.ErrorIs(t, err, decad.ErrUnsupported)
-		require.ErrorContains(t, err, "held facets come within the chord tolerance")
-	})
+	// The step's wall edges end on the bevels of the bar's top rim, which an earlier chamfer made. Each wall's bevel
+	// ends on the old bevel's plane, which meets the wall square.
+	for _, earlier := range []struct {
+		name string
+		d    float64
+	}{
+		// With the same setback the new bevel passes exactly through the old bevel's far corner on the top face.
+		{"of the same setback", tcD},
+		// A wider earlier bevel leaves part of its edge on the wall, beyond the new bevel's end.
+		{"wider than the step's", 0.8},
+	} {
+		t.Run("a step's floor rim ending on an earlier bevel "+earlier.name, func(t *testing.T) {
+			t.Parallel()
+			sc := newTCScene()
+			bar := tcBar(t, sc, 10, 70)
+			capped, err := tcChamferBy(t, bar, tcFacesEdges(t, bar, tcZ, []float64{0, 20}, tcNot(tcSkipAlong(tcY))), earlier.d)
+			require.NoError(t, err)
+			b := tcCut(t, capped, tcStepTool(t, sc, 10, 8, 30, 4))
+			chain := stepRim(b)
+			require.Len(t, chain, 7)
+			out, err := tcChamfer(t, b, tcFacesEdges(t, b, tcZ, []float64{8}, tcNot(tcSkipAlong(tcY))))
+			require.NoError(t, err)
+			// Each wall edge runs from the round at z = 12 to the old bevel at z = 20 − earlier.d.
+			wall := 20 - earlier.d - 12
+			want := tcWedge(2*26+2*wall, [][2]float64{{10, math.Pi}}, [][2]float64{{4, math.Pi / 2}, {4, math.Pi / 2}}) +
+				2*tcEndPiece
+			tcRequireChamfer(t, b, out, chain, want)
+			for _, s := range []float64{1, -1} {
+				// The bevel's end on the old bevel: its corner on the side face, and its corner on the wall, which the
+				// old bevel's far corner is when the setbacks agree.
+				tcRequireVertexAt(t, out, r3.NewVec(30+tcD, 10*s, 20-earlier.d))
+				tcRequireVertexAt(t, out, r3.NewVec(30, (10-tcD)*s, 20-earlier.d+tcD))
+			}
+		})
+	}
 
 	// A slot's rim runs along its sides, round the bar's far end on both sides, and round the slot's end on the top
 	// and bottom faces.
@@ -468,8 +560,8 @@ func TestChamferTangentChainAcrossPlanes(t *testing.T) {
 	})
 	t.Run("a slot through a link's end after its caps were chamfered", func(t *testing.T) {
 		t.Parallel()
-		const l = 120
-		b := tcLink(t, newTCScene(), l, true)
+		const l = tcLinkLength
+		b := tcLink(t, newTCScene(), true)
 		chain := tcEdgesWhere(b, func(e *decad.Edge, m r3.Vec) bool {
 			return m.X > l-30 && !tcSkipAlong(tcZ)(e) &&
 				(tcNear(math.Abs(m.Y), 4.26) || (tcIsArc(e) && m.X < l-21.74 && m.X > l-27))
@@ -484,7 +576,7 @@ func TestChamferTangentChainAcrossPlanes(t *testing.T) {
 	// the shoulder to the cap: an open chain on three planes.
 	t.Run("a tongue's rim open to uncut caps", func(t *testing.T) {
 		t.Parallel()
-		b := tcLink(t, newTCScene(), 120, false)
+		b := tcLink(t, newTCScene(), false)
 		chain := tcEdgesWhere(b, func(e *decad.Edge, m r3.Vec) bool {
 			if m.Y < 0 || m.X > 20+1e-9 || tcSkipAlong(tcZ)(e) || (tcSkipAlong(tcY)(e) && m.X < 1) {
 				return false
@@ -497,11 +589,44 @@ func TestChamferTangentChainAcrossPlanes(t *testing.T) {
 		want := tcWedge(2*16+2*2, [][2]float64{{10, math.Pi}}, [][2]float64{{4, math.Pi / 2}, {4, math.Pi / 2}})
 		tcRequireChamfer(t, b, out, chain, want)
 	})
-	t.Run("a tongue's rim ending on an earlier cap bevel of the same setback refuses", func(t *testing.T) {
+	t.Run("a tongue's rim ending on an earlier cap bevel of the same setback", func(t *testing.T) {
 		t.Parallel()
-		b := tcLink(t, newTCScene(), 120, true)
-		_, err := tcChamfer(t, b, tcFacesEdges(t, b, tcY, []float64{4}, tcNot(tcSkipAlong(tcZ))))
-		require.ErrorIs(t, err, decad.ErrUnsupported)
-		require.ErrorContains(t, err, "held facets come within the chord tolerance")
+		b := tcLink(t, newTCScene(), true)
+		chain := tcEdgesWhere(b, func(e *decad.Edge, m r3.Vec) bool {
+			if m.Y < 0 || m.X > 20+1e-9 || tcSkipAlong(tcZ)(e) || (tcSkipAlong(tcY)(e) && m.X < 1) {
+				return false
+			}
+			return tcNear(m.Y, 4) || (tcNear(math.Abs(m.Z), 10) && m.Y < 10-tcD)
+		})
+		require.Len(t, chain, 7)
+		out, err := tcChamfer(t, b, tcFacesEdges(t, b, tcY, []float64{4}, tcNot(tcSkipAlong(tcZ))))
+		require.NoError(t, err)
+		// The shoulder's edges run from the round at y = 8 to the cap's bevel at y = 9.5.
+		want := tcWedge(2*16+2*1.5, [][2]float64{{10, math.Pi}}, [][2]float64{{4, math.Pi / 2}, {4, math.Pi / 2}}) +
+			2*tcEndPiece
+		tcRequireChamfer(t, b, out, chain, want)
+		for _, s := range []float64{1, -1} {
+			// The old bevel's far corner on the cap is the new bevel's corner on the shoulder.
+			tcRequireVertexAt(t, out, r3.NewVec(20, 10, (10-tcD)*s))
+			tcRequireVertexAt(t, out, r3.NewVec(20+tcD, 10-tcD, 10*s))
+		}
+	})
+	t.Run("a link's tongue and fork faces in one call after its caps were chamfered", func(t *testing.T) {
+		t.Parallel()
+		b := tcLink(t, newTCScene(), true)
+		out, err := tcChamfer(t, b, tcFacesEdges(t, b, tcY, []float64{-4.26, -4, 4, 4.26}, tcNot(tcSkipAlong(tcZ))))
+		require.NoError(t, err)
+		tongue := tcWedge(2*16+2*1.5, [][2]float64{{10, math.Pi}}, [][2]float64{{4, math.Pi / 2}, {4, math.Pi / 2}}) +
+			2*tcEndPiece
+		v0, err := b.Volume()
+		require.NoError(t, err)
+		v1, err := out.Volume()
+		require.NoError(t, err)
+		// Both fork faces' rims are one closed chain, joined round the slot's end on the top and bottom faces.
+		require.InDelta(t, 2*tongue+slotWant, v0.Value.Base()-v1.Value.Base(), v0.Bound.Base()+v1.Bound.Base())
+		require.True(t, out.IsSolid())
+		_, _, f0 := tcSurfaceKinds(b)
+		_, _, f1 := tcSurfaceKinds(out)
+		require.Equal(t, f0, f1, "faceted faces")
 	})
 }
