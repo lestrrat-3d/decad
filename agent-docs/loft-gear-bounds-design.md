@@ -12,7 +12,7 @@ Router (navigation, not authority):
 
 | Your question | Section |
 |---|---|
-| what the gear probe measures, and why the earlier bounds read every gear `Suspect` | §1 |
+| why the earlier bounds read every gear `Suspect` | §1 |
 | the volume residual: one wall leg per cell and a skirt leg, and the proof | §2 |
 | the centroid bound as a shift of the held centroid | §3 |
 | `Area`'s per-cell cap tube | §4 |
@@ -25,24 +25,21 @@ Router (navigation, not authority):
 | open questions, each settled | §11 |
 | which loft sections read from this document | §12 |
 
-Every measured number below is a dated measurement from a probe that is no longer in the tree, so no test
-reproduces it. The probe built helical spur gears, module 2, 20° pressure angle, 10 mm face, 20° helix twist,
-5 fit points per Tier A flank, as one tooth (`tooth8`, `tooth20`, `tooth40`) or the full outline (`z8`, `z20`,
-`z40`), with every ceiling lifted so the bounds themselves could be read. "Earlier" columns read the bounds
-this design replaced; "new" and "now" columns read the bounds described here.
+The reference case is a helical spur gear: module 2, 20° pressure angle, 10 mm face, 20° helix twist, 5 fit points
+per Tier A flank, as one tooth or the full outline. Sizes and bounds below are the formulas and constants the code
+and the tests in §8 show.
 
 ## 1. Measured problem
 
 The earlier bounds, with the chord target `fraction × coordinate envelope` (loft §5.1's envelope rule), read
 every gear case `Suspect` at the default `1e-3` tolerance. Three facts drove the design:
 
-- The cap and seam legs were 60–85 % of the volume bound and scale as `matchedDelta × radius × perimeter`, so
+- The cap and seam legs dominated the volume bound and scale as `matchedDelta × radius × perimeter`, so
   they grow with the gear's radius rather than with its teeth.
 - The centroid bound multiplied the volume allowance by the body's distance from the mass anchor
   (`coordUpper`), which for one tooth is the gear radius rather than the tooth's size.
 - The crossing audit tested every pair of assembled triangles. The pairs that survive the box test are
-  dominated by cap-vs-wall and cap-vs-cap pairs whose exact classification is never informative: at z40,
-  2.15 M of the 30.7 M pairs overlap in boxes, and 2.05 M of those involve a cap triangle.
+  dominated by cap-vs-wall and cap-vs-cap pairs whose exact classification is never informative.
 
 ## 2. The volume residual: a per-cell wall leg, a skirt leg and the vertex sweep
 
@@ -121,20 +118,10 @@ is the skirt.
 
 **Per cell, never the maximum.** The build-wide `matchedDelta × wallAreaUpper` charges every cell at the worst
 cell's departure. On the gear a LineSeg cell's departure is zero, an arc cell's is its own sagitta, and a
-free-form cell's is its own matched bound, so the per-cell sum reads 0.47–0.62 of the maximum form.
+free-form cell's is its own matched bound, so the per-cell sum is below the maximum form.
 
-Measured on the probe (ceilings lifted, chord target `fraction × coordinate envelope`; "earlier" is the build-wide
-form with cap and seam legs):
-
-| Case | wall / cap / seam (earlier) | per-cell wallLeg | skirtLeg | Volume bound earlier → now |
-|---|---|---|---|---|
-| tooth8 | 0.083 / 0.060 / 0.073 | 0.051 | 4.6e-17 | 0.215 → 0.051 |
-| z8 | 1.15 / 0.83 / 1.01 | 0.69 | 1.0e-15 | 3.0 → 0.69 |
-| z20 | 7.5 / 9.6 / 11.3 | 4.3 | 2.3e-14 | 28.4 → 4.3 |
-| z40 | 36.4 / 90.5 / 98.4 | 16.9 | 1.7e-13 | 225 → 16.9 |
-
-The skirt column is the prototype's, which summed only charged cells' sides. Summing every seam cell adds the
-root `LineSeg`s and leaves the leg at the coordinates' rounding scale, since `delta` is.
+Summing the skirt over every seam cell, the root `LineSeg`s included, leaves the leg at the coordinates' rounding
+scale, since `delta` is.
 
 The tessellation's `volSymDiff` (`agent-docs/tessellation-design.md` §2's `loftPayload` row) composes
 `SweptVolumeAllow + wallLeg + twistVolumeUpper + skirtLeg`. The mesh holds the uncorrected triangles, so the
@@ -180,14 +167,7 @@ homotopy) within `delta` of a held triangle. So `sup |p − c| ≤ max_v |v − 
 **`R_c` is the tooth's size, not the gear's.** An anchor-based form reads `SweptMomentAllow` and the
 chorded-boundary moment residual at `coordUpper`, the body's inf-norm extent from the mass ANCHOR, then
 multiplies the largest coordinate by `√3`. The anchor is `p0`'s plane origin, which for one tooth is the gear
-centre. `R_c` is measured from the body's own centroid. Measured (prototype target, new `epsV`):
-
-| Case | anchor-form bound | shift-form bound | `R_c` |
-|---|---|---|---|
-| tooth8 | 7.1e-3 | 6.1e-4 | 6.1 |
-| tooth40 | 9.1e-2 | 7.8e-4 | 6.6 |
-| z8 | 6.9e-3 | 1.3e-3 | 11.2 |
-| z40 | 3.3e-2 | 5.8e-3 | 42.3 |
+centre. `R_c` is measured from the body's own centroid; §8's one-tooth centroid row asserts it.
 
 The loft path does not use the anchor-based moment helpers. `proofbound.SweptMomentAllow` stays for the modify
 designs that own it.
@@ -202,12 +182,11 @@ The sum runs over the same cells `ComputeLoftChordedAllow` walks; `π⁺` is `ne
 `sectionDisplacementArea`'s argument (`internal/stackedrecord/build.go`) is read per chord with that chord's own departure instead of the
 build-wide maximum: a point of the symmetric difference between the held cap polygon and the denoted region
 lies within the matched departure of SOME chord point, and a chord's neighbourhood is a rectangle of that
-half-width plus two half-disks. Measured: 0.0166 → 0.0079 (tooth8), 0.23 → 0.14 (z8), 5.0 → 2.6 (z40,
-prototype target). The wall's ruled and station-shift legs are already per cell.
+half-width plus two half-disks. The wall's ruled and station-shift legs are already per cell.
 
-With §2 and §3 in place `Area` is the binding reading on every probe case (§5's table). At z8 its bound is 0.58
-of `CellBilinearArea`'s integration enclosure (`divisions = 4`) beside 0.09 of ruled leg and 0.08 of cap tube.
-That enclosure does not shrink with the chord target and is left alone (§11).
+With §2 and §3 in place `Area` is the binding reading on the gear cases. `CellBilinearArea`'s integration
+enclosure (`divisions = 4`) is the largest part of its bound; it does not shrink with the chord target and is left
+alone (§11).
 
 ## 5. The chord target and bisection on the matched departure
 
@@ -244,32 +223,18 @@ more than a constant.
 carries them over unchanged. `StationCapGate` computes the target once per evaluation from them and the walks
 `ValidateLoftRecords` resolves, decides S15 against it, and returns it to the station generators. The target
 is not stored: its perimeter half reads the walks, which only `loftrecord.Build` resolves, and recomputing it
-from the stored areas is one pass over the segments. Recomputing the area integral would cost 1.1 s per
-record at z40.
+from the stored areas is one pass over the segments, where recomputing the area integral is far more work.
 
 **Bisect on `max(sagitta, matched)`.** `SagittaStationWalk.WalkCell` measures each side's
 `SpanMatchedDeltaUpper` beside its sagitta and bisects while either exceeds the target; the accepted cell's
 matched value is handed to the reader instead of recomputed. `SagittaUpper` stays the sagitta (loft §5.2's
 `sectionDelta` and `Bounds.Bound` read it). This makes "every `cellMatched_k ≤ target`" a property of the walk
-rather than of the probe: without it a free-form cell's matched departure sits 1.5× above the target on the
-gear flank and is unbounded in general (`TestSpanMatchedDeltaUpperEnclosesWhatTheSagittaMisses`). Cost on the
-probe at z40: 1960 stations against 1480, Volume ratio 1.4e-4 against 2.1e-4.
+rather than of the input: without it a free-form cell's matched departure can exceed the target and is
+unbounded in general (`TestSpanMatchedDeltaUpperEnclosesWhatTheSagittaMisses`).
 
-**The constant.** `2.5e-4` is the finest value whose z40 build the audit of §6 leaves near 5 s (§7's timing);
-the coarser `5e-4` still reads `Sound` on every case but leaves `Area` a 1.5× margin at z8. Measured with
-§2–§4 and this rule, every case `Sound`:
-
-| Case | target | Stations | Binding | Ratio | Volume ratio | Centroid bound | Build |
-|---|---|---|---|---|---|---|---|
-| tooth8 | 2.1e-4 | 132 | Area | 4.0e-4 | 9.9e-5 | 6.1e-4 | 12 ms |
-| tooth20 | 2.3e-4 | 124 | Area | 1.1e-4 | 9.9e-5 | 6.3e-4 | 6 ms |
-| tooth40 | 2.4e-4 | 125 | Volume | 1.2e-4 | 1.2e-4 | 7.8e-4 | 4 ms |
-| z8 | 4.2e-4 | 952 | Area | 5.2e-4 | 1.2e-4 | 1.3e-3 | 0.15 s |
-| z20 | 1.1e-3 | 1280 | Area | 2.6e-4 | 1.4e-4 | 3.1e-3 | 0.16 s |
-| z40 | 2.4e-3 | 1960 | Area | 2.8e-4 | 1.4e-4 | 5.8e-3 | 0.35 s |
-
-The Build column is the §6 audit's time. At `5e-4`: z8 640 stations, Area 6.5e-4, Volume 2.5e-4; z40 1360
-stations, Area 5.4e-4, Volume 2.6e-4, build 8.0 s (earlier audit 4.5 s).
+**The constant.** `ChordFraction = 2.5e-4`. The Volume ratio is at most `ChordFraction · σ` (above), and the
+Area bound is the binding reading on the gear cases, so a coarser fraction leaves `Area` less margin below the
+default tolerance. §8's tooth and gear rows assert `Sound` and a ratio below `1e-3` at this constant.
 
 `TestLoftArcWedgeVerifiesSound` pins loft §14's arc wedge (`m = 65`) under this constant.
 
@@ -352,20 +317,10 @@ the loft's (`loftrecord.Build` calls it with the assembly's `Walls`, `CapStartCo
 triangle through the exact classification) that every test compares verdicts against; the generic entry sets
 `BroadPhase`, `Certificates` and `Sweep`, and the structured entry sets those three and `CapProof`.
 
-Dated measurement from the probe (prototype target):
-
-| Case | F | all pairs | box candidates | wall-wall (no shared vertex) | wall-cap | cap-cap | earlier audit | pairwise over all candidates | wall-wall pairs + cap proofs |
-|---|---|---|---|---|---|---|---|---|---|
-| tooth8 | 524 | 137 K | 62.7 K | 16.7 K (16.2 K) | 29.2 K | 16.8 K | 50 ms | 45 ms | 9.5 + 1.1 ms |
-| z8 | 3804 | 7.23 M | 701 K | 139 K (135 K) | 321 K | 242 K | 1.81 s | 1.59 s | 71 + 8 ms |
-| z20 | 5116 | 13.1 M | 886 K | 88 K (83 K) | 377 K | 421 K | 3.11 s | 2.71 s | 48 + 9 ms |
-| z40 | 7836 | 30.7 M | 2.15 M | 96 K (88 K) | 884 K | 1.17 M | 9.04 s | 9.03 s | 56 + 15 ms |
-
-The sweep scan itself cost 1.6 ms (tooth8) to 276 ms (z40). A sweep alone buys nothing: every wall triangle has a
-vertex on each cap plane, every ear-clipped cap sliver spans the section, and `LoftPlaneSeparated`'s float
-filter cannot certify a determinant that is exactly zero, so 41 % of the earlier audit's CPU at z40 is the
-exact lift (`XptOf` under `OrientSign`) inside that tier. The cap proofs remove the cost: 25× to 130× on the
-gear.
+The sweep alone does not remove the cost: every wall triangle has a vertex on each cap plane, every ear-clipped cap
+sliver spans the section, and `LoftPlaneSeparated`'s float filter cannot certify a determinant that is exactly
+zero, so those pairs reach the exact lift (`XptOf` under `OrientSign`) inside that tier. The cap proofs remove
+the cap pairs from the pairwise pass.
 
 ## 7. Resource ceilings
 
@@ -374,10 +329,10 @@ paired-segment and chorded-pair counts.
 
 | Ceiling | Rule | Hard ceiling | Why this shape |
 |---|---|---|---|
-| S15 station cap `loftmesh.StationCap` | `StationCap(P) = min(max(512, 64·P), 8192)` (`StationCapFloor`, `StationsPerPair`, `StationCapCeiling`) | 8192 stations, `F ≤ 8·8192 − 8` | the probe needs 124–132 stations per tooth (`P = 6`) and 952–1960 for the gears (`P = 48–240`); S15 reserves one cell per pair and charges each curve's actual extra cells against the shared remainder, so a bore circle may use more cells than a short flank; the hard ceiling keeps `NewLoftAuditData`'s exact lifts under ~70 MB |
+| S15 station cap `loftmesh.StationCap` | `StationCap(P) = min(max(512, 64·P), 8192)` (`StationCapFloor`, `StationsPerPair`, `StationCapCeiling`) | 8192 stations, `F ≤ 8·8192 − 8` | the floor and slope scale with `P`; S15 reserves one cell per pair and charges each curve's actual extra cells against the shared remainder, so a bore circle may use more cells than a short flank; the hard ceiling bounds the triangle count `NewLoftAuditData` lifts exactly |
 | S8 pair ceiling | the smallest sweep, grid or tree scan count ≤ `8_000_000`, and enumerated candidates ≤ `8_000_000` (§6); `F ≤ 8·8192 − 8` before any exact lift | `8_000_000` pairs | the scan count is at least the candidate count, so the counting pass refuses after at most `8_000_000` scan units and the work before a refusal is `O(F log² F + ceiling)`; the triangle ceiling bounds the exact lifts, which the station cap does not bound for a build with no chorded pair (`StationCapGate` returns early there) |
 | R7 `FreeformWorkLimit` for Loft's area, walks and stations (default `1 << 20` per record per operation) | Public `Loft` raises each record's counter before area integration to `max(1 << 20, 8192 · StationCap(P))` (`StationWorkLimit`); re-evaluations raise fresh counters before walks. `P` comes from the first authenticated record. | `1 << 20 + 8192 · 8192 = 2^26 + 2^20` | The full embedded 60-tooth area's first integral exceeds the default ceiling before the walk gate. The same counter then pays for walks and stations; saturated single charges still refuse. |
-| reconstruction (default `1 << 28`, 11585 chords) | trusted Loft: `1 << 32`, 46340 chords (`LoftReconstructionWorkLimit`, `LoftReconstructionChordCeiling`); others unchanged | `1 << 32` | the 60-tooth gear charges 1.70 billion units per profile |
+| reconstruction (default `1 << 28`, 11585 chords) | trusted Loft: `1 << 32`, 46340 chords (`LoftReconstructionWorkLimit`, `LoftReconstructionChordCeiling`); others unchanged | `1 << 32` | the charge is `2·chords²` (`LoftReconstructionChordCeiling`'s comment), so `1 << 32` admits 46340 chords where `1 << 28` admits 11585 |
 
 The certified fit-spline fillet and centered-bore Cut each resolve the section for their own contact or
 containment proof, then integrate its area and rebuild the loft on the same counter. They may use twice the
@@ -392,15 +347,10 @@ actual reconstruction and refuses above its hard limit. decad needs
 two things from sketch to lower this cost: a sub-quadratic arrangement, and a chord count that scales with a
 curve's size rather than `16 · controls` with a floor of 64. The gear is the reference case. sketch owns both.
 
-`Loft` build time, a dated measurement on an AMD Ryzen 9 7900X3D: tooth cases 0.25–0.34 s; z8 1.4 s; z20 2.4 s; z40 4.2 s;
-and the same gear at z = 69, the largest the reconstruction ceiling admits, 8.5 s. Under `-race` the tooth
-cases take 1.1–1.7 s, z8 8.8 s, z20 16.0 s and z40 33.0 s.
-
 Each ceiling refuses an adversarial record in bounded time. One free-form pair among 256 paired segments,
 handed a chord target no station allowance can meet, refuses S15 under the shared cap; the shared allocation
-has no cost measurement yet. The reconstruction charge refuses a record past its ceiling before sketch
-arranges anything, in well under a millisecond. In a dated measurement the z = 70 gear refused there in 2.1 s, its
-`sectioncert.RecordProfile` included; no test reproduces either time.
+has no cost measurement. The reconstruction charge refuses a record past its ceiling before sketch arranges
+anything.
 
 ## 8. Required tests
 
@@ -457,7 +407,7 @@ Root-package and `apitest/` tests land in their shard manifests (`agent-docs/tes
   faceted cell's seam moves by `delta` too.
 - Do not read `sectionDelta` where `cellMatched_k` is owed, and do not substitute the build-wide
   `matchedDelta` for the per-cell value in `wallLeg` or the cap tube.
-- Do not bisect on the sagitta alone and rely on the measured 1.5× ratio; the ratio is unbounded on a general
+- Do not bisect on the sagitta alone and rely on the sagitta-to-matched ratio; the ratio is unbounded on a general
   span.
 - Do not recompute the area integral inside `loftrecord.Build` for the target: carry the area
   `Profile.FalsifyLoftRecordedArea` computed on the payload.
@@ -477,9 +427,8 @@ Root-package and `apitest/` tests land in their shard manifests (`agent-docs/tes
 
 - **Per-cell or per-segment target?** One target per build (§5): a per-segment allocation changes the residual
   by at most a constant.
-- **Bisect on matched?** Yes (§5). The cost is 32 % more stations at z40.
-- **`ChordFraction`.** `2.5e-4` (§5). `5e-4` reads `Sound` on every probe case but leaves `Area` a 1.5× margin
-  at z8.
+- **Bisect on matched?** Yes (§5). It costs more stations than the sagitta alone.
+- **`ChordFraction`.** `2.5e-4` (§5).
 - **Should `Area`'s `CellBilinearArea` enclosure be deepened now that `Area` binds?** No. It is a fixed `4 × 4`
   partition independent of the target. Deepening it is a separate change with its own cost, the next lever if
   a section reads `Suspect` on `Area` alone.
@@ -488,8 +437,8 @@ Root-package and `apitest/` tests land in their shard manifests (`agent-docs/tes
 - **Where does the loft raise its records' work ceiling?** Before `ValidateLoftRecords` resolves a walk, with
   `P` read from the first record's segment counts (§7). The walks' arc-length brackets alone pass `1 << 20` on
   every full gear outline, so a raise after the cap gate comes too late.
-- **How many stations per paired segment?** 64 (§7). S15 charges actual cells against the shared cap. The
-  measured gear outlines fit this scale; each build still stops at 8192 total stations.
+- **How many stations per paired segment?** 64 (§7). S15 charges actual cells against the shared cap; each build
+  still stops at 8192 total stations.
 - **Keep the `(sectionDelta, areaUpper)` two-leg warning in loft §8?** Yes. It warns against dropping the TWIST
   leg from a bound over held triangles, which §2 keeps for the tessellation's `volSymDiff`.
 
