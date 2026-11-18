@@ -239,8 +239,18 @@ func stitchFacetsContext(ctx context.Context, kept []KeptFacet, shared *PairCuts
 
 	if shared != nil && shared.replay != nil && coplanarcontact.Of(ctx) {
 		// The planar simplification of agent-docs/coplanar-contact-design.md §7,
-		// on the replay meter, so a replayed boolean holds what the live one
-		// holds. A refusal on the simplified mesh runs the plain tail.
+		// on the replay meter. The live stitch flips the needles and folds the
+		// simplified mesh leaves; the bounded stitch has no such flips, so it
+		// declines a simplified mesh that needs one rather than hold a mesh the
+		// live stitch does not. Every error, the budget's included, returns as it
+		// is: a decline is sound, and a budget error is never read as a refusal
+		// of the simplified mesh.
+		if err := shared.ReserveRecords(ctx, 8*uint64(len(tris))+8*uint64(len(xverts))); err != nil {
+			return nil, err
+		}
+		if err := shared.SpendWork(ctx, 16*uint64(len(tris))+4*uint64(len(xverts))); err != nil {
+			return nil, err
+		}
 		approx := make([]r3.Vec, len(xverts))
 		for i, p := range xverts {
 			v, err := proof.ReplayXptVec(ctx, p, replayExactWork{work: work})
@@ -255,13 +265,12 @@ func stitchFacetsContext(ctx context.Context, kept []KeptFacet, shared *PairCuts
 			return nil, err
 		}
 		if changed {
-			out, err := stitchRoundBudgeted(ctx, shared, work, simplified.Xverts, simplified.Xbeta, simplified.Tris, simplified.Src)
-			if err == nil {
-				return out, nil
+			for _, tri := range simplified.Tris {
+				if _, needle := needleEdge(simplified.Approx, tri); needle {
+					return nil, errReplaySimplifiedMeshNeedsAFlip
+				}
 			}
-			if ctx.Err() != nil {
-				return nil, err
-			}
+			return stitchRoundBudgeted(ctx, shared, work, simplified.Xverts, simplified.Xbeta, simplified.Tris, simplified.Src)
 		}
 	}
 	return stitchRoundBudgeted(ctx, shared, work, xverts, xbeta, tris, src)

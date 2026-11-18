@@ -2,12 +2,15 @@ package meshbool
 
 import (
 	"context"
+	"errors"
+	"math"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/lestrrat-3d/decad/internal/coplanarcontact"
 	"github.com/lestrrat-3d/decad/internal/decaderr"
+	"github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
 )
@@ -98,4 +101,72 @@ func plannedMeshOf(t *testing.T, kept []KeptFacet) PlanarMesh {
 		in.FacetBound = append(in.FacetBound, 0)
 	}
 	return in
+}
+
+// needlePrism is a closed prism whose top, fanned round an inside vertex, holds
+// a corner a hair below its neighbours' line. Re-triangulating the top on its
+// corners clips the needle ear first.
+func needlePrism() []KeptFacet {
+	e := math.Ldexp(1, -50)
+	pt := func(x, y, z float64) proof.Xpt { return proof.XptOf(r3.Vec{X: x, Y: y, Z: z}) }
+	p1, v1, q1, r1 := pt(0, 0, 1), pt(1, -e, 1), pt(2, 0, 1), pt(1, 1, 1)
+	c1 := pt(1, 0.25, 1)
+	p0, v0, q0, r0 := pt(0, 0, 0), pt(1, -e, 0), pt(2, 0, 0), pt(1, 1, 0)
+	f := func(src int, a, b, c proof.Xpt) KeptFacet { return KeptFacet{V: [3]proof.Xpt{a, b, c}, Src: src} }
+	return []KeptFacet{
+		f(0, v1, q1, c1), f(0, p1, v1, c1), f(0, q1, r1, c1), f(0, r1, p1, c1),
+		f(1, v0, p0, r0), f(1, v0, r0, q0),
+		f(2, p0, v0, v1), f(2, p0, v1, p1),
+		f(3, v0, q0, q1), f(3, v0, q1, v1),
+		f(4, q0, r0, r1), f(4, q0, r1, q1),
+		f(5, r0, p0, p1), f(5, r0, p1, r1),
+	}
+}
+
+// TestReplaySimplifyDeclinesWhatLiveFlips pins parity: the live stitch flips the
+// needle the simplified top holds, which the bounded stitch cannot, so the
+// bounded stitch declines instead of holding a different mesh.
+func TestReplaySimplifyDeclinesWhatLiveFlips(t *testing.T) {
+	ctx := coplanarcontact.With(t.Context(), true)
+	kept := needlePrism()
+	_, err := StitchFacetsWith(ctx, kept, StitchOptions{SimplifyPlanar: true})
+	require.NoError(t, err)
+	_, err = replayStitch(t, ctx, kept, proofbound.NewReplayTrialBudget())
+	require.ErrorIs(t, err, errReplaySimplifiedMeshNeedsAFlip)
+	require.ErrorIs(t, err, decaderr.ErrUnsupported)
+}
+
+// TestReplaySimplifyStitchBudget pins that the stitch, not only the
+// simplification, answers a meter that is too small with its budget error: over
+// a sweep of work limits every run either builds the simplified mesh or returns
+// a WorkLimitError, never the plain mesh and never another refusal.
+func TestReplaySimplifyStitchBudget(t *testing.T) {
+	ctx := coplanarcontact.With(t.Context(), true)
+	kept := dovetailCut(t, 0.125)
+	full := proofbound.NewReplayTrialBudget()
+	_, err := replayStitch(t, ctx, kept, full)
+	require.NoError(t, err)
+	total, _ := full.Usage()
+	built, refused := 0, 0
+	limits := []uint64{total, 2 * total}
+	for work := uint64(1); work < total; work += max(total/400, 1) {
+		limits = append(limits, work)
+	}
+	for _, work := range limits {
+		b, lerr := proofbound.NewReplayBudgetLimits(work, proofbound.ReplayTrialRecords, proofbound.ReplayTrialBytes)
+		require.NoError(t, lerr)
+		out, err := replayStitch(t, ctx, kept, b)
+		var limit *proofbound.WorkLimitError
+		switch {
+		case err == nil:
+			require.Zero(t, out.Round, "work %d: a built mesh is the simplified one", work)
+			built++
+		case errors.As(err, &limit):
+			refused++
+		default:
+			require.Failf(t, "not a budget error", "work %d: %v", work, err)
+		}
+	}
+	require.Positive(t, built)
+	require.Positive(t, refused)
 }
