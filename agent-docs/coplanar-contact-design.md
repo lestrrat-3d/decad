@@ -442,7 +442,7 @@ analytic prism path does not take the pair.
 | S4 | `TestSimplifyPlanarFallback` | forced fold on the simplified mesh | result equals the unsimplified stitch |
 | S5 | `TestSimplifyPlanarNonzeroClaim` | face with one interior vertex with `xbeta > 0` | untouched; red leg: a corners-only check simplifies it |
 
-### 11.2 API tests (`apitest/coplanar_contact_test.go`)
+### 11.2 API tests (`apitest/coplanar_contact_api_test.go`)
 
 Each case runs in a default document and in an `ExactOnly` one, and asserts the same outcome in both unless stated.
 
@@ -452,7 +452,7 @@ Each case runs in a default document and in an `ExactOnly` one, and asserts the 
 | A2 | B = 10×4×10 at (5.5, 0, 10), so B overhangs A | 1400 exact | `BooleanEmpty` | 1000 exact | `Sound` |
 | A3 | edge-only: B = 10×10×10 at (10, 0.5, 10) | default: no error, 1 lump, `CodeGapShiftApplied`, volume within bound of 2000; `ExactOnly`: `BooleanUnsupportedContact` | `BooleanEmpty` | 1000 exact | `Sound` |
 | A4 | vertex-only: B = 10×10×10 at (10, 10, 10) | as A3 | `BooleanEmpty` | 1000 exact | `Sound` |
-| A5 | same-facing: B = 6×6×5 at (2, 2, 5), top flush | 1000 exact | 180 exact | 820 exact, top face holed | `Interfering`, one row, `Value − Bound > 0` |
+| A5 | same-facing: B = 6×6×5 at (2, 2, 5), top flush | 1000 exact | 180 exact | 820, top face holed (an analytic blind pocket, so a rounding bound) | `Interfering`, one row, `Value − Bound > 0` |
 | A6 | overlap just beyond zero: B = 10×10×10 at (0.5, 0, 10 − 2^-30) | exact | positive, `Value − Bound > 0` | exact | `Interfering` |
 | A7 | gap just beyond zero: B at (0.5, 0, 10 + 2^-30) | 2 lumps | `BooleanEmpty` | 1000 exact | `Sound` |
 | R1 | exact tenon in a slot made by two `Cut`s | exact | `BooleanEmpty` | target | `Sound` |

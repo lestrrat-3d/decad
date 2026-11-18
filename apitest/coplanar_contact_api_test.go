@@ -71,6 +71,17 @@ func requireCoplanarVolume(t *testing.T, body *decad.Body, want float64) {
 	require.InDelta(t, want, volumeMM(t, v), boundMM3(t, v)+1e-9)
 }
 
+// requireVolumeByRoute asserts want exactly for a mesh result, as §11.2 asks,
+// and within a rounding bound for an analytic one.
+func requireVolumeByRoute(t *testing.T, body *decad.Body, want float64) {
+	t.Helper()
+	if tookMeshPath(body) {
+		requireExactVolume(t, body, want)
+		return
+	}
+	requireCoplanarVolume(t, body, want)
+}
+
 func requireNoShift(t *testing.T, body *decad.Body) {
 	t.Helper()
 	for _, d := range body.OperationDiagnostics() {
@@ -474,21 +485,21 @@ func TestCoplanarContactRandomBoxPairs(t *testing.T) {
 				case classDisjoint:
 					require.NoError(t, err)
 					require.Len(t, u.Lumps(), 2)
-					requireCoplanarVolume(t, u, va+vb)
+					requireVolumeByRoute(t, u, va+vb)
 				case classFace:
 					require.NoError(t, err)
 					require.Len(t, u.Lumps(), 1)
-					requireCoplanarVolume(t, u, va+vb)
+					requireVolumeByRoute(t, u, va+vb)
 				default:
 					require.NoError(t, err)
-					requireCoplanarVolume(t, u, va+vb-overlap)
+					requireVolumeByRoute(t, u, va+vb-overlap)
 				}
 
 				x, y, _ = pair()
 				if class == classOverlap {
 					common, err := decad.Intersect(t.Context(), x, y)
 					require.NoError(t, err)
-					requireCoplanarVolume(t, common, overlap)
+					requireVolumeByRoute(t, common, overlap)
 				} else {
 					_, err := decad.Intersect(t.Context(), x, y)
 					var be *decad.BooleanError
@@ -504,7 +515,7 @@ func TestCoplanarContactRandomBoxPairs(t *testing.T) {
 					require.Equal(t, decad.BooleanEmpty, be.Code, "a tool that covers its target leaves nothing")
 				} else {
 					require.NoError(t, err)
-					requireCoplanarVolume(t, cut, va-overlap)
+					requireVolumeByRoute(t, cut, va-overlap)
 				}
 
 				_, _, doc := pair()

@@ -281,6 +281,8 @@ func TestBooleanGapToleranceEdgeAndPointTouches(t *testing.T) {
 		// Intersect with nothing in common.
 		union, cut, intersect float64
 		empty                 bool
+		// cutExact marks a Cut the exact classification decides.
+		cutExact bool
 	}{
 		{
 			// Two cubes share one corner vertex.
@@ -288,7 +290,7 @@ func TestBooleanGapToleranceEdgeAndPointTouches(t *testing.T) {
 			make: func(doc *decad.Document) (*decad.Body, *decad.Body) {
 				return boxBody(t, doc, 0, 0, 10, 10, 10), translated(t, boxBody(t, doc, 0, 0, 10, 10, 10), 10, 10, 10)
 			},
-			union: 2000, cut: 1000, empty: true,
+			union: 2000, cut: 1000, empty: true, cutExact: true,
 		},
 		{
 			// An inner wedge shares the outer wedge's knife-edge line and lies
@@ -328,12 +330,17 @@ func TestBooleanGapToleranceEdgeAndPointTouches(t *testing.T) {
 			a, b = tc.make(doc)
 			cut, err := decad.Cut(t.Context(), a, b)
 			require.NoError(t, err)
-			// A shared corner of exact boxes leaves the target untouched, so its
-			// Cut is classified exactly; the wedges still take the retry.
-			cutVolume, err := cut.Volume()
-			require.NoError(t, err)
-			require.LessOrEqual(t, math.Abs(volumeMM(t, cutVolume)-tc.cut), cutVolume.Bound.Base(),
-				"volume %v is farther from %v than its bound", volumeMM(t, cutVolume), tc.cut)
+			if tc.cutExact {
+				// A shared corner of exact boxes leaves the target untouched, so its
+				// Cut is classified exactly.
+				cutVolume, err := cut.Volume()
+				require.NoError(t, err)
+				require.Equal(t, decad.Exact, cutVolume.Exactness)
+				require.Zero(t, cutVolume.Bound.Base())
+				require.Equal(t, tc.cut, volumeMM(t, cutVolume))
+			} else {
+				requireVolumeWithin(t, cut, tc.cut)
+			}
 
 			doc = decad.New()
 			a, b = tc.make(doc)
