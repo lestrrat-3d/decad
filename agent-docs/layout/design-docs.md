@@ -41,10 +41,9 @@ The rules for rows live in `agent-docs/layout.md`.
 | `agent-docs/vertex-blend-design.md` | Three-edge fillets, sphere patches, route V, and exact-radius refusals. |
 | `agent-docs/shell-opening-design.md` | Shell side openings on a prism and a revolve: rim rule, brep record, Tables RO/SO/BO/DO. |
 | `agent-docs/draft-design.md` | `WithTaper` and `Draft`: the sharp offset family, `draftPayload`, Tables RD/SD/BD/DD. |
-| `agent-docs/loft-design.md` | `Loft` pairing, refusals, results, consumers, chains, mass properties, and wall-crossing audit. |
+| `agent-docs/loft-design.md` | `Loft` pairing, refusals, results, consumers, chains, mass properties, wall-crossing audit, and `LoftFromPoint` (§20). |
 | `agent-docs/loft-sections-design.md` | Smooth-section loft classes, held meshes and proofs. |
 | `agent-docs/loft-face-sections-design.md` | Source-cap nine-section loft, cap correspondence, embedding, occupied-volume proof and two-cone continuation. |
-| `agent-docs/loft-point-design.md` | Point-to-profile solid loft, its apex topology and mesh proof. |
 | `agent-docs/revolve-axis-design.md` | Revolve/point-Loft sector Union and point-cone trims about a coordinate-plane axis through the origin: exact axis vector, predicates, charges, angle basis, ring, coaxial bore Cut, consumer contract, tests, +X digest. |
 | `agent-docs/loft-gear-bounds-design.md` | Loft gear bounds: per-cell residuals, centroid shift, `A/P` target, audit, ceilings. |
 | `agent-docs/loft-boolean-design.md` | Loft Booleans with a mirror image and with a cylinder. |

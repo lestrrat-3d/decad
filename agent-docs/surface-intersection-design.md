@@ -39,7 +39,7 @@ are curve kinds decad already records, both are positioned by a crossing
 a quartic. Nothing is fitted anywhere.
 
 `Split` also admits the bounded point-loft/planar-sheet class in
-`agent-docs/loft-point-design.md` "Planar split of a point loft". That arm reads
+`agent-docs/loft-design.md` §20.2. That arm reads
 the original point-loft fan and the sheet's exact line plane; it does not
 use the shared-generator section arrangement below.
 
