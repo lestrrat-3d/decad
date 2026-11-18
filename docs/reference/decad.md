@@ -2420,7 +2420,7 @@ ctx.Err() before the document changes.
 LoftFromPoint builds a solid from one exact world point to a closed Sketch
 profile. The apex is in millimetres. This operation accepts one outer loop
 and no holes; every fitted flank remains the recorded Sketch curve. The
-boundary is a certified chorded fan and a cap (agent-docs/loft-point-design.md).
+boundary is a certified chorded fan and a cap (agent-docs/loft-design.md §20).
 
 <a name="LoftSections"></a>
 #### func LoftSections

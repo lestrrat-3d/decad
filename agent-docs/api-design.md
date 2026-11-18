@@ -386,7 +386,7 @@ func (b *Body) Origin() FeatureRef  // which feature created this body
 Split slabs, their rigidly transformed copies, and positive uniform `ScaledAt` images.
 It returns `ErrUnsupported` when
 the cap centroid intervals do not strictly separate every side-face centroid.
-See `agent-docs/loft-point-design.md` for the source proof.
+See `agent-docs/loft-design.md` §20.2 for the source proof.
 
 `LocatePoint` returns `PointInside`, `PointOutside`, `PointOnBoundary` or
 `PointUndecided`. It classifies an undisplaced straight prism, an undisplaced
@@ -1054,7 +1054,7 @@ three to thirty-two independently varying axis-aligned rectangles,
 exactly identical curved sections, linearly varying four-arc circles, and the
 bounded varying fitted-flank class with fixed arcs; or four rounded-rectangle
 sections with cubic width and fixed height and corner radius.
-`agent-docs/loft-point-design.md` owns the separate
+`agent-docs/loft-design.md` §20 owns the separate
 `LoftFromPoint(ctx, doc, apex, sketch, profile)` solid construction from
 an exact world point to one recorded Sketch profile. `agent-docs/sweep-design.md` owns `Sweep`'s
 signature, spatial `Path`, frame transport, refusals, and staged reach.

@@ -52,8 +52,8 @@ builds the analytic `brepPayload` of §4, whose faces are planes and
 cylinders, whose edges are lines, circles and arcs, whose measurements carry
 closed-form bounds, and which every consumer in §4.5 reads. `facetedPayload`
 stays the result of pairs outside §3. The structural point-loft ×
-coaxial-cone Cut/Intersect path is specified in `agent-docs/loft-point-design.md`
-under "Coaxial finite cone trims"; it also uses `facetedPayload` but retains
+coaxial-cone Cut/Intersect path is specified in `agent-docs/loft-design.md`
+§20.4; it also uses `facetedPayload` but retains
 its source surface tags.
 
 ## 2. Measured current behaviour

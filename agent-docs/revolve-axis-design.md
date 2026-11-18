@@ -2,7 +2,7 @@
 
 This design extends the finite Revolve and point-Loft sector class
 (`agent-docs/revolve-loft-design.md`) and its point-cone trims
-(`agent-docs/loft-point-design.md` "Coaxial finite cone trims") from the world
+(`agent-docs/loft-design.md` §20.4) from the world
 +X axis to any axis through the world origin that lies in a world coordinate
 plane. The +X class is the special case in which every new charge is exactly
 zero, and its arithmetic is unchanged. Nothing here is specific to gears: the
