@@ -247,6 +247,20 @@ at the contact, whether it is Decisive, a Slack, and the second operand's facet 
    does for a coplanar contact. A step that folds again or meets a contact refusal is passed over, and the first
    other outcome is the result; when every step refuses, the fold is returned. The growth is charged as item 5's is.
    A fold met while meshing an operand is not retried, and the bounded replay path keeps its refusal.
+8. In an Intersect, a contact the proximity gate refuses between a curved face of the first operand and a flat face of
+   the second is read along the flat face's inward normal (`meshbool.flatAcross`), not the curved face's normals at
+   its near facets. A bore wall whose rim meets a bolt's bearing face has near facets whose normals fan round the
+   whole rim, so no one translation opens them all and item 1 finds no direction; the bearing face states the one direction the
+   contact opens in, moving the second operand off the first. With the operands the other way round the contact
+   already read the bearing face's normal, so the reading no longer depends on which operand comes first. A Union
+   keeps the curved face's normals: its resting and tangent contacts close along them.
+9. An Intersect the retry still refuses is tried again with the operands swapped (`swappedEmpty`), moving the first
+   operand: a second operand whose held mesh would fold under any move (`meshbool.HasHeldFold`, a sliver its rounding
+   flips) declines every shift, though the opposite move of the first operand is the same relative move. Intersect is
+   commutative, so the swapped pair's empty result, charged as item 3's is, is this pair's within the same reach. Only
+   an empty result is taken: any other swapped outcome is dropped and the first refusal returned, so no result body
+   ever comes from the swap with the operand roles reversed. A pair with a cap or cone certificate is not swapped,
+   because the certificates name each operand's role.
 
 The moved operand is the solid the Boolean decides about, so the proximity gate and the exact predicates read it
 (`boolshift` `decisionMesh`). Its true solid is the exact move of the true operand, each piece translated by `s` and,

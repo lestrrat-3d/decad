@@ -205,7 +205,8 @@ func refuseUndecidableProximityCachedReplay(ctx context.Context, ma, mb *topo.Me
 			if err := chargeContacts(contacts); err != nil {
 				return err
 			}
-			contactsOut, err := brakenearContactNormalsFromContacts(bmA, contacts, tightSlack, !flat, brakefirstFacet(gb.facets), budget)
+			contactsOut, err := brakenearContactNormalsFromContacts(bmA, contacts, tightSlack, !flat, brakefirstFacet(gb.facets),
+				flatAcross(ga, bmB, gb), budget)
 			if err != nil {
 				return err
 			}
@@ -272,7 +273,8 @@ func brakefirstFacet(facets []int) int {
 // is not decisive because the gate cannot distinguish a body resting on it from
 // one flush beneath it. The operation chooses the direction: Union moves into
 // the first operand; Cut and Intersect move out.
-func brakenearContactNormalsFromContacts(bmA *BoolMesh, nc NearContacts, slack float64, decisive bool, otherFacet int, budget *proofbound.WorkBudget) ([]TouchContact, error) {
+func brakenearContactNormalsFromContacts(bmA *BoolMesh, nc NearContacts, slack float64, decisive bool, otherFacet int,
+	across r3.Vec, budget *proofbound.WorkBudget) ([]TouchContact, error) {
 	type key [3]int64
 	var seen [maxTouchContacts]key
 	var n int
@@ -292,6 +294,9 @@ func brakenearContactNormalsFromContacts(bmA *BoolMesh, nc NearContacts, slack f
 		}
 		c := touchOf(bmA, i, otherFacet)
 		c.Slack, c.Decisive = slack, decisive
+		if across != (r3.Vec{}) {
+			c.NormalA = across
+		}
 		k := key{int64(math.Round(c.NormalA.X * 1e3)), int64(math.Round(c.NormalA.Y * 1e3)), int64(math.Round(c.NormalA.Z * 1e3))}
 		duplicate := false
 		for j := range n {

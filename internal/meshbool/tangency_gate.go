@@ -190,7 +190,8 @@ func RefuseUndecidableProximity(ctx context.Context, ma, mb *topo.Mesh, bmA, bmB
 				return err
 			}
 			_, flat := ga.source.Surface.(surfacegeom.Plane)
-			contactsOut := nearContactNormalsFromContacts(bmA, contacts, tightSlack, !flat, firstFacet(gb.facets))
+			contactsOut := nearContactNormalsFromContacts(bmA, contacts, tightSlack, !flat, firstFacet(gb.facets),
+				flatAcross(ga, bmB, gb))
 			refusal.Contacts = append(refusal.Contacts, contactsOut...)
 			if gaptol.Reach(ctx) <= 0 {
 				return refusal
@@ -257,6 +258,32 @@ func localSlackFromContacts(bmA, bmB *BoolMesh, nc NearContacts, slack float64) 
 	return proofbound.AbsSumUpper(worst(bmA, nc.CloseA, near(bmB, nc.CloseB)), worst(bmB, nc.CloseB, near(bmA, nc.CloseA)))
 }
 
+// flatAcross is the direction in which moving the second operand opens a contact between a curved face ga of the
+// first operand and a flat face gb of the second: away from the first operand, along the flat face's inward normal,
+// which is the first operand's outward normal there (agent-docs/gap-tolerance-design.md §5.2 item 7). A curved face's
+// own normals at its near facets fan round it, as a bore wall's do round its whole rim, so no one move opens them all,
+// while the flat face states the single direction the contact opens in, whichever operand comes first. It is zero for
+// every other pair, which keeps the first operand's normals, and for every Boolean but an Intersect (AcrossFlat): a
+// Union's resting and tangent contacts close along the curved face's own normals.
+func flatAcross(ga faceFacets, bmB *BoolMesh, gb faceFacets) r3.Vec {
+	if !bmB.AcrossFlat {
+		return r3.Vec{}
+	}
+	if _, flat := ga.source.Surface.(surfacegeom.Plane); flat {
+		return r3.Vec{}
+	}
+	if _, flat := gb.source.Surface.(surfacegeom.Plane); !flat || len(gb.facets) == 0 {
+		return r3.Vec{}
+	}
+	j := gb.facets[0]
+	bmB.PrepareFloatNormal(j)
+	n, ok := bmB.Fnorms[j].Normalize()
+	if !ok {
+		return r3.Vec{}
+	}
+	return n.Scale(-1)
+}
+
 // firstFacet is the first of facets, or zero when there is none.
 func firstFacet(facets []int) int {
 	if len(facets) == 0 {
@@ -273,13 +300,20 @@ func firstFacet(facets []int) int {
 // is not decisive because the gate cannot distinguish a body resting on it from
 // one flush beneath it. The operation chooses the direction: Union moves into
 // the first operand; Cut and Intersect move out.
-func nearContactNormalsFromContacts(bmA *BoolMesh, nc NearContacts, slack float64, decisive bool, otherFacet int) []TouchContact {
+//
+// across, when nonzero, replaces each facet's normal: a curved face of the first operand near a flat face of the
+// second reads the contact along the flat face's normal (flatAcross).
+func nearContactNormalsFromContacts(bmA *BoolMesh, nc NearContacts, slack float64, decisive bool, otherFacet int,
+	across r3.Vec) []TouchContact {
 	type key [3]int64
 	seen := map[key]struct{}{}
 	var out []TouchContact
 	for _, i := range nc.CloseA {
 		c := touchOf(bmA, i, otherFacet)
 		c.Slack, c.Decisive = slack, decisive
+		if across != (r3.Vec{}) {
+			c.NormalA = across
+		}
 		k := key{int64(math.Round(c.NormalA.X * 1e3)), int64(math.Round(c.NormalA.Y * 1e3)), int64(math.Round(c.NormalA.Z * 1e3))}
 		if _, dup := seen[k]; dup {
 			continue

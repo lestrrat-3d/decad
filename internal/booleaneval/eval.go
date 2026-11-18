@@ -170,7 +170,52 @@ func Evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 	if folded {
 		return growFolded(ctx, unwrapResultFold(err), op, boolshift.PiecesOf(mb), attempt)
 	}
-	return retryShifted(ctx, err, op, boolshift.PiecesOf(mb), attempt)
+	ev, rerr := retryShifted(ctx, err, op, boolshift.PiecesOf(mb), attempt)
+	if rerr != nil && op == meshbool.OpIntersect && capFace == nil && coneFace == nil && errors.As(rerr, &touch) {
+		if empty := swappedEmpty(ctx, a, b, meshes, chordScale, tolMM, dPair); empty != nil {
+			return Evaluation{}, empty
+		}
+	}
+	return ev, rerr
+}
+
+// swappedEmpty retries a refused Intersect of a and b with a as the moved operand, and returns its outcome only when
+// it is the empty result (agent-docs/gap-tolerance-design.md §5.2 item 8). The retry moves only the second operand,
+// and a second operand whose held mesh would fold under a move declines every shift, though moving the first operand
+// the opposite way is the same relative move. Intersect is commutative, so the swapped pair's empty result is this
+// pair's, within the same reach; any other swapped outcome is dropped, so a result body never comes from the swap and
+// keeps this call's operand roles.
+func swappedEmpty(ctx context.Context, a, b *topo.Body, meshes OperandMesher, chordScale, tolMM, dPair float64) error {
+	twins := &operandTwins{}
+	_, err := evaluate(ctx, meshbool.OpIntersect, b, a, meshes, chordScale, nil, nil, twins, nil, nil, nil, nil, 0)
+	if err == nil {
+		return nil
+	}
+	if !isEmptyResult(err) {
+		if _, touch := errors.AsType[*meshbool.TouchContactError](err); !touch {
+			return nil
+		}
+		ma, _, terr := meshes.TessellateOperand(ctx, a, operandChord(ctx, a, tolMM*chordScale,
+			chordDiameter(ctx, meshbool.OpIntersect, b, a, dPair), chordScale))
+		if terr != nil {
+			return nil //nolint:nilerr // the swap is a further try: its own failure keeps the first refusal
+		}
+		attempt := func(shifts map[int]pieceShift) (Evaluation, error) {
+			ev, err := evaluate(ctx, meshbool.OpIntersect, b, a, meshes, chordScale, nil, nil, twins, shifts, nil, nil, nil, 0)
+			return ev, unwrapResultFold(err)
+		}
+		_, err = retryShifted(ctx, err, meshbool.OpIntersect, boolshift.PiecesOf(ma), attempt)
+	}
+	if err = unwrapResultFold(err); isEmptyResult(err) {
+		return err
+	}
+	return nil
+}
+
+// isEmptyResult reports whether err is the empty result of a Boolean.
+func isEmptyResult(err error) bool {
+	expected, ok := errors.AsType[*meshbool.BooleanExpectedError](err)
+	return ok && expected.Kind == meshbool.BooleanExpectedEmpty
 }
 
 // resultFoldError marks a refusal of the stitched result's float rounding
@@ -642,6 +687,7 @@ func evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 	// pair tolerance; the gate reads them on the contact classification below
 	// (agent-docs/faceted-vertex-bounds-design.md §5). Any other operand is ungated.
 	chain := chaintol.Of(ctx)
+	bmB.AcrossFlat = op == meshbool.OpIntersect
 	if restatingA {
 		if fixed != nil {
 			configureChainGate(bmA, tolMM, proofbound.AbsSumUpper(tolMM, targetAllowance))

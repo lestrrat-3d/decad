@@ -933,3 +933,60 @@ the predicate, including a point off the rim, a carrier that is not exact and a 
 | `TestTrueFacePlane` | a proved claim, a level revolve record | a plane |
 | `TestTrueFacePlane` | a stale claim, a climbing meridian | none |
 | `TestRatPlaneImage` | the cofactor image against three mapped points | exact |
+
+## 18. Flush planes that agree only within a bound
+
+After §17 the gallery's clamp arm still refused some seats with the part first: the adapter nut and the adapter, and the
+hardware of the tilted poses (pan, shoulder-max, elbow-min, and the raised nut J4 and knob J4). This section records why
+no exact rule admits them, and what decides them instead.
+
+### 18.1 What the true planes are
+
+- **Translation sums.** The adapter nut is placed at the float sum `t = I + 4.7`, which rounds to
+  `110.68069729522874`, while the adapter's pocket floor is its local plane `z = 4.7` carried by `I`, the exact sum
+  `I + 4.7`. The float sum is `2.66×10⁻¹⁵` above the exact one. Both held faces are exactly at the float value, so the
+  held facets coincide; the nut's true bottom is its held one, and the adapter's true floor lies `2.66×10⁻¹⁵` below its
+  held floor, into the adapter. The true bodies stand apart by that gap, so the empty answer is true.
+- **Tilted poses.** A 40° turn has no exact matrix. Each body's true plane is the exact image of its local plane under
+  its own float matrix read as exact rationals, and two bodies whose matrices differ in a last place have true planes
+  that cross at an angle near `10⁻¹⁶`. Across a face several millimetres wide they then overlap on one side of the
+  crossing line by up to about `10⁻¹⁵` mm: the exact Intersect is a sliver, not empty.
+
+### 18.2 Why a bounded rule is not the route
+
+A rule that admits planes agreeing within a bound `ε` answers "empty" where the true bodies may overlap by `ε`, as the
+tilted poses do. That is a tolerance answer, not an exact one, and decad already has one with a stated reach: the gap
+tolerance's shifted retry (gap-tolerance-design.md §5.2), 0.01 mm unless set otherwise, whose empty results Verify
+reads as shifted (`AppliedShift`). Its hardware-first answers were already empty for every one of these pairs (§17.3);
+only its order dependence and one decline kept the part-first order refused. Fixing those costs two small changes and
+no new proof, against a new bounded-coplanarity rule that the mesh pass would also have to follow when it cuts facets
+that are not exactly coplanar. So the route taken is the retry:
+
+- **Contact direction** (gap-tolerance §5.2 item 8). In an Intersect, a contact between a curved face of the first
+  operand and a flat face of the second reads along the flat face's normal. A part's bore wall fanned its normals round
+  the rim, and no move opened them all.
+- **Swapped retry** (gap-tolerance §5.2 item 9). A second operand whose held mesh folds under any move declines every
+  shift. The adapter nut is one: its slivers flip under rounding. An Intersect the retry still refuses is retried with
+  the operands swapped, and only an empty result is taken.
+
+The translation-sum case could be proved exactly: a placement could record the true plane's exact offset from the held
+one, and §16's seat would admit a pair whose offsets each recede into their own body. It is not built, because the
+retry decides the pair and the exact proof would serve only the translation-only placements.
+
+### 18.3 Kept refusal
+
+The J2 bolt and the swivel refuse in both orders when the arm pans. The pan turns the swivel about the vertical axis,
+so its pocket floor's true plane holds no float and its bore wall earns no seat (§17.4). The wall's rim contacts then
+reach the chain-depth gate, and the wall is held to 0.0105 mm, coarser than the pair's 0.0019 mm chord tolerance. The
+gap tolerance's retry cannot help: a move clears a coarse facet only past the facet's own bound, and 0.0105 mm is beyond
+the 0.01 mm reach. Holding the swivel's bore finer where it is built would decide it.
+
+### 18.4 Tests
+
+| Test | Case | Expect |
+|---|---|---|
+| `TestIntersectSeatWithinGapTolerance` | a bored block and a round nut on the floor, both turned 31° about a horizontal axis, both orders | `BooleanEmpty` (fails red without §5.2 item 8, and for the block without item 9) |
+| `TestIntersectSeatWithinGapTolerance` | the turned block sunk 0.05, deeper than the reach, both orders | its overlap's volume |
+
+`TestIntersectSeat` and `TestIntersectPlacedSeat` now run in an `ExactOnly` document, so they keep testing the exact
+path alone.
