@@ -662,6 +662,9 @@ func evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 	}
 	var kept []meshbool.KeptFacet
 	var maxRim float64
+	// coplanarKeys is what the coplanar pass accepted, nil when it accepted
+	// nothing (agent-docs/coplanar-contact-design.md §5).
+	var coplanarKeys *meshbool.ContactKeys
 	// The occupancy record (agent-docs/body-refine-design.md §5) is tracked on
 	// the ordinary Union path only. deepTerm stays +Inf, which no record
 	// admits, on every path that does not report it.
@@ -702,6 +705,7 @@ func evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 		var stats meshbool.Stats
 		kept, stats, err = meshbool.MeshBooleanStats(ctx, op, bmA, bmB, memo)
 		maxRim = stats.MaxRim
+		coplanarKeys = stats.Coplanar
 		if trackOccupancy && bmA.Bulge != nil {
 			deepTerm, sites = localDeepTerm(op, occA, occB, pokesA, pokesB, ma, mb, stats.Contacts)
 		}
@@ -727,7 +731,7 @@ func evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 	if replay != nil {
 		stitched, err = meshbool.StitchFacetsReplayWithKeys(ctx, kept, replay, replayKeys)
 	} else {
-		stitched, err = meshbool.StitchFacetsContext(ctx, kept)
+		stitched, err = meshbool.StitchFacetsWith(ctx, kept, meshbool.StitchOptions{Coplanar: coplanarKeys})
 	}
 	if err != nil {
 		_, folded := errors.AsType[*meshbool.HeldFoldError](err)
@@ -795,7 +799,7 @@ func evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 		Xform:       r3.Identity(),
 	}
 	if trackOccupancy && bmA.Bulge != nil {
-		payload.Occupancy = composeOccupancy(ctx, op, occA, occB, bmA, bmB, ma, mb, memo, stitched.Round, deepTerm, sites)
+		payload.Occupancy = composeOccupancy(ctx, op, occA, occB, bmA, bmB, ma, mb, memo, stitched.Round, deepTerm, sites, coplanarKeys != nil)
 		if payload.Occupancy != nil {
 			payload.Occupancy.Mesh = occupancy.Bind(payload.Verts, payload.Tris)
 		}
@@ -918,9 +922,17 @@ func shiftsHaveSingleComponentAdjustment(shifts map[int]pieceShift) bool {
 // it suffices that each facet near the other operand has 2·λ(t) below its own
 // face's bound. Where that fails, the same pre-pass runs again over face
 // bounds raised to cover twice each face's largest bulge; a refusal there
-// drops the record and changes nothing about the Boolean itself.
+// drops the record and changes nothing about the Boolean itself. A result whose
+// pair the coplanar pass accepted a point of carries no record at all.
 func composeOccupancy(ctx context.Context, op meshbool.OperationKind, ra, rb *occupancy.Record, bmA, bmB *meshbool.BoolMesh,
-	ma, mb *topo.Mesh, memo *meshbool.ContactMemo, weld, deepTerm float64, sites [][2]r3.Vec) *occupancy.Record {
+	ma, mb *topo.Mesh, memo *meshbool.ContactMemo, weld, deepTerm float64, sites [][2]r3.Vec, coplanar bool) *occupancy.Record {
+	if coplanar {
+		// The re-run below can give an admitted exact pair positive slack, and
+		// no mesh refusal backs that deferral (agent-docs/coplanar-contact-design.md
+		// §6). localDeepTerm reads Stats.Contacts, which never holds an admitted
+		// coplanar contact.
+		return nil
+	}
 	if !gateCovers(bmA, ma, bmB) || !gateCovers(bmB, mb, bmA) {
 		wa, wb := widenedFaceBounds(ma, bmA.Bulge), widenedFaceBounds(mb, bmB.Bulge)
 		if err := meshbool.RefuseUndecidableProximity(ctx, wa, wb, bmA, bmB, memo, nil, nil); err != nil {
