@@ -192,7 +192,7 @@ func TestReplayCoplanarDeclinesWhatLiveClassifies(t *testing.T) {
 // corner stitch to the same legacy refusal on the bounded path as on the live
 // one, so the retry reads the same contacts.
 func TestReplayCoplanarLegacyRefusal(t *testing.T) {
-	for name, lo := range map[string]r3.Vec{"edge": {X: 10, Y: 0.5, Z: 10}, "vertex": {X: 10, Y: 10, Z: 10}} {
+	for name, lo := range map[string]r3.Vec{"edge only": {X: 10, Y: 0.5, Z: 10}, "vertex only": {X: 10, Y: 10, Z: 10}} {
 		t.Run(name, func(t *testing.T) {
 			a := exactBoxMesh(t, r3.Vec{}, r3.Vec{X: 10, Y: 10, Z: 10})
 			b := exactBoxMesh(t, lo, r3.Vec{X: lo.X + 10, Y: lo.Y + 10, Z: lo.Z + 10})
