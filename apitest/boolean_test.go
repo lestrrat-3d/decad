@@ -75,7 +75,7 @@ func wedgePrism(t *testing.T, doc *decad.Document, w *sketch.World, plane *sketc
 }
 
 // translated moves a body by (x, y, z), consuming it.
-func translated(t *testing.T, b *decad.Body, x, y, z float64) *decad.Body {
+func translated(t testing.TB, b *decad.Body, x, y, z float64) *decad.Body {
 	t.Helper()
 	tr, err := r3.Translation(r3.Vec{X: x, Y: y, Z: z})
 	require.NoError(t, err)

@@ -22,7 +22,7 @@ import (
 // pairs without a certificate Suspect, nested pairs undecided.
 
 // boxBody extrudes an axis-aligned rectangle into doc.
-func boxBody(t *testing.T, doc *decad.Document, x0, y0, x1, y1, h float64) *decad.Body {
+func boxBody(t testing.TB, doc *decad.Document, x0, y0, x1, y1, h float64) *decad.Body {
 	t.Helper()
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
