@@ -289,3 +289,59 @@ func TestSimplifyPlanarHoledFace(t *testing.T) {
 	require.Equal(t, count(plain), count(simple))
 	require.Zero(t, heldVolume(simple).Cmp(big.NewRat(1000-4*5*10, 1)))
 }
+
+// TestSimplifyPlanarOpenInput pins that an open input is returned unchanged:
+// removing the vertices round a crack must not close it.
+func TestSimplifyPlanarOpenInput(t *testing.T) {
+	in := planarBox(0)
+	var tris [][3]int
+	var src []int
+	var bound []float64
+	for i, tr := range in.Tris {
+		if i == 2 { // one triangle of the fan is missing
+			continue
+		}
+		tris, src, bound = append(tris, tr), append(src, in.Src[i]), append(bound, 0)
+	}
+	in.Tris, in.Src, in.FacetBound = tris, src, bound
+	out, changed, err := SimplifyPlanarFaces(t.Context(), in)
+	require.NoError(t, err)
+	require.False(t, changed)
+	require.Equal(t, in.Tris, out.Tris)
+}
+
+// TestSimplifyPlanarTouchingBody pins that a vertex another body shares keeps
+// its face: the centre vertex of the fan is also the apex of a tetrahedron, so
+// dropping it from the top would leave the apex inside a top facet.
+func TestSimplifyPlanarTouchingBody(t *testing.T) {
+	in := planarBox(0)
+	// A tetrahedron under the apex 8 = (1, 1, 2), with its own source ids.
+	base := len(in.Xverts)
+	for _, p := range []r3.Vec{{X: 5, Y: 5, Z: 0}, {X: 6, Y: 5, Z: 0}, {X: 5, Y: 6, Z: 0}} {
+		in.Xverts = append(in.Xverts, proof.XptOf(p))
+		in.Approx = append(in.Approx, p)
+		in.Xbeta = append(in.Xbeta, 0)
+	}
+	for k, tr := range [][3]int{{base, base + 2, base + 1}, {base, base + 1, 8}, {base + 1, base + 2, 8}, {base + 2, base, 8}} {
+		in.Tris = append(in.Tris, tr)
+		in.Src = append(in.Src, 50+k)
+		in.FacetBound = append(in.FacetBound, 0)
+	}
+	out, changed, err := SimplifyPlanarFaces(t.Context(), in)
+	require.NoError(t, err)
+	require.False(t, changed, "the fan's centre is shared with the tetrahedron")
+	require.Equal(t, in.Tris, out.Tris)
+}
+
+// TestSimplifyPlanarTentTop pins that a top lifted off its plane is not
+// simplified.
+func TestSimplifyPlanarTentTop(t *testing.T) {
+	in := planarBox(0)
+	// Lift the fan's centre off the top plane.
+	in.Xverts[8] = proof.XptOf(r3.Vec{X: 1, Y: 1, Z: 3})
+	in.Approx[8] = r3.Vec{X: 1, Y: 1, Z: 3}
+	out, changed, err := SimplifyPlanarFaces(t.Context(), in)
+	require.NoError(t, err)
+	require.False(t, changed, "a tent top is not planar")
+	require.Equal(t, in.Tris, out.Tris)
+}

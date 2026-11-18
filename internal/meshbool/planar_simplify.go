@@ -50,6 +50,11 @@ func SimplifyPlanarFaces(ctx context.Context, in PlanarMesh) (PlanarMesh, bool, 
 }
 
 func simplifyPlanarFaces(ctx context.Context, in PlanarMesh) (PlanarMesh, bool, error) {
+	// An open input is left to the closure audit: removing the vertices of a
+	// crack could close it with new surface.
+	if !stitchEdgesPaired(in.Tris, make(map[[2]int]uint8, len(in.Tris)+len(in.Tris)/2)) {
+		return in, false, nil
+	}
 	budget := proofbound.NewWorkBudget(ctx)
 	owner := make(map[[2]int]int, 3*len(in.Tris))
 	incident := make([][]int, len(in.Xverts))
@@ -222,6 +227,10 @@ func planarCandidate(ctx context.Context, in PlanarMesh, owner map[[2]int]int, f
 		}
 	}
 	n := proof.Xcross(proof.Xsub(b, a), proof.Xsub(c, a))
+	if n.X.Sign() == 0 && n.Y.Sign() == 0 && n.Z.Sign() == 0 {
+		// A collinear reference facet gives no plane to test against.
+		return none, nil, false, nil
+	}
 
 	// Connected regions through shared edges, and each region's boundary.
 	region := map[int]int{}
@@ -375,9 +384,21 @@ func collinearSeamVertex(in PlanarMesh, owner map[[2]int]int, fs []int, v int) b
 // boundary vertex that stays is the exact point of its own float.
 func planarCornersAreFloats(in PlanarMesh, rs []planarRegion, removable []bool) bool {
 	for _, r := range rs {
+		onLoop := make(map[int]struct{}, len(r.loop))
 		for _, v := range r.loop {
+			onLoop[v] = struct{}{}
 			if !removable[v] && !proof.XptDenotes(in.Xverts[v], in.Approx[v]) {
 				return false
+			}
+		}
+		// Every vertex of the region is a corner or removed. A vertex that
+		// another body also uses fails both, and would be left inside a facet
+		// as a T-junction.
+		for _, f := range r.facets {
+			for _, v := range in.Tris[f] {
+				if _, ok := onLoop[v]; !ok && !removable[v] {
+					return false
+				}
 			}
 		}
 	}
