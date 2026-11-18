@@ -255,9 +255,10 @@ func TestRetainedLineChamferExact(t *testing.T) {
 			requireFootBound(t, out, r3.NewVec(0.75, 1, z), true, 0)
 			requireFootBound(t, out, r3.NewVec(-1, 0.75, z), true, 0)
 		}
-		// The Cut's far wall corners are rational points that are not floats, so their rounding-level bounds
-		// (about 1e-15) stay and the slab term reads them: the bound grows by 3.6e-14 here, not by 0. The feet
-		// and the volume change are exact; only that read of the Cut's own corners is left.
+		// The Cut's rational wall corners are not floats and keep bounds near 1e-15, so the tilted walls' facets
+		// charge their tag distance (about 1.6e-14 and 2.2e-14 on the two walls) and the bound grows by 3.6e-14,
+		// not by 0. Only a Cut with all-float corners reads the slab term's corner minimum end to end; the unit
+		// cases of TestPlaneFacetVolumeCornerBounds cover it.
 		require.LessOrEqual(t, after.Bound.Mag()-before.Bound.Mag(), 1e-13)
 		require.Equal(t, 7.8125, after.Value.Mag()-before.Value.Mag())
 	})

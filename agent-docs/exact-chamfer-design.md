@@ -336,7 +336,8 @@ the mesh path. Tenon T: the prism through `(−5, 0), (5, 0), (6, 6), (−5, 6)`
   extruded `z ∈ [−1, 11]`. Chamfer the hole's corner edge at `(0, 0)` (concave, a fill) with `d = 1.25`: feet
   `(0.75, 1, z)` and `(−1, 0.75, z)` with bound 0, volume change exactly `+0.5 × 1.25² × 10 = 7.8125`, and
   `Volume.Bound` at most `1e-13` above the `Cut`'s (the `Cut` itself leaves rational wall corners that are not floats,
-  with bounds near `1e-15`, and the chamfer's slab term reads them). The walls' float tags need not contain their
+  with bounds near `1e-15`, so the walls' facets charge their tag distance, about `3.6e-14` in all, not `0`;
+  the corner minimum is not exercised end to end here and is covered by the unit cases) The walls' float tags need not contain their
   corners. R1 refusing this edge → stop and report.
 
 ### 7.3 API contact (`apitest/retained_chamfer_contact_test.go`; needs coplanar-contact Task 10 on origin/main)

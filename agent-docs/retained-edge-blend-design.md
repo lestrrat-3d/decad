@@ -1735,7 +1735,9 @@ the true plane lies in `H △ S`, so only the new slab can add. A new facet `t`
 lies within `h_t` of the tag plane and so within `h_t + δ_t` of the true plane,
 and its slab has volume at most that times `area(t)`. This holds for a cap an end
 face gains (new surface on the far side of `K`) as for any other facet of the
-face, since the term reads its corners' actual distances, not their bounds. Each
+face, since the term reads its corners' actual distances, not their bounds, except on an exact R1
+chamfer's four faces, where the smaller of that and the largest corner bound is read
+(`agent-docs/exact-chamfer-design.md` §4.4). Each
 blend charges a rebuilt face again, so `n` blends on one displaced face add its
 `δ·area` `n` times; the published bound stays sound. Inside `K`, `S'` is the exact blended region and
 `H'` is the polyhedron on the strip's chords; every strip facet lies within its

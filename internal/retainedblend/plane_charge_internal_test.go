@@ -135,6 +135,29 @@ func TestPlaneFacetVolumeCornerBounds(t *testing.T) {
 	})
 }
 
+// TestChargePlaneFaceReadsCornerBoundsOnlyWhenFlagged re-triangulates a face whose zero-bound corners lie on a true
+// plane its float tag misses, as TestPlaneFacetVolumeCornerBounds does, through chargePlaneFace: the tag charge
+// stays without the work's cornerSlab flag and is 0 with it.
+func TestChargePlaneFaceReadsCornerBoundsOnlyWhenFlagged(t *testing.T) {
+	t.Parallel()
+	n, ok := r3.NewVec(1, 3, 5).Normalize()
+	require.True(t, ok)
+	verts := []r3.Vec{r3.NewVec(3, -1, 0), r3.NewVec(5, 0, -1), r3.NewVec(0, 5, -3)}
+	planeVol := func(t *testing.T, flagged bool) float64 {
+		t.Helper()
+		fp := facetedrecord.Payload{Groups: []facetedrecord.Group{planeTag(t, r3.Vec{}, n, 0)}}
+		w := newWork(fp, rim{scale: 1}, blendSpec{dA: 1, dB: 1})
+		w.verts = append(w.verts, verts...)
+		w.beta = append(w.beta, 0, 0, 0)
+		w.cornerSlab = flagged
+		w.emit([3]int{0, 1, 2}, 0)
+		require.NoError(t, w.chargePlaneFace(0, 0))
+		return w.planeVol
+	}
+	require.Positive(t, planeVol(t, false))
+	require.Zero(t, planeVol(t, true))
+}
+
 // TestMeasureChangeChargesRetriangulatedPlaneFacets re-triangulates a plane face whose facet stands 0.5 above its
 // tag plane, over a tag that states a displacement, and reads the volume bound measureChange returns. The strip is
 // empty, so every other term is zero, and the bound must hold the slab between the new facet and the true plane
