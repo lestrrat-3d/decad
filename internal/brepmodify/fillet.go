@@ -76,6 +76,9 @@ func Fillet(ctx context.Context, env topo.Env, b *topo.Body, call FilletCall) (R
 		Corner: func(loop survey2d.CornerLoop, _, ci int, _ *topo.Edge) (*offset2d.Blend, error) {
 			return offset2d.Fillet(loop.Walks, ci, rmm, sectionaudit.Tolerance)
 		},
+		AtCorner: func(loop survey2d.CornerLoop, ci int, swap bool) (*offset2d.Blend, error) {
+			return offset2d.FilletAtCorner(loop.Walks, ci, rmm, sectionaudit.Tolerance, swap)
+		},
 	}
 	// The exact P8 front top edge takes a bounded cutter before the brep
 	// receiver's SB7 curved-third-face refusal (modify-general §4.3c).

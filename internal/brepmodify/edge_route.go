@@ -336,9 +336,14 @@ func (r *brepEdgeRoute) computeBlends(eb *breprecord.EdgeBlend) error {
 			return err
 		}
 		var cb *offset2d.Blend
-		if referenceSide < 0 {
+		switch {
+		case referenceSide < 0 && r.call.Blend.AtCorner != nil:
+			// Every end face reads its corner with the walk beside Adj[0]
+			// arriving, so G0 and G1 compute images of one blend (SB9).
+			cb, err = r.call.Blend.AtCorner(loops[end.Loop], end.Corner, end.Arriving != 0)
+		case referenceSide < 0:
 			cb, err = r.call.Blend.Corner(loops[end.Loop], end.Loop, end.Corner, r.call.Edges[eb.Ordinal])
-		} else {
+		default:
 			dA, dB := r.call.Asym.Other, r.call.Asym.D
 			if end.Arriving == referenceSide {
 				dA, dB = dB, dA

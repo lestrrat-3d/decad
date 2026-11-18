@@ -49,26 +49,9 @@ func roundedStem(t *testing.T, doc *decad.Document, w, th, round, z0, h float64)
 // by depth along +Y.
 func flushArm(t *testing.T, doc *decad.Document, y0, depth float64, poly [][2]float64) *decad.Body {
 	t.Helper()
-	world := sketch.NewWorld()
 	f, err := r3.NewFrame(r3.Vec{Y: y0}, r3.Vec{X: 1}, r3.Vec{Z: 1})
 	require.NoError(t, err)
-	plane, err := world.CreatePlaneFromFrame(f)
-	require.NoError(t, err)
-	s, err := world.CreateSketch(plane)
-	require.NoError(t, err)
-	pts := make([]*sketch.Point, len(poly))
-	for i, v := range poly {
-		pts[i] = s.CreatePoint(v[0], v[1])
-		s.Fix(pts[i])
-	}
-	for i := range pts {
-		s.CreateLine(pts[i], pts[(i+1)%len(pts)])
-	}
-	_, err = s.Solve(t.Context())
-	require.NoError(t, err)
-	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(depth), Dir: decad.Against})
-	require.NoError(t, err)
-	return body
+	return framePrism(t, doc, f, depth, decad.Against, poly)
 }
 
 // TestUnionRoundedStemWithFlushArm joins a stem whose vertical corners carry
