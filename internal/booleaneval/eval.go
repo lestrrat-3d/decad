@@ -731,7 +731,7 @@ func evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 	if replay != nil {
 		stitched, err = meshbool.StitchFacetsReplayWithKeys(ctx, kept, replay, replayKeys)
 	} else {
-		stitched, err = meshbool.StitchFacetsWith(ctx, kept, meshbool.StitchOptions{Coplanar: coplanarKeys})
+		stitched, err = meshbool.StitchFacetsWith(ctx, kept, meshbool.StitchOptions{Coplanar: coplanarKeys, SimplifyPlanar: coplanarcontact.Of(ctx)})
 	}
 	if err != nil {
 		_, folded := errors.AsType[*meshbool.HeldFoldError](err)

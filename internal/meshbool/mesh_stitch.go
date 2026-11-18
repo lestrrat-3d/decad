@@ -80,6 +80,9 @@ type StitchOptions struct {
 	// SimplifyPlanar re-triangulates the planar faces of the result on their
 	// corners alone (agent-docs/coplanar-contact-design.md §7).
 	SimplifyPlanar bool
+	// inject, set only by tests, replaces the result of the rest of the stitch
+	// on a simplified mesh, to exercise the fallback.
+	inject error
 }
 
 // StitchFacetsWith is StitchFacetsContext with the stages opts selects.
@@ -180,6 +183,44 @@ func StitchFacetsWith(ctx context.Context, kept []KeptFacet, opts StitchOptions)
 			return nil, err
 		}
 	}
+	if opts.SimplifyPlanar {
+		simplified, changed, err := SimplifyPlanarFaces(ctx, PlanarMesh{Xverts: xverts, Approx: approx, Xbeta: xbeta,
+			Tris: tris, Src: src, FacetBound: facetBound})
+		if err != nil {
+			return nil, err
+		}
+		if changed {
+			out, err := finishStitch(ctx, simplified.Xverts, simplified.Approx, simplified.Xbeta,
+				simplified.Tris, simplified.Src, simplified.FacetBound)
+			if opts.inject != nil {
+				out, err = nil, opts.inject
+			}
+			if err == nil {
+				return out, nil
+			}
+			// A closure, fold or embedding refusal on the simplified mesh runs
+			// the rest of the stitch on the unsimplified one. The context and
+			// every other error return as they are.
+			if ctx.Err() != nil || !simplifyFallbackError(err) {
+				return nil, err
+			}
+		}
+	}
+	return finishStitch(ctx, xverts, approx, xbeta, tris, src, facetBound)
+}
+
+// simplifyFallbackError reports whether err is a refusal the unsimplified mesh
+// may not share: the closure audit, the fold search or the embedding proof.
+func simplifyFallbackError(err error) bool {
+	_, folded := errors.AsType[*HeldFoldError](err)
+	return folded || errors.Is(err, decaderr.ErrBooleanFailed) || errors.Is(err, decaderr.ErrUnsupported)
+}
+
+// finishStitch is the rest of the stitch for a conformed exact mesh: the needle
+// flip, the closure audit and the rounding with its fold flips. It edits tris,
+// src and facetBound in place.
+func finishStitch(ctx context.Context, xverts []proof.Xpt, approx []r3.Vec, xbeta []float64,
+	tris [][3]int, src []int, facetBound []float64) (*StitchedMesh, error) {
 	// A needle's apex can round across its longest edge, which no float-box
 	// move clears; flipping that edge where the exact surface allows it keeps
 	// the surface and leaves no such facet to round (mesh_needle.go).
