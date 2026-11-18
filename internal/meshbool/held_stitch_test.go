@@ -215,7 +215,7 @@ func ratXpt(x, y, z *big.Rat) proof.Xpt {
 
 // boxMesh is an eight-corner box facet-triangulated with outward winding,
 // each corner pushed through rot and shifted by at.
-func boxMesh(t *testing.T, half r3.Vec, rot func(r3.Vec) r3.Vec, at r3.Vec) *BoolMesh {
+func boxMesh(t testing.TB, half r3.Vec, rot func(r3.Vec) r3.Vec, at r3.Vec) *BoolMesh {
 	t.Helper()
 	var verts []r3.Vec
 	for i := range 8 {

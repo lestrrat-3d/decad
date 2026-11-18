@@ -16,7 +16,7 @@ import (
 // exactBoxMesh is the axis-aligned box with float corners lo and hi, held
 // exactly: every vertex bound is zero and every facet is marked exact, as
 // SetExactFacets marks the facets of a face with a zero reading.
-func exactBoxMesh(t *testing.T, lo, hi r3.Vec) *BoolMesh {
+func exactBoxMesh(t testing.TB, lo, hi r3.Vec) *BoolMesh {
 	t.Helper()
 	half := r3.Vec{X: (hi.X - lo.X) / 2, Y: (hi.Y - lo.Y) / 2, Z: (hi.Z - lo.Z) / 2}
 	at := r3.Vec{X: (hi.X + lo.X) / 2, Y: (hi.Y + lo.Y) / 2, Z: (hi.Z + lo.Z) / 2}
