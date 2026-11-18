@@ -1388,9 +1388,9 @@ raised to a coil's, mitred sweep's, or certified `LoftFaces` result's held
 bound when that is larger, since those operands hold one fixed mesh. The pair tolerance is the gate's
 reference for those held operands only: an analytic partner is meshed at its
 own diameter-derived tolerance, never coarser than the pair's
-(`agent-docs/chained-cut-design.md` §4.1). A certified twisted `Sweep` also
-restates a finer mesh than its own at a tenth of the stationed build's target
-(§4.2), so a chain of twisted bore cuts through one tube touches no earlier
+(`agent-docs/twist-sweep-cut-design.md` §7.4). A certified twisted `Sweep` also
+restates a finer mesh than its own at about a twenty-seventh of the stationed build's target
+(same document, §7.5), so a chain of twisted bore cuts through one tube touches no earlier
 bore's rim.
 The next boolean compares the two only where the new pair meets the operand
 (`agent-docs/faceted-vertex-bounds-design.md` §5): every facet of an operand that
