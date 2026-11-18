@@ -2,6 +2,7 @@ package meshbool
 
 import (
 	"context"
+	"errors"
 	"unsafe"
 
 	"github.com/lestrrat-3d/decad/internal/proof"
@@ -11,45 +12,45 @@ import (
 const brakeReplayFacetLimit = 65536
 
 // MeshBooleanReplayWithKeys shares exact keys with the later stitch.
-func MeshBooleanReplayWithKeys(ctx context.Context, op OperationKind, ma, mb *BoolMesh, memo *ContactMemo, replay *proofbound.ReplayBudget, keys *ReplayKeys) ([]KeptFacet, float64, error) {
+func MeshBooleanReplayWithKeys(ctx context.Context, op OperationKind, ma, mb *BoolMesh, memo *ContactMemo, replay *proofbound.ReplayBudget, keys *ReplayKeys) ([]KeptFacet, float64, *ContactKeys, error) {
 	if replay == nil || keys == nil || keys.budget != replay {
-		return nil, 0, errReplayMismatchedReplayKeys
+		return nil, 0, nil, errReplayMismatchedReplayKeys
 	}
 	if err := replay.ReserveRecords(ctx, 1); err != nil {
-		return nil, 0, err
+		return nil, 0, nil, err
 	}
 	if err := replay.ReserveArray(ctx, 1, uint64(unsafe.Sizeof(PairCutsBudget{}))); err != nil {
-		return nil, 0, err
+		return nil, 0, nil, err
 	}
 	budget := &PairCutsBudget{replay: replay, keys: keys}
 	wantA, wantB, flipB, err := BooleanKeep(op)
 	if err != nil {
-		return nil, 0, err
+		return nil, 0, nil, err
 	}
 	keyOf := func(p proof.Xpt) string { return p.Key() }
 	cuts, err := boundedPairCuts(ctx, ma, mb, memo, keyOf, budget)
 	if err != nil {
-		return nil, 0, err
+		return nil, 0, nil, err
 	}
-	a, err := brakeKeepSideReplay(ctx, ma, mb, cuts.CutsA, cuts.replayCutsA, cuts.BlockedA, cuts.replayBlockedA, cuts.Rims, cuts.replayRims, wantA, false, keyOf, budget)
+	a, err := brakeKeepSideReplay(ctx, ma, mb, cuts.CutsA, cuts.replayCutsA, cuts.BlockedA, cuts.replayBlockedA, cuts.Rims, cuts.replayRims, wantA, false, keyOf, budget, keepOptions{Coplanar: cuts.CoplanarA, Op: op})
 	if err != nil {
-		return nil, 0, err
+		return nil, 0, nil, replayCoplanarRefusal(cuts, err)
 	}
-	b, err := brakeKeepSideReplay(ctx, mb, ma, cuts.CutsB, cuts.replayCutsB, cuts.BlockedB, cuts.replayBlockedB, cuts.Rims, cuts.replayRims, wantB, flipB, keyOf, budget)
+	b, err := brakeKeepSideReplay(ctx, mb, ma, cuts.CutsB, cuts.replayCutsB, cuts.BlockedB, cuts.replayBlockedB, cuts.Rims, cuts.replayRims, wantB, flipB, keyOf, budget, keepOptions{Coplanar: cuts.CoplanarB, Op: op, Second: true})
 	if err != nil {
-		return nil, 0, err
+		return nil, 0, nil, replayCoplanarRefusal(cuts, err)
 	}
 	if len(a)+len(b) > brakeReplayFacetLimit {
-		return nil, 0, errReplayBoundedOutputExceedsFacets
+		return nil, 0, nil, errReplayBoundedOutputExceedsFacets
 	}
 	if err := budget.ReserveRecords(ctx, uint64(len(a)+len(b))); err != nil {
-		return nil, 0, err
+		return nil, 0, nil, err
 	}
 	if err := budget.SpendWork(ctx, uint64(len(a)+len(b))); err != nil {
-		return nil, 0, err
+		return nil, 0, nil, err
 	}
 	if err := budget.ReserveBytes(ctx, uint64(len(a)+len(b)), uint64(unsafe.Sizeof(KeptFacet{}))); err != nil {
-		return nil, 0, err
+		return nil, 0, nil, err
 	}
 	for i := range b {
 		b[i].Second = true
@@ -57,20 +58,30 @@ func MeshBooleanReplayWithKeys(ctx context.Context, op OperationKind, ma, mb *Bo
 	out := make([]KeptFacet, 0, len(a)+len(b))
 	out = append(out, a...)
 	out = append(out, b...)
-	return out, cuts.MaxRim, nil
+	var coplanarKeys *ContactKeys
+	if len(cuts.Owned) > 0 {
+		coplanarKeys = &ContactKeys{Owned: cuts.Owned, Legacy: cuts.Legacy}
+	}
+	return out, cuts.MaxRim, coplanarKeys, nil
 }
 
-func brakeKeepSideReplay(ctx context.Context, m, other *BoolMesh, cuts map[int][]Xseg, replayCuts [][]Xseg, blocked map[[2]int]struct{}, replayBlocked *replayTable[[2]int, struct{}], rims map[string]float64, replayRims *replayTable[string, float64], wantInside, flip bool, keyOf func(proof.Xpt) string, shared *PairCutsBudget) ([]KeptFacet, error) {
+func brakeKeepSideReplay(ctx context.Context, m, other *BoolMesh, cuts map[int][]Xseg, replayCuts [][]Xseg, blocked map[[2]int]struct{}, replayBlocked *replayTable[[2]int, struct{}], rims map[string]float64, replayRims *replayTable[string, float64], wantInside, flip bool, keyOf func(proof.Xpt) string, shared *PairCutsBudget, opts keepOptions) ([]KeptFacet, error) {
 	var kept []KeptFacet
+	// A facet with a coplanar partner takes the cut path even with no segment
+	// (agent-docs/coplanar-contact-design.md §3.4).
 	getCuts := func(i int) ([]Xseg, bool) {
-		if replayCuts != nil {
+		var segs []Xseg
+		var ok bool
+		switch {
+		case replayCuts != nil:
 			if i < 0 || i >= len(replayCuts) {
 				return nil, false
 			}
-			return replayCuts[i], len(replayCuts[i]) > 0
+			segs, ok = replayCuts[i], len(replayCuts[i]) > 0
+		default:
+			segs, ok = cuts[i]
 		}
-		v, ok := cuts[i]
-		return v, ok
+		return segs, ok || len(opts.Coplanar[i]) > 0
 	}
 	emit := func(tri [3]proof.Xpt, beta [3]float64, keys [3]string, src int, facet int) error {
 		if shared != nil {
@@ -159,6 +170,17 @@ func brakeKeepSideReplay(ctx context.Context, m, other *BoolMesh, cuts map[int][
 			results = make([]cutFacetResult, len(facets))
 			for slot, i := range facets {
 				segments, _ := getCuts(i)
+				if len(segments) == 0 {
+					// Only coplanar partners: one region, the facet itself, and
+					// CutTriangle is not called.
+					x := XtriCorners(m, i)
+					probe, perr := proof.ReplayCentroid(ctx, x[0], x[1], x[2], shared.replay)
+					if perr != nil {
+						return nil, perr
+					}
+					results[slot].regions = []CutRegion{{Tris: [][3]proof.Xpt{x}, Probe: probe}}
+					continue
+				}
 				results[slot].regions, results[slot].err = cutTriangleSharedWork(ctx, XtriCorners(m, i), m.Norms[i], segments, shared)
 
 				if results[slot].err != nil {
@@ -187,6 +209,32 @@ func brakeKeepSideReplay(ctx context.Context, m, other *BoolMesh, cuts map[int][
 			for _, reg := range result.regions {
 				var inside bool
 				var err error
+				if partners := opts.Coplanar[i]; len(partners) > 0 {
+					// The cover test is exact work on every partner.
+					if err := shared.SpendWork(ctx, coplanarCoverWork*uint64(len(partners))); err != nil {
+						return nil, err
+					}
+					var twin func(m *BoolMesh, f, k int) (int, bool, error)
+					if shared != nil && shared.replay != nil {
+						twin = func(mm *BoolMesh, f, k int) (int, bool, error) { return mm.twinFacetReplay(ctx, f, k) }
+					}
+					cover, err := coverOf(other, partners, reg.Probe, twin)
+					if err != nil {
+						return nil, err
+					}
+					if len(cover) > 0 {
+						same, err := coverFacing(m, i, other, cover)
+						if err != nil {
+							return nil, err
+						}
+						if coplanarKeep(opts.Op, opts.Second, same) {
+							if err := emitReplayRegion(ctx, reg, i, cornerKeys, keyOf, m, rims, replayRims, shared, emit); err != nil {
+								return nil, err
+							}
+						}
+						continue
+					}
+				}
 				if shared != nil {
 					inside, err = classifyRegionReplay(ctx, reg, other, shared)
 				} else {
@@ -199,26 +247,8 @@ func brakeKeepSideReplay(ctx context.Context, m, other *BoolMesh, cuts map[int][
 				if inside != wantInside {
 					continue
 				}
-				for _, tri := range reg.Tris {
-					var beta [3]float64
-					var keys [3]string
-					for k, p := range tri {
-						keys[k], err = shared.pointKey(ctx, p, keyOf)
-						if err != nil {
-							return nil, err
-						}
-						if replayRims != nil {
-							beta[k], err = cutCornerBoundReplay(ctx, m, i, cornerKeys, keys[k], replayRims)
-							if err != nil {
-								return nil, err
-							}
-						} else {
-							beta[k] = CutCornerBound(m, i, cornerKeys, keys[k], rims)
-						}
-					}
-					if err := emit(tri, beta, keys, m.Src[i], i); err != nil {
-						return nil, err
-					}
+				if err := emitReplayRegion(ctx, reg, i, cornerKeys, keyOf, m, rims, replayRims, shared, emit); err != nil {
+					return nil, err
 				}
 			}
 		}
@@ -418,7 +448,29 @@ func classifyRegionReplay(ctx context.Context, reg CutRegion, other *BoolMesh, b
 		}
 		return false, errReplayARegionProbeLandedOnItsContact
 	}
-	return false, errBrakeUnanchored
+	if budget.replay == nil {
+		return ClassifyRegion(ctx, reg, other)
+	}
+	// An unanchored region, which a segment that runs along an edge or a
+	// coplanar patch boundary leaves, is classified by exact parity of its probe
+	// on the replay meter, as an uncut component's seed is.
+	work, err := newBrakeParityWork(ctx, budget)
+	if err != nil {
+		return false, err
+	}
+	inside, onBoundary, err := meshParityIndexedShared(ctx, reg.Probe, other.Parity, work)
+	if err != nil {
+		if errors.Is(err, errBrakeParityRays) {
+			// The live classification falls back to oblique rays, which the bounded
+			// scan does not run: decline instead of failing the boolean.
+			return false, errReplayUnanchoredParityIsAmbiguous
+		}
+		return false, err
+	}
+	if onBoundary {
+		return false, budget.boundaryContactRefusal()
+	}
+	return inside, nil
 }
 
 func blockedBetweenReplay(ctx context.Context, m *BoolMesh, a, b int, blocked *replayTable[[2]int, struct{}]) (bool, error) {
@@ -456,4 +508,52 @@ func newBrakeParityWork(ctx context.Context, budget *PairCutsBudget) (*proofboun
 	work := &proofbound.WorkBudget{Replay: true, ReplayID: budget.replay, StepFn: func() error { return budget.SpendWork(ctx, 1) }, ReserveFn: func(n uint64) error { return budget.ReserveRecords(ctx, n) }, ReserveBytesFn: func(n uint64) error { return budget.ReserveBytes(ctx, n, 1) }, ErrFn: ctx.Err}
 	work.SpendWorkFn = func(n uint64) error { return budget.SpendWork(ctx, n) }
 	return work, nil
+}
+
+// coplanarCoverWork is the work charged for one exact cover test of a probe
+// against one coplanar partner.
+const coplanarCoverWork = 256
+
+// emitReplayRegion emits the triangles of one kept region of facet i, each
+// corner with the bound the cutter gives it.
+func emitReplayRegion(ctx context.Context, reg CutRegion, i int, cornerKeys [3]string, keyOf func(proof.Xpt) string, m *BoolMesh,
+	rims map[string]float64, replayRims *replayTable[string, float64], shared *PairCutsBudget,
+	emit func(tri [3]proof.Xpt, beta [3]float64, keys [3]string, src int, facet int) error) error {
+	for _, tri := range reg.Tris {
+		var beta [3]float64
+		var keys [3]string
+		var err error
+		for k, p := range tri {
+			keys[k], err = shared.pointKey(ctx, p, keyOf)
+			if err != nil {
+				return err
+			}
+			if replayRims != nil {
+				beta[k], err = cutCornerBoundReplay(ctx, m, i, cornerKeys, keys[k], replayRims)
+				if err != nil {
+					return err
+				}
+			} else {
+				beta[k] = CutCornerBound(m, i, cornerKeys, keys[k], rims)
+			}
+		}
+		if err := emit(tri, beta, keys, m.Src[i], i); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// replayCoplanarRefusal maps an expected-contact refusal of the side pass, for a
+// pair the coplanar pass accepted a point of, to the refusal the pair gave
+// before it existed, as the live pass does, so the shifted retry reads the
+// contacts it always read. Only a contact refusal is mapped. A decline of the
+// bounded pass (an ambiguous probe, a cap, a budget error) is no statement about
+// the contact and returns as it is, so the retry never runs on it.
+func replayCoplanarRefusal(cuts *PairCutsResult, err error) error {
+	var expected *BooleanExpectedError
+	if cuts.Legacy == nil || !errors.As(err, &expected) || expected.Kind != BooleanExpectedContact {
+		return err
+	}
+	return cuts.Legacy
 }

@@ -11,7 +11,7 @@ import (
 	"github.com/lestrrat-3d/r3"
 )
 
-func TestBrakeParityWorkBudgetAndUnanchoredRefusal(t *testing.T) {
+func TestBrakeParityWorkBudget(t *testing.T) {
 	for _, short := range []bool{false, true} {
 		meter := proofbound.NewReplayTrialBudget()
 		size := 2*(uint64(unsafe.Sizeof(proofbound.WorkBudget{}))+256) + 128
@@ -33,13 +33,6 @@ func TestBrakeParityWorkBudgetAndUnanchoredRefusal(t *testing.T) {
 			t.Fatalf("exact: %v", err)
 		}
 	}
-	budget, err := NewReplayPairCutsBudget(proofbound.NewReplayTrialBudget())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := classifyRegionReplay(t.Context(), CutRegion{}, nil, budget); !errors.Is(err, decaderr.ErrUnsupported) {
-		t.Fatalf("unanchored: %v", err)
-	}
 }
 
 func TestBrakeCutterRefusesNoContactEdge(t *testing.T) {
@@ -56,14 +49,9 @@ func TestBrakeCutterRefusesNoContactEdge(t *testing.T) {
 
 func TestBrakeStaticRefusalsDoNotAllocate(t *testing.T) {
 	ctx := t.Context()
-	budget, err := NewReplayPairCutsBudget(proofbound.NewReplayTrialBudget())
-	if err != nil {
-		t.Fatal(err)
-	}
 	cutter := &brakeTriCutter{}
 	for _, run := range []func() error{
 		func() error { _, err := cutter.cutInterned(ctx, [3]int{}); return err },
-		func() error { _, err := classifyRegionReplay(ctx, CutRegion{}, nil, budget); return err },
 	} {
 		err := run()
 		if !errors.Is(err, decaderr.ErrUnsupported) {

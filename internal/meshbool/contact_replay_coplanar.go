@@ -186,7 +186,7 @@ func replayCoplanarContactHeld(ctx context.Context, ta, tb [3]r3.Vec, xa, xb [3]
 	}
 	if heldSharedOne && !zeroXpt(na) && !zeroXpt(nb) {
 		if shared, certain := replaySharedPointSeparated(ta, tb, u, v); certain {
-			out.Kind = ContactPoint
+			out.Kind, out.Coplanar = ContactPoint, true
 			out.P0, out.P1 = xa[shared], xa[shared]
 			return out, nil
 		}
@@ -209,7 +209,7 @@ func replayCoplanarContactHeld(ctx context.Context, ta, tb [3]r3.Vec, xa, xb [3]
 			return out, err
 		}
 		if ok {
-			out.Kind = ContactRegion
+			out.Kind, out.Coplanar = ContactRegion, true
 			return out, nil
 		}
 		ok, err = replaySegTriOverlapHeld(ctx, xb[i], xb[(i+1)%3], xa, u, v, meter, heldSharedOne)
@@ -217,12 +217,12 @@ func replayCoplanarContactHeld(ctx context.Context, ta, tb [3]r3.Vec, xa, xb [3]
 			return out, err
 		}
 		if ok {
-			out.Kind = ContactRegion
+			out.Kind, out.Coplanar = ContactRegion, true
 			return out, nil
 		}
 	}
 	if nb.X.Sign() == 0 && nb.Y.Sign() == 0 && nb.Z.Sign() == 0 {
-		out.Kind = ContactPoint
+		out.Kind, out.Coplanar = ContactPoint, true
 		out.P0, out.P1 = xa[0], xa[0]
 		return out, nil
 	}
@@ -236,13 +236,13 @@ func replayCoplanarContactHeld(ctx context.Context, ta, tb [3]r3.Vec, xa, xb [3]
 			return out, err
 		}
 		if ok {
-			out.Kind = ContactPoint
+			out.Kind, out.Coplanar = ContactPoint, true
 			out.P0, out.P1 = p, p
 			return out, nil
 		}
 	}
 	if na.X.Sign() == 0 && na.Y.Sign() == 0 && na.Z.Sign() == 0 {
-		out.Kind = ContactPoint
+		out.Kind, out.Coplanar = ContactPoint, true
 		out.P0, out.P1 = xb[0], xb[0]
 		return out, nil
 	}
@@ -252,7 +252,7 @@ func replayCoplanarContactHeld(ctx context.Context, ta, tb [3]r3.Vec, xa, xb [3]
 			return out, err
 		}
 		if ok {
-			out.Kind = ContactPoint
+			out.Kind, out.Coplanar = ContactPoint, true
 			out.P0, out.P1 = p, p
 			return out, nil
 		}

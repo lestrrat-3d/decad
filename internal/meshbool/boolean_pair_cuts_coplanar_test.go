@@ -165,9 +165,6 @@ func TestEdgeSide(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, EdgeGraze, side)
 	require.Equal(t, -1, inPlane)
-	_, crossing, err := EdgeCrosses(a, wall, k, top)
-	require.NoError(t, err)
-	require.False(t, crossing, "the wrapper reads a coplanar-bounded edge as a graze")
 }
 
 // TestPairCutsCoplanarPointTouchOrder pins that boxes meeting at a corner give

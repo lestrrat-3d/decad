@@ -605,6 +605,21 @@ func evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 				return Evaluation{}, err
 			}
 		}
+	} else if replay != nil && fixed == nil && !hasShifts {
+		// The bounded pass reads the same exactness, charged one work unit per
+		// facet (agent-docs/coplanar-contact-design.md §3.1).
+		if err := replay.SpendWork(ctx, uint64(len(bmA.Tris)+len(bmB.Tris))); err != nil {
+			return Evaluation{}, err
+		}
+		if err := replay.ReserveRecords(ctx, uint64(len(bmA.Tris)+len(bmB.Tris))); err != nil {
+			return Evaluation{}, err
+		}
+		if err := bmA.SetExactFacets(ma); err != nil {
+			return Evaluation{}, err
+		}
+		if err := bmB.SetExactFacets(mb); err != nil {
+			return Evaluation{}, err
+		}
 	}
 	// A restating operand's facets where the pair meets must hold within the
 	// pair tolerance; the gate reads them on the contact classification below
@@ -699,7 +714,7 @@ func evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 		if err != nil {
 			return Evaluation{}, err
 		}
-		kept, maxRim, err = meshbool.MeshBooleanReplayWithKeys(ctx, op, bmA, bmB, memo, replay, replayKeys)
+		kept, maxRim, coplanarKeys, err = meshbool.MeshBooleanReplayWithKeys(ctx, op, bmA, bmB, memo, replay, replayKeys)
 	} else {
 		var stats meshbool.Stats
 		kept, stats, err = meshbool.MeshBooleanStats(ctx, op, bmA, bmB, memo)
@@ -728,7 +743,7 @@ func evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 	}
 	var stitched *meshbool.StitchedMesh
 	if replay != nil {
-		stitched, err = meshbool.StitchFacetsReplayWithKeys(ctx, kept, replay, replayKeys)
+		stitched, err = meshbool.StitchFacetsReplayContact(ctx, kept, replay, replayKeys, coplanarKeys)
 	} else {
 		stitched, err = meshbool.StitchFacetsWith(ctx, kept, meshbool.StitchOptions{Coplanar: coplanarKeys, SimplifyPlanar: true})
 	}

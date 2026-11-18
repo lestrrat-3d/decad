@@ -69,6 +69,14 @@ func pairCuts(ctx context.Context, ma, mb *BoolMesh, memo *ContactMemo, keyOf fu
 	// refusing pass collects for the admitted pairs, edges and points.
 	cp := &coplanarPass{coplanarA: map[int][]int{}, coplanarB: map[int][]int{}, owned: map[string]struct{}{}}
 	refused := false
+	appendLive := func(side, facet int, seg Xseg) error { //nolint:unparam // the shape the bounded pass shares, whose appends can fail
+		if side == 0 {
+			cutsA[facet] = append(cutsA[facet], seg)
+		} else {
+			cutsB[facet] = append(cutsB[facet], seg)
+		}
+		return nil
+	}
 	work := 0
 	boxTree := newBoxTree(mb.Boxes)
 	candidates := make([]int, 0, 64)
@@ -88,7 +96,7 @@ func pairCuts(ctx context.Context, ma, mb *BoolMesh, memo *ContactMemo, keyOf fu
 				return ExpectedBoolean(BooleanExpectedContact, &TouchContactError{What: touchCoplanar, Contacts: coplanar})
 			}
 			if admitted {
-				return cp.admit(ma, mb, i, j, keyOf, cutsA, cutsB)
+				return cp.admit(ma, mb, i, j, keyOf, appendLive)
 			}
 			return nil
 		}
@@ -358,6 +366,12 @@ func (bm *BoolMesh) isExact(t int) bool { return bm.Exact != nil && bm.Exact[t] 
 // coplanarPass is the state of the exact coplanar pass over one pairCuts call
 // (agent-docs/coplanar-contact-design.md §3.2–§3.3).
 type coplanarPass struct {
+	// twin reads the facet across an edge, and charge meters the exact work of
+	// the bounded replay pass; both are nil for the live pass, which reads the
+	// operand's own owner table and meters nothing.
+	twin                 func(m *BoolMesh, f, k int) (int, bool, error)
+	charge               func(n uint64) error
+	reserve              func(n uint64) error
 	coplanarA, coplanarB map[int][]int
 	owned                map[string]struct{}
 	// legacyGrazes and legacyPoints are the contacts the switch-off pass would
@@ -369,27 +383,32 @@ type coplanarPass struct {
 // admit records the admitted coplanar pair (i, j): it inserts each operand's
 // patch-boundary edges, clipped to the other facet, as cuts, and owns the
 // clipped end points.
-func (cp *coplanarPass) admit(ma, mb *BoolMesh, i, j int, keyOf func(proof.Xpt) string, cutsA, cutsB map[int][]Xseg) error {
+func (cp *coplanarPass) admit(ma, mb *BoolMesh, i, j int, keyOf func(proof.Xpt) string, appendCut func(side, facet int, seg Xseg) error) error {
 	cp.coplanarA[i] = append(cp.coplanarA[i], j)
 	cp.coplanarB[j] = append(cp.coplanarB[j], i)
-	if err := cp.clipEdges(mb, j, ma, i, keyOf, cutsA); err != nil {
+	if err := cp.clipEdges(mb, j, ma, i, keyOf, func(seg Xseg) error { return appendCut(0, i, seg) }); err != nil {
 		return err
 	}
-	return cp.clipEdges(ma, i, mb, j, keyOf, cutsB)
+	return cp.clipEdges(ma, i, mb, j, keyOf, func(seg Xseg) error { return appendCut(1, j, seg) })
 }
 
 // clipEdges clips the patch-boundary edges of facet src of from to the closed
 // facet dst of into and appends each surviving piece to cuts[dst].
-func (cp *coplanarPass) clipEdges(from *BoolMesh, src int, into *BoolMesh, dst int, keyOf func(proof.Xpt) string, cuts map[int][]Xseg) error {
+func (cp *coplanarPass) clipEdges(from *BoolMesh, src int, into *BoolMesh, dst int, keyOf func(proof.Xpt) string, add func(Xseg) error) error {
 	xs, xd := XtriCorners(from, src), XtriCorners(into, dst)
 	partner := TriCorners(from, src)
 	for k := range 3 {
-		boundary, err := patchBoundaryEdge(from, src, k)
+		boundary, err := cp.patchBoundary(from, src, k)
 		if err != nil {
 			return err
 		}
 		if !boundary {
 			continue
+		}
+		if cp.charge != nil {
+			if err := cp.charge(coplanarClipWork); err != nil {
+				return err
+			}
 		}
 		piece, ok, err := CoplanarClip([2]proof.Xpt{xs[k], xs[(k+1)%3]}, xd, into.Norms[dst])
 		if err != nil {
@@ -398,23 +417,50 @@ func (cp *coplanarPass) clipEdges(from *BoolMesh, src int, into *BoolMesh, dst i
 		if !ok {
 			continue
 		}
-		cuts[dst] = append(cuts[dst], Xseg{
+		if cp.reserve != nil {
+			// A kept piece holds a cut and two owned keys.
+			if err := cp.reserve(8); err != nil {
+				return err
+			}
+		}
+		if err := add(Xseg{
 			A: piece.P0, B: piece.P1,
 			AOnEdge: piece.P0OnA, BOnEdge: piece.P1OnA,
 			Partner: partner, ViaParity: true,
-		})
+		}); err != nil {
+			return err
+		}
 		cp.owned[keyOf(piece.P0)] = struct{}{}
 		cp.owned[keyOf(piece.P1)] = struct{}{}
 	}
 	return nil
 }
 
-// patchBoundaryEdge reports whether edge k of facet f bounds a planar patch of
+// coplanarClipWork is the work a bounded pass charges for one exact clip of an
+// edge to a triangle.
+const coplanarClipWork = 512
+
+// patchBoundary is patchBoundaryEdge through the pass's own twin lookup.
+func (cp *coplanarPass) patchBoundary(m *BoolMesh, f, k int) (bool, error) {
+	return patchBoundaryEdgeBy(m, f, k, cp.twin)
+}
+
+// patchBoundaryEdgeBy reports whether edge k of facet f bounds a planar patch of
 // its operand: the facet across it is not coplanar with f. An edge between two
 // coplanar facets is a triangulation diagonal and is never inserted
 // (agent-docs/coplanar-contact-design.md §3.2).
-func patchBoundaryEdge(m *BoolMesh, f, k int) (bool, error) {
-	twin, ok := m.TwinFacet(f, k)
+func patchBoundaryEdgeBy(m *BoolMesh, f, k int, lookup func(m *BoolMesh, f, k int) (int, bool, error)) (bool, error) {
+	var twin int
+	var ok bool
+	if lookup != nil {
+		var err error
+		twin, ok, err = lookup(m, f, k)
+		if err != nil {
+			return false, err
+		}
+	} else {
+		twin, ok = m.TwinFacet(f, k)
+	}
 	if !ok {
 		return false, fmt.Errorf(`%w: a coplanar facet edge has no twin facet`, decaderr.ErrBooleanFailed)
 	}
@@ -429,6 +475,15 @@ func patchBoundaryEdge(m *BoolMesh, f, k int) (bool, error) {
 // the edge's own operand that lies in the plane, and the pair it forms with the
 // partner facet must be one the pair pass admitted. It owns the contact segment's end points.
 func (cp *coplanarPass) acceptEdge(p PairContact, a, b int, keyOf func(proof.Xpt) string) error {
+	if cp.charge != nil {
+		// Two exact keys and two owned entries.
+		if err := cp.charge(128); err != nil {
+			return err
+		}
+		if err := cp.reserve(4); err != nil {
+			return err
+		}
+	}
 	recorded := cp.coplanarA[a]
 	if !slices.Contains(recorded, b) {
 		return fmt.Errorf(`%w: an in-plane edge bounds a coplanar patch no admitted pair recorded`, decaderr.ErrBooleanFailed)

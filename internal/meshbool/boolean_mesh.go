@@ -387,14 +387,6 @@ func EdgeSide(m *BoolMesh, f, k int, partner [3]r3.Vec) ([2]int, EdgeOutcome, in
 	}
 }
 
-// EdgeCrosses is EdgeSide for a caller that does not read a coplanar patch:
-// it reports whether the edge crosses the plane, and reads an edge that bounds
-// a coplanar patch as a graze (reject-only), as the bounded replay does.
-func EdgeCrosses(m *BoolMesh, f, k int, partner [3]r3.Vec) ([2]int, bool, error) {
-	key, side, _, err := EdgeSide(m, f, k, partner)
-	return key, side == EdgeCrossing, err
-}
-
 // BlockedBetween reports whether the mesh edge two adjacent facets share
 // carries an in-plane CROSSING contact. The other operand's boundary passes
 // exactly along that edge, so the two facets sit on opposite sides of it: they
@@ -529,7 +521,7 @@ func keepSideWith(ctx context.Context, m, other *BoolMesh, cuts map[int][]Xseg, 
 			cornerKeys := [3]string{keyOf(m.Xverts[corners[0]]), keyOf(m.Xverts[corners[1]]), keyOf(m.Xverts[corners[2]])}
 			for _, reg := range result.regions {
 				if partners := opts.Coplanar[i]; len(partners) > 0 {
-					cover, err := coverOf(other, partners, reg.Probe)
+					cover, err := coverOf(other, partners, reg.Probe, nil)
 					if err != nil {
 						return nil, err
 					}

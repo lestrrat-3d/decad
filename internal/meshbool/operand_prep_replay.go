@@ -113,29 +113,46 @@ func (bm *BoolMesh) ensureReplayOwner(ctx context.Context, b *proofbound.ReplayB
 	return nil
 }
 
-func edgeCrossesReplay(ctx context.Context, m *BoolMesh, f, k int, other *BoolMesh, partner int,
-	b *proofbound.ReplayBudget) ([2]int, bool, error) {
+// edgeSideReplay is EdgeSide on the replay meter: edge k of facet f lies in
+// the plane of facet partner of other, and the two apex signs read the facet's
+// own side and its twin's.
+func edgeSideReplay(ctx context.Context, m *BoolMesh, f, k int, other *BoolMesh, partner int,
+	b *proofbound.ReplayBudget) ([2]int, EdgeOutcome, int, error) {
 	if err := m.ensureReplayOwner(ctx, b); err != nil {
-		return [2]int{}, false, err
+		return [2]int{}, EdgeGraze, -1, err
 	}
 	tri := m.Tris[f]
 	u, v := tri[k], tri[(k+1)%3]
 	key := [2]int{min(u, v), max(u, v)}
 	twin, ok, err := m.twinFacetReplay(ctx, f, k)
 	if err != nil {
-		return key, false, err
+		return key, EdgeGraze, -1, err
 	}
 	if !ok {
-		return key, false, errReplayAnInPlaneFacetEdgeHasNo
+		return key, EdgeGraze, -1, errReplayAnInPlaneFacetEdgeHasNo
 	}
 	tt, pt := m.Tris[twin], other.Tris[partner]
 	a, c := tri[0]+tri[1]+tri[2]-u-v, tt[0]+tt[1]+tt[2]-u-v
 	s0, err := proof.ReplayOrientSignPrepared(ctx, other.Verts[pt[0]], other.Verts[pt[1]], other.Verts[pt[2]], m.Verts[a], other.Xverts[pt[0]], m.Xverts[a], other.Norms[partner], b)
 	if err != nil {
-		return key, false, err
+		return key, EdgeGraze, -1, err
 	}
 	s1, err := proof.ReplayOrientSignPrepared(ctx, other.Verts[pt[0]], other.Verts[pt[1]], other.Verts[pt[2]], m.Verts[c], other.Xverts[pt[0]], m.Xverts[c], other.Norms[partner], b)
-	return key, s0*s1 < 0, err
+	if err != nil {
+		return key, EdgeGraze, -1, err
+	}
+	switch {
+	case s0 == 0 && s1 == 0:
+		return key, EdgeGraze, -1, errReplayAnInPlaneFacetEdgeHasBoth
+	case s0 == 0:
+		return key, EdgeCoplanarBounded, f, nil
+	case s1 == 0:
+		return key, EdgeCoplanarBounded, twin, nil
+	case s0*s1 < 0:
+		return key, EdgeCrossing, -1, nil
+	default:
+		return key, EdgeGraze, -1, nil
+	}
 }
 
 func facetAdjacencyReplay(ctx context.Context, m *BoolMesh, b *proofbound.ReplayBudget) ([][]int, error) {

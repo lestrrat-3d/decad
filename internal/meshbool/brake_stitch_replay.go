@@ -20,7 +20,7 @@ func stitchFacetsContextBudgeted(ctx context.Context, kept []KeptFacet, shared *
 	if shared == nil {
 		return nil, errReplayBoundedStitchNeedsASharedBudget
 	}
-	return stitchFacetsContext(ctx, kept, shared, brakeReplayCutterLimit)
+	return stitchFacetsContext(ctx, kept, shared, brakeReplayCutterLimit, nil)
 }
 
 // StitchFacetsReplay applies the existing bounded stitch to the shared replay counter.
@@ -34,6 +34,13 @@ func StitchFacetsReplay(ctx context.Context, kept []KeptFacet, replay *proofboun
 
 // StitchFacetsReplayWithKeys reuses the Boolean's authenticated key memo.
 func StitchFacetsReplayWithKeys(ctx context.Context, kept []KeptFacet, replay *proofbound.ReplayBudget, keys *ReplayKeys) (*StitchedMesh, error) {
+	return StitchFacetsReplayContact(ctx, kept, replay, keys, nil)
+}
+
+// StitchFacetsReplayContact is StitchFacetsReplayWithKeys that also audits the
+// stitched mesh for a contact pinch, as the live stitch does when the coplanar
+// pass accepted a point (agent-docs/coplanar-contact-design.md §5).
+func StitchFacetsReplayContact(ctx context.Context, kept []KeptFacet, replay *proofbound.ReplayBudget, keys *ReplayKeys, coplanar *ContactKeys) (*StitchedMesh, error) {
 	if replay == nil {
 		return nil, errReplayMissingStitchReplayBudget
 	}
@@ -44,6 +51,9 @@ func StitchFacetsReplayWithKeys(ctx context.Context, kept []KeptFacet, replay *p
 		return nil, errReplayMismatchedReplayKeys
 	}
 	budget := &PairCutsBudget{replay: replay, keys: keys}
+	if coplanar != nil {
+		return stitchFacetsContext(ctx, kept, budget, brakeReplayCutterLimit, coplanar)
+	}
 	return stitchFacetsContextBudgeted(ctx, kept, budget)
 }
 
@@ -58,7 +68,7 @@ func reserveBrakeStitchFixed(ctx context.Context, replay *proofbound.ReplayBudge
 	return replay.ReserveArray(ctx, 1, uint64(unsafe.Sizeof(PairCutsBudget{}))+uint64(unsafe.Sizeof(proofbound.WorkBudget{}))+uint64(unsafe.Sizeof(StitchedMesh{}))+512)
 }
 
-func stitchFacetsContext(ctx context.Context, kept []KeptFacet, shared *PairCutsBudget, maxFacets int) (*StitchedMesh, error) {
+func stitchFacetsContext(ctx context.Context, kept []KeptFacet, shared *PairCutsBudget, maxFacets int, coplanar *ContactKeys) (*StitchedMesh, error) {
 	var work *proofbound.WorkBudget
 	if shared == nil {
 		work = proofbound.NewWorkBudget(ctx)
@@ -236,6 +246,23 @@ func stitchFacetsContext(ctx context.Context, kept []KeptFacet, shared *PairCuts
 		}
 	}
 
+	if coplanar != nil && shared != nil {
+		// The manifold audit reads every edge and vertex fan once.
+		if err := shared.ReserveRecords(ctx, 12*uint64(len(tris))+4*uint64(len(xverts))); err != nil {
+			return nil, err
+		}
+		if shared.replay != nil {
+			if err := shared.ReserveBytes(ctx, 6*uint64(len(tris))+4*uint64(len(xverts)), uint64(unsafe.Sizeof([2]int{}))+16); err != nil {
+				return nil, err
+			}
+		}
+		if err := shared.SpendWork(ctx, 24*uint64(len(tris))+8*uint64(len(xverts))); err != nil {
+			return nil, err
+		}
+		if err := auditContactManifold(tris, xverts, coplanar); err != nil {
+			return nil, err
+		}
+	}
 	if shared != nil && shared.replay != nil {
 		// The planar simplification of agent-docs/coplanar-contact-design.md §7,
 		// on the replay meter. The live stitch flips the needles and folds the
