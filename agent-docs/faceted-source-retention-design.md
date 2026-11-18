@@ -1,11 +1,11 @@
 # Faceted Source Retention Design
 
 A mesh Boolean result stores, for each of its faces, the analytic surface of
-the operand face it came from. Today every such face reads `Faceted`, so a
-filleted cube that a tilted tool drilled reports its six planes and four
-blend cylinders as polygons. This design makes each face that descends from
-one operand face publish that face's surface, and lets the readers that need
-an exact plane or a bounded normal use it. Companion to
+the operand face it came from. Without retention such a face reads `Faceted`, so a
+filleted cube that a tilted tool drilled would report its six planes and four
+blend cylinders as polygons. Each face that descends from one operand face
+publishes that face's surface, and the readers that need an exact plane or a
+bounded normal use it. Companion to
 `agent-docs/evaluator-design.md` §9 (the mesh Boolean),
 `agent-docs/faceted-vertex-bounds-design.md` ("vertex bounds §N": per-vertex
 displacement) and `agent-docs/payload-verification-design.md` §5 ("payload §N": the
@@ -13,13 +13,12 @@ faceted boundary certificate this design supplies the source identity for).
 "core §N" is `agent-docs/api-design.md`.
 
 No public type changes. `Face.Surface()`, `Face.NormalAt`, selectors and the
-body-relative stops report a different, tighter answer on faces they read
-`Faceted` or refuse on today (§6).
+body-relative stops give a tighter answer on faces that would read `Faceted` or be
+refused without a retained tag (§6).
 
 ## 1. Problem
 
-Probe on `main` on 2026-10-20: a 40×20×20 box, four lateral edges filleted
-at r=3, then the next operation.
+A 40×20×20 box with four lateral edges filleted at r=3, then the next operation.
 
 | Row | Next operation | Path | Result faces |
 |---|---|---|---|
@@ -28,17 +27,15 @@ at r=3, then the next operation.
 | P3 | Same tool rotated 20° about z | mesh | 12 faces, all `Faceted` |
 | P4 | `Fillet` of the four x-parallel cap edges | `Fillet` on the filleted prism | `ErrUnsupported` (brep-modify SB7: the end face is the blend cylinder) |
 
-P1 shows the reachable ideal: the part is still an analytic solid after a
+P1 shows the ideal: the part is still an analytic solid after a
 drill, and a later hole or fillet is computed against the true cube. P3 shows
-the loss. Of its 12 faces, ten come from the filleted box and two from the
-tool's exact `Cylinder`. All 12 lose
-their identity because `boolean_mesh.go` builds each source group with
-`Origins` and `Planar` only, and `internal/facetedrecord/assemble.go` assigns
-`surfacegeom.Faceted` to every face whose group has no `Surface`. A group's
-`Surface` field exists, and structural builders (point-loft cone trims, the
-smooth loft) already fill it; the generic Boolean never does.
+the loss without retention. Of its 12 faces, ten come from the filleted box and two from the
+tool's exact `Cylinder`. `internal/facetedrecord/assemble.go` assigns
+`surfacegeom.Faceted` to every face whose group has no `Surface`, so a group
+that carries no tag loses its face's identity. `booleaneval.sourceGroup`
+(`internal/booleaneval/eval_mesh.go`) fills the tag from the operand face (§3.1).
 
-What the loss costs a caller:
+A face that reads `Faceted` costs a caller:
 
 1. `Face.Surface()` is `Faceted`, `NormalAt` is `ErrUnsupported`, and
    `Facing`/`ParallelTo`-style selectors cannot read the plane normal of a
@@ -97,7 +94,7 @@ recorded it, not because the polygons happen to sit near it.
 
 ### 3.1 What a group carries
 
-`boolean_mesh.go` fills each `facetGroup` from its operand face:
+`booleaneval.sourceGroup` (`internal/booleaneval/eval_mesh.go`) fills each `facetedrecord.Group` from its operand face:
 
 | Field | Value |
 |---|---|
@@ -124,7 +121,7 @@ operand's face, so a tag survives a chain.
 ### 3.2 Admission
 
 A group takes the tag only when all of these hold; a group that fails stays
-`Faceted`, as now, and the Boolean does not refuse.
+`Faceted`, and the Boolean does not refuse.
 
 | # | Condition | Why |
 |---|---|---|
@@ -152,7 +149,7 @@ curve lies within `P/2` of the true vertex `v*` of any `v`, along the curve and 
 `dist(v, T)` is read exactly in rationals from the held position and `T`'s frame normal and origin, and every sum and
 product rounds up. The result's patch is a piece of the true operand patch, so `E` bounds it too, and §11's slab and
 every reader of charged-window-chamfer §4 read the group as they read an oblique wall. A flat patch's face that fails
-any premise (a stamp at its cap, two loops, a length or bound that is not finite) keeps no tag, as before.
+any premise (a stamp at its cap, two loops, a length or bound that is not finite) keeps no tag.
 
 A4 is evaluated per built face, not per group: the group's patches may carry
 different `δ_f`. A patch that fails it reads `Faceted`, and the group's other
@@ -297,7 +294,7 @@ does with a retained tag; the audit in §7 keeps the table complete.
 
 | Reader | Reads | With a retained tag |
 |---|---|---|
-| `Face.Surface()`, `surfacegeom.SurfaceTypeName`, `decadtest` formatting | the tag | reports `Plane`/`Cylinder`/`Sphere` instead of `Faceted`; examples and tests that print `faceted` for these faces change (§8) |
+| `Face.Surface()`, `surfacegeom.SurfaceTypeName`, `decadtest` formatting | the tag | reports `Plane`/`Cylinder`/`Sphere` instead of `Faceted`; examples and tests that print the kind use the retained kind (§8) |
 | `Face.NormalAt` | tag + `NormalBound` | answers with the bound of §3.3 instead of `ErrUnsupported` |
 | `internal/selectorquery/topo_views.go` planar and cylindrical views | the tag | a flat retained face matches `Facing`/`ParallelTo` by its plane normal, signed by `Reversed` |
 | `internal/extent/to_face.go`, `angular_stop.go` | `Plane`, `NormalBound == 0`, `CapRecord`, `HasAxialDelta` | admits a retained `Plane` whose group carried `CapRecord` and `NormalBound == 0`; a float-placed or scaled body drops the record, so it refuses as before; an exact rotation copy keeps it on a plane the rotation fixes (a cap normal to a rotation about z) |
@@ -306,7 +303,7 @@ does with a retained tag; the audit in §7 keeps the table complete.
 | `internal/contactfaceted/floor.go` `AxisSupportAtPose` | `HeldPlanar && Kind == Faceted` | **must change.** The predicate drops every retained plane from the support proof. It becomes `HeldPlanar && face is held geometry`, where a new `topo.Face.RetainedTag` flag marks a tag on a faceted payload (§5) |
 | `internal/contactbox/`, `internal/contactround/`, `internal/contactruling/`, `internal/contactruling/placed/` | `Surface.(Plane/Cylinder/Sphere)` | gated by payload class (`prismPayload`, source cylinder) before they read a face; a faceted payload never reaches them. §7 pins this |
 | `internal/clearance/stitch_carriers.go`, `internal/stackedrecord/mesh.go` | `Plane` | gated by `stitchPayload` / `stackedPrismPayload`; unreachable from a faceted payload |
-| `export/step_analytic.go` `supportsAnalyticSTEP` | `Plane`/`Cylinder` plus each loop's edge curves | a retained face's edges are `FacetedCurve`, which the loop check refuses, so the whole body takes the faceted writer as now |
+| `export/step_analytic.go` `supportsAnalyticSTEP` | `Plane`/`Cylinder` plus each loop's edge curves | a retained face's edges are `FacetedCurve`, which the loop check refuses, so the whole body takes the faceted writer |
 | `section.go` cardinal cone section | two faces, one `Cone`, one `Plane` | also requires the revolve payload record; a faceted payload never matches |
 | `internal/boundaryaudit/audit.go` | `KindFaceted` for one-face loop-less images | A3 keeps a loop-less `Sphere` retained face out |
 
@@ -336,8 +333,8 @@ For row P3 of §1, with this design:
 - `Face.NormalAt(p)` on a cut plane returns the plane normal with bound 0
   plus the tag's arithmetic allowance. On a blend cylinder it returns the
   radial direction with bound `2·δ_f / r` plus the allowance.
-- From increment 2, an `Extrude` with a `ToFace` stop at an untouched planar
-  face of the Boolean result builds, where today it refuses (§1 item 2).
+- An `Extrude` with a `ToFace` stop at an untouched planar
+  face of the Boolean result builds; a `Faceted` face is refused (§1 item 2).
 - A selector `Faces(Facing(+z))` returns the top face by its plane normal.
 
 Two readings change that are not improvements. A retained face no longer
@@ -372,7 +369,7 @@ the clause named.
 | Placed analytic operand (§3.5) | `PlacedBuiltDeparture` states zero for a cylinder moved by an exact translation, at least `2·2·2^-47/R` for one whose moved origin rounds by `2^-47`, a positive charge for a rotation, no bound for a twin of another variant or radius, and zero for a cone only as its exact image; a rounding along a cylinder's axis or within a plane states zero and one along the normal or across the axis a positive charge | return zero unconditionally: the rounding, rotation, mismatch and cone cases fail; charge the whole origin gap (§3.4): the along-axis and in-plane cases fail |
 | Rounding that leaves the surface in place (§3.4) | a Ø6 pin sketched at z = −30 and moved by (0, 0, 0.1) bores the plate with both mouths `Circle3`, and its top mouth takes a fillet and a chamfer by the hole-mouth volumes; a box tool sketched at z = 10 and moved by (0, 0.1, 0) steps the plate at x = 30, and the step's concave and convex edges each take a fillet (`apitest/faceted_retained_blend_test.go`); the saddle chamfer's shaft moved by (0.1, 0.2, 0.3) rounds only along both axes and builds | charge the whole origin gap: the mouths read `FacetedCurve` and every blend refuses SR1 |
 | Reader audit | a test lists every non-test file under the module that matches `Surface\.\(surfacegeom\.` or `Surface\(\)\.\(`, and fails on a file this document's §4 does not name | add a reader without a §4 row: the audit fails |
-| Existing assertions | the 23 `decad.Faceted` / `KindFaceted` assertions under `apitest/` and `examples/` (for example `apitest/mirror_test.go`, whose premise is a Boolean wall that carries no `Plane`) are rewritten to the retained kind where §3.2 admits the face, and kept where it declines | run the suite before the change; a test that still passes after it, on a face §3.2 admits, asserts the wrong thing |
+| Existing assertions | the `decad.Faceted` / `KindFaceted` assertions under `apitest/` and `examples/` (for example `apitest/mirror_test.go`, whose premise is a Boolean wall that carries no `Plane`) are rewritten to the retained kind where §3.2 admits the face, and kept where it declines | a test that still asserts `Faceted` on a face §3.2 admits asserts the wrong thing |
 
 Tests do not pin a bound or a volume by literal: float bounds are
 architecture-specific (FMA differs between amd64 and arm64), so tests
@@ -383,23 +380,23 @@ expression) and not a printed number.
 
 | Area | Change |
 |---|---|
-| `boolean_mesh.go` | fill `facetGroup.Surface`, `Retained`, `Reversed`, `NormalBound` from the operand face (§3.1, §3.2) |
+| `internal/booleaneval/eval_mesh.go` (`sourceGroup`) | fill `Surface`, `Retained`, `Reversed`, `NormalBound` from the operand face (§3.1, §3.2) |
 | `internal/facetedrecord/assemble.go` | compute `NormalBound_f` per built face, apply A4, set `RetainedTag` |
 | `internal/facetedrecord/place_tag.go`, `placed.go` | placement rule of §3.4 |
 | `internal/booleaneval/placed_operand.go`, `internal/facetedrecord/place_tag.go` (`PlacedBuiltDeparture`) | placed analytic operand charge of §3.5 |
 | `internal/topo/face.go` | `RetainedTag` |
 | `internal/contactfaceted/floor.go` | predicate of §4 |
-| `internal/facetedrecord/edge_curve.go`, `topology.go`, `internal/topo/edge.go` | edge curves and their witness flag (§10, increment 3) |
-| `internal/meshbool/plane_slab.go`, `internal/booleaneval/retained_plane.go` | slab bound of a retained plane facet (§11, increment 5) |
+| `internal/facetedrecord/edge_curve.go`, `topology.go`, `internal/topo/edge.go` | edge curves and their witness flag (§10) |
+| `internal/meshbool/plane_slab.go`, `internal/booleaneval/retained_plane.go` | slab bound of a retained plane facet (§11) |
 | `internal/booleaneval/chorded_loft_plane.go` | states a chorded loft wall's displacement (§11) |
 | `mirror.go`, `internal/extent` | admit a retained `Plane` per §4 |
-| `internal/selectorquery/topo_views.go` | no code change expected; the existing views read the tag |
+| `internal/selectorquery/topo_views.go` | none; the existing views read the tag |
 | Tests | the `Faceted` assertions of §7's last row |
 | Docs | `agent-docs/evaluator-design.md` §9 (group fields), `agent-docs/api-design.md` §6.1 (the tagged-stand-in paragraph), `agent-docs/faceted-vertex-bounds-design.md` §4.3 (placement), `agent-docs/payload-verification-design.md` §5.2 and §13 (the source identity half of the faceted certificate), `agent-docs/missing-features.md` (the row for `NormalAt` on a faceted face, if present), and this document's row in `agent-docs/layout/design-docs.md` |
 
 ## 9. Increments
 
-Increments 1 to 6 are in. Nothing in 1–4 depends on 5 or 6.
+All six increments are in. Increments 1–4 do not depend on 5 or 6.
 
 | # | Lands | Gate to start the next |
 |---|---|---|
@@ -407,11 +404,10 @@ Increments 1 to 6 are in. Nothing in 1–4 depends on 5 or 6.
 | 2 | `Cone` and `Torus`, faces with a denoted patch (revolved walls and caps), and `ToFace` / `MirrorFace` on a retained plane | a revolved shaft keeps its cone, cylinder and caps through a cut |
 | 3 | §10: `Line3`, `Circle3` and `Arc3` on an edge between two retained faces, the `Curve` reader audit and the Boolean-rim witness flag | the P3 fixture's edges publish their curves and the STEP test passes |
 | 4 | Placement rule of §3.4 | a rotated copy of P3 reports a finite `NormalAt` bound below 2 |
-| 5 | A later mesh Boolean charges a retained `Plane` facet's slab half-width by its measured distance from `T` instead of `β` (§11) | a second cut beside the first hole, previously refused by the held-mesh gate, builds with rim bounds below the first cut's |
-
+| 5 | A later mesh Boolean charges a retained `Plane` facet's slab half-width by its measured distance from `T` instead of `β` (§11) | a second cut beside the first hole, which the held-mesh gate refuses with `β`, builds with rim bounds below the first cut's |
 | 6 | §10.5–§10.6: `Ellipse3` on an oblique `Plane`/`Cylinder` rim, with its sweep rule and the whole-turn convention | the `RetainedEdgeCurve` unit tests publish the oblique ellipse |
 
-Increments 1–4 only publish what Claim R and Claim E already prove (increment 4 adds the placement charge of §3.4).
+Increments 1–4 publish what Claim R and Claim E prove (increment 4 adds the placement charge of §3.4).
 Increment 5 uses the tag to tighten later arithmetic; its proof is Claim S in §11.
 
 ## 10. Edge curves
@@ -485,7 +481,7 @@ rim on a curved source still refuses `Length`.
 `topo.Edge.RetainedCurve` marks the edge and `ChainBound` keeps the chord
 bound the curve replaced. Three modify routes take a `FacetedCurve` as the
 witness that an edge is a Boolean rim (`internal/brepmodify/prism_union.go`,
-`oblique_boss_fillet.go`, `cross_cylinder_bore.go`); each accepts a retained
+`internal/obliqueboss/fillet.go`, `internal/crossbore/mouth.go`); each accepts a retained
 curve in its place.
 
 ### 10.3 Readers
@@ -497,7 +493,7 @@ The curve readers split the same way the surface readers did in §4.
 | `internal/selectorquery/topo_views.go` | `ParallelTo`, `Circular` and `EndpointAt` match a retained edge by its curve |
 | `internal/modifyselect/edge_context.go` | a refusal message renders a retained closed rim as `closed circle through (p), centre (c), radius r mm` |
 | `export/step_analytic.go` | `supportsAnalyticSTEP` requires the circle seams of a cylinder wall to align exactly. Held rim vertices do not, so a retained body still writes one planar face per triangle |
-| `internal/brepmodify/prism_union.go`, `oblique_boss_fillet.go`, `cross_cylinder_bore.go` | accept `RetainedCurve` as the Boolean-rim witness (§10.2) |
+| `internal/brepmodify/prism_union.go`, `internal/obliqueboss/fillet.go`, `internal/crossbore/mouth.go` | accept `RetainedCurve` as the Boolean-rim witness (§10.2) |
 | `internal/brepmodify`, `internal/modifyselect` | read the curve after a payload-class gate. A `facetedPayload` stays `ErrUnsupported` at modify S3/SX9, so the new curve opens no modify route by itself |
 | `internal/extent/angular_stop.go`, `patch_body.go`, `internal/clearance/edge_topology.go`, `internal/gatediameter/body_gate.go` | each is gated by its own payload class |
 | `Edge.Length`, `LengthBound` | unchanged (§10.2) |
@@ -589,10 +585,9 @@ result whose published bound `FacetBound` exceeds the pair's chord tolerance
 (`agent-docs/faceted-vertex-bounds-design.md` §5), and composes each rim vertex it
 creates from the two contacting facets' bounds (`meshbool.RimBound`). A planar
 facet next to an earlier cut's rim has a corner on that rim, so it carries the
-rim's bound, though its three corners lie in the plane. The probe of
-2026-10-20 ran 374 second cuts after the P3 drill. The held-mesh gate refused
-319 of them, and 287 of those refusals were on facets of a retained `Plane`.
-The hidden-tangency pre-pass (`RefuseUndecidableProximity`) refused none.
+rim's bound, though its three corners lie in the plane. In second cuts after the P3 drill
+the held-mesh gate refuses mostly on facets of a retained `Plane`; the
+hidden-tangency pre-pass (`RefuseUndecidableProximity`) does not.
 
 **What RimBound reads.** Its proof (`agent-docs/faceted-vertex-bounds-design.md`
 §3.2) needs only that the true piece of each facet lies within a slab about the
@@ -679,8 +674,7 @@ builds.
 held-mesh gate (`RefuseCoarseHeldContact`) and in `RimBound`. A vertex the
 cutter places on a facet's interior keeps `β`, because its true boundary point
 may sit anywhere in the plane within `β`. A curved retained group has no such
-split, so a cylinder or sphere keeps `β`. In the probe, the 32 refusals whose
-worst facet was a cylinder stay refused.
+split, so a cylinder or sphere keeps `β`, and a refusal whose worst facet is a cylinder stays.
 
 ## 12. Rejected shortcuts
 
