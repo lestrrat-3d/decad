@@ -3,8 +3,8 @@
 Companion to `agent-docs/loft-design.md` ("loft §N"), which owns `Loft`'s pairing, construction, refusals and
 consumers. This document owns four things loft does not state: the chorded volume residual as a per-cell wall
 leg plus a skirt leg (§2), the centroid bound in shift form (§3), the chord target read from the section's own
-feature size with bisection on the matched departure (§5), and the crossing audit as a sweep over wall pairs
-plus one exact proof per cap (§6). It also fixes the shape of every resource ceiling a chorded loft meets (§7).
+feature size with bisection on the matched departure (§5), and the crossing audit as a box-overlap enumeration
+over wall pairs plus one exact proof per cap (§6). It also fixes the shape of every resource ceiling a chorded loft meets (§7).
 Loft stays the owner of each term it names (§5.2, §6, §8, §8.1, Table S); §12 lists the loft sections that
 read from here.
 
@@ -17,19 +17,19 @@ Router (navigation, not authority):
 | the centroid bound as a shift of the held centroid | §3 |
 | `Area`'s per-cell cap tube | §4 |
 | the chord target, its constant, and bisection on the matched departure | §5 |
-| the audit: sweep enumeration, wall-wall pairs, the per-cap family proof | §6 |
+| the audit: box-overlap enumeration, wall-wall pairs, the per-cap family proof | §6 |
 | the ceilings R7, S15, S8 and the reconstruction limit, and the sketch hand-off | §7 |
 | required tests | §8 |
-| the PR split (now the map of where the code lives) | §9 |
+| where each piece of code lives | §9 |
 | do not do this | §10 |
 | open questions, each settled | §11 |
-| which loft sections each PR edits | §12 |
+| which loft sections read from this document | §12 |
 
-Every number below comes from the probe `.tmp/zz_probe_gear_measure_internal_test.go.txt` (repo root,
-untracked scratch): helical spur gears, module 2, 20° pressure angle, 10 mm face, 20° helix twist, 5 fit
-points per Tier A flank, one tooth (`toothZ`) or the full outline (`zZ`), built with every ceiling lifted so the
-bounds themselves can be read. The prototype behind the "new" columns is `.tmp/loft-gear-bounds-proto.diff`
-with its logs in `.tmp/loft-gear-bounds-logs/`.
+Every measured number below is a dated measurement from a probe that is no longer in the tree, so no test
+reproduces it. The probe built helical spur gears, module 2, 20° pressure angle, 10 mm face, 20° helix twist,
+5 fit points per Tier A flank, as one tooth (`tooth8`, `tooth20`, `tooth40`) or the full outline (`z8`, `z20`,
+`z40`), with every ceiling lifted so the bounds themselves could be read. "Earlier" columns read the bounds
+this design replaced; "new" and "now" columns read the bounds described here.
 
 ## 1. Measured problem
 
@@ -199,7 +199,7 @@ capAreaExcess = Σ_caps Σ_cells ( productUpper(2·cellMatched_k, arcLenUpper_k)
 ```
 
 The sum runs over the same cells `ComputeLoftChordedAllow` walks; `π⁺` is `nextafter(π, +Inf)`.
-`sectionDisplacementArea`'s argument is read per chord with that chord's own departure instead of the
+`sectionDisplacementArea`'s argument (`internal/stackedrecord/build.go`) is read per chord with that chord's own departure instead of the
 build-wide maximum: a point of the symmetric difference between the held cap polygon and the denoted region
 lies within the matched departure of SOME chord point, and a chord's neighbourhood is a rectangle of that
 half-width plus two half-disks. Measured: 0.0166 → 0.0079 (tooth8), 0.23 → 0.14 (z8), 5.0 → 2.6 (z40,
@@ -276,23 +276,29 @@ stations, Area 5.4e-4, Volume 2.6e-4, build 8.0 s (earlier audit 4.5 s).
 ## 6. The audit: sweep enumeration, wall-wall pairs, one proof per cap
 
 Loft §6's audit keeps its verdict rule, its per-pair classification, its two reject-only tiers and its three
-certificates. This section changes how pairs are ENUMERATED, which pairs are tested, and how S8 counts.
+certificates. This section states how pairs are ENUMERATED, which pairs are tested, and how S8 counts.
 
-**Enumeration is sweep-and-prune over the triangles' boxes.** Sort the triangle indices by their box's lower
-bound on the axis of largest total extent (ties by index), sweep, and emit every pair whose boxes overlap on
-all three axes. Boxes are closed intervals: boxes that touch on a face, edge or corner overlap, as
+**Enumeration emits every pair whose boxes overlap, through the cheapest of three box scans.** The scans are
+the sweep over the sorted boxes, a uniform grid and a balanced box tree (`loft_audit_grid.go`,
+`loft_audit_tree.go`; `loft_audit_group_tree.go` serves audits with proven projected patches). `newPairScan`
+counts each scan's work before any runs and takes the lowest; a tie keeps the earlier scan. All three report
+exactly the box-overlap pairs, each once, so the candidate set, its test order and every verdict are the same
+whichever runs. The sweep sorts the triangle indices by their box's lower bound on the axis of largest total
+extent (ties by index), walks that order, and emits every pair whose boxes overlap on all three axes. Boxes
+are closed intervals: boxes that touch on a face, edge or corner overlap, as
 `BoxesOverlap`'s `<=` decides. A pair of disjoint boxes shares no point (loft §6's box argument), so the
 enumerated set contains every touching pair, and a pair sharing a vertex has overlapping boxes, so every pair
 Table C expects to touch is enumerated. Candidates are sorted lexicographically before testing, so the first
-refused pair is the same `(i, j)` the zero-shortcut reference loop reports. Both sweep passes are float
-comparisons only; the sort is deterministic.
+refused pair is the same `(i, j)` the zero-shortcut reference loop reports. Every scan is float comparisons
+only, and the sort is deterministic.
 
 **Only wall-wall candidates are tested pairwise.** Each is decided exactly (box tier already passed;
 `LoftPlaneSeparated`; certificates; exact classification). The two caps are decided by one proof each, over
 exact signs alone:
 
 Let `C` be one cap's triangles, `L` its polygon loops as vertex-index cycles (the cap's `vIdx` or `wIdx`), `O`
-the other cap's vertices, and `Π` the exact plane of `C`'s first triangle with normal `n`.
+the other cap's vertices together with `LoftAuditStructure.Interior` (the rings of a banded loft's interior
+sections; nil for a two-ring loft), and `Π` the exact plane of `C`'s first triangle with normal `n`.
 
 - **(s)** the index structure is the one assembly builds: loops of at least three vertices, no index repeated
   across `L` and `O`, no vertex of `C` in `O` and no vertex of the other cap in `L`, every wall triangle with
@@ -337,13 +343,16 @@ refusal by `O(F log² F + ceiling)`. `F` itself is refused past `8·8192 − 8` 
 any exact lift (§7). The budget steps once per tested pair.
 
 **Entry points.** `LoftCrossingAuditStructured(budget, verts, tris, walls, capStartCount, loops0, loops1)` is
-the loft's (`loftrecord.Build` calls it with the assembly's `Walls`, `CapStartCount`, `VIdx`, `WIdx`). The
-generic `LoftCrossingAudit(budget, verts, tris)` serves every other caller (`internal/sweepmitre/build.go`)
-with the box enumeration and pairwise testing of every candidate. `LoftAuditShortcuts` has `Sweep` and
-`CapProof` fields; the zero value is the reference path (every pair of every triangle through the exact
-classification) that every test compares verdicts against.
+the loft's (`loftrecord.Build` calls it with the assembly's `Walls`, `CapStartCount`, `VIdx`, `WIdx`).
+`LoftCrossingAuditBanded` is the same audit over a `LoftAuditStructure` that carries `Interior` rings
+(`internal/loftmirror/union.go`). The generic `LoftCrossingAudit(budget, verts, tris)` serves every other caller
+(for example `internal/sweepmitre/build.go`) with the box enumeration and pairwise testing of every candidate.
+`LoftAuditShortcuts` has the fields `BroadPhase`, `Certificates`, `Sweep`, `CapProof` and `ExactInput`
+(`ExactInput` disables the float-only filters). The zero value is the reference path (every pair of every
+triangle through the exact classification) that every test compares verdicts against; the generic entry sets
+`BroadPhase`, `Certificates` and `Sweep`, and the structured entry sets those three and `CapProof`.
 
-Measured on the probe (prototype target):
+Dated measurement from the probe (prototype target):
 
 | Case | F | all pairs | box candidates | wall-wall (no shared vertex) | wall-cap | cap-cap | earlier audit | pairwise over all candidates | wall-wall pairs + cap proofs |
 |---|---|---|---|---|---|---|---|---|---|
@@ -352,7 +361,7 @@ Measured on the probe (prototype target):
 | z20 | 5116 | 13.1 M | 886 K | 88 K (83 K) | 377 K | 421 K | 3.11 s | 2.71 s | 48 + 9 ms |
 | z40 | 7836 | 30.7 M | 2.15 M | 96 K (88 K) | 884 K | 1.17 M | 9.04 s | 9.03 s | 56 + 15 ms |
 
-The sweep itself costs 1.6 ms (tooth8) to 276 ms (z40). A sweep alone buys nothing: every wall triangle has a
+The sweep scan itself cost 1.6 ms (tooth8) to 276 ms (z40). A sweep alone buys nothing: every wall triangle has a
 vertex on each cap plane, every ear-clipped cap sliver spans the section, and `LoftPlaneSeparated`'s float
 filter cannot certify a determinant that is exactly zero, so 41 % of the earlier audit's CPU at z40 is the
 exact lift (`XptOf` under `OrientSign`) inside that tier. The cap proofs remove the cost: 25× to 130× on the
@@ -372,27 +381,26 @@ paired-segment and chorded-pair counts.
 
 The certified fit-spline fillet and centered-bore Cut each resolve the section for their own contact or
 containment proof, then integrate its area and rebuild the loft on the same counter. They may use twice the
-ordinary station-scaled R7 allowance, at most `1 << 27`, after the original public Loft authenticated both
+ordinary station-scaled R7 allowance (`loftrecord.Payload.RewriteWorkLimit`), at most `1 << 27`, after the original public Loft authenticated both
 profiles. Ordinary Loft, other Cut paths, and detached records keep their existing ceilings.
 
 The reconstruction ceiling is decad's model of sketch's quadratic arranger. A public Loft may raise only its
 private per-profile counters after both Sketch profiles pass the seam. Its certified fillet, bore and
 placement rewrites carry that provenance to their fresh counters. Standalone record validation and public
 moment methods keep the `1 << 28` ceiling. The larger cap still charges the global chord count before any
-actual reconstruction and refuses above its hard limit. The hand-off
-`../sketch/.tmp/decad-handoff-arrangement-chords.md` asks sketch for a sub-quadratic arrangement and for a
-chord count that scales with a curve's size rather than `16 · controls` with a floor of 64, with the gear as
-the reference case.
+actual reconstruction and refuses above its hard limit. decad needs
+two things from sketch to lower this cost: a sub-quadratic arrangement, and a chord count that scales with a
+curve's size rather than `16 · controls` with a floor of 64. The gear is the reference case. sketch owns both.
 
-`Loft` build time, measured on an AMD Ryzen 9 7900X3D: tooth cases 0.25–0.34 s; z8 1.4 s; z20 2.4 s; z40 4.2 s;
+`Loft` build time, a dated measurement on an AMD Ryzen 9 7900X3D: tooth cases 0.25–0.34 s; z8 1.4 s; z20 2.4 s; z40 4.2 s;
 and the same gear at z = 69, the largest the reconstruction ceiling admits, 8.5 s. Under `-race` the tooth
 cases take 1.1–1.7 s, z8 8.8 s, z20 16.0 s and z40 33.0 s.
 
 Each ceiling refuses an adversarial record in bounded time. One free-form pair among 256 paired segments,
 handed a chord target no station allowance can meet, refuses S15 under the shared cap; the shared allocation
 has no cost measurement yet. The reconstruction charge refuses a record past its ceiling before sketch
-arranges anything, in well under a millisecond, and the z = 70 gear refuses there in 2.1 s, its
-`sectioncert.RecordProfile` included.
+arranges anything, in well under a millisecond. In a dated measurement the z = 70 gear refused there in 2.1 s, its
+`sectioncert.RecordProfile` included; no test reproduces either time.
 
 ## 8. Required tests
 
@@ -421,6 +429,7 @@ tolerance. Each test names its package. A row whose test is "none" states an ass
 | none | on every gear case, the counter has `StationWorkLimit(0,P)` before the area falsifier, keeps it through the walk gate, and walks plus stations charge below 8192 per station | — |
 | `TestLoftStationWalkRefusesAtTheRaisedWorkLimit` (`internal/loftmesh`) | on the parabola record of `TestLoftChordTargetReadsFeatureSize`, a station walk left half its cost below the raised ceiling runs past `1 << 20`, refuses R7 at the raised ceiling and names it | removing the raise |
 | `TestFreeformWorkRaisedLimitBinds` (`internal/freeform`) | `RaiseLimit` never lowers the ceiling, charges run to the raised ceiling and refuse one unit past it, and a saturated charge refuses under any ceiling | removing `Step`'s saturation test |
+| `TestLoftCertifiedRewriteWorkLimitKeepsDefault` (root package) | an authenticated payload's rewrite limit is twice `StationWorkLimit(0, P)` and at most `1 << 27`; an untrusted payload keeps the ordinary limit; a counter at the ordinary limit refuses the next unit while the raised one admits it | — |
 | `TestLoftAuditCandidateCeilingRefuses` (`internal/loftmesh`) | the structured audit of the holed square prism refuses S8 at a ceiling one scan unit below its scan count, before any pair test, and admits at the count | removing the scan-count refusal |
 
 Root-package and `apitest/` tests land in their shard manifests (`agent-docs/testing.md`, "Shard manifests").
@@ -481,8 +490,8 @@ Root-package and `apitest/` tests land in their shard manifests (`agent-docs/tes
   every full gear outline, so a raise after the cap gate comes too late.
 - **How many stations per paired segment?** 64 (§7). S15 charges actual cells against the shared cap. The
   measured gear outlines fit this scale; each build still stops at 8192 total stations.
-- **Keep the `(sectionDelta, areaUpper)` two-leg warning in loft §8?** Yes, reworded: the warning was against
-  dropping the TWIST leg from a bound over held triangles, which §2 keeps for the tessellation's `volSymDiff`.
+- **Keep the `(sectionDelta, areaUpper)` two-leg warning in loft §8?** Yes. It warns against dropping the TWIST
+  leg from a bound over held triangles, which §2 keeps for the tessellation's `volSymDiff`.
 
 ## 12. Loft sections each PR edits
 
