@@ -289,6 +289,24 @@ type RegionKey struct {
 // reached, an invalid cell, or a shape Classify does not cover.
 func ClassifyRegions(budget *proofbound.WorkBudget, tags map[sketch.Entity]Origin,
 	profiles []*sketch.Profile) (map[RegionKey][]bool, bool, error) {
+	out, resolved, _, err := classifyRegions(budget, tags, profiles, false)
+	return out, resolved, err
+}
+
+// ClassifyRegionsApart is ClassifyRegions that also reads a cell outside a
+// record when its membership there is unreached and the group of cells it
+// lies in, joined by shared edges, holds none of that record's edges. Every
+// record ring that encloses such a group is the outer of a cell holding the
+// group's outer ring as a hole, which an occurrence links into the group, so
+// a group with none of the record's edges lies in the record's unbounded
+// face. apart reports whether any cell was read that way.
+func ClassifyRegionsApart(budget *proofbound.WorkBudget, tags map[sketch.Entity]Origin,
+	profiles []*sketch.Profile) (map[RegionKey][]bool, bool, bool, error) {
+	return classifyRegions(budget, tags, profiles, true)
+}
+
+func classifyRegions(budget *proofbound.WorkBudget, tags map[sketch.Entity]Origin,
+	profiles []*sketch.Profile, readApart bool) (map[RegionKey][]bool, bool, bool, error) {
 	n := len(profiles)
 	member := map[RegionKey][]membership{}
 	for _, origin := range tags {
@@ -308,7 +326,7 @@ func ClassifyRegions(budget *proofbound.WorkBudget, tags map[sketch.Entity]Origi
 	occ := map[edgeKey][]occurrence{}
 	coincident, ok, err := CoincidentEdgesRegions(budget, tags, profiles)
 	if err != nil || !ok {
-		return nil, false, err
+		return nil, false, false, err
 	}
 	setMember := func(i int, k RegionKey, match bool) bool {
 		m := &member[k][i]
@@ -320,33 +338,33 @@ func ClassifyRegions(budget *proofbound.WorkBudget, tags map[sketch.Entity]Origi
 	}
 	for i, p := range profiles {
 		if err := budget.Step(); err != nil {
-			return nil, false, err
+			return nil, false, false, err
 		}
 		if !p.Valid {
-			return nil, false, nil
+			return nil, false, false, nil
 		}
 		for _, loop := range append([][]sketch.BoundaryEdge{p.Outer}, p.Holes...) {
 			for _, e := range loop {
 				if err := budget.Step(); err != nil {
-					return nil, false, err
+					return nil, false, false, err
 				}
 				origin, ok := tags[e.Entity]
 				if !ok {
-					return nil, false, nil
+					return nil, false, false, nil
 				}
 				k := RegionKey{IsB: origin.IsB, Region: origin.Region}
 				if !setMember(i, k, e.Reversed == origin.AuthoredReversed) {
-					return nil, false, nil
+					return nil, false, false, nil
 				}
 				keys := []RegionKey{k}
 				if c, shared := coincident.Edges[edgeSpan{entity: e.Entity, t0: e.TStart, t1: e.TEnd}]; shared {
 					partner, ok := tags[c.Partner]
 					pk := RegionKey{IsB: partner.IsB, Region: partner.Region}
 					if !ok || pk == k {
-						return nil, false, nil
+						return nil, false, false, nil
 					}
 					if !setMember(i, pk, (e.Reversed != c.Opposite) == partner.AuthoredReversed) {
-						return nil, false, nil
+						return nil, false, false, nil
 					}
 					keys = append(keys, pk)
 				}
@@ -361,14 +379,14 @@ func ClassifyRegions(budget *proofbound.WorkBudget, tags map[sketch.Entity]Origi
 	var links []regionLink
 	for _, os := range occ {
 		if err := budget.Step(); err != nil {
-			return nil, false, err
+			return nil, false, false, err
 		}
 		switch len(os) {
 		case 1:
 		case 2:
 			links = append(links, regionLink{a: os[0].cell, b: os[1].cell, keys: os[0].keys})
 		default:
-			return nil, false, nil
+			return nil, false, false, nil
 		}
 	}
 	for k, m := range member {
@@ -381,16 +399,11 @@ func ClassifyRegions(budget *proofbound.WorkBudget, tags map[sketch.Entity]Origi
 			adj[l.b] = append(adj[l.b], l.a)
 		}
 		if err := flood(budget, adj, m); err != nil {
-			return nil, false, err
+			return nil, false, false, err
 		}
 	}
-	// A cell still unknown for a record lies in a group of cells joined by
-	// shared edges that holds no edge of that record. Every record ring that
-	// encloses such a group is the outer of a cell holding the group's outer
-	// ring as a hole, which an occurrence links into the group, so a group
-	// with none of the record's edges lies outside every ring of it, in the
-	// unbounded face of the record: the cell is outside the record's
-	// material.
+	// With readApart a cell still unknown for a record whose edges its group
+	// does not hold is outside it (ClassifyRegionsApart).
 	pairs := make([][2]int, len(links))
 	for i, l := range links {
 		pairs[i] = [2]int{l.a, l.b}
@@ -408,21 +421,22 @@ func ClassifyRegions(budget *proofbound.WorkBudget, tags map[sketch.Entity]Origi
 		}
 	}
 	out := make(map[RegionKey][]bool, len(member))
+	apart := false
 	for k, m := range member {
 		vals := make([]bool, n)
 		for i := range m {
 			if !m[i].known {
-				if _, touches := present[k][group[i]]; touches {
-					return nil, false, nil
+				if _, touches := present[k][group[i]]; touches || !readApart {
+					return nil, false, false, nil
 				}
-				vals[i] = false
+				vals[i], apart = false, true
 				continue
 			}
 			vals[i] = m[i].val
 		}
 		out[k] = vals
 	}
-	return out, true, nil
+	return out, true, apart, nil
 }
 
 // cellGroups numbers the groups of cells the links (pairs of cells sharing an

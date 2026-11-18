@@ -306,8 +306,13 @@ that record's edges. A record ring enclosing such a group is the outer of a
 cell that holds the group's outer ring as a hole, which joins the group, so
 the group lies outside the record and the cell reads outside it: the top of
 a lower block and the footprint of a taller one, standing apart on a plate,
-share no edge in the scene above the lower block's top. A cell unreached in
-a record whose edges its group does hold stays unresolved and misses.
+share no edge in the scene above the lower block's top
+(`prismcells.ClassifyRegionsApart`). Only a `Union`'s interface reads cells
+so, and only when some interface cell lies inside a record of each operand:
+each operand is one connected solid, so the union is one too. Two blocks
+that stand apart on no common plate share no such cell and keep the mesh
+path. A cell unreached in a record whose edges its group does hold stays
+unresolved and misses.
 A cell inside some record reaching one side and inside
 none reaching the other is that side's exposed face, recorded from the cell
 as `sketch` returned it (a floor faces up, a ceiling down). A `Union`'s
