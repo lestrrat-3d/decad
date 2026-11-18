@@ -80,10 +80,11 @@ func TestCoplanarUnionDropsTheOccupancyRecord(t *testing.T) {
 	require.NoError(t, err)
 	payload, ok := flush.n.Payload.(facetedPayload)
 	require.True(t, ok)
-	require.Nil(t, payload.OccupancyRecord(), "an admitted coplanar pair publishes no record")
+	require.True(t, payload.OccupancyRecord() == nil, "an admitted coplanar pair publishes no record")
 	v, err := flush.Volume()
 	require.NoError(t, err)
 	require.Equal(t, 2000.0, v.Value.Base())
+	require.Zero(t, v.Bound.Base())
 
 	crossing, err := Union(t.Context(), boxAt(t, w, doc, 0, 0, 0, 10, 10, 10), boxAt(t, w, doc, 5, 3, 4, 10, 10, 10))
 	require.NoError(t, err)

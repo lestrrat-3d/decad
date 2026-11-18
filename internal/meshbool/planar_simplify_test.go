@@ -11,10 +11,10 @@ import (
 	"github.com/lestrrat-3d/r3"
 )
 
-// prismMesh is the prism of the xy polygon poly (counter-clockwise) from z0 to
+// polygonPrismMesh is the prism of the xy polygon poly (counter-clockwise) from z0 to
 // z1, every corner a float, with one source id per side: the bottom is 0, the
 // top 1 and wall k is 2+k. Its walls are exactly planar quads.
-func prismMesh(t testing.TB, poly [][2]float64, z0, z1 float64) *BoolMesh {
+func polygonPrismMesh(t testing.TB, poly [][2]float64, z0, z1 float64) *BoolMesh {
 	t.Helper()
 	n := len(poly)
 	var verts []r3.Vec
@@ -59,7 +59,7 @@ func dovetailCut(t *testing.T, slope float64) []KeptFacet {
 	a := exactBoxMesh(t, r3.Vec{}, r3.Vec{X: 10, Y: 10, Z: 10})
 	left := func(y float64) float64 { return 4 - slope*y }
 	right := func(y float64) float64 { return 6 + slope*y }
-	b := prismMesh(t, [][2]float64{{left(-1), -1}, {right(-1), -1}, {right(11), 11}, {left(11), 11}}, -1, 11)
+	b := polygonPrismMesh(t, [][2]float64{{left(-1), -1}, {right(-1), -1}, {right(11), 11}, {left(11), 11}}, -1, 11)
 	// The slot's far end passes through the cube's y = 10 face, so the first
 	// operand's facets meet it in crossings only.
 	kept, _, err := MeshBooleanStats(t.Context(), OpCut, a, b, NewContactMemo(a, b))
@@ -269,7 +269,7 @@ func TestSimplifyPlanarFallback(t *testing.T) {
 // the hole's walls may simplify.
 func TestSimplifyPlanarHoledFace(t *testing.T) {
 	a := exactBoxMesh(t, r3.Vec{}, r3.Vec{X: 10, Y: 10, Z: 10})
-	b := prismMesh(t, [][2]float64{{3, 2}, {7, 2}, {7, 7}, {3, 7}}, -1, 11)
+	b := polygonPrismMesh(t, [][2]float64{{3, 2}, {7, 2}, {7, 7}, {3, 7}}, -1, 11)
 	kept, _, err := MeshBooleanStats(t.Context(), OpCut, a, b, NewContactMemo(a, b))
 	require.NoError(t, err)
 	const top = 5 // boxMesh's z-maximum side
@@ -474,4 +474,41 @@ func TestSimplifyPlanarTouchingBodyWithRemovable(t *testing.T) {
 	_, changed, err := SimplifyPlanarFaces(t.Context(), in)
 	require.NoError(t, err)
 	require.False(t, changed)
+}
+
+// TestSimplifyPlanarStartsAtABoundaryVertex pins that a face whose first facet
+// has an interior vertex with the lowest id is still simplified: the box top is
+// a fan round vertex 0, an interior vertex with a lower id than every corner.
+func TestSimplifyPlanarStartsAtABoundaryVertex(t *testing.T) {
+	in := planarBox(0)
+	// Renumber so the fan's centre is vertex 0.
+	perm := []int{1, 2, 3, 4, 5, 6, 7, 8, 0}
+	var xv []proof.Xpt
+	var ap []r3.Vec
+	var xb []float64
+	for range perm {
+		xv, ap, xb = append(xv, proof.Xpt{}), append(ap, r3.Vec{}), append(xb, 0)
+	}
+	for old, nw := range perm {
+		xv[nw], ap[nw], xb[nw] = in.Xverts[old], in.Approx[old], in.Xbeta[old]
+	}
+	in.Xverts, in.Approx, in.Xbeta = xv, ap, xb
+	for i, tri := range in.Tris {
+		in.Tris[i] = [3]int{perm[tri[0]], perm[tri[1]], perm[tri[2]]}
+	}
+	// The first top facet now starts at the centre.
+	for i := range in.Tris {
+		if in.Src[i] == 1 {
+			in.Tris[0], in.Tris[i] = in.Tris[i], in.Tris[0]
+			in.Src[0], in.Src[i] = in.Src[i], in.Src[0]
+			// Rotate it to start at the centre, which keeps its winding.
+			f := in.Tris[0]
+			in.Tris[0] = [3]int{f[2], f[0], f[1]}
+			break
+		}
+	}
+	out, changed, err := SimplifyPlanarFaces(t.Context(), in)
+	require.NoError(t, err)
+	require.True(t, changed)
+	require.Len(t, out.Xverts, 8, "the centre vertex is dropped")
 }
