@@ -22,6 +22,9 @@ var ShiftNeed = shiftNeed
 // RetainedPlaneOf exposes retainedPlaneOf to the external test package.
 var RetainedPlaneOf = retainedPlaneOf
 
+// DenotedPlaneWork exposes denotedPlaneWork to the external test package.
+const DenotedPlaneWork = denotedPlaneWork
+
 // PieceOfFacet returns the connected piece of each facet of m.
 func PieceOfFacet(m *topo.Mesh) []int {
 	pc := boolshift.PiecesOf(m)

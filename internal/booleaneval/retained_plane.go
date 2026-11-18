@@ -76,6 +76,28 @@ func denotedPlaneIsTag(f *topo.Face) bool {
 	return stitchflux.TagIsDenoted(stitchflux.TaggedFace{Denoted: f.Denoted, Surface: f.Surface})
 }
 
+// denotedPlaneWork is the flat work a bounded replay charges for one
+// denotedPlaneIsTag decision. The decision reads a fixed number of the
+// record's float leaves as exact rationals and forms a fixed number of dot
+// products of them, so its cost is a constant multiple of their size.
+const denotedPlaneWork = 64
+
+// denotedPlaneFaces counts the distinct source faces of m whose slab reading
+// runs denotedPlaneIsTag: retained Plane faces with no stated normal
+// departure that carry a denoted patch.
+func denotedPlaneFaces(m *topo.Mesh) uint64 {
+	seen := map[*topo.Face]struct{}{}
+	for _, f := range m.Source {
+		if f == nil || !f.RetainedTag || f.NormalBound != 0 || f.Denoted == nil {
+			continue
+		}
+		if _, ok := f.Surface.(surfacegeom.Plane); ok {
+			seen[f] = struct{}{}
+		}
+	}
+	return uint64(len(seen))
+}
+
 type withoutRetainedPlaneSlabKey struct{}
 
 // WithoutRetainedPlaneSlab returns a context under which PrepBoolMesh reads no
