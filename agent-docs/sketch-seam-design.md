@@ -73,9 +73,9 @@ evaluated from the curve. The one exception is an elliptical arc's two end
 vertices, which are its pinned ends (§2). A sampled cut is the crossing of a
 **chord** between two such vertices. As the crossing approaches an evaluated
 vertex, the cut point approaches the curve and its residual goes to zero. It
-can reach zero: in a rectangle-and-spline arrangement a line fragment reads
-`TExact == false` while evaluating its reported range reproduces its `Polyline`
-endpoints with a residual of exactly **0.0**. That sampled cut sits precisely
+can reach zero: a sampled cut that falls on an evaluated vertex is that
+vertex, and a vertex lies on the curve. The fragment still reads
+`TExact == false`, and its residual is zero. That sampled cut sits precisely
 where an exact one would, so no threshold can separate it from an exact cut.
 Exactly-cut and sampled endpoints are not separated populations, and an
 endpoint-residual test is **unsound as an admission gate**. It is not a
