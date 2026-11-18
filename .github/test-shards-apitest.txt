@@ -2881,6 +2881,9 @@
 12	2.85	TestBossRootTangentRefusesKinkedJoint
 12	0.01	TestBossShapedDraftLeansEveryWall
 12	0.00	TestBrepIndependentBossRootEdgesRefuseRouteEWedge
+12	0.00	TestBrepPartialRootFilletFlushCorner
+12	0.00	TestBrepPartialRootFilletFlushSide
+12	0.00	TestBrepPartialRootFilletMixedSidesRefuses
 12	0.01	TestBrepSingleUnderBossRootChamferAddsMaterial
 12	0.05	TestCapBlendAsymmetricOverrunRefused
 12	0.02	TestCapBlendCapContourVertexBoundEncloses

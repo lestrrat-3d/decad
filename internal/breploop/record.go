@@ -133,7 +133,23 @@ func (r *State) naturalFaceLoops(fi int) (string, error) {
 // such face, and F, passes LB4. The faces' far ends must all lie on one side
 // of F (LB6): against F's outward normal the walls descend into the body
 // (sigma −1), along it they rise off F (sigma +1).
-func (r *State) ClassifyLoop(sel *Sel) error {
+func (r *State) ClassifyLoop(sel *Sel) error { return r.classifyLoop(sel, nil) }
+
+// ClassifyPartialLoop is ClassifyLoop over the selected segments of a partial
+// loop alone. A partial band moves only the selected walls; an unselected
+// segment keeps its face, so that face neither needs a reading nor takes part
+// in LB6, and its Beside stays zero. A chain end's terminal face is read and
+// rewritten by route E's gates instead.
+func (r *State) ClassifyPartialLoop(sel *Sel, selected []bool) error {
+	if len(selected) != len(r.Topology.Planar[sel.Face][sel.Loop]) {
+		return r.Refuse("SL1", `the partial selection does not match its loop`)
+	}
+	return r.classifyLoop(sel, selected)
+}
+
+// classifyLoop reads every segment of the loop, or with a non-nil selected
+// only the selected ones.
+func (r *State) classifyLoop(sel *Sel, selected []bool) error {
 	f := r.Payload.Faces[sel.Face]
 	eF := r.Topology.Embeds[sel.Face]
 	n := eF.Axis[2]
@@ -153,6 +169,9 @@ func (r *State) ClassifyLoop(sel *Sel) error {
 	segs := len(r.Topology.Planar[sel.Face][sel.Loop])
 	sel.Beside = make([]Beside, segs)
 	for s := range segs {
+		if selected != nil && !selected[s] {
+			continue
+		}
 		if err := survey2d.WallBudgetStep(r.Budget); err != nil {
 			return err
 		}
