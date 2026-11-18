@@ -181,3 +181,60 @@ func TestStackedUnionSelfTangent(t *testing.T) {
 		require.InDelta(t, want, volume.Value.Base(), volume.Bound.Base()+1e-9)
 	})
 }
+
+// TestStackedUnionPinchRecordCount meets two L-shaped prisms at the point
+// p = (30, 20), each 10 thick: a lower L over z 0..10 missing the quadrant
+// x > 30, y < 20 at p, and an upper L over z 10..20 missing x < 30, y > 20.
+// Round p at z = 10 the lower L's floor and the upper L's ceiling sit in
+// opposite quadrants between two quadrants both cover, so the empty spaces
+// over the floor and under the ceiling meet at p and the body meets itself
+// there.
+//
+// With a wedge added to each operand's other slab, every floor and ceiling
+// corner at p turns from a lower record's edge to an upper record's, so only
+// the count of records with edges at p (two of each side, not one) reads the
+// pinch.
+func TestStackedUnionPinchRecordCount(t *testing.T) {
+	t.Parallel()
+	lowerL := func(t *testing.T, doc *decad.Document) *decad.Body {
+		t.Helper()
+		return polygonPrismAtZ(t, doc, 0, 10,
+			[2]float64{20, 10}, [2]float64{30, 10}, [2]float64{30, 20}, [2]float64{40, 20},
+			[2]float64{40, 30}, [2]float64{20, 30})
+	}
+	upperL := func(t *testing.T, doc *decad.Document) *decad.Body {
+		t.Helper()
+		return polygonPrismAtZ(t, doc, 10, 10,
+			[2]float64{22, 12}, [2]float64{38, 12}, [2]float64{38, 28}, [2]float64{30, 28},
+			[2]float64{30, 20}, [2]float64{22, 20})
+	}
+	t.Run("two Ls", func(t *testing.T) {
+		t.Parallel()
+		doc := decad.New()
+		requireNoExactPinch(t, lowerL(t, doc), upperL(t, doc))
+	})
+	// operands builds A, the lower L with an upper wedge pointing at p from
+	// x > 30, and B, a lower wedge pointing at p from x < 30 with the upper L.
+	operands := func(t *testing.T, doc *decad.Document) (*decad.Body, *decad.Body) {
+		t.Helper()
+		a, err := decad.Union(t.Context(), lowerL(t, doc), polygonPrismAtZ(t, doc, 10, 10,
+			[2]float64{30, 20}, [2]float64{35, 15}, [2]float64{35, 25}))
+		require.NoError(t, err)
+		b, err := decad.Union(t.Context(), polygonPrismAtZ(t, doc, 0, 10,
+			[2]float64{30, 20}, [2]float64{25, 25}, [2]float64{25, 15}), upperL(t, doc))
+		require.NoError(t, err)
+		return a, b
+	}
+	t.Run("wedged", func(t *testing.T) {
+		t.Parallel()
+		doc := decad.New()
+		a, b := operands(t, doc)
+		requireNoExactPinch(t, a, b)
+	})
+	t.Run("wedged, swapped", func(t *testing.T) {
+		t.Parallel()
+		doc := decad.New()
+		a, b := operands(t, doc)
+		requireNoExactPinch(t, b, a)
+	})
+}
