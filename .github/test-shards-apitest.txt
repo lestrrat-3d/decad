@@ -3143,3 +3143,9 @@
 12	0.00	TestCoplanarContactRoundedFixtureKeepsRetry
 12	0.00	TestStackedOpposedObliqueLoops
 12	0.00	TestVerifyReadsAnExactFlushPairExactly
+12	0.00	TestCoplanarContactFaceToFace
+12	0.00	TestCoplanarContactOverlapBeyondZero
+12	0.00	TestCoplanarContactEdgeAndVertexOnly
+12	0.00	TestCoplanarContactMadeByCut
+12	0.00	TestCoplanarContactKeepsRecords
+12	0.00	TestCoplanarContactRandomBoxPairs
