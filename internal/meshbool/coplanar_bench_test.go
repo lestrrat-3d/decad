@@ -26,8 +26,8 @@ func polygonRing(n, shift int, r float64) [][2]float64 {
 // §10): every coplanar facet pair is classified.
 func BenchmarkCoplanarCaps(b *testing.B) {
 	ctx := context.Background()
-	lower := prismMesh(b, polygonRing(64, 0, 5), 0, 1)
-	upper := prismMesh(b, polygonRing(64, 1, 5), 1, 2)
+	lower := polygonPrismMesh(b, polygonRing(64, 0, 5), 0, 1)
+	upper := polygonPrismMesh(b, polygonRing(64, 1, 5), 1, 2)
 	b.ResetTimer()
 	for range b.N {
 		if _, _, err := MeshBooleanStats(ctx, OpUnion, lower, upper, NewContactMemo(lower, upper)); err != nil {

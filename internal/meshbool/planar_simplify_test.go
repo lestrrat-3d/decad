@@ -11,10 +11,10 @@ import (
 	"github.com/lestrrat-3d/r3"
 )
 
-// prismMesh is the prism of the xy polygon poly (counter-clockwise) from z0 to
+// polygonPrismMesh is the prism of the xy polygon poly (counter-clockwise) from z0 to
 // z1, every corner a float, with one source id per side: the bottom is 0, the
 // top 1 and wall k is 2+k. Its walls are exactly planar quads.
-func prismMesh(t testing.TB, poly [][2]float64, z0, z1 float64) *BoolMesh {
+func polygonPrismMesh(t testing.TB, poly [][2]float64, z0, z1 float64) *BoolMesh {
 	t.Helper()
 	n := len(poly)
 	var verts []r3.Vec
@@ -59,7 +59,7 @@ func dovetailCut(t *testing.T, slope float64) []KeptFacet {
 	a := exactBoxMesh(t, r3.Vec{}, r3.Vec{X: 10, Y: 10, Z: 10})
 	left := func(y float64) float64 { return 4 - slope*y }
 	right := func(y float64) float64 { return 6 + slope*y }
-	b := prismMesh(t, [][2]float64{{left(-1), -1}, {right(-1), -1}, {right(11), 11}, {left(11), 11}}, -1, 11)
+	b := polygonPrismMesh(t, [][2]float64{{left(-1), -1}, {right(-1), -1}, {right(11), 11}, {left(11), 11}}, -1, 11)
 	// The slot's far end passes through the cube's y = 10 face, so the first
 	// operand's facets meet it in crossings only.
 	kept, _, err := MeshBooleanStats(t.Context(), OpCut, a, b, NewContactMemo(a, b))
@@ -269,7 +269,7 @@ func TestSimplifyPlanarFallback(t *testing.T) {
 // the hole's walls may simplify.
 func TestSimplifyPlanarHoledFace(t *testing.T) {
 	a := exactBoxMesh(t, r3.Vec{}, r3.Vec{X: 10, Y: 10, Z: 10})
-	b := prismMesh(t, [][2]float64{{3, 2}, {7, 2}, {7, 7}, {3, 7}}, -1, 11)
+	b := polygonPrismMesh(t, [][2]float64{{3, 2}, {7, 2}, {7, 7}, {3, 7}}, -1, 11)
 	kept, _, err := MeshBooleanStats(t.Context(), OpCut, a, b, NewContactMemo(a, b))
 	require.NoError(t, err)
 	const top = 5 // boxMesh's z-maximum side
