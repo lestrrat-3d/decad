@@ -73,7 +73,8 @@ func CoplanarClip(edge [2]proof.Xpt, xta [3]proof.Xpt, n proof.Xpt) (ClipPiece, 
 			hi = t
 		}
 	}
-	if CmpClipFrac(lo, hi) >= 0 {
+	if CmpClipFrac(lo, hi) >= 0 || (CompareCoord(edge[0], edge[1], 0) == 0 &&
+		CompareCoord(edge[0], edge[1], 1) == 0 && CompareCoord(edge[0], edge[1], 2) == 0) {
 		return ClipPiece{}, false, nil
 	}
 	piece := ClipPiece{P0: edge[0], P1: edge[1]}

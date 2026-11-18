@@ -24,12 +24,11 @@ func TestCoplanarClip(t *testing.T) {
 	tri := [3]proof.Xpt{clipPt(0, 0), clipPt(4, 0), clipPt(0, 4)}
 	n := proof.XptOf(r3.Vec{Z: 1})
 	tests := []struct {
-		name            string
-		a, b            r3.Vec
-		keep            bool
-		p0, p1          r3.Vec
-		p0OnA, p1OnA    bool
-		reversedWinding bool
+		name         string
+		a, b         r3.Vec
+		keep         bool
+		p0, p1       r3.Vec
+		p0OnA, p1OnA bool
 	}{
 		{name: "inside", a: r3.Vec{X: 1, Y: 1}, b: r3.Vec{X: 2, Y: 1}, keep: true,
 			p0: r3.Vec{X: 1, Y: 1}, p1: r3.Vec{X: 2, Y: 1}},
@@ -44,6 +43,7 @@ func TestCoplanarClip(t *testing.T) {
 		{name: "collinear inside the edge", a: r3.Vec{X: 1, Y: 0}, b: r3.Vec{X: 2, Y: 0}},
 		{name: "shared vertex", a: r3.Vec{X: -1, Y: -1}, b: r3.Vec{X: 0, Y: 0}},
 		{name: "hypotenuse", a: r3.Vec{X: 5, Y: -1}, b: r3.Vec{X: -1, Y: 5}},
+		{name: "zero length", a: r3.Vec{X: 1, Y: 1}, b: r3.Vec{X: 1, Y: 1}},
 		{name: "disjoint", a: r3.Vec{X: 5, Y: 5}, b: r3.Vec{X: 6, Y: 5}},
 	}
 	for _, tc := range tests {
@@ -109,4 +109,27 @@ func TestTriContactCoplanarFlag(t *testing.T) {
 	none := classify(base, [3]r3.Vec{{X: 9, Y: 9}, {X: 10, Y: 9}, {X: 9, Y: 10}})
 	require.Equal(t, meshbool.ContactNone, none.Kind)
 	require.False(t, none.Coplanar)
+}
+
+// TestCoplanarClipWindingAndPlane pins the clip for a clockwise triangle and
+// for a plane whose dominant normal axis is not z: the pieces are the same
+// exact points either way.
+func TestCoplanarClipWindingAndPlane(t *testing.T) {
+	t.Parallel()
+	// The triangle (0,0,0) (0,4,0) (4,0,0) is clockwise seen from +z.
+	cw := [3]proof.Xpt{clipPt(0, 0), clipPt(0, 4), clipPt(4, 0)}
+	piece, ok, err := meshbool.CoplanarClip([2]proof.Xpt{clipPt(-1, 2), clipPt(5, 2)}, cw, proof.XptOf(r3.Vec{Z: -1}))
+	require.NoError(t, err)
+	require.True(t, ok)
+	require.True(t, spanTestPointsEqual(piece.P0, clipPt(0, 2)))
+	require.True(t, spanTestPointsEqual(piece.P1, clipPt(2, 2)))
+	// The same triangle stood up in the xz plane (y = 0): the dominant normal
+	// axis is y.
+	xz := func(x, z float64) proof.Xpt { return proof.XptOf(r3.Vec{X: x, Z: z}) }
+	tri := [3]proof.Xpt{xz(0, 0), xz(4, 0), xz(0, 4)}
+	piece, ok, err = meshbool.CoplanarClip([2]proof.Xpt{xz(-1, 2), xz(5, 2)}, tri, proof.XptOf(r3.Vec{Y: -1}))
+	require.NoError(t, err)
+	require.True(t, ok)
+	require.True(t, spanTestPointsEqual(piece.P0, xz(0, 2)))
+	require.True(t, spanTestPointsEqual(piece.P1, xz(2, 2)))
 }
