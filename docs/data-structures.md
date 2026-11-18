@@ -374,7 +374,8 @@ walk, so it calls a boss root convex and a hole's rim concave.
 an exact `Union`, `Cut` or `Intersect` result also lists an operand face's roles only where exact plane identity
 proves the face lies inside that one operand face, such as `decad.CapEnd(boss)` on the top of a boss joined to a
 plate. A face two operands share lists neither. A face of a faceted (mesh) result lists the roles of the operand face
-it was cut from. Selectors such as `decad.FaceCreatedBy` match on any of these roles.
+it was cut from; where two operands' faces are adjacent and exactly coplanar, the one merged face lists the roles of
+both. Selectors such as `decad.FaceCreatedBy` match on any of these roles.
 
 ## Surfaces and curves
 

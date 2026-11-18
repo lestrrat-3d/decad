@@ -414,10 +414,13 @@ Features choose edges and faces with queries.
   `decad.Facing`, `decad.NormalTo`, `decad.FaceCreatedBy` and `decad.Walls`.
 - `EdgeQuery` and `FaceQuery` chain `Or`, `Exactly` and `AtLeast`.
 - `decad.CapStart` and `decad.CapEnd` name the two caps of a body as a `decad.FeatureRef`.
-- After `Union`, `Cut` or `Intersect`, `decad.FaceCreatedBy(decad.CapEnd(boss))` still selects a face of the result
-  that lies inside the boss's end cap and inside no other operand face on that plane, such as the top of a boss joined
-  to a plate. A face two operands share, such as the floor of two flush blocks, names neither operand, and a face on a
+- After an exact (analytic) `Union`, `Cut` or `Intersect`, `decad.FaceCreatedBy(decad.CapEnd(boss))` still selects a
+  face of the result that lies inside the boss's end cap and inside no other operand face on that plane, such as the top of a boss joined
+  to a plate. On an exact result, a face two operands share, such as the floor of two flush blocks, names neither operand, and a face on a
   plane parallel to an operand's extrude direction may name none.
+- A mesh `Union`, `Cut` or `Intersect` merges adjacent, exactly coplanar, same-facing faces of its two operands into one face, so
+  `decad.FaceCreatedBy` with either operand's role selects that one face, and a count such as
+  `Faces(decad.Facing(v)).Exactly(2)` sees one face where the operands had two.
 - A query that matches nothing, or the wrong count, returns a `*decad.SelectionError` that lists how many
   elements each clause matched.
 

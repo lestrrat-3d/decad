@@ -43,7 +43,9 @@ import (
 // bound can try the other grouping (prism-boolean §4.7).
 // Each pair must pass its own proof. Failure or cancellation leaves every
 // input live. A two-body result from the mesh path is a Faceted body:
-// its faces are grouped by the operands' source faces, so provenance
+// its faces are grouped by the operands' source faces, with adjacent exactly
+// coplanar same-facing faces of the two operands merged into one face
+// (agent-docs/union-face-merge-design.md), so provenance
 // (FaceCreatedBy) survives, and its measurements are Approximate with proven
 // bounds (agent-docs/evaluator-design.md §9) — except that an all-planar pair whose
 // contact points round exactly keeps an Exact VOLUME (the volume integral is

@@ -545,7 +545,8 @@ func (f *Face) isPlanar() bool {
 
 // Origins returns every feature role that created this face —
 // canonicalization may merge coplanar faces, and a merged face carries ALL
-// contributing roles (core §6.1). A face of an analytic Boolean result also
+// contributing roles (core §6.1). A mesh Boolean merges adjacent exactly coplanar faces of its two
+// operands (agent-docs/union-face-merge-design.md), so such a face lists both operands' roles. A face of an analytic Boolean result also
 // carries the roles of the one operand face it provably lies inside
 // (agent-docs/prism-boolean-design.md §11).
 func (f *Face) Origins() []FeatureRef { return featureRefsOf(f.n.AllOrigins()) }

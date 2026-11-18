@@ -157,7 +157,10 @@ Rules:
   `side(i,j,0)`/`side(i,j,1)` distinct within a cell and preserves every
   cross-cell rung between coplanar Loft triangles. A full cylinder is one
   face with two circular-edge loops and no seam edge. v1 counts already match
-  the analytic answer, so vN does not churn them (core §3).
+  the analytic answer, so vN does not churn them (core §3). The mesh Boolean also merges adjacent, exactly coplanar,
+  same-facing planar faces of different operands into one face that carries every merged role
+  (`agent-docs/union-face-merge-design.md`). Two coplanar faces of one operand, Loft rungs included, join only
+  through faces of the other operand: one adjacent to both, or a chain of such joins.
 - **Every vertex carries its bound.** Exactness is decided by what the
   coordinate was READ FROM, never by which builder placed it. A coordinate the
   record states is exact (bound zero); every computed one carries its own
@@ -1630,7 +1633,8 @@ work intervals inside quadratic/refinement loops, as interference §7 specifies.
   motion's own rounding allowance. So every `Faceted` body is embedded when it
   is created, which is what its tessellation's `BoundaryVerified()` reports.
 - **Ordinary mesh output**: faces are `Faceted`, one per CONNECTED PATCH of a current operand
-  face. Each patch keeps that face's origins, and its inherited Boolean roles
+  face, except that a patch joins the patches of the other operand that are adjacent, exactly coplanar and
+  same-facing (`agent-docs/union-face-merge-design.md`). Each patch keeps that face's origins, and its inherited Boolean roles
   apart as `Upstream` (prism-boolean §11), so provenance (`FaceCreatedBy`)
   and face-level selection survive the boolean — but the operand face is not the
   face. A boolean can cut one operand face into pieces that no longer touch (a blind
