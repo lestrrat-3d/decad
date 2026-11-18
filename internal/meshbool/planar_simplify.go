@@ -39,7 +39,14 @@ type planarRegion struct {
 // unchanged either way. A failure of the simplification itself, as opposed to
 // the context, leaves the mesh unchanged.
 func SimplifyPlanarFaces(ctx context.Context, in PlanarMesh) (PlanarMesh, bool, error) {
-	out, changed, err := simplifyPlanarFaces(ctx, in)
+	return SimplifyPlanarFacesBudget(ctx, proofbound.NewWorkBudget(ctx), in)
+}
+
+// SimplifyPlanarFacesBudget is SimplifyPlanarFaces charging budget one work
+// unit for each facet and vertex it visits and for each ear-clipping step. A
+// budget error returns as it is.
+func SimplifyPlanarFacesBudget(ctx context.Context, budget *proofbound.WorkBudget, in PlanarMesh) (PlanarMesh, bool, error) {
+	out, changed, err := simplifyPlanarFaces(ctx, budget, in)
 	if err != nil {
 		if ctx.Err() != nil || !errors.Is(err, decaderr.ErrBooleanFailed) {
 			return in, false, err
@@ -49,18 +56,20 @@ func SimplifyPlanarFaces(ctx context.Context, in PlanarMesh) (PlanarMesh, bool, 
 	return out, changed, nil
 }
 
-func simplifyPlanarFaces(ctx context.Context, in PlanarMesh) (PlanarMesh, bool, error) {
+func simplifyPlanarFaces(ctx context.Context, budget *proofbound.WorkBudget, in PlanarMesh) (PlanarMesh, bool, error) {
 	// An open input is left to the closure audit: removing the vertices of a
 	// crack could close it with new surface.
 	if !stitchEdgesPaired(in.Tris, make(map[[2]int]uint8, len(in.Tris)+len(in.Tris)/2)) {
 		return in, false, nil
 	}
-	budget := proofbound.NewWorkBudget(ctx)
 	owner := make(map[[2]int]int, 3*len(in.Tris))
 	incident := make([][]int, len(in.Xverts))
 	byFace := map[int][]int{}
 	var faceOrder []int
 	for f, tri := range in.Tris {
+		if err := budget.Step(); err != nil {
+			return in, false, err
+		}
 		if f%256 == 0 {
 			if err := ctx.Err(); err != nil {
 				return in, false, err
@@ -81,7 +90,7 @@ func simplifyPlanarFaces(ctx context.Context, in PlanarMesh) (PlanarMesh, bool, 
 	normals := map[int]proof.Xpt{}
 	regions := map[int][]planarRegion{}
 	for _, s := range faceOrder {
-		n, rs, ok, err := planarCandidate(ctx, in, owner, byFace[s], s)
+		n, rs, ok, err := planarCandidate(ctx, budget, in, owner, byFace[s], s)
 		if err != nil {
 			return in, false, err
 		}
@@ -94,6 +103,9 @@ func simplifyPlanarFaces(ctx context.Context, in PlanarMesh) (PlanarMesh, bool, 
 	var removable []bool
 	for {
 		if err := ctx.Err(); err != nil {
+			return in, false, err
+		}
+		if _, err := budget.StepN(uint64(len(in.Xverts))); err != nil {
 			return in, false, err
 		}
 		removable = removableVertices(in, owner, incident, regions)
@@ -202,7 +214,7 @@ func simplifyPlanarFaces(ctx context.Context, in PlanarMesh) (PlanarMesh, bool, 
 
 // planarCandidate reads §7.1 step 1 for source face s: exactly planar, every
 // vertex claim zero, and every connected region bounded by one loop.
-func planarCandidate(ctx context.Context, in PlanarMesh, owner map[[2]int]int, facets []int, s int) (proof.Xpt, []planarRegion, bool, error) {
+func planarCandidate(ctx context.Context, budget *proofbound.WorkBudget, in PlanarMesh, owner map[[2]int]int, facets []int, s int) (proof.Xpt, []planarRegion, bool, error) {
 	var none proof.Xpt
 	first := in.Tris[facets[0]]
 	a, b, c := in.Xverts[first[0]], in.Xverts[first[1]], in.Xverts[first[2]]
@@ -214,6 +226,9 @@ func planarCandidate(ctx context.Context, in PlanarMesh, owner map[[2]int]int, f
 		}
 	}
 	for _, f := range facets {
+		if err := budget.Step(); err != nil {
+			return none, nil, false, err
+		}
 		if err := ctx.Err(); err != nil {
 			return none, nil, false, err
 		}
