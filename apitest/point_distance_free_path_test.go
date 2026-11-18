@@ -32,8 +32,9 @@ func TestDistanceToPointFreePath(t *testing.T) {
 		xf   r3.Transform
 	}{{"as built", r3.Identity()}, {"rotated and moved", placed}}
 	for _, m := range moves {
+		// Both subtests mutate body's document through Copy and Transform, and a
+		// Document is not safe for concurrent mutation, so they run in sequence.
 		t.Run(m.name, func(t *testing.T) {
-			t.Parallel()
 			b, err := decad.Copy(t.Context(), body)
 			require.NoError(t, err)
 			if m.name != "as built" {
