@@ -46,6 +46,15 @@ func finishBoolMeshReplay(ctx context.Context, m *topo.Mesh, bm *meshbool.BoolMe
 	}
 	bm.SetVertexBounds(beta)
 	if retained {
+		// retainedPlaneOf decides each denoted Plane face once, in exact
+		// arithmetic on the record's leaves, and memoises it per face.
+		denoted := denotedPlaneFaces(m)
+		if err := budget.SpendWork(ctx, denoted*denotedPlaneWork); err != nil {
+			return nil, err
+		}
+		if err := budget.ReserveRecords(ctx, denoted); err != nil {
+			return nil, err
+		}
 		if err := bm.SetChargedSlabBoundsReplay(ctx, retainedPlaneOf(m), budget); err != nil {
 			return nil, err
 		}
