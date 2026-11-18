@@ -4797,7 +4797,7 @@ cancellation; after it a canceled context returns ctx.Err() and no report.
 <pre>func (d *<a href="#Document">Document</a>) VerifyMotion(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>, moving []*<a href="#Body">Body</a>, m <a href="#Motion">Motion</a>, opts ...<a href="#MotionOption">MotionOption</a>) (*<a href="#MotionReport">MotionReport</a>, <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
 
 VerifyMotion checks whether the rigid set moving, carried along m, meets
-any other live body of d anywhere on the path (agent-docs/motion-check-design.md).
+any other live body of d anywhere on the path (agent-docs/linkage-check-design.md Part M).
 It never changes the document: each pose re-evaluates a mover's payload
 under the composed motion as a transient body that is never committed, so
 [Document](<#Document>).Bodies(), every body's live state and the next producer identity
@@ -7310,7 +7310,7 @@ WithResolution sets the finest parameter step for verdicts and readings.
 
 <pre>type MotionReport = report.<a href="report.md#MotionReportOf">MotionReportOf</a>[*<a href="#Body">Body</a>, <a href="#Motion">Motion</a>]</pre>
 
-MotionReport is VerifyMotion's path report (agent-docs/motion-check-design.md §4).
+MotionReport is VerifyMotion's path report (agent-docs/linkage-check-design.md Part M §4).
 
 <a name="MotionRequest"></a>
 ### type MotionRequest

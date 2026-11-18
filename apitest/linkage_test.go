@@ -377,7 +377,7 @@ func TestLinkageConstructorRefusals(t *testing.T) {
 // MotionFrame.At, so at the endpoints alone, where no bound certifies the one
 // interval, the two reports agree in every reading. Bisected, both take the
 // larger of the travel bound and the projection bound
-// (agent-docs/linkage-check-design.md §5.8, agent-docs/motion-check-design.md §5.2) over
+// (agent-docs/linkage-check-design.md §5.8, agent-docs/linkage-check-design.md Part M §5.2) over
 // the same corner and hull readings, so they agree there too: the same
 // collisions and Status, the same poses, the same interval outcomes, each
 // interval's Clearance within 1e-9 — ρ_11 and ρ_max are read by two routes

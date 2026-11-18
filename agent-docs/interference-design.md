@@ -960,7 +960,7 @@ document finds it there.
 A pair whose chord share cannot be read — a body with no bounds, a pair with
 no extent — contributes nothing to any chord. If it reaches the mesh path, it
 derives its own pair tolerance there and fails exactly as it would without the
-cache. The motion check (`agent-docs/motion-check-design.md`) measures one transient
+cache. The motion check (`agent-docs/linkage-check-design.md` Part M) measures one transient
 pose against one static body at a time and keeps the pair's own tolerance.
 
 ## 6. Positive-volume gate

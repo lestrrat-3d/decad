@@ -69,8 +69,7 @@ The rules for rows live in `agent-docs/layout.md`.
 | `agent-docs/retained-modify-reach-design.md` | Modify and placement reach on retained mesh Boolean results: the per-call probe table, two-distance and tangent-chain blends, exact-copy and scaled tags, parallel-cylinder blends, and the Shell, Draft and many-body Union refusals. |
 | `agent-docs/surface-intersection-design.md` | `Trim`/`Extend`/`Split` over shared-generator sweeps. |
 | `agent-docs/surface-design.md` | Sheet bodies, surface operations, verification and export. |
-| `agent-docs/motion-check-design.md` | `VerifyMotion`: motions, the per-pose proof, the interval certificate, `MotionReport`. |
-| `agent-docs/linkage-check-design.md` | `VerifyLinkage` and `VerifyJointBox`. |
+| `agent-docs/linkage-check-design.md` | `VerifyLinkage` and `VerifyJointBox`, and as a part `VerifyMotion`: motions, the per-pose proof, the interval certificate, `MotionReport`. |
 | `agent-docs/multibody-dynamics-design.md` | N-body dynamics, islands, `Timeline`, and as parts the system map, rigid response, mass readings, contact geometry and the two-body sweep. |
 | `agent-docs/planar-convex-filter-design.md` | Float pre-test of the §9.2 convexity certificate: error bound, range guard, poll count. |
 | `agent-docs/step-export-design.md` | Export package entry points and the AP214 faceted writer contract. |

@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file holds the tests of agent-docs/motion-check-design.md §5.2's projection
+// This file holds the tests of agent-docs/linkage-check-design.md Part M §5.2's projection
 // bound: VerifyMotion reads its motion as one joint and takes the larger of
 // the travel bound and the projection bound over every interval.
 

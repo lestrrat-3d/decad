@@ -538,7 +538,7 @@ identity a caller and a log share.
     // names the quantity, Required nil. Contributes Suspect.
     DiagToleranceReferenceUnavailable
     // DiagMotionCollision — a motion pose proves a (mover, static) pair
-    // overlaps (agent-docs/motion-check-design.md §4.1). Pair and At set; Reading
+    // overlaps (agent-docs/linkage-check-design.md Part M §4.1). Pair and At set; Reading
     // ReadingOverlapVolume with Observed the volume when it was bounded, else
     // ReadingNone. Contributes Interfering.
     DiagMotionCollision
@@ -600,7 +600,7 @@ reason concerns — SurveyNone for every core reading and every pair
 diagnostic — set even when Reading is ReadingNone, so an unsupported wall,
 undercut, or concave-radius refusal is distinguished without inspecting
 Message text. At is the motion parameter a VerifyMotion finding concerns
-(agent-docs/motion-check-design.md §4.1); it is nil on every diagnostic Verify
+(agent-docs/linkage-check-design.md Part M §4.1); it is nil on every diagnostic Verify
 emits and on every motion finding about the whole path. Cell is the joint
 cell a VerifyJointBox finding concerns (agent-docs/linkage-check-design.md §14.2);
 it is nil on every diagnostic Verify, VerifyMotion and VerifyLinkage emit.
@@ -789,7 +789,7 @@ MotionInterval records the certificate between adjacent poses.
     Status      <a href="#Status">Status</a>
 }</pre>
 
-MotionReportOf is VerifyMotion's path report (agent-docs/motion-check-design.md
+MotionReportOf is VerifyMotion's path report (agent-docs/linkage-check-design.md Part M
 §4). B is the body reference type and M the motion type the call stated.
 
 <a name="LiftMotionReport"></a>
