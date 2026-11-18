@@ -69,6 +69,33 @@ membership and transfers the exact mesh parity answer to the body. Equality
 is undecided. The calculation compares exact rationals and uses no sampled
 distance or tolerance-based predicate.
 
+**Free path.** `S` bounds the whole body's symmetric difference, so on a large
+faceted result the ball rule decides only far from the boundary: a point 0.3 mm
+inside a bore of a 140 mm mesh Boolean result has `4R³ ≈ 0.09` against `S ≈ 11`.
+`S` is composed by set algebra over the operations that made the body and
+names no region, so no part of it can be read as the share near `p`. A point the
+held mesh puts outside is then proved outside, for a distance query, by a free
+path, which reads `B` and no volume. Point location keeps the ball rule alone,
+since its callers ask many points of fine meshes, such as a lattice's. Take points `q_0 = p, q_1, …, q_k` with exact held-mesh distances
+`L_i` (rounded down) and `R_i = L_i − B > 0`. The open ball of radius `R_i` about
+`q_i` meets neither boundary: `M`'s lies at least `L_i` from `q_i`, and every
+point of `T`'s lies within `B` of `M`'s, so at least `L_i − B` from `q_i`. When
+`|q_{i+1} − q_i| < R_i + R_{i+1}`, compared exactly, consecutive balls overlap,
+so the chain's union is connected and boundary-free and both solids give all of
+it one membership each. The last point lies strictly outside the box of `M`'s
+vertices widened by `B` on some axis. `T`'s boundary lies in that box, so `T`
+does too (a point of `T` outside a convex box leaves `T` on a ray away from the
+box, at a boundary point outside it), and so does `M`. Both solids therefore
+leave `q_k`, and so `p`, outside. The chain steps from `p` by just under `R_i`
+along trial directions: the six axis directions and both ways along each edge
+of the held triangle nearest `p`, which follow a bore's or a slot's wall out of
+it. A direction takes at most 64 balls and is dropped when a ball falls below
+1/8 of the first or the balls stop overlapping; a query spends at most 128 exact
+mesh distances on chains. The directions only steer the search; each chain is checked exactly. A
+point the held mesh puts inside, or one whose chains all stop, stays
+undecided. The proof is only as sound as `B`: an understated `B` lets a chain
+pass a true boundary the held mesh does not show (`TestLocateByFreePath`).
+
 The distance kernel tests the orthogonal projection onto each triangle's
 plane. If that projection lies in the closed triangle, the squared distance is
 the squared plane offset divided by the squared normal length. Otherwise the
@@ -88,6 +115,12 @@ outside. No nearest-face selection or local normal decides membership.
   it, and on the boundary at a point of its exact circular wall (§7).
 - A faceted boolean result answers inside or outside at points whose ball
   proof clears its symmetric-difference bound.
+- A point in a bore of a large faceted boolean result, whose ball cannot clear
+  the body's symmetric-difference bound, is proved outside by a free path, and
+  its distance reads within the mesh bound of the exact one, also after a
+  rotation (`apitest/point_distance_free_path_test.go`). A closed cavity has no
+  free path, a path within `B` of the mesh proves nothing, and an understated
+  `B` would answer wrongly (`internal/pointquery/escape_test.go`).
 - A rotated body answers in world coordinates. A sheet returns `ErrNotSolid`.
 - A canceled context, invalid point and invalid tolerance return their stated
   errors without changing the document.
