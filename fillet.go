@@ -108,8 +108,9 @@ type FilletOption interface{ filletOption() }
 // corner involving an arc — the walls beside each loop trimmed to its
 // side level and the face holding it to its offset contour; the result is a
 // brep body whose patches carry filletLoop(f,l,p). Selected straight edges
-// on part of one planar loop form a partial band; a swept common wall can be
-// restated as that planar loop. Loops sharing an edge are SL1; complete loops
+// on part of one planar loop form a partial band whose selected walls must
+// all descend or all rise, as a block's root flush with a plate's side does;
+// a swept common wall can be restated as that planar loop. Loops sharing an edge are SL1; complete loops
 // mixed with independent straight edges take route V. A line–arc or arc–arc
 // join tangent only to the record's rounding, as a sketch fillet or tangent
 // constraint records it (sin²θ ≤ 2⁻⁶⁴), builds as a tangent join and its

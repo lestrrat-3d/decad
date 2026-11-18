@@ -152,7 +152,7 @@ func (r *State) RewritePartialFillet(sel Sel, selected []bool, blends []*breprec
 	if r.Setback == nil {
 		return breprecord.Payload{}, r.Refuse("SL1", `the partial-loop fillet has no radius`)
 	}
-	if err := r.ClassifyLoop(&sel); err != nil {
+	if err := r.ClassifyPartialLoop(&sel, selected); err != nil {
 		return breprecord.Payload{}, err
 	}
 	active := sel
