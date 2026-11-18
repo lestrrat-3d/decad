@@ -5,18 +5,18 @@ Navigation: input class → §1; why a cell needs a band → §2; shared rules �
 undecided → §6; soundness → §7; tests → §8; increments → §9.
 
 The pin-in-bore readings of §4 are implemented. The flat-feature readings of
-§5 are the planned second increment (§9); the code does not read them yet.
+§5 are planned (§9) and not yet in the code.
 
 This document owns the band readings of the clearance kernel's face and edge
-cells: lower bounds read without the degeneracy oracle's answer, for carriers
-that an exact construction makes coaxial, parallel or perpendicular and a
-float placement moves a few roundings off. `agent-docs/clearance-design.md`
-owns the kernel, its proof obligation (§1), candidate enumeration (§3), face
-pair table (§4), intervals (§5) and touching pairs (§6). Its windowed nested
-cell (§4) is the first band reading and the model for every reading here.
-Nothing here changes those contracts: a band reading only adds a proven
-interval where a cell would otherwise contribute the coarse enclosure's zero
-lower bound or mark the pair unsure.
+cells. A band reading is a lower bound read without the degeneracy oracle's
+answer, for carriers that an exact construction makes coaxial, parallel or
+perpendicular and a float placement moves a few roundings off.
+`agent-docs/clearance-design.md` owns the kernel, its proof obligation (§1),
+candidate enumeration (§3), face pair table (§4), intervals (§5) and touching
+pairs (§6). Its windowed nested cell (§4) is the first band reading and the
+model for every reading here. A band reading changes none of those contracts.
+It only adds a proven interval where a cell would otherwise contribute the
+coarse enclosure's zero lower bound or mark the pair unsure.
 
 ## 1. Input class
 
@@ -58,8 +58,8 @@ A cell that branches on the answer has a closed form for `DegYes` and for
 boxes, or it marks the sink unsure. Two features whose boxes meet then
 contribute a zero lower bound, `Pair` reads `lo ≤ tol` and the pair is
 undecided. The pruning of `clearance-design.md` §5 skips a cell whose box
-distance exceeds the best upper bound, so whether the failure shows depends on how far apart the features'
-boxes are, not on the placement angle as such. A pin and its bore rotated
+distance exceeds the best upper bound, so the failure shows only when the
+features' boxes are close, whatever the placement angle. A pin and its bore rotated
 5° about Y keep their rim boxes 1.45 mm apart and the rim cell is pruned; at
 20° the boxes meet and the pair reads undecided. The same pin with its rims
 5 mm from the bore's rims reads a measured gap at 20°.
@@ -191,7 +191,7 @@ the cell reads the rim height band (`tiltedRimOverPlane`,
 Every point of the circle is `c + ρ·u` with `u ⊥ m`, so `|u·n| ≤ s` and its
 height over `f`'s plane lies in `[b − ρ·s, b + ρ·s]`, `b = (c − f.O)·n` read
 through `clearance.Height`. A rim whose box lies farther than `tol` from the
-face's box is excluded before the reading, as it was. When `|b| − ρ·s − charge > tol`, the whole circle
+face's box is excluded before the reading. When `|b| − ρ·s − charge > tol`, the whole circle
 lies strictly on one side of the plane: no crossing, and every point pair is
 at least that far apart. The upper bound reads each admitted sample's exact
 height (`clearance.Height`) where its foot lies in `f`'s trim. A band that
@@ -199,9 +199,8 @@ does not clear keeps the unsure answer.
 
 ## 5. Flat-feature readings (planned)
 
-These readings are the second increment and are not implemented. Until they
-land, each cell below keeps its present answer: the coarse enclosure or
-unsure.
+These readings are not implemented. Each cell below keeps its present answer:
+the coarse enclosure or unsure.
 
 A placed block beside a placed block, or a pin lying along a block's face,
 reaches the same undecided band through parallel planes, edges and axes. Each
@@ -325,7 +324,7 @@ directly, as `curvecells/cells_test.go` and `facepair/cells_test.go` do.
   with an annulus inside, outside and straddling each boundary.
 - `curvecells` and `facepair`: the §5 readings, each with a near-parallel
   case that clears, a crossing that stays unsure, and a decided branch whose
-  output is unchanged (second increment).
+  output is unchanged (planned with §5).
 
 **API tests** (`apitest/clearance_band_test.go`, exported API only):
 
@@ -340,7 +339,7 @@ directly, as `curvecells/cells_test.go` and `facepair/cells_test.go` do.
   by one rotation and the pin by two half rotations. The placements at 0°, 5°,
   20°, 90° and off Y read the same row. The placements at 45° and 137° about Y
   read `Suspect` with `DiagUndecidedClearance` and no row, because §6's
-  near-parallel plane faces meet there; the second increment turns them into
+  near-parallel plane faces meet there; the §5 readings turn them into
   rows.
 - `TestClearancePlacedPinInBoreIsFast`: the 20° pair verifies in under five
   seconds.
@@ -353,7 +352,7 @@ directly, as `curvecells/cells_test.go` and `facepair/cells_test.go` do.
   (`raceDetector`).
 - `TestClearancePlacedPinThatFillsItsBore`: equal radii, placed at 20°, reads
   `Suspect` with no row.
-- `TestClearancePlacedFlatPairs` (second increment, with §5): two blocks with facing
+- `TestClearancePlacedFlatPairs` (planned with §5, not yet written): two blocks with facing
   faces `0.5` apart and a pin `0.5` from a block's face, placed at 30° about
   `(1, 1, 0)` and at 137° about Y, read a gap within `1e-9` of `0.5`.
 
