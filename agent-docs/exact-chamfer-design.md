@@ -147,7 +147,8 @@ For edge `e` from `V₀` to `V₁` (held vertices `l.ends[i].v`), faces `A`, `B`
   loop of `fG[i]` (`indexIn` over `fG[i].loops`). `cB_i` likewise from `runB.chain[i]`. Every chain vertex is a vertex
   of `A`'s (or `B`'s) loop by construction (`walk` over that loop), so `cA_i` is a held vertex of both `A` and `G_i`.
 - The exact path runs when the spec is a chamfer (`!spec.fillet`), `V₀` and `V₁` have `w.beta == 0`, all four of
-  `cA₀, cA₁, cB₀, cB₁` exist, and neither end is oblique (`l.ends[i].tilt == 0`). Otherwise the feet take today's
+  `cA₀, cA₁, cB₀, cB₁` exist, and neither end is oblique (`l.ends[i].tilt == 0`), no plane of `A`, `B`, `G₀`, `G₁` states a displacement
+  (`AxialDelta` is 0; §9 Q5), and `V_i` is a vertex of a loop of `G_i`. Otherwise the feet take today's
   path unchanged (E6). An oblique end's tag states a tilt, and this design does not derive its plane.
 
 All arithmetic is in `big.Rat` on the held floats. With `E = V₁ − V₀`:
@@ -322,7 +323,9 @@ the mesh path. Tenon T: the prism through `(−5, 0), (5, 0), (6, 6), (−5, 6)`
 
 - R1 square lip of S, `d = 0.5`: first assert every vertex of the `Cut` has bound 0; then every vertex of the result
   has bound 0, `Volume.Bound` equals the `Cut`'s, and the volume change is exactly `0.125 × 16 = 2`.
-- R2 asymmetric square lip, `d = 0.5`, other `0.25`, reference the lip top: as R1, change `0.0625 × 16 = 1`.
+- R2 asymmetric square lips: S with both walls square (prism through `(−5, −6), (5, −6), (5, 6), (−5, 6)`), both lips
+  chamfered with `d = 0.5`, other `0.25`, the block's start cap as reference (a face query on the lip bottoms alone
+  matches the pocket ceiling too, which the option refuses): as R1, change `2 × 0.0625 × 16 = 2`.
 - R3 tilted lip of S, `d = 0.5`: the two feet on the lip top, `(5.5, y, 0)`, have bound 0; the two feet on the
   slope-1/6 wall have bound in `(0, 1e-14]`; `Volume.Bound − Cut bound ≤ 1e-11`; each strip facet lies within its own
   bound of the exact chamfer plane, measured with U3's 512-bit `big.Float` feet (the plane is irrational).
@@ -407,6 +410,14 @@ the mesh path. Tenon T: the prism through `(−5, 0), (5, 0), (6, 6), (−5, 6)`
 - B. Publish `AxialDelta` = the proven largest distance of the four exact feet from the tag plane. Gains: Claim R
   exact. Costs: every R1 chamfer face becomes a displaced plane; readers that refuse displaced planes refuse it.
 - Recommend A until a reader needs B.
+
+**Q5. Faces that state a plane displacement** (`AxialDelta` above 0) keep today's feet and the τ bound.
+
+- A. Keep the restriction (as built). Gains: the existing pin `TestChamferChargesPlaneAxialDelta` (a stated
+  displacement reaches the vertex bounds) holds. Costs: such chamfers keep the `τ`-sized volume bound.
+- B. Drop it. The carriers are true points, so the exact feet do not read the tags. Gains: exact feet there too.
+  Costs: that test's pin changes.
+- Recommend A until a consumer needs B.
 
 **Q4. Exact feet on the other planar strips** (R3 chamfer, straight entries of chamfer chains). Gains: the same
 exactness there. Costs: one foot formula per route. Recommend after Q1, which decides whether exactness pays off.
