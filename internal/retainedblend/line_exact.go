@@ -34,9 +34,8 @@ func (a ratVec) primitive() (ratVec, bool) {
 	}
 	lcm := big.NewInt(1)
 	for _, x := range a {
-		d := x.Denom()
-		g := new(big.Int).GCD(nil, nil, lcm, d)
-		lcm.Mul(lcm, new(big.Int).Quo(d, g))
+		g := new(big.Int).GCD(nil, nil, lcm, x.Denom())
+		lcm.Mul(lcm, new(big.Int).Quo(x.Denom(), g))
 	}
 	var ints [3]*big.Int
 	gcd := new(big.Int)
@@ -159,9 +158,8 @@ func setbackFoot(v, e, n ratVec, ne *big.Rat, u ratVec, t *big.Rat) (r3.Vec, flo
 // ratSqrt encloses √q for the positive integer q: a point when q is a perfect square, else SqrtFixed's enclosure.
 func ratSqrt(q *big.Rat) (proofbound.RatInterval, bool) {
 	if q.IsInt() {
-		n := q.Num()
-		s := new(big.Int).Sqrt(n)
-		if new(big.Int).Mul(s, s).Cmp(n) == 0 {
+		s := new(big.Int).Sqrt(q.Num())
+		if new(big.Int).Mul(s, s).Cmp(q.Num()) == 0 {
 			return proofbound.PointInterval(new(big.Rat).SetInt(s)), true
 		}
 	}
