@@ -17,7 +17,7 @@ type DiagnosticPairOf[BodyT comparable] struct{ A, B BodyT }
 // diagnostic — set even when Reading is ReadingNone, so an unsupported wall,
 // undercut, or concave-radius refusal is distinguished without inspecting
 // Message text. At is the motion parameter a VerifyMotion finding concerns
-// (agent-docs/motion-check-design.md §4.1); it is nil on every diagnostic Verify
+// (agent-docs/linkage-check-design.md Part M §4.1); it is nil on every diagnostic Verify
 // emits and on every motion finding about the whole path. Cell is the joint
 // cell a VerifyJointBox finding concerns (agent-docs/linkage-check-design.md §14.2);
 // it is nil on every diagnostic Verify, VerifyMotion and VerifyLinkage emit.

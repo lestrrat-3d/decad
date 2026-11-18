@@ -7,7 +7,7 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// MotionReportOf is VerifyMotion's path report (agent-docs/motion-check-design.md
+// MotionReportOf is VerifyMotion's path report (agent-docs/linkage-check-design.md Part M
 // §4). B is the body reference type and M the motion type the call stated.
 type MotionReportOf[B comparable, M any] struct {
 	Request     MotionRequest

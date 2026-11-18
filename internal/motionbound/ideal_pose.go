@@ -155,7 +155,7 @@ func (mf MotionFrame) ScaledRotation(sin, cos proofbound.RatInterval) ScaledIvMa
 // at builds the ideal pose for the exact parameter p.
 //
 // A between's parameter is the fraction s = p.base, and its ideal path is
-// agent-docs/motion-check-design.md §5.1's T*(s) = S*(s) ∘ From: the exact screw of
+// agent-docs/linkage-check-design.md Part M §5.1's T*(s) = S*(s) ∘ From: the exact screw of
 // the read parameters, rotating by s·θ about the line through c = Point along
 // n = Axis/|Axis| and sliding s·d along n, applied after the exact From. In
 // x ↦ rot·x + shift form that is rot = R(s·θ, n)·B(From) and
@@ -234,7 +234,7 @@ func (mf MotionFrame) AtRange(lo, hi MotionParam) IdealPose {
 }
 
 // StatedEnd is the ideal pose of a between's stated To, x ↦ B(To)·x + t(To)
-// read exactly: what η_To of agent-docs/motion-check-design.md §5.1 charges the
+// read exactly: what η_To of agent-docs/linkage-check-design.md Part M §5.1 charges the
 // s = 1 pose against, beside the ideal end T*(1).
 func (mf MotionFrame) StatedEnd() IdealPose {
 	zero := proofbound.PointInterval(new(big.Rat))

@@ -442,7 +442,7 @@ func (r *Run) recordDeclaredGap(mp *Pose, mover, partner *topo.Body, res pairker
 }
 
 // intervalVerdict decides one interval between adjacent poses a and b
-// (agent-docs/motion-check-design.md §5.2). A proven collision at either end makes
+// (agent-docs/linkage-check-design.md Part M §5.2). A proven collision at either end makes
 // it vocab.IntervalColliding. Otherwise it is vocab.IntervalClear only when EVERY pair
 // certifies: a swept-box-excluded pair by its whole-path lower bound, an
 // evaluated pair by the larger of two proven lower bounds on its gap over the
@@ -555,7 +555,7 @@ func (r *Run) Conclude(poses []*Pose, spans []Span) motionconclude.MotionConclus
 		})
 }
 
-// Publish assembles VerifyMotion's report (agent-docs/motion-check-design.md §4).
+// Publish assembles VerifyMotion's report (agent-docs/linkage-check-design.md Part M §4).
 func (r *Run) Publish(poses []*Pose, spans []Span) *Report {
 	c := r.Conclude(poses, spans)
 	report := &Report{
@@ -578,7 +578,7 @@ func (r *Run) Publish(poses []*Pose, spans []Span) *Report {
 	return report
 }
 
-// pathClearance is agent-docs/motion-check-design.md §5.3's whole-path reading: the
+// pathClearance is agent-docs/linkage-check-design.md Part M §5.3's whole-path reading: the
 // minimum gap over the path lies between the smallest interval lower bound
 // and the smallest evaluated upper bound, since any pose's upper bound bounds
 // the path's minimum from above. It reports that interval's midpoint and

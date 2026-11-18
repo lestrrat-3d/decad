@@ -24,7 +24,7 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// This file is Document.VerifyMotion (agent-docs/motion-check-design.md §3, §5-§8)
+// This file is Document.VerifyMotion (agent-docs/linkage-check-design.md Part M §3, §5-§8)
 // and the engine it shares with Document.VerifyLinkage
 // (agent-docs/linkage-check-design.md §6): validation, the swept-box exclusion, the
 // per-pose pair proof over transient placements, the two-sided interval
@@ -426,7 +426,7 @@ func (m *Single) PosesAt(f *big.Rat, at units.Value, param motionbound.MotionPar
 	return []GroupPose{{Pose: pose, Ideals: ideals, Stretch: stretch}}, nil
 }
 
-// travel is τ of agent-docs/motion-check-design.md §5.2 for mover i: every pair of
+// travel is τ of agent-docs/linkage-check-design.md Part M §5.2 for mover i: every pair of
 // one group's mover has a static partner, which does not move.
 func (m *Single) Travel(i, _ int, a, b motionbound.MotionParam) *big.Rat {
 	return motionbound.MoverTravel(m.r.Spec.Frame, m.r.Movers[i].Rho, a, b)
@@ -435,7 +435,7 @@ func (m *Single) Travel(i, _ int, a, b motionbound.MotionParam) *big.Rat {
 // projection is the projection bound of agent-docs/linkage-check-design.md §5.8
 // for pair k of mover i over the interval between poses a and b, the motion
 // read as one joint whose value is the motion's parameter
-// (agent-docs/motion-check-design.md §5.2): the mover's points — its box corners,
+// (agent-docs/linkage-check-design.md Part M §5.2): the mover's points — its box corners,
 // then its hull points — posed at each end and expanded to second order in
 // the parameter along the interval's own step, the static partner's points
 // as they stand. The parameter is affine in the fraction over the whole path,
@@ -722,7 +722,7 @@ func (r *Run) RunPairs(mp *Pose) error {
 }
 
 // validityFindings carries a not-proven-valid body's own validity diagnostic
-// into the pose (agent-docs/motion-check-design.md §7), stamped with where it was
+// into the pose (agent-docs/linkage-check-design.md Part M §7), stamped with where it was
 // found.
 func (r *Run) validityFindings(mp *Pose, validity ValidityResult) {
 	if validity.Outcome == vocab.ValidityValid {

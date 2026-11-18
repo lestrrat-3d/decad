@@ -39,7 +39,7 @@ type identResolution struct{}
 type identMinClearance struct{}
 
 // WithMotionTolerance is verification §2's relative tolerance under a name of
-// its own (agent-docs/motion-check-design.md §3): it governs every bounded reading
+// its own (agent-docs/linkage-check-design.md Part M §3): it governs every bounded reading
 // a MotionReport carries, with the pair diameter as the reference.
 // Dimensionless; the default is units.Scalar(1e-3). A wrong Kind is
 // ErrUnitKind, a negative value decaderr.ErrNegativeMagnitude, a non-finite one
@@ -49,7 +49,7 @@ func WithMotionTolerance(rel units.Value) MotionOption {
 }
 
 // WithResolution states the finest parameter step the check refines to, for
-// the verdict and for the readings alike (agent-docs/motion-check-design.md §3,
+// the verdict and for the readings alike (agent-docs/linkage-check-design.md Part M §3,
 // §6): an interval at or below it that the certificate still cannot settle
 // reads IntervalUndecided, and a path reading or margin the floor leaves
 // coarse is published coarse. It is a magnitude of the motion's own Kind —
@@ -69,7 +69,7 @@ func WithResolution(step units.Value) MotionOption {
 }
 
 // WithMinClearance states the spec that the moving set stays at least minimum
-// from every static body over the whole path (agent-docs/motion-check-design.md §3),
+// from every static body over the whole path (agent-docs/linkage-check-design.md Part M §3),
 // and, for VerifyLinkage, that every evaluated pair stays that far apart,
 // deciding the report's Assessment: met when every interval certifies the
 // margin, violated when some pose proves a gap below it, undecided otherwise.

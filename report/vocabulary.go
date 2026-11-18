@@ -468,7 +468,7 @@ const (
 	// names the quantity, Required nil. Contributes Suspect.
 	DiagToleranceReferenceUnavailable
 	// DiagMotionCollision — a motion pose proves a (mover, static) pair
-	// overlaps (agent-docs/motion-check-design.md §4.1). Pair and At set; Reading
+	// overlaps (agent-docs/linkage-check-design.md Part M §4.1). Pair and At set; Reading
 	// ReadingOverlapVolume with Observed the volume when it was bounded, else
 	// ReadingNone. Contributes Interfering.
 	DiagMotionCollision

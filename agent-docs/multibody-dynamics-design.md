@@ -5274,7 +5274,7 @@ zero after both charges.
 Transfer a held overlap to the query pose by subtracting the two bodies'
 conservative swept-volume allowances from its lower volume bound. The
 allowances use each body's area upper bound and its own pose deviation, as in
-`agent-docs/motion-check-design.md` §5.1. A positive remainder proves overlap;
+`agent-docs/linkage-check-design.md` Part M §5.1. A positive remainder proves overlap;
 otherwise return `Undecided` unless another exact set certificate applies.
 Transfer a held exact touch only if the complete contact and material-side
 certificate also applies to the exact query poses. A nonzero placement or
@@ -5877,7 +5877,7 @@ revolved profiles return `Undecided` on this path.
 Part C owns the package
 boundary and Part G owns relation and manifold
 proofs at one pose. This document owns the paths, continuous clear certificate,
-first-contact search, and sweep report. `agent-docs/motion-check-design.md` supplies
+first-contact search, and sweep report. `agent-docs/linkage-check-design.md` Part M supplies
 the existing one-mover proof pattern; its `VerifyMotion` API stays separate.
 
 Navigation only: paths and API → §1–2; pose accounting → §3; continuous bounds
