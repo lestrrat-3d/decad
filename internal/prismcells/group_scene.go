@@ -447,24 +447,9 @@ func curvedPairContact(a, b sketch.Entity) (bool, bool) {
 // only leaves the arrangement's own cut standing for the caller's checks.
 func CurvedCrossingsCut(budget *proofbound.WorkBudget, tags map[sketch.Entity]Origin,
 	profiles []*sketch.Profile) (bool, error) {
-	at := map[[2]float64]map[sketch.Entity]struct{}{}
-	for _, cell := range profiles {
-		for _, ring := range append([][]sketch.BoundaryEdge{cell.Outer}, cell.Holes...) {
-			for _, e := range ring {
-				if err := budget.Step(); err != nil {
-					return false, err
-				}
-				if len(e.Polyline) == 0 {
-					return false, nil
-				}
-				for _, p := range [][2]float64{e.Polyline[0], e.Polyline[len(e.Polyline)-1]} {
-					if at[p] == nil {
-						at[p] = map[sketch.Entity]struct{}{}
-					}
-					at[p][e.Entity] = struct{}{}
-				}
-			}
-		}
+	at, ok, err := arrangedVertexEntities(budget, profiles)
+	if err != nil || !ok {
+		return false, err
 	}
 	entities := make([]sketch.Entity, 0, len(tags))
 	for e := range tags {
@@ -508,6 +493,33 @@ func CurvedCrossingsCut(budget *proofbound.WorkBudget, tags map[sketch.Entity]Or
 	return true, nil
 }
 
+// arrangedVertexEntities maps every walked vertex (an edge's Polyline end)
+// to the entities whose edges end there. ok is false when an edge has no
+// polyline to read.
+func arrangedVertexEntities(budget *proofbound.WorkBudget,
+	profiles []*sketch.Profile) (map[[2]float64]map[sketch.Entity]struct{}, bool, error) {
+	at := map[[2]float64]map[sketch.Entity]struct{}{}
+	for _, cell := range profiles {
+		for _, ring := range append([][]sketch.BoundaryEdge{cell.Outer}, cell.Holes...) {
+			for _, e := range ring {
+				if err := budget.Step(); err != nil {
+					return nil, false, err
+				}
+				if len(e.Polyline) == 0 {
+					return nil, false, nil
+				}
+				for _, p := range [][2]float64{e.Polyline[0], e.Polyline[len(e.Polyline)-1]} {
+					if at[p] == nil {
+						at[p] = map[sketch.Entity]struct{}{}
+					}
+					at[p][e.Entity] = struct{}{}
+				}
+			}
+		}
+	}
+	return at, true, nil
+}
+
 // crossingMatchBand is CurvedCrossingsCut's relative distance between a point
 // sketch's query reports and the arranged vertex standing for it. A narrower
 // band only refuses more.
@@ -542,16 +554,12 @@ func lineCurvePoints(line *sketch.Line, curve sketch.Entity) ([]*geom.Point, boo
 }
 
 // crossingVertex reports whether some arranged vertex where an edge of line
-// and an edge of curve both end lies within crossingMatchBand of q.
+// and an edge of curve both end lies within crossingMatchBand of q, relative
+// to q's coordinates and either entity's radius. ContactsCut passes any two
+// entities this way.
 func crossingVertex(budget *proofbound.WorkBudget, at map[[2]float64]map[sketch.Entity]struct{},
-	line *sketch.Line, curve sketch.Entity, q *geom.Point) (bool, error) {
-	scale := max(1, math.Abs(q.X), math.Abs(q.Y))
-	switch c := curve.(type) {
-	case *sketch.Circle:
-		scale = max(scale, c.Geometry().Radius)
-	case *sketch.Arc:
-		scale = max(scale, c.Geometry().Radius())
-	}
+	line, curve sketch.Entity, q *geom.Point) (bool, error) {
+	scale := matchScale(q, line, curve)
 	for p, incident := range at {
 		if err := budget.Step(); err != nil {
 			return false, err
