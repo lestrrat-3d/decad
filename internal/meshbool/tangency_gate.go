@@ -53,6 +53,14 @@ import (
 // disjoint from coneFace of the second; that pair is admitted only when no
 // held facet of one touches a held facet of the other.
 //
+// A coplanar face-on-face overlap is deferred by the caller's gather, and the
+// deferral is backed by a refusal in the mesh pass (agent-docs/coplanar-contact-design.md
+// §6). A face pair with a summed reading of zero is skipped above: both faces are
+// exact, so every coplanar facet pair between them is admitted and classified
+// exactly. A face pair with a positive sum holds an inexact face, and every
+// coplanar facet pair in it holds a facet of that face, which the mesh pass
+// refuses with TouchCoplanar.
+//
 // It may refuse a valid model whose operands genuinely pass within a chord
 // tolerance of each other. That is the accepted price; the alternative is a
 // verdict decided by chord placement.
