@@ -441,7 +441,7 @@ For an admitted pair, decad builds one private `sketch.Sketch` (the same
   and that decision is `sketch`'s to make, not decad's to second-guess or
   pre-empt. An ordinary rigid-transform rounding (a few ulps) clears that band
   by three-plus orders of magnitude on any geometry with a real coincident
-  carrier by construction (`docs/coincident-carrier-resolution-design.md`'s
+  carrier by construction (`sketch` `docs/coincident-carrier-resolution-design.md`'s
   own sizing: "a couple of ulps of `r`").
 
 ### 4.2 Region resolution

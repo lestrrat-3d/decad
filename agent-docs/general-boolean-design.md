@@ -1889,7 +1889,7 @@ refuse or are charged.
 ## 7. Upstream dependency
 
 Class A3 reads `sketch`'s resolution of coincident line carriers
-(`agent-docs/coincident-carrier-resolution-design.md`, "Coincident line carriers"),
+(`sketch` `docs/coincident-carrier-resolution-design.md`, "Coincident line carriers"),
 which resolves a line pair only where both lines close loops (its
 shared-wall gate) and they are the same line at round-off (its identity
 gate). A pair outside either gate stays an invalid region, and the boolean

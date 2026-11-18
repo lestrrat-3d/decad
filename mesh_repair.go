@@ -70,7 +70,7 @@ type MeshRepairReport struct {
 }
 
 // RepairMesh mends m and returns the result as a new [MeshBody] with a report of
-// what changed (agent-docs/mesh-repair-design.md). m is not changed.
+// what changed (agent-docs/mesh-import-design.md §7). m is not changed.
 //
 // It always drops triangles that carry no surface: those that name a vertex
 // twice, have zero area, or repeat an earlier triangle's vertices. Then, in this

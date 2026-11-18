@@ -1422,7 +1422,7 @@ already under way reports on the set as it stood when the call began.
 <pre>func RepairMesh(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>, m *<a href="#MeshBody">MeshBody</a>, opts ...<a href="#MeshRepairOption">MeshRepairOption</a>) (*<a href="#MeshBody">MeshBody</a>, <a href="#MeshRepairReport">MeshRepairReport</a>, <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
 
 RepairMesh mends m and returns the result as a new [MeshBody](<#MeshBody>) with a report of
-what changed (agent-docs/mesh-repair-design.md). m is not changed.
+what changed (agent-docs/mesh-import-design.md §7). m is not changed.
 
 It always drops triangles that carry no surface: those that name a vertex
 twice, have zero area, or repeat an earlier triangle's vertices. Then, in this

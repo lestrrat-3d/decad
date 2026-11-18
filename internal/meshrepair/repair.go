@@ -1,6 +1,6 @@
 // Package meshrepair mends an indexed triangle mesh: it welds close vertices,
 // drops triangles that carry no surface, winds shells consistently and closes
-// simple holes (agent-docs/mesh-repair-design.md). It works on plain
+// simple holes (agent-docs/mesh-import-design.md §7). It works on plain
 // millimetre data and touches no body or document.
 package meshrepair
 
