@@ -123,3 +123,81 @@ func TestStackedUnionBlocksApartTakeMeshPath(t *testing.T) {
 	require.True(t, tookMeshPath(got))
 	require.Len(t, got.Lumps(), 2)
 }
+
+// joinOrRefuse is the union of a and b, or nil with the refusal when the
+// union refuses.
+func joinOrRefuse(t *testing.T, a, b *decad.Body) (*decad.Body, error) {
+	t.Helper()
+	got, err := decad.Union(t.Context(), a, b)
+	if err != nil {
+		require.ErrorIs(t, err, decad.ErrUnsupported)
+		return nil, err
+	}
+	return got, nil
+}
+
+// TestStackedUnionApartGroupsMustNotTouch puts a block across the tops of two
+// 15 mm blocks standing on a plate. Over z = 25 the bridge's footprint and
+// one block's top share no edge. Where they stand apart the union is an exact
+// brep; where they touch at a corner, or where a bridge's edge is tangent to
+// a round boss's top circle, reading them apart would pinch the result at
+// that point, so the union keeps the mesh path or refuses.
+func TestStackedUnionApartGroupsMustNotTouch(t *testing.T) {
+	t.Parallel()
+	bridged := func(t *testing.T, doc *decad.Document, x0, y0 float64) *decad.Body {
+		t.Helper()
+		body := unionUnequalBlocks(t, doc, []unequalBlock{{10, 10, 20, 20, 15}, {x0, y0, x0 + 10, y0 + 10, 15}})
+		got, err := decad.Union(t.Context(), body, boxBodyAtZ(t, doc, 15, 15, 30, 25, 25, 5))
+		require.NoError(t, err)
+		return got
+	}
+	t.Run("apart", func(t *testing.T) {
+		t.Parallel()
+		doc := decad.New()
+		got := bridged(t, doc, 35, 25)
+		require.False(t, tookMeshPath(got))
+		requireEveryEdgeOnTwoFaces(t, got)
+		volume, err := got.Volume()
+		require.NoError(t, err)
+		require.Equal(t, decad.Exact, volume.Exactness)
+		require.Equal(t, 24000.0+1500+1500+750, volumeMM(t, volume))
+		report, err := doc.Verify(t.Context())
+		require.NoError(t, err)
+		reading, err := report.ForBody(got)
+		require.NoError(t, err)
+		require.Equal(t, decad.Sound, reading.Status)
+	})
+	t.Run("corner touch", func(t *testing.T) {
+		t.Parallel()
+		doc := decad.New()
+		// The bridge's corner (30, 25, 25) is the second block's top corner.
+		require.True(t, tookMeshPath(bridged(t, doc, 30, 25)))
+	})
+	for _, tc := range []struct {
+		name string
+		x1   float64
+	}{{"edge tangent to the boss", 30}, {"clear of the boss", 29}} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			doc := decad.New()
+			plate := boxBody(t, doc, 0, -10, 60, 10, 10)
+			body, err := decad.Union(t.Context(), plate, circleBodyAtZ(t, doc, 15, 5, 10, 15))
+			require.NoError(t, err)
+			body, err = decad.Union(t.Context(), body, circleBodyAtZ(t, doc, 35, 5, 10, 15))
+			require.NoError(t, err)
+			// The bridge's edge x = 30 touches the second boss's top circle at (30, 0, 25).
+			got, err := joinOrRefuse(t, body, boxBodyAtZ(t, doc, 15, -3, tc.x1, 3, 25, 5))
+			if tc.x1 == 30 {
+				require.True(t, err != nil || tookMeshPath(got), "a tangent contact is not read apart")
+				return
+			}
+			require.NoError(t, err)
+			require.False(t, tookMeshPath(got))
+			requireEveryEdgeOnTwoFaces(t, got)
+			volume, err := got.Volume()
+			require.NoError(t, err)
+			want := 12000 + 2*25*15*math.Pi + (tc.x1-15)*6*5
+			require.InDelta(t, want, volume.Value.Base(), volume.Bound.Base()+1e-9)
+		})
+	}
+}

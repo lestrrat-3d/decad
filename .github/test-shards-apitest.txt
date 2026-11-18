@@ -3052,6 +3052,7 @@
 12	8.46	TestShellThenFilletOtherStackedShells
 12	0.00	TestSolidFromMeshReadsATetrahedron
 12	0.02	TestStackBrepScaledAtPlacedAndRepeated
+12	0.00	TestStackedUnionApartGroupsMustNotTouch
 12	0.00	TestStackedUnionBlocksApartTakeMeshPath
 12	1.00	TestStackedUnionTouchingBosses
 12	0.00	TestStackedUnionUnequalBlocks
