@@ -1,9 +1,8 @@
 # Smooth Section Loft Design
 
-`LoftSections` builds one smooth solid through three to 1024
-recorded Sketch profiles. `agent-docs/loft-design.md` continues to own the two-profile ruled
-`Loft`. This document owns the separate smooth constructions, their
-admission gates, and the proofs attached to their held meshes.
+`LoftSections` builds one smooth solid through three to 1024 recorded Sketch profiles.
+`agent-docs/loft-design.md` owns the two-profile ruled `Loft`. This document owns the smooth
+constructions, their admission gates, and the proofs attached to their held meshes.
 
 ## 1. Public operation and admitted class
 
@@ -34,7 +33,7 @@ Any other five or more sections must be rectangles and stop at thirty-two.
 For the three-section homothetic route, all three planes have world-XY `U` and
 `V` axes, the same XY origin, and strictly increasing Z origins with the middle
 Z exactly halfway between the ends. A different pose or spacing returns `ErrUnsupported`. The returned body
-is a solid; this increment has no surface-result or alignment option.
+is a solid; the route has no surface-result or alignment option.
 
 Let `P_j` be walked vertex `j` of the first section. Every corresponding
 vertex of section 1 must equal `q_1 P_j`, and every vertex of section 2 must
@@ -80,7 +79,7 @@ Choose a power-of-two band count `N`, beginning at 16 and doubling through
 128, until the rational displacement bound below is at most 0.05 mm. More
 than 64 base edges or failure within 128 bands returns `ErrUnsupported`.
 Every ring vertex and Z level is evaluated as an exact rational and must be
-exactly representable as a finite float64; otherwise this increment returns
+exactly representable as a finite float64; otherwise the route returns
 `ErrUnsupported`. This keeps the held vertex table equal to its stated
 piecewise-linear interpolation, with no uncharged coordinate rounding.
 
@@ -146,14 +145,13 @@ The faceted area and face readings add their own held arithmetic charges.
 faceted proof payload. Placement carries the certified mesh and source-face
 groups through the existing faceted placement proof. Unless the placement is exactly the
 identity, a placed analytic tag moves to its float image and gets a conservative unit-normal
-departure bound. `Face.NormalAt` on a quadratic wall remains `ErrUnsupported`, as for every
+departure bound. `Face.NormalAt` on a quadratic wall returns `ErrUnsupported`, as for every
 `NURBSSurface`.
 
-The admitted classes are increments, not a claim that general multi-section
-interpolation is determined by profile boundaries. Nonhomothetic profiles
-outside §§10–12,
+The admitted classes are specific constructions. General multi-section interpolation is not
+determined by profile boundaries, so nonhomothetic profiles outside §§10–12,
 varying curved profiles outside §§7–9, arbitrary planes, guides, centerlines,
-and hole loops remain `ErrUnsupported`. Nil context or document, or fewer than
+and hole loops return `ErrUnsupported`. Nil context or document, or fewer than
 three sections, returns `ErrDegenerate`; more than thirty-two sections returns
 `ErrUnsupported` unless §13 admits them (at most 1024). A seam failure returns its own sentinel and leaves the
 document unchanged.
@@ -188,9 +186,8 @@ occupied-volume proofs for `VerifyAll`. Placement and replay use its prism
 payload, including the same curved source records.
 
 This route covers sections whose curve records are exactly identical.
-Section 8 owns its bounded fitted-flank exception. Changing another curved
-record still returns `ErrUnsupported`. Section 7 handles one bounded circular
-radius change.
+Section 7 admits one bounded circular radius change and §8 a bounded fitted-flank
+change. Any other change to a curved record returns `ErrUnsupported`.
 
 ## 7. Linearly varying circular sections
 
@@ -770,8 +767,8 @@ ring polygon by the area swept between ring and polygon, at most
 `(M_uu/(8 n_u²) + ρ)(B_u + 2ρ n_u)` per edge span, for each cap. Every term
 rounds upward into `AreaSlack`. This bound is first order in the cell size,
 unlike the second-order distance and volume bounds, and is loose at this
-resolution (about 40% of the area for the 41-section ribbon of
-`TestLoftSectionsTwistedRibbonKeepsVolumeAndMeshProof`). The diameter
+resolution; `TestLoftSectionsTwistedRibbonKeepsVolumeAndMeshProof` pins only that the
+area bound stays below the area reading. The diameter
 bound is `2 max |C|_1 + (z_{n-1} - z_0)`, over every control point.
 
 Placement, `Tessellate(VerifyAll)`, mesh booleans and export use the standard
@@ -801,8 +798,8 @@ that `big.Rat` rounding of the same value gives (`proof.FracFloat64`), and
 its rounding distance is the exact difference from that float, compared
 with the ring's largest by cross multiplication. No float decides anything,
 and every vertex and published number equals the reduced-rational
-evaluation bit for bit. The mesh needs rings about every 0.04 mm of height for a moving tooth, whatever
-the section spacing, so the triangle count follows the height and the
+evaluation bit for bit. The ring spacing needed for the tolerance follows the blend's curvature
+in height, not the section spacing, so the triangle count follows the height and the
 tolerance and not the section count. `twistTargets` are tried finest first
 (0.02, 0.03, then 0.049 mm), and the first table at or under 500000 triangles
 is used (`TestTwistedSelectCountsFallsBackPastTheCeiling`); a loft none of them
@@ -817,10 +814,9 @@ the triangle ceiling.
 
 ### 13.6 Size and provability
 
-The route is about 1000 lines of Go in `internal/smoothloft/` (patch algebra
-and admission, gathering, mesh and bounds) plus 60 in the root glue. Every
-bound above is a closed-form rational expression over exact control nets, so
-the error bound is provable as stated. No numeric search or sampled residual
-admits input. For the 41-section ribbon of
-`TestLoftSectionsTwistedRibbonKeepsVolumeAndMeshProof` the mesh has about
-39000 triangles with `MeshBound` 0.014 mm.
+The route lives in `internal/smoothloft/` (patch algebra and admission, gathering, mesh and
+bounds) with glue in `loft_sections.go`. Every bound above is a closed-form rational
+expression over exact control nets, so the error bound is provable as stated. No numeric
+search or sampled residual admits input. For the 41-section ribbon of
+`TestLoftSectionsTwistedRibbonKeepsVolumeAndMeshProof` the test pins `MeshBound` at most
+0.05 mm and the volume bound under 2% of the reference volume.
