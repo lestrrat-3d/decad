@@ -973,7 +973,15 @@ The translation-sum case could be proved exactly: a placement could record the t
 one, and §16's seat would admit a pair whose offsets each recede into their own body. It is not built, because the
 retry decides the pair and the exact proof would serve only the translation-only placements.
 
-### 18.3 Tests
+### 18.3 Kept refusal
+
+The J2 bolt and the swivel refuse in both orders when the arm pans. The pan turns the swivel about the vertical axis,
+so its pocket floor's true plane holds no float and its bore wall earns no seat (§17.4). The wall's rim contacts then
+reach the chain-depth gate, and the wall is held to 0.0105 mm, coarser than the pair's 0.0019 mm chord tolerance. The
+gap tolerance's retry cannot help: a move clears a coarse facet only past the facet's own bound, and 0.0105 mm is beyond
+the 0.01 mm reach. Holding the swivel's bore finer where it is built would decide it.
+
+### 18.4 Tests
 
 | Test | Case | Expect |
 |---|---|---|
