@@ -307,12 +307,17 @@ cell that holds the group's outer ring as a hole, which joins the group, so
 the group lies outside the record and the cell reads outside it: the top of
 a lower block and the footprint of a taller one, standing apart on a plate,
 share no edge in the scene above the lower block's top
-(`prismcells.ClassifyRegionsApart`). Only a `Union`'s interface reads cells
-so, and only when some interface cell lies inside a record of each operand:
-each operand is one connected solid, so the union is one too. Two blocks
-that stand apart on no common plate share no such cell and keep the mesh
-path. A cell unreached in a record whose edges its group does hold stays
-unresolved and misses.
+(`prismcells.ClassifyRegionsApart`). The reading holds only where no two
+groups touch: a walked vertex reached from two groups, an entity walked by
+two, or a `RegionContact` point between entities of two groups (a block's
+corner on another's, a block's edge tangent to a boss circle) is a contact
+that would pinch the result, and the scene stays unresolved and misses.
+Only a `Union`'s interface reads cells so, and only when some interface cell
+lies inside a record of each operand. That guard limits the reading's scope
+to operands that meet somewhere; it is not what makes the result correct.
+Two blocks that stand apart on no common plate share no such cell and keep
+the mesh path. A cell unreached in a record whose edges its group does hold
+stays unresolved and misses.
 A cell inside some record reaching one side and inside
 none reaching the other is that side's exposed face, recorded from the cell
 as `sketch` returned it (a floor faces up, a ceiling down). A `Union`'s
@@ -1945,8 +1950,10 @@ are relations, never literals.
   the plate-only area 1400 and each boss's cell inside its own record only.
   Blocks of unequal heights standing apart on a 60 × 40 × 10 plate, two or
   three, in either order, build an `Exact` brep of the summed volume, and the
-  lower block's root loop fillets on it
-  (`apitest/stacked_union_unequal_blocks_test.go`).
+  lower block's root loop fillets on it; a bridge across two block tops
+  builds exactly where it stands clear, and keeps the mesh path or refuses
+  where its corner meets a block's top corner or its edge is tangent to a
+  boss's top circle (`apitest/stacked_union_unequal_blocks_test.go`).
   Misses: a class-B brep operand (no stack), and a crossing round boss
   result as an operand (its stack carries a displacement).
 - **A4 reflected operand**: the L of mirror §2 mirrored across x = 30 and
