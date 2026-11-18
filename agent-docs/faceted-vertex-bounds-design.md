@@ -197,10 +197,11 @@ never reads the geometry to admit.
 ### 3.6 Shallow crossings
 
 A rim vertex's bound divides the pair's summed facet bounds by `sin θ`, so two facets that cross at a shallow
-angle give a large bound however small their own bounds are. A spiral bevel member built with a 30 mm cutter
-radius has rim pairs with `sin θ` between 0.0064 and 0.0095, facet bounds 0.0066 mm and 0.0026 mm, and a largest
-rim bound of 1.43 mm. `VerifyAll` at 0.1 mm then refuses with "requested tolerance ... is below the faceted
-body's minimum mesh bound". The same refusal applies to a 20 degree spiral angle and a 14.5 degree pressure angle.
+angle give a large bound however small their own bounds are. In a dated measurement, a spiral bevel member built
+with a 30 mm cutter radius had rim pairs with `sin θ` between 0.0064 and 0.0095, facet bounds 0.0066 mm and
+0.0026 mm, and a largest rim bound of 1.43 mm. `VerifyAll` at 0.1 mm then refuses with "requested tolerance ... is
+below the faceted body's minimum mesh bound". A 20 degree spiral angle and a 14.5 degree pressure angle refuse the
+same way.
 
 These pairs have nearly equal outward normals, so for Union and Intersect the result's corner at the rim is
 nearly flat, and the nearest point of the true boundary is much closer than `(δ_A + δ_B)/sin θ`. A flat-corner
@@ -251,8 +252,8 @@ whose box comes within the clearance of `T`'s box, grown by the corners' roundin
 that facet above `δ(t) + δ_o`, first by a float separating axis with its rounding charged (`triGapAbove`), then by
 `DisjointTriDistanceAbove`, the exact rational distance. A facet neither proof clears, whether it crosses `T`,
 touches it or stands too near, refuses the split. A candidate split is emitted only when every far piece it makes is
-proven. Otherwise the next candidate, deeper from the other operand by a factor of 8, is tried, up to four
-candidates, and a piece with none that passes stays whole, which is the result before this section. The test is
+proven. Otherwise the next candidate is tried: the clearance margin takes the values 1, 8, 64 and 512
+(`spreadMargins`), so there are at most four candidates. A piece with no passing candidate stays whole. The test is
 reject-only: a float distance at or below the clearance refuses without the exact proof, and only an axis gap or the
 exact distance admits.
 
@@ -281,8 +282,8 @@ Further conditions:
   reads the far pieces' facet bounds, which the proof above covers, and its result bound is lower for it.
   `WithRimSplit` adds no refusal for bounds, because no bound a blend reads is unproven. The refusals that remain come
   from the split vertex lying off the face's boundary loops.
-- A bounded replay applies the same pass. It charges the scan of the other operand's facets once per far piece, a
-  flat 64 work per exact distance proof, and the records of each split. It reserves the output slice's storage
+- A bounded replay applies the same pass. It charges the scan of the other operand's facets, a flat 64 work
+  (`spreadExactWork`) per exact distance proof, and the records of each split. It reserves the output slice's storage
   before it allocates it or grows it, and every append to that slice goes through the reservation. The exact-arithmetic
   temporaries (`proof.Xlerp`, `PointRoundBound`, the rationals inside `DisjointTriDistanceAbove`) reserve no bytes;
   they are bounded by a constant multiple of the corner sizes, and their cost is the flat 64 work.
@@ -433,8 +434,8 @@ classification reports as meeting the other operand (`ContactPoint`,
 facet of a RESTATING operand has `δ(t) > tol`, where a facet of a retained `Plane` states
 the slab half-width of `agent-docs/faceted-source-retention-design.md` §11 in place of `δ(t)` — which a held primitive's
 facets never do (`meshbool.RefuseCoarseHeldContact`,
-called from `MeshBoolean` on the classified contacts and from the root's
-hidden-tangency pre-pass on the facets within its slack;
+called from `MeshBoolean` on the classified contacts and from the hidden-tangency
+pre-pass (`meshbool.RefuseUndecidableProximity`, run by `internal/booleaneval/eval.go`) on the facets within its slack;
 `meshbool.StagingError` restates it in the boolean's own terms). The message names the operand (`Cut`'s
 target or tool, else first or second), the bound of the touched facet, the
 pair's chord tolerance, and says that a boolean takes no tolerance. A chorded
@@ -517,23 +518,23 @@ exactly as a global bound would.
 |---|---|---|
 | **A. Per-vertex bounds, chain-depth gate stays global** (PRs 1–3 alone) | planar chains run to fifty unions and beyond with bounds near `1e-13`; no contract change; `Bound`s shrink for every faceted body | a curved operand's result still carries `≈ 8·tol` as its global bound and is refused at the next union, so mtilt's request 1 stays refused |
 | **B. Per-vertex bounds and the local gate of §5** (PRs 1–4) | curved chains continue wherever a new contact avoids earlier rims, with the rim ceiling `2·tol/sin θ` certified per union; planar chains are additionally protected against one coarse rim far from the contact | core §8's chain-depth paragraph, evaluator §9 and tessellation §7/§11 are rewritten; a result can publish a `Bound` above the next pair's tolerance and still be an operand, which callers judging with `WithTolerance` at `Verify` already handle |
-| **C. Drop the chain-depth gate** | simplest code; nothing is ever refused before contact | the only ceiling left is `rimDelta`'s pair-diameter refusal, so a chain can publish a bound of millimetres on a part of centimetres without any refusal naming it; core §8's promise that a chain is limited by a stated comparison is gone |
+| **C. Drop the chain-depth gate** | simplest code; nothing is ever refused before contact | the only ceiling left is the pair-diameter refusal of `RimBound`, so a chain can publish a bound of millimetres on a part of centimetres without any refusal naming it; core §8's promise that a chain is limited by a stated comparison is gone |
 
 **Chosen: B.** The gate certifies a stated inequality, and B is the only option under which the hand-off's
 curved chain continues.
 
 ## 8. Increments
 
-Files are named by role. "The mesh-boolean pipeline" is `internal/meshbool` (the contact gather, the facet
+All of PRs 1–4 are implemented; PR 5 is not. Files are named by role. "The mesh-boolean pipeline" is `internal/meshbool` (the contact gather, the facet
 cutter and the stitch) together with `internal/booleaneval/eval_mesh.go`, which prepares each operand for it.
 
 | PR | Lands | Files | Tests and the red leg each must show |
 |---|---|---|---|
-| **1** | the mesh node's `VertexBound` (`internal/topo/mesh.go`) with its setter and reader, `topobuild.SetVertexBounds` and `topobuild.VertexBounds` (`internal/topobuild/mesh.go`); the mitred sweep build keeps each vertex's own rounding gap and publishes it, with `faceBound[f]` the corner maximum over `f`'s triangles and `delta`/`bound` the overall maximum (`internal/sweepmitre/build.go`); §2.1's derived reading for a mesh with no record, as one reader the pipeline will call | mesh record, mitred build, mitred restatement | A mitred sweep with its path start at the origin and an axis-aligned first span publishes `β = 0` at every start-cap vertex and `β ≤ delta` everywhere, with equality at one vertex; red leg: publish `delta` at every vertex and the zero assertion fails. The derived reading on a revolve mesh equals the largest incident `faceBound` at a cap-wall corner; red leg: read the vertex's own face alone and the corner assertion fails |
+| **1** | the mesh node's `VertexBound` (`internal/topo/mesh.go`) with its setter and reader, `topobuild.SetVertexBounds` and `topobuild.VertexBounds` (`internal/topobuild/mesh.go`); the mitred sweep build keeps each vertex's own rounding gap and publishes it, with `faceBound[f]` the corner maximum over `f`'s triangles and `delta`/`bound` the overall maximum (`internal/sweepmitre/build.go`); §2.1's derived reading for a mesh with no record, as one reader the pipeline calls | mesh record, mitred build, mitred restatement | A mitred sweep with its path start at the origin and an axis-aligned first span publishes `β = 0` at every start-cap vertex and `β ≤ delta` everywhere, with equality at one vertex; red leg: publish `delta` at every vertex and the zero assertion fails. The derived reading on a revolve mesh equals the largest incident `faceBound` at a cap-wall corner; red leg: read the vertex's own face alone and the corner assertion fails |
 | **2** | the composition of §3: facet bounds on the prepared operand, `Sin2`/`δ` recorded on each contact segment, corner provenance on kept facets, per-vertex weld in the stitch, `facetedPayload.VertexBound`, `MeshBound` as the facet maximum; measurements still read `MeshBound` | mesh-boolean pipeline, `boolean.go`'s composition, the payload build | Union of two crossing mitred branches (the existing `apitest` fixture): every surviving operand vertex keeps its operand `β` to the bit; every rim vertex's `β` equals `upRound((δ(t_A)+δ(t_B))/SinLowerBound(Sin2)) + weld` recomputed from the fixture's own facet pair; `MeshBound` is at most today's. Red legs: divide by the pair-wide `sinMin` and the rim equality fails at a rim whose own crossing is not the shallowest; drop the per-vertex weld and tessellation §14's "rational intersection vertices round inexactly" fixture reports a rim `β` below the measured rounding gap |
 | **3** | §4's readings: `Vertex.Bound`, edge bounds, `Faceted.Bound`, area, box; `Transform` per vertex; `facetedrecord.Restate` publishes the record and per-face `faceBound`; the pre-pass reads per-face slack | `internal/booleaneval/eval_mesh.go`, `internal/facetedrecord/restate.go` | A three-union chain: an untouched trunk vertex reports the trunk's own `delta` as its `Vertex.Bound`, an untouched trunk face reports it as `Faceted.Bound`, and the box bound equals `Radius3D(e)` recomputed from the published vertices; red leg: publish `MeshBound` to every vertex and the untouched-vertex equality fails. A fixture whose largest-`β` vertex sits inside the held box but within `β` of one face of it: the box bound covers `m − (v.x − B(v))`; red leg: drop that term and the fixture's exact source box (the exact rationals) escapes the published bound. `Transform` of a boolean result: each vertex's bound grows by `RigidRoundAllow` at its own magnitude; red leg: charge the body-wide magnitude and the near-origin vertex's bound is strictly looser than the assertion allows |
 | **4** | §5: `booloperand.HeldFloor`, the per-operand request tolerance, the post-classification gate and its message; companion edits to core §8 "The chain depth", evaluator §9's rim bullet, tessellation §7 (the boolean's request) and §11 steps 7–8 and the result-payload paragraph; `meshbool.StagingError` rewritten | `boolean.go`, the mesh-boolean pipeline's contact gather, the three design docs | Twenty unions of §6's fixture succeed with every union's rim `β` at most `2·tol/sin θ` of its own pair. A fixture whose operand carries one rim with `β > tol` away from the new contact succeeds, and the same operand with the new contact placed ON that rim refuses with the new message; red leg: compare the operand's `MeshBound` and the first fixture refuses. A cone-to-cone-to-cone chain (the hand-off's request 1 shape) builds three segments; red leg: the global comparison refuses the third |
-| **5** (optional, not scheduled) | the interpolated rim rule of §6 | mesh-boolean pipeline | only if a measured chain needs it |
+| **5** (not implemented) | the interpolated rim rule of §6 | mesh-boolean pipeline | only if a measured chain needs it |
 
 ## 9. Decisions the user may want to overturn
 
