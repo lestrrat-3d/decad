@@ -8,6 +8,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/topo"
+	"github.com/lestrrat-3d/r3"
 )
 
 // TestSetExactFacets pins §3.1's admission reading: a facet is exact only when
@@ -40,4 +41,26 @@ func TestSetExactFacetsUnstatedFace(t *testing.T) {
 	err := bm.SetExactFacets(m)
 	require.Error(t, err)
 	require.True(t, errors.Is(err, decaderr.ErrBooleanFailed))
+}
+
+// TestSetExactFacetsBox pins a prepared box whose faces all read zero: every
+// facet is exact.
+func TestSetExactFacetsBox(t *testing.T) {
+	t.Parallel()
+	bm := boxMesh(t, r3.Vec{X: 1, Y: 1, Z: 1}, func(v r3.Vec) r3.Vec { return v }, r3.Vec{})
+	bm.SetVertexBounds(make([]float64, len(bm.Verts)))
+	m := &topo.Mesh{FaceBound: map[*topo.Face]float64{}}
+	faces := make([]*topo.Face, 6)
+	for i := range faces {
+		faces[i] = &topo.Face{}
+		m.FaceBound[faces[i]] = 0
+	}
+	for f := range bm.Tris {
+		m.Source = append(m.Source, faces[f/2])
+	}
+	require.NoError(t, bm.SetExactFacets(m))
+	require.Len(t, bm.Exact, 12)
+	for f, ok := range bm.Exact {
+		require.True(t, ok, "facet %d", f)
+	}
 }
