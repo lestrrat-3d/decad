@@ -987,6 +987,10 @@ Gates, each `ErrUnsupported` unless stated:
   arc's chords. A chord with an end inside the region consumes the face (SR4, `ErrDegenerate`), and one within the
   widening is undecided (SR5). A chord along a seam or along `X ∩ G` beyond the setback runs on in line with the
   region's edge and passes. A chord leaving a held corner the column takes must leave it outward of the region.
+  Beyond such a corner the boundaries of `X` and of `G` run on along their edges with `T`, away from `G` and from
+  `X`; a chord along those lines passes too, as a Cut leaves vertices inside them a few micrometres from the corner
+  (a sketched stadium's cap edge with the shoulder). Either line that meets `G` or `X` too near parallel to tell
+  its way refuses.
 - The cylinder cut takes §5.6's wall gates: a vertex on the arc's plane off the arc refuses, and a vertex inside the
   band that lies on no seam refuses (SR4 or SR5).
 - The strip test of §5.6 (`checkStripClear`) and the held audit (SR7).
@@ -1031,7 +1035,8 @@ sides' arcs and from one seed under `WithTangentChain`; a step's floor rim open 
 earlier bevel of the top rim of the same setback (the column takes the old bevel's far corner) and of a wider one
 (the wall's edge with the old bevel keeps its far part); a slot through the bar's rounded end, before and after the
 bar's rim was chamfered; a slot, a tongue open to uncut caps and a tongue ending on the caps' earlier bevels through
-a stadium link; and the link's tongue and fork faces in one call. Each checks the removed volume against Pappus
+a stadium link; tongues ending on the cap bevels of sketched stadiums of two lengths and of a sketched head with
+filleted corners; and the link's tongue and fork faces in one call. Each checks the removed volume against Pappus
 (with `d³/6` for each end on a 45° bevel that meets the wall square) within the readings' bounds, that no chain edge
 survives, that every vertex the chamfer made lies `d` from a chain edge's line or circle, and that each line's bevel
 is a new oblique plane and each arc's a new cone with no new faceted face. The ends on an earlier bevel also check
@@ -1041,7 +1046,8 @@ the other face's column do not; and the direction test for a chord that leaves a
 coincidence the ends on an earlier bevel of the same setback fall back to the cutter, whose Cut refuses them; with the
 seam read from every edge near `g` the step open to the top face falls back to the cutter and its bevels are faceted;
 with a row of its own on the cylinder an arc's bevel meets the cylinder's facets at a generator's cut and the strip
-test refuses.
+test refuses; without the line beyond a held corner on `X`, the sketched tongues fall back to the
+cutter, whose Cut refuses them. No case reaches the line on `G`, which reads the same way.
 
 ## 16. Decisions the user may want to overturn
 

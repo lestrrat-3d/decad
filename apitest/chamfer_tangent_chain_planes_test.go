@@ -307,6 +307,61 @@ func tcLink(t *testing.T, sc *tcScene, capped bool) *decad.Body {
 		tcSlotTool(t, sc, 4.26, l-21.74, l+11, -11, 22))
 }
 
+// tcSolvedPrism solves s, a sketch its caller dimensioned rather than fixed, and extrudes its one profile 10 each side
+// of its plane.
+func tcSolvedPrism(t *testing.T, sc *tcScene, s *sketch.Sketch) *decad.Body {
+	t.Helper()
+	_, err := s.Solve(t.Context())
+	require.NoError(t, err)
+	require.Len(t, s.Profiles(), 1)
+	b, err := decad.Extrude(t.Context(), sc.doc, s, s.Profiles()[0], decad.Symmetric{D: units.Millimeters(10)})
+	require.NoError(t, err)
+	return b
+}
+
+// tcPlaneXZ is a sketch on the plane y = 0 spanned by x and z.
+func tcPlaneXZ(t *testing.T, sc *tcScene) *sketch.Sketch {
+	t.Helper()
+	f, err := r3.NewFrame(r3.Vec{}, tcX, tcZ)
+	require.NoError(t, err)
+	pl, err := sc.w.CreatePlaneFromFrame(f)
+	require.NoError(t, err)
+	s, err := sc.w.CreateSketch(pl)
+	require.NoError(t, err)
+	return s
+}
+
+// tcSketchedStadium is a stadium of length l between its end axes, radius 10, drawn as a dimensioned sketch slot,
+// 20 thick along y. Its solved outline places the caps' tessellation differently from a stadium of fixed points.
+func tcSketchedStadium(t *testing.T, sc *tcScene, l float64) *decad.Body {
+	t.Helper()
+	s := tcPlaneXZ(t, sc)
+	slot, err := s.CreateSlot(0, 0, l, 0, 10)
+	require.NoError(t, err)
+	s.AddConstraint(sketch.NewCoincident(slot.C1, s.Origin()), sketch.NewVerticalDistance(s.Origin(), slot.C2, 0),
+		sketch.NewHorizontalDistance(s.Origin(), slot.C2, l), sketch.NewRadius(slot.A1, 10))
+	return tcSolvedPrism(t, sc, s)
+}
+
+// tcSketchedHead is a half circle of radius 10 about the origin, closed by a flat end at x = l whose two corners are
+// filleted with radius r in the sketch, 20 thick along y.
+func tcSketchedHead(t *testing.T, sc *tcScene, l, r float64) *decad.Body {
+	t.Helper()
+	s := tcPlaneXZ(t, sc)
+	top, bottom := s.CreatePoint(0, 10), s.CreatePoint(0, -10)
+	c1, c2 := s.CreatePoint(l, 10), s.CreatePoint(l, -10)
+	half := s.CreateArc(s.Origin(), top, bottom)
+	low, end, high := s.CreateLine(bottom, c2), s.CreateLine(c2, c1), s.CreateLine(c1, top)
+	s.AddConstraint(sketch.NewHorizontalDistance(s.Origin(), top, 0), sketch.NewHorizontalDistance(s.Origin(), bottom, 0),
+		sketch.NewRadius(half, 10), sketch.NewHorizontal(low), sketch.NewHorizontal(high), sketch.NewVertical(end),
+		sketch.NewDistancePointLine(s.Origin(), end, l))
+	_, err := sketch.CreateFillet(s, low, end, c2, r)
+	require.NoError(t, err)
+	_, err = sketch.CreateFillet(s, end, high, c1, r)
+	require.NoError(t, err)
+	return tcSolvedPrism(t, sc, s)
+}
+
 // tcWedge is the volume a chamfer of setback d removes along a right-angled edge: d²/2 times the path of the
 // wedge's centroid (Pappus). An arc of radius r and sweep θ contributes θ(r − d/3) when the material lies inside its
 // circle and θ(r + d/3) when it lies outside.
@@ -611,6 +666,43 @@ func TestChamferTangentChainAcrossPlanes(t *testing.T) {
 			tcRequireVertexAt(t, out, r3.NewVec(20+tcD, 10-tcD, 10*s))
 		}
 	})
+	// Sketched outlines, whose caps a later Cut holds with vertices close beside the old bevel's corner on the cap's
+	// edge with the shoulder: the boundary runs on from the corner along that edge.
+	for _, c := range []struct {
+		name string
+		body func(t *testing.T, sc *tcScene) *decad.Body
+	}{
+		{"a sketched stadium of length 80", func(t *testing.T, sc *tcScene) *decad.Body { return tcSketchedStadium(t, sc, 80) }},
+		{"a sketched stadium of length 150", func(t *testing.T, sc *tcScene) *decad.Body { return tcSketchedStadium(t, sc, 150) }},
+		{"a sketched head with rounded corners", func(t *testing.T, sc *tcScene) *decad.Body { return tcSketchedHead(t, sc, 55, 2) }},
+	} {
+		t.Run("a tongue's rim ending on the cap bevel of "+c.name, func(t *testing.T) {
+			t.Parallel()
+			sc := newTCScene()
+			b := c.body(t, sc)
+			b, err := tcChamfer(t, b, tcFacesEdges(t, b, tcY, []float64{-10, 10}, tcAll))
+			require.NoError(t, err)
+			b = tcCut(t, b, tcTongueCutter(t, sc, 1), tcTongueCutter(t, sc, -1))
+			out, err := tcChamfer(t, b, tcFacesEdges(t, b, tcY, []float64{-4, 4}, tcNot(tcSkipAlong(tcZ))))
+			require.NoError(t, err)
+			tongue := tcWedge(2*16+2*1.5, [][2]float64{{10, math.Pi}}, [][2]float64{{4, math.Pi / 2}, {4, math.Pi / 2}}) +
+				2*tcEndPiece
+			v0, err := b.Volume()
+			require.NoError(t, err)
+			v1, err := out.Volume()
+			require.NoError(t, err)
+			require.True(t, out.IsSolid())
+			require.InDelta(t, 2*tongue, v0.Value.Base()-v1.Value.Base(), v0.Bound.Base()+v1.Bound.Base())
+			o0, c0, f0 := tcSurfaceKinds(b)
+			o1, c1, f1 := tcSurfaceKinds(out)
+			require.Equal(t, [3]int{8, 6, f0}, [3]int{o1 - o0, c1 - c0, f1}, "new oblique planes and cones, faceted faces")
+			for _, ys := range []float64{1, -1} {
+				for _, zs := range []float64{1, -1} {
+					tcRequireVertexAt(t, out, r3.NewVec(20, 10*ys, (10-tcD)*zs))
+				}
+			}
+		})
+	}
 	t.Run("a link's tongue and fork faces in one call after its caps were chamfered", func(t *testing.T) {
 		t.Parallel()
 		b := tcLink(t, newTCScene(), true)

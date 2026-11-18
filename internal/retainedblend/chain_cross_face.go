@@ -280,6 +280,9 @@ func (cx *crossChain) runRepl(f *topo.Face, r *crossRun) error {
 		}
 		x := slices.Index(pt.end.faces[:], f)
 		poly.rays = append(poly.rays, polyRay{o: pt.exact, dir: pt.end.dirs[x], from: pt.end.reach[x]})
+		if pt.end.held[x] {
+			poly.rays = append(poly.rays, pt.end.past[x].onX)
+		}
 	}
 	poly.pts = append(poly.pts, old...)
 	for _, p := range slices.Backward(cut) {
