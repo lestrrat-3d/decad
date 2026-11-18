@@ -272,7 +272,9 @@ tags: its junctions are decided by `retainedblend.Tangent`
 
 `internal/tangentchain/geometry.go` decides continuations;
 `brep_modify_partial.go` adapts handles, selectors and refusals. `Fillet` and `Chamfer` call it
-right after the seed query resolves. The oracle is the clearance kernel's
+right after the seed query resolves. `Chamfer` also calls it without `WithTangentChain`, as the target CAD's chamfer
+extends its edges along tangent chains: an expansion that grows the selection replaces it, and one that refuses (SX2,
+SX9) leaves the selection as named. The oracle is the clearance kernel's
 `Oracle.ParallelExact` (`internal/clearance/oracle.go`): an exact zero cross
 product over the held floats proves "parallel", a cross above `ClrAngTol`
 relative to the two lengths disproves it, and the band between is undecided.

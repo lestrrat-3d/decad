@@ -642,7 +642,8 @@ When the third face is curved and the selected edge ends at a junction that
 edge, the refusal names that junction and the workaround: "the selected edge
 ends at the tangent junction `x,y,z` whose continuation is not selected;
 `WithTangentChain` selects the whole chain (brep-modify SB7)", the mesh route's
-SM2 wording. An undecided or non-tangent junction keeps the curved-face text.
+SM2 wording. An undecided or non-tangent junction keeps the curved-face text. `Chamfer` extends such a selection
+along its chain first (modify-reach §5.1), so it reaches this text only when that expansion is undecided.
 
 Base S4, S5, S6, S7, S8, S9 keep modify §4's meanings per end face and per
 trimmed wall. Reach SX16 is replaced: a brep receiver either builds here or

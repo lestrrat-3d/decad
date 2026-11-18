@@ -116,7 +116,13 @@ type ChamferOption interface{ chamferOption() }
 //
 // On a mesh Boolean result, whole loops of a retained planar face that the per-edge routes cannot bevel, such as a
 // window of lines and arcs with sharp corners, are cut by a polyhedral cutter (agent-docs/retained-modify-reach-design.md
-// §15a): faceted, the Cut's own readings, and the bevel ruled between its two sections.
+// §15a): faceted, the Cut's own readings, and the bevel ruled between its two sections. A tangent chain whose edges
+// share no one base plane, such as the rim of a bar rounded about z at one end and about y at the other, is cut by
+// the bevel's section swept along the chain (§15b), with the same readings.
+//
+// Without WithTangentChain a selected edge that ends at a proven tangent junction still takes its continuation, as
+// the target CAD's chamfer does (agent-docs/modify-reach-design.md §5.1): the selection grows to the whole chain. An
+// expansion the oracle cannot decide leaves the selection as named.
 //
 // All twelve straight edges of an exact axis-aligned box take
 // agent-docs/modify-general-design.md §4.3b's simultaneous chamfer, with or
@@ -230,6 +236,11 @@ func Chamfer(ctx context.Context, b *Body, sel EdgeSelector, d units.Value,
 		if edges, err = expandTangentChain(ctx, b, sel, edges); err != nil {
 			return nil, err
 		}
+	} else if grown, gerr := expandTangentChain(ctx, b, sel, edges); gerr == nil && len(grown) > len(edges) {
+		// A selected edge that ends at a proven tangent junction takes its continuation, as the target CAD's tangent
+		// chain does (agent-docs/modify-reach-design.md §5): its bevel has no free end there. An expansion the oracle
+		// cannot decide keeps the selection as named, and the routes refuse its open junction (SB7, SM2).
+		edges = grown
 	}
 	// Reach stage 3 (§6, SX3): the asymmetric reference resolves against the
 	// receiver, after expansion, to one adjacent face per chamfered edge.
@@ -272,6 +283,17 @@ func Chamfer(ctx context.Context, b *Body, sel EdgeSelector, d units.Value,
 				&b.n, edgeNodes(edges), dmm, dDelta, nil); matched {
 				if perr != nil {
 					return nil, perr
+				}
+				return commitResult(ctx, OperationChamfer, b, res)
+			}
+		}
+		// Tangent chains of a mesh Boolean result that share no base plane are cut by one swept cutter per chain
+		// (agent-docs/retained-modify-reach-design.md §15b).
+		if errors.Is(err, ErrUnsupported) && asym == nil {
+			if res, matched, cerr := brepmodify.ChainCutterChamfer(ctx, envOf(b.n.Doc, b.n.Doc.NextProducer), modifyHooks(),
+				&b.n, edgeNodes(edges), dmm, dDelta, nil); matched {
+				if cerr != nil {
+					return nil, cerr
 				}
 				return commitResult(ctx, OperationChamfer, b, res)
 			}

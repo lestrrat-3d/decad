@@ -218,13 +218,23 @@ of axes and normals stay exact. A gap past round-off but inside the angular band
 `expandTangentChain` (`brep_modify_partial.go`) expands a `facetedPayload` only when every seed is a retained line or
 arc between two faces that §2 reads (`retainedblend.Chainable`); any other faceted seed set is SX9. The walk calls
 a retained continuation test in place of `tangentchain.Continues`: §5.2 decides a candidate edge at `v`; an
-incident edge whose faces fail §2, or whose curve is a chord chain, is undecided (SX2). At a junction the third incident edge is the seam `{W_k, W_{k+1}}`; its
-face map sends `P` to a wall, test 4 of reach §5 fails, and it is "not a continuation". Seeds whose chains overlap
-merge into one chain (reach §5's fixed point), so the four x-parallel seeds of §1 give two closed chains.
+incident edge whose faces fail §2, or whose curve is a chord chain, is undecided (SX2) unless its direction at `v` is
+proven apart from the seed's. A line or arc is apart when reach §5's oracle reads the two rays away from `v` as not
+parallel, or their exact dot product is non-negative (`tangentchain.Apart`). A chord chain, such as the rim an
+earlier bevel's Cut left, is apart when every held chord from `v` that a facet of each of its two faces holds turns
+from the reverse of the seed's ray by more than `asin(10⁻³)` plus the chord's own uncertainty, the angle whose sine
+is `4(δ + β_v + β_w)/L` for the chain's bound `δ`, the chord's vertex bounds and its length `L`
+(`tangentchain.HeldApart`). A tolerance proves "no" only, as reach §5 requires. At a junction the third incident edge
+is the seam `{W_k, W_{k+1}}`; its face map sends `P` to a wall, test 4 of reach §5 fails, and it is "not a
+continuation". Seeds whose chains overlap merge into one chain (reach §5's fixed point), so the four x-parallel seeds
+of §1 give two closed chains.
 
-Without `WithTangentChain` the selection is what the caller named. A selection that names every edge of a chain
-builds the chain. A selected edge that ends at a proven tangent junction whose continuation is not selected is
-SM2 (§10).
+`Chamfer` without `WithTangentChain` expands the selection the same way, as the target CAD's tangent chain does: a
+selected edge that ends at a proven tangent junction takes its continuation, and its bevel has no free end there.
+An expansion the walk cannot decide keeps the selection as named. `Fillet` without the option builds what the caller
+named. A selection that names every edge of a chain builds the chain. A `Fillet` edge, or a `Chamfer` edge
+whose expansion was undecided, that ends at a proven tangent junction whose continuation is not selected is SM2
+(§10).
 
 ### 5.4 Claim J
 
@@ -674,8 +684,8 @@ Rows narrow blend Table SR and reach SX2/SX9; sentinels follow those tables.
 | SM | Call | Sentinel |
 |---|---|---|
 | **SM1** | a chain junction whose tangency §5.2 cannot decide | `ErrUnsupported` (reach SX2's text) |
-| **SM2** | a selected edge ends at a proven tangent junction whose continuation is not selected and `WithTangentChain` is absent; the message names the junction point and `WithTangentChain` | `ErrUnsupported` |
-| **SM3** | a chain whose edges share no base plane, a junction of two plane walls, a cylinder wall whose axis is not exactly normal to `P`, an R4 chain edge spanning more than `π`, or a chain that mixes convex and concave edges | `ErrUnsupported` |
+| **SM2** | a selected edge ends at a proven tangent junction whose continuation is not selected and `WithTangentChain` is absent, on a `Fillet` or on a `Chamfer` whose expansion (§5.3) was undecided; the message names the junction point and `WithTangentChain` | `ErrUnsupported` |
+| **SM3** | a chain whose edges share no base plane outside §15b's cutter, a junction of two plane walls, a cylinder wall whose axis is not exactly normal to `P`, an R4 chain edge spanning more than `π`, or a chain that mixes convex and concave edges | `ErrUnsupported` |
 | **SM4** | the chain gates of §5.6: proven overlap | `ErrDegenerate` (SR4) |
 | **SM5** | the chain gates of §5.6: undecided; a strip facet, or a facet of an end face that takes a cap, that meets another facet of the body; or a chain whose resolved references mix `P` and walls | `ErrUnsupported` (SR5; SX3 first for the mix) |
 | **SM6** | R5: the offset circles do not meet | `ErrDegenerate` (SR3) |
@@ -820,8 +830,8 @@ increment stops and reports the refusal.
   which near tangency does not give.
 - **Blend each chain edge on the evolving mesh.** Blending one edge alone leaves a flat end cap in `Π_J`; the
   next edge's blend then removes that cap to zero area, which no end rule builds.
-- **Expand a tangent chain without `WithTangentChain`.** Cardinality applies to what the caller named (reach §2).
-  SM2 names the option instead.
+- **Expand a `Fillet`'s tangent chain without `WithTangentChain`.** Cardinality applies to what the caller named
+  (reach §2). SM2 names the option instead. `Chamfer` expands it (§5.3), as the target CAD's chamfer does.
 - **Re-derive the copy's or the scaled body's tag from its moved polygons.** It blesses a surface from the
   polygons it should be checked against (CLAUDE.md).
 - **Scale or rotate a tag and set its bound to 0.** The origin and radius round; a zero bound would claim the
@@ -886,6 +896,64 @@ windows of a cover before and after a boss is joined (both faces, with the rim a
 setback past the walls and for part of a loop, and measured removed volume against `L·d²/2`.
 `apitest/loop_chamfer_narrow_feature_test.go` chamfers a watch lever's fork, a mesh result, whose dart and corner rounds
 the default cutter's overshoot crossed and whose fine mesh the default cutter's bound exceeded.
+
+## 15b. Tangent chains across planes
+
+The chain route of §5 builds a chain whose edges all border one base plane. A chain whose junctions have different
+bases has none: a bar rounded about z at one end and about y at the other, whose rim runs round both caps and both
+sides; a slot whose rim runs along its sides, round the bar's end on both sides and round the slot's end on the top
+and bottom faces; a step whose floor's rim runs on round the step's round and up its wall. The chain route refuses
+them ("the chain's edges share no base plane", SM3). `brepmodify.ChainCutterChamfer`
+(`internal/brepmodify/chain_cutter_chamfer.go`) chamfers them when that refusal stands, with or without
+`WithTangentChain`.
+
+Accepted input:
+
+- The receiver is a solid mesh Boolean result. The call is an equal-setback `Chamfer`.
+- Every selected edge is a convex retained line or arc between two faces with retained plane or cylinder tags
+  (`retainedblend.Chainable`).
+- The edges group into chains whose junctions §5.2 proves tangent, and every proven continuation of a selected edge
+  is selected. Each junction proves both walls normal to its base, so both faces of every edge meet at a right angle
+  along its whole length, whatever base its other junction has.
+- No face borders every edge of a chain; such a chain belongs to §5. A chain has two edges or more, and chains share
+  no vertex.
+- A chain is closed, or open with each end at a straight edge whose end vertex is a corner of exactly three faces: the
+  edge's two faces and one end face `G`, joined by two convex edges. `G` is a plane there: its plane tag, or its held
+  facets at the vertex when it is faceted, all coplanar. `G` faces away from the chain: `n_G · t ≥ 10⁻³`, with `t` the
+  edge's direction out of the chain.
+
+Construction. At a point `p` of an edge, with outward normals `n_A` and `n_B` of its faces ordered so that
+`n_A × n_B` runs along the walk, the body near `p` is `a, b ≤ 0` in the frame along `(n_A, n_B)` and the chamfer
+removes `a + b ≥ −d`. The cutter's cross-section is the triangle `a ≤ o, b ≤ o, a + b ≥ −d` with `o = over/√2`: it
+holds the removed wedge and reaches `o` past each face, so its other two sides lie outside the body. The section is
+swept along the chain: a line takes its two end sections, which rule the wedge exactly; an arc takes sections at
+chord points whose sagitta at radius `R + d + over` is at most `cutterSagitta` (0.002 mm), the cutter's bound. A
+proven junction gives both edges the same section (Claim J's chamfer row), so the sweep is continuous and a closed
+chain's cutter closes on itself. An open end carries its section straight on past the end vertex by
+`reach + over`, `reach = d·max(0, n_G·n_A, n_G·n_B)/(n_G·t)`, so the end cap clears `G`'s plane over the whole
+wedge. The corner is convex, so the body there lies inside all three planes and the cutter takes only the wedge.
+The overshoot runs through `partialOvershoots` (0.5, 0.35, 0.7 of `d`) while the Cut refuses.
+
+Gates, each `ErrUnsupported`: an open end on an arc, at a corner that is not convex or not of three faces, or on an
+end face that is not a plane there or faces the chain; two chains that meet at a vertex, or whose cutters' boxes
+meet; a held facet of any face other than the chain's faces, its end faces and their neighbours that meets or comes
+within bounds of the cutter (`checkCutterClearOf`, the partial route's test); and the Cut's own refusals. Each cutter
+is built and tested against the receiver before any Cut.
+
+The result is a Boolean Cut: faceted, with the Cut's own readings.
+
+An open chain that ends on an earlier bevel of the same setback, the usual end of a step's or a tongue's rim on a
+part whose outline was chamfered first, is refused by the Cut. The new bevel passes through the far corner of the old
+one, on the next face's rim, and that rim is held only within the earlier Cut's bound (about 0.01 mm), so the Cut
+cannot tell the touch there from a crossing ("the operands' held facets come within the chord tolerance"). The gap
+tolerance's shifted retry does not clear it. Building it needs the end's bevel rewritten exactly, as §5's chain
+route does on one base plane, or a relief larger than the document's gap tolerance (gap-tolerance §5.4).
+
+Tests: `apitest/chamfer_tangent_chain_planes_test.go` chamfers the bar at two sizes from its caps' edges, from its
+sides' arcs and from one seed under `WithTangentChain`; a step's floor rim open to the top face; a slot through the
+bar's rounded end, before and after the bar's rim was chamfered; a slot and a tongue through a stadium link; and the
+two refusals at an earlier bevel. Each checks the removed volume against Pappus within the readings' bounds, that no
+chain edge survives, and that every vertex the chamfer made lies `d` from a chain edge's line or circle.
 
 ## 16. Decisions the user may want to overturn
 
