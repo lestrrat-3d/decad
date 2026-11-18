@@ -10,15 +10,17 @@ Navigation only; the linked sections own their contracts.
 | When are records published? | [Atomicity, order, and storage](#atomicity-order-and-storage) |
 | How do diagnostics differ from verification? | [Verification and other result types](#verification-and-other-result-types) |
 | What must implementation prove? | [Focused repository proof fixtures](#focused-repository-proof-fixtures) |
-| What should a coding agent implement first? | [Ordered implementation tasks](#ordered-implementation-tasks) |
+| Which files and tests pin each part? | [Ordered implementation tasks](#ordered-implementation-tasks) |
 
 ## Status and ownership
 
 Delivered: public diagnostic values, typed `BooleanError` and `SelectionError` accessors, mapped
 `OperationError` branches, and warnings for accepted Boolean shifts, raised chain allowances, tolerant Stitch
 merges, and accepted positive-reach repairs. Three-input Union chains, Patterned, private tool composites, direct
-modify routes, tangent trim, and mirrored assembly paths aggregate accepted summaries. Eleven resource names
-retain exact counts where their producers know them; overflowed counts, saturated estimates and opaque refusals
+modify routes, tangent trim, and mirrored assembly paths aggregate accepted summaries. `arrangement_segments` and fourteen `proofbound` resource names
+(`proof_steps`, `replay_bytes`, `multiway_work`, `multiway_records`, `facet_pairs`, `pair_enumeration_steps`,
+`mesh_facets`, `facet_allocations`, `freeform_work_units`, `reconstruction_work_units`, `sweep_span_pairs`,
+`sweep_faces`, `sweep_spans`, `shell_candidate_visits`) retain exact counts where their producers know them; overflowed counts, saturated estimates and opaque refusals
 stay unclassified. Arrangement-cap refusals retain their observed and maximum segment counts.
 
 - `TestBooleanGapTolerance` proves that a real accepted shift can return an empty Intersect with both codes.
@@ -46,7 +48,7 @@ operand, failed proof, or bound comparison only through text. A successful opera
 to move geometry without recording that choice apart from its resulting measurement bounds.
 
 Expose the reason at the call that produced it. Preserve existing `(T, error)` signatures, sentinel matches,
-typed errors, and immutable bodies. Warnings ride on the returned body; failure diagnostics ride on the returned
+typed errors, and immutable bodies. Warnings attach to the returned body; failure diagnostics attach to the returned
 error. `Message` is for people; stable codes are for programs.
 
 The caller's Go function is the feature tree. Store no operation graph, failed-attempt registry, replay program,
@@ -305,226 +307,106 @@ Full consumer models stay in their consumer repositories.
 
 ## Ordered implementation tasks
 
-Implement these phases in order. This section is an execution checklist, not a second API definition; the
-contract sections above win if wording differs. Filenames below are implementation destinations; the root records
-and accessors live in `operation_diagnostics.go`. Keep each phase reviewable; open no PR before the first real
-producer-to-accessor fixture passes.
+Each phase below describes what exists now and which files and tests pin it. The contract sections above win if
+wording differs. Root records and accessors live in `operation_diagnostics.go`.
 
 ### Phase 0: Resolve prerequisites and map entry points
 
-- Read the Public API, Evaluator, both Boolean, Verification, Interference, Gap tolerance, Faceted vertex bounds,
-  Surface, and Operation history designs before changing their code.
-- Inspect `agent-docs/layout/`, root public modeling functions, and built-in selector resolution. Record an
-  entry-point checklist in implementation scratch under `.tmp/`: operation kind, argument names and ordinals,
-  gate order, commit owner, error sources, and whether the call can reach a chosen warning producer.
-- Record the dependency on the shared vocabulary from
-  [Operation history design: Operation kinds](operation-history-design.md#operation-kinds).
-  History Phase 1 owns `operation_kind.go` and `OperationKind`; do not add either independently here.
-  Diagnostics does not require history lookup or recorded-call coverage beyond that shared vocabulary.
-- Acceptance: every in-scope entry point has an explicit kind and public argument mapping; every terminal error
-  has an owning source. The shared vocabulary has one implementation owner and an explicit dependency.
-- Stop if the shared vocabulary conflicts with another active implementation, or an entry point requires a
-  contract change. Resolve that prerequisite before inventing a diagnostics-only vocabulary or changing behavior.
+The shared `OperationKind` vocabulary lives in `operation_kind.go`, owned by
+[Operation history design: Operation kinds](operation-history-design.md#operation-kinds). Diagnostics depends on
+that vocabulary and on nothing else from history. `booleanOperandLocation` in `operation_diagnostics.go` maps each
+Boolean kind's operand index to its public argument name and ordinal (`target`/`tool`, `a`/`b`,
+`first`/`others`). No other entry-point checklist is kept in the repository.
 
 ### Phase 1: Add records, error transport, and immutable accessors
 
-- Depends on Phase 0 and the shared vocabulary landing from
-  [History Phase 1](operation-history-design.md#phase-1-add-unconditional-storage-and-the-atomic-publication-seam).
-  Add root `operation_diagnostics.go` for the surface in
-  [Delivery API proposal](#delivery-api-proposal) and [Record proposal](#record-proposal).
-  Algorithmic aggregation lives in the leaf package `internal/opdiagnostic`, with plain-data records only.
-- Implement diagnostic enums and total `String()` methods, typed subject/change/chain/work-limit details,
-  `OperationDiagnosticError`, and `OperationError`. Preserve its original error object through `Unwrap` and its
-  text through `Error`; do not reconstruct causes from messages.
-- Add body-local immutable storage through `internal/topo/body.go` and root's `Body` adapter in `topology.go`.
-  Store private summaries without input body references. Root adapters alone turn error locations into original
-  caller body handles and convert private lengths to public `units.Value` fields.
-- Implement newly owned slices and deep copies of optional detail records, including `ChainAllowance` and any
-  optional ordinal. Keep copied body identities shared only where the error-subject contract permits them.
-- Add `operation_diagnostics_test.go` (with `apitest/` fixtures) for enum tokens, unknowns,
-  `errors.Is`, caller `%w` wrapping plus `errors.As`, original error text, and independent accessor copies.
-  Test diagnostic records with each shared operation kind, including selector kinds, zero, and unknown values.
-  Diagnostic-owned enum tokens are tested here; the shared enum's tokens are tested only by its history owner.
-  Keep synthetic records limited to these value/ownership tests; geometry transport needs Phase 2's real fixture.
-- Acceptance: supported error branches survive `OperationError`; zero records have unknown codes; body accessors
-  can return only warnings. Mutating one returned optional value cannot change the next read or another body.
-- Stop on a package cycle, a need to import root from `internal/`, or a need for a document collector, context
-  collector, public callback, or parallel detailed-result entry point. Use private return records instead.
+- `operation_diagnostics.go` defines the enums with total `String()` methods, `OperationSubject`,
+  `OperationChange`, `OperationChainDetail`, `OperationWorkLimit`, `OperationDiagnostic`, `OperationDiagnosticError`
+  and `OperationError`. `OperationError.Unwrap` returns the original error and `Error` returns its text.
+- Plain-data records and aggregation live in the leaf package `internal/opdiagnostic`. `internal/topo/body.go`
+  stores them as `Body.OperationWarnings` without input body references. Root adapts them to public values.
+- Accessors return newly owned slices and copies of optional details.
+- `operation_diagnostics_test.go` pins enum tokens and unknown values, `BooleanError` diagnostics, optional-detail
+  copies and `Unwrap` (`TestOperationErrorCopiesOptionalDetailsAndUnwrapsOriginal`), and the pass-through of known
+  typed failures (`TestOperationErrorPreservesKnownFailureAndSkipsTypedErrors`).
+  Synthetic records appear only in these value and ownership tests.
 
 ### Phase 2: Prove one real shifted Boolean end to end
 
-- Depends on Phase 1. Modify `internal/boolshift/shift.go`, `internal/booleaneval/eval.go`,
-  `internal/booleandispatch/dispatch.go`, `boolean.go`, and the body publication adapter only as needed to carry
-  the accepted retry's typed shift summary to `(*Body).OperationDiagnostics()` before `document.go` commits it.
-- Derive displacement from `boolshift.ShiftOperandMesh`'s actual accepted per-piece charges. Summarize the moved pieces
-  with a certified upper bound; do not use configured reach as the displacement or charge untouched pieces.
-  Keep rejected-attempt records local and discard them when retrying or returning the original refusal.
-- Extend only the face-touching Union subtest in `apitest/boolean_gap_tolerance_test.go` first. Use its real
-  operands, dispatch, mesh evaluator, result builder, commit, and public accessor. Assert the expected warning,
-  public operation/location, positive displacement within allowed reach, one lump, and volume bound covering
-  2000 mm³. Run this subtest before adding the remaining warning mechanisms or expanding the test matrix.
-- Acceptance: the real producer's charged change reaches the immutable public body with no fabricated record,
-  changed route admission, extra producer identity, or extra committed body.
-- Stop expansion if this fixture fails. Report the failed boundary, the repair scope, and the measured cost.
-  A defect in a prerequisite needs a scope decision before repair.
+The accepted retry's shift summary travels from `internal/boolshift`, `internal/booleaneval` and
+`internal/booleandispatch` through `boolean.go` to `(*Body).OperationDiagnostics()` before `document.go` commits
+the body. The displacement is the upper bound of the actual accepted per-piece charges, not the configured reach.
+`TestBooleanGapTolerance` in `apitest/boolean_gap_tolerance_test.go` pins the real path: the warning, a positive
+displacement within the allowed reach, one lump, and a volume bound covering 2000 mm³. Rejected-attempt records
+stay local and are discarded.
 
 ### Phase 3: Preserve failure classifications and add typed reasons
 
-- Depends on Phase 2. Extend `errors.go`, `selection_error.go`, `boolean.go`'s `asBooleanError` and
-  `newBooleanError`, private expected outcomes in `internal/meshbool/boolean.go`, and root entry points from
-  Phase 0's checklist. Keep root adapters thin; place reusable plain-data mapping in `internal/opdiagnostic`.
-- Add accessors directly to existing `BooleanError` and `SelectionError`. Preserve their concrete identity,
-  existing fields, sentinels, `BooleanError.Code`, selection rendering, and residual order. Selector diagnostics
-  must name selector resolution even when an enclosing modifier, stop, or axis propagates the error.
-- Wrap only otherwise unstructured, in-scope Decad operation errors in `OperationError`. Preserve original
-  validation order and error precedence. Return the exact `ctx.Err()` on cancellation/deadline; preserve
-  caller-created typed-nil panics. Leave arbitrary writer and third-party errors under their current contracts.
-- Implement the failure catalog at the source that knows the reason: input/ownership gates, sketch recording,
-  operand proof/chording, contact classification, feature reach, result emptiness, and invariant checks.
-  Do not derive subtype distinctions from `ErrUnsupported`, `ErrDegenerate`, or error text alone.
-- Preserve typed counts at existing resource gates in `internal/prismcells/work_cap.go`,
-  `internal/proofbound/budget.go`, and their modeling callers when those gates actually know observed and
-  maximum counts. Emit `WorkLimitReached` with the existing sentinel mapping; do not add limits, continue
-  evaluation for extra evidence, or invent observed counts for an opaque refusal.
-- Extend `apitest/boolean_test.go`, `apitest/selection_error_test.go`, and small private error tests for every
-  catalog mapping. Include `TestImplicitExactlyOneStopFailedAssertionPassesThrough`, malformed-input versus
-  coarse-chording `ErrDegenerate`, proof-unavailable versus contact `ErrUnsupported`, nil context, and existing
-  cancellation fixtures. Compare error pointers and bounded fields instead of deep-dumping error graphs.
-- Acceptance: caller wrapping exposes the new interface while all existing supported branches and gate
-  precedence survive. Analytic admission misses stay silent; admitted-route refusals keep their current mapping.
-- Stop if a source cannot establish a proposed distinction. Use the catalog's broader known reason or document
-  the missing producer detail; never change classification or parse a message to fill it.
+- `BooleanError` and `SelectionError` carry `OperationDiagnostics()` and keep their concrete identity, fields,
+  sentinels, `Code` and residual order. A selector diagnostic names `SelectEdges` or `SelectFaces` even when an
+  enclosing modifier propagates it.
+- `operationError` in `operation_diagnostics.go` wraps otherwise unstructured Decad errors in `OperationError`. It
+  returns cancellation and deadline errors unchanged, returns errors that already carry diagnostics, and maps typed
+  private errors before falling back to `operationErrorCode`, which classifies by sentinel.
+  The typed private errors are `tessellation.ExpectedError`, `meshbool.CoarseHeldContactError`,
+  `meshbool.BooleanExpectedError`, `prismcells.WorkLimitError` and `proofbound.WorkLimitError`.
+- `WorkLimitReached` carries `arrangement_segments` counts from `internal/prismcells` and the resource names
+  listed in Status and ownership, from `internal/proofbound` and the evaluators that call `proofbound.WithWorkLimit`.
+  A proof-limit count above the platform `int` range leaves `WorkLimit` nil.
+- Tests: `TestOperationWorkLimitHasTypedArrangementCounts` and `TestSelectionErrorHasSelectorDiagnostic` in
+  `operation_diagnostics_test.go`, `apitest/selection_error_test.go` (including
+  `TestImplicitExactlyOneStopFailedAssertionPassesThrough`) and `apitest/boolean_test.go`.
 
 ### Phase 4: Carry the local chain gate's three inputs
 
-- Depends on Phase 3. Change `internal/booleaneval/eval.go`, `internal/meshbool/boolean.go`,
-  `internal/meshbool/staging_error.go`, `internal/meshbool/boolean_mesh.go`, and the near-contact gate callers
-  to preserve typed touched bound, ordinary pair chord limit, and optional configured allowance.
-- Keep `CoarseHeldContactError` details discoverable after `StagingError` formats its text. The current
-  formatting path loses the typed cause; transport it without changing the existing public sentinel mapping.
-- Add `ChainAllowanceApplied` only when a real touched gate needs the configured allowance. Preserve the
-  ordinary pair chord separately from `max`'s effective threshold. Keep retry shift credit separate privately;
-  credit already charged by a shifted retry must not create a chain-allowance warning by itself.
-- Aggregate repeated local gates without combining unrelated threshold values into a fictitious comparison.
-  Preserve an actual gate's tuple and a conservative summary under [Atomicity, order, and storage](#atomicity-order-and-storage).
-  Establish that aggregation rule in private transport tests before using it across multiple internal steps.
-- Extend `TestBooleanChainDepthGateReadsOnlyTheTouchedRims` in `apitest/boolean_test.go` and
-  `TestChainToleranceAdmitsAContactOnACoarserRim` in `apitest/chain_tolerance_test.go`. Replace the latter's
-  regexp/`ParseFloat` extraction with structured fields. Cover absent allowance, insufficient allowance,
-  sufficient allowance, an allowance configured but unused, untouched coarse regions, and retry credit alone.
-- Acceptance: refusal and warning expose real local values with length kinds and correct original input
-  locations. Geometry bounds and pair chording are unchanged; configuring an allowance alone emits nothing.
-- Stop if only the effective gate survives a boundary, or repeated gates cannot produce a truthful bounded
-  summary. Preserve the missing inputs at their producer before publishing a partial or misleading record.
+`meshbool.CoarseHeldContactError` keeps the touched bound, the pair chord limit and the configured chain
+allowance past `StagingError`'s text rendering. `operationError` fills `OperandBoundExceeded` from it, with
+`ChainAllowance` nil when none was configured. `ChainAllowanceApplied` is emitted only when a touched gate passes
+using the allowance. Credit already charged by a shifted retry does not emit it by itself. `TestBooleanChainDepthGateReadsOnlyTheTouchedRims` (`apitest/boolean_test.go`) and
+`TestChainToleranceAdmitsAContactOnACoarserRim` (`apitest/chain_tolerance_test.go`) read these structured fields;
+the latter has no regexp or `ParseFloat` extraction.
 
 ### Phase 5: Report accepted positive-reach embedding repairs
 
-- Depends on Phase 4. Add typed actual-use output at `RepairHeldEmbedding`/`EnforceHeldEmbedding` in
-  `internal/meshbool/held_embedding.go`. Propagate it through `internal/meshbool/mesh_stitch.go`,
-  `internal/facetproof/faceted.go`, `internal/facetproof/placement.go`, `internal/facetproof/similarity.go`,
-  `internal/facetedrecord/placed.go`, and their public placement/scale adapters in `topology_handles.go`,
-  `document.go`, and `point_plane_scale.go`.
-- Track whether the final accepted geometry uses a positive-reach candidate. Distinguish that event from
-  ordinary nearest rounding, float-box corner repair, inherited vertex bounds, and failed reach trials.
-  Reuse the existing final-position proof to bound displacement; keep geometry and its existing charges unchanged.
-- Add `EmbeddingReachApplied` at the outer public operation/location. Cover mesh-Boolean result repair,
-  rigid placement, and similarity placement. A copy or transform gets only its newly applied repair summary;
-  inherited bounds do not copy the source body's warnings.
-- Extend `internal/facetproof/placement_reach_test.go`, corresponding `internal/meshbool` reach and clean-mesh
-  fixtures, and the similarity tests. Add the smallest real public placement fixture reaching the repaired
-  payload; retain the existing embedding audit and displacement assertions. Cover positive reach, float-box-only
-  success, no movement, refused repair, and cancellation before publication.
-- Acceptance: every reached repair producer supplies actual-use evidence; only final accepted reach changes
-  warn. Public warning bounds cover the real displacement and do not substitute total accumulated body bounds.
-- Stop if a producer exposes only move counts or total rounding bounds. Add the typed stage detail there;
-  do not infer reach use from `Approximate`, a positive bound, or a nonzero configured tolerance.
+`internal/meshbool/held_embedding_diagnostics.go` defines `EnforceHeldEmbeddingWithSummary` and
+`RepairHeldEmbeddingWithSummary`, which return an `*EmbeddingReach` describing the accepted positive-reach use.
+The summary reaches the public body through `internal/meshbool/mesh_stitch.go` and `internal/facetproof`, and `EmbeddingReachApplied` is published at the outer operation. `TestCopyReportsAcceptedEmbeddingReach`
+(`apitest/embedding_reach_test.go`) pins the public placement path. `internal/facetproof/placement_reach_test.go`
+pins the placement-reach producer.
 
 ### Phase 6: Report actual tolerant Stitch merges
 
-- Depends on Phase 5. Extend `internal/stitchrecord/plan.go`, `internal/stitchrecord/build.go`, and `stitch.go`
-  to transport actual accepted merge summaries. Reuse `Plan.Merged` and its charged separation bounds.
-- Map touched source vertices/faces to the caller's `bodies` ordinals while inputs are available. Publish only
-  argument locations and conservative merge summaries; keep private vertex classes out of public records.
-- Emit `StitchMergeApplied` only for distinct positions merged by the accepted plan. Discard a tolerant plan's
-  records when `loopsKeepTheirShape` selects the exact plan. Replaying an old plan during placement must not
-  misreport that inherited merge as a new tolerant Stitch event.
-- Extend small `internal/stitchrecord` plan tests and `apitest/gap_tolerance_test.go` with a minimal planar
-  Stitch fixture. Assert the real merge warning and existing geometric/volume bound, plus exact positions,
-  `ExactOnly`, ineligible curved/bounded vertices, and rejected collapsing/repeated-loop merges.
-- Acceptance: warnings describe only accepted distinct-position merges; unchanged exact plans have no merge
-  warning. The existing weld eligibility, closure classification, and charged geometry remain unchanged.
-- Stop if a warning needs geometry to be remeasured or a weld admission rule to change. Use the accepted plan's
-  existing proof data; a new geometry capability is outside this task.
+`stitch.go` and `internal/stitchrecord` publish `StitchMergeApplied` for distinct positions the accepted tolerant
+plan merged, using the plan's charged separation bounds. When `loopsKeepTheirShape` (`internal/stitchrecord/plan.go`)
+selects the exact plan, the tolerant plan's records are discarded.
+`apitest/stitch_gap_tolerance_test.go` pins the merge warning, and `ExactOnly` producing none.
 
 ### Phase 7: Finish composite publication, order, and storage bounds
 
-- Depends on Phase 6. Audit `boolean_many.go`, `pattern.go`, `tool_combine.go`, `brep_modify.go`, their callers,
-  `document.go`'s `commitOperation*` helpers, and the private builders used by those operations.
-  Carry warnings locally until the outer public operation has its final result and final cancellation check.
-- Normalize operation kind and argument locations at the public boundary. Map a failing step back only to
-  original caller inputs; omit a body subject when a transient composite prevents a sound attribution.
-  Discard earlier successful-step summaries after a later failure or abandoned route.
-- Complete shifted retry error transport: an accepted empty Intersect keeps `BooleanEmpty` and
-  `ErrBooleanFailed`, with its own applied-shift warning beside `ResultEmpty`. Exhausted retries keep the
-  original refusal and no applied-shift warning. A failure never publishes a partial body.
-- Add deterministic merge/aggregation in `internal/opdiagnostic`: public argument order, stage order, then code
-  token. Bound storage by catalog and public locations, with one summary per mechanism/location. Worker results
-  merge in input order; facet count, trial count, or private route count must not grow the public inventory.
-- Keep final warning attachment before commit and never mutate a published body. Audit body-copy/placement
-  code for accidental warning inheritance. `Remove` must allocate no warning record and retired-body reads must
-  still work. Add no producer allocation, operand mutation, or new concurrent-document-mutation permission.
-- Add real three-input Union final-step refusal and composite-success fixtures in `apitest/`; preserve all
-  original live inputs on refusal. Add private aggregation/order tests and public accessor tests for retired
-  bodies, fresh copies, `%w` errors, concurrent reads, optional-pointer copies, and unaffected later calls.
-- Check bounded formatting with a tiny deliberate mismatch under hard memory and time limits, per
-  [Focused repository proof fixtures](#focused-repository-proof-fixtures).
-- Acceptance: outer success publishes all and only its accepted summaries once. Failure/cancellation preserves
-  the live set and producer identity; the existing level/curve failed-build semantics do not change.
-- Stop if aggregation needs per-facet storage, references to consumed inputs on a successful body, or mutation
-  after commit. Return bounded private summaries from producers instead.
+`internal/opdiagnostic` holds `UnionSummaries`, `ReplayUnionSummaries` and `CompositeSummaries`, which aggregate one
+summary per mechanism and public location. `boolean_group_blind.go`, `boolean_group_history.go`,
+`boolean_regroup.go`, `boolean_group_tessellate.go`, `pattern.go`, `tool_combine.go`, `stitch.go` and
+`point_plane_scale.go` attach them to the outer result before `document.go`'s `commitOperation*In` helpers commit
+it. A failed later step discards earlier summaries. `apitest/union_many_diagnostics_test.go`
+(`TestUnionManyOperationWarnings`) pins the Union path, and `internal/opdiagnostic/composite_test.go` and
+`union_test.go` pin aggregation. `TestEmptyBooleanDiagnosticsKeepAnAcceptedShift` pins the accepted-shift empty
+Intersect.
 
 ### Phase 8: Prove verification separation and complete API documentation
 
-- Depends on Phase 7. Inspect `verify.go`, `verify_result.go`, `report/verify.go`,
-  `internal/verifyrun/interference.go`, and `internal/verifypublish/`. Shared private reasons may be read there;
-  public operation records must not enter verification inventories or change cause-specific pair mapping.
-- Extend `TestVerifyGapToleranceDecidesAFlushPair` in `apitest/verify_gap_tolerance_test.go`. Verify
-  a real shifted result with a loose request and a stricter request. Assert Sound plus operation warnings when
-  bounds pass, existing bound diagnostics when they fail, and unchanged creation warnings after read-only Verify.
-  Preserve existing invariant-error and cancellation behavior; warnings never decide the verdict.
-- Add one ordinary exact rectangular operation with exact readings and an empty warning slice. Cover
-  `WithMatchingFaces` with no new warning code, consistent with the settled catalog exclusion.
-- Update `docs/api.md`, `docs/data-structures.md`, public Go doc comments, and an executable example under
-  `examples/` for body warnings, `errors.As` through caller wrapping, and stable code branching. Explain the
-  unchanged typed-error/cancellation exceptions and empty-inventory meaning by linking their owning contracts.
-- Update this design's implementation status only for delivered behavior. Update `agent-docs/api-design.md`,
-  affected companion contracts, and owning rows in `agent-docs/layout/` for every added root Go file and internal
-  package. Follow [Splitting oversized agent files](layout.md#splitting-oversized-agent-files) if a budget fails.
-- Acceptance: operation diagnostics introduce no warning-as-error mode, report verdict field, or warnings on
-  Mesh/export/motion/dynamics results. Executable examples show current API behavior and bounded field output.
-- Stop if a query-only repair needs a new result location, or verification's Sound/empty-inventory contract
-  would change. Those changes require a separate proposal.
+`TestVerifyGapToleranceDecidesAFlushPair` (`apitest/verify_gap_tolerance_test.go`) pins the separation: a shifted
+result is Sound under a loose request, an exact construction has an empty warning slice, and read-only Verify
+leaves the creation warnings unchanged. `docs/api.md`, `docs/data-structures.md`,
+`examples/operation_diagnostics_example_test.go` and the `agent-docs/layout/` rows cover the public surface.
+No warning-as-error mode, report verdict field, or warning on Mesh, export, motion or dynamics results exists.
+`WithMatchingFaces` has no warning code.
 
 ### Phase 9: Run focused checks and prepare review
 
-- Depends on Phase 8. Add every new/renamed root, `apitest`, fuzz, and example name to its owning shard manifest.
-  Put unmeasured tests in shard 10; do not rebalance without measured `_shardgen` input.
-- At each preceding phase's checkpoint, run only the touched package or named fixtures. Before handoff, run
-  the selected public diagnostics fixtures, private transport/producer tests, example tests, and the focused
-  concurrent-accessor tests with `-race`. Store reusable or large output under `.tmp/`.
-- Run `go test . ./apitest/ -run '^TestCI'` for changed test names and
-  `go test . -run '^TestCLAUDEMDLayoutStaysCompact$'` for layout changes. Run the repository's applicable API/doc
-  guard tests discovered beside the touched public surface. Fix failures without weakening assertions.
-- Before any Go-code PR push or creation, follow `git-operations.md`'s Go Lint Before PR requirement. Current
-  `.github/workflows/ci.yml` runs golangci-lint v2.15.0 and `go vet ./...`; run
-  `golangci-lint run --timeout=5m` and `go vet ./...` after the last Go edit and resolve change-caused failures.
-- Remote CI runs the full suite. Watch PR checks to completion and report the actual CI result; focused local
-  checks are never the full suite. If CI is unavailable, follow the repository's full-suite fallback rule.
-- Acceptance: the Phase 0 checklist has no unhandled in-scope entry points, every chosen warning has a real
-  producer/consumer proof, supported error branches pass focused tests, documentation/layout/shards agree,
-  required lint passes, and any opened PR has completed checks.
-- Stop on unresolved behavior failures, unavailable required lint, out-of-scope prerequisite defects, or CI
-  failures requiring a design decision. Report the exact failed check, bounded evidence, and remaining scope.
+New test names belong in the shard manifest `.github/test-shards.txt`; unmeasured tests go in the last numbered shard and shards
+are rebalanced only from measured `_shardgen` input (see [Test guidance](testing.md)). `.github/workflows/ci.yml`
+runs `golangci-lint` v2.15.0 with `--timeout=5m` and `go vet ./...`, and the full suite runs in remote CI.
+Focused local runs of the touched package or named fixtures stand in for the suite only before CI reports.
 
 ## Behavioral reference boundary
 
