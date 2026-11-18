@@ -260,6 +260,14 @@ func rewriteLineEdge(ctx context.Context, env topo.Env, fp facetedrecord.Payload
 		rowsAt = []r3.Vec{baseA, baseB}
 	}
 	m := len(rowsAt) - 1
+	// A chamfer's feet are the exact meetings of its setback lines with the end planes, where the
+	// receiver's corners allow it (agent-docs/exact-chamfer-design.md §4); the rest keep the grid
+	// tolerance.
+	var feet [2][2]lineFoot
+	exactFeet := false
+	if !spec.fillet {
+		feet, exactFeet = w.exactLineFeet(l, runA, runB, fG, wA, wB, tA, tB)
+	}
 
 	// Per end: the setback points, the chains' removed parts and the gates.
 	var rowIdx [2][]int
@@ -268,6 +276,10 @@ func rewriteLineEdge(ctx context.Context, env topo.Env, fp facetedrecord.Payload
 		end := l.ends[i]
 		rowIdx[i] = make([]int, m+1)
 		for j, p := range rowsAt {
+			if exactFeet {
+				rowIdx[i][j] = w.vertex(feet[i][j].p, feet[i][j].bound)
+				continue
+			}
 			rowIdx[i][j] = w.vertex(setbackPoint(p, l.d, end.g), w.tau+slack)
 		}
 		for f, side := range []struct {

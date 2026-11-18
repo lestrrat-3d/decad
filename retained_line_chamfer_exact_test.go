@@ -1,0 +1,204 @@
+package decad
+
+import (
+	"math"
+	"math/big"
+	"testing"
+
+	"github.com/lestrrat-3d/r3"
+	"github.com/lestrrat-3d/units"
+	"github.com/stretchr/testify/require"
+)
+
+// This file checks agent-docs/exact-chamfer-design.md: an R1 chamfer of a straight edge between two retained
+// planes of a mesh Boolean result holds its feet exactly, so a chamfer whose feet are floats reads vertex bound
+// 0 and adds nothing to the volume bound. It reads the mesh node's VertexBound, which no exported API
+// publishes, so it lives in the root package.
+
+// lipSocket is fixture S (design §7): a block x ∈ [−10, 10], y ∈ [0, 16], z ∈ [0, 10] cut from below by the
+// prism through (−5, −6), (x4, −6), (x6, 6), (−5, 6) sketched on XZ and spanning y ∈ [−1, 17]. The different
+// extrusion axes keep the Cut on the mesh path. Its walls are x = −5 (square) and the line from (5, 0). It also
+// returns the block's start cap, the face the lips lie on.
+func (sc *stripScene) lipSocket(t testing.TB, x4, x6 float64) (*Body, FeatureRef) {
+	t.Helper()
+	block := sc.rect(t, -10, 0, 10, 16, 10)
+	lips := CapStart(block)
+	s, err := sc.w.CreateSketch(sc.w.XZ())
+	require.NoError(t, err)
+	corners := [][2]float64{{-5, -6}, {x4, -6}, {x6, 6}, {-5, 6}}
+	first := s.CreatePoint(corners[0][0], corners[0][1])
+	s.Fix(first)
+	prev := first
+	for _, c := range corners[1:] {
+		p := s.CreatePoint(c[0], c[1])
+		s.CreateLine(prev, p)
+		prev = p
+	}
+	s.CreateLine(prev, first)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	// Against the sketch normal the prism spans y ∈ [0, 18]; shifted by −1 it passes both ends of the block.
+	tool, err := Extrude(t.Context(), sc.doc, s, s.Profiles()[0], Distance{D: units.Millimeters(18), Dir: Against})
+	require.NoError(t, err)
+	move, err := r3.Translation(r3.Vec{Y: -1})
+	require.NoError(t, err)
+	tool, err = Transform(t.Context(), tool, move)
+	require.NoError(t, err)
+	socket, err := Cut(t.Context(), block, tool)
+	require.NoError(t, err)
+	return socket, lips
+}
+
+// lipEdges selects the edges along Y whose bottom ends are at (x, 0, 0) for each x.
+func lipEdges(xs ...float64) EdgeSelector {
+	var q *EdgeQuery
+	for _, x := range xs {
+		preds := []EdgePredicate{EndpointAt(r3.NewVec(x, 0, 0)), ParallelTo(r3.NewVec(0, 1, 0))}
+		if q == nil {
+			q = Edges(preds...)
+			continue
+		}
+		q = q.Or(preds...)
+	}
+	return q.Exactly(len(xs))
+}
+
+// vertexBounds is the mesh node's per-vertex bounds and positions of b.
+func vertexBounds(t *testing.T, b *Body) ([]r3.Vec, []float64) {
+	t.Helper()
+	mesh, err := b.Tessellate(t.Context(), units.Millimeters(0.1), WithVerification(VerifyNone))
+	require.NoError(t, err)
+	require.Len(t, mesh.n.VertexBound, len(mesh.n.Vertices))
+	return mesh.n.Vertices, mesh.n.VertexBound
+}
+
+// requireZeroBounds requires every vertex of b to state bound 0.
+func requireZeroBounds(t *testing.T, b *Body) {
+	t.Helper()
+	verts, bounds := vertexBounds(t, b)
+	for i, bound := range bounds {
+		require.Zero(t, bound, "vertex %d at %v", i, verts[i])
+	}
+}
+
+// requireFootBound requires the bound of the vertex at p to be exactly zero (zero) or in (0, max].
+func requireFootBound(t *testing.T, b *Body, p r3.Vec, zero bool, maxBound float64) {
+	t.Helper()
+	verts, bounds := vertexBounds(t, b)
+	found := 0
+	for i, v := range verts {
+		if v.Sub(p).Len() > 1e-3 {
+			continue
+		}
+		found++
+		if zero {
+			require.Zero(t, bounds[i], "vertex at %v", v)
+			require.Equal(t, p, v, "a foot with bound 0 is the exact float")
+			continue
+		}
+		require.Positive(t, bounds[i], "vertex at %v", v)
+		require.LessOrEqual(t, bounds[i], maxBound, "vertex at %v", v)
+	}
+	require.Positive(t, found, "no vertex near %v", p)
+}
+
+// requireOnChamferPlane requires every vertex of the tilted lip's chamfer face to lie within its own bound of the
+// exact chamfer plane, through the feet (5.5, y, 0) and (5 + 0.5/√37, y, 3/√37) computed at 512 bits.
+func requireOnChamferPlane(t *testing.T, b *Body) {
+	t.Helper()
+	f := func(x float64) *big.Float { return new(big.Float).SetPrec(512).SetFloat64(x) }
+	root := new(big.Float).SetPrec(512).Sqrt(f(37))
+	a := new(big.Float).SetPrec(512).Quo(f(0.5), root)
+	h := new(big.Float).SetPrec(512).Quo(f(3), root)
+	// In (x, z) the plane runs from (5.5, 0) to (5 + a, h): normal (h, 0.5 − a).
+	nz := new(big.Float).SetPrec(512).Sub(f(0.5), a)
+	norm := new(big.Float).SetPrec(512).Sqrt(new(big.Float).SetPrec(512).Add(
+		new(big.Float).SetPrec(512).Mul(h, h), new(big.Float).SetPrec(512).Mul(nz, nz)))
+	verts, bounds := vertexBounds(t, b)
+	checked := 0
+	for i, v := range verts {
+		onFace := false
+		for _, y := range []float64{0, 16} {
+			onFace = onFace || v.Sub(r3.NewVec(5.5, y, 0)).Len() < 1e-3 ||
+				v.Sub(r3.NewVec(5+0.5/math.Sqrt(37), y, 3/math.Sqrt(37))).Len() < 1e-3
+		}
+		if !onFace {
+			continue
+		}
+		checked++
+		d := new(big.Float).SetPrec(512).Add(
+			new(big.Float).SetPrec(512).Mul(h, new(big.Float).SetPrec(512).Sub(f(v.X), f(5.5))),
+			new(big.Float).SetPrec(512).Mul(nz, f(v.Z)))
+		d.Quo(d, norm).Abs(d)
+		require.LessOrEqual(t, d.Cmp(f(bounds[i])), 0, "vertex %v is %v from the chamfer plane, bound %v", v, d, bounds[i])
+	}
+	require.Equal(t, 4, checked)
+}
+
+func TestRetainedLineChamferExact(t *testing.T) {
+	t.Parallel()
+
+	// chamfered cuts the socket, chamfers sel by d and returns the result with the volumes before and after.
+	// options builds the chamfer's options from the lips' face feature.
+	chamfered := func(t *testing.T, x4, x6 float64, sel EdgeSelector, d float64,
+		options func(lips FeatureRef) []ChamferOption) (out *Body, before, after Measurement) {
+		t.Helper()
+		sc := newStripScene()
+		cut, lips := sc.lipSocket(t, x4, x6)
+		requireZeroBounds(t, cut)
+		var opts []ChamferOption
+		if options != nil {
+			opts = options(lips)
+		}
+		var err error
+		before, err = cut.Volume()
+		require.NoError(t, err)
+		out, err = Chamfer(t.Context(), cut, sel, units.Millimeters(d), opts...)
+		require.NoError(t, err)
+		after, err = out.Volume()
+		require.NoError(t, err)
+		return out, before, after
+	}
+
+	t.Run("square lip", func(t *testing.T) {
+		t.Parallel()
+		out, before, after := chamfered(t, 4, 6, lipEdges(-5), 0.5, nil)
+		requireZeroBounds(t, out)
+		require.Equal(t, before.Bound.Mag(), after.Bound.Mag())
+		require.Equal(t, 2.0, before.Value.Mag()-after.Value.Mag())
+	})
+
+	t.Run("asymmetric square lips", func(t *testing.T) {
+		t.Parallel()
+		// Both walls square, so both lips are exact; the bottom face is the reference of each.
+		out, before, after := chamfered(t, 5, 5, lipEdges(-5, 5), 0.5,
+			func(lips FeatureRef) []ChamferOption {
+				return []ChamferOption{WithAsymmetricChamfer(Faces(FaceCreatedBy(lips)), units.Millimeters(0.25))}
+			})
+		requireZeroBounds(t, out)
+		require.Equal(t, before.Bound.Mag(), after.Bound.Mag())
+		require.Equal(t, 2.0, before.Value.Mag()-after.Value.Mag())
+	})
+
+	t.Run("tilted lip", func(t *testing.T) {
+		t.Parallel()
+		out, before, after := chamfered(t, 4, 6, lipEdges(5), 0.5, nil)
+		// The wall rises 6 over 1, so its foot lies 0.5/√37 in and 3/√37 up from the corner.
+		root := math.Sqrt(37)
+		for _, y := range []float64{0, 16} {
+			// The feet on the lip's bottom face are floats; the ones on the wall are irrational.
+			requireFootBound(t, out, r3.NewVec(5.5, y, 0), true, 0)
+			requireFootBound(t, out, r3.NewVec(5+0.5/root, y, 3/root), false, 1e-14)
+		}
+		require.LessOrEqual(t, after.Bound.Mag()-before.Bound.Mag(), 1e-11)
+		requireOnChamferPlane(t, out)
+	})
+
+	t.Run("steeper wall and a larger setback", func(t *testing.T) {
+		t.Parallel()
+		out, before, after := chamfered(t, 3.5, 6.5, lipEdges(-5), 1.0, nil)
+		requireZeroBounds(t, out)
+		require.Equal(t, before.Bound.Mag(), after.Bound.Mag())
+		require.Equal(t, 8.0, before.Value.Mag()-after.Value.Mag())
+	})
+}

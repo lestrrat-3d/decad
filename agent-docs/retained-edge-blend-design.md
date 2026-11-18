@@ -1310,7 +1310,9 @@ again over the new loops. Let `e` run from `V₀` to `V₁`, with `d̂` its dire
    For a fillet, the arc rows `α_j = jφ/m` of the exact cylinder meet `G_i` at
    `q_j,i = p_j + s·d̂`, with `p_j` the point of the cross-section arc and `s`
    the offset along `d̂` that reaches `G_i`. Row 0 is `P_A` and row `m` is `P_B`;
-   a chamfer has rows 0 and 1 only. `m` is the smallest count whose arc
+   a chamfer has rows 0 and 1 only. A chamfer's feet follow
+   `agent-docs/exact-chamfer-design.md` §4: where the receiver's corners allow it,
+   each is computed exactly and held with its own proven bound, not `τ`. `m` is the smallest count whose arc
    sagitta `r·(1 − cos(Δα/2))` is at most `τ·c`, with `c` the smaller of
    `|d̂ · n_G0|` and `|d̂ · n_G1|` (`rowStep`): in `G_i` each row chord stands
    for an arc of the ellipse and its sagitta grows by up to `1/c`, so the
@@ -1504,7 +1506,9 @@ without retention's falsifier: the two setback edges (`Line3` for R1,
 for a chamfer the end segments (`Line3`). Each is marked `RetainedCurve`.
 Their vertices are the exact intersections of the setback lines with the end
 planes or the end faces' own edges, so a vertex position bound is the rounding
-of that computation.
+of that computation. An R1 chamfer's feet state the proven distance of the held
+point from the exact one (`agent-docs/exact-chamfer-design.md` §4.2), 0 when the
+exact point is a float.
 
 ## 6. Gates and bounds
 
@@ -1708,7 +1712,9 @@ vertex keeps its bound.
 **Claim K.** Let `H` be the held solid with `VolSymDiff = v`, `H'` the rewritten
 held solid, and `S'` the true blended solid. Then
 `vol(H' △ S') ≤ v + ε·(area(strip) + area(blend)) + Σ_t (h_t + δ_t)·area(t) + ρ`,
-with `ε` the largest vertex bound of the strip's facets (Strip triangles), the
+with `ε` the largest vertex bound of the strip's facets (Strip triangles; an R1
+chamfer's feet carry their own proven bounds, `agent-docs/exact-chamfer-design.md`
+§4.2 and Claim X), the
 sum over every facet `t` of every plane face the route rebuilds by re-triangulating
 it (`retriangulate`, §5; on every route, mitre runs and corners included), `h_t`
 the largest exact distance of `t`'s corners from that face's tag plane, rounded
