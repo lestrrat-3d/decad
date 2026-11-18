@@ -162,8 +162,7 @@ func TestKeepSideCoplanarMixedSides(t *testing.T) {
 
 // TestKeepSideCoplanarNoSegment pins a facet whose coplanar partner leaves no
 // surviving segment (equal footprints): the facet is one region and the cover
-// decides it. The two triangulations disagree on the diagonal, so a cover must
-// pick the right partner facet.
+// decides it, and a partner that shares only the facet's diagonal is no cover.
 func TestKeepSideCoplanarNoSegment(t *testing.T) {
 	a := exactBoxMesh(t, r3.Vec{}, r3.Vec{X: 10, Y: 10, Z: 10})
 	b := exactBoxMesh(t, r3.Vec{Z: 10}, r3.Vec{X: 10, Y: 10, Z: 20})

@@ -161,8 +161,9 @@ type NearContacts struct {
 // within slack and collects the pairs that meet or stay within slack. deferred
 // reports a coplanar face-on-face overlap, which FacesNearMiss leaves to the
 // mesh pass: it refuses a pair holding an inexact facet with TouchCoplanar and
-// classifies a pair of exact facets, so the deferral is always backed
-// (agent-docs/coplanar-contact-design.md §6).
+// classifies a pair of exact facets, so the deferral is backed for the
+// pre-pass. The occupancy re-run is the exception, which drops its record
+// instead (agent-docs/coplanar-contact-design.md §6).
 func GatherNearContacts(ctx context.Context, bmA *BoolMesh, fis []int, bmB *BoolMesh, fjs []int, slack float64, memo *ContactMemo) (NearContacts, bool, error) {
 	return gatherNearContacts(ctx, bmA, fis, bmB, fjs, slack, memo, NearContactRunner(slack), ContactBatchSize)
 }
