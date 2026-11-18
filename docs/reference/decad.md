@@ -1785,7 +1785,13 @@ setback that reaches the outline's radius of curvature is ErrDegenerate.
 
 On a mesh Boolean result, whole loops of a retained planar face that the per-edge routes cannot bevel, such as a
 window of lines and arcs with sharp corners, are cut by a polyhedral cutter (agent-docs/retained-modify-reach-design.md
-§15a): faceted, the Cut's own readings, and the bevel ruled between its two sections.
+§15a): faceted, the Cut's own readings, and the bevel ruled between its two sections. A tangent chain whose edges
+share no one base plane, such as the rim of a bar rounded about z at one end and about y at the other, is cut by
+the bevel's section swept along the chain (§15b), with the same readings.
+
+Without WithTangentChain a selected edge that ends at a proven tangent junction still takes its continuation, as
+the target CAD's chamfer does (agent-docs/modify-reach-design.md §5.1): the selection grows to the whole chain. An
+expansion the oracle cannot decide leaves the selection as named.
 
 All twelve straight edges of an exact axis-aligned box take
 agent-docs/modify-general-design.md §4.3b's simultaneous chamfer, with or
@@ -2201,8 +2207,9 @@ around each arc and at each reflex corner, cylinders meeting along an
 corner involving an arc — the walls beside each loop trimmed to its
 side level and the face holding it to its offset contour; the result is a
 brep body whose patches carry filletLoop(f,l,p). Selected straight edges
-on part of one planar loop form a partial band; a swept common wall can be
-restated as that planar loop. Loops sharing an edge are SL1; complete loops
+on part of one planar loop form a partial band whose selected walls must
+all descend or all rise, as a block's root flush with a plate's side does;
+a swept common wall can be restated as that planar loop. Loops sharing an edge are SL1; complete loops
 mixed with independent straight edges take route V. A line–arc or arc–arc
 join tangent only to the record's rounding, as a sketch fillet or tangent
 constraint records it (sin²θ ≤ 2⁻⁶⁴), builds as a tangent join and its
@@ -3074,7 +3081,9 @@ A three-source chain whose second pair refuses on its first operand's held
 bound can try the other grouping (prism-boolean §4.7).
 Each pair must pass its own proof. Failure or cancellation leaves every
 input live. A two-body result from the mesh path is a [Faceted](<#Faceted>) body:
-its faces are grouped by the operands' source faces, so provenance
+its faces are grouped by the operands' source faces, with adjacent exactly
+coplanar same-facing faces of the two operands merged into one face
+(agent-docs/union-face-merge-design.md), so provenance
 (FaceCreatedBy) survives, and its measurements are Approximate with proven
 bounds (agent-docs/evaluator-design.md §9) — except that an all-planar pair whose
 contact points round exactly keeps an Exact VOLUME (the volume integral is
@@ -5487,7 +5496,8 @@ waits on the faceted certificate stage
 
 Origins returns every feature role that created this face —
 canonicalization may merge coplanar faces, and a merged face carries ALL
-contributing roles (core §6.1). A face of an analytic Boolean result also
+contributing roles (core §6.1). A mesh Boolean merges adjacent exactly coplanar faces of its two
+operands (agent-docs/union-face-merge-design.md), so such a face lists both operands' roles. A face of an analytic Boolean result also
 carries the roles of the one operand face it provably lies inside
 (agent-docs/prism-boolean-design.md §11).
 
