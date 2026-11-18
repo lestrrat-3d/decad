@@ -62,21 +62,20 @@ coplanar classification admits a facet only when its `FacetBound` and its face's
    predicates over held floats then see a sliver crossing or a sliver gap where the true faces coincide. No exact
    test on held data can separate "touching" from "overlapping by ≤ β".
 
-### 1.1 Measured
+### 1.1 Observed outcomes
 
-Gallery dovetail on origin/main `c8e1721c4b` (dated illustration, 2026-11-18; repro `.tmp/gallery` in this worktree,
-`go test ./features/dovetail -run 'TestZZPairs|TestZZTagPlanes' -v`). Socket chamfer uses today's `τ` feet;
-exact-chamfer Task 4 is not merged.
+The gallery dovetail (a tail and a socket meeting face to face, each plain or chamfered with today's float feet from
+exact-chamfer §1; the dovetail check runs in the consumer repository, §11.5) reads as follows.
 
-| Tail | Socket | `Verify` | `Intersect` | `Union` vs sum 6437.0956 / 6433.1564 / 6429.2171 |
+| Tail | Socket | `Verify` | `Intersect` | `Union` |
 |---|---|---|---|---|
-| plain | plain | `Sound` | `BooleanEmpty` | `6437.095605921 ± 4.5e-13`, no diagnostic |
-| chamfered | plain | `Suspect`, `undecided_interference` (proven overlap) | `1.8e-4 ± 3.6e-3` | `6433.156005 ± 3.6e-3`, 1 diagnostic |
-| plain | chamfered | `Suspect`, `unsupported_pair_contact` | refused (gate) | `6432.778 ± 4.64`, 1 diagnostic |
-| chamfered | chamfered | `Suspect`, `unsupported_pair_contact` | refused (gate) | `6429.035 ± 3.65`, 1 diagnostic |
+| plain | plain | `Sound` | `BooleanEmpty` | volume equals the sum, no diagnostic |
+| chamfered | plain | `Suspect`, `undecided_interference` (proven overlap) | non-empty sliver | volume off the sum, 1 diagnostic |
+| plain | chamfered | `Suspect`, `unsupported_pair_contact` | refused (gate) | volume off the sum, 1 diagnostic |
+| chamfered | chamfered | `Suspect`, `unsupported_pair_contact` | refused (gate) | volume off the sum, 1 diagnostic |
 
 A minimal mesh fixture shows the same refusal without chamfers: a pentagon prism `Cut` by a prism with a tilted wall
-(§11 fixture K) holds rational corners rounded by `2.6e-16`; `Intersect` against a flush partner is refused (gate)
+(§11 fixture K) holds rational corners rounded by about 1e-16 mm; `Intersect` against a flush partner is refused (gate)
 on the tilted plane and on an axis plane.
 
 ### 1.2 What decad knows about a face with a rounding-level bound
@@ -86,7 +85,7 @@ on the tilted plane and on an axis plane.
 | Per-vertex distance bound `β(v)` | yes | `Payload.VertexBound`, `topo.Mesh.VertexBound` |
 | `v*` lies on the true plane of every incident planar face | yes (corner model) | faceted-vertex-bounds §2 |
 | Exact plane of a planar face | caps only (`topo.CapRecord` with `AxialDelta == 0` or `ZDenoted`), or a face with three non-collinear zero-bound vertices | `internal/topo/face.go` |
-| Retained `Plane` tag as exact plane | no: a float frame; tilted flank tags miss their own zero-bound corners by `4.0e-16`–`4.7e-16` (probe) | `TestZZTagPlanes` |
+| Retained `Plane` tag as exact plane | no: a float frame; tilted flank tags miss their own zero-bound corners by rounding-level amounts | — |
 | Origin of a positive bound (rounding vs displacement) | not recorded | — |
 | Side of the true face relative to a held vertex | computable only once the exact plane is known; the true face lies ON its plane, so the side adds nothing | — |
 
@@ -139,7 +138,7 @@ setback within about one rounding unit of the requested one.
 
 - **Rule B: certify bounded contact without rebuilding exact points.** Admit coplanar pairs whose corners lie on a
   shared carrier within their bounds, guarded by a half-space certificate in the gate (§13 Q1 states it). Rejected as
-  the first step: a second soundness-critical classifier and about 3 extra weeks; Rule A plus D1 covers the dovetail.
+  the first step: it is a second soundness-critical classifier; Rule A plus D1 covers the dovetail.
   Kept as the path if D1 is overridden.
 - **Weaken the gate by a tolerance.** Rejected by direction: a true overlap within the tolerance would pass.
 - **Read retained `Plane` tags as exact planes.** Unsound: tags are float frames that miss exact corners (§1.2).
@@ -264,8 +263,7 @@ such read on the live path falls in one class:
 
 Audit scope: every hit of
 `grep -n '\.Verts\b\|TriCorners(\|\.Fnorms\b\|\.Boxes\b' internal/meshbool/*.go internal/booleaneval/*.go | grep -v _test`
-outside the replay files (`brake_*.go`, `*_replay*.go`, `replay_*.go`), which never see a snapped operand. On
-`c8e1721c4b` the live files are listed in Tasks 5 and 6. Each PR classifies every hit in its description.
+outside the replay files (`brake_*.go`, `*_replay*.go`, `replay_*.go`), which never see a snapped operand. The live files are listed in Tasks 5 and 6. Each PR classifies every hit in its description.
 
 **Poison build.** Under the build tag `snappoison` (file `internal/meshbool/snap_poison_on.go`; the default build
 compiles `snap_poison_off.go`), step 5 stores `NaN` in `Verts[v]` for snapped vertices. The detection rule is equality:
@@ -425,7 +423,7 @@ Every test asserts computed geometry. Fixtures (float coordinates, mm):
 - **K**: pentagon `(0,0) (10,0) (10,16) (5,18) (0,16)` on XY extruded +Z by 10, `Cut` by the prism on XZ (frame
   `U = +X`, `V = +Z`, origin `y = −1`; its normal is −Y, so `decad.Against`) through `(−1,3) (11,4) (11,11) (−1,11)`
   extruded 20 toward +Y. Its tilted top meets
-  `x = 0` and `x = 10` at `z = 37/12` and `47/12`, rational non-floats (measured `β = 2.6e-16`, §1.1).
+  `x = 0` and `x = 10` at `z = 37/12` and `47/12`, rational non-floats (held corners carry `0 < β` about 1e-16, §1.1).
 - **F**: box `[x0,20]×[0,18]×[0,6]` (XY section, +Z), `x0 = 10` unless a case draws it elsewhere (never moved by
   `Transform`). **P2**: a fresh copy of K's tool prism. **G** = `Union(P2, F)`.
 - **S**, **T**: exact-chamfer §7's slot block and tenon (slope-1/6 wall through `(5,0)`, `(6,6)`).
@@ -506,39 +504,38 @@ volume equals its unchamfered volume minus `2·ChamferCut()·Length` within its 
 ## 13. Open questions
 
 - **Q1. Chamfer denotation for R1 (D1).** D1 (designed): rational chamfer plane, feet pinned by three carriers. Gains:
-  Rule A alone decides every flush contact on chamfered planar bodies; Task 11 is 2–3 days. Costs: the denoted setback
+  Rule A alone decides every flush contact on chamfered planar bodies. Costs: the denoted setback
   differs from the requested one by about one ulp of the coordinates; amends an in-flight design. D2: keep exact-chamfer's
   ideal (irrational) chamfer. Gains: the exact requested setback. Costs: the socket feet are not pinned, so the dovetail
   needs **Rule B**: snap a vertex onto the line or plane its carriers share keeping `β`; admit a coplanar facet pair whose
   corners all lie on the shared carrier when the gate certifies every near facet pair `(a, b)` by a carrier plane `Π`
   (each corner on `Π`, or off it by more than its bound on its own side; at every corner on `Π` the held star lies in its
   side's closed half-space with its in-plane facets facing the other side); extend interference §6.1 Step 4 with swept
-  sets, each confined to its half-space; add in-plane rim bounds for clip points. About 12–18 extra agent-days and a
-  second soundness proof. Recommend D1: smaller and Fusion-like (B-rep surfaces as exact planes, vertices derived).
+  sets, each confined to its half-space; add in-plane rim bounds for clip points. It needs a second soundness proof. Recommend D1: smaller and Fusion-like (B-rep surfaces as exact planes, vertices derived).
 - **Q2. Section chamfer (Q2-N vs Q2-A, Q2-B, Q2-C).** Gains and costs in §8.1. Recommend Q2-N.
 - **Q3. Replay parity.** Decline (designed): the bounded replay does not snap, so it refuses where live snapping was
   needed. Gains: no replay work. Costs: a re-tessellation or certificate replay of such a pair refuses. Port the snap to
-  the replay (about 4–6 days): gains parity. Decide after Task 9 shows whether any test or consumer replays these pairs.
+  the replay: gains parity, costs replay work. Decide after Task 9 shows whether any test or consumer replays these pairs.
 - **Q4. Fillet feet on tilted walls.** A section fillet's foot rounds off the wall the same way. Decide between Q2-N's
   rule for line walks next to fillet arcs (small, same pattern) and leaving fillets as they are, after Task 10.
 - **Q5. Carriers through placement.** Drop (designed). An exact image under translations and exact-rotation copies
-  (about 2 days) would keep flush contact decidable after `Transform`/`Copy`. Decide when a consumer needs it.
+  would keep flush contact decidable after `Transform`/`Copy`. Decide when a consumer needs it.
 
 ## 14. Size
 
-| Part | Tasks | Agent-days |
-|---|---|---|
-| carrier record and transfer | 2–3 | 3–4 |
-| snap core and float-read audit | 4–6 | 8–11 |
-| simplification, wiring, contact tests | 7–9 | 5–6 |
-| section chamfer (Q2-N) and junction corner | 10 | 3–4 |
-| R1 chamfer (D1) | 11 | 2–3 |
-| repro tests, docs, acceptance | 12–14 | 2–3 |
+| Part | Tasks |
+|---|---|
+| carrier record and transfer | 2–3 |
+| snap core and float-read audit | 4–6 |
+| simplification, wiring, contact tests | 7–9 |
+| section chamfer (Q2-N) and junction corner | 10 |
+| R1 chamfer (D1) | 11 |
+| repro tests, docs, acceptance | 12–14 |
 
-About 23–31 agent-days plus review and CI cycles: 5–7 weeks serially; Task 10 can run beside Tasks 4–9. Rule B instead
-of D1 adds about 3 weeks. The largest unknown is the float-read audit (Tasks 5–6). The cheapest sound subset is Tasks
-2–9: it makes flush contact exact for every planar body whose corners are pinned (fixtures K, G) with no denotation
-change; the dovetail also needs Tasks 10 and 11.
+Task 10 can run beside Tasks 4–9. The largest unknown is the float-read audit (Tasks 5–6). The cheapest sound subset is
+Tasks 2–9: it makes flush contact exact for every planar body whose corners are pinned (fixtures K, G) with no
+denotation change; the dovetail also needs Tasks 10 and 11. Rule B instead of D1 adds a second classifier and its
+soundness proof (§13 Q1).
 
 ## 15. Tasks
 
