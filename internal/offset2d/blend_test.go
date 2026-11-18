@@ -31,7 +31,7 @@ func cornerFillet(t *testing.T, at [2]float64, swap bool, pts ...[2]float64) *of
 }
 
 // TestFilletAtCornerAgreesAcrossFaces rounds one solid corner as two end
-// faces of a route E edge hold it (agent-docs/brep-modify-design.md §5.3 step
+// faces of a route E edge hold it (agent-docs/modify-design.md Part B §5.3 step
 // 2). G0 is the face x ∈ [−3.5, 3.5], y ∈ [0, 3.6]. G1 holds the same corner
 // (−3.5, 0) through a frame that flips y, (u, v) = (x, −y), so it reflects,
 // and its region runs on to x = 7. G0's loop arrives at the corner along the

@@ -7,7 +7,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 )
 
-// This file sizes the rows of an arc blend (agent-docs/retained-edge-blend-design.md
+// This file sizes the rows of an arc blend (agent-docs/modify-design.md Part E
 // §4.4, §6.3) for the curve the blend cuts in each end plane G. G is parallel
 // to the axis at distance h from it, so the row at profile parameter s, the
 // circle of radius ρ(s) at height z(s), meets G at in-plane distance
@@ -144,7 +144,7 @@ func (e endSection) at(s float64) (u, v, q float64) {
 //
 // On a cylinder the chord between the placed row vertices is a 3D chord and the
 // curve's image on G is an arc: the chord strays from the image of the unrolled
-// chord by at most curv, once per gap (agent-docs/retained-edge-blend-design.md
+// chord by at most curv, once per gap (agent-docs/modify-design.md Part E
 // §6.3), which every piece's test charges.
 func (e endSection) certify(s0, s1, tau float64) bool {
 	curv := e.curv(s0, s1)

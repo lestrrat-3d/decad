@@ -69,7 +69,7 @@ func TestChamferOfEdgesSharingCornersRefusesWhatItWouldOvercut(t *testing.T) {
 
 // An L: a 20 x 10 slab and a 10 x 20 slab, 10 mm tall. The two top edges at its inside corner (10, 10, 10) run on into
 // material past that corner, so a wedge longer than the edge would cut more than the wedge: the wedge route's fit check
-// declines them, and the chamfer of runs of a face's loop (agent-docs/modify-reach-design.md §8.3.2) builds them.
+// declines them, and the chamfer of runs of a face's loop (agent-docs/modify-design.md Part R §8.3.2) builds them.
 func lShape(t *testing.T, doc *decad.Document) *decad.Body {
 	t.Helper()
 	a := blockIn(t, doc, r3.NewVec(0, 0, 0), r3.NewVec(20, 10, 10))

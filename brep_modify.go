@@ -12,7 +12,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/topo"
 )
 
-// This file is the root's side of agent-docs/brep-modify-design.md's receiver
+// This file is the root's side of agent-docs/modify-design.md Part B's receiver
 // dispatch: the commit of a modify op's result and the hooks the node-level
 // routes of internal/brepmodify call back into root through.
 

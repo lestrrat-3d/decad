@@ -16,10 +16,10 @@ import (
 // that reads as a prism (inward along any axis, outward along its one axis),
 // an admitted two-slab rectangular boss, and an inward convex mesh Boolean result with planar faces
 // (agent-docs/trim-graph-design.md).
-// Their own builders run first (agent-docs/modify-reach-design.md Tables RX/SX,
-// §14; agent-docs/modify-general-design.md §3.2). Each receiver gets the row
+// Their own builders run first (agent-docs/modify-design.md Part R Tables RX/SX,
+// §14; agent-docs/modify-design.md Part G §3.2). Each receiver gets the row
 // that stages it: a faceted boolean result SX9, a brep or stacked receiver
-// agent-docs/modify-general-design.md's SG2, a holed revolve meridian SX8, a
+// agent-docs/modify-design.md Part G's SG2, a holed revolve meridian SX8, a
 // partial revolve SX8 (it keeps both angular caps), and any other receiver
 // base S3. Shell routes every straight prism to prismshell.BuildClosed, so
 // none arrives here. Every one is ErrUnsupported: the closed body exists, and this

@@ -81,7 +81,7 @@ round the circle turns them red.
 ## 7. Draft
 
 `WithRibDraft` leans every rib's walls. It passes `WithTaper` to the `Extrude` that builds each tool, so the lean, its
-sign and its refusals are `Extrude`'s (`agent-docs/draft-design.md` §2).
+sign and its refusals are `Extrude`'s (`agent-docs/modify-design.md` Part D §2).
 
 | Decision | Rule |
 |---|---|

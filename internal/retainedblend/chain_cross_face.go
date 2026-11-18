@@ -10,7 +10,7 @@ import (
 	"github.com/lestrrat-3d/r3"
 )
 
-// This file rebuilds the faces a cross-plane chain touches (agent-docs/retained-modify-reach-design.md §15b): each
+// This file rebuilds the faces a cross-plane chain touches (agent-docs/retained-agent-docs/modify-design.md Part R §15b): each
 // plane face's runs of chain edges give way to their setback contours, each cylinder face is cut at the setback
 // plane of each arc it borders, and each end plane gives up the corner its end column cuts off.
 

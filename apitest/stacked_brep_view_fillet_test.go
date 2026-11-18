@@ -13,7 +13,7 @@ import (
 
 // TestStackedBrepViewFillet fillets an edge that the brep receiver routes
 // refuse, through the retained edge blend on the body's faceted view
-// (agent-docs/tangent-notch-design.md T3): the plate's top edge at x = -10 or
+// (agent-docs/modify-design.md Part T T3): the plate's top edge at x = -10 or
 // x = 10, on an A7 result (a pocket across a round hole) and on an A1 union (a
 // round boss standing across the plate's outline). The circle crossings give
 // both records a section displacement, which the receivers refuse. The edge is

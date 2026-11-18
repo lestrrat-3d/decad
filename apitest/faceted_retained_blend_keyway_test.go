@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// The keyway rows of agent-docs/retained-edge-blend-design.md §9: a keyway
+// The keyway rows of agent-docs/modify-design.md Part E §9: a keyway
 // cut into a turned shaft ends inside it, so the shaft's cylinder runs on past
 // each end of the keyway's top edges. Each top edge is convex, between the
 // keyway's wall (a plane) and the shaft (a cylinder); at an end inside the

@@ -420,7 +420,7 @@ func requireAnalyticSTEPFeatures(t *testing.T, body *decad.Body, faces, planes, 
 }
 
 // TestNewSTEPFileFilletedClassBCutAnalytic writes S1 after a Fillet of its
-// edge along z at the origin (agent-docs/brep-modify-design.md §5, Table DB's DB10)
+// edge along z at the origin (agent-docs/modify-design.md Part B §5, Table DB's DB10)
 // through the analytic arm: 8 faces, 6 planes, and two cylinders, the hole's
 // whole wall and the fillet's partial wall of two arcs and two lines, each
 // EDGE_CURVE used once in each sense. Shown to fail with the brep route's
@@ -607,7 +607,7 @@ func TestNewSTEPFileRefusals(t *testing.T) {
 	require.True(t, errors.Is(err, context.Canceled))
 }
 
-// TestNewSTEPFileShellSideOpeningAnalytic writes agent-docs/shell-opening-design.md
+// TestNewSTEPFileShellSideOpeningAnalytic writes agent-docs/modify-design.md Part O
 // §9's U-channel — the 40×20×10 box shelled 2 mm inward with its x = 0 face
 // removed, both caps kept — through the analytic arm: 11 planar faces, the
 // x = 0 plane one face whose inner bound is the opening, and every
@@ -641,7 +641,7 @@ func TestNewSTEPFileShellSideOpeningAnalytic(t *testing.T) {
 }
 
 // TestNewSTEPFileShellObliqueOpeningAnalytic writes
-// agent-docs/shell-opening-design.md §9's oblique removed face — the triangle
+// agent-docs/modify-design.md Part O §9's oblique removed face — the triangle
 // (0,0) (12,0) (0,9) extruded 10 and shelled 3 mm inward with its hypotenuse
 // removed — through the analytic arm (Table DO's DO10): 12 planar faces, the
 // hypotenuse plane's four coplanar pieces among them, and every EDGE_CURVE

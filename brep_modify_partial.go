@@ -12,7 +12,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/topobuild"
 )
 
-// This file adapts WithTangentChain's expansion (agent-docs/modify-reach-design.md §5)
+// This file adapts WithTangentChain's expansion (agent-docs/modify-design.md Part R §5)
 // to public handles and selectors. The analytic continuation decision lives in
 // internal/tangentchain. An undecided continuation is SX2, never a chain stop:
 // stopping would under-blend the caller's rule.

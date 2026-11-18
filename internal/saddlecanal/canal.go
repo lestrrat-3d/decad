@@ -1,12 +1,12 @@
 // Package saddlecanal computes and proves the rolling-ball fillet of the
 // closed saddle where a bore crosses a larger perpendicular cylinder
-// (agent-docs/retained-edge-blend-design.md §4.10). The ball lies outside the
+// (agent-docs/modify-design.md Part E §4.10). The ball lies outside the
 // bore, and inside or outside the larger cylinder: inside at the convex mouth
 // of a cross hole in a shaft, outside where two bores cross in a block or a
 // boss roots on a rod.
 //
 // Everything is in the fixed local pose of
-// agent-docs/cross-cylinder-bore-chamfer-design.md: the larger cylinder
+// agent-docs/modify-design.md Part X: the larger cylinder
 // x² + y² = R² about the z axis, the bore y² + z² = r² about the x axis, the
 // mouth at x > 0. With σ1 the ball's side of the larger cylinder (−1 inside,
 // +1 outside), a ball of radius ρ touching both walls has its centre on the

@@ -16,7 +16,7 @@ import (
 )
 
 // This file fillets straight convex edges of equal radius that meet at corners of three mutually perpendicular
-// retained planes (agent-docs/retained-edge-blend-design.md §4.8). Each corner is read on its own. With one selected
+// retained planes (agent-docs/modify-design.md Part E §4.8). Each corner is read on its own. With one selected
 // edge the strip ends on the corner's end face as a lone edge's does. With two the strips end on the plane that bisects
 // the two walls (§4.7). With three the strips stop a radius short of the corner and a sphere octant of the same radius
 // joins them. Every face at a corner is rebuilt from its boundary loops, which swap the corner for the points the

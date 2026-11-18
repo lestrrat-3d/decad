@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// The fixtures of agent-docs/retained-edge-blend-design.md §4.5 (R6): a
+// The fixtures of agent-docs/modify-design.md Part E §4.5 (R6): a
 // Revolve ball (a half-disk meridian about the x axis) cut by a box that a
 // Transform placed at z >= ballCut, which keeps the pair on the mesh path. The
 // cut leaves the spherical cap below z = ballCut, height R + ballCut, whose rim

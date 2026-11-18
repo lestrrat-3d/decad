@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// The fixtures of agent-docs/retained-edge-blend-design.md §9 for increment B1: a
+// The fixtures of agent-docs/modify-design.md Part E §9 for increment B1: a
 // 40x20x20 plate bored by a Ø8 tool along z that a Transform placed, which
 // keeps the pair on the mesh path.
 
@@ -978,7 +978,7 @@ func TestFacetedRetainedBlendCylinderLine(t *testing.T) {
 		requireAreaChange(t, beforeArea, afterArea, 40*(r*phi-(k[0]-ta[0])-rad*q)-2*kq)
 		// The growth carries the rewrite's error, the shortfall of the rebuilt
 		// faces' geometric area terms and the new faces' own terms
-		// (agent-docs/retained-edge-blend-design.md §6.3), about 0.42 here: a
+		// (agent-docs/modify-design.md Part E §6.3), about 0.42 here: a
 		// loose ceiling, not the bound itself.
 		require.Less(t, afterArea.Bound.Mag()-beforeArea.Bound.Mag(), 2.0,
 			"the area bound grows by the rewrite's error, the terms' shortfall and the new terms only")

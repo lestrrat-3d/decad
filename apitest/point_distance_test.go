@@ -67,7 +67,7 @@ func TestPointDistanceFromBore(t *testing.T) {
 }
 
 // TestPointDistanceWithoutVolumeProof reads a point distance off a slot whose
-// joins turn past agent-docs/draft-design.md §9.1.1's limit, so its mesh
+// joins turn past agent-docs/modify-design.md Part D §9.1.1's limit, so its mesh
 // carries no volume proof.
 func TestPointDistanceWithoutVolumeProof(t *testing.T) {
 	t.Parallel()

@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// The concave fixtures of agent-docs/retained-modify-reach-design.md §12 for
+// The concave fixtures of agent-docs/retained-agent-docs/modify-design.md Part R §12 for
 // increment M7: Fillet and Chamfer of a closed concave outline of a mesh
 // Boolean result. The pocket is roundedPocket's: a 40x40x10 plate with a
 // 20x20, r = 3 pocket whose floor at z = 5 is bounded by four lines of 14 and

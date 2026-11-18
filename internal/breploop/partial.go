@@ -21,7 +21,7 @@ import (
 
 // This file is route L's partial-loop arm: a Fillet of a selected
 // straight-edge chain on one planar loop, and a Chamfer of one or two
-// adjacent straight walks (agent-docs/modify-general-design.md §4.3a). Route E
+// adjacent straight walks (agent-docs/modify-design.md Part G §4.3a). Route E
 // prepares the selected edges' end-face corners; these readers move only the
 // selected walls, offset only their walks of the common cap loop, and pin each
 // chain end's terminal to the cap contour's foot.
@@ -185,7 +185,7 @@ func (r *State) RewritePartialFillet(sel Sel, selected []bool, blends []*breprec
 		return breprecord.Payload{}, err
 	}
 	// A partial band charges no near-tangent reach, radial step or restated
-	// arc (agent-docs/loop-fillet-design.md §5.5), so a selection that
+	// arc (agent-docs/modify-design.md Part L §5.5), so a selection that
 	// touches one refuses.
 	for i, on := range selected {
 		if on && (fr.Loop.Charged(i) || fr.Loop.Charged((i+1)%len(selected))) {

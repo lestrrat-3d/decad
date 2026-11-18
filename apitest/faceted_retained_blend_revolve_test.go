@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// The fixtures of agent-docs/retained-edge-blend-design.md §2 for a revolve
+// The fixtures of agent-docs/modify-design.md Part E §2 for a revolve
 // wall: a r=10, L=40 shaft along x with a D-flat at z >= 7 cut by a
 // Transform-placed box. Built by Revolve, the wall and end planes carry a
 // denoted patch whose point leaves state the tag exactly, so the retained

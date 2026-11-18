@@ -619,7 +619,7 @@ type Arc3 struct    { /* ... */ }
 // the start vertex to the end vertex as Arc3 is: the point at angle φ from the
 // unit semi-major direction Major is
 // Center + SemiMajor·cos φ·Major + SemiMinor·sin φ·(Axis × Major)
-// (agent-docs/loop-fillet-design.md §2). An edge whose start and end vertex are one
+// (agent-docs/modify-design.md Part L §2). An edge whose start and end vertex are one
 // vertex is the whole ellipse, one turn from that vertex, as a Circle3 edge is. A
 // placement maps Center and Major as points and directions; a reflection also
 // negates Axis, so the arc keeps its sense between its mapped vertices.
@@ -644,14 +644,14 @@ type FacetedCurve struct{ Bound units.Value }
 invariant #2.** An analytic `Surface` variant's parameters are exact for the
 surface it names. A face whose built geometry is that surface is exact; a tagged
 analytic variant may instead be a bounded stand-in and carry its departure in
-computed measurements (`agent-docs/modify-reach-design.md` §8.3). A face whose held
+computed measurements (`agent-docs/modify-design.md` Part R §8.3). A face whose held
 geometry is faceted is `Faceted`, and `Faceted` is the flag; the one exception
 is a tagged analytic variant on a faceted face, a stand-in whose departure is
 carried in `NormalAt` and in the bounds of the measurements that read it, never
 in `Surface()`'s parameters. The stand-in is a float image of the true surface,
 or a tag whose true surface lies within a stated positional offset of it: a
 displaced plane, or a cylinder wall a retained edge blend keeps with its charge
-(`agent-docs/retained-edge-blend-design.md` §6.1). A reader that would take such
+(`agent-docs/modify-design.md` Part E §6.1). A reader that would take such
 a tag's parameters as the true surface's charges the offset or refuses the face.
 `Transform` and `Copy` carry such a tag to the float image of the source tag,
 and unless the placement is exactly the identity, `NormalAt` charges a placed
@@ -829,7 +829,7 @@ open-path `Sweep` does the same. A partial `Revolve` opens its groove at the
 angular caps. Those bodies have one connected, non-void shell. The `Shell`
 operation that removes a face leaves an opening, so its inner and outer skins
 connect. `Shell` accepts the closed `WithNoOpenings()` form of
-`agent-docs/modify-reach-design.md` §9.2 and returns `ErrUnsupported` for it on every
+`agent-docs/modify-design.md` Part R §9.2 and returns `ErrUnsupported` for it on every
 receiver until reach §14 rows C and D build it. Sheet shells
 always report `IsVoid() == false`, even when closed
 (`agent-docs/surface-design.md` §2.2). `Stitch` refuses a closed assembly whose
@@ -1064,7 +1064,7 @@ turns.
 together with `WithSurfaceResult()`, the option that
 makes `Extrude`, `Revolve`, `Sweep` and `Loft` return their wall set as a
 sheet instead of closing it into a solid, and the chain-fed forms that
-sweep an open curve (§13 there). `agent-docs/draft-design.md` owns `WithTaper`'s
+sweep an open curve (§13 there). `agent-docs/modify-design.md` Part D owns `WithTaper`'s
 build and `Draft`, the face draft of an existing prism, with its
 `NeutralFace`/`NeutralFrame` planes and the `Walls(b)` selector.
 
@@ -1449,10 +1449,10 @@ func FilletChord(ctx context.Context, b *Body, sel EdgeSelector, chord units.Val
 ```
 
 `FilletChord(ctx, b, sel, chord)` rounds right-angled planar edges with the radius `chord/√2` and builds the result with
-`Fillet`. `agent-docs/blend-variants-design.md` owns its rules.
+`Fillet`. `agent-docs/modify-design.md` Part A owns its rules.
 
 `ChamferAngle` sets back `d` on `reference` and `d·tan(angle)` on the other face of each right-angled planar edge, and
-builds the result with `Chamfer`. `agent-docs/blend-variants-design.md` owns its rules.
+builds the result with `Chamfer`. `agent-docs/modify-design.md` Part A owns its rules.
 
 Each bounds cancellation latency in its cancellable construction
 and audit paths, including Shell's shared offset-construction, crossing, and
@@ -1476,7 +1476,7 @@ func WithNoOpenings() ShellOption
 continuations. `WithAsymmetricChamfer` applies positional `d` on `reference`
 and `otherDistance` on the other adjacent face. `WithNoOpenings` is the only
 shell form that accepts `sel == nil`; it conflicts with a non-nil selector.
-`agent-docs/modify-reach-design.md` owns exact receiver/target limits, refusal order,
+`agent-docs/modify-design.md` Part R owns exact receiver/target limits, refusal order,
 payloads, and validation.
 
 Surface operations build, close and thicken a **sheet body** — a body that
@@ -2346,7 +2346,7 @@ the resulting bodies, measurements, and verification reports directly.
   displaces along the target face's normal and whose sign says which side of that
   face the sweep stops on (§8.1); `ExtrudeOpts.Taper` (`WithTaper`, §8.1),
   whose sign says which way the wall leans; and `Draft`'s angle
-  (`agent-docs/draft-design.md` §10), read the same way about its neutral plane. Neither carries a `Direction` to reverse,
+  (`agent-docs/modify-design.md` Part D §10), read the same way about its neutral plane. Neither carries a `Direction` to reverse,
   so a negative value there is a legal intent, not an error.
 - **`ErrCardinality` takes precedence at zero matches.** A failed cardinality
   assertion is `ErrCardinality` **even when the selector matched nothing** — and

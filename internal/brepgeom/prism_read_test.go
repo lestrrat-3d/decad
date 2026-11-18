@@ -10,7 +10,7 @@ import (
 )
 
 // TestPrismWallSetMapsCarrier is the carrier half of P2(a)
-// (agent-docs/brep-modify-design.md §4.4): a swept arc about (3, 4) in a wall
+// (agent-docs/modify-design.md Part B §4.4): a swept arc about (3, 4) in a wall
 // frame turned a quarter turn from the section frame (u along reference y, v
 // along −x) records its operand circle about (−4, 3) in the section frame,
 // with its radius unchanged, and a wall with no carrier keeps none.

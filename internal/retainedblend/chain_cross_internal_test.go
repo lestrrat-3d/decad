@@ -9,7 +9,7 @@ import (
 )
 
 // TestColumnAtCorner checks the exact identity that lets a cross-plane chain's end column take a held corner of its
-// end plane (agent-docs/retained-modify-reach-design.md §15b.1): a step's wall edge between the side y = 10 and the
+// end plane (agent-docs/retained-agent-docs/modify-design.md Part R §15b.1): a step's wall edge between the side y = 10 and the
 // wall x = 30 ends on the 45° bevel of the top rim, whose far corner on the wall is where the bevel, the wall and the
 // top z = 20 meet.
 func TestColumnAtCorner(t *testing.T) {

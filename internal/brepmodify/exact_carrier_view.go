@@ -11,7 +11,7 @@ import (
 )
 
 // exactCarrierViewBlend is a Chamfer of a prism whose section carries a
-// displacement (agent-docs/brep-modify-design.md §2.2). The corner rewrite
+// displacement (agent-docs/modify-design.md Part B §2.2). The corner rewrite
 // refuses such a receiver, since it reads the displaced coordinates, so the
 // body is restated as its faceted view like shellViewBlend's: its own
 // tessellation, which charges the section

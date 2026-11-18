@@ -88,7 +88,7 @@ func TestTessellateDraftBand(t *testing.T) {
 	t.Run("TwoSidedChargesANearTangentSlot", func(t *testing.T) {
 		t.Parallel()
 		// A join the build reads as tangent but the record does not make
-		// exactly tangent is a near-tangent join (agent-docs/draft-design.md
+		// exactly tangent is a near-tangent join (agent-docs/modify-design.md Part D
 		// §9.1.1): each half's band charges its corners, so the sewn mesh
 		// carries the occupied-volume proof both halves compose.
 		body, got := twoSidedBody(t, env, nearTangentSlot(math.Ldexp(1, -40)))

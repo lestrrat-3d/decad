@@ -1571,7 +1571,7 @@ answers this way:
   each side of zero, prove the wall opposes. Anything else leaves that wall
   undecided, and every other wall keeps its own verdict. A tagged analytic
   variant that is a bounded
-  stand-in carries its own normal departure (`agent-docs/modify-reach-design.md`
+  stand-in carries its own normal departure (`agent-docs/modify-design.md` Part R
   §8.3) on top of that. A faceted survey proves the same all-clear only when
   every true patch's source-normal range clears. A missing or straddling
   range leaves `Coverage` at `CoverageUndecided` (or `CoveragePartial` when
@@ -1975,7 +1975,7 @@ core §6.1 defines is the normal **at a point**: `Face.NormalAt(p)`, a
 face's closed form earns — zero where the evaluation lands on the exact unit
 normal and the rounding it committed where it does not — with any proven
 departure of the published tag from the surface it represents
-(`agent-docs/modify-reach-design.md` §8.3). A `Faceted` face carries the facet's
+(`agent-docs/modify-design.md` Part R §8.3). A `Faceted` face carries the facet's
 honest tilt error, because a facet's normal is exact *for the facet* and
 approximate *for the part the facet stands for*. A curved face sweeps a
 **range** of normals — a single cylindrical, spherical or toroidal face
@@ -2022,7 +2022,7 @@ cone, sphere or torus — whose geometry is its tag, the normal over the face's
 bounded region is closed-form, so the survey of its range is exact and the
 three-way answer is decided outright. A tagged analytic variant that is a
 bounded stand-in widens that range by its proven departure and can leave the
-three-way answer undecided (`agent-docs/modify-reach-design.md` §8.3). A `Faceted`
+three-way answer undecided (`agent-docs/modify-design.md` Part R §8.3). A `Faceted`
 face is its held facets, but every facet's certificate encloses the normals of
 the true patch it represents; that whole range, not only the held plane
 normal, is what the pointwise rule reads (payload verification §8).

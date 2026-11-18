@@ -14,7 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// The fixtures of agent-docs/retained-modify-reach-design.md §5.5 step 5 for a
+// The fixtures of agent-docs/retained-agent-docs/modify-design.md Part R §5.5 step 5 for a
 // concave open tangent chain whose walls continue past its end planes: a box
 // ear is unioned under a block whose bottom edges are rounded, and the ear's
 // front face crosses the round between its two tangent lines. The ear's root
@@ -289,7 +289,7 @@ func TestFacetedRetainedBlendNotchedRoundRefusals(t *testing.T) {
 // Several ears whose back faces lie in one plane G (the back faces of two
 // boxes unioned under the floor, y = 13.5) take one blend after another: the
 // earlier blend leaves a run of cut vertices along G, and the later band's
-// planes put them outside it (agent-docs/retained-edge-blend-design.md §4.3).
+// planes put them outside it (agent-docs/modify-design.md Part E §4.3).
 // Each side root is notchedRoots[0]'s: a straight edge on the floor and an arc
 // on the round, so each root fills what N1's does.
 
@@ -500,7 +500,7 @@ func TestFacetedRetainedBlendSharedBackPlaneRefusals(t *testing.T) {
 // band's setback plane cuts that edge. Each ear's corners lie on the end plane
 // by their own faces' tags, which equal the blend's end plane exactly, and the
 // cut inherits the plane from the edge's two ends
-// (agent-docs/retained-edge-blend-design.md §4.3).
+// (agent-docs/modify-design.md Part E §4.3).
 var (
 	// earBoxFlush is earBoxA's twin, whose front face lies in the plane y = 1.5
 	// too, 10 away.

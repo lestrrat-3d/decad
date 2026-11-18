@@ -14,7 +14,7 @@ import (
 // requireEndCurveCovered samples the true end curve of a quarter-turn fillet,
 // at(α) for α in [0, π/2], where the blend's rows end on a plane oblique to
 // the edge, and requires every sample within the mesh's published Bound of
-// the held facets (agent-docs/retained-edge-blend-design.md §6.3). The curve
+// the held facets (agent-docs/modify-design.md Part E §6.3). The curve
 // is the ellipse the blend's cylinder cuts in that plane, and the facets reach
 // it only through the chords between the rows' vertices there. A sample
 // farther than Bound disproves the bound; samples within it prove nothing.

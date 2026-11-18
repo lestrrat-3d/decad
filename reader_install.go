@@ -20,7 +20,7 @@ func init() {
 }
 
 // init installs the reader parts' joint inference calls to read a charged
-// wall as an unread face (agent-docs/retained-edge-blend-design.md §6.1).
+// wall as an unread face (agent-docs/modify-design.md Part E §6.1).
 func init() {
 	facedeparture.ChargedReader = func(face any) bool {
 		f, ok := face.(*Face)

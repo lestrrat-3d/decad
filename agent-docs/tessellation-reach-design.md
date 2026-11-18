@@ -482,7 +482,7 @@ patch and the cap contour (below).
 
 `capBlendPayload` (`capblend.Payload`, `internal/capblend/payload.go`) holds the receiver's `profile`, `frame`, `z0/z1` with their axial
 displacements, each chamfered cap's two setbacks (`capSetback`: `dc` across the cap and `ds` down the side,
-each with its conversion rounding `dcDelta`, `dsDelta`; `agent-docs/modify-reach-design.md` §8.3.1), the selected
+each with its conversion rounding `dcDelta`, `dsDelta`; `agent-docs/modify-design.md` Part R §8.3.1), the selected
 `startLoops`/`endLoops`, and `Patches []capblend.Patch` — every
 `chamferCap(cap, loop, k)` role beside its plane-local `capband.Patch` (`internal/capband/patch.go`): a `Plane` patch's
 four corners, or a `Cone` patch's centre, `sideRadius`/`capRadius`, side window `th0..th1`, cap window
@@ -505,7 +505,7 @@ chamfered loop and the original loop otherwise (the `mixed` profile of `capblend
 
 ### Chording — one count per wall walk, shared three ways
 
-A route L band on a brep body (`agent-docs/modify-general-design.md` Table DG's
+A route L band on a brep body (`agent-docs/modify-design.md` Part G Table DG's
 DG3) is chorded by the same loop chording over the receiver's loop in its
 face's frame. The brep tessellator hands the wall beside each walk the
 band's side-ring points as its own samples, so the three share one count and
@@ -606,7 +606,7 @@ A draft band (`capblend.Payload.Draft`) or a cap-loop chamfer band also admits (
 by one amount, each moved circle clear of the corner (`capband.NearTangentCorner`), and each wall at it proven to
 survive every level (`capband.NearTangentWallRefusal`). At two arcs B1's corner is the leaving arc's radial foot, so
 the arriving arc's last cell is not a planar trapezoid; the charge covers that cell's twist beside the sliver. Its
-proof adds the corner charge `capblend.NearTangentVolume` to `volSymDiff` below; `agent-docs/draft-design.md`
+proof adds the corner charge `capblend.NearTangentVolume` to `volSymDiff` below; `agent-docs/modify-design.md` Part D
 §9.1.1 states and proves it. A chamfer band moves every walk by its cap's `dc`, so the one-amount condition
 holds; its shell offset meets a convex sliver at the same corner and closes a reflex sliver with a connector arc,
 and §9.1.1's "On a cap-loop chamfer band" shows the same charge covers both (`capblend.Payload.cornerClass`).
@@ -614,7 +614,7 @@ Neither a fillet band's view (`capblend.Payload.Fillet`) nor a loft-source band 
 chamfered on both caps with two different setbacks takes the exact class. A route L chamfer band of a brep
 body (`brepbandmesh`) composes its own terms without the corner or restatement charge, so its admission
 (`capblend.ExactOccupiedVolumeAdmission`) keeps the exact class. A route L fillet band takes no admission
-here: `brepfilletmesh` meshes it and charges its own near-tangent joins (`agent-docs/loop-fillet-design.md`
+here: `brepfilletmesh` meshes it and charges its own near-tangent joins (`agent-docs/modify-design.md` Part L
 §5.5).
 
 A reflex corner (`cornerJoin.arc`) is admitted for a prism cap-loop chamfer band only (`capband.OccupiedVolumeAdmission`'s
@@ -717,7 +717,7 @@ volSymDiff = upRound(Mchord + sweptVolumeAllow(motionMax, perturbedAreaUpper(M, 
 symDiffOK  = true
 ```
 
-where `Ncorner` is a draft or chamfer band's near-tangent corner charge (`agent-docs/draft-design.md` §9.1.1),
+where `Ncorner` is a draft or chamfer band's near-tangent corner charge (`agent-docs/modify-design.md` Part D §9.1.1),
 and `Noff`, with the shift `motionMax` adds, is §7.1's restatement charge; each is present only when it is
 positive, so every other band's sum is unchanged.
 
@@ -823,7 +823,7 @@ loop gates read for both. Nothing here proves it: the window gate bounds `Δ` on
 restated arc beside another loop is the case it leaves open.
 
 A loop with no off-radius arc adds nothing. A complete-loop fillet reads the same restatement, shift and
-level-set perimeter for its strip (`agent-docs/loop-fillet-design.md` §5.6). The 20 mm plate of the apitest below (two R4.5 corners and an R22
+level-set perimeter for its strip (`agent-docs/modify-design.md` Part L §5.6). The 20 mm plate of the apitest below (two R4.5 corners and an R22
 end arc, 8 mm thick, 0.5 mm chamfer) restates two arcs with `Δ ≈ 1.5·10⁻¹⁵` mm and `Perim ≈ 274` mm, so its
 `Noff` is near `7·10⁻¹²` mm³.
 
@@ -893,7 +893,7 @@ Stated separately, per `CLAUDE.md`'s rule. Everything else here extends a design
 
 | Doc | Section | Sentence today | Change | Reason |
 |---|---|---|---|---|
-| `agent-docs/modify-reach-design.md` | §12 Table DX, row DX4, `capBlendPayload` cell | "available once DX3 exists" | "available once DX3's occupied-volume proof lands (`agent-docs/tessellation-reach-design.md` §7); export-only tessellation does not admit it" | tess §2 makes boolean admission conditional on `volSymDiff`, which R6 does not prove |
+| `agent-docs/modify-design.md` Part R | §12 Table DX, row DX4, `capBlendPayload` cell | "available once DX3 exists" | "available once DX3's occupied-volume proof lands (`agent-docs/tessellation-reach-design.md` §7); export-only tessellation does not admit it" | tess §2 makes boolean admission conditional on `volSymDiff`, which R6 does not prove |
 
 The `loftPayload` doc comment's "deliberately NOT a `loftPayload` field" paragraph is a code comment, not a
 design decision; R1 rewrites it to say the payload stores the COMPOSED proof terms and why that keeps the
@@ -1022,4 +1022,4 @@ Ordered. Each is independently reviewable. "Pattern" names the file whose existi
     cells, apex fans, cap faces, the §7 term table, refusals; dispatch. **Pattern:** `cuptess.Tessellate` for
     rings, `tessellate_revolve.go` for cone cells and fans. **Depends on:** 9 (twist helper use), 15, 23.
     **Tests:** §7's list in new `apitest/tessellate_capblend_test.go`.
-25. **Files:** `agent-docs/modify-reach-design.md` §12 DX3/DX4 cells (§8's change), `doc.go`. **Depends on:** 24.
+25. **Files:** `agent-docs/modify-design.md` Part R §12 DX3/DX4 cells (§8's change), `doc.go`. **Depends on:** 24.

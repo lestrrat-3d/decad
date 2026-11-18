@@ -18,7 +18,7 @@ import (
 // This file is the cup of agent-docs/modify-design.md §9 (Table B, B5/B6). A cup
 // is the outer region O on its interval less the cavity region C on its own,
 // sharing a rim at the open end and a floor at the closed one. Its record is a
-// two-slab stackedrecord.Payload (agent-docs/modify-reach-design.md §9.1): a floor
+// two-slab stackedrecord.Payload (agent-docs/modify-design.md Part R §9.1): a floor
 // slab over O and a wall slab over the bands between O's loops and C's, with C
 // exposed between them as the pocket floor. The stacked build makes its body,
 // and every cup survey, mesh and mass reading reads the View the record
@@ -245,7 +245,7 @@ func ViewFor(in prismshell.CapShellInput, offset momentinput.Profile, offsetDelt
 	return cp
 }
 
-// Payload is the cup's stored record (agent-docs/modify-reach-design.md §9.1): a
+// Payload is the cup's stored record (agent-docs/modify-design.md Part R §9.1): a
 // two-slab stackedrecord.Payload plus the shell morphology certificate the
 // cup's own surveys read (agent-docs/payload-verification-design.md §4.1). The floor
 // slab holds the outer region O over the floor interval; the wall slab holds

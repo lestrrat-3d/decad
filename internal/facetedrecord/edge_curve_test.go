@@ -372,7 +372,7 @@ func TestRetainedEdgeCurveObliqueEllipse(t *testing.T) {
 }
 
 // TestRetainedEdgeCurveCylinderTorus covers the junction of two fillet blends
-// (agent-docs/retained-modify-reach-design.md §5.4, Claim J). A fillet of
+// (agent-docs/retained-agent-docs/modify-design.md Part R §5.4, Claim J). A fillet of
 // radius 1 along the front edge y=0 of a plate top z=20 is the cylinder about
 // the line y=1, z=19. The fillet of the r=3 corner about (3,3) is the torus of
 // tube radius 1 about the corner axis at depth 1. They meet in the quarter

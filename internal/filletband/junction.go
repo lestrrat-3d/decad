@@ -11,7 +11,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 )
 
-// This file is agent-docs/loop-fillet-design.md §5.6–§5.7: an arc whose
+// This file is agent-docs/modify-design.md Part L §5.6–§5.7: an arc whose
 // recorded End is off the circle its Start states. The record denotes Start's
 // radius up to End's angle and a radial step to End
 // (agent-docs/evaluator-design.md §4). The strip's volume and first moments
@@ -31,7 +31,7 @@ type RestateTerms struct {
 
 // Charged reports whether corner k carries a near-tangent reach, a radial
 // step, or a restated arc on either side: a reading the partial-fillet route
-// does not charge (agent-docs/loop-fillet-design.md §5.5).
+// does not charge (agent-docs/modify-design.md Part L §5.5).
 func (l Loop) Charged(k int) bool {
 	n := len(l.Walks)
 	if l.Restate.Walks != nil && (l.Restate.Walks[k] || l.Restate.Walks[(k+n-1)%n]) {

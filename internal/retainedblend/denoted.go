@@ -46,7 +46,7 @@ func recordTag(f *topo.Face) bool {
 }
 
 // sphereIsRecord refuses a retained Sphere face whose tag is not exactly the
-// sphere its revolve record denotes (agent-docs/retained-edge-blend-design.md
+// sphere its revolve record denotes (agent-docs/modify-design.md Part E
 // §4.5). A face with no denoted patch is its own record. Otherwise every leaf of
 // the circular patch must be a point and its axis frame exactly orthonormal; the
 // recorded centre must lie on the axis and the tag's centre must be that axis

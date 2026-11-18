@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file pins agent-docs/draft-design.md §9.1.1 at a corner of two arcs:
+// This file pins agent-docs/modify-design.md Part D §9.1.1 at a corner of two arcs:
 // Lemma 1′ against a 256-bit reference in each of its four cases, the
 // refusals of condition 6 for two arcs, and the survival gate at such a
 // corner.
@@ -102,7 +102,7 @@ func twoArcGaps(pair arcPair, t float64) (float64, float64, float64) {
 }
 
 // TestNearTangentArcsEncloseTheMiter pins Lemma 1′ of
-// agent-docs/draft-design.md §9.1.1 against the 256-bit reference in each of
+// agent-docs/modify-design.md Part D §9.1.1 against the 256-bit reference in each of
 // its four cases: at every amount the sweep reaches, inward and outward, the
 // two moved circles meet within ρ of the leaving arc's radial foot, which B1
 // holds, and of the arriving arc's own foot, and the two feet lie within ρ of

@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// The boss-foot rows of agent-docs/retained-edge-blend-design.md §9: a boss's
+// The boss-foot rows of agent-docs/modify-design.md Part E §9: a boss's
 // side edge is convex, and at its foot it ends on the plate's top face, which
 // wraps the boss's footprint and so is reflex at the corner. The plate's top
 // face takes the blend's end cap there. A through hole placed by a Transform

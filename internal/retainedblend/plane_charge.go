@@ -13,7 +13,7 @@ import (
 	"github.com/lestrrat-3d/r3"
 )
 
-// This file charges the plane faces a route rebuilds (agent-docs/retained-edge-blend-design.md §6.3, Claim K,
+// This file charges the plane faces a route rebuilds (agent-docs/modify-design.md Part E §6.3, Claim K,
 // "Volume" and "A displaced plane in the area bound"): the volume the new facets of a re-triangulated plane
 // face can add over the true plane, and the area a displaced plane moves in the exact pieces of a route.
 

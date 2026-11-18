@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// sourceScene builds the 40x20x20 plate of agent-docs/retained-edge-blend-design.md
+// sourceScene builds the 40x20x20 plate of agent-docs/modify-design.md Part E
 // §9 and a translated Ø8 z-cylinder, so a Cut takes the mesh path.
 type sourceScene struct {
 	w     *sketch.World

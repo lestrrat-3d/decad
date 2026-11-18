@@ -57,7 +57,7 @@ type Face struct {
 	// axis offset and radius difference from the tag, the axes parallel. A
 	// stacked brep's faceted view states it, and a retained edge blend's result,
 	// every later Boolean, placement and similarity keep it (scaled by |s| under
-	// a similarity; agent-docs/retained-edge-blend-design.md §6.1).
+	// a similarity; agent-docs/modify-design.md Part E §6.1).
 	AxialDelta float64
 	// HasAxialDelta reports whether the face's payload states an axial bound.
 	HasAxialDelta bool
@@ -111,7 +111,7 @@ type Face struct {
 	// patch is RULED between two built directrices, and the `Cone` or `Plane`
 	// it publishes is that ruled surface only to within a bound measured from
 	// the numbers the body publishes for it
-	// (root capblend_departure.go, agent-docs/modify-reach-design.md §8.3). The bound is a
+	// (root capblend_departure.go, agent-docs/modify-design.md Part R §8.3). The bound is a
 	// world-space one, so it covers both a mitered corner's own angular skew and
 	// the placement's independent rounding of every coordinate the build emits —
 	// which leaves the tag even on a flat patch, and on a circular one whose two

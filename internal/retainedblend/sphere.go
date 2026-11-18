@@ -14,7 +14,7 @@ import (
 )
 
 // sphereRim is a closed circular edge between a retained plane and a retained
-// sphere (agent-docs/retained-edge-blend-design.md §4.5, R6). Its rim frame is
+// sphere (agent-docs/modify-design.md Part E §4.5, R6). Its rim frame is
 // the plane's: center is the foot of the sphere's centre on the plane, n the
 // plane's outward normal, radius the rim's radius. matOutside is the sphere
 // face's Reversed flag.

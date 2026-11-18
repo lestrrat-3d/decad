@@ -115,7 +115,7 @@ func Shell(ctx context.Context, env topo.Env, b *topo.Body, call ShellCall) (*to
 	if err := draftrecord.RequireNotReceiver(b.Payload, "shells"); err != nil {
 		return nil, err
 	}
-	// Reach RX2 (agent-docs/modify-reach-design.md §9.3): a revolve receiver shells
+	// Reach RX2 (agent-docs/modify-design.md Part R §9.3): a revolve receiver shells
 	// its meridian and sweeps the wall over its own angular interval.
 	if rp, ok := b.Payload.(revolveplan.Payload); ok {
 		return shellRevolve(ctx, env, b, rp, removed, s, t, tmm, tDelta)
@@ -129,7 +129,7 @@ func Shell(ctx context.Context, env topo.Env, b *topo.Body, call ShellCall) (*to
 		}
 	}
 	// A brep or stacked receiver takes the brep route
-	// (agent-docs/brep-modify-design.md §2), ahead of the generic refusal.
+	// (agent-docs/modify-design.md Part B §2), ahead of the generic refusal.
 	route, err := Receiver(ctx, env, b, Request{Op: "shells", Shell: true,
 		Admits: func(_ prismrecord.Payload, caps PrismCaps) error {
 			_, _, err := classifyRemovedCaps(caps, removed)
@@ -191,7 +191,7 @@ func Shell(ctx context.Context, env topo.Env, b *topo.Body, call ShellCall) (*to
 	return capShell.Build(ctx, env)
 }
 
-// shellClosedPrism is reach BX5 (agent-docs/modify-reach-design.md §9.2), built by
+// shellClosedPrism is reach BX5 (agent-docs/modify-design.md Part R §9.2), built by
 // prismshell.BuildClosed: WithNoOpenings on a straight prism keeps every face
 // and lines it with a wall of thickness t, closing a cavity whose walls form
 // one void shell (FaceShell.IsVoid), holed or not, in either sense.
@@ -202,7 +202,7 @@ func shellClosedPrism(ctx context.Context, env topo.Env, pp prismrecord.Payload,
 }
 
 // classifyRemovedCaps decides which caps a removed-face set names on a brep
-// receiver's route P (agent-docs/brep-modify-design.md §4.2): every face must be one
+// receiver's route P (agent-docs/modify-design.md Part B §4.2): every face must be one
 // of the recognised prism's two cap faces, else ErrUnsupported, which the
 // route reports as SB3. It reports whether the start cap, the end cap, or
 // both were removed. A prism receiver classifies its removed faces with
@@ -307,7 +307,7 @@ func classifyRemovedSweepFaces(b *topo.Body, caps PrismCaps, pp prismrecord.Payl
 }
 
 // shellSideOpening is Shell's side opening on a hole-free straight
-// prism (agent-docs/shell-opening-design.md): sides names the removed outer-loop
+// prism (agent-docs/modify-design.md Part O): sides names the removed outer-loop
 // segments, and removedStart/removedEnd the removed caps. The regions are
 // built and audited first (prismshell.SideOpeningRegions); both caps removed records W
 // as a prism over the receiver's sweep (BO1), and otherwise the slabs are

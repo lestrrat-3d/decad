@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file checks agent-docs/retained-edge-blend-design.md §6.3's strip
+// This file checks agent-docs/modify-design.md Part E §6.3's strip
 // triangles facet by facet. A held mesh states a bound per vertex, and every
 // facet claims its true piece within the largest bound of its three corners
 // (agent-docs/faceted-vertex-bounds-design.md §2). Mesh.Bound is the largest

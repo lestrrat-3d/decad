@@ -22,7 +22,7 @@ import (
 
 // Fillet fillets the selected edges of b, a mesh Boolean result with retained
 // tags. recognized is false when some selected edge is in no class of
-// agent-docs/retained-edge-blend-design.md Table RR; the caller then keeps its own
+// agent-docs/modify-design.md Part E Table RR; the caller then keeps its own
 // refusal. All edges must be non-nil.
 func Fillet(ctx context.Context, env topo.Env, b *topo.Body, fp facetedrecord.Payload, edges []*topo.Edge,
 	radius, radiusDelta float64) (*topo.Body, bool, error) {
@@ -43,7 +43,7 @@ func publishCharged(ctx context.Context, env topo.Env, out *topo.Body, recognize
 	return out, recognized, nil
 }
 
-// Reference is a resolved two-distance chamfer (agent-docs/retained-modify-reach-design.md
+// Reference is a resolved two-distance chamfer (agent-docs/retained-agent-docs/modify-design.md Part R
 // §4.1): Refs maps each selected edge to its one reference face of b, which takes
 // the positional distance d. The other face adjacent to the edge takes Other.
 type Reference struct {
@@ -520,7 +520,7 @@ func (w *work) splitSeams(facets [][3]int, src []int) ([][3]int, []int) {
 
 // buildCharged builds the rewritten body from next and charges the shortfall
 // of its geometric area terms against oldGeom, the old body's terms by group
-// (agent-docs/retained-edge-blend-design.md §6.3, Area). next.AreaSlack holds
+// (agent-docs/modify-design.md Part E §6.3, Area). next.AreaSlack holds
 // the old slack and the change's own terms; the shortfall joins it and every
 // area bound of the built body (facetedrecord.ChargeAreaSlack).
 func buildCharged(ctx context.Context, env topo.Env, next facetedrecord.Payload,
@@ -649,7 +649,7 @@ func heldArea(verts []r3.Vec, facets [][3]int) (float64, float64) {
 }
 
 // measureChange returns the area slack and volume bound the rewrite adds
-// (agent-docs/retained-edge-blend-design.md §6.3, Claim K). The area change of the
+// (agent-docs/modify-design.md Part E §6.3, Claim K). The area change of the
 // held mesh is compared with the exact change: the annulus and band removed
 // and the blend face added, widened by the pieces a displaced plane moves
 // (planeAreaCharge). The volume bound adds the slab each re-triangulated plane

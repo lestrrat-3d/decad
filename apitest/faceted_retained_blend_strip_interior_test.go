@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// The fixtures of agent-docs/retained-edge-blend-design.md §6.3, "Strip
+// The fixtures of agent-docs/modify-design.md Part E §6.3, "Strip
 // triangles": every facet of a blend face, the band beside the wall's cut
 // included, is sampled on a barycentric grid against the exact blend surface,
 // and every sample must lie within the mesh's published Bound of it. The

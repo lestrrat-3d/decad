@@ -18,7 +18,7 @@ import (
 // offset section at the same azimuths: a whole turn, a line-line miter, and a
 // join whose two walks meet exactly tangent (G1). A draft or cap-loop chamfer
 // band also admits a near-tangent line–arc or arc–arc join, whose sliver its
-// mesh charges (near_tangent.go, agent-docs/draft-design.md §9.1.1), and a
+// mesh charges (near_tangent.go, agent-docs/modify-design.md Part D §9.1.1), and a
 // chamfer band restates an off-radius arc (restate.go, §7.1). A prism cap-loop
 // chamfer band also admits a reflex corner, whose apex fan its mesh charges
 // (§7, "Reflex connector"). Every test here is exact
@@ -46,7 +46,7 @@ import (
 // chamfer's one setback on every walk; nil for a band whose mesh charges no
 // near-tangent corner. With it, a corner JoinIsG1 rejects is admitted when
 // NearTangentCorner reads it as a near-tangent join
-// (agent-docs/draft-design.md §9.1.1), and refused with that function's reason
+// (agent-docs/modify-design.md Part D §9.1.1), and refused with that function's reason
 // otherwise; every wall with such a join at an end must then pass
 // NearTangentWallRefusal.
 //
@@ -162,7 +162,7 @@ func OccupiedVolumeAdmission(
 			// A band passed no amounts has no term for the volume between that
 			// locus and the ruled cells; a draft or cap-loop chamfer band charges
 			// it for a near-tangent line–arc or arc–arc join
-			// (agent-docs/draft-design.md §9.1.1).
+			// (agent-docs/modify-design.md Part D §9.1.1).
 			if sharp == nil {
 				return admissionRefusal(noun, li, cornerAt(prev, cur), notTangentWhy, notTangentHint), nil
 			}
@@ -181,7 +181,7 @@ func OccupiedVolumeAdmission(
 			}
 			charges[i] = &charge
 		}
-		// Lemma 2 of agent-docs/draft-design.md §9.1.1 assumes every wall
+		// Lemma 2 of agent-docs/modify-design.md Part D §9.1.1 assumes every wall
 		// at a near-tangent join survives at every level.
 		for i, w := range walks {
 			if charges == nil {

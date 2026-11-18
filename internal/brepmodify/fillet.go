@@ -82,9 +82,9 @@ func Fillet(ctx context.Context, env topo.Env, b *topo.Body, call FilletCall) (R
 	}
 	// The exact P8 front top edge takes a bounded cutter before the brep
 	// receiver's SB7 curved-third-face refusal (modify-general §4.3c).
-	// Other brep and stacked receivers take agent-docs/brep-modify-design.md §2.
+	// Other brep and stacked receivers take agent-docs/modify-design.md Part B §2.
 	// A loop's fillet radius is both of route L's setbacks
-	// (agent-docs/loop-fillet-design.md §4).
+	// (agent-docs/modify-design.md Part L §4).
 	loopCall := Request{
 		Op: "fillets",
 		Admits: func(pp prismrecord.Payload, _ PrismCaps) error {
@@ -98,7 +98,7 @@ func Fillet(ctx context.Context, env topo.Env, b *topo.Body, call FilletCall) (R
 	if err != nil {
 		// A stacked or slab-cut BRep result whose selection the receiver
 		// routes refuse takes the retained edge blend on its faceted view
-		// (agent-docs/tangent-notch-design.md T3). It runs after them, so every
+		// (agent-docs/modify-design.md Part T T3). It runs after them, so every
 		// selection they build keeps its result.
 		// The record proves the tangent corners of a root arc's ends
 		// (agent-docs/boss-root-overflow-design.md §5.5.2).
@@ -119,7 +119,7 @@ func Fillet(ctx context.Context, env topo.Env, b *topo.Body, call FilletCall) (R
 		return Result{Body: route.Body}, nil
 	}
 
-	// Reach RX2 (agent-docs/modify-reach-design.md §7): a quarter-turn rectangular
+	// Reach RX2 (agent-docs/modify-design.md Part R §7): a quarter-turn rectangular
 	// revolve also admits its one outer angular-cap radial rim.
 	if rp, ok := b.Payload.(revolveplan.Payload); ok {
 		if out, matched, err := RevolveCapRimFillet(ctx, env, b, rp, edges, rmm, rDelta); matched || err != nil {
@@ -162,12 +162,12 @@ func Fillet(ctx context.Context, env topo.Env, b *topo.Body, call FilletCall) (R
 
 	if fp, ok := b.Payload.(facetedrecord.Payload); ok {
 		// A cross hole's saddle mouth rebuilds both walls near it and joins
-		// them by a proven pipe (agent-docs/retained-edge-blend-design.md §4.10).
+		// them by a proven pipe (agent-docs/modify-design.md Part E §4.10).
 		if out, recognized, err := retainedblend.SaddleFillet(ctx, env, b, fp, edges, rmm, rDelta); recognized || err != nil {
 			return Result{Body: out}, err
 		}
 		// A closed circular rim between two retained faces rebuilds the held
-		// mesh near it (agent-docs/retained-edge-blend-design.md). A selection it does
+		// mesh near it (agent-docs/modify-design.md Part E). A selection it does
 		// not recognize keeps the ordinary S3 refusal and its edge context.
 		if out, recognized, err := retainedblend.Fillet(ctx, env, b, fp, edges, rmm, rDelta); recognized || err != nil {
 			return Result{Body: out}, err
@@ -188,7 +188,7 @@ func Fillet(ctx context.Context, env topo.Env, b *topo.Body, call FilletCall) (R
 	if route.Prism != nil {
 		pp, ok = *route.Prism, true
 	}
-	// Route P's displaced reading (agent-docs/brep-modify-design.md §4.4)
+	// Route P's displaced reading (agent-docs/modify-design.md Part B §4.4)
 	// fillets from the record's exact carriers instead of its displaced
 	// section.
 	if route.Carriers != nil {
@@ -259,9 +259,9 @@ func Fillet(ctx context.Context, env topo.Env, b *topo.Body, call FilletCall) (R
 				}
 				return Result{Body: node}, nil
 			}
-			// RF3 (agent-docs/loop-fillet-design.md §3): a cap edge sends the
+			// RF3 (agent-docs/modify-design.md Part L §3): a cap edge sends the
 			// prism through its brep face view. Route E, L or V then reads the
-			// whole selection (agent-docs/vertex-blend-design.md §2).
+			// whole selection (agent-docs/modify-design.md Part V §2).
 			if original, ok := b.Payload.(prismrecord.Payload); ok {
 				if out, recognized, err := ObliqueCapEdgeFillet(ctx, env, hooks, b, original, edges, rmm, rDelta); recognized {
 					return out, err

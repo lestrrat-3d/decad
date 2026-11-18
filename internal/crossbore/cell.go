@@ -103,7 +103,7 @@ type CellExact struct {
 // sine/cosine span input and width, and the float readers.
 //
 // radius is the outer cylinder's R and bore the bore's r, in the fixed pose of
-// agent-docs/cross-cylinder-bore-chamfer-design.md with the bore axis at Z−c = 0;
+// agent-docs/modify-design.md Part X with the bore axis at Z−c = 0;
 // the retained saddle chamfer (internal/retainedblend/saddle.go) maps its pair
 // into that pose and proves the same cells.
 func CellExactProof(radius, bore, setback float64, i int, angularGap *big.Rat) (CellExact, error) {

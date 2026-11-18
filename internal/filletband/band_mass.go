@@ -41,7 +41,7 @@ func RadiusInterval(held, delta float64) (proofbound.RatInterval, error) {
 }
 
 // MassOf integrates the fillet strip and widens every changed term at curved
-// miters, at LF5′ corners (Rho, agent-docs/loop-fillet-design.md §5.5), and
+// miters, at LF5′ corners (Rho, agent-docs/modify-design.md Part L §5.5), and
 // for the loop's restated off-radius arcs (Restate, §5.6). The
 // sign of either corner's change is unknown, so its allowance widens both
 // ends of each interval.

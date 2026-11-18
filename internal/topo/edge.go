@@ -27,7 +27,7 @@ type Edge struct {
 	// curved source, whose chord chain understates the true curve's length
 	// by an amount no chord bound can cover, or a cap-blend miter ruling
 	// adjacent to a circular wall whose corner-foot locus this evaluator
-	// cannot enclose (agent-docs/modify-reach-design.md §8.3).
+	// cannot enclose (agent-docs/modify-design.md Part R §8.3).
 	LengthUnbounded bool
 	// CurveBound, valid only where CurveBounded is set, bounds how far the
 	// curve a Circle3 or Arc3 edge denotes lies from its held circle — the

@@ -74,7 +74,7 @@ func shearedPlate(t *testing.T, k, delta float64, tagged, onTags bool) (*topo.Bo
 // TestChamferEndPlaneDisplacementIsInAreaSlack chamfers the edge of a plate whose end planes meet it at a sine of
 // about 0.3 and whose held mesh stands on the true end planes, which lie delta off their tags. The chamfer of the
 // exact twin (tags on the true planes) is the ground truth of the true area change; the displaced build's held
-// area change must lie within the area slack it publishes of that truth (agent-docs/retained-edge-blend-design.md
+// area change must lie within the area slack it publishes of that truth (agent-docs/modify-design.md Part E
 // §6.3, "A displaced plane in the area bound").
 func TestChamferEndPlaneDisplacementIsInAreaSlack(t *testing.T) {
 	t.Parallel()

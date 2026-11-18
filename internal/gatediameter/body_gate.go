@@ -408,7 +408,7 @@ func FallbackGateDiameter(budget *proofbound.WorkBudget, body *topo.Body) (float
 }
 
 // draftGateDiameter is pairkernel.BodyGateDiameter's arm for a draft body
-// (agent-docs/draft-design.md Table DD row DD6). The body has no exact carrier
+// (agent-docs/modify-design.md Part D Table DD row DD6). The body has no exact carrier
 // model here and no single witness prism: its far section is not the near
 // one. It reads the stations SectionStations places on the near section P at
 // the near level and on the far section Q, read from the payload's own

@@ -13,7 +13,7 @@ import (
 
 // wallSlant bounds how far along a slanted wall the band's boundary on an end
 // plane lies from a point that is close to both the wall and the plane
-// (agent-docs/retained-edge-blend-design.md §4.3, the crossing's slant). The
+// (agent-docs/modify-design.md Part E §4.3, the crossing's slant). The
 // distance from a point to the plane alone is no bound: where the true wall meets
 // the plane at sine s, the true boundary lies about 1/s farther along the wall.
 type wallSlant interface {

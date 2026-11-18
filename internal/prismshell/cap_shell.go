@@ -24,7 +24,7 @@ import (
 )
 
 // CapShellInput is a straight prism shell that removes caps only or keeps
-// every face (agent-docs/modify-design.md §8, agent-docs/modify-reach-design.md BX5/BX8):
+// every face (agent-docs/modify-design.md §8, agent-docs/modify-design.md Part R BX5/BX8):
 // the receiver's exact record and the held thickness.
 type CapShellInput struct {
 	Prism prismrecord.Payload
@@ -216,7 +216,7 @@ func BuildBands(ctx context.Context, env topo.Env, in CapShellInput, offset mome
 	}, stackedrecord.OwnPlan{})
 }
 
-// BuildClosed is reach BX5 (agent-docs/modify-reach-design.md §9.2): WithNoOpenings
+// BuildClosed is reach BX5 (agent-docs/modify-design.md Part R §9.2): WithNoOpenings
 // on a straight prism keeps every face and lines it with a wall of thickness
 // t, closing a cavity. The record is three stacked slabs: inward, the section
 // P on [z0, z0 + t], the wall bands between P and its erosion Q on
@@ -230,7 +230,7 @@ func BuildBands(ctx context.Context, env topo.Env, in CapShellInput, offset mome
 // and the cavity is a ring around every lining
 // (agent-docs/stacked-prism-design.md §2.4). Outward each hole erodes by t,
 // so the lining grows into the hole and the cavity is P itself
-// (agent-docs/modify-reach-design.md §9.2). The record carries
+// (agent-docs/modify-design.md Part R §9.2). The record carries
 // stackedrecord.Payload.ClosedShell, and the built body must read as one lump
 // of one outer shell around one void shell.
 //

@@ -17,7 +17,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file pins agent-docs/draft-design.md §9.1.1 at corners of two arcs on
+// This file pins agent-docs/modify-design.md Part D §9.1.1 at corners of two arcs on
 // the production mesh path: a draft of splitDisc, a radius-5 circle drawn as
 // two half arcs whose second centre sits shift off the first, meshes with the
 // occupied-volume proof, and its corner charge covers the area its ideal
@@ -151,7 +151,7 @@ func (a splitDiscArc) foot(v bfPt, moved *big.Float) bfPt {
 	return bfPt{bfSum(a.c.u, bfProd(s, bfSum(v.u, bfNeg(a.c.u)))), bfSum(a.c.v, bfProd(s, bfSum(v.v, bfNeg(a.c.v))))}
 }
 
-// twoArcSliceArea is the area Lemma 2 of agent-docs/draft-design.md §9.1.1
+// twoArcSliceArea is the area Lemma 2 of agent-docs/modify-design.md Part D §9.1.1
 // charges at one corner of two arcs, prev arriving at v and cur leaving it, at
 // level frac of the full amount d: the larger over the two diagonals of
 // prev's last cell of the polygon P → q → f₂ → f₁, plus the curvilinear
@@ -258,7 +258,7 @@ func TestDraftTwoArcChargeJoinsTheProofSum(t *testing.T) {
 		"VolSymDiff %v is below the chord and motion terms %v plus the charge %g", got.mesh.VolSymDiff, base, got.charge)
 }
 
-// nearTangentChargeTerms is the corner charge agent-docs/draft-design.md
+// nearTangentChargeTerms is the corner charge agent-docs/modify-design.md Part D
 // §9.1.1 states for a meshed draft band, in 256-bit arithmetic from the
 // exported loop meshes: hUpper times, per loop, πρ²/4 per line–arc corner,
 // 3ελ per straight walk with a near-tangent end (ε the larger of its ends'),

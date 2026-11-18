@@ -251,7 +251,7 @@
 // for a closed shell (built for a full revolve, a hole-free prism and an
 // inward nested rectangular-slab Union; [ErrUnsupported] elsewhere),
 // and WithTaper drafts an extrude's walls by a signed angle, a positive one
-// narrowing the body away from the sketch plane (agent-docs/draft-design.md); a
+// narrowing the body away from the sketch plane (agent-docs/modify-design.md Part D); a
 // taper the support map does not list is [ErrUnsupported], returned before
 // the document changes. Draft leans an existing prism's walls, all of
 // them or a selected subset, the same way about one of its caps.

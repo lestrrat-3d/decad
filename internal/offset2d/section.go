@@ -262,7 +262,7 @@ func WalkConsumed(w survey2d.SideWalk, start, end Point, tol float64) bool {
 
 // OpenWalkConsumed is WalkConsumed for one walk of an open chain whose start
 // (openStart), end (openEnd) or both is a side opening's rim cut
-// (agent-docs/shell-opening-design.md §2.4). Table RO's cut can land past the
+// (agent-docs/modify-design.md Part O §2.4). Table RO's cut can land past the
 // offset foot, so the trimmed offset arc runs along its own circle beyond the
 // source's end, and its sweep exceeds the source's by that extension.
 //

@@ -310,7 +310,7 @@ charges it into every reading a solid publishes: §7.1 derives the area and
 the box, and §7.2 the Pappus volume, the centroid, a cap's area, the vertices,
 the walls' denoted normals and the mesh. `revolvePayload` also carries
 `sectionWhole`, which says the displacement reaches every recorded coordinate
-(an offset construction, `agent-docs/modify-reach-design.md` §9.3.1) rather than only
+(an offset construction, `agent-docs/modify-design.md` Part R §9.3.1) rather than only
 the cut ends a trim records.
 
 `Extend`'s result is the receiver's own `chainPayload` or

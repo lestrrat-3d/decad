@@ -151,7 +151,7 @@ func ChordVolume(cbp Payload, lms []LoopMesh) float64 {
 	return total
 }
 
-// NearTangentVolume is agent-docs/draft-design.md §9.1.1's corner charge for a
+// NearTangentVolume is agent-docs/modify-design.md Part D §9.1.1's corner charge for a
 // draft view's or a cap-loop chamfer's mesh: over the band's height, every
 // near-tangent line–arc join's disc πρ²/4, for every straight walk with a
 // near-tangent end the strip 3ελ, and for every near-tangent join of two arcs

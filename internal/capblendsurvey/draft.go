@@ -10,7 +10,7 @@ import (
 	"github.com/lestrrat-3d/r3"
 )
 
-// This file is a draft body's undercut survey (agent-docs/draft-design.md Table DD
+// This file is a draft body's undercut survey (agent-docs/modify-design.md Part D Table DD
 // row DD7). Every wall of a draft body is a patch of its band view
 // (draftPayload.Band), so the survey reads each wall the way DX7 reads a
 // chamfer patch (PatchUndercuts, undercut.go): the wall's own

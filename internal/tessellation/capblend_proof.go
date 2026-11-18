@@ -114,7 +114,7 @@ func CapBlendRingSegmentArea(lm CapBlendLoopProof, contour bool, d float64) floa
 // D is the loop's in-plane setback and DDelta the rounding its unit
 // conversion committed, zero for a setback stated in millimetres. Amounts,
 // when non-nil, is each walk's own setback in place of D: a subset draft's
-// kept wall reads zero (agent-docs/draft-design.md §10.2), exactly, with no DDelta.
+// kept wall reads zero (agent-docs/modify-design.md Part D §10.2), exactly, with no DDelta.
 type CapBlendMotionInput struct {
 	CapBlendLoopProof
 	Loop         int

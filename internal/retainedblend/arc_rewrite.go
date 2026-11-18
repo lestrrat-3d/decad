@@ -129,7 +129,7 @@ func rewriteArc(ctx context.Context, env topo.Env, fp facetedrecord.Payload, a a
 	// At each end the wall's chain along the end plane either climbs the wall,
 	// away from the plane (the wall trims there), or runs back past the plane
 	// (the wall extends past the end plane, which only a concave arc admits,
-	// agent-docs/retained-edge-blend-design.md Table E).
+	// agent-docs/modify-design.md Part E Table E).
 	var kindB [2]sideKind
 	for i := range 2 {
 		if cyl {

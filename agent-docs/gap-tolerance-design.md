@@ -84,7 +84,7 @@ part against a stricter standard than the eye chooses `ExactOnly` or a smaller v
 meet. This design keeps topology exact and states the displacement: the moved vertex is part of the result's bound
 (§4), so `Verify` judges it like any other bound. The chamfer's corner relief (§5.4) is the one exception: it moves no
 held vertex, so there is nothing to charge, and it changes the solid the chamfer states instead, by an amount §5.4
-and `agent-docs/modify-reach-design.md` §8.3 give.
+and `agent-docs/modify-design.md` Part R §8.3 give.
 
 ## 4. How a use is charged
 
@@ -299,7 +299,7 @@ exact stitch.
 
 ### 5.4 Chamfer corner relief
 
-A partial cap-loop chamfer (`agent-docs/modify-reach-design.md` §8.3) ends a run at a concave corner by stopping the
+A partial cap-loop chamfer (`agent-docs/modify-design.md` Part R §8.3) ends a run at a concave corner by stopping the
 bevel on the next wall's plane. Its cutter, clipped there, lies flush with the next wall along the corner's vertical
 edge, and the Cut refuses that touch and takes §5.2's shift. On a prism whose document tolerance is at least
 0.004 mm, the clip instead also removes a polygon inscribed in the circle of radius 0.004 mm about the corner
@@ -310,7 +310,7 @@ What a relieved result states, and what it does not:
 - Its true solid is the relieved chamfer. Its bounds, retained tags, edge curves and every operation built on it
   describe that solid. Unlike the shifted Boolean of §5.2, whose bounds still cover the unmoved Boolean, no charge is
   added for the relief, so the bounds do not cover the chamfer without it. The precedent is the free-form rim chamfer
-  (`agent-docs/modify-reach-design.md` §8.5), exact for what it is and departing from the ideal bevel by a stated
+  (`agent-docs/modify-design.md` Part R §8.5), exact for what it is and departing from the ideal bevel by a stated
   amount.
 - It differs from the chamfer without the relief only within 0.004 mm of each concave corner's vertical edge: it
   keeps material there, at most `0.004^2 turn dc / 2` mm3 per corner (`turn` in radians, `dc` the setback), 6.3e-6

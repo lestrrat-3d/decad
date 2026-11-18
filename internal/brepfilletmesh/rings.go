@@ -37,7 +37,7 @@ type Rings struct {
 // RootAxis marks a band whose patches turn about the side ring's plan points
 // at F's level, not about the cap ring's plan points at the side level: a
 // boss shell's root transition, whose axis is the source root edge
-// (agent-docs/modify-general-design.md §3.1a). SideDelta is the side level's
+// (agent-docs/modify-design.md Part G §3.1a). SideDelta is the side level's
 // displacement. Near is each corner's local reach
 // (filletband.Loop.LocalReach), nil when the band has no LF5′ corner and no
 // radial step.
@@ -75,7 +75,7 @@ func loopLayout(lm *capblend.LoopMesh) ([]int, []tessellation.FilletCell, int, e
 // Ring k's plan point at cap sample c is side + D·g(φ_k), with D the cap
 // sample's offset from its matched side sample, g(φ) = 1 − cos φ (cos φ on a
 // root-axis band, whose rings are exchanged) at every sample, and every ring
-// vertex of ring k at one level (agent-docs/loop-fillet-design.md §7.1). A
+// vertex of ring k at one level (agent-docs/modify-design.md Part L §7.1). A
 // cell's twist vector between rings k and k+1 is then
 // (D(C0) − D(C1))·(g(φ_k) − g(φ_{k+1})), and |Δg| ≤ Δφ = (π/2)/n, so its
 // |T|/4 is at most |D(C0) − D(C1)|·π/(8n). A cell from one line–line miter
@@ -183,7 +183,7 @@ func (fr *Rings) Place(in Input, e brepgeom.Embed,
 		// beside an off-radius arc on its recorded join. Every true band
 		// point near such a corner lies, in its own level, within the corner's
 		// local reach of the column and of both patches' stated ends, so each
-		// patch beside it adds that distance (agent-docs/loop-fillet-design.md
+		// patch beside it adds that distance (agent-docs/modify-design.md Part L
 		// §5.7).
 		for k, reach := range in.Near {
 			if proofbound.IsNonFinite(reach) {
@@ -300,7 +300,7 @@ func (fr *Rings) Emit(in Input, mesh *topo.Mesh,
 // the bilinear patch over its four held corners: the smaller of the twist
 // bound |T|/4 and, when the cell projects onto the plane of three corners as
 // a strictly convex quadrilateral, the fourth corner's height over that plane
-// (proofbound.CellHeightOffsetUpper; agent-docs/loop-fillet-design.md §7.1).
+// (proofbound.CellHeightOffsetUpper; agent-docs/modify-design.md Part L §7.1).
 // Both bound the same distance, so their minimum does. A cell whose |T|/4 is
 // at most floor, the patch's running maximum, cannot raise that maximum, and
 // skips the exact height reading.

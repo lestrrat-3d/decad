@@ -27,7 +27,7 @@ import (
 )
 
 // These tests follow a charged cylinder wall down the producer chain: a retained fillet publishes the wall with its
-// displacement (agent-docs/retained-edge-blend-design.md §6.1, "Publishing a charged wall"), and a later mesh Cut,
+// displacement (agent-docs/modify-design.md Part E §6.1, "Publishing a charged wall"), and a later mesh Cut,
 // placement, scale and chamfer read it again. Every stage runs a charged body and its uncharged twin (no
 // displacement), so a displacement dropped anywhere turns a comparison red.
 

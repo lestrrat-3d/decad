@@ -5,14 +5,14 @@ plane, and the two constructions that build it — a blind `Cut` of a straight
 prism by a same-plane prism tool whose sweep ends inside the target, and a
 `Union` of two co-directional prisms or stacked prisms whose sweep intervals
 overlap or touch without being equal (`agent-docs/general-boolean-design.md` §3 A1).
-`agent-docs/modify-reach-design.md` §9.1 records the prism shells on it — the cup
+`agent-docs/modify-design.md` Part R §9.1 records the prism shells on it — the cup
 and the both-caps shell of a holed section (§2.4); this document owns the
 payload itself (its record,
 its invariants, how its body is built and measured, how it tessellates, and
 what every consumer does with it), and `agent-docs/prism-boolean-design.md` owns the
 boolean admission that produces one. References of the form "core §N" are to
 `agent-docs/api-design.md`, "prism-boolean §N" to `agent-docs/prism-boolean-design.md`,
-"modify-reach §N" to `agent-docs/modify-reach-design.md`, "tessellation §N" to
+"modify-reach §N" to `agent-docs/modify-design.md` Part R, "tessellation §N" to
 `agent-docs/tessellation-design.md`.
 
 The blind cut reads prism-boolean §3.1's G3 with its shared-axis offset-plane
@@ -280,7 +280,7 @@ slab's `z1`) and the two levels' displacements.
 
 ### 2.4 Shell records
 
-`Shell` (`agent-docs/modify-reach-design.md` §9) records two results on this
+`Shell` (`agent-docs/modify-design.md` Part R §9) records two results on this
 payload, with `O` the shell's outer region and `C` its cavity region: `P` and
 its offset `Q` inward, `Q` and `P` outward. Its wall bands are the band between
 `O`'s outer and `C`'s outer (`C`'s outer reversed as its one hole), then, per
@@ -466,7 +466,7 @@ reads its `sectionDelta` through `booloperand.sectionDisplacement`, as it reads 
 | `Verify` undercut and minimum-radius surveys | staged: `DiagUnsupportedSurveyPayload`, `Suspect` (stage 4 adds DX7 face normals and DX8 `radiussurvey.Prism` over each loop) |
 | `Verify` clearance | `newBodyGeomBudget` has no arm, so a pair the boxes do not separate reads `Suspect`; a box-disjoint pair is proven (stage 4 adds the exposed-face model, DX6) |
 | `Verify` interference | `analyticBodiesEqual` answers undecided; the read-only mesh intersection reads §5's proof |
-| `Fillet` / `Chamfer` / `Shell` | through the brep face view (modify-reach RX3); a prism group and a stack enclosing a cavity have none (brep-modify SB2). `internal/stackedshell` reads a two-slab stack with that view for the exact boss, blind-pocket and counterbore shells (`agent-docs/modify-general-design.md` §3.1a-§3.1c, §3.1e) |
+| `Fillet` / `Chamfer` / `Shell` | through the brep face view (modify-reach RX3); a prism group and a stack enclosing a cavity have none (brep-modify SB2). `internal/stackedshell` reads a two-slab stack with that view for the exact boss, blind-pocket and counterbore shells (`agent-docs/modify-design.md` Part G §3.1a-§3.1c, §3.1e) |
 | `Thicken` / `Offset` / `Patch` / `Stitch` | not reachable: the body is a solid |
 
 ## 7. Stages
@@ -547,7 +547,7 @@ Each admitted arm ships its implementation and tests together.
 Not planned here: a blind tool crossing the target's boundary (a side notch),
 whose per-slab walls split at the crossing; it takes the mesh path, and
 general-boolean §3 A9 builds it as a BRep where the mesh path refuses.
-Also not planned: `Fillet`/`Chamfer` on a stacked body (`agent-docs/brep-modify-design.md` takes it
+Also not planned: `Fillet`/`Chamfer` on a stacked body (`agent-docs/modify-design.md` Part B takes it
 through the face view).
 
 ## 8. Required tests

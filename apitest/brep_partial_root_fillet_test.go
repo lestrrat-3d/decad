@@ -11,7 +11,7 @@ import (
 )
 
 // These fixtures pin the partial-loop fillet of a root chain
-// (agent-docs/vertex-blend-design.md §2): a block stands on a plate's top
+// (agent-docs/modify-design.md Part V §2): a block stands on a plate's top
 // flush with one or two of the plate's sides, so the plate top's outer loop
 // runs down the plate's side and up the block's. Filleting the block's root
 // edges is an open chain of that loop whose selected walls all rise. The

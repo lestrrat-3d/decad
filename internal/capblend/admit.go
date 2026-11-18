@@ -14,7 +14,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/topo"
 )
 
-// RequireNotReceiver is SX10 (agent-docs/modify-reach-design.md Table SX):
+// RequireNotReceiver is SX10 (agent-docs/modify-design.md Part R Table SX):
 // another modify op on a Payload receiver is staged — the body
 // exists, but composing another feature onto a cap-blend result is not built.
 // Called before the ordinary prism payload cast in Fillet/Chamfer/Shell so the
@@ -112,7 +112,7 @@ func (cbp Payload) sharpAmounts(li int, walks []survey2d.SideWalk) ([]float64, f
 // chamfer's receiver section, each over the interval its loop's own wall runs
 // on the body. A chamfer band cuts its loop's wall back from the cap level to
 // the side level, the cap level moved ds into the material
-// (agent-docs/modify-reach-design.md §8.3.1), and leaves the wall between the two
+// (agent-docs/modify-design.md Part R §8.3.1), and leaves the wall between the two
 // side levels untouched. A loop chamfered on the start cap therefore starts
 // at z0 + ds, one chamfered on the end cap stops at z1 - ds, and an
 // unchamfered loop runs from z0 to z1. Those are the float sums the build

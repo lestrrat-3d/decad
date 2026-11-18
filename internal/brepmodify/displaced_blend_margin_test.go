@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// These are Table PD's per-corner margins (agent-docs/brep-modify-design.md
+// These are Table PD's per-corner margins (agent-docs/modify-design.md Part B
 // §4.4) on crafted numbers: each refuses a reading within its margin and
 // passes one clear of it. Shown-to-fail: deleting the comparison in
 // requireTurnMargin, requireRootMargin or requireSenseMargin, the radius

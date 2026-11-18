@@ -199,7 +199,7 @@ func requireFileVerticesOnPatchSurfaces(t *testing.T, f step.File) int {
 // conePatchArmFile writes a loop chamfer through the analytic arm's writer.
 // Every corner cone of a loop chamfer is a cap-blend band patch whose tag
 // departs from the ruled patch the build assembles by a stated bound
-// (agent-docs/modify-reach-design.md §8.3), so tagsUndeparted refuses the body
+// (agent-docs/modify-design.md Part R §8.3), so tagsUndeparted refuses the body
 // and NewSTEPFile writes it faceted. The face admission still takes it, and
 // these bodies are the only ones that build cone patches, so the cone patch
 // writer is read on them through armFile.

@@ -63,7 +63,7 @@ according to the writer path.
   whose position carries a bound, is not proven to lie on the curves and surface the file states
   through it, and the body takes the faceted writer. A loop fillet's meridians pass the plane check
   where the record denotes their feet exactly: the fillet holds those feet at the exact point
-  (`agent-docs/loop-fillet-design.md` §4 step 1), so the rounded plate's top-loop fillet (loop-fillet
+  (`agent-docs/modify-design.md` Part L §4 step 1), so the rounded plate's top-loop fillet (loop-fillet
   P8 with its top loop filleted r = 2) holds every vertex `Exact` and writes analytic. The vertex
   check covers cone, sphere and horn torus patches only. The same reason
   holds for the other arms, which do not apply it: a plane, cylinder or other torus face writes its held
@@ -146,9 +146,9 @@ according to the writer path.
   state a nonzero plane gap (`agent-docs/pattern-union-design.md` §4), a Loft bore cylinder
   with a rounded center or an inexact frame map (`agent-docs/loft-design.md` §18), an extrusion up to
   a face at an offset whose level no float holds (a `ToFace` stop 0.1 mm above a cap at z = 10), every
-  loop chamfer's corner cone, which is a cap-blend band patch (`agent-docs/modify-reach-design.md`
+  loop chamfer's corner cone, which is a cap-blend band patch (`agent-docs/modify-design.md` Part R
   §8.3), every drafted wall, plane or cone, whose tag is a rounding of the tilted surface
-  (`agent-docs/draft-design.md` DD4), every partial revolution, and every revolved cone. Their
+  (`agent-docs/modify-design.md` Part D DD4), every partial revolution, and every revolved cone. Their
   departures are rounding-sized, measured on amd64 at 5.0e-14 mm on the end cap of a loft with a
   radius-1 hole on the frame tilted to (1, 0, 4), 3.6e-16 mm on the offset `ToFace` cap, 4.3e-17 to 2.2e-16 on the chamfer cones, 1.5e-16 to
   2.9e-16 on the drafted walls, and 2.3e-15 mm on the apex of a frustum revolved from radius 3 to 7.1.

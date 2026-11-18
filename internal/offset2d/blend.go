@@ -103,7 +103,7 @@ func Fillet(walks []survey2d.SideWalk, ci int, r, tol float64) (*Blend, error) {
 }
 
 // FilletDecisions are the numbers a fillet's discrete choices read
-// (agent-docs/brep-modify-design.md §4.4, PD5): Cross, the cross product of
+// (agent-docs/modify-design.md Part B §4.4, PD5): Cross, the cross product of
 // the corner's two unit travel tangents, whose sign is S4's corner and the
 // offset side; Roots, every root of the offset intersection, among which
 // Center is the one nearest the corner; and Sense, rot90(fA − Center)·tA,
@@ -188,7 +188,7 @@ func FilletWithCarriers(walks []survey2d.SideWalk, ci int, r, tol float64, ovA, 
 }
 
 // FilletAtCorner is Fillet read the same way in every face that holds one
-// solid corner (agent-docs/brep-modify-design.md §5.3 step 2). Two changes make
+// solid corner (agent-docs/modify-design.md Part B §5.3 step 2). Two changes make
 // the reading depend on the corner alone. A straight carrier passes through
 // the corner itself, not through its walk's far end, which differs between
 // faces. When swap is true the corner is read with its walks exchanged: the
@@ -350,7 +350,7 @@ func RewriteLoop(budget *proofbound.WorkBudget, walks []survey2d.SideWalk, blend
 		segs = append(segs, OriginalSegment(w, startU, startV, endU, endV))
 		// A blend without a connector only moves this walk's end: the brep
 		// route's trim of a face that holds a blended edge as a segment
-		// (agent-docs/brep-modify-design.md §5.3 step 4).
+		// (agent-docs/modify-design.md Part B §5.3 step 4).
 		if cb := blends[(i+1)%n]; cb != nil && cb.Connector != nil {
 			segs = append(segs, cb.Connector)
 			connectors[len(segs)-1] = struct{}{}
@@ -363,7 +363,7 @@ func RewriteLoop(budget *proofbound.WorkBudget, walks []survey2d.SideWalk, blend
 // smooth or cusped corner, then each walk is set back its own arc length from
 // the corner — dA back along the arriving walk to foot fA, dB forward along
 // the leaving walk to foot fB, equal for an equal-distance chamfer and the
-// two distances of an asymmetric one (agent-docs/modify-reach-design.md §6) — and
+// two distances of an asymmetric one (agent-docs/modify-design.md Part R §6) — and
 // the two feet are joined by a chord. The bevel is a plane, so the connector
 // is a LineSeg (fA→fB), which continues the loop's own walk sense; there is
 // no offset carrier and no S5, because a chord exists between any two

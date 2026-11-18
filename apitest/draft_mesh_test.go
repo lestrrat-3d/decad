@@ -15,7 +15,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file is agent-docs/draft-design.md §11's PR 2 fixture set: a draft body's
+// This file is agent-docs/modify-design.md Part D §11's PR 2 fixture set: a draft body's
 // tessellation (Table DD row DD1) and the readings it opens — booleans (DD2),
 // export (DD3, DD4), interference (DD10), mass properties (DD11) and Patterned
 // (DD13). Closed forms reuse extrude_taper_test.go's 256-bit helpers, with
@@ -403,7 +403,7 @@ func nearTangentSlot(shift float64) func(*sketch.Sketch) {
 	}
 }
 
-// TestDraftNearTangentJoinBooleans pins agent-docs/draft-design.md §9.1.1 on
+// TestDraftNearTangentJoinBooleans pins agent-docs/modify-design.md Part D §9.1.1 on
 // a join the build reads as tangent and the record does not make exactly
 // tangent: the slot's mesh proves its volume at VerifyAll, charging the
 // sliver at its two near-tangent corners, and a Cut by a 4 mm square post
@@ -486,7 +486,7 @@ func splitDiscSketch(shift float64) func(*sketch.Sketch) {
 	}
 }
 
-// TestDraftTwoArcNearTangentJoinBooleans pins agent-docs/draft-design.md
+// TestDraftTwoArcNearTangentJoinBooleans pins agent-docs/modify-design.md Part D
 // §9.1.1 on corners of two arcs whose centres sit a few ulps apart: the split
 // disc with its lower centre moved 2⁻⁴⁸ mm (four ulps of 5) meshes with its
 // volume proof at VerifyAll, charging the sliver at its two corners, and a

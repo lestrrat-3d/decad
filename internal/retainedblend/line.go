@@ -320,7 +320,7 @@ func (p plane) holds(x r3.Vec) bool {
 // lies exactly on the end plane: the rewrite re-triangulates every face it
 // touches from its boundary loops alone, so such a vertex (the centre of a
 // fan-triangulated end cap) is dropped with the old facets and never reaches
-// the result (agent-docs/retained-edge-blend-design.md).
+// the result (agent-docs/modify-design.md Part E).
 type faceLoops struct {
 	index  int
 	facets []int

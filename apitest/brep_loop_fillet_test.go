@@ -15,7 +15,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// These fixtures pin route L's fillet arm of agent-docs/loop-fillet-design.md
+// These fixtures pin route L's fillet arm of agent-docs/modify-design.md Part L
 // through the public API: Fillet of a complete loop of a planar face
 // builds a brep body whose pipe patches are faces of the body, measured by
 // the strip model (§5.3), and tessellate, export and take part in booleans.
@@ -143,7 +143,7 @@ func boxTopLoopFillet(t *testing.T) (*decad.Document, *decad.Body) {
 }
 
 // A loop fillet's band meshes within the requested tolerance at its sagitta
-// ring count (agent-docs/loop-fillet-design.md §7.1). Each straight walk of
+// ring count (agent-docs/modify-design.md Part L §7.1). Each straight walk of
 // the box's top loop is one cell per strip, from one miter to the next,
 // whose two ring chords are parallel, so the cell is planar and its strip
 // pair adds no departure beyond the quarter-arc sagitta. The ring count is

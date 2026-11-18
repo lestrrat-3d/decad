@@ -20,7 +20,7 @@ import (
 )
 
 // This file assembles the cap-blend body and adapts its mass readings to
-// internal/capband. See agent-docs/modify-reach-design.md §8.4.
+// internal/capband. See agent-docs/modify-design.md Part R §8.4.
 
 // Build builds the analytic cap-blend body from the payload
 // (BX3): the trimmed prism side walls (prismrecord.BuildLoopSidesAs, unmodified) plus,
@@ -54,7 +54,7 @@ func build(ctx context.Context, env topo.Env, cbp Payload, loopDelta []float64) 
 	endLoopObjs := make([]*topo.Loop, len(loops))
 	var startArea, endArea, sideArea, patchArea, slabVolume, bandVolume proofbound.BoundedScalar
 	// muTotal, mvTotal, mzTotal accumulate the body's own plane-local first
-	// moments (agent-docs/modify-reach-design.md §8.4's fourth reading): the SAME
+	// moments (agent-docs/modify-design.md Part R §8.4's fourth reading): the SAME
 	// per-loop sign this loop already applies to slabVolume/bandVolume, over
 	// the SAME two-part decomposition (a signed slab term via
 	// momentinput.LoopEnclosedMoments, a band term via capband.BandMoment).
@@ -88,7 +88,7 @@ func build(ctx context.Context, env topo.Env, cbp Payload, loopDelta []float64) 
 		}
 
 		// A chamfered end pulls its own straight level in by that cap's side
-		// setback ds (agent-docs/modify-reach-design.md §8.3.1). Its unit conversion
+		// setback ds (agent-docs/modify-design.md Part R §8.3.1). Its unit conversion
 		// and float sum both round. The rounding is an ulp of
 		// the SWEEP, but it multiplies the whole section area below, so it
 		// reaches the volume at the scale of the band itself and is charged here
@@ -154,7 +154,7 @@ func build(ctx context.Context, env topo.Env, cbp Payload, loopDelta []float64) 
 		loopSlab := proofbound.BoundedMul(loopArea, straightHeight)
 		slabVolume = proofbound.BoundedAdd(slabVolume, proofbound.MeasuredScalar(sign*loopSlab.Value, loopSlab.Bound))
 
-		// M_slab = (mu·h, mv·h, A·h·(zLo+zHi)/2), agent-docs/modify-reach-design.md
+		// M_slab = (mu·h, mv·h, A·h·(zLo+zHi)/2), agent-docs/modify-design.md Part R
 		// §8.4(a): mu, mv are the loop's own signed first moments (already
 		// canonicalized the same way loopArea is), and A·h is loopSlab itself,
 		// so the z component reuses it rather than recomputing A·h a second
@@ -323,7 +323,7 @@ func build(ctx context.Context, env topo.Env, cbp Payload, loopDelta []float64) 
 	}
 
 	// Centroid: the closed-form first moments divided by the body's own
-	// volume (agent-docs/modify-reach-design.md §8.4), lifted to world through the
+	// volume (agent-docs/modify-design.md Part R §8.4), lifted to world through the
 	// SAME frame/placement lift a prism centroid uses, backed by the
 	// geometry safety-net ceiling every analytic centroid falls back to.
 	bounds, err := bounds(ctx, cbp, work, loopDelta)

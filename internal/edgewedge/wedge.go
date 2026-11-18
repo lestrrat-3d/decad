@@ -80,7 +80,7 @@ func Of(e *topo.Edge) Wedge {
 	}
 	// A Cylinder tag that states a wall charge stands for a wall that may lie
 	// off it, so its angle across the edge is not read
-	// (agent-docs/retained-edge-blend-design.md §6.1, "Publishing a charged wall").
+	// (agent-docs/modify-design.md Part E §6.1, "Publishing a charged wall").
 	if slices.ContainsFunc(e.Faces, chargedCylinder) {
 		return Undecided
 	}

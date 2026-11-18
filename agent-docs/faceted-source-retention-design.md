@@ -344,7 +344,7 @@ Two readings change that are not improvements. A retained face no longer
 publishes `Faceted.Bound`, its held displacement `δ_f`; a caller reads it from
 the face's vertex bounds. `ScaledAt` keeps a retained `Plane`, `Cylinder`,
 `Sphere` or `Torus` at its similar image, charged for rounding only
-(`agent-docs/retained-modify-reach-design.md` §7). A retained `Cone` or
+(`agent-docs/retained-agent-docs/modify-design.md` Part R §7). A retained `Cone` or
 denoted face reads `Faceted` afterwards, because the scaled tag has no
 similarity proof here.
 
@@ -713,5 +713,5 @@ worst facet was a cylinder stay refused.
 | `Cone` and `Torus` | increment 2 | in increment 1; blocked only by the axis-distance lower bound |
 | `ToFace` on a retained plane | increment 2, with the carried `CapRecord` | increment 1; needs a `CapRecord` for every operand plane first |
 | `Line3`/`Circle3` on edges | increment 3, after 1 and 2 | never; keeps `FacetedCurve` everywhere |
-| Fillet and chamfer of an edge between two retained planes | out of scope here; needs its own route in `agent-docs/modify-reach-design.md` (SX9) | include as increment 7 |
+| Fillet and chamfer of an edge between two retained planes | out of scope here; needs its own route in `agent-docs/modify-design.md` Part R (SX9) | include as increment 7 |
 | Oblique `Plane`/`Cylinder` edges as `Ellipse3` | increment 6, with the whole-turn convention for a closed rim (§10.5) | keep `FacetedCurve`, or add a separate whole-ellipse curve type |

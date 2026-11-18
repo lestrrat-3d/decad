@@ -14,7 +14,7 @@ import (
 // plane z = 0, whose rows end on the plane x = h. It samples the end curve
 // without the route's code: the row at profile parameter s is the circle of
 // radius rho(s) at height z(s), written out from the torus (or cone) of
-// agent-docs/retained-edge-blend-design.md §4.2, and its point on x = h is
+// agent-docs/modify-design.md Part E §4.2, and its point on x = h is
 // found by bisecting the circle's angle.
 type endPlaneFixture struct {
 	R, kappa, side, h float64

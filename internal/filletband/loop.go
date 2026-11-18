@@ -1,5 +1,5 @@
 // Package filletband holds the closed forms a loop fillet's pipe band is
-// measured by (agent-docs/loop-fillet-design.md §5): Table CF's strip
+// measured by (agent-docs/modify-design.md Part L §5): Table CF's strip
 // coefficients, the height integrals J_k and H_k, the strip volume and first
 // moment, the patch areas, the length of an LF4 quarter ellipse, and each
 // patch's extent along a direction. Every reading is a rational interval over
@@ -50,7 +50,7 @@ const (
 	// CurvedMiter is LF8: a sharp convex corner involving a circular walk.
 	CurvedMiter
 	// NearTangent is LF5′: a line–arc or arc–arc join the offset reads as G1
-	// whose exact tangents turn by a sliver (agent-docs/loop-fillet-design.md
+	// whose exact tangents turn by a sliver (agent-docs/modify-design.md Part L
 	// §5.5). It is built as LF5, and Loop.Rho charges the sliver.
 	NearTangent
 )
@@ -221,7 +221,7 @@ func Turn(prev, cur Walk) (int, error) {
 // Kappa is cot(θ/2) at an LF4 corner, θ the interior angle on the material
 // side where the straight walk prev meets the straight walk cur:
 // (|a||b| − a·b)/(a × b) over the two exact directions, one enclosed square
-// root (agent-docs/loop-fillet-design.md §5.1).
+// root (agent-docs/modify-design.md Part L §5.1).
 func Kappa(prev, cur Walk) (Interval, error) {
 	if prev.Circular || cur.Circular {
 		return Interval{}, fmt.Errorf(`%w: an LF4 corner joins two straight walks`, decaderr.ErrUnsupported)

@@ -1454,7 +1454,7 @@ func TestVerifyCupWithinToleranceIsSound(t *testing.T) {
 
 // TestVerifyCapBlendChamferAreaVolumeCentroidAllPass is the cap-blend
 // coverage the tolerance gate was missing, on the exact body
-// agent-docs/modify-reach-design.md's own example builds (a 100x60x20 plate with a
+// agent-docs/modify-design.md Part R's own example builds (a 100x60x20 plate with a
 // complete end-cap chamfer at d=5mm): pairkernel.BodyGateDiameter had no fallback for
 // capBlendPayload either, so its area, volume AND centroid readings all
 // failed the gate closed with no reference, regardless of how each reading's
@@ -1462,7 +1462,7 @@ func TestVerifyCupWithinToleranceIsSound(t *testing.T) {
 // fallback in place, area and volume pass with bounds many decades below any
 // reasonable gate. The centroid used to be a known separate defect (an
 // area-weighted face-vertex estimate, no real first moment behind it,
-// capblend_moments.go) that kept this same body Suspect; agent-docs/modify-reach-design.md
+// capblend_moments.go) that kept this same body Suspect; agent-docs/modify-design.md Part R
 // §8.4's closed-form first moments (capblend_centroid.go) fixed it — an
 // all-Plane band's centroid is exact rational end to end here — so all three
 // readings now pass and the body reads Sound.

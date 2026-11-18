@@ -246,7 +246,7 @@ type Topology struct {
 // Every face's walks must already have passed the caller's record audit.
 // open names edge keys the record bounds on one side only, because a face
 // outside the record closes them (a route L band,
-// agent-docs/modify-general-design.md §4.2); nil names none.
+// agent-docs/modify-design.md Part G §4.2); nil names none.
 func Build(faces []FaceWalks, open map[EdgeKey]struct{}, unsupported error) (*Topology, error) {
 	topo := &Topology{
 		Walls:    map[int]survey2d.SegmentWalk{},

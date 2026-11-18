@@ -912,7 +912,7 @@ func TestShellRefusals(t *testing.T) {
 
 	t.Run("removing a side wall opens the box", func(t *testing.T) {
 		_, box := shellBox(t)
-		// agent-docs/shell-opening-design.md: the y = 0 wall removed leaves the
+		// agent-docs/modify-design.md Part O: the y = 0 wall removed leaves the
 		// cavity (5,95)×(0,55) over (5,15).
 		wall := decad.Faces(decad.Facing(r3.NewVec(0, -1, 0)))
 		body, err := decad.Shell(t.Context(), box, wall, units.Millimeters(5))

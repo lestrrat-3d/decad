@@ -15,7 +15,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// These fixtures pin route L of agent-docs/modify-general-design.md (§4, §9)
+// These fixtures pin route L of agent-docs/modify-design.md Part G (§4, §9)
 // through the public API: Chamfer of a complete loop of a planar face
 // of a stacked or brep boolean result builds a brep body whose band patches
 // are faces of the body, and the mesh, STEP and boolean consumers read them.
@@ -179,7 +179,7 @@ func TestBrepLoopChamferPublicBossRoot(t *testing.T) {
 	require.GreaterOrEqual(t, new(big.Rat).Add(held, bound).Cmp(at(piHi)), 0)
 }
 
-// roundedDrilledPlate is agent-docs/modify-general-design.md §1's P8 through the
+// roundedDrilledPlate is agent-docs/modify-design.md Part G §1's P8 through the
 // public API: the 40×20×20 box with its four vertical edges filleted r = 3,
 // then cut by a Ø6 hole along y through (20, ·, 10).
 func roundedDrilledPlate(t *testing.T) *decad.Body {
@@ -220,7 +220,7 @@ func roundedDrilledPlate(t *testing.T) *decad.Body {
 // and Verify reads it Sound. STEP writes each body faceted, one ADVANCED_FACE
 // per mesh triangle: the top loop's corner cones are cap-blend band patches
 // whose tags depart from the ruled patches by a stated bound
-// (agent-docs/modify-reach-design.md §8.3), which the analytic writer refuses,
+// (agent-docs/modify-design.md Part R §8.3), which the analytic writer refuses,
 // and the hole rim's one-circle cone has no analytic arm. The top loop's
 // faceted leg was shown to fail with supportsAnalyticSTEP's tag gate deleted
 // (the body was written analytic).

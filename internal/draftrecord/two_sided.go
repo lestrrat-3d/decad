@@ -15,7 +15,7 @@ import (
 
 // This file is the two-sided taper: two single-slab draft bodies built from
 // the sketch plane outward and sewn at their shared middle rim
-// (agent-docs/draft-design.md). TwoSidedPayload implements topo.Payload
+// (agent-docs/modify-design.md Part D). TwoSidedPayload implements topo.Payload
 // (agent-docs/evaluator-design.md §8).
 
 // TwoSidedPayload keeps both halves of a taper measured from the sketch
