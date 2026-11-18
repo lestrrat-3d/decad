@@ -9,12 +9,19 @@ import (
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/r3"
 )
 
 // PairCutsResult holds the exact contact cuts before classification and stitching.
 type PairCutsResult struct {
-	CutsA, CutsB                   map[int][]Xseg
-	replayCutsA, replayCutsB       [][]Xseg
+	CutsA, CutsB             map[int][]Xseg
+	replayCutsA, replayCutsB [][]Xseg
+	// CoplanarA, CoplanarB, Owned and Legacy are the exact coplanar pass's
+	// results (agent-docs/coplanar-contact-design.md §3, §5); nil when it
+	// admitted nothing.
+	CoplanarA, CoplanarB           map[int][]int
+	Owned                          map[string]struct{}
+	Legacy                         error
 	replayBlockedA, replayBlockedB *replayTable[[2]int, struct{}]
 	replayRims                     *replayTable[string, float64]
 	BlockedA, BlockedB             map[[2]int]struct{}
@@ -248,6 +255,15 @@ func pairCutsImpl(ctx context.Context, ma, mb *BoolMesh, memo *ContactMemo, keyO
 	// coplanar collects the coplanar facet pairs the scan meets, up to
 	// maxTouchContacts, so the refusal can say which planes are involved.
 	var coplanar []TouchContact
+	// The coplanar pass reads the twin facet through the replay table on the
+	// replay path and charges its exact clips to the shared meter.
+	cp := &coplanarPass{coplanarA: map[int][]int{}, coplanarB: map[int][]int{}, owned: map[string]struct{}{}}
+	if budget != nil && budget.replay != nil {
+		cp.twin = func(m *BoolMesh, f, k int) (int, bool, error) { return m.twinFacetReplay(ctx, f, k) }
+		cp.charge = func(n uint64) error { return budget.SpendWork(ctx, n) }
+	}
+	refused := false
+	var pointCoplanar []bool
 	work := 0
 
 	var boxTree heldBoxTree
@@ -305,13 +321,28 @@ func pairCutsImpl(ctx context.Context, ma, mb *BoolMesh, memo *ContactMemo, keyO
 		ta := TriCorners(ma, i)
 		tb := TriCorners(mb, j)
 		if c.Kind == ContactRegion {
-			var err error
-			coplanar, err = appendReplay(ctx, coplanar, coplanarContactOf(ma, mb, i, j), budget)
-			if err != nil {
-				return err
+			admitted := ma.isExact(i) && mb.isExact(j)
+			if !admitted {
+				refused = true
 			}
-			if len(coplanar) >= maxTouchContacts {
+			if len(coplanar) < maxTouchContacts {
+				var err error
+				coplanar, err = appendReplay(ctx, coplanar, coplanarContactOf(ma, mb, i, j), budget)
+				if err != nil {
+					return err
+				}
+			}
+			if refused && len(coplanar) >= maxTouchContacts {
 				return ExpectedBoolean(BooleanExpectedContact, &TouchContactError{What: touchCoplanar, Contacts: coplanar})
+			}
+			if admitted {
+				if err := budget.SpendWork(ctx, 8); err != nil {
+					return err
+				}
+				if err := budget.ReserveRecords(ctx, 8); err != nil {
+					return err
+				}
+				return cp.admit(ma, mb, i, j, keyOf, appendCut)
 			}
 			return nil
 		}
@@ -345,6 +376,10 @@ func pairCutsImpl(ctx context.Context, ma, mb *BoolMesh, memo *ContactMemo, keyO
 				return appendErr
 			}
 			pointFacets, appendErr = appendReplay(ctx, pointFacets, [2]int{i, j}, budget)
+			if appendErr != nil {
+				return appendErr
+			}
+			pointCoplanar, appendErr = appendReplay(ctx, pointCoplanar, c.Coplanar && ma.isExact(i) && mb.isExact(j), budget)
 			if appendErr != nil {
 				return appendErr
 			}
@@ -487,7 +522,7 @@ func pairCutsImpl(ctx context.Context, ma, mb *BoolMesh, memo *ContactMemo, keyO
 	if err := contacts.Done(); err != nil {
 		return nil, err
 	}
-	if len(coplanar) > 0 {
+	if refused {
 		return nil, ExpectedBoolean(BooleanExpectedContact, &TouchContactError{What: touchCoplanar, Contacts: coplanar})
 	}
 	// The held-mesh gate runs on the classification's own answer and before
@@ -552,6 +587,15 @@ func pairCutsImpl(ctx context.Context, ma, mb *BoolMesh, memo *ContactMemo, keyO
 	// grazes collects the facets of the first operand at every graze, so the
 	// refusal can say where the operands touch.
 	var grazes []TouchContact
+	// realGraze is set by a graze no coplanar patch accounts for; only then do
+	// the grazes refuse, and the refusal lists every contact in order.
+	realGraze := false
+	edgeSide := func(m *BoolMesh, f, k int, other *BoolMesh, partner int, partnerTri [3]r3.Vec) ([2]int, EdgeOutcome, int, error) {
+		if budget != nil && budget.replay != nil {
+			return edgeSideReplay(ctx, m, f, k, other, partner, budget.replay)
+		}
+		return EdgeSide(m, f, k, partnerTri)
+	}
 	for i, p := range inPlane {
 		if err := budget.SpendWork(ctx, 1); err != nil {
 			return nil, err
@@ -561,19 +605,18 @@ func pairCutsImpl(ctx context.Context, ma, mb *BoolMesh, memo *ContactMemo, keyO
 				return nil, err
 			}
 		}
+		skipCut, grazed := false, false
 		if p.C.EdgeA >= 0 {
-			var key [2]int
-			var crossing bool
-			var err error
-			if budget != nil && budget.replay != nil {
-				key, crossing, err = edgeCrossesReplay(ctx, ma, p.I, p.C.EdgeA, mb, p.J, budget.replay)
-			} else {
-				key, crossing, err = EdgeCrosses(ma, p.I, p.C.EdgeA, p.Tb)
-			}
+			key, side, adjacent, err := edgeSide(ma, p.I, p.C.EdgeA, mb, p.J, p.Tb)
 			if err != nil {
 				return nil, err
 			}
-			if !crossing {
+			if side == EdgeCoplanarBounded && ma.isExact(p.I) && mb.isExact(p.J) {
+				if err := cp.acceptEdge(p, adjacent, p.J, keyOf); err != nil {
+					return nil, err
+				}
+				skipCut, grazed = true, true
+			} else if side != EdgeCrossing {
 				if len(grazes) < maxTouchContacts {
 					var err error
 					grazes, err = appendReplay(ctx, grazes, touchOf(ma, p.I, p.J), budget)
@@ -581,25 +624,23 @@ func pairCutsImpl(ctx context.Context, ma, mb *BoolMesh, memo *ContactMemo, keyO
 						return nil, err
 					}
 				}
+				realGraze = true
 				continue
-			}
-			if err := setBlocked(0, key); err != nil {
+			} else if err := setBlocked(0, key); err != nil {
 				return nil, err
 			}
 		}
 		if p.C.EdgeB >= 0 {
-			var key [2]int
-			var crossing bool
-			var err error
-			if budget != nil && budget.replay != nil {
-				key, crossing, err = edgeCrossesReplay(ctx, mb, p.J, p.C.EdgeB, ma, p.I, budget.replay)
-			} else {
-				key, crossing, err = EdgeCrosses(mb, p.J, p.C.EdgeB, p.Ta)
-			}
+			key, side, adjacent, err := edgeSide(mb, p.J, p.C.EdgeB, ma, p.I, p.Ta)
 			if err != nil {
 				return nil, err
 			}
-			if !crossing {
+			if side == EdgeCoplanarBounded && ma.isExact(p.I) && mb.isExact(p.J) {
+				if err := cp.acceptEdge(p, p.I, adjacent, keyOf); err != nil {
+					return nil, err
+				}
+				skipCut, grazed = true, true
+			} else if side != EdgeCrossing {
 				if len(grazes) < maxTouchContacts {
 					var err error
 					grazes, err = appendReplay(ctx, grazes, touchOf(ma, p.I, p.J), budget)
@@ -607,11 +648,21 @@ func pairCutsImpl(ctx context.Context, ma, mb *BoolMesh, memo *ContactMemo, keyO
 						return nil, err
 					}
 				}
+				realGraze = true
 				continue
-			}
-			if err := setBlocked(1, key); err != nil {
+			} else if err := setBlocked(1, key); err != nil {
 				return nil, err
 			}
+		}
+		if grazed && len(grazes) < maxTouchContacts {
+			var err error
+			grazes, err = appendReplay(ctx, grazes, touchOf(ma, p.I, p.J), budget)
+			if err != nil {
+				return nil, err
+			}
+		}
+		if skipCut {
+			continue
 		}
 		// A crossing segment subdivides whichever facet does NOT already own it
 		// as an edge — a segment lying along a facet's own boundary cuts nothing
@@ -630,9 +681,14 @@ func pairCutsImpl(ctx context.Context, ma, mb *BoolMesh, memo *ContactMemo, keyO
 		}
 	}
 
-	if len(grazes) > 0 {
+	coplanarRefusal := ExpectedBoolean(BooleanExpectedContact, &TouchContactError{What: touchCoplanar, Contacts: coplanar})
+	if realGraze {
+		if len(coplanar) > 0 {
+			return nil, coplanarRefusal
+		}
 		return nil, ExpectedBoolean(BooleanExpectedContact, &TouchContactError{What: touchGraze, Contacts: grazes})
 	}
+	cp.legacyGrazes = grazes
 
 	// A point contact is legitimate only as the endpoint of some crossing
 	// segment (a chain passing exactly through a vertex). An isolated one is a
@@ -667,7 +723,15 @@ func pairCutsImpl(ctx context.Context, ma, mb *BoolMesh, memo *ContactMemo, keyO
 				ends[key] = struct{}{}
 			}
 		}
-		var isolated []TouchContact
+		isRim := func(key string) (bool, error) {
+			if fixedEnds == nil {
+				_, ok := ends[key]
+				return ok, nil
+			}
+			_, ok, err := fixedEnds.Get(ctx, key)
+			return ok, err
+		}
+		keys := make([]string, len(pointTouches))
 		for k, p := range pointTouches {
 			if err := budget.SpendWork(ctx, 1); err != nil {
 				return nil, err
@@ -676,25 +740,64 @@ func pairCutsImpl(ctx context.Context, ma, mb *BoolMesh, memo *ContactMemo, keyO
 			if err != nil {
 				return nil, err
 			}
-			_, ok := ends[key]
-			if fixedEnds != nil {
+			keys[k] = key
+		}
+		// A point a coplanar pair of exact facets touches is owned whatever the
+		// order its contacts arrive in.
+		for k := range pointTouches {
+			if !pointCoplanar[k] {
+				continue
+			}
+			if rim, err := isRim(keys[k]); err != nil {
+				return nil, err
+			} else if !rim {
+				cp.owned[keys[k]] = struct{}{}
+			}
+		}
+		// every lists each point contact no crossing segment ends at, in order,
+		// the accepted ones too, so a refusal reads as it does with none accepted.
+		var every []TouchContact
+		isolated := false
+		for k := range pointTouches {
+			if err := budget.SpendWork(ctx, 1); err != nil {
+				return nil, err
+			}
+			if rim, err := isRim(keys[k]); err != nil {
+				return nil, err
+			} else if rim {
+				continue
+			}
+			if len(every) < maxTouchContacts {
 				var err error
-				_, ok, err = fixedEnds.Get(ctx, key)
+				every, err = appendReplay(ctx, every, touchOf(ma, pointFacets[k][0], pointFacets[k][1]), budget)
 				if err != nil {
 					return nil, err
 				}
 			}
-			if !ok && len(isolated) < maxTouchContacts {
-				isolated, err = appendReplay(ctx, isolated, touchOf(ma, pointFacets[k][0], pointFacets[k][1]), budget)
-				if err != nil {
-					return nil, err
+			if ma.isExact(pointFacets[k][0]) && mb.isExact(pointFacets[k][1]) {
+				if _, owned := cp.owned[keys[k]]; pointCoplanar[k] || owned {
+					cp.owned[keys[k]] = struct{}{}
+					continue
 				}
 			}
+			isolated = true
 		}
-		if len(isolated) > 0 {
-			return nil, ExpectedBoolean(BooleanExpectedContact, &TouchContactError{What: touchPoint, Contacts: isolated})
+		if isolated {
+			if len(coplanar) > 0 {
+				return nil, coplanarRefusal
+			}
+			return nil, ExpectedBoolean(BooleanExpectedContact, &TouchContactError{What: touchPoint, Contacts: every})
 		}
+		cp.legacyPoints = every
 	}
 
-	return &PairCutsResult{CutsA: cutsA, CutsB: cutsB, replayCutsA: replayCutsA, replayCutsB: replayCutsB, replayBlockedA: replayBlockedA, replayBlockedB: replayBlockedB, replayRims: replayRims, BlockedA: blockedA, BlockedB: blockedB, Rims: rims, MaxRim: maxRim}, nil
+	res := &PairCutsResult{CutsA: cutsA, CutsB: cutsB, replayCutsA: replayCutsA, replayCutsB: replayCutsB, replayBlockedA: replayBlockedA, replayBlockedB: replayBlockedB, replayRims: replayRims, BlockedA: blockedA, BlockedB: blockedB, Rims: rims, MaxRim: maxRim}
+	if len(cp.coplanarA) > 0 {
+		res.CoplanarA, res.CoplanarB = cp.coplanarA, cp.coplanarB
+	}
+	if len(cp.owned) > 0 {
+		res.Owned = cp.owned
+		res.Legacy = cp.legacy(coplanar)
+	}
+	return res, nil
 }

@@ -54,7 +54,7 @@ func coplanarKeep(op OperationKind, second, sameFacing bool) bool {
 // inserted as cuts, so no region's interior touches them. A probe on a
 // triangulation diagonal of the partner's patch lies in both facets sharing it,
 // and both are partners, so both are covers.
-func coverOf(other *BoolMesh, partners []int, p proof.Xpt) ([]int, error) {
+func coverOf(other *BoolMesh, partners []int, p proof.Xpt, twin func(m *BoolMesh, f, k int) (int, bool, error)) ([]int, error) {
 	var cover []int
 	for _, j := range partners {
 		xt := XtriCorners(other, j)
@@ -67,7 +67,7 @@ func coverOf(other *BoolMesh, partners []int, p proof.Xpt) ([]int, error) {
 			if PlaneSide(a, b, p, nb) != 0 || !PointOnSegment3D(a, b, p) {
 				continue
 			}
-			boundary, err := patchBoundaryEdge(other, j, k)
+			boundary, err := patchBoundaryEdgeBy(other, j, k, twin)
 			if err != nil {
 				return nil, err
 			}

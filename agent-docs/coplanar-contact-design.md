@@ -37,8 +37,11 @@ Navigation, not authority.
   coplanar pair keep today's refusals.
 - A shifted, grown or fixed-tool attempt (`hasShifts || fixed != nil` in `booleaneval.evaluate`) admits no coplanar
   pair: its `BoolMesh.Exact` stays nil. The retry ladder therefore behaves exactly as today.
-- The bounded replay path refuses coplanar contacts until Task 12 ports §3 and §5. A replay refusal is a decline. §7
-  runs on the replay stitch as well, so live and replay held meshes are equal for every boolean both paths build.
+- The bounded replay path classifies coplanar contacts as the live pass does, on the replay meter: it reads exactness
+  for its operands, admits the same pairs, inserts the same cuts, keeps or drops covered regions by the same table,
+  classifies an unanchored region by exact parity of its probe, and runs the manifold audit. A region it cannot
+  classify, and a simplified mesh the live stitch would flip, are declines. §7 runs on the replay stitch as well, so
+  live and replay held meshes are equal for every boolean both paths build.
 - Planar face simplification (§7) leaves any face region with a hole untouched in this design.
 - decad tests use minimal box and prism fixtures and name no consumer model (`agent-docs/testing.md` "Test scope").
   The consumer dovetail check runs outside this repository (§11.4).
