@@ -3157,3 +3157,10 @@
 12	0.00	TestShellBossThenFilletOpeningInnerRim
 12	0.00	TestBrepRouteEFilletEndFacesAgree
 12	0.00	TestBrepRouteEFilletObliqueBossEdges
+12	0.00	TestUnionFaceMergeFlushBoxes
+12	0.00	TestUnionFaceMergeDovetailEnds
+12	0.00	TestUnionFaceMergeCutStepDown
+12	0.00	TestUnionFaceMergeIntersectSteppedPrisms
+12	0.00	TestUnionFaceMergeKeepsOffsetPlanesApart
+12	0.00	TestUnionFaceMergeThenChamfer
+12	0.00	TestUnionFaceMergeThenCut
