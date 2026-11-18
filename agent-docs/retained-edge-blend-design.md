@@ -1720,7 +1720,11 @@ it (`retriangulate`, §5; on every route, mitre runs and corners included), `h_t
 the largest exact distance of `t`'s corners from that face's tag plane, rounded
 up, `δ_t` the face's `AxialDelta` plus its `ExtentDelta` (each zero when it states
 none), and `ρ` the rounding of the new vertices times the area of the faces they
-touch.
+touch. On the four faces of an R1 chamfer on the exact path, `h_t + δ_t` is
+replaced by the smaller of it and the largest bound of `t`'s corners, read from
+bounds that are final when read (`agent-docs/exact-chamfer-design.md` §4.4): each
+corner lies within its bound of a true point of the face's plane
+(faceted-vertex-bounds §2), so the facet lies within the largest of them of it.
 
 *Proof.* Outside `K` and the re-triangulated plane faces, `H'` equals `H` and
 `S'` equals the true solid `S`, because the gates of §6.2 show that no other
@@ -1731,7 +1735,9 @@ the true plane lies in `H △ S`, so only the new slab can add. A new facet `t`
 lies within `h_t` of the tag plane and so within `h_t + δ_t` of the true plane,
 and its slab has volume at most that times `area(t)`. This holds for a cap an end
 face gains (new surface on the far side of `K`) as for any other facet of the
-face, since the term reads its corners' actual distances, not their bounds. Each
+face, since the term reads its corners' actual distances, not their bounds, except on an exact R1
+chamfer's four faces, where the smaller of that and the largest corner bound is read
+(`agent-docs/exact-chamfer-design.md` §4.4). Each
 blend charges a rebuilt face again, so `n` blends on one displaced face add its
 `δ·area` `n` times; the published bound stays sound. Inside `K`, `S'` is the exact blended region and
 `H'` is the polyhedron on the strip's chords; every strip facet lies within its

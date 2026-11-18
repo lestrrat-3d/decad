@@ -397,6 +397,9 @@ func rewriteLineEdge(ctx context.Context, env topo.Env, fp facetedrecord.Payload
 	// An end face that gains the cap is new surface where the cap lies: its
 	// rebuilt facets are cleared against the rest of the body as the strip is.
 	var taken [][2]int
+	// On the exact path no bound is written after these facets, so the slab term may read the corners' own
+	// bounds (agent-docs/exact-chamfer-design.md §4.4).
+	w.cornerSlab = exactFeet
 	for _, c := range []struct {
 		f     faceLoops
 		loops [][]int
@@ -414,6 +417,7 @@ func rewriteLineEdge(ctx context.Context, env topo.Env, fp facetedrecord.Payload
 		}
 		w.removed = append(w.removed, c.f.facets...)
 	}
+	w.cornerSlab = false
 
 	tag = w.lineTag(l, convex, center, baseA, baseB)
 	// The strip: row after row of two vertices.

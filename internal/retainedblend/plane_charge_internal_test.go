@@ -56,12 +56,12 @@ func TestPlaneFacetVolume(t *testing.T) {
 		pl := plane{n: r3.NewVec(0, 0, 1), o: r3.NewVec(0, 0, 0)}
 		area := math.Sqrt(37)
 		want := 0.5 * area
-		got := planeFacetVolume(verts, tris, pl, 0)
+		got := planeFacetVolume(verts, tris, pl, 0, nil)
 		require.GreaterOrEqual(t, got, want*(1-1e-15))
 		require.LessOrEqual(t, got, want*(1+1e-12))
 		// The displacement adds its own slab: (0.5 + 0.01) · area.
 		want = 0.51 * area
-		got = planeFacetVolume(verts, tris, pl, 0.01)
+		got = planeFacetVolume(verts, tris, pl, 0.01, nil)
 		require.GreaterOrEqual(t, got, want*(1-1e-15))
 		require.LessOrEqual(t, got, want*(1+1e-12))
 		// It is at least the slab the facet really bounds against the plane moved the other way.
@@ -78,7 +78,7 @@ func TestPlaneFacetVolume(t *testing.T) {
 		pl := plane{n: n, o: r3.NewVec(1, 1, 0)}
 		// Corners at 0, 1/√2 and 1/√2 from the plane; area 1/2.
 		want := math.Sqrt2 / 2 * 0.5
-		got := planeFacetVolume(verts, [][3]int{{0, 1, 2}}, pl, 0)
+		got := planeFacetVolume(verts, [][3]int{{0, 1, 2}}, pl, 0, nil)
 		require.GreaterOrEqual(t, got, want*(1-1e-15))
 		require.LessOrEqual(t, got, want*(1+1e-12))
 		require.GreaterOrEqual(t, got, slabVolume(verts[0], verts[1], verts[2], pl.o, pl.n))
@@ -86,11 +86,76 @@ func TestPlaneFacetVolume(t *testing.T) {
 	t.Run("a facet on the plane adds only the displacement", func(t *testing.T) {
 		t.Parallel()
 		verts := []r3.Vec{r3.NewVec(0, 0, 0), r3.NewVec(4, 0, 0), r3.NewVec(0, 3, 0)}
-		got := planeFacetVolume(verts, [][3]int{{0, 1, 2}}, plane{n: r3.NewVec(0, 0, 1)}, 0.25)
+		got := planeFacetVolume(verts, [][3]int{{0, 1, 2}}, plane{n: r3.NewVec(0, 0, 1)}, 0.25, nil)
 		require.GreaterOrEqual(t, got, 1.5)
 		require.LessOrEqual(t, got, 1.5*(1+1e-12))
-		require.Zero(t, planeFacetVolume(verts, [][3]int{{0, 1, 2}}, plane{n: r3.NewVec(0, 0, 1)}, 0))
+		require.Zero(t, planeFacetVolume(verts, [][3]int{{0, 1, 2}}, plane{n: r3.NewVec(0, 0, 1)}, 0, nil))
 	})
+}
+
+// TestPlaneFacetVolumeCornerBounds checks the corner-bound minimum of the slab term
+// (agent-docs/exact-chamfer-design.md §4.4) on the facet of TestPlaneFacetVolume's first case, whose far corner
+// stands 0.5 over the tag plane z = 0 (area √37), and on a facet whose corners lie on a true plane its float tag
+// misses by rounding.
+func TestPlaneFacetVolumeCornerBounds(t *testing.T) {
+	t.Parallel()
+	verts := []r3.Vec{r3.NewVec(0, 0, 0), r3.NewVec(4, 0, 0), r3.NewVec(0, 3, 0.5)}
+	tris := [][3]int{{0, 1, 2}}
+	pl := plane{n: r3.NewVec(0, 0, 1)}
+	area := math.Sqrt(37)
+	near := func(t *testing.T, got, want float64) {
+		t.Helper()
+		require.GreaterOrEqual(t, got, want*(1-1e-15))
+		require.LessOrEqual(t, got, want*(1+1e-12))
+	}
+
+	t.Run("no bounds keeps the tag charge", func(t *testing.T) {
+		t.Parallel()
+		near(t, planeFacetVolume(verts, tris, pl, 0.01, nil), 0.51*area)
+	})
+	t.Run("corner bounds above the tag distance charge the tag distance", func(t *testing.T) {
+		t.Parallel()
+		near(t, planeFacetVolume(verts, tris, pl, 0.01, []float64{1, 1, 1}), 0.51*area)
+	})
+	t.Run("a corner bound below the tag distance charges the largest corner bound", func(t *testing.T) {
+		t.Parallel()
+		near(t, planeFacetVolume(verts, tris, pl, 0.01, []float64{0.1, 0.2, 0.3}), 0.3*area)
+		near(t, planeFacetVolume(verts, tris, pl, 0.01, []float64{0.3, 0.1, 0.2}), 0.3*area)
+	})
+	t.Run("zero-bound corners on a plane the float tag misses charge nothing", func(t *testing.T) {
+		t.Parallel()
+		// The vertices lie exactly on x + 3y + 5z = 0, the plane through the origin of normal (1, 3, 5)/√35;
+		// the unit normal's floats do not contain them, so the tag distance is positive.
+		n, ok := r3.NewVec(1, 3, 5).Normalize()
+		require.True(t, ok)
+		tilted := []r3.Vec{r3.NewVec(3, -1, 0), r3.NewVec(5, 0, -1), r3.NewVec(0, 5, -3)}
+		tiltedPlane := plane{n: n}
+		require.Positive(t, planeFacetVolume(tilted, tris, tiltedPlane, 0, nil), "the tag misses the corners")
+		require.Zero(t, planeFacetVolume(tilted, tris, tiltedPlane, 0, []float64{0, 0, 0}))
+	})
+}
+
+// TestChargePlaneFaceReadsCornerBoundsOnlyWhenFlagged re-triangulates a face whose zero-bound corners lie on a true
+// plane its float tag misses, as TestPlaneFacetVolumeCornerBounds does, through chargePlaneFace: the tag charge
+// stays without the work's cornerSlab flag and is 0 with it.
+func TestChargePlaneFaceReadsCornerBoundsOnlyWhenFlagged(t *testing.T) {
+	t.Parallel()
+	n, ok := r3.NewVec(1, 3, 5).Normalize()
+	require.True(t, ok)
+	verts := []r3.Vec{r3.NewVec(3, -1, 0), r3.NewVec(5, 0, -1), r3.NewVec(0, 5, -3)}
+	planeVol := func(t *testing.T, flagged bool) float64 {
+		t.Helper()
+		fp := facetedrecord.Payload{Groups: []facetedrecord.Group{planeTag(t, r3.Vec{}, n, 0)}}
+		w := newWork(fp, rim{scale: 1}, blendSpec{dA: 1, dB: 1})
+		w.verts = append(w.verts, verts...)
+		w.beta = append(w.beta, 0, 0, 0)
+		w.cornerSlab = flagged
+		w.emit([3]int{0, 1, 2}, 0)
+		require.NoError(t, w.chargePlaneFace(0, 0))
+		return w.planeVol
+	}
+	require.Positive(t, planeVol(t, false))
+	require.Zero(t, planeVol(t, true))
 }
 
 // TestMeasureChangeChargesRetriangulatedPlaneFacets re-triangulates a plane face whose facet stands 0.5 above its
