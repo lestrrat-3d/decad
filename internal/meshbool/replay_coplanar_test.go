@@ -9,6 +9,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
 )
@@ -124,24 +125,67 @@ func TestReplayCoplanarMatchesLive(t *testing.T) {
 }
 
 // TestReplayCoplanarBudget pins that a meter too small for the coplanar pass
-// returns the budget error, and that edge and vertex contacts return the same
-// legacy refusal as the live pass.
+// returns the budget error: the least work the bounded boolean needs, less one,
+// runs out inside the pass, and is never read as a refusal of the contact.
 func TestReplayCoplanarBudget(t *testing.T) {
 	a := exactBoxMesh(t, r3.Vec{}, r3.Vec{X: 10, Y: 10, Z: 10})
 	b := exactBoxMesh(t, r3.Vec{X: 0.5, Z: 10}, r3.Vec{X: 10.5, Y: 10, Z: 20})
-	small, err := proofbound.NewReplayBudgetLimits(50, proofbound.ReplayTrialRecords, proofbound.ReplayTrialBytes)
+	run := func(limit uint64) error {
+		budget, err := proofbound.NewReplayBudgetLimits(limit, proofbound.ReplayTrialRecords, proofbound.ReplayTrialBytes)
+		require.NoError(t, err)
+		_, _, err = replayBoolean(t, t.Context(), OpUnion, a, b, budget)
+		return err
+	}
+	full := proofbound.NewReplayTrialBudget()
+	_, _, err := replayBoolean(t, t.Context(), OpUnion, a, b, full)
 	require.NoError(t, err)
-	keys, err := NewReplayKeysBounded(t.Context(), small)
-	if err == nil {
-		memo, merr := NewReplayContactMemo(t.Context(), a, b, small)
-		if merr == nil {
-			_, _, _, err = MeshBooleanReplayWithKeys(t.Context(), OpUnion, a, b, memo, small, keys)
+	total, _ := full.Usage()
+	lo, hi := uint64(1), total
+	for lo < hi {
+		mid := (lo + hi) / 2
+		if run(mid) == nil {
+			hi = mid
 		} else {
-			err = merr
+			lo = mid + 1
 		}
 	}
-	var limit *proofbound.WorkLimitError
-	require.ErrorAs(t, err, &limit)
+	require.NoError(t, run(lo))
+	for _, limit := range []uint64{lo - 1, lo / 2, lo * 3 / 4} {
+		var wl *proofbound.WorkLimitError
+		require.ErrorAs(t, run(limit), &wl, "limit %d", limit)
+	}
+}
+
+// TestReplayCoplanarDeclinesWhatLiveClassifies pins two refusals: a partial
+// footprint whose region probes lie on axis planes is built or declined, never a
+// hard failure; and a pair whose chains branch refuses as the live pass does,
+// with a contact error the shifted retry reads.
+func TestReplayCoplanarDeclinesWhatLiveClassifies(t *testing.T) {
+	t.Run("partial footprint", func(t *testing.T) {
+		a := exactBoxMesh(t, r3.Vec{}, r3.Vec{X: 10, Y: 10, Z: 10})
+		b := exactBoxMesh(t, r3.Vec{X: 5, Y: 5, Z: 10}, r3.Vec{X: 15, Y: 15, Z: 20})
+		for _, op := range []OperationKind{OpUnion, OpIntersect, OpCut} {
+			_, _, err := replayBoolean(t, t.Context(), op, a, b, proofbound.NewReplayTrialBudget())
+			if err != nil {
+				require.ErrorIs(t, err, decaderr.ErrUnsupported, "%v is a decline", op)
+			}
+		}
+	})
+	t.Run("branching chains", func(t *testing.T) {
+		a := exactBoxMesh(t, r3.Vec{}, r3.Vec{X: 10, Y: 10, Z: 10})
+		b := prismMesh(t, [][2]float64{{14, 8}, {7, 8}, {10, 5}, {10, 2}, {14, 2}}, 2, 8)
+		for _, op := range []OperationKind{OpUnion, OpIntersect, OpCut} {
+			_, _, liveErr := MeshBooleanStats(t.Context(), op, a, b, NewContactMemo(a, b))
+			var want *TouchContactError
+			if !errors.As(liveErr, &want) {
+				continue // the live pass builds this one; the fixture only pins refusals
+			}
+			_, _, err := replayBoolean(t, t.Context(), op, a, b, proofbound.NewReplayTrialBudget())
+			var have *TouchContactError
+			require.ErrorAs(t, err, &have, "%v", op)
+			require.Equal(t, want.What, have.What)
+		}
+	})
 }
 
 // TestReplayCoplanarLegacyRefusal pins that boxes meeting along an edge or at a

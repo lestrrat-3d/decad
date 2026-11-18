@@ -371,6 +371,7 @@ type coplanarPass struct {
 	// operand's own owner table and meters nothing.
 	twin                 func(m *BoolMesh, f, k int) (int, bool, error)
 	charge               func(n uint64) error
+	reserve              func(n uint64) error
 	coplanarA, coplanarB map[int][]int
 	owned                map[string]struct{}
 	// legacyGrazes and legacyPoints are the contacts the switch-off pass would
@@ -415,6 +416,12 @@ func (cp *coplanarPass) clipEdges(from *BoolMesh, src int, into *BoolMesh, dst i
 		}
 		if !ok {
 			continue
+		}
+		if cp.reserve != nil {
+			// A kept piece holds a cut and two owned keys.
+			if err := cp.reserve(8); err != nil {
+				return err
+			}
 		}
 		if err := add(Xseg{
 			A: piece.P0, B: piece.P1,

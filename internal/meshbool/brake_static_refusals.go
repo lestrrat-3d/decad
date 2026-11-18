@@ -113,6 +113,7 @@ var (
 	errReplayTheOperationLeavesNoBoundaryAtAll          = fmt.Errorf(`%w: the operation leaves no boundary at all`, decaderr.ErrBooleanFailed)
 	errReplayAKeptFacetCollapsed                        = fmt.Errorf(`%w: a kept facet collapsed`, decaderr.ErrBooleanFailed)
 	errReplayTheConformingPassDidNotConverge            = fmt.Errorf(`%w: the conforming pass did not converge`, decaderr.ErrBooleanFailed)
+	errReplayUnanchoredParityIsAmbiguous                = fmt.Errorf("%w: every axis ray through an unanchored replay region is ambiguous", decaderr.ErrUnsupported)
 	errReplaySimplifiedMeshNeedsAFlip                   = fmt.Errorf("%w: the simplified mesh holds a needle only the live stitch flips", decaderr.ErrUnsupported)
 	errReplayTheStitchedBoundaryDoesNotClose            = fmt.Errorf(`%w: the stitched boundary does not close`, decaderr.ErrBooleanFailed)
 	errReplayNonfiniteRoundedReplayVertex               = fmt.Errorf("%w: nonfinite rounded replay vertex", decaderr.ErrUnsupported)

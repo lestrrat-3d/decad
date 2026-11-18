@@ -2,8 +2,10 @@ package meshbool
 
 import (
 	"context"
+	"errors"
 	"unsafe"
 
+	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 )
@@ -33,11 +35,11 @@ func MeshBooleanReplayWithKeys(ctx context.Context, op OperationKind, ma, mb *Bo
 	}
 	a, err := brakeKeepSideReplay(ctx, ma, mb, cuts.CutsA, cuts.replayCutsA, cuts.BlockedA, cuts.replayBlockedA, cuts.Rims, cuts.replayRims, wantA, false, keyOf, budget, keepOptions{Coplanar: cuts.CoplanarA, Op: op})
 	if err != nil {
-		return nil, 0, nil, err
+		return nil, 0, nil, replayCoplanarRefusal(cuts, err)
 	}
 	b, err := brakeKeepSideReplay(ctx, mb, ma, cuts.CutsB, cuts.replayCutsB, cuts.BlockedB, cuts.replayBlockedB, cuts.Rims, cuts.replayRims, wantB, flipB, keyOf, budget, keepOptions{Coplanar: cuts.CoplanarB, Op: op, Second: true})
 	if err != nil {
-		return nil, 0, nil, err
+		return nil, 0, nil, replayCoplanarRefusal(cuts, err)
 	}
 	if len(a)+len(b) > brakeReplayFacetLimit {
 		return nil, 0, nil, errReplayBoundedOutputExceedsFacets
@@ -459,6 +461,11 @@ func classifyRegionReplay(ctx context.Context, reg CutRegion, other *BoolMesh, b
 	}
 	inside, onBoundary, err := meshParityIndexedShared(ctx, reg.Probe, other.Parity, work)
 	if err != nil {
+		if errors.Is(err, errBrakeParityRays) {
+			// The live classification falls back to oblique rays, which the bounded
+			// scan does not run: decline instead of failing the boolean.
+			return false, errReplayUnanchoredParityIsAmbiguous
+		}
 		return false, err
 	}
 	if onBoundary {
@@ -536,4 +543,17 @@ func emitReplayRegion(ctx context.Context, reg CutRegion, i int, cornerKeys [3]s
 		}
 	}
 	return nil
+}
+
+// replayCoplanarRefusal maps a side-pass refusal of a pair the coplanar pass
+// accepted a point of to the refusal the pair gave before it existed, as the
+// live pass does, so the shifted retry reads the contacts it always read. A
+// budget error is never remapped: it says the meter ran out, not that the
+// contact is unclassifiable.
+func replayCoplanarRefusal(cuts *PairCutsResult, err error) error {
+	var limit *proofbound.WorkLimitError
+	if cuts.Legacy == nil || errors.As(err, &limit) || !errors.Is(err, decaderr.ErrUnsupported) {
+		return err
+	}
+	return cuts.Legacy
 }

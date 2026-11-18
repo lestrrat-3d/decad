@@ -261,6 +261,7 @@ func pairCutsImpl(ctx context.Context, ma, mb *BoolMesh, memo *ContactMemo, keyO
 	if budget != nil && budget.replay != nil {
 		cp.twin = func(m *BoolMesh, f, k int) (int, bool, error) { return m.twinFacetReplay(ctx, f, k) }
 		cp.charge = func(n uint64) error { return budget.SpendWork(ctx, n) }
+		cp.reserve = func(n uint64) error { return budget.ReserveRecords(ctx, n) }
 	}
 	refused := false
 	var pointCoplanar []bool

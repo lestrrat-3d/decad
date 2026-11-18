@@ -251,6 +251,11 @@ func stitchFacetsContext(ctx context.Context, kept []KeptFacet, shared *PairCuts
 		if err := shared.ReserveRecords(ctx, 12*uint64(len(tris))+4*uint64(len(xverts))); err != nil {
 			return nil, err
 		}
+		if shared.replay != nil {
+			if err := shared.ReserveBytes(ctx, 6*uint64(len(tris))+4*uint64(len(xverts)), uint64(unsafe.Sizeof([2]int{}))+16); err != nil {
+				return nil, err
+			}
+		}
 		if err := shared.SpendWork(ctx, 24*uint64(len(tris))+8*uint64(len(xverts))); err != nil {
 			return nil, err
 		}
