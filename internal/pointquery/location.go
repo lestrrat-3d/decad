@@ -48,7 +48,7 @@ const (
 // boundary and occupied-volume bounds exclude a different answer.
 func Locate(ctx context.Context, p r3.Vec, verts []r3.Vec, tris [][3]int,
 	boundaryBound, symDiffBound float64) (Location, error) {
-	return locate(ctx, p, verts, tris, boundaryBound, symDiffBound, nil, nil)
+	return locate(ctx, p, verts, tris, boundaryBound, symDiffBound, nil, nil, false)
 }
 
 // LocatePrepared reuses the parity projections and index in prepared across
@@ -59,19 +59,21 @@ func LocatePrepared(ctx context.Context, p r3.Vec, prepared *PreparedMesh,
 	if prepared == nil {
 		return Undecided, nil
 	}
-	return locate(ctx, p, prepared.verts, prepared.tris, boundaryBound, symDiffBound, nil, prepared)
+	return locate(ctx, p, prepared.verts, prepared.tris, boundaryBound, symDiffBound, nil, prepared, false)
 }
 
 // LocateWithDistance reuses an exact held-mesh distance already computed for
-// the same point and triangles. The caller must pass MeshDistanceSquared's
+// the same point and triangles. Where the ball proof cannot decide a point the
+// mesh puts outside, it also tries a free path (escape.go), which a distance
+// query needs near a bore of a large body. The caller must pass MeshDistanceSquared's
 // result, or nil to compute it here.
 func LocateWithDistance(ctx context.Context, p r3.Vec, verts []r3.Vec, tris [][3]int,
 	boundaryBound, symDiffBound float64, distanceSquared *big.Rat) (Location, error) {
-	return locate(ctx, p, verts, tris, boundaryBound, symDiffBound, distanceSquared, nil)
+	return locate(ctx, p, verts, tris, boundaryBound, symDiffBound, distanceSquared, nil, true)
 }
 
 func locate(ctx context.Context, p r3.Vec, verts []r3.Vec, tris [][3]int,
-	boundaryBound, symDiffBound float64, distanceSquared *big.Rat, prepared *PreparedMesh) (Location, error) {
+	boundaryBound, symDiffBound float64, distanceSquared *big.Rat, prepared *PreparedMesh, escape bool) (Location, error) {
 	if len(tris) == 0 || math.IsNaN(boundaryBound) || math.IsInf(boundaryBound, 0) ||
 		math.IsNaN(symDiffBound) || math.IsInf(symDiffBound, 0) ||
 		boundaryBound < 0 || symDiffBound < 0 {
@@ -151,7 +153,7 @@ func locate(ctx context.Context, p r3.Vec, verts []r3.Vec, tris [][3]int,
 	if ballLowerBound.Cmp(proof.FloatRat(symDiffBound)) <= 0 {
 		// The ball is too small for the body's whole symmetric-difference bound. A point the held mesh puts outside
 		// may still reach the outside of both solids by a free path (escape.go), which reads no volume bound.
-		if inside {
+		if inside || !escape {
 			return Undecided, nil
 		}
 		free, err := escapeOutside(ctx, p, verts, tris, boundaryBound, distanceSquared)

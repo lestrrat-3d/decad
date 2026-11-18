@@ -17,12 +17,12 @@ import (
 
 const (
 	// maxEscapeSteps is the most balls one direction's chain takes.
-	maxEscapeSteps = 256
+	maxEscapeSteps = 64
 	// maxEscapeScans is the most exact mesh distances one query spends on chains.
-	maxEscapeScans = 1024
+	maxEscapeScans = 128
 	// escapeShrink abandons a direction whose ball shrinks below this fraction of the first one: the chain then
 	// runs into the boundary, and its balls would only shrink further.
-	escapeShrink = 1.0 / 64
+	escapeShrink = 1.0 / 8
 )
 
 // clearRadius is a lower bound on L − B, L the distance whose square is distanceSquared and B the boundary bound.

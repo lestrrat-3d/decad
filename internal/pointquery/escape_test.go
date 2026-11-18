@@ -56,6 +56,16 @@ func tunnelled() *boxMesh {
 	return m
 }
 
+// locateFree locates p as a distance query does, with the free path (LocateWithDistance).
+func locateFree(t *testing.T, p r3.Vec, m *boxMesh, bound, symDiff float64) (Location, error) {
+	t.Helper()
+	ds, err := MeshDistanceSquared(t.Context(), p, m.verts, m.tris)
+	if err != nil {
+		return Undecided, err
+	}
+	return LocateWithDistance(t.Context(), p, m.verts, m.tris, bound, symDiff, ds)
+}
+
 // TestLocateByFreePath checks the free-path proof of point-containment §2: a symmetric-difference bound far larger
 // than any ball leaves only the path to decide.
 func TestLocateByFreePath(t *testing.T) {
@@ -65,12 +75,16 @@ func TestLocateByFreePath(t *testing.T) {
 		t.Parallel()
 		m := tunnelled()
 		for _, p := range []r3.Vec{{}, r3.NewVec(0.5, 3, -0.5)} {
-			got, err := Locate(t.Context(), p, m.verts, m.tris, 0.1, huge)
+			got, err := locateFree(t, p, m, 0.1, huge)
 			require.NoError(t, err)
 			require.Equal(t, Outside, got, "at %v", p)
 		}
+		// A plain location tries no free path.
+		got, err := Locate(t.Context(), r3.Vec{}, m.verts, m.tris, 0.1, huge)
+		require.NoError(t, err)
+		require.Equal(t, Undecided, got)
 		// Inside the wall the held mesh says inside, which no free path decides.
-		got, err := Locate(t.Context(), r3.NewVec(3, 0, 0), m.verts, m.tris, 0.1, huge)
+		got, err = locateFree(t, r3.NewVec(3, 0, 0), m, 0.1, huge)
 		require.NoError(t, err)
 		require.Equal(t, Undecided, got)
 	})
@@ -79,11 +93,11 @@ func TestLocateByFreePath(t *testing.T) {
 		m := &boxMesh{}
 		m.cube(5, 5, 1, false)
 		m.cube(1, 1, -1, false)
-		got, err := Locate(t.Context(), r3.Vec{}, m.verts, m.tris, 0.1, huge)
+		got, err := locateFree(t, r3.Vec{}, m, 0.1, huge)
 		require.NoError(t, err)
 		require.Equal(t, Undecided, got)
 		// A symmetric-difference bound below the ball's volume decides it by the ball alone.
-		got, err = Locate(t.Context(), r3.Vec{}, m.verts, m.tris, 0.1, 0.5)
+		got, err = locateFree(t, r3.Vec{}, m, 0.1, 0.5)
 		require.NoError(t, err)
 		require.Equal(t, Outside, got)
 	})
@@ -91,7 +105,7 @@ func TestLocateByFreePath(t *testing.T) {
 		t.Parallel()
 		m := tunnelled()
 		// The tunnel's wall lies 1 from the axis; with B = 1 no ball about the axis is clear of it.
-		got, err := Locate(t.Context(), r3.Vec{}, m.verts, m.tris, 1, huge)
+		got, err := locateFree(t, r3.Vec{}, m, 1, huge)
 		require.NoError(t, err)
 		require.Equal(t, Undecided, got)
 	})
@@ -101,10 +115,10 @@ func TestLocateByFreePath(t *testing.T) {
 		// from the tunnel's walls. The sound B = 4 leaves the axis undecided; an understated B = 0.1 lets the path
 		// pass and answers outside, where the true cube holds the point. The proof is only as sound as B.
 		m := tunnelled()
-		got, err := Locate(t.Context(), r3.Vec{}, m.verts, m.tris, 4, huge)
+		got, err := locateFree(t, r3.Vec{}, m, 4, huge)
 		require.NoError(t, err)
 		require.Equal(t, Undecided, got)
-		got, err = Locate(t.Context(), r3.Vec{}, m.verts, m.tris, 0.1, huge)
+		got, err = locateFree(t, r3.Vec{}, m, 0.1, huge)
 		require.NoError(t, err)
 		require.Equal(t, Outside, got, "an understated bound transfers the held answer to a body it does not bound")
 	})
