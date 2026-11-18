@@ -300,7 +300,15 @@ of the scene, a cell's holes read as its outer is — prism-boolean §4.2's flag
 per record rather than per operand, with a span two records share
 (`prismcells.CoincidentEdgesRegions`, A3's reading with the partner taken
 from any other record, of either operand) a boundary of both that neither
-membership crosses. A cell inside some record reaching one side and inside
+membership crosses. A cell whose membership in a record no propagation
+reaches lies in a group of cells, joined by shared edges, that holds none of
+that record's edges. A record ring enclosing such a group is the outer of a
+cell that holds the group's outer ring as a hole, which joins the group, so
+the group lies outside the record and the cell reads outside it: the top of
+a lower block and the footprint of a taller one, standing apart on a plate,
+share no edge in the scene above the lower block's top. A cell unreached in
+a record whose edges its group does hold stays unresolved and misses.
+A cell inside some record reaching one side and inside
 none reaching the other is that side's exposed face, recorded from the cell
 as `sketch` returned it (a floor faces up, a ceiling down). A `Union`'s
 exposed cell may carry holes: the plate's floor round separate bosses is one
@@ -1930,6 +1938,10 @@ are relations, never literals.
   overlapping the first in the upper slab merges into one region. A scene
   test reads `ClassifyRegions` over a plate and two flush bosses and finds
   the plate-only area 1400 and each boss's cell inside its own record only.
+  Blocks of unequal heights standing apart on a 60 × 40 × 10 plate, two or
+  three, in either order, build an `Exact` brep of the summed volume, and the
+  lower block's root loop fillets on it
+  (`apitest/stacked_union_unequal_blocks_test.go`).
   Misses: a class-B brep operand (no stack), and a crossing round boss
   result as an operand (its stack carries a displacement).
 - **A4 reflected operand**: the L of mirror §2 mirrored across x = 30 and

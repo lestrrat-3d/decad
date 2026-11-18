@@ -384,18 +384,70 @@ func ClassifyRegions(budget *proofbound.WorkBudget, tags map[sketch.Entity]Origi
 			return nil, false, err
 		}
 	}
+	// A cell still unknown for a record lies in a group of cells joined by
+	// shared edges that holds no edge of that record. Every record ring that
+	// encloses such a group is the outer of a cell holding the group's outer
+	// ring as a hole, which an occurrence links into the group, so a group
+	// with none of the record's edges lies outside every ring of it, in the
+	// unbounded face of the record: the cell is outside the record's
+	// material.
+	pairs := make([][2]int, len(links))
+	for i, l := range links {
+		pairs[i] = [2]int{l.a, l.b}
+	}
+	group := cellGroups(n, pairs)
+	present := map[RegionKey]map[int]struct{}{}
+	for _, os := range occ {
+		for _, o := range os {
+			for _, k := range o.keys {
+				if present[k] == nil {
+					present[k] = map[int]struct{}{}
+				}
+				present[k][group[o.cell]] = struct{}{}
+			}
+		}
+	}
 	out := make(map[RegionKey][]bool, len(member))
 	for k, m := range member {
 		vals := make([]bool, n)
 		for i := range m {
 			if !m[i].known {
-				return nil, false, nil
+				if _, touches := present[k][group[i]]; touches {
+					return nil, false, nil
+				}
+				vals[i] = false
+				continue
 			}
 			vals[i] = m[i].val
 		}
 		out[k] = vals
 	}
 	return out, true, nil
+}
+
+// cellGroups numbers the groups of cells the links (pairs of cells sharing an
+// edge) join, whatever records the edges belong to: group[i] is the group of
+// cell i.
+func cellGroups(n int, links [][2]int) []int {
+	parent := make([]int, n)
+	for i := range parent {
+		parent[i] = i
+	}
+	find := func(i int) int {
+		for parent[i] != i {
+			parent[i] = parent[parent[i]]
+			i = parent[i]
+		}
+		return i
+	}
+	for _, l := range links {
+		parent[find(l[0])] = find(l[1])
+	}
+	group := make([]int, n)
+	for i := range group {
+		group[i] = find(i)
+	}
+	return group
 }
 
 // flood is propagate's breadth-first walk over an adjacency the caller has
