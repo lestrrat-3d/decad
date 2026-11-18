@@ -11,7 +11,7 @@ import (
 )
 
 // This file holds the end of an open tangent chain on an arc edge
-// (agent-docs/retained-agent-docs/modify-design.md Part R §5.5 step 5, blend §4.4). The
+// (agent-docs/modify-design.md Part M §5.5 step 5, blend §4.4). The
 // arc's free end lies on a retained plane G parallel to the axis. Each row of
 // the end column is the point where the row's circle of the torus (or cone)
 // meets G, so the end curve is a chain of exact points and not a conic.

@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// The R5 cases of agent-docs/retained-agent-docs/modify-design.md Part R §8 that the bore
+// The R5 cases of agent-docs/modify-design.md Part M §8 that the bore
 // pair of faceted_retained_blend_cylinders_test.go does not reach: a concave
 // valley whose both ends are reflex corners, a two-distance chamfer, and
 // walls that meet at a grazing angle.

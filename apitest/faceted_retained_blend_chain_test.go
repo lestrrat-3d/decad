@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// The fixtures of agent-docs/retained-agent-docs/modify-design.md Part R §12 for increment
+// The fixtures of agent-docs/modify-design.md Part M §12 for increment
 // M3: Fillet and Chamfer of a closed rounded outline of a mesh Boolean result.
 // The cross-drilled rounded box has two such outlines, the top and the bottom
 // face's, each four lines and four r = 3 arcs.

@@ -19,7 +19,7 @@ import (
 // nest with consistent signs, reading one probe point per shell; it does not
 // test facets for intersection. A shell that reaches into the blend region K
 // from outside it would cross the new strip and still pass. checkStripClear
-// closes that gap for every route (agent-docs/retained-agent-docs/modify-design.md Part R
+// closes that gap for every route (agent-docs/modify-design.md Part M
 // §5.6): no facet of the rest of the body may meet a strip facet, decided by
 // meshbool's exact triangle/triangle classification on the held floats. A
 // pair that shares a vertex is the construction's own seam, along the base's

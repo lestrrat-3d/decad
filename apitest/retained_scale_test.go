@@ -14,7 +14,7 @@ import (
 // TestRetainedScaledAtKeepsCurvedTags scales the retained-tag fixture of
 // agent-docs/faceted-source-retention-design.md (a filleted box drilled by a
 // placed tool, a mesh Boolean) and checks the faces keep their analytic kinds
-// (agent-docs/retained-agent-docs/modify-design.md Part R §7).
+// (agent-docs/modify-design.md Part M §7).
 func TestRetainedScaledAtKeepsCurvedTags(t *testing.T) {
 	for _, factor := range []float64{2, 1.1} {
 		t.Run(units.Scalar(factor).String(), func(t *testing.T) {

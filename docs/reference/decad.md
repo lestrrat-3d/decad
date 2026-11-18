@@ -1784,7 +1784,7 @@ own bounds, and it matches the ideal chamfer only within that ratio. A
 setback that reaches the outline's radius of curvature is ErrDegenerate.
 
 On a mesh Boolean result, whole loops of a retained planar face that the per-edge routes cannot bevel, such as a
-window of lines and arcs with sharp corners, are cut by a polyhedral cutter (agent-docs/retained-agent-docs/modify-design.md Part R
+window of lines and arcs with sharp corners, are cut by a polyhedral cutter (agent-docs/modify-design.md Part M
 §15a): faceted, the Cut's own readings, and the bevel ruled between its two sections. A tangent chain whose edges
 share no one base plane, such as the rim of a bar rounded about z at one end and about y at the other, is cut by
 the bevel's section swept along the chain (§15b), with the same readings.

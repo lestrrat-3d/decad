@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// The base-wrap chain-end fixtures of agent-docs/retained-agent-docs/modify-design.md Part R
+// The base-wrap chain-end fixtures of agent-docs/modify-design.md Part M
 // §5.5 step 5 and §12: a concave open tangent chain on a plate's top whose
 // ends lie on the sharp vertical corners of a block joined on top. There the
 // plate's top wraps the corner (it is reflex), the block's wall is convex, and

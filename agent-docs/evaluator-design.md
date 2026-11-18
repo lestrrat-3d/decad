@@ -1116,7 +1116,7 @@ as every facet's vertex bound. It refuses a source group without an origin
 role. `facetproof.ScaleMesh` then applies the same rational similarity,
 embedding audit and area/volume charges to the Boolean mesh. A retained
 `Plane`, `Cylinder`, `Sphere` or `Torus` tag keeps its similar image
-(`agent-docs/retained-agent-docs/modify-design.md` Part R §7). A retained `Cone`, every
+(`agent-docs/modify-design.md` Part M §7). A retained `Cone`, every
 denoted surface and every unretained curved tag read `Faceted`: none has a
 similarity image here, and `Faceted` claims less than the source tag did. The scaled
 result carries source-face roles and its plane tags, but drops

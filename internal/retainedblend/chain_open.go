@@ -13,7 +13,7 @@ import (
 )
 
 // This file holds the ends of an open tangent chain
-// (agent-docs/retained-agent-docs/modify-design.md Part R §5.1 C2, §5.5 step 5). An end is
+// (agent-docs/modify-design.md Part M §5.1 C2, §5.5 step 5). An end is
 // the corner where the chain's first or last straight edge meets the base P,
 // its wall and an end face G. G is a retained plane normal to the edge, or one
 // that meets the wall square and so tilts only about its line on the base (a
@@ -43,7 +43,7 @@ type chainEndCut struct {
 	// lies outside G, and G takes it in place of giving it up.
 	reflex bool
 	// wraps is set when the base is reflex at the corner of a concave chain
-	// (agent-docs/retained-agent-docs/modify-design.md Part R §5.5 step 5): the base keeps
+	// (agent-docs/modify-design.md Part M §5.5 step 5): the base keeps
 	// the corner and its boundary gains the run from it to the setback point on
 	// G ∩ P, away from G's chain along G ∩ P. G is convex there and takes the
 	// cap.

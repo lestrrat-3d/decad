@@ -8,7 +8,7 @@ import (
 )
 
 // The removed band of a chain wall whose face is not one-sided
-// (agent-docs/retained-agent-docs/modify-design.md Part R §5.5 step 5, blend §5.0 "A wall
+// (agent-docs/modify-design.md Part M §5.5 step 5, blend §5.0 "A wall
 // that extends past the corner" and §6.2). Where the wall is a notched round,
 // or the floor beside a block that stands on it, the wall's facets lie behind
 // the base plane P and past the end plane G of a chain end, and a cut by the

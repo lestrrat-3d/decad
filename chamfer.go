@@ -115,7 +115,7 @@ type ChamferOption interface{ chamferOption() }
 // setback that reaches the outline's radius of curvature is ErrDegenerate.
 //
 // On a mesh Boolean result, whole loops of a retained planar face that the per-edge routes cannot bevel, such as a
-// window of lines and arcs with sharp corners, are cut by a polyhedral cutter (agent-docs/retained-agent-docs/modify-design.md Part R
+// window of lines and arcs with sharp corners, are cut by a polyhedral cutter (agent-docs/modify-design.md Part M
 // §15a): faceted, the Cut's own readings, and the bevel ruled between its two sections. A tangent chain whose edges
 // share no one base plane, such as the rim of a bar rounded about z at one end and about y at the other, is cut by
 // the bevel's section swept along the chain (§15b), with the same readings.
@@ -267,7 +267,7 @@ func Chamfer(ctx context.Context, b *Body, sel EdgeSelector, d units.Value,
 				return out, nil
 			}
 			// Whole loops with sharp corners on a mesh Boolean result are cut by a polyhedral cutter, after the exact
-			// wedge route has declined them (agent-docs/retained-agent-docs/modify-design.md Part R §15a).
+			// wedge route has declined them (agent-docs/modify-design.md Part M §15a).
 			if res, matched, lerr := brepmodify.RetainedLoopChamfer(ctx, envOf(b.n.Doc, b.n.Doc.NextProducer), modifyHooks(),
 				&b.n, edgeNodes(edges), dmm, dDelta, nil); matched {
 				if lerr != nil {
@@ -288,7 +288,7 @@ func Chamfer(ctx context.Context, b *Body, sel EdgeSelector, d units.Value,
 			}
 		}
 		// Tangent chains of a mesh Boolean result that share no base plane are cut by one swept cutter per chain
-		// (agent-docs/retained-agent-docs/modify-design.md Part R §15b).
+		// (agent-docs/modify-design.md Part M §15b).
 		if errors.Is(err, ErrUnsupported) && asym == nil {
 			if res, matched, cerr := brepmodify.ChainCutterChamfer(ctx, envOf(b.n.Doc, b.n.Doc.NextProducer), modifyHooks(),
 				&b.n, edgeNodes(edges), dmm, dDelta, nil); matched {

@@ -180,7 +180,7 @@ func tagDeparts(f *topo.Face) bool {
 }
 
 // cylinderTorusRim returns the junction circle of a blend cylinder and a blend
-// torus of one tube radius (agent-docs/retained-agent-docs/modify-design.md Part R §5.4,
+// torus of one tube radius (agent-docs/modify-design.md Part M §5.4,
 // Claim J, and retention §10.1 E11). The cylinder's axis d is normal to the
 // torus axis a, and the plane through the torus axis normal to d cuts the
 // cylinder axis at the tube centre c_J: c_J lies in the torus's equatorial

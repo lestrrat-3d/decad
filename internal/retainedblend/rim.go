@@ -70,7 +70,7 @@ func (s blendSpec) otherSize() float64 {
 // refTag is the retained tag of a reference face. Face indices change between
 // the steps of a multi-edge blend, so each step finds its reference by the tag
 // bit for bit; the two faces of an edge carry distinct tags
-// (agent-docs/retained-agent-docs/modify-design.md Part R §4.1).
+// (agent-docs/modify-design.md Part M §4.1).
 type refTag struct {
 	surface  surfacegeom.Surface
 	reversed bool

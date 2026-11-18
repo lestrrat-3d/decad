@@ -14,7 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// The fixtures of agent-docs/retained-agent-docs/modify-design.md Part R §5.5 step 5 for a
+// The fixtures of agent-docs/modify-design.md Part M §5.5 step 5 for a
 // concave open tangent chain whose walls continue past its end planes: a box
 // ear is unioned under a block whose bottom edges are rounded, and the ear's
 // front face crosses the round between its two tangent lines. The ear's root

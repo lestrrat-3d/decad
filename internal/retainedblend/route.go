@@ -43,7 +43,7 @@ func publishCharged(ctx context.Context, env topo.Env, out *topo.Body, recognize
 	return out, recognized, nil
 }
 
-// Reference is a resolved two-distance chamfer (agent-docs/retained-agent-docs/modify-design.md Part R
+// Reference is a resolved two-distance chamfer (agent-docs/modify-design.md Part M
 // §4.1): Refs maps each selected edge to its one reference face of b, which takes
 // the positional distance d. The other face adjacent to the edge takes Other.
 type Reference struct {

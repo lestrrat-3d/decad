@@ -344,7 +344,7 @@ Two readings change that are not improvements. A retained face no longer
 publishes `Faceted.Bound`, its held displacement `δ_f`; a caller reads it from
 the face's vertex bounds. `ScaledAt` keeps a retained `Plane`, `Cylinder`,
 `Sphere` or `Torus` at its similar image, charged for rounding only
-(`agent-docs/retained-agent-docs/modify-design.md` Part R §7). A retained `Cone` or
+(`agent-docs/modify-design.md` Part M §7). A retained `Cone` or
 denoted face reads `Faceted` afterwards, because the scaled tag has no
 similarity proof here.
 
