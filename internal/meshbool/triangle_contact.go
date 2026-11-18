@@ -114,6 +114,10 @@ type TriContact struct {
 	// — it is a property of the edge's two adjacent facets — so the pair only
 	// reports the fact and the mesh pass decides (agent-docs/evaluator-design.md §9).
 	EdgeA, EdgeB int
+	// Coplanar is set only by the coplanar branch of the classifier, for a
+	// region or a point contact of a coplanar pair. A crossing contact never
+	// sets it (agent-docs/coplanar-contact-design.md §3.2).
+	Coplanar bool
 	// sin2 is the exact squared sine of the two facet planes' crossing angle,
 	// nil for a coplanar or empty pair. A rim vertex this pair's segment ends
 	// at is displaced by (δA + δB)/sin θ of THIS pair (RimBound).
@@ -162,6 +166,8 @@ func TriTriClassifyPrepared(ta, tb [3]r3.Vec, xta, xtb [3]proof.Xpt, na, nb proo
 type TriContactSpan struct {
 	Kind   ContactKind
 	P0, P1 proof.Xpt
+	// Coplanar is TriContact.Coplanar.
+	Coplanar bool
 }
 
 func TriTriClassifyCore(ta, tb [3]r3.Vec, xta, xtb [3]proof.Xpt, na, nb proof.Xpt, pa, pb *[3]Xp2, sa, sb *[3]int,
@@ -172,7 +178,7 @@ func TriTriClassifyCore(ta, tb [3]r3.Vec, xta, xtb [3]proof.Xpt, na, nb proof.Xp
 	if err != nil {
 		return out, err
 	}
-	out.Kind, out.P0, out.P1 = span.Kind, span.P0, span.P1
+	out.Kind, out.P0, out.P1, out.Coplanar = span.Kind, span.P0, span.P1, span.Coplanar
 	if !crossing {
 		return out, nil
 	}
@@ -265,11 +271,11 @@ func triTriSpan(ta, tb [3]r3.Vec, xta, xtb [3]proof.Xpt, na, nb proof.Xpt, pa, p
 			overlap = CoplanarOverlap(xta, xtb, na)
 		}
 		if overlap {
-			span.Kind = ContactRegion
+			span.Kind, span.Coplanar = ContactRegion, true
 			return span, false, nil
 		}
 		if p, ok := CoplanarTouch(xta, xtb, na, nb); ok {
-			span.Kind, span.P0, span.P1 = ContactPoint, p, p
+			span.Kind, span.P0, span.P1, span.Coplanar = ContactPoint, p, p, true
 		}
 		return span, false, nil
 	}

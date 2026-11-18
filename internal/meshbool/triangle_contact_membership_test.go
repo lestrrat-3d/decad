@@ -29,7 +29,7 @@ func classifyContactReference(ta, tb [3]r3.Vec, xta, xtb [3]proof.Xpt, na, nb pr
 	if err != nil {
 		return out, err
 	}
-	out.Kind, out.P0, out.P1 = span.Kind, span.P0, span.P1
+	out.Kind, out.P0, out.P1, out.Coplanar = span.Kind, span.P0, span.P1, span.Coplanar
 	if !crossing {
 		return out, nil
 	}
