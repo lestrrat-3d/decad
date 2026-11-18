@@ -69,7 +69,7 @@ func OverlapDiameter(a, b ChordOperand) (float64, bool) {
 // it chords nothing. Every other operand is chorded at the diameter-derived
 // tolerance alone, raised only to its own floor, so a partner that holds a
 // coarse fixed mesh (a twisted sweep, a coil, a mitred sweep) does not coarsen
-// it (agent-docs/chained-cut-design.md §4). The result never exceeds pairTol.
+// it (agent-docs/twist-sweep-cut-design.md §7.4). The result never exceeds pairTol.
 // diameter is the pair diameter scaled as pairTol is, and floor is the
 // operand's own ChordOperand.Floor scaled likewise.
 func OperandChord(pairTol, diameter, floor float64, restating bool) float64 {

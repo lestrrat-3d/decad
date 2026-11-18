@@ -308,7 +308,7 @@ two cylinders. Chorded at its whole 476 mm pair's tolerance, its leaf bounds wou
 finer mesh needs new vertices on the true crossing of the socket and the hole, which means running the Cut again.
 The floor meets 0.01 mm only when the chord comes from a box of about 130 mm. A public Cut by a curved tool whose
 operand boxes overlap in at most 1/8 of the pair chords its fresh operands by that overlap
-(agent-docs/chained-cut-design.md §4.1), so footman's last Cut is chorded finely enough and its 0.01 mm check passes.
+(agent-docs/twist-sweep-cut-design.md §7.4), so footman's last Cut is chorded finely enough and its 0.01 mm check passes.
 
 At 0.05 mm the facet search certifies the pieces on the 2.2 mm hole's wall where the socket crosses it only by a
 move into the hole's inner piece. Three rules make that reachable:
