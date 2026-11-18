@@ -2,9 +2,11 @@ package meshbool
 
 import (
 	"context"
+	"math"
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/proof"
+	"github.com/lestrrat-3d/r3"
 )
 
 // FacesNearMiss reports whether two faces' facet sets come within slack of each
@@ -61,10 +63,12 @@ func facesNearMissFromContacts(ctx context.Context, bmA, bmB *BoolMesh, nc NearC
 // meet is treated as undecidable and refused upstream — over-refuse, never
 // over-admit.
 //
-// It looks for a witness in two places: the fixed sample points of every
+// It looks for a witness in three places: the fixed sample points of every
 // contacting facet (DeepWitnessInside), then points on each contact segment's
-// two facets walked inward from that segment (SpanWitness). Both only nominate
-// candidates; DeepWitnessAt alone certifies one.
+// two facets walked inward from that segment (SpanWitness), then the points of
+// each near facet nearest the sample points of a near facet of the other face
+// (NearestWitness). All three only nominate candidates; DeepWitnessAt alone
+// certifies one.
 func ProvenDepthExceeds(ctx context.Context, bmA *BoolMesh, closeA []int, bmB *BoolMesh, closeB []int, spans []ContactSpan, b float64) (bool, error) {
 	deep, err := DeepWitnessInside(ctx, bmA, closeA, bmB, b)
 	if err != nil || deep {
@@ -74,7 +78,158 @@ func ProvenDepthExceeds(ctx context.Context, bmA *BoolMesh, closeA []int, bmB *B
 	if err != nil || deep {
 		return deep, err
 	}
-	return SpanWitness(ctx, bmA, bmB, spans, b)
+	deep, err = SpanWitness(ctx, bmA, bmB, spans, b)
+	if err != nil || deep {
+		return deep, err
+	}
+	return NearestWitness(ctx, bmA, closeA, bmB, closeB, b)
+}
+
+// NearestWitness looks for a deep witness on each pair of near facets, one of
+// each face, whose boxes come within b of each other: the points of facet i
+// nearest the sample points of facet j, then the points of facet j nearest the
+// sample points of facet i.
+//
+// The other searches miss a witness where a long facet meets a face that is
+// short along it. A cylinder's chord facets run its whole length, so where such
+// a wall passes deeply into a thin part of the other operand, every fixed
+// sample of the facet lies outside it, and a walk from a contact segment toward
+// the facet's far corners leaves the thin part before it gets deeper than b.
+// The point of the facet nearest a sample of the other face's facet lies across
+// the facet from the contact, inside the other face's extent.
+//
+// The nearest points are found in floats and only nominate: each candidate is
+// rebuilt as an exact convex combination of the facet's exact corners, so it
+// lies on the closed facet, and DeepWitnessAt certifies it. A rounded weight
+// can only move a candidate along the facet. MaxDepthWitnessPairs caps the
+// pairs, which bounds the work the refusal path spends; the cap can only
+// refuse.
+func NearestWitness(ctx context.Context, bmA *BoolMesh, closeA []int, bmB *BoolMesh, closeB []int, b float64) (bool, error) {
+	pairs := 0
+	for n, i := range closeA {
+		if n >= MaxDepthWitnessFacets {
+			break
+		}
+		for k, j := range closeB {
+			if k >= MaxDepthWitnessFacets {
+				break
+			}
+			if !BoxesWithin(bmA.Boxes[i], bmB.Boxes[j], b) {
+				continue
+			}
+			if pairs >= MaxDepthWitnessPairs {
+				return false, nil
+			}
+			pairs++
+			if err := ctx.Err(); err != nil {
+				return false, err
+			}
+			deep, err := nearestWitnessOn(ctx, bmA, i, bmB, j, b)
+			if err != nil || deep {
+				return deep, err
+			}
+			deep, err = nearestWitnessOn(ctx, bmB, j, bmA, i, b)
+			if err != nil || deep {
+				return deep, err
+			}
+		}
+	}
+	return false, nil
+}
+
+// nearestWitnessOn asks DeepWitnessAt about the points of facet fi of m
+// nearest each sample point of facet fj of other.
+func nearestWitnessOn(ctx context.Context, m *BoolMesh, fi int, other *BoolMesh, fj int, b float64) (bool, error) {
+	t := TriCorners(m, fi)
+	x := XtriCorners(m, fi)
+	// Every candidate lies next to facet fj, so it is tried first.
+	hint := fj
+	for _, q := range floatSamplePoints(TriCorners(other, fj)) {
+		inner, outer, ok := nearestFacetWeights(q, t)
+		if !ok {
+			continue
+		}
+		p := proof.Xlerp(proof.Xlerp(x[0], x[1], inner, nearestWeightDen), x[2], outer, nearestWeightDen)
+		deep, err := deepWitnessAt(ctx, p, other, b, &hint)
+		if err != nil || deep {
+			return deep, err
+		}
+	}
+	return false, nil
+}
+
+// floatSamplePoints is facetSamplePoints in floats: a facet's three corners,
+// its three edge midpoints and its centroid.
+func floatSamplePoints(t [3]r3.Vec) [7]r3.Vec {
+	mid := func(p, q r3.Vec) r3.Vec { return p.Add(q).Scale(0.5) }
+	return [7]r3.Vec{t[0], t[1], t[2], mid(t[0], t[1]), mid(t[1], t[2]), mid(t[2], t[0]),
+		t[0].Add(t[1]).Add(t[2]).Scale(1.0 / 3)}
+}
+
+// nearestWeightBits is the precision of the dyadic weights nearestFacetWeights
+// returns, and nearestWeightDen their common denominator.
+const nearestWeightBits = 40
+
+var nearestWeightDen = new(big.Int).Lsh(big.NewInt(1), nearestWeightBits)
+
+// nearestFacetWeights returns dyadic weights, over nearestWeightDen, that place
+// the point of triangle t nearest q: the point is lerp(lerp(t0, t1, inner),
+// t2, outer). Both weights lie in [0, 1], so the point lies on the closed
+// triangle whatever the rounding. It returns false when the floats give no
+// weight, as for a degenerate triangle.
+func nearestFacetWeights(q r3.Vec, t [3]r3.Vec) (*big.Int, *big.Int, bool) {
+	v, w := nearestTriBarycentric(q, t)
+	inner := 0.0
+	if w < 1 {
+		inner = v / (1 - w)
+	}
+	if !(inner >= 0 && inner <= 1 && w >= 0 && w <= 1) {
+		if math.IsNaN(inner) || math.IsNaN(w) || math.IsInf(inner, 0) || math.IsInf(w, 0) {
+			return nil, nil, false
+		}
+		inner = math.Min(math.Max(inner, 0), 1)
+		w = math.Min(math.Max(w, 0), 1)
+	}
+	scale := math.Ldexp(1, nearestWeightBits)
+	return big.NewInt(int64(math.Round(inner * scale))), big.NewInt(int64(math.Round(w * scale))), true
+}
+
+// nearestTriBarycentric returns (v, w) with t0 + v·(t1 − t0) + w·(t2 − t0)
+// the point of triangle t nearest q, by the Voronoi regions of the triangle's
+// corners, edges and face.
+func nearestTriBarycentric(q r3.Vec, t [3]r3.Vec) (float64, float64) {
+	a, b, c := t[0], t[1], t[2]
+	ab, ac := b.Sub(a), c.Sub(a)
+	ap := q.Sub(a)
+	d1, d2 := ab.Dot(ap), ac.Dot(ap)
+	if d1 <= 0 && d2 <= 0 {
+		return 0, 0
+	}
+	bp := q.Sub(b)
+	d3, d4 := ab.Dot(bp), ac.Dot(bp)
+	if d3 >= 0 && d4 <= d3 {
+		return 1, 0
+	}
+	vc := d1*d4 - d3*d2
+	if vc <= 0 && d1 >= 0 && d3 <= 0 {
+		return d1 / (d1 - d3), 0
+	}
+	cp := q.Sub(c)
+	d5, d6 := ab.Dot(cp), ac.Dot(cp)
+	if d6 >= 0 && d5 <= d6 {
+		return 0, 1
+	}
+	vb := d5*d2 - d1*d6
+	if vb <= 0 && d2 >= 0 && d6 <= 0 {
+		return 0, d2 / (d2 - d6)
+	}
+	va := d3*d6 - d5*d4
+	if va <= 0 && d4-d3 >= 0 && d5-d6 >= 0 {
+		w := (d4 - d3) / ((d4 - d3) + (d5 - d6))
+		return 1 - w, w
+	}
+	den := va + vb + vc
+	return vb / den, vc / den
 }
 
 // DeepWitnessInside reports whether any held-facet sample point of m's

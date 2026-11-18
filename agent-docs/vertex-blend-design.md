@@ -57,7 +57,16 @@ loops. Otherwise it assigns each edge covered by one complete loop to the
 loop set and checks the remaining straight edges for shared vertices.
 An open selection on one planar-face loop forms one or more maximal chains
 of selected walks. Each selected walk's cap offset is `r`; every unselected
-walk stays at offset zero. A corner between two selected convex straight
+walk stays at offset zero. Table LB's LB3, LB4 and LB6 read the faces beside
+the selected walks alone: they must all descend into the body or all rise
+off it, and that sense is the band's. The faces beside unselected walks keep
+their geometry, so they are not read and may lie on either side of the face.
+A block standing on a plate flush with the plate's side is the case: the
+plate top's loop runs down the plate's side and up the block's, and the
+block's root chain rises. Route E reads an end-face corner only at a chain's
+two ends; the band builds every corner inside the chain from the cap
+contour, so the third face at an interior vertex, the next selected wall,
+is not read as an end face. A corner between two selected convex straight
 walks uses LF4's miter and ellipse. A reflex corner between selected walks
 keeps the fillet connector arc and its horn-torus patch. A selected-to-
 unselected corner uses the sharp intersection of the moved and fixed
@@ -151,6 +160,7 @@ loop-fillet terms.
 |---|---|
 | loops sharing an edge after the partition | SL1, `ErrUnsupported` |
 | selected straight edges sharing a vertex with no common planar-face loop after straight-wall restatement | SL1 or SB5, `ErrUnsupported` |
+| a partial loop whose selected walls lie on both sides of the face | SL2, `ErrUnsupported` |
 | a single oblique prism cap edge outside the convex cutter admission, or a cutter whose boolean contact cannot be proved | route E's refusal or the boolean's `ErrUnsupported` |
 | an LF9 candidate with a circular neighbour or a non-G1 join | SF1, `ErrUnsupported` |
 | held radius `r` but either recorded endpoint has a different exact distance to the centre | `ErrUnsupported` |
@@ -171,6 +181,8 @@ radius-one circle. The record does not define exact spheres there.
 | 40×20×20 box, all 12 edges, `r=2` | 8 spheres; volume `14848 + 848π/3` |
 | same box, two adjacent top edges, `r=2` | one ellipse seam; volume `47320/3 + 56π` |
 | same box, three adjacent top edges, `r=2` | three cylinders, two ellipse seams, closed mesh |
+| 40×20×10 plate, 10×6×5 block flush with its side, three root edges, `r=1` | three cylinders, two horn tori; volume `8322 − 14π/3 − π²/4` |
+| same plate, block flush in its corner, two root edges, `r=1` | two cylinders, one horn torus; volume `8316 − 43π/12 − π²/8` |
 | pocket mouth, three of four edges, `r=1.5` | three cylinders, two horn tori, closed mesh |
 | same box, top loop and 4 vertical edges | 4 spheres; volume `15264 + 544π/3` |
 | same box, top loop and 2 vertical edges | 2 spheres and 2 ellipse seams |

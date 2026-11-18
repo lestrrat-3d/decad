@@ -327,6 +327,9 @@ type ContactSpan struct {
 const (
 	MaxDepthWitnessFacets = 96
 	MaxDepthWitnessSpans  = 96
+	// MaxDepthWitnessPairs caps how many pairs of near facets NearestWitness
+	// probes, for the same reason.
+	MaxDepthWitnessPairs = 96
 	// SpanWalkSteps is how many halving steps SpanWitness takes from a contact
 	// segment's midpoint toward one facet corner: the step lengths run from
 	// half the corner's distance down to 2^-SpanWalkSteps of it.

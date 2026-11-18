@@ -849,7 +849,8 @@ admits it, and no faceted path merges two groups. `facetedtopology` needs no
 change in this phase.
 
 `retainedPlaneOf` reads the operand mesh's `Source` face. It admits a
-`RetainedTag` `Plane` with `NormalBound == 0` and no denoted patch.
+`RetainedTag` `Plane` with `NormalBound == 0` and no denoted patch, or a
+denoted revolve patch whose tag is exactly its plane (retention §11).
 `RefuseCoarseHeldContact` and `RimBound` then read the slab bound in place of
 `FacetBound`. Any departure that placement states ends the admission.
 `retainedblend` copies `fp.Groups`, clearing only the whole-group centroid of

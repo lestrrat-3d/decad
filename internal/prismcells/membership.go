@@ -289,6 +289,26 @@ type RegionKey struct {
 // reached, an invalid cell, or a shape Classify does not cover.
 func ClassifyRegions(budget *proofbound.WorkBudget, tags map[sketch.Entity]Origin,
 	profiles []*sketch.Profile) (map[RegionKey][]bool, bool, error) {
+	out, resolved, _, err := classifyRegions(budget, tags, profiles, false)
+	return out, resolved, err
+}
+
+// ClassifyRegionsApart is ClassifyRegions that also reads a cell outside a
+// record when its membership there is unreached and the group of cells it
+// lies in, joined by shared edges, holds none of that record's edges. Every
+// record ring that encloses such a group is the outer of a cell holding the
+// group's outer ring as a hole, which an occurrence links into the group, so
+// a group with none of the record's edges lies in the record's unbounded
+// face. Two groups that touch at a point (groupsTouch) leave the scene
+// unresolved: reading them apart would pinch the result there. apart reports
+// whether any cell was read that way.
+func ClassifyRegionsApart(budget *proofbound.WorkBudget, tags map[sketch.Entity]Origin,
+	profiles []*sketch.Profile) (map[RegionKey][]bool, bool, bool, error) {
+	return classifyRegions(budget, tags, profiles, true)
+}
+
+func classifyRegions(budget *proofbound.WorkBudget, tags map[sketch.Entity]Origin,
+	profiles []*sketch.Profile, readApart bool) (map[RegionKey][]bool, bool, bool, error) {
 	n := len(profiles)
 	member := map[RegionKey][]membership{}
 	for _, origin := range tags {
@@ -308,7 +328,7 @@ func ClassifyRegions(budget *proofbound.WorkBudget, tags map[sketch.Entity]Origi
 	occ := map[edgeKey][]occurrence{}
 	coincident, ok, err := CoincidentEdgesRegions(budget, tags, profiles)
 	if err != nil || !ok {
-		return nil, false, err
+		return nil, false, false, err
 	}
 	setMember := func(i int, k RegionKey, match bool) bool {
 		m := &member[k][i]
@@ -320,33 +340,33 @@ func ClassifyRegions(budget *proofbound.WorkBudget, tags map[sketch.Entity]Origi
 	}
 	for i, p := range profiles {
 		if err := budget.Step(); err != nil {
-			return nil, false, err
+			return nil, false, false, err
 		}
 		if !p.Valid {
-			return nil, false, nil
+			return nil, false, false, nil
 		}
 		for _, loop := range append([][]sketch.BoundaryEdge{p.Outer}, p.Holes...) {
 			for _, e := range loop {
 				if err := budget.Step(); err != nil {
-					return nil, false, err
+					return nil, false, false, err
 				}
 				origin, ok := tags[e.Entity]
 				if !ok {
-					return nil, false, nil
+					return nil, false, false, nil
 				}
 				k := RegionKey{IsB: origin.IsB, Region: origin.Region}
 				if !setMember(i, k, e.Reversed == origin.AuthoredReversed) {
-					return nil, false, nil
+					return nil, false, false, nil
 				}
 				keys := []RegionKey{k}
 				if c, shared := coincident.Edges[edgeSpan{entity: e.Entity, t0: e.TStart, t1: e.TEnd}]; shared {
 					partner, ok := tags[c.Partner]
 					pk := RegionKey{IsB: partner.IsB, Region: partner.Region}
 					if !ok || pk == k {
-						return nil, false, nil
+						return nil, false, false, nil
 					}
 					if !setMember(i, pk, (e.Reversed != c.Opposite) == partner.AuthoredReversed) {
-						return nil, false, nil
+						return nil, false, false, nil
 					}
 					keys = append(keys, pk)
 				}
@@ -361,14 +381,14 @@ func ClassifyRegions(budget *proofbound.WorkBudget, tags map[sketch.Entity]Origi
 	var links []regionLink
 	for _, os := range occ {
 		if err := budget.Step(); err != nil {
-			return nil, false, err
+			return nil, false, false, err
 		}
 		switch len(os) {
 		case 1:
 		case 2:
 			links = append(links, regionLink{a: os[0].cell, b: os[1].cell, keys: os[0].keys})
 		default:
-			return nil, false, nil
+			return nil, false, false, nil
 		}
 	}
 	for k, m := range member {
@@ -381,21 +401,129 @@ func ClassifyRegions(budget *proofbound.WorkBudget, tags map[sketch.Entity]Origi
 			adj[l.b] = append(adj[l.b], l.a)
 		}
 		if err := flood(budget, adj, m); err != nil {
-			return nil, false, err
+			return nil, false, false, err
+		}
+	}
+	unknown := false
+	for _, m := range member {
+		for i := range m {
+			unknown = unknown || !m[i].known
+		}
+	}
+	if unknown && !readApart {
+		return nil, false, false, nil
+	}
+	var group []int
+	present := map[RegionKey]map[int]struct{}{}
+	if unknown {
+		// With readApart a cell still unknown for a record whose edges its
+		// group does not hold is outside it (ClassifyRegionsApart), provided
+		// no two groups touch.
+		pairs := make([][2]int, len(links))
+		for i, l := range links {
+			pairs[i] = [2]int{l.a, l.b}
+		}
+		if group, err = cellGroups(budget, n, pairs); err != nil {
+			return nil, false, false, err
+		}
+		for _, os := range occ {
+			if err := budget.Step(); err != nil {
+				return nil, false, false, err
+			}
+			for _, o := range os {
+				for _, k := range o.keys {
+					if present[k] == nil {
+						present[k] = map[int]struct{}{}
+					}
+					present[k][group[o.cell]] = struct{}{}
+				}
+			}
+		}
+		touch, err := groupsTouch(budget, profiles, group)
+		if err != nil || touch {
+			return nil, false, false, err
 		}
 	}
 	out := make(map[RegionKey][]bool, len(member))
+	apart := false
 	for k, m := range member {
 		vals := make([]bool, n)
 		for i := range m {
 			if !m[i].known {
-				return nil, false, nil
+				if _, touches := present[k][group[i]]; touches {
+					return nil, false, false, nil
+				}
+				vals[i], apart = false, true
+				continue
 			}
 			vals[i] = m[i].val
 		}
 		out[k] = vals
 	}
-	return out, true, nil
+	return out, true, apart, nil
+}
+
+// groupsTouch reports whether two groups of cells (group[i] is cell i's)
+// meet at a point, which would pinch a face or a solid there. It reads, each
+// only refusing: a walked vertex (an edge's Polyline end) that edges of two
+// groups reach, as at two block corners that meet; one entity walked by two
+// groups; and RegionContact over every walked entity tagged with its group,
+// since the arrangement cuts neither a tangency nor a line's endpoint lying
+// on another line.
+func groupsTouch(budget *proofbound.WorkBudget, profiles []*sketch.Profile, group []int) (bool, error) {
+	tags := map[sketch.Entity]Origin{}
+	ends := map[[2]float64]int{}
+	for i, p := range profiles {
+		for _, loop := range append([][]sketch.BoundaryEdge{p.Outer}, p.Holes...) {
+			for _, e := range loop {
+				if err := budget.Step(); err != nil {
+					return false, err
+				}
+				if len(e.Polyline) == 0 {
+					return true, nil
+				}
+				for _, q := range [][2]float64{e.Polyline[0], e.Polyline[len(e.Polyline)-1]} {
+					if g, ok := ends[q]; ok && g != group[i] {
+						return true, nil
+					}
+					ends[q] = group[i]
+				}
+				if have, ok := tags[e.Entity]; ok && have.Region != group[i] {
+					return true, nil
+				}
+				tags[e.Entity] = Origin{Region: group[i]}
+			}
+		}
+	}
+	return RegionContact(budget, tags)
+}
+
+// cellGroups numbers the groups of cells the links (pairs of cells sharing an
+// edge) join, whatever records the edges belong to: group[i] is the group of
+// cell i.
+func cellGroups(budget *proofbound.WorkBudget, n int, links [][2]int) ([]int, error) {
+	parent := make([]int, n)
+	for i := range parent {
+		parent[i] = i
+	}
+	find := func(i int) int {
+		for parent[i] != i {
+			parent[i] = parent[parent[i]]
+			i = parent[i]
+		}
+		return i
+	}
+	for _, l := range links {
+		if err := budget.Step(); err != nil {
+			return nil, err
+		}
+		parent[find(l[0])] = find(l[1])
+	}
+	group := make([]int, n)
+	for i := range group {
+		group[i] = find(i)
+	}
+	return group, nil
 }
 
 // flood is propagate's breadth-first walk over an adjacency the caller has

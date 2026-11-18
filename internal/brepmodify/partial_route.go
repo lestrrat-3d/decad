@@ -52,16 +52,9 @@ func brepFilletPartialLoop(ctx context.Context, env topo.Env, bp breprecord.Payl
 	for i, ordinal := range ordinals {
 		lineCall.Edges[i] = call.Edges[ordinal]
 	}
-	partialTerminals := terminals
-	if len(lineCall.Edges) == len(call.Edges) {
-		partialTerminals = nil
-	}
-	er, blends, err := prepareBrepEdgeBlends(ctx, bp, lineCall, true, partialTerminals)
+	er, blends, err := prepareBrepEdgeBlends(ctx, bp, lineCall, true, terminals)
 	if err != nil {
 		return nil, err
-	}
-	if partialTerminals == nil {
-		breploop.MarkChainTerminals(blends)
 	}
 	for i, eb := range blends {
 		eb.Ordinal = ordinals[i]

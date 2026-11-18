@@ -32,7 +32,8 @@ import (
 // every record reaching it and its regions are the select-all merge's loops,
 // proven apart when there are several; each interface arranges every record
 // reaching the slab below or above it and prismcells.ClassifyRegions names
-// the cells on each side, so the exposed floors and ceilings are cells,
+// the cells on each side (a union's, where footprints share no edge,
+// prismcells.ClassifyRegionsApart), so the exposed floors and ceilings are cells,
 // recorded as sketch returned them. A union floor round separate bosses is
 // one cell with a hole per boss, whose rings must not touch.
 // An operand is a prism, a stacked prism, or an A1 result read through the
@@ -111,6 +112,16 @@ type ubBuild struct {
 	holedUnion  bool
 	segmentCap  int
 	aliasCharge float64
+
+	// apart marks a union interface whose classification read a cell outside
+	// a record it shares no edge with (prismcells.ClassifyRegionsApart), and
+	// touch an interface cell inside a record of each operand. A build with
+	// apart and no touch misses. The guard narrows where the reading is tried;
+	// it neither makes the result correct, which ClassifyRegionsApart's own
+	// contact check decides, nor keeps it in one piece: an operand of two
+	// pieces meeting the other with one of them builds an exact two-lump
+	// brep, which is accepted.
+	apart, touch bool
 }
 
 // errUBMiss marks a topology this build does not cover, found after a scene
@@ -148,6 +159,11 @@ func (st *stackedUnionState) brep(ctx context.Context, levels []stackedrecord.Un
 	}
 	bp, err := b.run(ctx)
 	if errors.Is(err, errUBMiss) || errors.Is(err, decaderr.ErrUnsupported) {
+		return nil, false, nil
+	}
+	if err == nil && b.apart && !b.touch {
+		// No interface cell lies in both operands: the apart reading is not
+		// tried for operands that meet nowhere.
 		return nil, false, nil
 	}
 	if b.holedUnion && err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) {
@@ -663,6 +679,16 @@ func (b *ubBuild) interfaceFaces(ctx context.Context, k int) error {
 		if err != nil {
 			return err
 		}
+		if !resolved && !b.cut {
+			// Blocks of unequal heights standing apart on a plate leave, above
+			// the lower one's top, footprints that share no edge.
+			var apart bool
+			matter, resolved, apart, err = prismcells.ClassifyRegionsApart(b.st.budget, sc.tags, sc.profiles)
+			if err != nil {
+				return err
+			}
+			b.apart = b.apart || apart
+		}
 		if !resolved {
 			return errUBMiss
 		}
@@ -680,6 +706,10 @@ func (b *ubBuild) interfaceFaces(ctx context.Context, k int) error {
 				sideMatter[op][0] = sideMatter[op][0] || (sd.below && in)
 				sideMatter[op][1] = sideMatter[op][1] || (sd.above && in)
 			}
+		}
+		if (sideMatter[0][0] || sideMatter[0][1]) && (sideMatter[1][0] || sideMatter[1][1]) {
+			// Both operands hold this cell's area, at or beside the interface.
+			b.touch = true
 		}
 		below := sideMatter[0][0] || sideMatter[1][0]
 		above := sideMatter[0][1] || sideMatter[1][1]

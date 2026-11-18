@@ -2881,6 +2881,9 @@
 12	2.85	TestBossRootTangentRefusesKinkedJoint
 12	0.01	TestBossShapedDraftLeansEveryWall
 12	0.00	TestBrepIndependentBossRootEdgesRefuseRouteEWedge
+12	0.00	TestBrepPartialRootFilletFlushCorner
+12	0.00	TestBrepPartialRootFilletFlushSide
+12	0.00	TestBrepPartialRootFilletMixedSidesRefuses
 12	0.01	TestBrepSingleUnderBossRootChamferAddsMaterial
 12	0.05	TestCapBlendAsymmetricOverrunRefused
 12	0.02	TestCapBlendCapContourVertexBoundEncloses
@@ -3052,7 +3055,12 @@
 12	8.46	TestShellThenFilletOtherStackedShells
 12	0.00	TestSolidFromMeshReadsATetrahedron
 12	0.02	TestStackBrepScaledAtPlacedAndRepeated
+12	0.00	TestStackedUnionApartFloatingPiece
+12	0.00	TestStackedUnionApartGroupsMustNotTouch
+12	0.00	TestStackedUnionBlocksApartTakeMeshPath
 12	1.00	TestStackedUnionTouchingBosses
+12	0.00	TestStackedUnionUnequalBlocks
+12	0.00	TestStackedUnionUnequalBlocksRootFillet
 12	0.00	TestStackedViewObliqueWallTag
 12	0.00	TestStitchClosesABoundedPatchedWallWithChargedVolumeBound
 12	0.01	TestStitchCurvedMeshRefusesUnsharedChording
@@ -3101,6 +3109,7 @@
 12	0.01	TestUnionManyChainsMixedHeightPrisms
 12	0.00	TestUnionProfileRejectsStaleSelection
 12	0.02	TestUnionRefusesPlacedPrismGrazingAlongAnEdge
+12	0.00	TestUnionRoundedStemWithFlushArm
 12	2.69	TestUnionSixSpanHubSerialRadialLugs
 12	5.38	TestUnionTaperedHubRadialLugRefusals
 12	0.20	TestUnionWithAToolFlushWithBothFacesOfAMeshPlate
