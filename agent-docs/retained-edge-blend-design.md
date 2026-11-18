@@ -1720,7 +1720,11 @@ it (`retriangulate`, §5; on every route, mitre runs and corners included), `h_t
 the largest exact distance of `t`'s corners from that face's tag plane, rounded
 up, `δ_t` the face's `AxialDelta` plus its `ExtentDelta` (each zero when it states
 none), and `ρ` the rounding of the new vertices times the area of the faces they
-touch.
+touch. On the four faces of an R1 chamfer on the exact path, `h_t + δ_t` is
+replaced by the smaller of it and the largest bound of `t`'s corners, read from
+bounds that are final when read (`agent-docs/exact-chamfer-design.md` §4.4): each
+corner lies within its bound of a true point of the face's plane
+(faceted-vertex-bounds §2), so the facet lies within the largest of them of it.
 
 *Proof.* Outside `K` and the re-triangulated plane faces, `H'` equals `H` and
 `S'` equals the true solid `S`, because the gates of §6.2 show that no other

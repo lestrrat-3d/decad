@@ -72,6 +72,10 @@ type work struct {
 	// (planeAreaCharge); measureChange adds both (plane_charge.go).
 	planeVol    float64
 	planePieces []chargePiece
+	// cornerSlab lets the slab term of every re-triangulated plane face read the corners' bounds
+	// (planeFacetVolume). A route sets it only while no bound it has yet to write can change them
+	// (agent-docs/exact-chamfer-design.md §4.4).
+	cornerSlab bool
 	// tiltArea is the area an oblique end plane's cap may hold beyond its projection onto the tag
 	// (obliqueCapArea); measureChange adds it.
 	tiltArea float64

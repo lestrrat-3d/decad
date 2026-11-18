@@ -17,12 +17,16 @@ import (
 // "Volume" and "A displaced plane in the area bound"): the volume the new facets of a re-triangulated plane
 // face can add over the true plane, and the area a displaced plane moves in the exact pieces of a route.
 
-// planeFacetVolume bounds Σ_t (h_t + δ)·area(t) over the facets tris of verts, from above. h_t is the largest
-// exact distance of t's corners from the plane pl (its tag), |n·(v − o)|/|n|, and area(t) the exact area of t,
-// both read in rationals from the held coordinates and rounded up; δ is the displacement the plane's face states.
-// A facet lies within h_t of the tag plane and so within h_t + δ of the true one, and the slab between it and the
-// plane holds at most that times its area. An input no rational reads gives +Inf.
-func planeFacetVolume(verts []r3.Vec, tris [][3]int, pl plane, delta float64) float64 {
+// planeFacetVolume bounds Σ_t c_t·area(t) over the facets tris of verts, from above. c_t is h_t + δ: h_t is the
+// largest exact distance of t's corners from the plane pl (its tag), |n·(v − o)|/|n|, and area(t) the exact area
+// of t, both read in rationals from the held coordinates and rounded up; δ is the displacement the plane's face
+// states. A facet lies within h_t of the tag plane and so within h_t + δ of the true one, and the slab between it
+// and the plane holds at most that times its area. A non-nil beta, one bound per vertex of verts, lets c_t be the
+// smaller of that and the largest bound of t's corners: each corner lies within its bound of a true point of the
+// face's plane (agent-docs/faceted-vertex-bounds-design.md §2), so the facet lies within the largest of them of
+// it, whatever the tag states. The caller passes beta only where those bounds are final
+// (agent-docs/exact-chamfer-design.md §4.4). An input no rational reads gives +Inf.
+func planeFacetVolume(verts []r3.Vec, tris [][3]int, pl plane, delta float64, beta []float64) float64 {
 	n, okN := stitchflux.RatVecOf(pl.n)
 	o, okO := stitchflux.RatVecOf(pl.o)
 	if !okN || !okO || !(delta >= 0) {
@@ -60,7 +64,11 @@ func planeFacetVolume(verts []r3.Vec, tris [][3]int, pl plane, delta float64) fl
 		if !okA {
 			return math.Inf(1)
 		}
-		total = proofbound.AbsSumUpper(total, proofbound.ProductUpper(proofbound.AbsSumUpper(h, delta), a))
+		charge := proofbound.AbsSumUpper(h, delta)
+		if beta != nil {
+			charge = math.Min(charge, math.Max(beta[t[0]], math.Max(beta[t[1]], beta[t[2]])))
+		}
+		total = proofbound.AbsSumUpper(total, proofbound.ProductUpper(charge, a))
 	}
 	return total
 }
@@ -119,7 +127,11 @@ func (w *work) chargePlaneFace(group, from int) error {
 	if !ok {
 		return fmt.Errorf("%w: a re-triangulated face states no plane tag", decaderr.ErrUnsupported)
 	}
-	vol := planeFacetVolume(w.verts, w.out[from:], pl, delta)
+	var beta []float64
+	if w.cornerSlab {
+		beta = w.beta
+	}
+	vol := planeFacetVolume(w.verts, w.out[from:], pl, delta, beta)
 	if proofbound.IsNonFinite(vol) {
 		return fmt.Errorf("%w: a re-triangulated face's volume term is not finite", decaderr.ErrUnsupported)
 	}

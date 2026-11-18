@@ -201,4 +201,63 @@ func TestRetainedLineChamferExact(t *testing.T) {
 		require.Equal(t, before.Bound.Mag(), after.Bound.Mag())
 		require.Equal(t, 8.0, before.Value.Mag()-after.Value.Mag())
 	})
+
+	t.Run("tilted exact planes", func(t *testing.T) {
+		t.Parallel()
+		// A block x ∈ [−20, 20], y ∈ [−10, 25], z ∈ [0, 10] with a square hole through (0, 0), (6, 8), (−2, 14),
+		// (−8, 6): its walls run along (0.6, 0.8) and (−0.8, 0.6), whose float tags need not contain the corners.
+		// The hole's corner at (0, 0) is concave, so its chamfer fills.
+		sc := newStripScene()
+		xz, err := sc.w.CreateSketch(sc.w.XZ())
+		require.NoError(t, err)
+		r := xz.CreateRectangle(-20, 0, 20, 10)
+		xz.Fix(r.A)
+		_, err = xz.Solve(t.Context())
+		require.NoError(t, err)
+		// Along the sketch normal the block spans y ∈ [−35, 0]; shifted by 25 it spans y ∈ [−10, 25].
+		block, err := Extrude(t.Context(), sc.doc, xz, xz.Profiles()[0], Distance{D: units.Millimeters(35), Dir: Along})
+		require.NoError(t, err)
+		move, err := r3.Translation(r3.Vec{Y: 25})
+		require.NoError(t, err)
+		block, err = Transform(t.Context(), block, move)
+		require.NoError(t, err)
+		xy, err := sc.w.CreateSketch(sc.w.XY())
+		require.NoError(t, err)
+		corners := [][2]float64{{0, 0}, {6, 8}, {-2, 14}, {-8, 6}}
+		first := xy.CreatePoint(corners[0][0], corners[0][1])
+		xy.Fix(first)
+		prev := first
+		for _, c := range corners[1:] {
+			p := xy.CreatePoint(c[0], c[1])
+			xy.CreateLine(prev, p)
+			prev = p
+		}
+		xy.CreateLine(prev, first)
+		_, err = xy.Solve(t.Context())
+		require.NoError(t, err)
+		// Along +Z the prism spans z ∈ [0, 12]; shifted down by 1 it passes both faces of the block.
+		tool, err := Extrude(t.Context(), sc.doc, xy, xy.Profiles()[0], Distance{D: units.Millimeters(12), Dir: Along})
+		require.NoError(t, err)
+		down, err := r3.Translation(r3.Vec{Z: -1})
+		require.NoError(t, err)
+		tool, err = Transform(t.Context(), tool, down)
+		require.NoError(t, err)
+		cut, err := Cut(t.Context(), block, tool)
+		require.NoError(t, err)
+		before, err := cut.Volume()
+		require.NoError(t, err)
+		sel := Edges(EndpointAt(r3.NewVec(0, 0, 0)), ParallelTo(r3.NewVec(0, 0, 1))).Exactly(1)
+		out, err := Chamfer(t.Context(), cut, sel, units.Millimeters(1.25))
+		require.NoError(t, err)
+		after, err := out.Volume()
+		require.NoError(t, err)
+		for _, z := range []float64{0, 10} {
+			requireFootBound(t, out, r3.NewVec(0.75, 1, z), true, 0)
+			requireFootBound(t, out, r3.NewVec(-1, 0.75, z), true, 0)
+		}
+		// The Cut's far wall corners are rational points that are not floats, so their rounding-level bounds
+		// stay; the chamfer adds only what the slab term reads from them.
+		require.LessOrEqual(t, after.Bound.Mag()-before.Bound.Mag(), 1e-13)
+		require.Equal(t, 7.8125, after.Value.Mag()-before.Value.Mag())
+	})
 }
