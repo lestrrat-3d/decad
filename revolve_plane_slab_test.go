@@ -93,33 +93,40 @@ func (sc revolvePlaneScene) holeCentre(i int) (float64, float64) {
 }
 
 // build runs the scene's Booleans in order and returns the result of the
-// last one, or the first error with the step it came from.
-func (sc revolvePlaneScene) build(ctx context.Context, t *testing.T) (*Body, string, error) {
+// last one, or the first error with the step it came from. It also cuts the
+// last hole a second time, under control, into the same target and returns
+// that cut's error.
+func (sc revolvePlaneScene) build(ctx, control context.Context, t *testing.T) (*Body, string, error, error) {
 	t.Helper()
 	doc := New()
 	h := sc.z1 - sc.z0
 	body, err := Cut(ctx, revolveDisc(ctx, t, doc, sc.radius, sc.z0, sc.z1),
 		axialTool(ctx, t, doc, 0, 0, sc.z0-1, h+2, sc.bore))
 	if err != nil {
-		return nil, "bore", err
+		return nil, "bore", err, nil
 	}
 	if sc.groove[1] > 0 {
 		groove := axialTool(ctx, t, doc, 0, 0, sc.z1-sc.grooveDepth, sc.grooveDepth+1, sc.groove[1], sc.groove[0])
 		if body, err = Cut(ctx, body, groove); err != nil {
-			return nil, "groove", err
+			return nil, "groove", err, nil
 		}
 	}
+	var controlErr error
 	for i := range sc.holes {
 		if sc.copyEach {
 			body, err = Copy(ctx, body)
 			require.NoError(t, err)
 		}
 		x, y := sc.holeCentre(i)
-		if body, err = Cut(ctx, body, axialTool(ctx, t, doc, x, y, sc.z0-1, h+2, sc.holeR)); err != nil {
-			return nil, "hole " + strconv.Itoa(i+1), err
+		hole := axialTool(ctx, t, doc, x, y, sc.z0-1, h+2, sc.holeR)
+		if i == sc.holes-1 {
+			_, controlErr = Cut(control, body, hole)
+		}
+		if body, err = Cut(ctx, body, hole); err != nil {
+			return nil, "hole " + strconv.Itoa(i+1), err, nil
 		}
 	}
-	return body, "", nil
+	return body, "", nil, controlErr
 }
 
 // requireChainDepthRefusal asserts err is the held-mesh chain-depth refusal
@@ -147,7 +154,9 @@ func requireChainDepthRefusal(t *testing.T, err error) (float64, float64) {
 // later small hole that lands on such a facet is refused by the held-mesh gate
 // unless the facet's true piece is known to lie in its own plane. Each case
 // builds, and the full-displacement control (booleaneval.WithoutRetainedPlaneSlab)
-// refuses the same scene with the chain-depth refusal. The built body's volume
+// refuses the last hole's cut into the same target with the chain-depth
+// refusal. The control reuses the real build up to that cut, so the test pays
+// for one extra cut, not a second build. The built body's volume
 // matches the exact solid, and every vertex on a hole's rim lies within its
 // published bound of the exact circle.
 func TestRevolvePlaneSlab(t *testing.T) {
@@ -172,13 +181,10 @@ func TestRevolvePlaneSlab(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			body, step, err := tc.sc.build(t.Context(), t)
+			body, step, err, controlErr := tc.sc.build(t.Context(), booleaneval.WithoutRetainedPlaneSlab(t.Context()), t)
 			require.NoError(t, err, "step %s", step)
-
-			_, step, err = tc.sc.build(booleaneval.WithoutRetainedPlaneSlab(t.Context()), t)
-			require.Error(t, err, "the control builds every step")
-			t.Logf("control refuses at %s", step)
-			requireChainDepthRefusal(t, err)
+			require.Error(t, controlErr, "the control cuts the last hole")
+			requireChainDepthRefusal(t, controlErr)
 
 			sc := tc.sc
 			h := sc.z1 - sc.z0
