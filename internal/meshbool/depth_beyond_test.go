@@ -128,7 +128,60 @@ func refProvenDepthExceeds(ctx context.Context, bmA *BoolMesh, closeA []int, bmB
 	if err != nil || deep {
 		return deep, err
 	}
-	return refSpanWitness(ctx, bmA, bmB, spans, b)
+	deep, err = refSpanWitness(ctx, bmA, bmB, spans, b)
+	if err != nil || deep {
+		return deep, err
+	}
+	return refNearestWitness(ctx, bmA, closeA, bmB, closeB, b)
+}
+
+func refNearestWitnessOn(ctx context.Context, m *BoolMesh, fi int, other *BoolMesh, fj int, b float64) (bool, error) {
+	t, x := TriCorners(m, fi), XtriCorners(m, fi)
+	for _, q := range floatSamplePoints(TriCorners(other, fj)) {
+		inner, outer, ok := nearestFacetWeights(q, t)
+		if !ok {
+			continue
+		}
+		p := proof.Xlerp(proof.Xlerp(x[0], x[1], inner, nearestWeightDen), x[2], outer, nearestWeightDen)
+		deep, err := refDeepWitnessAt(ctx, p, other, b)
+		if err != nil || deep {
+			return deep, err
+		}
+	}
+	return false, nil
+}
+
+func refNearestWitness(ctx context.Context, bmA *BoolMesh, closeA []int, bmB *BoolMesh, closeB []int, b float64) (bool, error) {
+	pairs := 0
+	for n, i := range closeA {
+		if n >= MaxDepthWitnessFacets {
+			break
+		}
+		for k, j := range closeB {
+			if k >= MaxDepthWitnessFacets {
+				break
+			}
+			if !BoxesWithin(bmA.Boxes[i], bmB.Boxes[j], b) {
+				continue
+			}
+			if pairs >= MaxDepthWitnessPairs {
+				return false, nil
+			}
+			pairs++
+			if err := ctx.Err(); err != nil {
+				return false, err
+			}
+			deep, err := refNearestWitnessOn(ctx, bmA, i, bmB, j, b)
+			if err != nil || deep {
+				return deep, err
+			}
+			deep, err = refNearestWitnessOn(ctx, bmB, j, bmA, i, b)
+			if err != nil || deep {
+				return deep, err
+			}
+		}
+	}
+	return false, nil
 }
 
 // depthCylinder is parityCylinder(n) moved by shift and prepared with its
@@ -310,6 +363,14 @@ func TestProvenDepthExceedsMatchesReference(t *testing.T) {
 			"span": {
 				func(ctx context.Context) (bool, error) { return SpanWitness(ctx, pc.a, pc.b, pc.nc.Spans, pc.slack) },
 				func(ctx context.Context) (bool, error) { return refSpanWitness(ctx, pc.a, pc.b, pc.nc.Spans, pc.slack) },
+			},
+			"nearest": {
+				func(ctx context.Context) (bool, error) {
+					return NearestWitness(ctx, pc.a, pc.nc.CloseA, pc.b, pc.nc.CloseB, pc.slack)
+				},
+				func(ctx context.Context) (bool, error) {
+					return refNearestWitness(ctx, pc.a, pc.nc.CloseA, pc.b, pc.nc.CloseB, pc.slack)
+				},
 			},
 		}
 		for name, c := range cases {

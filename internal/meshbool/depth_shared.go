@@ -174,7 +174,7 @@ func provenDepthExceedsShared(ctx context.Context, a *BoolMesh, closeA []int, b 
 			return deep, err
 		}
 	}
-	return false, nil
+	return nearestWitnessShared(ctx, a, closeA, b, closeB, threshold, budget)
 }
 
 // depthBeyondShared performs the existing depth test while charging each
@@ -348,3 +348,77 @@ func facetSamplePointsShared(ctx context.Context, a, b, c proof.Xpt, budget *pro
 }
 
 var replayDepthTwo = big.NewInt(2)
+
+// nearestWitnessShared is NearestWitness charging each pair and candidate to
+// budget, with replay-budgeted exact interpolation on a replay budget.
+func nearestWitnessShared(ctx context.Context, a *BoolMesh, closeA []int, b *BoolMesh, closeB []int,
+	threshold float64, budget *proofbound.WorkBudget) (bool, error) {
+	pairs := 0
+	for n, i := range closeA {
+		if n >= MaxDepthWitnessFacets {
+			break
+		}
+		for k, j := range closeB {
+			if k >= MaxDepthWitnessFacets {
+				break
+			}
+			if err := budget.Step(); err != nil {
+				return false, err
+			}
+			if !BoxesWithin(a.Boxes[i], b.Boxes[j], threshold) {
+				continue
+			}
+			if pairs >= MaxDepthWitnessPairs {
+				return false, nil
+			}
+			pairs++
+			deep, err := nearestWitnessOnShared(ctx, a, i, b, j, threshold, budget)
+			if err != nil || deep {
+				return deep, err
+			}
+			deep, err = nearestWitnessOnShared(ctx, b, j, a, i, threshold, budget)
+			if err != nil || deep {
+				return deep, err
+			}
+		}
+	}
+	return false, nil
+}
+
+// nearestWitnessOnShared is nearestWitnessOn charging budget.
+func nearestWitnessOnShared(ctx context.Context, m *BoolMesh, fi int, other *BoolMesh, fj int, threshold float64,
+	budget *proofbound.WorkBudget) (bool, error) {
+	t := TriCorners(m, fi)
+	x := XtriCorners(m, fi)
+	hint := fj
+	for _, q := range floatSamplePoints(TriCorners(other, fj)) {
+		if err := budget.Step(); err != nil {
+			return false, err
+		}
+		inner, outer, ok := nearestFacetWeights(q, t)
+		if !ok {
+			continue
+		}
+		var p proof.Xpt
+		if budget.Replay {
+			if err := budget.ReserveBytes(512); err != nil {
+				return false, err
+			}
+			edge, err := proof.ReplayXlerp(ctx, x[0], x[1], inner, nearestWeightDen, replayExactWork{budget})
+			if err != nil {
+				return false, err
+			}
+			p, err = proof.ReplayXlerp(ctx, edge, x[2], outer, nearestWeightDen, replayExactWork{budget})
+			if err != nil {
+				return false, err
+			}
+		} else {
+			p = proof.Xlerp(proof.Xlerp(x[0], x[1], inner, nearestWeightDen), x[2], outer, nearestWeightDen)
+		}
+		deep, err := deepWitnessAtShared(ctx, p, other, threshold, &hint, budget)
+		if err != nil || deep {
+			return deep, err
+		}
+	}
+	return false, nil
+}
