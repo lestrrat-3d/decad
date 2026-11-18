@@ -15,8 +15,9 @@ Every admitted cap retains the same immutable point-loft Sketch/profile,
 source station order, exact rational ray-plane cut map, and ordered rigid
 and positive-scale steps. Each source record is current when the loft is
 built. A side face, mixed source, duplicate cap, stale source, reordered
-cap, missing proof record, or a section count outside two to thirty-two (one to
-thirty-one with `WithConeTangentEnd`) refuses without retiring an operand. The
+cap, or missing proof record refuses without retiring an operand. A section count
+outside two to thirty-two (one to thirty-one with `WithConeTangentEnd`) is
+`ErrDegenerate`. The
 record, rather than a face's rounded `Plane` tag or `FacetedCurve` edges,
 defines the cap curve.
 The thirty-two-cap ceiling bounds pairwise section-plane and mesh-contact work.
@@ -301,8 +302,8 @@ The cone is the nearest representable strict offset from the selected face's
 exact line. This need not be one float step: the rounded value may already be
 strictly sided, or the bound may be MaxFloat64. The construction guarantees
 separation only from that line; other blank and tool relations keep their own
-checks. `body` must pass `revolveshell.RecordedSection`: a live, unplaced, full Revolve about world X of
-whole straight sides. That section has 4 to 128 recorded segments, strictly
+checks. `body` must pass `revolveshell.RecordedSection`: a live, unplaced, full Revolve
+about world X of whole straight sides. That section has 4 to 128 recorded segments, strictly
 positive X coordinates, nonnegative radii, no holes and one side of the axis;
 it may be non-convex. `face` resolves to one non-axis side of that section
 with both end radii positive, unequal end stations and unequal end radii.
@@ -444,7 +445,8 @@ radii and a certified sweep shorter than a half-turn. Exact control hulls
 and arc boxes must separate nonadjacent cells. Adjacent cells must meet at
 one exact endpoint and lie on opposite strict sides of one coordinate.
 One arc that alone passes an axis extremum determines the loop direction.
-The real Sketch profile produces eight cells for the focused neutral case.
+A dated measurement of the real Sketch profile in the focused neutral case gave
+eight cells; no test pins it.
 This gate does not decide which tool-cap angles the source occupies.
 
 For a heel-tool circle on a vertical blank side, a positive-determinant
@@ -470,19 +472,18 @@ Before a later consumer uses its endpoints, it rederives the contact circle
 and the complete constant-X source cells from the live Sketch, LoftFaces,
 trim cones and Revolve. A changed band, time, root bracket, source face or
 cell sign refuses the arc. The comparison includes retained source intervals
-and mapped boxes, not only the two selected circle crossings. Inside one call,
-an arc that the face-pair census derived is compared with a private deep copy
-of that derivation, which the census made from the same live producers
-earlier in the call. The copy never leaves the census, and nothing writes to
-it.
+and mapped boxes, not only the two selected circle crossings. An arc that the
+face-pair census derived is compared with the census's private deep copy of
+that derivation. The copy never leaves the census, and nothing writes to it.
 
 The source pair census rechecks every live Revolve face and retained LoftFaces
 face against the current source-side and tool-cap records. A strict gap is a
 miss; a mapped source crossing or retained vertical cell is a source candidate;
 an occupied heel circle carries its ordered source-bound arc. Missing face
 roles, duplicate pairs and undecidable side values refuse the whole census.
-Each top-level mesh consumer derives the census from the live source before
-using its cells, once per source certificate in its call.
+Each top-level mesh consumer derives the census from the live source once per
+source certificate in its call, before using its cells, and passes it to the
+checks below. A check called without a census derives a fresh one.
 These source verdicts do not prove a shared seam, retained patch or volume.
 One census computes each distinct set of meridian rows once; equal inputs, compared exactly,
 reuse the rows within that census only.
@@ -494,9 +495,7 @@ cell has one root. For a vertical side, the cap and source cell share the
 same exact root bracket and mapped XYZ box. The check compares the arc
 with the census's own derivation when the census produced it, and rederives
 any other arc from current producers. It reads the face-pair verdicts from
-the census its caller derived from the same source certificate earlier in the
-same call: the contact graph and the cap-ring constructor pass their own
-census, and a caller without one derives a fresh census. It requires one live face and
+the call's census. It requires one live face and
 source reference for each endpoint, and refuses ambiguous ownership or an
 excluded time boundary. It does not place a mesh vertex or admit `Union`.
 
@@ -508,7 +507,7 @@ The patches retain their source origins. Their vertex bounds do not include
 curve and twist error over whole faces, so they are not a closed shell or a
 Boolean result.
 The checked patch constructor uses the live source certificate and
-face-pair census of its top-level call. It matches one whole-arc contact and
+the call's census. It matches one whole-arc contact and
 its rational root bracket, then requires every issued station of that arc
 through its shared endpoint. The point-loft record compares station coordinates and their
 rounding bound against the values issued at construction. Changed or missing
@@ -526,7 +525,8 @@ chord sagitta is at most `maxRadius/(2*n*n)`. Straight ideal meridians have
 zero twist. The face bound adds this sagitta and the largest exact radial
 and rounding displacement of any vertex. The constructor requires a closed,
 oriented, connected genus-zero mesh with positive exact volume and no exact
-facet crossings. The neutral producer yields 494 vertices and 984 triangles.
+facet crossings. A dated measurement of the neutral producer gave 494 vertices and 984 triangles;
+no test pins it.
 The shell is an internal construction piece; it does not admit `Union`.
 
 The cap-ring constructor derives the live face-pair census and splits that shell
@@ -535,7 +535,8 @@ the endpoint-binding check above does, requires its exact circle to lie strictly
 and orders multiple cuts by their exact meridian fractions. Both bands next
 to a cut reuse the same ring vertex indices. The complete shell then repeats
 the crossing, Euler, volume, and face-bound audits. A changed arc refuses.
-The neutral producer yields two cap rings, 690 vertices, and 1376 triangles.
+A dated measurement of the neutral producer gave two cap rings, 690 vertices and
+1376 triangles; no test pins it.
 The shell still does not admit `Union`.
 
 For each occupied heel arc, the endpoint builder checks its live source
