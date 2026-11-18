@@ -52,8 +52,6 @@ func facetsOfSide(k int) []int { return []int{4 * k, 4*k + 1} }
 func TestNearestWitnessFindsDepthAcrossALongFacet(t *testing.T) {
 	t.Parallel()
 	const slack = 0.002
-	// The edge from (0.05, 1) to (0, 0), polygon edge 3, is the leaning wall.
-	wall := witnessPrismMesh(t, []r3.Vec{{}, {X: 2}, {X: 2, Y: 1}, {X: 0.05, Y: 1}}, -10, 10)
 	testcases := []struct {
 		Name string
 		Box  []r3.Vec
@@ -65,6 +63,9 @@ func TestNearestWitnessFindsDepthAcrossALongFacet(t *testing.T) {
 	for _, tc := range testcases {
 		t.Run(tc.Name, func(t *testing.T) {
 			t.Parallel()
+			// The edge from (0.05, 1) to (0, 0), polygon edge 3, is the leaning wall. Each subtest builds its own:
+			// a BoolMesh fills its lazy caches as it is read, so parallel subtests must not share one.
+			wall := witnessPrismMesh(t, []r3.Vec{{}, {X: 2}, {X: 2, Y: 1}, {X: 0.05, Y: 1}}, -10, 10)
 			box := witnessPrismMesh(t, tc.Box, 5, 5.5)
 			// The box's face in the plane x = 0 is polygon edge 3 beside the
 			// wall and edge 1 outside it.
@@ -150,7 +151,6 @@ func TestNearestFacetWeightsStayOnTheFacet(t *testing.T) {
 func TestNearestWitnessReplayAgreesWithPlain(t *testing.T) {
 	t.Parallel()
 	const slack = 0.002
-	wall := witnessPrismMesh(t, []r3.Vec{{}, {X: 2}, {X: 2, Y: 1}, {X: 0.05, Y: 1}}, -10, 10)
 	testcases := []struct {
 		Name string
 		Box  []r3.Vec
@@ -163,6 +163,9 @@ func TestNearestWitnessReplayAgreesWithPlain(t *testing.T) {
 	for _, tc := range testcases {
 		t.Run(tc.Name, func(t *testing.T) {
 			t.Parallel()
+			// The edge from (0.05, 1) to (0, 0), polygon edge 3, is the leaning wall. Each subtest builds its own:
+			// a BoolMesh fills its lazy caches as it is read, so parallel subtests must not share one.
+			wall := witnessPrismMesh(t, []r3.Vec{{}, {X: 2}, {X: 2, Y: 1}, {X: 0.05, Y: 1}}, -10, 10)
 			box := witnessPrismMesh(t, tc.Box, 5, 5.5)
 			memo := NewContactMemo(wall, box)
 			nc, deferred, err := GatherNearContacts(t.Context(), wall, facetsOfSide(3), box, facetsOfSide(tc.Side), slack, memo)
