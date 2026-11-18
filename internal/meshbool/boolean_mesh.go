@@ -60,6 +60,11 @@ type BoolMesh struct {
 	// solid outside its true solid lies within Bulge[t] of some facet t. nil
 	// when untracked; Stats.DeepTerm then reads +Inf.
 	Bulge []float64
+	// Exact[t] reports that facet t is exact: its FacetBound and the gate
+	// reading of its source face are both zero, so the held facet IS its true
+	// piece (agent-docs/coplanar-contact-design.md §3.1). SetExactFacets fills
+	// it; nil reads as all false.
+	Exact []bool
 	// Gate is the pair's chord tolerance when this operand restates a held
 	// mesh (a boolean result or a mitred sweep), and zero for every other
 	// operand. A gated operand's facets that meet the other operand, or come
