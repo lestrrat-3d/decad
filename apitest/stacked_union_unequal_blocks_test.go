@@ -110,3 +110,16 @@ func TestStackedUnionUnequalBlocksRootFillet(t *testing.T) {
 	want := 60*(1-math.Pi/4) + 4*(math.Pi/2)*(5.0/6-math.Pi/4)
 	require.InDelta(t, want, after.Value.Base()-before.Value.Base(), 1e-9)
 }
+
+// TestStackedUnionBlocksApartTakeMeshPath joins two blocks that stand apart
+// on no common plate, a 10 mm cube and a block over z 5 to 15 beside it. No
+// interface cell lies in both, so the brep build does not read their
+// footprints as apart and the union keeps the mesh path, two lumps.
+func TestStackedUnionBlocksApartTakeMeshPath(t *testing.T) {
+	t.Parallel()
+	doc := decad.New()
+	got, err := decad.Union(t.Context(), boxBody(t, doc, 0, 0, 10, 10, 10), boxBodyAtZ(t, doc, 12, 3, 15, 7, 5, 10))
+	require.NoError(t, err)
+	require.True(t, tookMeshPath(got))
+	require.Len(t, got.Lumps(), 2)
+}
