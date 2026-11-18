@@ -1,11 +1,8 @@
 # Boss root fillet overflow design
 
 A `Boss` root fillet whose blend runs off its face (boss-design §6). The blend ends where it meets another face of the
-body, as Fusion 360 ends it. Status: approved for building in the increments of §7. P2 is built: the Ø14 union is an
-A1 brep with `B` on one carrier (general-boolean §3 "A1 as a brep", holed operands). P4 is built: C2 root arcs ending
-on window or slot corner rounds. P3 is built as tangent-notch T3. P5 is built for closed rims (§5.4). P6 is built:
-C3 tangent root ends (§5.5), so the Ø14 gallery boss builds. C3 is accepted on the expected outcome of §2.4 until gate
-G0 runs. P7 is not built.
+body, as Fusion 360 ends it. Status: increments P2 to P6 of §7 are built, so the Ø14 gallery boss builds. P7 is not
+built. C3 is accepted on the expected outcome of §2.4 until gate G0 runs.
 
 Navigation (not authority): target result → §2; the gate before any build → §2.4; which configurations build → §4;
 why each admission is sound → §5; what must exist first → §6; size and options → §7, §8.
@@ -16,21 +13,20 @@ why each admission is sound → §5; what must exist first → §6; size and opt
 The retained edge blend builds that circle as R2 (retained-edge-blend §4.2) only when the whole blend lies inside the
 plane face (retained-edge-blend §6.2, R2 row). A boss standing where the face ends has no such circle.
 
-Probe on `main` at `cccee25a4b`, 2026-11-16. The fixture is a disc of radius 21 and thickness 5 from `z = 0`, with four
+The fixture (swisslever balance wheel of decad-gallery, at the gallery's hub size) is a disc of radius 21 and thickness 5 from `z = 0`, with four
 windows between arms 4 wide (half width 2 about radial lines at 45°, 135°, 225°, 315°). Each window's inner wall is an
 arc of radius 7 about the axis, its outer wall an arc of radius 18, and every window corner is a sketch fillet of
-radius 2. The boss stands on the top face at the origin: height 1, `RootFillet` 0.5. This is the swisslever balance
-wheel of decad-gallery at the gallery's hub size.
+radius 2. The boss stands on the top face at the origin: height 1, `RootFillet` 0.5.
 
 | Boss Ø | Root `R` | Union result near the hub | `Boss` with `RootFillet` 0.5 |
 |---|---|---|---|
-| 12 | 6 | whole root circle on the face | builds (R2) |
-| 13 | 6.5 | whole root circle; the blend's outer tangent circle `R + ρ = 7` lies on the windows' inner arcs | "the held bounds cannot show that the blend leaves the plane face" (SR5) |
-| 14 | 7 | boss wall on the windows' inner walls; 92 faces with `FacetedCurve` slivers along those arcs | "the boss's root circle is not an edge of the result" |
-| 15 | 7.5 | four clean concave root arcs, each ending on two window corner rounds | "the boss's root circle is not an edge of the result" |
+| 12 | 6 | whole root circle on the face | builds (R2, C0) |
+| 13 | 6.5 | whole root circle; the blend's outer tangent circle `R + ρ = 7` lies on the windows' inner arcs | refused (C1, P7): "the held bounds cannot show that the blend leaves the plane face" (SR5) |
+| 14 | 7 | boss wall on the windows' inner walls, an A1 brep with `B` on one carrier (§6.1) | builds (C3, §5.5) |
+| 15 | 7.5 | four clean concave root arcs, each ending on two window corner rounds | builds (C2) |
 
-The union is a mesh Boolean result (`facetedrecord.Payload`) at every size: A1 (general-boolean §3) admits hole-free
-operands only, and the disc has four holes.
+The Ø14 union is a brep (§6.3). The other sizes are mesh Boolean results (`facetedrecord.Payload`): A1
+(general-boolean §3) admits hole-free operands, except where a hole shares a span with the other outline (§6.3).
 
 ## 2. Target result: cliff capping
 
@@ -204,7 +200,7 @@ the exact-equality row decides, and a near-equal pair refuses (X4).
   `G` parallel to the axis it solves a circle-circle intersection in plan, a quadratic. Each row is a circle of the torus
   at a tube angle the blend picks, not a recorded entity, so the row ends are not a 2D answer about records. R4 computes
   its plane row ends decad-side for the same reason; retained-edge-blend §4.4 ("An end on a cylinder") states it for
-  the cylinder ends. The root on the arc's side is chosen by the side rule: the arc runs on material outside the corner round, so in
+  the cylinder ends. The side rule chooses the root: the arc runs on material outside the corner round, so in
   the arc's direction it leaves the round's disk at the centre's azimuth plus `α` (end 0) and enters it at the centre's
   azimuth minus `α` (end 1), where `cos α = (R² + d² − r_G²)/(2·R·d)`. The distance to the held vertex never chooses.
   A discriminant whose charged sign is undecided refuses (X4). A plane end keeps the root nearest the held vertex, and
@@ -222,8 +218,9 @@ record's section displacement, as the `AxialDelta` of every swept circular wall'
 The retained edge blend charges it as it charges a displaced plane (retained-edge-blend §6.1, "Displaced planes and
 walls"): the closed rim (R2) adds `4δ/minSine` to its slack and a radius term to its area bound, and its blend face
 stays `Faceted`. Every other route refuses a charged wall, an open arc (R4) included. The result keeps each charged
-wall with its charge (retained-edge-blend §6.1, "Publishing a charged wall"). In the fixture two of four inner arcs carry such a charge, so at Ø13 and Ø14 the fillet face is
-`Faceted` unless the torus tag gains a field for a positional bound.
+wall with its charge (retained-edge-blend §6.1, "Publishing a charged wall"). In the fixture two of four inner arcs
+carry such a charge, so at Ø13 and Ø14 the fillet face is `Faceted` unless the torus tag gains a field for a
+positional bound.
 
 At Ø14 each root arc ends at a four-face corner (`A`, the boss wall above the arm, the full wall piece that continues
 the window wall, the corner round). §5.5 reads that corner from the record's tangency proof and charges the arc's span
@@ -339,8 +336,8 @@ changes for a tangent end.
 - `H(h) = 2·asin(min(1, √(h/2)))`, rounded up, is the modulus of continuity of `acos`: `|acos x̃ − acos x| ≤ H(|x̃ − x|)`
   for `x, x̃ ∈ [−1, 1]`, with equality at `x = 1`.
 - `q = sin∠OPC`: under R4's fold check `ρ_lo² + d'² > r_G²`, which stays, `cos∠OPC` grows with `ρ`, so `q` has a
-  single peak over the profile and its least value over a piece lies at one of the piece's ends. A piece `[s0, s1]` with `s1 < 1` reads its angle allowance and margin from
-  `q_lo = min(q(s0), q(s1))` rounded down, not once from the profile's ends, where `q(1) = 0`.
+  single peak over the profile and its least value over a piece lies at one of the piece's ends. A piece `[s0, s1]` with `s1 < 1` reads its angle
+  allowance and margin from `q_lo = min(q(s0), q(s1))` rounded down, not once from the profile's ends, where `q(1) = 0`.
 - A piece with `s1 = 1` takes the cone `[0, π/2]` and no angle allowance. `u = −κ·r_G·ψ(ρ)` and `v = side·z` are both
   monotone in `s` (`ψ` is monotone in `ρ` on `[|d' − r_G|, d' + r_G]`, `ρ` and `z` are monotone in `s`, and `−κ`
   orients `u`), so the curve between the piece's ends lies in their box, the parallelogram `certify` reads for
@@ -355,15 +352,14 @@ changes for a tangent end.
   `cos ψ`'s argument (`|∂/∂d'| + |∂/∂r_G| ≤ 2(1/r_G + 1/d')`), and
   `err_α = 16·ulp·(ρ_hi² + d'² + r_G²)/(2ρ_lo·d') + (1 + 2⁻¹⁰)·(D + e_d)·2r_G/(ρ_lo·d')` that of `cos α`'s. The `α`
   term of `m` adds `ρ_hi·asin↑(D/(d' − D))` for the turn of `θ_c` under a sideways shift of `G`'s section, inside the
-  second branch. The end
-  refuses unless `D + e_d ≤ 2⁻²⁰·min(d', r_G)`, which keeps the second-order remainder inside the `2⁻¹⁰` factor.
+  second branch. The end refuses unless `D + e_d ≤ 2⁻²⁰·min(d', r_G)`, which keeps the second-order remainder inside the `2⁻¹⁰` factor.
 - `curv`'s widening `2·e.angle` on the last piece is `2·H(err_ψ)`.
 - `sectionGrid`'s up-front test (`margin < τ`) and `certify`'s gap test (`margin + curv < τ`) read the piece's own
   margin; the up-front test reads the first-branch margin of the profile's first piece.
 - The strict range checks `ρ > |d' − r_G|` and `ρ < d' + r_G` apply to `s < 1` only.
 - A tangent end has no cusp: `u` grows linearly in `ρ_f − z` (`ρ_f` the fillet radius) near the apex (§5.3), so the
-  cap is a triangle with a nonzero angle at `(T, t_B)`. `cuspParam` and `widenRows` do not run. `capSimple2` runs on the cap, as it does where
-  the wall extends; a cap it refuses refuses.
+  cap is a triangle with a nonzero angle at `(T, t_B)`. `cuspParam` and `widenRows` do not run. `capSimple2` runs on the cap, as it
+  does where the wall extends; a cap it refuses refuses.
 
 #### 5.5.5 The wall, the plane and the cap
 
@@ -418,9 +414,8 @@ changes for a tangent end.
 #### 5.5.7 The tangent junction
 
 A selected arc meets the unselected edge `A ∩ G` at `V` tangentially. That continuation is convex while the arc is
-concave, so it is no tangent chain. `planChains` and `refuseChargedJunctions` skip a junction at `V` when the faces at
-`V` are `{A, B, G, K}` and `TangentEnds` proves `(B, G, K)`; the arc end then takes §5.5.3. Every other junction keeps
-SM2's refusal, so a mesh result's tangent junctions refuse as before. The brep receiver's SB7 note is refusal text
+concave, so it is no tangent chain. `planChains` skips a junction at `V` when the faces at `V` are `{A, B, G, K}` and
+`TangentEnds` proves `(B, G, K)`; the arc end then takes §5.5.3. Every other junction keeps SM2's refusal, so a mesh result's tangent junctions refuse as before. The brep receiver's SB7 note is refusal text
 only and is unchanged.
 
 #### 5.5.8 The root arcs of a brep union
@@ -428,7 +423,7 @@ only and is unchanged.
 `bossRootEdges` takes an arc whose `Edge.Wedge` reads reflex, as well as one `IsConvex` reports concave. `IsConvex` is
 the walked convention, and by its own contract a Union's boss root walks the boss wall's sense and reads convex;
 `Wedge` reads the material angle, which is what a root is. A mesh result's arcs keep the `IsConvex` reading, where
-`Wedge` can be undecided. `edgesQuery` is unchanged: it selects by each edge's own `IsConvex`.
+`Wedge` can be undecided. `edgesQuery` selects by each edge's own `IsConvex`.
 
 #### 5.5.9 Tests
 
@@ -438,9 +433,9 @@ the walked convention, and by its own contract a Union's boss root walks the bos
 - Internal tests: the record proof (exact, near-tangent, kinked and cusped joints); the tangent end's rows measured
   against 200-bit roots, each within its margin; the apex box; refusals for a four-face corner with no proof and for a
   joint neither capband test admits.
-- Existing tests that change: `TestStackedBrepViewFilletReachesRetainedBlend` (both subtests build; the fork at radius
-  0.5, while at 0.6 its setback point falls within `4·margin` of a held vertex and refuses by R4's name) and
-  `TestBossRootFilletSpokedHub`'s "14 is refused" (it builds). Every other test is unchanged.
+- `TestStackedBrepViewFilletReachesRetainedBlend` builds both subtests: the fork at radius 0.5, while at 0.6 its
+  setback point falls within `4·margin` of a held vertex and refuses by R4's name. `TestBossRootFilletSpokedHub`
+  builds Ø14 ("14 builds with tangent ends").
 
 #### 5.5.10 Files
 
@@ -455,24 +450,20 @@ the walked convention, and by its own contract a Union's boss root walks the bos
 | `boss_fillet.go` | §5.5.8 |
 
 `retainedblend.FilletTangent` takes the proofs; `Fillet` is `FilletTangent` with none. `route.go`, `arc.go`,
-`arc_rewrite.go`, `arc_end_cyl.go`, `arc_section.go`, `chain.go`, `wall_charge.go` and `brepmodify/fillet.go` change
-only to call into the new files.
+`arc_rewrite.go`, `arc_end_cyl.go`, `arc_section.go`, `chain.go`, `wall_charge.go` and `brepmodify/fillet.go` only
+call into the files above.
 
 ## 6. Prerequisites
 
 ### 6.1 The Ø14 union states `B` as one carrier
 
 The union at Ø14 puts the boss wall on the inner window walls over the footing's depth (boss-design B3). The mesh path
-tessellates the two walls with different chords, so the result carries `FacetedCurve` slivers along the arcs and no
-root edge exists to fillet. Rule CO needs `B` below and above `A` on one carrier, recorded from the shared arcs: either
+tessellates the two walls with different chords, so its result (92 faces) carries `FacetedCurve` slivers along the arcs
+and no root edge exists to fillet. Rule CO needs `B` below and above `A` on one carrier, recorded from the shared arcs: either
 one face, or a face per slab on the same cylinder with a smooth seam at the slab level.
 
-Two routes can give that:
-
-- A record route: A1's brep build extended to a holed lower operand whose holes share arcs with the upper operand's
-  outline (A1 with A3's shared spans and A5's holes), returning a `brepPayload`.
-- The mesh path with a shared-span reading from the operands' records, so coincident walls take one tessellation, and
-  the history read of §5.2.
+§6.3 compares the two routes that give that: A1's brep build extended to a holed lower operand (the record route), and
+the mesh path with a shared-span reading from the operands' records.
 
 ### 6.2 The footing
 
@@ -485,68 +476,59 @@ and C2's topology has `G` crossing `B` below `A` as well. Rule CO is unaffected,
 ### 6.3 Route decision: the record route
 
 **Build §6.1 on the record route with a narrow gate: A1's brep build admits a holed operand only where one of its holes
-shares a span with the other operand's outline. Every other holed pair keeps today's mesh path silently.**
+shares a span with the other operand's outline. Every other holed pair keeps the mesh path silently.**
 
 | Concern | Record route | Mesh route |
 |---|---|---|
-| shared walls | `sketch` resolves the shared spans in the slab scene (A3), with its coincident-carrier band and the span's width charge | the mesh Boolean has no records; a new reader must find the operands' records through the history |
-| coincidence and tangency proofs (§5.2) | the result's records hold every arc and joint, so `capband.JoinIsG1` and `NearTangentCorner` read them directly | the same proofs need the history read first, unestimated |
+| shared walls | `sketch` resolves the shared spans in the slab scene (A3), with its coincident-carrier band and the span's width charge | the mesh Boolean has no records; a reader would have to find the operands' records through the history |
+| coincidence and tangency proofs (§5.2) | the result's records hold every arc and joint, so `capband.JoinIsG1` and `NearTangentCorner` read them directly | the same proofs need the history read first |
 | the fillet | brepmodify restates a brep as its faceted view and runs the retained edge blend there (`retainedViewBlend`, as `shellViewBlend` and `exactCarrierViewBlend` do); one fillet construction stays in `internal/retainedblend` | the retained edge blend runs on the mesh result directly |
-| bodies built today | only holed pairs with a shared span change route; today those build slivered mesh results (Ø14) or none | none outside the new reader |
-| code touched | `internal/prismboolean/stacked_union.go` (G6), `internal/stackedunion/brep.go`, `internal/stackedbrep`, an entry in `internal/brepmodify/fillet.go` | `internal/meshbool` and the history readers |
+| bodies built today | only holed pairs with a shared span take the route; the mesh path builds those as slivered results (Ø14) or not at all | none outside the new reader |
+| code touched | `internal/prismboolean/stacked_union.go` (G6), `internal/stackedunion`, `internal/stackedbrep`, an entry in `internal/brepmodify/fillet.go` | `internal/meshbool` and the history readers |
 
 - The record route gives exact proofs from records that already exist. The mesh route needs both a coincident-wall
   tessellation and a history read, and neither has a design.
 - With the narrow gate, Ø12, Ø13 and Ø15 keep their mesh results, and P4 builds C2 on the mesh result directly.
-- P2 lists every existing test whose union exits at G6 today and holds a shared span (coverage of `TryStackedUnion`
-  names them). Each changes route on purpose and states its new faces and bounds. Every other test is unchanged.
-- general-boolean §3 "A1 as a brep" and §4.1 ("hole-free regions per slab") change in P2's PR. A holed `brepStack` then
-  reaches `stack_brep_scale.go` and later A1 unions, and P2 gates or tests each.
+- Every test whose union exits at G6 and holds a shared span (coverage of `TryStackedUnion` names them) takes the
+  record route and states its faces and bounds. Every other test keeps the mesh path.
+- general-boolean §3 "A1 as a brep" and §4.1 ("hole-free regions per slab") state the gate. A holed `brepStack` reaches
+  `stack_brep_scale.go` and later A1 unions, and each is gated or tested.
 
 ### 6.4 Probe P2a: what the A1 brep build refuses at Ø14
 
-Probe on this branch, 2026-11-16, with G6 lifted for holed operands only and the brep build's misses logged. The edits
-were reverted. In order of the build:
+The A1 brep build of a holed union rests on these pieces:
 
-| # | Refusal | Where | P2's work |
-|---|---|---|---|
-| 1 | the slab scene charges at least 4,101 arranger segments against the cap of 4,096 (each circle or arc 256; the count stops at the cap) | `prismcells.MaxArrangementSegments`, `stackedunion/brep.go` scene | the disc's 25 arcs, the pillar circle and 8 lines need about 6,700, at about 3.7 s per scene by the cap's own rate; P2 raises the cap for the gated scene only, never globally, or thins the arranger's densification in `sketch`, which needs a `sketch` release and a version bump here |
-| 2 | `CellsHaveNoVoid` reads each window as an enclosed void | `stackedunion/brep.go` slab merge | tell an operand's own hole from a new void, and assign holes to outer loops (`slabRegions` refuses any clockwise loop) |
-| 3 | the Ø14 scene's crossing charge is `1.78e-15` (the span between radius 7 and `7.0000000000000009`); the build requires zero | `stackedunion/brep.go`, the `b.crossing != 0` miss | carry the charge as a band on the swept face, §5.4's charge moved into the brep record |
-| 4 | not reached: the pillar's wall above `A` and the window arcs below it are different pieces, which `stackedbrep.sweptFaces` does not join | `internal/stackedbrep` | join them on one carrier, or state `B` as a face per slab (§6.1) |
-| 5 | not reached: the corner rounds touch the pillar circle tangentially at the arc ends | the interface scene at `z = 5` | when the scene cuts a corner round anywhere other than its recorded vertex, the build misses (reject only); P2 gets `sketch` to cut at the recorded vertex or accepts the miss; `JoinIsG1` proves tangency inside the window record only. This is P2's main open risk |
+| Piece | Where | Rule |
+|---|---|---|
+| gate | `internal/stackedunion/holed_gate.go` (`holedCandidate`) | a hole segment of one operand and an outer segment of the other lie on one carrier kind within a loose band |
+| arrangement cap | `gatedArrangementSegments` in `holed_gate.go` | twice `prismcells.MaxArrangementSegments`, for the gated build only; the Ø14 slab scene counts 6,664 segments |
+| shared spans | `prepareHoled` in `holed_scenes.go`, `SetHoledUnion` in `internal/stackedbrep/alias.go` | every scene is arranged and charged first; each class of coincident carriers reads as one canonical carrier |
+| holed slab regions | `holed_merge.go` (`holedSlabRegions`) | a cell inside no record must lie in a hole of some record, else it is a new void and a miss; one outer loop takes every hole, and several outer loops with a hole are a miss |
+| crossing charge | `internal/stackedunion/brep.go` | a nonzero crossing charge is admitted for a holed union only (`holedUnion`) |
 
-Ø13 and Ø15 stop at refusal 2 with a zero crossing charge.
+The Ø14 corner rounds touch the pillar circle tangentially at the arc ends. When the interface scene at `z = 5` cuts
+a corner round anywhere other than its recorded vertex, the build misses (reject only). `JoinIsG1` proves tangency
+inside the window record only.
 
 ## 7. Increments
 
-Each increment is one PR, merged after green CI and an independent review of its soundness-sensitive diff. Every
-increment leaves `main` green and every result outside its gate unchanged.
-
-| # | Increment | Unlocks | Estimate |
+| # | Increment | Unlocks | Status |
 |---|---|---|---|
-| P1 | this design, with §6.3's route decision and §6.4's probe | the plan | done with this PR |
-| P2 | §6.4's refusals 1 to 5 under §6.3's narrow gate | the Ø14 union with `B` on one carrier | 4 to 7 weeks |
-| P3 | built as tangent-notch-design T3 (brep-modify §2.3): the faceted-view fillet of a stacked or slab-cut BRep after the receiver routes refuse. A holed union with a carrier charge keeps its curved faces untagged until P5 | `Boss` root fillets on P2's results, after P5 | built |
-| P4 (built) | C2: R4 with cylinder end faces, `B` running on past a cylinder end face below `A` (the footing), several arcs on one wall, caps on cylinders | Ø15 and transversal root ends on window or slot corner rounds | 2 to 3 weeks |
-| P5 (built) | §5.4's cylinder charge on `B` in the retained edge blend, for the closed rim | near-equal carriers at Ø14 | about 1 week |
-| P6 (built) | C3 tangent ends with §5.2's tangency proof, the four-face arc end of §5.5, and the charge on an arc's span and ends | Ø14, the gallery case; the lever's dart root (tangent-notch T4) | 1.5 to 2.5 weeks |
-| P7 | C1 with §5.2's coincidence proof | exact-equal C1 only; the fixture's Ø13 (near-equal, on the mesh path under the narrow gate) refuses until a history read exists | 1 to 2 weeks |
+| P1 | this design, with §6.3's route decision | the plan | built |
+| P2 | the A1 brep build of a holed union under §6.3's narrow gate (§6.4) | the Ø14 union with `B` on one carrier | built |
+| P3 | tangent-notch-design T3 (brep-modify §2.3): the faceted-view fillet of a stacked or slab-cut BRep after the receiver routes refuse. A holed union with a carrier charge keeps its curved faces untagged until P5 | `Boss` root fillets on P2's results | built |
+| P4 | C2: R4 with cylinder end faces, `B` running on past a cylinder end face below `A` (the footing), several arcs on one wall, caps on cylinders | Ø15 and transversal root ends on window or slot corner rounds | built |
+| P5 | §5.4's cylinder charge on `B` in the retained edge blend, for the closed rim | near-equal carriers at Ø14 | built |
+| P6 | C3 tangent ends with §5.2's tangency proof, the four-face arc end of §5.5, and the charge on an arc's span and ends | Ø14, the gallery case; the lever's dart root (tangent-notch T4) | built |
+| P7 | C1 with §5.2's coincidence proof | exact-equal C1 only; the fixture's Ø13 (near-equal, on the mesh path under the narrow gate) refuses until a history read exists | not built; 1 to 2 weeks |
 
-The Ø14 gallery case needed P2 to P6. Gate G0 runs whenever Fusion is available. The estimates
-scale from the existing R4 code (`internal/retainedblend`: `arc*.go`, `cyl_band.go`, `chain_open.go`, about 3,000 lines
-with tests) and from A1's brep build (`internal/stackedunion`, about 3,000 lines). P4 and P2 touch disjoint packages and
-may proceed in parallel.
-
-**Coordination.** P2 shares `internal/prismcells` and `internal/prismboolean`, and P3 shares
-`internal/brepmodify/fillet.go`, with concurrent work on the prism union and fillet path. Each PR rebases on `main`
-before review and keeps its code in new files where it can.
+Gate G0 runs whenever Fusion is available.
 
 ## 8. Options
 
 | Option | Gains | Costs |
 |---|---|---|
-| O1 (chosen): build P2 to P7 on the record route | Ø14 and Ø15 build as Fusion is expected to (§2.4); Ø13 only where its arcs are exactly equal | 9 to 14.5 weeks for Ø14; P7 adds 1 to 2 for exact-equal C1 only |
+| O1 (chosen): build P2 to P7 on the record route | Ø14 and Ø15 build as Fusion is expected to (§2.4); Ø13 only where its arcs are exactly equal | P2 to P6 gave Ø14 (9 to 14.5 weeks); P7 adds 1 to 2 for exact-equal C1 only |
 | O2: build P4 only; the gallery moves the windows' inner radius in, for example to 6.5, keeping Ø14 | the root ends cross the corner rounds transversally (C2), with no coincident walls, no charge and no tangency; the probe's union there has four clean `Arc3` root arcs | 2 to 3 weeks of decad work; the arms' inner window edge moves in 0.5 mm, and the footing hangs into the windows as in the port |
 | O3: the gallery moves the windows' inner radius out to at least `R + ρ` plus a margin | builds today: inner radius 7.6 with Ø14 and fillet 0.5 builds (C0); 7.5 refuses (C1) | no decad change; the inner window edge moves out 0.6 mm |
 | O4: the gallery shrinks the boss to Ø12.5 or less | builds today | rejected by the user |

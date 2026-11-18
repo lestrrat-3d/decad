@@ -32,20 +32,16 @@ A `Document` carries one gap tolerance, a length in millimetres. `decad.New` tak
 The tolerance is the **reach** of two repairs, each run only after the exact path has refused, and the budget of
 one construction choice made up front, the partial chamfer's corner relief (§5.4):
 
-- The held-mesh embedding repair (§5.1). A result whose exact vertices round to float64 so that facets fold through
-  each other is first repaired among the float-box corners of each exact point
-  (`agent-docs/evaluator-design.md` §9). A mesh that search leaves folded gets a second stage in which each movable
-  vertex of a failing pair may also sit up to the reach from its exact point.
-- The shifted Boolean retry (§5.2). A mesh Boolean whose operands meet in coplanar facets of a face with a positive bound, or
-  only along an edge or at a vertex, is run again with the
-  second operand moved by up to the reach, and one whose stitched result the embedding repair leaves folded is run
-  again with the second operand grown by up to the reach (§5.2 item 7).
-- The partial chamfer's corner relief (§5.4). A prism's chamfer run that ends at a concave corner stops 0.004 mm
-  short of the corner when the reach is at least that, so its Cut meets no flush contact.
+- The held-mesh embedding repair (§5.1): a result whose rounded vertices fold facets through each other is first
+  repaired among the float-box corners of each exact point (`agent-docs/evaluator-design.md` §9). A second stage
+  lets each movable vertex of a failing pair also sit up to the reach from its exact point.
+- The shifted Boolean retry (§5.2): the second operand is moved or grown by up to the reach.
+- The partial chamfer's corner relief (§5.4): a prism's chamfer run that ends at a concave corner stops 0.004 mm
+  short of it when the reach is at least that.
 
 With reach zero none runs, and the refusal is the one the exact path gives.
 
-An invalid option is reported by every operation that reads the tolerance, because `New` returns no error:
+`New` returns no error, so every operation that reads the tolerance reports an invalid option:
 
 | Option value | Error |
 |---|---|
@@ -63,15 +59,15 @@ operation called reads zero, so it is exact-only.
 
 0.01 mm is one tenth of the smallest feature the unaided eye resolves at reading distance (about 0.1 mm), so a
 move within it changes nothing a viewer can see. The renderer in `solidlens` uses the same stance: a facet narrower
-than half a pixel at the model's distance draws no line. A caller that proves a
-part against a stricter standard than the eye chooses `ExactOnly` or a smaller value.
+than half a pixel at the model's distance draws no line. A caller that proves a part against a stricter standard
+than the eye chooses `ExactOnly` or a smaller value.
 
 ## 3. What the tolerance never permits
 
 - **It never widens a predicate.** Every embedding, contact and coincidence decision stays exact over the held
   binary64 values the evaluator ends with. The tolerance chooses where a held vertex, or a whole operand, sits, and
-  the decision is then made exactly about that position: two facets still count as meeting only where exact
-  arithmetic says they meet.
+  the decision is then made exactly about that position: two facets count as meeting only where exact arithmetic
+  says they meet.
 - **It never admits an answer an upstream package called approximate.** A fragment `sketch` reports uncertified
   (`BoundaryEdge.TExact` false) is still rejected (`agent-docs/sketch-seam-design.md`). The tolerance moves decad's
   own held vertices, and only vertices that stand for exactly one exact point.
@@ -82,19 +78,18 @@ part against a stricter standard than the eye chooses `ExactOnly` or a smaller v
 
 `agent-docs/api-design.md` §2.1 rejects a kernel's "tolerant topology" because it hides a geometry that does not
 meet. This design keeps topology exact and states the displacement: the moved vertex is part of the result's bound
-(§4), so `Verify` judges it like any other bound. The chamfer's corner relief (§5.4) is the one exception: it moves no
-held vertex, so there is nothing to charge, and it changes the solid the chamfer states instead, by an amount §5.4
-and `agent-docs/modify-design.md` Part R §8.3 give.
+(§4), so `Verify` judges it like any other bound. The chamfer's corner relief (§5.4) is the one exception. It moves no
+held vertex, so there is nothing to charge. It changes the solid the chamfer states, by the amount §5.4 gives.
 
 ## 4. How a use is charged
 
 The repairs of §5.1 to §5.3 are charged as below. The corner relief of §5.4 is not charged: it is stated.
 
-The distance from every exact point to the float that finally holds it is MEASURED after the search, exactly, and
-every consumer composes that maximum as the rounding bound (`StitchedMesh.Round`, the placement's `VertexBound`, the
-similarity image's `VertexBound`). The three sites that run the search charge the final position and no
-estimate, so a reach move needs no new term: its distance is larger than an ulp, and the same measured gap carries it
-into the swept-volume and perturbed-area terms.
+After the search, the distance from every exact point to the float that finally holds it is MEASURED, exactly. Every
+consumer composes the maximum as the rounding bound (`StitchedMesh.Round`, the placement's `VertexBound`, the
+similarity image's `VertexBound`). The three sites that run the search charge the final position and no estimate, so
+a reach move needs no new term: its distance is larger than an ulp, and the same measured gap carries it into the
+swept-volume and perturbed-area terms.
 
 A result whose search used the second stage therefore reads `Approximate`, with a vertex `Bound` that covers the
 moved vertices. The shifted Boolean retry charges its move by widening the bounds of the moved operand's copy that
@@ -104,11 +99,15 @@ result the gap tolerance kept can still read `Suspect`.
 ## 5. Where the tolerance runs
 
 The root reads the tolerance in `placePayload`, `booleanBodyWith`, `performUnionMany`, `ScaledAt` and
-`Document.Verify`, and puts it on the context. `Verify` hands it to the read-only boolean that measures each pair's
-overlap, so a pair the exact predicates could not classify reads the overlap it has, with a bound that covers the
-shift, instead of `DiagUnsupportedPairContact`. `Chamfer` reads it through `brepmodify.Hooks.GapReach` for the
-partial chamfer's corner relief (§5.4). Every other operation, such as `Fillet`, `Shell` and `Loft`, reads no
-tolerance of its own. Four evaluator sites read it:
+`Document.Verify`, and puts it on the context.
+
+- `Verify` hands it to the read-only boolean that measures each pair's overlap, so a pair the exact predicates could
+  not classify reads the overlap it has, with a bound that covers the shift, instead of
+  `DiagUnsupportedPairContact`.
+- `Chamfer` reads it through `brepmodify.Hooks.GapReach` for the partial chamfer's corner relief (§5.4).
+- Every other operation, such as `Fillet`, `Shell` and `Loft`, reads no tolerance of its own.
+
+Four evaluator sites read it:
 
 | Site | Operations that reach it |
 |---|---|
@@ -127,9 +126,9 @@ reach, and zero keeps the float-box search alone.
 2. A mesh it leaves folded gets stage 2. The grid is rebuilt with a pad of twice the largest distance a vertex can
    lie from its first rounding, counting the reach: `2·(maxDev + Reach)` plus rounding slack, so no move
    leaves a facet's cells.
-3. Each offending movable vertex tries positions at `step·Reach` from its exact point for step in 1/64, 1/16, 1/4 and 1,
-   nearest first. For each step it tries both senses of the unit normal of every incident facet and of every facet
-   they fail against, then both senses of the coordinate axes. A collapsed facet has no normal, so the axes
+3. Each offending movable vertex tries positions at `step·Reach` from its exact point for step in 1/64, 1/16, 1/4
+   and 1, nearest first. For each step it tries both senses of the unit normal of every incident facet and of every
+   facet they fail against, then both senses of the coordinate axes. A collapsed facet has no normal, so the axes
    always apply.
 4. A candidate is taken when it leaves fewer failing pairs among the vertex's facets than where the vertex sits.
    A step that clears every pair ends the vertex's search, so the nearest clean position wins and the charge is the
@@ -139,87 +138,106 @@ reach, and zero keeps the float-box search alone.
 
 ### 5.2 The shifted Boolean retry
 
-A mesh Boolean refuses four contacts the exact predicates cannot classify. Two operand facets can overlap in one
-plane, so no side of the other operand is proven for the shared region, unless both facets are exact: the exact
-facets of two zero-bound faces are classified without a retry (`agent-docs/coplanar-contact-design.md`), so this
-retry meets a coplanar overlap only on a face with a positive bound, or when the exact classification leaves an
-operand meeting itself along an edge or at a vertex, in which case the refusal it returns is the one the retry reads
-here. An edge of one operand can graze along a facet
-of the other. The operands can touch at an isolated point. Facets of a curved face of one operand can come within the
-chord tolerance of the other operand's facets without provably crossing deeper than it (the proximity gate,
-`meshbool.RefuseUndecidableProximity`). `meshbool.TouchContactError` carries every such contact it met (up to 64) as
-the first operand's outward unit normal at the contact, whether it is Decisive, a Slack, and the second operand's
-facet it meets. A coplanar pair is Decisive when the second operand's facet faces the opposite way, which puts the
-operands on opposite sides of the plane (a face-on-face touch). A graze and a point touch are always Decisive. A
-gate contact is Decisive when the first operand's face is curved, and its Slack is the sum of the largest facet bound
-among the close facets of each face (never more than the faces' own bounds, which cover their worst facet). Any
-other contact has Slack zero. `booleaneval.Evaluate` reads the error and
-runs the Boolean again with the second operand moved:
+A mesh Boolean refuses four contacts the exact predicates cannot classify:
+
+- **Coplanar overlap.** Two operand facets overlap in one plane, so no side of the other operand is proven for the
+  shared region. The exact facets of two zero-bound faces are classified without a retry
+  (`agent-docs/coplanar-contact-design.md`), so this retry meets a coplanar overlap only on a face with a positive
+  bound, or when the exact classification leaves an operand meeting itself along an edge or at a vertex. The refusal
+  it returns is then the one the retry reads.
+- **Graze.** An edge of one operand grazes along a facet of the other.
+- **Point touch.** The operands touch at an isolated point.
+- **Proximity.** Facets of a curved face of one operand come within the chord tolerance of the other operand's
+  facets without provably crossing deeper than it (the proximity gate, `meshbool.RefuseUndecidableProximity`).
+
+`meshbool.TouchContactError` carries every such contact it met (up to 64) as the first operand's outward unit normal
+at the contact, whether it is Decisive, a Slack, and the second operand's facet it meets:
+
+- A coplanar pair is Decisive when the second operand's facet faces the opposite way, which puts the operands on
+  opposite sides of the plane (a face-on-face touch).
+- A graze and a point touch are always Decisive.
+- A gate contact is Decisive when the first operand's face is curved. Its Slack is the sum of the largest facet bound
+  among the close facets of each face (never more than the faces' own bounds, which cover their worst facet).
+- Any other contact has Slack zero.
+
+`booleaneval.Evaluate` reads the error and runs the Boolean again with the second operand moved:
 
 1. Directions come from the contacts (`shiftDirections`). Every contact must open: the shift's component along each
    contact's normal is at least 0.02 in magnitude. A Decisive contact also fixes the sense. A Union moves the second
    operand inward along the first operand's normal, so bodies that touch join into one, along a face, an edge or at a
    corner. A Cut and an Intersect move it outward, so a touching Cut leaves its target whole and a touching Intersect
-   is empty. With no Decisive contact, each contact is a flush wall or a gate contact on a flat face, and a gate
-   contact cannot tell a body resting on the face from one flush beneath it. A Cut and an Intersect still need every
-   such contact to open outward, so a tool flush with its target's wall pokes through it and leaves no skin, and a tool
+   is empty.
+
+   With no Decisive contact, each contact is a flush wall or a gate contact on a flat face, and a gate contact
+   cannot tell a body resting on the face from one flush beneath it. A Cut and an Intersect still need every such
+   contact to open outward, so a tool flush with its target's wall pokes through it and leaves no skin, and a tool
    resting on it stays apart. A Union needs only that they open (`weightedBase`). Each contact that is not wanted
    pulls in the sense the pull so far leans along its normal. A contact the pull does not lean along takes the tie
    sense: inward when the Union has no Decisive contact, outward otherwise. The lean is the float dot product of the
    pull and the normal, so only an exactly zero product is a tie, and a nearly orthogonal normal follows the sign
-   rounding gives it. With no Decisive contact nothing else brings the operands into overlap, so a body resting on a
-   flat face sinks into it and joins into one solid, and a body flush beneath it sinks inside, where an outward pull
-   would leave the resting body as a second lump above the face. A Decisive contact already moves the operands into
-   overlap, so the contacts beside it, such as the flush top and bottom caps of two ribs whose curved and flat walls
-   touch, only open, and they open outward on a tie. An inward tie there gains no connection, and on the line, arc and
-   line ribs of `TestWebPathJoinsALineArcLineChain` it leaves the joined ribs with a mesh bound that the next Union of
-   the chain refuses at the chain-depth gate (`RefuseCoarseHeldContact`). A pair of contacts that no direction opens in the needed sense,
-   such as a tool flush with both walls of a slot, is opened by growth (item 5).
+   rounding gives it.
+
+   With no Decisive contact nothing else brings the operands into overlap, so a body resting on a flat face sinks
+   into it and joins into one solid, and a body flush beneath it sinks inside, where an outward pull would leave the
+   resting body as a second lump above the face. A Decisive contact already moves the operands into overlap, so the
+   contacts beside it, such as the flush top and bottom caps of two ribs whose curved and flat walls touch, only
+   open, and they open outward on a tie. An inward tie there gains no connection, and on the ribs of
+   `TestWebPathJoinsALineArcLineChain` it leaves a mesh bound that the next Union of the chain refuses at the
+   chain-depth gate (`RefuseCoarseHeldContact`). A pair of contacts that no direction opens in
+   the needed sense, such as a tool flush with both walls of a slot, is opened by growth (item 5).
 
    The rule follows from the tolerant reading `A∘(B+s)` with `s·n` the shift along a contact's outward normal `n`.
-   `A∘(B+s)` is the solid the result states, never `A∘B` (see "What a result of the retry states" below). A
-   Union with `s·n < 0` overlaps a resting B by `|s·n|` and leaves a flush B inside A. With `s·n > 0` it leaves a
-   gap under a resting B and a sliver of a flush B outside A. A Union that also holds a Decisive contact overlaps B
-   there whichever way a contact that is not Decisive opens, so the sense of that contact decides only on which side
-   of its face a sliver or a gap of the shift's length lies, and the result is one solid either way. A Cut with
-   `s·n > 0` leaves A whole under a resting tool and opens a flush tool's pocket. With `s·n < 0` it notches A under a
-   resting tool and leaves a skin over a flush pocket. An Intersect with `s·n > 0` is empty for a resting B and B less a sliver for a flush B. With
-   `s·n < 0` it leaves a sliver solid for a resting B. Union with no Decisive contact therefore pulls inward, and Cut
-   and Intersect push outward: every contact is wanted for them when none is Decisive, and a tie beside a Decisive
+   `A∘(B+s)` is the solid the result states, never `A∘B` (see "What a result of the retry states" below).
+
+   | Operation | `s·n < 0` | `s·n > 0` |
+   |---|---|---|
+   | Union | Overlaps a resting B by `\|s·n\|`; leaves a flush B inside A. | Leaves a gap under a resting B and a sliver of a flush B outside A. |
+   | Cut | Notches A under a resting tool; leaves a skin over a flush pocket. | Leaves A whole under a resting tool; opens a flush tool's pocket. |
+   | Intersect | Leaves a sliver solid for a resting B. | Empty for a resting B; B less a sliver for a flush B. |
+
+   A Union that also holds a Decisive contact overlaps B there whichever way another contact opens, so that
+   contact's sense decides only which side of its face a sliver or gap of the shift's length lies. So Union with no Decisive contact pulls inward, and Cut and
+   Intersect push outward: every contact is wanted for them when none is Decisive, and a tie beside a Decisive
    contact opens outward.
-2. Each direction is the contacts' unit direction, each contact pulling in proportion to its Slack, plus a generic part
-   of weight 0.2 that is parallel to no coordinate plane, so a shift also opens the walls that two bodies sharing a
-   footprint leave coplanar.
-3. Steps of 1/4096, 1/512, 1/64, 1/16, 1/4 and 1 of the reach are tried in order, three directions each. A step's length is the
-   larger of that fraction of the reach and the least shift that clears every contact's Slack (the Slack over the
-   component along its normal, with a margin of 5%). A length above the reach is skipped. Each component of the
-   shift `s` is then truncated toward zero onto the grid `2^(⌊log₂|s|⌋−24)` (`snapShift`): the shift never
-   lengthens, and its length changes by under `2^-23` of itself, inside the 5% margin. Every component of `s` is a
-   multiple of the grid, so for a tag coordinate `o ≠ 0` the sum `o + s` is a multiple of `q`, the smaller of the
-   grid and the lowest set bit of `o`, and it is a float, so `o` moves exactly, whenever `|o + s| ≤ 2^53·q`. Two
-   cases follow. A coordinate whose last-place unit is no larger than the grid moves exactly unless `|o + s|`
-   exceeds the power of two just above `|o|`. A coordinate that is a multiple of the grid moves exactly while
-   `|o + s| ≤ 2^53·grid`, which is at least `2^28·|s|`. A tag whose coordinates all move exactly carries no rounding
-   (the tag paragraph below). The first outcome that
-   is not a contact refusal is the result, whether it is a body or another error, such as an empty Intersect. When a
-   shifted attempt meets a contact the unmoved pair did not reach, the contacts are merged and the search starts
-   again, up to four times. When every attempt refuses, the original refusal is returned.
+2. Each direction is the contacts' unit direction, each contact pulling in proportion to its Slack, plus a generic
+   part of weight 0.2 that is parallel to no coordinate plane, so a shift also opens the walls that two bodies
+   sharing a footprint leave coplanar.
+3. Steps of 1/4096, 1/512, 1/64, 1/16, 1/4 and 1 of the reach are tried in order, three directions each. A step's
+   length is the larger of that fraction of the reach and the least shift that clears every contact's Slack (the
+   Slack over the component along its normal, with a margin of 5%). A length above the reach is skipped. Each
+   component of the shift `s` is then truncated toward zero onto the grid `2^(⌊log₂|s|⌋−24)` (`snapShift`): the
+   shift never lengthens, and its length changes by under `2^-23` of itself, inside the 5% margin.
+
+   Every component of `s` is a multiple of the grid, so for a tag coordinate `o ≠ 0` the sum `o + s` is a multiple of
+   `q`, the smaller of the grid and the lowest set bit of `o`, and it is a float, so `o` moves exactly, whenever
+   `|o + s| ≤ 2^53·q`. Two cases follow. A coordinate whose last-place unit is no larger than the grid moves exactly
+   unless `|o + s|` exceeds the power of two just above `|o|`. A coordinate that is a multiple of the grid moves
+   exactly while `|o + s| ≤ 2^53·grid`, which is at least `2^28·|s|`. A tag whose coordinates all move exactly
+   carries no rounding (the tag paragraph below).
+
+   The first outcome that is not a contact refusal is the result, whether it is a body or another error, such as an
+   empty Intersect. When a shifted attempt meets a contact the unmoved pair did not reach, the contacts are merged
+   and the search starts again, up to four times. When every attempt refuses, the original refusal is returned.
+4. Each connected piece of the second operand (the teeth of a gear tool, for one) is moved on its own, along the
+   directions and by the length its own contacts ask for, and a piece no contact names stays where it is. Each
+   piece's displacement is charged to its own vertices and faces, the mesh bound takes the largest, and the swept
+   volume sums the pieces, so a piece is never charged for another's move.
 5. When every translation has refused, and the exact predicates alone refused the pair with coplanar facet overlaps
    (`meshbool.TouchCoplanar`, every contact with zero Slack), each piece is grown about the mean of its vertices
    (`growShifted`, `pieceShift.Grow`): its farthest vertex moves by the step times the reach, outward for a Union and a
-   Cut, inward for an Intersect, and every face moves by its distance from the centre. A tool flush with both walls of a
-   slot, whose two faces need to move opposite ways, then pokes through both; a Union overlaps what only touched, and an
-   Intersect leaves a gap where it only touched. The growth is charged as any displacement is, its length being the
-   farthest vertex's. An edge graze or a point touch is not grown across, because the sign of the growth would decide a
-   tangency that stays refused. A tool that only touches a Cut target, grown, notches the target by the growth, which the
-   bound covers.
-6. A Union whose contacts are all flush faces (none Decisive, none with Slack, the exact predicates' coplanar refusal)
-   is tried first by shrinking the second operand about its centre (`growShifted` with `shrink`), steps from the least
-   up: the second operand then lies strictly inside the first, so the union is the first operand's own faces and
-   leaves no sliver for the next Boolean of a chain to meet, where a translation protrudes by the shift at one end. A
-   held curved operand needs the shrink to pass its own chord bound, so the steps climb to it. When no shrink stands,
-   the translations of items 1 to 4 run as before. Where this is the first step of a chain (`Union` of a mesh plate, a round pin and its
-   `PatternCopies`), the result keeps the plate's six faces and the volume of the plate.
+   Cut, inward for an Intersect, and every face moves by its distance from the centre. A tool flush with both walls of
+   a slot, whose two faces need to move opposite ways, then pokes through both; a Union overlaps what only touched,
+   and an Intersect leaves a gap where it only touched. The growth is charged as any displacement is, its length
+   being the farthest vertex's. An edge graze or a point touch is not grown across, because the sign of the growth
+   would decide a tangency that stays refused. A tool that only touches a Cut target, grown, notches the target by
+   the growth, which the bound covers.
+6. A Union whose contacts are all flush faces (none Decisive, none with Slack, the exact predicates' coplanar
+   refusal) is tried first by shrinking the second operand about its centre (`growShifted` with `shrink`), steps from
+   the least up. The second operand then lies strictly inside the first, so the union is the first operand's own
+   faces and leaves no sliver for the next Boolean of a chain to meet, where a translation protrudes by the shift at
+   one end. A held curved operand needs the shrink to pass its own chord bound, so the steps climb to it. When no
+   shrink stands, the translations of items 1 to 4 run as before. The first step of a chain (`Union` of a mesh
+   plate, a round pin and its `PatternCopies`) then keeps the plate's six faces and volume.
 7. A mesh Boolean whose own stitched result the embedding repair leaves folded (§5.1, `meshbool.HeldFoldError`) is
    run again with every piece of the second operand grown about its centre (`growFolded`): outward for a Union and a
    Cut, inward for an Intersect, by the steps of item 3 times the reach, smallest first. Such a fold comes from the
@@ -229,26 +247,29 @@ runs the Boolean again with the second operand moved:
    does for a coplanar contact. A step that folds again or meets a contact refusal is passed over, and the first
    other outcome is the result; when every step refuses, the fold is returned. The growth is charged as item 5's is.
    A fold met while meshing an operand is not retried, and the bounded replay path keeps its refusal.
-4. Each connected piece of the second operand (the teeth of a gear tool, for one) is moved on its own, along the
-   directions and by the length its own contacts ask for, and a piece no contact names stays where it is. Each
-   piece's displacement is charged to its own vertices and faces, the mesh bound takes the largest, and the swept
-   volume sums the pieces, so a piece is never charged for another's move.
 
 The moved operand is the solid the Boolean decides about, so the proximity gate and the exact predicates read it
-(`decisionMesh`). Its true solid is the exact move of the true operand, each piece translated by `s` and, when grown,
-scaled about its float centre by its float factor `k`. A held vertex is the rounded image of that move, so the
-decision copy keeps `m`'s bounds and adds, per vertex, an upper bound on the distance of the stored image `fl(v + s)`
-(or the grown image) from the exact `v + s`, computed from the exact rounding error of each coordinate
-(`moveRounding`). A face bound takes the largest addition among its corners, and the mesh
-bound the largest overall. A grown piece's bounds also stretch by `1 + |k|`. A held vertex need not be a multiple of
-the grid, so only the first case of item 3 makes its sum exact: the addition is zero for a coordinate whose last-place
-unit is no larger than the grid (below about `2^28·|s|`) unless the sum passes the power of two above it, and a larger
-coordinate generally rounds. The chain-depth gate (`RefuseCoarseHeldContact`) admits a mesh bound coarser than the chord
-tolerance by the shift the retry applied (the charged copy's mesh bound less the unmoved operand's), because the result's bounds already carry it. The composition of the result's bounds reads a copy that is wider by the shift
-(`shiftOperandMesh`): the vertex and face bounds of a moved piece grow by its displacement, the mesh bound by the
-largest, the symmetric-difference volume grows by what each move sweeps over its piece's boundary, and the area allowance grows by the rounding of the new
-coordinates. The ordinary trim amplification then charges the shift at every crossing. A shifted mesh that folds,
-and any pair that uses a spiral-join certificate, is declined.
+(`boolshift` `decisionMesh`). Its true solid is the exact move of the true operand, each piece translated by `s` and,
+when grown, scaled about its float centre by its float factor `k`. A held vertex is the rounded image of that move,
+so the decision copy keeps `m`'s bounds and adds, per vertex, an upper bound on the distance of the stored image
+`fl(v + s)` (or the grown image) from the exact `v + s`, computed from the exact rounding error of each coordinate
+(`boolshift.MoveRounding`). A face bound takes the largest addition among its corners, and the mesh bound the largest
+overall. A grown piece's bounds also stretch by `1 + |k|`. A held vertex need not be a multiple of the grid, so only
+the first case of item 3 makes its sum exact: the addition is zero for a coordinate whose last-place unit is no
+larger than the grid (below about `2^28·|s|`) unless the sum passes the power of two above it, and a larger
+coordinate generally rounds.
+
+The chain-depth gate (`RefuseCoarseHeldContact`) admits a mesh bound coarser than the chord tolerance by the shift
+the retry applied (the charged copy's mesh bound less the unmoved operand's), because the result's bounds already
+carry it. The composition of the result's bounds reads a copy that is wider by the shift
+(`boolshift.ShiftOperandMesh`):
+
+- The vertex and face bounds of a moved piece grow by its displacement, and the mesh bound by the largest.
+- The symmetric-difference volume grows by what each move sweeps over its piece's boundary.
+- The area allowance grows by the rounding of the new coordinates.
+
+The ordinary trim amplification then charges the shift at every crossing. A shifted mesh that folds, and any pair
+that uses a spiral-join certificate, is declined.
 
 The moved operand's retained tags (`agent-docs/faceted-source-retention-design.md` §3.1) follow the move
 (`MovedGroup`, `internal/boolshift/moved_tag.go`). A face of a piece translated by `s` lies on its tag translated
@@ -333,7 +354,8 @@ keeps its refusal:
 - A mesh the second stage leaves folded, because a vertex is welded, no candidate within the reach clears it, or
   the reach is too small, unless it is a Boolean's stitched result that a growth of the second operand clears
   (§5.2 item 7). A placement or similarity image that stays folded is refused.
-- `Stitch` of a curved edge, of a vertex that carries a bound, and of any pair under `ExactOnly`: the edges stay free (§5.3).
+- `Stitch` of a curved edge, of a vertex that carries a bound, and of any pair under `ExactOnly`: the edges stay free
+  (§5.3).
 - Branching intersection curves, and a facet or subdivision region that touches the other operand's boundary. They
   carry no contact normal.
 - A curved near contact no shift within the reach clears. The gate asks whether chorded surfaces touch, and it is

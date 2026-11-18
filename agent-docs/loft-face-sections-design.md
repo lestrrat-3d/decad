@@ -3,9 +3,9 @@
 `LoftFaces(ctx, sections, opts...)` builds one solid through two to
 thirty-two ordered planar caps. The admitted producer is one to thirty-one
 live, complete Split slabs from one authenticated `LoftFromPoint` source.
-Each section is an original Split cap, its rigid image, or its positive uniform image. The
-first section is the toe cap of the least slab; the remaining sections are the
-heel caps in source order. This is a separate operation from the three-Sketch
+Each section is an original Split cap, its rigid image, or its positive uniform
+image. The first section is the toe cap of the least slab; the remaining sections
+are the heel caps in source order. This is a separate operation from the three-Sketch
 `LoftSections` route. No public faceted cap edge is promoted to a Sketch
 curve.
 
@@ -19,8 +19,8 @@ cap, missing proof record, or a section count outside two to thirty-two (one to
 thirty-one with `WithConeTangentEnd`) refuses without retiring an operand. The
 record, rather than a face's rounded `Plane` tag or `FacetedCurve` edges,
 defines the cap curve.
-The thirty-two-cap ceiling bounds pairwise section-plane and mesh-contact work;
-every admitted count still passes the same exact embedding and volume proofs.
+The thirty-two-cap ceiling bounds pairwise section-plane and mesh-contact work.
+Every admitted count passes the same exact embedding and volume proofs.
 
 Write `D` for the original authenticated planar Sketch region and `P` for
 its certified station polygon. An exact cut cap maps each source point `p`
@@ -229,8 +229,7 @@ This continuation tries four, eight, sixteen and at most thirty-two times
 the ordinary pair chord. It retries only a first-operand staging refusal.
 The local chain-depth gate still checks the held bound at every other contact.
 The same mesh Boolean still checks all other face pairs, contacts, rims,
-occupied-volume bounds, and the final mesh. Placement drops the record.
-When the original LoftFaces result carries two to thirty-two exact maps,
+occupied-volume bounds, and the final mesh. When the original LoftFaces result carries two to thirty-two exact maps,
 matching source-cell bounds, and a complete source-station group, a successful
 toe Cut and heel Intersect retain an immutable source record on the unplaced
 faceted result. The record identifies the two
@@ -240,7 +239,7 @@ The curved source gate rederives both exact cone meridians from the live tool
 bodies and rejects changed cached apex, far-plane, or slope values.
 It also requires each tool-cap group to own one live result face without triangles
 from another source group.
-Every other Intersect result has no continuation record. Placement drops it.
+Every other Intersect result has no continuation record. Placement drops every record this section describes.
 
 ## Cone-tangent end section
 
@@ -301,9 +300,8 @@ inconsistent end.
 The cone is the nearest representable strict offset from the selected face's
 exact line. This need not be one float step: the rounded value may already be
 strictly sided, or the bound may be MaxFloat64. The construction guarantees
-separation only from that line. Other blank and tool relations are left to
-later checks. `body` must
-pass `revolveshell.RecordedSection`: a live, unplaced, full Revolve about world X of
+separation only from that line; other blank and tool relations keep their own
+checks. `body` must pass `revolveshell.RecordedSection`: a live, unplaced, full Revolve about world X of
 whole straight sides. That section has 4 to 128 recorded segments, strictly
 positive X coordinates, nonnegative radii, no holes and one side of the axis;
 it may be non-convex. `face` resolves to one non-axis side of that section
@@ -329,16 +327,15 @@ must be above `far`, `R` must be positive, and `A > 0 > far` so that
 Revolve classifies a generator as a cylinder when `|dr| <= 1e-9*hypot(dx, dr)`,
 and the directed rounding can cross that boundary. The built body is checked
 with `revolveplan.PointConeSource`, which needs a face classified Cone and must
-report the canonical world-X axis, before it is registered in the document. A failed check is `ErrUnsupported` and leaves the
-document and its provenance numbering unchanged.
+report the canonical world-X axis, before it is registered in the document. A failed check is `ErrUnsupported` and
+leaves the document and its provenance numbering unchanged.
 
 The result is the full Revolve of the triangle `(far, 0)`, `(far, R)`,
 `(A, 0)` in a private world-XY sketch. It is an ordinary Revolve body that
 depends on `body`. Every rounding step is decided by exact rational
 comparison, so for identical recorded endpoint and far bits the strict gap to
-the face is the same on every build. That establishes only the separation from
-the selected face line; other blank and tool relations keep their own checks.
-The strict signs are the same on amd64 and arm64. `internal/pointcone/offset.go` holds
+the face is the same on every build. The strict signs are the same on amd64 and
+arm64. `internal/pointcone/offset.go` holds
 the arithmetic as plain data.
 
 ## Generic finite Revolve source gate
@@ -533,9 +530,8 @@ facet crossings. The neutral producer yields 494 vertices and 984 triangles.
 The shell is an internal construction piece; it does not admit `Union`.
 
 The cap-ring constructor derives the live face-pair census and splits that shell
-at each occupied heel-cap circle. It checks each arc against the live source,
-through the census's own derivation for arcs that census produced,
-requires its exact circle to lie strictly inside one straight section side,
+at each occupied heel-cap circle. It checks each arc against the live source as
+the endpoint-binding check above does, requires its exact circle to lie strictly inside one straight section side,
 and orders multiple cuts by their exact meridian fractions. Both bands next
 to a cut reuse the same ring vertex indices. The complete shell then repeats
 the crossing, Euler, volume, and face-bound audits. A changed arc refuses.

@@ -14,21 +14,19 @@ Navigation only; the linked sections own their contracts.
 
 ## Status and ownership
 
-Implementation delivers public diagnostic values, typed `BooleanError` and
-`SelectionError` accessors, mapped `OperationError` branches, and warnings for
-accepted Boolean shifts, raised chain allowances, tolerant Stitch merges, and
-accepted positive-reach repairs. Three-input Union chains, Patterned, private tool composites, direct modify routes,
-tangent trim, and mirrored assembly paths aggregate accepted summaries. Eleven resource names
-retain exact counts where their producers know them; overflowed counts,
-saturated estimates and opaque refusals remain unclassified. Arrangement-cap
-refusals retain their observed and maximum segment counts.
-`TestBooleanGapTolerance` proves that a real accepted shift can return an empty
-Intersect with both diagnostic codes. `TestCopyReportsAcceptedEmbeddingReach`
-proves that a public notched-prism placement publishes an accepted repair,
-keeps one solid lump, and covers its volume change with the published bound.
-The same placement under `ExactOnly` refuses without publishing a body.
+Delivered: public diagnostic values, typed `BooleanError` and `SelectionError` accessors, mapped
+`OperationError` branches, and warnings for accepted Boolean shifts, raised chain allowances, tolerant Stitch
+merges, and accepted positive-reach repairs. Three-input Union chains, Patterned, private tool composites, direct
+modify routes, tangent trim, and mirrored assembly paths aggregate accepted summaries. Eleven resource names
+retain exact counts where their producers know them; overflowed counts, saturated estimates and opaque refusals
+stay unclassified. Arrangement-cap refusals retain their observed and maximum segment counts.
 
-The existing contracts remain authoritative:
+- `TestBooleanGapTolerance` proves that a real accepted shift can return an empty Intersect with both codes.
+- `TestCopyReportsAcceptedEmbeddingReach` proves that a public notched-prism placement publishes an accepted
+  repair, keeps one solid lump, and covers its volume change with the published bound. `ExactOnly` refuses the
+  same placement without publishing a body.
+
+These contracts stay authoritative:
 
 - [Public API design](api-design.md), especially architecture, bounded readings, booleans, selectors, and errors.
 - [Evaluator design](evaluator-design.md), especially document state and re-evaluation.
@@ -43,27 +41,26 @@ It does not change geometric admission, tolerance defaults, error classification
 
 ## Problem and intended behavior
 
-A caller can branch on `BooleanError.Code` or inspect `SelectionError`, but many other failures expose their
+Callers can branch on `BooleanError.Code` or inspect `SelectionError`. Many other failures expose their
 operand, failed proof, or bound comparison only through text. A successful operation can use a gap tolerance
-to move geometry without recording that choice separately from its resulting measurement bounds.
+to move geometry without recording that choice apart from its resulting measurement bounds.
 
 Expose the reason at the call that produced it. Preserve existing `(T, error)` signatures, sentinel matches,
-typed errors, and immutable bodies. Provide warnings on the successfully returned body. Provide failure
-diagnostics through the returned error. Keep `Message` for people and stable codes for programs.
+typed errors, and immutable bodies. Warnings ride on the returned body; failure diagnostics ride on the returned
+error. `Message` is for people; stable codes are for programs.
 
-The caller's Go function remains the feature tree. Store no operation graph, failed-attempt registry,
-replay program, timeline, or document-level last error. A caller can save its own call label beside an error
-or warning without allocating a Decad producer identity.
+The caller's Go function is the feature tree. Store no operation graph, failed-attempt registry, replay program,
+timeline, or document-level last error. A caller may keep its own call label beside an error or warning; that
+allocates no Decad producer identity.
 
 ## Delivery API proposal
 
-Define the new public types in package `decad`, following Public API design's type-ownership contract.
-Internal packages carry private plain-data records; root adapters produce public records and handles.
-Use the shared `OperationKind` vocabulary owned by
-[Operation history design: Operation kinds](operation-history-design.md#operation-kinds).
-The type describes calls independently of history snapshot lookup.
+The public types live in package `decad`, per Public API design's type-ownership contract. Internal packages
+carry private plain-data records; root adapters produce public records and handles. `OperationKind` is the shared
+vocabulary owned by [Operation history design: Operation kinds](operation-history-design.md#operation-kinds);
+it describes calls independently of history snapshot lookup.
 
-| Proposed surface | Behavior |
+| Surface | Behavior |
 |---|---|
 | `OperationDiagnosticError` | An interface embedding `error` and declaring `OperationDiagnostics() []OperationDiagnostic`. |
 | `(*BooleanError).OperationDiagnostics()` | Returns the failed boolean's structured reasons while preserving `Code` and existing sentinel behavior. |
@@ -71,17 +68,17 @@ The type describes calls independently of history snapshot lookup.
 | `OperationError` | Wraps an otherwise unstructured Decad operation error. It implements `Error`, `Unwrap`, and `OperationDiagnostics`. |
 | `(*Body).OperationDiagnostics()` | Returns warnings from the successful public call that created this body. It returns no failure entries. |
 
-Use `errors.As` to find `OperationDiagnosticError`, including through a caller's `%w` wrapper.
-Keep `errors.Is` and existing `errors.As` branches as the authoritative failure classification.
+Find `OperationDiagnosticError` with `errors.As`, including through a caller's `%w` wrapper.
+`errors.Is` and existing `errors.As` branches stay the authoritative failure classification.
 Wrap only otherwise unstructured Decad errors within this document's modeling scope.
-`OperationError.Unwrap` returns the original error, rather than rebuilding a sentinel from its message.
-Its `Error` preserves the original text. Add contextual text only when the owning API explicitly needs it.
-The new wrapper can change direct equality and concrete-type assertions on those previously unstructured
-errors. Callers use the supported `errors.Is` and `errors.As` branches instead.
+`OperationError.Unwrap` returns the original error and never rebuilds a sentinel from its message.
+Its `Error` preserves the original text; add context only when the owning API explicitly needs it.
+The wrapper can break direct equality and concrete-type assertions on those previously unstructured errors;
+callers use the supported `errors.Is` and `errors.As` branches instead.
 
-Return newly owned slices and copies of optional detail records from every accessor. A caller's edits to
-one returned record cannot affect a later read, the error, another body, or a concurrent reader.
-Body handles in error subjects remain immutable shared identities.
+Every accessor returns newly owned slices and copies of optional detail records. A caller's edits to one
+returned record cannot affect a later read, the error, another body, or a concurrent reader.
+Body handles in error subjects stay immutable shared identities.
 
 Keep these exceptions explicit:
 
@@ -92,15 +89,15 @@ Keep these exceptions explicit:
 - Preserve panic behavior for caller-created typed-nil interface values. Diagnostics add no reflection or recovery.
 - Do not wrap arbitrary third-party or writer errors merely to make this interface universal.
 
-An empty diagnostic slice means no event from this document's catalog was recorded. It is not a proof of
-exactness, validity, verification coverage, or the absence of every possible future warning.
+An empty diagnostic slice means no event from this document's catalog was recorded. It proves nothing about
+exactness, validity, verification coverage, or future warnings.
 
 ## Record proposal
 
-Use one root-owned `OperationDiagnostic` value with the fields below. Keep optional details typed; do not
-introduce `map[string]any`, arbitrary attributes, embedded topology dumps, or message parsing.
+`OperationDiagnostic` is one root-owned value with the fields below. Optional details are typed; add no
+`map[string]any`, arbitrary attributes, embedded topology dumps, or message parsing.
 
-| Field | Proposed type and meaning |
+| Field | Type and meaning |
 |---|---|
 | `Code` | `OperationDiagnosticCode`; the stable reason. Zero means unknown, never success. |
 | `Severity` | `OperationDiagnosticSeverity`; zero is unknown, followed by warning and failure. |
@@ -112,44 +109,43 @@ introduce `map[string]any`, arbitrary attributes, embedded topology dumps, or me
 | `WorkLimit` | Optional `OperationWorkLimit`; a named resource and integer observed and maximum counts. |
 | `Message` | Human-readable explanation. Its text is not a branch key or a serialized identity. |
 
-`OperationSubject` identifies a named public argument, such as target, tool, first, others, body, profile,
-or selector. A variadic argument has an optional zero-based ordinal within that argument. This ordinal
-identifies caller input order, never a face, edge, vertex, facet, or private transient body.
-An absent subject concerns the whole operation. A nil offending body can still name its argument.
+`OperationSubject` names a public argument, such as target, tool, first, others, body, profile, or selector.
+A variadic argument has an optional zero-based ordinal within that argument. The ordinal is caller input order,
+never a face, edge, vertex, facet, or private transient body. An absent subject concerns the whole operation.
+A nil offending body can still name its argument.
 
-Error subjects may reference only bodies actually supplied by the caller. Successful-body warnings store
-argument locations without input body handles. They therefore do not retain a chain of consumed bodies.
-Do not publish private temporary handles, speculative producer references, internal topology indices, or
-uncommitted result bodies. Use existing `SelectionError` fields for selection residuals rather than copying
-their complete schema into the new record.
+Error subjects reference only bodies the caller supplied. Successful-body warnings store argument locations
+without input body handles, so they retain no chain of consumed bodies. Never publish private temporary handles,
+speculative producer references, internal topology indices, or uncommitted result bodies. Selection residuals
+stay in the existing `SelectionError` fields; do not copy their schema into this record.
 Omit an uncertain subject rather than blaming one original input for a failure of a transient composite.
 
 `OperationChainDetail` carries `TouchedBound units.Value`, `PairChordLimit units.Value`, and
 `ChainAllowance *units.Value`. Every value is a length. A nil allowance means none was configured.
-`TouchedBound` is the certified upper bound of the held geometry this contact touches, not a measured
-distance to the true surface or the body's global maximum bound. Preserve all three gate inputs so the
-caller can inspect both the ordinary threshold and any configured allowance without reconstructing text.
+`TouchedBound` is the certified upper bound of the held geometry this contact touches. It is not a measured
+distance to the true surface or the body's global maximum bound. All three gate inputs are preserved so a
+caller can inspect the ordinary threshold and any configured allowance without reconstructing text.
 `ChainAllowanceApplied` requires a non-nil allowance: the touched bound exceeds the pair chord limit and
-passes the configured allowance. `OperandBoundExceeded` also carries this detail when that gate refuses.
+passes the configured allowance. `OperandBoundExceeded` carries this detail too when that gate refuses.
 
-`OperationChange` carries a mechanism enum, `DisplacementBound units.Value`, and `AllowedReach units.Value`.
-Both quantities are lengths. The displacement is a certified upper bound for the change made by this call,
-not the configured reach and not the result's total accumulated bound. Compose multiple changes using the
-owning geometry proof; use a conservative sum when only per-stage upper bounds are available.
-Do not imply that an upper bound is an exact measured maximum.
+`OperationChange` carries a mechanism enum, `DisplacementBound units.Value`, and `AllowedReach units.Value`,
+both lengths. The displacement is a certified upper bound for the change this call made. It is neither the
+configured reach nor the result's total accumulated bound. Compose multiple changes with the owning geometry
+proof, or a conservative sum when only per-stage upper bounds exist. An upper bound is never presented as an
+exact measured maximum.
 
-Every actual measurement added to a future detail record must use `Measurement`, `VecMeasurement`, or `Box`,
-including its own exactness and bound. Scalar parameters, limits, angles, and error bounds use `units.Value`.
-The coordinate and curve-parameter exceptions remain the ones Public API design defines.
+Any actual measurement added to a detail record uses `Measurement`, `VecMeasurement`, or `Box`, with its own
+exactness and bound. Scalar parameters, limits, angles, and error bounds use `units.Value`. The coordinate and
+curve-parameter exceptions are the ones Public API design defines.
 
 Each diagnostic-owned enum has a stable lower-snake `String()` token and a total unknown-value rendering.
-Never serialize the enum's integer as its meaning. Add new codes without renumbering old published values.
-Code availability is additive: callers must handle unknown codes without treating them as success.
+Never serialize the enum's integer as its meaning. New codes never renumber published values. Callers MUST
+handle unknown codes without treating them as success.
 
 ## Failure catalog and compatibility
 
-Publish only reasons the evaluator already knows. A broad reason is preferable to an invented distinction.
-The proposed constant names below all have the prefix `OpDiag`.
+Publish only reasons the evaluator already knows; a broad reason beats an invented distinction.
+Every constant name below carries the prefix `OpDiag`.
 
 | Suffix | Concrete trigger | Existing classification |
 |---|---|---|
@@ -165,116 +161,113 @@ The proposed constant names below all have the prefix `OpDiag`.
 | `UnsupportedIntent` | The requested feature class or admitted construction exceeds the current evaluator's reach. | Existing `ErrUnsupported` or its established typed mapping. |
 | `EvaluatorFailure` | A proved internal invariant breaks. | Existing invariant error; booleans preserve `BooleanEvaluatorFailure`. |
 
-Keep genuinely malformed inputs distinct from chording refusals even when both match `ErrDegenerate`.
-Do not classify every `ErrUnsupported` as contact, or every `ErrBooleanFailed` as empty.
-An analytic prism admission miss remains silent fallback. An admitted route's refusal keeps the behavior
-specified by Prism boolean design; a diagnostic never converts it into a fallback or vice versa.
+- Keep malformed inputs distinct from chording refusals even when both match `ErrDegenerate`.
+- Never classify every `ErrUnsupported` as contact, or every `ErrBooleanFailed` as empty.
+- An analytic prism admission miss stays a silent fallback. An admitted route's refusal keeps the behavior
+  Prism boolean design specifies; a diagnostic never converts a refusal into a fallback or the reverse.
 
-Carry private typed detail to root before it is rendered into text. For example,
-`meshbool.StagingError` currently renders a `CoarseHeldContactError` into operand/bound/tolerance prose.
-Preserve those values in the private error path so root can populate `OperandBoundExceeded` directly.
-Keep the public boolean mapping at `asBooleanError`; extend its records without reclassifying its outcomes.
+Carry private typed detail to root before it is rendered into text. `meshbool.StagingError` renders a
+`CoarseHeldContactError` into operand/bound/tolerance prose, so the private error path preserves those values and
+root fills `OperandBoundExceeded` directly. The public boolean mapping stays at `asBooleanError`; records
+extend there without reclassifying outcomes.
 
 ## Successful-call warnings
 
-Emit a warning only when the corresponding event actually affects the accepted result.
-Ordinary floating-point bounds, a mesh route, a nonzero measurement bound, and `Approximate` alone do not
-create warnings. Their existing measurement and surface contracts already expose them.
-Exclude `WithMatchingFaces` from the initial warning catalog until its real producer supplies typed
-actual-use and deviation data. Its existing geometry and bound contracts continue to apply.
+Emit a warning only when its event actually affects the accepted result. Ordinary floating-point bounds, a mesh
+route, a nonzero measurement bound, and `Approximate` alone create none; their measurement and surface contracts
+already expose them. `WithMatchingFaces` is outside the warning catalog until its real producer supplies typed
+actual-use and deviation data; its existing geometry and bound contracts apply.
 
-| Proposed suffix | Trigger and detail |
+| Suffix | Trigger and detail |
 |---|---|
 | `GapShiftApplied` | A shifted boolean attempt produces the accepted outcome. `Change` names shifted retry and bounds the actual accepted displacement. |
 | `EmbeddingReachApplied` | Held-embedding repair accepts a position from its positive-reach stage. `Change` excludes ordinary float-box rounding. |
 | `StitchMergeApplied` | Tolerant Stitch actually merges distinct vertex positions. `Change` describes the accepted merge, using its existing charged bound. |
 | `ChainAllowanceApplied` | A local held bound exceeds the ordinary pair chord gate and passes using a configured chain allowance. `Chain` records all three gate inputs. |
 
-The warning constants also use the `OpDiag` prefix. Each mechanism contributes at most one summary per
-public call and public argument location. Summaries conservatively cover all affected pieces or internal
-steps at that location. They do not expose private component IDs or retain per-facet data.
+Each mechanism contributes at most one summary per public call and public argument location. A summary
+conservatively covers all affected pieces or internal steps at that location. It exposes no private component
+IDs and retains no per-facet data.
 
-Record only the accepted retry's changes. Discard warnings from rejected trial positions and abandoned
-routes. If a shifted attempt ends in `BooleanEmpty`, return that existing error and attach its accepted
-shift warning beside `ResultEmpty`; no body commits. If every shifted attempt refuses, return the original
-refusal and no applied-shift warning. A discarded transient change is not an applied result change.
+- Record only the accepted retry's changes. Discard warnings from rejected trial positions and abandoned routes.
+- If a shifted attempt ends in `BooleanEmpty`, return that existing error with its accepted shift warning beside
+  `ResultEmpty`; no body commits.
+- If every shifted attempt refuses, return the original refusal and no applied-shift warning.
 
-For multi-input `Union` or a composite feature, collect successful internal-step summaries locally.
-Publish them only with the outer successful body. If a later step fails, discard those earlier summaries
-and report the failing step's original caller input locations. Do not expose a partial result or claim
-that earlier inputs were consumed. A terminal failure may include its own accepted-outcome warning,
-as the empty-result case above specifies.
+For multi-input `Union` or a composite feature, collect internal-step summaries locally and publish them only
+with the outer successful body. If a later step fails, discard the earlier summaries and report the failing
+step's original caller input locations. Never expose a partial result or claim earlier inputs were consumed.
+A terminal failure may carry its own accepted-outcome warning, as the empty-result case above shows.
 
-A copied or transformed body starts a new creation record. Do not copy its source body's warning list.
-Its geometry still carries all inherited bounds, and any new repair produces its own warning.
-Warnings on retired bodies remain readable because they describe the immutable call result.
-`Remove` does not edit that record or allocate a warning record.
+A copied or transformed body starts a new creation record and does not copy its source's warning list. Its
+geometry still carries all inherited bounds, and any new repair produces its own warning. Warnings on retired
+bodies stay readable because they describe the immutable call result. `Remove` neither edits that record nor
+allocates a warning record.
 
-Warnings never decide whether a body is valid or whether a verification request passes.
-There is no warning-as-error mode in this proposal: an operation has already committed when its caller
-reads the successful body. A caller needing strict geometric behavior chooses existing construction and
-tolerance options before the call, including `ExactOnly` where appropriate.
+Warnings never decide body validity or a verification verdict. There is no warning-as-error mode: the operation
+has already committed when the caller reads the body. A caller needing strict geometry picks construction and
+tolerance options before the call, including `ExactOnly`.
 
 ## Atomicity, order, and storage
 
-Keep collection local to a single public operation. Build final warning records before commit, then attach
-them to the immutable result that commits. Do not append warnings to an already published body.
-Failure or cancellation preserves live-body membership and the producer identity under Evaluator design.
-Level and curve counters retain that design's existing failed-build semantics.
+Collection is local to one public operation. Final warning records are built before commit and attached to the
+immutable result that commits; never append warnings to a published body. Failure or cancellation preserves
+live-body membership and the producer identity under Evaluator design. Level and curve counters keep that
+design's failed-build semantics.
 
-Never allocate a producer identity for diagnostics. Never update an operand to record a failed attempt.
-Do not add a mutable collector to `Document`, a context value, or a public callback.
-Private evaluator result fields and typed error detail transport records across internal boundaries.
-Each parallel worker returns its own records; an owning operation merges them in deterministic input order.
-This adds no permission for concurrent document mutation.
+- Never allocate a producer identity for diagnostics.
+- Never update an operand to record a failed attempt.
+- Add no mutable collector to `Document`, no context value, and no public callback.
+- Private evaluator result fields and typed error detail carry records across internal boundaries.
+- Each parallel worker returns its own records; the owning operation merges them in deterministic input order.
+  This grants no permission for concurrent document mutation.
 
-Order diagnostics by public argument order, stage order, then stable code token. Preserve the existing
-selection residual order. Aggregate repeated mechanism summaries at the same public location using the
-owning proof's bound composition. Keep one primary failure reason unless the existing evaluator actually
-establishes independent reasons. Never continue geometry work solely to collect more failures.
+Order diagnostics by public argument order, stage order, then stable code token; keep the existing selection
+residual order. Aggregate repeated mechanism summaries at one public location with the owning proof's bound
+composition. Keep one primary failure reason unless the evaluator establishes independent reasons. Never
+continue geometry work only to collect more failures.
 
-Keep records bounded by their catalog and input locations, rather than the number of facets, candidate
-pairs, trial positions, or failed intermediate routes. Do not retain meshes, ASTs, or arbitrary error
-graphs in the diagnostic detail. Error messages and debug formatters must summarize bounded scalar data.
+Records are bounded by the catalog and input locations, never by facets, candidate pairs, trial positions, or
+failed intermediate routes. Retain no meshes, ASTs, or arbitrary error graphs in detail. Error messages and
+debug formatters summarize bounded scalar data.
 
 ## Verification and other result types
 
-Keep operation diagnostics separate from `Diagnostic` and `Report.Diagnostics`.
-Verification diagnostic codes explain a requested proof verdict; operation warnings explain how one
-modeling call obtained its accepted outcome. Do not add `Status`, `Passed`, or an error field to an
-operation record. Do not add a creation warning to the verification inventory merely because it exists.
+Operation diagnostics stay separate from `Diagnostic` and `Report.Diagnostics`. Verification codes explain a
+requested proof verdict; operation warnings explain how one modeling call obtained its accepted outcome. An
+operation record has no `Status`, `Passed`, or error field, and a creation warning never enters the verification
+inventory.
 
-The existing equivalence between Sound and an empty verification diagnostic inventory remains unchanged.
-Verification judges a repaired body's published bounds, so a body with an operation warning can be Sound,
-and a body without one can be Suspect. Preserve the cause-specific pair diagnostic mapping in
-Interference design; shared private reason records must not force the two public code sets to coincide.
+Sound still equals an empty verification diagnostic inventory. Verification judges a repaired body's published
+bounds, so a body with an operation warning can be Sound and a body without one can be Suspect. The
+cause-specific pair diagnostic mapping in Interference design stands; shared private reason records must not
+force the two public code sets to coincide.
 
-The first delivery covers failures of modeling operations and their built-in selectors, plus the successful
-body warnings cataloged here. It does not attach a modeling warning list to `Mesh`, export writers,
-`Report`, motion results, or dynamics results. A read-only boolean inside Verify must not mutate either
-body's creation warnings. A later proposal must give query-only tolerance changes an explicit result
-location without weakening the verification inventory contract.
+Coverage is failures of modeling operations and their built-in selectors, plus the body warnings cataloged
+here. No modeling warning list attaches to `Mesh`, export writers, `Report`, motion results, or dynamics results.
+A read-only boolean inside Verify must not mutate either body's creation warnings. Query-only tolerance changes
+need a future proposal that gives them an explicit result location without weakening the verification inventory
+contract.
 
 ## Failure cases that must stay explicit
 
-- A nil context fails at the existing entry gate. It must not inspect an operand or allocate provenance.
-- A selector failing inside a modifier still returns the same `SelectionError`, not an outer wrapper.
-- A held-bound refusal identifies the touched operand and comparison without suggesting a boolean chord option.
-- A canceled bounded worker must finish under its existing cancellation contract; diagnostics add no worker lifetime.
+- A nil context fails at the existing entry gate, without inspecting an operand or allocating provenance.
+- A selector failing inside a modifier returns the same `SelectionError`, not an outer wrapper.
+- A held-bound refusal names the touched operand and comparison and suggests no boolean chord option.
+- A canceled bounded worker finishes under its existing cancellation contract; diagnostics add no worker lifetime.
 - A tolerance cannot turn an uncertified sketch fragment into an accepted input or an exact reading.
 - A message-format change cannot alter any branch, diagnostic code, operand role, or bound field.
 - A warning cannot hide an invariant failure or replace the operation's returned error.
-- A caller retaining many errors retains their referenced input bodies. Success warning storage must not do that.
+- Retained errors keep their referenced input bodies alive; success warning storage must not.
 
 ## Focused repository proof fixtures
 
-Start with one real path: extend the small face-touching box construction in
-`apitest/boolean_gap_tolerance_test.go`. The real boolean evaluator must produce a charged shift that
-appears through the real public body accessor. Prove its volume bound against 2000 mm³ and preserve its
-single-lump assertion. Stop expansion if private evaluation cannot deliver this record through commit.
-Do not replace that boundary with a handcrafted warning fixture.
+Start with one real path: the small face-touching box construction in `apitest/boolean_gap_tolerance_test.go`.
+The real boolean evaluator produces a charged shift that appears through the real public body accessor. Prove
+its volume bound against 2000 mm³ and keep its single-lump assertion. Stop expanding if private evaluation
+cannot deliver this record through commit; a handcrafted warning fixture never replaces this boundary.
 
-After that boundary passes, add these focused assertions in the implementation task:
+After it passes, add these focused assertions:
 
 | Fixture | Required proof |
 |---|---|
@@ -293,37 +286,34 @@ After that boundary passes, add these focused assertions in the implementation t
 | Accessor ownership and order | Changing returned slices and detail pointers does not change later reads. Parallel reads preserve stable tokens, ordering, and bounds. |
 | Verify on a shifted result | A loose request can be Sound with operation warnings; a stricter request produces existing bound diagnostics. Warnings do not enter `Report.Diagnostics`. |
 
-Use exported-API fixtures in `apitest/` and private transport tests beside the transport implementation.
-Use the existing geometry constructors and real producer/consumer paths. Compare fields, sentinels,
-counts, and bounded numerical invariants; never deep-dump bodies, errors with body subjects, or topology.
-Check bounded failure formatting with a small deliberate mismatch. Follow [Test guidance](testing.md)
-for new test names and CI shards. Keep full consumer models in their consumer repositories.
+Exported-API fixtures go in `apitest/`; private transport tests sit beside the transport implementation.
+Use existing geometry constructors and real producer/consumer paths. Compare fields, sentinels, counts, and
+bounded numerical invariants; never deep-dump bodies, errors with body subjects, or topology. Check bounded
+failure formatting with a small deliberate mismatch. [Test guidance](testing.md) owns test names and CI shards.
+Full consumer models stay in their consumer repositories.
 
 ## Settled scope and API decisions
 
-Use the body-local warning accessor defined in Delivery API proposal. Preserve current operation signatures;
-this scope introduces no parallel detailed-result entry points. Warnings become inspectable after commit.
-
-Use the initial catalog defined in Successful-call warnings. Its `WithMatchingFaces` exclusion is settled
-scope; adding that event requires the producer evidence and typed detail specified there.
-
-Use the dedicated chain record defined in Record proposal. Expose the touched bound, ordinary pair chord
-limit, and configured chain allowance together rather than reducing them to one effective threshold.
-
-Use the error wrapping rules in Delivery API proposal. Preserve existing `BooleanError`, `SelectionError`,
-and cancellation delivery. Wrap only otherwise unstructured Decad errors and preserve their error chains.
+- Warnings are read through the body-local accessor in Delivery API proposal. Operation signatures stay as they
+  are; there are no parallel detailed-result entry points.
+- The warning catalog is the one in Successful-call warnings. The `WithMatchingFaces` exclusion is settled;
+  adding it needs the producer evidence and typed detail specified there.
+- The chain record is the one in Record proposal; the touched bound, pair chord limit, and chain allowance are
+  exposed together, never reduced to one effective threshold.
+- Error wrapping follows Delivery API proposal: `BooleanError`, `SelectionError`, and cancellation delivery are
+  preserved, and only otherwise unstructured Decad errors are wrapped with their chains intact.
 
 ## Ordered implementation tasks
 
-Implement these phases in order. This section is an execution checklist, not a second API definition;
-the linked contract sections above win if wording differs. Proposed new filenames below are implementation
-destinations, not claims that those files or APIs already exist. Keep each phase reviewable; no phase
-requires opening a PR before the first real producer-to-accessor fixture passes.
+Implement these phases in order. This section is an execution checklist, not a second API definition; the
+contract sections above win if wording differs. Filenames below are implementation destinations; the root records
+and accessors live in `operation_diagnostics.go`. Keep each phase reviewable; open no PR before the first real
+producer-to-accessor fixture passes.
 
 ### Phase 0: Resolve prerequisites and map entry points
 
-- Read Public API, Evaluator, both Boolean, Verification, Interference, Gap tolerance, Faceted vertex bounds,
-  Surface, and Operation history designs before changing their code. Follow repository pre-read and worktree rules.
+- Read the Public API, Evaluator, both Boolean, Verification, Interference, Gap tolerance, Faceted vertex bounds,
+  Surface, and Operation history designs before changing their code.
 - Inspect `agent-docs/layout/`, root public modeling functions, and built-in selector resolution. Record an
   entry-point checklist in implementation scratch under `.tmp/`: operation kind, argument names and ordinals,
   gate order, commit owner, error sources, and whether the call can reach a chosen warning producer.
@@ -331,8 +321,6 @@ requires opening a PR before the first real producer-to-accessor fixture passes.
   [Operation history design: Operation kinds](operation-history-design.md#operation-kinds).
   History Phase 1 owns `operation_kind.go` and `OperationKind`; do not add either independently here.
   Diagnostics does not require history lookup or recorded-call coverage beyond that shared vocabulary.
-- Plan diagnostic-specific coverage for using each shared kind in operation records, including selector kinds,
-  zero, and unknown values. Leave the shared enum's definition and token tests with its history owner.
 - Acceptance: every in-scope entry point has an explicit kind and public argument mapping; every terminal error
   has an owning source. The shared vocabulary has one implementation owner and an explicit dependency.
 - Stop if the shared vocabulary conflicts with another active implementation, or an entry point requires a
@@ -342,9 +330,9 @@ requires opening a PR before the first real producer-to-accessor fixture passes.
 
 - Depends on Phase 0 and the shared vocabulary landing from
   [History Phase 1](operation-history-design.md#phase-1-add-unconditional-storage-and-the-atomic-publication-seam).
-  Add root `operation_diagnostics.go` and `operation_diagnostics_error.go` for the surface in
+  Add root `operation_diagnostics.go` for the surface in
   [Delivery API proposal](#delivery-api-proposal) and [Record proposal](#record-proposal).
-  Keep algorithmic aggregation in a new leaf package, `internal/opdiagnostic`, with plain-data records only.
+  Algorithmic aggregation lives in the leaf package `internal/opdiagnostic`, with plain-data records only.
 - Implement diagnostic enums and total `String()` methods, typed subject/change/chain/work-limit details,
   `OperationDiagnosticError`, and `OperationError`. Preserve its original error object through `Unwrap` and its
   text through `Error`; do not reconstruct causes from messages.
@@ -353,10 +341,10 @@ requires opening a PR before the first real producer-to-accessor fixture passes.
   caller body handles and convert private lengths to public `units.Value` fields.
 - Implement newly owned slices and deep copies of optional detail records, including `ChainAllowance` and any
   optional ordinal. Keep copied body identities shared only where the error-subject contract permits them.
-- Add `operation_diagnostics_test.go` and `apitest/operation_diagnostics_test.go` for enum tokens, unknowns,
+- Add `operation_diagnostics_test.go` (with `apitest/` fixtures) for enum tokens, unknowns,
   `errors.Is`, caller `%w` wrapping plus `errors.As`, original error text, and independent accessor copies.
-  Test diagnostic records using each shared operation kind, including selector kinds, zero, and unknown values;
-  test diagnostic-owned enum tokens here and shared enum tokens only at their history owner.
+  Test diagnostic records with each shared operation kind, including selector kinds, zero, and unknown values.
+  Diagnostic-owned enum tokens are tested here; the shared enum's tokens are tested only by its history owner.
   Keep synthetic records limited to these value/ownership tests; geometry transport needs Phase 2's real fixture.
 - Acceptance: supported error branches survive `OperationError`; zero records have unknown codes; body accessors
   can return only warnings. Mutating one returned optional value cannot change the next read or another body.
@@ -377,9 +365,8 @@ requires opening a PR before the first real producer-to-accessor fixture passes.
   2000 mm³. Run this subtest before adding the remaining warning mechanisms or expanding the test matrix.
 - Acceptance: the real producer's charged change reaches the immutable public body with no fabricated record,
   changed route admission, extra producer identity, or extra committed body.
-- Stop expansion if this fixture fails. Report the boundary that failed, required repair scope, and measured
-  cost. A defect in a prerequisite needs a scope decision before repair; a handcrafted transport fixture does
-  not replace this gate.
+- Stop expansion if this fixture fails. Report the failed boundary, the repair scope, and the measured cost.
+  A defect in a prerequisite needs a scope decision before repair.
 
 ### Phase 3: Preserve failure classifications and add typed reasons
 
@@ -489,8 +476,8 @@ requires opening a PR before the first real producer-to-accessor fixture passes.
 - Add real three-input Union final-step refusal and composite-success fixtures in `apitest/`; preserve all
   original live inputs on refusal. Add private aggregation/order tests and public accessor tests for retired
   bodies, fresh copies, `%w` errors, concurrent reads, optional-pointer copies, and unaffected later calls.
-- Check bounded formatting with a tiny deliberate mismatch under hard memory/time limits. Compare scalar
-  fields, tokens, counts, and geometric invariants; never pass bodies or body-owning errors to a recursive diff.
+- Check bounded formatting with a tiny deliberate mismatch under hard memory and time limits, per
+  [Focused repository proof fixtures](#focused-repository-proof-fixtures).
 - Acceptance: outer success publishes all and only its accepted summaries once. Failure/cancellation preserves
   the live set and producer identity; the existing level/curve failed-build semantics do not change.
 - Stop if aggregation needs per-facet storage, references to consumed inputs on a successful body, or mutation
@@ -531,9 +518,8 @@ requires opening a PR before the first real producer-to-accessor fixture passes.
 - Before any Go-code PR push or creation, follow `git-operations.md`'s Go Lint Before PR requirement. Current
   `.github/workflows/ci.yml` runs golangci-lint v2.15.0 and `go vet ./...`; run
   `golangci-lint run --timeout=5m` and `go vet ./...` after the last Go edit and resolve change-caused failures.
-- Let remote CI run the full suite. Follow Push Guard, message lint, and PR CI Watch rules for any authorized
-  PR delivery; watch checks to completion and report the actual CI result. Do not call focused local checks
-  the full suite. If CI is unavailable, follow the repository's full-suite fallback rule.
+- Remote CI runs the full suite. Watch PR checks to completion and report the actual CI result; focused local
+  checks are never the full suite. If CI is unavailable, follow the repository's full-suite fallback rule.
 - Acceptance: the Phase 0 checklist has no unhandled in-scope entry points, every chosen warning has a real
   producer/consumer proof, supported error branches pass focused tests, documentation/layout/shards agree,
   required lint passes, and any opened PR has completed checks.
@@ -545,7 +531,7 @@ requires opening a PR before the first real producer-to-accessor fixture passes.
 Read-only reference inspection used the sibling OCCT checkout's
 `src/ModelingAlgorithms/TKBO/BOPAlgo/BOPAlgo_Options.hxx` and
 `src/FoundationClasses/TKernel/Message/Message_Report.hxx`.
-The relevant observed behavior was per-operation inspection of typed failures and warnings, including
-results from nested work. This proposal uses Decad's existing Go errors, immutable body results, and proof
-contracts to specify that behavior independently. No OCCT implementation, declaration, or text is copied
-or adapted. OCCT is not a dependency, a runtime oracle, or an interoperability test requirement.
+The observed behavior was per-operation inspection of typed failures and warnings, including results from
+nested work. This design specifies that behavior independently from Decad's existing Go errors, immutable body
+results, and proof contracts. No OCCT implementation, declaration, or text is copied or adapted. OCCT is not a
+dependency, a runtime oracle, or an interoperability test requirement.
