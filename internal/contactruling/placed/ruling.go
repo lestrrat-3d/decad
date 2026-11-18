@@ -27,7 +27,7 @@ import (
 )
 
 // PlacedCylinder is a full source cylinder staged through a query pose
-// (agent-docs/contact-geometry-design.md §4.5, placed poses). Its identity record
+// (agent-docs/multibody-dynamics-design.md Part G §4.5, placed poses). Its identity record
 // gives the body-frame axis, radius, axial length and end-disk centers; the
 // pose maps each center exactly. The pose's float basis B is orthonormal only
 // to rounding, so the occupied set is the identity cylinder's image under the
@@ -62,7 +62,7 @@ func PlacedCylinderAt(b *topo.Body, pose r3.Transform) (PlacedCylinder, bool) {
 	return c, true
 }
 
-// ClassifyPlacedRuling is agent-docs/contact-geometry-design.md §4.5 at placed
+// ClassifyPlacedRuling is agent-docs/multibody-dynamics-design.md Part G §4.5 at placed
 // query poses: a full source cylinder M, at any pose with a positive
 // determinant, against an exact planar body S with zero held displacement,
 // at its own pose. It reports false, leaving report untouched, when the pair

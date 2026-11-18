@@ -2215,7 +2215,7 @@ contract pins down:
   instead of reconstructing them.
   `agent-docs/verification-design.md` §1.1 owns its shape.
 
-`agent-docs/collision-dynamics-design.md` specifies pair-contact and two-body sweep
+`agent-docs/multibody-dynamics-design.md` Part C specifies pair-contact and two-body sweep
 queries and the separate dynamics subpackage. Their source-box and vertical
 rebound slices are available; other cases remain staged.
 

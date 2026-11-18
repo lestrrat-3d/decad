@@ -14,7 +14,7 @@ import (
 )
 
 // These fixtures exercise the clearance kernel's ruling certificates and the
-// manifold agent-docs/contact-geometry-design.md §4.5 publishes from them. Every
+// manifold agent-docs/multibody-dynamics-design.md Part G §4.5 publishes from them. Every
 // coordinate is dyadic, so each ruling end is an exact float and every
 // published bound is computed, never pinned.
 //
@@ -307,7 +307,7 @@ func verticalCylinder(t *testing.T, doc *decad.Document, cx, cy, r float64) *dec
 	return body
 }
 
-// The placed-pose fixtures of agent-docs/contact-geometry-design.md §4.5: a radius-10
+// The placed-pose fixtures of agent-docs/multibody-dynamics-design.md Part G §4.5: a radius-10
 // source cylinder along world X lies on a floor whose top face is z = −10, at
 // query poses other than the identity. Every coordinate is dyadic. A
 // signed-axis pose proves an exact touch or gap; any other pose stages the

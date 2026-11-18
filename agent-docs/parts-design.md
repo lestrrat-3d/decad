@@ -103,7 +103,7 @@ view and the schematic are views of those parts, and the bill of materials is a 
 
 `parts` does not import `export`. Nothing in `decad`, `export`, `sketch`, `r3` or `units` imports `parts`.
 
-`parts` sits above the root as `dynamics` does (`agent-docs/collision-dynamics-design.md` §1): every geometric fact it
+`parts` sits above the root as `dynamics` does (`agent-docs/multibody-dynamics-design.md` Part C §1): every geometric fact it
 needs is a public query that already states its own proof (`Tessellate`, `Mesh.SourceFaces`, `Face.Surface`,
 `Face.NormalAt`, `Body.Bounds`, `Body.Volume`, `Body.DistanceToPoint`, `Document.SweptBox`, `Document.ContainerOf`). It
 never needs a body's private payload, so it adds no root adapter. `api-design.md` §2 keeps types that the root API

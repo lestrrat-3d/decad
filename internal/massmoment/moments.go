@@ -8,7 +8,7 @@ import (
 
 // Moments is one solid's V = ∫dV, P_i = ∫q_i dV and Q_ij = ∫q_i·q_j dV
 // as rational intervals, q the coordinates about the anchor the producer
-// names (agent-docs/dynamic-mass-design.md §2). Second is filled symmetrically.
+// names (agent-docs/multibody-dynamics-design.md Part M §2). Second is filled symmetrically.
 type Moments struct {
 	Volume proofbound.RatInterval
 	First  [3]proofbound.RatInterval
@@ -63,7 +63,7 @@ func Transform(m Moments, f [3][3]*big.Rat) Moments {
 
 // Add and Sub combine two solids' moments about one
 // anchor. Each operand keeps its own outward interval, so an uncertainty
-// never cancels against a neighbor's (agent-docs/dynamic-mass-design.md §2).
+// never cancels against a neighbor's (agent-docs/multibody-dynamics-design.md Part M §2).
 func Add(a, b Moments) Moments {
 	return combine(a, b, proofbound.IntervalAdd)
 }

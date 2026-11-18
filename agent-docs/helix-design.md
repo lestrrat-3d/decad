@@ -799,7 +799,7 @@ the leg it guards, watch the assertion go red, restore it, and record the
 legs shown to fail in the test's own comment. PR 1 does not wait on any
 open PR: `#1033` moves the contact-sweep motion planner into
 `internal/sweeppath/`, which is the PAIR-sweep path of
-`agent-docs/contact-sweep-design.md`, not `Sweep`'s `Path`, and no coil file
+`agent-docs/multibody-dynamics-design.md` Part S, not `Sweep`'s `Path`, and no coil file
 touches it.
 
 | PR | Model | Lands | Still staged |

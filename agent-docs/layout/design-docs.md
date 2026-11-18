@@ -71,12 +71,7 @@ The rules for rows live in `agent-docs/layout.md`.
 | `agent-docs/surface-design.md` | Sheet bodies, surface operations, verification and export. |
 | `agent-docs/motion-check-design.md` | `VerifyMotion`: motions, the per-pose proof, the interval certificate, `MotionReport`. |
 | `agent-docs/linkage-check-design.md` | `VerifyLinkage` and `VerifyJointBox`. |
-| `agent-docs/collision-dynamics-design.md` | Pair contact/sweep in decad and rigid response in `dynamics`. |
-| `agent-docs/contact-geometry-design.md` | Pair relation and contact manifold proofs. |
-| `agent-docs/contact-sweep-design.md` | Two-body continuous sweep and first-contact brackets. |
-| `agent-docs/dynamic-mass-design.md` | Bounded mass and inertia for rigid dynamics. |
-| `agent-docs/rigid-dynamics-design.md` | Rigid-body steps, impulses, and reports. |
-| `agent-docs/multibody-dynamics-design.md` | N-body dynamics, islands, `Timeline`. |
+| `agent-docs/multibody-dynamics-design.md` | N-body dynamics, islands, `Timeline`, and as parts the system map, rigid response, mass readings, contact geometry and the two-body sweep. |
 | `agent-docs/planar-convex-filter-design.md` | Float pre-test of the §9.2 convexity certificate: error bound, range guard, poll count. |
 | `agent-docs/step-export-design.md` | Export package entry points and the AP214 faceted writer contract. |
 
@@ -108,4 +103,4 @@ The rules for rows live in `agent-docs/layout.md`.
 
 | Path | Responsibility |
 |---|---|
-| `mass_properties.go` | Public mass and inertia types and the `Body.MassProperties` conversion over `internal/massdispatch/`. See `agent-docs/dynamic-mass-design.md` §2–§3. |
+| `mass_properties.go` | Public mass and inertia types and the `Body.MassProperties` conversion over `internal/massdispatch/`. See `agent-docs/multibody-dynamics-design.md` Part M §2–§3. |

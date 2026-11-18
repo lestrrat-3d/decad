@@ -13,7 +13,7 @@ source-volume and source-centroid calculations. This document owns the
 contained-Cut second-moment composition and its `MassProperties` consumer for
 one source class.
 
-Use `dynamic-mass-design.md` §2–§3 for moment meanings, density, physical
+Use `agent-docs/multibody-dynamics-design.md` Part M §2–§3 for moment meanings, density, physical
 inertia signs, and positivity. Use `evaluator-design.md` §9 for the real mesh
 Boolean and `interference-design.md` §4 for strict whole-solid containment.
 `prism-boolean-design.md` and `general-boolean-design.md` own Boolean route
@@ -113,7 +113,7 @@ the difference between held `t` and that map's exact translation.
 
 At the common anchor, form `R = massmoment.Sub(target, tool)`. Each source
 interval contributes its own uncertainty before subtraction. Reuse the
-formulas owned by `dynamic-mass-design.md` §2 for the center and central
+formulas owned by `agent-docs/multibody-dynamics-design.md` Part M §2 for the center and central
 second moment. Call `AffineInertia` with the identity matrix because `R`
 already uses world axes. Apply the requested density only at query time.
 
@@ -239,7 +239,7 @@ Use `evaluator-design.md` §8 and `mirror-pattern-design.md` "Exact rotation
 copies" for the copy's denoted solid and its existing placement proof. Use
 `operation-history-design.md` "Atomic publication and storage" for commit and
 public history. Moment meanings, density and positivity come from
-`dynamic-mass-design.md` §2–§3, as above.
+`agent-docs/multibody-dynamics-design.md` Part M §2–§3, as above.
 
 ### Selected calculation and alternatives
 
