@@ -18,7 +18,7 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// This file builds a tangent chain (agent-docs/retained-agent-docs/modify-design.md Part R
+// This file builds a tangent chain (agent-docs/modify-design.md Part M
 // §5.5): every edge of one loop of the base plane P, or an open run of them, is
 // blended as one chain.
 // Section points of a junction are computed once and shared by both strips. A closed chamfer chain

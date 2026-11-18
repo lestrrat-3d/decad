@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// The fixtures of agent-docs/retained-agent-docs/modify-design.md Part R §12 for increment
+// The fixtures of agent-docs/modify-design.md Part M §12 for increment
 // M4: Fillet and Chamfer of an open rounded outline of a mesh Boolean result.
 // The open-corner box is 40x20x20 with its corner at the origin rounded at
 // r = 3 and a Ø8 bore through y. Its top and bottom outlines are each a line of

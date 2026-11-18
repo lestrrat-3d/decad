@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// The chain-end fixtures of agent-docs/retained-agent-docs/modify-design.md Part R §12 for
+// The chain-end fixtures of agent-docs/modify-design.md Part M §12 for
 // increment M8: open tangent chains of a mesh Boolean result whose two ends
 // lie on one end face G. G gives up the blend's end cap where it is convex at
 // the corner and takes it where it is reflex. Each outline runs line, quarter

@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// The fixtures of agent-docs/retained-agent-docs/modify-design.md Part R §12 for increment
+// The fixtures of agent-docs/modify-design.md Part M §12 for increment
 // M4b: an open tangent chain whose first edge is an arc that ends on a plane
 // parallel to its axis. The rounded-corner box (40x20x20, corner radius 3 about
 // (3,3)) loses everything below x = 1.5 to a placed block, so the top outline

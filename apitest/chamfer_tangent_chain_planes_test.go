@@ -254,7 +254,7 @@ func tcSurfaceKinds(b *decad.Body) (oblique, cones, faceted int) {
 }
 
 // tcRequireExact checks that out bevels each edge of chain with an exact surface, as the chain rewrite builds it
-// (agent-docs/retained-agent-docs/modify-design.md Part R §15b): one new oblique plane per line, one new cone per arc, and no new
+// (agent-docs/modify-design.md Part M §15b): one new oblique plane per line, one new cone per arc, and no new
 // faceted face, which a Boolean Cut would leave.
 func tcRequireExact(t *testing.T, before, out *decad.Body, chain []*decad.Edge) {
 	t.Helper()
@@ -469,7 +469,7 @@ func tcEdgesWhere(b *decad.Body, keep func(e *decad.Edge, mid r3.Vec) bool) []*d
 func tcNear(a, b float64) bool { return math.Abs(a-b) < 1e-6 }
 
 // TestChamferTangentChainAcrossPlanes chamfers tangent chains of mesh Boolean results whose edges share no one base
-// plane (agent-docs/retained-agent-docs/modify-design.md Part R §15b), each exactly: every bevel is a plane or a cone.
+// plane (agent-docs/modify-design.md Part M §15b), each exactly: every bevel is a plane or a cone.
 func TestChamferTangentChainAcrossPlanes(t *testing.T) {
 	t.Parallel()
 

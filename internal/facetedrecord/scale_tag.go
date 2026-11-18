@@ -12,7 +12,7 @@ import (
 // ScaleTag returns the published image of a retained Plane, Cylinder, Sphere or
 // Torus tag under the positive uniform scale x -> anchor + s*(x - anchor), and
 // the normal departure the image gains from the exact similar surface
-// (agent-docs/retained-agent-docs/modify-design.md Part R §7). It reports false for any
+// (agent-docs/modify-design.md Part M §7). It reports false for any
 // other tag, and for a tag whose image has no stated bound: a plane whose
 // frame is not representable, or a curved tag whose radii have no finite
 // millimetre reading or whose displacement reaches the A4 limit.

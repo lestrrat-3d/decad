@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// The fixtures of agent-docs/retained-agent-docs/modify-design.md Part R §8 (R5): the 40x20x20
+// The fixtures of agent-docs/modify-design.md Part M §8 (R5): the 40x20x20
 // plate with two overlapping Ø8 bores along z at (14, 10) and (21, 10), each
 // cut by a placed tool so the Booleans take the mesh path. The bores meet in
 // two straight generators at x = 17.5; the one nearer y = 0 is selected.

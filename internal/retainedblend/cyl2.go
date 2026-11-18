@@ -29,7 +29,7 @@ func (c cylWall) axisPoint(axis, p r3.Vec) r3.Vec {
 
 // cylCyl is a straight edge between two retained cylinders with parallel
 // axes, ending on retained planes normal to the axes (R5,
-// agent-docs/retained-agent-docs/modify-design.md Part R §8).
+// agent-docs/modify-design.md Part M §8).
 type cylCyl struct {
 	wall       [2]cylWall
 	axis       r3.Vec // the shared direction, end 0 to end 1
@@ -172,7 +172,7 @@ type cylSection struct {
 }
 
 // solveSection finds the tangent points of the blend of the corner k0
-// (agent-docs/retained-agent-docs/modify-design.md Part R §8, R5). o are the walls' axis
+// (agent-docs/modify-design.md Part M §8, R5). o are the walls' axis
 // points in the plane, u the radial unit vectors at k0 and w the unit tangents
 // into each wall's face.
 func (c cylCyl) solveSection(spec blendSpec, k0 r3.Vec, o, u, w [2]r3.Vec, convex bool, tau,

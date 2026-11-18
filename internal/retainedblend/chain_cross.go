@@ -16,7 +16,7 @@ import (
 )
 
 // This file chamfers a tangent chain whose edges share no one base plane by rewriting the held mesh
-// (agent-docs/retained-agent-docs/modify-design.md Part R §15b). Each junction's row is §5.5's, computed once from its own base;
+// (agent-docs/modify-design.md Part M §15b). Each junction's row is §5.5's, computed once from its own base;
 // every plane face the chain borders gives way to the setback contour of its run of chain edges and is triangulated
 // again, every cylinder face is cut at the setback plane of each arc it borders, and each straight end is rebuilt on
 // its end plane as §5.5 step 5 does.

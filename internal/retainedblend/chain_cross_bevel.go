@@ -13,7 +13,7 @@ import (
 	"github.com/lestrrat-3d/r3"
 )
 
-// This file emits the bevels of a cross-plane chain (agent-docs/retained-agent-docs/modify-design.md Part R §15b) and their exact
+// This file emits the bevels of a cross-plane chain (agent-docs/modify-design.md Part M §15b) and their exact
 // areas: a line's bevel is the plane through its two end rows, an arc's the cone between its columns on the plane and
 // the cylinder's cut, as §5.5 step 2 builds a chain chamfer's.
 

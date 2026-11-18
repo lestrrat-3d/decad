@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// The fixtures of agent-docs/retained-agent-docs/modify-design.md Part R §5.5 step 5 for a
+// The fixtures of agent-docs/modify-design.md Part M §5.5 step 5 for a
 // concave open chain whose end edge is an arc. A pocket floor outline runs
 // arc, line, quarter arc, line, quarter arc, line, arc with r = 3 arcs about
 // centres 1 mm from the end face G, so G cuts each end arc 1 mm from its

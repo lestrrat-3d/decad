@@ -12,7 +12,7 @@ import (
 )
 
 // This file covers an open tangent chain that ends on an oblique end face
-// (agent-docs/retained-agent-docs/modify-design.md Part R §5.5 step 5, "An oblique end
+// (agent-docs/modify-design.md Part M §5.5 step 5, "An oblique end
 // face"): a 20 mm wide arm, 17 mm tall with a round end at y = 55, cut down to
 // 8 mm beyond a ramp that rises from the outer face at its foot to the top at
 // y = 10. The outer face's outline (two sides and the round end) is one convex
