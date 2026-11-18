@@ -331,3 +331,7 @@
 12	0.00	TestRoundedBoxContactFaceReadsABound
 12	0.00	TestRetainedLineChamferExact
 0	0.00	TestCoplanarUnionDropsTheOccupancyRecord
+12	0.00	TestUnionFaceMergeDovetailEnds
+12	0.00	TestUnionFaceMergeFlushBoxes
+12	0.00	TestUnionFaceMergeKeepsRoundedFacesApart
+12	0.00	TestUnionFaceMergeSurvivesPlacement

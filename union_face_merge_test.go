@@ -1,0 +1,222 @@
+package decad
+
+import (
+	"math"
+	"testing"
+
+	"github.com/lestrrat-3d/decad/internal/provenance"
+	"github.com/lestrrat-3d/r3"
+	"github.com/lestrrat-3d/sketch"
+	"github.com/lestrrat-3d/units"
+	"github.com/stretchr/testify/require"
+)
+
+func mergeTranslated(t *testing.T, b *Body, x, y, z float64) *Body {
+	t.Helper()
+	tr, err := r3.Translation(r3.Vec{X: x, Y: y, Z: z})
+	require.NoError(t, err)
+	moved, err := Transform(t.Context(), b, tr)
+	require.NoError(t, err)
+	return moved
+}
+
+// mergeFlushPair is the Union of a 10×10×10 box and a copy of it moved to (0.5, 0, 10): both y walls are flush.
+func mergeFlushPair(t *testing.T) *Body {
+	t.Helper()
+	doc := New()
+	a := internalBoxBody(t, doc, 0, 0, 10, 10, 10)
+	b := mergeTranslated(t, internalBoxBody(t, doc, 0, 0, 10, 10, 10), 0.5, 0, 10)
+	joined, err := Union(t.Context(), a, b)
+	require.NoError(t, err)
+	return joined
+}
+
+// mergeFaceted returns the faceted payload of a result and fails when it is not a mesh-path result.
+func mergeFaceted(t *testing.T, b *Body) facetedPayload {
+	t.Helper()
+	fp, ok := b.n.Payload.(facetedPayload)
+	require.True(t, ok, "the result takes the mesh path")
+	return fp
+}
+
+// mergedGroupOn returns the groups holding a facet whose vertices all lie on the plane coord = at.
+func mergedGroupsOn(fp facetedPayload, axis int, at float64) map[int]struct{} {
+	out := map[int]struct{}{}
+	for i, tri := range fp.Tris {
+		on := true
+		for _, v := range tri {
+			p := fp.Verts[v]
+			on = on && [3]float64{p.X, p.Y, p.Z}[axis] == at
+		}
+		if on {
+			out[fp.Src[i]] = struct{}{}
+		}
+	}
+	return out
+}
+
+func requireVolumeNear(t *testing.T, b *Body, want float64) {
+	t.Helper()
+	v, err := b.Volume()
+	require.NoError(t, err)
+	require.LessOrEqual(t, math.Abs(v.Value.Base()-want), v.Bound.Base())
+}
+
+func TestUnionFaceMergeFlushBoxes(t *testing.T) {
+	t.Parallel()
+	joined := mergeFlushPair(t)
+	fp := mergeFaceted(t, joined)
+	require.Len(t, joined.Faces(), 10)
+	requireVolumeNear(t, joined, 2000)
+	for _, y := range []float64{0, 10} {
+		groups := mergedGroupsOn(fp, 1, y)
+		require.Len(t, groups, 1, "y = %v is one source group", y)
+		for g := range groups {
+			src := fp.Groups[g].Source
+			require.NotNil(t, src)
+			require.Len(t, src.Members, 2)
+			require.Equal(t, 0, src.Members[0].Operand)
+			require.Equal(t, 1, src.Members[1].Operand)
+		}
+	}
+}
+
+func mergeDovetail(t *testing.T) *Body {
+	t.Helper()
+	doc := New()
+	host := internalOffsetBox(t, doc, -10, 0, 10, 16, 0, Distance{D: units.Millimeters(10), Dir: Against})
+
+	world := sketch.NewWorld()
+	frame, err := r3.NewFrame(r3.Vec{}, r3.Vec{X: 1}, r3.Vec{Z: 1})
+	require.NoError(t, err)
+	plane, err := world.CreatePlaneFromFrame(frame)
+	require.NoError(t, err)
+	s, err := world.CreateSketch(plane)
+	require.NoError(t, err)
+	pts := [][2]float64{{-5, -1}, {5, -1}, {5, 0}, {6, 6}, {-6, 6}, {-5, 0}}
+	verts := make([]*sketch.Point, len(pts))
+	for i, p := range pts {
+		verts[i] = s.CreatePoint(p[0], p[1])
+		s.Fix(verts[i])
+	}
+	for i := range verts {
+		s.CreateLine(verts[i], verts[(i+1)%len(verts)])
+	}
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	require.Len(t, s.Profiles(), 1)
+	tool, err := Extrude(t.Context(), doc, s, s.Profiles()[0], Distance{D: units.Millimeters(16), Dir: Against})
+	require.NoError(t, err)
+	joined, err := Union(t.Context(), host, tool)
+	require.NoError(t, err)
+	return joined
+}
+
+func TestUnionFaceMergeDovetailEnds(t *testing.T) {
+	t.Parallel()
+	joined := mergeDovetail(t)
+	fp := mergeFaceted(t, joined)
+	require.Len(t, joined.Faces(), 10)
+	requireVolumeNear(t, joined, 4256)
+	for _, y := range []float64{0, 16} {
+		groups := mergedGroupsOn(fp, 1, y)
+		require.Len(t, groups, 1, "y = %v is one source group", y)
+		for g := range groups {
+			require.Len(t, fp.Groups[g].Source.Members, 2)
+			ops := []int{fp.Groups[g].Source.Members[0].Operand, fp.Groups[g].Source.Members[1].Operand}
+			require.ElementsMatch(t, []int{0, 1}, ops)
+		}
+	}
+	// Each end face has one loop, which is outer.
+	ends := 0
+	for _, f := range joined.Faces() {
+		for _, y := range []float64{0, 16} {
+			if faceOnPlane(fp, joined, f, 1, y) {
+				ends++
+				require.Len(t, f.Loops(), 1)
+				require.True(t, f.Loops()[0].IsOuter())
+			}
+		}
+	}
+	require.Equal(t, 2, ends)
+}
+
+// faceOnPlane reports whether every facet of f lies on the plane coord = at.
+func faceOnPlane(fp facetedPayload, b *Body, f *Face, axis int, at float64) bool {
+	idx := -1
+	for i, g := range b.Faces() {
+		if g == f {
+			idx = i
+		}
+	}
+	found := false
+	for t, fi := range fp.FaceOf {
+		if fi != idx {
+			continue
+		}
+		found = true
+		for _, v := range fp.Tris[t] {
+			p := fp.Verts[v]
+			if [3]float64{p.X, p.Y, p.Z}[axis] != at {
+				return false
+			}
+		}
+	}
+	return found
+}
+
+// faceSummary lists each face's loop count and origin roles in face order.
+func faceSummary(b *Body) []string {
+	var out []string
+	for _, f := range b.Faces() {
+		s := string(rune('0' + len(f.Loops())))
+		for _, o := range f.Origins() {
+			s += "|" + o.Role
+		}
+		out = append(out, s)
+	}
+	return out
+}
+
+func TestUnionFaceMergeSurvivesPlacement(t *testing.T) {
+	t.Parallel()
+	want := faceSummary(mergeFlushPair(t))
+	require.Len(t, want, 10)
+
+	moved := mergeTranslated(t, mergeFlushPair(t), 3, -2, 5)
+	require.Equal(t, want, faceSummary(moved))
+
+	copied, err := Copy(t.Context(), mergeFlushPair(t))
+	require.NoError(t, err)
+	require.Equal(t, want, faceSummary(copied))
+}
+
+func TestUnionFaceMergeKeepsRoundedFacesApart(t *testing.T) {
+	t.Parallel()
+	doc := New()
+	a := internalBoxBody(t, doc, 0, 0, 10, 10, 10)
+	b := internalBoxBody(t, doc, 0, 0, 10, 10, 10)
+	for _, deg := range []float64{20, -20} {
+		turn, err := r3.Rotation(r3.Vec{X: 1, Y: 1, Z: 1}, units.Degrees(deg))
+		require.NoError(t, err)
+		b, err = Transform(t.Context(), b, turn)
+		require.NoError(t, err)
+	}
+	b = mergeTranslated(t, b, 0.5, 0, 10)
+	joined, err := Union(t.Context(), a, b)
+	require.NoError(t, err)
+	fp := mergeFaceted(t, joined)
+	shifted := false
+	for _, d := range joined.OperationDiagnostics() {
+		shifted = shifted || d.Code == OpDiagGapShiftApplied
+	}
+	require.True(t, shifted, "the rounded operand takes the gap shift")
+	require.Len(t, joined.Faces(), 12)
+	for _, g := range fp.Groups {
+		var members []*provenance.SourcePatch
+		if g.Source != nil {
+			members = g.Source.Members
+		}
+		require.Empty(t, members, "no group is merged")
+	}
+}
