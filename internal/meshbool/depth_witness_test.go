@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/proof"
+	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
 	"github.com/stretchr/testify/require"
 )
@@ -140,4 +141,49 @@ func TestNearestFacetWeightsStayOnTheFacet(t *testing.T) {
 	}
 	_, _, ok := nearestFacetWeights(r3.Vec{X: math.NaN()}, tri)
 	require.False(t, ok)
+}
+
+// TestNearestWitnessReplayAgreesWithPlain runs the leaning wall's two cases
+// through the replay path's witness search, under a replay budget, and
+// requires the plain search's verdict: whole and through the nearest-point
+// step alone.
+func TestNearestWitnessReplayAgreesWithPlain(t *testing.T) {
+	t.Parallel()
+	const slack = 0.002
+	wall := prismMesh(t, []r3.Vec{{}, {X: 2}, {X: 2, Y: 1}, {X: 0.05, Y: 1}}, -10, 10)
+	testcases := []struct {
+		Name string
+		Box  []r3.Vec
+		Side int
+		Deep bool
+	}{
+		{Name: "box beside the wall", Box: []r3.Vec{{Y: -1}, {X: 3, Y: -1}, {X: 3, Y: 2}, {Y: 2}}, Side: 3, Deep: true},
+		{Name: "box outside the wall", Box: []r3.Vec{{X: -3, Y: -1}, {Y: -1}, {Y: 2}, {X: -3, Y: 2}}, Side: 1, Deep: false},
+	}
+	for _, tc := range testcases {
+		t.Run(tc.Name, func(t *testing.T) {
+			t.Parallel()
+			box := prismMesh(t, tc.Box, 5, 5.5)
+			memo := NewContactMemo(wall, box)
+			nc, deferred, err := GatherNearContacts(t.Context(), wall, facetsOfSide(3), box, facetsOfSide(tc.Side), slack, memo)
+			require.NoError(t, err)
+			require.False(t, deferred)
+
+			plain, err := ProvenDepthExceeds(t.Context(), wall, nc.CloseA, box, nc.CloseB, nc.Spans, slack)
+			require.NoError(t, err)
+			require.Equal(t, tc.Deep, plain)
+			plainNearest, err := NearestWitness(t.Context(), wall, nc.CloseA, box, nc.CloseB, slack)
+			require.NoError(t, err)
+			require.Equal(t, tc.Deep, plainNearest)
+
+			replay, err := provenDepthExceedsShared(t.Context(), wall, nc.CloseA, box, nc.CloseB, nc.Spans, slack,
+				proofbound.NewReplayTrialBudget().WorkBudget(t.Context()))
+			require.NoError(t, err)
+			require.Equal(t, plain, replay)
+			replayNearest, err := nearestWitnessShared(t.Context(), wall, nc.CloseA, box, nc.CloseB, slack,
+				proofbound.NewReplayTrialBudget().WorkBudget(t.Context()))
+			require.NoError(t, err)
+			require.Equal(t, plainNearest, replayNearest)
+		})
+	}
 }
