@@ -21,7 +21,7 @@ func SolidFromMesh(ctx context.Context, d *Document, m *MeshBody) (*Body, error)
 
 ## 2. Blends on a mesh solid
 
-A retained plane is what the retained edge blend reads (`agent-docs/retained-edge-blend-design.md`, `agent-docs/retained-modify-reach-design.md`),
+A retained plane is what the retained edge blend reads (`agent-docs/modify-design.md` Part E, `agent-docs/retained-agent-docs/modify-design.md` Part R),
 so `Fillet` and `Chamfer` build on an edge of a mesh solid between two axis-square faces whose ends lie on axis-square
 faces, exactly as on a mesh Boolean result with retained planes: the call is that route's, its gates and bounds
 unchanged. An edge that meets a slanted face has no plane to blend against and is that route's `ErrUnsupported`. The tests

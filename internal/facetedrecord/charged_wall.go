@@ -24,7 +24,7 @@ func chargedWall(g Group) bool {
 // true radius is at least R - delta, so the true normal moves by at most
 // 2(delta_f + delta)/(R - delta). That is at most 4(delta_f + delta)/R while the
 // term stays below 1, which HeldNormalTerm enforces. The argument is
-// 2(delta_f + delta), rounded up (agent-docs/retained-edge-blend-design.md
+// 2(delta_f + delta), rounded up (agent-docs/modify-design.md Part E
 // §6.1, "Publishing a charged wall").
 func chargedWallTerm(surface surfacegeom.Surface, delta, axial float64) (float64, bool) {
 	// A negative or non-finite charge bounds nothing: the tag is declined.

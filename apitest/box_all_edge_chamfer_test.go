@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file is agent-docs/modify-general-design.md §4.3b's public-surface
+// This file is agent-docs/modify-design.md Part G §4.3b's public-surface
 // tests for the bare box: Chamfer of all twelve straight edges of an exact
 // axis-aligned box builds the same eighteen-plane polyhedron as the
 // cross-drilled box, without the bore.

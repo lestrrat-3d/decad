@@ -24,8 +24,8 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// The saddle chamfer's tool (agent-docs/retained-edge-blend-design.md §4.9).
-// In the fixed pose of agent-docs/cross-cylinder-bore-chamfer-design.md (shaft
+// The saddle chamfer's tool (agent-docs/modify-design.md Part E §4.9).
+// In the fixed pose of agent-docs/modify-design.md Part X (shaft
 // axis Z, bore axis X, the axes meeting at the origin, the mouth at +X), each
 // of the crossbore.ToolStations stations θ_j holds toolStride vertices:
 //

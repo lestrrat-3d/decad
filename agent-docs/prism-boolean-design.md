@@ -1709,7 +1709,7 @@ tolerance gate's reference diameter.
 
 ### internal/capblend contour (boundary note)
 
-The cap-loop chamfer's cap contour displacement (`agent-docs/modify-reach-design.md`
+The cap-loop chamfer's cap contour displacement (`agent-docs/modify-design.md` Part R
 §8.4) is a separate term with its own owner, derived and read in
 `internal/capblend` (`band.go`, `payload.go`, `build.go`). It is not
 `sectionDelta`: nothing in this design's own consumers reads the cap contour

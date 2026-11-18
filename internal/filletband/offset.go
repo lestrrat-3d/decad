@@ -143,7 +143,7 @@ func OffsetLoop(budget *proofbound.WorkBudget, walks []survey2d.SideWalk, joins 
 
 // CornerRead is Table LF's class of one corner beside the corner's
 // near-tangent reaches: Rho read with every off-radius arc about its restated
-// centre (the class's own ρ, agent-docs/loop-fillet-design.md §5.5–§5.6) and
+// centre (the class's own ρ, agent-docs/modify-design.md Part L §5.5–§5.6) and
 // RhoRec read about the recorded centres through the recorded junction (the
 // local terms of §5.7). Both are zero at a join exactly tangent in that
 // reading. Class is zero for SF1, with Why the reason when a near-tangent,

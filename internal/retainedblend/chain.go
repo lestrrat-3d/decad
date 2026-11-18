@@ -30,7 +30,7 @@ type chainLink struct {
 }
 
 // planChains groups the selected edges into closed tangent chains
-// (agent-docs/retained-modify-reach-design.md §5). handled is false when no
+// (agent-docs/retained-agent-docs/modify-design.md Part R §5). handled is false when no
 // selected edge ends at a proven tangent junction, and the caller keeps its
 // per-edge routes. Each chain lists its edges in cyclic order and carries the
 // junction between each edge and the next. A junction at the end of an arc that

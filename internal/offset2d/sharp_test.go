@@ -29,7 +29,7 @@ func polygonWalks(pts ...[2]float64) []survey2d.SideWalk {
 	return walks
 }
 
-// lWalks is agent-docs/draft-design.md F4's L section, counter-clockwise, its one
+// lWalks is agent-docs/modify-design.md Part D F4's L section, counter-clockwise, its one
 // reflex corner at (10, 10).
 func lWalks() []survey2d.SideWalk {
 	return polygonWalks([2]float64{0, 0}, [2]float64{20, 0}, [2]float64{20, 10},
@@ -37,7 +37,7 @@ func lWalks() []survey2d.SideWalk {
 }
 
 // TestSharpJoinsMiterTheReflexCorner pins the one row the sharp rule changes
-// (agent-docs/draft-design.md §2): the L section's reflex corner, which JoinsBudget
+// (agent-docs/modify-design.md Part D §2): the L section's reflex corner, which JoinsBudget
 // closes with a connector arc, is the miter of its two moved walls, (10 − t,
 // 10 − t), and every other corner is the same miter JoinsBudget takes.
 func TestSharpJoinsMiterTheReflexCorner(t *testing.T) {
@@ -121,7 +121,7 @@ func TestBuildSharpLoopConsumption(t *testing.T) {
 }
 
 // TestSharpLoopMixedAmounts pins the subset draft's corner rule
-// (agent-docs/draft-design.md §10.2). A square whose right wall alone moves t keeps
+// (agent-docs/modify-design.md Part D §10.2). A square whose right wall alone moves t keeps
 // its two left corners where they are and miters the moved wall against the
 // two kept walls at (20 − t, 0) and (20 − t, 20), so the far section is the
 // rectangle the kept walls' carriers bound. A G1 join between an arc and a line

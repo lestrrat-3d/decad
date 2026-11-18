@@ -149,7 +149,7 @@ func bossShellOpenEdges(ctx context.Context, alloc topo.Alloc, bp Payload, btopo
 // point keeps distance t from the source's root edge, the boss outline at
 // InterfaceZ, so each patch lies on the cylinder of radius t about one root
 // edge (a whole circle: the torus about it), on the cavity side below and
-// inside the root (agent-docs/modify-general-design.md §3.1a, §3.1c). The
+// inside the root (agent-docs/modify-design.md Part G §3.1a, §3.1c). The
 // patch runs from the side ring, the boss outline at LowerZ straight below
 // the axis, to the cap ring, the upper inset at InterfaceZ, beside it. Two
 // rectangular patches meet on the quarter ellipse the bisector plane of their

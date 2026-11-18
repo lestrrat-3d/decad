@@ -22,7 +22,7 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// This file is route P's displaced reading of agent-docs/brep-modify-design.md
+// This file is route P's displaced reading of agent-docs/modify-design.md Part B
 // §4.4 ("brep-modify §4.4"): a brep receiver whose record carries a section
 // displacement (a class-B crossing result) that reads as a prism is filleted
 // or chamfered at its lateral edges from the EXACT carriers its record holds

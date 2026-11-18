@@ -22,7 +22,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// The displaced-receiver fixtures of agent-docs/brep-modify-design.md §4.4:
+// The displaced-receiver fixtures of agent-docs/modify-design.md Part B §4.4:
 // the class-B D-flat record (r = 10, L = 40 shaft along x, flat at z = 7),
 // as the crossing reach builds it and with every displaced crossing moved by
 // eps. Both records denote the same exact D-flat: the cap and flat lines lie

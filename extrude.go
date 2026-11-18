@@ -49,7 +49,7 @@ type ExtrudeOption interface {
 // WithTaper sets the extrude taper: a SIGNED displacement angle — which way
 // the wall leans. A positive taper leans every wall into the material as it
 // leaves the sketch plane, so the body narrows toward the far end; a negative
-// one widens it (agent-docs/draft-design.md §2). An angle at or past a right angle
+// one widens it (agent-docs/modify-design.md Part D §2). An angle at or past a right angle
 // is [ErrDegenerate]. A nonzero taper builds over Distance, ToFace,
 // ThroughAll, Symmetric or TwoSided. WithSurfaceResult is [ErrUnsupported],
 // returned before commit. A zero taper builds the straight prism. A chain
@@ -91,7 +91,7 @@ func WithTaper(a units.Value) ExtrudeOption {
 // §4).
 //
 // A nonzero [WithTaper] on a profile builds a draft body instead
-// (agent-docs/draft-design.md): the far cap is the profile offset by h·tan α with
+// (agent-docs/modify-design.md Part D): the far cap is the profile offset by h·tan α with
 // every straight corner mitered, each straight wall a Plane leaning by the
 // taper and each circular wall a Cone. Its profile must hold line, arc and
 // circle segments only, and a circular wall must meet each neighbour
@@ -226,7 +226,7 @@ func extrudeProfile(ctx context.Context, d *Document, s *sketch.Sketch, p *sketc
 		return nil, err
 	}
 	if taper.Mag() != 0 {
-		// A nonzero taper builds a draft body (agent-docs/draft-design.md), never a
+		// A nonzero taper builds a draft body (agent-docs/modify-design.md Part D), never a
 		// straight prism.
 		return d.extrudeDraft(ctx, profile, frame, e, alpha, alphaDelta, surfaceResult)
 	}

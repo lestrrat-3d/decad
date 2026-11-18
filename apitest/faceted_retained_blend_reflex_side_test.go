@@ -58,7 +58,7 @@ func steppedArm(t *testing.T, outline [][2]float64) *decad.Body {
 // to the vertex (10, 0, 10), where the face y = 0 turns onto an overhang. The
 // blend ends on the overhang's underside, which takes the blend's end cap,
 // and the face y = 0 runs on from the setback point along its meeting with the
-// underside (agent-docs/retained-edge-blend-design.md §5.0, "A face that is
+// underside (agent-docs/modify-design.md Part E §5.0, "A face that is
 // reflex at an end").
 func TestFacetedRetainedBlendReflexSide(t *testing.T) {
 	t.Parallel()

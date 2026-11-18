@@ -408,7 +408,7 @@ func CapEnd(b *Body) FeatureRef {
 // Walls matches every face a sweep made: the faces carrying a side(i, j) role
 // of b's own producing feature. It is the sibling of CapStart and CapEnd, and
 // it is what Draft takes as the complete wall set of an extrude
-// (agent-docs/draft-design.md §10). On a body whose producer mints no side roles it
+// (agent-docs/modify-design.md Part D §10). On a body whose producer mints no side roles it
 // matches nothing, an ordinary ErrNoMatch at resolve. b must not be nil.
 func Walls(b *Body) FacePredicate {
 	return FacePredicate{kind: selectorquery.WallsKind, ref: provenance.Ref{Producer: b.n.Origin.Producer, Role: selectorquery.RoleSidePrefix}}

@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// The strip clearance rows of agent-docs/retained-modify-reach-design.md §5.6
+// The strip clearance rows of agent-docs/retained-agent-docs/modify-design.md Part R §5.6
 // for the routes that blend one edge, or a mitre run, rather than a tangent
 // chain: a cavity whose corner reaches into the region the blend removes, the
 // rest of it in the material behind the blend face, crosses the new strip

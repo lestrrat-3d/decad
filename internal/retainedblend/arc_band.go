@@ -11,7 +11,7 @@ import (
 )
 
 // The removed band of an arc's wall when the wall is not one-sided or extends
-// past an end plane (agent-docs/retained-edge-blend-design.md §5.0, "A wall that
+// past an end plane (agent-docs/modify-design.md Part E §5.0, "A wall that
 // extends past the corner", R4). The band is the part of the wall that lies
 // between the rim's plane P and the setback plane P′ (at height tb on the
 // wall's side), inside the end plane of each end where the wall extends, and on

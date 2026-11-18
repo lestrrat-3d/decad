@@ -114,7 +114,7 @@ type (
 // tapered Extrude or face Draft and of a two-sided taper: the
 // internal/draftrecord payloads, which draftrecord.Build and
 // draftrecord.BuildTwoSided evaluate over topology nodes and which implement
-// topo.Payload (agent-docs/draft-design.md, agent-docs/evaluator-design.md §8).
+// topo.Payload (agent-docs/modify-design.md Part D, agent-docs/evaluator-design.md §8).
 type (
 	draftPayload = draftrecord.Payload
 )
@@ -122,7 +122,7 @@ type (
 // capBlendPayload is the evaluator's record of a complete-cap-loop chamfer
 // and of the band view a draft or brep loop band builds through: the
 // internal/capblend payload, which capblend.Build evaluates over topology
-// nodes and which implements topo.Payload (agent-docs/modify-reach-design.md §8.3,
+// nodes and which implements topo.Payload (agent-docs/modify-design.md Part R §8.3,
 // agent-docs/evaluator-design.md §8). The other names are its setbacks and its
 // loft source.
 type (

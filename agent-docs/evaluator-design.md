@@ -535,7 +535,7 @@ cylinder union), a copied cap placed by a non-identity transform
 sweep, mitred-sweep, twist or coil end cap and a `Body.Patch` chain patch. A
 `Distance` extent reaches them. A nonzero
 `WithTaper` builds a draft body over `Distance`, `ToFace`, `ThroughAll`,
-`Symmetric`, or `TwoSided`. `agent-docs/draft-design.md` owns the tapered extrude:
+`Symmetric`, or `TwoSided`. `agent-docs/modify-design.md` Part D owns the tapered extrude:
 its sharp offset family, its one- and two-slab payloads, its refusals and its
 staging.
 
@@ -1116,7 +1116,7 @@ as every facet's vertex bound. It refuses a source group without an origin
 role. `facetproof.ScaleMesh` then applies the same rational similarity,
 embedding audit and area/volume charges to the Boolean mesh. A retained
 `Plane`, `Cylinder`, `Sphere` or `Torus` tag keeps its similar image
-(`agent-docs/retained-modify-reach-design.md` §7). A retained `Cone`, every
+(`agent-docs/retained-agent-docs/modify-design.md` Part R §7). A retained `Cone`, every
 denoted surface and every unretained curved tag read `Faceted`: none has a
 similarity image here, and `Faceted` claims less than the source tag did. The scaled
 result carries source-face roles and its plane tags, but drops
@@ -1794,7 +1794,7 @@ silent pass.
 | 4 | tessellation per `agent-docs/tessellation-design.md` + the exact-predicate mesh boolean, `Faceted` bodies, faceted `Verify`, `Tessellate`/`STL`/`OBJ`; supplies the geometry and bounds shared by public booleans and read-only interference evaluation |
 | 5 | fillet/chamfer on analytic prism edges, shell |
 | 6 | broader evaluator coverage, property tests, and fuzz tests for structural record validation |
-| 7 | tapered extrude and `Draft`, per `agent-docs/draft-design.md` §14's count-free five-PR plan |
+| 7 | tapered extrude and `Draft`, per `agent-docs/modify-design.md` Part D §14's count-free five-PR plan |
 
 Free-form support is `agent-docs/spline-design.md`'s own increment plan (§10 there).
 Its stages do not consume a global evaluator increment number.
@@ -1846,10 +1846,10 @@ numbers.
   ask that retires `EllipticalArcSeg` (§9 there). `FitSplineSeg` is Tier A
   (Table F), and its own build-path refusal (R6) is retired (§10 P4b), not
   through any upstream ask.
-- **Tapered extrude is decided.** `agent-docs/draft-design.md` owns it: the sharp
+- **Tapered extrude is decided.** `agent-docs/modify-design.md` Part D owns it: the sharp
   offset family, the admitted profile class, the audit that refuses a
   self-intersecting or collapsed far section, and `Draft`.
-- **Modify reach is decided.** `agent-docs/modify-reach-design.md` extends increment
+- **Modify reach is decided.** `agent-docs/modify-design.md` Part R extends increment
   5's modify ops with staged sub-items (RX/SX/BX/DX), including exact admitted
   cases and permanent `ErrUnsupported` boundaries; these stages do not consume a
   global evaluator increment number.

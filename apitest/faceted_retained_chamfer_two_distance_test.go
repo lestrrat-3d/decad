@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// The fixtures of agent-docs/retained-modify-reach-design.md §12 for increment
+// The fixtures of agent-docs/retained-agent-docs/modify-design.md Part R §12 for increment
 // M1: a two-distance chamfer of an edge of a mesh Boolean result with retained
 // tags.
 

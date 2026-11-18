@@ -176,7 +176,7 @@ func restateLoop(record sectionrecord.LoopRecord, walks []survey2d.SideWalk, cor
 // near-tangent end, every walk moving by radius over radiusDelta: once with
 // restated centres and the ρ′ reaches rho, and once with the recorded centres
 // and the ρ_rec reaches rhoRec, wherever either is positive at an end
-// (agent-docs/loop-fillet-design.md §5.5). It returns the near-tangent corner
+// (agent-docs/modify-design.md Part L §5.5). It returns the near-tangent corner
 // a failing wall names and the refusal's reason, or "" when every such wall
 // survives; err is a budget or context error.
 func nearTangentWalls(budget *proofbound.WorkBudget, record sectionrecord.LoopRecord, walks []survey2d.SideWalk,

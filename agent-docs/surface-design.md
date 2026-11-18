@@ -108,7 +108,7 @@ slightly wrong one.
 
 **The rule decad builds by is not "mint no geometry".** It mints a section
 offset's lines and arcs (§16.2, §17.2) and a cap blend's cone patches
-(`agent-docs/modify-reach-design.md` §8.3). The rule is a conjunction, and BOTH halves
+(`agent-docs/modify-design.md` Part R §8.3). The rule is a conjunction, and BOTH halves
 must hold: every generated coordinate has a closed form it is proven equal to,
 **and** every reading taken over it has a closed form too. A geometry meeting
 one half and not the other is refused, so passing the first half is never the
@@ -1620,7 +1620,7 @@ the refusal is this evaluator's reach, not a zero or self-crossing region. R5,
 R7 and R9 are `ErrDegenerate` because the geometry itself is the problem and
 no later evaluator admits it. R11, R15 and R17 are `ErrUnsupported` for
 permanent boundaries rather than staged ones, which is the same use
-`agent-docs/modify-reach-design.md` already makes of the sentinel: the caller's move
+`agent-docs/modify-design.md` Part R already makes of the sentinel: the caller's move
 is a different operation, not a later version. R18 joins R5, R7 and R9 for the
 same reason: an inconsistent assembly is the problem, not this evaluator's
 reach. R19 joins R11, R15 and R17: a body this evaluator did not build is a

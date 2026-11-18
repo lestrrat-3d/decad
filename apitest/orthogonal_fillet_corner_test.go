@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file is agent-docs/retained-edge-blend-design.md §4.8's tests: Fillet of straight mesh edges that meet at
+// This file is agent-docs/modify-design.md Part E §4.8's tests: Fillet of straight mesh edges that meet at
 // corners of three perpendicular faces, where three filleted edges end in a sphere octant.
 
 func TestFilletOfThreeEdgesAtABoxCornerEndsInASphere(t *testing.T) {

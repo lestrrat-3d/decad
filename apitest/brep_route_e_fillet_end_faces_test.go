@@ -37,7 +37,7 @@ func xzBox(t *testing.T, y0, z0, z1 float64) *decad.Body {
 // the box's floor and top, hold its corner through mirrored frames, and each
 // face's walk along the cap runs to a different far end. Both read the corner
 // with the same walk arriving, through the corner itself, so their feet agree
-// bit for bit and SB9 passes (agent-docs/brep-modify-design.md §5.3 step 2).
+// bit for bit and SB9 passes (agent-docs/modify-design.md Part B §5.3 step 2).
 // Read through the far ends in each face's own loop order, the feet on the
 // edges at the sketch plane y = y0 part by an ulp and SB9 refused them.
 func TestBrepRouteEFilletEndFacesAgree(t *testing.T) {

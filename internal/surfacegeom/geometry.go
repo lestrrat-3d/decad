@@ -167,7 +167,7 @@ type Arc3 struct {
 // counter-clockwise about Axis from the start vertex to the end vertex, as
 // Arc3 is, so the point at angle φ from Major is
 // Center + SemiMajor·cos φ·Major + SemiMinor·sin φ·(Axis × Major)
-// (agent-docs/loop-fillet-design.md §2). An edge whose start and end vertex are one
+// (agent-docs/modify-design.md Part L §2). An edge whose start and end vertex are one
 // vertex is the whole ellipse, one turn from that vertex, as a Circle3 edge is.
 type Ellipse3 struct {
 	Center, Axis, Major  r3.Vec

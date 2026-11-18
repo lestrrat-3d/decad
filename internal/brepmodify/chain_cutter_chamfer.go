@@ -22,7 +22,7 @@ import (
 )
 
 // ChainCutterChamfer chamfers the tangent chains of a mesh Boolean result whose edges share no one base plane
-// (agent-docs/retained-modify-reach-design.md §15b): a bar rounded about one axis at one end and about another at the
+// (agent-docs/retained-agent-docs/modify-design.md Part R §15b): a bar rounded about one axis at one end and about another at the
 // other, whose rim runs over both caps and both sides, or a slot whose rim runs down its sides and round its end on the
 // top and bottom faces. The retained chain route (§5) builds a chain on one base plane only.
 //

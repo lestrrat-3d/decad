@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// The fixtures of agent-docs/retained-modify-reach-design.md §12 for increment
+// The fixtures of agent-docs/retained-agent-docs/modify-design.md Part R §12 for increment
 // M4: Fillet and Chamfer of an open rounded outline of a mesh Boolean result.
 // The open-corner box is 40x20x20 with its corner at the origin rounded at
 // r = 3 and a Ø8 bore through y. Its top and bottom outlines are each a line of
@@ -188,7 +188,7 @@ func TestFacetedRetainedBlendOpenChain(t *testing.T) {
 		t.Logf("area change %.9f, want %.9f, bound growth %.3g", got, want, growth)
 		require.InDelta(t, want, got, growth)
 		// The growth carries the shortfall of the rebuilt faces' geometric area
-		// terms and the new faces' own terms (agent-docs/retained-edge-blend-design.md
+		// terms and the new faces' own terms (agent-docs/modify-design.md Part E
 		// §6.3), beside the chord error of the new facets, about 0.78 here: a
 		// loose ceiling, not the bound itself.
 		require.Less(t, growth, 4.0)

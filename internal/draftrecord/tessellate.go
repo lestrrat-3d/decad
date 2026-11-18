@@ -15,9 +15,9 @@ import (
 	"github.com/lestrrat-3d/decad/internal/topobuild"
 )
 
-// This file is agent-docs/draft-design.md Table DD row DD1: a draft body's
+// This file is agent-docs/modify-design.md Part D Table DD row DD1: a draft body's
 // tessellation and its occupied-volume proof. A draft body is built as the
-// cap-loop band of agent-docs/modify-reach-design.md §8.3 with no straight slab
+// cap-loop band of agent-docs/modify-design.md Part R §8.3 with no straight slab
 // (Payload.Band), so it is meshed by the cap-loop chamfer tessellator over
 // that same view (capblend.TessellateMesh, agent-docs/tessellation-reach-design.md
 // §7) with four differences, each stated where it applies:
@@ -31,12 +31,12 @@ import (
 //   - the slice-wise chord term integrates over the whole sweep height with
 //     both ends' displacements (capblend.Payload.DraftBandHeightUpper);
 //   - a subset draft's kept wall reads a zero setback (offset2d.DraftWalkAmounts,
-//     agent-docs/draft-design.md §10.2) in the cap radius, the band's radius
+//     agent-docs/modify-design.md Part D §10.2) in the cap radius, the band's radius
 //     rounding and the cap samples' motion, where a chamfer reads its one
 //     setback.
 //
 // The occupied-volume proof is §7's admission and its two legs, unchanged: a
-// sharp offset's corner loci are affine in the amount (agent-docs/draft-design.md
+// sharp offset's corner loci are affine in the amount (agent-docs/modify-design.md Part D
 // §2), so a band whose every corner is a line-line miter, convex or reflex,
 // or an exactly G1 join, and a whole circle, reproduces the exact offset
 // family slice by slice. Booleans, export, interference, mass properties and

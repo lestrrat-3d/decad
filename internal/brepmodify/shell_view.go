@@ -17,11 +17,11 @@ import (
 
 // shellViewBlend is a Fillet or Chamfer of a brep body whose record carries a
 // stacked shell's rounded cavity (breprecord.Payload BossShell or PocketShell;
-// agent-docs/brep-modify-design.md §2.1). The record has no exact route for
+// agent-docs/modify-design.md Part B §2.1). The record has no exact route for
 // any modify, so the body is restated as its faceted view (booleaneval.View):
 // its own tessellation, with each face's exact surface kept as a retained tag.
 // The selected edges map to the view's edges, and blend runs the retained edge
-// blend (agent-docs/retained-edge-blend-design.md) on the view, whose strip
+// blend (agent-docs/modify-design.md Part E) on the view, whose strip
 // check reads every other facet of the view, the cavity walls included, as an
 // obstacle.
 //

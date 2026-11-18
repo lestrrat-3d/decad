@@ -30,17 +30,9 @@ The rules for rows live in `agent-docs/layout.md`.
 | `agent-docs/hole-design.md` | `Hole`: face and point placement, size gates, tool shapes and the atomic cut. |
 | `agent-docs/rib-design.md` | `WebPath`: line and arc outlines, extent, overrun, draft, touch and volume checks, and the merged join. |
 | `agent-docs/emboss-design.md` | `Emboss`: face-derived sweep, plane checks, margin, volume checks and the shared join. |
-| `agent-docs/modify-design.md` | `Fillet`/`Chamfer`/`Shell` tables, section rewrite, exact offset, and build audit. |
-| `agent-docs/shell-variants-design.md` | `Shell` of a faceted body with bosses and of a twisted sweep. |
+| `agent-docs/modify-design.md` | `Fillet`/`Chamfer`/`Shell` tables, section rewrite, exact offset, build audit, and as parts every modify reach, blend, shell-opening and draft design. |
 | `agent-docs/twist-sweep-cut-design.md` | Stationed refinement of a twisted Sweep so Cut, Union and Intersect admit it, and the fine partner chord that admits chained twisted bore and window cuts. |
 | `agent-docs/spline-design.md` | Free-form kinds, exactness tiers, refusals, Tier A moments, work budget, proven brackets, and reach. |
-| `agent-docs/modify-reach-design.md` | Modify reach: tangent chains, asymmetric chamfers, cap-loop blends, shell reach and staging. |
-| `agent-docs/brep-modify-design.md` | Modify ops on brep and stacked receivers; Tables RB/EB/SB/BB/DB. |
-| `agent-docs/modify-general-design.md` | Shell of a through-cut brep (S), complete-loop chamfers (L); Tables TC/SG/LB/SL. |
-| `agent-docs/loop-fillet-design.md` | Route L's fillet arm: pipe bands on a planar face's loop. |
-| `agent-docs/vertex-blend-design.md` | Three-edge fillets, sphere patches, route V, and exact-radius refusals. |
-| `agent-docs/shell-opening-design.md` | Shell side openings on a prism and a revolve: rim rule, brep record, Tables RO/SO/BO/DO. |
-| `agent-docs/draft-design.md` | `WithTaper` and `Draft`: the sharp offset family, `draftPayload`, Tables RD/SD/BD/DD. |
 | `agent-docs/loft-design.md` | `Loft` pairing, refusals, results, consumers, chains, mass properties, wall-crossing audit, and `LoftFromPoint` (§20). |
 | `agent-docs/loft-sections-design.md` | Smooth-section loft classes, held meshes and proofs. |
 | `agent-docs/loft-face-sections-design.md` | Source-cap nine-section loft, cap correspondence, embedding, occupied-volume proof and two-cone continuation. |
@@ -56,7 +48,6 @@ The rules for rows live in `agent-docs/layout.md`.
 | `agent-docs/stacked-prism-design.md` | Stacked slabs, walls, measurements, mesh and consumers. |
 | `agent-docs/mirror-pattern-design.md` | Mirror and pattern entry points, the exact mirror join, the prism group. |
 | `agent-docs/general-boolean-design.md` | Boolean classes past the prism pair, and `brepPayload`. |
-| `agent-docs/cross-cylinder-bore-chamfer-design.md` | Source-backed perpendicular cylinder bore-mouth chamfer and mesh proof. |
 | `agent-docs/tessellation-reach-design.md` | Tessellation reach for lofts, free-form prisms, revolves and cap-loop chamfers. |
 | `agent-docs/faceted-vertex-bounds-design.md` | Per-vertex displacement bounds on faceted bodies and their boolean composition. |
 | `agent-docs/param-binding-design.md` | Reading feature values from a `sketch/param` table, and the ledger of those reads. |
@@ -65,8 +56,6 @@ The rules for rows live in `agent-docs/layout.md`.
 | `agent-docs/contained-cut-moments-design.md` | Certified contained-Cut V/P/Q source moments, faceted mass-property selection, bounds, refusals, and their exact-rational transfer through one rotation Copy. |
 | `agent-docs/operation-diagnostics-design.md` | Operation failure diagnostics, successful-call warnings, delivery APIs, compatibility rules, and proof fixtures. |
 | `agent-docs/faceted-source-retention-design.md` | Analytic source surfaces carried onto mesh Boolean result faces: claim, admission, normal bound, readers, increments. |
-| `agent-docs/retained-edge-blend-design.md` | `Fillet` and `Chamfer` of an edge between two retained faces of a mesh Boolean result: edge classes, exact blend geometry, local mesh rewrite, gates, bounds, increments. |
-| `agent-docs/retained-modify-reach-design.md` | Modify and placement reach on retained mesh Boolean results: the per-call probe table, two-distance and tangent-chain blends, exact-copy and scaled tags, parallel-cylinder blends, and the Shell, Draft and many-body Union refusals. |
 | `agent-docs/surface-intersection-design.md` | `Trim`/`Extend`/`Split` over shared-generator sweeps. |
 | `agent-docs/surface-design.md` | Sheet bodies, surface operations, verification and export. |
 | `agent-docs/linkage-check-design.md` | `VerifyLinkage` and `VerifyJointBox`, and as a part `VerifyMotion`: motions, the per-pose proof, the interval certificate, `MotionReport`. |

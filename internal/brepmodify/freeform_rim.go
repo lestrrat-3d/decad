@@ -23,7 +23,7 @@ import (
 )
 
 // FreeformRimChamfer chamfers the complete outer cap loop of a straight prism whose section holds fit
-// splines, the receiver the cap-loop chamfer refuses (agent-docs/modify-reach-design.md §8.5). Decad
+// splines, the receiver the cap-loop chamfer refuses (agent-docs/modify-design.md Part R §8.5). Decad
 // cannot offset a fit spline exactly, so each selected rim is cut by a band-shaped loft cutter. The band's
 // inner wall runs between two offsets of the recorded outline: the outline moved into the material by the setback
 // plus an overshoot, at a level that overshoot beyond the cap, and the outline moved away from the material by

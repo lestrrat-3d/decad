@@ -56,7 +56,7 @@ reliefs of different height on one side, `Facing` matches several faces and `Emb
 ## 6. Draft
 
 `WithEmbossDraft` leans the relief's walls. It passes `WithTaper` to the `Extrude` that builds each tool, so the lean,
-its sign and its refusals are `Extrude`'s (`agent-docs/draft-design.md` §2).
+its sign and its refusals are `Extrude`'s (`agent-docs/modify-design.md` Part D §2).
 
 | Decision | Rule |
 |---|---|

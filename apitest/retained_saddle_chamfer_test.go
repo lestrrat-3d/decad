@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// The fixtures of agent-docs/retained-edge-blend-design.md §4.9 (R7): a
+// The fixtures of agent-docs/modify-design.md Part E §4.9 (R7): a
 // Revolve shaft of radius saddleR, 80 mm long on the x axis, cut by an
 // Extrude pin of radius r along z through x = 40 (optionally moved off the
 // shaft's axis along y). The pin's two mouths are closed saddle edges between
@@ -134,7 +134,7 @@ func saddleMouths(t *testing.T, body *decad.Body, r, y float64) decad.EdgeSelect
 }
 
 // saddleSection is the exact section of the chamfer wedge at angle θ around
-// the bore, in the fixed pose of agent-docs/cross-cylinder-bore-chamfer-design.md
+// the bore, in the fixed pose of agent-docs/modify-design.md Part X
 // with the bore axis at z = 0: the seam point P, the outer foot O on the shaft
 // wall and the bore foot B on the bore wall, each d from P along its own
 // unrolled cylinder.

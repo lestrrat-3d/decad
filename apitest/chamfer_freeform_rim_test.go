@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file is agent-docs/modify-reach-design.md §8.5's test obligation: a Chamfer over the whole outer cap
+// This file is agent-docs/modify-design.md Part R §8.5's test obligation: a Chamfer over the whole outer cap
 // loop of a prism whose section is a smooth chain of fit splines.
 
 // flower is the polar outline r(θ) = base + amp·cos(lobes·θ).

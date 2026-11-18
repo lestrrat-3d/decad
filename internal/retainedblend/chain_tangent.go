@@ -12,7 +12,7 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// This file decides the tangent junction of agent-docs/retained-modify-reach-design.md
+// This file decides the tangent junction of agent-docs/retained-agent-docs/modify-design.md Part R
 // §5.2 from the retained tags alone. Every "yes" is an identity over the tags'
 // floats read as rationals, or a gap that only float round-off of the stored
 // tags can explain (tangentRoundoff). A "no" is a clear structural or numeric

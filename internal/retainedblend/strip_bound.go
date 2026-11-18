@@ -10,7 +10,7 @@ import (
 )
 
 // This file holds the bounds of a blend strip's facets (agent-docs/
-// retained-edge-blend-design.md §6.3, "Strip triangles"). A strip triangle
+// agent-docs/modify-design.md Part E §6.3, "Strip triangles"). A strip triangle
 // whose vertices lie on two neighbouring rows of the exact blend stays within
 // the profile's sagitta over their gap plus ρ_g·(1 − cos(Δφ/2)) of the
 // surface, with ρ_g the larger radius of the two rows and Δφ the spread of

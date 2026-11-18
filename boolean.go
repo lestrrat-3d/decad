@@ -82,7 +82,7 @@ import (
 // every band is a whole turn or joins only line-line miters and exactly tangent
 // corners — a filleted plate with drilled holes among them — is an ordinary
 // operand, as is a tapered extrude whose line–arc and arc–arc joins turn by
-// an angle whose sine is at most 2⁻³² (agent-docs/draft-design.md §9.1.1). The
+// an angle whose sine is at most 2⁻³² (agent-docs/modify-design.md Part D §9.1.1). The
 // matching axial loft's held-polygon cap band also has its own
 // occupied-volume proof for reflex corners (loft §18). A valid operand whose
 // boolean OUTPUT

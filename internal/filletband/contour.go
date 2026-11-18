@@ -19,7 +19,7 @@ import (
 // contour holds an LF5′ corner, or a corner beside an off-radius arc, at its
 // G1 foot or its recorded join, and the true contour lies within that
 // corner's local reach of it (Loop.LocalReach), so the bound adds the loop's
-// largest reach (agent-docs/loop-fillet-design.md §5.7). A loop whose corners
+// largest reach (agent-docs/modify-design.md Part L §5.7). A loop whose corners
 // Table LF refuses is ErrUnsupported: no band holds it.
 func LoopContourDelta(ctx context.Context, loop sectionrecord.LoopRecord, r, rDelta, tol float64) (float64, error) {
 	budget := proofbound.NewWorkBudget(ctx)

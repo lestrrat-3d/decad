@@ -19,7 +19,7 @@ import (
 // is at most delta. Only the closed-rim route (R2) and a closed chamfer tangent
 // chain (chain_charge.go) read it; every other route refuses it. A blend result keeps the tag with its delta (publishChargedWalls),
 // and the readers outside this package charge it or refuse it
-// (agent-docs/retained-edge-blend-design.md §6.1, "Publishing a charged wall").
+// (agent-docs/modify-design.md Part E §6.1, "Publishing a charged wall").
 
 // rimAreaSlope bounds how fast a closed rim's exact area change moves with the
 // wall radius: (pi^2 + 4*pi) < 22.44, per unit of the larger setback.
@@ -117,7 +117,7 @@ func keptWall(g facetedrecord.Group) bool {
 // publishChargedWalls publishes the charged walls of body. A retained Cylinder
 // group that states a finite displacement delta >= 0 keeps its tag and delta, as
 // a displaced plane does, so a later Fillet, Chamfer or Boolean reads the wall
-// again (agent-docs/retained-edge-blend-design.md §6.1, "Publishing a charged
+// again (agent-docs/modify-design.md Part E §6.1, "Publishing a charged
 // wall"). It clears the group's ViewCharge mark, so the rebuilt body's edge
 // curves take the published rule. Any other curved group that states a
 // displacement is untagged: the tag, its record and its displacement drop, and

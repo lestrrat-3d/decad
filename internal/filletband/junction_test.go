@@ -21,7 +21,7 @@ var stepDelta = math.Ldexp(1, -30)
 // runs from (−5, 0) to (0, −5 − δ): its End sits |δ| off the circle its Start
 // states, outside it for δ > 0 and inside it, a step into the material, for
 // δ < 0, so the record holds a radial step at the corner where the bottom line
-// leaves (agent-docs/loop-fillet-design.md §5.6–§5.7). Both of the arc's
+// leaves (agent-docs/modify-design.md Part L §5.6–§5.7). Both of the arc's
 // joins are exactly tangent about the recorded centre. The rest of the loop
 // closes with three right-angle miters.
 func steppedLoop(delta float64) sectionrecord.LoopRecord {
@@ -277,7 +277,7 @@ func TestNormalTurnAndMeridianExcess(t *testing.T) {
 
 // lemmaOneSeamExcess integrates, in 256-bit arithmetic, how much longer the
 // convex seam of slotLoop's bottom line and right arc is than the quarter
-// circle (π/2)·r: Lemma 1 of agent-docs/draft-design.md §9.1.1 puts the
+// circle (π/2)·r: Lemma 1 of agent-docs/modify-design.md Part D §9.1.1 puts the
 // corner at x(t) along the moved line with |x′| = R(1 − cos θ)/√Δ(t), so the
 // seam's speed is r·√(1 + x′²·sin²φ) against the meridian's r.
 func lemmaOneSeamExcess(shift, r float64) float64 {

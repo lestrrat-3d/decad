@@ -118,7 +118,7 @@ func setbackPoint(base, d r3.Vec, g plane) r3.Vec {
 // the edge onto an end plane it grows by up to 1/|d·n|, so the step keeps the
 // cross-section's sagitta within tau·c and the end plane's within tau, which
 // every row vertex's bound tau + slack states
-// (agent-docs/retained-edge-blend-design.md §6.3).
+// (agent-docs/modify-design.md Part E §6.3).
 func rowStep(tau, r, c float64) float64 { return 2 * math.Acos(1-math.Min(tau*c/r, 1)) }
 
 // endSine is the smallest of c and |d·n| over the planes' normals n: the

@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// The class-B blend fixtures of agent-docs/brep-modify-design.md §4.4: a
+// The class-B blend fixtures of agent-docs/modify-design.md Part B §4.4: a
 // Fillet or Chamfer of the long edges where a class-B cut meets the shaft
 // cylinder (revolve_shaft_class_b_test.go's D-flat and keyway) builds from the
 // record's exact carriers. Each removed corner is a closed form in the

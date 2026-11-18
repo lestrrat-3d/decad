@@ -8,7 +8,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/topo"
 )
 
-// Exact on-plane provenance of a band's end plane (agent-docs/retained-edge-blend-design.md
+// Exact on-plane provenance of a band's end plane (agent-docs/modify-design.md Part E
 // §4.3). A held vertex lies on end plane G by construction when it bounds a face
 // whose retained plane tag is G's tag exactly. Retention Claim R puts every true
 // point of such a face's patch on its tag, and a vertex's true point lies in the

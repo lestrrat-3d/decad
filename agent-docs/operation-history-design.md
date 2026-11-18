@@ -147,7 +147,7 @@ affected patches with the modify builder's certified trimmed and blend records.
 `internal/retainedblend` already preserves surface groups and creates blend tags;
 extend its lineage alongside those real groups, not by joining old and new roles.
 Existing retained-edge routes can consume the resulting surfaces, rims and local
-bounds under `retained-edge-blend-design.md`. They gain no new admission from an
+bounds under `agent-docs/modify-design.md` Part E. They gain no new admission from an
 operation name, ancestry pointer, or complete public face mapping.
 
 The contained-Cut mass-property slice is implemented in
@@ -960,7 +960,7 @@ Add each new test name to shard 10 of `.github/test-shards.txt`.
 - Files: `internal/facetedrecord/group.go`, new `internal/facetedrecord/source_patch.go`,
   `internal/booleaneval/eval.go`'s face-to-group loop, and the blend-group
   appends in the six `retainedblend` files of the table above. Update
-  retention §3.1's group table, `retained-edge-blend-design.md` §5.1 and
+  retention §3.1's group table, `agent-docs/modify-design.md` Part E §5.1 and
   `evaluator-design.md` §9's group fields.
 - Deliverable: Add `Group.Source *SourcePatch`. A `SourcePatch` is immutable and
   holds the operand body's `Origin.Producer`, the operand position, the face's

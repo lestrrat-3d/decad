@@ -11,10 +11,10 @@ import (
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 )
 
-// This file is agent-docs/loop-fillet-design.md §5.5: the terms an LF5′
+// This file is agent-docs/modify-design.md Part L §5.5: the terms an LF5′
 // corner charges. The band is built as at an LF5 join, so every reading
 // states the structure's own value and widens it by the corner's reach ρ
-// (capband.NearTangentCorner, agent-docs/draft-design.md §9.1.1 Lemmas 1 and
+// (capband.NearTangentCorner, agent-docs/modify-design.md Part D §9.1.1 Lemmas 1 and
 // 1′). At every offset t of the sweep, the true corner points (the miter m(t)
 // of a convex sliver, the connector arc of a reflex one) and both walks'
 // radial feet f(t) lie within 2ρ of each other. Every number here is a
@@ -46,7 +46,7 @@ func NearTangentMassAllowance(cornerU, cornerV, cornerError, rho float64, radius
 }
 
 // WidenNearTangentExtent widens an extent's enclosure by the loop's largest
-// local reach (Loop.LocalReach, agent-docs/loop-fillet-design.md §5.7) along
+// local reach (Loop.LocalReach, agent-docs/modify-design.md Part L §5.7) along
 // the planar part of direction g: every true band point lies, in its own
 // level, within it of a point of the stated patches, and each stated point
 // within it of a true one. reach is nil for a loop with no LF5′ corner and no
@@ -73,7 +73,7 @@ func WidenNearTangentExtent(reach []float64, g [3]*big.Rat, old Interval) (Inter
 
 // NearTangentNormalTurn bounds how far the in-plane outward normal of the
 // true band strays, near near-tangent corner k, from the normal a patch
-// beside it states at the same point (agent-docs/loop-fillet-design.md
+// beside it states at the same point (agent-docs/modify-design.md Part L
 // §5.7): the turn between the two walks' normals, 2·sin(θ/2) <= ρ/r_lo, plus,
 // for each circular walk, the rotation its moved circle's normal takes over
 // the stretch between the radial foot and the true corner or the other foot,

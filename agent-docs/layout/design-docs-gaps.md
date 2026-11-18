@@ -18,14 +18,12 @@ The rules for rows live in `agent-docs/layout.md`.
 | `agent-docs/mesh-solid-design.md` | `SolidFromMesh`: a closed `MeshBody` as a Faceted solid `Body`, its proofs and exact plane groups. |
 | `agent-docs/mesh-import-design.md` | `MeshBody`, `ReadSTL` and `ReadOBJ`: the mesh readers, the mesh report and its exact volume. |
 | `agent-docs/path-pattern-design.md` | `PathPattern`: copies along a `Path` by count or by arc-length spacing, and the path sampler. |
-| `agent-docs/blend-variants-design.md` | Chord-length fillet, angle chamfer and the oblique boss fillet. |
 | `agent-docs/arrange-design.md` | `Arrange`: shelf packing of body footprints onto a flat bed by translation. |
 | `agent-docs/parts-design.md` | `parts`: staged exploded view and schematic of placed bodies; typed joints, part views, BOM, summary, a structural joint check without `Verify`, linkage bridge; `export.ThreeMFItems`. |
 | `agent-docs/section-outline-design.md` | `Body.SectionOutline`: the mesh cut by a plane as closed outlines, its on-plane rule and its bound. |
 | `agent-docs/boss-design.md` | `Boss`: a round boss and its blind pilot hole in one atomic union-and-cut commit. |
 | `agent-docs/charged-window-chamfer-design.md` | `Chamfer` of a window rim of a holed A1 stacked BRep after a retained edge blend: oblique walls in the view, a tangent chain on charged walls. |
 | `agent-docs/boss-root-overflow-design.md` | Design only: a `Boss` root fillet that runs off its face and ends on the cliff faces, as Fusion ends it. |
-| `agent-docs/tangent-notch-design.md` | Design only: a blind side-notch `Cut` meeting the outer wall tangentially at recorded vertices, and its floor-arc fillet. |
 | `agent-docs/mesh-wall-survey-design.md` | The wall and undercut surveys of a faceted body by rays through its held mesh: what they prove and what they cannot. |
 | `agent-docs/dxf-export-design.md` | `export.DXF`: feature-edge projection, hidden-line runs and the release-12 file. |
 | `agent-docs/png-export-design.md` | `export.PNG` and `export.PNGBodies`: the orthographic flat-shaded renderer, its camera and shading rules. |

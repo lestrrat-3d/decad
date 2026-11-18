@@ -22,7 +22,7 @@ import (
 	"github.com/lestrrat-3d/r3"
 )
 
-// The saddle fillet (agent-docs/retained-edge-blend-design.md §4.10): the
+// The saddle fillet (agent-docs/modify-design.md Part E §4.10): the
 // rolling-ball fillet of an R7 saddle, built by rewriting the held mesh near
 // the mouth. In the fixed local pose (shaft axis z, bore axis x, mouth at
 // +x) it
@@ -66,7 +66,7 @@ func canalOf(key saddleKey, rho float64) saddlecanal.Canal {
 }
 
 // SaddleFillet fillets the selected saddle edges of b (Table RR R7 fillet,
-// agent-docs/retained-edge-blend-design.md §4.10), one mouth at a time on the
+// agent-docs/modify-design.md Part E §4.10), one mouth at a time on the
 // evolving mesh. recognized is false when some selected edge is no saddle;
 // the caller then tries the other routes.
 func SaddleFillet(ctx context.Context, env topo.Env, b *topo.Body, fp facetedrecord.Payload,
@@ -484,7 +484,7 @@ func (f *saddleFillet) windowClear(w shaftWindow, facets []int) bool {
 // within the rewrite's reach: a facet of another face, or a segment of another
 // boundary loop of either wall, whose box grown by its bounds plus slack meets
 // the box of the window, the bore's cut-off end and the fillet
-// (agent-docs/retained-edge-blend-design.md §4.10, SR5). The fillet's part is
+// (agent-docs/modify-design.md Part E §4.10, SR5). The fillet's part is
 // strip, the box of the held strip's vertices, grown by chord: it holds both
 // the held strip and the exact fillet. Inside that box the solid's boundary is
 // then the two walls alone, on whichever side of each its material lies.

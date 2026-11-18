@@ -101,7 +101,7 @@ func requireBlendVerified(t *testing.T, doc *decad.Document, b *decad.Body) *dec
 // A stacked boss shell's root band meshes within the requested tolerance.
 // Each straight root edge's band runs from one root corner's miter to the
 // next in a single cell, so its ring count is set by that cell's twist
-// (agent-docs/loop-fillet-design.md §7.1), and the mesh Bound, every term of
+// (agent-docs/modify-design.md Part L §7.1), and the mesh Bound, every term of
 // which the band charges, stays at or below tol.
 func TestShellBossTessellateWithinTolerance(t *testing.T) {
 	t.Parallel()

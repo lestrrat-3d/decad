@@ -42,7 +42,7 @@ import (
 // face(k) or wall(k) for its index k in the record.
 //
 // blend is "fillet" or "chamfer" on a swept face a modify op's route E built
-// (agent-docs/brep-modify-design.md §5.3, Table BB's BB4), and empty on every other
+// (agent-docs/modify-design.md Part B §5.3, Table BB's BB4), and empty on every other
 // face. The body build gives such a face a second role, fillet(k) or
 // chamfer(k) for its index k, so a placement re-mints it with the record.
 //
@@ -50,7 +50,7 @@ import (
 // (agent-docs/general-boolean-design.md §4.1): the operand circle the wall lies
 // on, in the face's own frame. The recorded wall denotes that circle only to
 // within delta. It is zero on every other face, and only route P's displaced
-// reading reads it (agent-docs/brep-modify-design.md §4.4).
+// reading reads it (agent-docs/modify-design.md Part B §4.4).
 type Face struct {
 	Frame            r3.Frame
 	Region           *momentinput.Profile
@@ -90,7 +90,7 @@ type CutOperands struct {
 // face frame is stated in the payload's unplaced coordinates and xform places
 // the whole body, as every payload does. stack is nil for every record but
 // an A1 result's. loopBands holds a route L chamfer's or fillet's bands
-// (agent-docs/modify-general-design.md §4.2 step 5, agent-docs/loop-fillet-design.md §4):
+// (agent-docs/modify-design.md Part G §4.2 step 5, agent-docs/modify-design.md Part L §4):
 // each band's patches are faces of the body and no face of the record, and
 // the body build attaches them (band.go, fillet.go). It
 // is nil for every record route L did not build.
@@ -104,7 +104,7 @@ type Payload struct {
 	// SlabCut marks a record a blind Cut built through stackedunion's BRep build
 	// (general-boolean §3 A7, A9). Like Stack, it admits the record to the
 	// faceted-view fillet that runs after the receiver routes refuse
-	// (agent-docs/tangent-notch-design.md T3).
+	// (agent-docs/modify-design.md Part T T3).
 	SlabCut bool
 	// CarrierCharge is the carrier alias charge a holed A1 union records
 	// (general-boolean §3 "A1 as a brep", width band): the shared span width
@@ -137,7 +137,7 @@ func (Payload) SurveyClass() string { return "brepPayload" }
 func (f Face) Planar() bool { return f.Region != nil }
 
 // reversed is the face with its outward side exchanged, the rule a record
-// applies to a face of a cavity (agent-docs/modify-general-design.md §3.3 step 5):
+// applies to a face of a cavity (agent-docs/modify-design.md Part G §3.3 step 5):
 // a planar face flips outward, and a swept face walks its wall the other way
 // and exchanges its start-line and end-line splits. Levels, frame and
 // displacements are unchanged.

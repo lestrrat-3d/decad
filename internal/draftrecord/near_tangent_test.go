@@ -14,7 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file pins agent-docs/draft-design.md §9.1.1 on the production mesh
+// This file pins agent-docs/modify-design.md Part D §9.1.1 on the production mesh
 // path: a draft of nearTangentSlot, whose right arc meets both lines a sliver
 // off tangent, meshes with the occupied-volume proof, and its near-tangent
 // corner charge covers the area its ideal polyhedron's slices leave between

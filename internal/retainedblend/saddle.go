@@ -18,7 +18,7 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// This file reads R7 of agent-docs/retained-edge-blend-design.md Table RR: the
+// This file reads R7 of agent-docs/modify-design.md Part E Table RR: the
 // closed saddle edge where a retained bore crosses a larger retained cylinder
 // at right angles, as a cross hole leaves a turned shaft. Chamfer cuts it
 // (saddle_tool.go) and Fillet rewrites the mesh near it (saddle_fillet.go).
@@ -51,7 +51,7 @@ var outsideSides = [2]int{1, 1}
 func (k saddleKey) built() bool { return k.convex && k.sigma == mouthSides }
 
 // filletBuilt reports whether the fillet builds the saddle
-// (agent-docs/retained-edge-blend-design.md §4.10): the chamfer's mouth, and
+// (agent-docs/modify-design.md Part E §4.10): the chamfer's mouth, and
 // σ = (+1, +1) at either a convex edge (two crossing bores, both faces
 // Reversed; the fillet removes material) or a concave one (a boss on a rod,
 // neither Reversed; the fillet adds material). The concave pin root inside a
@@ -276,7 +276,7 @@ func readSaddle(e *topo.Edge, fp facetedrecord.Payload, faceIndex map[*topo.Face
 
 // SaddleChamfer bevels the selected saddle edges of b (Table RR R7): one mesh
 // Boolean cuts b by a tool of one proven band-shaped ring per edge
-// (agent-docs/retained-edge-blend-design.md §4.9). recognized is false when
+// (agent-docs/modify-design.md Part E §4.9). recognized is false when
 // some selected edge is no saddle; the caller then tries the other routes.
 // The span is the number of producer identities the result used: the tool's
 // and the cut's.

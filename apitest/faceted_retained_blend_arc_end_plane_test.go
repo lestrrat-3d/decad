@@ -13,7 +13,7 @@ import (
 
 // TestFacetedRetainedBlendArcEndPlane fillets arcs whose rows end on a plane
 // parallel to the axis and offset from it, nearly tangent to the rows'
-// circles (agent-docs/retained-edge-blend-design.md §4.4, §6.3). The torus
+// circles (agent-docs/modify-design.md Part E §4.4, §6.3). The torus
 // meets that plane in a curve that is no conic, and the end face takes the
 // chords between the rows' points on it. c is the sine of the angle between
 // the plane and the circle of the row nearest tangency. The true end curve is

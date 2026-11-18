@@ -56,7 +56,7 @@ type CapBlendLocusInput struct {
 // number at either cap, since a loop chamfered on both caps takes one setback
 // pair on both (resolveCapSetbacks) and the two readings then differ only in
 // the sign of an axial span both take the magnitude of. The locus runs dc in
-// the plane and ds along the sweep (agent-docs/modify-reach-design.md §8.3.1). A
+// the plane and ds along the sweep (agent-docs/modify-design.md Part R §8.3.1). A
 // sub-range whose speed cannot be enclosed answers +Inf, which refuses.
 func CapBlendCornerLocusGap(budget *proofbound.WorkBudget, in CapBlendLocusInput) (float64, error) {
 	n := len(in.Walks)

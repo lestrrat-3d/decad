@@ -21,7 +21,7 @@ type PrismRect struct {
 // CircleCarrier is the circle a swept circular wall lies on, in the wall's own
 // frame, as the operand that contributed the wall recorded it: its centre and
 // its radius in millimetres, the operand CircleSeg's Radius. A zero Radius
-// names none (agent-docs/brep-modify-design.md §4.4).
+// names none (agent-docs/modify-design.md Part B §4.4).
 type CircleCarrier struct {
 	Center sectionrecord.Point2
 	Radius float64

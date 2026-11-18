@@ -30,12 +30,12 @@ import (
 // Fillet rounds lateral edges — line/line, line/arc and arc/arc corners,
 // convex and concave — with B1's roles and atomic commit (modify §13). A
 // selection of complete cap loops is route L's fillet arm over the prism's
-// face view (agent-docs/loop-fillet-design.md RF3). Single straight cap edges take
+// face view (agent-docs/modify-design.md Part L RF3). Single straight cap edges take
 // route E; complete loops with independent straight edges take route V
-// (agent-docs/vertex-blend-design.md). A revolve
+// (agent-docs/modify-design.md Part V). A revolve
 // receiver takes the same corner rewrite on its meridian (revolve_blend.go,
-// agent-docs/modify-reach-design.md §7), and a brep or stacked boolean result takes
-// routes P and E of agent-docs/brep-modify-design.md (brep_modify.go); any other
+// agent-docs/modify-design.md Part R §7), and a brep or stacked boolean result takes
+// routes P and E of agent-docs/modify-design.md Part B (brep_modify.go); any other
 // receiver is S3 (ErrUnsupported). A zero-twist, one-line solid Sweep reads
 // its stored exact prism reduction for lateral-edge fillets. Other Sweep
 // paths are S3, and its cap-edge selections are S1.
@@ -43,7 +43,7 @@ import (
 // rim through the bounded meridian reduction in draft_circle.go.
 
 // FilletOption configures Fillet. WithTangentChain is the one option a
-// fillet takes (agent-docs/modify-reach-design.md §2).
+// fillet takes (agent-docs/modify-design.md Part R §2).
 type FilletOption interface{ filletOption() }
 
 // Fillet rounds selected section corners of a straight prism, its admitted
@@ -58,13 +58,13 @@ type FilletOption interface{ filletOption() }
 //
 // WithTangentChain expands the edges sel resolves to across every edge that
 // continues them with proven G1 continuity before any receiver gate runs
-// (agent-docs/modify-reach-design.md §5); sel's cardinality assertion applies to
+// (agent-docs/modify-design.md Part R §5); sel's cardinality assertion applies to
 // the seeds it names. A continuation that branches or that this evaluator
 // cannot decide is ErrUnsupported (SX2), and so is a faceted boolean result
 // (SX9), refused before expansion.
 //
 // On a revolve, Fillet rounds swept meridian junctions instead
-// (agent-docs/modify-reach-design.md §7): a latitude Circle3 of a full turn or a
+// (agent-docs/modify-design.md Part R §7): a latitude Circle3 of a full turn or a
 // junction Arc3 of a partial one, each the sweep of one corner of the
 // recorded meridian. The meridian gets the same tangent arc, faces the same
 // audit, and is re-gated against the axis — a new axis contact is
@@ -83,7 +83,7 @@ type FilletOption interface{ filletOption() }
 //
 // An analytic boolean result (a brep or stacked body) that reads as a prism
 // along a reference axis is filleted as that prism
-// (agent-docs/brep-modify-design.md route P): its lateral edges are the prism's, and
+// (agent-docs/modify-design.md Part B route P): its lateral edges are the prism's, and
 // the result is a prism. Any other selection of straight edges along one axis
 // of such a body's face record takes route E (§5): a swept straight wall
 // the edge ends on or runs along as a rim is first restated as the planar
@@ -100,9 +100,9 @@ type FilletOption interface{ filletOption() }
 // P8's exact front top edge uses a radius-1 quarter-cylinder cutter before
 // route E's SB7 curved-third-face gate (modify-general §4.3c).
 // Any other selection of such a body's edges is route L's
-// (agent-docs/modify-general-design.md §4): complete
+// (agent-docs/modify-design.md Part G §4): complete
 // loops of planar faces are filleted as a pipe band at radius r
-// (agent-docs/loop-fillet-design.md) — a quarter cylinder along each line, a torus
+// (agent-docs/modify-design.md Part L) — a quarter cylinder along each line, a torus
 // around each arc and at each reflex corner, cylinders meeting along an
 // Ellipse3 at a line-line miter, and a FilletMiter3 at a regular sharp
 // corner involving an arc — the walls beside each loop trimmed to its
@@ -122,18 +122,18 @@ type FilletOption interface{ filletOption() }
 // prism uses a bounded faceted cutter when that edge or its terminal walls
 // are oblique; the cutter and receiver commit atomically. A faceted Union of
 // a rooted oblique circular boss and rectangular plate also accepts its one
-// complete root junction (agent-docs/blend-variants-design.md). Any other
+// complete root junction (agent-docs/modify-design.md Part A). Any other
 // receiver outside those routes, loft §17 and draft §10.4 is S3
 // (ErrUnsupported).
 //
 // A faceted Union of two rectangular prisms also admits one untouched outer
 // vertical edge when the other prism is certified clear of the full removed
-// radius band (agent-docs/modify-reach-design.md §10.1).
+// radius band (agent-docs/modify-design.md Part R §10.1).
 // A loop-filleted body publishes its volume, centroid, area, box and
 // through-all extent, and passes Verify; it meshes with an occupied-volume
 // proof, exports to STEP, takes part in a mesh boolean, is surveyed for
 // undercuts and concave radii, and is placed, mirrored and patterned like any
-// brep body (agent-docs/loop-fillet-design.md Table DF).
+// brep body (agent-docs/modify-design.md Part L Table DF).
 func Fillet(ctx context.Context, b *Body, sel EdgeSelector, r units.Value,
 	opts ...FilletOption) (result *Body, retErr error) {
 	defer func() { retErr = operationError(OperationFillet, retErr) }()
@@ -181,7 +181,7 @@ func Fillet(ctx context.Context, b *Body, sel EdgeSelector, r units.Value,
 	if err != nil {
 		return nil, err
 	}
-	// Reach stage 2 (agent-docs/modify-reach-design.md §4/§5): the seed query's
+	// Reach stage 2 (agent-docs/modify-design.md Part R §4/§5): the seed query's
 	// cardinality has been enforced above; the tangent chain expands it.
 	if o.TangentChain {
 		if edges, err = expandTangentChain(ctx, b, sel, edges); err != nil {

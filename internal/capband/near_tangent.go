@@ -13,7 +13,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 )
 
-// This file is agent-docs/draft-design.md §9.1.1: the near-tangent join of a
+// This file is agent-docs/modify-design.md Part D §9.1.1: the near-tangent join of a
 // draft or cap-loop chamfer band, a line–arc or arc–arc corner the build reads as G1 whose exact
 // tangents turn by a sliver θ. Its true corner m(t), where the moved line
 // meets the moved circle or the two moved circles meet, leaves the radial
@@ -28,7 +28,7 @@ import (
 // sharp rule's amounts; a cap-loop chamfer passes its setback on every walk,
 // since its shell offset meets a convex sliver at the sharp corner and closes
 // a reflex one with a connector arc the same charge covers
-// (agent-docs/draft-design.md §9.1.1, "On a cap-loop chamfer band").
+// (agent-docs/modify-design.md Part D §9.1.1, "On a cap-loop chamfer band").
 type SharpAmounts func(li int, walks []survey2d.SideWalk) ([]float64, float64)
 
 // NearTangentCharge is one corner's terms in the near-tangent volume charge:
@@ -59,7 +59,7 @@ var nearTangentSinSqLimit = new(big.Rat).SetFrac(big.NewInt(1), new(big.Int).Lsh
 
 // NearTangentCorner reads the corner where prev's walk ends and cur's starts,
 // both normalized recorded segments the exact-tangent test JoinIsG1 rejects,
-// as agent-docs/draft-design.md §9.1.1's near-tangent join. prevAmount and
+// as agent-docs/modify-design.md Part D §9.1.1's near-tangent join. prevAmount and
 // curAmount are the two walks' offset amounts and amountDelta the half-width
 // of a nonzero amount's span. It returns the corner's charge, or the reason
 // and hint of the refusal: a corner whose recorded ends differ, whose exact
@@ -120,7 +120,7 @@ func nearTangentCorner(prev, cur cornerSegment, prevAmount, curAmount, amountDel
 	return charge, "", ""
 }
 
-// nearTangentCharge composes the corner's ρ and ε (agent-docs/draft-design.md
+// nearTangentCharge composes the corner's ρ and ε (agent-docs/modify-design.md Part D
 // §9.1.1, Lemma 1) from the exact sin²θ, the corner v on arc's circle and the
 // common amount, after checking condition 6: the moved radius r stays above
 // ρ + R·sin²θ at every level, which keeps the miter's discriminant positive
@@ -143,7 +143,7 @@ func nearTangentCharge(arc cornerSegment, v [2]*big.Rat, sinSq *big.Rat, amount,
 }
 
 // nearTangentReach composes ρ = T·sinUp·(1 + S) and ε = T·S
-// (agent-docs/draft-design.md §9.1.1) from the exact sin²θ and the common
+// (agent-docs/modify-design.md Part D §9.1.1) from the exact sin²θ and the common
 // amount, with T = |amount| + width bounding |t| at every level, and returns
 // width, the span's half-width (zero for a walk that does not move). ok is
 // false where a number does not lift.
@@ -169,11 +169,11 @@ func nearTangentReach(sinSq *big.Rat, amount, amountDelta float64) (*big.Rat, *b
 }
 
 // nearTangentArcsWhy is the refusal of a corner of two circular walls whose
-// moved circles do not meet condition 6 (agent-docs/draft-design.md §9.1.1).
+// moved circles do not meet condition 6 (agent-docs/modify-design.md Part D §9.1.1).
 const nearTangentArcsWhy = `a near-tangent join of two circular walls whose moved circles do not both clear the near-tangent corner charge`
 
 // twoArcCharge composes the charge of a near-tangent corner where arc first
-// arrives at v and arc second leaves it (agent-docs/draft-design.md §9.1.1,
+// arrives at v and arc second leaves it (agent-docs/modify-design.md Part D §9.1.1,
 // Lemma 1′), after checking condition 6 for two arcs: each moved radius stays
 // above ρ at every level. That keeps each arc from a radial foot to the true
 // corner under a quarter turn and, with sin θ ≤ 2⁻³², the two moved circles
@@ -326,7 +326,7 @@ func ratPoint2(p sectionrecord.Point2) ([2]*big.Rat, bool) {
 }
 
 // NearTangentWallRefusal checks Lemma 2's survival assumption
-// (agent-docs/draft-design.md §9.1.1) for walk i of a draft loop with a
+// (agent-docs/modify-design.md Part D §9.1.1) for walk i of a draft loop with a
 // near-tangent join at an end: the true edge runs forward from its start corner
 // to its end corner at every level. A circular walk reads
 // nearTangentArcRefusal; for a straight one, B1's two corner points move affinely

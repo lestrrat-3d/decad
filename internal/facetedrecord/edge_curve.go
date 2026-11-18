@@ -60,7 +60,7 @@ func RetainedEdgeCurve(a, b *topo.Face, chain []r3.Vec, bounds []float64, closed
 	slack := 64 * edgeEps * scale
 	// A Cylinder tag that states a displacement (AxialDelta: the true wall is a
 	// parallel cylinder within it) is a published wall once a retained edge
-	// blend keeps it (agent-docs/retained-edge-blend-design.md §6.1, "Publishing
+	// blend keeps it (agent-docs/modify-design.md Part E §6.1, "Publishing
 	// a charged wall"). A circle, arc or line is published with no room for the
 	// displacement, so beside an unmarked charged wall every rule applies the
 	// displaced plane's rule: a displacement above the chain's arithmetic
@@ -180,7 +180,7 @@ func tagDeparts(f *topo.Face) bool {
 }
 
 // cylinderTorusRim returns the junction circle of a blend cylinder and a blend
-// torus of one tube radius (agent-docs/retained-modify-reach-design.md §5.4,
+// torus of one tube radius (agent-docs/retained-agent-docs/modify-design.md Part R §5.4,
 // Claim J, and retention §10.1 E11). The cylinder's axis d is normal to the
 // torus axis a, and the plane through the torus axis normal to d cuts the
 // cylinder axis at the tube centre c_J: c_J lies in the torus's equatorial

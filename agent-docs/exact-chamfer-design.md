@@ -4,7 +4,7 @@ Exact setback points for `Chamfer` of a straight edge between two retained plane
 (retained-edge-blend R1): root cause (§1), required behavior (§2), approach (§3), construction (§4), bounds and
 soundness (§5), performance (§6), tests (§7), risks (§8), open questions (§9), tasks (§10).
 
-Amends `agent-docs/retained-edge-blend-design.md` §5.0 step 1, §5.2 and §6.3 (Claim K). Companion to
+Amends `agent-docs/modify-design.md` Part E §5.0 step 1, §5.2 and §6.3 (Claim K). Companion to
 `agent-docs/coplanar-contact-design.md` (exact faces are what its §3.1 admits) and
 `agent-docs/faceted-vertex-bounds-design.md` §2 (the corner model the bounds use). Adds no public API and no option.
 
@@ -216,7 +216,7 @@ conversion delta, so both are the exact requested distances.
 | `internal/retainedblend/line_rewrite.go` | `rewriteLineEdge` calls `exactChamferFeet` for chamfers |
 | `internal/retainedblend/plane_charge.go` | `planeFacetVolume` takes optional corner bounds; `chargePlaneFace` passes them |
 | `internal/retainedblend/rewrite.go` | `work.cornerSlab` field |
-| `agent-docs/retained-edge-blend-design.md` | §5.0 step 1, §5.2, §6.3 point to this doc |
+| `agent-docs/modify-design.md` Part E | §5.0 step 1, §5.2, §6.3 point to this doc |
 
 New unexported symbols (no exported ones):
 
@@ -460,7 +460,7 @@ result", the focused tests, and no new root adapter.
 ### Task 4: Hold R1 chamfer feet exactly
 
 - **Files:** `internal/retainedblend/line_rewrite.go`, `retained_line_chamfer_exact_test.go` (new),
-  `apitest/faceted_retained_blend_test.go`, `.github/test-shards.txt`, `agent-docs/retained-edge-blend-design.md`.
+  `apitest/faceted_retained_blend_test.go`, `.github/test-shards.txt`, `agent-docs/modify-design.md` Part E.
 - **What:** `chamferCarriers` and the §4.3 wiring with the §4.1 fallback; amend retained-edge-blend §5.0 step 1 ("a
   chamfer's feet follow `agent-docs/exact-chamfer-design.md` §4"), §5.2 and §6.3's strip-vertex sentence. Add
   `TestRetainedLineChamferExact` to the last numbered shard of `.github/test-shards.txt`.
@@ -478,7 +478,7 @@ result", the focused tests, and no new root adapter.
 
 - **Files:** `internal/retainedblend/plane_charge.go`, `internal/retainedblend/plane_charge_internal_test.go`,
   `internal/retainedblend/rewrite.go`, `internal/retainedblend/line_rewrite.go`, `retained_line_chamfer_exact_test.go`,
-  `agent-docs/retained-edge-blend-design.md`.
+  `agent-docs/modify-design.md` Part E.
 - **What:** §4.4: `work.cornerSlab`, the `beta` parameter, and `rewriteLineEdge` setting the flag on the exact path;
   amend Claim K's slab term and its proof sentence for R1.
 - **Depends on:** 4.

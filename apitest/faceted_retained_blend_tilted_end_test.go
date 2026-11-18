@@ -12,7 +12,7 @@ import (
 )
 
 // This file covers a straight edge that ends on an oblique end plane
-// (agent-docs/retained-edge-blend-design.md §6.1, "An oblique end plane"): the
+// (agent-docs/modify-design.md Part E §6.1, "An oblique end plane"): the
 // chamfer band of an outline drawn with tangent constraints states a rounding
 // tilt on its flat patches, a mesh Boolean keeps their Plane tags with that
 // tilt and an extent (agent-docs/faceted-source-retention-design.md §3.2, A2,

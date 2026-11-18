@@ -1,5 +1,5 @@
 // Package rimoffset offsets a smooth closed section loop of fit splines and lines, the foot curve of a
-// free-form cap-loop chamfer (agent-docs/modify-reach-design.md §8.5).
+// free-form cap-loop chamfer (agent-docs/modify-design.md Part R §8.5).
 package rimoffset
 
 import (

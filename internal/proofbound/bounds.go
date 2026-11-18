@@ -84,7 +84,7 @@ import (
 //     tolerance-gate diameter arm) so a later reading over the same bound can
 //     share it;
 //   - the AREA of ONE RULED QUAD whose cap-level chord alone is displaced (the
-//     cap-loop chamfer's own band patches, agent-docs/modify-reach-design.md §8.4) →
+//     cap-loop chamfer's own band patches, agent-docs/modify-design.md Part R §8.4) →
 //     BandPatchAreaAllow, the same two-factor product one patch at a time
 //     rather than one whole section;
 //   - the AREA of that SAME patch under a displacement of its OTHER directrix
@@ -2462,7 +2462,7 @@ func WalkEndBoundAllow(bound WalkEndBound) float64 {
 }
 
 // BandPatchAreaAllow bounds how far ONE chamfer band patch's own area
-// (agent-docs/modify-reach-design.md §8.4) can differ from the area of the ruled
+// (agent-docs/modify-design.md Part R §8.4) can differ from the area of the ruled
 // quad the construction DENOTES, given that its cap-level directrix sits
 // within delta of the point it denotes (agent-docs/prism-boolean-design.md §7's
 // identity, one ruled patch at a time rather than one whole section). The
@@ -2531,7 +2531,7 @@ func BandLevelAreaAllow(levelDelta, directrixSumUpper float64) float64 {
 // residual: the flux gap between a cap-loop chamfer's regular-wall Cone patch
 // B, the straight-ruled surface the topology builds between its two
 // directrices, and the denoted miter-locus surface T
-// (agent-docs/modify-reach-design.md §8.3: "at axial fraction s, the denoted miter
+// (agent-docs/modify-design.md Part R §8.3: "at axial fraction s, the denoted miter
 // locus is the parallel section offset by s*dc"). B meets T only at s=0 and
 // s=1 and chords it in between wherever the cap-level directrix
 // (capTh0, capTh1) sweeps a narrower window than the side-level one
@@ -2812,7 +2812,7 @@ func ChordLocusCornerFlux(axialUpper, dcLower, momentUpper float64) float64 {
 }
 
 // ChordLocusLengthAllow bounds a cap-blend miter ruling's own chord-versus-
-// locus excess (agent-docs/modify-reach-design.md §8.3's boundary bullet): how far
+// locus excess (agent-docs/modify-design.md Part R §8.3's boundary bullet): how far
 // the denoted corner-foot locus's true length can exceed the built chord it
 // is tagged `Line3` as, given a proven upper bound speedUpper on the locus's
 // own in-plane speed |dP/dt| over the offset range [0, dc] and the locus's
@@ -2853,7 +2853,7 @@ func ChordLocusLengthAllow(speedUpper, dc, axialSpan, chordUpper float64) float6
 
 // SweptMomentAllow bounds the FIRST MOMENT a cap contour's own displacement
 // can move — SweptVolumeAllow's own sibling one power higher
-// (agent-docs/modify-reach-design.md §8.4's fourth reading, beside the band
+// (agent-docs/modify-design.md Part R §8.4's fourth reading, beside the band
 // volume, the chamfered cap face area, and each band patch's own area). The
 // symmetric difference between the band the build holds and the one the
 // offset denotes has volume at most SweptVolumeAllow(delta, areaUpper) — that

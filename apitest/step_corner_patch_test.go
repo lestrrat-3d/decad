@@ -20,7 +20,7 @@ import (
 // and the pocket mouth chamfer holds four three-edge cone patches meeting at
 // their apex vertices. A loop chamfer's corner cones are cap-blend band
 // patches whose tags depart from the ruled patches the build assembles by a
-// stated bound (agent-docs/modify-reach-design.md §8.3), so both bodies take
+// stated bound (agent-docs/modify-design.md Part R §8.3), so both bodies take
 // the faceted writer: no CONICAL_SURFACE, one planar ADVANCED_FACE per mesh
 // triangle. The rounded box's volume is 9·(400 − 9(4 − π)) + ∫₀¹ (20 − 2d)² −
 // (4 − π)(3 − d)² dd = 3612 + 262π/3; ReadSTEP reads its file back closed,

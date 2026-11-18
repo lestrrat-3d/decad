@@ -144,13 +144,13 @@ func (m *Mesh) Bound() units.Value { return units.Millimeters(m.n.Bound) }
 // an operand; a band with a mitered circular wall or a reflex corner carries
 // no such proof, and that mesh serves export while the booleans refuse it.
 //
-// A tapered extrude (a draft body, agent-docs/draft-design.md) meshes as that same
+// A tapered extrude (a draft body, agent-docs/modify-design.md Part D) meshes as that same
 // band with no straight slab: one ruled wall per section walk between the near
 // cap's rim and the far section, a sharp miter at every line-line corner,
 // convex or reflex, and both caps triangulated. Where every circular wall
 // meets its neighbours exactly tangent, or meets a line or an arc tangent up
 // to a turn whose sine is at most 2⁻³², a sliver the proof charges
-// (agent-docs/draft-design.md §9.1.1), it also proves the volume it and the
+// (agent-docs/modify-design.md Part D §9.1.1), it also proves the volume it and the
 // body differ by, so [Union], [Cut] and [Intersect] take it as an operand.
 //
 // A lofted body RESTATES the flat triangle set its construction already built

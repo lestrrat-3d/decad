@@ -181,8 +181,8 @@ func Chamfer(ctx context.Context, env topo.Env, b *topo.Body, call ChamferCall) 
 	// Stage 2 (§4): the receiver's payload class (S3), then every selected
 	// edge is a lateral edge mapped to a section corner (S1) OR — reach RX1's
 	// second class — every geometric edge of one or more complete prism cap
-	// loops (SX4 otherwise; agent-docs/modify-reach-design.md §4/§8.3).
-	// Reach RX2 (agent-docs/modify-reach-design.md §7): a revolve receiver bevels its
+	// loops (SX4 otherwise; agent-docs/modify-design.md Part R §4/§8.3).
+	// Reach RX2 (agent-docs/modify-design.md Part R §7): a revolve receiver bevels its
 	// swept meridian junctions through the same corner rewrite. One certified
 	// quarter-turn radial cap rim takes the source-backed §7.2 route first.
 	if rp, ok := b.Payload.(revolveplan.Payload); ok {
@@ -212,7 +212,7 @@ func Chamfer(ctx context.Context, env topo.Env, b *topo.Body, call ChamferCall) 
 	if sweepStraight && asym != nil {
 		return Result{}, fmt.Errorf(`%w: an asymmetric chamfer of a Sweep wall has no mapped reference-face role`, decaderr.ErrUnsupported)
 	}
-	// Route P's displaced reading (agent-docs/brep-modify-design.md §4.4)
+	// Route P's displaced reading (agent-docs/modify-design.md Part B §4.4)
 	// bevels lateral corners from the record's exact carriers; a cap edge or
 	// a complete cap loop of it is PD1.
 	if route.Carriers != nil {
@@ -296,7 +296,7 @@ func Chamfer(ctx context.Context, env topo.Env, b *topo.Body, call ChamferCall) 
 	if !lateral {
 		// An equal chamfer sets both caps back d across the cap and d down the
 		// side; a two-distance one takes each cap's pair from its reference
-		// face (agent-docs/modify-reach-design.md §8.3.1).
+		// face (agent-docs/modify-design.md Part R §8.3.1).
 		// Dc measures across the end face; Ds measures down its side wall.
 		start := capblend.Setback{Dc: dmm, DcDelta: dDelta, Ds: dmm, DsDelta: dDelta}
 		end := start
@@ -401,7 +401,7 @@ func Chamfer(ctx context.Context, env topo.Env, b *topo.Body, call ChamferCall) 
 }
 
 // displacedChamfer is the chamfer arm of route P's displaced reading
-// (agent-docs/brep-modify-design.md §4.4): a selection that classifies as
+// (agent-docs/modify-design.md Part B §4.4): a selection that classifies as
 // lateral takes DisplacedLateralChamfer, and a cap edge or complete cap loop
 // is SB1 (PD1).
 func displacedChamfer(ctx context.Context, env topo.Env, pp prismrecord.Payload, caps PrismCaps, carriers SectionCarriers,

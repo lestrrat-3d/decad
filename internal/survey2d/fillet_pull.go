@@ -9,7 +9,7 @@ import (
 )
 
 // This file is the undercut survey's reading of a loop fillet's pipe patch
-// (agent-docs/loop-fillet-design.md Table DF's DF7). A patch's outward normal at
+// (agent-docs/modify-design.md Part L Table DF's DF7). A patch's outward normal at
 // azimuth θ and tube angle φ ∈ [0, π/2] is cos φ·ν + sin φ·σ·û(θ), with ν the
 // outward normal of the face F the band meets, σ the band's side and û(θ)
 // the inward normal of F's region at the loop point at azimuth θ. Its component
@@ -83,7 +83,7 @@ func InwardRange(w SideWalk, m PlacedFrameMap, pull r3.Vec, coef int64) (PullBra
 // at most turn (a unit-vector distance) from the normals b ranges over: such
 // a normal moves coef·(û·pull) by at most turn·(|Du·pull| + |Dv·pull|), F's
 // plane holding û. A loop fillet's near-tangent corner reads it
-// (agent-docs/loop-fillet-design.md §5.5).
+// (agent-docs/modify-design.md Part L §5.5).
 func WidenPullBracket(b PullBracket, m PlacedFrameMap, pull r3.Vec, turn *big.Rat) (PullBracket, bool) {
 	pv, ok := proofbound.IvVec3Of(pull)
 	if !ok || turn == nil || turn.Sign() < 0 {

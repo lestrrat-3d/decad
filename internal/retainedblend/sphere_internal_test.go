@@ -11,7 +11,7 @@ import (
 )
 
 // TestCrossing pins the grazing gate of the plane-sphere rim
-// (agent-docs/retained-edge-blend-design.md §4.5): a mesh Boolean cannot place a
+// (agent-docs/modify-design.md Part E §4.5): a mesh Boolean cannot place a
 // plane within 1e-7 of a sphere's tangent plane, so the gate is shown on the
 // rim's numbers directly.
 func TestCrossing(t *testing.T) {
@@ -26,7 +26,7 @@ func TestCrossing(t *testing.T) {
 }
 
 // TestSphereWallInnerVertexBound pins the bound of a kept inner vertex of a
-// curved wall (agent-docs/retained-edge-blend-design.md §4.5): a held vertex just
+// curved wall (agent-docs/modify-design.md Part E §4.5): a held vertex just
 // beyond the cut plane whose true point lies in the removed zone must be
 // bounded by its distance to the new boundary, not by its old bound. The wall
 // is a hand-built band of a radius-2 sphere below the plane z = −1: its rim

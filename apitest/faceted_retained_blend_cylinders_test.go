@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// The fixtures of agent-docs/retained-modify-reach-design.md §8 (R5): the 40x20x20
+// The fixtures of agent-docs/retained-agent-docs/modify-design.md Part R §8 (R5): the 40x20x20
 // plate with two overlapping Ø8 bores along z at (14, 10) and (21, 10), each
 // cut by a placed tool so the Booleans take the mesh path. The bores meet in
 // two straight generators at x = 17.5; the one nearer y = 0 is selected.
@@ -206,7 +206,7 @@ func TestFacetedRetainedBlendParallelCylinders(t *testing.T) {
 		// The two bores meet along a curve that is not a straight generator, so
 		// none of its edges is a Line3 between two cylinders. The straight
 		// valley class must not read it. The crossing is a perpendicular saddle,
-		// whose own class (agent-docs/retained-edge-blend-design.md §4.10) may
+		// whose own class (agent-docs/modify-design.md Part E §4.10) may
 		// fillet a whole closed crossing edge with a faceted band; any other
 		// answer is a refusal.
 		found := false

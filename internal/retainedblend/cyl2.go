@@ -29,7 +29,7 @@ func (c cylWall) axisPoint(axis, p r3.Vec) r3.Vec {
 
 // cylCyl is a straight edge between two retained cylinders with parallel
 // axes, ending on retained planes normal to the axes (R5,
-// agent-docs/retained-modify-reach-design.md §8).
+// agent-docs/retained-agent-docs/modify-design.md Part R §8).
 type cylCyl struct {
 	wall       [2]cylWall
 	axis       r3.Vec // the shared direction, end 0 to end 1
@@ -172,7 +172,7 @@ type cylSection struct {
 }
 
 // solveSection finds the tangent points of the blend of the corner k0
-// (agent-docs/retained-modify-reach-design.md §8, R5). o are the walls' axis
+// (agent-docs/retained-agent-docs/modify-design.md Part R §8, R5). o are the walls' axis
 // points in the plane, u the radial unit vectors at k0 and w the unit tangents
 // into each wall's face.
 func (c cylCyl) solveSection(spec blendSpec, k0 r3.Vec, o, u, w [2]r3.Vec, convex bool, tau,
@@ -299,7 +299,7 @@ type wallCut struct {
 
 // cutWall cuts the wall at the generator through angle theta about its axis
 // (measured from the corner along u1 toward u2) and keeps the part beyond it,
-// as the wall of R3 is cut (agent-docs/retained-edge-blend-design.md §4.3).
+// as the wall of R3 is cut (agent-docs/modify-design.md Part E §4.3).
 // o0 is the wall's axis point in the plane through the corner k0.
 func (w *work) cutWall(fp facetedrecord.Payload, f faceLoops, run edgeRun, c cylCyl, wall cylWall, o0, u1, u2 r3.Vec,
 	theta float64, k0 r3.Vec) (wallCut, error) {

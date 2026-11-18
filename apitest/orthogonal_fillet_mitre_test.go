@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file is agent-docs/retained-edge-blend-design.md's mitre-run tests: a fillet of straight convex edges that meet
+// This file is agent-docs/modify-design.md Part E's mitre-run tests: a fillet of straight convex edges that meet
 // end to end on one face of a mesh box, the cylinders meeting in the plane that bisects the two walls.
 
 // topEdge selects the top edge of the 20 x 20 x 10 block that starts at p and runs along dir.

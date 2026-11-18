@@ -56,7 +56,7 @@ func addRoundedHex(t *testing.T, s *sketch.Sketch, circum, round float64) {
 // roundedHexStrip is Table CF's a₁ (the perimeter) of roundedHexPrism's
 // outline and the strip volume a₁·J₁ + a₂·J₂ its loop fillet of radius r
 // sweeps, with a₂ = −π for an outer loop and +π for a hole or a boss root,
-// whose material lies outside the outline (agent-docs/loop-fillet-design.md
+// whose material lies outside the outline (agent-docs/modify-design.md Part L
 // §5.1).
 func roundedHexStrip(circum, round, r float64, outside bool) float64 {
 	half := math.Pi / 6
@@ -86,7 +86,7 @@ func roundedHexFilletVolume(circum, round, h, r float64) float64 {
 // roundedHexPrism (corner circle 2.51, corner rounds 0.8, 3 mm tall) by
 // 0.6. Each line–arc join of the loop is tangent only to the sketch solver's
 // precision, so the loop fillet reads it as an LF5′ join and charges its
-// sliver (agent-docs/loop-fillet-design.md §5.5). The volume matches
+// sliver (agent-docs/modify-design.md Part L §5.5). The volume matches
 // roundedHexFilletVolume within the published bound.
 func TestFilletLoopNearTangentJoins(t *testing.T) {
 	t.Parallel()
@@ -110,7 +110,7 @@ func TestFilletLoopNearTangentJoins(t *testing.T) {
 // tangentArcPlateFilletVolume is the start cap loop of tangentArcPlate
 // filleted by r, against Table CF's closed form: the plate's perimeter times
 // J₁ plus a₂·J₂, a₂ = −(2 + π/2) from its two right-angle miters and its
-// half turn of arcs (agent-docs/loop-fillet-design.md §5.1).
+// half turn of arcs (agent-docs/modify-design.md Part L §5.1).
 func TestFilletLoopNearTangentArcJoins(t *testing.T) {
 	t.Parallel()
 	const r = 0.5

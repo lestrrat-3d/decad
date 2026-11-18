@@ -100,7 +100,7 @@ func TestBlindPocketPlacedAndVerified(t *testing.T) {
 }
 
 // TestBlindPocketFilletsItsOuterEdges rounds a blind pocket's four convex
-// vertical edges, r = 1, through agent-docs/brep-modify-design.md's route E: each
+// vertical edges, r = 1, through agent-docs/modify-design.md Part B's route E: each
 // corner loses (1 − π/4)·10, so the volume 936 becomes 896 + 10π, and the
 // result is watertight. π lies in [3.14159265358979, 3.14159265358980], and
 // the reading covers both ends.

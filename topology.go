@@ -256,7 +256,7 @@ type Vertex struct {
 // carries that computation's own proven displacement wherever the payload
 // tracks one: a boolean-built vertex carries the tessellation's chord bound;
 // a cap-loop chamfer's cap-level feet, which a float offset solve places
-// (agent-docs/modify-reach-design.md §8.4), carry that solve's own displacement; and
+// (agent-docs/modify-design.md Part R §8.4), carry that solve's own displacement; and
 // a PLACED loft's vertex, re-lifted from the record under a rigid motion,
 // carries that motion's own rounding (agent-docs/loft-design.md §5) — a recorded
 // coordinate the identity transform leaves alone is the zero-bound case of
@@ -439,7 +439,7 @@ func (e *Edge) IsFree() bool { return len(e.n.Faces) == 1 }
 // cap-loop chamfer's miter ruling is the same refusal one construction over:
 // where either carrier meeting at the corner is circular, the ruling's tagged
 // chord understates the curved locus the exact offset family denotes
-// (agent-docs/modify-reach-design.md §8.3), and a corner whose locus enclosure this
+// (agent-docs/modify-design.md Part R §8.3), and a corner whose locus enclosure this
 // evaluator cannot build refuses the same way rather than publish an
 // understated Bound.
 func (e *Edge) Length() (Measurement, error) {

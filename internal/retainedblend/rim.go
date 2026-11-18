@@ -1,5 +1,5 @@
 // Package retainedblend builds Fillet and Chamfer of an edge between two
-// retained faces of a mesh Boolean result (agent-docs/retained-edge-blend-design.md).
+// retained faces of a mesh Boolean result (agent-docs/modify-design.md Part E).
 // It rewrites the held mesh near the edge so the new faces lie on exact
 // surfaces computed from the two retained tags.
 package retainedblend
@@ -70,7 +70,7 @@ func (s blendSpec) otherSize() float64 {
 // refTag is the retained tag of a reference face. Face indices change between
 // the steps of a multi-edge blend, so each step finds its reference by the tag
 // bit for bit; the two faces of an edge carry distinct tags
-// (agent-docs/retained-modify-reach-design.md §4.1).
+// (agent-docs/retained-agent-docs/modify-design.md Part R §4.1).
 type refTag struct {
 	surface  surfacegeom.Surface
 	reversed bool

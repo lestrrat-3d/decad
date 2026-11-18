@@ -266,7 +266,7 @@ two setbacks, WithShellSense picks a shell's wall sense, WithNoOpenings asks
 for a closed shell (built for a full revolve, a hole-free prism and an
 inward nested rectangular-slab Union; [ErrUnsupported](<#ErrUnsupported>) elsewhere),
 and WithTaper drafts an extrude's walls by a signed angle, a positive one
-narrowing the body away from the sketch plane (agent-docs/draft-design.md); a
+narrowing the body away from the sketch plane (agent-docs/modify-design.md Part D); a
 taper the support map does not list is [ErrUnsupported](<#ErrUnsupported>), returned before
 the document changes. Draft leans an existing prism's walls, all of
 them or a selected subset, the same way about one of its caps.
@@ -1736,12 +1736,12 @@ built, so no unproven body is ever made and an over-large setback is refused
 (S6), never clipped.
 
 On a revolve, Chamfer bevels swept meridian junctions instead
-(agent-docs/modify-reach-design.md §7): the meridian corner gets the same chord,
+(agent-docs/modify-design.md Part R §7): the meridian corner gets the same chord,
 faces the same audit and the revolve's axis gates, and the revolve is rebuilt
 over the receiver's own axis, sweep and placement. The bevel is a [Cone](<#Cone>), a
 [Cylinder](<#Cylinder>) where the chord runs parallel to the axis, or a [Plane](<#Plane>) where it runs
 perpendicular. One source-authenticated quarter-turn rectangular radial
-cap rim takes the bounded faceted route in agent-docs/modify-reach-design.md §7.2.
+cap rim takes the bounded faceted route in agent-docs/modify-design.md Part R §7.2.
 Other cap edges and edges on the axis are SX5 (ErrUnsupported).
 
 A one-sided positive-taper circular extrude also accepts one complete
@@ -1754,7 +1754,7 @@ reference roles remain unsupported; other Sweep kinds are S3 (ErrUnsupported).
 A receiver outside the admitted classes is S3 (ErrUnsupported).
 
 WithTangentChain expands the edges sel resolves to as Fillet's does
-(agent-docs/modify-reach-design.md §5). WithAsymmetricChamfer sets each edge back
+(agent-docs/modify-design.md Part R §5). WithAsymmetricChamfer sets each edge back
 d across its reference face and the option's other distance across the
 other adjacent face (§6), on a prism's lateral edges and a revolve's
 junctions alike; each setback faces the S6 audit on its own walk. On a
@@ -1770,13 +1770,13 @@ through their face view; selections outside them remain SX16.
 A selection covering one straight prism cap edge uses route E or the
 bounded cutter for an admitted oblique edge. A selection
 covering every geometric edge of one or more complete prism cap loops uses
-agent-docs/modify-reach-design.md §8.3's cap-loop chamfer. It bevels each loop
+agent-docs/modify-design.md Part R §8.3's cap-loop chamfer. It bevels each loop
 with a band of analytic patches, and the result is a cap-blend body whose
 volume, area, bounds, undercut and minimum-radius readings all answer.
 A selection covering the whole outer loop of one or both caps of a straight
 prism whose section holds fit splines and lines, with no corner past 10°,
 bevels it at an equal setback by cutting the prism with a polyhedral cutter
-(agent-docs/modify-reach-design.md §8.5). Decad cannot offset a fit spline
+(agent-docs/modify-design.md Part R §8.5). Decad cannot offset a fit spline
 exactly, so the cutter's offset curves are fit splines through points of the
 exact offset, and the call refuses an offset that departs from it by more than
 0\.002 of the setback. The result is a mesh Boolean's: faceted, with the Cut's
@@ -1784,17 +1784,17 @@ own bounds, and it matches the ideal chamfer only within that ratio. A
 setback that reaches the outline's radius of curvature is ErrDegenerate.
 
 On a mesh Boolean result, whole loops of a retained planar face that the per-edge routes cannot bevel, such as a
-window of lines and arcs with sharp corners, are cut by a polyhedral cutter (agent-docs/retained-modify-reach-design.md
+window of lines and arcs with sharp corners, are cut by a polyhedral cutter (agent-docs/retained-agent-docs/modify-design.md Part R
 §15a): faceted, the Cut's own readings, and the bevel ruled between its two sections. A tangent chain whose edges
 share no one base plane, such as the rim of a bar rounded about z at one end and about y at the other, is cut by
 the bevel's section swept along the chain (§15b), with the same readings.
 
 Without WithTangentChain a selected edge that ends at a proven tangent junction still takes its continuation, as
-the target CAD's chamfer does (agent-docs/modify-reach-design.md §5.1): the selection grows to the whole chain. An
+the target CAD's chamfer does (agent-docs/modify-design.md Part R §5.1): the selection grows to the whole chain. An
 expansion the oracle cannot decide leaves the selection as named.
 
 All twelve straight edges of an exact axis-aligned box take
-agent-docs/modify-general-design.md §4.3b's simultaneous chamfer, with or
+agent-docs/modify-design.md Part G §4.3b's simultaneous chamfer, with or
 without a cross bore. Other partial cap selections and mixed cap/lateral
 selections are SX4 (ErrUnsupported). A setback across the
 cap that empties the cap contour is SX6 (ErrDegenerate), and bands whose
@@ -1810,7 +1810,7 @@ not already decide reads Suspect (Table DX row DX6).
 
 An analytic boolean result (a brep or stacked body) that reads as a prism
 along a reference axis is chamfered as that prism
-(agent-docs/brep-modify-design.md route P): lateral edges and complete cap loops
+(agent-docs/modify-design.md Part B route P): lateral edges and complete cap loops
 alike, so a cross-drilled hole's mouth takes a countersink. Any other
 selection of straight edges along one axis of such a body's face record
 takes route E (§5): a swept straight wall the edge ends on or runs along
@@ -1826,7 +1826,7 @@ whose faces carry a section displacement (SB1), outside brep-modify §4.4's
 lateral blend of a class-B crossing prism, are ErrUnsupported (Table SB).
 
 A selection of one or more complete loops of planar faces of such a body
-takes route L (agent-docs/modify-general-design.md §4): each loop's face takes
+takes route L (agent-docs/modify-design.md Part G §4): each loop's face takes
 the loop offset dc into its material, every face beside the loop is trimmed
 ds along the face's normal, and a band of [Plane](<#Plane>) and [Cone](<#Cone>) patches joins the
 two, removing a wedge where the walls beside the loop descend into the body
@@ -1855,7 +1855,7 @@ empties a loop's offset is SX6 (ErrDegenerate).
 
 ChamferAngle bevels the edges sel selects by a distance d along the
 reference face and an angle between the bevel and that face, returning the
-new body and retiring b (agent-docs/blend-variants-design.md).
+new body and retiring b (agent-docs/modify-design.md Part A).
 
 The bevel leaves the reference face d from each edge and makes angle with it.
 It meets the other face d·sin(angle)/sin(φ + angle) from the edge, where φ is
@@ -1987,7 +1987,7 @@ It returns ctx.Err() unchanged when ctx is canceled before the document commit.
     opts ...<a href="#DraftOption">DraftOption</a>) (result *<a href="#Body">Body</a>, retErr <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
 
 Draft returns a new body whose walls lean by angle from the sweep axis about
-the neutral plane, retiring b (agent-docs/draft-design.md §10). A
+the neutral plane, retiring b (agent-docs/modify-design.md Part D §10). A
 positive angle narrows the body with distance from the neutral plane and a
 negative one widens it; the angle is a signed [units.Angle](<https://pkg.go.dev/github.com/lestrrat-3d/units#Angle>) outside
 [ErrNegativeMagnitude](<#ErrNegativeMagnitude>) (core §12). sel names the walls to lean, about one
@@ -1996,14 +1996,14 @@ the body a tapered [Extrude](<#Extrude>) of the same section and sweep builds.
 A subset leans only the walls it names: each moved wall's far trace is its
 own moved line or circle, a kept wall stays vertical, and a corner between a
 moved and a kept line is the intersection of the two
-(agent-docs/draft-design.md §10.2).
+(agent-docs/modify-design.md Part D §10.2).
 
 A faceted solid with exact vertices that is a straight prism along a world axis is also drafted, on all its walls,
 about one of its two caps (agent-docs/orthogonal-design.md B21).
 
 b is a live straight prism: an extrude, a filleted or chamfered
 extrude, a tube, or any of these placed, whose recorded section is the
-section it denotes. The gates run in agent-docs/draft-design.md §5's order, and a
+section it denotes. The gates run in agent-docs/modify-design.md Part D §5's order, and a
 refused call leaves the document unchanged, including on ctx.Err():
 
 - an angle that is not an angle is [ErrUnitKind](<#ErrUnitKind>), one that is not finite
@@ -2108,7 +2108,7 @@ caps and publishes a sheet body instead of a solid (agent-docs/surface-design.md
 §4).
 
 A nonzero [WithTaper](<#WithTaper>) on a profile builds a draft body instead
-(agent-docs/draft-design.md): the far cap is the profile offset by h·tan α with
+(agent-docs/modify-design.md Part D): the far cap is the profile offset by h·tan α with
 every straight corner mitered, each straight wall a [Plane](<#Plane>) leaning by the
 taper and each circular wall a [Cone](<#Cone>). Its profile must hold line, arc and
 circle segments only, and a circular wall must meet each neighbour
@@ -2157,13 +2157,13 @@ section faces the §5 audit before anything is built.
 
 WithTangentChain expands the edges sel resolves to across every edge that
 continues them with proven G1 continuity before any receiver gate runs
-(agent-docs/modify-reach-design.md §5); sel's cardinality assertion applies to
+(agent-docs/modify-design.md Part R §5); sel's cardinality assertion applies to
 the seeds it names. A continuation that branches or that this evaluator
 cannot decide is ErrUnsupported (SX2), and so is a faceted boolean result
 (SX9), refused before expansion.
 
 On a revolve, Fillet rounds swept meridian junctions instead
-(agent-docs/modify-reach-design.md §7): a latitude [Circle3](<#Circle3>) of a full turn or a
+(agent-docs/modify-design.md Part R §7): a latitude [Circle3](<#Circle3>) of a full turn or a
 junction [Arc3](<#Arc3>) of a partial one, each the sweep of one corner of the
 recorded meridian. The meridian gets the same tangent arc, faces the same
 audit, and is re-gated against the axis — a new axis contact is
@@ -2182,7 +2182,7 @@ clear of each non-adjacent free-form segment.
 
 An analytic boolean result (a brep or stacked body) that reads as a prism
 along a reference axis is filleted as that prism
-(agent-docs/brep-modify-design.md route P): its lateral edges are the prism's, and
+(agent-docs/modify-design.md Part B route P): its lateral edges are the prism's, and
 the result is a prism. Any other selection of straight edges along one axis
 of such a body's face record takes route E (§5): a swept straight wall
 the edge ends on or runs along as a rim is first restated as the planar
@@ -2199,9 +2199,9 @@ crossing prism, are ErrUnsupported (Table SB).
 P8's exact front top edge uses a radius-1 quarter-cylinder cutter before
 route E's SB7 curved-third-face gate (modify-general §4.3c).
 Any other selection of such a body's edges is route L's
-(agent-docs/modify-general-design.md §4): complete
+(agent-docs/modify-design.md Part G §4): complete
 loops of planar faces are filleted as a pipe band at radius r
-(agent-docs/loop-fillet-design.md) — a quarter cylinder along each line, a torus
+(agent-docs/modify-design.md Part L) — a quarter cylinder along each line, a torus
 around each arc and at each reflex corner, cylinders meeting along an
 [Ellipse3](<#Ellipse3>) at a line-line miter, and a [FilletMiter3](<#FilletMiter3>) at a regular sharp
 corner involving an arc — the walls beside each loop trimmed to its
@@ -2221,18 +2221,18 @@ return a brep body (RF3). A single cap edge on a strictly convex straight
 prism uses a bounded faceted cutter when that edge or its terminal walls
 are oblique; the cutter and receiver commit atomically. A faceted Union of
 a rooted oblique circular boss and rectangular plate also accepts its one
-complete root junction (agent-docs/blend-variants-design.md). Any other
+complete root junction (agent-docs/modify-design.md Part A). Any other
 receiver outside those routes, loft §17 and draft §10.4 is S3
 (ErrUnsupported).
 
 A faceted Union of two rectangular prisms also admits one untouched outer
 vertical edge when the other prism is certified clear of the full removed
-radius band (agent-docs/modify-reach-design.md §10.1).
+radius band (agent-docs/modify-design.md Part R §10.1).
 A loop-filleted body publishes its volume, centroid, area, box and
 through-all extent, and passes Verify; it meshes with an occupied-volume
 proof, exports to STEP, takes part in a mesh boolean, is surveyed for
 undercuts and concave radii, and is placed, mirrored and patterned like any
-brep body (agent-docs/loop-fillet-design.md Table DF).
+brep body (agent-docs/modify-design.md Part L Table DF).
 
 <a name="FilletChord"></a>
 #### func FilletChord
@@ -2241,7 +2241,7 @@ brep body (agent-docs/loop-fillet-design.md Table DF).
 
 FilletChord rounds the edges sel selects with an arc whose chord, the
 straight line between its two tangent edges, is chord long, returning the
-new body and retiring b (agent-docs/blend-variants-design.md).
+new body and retiring b (agent-docs/modify-design.md Part A).
 
 Where the faces meet at the angle φ across the corner (the interior angle of a
 convex edge, the open wedge of a concave one) the arc turns π − φ, so its
@@ -2775,10 +2775,10 @@ ErrUnsupported. A straight prism's offset
 section faces the §5 audit before anything is built, so no unproven body is
 ever made. Removing both caps of a section with k holes returns 1 + k
 lumps: the band inside the outer loop, then one band lining each hole
-(agent-docs/modify-reach-design.md BX8).
+(agent-docs/modify-design.md Part R BX8).
 
 A prism or one-line solid Sweep also takes a side opening
-(agent-docs/shell-opening-design.md): one
+(agent-docs/modify-design.md Part O): one
 connected run of its outer side faces removed, with or without its caps, on
 a hole-free section whose every walk is a line, along a section axis or
 oblique, or a circular arc. Each end of the kept walks closes on the removed
@@ -2795,11 +2795,11 @@ cavity height (SO3, ErrDegenerate).
 
 A partial revolve is shelled when sel removes both of its angular caps: the
 wall is its meridian's offset swept over the same angle, and a meridian walk
-on the axis grows no wall (agent-docs/modify-reach-design.md §9.3). A revolve
+on the axis grows no wall (agent-docs/modify-design.md Part R §9.3). A revolve
 also takes a side opening — one connected run of its generated side faces,
 on a full turn or beside both removed angular caps — where the kept chain is
 one piece; the rim at each opening end is the removed face's own cut
-through the wall (agent-docs/shell-opening-design.md §8). Any
+through the wall (agent-docs/modify-design.md Part O §8). Any
 other side selection, a kept angular cap, a holed meridian, a meridian
 meeting the axis along more than one walk and an offset reaching the axis
 are ErrUnsupported.
@@ -2817,7 +2817,7 @@ inward builds a conical cup through draft §10.6's bounded meridian.
 
 WithNoOpenings asks for a closed hollow body that keeps every face; it is
 the one call form that takes a nil sel, and a non-nil sel beside it is
-ErrDegenerate (agent-docs/modify-reach-design.md §2, SX1). A full-turn revolve
+ErrDegenerate (agent-docs/modify-design.md Part R §2, SX1). A full-turn revolve
 builds it: the meridian's wall region swept a whole turn, an outer shell
 around one void shell ([FaceShell](<#FaceShell>).IsVoid) that is the cavity. So does a
 straight prism: both caps keep a floor t thick, so an inward wall needs t
@@ -2842,13 +2842,13 @@ ErrDegenerate (SX1).
 
 An analytic boolean result (a brep or stacked body) that reads as a prism
 along a reference axis is shelled as that prism
-(agent-docs/brep-modify-design.md route P) when the removed faces are its caps.
+(agent-docs/modify-design.md Part B route P) when the removed faces are its caps.
 A brep that reads as a prism along one reference axis cut by through tools
 along others is shelled inward with one or both of that prism's caps, one
 connected run of its straight side walls along section axes, or both
-removed (agent-docs/modify-general-design.md route S): the cavity is the eroded
+removed (agent-docs/modify-design.md Part G route S): the cavity is the eroded
 prism — with a wall run, the side opening's cavity section
-(agent-docs/shell-opening-design.md) — cut by each tool dilated by t, and the
+(agent-docs/modify-design.md Part O) — cut by each tool dilated by t, and the
 result is a brep holding the receiver's kept faces, the cavity's faces and
 the rim at each removed face. One whole-circle tool wall through a rectangular
 box builds a three-section shell (modify-general §3.1d). On other records,
@@ -3120,7 +3120,7 @@ and before any facet is cut. A cap-loop chamfer whose
 every band is a whole turn or joins only line-line miters and exactly tangent
 corners — a filleted plate with drilled holes among them — is an ordinary
 operand, as is a tapered extrude whose line–arc and arc–arc joins turn by
-an angle whose sine is at most 2⁻³² (agent-docs/draft-design.md §9.1.1). The
+an angle whose sine is at most 2⁻³² (agent-docs/modify-design.md Part D §9.1.1). The
 matching axial loft's held-polygon cap band also has its own
 occupied-volume proof for reflex corners (loft §18). A valid operand whose
 boolean OUTPUT
@@ -3518,13 +3518,13 @@ body it stands for differ by, so [Union](<#Union>), [Cut](<#Cut>) and [Intersect
 an operand; a band with a mitered circular wall or a reflex corner carries
 no such proof, and that mesh serves export while the booleans refuse it.
 
-A tapered extrude (a draft body, agent-docs/draft-design.md) meshes as that same
+A tapered extrude (a draft body, agent-docs/modify-design.md Part D) meshes as that same
 band with no straight slab: one ruled wall per section walk between the near
 cap's rim and the far section, a sharp miter at every line-line corner,
 convex or reflex, and both caps triangulated. Where every circular wall
 meets its neighbours exactly tangent, or meets a line or an arc tangent up
 to a turn whose sine is at most 2⁻³², a sliver the proof charges
-(agent-docs/draft-design.md §9.1.1), it also proves the volume it and the
+(agent-docs/modify-design.md Part D §9.1.1), it also proves the volume it and the
 body differ by, so [Union](<#Union>), [Cut](<#Cut>) and [Intersect](<#Intersect>) take it as an operand.
 
 A lofted body RESTATES the flat triangle set its construction already built
@@ -3875,7 +3875,7 @@ call for a later chain-only option.
 }</pre>
 
 ChamferOption configures Chamfer: WithTangentChain and
-WithAsymmetricChamfer (agent-docs/modify-reach-design.md §2).
+WithAsymmetricChamfer (agent-docs/modify-design.md Part R §2).
 
 <a name="WithAsymmetricChamfer"></a>
 #### func WithAsymmetricChamfer
@@ -3884,7 +3884,7 @@ WithAsymmetricChamfer (agent-docs/modify-reach-design.md §2).
 
 WithAsymmetricChamfer sets back the chamfer's positional distance across
 reference and otherDistance across the other face adjacent to each selected
-edge (agent-docs/modify-reach-design.md §6). The option copies reference when it
+edge (agent-docs/modify-design.md Part R §6). The option copies reference when it
 is called, so a later change to the caller's query does not reach the
 chamfer. reference resolves against the receiver after tangent expansion,
 and every chamfered edge must have exactly one adjacent face in it, and
@@ -5011,7 +5011,7 @@ is ErrUnsupported — an honest refusal, never an understated Bound. A
 cap-loop chamfer's miter ruling is the same refusal one construction over:
 where either carrier meeting at the corner is circular, the ruling's tagged
 chord understates the curved locus the exact offset family denotes
-(agent-docs/modify-reach-design.md §8.3), and a corner whose locus enclosure this
+(agent-docs/modify-design.md Part R §8.3), and a corner whose locus enclosure this
 evaluator cannot build refuses the same way rather than publish an
 understated Bound.
 
@@ -5399,7 +5399,7 @@ WithTaper and WithSurfaceResult return ErrUnsupported on a chain.
 WithTaper sets the extrude taper: a SIGNED displacement angle — which way
 the wall leans. A positive taper leans every wall into the material as it
 leaves the sketch plane, so the body narrows toward the far end; a negative
-one widens it (agent-docs/draft-design.md §2). An angle at or past a right angle
+one widens it (agent-docs/modify-design.md Part D §2). An angle at or past a right angle
 is [ErrDegenerate](<#ErrDegenerate>). A nonzero taper builds over [Distance](<#Distance>), [ToFace](<#ToFace>),
 [ThroughAll](<#ThroughAll>), [Symmetric](<#Symmetric>) or [TwoSided](<#TwoSided>). WithSurfaceResult is [ErrUnsupported](<#ErrUnsupported>),
 returned before commit. A zero taper builds the straight prism. A chain
@@ -5600,7 +5600,7 @@ Planar matches faces whose surface is a plane.
 Walls matches every face a sweep made: the faces carrying a side(i, j) role
 of b's own producing feature. It is the sibling of CapStart and CapEnd, and
 it is what Draft takes as the complete wall set of an extrude
-(agent-docs/draft-design.md §10). On a body whose producer mints no side roles it
+(agent-docs/modify-design.md Part D §10). On a body whose producer mints no side roles it
 matches nothing, an ordinary ErrNoMatch at resolve. b must not be nil.
 
 <a name="FaceQuery"></a>
@@ -5811,7 +5811,7 @@ FilletChamferOption is accepted by both Fillet and Chamfer.
 <pre>func WithTangentChain() <a href="#FilletChamferOption">FilletChamferOption</a></pre>
 
 WithTangentChain expands each selected seed edge across the edges that
-continue it with proven G1 continuity (agent-docs/modify-reach-design.md §5): an
+continue it with proven G1 continuity (agent-docs/modify-design.md Part R §5): an
 edge leaving the seed's endpoint along the exactly opposite tangent ray,
 whose two adjacent faces have the same outward normals there as the
 seed's. The expansion repeats from every edge it adds. The seed query's
@@ -5835,7 +5835,7 @@ FilletMiter3 is the intersection edge of two analytic fillet patches.
 }</pre>
 
 FilletOption configures Fillet. WithTangentChain is the one option a
-fillet takes (agent-docs/modify-reach-design.md §2).
+fillet takes (agent-docs/modify-design.md Part R §2).
 
 <a name="FullRevolution"></a>
 ### type FullRevolution
@@ -7378,7 +7378,7 @@ until the increment that lifts draft SD20.
 }</pre>
 
 NeutralPlane is the plane a draft tilts faces about. The set is sealed
-(agent-docs/draft-design.md §10).
+(agent-docs/modify-design.md Part D §10).
 
 <a name="OffsetOption"></a>
 ### type OffsetOption
@@ -8399,7 +8399,7 @@ ShellOption configures Shell, including its wall sense.
 <pre>func WithNoOpenings() <a href="#ShellOption">ShellOption</a></pre>
 
 WithNoOpenings asks Shell to keep every face and build a closed hollow body
-(agent-docs/modify-reach-design.md §9.2). It is the only call form in which Shell
+(agent-docs/modify-design.md Part R §9.2). It is the only call form in which Shell
 accepts a nil face selector, and a non-nil selector beside it is
 ErrDegenerate. No receiver builds a closed shell yet: Shell returns
 ErrUnsupported for every receiver it accepts the option on.
@@ -9303,7 +9303,7 @@ coordinate is Exact with a zero bound. A vertex at a COMPUTED coordinate
 carries that computation's own proven displacement wherever the payload
 tracks one: a boolean-built vertex carries the tessellation's chord bound;
 a cap-loop chamfer's cap-level feet, which a float offset solve places
-(agent-docs/modify-reach-design.md §8.4), carry that solve's own displacement; and
+(agent-docs/modify-design.md Part R §8.4), carry that solve's own displacement; and
 a PLACED loft's vertex, re-lifted from the record under a rigid motion,
 carries that motion's own rounding (agent-docs/loft-design.md §5) — a recorded
 coordinate the identity transform leaves alone is the zero-bound case of

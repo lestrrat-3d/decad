@@ -14,8 +14,8 @@ import (
 )
 
 // This file proves the band of the retained saddle chamfer's cutting tool
-// (agent-docs/retained-edge-blend-design.md §4.9). The tool's band is the
-// ruled surface of agent-docs/cross-cylinder-bore-chamfer-design.md, extended
+// (agent-docs/modify-design.md Part E §4.9). The tool's band is the
+// ruled surface of agent-docs/modify-design.md Part X, extended
 // past both feet by BandExtension of its own length: at angle θ it runs from
 // B⁺ = B − λ(O − B) to O⁺ = O + λ(O − B), O and B the outer and bore feet.
 
@@ -85,7 +85,7 @@ func BandEnds(R, r, setback float64, j int) (r3.Vec, r3.Vec) {
 
 // ToolProof is the proven reading of the tool's band. Chord bounds the
 // distance between each held band facet and the exact extended ruled surface
-// under the pairing of agent-docs/retained-edge-blend-design.md §4.9, held
+// under the pairing of agent-docs/modify-design.md Part E §4.9, held
 // rounding included. RowLo[i] and RowHi[i] enclose the exact area of row i of
 // the extended band, t ∈ [t_i, t_i+1]; AreaLo and AreaHi are their sums, the
 // whole band's.
@@ -194,7 +194,7 @@ func bandDensity(cell *CellExact) ([ToolRows]float64, [ToolRows]float64, bool) {
 // quadSpread is the chord spread of the quad a cell spans: per coordinate,
 // the larger width of the band ends' θ-derivative enclosures plus the
 // largest |D′| divided by ToolRows, D′ = (1 + 2λ)·(O′ − B′); the largest
-// over the three coordinates (agent-docs/retained-edge-blend-design.md §4.9,
+// over the three coordinates (agent-docs/modify-design.md Part E §4.9,
 // proof 2).
 func quadSpread(cell *CellExact) float64 {
 	spread := 0.0
@@ -314,7 +314,7 @@ func worldError(held r3.Vec, local [3]crossIV, flipY, flipZ bool, pose Pose) flo
 // triangle of the quad between stations j and j+1 and rows i and i+1, each
 // coordinate of the difference is at most h·u(1−u) times the quad's spread
 // (quadSpread), u ∈ [0, 1] the fraction of the station step h, so h/4 times
-// it (agent-docs/retained-edge-blend-design.md §4.9, proof 2).
+// it (agent-docs/modify-design.md Part E §4.9, proof 2).
 func ProveToolBand(ctx context.Context, R, r, d float64, pose Pose,
 	held func(j, i int) r3.Vec) (ToolProof, error) {
 	tb, err := ProveToolBases(ctx, R, r, d)

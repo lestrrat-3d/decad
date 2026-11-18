@@ -14,7 +14,7 @@ import (
 )
 
 // junctionAt builds the top-front line and the top corner arc of the rounded
-// box (agent-docs/retained-modify-reach-design.md §1), with the corner
+// box (agent-docs/retained-agent-docs/modify-design.md Part R §1), with the corner
 // cylinder of the given radius, whose origin stays at (3, 3).
 func junctionAt(t *testing.T, radius float64) (line, arc *topo.Edge, v *topo.Vertex) {
 	t.Helper()

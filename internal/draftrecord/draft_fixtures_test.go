@@ -23,7 +23,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file pins agent-docs/draft-design.md Table DD row DD1's occupied-volume
+// This file pins agent-docs/modify-design.md Part D Table DD row DD1's occupied-volume
 // proof on the production mesh path (Tessellate at verifyAll): every fixture
 // is meshed at three tolerances, and the exact signed volume of the held mesh
 // must lie within the published VolSymDiff of the closed form §8 states for
@@ -223,7 +223,7 @@ func requireVolumeProofCovers(t *testing.T, fx meshVolumeFixture) {
 	}
 }
 
-// draftFixtures returns agent-docs/draft-design.md §11's F1–F7 records with their
+// draftFixtures returns agent-docs/modify-design.md Part D §11's F1–F7 records with their
 // closed-form volumes.
 func draftFixtures() []meshVolumeFixture {
 	box := func(a, h float64, d *big.Float) *big.Float {
@@ -257,7 +257,7 @@ func draftFixtures() []meshVolumeFixture {
 	}
 }
 
-// TestDraftMeshVolumeProofCoversTheClosedForm is agent-docs/draft-design.md §11's
+// TestDraftMeshVolumeProofCoversTheClosedForm is agent-docs/modify-design.md Part D §11's
 // PR 2 fixture set on the volume proof: F1–F7, each at three chord
 // tolerances, the held mesh's exact volume within VolSymDiff of the body's
 // closed form.
@@ -278,7 +278,7 @@ func TestDraftMeshVolumeProofCoversTheClosedForm(t *testing.T) {
 }
 
 // TestDraftSubsetMeshVolumeProofCoversTheClosedForm is the subset draft's
-// mesh (agent-docs/draft-design.md §10.2 over Table DD row DD1): F1's box with one
+// mesh (agent-docs/modify-design.md Part D §10.2 over Table DD row DD1): F1's box with one
 // wall drafted alone, h·a(a − d/2); F4's L with its notch wall u = 10 drafted
 // alone, h(300 − 5d); and F7's hole drafted alone, πh(R² − r² − rd − d²/3).
 // Each meshes closed at three tolerances, its proof admitted, and the held

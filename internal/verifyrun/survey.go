@@ -205,7 +205,7 @@ func runSurveys(budget *proofbound.WorkBudget, b *topo.Body, cfg verifyConfig) (
 			wall, wallErr := cupwall.Evaluate(budget, cupWallInput(pl.View()), cfg.AllowRad, cupWallOperations)
 			out, err = wallOutcome{reading: wall.Reading, bound: wall.Bound, ok: wall.OK}, wallErr
 		case capblend.Payload:
-			// DX9 (agent-docs/modify-reach-design.md Table DX): a cap blend is not
+			// DX9 (agent-docs/modify-design.md Part R Table DX): a cap blend is not
 			// one constant section at one height, so the existing 2D
 			// spanning-disk proof does not decide it. A deliberate evaluator
 			// limit, published as an explicit unsupported-payload dispatch

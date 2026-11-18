@@ -26,7 +26,7 @@ func nearTangentPair(shift float64) (sectionrecord.LineSeg, sectionrecord.ArcSeg
 	return line, arc
 }
 
-// nearTangentGap is the reference for Lemma 1 of agent-docs/draft-design.md
+// nearTangentGap is the reference for Lemma 1 of agent-docs/modify-design.md Part D
 // §9.1.1 on nearTangentPair at amount t, in 256-bit arithmetic: the distance
 // from the radial foot f(t) = b + t·(C − b)/R to the true corner m(t), where
 // the moved line v = −5 + t meets the moved circle of radius R − t on the
@@ -54,7 +54,7 @@ func nearTangentGap(shift, t float64) (float64, float64) {
 }
 
 // TestNearTangentCornerEnclosesTheMiter pins Lemma 1 of
-// agent-docs/draft-design.md §9.1.1 against the 256-bit reference: at every
+// agent-docs/modify-design.md Part D §9.1.1 against the 256-bit reference: at every
 // amount the sweep reaches, inward and outward, the true corner lies within ρ
 // of the radial foot B1 holds, and that foot within ε of the moved line.
 // The bounds sit about twice the reference (ρ = 2.4e-11 against a gap of

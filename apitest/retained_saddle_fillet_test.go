@@ -12,10 +12,10 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// The fixtures of agent-docs/retained-edge-blend-design.md §4.10: the R7
+// The fixtures of agent-docs/modify-design.md Part E §4.10: the R7
 // shafts of retained_saddle_chamfer_test.go, filleted, and the saddles with
 // the ball outside both cylinders. In the fixed pose of
-// agent-docs/cross-cylinder-bore-chamfer-design.md (larger cylinder
+// agent-docs/modify-design.md Part X (larger cylinder
 // x² + y² = R² about z, bore y² + z² = r² about x, mouth at x > 0) a ball of
 // radius ρ outside the bore, and inside (σ1 = −1) or outside (σ1 = +1) the
 // larger cylinder, has its centre on the closed curve
@@ -187,7 +187,7 @@ func (sb saddleBlend) points(theta float64) (r3.Vec, r3.Vec) {
 
 func TestSaddleFilletHandVolume(t *testing.T) {
 	t.Parallel()
-	// The values of agent-docs/retained-edge-blend-design.md §4.10, which a
+	// The values of agent-docs/modify-design.md Part E §4.10, which a
 	// rolling-ball grid (a point is removed when it is material and farther
 	// than ρ from the material eroded by ρ; added, likewise for the void)
 	// matched to 0.5 % and 0.2 %.
@@ -527,7 +527,7 @@ func TestRetainedSaddleFilletExtrudeShaft(t *testing.T) {
 }
 
 // TestRetainedSaddleFilletOutside fillets the saddles whose ball lies outside
-// both cylinders (agent-docs/retained-edge-blend-design.md §4.10, σ = (+1,
+// both cylinders (agent-docs/modify-design.md Part E §4.10, σ = (+1,
 // +1)): the convex seams where two bores cross in a block, which the fillet
 // rounds by removing material, and the concave roots of a boss on a rod and
 // of a pin joined through a turned shaft, which it fills by adding material.

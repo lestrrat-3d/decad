@@ -21,13 +21,13 @@ import (
 // plain prismPayload over the annular section {Outer, Hole} (Table B, B2/B3),
 // so nothing downstream needs a new case for it (§12). A both-caps shell of a
 // section with k holes is 1 + k disjoint bands, one stacked slab with one
-// region per band (agent-docs/modify-reach-design.md BX8). A one-cap shell is a CUP
+// region per band (agent-docs/modify-design.md Part R BX8). A one-cap shell is a CUP
 // — cupPayload, a floor slab under a slab of wall bands (B5/B6).
 //
 // The gate order is §4's, and the sentinel of each refusal follows the §1
 // existence test. Staged, never a wrong body: a topology-changing offset is
 // S11, ErrUnsupported. Removing side faces of a prism is a side opening,
-// agent-docs/shell-opening-design.md's (shell_opening.go).
+// agent-docs/modify-design.md Part O's (shell_opening.go).
 
 // ShellOption configures Shell, including its wall sense.
 type ShellOption interface{ shellOption() }
@@ -95,10 +95,10 @@ func WithShellFaceThickness(normal r3.Vec, t units.Value) ShellOption {
 // section faces the §5 audit before anything is built, so no unproven body is
 // ever made. Removing both caps of a section with k holes returns 1 + k
 // lumps: the band inside the outer loop, then one band lining each hole
-// (agent-docs/modify-reach-design.md BX8).
+// (agent-docs/modify-design.md Part R BX8).
 //
 // A prism or one-line solid Sweep also takes a side opening
-// (agent-docs/shell-opening-design.md): one
+// (agent-docs/modify-design.md Part O): one
 // connected run of its outer side faces removed, with or without its caps, on
 // a hole-free section whose every walk is a line, along a section axis or
 // oblique, or a circular arc. Each end of the kept walks closes on the removed
@@ -115,11 +115,11 @@ func WithShellFaceThickness(normal r3.Vec, t units.Value) ShellOption {
 //
 // A partial revolve is shelled when sel removes both of its angular caps: the
 // wall is its meridian's offset swept over the same angle, and a meridian walk
-// on the axis grows no wall (agent-docs/modify-reach-design.md §9.3). A revolve
+// on the axis grows no wall (agent-docs/modify-design.md Part R §9.3). A revolve
 // also takes a side opening — one connected run of its generated side faces,
 // on a full turn or beside both removed angular caps — where the kept chain is
 // one piece; the rim at each opening end is the removed face's own cut
-// through the wall (agent-docs/shell-opening-design.md §8). Any
+// through the wall (agent-docs/modify-design.md Part O §8). Any
 // other side selection, a kept angular cap, a holed meridian, a meridian
 // meeting the axis along more than one walk and an offset reaching the axis
 // are ErrUnsupported.
@@ -137,7 +137,7 @@ func WithShellFaceThickness(normal r3.Vec, t units.Value) ShellOption {
 //
 // WithNoOpenings asks for a closed hollow body that keeps every face; it is
 // the one call form that takes a nil sel, and a non-nil sel beside it is
-// ErrDegenerate (agent-docs/modify-reach-design.md §2, SX1). A full-turn revolve
+// ErrDegenerate (agent-docs/modify-design.md Part R §2, SX1). A full-turn revolve
 // builds it: the meridian's wall region swept a whole turn, an outer shell
 // around one void shell (FaceShell.IsVoid) that is the cavity. So does a
 // straight prism: both caps keep a floor t thick, so an inward wall needs t
@@ -162,13 +162,13 @@ func WithShellFaceThickness(normal r3.Vec, t units.Value) ShellOption {
 //
 // An analytic boolean result (a brep or stacked body) that reads as a prism
 // along a reference axis is shelled as that prism
-// (agent-docs/brep-modify-design.md route P) when the removed faces are its caps.
+// (agent-docs/modify-design.md Part B route P) when the removed faces are its caps.
 // A brep that reads as a prism along one reference axis cut by through tools
 // along others is shelled inward with one or both of that prism's caps, one
 // connected run of its straight side walls along section axes, or both
-// removed (agent-docs/modify-general-design.md route S): the cavity is the eroded
+// removed (agent-docs/modify-design.md Part G route S): the cavity is the eroded
 // prism — with a wall run, the side opening's cavity section
-// (agent-docs/shell-opening-design.md) — cut by each tool dilated by t, and the
+// (agent-docs/modify-design.md Part O) — cut by each tool dilated by t, and the
 // result is a brep holding the receiver's kept faces, the cavity's faces and
 // the rim at each removed face. One whole-circle tool wall through a rectangular
 // box builds a three-section shell (modify-general §3.1d). On other records,
@@ -213,7 +213,7 @@ func Shell(ctx context.Context, b *Body, sel FaceSelector, t units.Value,
 	// resolved and recorded. A typed nil query reads as an untyped nil.
 	q, isQuery := sel.(*FaceQuery)
 	nilSel := sel == nil || (isQuery && q == nil)
-	// SX1 (agent-docs/modify-reach-design.md §2): WithNoOpenings keeps every face,
+	// SX1 (agent-docs/modify-design.md Part R §2): WithNoOpenings keeps every face,
 	// so a selector naming faces to remove beside it names no single intent.
 	if o.NoOpenings && !nilSel {
 		return nil, modifyoption.ErrOptionConflict(`WithNoOpenings keeps every face, and a non-nil selector names faces to remove`)

@@ -6,8 +6,8 @@ those ops need. References of the form "prism-boolean §N" are to
 `agent-docs/prism-boolean-design.md`; "A6" and "A3" to
 `agent-docs/general-boolean-design.md` §3; "modify §N" to
 `agent-docs/modify-design.md`; "brep-modify §N" to
-`agent-docs/brep-modify-design.md`; "reach §N" to
-`agent-docs/modify-reach-design.md`; "mirror-pattern §N" to
+`agent-docs/modify-design.md` Part B; "reach §N" to
+`agent-docs/modify-design.md` Part R; "mirror-pattern §N" to
 `agent-docs/mirror-pattern-design.md`; "tessellation §N" to
 `agent-docs/tessellation-design.md`.
 
@@ -1643,7 +1643,7 @@ PR 1:
   uniqueness through Lemma T, and that a recorded union result fillets. The A6
   text keeps its own pair reading as it is and does not claim that every A6
   reading has Lemma T's form.
-- `agent-docs/brep-modify-design.md` Table RB row RB6, and §2.2 (a CB refusal of
+- `agent-docs/modify-design.md` Part B Table RB row RB6, and §2.2 (a CB refusal of
   `Chamfer` falls through to it).
 - `agent-docs/modify-design.md` §5 test 4 (the nesting candidate points).
 - `agent-docs/mirror-pattern-design.md` §4.3 (the instance's record).
@@ -1656,7 +1656,7 @@ PR 1:
 
 PR 2:
 
-- `agent-docs/modify-reach-design.md` §8.3 (`capblend.DisplacedPayload`) and
+- `agent-docs/modify-design.md` Part R §8.3 (`capblend.DisplacedPayload`) and
   §8.4 (its measurements and tessellation).
 - `agent-docs/tessellation-design.md` §5 (the `LoopDelta` reservation).
 - `agent-docs/prism-boolean-design.md` §8 row 3 (a displaced result with a valid
@@ -1664,10 +1664,10 @@ PR 2:
   cap-loop `Chamfer` of exact loops builds a `DisplacedPayload`) and §8.8's
   readers, and "internal/capblend contour (boundary note)" (`LoopDelta` is the
   third term beside the contour displacement and `sectionDelta`).
-- `agent-docs/brep-modify-design.md` Table RB row RB6 and §2.2 (a cap-loop
+- `agent-docs/modify-design.md` Part B Table RB row RB6 and §2.2 (a cap-loop
   `Chamfer` of exact loops of a recorded receiver reaches the faceted view only
   through §8.1's fall-through).
-- `agent-docs/modify-reach-design.md` Table SX row SX10 (it also refuses a
+- `agent-docs/modify-design.md` Part R Table SX row SX10 (it also refuses a
   `DisplacedPayload` receiver) and Table DX's survey rows DX7 to DX9 (a
   `DisplacedPayload` is staged).
 - `agent-docs/tessellation-reach-design.md` §7 (T7: the `LoopDelta` reservation,

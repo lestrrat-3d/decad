@@ -840,7 +840,7 @@ func TestBooleanChainOfConesContinuesPastEachJoint(t *testing.T) {
 // TestUnionCupOperand pins the operand admission set: booleans tessellate their
 // operands, and tessellation accepts the prism, cup and faceted payload
 // classes, so a Shell-built cup is a first-class operand
-// (agent-docs/modify-reach-design.md §11).
+// (agent-docs/modify-design.md Part R §11).
 func TestUnionCupOperand(t *testing.T) {
 	t.Parallel()
 	doc, box := shellBox(t)

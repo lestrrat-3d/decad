@@ -301,7 +301,7 @@ func tessellateMesh(ctx context.Context, b *topo.Body, cbp Payload, chord float6
 		ChordVolume(cbp, lms),
 		proofbound.SweptVolumeAllow(motionMax, proofbound.PerturbedAreaUpper(mesh.Vertices, mesh.Triangles, motionMax)),
 	}
-	// A draft or chamfer band's near-tangent joins (agent-docs/draft-design.md
+	// A draft or chamfer band's near-tangent joins (agent-docs/modify-design.md Part D
 	// §9.1.1) leave B1's slices short of chord polygons near each such
 	// corner, and a restated arc (§7.1) moves the body B1 stands for; a band
 	// with neither adds no term, so its sum is unchanged.

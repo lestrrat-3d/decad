@@ -33,7 +33,7 @@ Outside prism-boolean's admitted class a boolean tessellates both operands
    boss rooted inside a plate, a tee of cylinders all build, but as
    `facetedPayload`: most `Fillet`/`Chamfer`/`Shell` requests refuse
    (modify-reach SX9). A complete tilted plate-to-cylinder junction can take
-   the bounded `Fillet` in `agent-docs/blend-variants-design.md`. The three
+   the bounded `Fillet` in `agent-docs/modify-design.md` Part A. The three
    surveys read `Suspect`, the analytic STEP
    path is gone, and the published bound is 0.5–2 mm³ against 1e-12 mm³ for
    the same part drawn as an analytic cut.
@@ -1750,7 +1750,7 @@ ordinary mesh-path operand and export input.
 | `Union`/`Cut`/`Intersect` with a prism, stacked or brep partner | class B again over the face view (§5), so a cross-drilled plate takes a second cross hole and a coplanar blind cut alike; a co-directional `Union` on an A1 result reads its `stack` and is A1 again (§3); a pair outside both takes the mesh path over §4.4's mesh |
 | `Transform` / `Copy` / `Mirrored` | re-lifts every face frame under the composed motion; a reflection flips `outward` and every wall's winding, exactly as `prismPayload.Reflected()` does |
 | `ScaledAt` | An A1 stack-backed, line-only solid with zero section and level displacement becomes a certified faceted image; source roles and planar tags follow the scale (evaluator §8). |
-| `Fillet` / `Chamfer` / `Shell` | `agent-docs/brep-modify-design.md`: a brep that reads as a prism along a reference axis takes the prism's own ops (route P); an axis-parallel straight edge takes the brep rewrite (route E) and the result is a `brepPayload`; every other call refuses by that document's Table SB |
+| `Fillet` / `Chamfer` / `Shell` | `agent-docs/modify-design.md` Part B: a brep that reads as a prism along a reference axis takes the prism's own ops (route P); an axis-parallel straight edge takes the brep rewrite (route E) and the result is a `brepPayload`; every other call refuses by that document's Table SB |
 | `ThroughAll` / `ToFace` stops | a planar face's level is its frame and `z0`, and the face carries its cap record (`topo.CapRecord`: that frame, the placement and `z0`); a directional extent reads the per-face extremes (§4.3), and refuses a record carrying a `delta` as a prism's does |
 | `Verify` validity | by construction (§4.2); the structural audit runs |
 | `Verify` tolerance gate | `brepGateDiameter` reads every body vertex and each face's stations (a swept face's wall at both levels, a planar face's region boundary), shrunk by the largest `delta` plus axial term plus the widest vertex bound or station gap (verification §3) |

@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// The fixtures of agent-docs/retained-edge-blend-design.md R4 and Table E for
+// The fixtures of agent-docs/modify-design.md Part E R4 and Table E for
 // the arc whose wall extends past its end planes: a rib stands on a round, so
 // the rib's end face x = 0 meets the round's cylinder (axis along x) in an arc
 // whose ends lie on the rib's two side faces y = ±earHalf. The round continues

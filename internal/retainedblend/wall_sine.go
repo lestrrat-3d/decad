@@ -12,7 +12,7 @@ import (
 // wallSine is a proven lower bound on the sine of the angle between the true wall
 // face fi and end plane g, as a function of how far from g the wall point it
 // bounds may lie (reach), and whether the wall is a plane, or nil when no bound
-// follows from the wall's tag (agent-docs/retained-edge-blend-design.md §4.3,
+// follows from the wall's tag (agent-docs/modify-design.md Part E §4.3,
 // sign reading). The tag must state no positional departure (TagDeparture and
 // the axial delta zero): Retention Claim R then puts every true point of the wall
 // on it. The tag's normal bound lowers the sine by at most itself, since

@@ -11,7 +11,7 @@ import (
 )
 
 // TestFacetedRetainedBlendAreaCharge blends one body edge by edge
-// (agent-docs/retained-edge-blend-design.md §6.3, Area). A plate 80×60×10
+// (agent-docs/modify-design.md Part E §6.3, Area). A plate 80×60×10
 // carries a 20×20 boss 15 high, a counterbored M6 hole and a round boss of
 // radius 6 placed by a Transform, so every body stays on the mesh path. Each
 // of the four side fillets rebuilds the plate's top, whose geometric area term

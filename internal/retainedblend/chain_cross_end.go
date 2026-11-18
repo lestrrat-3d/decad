@@ -12,7 +12,7 @@ import (
 )
 
 // This file reads and rebuilds the free ends of an open cross-plane chain
-// (agent-docs/retained-modify-reach-design.md §15b): a straight end edge between planes A and B meets an exact end
+// (agent-docs/retained-agent-docs/modify-design.md Part R §15b): a straight end edge between planes A and B meets an exact end
 // plane G at a convex corner, and its bevel ends on G in the segment between the setback points slid along the edge
 // onto G. Where such a point is exactly a corner of G, as where the chain ends on an earlier bevel of the same
 // setback, the column takes that held corner.
