@@ -59,7 +59,7 @@ func replayCoplanarCases() []replayCase {
 		{"R3", box(r3.Vec{}, r3.Vec{X: 20, Y: 16, Z: 10}),
 			func(t *testing.T) *BoolMesh {
 				// A trapezoid tenon resting on the plate, flush with its y faces.
-				return prismMesh(t, [][2]float64{{5.5, 0}, {14.5, 0}, {16.5, 16}, {3.5, 16}}, 10, 16)
+				return polygonPrismMesh(t, [][2]float64{{5.5, 0}, {14.5, 0}, {16.5, 16}, {3.5, 16}}, 10, 16)
 			}, all},
 	}
 }
@@ -173,7 +173,7 @@ func TestReplayCoplanarDeclinesWhatLiveClassifies(t *testing.T) {
 	})
 	t.Run("branching chains", func(t *testing.T) {
 		a := exactBoxMesh(t, r3.Vec{}, r3.Vec{X: 10, Y: 10, Z: 10})
-		b := prismMesh(t, [][2]float64{{14, 8}, {7, 8}, {10, 5}, {10, 2}, {14, 2}}, 2, 8)
+		b := polygonPrismMesh(t, [][2]float64{{14, 8}, {7, 8}, {10, 5}, {10, 2}, {14, 2}}, 2, 8)
 		for _, op := range []OperationKind{OpUnion, OpIntersect, OpCut} {
 			_, _, liveErr := MeshBooleanStats(t.Context(), op, a, b, NewContactMemo(a, b))
 			var want *TouchContactError
