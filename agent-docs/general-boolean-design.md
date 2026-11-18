@@ -1968,6 +1968,10 @@ are relations, never literals.
   apex on a wider tower's edge, or a bar's edge tangent to a round boss's top
   circle. Each twin moved 1 mm clear builds the brep, `Exact` and `Sound`
   for the straight bridges (`apitest/stacked_union_self_pinch_test.go`).
+  A lower L and an upper L whose missing quadrants meet opposite each other
+  at one point keep the mesh path; so do the same Ls each joined first by a
+  wedge pointing at that point in its operand's other slab, in either order,
+  where only the count of records with edges there reads the pinch.
 - **A1 separate bosses**: a 100 × 60 × 10 plate with radius-6, 8 mm round
   bosses standing apart (`apitest/stacked_union_separate_bosses_test.go`):
   `PatternCopies` and `Union` of three at 30 mm, `Union` of two, three in
