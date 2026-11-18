@@ -181,3 +181,39 @@ func TestEdgeSide(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, crossing, "the wrapper reads a coplanar-bounded edge as a graze")
 }
+
+// TestPairCutsCoplanarPointTouchOrder pins that boxes meeting at a corner give
+// the legacy refusal the switch-off pass gives, contact for contact and in the
+// same order.
+func TestPairCutsCoplanarPointTouchOrder(t *testing.T) {
+	a := exactBoxMesh(t, r3.Vec{}, r3.Vec{X: 10, Y: 10, Z: 10})
+	b := exactBoxMesh(t, r3.Vec{X: 10, Y: 10, Z: 10}, r3.Vec{X: 20, Y: 20, Z: 20})
+	res, err := pairCuts(coplanarCtx(t), a, b, NewContactMemo(a, b), newKeyMemo())
+	require.NoError(t, err)
+	_, off := pairCuts(t.Context(), a, b, NewContactMemo(a, b), newKeyMemo())
+	want, ok := errors.AsType[*TouchContactError](off)
+	require.True(t, ok, "%v", off)
+	got := mustLegacy(t, res)
+	require.Equal(t, want.What, got.What)
+	require.Equal(t, want.Contacts, got.Contacts)
+}
+
+// TestPairCutsCoplanarPointOnRim pins that a coplanar point touch that a
+// crossing segment also ends at is an ordinary rim point: the switch-off pass
+// accepts it, so it is neither owned nor part of any legacy refusal.
+func TestPairCutsCoplanarPointOnRim(t *testing.T) {
+	a := exactBoxMesh(t, r3.Vec{}, r3.Vec{X: 10, Y: 10, Z: 10})
+	verts := []r3.Vec{{X: 10, Y: 10, Z: 10}, {X: 20, Y: 10, Z: 10}, {X: 10, Y: 20, Z: 10}, {X: 5, Y: 5, Z: 1}}
+	tris := [][3]int{{0, 1, 2}, {0, 3, 1}, {1, 3, 2}, {2, 3, 0}}
+	b, err := PrepContext(t.Context(), verts, tris, []int{0, 1, 2, 3})
+	require.NoError(t, err)
+	b.SetVertexBounds(make([]float64, len(verts)))
+	b.Exact = []bool{true, true, true, true}
+	_, off := pairCuts(t.Context(), a, b, NewContactMemo(a, b), newKeyMemo())
+	require.NoError(t, off, "the switch-off pass accepts the point")
+	res, err := pairCuts(coplanarCtx(t), a, b, NewContactMemo(a, b), newKeyMemo())
+	require.NoError(t, err)
+	_, owned := res.Owned[proof.XptOf(verts[0]).Key()]
+	require.False(t, owned)
+	require.Nil(t, res.Legacy)
+}

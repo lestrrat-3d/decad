@@ -298,6 +298,14 @@ func meshBooleanStats(ctx context.Context, op OperationKind, ma, mb *BoolMesh, m
 	if err != nil {
 		return nil, Stats{}, err
 	}
+	if len(cuts.CoplanarA) > 0 || len(cuts.Owned) > 0 {
+		// The side pass does not read the admitted pairs yet, so the pair is
+		// refused as the switch-off pass refuses it.
+		if cuts.Legacy != nil {
+			return nil, Stats{}, cuts.Legacy
+		}
+		return nil, Stats{}, fmt.Errorf(`%w: an admitted coplanar pair has no side pass yet`, decaderr.ErrBooleanFailed)
+	}
 
 	if err := ctx.Err(); err != nil {
 		return nil, Stats{}, err
