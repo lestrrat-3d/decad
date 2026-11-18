@@ -78,6 +78,9 @@ type Face struct {
 	// placement, the shifted retry, an exact rotation and a similarity drop it
 	// and keep the departed tag. Zero for every other face.
 	ExtentDelta float64
+	// PlacedPlane is facetedrecord.Group.PlacedPlane on a retained Plane face: the face's true piece lies in it
+	// exactly while Surface equals it (agent-docs/coplanar-contact-design.md §17). nil for every other face.
+	PlacedPlane *surfacegeom.Plane
 	// FlatPatch marks a built Plane face whose true patch is a planar region
 	// bounded by one loop, the true counterpart of its own loop: each true
 	// vertex within its vertex's Bound, each true edge no longer than its

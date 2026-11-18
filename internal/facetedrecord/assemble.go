@@ -445,6 +445,7 @@ func assembleBody(ctx context.Context, shared *proofbound.WorkBudget, env topo.E
 				f.CapRecord, f.AxialDelta, f.HasAxialDelta = group.CapRecord, group.AxialDelta, group.HasAxialDelta
 				f.ViewCharge = group.ViewCharge
 				f.ExtentDelta = group.ExtentDelta
+				f.PlacedPlane = group.PlacedPlane
 				if group.Denoted != nil {
 					// The denoted proof replaces the tag's departure; the held
 					// displacement adds on top of it (topobuild.NormalAt).
@@ -486,6 +487,7 @@ func assembleBody(ctx context.Context, shared *proofbound.WorkBudget, env topo.E
 			f.Denoted = nil
 			f.CapRecord, f.AxialDelta, f.HasAxialDelta, f.ViewCharge = nil, 0, false, false
 			f.ExtentDelta = 0
+			f.PlacedPlane = nil
 		}
 	}
 

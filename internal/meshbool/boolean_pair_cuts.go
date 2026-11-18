@@ -105,10 +105,11 @@ func pairCuts(ctx context.Context, ma, mb *BoolMesh, memo *ContactMemo, keyOf fu
 		}
 		// A contact along a wall's rim against a carrier-exact facet is decided by the seat (§16), not by how
 		// finely the wall is held: the held-mesh gate does not read the wall's facet there.
-		if !rimOnCarrier(mb, j, c.EdgeB, ma, i) {
+		// A point contact at a rim vertex is a contact on the rim too.
+		if !rimOnCarrier(mb, j, c.EdgeB, ma, i) && !rimPointOnCarrier(mb, j, c, ma, i, keyOf) {
 			touchedB = append(touchedB, j)
 		}
-		if !rimOnCarrier(ma, i, c.EdgeA, mb, j) {
+		if !rimOnCarrier(ma, i, c.EdgeA, mb, j) && !rimPointOnCarrier(ma, i, c, mb, j, keyOf) {
 			touchedA = append(touchedA, i)
 		}
 		if c.Kind == ContactPoint {

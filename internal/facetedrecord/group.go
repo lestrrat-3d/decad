@@ -81,6 +81,12 @@ type Group struct {
 	// through NormalBound. SourceTag carries it. A placement, the shifted
 	// retry, an exact rotation and a similarity drop it and keep the tag.
 	ExtentDelta float64
+	// PlacedPlane is the retained Plane tag a placement proved to be, as a point set, exactly the image of an exact
+	// plane under the placement read as exact rationals (PlaneImageIsTag): the group's true piece lies in that plane
+	// though NormalBound charges the tag's rounded frame (agent-docs/coplanar-contact-design.md §17). It holds only
+	// while Surface equals it: every path that moves the tag without proving the image again voids it, and only a
+	// placement sets it.
+	PlacedPlane *surfacegeom.Plane
 	Denoted     *surfacenormal.Revolved
 	// NormalBound covers the tag's normal departure from its denoted patch.
 	// A placed planar tag conservatively uses the maximum distance of two

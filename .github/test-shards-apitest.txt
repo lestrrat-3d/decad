@@ -2917,6 +2917,7 @@
 11	0.02	TestVoidRevolveModifyOps
 11	0.00	TestWallReadingExactHeightArm
 12	0.01	TestAsymmetricChamferOnPrismCapEdge
+12	2.10	TestIntersectPlacedSeat
 12	0.59	TestAxialSectionUnionExactTurnsKeepExactCaps
 12	0.00	TestBodyPatchDoublesAFlatSheetWithANegatedNormal
 12	0.40	TestBooleanBoundComposition

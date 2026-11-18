@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
+	"github.com/lestrrat-3d/decad/decadtest"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
@@ -124,6 +125,71 @@ func TestIntersectSeat(t *testing.T) {
 		block, err := decad.Transform(t.Context(), tcCut(t, seatBox(t, sc, -4, -4, 6, 4, 4, 9), seatDisc(t, sc, 2.5, 5, 10)), turn)
 		require.NoError(t, err)
 		_, err = decad.Intersect(t.Context(), seatCopy(t, plate), seatCopy(t, block))
+		require.ErrorIs(t, err, decad.ErrUnsupported)
+	})
+}
+
+// TestIntersectPlacedSeat intersects seated bodies after a placement (agent-docs/coplanar-contact-design.md §17). A
+// turn about the bore's axis carries the floor's plane onto itself exactly, so the placed tags state a departure only
+// for their rounded frames, and the seat still decides.
+func TestIntersectPlacedSeat(t *testing.T) {
+	t.Parallel()
+	turned := func(t *testing.T, b *decad.Body, axis r3.Vec, deg float64) *decad.Body {
+		t.Helper()
+		turn, err := r3.Rotation(axis, units.Degrees(deg))
+		require.NoError(t, err)
+		out, err := decad.Transform(t.Context(), b, turn)
+		require.NoError(t, err)
+		return out
+	}
+	t.Run("a round nut turned about the bore's axis", func(t *testing.T) {
+		t.Parallel()
+		sc := newTCScene()
+		plate := turned(t, seatPlate(t, sc), r3.NewVec(0, 0, 1), 25)
+		nut := turned(t, tcCut(t, seatDisc(t, sc, 4.5, 6, 9.5), seatDisc(t, sc, 2.5, 5, 10)), r3.NewVec(0, 0, 1), 70)
+		requireSeatEmpty(t, nut, plate)
+	})
+	t.Run("mesh-built bodies turned about the bore's axis", func(t *testing.T) {
+		t.Parallel()
+		// A tilted hole away from the seat sends each Cut down the mesh path, so both bodies hold faceted records
+		// whose placed groups carry the proved plane (Group.PlacedPlane).
+		sc := newTCScene()
+		tilted := func(t *testing.T, cx, cy, r, z0 float64) *decad.Body {
+			t.Helper()
+			tool := sc.prism(t, r3.NewVec(0, 0, z0), tcX, tcY, []tcSeg{
+				tcArc(cx, cy, cx+r, cy, cx-r, cy), tcArc(cx, cy, cx-r, cy, cx+r, cy),
+			}, tcAlong(20))
+			return turned(t, tool, r3.NewVec(1, 0, 0), 10)
+		}
+		plate := tcCut(t, seatPlate(t, sc), tilted(t, 14, 14, 1, -5))
+		nut := tcCut(t, tcCut(t, seatDisc(t, sc, 4.5, 6, 9.5), seatDisc(t, sc, 2.5, 5, 10)), tilted(t, 3.5, 0, 0.4, 7.5))
+		require.Equal(t, "decad.facetedPayload", decadtest.PayloadClass(plate))
+		require.Equal(t, "decad.facetedPayload", decadtest.PayloadClass(nut))
+		requireSeatEmpty(t, turned(t, nut, r3.NewVec(0, 0, 1), 70), turned(t, plate, r3.NewVec(0, 0, 1), 25))
+	})
+	// Rejected: a move too small to change a held float still moves the true plane. The plate below sits 10⁻³⁰ higher
+	// than its held floor, so the block overlaps it by that much, and no exact reading of the held floats decides it.
+	t.Run("a move below the floats' resolution refuses", func(t *testing.T) {
+		t.Parallel()
+		sc := newTCScene()
+		lift, err := r3.Translation(r3.NewVec(0, 0, 1e-30))
+		require.NoError(t, err)
+		plate, err := decad.Transform(t.Context(), seatPlate(t, sc), lift)
+		require.NoError(t, err)
+		block := tcCut(t, seatBox(t, sc, -4, -4, 6, 4, 4, 9), seatDisc(t, sc, 2.5, 5, 10))
+		for _, ops := range [][2]*decad.Body{{block, plate}, {plate, block}} {
+			_, err := decad.Intersect(t.Context(), seatCopy(t, ops[0]), seatCopy(t, ops[1]))
+			require.ErrorIs(t, err, decad.ErrUnsupported)
+		}
+	})
+	// Rejected: a turn that tilts the floor leaves its true plane where no held float lies, so no exact reading
+	// decides the contact.
+	t.Run("turned about a horizontal axis refuses", func(t *testing.T) {
+		t.Parallel()
+		sc := newTCScene()
+		plate := turned(t, seatPlate(t, sc), r3.NewVec(1, 0, 0), 31)
+		block := turned(t, tcCut(t, seatBox(t, sc, -4, -4, 6, 4, 4, 9), seatDisc(t, sc, 2.5, 5, 10)), r3.NewVec(1, 0, 0), 31)
+		_, err := decad.Intersect(t.Context(), seatCopy(t, block), seatCopy(t, plate))
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 	})
 }

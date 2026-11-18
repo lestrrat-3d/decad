@@ -731,8 +731,11 @@ Code: `internal/meshbool/seat.go`; callers in `boolean_pair_cuts.go`, `tangency_
 ### 16.1 Carrier-exact facets and seat pairs
 
 A facet is **carrier-exact** when its true piece lies in the facet's own plane, whatever its outline: its slab bound is
-zero (a retained plane whose tag is the facet's plane, `SetChargedSlabBounds`), or its face is an analytic `Plane` with
-no retained tag, no stated departure and zero displacement, whose plane slab (`planeSlab`) at the facet is zero.
+zero (a retained plane whose tag is the facet's plane, `SetChargedSlabBounds`), or its face is an analytic `Plane` of an
+unplaced body with no retained tag, no stated departure and zero displacement, whose plane slab (`planeSlab`) at the
+facet is zero, or §17 reads the face's exact true plane through its corners. A placed analytic body denotes its record
+carried through the placement read as exact rationals, which its float tag only approximates, so the analytic reading
+applies to an unplaced body only (§17.2).
 
 A **seat pair** is two coplanar facets, one of each operand, both carrier-exact and facing opposite ways
 (`proof.XdotSign` of their normals is negative). §3's pass admits a seat pair as it admits an exact pair.
@@ -801,8 +804,11 @@ The pass reads this in three places:
 - **Proximity gate.** `RefuseUndecidableProximity` skips the face pair (`seatSkip`): every facet of `X` is
   carrier-exact, lies on the seat plane exactly and faces opposite the seat facet. S3 leaves nothing for a chord to
   hide.
-- **Held-mesh gate.** A contact along a marked rim edge against a carrier-exact facet does not enter the touched
-  lists the chain-depth gate (`RefuseCoarseHeldContact`) reads. By S3 the contact lies in `P` and adds no volume.
+- **Held-mesh gate.** A contact along a marked rim edge, or a single-point contact at a vertex of a marked rim edge
+  (`rimPointOnCarrier`), against a carrier-exact facet does not enter the touched lists the chain-depth gate
+  (`RefuseCoarseHeldContact`) reads. By S3 the contact lies in `P` and adds no volume. A wall held coarser than the
+  pair's chord tolerance then meets the seat without tripping the gate; every other contact of its facets still
+  enters the lists.
 - **In-plane edges.** An `EdgeCoplanarBounded` rim edge (§3.3) is accepted when the facet across it is admitted as
   coplanar with the facet it lies in: a seat pair. A point contact may be owned by the coplanar pass when both facets
   are exact, or one is carrier-exact and the other carrier-exact or on a marked rim (`seatPoint`).
@@ -830,3 +836,100 @@ Kept refusals:
   compared exactly from their records, which this section does not do.
 - **Open rims** of held walls (S2).
 - **Shifted operands, replays and fixed operands** read no seats.
+
+## 17. Placed seats
+
+Hardware and parts in an assembly are placed bodies, and a placement rounds their tags: a placed retained plane states
+a departure (about 10⁻¹⁵ in the gallery's clamp arm), so §16.1 reads none of its facets as carrier-exact. Yet a turn
+about a plane's normal, or any placement whose matrix row along that normal is exact, carries the plane onto its float
+image exactly. This section reads a placed face's true plane exactly when the record allows it, and §16 then applies
+unchanged.
+
+### 17.1 Faceted records
+
+A faceted payload holds its mesh in its current frame, and its true solid is the earlier one carried through each
+placement's delta read as exact rationals (`facetedrecord.Payload.Placed`). Only the float tags survive a placement, so
+the claim is recorded when the placement happens.
+
+- **Claim.** `Group.PlacedPlane` (and `topo.Face.PlacedPlane`, copied in `AssembleBody`) names a retained `Plane` tag
+  whose point set is exactly the true plane. `placedPlane` sets it when the group's tag before the placement was exact
+  (retained, not denoted, no stated departure and zero displacement, or an earlier claim still equal to the tag) and
+  `PlaneImageIsTag` proves the moved float tag is, as a point set, the exact image: its normal `U′×V′` is parallel to
+  `(B·U)×(B·V)` and its origin lies in the image plane through `B·O + t`, all in exact rationals. The frames may differ;
+  only the plane is claimed.
+- **Why it holds.** The tag before the placement held the true piece. The true piece after it is that piece's exact
+  image, which lies in the exact image plane, and the claim proves that plane equals the moved tag.
+- **Voiding.** Every placement that moves the record clears the claim before it proves it again, since a move too
+  small to change the tag's floats still moves the true plane. Every other path that moves a tag leaves a claim naming
+  the old tag, and a reader (`trueFacePlane`) accepts the claim only while the face's tag equals it. A new record that
+  `SourceTag` restates from a face starts without a claim.
+- **Denoted revolve planes.** A plane face with a revolve record (`topo.Face.Denoted`) whose meridian segments all run
+  at one exact level `z₀` lies in the plane through `O + z₀·W` spanned by `E₀` and `E₁`, all exact point leaves of the
+  record (`denotedPlane`). A placement transforms the record exactly (`Revolved.Transformed`), so this holds for a
+  placed bolt's bearing face whatever its tag states.
+
+A facet is carrier-exact when its three held corners lie in the face's true plane, decided in exact rationals
+(`exactPlane.holds`).
+
+### 17.2 Placed analytic bodies
+
+A body built by an analytic payload denotes its record at the identity placement carried through `Payload.Transform`
+read as exact rationals. `placedCarriers` (`internal/booleaneval/placed_seat.go`) rebuilds the record at the identity,
+pairs its faces with the placed body's by position (as `placedOperandDepartures` does), reads each paired plane face
+whose identity tag states no departure, no displacement and no denoted patch as an exact plane `P₀`, and maps it
+exactly: the image passes through `L·o + t` with normal `cof(L)·n`, the direction of `L⁻ᵀ·n`. The held corners must lie
+in it exactly. Faceted payloads use §17.1 instead.
+
+§16.1's analytic reading took a placed analytic body's float tag as its true plane. A plate moved by `10⁻³⁰` along its
+normal keeps every float, so its held floor and tag are unchanged, but its true floor is `10⁻³⁰` higher: a block resting
+on the held floor overlaps it, and `Intersect` returned `BooleanEmpty`. The analytic reading now applies to unplaced
+bodies only, and the moved plate refuses.
+
+### 17.3 Why the hardware-first order passed
+
+In the gallery survey on #3318, seven hardware pairs refused with the part as the first operand and proved empty with the
+hardware first. Both orders refused on the first attempt. A document's gap tolerance is 0.01 mm unless set otherwise
+(`WithGapTolerance`, api-design.md), and the refusal is a touch contact, so `Evaluate` retried with the second operand moved by up to that tolerance
+(gap-tolerance-design.md §5.2). `shiftDirections` looks for one direction that opens every contact, read along operand
+A's facet normal at each contact. With the hardware first, the contacts carry the bolt's or nut's normals: its bearing
+face and chamfer cone all lean the same way along the axis, so moving the part along the axis opens them, and the moved
+part proves empty. With the part first, the contacts carry the part's normals, among them the bore wall's radial normals
+round its whole rim, which no single translation opens; the retry tries nothing and the refusal stands.
+
+So the hardware-first answers were the gap tolerance's, not an exact proof, and the retry is order-dependent: one
+contact reads as openable or not depending on which operand's normal it records. With §17 both orders decide those pairs
+on the first attempt. The order dependence of the retry itself is left as it is: it only ever answers within the
+document's stated tolerance.
+
+### 17.4 Kept refusals
+
+- **Placements whose image plane holds no float.** A turn whose matrix row along the plane's normal is inexact tilts the
+  true plane off every held float. The gallery's adapter and stud pairs share a basis with an off-axis entry of
+  `5.55×10⁻¹⁷`, and the raised nut J4 pair a basis vector of length `1 + 2⁻⁵²`. Both operands' true planes may still
+  coincide, but no held corner lies in them, so no exact predicate on the held facets decides the contact.
+- **Held planar walls.** §16.2 admits a planar wall only when it is exact. A placed planar wall is held within a bound,
+  and its rim is an open segment, which S2's closed-rim argument does not cover.
+
+### 17.5 The J2 bolt and swivel
+
+Bolt J2 refused against the swivel in both orders on the chain-depth gate, after #3318 as before. The swivel's J2 hole
+is cut while the operands are swivel-sized, so its wall is held to about 0.0105 mm, while the bolt and swivel pair's
+chord tolerance is 0.0019 mm. The wall earns a seat on the pocket floor (§16.2), but its long facets fan from the rim,
+and many touch the bolt's bearing face only at one rim vertex. Those single-point contacts carried no rim edge, so they
+entered the touched lists and the gate refused the coarse wall. A point at a rim vertex is a rim contact by S3, so
+`rimPointOnCarrier` now leaves it out (§16.3), and the pair proves empty in both orders. `TestRimPointOnCarrier` covers
+the predicate, including a point off the rim, a carrier that is not exact and a segment contact, which it rejects.
+
+### 17.6 Tests
+
+| Test | Case | Expect |
+|---|---|---|
+| `TestIntersectPlacedSeat` | a round nut and the plate, analytic, turned about the bore's axis by 70° and 25°, both orders | `BooleanEmpty` (fails red without `placedCarriers`) |
+| `TestIntersectPlacedSeat` | the same bodies built on the mesh path (faceted records) | `BooleanEmpty` (fails red without `placedPlane`) |
+| `TestIntersectPlacedSeat` | the plate moved `10⁻³⁰` along its normal, both orders | `ErrUnsupported` (returned `BooleanEmpty` before §17.2) |
+| `TestIntersectPlacedSeat` | both turned 31° about a horizontal axis | `ErrUnsupported` |
+| `TestPlacedPlane` | a turn about the normal, twice | a claim |
+| `TestPlacedPlane` | a tilting turn, a sub-resolution move, a stated departure, a stale claim, a displacement, an unretained tag | no claim |
+| `TestTrueFacePlane` | a proved claim, a level revolve record | a plane |
+| `TestTrueFacePlane` | a stale claim, a climbing meridian | none |
+| `TestRatPlaneImage` | the cofactor image against three mapped points | exact |
