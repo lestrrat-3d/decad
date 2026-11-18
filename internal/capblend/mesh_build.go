@@ -32,7 +32,7 @@ func TessellateMesh(ctx context.Context, b *topo.Body, cbp Payload, chord float6
 }
 
 // TessellateDisplacedMesh is TessellateMesh for a displaced cap-loop chamfer
-// (agent-docs/carrier-record-design.md §8.7): the same core with the payload's
+// (agent-docs/prism-boolean-design.md Part K §8.7): the same core with the payload's
 // LoopDelta reserved from the chord budget and charged into every facet bound,
 // area slack and occupied-volume term.
 func TessellateDisplacedMesh(ctx context.Context, b *topo.Body, dp DisplacedPayload, chord float64,

@@ -151,7 +151,7 @@ func analyticRoutes(ctx context.Context, op meshbool.OperationKind, env topo.Env
 	if err := refuseSheetOperand(b, op.String()); err != nil {
 		return nil, false, err
 	}
-	// agent-docs/axial-section-boolean-design.md: a Union of axial extrusions
+	// agent-docs/prism-boolean-design.md Part A: a Union of axial extrusions
 	// between the same two planes is the extrusion of the 2D union of their
 	// sections, when some section holds a free-form segment the analytic prism
 	// routes below do not read. ok=false is a miss, never an error.
@@ -205,7 +205,7 @@ func analyticRoutes(ctx context.Context, op meshbool.OperationKind, env topo.Env
 		} else if ok {
 			return found(prismboolean.AnalyticBody(ctx, env, payload))
 		}
-		// agent-docs/general-boolean-design.md §3 A1: unequal sweep intervals that
+		// agent-docs/prism-boolean-design.md Part G §3 A1: unequal sweep intervals that
 		// overlap or touch build a stacked prism, or a brep where an
 		// interface is flush or crossing. Same contract as above.
 		if payload, ok, err := prismboolean.TryStackedUnion(ctx, a.Payload, b.Payload); err != nil {
@@ -223,7 +223,7 @@ func analyticRoutes(ctx context.Context, op meshbool.OperationKind, env topo.Env
 			}
 			return body, true, nil
 		}
-		// agent-docs/general-boolean-design.md §3 A5: a prism-group operand, or
+		// agent-docs/prism-boolean-design.md Part G §3 A5: a prism-group operand, or
 		// survivors that close into several disjoint loops.
 		if payload, ok, err := prismboolean.TryGroupUnion(ctx, a.Payload, b.Payload); err != nil {
 			if errors.Is(err, decaderr.ErrUnsupported) {
@@ -270,7 +270,7 @@ func analyticRoutes(ctx context.Context, op meshbool.OperationKind, env topo.Env
 			}
 			return body, true, nil
 		}
-		// agent-docs/general-boolean-design.md §3 A8: opposed pockets that
+		// agent-docs/prism-boolean-design.md Part G §3 A8: opposed pockets that
 		// overlap in plan at the interface the tool ends at.
 		if bp, ok, err := prismboolean.TryOpposedBlindCut(ctx, a.Payload, b.Payload); err != nil {
 			return nil, false, err
@@ -297,7 +297,7 @@ func analyticRoutes(ctx context.Context, op meshbool.OperationKind, env topo.Env
 			}
 			return body, true, nil
 		}
-		// agent-docs/general-boolean-design.md §3 A5: a prism-group tool.
+		// agent-docs/prism-boolean-design.md Part G §3 A5: a prism-group tool.
 		if pp, ok, err := prismboolean.TryGroupCut(ctx, a.Payload, b.Payload); err != nil {
 			if errors.Is(err, decaderr.ErrUnsupported) {
 				return nil, false, hooks.AsBooleanError(op, meshbool.ExpectedBoolean(meshbool.BooleanExpectedUnsupported, err))
@@ -316,7 +316,7 @@ func analyticRoutes(ctx context.Context, op meshbool.OperationKind, env topo.Env
 			return found(revolvebore.Build(ctx, env, revolvebore.Payload{Candidate: candidate}))
 		}
 	}
-	// agent-docs/general-boolean-design.md §3 class B: a perpendicular pair with a
+	// agent-docs/prism-boolean-design.md Part G §3 class B: a perpendicular pair with a
 	// prism, stacked or brep operand builds a brep body (or, for Intersect, a
 	// prism). Same contract as above.
 	if payload, ok, err := classB(ctx, op, a, b); err != nil {
@@ -385,7 +385,7 @@ func BodyScaled(ctx context.Context, op meshbool.OperationKind, env topo.Env, a,
 	if err == nil || ctx.Err() != nil || op != meshbool.OpCut || !errors.Is(err, decaderr.ErrUnsupported) {
 		return body, err
 	}
-	// agent-docs/general-boolean-design.md §3 A9: a blind side notch, or a
+	// agent-docs/prism-boolean-design.md Part G §3 A9: a blind side notch, or a
 	// blind pocket across holes of a target with any number of them, the mesh
 	// path refused (a tool tangent to the outline at recorded vertices). It
 	// runs after the mesh path, so a pair the mesh path builds keeps that
@@ -499,7 +499,7 @@ func classB(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body) (to
 	}
 	// A turned shaft's Cut reads the shaft as the prism, or the stack of
 	// coaxial prisms, it denotes exactly
-	// (agent-docs/general-boolean-design.md §3 "Revolved shaft as a prism").
+	// (agent-docs/prism-boolean-design.md Part G §3 "Revolved shaft as a prism").
 	if rp, ok := a.Payload.(revolveplan.Payload); ok && op == meshbool.OpCut {
 		steps, ok := rp.CylinderSteps()
 		if !ok {

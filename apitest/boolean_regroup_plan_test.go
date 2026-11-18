@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// The hand-built plans of agent-docs/boolean-chain-regroup-design.md (Test plan): each
+// The hand-built plans of agent-docs/prism-boolean-design.md Part R (Test plan): each
 // fixture's sequential chain refuses, and the regrouped plan builds through public calls.
 // The test pins the premises the regroup depends on, namely which steps take the mesh path.
 

@@ -109,7 +109,7 @@ func FrameKeepingInstance(ctx context.Context, env topo.Env, rp patternrecord.Sp
 		if sourceExact && p.SectionDelta != 0 {
 			// An undisplaced source's instance denotes the source moved by the
 			// exact motion, and every datum moved by at most the motion's charge
-			// (agent-docs/carrier-record-design.md §5.1).
+			// (agent-docs/prism-boolean-design.md Part K §5.1).
 			if cr, raised, ok := instanceRecord(moved, p.SectionDelta, pointCharge); ok {
 				p.SectionDelta = raised
 				p.Carriers = &cr

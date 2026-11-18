@@ -15,7 +15,7 @@ import (
 var capLoopRouteDisabled atomic.Bool
 
 // CarrierCapLoopChamfer is the cap-loop route of
-// agent-docs/carrier-record-design.md §8.1: a Chamfer whose selection is every
+// agent-docs/prism-boolean-design.md Part K §8.1: a Chamfer whose selection is every
 // edge of one or more complete cap loops of a prism receiver whose valid
 // carrier record cr marks every selected loop exact builds the chamfer of the
 // section the receiver denotes, as a capblend.DisplacedPayload that charges

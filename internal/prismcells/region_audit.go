@@ -15,7 +15,7 @@ import (
 )
 
 // This file is the arrangement stability audit (V2) of
-// agent-docs/carrier-record-design.md §6.3. Every pair of arranged edges from
+// agent-docs/prism-boolean-design.md Part K §6.3. Every pair of arranged edges from
 // different records, at least one of them displaced, keeps the arrangement's
 // topology under each edge's displacement η.
 

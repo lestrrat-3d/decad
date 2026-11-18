@@ -113,7 +113,7 @@ func TestPairChord(t *testing.T) {
 }
 
 // A displaced cap-loop chamfer's chord floor is at least twice its largest
-// LoopDelta (agent-docs/carrier-record-design.md §8.7).
+// LoopDelta (agent-docs/prism-boolean-design.md Part K §8.7).
 func TestChordShareFloorOfDisplacedCapBlend(t *testing.T) {
 	dp := capblend.DisplacedPayload{LoopDelta: []float64{0.25, 0, 0.125}}
 	share := booloperand.ChordShare(t.Context(), boxBody(r3.Vec{}, r3.NewVec(1, 1, 1), 0, dp))

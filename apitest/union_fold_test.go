@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file is agent-docs/union-fold-design.md's public-surface tests for the
+// This file is agent-docs/prism-boolean-design.md Part U's public-surface tests for the
 // many-body Union that no certified route takes as a set: two revolved frusta, 10 mm long
 // and overlapping from x = 6 to 10, and a block through their axis.
 

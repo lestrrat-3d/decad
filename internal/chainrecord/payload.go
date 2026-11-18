@@ -28,7 +28,7 @@ type Payload struct {
 	Z0Delta float64
 	Z1Delta float64
 	// Z0Denoted and Z1Denoted are prismrecord.Payload's own level
-	// denotations (agent-docs/stacked-prism-design.md §2.1).
+	// denotations (agent-docs/prism-boolean-design.md Part S §2.1).
 	Z0Denoted, Z1Denoted prismplacement.LevelDenotation
 	Xform                r3.Transform
 	// SectionDelta is prismrecord.Payload's own §7 term

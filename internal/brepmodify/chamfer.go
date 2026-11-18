@@ -223,7 +223,7 @@ func Chamfer(ctx context.Context, env topo.Env, b *topo.Body, call ChamferCall) 
 	// whose selected edges lie on loops with exact carriers takes the faceted
 	// view's retained edge blend instead (brep-modify §2.2).
 	// A displaced receiver whose carrier record is valid bevels its lateral
-	// corners from the recorded carriers (agent-docs/carrier-record-design.md
+	// corners from the recorded carriers (agent-docs/prism-boolean-design.md Part K
 	// §7), or chamfers complete cap loops that are exact on the section it
 	// denotes (§8.1). The record is read once for both routes.
 	if pp.SectionDelta != 0 && route.Prism == nil && !sweepStraight {

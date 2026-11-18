@@ -2341,7 +2341,7 @@ build (`extrudeChain`). The profile build records a `prismPayload`, or a
 `chainPayload`, which a one-span chain `Sweep` also records. A chain
 `Extrude`'s `chainPayload` also records the exact level each sweep end
 denotes (`Z0Denoted`, `Z1Denoted`), as `prismPayload` does
-(`agent-docs/stacked-prism-design.md` §2.1); a sweep's one-span payload and a
+(`agent-docs/prism-boolean-design.md` Part S §2.1); a sweep's one-span payload and a
 trimmed ribbon record none. Each build keeps its own refusal order. A profile section runs the seam gates, the
 recorded-area falsifier, the option decode, the taper checks, then the extent
 gate. A chain section runs the nil-option check, the seam gates of §13.3, the

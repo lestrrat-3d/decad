@@ -29,7 +29,7 @@ func LocateStacked(ctx context.Context, p r3.Vec, sp stackedrecord.Payload) (Loc
 }
 
 // LocateStackBrep classifies the world point p against a BRep that keeps the
-// slabs a stacked Union built it from (agent-docs/general-boolean-design.md
+// slabs a stacked Union built it from (agent-docs/prism-boolean-design.md Part G
 // §4.1), when its faces are exactly those slabs' loops at their levels: a
 // zero stack and face displacement, no blend face, loop band or shell band,
 // and a first face that is a planar cap in the reference frame the stack is
@@ -85,7 +85,7 @@ func LocateStackBrep(ctx context.Context, p r3.Vec, bp breprecord.Payload) (Loca
 		return Undecided, false, nil
 	}
 	// The BRep joins each junction at one canonical vertex
-	// (agent-docs/general-boolean-design.md §4.1); the route reads only
+	// (agent-docs/prism-boolean-design.md Part G §4.1); the route reads only
 	// loops whose junctions close at two equal ends, where that vertex is
 	// the recorded end itself.
 	budget := proofbound.NewWorkBudget(ctx)

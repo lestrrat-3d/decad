@@ -183,7 +183,7 @@ func (b *Engine) junction(ci Carrier, ei ubEnd, cj Carrier, sj ubEnd) (Point2, f
 		}
 	}
 	// The point's own proven distance from the crossing joins its allowance
-	// (agent-docs/general-boolean-design.md §3 A1, §5).
+	// (agent-docs/prism-boolean-design.md Part G §3 A1, §5).
 	off := crossingOffset(ei, sj, p)
 	side := 0
 	if curve.Kind != ubCircle {

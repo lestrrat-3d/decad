@@ -123,7 +123,7 @@ func FilletWithRoots(walks []survey2d.SideWalk, ci int, r, tol float64) (*Blend,
 }
 
 // FilletWithCarriers is FilletWithRoots reading the corner's two carriers from
-// recorded segment data (agent-docs/carrier-record-design.md §7.2) instead of
+// recorded segment data (agent-docs/prism-boolean-design.md Part K §7.2) instead of
 // the walks: carA for the arriving walk and carB for the leaving one. A nil
 // override reads that walk as FilletWithRoots does.
 func FilletWithCarriers(walks []survey2d.SideWalk, ci int, r, tol float64, ovA, ovB *CornerCarrier) (*Blend, FilletDecisions, error) {
@@ -260,7 +260,7 @@ func CornerCross(walks []survey2d.SideWalk, ci int) (float64, bool) {
 }
 
 // CornerCrossWithCarriers is CornerCross reading the tangents from recorded
-// carrier data where an override is given (agent-docs/carrier-record-design.md
+// carrier data where an override is given (agent-docs/prism-boolean-design.md Part K
 // §7.2).
 func CornerCrossWithCarriers(walks []survey2d.SideWalk, ci int, ovA, ovB *CornerCarrier) (float64, bool) {
 	n := len(walks)
@@ -376,7 +376,7 @@ func Chamfer(walks []survey2d.SideWalk, ci int, dA, dB, tol float64) (*Blend, er
 }
 
 // ChamferWithCarriers is Chamfer whose S4 turn reads the tangents of recorded
-// carrier data where an override is given (agent-docs/carrier-record-design.md
+// carrier data where an override is given (agent-docs/prism-boolean-design.md Part K
 // §7.2). The feet stay set back from the walked corner.
 func ChamferWithCarriers(walks []survey2d.SideWalk, ci int, dA, dB, tol float64, ovA, ovB *CornerCarrier) (*Blend, error) {
 	n := len(walks)

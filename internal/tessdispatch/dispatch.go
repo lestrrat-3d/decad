@@ -297,7 +297,7 @@ func capBlendMesh(ctx context.Context, b *topo.Body, cbp capblend.Payload, chord
 // displacedCapBlendMesh is capBlendMesh for a displaced cap-loop chamfer: it
 // reserves the largest LoopDelta from the chord budget and charges each loop's
 // own into the facet bounds, area slack and occupied volume
-// (agent-docs/carrier-record-design.md §8.7).
+// (agent-docs/prism-boolean-design.md Part K §8.7).
 func displacedCapBlendMesh(ctx context.Context, b *topo.Body, dp capblend.DisplacedPayload, chord float64, verify Verify) (*topo.Mesh, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err

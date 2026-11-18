@@ -597,7 +597,7 @@ func TestVerifyCrossingPairSeatedAndPlacedResolve(t *testing.T) {
 		requireDocumentUnchanged(t, doc, before)
 	})
 
-	// A6 (agent-docs/general-boolean-design.md §3) charges the crossings a
+	// A6 (agent-docs/prism-boolean-design.md Part G §3) charges the crossings a
 	// nonidentity re-expression can move, so a placed section is measured
 	// as the seated one is. Shown to fail with the §3.4 split-boundary
 	// reroute restored in prismcells.ResolveCrossingCells.
@@ -655,7 +655,7 @@ func TestVerifyCrossingPairSeatedAndPlacedResolve(t *testing.T) {
 // the identity and no placement is ever applied, but operand A's section was
 // trimmed out of a larger sketch arrangement and its consumed walls carry a
 // walk charge (§7's delta_walk), which the crossings with B can amplify.
-// agent-docs/general-boolean-design.md §3 A6 charges that, so the pair is measured
+// agent-docs/prism-boolean-design.md Part G §3 A6 charges that, so the pair is measured
 // like the control arm, which draws the IDENTICAL footprint as a plain
 // rectangle. Shown to fail with the §3.4 split-boundary reroute restored in
 // prismcells.ResolveCrossingCells.

@@ -68,7 +68,7 @@ func UnionMany(ctx context.Context, env topo.Env,
 	operands []*topo.Body) (*topo.Body, bool, error) {
 	if !lineClass(operands) {
 		// Circles, holes or displaced operands: the extended class
-		// (agent-docs/carrier-record-design.md §5.3), which misses rather
+		// (agent-docs/prism-boolean-design.md Part K §5.3), which misses rather
 		// than refuses.
 		return unionRegions(ctx, env, operands)
 	}
@@ -197,7 +197,7 @@ func UnionMany(ctx context.Context, env topo.Env,
 	}
 	if !disjoint {
 		// Loops that touch at a point, such as a triangle's apex on a square's
-		// side, are no prism group (agent-docs/general-boolean-design.md §3 A5).
+		// side, are no prism group (agent-docs/prism-boolean-design.md Part G §3 A5).
 		// A miss lets the bodies join two at a time, where the mesh path
 		// takes the touching pair.
 		return nil, false, nil
@@ -222,7 +222,7 @@ func AnalyticBody(ctx context.Context, env topo.Env, payload topo.Payload) (*top
 	case prismrecord.Payload:
 		// A freshly minted record (no owner yet) is bound to its new body; a
 		// record already bound to another body was passed through and is dropped
-		// by Build (agent-docs/carrier-record-design.md §3.4).
+		// by Build (agent-docs/prism-boolean-design.md Part K §3.4).
 		if p.Carriers != nil && !p.Carriers.Minted() {
 			return prismrecord.Build(ctx, env, p, freeform.NewFreeformWork())
 		}

@@ -12,7 +12,7 @@ import (
 )
 
 // cutToolApart is §5.4's stability audit over every pair of a tool segment and
-// a target segment with a nonzero h (agent-docs/carrier-record-design.md §6.3,
+// a target segment with a nonzero h (agent-docs/prism-boolean-design.md Part K §6.3,
 // ASA1: a clean-nesting match shares no vertex). It requires
 // 4·max(h, c) < F over every segment and G > F for each pair.
 func cutToolApart(budget *proofbound.WorkBudget, target, tool prismrecord.Payload,

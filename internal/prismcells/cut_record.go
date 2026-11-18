@@ -14,7 +14,7 @@ import (
 )
 
 // This file is the clean-nesting Cut's carrier record
-// (agent-docs/carrier-record-design.md §5.4): each result segment and
+// (agent-docs/prism-boolean-design.md Part K §5.4): each result segment and
 // junction reads its entity tag for the target (hole, segment) it came from,
 // because the matched profile may order loops and start segments differently
 // from the target.

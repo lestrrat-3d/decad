@@ -1,6 +1,6 @@
 // Package prismboolean admits prism, stacked-prism and prism-group operand
 // payloads to the analytic boolean routes of agent-docs/prism-boolean-design.md and
-// agent-docs/general-boolean-design.md §3 (A1, A5, A7). It reads only the two
+// agent-docs/prism-boolean-design.md Part G §3 (A1, A5, A7). It reads only the two
 // operand payloads, runs the reject-only gates, and passes the admitted
 // records to prismcells, stackedrecord and stackedunion, which build the
 // result payload. The root boolean dispatch builds and commits the body.
@@ -157,7 +157,7 @@ func TryStackedBlindCut(ctx context.Context, a, b topo.Payload) (stackedrecord.P
 
 // TryOpposedBlindCut builds a blind tool ending exactly at an existing
 // interface whose opposed exclusive holes overlap in plan
-// (agent-docs/general-boolean-design.md §3 A8). TryStackedBlindCut's
+// (agent-docs/prism-boolean-design.md Part G §3 A8). TryStackedBlindCut's
 // admission applies; the result is a BRep because the stacked payload cannot
 // hold the partial floor and ceiling. Opposed holes that touch, and any
 // scene or topology the build does not cover, are silent misses.
@@ -207,7 +207,7 @@ func TryStackedThroughCut(ctx context.Context, a, b topo.Payload) (stackedrecord
 	}
 	// A union-built stack changes its outer loop at an interface. Its exposed
 	// patches are not the exclusive-hole patches this cut re-derives below, so
-	// it takes the mesh path (agent-docs/stacked-prism-design.md §6).
+	// it takes the mesh path (agent-docs/prism-boolean-design.md Part S §6).
 	if len(sp.OuterRuns()) != 1 {
 		return stackedrecord.Payload{}, false, nil
 	}
@@ -251,7 +251,7 @@ func TryCrossingBlindCut(ctx context.Context, a, b topo.Payload) (breprecord.Pay
 
 // TrySideNotchCut builds a blind tool that crosses or touches the target's
 // outer wall, or crosses holes of a target with any number of them
-// (agent-docs/general-boolean-design.md §3 A9): A7's BRep build with its scope
+// (agent-docs/prism-boolean-design.md Part G §3 A9): A7's BRep build with its scope
 // gates lifted. Every loop holds lines, circles and arcs; an oblique line may
 // stand only where no scene cuts it, which the build checks per fragment. The
 // dispatch tries it only after the mesh path has refused the pair, so every

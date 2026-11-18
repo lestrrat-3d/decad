@@ -41,7 +41,7 @@ func (m cancelOperandMesher) TessellateOperand(ctx context.Context, _ *topo.Body
 }
 
 // TestBooleanDispatchAnalyticPrefix pins the split of booleandispatch.Body into the
-// analytic route prefix and the mesh tail (agent-docs/boolean-chain-regroup-design.md).
+// analytic route prefix and the mesh tail (agent-docs/prism-boolean-design.md Part R).
 func TestBooleanDispatchAnalyticPrefix(t *testing.T) {
 	t.Parallel()
 

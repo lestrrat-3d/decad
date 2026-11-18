@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// These fixtures pin agent-docs/general-boolean-design.md §3 "Pin across
+// These fixtures pin agent-docs/prism-boolean-design.md Part G §3 "Pin across
 // several faces": a Ø6 pin whose tube meets several faces of the target, or
 // two in a pattern the through and flush reaches do not build, read layer by
 // layer along its sweep.

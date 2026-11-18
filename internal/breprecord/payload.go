@@ -47,7 +47,7 @@ import (
 // chamfer(k) for its index k, so a placement re-mints it with the record.
 //
 // wallCarrier is set on a swept circular face a class-B crossing build made
-// (agent-docs/general-boolean-design.md §4.1): the operand circle the wall lies
+// (agent-docs/prism-boolean-design.md Part G §4.1): the operand circle the wall lies
 // on, in the face's own frame. The recorded wall denotes that circle only to
 // within delta. It is zero on every other face, and only route P's displaced
 // reading reads it (agent-docs/modify-design.md Part B §4.4).
@@ -67,7 +67,7 @@ type Face struct {
 }
 
 // Stack is the slabs an A1 result was built from
-// (agent-docs/general-boolean-design.md §3 "A1 as a brep", §4.1): each slab's
+// (agent-docs/prism-boolean-design.md Part G §3 "A1 as a brep", §4.1): each slab's
 // hole-free regions in the reference frame, and the section displacement
 // every region carries. A further co-directional Union reads it as its
 // operand's slabs (stackedunion.OperandFromPayload), and Section reads it to

@@ -200,7 +200,7 @@ Rules:
   natural line ends meet at one recorded coordinate, or the seam of a circle
   whose centre plus radius is representable, is `Exact`. A cut junction, a
   trimmed line end, and a seam whose sum rounds carry a bound.
-  A brep body's vertex (`agent-docs/general-boolean-design.md` §4.2) takes the
+  A brep body's vertex (`agent-docs/prism-boolean-design.md` Part G §4.2) takes the
   largest bound over every face use meeting it. Each use charges the bound
   from its held walk end to the point its recorded segment denotes there
   (`brepgeom.Use`'s `StartBound` and `EndBound`, which call
@@ -459,7 +459,7 @@ that computation's own rounding (a `ToFace`/`ThroughAll` stop resolved in float
 against another body's face, a magnitude rescaled from a non-base unit, a
 chamfered end's setback). A rescaled magnitude, and a `ToFace` or `ThroughAll`
 stop on a prism cap that records its own denoted level, also record the exact
-level they denote (agent-docs/stacked-prism-design.md §2.1). It is the axial twin of the section displacement:
+level they denote (agent-docs/prism-boolean-design.md Part S §2.1). It is the axial twin of the section displacement:
 the two are tracked apart and neither stands in for the other — one moves a
 coordinate IN the plane, the other moves a level ALONG the normal — while a
 reading both displace, a side vertex or `Bounds`, sums them. The per-end pair
@@ -1205,7 +1205,7 @@ work intervals inside quadratic/refinement loops, as interference §7 specifies.
   so the request never refuses; which of its facets the pair may cut is the
   rim bullet's gate below (`agent-docs/faceted-vertex-bounds-design.md` §5). A pair the gate
   refuses is retried from the source bodies of its chain when the chain regroup applies
-  (`agent-docs/boolean-chain-regroup-design.md`). A route that moves accepted geometry
+  (`agent-docs/prism-boolean-design.md` Part R). A route that moves accepted geometry
   MUST record an `opdiagnostic.Record` with a `Change` mechanism, because the regroup
   reads that field to tell a result that denotes its operation exactly from one that does not.
   `Verify`'s read-only intersection instead meshes each other body once per

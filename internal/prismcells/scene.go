@@ -175,7 +175,7 @@ func BuildSceneRegions(budget *proofbound.WorkBudget, regionsA, regionsB []Scene
 }
 
 // finishScene recounts the built scene with the arranger's own densification
-// over each entity's floats (agent-docs/carrier-record-design.md §4) and
+// over each entity's floats (agent-docs/prism-boolean-design.md Part K §4) and
 // refuses one over the cap with a *WorkLimitError.
 func finishScene(s *sketch.Sketch, tags map[sketch.Entity]Origin, charge SceneWalkCharge) (*sketch.Sketch, map[sketch.Entity]Origin, SceneWalkCharge, error) {
 	if err := CheckSceneWithinCap(s); err != nil {

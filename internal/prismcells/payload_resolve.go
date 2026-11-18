@@ -94,7 +94,7 @@ func ResolveAndBuildUnion(ctx context.Context, budget *proofbound.WorkBudget, pa
 	}
 	// Two undisplaced operands on one frame with whole consumed segments and
 	// no shared span denote their exact carriers, so the result records them
-	// (agent-docs/carrier-record-design.md §5.2).
+	// (agent-docs/prism-boolean-design.md Part K §5.2).
 	if result.SectionDelta != 0 && pa.SectionDelta == 0 && pb.SectionDelta == 0 && reexpress.Identity &&
 		sceneDelta.A == 0 && sceneDelta.B == 0 && !sceneDelta.HasSharedSpans() {
 		cr, ok, err := ExactOperandsRecord(chain, merged, result.SectionDelta)

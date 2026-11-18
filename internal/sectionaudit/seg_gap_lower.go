@@ -10,7 +10,7 @@ import (
 )
 
 // This file is SegGapLower, the certified gap lower bound of
-// agent-docs/carrier-record-design.md §6.2. segMinDist is a float closed form
+// agent-docs/prism-boolean-design.md Part K §6.2. segMinDist is a float closed form
 // whose crossing tests ignore a crossing within segCrossEps of a segment end,
 // so it reads such a crossing as a gap of about 1e-7·ℓ; SegGapLower reads
 // every walk as exact data and rounds each square root toward the lower
@@ -261,7 +261,7 @@ func maxR(a, b *big.Rat) *big.Rat {
 // SegGapLower is a proven lower bound on the distance between two closed
 // walks, each read as exact data: its float ends, centre and radius as exact
 // rationals, an arc being the points at that radius whose bearing lies in the
-// walk's range (agent-docs/carrier-record-design.md §6.2). It answers 0
+// walk's range (agent-docs/prism-boolean-design.md Part K §6.2). It answers 0
 // unless the pieces are proven apart.
 func SegGapLower(a, b survey2d.SegmentWalk) float64 {
 	ga, okA := newGapPiece(a)

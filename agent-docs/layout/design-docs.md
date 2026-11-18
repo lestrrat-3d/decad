@@ -41,13 +41,8 @@ The rules for rows live in `agent-docs/layout.md`.
 | `agent-docs/loft-boolean-design.md` | Loft Booleans with a mirror image and with a cylinder. |
 | `agent-docs/sweep-design.md` | `Path`/`Sweep`, its chain section (§15), mitred sweeps (§16) and bounded one-cell, composite and stationed twist (§17). |
 | `agent-docs/helix-design.md` | `Coil`: a profile screwed about an in-plane axis. |
-| `agent-docs/axial-section-boolean-design.md` | Union of axial extrusions as the extrusion of the 2D union of their sections, through sketch loop containment. |
-| `agent-docs/pattern-union-design.md` | Joining prism and axial Loft pattern copies to a base through `Union`. |
-| `agent-docs/prism-boolean-design.md` | Analytic `Union`/`Cut`/`Intersect` over co-directional prisms. |
-| `agent-docs/carrier-record-design.md` | Carrier records of displaced prisms; their producers, lateral blends and exact-loop cap chamfers. |
-| `agent-docs/stacked-prism-design.md` | Stacked slabs, walls, measurements, mesh and consumers. |
+| `agent-docs/prism-boolean-design.md` | Analytic `Union`/`Cut`/`Intersect` over co-directional prisms, and as parts the general, regroup, continuation, stacked-prism, carrier-record, pattern and fold Boolean designs. |
 | `agent-docs/mirror-pattern-design.md` | Mirror and pattern entry points, the exact mirror join, the prism group. |
-| `agent-docs/general-boolean-design.md` | Boolean classes past the prism pair, and `brepPayload`. |
 | `agent-docs/tessellation-reach-design.md` | Tessellation reach for lofts, free-form prisms, revolves and cap-loop chamfers. |
 | `agent-docs/faceted-vertex-bounds-design.md` | Per-vertex displacement bounds on faceted bodies and their boolean composition. |
 | `agent-docs/param-binding-design.md` | Reading feature values from a `sketch/param` table, and the ledger of those reads. |

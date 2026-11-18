@@ -17,7 +17,7 @@ import (
 // producer sets it.
 //
 // ZDenoted is the exact level Z denotes, where the producer records one
-// (agent-docs/stacked-prism-design.md §2.1): the face then lies on the same
+// (agent-docs/prism-boolean-design.md Part S §2.1): the face then lies on the same
 // plane taken at ZDenoted. nil records nothing, and a reader falls back to Z
 // and AxialDelta.
 type CapRecord struct {

@@ -20,7 +20,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// The displaced cap-loop chamfer of agent-docs/carrier-record-design.md §8.
+// The displaced cap-loop chamfer of agent-docs/prism-boolean-design.md Part K §8.
 // The fixture is a 20 mm square with one 4 mm square hole whose rims are
 // chamfered on both caps; the outer loop is the displaced one. The twin of a
 // displaced build is the same payload built with every LoopDelta zero.

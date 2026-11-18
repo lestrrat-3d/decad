@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// These fixtures pin agent-docs/general-boolean-design.md §9's A1 rows: a Union of
+// These fixtures pin agent-docs/prism-boolean-design.md Part G §9's A1 rows: a Union of
 // two co-directional prisms whose sweep intervals overlap or touch builds an
 // analytic stacked prism.
 

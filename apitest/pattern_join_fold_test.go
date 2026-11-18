@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file is agent-docs/union-fold-design.md's U6 tests: a pattern of a polygonal pin joined to a mesh plate
+// This file is agent-docs/prism-boolean-design.md Part U's U6 tests: a pattern of a polygonal pin joined to a mesh plate
 // that no certified route takes as a set is joined two at a time by Union.
 
 func TestPatternUnionFoldsPolygonalPinsIntoAMeshPlate(t *testing.T) {

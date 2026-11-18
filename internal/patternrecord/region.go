@@ -30,7 +30,7 @@ type Region struct {
 // point charge tripled, since its centre and radius both move with its three
 // points' rounding (the argument offset2d.OffsetSectionDelta states for a recorded
 // arc). The third result is the largest single point charge e the motion took,
-// the quantity agent-docs/carrier-record-design.md §5.1 states a record's
+// the quantity agent-docs/prism-boolean-design.md Part K §5.1 states a record's
 // entries in.
 func MoveRegion(budget *proofbound.WorkBudget, region Region, mv PointMotion) (Region, float64, float64, error) {
 	delta, pointCharge := 0.0, 0.0

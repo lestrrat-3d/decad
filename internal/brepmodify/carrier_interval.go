@@ -8,7 +8,7 @@ import (
 )
 
 // ivl is an exact rational interval, the arithmetic every carrier-route
-// reading is enclosed in (agent-docs/carrier-record-design.md §7.5). Only
+// reading is enclosed in (agent-docs/prism-boolean-design.md Part K §7.5). Only
 // square roots round, each outward, and the result of a reading converts to
 // float64 once, rounded up.
 type ivl struct{ lo, hi *big.Rat }

@@ -345,7 +345,7 @@ func Build(ctx context.Context, env topo.Env, pp Payload, work *freeform.Freefor
 		return nil, err
 	}
 	// A record never survives a Build: only BuildWithRecord binds one to the
-	// body it mints (agent-docs/carrier-record-design.md §3.4).
+	// body it mints (agent-docs/prism-boolean-design.md Part K §3.4).
 	pp.Carriers = nil
 	body.Payload = pp
 	if witness != nil && witness.valid && len(witness.Walls) == len(pp.Profile.Outer.Segments) {

@@ -16,7 +16,7 @@ one source class.
 Use `agent-docs/multibody-dynamics-design.md` Part M §2–§3 for moment meanings, density, physical
 inertia signs, and positivity. Use `evaluator-design.md` §9 for the real mesh
 Boolean and `interference-design.md` §4 for strict whole-solid containment.
-`prism-boolean-design.md` and `general-boolean-design.md` own Boolean route
+`prism-boolean-design.md` and `agent-docs/prism-boolean-design.md` Part G own Boolean route
 admission. This slice adds no route or geometric admission.
 
 ## Evaluator result

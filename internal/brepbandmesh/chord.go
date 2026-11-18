@@ -1,4 +1,4 @@
-// Package brepbandmesh is the brep tessellator (agent-docs/general-boolean-design.md
+// Package brepbandmesh is the brep tessellator (agent-docs/prism-boolean-design.md Part G
 // §4.4): Tessellate meshes a brep body's walls and planar faces, audits the
 // mesh and sums its occupied-volume proof. The rest of the package reads a
 // route L body's bands (agent-docs/modify-design.md Part G Table DG's DG3). Each

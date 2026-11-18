@@ -12,7 +12,7 @@ import (
 )
 
 // This file is the crossing reach's stepped target
-// (agent-docs/general-boolean-design.md §3 "Revolved shaft as a prism"): X is
+// (agent-docs/prism-boolean-design.md Part G §3 "Revolved shaft as a prism"): X is
 // a stack of coaxial circular prisms, a stepped turned shaft, each step's Z1
 // the next one's Z0. X's faces are its two end caps, one shoulder at each
 // step boundary (the annulus between the two steps' circles), and one

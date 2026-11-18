@@ -25,7 +25,7 @@ func BuildChecked(ctx context.Context, env topo.Env, pp prismrecord.Payload,
 }
 
 // BuildCheckedDisplaced is BuildChecked for a receiver whose recorded section
-// is displaced from the section it denotes (agent-docs/carrier-record-design.md
+// is displaced from the section it denotes (agent-docs/prism-boolean-design.md Part K
 // §8): loopDelta is the receiver record's h_loop per loop, zero on every
 // selected loop. It runs BuildChecked's gates, each offset audit followed by
 // §8.3's transfer condition T1 to T3 on the audited mixed profile, and builds

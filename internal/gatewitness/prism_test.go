@@ -12,7 +12,7 @@ import (
 
 // A displaced cap-loop chamfer answers one witness prism per loop, each point
 // within the largest LoopDelta of the denoted body in the plane and within the
-// axial term along the sweep (agent-docs/carrier-record-design.md §8.8).
+// axial term along the sweep (agent-docs/prism-boolean-design.md Part K §8.8).
 func TestPrismsOfDisplacedCapBlend(t *testing.T) {
 	square := func(s float64) sectionrecord.LoopRecord {
 		pts := []sectionrecord.Point2{{U: 0, V: 0}, {U: s, V: 0}, {U: s, V: s}, {U: 0, V: s}}

@@ -102,7 +102,7 @@ not, and consumes nothing. It replays no feature call.
 ### Admission of the result
 
 The body must be a `facetedPayload` that misses both smooth-loft classes and
-that `boolchain.Expandable` accepts (`agent-docs/boolean-chain-regroup-design.md`,
+that `boolchain.Expandable` accepts (`agent-docs/prism-boolean-design.md` Part R,
 "Eligibility of an expandable body"): no point-cone trim and no operation
 warning naming an accepted change, such as a gap shift or an embedding reach.
 Its producer must be a public `Cut`, `Union` or `Intersect` with exactly two
@@ -176,7 +176,7 @@ holes, and of several regions alike.
 
 - Parallel prism or stack slab: the plane is normal to the sweep at a level
   strictly inside the slab's open level interval I. Consecutive slabs meet only
-  at their end levels (`agent-docs/stacked-prism-design.md` I4). So near P the
+  at their end levels (`agent-docs/prism-boolean-design.md` Part S I4). So near P the
   operand is `Σ × I` and its interior is `int Σ × I`, with Σ the recorded
   region, holes included. `X ∩ P = Σ`, `X° ∩ P = int Σ`, and `Σ = cl(int Σ)`
   because a recorded region is the closure of its interior.

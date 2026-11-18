@@ -4,8 +4,8 @@ Mirroring a body across a plane, joining a body with its own mirror image, and
 repeating a body in a linear or circular pattern. Companion to
 `agent-docs/api-design.md` (core §N below), `agent-docs/evaluator-design.md` §8 (placement
 and copies), `agent-docs/prism-boolean-design.md` (the analytic boolean a pattern
-tool feeds), `agent-docs/stacked-prism-design.md` (the payload a prism pattern
-builds) and `agent-docs/general-boolean-design.md` (the boolean classes a mirror or
+tool feeds), `agent-docs/prism-boolean-design.md` Part S (the payload a prism pattern
+builds) and `agent-docs/prism-boolean-design.md` Part G (the boolean classes a mirror or
 pattern result needs next). Every number in §2 was measured with the probe
 under `.tmp/probe/` at `8cc06f90`.
 
@@ -101,7 +101,7 @@ placement a float composition the caller never asked for, orthonormalised by
 | STL/OBJ/3MF | read the mesh |
 | `Verify` validity, surveys, tolerance gate | per payload, unchanged; measured `Sound` on prism, revolve, fillet result |
 | Clearance kernel | `internal/clearance/pairkernel/geom.go` reads `reflected()`; measured T3 |
-| Interference | a reflected prism beside a coplanar prism enters the analytic Intersect and overlap readings (`agent-docs/general-boolean-design.md` class A4); a pair whose outlines cross under a one-sided reflection is charged its crossings (general-boolean A6); T2's shared collinear walls are read as one carrier (general-boolean A3), and its overlap is measured: `Interfering`, 500 mm³ |
+| Interference | a reflected prism beside a coplanar prism enters the analytic Intersect and overlap readings (`agent-docs/prism-boolean-design.md` Part G class A4); a pair whose outlines cross under a one-sided reflection is charged its crossings (general-boolean A6); T2's shared collinear walls are read as one carrier (general-boolean A3), and its overlap is measured: `Interfering`, 500 mm³ |
 | `Union`/`Cut`/`Intersect` | a reflected operand enters the analytic path with its record re-wound (general-boolean class A4: M5, T1); M3's shared walls bound its union and build analytically (A3); M2's shared wall lies inside its union and the image is displaced, so `Union` takes the mesh path's coplanar refusal, and the mirror join builds it (§5) |
 | `Trim`/`Extend`/`Split` | refuse a reflected operand (`surface_trim.go`). Unchanged by this design |
 | `VerifyMotion`, contact sweeps | a reflection joined to a proper motion is `ErrDegenerate` (`motion.go`): no rigid path exists. `internal/contactround/sphere.go` and `contact_sweep_replay.go` refuse a reflected pose. Both unchanged |
@@ -203,7 +203,7 @@ func PathPattern(ctx context.Context, b *Body, path *Path, opts ...PathPatternOp
 bodies, instances `1..Count−1` in order. `Patterned` retires the receiver and
 returns ONE body holding every instance (§6). To join every instance to a
 separate target, pass the target, the receiver and the `PatternCopies` result to one `Union`
-(`agent-docs/pattern-union-design.md`, Axial pattern join §7). `Count < 2` is `ErrDegenerate`
+(`agent-docs/prism-boolean-design.md` Part P, Axial pattern join §7). `Count < 2` is `ErrDegenerate`
 (a pattern of one is the receiver), a non-finite or zero `Dir`/`Axis` is
 `ErrNotFinite`/`ErrDegenerate` (a non-finite `Center` too is `ErrNotFinite`),
 a wrong-kind `Step` is `ErrUnitKind`, a negative one `ErrNegativeMagnitude`
@@ -361,7 +361,7 @@ A loop's segments are walked in record order. Runs of consecutive segments
 between selected (on-line) segments are the material's own boundary arcs; each
 run `R` closes with its own reflection: `R` followed by `m(R)` walked
 backwards, each segment mirrored. That is the per-loop re-winding rule a
-reflected boolean operand takes (`agent-docs/general-boolean-design.md` §3 A4,
+reflected boolean operand takes (`agent-docs/prism-boolean-design.md` Part G §3 A4,
 `rewindLoop`), run under the exact reflection:
 
 | Segment | Mirrored, reversed |
@@ -496,7 +496,7 @@ under an in-plane motion of the section:
   copies through `Copy` instead.
 
 An instance of a source with `sectionDelta == 0` also carries a carrier record
-(`agent-docs/carrier-record-design.md` §5.1): every segment and junction entry
+(`agent-docs/prism-boolean-design.md` Part K §5.1): every segment and junction entry
 is the instance's `sectionDelta`, except a junction at an `ArcSeg`'s `End`,
 which takes `δ_End = up(3e + 4e·(R + 2e)/(R_E − 2e))` (`e` the largest point
 charge, `R` the recorded radius, `R_E` a lower bound on the moved
@@ -581,7 +581,7 @@ loop clearance proven per slab, which is the one slab. `Lumps()` reports
 
 | Consumer | Behaviour |
 |---|---|
-| `Cut(target, group)` | the N-hole case. `agent-docs/general-boolean-design.md` class A5 admits a prism-group tool: its regions enter one private scene as `Count` hole candidates, and the clean-nesting match requires the target's outer whole plus `Count` new holes each reproducing one region whole. One arrangement, one result, `Exact` where the target and `δ_pattern` are |
+| `Cut(target, group)` | the N-hole case. `agent-docs/prism-boolean-design.md` Part G class A5 admits a prism-group tool: its regions enter one private scene as `Count` hole candidates, and the clean-nesting match requires the target's outer whole plus `Count` new holes each reproducing one region whole. One arrangement, one result, `Exact` where the target and `δ_pattern` are |
 | `Union(group, other)` / `Intersect` | general-boolean class A5; until it lands, the mesh path over the group's own tessellation (stacked §6) |
 | `Patterned` of a group (a grid) | the frame-keeping arm applies to every region at once; the disjointness scene holds `Count_1 · Count_2` outers |
 | `Mirrored` / `MirroredCopy` | reflection in `xform` (§3) |
@@ -753,6 +753,6 @@ Each PR ships code and tests; this document ships with PR 1.
 4. **`Patterned` and the prism group.** Stacked §2.2's I1/I2 reading, the
    disjointness scene, multi-region slab topology, measurements and
    tessellation, rule 3's `Union` fallback, and the N-hole `Cut` admission
-   shared with `agent-docs/general-boolean-design.md` class A5 (that PR lands the
+   shared with `agent-docs/prism-boolean-design.md` Part G class A5 (that PR lands the
    boolean side; this one lands the tool and the test that pins the two
    together).

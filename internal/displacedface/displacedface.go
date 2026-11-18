@@ -1,6 +1,6 @@
 // Package displacedface decides which faces of a displaced body are displaced
 // walls: side faces whose recorded surface lies only within a loop's bound of
-// the wall the body denotes (agent-docs/carrier-record-design.md §8.7, rule
+// the wall the body denotes (agent-docs/prism-boolean-design.md Part K §8.7, rule
 // DW, and agent-docs/modify-design.md Part B §2.2). Both the brep-modify
 // faceted view and the mesh Boolean's source tags decline the retained tag of
 // such a face.

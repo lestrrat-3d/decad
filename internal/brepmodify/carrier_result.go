@@ -227,7 +227,7 @@ func junctionEntry(cr prismrecord.CarrierRecord, section sectionrecord.LoopRecor
 }
 
 // chargeArcRadius is the radial part of an emitted ArcSeg's End-side
-// displacement (agent-docs/carrier-record-design.md §7.7): the read end on
+// displacement (agent-docs/prism-boolean-design.md Part K §7.7): the read end on
 // ArcSeg.End's side stands at Start's radius, so it moves by the outward
 // difference of the emitted and the receiver's radius (at most the distance of
 // the two Start-to-centre vectors) on top of the receiver's junction entry. A

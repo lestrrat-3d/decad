@@ -41,7 +41,7 @@ func payloadAxialDelta(b *topo.Body) float64 {
 // denotedCaps is what a through-all stop reads of a stop body whose material
 // lies between two planar caps of one record: the record's frame and
 // placement, both held cap levels, and the exact level each denotes, nil
-// where none is recorded (agent-docs/stacked-prism-design.md §2.1).
+// where none is recorded (agent-docs/prism-boolean-design.md Part S §2.1).
 type denotedCaps interface {
 	DenotedCapLevels() (frame r3.Frame, xform r3.Transform, z0, z1 float64, d0, d1 *big.Rat)
 }

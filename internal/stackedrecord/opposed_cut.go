@@ -13,10 +13,10 @@ import (
 // OpposedCut is a blind cut on a stack whose tool ends exactly at an existing
 // interface and leaves exclusive holes on both sides of it: pockets from
 // opposite faces that overlap in plan at one level
-// (agent-docs/stacked-prism-design.md §7 stage 3). Its slabs are proven as
+// (agent-docs/prism-boolean-design.md Part S §7 stage 3). Its slabs are proven as
 // CutSlabs proves them, but the payload's whole column rings cannot hold the
 // partial floor and ceiling, so the caller states the body as a BRep
-// (agent-docs/general-boolean-design.md §3 A8).
+// (agent-docs/prism-boolean-design.md Part G §3 A8).
 type OpposedCut struct {
 	Slabs []Slab
 	// Interfaces holds every other interface's derived record. Interfaces[At]

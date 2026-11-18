@@ -285,7 +285,7 @@ func TestPrismUnionG1FallsBackToTheMeshPath(t *testing.T) {
 //
 // A hand-built r3.FromBasis placement (literal-zero z components) stays
 // exactly planar for the same n, k and clears G3, and A6
-// (agent-docs/general-boolean-design.md §3) charges the crossings its
+// (agent-docs/prism-boolean-design.md Part G §3) charges the crossings its
 // re-expression can move. The tooth's root arc lies on the hub's own circle,
 // though, so where the arc meets the hub circle the two carriers are
 // tangent: no positive sine bound exists, the crossing has no charge, and
@@ -436,7 +436,7 @@ func TestPrismUnionCancellationLeavesDocumentUnchanged(t *testing.T) {
 //
 // A chain whose FIRST result already cut carries that cut's displacement into
 // the second, and the second arm pins it: the next cut can amplify it by
-// 1/sin θ, which agent-docs/general-boolean-design.md §3 A6 charges, so the chain
+// 1/sin θ, which agent-docs/prism-boolean-design.md Part G §3 A6 charges, so the chain
 // still builds analytically — 210 mm² over 10 mm, within its bound.
 func TestPrismUnionChainedBooleanCarriesNoAccumulatedBound(t *testing.T) {
 	t.Parallel()
@@ -484,7 +484,7 @@ func TestPrismUnionChainedBooleanCarriesNoAccumulatedBound(t *testing.T) {
 // payload-verification's survey wiring). A merge that cuts is a different
 // receiver: its section is the section it denotes only within §7's cut
 // displacement. Its pair route's carrier record lets Fillet build from the
-// recorded carriers (agent-docs/carrier-record-design.md §7), while the wall
+// recorded carriers (agent-docs/prism-boolean-design.md Part K §7), while the wall
 // survey withholds rather than answer for the wrong section (§12).
 func TestPrismUnionDownstreamFilletAndWallSurvey(t *testing.T) {
 	t.Parallel()
@@ -507,7 +507,7 @@ func TestPrismUnionDownstreamFilletAndWallSurvey(t *testing.T) {
 
 	// A cut-bearing merge of the same two shapes carries §7's displacement and
 	// the pair route's carrier record, so its fillet builds from the recorded
-	// carriers (agent-docs/carrier-record-design.md §7), while the wall survey
+	// carriers (agent-docs/prism-boolean-design.md Part K §7), while the wall survey
 	// reading withholds.
 	cutDoc := decad.New()
 	cutA := boxBody(t, cutDoc, 0, 0, 10, 10, 10)

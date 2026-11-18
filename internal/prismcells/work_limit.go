@@ -15,7 +15,7 @@ func (e *WorkLimitError) Unwrap() error { return e.err }
 
 // IsWorkLimit reports whether err is an arrangement-cap refusal. A caller
 // whose own over-cap answer is a silent miss maps it to that miss
-// (agent-docs/carrier-record-design.md §4).
+// (agent-docs/prism-boolean-design.md Part K §4).
 func IsWorkLimit(err error) bool {
 	var limit *WorkLimitError
 	return errors.As(err, &limit)

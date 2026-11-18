@@ -16,11 +16,11 @@ import (
 )
 
 // This file holds the undercut and minimum-radius surveys over a breprecord.Payload's
-// faces (agent-docs/general-boolean-design.md §4.5). internal/breprecord's
+// faces (agent-docs/prism-boolean-design.md Part G §4.5). internal/breprecord's
 // measure.go measures the body (§4.3).
 
 // brepUndercuts surveys a brep body's faces against the pull
-// (agent-docs/general-boolean-design.md §4.5's undercut row, DX7's reading): a
+// (agent-docs/prism-boolean-design.md Part G §4.5's undercut row, DX7's reading): a
 // planar face carries one normal, its frame's N turned outward, and a swept
 // face sweeps its wall walk's normal range exactly as a prism's side does.
 // Both readings go through the exact three-valued decisions analyticundercut.Prism

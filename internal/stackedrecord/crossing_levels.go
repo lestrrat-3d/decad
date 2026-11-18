@@ -28,7 +28,7 @@ func levelOrder(a, b UnionLevel) (int, bool) {
 
 // crossingLevel is one end level of a crossing blind cut operand, with the
 // exact rational it denotes on the target's axis, or nil where no record
-// proves one (agent-docs/stacked-prism-design.md §2.1).
+// proves one (agent-docs/prism-boolean-design.md Part S §2.1).
 type crossingLevel struct {
 	UnionLevel
 	denoted *big.Rat

@@ -1404,10 +1404,10 @@ not a `BooleanError`, since the limit is the bound the operand holds there.
 A refused two-body `Union`, `Cut` or `Intersect` with a mesh Boolean result as an operand is then
 rebuilt from the source bodies the operation history names, under a set identity
 that leaves the result unchanged, when its bounded plan applies
-(`agent-docs/boolean-chain-regroup-design.md`, Plan). The result is the same set, its history
+(`agent-docs/prism-boolean-design.md` Part R, Plan). The result is the same set, its history
 is the single call, and a selector naming a source feature's origin may match fewer faces.
 A target-side coarse-held `Cut` refusal may also continue from an authenticated two-source `Union`, or from
-a `Cut` of that union, through the separate paired plan in `agent-docs/boolean-chain-regroup-design.md`
+a `Cut` of that union, through the separate paired plan in `agent-docs/prism-boolean-design.md` Part R
 (Paired Cut continuation). Other refusals follow the ordinary dispatch and regroup rules.
 The refusal names the operand (`Cut`'s target or tool; the first or second
 operand otherwise), quotes the bound of the facets the pair touches and the

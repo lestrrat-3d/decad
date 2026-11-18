@@ -103,7 +103,7 @@ func (r CoincidentReading) ExactLineCarriers(budget *proofbound.WorkBudget) (boo
 }
 
 // ExactCarriers is ExactLineCarriers that also reads a span shared by two
-// arcs or circles (agent-docs/general-boolean-design.md §3 "Common-axis full
+// arcs or circles (agent-docs/prism-boolean-design.md Part G §3 "Common-axis full
 // revolutions"). Both circular entities must hold one exact carrier: the same
 // recorded centre, and one squared radius read exactly from every recorded
 // value that defines either (a circle's radius, an arc's start and end). An
@@ -329,7 +329,7 @@ func CoincidentEdges(budget *proofbound.WorkBudget, tags map[sketch.Entity]Origi
 
 // CoincidentEdgesRegions is CoincidentEdges with a span's partner taken from
 // any other record of the scene — another region of the same operand as
-// well as the other operand (agent-docs/general-boolean-design.md §3 "A1 as a
+// well as the other operand (agent-docs/prism-boolean-design.md Part G §3 "A1 as a
 // brep") — so two records of one operand sharing a wall read as A3 reads
 // two operands sharing one.
 func CoincidentEdgesRegions(budget *proofbound.WorkBudget, tags map[sketch.Entity]Origin, profiles []*sketch.Profile) (CoincidentReading, bool, error) {

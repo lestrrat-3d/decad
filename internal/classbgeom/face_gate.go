@@ -115,7 +115,7 @@ func CurvedApart(ctx context.Context, faces []FaceRecord, tool ToolRecord, widen
 	return true, nil
 }
 
-// CoplanarFaces is B8 with its flush lift (agent-docs/general-boolean-design.md
+// CoplanarFaces is B8 with its flush lift (agent-docs/prism-boolean-design.md Part G
 // §3 "Flush cap contact"). It compares every target cap and wall plane with
 // every tool cap and wall plane by exact equality of their recorded axis and
 // level. ok is false when a target plane is a tool wall's plane, and, with

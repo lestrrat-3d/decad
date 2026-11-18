@@ -17,7 +17,7 @@ import (
 )
 
 // This file is the extended class of the one-scene prism Union
-// (agent-docs/carrier-record-design.md §5.3): whole line, circle and arc
+// (agent-docs/prism-boolean-design.md Part K §5.3): whole line, circle and arc
 // sections, holed operands and displaced operands that carry a valid carrier
 // record, all on one frame and placement over one sweep interval. Every
 // failure after admission is a miss, so the set takes the next Union route;

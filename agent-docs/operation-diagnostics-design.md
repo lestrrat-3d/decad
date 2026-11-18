@@ -33,7 +33,7 @@ The existing contracts remain authoritative:
 - [Public API design](api-design.md), especially architecture, bounded readings, booleans, selectors, and errors.
 - [Evaluator design](evaluator-design.md), especially document state and re-evaluation.
 - [Prism boolean design](prism-boolean-design.md), especially admission and refusals.
-- [General boolean design](general-boolean-design.md), especially route admission and proof requirements.
+- [General boolean design (Part G)](prism-boolean-design.md), especially route admission and proof requirements.
 - [Verification design](verification-design.md), especially diagnostics and report status.
 - [Gap tolerance](gap-tolerance-design.md), especially charged displacement and shifted retries.
 - [Interference design](interference-design.md), especially expected outcomes and invariant failures.

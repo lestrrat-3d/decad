@@ -21,7 +21,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// The cap-loop route of agent-docs/carrier-record-design.md §8.1. The fixture
+// The cap-loop route of agent-docs/prism-boolean-design.md Part K §8.1. The fixture
 // is a 20 mm square with one 4 mm square hole, 10 mm tall, recorded as a
 // displaced prism: one loop carries entries of capLoopEntry and the other is
 // exact. A Chamfer of the exact loop's cap edges builds a DisplacedPayload.
@@ -228,7 +228,7 @@ func TestCarrierCapLoopChamferDeclines(t *testing.T) {
 				map[int]bool{1: true}, map[int]bool{1: true}, loopDelta)
 			require.ErrorIs(t, err, decaderr.ErrUnsupported)
 			require.Contains(t, err.Error(), "§8.3, "+c.row)
-			require.Contains(t, err.Error(), "carrier-record-design.md")
+			require.Contains(t, err.Error(), "agent-docs/prism-boolean-design.md Part K")
 		})
 	}
 	t.Run("a placed copy carries no record", func(t *testing.T) {

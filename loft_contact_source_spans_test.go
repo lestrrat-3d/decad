@@ -203,7 +203,7 @@ func TestLoftCurvedSourceCapsRealIndependentWedgeRefusesWithoutBoundaryProof(t *
 			len(arcSource.LoftCaps[0]) - arcCount + 256*arcCount
 		require.Greater(t, conservativeSegments, prismcells.MaxArrangementSegments)
 		// The cap counts each arc's own densification
-		// (agent-docs/carrier-record-design.md §4), so seventeen short arcs
+		// (agent-docs/prism-boolean-design.md Part K §4), so seventeen short arcs
 		// that a flat 256 per arc would refuse now fit and certify.
 		perArc := len(arcSource.PrismCaps[0]) + len(arcSource.LoftCaps[0]) - arcCount
 		for _, span := range arcSource.LoftCaps[0] {

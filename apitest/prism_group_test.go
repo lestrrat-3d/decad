@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// These fixtures pin agent-docs/general-boolean-design.md §9's A5 rows: a Union of
+// These fixtures pin agent-docs/prism-boolean-design.md Part G §9's A5 rows: a Union of
 // disjoint footprints builds a prism group, and a prism-group tool cuts a
 // plate in one arrangement.
 

@@ -15,7 +15,7 @@ type AxisRect struct{ U0, V0, U1, V1 float64 }
 
 // CrossingBlindLoops accepts profiles whose loops hold only axis-aligned line,
 // circle and arc records, for the crossing-blind Cut route
-// (agent-docs/general-boolean-design.md §3 A7). An oblique line, an ellipse or a
+// (agent-docs/prism-boolean-design.md Part G §3 A7). An oblique line, an ellipse or a
 // free-form segment is refused: the A1 BRep build states no exact crossing for
 // it. Whether two circles cross, and whether each crossing is certified, is the
 // private scene's answer, read later.
@@ -37,7 +37,7 @@ func CrossingBlindLoops(p Profile) bool {
 }
 
 // LineArcLoops accepts profiles whose loops hold only line, circle and arc
-// records, for the side-notch Cut route (agent-docs/general-boolean-design.md
+// records, for the side-notch Cut route (agent-docs/prism-boolean-design.md Part G
 // §3 A9). Unlike CrossingBlindLoops it admits an oblique line: the BRep build
 // misses any scene that cuts one, so an oblique record reaches the result only
 // whole, at its recorded vertices. An ellipse or a free-form segment is refused.

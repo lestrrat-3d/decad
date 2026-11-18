@@ -34,7 +34,7 @@ func capCircle(x, y, r float64, ccw bool) momentinput.CurveSegment {
 
 // TestCircularSegmentCountMatchesBuilder pins the screen against the
 // arranger's own count for the same floats at sweeps near 0, pi and 2pi
-// (agent-docs/carrier-record-design.md §4).
+// (agent-docs/prism-boolean-design.md Part K §4).
 func TestCircularSegmentCountMatchesBuilder(t *testing.T) {
 	budget := proofbound.NewWorkBudget(t.Context())
 	for name, sweep := range map[string]float64{

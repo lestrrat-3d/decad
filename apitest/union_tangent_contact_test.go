@@ -14,8 +14,8 @@ import (
 // apex on a square's side. Sketch's arrangement cuts neither, so the touching
 // loops come back whole. A prism group over them, or a stacked interface whose
 // hole touches the outer wall, would hold two loops meeting at that point,
-// which no cap mesh can separate (agent-docs/general-boolean-design.md §3 A5,
-// agent-docs/stacked-prism-design.md §2.2).
+// which no cap mesh can separate (agent-docs/prism-boolean-design.md Part G §3 A5,
+// agent-docs/prism-boolean-design.md Part S §2.2).
 
 // polygonPrismIn extrudes a polygon on XY into doc by 10 along +z.
 func polygonPrismIn(t *testing.T, doc *decad.Document, pts ...[2]float64) *decad.Body {
@@ -168,7 +168,7 @@ func TestUnionTangentContactTakesMeshPath(t *testing.T) {
 // there leave that side by about 2.5e-10 rad, inside sketch's own parallel
 // band, so sketch's line query reports no common point for either edge.
 // Sketch's arrangement reports the region invalid, so the pair is refused
-// before any contact reading runs (agent-docs/stacked-prism-design.md §2.2).
+// before any contact reading runs (agent-docs/prism-boolean-design.md Part S §2.2).
 func TestUnionNearStraightVertexRefuses(t *testing.T) {
 	t.Parallel()
 	nearStraight := func(t *testing.T, doc *decad.Document) *decad.Body {

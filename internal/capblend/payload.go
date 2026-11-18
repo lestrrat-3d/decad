@@ -319,7 +319,7 @@ func (cbp Payload) ExtentBoundedAlong(ctx context.Context, g r3.Vec, work *freef
 }
 
 // extentBoundedAlong is ExtentBoundedAlong over an optional per-loop
-// displacement (agent-docs/carrier-record-design.md §8.6): a loop with a
+// displacement (agent-docs/prism-boolean-design.md Part K §8.6): a loop with a
 // nonzero loopDelta entry adds the in-plane norm of g times that entry to the
 // plane allowance of both its level candidates, and the coordinate envelope the
 // placement coefficients read widens by the largest entry. Contour candidates

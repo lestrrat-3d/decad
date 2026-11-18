@@ -24,7 +24,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// The carrier route of agent-docs/carrier-record-design.md §7. The fixtures
+// The carrier route of agent-docs/prism-boolean-design.md Part K §7. The fixtures
 // are a disc with one all-line tooth, drawn the way the pair Union records
 // it: a trimmed CircleSeg and whole flanks whose junctions carry a few ulps
 // of cut-parameter rounding. The tooth's two roots are its concave corners.
@@ -154,7 +154,7 @@ func requireRefusal(t *testing.T, err error, row string) *brepmodify.CarrierRefu
 	require.ErrorAs(t, err, &refusal)
 	require.ErrorIs(t, err, decaderr.ErrUnsupported)
 	require.Equal(t, row, refusal.Row)
-	require.Contains(t, err.Error(), `agent-docs/carrier-record-design.md`)
+	require.Contains(t, err.Error(), "agent-docs/prism-boolean-design.md Part K")
 	return refusal
 }
 
@@ -820,7 +820,7 @@ func TestCarrierCB5WidenedCutbacksRefuse(t *testing.T) {
 // end only. The untouched End side reads Start's radius on End's bearing, so
 // its junction entry is at least the receiver's entry plus the exact distance
 // between the receiver's and the emitted read ends, |R_emit − R_recv| where the
-// centre and End are shared (agent-docs/carrier-record-design.md §7.7, "Arc
+// centre and End are shared (agent-docs/prism-boolean-design.md Part K §7.7, "Arc
 // read ends"). A walk-end allowance alone is zero there.
 func TestCarrierArcReadEndEntry(t *testing.T) {
 	arcReadEndProbe(t, 3.0, 4e-15, 0).requireEntry(t)
@@ -936,7 +936,7 @@ func seamArcProfile(g float64, reversed bool) momentinput.Profile {
 }
 
 // arcReadEnd is the exact read end of an ArcSeg on End's side: Start's
-// radius on End's bearing (agent-docs/carrier-record-design.md §3.2).
+// radius on End's bearing (agent-docs/prism-boolean-design.md Part K §3.2).
 func arcReadEnd(arc sectionrecord.ArcSeg) (*big.Float, *big.Float) {
 	f := func(x float64) *big.Float { return new(big.Float).SetPrec(300).SetFloat64(x) }
 	sub := func(a, b *big.Float) *big.Float { return new(big.Float).SetPrec(300).Sub(a, b) }

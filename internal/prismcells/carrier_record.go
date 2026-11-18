@@ -10,14 +10,14 @@ import (
 )
 
 // HasSharedSpans reports whether the arrangement withdrew a span from one
-// operand's entity under the other's (agent-docs/general-boolean-design.md §3
+// operand's entity under the other's (agent-docs/prism-boolean-design.md Part G §3
 // A3). Two such entities are near-identical carriers sketch merged, which the
 // denoted section keeps as two walls.
 func (d SceneDelta) HasSharedSpans() bool { return len(d.shared.Spans) > 0 }
 
 // ExactOperandsRecord is the carrier record of a merged one-loop Union of two
 // undisplaced operands under the identity re-expression with no walk charge
-// and no shared span (agent-docs/carrier-record-design.md §5.2). Every
+// and no shared span (agent-docs/prism-boolean-design.md Part K §5.2). Every
 // carrier is an operand's own exact record, so every segment entry is zero.
 // A junction where the arrangement computed a parameter on either side takes
 // the larger cut allowance (CutDelta) of its two edges; a junction both sides

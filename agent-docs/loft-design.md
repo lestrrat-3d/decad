@@ -2889,7 +2889,7 @@ its wall faces are bounded planar triangles, and its mass readings retain
 §8's loft bounds.
 
 A corner between a line or an arc and a trimmed circle fragment is also an analytic corner. The union of an
-axial extrusion with a circular boundary leaves it (`agent-docs/axial-section-boolean-design.md`), as a line meeting
+axial extrusion with a circular boundary leaves it (`agent-docs/prism-boolean-design.md` Part A), as a line meeting
 the fragment of the circle between two other curves. `offset2d.Fillet` blends it over the two circular and straight
 walks, the line or arc piece is rewritten from the blend's feet as for any analytic corner, and the circle fragment is
 trimmed by its parameter: the angle of the blend's tangent foot about the circle's centre over 2π, taken on the
@@ -3074,7 +3074,7 @@ parallel to it; the tag origin and every vertex of every cap loop lie on the
 plane; and every `Circle3` or `Arc3` rim has its center on the plane and its
 axis parallel to `m`. Any other edge curve refuses. The cap then states
 `AxialDelta` `Payload.JoinPlaneGap`, which is 0 for a loft that is no join. A
-join loft (`agent-docs/pattern-union-design.md`) sets `JoinPlaneGap` to how far
+join loft (`agent-docs/prism-boolean-design.md` Part P) sets `JoinPlaneGap` to how far
 its operands' end planes sit from the record's section planes along their
 normal, so an admitted cap states that gap, and any other cap states the vertex
 displacement plus `JoinPlaneGap`. `stateCapLevels` applies both rules.

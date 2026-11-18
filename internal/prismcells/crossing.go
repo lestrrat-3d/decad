@@ -15,7 +15,7 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// This file is agent-docs/general-boolean-design.md §3 A6's crossing-sensitivity
+// This file is agent-docs/prism-boolean-design.md Part G §3 A6's crossing-sensitivity
 // charge. An operand whose recorded boundary sits within δ of the boundary
 // it denotes moves every crossing with the other operand by more than δ: two
 // carriers that cross at an angle θ, displaced by δ1 and δ2, meet up to
@@ -390,7 +390,7 @@ type BoundCarrier struct {
 }
 
 // SinLowerBounds is sinLower for carriers whose circle radii are enclosures
-// (agent-docs/carrier-record-design.md §7.5, CB2). Every circle form of the
+// (agent-docs/prism-boolean-design.md Part K §7.5, CB2). Every circle form of the
 // bound falls as the radius grows, so it reads the numerator and the
 // denominator at RadiusHi, and the half-radius test at RadiusLo.
 func SinLowerBounds(a, b BoundCarrier, pt [2]*big.Rat, rho float64) (float64, error) {
@@ -475,7 +475,7 @@ func sinLowerCarriers(c1, c2 carrier, pt [2]*big.Rat, rho float64) (float64, err
 // bound on |sin| of the angle between any tangent of seg1's carrier and any
 // tangent of seg2's carrier within rho of pt. A blend of a recorded receiver
 // reads it over the two offset carriers of a corner
-// (agent-docs/carrier-record-design.md §5.3).
+// (agent-docs/prism-boolean-design.md Part K §5.3).
 func SinLower(seg1, seg2 CurveSegment, pt [2]*big.Rat, rho float64) (float64, error) {
 	return sinLower(seg1, seg2, pt, rho)
 }

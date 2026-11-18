@@ -54,7 +54,7 @@ type prismPayload = prismrecord.Payload
 // stackedPrismPayload is the evaluator's own record of a stacked prism: the
 // internal/stackedrecord payload, which stackedrecord.Build evaluates over
 // topology nodes and which implements topo.Payload
-// (agent-docs/stacked-prism-design.md, agent-docs/evaluator-design.md §8).
+// (agent-docs/prism-boolean-design.md Part S, agent-docs/evaluator-design.md §8).
 type stackedPrismPayload = stackedrecord.Payload
 
 // chainPayload is chain Extrude's own record of a ribbon body: the
@@ -172,7 +172,7 @@ type arcSeg = sectionrecord.ArcSeg
 type fitSplineSeg = sectionrecord.FitSplineSeg
 
 // brepPayload is the evaluator's record of an analytically trimmed body
-// (agent-docs/general-boolean-design.md §4): the internal/breprecord payload, which
+// (agent-docs/prism-boolean-design.md Part G §4): the internal/breprecord payload, which
 // breprecord.Build evaluates over topology nodes and which implements
 // topo.Payload (agent-docs/evaluator-design.md §8). The other names are its faces,
 // an A1 result's slabs, a route L band and its kind, and the shared topology

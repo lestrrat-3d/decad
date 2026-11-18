@@ -23,7 +23,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/topo"
 )
 
-// This file is the lateral carrier route of agent-docs/carrier-record-design.md
+// This file is the lateral carrier route of agent-docs/prism-boolean-design.md Part K
 // §7: a Fillet or Chamfer of a prism whose section is displaced from the one it
 // denotes but carries a valid carrier record. The construction is the
 // ordinary corner rewrite on the recorded carriers (offset2d's carrier
@@ -31,7 +31,7 @@ import (
 // flip, §7.5 charges what a displaced carrier or junction moves, and the
 // result carries a carrier record of its own (§7.7).
 
-// CarrierRefusal is a Table CB row's refusal (agent-docs/carrier-record-design.md
+// CarrierRefusal is a Table CB row's refusal (agent-docs/prism-boolean-design.md Part K
 // §7.6). It is an ErrUnsupported: the body exists and this evaluator cannot
 // prove it. Chamfer falls through on one; Fillet returns it.
 type CarrierRefusal struct { //nolint:errname // a Table CB row's refusal, named for the doc's term
@@ -45,7 +45,7 @@ func (e *CarrierRefusal) Error() string {
 	if e.Corner != "" {
 		where = ", " + e.Corner
 	}
-	return fmt.Sprintf(`%v: the displaced receiver's carrier record cannot prove this blend (agent-docs/carrier-record-design.md Table %s%s): %s`,
+	return fmt.Sprintf(`%v: the displaced receiver's carrier record cannot prove this blend (agent-docs/prism-boolean-design.md Part K Table %s%s): %s`,
 		decaderr.ErrUnsupported, e.Row, where, e.Reason)
 }
 
@@ -65,7 +65,7 @@ func carrierBlendKind(fillet bool) string {
 }
 
 // disabledRows lets a test switch a Table CB row off to show it is the guard
-// that refuses (agent-docs/carrier-record-design.md §10). Production code
+// that refuses (agent-docs/prism-boolean-design.md Part K §10). Production code
 // never sets it.
 var disabledRows atomic.Pointer[[]string]
 
@@ -433,7 +433,7 @@ func otherRoot(dec offset2d.FilletDecisions) ([2]float64, bool) {
 
 // seamMove is what closeSeams charges to one segment it moved: Read is how far
 // its walk-start read end moved, ReadEnd how far its walk-end read end moved,
-// both from enclosures rounded up (agent-docs/carrier-record-design.md §7.7,
+// both from enclosures rounded up (agent-docs/prism-boolean-design.md Part K §7.7,
 // "Seam snap"), and Carrier how far the recorded field it rewrote moved (a
 // line's carrier end, or an arc's radius).
 type seamMove struct{ Read, ReadEnd, Carrier float64 }

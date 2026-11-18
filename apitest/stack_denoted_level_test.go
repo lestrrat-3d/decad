@@ -14,7 +14,7 @@ import (
 
 // The tests in this file reach a denoted level that a stack, a stacked union,
 // a chain sheet, a Split piece, a tube shell or a pattern group records
-// (agent-docs/stacked-prism-design.md §2.1). Each fixture places the
+// (agent-docs/prism-boolean-design.md Part S §2.1). Each fixture places the
 // undenoted side so that the held floats alone cannot decide it: 0.2 in
 // denotes a rational below its held 5.08, and 0.3 in one above its held
 // 7.619999999999999.

@@ -12,7 +12,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 )
 
-// DisableCarrierRows switches Table CB rows off (agent-docs/carrier-record-design.md
+// DisableCarrierRows switches Table CB rows off (agent-docs/prism-boolean-design.md Part K
 // §10) and returns the function that restores them.
 func DisableCarrierRows(rows ...string) func() {
 	disabledRows.Store(&rows)

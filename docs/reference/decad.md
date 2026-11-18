@@ -1976,7 +1976,7 @@ everything is ErrBooleanFailed;
 the other gates match Union's.
 A call refused with ErrUnsupported on a mesh result of earlier Cut and
 Intersect calls is retried from the source bodies of that chain
-(agent-docs/boolean-chain-regroup-design.md); only a failure of that retry too
+(agent-docs/prism-boolean-design.md Part R); only a failure of that retry too
 returns the refusal.
 It returns ctx.Err() unchanged when ctx is canceled before the document commit.
 
@@ -2311,7 +2311,7 @@ from their document (core §8). Disjoint operands share nothing, so the
 empty result is ErrBooleanFailed; the other gates match Union's.
 A call refused with ErrUnsupported on a mesh result of earlier Cut and
 Intersect calls is retried from the source bodies of that chain
-(agent-docs/boolean-chain-regroup-design.md); only a failure of that retry too
+(agent-docs/prism-boolean-design.md Part R); only a failure of that retry too
 returns the refusal.
 It returns ctx.Err() unchanged when ctx is canceled before the document commit.
 
@@ -3146,12 +3146,12 @@ largest of them.
 
 A two-body call refused with ErrUnsupported on a mesh result of earlier Union
 calls is retried from the source bodies of that chain
-(agent-docs/boolean-chain-regroup-design.md); only a failure of that retry too
+(agent-docs/prism-boolean-design.md Part R); only a failure of that retry too
 returns the refusal.
 
 A Union of three or more bodies that no certified route takes as a set joins
 the bodies two at a time, left to right, after trying the whole chain on copies
-(agent-docs/union-fold-design.md): a chain whose step refuses returns the
+(agent-docs/prism-boolean-design.md Part U): a chain whose step refuses returns the
 many-body refusal and leaves every body live.
 
 It returns ctx.Err() unchanged when ctx is canceled before the document

@@ -11,7 +11,7 @@ import (
 
 // The tests in this file stop a tool at a level a shell derives: a cup's
 // floor, kept cap or rim, and a closed shell's cavity floor or ceiling
-// (agent-docs/stacked-prism-design.md §2.1). A derived level denotes its
+// (agent-docs/prism-boolean-design.md Part S §2.1). A derived level denotes its
 // source end's rational plus or minus the exact thickness, so a tool that
 // stops there spans a plate whose cap denotes the same rational. 0.2 in
 // denotes a rational r about 7.3e-17 below its held float h = 5.08, so a

@@ -36,7 +36,7 @@ history and Section through history below own the rules.
 
 The owning contracts are `api-design.md` §2, §3, §5.3, §6 and §12;
 `evaluator-design.md` §3 and §8; `prism-boolean-design.md` §11;
-`general-boolean-design.md` §4.2; and `param-binding-design.md` §3.
+`agent-docs/prism-boolean-design.md` Part G §4.2; and `param-binding-design.md` §3.
 Use those documents for existing behavior. This proposal owns the additional
 computational lineage, source-quantity consumer, and public history queries.
 
@@ -171,7 +171,7 @@ faceted result. Do not re-tessellate an unknown trim as if it were an analytic p
 
 ### Boolean chain regroup
 
-`agent-docs/boolean-chain-regroup-design.md` owns one of the designed readers of
+`agent-docs/prism-boolean-design.md` Part R owns one of the designed readers of
 public records. When a two-body Boolean refuses and an operand is a mesh Boolean result, it
 walks producer records to the retained source bodies and evaluates a set-equal
 regrouping of the chain. It is not replay:
@@ -370,7 +370,7 @@ Keep face correspondence separate from role provenance. In particular:
 
 - Analytic section rewrites keep their fresh roles, and the operand roles their
   planar faces inherit, under `prism-boolean-design.md` §11 and
-  `general-boolean-design.md` §4.2.
+  `agent-docs/prism-boolean-design.md` Part G §4.2.
 - Copy and Transform keep their existing per-payload provenance rules under
   `api-design.md` §8.
 - Canonicalization keeps the existing union of contributing origin roles.

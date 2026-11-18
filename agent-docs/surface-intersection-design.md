@@ -209,7 +209,7 @@ geometric test. decad reads the TOOL's label for a cell the fragment bounds.
 A fragment not lying on the tool's own boundary has the same tool-membership
 on both sides, so one cell settles it; a fragment that does lie on the tool's
 boundary is a coincident carrier, which `sketch` emits once under one of the
-two entities (`agent-docs/general-boolean-design.md` §3 A3), and is refused (§4).
+two entities (`agent-docs/prism-boolean-design.md` Part G §3 A3), and is refused (§4).
 
 `Trim` then keeps the fragments whose label matches the caller's stated side
 and drops the rest.
@@ -293,7 +293,7 @@ single-walk ribbon becomes the one-element case:
   trim is the first construction that sets it nonzero.
 
 A prism-family ribbon also carries `prismPayload`'s two level denotations
-(`Z0Denoted`, `Z1Denoted`, `agent-docs/stacked-prism-design.md` §2.1). A chain
+(`Z0Denoted`, `Z1Denoted`, `agent-docs/prism-boolean-design.md` Part S §2.1). A chain
 `Extrude` records them as `Extrude` does, a placed copy and `Extend`'s result
 keep them, and a trimmed ribbon records none.
 
