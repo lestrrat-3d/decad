@@ -607,6 +607,12 @@ func evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 			if err := bmB.SetExactFacets(mb); err != nil {
 				return Evaluation{}, err
 			}
+			// An unshifted Intersect also reads its seats: carrier-exact faces resting on each other, and the walls
+			// that leave their planes (agent-docs/coplanar-contact-design.md §16).
+			if op == meshbool.OpIntersect {
+				bmA.SetSeats(ma)
+				bmB.SetSeats(mb)
+			}
 		}
 	} else if replay != nil && fixed == nil && !hasShifts {
 		// The bounded pass reads the same exactness, charged one work unit per

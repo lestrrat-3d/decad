@@ -717,3 +717,116 @@ between exact planar faces of mesh boolean operands" (Tasks 2–6, 12) or "plana
 - **Q3.** Should the branch refusal of §3.2 ("Remaining refusals") be lifted with a planar-arrangement cutter? Decide
   after Task 11's P2 and the acceptance run show whether any real case hits it, because the cutter is a separate,
   larger change to `boolean_cut.go`.
+
+## 16. Seats in an Intersect
+
+A bolt head or nut that rests flush on a bored pocket floor meets the floor in a plane, but neither face is exact
+(§3.1): the floor's rim round the bore is chorded, and so is the bearing face's rim round its own hole or chamfer.
+§3.1 then refuses the pair, and the rim edges that touch the other face's plane reach the held-mesh gates. Hardware
+interference checks run `Intersect` on exactly these pairs. This section admits them for `Intersect` only.
+
+Code: `internal/meshbool/seat.go`; callers in `boolean_pair_cuts.go`, `tangency_gate.go` and
+`internal/booleaneval/eval.go` (an unshifted `Intersect` with no replay or fixed operand calls `SetSeats`).
+
+### 16.1 Carrier-exact facets and seat pairs
+
+A facet is **carrier-exact** when its true piece lies in the facet's own plane, whatever its outline: its slab bound is
+zero (a retained plane whose tag is the facet's plane, `SetChargedSlabBounds`), or its face is an analytic `Plane` with
+no retained tag, no stated departure and zero displacement, whose plane slab (`planeSlab`) at the facet is zero.
+
+A **seat pair** is two coplanar facets, one of each operand, both carrier-exact and facing opposite ways
+(`proof.XdotSign` of their normals is negative). §3's pass admits a seat pair as it admits an exact pair.
+
+**Claim S1.** In an `Intersect`, the cover table's answer for a seat pair is right even though the outlines are chorded.
+
+Both true pieces lie in the common plane `P`, one operand's material on each side near them. Opposite-facing pairs
+drop both copies (§3.3's table), and so does every point of either outline's neighbourhood that the pass may misplace
+by a chord: near `P` the operands lie on opposite sides, so no point near the outlines is inside both. The `Intersect`
+result has no surface there whatever the outlines are. In a `Union` or `Cut` the kept copy's outline is the result's
+boundary, so a chorded outline would make the result's face wrong; seats are not read there.
+
+### 16.2 Walls that leave a seat plane
+
+A **wall** `W` is a face beside a carrier-exact face `F` of its own operand, or all the faces of one operand that share
+one `Cylinder` or `Cone` tag (the two arcs of a drawn bore). Its **rim** is the set of edges it shares with `F`.
+`W` earns a seat on `F`'s plane `P`, and its rim edges are marked, when:
+
+1. every corner of `F` lies in `P` exactly and every facet of `F` is carrier-exact;
+2. every facet of `W` has a vertex off the rim, and every such vertex lies strictly on `F`'s material side of `P`
+   (`proof.OrientSign` negative);
+3. either every facet of `W` is exact (§3.1), or all of the following hold:
+   - the rim edges form closed loops;
+   - every ruling of `W`'s true surface meets `P` at a sine above `seatSinMin = 10⁻³` (below);
+   - every vertex off the rim lies farther from `P` than `W`'s largest facet bound plus 64 ulps of the coordinate scale.
+
+**Claim S2.** Then `W`'s true piece lies on `F`'s material side of `P` and meets `P` only along the rim.
+
+- *Exact wall.* `W` is its facets. Each facet is the convex hull of its corners, which lie in `P` (rim) or strictly
+  below it, and no facet has all three on the rim, so every point lies below `P` except on rim edges.
+- *Held wall.* Let `C` be the curve where `W`'s true surface meets `P`. Every ruling meets `P` transversally, so it
+  crosses `P` once, and `C` is one closed curve on a cylinder (or on the cone's nappe). The true rim lies in `P`,
+  since it is the boundary `W` shares with `F`, whose true piece lies in `P`. The held rim is closed, so the true rim
+  is a closed curve inside `C`, which is all of `C`. `W`'s true interior is connected and misses `C`, which is its
+  boundary, so it lies on one side of `P`. A vertex off the rim lies below `P` by more than its facet's bound, so the
+  true point near it is below `P` too, and the whole true interior is.
+
+An open rim fails the argument. A side edge where the true face meets another wall may rise above `P` by less than
+the facet bound and still round to held vertices below it.
+
+**Transversal rulings.** A face that records the surface its revolve denotes (`topo.Face.Denoted`) is read from that
+record (`denotedTransversal`). A revolve cone's tag is a float re-expression with no stated normal bound (its
+`NormalBound` is 2, retained-modify-reach §9.5), so the record's rational leaves are its only exact reading. For a
+meridian segment from `(z₀, ρ₀)` to `(z₁, ρ₁)` a ruling runs along `d(φ) = Δz·W + Δρ·(cos φ·E₀ + sin φ·E₁)`,
+with the axis `W` and basis `E₀`, `E₁` known only inside their intervals. With `N` the exact cross product of the facet's
+edges,
+
+    |d·N| ≥ |Δz|·|W·N| − |Δρ|·(|E₀·N| + |E₁·N|),   |d|·|N| ≤ (|Δz|·|W|₁ + |Δρ|·(|E₀|₁ + |E₁|₁))·|N|₁,
+
+each absolute value taken at its least or greatest over the intervals, in exact rationals. The ruling's sine against
+`P` is `|d·N| / (|d|·|N|)`; the lower bound over the upper one must exceed `seatSinMin`. A circular meridian (a sphere
+or torus) has no rulings and refuses. A face without a record is read from its `Cylinder` or `Cone` tag
+(`transversal`), whose unit normal departs from the true one by at most `NormalBound` `d < 2`, an angle of at most
+`2·asin(d/2)`; the margin `seatSinMin` dwarfs the float trigonometry's rounding, padded by a relative `10⁻⁹`.
+
+### 16.3 What the seat decides
+
+**Claim S3.** For a carrier-exact face `X` of the other operand lying exactly in `P` and facing opposite `F`, the true
+surfaces of `X` and `W` meet only on `W`'s rim, and no point near that contact lies inside both operands.
+
+By S2, `W` lies on `F`'s side of `P` and touches `P` only on its rim; `X` lies in `P` with its operand on the far side.
+Near the rim, `W`'s operand lies on `F`'s side (it is bounded there by `F` and `W`) and `X`'s operand on the other.
+
+The pass reads this in three places:
+
+- **Proximity gate.** `RefuseUndecidableProximity` skips the face pair (`seatSkip`): every facet of `X` is
+  carrier-exact, lies on the seat plane exactly and faces opposite the seat facet. S3 leaves nothing for a chord to
+  hide.
+- **Held-mesh gate.** A contact along a marked rim edge against a carrier-exact facet does not enter the touched
+  lists the chain-depth gate (`RefuseCoarseHeldContact`) reads. By S3 the contact lies in `P` and adds no volume.
+- **In-plane edges.** An `EdgeCoplanarBounded` rim edge (§3.3) is accepted when the facet across it is admitted as
+  coplanar with the facet it lies in: a seat pair. A point contact may be owned by the coplanar pass when both facets
+  are exact, or one is carrier-exact and the other carrier-exact or on a marked rim (`seatPoint`).
+
+### 16.4 Rejected variants and tests
+
+`apitest/intersect_seat_test.go` (`TestIntersectSeat`) and `internal/meshbool/seat_internal_test.go`
+(`TestDenotedTransversal`):
+
+| Case | Expect | Guards |
+|---|---|---|
+| a bored block on a bored pocket floor, both orders | `BooleanEmpty` | S1–S3 |
+| a bored round nut on the floor, both orders | `BooleanEmpty` | S2 for a held cylinder wall |
+| the block sunk 0.05 into the floor | the overlap's volume | seats admit no false empty |
+| the block flush with a solid plate's top, same facing | the block less the bore | same-facing pairs are no seat |
+| a seated `Union` | `ErrUnsupported` | S1 holds for `Intersect` only; fails red if `SetSeats` runs for every op |
+| both bodies turned by 31° | `ErrUnsupported` | planes with a stated departure are not carrier-exact |
+| a meridian in the plane, or flatter than `seatSinMin`, or a plane across the axis | refuse | transversality |
+
+Kept refusals:
+
+- **Turned or placed planes.** A plane whose tag states a departure, however small (a placed body's planes carry the
+  rounding of the moved frame, often 10⁻¹⁵), is not carrier-exact. Its true piece lies only within the departure of
+  the held plane, so two such faces may be apart or overlap by that much. Admitting them needs the two true planes
+  compared exactly from their records, which this section does not do.
+- **Open rims** of held walls (S2).
+- **Shifted operands, replays and fixed operands** read no seats.

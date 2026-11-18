@@ -676,7 +676,8 @@ belongs to that owner.
   face's denoted interval surface (`topo.Face.Denoted`), which blend §2 reads only for a `Plane` or `Cylinder` tag
   equal to it, and blend §4.5 for a `Sphere` whose record's centre and radius are its tag's. A cone or torus that a blend
   built (blend §4.2) meets its neighbours tangentially, so it has no edge to blend, and a later cut through it
-  gives a non-coaxial rim. SR1. §16 lists the denoted-surface route.
+  gives a non-coaxial rim. SR1. §16 lists the denoted-surface route. The `Intersect` seat reading reads a revolve
+  cone's rulings from that record, not its tag (coplanar-contact §16.2).
 
 ## 10. Table SM — added refusal rows
 
