@@ -19,6 +19,9 @@ var ChordedLoftPlane = chordedLoftPlane
 // ShiftNeed exposes shiftNeed to the external test package.
 var ShiftNeed = shiftNeed
 
+// RetainedPlaneOf exposes retainedPlaneOf to the external test package.
+var RetainedPlaneOf = retainedPlaneOf
+
 // PieceOfFacet returns the connected piece of each facet of m.
 func PieceOfFacet(m *topo.Mesh) []int {
 	pc := boolshift.PiecesOf(m)

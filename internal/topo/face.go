@@ -146,7 +146,8 @@ type Face struct {
 	// NormalBound: no dimensionless term states the departure for every p.
 	// Stitch's flux arms integrate the tag, so they admit a revolve wall only
 	// where its tag is exactly this surface (internal/stitchrecord/flux.go's
-	// fluxTagsDenoted).
+	// fluxTagsDenoted). The retained-plane slab reads a Plane face's tag the
+	// same way (internal/booleaneval/retained_plane.go).
 	Denoted *surfacenormal.Revolved
 	// Surface is the face's tagged geometry in its internal variant. Root
 	// Face.Surface converts it to the public variant with publicSurface.
