@@ -183,8 +183,7 @@ at the contact, whether it is Decisive, a Slack, and the second operand's facet 
    contacts beside it, such as the flush top and bottom caps of two ribs whose curved and flat walls touch, only
    open, and they open outward on a tie. An inward tie there gains no connection, and on the ribs of
    `TestWebPathJoinsALineArcLineChain` it leaves a mesh bound that the next Union of the chain refuses at the
-   chain-depth gate (`RefuseCoarseHeldContact`). A pair of contacts that no direction opens in
-   the needed sense, such as a tool flush with both walls of a slot, is opened by growth (item 5).
+   chain-depth gate (`RefuseCoarseHeldContact`). A pair of contacts that no direction opens in the needed sense, such as a tool flush with both walls of a slot, is opened by growth (item 5).
 
    The rule follows from the tolerant reading `A∘(B+s)` with `s·n` the shift along a contact's outward normal `n`.
    `A∘(B+s)` is the solid the result states, never `A∘B` (see "What a result of the retry states" below).
@@ -196,9 +195,9 @@ at the contact, whether it is Decisive, a Slack, and the second operand's facet 
    | Intersect | Leaves a sliver solid for a resting B. | Empty for a resting B; B less a sliver for a flush B. |
 
    A Union that also holds a Decisive contact overlaps B there whichever way another contact opens, so that
-   contact's sense decides only which side of its face a sliver or gap of the shift's length lies. So Union with no Decisive contact pulls inward, and Cut and
-   Intersect push outward: every contact is wanted for them when none is Decisive, and a tie beside a Decisive
-   contact opens outward.
+   contact's sense decides only which side of its face a sliver or gap of the shift's length lies. So Union with no
+   Decisive contact pulls inward, and Cut and Intersect push outward: every contact is wanted for them when none is
+   Decisive, and a tie beside a Decisive contact opens outward.
 2. Each direction is the contacts' unit direction, each contact pulling in proportion to its Slack, plus a generic
    part of weight 0.2 that is parallel to no coordinate plane, so a shift also opens the walls that two bodies
    sharing a footprint leave coplanar.
