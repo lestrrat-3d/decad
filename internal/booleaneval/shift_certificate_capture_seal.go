@@ -2,11 +2,52 @@ package booleaneval
 
 import (
 	"context"
+	"errors"
+	"slices"
 	"unsafe"
 
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/provenance"
 )
+
+// errShiftSourceTooDeep is walkShiftSources' answer to a record chain deeper
+// than 64; each seal maps it to its own refusal.
+var errShiftSourceTooDeep = errors.New("source ancestry too deep")
+
+// sealShiftSource records p and a copy of its value. The copy owns its own
+// Members array, so replacing an element of p.Members in place shows up as a
+// difference.
+func sealShiftSource(p *provenance.SourcePatch) shiftSourceSeal {
+	value := *p
+	value.Members = slices.Clone(p.Members)
+	return shiftSourceSeal{ptr: p, value: value}
+}
+
+// walkShiftSources calls visit on p, then on the records of p's Parent and
+// Members, each one level deeper. A nil record is skipped. A record at depth 64
+// or more returns errShiftSourceTooDeep. Both seals walk the same order, so a
+// capture-time list and a later list agree element for element.
+func walkShiftSources(p *provenance.SourcePatch, depth int, visit func(*provenance.SourcePatch) error) error {
+	if p == nil {
+		return nil
+	}
+	if depth >= 64 {
+		return errShiftSourceTooDeep
+	}
+	if err := visit(p); err != nil {
+		return err
+	}
+	if err := walkShiftSources(p.Parent, depth+1, visit); err != nil {
+		return err
+	}
+	for _, m := range p.Members {
+		if err := walkShiftSources(m, depth+1, visit); err != nil {
+			return err
+		}
+	}
+	return nil
+}
 
 // shiftCaptureSeal retains the capture-time content and pointer identities.
 type shiftCaptureSeal struct {
@@ -42,14 +83,18 @@ func captureShiftGroupSeal(ctx context.Context, groups []facetedrecord.Group, bu
 		if g.CapRecord != nil {
 			pointers[i].level = g.CapRecord.ZDenoted
 		}
-		for p, depth := g.Source, 0; p != nil; p, depth = p.Parent, depth+1 {
-			if depth >= 64 {
-				return nil, errCaptureSealCaptureSourceAncestryTooDeep
-			}
+		err := walkShiftSources(g.Source, 0, func(*provenance.SourcePatch) error {
 			if err := budget.SpendWork(ctx, 1); err != nil {
-				return nil, err
+				return err
 			}
 			count++
+			return nil
+		})
+		if errors.Is(err, errShiftSourceTooDeep) {
+			return nil, errCaptureSealCaptureSourceAncestryTooDeep
+		}
+		if err != nil {
+			return nil, err
 		}
 	}
 	if err := budget.ReserveRecords(ctx, count); err != nil {
@@ -63,11 +108,15 @@ func captureShiftGroupSeal(ctx context.Context, groups []facetedrecord.Group, bu
 	}
 	sources := make([]shiftSourceSeal, 0, count)
 	for _, g := range groups {
-		for p := g.Source; p != nil; p = p.Parent {
+		err := walkShiftSources(g.Source, 0, func(p *provenance.SourcePatch) error {
 			if uint64(len(sources)) >= count {
-				return nil, errCaptureSealCaptureAncestryChanged
+				return errCaptureSealCaptureAncestryChanged
 			}
-			sources = append(sources, shiftSourceSeal{ptr: p, value: *p})
+			sources = append(sources, sealShiftSource(p))
+			return nil
+		})
+		if err != nil {
+			return nil, err
 		}
 	}
 	if uint64(len(sources)) != count {
@@ -88,7 +137,7 @@ func validateShiftCaptureSeal(ctx context.Context, cert *ShiftCertificate, budge
 		return err
 	}
 	for _, source := range seal.sources {
-		if source.ptr == nil || *source.ptr != source.value {
+		if source.ptr == nil || !source.ptr.Same(source.value) {
 			return errCaptureSealCapturedSourceChanged
 		}
 	}

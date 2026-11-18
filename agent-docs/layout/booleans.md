@@ -13,6 +13,7 @@ Boolean files and modify operations. The rules for rows live in `agent-docs/layo
 | `boolean_group_tessellate.go` | Replays a blind group Cut mesh and verifies its source history. See tessellation design. |
 | `boolean_many.go` | Validates and commits multi-body Union through `internal/unionmany`, prism pair chains, and the two-at-a-time fold no certified route takes. See API §8, prism-boolean §4.6–§4.7, union-fold design. |
 | `internal/unionmany/` | Orders certified many-operand Union routes and fallback prism pair chains over nodes. See prism-boolean §4.6–§4.7, axial-section-boolean, loft-cylinder-boolean, loft-mirror-boolean, prism-pattern-union and revolve-loft-sector designs. |
+| `internal/facemerge/` | Relabels a mesh Boolean result's source groups so adjacent exactly coplanar same-facing faces of the two operands become one face. See union-face-merge design §4. |
 | `boolean_regroup.go` | Root history, handle, error and commit adapters for chain regroup and paired Cut continuation. `internal/booleandispatch` owns the private node plan. See boolean-chain-regroup-design. |
 | `surface_trim.go` | Public `Trim`, `Extend` and `Split` entry checks and commits; `internal/surfacetrim/` builds them. See surface-intersection §2–§3. |
 | `point_plane_scale.go` | ScaledAt: resolves the similarity source by payload kind and commits the image; facetedrecord.ScaleImage admits and scales it. See loft-point design and evaluator §8. |

@@ -2,6 +2,7 @@ package booleaneval
 
 import (
 	"context"
+	"errors"
 	"math"
 	"math/big"
 	"slices"
@@ -450,16 +451,18 @@ func SnapshotShiftCertificate(ctx context.Context, budget *proofbound.ReplayBudg
 	}
 	var count uint64
 	for _, g := range cert.groups {
-		p := g.Source
-		for depth := 0; p != nil; depth++ {
-			if depth >= 64 {
-				return nil, errShiftSnapshotSourceAncestryTooDeep
-			}
+		err := walkShiftSources(g.Source, 0, func(*provenance.SourcePatch) error {
 			if err := budget.SpendWork(ctx, 1); err != nil {
-				return nil, err
+				return err
 			}
 			count++
-			p = p.Parent
+			return nil
+		})
+		if errors.Is(err, errShiftSourceTooDeep) {
+			return nil, errShiftSnapshotSourceAncestryTooDeep
+		}
+		if err != nil {
+			return nil, err
 		}
 	}
 	if err := budget.ReserveRecords(ctx, count); err != nil {
@@ -473,8 +476,12 @@ func SnapshotShiftCertificate(ctx context.Context, budget *proofbound.ReplayBudg
 	}
 	seals := make([]shiftSourceSeal, 0, count)
 	for _, g := range cert.groups {
-		for p := g.Source; p != nil; p = p.Parent {
-			seals = append(seals, shiftSourceSeal{ptr: p, value: *p})
+		err := walkShiftSources(g.Source, 0, func(p *provenance.SourcePatch) error {
+			seals = append(seals, sealShiftSource(p))
+			return nil
+		})
+		if err != nil {
+			return nil, err
 		}
 	}
 	return &ShiftCertificateSnapshot{source: cert, copy: snapshotCopy, budget: budget, sources: seals, groupPointers: pointers, meshes: [4]*topo.Mesh{cert.selected, cert.decision, cert.charged, cert.targetMesh}}, nil
@@ -504,7 +511,7 @@ func (s *ShiftCertificateSnapshot) Revalidate(ctx context.Context, budget *proof
 		return err
 	}
 	for _, x := range s.sources {
-		if x.ptr == nil || *x.ptr != x.value {
+		if x.ptr == nil || !x.ptr.Same(x.value) {
 			return errShiftSnapshotSourceAncestryChanged
 		}
 	}
