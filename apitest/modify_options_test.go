@@ -251,16 +251,20 @@ func TestTangentChainSlotCapLoop(t *testing.T) {
 	const h, d = slotHeight, 2.0
 	_, slot := slotBody(t, [2]float64{10, 5})
 
-	// Without the chain the single edge reaches route E, whose straight-wall
-	// admission refuses the slot's curved terminal wall (SB7).
-	_, err := decad.Chamfer(t.Context(), slot, slotSeed(slot), units.Millimeters(d))
-	require.ErrorIs(t, err, decad.ErrUnsupported)
-	require.ErrorContains(t, err, "brep-modify SB7")
-
 	// Exactly(1) holds on the seed; the line→arc→line→arc chain then expands
 	// it to the whole top loop, which builds the cap-loop chamfer.
 	chained := mustChamfer(t, slot, slotSeed(slot), d, decad.WithTangentChain())
 	requireManifold(t, chained)
+
+	// Without the option the seed ends at tangent junctions, so Chamfer takes
+	// their continuations too and builds the same loop.
+	_, plain := slotBody(t, [2]float64{10, 5})
+	extended := mustChamfer(t, plain, slotSeed(plain), d)
+	ev, err := extended.Volume()
+	require.NoError(t, err)
+	cv, err := chained.Volume()
+	require.NoError(t, err)
+	require.Equal(t, cv.Value.Base(), ev.Value.Base())
 
 	// Pappus: the removed ring has the right-triangle section d²/2, its
 	// centroid d/3 inside the wall, so the straight walls remove d²/2·2L and

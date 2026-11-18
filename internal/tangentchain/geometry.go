@@ -50,6 +50,104 @@ func Continues(e, c *topo.Edge, v *topo.Vertex) clearance.DegState {
 	return degOr(straight, crossed)
 }
 
+// Apart reports whether the rays of e and c away from their shared vertex v are proven not opposite (§5 test 1):
+// the oracle reads them as not parallel beyond its noise band, or their exact dot product is non-negative. Then c
+// does not continue e whatever its faces are. A curve the oracle does not read is never apart.
+func Apart(e, c *topo.Edge, v *topo.Vertex) bool {
+	if c.Start == c.End || (c.Start != v && c.End != v) {
+		return false
+	}
+	te, okE := rayAway(e, v)
+	tc, okC := rayAway(c, v)
+	if !okE || !okC {
+		return false
+	}
+	var oracle clearance.Oracle
+	if oracle.ParallelExact(te.exact, tc.exact, te.f, tc.f) == clearance.DegNo {
+		return true
+	}
+	return proofarith.DvDot(te.exact, tc.exact).Sign() >= 0
+}
+
+// HeldMesh is a faceted body's held mesh: vertices with their bounds, triangles, and the index of each triangle's face.
+type HeldMesh struct {
+	Verts  []r3.Vec
+	Bounds []float64
+	Tris   [][3]int
+	FaceOf []int
+}
+
+// heldApartSine is the least sine, beyond a chord's own uncertainty, at which a held chord's direction is read as
+// apart from a ray.
+const heldApartSine = 1e-3
+
+// HeldApart is Apart for a candidate c whose curve is a Boolean's chord chain, which carries no direction: its ray at
+// v is read from the held mesh as the chord from v that a facet of each of c's two faces holds, whose face indices are
+// fa and fb. Every such chord must be proven apart from e's ray: its angle to the reverse of that ray exceeds
+// heldApartSine plus the chord's uncertainty, the angle whose sine is 4(δ + β_v + β_w)/L for the chain's bound δ, the
+// two vertex bounds and the chord's length L. A curve whose points lie within that much of the chord turns from it at
+// v by less than that angle. It reports false when the mesh holds no such chord.
+func HeldApart(m HeldMesh, fa, fb int, chainBound float64, e *topo.Edge, v *topo.Vertex) bool {
+	te, ok := rayAway(e, v)
+	if !ok || len(m.Bounds) != len(m.Verts) || len(m.FaceOf) != len(m.Tris) {
+		return false
+	}
+	hv := -1
+	for i, p := range m.Verts {
+		if p == v.Position {
+			hv = i
+			break
+		}
+	}
+	if hv < 0 {
+		return false
+	}
+	// The chord's far ends: vertices that share a triangle with hv on face fa and another on face fb.
+	onA, onB := map[int]struct{}{}, map[int]struct{}{}
+	for ti, t := range m.Tris {
+		if t[0] != hv && t[1] != hv && t[2] != hv {
+			continue
+		}
+		for _, w := range t {
+			if w == hv {
+				continue
+			}
+			switch m.FaceOf[ti] {
+			case fa:
+				onA[w] = struct{}{}
+			case fb:
+				onB[w] = struct{}{}
+			}
+		}
+	}
+	back, ok := te.f.Scale(-1).Normalize()
+	if !ok {
+		return false
+	}
+	found := false
+	for w := range onA {
+		if _, both := onB[w]; !both {
+			continue
+		}
+		found = true
+		chord := m.Verts[w].Sub(v.Position)
+		l := chord.Len()
+		if !(l > 0) {
+			return false
+		}
+		u := 4 * (chainBound + m.Bounds[hv] + m.Bounds[w]) / l
+		if u >= 1 {
+			return false
+		}
+		limit := math.Asin(u) + math.Asin(heldApartSine)
+		angle := math.Acos(max(-1, min(1, back.Dot(chord.Scale(1/l)))))
+		if angle <= limit {
+			return false
+		}
+	}
+	return found
+}
+
 // degAnd is three-valued conjunction: no when either is no, yes when both
 // are yes, undecided otherwise.
 func degAnd(x, y clearance.DegState) clearance.DegState {

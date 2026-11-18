@@ -26,15 +26,17 @@ so the refusal stays. Adding a case needs that reason.
 - A `Fillet` or `Chamfer` of zero size, or one that consumes its face (`ErrDegenerate`, SR3 and SR4 in
   `agent-docs/retained-edge-blend-design.md`). A cross hole's mouth filleted with `2ρ ≥ R − r` is one: no ball of
   radius ρ inside the shaft and outside the bore touches both walls (§4.10).
-- A `Fillet` or `Chamfer` of an edge that ends at a proven tangent (G1) junction whose continuation the selection
-  leaves out, without `WithTangentChain`. It refuses `ErrUnsupported` with "the selected edge ends at the tangent
-  junction … whose continuation is not selected; WithTangentChain selects the whole chain": brep-modify SB7 on a
-  brep result (`internal/brepmodify/edge_route.go`, such as a plate unioned with a rounded-rectangle boss) and
-  retained-modify-reach SM2 on a mesh Boolean result (`internal/retainedblend/chain.go`). A solid that ends the
-  blend at the junction exists: a flat cap in the junction plane beside the sharp continuation
-  (`agent-docs/retained-modify-reach-design.md` §15). decad does not model it, because the target CAD blends along
-  tangent edges (Fusion's tangent chain, `isTangentChain` on a fillet or chamfer edge set), so its blend has no free
-  end at a G1 junction. `WithTangentChain`, or a selection that names every edge of the chain, builds that result.
+- A `Fillet` of an edge that ends at a proven tangent (G1) junction whose continuation the selection leaves out,
+  without `WithTangentChain`, and a `Chamfer` of one whose chain expansion is undecided. It refuses `ErrUnsupported`
+  with "the selected edge ends at the tangent junction … whose continuation is not selected; WithTangentChain
+  selects the whole chain": brep-modify SB7 on a brep result (`internal/brepmodify/edge_route.go`, such as a plate
+  unioned with a rounded-rectangle boss) and retained-modify-reach SM2 on a mesh Boolean result
+  (`internal/retainedblend/chain.go`). A solid that ends the blend at the junction exists: a flat cap in the junction
+  plane beside the sharp continuation (`agent-docs/retained-modify-reach-design.md` §15). decad does not model it,
+  because the target CAD blends along tangent edges (Fusion's tangent chain, `isTangentChain` on a fillet or chamfer
+  edge set), so its blend has no free end at a G1 junction. `WithTangentChain`, or a selection that names every edge
+  of the chain, builds that result; `Chamfer` extends its selection along the chain by itself
+  (`agent-docs/modify-reach-design.md` §5.1).
 - A two-distance `Chamfer` whose `WithAsymmetricChamfer` reference names none, or more than one, of the faces beside
   some selected edge, such as `Facing(+z)` for both outlines of the drilled rounded box under `WithTangentChain`. It
   refuses `ErrCardinality` with "the asymmetric chamfer's reference … names 0 of the faces adjacent to selected
@@ -128,6 +130,7 @@ Ranked by how many ordinary machined or printed parts each gap stops end to end.
 | Cap-loop chamfer at a corner where a circular wall meets a neighbour tangentially but runs back against it (a tangent cusp), or turns past the G1 tolerance too slightly to enclose | `ErrUnsupported` (SX14) (`internal/capblend/gate.go`) | `agent-docs/modify-reach-design.md` Table SX |
 | Asymmetric brep or stacked chamfer selection outside routes E/L | `ErrUnsupported` (SX16); E takes straight edges, L takes full planar loops | `agent-docs/modify-reach-design.md` §6, `agent-docs/modify-general-design.md` §4 |
 | Tangent chain that branches or whose G1 continuity the oracle cannot decide | `ErrUnsupported` (SX2) (`brep_modify_partial.go`, `internal/tangentchain/geometry.go`) | `agent-docs/modify-reach-design.md` §5 |
+| `Chamfer` of an open tangent chain across planes on a mesh Boolean result that ends on an earlier bevel of the same setback (a step's or tongue's rim on a part whose outline was chamfered first): the new bevel passes through the old bevel's far corner, on a rim the earlier Cut holds only within its bound | `ErrUnsupported`, the Cut's "the operands' held facets come within the chord tolerance" (`internal/brepmodify/chain_cutter_chamfer.go`); the same chain ending on an unchamfered face builds | `agent-docs/retained-modify-reach-design.md` §15b |
 | Closed shell (`WithNoOpenings`) outside a full revolve, a straight prism, a brep record that reads as a prism (inward along any axis, outward along its one axis), a two-slab nested rectangular boss or a convex mesh Boolean result with planar faces, inward (`agent-docs/trim-graph-design.md`); an outward one whose offset empties a hole (S11a) | `ErrUnsupported` (SX8/SX9; modify-general SG2) (`shell.go`) | `agent-docs/modify-reach-design.md` §9, §14; `agent-docs/modify-general-design.md` §3.1a, §3.2; `agent-docs/trim-graph-design.md` |
 | Reverse-order nested rectangular boss whose frame cannot flip exactly | `ErrUnsupported` (`internal/prismshell/boss_stack.go`) | `agent-docs/modify-general-design.md` §3.1a |
 | Modify of a prism whose section carries a displacement bound, other than a lateral `Fillet` or symmetric `Chamfer` of a receiver whose own body carries a valid carrier record (a `Transform` or `Copy` carries none) that passes Table CB (a disc united with pattern-copied teeth fillets its roots), and a `Chamfer` whose edges lie on loops with exact carriers (a plate cut by rotated pattern copies chamfers its own outline as a faceted result); a cap-loop `Chamfer` of a recorded receiver builds a `capblend.DisplacedPayload` when every selected loop is exact in its record (a disc's windows chamfer on both caps) and a second modify op on that result is SX10's refusal; any other cap-loop selection keeps the faceted view or the refusal | `ErrUnsupported` via `prismrecord.Payload.RequireExactSection`; a Table CB refusal of `Fillet` is `ErrUnsupported`, of `Chamfer` falls through | `agent-docs/modify-design.md`, `agent-docs/brep-modify-design.md` §2.2, `agent-docs/carrier-record-design.md` §7 |

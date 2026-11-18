@@ -33,13 +33,20 @@ import (
 //
 // cutter is the body the run's cut takes, after any end clip, so the sector a clip removes is not tested.
 func (r chamferRun) checkCutterClear(ctx context.Context, body, cutter *topo.Body, bound float64) error {
+	return checkCutterClearOf(ctx, body, cutter, bound, r.ownFaces(body), "partial chamfer")
+}
+
+// checkCutterClearOf is checkCutterClear for any cutter: every held facet of a face outside allowed (indices in
+// topobuild.Faces order) must miss cutter. what names the chamfer in a refusal.
+func checkCutterClearOf(ctx context.Context, body, cutter *topo.Body, bound float64, allowed map[int]struct{},
+	what string) error {
 	fp, ok := body.Payload.(facetedrecord.Payload)
 	if !ok {
 		return nil
 	}
 	cp, ok := cutter.Payload.(facetedrecord.Payload)
 	if !ok || len(cp.Tris) == 0 {
-		return fmt.Errorf("%w: the partial chamfer's cutter has no held mesh to test", decaderr.ErrUnsupported)
+		return fmt.Errorf("%w: the %s's cutter has no held mesh to test", decaderr.ErrUnsupported, what)
 	}
 	if len(fp.VertexBound) != len(fp.Verts) || len(fp.FaceOf) != len(fp.Tris) {
 		return fmt.Errorf("%w: the receiver's held mesh has no vertex bounds to test the cutter against",
@@ -48,7 +55,6 @@ func (r chamferRun) checkCutterClear(ctx context.Context, body, cutter *topo.Bod
 	for _, b := range cp.VertexBound {
 		bound = max(bound, b)
 	}
-	allowed := r.ownFaces(body)
 
 	boxes := make([]facetBox, len(cp.Tris))
 	for i, t := range cp.Tris {
@@ -103,19 +109,19 @@ func (r chamferRun) checkCutterClear(ctx context.Context, body, cutter *topo.Bod
 			c := cutterFacets[ci]
 			if f.flat || c.flat {
 				// The classification needs a plane for each facet.
-				return fmt.Errorf("%w: a flat facet beside the partial chamfer's cutter leaves its clearance undecided",
-					decaderr.ErrUnsupported)
+				return fmt.Errorf("%w: a flat facet beside the %s's cutter leaves its clearance undecided",
+					decaderr.ErrUnsupported, what)
 			}
 			contact, err := meshbool.TriTriClassify(c.f, f.f, c.x, f.x, c.n, f.n)
 			if err != nil {
-				return fmt.Errorf("%w: the partial chamfer's clearance from the rest of the body is undecided: %w",
-					decaderr.ErrUnsupported, err)
+				return fmt.Errorf("%w: the %s's clearance from the rest of the body is undecided: %w",
+					decaderr.ErrUnsupported, what, err)
 			}
 			if contact.Kind != meshbool.ContactNone {
-				return refuseOtherFace(contactAt3(contact, f.f))
+				return refuseOtherFace(what, contactAt3(contact, f.f))
 			}
 			if d := meshbool.TriTriDistance(c.f, f.f); d <= infl {
-				return refuseOtherFace(f.f[0])
+				return refuseOtherFace(what, f.f[0])
 			}
 		}
 		// A facet that crosses nothing lies wholly inside the cutter or wholly outside it.
@@ -128,15 +134,15 @@ func (r chamferRun) checkCutterClear(ctx context.Context, body, cutter *topo.Bod
 		placed[t[0]] = struct{}{}
 		inside, on, err := meshbool.MeshParityAllContext(ctx, proof.XptOf(fp.Verts[t[0]]), parity)
 		if err != nil || inside || on {
-			return refuseOtherFace(fp.Verts[t[0]])
+			return refuseOtherFace(what, fp.Verts[t[0]])
 		}
 	}
 	return nil
 }
 
-func refuseOtherFace(p r3.Vec) error {
-	return fmt.Errorf(`%w: a partial chamfer's cutter meets or comes within bounds of another face of the body near %.4g,%.4g,%.4g`,
-		decaderr.ErrUnsupported, p.X, p.Y, p.Z)
+func refuseOtherFace(what string, p r3.Vec) error {
+	return fmt.Errorf(`%w: a %s's cutter meets or comes within bounds of another face of the body near %.4g,%.4g,%.4g`,
+		decaderr.ErrUnsupported, what, p.X, p.Y, p.Z)
 }
 
 func contactAt3(c meshbool.TriContact, f [3]r3.Vec) r3.Vec {

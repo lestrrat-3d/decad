@@ -210,7 +210,7 @@ func TestChamferCapLoopSubset(t *testing.T) {
 		require.InDelta(t, before-20*d*d/2, volumeOf(t, out), 1e-5)
 	})
 
-	t.Run("run that stops inside a tangent chain", func(t *testing.T) {
+	t.Run("run that stops inside a tangent chain takes the chain", func(t *testing.T) {
 		t.Parallel()
 		body := capLoopSubsetBody(t, func(s *sketch.Sketch) {
 			a, b, c, e := s.CreatePoint(0, 0), s.CreatePoint(25, 0), s.CreatePoint(25, 10), s.CreatePoint(0, 10)
@@ -223,8 +223,16 @@ func TestChamferCapLoopSubset(t *testing.T) {
 				s.Fix(p)
 			}
 		})
-		_, err := decad.Chamfer(t.Context(), body, topEdges(topEdge{r3.Vec{}, r3.Vec{X: 1}}), units.Millimeters(d))
-		require.ErrorIs(t, err, decad.ErrUnsupported)
+		before := volumeOf(t, body)
+		// The bottom line ends at the arc's tangent junction, so the chamfer runs on round the arc and along the top
+		// line to the wall x = 0 (Pappus: the arc's wedge centroid lies d/3 inside its radius 5).
+		out, err := decad.Chamfer(t.Context(), body, topEdges(topEdge{r3.Vec{}, r3.Vec{X: 1}}), units.Millimeters(d))
+		require.NoError(t, err)
+		require.True(t, out.IsSolid())
+		// The result is a Cut by a faceted cutter, read within its volume bound.
+		v, err := out.Volume()
+		require.NoError(t, err)
+		require.InDelta(t, before-d*d/2*(50+math.Pi*(5-d/3)), v.Value.Base(), v.Bound.Base())
 	})
 }
 
