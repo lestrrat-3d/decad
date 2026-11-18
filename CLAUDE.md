@@ -35,10 +35,10 @@ APIs are design-only.**
 | Tessellation, export or mesh-boolean operands | `agent-docs/tessellation-design.md` |
 | STEP export | `agent-docs/step-export-design.md` |
 | Free-form geometry or per-kind dispatch | `agent-docs/spline-design.md` |
-| `Union`/`Cut`/`Intersect`, `evaluateBoolean` dispatch, or any code combining recorded sections through a private `sketch` scene | `agent-docs/prism-boolean-design.md`, `agent-docs/general-boolean-design.md` |
+| `Union`/`Cut`/`Intersect`, `evaluateBoolean` dispatch, or any code combining recorded sections through a private `sketch` scene | `agent-docs/prism-boolean-design.md` |
 | Mirror, pattern, `Transform`/`Copy` | `agent-docs/mirror-pattern-design.md` |
 | Any modify op, option codec or modify payload | `agent-docs/modify-design.md`, `agent-docs/modify-design.md` Part R |
-| `stackedPrismPayload`, blind `Cut`, slabs | `agent-docs/stacked-prism-design.md` |
+| `stackedPrismPayload`, blind `Cut`, slabs | `agent-docs/prism-boolean-design.md` Part S |
 | Sheet-body, surface-result, patch or stitch code | `agent-docs/surface-design.md` |
 | `Trim`, `Extend` or `Split` code | `agent-docs/surface-intersection-design.md` |
 | Anything the surrounding `.go` file documents | its doc comments |

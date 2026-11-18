@@ -199,7 +199,7 @@ func capArcRim(cbp capblend.Payload, g capband.Patch, contour float64) (prismrec
 }
 
 // brepGateDiameter is pairkernel.BodyGateDiameter's arm for a breprecord.Payload
-// (agent-docs/general-boolean-design.md §4.5), read over brepGatePoints.
+// (agent-docs/prism-boolean-design.md Part G §4.5), read over brepGatePoints.
 func brepGateDiameter(ctx context.Context, body *topo.Body, bp breprecord.Payload) (float64, bool, error) {
 	budget := proofbound.NewWorkBudget(ctx)
 	g, ok, err := brepGatePoints(budget, body, bp)

@@ -73,7 +73,7 @@ func MovePlaneRegion(budget *proofbound.WorkBudget, region Region, pm PlaneMap) 
 // RegionNormalCharge is MovePlaneRegion's off-plane term over region's extent
 // widened by margin mm on each in-plane axis: an upper bound on how far any
 // point within margin of region, placed by pm, sits off the reference plane
-// along its normal (agent-docs/pattern-union-design.md §2).
+// along its normal (agent-docs/prism-boolean-design.md Part P §2).
 func RegionNormalCharge(region Region, pm PlaneMap, margin float64) (float64, error) {
 	ext, err := regionExtent(region)
 	if err != nil {

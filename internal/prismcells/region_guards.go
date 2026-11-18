@@ -6,7 +6,7 @@ import (
 )
 
 // disabledGuards lets a test switch one of the extended Union's arrangement
-// guards (V1, V2, V3; agent-docs/carrier-record-design.md §5.3) off to show
+// guards (V1, V2, V3; agent-docs/prism-boolean-design.md Part K §5.3) off to show
 // that the guard is what refuses a scene. Production code never sets it.
 var disabledGuards atomic.Pointer[[]string]
 

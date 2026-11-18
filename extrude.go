@@ -277,7 +277,7 @@ func extrudeProfile(ctx context.Context, d *Document, s *sketch.Sketch, p *sketc
 // what the prism payload carries into every level-derived reading. z0Exact and
 // z1Exact are the exact levels a converted distance, or a to-face or
 // through-all stop on a cap that records its denoted level, denotes, nil
-// where the resolution does not know one (agent-docs/stacked-prism-design.md §2.1).
+// where the resolution does not know one (agent-docs/prism-boolean-design.md Part S §2.1).
 type linearSweep struct {
 	z0, z1          float64
 	z0Delta         float64

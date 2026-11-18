@@ -13,7 +13,7 @@ import (
 )
 
 // This file reads the arranged vertices of a one-scene arrangement of
-// several recorded sections (agent-docs/carrier-record-design.md §5.3,
+// several recorded sections (agent-docs/prism-boolean-design.md Part K §5.3,
 // "Vertex reading"). Every record is one region of the scene's operand A, so
 // Origin.Region names the record.
 

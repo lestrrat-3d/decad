@@ -22,7 +22,7 @@ type contactSegment struct {
 }
 
 // CertifiedContact is the certified contact test of a section against its own
-// denoted section (agent-docs/carrier-record-design.md §5.3 for the extended
+// denoted section (agent-docs/prism-boolean-design.md Part K §5.3 for the extended
 // Union's merged profile, §7.6 CB7 for a rewritten section): with F the
 // section's contact floor (sectionaudit.ContactFloor), hMax the largest
 // h_loop of its record and c_e each segment's walk allowance (§6.2: Lemma H's
@@ -37,7 +37,7 @@ func CertifiedContact(budget *proofbound.WorkBudget, loops []sectionrecord.LoopR
 }
 
 // CertifiedContactLoops is CertifiedContact with a displacement per loop
-// (agent-docs/carrier-record-design.md §8.3, T1 and T2): hLoop[l] is loop l's
+// (agent-docs/prism-boolean-design.md Part K §8.3, T1 and T2): hLoop[l] is loop l's
 // own h_loop and extra[l] is added to the allowance c_e of every segment of
 // loop l (a selected loop's computed cap contour passes its contour
 // displacement there; a nil extra adds nothing). It checks T1 against the

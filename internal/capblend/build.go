@@ -35,7 +35,7 @@ func Build(ctx context.Context, env topo.Env, cbp Payload) (*topo.Body, error) {
 // build is the one builder of Build and BuildDisplaced. loopDelta is nil for a
 // plain payload; otherwise it is BuildDisplaced's validated per-loop
 // displacement with at least one nonzero entry, charged as §8.5 of
-// agent-docs/carrier-record-design.md states, and the body stores a
+// agent-docs/prism-boolean-design.md Part K states, and the body stores a
 // DisplacedPayload.
 func build(ctx context.Context, env topo.Env, cbp Payload, loopDelta []float64) (*topo.Body, error) {
 	if err := ctx.Err(); err != nil {

@@ -41,7 +41,7 @@ type CapShellInput struct {
 // StepLevel is a level the shell derives from a receiver end (from, its
 // displacement delta and its denotation) by moving it sign times the
 // thickness: the held sum, its bound, and the exact level it denotes
-// (agent-docs/stacked-prism-design.md §2.1). The bound carries the end's
+// (agent-docs/prism-boolean-design.md Part S §2.1). The bound carries the end's
 // displacement, the thickness conversion and the float sum's rounding. The
 // denoted level is the end's rational plus sign times the thickness's exact
 // rescale, recorded through DenoteLevel; it records nothing when the end
@@ -197,7 +197,7 @@ func BuildTube(ctx context.Context, env topo.Env, in CapShellInput, offset momen
 
 // BuildBands builds reach BX8: the both-caps shell of a section with k >= 1
 // holes is 1 + k disjoint bands over the receiver's sweep, one stacked slab
-// holding one region per band (a prism group, agent-docs/stacked-prism-design.md
+// holding one region per band (a prism group, agent-docs/prism-boolean-design.md Part S
 // §2.2). Each band is its own lump with its own rim caps, capStart and
 // capEnd, and its walls carry slab(0).region(m).side(i,j) with the outer band
 // first and the hole linings in ProfileRecord order. The offset loops sit
@@ -228,7 +228,7 @@ func BuildBands(ctx context.Context, env topo.Env, in CapShellInput, offset mome
 // its wall slab holds 1 + k bands (ShellWallBands), each hole lined by a band
 // whose outer loop is the cavity region's hole (Q's inward, P's own outward),
 // and the cavity is a ring around every lining
-// (agent-docs/stacked-prism-design.md §2.4). Outward each hole erodes by t,
+// (agent-docs/prism-boolean-design.md Part S §2.4). Outward each hole erodes by t,
 // so the lining grows into the hole and the cavity is P itself
 // (agent-docs/modify-design.md Part R §9.2). The record carries
 // stackedrecord.Payload.ClosedShell, and the built body must read as one lump
@@ -309,7 +309,7 @@ func slabBetween(regions []momentinput.Profile, a, b level) stackedrecord.Slab {
 }
 
 // requireOneCavity is the closed shell's lump reading
-// (agent-docs/stacked-prism-design.md §3): one lump of one closed outer shell
+// (agent-docs/prism-boolean-design.md Part S §3): one lump of one closed outer shell
 // around exactly one closed void shell. Any other reading disproves the
 // record's ClosedShell mark, and the shell refuses it.
 func requireOneCavity(lumps []*topo.Lump) error {

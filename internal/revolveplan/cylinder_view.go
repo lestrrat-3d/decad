@@ -15,7 +15,7 @@ import (
 
 // CylinderPrism is the prism record that denotes exactly the solid rp
 // denotes, when rp is a plain turned shaft: a full solid revolution of a
-// rectangle with one side on the axis (agent-docs/general-boolean-design.md
+// rectangle with one side on the axis (agent-docs/prism-boolean-design.md Part G
 // §3 "Revolved shaft as a prism"). It is CylinderSteps' reading of a meridian
 // with one step. ok=false is a silent miss.
 func (rp Payload) CylinderPrism() (prismrecord.Payload, bool) {
@@ -29,7 +29,7 @@ func (rp Payload) CylinderPrism() (prismrecord.Payload, bool) {
 // CylinderSteps is the stack of coaxial circular prism records that denotes
 // exactly the solid rp denotes, when rp is a turned shaft, plain or stepped: a
 // full solid revolution of a staircase with one side on the axis
-// (agent-docs/general-boolean-design.md §3 "Revolved shaft as a prism"). Each
+// (agent-docs/prism-boolean-design.md Part G §3 "Revolved shaft as a prism"). Each
 // prism's section is one circle of its step's radius about the axis, and its
 // sweep is the step's span along the axis; the prisms are in order along the
 // axis, and each one's Z1 is the next one's Z0 bit for bit. ok=false is a

@@ -14,7 +14,7 @@ import (
 	"github.com/lestrrat-3d/decad/decadtest"
 )
 
-// This file is agent-docs/carrier-record-design.md §10's PR-2 public-API tests:
+// This file is agent-docs/prism-boolean-design.md Part K §10's PR-2 public-API tests:
 // the wheel-like part of carrier_record_test.go (two windows, a tooth and two
 // rotated copies, the six roots filleted, the D bore cut), then a Chamfer of
 // every edge of both windows' cap loops on both caps. The windows are exact
@@ -179,7 +179,7 @@ func TestDisplacedCapChamferMeshCutByBoxComposes(t *testing.T) {
 
 // TestDisplacedCapChamferReaders pins each reader that does not know a
 // displaced cap-loop chamfer to its answer for a payload class it does not
-// know (agent-docs/carrier-record-design.md §8.8).
+// know (agent-docs/prism-boolean-design.md Part K §8.8).
 func TestDisplacedCapChamferReaders(t *testing.T) {
 	t.Parallel()
 	chamfered := chamferedWheel(t)

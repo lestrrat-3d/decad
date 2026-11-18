@@ -30,7 +30,7 @@ type runner struct {
 }
 
 // Run evaluates every pair Exact admits first, then the bounded Full steps in
-// agent-docs/boolean-chain-regroup-design.md (Plan). ok is false when the plan
+// agent-docs/prism-boolean-design.md Part R (Plan). ok is false when the plan
 // cannot finish. A non-nil error is a Step error or ctx.Err(). Run never calls
 // Exact twice with one (op, x, y).
 func Run(ctx context.Context, chain Chain, steps Steps) (*topo.Body, bool, error) {

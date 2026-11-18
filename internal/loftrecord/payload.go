@@ -61,7 +61,7 @@ type Payload struct {
 	// connector's complete arc length, keyed by the outer-loop segment index.
 	ConstructionDelta float64
 	// JoinDelta is how far the recorded section sits from the exact image of
-	// the placed operand sections it was joined from (agent-docs/pattern-union-design.md).
+	// the placed operand sections it was joined from (agent-docs/prism-boolean-design.md Part P).
 	// It is folded into the held-vertex, chord and matched displacements of
 	// the join body, so its readings enclose the ideal join. A body rebuilt from
 	// a copy of this payload keeps the term as extra slack; it denotes its own
@@ -70,7 +70,7 @@ type Payload struct {
 	JoinDelta float64
 	// JoinPlaneGap bounds, in mm, how far the end planes of the ideal join sit
 	// from this record's section planes, along their normal
-	// (agent-docs/pattern-union-design.md §4). Zero for a loft that is no join.
+	// (agent-docs/prism-boolean-design.md Part P §4). Zero for a loft that is no join.
 	// A cap CapOnRecord admits states it as its AxialDelta; any other cap adds it
 	// to the vertex displacement. Copies keep it as they keep JoinDelta.
 	JoinPlaneGap         float64

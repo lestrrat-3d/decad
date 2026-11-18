@@ -394,7 +394,7 @@ func ownerRank(p Part) int {
 }
 
 // Convex reads an edge's walked-boundary convexity from its owner and mate
-// (agent-docs/general-boolean-design.md §4.2).
+// (agent-docs/prism-boolean-design.md Part G §4.2).
 //
 // A rim reads the wall it runs along: a circular wall by its own turn, a
 // straight wall by its loop's role, which the planar face sharing the rim

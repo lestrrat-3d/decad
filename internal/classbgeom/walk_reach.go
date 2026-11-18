@@ -6,7 +6,7 @@ import (
 )
 
 // Walk is the tool's sweep read through every target face its tube meets
-// (agent-docs/general-boolean-design.md §3 "Pin across several faces"), in
+// (agent-docs/prism-boolean-design.md Part G §3 "Pin across several faces"), in
 // the frame g: the tool spans [A, B] along g's normal, and Slabs lists the
 // faces in strictly increasing Level order.
 type Walk struct {

@@ -81,7 +81,7 @@ func RequireVolumeProof(ctx context.Context, b *topo.Body, index int) error {
 	case capblend.DisplacedPayload:
 		// The displaced payload's tessellation charges its displacement tube
 		// and admits the same classes the plain payload does
-		// (agent-docs/carrier-record-design.md §8.7).
+		// (agent-docs/prism-boolean-design.md Part K §8.7).
 		refusal, aErr := capblend.OccupiedVolumeAdmission(proofbound.NewWorkBudget(ctx), pl.Base)
 		if aErr != nil {
 			return aErr

@@ -14,7 +14,7 @@ import (
 )
 
 // LoopAreaEnclosure encloses the signed area (positive counter-clockwise) of
-// the section S* a recorded loop denotes (agent-docs/carrier-record-design.md
+// the section S* a recorded loop denotes (agent-docs/prism-boolean-design.md Part K
 // §5.3, "Selection and merge"): the sum of every segment's area term about
 // one anchor, a line's exact and a circular segment's from
 // circularbounds.AreaInterval, widened by the area its junction gaps can

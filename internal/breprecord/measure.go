@@ -14,7 +14,7 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// This file measures a Payload (agent-docs/general-boolean-design.md §4.3): every
+// This file measures a Payload (agent-docs/prism-boolean-design.md Part G §4.3): every
 // reading is a sum over faces of a closed form in that face's own record. The
 // divergence-theorem sums run in exact rational intervals in the reference
 // frame (Embeds): a line contributes an exact rational, a circular wall or

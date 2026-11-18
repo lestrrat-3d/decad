@@ -38,7 +38,7 @@ const sweepSlack = 0x1p-40
 
 // CircularSegmentCount is an upper bound on the pieces the pinned arranger
 // densifies one recorded circle or arc into
-// (agent-docs/carrier-record-design.md §4). A whole circle counts the
+// (agent-docs/prism-boolean-design.md Part K §4). A whole circle counts the
 // arranger's own 256. An ArcSeg's turn is sketch's wrapSweep of its
 // recorded centre, start and end, computed with math.Mod as sketch computes
 // it, multiplied by a narrowed range; a narrowed CircleSeg's turn is its

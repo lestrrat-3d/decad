@@ -493,7 +493,7 @@ or of a line end and an arc's `t = 0` Start, at one recorded coordinate stays
 zero. The prism, cup and stacked-prism rings (`tessellation.SampleLoop`), a
 cap-loop chamfer's side ring (`tessellation.SampleCapBlend`) and a revolve's
 meridian junctions (§8) all charge it. A brep face's open wall
-(`agent-docs/general-boolean-design.md` §4.4) is one walk with no neighbour in its
+(`agent-docs/prism-boolean-design.md` Part G §4.4) is one walk with no neighbour in its
 own chording: each of its two end samples charges its own record's denoted
 end bound, and every other use placing a vertex there adds its own.
 

@@ -119,7 +119,7 @@ func resolveUnion(ctx context.Context, budget *proofbound.WorkBudget, pa, pb mom
 	if len(profiles) == 0 {
 		return momentinput.Profile{}, SceneDelta{}, 0, nil, false, nil // §4.4: the scene holds no bounded cell at all
 	}
-	// agent-docs/general-boolean-design.md §3 A6: every crossing the arrangement
+	// agent-docs/prism-boolean-design.md Part G §3 A6: every crossing the arrangement
 	// cut is charged the input displacement it amplifies; a crossing too
 	// close to tangent for that charge sends the pair to the mesh path.
 	if ok, err := sceneDelta.ChargeCrossings(budget, tags, profiles, deltaA, deltaB, reexpress.Delta); err != nil || !ok {
@@ -222,7 +222,7 @@ func ResolveCrossingCells(ctx context.Context, budget *proofbound.WorkBudget, pa
 	if err != nil {
 		return nil, SceneDelta{}, false, err
 	}
-	// agent-docs/general-boolean-design.md §3 A6, Union's own charge: every cut the
+	// agent-docs/prism-boolean-design.md Part G §3 A6, Union's own charge: every cut the
 	// operands' incoming displacement can move is charged, and a crossing too
 	// close to tangent for that charge sends the pair to the mesh path.
 	if ok, err := sceneDelta.ChargeCrossings(budget, tags, profiles, deltaA, deltaB, reexpress.Delta); err != nil || !ok {

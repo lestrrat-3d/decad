@@ -372,7 +372,7 @@ closed form over decad's own line and arc segments:
    decide the earlier one (a start on another loop's carrier circle, as a
    window's start on a concentric window's circle). Every candidate is a point
    of the loop, so the verdict is the same whichever start decides it
-   (`agent-docs/carrier-record-design.md` §6.5).
+   (`agent-docs/prism-boolean-design.md` Part K §6.5).
 
 A residual proves nothing and admits nothing; a crossing, boundary-contact or
 containment test on exactly represented line and arc segments is a **decided**
@@ -768,7 +768,7 @@ needs none: it reads `t*`, which the thickness's own conversion bound already
 covers.
 
 **A cup's levels denote exact rationals as a prism's caps do**
-(`agent-docs/stacked-prism-design.md` §2.1). The open end and the kept end keep
+(`agent-docs/prism-boolean-design.md` Part S §2.1). The open end and the kept end keep
 the receiver end's denotation. The derived floor level, held as the float sum
 of that end and the held thickness, denotes the end's rational plus or minus
 `t*` (`prismshell.CapShellInput.StepLevel`). The exact construction makes
@@ -1058,7 +1058,7 @@ Base Table R still admits the shipped straight-prism cases. RX adds these rows:
 | **RX4** | `capBlendPayload` | SX10 | SX10 |
 | **RX5** | `cupPayload`: a two-slab `stackedPrismPayload` record beside the shell morphology (§9.1) | base S3 | base S3 |
 | **RX6** | `facetedPayload`, including zero-bound all-planar boolean output | certified loft/cylinder outer cap `Chamfer`, including mirrored bore results, and the outer cap `Chamfer` of a hole-free mirrored Loft join (loft §19.1), one cross-cylinder bore-mouth `Chamfer`, or §10.1's isolated rectangular-prism Union edge `Fillet` or equal-setback `Chamfer`, or Part E's closed circular rim between a retained plane and a coaxial retained cylinder or a retained sphere, straight edge between two retained planes that ends on retained planes, or straight edge between a retained plane and a parallel retained cylinder that ends on planes normal to its axis, for `Fillet` or equal-setback `Chamfer`; otherwise SX9 | SX9 |
-| **RX7** | `brepPayload` (`agent-docs/general-boolean-design.md` §4) | Part B Table RB; outside it, SX16 | the same |
+| **RX7** | `brepPayload` (`agent-docs/prism-boolean-design.md` Part G §4) | Part B Table RB; outside it, SX16 | the same |
 | **RX8** | `loftPayload` | `Fillet` on analytic corners of axial sections whose segments match in kind, each section rounded on its own (loft §17); equal-distance `Chamfer` on both complete held outer cap loops of a matching axial loft with zero holes or one certified circular bore (loft §18), or of a loft whose sections differ, with zero holes or one whole-circle bore (loft §19); other chamfers are base S3 | base S3 |
 | **RX9** | `draftPayload` with one positive-taper whole circular wall and its near section at the start level | draft §10.4–§10.5 | Removing its far cap inward builds draft §10.6's cup; other calls are base S3 |
 
@@ -2423,7 +2423,7 @@ result, and `Verify` reads it as a faceted body.
 #### 9.1 `stackedPrismPayload`
 
 General prism shells are a finite axial stack of exact line/arc regions. One
-axial slab may contain several disconnected regions. `agent-docs/stacked-prism-design.md`
+axial slab may contain several disconnected regions. `agent-docs/prism-boolean-design.md` Part S
 owns the payload: its internal `stackedrecord.Slab` and
 `stackedrecord.Interface` records, the root `stackedPrismPayload`, its
 invariants, its body build, its measurements, its
@@ -2464,7 +2464,7 @@ A cup's record is this payload. A cup over a section with `k` holes is one
 floor slab containing `P` inward or `Q` outward, plus one wall slab containing
 the outer band and `k` hole-lining bands as separate regions. Every wall region
 has positive-area overlap with the floor region, so the component graph proves
-exactly one lump. The interface partition — `agent-docs/stacked-prism-design.md`
+exactly one lump. The interface partition — `agent-docs/prism-boolean-design.md` Part S
 §2.2's lining reading — emits the remaining cavity-floor face once, and records
 it as the cavity region itself.
 
@@ -2531,7 +2531,7 @@ inward, `Q \ P` outward. It produces one outer shell plus one void shell.
 three slabs: inward `P` on `[z0, z0 + t]`, the band `{P, reverse(Q)}` on `[z0 + t, z1 − t]` and `P` on
 `[z1 − t, z1]`; outward `Q` on `[z0 − t, z0]`, `{Q, reverse(P)}` on `[z0, z1]`
 and `Q` on `[z1, z1 + t]`. Both interfaces are monotone
-(`agent-docs/stacked-prism-design.md` §2.2): the band's one hole is upper-only at the
+(`agent-docs/prism-boolean-design.md` Part S §2.2): the band's one hole is upper-only at the
 first and lower-only at the second, and each exposes the cavity region (`Q`
 inward, `P` outward) as the cavity's floor and ceiling. Each derived level
 carries its source end's displacement, the thickness conversion and its own
@@ -2640,7 +2640,7 @@ For cap-only removal from a holed section, build the wall as one slab with
 `1 + k` regions: the band between the paired outer loops first, followed by one
 band between each paired hole loop in `ProfileRecord` order. The base
 S18/S10/S11/§5 gates prove those bands are regular and pairwise disjoint before
-payload construction. The slab is a prism group (`agent-docs/stacked-prism-design.md`
+payload construction. The slab is a prism group (`agent-docs/prism-boolean-design.md` Part S
 §2.2) whose disjointness is that audit's, not `provePrismRegionsDisjoint`'s: a
 hole lining lies inside the outer band's own hole, which a scene of outers alone
 would read as nesting. The offset loops sit within the offset displacement of
@@ -3209,9 +3209,9 @@ numbers paragraph).
 ## Part G — Modify general
 
 The next reach of `Fillet`, `Chamfer` and `Shell` over
-analytic boolean results: a `brepPayload` (`agent-docs/general-boolean-design.md`
+analytic boolean results: a `brepPayload` (`agent-docs/prism-boolean-design.md` Part G
 §4, "general-boolean §N" below) and a `stackedPrismPayload` through its face
-view (`agent-docs/stacked-prism-design.md`). Companion to
+view (`agent-docs/prism-boolean-design.md` Part S). Companion to
 Part B ("brep-modify §N"), whose routes P and E this
 document extends with route S (shell) and route L (complete-loop chamfer),
 and whose Table SB rows SB3, SB4, SB5 and SB10 it narrows. Part F
@@ -4360,9 +4360,9 @@ Increment table — what still refuses after each PR:
 ## Part B — Brep modify
 
 How `Fillet`, `Chamfer` and `Shell` take an analytically
-trimmed boolean result — a `brepPayload` (`agent-docs/general-boolean-design.md` §4,
+trimmed boolean result — a `brepPayload` (`agent-docs/prism-boolean-design.md` Part G §4,
 "general-boolean §N" below) — and, through its face view, a
-`stackedPrismPayload` (`agent-docs/stacked-prism-design.md`). Companion to
+`stackedPrismPayload` (`agent-docs/prism-boolean-design.md` Part S). Companion to
 Part F ("modify §N"), which owns the three call contracts,
 the base gates, the section rewrite and its §5 audit, and to
 Part R ("reach §N"), whose RX3/RX7 rows and SX10/SX16
@@ -4535,7 +4535,7 @@ displacement into every facet bound (tessellation §2, §5), so the strip check
 (SR7) clears the true holes, not only the recorded ones. The retained blend
 rewrites only faces with an exact tag, so a selection on a displaced loop is
 not recognized and keeps the `RequireExactSection` refusal. A receiver whose
-carrier record is valid (`agent-docs/carrier-record-design.md` §3) first tries
+carrier record is valid (`agent-docs/prism-boolean-design.md` Part K §3) first tries
 the lateral carrier route (§7 there); when Table CB refuses a `Chamfer`, the
 call falls through to this view exactly as for a receiver with no record. The
 result is a
@@ -6709,7 +6709,7 @@ with the ring a triangle of legs `d` and `d·tan(angle)` sweeps about the axis.
 
 This design covers one complete junction between a rectangular plate's top
 plane and a rooted circular cylinder whose axis rises obliquely. It extends
-`agent-docs/general-boolean-design.md` and Part G without
+`agent-docs/prism-boolean-design.md` Part G and Part G without
 changing either operation's public API.
 
 #### Source and admission
@@ -10313,7 +10313,7 @@ How `Shell` removes one proper connected run of a prism's side faces
 §N" below), and how the same rim rule lifts the right-angle restriction on a
 revolve side opening (reach §9.3.2). Companion to Part F
 ("modify §N"), which owns the call contract, the gate order, the section
-offset and its §5 audit; to `agent-docs/general-boolean-design.md` ("general-boolean
+offset and its §5 audit; to `agent-docs/prism-boolean-design.md` Part G ("general-boolean
 §N"), which owns the `brepPayload` the prism result is recorded on; and to
 Part B ("brep-modify §N"), which owns what a later
 modify op does with that result.

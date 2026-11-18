@@ -14,7 +14,7 @@ import (
 )
 
 // buildClassBWalk assembles op's result over a walked sweep
-// (agent-docs/general-boolean-design.md §3 "Pin across several faces"), in g.
+// (agent-docs/prism-boolean-design.md Part G §3 "Pin across several faces"), in g.
 // Inside the tube the result is 1 for Union, 0 for Cut and the target's own
 // layer for Intersect; outside it, the target for Union and Cut and nothing
 // for Intersect. W6 needs the result to change the target in the tube and to

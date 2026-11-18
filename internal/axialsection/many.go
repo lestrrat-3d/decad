@@ -16,7 +16,7 @@ import (
 )
 
 // UnionMany is the Union of axial extrusions that lie between the same two planes
-// and share section axes (agent-docs/axial-section-boolean-design.md). The result
+// and share section axes (agent-docs/prism-boolean-design.md Part A). The result
 // is the loft of two identical sections, the 2D union of the operands' sections, so
 // the loft's own routes read it. ok is false, with a nil error, for operands this
 // route does not take, so the caller tries its next route. An error is a genuine

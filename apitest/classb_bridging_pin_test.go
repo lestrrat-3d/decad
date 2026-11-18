@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// These fixtures pin agent-docs/general-boolean-design.md §3 "Flush cap
+// These fixtures pin agent-docs/prism-boolean-design.md Part G §3 "Flush cap
 // contact" for a pin running exactly between two target faces, both caps
 // flush: a pin bridging the gap of a U-shaped plate, and a pin from one wall
 // of a plate to the opposite wall.

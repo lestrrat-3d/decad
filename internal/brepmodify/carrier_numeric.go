@@ -15,7 +15,7 @@ import (
 )
 
 // This file reads one recorded carrier at a selected corner as exact data and
-// computes the quantities of agent-docs/carrier-record-design.md §7.5 from it.
+// computes the quantities of agent-docs/prism-boolean-design.md Part K §7.5 from it.
 
 // cbCarrier is one recorded segment's carrier at a corner: a line through its
 // recorded Start with the End − Start direction in the walk's travel sense,

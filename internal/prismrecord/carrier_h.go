@@ -11,7 +11,7 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// This file is Lemma H of agent-docs/carrier-record-design.md §3.3: the
+// This file is Lemma H of agent-docs/prism-boolean-design.md Part K §3.3: the
 // pointwise bound h that a record's entries give on how far the denoted
 // section's segment lies from the recorded one.
 
@@ -48,7 +48,7 @@ func circularRadius(seg sectionrecord.CurveSegment) (lo, hi float64, ok bool) {
 
 // SweepLowerUpper is a proven enclosure of the sweep σ of a circular segment
 // in radians: an ArcSeg's wrapSweep of its recorded bearings (agent-docs
-// carrier-record-design.md §3.3) times its parameter range, a narrowed
+// agent-docs/prism-boolean-design.md Part K §3.3) times its parameter range, a narrowed
 // CircleSeg's 2π·|TEnd − TStart|. ok=false means no enclosure (a bearing
 // difference straddling zero, or unusable data).
 func SweepLowerUpper(seg sectionrecord.CurveSegment) (lo, hi float64, ok bool) {

@@ -21,7 +21,7 @@ import (
 // carries a section displacement, a consumed source segment's own walk
 // computed a coordinate (§7's δ_walk, WalkChargeOf), or B's re-expression is
 // nonidentity, every crossing the arrangement cuts can amplify that
-// displacement by 1/sin θ, and agent-docs/general-boolean-design.md §3 A6 charges
+// displacement by 1/sin θ, and agent-docs/prism-boolean-design.md Part G §3 A6 charges
 // it (SceneDelta.ChargeCrossings, CrossingCharge). Such a
 // pair never refuses: a crossing too close to tangent to bound, or any later
 // analytic failure, sends it to the mesh path (AmplifiedFallback). Every cut also charges the cut
@@ -77,7 +77,7 @@ import (
 // route misses.
 func TryAnalytic(ctx context.Context, op meshbool.OperationKind, a, b topo.Payload) (prismrecord.Payload, bool, error) {
 	result, ok, err := tryAnalytic(ctx, op, a, b)
-	// A record is minted by its producer (agent-docs/carrier-record-design.md
+	// A record is minted by its producer (agent-docs/prism-boolean-design.md Part K
 	// §3.4). A result that carries an operand's own record by pointer passed
 	// it through with no proof that it denotes the operand's section, so it
 	// keeps none.
@@ -249,7 +249,7 @@ func AdmitIntersectPair(ctx context.Context, a, b topo.Payload) (budget *proofbo
 // AdmitPairBudget checks G1 (both operands a prismrecord.Payload), G3 (the composed
 // world normals are bit-identical and the two planes share one sweep axis,
 // exactly) and G4 (every segment of both records is line/circle/arc) — §3.1.
-// A reflected placement is no gate (agent-docs/general-boolean-design.md §3 A4):
+// A reflected placement is no gate (agent-docs/prism-boolean-design.md Part G §3 A4):
 // G3 reads each world normal through ApplyDir, which maps a reflection's
 // sweep direction like any other, and BuildScene re-winds operand B's
 // record when the composed relative map is a reflection

@@ -14,7 +14,7 @@ import (
 	"github.com/lestrrat-3d/decad/decadtest"
 )
 
-// This file is agent-docs/carrier-record-design.md §10's public-API tests: a
+// This file is agent-docs/prism-boolean-design.md Part K §10's public-API tests: a
 // disc united with a tooth and its rotated pattern copies, the concave
 // roots filleted and a D bore cut, all with analytic edges. The input class
 // is a disc (a CircleSeg with line and arc windows) united on its own plane

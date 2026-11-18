@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file covers agent-docs/general-boolean-design.md "Common-axis full
+// This file covers agent-docs/prism-boolean-design.md Part G "Common-axis full
 // revolutions": a retaining-ring groove cut into a stepped shaft keeps an
 // exact meridian, so the modify ops that rewrite the meridian take it. Every
 // fixture is drawn on the XY plane and revolved a full turn about the u axis,

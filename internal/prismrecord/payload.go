@@ -67,7 +67,7 @@ import (
 // and a level with zero displacement denotes its own held float without one.
 // DenotedZ0 and DenotedZ1 read them; a copy that rewrites a level or its
 // displacement without restating the denotation reads nil there
-// (agent-docs/stacked-prism-design.md §2.1).
+// (agent-docs/prism-boolean-design.md Part S §2.1).
 //
 // ExactCarriers lists, for a displaced section, the loops whose carriers are
 // exact even so (exact_carriers.go): a Cut whose result keeps the target's own
@@ -99,7 +99,7 @@ type Payload struct {
 	SectionDelta  float64
 	ExactCarriers *ExactCarriers
 	// Carriers is the section's carrier record (carrier_record.go,
-	// agent-docs/carrier-record-design.md §3): per segment and junction, how far
+	// agent-docs/prism-boolean-design.md Part K §3): per segment and junction, how far
 	// the denoted section's carriers and junctions sit from the recorded ones.
 	// Read it through CarrierRecord, which answers false for a stale record.
 	Carriers      *CarrierRecord

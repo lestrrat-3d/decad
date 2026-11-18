@@ -278,7 +278,7 @@ type RegionKey struct {
 }
 
 // ClassifyRegions is Classify run per record rather than per operand
-// (agent-docs/general-boolean-design.md §3 "A1 as a brep"): for every cell and
+// (agent-docs/prism-boolean-design.md Part G §3 "A1 as a brep"): for every cell and
 // every record of the scene, whether the cell sits on that record's material
 // side. Each record's membership propagates across the edges of every other
 // record and never across its own; a span two records share

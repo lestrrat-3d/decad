@@ -4,7 +4,7 @@
 cylinder. §1–§6 cover one twisted tool and its stationed refinement; §7 covers
 a body cut by several twisted tools and prism windows in a chain, which also
 needs a finer chord for the partner. Companion to `agent-docs/sweep-design.md`
-§17 (the twisted Sweep), `agent-docs/general-boolean-design.md` (the mesh
+§17 (the twisted Sweep), `agent-docs/prism-boolean-design.md` Part G (the mesh
 path), `agent-docs/tessellation-design.md` §11 step 4 (the tangency gate),
 `agent-docs/faceted-vertex-bounds-design.md` §3 and §5 (the bound composition
 and the chain-depth gate) and `agent-docs/api-design.md` §8 "The chain depth".

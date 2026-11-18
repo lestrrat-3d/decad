@@ -22,7 +22,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// Rule DW (agent-docs/carrier-record-design.md §8.7) declines the retained tag
+// Rule DW (agent-docs/prism-boolean-design.md Part K §8.7) declines the retained tag
 // of a displaced wall, Plane and Cylinder alike, and keeps every other tag.
 func TestDisplacedWall(t *testing.T) {
 	t.Parallel()

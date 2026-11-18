@@ -12,7 +12,7 @@ import (
 )
 
 // CarrierRecord is a displaced section's per-segment and per-junction proof
-// (agent-docs/carrier-record-design.md §3). Segment[l][j] is ε, the
+// (agent-docs/prism-boolean-design.md Part K §3). Segment[l][j] is ε, the
 // displacement of segment j of loop l's carrier: the line through its
 // recorded Start and End, or the circle its recorded centre and radius state
 // (an ArcSeg's radius is |Start − Center|). Junction[l][j] is δ, the

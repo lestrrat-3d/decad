@@ -146,7 +146,7 @@ func AuditSetbackSpan(budget *proofbound.WorkBudget, profile momentinput.Profile
 
 // auditSetbackSpan is AuditSetbackSpan with a displaced receiver's per-loop
 // displacement: when loopDelta is non-nil the top-of-span mixed profile also
-// passes the transfer condition (agent-docs/carrier-record-design.md §8.3).
+// passes the transfer condition (agent-docs/prism-boolean-design.md Part K §8.3).
 func auditSetbackSpan(ctx context.Context, budget *proofbound.WorkBudget, profile momentinput.Profile,
 	cbp Payload, loopDelta []float64) error {
 	top, ok := cbp.setbackSpanTop()
@@ -172,7 +172,7 @@ func auditSetbackSpan(ctx context.Context, budget *proofbound.WorkBudget, profil
 		return context.DeadlineExceeded
 	}
 	if transfer {
-		return fmt.Errorf(`%w: the chamfer setback across the cap converts to a float within its own rounding of the stated value, and at the top of that span the displaced section fails the transfer condition of agent-docs/carrier-record-design.md §8.3 (%v); this evaluator cannot decide whether the stated setback builds`, decaderr.ErrUnsupported, err)
+		return fmt.Errorf(`%w: the chamfer setback across the cap converts to a float within its own rounding of the stated value, and at the top of that span the displaced section fails the transfer condition of agent-docs/prism-boolean-design.md Part K §8.3 (%v); this evaluator cannot decide whether the stated setback builds`, decaderr.ErrUnsupported, err)
 	}
 	return fmt.Errorf(`%w: the chamfer setback across the cap converts to a float within its own rounding of the stated value, and at the top of that span the cap contour fails the offset audit (%v); this evaluator cannot decide whether the stated setback builds`, decaderr.ErrUnsupported, err)
 }

@@ -1187,7 +1187,7 @@ their own fixtures: the motion arm swinging away from a block `12` mm past its t
 declared, publishes its gap row at every pose and nothing else, so a `15` mm `WithMinClearance` raises no
 finding and reads `AssessmentMet`; a block resting on a slab, sliding along a face plane it shares with
 the slab, publishes no row and no finding, while the same block sunk `1` mm into the slab is a proven
-`100` mm³ overlap, since the shared plane's walls are one carrier (`agent-docs/general-boolean-design.md` §3
+`100` mm³ overlap, since the shared plane's walls are one carrier (`agent-docs/prism-boolean-design.md` Part G §3
 A3), and so a `LinkCollision`; a block sliding inside a declared sheet raises no `DiagUnsupportedPairSheet`, which the
 undeclared pair raises at every pose. The leg that a declared pair is still proven for overlap is pinned
 separately: a

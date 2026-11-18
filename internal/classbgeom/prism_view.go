@@ -10,7 +10,7 @@ import (
 
 // CutPrismView is class B's Cut of a target x that is a prism view of
 // another payload denoting exactly the same solid, such as a turned shaft's
-// (agent-docs/general-boolean-design.md §3 "Revolved shaft as a prism"), by a
+// (agent-docs/prism-boolean-design.md Part G §3 "Revolved shaft as a prism"), by a
 // prism tool y. It runs AdmitPair under x's placement and then the crossing
 // reach, as OfPayloads does for a prism target. Beside those gates it misses
 // unless every straight tool wall across x's sweep lies at a level strictly

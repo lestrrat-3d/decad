@@ -273,5 +273,5 @@ func CircleCircle(c0x, c0y, r0, c1x, c1y, r1 float64) [][2]float64 {
 // SegMinDist is segMinDist for a caller outside this package: the closed-form
 // minimum distance between two line or arc walks, read under the S7
 // convention that a gap above a section's contact floor is a decided gap
-// (agent-docs/carrier-record-design.md §7).
+// (agent-docs/prism-boolean-design.md Part K §7).
 func SegMinDist(a, b survey2d.SegmentWalk) float64 { return segMinDist(a, b) }

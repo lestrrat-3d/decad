@@ -27,7 +27,7 @@ import (
 
 // This file builds a stacked prism's body from its Payload: one wall column
 // per recorded loop run, the caps and interface patches, and the
-// measurements the finished body publishes (agent-docs/stacked-prism-design.md).
+// measurements the finished body publishes (agent-docs/prism-boolean-design.md Part S).
 
 // WallColumn is a recorded wall column together with what its build produced:
 // the bottom and top coedges of the column's rim and the column's proven
@@ -601,7 +601,7 @@ func build(ctx context.Context, env topo.Env, sp Payload, plan Plan, budget *pro
 
 	// newPlane records denoted, the slab level's exact rational or nil, as the
 	// face's CapRecord.ZDenoted, so a ToFace stop on a stack's cap or floor
-	// reads it as a prism cap's (agent-docs/stacked-prism-design.md §2.1).
+	// reads it as a prism cap's (agent-docs/prism-boolean-design.md Part S §2.1).
 	newPlane := func(z, axial float64, denoted *big.Rat, flip bool, role string, area proofbound.BoundedScalar) (*topo.Face, error) {
 		var frame r3.Frame
 		var err error

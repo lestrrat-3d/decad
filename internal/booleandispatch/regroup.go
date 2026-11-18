@@ -13,7 +13,7 @@ import (
 // Regroup evaluates chain's plan (boolchain.Run). Step k builds under producer env.Ref+k.
 // It returns the result, the number of producer identities its steps used, and ok.
 // A non-nil error is cancellation, or a step error for which surface reports true.
-// Regroup never writes the document (agent-docs/boolean-chain-regroup-design.md,
+// Regroup never writes the document (agent-docs/prism-boolean-design.md Part R,
 // Execution in booleandispatch). hooks and surface must not be nil.
 func Regroup(ctx context.Context, chain boolchain.Chain, env topo.Env, hooks Hooks,
 	surface func(error) bool) (*topo.Body, provenance.Producer, bool, error) {

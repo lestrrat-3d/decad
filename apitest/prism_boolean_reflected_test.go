@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file is agent-docs/general-boolean-design.md §3 A4's public-API suite: the
+// This file is agent-docs/prism-boolean-design.md Part G §3 A4's public-API suite: the
 // analytic booleans and Verify's interference reading with a reflected
 // operand. Reflected bodies are built with Copy/Transform under
 // r3.Reflection. The L is agent-docs/mirror-pattern-design.md §2's: the union of

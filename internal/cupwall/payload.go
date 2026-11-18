@@ -61,7 +61,7 @@ const (
 // the shared prism build stamps.
 //
 // ZOpenDenoted, ZOuterDenoted and ZCavDenoted are the exact levels the three
-// planes denote (agent-docs/stacked-prism-design.md §2.1): the open end and the
+// planes denote (agent-docs/prism-boolean-design.md Part S §2.1): the open end and the
 // unstepped floor level keep the receiver end's denotation, and the derived
 // floor level denotes that end's rational moved by the exact thickness
 // (prismshell.CapShellInput.StepLevel). The zero value records nothing.

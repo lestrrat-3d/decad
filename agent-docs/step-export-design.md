@@ -143,7 +143,7 @@ according to the writer path.
   The bodies the check sends to the faceted writer include every Loft with a cap not proven to lie
   exactly on its section plane, which states the loft's vertex displacement (`agent-docs/loft-design.md`
   §18; a cap on a tilted plane whose held points round off it), every join Loft whose admitted caps
-  state a nonzero plane gap (`agent-docs/pattern-union-design.md` §4), a Loft bore cylinder
+  state a nonzero plane gap (`agent-docs/prism-boolean-design.md` Part P §4), a Loft bore cylinder
   with a rounded center or an inexact frame map (`agent-docs/loft-design.md` §18), an extrusion up to
   a face at an offset whose level no float holds (a `ToFace` stop 0.1 mm above a cap at z = 10), every
   loop chamfer's corner cone, which is a cap-blend band patch (`agent-docs/modify-design.md` Part R

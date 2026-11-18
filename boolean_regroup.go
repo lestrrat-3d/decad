@@ -242,7 +242,7 @@ func coarseTargetCut(op meshbool.OperationKind, cfg booleanConfig, cause error) 
 }
 
 // regroupBoolean tries the chain regroup for a refused two-body Boolean
-// (agent-docs/boolean-chain-regroup-design.md). ok=false means the caller returns cause
+// (agent-docs/prism-boolean-design.md Part R). ok=false means the caller returns cause
 // unchanged. A non-nil error is cancellation or a surfaced invariant break. It stays
 // in root because it reads Document.producers and maps BooleanError codes, both
 // root-only.

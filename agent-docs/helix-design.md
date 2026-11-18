@@ -693,7 +693,7 @@ lies in a plane through the axis, the axis plane at angle `θ`. What is
 refused is a cap flush with another face in that same half-plane, such as
 the start cap of a cylinder revolved through half a turn from the coil's own
 sketch plane: that is the coplanar contact the mesh boolean's hidden-tangency
-gate refuses (`agent-docs/general-boolean-design.md` §2), and the repair is to
+gate refuses (`agent-docs/prism-boolean-design.md` Part G §2), and the repair is to
 start the coil, or the half turn, at another angle.
 
 **Internal thread.** A block with a bore (an `Extrude` of an annular

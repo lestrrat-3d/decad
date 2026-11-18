@@ -199,7 +199,7 @@ func Fillet(ctx context.Context, env topo.Env, b *topo.Body, call FilletCall) (R
 			decaderr.ErrUnsupported, unreadNote(b.Payload, edges), sel, modifyselect.EdgesContext(edges))
 	}
 	// A displaced receiver whose carrier record is valid fillets its lateral
-	// corners from the recorded carriers (agent-docs/carrier-record-design.md
+	// corners from the recorded carriers (agent-docs/prism-boolean-design.md Part K
 	// §5); any other displaced receiver keeps the refusal.
 	if pp.SectionDelta != 0 && route.Prism == nil && !sweepReduction {
 		cr, valid, err := prismrecord.CarrierRecordOf(proofbound.NewWorkBudget(ctx), b)

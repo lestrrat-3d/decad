@@ -1,6 +1,6 @@
 // Package boolchain flattens a refused two-body Boolean over mesh Boolean results into
 // a normal form of source-body literals, and evaluates a regrouped plan over it
-// (agent-docs/boolean-chain-regroup-design.md). It reads no document: a Source supplies
+// (agent-docs/prism-boolean-design.md Part R). It reads no document: a Source supplies
 // the recorded producer of a body, and Run takes the Boolean steps as callbacks.
 package boolchain
 

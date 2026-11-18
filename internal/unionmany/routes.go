@@ -19,7 +19,7 @@ import (
 
 // SectionUnionError wraps the refusal Routes returns when every route
 // declined a set and the union of its prism sections was among the refusals
-// (agent-docs/axial-section-boolean-design.md §2). The caller keeps that refusal
+// (agent-docs/prism-boolean-design.md Part A §2). The caller keeps that refusal
 // as the answer rather than trying a pair chain. Unwrap returns the refusal.
 type SectionUnionError struct{ Err error }
 

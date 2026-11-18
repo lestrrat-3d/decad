@@ -15,7 +15,7 @@ import (
 	"github.com/lestrrat-3d/sketch"
 )
 
-// arrangedEdge is one arranged edge of a scene (agent-docs/carrier-record-design.md
+// arrangedEdge is one arranged edge of a scene (agent-docs/prism-boolean-design.md Part K
 // §6.3): its tag, its source segment, its recorded (possibly narrowed)
 // segment and float walk, and its two end vertices.
 type arrangedEdge struct {

@@ -16,7 +16,7 @@ import (
 // the interface patches between them, the section's frame and accumulated
 // placement, and the section displacement every slab carries. Build
 // evaluates it over topology nodes, and it implements topo.Payload
-// (agent-docs/stacked-prism-design.md §1, agent-docs/evaluator-design.md §8).
+// (agent-docs/prism-boolean-design.md Part S §1, agent-docs/evaluator-design.md §8).
 type Payload struct {
 	Slabs        []Slab
 	Interfaces   []Interface
@@ -24,7 +24,7 @@ type Payload struct {
 	Xform        r3.Transform
 	SectionDelta float64
 	// ClosedShell marks the record of a closed shell (WithNoOpenings,
-	// agent-docs/stacked-prism-design.md §2.4). Its wall slab lines each hole
+	// agent-docs/prism-boolean-design.md Part S §2.4). Its wall slab lines each hole
 	// of the section with a band whose OUTER loop is the cavity's hole, so
 	// that band's outer column bounds the cavity, not the body's exterior.
 	// Build then leaves every outer column that starts and ends at an

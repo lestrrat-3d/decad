@@ -20,7 +20,7 @@ type orderPoint struct {
 	moves  bool // L_v > 0
 }
 
-// Ordered is V3 (agent-docs/carrier-record-design.md §5.3): along every
+// Ordered is V3 (agent-docs/prism-boolean-design.md Part K §5.3): along every
 // source segment that carries an arranged vertex with L_v > 0, each two
 // consecutive arranged vertices v, w satisfy
 // |P̂_v − P̂_w| > 4·(L_v + 2·err_v + L_w + 2·err_w + 2h), h the segment's own.

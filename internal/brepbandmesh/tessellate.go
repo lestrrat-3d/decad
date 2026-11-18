@@ -20,7 +20,7 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// Tessellate meshes body, whose payload is bp (agent-docs/general-boolean-design.md
+// Tessellate meshes body, whose payload is bp (agent-docs/prism-boolean-design.md Part G
 // §4.4). Every swept face chords its own wall once with tessellation.SampleLoop,
 // the sampler a prism's walls use, and emits its rim polylines at both levels.
 // Every planar face triangulates its loops with triangulation.Triangulate, as a

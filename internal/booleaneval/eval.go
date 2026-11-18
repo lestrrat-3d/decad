@@ -431,7 +431,7 @@ func evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 			return Evaluation{}, err
 		}
 	}
-	// Rule DW (agent-docs/carrier-record-design.md §8.7): the displaced walls of
+	// Rule DW (agent-docs/prism-boolean-design.md Part K §8.7): the displaced walls of
 	// each operand, decided once with this call's context.
 	var walls [2]map[*topo.Face]struct{}
 	for k, owner := range [2]*topo.Body{a, b} {

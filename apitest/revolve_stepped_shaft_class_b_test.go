@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// The stepped-shaft fixtures of agent-docs/general-boolean-design.md §3
+// The stepped-shaft fixtures of agent-docs/prism-boolean-design.md Part G §3
 // "Revolved shaft as a prism": a full Revolve of a staircase with one side on
 // the axis is read as its stack of coaxial circular prisms, so a
 // perpendicular box spanning its length cuts it through class B's crossing

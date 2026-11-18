@@ -15,7 +15,7 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// This file is class B of agent-docs/general-boolean-design.md §3: an operand X read
+// This file is class B of agent-docs/prism-boolean-design.md Part G §3: an operand X read
 // through its face view (§4.1) — a prism, a stacked prism or a brep body — and
 // a prism Y whose axes are signed axes of X's reference frame. Every reading
 // is taken in X's reference frame, the first face's: d is the reference axis

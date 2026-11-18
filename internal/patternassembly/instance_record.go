@@ -12,7 +12,7 @@ import (
 )
 
 // instanceRecord is the carrier record of a frame-keeping pattern instance of
-// an undisplaced source (agent-docs/carrier-record-design.md §5.1). moved is
+// an undisplaced source (agent-docs/prism-boolean-design.md Part K §5.1). moved is
 // the instance's recorded section, charge the motion's section charge (the
 // instance's SectionDelta before it is raised) and e the largest point charge
 // the motion took.

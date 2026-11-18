@@ -6,7 +6,7 @@ import (
 )
 
 // CornerCarrier states one side of a corner from a recorded segment's own
-// data (agent-docs/carrier-record-design.md §7.2): a line through the
+// data (agent-docs/prism-boolean-design.md Part K §7.2): a line through the
 // recorded Start with direction End − Start, or a circle of the recorded
 // Center and radius. It replaces the walk-start anchor offset2d otherwise
 // reads, which for a narrowed flank is a rounded cut point.

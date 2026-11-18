@@ -14,7 +14,7 @@ func DisableTransfer(checks ...string) func() {
 	return func() { disabledTransfer.Store(nil) }
 }
 
-// RequireTransfer runs agent-docs/carrier-record-design.md §8.3's transfer
+// RequireTransfer runs agent-docs/prism-boolean-design.md Part K §8.3's transfer
 // condition on a mixed profile.
 func RequireTransfer(ctx context.Context, cbp Payload, mixed momentinput.Profile, loopDelta []float64) error {
 	return requireTransfer(ctx, proofbound.NewWorkBudget(ctx), cbp, mixed, loopDelta)

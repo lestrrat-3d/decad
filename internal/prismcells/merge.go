@@ -78,7 +78,7 @@ func mergeWithChain(budget *proofbound.WorkBudget, scene *sketch.Sketch, selecte
 }
 
 // MergeLoops is Merge for a selection whose survivors close into several
-// loops (agent-docs/general-boolean-design.md §3 A5's disjoint Union): the same
+// loops (agent-docs/prism-boolean-design.md Part G §3 A5's disjoint Union): the same
 // edge counting, then ChainClosedLoops partitions the survivors into closed
 // cycles, and each cycle is recorded and closure-falsified as Merge records
 // its one loop. The loops are the candidate boundaries only: whether they

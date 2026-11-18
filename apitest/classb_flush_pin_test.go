@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// These fixtures pin agent-docs/general-boolean-design.md §3 "Flush cap
+// These fixtures pin agent-docs/prism-boolean-design.md Part G §3 "Flush cap
 // contact": a pin whose end cap lies in a wall of the target builds class B's
 // brep, and a contact the flush reach does not cover keeps the mesh path.
 

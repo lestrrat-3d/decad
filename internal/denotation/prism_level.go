@@ -8,7 +8,7 @@ import (
 
 // LevelDenotation is the exact rational a held sweep level denotes, recorded
 // beside the held float and the displacement bound it was proven against
-// (agent-docs/stacked-prism-design.md §2.1). The zero value records nothing.
+// (agent-docs/prism-boolean-design.md Part S §2.1). The zero value records nothing.
 //
 // The held float and bound are part of the record so that a copy which
 // rewrites the level without restating its denotation cannot carry a stale

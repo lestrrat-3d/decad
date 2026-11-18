@@ -92,7 +92,7 @@ const (
 )
 
 // FlushReach is the through reach with every target face the tube meets lying
-// in the plane of a tool cap (agent-docs/general-boolean-design.md §3 "Flush
+// in the plane of a tool cap (agent-docs/prism-boolean-design.md Part G §3 "Flush
 // cap contact"). flush names the tool caps CoplanarFaces found in a target
 // plane. The tube meets one or two faces, and each must sit at a distinct
 // marked cap's level, compared as recorded floats, with the face's and that

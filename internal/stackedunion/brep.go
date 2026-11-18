@@ -20,7 +20,7 @@ import (
 	"github.com/lestrrat-3d/sketch"
 )
 
-// This file builds agent-docs/general-boolean-design.md §3 A1's brep result
+// This file builds agent-docs/prism-boolean-design.md Part G §3 A1's brep result
 // from admitted operand slabs. It handles operands that already require a
 // BRep, slabs whose records stay apart (separate bosses on a plate), and
 // interfaces that clean nesting cannot state as a stacked-prism record, such

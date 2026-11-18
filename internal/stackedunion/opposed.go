@@ -15,7 +15,7 @@ import (
 	"github.com/lestrrat-3d/sketch"
 )
 
-// This file states agent-docs/general-boolean-design.md §3 A8: a cut-built
+// This file states agent-docs/prism-boolean-design.md Part G §3 A8: a cut-built
 // stack whose one interface holds opposed exclusive holes that overlap in
 // plan. The slabs are the ones stackedrecord already proved; every other
 // interface keeps its derived exposed records. The opposed interface's faces

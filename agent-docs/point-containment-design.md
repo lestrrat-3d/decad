@@ -372,7 +372,7 @@ A body built by a public `Cut`, `Union` or `Intersect` denotes that
 regularized operation over its recorded consumed inputs, unless the build
 moved accepted geometry. Its published bounds relate its held mesh to that set
 (`agent-docs/faceted-vertex-bounds-design.md` §2), so that set is §2's true
-region `T`. `agent-docs/boolean-chain-regroup-design.md`, "Eligibility of an
+region `T`. `agent-docs/prism-boolean-design.md` Part R, "Eligibility of an
 expandable body", states when the record is that set-equality proof, and
 `boolchain.Expandable` decides it. The route reads the same function and
 nothing else:
@@ -527,13 +527,13 @@ point to §2 unchanged.
 
 Two payloads carry a slab stack:
 
-- A `stackedPrismPayload` (`agent-docs/stacked-prism-design.md` §2.1) denotes
+- A `stackedPrismPayload` (`agent-docs/prism-boolean-design.md` Part S §2.1) denotes
   the union of every slab's regions swept over that slab's interval, carried
   through §7.2's map with its own frame and placement (evaluator §5.1). Its
   interfaces are derived from the slabs, so the route does not read them.
   `SectionDelta` and every slab's `Z0Delta` and `Z1Delta` must be zero, so
   each level is its held float.
-- A `brepPayload` that keeps a `Stack` (`agent-docs/general-boolean-design.md`
+- A `brepPayload` that keeps a `Stack` (`agent-docs/prism-boolean-design.md` Part G
   §3 "A1 as a brep", §4.1) is built from exactly the stack's loops at the
   stack's levels, each face within the stack's section displacement of the
   set it denotes. The route requires that displacement and every stack level

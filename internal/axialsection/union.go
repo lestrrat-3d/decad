@@ -1,6 +1,6 @@
 // Package axialsection takes the 2D Boolean of recorded sections, so a Boolean of
 // axial extrusions of those sections is the extrusion of the result
-// (agent-docs/axial-section-boolean-design.md).
+// (agent-docs/prism-boolean-design.md Part A).
 package axialsection
 
 import (

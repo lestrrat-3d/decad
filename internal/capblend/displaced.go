@@ -23,7 +23,7 @@ import (
 
 // DisplacedPayload is the cap-loop chamfer of a prism whose recorded section is
 // displaced from the section it denotes, built over exact selected loops
-// (agent-docs/carrier-record-design.md §8). Base is the chamfer record as
+// (agent-docs/prism-boolean-design.md Part K §8). Base is the chamfer record as
 // Build makes it; LoopDelta[l] is the receiver record's h_loop of loop l (0 the
 // outer loop, i+1 hole i), zero on every selected loop: Lemma H's bound on how
 // far the denoted loop lies from the recorded one.
@@ -166,7 +166,7 @@ func requireTransfer(ctx context.Context, budget *proofbound.WorkBudget, cbp Pay
 			return err
 		}
 		if !(proofbound.ProductUpper(4, maxOf(loopDelta)) < floor) {
-			return fmt.Errorf(`%w: four times the largest loop displacement %g is not below the contact floor %g (agent-docs/carrier-record-design.md §8.3, T1)`,
+			return fmt.Errorf(`%w: four times the largest loop displacement %g is not below the contact floor %g (agent-docs/prism-boolean-design.md Part K §8.3, T1)`,
 				decaderr.ErrUnsupported, maxOf(loopDelta), floor)
 		}
 	}
@@ -176,7 +176,7 @@ func requireTransfer(ctx context.Context, budget *proofbound.WorkBudget, cbp Pay
 			return err
 		}
 		if !apart {
-			return fmt.Errorf(`%w: the chamfered section's displaced loops are not certified clear of the rest of the section (agent-docs/carrier-record-design.md §8.3, T2): %s`,
+			return fmt.Errorf(`%w: the chamfered section's displaced loops are not certified clear of the rest of the section (agent-docs/prism-boolean-design.md Part K §8.3, T2): %s`,
 				decaderr.ErrUnsupported, why)
 		}
 	}
@@ -189,7 +189,7 @@ func requireTransfer(ctx context.Context, budget *proofbound.WorkBudget, cbp Pay
 			return err
 		}
 		if !ok || enc.Lo.Sign() <= 0 && enc.Hi.Sign() >= 0 {
-			return fmt.Errorf(`%w: the area of displaced loop %d is not enclosed away from zero (agent-docs/carrier-record-design.md §8.3, T3)`,
+			return fmt.Errorf(`%w: the area of displaced loop %d is not enclosed away from zero (agent-docs/prism-boolean-design.md Part K §8.3, T3)`,
 				decaderr.ErrUnsupported, li)
 		}
 	}
@@ -215,7 +215,7 @@ func requireSameWalks(budget *proofbound.WorkBudget, cbp Payload) error {
 			return err
 		}
 		if !sameWalkSegments(cornerLoops[li].Walks, walks) {
-			return fmt.Errorf(`%w: loop %d's corner walks and its cap-band walks name different segments (agent-docs/carrier-record-design.md §8.3, T2)`,
+			return fmt.Errorf(`%w: loop %d's corner walks and its cap-band walks name different segments (agent-docs/prism-boolean-design.md Part K §8.3, T2)`,
 				decaderr.ErrUnsupported, li)
 		}
 	}

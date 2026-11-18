@@ -83,7 +83,7 @@ func TestPairChordReplayBudgetAndRefusals(t *testing.T) {
 }
 
 // The bounded chord reads no displaced cap-loop chamfer: its default arm
-// refuses (agent-docs/carrier-record-design.md §8.8).
+// refuses (agent-docs/prism-boolean-design.md Part K §8.8).
 func TestChordShareReplayRefusesDisplacedCapBlend(t *testing.T) {
 	b := &topo.Body{Payload: capblend.DisplacedPayload{LoopDelta: []float64{0.01}}}
 	_, err := ChordShareReplay(t.Context(), b, proofbound.NewReplayTrialBudget())

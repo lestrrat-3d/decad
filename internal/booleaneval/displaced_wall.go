@@ -5,7 +5,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/topo"
 )
 
-// displacedWall is rule DW of agent-docs/carrier-record-design.md §8.7: a mesh
+// displacedWall is rule DW of agent-docs/prism-boolean-design.md Part K §8.7: a mesh
 // Boolean's source tag on a displaced wall (the walls internal/displacedface
 // reads once per operand) is declined. The recorded Plane or Cylinder of such a
 // wall lies only within its loop's bound of the wall the body denotes, offset

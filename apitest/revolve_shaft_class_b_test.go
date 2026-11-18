@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// The turned-shaft fixtures of agent-docs/general-boolean-design.md §3
+// The turned-shaft fixtures of agent-docs/prism-boolean-design.md Part G §3
 // "Revolved shaft as a prism": a full Revolve of a rectangle with one side on
 // the axis is read as the circular prism it denotes, so a perpendicular box
 // spanning its length cuts it through class B's crossing reach. Each exact

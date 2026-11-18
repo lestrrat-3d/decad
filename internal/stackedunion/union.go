@@ -41,7 +41,7 @@ type Operand struct {
 // order (stackedrecord.UnionLevels) read the denoted levels, and the union and
 // brep builders write each new slab's levels with the rational the operands
 // denote there (stackedrecord.UnionLevel.Denoted;
-// agent-docs/stacked-prism-design.md §2.1). The brep proxy records no
+// agent-docs/prism-boolean-design.md Part S §2.1). The brep proxy records no
 // denotation, because every level relation reads the slabs.
 // Its proxy carries the frame, placement and section displacement read by
 // prismboolean's admission. A brep without an A1 stack is not an operand.
@@ -256,7 +256,7 @@ func (st *stackedUnionState) slabRegion(ctx context.Context, ia, ib int) (profil
 	}
 	// Neither holds the other whole: prism-boolean §4.2's select-all merge,
 	// with §3.4's crossing charge on every cut a displaced source can move
-	// (agent-docs/general-boolean-design.md §3 A6). No cell at all is a scene
+	// (agent-docs/prism-boolean-design.md Part G §3 A6). No cell at all is a scene
 	// prismcells.CellProfiles could not restate: the mesh path.
 	if len(m.Profiles) == 0 {
 		return profileRecord{}, false, nil
@@ -361,7 +361,7 @@ func (st *stackedUnionState) interfaceOf(ctx context.Context, lower, upper profi
 		// The narrower outer becomes a hole of the exposed face. The arrangement
 		// does not cut a tangency, so a narrower curve touching the wider
 		// outline at one point still nests whole, and the exposed face would
-		// pinch there (agent-docs/stacked-prism-design.md §2.2). Any point
+		// pinch there (agent-docs/prism-boolean-design.md Part S §2.2). Any point
 		// sketch's intersection query reports is a miss.
 		touch, err := prismcells.RegionContact(st.budget, m.Tags)
 		if err != nil {
