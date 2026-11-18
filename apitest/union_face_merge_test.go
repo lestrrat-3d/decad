@@ -50,19 +50,40 @@ func requireNoSeam(t *testing.T, body *decad.Body) {
 	}
 }
 
-// requireOneFaceWithRoles asserts that sel resolves to one face and that every origin of that face selects it.
-func requireOneFaceWithRoles(t *testing.T, body *decad.Body, pred decad.FacePredicate) *decad.Face {
+// faceAt returns the one face of body matching pred whose plane has offset off along the axis normal.
+func faceAt(t *testing.T, body *decad.Body, pred decad.FacePredicate, normal r3.Vec, off float64) *decad.Face {
 	t.Helper()
-	faces, err := decad.Faces(pred).Exactly(1).SelectFaces(body)
+	faces, err := decad.Faces(pred).AtLeast(1).SelectFaces(body)
 	require.NoError(t, err)
-	origins := faces[0].Origins()
-	require.GreaterOrEqual(t, len(origins), 2, "the face lists the roles of both operands")
-	for _, o := range origins {
-		got, err := decad.Faces(decad.FaceCreatedBy(o)).Exactly(1).SelectFaces(body)
-		require.NoError(t, err, "origin %v", o)
-		require.Same(t, faces[0], got[0])
+	var found []*decad.Face
+	for _, f := range faces {
+		plane, ok := f.Surface().(decad.Plane)
+		require.True(t, ok)
+		if math.Abs(plane.Frame.Origin().Dot(normal)-off) < 1e-9 {
+			found = append(found, f)
+		}
 	}
-	return faces[0]
+	require.Len(t, found, 1, "faces on the plane at offset %v", off)
+	return found[0]
+}
+
+// requireMergedFace asserts that the face of merged at the given plane is the only one there and that it lists every
+// origin of every contributor, a face an operand had before the Boolean, and that each origin selects it.
+func requireMergedFace(t *testing.T, merged *decad.Body, pred decad.FacePredicate, normal r3.Vec, off float64,
+	contributors ...*decad.Face) {
+	t.Helper()
+	face := faceAt(t, merged, pred, normal, off)
+	require.NotEmpty(t, contributors)
+	have := face.Origins()
+	for i, c := range contributors {
+		require.NotEmpty(t, c.Origins(), "contributor %d", i)
+		for _, o := range c.Origins() {
+			require.Contains(t, have, o, "contributor %d's role is on the merged face", i)
+			got, err := decad.Faces(decad.FaceCreatedBy(o)).Exactly(1).SelectFaces(merged)
+			require.NoError(t, err, "origin %v", o)
+			require.Same(t, face, got[0])
+		}
+	}
 }
 
 func requireNoDiagnostics(t *testing.T, b *decad.Body) {
@@ -114,15 +135,20 @@ func xzPrism(t *testing.T, doc *decad.Document, pts [][2]float64, d float64) *de
 
 func TestUnionFaceMergeFlushBoxes(t *testing.T) {
 	t.Parallel()
-	joined := mergeFlushBoxes(t, 0.5, 0)
+	doc := decad.New()
+	a := boxBody(t, doc, 0, 0, 10, 10, 10)
+	b := translated(t, boxBody(t, doc, 0, 0, 10, 10, 10), 0.5, 0, 10)
+	negY, posY := r3.Vec{Y: -1}, r3.Vec{Y: 1}
+	wallsA, wallsB := faceAt(t, a, faceNegY, negY, 0), faceAt(t, b, faceNegY, negY, 0)
+	farA, farB := faceAt(t, a, facePosY, posY, 10), faceAt(t, b, facePosY, posY, 10)
+	joined, err := decad.Union(t.Context(), a, b)
+	require.NoError(t, err)
 	require.Len(t, joined.Faces(), 10)
 	requireNoDiagnostics(t, joined)
 	requireVolumeNear(t, joined, 2000)
 	requireNoSeam(t, joined)
-	face := requireOneFaceWithRoles(t, joined, faceNegY)
-	_, ok := face.Surface().(decad.Plane)
-	require.True(t, ok)
-	requireOneFaceWithRoles(t, joined, facePosY)
+	requireMergedFace(t, joined, faceNegY, negY, 0, wallsA, wallsB)
+	requireMergedFace(t, joined, facePosY, posY, 10, farA, farB)
 }
 
 func TestUnionFaceMergeDovetailEnds(t *testing.T) {
@@ -130,13 +156,17 @@ func TestUnionFaceMergeDovetailEnds(t *testing.T) {
 	doc := decad.New()
 	host := boxBodyAtZ(t, doc, -10, 0, 10, 16, -10, 10)
 	tool := xzPrism(t, doc, [][2]float64{{-5, -1}, {5, -1}, {5, 0}, {6, 6}, {-6, 6}, {-5, 0}}, 16)
+	negY, posY := r3.Vec{Y: -1}, r3.Vec{Y: 1}
+	hostStart, toolStart := faceAt(t, host, faceNegY, negY, 0), faceAt(t, tool, faceNegY, negY, 0)
+	hostEnd, toolEnd := faceAt(t, host, facePosY, posY, 16), faceAt(t, tool, facePosY, posY, 16)
 	joined, err := decad.Union(t.Context(), host, tool)
 	require.NoError(t, err)
 	require.Len(t, joined.Faces(), 10)
 	requireNoSeam(t, joined)
 	requireVolumeNear(t, joined, 4256)
-	for _, pred := range []decad.FacePredicate{faceNegY, facePosY} {
-		f := requireOneFaceWithRoles(t, joined, pred)
+	requireMergedFace(t, joined, faceNegY, negY, 0, hostStart, toolStart)
+	requireMergedFace(t, joined, facePosY, posY, 16, hostEnd, toolEnd)
+	for _, f := range []*decad.Face{faceAt(t, joined, faceNegY, negY, 0), faceAt(t, joined, facePosY, posY, 16)} {
 		require.Len(t, f.Loops(), 1)
 		require.True(t, f.Loops()[0].IsOuter())
 	}
@@ -147,14 +177,19 @@ func TestUnionFaceMergeCutStepDown(t *testing.T) {
 	doc := decad.New()
 	target := xzPrism(t, doc, [][2]float64{{0, 0}, {20, 0}, {19, 10}, {10, 10}, {10, 5}, {0, 5}}, 10)
 	tool := translated(t, boxBody(t, doc, 0, 0, 11, 12, 6), 10, -1, 5)
+	posZ, negZ := r3.Vec{Z: 1}, r3.Vec{Z: -1}
+	targetTop, toolFloor := faceAt(t, target, facePosZ, posZ, 5), faceAt(t, tool, decad.Facing(negZ), negZ, -5)
 	cut, err := decad.Cut(t.Context(), target, tool)
 	require.NoError(t, err)
 	require.Len(t, cut.Faces(), 6)
 	requireNoSeam(t, cut)
-	requireOneFaceWithRoles(t, cut, facePosZ)
+	requireMergedFace(t, cut, facePosZ, posZ, 5, targetTop, toolFloor)
 	requireVolumeNear(t, cut, 987.5)
 }
 
+// TestUnionFaceMergeIntersectSteppedPrisms pins the result of an Intersect whose operands' tops lie on one plane. The
+// Intersect takes the prism route, which builds one face per exact planar region itself and mints its own roles, so
+// this test covers the route's result and not the mesh merge (design §10.3 A4).
 func TestUnionFaceMergeIntersectSteppedPrisms(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
@@ -164,7 +199,9 @@ func TestUnionFaceMergeIntersectSteppedPrisms(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, both.Faces(), 6)
 	requireNoSeam(t, both)
-	requireOneFaceWithRoles(t, both, facePosZ)
+	faces, err := decad.Faces(facePosZ).Exactly(1).SelectFaces(both)
+	require.NoError(t, err)
+	require.Len(t, faces, 1)
 	requireVolumeNear(t, both, 1000)
 }
 
@@ -174,6 +211,7 @@ func TestUnionFaceMergeKeepsOffsetPlanesApart(t *testing.T) {
 	faces, err := decad.Faces(faceNegY).AtLeast(2).SelectFaces(joined)
 	require.NoError(t, err)
 	require.Len(t, faces, 2, "the two y = 0 walls stay separate")
+	requireNoDiagnostics(t, joined)
 }
 
 func TestUnionFaceMergeThenChamfer(t *testing.T) {
@@ -195,17 +233,29 @@ func TestUnionFaceMergeThenCut(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
 	joined := mergeFlushBoxesIn(t, doc, 0.5, 0)
-	pocket := translated(t, boxBody(t, doc, 0, 0, 2, 2, 2), 4, 4, 19)
+	negY, posY := r3.Vec{Y: -1}, r3.Vec{Y: 1}
+	near, far := faceAt(t, joined, faceNegY, negY, 0), faceAt(t, joined, facePosY, posY, 10)
+
+	// A round pocket into the upper block leaves the flush walls planar and on the mesh path. A box pocket would
+	// take the orthogonal route, which mints fresh roles.
+	world := sketch.NewWorld()
+	plane, err := world.CreateOffsetPlane(world.XY(), 19)
+	require.NoError(t, err)
+	s, err := world.CreateSketch(plane)
+	require.NoError(t, err)
+	centre := s.CreatePoint(5, 5)
+	s.Fix(centre)
+	s.CreateCircle(centre, 1)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	pocket, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(2), Dir: decad.Along})
+	require.NoError(t, err)
+
 	cut, err := decad.Cut(t.Context(), joined, pocket)
 	require.NoError(t, err)
-	// This Cut takes the orthogonal route, which groups facets by exact plane and mints fresh roles, so
-	// the walls keep no operand roles (design §12 Q2 covers the analytic routes). The flush walls are one face
-	// each: the outer wall and the pocket's wall make two faces on each y side.
-	require.Len(t, cut.Faces(), 15)
-	requireNoSeam(t, cut)
-	for _, pred := range []decad.FacePredicate{faceNegY, facePosY} {
-		faces, err := decad.Faces(pred).Exactly(2).SelectFaces(cut)
-		require.NoError(t, err)
-		require.Len(t, faces, 2)
-	}
+	require.Len(t, cut.Faces(), 12, "ten faces, the pocket wall and the pocket floor")
+	require.GreaterOrEqual(t, len(near.Origins()), 2, "the merged wall lists both operands' roles")
+	require.GreaterOrEqual(t, len(far.Origins()), 2)
+	requireMergedFace(t, cut, faceNegY, negY, 0, near)
+	requireMergedFace(t, cut, facePosY, posY, 10, far)
 }
