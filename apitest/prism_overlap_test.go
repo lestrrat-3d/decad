@@ -15,10 +15,10 @@ import (
 // This file is agent-docs/prism-boolean-design.md §4.5's own required-tests suite
 // (§15's multi-region rows) and agent-docs/interference-design.md §10.2's
 // multi-region rows, exercised end to end through Document.Verify and the
-// public booleans. The internal admission/decline mechanics (the exactly-
-// tangent decline, the arrangement cap, cancellation, and the G1-G4-style
-// regression fallbacks) are prism_overlap_internal_test.go's own, white-box
-// suite.
+// public booleans. The admission/decline mechanics (the exactly-tangent
+// decline, the arrangement cap, cancellation, and the G1-G4-style regression
+// fallbacks) are reached here only through the public booleans; no white-box
+// test isolates them.
 //
 // polyPrismBody's U-and-bar fixture reproduces .tmp/multilump/main.go's own
 // measured case: a U-shaped prism (a rectangle with a rectangular notch cut

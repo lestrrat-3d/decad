@@ -16,8 +16,8 @@ import (
 // This file is agent-docs/surface-design.md §15's T31-T36, T46-T47 and T50-T52
 // public coverage for internal/stitchrecord/flux.go's per-surface flux integral: the
 // `Plane`, `Cylinder`, `Cone` and `Sphere` arms that let `Stitch` close a
-// boundary holding a curved face. T37, T38, T48 and T49 are internal-only
-// (stitch_internal_test.go): a genuinely closed
+// boundary holding a curved face. T37, T38, T48 and T49 are not reachable
+// through the public seam: a genuinely closed
 // `NURBSSurface`-holding set and a hand-built nonzero-`normalBound` face are
 // both unreachable through the public seam, for reasons each test records.
 

@@ -42,8 +42,7 @@ func ChargeFitInterpolant(work *FreeformWork, n int) error {
 // with vi/vi1 the span's endpoint values (its Bézier b0/b3, interpolated
 // exactly), mi/mi1 the natural-cubic second derivatives at those same ends,
 // and hSq the span width squared, all exact rationals. Every operand is a
-// big.Rat, so nothing here rounds — cross-checked against the monomial route
-// in spline_fit_internal_test.go, and against FitSpan's own independent
+// big.Rat, so nothing here rounds — checked against FitSpan's own independent
 // conversion as an oracle.
 func FitSpanControls(vi, vi1, mi, mi1, hSq *big.Rat) (b1, b2 *big.Rat) {
 	three := big.NewRat(3, 1)

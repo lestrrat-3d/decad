@@ -479,8 +479,8 @@ func TestJointBoxOptionSet(t *testing.T) {
 // TestVerifyJointBoxErrors is one subtest per row of
 // agent-docs/linkage-check-design.md §14.6's table and per shared row of §8 the
 // public API can reach, each asserting the sentinel, no report, and an
-// unchanged document. The row for a body this evaluator did not build lives
-// in linkage_internal_test.go.
+// unchanged document. The row for a body this evaluator did not build is
+// unreachable through the public API and has no test.
 func TestVerifyJointBoxErrors(t *testing.T) {
 	t.Parallel()
 	c := buildCraneBox(t, 62)

@@ -65,7 +65,7 @@ import (
 //     densely-sampled right edge gives every hole its own outer vertex to bridge
 //     to. That class is pinned deterministically by
 //     TestTriangulate2DHolesSharingOneBridgeAnchor
-//     (triangulate_internal_test.go) instead.
+//     (triangulate_test.go) instead.
 //
 // PROPERTY ASSERTIONS (triAssert), all on computed geometry:
 //  P1 A valid input MUST NOT error and MUST yield at least one triangle.

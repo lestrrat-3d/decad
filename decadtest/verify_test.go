@@ -258,7 +258,7 @@ func TestFindBodyReportRejectsANilReport(t *testing.T) {
 // decad.ValidityValid, because every one of decad's six builders sets the
 // body solid and assigns a payload on every success path — the invalid and
 // undecided branches of publishBodyResult are proven unreachable through a
-// live document body (verify_publish_internal_test.go). This record is one
+// live document body. This record is one
 // decad itself would never emit; the literal is the only way to reach
 // IsValid's validity-mismatch branch, and the point here is IsValid's own
 // dispatch, never decad's geometry.

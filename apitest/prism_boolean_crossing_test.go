@@ -15,9 +15,9 @@ import (
 // prisms whose 2D outlines genuinely cross, neither nested inside the other.
 // boxBody/discBody (clearance_test.go, prism_boolean_bounds_test.go) and
 // tookMeshPath/boundMM3/volumeMM (prism_boolean_test.go, boolean_test.go)
-// are the shared helpers. The randomized analytic/mesh property test lives in
-// prism_boolean_crossing_internal_test.go, which needs the internal
-// evaluateBoolean entry point to force the mesh path for comparison.
+// are the shared helpers. No randomized analytic/mesh property test covers
+// these crossings: forcing the mesh path for comparison needs the internal
+// evaluateBoolean entry point, which this public suite cannot reach.
 
 // TestPrismIntersectCrossingBoxesResolvesAnalytically is agent-docs/prism-boolean-design.md
 // §14 PR3's own required test: two coplanar boxes offset diagonally so their

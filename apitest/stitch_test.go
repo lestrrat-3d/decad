@@ -15,10 +15,9 @@ import (
 
 // This file is agent-docs/surface-design.md's T3/T4-shaped public tests for
 // Stitch, plus Table R's R12/R13/R14/R17 rows and the pair-relation
-// refusal a stitched solid pins. The internal fixtures for Table R's R7 rows (a
-// non-orientable set and a non-manifold one) and R9 live in
-// stitch_internal_test.go, since decad's public seam admits no way to
-// author either shape directly. T6's own stitched-solid half (T50) is
+// refusal a stitched solid pins. Table R's R7 rows (a non-orientable set and a
+// non-manifold one) and R9 are not covered here, since decad's public seam
+// admits no way to author either shape directly. T6's own stitched-solid half (T50) is
 // TestStitchSphereRevolveSheetClosesToABall in stitch_flux_test.go.
 
 // stitchBoxSheets builds T1's rectangle walls plus a patch at each end —

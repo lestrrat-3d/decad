@@ -13,8 +13,8 @@ import (
 
 // This file holds the Between tests of agent-docs/linkage-check-design.md Part M §9,
 // numbered 12-20 as §9 numbers them; test 21 is examples/'s
-// Example_verify_motion_between, and the internal tests sit in
-// motion_internal_test.go. Bounds are asserted against geometric truths or as
+// Example_verify_motion_between, and no internal test asserts the
+// bounds in isolation. Bounds are asserted against geometric truths or as
 // small, never pinned to a measured literal: FMA contraction moves the last
 // ulp between amd64 and arm64.
 //

@@ -15,8 +15,8 @@ import (
 // (the folding arm), the agreement of a one-link linkage with VerifyMotion,
 // PoseAt's composition, and the standing tests. Bounds are asserted against
 // geometric truths or as small, never pinned to a measured literal: FMA
-// contraction moves the last ulp between amd64 and arm64. The internal tests
-// of the chain bound sit in linkage_internal_test.go.
+// contraction moves the last ulp between amd64 and arm64. No test asserts the
+// chain bound in isolation; this file reaches it only in aggregate.
 //
 // Scene 1's upper arm is the motion arm, x ∈ [0, 48], y ∈ [−14, 14],
 // z ∈ [0, 10], on a revolute joint about Z through the origin sweeping
@@ -638,7 +638,8 @@ func TestVerifyLinkagePoseDeviationIsCharged(t *testing.T) {
 // TestVerifyLinkageErrors is one subtest per row of
 // agent-docs/linkage-check-design.md §8's table that PR 1's public API can reach,
 // each asserting the sentinel, no report, and an unchanged document. The row
-// for a body this evaluator did not build lives in linkage_internal_test.go.
+// for a body this evaluator did not build is unreachable through the public API
+// and has no test.
 func TestVerifyLinkageErrors(t *testing.T) {
 	t.Parallel()
 	a := buildFoldingArm(t, true)
@@ -731,7 +732,7 @@ func TestVerifyLinkageErrors(t *testing.T) {
 // TestVerifyLinkageNonMutationAndDeterminism is §11's standing test, as
 // motion §9 test 7: the live body set and its order survive the call, and two
 // calls on the same inputs return reports equal in every field. The producer
-// identity half lives in linkage_internal_test.go, which can read it.
+// identity half is unreachable through the public API and has no test.
 func TestVerifyLinkageNonMutationAndDeterminism(t *testing.T) {
 	t.Parallel()
 	a := buildFoldingArm(t, true)
