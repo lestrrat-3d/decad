@@ -139,7 +139,7 @@ func TestSurfaceTrimRevolveKeepOutsideSplitsIntoTwoWalks(t *testing.T) {
 	require.Equal(t, decad.Approximate, box.Exactness)
 	require.Positive(t, box.Bound.Base())
 
-	// A revolve sheet's mesh waits on surface increment 4, trimmed or not.
+	// A trimmed revolve sheet's payload (chainRevolvePayload) has no tessellation arm.
 	_, err = trimmed.Tessellate(t.Context(), units.Millimeters(0.1))
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 }
