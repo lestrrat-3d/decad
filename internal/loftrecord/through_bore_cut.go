@@ -29,7 +29,7 @@ import (
 // other pair keeps the general boolean path.
 func ThroughBoreCut(ctx context.Context, env topo.Env, a, b topo.Payload) (*topo.Body, bool, error) {
 	pl, ok := a.(Payload)
-	if !ok || pl.SurfaceResult || len(pl.Profile0.Holes) != 0 || len(pl.Profile1.Holes) != 0 ||
+	if !ok || pl.SurfaceResult || len(pl.Profile0.Holes) != len(pl.Profile1.Holes) ||
 		!sameSegmentKinds(pl.Profile0.Outer.Segments, pl.Profile1.Outer.Segments) ||
 		pl.Frame0.U() != pl.Frame1.U() || pl.Frame0.V() != pl.Frame1.V() ||
 		pl.Xform != r3.Identity() {
@@ -76,9 +76,14 @@ func ThroughBoreCut(ctx context.Context, env topo.Env, a, b topo.Payload) (*topo
 		return nil, false, nil
 	}
 	identical := sectionrecord.IdenticalRecord(pl.Profile0, pl.Profile1)
+	circle.Center = sectionrecord.Point2{U: center.X, V: center.Y}
+	_, bounded := BoreCylinderNormalBound(pl.Frame0, pl.Xform, center.X, center.Y, end.Z, circle.Radius.Base())
+	analytic := wholeCircle && bounded && BoreHasExactAxis(pl.Frame0, pl.Frame1, center.X, center.Y, end.Z)
+	if len(pl.Profile0.Holes) > 0 && (!pl.AnalyticBore || !identical || !analytic || !disjointBore(pl.Profile0.Holes, circle)) {
+		return nil, false, nil
+	}
 	var hole sectionrecord.LoopRecord
 	if wholeCircle {
-		circle.Center = sectionrecord.Point2{U: center.X, V: center.Y}
 		circle.CCW, circle.TStart, circle.TEnd = false, 1, 0
 		hole = sectionrecord.LoopRecord{Segments: []sectionrecord.CurveSegment{circle}}
 	} else if profileLoop {
@@ -93,16 +98,16 @@ func ThroughBoreCut(ctx context.Context, env topo.Env, a, b topo.Payload) (*topo
 		}
 	}
 	profile0, profile1 := pl.Profile0, pl.Profile1
-	profile0.Holes = []sectionrecord.LoopRecord{hole}
-	profile1.Holes = []sectionrecord.LoopRecord{hole}
+	profile0.Holes = append(slices.Clip(profile0.Holes), hole)
+	profile1.Holes = append(slices.Clip(profile1.Holes), hole)
 	budget := proofbound.NewWorkBudget(ctx)
 	work0, work1 := freeform.NewFreeformWork(), freeform.NewFreeformWork()
 	pl.RaiseReconstructionLimit(work0, work1)
-	limit := pl.RewriteWorkLimit(uint64(len(profile0.Outer.Segments) + 1))
+	segments := len(pl.Profile0.Outer.Segments) + len(pl.Profile0.Holes) + len(hole.Segments)
+	limit := pl.RewriteWorkLimit(uint64(segments))
 	work0.RaiseLimit(limit)
 	work1.RaiseLimit(limit)
 	container := circle
-	container.Center = sectionrecord.Point2{U: center.X, V: center.Y}
 	container.Radius = units.Millimeters(proofbound.AbsSumUpper(
 		container.Radius.Base(), tool.SectionDelta))
 	targetDelta := proofbound.AbsSumUpper(pl.SectionDelta, pl.JoinDelta, pl.ConstructionDelta)
@@ -143,20 +148,41 @@ func ThroughBoreCut(ctx context.Context, env topo.Env, a, b topo.Payload) (*topo
 	}
 	next := pl
 	next.Profile0, next.Profile1 = profile0, profile1
+	// Every supplied offset is zero. Nil extends that alignment to the new hole.
+	next.Alignment = nil
 	next.ThroughBoreCut = true
 	next.SectionDelta = max(pl.SectionDelta, tool.SectionDelta)
 	next.RecordArea = [2]float64{ig.Area, area1}
 	// The analytic wall carries the normal departure a rounded center, a
 	// non-isometric frame map or a tilted held axis leaves on its tag. A bore
 	// whose departure has no bound keeps the Loft's tessellated topology.
-	_, bounded := BoreCylinderNormalBound(pl.Frame0, pl.Xform, container.Center.U, container.Center.V,
-		end.Z, container.Radius.Base())
-	next.AnalyticBore = wholeCircle && BoreHasExactAxis(pl.Frame0, pl.Frame1, container.Center.U, container.Center.V, end.Z) && bounded
+	next.AnalyticBore = analytic
 	out, err := Build(ctx, env, next, budget, work0, work1)
 	if err != nil {
 		return nil, false, err
 	}
 	return out, true, nil
+}
+
+// disjointBore compares the fixed circular records at every sweep level.
+// A certified circular tool has zero section displacement and maps exactly to
+// both sections. The Loft's SectionDelta bounds its chords' departure from those circles.
+func disjointBore(holes []sectionrecord.LoopRecord, tool sectionrecord.CircleSeg) bool {
+	for _, hole := range holes {
+		existing, ok := boreHoleCircle(hole)
+		if !ok {
+			return false
+		}
+		distance := proofarith.RatSquaredDistance3(tool.Center.U, tool.Center.V, 0, existing.Center.U, existing.Center.V, 0)
+		if distance == nil {
+			return false
+		}
+		radii := new(big.Rat).Add(proofarith.FloatRat(existing.Radius.Base()), proofarith.FloatRat(tool.Radius.Base()))
+		if distance.Cmp(new(big.Rat).Mul(radii, radii)) <= 0 {
+			return false
+		}
+	}
+	return true
 }
 
 // throughBoreProfileCircle encloses a validated closed line and circular-arc

@@ -79,12 +79,12 @@ type Payload struct {
 	// replaces the recorded float trim. Each value bounds that increase for
 	// every cell of the named outer-loop segment.
 	ConstructionLengthExtra map[int]float64
-	// ThroughBoreCut marks a profile pair rewritten by Cut. The added hole
-	// did not come from the two authenticated source Sketch profiles.
+	// ThroughBoreCut marks a profile pair with holes added by Cut after
+	// authentication of the two source Sketch profiles.
 	ThroughBoreCut bool
 	// AnalyticBore is set only by the certified whole-circle through Cut.
 	// Its loft mesh still supplies mass and tessellation proofs, while the
-	// public topology uses one cylindrical wall for the new hole.
+	// public topology uses one cylindrical wall per bore.
 	AnalyticBore bool
 
 	// SurfaceResult is WithSurfaceResult's own flag (agent-docs/surface-design.md

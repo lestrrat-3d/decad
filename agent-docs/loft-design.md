@@ -2921,7 +2921,7 @@ fillets, optional bore and both outer-cap chamfers.
 
 `Cut` keeps a solid axial loft as a `loftPayload` when a straight
 prism tool cuts one full circular, D-shaped or closed line-and-arc-profile
-through-bore. Both recorded sections must be hole-free before the cut and
+through-bore. Both recorded sections must
 have the same segment kinds in the same order, share their in-plane axes,
 have zero alignment, and have no placement. The sections may differ, such as
 a gear outline lofted to the same outline turned about its axis: both
@@ -2940,6 +2940,19 @@ circles contains the complete tool; the existing circle containment proof
 must place that circle inside the loft boundary. A whole-circle tool with
 displaced section or endpoint records uses the general boolean path. Other
 profile curves also use the general boolean path.
+
+For a loft with existing holes, a further whole circular tool may cut matching
+sections with straight cylindrical through-bores from prior certified cuts.
+Every prior hole must have the same clockwise whole circle in both sections.
+The new hole must have a certified common axis and bounded cylinder normal,
+and must lie strictly outside every prior hole. Compare the exact squared
+distances between the recorded centers with the squared sums of the radii.
+Every circular tool has zero section displacement and an exact mapped center.
+The loft's section displacement bounds the held chords' departure from these
+circles. The circles therefore keep their recorded radii in this comparison
+at every sweep level. The outer loop passes the same containment
+proof as for the first cut. Each surviving hole keeps a cylindrical wall,
+its own pair of circular cap rims, and its own source triangle roles.
 `internal/loftfillet/circle_hole.go` proves that the circle's
 containing square misses every outer carrier enclosure and junction, then uses
 exact winding of the carrier chords to prove the circle lies inside the
@@ -2967,7 +2980,7 @@ tessellation proofs. It replaces only the hole-wall triangles with one
 cylindrical face and their cap rim chords with one full `Circle3` per cap.
 Every former hole-wall `side(i,j,k)` role belongs to that cylinder, so the
 unchanged held triangle mesh still resolves its source face at `VerifyAll`.
-The cap face area subtracts the bounded whole-circle integral from the held
+The cap face area subtracts each bounded whole-circle integral from the held
 outer polygon area. Placement and duplication rebuild Cut topology from the
 same mark. The rebuild recomputes the bore normal departure under the composed
 placement, and a placement whose departure has no bound keeps the faceted
