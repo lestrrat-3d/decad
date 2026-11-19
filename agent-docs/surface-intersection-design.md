@@ -79,7 +79,7 @@ this evaluator cannot build.
 | S4 | **The generators are the same, exactly.** Prism-family: prism G3's test unchanged — `worldNormalA == worldNormalB` (Go `==` on the stored `r3.Vec` floats) and `(worldOriginB − worldOriginA)·worldNormalA == 0.0` against the literal zero. Revolve-family: `frameA == frameB` and the resolved AXIS equal component-wise — its anchor `aU`/`aV`, its direction `dU`/`dV` and each of those four fields' own proven bound, the eight `axisInPlane` resolves and the side flip orients — both under Go `==` on the stored floats, with both meridians on the side `internal/revolveplan/axis_side.go` already resolved. For `Trim` and `Extend` both meridians must also be proven clear of the axis, read off the axis snap that has ALREADY run (no walk endpoint sits at `ρ == 0`) rather than off a fresh measurement; `Split` does not take that clause (§2.2). The remaining `revolveaxis.Frame` fields — `SnapTol`, `RadialAdmitAllow`, `AxialExtentUpper`, `Snap` — are each operand's own admission allowances, derived from its OWN section rather than from the generator, so two genuinely co-axial operands differ in them by construction and comparing them would refuse every admissible pair. | This is decad's own admission decision, so CLAUDE.md's reject-only rule binds it directly and a residual test here would be the admission gate on a residual that rule forbids. Prism §3.3 states what the exactness excludes and why loosening it is not the repair; the same reading governs here, and the revolve arm's frame equality is what makes §3.1's re-expression the identity by construction rather than by a computation. |
 | S5 | **For `Trim`, the tool's section is one closed hole-free loop** — for a prism-family tool that is `ProfileRecord.Outer` with `Holes` empty, and a `chainPayload` tool fails the row. `Extend` and `Split` do not take it. | The side reading (§3.2) is "does this cell lie inside the tool's own loop", and `sketch` answers it by which cells its arrangement publishes. A holed tool publishes its hole's interior as a bounded cell of its own, which that reading would misread as material; an open tool's section bounds no region, so there is no inside to name. `Extend` reads the nearest crossing and `Split` returns every piece, so neither reads a side and neither hazard reaches them. |
 | S6 | **The tool spans the receiver over the sweep parameter.** Prism-family: `z0_tool' <= z0_recv && z1_tool' >= z1_recv` after prism G5's origin shift `z' = z + (originB − originA)·normalA`. Revolve-family: the same relation over `phi0`/`phi1`. | A tool that stops inside the receiver ends its cut at a level the receiver's own record does not state, so the result would carry a face at that level and stop being the sweep of one section over one interval. The comparison is prism G5's: exact over each level's held float, displacement and denoted rational, so a tool end within its displacement of a receiver end, with no shared denoted rational, does not span. A chain sheet records its extent's denoted levels as `prismPayload` does, so a chain tool or receiver at 0.2 in or 0.3 in spans a receiver at the same denoted level. The shift is bookkeeping on an axis S4 certified. |
-| S7 | **Both operands carry a zero section displacement, the re-expression is the identity in the stored floats, and every segment either operand's own record CONSUMES spans its entity's natural domain** (`prismcells.WholeSegmentRange`, taken off the recorded range and never off the walk's closed-ness). `Extend`'s one exception is the segment being extended, whose recorded range must be narrower (§2.2) and whose entity §3.1 recreates over its full domain instead of walking it. | Prism §3.4 reroutes a split boundary to the mesh path under exactly these three causes — a source displacement, a walk charge, a nonidentity re-expression — because each can move a transverse cut by its displacement divided by the crossing sine and no certified crossing-sensitivity bound exists. A trim always splits a boundary, so the condition is never vacuous, and with no mesh path to reroute to the same three causes refuse. Stating the third as a record property rather than as a scene-time charge makes it decidable before the arrangement runs, which is what lets every miss be one refusal at the call. §5 states the cost and what would lift it. |
+| S7 | **Both operands carry a zero section displacement, the re-expression is the identity in the stored floats, and every segment either operand's own record CONSUMES spans its entity's natural domain** (`prismcells.WholeSegmentRange`, taken off the recorded range and never off the walk's closed-ness). `Extend`'s one exception is the segment being extended, whose recorded range must be narrower (§2.2) and whose entity §3.1 recreates over its full domain instead of walking it. | Each of these three causes — a source displacement, a walk charge, a nonidentity re-expression — can move a transverse cut by its displacement divided by the crossing sine. Prism §3.4 charges that movement per cut (Part G §3 A6, `prismcells.CrossingCharge`) and sends a pair with no charge to the mesh path. Trim, Extend and Split do not call it and have no mesh path, so the three causes refuse. A trim always splits a boundary, so the condition is never vacuous. Stating the third as a record property rather than as a scene-time charge makes it decidable before the arrangement runs, so every miss is one refusal at the call. §5 states the cost. |
 
 S1–S7, with §2.2's receiver rows, are what the gate checks before touching
 `sketch`. Passing them admits the pair to §3's resolution, which has
@@ -118,7 +118,7 @@ clause exists because `Trim` and `Extend` return an open-meridian sheet, and the
 chain-revolve build places no pole for a cut fragment ending on the axis.
 `Split` returns solids, and the solid revolve build places a pole for a meridian
 meeting the axis exactly as `Revolve` does. Each piece reruns the axis gates
-over its own meridian about the target's oriented axis (`revolveBlendAxis`:
+over its own meridian about the target's oriented axis (`revolveplan.Payload.BlendAxis`:
 the side gate, the axis-contact audit and the snap allowances), so a piece the
 target's gates would not have admitted refuses with the sentinel `Revolve`
 gives it. A cylinder or a ball splits across its axis this way.
@@ -133,7 +133,7 @@ internal edges do not name a free end. Placement rebuilds the record with new ed
 
 decad builds one private `sketch.Sketch`, the same
 `sketch.NewWorld().CreateSketch(...)` pattern `prismcells.BuildScene`
-(`internal/prismcells/scene.go`) and `momentRecordScene` (`internal/momentinput/reconstruct.go`) already
+(`internal/prismcells/resolve.go`) and `momentRecordScene` (`internal/momentinput/reconstruct.go`) already
 use. **`prismcells.BuildScene` is reused**, over three extensions and no new scene
 code:
 
@@ -259,7 +259,7 @@ union loop — a fact about the arrangement, not about what the record states.
 Two things differ from that function, and nothing else does: the chain is not
 required to close, and a survivor set that falls into several runs yields
 several walks rather than failing. Each surviving edge is converted through
-the existing, unmodified `recordEdge`/`falsifyRange` pair (seam.go), so every
+the existing, unmodified `recordEdge`/`falsifyRange` pair (`internal/sketchrecord`), so every
 fragment's `TExact` admission and reject-only range falsifier applies exactly
 as it does for a caller-drawn profile.
 
@@ -340,12 +340,12 @@ consequence: **a body this design produced cannot be trimmed again.** A trim's
 result carries a positive section displacement whenever the tool cut anything
 (§7), so a second `Trim` on it fails S7.
 
-That is prism §3.4's own routing decision with the fallback removed, and the
-same proof would lift both: a certified lower bound on the crossing angle `θ`
-between two arranged carriers would bound the amplification `δ/sin θ` a
-pre-existing displacement suffers at a cut, and both designs could then charge
-it instead of refusing. Neither design has one, and inventing a floor for `θ`
-would be a tolerance deciding admission, which the reject-only rule forbids.
+The amplification `δ/sin θ` a pre-existing displacement suffers at a cut is
+what S7 avoids. `prismcells.CrossingCharge` bounds it for prism booleans from an
+exact rational lower bound on `sin θ` and declines a crossing whose bound is not
+above the noise floor (prism §3.4). Trim, Extend and Split do not call it.
+Lifting S7 means charging through it and refusing wherever it declines, because
+no mesh path exists to take instead.
 
 A caller reaches a multiply-trimmed shape today by trimming once against each
 tool from the undisplaced original, then `Stitch`ing the results (surface §6) —
@@ -634,16 +634,16 @@ const (
 // Trim cuts the receiver where it meets tool and returns the kept pieces as
 // one sheet body. The receiver and tool are consumed on the document's
 // uniform terms (core §6); a refusal consumes neither.
-func (b *Body) Trim(ctx context.Context, tool *Body, side TrimSide) (*Body, error)
+func Trim(ctx context.Context, b *Body, tool *Body, side TrimSide) (*Body, error)
 
 // Extend lengthens the receiver along the named edges' own carriers until
 // they meet tool, and returns the lengthened sheet.
-func (b *Body) Extend(ctx context.Context, edges *EdgeQuery, tool *Body) (*Body, error)
+func Extend(ctx context.Context, b *Body, edges *EdgeQuery, tool *Body) (*Body, error)
 
 // Split cuts target with tool and returns one body per piece, in a
 // deterministic order this evaluator states. Both operands are consumed on the
 // document's uniform terms, exactly as Cut consumes its two.
-func (d *Document) Split(ctx context.Context, target, tool *Body) ([]*Body, error)
+func Split(ctx context.Context, target, tool *Body) ([]*Body, error)
 ```
 
 `Extend` names the edges to lengthen through the existing selector vocabulary
@@ -671,10 +671,10 @@ predicate, exactly as it must after a mesh boolean produces several lumps.
 | Consumer | Effect |
 |---|---|
 | Topology and provenance | The result is built by the ribbon's own wall build over the widened payload, under the operation's own private producer identity. Faces get FRESH roles minted from the surviving walks' own segment positions, per decad's settled role rule (`agent-docs/modify-design.md` §9: a role indexes the record it labels and is never inherited). A caller re-selects by geometric predicate, as it already must after a Fillet |
-| Tessellation and export | A trimmed prism sheet's walls chord exactly as the same record's untrimmed siblings do, through surface §10's manifold-with-boundary audit, with the section displacement reserved from the requested tolerance before chording exactly as `agent-docs/tessellation-design.md` §5 reserves `prismPayload`'s. A trimmed revolve sheet waits on surface increment 4 as every revolve sheet mesh does |
-| Clearance kernel | `clearance.BuildPrismBodyCarriers` (`internal/clearance/body_carriers.go`) refuses a model for any payload carrying a nonzero section displacement, so a trimmed body reads `Suspect` in every pair: each certificate the kernel emits is an exact statement about the carriers it read, and a carrier the payload holds only within `δ` of the one it denotes supports none. A ribbon payload has no carrier model at all today, trimmed or not |
-| `Verify` | The sheet validity audit (surface §9.1) reads the surviving walks the same way it reads a ribbon's: a trimmed prism sheet earns the fourth leg by construction where every walk is proven simple and the sweep height positive, and a trimmed revolve sheet earns it on the full-turn argument alone. The tolerance gate reads the body's own recorded section and shrinks its witness maximum by twice the sum of `δ` and the axial displacement through `gatewitness.Prism` |
-| Surveys | The undercut reading is a normal-direction membership and is unaffected at any `δ`. The wall and min-radius readings are staged at `δ > 0`, answering `Suspect`, on prism §12's own reasoning: a displacement is not a term either reading may absorb into its bound |
+| Tessellation and export | A trimmed prism sheet's walls chord exactly as the same record's untrimmed siblings do, through surface §10's manifold-with-boundary audit, with the section displacement reserved from the requested tolerance before chording exactly as `agent-docs/tessellation-design.md` §5 reserves `prismPayload`'s. A trimmed revolve sheet is a `chainRevolvePayload`, which tessellation has no arm for, so `Tessellate` returns `ErrUnsupported` (T180) |
+| Clearance kernel | A trimmed sheet is a `chainPayload` or `chainRevolvePayload`, and the pair kernel (`internal/clearance/pairkernel/geom.go`) builds no carrier model for either, trimmed or not. A displaced prism piece of `Split` gets none either: `clearance.BuildPrismBodyCarriers` (`internal/clearance/body_carriers.go`) refuses a payload with a nonzero section displacement, because each certificate the kernel emits is an exact statement about the carriers it read |
+| `Verify` | The sheet validity audit (surface §9.1) leaves the fourth leg, non-self-intersection, undecided for a trimmed sheet of either family: `chainrecord.Payload.ProvesSimple` and `revolveaxis.ProvesSimple` both withhold the proof when the section displacement is nonzero, so the section's validity is `ValidityUndecided` unless a proven violation makes it `ValidityInvalid`. The tolerance gate's diameter reads a trimmed prism sheet's vertices and stations through `gatediameter`'s chain arm, each charged the section displacement |
+| Surveys | A sheet has no material, so the wall and min-radius readings are `ScalarUnavailable` with `DiagSurveyPrerequisite` (surface Table V). The undercut survey has no arm for `chainPayload` or `chainRevolvePayload` and reads `CoverageUnavailable` |
 | Modify ops | `Fillet`/`Chamfer`/`Shell` already refuse a sheet (surface Table X) and already refuse a displaced receiver (`prismrecord.Payload.RequireExactSection`), so a trimmed body reaches none of them by either route |
 | `Split`'s pieces | Ordinary prisms or revolves. Every consumer that admits a `prismPayload` or `revolvePayload` admits a piece whose own cell was untouched; a prism piece carrying a cut reads as any other displaced prism does, under prism §12's own rows, and a revolve piece as §7.2's displaced revolve does, under that section's last paragraph |
 
@@ -690,9 +690,8 @@ predicate, exactly as it must after a mesh boolean produces several lumps.
   an orientation surface §2.3 decides at build, and surface §1.4 records that
   no `Reverse Normal` exists to change it.
 - **S7 refuses a second trim rather than charging the amplification.** §5
-  states the proof that would lift it. Charging it without that proof would
-  publish a bound no derivation supports; refusing costs the caller a
-  `Stitch` of single-trim results.
+  names the charge that exists for prism booleans and why these operations do
+  not use it. Refusing costs the caller a `Stitch` of single-trim results.
 - **`Trim` takes a stated side rather than returning both pieces.** The side
   is a two-value enum, so neither value is a default and the call cannot be
   written without deciding. Returning both pieces and letting the caller pick
@@ -721,7 +720,7 @@ All five arms are implemented. Tests are surface §15's rows.
 | `Trim`, prism family | The S1–S7 gate, `prismcells.BuildScene`'s `ChainRecord` arm, §3.2's side reading over `prismcells.Classify`, §3.3's open-walk chaining, the walk set and section displacement of §3.4, §7's exactness | T170–T174, T181 |
 | `Split`, prism family | §3.2's cell selection, per-cell recording of the private arrangement, one `prismPayload` per piece through `evalPrism` | T175–T177 |
 | `Extend`, prism family | §3.1's full-domain entity recreation, §3.2's nearest-cut reading, RS4's refusal | T178–T179 |
-| `Trim` and `Extend`, revolve family | S1's and S4's revolve arms over `chainRevolvePayload`'s walk set, S6's angular span relation, the meridian scene, §7.1's fold into the axis-coordinate walk. A trimmed revolve sheet's mesh waits on surface increment 4, as every revolve sheet's does | T180, T182, T183 |
+| `Trim` and `Extend`, revolve family | S1's and S4's revolve arms over `chainRevolvePayload`'s walk set, S6's angular span relation, the meridian scene, §7.1's fold into the axis-coordinate walk. A trimmed revolve sheet has no mesh (§9) | T180, T182, T183 |
 | `Split`, revolve family | `revolvePayload.SectionDelta` reaches the Pappus volume, the centroid and every other solid reading (§7.2). `surfacetrim.SplitRevolve` runs `prismcells.SplitPieces` over the two meridian views, reruns the axis gates per piece (§2.2) and builds one `revolvePayload` per cell. The piece order is the prism arm's | T184–T186 |
 
 ## 12. Required tests
