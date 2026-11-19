@@ -1500,35 +1500,21 @@ areas, residuals), never merely "it ran" — CLAUDE.md's own rule.
   outer loop (verbatim reproduction, §4.2's structural-match claim) — for a
   target and tool whose own consumed segments are whole, the only case this
   claim holds for (§4.2's own qualification).
-- A trimmed source segment's walked endpoint is charged (task fu143): an
-  operand whose OWN recorded profile carries a segment ranged narrower than
-  its entity's full domain (a `LineSeg` fragment of a larger sketch-cut line,
-  the ordinary shape a `sketch` arrangement produces for a rectangle split by
-  another entity) reports a positive `sectionDelta` from `Union`, `Cut`'s
-  clean-nesting match, and `Intersect`'s clean-nesting match alike, and each
-  op's published volume bound contains the residual against the exactly
-  computed union of the two operands' own DENOTED sections (`math/big.Rat`
-  over the operands' own recorded floats, never a second float answer). The
-  same fixture with every consumed segment whole publishes a `sectionDelta`
-  of exactly `0.0` on all three ops, pinning that the new charge does not
-  fire on the case §7 already kept exact.
-- The walk charge survives `momentregion.Lerp2`'s CANCELLATION: over a table of trimmed
-  `LineSeg` carriers whose `End − Start` cancels, including one whose fragment sits on
-  the sketch origin — `prismcells.WalkChargeOf`'s answer contains
-  the EXACT rational residual of the endpoint `momentregion.Lerp2` walked to, at both
-  recorded bounds, compared squared over `math/big.Rat` so no square root or
-  float difference can flatter it. Each row also asserts its own premise: that
-  charging the walked endpoint's own envelope (`segmentWalk.coordUpper`)
-  instead of the carrier's would under-charge exactly on the rows that cancel
-  and NOT on an ordinary uncancelling fragment, so a row that stops
-  reproducing the shape fails rather than passing quietly.
-- The trimmed-circular refusal reads the RECORDED range, not the walk's
-  closed-ness: a `CircleSeg` whose `TEnd` is one ulp short of `1` — a range
-  the walk's own tolerance still calls a closed turn, which the fixture must
-  assert directly so the case cannot silently stop being the one under test —
-  refuses all three ops (`ok == false`, no error), while the same pair with
-  the bound recorded exactly resolves analytically, so the fallback is the
-  trim's own doing.
+- A trimmed source segment's walked endpoint is charged (§7's δ_walk). Two tests pin it:
+  `TestReflectedRewindReversesLoopAndChargesTrimmedLine` (`internal/prismcells`) asserts that
+  `prismcells.WalkChargeOf` is positive for a `LineSeg` ranged to `TEnd: 0.5` and that `RewindLoop` returns that
+  same charge bit for bit, and `TestCleanNestingCutRecordNarrowedLines` asserts that a clean-nesting `Cut` over
+  lines narrowed to `0.25..0.75` carries a walk allowance in its carrier record's entries. No test yet runs a
+  trimmed-fragment operand through `Union`, `Cut` and `Intersect` and compares each published bound with an
+  exact `math/big.Rat` residual, and none checks that the all-whole variant publishes a `sectionDelta` of exactly
+  `0.0`. No test drives `WalkChargeOf` over lines whose `End − Start` cancels in `momentregion.Lerp2`, and none
+  compares the line operand envelope against the walked endpoint's own `coordUpper`.
+- The trimmed-circular refusal reads the RECORDED range, not the walk's closed-ness: a `CircleSeg` whose `TEnd` is
+  one ulp short of `1` refuses all three ops (`ok == false`, no error), while the same pair with the bound
+  recorded exactly resolves analytically. `ProfileHasTrimmedCircularSource` (`internal/prismcells/charges.go`)
+  implements the refusal; no test pins it through a boolean. The only test with `TEnd: math.Nextafter(1, 0)` on a
+  `CircleSeg` is `apitest` `TestRegionMomentsRejectMalformedTopology`'s `NearlyFullCircle` row, which asserts
+  `decad.ErrDegenerate` from the moment readers.
 - Exactness, one test per §7 arm: a line-only merged section over operands
   that share a frame AND whose merge cut nothing (a contained footprint)
   reports `Exact` volume with a zero bound; a partially overlapping pair of
@@ -1754,26 +1740,26 @@ its source surface tags.
 | S4a | plate `Cut` through hole, both on XY | analytic | 7 faces, closed-form volume bound |
 | S4b | 20×20×10 plate with Ø4 through hole, then `Cut` Ø8 counterbore from z = 7 | analytic | 9 faces, volume 4000 − 76π mm³ within its published bound (`apitest/counterbore_test.go`) |
 | S4c/d | the same counterbore first, then the Ø4 through hole inside it | analytic | the same 9 faces and bounded volume |
-| S5 | plate `Cut` by six `Copy`-translated cylinders | analytic | six results, `sectionDelta > 0`: `Fillet` refuses, wall `undecided` |
+| S5 | plate `Cut` by six `Copy`-translated cylinders | analytic | at the survey commit: six results, `sectionDelta > 0`: `Fillet` refuses, wall `undecided`. Today the cut still records no carrier record, because §5.4 of Part K needs the identity re-expression (`prismcells.CleanCutRecord`) and a translated tool is not one. The `Fillet` refusal therefore stands. No test asserts this fixture; `TestChamferPlateAfterPatternSocketCut` pins the same refusal for the loops of rotated pattern sockets |
 | S5b | the six holes each drawn in a sketch | analytic | closed-form bound, `Fillet` OK |
 | S6a | filleted box `Cut` by a cross cylinder | mesh | `Faceted` faces, mesh-bounded volume |
 | S6b | filleted box `Cut` by a same-plane cylinder | analytic | closed-form volume bound |
-| S7 | two Ø10 cylinders crossing at right angles, `Union` and `Cut` | mesh | `Faceted`, mesh-bounded volume |
+| S7 | two Ø10 cylinders crossing at right angles, `Union` and `Cut` | mesh | at the survey commit: `Faceted`, mesh-bounded volume. Not asserted by a test for equal diameters. `TestSectionMeshBooleanHistoryRefusesCutCurves` shows the mesh path for a Ø12 and a Ø8 cylinder crossing at right angles |
 | S8 | sphere r = 10 `Cut` by a box, or by a Ø6 cylinder | mesh | `ErrUnsupported`: "more than 65536 facets in one revolve mesh" at the pair tolerance (`revolveproof` `maxFacetsPerMesh`) |
-| S9 | box `Intersect` the same box rotated 45° about z | mesh | `BooleanUnsupportedContact` (coplanar caps); rotated 90°: "come within the chord tolerance without provably interpenetrating" |
+| S9 | box `Intersect` the same box rotated 45° about z | mesh at the survey commit; analytic with A6's charge | `BooleanUnsupportedContact` (coplanar caps) at the survey commit; an analytic octagonal prism with 10 faces and an `Approximate` volume now (`TestPrismIntersectRotatedBoxBuildsAnalyticOctagon`). Rotated 90° at the survey commit: "come within the chord tolerance without provably interpenetrating" |
 | S10 | box `Cut` by a cylinder on a plane tilted 30° | mesh | 7 `Faceted` faces, mesh-bounded volume |
 | S11 | 60×20×10 bar, three cross holes at x = 10, 30, 50 | mesh | holes 1–2 build; hole 3 refuses because the target's held mesh bound where the pair meets exceeds the pair tolerance. Both long side walls carry that bound over their whole face; the box's other faces carry 0 |
-| S12 | two disjoint boxes `Union` | mesh | `Faceted`, 2 lumps, `Exact` volume, wall `unavailable` |
+| S12 | two disjoint boxes `Union` | mesh at the survey commit; multi-region prism with A5 | `Faceted`, 2 lumps, `Exact` volume, wall `unavailable` at the survey commit; two lumps, `Exact` volume and no `Faceted` face now (§9, A5 N-hole cut) |
 | S12c | two boxes touching at one vertical edge | mesh | `BooleanUnsupportedContact` |
-| W1–W4 | two boxes sharing a wall (whole, partial, longer, 1 mm overlap with collinear walls) | analytic | RB1 `ErrUnsupported`: the arrangement reports an invalid region |
+| W1–W4 | two boxes sharing a wall (whole, partial, longer, 1 mm overlap with collinear walls) | analytic | RB1 `ErrUnsupported`: the arrangement reports an invalid region at the survey commit; one analytic prism now (A3, `TestPrismBooleanSharedWallBoxes`) |
 | W5 | two boxes overlapping with no collinear wall | analytic | builds |
-| W6 | box `Cut` by a box sharing its wall | mesh | `BooleanUnsupportedContact` |
+| W6 | box `Cut` by a box sharing its wall | mesh at the survey commit; analytic with A3 | `BooleanUnsupportedContact` at the survey commit; an analytic prism now (`TestPrismBooleanSharedWallBoxes`) |
 | B1 | box `Cut` by a 10×10 square cross slot | mesh | 10 `Faceted` faces, exact-integral volume |
 | B2 | Ø20×40 rod `Cut` by a 4 mm keyway box | mesh | 7 `Faceted` faces, mesh-bounded volume |
-| B3 | plate `Union` Ø10 boss standing on its top (z 10..25) | mesh | `BooleanUnsupportedContact` (held facets within tolerance) |
+| B3 | plate `Union` Ø10 boss standing on its top (z 10..25) | mesh at the survey commit; A1 stacked prism | `BooleanUnsupportedContact` (held facets within tolerance) at the survey commit; an analytic stacked prism now (`TestStackedUnionBossOnPlate`) |
 | B4 | plate `Union` the boss rooted inside (z 5..25) | mesh | 8 `Faceted` faces, mesh-bounded volume, no analytic edge |
 | B5 | plate `Union` a side pin whose end cap lies in the plate's face | mesh at the survey commit; class B "Flush cap contact" when both are perpendicular datum-placed prisms | `BooleanUnsupportedContact` at the survey commit; analytic brep now |
-| P1 | hub ∪ six teeth placed by `RotationAround` | analytic → mesh | tooth 2 `BooleanUnsupportedContact` (prism-boolean §3.4 reroute) |
+| P1 | hub ∪ six teeth placed by `RotationAround` | analytic → mesh | tooth 2 `BooleanUnsupportedContact` (prism-boolean §3.4 reroute) at the survey commit. A tooth whose root arc lies on the hub circle still falls back to the mesh path and refuses with `ErrUnsupported`, "held facets come within the chord tolerance" (`TestPrismUnionToothOnHubCircleFallsBackAtTheTangentRoot`); a rotated tooth rooted inside the hub builds analytically (`TestPrismUnionRotatedToothBuildsAnalytic`) |
 | P2 | plate `Cut` by a four-lump faceted tool | mesh | `BooleanUnsupportedContact` |
 | M2–M5, T1 | reflected operands (mirror §2) | mesh | coplanar refusal, or a `Faceted` result |
 
@@ -4113,9 +4099,11 @@ No missing-features row closes. Effect per row or claim:
 
 The concrete gain is a set of ordinary refused chains: two overlapping parallel holes placed off the body's frame
 (fixture F1), a straight hole that breaks into an earlier translated hole (F2), and an analytic intersect after a
-mesh cut (F4). F3, a box beside a plate that already carries a boss under `ExactOnly`, is a regrouped plan whose
-result `TestBooleanRegroupDisjunction` checks. The sequential join of a copy of the plate and boss with the box
-succeeds by the grid route (`TestRegroupPlansBuildByHand`), so F3 is not a refused chain.
+mesh cut (F4). F3, a box beside a plate that already carries a boss under `ExactOnly`, is not shown to be a
+refused chain. `TestRegroupPlansBuildByHand` shows that the sequential join of a copy of the plate and boss with the
+box succeeds by the grid route (volume 12240). `TestBooleanRegroupDisjunction` runs the call without the copy and
+asserts the same volume, a mesh-path watertight result and the regrouped history shape, but it does not assert that
+the sequential call refuses first, so it does not show that the regroup is what builds F3.
 
 ### Assumptions
 
@@ -4591,7 +4579,8 @@ All of Part R is implemented. Each task below gives its owner and its pinning te
 
 Owner: none (tests only). `TestRegroupPlansBuildByHand` (`apitest/boolean_regroup_plan_test.go`) has one subtest per
 F fixture asserting: for F1, F2 and F4 the sequential chain's final call fails with
-`errors.Is(err, decad.ErrUnsupported)` (F3's sequential call on a copy succeeds with the F3 volume); each plan
+`errors.Is(err, decad.ErrUnsupported)`. F3's subtest instead joins a `Copy` of `Union(plate, boss)` with `box2`
+sequentially, which succeeds by the grid route with the F3 volume, a mesh-path result and watertightness. Each plan
 step marked analytic in Fixtures has `tookMeshPath == false`; the final `Full` step has `tookMeshPath == true`; the
 final body meets the F assertions on volume, bound and watertightness. D1 and D4 subtests assert the sequential
 refusal persists through the `Copy` and the tilted `t2'`, and that `Union(t1, t2')` takes the mesh path.
@@ -4619,8 +4608,10 @@ Owners: the plan executor `internal/booleandispatch/regroup.go`, and the root wr
 
 #### Task 5: Disjunction regroup
 
-`TestBooleanRegroupDisjunction` covers F3 and D2. The plan executor handles a disjunction; `regroupBoolean` has no
-disjunction gate.
+`TestBooleanRegroupDisjunction` covers F3 and D2. Its F3 subtest calls `Union(Union(plate, boss), box2)` with no
+`Copy` and asserts the F3 volume, the mesh-path watertight result and the history assertions of Fixtures. It does not
+assert that the sequential call refuses beforehand. D2 asserts the refusal of `Union(first, t2)` over a `Cut` result.
+The plan executor handles a disjunction; `regroupBoolean` has no disjunction gate.
 
 The test names are in `.github/test-shards.txt` and `.github/test-shards-apitest.txt`. Layout rows:
 `agent-docs/layout/booleans.md` (`boolean_regroup.go`), `verification.md` (`internal/boolchain/`),
