@@ -108,6 +108,50 @@ func TestLoftThroughBoreCutGates(t *testing.T) {
 	line := sectionrecord.LineSeg{End: sectionrecord.Point2{U: 1, V: 1}, TStart: 0, TEnd: 1}
 	circle := tool.Profile.Outer.Segments[0].(sectionrecord.CircleSeg)
 
+	t.Run("a later circular tool must clear every prior bore", func(t *testing.T) {
+		env := envOf(documentNode(doc), doc.nextProducerID())
+		first, admitted, err := loftrecord.ThroughBoreCut(t.Context(), env, loft, tool)
+		require.NoError(t, err)
+		require.True(t, admitted)
+		withBore := first.Payload.(loftPayload)
+		require.Positive(t, withBore.SectionDelta, "the held hole chords depart from the exact circle")
+		withCenter := func(x float64) prismPayload {
+			pl, c := tool, circle
+			c.Center.U = x
+			pl.Profile.Outer.Segments = []sectionrecord.CurveSegment{c}
+			return pl
+		}
+		for _, tc := range []struct {
+			name string
+			x    float64
+		}{
+			{"coincident", 1},
+			{"crossing", 2},
+			{"tangent", 3},
+		} {
+			t.Run(tc.name, func(t *testing.T) {
+				out, admitted, err := loftrecord.ThroughBoreCut(t.Context(), env, withBore, withCenter(tc.x))
+				require.NoError(t, err)
+				require.False(t, admitted)
+				require.Nil(t, out)
+			})
+		}
+		second, admitted, err := loftrecord.ThroughBoreCut(t.Context(), env, withBore, withCenter(-2))
+		require.NoError(t, err)
+		require.True(t, admitted)
+		out, admitted, err := loftrecord.ThroughBoreCut(t.Context(), env, second.Payload, withCenter(-3))
+		require.NoError(t, err)
+		require.False(t, admitted, "the tool clears the first bore and crosses the second")
+		require.Nil(t, out)
+
+		displaced := withCenter(-2)
+		displaced.SectionDelta = 0.01
+		out, admitted, err = loftrecord.ThroughBoreCut(t.Context(), env, withBore, displaced)
+		require.NoError(t, err)
+		require.False(t, admitted, "the new circle must have zero section displacement")
+		require.Nil(t, out)
+	})
+
 	loftGates := []struct {
 		name string
 		edit func(*loftPayload)

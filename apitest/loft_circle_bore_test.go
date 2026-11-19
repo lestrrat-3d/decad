@@ -257,6 +257,45 @@ func TestLoftThroughBoreCutPublishesCircularTopology(t *testing.T) {
 			requireBoreRimsOppositeUses(t, placedBody)
 		})
 	}
+
+	t.Run("successive flush tools", func(t *testing.T) {
+		body := cut
+		materialArea := 100 - math.Pi
+		bores := []struct{ x, y, radius float64 }{{1, 0.5, 1}, {-2, 1, 0.75}, {0, -2, 0.5}}
+		for i, bore := range bores[1:] {
+			tool := circlePrismAtZ(t, doc, bore.x, bore.y, bore.radius, 0, 2)
+			body, err = decad.Cut(t.Context(), body, tool)
+			require.NoError(t, err)
+			materialArea -= math.Pi * bore.radius * bore.radius
+			_, err := decad.Faces(decad.Cylindrical()).Exactly(i + 2).SelectFaces(body)
+			require.NoError(t, err)
+			for end, ref := range []decad.FeatureRef{decad.CapStart(body), decad.CapEnd(body)} {
+				caps, err := decad.Faces(decad.FaceCreatedBy(ref)).Exactly(1).SelectFaces(body)
+				require.NoError(t, err)
+				loops := caps[0].Loops()
+				require.Len(t, loops, i+3)
+				for j, loop := range loops[1:] {
+					edges := loop.Edges()
+					require.Len(t, edges, 1)
+					rim, ok := edges[0].Curve().(decad.Circle3)
+					require.True(t, ok)
+					want := bores[j]
+					require.Equal(t, r3.NewVec(want.x, want.y, float64(2*end)), rim.Center)
+					require.Equal(t, units.Millimeters(want.radius), rim.Radius)
+					require.Len(t, edges[0].Faces(), 2)
+				}
+				area, err := caps[0].Area()
+				require.NoError(t, err)
+				require.InDelta(t, materialArea, area.Value.Base(), area.Bound.Base())
+			}
+			volume, err := body.Volume()
+			require.NoError(t, err)
+			require.InDelta(t, materialArea*2, volume.Value.Base(), volume.Bound.Base())
+			mesh, err := body.Tessellate(t.Context(), units.Millimeters(0.1), decad.WithVerification(decad.VerifyAll))
+			require.NoError(t, err)
+			require.True(t, mesh.VolumeVerified() && mesh.BoundaryVerified())
+		}
+	})
 }
 
 func requireBoreRimsOppositeUses(t *testing.T, body *decad.Body) {

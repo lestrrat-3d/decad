@@ -94,7 +94,7 @@ func TestBoreTopologyShapeRefusals(t *testing.T) {
 		}
 	}
 	baseline := valid()
-	_, ok := boreTopologyCircle(baseline.pl, baseline.a, baseline.start, baseline.end, baseline.walls)
+	_, ok := boreTopologyCircles(baseline.pl, baseline.a, baseline.start, baseline.end, baseline.walls)
 	require.True(t, ok)
 	for _, tc := range []struct {
 		name   string
@@ -126,7 +126,7 @@ func TestBoreTopologyShapeRefusals(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			f := valid()
 			tc.change(&f)
-			_, ok := boreTopologyCircle(f.pl, f.a, f.start, f.end, f.walls)
+			_, ok := boreTopologyCircles(f.pl, f.a, f.start, f.end, f.walls)
 			require.False(t, ok)
 		})
 	}

@@ -431,43 +431,98 @@ func BoreHasExactAxis(frame0, frame1 r3.Frame, u, v, level float64) bool {
 	return true
 }
 
-func boreTopologyCircle(pl Payload, a loftmesh.Assembly, start, end *topo.Face, walls []*topo.Face) (sectionrecord.CircleSeg, bool) {
-	if len(pl.Profile0.Holes) != 1 || len(pl.Profile0.Holes[0].Segments) != 1 ||
-		len(a.VIdx) != 2 || len(start.Loops) != 2 || len(end.Loops) != 2 || len(walls) != a.Walls {
+func boreHoleCircle(hole sectionrecord.LoopRecord) (sectionrecord.CircleSeg, bool) {
+	if len(hole.Segments) != 1 {
 		return sectionrecord.CircleSeg{}, false
 	}
-	circle, ok := pl.Profile0.Holes[0].Segments[0].(sectionrecord.CircleSeg)
+	circle, ok := hole.Segments[0].(sectionrecord.CircleSeg)
 	if !ok || circle.CCW || circle.TStart != 1 || circle.TEnd != 0 {
 		return sectionrecord.CircleSeg{}, false
 	}
 	return circle, true
 }
 
-// buildAnalyticBoreTopology replaces only the certified hole's triangle
+func boreTopologyCircles(pl Payload, a loftmesh.Assembly, start, end *topo.Face, walls []*topo.Face) ([]sectionrecord.CircleSeg, bool) {
+	n := len(pl.Profile0.Holes)
+	if n == 0 || len(a.VIdx) != n+1 || len(start.Loops) != n+1 || len(end.Loops) != n+1 || len(walls) != a.Walls {
+		return nil, false
+	}
+	circles := make([]sectionrecord.CircleSeg, n)
+	for i, hole := range pl.Profile0.Holes {
+		circle, ok := boreHoleCircle(hole)
+		if !ok {
+			return nil, false
+		}
+		circles[i] = circle
+	}
+	return circles, true
+}
+
+// buildAnalyticBoreTopology replaces the certified holes' triangle
 // faces. The loft assembly and its mass and tessellation proofs stay intact:
 // each former hole triangle role maps to the one cylindrical source face.
 // The cylinder carries BoreCylinderNormalBound for the payload's own frame
 // and placement. A placement whose bound fails keeps the faceted walls.
 func buildAnalyticBoreTopology(ctx context.Context, env topo.Env, body *topo.Body, pl Payload,
 	a loftmesh.Assembly, start, end *topo.Face, walls []*topo.Face) ([]*topo.Face, error) {
-	circle, ok := boreTopologyCircle(pl, a, start, end, walls)
+	circles, ok := boreTopologyCircles(pl, a, start, end, walls)
 	if !ok {
 		return nil, fmt.Errorf("%w: a through-bore loft lost its certified hole", decaderr.ErrUnsupported)
 	}
 	level := pl.Frame0.ToLocal(pl.Frame1.Origin())
-	if !BoreHasExactAxis(pl.Frame0, pl.Frame1, circle.Center.U, circle.Center.V, level.Z) {
-		return nil, fmt.Errorf("%w: a through-bore loft has no common circle axis", decaderr.ErrUnsupported)
-	}
-	normalBound, ok := BoreCylinderNormalBound(pl.Frame0, pl.Xform, circle.Center.U, circle.Center.V,
-		level.Z, circle.Radius.Base())
-	if !ok {
-		return walls, nil
+	normalBounds := make([]float64, len(circles))
+	for i, circle := range circles {
+		if !BoreHasExactAxis(pl.Frame0, pl.Frame1, circle.Center.U, circle.Center.V, level.Z) {
+			return nil, fmt.Errorf("%w: a through-bore loft has no common circle axis", decaderr.ErrUnsupported)
+		}
+		normalBounds[i], ok = BoreCylinderNormalBound(pl.Frame0, pl.Xform, circle.Center.U, circle.Center.V,
+			level.Z, circle.Radius.Base())
+		if !ok {
+			return walls, nil
+		}
 	}
 	pp := prismrecord.Payload{
 		Frame: pl.Frame0, Z0: 0, Z1: level.Z, Xform: pl.Xform,
 		Z0Delta: a.Delta, Z1Delta: a.Delta,
 	}
-	faces, bottom, top, _, err := prismrecord.BuildLoopSidesAs(ctx, env, body, pp, 1, true, pl.Profile0.Holes[0], freeform.NewFreeformWork(), nil, denotation.LevelToken{}, denotation.LevelToken{}, false)
+	cylinders := make([]*topo.Face, len(circles))
+	for i, hole := range pl.Profile0.Holes {
+		loop := i + 1
+		wall, err := replaceBoreRims(ctx, env, body, pp, loop, hole, a.Reversed, start, end)
+		if err != nil {
+			return nil, err
+		}
+		wall.NormalBound = normalBounds[i]
+		cylinders[i] = wall
+	}
+	filtered := make([]*topo.Face, 0, len(walls))
+	for k, face := range walls {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		loop := a.Cell[k][0]
+		if loop == 0 {
+			filtered = append(filtered, face)
+			continue
+		}
+		wall := cylinders[loop-1]
+		wall.Origins = append(wall.Origins, face.Origins...)
+	}
+	for _, wall := range cylinders {
+		if len(wall.Origins) < 2 {
+			return nil, fmt.Errorf("%w: a through-bore has no source wall cells", decaderr.ErrUnsupported)
+		}
+	}
+	if err := circleCapAreas(ctx, pl, a, start, end); err != nil {
+		return nil, err
+	}
+	return append(filtered, cylinders...), nil
+}
+
+func replaceBoreRims(ctx context.Context, env topo.Env, body *topo.Body, pp prismrecord.Payload,
+	loopIndex int, hole sectionrecord.LoopRecord, reversed bool, start, end *topo.Face) (*topo.Face, error) {
+	faces, bottom, top, _, err := prismrecord.BuildLoopSidesAs(ctx, env, body, pp, loopIndex, true, hole,
+		freeform.NewFreeformWork(), nil, denotation.LevelToken{}, denotation.LevelToken{}, false)
 	if err != nil {
 		return nil, err
 	}
@@ -476,38 +531,21 @@ func buildAnalyticBoreTopology(ctx context.Context, env topo.Env, body *topo.Bod
 	}
 	wall := faces[0]
 	wall.Origins = nil
-	wall.NormalBound = normalBound
 	// The prism builder states these circle loops in its local sweep order.
 	// Carry the Loft assembly's whole-shell reversal onto the cylinder too;
 	// the cap loops below already receive the same reversal.
 	for _, loop := range wall.Loops {
-		loop.CoEdges = topobuild.LoftLoopCoedges(loop.CoEdges, a.Reversed)
+		loop.CoEdges = topobuild.LoftLoopCoedges(loop.CoEdges, reversed)
 	}
 	// prismrecord.BuildLoopSidesAs links its side face immediately, while Build links
 	// every live face after this rewrite. Clear those two private links once.
 	bottom[0].Edge.Faces = nil
 	top[0].Edge.Faces = nil
-	filtered := make([]*topo.Face, 0, len(walls))
-	for k, face := range walls {
-		if err := ctx.Err(); err != nil {
-			return nil, err
-		}
-		if a.Cell[k][0] == 1 {
-			wall.Origins = append(wall.Origins, face.Origins...)
-			continue
-		}
-		filtered = append(filtered, face)
-	}
-	if len(wall.Origins) < 2 {
-		return nil, fmt.Errorf("%w: a through-bore has no source wall cells", decaderr.ErrUnsupported)
-	}
-	filtered = append(filtered, wall)
-	start.Loops[1] = topobuild.NewLoop(env.Alloc, topo.Loop{Outer: start.Loops[1].Outer, CoEdges: topobuild.LoftLoopCoedges([]topo.CoEdge{{Edge: bottom[0].Edge, Forward: false}}, a.Reversed)})
-	end.Loops[1] = topobuild.NewLoop(env.Alloc, topo.Loop{Outer: end.Loops[1].Outer, CoEdges: topobuild.LoftLoopCoedges([]topo.CoEdge{{Edge: top[0].Edge, Forward: true}}, a.Reversed)})
-	if err := circleCapAreas(ctx, pl, a, start, end); err != nil {
-		return nil, err
-	}
-	return filtered, nil
+	start.Loops[loopIndex] = topobuild.NewLoop(env.Alloc, topo.Loop{Outer: start.Loops[loopIndex].Outer,
+		CoEdges: topobuild.LoftLoopCoedges([]topo.CoEdge{{Edge: bottom[0].Edge, Forward: false}}, reversed)})
+	end.Loops[loopIndex] = topobuild.NewLoop(env.Alloc, topo.Loop{Outer: end.Loops[loopIndex].Outer,
+		CoEdges: topobuild.LoftLoopCoedges([]topo.CoEdge{{Edge: top[0].Edge, Forward: true}}, reversed)})
+	return wall, nil
 }
 
 // circleCapAreas replaces each held hole polygon's area with its own
@@ -515,23 +553,25 @@ func buildAnalyticBoreTopology(ctx context.Context, env topo.Env, body *topo.Bod
 // placement bounds; the subtraction composes the circle integral's bound.
 func circleCapAreas(ctx context.Context, pl Payload, a loftmesh.Assembly, start, end *topo.Face) error {
 	for endCap, face := range []*topo.Face{start, end} {
-		hole := pl.Profile0.Holes[0]
+		holes := pl.Profile0.Holes
 		pts, loops := a.Pts0, a.LoopIdx0
 		if endCap == 1 {
-			hole = pl.Profile1.Holes[0]
+			holes = pl.Profile1.Holes
 			pts, loops = a.Pts1, a.LoopIdx1
-		}
-		holeArea, err := momentinput.LoopEnclosedArea(ctx, hole)
-		if err != nil {
-			return err
 		}
 		outer := loftmesh.CapPolygonAreaRat(pts, [][]int{loops[0]})
 		value, _ := outer.Float64()
 		if proofbound.IsNonFinite(value) {
 			return fmt.Errorf("%w: a circular-hole cap area is not finite", decaderr.ErrUnsupported)
 		}
-		area := proofbound.BoundedSub(
-			proofbound.MeasuredScalar(value, proofarith.RationalFloatError(outer, value)), holeArea)
+		area := proofbound.MeasuredScalar(value, proofarith.RationalFloatError(outer, value))
+		for _, hole := range holes {
+			holeArea, err := momentinput.LoopEnclosedArea(ctx, hole)
+			if err != nil {
+				return err
+			}
+			area = proofbound.BoundedSub(area, holeArea)
+		}
 		face.Area = area.Value
 		face.AreaBound = proofbound.AbsSumUpper(area.Bound, face.AreaBound)
 	}
