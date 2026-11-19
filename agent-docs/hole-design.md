@@ -153,11 +153,11 @@ cylinder at `At`, the plane Y2 reads a blind `Depth` from.
 
 | Decision | Rule |
 |---|---|
-| Z1 | The head's depth is measured from the tangent plane, as the bore's is: a counterbore of depth `d` ends `d` from that plane along the hole axis, and a countersink's cone has its stated diameter in that plane and narrows from there. Where the wall of a rod has fallen away from the plane the recess is the shallower there, and where a bore's wall has risen toward it the recess takes the lens of wall between them. The head's gates of H5 to H7 are those of a plane. |
-| Z2 | Y3's margin reads the head's radius when it is wider than the bore, so the tools clear the wall as far out as the head reaches. A head as wide as a bore it starts in is `ErrUnsupported`, as Y4 says of the bore. |
-| Z3 | A countersink's cone rises at least that margin over the plane, so a bore's wall that has risen into it is cut. |
-| Z4 | The bore and its head are one cut. On the mesh path a second cut would meet a target that already holds the first cut's coarse mesh and be refused, so a counterbore's cylinders are united before the cut, and a countersink on a cylindrical face is one revolve of the bore and the cone together. |
-| Z5 | The tests state the removed volume of each case from an integral over the hole's section of the length between the wall and the recess floor, the wall at `√(R² − y²)`, and require it inside the result's own bound. A counterbore wide enough that the wall rises more than `MouthMargin` toward the plane checks Z2. |
+| C1 | The head's depth is measured from the tangent plane, as the bore's is: a counterbore of depth `d` ends `d` from that plane along the hole axis, and a countersink's cone has its stated diameter in that plane and narrows from there. Where the wall of a rod has fallen away from the plane the recess is the shallower there, and where a bore's wall has risen toward it the recess takes the lens of wall between them. The head's gates of H5 to H7 are those of a plane. |
+| C2 | Y3's margin reads the head's radius when it is wider than the bore, so the tools clear the wall as far out as the head reaches. A head as wide as a bore it starts in is `ErrUnsupported`, as Y4 says of the bore. |
+| C3 | A countersink's cone rises at least that margin over the plane, so a bore's wall that has risen into it is cut. |
+| C4 | The bore and its head are one cut. On the mesh path a second cut would meet a target that already holds the first cut's coarse mesh and be refused, so a counterbore's cylinders are united before the cut, and a countersink on a cylindrical face is one revolve of the bore and the cone together. |
+| C5 | The tests state the removed volume of each case from an integral over the hole's section of the length between the wall and the recess floor, the wall at `√(R² − y²)`, and require it inside the result's own bound. A counterbore wide enough that the wall rises more than `MouthMargin` toward the plane checks C2. |
 
 ## 12. A thread in a hole on a cylindrical face
 
@@ -166,7 +166,7 @@ cylinder at `At`, the plane Y2 reads a blind `Depth` from.
 | Decision | Rule |
 |---|---|
 | T1 | The thread's frame, span and handedness are §8's, read from the tangent plane at `At`: the groove starts there, a head's floor if there is one, and runs the bore's depth or `HoleThread.Length`. The groove's first turn lies in the plane's side of the wall by the margin a plain hole takes (Y3). |
-| T2 | The bore, its head and the coil are one cut by their union (Z4): on the mesh path a second cut meets a target that already holds the first cut's coarse mesh and is refused. A united tool is coarser than a pair's tolerance on a thin rod, whose cylinder asks for a finer one, and the cut is then the evaluator's own `ErrUnsupported`, which leaves the body live. A bore's wall and a rod of radius 14 mm or more are cut. |
+| T2 | The bore, its head and the coil are one cut by their union (C4): on the mesh path a second cut meets a target that already holds the first cut's coarse mesh and is refused. A united tool is coarser than a pair's tolerance on a thin rod, whose cylinder asks for a finer one, and the cut is then the evaluator's own `ErrUnsupported`, which leaves the body live. A bore's wall and a rod of radius 14 mm or more are cut. |
 | T3 | The tests state the removed volume of a tapped blind hole as the bore's integral plus the groove's: the groove's axial overlap with the material along the hole axis, at each radius and angle about the bore, the angle taken from the cylinder's axis, and require it inside the result's own volume bound. A thin rod's refusal is tested as such. |
 
 ## 13. Outline holes
@@ -175,7 +175,7 @@ cylinder at `At`, the plane Y2 reads a blind `Depth` from.
 
 | Decision | Rule |
 |---|---|
-| H1 | `Corners` are `Point2` values in millimetres in the face frame's U and V about the hole axis, in order round the polygon either way; `Angle` turns them counter-clockwise about the axis, as for the other shapes, and the zero `units.Value` is no turn. A shaped hole takes no `Diameter`, head or thread, as before. |
-| H2 | The polygon has from 3 to 256 corners, all finite, encloses an area, repeats no corner, and no side crosses or touches a non-neighbouring one (`holeplan.checkOutline`, `segmentsTouch`): each failure is `ErrDegenerate`. The gate only rejects; the section the sketch closes is what the tool is cut from. |
-| H3 | The bore is the same prism as a rectangular or regular polygonal one, from `Plan.Corners`, so depth, blind and through holes, the tool margin and the axis-inside-body check hold unchanged. On a cylindrical face the margin is taken from the farthest corner's distance from the axis (`Outline.Reach`). `Boss` does not take the shape. |
-| H4 | The tests cut an L-shaped bore through a plate and read the volume (the bore's 48 mm² times the depth), the bounds, twelve plane faces and points in each arm, in the removed quadrant and past a side; the same bore listed clockwise and turned a quarter; a blind irregular triangle; and the refusals. A corner lying on another side is a refusal only this gate makes. |
+| O1 | `Corners` are `Point2` values in millimetres in the face frame's U and V about the hole axis, in order round the polygon either way; `Angle` turns them counter-clockwise about the axis, as for the other shapes, and the zero `units.Value` is no turn. A shaped hole takes no `Diameter`, head or thread, as before. |
+| O2 | The polygon has from 3 to 256 corners, all finite, encloses an area, repeats no corner, and no side crosses or touches a non-neighbouring one (`holeplan.checkOutline`, `segmentsTouch`): each failure is `ErrDegenerate`. The gate only rejects; the section the sketch closes is what the tool is cut from. |
+| O3 | The bore is the same prism as a rectangular or regular polygonal one, from `Plan.Corners`, so depth, blind and through holes, the tool margin and the axis-inside-body check hold unchanged. On a cylindrical face the margin is taken from the farthest corner's distance from the axis (`Outline.Reach`). `Boss` does not take the shape. |
+| O4 | The tests cut an L-shaped bore through a plate and read the volume (the bore's 48 mm² times the depth), the bounds, twelve plane faces and points in each arm, in the removed quadrant and past a side; the same bore listed clockwise and turned a quarter; a blind irregular triangle; and the refusals. A corner lying on another side is a refusal only this gate makes. |
