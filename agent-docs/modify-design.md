@@ -46,7 +46,7 @@ Around the tables: what a modify op owes and how it refuses (§1), the reduction
 that keeps the analytic shape and propagates bounded mass results, with
 Exactness only when the proven bound is zero (§2, §10), where the 2D work is
 allowed to live (§5), the fillet (§6), the chamfer (§7), the shell (§8), the
-commit and provenance rules (§11), the increment plan (§13) and the
+commit and provenance rules (§11), what each base step builds (§13) and the
 reach decisions (§14).
 
 Companion to `agent-docs/api-design.md`, which owns the three operation signatures
@@ -300,12 +300,12 @@ the shell has one, and §8 says which.
 The root audit orders those checks with each modify op's own cutback rules.
 
 **Every modify audit is cancellable with bounded work.** `Fillet`,
-`Chamfer`, and `Shell` create one `workBudget` for their
+`Chamfer`, and `Shell` create one `proofbound.WorkBudget` for their
 pre-commit cancellation path. Fillet and Chamfer share it through profile
 walks, segment-pair crossing/contact tests, hole-pair tests, and each
 ray-boundary containment scan. Shell also shares it through exact offset
 construction before that audit. The budget polls at phase boundaries and after
-at most `workPollInterval` candidate operations. A cancelled operation returns
+at most `proofbound.WorkPollInterval` candidate operations. A cancelled operation returns
 `ctx.Err()` before commit, leaving the receiver live and the document
 unchanged. The `cupWall`
 morphology recheck shares its budget across profile validation and integration,
@@ -476,10 +476,9 @@ clockwise circular walk**, and that is not a shape only a fillet can make: the
 seam records an arc's walk sense in the segment's own range (`TStart` > `TEnd`
 says the walk runs against the curve, `seam.go`), so a plain sketch produces one —
 a plate with a semicircular bite taken out of one edge walks that arc clockwise
-on its outer loop. The rules are therefore the prism build's own, and this
-increment inherits them rather than shipping them: a concave round — a clockwise
-circular walk on an outer loop — is the first thing a fillet emits, so the
-walk-sense rules are its prerequisite, not its deliverable (§13).
+on its outer loop. The rules therefore belong to the prism build, and the fillet relies on
+them: a concave round — a clockwise circular walk on an outer loop — is the first
+thing a fillet emits (§13).
 
 **The base increment excludes the corner problem.** Where a cap-edge chain ends
 at a vertex, its rolling blend needs an endpoint transition this section rewrite
@@ -502,8 +501,8 @@ contact without either overrunning a walk, and the §5 audit catches those: S7.
 Both fire before a face is made, and neither produces a corner needing a surface
 nobody can name.
 
-A fillet's one option is reach §5's `WithTangentChain`. A variable-radius or
-setback option would be a second one.
+A fillet's one option is reach §5's `WithTangentChain`. There is no
+variable-radius or setback option.
 
 ## 7. Chamfer
 
@@ -730,7 +729,7 @@ the receiver's (§11). B2/B3's tube is a `prismPayload`, which is why Table R
 admits it as a receiver in R1 and why nothing downstream needs a new case for
 it (§12).
 
-`cupPayload` is the one new payload this increment introduces: two
+`cupPayload` is the payload of B5 and B6: two
 co-directional prisms over the same plane — the outer region on its interval,
 the cavity region on its own — plus the private shell-thickness/sense morphology
 certificate of payload verification §3.1 and the accumulated rigid placement,
@@ -750,7 +749,7 @@ cavity inward, the outer region outward — sits from the denoted boundary; the
 receiver's own region carries none. It is derived once, at the shell, as an
 enclosure (the method §8.4 of Part R states for a cap
 contour): §7's closed forms are re-evaluated over rational intervals across
-the whole thickness interval `magnitudeInBounded` proves, with the receiver's
+the whole thickness interval `extent.MagnitudeInBounded` proves, with the receiver's
 walk endpoints, centres and bracketed radii taken exactly and outward-rounded
 square roots, and each recorded join is charged its enclosure's greatest reach
 from the held point. A recorded line stays within the larger of its two end
@@ -828,8 +827,8 @@ payload.** `FeatureRef` carries a private producer identity plus a role, and the
 side face is `side(i, j)` — loop `i`, segment `j` **of the payload the body
 holds** (evaluator §3). A modify op rewrites the section: segments are trimmed,
 inserted and renumbered, so a role inherited from the receiver would name a
-segment of a record this body no longer has. This increment therefore does what
-the shipped evaluator already does when it re-evaluates a payload: **every face
+segment of a record this body no longer has. The evaluator
+therefore does what it already does when it re-evaluates a payload: **every face
 of the result carries roles of the modify operation alone**, in the result's own index
 space, and Table B lists them. There is no re-parenting problem because there is
 no inheritance: a role is minted from the payload it labels.
@@ -894,17 +893,17 @@ what makes them arise, and neither needs §6 relaxed:
 
 ## 13. Increments
 
-PR-level staging inside evaluator increment 5. Everything not yet landed is
+The base operations build in three steps inside evaluator increment 5. Anything a step does not build is
 `ErrUnsupported` **at the call** — never a `Verify` reading, and never a body:
 
-| PR | Lands | Still `ErrUnsupported` after it |
+| Step | Builds | `ErrUnsupported` here |
 |---|---|---|
-| 1 | the section rewrite and its §5 audit, `Fillet` on lateral edges (line/line, line/arc, arc/arc corners), B1's roles, the `Step` wiring | `Chamfer`, `Shell` (S3 for their receivers is unchanged); every cap edge (S1); every non-prism receiver (S3) |
-| 2 | `Chamfer`, equal distance | `Shell`; the asymmetric chamfer (reach PR A) |
-| 3 | `Shell`: cap removal, the exact erosion and dilation, the §5 topology gates, the tube (B2/B3), the `cupPayload` (B5/B6), and D2/D3/D4 extended to the cup | side-wall removal (S2); the topology-changing offset (S11); the both-caps shell of a holed section (S12) |
+| 1 | the section rewrite and its §5 audit, `Fillet` on lateral edges (line/line, line/arc, arc/arc corners), B1's roles, the `Step` wiring | every cap edge (S1); every non-prism receiver (S3) |
+| 2 | `Chamfer`, equal distance | the asymmetric chamfer (reach §6) |
+| 3 | `Shell`: cap removal, the exact erosion and dilation, the §5 topology gates, the tube (B2/B3), the `cupPayload` (B5/B6), and D2/D3/D4 extended to the cup | side-wall removal (S2); the topology-changing offset (S11) |
 
-Reach PRs A–E follow these base PRs. Part R §14 owns
-their order; RX/SX/BX/DX own every additional build and staging result.
+Part R §14 owns the reach order; RX/SX/BX/DX own every build and refusal beyond these steps, including
+the both-caps shell of a holed section (S12, built by BX8).
 
 D1's cup-wall theorem is implemented. D6 remains staged in the implementation;
 payload verification §13 names its approved cup-boundary stage. Until that stage
@@ -912,9 +911,8 @@ lands, an invoked cup clearance pair reads `Suspect`; a box-disjoint cup pair
 with no clearance asked is still proven `Sound` by the box test.
 
 The walk-sense rules of §6 — a circular wall's face orientation and the
-walked-boundary `Edge.IsConvex` — are a **prerequisite**, not a deliverable. They
-belong to the prism build, which reads them on profiles a fillet has nothing to
-do with; PR 1 builds on them and carries none of them.
+walked-boundary `Edge.IsConvex` — belong to the prism build, which reads them on
+profiles a fillet has nothing to do with. Step 1 relies on them and carries none of them.
 
 ## 14. Reach decisions
 
@@ -942,7 +940,7 @@ Part R resolves the former reach questions:
 - variable-radius fillets, unsupported partial cap chains, mixed edge classes,
   and faceted receivers outside explicit source-backed routes stay unsupported.
 
-The extension's PR order and required tests are reach §§13–14. No reach choice
+The reach order and required tests are reach §§13–14. No reach choice
 in this document remains open.
 
 Free-form reach is `agent-docs/spline-design.md`'s, not this document's or the
@@ -1026,10 +1024,10 @@ selectors resolve against the receiver during evaluation; resolved faces and
 topology indices are never retained.
 
 Each call decodes its options into a private record (`internal/modifyoption/`):
-`filletOpts{TangentChain}`, `chamferOpts{TangentChain, Asymmetric}` and
-`shellOpts{Sense, NoOpenings}`. A shell with openings states a removed-face
+`FilletConfig{TangentChain}`, `ChamferConfig{TangentChain, Asymmetric}` and
+`ShellConfig{Sense, NoOpenings, FaceThickness}`. A shell with openings states a removed-face
 query and a thickness; a shell with no openings states no selector, a
-thickness and `shellOpts{NoOpenings: true}`.
+thickness and `ShellConfig{NoOpenings: true}`.
 
 An option repeated with the same intent counts once: `WithTangentChain`,
 `WithNoOpenings`, and one `WithShellSense` sense given twice. Two
@@ -1116,7 +1114,7 @@ Gate order:
 | 6. constructed-geometry audit | base S8/S6/S7/S9/S11; SX7/SX12/SX13/SX14/SX15 |
 | 7. payload | BX8 holds the `1 + k` bands where base S12 stood |
 
-The existence-first rule remains load-bearing. SX6 precedes SX7: an empty
+The existence-first rule holds. SX6 precedes SX7: an empty
 offset means no regular rolling-ball surface; intersecting valid patches mean
 the surface exists but this evaluator cannot trim it.
 
@@ -1216,8 +1214,7 @@ is body order, so replay and role assignment stay deterministic.
 
 Faceted curves/surfaces never enter the oracle. They route to SX9 before
 expansion, except a mesh Boolean result whose seeds are retained lines and arcs between retained plane and cylinder
-tags: its junctions are decided by `retainedblend.Tangent`
-(`agent-docs/retained-Part R §5.2, §5.3).
+tags: its junctions are decided by `retainedblend.Tangent` (`retained-modify-reach §5.2, §5.3`).
 
 #### 5.1 Implementation
 
@@ -1383,7 +1380,7 @@ it sweeps. §6's role reading picks which plane-local walk takes `d`, and
 XY-plane rectangle `(xlo,0)`–`(xhi,R)`, swept from zero to a denoted exact
 quarter turn about +X. The four natural-range lines must follow that order;
 the source has no holes, section displacement, previous blend, or draft
-rewrite. `|xlo|,|xhi| ≤ 16`, `1 ≤ xhi−xlo,R ≤ 16`, and the exact millimetre
+rewrite. `internal/revolveplan/rim_source.go` limits `|xlo|,|xhi| ≤ 16` and `1 ≤ xhi−xlo,R ≤ 16`, and the exact millimetre
 fillet radius or equal chamfer setback satisfies `0.125 ≤ a ≤ 4` and
 `2a < min(xhi−xlo,R)`. An asymmetric chamfer remains SX5. One
 selected `Line3` must run from `(xhi,0,0)` to `(xhi,R,0)`. A different
@@ -1573,9 +1570,7 @@ enclosure to either end of the denoted enclosure. The gap is never
 taken as `|W − B|` through a displacement-times-area bound: the wide sector
 and the built patch end on different rulings, and the corner triangle
 between them carries a flux of about `½·R0·R1·H·Φ` per corner, which no
-bound on how far interior points move accounts for. On a 0.001 rad window
-of radius 10 trimmed 2e-4 rad at each corner, `W − B` is 0.018 while such a
-bound gives about 1e-4. The band's volume sums every patch's flux about the plane-local
+bound on how far interior points move accounts for. The band's volume sums every patch's flux about the plane-local
 origin, and moving a patch's flux from the arc's axis to that origin adds the
 axis point times the patch's vector area, which depends only on the patch's
 boundary. The true and built patches end on different curves at each mitered
@@ -1627,9 +1622,7 @@ over the union of the two windows. Each corner's sliver adds `r²·δ²/8` only
 over its own angle `δ(v)` between the locus and the built ruling, which the
 corner locus spans enclose span by span. The shell's volume is at most
 `H·max(R0, R1)²·((w + s0 + s1)·Φ²/12 + Σ ∫ δ³ dv/8)`, with `w` the narrower
-window's width (`ChordLocusShellUpper`): second order in the skew. On the
-quarter disk R = 60 chamfered 4 mm it is 9.6 mm³ against a measured dip of
-2.9 mm³. The region term charges that shell and nothing else: the
+window's width (`ChordLocusShellUpper`): second order in the skew. The region term charges that shell and nothing else: the
 corner slivers lie in the shell. A patch whose corner sliver could not be bounded answers an
 unbounded region, since its locus may fold back. The proof reads the
 corner-foot locus as the carrier root nearest the corner: the two roots
@@ -1637,7 +1630,7 @@ mirror each other across the line through the two centres, or across the
 perpendicular from the centre to a line, and the locus stays on the
 corner's side of it until the carriers touch, which the sliver bound
 refuses. Both terms compare the built and denoted surfaces between the
-same two held levels. The held side level sits up to `capBandLevelDelta`
+same two held levels. The held side level sits up to `capband.BandLevelDelta`
 from the denoted one, and that move is the body's, not the patch's: the
 slab and the band meet at the held level, so the body changes only where a
 vertical line leaves the band toward the cap, by at most the larger of the
@@ -1649,9 +1642,8 @@ region term reads is the larger of the patch's two proven corner
 skews (§8.4's `CornerSkewUpper`), the exact angle between each corner's held
 side end and held cap end; the volume term reads it only to test for zero.
 The difference of the two held windows is not used:
-each end of it is a float `Atan2`, and over a 600-sector sweep drawn away from
-the sketch origin that difference fell below the exact corner angle on 120 of
-568 patches. Both terms round every operation outward: the flux sums and
+each end of it is a float `Atan2`, and over a sweep of sectors drawn away from
+the sketch origin that difference can fall below the exact corner angle. Both terms round every operation outward: the flux sums and
 differences are taken exactly and rounded once, and every product is rounded
 up. A skew that is not finite answers an unbounded volume. The
 residual, and its bound, are exactly zero wherever both proven skews are: an
@@ -1698,7 +1690,7 @@ term:
   apex patch, a whole turn or a straight wall is an ASSERTION rather than a
   measurement, and it omits a direction difference the built surface has.
   `Face.NormalAt` separately composes its arithmetic proof
-  (`normal_bound.go`).
+  (`internal/surfacenormal/normal_bound.go`).
 - The same stamp adds the turn between the built patch and the wall its records
   denote (`capband.DenotedNormalAllow`). The cap directrix is the offset the
   build solved, held within the contour displacement `δ` of the denoted one in
@@ -1711,7 +1703,7 @@ term:
   allowances. The term charges `2·(δ + δ_z·max(1, |Δr|/h))/h` with `h` at the
   bottom of its span. It is zero only where every one of those displacements
   is. Without it, a 0.1 mm chamfer on a 20 mm square drawn at `v = 10⁶` publishes
-  a `1.7e-16` bound on walls that sit `1.2e-10` from the exact 45° normal.
+  a bound far below the walls' distance from the exact 45° normal.
 - A flat patch also states `topo.Face.FlatPatch` while its stamp is below the cap: it denotes the plane through its
   straight side directrix and the parallel cap directrix over the window its one loop bounds, so a mesh Boolean
   bounds where its true patch lies from its vertices' bounds, its edges' lengths and the stamp, and keeps its tag
@@ -1728,7 +1720,7 @@ term:
   the patch rather than about the cone. `allow` is TWO terms, and the departure
   is only one of them: DX7 reads each patch's normal through `Face.NormalAt`,
   and a reading so taken departs from the patch's own exact normal model three
-  ways — the arm's own arithmetic (`normal_bound.go`), the displacement of the
+  ways — the arm's own arithmetic (`internal/surfacenormal/normal_bound.go`), the displacement of the
   point the survey computed to sample at from the azimuth that reading is then
   used as, and the rounded spacing between those azimuths, neither of the last
   two being anything a reading's own bound speaks about. So a circular patch
@@ -1788,11 +1780,10 @@ departure (`internal/capblend/band.go`'s `f.n.NormalBound`, derived in
 `internal/capband/departure.go`, plus `capband.DenotedNormalAllow`) is an exact
 zero does — an axis-aligned `Plane` patch of an unplaced band whose cap contour
 and levels are held exactly reaches that, and nothing else does. `Face.NormalAt` and DX7
-already read that same stamp; DX8 now reads it too, rather than assuming a
-coinciding window buys back what only a zero stamp proves. A later PR could win
-the answer back for a placed or whole-turn band through a proven curvature
-bound over the built ruled patch's own held numbers, rather than through its
-tag; this PR does not implement that route.
+already read that same stamp; DX8 reads it too, rather than assuming a
+coinciding window buys back what only a zero stamp proves. A proven curvature
+bound over the built ruled patch's own held numbers could answer DX8 for a placed
+or whole-turn band without the tag; that route is not implemented.
 
 SX12 audits the exact offset family, not the ruled patch the body builds. It
 runs the existing line/arc offset audit on the section offset by the full
@@ -1898,7 +1889,7 @@ a wall patch's normal is `(ds·n̂_wall, ∓dc·ẑ)` against the reference
 
 A setback stated in a unit other than millimetres reaches the band as a
 rescaled float, some rounding away from the quantity the caller stated
-(`magnitudeInBounded`). The side level charges `ds`'s rounding as `levelDelta`.
+(`MagnitudeInBounded`). The side level charges `ds`'s rounding as `levelDelta`.
 The cap contour charges `dc`'s rounding `dcDelta` through its displacement
 (§8.4): the enclosures are taken over every offset amount in
 `[dc − dcDelta, dc + dcDelta]`. The reflex connector arc's length is bracketed
@@ -2060,9 +2051,9 @@ diagonal spans that turn and the arc's chord step together, so its sag is `rho (
 charges `rho dphi^2 / 8 + 2 sqrt(0.0002 rho dphi^2 / 8)`, the part of it the sagitta does not already hold. A corner
 that reaches the arc's foot, or an arc-arc corner that changes sides of the line of centres in a layer, is
 `ErrUnsupported`. The cutter's bound is 0.0002 mm plus that departure. On a concave arc wall (material outside the
-circle) the faceted result reads about 0.07 mm3 more volume per arc run than its exact value on a cutter of hub size
-(arc radius near 13 mm, 22 mm long), so a test of such a run reads a section or allows that excess. A concave end's
-clip is a second mesh Boolean; without a relief its gap shift leaves about 5e-6 mm3 on a straight edge, and with one
+circle) the faceted result reads more volume per arc run than its exact value, so a test of such a run reads a section or
+allows that excess. A concave end's
+clip is a second mesh Boolean; without a relief its gap shift leaves a sliver on a straight edge, and with one
 the relief keeps what it states above. `internal/brepmodify/partial_loop_chamfer.go` owns it. It runs after every
 exact route has declined, and only for a symmetric chamfer.
 
@@ -2095,10 +2086,8 @@ values the band's closed surface needs. Each window end `th0`, `th1`, `capTh0`,
 `R ∓ dc`. The two closing disks are the side record's own region and the cap
 face's recorded loop, so a patch integrated at the held floats does not meet
 them, and a patch's flux is not translation invariant: the gap is read
-against the centre's distance from the plane-local origin. A slot whose
-half-turn ends sit `10⁶` mm up the `v` axis published a volume `6.11e-08` mm³
-from its exact value under a `5.72e-08` mm³ bound, and an L at the sketch
-origin missed by `7.854e-13` against `7.852e-13`. So each patch carries a
+against the centre's distance from the plane-local origin. Far from the origin a
+published bound can then miss the exact value. So each patch carries a
 `capband.HeldAllow`, a proven bound on `|held − reference|` for each of those
 six numbers:
 
@@ -2232,7 +2221,7 @@ need it, each composing a different existing bound for a different reason:
   in both places would charge it twice;
 - each BAND PATCH's own area (one ruled quad between a side-level chord and a
   cap-level chord displaced by delta) composes
-  `bandPatchAreaAllow(delta, chordUpper, slantUpper)` — a ruled quad's area is
+  `BandPatchAreaAllow(delta, chordUpper, slantUpper)` — a ruled quad's area is
   its chord length times its slant distance to first order, so the chord's own
   length can move by `sectionDisplacementLength(delta, 1)` and the slant can
   move by delta, each read against the OTHER factor's own held magnitude;
@@ -2311,7 +2300,7 @@ edge's own length, the band volume and first moment (`capband.LevelVolume`:
 the body moves only where a vertical line leaves the band toward the cap,
 over at most the larger of the side loop's and cap contour's areas), and
 each BAND PATCH's own area, which
-composes `bandLevelAreaAllow(levelDelta, directrixSumUpper)` — under a rigid
+composes `BandLevelAreaAllow(levelDelta, directrixSumUpper)` — under a rigid
 translation of one directrix a patch's area moves at the rate of its two
 directrix lengths, which is the Plane arm's two chords and the Cone arm's two
 frustum arcs alike. A patch bound that reads the held level as an exact input
@@ -2468,7 +2457,7 @@ exactly one lump. The interface partition — `agent-docs/prism-boolean-design.m
 §2.2's lining reading — emits the remaining cavity-floor face once, and records
 it as the cavity region itself.
 
-The cup keeps its own payload type, `cupPayload`, which holds that stacked
+The cup keeps its own payload type, `cupwall.Payload` (`internal/cupwall/payload.go`), which holds that stacked
 record beside the shell morphology payload verification §4.1 reads: the
 thickness, its conversion displacement, the offset region's proven
 displacement and the sense. The stacked build makes the body under the cup's
@@ -2641,7 +2630,7 @@ For cap-only removal from a holed section, build the wall as one slab with
 band between each paired hole loop in `ProfileRecord` order. The base
 S18/S10/S11/§5 gates prove those bands are regular and pairwise disjoint before
 payload construction. The slab is a prism group (`agent-docs/prism-boolean-design.md` Part S
-§2.2) whose disjointness is that audit's, not `provePrismRegionsDisjoint`'s: a
+§2.2) whose disjointness is that audit's, not a scene-of-outers disjointness proof's: a
 hole lining lies inside the outer band's own hole, which a scene of outers alone
 would read as nesting. The offset loops sit within the offset displacement of
 the offset the thickness denotes, and the group carries it as its
@@ -2792,7 +2781,7 @@ axis end takes §9.3.1's mirror join, so the offset ends on the axis, and its
 axis point must land on the axis walk on the material side (S11b). An opening
 end takes Part O Table RO's rim: the removed
 neighbour walk's own carrier from `K`'s end to its cut with `K'`
-(`offset2d.OpeningJoin`, `shell_chain.go`'s opening end), a `LineSeg` or an
+(`offset2d.OpeningJoin`, `internal/offset2d/opening.go`), a `LineSeg` or an
 `ArcSeg` about the removed walk's centre. The wall walks `K`, the rim at
 `K`'s end, `K'` backward and the rim at `K`'s start, inward; and `K'`, the
 rim back to `K`'s end, `K` backward and the rim out to `K`'s start, outward. The wall faces the §5 audit (S8, S11b, S9) and the axis
@@ -2932,8 +2921,8 @@ modified body exists and is sound.
 Taking the reading off the operands is what makes the substitute reachable at
 all. The wall, undercut and minimum-radius surveys each answer from an analytic
 payload, so the same question asked on the boolean RESULT is undecided today and
-reads `Suspect` — the faceted surveys that would answer it are
-`agent-docs/payload-verification-design.md`'s design, not shipped behaviour — while
+reads `Suspect` (the faceted surveys that would answer it are
+`agent-docs/payload-verification-design.md`'s design and are not implemented) while
 asked on an operand carrying an analytic payload, a prism or a cup, it is
 answered outright. An operand that is itself a boolean result carries a
 `facetedPayload` and leaves the same question undecided, so the substitute
@@ -2963,9 +2952,7 @@ explicit unsupported-payload dispatch rather than a generic undecided result
 Clearance may also return undecided for surface cells its certified kernel does
 not solve. This is the existing `Verify` contract, not a modify-build refusal.
 
-DX6 is staged for the cap-loop chamfer, and §14's rule that a PR may leave a DX
-question staged only where this table says so is what that cell now says. It
-remains required for the cap-loop fillet.
+DX6 is staged for the cap-loop chamfer, as the table says (§14). It is required for the cap-loop fillet.
 
 The chamfer's DX3 reading is a mesh. A patch tessellator must chord the
 cap-level offset boundary and the side-level original boundary into one strip,
@@ -2980,8 +2967,7 @@ whole turns — and every boolean refuses the operand for any other band, which
 serves export alone.
 
 The chamfer's DX6 reading is `Suspect` for any pair its bounding boxes do not
-already decide, which is the same staging the cup payload took before its own
-clearance model landed. A trimmed patch face admitted into the certified kernel
+already decide. A trimmed patch face admitted into the certified kernel
 without a proof of its trim yields a false disjointness certificate, and a false
 certificate is worse than an undecided pair: `Verify` would report a clearance
 the geometry does not have.
@@ -3200,8 +3186,7 @@ carries it into every reading that needs it. No
 cap-blend reading composes `sectionDelta`, and no `sectionDelta` consumer reads
 the cap contour's displacement. `capBlendPayload` separately preserves its
 receiver's per-end axial displacement and the selected-end setback rounding.
-`internal/capblend` also states each circular patch's held allowances
-(`capWallHeldAllow`, `capApexHeldAllow`). `internal/capband/closure.go` bounds
+Each circular patch's held allowances are `capband.HeldAllow` (`internal/capband/patch.go`). `internal/capband/closure.go` bounds
 each band's closure slivers (`capband.Closure`), which
 `internal/capband/band_mass.go` charges beside the patch integrals (§8.4's held
 numbers paragraph).
@@ -3234,8 +3219,7 @@ Six tables are normative:
 
 Nine reference parts, each built from operations decad ships today through
 the public API, and the fillet, chamfer and shell requests an ordinary Fusion
-part makes on them. Every cell was read off the live code with the probe under
-`.tmp/probe-modify/` (not tracked). "builds" names the route that built it.
+part makes on them. "builds" names the route that built it.
 
 | Part | Receiver | Request | Today |
 |---|---|---|---|
@@ -3603,7 +3587,7 @@ The removed faces are read against the recognised record:
 | Removed face | PR | Rule |
 |---|---|---|
 | a cap of `A` (TC1's bottom or top), one or both | S-1 | `A ⊖ t` keeps a removed cap's level and moves a kept one by `t`: modify §9's cup interval `[zlo + t·kept₀, zhi − t·kept₁]` |
-| a wall of `A` (an (a) or (b) face), one proper connected run of whole walls of `S`'s outer loop, with or without either cap | S-2 | `A ⊖ t`'s section is Part O §3's cavity section `C` over the kept chain, with that document's rim rule at each end (`sideOpeningRegions`); its SO1–SO6 refusals keep their codes, a set of walls that is no proper connected run among them (SO6). No section limit runs (shell-opening §5). Each removed wall must be a straight wall along a section axis, whose rim is a planar face, and neither end of the run may cut backward along the removed carrier (a reflex end, whose rim lies inside the material): SG5 |
+| a wall of `A` (an (a) or (b) face), one proper connected run of whole walls of `S`'s outer loop, with or without either cap | S-2 | `A ⊖ t`'s section is Part O §3's cavity section `C` over the kept chain, with that document's rim rule at each end (`prismshell.SideOpeningRegions`); its SO1–SO6 refusals keep their codes, a set of walls that is no proper connected run among them (SO6). No section limit runs (shell-opening §5). Each removed wall must be a straight wall along a section axis, whose rim is a planar face, and neither end of the run may cut backward along the removed carrier (a reflex end, whose rim lies inside the material): SG5 |
 | a tool wall outside §3.1d, a tool's floor, a face of a hole of `S` | — | SG4 |
 | two removed faces sharing an edge, other than the runs above | — | SG5 |
 
@@ -3665,7 +3649,7 @@ With `s = +1`, `t` the thickness in millimetres with its conversion bound
    figure). `Tᵢ' = prismPayload{profile: Dᵢ, frame: F_j, z0: L0 − t, z1: L1 + t}`
    with `offset2d.OffsetSectionDelta(Tᵢ, −1, t, tDelta)`. The cavity is
    `Cut(…Cut(A', T₁'), …, Tₙ')` through class B's own entry over payloads
-   (`classbgeom.OfPayloads`, PR 0's `classBOfPayloads`, the body-free form of `booleandispatch`'s class B route): each cut
+   (`classbgeom.OfPayloads`, the body-free form of class B's route): each cut
    must build a `brepPayload`; a pair class B does not admit — two dilated
    holes closer than `2t` (B7), a dilated tool reaching a cap of `A'` within
    `t` of a hole (the crossing reach or the mesh path) — is SG6, naming the
@@ -3782,7 +3766,7 @@ reach SX10:
 | 2a. record | RB dispatch; SB2; SB1 |
 | 2b. route P | brep-modify §4.2 unchanged: an axis whose prism takes the removed faces as caps builds the prism's own cup or tube |
 | 2c. route S entry | `WithNoOpenings` first: §3.1a's closed-boss case, a closed shell through route P's prism reading (§3.2), or SG2; then SG1; Table TC (SG3); §3.1d's exact circular-wall case; the remaining removed faces against the record (SG4, SG5's face and straight-wall tests) |
-| 3. existence | caps alone: S18; S10 (section and height limits); S11a on `S`. A wall run: `sideOpeningRegions` in shell-opening §5's stages 2–5 (SO6, SO3's height half, S11a and SO1, SO2, SO4 per end, S8, S11b and S9 on `W` and `C`, the area identity), then SG5's reflex-end test. Then S11a on each tool |
+| 3. existence | caps alone: S18; S10 (section and height limits); S11a on `S`. A wall run: `prismshell.SideOpeningRegions` in shell-opening §5's stages 2–5 (SO6, SO3's height half, S11a and SO1, SO2, SO4 per end, S8, S11b and S9 on `W` and `C`, the area identity), then SG5's reflex-end test. Then S11a on each tool |
 | 4. offset audit | S8, S11b, S9 on `S ⊖ t` (caps alone) and on each `Tᵢ ⊕ t`; TC7 (SG6) |
 | 5. cavity | the private cuts (SG6) |
 | 6. assembly | SG7; the rim audit S8, S7, S9 |
@@ -3867,9 +3851,8 @@ cap-blend view. Then:
    `sideZ`, `matSign` from `σ` and `F.outward`), with both of its directrices
    handed in as the brep's own coedges: the cap contour's edges are `F`'s new
    loop coedges, the side contour's edges are the (sw) faces' rims at `sideZ`
-   and the (pl) faces' moved segments. PR 0 refactors `capblend.BuildBand` to take
-   the cap-level coedges from its caller; the prism cap blend passes the
-   ones it minted. Patches, their readings (`setPatchReadings`), their
+   and the (pl) faces' moved segments. `capblend.BuildBand` takes the cap-level
+   coedges from its caller; the prism cap blend passes the ones it minted. Patches, their readings (`setPatchReadings`), their
    orientation (`capblend.FixPatchOrientation` against reach §8.3.1's reference
    `(ds·n̂_wall, σ·dc·n̂_F)`, which has a positive dot product with the true
    outward normal in both senses), their skews, locus spans and corner flux
@@ -4212,8 +4195,7 @@ Route S (S-1):
   rational closed form, unplaced and placed `10⁶` mm along x; its own
   rounding bound exceeds `δ`'s charge, so it does not see the leg.
 - Refusals: P2 outside §3.1b and P6c → SG3 naming the pocket floor; P3 → SG3 naming the
-  third planar face across z; a removed hole wall outside §3.1d → SG4; a removed wall → SG5
-  (until S-2); P1 with a second Ø6 hole along y 7 mm from the first → SG6
+  third planar face across z; a removed hole wall outside §3.1d → SG4; a removed fillet cylinder → SG5; P1 with a second Ø6 hole along y 7 mm from the first → SG6
   (the dilated holes meet); P1 at 0.1 in → SG6; a U section with a 1 mm
   slot, drilled through one arm → SG6 through TC7; `Outward` → SG1;
   `WithNoOpenings` builds P1's closed shell through its prism reading along y
@@ -4328,34 +4310,12 @@ Route L (L-2):
 
 ### 10. PR split
 
-Each PR ships code, tests and the documentation its lifted refusals touch:
-this document's increment table, `doc.go`'s support map,
-`agent-docs/missing-features.md`'s Modify rows, Part B's
-Table SB text for SB3/SB4/SB5/SB10, the functions' doc comments, a
-`agent-docs/layout/` row per new root file, and `.github/test-shards.txt`. This
-document ships with PR 0.
-
-| PR | Model | Lands | Files and functions | Proves | After |
-|---|---|---|---|---|---|
-| **0** | Sonnet, file-by-file | the hooks: `classBOfPayloads` (class B's entry over two payloads and one placement, `tryClassB` rewritten over it); `recognisePrism` split into `readPrismCaps` (P1, P3, P4) and the wall classifier, both exported to route S; `brepgeom.ReverseSegment` over a `CircleSeg` and a `brepFace` reversal helper; `capblend.BuildBand` taking its cap-level coedges from the caller; `modifyBrepReceiver`'s two new arms calling stubs that return SB10's and SX16's refusals | `boolean.go`, `brep_modify.go`, `brep_modify_edge.go`, `internal/breprecord/convert.go`, `internal/capblend/band.go`, `internal/capblend/build.go`, `brep_modify.go` | every existing brep-modify, class-B and cap-blend fixture bit for bit | — |
-| **S-1** | Opus, proof spec | route S with removed caps: Table TC, the gates, TC7, the private cuts, the rim assembly, SG1–SG7 | `brep_shell.go` (new: `readThroughCut`, `shellThroughCut`, `throughCutRims`), `brep_modify.go`, `shell.go` (doc comment), `brep_shell_internal_test.go`, `apitest/brep_shell_test.go` | §9's S-1 fixtures | 0 |
-| **S-2** | Opus, proof spec | route S with a removed wall run: `sideOpeningRegions`'s cavity section as `A ⊖ t`'s section, the rim at a pierced wall as bands, SG5 narrowed | `brep_shell.go`, `brep_shell_rim.go`, `internal/throughshell/`, `shell_opening.go`, tests | §9's S-2 fixtures | S-1 |
-| **L-1** | Opus, proof spec | route L: Table LB, the record rewrite and trims, `loopBands` on `brepPayload`, the band attached at build, measurements, SL1–SL4; tessellation, clearance, the surveys and STEP refuse a body with `loopBands` until L-2 (`ErrUnsupported`, naming L-2) | `brep_modify_loop.go` (new: `brepLoopRoute`, `admitLoops`, `rewriteLoopFaces`), `tessellate_brep.go` (new: the `capblend.BuildBand` adapter and `capblend.ReadBandMass` sums), `internal/breprecord/convert.go`, `internal/verifyrun/brep.go`, `chamfer.go` (doc comment), `brep_modify_loop_internal_test.go`, `apitest/brep_loop_chamfer_test.go` | §9's L-1 fixtures | 0 |
-| **L-2** | Sonnet, file-by-file: each consumer copies its cap-blend twin | DG3 (`tessellateBrep` with imposed samples and `capblend.EmitBand`), DG4 (`capblend.OccupiedVolumeAdmission` per band in `booloperand.RequireVolumeProof`), DG6 (`clearance.BuildBrepBodyCarriers` returns no model), DG7/DG8 (`brepUndercuts`, `brepMinRadius` reading the patch faces through `capblend_survey.go`'s readers), DG10 (the STEP writer's cone fallback, which needed no change), DG12 | `tessellate_brep.go`, `internal/brepbandmesh/`, `internal/capblend/`, `boolean_mesh.go`, `tessellate_brep.go`, `internal/verifyrun/brep.go`, `internal/breprecord/convert.go`, `internal/verifyrun/survey.go`, tests | §9's L-2 fixtures | L-1 |
-
-S-1 and L-1 run in parallel after PR 0: they add disjoint files and touch
-`brep_modify.go` only through the arms PR 0 placed. S-2 follows S-1; L-2
-follows L-1 and runs in parallel with S-2.
-
-Increment table — what still refuses after each PR:
-
-| After | Still refused |
-|---|---|
-| 0 | everything Table SB refuses today |
-| S-1 (landed) | a removed wall (SG5); every shell of §6; every route L loop |
-| S-2 (landed) | every shell of §6; every route L loop |
-| L-1 (landed) | every consumer of a route L body but mass properties, `Verify`'s structural audit and gate, placement and later modify ops (L-2); §6 |
-| L-2 (landed) | §6; a banded body's mesh boolean where a band holds an apex cone (DG4) |
+Route S lives in `internal/throughshell/` (`ShellCut` is its entry) and the stacked builders in `internal/stackedshell/`.
+Route L lives in `internal/brepmodify/loop_route.go` (`brepLoopRoute`, `admitLoops`) and `internal/breploop/record.go`
+(`rewriteLoopFaces`); its band mesh is `internal/brepbandmesh/`. §9's S-1, S-2, L-1 and L-2 name fixture groups: S-1 is
+route S with removed caps, S-2 a removed wall run, L-1 route L's construction and L-2 its downstream consumers (DG3,
+DG4, DG6, DG7, DG8, DG10, DG12). All four have shipped. Still refused: §6, and a banded body's mesh boolean where a
+band holds an apex cone (DG4).
 
 ## Part B — Brep modify
 
@@ -4427,9 +4387,8 @@ single edges uses route L (Part L).
 ### 2. Routes and dispatch
 
 Each op keeps modify §4's stage 1 (S17, the sheet refusal, options, S15, S13 or
-S14, S16) and reach SX10 for a `capBlendPayload`. Where the ops today cast to
-`prismPayload` and refuse a brep with SX16, they call `brepmodify.Receiver`
-(`internal/brepmodify/prism_route.go`):
+S14, S16) and reach SX10 for a `capBlendPayload`. Where an op would otherwise cast to
+`prismPayload`, it calls `brepmodify.Receiver` (`internal/brepmodify/prism_route.go`):
 
 ```
 receiver payload           → record handed to the brep route
@@ -5276,37 +5235,21 @@ Refusals:
 
 ### 12. PR split
 
-Each PR ships code, tests and the documentation updates for every refusal it
-lifts (the increment table below marked landed, `doc.go`'s support map,
-`agent-docs/missing-features.md`, the function doc comments). This document ships
-with PR 0.
+The brep route is implemented in `internal/brepmodify/`. Each piece below ships with the tests of §9;
+`doc.go`'s support map and `agent-docs/missing-features.md` state what it lifted.
 
-| PR | Lands | Files and functions | Proves | After |
-|---|---|---|---|---|
-| **0** | the dispatch: `modifyBrepReceiver` in `brep_modify.go` replacing `requireNotBrepReceiver` in `fillet.go`, `chamfer.go`, `shell.go`; the stacked receiver's `breprecord.OfStacked` entry (SB2); SB1; every other brep call still refuses with reach SX16's text | `brep_modify.go`, `internal/breprecord/convert.go`, `fillet.go`, `chamfer.go`, `shell.go` | SB1, SB2 fixtures; a stacked receiver reaches SB1 rather than SX10 | — |
-| **1** | route P: `recognisePrism` (P1–P5), `brepgeom.AxisFrame`, the re-expression into `F`, cap-face arguments on `classifyChamferSelection` and `classifyRemovedCaps`, SB3 | `brep_modify.go`, `capblend.go`, `shell.go`, `internal/brepgeom/` | §9's five route P fixtures | 0 |
-| **2a** | route E without restatement: Table EB, `brepgeom.BrepCornerAt`, the corner blend in both end faces and SB9, (sw)/(pl) trims, claims and the per-face audit, the blend face and `brepFace.blend`, `brepgeom.MapSegment`, assembly and closure | `brep_modify_edge.go`, `internal/breprecord/convert.go`, `fillet_audit.go`, `internal/brepgeom/` | S1 `z`-edge fillet, B1 `z`-edge chamfer, Pocket vertical fillets, Boss chamfer, the chaining and SB4/SB5 refusals, the consumer and placement fixtures | 0 |
-| **2b** | restatement: `brepgeom.Restate`, `brepgeom.PlanarFrame`, the whole-call restatement set, EB3/EB4 over restated faces | `brep_modify_edge.go`, `internal/brepgeom/` | Pocket floor-edge fillets, S1 `x`-edge chamfer, SB8 on a split wall | 2a |
-| **2c** | route E's asymmetric reference-face mapping; bypass route P for this option and refuse route L | `brep_modify.go`, `brep_modify_edge.go`, `brep_modify_loop.go`, `chamfer.go` | public boolean body: both reference faces on a vertical edge, restated end faces on a horizontal edge, and route L refusal | 2b |
-| **2d** | route L's asymmetric cap/side assignment and two-distance band | `brep_modify_loop.go`, `tessellate_brep.go` | public rounded, cross-drilled plate: both reference choices, analytic volume, verified mesh | 2c |
-| **2e** | preserve stacked source-face roles in its brep view for asymmetric route E/L references | `internal/breprecord/convert.go`, `brep_modify.go`, `chamfer.go` | public blind-pocket plate: outer edge and both top-loop reference choices, analytic volumes, verified meshes | 2d |
-| **3** | §4.4: `breprecord.Face.WallCarrier` from the crossing build, the claim map, `displacedReceiver`, the Fillet and Chamfer arms, Table PD | `internal/brepgeom/`, `internal/breprecord/payload.go`, `internal/classbgeom/`, `internal/offset2d/blend.go`, `internal/brepmodify/` (`displaced_blend.go`, `prism_route.go`, `fillet.go`, `chamfer.go`) | §9's displaced-reading fixtures | 1 |
-
-PR 1 and PR 2a run in parallel: they share only PR 0's dispatch and add
-disjoint files. PR 2b follows 2a.
-
-Increment table — what still refuses after each PR:
-
-| After | Still refused |
+| Piece | Code |
 |---|---|
-| 0 (landed) | every brep and stacked modify op except SB1/SB2 (reach SX16's text) |
-| 1 (landed) | every non-prism brep; every route E edge |
-| 2a (landed) | edges whose end or rim-adjacent face is a swept straight wall (SB7/SB8 until 2b) |
-| 2b (landed) | Table SB alone |
-| 2c (landed) | asymmetric route P/L chamfers and stacked receivers (SX16) |
-| 2d (landed) | asymmetric stacked receivers and brep selections outside routes E/L (SX16) |
-| 2e | brep or stacked asymmetric selections outside routes E/L (SX16) |
-| 3 (landed) | displaced receivers outside §4.4 (SB1): a stepped shaft, a partial crossing selection, an asymmetric chamfer, a cap edge or loop, a Shell, an arc-walled operand |
+| Receiver dispatch, SB1, SB2 | `brepmodify.Receiver` (`prism_route.go`); the stacked entry is `breprecord.OfStacked` |
+| Route P (P1–P5, SB3) | `prism_route.go`; `brepgeom.AxisFrame` |
+| Route E (Table EB, SB9, blend face) | `edge_route.go`; `brepgeom.BrepCornerAt`, `brepgeom.MapSegment` |
+| Restatement (§5.2) | `brepgeom.Restate`, `brepgeom.PlanarFrame` |
+| Asymmetric reference-face mapping (§5.1) | `asymmetric.go`; route L's side in `loop_route.go` |
+| Displaced reading (§4.4, Table PD) | `displaced_blend.go`; `breprecord.Face.WallCarrier` |
+| Faceted views (§2.1–§2.3) | `shell_view.go`, `exact_carrier_view.go`, `stacked_view.go` |
+
+Still refused: the selections Table SB lists, a `facetedPayload` receiver (reach SX9), and an asymmetric selection
+that route E and route L both decline (reach SX16).
 
 ## Part L — Loop fillet
 
@@ -5418,19 +5361,19 @@ the polynomial strip result by certified corner allowances, and its mesh
 places each seam station on the offset intersection. The allowances may
 make the default verification tolerance report `Suspect`.
 
-`Ellipse3` is a new sealed `Curve` variant (api §4 extension, shipped in
-PR F-0): `type Ellipse3 struct { Center, Axis, Major r3.Vec; SemiMajor,
+`Ellipse3` is a sealed `Curve` variant (api §4): `type Ellipse3 struct { Center, Axis, Major r3.Vec; SemiMajor,
 SemiMinor units.Value }`, the arc swept counter-clockwise about `Axis` from
 the start vertex to the end vertex, as `Arc3` is. `Major` is the unit
 direction of the semi-major axis. Its parameters are exact for the curve they
 name (api §4); the curve sits within `F.delta` of the one the fillet denotes,
 since `c` is the offset corner's float solve. Every production switch on
-`Curve` carries a default (`geometry.go`'s rule), so F-0 adds an arm only
+`Curve` carries a default (`geometry.go`'s rule), so `Ellipse3` has an arm only
 where the default would be wrong: `surfaceplace/placement.go` (map `Center`,
 `Axis`, `Major`), `modifyselect.EdgeContext` (render centre and semi-axes),
-`brepEdgeMatches` (match nothing: a band edge is in no record); it verifies
-that `stops.go`, `internal/clearance/pairkernel/gate.go`, `internal/clearance/pairkernel/geom.go` and `selector.go`
-read an unknown curve through its two vertices or refuse it. `Edge.Length`
+`brepEdgeMatches` (match nothing: a band edge is in no record); the
+default is right in
+`stops.go`, `internal/clearance/pairkernel/gate.go`, `internal/clearance/pairkernel/geom.go` and `selector.go`
+which read an unknown curve through its two vertices or refuse it. `Edge.Length`
 of an LF4 edge is the quarter-ellipse arc length
 `∫₀^{π/2} √(b² + (a² − b²)·sin²φ) dφ`, `a = r/sin(θ/2)`, `b = r`, enclosed by
 the monotone integrand's lower and upper Riemann sums over 64 equal
@@ -5460,7 +5403,7 @@ where its chamfer returns BX3's `capStart`/`side(i,j)`/`chamferCap`. §9.
 
 Selection: Table LB unchanged. A `Fillet` whose matched edges are whole loops
 of planar faces, of any segment count, takes the fillet arm; a single whole
-circle no longer goes on to route E (SB4). Route E keeps every selection of
+circle takes it too (SB4). Route E keeps every selection of
 single straight edges along axes (`singleStraightEdges`) whose endpoint-face
 corners agree with the interior material wedge (brep-modify EB8). One straight
 edge that fails EB8 takes the selected planar-loop band if that edge belongs
@@ -5502,7 +5445,7 @@ rDelta, dsDelta: rDelta}`), sense `σ` from LB6:
    a whole turn is LF7; any other corner is SF1. Every off-radius arc is read
    about its restated centre (§5.6). The classification is exact rational
    arithmetic on recorded coordinates and admits nothing on a residual.
-3. **Band record.** `brepLoopBand` gains `kind` (`"chamfer"` | `"fillet"`);
+3. **Band record.** `brepLoopBand` carries `kind` (`"chamfer"` | `"fillet"`);
    the record stores `(face, loop, orig, setback, sigma, kind)` as route L
    does. No face record holds a cylinder with an in-plane axis, a torus or an
    ellipse (modify-general §8).
@@ -6006,11 +5949,11 @@ modify §4's stage 1 and reach SX10:
 | **DF3** | `Verify` validity, tolerance gate | by construction; the bands' vertices are body vertices; `brepGateDiameter` reads every vertex |
 | **DF4** | `Tessellate`, STL/OBJ/3MF | §7.1 |
 | **DF5** | mesh boolean operand | admitted for every band: every ring of §7.1 lies on the denoted surface up to `F.delta` and interpolation rounding, so the slice-wise argument of tessellation-reach §7 holds with the per-vertex store as the vertex-motion allowance and §7.1's sagitta terms as the chord term; an LF5′ corner or a radial step adds its local reach to the distance of the patches beside it (§5.7). `capband.OccupiedVolumeAdmission`'s reflex refusal does not apply: the LF6 fan's stations are the connector arc's azimuths at every ring |
-| **DF6** | clearance | no model: the pair reads `Suspect` unless its boxes decide it (DG6); a later increment may add the LF1 cylinder carrier, whose axis is in-plane |
+| **DF6** | clearance | no model: the pair reads `Suspect` unless its boxes decide it (DG6); no model of the LF1 cylinder carrier, whose axis is in-plane, exists |
 | **DF7** | undercut survey | per patch through `Face.NormalAt`, a patch beside an LF5′ corner or a radial step widened by §5.7's normal turn: the normal of an LF1 patch sweeps the quarter from `n̂_F` to the wall's outward normal, an LF2/LF3 patch the quarter at every azimuth of its window, an LF6 patch the quarter at every azimuth of `ψ` short of the apex; the component range along the pull is the closed-form range of `A·cos φ + B·sin φ` over the window, read with reach DX7's three-valued rule and its arithmetic allowance alone, since the stamped departure is zero |
 | **DF8** | concave-radius survey | undecided for a band with a patch beside an LF5′ corner or a radial step, whose `NormalBound` §5.7 sets; otherwise a band with `σ = +1` (a fill) contributes `r` exactly, the tag's `Minor`/`Radius`, which a placement leaves unchanged; a band with `σ = −1` is convex in its tube direction and contributes nothing; an LF6 patch's other principal radius is `ρ/sin φ`, which vanishes at the apex where the receiver's own sharp reflex edge already reads as `brepMinRadius` reads it today (a sharp corner enters no aggregate), so it adds nothing. `brepMinRadius` drops its `capblend.PatchWindowSkew`/`normalBound` refusal for fillet bands, keeps it for chamfer bands |
 | **DF9** | wall survey | staged `Suspect`, as for every brep |
-| **DF10** | STEP | faceted for a band with a patch whose `NormalBound` §5.7 sets; otherwise analytic: `supportsAnalyticSTEP` takes a whole-turn torus (LF7), a four-arc torus patch (LF2/LF3) whose arcs each hold both their vertices in their own plane, a horn torus patch (LF6, a three-edge loop closing on the axis at its apex vertex) whose vertices are `Exact`, and a straight-walk cylinder patch closed by `Ellipse3` edges (`agent-docs/step-export-design.md`). `Body.Tessellate` admits a banded body (F-2), so `export.STEP` reaches the writer |
+| **DF10** | STEP | faceted for a band with a patch whose `NormalBound` §5.7 sets; otherwise analytic: `supportsAnalyticSTEP` takes a whole-turn torus (LF7), a four-arc torus patch (LF2/LF3) whose arcs each hold both their vertices in their own plane, a horn torus patch (LF6, a three-edge loop closing on the axis at its apex vertex) whose vertices are `Exact`, and a straight-walk cylinder patch closed by `Ellipse3` edges (`agent-docs/step-export-design.md`). `Body.Tessellate` admits a banded body, so `export.STEP` reaches the writer |
 | **DF11** | a later `Fillet`/`Chamfer`/`Shell` | DG11: Tables RB/EB/SB/TC/LB over the rewritten record; a patch's edge is in no record and matches nothing (SL1); a trimmed wall's rim at `sideZ` ends on a patch, so route E's SB7 refuses an edge there; a record carrying bands reads as no prism (route P and Table TC refuse); a second loop fillet or chamfer on another loop appends to `loopBands`, provided the first left `delta = 0` |
 | **DF12** | `Transform`, `Mirrored`, `PatternCopies` | re-lifts every face frame; `loopBands` re-attach on re-evaluation; a reflection flips `outward` and the ellipse's `Axis` sense with every winding (general-boolean A4) |
 
@@ -6255,13 +6198,13 @@ revolve route rounds (reach §7), so no full-turn revolve fixture refuses here.
   §2 states the derivation: the rolling ball never rests at the corner, and
   the octant would expose a shelf. Reach §8.2's miter row ("zero-length
   miter → trimmed `Sphere`") and modify-general §6's first two rows and SL3
-  are rewritten in PR F-1 to say so; an LF9 sphere needs the third edge's
+  state this; an LF9 sphere needs the third edge's
   fillet (Part V).
-- **A new `Ellipse3` curve variant, rather than a `Line3`, `NURBSCurve` or
+- **An `Ellipse3` curve variant, rather than a `Line3`, `NURBSCurve` or
   `FacetedCurve` stand-in.** The miter is an exact conic; a `Line3` tag would
   be a first-order lie (sagitta up to `0.2·r`), a `NURBSCurve` would hold an
   irrational weight, and a `FacetedCurve` says the body holds chords where it
-  holds a cylinder. api §4 is extended in F-0.
+  holds a cylinder (api §4).
 - **Admit a regular non-tangent convex corner at a circular walk (LF8).**
   `FilletMiter3` names its pipe intersection. Certified corner allowances
   enclose the difference from the polynomial strip and patch area formulas.
@@ -6274,8 +6217,9 @@ revolve route rounds (reach §7), so no full-turn revolve fixture refuses here.
 - **Curved miter rings follow the offset intersection.** Other rings
   interpolate affinely between the side and cap contours; LF8 seam stations
   solve the actual offset locus at each meridian angle.
-- **STEP stays faceted until `step` ships `TOROIDAL_SURFACE` and `ELLIPSE`.**
-  DF10, §12.
+- **STEP is analytic where DF10 admits it and faceted elsewhere.** The `step`
+  module's `ap214.ToroidalSurface` and `ap214.Ellipse` carry the tori and
+  ellipse edges (§12).
 - **Restored faces keep the rewritten record's displacements.**
   `breprecord`'s `measureBody` reads each face a fillet band rewrote restored to the
   receiver's level and region (`filletRestored`), but with the level and
@@ -6305,8 +6249,7 @@ revolve route rounds (reach §7), so no full-turn revolve fixture refuses here.
   patch's walk or through a reflex corner's turn (Table DF's DF7). Both are
   nondecreasing in `A` and `B`, so their ends bound the whole patch, and the
   three-valued rule of reach DX7 reads them with no departure term.
-- **Hand-offs: `step` only.** No 2D answer beyond route L's own offset is
-  asked; `sketch`, `r3` and `units` need nothing.
+- **No new 2D question.** The arm asks `sketch` for nothing beyond route L's own offset.
 
 ### 10. Do not do this
 
@@ -6338,41 +6281,18 @@ revolve route rounds (reach §7), so no full-turn revolve fixture refuses here.
 
 ### 11. PR split
 
-Each PR ships its code, tests and the documentation its lifted refusals
-touch: this document's increment table, `doc.go`'s support map,
-`agent-docs/missing-features.md`'s Modify rows, the design-doc rows §9 names, the
-functions' doc comments, a `agent-docs/layout/` row per new root file, and
-`.github/test-shards.txt`. This document ships with F-0.
-
-| PR | Model | Lands | Files and functions | Proves | After |
-|---|---|---|---|---|---|
-| **F-0** | Sonnet, file-by-file | `Ellipse3` (api §4; `surfacegeom/geometry.go`, `surfaceplace/placement.go`, `topology.go` alias, `modifyselect.EdgeContext`, `brepEdgeMatches` default); `brepLoopBand.kind`; `brepLoopRoute`'s fillet arm as a stub keeping SL3's refusal; `fillet.go`'s cap-edge arm calling `breprecord.OfPrism` into the stub | `internal/surfacegeom/`, `internal/surfaceplace/`, `topology.go`, `fillet.go`, `tessellate_brep.go`, `brep_modify_loop.go`, `agent-docs/api-design.md` | every existing fillet, chamfer, brep-modify and route L fixture bit for bit; an `Ellipse3` placed and mirrored | — |
-| **F-1** | Opus, proof spec | the fillet arm: LF classification (SF1), `attachFilletBand` (LF1–LF7 faces, `Ellipse3`/`Arc3`/`Circle3` edges, shared vertices, roles), `internal/filletband/` (Table CF coefficients with interval enclosures, `J_k`/`H_k`, patch areas, extents), `breprecord`'s `measureBody`'s restored-face sum plus `σ·V_strip`/`σ·M_strip`, `ExtentAlong`; tessellation, surveys and the boolean operand refuse a fillet-banded body (`ErrUnsupported`, naming F-2); reach §8.2, modify-general §6/SL3, brep-modify SB4/SB5/SB7 text, `missing-features.md`, `doc.go` | `tessellate_brep.go`, `internal/verifyrun/brep.go` (holds the fillet-band pull survey), `internal/breprecord/convert.go`, `brep_modify_loop.go`, `fillet.go`, `internal/filletband/` (new), `brep_loop_fillet_internal_test.go`, `apitest/brep_loop_fillet_test.go` | §8's volumes, areas, centroids, topology and roles; the bound fixture's two legs; every refusal | F-0 |
-| **F-2** (landed) | Sonnet, file-by-file, copying `internal/brepbandmesh/` with §7.1 as its term table | DF4 rings and the proof terms, DF5 admission, DF7/DF8 surveys, DF12 re-attachment tests, DF10 export confirmed | `internal/brepbandmesh/`, `internal/brepfilletmesh/`, `tessellate_brep.go`, `tessellate_brep.go` (admission), `internal/verifyrun/brep.go` and `internal/survey2d/fillet_pull.go` (surveys), tests | every §8 fixture's mesh closed and within its published bound; P2's floor loop reads `1.5` in the concave-radius survey; P3's root is listed by the undercut survey under a pull along `−z`; a `Cut` by a box over P1's filleted corner builds through the mesh path | F-1 |
-| **F-3** (landed) | Sonnet, file-by-file | analytic STEP: `TOROIDAL_SURFACE` faces bounded by `Circle3`/`Arc3` edges, `ELLIPSE` edges on partial cylinders, `supportsAnalyticSTEP` arms | `export/step_analytic.go`, `export/step_analytic_torus.go`, `export/step_analytic_band_internal_test.go` | P3's root and rim and P8's top loop export analytic STEP; P1's top loop exports analytic STEP with four `ELLIPSE` edges | F-1, and the `step` module release of §12 |
-
-F-2 and F-3 run in parallel after F-1: they share no file. F-0 runs alone;
-F-1 runs alone.
-
-Increment table — what still refuses after each PR:
-
-| After | Still refused |
-|---|---|
-| F-0 (landed) | everything Table SB and SL3 refuse today |
-| F-1 (landed) | every consumer of a fillet-banded body but mass properties, `Bounds`, `Verify`'s structural audit and gate, placement and later modify ops (F-2); SF1; SB5; SX5; SX4 |
-| F-2 (landed) | SF1; SB5 (single edges sharing a vertex outside route V); SX5 (revolve cap edges); SX4 (partial loops); clearance model (DF6, `Suspect`) |
-| F-3 (landed) | SF1; SB5; SX5; SX4; DF6; variable-radius fillets (no entry point) |
+The fillet arm is complete; no later PR is planned. Its code lives in `internal/filletband/` (Table CF readings),
+`internal/breprecord/` (`attachFilletBand`, the restored-face sum, `ExtentAlong`),
+`internal/brepfilletmesh/` and `internal/brepbandmesh/` (§7.1 rings), `internal/survey2d/` and
+`internal/verifyrun/brep.go` (DF7/DF8 surveys), and `export/step_analytic.go` with
+`export/step_analytic_torus.go` (DF10). Still refused: SF1, SB5 (single edges sharing a vertex outside
+route V), SX5 (revolve cap edges), SX4 (partial loops outside the selected-chain route), the clearance
+model (DF6, `Suspect`), and variable-radius fillets (no entry point).
 
 ### 12. Hand-off
 
-`github.com/lestrrat-3d/step` holds no `TOROIDAL_SURFACE`, `SPHERICAL_SURFACE`
-or `ELLIPSE` constructor (`ap214/geometry.go` ends at `Line`). The hand-off
-file `../step/.tmp/decad-handoff-loop-fillet.md` asks for
-`ap214.ToroidalSurface(id, name, position, majorRadius, minorRadius)`,
-`ap214.SphericalSurface(id, name, position, radius)` and
-`ap214.Ellipse(id, name, position, semiAxis1, semiAxis2)`, with the AP214
-attribute order and the decad faces that use them. PR F-3 consumes it.
-
+DF10's analytic STEP uses `ap214.ToroidalSurface(id, name, position, majorRadius, minorRadius)` and
+`ap214.Ellipse(id, name, position, semiAxis1, semiAxis2)` from `github.com/lestrrat-3d/step`.
 ## Part V — Three-edge vertex blends
 
 `Fillet` admits a complete planar-face loop together with independent
@@ -6501,14 +6421,13 @@ The straight-edge set runs through route E (`brepmodify.BlendEdges`). A prism is
 read through `breprecord.OfPrism` first; a single straight prism cap edge also
 uses route E for a chamfer. Its two end-face corners take straight chords,
 the cap and side faces end at the chords' feet, and a planar bevel closes
-them. Route E keeps face and loop indices. A new route L reading
-uses those indices on the rewritten brep, including arcs route E added to
-the loops. Route L records its loop bands and builds one brep result. The
+them. Route E keeps face and loop indices. Route L reads those
+indices on the rewritten brep, including arcs route E added to the loops. Route L records its loop bands and builds one brep result. The
 public `Fillet` call commits only that final result. A single-edge
 `Chamfer` commits route E's result.
 
-`filletOffsetJoins` admits LF9 and names the pole. The fillet-specific
-offset builder omits its zero-length arc. `attachFilletBand` creates a
+`capband.PartialFilletContourDelta` drops the collapsed arc from the cap contour
+and joins its straight neighbours at the pole. `attachFilletBand` creates a
 three-edge sphere face: the side arc, the trailing meridian in reverse, and
 the leading meridian. The two neighbouring cylinder faces share those
 meridians. A complete circular walk still takes LF7's torus path.
@@ -6709,7 +6628,7 @@ with the ring a triangle of legs `d` and `d·tan(angle)` sweeps about the axis.
 
 This design covers one complete junction between a rectangular plate's top
 plane and a rooted circular cylinder whose axis rises obliquely. It extends
-`agent-docs/prism-boolean-design.md` Part G and Part G without
+`agent-docs/prism-boolean-design.md` Part G without
 changing either operation's public API.
 
 #### Source and admission
@@ -6797,7 +6716,7 @@ narrows. Nothing here changes a prism, revolve or brep receiver.
 
 ### 1. Problem
 
-Probe on `main` on 2026-10-20 (retention §1, row P4): a 40×20×20 box with four
+Retention §1, row P4: a 40×20×20 box with four
 filleted lateral edges, cross-drilled by a tool that a `Transform` placed, then
 `Fillet` of the four x-parallel cap edges. The call returns `ErrUnsupported`
 (reach SX9). The same box drilled by an unplaced tool is a `brepPayload`
@@ -6805,7 +6724,7 @@ filleted lateral edges, cross-drilled by a tool that a `Transform` placed, then
 tool was placed, rotated or cut at an angle is the common machining shape, and
 it is the shape the mesh path exists for.
 
-Three things stop the call today.
+Three things stop the call.
 
 1. **No analytic edge.** Before retention an edge of a mesh result was a chord
    chain (`FacetedCurve`) between two `Faceted` faces. Retention §10 now
@@ -7033,8 +6952,7 @@ than twice `proofbound.FacetAreaTermSlop` of the facet's corners: the float and
 exact normals then make an angle under 90 degrees, so the frame's winding agrees
 with the facet's exact winding. A shorter normal may be rounding noise of the
 wrong sign, as the cross product of a near-collinear facet of edges about 100 mm
-is, and the facet refuses (SR5, "a wall facet has no plane"). The check only
-refuses; no facet of the retained-blend suites comes within seven orders of it.
+is, and the facet refuses (SR5, "a wall facet has no plane"). The check only refuses.
 
 On the arc and chain routes (an exact main plane; R3's angle-main band keeps the
 rules above) the end plane's `on` set also holds every vertex of the boundary of
@@ -7126,7 +7044,7 @@ wall on it, and its `NormalBound` lowers the sine by at most itself, since
   `h` the axis's distance from `G`, because `n·(p − o) = n·(c − o) + R·(r·n)` when
   the axial term vanishes. This is `√(R² − (h + reach)²) / R`, the arc route's
   `√(R² − h²) / R` at reach zero (0.866 for the notched round's side roots, 0.66
-  to 0.87 for the end-round chord-row fixture). The axis may lie on either side
+  for the end-round chord-row fixture). The axis may lie on either side
   of `G`, and a bore wall is the same surface.
 - Any other wall, a cylinder with a tilted axis, a cone, a sphere and a wall whose
   tag states a departure, has no `s_lo`, and the reading refuses.
@@ -7151,8 +7069,8 @@ something else: the end's own distance to the band's boundary under the side cho
 is published on the end, and the output facets that touch the end take it through their corners'
 `max`. A cut does not inherit it, because nothing the cut publishes depends on another point's side
 choice. If the cut itself lies within its bound of another end plane, it is read by sign on its own
-offset, once. Charges therefore never compound: before this reading a cut on an edge whose ends an
-earlier reading had charged took `β + c/s` of the raised end and was then charged again. A vertex
+offset, once. Charges therefore never compound: a cut never takes `β + c/s` of an end that an earlier
+reading raised and is then charged again. A vertex
 the work made keeps the bound it was made with (`inputBeta` has no input record for it).
 
 **The setback line caps a sign reading of a cut point on the setback plane.** A cut point that lies on the setback
@@ -7184,9 +7102,8 @@ against the exact kept wall; `TestCappedCutPointOnTheSetbackPlane` and `TestOnly
 pin the restriction.
 
 The cap never lowers a bound below `β` and only replaces a larger one, for a point whose sign reading already
-succeeded. It admits no input claim. A lower bound can let a later tolerance-gated call succeed that refused before,
-because the gates read the published bounds; the six builds of the apitest set whose bounds drop (and the fan
-housing) are the measured cases, and each still passes its own gates.
+succeeded. It admits no input claim. A lower bound can let a later tolerance-gated call succeed, because the gates
+read the published bounds; each such build still passes its own gates.
 
 **The slant of the crossing bound.** A cut point on an end plane `G` publishes
 `max(ends, facet) + slack + τ`, a distance to the plane. Where the true wall meets `G`
@@ -7226,10 +7143,10 @@ closure of the kept wall. Every operation rounds outward, and `reach` refuses wh
 or brep record states) moves the true generator, so it is charged into `h` (`wallSlant`)
 and into `e` (`slantBound`): the bound does not rest on the band's slack covering it.
 `wallSine`, and so the H2 reading, has the same omission and relies on that slack
-(`planeCharge`, at least `4·delta/minSine`); charging it there is a known follow-up. The
+(`planeCharge`, at least `4·delta/minSine`); `wallSine` does not charge it. The
 crossing is a generator only up to `|n·a| ≤ parallelTol`, which the `|n·a|·far` term of
 `h` charges per section. It is tight: the
-worst ratio of the true distance to the published bound reaches 0.988 to 0.999 on the
+worst ratio of the true distance to the published bound reaches 0.98 on the
 adversarial cylinder rows (`TestCrossingBoundCoversCylinder`).
 
 What a cut point publishes (`slantBound`), with `b = β + slack` for the held input
@@ -7726,9 +7643,7 @@ diagonal; the ring is wound outward by its signed volume. Its band is group
    on the mirror image of a quad. The enclosures come from cells over exactly
    `[θ_k, θ_k+1]` for the quarter turn's quads; every other quad is the mirror
    image of one of them, which keeps each coordinate's magnitude. `W` shrinks
-   with `h` and `S/M` with the rows: the band's twist `S` is about 3 mm per
-   radian at R = 10, r = 3, d = 1.5, and the rows take its share of `ε` from
-   about 0.0080 to 0.0011 mm. Each held band point, on every row, is compared
+   with `h` and `S/M` with the rows. Each held band point, on every row, is compared
    with a tight enclosure of `(1 − t_i)·B⁺ + t_i·O⁺` at its own exact angle,
    mapped to the world by the exact pose; the largest gap joins `ε`.
 3. Band area: `|F_θ × F_t| = |w(t)|`, `w = (1 − t)·u + t·v` with
@@ -7739,8 +7654,7 @@ diagonal; the ring is wound outward by its signed volume. Its band is group
    enclosures `U` and `V` of `u` and `v` give `(1 − t)·U + t·V ∋ w(t)` at
    every θ of the cell; four quarters give each row's exact area interval. An
    interval enclosure over a cell is wider than the range it holds by a part
-   proportional to the cell's width, so the split narrows the band's interval
-   eightfold, from 4.61 to 0.58 mm² per mouth at R = 10, r = 3, d = 1.5.
+   proportional to the cell's width, so the split narrows the band's interval.
 4. Outside: on the held vertices in exact rationals, every `O⁺A` and `AK` quad
    lies in one half-space `n·p ≥ (R + μ)|n|`, `n` horizontal, and every `K`
    and `B⁺` lies inside the bore shrunk to `r − μ'`, so the `KB⁺` quads do
@@ -7777,19 +7691,14 @@ with the chain tolerance raised to the largest of those bounds, as §5's rewrite
 publishes the walls' bounds on its cut vertices.
 
 **Result.** The walls keep their `Cylinder` tags; each band is a `Faceted` face
-with role `chamfer(k)`. On the R = 10, r = 3 shaft the two-mouth result holds
-about 40,000 facets and `Tessellate(…, VerifyAll)` verifies its boundary and
-volume. Each face's area term is its largest facet bound times its perimeter,
+with role `chamfer(k)`. On the R = 10, r = 3 shaft `Tessellate(…, VerifyAll)`
+verifies the two-mouth result's boundary and volume. Each face's area term is its largest facet bound times its perimeter,
 and the perimeter carries `proofbound.ChainLengthBound`'s `2δ` for each of the
-rims' segments, about 2,400 per rim. The largest facet bound is a rim vertex's,
-`(ε + β_wall)/sin θ` (faceted-vertex-bounds §3.2): 0.0065 mm from `ε` = 0.0011
-and the wall's 0.0037 at a crossing angle near 47°. At d = 1.5 the body's area
-bound is 5.34 mm² against `Verify`'s relative tolerance of 5.93: 3.94 from the
-face terms (shaft 1.61, bore 0.67, each band 0.72, each end disc 0.11), 0.59
-carried from the Boolean, and 0.81 from the two tools' row gaps and seals.
-`Verify` reads it Sound, and the d = 0.5 result too (3.95 against 5.95). At
-r = 7, d = 0.5 the bound is 7.19 against 6.04, and `Verify` reads the area
-Suspect; the face terms there are 4.79.
+rims' segments. The largest facet bound is a rim vertex's,
+`(ε + β_wall)/sin θ` (faceted-vertex-bounds §3.2). The body's area bound sums
+the face terms, the area bound carried from the Boolean, and the two tools' row gaps and seals.
+`Verify` reads the d = 1.5 and d = 0.5 results Sound. At r = 7, d = 0.5 the bound exceeds
+`Verify`'s relative tolerance and `Verify` reads the area Suspect.
 
 **Reach.** Built and checked: r/R = 0.3 (d = 0.5, 1.5) and 0.7 (d = 0.5) on a
 Revolve shaft, and r/R = 0.3 (d = 1.5) on an Extrude shaft under each
@@ -7946,7 +7855,7 @@ an untagged `Faceted` face with role `fillet(k)`, as §4.9's band is.
      touches the bore.
 
    A cell too wide to decide a test splits up to 8 × 16. At R = 10, r = 3,
-   ρ = 3.4 and 3.2 inside the shaft, where `r' < R'` holds, the pipe folds near
+   ρ = 3.4 inside the shaft, where `r' < R'` holds, the pipe folds near
    θ = 0 and the first test refuses: "the saddle fillet's cell at station 0
    folds: the pipe is not regular there". Dropping the sign `s_J` refuses every
    outside fillet with that text; dropping σ1 from `G` refuses them "is not
@@ -7999,17 +7908,13 @@ mean-value remainder, which grows with the cell's second partials, and the
 first split stops at the coarsest cell that passes the three tests. Every cell
 splits in two along t first: a row cell is wider in t than a station cell in
 θ, so the t term of the remainder dominates, and halving it quarters that term
-for about a third more proof time. The enclosure reads [64.4, 66.9] mm² at
-r = 3, ρ = 1.5 inside the R = 10 shaft and [180.6, 205.4] at ρ = 3.0, where
-`AreaSlack` grows by about 43 mm² over two mouths, and [45.4, 47.1] for a boss
-with R = 15, r = 5, ρ = 1. ε grows with ρ too, so the volume bound grows by about
-135 mm³ at r = 7, ρ = 1.36. Each bound is proven; only its tightness suffers,
+for more proof time. The enclosure widens with ρ, and `AreaSlack` grows with it. ε grows with ρ too, so the volume bound grows with it. Each bound is proven; only its tightness suffers,
 and splitting every cell finer would buy it back at a multiple of the proof's
 time.
 
 **Result.** The walls keep their `Cylinder` tags; each fillet is a `Faceted`
-face. On the R = 10, r = 3 shaft the two-mouth result holds about 30,000 facets
-at ρ = 0.5, and `Tessellate(…, VerifyAll)` verifies its boundary and volume.
+face. On the R = 10, r = 3 shaft `Tessellate(…, VerifyAll)` verifies
+the two-mouth result's boundary and volume at ρ = 0.5.
 The block's and the rod's results below read Sound under `Verify`.
 
 **Reach.** Built and checked inside the larger cylinder: a Revolve shaft with
@@ -8019,12 +7924,9 @@ to world coordinates and under a translation. Outside it: a block 80 × 60 × 20
 with a radius-5 `Hole` down through it crossed by a radius-3 blind `Hole`
 (ρ = 0.5, both mouths), a radius-5 `Boss` on a radius-15 rod (ρ = 1), and a
 radius-3 pin joined through the R = 10 Revolve shaft (ρ = 1.5, both roots, a
-left-handed pose). The cell proofs also pass at r/R = 0.8 and at r/R = 0.3 with
-ρ = 3.0 inside, where ε grows to 0.022 mm, and outside at R = 5, r = 3 up to
-ρ = 5 and at R = 10, r = 7, ρ = 10; at R = 5, r = 3, ρ = 20 a cell "is not
-embedded". Near the size limit inside the shaft the route refuses before
-`2ρ = R − r`: at r = 3 the pipe folds at ρ = 3.2; at r = 7, ρ = 1.4 the window
-would reach past the side of the shaft (`s ≥ R'`, SR5). A boss whose top face
+left-handed pose). Near the size limit inside the shaft the route refuses before
+`2ρ = R − r`: at r = 3 the pipe folds at ρ = 3.4 (`TestRetainedSaddleFilletRefusals`);
+a window that would reach past the side of the shaft (`s ≥ R'`) refuses (SR5). A boss whose top face
 lies inside the bore's cut refuses at proof 5. The volume per mouth, from the
 tube-coordinate integral of `apitest/retained_saddle_fillet_test.go`, is
 1.635978 mm³ removed at ρ = 0.5, 7.317201 at ρ = 1.0 and 18.593228 at ρ = 1.5
@@ -8056,8 +7958,11 @@ faces `G₀` and `G₁`. Everything else in the held mesh is copied unchanged.
    stay distinct however close a mesh Boolean left them; on a tilted plane far
    from the world origin the reading rounds. Two neighbouring loop vertices that
    read one point refuse (SR5). A face with a vertex off its boundary loops refuses
-   (SR5), except a plane face's vertex exactly on its plane (§2), and the straight edge's own two faces' vertex exactly on that face's retained plane: the rewrite triangulates those faces again from their loops, so the point a mesh adds to fan a face is dropped. The wall's facets are cut by the setback plane: a facet wholly beyond
-   it stays, one wholly before it goes, and a crossing facet is clipped, with one
+   (SR5), except a plane face's vertex exactly on its plane (§2), and the
+   straight edge's own two faces' vertex exactly on that face's retained plane.
+   The rewrite triangulates those faces again from their loops, so the point a
+   mesh adds to fan a face is dropped. The wall's facets are cut by the setback
+   plane: a facet wholly beyond it stays, one wholly before it goes, and a crossing facet is clipped, with one
    new vertex per cut mesh edge shared by the facets on either side. A new wall
    vertex lies on a held facet edge, so it takes the bound of the facet it is
    cut from, the largest of its three corners' (§6.3), plus `τ` and the
@@ -8436,7 +8341,7 @@ the same charge. A chamfer plane states it as its `AxialDelta`. A fillet
 cylinder, a rim torus or cone and a corner sphere built from a charged face are
 not published as retained tags, so the face stays faceted; only a wall the view
 charged states a cylinder's `AxialDelta`. With no charge every tag is published as built. A tangent
-chain other than a closed chamfer chain (retained-Part R §5.3) reads its tags as exact, so a
+chain other than a closed chamfer chain (Part M §5.3) reads its tags as exact, so a
 plane with any nonzero `AxialDelta` is no wall of it, as `facedeparture.TagDeparts` reads it.
 
 Gate order: base gates of modify §4 stage 1, then SR1, SR2, SR3, SR6, SR5, SR4,
@@ -9065,7 +8970,7 @@ body, not from these terms.
 
 ### 7. Receiver and dispatch
 
-Reach RX6's row gains a class and SX9 narrows with it.
+This section extends reach RX6's receiver row and narrows SX9.
 
 | Receiver | `Fillet` / `Chamfer` |
 |---|---|
@@ -9082,7 +8987,7 @@ The result is a `facetedPayload` with retained tags. A further `Fillet`,
 its tags by retention §3.4. `Shell` stays SX9. An asymmetric chamfer takes the
 reference-face option of modify §7: SX3 resolves one reference face per edge,
 and each step finds it again on the evolving mesh by its retained tag
-(`agent-docs/retained-Part R §4). A missing or ambiguous one
+(Part M §4). A missing or ambiguous one
 is reach SX3.
 
 ### 8. Readers
@@ -9107,15 +9012,15 @@ published bound, never with a pinned literal.
 | Plane to cylinder edge (R3): a groove's top edge, fillet and chamfer | the fillet's centre and tangent points are those of the cross-section; the volume change equals `L` times the area of the corner region, and the surface changes by the cylinder gained less the plane strip, the wall band and a corner of each end face | take `κ` the other way: the ball sits on the wrong side of the wall |
 | Plane to cylinder edge at a boss's foot | the plate's top face is reflex at each end; the fill adds `L` times the corner region's area, and `VerifyAll` passes | |
 | Keyway top edges in a turned shaft and a hub (`apitest/faceted_retained_blend_keyway_test.go`): an R = 10 shaft 80 mm long with a keyway `|y| ≤ 3` above z = 6.5 from x = 20 to 60, one from x = 20 running off the shaft's end, one from x = 20.37 to 60, and the 20–60 keyway with a Ø0.6 hole along z at x = 70 whose rim has a vertex on the r = 0.5 fillet's setback line; a hub with a bore r = 5 and a keyway `|y| ≤ 2` from x = 10 to 30 | the shaft runs on past each end wall, which is convex at the corner and takes the cap. Fillet r = 0.5 of both edges removes `2·40·A`, with `A` = 0.117968684 mm² the corner region (its closed form agrees with a sampled polygon), the run-off keyway `2·60·A`, Fillet r = 0.3 of the 20.37 keyway `2·39.63·A(0.3)`, Fillet r = 0.3 and 0.1 of a keyway from x = 20.37 running off the shaft's end, whose rows `clearCusp` spaces again, `2·59.63·A(r)` with `A(0.3)` = 0.040674574 and `A(0.1)` = 0.004336328 mm² (each agreeing with a sampled polygon), a point 0.05 and 0.01 mm inside the corner region lying on the cap at x = 20.37, both meshes passing `VerifyAll` and `Verify` reading both Sound, the holed shaft `2·40·A` as without the hole, and Chamfer d = 0.5 of one edge `40·A_c`; the hub's bore holds its material outside the cylinder, its ball lies in the hub and its region (agreeing with a sampled polygon) is the quadrilateral less the sector and less the bore's segment, removed over `2·20`; the area changes by the blend face less the wall's strip and the cylinder's band, plus a cap at each end inside the cylinder and less a corner at the shaft's end disc; a point 0.125 mm inside the corner region lies on each end wall and more than 0.1 mm off the disc; `VerifyAll` passes. A cavity crossing the cap refuses "the cap an end face takes meets …", a pin hole into the end wall within the blend's reach refuses SR5, the cross hole moved to x = 40, inside the band, refuses SR5 on the setback line, Fillet r = 0.007 of a keyway from x = 20.37 running off the shaft's end refuses "the blend's tangent point does not lie on the wall's face", and the top edge of a blind groove in a plate, whose plane is reflex at its ends, refuses SR5. Unit tests (`internal/retainedblend/line_rewrite_internal_test.go`, `cyl_rewrite_internal_test.go`) splice the rows, the wall's run and `V` into an end face's loop, refuse tag directions whose turn is undecided or reflex while the held vertices show a convex corner, refuse a plane's or wall's chain whose sense vertex lies within its bound of the corner, charge `A` against the strip and band with the sign of each end's kind (`cylRemovedArea`), refuse a cap loop that crosses itself or runs straight on at the band's corner, and space a shaft's and a hub's rows so the last row before `tb` lies `need` from the circle, every other gap within the profile's step, a need the rows already meet leaving them and one past the plane's tangent point refusing (`TestClearCusp`) | clip the wall by angle alone: "a wall facet reaches across half the cylinder"; read every wall vertex against the generator: the x = 70 hole refuses; drop the caps from the strip-clear check: the cavity builds; never space the rows again: the r = 0.3 and 0.1 run-off keyways refuse SR5 "the blend's end cap folds …"; space them by `τ` and the slack alone, without the wall's reach: r = 0.3 refuses the same; drop its crossing or its turn test: the matching unit case returns no error; drop the wall's run from the splice: the end face fails to triangulate; drop the reach check: the pin hole builds; drop the reflex-plane check: the groove builds; read the turn from held vertices: the unit cases return no error; drop either sense bound: its unit case returns no error; charge a cap where the wall extends as a corner given up: the area unit case fails |
-| The keyway cusp's last gap (`retained_blend_facet_bound_test.go` `TestRetainedBlendKeywayCuspBounds`, `internal/retainedblend/cyl_rewrite_internal_test.go` `TestCuspChargeCoversSamples`): Fillet r = 0.3 and 0.1 of the keyway top edge at y = 3 from x = 20.37 running off the R = 10 shaft's end | every blend facet, sampled on a 12×12 barycentric grid against the exact cylinder of radius r about (3 + r, √((10 − r)² − (3 + r)²)), lies within its own bound and `Mesh.Bound` (the farthest at 0.925 and 0.903 of its own bound), and 12,139 exact points of each fillet, denser near `tb`, within the nearest blend facet's own bound; every facet of the end planes x = 20.37 and x = 80 near the corner, sampled the same way against the exact end face, whose boundary there runs up the wall, along the fillet's arc and along the circle, lies within its own bound and `Mesh.Bound`, and 2,001 exact points of the arc in each end plane within the nearest end facet's own bound. `TestCuspChargeCoversSamples` samples the segment from `P` to `C'`, moved `ε` from `C` in 16 directions, and the arc `PC` at chord half-angles 0.02, 0.07 and 0.3 on a circle of radius 0.3 and `ε` from 0 to 8 sagittas: each lies within `cuspCharge` of the other, the farthest at 0.978 of it or more, and past `ε` wherever `ε` is under four sagittas | charge the cut row with its own bound alone (`cuspCharge` returning `ε`): `TestCuspChargeCoversSamples` fails at `ε` = 0; dropping the charge leaves both keyway fixtures within their facets' own bounds, the farthest strip facet at the same 0.925 of its own bound and the cap's end facets at 0.882 against 0.874 with it, since their cut vertices lie nearer the exact setback line than their own bounds state, so no keyway fixture shows that leg; the `σ²/(2r)` term is shown by no sample past rounding |
+| The keyway cusp's last gap (`retained_blend_facet_bound_test.go` `TestRetainedBlendKeywayCuspBounds`, `internal/retainedblend/cyl_rewrite_internal_test.go` `TestCuspChargeCoversSamples`): Fillet r = 0.3 and 0.1 of the keyway top edge at y = 3 from x = 20.37 running off the R = 10 shaft's end | every blend facet, sampled on a 12×12 barycentric grid against the exact cylinder of radius r about (3 + r, √((10 − r)² − (3 + r)²)), lies within its own bound and `Mesh.Bound`, and 12,139 exact points of each fillet (61 columns of 199 arc points), denser near `tb`, within the nearest blend facet's own bound; every facet of the end planes x = 20.37 and x = 80 near the corner, sampled the same way against the exact end face, whose boundary there runs up the wall, along the fillet's arc and along the circle, lies within its own bound and `Mesh.Bound`, and 2,001 exact points of the arc in each end plane within the nearest end facet's own bound. `TestCuspChargeCoversSamples` samples the segment from `P` to `C'`, moved `ε` from `C` in 16 directions, and the arc `PC` at chord half-angles 0.02, 0.07 and 0.3 on a circle of radius 0.3 and `ε` from 0 to 8 sagittas: each lies within `cuspCharge` of the other, and past `ε` wherever `ε` is under four sagittas | charge the cut row with its own bound alone (`cuspCharge` returning `ε`): `TestCuspChargeCoversSamples` fails at `ε` = 0; dropping the charge leaves both keyway fixtures within their facets' own bounds, since their cut vertices lie nearer the exact setback line than their own bounds state, so no keyway fixture shows that leg; the `σ²/(2r)` term is shown by no sample past rounding |
 | Convex side edges of a boss at its foot (`apitest/faceted_retained_blend_boss_foot_test.go`): a 20×20×15 box boss on an 80×60×10 plate with a placed through hole; a 45° corner, its slant sketched so its tag states no departure (retention §3.5), on a boss sunk 1 mm into the plate because the shifted retry re-normalises a slanted frame and states a departure; a pillar between two plates. The square bosses stand on the plate and take the shifted retry | the plate's top face is reflex at each foot and takes the cap. Fillet r = 3 of the four sides removes `4·15·r²(1 − π/4)`, Chamfer d = 2 removes `4·15·d²/2`, the 45° corner `15·r²(tan(φ/2) − φ/2)` with `φ = 3π/4`, the pillar `15·r²(1 − π/4)` with a cap at each end; the area changes by the blend face less the two strips, less the corner each convex top end gives up, plus each cap a reflex end takes (top and foot cancel on the boss; the pillar gains two caps), and the bound's growth stays under twice the caps' area; `VerifyAll` passes on the box fillet. A cavity crossing the cap refuses "the cap an end face takes meets …", and a hole within the blend's reach on the plate's top refuses SR5. The wall edge of an L section whose front face is reflex at the step loses `20·r²(1 − π/4)`, and the plate's top takes the cap. A unit test (`internal/retainedblend/line_rewrite_internal_test.go`) reads `G`'s turn from tag directions whose sine is under `minSine` while the held vertices show a square corner: it refuses as undecided | build no cap: the boss refuses SR5; drop the cap's facets from the strip-clear check: the cavity builds; charge the cap as a corner `G` gives up: the bound's growth passes twice the caps; read the turn from `G`'s loop vertices beside `V`: the undecided unit case returns no error |
 | Concave edge in an L section | the fill adds `L·r²(1 − π/4)`, the blend's normal points into the void, `VerifyAll` passes | build the convex blend: the normal points into the material |
 | Convex edge whose front face is reflex at its top (`apitest/faceted_retained_blend_reflex_side_test.go`): an outline in the XZ plane extruded 6 mm along y, joined to a block that crosses its top so the Union takes the mesh path; its right side x = 10 rises from z = 0 to (10, 10), where the front face y = 0 turns onto a flat underside or onto one at 45° | Fillet r = 1 of the edge x = 10, y = 0 removes `10·A` under the flat underside and `A·(10 − c)` under the sloped one, `A` the corner region and `c` its centroid's offset from x = 10; the area changes by the cylinder less the two strips, less the floor's corner, plus the cap the underside takes (`A/|d·n|`), and the bound's growth stays under twice the cap; the corner (10, 0, 10) is no longer a vertex and `P_A` is; the end curve on the 45° underside lies within the mesh's bound; `VerifyAll` passes. A cavity crossing the cap refuses "the cap an end face takes meets …"; an underside rising at slope 10 or 12 from the corner meets the setback line at or below the floor and refuses "a row of the blend's strip is no longer than its bounds along the edge" | charge the cap as a corner the underside gives up: the bound's growth passes twice the cap; charge it as zero: the growth passes the cap (as for the L section's wall edge and a shell opening's inner rim); keep the cap out of the strip-clear check: the cavity case fails its held audit instead of naming the cap; drop the row check: the steep undersides refuse on the end face's reach instead |
 | Concave edge at a wall's foot | the plate face is reflex at each foot corner; the fill adds `L·r²(1 − π/4)`, the wall's end faces grow by the caps, `VerifyAll` passes; two foot edges together and a chamfer build as well | keep `V` out of the extended end face's loop: the mesh fails its audit |
 | Oblique end face, sketched at 45° about z and, separately, about y (no exact tool leans both ways) | the end arc is an `Ellipse3` with `SemiMinor = r` and `SemiMajor = r / |d̂ · nG|`; removed volume equals the section area times the length between the end planes measured through the section's centroid | treat `G` as normal to the edge: the volume is off by the centroid offset |
-| Rows ending on oblique planes (`apitest/faceted_retained_blend_oblique_end_test.go`): the 45° end face above at r = 2, a two-edge mitre run at r = 3, and the 45° plane of a two-edge corner on the corner route at r = 2 | 1,001 samples of the true end curve, the ellipse the cylinder cuts in that plane, lie within the mesh's `Bound` of its facets. A unit test (`internal/retainedblend/line_rewrite_internal_test.go`) projects rows onto a plane with `|d̂ · n| = 1/2`: the chord centred on the stretch direction has sagitta `r·(1 − cos h)/c` there and no other chord's is larger; spaced for the cross-section alone that is `τ/c`, spaced by `rowStep` it is `τ` | space the rows by `τ` alone in any of the three routes: its curve lies up to about 1.37 times `Bound` from the mesh; drop `c` from `rowStep`: the unit case reads `τ/c` |
-| Rows ending on an arc's offset end planes (`apitest/faceted_retained_blend_arc_end_plane_test.go`): a Ø8 bore whose axis lies `h` from the plate's face `x = 0` breaks out through it, fillet r = 4 with the wall's row meeting `x = 0` at `X/ρ` = 0.4 and 0.2 (arc route); the rounded box corner cut back so the plane's row meets the cut at `X/ρ` = 0.1, fillet r = 2.5 along the tangent chain (chain route); a pocket open through `x = 0` whose 3 mm corners' axes lie 2.5 mm and 2.75 mm from it, fillet r = 2 and r = 1 along the mouth's chain (chain route, hole side); the hole mouth chamfered with d = 1, 2 and 4 at `X/ρ` = 0.4 and 0.2 | 1,001 samples of each true end curve, taken from the torus, lie within the mesh's `Bound` of its facets; every facet of the chamfer, the band beside the wall's cut included, sampled on a barycentric grid against the cone's generator in closed form, lies within `Bound` of the cone. Unit tests (`internal/retainedblend/arc_section_internal_test.go`) pin `tan ψ = g·X/ρ` against finite differences of a sampler that bisects each row's circle against the plane; on a plane through the axis, where the end curve is the tube's circle, `certify` refuses a chord whose sagitta `r·(1 − cos(Δα/2))` is 1.01 `τ` and accepts one at 0.9 `τ`; a hole mouth's torus and cone at `X/ρ` = 0.2 and a boss's torus at 0.1 keep every sampled chord within `τ` with at most 96 rows, the rows that hold the ends' azimuth shift included, where the profile's own rows stray past it; a plane through the axis adds no rows; a tiny `τ`, and a fillet of 10⁻⁶ on a 1,000 mm bore whose margin `δ` passes `τ`, refuse past 1,024 rows; a plane the setback circle misses refuses; `TestEndSectionMarginCoversRounding` measures the rounding of `X` and of the placed row vertex in 200-bit arithmetic under `δ/4` down to `q = 10⁻⁶`; `TestStripRowStepsHoldTau` sizes the rows and the steps `rowSteps` gives a hole mouth's cone and torus at the sine 0.2 and a boss's torus at 0.1: every gap between two vertex rows keeps its sagitta plus the azimuth term of its larger step and its shift within `τ`, the worst gap within 10⁻⁴ of it, and every row keeps its near-end term within `τ`; `TestAzimuthStepHoldsBudget` keeps the step's term within its budget and within `2·stepCut` of it down to a budget of 10⁻¹⁴ of the radius; `TestEndSectionTiltCharge` measures a plane tilted 10⁻⁹ off the axis in 200-bit arithmetic within the margin's tilt term and refuses where that term passes `τ` | space the rows by the profile alone: the curves lie up to 1.41 times `Bound` from the mesh (1.22 at 0.4, 1.05 on the chain) and the unit cases stray past `τ`; drop the parallelogram's corners from `certify`: the 1.01 `τ` chord certifies; set `δ` to zero: the rounding test and the margin refusal fail; drop each gap's shift from `rowSteps`: the root test's hole mouth chamfer at d = 2, c = 0.4 lies 1.017 times its facets' own bounds from the cone, and `TestStripRowStepsHoldTau` reads 1.46 `τ` on the cone, 1.49 on the hole's torus and 1.50 on the boss's; read every gap at the strip's smallest radius: that test reads 1.72, 1.69 and 3.26 `τ`; drop a gap's sagitta from its budget, or the cap near each row: that test fails, and no sampler here does: the hole mouth's sagitta and azimuth terms push opposite ways, and the other limit on each step still binds; drop the tilt term: the tilt test fails |
-| Strip triangles (`apitest/faceted_retained_blend_strip_interior_test.go`, `retained_blend_facet_bound_test.go`): the rounded box corner cut back so the plane's row meets the cut at `q` = 0.4 and 0.2 for r = 2 and at 0.4, 0.2 and 0.1 for r = 2.5, filleted along the tangent chain (`κ = −1`); the hole mouth that breaks out through `x = 0`, filleted with d = 1, 2 and 4 at `X/ρ` = 0.4 and 0.2; bosses of radius 3 and 4 on the plate, their top rims filleted with r = 1 and 2.5, and of radius 1 at r = 0.01; a boss of radius 9 filleted at r = 0.004 and chamfered at d = 0.003, and an Ø18 bore's mouth filleted at r = 0.002; a groove's top edge (R3) and a bore pair's ridge (R5) filleted with r = 1; the cap of the radius 2 ball below z = −1, its rim filleted with r = 0.4; three edges at a mesh box's corner filleted with r = 1, 2 and 3 | every facet of each blend face, the band beside the wall's cut included, sampled on a 12×12 barycentric grid against the fixture's profile or sphere in closed form, lies within the mesh's `Bound`; the root test reads each blend facet's own bound, the largest vertex bound of its corners, and every sample of the boss rims at r = 1 and 2.5, the boss corner at r = 2.5 and `q` = 0.4 and its chain chamfer at d = 2.5 and `q` = 0.2, the hole mouth at d = 4 and 0.2 and its chamfer at d = 2 and 0.4, the sphere rim, the r = 2 corner, the radius 9 boss's chamfer at d = 0.003, the groove and the ridge lies within it. Every blend facet's normal agrees in sign with the exact surface's outward normal at its centroid, the smallest dot product logged (0.107 on the radius 1 boss's band, whose held wall steps far wider than its rows). The radius 9 boss at r = 0.004 and the Ø18 mouth refuse past 4,096 columns; `TestColumnCountRefusesPastTheLimit` builds exactly 4,096 and refuses one more, and refuses a step that is zero, negative or not a number. `TestRetainedBlendStripPatchCovered` samples the exact torus of the hole mouth's fillet at d = 4 and 0.2 (44,357 points) and of the boss corner's at r = 2.5 and 0.4 (9,952 points) against the blend's facets: each point lies within the nearest facet's own bound of it, the farthest at 0.50 and 0.58 of it. `TestOctantDepartureCoversSamples` samples the corner patch's grid at 4, 17 and 51 rows: no sample lies past `octantDeparture`, the farthest comes within a tenth of it, and it passes twice the side chords' sagitta | count a fan's columns from its wall row alone: the boss corner's chain chamfer lies 1.26 times its facets' own bounds from the cone; drop both each gap's shift and the cap near each row from `rowSteps`: the hole mouth's fillet lies 1.23 times its facets' own bounds from the torus, its chamfer at d = 2 1.55 times, the boss corner's chain chamfer 1.26 times, and a point of the hole mouth's torus lies 1.03 times past the nearest facet's own bound; read the band's azimuth term at the smaller of its two radii: no fixture here fails; give each of a closed rim fillet's two terms all of `τ`: the boss rims fail the root test, their facets up to 1.01 times their own bounds, while `Bound` alone still covers them, held up by the band's cut vertices; drop the band's charge: the sphere rim's band lies 1.91 times `Bound` from the torus, and 0.0103 mm against its facets' own 0.0060; size the corner's rows by the strips alone and drop the patch's charge: the patch lies 2.60 times `Bound`; size them so and keep the charge: both tests pass and the corner boxes' volume bounds pass 0.1 and 0.5 (`apitest/orthogonal_fillet_corner_test.go`); drop the shift from the rows' spacing (`arcRows`): the hole mouth's chamfers and the boss corner's chain fillets refuse with "the blend's strip has no column step left …", their rows' shifts past their gaps' budgets, and `TestStripRowStepsHoldTau` fails; state `2τ` on every fillet row instead of splitting `τ`: `TestFacetedSourcePatchBlendThenCut` refuses at the chain-depth gate; clamp the column count at 4,096 instead of refusing: the radius 9 boss and the Ø18 mouth build, their facets 1.14 and 1.35 times their own bounds; read a curved wall's cut vertex from its edge's two ends alone: no fixture here fails, since their held facets' corners carry equal bounds |
+| Rows ending on oblique planes (`apitest/faceted_retained_blend_oblique_end_test.go`): the 45° end face above at r = 2, a two-edge mitre run at r = 3, and the 45° plane of a two-edge corner on the corner route at r = 2 | 1,001 samples of the true end curve, the ellipse the cylinder cuts in that plane, lie within the mesh's `Bound` of its facets. A unit test (`internal/retainedblend/line_rewrite_internal_test.go`) projects rows onto a plane with `|d̂ · n| = 1/2`: the chord centred on the stretch direction has sagitta `r·(1 − cos h)/c` there and no other chord's is larger; spaced for the cross-section alone that is `τ/c`, spaced by `rowStep` it is `τ` | space the rows by `τ` alone in any of the three routes: its curve lies past `Bound` from the mesh; drop `c` from `rowStep`: the unit case reads `τ/c` |
+| Rows ending on an arc's offset end planes (`apitest/faceted_retained_blend_arc_end_plane_test.go`): a Ø8 bore whose axis lies `h` from the plate's face `x = 0` breaks out through it, fillet r = 4 with the wall's row meeting `x = 0` at `X/ρ` = 0.4 and 0.2 (arc route); the rounded box corner cut back so the plane's row meets the cut at `X/ρ` = 0.1, fillet r = 2.5 along the tangent chain (chain route); a pocket open through `x = 0` whose 3 mm corners' axes lie 2.5 mm and 2.75 mm from it, fillet r = 2 and r = 1 along the mouth's chain (chain route, hole side); the hole mouth chamfered with d = 1, 2 and 4 at `X/ρ` = 0.4 and 0.2 | 1,001 samples of each true end curve, taken from the torus, lie within the mesh's `Bound` of its facets; every facet of the chamfer, the band beside the wall's cut included, sampled on a barycentric grid against the cone's generator in closed form, lies within `Bound` of the cone. Unit tests (`internal/retainedblend/arc_section_internal_test.go`) pin `tan ψ = g·X/ρ` against finite differences of a sampler that bisects each row's circle against the plane; on a plane through the axis, where the end curve is the tube's circle, `certify` refuses a chord whose sagitta `r·(1 − cos(Δα/2))` is 1.01 `τ` and accepts one at 0.9 `τ`; a hole mouth's torus and cone at `X/ρ` = 0.2 and a boss's torus at 0.1 keep every sampled chord within `τ` with at most 96 rows, the rows that hold the ends' azimuth shift included, where the profile's own rows stray past it; a plane through the axis adds no rows; a tiny `τ`, and a fillet of 10⁻⁶ on a 1,000 mm bore whose margin `δ` passes `τ`, refuse past 1,024 rows; a plane the setback circle misses refuses; `TestEndSectionMarginCoversRounding` measures the rounding of `X` and of the placed row vertex in 200-bit arithmetic under `δ/4` down to `q = 10⁻⁶`; `TestStripRowStepsHoldTau` sizes the rows and the steps `rowSteps` gives a hole mouth's cone and torus at the sine 0.2 and a boss's torus at 0.1: every gap between two vertex rows keeps its sagitta plus the azimuth term of its larger step and its shift within `τ`, the worst gap within 10⁻⁴ of it, and every row keeps its near-end term within `τ`; `TestAzimuthStepHoldsBudget` keeps the step's term within its budget and within `2·stepCut` of it down to a budget of 10⁻¹⁴ of the radius; `TestEndSectionTiltCharge` measures a plane tilted 10⁻⁹ off the axis in 200-bit arithmetic within the margin's tilt term and refuses where that term passes `τ` | space the rows by the profile alone: the curves lie past `Bound` from the mesh and the unit cases stray past `τ`; drop the parallelogram's corners from `certify`: the 1.01 `τ` chord certifies; set `δ` to zero: the rounding test and the margin refusal fail; drop each gap's shift from `rowSteps`: the root test's hole mouth chamfer at d = 2, c = 0.4 lies past its facets' own bounds from the cone, and `TestStripRowStepsHoldTau` reads more than `τ` on the cone, the hole's torus and the boss's; read every gap at the strip's smallest radius: that test reads more than `τ` on all three; drop a gap's sagitta from its budget, or the cap near each row: that test fails, and no sampler here does: the hole mouth's sagitta and azimuth terms push opposite ways, and the other limit on each step still binds; drop the tilt term: the tilt test fails |
+| Strip triangles (`apitest/faceted_retained_blend_strip_interior_test.go`, `retained_blend_facet_bound_test.go`): the rounded box corner cut back so the plane's row meets the cut at `q` = 0.4 and 0.2 for r = 2 and at 0.4, 0.2 and 0.1 for r = 2.5, filleted along the tangent chain (`κ = −1`); the hole mouth that breaks out through `x = 0`, filleted with d = 1, 2 and 4 at `X/ρ` = 0.4 and 0.2; bosses of radius 3 and 4 on the plate, their top rims filleted with r = 1 and 2.5, and of radius 1 at r = 0.01; a boss of radius 9 filleted at r = 0.004 and chamfered at d = 0.003, and an Ø18 bore's mouth filleted at r = 0.002; a groove's top edge (R3) and a bore pair's ridge (R5) filleted with r = 1; the cap of the radius 2 ball below z = −1, its rim filleted with r = 0.4; three edges at a mesh box's corner filleted with r = 1, 2 and 3 | every facet of each blend face, the band beside the wall's cut included, sampled on a 12×12 barycentric grid against the fixture's profile or sphere in closed form, lies within the mesh's `Bound`; the root test reads each blend facet's own bound, the largest vertex bound of its corners, and every sample of the boss rims at r = 1 and 2.5, the boss corner at r = 2.5 and `q` = 0.4 and its chain chamfer at d = 2.5 and `q` = 0.2, the hole mouth at d = 4 and 0.2 and its chamfer at d = 2 and 0.4, the sphere rim, the r = 2 corner, the radius 9 boss's chamfer at d = 0.003, the groove and the ridge lies within it. Every blend facet's normal agrees in sign with the exact surface's outward normal at its centroid, the smallest dot product logged. The radius 9 boss at r = 0.004 and the Ø18 mouth refuse past 4,096 columns; `TestColumnCountRefusesPastTheLimit` builds exactly 4,096 and refuses one more, and refuses a step that is zero, negative or not a number. `TestRetainedBlendStripPatchCovered` samples the exact torus of the hole mouth's fillet at d = 4 and 0.2 and of the boss corner's at r = 2.5 and 0.4 against the blend's facets: each point lies within the nearest facet's own bound of it. `TestOctantDepartureCoversSamples` samples the corner patch's grid at 4, 17 and 51 rows: no sample lies past `octantDeparture`, the farthest comes within a tenth of it, and it passes twice the side chords' sagitta | count a fan's columns from its wall row alone: the boss corner's chain chamfer lies past its facets' own bounds from the cone; drop both each gap's shift and the cap near each row from `rowSteps`: the hole mouth's fillet and its chamfer at d = 2 lie past their facets' own bounds from the torus and cone, the boss corner's chain chamfer does too, and a point of the hole mouth's torus lies past the nearest facet's own bound; read the band's azimuth term at the smaller of its two radii: no fixture here fails; give each of a closed rim fillet's two terms all of `τ`: the boss rims fail the root test, their facets past their own bounds, while `Bound` alone still covers them, held up by the band's cut vertices; drop the band's charge: the sphere rim's band lies past `Bound` from the torus; size the corner's rows by the strips alone and drop the patch's charge: the patch lies past `Bound`; size them so and keep the charge: both tests pass and the corner boxes' volume bounds pass 0.1 and 0.5 (`apitest/orthogonal_fillet_corner_test.go`); drop the shift from the rows' spacing (`arcRows`): the hole mouth's chamfers and the boss corner's chain fillets refuse with "the blend's strip has no column step left …", their rows' shifts past their gaps' budgets, and `TestStripRowStepsHoldTau` fails; state `2τ` on every fillet row instead of splitting `τ`: `TestFacetedSourcePatchBlendThenCut` refuses at the chain-depth gate; clamp the column count at 4,096 instead of refusing: the radius 9 boss and the Ø18 mouth build, their facets past their own bounds; read a curved wall's cut vertex from its edge's two ends alone: no fixture here fails, since their held facets' corners carry equal bounds |
 | Grazing-angle and direction gates (`TestGatesRefuseNaN`, `internal/retainedblend/line_internal_test.go`) | each gate refuses a value that is not a number, as a tag whose normal is not a number produces: `shallow` (the straight edge's end, mitre and corner planes, and the cylinder–cylinder walls' meeting), `intersect3`, `grazes` (a plane–cylinder edge's end plane), `clears` (the cylinder–cylinder walls' ways out of a corner), `crossing` (a sphere rim's plane) and `cornerTurn` (a chain end's turn reads undecided) | write any of them as `c < minSine`, `≤` or `>` against the bound: NaN passes and its subtest fails |
 | Clearance | a radius past the face width refuses `ErrDegenerate`; a radius within `b` of it refuses `ErrUnsupported` | drop the `− b_v` term of §6.2: the near case builds an invalid solid |
 | Shared vertex / tangent chain | refuse SR2 | |
@@ -9135,7 +9040,7 @@ published bound, never with a pinned literal.
 | Result is an ordinary retained body | a second blend on another edge, a `Cut` through the blended region and `Transform` all build; `NormalAt` on the blend face has a bound below 1 | store the blend with `Retained = false`: the chain loses the tag |
 | New vertex bounds | every new vertex lies within its stated bound of its exact point | skip the rounding charge: the bound is zero and the check fails |
 | Verify | `Verify` of a blended plate passes with no `Suspect` in watertightness | |
-| R7 cross-hole chamfer: Revolve shaft R = 10, pin r = 3 through it, both mouths, d = 1.5 and 0.5; pin r = 7, d = 0.5 (`apitest/retained_saddle_chamfer_test.go`) | the volume falls by twice the wedge's divergence-theorem integral (24.474 mm³ per mouth at d = 1.5, 2.460 at d = 0.5) within both bodies' bounds, and at d = 1.5 that change exceeds the bounds; the area falls by twice the shaft's and the bore's strips less the band, from the same parametrisation, within both bodies' bounds, and at r = 3 that change exceeds the bounds and `Verify` reads the result Sound with the area within its tolerance; the walls stay `Cylinder`, the bands read `Faceted`; on the `VerifyAll` mesh the wedge's section centroid reads outside, farther than the mesh bound, and a point 0.3 mm past the band reads inside, at 8 stations of each mouth; an Extrude shaft at d = 1.5 under the three axis assignments and a translation does the same (`TestRetainedSaddleChamferExtrudeShaft`; under `-race` the translated case only, on one mouth). A unit test (`internal/crossbore/saddle_tool_test.go`, R = 10, r = 3, d = 1.5) checks that the chord bound covers sampled points of the held band triangles against the exact band at the same parameters, that each row's area interval holds a midpoint-rule area of the exact row and the band's interval is narrower than 1 % of its area, and that a moved inner row raises the sample error | cut with `d/2`: the d = 1.5 volume and the d = 0.5 centroids fail; drop the outer foot's rotation from the held stations: the sample comparison widens `ε` and proof 4 refuses; drop the mouth-side flip or permute the pose's axes: the race-mode Extrude case refuses; drop the twist term from the chord spread: the sampled triangles lie past the bound; charge the whole twist (`S` in place of `S/M`): `Verify` reads both r = 3 results Suspect; split no quad into area cells: `Verify` reads the d = 1.5 result Suspect and the band's interval is too wide; give every row the whole band's density: row 0's interval misses its area; compare only `O⁺` and `B⁺`: the moved inner row goes unread |
+| R7 cross-hole chamfer: Revolve shaft R = 10, pin r = 3 through it, both mouths, d = 1.5 and 0.5; pin r = 7, d = 0.5 (`apitest/retained_saddle_chamfer_test.go`) | the volume falls by twice the wedge's divergence-theorem integral per mouth (`saddleWedgeVolume`) within both bodies' bounds, and at d = 1.5 that change exceeds the bounds; the area falls by twice the shaft's and the bore's strips less the band, from the same parametrisation, within both bodies' bounds, and at r = 3 that change exceeds the bounds and `Verify` reads the result Sound with the area within its tolerance; the walls stay `Cylinder`, the bands read `Faceted`; on the `VerifyAll` mesh the wedge's section centroid reads outside, farther than the mesh bound, and a point 0.3 mm past the band reads inside, at 8 stations of each mouth; an Extrude shaft at d = 1.5 under the three axis assignments and a translation does the same (`TestRetainedSaddleChamferExtrudeShaft`; under `-race` the translated case only, on one mouth). A unit test (`internal/crossbore/saddle_tool_test.go`, R = 10, r = 3, d = 1.5) checks that the chord bound covers sampled points of the held band triangles against the exact band at the same parameters, that each row's area interval holds a midpoint-rule area of the exact row and the band's interval is narrower than 1 % of its area, and that a moved inner row raises the sample error | cut with `d/2`: the d = 1.5 volume and the d = 0.5 centroids fail; drop the outer foot's rotation from the held stations: the sample comparison widens `ε` and proof 4 refuses; drop the mouth-side flip or permute the pose's axes: the race-mode Extrude case refuses; drop the twist term from the chord spread: the sampled triangles lie past the bound; charge the whole twist (`S` in place of `S/M`): `Verify` reads both r = 3 results Suspect; split no quad into area cells: `Verify` reads the d = 1.5 result Suspect and the band's interval is too wide; give every row the whole band's density: row 0's interval misses its area; compare only `O⁺` and `B⁺`: the moved inner row goes unread |
 | R7 fillet: Revolve shaft R = 10, pin r = 3 through it, both mouths, ρ = 1.5 and 0.5; pin r = 7, ρ = 0.5; a `Hole` r = 3 through the shaft's wall, ρ = 1.5 (`apitest/retained_saddle_fillet_test.go`) | the volume falls by twice the tube-coordinate integral of §4.10, computed by Gauss–Legendre over exact ray exits (18.593228 mm³ per mouth at ρ = 1.5, 1.635978 at ρ = 0.5), within both bodies' bounds, and at ρ = 1.5 that change exceeds the bounds; the walls stay `Cylinder`, the fillets read `Faceted`; `VerifyAll` verifies the result; on its mesh a point midway between the arc and the edge along the arc's bisector reads outside, farther than the mesh bound, and a point 0.3·ρ inside the ball reads inside, at 8 stations of each mouth; an Extrude shaft at ρ = 1.5 under the three axis assignments and a translation does the same (`TestRetainedSaddleFilletExtrudeShaft`; under `-race` the translated case only, on one mouth). Unit tests (`internal/saddlecanal/proof_internal_test.go`, both sides of the larger cylinder; under `-race` one canal of each): the cell proofs' area intervals hold a midpoint-rule area of the fillet and Green's-theorem areas of both walls, the chord bound covers sampled held triangles, the rows split the widest arc, a moved held vertex raises the sample error, and ρ = 3.4 folds; `internal/retainedblend/saddle_fillet_internal_test.go` chains a cut ring through a merged sliver, reads a pose's hand, checks that the chamfer's recognition admits exactly the edges its rule before σ admitted, and that the fillet's admits its three patterns, over every pair of radii, `Reversed` flags and `Convex` flag; a second fillet of a rebuilt r = 3 shaft at ρ = 0.5 tessellates to the same vertices and triangles | fillet with ρ/2: the ρ = 1.5 volume and the ρ = 0.5 points fail; flip σ1 in the route: every build refuses, "the bore's cut leaves fewer than three vertices"; drop the strip's winding swap for a left-handed pose: the Revolve result fails its audit; drop the mouth-side flip: the race-mode Extrude case puts the fillet on the far mouth and its points fail; drop the Jacobian's sign or σ1 in `G`: the outside unit canals refuse, "folds" and "is not embedded" |
 | R7 fillet outside both cylinders (`TestRetainedSaddleFilletOutside`): a block 80 × 60 × 20 with a radius-5 `Hole` down through it crossed by a radius-3 blind `Hole`, both mouths, ρ = 0.5 (convex, removes); a radius-5 `Boss` 8 high on a radius-15 rod, ρ = 1 (concave, adds); a radius-3 pin joined through the R = 10 Revolve shaft, both roots, ρ = 1.5 (concave, a left-handed pose) | the volume falls (block) or grows (rod, pin) by the tube-coordinate integral per mouth (0.540755, 4.701377 and 6.619077 mm³) within both bodies' bounds; `VerifyAll` verifies the result; on its mesh the point midway between the arc and the edge reads outside for the block and inside for the rod and pin, farther than the mesh bound from every facet, and the point 0.3·ρ inside the ball keeps its side, at 8 stations of each mouth; under `-race` the rod only | expect ρ/2 or σ1 = −1 in the test: all three fail, at the ball's points or the volume; flip σ1 in the route: every build refuses, "the bore's cut leaves fewer than three vertices" |
 | R7 fillet refusals | `ρ = 3.5` (`2ρ = R − r`) refuses `ErrDegenerate` "no ball of that radius touches both walls of the saddle"; ρ = 3.4 refuses "folds: the pipe is not regular there"; a pin moved 0.5 off the shaft's axis, the pin's part inside the shaft (`Intersect`, σ = (−1, −1)) and a concave pin root inside a tube's bore (`Chamfer` and `Fillet`) refuse with the canal-surface reason; a flat milled beside a mouth refuses "another face of the body comes within the saddle fillet's reach", as does a boss 1 high on the radius-15 rod at ρ = 1, whose top face lies inside the bore's cut (`TestRetainedSaddleFilletRefusals`) | drop the route's existence test: ρ = 3.5 refuses at `saddlecanal.Prove`'s own, "the saddle canal's offset cylinders do not meet in a loop" (a unit test pins that site's text); drop the Convex flag from `saddleKey.built`: the tube root's `Chamfer` builds and removes material where a concave blend adds it, and both recognition unit tests fail; drop the Jacobian test: ρ = 3.4 refuses at the progress test instead; drop the clearance check: the flat refuses later, "a corner of the saddle fillet's window lies on no facet of the shaft wall", and the short boss "the bore's cut leaves fewer than three vertices"; admit every σ: the tube root's `Fillet` builds and the clipped pin refuses "a corner of the saddle fillet's window lies on no facet of the shaft wall"; drop the exact axis meeting: the moved pin refuses with "a held seam vertex is off the two cylinders" |
@@ -9152,8 +9057,8 @@ published bound, never with a pinned literal.
 
 | Area | Change |
 |---|---|
-| `internal/retainedblend/` | new: classification (Table RR), exact geometry (§4), clip, strip and end construction (§5), gates (§6); R6 in `sphere.go`, its exact-record rule in `denoted.go`; an R4 arc's end on a cylinder in `arc_end_cyl.go`, its band, chain, cap and split in `arc_end_cyl_cap.go`; R3's wall band in `cyl_band.go`, which also cuts an R4 arc's wall by the planes of `arc_band.go` and a concave chain's wall by those of `chain_band.go`; the strip triangles' bounds, the band's charge and the corner patch's in `strip_bound.go` |
-| `internal/facetedrecord/` | an entry that builds a payload from new vertices, triangles, groups and bounds; no change to `Build` |
+| `internal/retainedblend/` | classification (Table RR), exact geometry (§4), clip, strip and end construction (§5), gates (§6); R6 in `sphere.go`, its exact-record rule in `denoted.go`; an R4 arc's end on a cylinder in `arc_end_cyl.go`, its band, chain, cap and split in `arc_end_cyl_cap.go`; R3's wall band in `cyl_band.go`, which also cuts an R4 arc's wall by the planes of `arc_band.go` and a concave chain's wall by those of `chain_band.go`; the strip triangles' bounds, the band's charge and the corner patch's in `strip_bound.go` |
+| `internal/facetedrecord/` | an entry that builds a payload from new vertices, triangles, groups and bounds |
 | `internal/retainedblend/saddle.go`, `saddle_tool.go`, `internal/crossbore/saddle_tool.go` | R7 (§4.9): recognition, tool, band proof, outside and clearance proofs, the Cut |
 | `internal/brepmodify/chamfer.go` | calls `retainedblend.SaddleChamfer` with the hooks' mesher before `retainedblend.Chamfer` |
 | `internal/retainedblend/saddle_fillet.go`, `internal/saddlecanal/` | R7 fillet (§4.10): the window and bore cuts, the bands, the strip and the bounds; the exact fillet, its rows and its cell proofs |
@@ -9167,7 +9072,9 @@ published bound, never with a pinned literal.
 
 ### 11. Increments
 
-| # | Lands | Gate to start the next |
+Each stage below is built. Its gate is the §9 rows named.
+
+| # | Built | Gate: rows that pass |
 |---|---|---|
 | B1 | R2 fillet and chamfer: classification, the four rims of §4.2, clip and strip, bounds, gates SR1–SR4 and SR6–SR7 | the hole-mouth, boss-root and shaft-end rows of §9 pass; `go test ./...` on CI |
 | B2 | R1 fillet and equal-distance chamfer with planar end faces, SR5 | the 90° and 45° edge rows, the oblique-end row and the L-section concave row pass |
@@ -9210,17 +9117,17 @@ published bound, never with a pinned literal.
 
 | Decision | Default | Alternative |
 |---|---|---|
-| Edge classes in the first increment | R2 (closed circular rims) first, because they have no end vertices | R1 first: more common, but needs the end-face construction and SR5 |
+| Edge classes in the first increment | R2 (closed circular rims), because they have no end vertices | R1: more common, but needs the end-face construction and SR5 |
 | A blend whose clearance is undecided within bounds | refuse (`ErrUnsupported`) | build with a bound that charges the undecided margin: smaller refusal set, larger proof |
 | Chord tolerance `τ = 2⁻¹⁰·r` for the blend grid | fixed ratio of the radius | follow the body's `MeshBound`: finer blend, many more facets |
 | Several selected edges | one at a time on the evolving mesh; each later rim is found again by its circle | require disjoint regions `K` and build them together |
 | `Shell` of a retained body | stays SX9 | a separate design |
-| R7 tool stations | `N = 1024`: two mouths cut in about 2 s, about 40,000 facets | `N = 4096`: `ε` four times smaller, but a rim vertex's bound only falls from 0.0065 to about 0.0054 mm, the wall's share, while the rims hold four times the segments, so their length bounds grow about threefold; several times the facets and time |
-| R7 band rows and area cells | `M = 8` rows and 8 area cells per quad: `ε` 0.0011 mm and an area bound of 5.34 mm² (Sound) at R = 10, r = 3, d = 1.5, the cut about 0.8 s slower than with neither | `M = 16`: `ε` about 0.0006, about 70,000 facets; 16 area cells: 5.04 mm², about 0.3 s more; `N = 512` with 8 rows and 16 area cells: `ε` 0.0026 and 6.22 mm², Suspect |
+| R7 tool stations | `N = 1024` (`crossbore.ToolStations`) | `N = 4096`: `ε` four times smaller, but a rim vertex's bound falls only by the wall's share while the rims hold four times the segments, so their length bounds grow; more facets and time |
+| R7 band rows and area cells | `M = 8` rows and 8 area cells per quad (`crossbore.ToolRows`, `ToolAreaCells`); `Verify` reads the R = 10, r = 3, d = 1.5 result Sound (`apitest/retained_saddle_chamfer_test.go`) | more rows or cells: a smaller `ε` or area bound for more facets and time; fewer stations with the same rows and cells: a larger bound that can read Suspect |
 | R7 cut's chain allowance | raised to the walls' held bounds and `ε` (§4.9) | keep the document's: every R7 cut on a Boolean result refuses at the chain-depth gate |
 | R7 ratio | `2r² < R²` | admit what the cell proofs pass (r/R = 0.75 builds with the gate dropped): wider reach, no checked fixture past 0.7 |
-| R7 fillet stations and rows | `N = 256`, rows for `τ = 2⁻¹⁰·ρ`: two mouths in about 0.45 s and 30,000 facets at ρ = 0.5, ε from 0.0020 mm (ρ = 0.5) to 0.0059 mm (ρ = 1.5) | `N = 1024` as §4.9: ε about a quarter, four times the facets and time |
-| R7 fillet cell split along t | every cell splits in two along t (`rowSplit`): the fillet's area enclosure narrows about fourfold (7.4 to 1.7 mm² on the R = 15, r = 5, ρ = 1 rod, whose `Verify` then reads Sound) for about a third more proof time | no split: the proof's time, and an area bound past `Verify`'s relative tolerance on that rod; or four: the enclosure narrows about twice more for twice the time |
+| R7 fillet stations and rows | `N = 256` (`saddlecanal.Stations`), rows for `τ = 2⁻¹⁰·ρ` | `N = 1024` as §4.9: ε about a quarter, four times the facets and time |
+| R7 fillet cell split along t | every cell splits in two along t (`rowSplit`): the fillet's area enclosure narrows (`saddlecanal.rowSplit` = 2) for more proof time | no split: less proof time, and a wider area bound that can pass `Verify`'s relative tolerance; or more splits: a narrower enclosure for more time |
 | R7 fillet face | untagged `Faceted`, role `fillet(k)` | a sealed `Canal` surface variant (`agent-docs/trim-graph-design.md` increment 9): a tag a reader can query, a new public type |
 | R7 fillet sign patterns | σ = (−1, +1) at a convex edge (the cross hole's mouth) and σ = (+1, +1) at either edge (crossing bores, a boss's root) | the patterns of B8 as well |
 
@@ -9261,7 +9168,7 @@ the four edges along x at `y ∈ {0, 20}`, `z ∈ {0, 20}`; the top front one ru
 
 #### 1.1 Table P — calls on a mesh Boolean result
 
-P2 and P3 give the same result on every row (probe on `main` at e36f26819, 2026-10-26; dated illustration).
+P2 and P3 give the same result on every row.
 Every refusal is `ErrUnsupported`; the quoted text follows `decad: not supported by the current evaluator:`.
 "Kinds" counts the result's faces by `Face.Surface()` kind.
 
@@ -9288,15 +9195,15 @@ Every refusal is `ErrUnsupported`; the quoted text follows `decad: not supported
 The refusal texts are these.
 
 - **SM2**: "the selected edge ends at the tangent junction 37,0,20 whose continuation is not selected;
-  WithTangentChain selects the whole chain" (`internal/retainedblend/chain.go`).
-- **Text A**: SX3, "names 0 of the faces adjacent to selected edge" (reach §6), for the chain on the bottom plane.
+  WithTangentChain selects the whole chain" (`internal/brepmodify/edge_route.go`).
+- **Text A**: SX3, "names 0 of the faces adjacent to" the edge, "it must name exactly one" (reach §6), for the chain on the bottom plane.
 - **Text S**: "this evaluator shells a straight prism or its one-line Sweep reduction only"
   (`internal/brepmodify/shell.go`).
 - **SD23**: "this evaluator drafts a straight prism only (an extrude, its filleted or chamfered result, a tube, or
   any of these placed) (draft SD23)".
 - **Text O**: "Offset requires a sheet body" (`offset.go`).
 - **Text J**: "Union of three or more bodies needs a certified prism, axial or copied-tooth set; join them two at
-  a time" (`boolean_many.go`).
+  a time" (`internal/unionmany/routes.go`).
 
 The asymmetric chain rows differ in the reference. `Faces(Facing(+z)).Or(Facing(-z))` holds both base planes, the
 top and the bottom face. Reach SX3 admits it, because each expanded edge borders exactly one of the two. The four
@@ -9789,10 +9696,9 @@ non-retained structural tags and `CapRecord` are dropped.
 surface, and `Q` maps normals to normals without stretch, so retention §3.4's derivation holds with `e = 0`. A
 plane that `Q` fixes is handled by the fixed-plane rule above.
 
-**Code.** `facetedrecord.PlacedTagDeparture` takes a float transform. Split out
-`PlacedTagDepartureBy(tag, moved, linear [3][3]*big.Rat, translation [3]*big.Rat, e float64, verts, reach)`, keep
-`PlacedTagDeparture` as its float-transform wrapper, and call it from `ExactGroupPlaced` with `fp.Verts` and the
-`reach` that `PlacedWith` already computes.
+**Code.** `facetedrecord.PlacedTagDepartureBy(tag, moved, linear, translation, e, verts, reach)` takes the exact
+rational map. `PlacedTagDeparture` is its wrapper for a float transform. `ExactGroupPlaced` calls
+`PlacedTagDepartureBy` with `fp.Verts` and the `reach` that `PlacedWith` computes.
 
 ### 7. `ScaledAt` keeps curved tags
 
@@ -9880,7 +9786,7 @@ changes nothing about it.
 
 Not a retention matter. A `Union` of the target, a feature and its `PatternCopies` joins every operand in one
 many-body `Union`. Its pairwise
-fallback, `tryPrismUnionChain` (`boolean_many.go`), admits prism and exact-Loft operands only; the contract is
+fallback, `tryPrismUnionChain` (`internal/unionmany/routes.go`), admits prism and exact-Loft operands only; the contract is
 `agent-docs/api-design.md`'s many-body `Union` paragraph. Each pair of a chain would be an ordinary mesh Boolean,
 and retention §3.1 already carries tags through a second generation. Whether faceted operands may join that chain
 belongs to that owner.
@@ -9970,7 +9876,7 @@ shown red first by the change named. `A_f = r²(1 − π/4)` is a fillet's corne
 | Chain strip clearance | a 2×1×1 box joined over the pocket floor with only its lower front edge in the fill, and a cavity under the cross-drilled box's top-front edge with only its upper front edge in the removed corner, both refuse SM5 "the blend meets another facet of the body" at a point with `x` in 15…17; unit tests check that the grid keeps every pair of meeting boxes (random, degenerate-axis, far, touching and boundary boxes) and that a crossing, a coplanar overlap and a flat facet refuse | drop the strip test: both build; report a strip vertex: the point lies outside the solid; visit one grid column, or convert the cell before clamping (amd64): the grid loses pairs; read a region contact's point: panic |
 | Single-edge strip clearance | a cavity whose corner reaches the corner the blend removes refuses blend SR7 "the blend meets another facet of the body" at a point inside the cavity's `x` range, for a plate's top edge (R1, `r = 2`), a mitre run of two top edges, a hole mouth (R2), a broken-out arc, a groove's edge (R3) and the ridge between two bores (R5); a top-edge cavity at `y` 3.25…4.25, `z` 18.75…19.75 and one at `y` 1.99…4, `z` 16…19.995, whose corner lies inside the box of the strip's first facet but under its chord so the exact test runs on the cavity's facets, both build and remove `40·4·(1 − π/4)` | call `build` for one route in place of `buildClear`: that route's cavity builds; count every tested pair with a cavity vertex as a contact: the near cavity refuses and the far one still builds |
 | Concave chain gates | a pocket 0.8 deep refuses SR4 "the blend consumes the wall"; `r = 3` refuses SR3; a cube floating inside the fill refuses SR7 by nesting parity while one clear of it builds; a chain of mixed sides refuses SM3 (unit test) | classify by `n_W = −m` only: every concave row refuses; measure the wall band on the convex side: the pocket refuses; drop the wall clearance: the shallow pocket refuses with another text; drop the mixed-side check: the unit test builds |
-| Chain ends: reflex foot (wall `0…10 × 0…40 × 0…30` joined with a ledge `5…30 × 10…30 × 4…10` whose `x = 30` corners are `r = 3`), fillet `r = 1` | removed `A_f·(48 + π·(R − x̄))`; 3 `Cylinder`, 2 `Torus` (`Major = R − r`); the `x = 10` face's area grows by `2A_f` within its bounds and the face holds a point just inside each cap; `VerifyAll` passes | keep a reflex `G` refusing: "an end face's corner does not match the chain's convexity"; walk `G`'s loop the same way at both ends: "an end face leaves the chain's corner along neither of its lines" |
+| Chain ends: reflex foot (wall `0…10 × 0…40 × 0…30` joined with a ledge `5…30 × 10…30 × 4…10` whose `x = 30` corners are `r = 3`), fillet `r = 1` | removed `A_f·(48 + π·(R − x̄))`; 3 `Cylinder`, 2 `Torus` (`Major = R − r`); the `x = 10` face's area grows by `2A_f` within its bounds and the face holds a point just inside each cap; `VerifyAll` passes | keep a reflex `G` refusing: "an end face's corner does not match the edge's convexity"; walk `G`'s loop the same way at both ends: "an end face leaves the chain's corner along neither of its lines" |
 | Chain ends: run-out (the slot of `roundedPocket` leaving through `x = 0`), fillet and chamfer `1` | fill `A_f·(68 + π·(R − x̄))` and `(1/2)·(68 + π·(R − 1/3))`; the `x = 0` face grows by two caps and holds a point just inside each; blend normals point into the void | keep a reflex `G` refusing: refused; rebuild each end alone: the strip meets the duplicated `G` facets |
 | Chain ends: blind end (pocket `10…30` with only its `x = 30` corners `r = 3`, floor `z = 5`), fillet `r = 1` | fill `A_f·(48 + π·(R − x̄))`; the `x = 10` wall shrinks by `2A_f` and lies more than 0.1 from a point just inside each cap | admit only a reflex `G` for a concave chain: refused; drop the whole-loop base branch: "a face boundary holds no run to replace" |
 | Chain ends: tongue (40×20×20, `x = 40` corners `r = 3`, bored), fillet `r = 1`, both ends on `x = 0` | removed `A_f·(88 + π·(R − x̄))`; 3 `Cylinder`, 2 `Torus` (`Major = R − r`); the `x = 0` face shrinks by `2A_f` and gives up both caps | drop the whole-loop base branch, or rebuild each end alone |
@@ -10002,9 +9908,9 @@ shown red first by the change named. `A_f = r²(1 − π/4)` is a fillet's corne
 | `internal/retainedblend/route.go` | `Chamfer` takes a two-distance spec with per-target reference tags (§4.1); group selected edges into chains; SM2, SM3 |
 | `internal/retainedblend/line_rewrite.go`, `arc_rewrite.go`, `rewrite.go` | setbacks from the mapping; an end at a junction plane in place of an end face |
 | `internal/retainedblend/cyl_rewrite.go` | the wall setback reads `dB` (§4.1) |
-| `internal/retainedblend/chain.go`, `chain_rewrite.go` | new: Table RC, §5.2 junctions, Claim J rows, §5.5 construction, §5.6 gates |
-| `internal/retainedblend/cyl2.go`, `cyl2_rewrite.go` | new: R5 |
-| `internal/retainedblend/chain_cross.go`, `chain_cross_face.go`, `chain_cross_end.go`, `chain_cross_bevel.go` | new: §15b.1, the exact chamfer of a chain across planes |
+| `internal/retainedblend/chain.go`, `chain_rewrite.go` | Table RC, §5.2 junctions, Claim J rows, §5.5 construction, §5.6 gates |
+| `internal/retainedblend/cyl2.go`, `cyl2_rewrite.go` | R5 |
+| `internal/retainedblend/chain_cross.go`, `chain_cross_face.go`, `chain_cross_end.go`, `chain_cross_bevel.go` | §15b.1, the exact chamfer of a chain across planes |
 | `internal/brepmodify/chamfer.go`, `asymmetric.go` | pass the resolved reference into `retainedblend.Chamfer` |
 | `internal/tangentchain/` | the retained continuation test of §5.3 |
 | `brep_modify_partial.go` | admit a retained `facetedPayload` and dispatch the retained test |
@@ -10022,9 +9928,9 @@ shown red first by the change named. `A_f = r²(1 − π/4)` is a fillet's corne
 
 ### 14. Increments
 
-Each increment is one PR. M1 ships this document.
+Each stage below is built. Its gate is the §12 rows named.
 
-| # | Lands | Gate to start the next |
+| # | Built | Gate: rows that pass |
 |---|---|---|
 | M1 | §4: two-distance chamfer on R1–R4 | the five two-distance rows of §12 pass; `go test ./...` on CI |
 | M2 | §6: exact-rotation `Copy` keeps its tags (independent of M1) | the four exact-copy rows pass on CI |
@@ -10049,9 +9955,6 @@ whose wall continues past a reflex `G`, or whose base is reflex on a convex chai
 a convex chain on a face reflex at the corner and an arc end on a face that is not parallel to the
 axis are refused. The edge between a `Cylinder` and a `Torus` blend of a fillet chain is an `Arc3`
 (retention §10.1 E11).
-
-M3 starts with one real end-to-end run on the P2 fixture before any other fixture. If that run refuses, the
-increment stops and reports the refusal.
 
 ### 15. Rejected shortcuts
 
@@ -10092,11 +9995,10 @@ retained plane"). `brepmodify.RetainedLoopChamfer` (`internal/brepmodify/retaine
   straight ruling where the exact patches meet along a conic, and an arc's cells twist as the corner turns about its
   centre. Every cutter vertex carries the chord sagitta plus the layer departure the shared closed form proves
   (`chamferRun.layerDepartureWith`, the partial route's `layerDeparture` with the cutter's own sagitta, modify-reach
-  §8.3.2), over the layers that meet the material: zero for a loop whose arcs meet their neighbours tangentially. This
-  replaces the earlier `d²/(R·6²)` charge, which assumed a layer step of `d/6` where the step is `d/3`; the default
-  cutter's bound can rise at sharp corners beside an arc and falls to the chord sagitta on tangent loops. A lofted cutter of two
-  sections is not used: its twisted arc cells carry a facet bound of 0.013 mm at `d` = 0.5 mm, which the Boolean's rim
-  rule `(δ_A + δ_B)/sin θ` turns into a 0.022 mm body bound; the polyhedral cutter leaves the body's bound at the
+  §8.3.2), over the layers that meet the material: zero for a loop whose arcs meet their neighbours tangentially. The
+  default cutter's bound can rise at sharp corners beside an arc and equals the chord sagitta on tangent loops. A
+  lofted cutter of two sections is not used: its twisted arc cells carry a larger facet bound, which the Boolean's rim
+  rule `(δ_A + δ_B)/sin θ` turns into a larger body bound; the polyhedral cutter leaves the body's bound at the
   value its target already had.
 - The cutter above the face and beyond the bevel's far end removes no material: it keeps the caps clear of the face
   and the walls. Moving the loop on past its narrowest feature (a dart whose width is twice the reach, a convex round
@@ -10283,8 +10185,7 @@ cutter, whose Cut refuses them. No case reaches the line on `G`, which reads the
 | Chain junctions | exact tangency, or a gap of at most 64 ulps of the coordinate scale (§5.2) | a bounded near-tangency rule wider than round-off |
 | `Shell` and `Draft` of a mesh Cut | refuse (§9.1, §9.2) | a source-backed route on an operand record |
 | `Cone` and `Torus` rims | refuse (§9.5) | a coaxial revolution class read from denoted surfaces |
-| Increment order | M1 and M2 first (small), then the chains | chains first |
-| R5 | build last (M6) | drop it |
+| R5 | built (M6) | drop it |
 
 - **Chain junctions.** The default proof is short and matches reach §5. It admits a tangency gap of 64 ulps at
   most (the rounding of sketch-built tags) and refuses every part whose wall and fillet tags miss tangency by
@@ -10296,15 +10197,13 @@ cutter, whose Cut refuses them. No case reaches the line on `G`, which reads the
   crosses `T` by more than `t`, and `Draft(T − U) = Draft(T) − U` holds when every drafted face descends from `T`.
   The route gains shells and drafts of drilled parts. It costs a new record on every mesh Cut, a dilation of the
   tool, two more mesh Booleans per call (which may hit the coarse-held-contact refusal on curved faces), and a
-  separate design of about three PRs.
+  separate design.
 - **`Cone` and `Torus`.** The coaxial class's meridian blend is a `Torus`, built from the denoted interval
   surfaces. It gains blends on revolved shafts after a placed cut. It costs an interval construction and a proof
   that two denoted walls share one axis. A revolved shaft's plane and cylinder faces blend after a placed cut where
   the other gates of the route hold (blend §2), and a revolved ball's plane-sphere rim blends by R6 (blend §4.5); the
   cone and torus classes wait.
-- **Increment order.** Chains first lands the highest-value case one PR sooner. M3's two-distance chain chamfer
-  row then waits for M1.
-- **R5.** Dropping it saves M6. Two parallel cylinders meeting in a transversal edge are rare in machined parts.
+- **R5.** Dropping R5 removes M6. Two parallel cylinders meeting in a transversal edge are rare in machined parts.
 
 ## Part O — Shell opening
 
@@ -10333,10 +10232,9 @@ Four tables are normative:
 
 ### 1. Problem
 
-Reach §9.2 builds a prism shell with a side opening on `stackedPrismPayload`
-and closes the wall section with the exact normal segment of length `t` at
-each end of the kept chain. The implementer of reach PR C found three defects,
-each reproducible on an ordinary part:
+Closing the wall section with the exact normal segment of length `t` at each
+end of the kept chain (reach §9.2's construction on `stackedPrismPayload`) has
+three defects, each reproducible on an ordinary part:
 
 1. On every box the normal segment at an end corner lies on the removed
    face's own line and overlaps it, so the exposed cavity floor is not
@@ -10462,8 +10360,8 @@ Three consequences the table makes visible:
 #### 2.4 The computation and its bound
 
 `offset2d.OpeningJoin(k, r survey2d.SideWalk, atEnd bool, s, t, tol float64)
-(Join, error)` is the one owner of the rim cut, beside `CornerJoin` and
-`MirrorCornerJoin` in `internal/offset2d/section.go`'s family: `k` is the kept
+(Join, error)` (`internal/offset2d/opening.go`) is the one owner of the rim cut,
+beside `CornerJoin` and `MirrorCornerJoin` (`internal/offset2d/section.go`): `k` is the kept
 walk and `r` the removed neighbour; `atEnd` says whether `v` is `k`'s end
 (`K`'s end, `r` follows) or its start (`K`'s start, `r` precedes). It returns
 `Join{VertU, VertV: v, M: q}` with `Arc` and `G1` false. `offset2d.RimSegment`
@@ -10506,14 +10404,13 @@ enclosures cannot place or order, or a reach the enclosure cannot bound, is
 
 ### 3. The three regions
 
-`offset2d.OffsetOpenChain` (`internal/offset2d/open_chain.go`) already
-offsets an open chain with per-end joins. Its end kinds become an enumeration:
-an **axis end** (`MirrorCornerJoin`, the revolve's), and an **opening end**
+`offset2d.OffsetOpenChain` (`internal/offset2d/open_chain.go`) offsets an
+open chain with per-end joins. An end is one of two kinds: an **axis end** (`MirrorCornerJoin`, the revolve's), and an **opening end**
 (`OpeningJoin` with the removed neighbour walk). It returns `K'` in `K`'s own
 walk order from `qA` to `qB`, the join at each interior corner as modify §7
 rules (miter, arc of radius `t` about the corner, G1 foot), and the two cut
 points. Every walk of `K'` passes S11a's consumption test in
-`offsetOpenChain`: `offset2d.OpenWalkConsumed`, which lets the walk at an
+`OffsetOpenChain`: `offset2d.OpenWalkConsumed`, which lets the walk at an
 opening end run past its own end to the cut (§2.4).
 
 With `R'` the removed run re-cut at both ends — `r_B` (the walk after `vB`)
@@ -10575,7 +10472,7 @@ decad's own record, so `LoopOf` restates it directly, and the faces are:
   planar faces in the reference frame, each line unit split at the body's
   vertices at that level and each circle unit at every vertex on it;
 - **axis-aligned straight walls**: one planar face per carrier plane and
-  material side (`stackedBrepWallFaces`), the rectangles each slab's segment sweeps with
+  material side (`Engine.wallFaces`), the rectangles each slab's segment sweeps with
   their shared edges cancelled and the rest chained into loops;
 - **oblique straight and circular walls**: swept pieces between consecutive
   vertices, the identical piece in consecutive slabs joined into one face, a
@@ -10596,7 +10493,7 @@ The circular case is stated in the same pieces as the oblique one below
 (`P`'s arc split at each forward cut, `R'` at `v` where its cut runs
 backward), and the engine merges consecutive pieces of one circle walked one
 way into one unit, `circlePoints` splits the cap slabs' unit at `qA` and
-`qB`, and `stackedBrepSweptFaces` joins the column pieces; the pieces serve
+`qB`, and `Engine.sweptFaces` joins the column pieces; the pieces serve
 the area identity (§4.7), and each end vertex on a circular `r` is marked as
 an oblique one is. The engine keys a circle by the centre and the radius an
 `ArcSeg` reads from its `Start`, so every piece on `carrier(r)` — the rims and
@@ -10747,7 +10644,7 @@ Gate order, after modify §4's stage 1 and reach SX10:
 |---|---|
 | 2. receiver | S3; `prismrecord.Payload.RequireExactSection`; the removed faces: caps by role, prism sides by `side(0,j)`, one-line Sweep sides by `side(0,0,j)` mapped to the stored prism segment; SO6 |
 | 3. levels | SO3's height half (inward, kept caps) |
-| 4. chain | `offsetOpenChain` over `K`: S11a per walk, SO1/SO2/SO4 per end; each cut on a removed arc placed in the arc's parameterisation (SO5) |
+| 4. chain | `offset2d.OffsetOpenChain` over `K`: S11a per walk, SO1/SO2/SO4 per end; each cut on a removed arc placed in the arc's parameterisation (SO5) |
 | 5. regions | §4.7 steps 2–3: S8 (SO3's section half), S11b, S9, the area identity |
 | 6. record | both caps removed → `prismrecord.Build` over `W`; else the engine, §4.7 step 4 |
 
@@ -10799,7 +10696,7 @@ ordinary `brepPayload`, and general-boolean §4.5 reads it unchanged:
 ### 8. The revolve's slanted rim
 
 A revolve side opening (reach §9.3.2) closes each opening end by Table RO:
-`offsetOpenChain`'s opening end calls `OpeningJoin`, and the wall
+`OffsetOpenChain`'s opening end calls `OpeningJoin`, and the wall
 region's rim is the piece of `carrier(r)` from `v` to `q` — a `LineSeg`
 sweeping a cone or a plane, or an `ArcSeg` about `r`'s centre sweeping a
 torus or a sphere, all surfaces `evalRevolve` builds from any line/arc
@@ -10814,7 +10711,7 @@ things differ from the prism and are stated here:
 - the exact-pair rule keeps today's right-angle feet bit for bit (§2.4), so
   every body §9.3.2 builds today is unchanged;
 - the displacement is the whole wall's, not a face's: reach §9.3.1's
-  `openChainSectionDelta` encloses every interior miter, every axis join and
+  `revolveshell.ChainSectionDelta` encloses every interior miter, every axis join and
   each opening's rim cut (`OpeningReach`, §2.4) and publishes three times the
   largest reach as the revolve's `sectionDelta`, with `sectionWhole` set,
   only where it is nonzero. A cut whose enclosure is the held float — a
@@ -10828,13 +10725,13 @@ the axis walk never arises (the run touches the axis walk, reach §9.3.2).
 ### 9. Required tests
 
 Every test asserts computed geometry against a closed form; bounds are
-relations (`|value − closed form| ≤ Bound`), never literals; every new bound
+relations (`|value − closed form| ≤ Bound`), never literals; every bound
 fixture is shown to fail first by deleting the leg it guards. Tests of the
 exported API live in `apitest/shell_opening_test.go` and
 `apitest/revolve_shell_side_test.go`; record-level tests in
-`shell_opening_internal_test.go` and `internal/offset2d/opening_test.go`.
+`internal/offset2d/opening_test.go` and `internal/stackedbrep/record_test.go`.
 
-**U-channel** (PR 2). Box `x∈[0,40]`, `y∈[0,20]`, `z∈[0,10]`, `t = 2`, the
+**U-channel**. Box `x∈[0,40]`, `y∈[0,20]`, `z∈[0,10]`, `t = 2`, the
 `x = 0` face removed:
 
 - inward, both caps kept: cavity `(0,38)×(2,18)×(2,8)`, volume
@@ -10862,7 +10759,7 @@ exported API live in `apitest/shell_opening_test.go` and
   SO6; `Verify` `Sound`, STEP analytic, the mesh's occupied-volume proof
   covering `4352`.
 
-**L prism opened on one leg** (PR 2). `P = (0,0),(30,0),(30,10),(10,10),
+**L prism opened on one leg**. `P = (0,0),(30,0),(30,10),(10,10),
 (10,30),(0,30)`, height 10, `t = 2`, the `x = 10` face (`(10,10)→(10,30)`)
 removed, inward, both caps kept:
 
@@ -10875,7 +10772,7 @@ removed, inward, both caps kept:
 - route E on the result: chamfer the outer edge along `z` at `(0,0)`,
   `d = 1`: `Exact` `3104 − 5`; `Shell` on the result → SB10.
 
-**Acute corner** (PR 4). Triangle `(0,0),(12,0),(0,9)`, height 10,
+**Acute corner**. Triangle `(0,0),(12,0),(0,9)`, height 10,
 `t = 1.5`, the `y = 0` leg removed, inward, both caps kept: the acute end at
 `(12,0)` cuts at `q = (9.5, 0)`, the right-angle end at `(0,0)` at
 `(1.5, 0)`; `C = (1.5,0),(9.5,0),(1.5,6)`, area 24; volume
@@ -10883,18 +10780,18 @@ removed, inward, both caps kept:
 `z∈[1.5,8.5]`; the hypotenuse wall and its offset are swept faces; `delta`
 encloses the offset's distance from the exact line `3x + 4y = 28.5`.
 
-**Obtuse corner** (PR 4). Trapezoid `(0,0),(14,0),(11,4),(3,4)`, height 10,
+**Obtuse corner**. Trapezoid `(0,0),(14,0),(11,4),(3,4)`, height 10,
 `t = 1`, the `y = 4` side removed: cuts at `(4.25, 4)` and `(9.75, 4)`;
 `C = (2,1),(12,1),(9.75,4),(4.25,4)`, area `23.25`; volume
 `440 − 23.25·8 = 254`.
 
-**Oblique removed face** (PR 4). The triangle above with the hypotenuse
+**Oblique removed face**. The triangle above with the hypotenuse
 removed, `t = 3`: cuts `(8, 3)` and `(3, 6.75)`; `C = (3,3),(8,3),(3,6.75)`,
 area `9.375`; volume `540 − 9.375·4 = 502.5`; the hypotenuse plane holds four
 swept faces whose shared edges pair; the cap loops hold the hypotenuse as
 three collinear segments.
 
-**Slanted reflex corner** (PR 4). `P = (0,0),(30,0),(30,10),(14,10),(10,30),
+**Slanted reflex corner**. `P = (0,0),(30,0),(30,10),(14,10),(10,30),
 (0,30)`, height 10, `t = 2`, the oblique face `(14,10)→(10,30)` removed: the
 reflex end at `(14,10)` cuts backward at `(14.4, 8)`, the convex end at
 `(10,30)` forward at `(10.4, 28)`; `C = (10.4,28),(2,28),(2,2),(28,2),(28,8),
@@ -10907,7 +10804,7 @@ BO1's prism, volume `(54 − 24)·10`. A forward cut past an oblique removed
 face's far end is SO2, and an oblique removed face recorded as two collinear
 segments is SO5.
 
-**Arcs** (PR 3). The D section — the semicircle of radius 5 about the origin
+**Arcs**. The D section — the semicircle of radius 5 about the origin
 through `(5,0)` from `(0,−5)` to `(0,5)`, then the chord `x = 0` — height
 10, both caps kept:
 
@@ -10937,7 +10834,7 @@ through `(5,0)` from `(0,−5)` to `(0,5)`, then the chord `x = 0` — height
   exact cuts `(3, ±4)`, whose parameters are floats;
 - the removed arc touching the kept chord at its end (a cusp) → SO1.
 
-**Circle junctions** (PR 5). Each 10 tall:
+**Circle junctions**. Each 10 tall:
 
 - the notch — the concave arc of radius 13 about the origin from `(0,13)` to
   `(13,0)` with the material outside it, the arc of radius 17 about `(−2,8)`
@@ -10968,7 +10865,7 @@ through `(5,0)` from `(0,−5)` to `(0,5)`, then the chord `x = 0` — height
   recorded point builds; an oblique chord's two crossings of its circle are
   two vertices.
 
-**Arc extension** (PR 6). Each 10 tall, outward, every walk but the concave
+**Arc extension**. Each 10 tall, outward, every walk but the concave
 arc of radius 13 about the origin removed:
 
 - the end section — that arc from `(0,13)` to `(5,12)`, then `x = 5` to
@@ -10992,7 +10889,7 @@ arc of radius 13 about the origin removed:
 - every closed-shell, cup, tube, revolve and side-opening reading of the
   existing fixtures bit for bit unchanged.
 
-**Revolve slanted rim** (PR 1). Meridian `(ρ,z) = (0,0),(8,0),(8,2),(5,6),
+**Revolve slanted rim**. Meridian `(ρ,z) = (0,0),(8,0),(8,2),(5,6),
 (0,6)`, a full turn, `t = 1.5`, the cone `(8,2)→(5,6)` and the top disc
 removed: the cut `(6.5, 4)` on the cone's line, the rim a cone frustum between
 radii 8 and 6.5; volume `300π − 172.125π = 1023π/8`. Outward at `t = 1.5` the
@@ -11024,7 +10921,7 @@ SO1.
 bit for bit; `ChainReach`'s enclosure containing the exact rational cut for
 the triangle and trapezoid families over a range of `t`; every refusal
 leaving the receiver live and the document unchanged; `.github/test-shards.txt`
-carrying every new name and `go test . ./apitest/ -run '^TestCI'` passing.
+and `.github/test-shards-apitest.txt` carrying every test name (`apitest/ci_shards_test.go`).
 
 ### 10. Do not do this
 
@@ -11057,7 +10954,7 @@ carrying every new name and `go test . ./apitest/ -run '^TestCI'` passing.
 ### 11. Decided questions
 
 - **Payload for the prism side opening**: `brepPayload` through
-  `internal/stackedbrep`, as approved; `prismPayload` where both caps are
+  `internal/stackedbrep`; `prismPayload` where both caps are
   removed, since the result then is a prism (§4.1).
 - **Roles**: the brep's `face(k)`/`wall(k)` alone, as route E's results carry
   (brep-modify BB4). No shell-specific second role is minted: a caller selects
@@ -11078,35 +10975,18 @@ carrying every new name and `go test . ./apitest/ -run '^TestCI'` passing.
 
 ### 12. PR split
 
-Each PR ships code, tests and the documentation updates for every refusal it
-lifts: reach §14's increment table, `doc.go`'s support map,
-`agent-docs/missing-features.md`, the function doc comments, and the layout rows of
-every new root file. This document ships with PR 1.
+All six increments of the side-opening design have shipped; Table SO lists
+every remaining refusal. Where each piece lives:
 
-| PR | Lands | Files and functions | Proves | After |
-|---|---|---|---|---|
-| **1** (landed) | `offset2d.OpeningJoin` (§2.4) with its exact pairs and root choice; `offsetOpenChain` moved to `shell_chain.go` with an end-kind parameter; the revolve slanted rim (§8): `revolveShellSideWall` writes the rim from `OpeningJoin`, `requireOpeningRim` deleted; `offset2d.OpeningReach` charging each rim cut through `ChainReach` into the wall's `sectionDelta` | `internal/offset2d/opening.go`, `internal/offset2d/reach.go`, `shell_chain.go`, `shell_revolve.go`, `apitest/revolve_shell_side_test.go`, `internal/offset2d/opening_test.go`, `shell_chain_internal_test.go` | the revolve fixtures of §9; `OpeningJoin`'s corner rows; right-angle bodies bit for bit; float cuts charged, exact ones not | — |
-| **2** (landed) | the prism side opening, rectilinear: `classifyRemovedFaces` (caps by role, sides by `side(0,j)`, SO6), the three regions and the §4.7 audit (`shell_opening.go`), the stack through the engine into a `brepPayload` and the both-caps prism (`shell_opening.go`), the `delta` composition over `offset2d.ChainReach`, `brepgeom.StackedWallRegions` with holes, `Engine.Event`; every non-axis-aligned walk in `K` or `R` refused with SO5's sentinel until PRs 3–4 | `shell_opening.go`, `shell_opening.go`, `shell.go` (S2 replaced by the dispatch), `internal/offset2d/reach.go`, `internal/brepgeom/stacked_wall.go`, `internal/stackedbrep/record.go`, `apitest/shell_opening_test.go`, `shell_opening_internal_test.go` | the U-channel and L fixtures of §9, every sense and cap variant, DO11's route E on the result | 1 |
-| **3** (landed) | circular walks in `K` and `R`: line–arc and arc–line cuts through `ChainReach`'s circle enclosures; `R`, `R'` and the rims stated in pieces on a removed arc's circle, each a parameter range of the arc's own record or its complement, with BO1 charging the cut gap (§4.2, §4.4); the refusal narrowed to arc–arc end corners; the engine's tangent line–circle junction (§4.3), so an offset arc join between axis-aligned walks builds under a kept cap | `shell_opening.go`, `internal/offset2d/opening.go`, `internal/stackedbrep/record.go`, `tessellate_brep.go` (a side line's column holds its own splits alone), tests | the D fixtures of §9; the outward U-channel with both caps kept | 2 |
-| **4** (landed) | oblique straight walks in `K` and `R`: the pre-split record of `r` at forward cuts and of `R'` at backward ones, with the oblique end vertices marked (§4.2), the axis hold of a float cut on an axis-aligned `r` (§2.4), the acute, obtuse and slanted-reflex corners; the refusal of PR 2 narrowed to circular walks, which PR 3 lifts | `shell_opening.go`, `internal/offset2d/opening.go`, tests | the triangle and trapezoid fixtures of §9 | 2 |
-| **5** (landed) | the engine's circle–circle junction at one recorded point (§4.3); arc–arc interior corners of `K` and arc–arc end corners; the line–circle junction at one recorded point, so an offset arc join between oblique walks builds under a kept cap | `internal/stackedbrep/record.go`, `shell_opening.go`, `internal/stackedbrep/record_test.go`, tests | the circle-junction fixtures of §9; distinct walked ends still miss | 3 |
-| **6** (landed) | a kept arc's offset extended past its own end to an opening cut (§2.4's consumption row): `offset2d.OpenWalkConsumed`, read by `offsetOpenChain` on both routes | `internal/offset2d/section.go`, `shell_chain.go`, tests | the arc-extension fixtures of §9; consumption still S11a; every existing shell reading bit for bit | 5 |
-
-PRs 3 and 4 run in parallel: they share PR 2's files but touch disjoint
-functions (the circle cases of `OpeningJoin`/`ChainReach` against the cap
-pre-split and the oblique refusal), and each narrows PR 2's one refusal
-message on its own branch. PR 5 follows 3.
-
-Increment table — what still refuses after each PR:
-
-| After | Still refused |
+| Piece | Where |
 |---|---|
-| 1 | every prism side opening (base S2) |
-| 2 | a prism side opening with any circular or oblique walk (SO5's sentinel); an offset arc join under a kept cap (SO5, §4.3); the revolve rows of reach SX8 |
-| 3 | oblique walks; arc–arc end corners; a rim cut no range of a removed arc's record names (SO5, §4.2) |
-| 4 | arc–arc end corners; a rim cut no range of a removed arc's record names; an offset arc join between oblique walks under a kept cap (SO5) |
-| 5 | Table SO; a kept arc whose offset runs past its own end (S11a) |
-| 6 | Table SO alone |
+| `OpeningJoin` (§2.4) with its exact pairs and root choice, `OpeningReach`, `RimSegment`, `ChainReach`, `OffsetOpenChain`, `OpenWalkConsumed` (§2.4, §3) | `internal/offset2d/opening.go`, `reach.go`, `open_chain.go`, `section.go` |
+| the revolve's slanted rim (§8) | `internal/revolveshell/wall.go`, `bounds.go` |
+| the prism side opening: removed-face classification, the three regions, the §4.7 audit, BO1's prism | `internal/brepmodify/shell.go`, `internal/prismshell/section.go`, `side_opening_prism.go` |
+| rim pieces on removed arcs, the cut gap and the area identity (§4.2, §4.7) | `internal/offset2d/opening_record.go` |
+| the engine extensions (§4.3): `Engine.Event`, the tangent line–circle and circle–circle junctions | `internal/stackedbrep/record.go` |
+| planar walls with holes | `internal/brepgeom/stacked_wall.go` (`StackedWallRegions`) |
+| tests | `apitest/shell_opening_test.go`, `apitest/revolve_shell_side_test.go`, `internal/offset2d/opening_test.go`, `internal/stackedbrep/record_test.go` |
 
 ## Part S — Shell variants
 
@@ -11475,14 +11355,14 @@ any evaluator?) and the sentinel that follows from it.
 | **SD1** | a taper that is not an angle, or not representable in radians | — | `ErrUnitKind` / `ErrNotFinite`, as for a straight prism |
 | **SD2** | `|α| ≥ 90°`, or an angle whose certified cosine enclosure (`RadSinCosInterval`) reaches zero | no — a wall at a right angle to the axis sweeps nothing | `ErrDegenerate` |
 | **SD3** | a free-form walk in the section | yes | `ErrUnsupported` — the offset of a Bézier span is not a recorded kind; §12 names the chorded alternative and rejects it |
-| **SD4** | a corner where a circular walk meets its neighbour that the held-tangent rule classifies as a miter (not G1), or, in a subset draft, a G1 corner at a circular walk whose two walks move by different amounts (§10.2) | yes | `ErrUnsupported` — the junction is a conic; the ruled stand-in of modify-reach §8.3 is not scheduled here (§14) |
+| **SD4** | a corner where a circular walk meets its neighbour that the held-tangent rule classifies as a miter (not G1), or, in a subset draft, a G1 corner at a circular walk whose two walks move by different amounts (§10.2) | yes | `ErrUnsupported` — the junction is a conic; the ruled stand-in of modify-reach §8.3 is not implemented (§14) |
 | **SD5** | a circular walk whose far radius collapses: `offset2d.OffsetRadius` reports `ok == false` (`R ≤ d` for a round with the material inside under a positive taper; a hole wall under a negative one) | yes — the cone's apex lies inside the sweep and the body past it has another topology | `ErrUnsupported` (modify S11a) |
 | **SD6** | a far outer loop whose signed area has changed sign (modify S8), whose every walk the offset consumes (`offset2d.ErrLoopConsumed`) under a positive taper, or a far hole the audit decides lies outside the far outer loop (modify S9's decided row) | no — the taper consumed the region | `ErrDegenerate` |
 | **SD7** | a far walk `offset2d.WalkConsumed` reports consumed — a line whose two miters have crossed — where some walk of its loop survives, or a hole every walk of which is consumed | yes | `ErrUnsupported` (modify S11a) |
 | **SD8** | far loops that cross or make boundary contact at modify §5's scale-anchored floor (S7/S11b) — two walls closing on each other, a widened hole reaching the outer loop | yes | `ErrUnsupported` |
 | **SD9** | far loops whose nesting the containment classifier cannot decide (modify S9) | undecidable here | `ErrUnsupported` |
 | **SD10** | a far section that passes every audit at the held `d` and fails at the top of `d`'s span (§8.1; modify-reach §8.3.1's second audit) | undecidable here | `ErrUnsupported` |
-| **SD11** | retired for `Symmetric` and `TwoSided`; each side now has its own draft slab | — | — |
+| **SD11** | not used: `Symmetric` and `TwoSided` build one draft slab per side (BD4) | — | — |
 | **SD12** | a nonzero taper with `WithSurfaceResult` | yes | `ErrUnsupported` (staged, §14) |
 | **SD13** | a `d` that rounds to zero, a far vertex bit-identical to its near vertex, or a far radius bit-identical to its near radius (`capband.BandRadius`) | yes — float64 cannot name the far section at this scale | `ErrUnsupported` (modify-reach SX13) |
 | **SD14** | a far corner whose displacement enclosure cannot be built (`offset2d.ErrUnbounded`) | yes | `ErrUnsupported` (SX14) |
@@ -11644,7 +11524,7 @@ once after the flux sum; each patch's area composes `BandPatchAreaAllow` and
 body. `capband.ClosureOf` charges the sliver at every corner whose held ends
 are not provably one point, exactly as the band does. The chord-versus-locus
 term (`ChordLocusVolumeAllow`) is read and is zero, because both windows of
-every Cone patch coincide; an implementer keeps the call and asserts the zero
+every Cone patch coincide; the code keeps the call and asserts the zero
 rather than omitting the term.
 
 **The wall normal.** `Face.NormalAt` on a draft wall carries the same
@@ -11707,26 +11587,26 @@ nothing else.
 
 ### 9. Table DD — downstream
 
-| DD | Consumer | What it does with a draft body | PR |
-|---|---|---|---|
-| **DD1** | `Body.Tessellate` | chords both records once with the shared curve samples (tessellation §3), rules each wall between its two rims with the cap-band strip emitter (`capblend.EmitBand` in `internal/capblend/mesh_band.go`, over `internal/tessellation`'s rings), triangulates both caps; manifold by construction; the volume proof is the band admission of `agent-docs/tessellation-reach-design.md` §7 with no slab (§9.1). A band the admission refuses meshes for export with no volume proof | 2 |
-| **DD2** | `Union`/`Cut`/`Intersect` | the mesh path (evaluator §9) over DD1's mesh, admitted by `booloperand.RequireVolumeProof` through the same band admission; the analytic prism reduction's entry gate (`internal/prismboolean`) does not admit the class and takes the mesh path | 2 |
-| **DD3** | STL / OBJ / 3MF | the mesh of DD1 | 2 |
-| **DD4** | STEP | the faceted writer. A drafted polygon's tilted planes with `Line3` loops and a drafted circle's full conical wall pass the analytic face admission, but each drafted wall's tag is a rounding of the tilted surface and states a nonzero `NormalBound`, and a face that states a departure sends the whole body to the faceted writer (`agent-docs/step-export-design.md`) | 2 |
-| **DD5** | `Verify` validity | built by construction after the §5 audit, as a prism is; `Built` and `Solid` read true | 1 |
-| **DD6** | `Verify` tolerance reference | `pairkernel.BodyGateDiameter` gains an arm (`draftGateDiameter`): the lower-bound diameter over wall stations on the near section at the near level and on the recorded far section at the far level, each charged its gap plus the level displacement and `farDelta`, falling back to the held vertices with their bounds (verification §3). Without it every draft body would read `DiagToleranceReferenceUnavailable`, since its bounds are never zero | 1 |
-| **DD7** | `Verify` undercut survey (`WithPullDirection`) | `internal/capblendsurvey` reads built face normals and decides each wall and cap as described below. | 4 |
-| **DD8** | `Verify` wall and concave-radius surveys | `Suspect` with `DiagUnsupportedSurveyPayload` (staged). The reduction a later PR takes: the thinnest wall between two drafted skins is the far section's 2D reading scaled by `cos α`, and the smallest concave radius of a hole wall is its radius at the narrower end; neither is scheduled here | — |
-| **DD9** | `Verify` clearance (`WithClearances`) | `Suspect` (`boundaryaudit.PairUndecided`): `newBodyGeomBudget` has no carrier model for the class. A later PR adds the Plane/Cone carriers; not scheduled | — |
-| **DD10** | `Verify` interference | box-disjoint proofs from the body's `Bounds`; the read-only mesh intersection over DD1's mesh | 2 |
-| **DD11** | `MassProperties` and `dynamics` | the verified-mesh path (`verifiedMeshMassProperties`) over DD1's mesh; `ErrUnsupported` where the band admission refuses | 2 |
-| **DD12** | `Transform`, `Copy`, `Mirrored`, `MirroredCopy` | the payload implements `Transform()` and `Placed()`: a placement re-runs §7 under the composed motion, as a prism's does. `WithJoin` refuses (it rewrites a prism's or stacked prism's section) | 1 |
-| **DD13** | `Patterned` | `placedInstance` and a boolean `Union` (the mesh path); the frame-keeping arm does not take the class | 2 |
-| **DD14** | `Fillet`, `Chamfer`, `Shell` | A positive-taper, one-sided, full circular solid admits one complete far-cap outer rim fillet (§10.4), symmetric chamfer (§10.5), or inward shell with that cap removed (§10.6). Other selections and draft shapes remain modify S3, `ErrUnsupported` | — |
-| **DD15** | `Draft` of a draft body | SD23 | — |
-| **DD16** | `Thicken`, `Offset`, `Patch`, `Stitch`, `Trim`/`Extend`/`Split` | not reached: a draft body is a solid (SD12 refuses the sheet form) | — |
-| **DD17** | Motion and linkage bounds | `internal/motionengine/recordradius.go` reads near and widened far section bounds. `internal/motionbound/record_radius.go` reads each segment's carrier and walk. | 2 |
-| **DD18** | Selectors | `Planar()`, `FaceCreatedBy`, `CapStart`/`CapEnd` and the new `Walls(b)` (§10) select as on a prism. `Facing(v)` and `NormalTo(v)` match a drafted `Plane` wall only for its own tilted normal, since both require parallelism; a caller naming a drafted wall by direction passes that normal, or selects by role | 1, 3 |
+| DD | Consumer | What it does with a draft body |
+|---|---|---|
+| **DD1** | `Body.Tessellate` | chords both records once with the shared curve samples (tessellation §3), rules each wall between its two rims with the cap-band strip emitter (`capblend.EmitBand` in `internal/capblend/mesh_band.go`, over `internal/tessellation`'s rings), triangulates both caps; manifold by construction; the volume proof is the band admission of `agent-docs/tessellation-reach-design.md` §7 with no slab (§9.1). A band the admission refuses meshes for export with no volume proof |
+| **DD2** | `Union`/`Cut`/`Intersect` | the mesh path (evaluator §9) over DD1's mesh, admitted by `booloperand.RequireVolumeProof` through the same band admission; the analytic prism reduction's entry gate (`internal/prismboolean`) does not admit the class and takes the mesh path |
+| **DD3** | STL / OBJ / 3MF | the mesh of DD1 |
+| **DD4** | STEP | the faceted writer. A drafted polygon's tilted planes with `Line3` loops and a drafted circle's full conical wall pass the analytic face admission, but each drafted wall's tag is a rounding of the tilted surface and states a nonzero `NormalBound`, and a face that states a departure sends the whole body to the faceted writer (`agent-docs/step-export-design.md`) |
+| **DD5** | `Verify` validity | built by construction after the §5 audit, as a prism is; `Built` and `Solid` read true |
+| **DD6** | `Verify` tolerance reference | `gatediameter`'s body gate has an arm (`draftGateDiameter`) beside `pairkernel.BodyGateDiameter`: the lower-bound diameter over wall stations on the near section at the near level and on the recorded far section at the far level, each charged its gap plus the level displacement and `farDelta`, falling back to the held vertices with their bounds (verification §3). Without it every draft body would read `DiagToleranceReferenceUnavailable`, since its bounds are never zero |
+| **DD7** | `Verify` undercut survey (`WithPullDirection`) | `internal/capblendsurvey` reads built face normals and decides each wall and cap as described below. |
+| **DD8** | `Verify` wall and concave-radius surveys | `Suspect` with `DiagUnsupportedSurveyPayload` (not implemented). The available reduction: the thinnest wall between two drafted skins is the far section's 2D reading scaled by `cos α`, and the smallest concave radius of a hole wall is its radius at the narrower end; neither is implemented |
+| **DD9** | `Verify` clearance (`WithClearances`) | `Suspect` (`boundaryaudit.PairUndecided`): `newBodyGeomBudget` has no carrier model for the class. The Plane/Cone carriers are not implemented |
+| **DD10** | `Verify` interference | box-disjoint proofs from the body's `Bounds`; the read-only mesh intersection over DD1's mesh |
+| **DD11** | `MassProperties` and `dynamics` | the verified-mesh path (`verifiedMeshMassProperties`) over DD1's mesh; `ErrUnsupported` where the band admission refuses |
+| **DD12** | `Transform`, `Copy`, `Mirrored`, `MirroredCopy` | the payload implements `Transform()` and `Placed()`: a placement re-runs §7 under the composed motion, as a prism's does. `WithJoin` refuses (it rewrites a prism's or stacked prism's section) |
+| **DD13** | `Patterned` | `placedInstance` and a boolean `Union` (the mesh path); the frame-keeping arm does not take the class |
+| **DD14** | `Fillet`, `Chamfer`, `Shell` | A positive-taper, one-sided, full circular solid admits one complete far-cap outer rim fillet (§10.4), symmetric chamfer (§10.5), or inward shell with that cap removed (§10.6). Other selections and draft shapes remain modify S3, `ErrUnsupported` |
+| **DD15** | `Draft` of a draft body | SD23 |
+| **DD16** | `Thicken`, `Offset`, `Patch`, `Stitch`, `Trim`/`Extend`/`Split` | not reached: a draft body is a solid (SD12 refuses the sheet form) |
+| **DD17** | Motion and linkage bounds | `internal/motionengine/recordradius.go` reads near and widened far section bounds. `internal/motionbound/record_radius.go` reads each segment's carrier and walk. |
+| **DD18** | Selectors | `Planar()`, `FaceCreatedBy`, `CapStart`/`CapEnd` and `Walls(b)` (§10) select as on a prism. `Facing(v)` and `NormalTo(v)` match a drafted `Plane` wall only for its own tilted normal, since both require parallelism; a caller naming a drafted wall by direction passes that normal, or selects by role |
 
 DD7's `capblendsurvey.DraftUndercuts` reads each built wall's `*topo.Face`
 through `topobuild.NormalAt`. `capblendsurvey.PatchNormalRange` encloses its
@@ -11750,13 +11630,13 @@ tessellator with the payload's own wall geometry and far contour displacement
 every reading of the body charged. Three things differ from a chamfer's mesh:
 
 - no trimmed side wall is emitted, and the near cap's rim is written once and
-  read by both the near cap and the walls (`draftNearRing`);
+  read by both the near cap and the walls (`capblend.DraftNearRing`);
 - a wall patch carries `side(i, j)` and the band has no apex patch, since the
   corners are read by the sharp rule (`capBlendPayload.offsetJoins`), which the
   admission (`capblend.OccupiedVolumeAdmission`) reads too: a reflex line-line
   corner is a miter, affine in the amount, and is admitted;
 - the slice-wise chord term integrates over the whole sweep, `|z1 − z0|` with
-  both ends' displacements (`draftBandHeightUpper`), not over a side setback.
+  both ends' displacements (`capblend.Payload.DraftBandHeightUpper`), not over a side setback.
 
 A wall face's bound charges the far level's displacement and the band's, as a
 chamfer patch's does, and no near-level term: the near end of every admitted
@@ -12035,7 +11915,7 @@ Ncorner = hUpper · Σ_loops [ Σ_{line–arc corners} πρ²/4 + Σ_{straight w
 volSymDiff = upRound(Mchord + sweptVolumeAllow(motionMax, …) + Ncorner)
 ```
 
-with `hUpper` the draft's `draftBandHeightUpper` (a chamfer loop's summed
+with `hUpper` the draft's `DraftBandHeightUpper` (a chamfer loop's summed
 band setbacks, `capblend.Payload.bandHeightUpper`), `2.08 > (1 + π)/2`, and a
 straight walk's `ε` the larger of its two ends'. `capblend.NearTangentVolume` composes it from
 `capband.NearTangentCharges`, which reads every corner as the admission does.
@@ -12062,7 +11942,7 @@ type NeutralFace struct {
 }
 
 // NeutralFrame names the plane through Frame's origin spanned by U and V.
-// Staged: ErrUnsupported until the increment that lifts SD20.
+// Not implemented: ErrUnsupported (SD20).
 type NeutralFrame struct {
     Frame r3.Frame
 }
@@ -12080,10 +11960,8 @@ and leaves the document unchanged on any error, including `ctx.Err()`.
 `angle` is a signed `units.Value` of `Kind` Angle (core §12 lists it with
 `ToFace.Offset` and `WithTaper` as the signed displacements outside
 `ErrNegativeMagnitude`); a positive angle narrows the body with distance from
-the neutral plane. `DraftOption` is a sealed option tier with no option in
-this design; it exists so a later increment can add one without changing the
-signature. It includes `option.Interface` in its method set for that later
-option.
+the neutral plane. `DraftOption` is a sealed option tier that carries no option; it reserves
+the signature and includes `option.Interface` in its method set.
 
 #### 10.1 Resolution (RD2)
 
@@ -12265,8 +12143,8 @@ written in the test from §8's polynomials, with `d = h · tan α` evaluated in
 the test, never read back from the body. No bound literal is pinned
 (amd64 and arm64 round FMA differently); a bound is asserted to cover the
 closed form and to be below a stated relative ceiling. Each bound leg is
-shown to fail first: the implementer deletes the leg, runs the fixture, records
-the red run's failing assertion in the test's comment, and restores the leg.
+shown to fail first: delete the leg, run the fixture, record
+the red run's failing assertion in the test's comment, and restore the leg.
 
 **Extrude fixtures** (`apitest/extrude_taper_test.go`,
 `internal/draftrecord/build_test.go`):
@@ -12459,12 +12337,12 @@ undecided.
   cost. Deleting either is the first fail-first leg.
 - **Hold a non-G1 circular corner as a ruled `Cone` with a bounded skew.**
   That is the cap-loop chamfer's stand-in (modify-reach §8.3), with its
-  departure terms, its DX8 refusal and its conic ruling bound. It is a
-  separate increment (§14) and not a shortcut in this one.
+  departure terms, its DX8 refusal and its conic ruling bound. It is not
+  built (§14).
 - **Build `Symmetric` or `TwoSided` by offsetting both ends from the sketch
   plane and gluing two bands at level 0.** The seam at level 0 is an edge
   between two walls of different lean and a `stackedPrismPayload` holds no
-  tapered slab; it needs its own record (§14).
+  tapered slab. `TwoSidedPayload` holds the two draft slabs (§14).
 - **Ask `sketch.CreateOffset` for `Q`.** Lines only, a float solve, no
   certificate, and no collapse or crossing check (§3).
 - **Let `Draft` take a `nil` selector meaning "every wall".** A nil selector
@@ -12481,8 +12359,8 @@ undecided.
 - **One payload for both entry points**: `draftPayload`, over the operand's
   or the sketch's record. `Draft` is `Extrude` with a taper over an existing
   prism's section (§10.1), so the two share §7 entirely.
-- **Order**: the tapered extrude ships first (it has no selection or neutral
-  plane to resolve), tessellation second, `Draft` third (§14).
+- **Build order**: the tapered extrude comes first (it has no selection or neutral
+  plane to resolve), then tessellation, then `Draft` (§14).
 - **Sign**: positive narrows away from the sketch plane or neutral plane
   (§2). `Verify`'s pull survey then reads a positive draft as clear along
   the sweep.
@@ -12500,59 +12378,48 @@ undecided.
   A crossing extent uses two slabs with one sewn sketch rim (§7, §14).
 - **Neutral plane**: a cap of the operand, through a `NeutralFace`; a
   `NeutralFrame` and an interior neutral level are deferred (SD20, §14).
-- **Selection vocabulary**: `Walls(b)` added as a `FacePredicate` beside
-  `CapStart`/`CapEnd`; no nil-selector form.
-- **Surveys**: undercut decided in PR 4 off the patches' normal model; wall
-  and concave radius staged (DD8).
+- **Selection vocabulary**: `Walls(b)` is a `FacePredicate` beside
+  `CapStart`/`CapEnd`; there is no nil-selector form.
+- **Surveys**: undercut is decided off the patches' normal model (DD7); wall
+  and concave-radius surveys are staged (DD8).
 - **Hand-offs**: none (§3).
 
 ### 14. PR split
 
-Each PR ships code, tests and the documentation updates for every refusal it
-lifts: this document's increment table, `doc.go`'s support map,
-`agent-docs/missing-features.md`, the function doc comments, and the layout rows of
-every new root file. This document ships with PR 1.
+All seven increments are built. The numbers name the increments that §11's tables cite. Documentation for every
+refusal an increment lifts lives in this document's §11, `doc.go`'s support map, `agent-docs/missing-features.md`,
+the function doc comments, and the layout rows of the root files.
 
-| PR | Lands | Files and functions | Proves | After |
+| Increment | Provides | Files | Pinned by | Builds on |
 |---|---|---|---|---|
-| **1** | `Extrude` + `WithTaper` over Table RD1: `offset2d.BuildSharpLoop`; `draftPayload` with `Transform`/`Placed`; `internal/draftrecord/build.go` (§7); `internal/draftrecord/measure.go` (§8 over `internal/capband`); `d` and its span (§8.1) with a certified tangent in `internal/proofbound`; `extrude.go` dispatches a nonzero taper to the draft build and refuses SD11/SD12; DD6's gate arm; DD12; the modify refusal messages naming the class; `Tessellate` refuses the class through its default | `internal/offset2d/sharp.go`, `internal/proofbound/interval_trig.go` (tangent), `internal/draftrecord/` (`payload.go`, `build.go`, `measure.go`), `draft.go`, `extrude.go`, `capblend*.go` (the band's `draft` view), `internal/clearance/pairkernel/gate.go`, `fillet.go`/`chamfer.go`/`shell.go` (messages), `apitest/extrude_taper_test.go`, `internal/draftrecord/build_test.go`, `internal/offset2d/sharp_test.go`, `examples/extrude_taper_example_test.go` | F1–F10 and the SD refusals of §11; the fail-first legs | — |
-| **2** | tessellation and the mesh volume proof (DD1), which opens DD2, DD3, DD4, DD10, DD11, DD13, DD17 | `internal/draftrecord/tessellate.go`, `tessellate.go` (dispatch), `tessellate_capblend.go` and `internal/capblend/admit.go` (§9.1's three differences), `internal/draftrecord/payload.go`/`build.go` (`Patches`, `BandDelta`), `boolean.go` (the admission arm), `internal/massdispatch/dispatch.go` (the mesh path needs no arm), `internal/motionengine/recordradius.go`, `apitest/draft_mesh_test.go`, `internal/draftrecord/tessellate_test.go` | the PR 2 fixtures | 1 |
+| **1** | `Extrude` + `WithTaper` over Table RD1: `offset2d.BuildSharpLoop`; `draftPayload` with `Transform`/`Placed`; the build (§7); the measurement (§8 over `internal/capband`); `d` and its span (§8.1) with a certified tangent in `internal/proofbound`; `extrude.go` dispatches a nonzero taper to the draft build and refuses SD11/SD12; DD6's gate arm; DD12; the modify refusal messages naming the class | `internal/offset2d/sharp.go`, `internal/proofbound/interval_trig.go` (tangent), `internal/draftrecord/` (`payload.go`, `build.go`, `measure.go`), `draft.go`, `extrude.go`, `internal/clearance/pairkernel/gate.go`, `internal/gatediameter/body_gate.go`, `fillet.go`/`chamfer.go`/`shell.go` (messages), `apitest/extrude_taper_test.go`, `internal/draftrecord/build_test.go`, `internal/offset2d/sharp_test.go`, `examples/extrude_taper_example_test.go` | F1–F10 and the SD refusals of §11; the fail-first legs | — |
+| **2** | tessellation and the mesh volume proof (DD1), which serves DD2, DD3, DD4, DD10, DD11, DD13, DD17 | `internal/draftrecord/tessellate.go`, `internal/tessdispatch/dispatch.go` (dispatch), `internal/capblend/admit.go` (§9.1's three differences), `internal/draftrecord/payload.go`/`build.go` (`Patches`, `BandDelta`), `internal/booloperand/volume_proof.go` (the admission arm), `internal/massdispatch/dispatch.go` (the mesh path needs no arm), `internal/motionengine/recordradius.go`, `apitest/draft_mesh_test.go`, `internal/draftrecord/tessellate_test.go` | the mesh fixtures | 1 |
 | **3** | `Draft` over RD2: `NeutralPlane`, `NeutralFace`, `NeutralFrame` (refusing), `DraftOption`, `Walls(b)`; §10.1's resolution; SD17–SD23; core §8's pointer to this document and core §12's signed-displacement list | `draft.go`, `selector.go` (`Walls`), `internal/selectorquery/predicate.go`, `agent-docs/api-design.md` §8/§12, `apitest/draft_test.go`, `examples/draft_example_test.go` | D1–D5 | 1 |
-| **4** | DD7: the undercut survey over draft bodies | `draft_survey.go`, `internal/verifyrun/survey.go` (dispatch), `capblend_survey.go` (`capPatchUndercuts`, the patch loop both surveys run), `apitest/draft_verify_test.go` | the PR 4 fixtures; the `−e` pull lists every wall | 2 |
-| **5** | RD3: the subset draft (§10.2): per-walk amounts in `BuildSharpLoop`, the mixed-corner rule, SD21 narrowed | `internal/offset2d/sharp.go`, `internal/capcontour/displacement.go`, `internal/capband/`, `draft.go`, `internal/draftrecord/build.go`, `internal/draftrecord/payload.go`, `capblend*.go` (the band view's per-walk amounts), `tessellate_capblend.go` and `internal/tessellation/` (the mesh's per-walk setbacks), `apitest/draft_subset_test.go` | one wall of F1's box drafted: `A(z) = a(a − z·tan α)`, so `Volume = h·a(a − d/2)`; the L with one notch wall drafted; a hole drafted alone (F7's cone with vertical outer walls) | 3 |
-| **6** | RD1 with a one-sided `ToFace` or `ThroughAll`: resolve the stop through `resolveLinearExtent`, then build the existing single-slab draft with the stop's axial bound | `draft.go`, `apitest/extrude_taper_test.go` | the far-cap vertex and volume match the selected stop level within their bounds | 5 |
-| **7** | RD1 with `Symmetric` or `TwoSided`: build and sew the two slabs, combine bounded readings and meshes | `internal/draftrecord/two_sided.go`, `internal/draftrecord/tessellate.go`, `draft.go`, `internal/compositesweep/body_audit.go` | public volume, manifold, curved mesh and placement cases | 6 |
+| **4** | DD7: the undercut survey over draft bodies | `internal/capblendsurvey/draft.go`, `internal/capblendsurvey/undercut.go`, `internal/verifyrun/survey.go` (dispatch), `apitest/draft_verify_test.go` | the survey fixtures; the `−e` pull lists every wall | 2 |
+| **5** | RD3: the subset draft (§10.2): per-walk amounts in `BuildSharpLoop`, the mixed-corner rule, SD21 narrowed | `internal/offset2d/sharp.go`, `internal/capcontour/displacement.go`, `internal/capband/`, `draft.go`, `internal/draftrecord/build.go`, `internal/draftrecord/payload.go`, `internal/draftrecord/tessellate.go` (the mesh's per-walk setbacks), `apitest/draft_subset_test.go` | one wall of F1's box drafted: `A(z) = a(a − z·tan α)`, so `Volume = h·a(a − d/2)`; the L with one notch wall drafted; a hole drafted alone (F7's cone with vertical outer walls) | 3 |
+| **6** | RD1 with a one-sided `ToFace` or `ThroughAll`: `resolveLinearExtent` resolves the stop, then the existing single-slab draft builds with the stop's axial bound | `draft.go`, `apitest/extrude_taper_test.go` | the far-cap vertex and volume match the selected stop level within their bounds | 5 |
+| **7** | RD1 with `Symmetric` or `TwoSided`: two slabs sewn, with bounded readings and meshes combined | `internal/draftrecord/two_sided.go`, `internal/draftrecord/tessellate.go`, `draft.go`, `internal/compositesweep/body_audit.go` | public volume, manifold, curved mesh and placement cases | 6 |
 
-PRs 2 and 3 run in parallel after PR 1; PR 4 follows 2; PR 5 follows 3.
-PRs 1, 2 and 4 are proof specifications (bounds, closure terms, the mesh
-proof and the normal model) and are implemented at the higher reasoning
-tier; PRs 3 and 5 are file-by-file plans over PR 1's builder.
+What still refuses:
 
-Increment table — what still refuses after each PR. PR 2's mesh serves every
-draft body, `Draft`'s included:
+- SD3 (free-form walk), SD4 (the mitered circular corner), SD12 (taper with a surface result), SD20 (`NeutralFrame`
+  and the interior neutral level).
+- The wall and concave-radius surveys (DD8) and the undercut survey of a two-sided body read `Suspect`.
+- Clearance carriers (DD9).
+- Shell, fillet and chamfer of a draft body outside §10.4–§10.6 (DD14).
+- Booleans, interference and mass of a body the band admission refuses (§9.1).
 
-| After | State | Still refused |
-|---|---|---|
-| 1 | landed | every draft body's tessellation, boolean, export, mass and interference reading (DD1's dependants); `Draft` (no entry point); surveys `Suspect`; SD3, SD4, SD11, SD12 |
-| 2 | landed | surveys `Suspect`; SD3, SD4, SD11, SD12, SD20, SD21; booleans, interference and mass of a body the band admission refuses (§9.1) |
-| 3 | landed | surveys `Suspect`; SD3, SD4, SD11, SD12, SD20, SD21 |
-| 4 | landed | wall and concave-radius surveys `Suspect` (DD8); SD3, SD4, SD11, SD12, SD20 |
-| 5 | landed | DD8; SD3, SD4, SD11, SD12, SD20; clearance carriers (DD9); shell, fillet and chamfer of a draft body (DD14); the mitered circular corner; the two-sided extents; `NeutralFrame` and the interior neutral level; the surface result |
-| 6 | landed | DD8; SD3, SD4, two-sided SD11, SD12, SD20; clearance carriers (DD9); shell, fillet and chamfer of a draft body (DD14); `NeutralFrame` and the interior neutral level |
-| 7 | landed | DD8; SD3, SD4, SD12, SD20; two-sided undercut survey; clearance carriers (DD9); DD14 outside §10.4–§10.6; `NeutralFrame` and the interior neutral level |
-
-The unscheduled reach, in the order a later design should take it: the
-interior neutral level, the mitered circular
-corner as modify-reach §8.3's ruled stand-in, the wall and concave-radius
-surveys (DD8), and the clearance carriers (DD9).
+The unscheduled reach, in the order a later design should take it: the interior neutral level, the mitered circular
+corner as modify-reach §8.3's ruled stand-in, the wall and concave-radius surveys (DD8), and the clearance carriers
+(DD9).
 
 ## Part T — Tangent side notch
 
 A blind `Cut` whose tool meets the target's outer wall only at recorded vertices, tangentially, and the `Fillet` of
 the concave arc it leaves on the notch floor. The gallery reports that Fusion 360 builds both (not checked here; §6
-gate G0). Status: approved (option O1). T1 is built (sketch `9216dee`, decad pin `68d12a1916`). T2 is built as
-general-boolean §3 A9 on A7's build: the cut builds as a BRep. T3 and T4 are built: the dart-root fillet builds as
-boss-root-overflow §5.5's C3 construction. §2 and §3 record why `main` at `06df1932f5` refused both.
+gate G0). Status: approved (option O1) and built. T1 is the `sketch` fix (sketch `9216dee`, pinned in `go.mod`). T2 is
+general-boolean §3 A9 on A7's build: the cut builds as a BRep. T3 and T4 build the dart-root fillet as
+boss-root-overflow §5.5's C3 construction. §2 and §3 record why both refused before T1 to T4.
 
 Navigation (not authority): the failing case → §1; why the cut refuses → §2; why the fillet refuses → §3; the target
 result → §4; soundness → §5; increments and size → §6; options → §7.
@@ -12575,7 +12442,7 @@ inside. The mirror vertex `a'` is the same.
 The result is a valid solid. Above 5.80 the outline runs along `K` into `B` with a smooth (G1) joint at `a` and `a'`.
 The floor at 5.80 is the dart top plus two crescents between `G` and `B`, each narrowing to a zero-width point at `a`.
 
-Probe on `main` at `06df1932f5`, 2026-11-17, through a `go.mod` replace in a scratch copy of the gallery:
+Before T1 to T4, a probe through a `go.mod` replace in a scratch copy of the gallery gave these first refusals:
 
 | Variant | First refusal |
 |---|---|
@@ -12603,11 +12470,11 @@ Three facts together give it.
 
 #### 2.2 The mesh path refuses the contact at `a`
 
-The gate's refused face pairs (probe log): the target's corner round `K` (a `Cylinder`) against the tool's oblique
-wall (a `Plane`), at both `a` and `a'`, with slack 1.5e-4 mm at the overlap chord and 1.55e-3 mm at the pair chord.
-The wall starts at `a`, where `K` is vertical, and leaves at 7.4° into the void, so the true faces touch along the
-generator through `a` and nowhere else. Their facets come within the slack without crossing deeper than it, which is
-exactly the case the gate refuses (evaluator §9). The cylinder pairs `B`–`K` and `B`–`G` touch along the same line.
+The gate's refused face pairs are the target's corner round `K` (a `Cylinder`) against the tool's oblique wall (a
+`Plane`), at both `a` and `a'`. The wall starts at `a`, where `K` is vertical, and leaves at atan(0.66767 / 5.12535) =
+7.4° from vertical into the void (the wall runs from `(r_n, k_y)` to `(1, 44)`), so the true faces touch along the
+generator through `a` and nowhere else. Their facets come within the chord slack without crossing deeper than it,
+which is exactly the case the gate refuses (evaluator §9). The cylinder pairs `B`–`K` and `B`–`G` touch along the same line.
 
 The shifted retry (gap-tolerance §5.2) does not open it:
 
@@ -12617,49 +12484,41 @@ The shifted retry (gap-tolerance §5.2) does not open it:
 
 #### 2.3 `sketch` returns a wrong arrangement at `a`
 
-A record route (§6) asks `sketch` for the cells of the band F scene. With A7's gates lifted in a probe, the scene of
-the lever region and the notch returned 3 cells (one outline cell and the two slot interiors) where 5 are needed, and `prismcells.ClassifyRegions` refused: one cell's
-outer loop walks the notch arc in both directions and the gap arcs and dart edges against their material side.
+A record route (§6) asks `sketch` for the cells of the band F scene. Before T1, the scene of the lever region and the
+notch returned too few cells, and `prismcells.ClassifyRegions` refused: one cell's outer loop walks the notch arc in
+both directions and the gap arcs and dart edges against their material side.
 
-A `sketch`-only scene reproduces it at the pinned version (`168cc02138ab`) and at `sketch` main (`1f155e0`): the
-fork end (arm sides, `K`, `G`, the dart, the closing line) and the notch polygon, sharing `a` and `a'` exactly.
+A `sketch`-only scene reproduces it: the fork end (arm sides, `K`, `G`, the dart, the closing line) and the notch
+polygon, sharing `a` and `a'` exactly. The correct arrangement has 3 cells, and
+`TestSideNotchCutTangentFork` pins two of their areas: 50.273480 mm² for the fork less the notch and 7.969198 mm² for
+the overlap. Before T1 the arrangement was one cell holding the union, with some edges walked twice, reported `Valid`.
+That is a `sketch` soundness defect, not a refusal. decad caught it only because `ClassifyRegions` met a membership
+conflict. The defects in `geom/arrange.go` were:
 
-| Scene | Cells (area, mm²) |
-|---|---|
-| fork end alone | 1 (58.242678) |
-| notch alone | 1 (18.041331) |
-| fork end and notch | 1 (68.314811, the union's area; 20 edges, some walked twice), reported `Valid` |
-| fork end with `G` drawn as two lines, and notch | 3 (50.273480, 8.223888, 9.817444) |
-| fork end and a V-shaped notch | 5, correct |
-
-Expected for the third row: 3 cells, about 50.27, 7.97 and 10.07. The wrong cell is reported `Valid`, so this is a
-`sketch` soundness defect, not a refusal. decad caught it here only because `ClassifyRegions` met a membership
-conflict. The path at the pinned commit (`geom/arrange.go`):
-
-- The consistency gate exempts an internal tangency (around lines 1559 and 1629).
-- The shared-endpoint branch (around 1695-1699) breaks before the vertex is registered for exact port order
-  (`exactPortVerts`, around 1713-1719), so `a` is never a certified tangency vertex.
-- `prepareExactPorts`' second door skips a same-ray tie even when the chord angles tie bit for bit (around 3843-3849).
+- The consistency gate exempts an internal tangency.
+- The shared-endpoint branch breaks before the vertex is registered for exact port order (`exactPortVerts`), so `a` is
+  never a certified tangency vertex.
+- `prepareExactPorts`' second door skips a same-ray tie even when the chord angles tie bit for bit.
   `G` and `B` leave `a` on one tangent ray, so curvature, which would order them, is never asked.
-- Both arcs are densified with one angular step per turn (around 1306-1318), so their first chords leave `a` on one
-  ray to rounding (−1.583068173097986 and −1.5830681730979772 rad). `G`'s first chord (about 0.0131 mm) is shorter
-  than `B`'s (about 0.0409 mm) and ends on it, so the chorded curves overlap.
+- Both arcs are densified with one angular step per turn, so their first chords leave `a` on one ray to rounding.
+  `G`'s first chord is shorter than `B`'s and ends on it, so the chorded curves overlap.
 
-The fix belongs in `sketch` (T1): register a shared endpoint of two curved fragments on one tangent ray for exact port
+T1 is the `sketch` fix: register a shared endpoint of two curved fragments on one tangent ray for exact port
 order (tangent, then signed curvature); keep their chords from overlapping there; and flag the scene `Degenerate`
 wherever the ports cannot be ordered (equal curvature, or a line and an arc on one ray) instead of returning a cell.
 
 ### 3. The fillet refusal
 
-- Widened notch: `B`'s end `(r_n + 0.02, k_y)` lies inside the horn, and the oblique wall crosses `K` about 0.097 mm
-  above `k_y` (the arcs `B` and `K` themselves do not meet: their circles cross at `y = k_y ± 0.138`, each point on one
-  arc only). `B` therefore ends at the oblique wall, as in the exact lever. The arc blend ends each row on the plane at
+- Widened notch: `B`'s end `(r_n + 0.02, k_y)` lies inside the horn, and the oblique wall crosses `K` about 0.1 mm
+  above `k_y` (the arcs `B` and `K` themselves do not meet: their circles cross at about `y = k_y ± 0.14`, each point on
+  one arc only). `B` therefore ends at the oblique wall, as in the exact lever. The arc blend ends each row on the plane at
   each arc end (retained-edge-blend R4). That plane lies 1.6727 mm from `B`'s axis. The floor row's circle has radius
   `r_n + 0.02 − 0.6` = 1.0877 mm and never reaches it, so `arcRim.section` refuses. The shape is boss-root-overflow X1
   (an arc ending on a wall that rises from the floor). It says nothing about the exact case.
-- Exact lever: never reached, because the cut refuses first. By construction it is boss-root-overflow's rule CO on an
+- Exact lever: never reached before T2, because the cut refused first. By construction it is boss-root-overflow's rule CO on an
   inner wall. The fillet ring lies inside `B` (torus major radius `r_n − ρ` = 1.06767). Its floor row crosses `G` at
-  27.86° from each end of `B`, where the crescent becomes narrower than `ρ` (a transversal crossing of a cliff
+  27.86° from each end of `B` (the circle of radius `r_n − ρ` about `(0, k_y)` meets `G`'s circle at `(±0.94392,
+  k_y + 0.49894)`), where the crescent becomes narrower than `ρ` (a transversal crossing of a cliff
   cylinder, C2's construction on a floor row rather than at an arc end). From there to `a` the ring is trimmed by `G`
   extended upward, and at `a` the cap on `G` narrows to the point where `G` touches `B`. That is configuration C3, the
   class boss-root-overflow rates least likely to be built by Fusion, built by its §5.5 (T4).
@@ -12691,39 +12550,37 @@ CLAUDE.md governs every admission: a decad-side residual may only falsify.
 | `B` meets the target loop only at `a` and `a'` | `sketch`'s intersection query for every pair of a tool entity and a target entity with a curved member (the query `prismcells.ProveGroupApart` reads, prism-boolean §4.2), every reported point being the shared recorded endpoint (equal floats in both records; probe: `(1.6676711944252536, 38.874650636459869)` for `K`, `G` and `B`). Whole edges alone prove nothing: the arrangement neither cuts nor flags a clean tangency | a distance below a tolerance |
 | `B`–`G` tangency at `a` for C3 | not the floor loop's joint `B → G`: that joint is a cusp (B arrives along `+y`, `G` leaves along `−y`), and `capband.JoinIsG1` and `NearTangentCorner` both refuse `dot ≤ 0`. Prove it through `K` at the one exact vertex: `JoinIsG1(K → G)` on the target outline (or `NearTangentCorner`'s near-tangent admission with its turn charged, boss-root-overflow §5.5.2) and `JoinIsG1(K → B)` on the result's band F outline; or add a reject-only cusp predicate (cross product zero, dot product negative) to `capband` | an angle residual below a tolerance |
 | `K` meets the fillet prism `P` only along the generator through `a`, from 5.80 to 5.80 + ρ | boss-root-overflow A7 refuses any other face meeting `P`; T4 changes that gate for a side face G1 to both `B` and `G` at the arc end, proved by the row above | a clearance read from held facets |
-| C2 crossing of the floor row with `G` | its charged sine above `minSine` (retained-edge-blend §4.5) | a sine without its charge |
+| C2 crossing of the floor row with `G` | its charged sine above `minSine` (retained-edge-blend §4.4) | a sine without its charge |
 
 The cut's result is exact where the loops are exact; arcs make its volume `Approximate` with a proven bound, as A7's
-do. The mesh path's gate stays as it is: §6 adds a record route ahead of it, and every pair outside that route's gate
-keeps today's refusal.
+do. The mesh path's gate is unchanged: T2's route runs after the mesh path refuses, and every pair outside that route's
+gate keeps the mesh path's refusal.
 
 ### 6. Increments
 
-Each increment is one PR, merged after green CI and an independent review of its soundness-sensitive diff.
+| # | Increment | Unlocks |
+|---|---|---|
+| T1 (built) | `sketch`: exact port order at a shared endpoint of two curved fragments on one tangent ray, no chord overlap there, and `Degenerate` where the ports cannot be ordered (§2.3); the densification change moves the golden scenes that depend on it | correct cells for tangent arcs sharing an endpoint; no silently wrong `Valid` cell |
+| T2 (built) | general-boolean §3 A9: A7's BRep build, tried after the mesh path refuses, with A7's scope gates lifted (any number of target holes, oblique lines only where no scene cuts them, the tool across or touching the outer wall, one result cell with no pinch). A7's engine already splits walls at an interface on the outer ring, so no new geometry was needed | the lever body; side notches of line, circle and arc outlines |
+| T3 (built) | brep-modify §2.3: the retained edge blend on the faceted view of a stacked or slab-cut BRep (`SlabCut`), after the receiver routes refuse; a holed union's circular walls carry its charge on their tags (boss-root-overflow P5). Replaces boss-root-overflow P3 | fillets on T2's results reach the retained edge blend |
+| T4 (built) | C3 tangent ends (boss-root-overflow P6, §5.5) generalized to an inner wall and to §3's end topology (`G` below, `K` beside), the floor-row cliff crossing on an inner wall, and §5's A7 gate change | the dart-root fillet; the balance-wheel boss at Ø14 |
+| T5 (no code) | the lever's later steps on T2's result: the D bore `Cut` (an A7 BRep admits no later analytic Boolean, general-boolean §3 A7, so it takes the mesh path) and the edge-finish chamfers over the `K`–`B` G1 joints | the finished lever: on T4's result the gallery lever's bore `Cut` and edge chamfers build |
 
-| # | Increment | Unlocks | Estimate |
-|---|---|---|---|
-| T1 | `sketch`: exact port order at a shared endpoint of two curved fragments on one tangent ray, no chord overlap there, and `Degenerate` where the ports cannot be ordered (§2.3); `sketch` release and pin bump here | correct cells for tangent arcs sharing an endpoint; no silently wrong `Valid` cell | 1 to 2 weeks: the densification change moves the golden scenes that depend on it |
-| T2 (built) | general-boolean §3 A9: A7's BRep build, tried after the mesh path refuses, with A7's scope gates lifted (any number of target holes, oblique lines only where no scene cuts them, the tool across or touching the outer wall, one result cell with no pinch). A7's engine already splits walls at an interface on the outer ring, so no new geometry was needed | the lever body; side notches of line, circle and arc outlines | built |
-| T3 (built) | brep-modify §2.3: the retained edge blend on the faceted view of a stacked or slab-cut BRep (`SlabCut`), after the receiver routes refuse; a holed union's circular walls carry its charge on their tags (boss-root-overflow P5). Replaces boss-root-overflow P3 | fillets on T2's results reach the retained edge blend | built |
-| T4 (built) | C3 tangent ends (boss-root-overflow P6, §5.5) generalized to an inner wall and to §3's end topology (`G` below, `K` beside), the floor-row cliff crossing on an inner wall, and §5's A7 gate change | the dart-root fillet; the balance-wheel boss at Ø14 | built |
-| T5 | the lever's later steps on T2's result: the D bore `Cut` (an A7 BRep admits no later analytic Boolean, general-boolean §3 A7, so it takes the mesh path) and the edge-finish chamfers over the `K`–`B` G1 joints | the finished lever | no code: on T4's result the gallery lever's bore `Cut` and edge chamfers build (probe, 2026-11-17) |
-
-The lever with its fillet needed T1 to T4; T5 needed no code. The estimates scaled from A7's build
-(`internal/stackedunion` and `internal/stackedbrep`, about 4,500 lines with tests) and boss-root-overflow §7.
+The lever with its fillet needs T1 to T4; T5 needs no code.
 
 Gate G0 of boss-root-overflow §2.4 applies to T4: record in Fusion the faces the lever fillet produces. A Fusion result
 that keeps the edge or fails moves T4 to a refusal.
 
 ### 7. Options
 
-| Option | Gains | Costs |
-|---|---|---|
-| O1: build T1 to T5 | the lever as designed, as Fusion builds it | 7 to 12 weeks plus T5; T4's Fusion outcome is unconfirmed until G0 runs |
-| O2: build T1, T2 and T5; the gallery leaves the dart root sharp | the lever body builds exactly, in 4 to 8 weeks plus T5 | the lever loses its 0.6 mm root round in decad and in the port |
-| O3: build T4 as one generalized C3 increment with boss-root P6 | one C3 construction serves both gallery models; saves about 1 week against two | P6 waits for this design's approval |
-| O4: change the fork geometry so no tool face touches the target | no decad work for the cut: `r_n + 0.02` cuts today, and the bore after it | the fillet then refuses (X1, §3); no tested geometry builds both; the user has preferred decad fixes |
-| O5: keep `TestLever` skipped | nothing | the lever, and every lever test, stays unbuilt |
+O1 was chosen: build T1 to T5, so the lever builds as Fusion builds it. T4's Fusion outcome stays unconfirmed until G0
+runs. The rejected options:
+
+- O2: build T1, T2 and T5 and leave the dart root sharp. It loses the lever's 0.6 mm root round in decad and in the port.
+- O3: build T4 as one generalized C3 increment with boss-root P6, so one construction serves both gallery models.
+- O4: change the fork geometry so no tool face touches the target. `r_n + 0.02` cuts today, and the bore after it,
+  but the fillet then refuses (X1, §3), and no tested geometry builds both.
+- O5: keep `TestLever` skipped. The lever and every lever test stay unbuilt.
 
 ## Part X — Perpendicular cylinder bore-mouth chamfer
 
@@ -12855,7 +12712,6 @@ tool's band with the same cell tests at its own station count
 
 ### Public case
 
-For the public `R=5, r=1, H=10, c=5, d=0.5 mm` case, the result has
-47,104 facets, a 0.046353 mm boundary bound, and a
-`753.228711±10.088197 mm³` volume reading. `Tessellate(0.1 mm, VerifyAll)`
-reports both boundary and volume verified.
+`apitest/cross_cylinder_bore_chamfer_test.go` builds the cut, chamfers the positive mouth, and checks one
+`boreMouthChamfer` face. `Tessellate(0.1 mm, VerifyAll)` reports boundary and volume verified, the boundary bound is
+below 0.1 mm, and the volume reading's lower bound is positive.
