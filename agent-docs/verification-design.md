@@ -8,8 +8,11 @@ aggregate into (§6). Companion to `agent-docs/api-design.md` — the core desig
 owns `Verify`'s place in the API, the three bounded result shapes
 (`Measurement`, `VecMeasurement`, `Box`), and the error vocabulary. References
 of the form "core §N" are to that document.
-`agent-docs/payload-verification-design.md` owns the exact cup adapter and the
-certificate-backed faceted algorithms that meet this document's proof standard.
+`agent-docs/payload-verification-design.md` owns the exact cup adapter and the design of the certificate-backed
+faceted algorithms that would meet this document's proof standard; its §1 "Implementation status" lists which
+parts ship. For a faceted body, the shipped survey is ray sampling (`agent-docs/mesh-wall-survey-design.md`), which
+proves a body too thin or undercut and never proves the absence. A faceted axis-square solid is read exactly
+(`agent-docs/orthogonal-design.md`).
 `agent-docs/interference-design.md` owns the non-mutating proof behind an
 `Interference` row and its bounded overlap volume;
 `agent-docs/clearance-design.md` owns analytic disjointness, contact, and minimum-gap
@@ -1529,11 +1532,13 @@ answers this way:
   than. On analytic faces the proof exists: which face pairs oppose within the
   allowance across material, and whether any meeting inside it pinches a wall
   to zero, are closed-form facts of the surfaces, and the spanning survey over
-  them (below) is that proof. A faceted survey needs more than held facets:
-  its source-normal certificates, boundary-displacement bound, and complete
-  medial-family enclosure must exclude every possible wall. When they do,
-  `ScalarAbsent` is proven; otherwise the asked question is `ScalarUndecided`
-  and the body reads `Suspect` (payload verification §10). Modify reach DX9
+  them (below) is that proof. A faceted wall survey is ray sampling
+  (`internal/verifyrun/faceted_wall.go`): it bounds the thinnest wall from
+  above and never proves the absence, so it publishes `ScalarMeasured`, `ScalarUndecided` or, when no ray hits,
+  `ScalarUnavailable`, and an undecided one leaves the body `Suspect`. Only an
+  axis-square solid (`agent-docs/orthogonal-design.md`) reads exactly. The
+  certified medial survey that could prove the absence on other faceted bodies is
+  design only (payload verification §10). Modify reach DX9
   makes the same deliberate result for exact `capBlendPayload` and
   `stackedPrismPayload`: their solids are exact, but the shipped
   constant-section spanning proof does not cover them, so the outcome is
@@ -1543,10 +1548,11 @@ answers this way:
 - **`ConcaveRadius.Outcome == ScalarAbsent` on a proven solid** is the
   determination *no concave feature exists*. On analytic faces the proof
   exists: convexity and curvature are exact facts there, and a survey over
-  them is that proof. A faceted source certificate can also prove every
-  represented patch has no concave principal curvature. Missing, mixed-sign,
-  or unknown certificates leave the outcome `ScalarUndecided` and the body
-  `Suspect` (payload verification §9).
+  them is that proof. A faceted body proves it only if it is an axis-square solid
+  (`agent-docs/orthogonal-design.md` Wall survey §4); any other faceted body is
+  `ScalarUnavailable` with `DiagUnsupportedSurveyPayload`. The certified
+  curvature patches that could prove it for other faceted bodies are design only
+  (payload verification §9).
 - **`Undercut.Coverage == CoverageComplete` with an empty `Faces`** is the
   claim *no face is an undercut* — the same rule for the same reason, because
   the claim quantifies over the part, not over the survey. On an analytic face
@@ -1572,11 +1578,13 @@ answers this way:
   undecided, and every other wall keeps its own verdict. A tagged analytic
   variant that is a bounded
   stand-in carries its own normal departure (`agent-docs/modify-design.md` Part R
-  §8.3) on top of that. A faceted survey proves the same all-clear only when
-  every true patch's source-normal range clears. A missing or straddling
-  range leaves `Coverage` at `CoverageUndecided` (or `CoveragePartial` when
-  some other face is confirmed) and the body `Suspect` (payload verification
-  §8).
+  §8.3) on top of that. A faceted pull survey is ray sampling
+  (`internal/verifyrun/faceted_pull.go`): it proves a blocked face an undercut
+  and never proves the all-clear, except for an axis-square solid pulled along
+  a world axis (`agent-docs/orthogonal-design.md` Wall survey §3). Otherwise
+  `Coverage` is `CoverageUndecided` (or `CoveragePartial` when some other face
+  is confirmed) and the body `Suspect`. The certified normal patches that could
+  prove the all-clear are design only (payload verification §8).
 - **A pair with no `Interference` row** is the answer *these two bodies do not
   overlap* only inside a `Sound` report. The proof may be bounds separation,
   analytic boundary clearance plus nesting exclusion, or a certified touching
@@ -1720,7 +1728,8 @@ verification results.
   room to hide — is proven valid. In between — a defect, gap or graze inside
   the bound — the question is undecided, and the body reads `Suspect`: not
   `Sound`, and not `Unsound` either, because nothing is proven wrong.
-  Predicate by predicate:
+  The rule below is the design; for a faceted body the shipped decision is the held-mesh audit named at the end
+  of this item. Predicate by predicate:
 
   - **watertight** — a hole in the held skin wider than the bound is a proven
     hole: no true skin the bound admits closes it. A held skin that closes,
@@ -1744,13 +1753,13 @@ verification results.
     answer: the reported `int` is the held boundary's, and the part's is
     the claim.
 
-  Every predicate and both counts read the same instrument — the held
+  In the design, every predicate and both counts read the same instrument — the held
   boundary's own feature scale against its own proven bound — so one survey
   decides them together, and `Solid` is decided as their conjunction. An
   `Exact` evaluator's bound is zero and its boundary is the truth: it proves
-  validity outright, every time. A `Faceted` evaluator proves it whenever the
-  geometry is decisive, and on real parts that is the ordinary case, not the
-  exception: §2's Ø20×10mm cylinder at a 1e-3 mm chord has a self-clearance
+  validity outright, every time. The design lets a `Faceted` evaluator prove it
+  whenever the geometry is decisive, and on real parts that is the ordinary case,
+  not the exception: §2's Ø20×10mm cylinder at a 1e-3 mm chord has a self-clearance
   of its own 10 mm height — four decades beyond the bound its facets carry —
   and is proven valid outright. What a faceted evaluator cannot do is what
   it never honestly could: read `Sound` over a seam its chord cannot resolve.
@@ -1758,7 +1767,10 @@ verification results.
   question it cannot answer, and it reads `Suspect` — nothing proven wrong,
   nothing proven right, which is exactly the rung's meaning.
   Payload verification §5/§6 defines the required local correspondence, the
-  remote-feature set, the `2*delta` guard, and the exact held-mesh audit.
+  remote-feature set and the `2*delta` guard. Those are design only. The shipped
+  faceted validity is the exact held-mesh audit, `verifyrun.BodyValidityEvidence`
+  running `boundaryaudit.AuditSolidBoundary`, and it reads no feature scale
+  against the bound.
 - **`Report.Status`** is the document-level aggregate — over the bodies *and* over
   the pairwise results, which belong to no body. `Interfering` normally
   follows from a non-empty `Interferences` slice, and the two agree only
@@ -1899,9 +1911,10 @@ candidate into validation instead of retaining the full cubic candidate set.
 Its generation, validation, containment, and boundary scans share `Verify`'s
 work counter, which checks cancellation at least every 256 candidate
 operations; cancellation returns the context error from `Verify`, not a
-`Suspect` report. A `Faceted` evaluator encloses maximal-ball contact families
-whose true-patch normals carry source bounds (core §6.1), and widens held
-diameters by its boundary-displacement certificate (payload verification §10).
+`Suspect` report. The faceted wall survey is ray sampling and builds no
+maximal-ball contact families; the certified family enclosure that would widen
+held diameters by a boundary-displacement certificate is design only (payload
+verification §10).
 A family whose normal bounds admit both sides of the allowance it can neither
 count as a wall nor dismiss — the at-allowance wall is that pair every
 time, as the exactly-vertical wall is the undercut survey's undecided face
@@ -2023,18 +2036,19 @@ bounded region is closed-form, so the survey of its range is exact and the
 three-way answer is decided outright. A tagged analytic variant that is a
 bounded stand-in widens that range by its proven departure and can leave the
 three-way answer undecided (`agent-docs/modify-design.md` Part R §8.3). A `Faceted`
-face is its held facets, but every facet's certificate encloses the normals of
-the true patch it represents; that whole range, not only the held plane
-normal, is what the pointwise rule reads (payload verification §8).
+face is its held facets. The certified design reads, for each facet, the whole
+range of normals of the true patch it represents instead of the held plane
+normal, but that is design only (payload verification §8); the shipped faceted
+pull survey is ray sampling (above).
 The rule is the claim, not the algorithm — but everything it quantifies over
 is a reading the evaluator holds. The boundary case is the vertical wall — a
 face everywhere exactly perpendicular to the pull, draft angle zero. It
 provenly clears: the pull slides along it, not into it, and the strictness
 sits on the same side as the wall rule's — exactly perpendicular is not
 opposed, exactly tool-thick is not thinner. An analytic vertical wall is
-settled by the exact survey. A faceted vertical wall is settled when its
-source certificate proves a constant perpendicular normal; a range that
-straddles zero stays undecided and makes the body `Suspect`. A caller whose spec is a
+settled by the exact survey. A faceted vertical wall is settled only for an axis-square solid pulled
+along a world axis; on other faceted bodies the ray sampling does not decide it
+and the body is `Suspect`. A caller whose spec is a
 positive minimum draft — not mere clearance — is stating a spec
 `WithPullDirection` does not pose, and no option states, so no verdict
 enforces it (§2): the draft *allowance* is no such spec — it says which
@@ -2042,8 +2056,8 @@ skins the wall reading counts as opposing (above), and demands nothing of
 the pull. And `Undercut.Coverage == CoverageComplete` with an **empty**
 `Faces` claims more than every held face settled — it is the absence answer
 of the standard above, quantifying over the part and not the survey. Exact
-analytic ranges prove it directly; complete faceted source ranges can also
-prove it. A missing or undecided range leaves `Coverage` at
+analytic ranges prove it directly, and so does an axis-square faceted solid pulled
+along a world axis. A missing or undecided range leaves `Coverage` at
 `CoverageUndecided` (or `CoveragePartial` when some other face is confirmed)
 and the body `Suspect`.
 

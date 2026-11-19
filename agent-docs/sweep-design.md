@@ -3,7 +3,7 @@
 `Sweep` moves one recorded planar profile along an ordered spatial path. The
 profile stays normal to the path and uses rotation-minimizing transport. This
 document owns the spatial-path vocabulary, frame transport, refusals, topology,
-measurements, downstream coverage, and staged implementation.
+measurements, downstream coverage, and the implementation increments.
 
 Companion contracts remain authoritative for their existing areas:
 
@@ -49,14 +49,11 @@ The current `Sweep` implementation admits:
 - a build whose local curvature gates and global contact audit prove a simple,
   closed solid.
 
-The design also fixes these later increments:
+These are not implemented:
 
-- other Tier A free-form profile boundaries follow `agent-docs/spline-design.md` reach;
-- nonzero distributed twist over curved and composite paths builds a certified
-  faceted sweep in a later increment;
-- exact-restatement tessellation admits the payload to export and booleans;
-- a future constrained 3D sketch may be recorded into the same `Path` without
-  changing `Sweep`.
+- other Tier A free-form profile boundaries, which follow `agent-docs/spline-design.md` reach;
+- nonzero distributed twist over curved and composite paths beyond §17's cases;
+- a constrained 3D sketch recorded into the same `Path` (§4) without changing `Sweep`.
 
 **§16 owns the one corner mode and the one scale this document admits**: a
 `LineTo`-only path whose joins are cut on a stated join plane
@@ -86,11 +83,9 @@ from approximate input; its evaluator may reduce an admitted path segment to
 their existing builders internally.
 
 **`Sweep` takes a closed profile or an open sketch chain through one generic
-entry point, and §15 owns the chain case** — its pairing rule, refusals,
-result and staging. Everything §1
-through §14 states about the path, the transport, the span builders and the
-global audit is what that section consumes; what it replaces is the section
-alone.
+entry point, and §15 owns the chain case**: its pairing rule, refusals, result and
+increments. §15 consumes everything §1 through §14 states about the path, the
+transport, the span builders and the global audit, and replaces only the section.
 
 ## 2. Public API
 
@@ -476,11 +471,9 @@ between its bound-inflated axis-aligned boxes. A pair without the
 certificates its kind needs returns `ErrUnsupported`; the evaluator never
 infers disjointness from samples.
 
-The shared-grid tessellation increment will replace this conservative subset
-with an ephemeral certified facet cover of every lateral patch and both
-endpoint caps. That audit will reuse shared boundary stations, source bounds,
-exact triangle predicates, fixed work counters, and homotopy sign tests. It
-will distinguish proven extra contact from an undecidable displacement band.
+A certified facet cover of every lateral patch and both endpoint caps, with
+exact triangle predicates and homotopy sign tests, would distinguish proven
+extra contact from an undecidable displacement band. It is not implemented.
 
 The final topology also runs the ordinary directed-edge, vertex-link, positive
 face-area, outward-orientation, and positive-volume audits.
@@ -530,10 +523,9 @@ would change those claims.
 **This is the solid's own shape alone.** `WithSurfaceResult()`
 (agent-docs/surface-design.md §2.2, §4) omits the two section caps that join a
 holed profile's outer wall tube to its hole wall tube, so a surface-result
-sweep's holed profile reports one `Lump` per tube instead — the identical
-carve-out `agent-docs/surface-design.md` §2.2 already states for the surface-result
-prism and revolve builds, and Table D's own composite increment reuses it
-unchanged rather than inventing a second rule.
+sweep's holed profile reports one `Lump` per tube instead — the same
+carve-out `agent-docs/surface-design.md` §2.2 states for the surface-result
+prism and revolve builds.
 
 ## 9. Measurements and bounds
 
@@ -576,14 +568,14 @@ prevents a false `Sound` report.
 
 | D | Consumer | Status |
 |---|---|---|
-| **D1** | structural `Verify` + tolerance gate | lands with Sweep. For a solid, the construction and global audit prove validity and all four readings are judged; §3.3 uses the full `Revolve` proof and §3.4 uses the cyclic span audit. For a `WithSurfaceResult()` sheet, only the one-span straight reduction carries an equivalent construction proof (it IS a prismPayload build, agent-docs/surface-design.md §9.1); the arc reduction and every composite sheet read `Suspect` — the arc build runs no crossing audit of its own, and the composite build's own boundary/vertex-link audit proves assembled topology, not geometric non-self-intersection |
+| **D1** | structural `Verify` + tolerance gate | For a solid, the construction and global audit prove validity and all four readings are judged; §3.3 uses the full `Revolve` proof and §3.4 uses the cyclic span audit. For a `WithSurfaceResult()` sheet, only the one-span straight reduction carries an equivalent construction proof (it IS a prismPayload build, agent-docs/surface-design.md §9.1); the arc reduction and every composite sheet read `Suspect` — the arc build runs no crossing audit of its own, and the composite build's own boundary/vertex-link audit proves assembled topology, not geometric non-self-intersection |
 | **D2** | `Tessellate` / STL / OBJ | One-span sweeps and §3.3's full circle use prism or Revolve. Composite sweeps mesh line, circle, arc and fitted-spline profiles with shared stations; §3.4 identifies the final station with the first. Meridian poles or unmatched stations refuse. Sheets have no occupied-volume proof |
 | **D3** | mesh booleans | one-span solids and §3.3's full circle use their reduction's `volSymDiff`. An admitted composite solid sums span occupied-volume bounds and all join-vertex movement bounds, with `symDiffOK == true`; its mesh can enter `Union`, `Cut` and `Intersect` |
-| **D4** | interference | bounds-disjoint pairs work immediately; an admitted solid sweep reaches the mesh intersection D3 admits. Other pairs stay `Suspect` until D3 or a sweep analytic adapter lands |
-| **D5** | clearance | box separation may settle the partition, but `WithClearances` stays `Suspect` until a sweep boundary adapter lands |
-| **D6** | `Wall`, `Undercut`, `ConcaveRadius` | `Unavailable` with `DiagUnsupportedSurveyPayload` until non-constant-section proofs land |
+| **D4** | interference | bounds-disjoint pairs settle at once; an admitted solid sweep reaches the mesh intersection D3 admits. Other pairs stay `Suspect`; no sweep analytic adapter exists |
+| **D5** | clearance | box separation may settle the partition, but `WithClearances` stays `Suspect`; no sweep boundary adapter exists |
+| **D6** | `Wall`, `Undercut`, `ConcaveRadius` | `Unavailable` with `DiagUnsupportedSurveyPayload`; no non-constant-section proof exists |
 | **D7** | `Transform`, `Copy` | re-evaluates the payload under the composed rigid motion and reruns the applicable construction proof; every displacement and measurement is recomputed |
-| **D8** | Fillet, Chamfer and Shell | Straight solid profile: lateral Fillet/Chamfer, one Route E cap edge for either blend, and Shell (modify R9). Twisted line: inward top-cap Shell (R10). Other targets refuse; sheets may Thicken (§16.8). |
+| **D8** | Fillet, Chamfer and Shell | Straight solid profile: lateral Fillet/Chamfer, one Route E cap edge for either blend, and Shell (modify R9). Twisted line: inward top-cap Shell (R10). Other targets refuse; sheets may Thicken (`agent-docs/surface-design.md` §16.8). |
 
 The composite tessellator chooses the largest required profile chord count
 from its prism and Revolve span plans for each recorded segment. Each span
@@ -637,9 +629,9 @@ and role counts are preflighted before allocation. The defining source constant,
 not this design document, owns its numeric value and derivation.
 
 A composite `Sweep` carrying a `FitSplineSeg` gives its recorded-profile
-exact-work counter an eightfold allowance, bounded at
-`8 * freeform.FreeformWorkLimit`. The fitted-spline arc-line-arc case spends
-2,101,728 units, above the default 1,048,576-unit ceiling. All analytic span
+exact-work counter an eightfold allowance, `8 * freeform.FreeformWorkLimit`
+(`sweeprecord.CompositeFitWorkLimit`); the default ceiling is `freeform.FreeformWorkLimit`
+(1 << 20). The fitted-spline arc-line-arc case needs the larger allowance. All analytic span
 builds in one Sweep or placement replay share that counter. The composite mesh
 planner and each independently certified span tessellator use the same bounded
 allowance for their own exact-work replay. Other Sweep paths keep the default
@@ -652,10 +644,9 @@ allocation or audit.
 
 ## 12. Increments
 
-The current evaluator implements the first four increments and 5a, with composite
-paths admitted when every transported frame is exact and the conservative §7
-separation audit closes. Other composite paths remain staged as
-`ErrUnsupported`.
+The evaluator implements every row below except 7b and 8. It admits composite
+paths when every transported frame is exact and the conservative §7 separation
+audit closes; other composite paths return `ErrUnsupported`.
 
 | PR | Lands | Still staged |
 |---|---|---|
@@ -663,10 +654,10 @@ separation audit closes. Other composite paths remain staged as
 | **2** | zero-twist one-span line reduction, topology and all four measurements | arc spans, composite paths, downstream beyond D1 |
 | **3** | zero-twist one-span arc reduction with Revolve's local gates | composite paths |
 | **4** | composite tangent line/arc transport, internal-section topology, global contact audit, D1 and D7 | D2–D6, nonzero twist |
-| **5a** | one-span arc sweep tessellation through its revolve reduction, one-span sheet tessellation through its existing prism or revolve reduction, and mesh-boolean admission for arc solids; D2 and D3 for those reductions. **This row is landed.** | composite paths |
-| **5b** | shared-station tessellation and complete proof records for composite paths with line and circular profile walks; D2 and D3 for that reach. **This row is landed.** | Meridian poles, analytic clearance and surveys |
-| **6** | `FitSplineSeg` profile build and shared dyadic tessellation through composite arc-line-arc paths. **This reach is landed.** | Other Tier A profile kinds and Tier B/C kinds follow spline staging |
-| **7a** | §17's one-span centred convex polygon twist and verified faceted mesh. **This reach is landed.** | curved/composite paths, holes, non-convex or free-form profiles, sheets, mitres and scale |
+| **5a** | one-span arc sweep tessellation through its revolve reduction, one-span sheet tessellation through its existing prism or revolve reduction, and mesh-boolean admission for arc solids; D2 and D3 for those reductions. | composite paths |
+| **5b** | shared-station tessellation and complete proof records for composite paths with line and circular profile walks; D2 and D3 for that reach. | Meridian poles, analytic clearance and surveys |
+| **6** | `FitSplineSeg` profile build and shared dyadic tessellation through composite arc-line-arc paths. | Other Tier A profile kinds and Tier B/C kinds follow spline staging |
+| **7a** | §17's one-span centred convex polygon twist and verified faceted mesh. | curved/composite paths, holes, non-convex or free-form profiles, sheets, mitres and scale |
 | **7b** | nonzero distributed twist over tangent composite paths | closed-path twist, a corner mode or scale other than §16's |
 | **7c** | §17.4's centred symmetric Line/Arc profile on one straight path, with bounded Loft wall facets and verified mesh | other curved profiles, holes, sheets, mitres and scale |
 | **8** | sweep boundary adapter for clearance/interference | non-constant-section surveys |
@@ -675,9 +666,8 @@ separation audit closes. Other composite paths remain staged as
 | **F2** | §3.4's closed cardinal loop with any proven-simple section as a zero-twist solid, including D1–D3 and D7 | nonzero closed-path twist |
 | **F3** | §3.5's eight-span rounded rectangle and other split-line loops on the same construction | non-cardinal or spatial closed paths and nonzero closed-path twist |
 
-Each published feature increment lands its four measurements and structural
-verification together. An increment never returns a body whose cached reading
-is a placeholder.
+Every increment publishes its four measurements and structural verification
+together; no body carries a placeholder reading.
 
 ## 13. Required tests
 
@@ -734,17 +724,13 @@ Every test asserts computed geometry or a proof bound.
 
 ## 14. Companion edits
 
-Landing this design makes these contract edits:
+This design relates to other documents as follows:
 
-- `agent-docs/api-design.md` §8 adds `Sweep` and points here for its signature and
-  path contract;
-- `agent-docs/api-design.md` §13 removes Sweep from the non-goals list;
+- `agent-docs/api-design.md` §8 points here for `Sweep`'s signature and path contract;
 - `agent-docs/layout/design-docs.md` lists this document;
-- `agent-docs/evaluator-design.md` §11 points to this document's staged delivery;
-- the implementation increment that adds `sweepPayload` adds its row to
-  tessellation and payload-verification tables in the same change;
-- `doc.go` changes only when an implementation increment changes current
-  evaluator support;
+- `agent-docs/tessellation-design.md` §2 and `agent-docs/payload-verification-design.md`
+  carry the sweep payload rows;
+- `doc.go` changes only when an increment changes current evaluator support;
 - `agent-docs/surface-design.md` §1.2, §13.5, Table R and Table D name §15 as the
   owner of a chain `Sweep`'s pairing rule, and its §15 carries §15.7's test rows.
 
@@ -757,12 +743,12 @@ its certification contract exist.
 `agent-docs/surface-design.md` §13 owns the open chain itself: what `sketch.Chain`
 publishes, what `ChainRecord` records, the gates `RecordChain` runs, the four
 seam sentinels every chain-fed entry point reuses, and Table G's per-segment
-wall set. That document left exactly one question here (§13.5) — whether this
-document's composite join topology states a pairing rule for an open walk.
+wall set. That document's §13.5 asks whether this document's composite join topology
+states a pairing rule for an open walk.
 
 **It does.** §15.1 states why the rule survives, §15.2 states which paths need
 no rule at all, and §15.3 through §15.7 state the entry point, the refusals,
-the result and the staging that follow.
+the result and the increments.
 
 ### 15.1 The join pairs by recorded-segment index, and the loop is not what makes that true
 
@@ -833,9 +819,8 @@ span:
   builds, over the arc's exact centre, axis and directed angle instead of a
   resolved `AngularExtent`.
 
-Both constructions are landed (`agent-docs/surface-design.md` Table D row 6), so a
-one-span chain `Sweep` was never waiting on a pairing rule. It was waiting on
-this section to say so, and on Table SC to state which path shapes it admits.
+Both constructions exist (`agent-docs/surface-design.md` Table D row 6), so a
+one-span chain `Sweep` needs no pairing rule. Table SC states which path shapes it admits.
 
 **The two reductions are not the same call as their chain siblings, and the
 difference is the height.** A chain `Extrude` takes its interval from an `Extent`
@@ -946,7 +931,7 @@ The one-span straight chain sweep reuses the chain prism's exact-quad mesh.
 §15.9 meshes one straight source line swept through a single arc. §15.8's
 composite uses its own bounded sheet mesh. Other chain-sweep meshes return
 `ErrUnsupported` at tessellation, and the modify operations have no receiver
-row for the new one-span arc sheet (D8).
+row for the one-span arc sheet (D8).
 
 ### 15.7 Required tests
 
@@ -1096,11 +1081,10 @@ it has a separate station and boundary proof.
 
 ## 16. Mitred polyline sweep with a per-span section scale
 
-A branch of a 3D-print tree support is one straight segment after another,
-each leaning a different way, thick at the build plate and thin at the tip.
-The consumer that states this case (`mtilt`, its tree-support generator)
-needs one such branch to be ONE solid body, built without a boolean per
-segment, and needs two branches to union where they merge. This section
+A 3D-print tree-support branch is a chain of straight segments, each leaning a
+different way, thick at the build plate and thin at the tip. The consumer
+(`mtilt`, a tree-support generator) needs one branch to be ONE solid body, built
+without a boolean per segment, and needs two branches to union where they merge. This section
 admits that body: a `LineSeg`-only profile moved along a `LineTo`-only path
 whose joins are corners, cut on a join plane at every corner, with the
 section scaled by a stated factor across every span. Every vertex the build
@@ -1214,7 +1198,7 @@ intersect while every local gate passes — so SM8's crossing audit runs over
 the assembled triangle set before commit, exactly as `agent-docs/loft-design.md`
 §6 runs it over a loft (`loftCrossingAudit`'s generic entry: sweep-and-prune
 over the triangles' boxes, every candidate tested pairwise, and S8 over the
-candidate count against `maxFacetPairTestsPerCall`). SM10's `F·(F−1)/2`
+candidate count against `proofbound.MaxFacetPairTestsPerCall`). SM10's `F·(F−1)/2`
 preflight against the same ceiling runs first.
 
 **Rounding, once.** Every held vertex is the exact rational rounded to the
@@ -1251,7 +1235,7 @@ running SM8 in place of §7's separation audit.
 | **SM7** | a wall quad whose exact area is zero, or a section with two coincident vertices | `ErrDegenerate` |
 | **SM8** | the crossing audit proves two non-adjacent faces cross; its budget runs out first | `ErrDegenerate`; `ErrUnsupported` (S9's split) |
 | **SM9** | `WithSurfaceResult()`, a nonzero `WithSweepTwist`, or a closed path, with either option | `ErrUnsupported` |
-| **SM10** | `F·(F−1)/2` over Table BM's `F` exceeds `maxFacetPairTestsPerCall`, or the span count exceeds §11's span cap | `ErrUnsupported` (S14) |
+| **SM10** | `F·(F−1)/2` over Table BM's `F` exceeds `proofbound.MaxFacetPairTestsPerCall`, or the span count exceeds §11's span cap | `ErrUnsupported` (S14) |
 
 SM2's trimmed-line arm keeps every section vertex a recorded point: a cut
 parameter's point is a computed one, and the polygon through it is not the
@@ -1283,7 +1267,7 @@ adds no index. With `S` the profile's total segment count over every loop,
 the body has `2 + N·S` faces, `(N + 1)·S` vertices and `(2N + 1)·S` edges,
 and `F = 2·N·S + capTriangles` held triangles, each wall split along the
 fixed diagonal `tessellate.go` uses for a prism's lateral quad. `capStart` is
-triangulated by `triangulate.go`, and `capEnd` carries the same index triples
+triangulated by `internal/triangulation/triangulate.go`, and `capEnd` carries the same index triples
 on `P_N`: §16.3's projective map carries a triangulation of `P_0` to one of
 `P_N`. One lump, one outer shell; a hole loop is a
 void passage and never a second lump.
@@ -1319,10 +1303,10 @@ twice `delta`, rounded down.
 
 | DM | Consumer | Status |
 |---|---|---|
-| **DM1** | structural `Verify` + tolerance gate | lands with M1. The construction, SM6/SM7 per span and SM8's audit prove validity, and all four readings are judged |
-| **DM2** | `Tessellate` / STL / OBJ / 3MF / faceted STEP | lands with M1 as an exact restatement: the held triangles of Table BM at any tolerance at or above `delta` (below it, `ErrUnsupported`, `agent-docs/tessellation-design.md` §7's rule), each vertex's own rounding gap as its `vertexBound` and `sourceBound(face)` the largest of them over that face's triangles (`agent-docs/faceted-vertex-bounds-design.md` §2.1), with `Bound` `delta`, `areaSlack` the per-triangle perturbation at `delta` (`perturbedTriangleAreaAllow`, the `stitchPayload` row's term), `volSymDiff = sweptVolumeAllow(delta, area upper)` with `symDiffOK == true`, and the boundary proof the build's own SM8 certificate. The implementing PR adds this payload's row to `agent-docs/tessellation-design.md` §2's table |
-| **DM3** | mesh booleans | lands with M2: an operand on `agent-docs/tessellation-design.md` §11's terms. Two branches that cross carry `delta > 0` on both sides, so the hidden-tangency gate runs with slack `2·delta` and admits the pair only through a proven deep witness, which `boolean.go`'s witness search finds by sampling along each contact segment. Walls that are coplanar with the other operand's, as two branches sharing a span are, stay refused by that gate. A `Cut` whose tool is a mitred sweep wholly inside the target, such as a thinner bore through a trunk's corners that stops short of both caps, publishes the bore as a separate void shell (`agent-docs/api-design.md` §6), and a later `Union` whose operand stays clear of the bore keeps that shell whole. A holed profile's passage cannot be capped into a void by a `Union` with end plugs, because a plug flush with the tube's cap is a coplanar contact this gate refuses |
-| **DM4** | interference | lands with M2: the partition through the exact planar arm of `agent-docs/interference-design.md` §3.2 against a prism, a stitched solid, a faceted result or another mitred sweep, the overlap volume through DM3's mesh path |
+| **DM1** | structural `Verify` + tolerance gate | The construction, SM6/SM7 per span and SM8's audit prove validity, and all four readings are judged |
+| **DM2** | `Tessellate` / STL / OBJ / 3MF / faceted STEP | an exact restatement: the held triangles of Table BM at any tolerance at or above `delta` (below it, `ErrUnsupported`, `agent-docs/tessellation-design.md` §7's rule), each vertex's own rounding gap as its `vertexBound` and `sourceBound(face)` the largest of them over that face's triangles (`agent-docs/faceted-vertex-bounds-design.md` §2.1), with `Bound` `delta`, `areaSlack` the per-triangle perturbation at `delta` (`proofbound.PerturbedTriangleAreaAllow`, the `stitchPayload` row's term), `volSymDiff = sweptVolumeAllow(delta, area upper)` with `symDiffOK == true`, and the boundary proof the build's own SM8 certificate. The `mitredSweepPayload` row is in `agent-docs/tessellation-design.md` §2's table |
+| **DM3** | mesh booleans | an operand on `agent-docs/tessellation-design.md` §11's terms. Two branches that cross carry `delta > 0` on both sides, so the hidden-tangency gate runs with slack `2·delta` and admits the pair only through a proven deep witness, which `boolean.go`'s witness search finds by sampling along each contact segment. Walls that are coplanar with the other operand's, as two branches sharing a span are, stay refused by that gate. A `Cut` whose tool is a mitred sweep wholly inside the target, such as a thinner bore through a trunk's corners that stops short of both caps, publishes the bore as a separate void shell (`agent-docs/api-design.md` §6), and a later `Union` whose operand stays clear of the bore keeps that shell whole. A holed profile's passage cannot be capped into a void by a `Union` with end plugs, because a plug flush with the tube's cap is a coplanar contact this gate refuses |
+| **DM4** | interference | the partition through the exact planar arm of `agent-docs/interference-design.md` §3.2 against a prism, a stitched solid, a faceted result or another mitred sweep, the overlap volume through DM3's mesh path |
 | **DM5** | clearance | box separation at once; `WithClearances` reads the exact planar arm's gap, the held gap widened by `delta`, against the partners DM4 names, and stays `Suspect` against every other payload |
 | **DM6** | `Wall`, `Undercut`, `ConcaveRadius` | `Unavailable` with `DiagUnsupportedSurveyPayload`, as D6 |
 | **DM7** | `Transform`, `Copy` | re-runs §16.3 from the record under the composed motion, applied to the rational vertices exactly (a transform's entries are floats, hence rationals), rounds once, recomputes `delta`, re-decides the shell orientation and re-runs SM8; `delta` never accumulates across placements |
@@ -1344,8 +1328,8 @@ that growth.
 
 | PR | Lands | Still staged |
 |---|---|---|
-| **M1** | `WithMitredJoins()` and `WithSectionScale` over `LineTo`-only paths and `LineSeg`-only profiles: §16.3's construction, Table SM, Table BM, §16.6's four readings, DM1, DM2, DM7, the executable example, and the `agent-docs/tessellation-design.md` payload row | DM3 and DM4 until the witness fix lands; `WithSurfaceResult()`, arc spans, curved profile segments |
-| **M2** | DM3 and DM4 after `boolean.go`'s segment-anchored witness search lands: the union-of-two-branches test row | `WithSurfaceResult()`, arc spans, curved profile segments |
+| **M1** | `WithMitredJoins()` and `WithSectionScale` over `LineTo`-only paths and `LineSeg`-only profiles: §16.3's construction, Table SM, Table BM, §16.6's four readings, DM1, DM2, DM7, the executable example, and the `agent-docs/tessellation-design.md` payload row | `WithSurfaceResult()`, arc spans, curved profile segments |
+| **M2** | DM3 and DM4 through `boolean.go`'s segment-anchored witness search: the union-of-two-branches test row | `WithSurfaceResult()`, arc spans, curved profile segments |
 
 ### 16.10 Required tests
 
@@ -1387,13 +1371,11 @@ deleted once and watched fail before it is trusted.
 
 - §1 names §16 as the owner of the corner mode and the scale, §2 lists the
   two options, Table S's row S6 points here, and §12 lists M1 and M2.
-- `agent-docs/layout/design-docs.md` row for this document names §16; the implementing PR
-  adds rows for the files that build the mitred sweep.
-- The implementing PR adds the payload's row to `agent-docs/tessellation-design.md`
-  §2's table and to `agent-docs/payload-verification-design.md`, and changes
-  `doc.go`'s support map.
-- `agent-docs/api-design.md` needs no edit: `Sweep`'s signature is unchanged and §8
-  already names this document as the owner of its options and reach.
+- `agent-docs/layout/design-docs.md` names §16 in this document's row.
+- `agent-docs/tessellation-design.md` §2 and `agent-docs/payload-verification-design.md`
+  carry the `mitredSweepPayload` row.
+- `agent-docs/api-design.md` §8 already names this document as the owner of `Sweep`'s
+  options and reach; the signature is unchanged.
 
 ## 17. Bounded twist
 
@@ -1411,15 +1393,12 @@ builds it. A wide thin section can fold the long walls of one flat cell
 through each other (a 15.4 × 4.75 mm rectangle does at 35°–55°); Loft's facet
 audit then refuses with `ErrDegenerate`, and the build retries with §17.3's
 stationed cells. Any other refusal stands. A one-cell build that succeeds is
-unchanged.
-Sheets, mitred
-joins, section scale, other paths and other profiles remain S11 refusals.
-The preflight uses exact rational coordinates and commits no body on refusal.
-The twist must start on the origin XY sketch; a consumer needing another axis
-builds at the origin and moves the body with `Transform`, which replays the
-recorded twist under the rigid motion and keeps the volume and `VerifyAll`
-certificates.
-Section 17.3 extends this straight-path profile class to one full turn with
+unchanged. Sheets, mitred joins, section scale, other paths and other profiles
+are S11 refusals. The preflight uses exact rational coordinates and commits no
+body on refusal. The twist must start on the origin XY sketch; a consumer needing
+another axis builds at the origin and moves the body with `Transform`, which
+replays the recorded twist under the rigid motion and keeps the volume and
+`VerifyAll` certificates. §17.3 extends this profile class to one full turn with
 multiple certified Loft cells.
 
 At height `h`, the true section is the input polygon rotated by `theta*z/h`.
@@ -1531,8 +1510,8 @@ It refuses a total allowance as large as the true body volume; the
 The public Sketch acceptance uses a solved 0.2 mm square, a 1 mm line,
 an R=5 mm quarter arc and a 5° twist. Its true volume is about
 0.3541592654 mm³; the 76-triangle held mesh encloses about
-0.3510007989 mm³. The published local occupied-volume allowance is
-about 0.256 mm³ and covers the observed 0.00316 mm³ signed gap. It checks
+0.3510007989 mm³. The published local occupied-volume allowance covers the
+observed 0.00316 mm³ signed gap. It checks
 ten live Faces, source roles, placement replay, and `VerifyAll`.
 
 ### 17.3 Stationed straight-path twist
@@ -1602,9 +1581,8 @@ placement replays all stations and proofs under the placed transform and
 charges them by the placed basis (§17.5).
 
 The public acceptance sweeps Sketch's solved 2×2 mm square for 5 mm with
-two radians. Fourteen cells give a 0.07653061224492375 mm boundary bound
-and a 6.306450007046607 mm³ occupied-volume allowance, below the exact
-20 mm³ volume. The held mesh encloses 18.98294353769568 mm³. It passes
+two radians. The occupied-volume allowance stays below the exact
+20 mm³ volume. It passes
 `Tessellate(0.1 mm, VerifyAll)` before and after placement. Negative twist,
 a full turn and the over-turn and work-ceiling refusals are focused cases.
 
@@ -1678,22 +1656,16 @@ The focused tests also cover all eight source wall roles, placement,
 negative twist and an off-axis source refusal without a document commit.
 An 8×6 mm rounded rectangle with 1.5 mm corners and a 30° twist uses the
 optional finer count and passes `Tessellate(0.1 mm, VerifyAll)` with a bound
-below 0.08 mm. The finer build took 0.522 s versus 0.209 s for the original
-build in the measured local probe. A 1.4-radian twist of that profile keeps
+below 0.08 mm. A 1.4-radian twist of that profile keeps
 the original certified mesh when the finer construction reaches the
-facet-pair ceiling; the first-cell skip reduced that build from 1.57 s to
-0.61 s in the measured local probe.
+facet-pair ceiling; the first-cell skip estimate avoids the finer build's full audit.
 An overlapping Boolean raises its pair tolerance to this Sweep's certified
 held boundary. The rounded-profile example unions with an overlapping
-1.5×0.8×1 mm extruded box and passes `VerifyAll` at 0.2 mm. Its result's
-refined mesh bound is about 0.111778 mm, so a 0.1 mm request refuses. The default
+1.5×0.8×1 mm extruded box and passes `VerifyAll` at 0.2 mm. The default
 `Document.Verify` still reads `Suspect`. The caps retain coarse area charges,
 and the source occupied-volume, centroid and bounds proofs do not yet meet
-that separate oracle's thresholds. The rounded example's local wall charge
-is about 6.78 mm²; its complete mixed-face allowance is about 37.92 mm²,
-compared with about 145.71 mm² under the former positive wall charges.
-The real overlapping Union carries that allowance through a cut Arc wall
-and passes `VerifyAll(0.2 mm)` with a result area bound about 58.76 mm².
+that separate oracle's thresholds. The real overlapping Union carries the mixed-face allowance through a cut Arc
+wall and passes `VerifyAll(0.2 mm)`.
 
 ### 17.5 Placement charge
 
@@ -1703,9 +1675,9 @@ plane, the only plane §17.1–§17.4 admit. The record denotes that plane-local
 solid carried through the placement's held basis B, read as exact rationals
 (`massmoment.PlacementRotation`). r3 keeps B orthonormal only to rounding, and
 a placement composed through `r3.Transform.Then` drifts further with every
-composition: 5000 composed float rotations hold a B with
-`det B − 1 ≈ −5.6e-13`, which moves the 20000 mm³ volume of a 100×100 mm square
-swept 2 mm by about 1.1e-8 mm³ while its closed form reads `Exact`.
+composition: after 5000 composed float rotations `det B` differs from 1, which
+moves the 20000 mm³ volume of a 100×100 mm square swept 2 mm while its closed
+form reads `Exact`.
 Each of the three builders (`Eval`, `evalStationed`, `evalComposite`) reads
 B's `massmoment.MapCharge` (`agent-docs/evaluator-design.md` §5.1) and widens
 every plane-local reading before anything composes it:

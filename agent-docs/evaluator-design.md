@@ -60,9 +60,9 @@ like any other one**, so a volume, an area, a centroid and a `Box` can all reach
 a zero bound. `agent-docs/prism-boolean-design.md` §7 owns when each of them does; this
 document does not restate its rule.
 
-**Staging is explicit.** v1 lands in increments (§11), and an intent this
-evaluator cannot yet build is **rejected at the call** with the sentinel
-`ErrUnsupported` (core §12) — never built approximately or silently narrowed.
+**Staging is explicit.** An intent this evaluator cannot build (§11) is
+**rejected at the call** with the sentinel `ErrUnsupported` (core §12), never
+built approximately or silently narrowed.
 
 ## 3. The topology model
 
@@ -327,10 +327,9 @@ cosine `radSinCosSpan`'s enclosure over the enclosed angle. Every factor is an
 exact rational or a proven enclosure, so the interval encloses the integral
 the record denotes. A whole arc's region integrals read its two recorded ends,
 so they carry no trig-bracket width there. A cut end adds about one ulp of `r`
-of width, so a hemisphere or a sketch-cut cap reads its volume, area and
-centroid within `1e-13` relative before a `Split` piece's cut-displacement band
+of width. A `Split` piece's cut-displacement band
 (`agent-docs/surface-intersection-design.md` §7.2) and the junction charge below are
-added. The interval encloses the DENOTED walk at the recorded `t`; whether that
+added to it. The interval encloses the DENOTED walk at the recorded `t`; whether that
 `t` is the true crossing is `sketch`'s `TExact` claim, which this bracket
 neither tests nor widens.
 
@@ -377,7 +376,7 @@ segment holds its fields widened by `gap·reach^k`, far above that sliver; a
 region kept `Exact` through a chord — two nearly parallel lines, a free-form
 chain's end — publishes the chord-closed region itself.
 
-Increment 1 implements the closed forms for `LineSeg`/`CircleSeg`/`ArcSeg`.
+The closed forms above cover `LineSeg`/`CircleSeg`/`ArcSeg`.
 `agent-docs/spline-design.md` owns the free-form kinds entirely: Table F there assigns
 each an exactness tier and what a measurement over it may claim, §5 gives the
 construction, Table R owns every refusal and its sentinel — the permanent and the
@@ -408,7 +407,7 @@ Faces, per recorded loop segment (roles in parentheses):
 Caps: one planar face per end (`capStart`/`capEnd`), the outer loop plus one
 loop per hole, holes wound opposite.
 
-Measurements (untapered, increment-1 kinds): closed form with outward numerical
+Measurements (untapered, line/circle/arc kinds): closed form with outward numerical
 bounds; only proved exactly representable results are **Exact**. The
 extent resolves to a signed sweep interval `[z0, z1]` along the plane normal
 (`Along` positive; `Against`, `Symmetric` and `TwoSided` sides place `z0`/`z1`
@@ -437,11 +436,10 @@ chamfer's own cap-level vertices take the same per-vertex charge in
 `capblend.BuildBand` (`capVertexAt`), beside their own contour
 displacement, never inside the value an edge's own length bound still reads
 unwidened; chain `Extrude`'s rim posts, a brep record's vertices and a patch's
-rim vertices take it too. The cost is one exact dyadic evaluation per vertex,
-about 0.3 µs, under 1% of a 1000-gon extrude's build.
+rim vertices take it too. The cost is one exact dyadic evaluation per vertex.
 `apitest/vertex_frame_origin_test.go` checks every payload kind at a
 non-dyadic and a far origin against the exact rational lift, and
-`clearance_lift_internal_test.go` the clearance carriers. Beside
+`apitest/clearance_test.go` the clearance carriers. Beside
 it, the same reading charges the rounding its own FINAL SUMMATION of those
 terms into one published coordinate commits. That is a separate mechanism, not
 a consequence of the first: a placement can leave every coefficient exactly
@@ -468,14 +466,12 @@ is spelled `prismPayload.Z0Delta`/`Z1Delta`; `cupPayload`'s `ZOpenDelta`,
 selected end's setback rounding into it. Every
 level-derived reading takes it: `h` and the
 volume, wall area and centroid built on it, `Bounds`, the mesh bound, the side
-vertices and the vertical edge lengths. Extents: `Distance`,
-`Symmetric`, and `TwoSided` of distance sides land in increment 1 — the three
-whose interval the step's own quantities determine. `ThroughAll` and
+vertices and the vertical edge lengths. `Distance`, `Symmetric`, and `TwoSided` of distance
+sides have an interval the step's own quantities determine. `ThroughAll` and
 `ThroughAllSide` have no finite stop geometry of their own (they stop at the
 far side of every body the sweep meets), so they are body-relative exactly
-like `ToFace`: all three land in increment 2 with selectors (§7), the stop an
-intersection of the sweep direction with analytic target surfaces — closed
-form — and `ErrUnsupported` until then. A through-all payload must provide a
+like `ToFace`: the stop is an intersection of the sweep direction with
+analytic target surfaces, in closed form, found through selectors (§7). A through-all payload must provide a
 directional extent BESIDE the proven displacement that reading's own ends
 carry, and the stop consumes both: the level it resolves takes that
 displacement as its own axial displacement, so a far side a bracket holds — a
@@ -492,7 +488,7 @@ has no stated displacement to charge. A through-all
 dependency is ambient at the CALL but never in the RECORD: core §6.2's depends-on rule covers this
 case explicitly — the feature call resolves which live bodies actually bound
 the stops from live bodies without consuming them. (`ToFaceAngular` is the
-revolve analog and lands there, §6/§11.) `extent.ToFaceStop` admits the
+revolve analog, §6.) `extent.ToFaceStop` admits the
 selected face and computes the level; `extent.ToFaceAngularStop` admits an
 angular stop face and computes its angle. A `ToFace` stop face must be an
 analytic Plane whose held normal is exactly parallel to the sweep normal, by a
@@ -549,7 +545,7 @@ read as exact rationals (`massmoment.PrismRotation`), the leaves
 keeps those vectors orthonormal only to a few ulps: `r3.NewFrame` and
 `r3.FromBasis` normalize in float64, `IsValid` admits a departure up to 1e-9,
 and N is the float cross product of U and V. The plane spanned by (1, 1, 0)
-and (−1, 1, 1) reads det L − 1 ≈ 4.8e-17. `massmoment.MapCharge` reads two
+and (−1, 1, 1) reads a nonzero det L − 1. `massmoment.MapCharge` reads two
 numbers off L exactly, each rounded up: ||det L| − 1|, and the orthonormality
 defect e, the entrywise absolute sum of LᵀL − I. Every eigenvalue of LᵀL lies
 in [1 − e, 1 + e], so L scales an area, and for e ≤ 1 a length, by a factor in
@@ -570,7 +566,7 @@ rim instead bounds its area directly against the polygon its own vertices
 denote (`patchchain.PolygonAreaBound`), and one with a circular edge edge by edge
 through that edge's curve bound (`agent-docs/surface-design.md` §5.2), which also
 charges the rim's float re-expression into the fitted frame. A prism-family
-cap rim's circle or arc carries that curve bound (`circleCurveBound`): its
+cap rim's circle or arc carries that curve bound (`prismrecord.Payload.CircleCurveBound`): its
 centre's exact lift rounding, `massmoment.CircleImageGap`'s tilt and stretch
 terms, and the level and section displacements carried through L. `MassProperties` reads the exact image
 under the same map (`agent-docs/multibody-dynamics-design.md` §8.1). The centroid takes no charge: an
@@ -679,8 +675,8 @@ prism's chain. A whole-section displacement — an offset construction's, which
 before the comparison (`agent-docs/surface-intersection-design.md` §7.2).
 The swept edges' curves are held floats with no bound of their own: a
 junction `Circle3`/`Arc3` takes its centre and radius from the walk's (z, ρ)
-(`junctionCircle`) and a cap `Arc3` its centre from the walk's (cU, cV).
-`internal/brepmodify/revolve_blend.go` matches a selected edge against `junctionCircle` by
+(`revolveplan.Payload.JunctionCircle`) and a cap `Arc3` its centre from the walk's (cU, cV).
+`internal/brepmodify/revolve_blend.go` matches a selected edge against `JunctionCircle` by
 float identity over the same payload, so it reads the same numbers and needs
 no bound. The clearance kernel reads them through `newCEdge`, and its revolve
 carriers read the same walk values, so the displacement it charges for the
@@ -727,7 +723,7 @@ the denotation's own certified enclosures. Its tag is spanned from the float
 axis direction through the frame's float lift, at the float sine and cosine of
 the held angle, and placed in float, and its `normalBound` charges only the
 angle; a tilted axis on a tilted plane, a rotation and a reflection each left
-a cap up to 1.33× that bound off its record's normal. `NormalAt` proves a cap
+a cap farther off its record's normal than that bound. `NormalAt` proves a cap
 carrying the plane against it in place of the tag arm and `normalBound`,
 which then stays the figure the gates that refuse a departed face read. An
 end with no denotation (a `ToFaceAngular` stop) carries none and keeps the tag
@@ -744,7 +740,7 @@ lies on the axis with its axial position from the mixed moment, and a partial
 sweep's is closed form in the sweep angle. The centroid is lifted as
 A3 + W·axial (+ the partial sweep's in-plane term), and beside the axial
 coordinate's own bound and the lift's rounding at the centroid's magnitude it
-charges what that lift owes the axis basis (`revolveCentroidLift.charge`):
+charges what that lift owes the axis basis (`centroidLift.charge` in `internal/revolvemass/centroid.go`):
 the anchor A3's exact frame-lift rounding, which rounds at the frame origin's
 and the anchor's magnitudes rather than A3's own, and the axis's proven anchor
 and direction displacement carried through A3, W, E0 and E1 at the axial and
@@ -780,7 +776,7 @@ area, in `Revolve` over a profile and over a chain alike, and every latitude, ju
 and cap-edge length widen by e, and `Volume` by ||det L| − 1|. The centroid
 lift A3 + W·axial (+ the in-plane term) is L applied to the plane-coordinate
 centroid, so it takes no charge. The tilted plane of §5.1 reads
-det L − 1 ≈ 4.1e-16 here. `MassProperties` reads the exact image under the
+a nonzero det L − 1 here. `MassProperties` reads the exact image under the
 same L (`agent-docs/multibody-dynamics-design.md` §8.6).
 `Bounds` from per-face analytic extremes: each face's radial
 extreme about the axis (a cylinder's radius, a cone's two end radii, a
@@ -832,7 +828,7 @@ per-component gap from a certified enclosure of the point the record denotes.
 That bound belongs to the directional extent reading itself,
 not to the box, because a body-relative stop reads the same extent (§5) and
 must see the same uncertainty rather than an exact coordinate. All mass results
-carry the §4 numerical bounds. Increment 2.
+carry the §4 numerical bounds.
 
 ## 7. Selectors
 
@@ -1019,7 +1015,7 @@ cannot silently change the cached result's key.
 
 A tessellation reads the same published set. `tessellateContext`'s prism arm
 chords the very loops the build resolved, so it replays the recorded charge onto
-its own counter and hands the walks to `chordLoop`, which reads them exactly as
+its own counter and hands the walks to `tessellation.ChordLoop`, which reads them exactly as
 `prismrecord.BuildLoopSidesAs` does. It is where the resolution dominates: chording a
 free-form section would otherwise spend almost all of its time in the
 arc-length bracket under `walkOf`, while the chording itself — `chainStations`
@@ -1155,9 +1151,7 @@ leaves the receiver live.
 Internal bounded pair-chord reading accepts prism and faceted payloads on one shared trial meter.
 It refuses other payloads until a metered resolver exists.
 
-Increment 4, the deep end. Strategy:
-
-`agent-docs/prism-boolean-design.md` is the approved analytic reduction
+`agent-docs/prism-boolean-design.md` owns the analytic reduction
 `performBoolean` dispatches, ahead of the tessellation path below, for
 co-directional prism pairs on one plane or on shared-axis offset planes:
 `Union`'s select-all/merge/chain path and
@@ -1169,8 +1163,7 @@ this section's mesh path: a pair neither dispatch admits falls back to it
 unchanged, as does every other operation.
 
 **Interference evaluation MUST be read-only; committing a public boolean stays
-a wrapper.** Interference PR 1 (`agent-docs/interference-design.md` §11) factors one
-internal `evaluateBoolean(ctx, op, a, b)` over tessellation, exact-predicate
+a wrapper.** One internal `evaluateBoolean(ctx, op, a, b)` runs tessellation, exact-predicate
 classification, cutting, stitching, bound composition, and the rational volume
 integral. It never advances provenance, retires an operand, or registers a body.
 `Union` / `Cut` / `Intersect`
@@ -1180,8 +1173,7 @@ passes its own context to the read-only analytic intersection twin first, and
 to this same mesh evaluator for a pair that twin does not admit; it consumes
 only a bounded intersection volume from whichever path answers, never calls
 public `Intersect`, and never builds a transient document body
-(`agent-docs/interference-design.md` §5, §5.2). This split is implemented; public
-consuming behavior is unchanged.
+(`agent-docs/interference-design.md` §5, §5.2).
 
 Expected geometric non-results — empty held intersection, an undecidable
 contact arrangement, and `ErrUnsupported` staging — are private typed outcomes:
@@ -1376,9 +1368,8 @@ work intervals inside quadratic/refinement loops, as interference §7 specifies.
   — chording a concave hole wall inward, for one, adds held material into the
   hole and makes truly disjoint surfaces meet — so a held meet at distance 0 or
   a shallow penetration ≤ `b` proves nothing when `b > 0`. The interpenetration
-  depth is the implementer's to compute: it is the maximum signed penetration of
-  the two facet sets, decided by the exact predicates, never assumed cheaply
-  available. A depth past `b` is proven by a WITNESS: an exact point of one
+  depth is the maximum signed penetration of the two facet sets, decided by the
+  exact predicates. A depth past `b` is proven by a WITNESS: an exact point of one
   operand's held facets that exact ray parity places strictly inside the other
   operand, at a certified lower-bound distance greater than `b` from that
   operand's facets. The gate looks for one at each contacting facet's corners,
@@ -1441,7 +1432,7 @@ work intervals inside quadratic/refinement loops, as interference §7 specifies.
   still runs only for a candidate past `b`, so the witness verdicts and the
   context polls are those of the definition.
   A TANGENCY — facets that touch without crossing — has no positive-bound contact
-  certificate in this evaluator increment and stays refused; deciding such a
+  certificate in this evaluator and stays refused; deciding such a
   pair for real is the clearance kernel's job (`agent-docs/clearance-design.md`), not
   a held facet's. A planar face still carries
   every curved-trim, coordinate-construction, and placement displacement in its
@@ -1503,8 +1494,8 @@ work intervals inside quadratic/refinement loops, as interference §7 specifies.
     dropped facets' own swept volume out of the bound entirely. So the swept
     volume is charged against the pre-round surface, and the area the weld
     dropped — which the held mesh can no longer report — joins the operands'
-    chord deficit in the area bound (`internal/proofbound/bounds.go`: `sweptVolumeAllow`,
-    `perturbedAreaUpper`).
+    chord deficit in the area bound (`internal/proofbound/bounds.go`: `SweptVolumeAllow`,
+    `PerturbedAreaUpper`).
   - **A component welded out of existence is REFUSED.** When *every* facet of a
     connected component collapses, that whole shell disappears — a lump gone
     from the body, with its volume, its place in `Lumps()` and its reach in the
@@ -1744,10 +1735,9 @@ work intervals inside quadratic/refinement loops, as interference §7 specifies.
   evaluator and emits a row
   only when the volume interval proves positivity (`Value - Bound > 0`). Empty,
   contact, unsupported, or coarse results remain undecided and read `Suspect`;
-  internal failures return from `Verify`. Box-disjointness proofs run from
-  increment 1; increment 3 adds analytic clearance; increment 4 adds read-only
-  transversal intersection volume, with later staged breadth listed by the
-  interference design.
+  internal failures return from `Verify`. The proofs are box
+  disjointness, analytic clearance and read-only transversal intersection
+  volume; the interference design lists the pairs still undecided.
 - **Wall thickness / undercuts / min radius**: the analytic surveys of
   verification §6, answered outright on this evaluator's own payloads
   (`internal/verifyrun/survey.go`, `internal/survey2d/`, `internal/revolvesurvey/`): prism/revolve wall reduces exactly to the 2D
@@ -1778,66 +1768,35 @@ to status aggregation, as verification §6 specifies.
 
 ## 11. Increments
 
-Each increment is a PR series behind the same public contract; nothing ships
-half-silent. The staging surfaces differently by what is being staged, per
-the sections above: an intent the evaluator cannot BUILD — a feature call, an
-extent, a segment kind — is `ErrUnsupported` at the call (§2), while a
-`Verify` question the evaluator cannot yet ANSWER is accepted and reads
-`Suspect` (§10) — an asked-but-undecided answer, never an error and never a
+The evaluator implements every row of the table. An intent it cannot BUILD (a feature call, an
+extent, a segment kind) is `ErrUnsupported` at the call (§2). A `Verify` question it cannot yet ANSWER
+is accepted and reads `Suspect` (§10): an asked-but-undecided answer, never an error and never a
 silent pass.
 
-| # | Lands |
+| # | Implemented |
 |---|---|
 | 1 | topology model, `Document` and private provenance wiring, `Extrude` for line/circle/arc profiles with `Distance`/`Symmetric`/`TwoSided`-of-distance-sides extents, mass properties (§4), `Transform`, structural `Verify` (validity by construction, quantities, tolerance gate; every pair undecided → `Suspect` unless box-proven disjoint) |
 | 2 | `Revolve` (angular extents), selector vocabulary + resolution, the body-relative stops (`ToFace`/`ToFaceAngular`/`EdgeAxis`, `ThroughAll`/`ThroughAllSide`) |
-| 3 | analytic clearance proofs and `WithClearances` (box-disjointness proofs already run from increment 1, §10/§11 row 1) |
+| 3 | analytic clearance proofs and `WithClearances` (box-disjointness proofs already run from row 1, §10) |
 | 4 | tessellation per `agent-docs/tessellation-design.md` + the exact-predicate mesh boolean, `Faceted` bodies, faceted `Verify`, `Tessellate`/`STL`/`OBJ`; supplies the geometry and bounds shared by public booleans and read-only interference evaluation |
 | 5 | fillet/chamfer on analytic prism edges, shell |
 | 6 | broader evaluator coverage, property tests, and fuzz tests for structural record validation |
-| 7 | tapered extrude and `Draft`, per `agent-docs/modify-design.md` Part D §14's count-free five-PR plan |
+| 7 | tapered extrude and `Draft`, per `agent-docs/modify-design.md` Part D |
 
-Free-form support is `agent-docs/spline-design.md`'s own increment plan (§10 there).
-Its stages do not consume a global evaluator increment number.
+Each later family owns its delivery table. Its rows have no evaluator increment number. What a family
+has not implemented returns `ErrUnsupported` at the build, or reads `Suspect` for a verification question.
 
-Loft follows `agent-docs/loft-design.md` §12's count-free five-PR delivery plan.
-PR 1 adds `Loft`, its four measurements, and structural/tolerance
-`Verify`; PR 2 adds tessellation, mesh-boolean admission, and placement; PR 3
-lands same-kind `CircleSeg`/`ArcSeg` correspondence; PR 4 lands same-kind
-Tier A free-form correspondence; PR 5 reserves N-section and
-guide-rail/centerline lofts, and stages the analytic clearance adapter and
-non-constant-section wall survey.
-Every unlanded Loft `Verify` question remains `Suspect`; a call this evaluator
-cannot yet build returns `ErrUnsupported`.
+| Family | Delivery table | Not implemented |
+|---|---|---|
+| Free-form segments | `agent-docs/spline-design.md` §10 | spline Table R |
+| Loft | `agent-docs/loft-design.md` §12 | N-section and guide-rail/centerline lofts; a loft case in the analytic clearance kernel; a non-constant-section wall survey |
+| Sweep | `agent-docs/sweep-design.md` §12 | sweep Table D states |
+| Coil | `agent-docs/helix-design.md` §11 | `CoilChain`, `WithSurfaceResult()` and modify on a coil |
+| Sheet bodies and surface operations | `agent-docs/surface-design.md` §14 | surface Table R |
+| Payload verification (cup adapter, faceted validity, clearance, surveys) | `agent-docs/payload-verification-design.md` §13 | the stages that file marks design only |
 
-Sweep follows `agent-docs/sweep-design.md` §12's count-free delivery plan. The current
-build reduces line spans to Extrude and circular spans to Revolve, then joins
-composite tangent paths when exact frame transport and the conservative contact
-audit close. One-span sweeps and admitted composite paths with line or circular
-profile walks tessellate and enter mesh booleans. Free-form profiles, twist,
-clearance, and surveys remain staged as Table D states. An unlanded Sweep build returns
-`ErrUnsupported`; an unlanded verification question reads `Suspect`.
-
-Coil follows `agent-docs/helix-design.md` §11's count-free four-PR plan: PRs 1
-and 2 build `Coil` over whole-line profiles with its four readings,
-structural and tolerance `Verify`, placement, tessellation, boolean and
-interference operands and mass properties; arc profiles and clearance land
-with PRs 3 and 4.
-An unlanded Coil build returns `ErrUnsupported`; an unlanded verification
-question reads `Suspect`.
-
-Sheet bodies and the surface operations follow `agent-docs/surface-design.md` §14's
-count-free three-increment plan: the body kind with `WithSurfaceResult()` on
-Extrude and Revolve and `PatchProfile`; then `Stitch`/`Unstitch` over exact
-all-planar boundaries with `PatchEdges` and the sheet-against-solid pair
-proofs; then the remaining surface-result features, the shared-denotation join
-certificate and curved closure. An unlanded surface build returns
-`ErrUnsupported`; an unlanded pair question reads `Suspect`. These stages do
-not consume a global evaluator increment number.
-
-Payload verification §13 gives count-free stages for the cup adapter and
-faceted validity/clearance/survey work. Every later question stays `Suspect`
-until its stage lands. These stages do not consume global evaluator increment
-numbers.
+Sweep reduces line spans to Extrude and circular spans to Revolve, then joins composite tangent paths
+when exact frame transport and the conservative contact audit close.
 
 ## 12. Open questions
 
