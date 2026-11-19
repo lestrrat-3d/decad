@@ -81,7 +81,7 @@ pipeline. An admitted pair combines its two operands' `ProfileRecord`s through
 a private `sketch` scene decad builds. It records the selected result regions
 through the existing seam (`RecordProfile`/`recordEdge`), audits the assembly
 with `modify §5`'s existing closed-form checks, and rebuilds through
-`evalPrism`. Section 7 extends the result with a section-displacement bound so
+`prismrecord.Build`. Section 7 extends the result with a section-displacement bound so
 the re-expressed operand's rounding and the cut parameters `sketch` computes
 for surviving fragments reach every measurement. It also preserves each sweep
 end's axial displacement so every measurement keeps the bounds its operands
@@ -165,8 +165,8 @@ these arms:
   requires the tool rectangle to lie strictly inside the target rectangle.
   These are sufficient profile certificates; every other placed-axis pair falls back
   to the mesh path. The shared-frame-axis arm has its own profile admission.
-  `Verify`'s read-only Intersect twin reads the same certificate and applies its
-  positive-volume gate.
+  `Verify`'s read-only Intersect twin (`booleandispatch.AnalyticIntersect`) runs the same admission, so a pair
+  this arm admits is measured from the built intersection body's volume, under `Verify`'s positive-volume gate.
 
 For both axis arms, B's denoted prism has A's exact section coordinates and
 only its sweep interval moves by `s` (G5). The placed-axis arm does not rely
@@ -699,7 +699,7 @@ build-time audit has no assembly to re-prove and does not run.
 The recorded cell becomes a `prismPayload` carrying the pair's own frame,
 placement and §3.2 Intersect z-interval, that cell's own §7 section
 displacement, and the pair's per-end axial displacement. Its volume is then
-`evalPrism`'s, unchanged — the same region integrals, the same
+`prismrecord.Build`'s, unchanged — the same region integrals, the same
 `sectionDisplacementArea` charge over the cell's own perimeter, the same axial
 terms, the same `Exactness` rule. No bound mechanism is restated at a second
 site, which is what `internal/proofbound/bounds.go`'s one-helper-per-mechanism rule requires, and
@@ -708,7 +708,7 @@ no new helper is introduced.
 <!-- "a volume, never a body" is scoped to ASSEMBLY and DELIVERY, not to
      allocation: this section's own wording is "a limit on ASSEMBLING one",
      "without assembling anything", "nothing is assembled from them", and "it
-     assembles nothing". The paragraph above names `evalPrism` as the per-cell
+     assembles nothing". The paragraph above names `prismrecord.Build` as the per-cell
      volume path outright, and `prismrecord.Build` (extrude.go) does allocate a
      `Body` and read `body.volume` from it — that is the specified path, not a
      contradiction of it. What the reading never does is commit a `Step`,
@@ -1095,7 +1095,7 @@ for an offset such as 0.1 mm under a 0.3 mm tool.
 **The evaluator's current measurement path cannot carry `δ`, so this design
 extends it.** `prismPayload` holds the section, the frame, the sweep interval,
 the placement and its blend descriptors, and no coordinate-error term;
-`evalPrism` derives area and volume from the profile integrals and the z
+`prismrecord.Build` derives area and volume from the profile integrals and the z
 endpoints alone; and those integrals bound only the rounding of their own
 arithmetic over the recorded floats, so a line-only record yields a zero area
 bound and `exactnessOf` publishes `Exact`. `prismrecord.Payload.PointBound` carries a
@@ -1135,7 +1135,7 @@ extension is two pieces, each in the existing machinery's own shape:
   walk (whose two moved ends give `2·δ` — `chainLengthBound`'s own reasoning)
   and a circular one alike (whose radius moves by up to `2·δ` and whose swept
   angle moves with its endpoints, so the `2·δ` figure alone understates it).
-  `evalPrism` composes those two terms into area (the area displacement once per
+  `prismrecord.Build` composes those two terms into area (the area displacement once per
   cap, plus the sweep height × the walls' own length displacement), volume (the
   height upper bound × the area displacement), centroid (`δ` in plane, entering
   `prismrecord.Payload.PointBound`'s existing source term) and `Box` (`δ` outward on every
@@ -1254,7 +1254,7 @@ they already take. Exhaustion is RB7 (§9), not silent truncation.
 
 ## 11. Topology, provenance, and roles
 
-The result is built by `evalPrism` over the merged record, under the boolean's
+The result is built by `prismrecord.Build` over the merged record, under the boolean's
 own private producer identity — identical to how Fillet/Chamfer/Shell build, and
 the topology it builds is untouched by §7's added displacement term. Faces
 get **fresh** roles (`side(i,j)`/`capStart`/`capEnd`) minted from the merged
@@ -1323,7 +1323,7 @@ face this rule leaves unnamed selects by geometric predicate (`Facing`,
 | Clearance kernel | Unchanged where `δ == 0` — dispatches on payload class; `prismPayload` already has full analytic support (`internal/clearance/pairkernel`'s coplanar `Plane`×`Plane` certificate, `offsetPair`, etc.). Where `δ > 0` the kernel builds no model for the body and the pair reads `Suspect`: every certificate it emits is an exact statement about the carriers it read, and a carrier the payload holds only within `δ` of the one it denotes cannot support one. Widening the kernel's own candidate intervals by `δ` is a separate piece of work, not this design's. |
 | Interference (`Verify`) | **Reads the analytic path through two read-only entry points, tried in order.** After its containment and represented-set-equality certificates, `internal/verifyrun/interference.go`'s `MeasuredInterference` calls `booleandispatch.AnalyticIntersect` (`boolean.go`) — a read-only twin of `performBoolean`'s analytic dispatch that runs `prismboolean.Try`/`prismrecord.Build` under a temporary producer identity and never commits, so it consumes neither operand — and publishes the built payload's own volume. A pair that twin does not admit (`ok == false`) next reaches §4.5's overlap-area reading, which measures a selection covering any number of disjoint regions and publishes a volume with no body at all; the two-stage order keeps every pair the twin already answers byte-identical. A pair neither admits falls back unchanged to `evaluateBoolean`'s read-only mesh intersection. Both analytic answers are still subject to §6's positive-volume gate (`agent-docs/interference-design.md` §6). "Admitted" covers `Union`'s select-all path, `Cut`/`Intersect`'s clean-nesting sub-case, the crossing sub-case, and a multi-region coplanar overlap. `agent-docs/interference-design.md` §5.2 records the boundary this closes. |
 | Surveys (wall/undercut/min-radius) | No new code — they dispatch on payload class, and support is immediate where `δ == 0`. The undercut reading is a normal-direction membership and is unaffected at any `δ`. The wall and min-radius readings publish the bound their own arithmetic proves at `δ == 0` — a candidate's own division or square root, never the section displacement — and are staged at `δ > 0`, answering undecided (`Suspect`, never a silent pass): `δ` is not a term either reading may absorb into that bound, because the wall reading is not a quantity a displacement widens by a fixed amount — its allowance-angle contact families (verification §6) can change membership under a boundary perturbation, so a proven displaced reading needs the survey's own theory extended, not a term added to a bound. |
-| `Verify`'s structural/tolerance gates | Structurally unchanged — `prismPayload` is valid by construction as always. The TOLERANCE gate anchors each reading against a reference the body's own geometry supplies, and at `δ > 0` it cannot read that geometry through the clearance kernel's model, which the row above declines to build. It reads station witnesses on the body's OWN recorded section instead (`gatewitness.Prism`), each charged its own lift's gap, and hands them to the same shared reader every arm publishes through: `pointSetDiameterWithBudget` states the winning pair's own distance computed over exact rationals and rounded toward zero, never the float scan's norm. The gate then shrinks that station maximum by twice the SUM of `δ`, the axial displacement and the widest station gap, rounding the shrunken value toward zero as well (`lowerDiameterForDisplacement`), which verification design §3 proves a lower bound on the denoted body's own diameter. A displaced body is therefore judged on the same terms as any other: a reading passes when its bound meets the tolerance and reports `Suspect` with a stated `Required` threshold when it does not. |
+| `Verify`'s structural/tolerance gates | Structurally unchanged — `prismPayload` is valid by construction as always. The TOLERANCE gate anchors each reading against a reference the body's own geometry supplies, and at `δ > 0` it cannot read that geometry through the clearance kernel's model, which the row above declines to build. It reads station witnesses on the body's OWN recorded section instead (`gatewitness.Prism`), each charged its own lift's gap, and hands them to the same shared reader every arm publishes through: `diameter.PointsWithBudget` states the winning pair's own distance computed over exact rationals and rounded toward zero, never the float scan's norm. The gate then shrinks that station maximum by twice the SUM of `δ`, the axial displacement and the widest station gap, rounding the shrunken value toward zero as well (`diameter.LowerForDisplacement`), which verification design §3 proves a lower bound on the denoted body's own diameter. A displaced body is therefore judged on the same terms as any other: a reading passes when its bound meets the tolerance and reports `Suspect` with a stated `Required` threshold when it does not. |
 | `Fillet` / `Chamfer` | A result with `δ > 0` and no valid carrier record keeps `prismrecord.Payload.RequireExactSection`'s refusal (brep-modify RB6). A result with a valid record (Part K §3; the record is bound to the body that `prismrecord.BuildWithRecord` minted it for, `prismrecord.Build` and `Placed` drop it, and readers use `prismrecord.CarrierRecordOf`) takes the lateral carrier route for lateral edges (§7): a `Fillet` refusal of Table CB is `ErrUnsupported`, and a `Chamfer` refusal falls through to RB6's route. A cap-loop `Chamfer` whose selected loops are all exact in the record builds a `capblend.DisplacedPayload` (Part K §8); any other cap-loop `Chamfer` keeps RB6. |
 | Export (STL/OBJ) | Reads `Tessellate`'s output. Its size-derived default tolerance is raised past `δ`, which tessellation reserves from the tolerance before chording, so a default export of an assembled body still writes its mesh rather than refusing. |
 | Immediate calls | Public `Union`/`Cut`/`Intersect` signatures and consuming behavior stay unchanged. Qualified pairs use the analytic path internally; other pairs keep the mesh path. |
@@ -1386,7 +1386,7 @@ face this rule leaves unnamed selects by geometric predicate (`Facing`,
   path a pair for which `Verify` reports an `Interference`. Two alternatives were rejected. Extending `prismcells.Merge` to emit
   several loops cannot work at all — a `ProfileRecord` has one `Outer`.
   Restating the volume composition inside the reading, rather than building one
-  `prismPayload` per cell and reusing `evalPrism`, would put a second owner on
+  `prismPayload` per cell and reusing `prismrecord.Build`, would put a second owner on
   `internal/proofbound/bounds.go`'s section-displacement and axial mechanisms, which that file's
   own rule forbids.
 - **§3.1 G6 restricts `Union` to hole-free operands and `Cut` to a hole-free
@@ -1405,8 +1405,8 @@ All seven shipped. Each item names what exists and the tests that pin it; §15 l
    §4.1's scene builder and re-expression, `Union`'s select-all/merge/chain,
    §6's audit reuse, §5's authentication, §7's exactness (the section
    displacement bound on `prismPayload`, its helpers in `internal/proofbound/bounds.go`, and
-   `evalPrism`'s composition of it), and `performBoolean`'s branch before
-   `evaluateBoolean` that builds via `evalPrism` instead of `facetedrecord.Build`
+   `prismrecord.Build`'s composition of it), and `performBoolean`'s branch before
+   `evaluateBoolean` that builds via `prismrecord.Build` instead of `facetedrecord.Build`
    on admission. A split boundary routes to the mesh path before recording
    when either source carries a section displacement, either source carries a
    nonzero walk charge (§7's `δ_walk`), or B's re-expression is nonidentity —
@@ -1443,7 +1443,7 @@ All seven shipped. Each item names what exists and the tests that pin it; §15 l
    exactness conditions. `agent-docs/interference-design.md` §5.2 and
    `agent-docs/evaluator-design.md` §9 point to this document.
 5. **PR5 — §4.5's multi-region overlap-area reading.** The per-cell record,
-   per-cell `prismPayload`, `evalPrism` volume and charged sum, entered after
+   per-cell `prismPayload`, `prismrecord.Build` volume and charged sum, entered after
    `booleandispatch.AnalyticIntersect` returns `ok == false`, over the shared
    admission/scene/classification of PR1–PR3. It adds no bound helper and
    changes nothing in the public `Union`/`Cut`/`Intersect` surface.
@@ -1641,7 +1641,7 @@ areas, residuals), never merely "it ran" — CLAUDE.md's own rule.
 ## Implementation notes
 
 Every `sectionDelta` consumer below is a no-op at the zero every caller-drawn
-payload carries. `internal/prismrecord/build.go`'s `evalPrism` composition and `tessellate.go`'s
+payload carries. `prismrecord.Build`'s composition (`internal/prismrecord/build.go`) and `tessellate.go`'s
 tolerance reservation, mesh-bound charge and area-slack charge are §7's own
 subject and are not repeated here.
 
@@ -1700,7 +1700,7 @@ scene, cell classification and displacement bounds this design reuses),
 Part S ("stacked §N") and
 `agent-docs/mirror-pattern-design.md` ("mirror §N"). Core §N is
 `agent-docs/api-design.md`; seam §N is `agent-docs/sketch-seam-design.md`. The rows of §2 describe
-the mesh path's behaviour on the listed scenes before Part G; their figures are illustrative.
+the mesh path's behaviour on the listed scenes before Part G, without measured figures.
 
 ### 1. Problem
 
@@ -1723,11 +1723,11 @@ Outside prism-boolean's admitted class a boolean tessellates both operands
    (modify-reach SX9). A complete tilted plate-to-cylinder junction can take
    the bounded `Fillet` in `agent-docs/modify-design.md` Part A. The three
    surveys read `Suspect`, the analytic STEP
-   path is gone, and the published bound is 0.5–2 mm³ against 1e-12 mm³ for
-   the same part drawn as an analytic cut.
+   path is gone, and the published volume bound is that of a faceted mesh, far looser than the closed-form bound
+   of the same part drawn as an analytic cut.
 3. **Chains stop early.** A faceted face's bound is the largest over its
    facets, so a plate's side wall carrying one hole's rim is coarse over its
-   whole 60 mm, and a third cross hole 20 mm from any rim refuses on the
+   whole length, and a third cross hole 20 mm from any rim refuses on the
    chain-depth gate (§2 S11).
 
 A fourth limit sits beside them: a revolve with a spherical face cannot be
@@ -1748,31 +1748,31 @@ its source surface tags.
 
 | Row | Scene | Path | Result |
 |---|---|---|---|
-| S1 | 40×20×20 box `Cut` by Ø6 cylinder along y through its middle | mesh | 7 `Faceted` faces, 15434.9 mm³ ± 1.12 (closed form 15434.51), `Fillet`: no analytic edge, wall `unavailable` |
-| S2 | Ø30×20 cylinder `Union` Ø8 radial boss | mesh | 5 `Faceted` faces, bound 1.79 mm³ |
-| S3 | full revolve (cylinder along x) `Union` box crossing it | mesh | 13 `Faceted` faces, bound 0.21 mm³ |
+| S1 | 40×20×20 box `Cut` by Ø6 cylinder along y through its middle | mesh | 7 `Faceted` faces, a mesh-bounded volume (closed form 15434.51), `Fillet`: no analytic edge, wall `unavailable` |
+| S2 | Ø30×20 cylinder `Union` Ø8 radial boss | mesh | 5 `Faceted` faces, mesh-bounded volume |
+| S3 | full revolve (cylinder along x) `Union` box crossing it | mesh | 13 `Faceted` faces, mesh-bounded volume |
 | S3b | the same revolve `Union` a coaxial disk sharing its end plane (flange) | mesh at the survey commit; common-axis Revolve when both inputs qualify | `BooleanUnsupportedContact` at the survey commit; analytic common-axis result now |
-| S4a | plate `Cut` through hole, both on XY | analytic | 7 faces, bound 8e-13 mm³ |
-| S4b | 20×20×10 plate with Ø4 through hole, then `Cut` Ø8 counterbore from z = 7 | analytic | 9 faces, volume 4000 − 76π mm³ within a 2.9e-13 mm³ bound |
+| S4a | plate `Cut` through hole, both on XY | analytic | 7 faces, closed-form volume bound |
+| S4b | 20×20×10 plate with Ø4 through hole, then `Cut` Ø8 counterbore from z = 7 | analytic | 9 faces, volume 4000 − 76π mm³ within its published bound (`apitest/counterbore_test.go`) |
 | S4c/d | the same counterbore first, then the Ø4 through hole inside it | analytic | the same 9 faces and bounded volume |
-| S5 | plate `Cut` by six `Copy`-translated cylinders | analytic | six results, bound 5e-10 mm³, `sectionDelta > 0`: `Fillet` refuses, wall `undecided` |
-| S5b | the six holes each drawn in a sketch | analytic | bound 2e-12 mm³, `Fillet` OK |
-| S6a | filleted box `Cut` by a cross cylinder | mesh | 11 `Faceted` faces, bound 1.71 mm³ |
-| S6b | filleted box `Cut` by a same-plane cylinder | analytic | 11 faces, bound 3e-12 mm³ |
-| S7 | two Ø10 cylinders crossing at right angles, `Union` and `Cut` | mesh | `Faceted`, bound 1.2–1.5 mm³ |
-| S8 | sphere r = 10 `Cut` by a box, or by a Ø6 cylinder | mesh | `ErrUnsupported`: "more than 65536 facets in one revolve mesh" at the pair tolerance |
+| S5 | plate `Cut` by six `Copy`-translated cylinders | analytic | six results, `sectionDelta > 0`: `Fillet` refuses, wall `undecided` |
+| S5b | the six holes each drawn in a sketch | analytic | closed-form bound, `Fillet` OK |
+| S6a | filleted box `Cut` by a cross cylinder | mesh | 11 `Faceted` faces, mesh-bounded volume |
+| S6b | filleted box `Cut` by a same-plane cylinder | analytic | 11 faces, closed-form volume bound |
+| S7 | two Ø10 cylinders crossing at right angles, `Union` and `Cut` | mesh | `Faceted`, mesh-bounded volume |
+| S8 | sphere r = 10 `Cut` by a box, or by a Ø6 cylinder | mesh | `ErrUnsupported`: "more than 65536 facets in one revolve mesh" at the pair tolerance (`revolveproof` `maxFacetsPerMesh`) |
 | S9 | box `Intersect` the same box rotated 45° about z | mesh | `BooleanUnsupportedContact` (coplanar caps); rotated 90°: "come within the chord tolerance without provably interpenetrating" |
-| S10 | box `Cut` by a cylinder on a plane tilted 30° | mesh | 7 `Faceted` faces, bound 0.69 mm³ |
-| S11 | 60×20×10 bar, three cross holes at x = 10, 30, 50 | mesh | holes 1–2 build (bounds 0.86, 1.72 mm³); hole 3 refuses: target bound 0.0034 mm where the pair meets, pair tolerance 0.0017 mm. Both 60 mm side walls carry that bound over their whole face; the box's other faces carry 0 |
-| S12 | two disjoint boxes `Union` | mesh | `Faceted`, 2 lumps, `Exact` 1000 mm³, wall `unavailable` |
+| S10 | box `Cut` by a cylinder on a plane tilted 30° | mesh | 7 `Faceted` faces, mesh-bounded volume |
+| S11 | 60×20×10 bar, three cross holes at x = 10, 30, 50 | mesh | holes 1–2 build; hole 3 refuses because the target's held mesh bound where the pair meets exceeds the pair tolerance. Both long side walls carry that bound over their whole face; the box's other faces carry 0 |
+| S12 | two disjoint boxes `Union` | mesh | `Faceted`, 2 lumps, `Exact` volume, wall `unavailable` |
 | S12c | two boxes touching at one vertical edge | mesh | `BooleanUnsupportedContact` |
 | W1–W4 | two boxes sharing a wall (whole, partial, longer, 1 mm overlap with collinear walls) | analytic | RB1 `ErrUnsupported`: the arrangement reports an invalid region |
-| W5 | two boxes overlapping with no collinear wall | analytic | 800 mm³ |
+| W5 | two boxes overlapping with no collinear wall | analytic | builds |
 | W6 | box `Cut` by a box sharing its wall | mesh | `BooleanUnsupportedContact` |
-| B1 | box `Cut` by a 10×10 square cross slot | mesh | 10 `Faceted` faces, 14000 mm³ ± 9e-12 (exact integral) |
-| B2 | Ø20×40 rod `Cut` by a 4 mm keyway box | mesh | 7 `Faceted` faces, bound 2.0 mm³ |
+| B1 | box `Cut` by a 10×10 square cross slot | mesh | 10 `Faceted` faces, exact-integral volume |
+| B2 | Ø20×40 rod `Cut` by a 4 mm keyway box | mesh | 7 `Faceted` faces, mesh-bounded volume |
 | B3 | plate `Union` Ø10 boss standing on its top (z 10..25) | mesh | `BooleanUnsupportedContact` (held facets within tolerance) |
-| B4 | plate `Union` the boss rooted inside (z 5..25) | mesh | 8 `Faceted` faces, bound 0.51 mm³, no analytic edge |
+| B4 | plate `Union` the boss rooted inside (z 5..25) | mesh | 8 `Faceted` faces, mesh-bounded volume, no analytic edge |
 | B5 | plate `Union` a side pin whose end cap lies in the plate's face | mesh at the survey commit; class B "Flush cap contact" when both are perpendicular datum-placed prisms | `BooleanUnsupportedContact` at the survey commit; analytic brep now |
 | P1 | hub ∪ six teeth placed by `RotationAround` | analytic → mesh | tooth 2 `BooleanUnsupportedContact` (prism-boolean §3.4 reroute) |
 | P2 | plate `Cut` by a four-lump faceted tool | mesh | `BooleanUnsupportedContact` |
@@ -2214,8 +2214,8 @@ requires equal rectangle bounds; `Cut` requires the tool's bounds to lie
 strictly inside the target's bounds. Stacked Union still checks its own
 intervals, slabs and interfaces.
 Other placed-axis pairs keep the mesh route. The same-transform shared-axis arm
-admits profiles by its own rule. `Verify` reads a pair the placed-axis arm
-admits through its read-only Intersect path and positive-volume gate.
+admits profiles by its own rule. `Verify` measures a pair the placed-axis arm
+admits through `booleandispatch.AnalyticIntersect`, which runs the same admission, and then its positive-volume gate.
 A one-sided reflection is a nonidentity re-expression, so a reflected pair
 whose outlines cross takes A6's crossing charge, and one whose outlines share
 a wall takes A3's reading (M3, T2).
@@ -4080,7 +4080,9 @@ Success criteria:
   error (Failure behavior).
 - The fixtures in Test plan pass with assertions on computed volumes and coordinates.
 
-**Out of scope:** `Union` of three or more bodies (`performUnionMany`), regrouping before a call that succeeds
+**Out of scope:** the chain regroup does not run for `Union` of three or more bodies (`performUnionMany`).
+Its one regroup is the three-source prism pair retry `booleandispatch.RegroupUnionThree` (prism-boolean §4.7),
+a separate route. The regroup also leaves out regrouping before a call that succeeds
 today, walking through `Transform`/`Copy`/modify producers, general chains mixing `Union` with `Cut`/`Intersect`, a public
 option or diagnostic for regrouping, and `Verify`'s read-only evaluator.
 
@@ -5213,9 +5215,9 @@ the published value charges its own rounding.
 
 | Quantity | Composition |
 |---|---|
-| `Volume` | `Σ_k A_k · h_k` — each slab's region area (with `sectionDisplacementArea(sectionDelta, walks_k, perimeter_k)` folded into its bound, as `evalPrism` does) times its bounded height |
+| `Volume` | `Σ_k A_k · h_k` — each slab's region area (with `sectionDisplacementArea(sectionDelta, walks_k, perimeter_k)` folded into its bound, as `prismrecord.Build` does) times its bounded height |
 | `Area` | the first region's area (bottom cap) + the last region's area (top cap) + each exposed record's area (`momentinput.LoopEnclosedArea` of its outer loop) + `Σ_columns perimeter · height` |
-| `Centroid` | `Σ_k m_k · c_k / Σ_k m_k`, with `m_k = A_k · h_k` and `c_k` the region's centroid lifted to the slab's bounded midpoint through `prismPayload.Point`; taken component by component in bounded arithmetic, each `c_k` component carrying `prismrecord.Payload.PointBound`'s radius as its bound, and the three component bounds folded into one radius through `proofbound.Radius3D`. `prismrecord.Payload.CentroidGeometryBound`, the largest over the outer runs, plus `sectionDelta`, caps the result as `evalPrism`'s does |
+| `Centroid` | `Σ_k m_k · c_k / Σ_k m_k`, with `m_k = A_k · h_k` and `c_k` the region's centroid lifted to the slab's bounded midpoint through `prismPayload.Point`; taken component by component in bounded arithmetic, each `c_k` component carrying `prismrecord.Payload.PointBound`'s radius as its bound, and the three component bounds folded into one radius through `proofbound.Radius3D`. `prismrecord.Payload.CentroidGeometryBound`, the largest over the outer runs, plus `sectionDelta`, caps the result as `prismrecord.Build`'s does |
 | `Bounds` | the union of `prismrecord.Bounds` over each outer run: one outer-only prism per run of slabs sharing an outer record, over that run's interval with its end levels' displacements and the payload's `sectionDelta`, the largest run bound covering the union. A cut-built stack is one run, the outer-only prism on the full interval |
 | `ExtentAlong` | the extreme over every outer run's reading |
 | `AxialDelta` | the largest level displacement over every slab |
