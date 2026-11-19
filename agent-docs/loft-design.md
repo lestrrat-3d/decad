@@ -7,7 +7,7 @@ authenticated into, "seam §N"), `agent-docs/evaluator-design.md` ("evaluator §
 `agent-docs/modify-design.md` (the receiver/refusal/result/downstream table
 discipline and the build-time simplicity-audit pattern this document reuses,
 "modify §N"), `agent-docs/spline-design.md` (the exactness-tier reasoning this
-document's Table W follows, "spline §N"), `agent-docs/tessellation-design.md`
+document's Table S row S3 follows, "spline §N"), `agent-docs/tessellation-design.md`
 ("tessellation §N"), `agent-docs/verification-design.md` ("verification §N"),
 `agent-docs/evaluator-design.md` ("replay §N"), and `agent-docs/interference-design.md`
 / `agent-docs/clearance-design.md` (the staged-consumer precedent Table D follows).
@@ -138,7 +138,7 @@ supplies the whole per-loop payload, and two or more are `ErrDegenerate`
 **`Loft` also accepts `WithSurfaceResult()`
 (`agent-docs/surface-design.md` §3-§4).** It builds the wall triangles alone and
 omits both section caps, publishing `Kind() == BodySheet` in place of a solid
-loft, exactly as it does for `Extrude` and `Revolve` (Table W). Unlike
+loft, exactly as it does for `Extrude` and `Revolve` (`agent-docs/surface-design.md` Table W). Unlike
 `WithLoftAlignment`, a repeated `WithSurfaceResult()` is idempotent, never
 `ErrDegenerate`: the two options answer different questions. An alignment
 payload names one of several possible correspondences, so two occurrences name
@@ -1937,9 +1937,9 @@ The PR labels below are count-free and consume no global evaluator increment. Ev
 | 2b | `Tessellate` / `STL` / `OBJ` (D1), mesh-boolean admission (D2). **This row is landed.** | D3/D4's analytic-kernel case, D5 |
 | 3 | same-kind `CircleSeg`/`ArcSeg` correspondence (§1): the chord-chain construction and its shared station generator (§5.1), every term §5.2's table lists that a chorded build reaches — the certified per-cell sagitta and the `sectionDelta` it publishes, the `stationRound` term `delta` gains, the `matchedDelta` those two compose, the exact bilinear-patch volume and first-moment corrections with three residual volume terms (§8.1), and the wall's certified bilinear-area reading with two residual area legs beside the two caps' `capAreaAllow` (§8) — composed into `Volume`/`Centroid`/`Area`/`Bounds`, Table S gates S14–S16, S6's COMPUTED arm, and S7's structural walk-sense arm (P5). **This row is landed.** | mixed-kind correspondence, permanently (§1); N-section and guide-rail/centerline lofts; a loft case in `internal/clearance/pairkernel/geom.go`; a non-constant-cross-section wall survey kernel |
 | 4 | same-kind Tier A free-form correspondence (§1): integrate the shared station generator (§5.1), the existing free-form `stationRound`, sagitta, `SpanSpeedUpper` length/speed bound, and `SpanMatchedDeltaUpper` native-parameter bound plus `delta`, and the exact per-cell `SpanTangentEnergyUpper` energy (§5.2) into `Volume`/`Centroid`/`Area`/`Bounds`, and land Table S row S17. **This row is landed.** | mixed-kind correspondence, permanently (§1); a same-kind Tier A free-form pair whose two curves reduce to different Bézier span counts (S17); N-section and guide-rail/centerline lofts; a loft case in `internal/clearance/pairkernel/geom.go`; a non-constant-cross-section wall survey kernel |
-| 4b | `agent-docs/loft-gear-bounds-design.md`'s five increments: the per-cell volume residual with its skirt leg and the per-cell cap tube (§8, §8.1), the centroid shift form (§8), the chord target read from the section's feature size with bisection on the matched departure (§5.1), the sweep-enumerated crossing audit with one proof per cap (§6), and the scaled ceilings — `stationCap(P)` (§5.1), the raised free-form work ceiling (§5.1) and the `1 << 28` reconstruction ceiling — under which full helical gear outlines up to 69 teeth build and verify `Sound`. **This row is landed.** | a profile past 11585 reconstruction chords (the same gear at 70 teeth); every item PR 4's row still lists |
+| 4b | `agent-docs/loft-gear-bounds-design.md`'s five increments: the per-cell volume residual with its skirt leg and the per-cell cap tube (§8, §8.1), the centroid shift form (§8), the chord target read from the section's feature size with bisection on the matched departure (§5.1), the sweep-enumerated crossing audit with one proof per cap (§6), and the scaled ceilings — `stationCap(P)` (§5.1), the raised free-form work ceiling (§5.1) and the `1 << 28` reconstruction ceiling — under which full helical gear outlines up to 69 teeth build and verify `Sound`. **This row is landed.** | a detached record past 11585 reconstruction chords (the same gear at 70 teeth), and an authenticated `Loft` past the 46340-chord cap of its `1 << 32` limit (below); every item PR 4's row still lists |
 | 4c | Exact common subdivision admits different Bézier span counts for a same-kind Tier A free-form pair (§5.1) and retires S17. **This row is landed.** | N-section and guide-rail/centerline lofts; a loft case in `internal/clearance/pairkernel/geom.go`; a non-constant-cross-section wall survey kernel |
-| 5 (reach, not committed by this document) | N-section and guide-rail/centerline lofts, a loft case in `internal/clearance/pairkernel/geom.go`, a non-constant-cross-section wall survey kernel | — |
+| 5 (reach, not committed by this document) | N-section and guide-rail/centerline lofts beyond the classes `LoftSections` admits (`agent-docs/loft-sections-design.md`), a loft case in `internal/clearance/pairkernel/geom.go`, a non-constant-cross-section wall survey kernel | — |
 
 The PR 4b row records its original resource gate. An authenticated public Loft
 now uses a private `1 << 32` reconstruction cap for each profile, while
@@ -2112,9 +2112,9 @@ excludes, never a reason to loosen §5.1's chord target or its cap.
   square, make cell 0's two triangles share their recorded diagonal but
   overlap in area; the audit rejects them as S7. A synthetic triangle set
   whose candidate count exceeds the fixed pair-test budget → S8, refused
-  before any pair test; a 1200-gon prism whose `F*(F-1)/2` exceeds it builds,
-  because S8 counts candidates; a tall open tube, and a 3000-gon loft 100
-  tall, build through the grid, whose work stays a small multiple of their
+  before any pair test; a many-sided prism whose `F*(F-1)/2` exceeds it builds,
+  because S8 counts candidates; a tall open tube, and a many-sided tall loft,
+  build through the grid, whose work stays a small multiple of their
   candidates where the sweep would scan nearly every pair; a stack of
   mutually overlapping triangles whose candidates pass the ceiling refuses
   before any pair test; a set past the triangle ceiling refuses before S6.
@@ -2135,7 +2135,7 @@ excludes, never a reason to loosen §5.1's chord target or its cap.
   293/2 worked example). `Area` is `Approximate` whenever any wall triangle
   has nonzero area, and its reported bound ENCLOSES `|held - true|` against a
   high-precision reference, never merely asserted present — over a table of
-  slivers at aspect 1e-2, 1e-3 and 1e-6 and at least one large-coordinate
+  slivers of steeply falling aspect ratio and at least one large-coordinate
   case, and over a many-triangle wall set so the summation loop is covered
   beside the per-triangle brackets. One fixture drives the summation SCALE to
   `+Inf` while the summed value stays finite and every triangle's own bracket
@@ -2379,8 +2379,8 @@ excludes, never a reason to loosen §5.1's chord target or its cap.
   value, bound, and exactness are bit-identical to the source's. It leaves the
   source live and gives the document two bodies. Rotating the 16000 mm³ square-square loft 37
   degrees about X is the regression this PR exists for: assert
-  `|Volume.Value - 16000| <= Volume.Bound` (the naive implementation misses by
-  1.819e-12 against a 7.203e-13 bound), the centroid against the closed-form
+  `|Volume.Value - 16000| <= Volume.Bound` (the naive implementation's published
+  interval misses the true volume), the centroid against the closed-form
   rotated centroid within its bound, every `Vertex.Position().Bound >= 0`, and
   `Bounds.Exactness == Approximate`. A `Copy` by `(100,0,0)` moves
   `Bounds` and `Centroid` by exactly 100 in x, keeps the volume value,
@@ -2431,10 +2431,10 @@ and a new determinism obligation for replay (§10).
 **The reference wedges under that constant.** The arc wedge — a 90° radius-5
 quarter-arc lofted between `z=0` and `z=10` — has a feature size of
 `(25π/4) / (10 + 5π/2)`, about 1.10 mm, so its target is about 2.75e-4 mm.
-The joint walk-up settles at `m = 75`: the certified sagitta first meets the
-target there, and at `m = 74` both the certified and the exact sagitta are
-still over it. `Verify` at the default `1e-3` tolerance reads `Sound`, with `Volume` and `Area` each clearing the tolerance
-by more than 2x (`TestLoftArcWedgeVerifiesSound`). The matching fit-spline wedge, chorded by
+The quarter arc cut into `m` equal chords has the exact sagitta `5(1 - cos(π/4m))` mm, which is still over that target
+at `m = 74` and first falls under it at `m = 75`. The joint walk-up settles no lower than `m = 75`, because a certified
+sagitta is never below the exact one. `Verify` at the default `1e-3` tolerance reads `Sound`, with `Volume` and `Area`
+each clearing the tolerance by more than 2x (`TestLoftArcWedgeVerifiesSound`). The matching fit-spline wedge, chorded by
 §5.1's free-form arm with its matched-departure bisection, reads `Sound` with `Volume` binding at about 14.3x
 (`TestLoftFitSplineWedgeVerifiesSound`).
 
@@ -2450,7 +2450,7 @@ assembles at most the triangles S8's ceiling admits (§6), and the floor
 leaves room for every fixture §13 requires. The same cap bounds the free-form
 station generator; the extension creates no second cap. Nothing else in this
 document reads the number: every station count named here, the reference
-wedge's 75 included, is stated against the chord target above rather than
+wedge's, is stated against the chord target above rather than
 against the cap.
 
 Every other design variable this document depends on is resolved above, and
@@ -2540,7 +2540,7 @@ four seam sentinels every chain-fed entry point reuses. That document left
 exactly one question here (§13.5) — whether Table P states a pairing rule for
 two open walks.
 
-**It does, with two rows lost and one gate added.** §16.1 states which of
+**It does, with three rows gone, one narrowed and one gate added.** §16.1 states which of
 Table P's six rows survive an open walk and what replaces the one that cannot.
 §16.2 states the second thing a closed shell supplies and two open walks do
 not — the positive side — and the exact-rational gate that stands in its place.
@@ -2887,10 +2887,9 @@ The fit-circle route's own limits apply on its branch, and its circle fragment m
 either branch, a foot outside the circle fragment refuses, including two feet that cross on one fragment. A consumed line
 between two circle fragments, and a consumed arc, refuse. A refusal message names the original section corner and segment indices.
 
-The 17-tooth gear with 15 fit points per involute flank exercises all 34
-line/arc root corners in one call. The focused test checks the selected edges,
-solid result, connector roles and volume against an independently drawn
-tangent-arc gear. A rectangular loft checks
+A gear outline with involute fit-spline flanks exercises every line/arc root corner in one call. The focused
+test (`TestLoftFilletTwistedGearRoots`) checks the selected edges, solid result, connector roles and volume against
+an independently drawn tangent-arc gear. A rectangular loft (`TestLoftFilletRectangleCorner`) checks
 the one-corner volume against the circular-sector formula and checks that a
 placed copy still has fillet roles.
 `apitest.TestLoftFilletAtALineMeetingACircleFragment` rounds the two corners where a curved-topped blade's straight sides meet a
@@ -2914,8 +2913,8 @@ feet cross on one root fragment and an edge that is not a corner. The `loftfille
 its foot, the kink, the fit-circle branch for a flank that enters the ball and the kink limit; the
 `loftrecord` unit tests pin `circleFootParameter` and the corner class.
 An audit fixture moves a fit spline's control hull across a changed line and
-checks that the audit refuses the possible contact. The full embedded 30-tooth
-and 60-tooth cases exercise the original trimmed fit flanks, native root
+checks that the audit refuses the possible contact. The full embedded-flank gear
+cases exercise the original trimmed fit flanks, native root
 fillets, optional bore and both outer-cap chamfers.
 
 ## 18. Coaxial bore and held outer-cap chamfer
@@ -3114,10 +3113,10 @@ held outer cap edges, excluding the circular bore rims. An equal-distance
 `Chamfer` of both complete outer loops accepts a matching axial loft with
 zero holes or exactly one full circular bore. It requires the held start and end cap
 polygons to have the same edge multiset, and refuses a partial loop, a bore
-edge, an asymmetric setback, placement, a different section, or alignment.
+edge, an asymmetric setback, placement, or alignment. A loft with a different section takes §19's route.
 The result is a `capBlendPayload` whose outer section is the loft's certified
 held cap polygon. When present, its bore remains the original full circle,
-so both bore rims stay sharp. The source record, including each 15-fit-point spline flank,
+so both bore rims stay sharp. The source record, including each spline flank,
 is stored with the result for its displacement proof. The chamfer offsets
 the held polygon's edges; it does not denote a smooth-spline offset.
 
