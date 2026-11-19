@@ -2666,14 +2666,10 @@ the user-facing inventory; the "Files" lines below do not repeat it.
   `−Y` onto an edge sunk by `2⁻²⁰ mm`, two points at the edge's ends;
   `TestPlanarManifoldWithholdsCornerThroughTwoFaces`, the corner sunk into the floor and a wall at once,
   `Overlapping` with `ContactAmbiguousFeature` and no manifold. Legs shown to fail: condition 1 deleted,
-  the two-face fixture reads `ContactNoNormalProof` (conditions 3 and 4 still refuse it), and
-  `internal/pair/planar/planar_face_penetration_test.go`'s corner sunk through a floor's thin skin into a cavity
-  below publishes the corner at its full depth; condition 4 deleted, that file's snapshot of a tray with a
-  second shell, a `1 mm` cube standing on the floor wholly inside the sunk box (no crossing, so §9.1's
-  nesting cast never runs and only the column test sees it), publishes one corner; each part of
+  the two-face fixture reads `ContactNoNormalProof` (conditions 3 and 4 still refuse it); each part of
   condition 3 deleted, its region helper accepts a point set over a hole, across an L's notch or around a
-  hole (`TestHullInsideRegion` in that same file); the lifted set deleted, the barely turned cube
-  publishes its sunk corner alone. `.github/test-shards-apitest.txt`
+  hole (`TestHullInsideRegion` in `internal/pair/planar/planar_face_penetration_test.go`); the lifted set
+  deleted, the barely turned cube publishes its sunk corner alone. `.github/test-shards-apitest.txt`
   lists the `apitest` tests.
 - Depends on: PRs 11, 14a, 14c.
 - A pair of two certified bodies tries both orders as `M` (§9.6), and the hexagonal prism of
@@ -2770,8 +2766,8 @@ PRs 14b, 14c and 14e touch disjoint files and may land in any order; PR 14d foll
 - Delivers the Phase 2 exit scene of §2.
 - Files: `_gallery/dynamics_clip.go`, `dynamics/scene_test.go`.
 - Test: the Phase 2 exit criteria at §2's residuals; every release is placed so that no body reaches a tray
-  wall within `3 s` and no body's swept box reaches a wall's projection (§10.5, §10.6). The exploration run
-  with the tray at those residuals goes 256 steps `Advanced` with every body resting (§10.8).
+  wall within `3 s` and no body's swept box reaches a wall's projection (§10.5, §10.6). The scene runs `768` steps of `1/256 s` (`tumbleSteps`), every one
+  `Advanced`, with every body resting (§10.8).
 - Depends on: PRs 9, 13, 14, 14a, 14b, 14c, 14d, 14e, 14f.
 - The tray, `[−90, 90]²×[−10, 40]` minus `[−80, 80]²×[0, 50]`, is the only fixed body. The boxes
   start with their centers `40 mm` up at `(±45, ±45)`, the prism tipped `37°` about `−Y` on a vertex `20 mm`
@@ -3902,8 +3898,9 @@ or persistent-touch proof owned by contact-sweep §5.1. They never skip an
 initial touch by sampling at a positive time. `SweepDepartedClear` permits
 the rest of the drift. `SweepPersistentTouch` permits the rest only when
 the solver's normal/friction residuals stay within limits throughout its
-`ContactTrack`. The first source-box implementation checks the track's
-affine patch and constant normal/velocity; unsupported varying tracks are
+`ContactTrack`. The step reads the track's manifold at fractions 0, 1/2 and 1
+(`fullTrackWithin`) and requires each reading within the contact request's point and
+normal resolutions and within `PenetrationResidual`; a track that fails any reading is
 undecided. `SweepContactTransitionBracket` stops the drift at the first
 feature or patch change. It is a solver restart, not necessarily an impulse.
 
@@ -4940,8 +4937,9 @@ centers keep the relation and withhold the manifold.
 
 Two exact planar solids receive an exact relation at any query pose whose
 basis has a positive determinant. A solid is admitted as a prism over whole
-`LineSeg` edges with zero deltas, or as a zero-bound faceted Boolean, directly
-or through a translation-only placement. The relation is separation with an
+`LineSeg` edges with zero deltas, as a zero-bound faceted Boolean, directly
+or through a translation-only placement, or as a closed all-planar stitched solid welded at the
+identity with every vertex bound zero. The relation is separation with an
 enclosed gap, touch, or overlap, decided by the exact facet tests of
 Part N §9.1. With neither body carrying §9.2's
 convexity certificate, a touch or overlap has no manifold and the reason
