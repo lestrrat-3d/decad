@@ -4,7 +4,7 @@ How `Document.Verify` proves pairwise overlap and reports its volume without
 changing the document: the pair relation (§1), stable report walk (§2), proof
 paths (§3), full-containment certificate (§4), read-only boolean evaluation
 (§5), positive-volume gate (§6), errors, cost and cancellation (§7), tolerance
-gate (§8), evaluator coverage (§9), tests (§10), and increment plan (§11).
+gate (§8), evaluator coverage (§9), tests (§10), and the stage table (§11).
 Companion to `agent-docs/verification-design.md`, which owns what an
 `Interference` row means and how its `Volume` is judged; to
 `agent-docs/clearance-design.md`, which owns analytic pair classification; and to
@@ -101,13 +101,10 @@ outcome to its own slot, and `Verify` appends the slots in pair order. A pool
 of more than one worker runs the contact batches of every boolean inside its
 pairs on that pair's worker alone, so the pair proofs never run more
 goroutines than the pool has workers. Letting each pair's batches start their
-own workers beside the pool's put two layers of goroutines on the same cores:
-on a 24-core machine the 20-segment revolved star took 40 s that way and 19 s
-this way. No measured document got slower, down to a three-body star whose
-three pairs leave most cores idle. One worker proving the pairs alone leaves the
-batches their own workers. The worker count never changes a batch's result,
-because each batch merges its slots in input order. When a
-pair fails, no pair after it starts, every pair before it still runs, and
+own workers beside the pool's would put two layers of goroutines on the same
+cores. One worker proving the pairs alone leaves the batches their own workers.
+The worker count never changes a batch's result, because each batch merges its
+slots in input order. When a pair fails, no pair after it starts, every pair before it still runs, and
 `Verify` returns the failure at the lowest pair index: the error a walk of the
 pairs one at a time would stop on.
 
@@ -262,21 +259,18 @@ least radius (a vertex's, or a disc's centre less its radius) and
 The Revolve then lies in the closed exterior of the cylinder, so its interior
 misses the open interior of the other body, which lies in the closed
 cylinder. Under an exactly orthonormal lift `Q` is 1 at every angle. Under a
-lift that is a rotation by rounding, `Q` differs from 1 by about `1e-16`, and
-unevenly with `φ`. A 0.13 rad label of inner radius 30.65 bonded on a pack of
-that radius, turned by a rounded angle, has `Q − 1 ≥ 4.2e-16` over its sweep
-and is decided. The same lift's least eigenvalue is `6.9e-17` below 1, so a
-whole ring on it dips about `1e-15` mm into the pack: its denoted set overlaps
-the pack's, and the reading refuses it.
+lift that is a rotation by rounding, `Q` differs from 1 by rounding error, and
+unevenly with `φ`. A narrow label bonded on a pack of its own inner radius,
+turned by a rounded angle, keeps `Q − 1` positive over its sweep and is
+decided. The same lift's least eigenvalue lies below 1, so a whole ring on it
+dips a rounding error into the pack: its denoted set overlaps the pack's, and
+the reading refuses it.
 
 A tangent contact designed through rounded numbers can overlap the same way,
-and then no reading may call it apart. A brake cord of radius 0.6 swept half
-round a bobbin's V groove of slope 2, at the float radius `42 + 0.6·√5`,
-clears exact tangency by `6.5e-15` mm. Its arc's axis sits `7.1e-15` mm off
-the bobbin's axis and its plane `5.3e-15` mm off the groove's centre, so the
-cord's denoted set crosses a wall by about `2e-15` mm at one end of the arc
-and `8e-15` mm at the other. The pair stays undecided until the design opens
-a clearance.
+and then no reading may call it apart. A cord swept round a V groove at the
+float radius of exact tangency can cross a groove wall by rounding error, because
+its arc's axis and plane sit off the groove's by rounding error. The pair stays
+undecided until the design opens a clearance.
 
 **The history certificate** (`internal/verifyrun/csg.go`) answers a pair the
 coaxial separator leaves open from the recorded Boolean history alone. A Cut
@@ -819,31 +813,26 @@ and bound helpers. A verification-only approximate volume formula is forbidden.
 
 ### 5.2 Positive-area coplanar patches
 
-The current symmetric triangle classifier refuses a two-dimensional coplanar
-intersection. That refusal stays correct until this complete replacement
-lands; it must not be weakened one pair at a time.
-`agent-docs/prism-boolean-design.md` §14 PR4 wires `measuredInterference` to the
-same read-only analytic `OpIntersect` dispatch `performBoolean` uses
-(`booleandispatch.AnalyticIntersect`), so an admitted coplanar,
-co-directional prism pair — `Union`'s select-all path, `Cut`/`Intersect`'s
-clean-nesting sub-case, or (since PR3) `Cut`/`Intersect`'s crossing sub-case,
-§4.2 — is superseded here and no longer reaches the mesh path at all. PR5
-extends that supersession to a coplanar pair whose overlap covers two or more
-disjoint regions, through that document's §4.5 overlap-area reading: the
-reading measures the arrangement cells both operands claim and sums their
-volumes, so it needs no single assembled section and no body, and a pair of
-meshing gears — whose overlap is always multi-region — is measured rather
-than deferred to a mesh refusal. A crossing pair whose operands carry a
-section displacement or walk charge, or whose re-expression is nonidentity (a
+The symmetric triangle classifier refuses a two-dimensional coplanar
+intersection of non-exact faces; that refusal is not weakened one pair at a time.
+`measuredInterference` calls the same read-only analytic `OpIntersect` dispatch
+`performBoolean` uses (`booleandispatch.AnalyticIntersect`), so an admitted
+coplanar, co-directional prism pair never reaches the mesh path. That covers
+`Union`'s select-all path and `Cut`/`Intersect`'s clean-nesting and crossing
+sub-cases (`agent-docs/prism-boolean-design.md` §4.2, §14). A coplanar pair
+whose overlap covers two or more disjoint regions is measured through that
+document's §4.5 overlap-area reading, which sums the volumes of the arrangement
+cells both operands claim and needs no single assembled section and no body; a
+pair of meshing gears is measured this way. A crossing pair whose operands carry
+a section displacement or walk charge, or whose re-expression is nonidentity (a
 gear moved with `Transform`), is measured too: that document's §3.4 charges
 each crossing the displacement it can amplify
 (`agent-docs/prism-boolean-design.md` Part G §3 A6), and sends one too close to
-tangent to bound to the mesh path below. A pair neither analytic
-path admits still falls back to `evaluateBoolean`'s read-only mesh
-intersection unchanged, so this section still governs every coplanar pair the
-mesh path receives:
-non-prism payloads, non-coplanar or non-co-directional prisms, and every pair
-the entry gate or the region resolution declines.
+tangent to bound to the mesh path. A pair neither analytic path admits falls
+back to `evaluateBoolean`'s read-only mesh intersection, so this section governs
+every coplanar pair the mesh path receives: non-prism payloads, non-coplanar or
+non-co-directional prisms, and every pair the entry gate or the region
+resolution declines.
 
 Coplanar breadth support constructs one exact 2D arrangement per coplanar face
 patch in the dominant-axis projection already used by the boolean's rational
@@ -889,7 +878,7 @@ stitched result passes §5 and its volume clears §6.
 ### 5.3 One mesh per body in `Verify`
 
 A public boolean meshes both operands at the pair's own chord tolerance:
-`boolChordFactor` times the diameter of the union of the two operands'
+`meshbool.ChordFactor` times the diameter of the union of the two operands'
 bounds-inflated boxes, raised past each operand's own reserved floor (its
 section displacement, a revolve's coordinate stages, a coil's or a mitred
 sweep's held `delta`). `Verify` does not. Each
@@ -926,8 +915,8 @@ result, and the conversion of `Vheld`. The symmetric-difference identity
 `|1_{A∩B} − 1_{A'∩B'}| ≤ |1_A − 1_A'| + |1_B − 1_B'|` holds for any two held
 operands A' and B', whatever tolerances they were chorded at, so the interval
 `[V − E, V + E]` encloses the true overlap whether or not the two meshes share
-a tolerance. The hidden-tangency gate and `rimDelta` likewise read each mesh's
-own boundary bound, and `rimDelta` keeps the pair's own diameter. Nothing in
+a tolerance. The hidden-tangency gate and the rim bound likewise read each mesh's
+own boundary bound, and the rim refusal (`meshbool.RefuseRimPastPair`) keeps the pair's own diameter. Nothing in
 the pipeline assumes the two operands were chorded alike.
 
 **What the reading becomes.** A body's chord is never coarser than the
@@ -1212,8 +1201,8 @@ measures reads `Suspect`. A cup uses box proofs and the read-only boolean once
 its shipped cup tessellation is accepted; analytic clearance/full containment
 remain staged until `bodyGeom` supports `cupPayload`. A faceted boolean result
 uses its held mesh and carried bounds. A revolve uses analytic clearance/full
-containment where supported; read-only intersection stays staged until revolve
-tessellation lands.
+containment where supported (§3.2) and the read-only intersection of its
+tessellation otherwise.
 
 Do not claim curved coverage from planar facets alone. The hidden-tangency gate
 and every operand chord allowance remain mandatory. If a curved pair lies
@@ -1221,7 +1210,7 @@ inside those bounds and no analytic proof settles it, the pair is `Suspect`.
 
 ## 10. Required tests
 
-Every increment asserts geometry and report state, not only successful return.
+Every test asserts geometry and report state, not only successful return.
 
 ### 10.1 Non-mutation and order
 
@@ -1251,8 +1240,8 @@ Every increment asserts geometry and report state, not only successful return.
   containment reuse; read-only Boolean proves the complete overlap or the pair
   stays `Suspect`;
 - held overlap at or below its bound → no fabricated row, `Suspect`;
-- identical/coincident and broad coplanar pairs stay `Suspect` until their
-  stated increments land, then report the proved volume;
+- identical/coincident pairs report the proved volume through §4.1's certificate;
+  a broad coplanar pair that no path measures stays `Suspect`;
 - a coplanar prism pair whose 2D outlines overlap in two or more disjoint
   regions reports one row whose volume is the summed overlap, proving the
   overlap-area reading answered rather than the mesh path — which refuses a
@@ -1295,8 +1284,8 @@ Every increment asserts geometry and report state, not only successful return.
 
 ## 11. Increments
 
-Each row is a PR-sized stage. An unanswered verification question reads
-`Suspect`; no row claims work that has not landed.
+Each row is a shipped stage and what it still leaves `Suspect`. An unanswered
+verification question reads `Suspect`.
 
 | PR | Lands | Still `Suspect` |
 |---|---|---|
@@ -1336,6 +1325,5 @@ Each row is a PR-sized stage. An unanswered verification question reads
   never report a partial sum as total overlap.
 - Check cancellation at phase boundaries and every 256 expensive candidates.
 
-No design decision remains open in this increment. Revolve tessellation,
-analytic cup boundary support, and broader contact certificates are explicit
-prerequisites or staged coverage, not unresolved contract choices.
+No design decision is open. Analytic cup boundary support and broader contact
+certificates are staged coverage, not unresolved contract choices.
