@@ -36,7 +36,7 @@ link anywhere along the drive — or finds where one does.
 
 **It lives in the root package**, in `linkage.go`, `linkage/verify.go` and `linkage/bound.go`, beside
 `motion.go`, and not in a subpackage like `dynamics/`. The reason is what a pose evaluation needs: the
-transient placement of a payload under a composed transform (`payload.Placed` with the reserved
+transient placement of a payload under a composed transform (a payload's `Placed` method with the reserved
 `TransientProducer`, motion §5.1), the clearance kernel with its per-call carrier cache
 (`pairkernel.Pair`), the overlap transfer (`motionbound.TransferredOverlap`) and the exact ideal-pose enclosure
 `η` is charged against (`internal/motionbound.IdealPose`). `dynamics/` sits above the root because the
@@ -383,7 +383,7 @@ point enclosure, so a link whose path joints all hold `0` has `η` exactly zero,
 today. `η_k(s)` is `motionbound.PoseDeviation(composed, placement, T*_k(s), R0)` with `R0` the body's
 record radius (`moverRecordRadius`); it covers every rounding the float pose committed — `math.Sincos`,
 Rodrigues, the pivot offset, and one `Then` per joint on the path — and grows with the number of joints
-only through the enclosure widths, which are of order `1e-16` per joint. Both bodies of a link-link pair
+only through the enclosure widths, each at rounding scale per joint. Both bodies of a link-link pair
 move, so that pair's gap interval is widened by `η_A + η_B` (contact-sweep §3), and a collision on it
 transfers only when the measured volume clears `proofbound.SweptVolumeAllow(η_A, Area_A) + proofbound.SweptVolumeAllow(η_B, Area_B)`,
 each term exactly as motion §5.1 forms it with stretch base `1` (every ideal linear part is a product of
@@ -620,8 +620,8 @@ with its first power — the reading's defect per interval is about `τ_rate·Δ
 meeting the gate `rel·gap` needs a step of about `4·rel·gap/τ_rate` over the whole region where the gap
 sits within `rel·gap` of its minimum. For a gap curving as `κ·Δq²` that region is about
 `2·√(rel·gap/κ)` wide along each joint, so the cell count grows as `(τ_rate/√(rel·gap·κ))^n`: about a
-hundred intervals for the three-joint arm's drive (§10: `239` poses under the travel bound alone), and about `10^8` cells for the same
-arm's box (§14.7), which no budget reaches. This certificate bounds a pair's gap over an interval or a
+many intervals for the three-joint arm's drive (§10), and so many cells for the same arm's box
+that the default budget runs out (§14.7). This certificate bounds a pair's gap over an interval or a
 cell to second order in the step instead, from the bodies' `Bounds()` boxes and the ideal poses alone.
 
 **The fact.** For any unit vector `n` and any configuration, the distance between two bodies is at least
@@ -728,7 +728,7 @@ joint by different turns or bases — keeps the box form with `h_i` the total va
 configurations leave one segment; a waypoint on the straight line through its neighbours at equal shares
 bends nothing, so a drive with collinear `Via` values reads the bounds the plain drive reads (§2.3).
 The sum vanishes to first order where the drive's gap is flat, even when its terms do not: at the
-three-joint arm's minimum the wrist's corner moves along `X` at about `−2.8`, `−0.7` and `+3.6` mm per
+three-joint arm's minimum the wrist's corner moves along `X` at about `−2.8`, `−0.7` and `+3.5` mm per
 radian of its three joints, which the box form charges as `7.1` and the segment term as their sum, near
 `0`. The interval form is then second order on a drive, as the cell form is in a box, and the reading
 closes once `Rem(|Δq|)` falls under about `rel·gap/2`.
@@ -841,12 +841,13 @@ read the same points and report the same poses and outcomes.
 their velocities under each joint on the path once, and projects them onto six directions: a few hundred
 rational-interval operations, and a few hundred sums over short dyadics per pair and interval. The
 readings are kept on the pose and serve both intervals it ends. On §10's three-joint arm at the defaults the
-reading closes at a step of `1/256` in `15` poses, where the travel bound alone refines to the reading floor
-in `239` poses. The arm's box reads `Sound` in `417` centres (§14.9's P2) in place of exhausting the budget
-(§14.7). The disc is unchanged. A box whose minimum sits at a corner of the box with a nonzero
+reading closes at a step coarser than the verdict floor, where the travel bound alone refines to the reading
+floor (`TestVerifyLinkageThreeJointFlatMinimum`). The arm's box reads `Sound` in fewer than `4096` centres
+(§14.9's P2, `TestVerifyJointBoxThreeJointFlatMinimum`) in place of exhausting the budget (§14.7). The disc is
+unchanged. A box whose minimum sits at a corner of the box with a nonzero
 gradient (§14.8's clear crane box) still gains: its reading's upper end is a centre's gap, which no centre
 brings to the corner faster than linearly, but the lower end, the leaves' bounds, closes to second order,
-and the gate is met in `43` centres where the travel bound alone takes `137`.
+and the gate is met in fewer than `1024` centres (`TestVerifyJointBoxClearReading`).
 
 **The split axis.** Where a pair's bound over a cell or an interval is the projection bound, the joint
 whose halving lowers it most is the one with the largest share of its defect, `|n·v_{i,c}(m)|·h_i +
@@ -870,12 +871,11 @@ each of its ends, which is at least the minimum over it.
   `X(θ) = 50·(cos θ + cos 2θ + cos 3θ) + 10·sin 3θ`, `Y(θ) = 50·(sin θ + sin 2θ + sin 3θ) − 10·cos 3θ`
   for `θ = 90°·s`; `X` peaks where `X'(θ) = 0`, at `θ* ≈ 2.44°` (`s* ≈ 0.0271`, bracketed to `1e-12` by
   bisection of `X'`), with `Y ≈ 2.8` inside the post's face, so the drive's minimum gap is `160 − X(θ*)
-  ≈ 9.360` mm. Assert `Sound`, `Clearance` enclosing it with `ToleranceSatisfied`, no interval narrower
-  than `1/1024`, and the pose count recorded: `16`, against the estimate of about `90` that assumed a step
-  of `1/512`; the segment term closes the reading at `1/256`. Red when the projection bound is dropped:
-  the reading then refines to `1/16384` (§10). The reading floor's leg (§11) runs the same arm at
-  `WithMotionTolerance(Scalar(1e-5))`: `Sound` with some interval narrower than `1/1024`, measured `25`
-  poses down to `1/4096`; red when the segment term is dropped, since the box form's first-order defect
+  ≈ 9.360` mm. Assert `Sound`, `Clearance` enclosing it with `ToleranceSatisfied`, and no interval narrower
+  than `1/1024`; the segment term closes the reading before the verdict floor. Red when the projection bound
+  is dropped: the reading then refines to `1/16384` (§10). The reading floor's leg (§11) runs the same arm at
+  `WithMotionTolerance(Scalar(1e-5))`: `Sound` with some interval narrower than `1/1024`
+  (`TestVerifyLinkageReadingFloor`); red when the segment term is dropped, since the box form's first-order defect
   then leaves the reading beyond tolerance at the reading floor.
 - **Scene 13 — the pendulum (the remainder's leg).** A block `x ∈ [−5, 5], y ∈ [−50, −40], z ∈ [0, 10]`
   hangs from a revolute joint about `Z` through the origin and swings `0° → 90°` toward a wall
@@ -888,9 +888,8 @@ each of its ends, which is at least the minimum over it.
   every `IntervalClear` interval's `Clearance` at or below `g` at its far end; red when `Rem` is dropped
   and when it is halved. At `WithMotionTolerance(Scalar(1e-5))` assert `Sound`: the minimum, `15` mm at
   the drive's end, is approached at `40` mm per radian and the travel bound sits about `5.1` mm per radian
-  of the last step below it, so it needs a step of about `3.7e-5` there, under `1/16384`, and reads
-  `Suspect` alone, which is the leg that goes red when the projection bound is dropped. Measured: `11`
-  poses, against `16` that end at the reading floor under the travel bound alone. The same scene stated along each of the six directions — the wall on each
+  of the last step below it, so the gate admits it only at a step below the reading floor, and the travel bound reads
+  `Suspect` alone, which is the leg that goes red when the projection bound is dropped. The same scene stated along each of the six directions — the wall on each
   side of the pivot, the block hanging opposite — reads `Sound` at that tolerance; red when that direction
   is dropped. **The pendulum under a slide:** the pivot carried by a prismatic joint along `X` under the
   ground on a carriage `x ∈ [−5, 5], y ∈ [−8, −2], z ∈ [120, 130]`, the box `d ∈ [0, 30]` mm × `θ ∈ [0°,
@@ -906,9 +905,8 @@ each of its ends, which is at least the minimum over it.
   and `0.5952`. The relative path is both joints, and their `z`-extents coincide, so the layer exclusion
   does not settle the pair. Assert `Sound` at the defaults, `Clearance` enclosing `g*`, no interval
   narrower than `1/1024`; red when the partner's expansion is dropped from a link-link pair (the bound
-  then exceeds `g` at an interval end near a minimum). Measured: `23` poses, against `445` down to
-  `1/4096` under the travel bound alone.
-- **Unit-level checks of `B_ij`, `v_{i,c}`, `L_n` and the larger-of-two-bounds rule are not implemented.**
+  then exceeds `g` at an interval end near a minimum).
+- **There are no unit-level checks of `B_ij`, `v_{i,c}`, `L_n` or the larger-of-two-bounds rule.**
   No test differentiates `n·x_c` against `B_ij`, compares a corner velocity with `ω × r`, or sums `L_n` by
   hand. The bounds are exercised through the scenes above (`apitest/linkage_projection_test.go`,
   `apitest/linkage_box_projection_test.go`), whose assertions fail when a bound is unsound or too loose.
@@ -918,26 +916,22 @@ each of its ends, which is at least the minimum over it.
   stand far outside their bodies. At `WithMotionTolerance(Scalar(1e-5))` assert `Sound`, the reading
   enclosing `15`, every `IntervalClear` interval at or below `g` at its ends; red when the hull bound is
   dropped and when the face normals are (the reading stops at the reading floor beyond tolerance).
-  Measured: `11` poses, as untilted.
 - **The slot (the line-segment test).** A slot, cap centres `(0, 45)` and `(0, 85)` with radius `5`,
   rocks `−20° → 20°` about `Z` through the origin under a wall `y ∈ [95, 105]`: its top cap reaches
   `85·cos θ + 5`, a flat minimum of `5` mm upright, `5` mm above its segments' start points. Assert every
   `IntervalClear` interval at or below `90 − 85·cos θ` at its ends and the reading enclosing `5`; red when
-  an outer loop with an arc is read at its start points. The internal test pins a block's eight hull
-  points exactly, a displaced level's pad of `4·√3` times the displacement, and two blocks `10` mm apart
-  read `10` by the hull bound and `9.25` padded by `0.5` and `0.25`; red when the pad or the pads in the
-  bound are dropped. A second internal test pins the containment `ρ` relies on: every hull point of a box,
-  of a box turned about `Z` and lifted, of a box turned about `(1, 1, 1)`, and of a union whose section
-  carries a positive displacement lies inside the body's rest box inflated by its `Bound`, compared
-  exactly; red when the top level is lifted by the pad.
+  an outer loop with an arc is read at its start points. The internal tests of the hull bound
+  (`internal/linkagebound/projection_filter_test.go`: `TestHullDirectionBelowIsSound`,
+  `TestHullWitnessOfTurnedBoxes`, `TestAxialCandidatesNeverBeatCoordinateDirections`) pin its soundness and
+  the witness direction of two turned boxes. No test reads `PrismHullPoints` or the displacement pad
+  (`4·√3` times the largest displacement, `internal/linkagebound/hull.go`) directly.
 - **Agreement with `VerifyMotion`** (§11) is restated. At the endpoints alone, on motion §9's fixtures 1,
   2 and 4, neither bound certifies the one interval and the two reports agree in every reading.
   Bisected, both take the projection bound (motion §5.2), and the leg asserts the same collisions,
   `Status`, poses and interval outcomes, each interval's `Clearance` within `1e-9` of the other's — `ρ_11`
   and `ρ_max` are read by two routes and may part in the last ulp — every interval's `Clearance` at or
   below the closed-form gap at each of its ends, and on fixture 2 `Sound` with both readings enclosing `10`
-  within `0.1` mm. Measured, for both: fixture 1 evaluates `11` poses, fixture 2 `16` and fixture 4 `21`,
-  where the travel bound alone takes `13`, `102` and `114`.
+  within `0.1` mm.
 
 ### 5.9 Constant pairs
 
@@ -987,7 +981,7 @@ coupler and the follower meet at the closure, whose relative path through the tr
 the coupler joint and the follower joint, so those pairs are evaluated at every pose and read through the
 kernel's windowed cell. The symmetric fixtures of §11 — the disc on its own axis beside a wall, the cone
 on its own axis below a wall — are constant pairs: the disc reads the `Exact` `7` with `Bound` zero at both
-poses, and the cone its unplaced reading, `5` with a `Bound` of about `4e-15`, at both.
+poses, and the cone its unplaced reading, at most `5` with a `Bound`, at both.
 
 **Exactness.** Every admission test is §5.2's and §5.7's, exact rationals with no tolerance; the one
 evaluation is `Verify`'s own pair procedure on live bodies, with its own exactness and its own mesh path
@@ -1022,7 +1016,7 @@ several moving groups. The steps that differ:
    Every pair is also tried by the layer exclusion (§5.7), and a pair both settle keeps the larger of
    their two proven lower bounds: a swept box grows by the link's reach in every direction, so a layer
    the joints keep exactly can prove more — the Scotch yoke's yoke and block, `2` mm apart along `Z`,
-   whose swept boxes separate along `Y` by about `1.54`. A declared pair is excluded
+   whose swept boxes separate along `Y`. A declared pair is excluded
    on the same terms: a pair proven apart over the whole drive is proven free of overlap too. A pair
    neither settles that is a constant pair (§5.9) is evaluated once, on its bodies as they stand, and its
    outcome serves every pose; a constant pair whose one evaluation is undecided, touching or unmeasured
@@ -1071,7 +1065,8 @@ check declines by design is listed in §1, §13 and §14.10.
 ## 10. Cost
 
 Each pose runs the pair procedure once per evaluated pair; a declared pair costs the same as an evaluated
-one. A pin in a bore costs the kernel's windowed nested cell (clearance §4). A pair the kernel leaves undecided falls to the read-only mesh intersection at
+one. A pin in a bore costs the kernel's windowed nested cell (clearance §4). A pair the kernel leaves undecided falls
+to the read-only mesh intersection at
 every pose, the slow path, which tessellates each distinct transient placement; the windowed cell keeps a
 pin pair off it. A constant pair (§5.9) costs one evaluation per call, whatever the pose count. The
 per-call `pairkernel.Cache` holds every static body's clearance carriers for the whole run. `VerifyJointBox`
@@ -1087,26 +1082,25 @@ The pose count is governed by the travel rate. A link under `k` sweeping revolut
 turn sweeps has `τ ≈ 471·Δs` mm, so a `10` mm gap certifies at `Δs ≲ 1/32` and a clear sweep evaluates
 about `33` poses plus the reading refinement's `log₂(1/Resolution)` extra poses around the minimum. For a
 three-joint arm of one body per link, two fixtures and two declared elbow contacts, that is `9` pairs per
-pose — `6` against the fixtures, one undeclared link-link pair, two declared — about `400` pair evaluations
-for a clear sweep, and `10`–`20` onset poses per contact found.
+pose — `6` against the fixtures, one undeclared link-link pair, two declared — about `9 × 33` pair evaluations for a
+clear sweep, plus further poses to bracket each contact's onset.
 
 Measured on `BenchmarkVerifyLinkageThreeJointArm` (three stacked `50` mm links each turning `0° → 90°`,
 the two elbows declared, a post `10` mm past the wrist and a far post): the declared elbows touch and
 publish nothing, the shoulder-wrist pair is settled by the layer exclusion (§5.7), and four pairs are
 evaluated per pose. At `WithResolution(Scalar(1.0/64))` the verdict settles in `9` poses,
 every interval `IntervalClear` and the reading beyond tolerance. At the defaults the projection bound
-(§5.8) closes the reading around its one minimum at a step of `1/256`: `15` poses,
-`Sound`. The travel bound alone settles the verdict in `48` poses and refines the reading to the reading
-floor in `239`.
+(§5.8) closes the reading around its one minimum: `15` poses, `Sound`; the benchmark reports both counts as
+`poses/op`. The travel bound alone settles the verdict in more poses and refines the reading to the reading floor.
 
 **The whole-drive reading at the default floor.** The verdict is cheap; the reading need not be. A certified
 interval's lower bound sits up to `τ/2` below the true gap, so the reading's half-width near the minimum
 is about `τ_rate·Δs/4`, and the gate (verification §2) admits `rel·gap`. A chain's `τ_rate` is the sum of
 its `ρ_{ik}·|To_i − From_i|` — hundreds of millimetres per unit `s` for an arm of a few links — so at
-`rel = 1e-3` and a `10` mm gap the reading needs `Δs ≈ 7e-5`, under the verdict floor `1/1024`. That is
+`rel = 1e-3` and a `10` mm gap the reading needs `Δs` of order `1e-4`, under the verdict floor `1/1024`. That is
 why the reading has its own floor (§3): refinement past the verdict floor goes only to the interval holding
-the smallest bound, so around an isolated minimum it costs about `log₂(16)` halvings per tie broken (the
-three-joint arm above under the travel bound alone: `48` poses for the verdict, `239` with the reading).
+the smallest bound, so around an isolated minimum it costs about `log₂(16)` halvings per tie broken (the three-joint
+arm above reads this way under the travel bound alone).
 The projection bound of §5.8 sits second order in the step below the gap, and closes such a minimum's
 reading a few halvings past the width at which the verdict settles (`15` poses for the same arm); the reading
 floor then serves a tighter tolerance and the pairs that certificate leaves loose. A caller who states
@@ -1115,7 +1109,8 @@ coarse reads `Suspect` with a `DiagMeasurementBeyondTolerance` on it. A minimum 
 a pair whose gap does not change — makes every interval tie for the smallest bound, step 6 refines all of
 them, and the cost is linear in `1/Δs`: at most `16385` poses at the default reading floor, and fewer where
 the gate is met sooner (a disc of radius `5` spinning a quarter turn `7` mm from a wall about an axis
-`1e-9` mm off its own: `513` poses). A body symmetric about its own joint (§5.2) has no travel under it, so
+`1e-9` mm off its own: `513` poses, asserted by `TestVerifyLinkageReadingFloor`). A body symmetric about its own joint
+(§5.2) has no travel under it, so
 the same disc on its axis certifies the whole drive from its two ends. The layer
 exclusion (§5.7) settles the common case of that shape, a stacked planar mechanism, before any pose:
 scene 1 without the wall, and the same arms over a table, each evaluate the two endpoints and read
@@ -1125,8 +1120,8 @@ leans off its partner's layer, or a pair whose extents along the axis overlap �
 ## 11. Required tests
 
 Every test asserts on computed geometry through the production path (CLAUDE.md "Correctness must be
-observable"); bounds are asserted `InDelta` at a stated slack, never pinned (memory: float bounds are
-arch-specific); each bound leg is deleted once and seen to fail, and the test file records which legs.
+observable"); bounds are asserted `InDelta` at a stated slack, never pinned (fused multiply-add moves the last bits
+between amd64 and arm64); each bound leg is deleted once and seen to fail, and the test file records which legs.
 
 **Scene 1 — the folding arm (the first acceptance target).** Link 1, the upper arm `A`: motion §9's arm,
 a prism over `x ∈ [0, 48], y ∈ [−14, 14]`, `z ∈ [0, 10]`, on a revolute joint about `Z` through the origin,
@@ -1147,7 +1142,7 @@ circle of radius `48` about the origin, so its top face is the plane `y = 48·si
   point `86/256`, where the overlap is `480·(48·sin(30.234°) − 24) ≈ 81.5` mm³, asserted within `1e-3`
   mm³ with `Bound` below `Value`; every `IntervalClear` interval ends at or below `1/3`; the interval
   containing `1/3` is not `IntervalClear`; every `(A, wall)` collision has `At > 0.369`; no pose carries an
-  `(A, B)` row. The check evaluates `11` poses.
+  `(A, B)` row.
 - The same linkage with the wall removed, at the defaults: `Sound`, the two endpoints alone, one
   `IntervalClear` interval whose `Clearance` is exactly `2`, and no whole-drive `Clearance`. A `1` mm
   `WithMinClearance` is `AssessmentMet`; a `3` mm one is `AssessmentUndecided` with
@@ -1157,7 +1152,7 @@ circle of radius `48` about the origin, so its top face is the plane `y = 48·si
   evaluated; its relative motion is joint 2 alone and its gap, `21`–`31` mm, certifies every interval at
   `WithResolution(Scalar(1.0/4))`. This is the leg that goes red when the common-ancestor joint is left in
   the pair's `τ`: every interval is then undecided at that floor. The travel terms themselves are pinned by
-  the internal travel test below and by scene 4.
+  scene 4 and the waypoint legs of scene 5.
 - `examples/` holds `Example_verify_linkage_chain` on this scene, printing `Status`, the first collision's
   bodies and its fraction to three decimals — `0.336` on every platform, since the grid is dyadic.
 
@@ -1200,7 +1195,8 @@ follows later. Assert `Interfering` with the first collision on `(boom, wall)` w
 the grid point `137/256` — with the overlap the triangular prism `10·d²/(2·sin θ·cos θ)` mm³ for the
 corner's depth `d` past `y = 60`, within `1e-6`. The boom slides along `X`, perpendicular to `Z`, so the
 mast's `z`-extent `[0, 38]` and the boom's `[40, 50]` hold at every `s` and the layer exclusion settles
-the `(mast, boom)` pair: no pose carries its row. The prismatic term is pinned with the mast unlisted and a `10` mm block `x ∈ [10, 20]` in the
+the `(mast, boom)` pair: no pose carries its row. The prismatic term is pinned with the mast unlisted and a `10` mm
+block `x ∈ [10, 20]` in the
 boom's place (the `50` mm boom covers any pin it passes at the end): a `2 × 2 × 2` mm pin at
 `x ∈ [24, 26]`, `4` mm ahead of the block at rest and `14` mm behind it at the end, with the endpoints
 alone (`WithResolution(Scalar(1))`): no `Collision`, `IntervalUndecided`, `Suspect` — exactly motion §9
@@ -1229,8 +1225,7 @@ in two chains:
   `WithResolution(Scalar(1.0/900))` with the first `Collision.At` within `[31/64 − 0.41/90, 31/64 + 0.41/90]`.
   This is the fixture that goes red when the revolute ball's radius is dropped from `ρ_{ik}`.
 
-Measured: 4a's first collision lands at `s = 0.4707`, 4b's at `0.4805`, against `31/64 = 0.4844`, each
-inside its window.
+Each fixture's first collision lands inside its window around `31/64`.
 
 **Scene 5 — waypoints.** A hub `x, y ∈ [−5, 5], z ∈ [−20, −12]` on a revolute joint about `Z` through the
 origin carries an arm `x ∈ [0, 50], y ∈ [−5, 5], z ∈ [0, 10]` on a prismatic joint along `+Z`. The drive has
@@ -1243,7 +1238,8 @@ y ∈ [30, 40], z ∈ [−10, 5]` sits under the arm's final place.
   `s* = 11/12`, in closed form; the overlap is then `100·(5 − 60·(1 − s))` mm³. At
   `WithResolution(Scalar(1.0/256))` assert `Interfering`, the first `LinkCollision` on `(arm, landing
   block)` at the grid point `235/256` with the overlap `7.8125` mm³ within `1e-6`, every collision past
-  `s*` and every `IntervalClear` interval ending at or before it, no collision on the post, every pose's `Values` the closed-form schedule, and the intervals
+  `s*` and every `IntervalClear` interval ending at or before it, no collision on the post, every pose's `Values` the
+  closed-form schedule, and the intervals
   holding `1/3` and `2/3` each `IntervalClear`. The same swing with the lift unlisted strikes the post.
 - The same folding arm as scene 1, its sweeps given collinear `Via` values (`45°` and `−45°`; then `30°, 60°`
   and `−30°, −60°`), reports exactly what the one-segment drive reports but for `Drive`.
@@ -1266,8 +1262,8 @@ y ∈ [30, 40], z ∈ [−10, 5]` sits under the arm's final place.
   and the value, red when only the ends are checked; a drive whose every waypoint is inside poses, and its
   value at the waypoint's fraction is the waypoint as stated. `PoseAt` on a four-segment drive, whose
   waypoints sit at dyadic fractions, returns each waypoint exactly at its fraction, the segment's line
-  inside it, and the first and last segments' lines outside `[0, 1]`. An internal test pins `|Δq_i|`
-  against the hand sum across one and two waypoints, exactly for a prismatic joint whose ends agree.
+  inside it, and the first and last segments' lines outside `[0, 1]`. No test pins `|Δq_i|` against the hand sum in
+  isolation; the turning-back and `Via` legs above pin it through their collisions.
 - `examples/` holds `Example_verify_linkage_waypoints` on the lift-swing-lower scene, printing `Status`, the
   first collision at `s = 0.918`, and its segment and local fraction: the lowering, `75%` through it.
 
@@ -1278,21 +1274,20 @@ of radius `r = 5` about `(48, 0)`, `z ∈ [−1, 9]`, on the elbow revolute abou
 `0° → −90°`, with `DeclareJointContact(A, P)`. Scene 1's wall, `y ∈ [38, 58]`, which `A`'s far corner
 `(62, 14)`, at radius `≈ 63.6` and polar angle `atan(14/62)`, reaches when `63.6·sin(θ + atan(14/62)) =
 38`: `θ ≈ 24.0°`, `s ≈ 0.267`; `P`, whose centre rides the elbow's circle of radius `48`, reaches it when
-`48·sin θ + 5 = 38`, `s ≈ 0.482`. The verdict therefore bisects, and the endpoints, `1/2` (colliding) and
+`48·sin θ + 5 = 38`, `s ≈ 0.483`. The verdict therefore bisects, and the endpoints, `1/2` (colliding) and
 `1/4` (clear, `A`'s corner at `y ≈ 36.7`) are among the evaluated poses. At
 `WithResolution(Scalar(1.0/256))`:
 
 - `A` and `P` are coaxial in the ideal poses at every `s`: the pin turns about its own axis, which the
   shoulder carries along with the bore. Their float poses do not agree: `A`'s bore anchor is the shoulder
   rotation's image of `(48, 0, 0)`, `P`'s is the `Then`-composed elbow-then-shoulder pose's image of
-  `(48, 0, −1)`, and the two differ by `3e-15` to `7e-15` at `s = 1/4`, `3/4` and `1` on amd64, zero at
-  `s = 0`, `1/8`, `1/3` and `1/2`.
+  `(48, 0, −1)`, and the two differ by a few ulps at some poses and agree at others.
 - `(A, P)` is a constant pair (§5.9): its relative path is the elbow alone and the pin is symmetric about
   it. Assert: `Status` is `Interfering` with every `LinkCollision` on `(A, wall)` or `(P, wall)` and none
   on `(A, P)`; EVERY evaluated pose carries a `Clearance` row for `(A, P)`, `Exact` `0.5` with `Bound` zero;
-  no diagnostic names `(A, P)` (`10` poses, the first `(A, wall)` collision at `70/256`, the first
-  `(P, wall)` one at `1/2`). Red when the symmetry test is dropped from the rule: the rows read the placed
-  bodies, `Approximate` with bounds near `1e-11`.
+  no diagnostic names `(A, P)` (the first `(A, wall)` collision within `2/256` above its onset, `s ≈ 0.267`). Red when
+  the symmetry test is dropped from the rule: the rows read the placed
+  bodies, `Approximate` with nonzero bounds.
 - **Two stacked joints.** The pin hung from a wrist on the elbow's own axis, under an elbow link carrying
   a block above both bars, elbow and wrist each `0° → −45°`: the pin's relative path holds two moving
   joints, so the pair is not constant and every pose measures it through the kernel's windowed nested cell.
@@ -1301,7 +1296,7 @@ of radius `r = 5` about `(48, 0)`, `z ∈ [−1, 9]`, on the elbow revolute abou
   the kernel's `RingFamily` is undecided where the anchors differ, and the bore's rims against the pin's
   wall take the coarse enclosure's zero lower bound, so the row is missing from `s = 1/4` on.
 - **The jammed pin.** `r = 5.6`: a `LinkCollision` on `(A, P)` at every evaluated pose, `Volume.Value ±
-  Bound` enclosing `8·π·(5.6² − 5.5²) ≈ 27.897` mm³ (measured `27.896 ± 0.68` through the mesh path);
+  Bound` enclosing `8·π·(5.6² − 5.5²) ≈ 27.897` mm³;
   `Status` `Interfering` with the pin unmeasured at no pose, and the one volume, measured on the bodies as
   they stand, at every pose; red when the symmetry test is dropped (the volume at `s = 1` reads a few ulps
   off the one at `s = 0`). This leg pins the order the kernel reads its
@@ -1337,8 +1332,7 @@ candidate is dropped. The link-link swept box: a far sibling block is settled, a
 `30` mm toward the arm's swing, its rest box `46` mm from the arm's, collides — red when the boxes are not
 grown by each link's travel. Held links: a base on a joint the drive never moves, resting on a table and
 beside a wall, forms neither pair and reads `Sound`, red when its pairs are formed; held at `30°` its
-wall row is the same at every pose, and an internal test shows its one transient placement reused and kept
-cached across poses.
+wall row is the same at every pose, as one constant placement.
 
 **The reading floor.** At `WithMotionTolerance(Scalar(1e-5))` the three-joint arm of §10 reads `Sound`, its
 reading inside the gate, with `ReadingResolution` `1/16384` and some interval narrower than `1/1024`; red
@@ -1365,7 +1359,8 @@ widens a row's `Bound` as motion §9 test 8 shows, carried through a child link'
 exclusion of a far body, and a swept box grown by every ancestor joint's travel from the zero pose (scene
 1's shoulder swinging `80° → 90°` with the elbow held carries the forearm into a wall `46` mm beyond its
 zero-pose box); `PoseAt` composition pinned on three joints with closed-form world points (`(96, 0, 0)` on
-link 2 under scene 1 at `s = 1/3` is `(48·cos 30°, 48·sin 30°, 0) + (48, 0, 0)`). No test pins the ball propagation on a four-joint
+link 2 under scene 1 at `s = 1/3` is `(48·cos 30°, 48·sin 30°, 0) + (48, 0, 0)`). No test pins the ball propagation on
+a four-joint
 chain, the telescoping `τ`, the ideal pose of scene 1's forearm or a link-link gap's `η_A + η_B` widening in
 isolation; those are not implemented as unit tests. `apitest/linkage_test.go` covers them only through the
 scene verdicts (`TestVerifyLinkageFoldingArm`, `TestVerifyLinkageSweptBoxCoversAncestorTravel`,
@@ -1383,7 +1378,7 @@ Shard assignment of these tests and examples is owned by `agent-docs/testing.md`
 | 4 | the reading floor (§3): `ReadingResolution`, the reading's refinement past the verdict floor at the defaults, the margin held to the verdict floor; its tests | a stated `WithResolution` too coarse for the reading, and a constant gap the layer exclusion cannot settle whose gate needs a step under `1/16384` |
 | 5 | waypoints (§2.3): `JointSweep.Via`, equal-share segments, `PoseAt` per segment, limits at every waypoint, `m_i`, holds and standings over every waypoint, `|Δq_i|` cut at every waypoint inside an interval (§5.2); scene 5 and its example | as after PR 4 |
 | 6 (`internal/clearance/facepair`, `internal/clearance/curvecells`: clearance §4's windowed nested cell and its edge-tier twin, clearance §8 PR 4) | a placed pin in a bore measured at every pose: scene 8, its jammed, filled and static-post variants, the kernel's band, tilt and rim tests; `_gallery`'s pins back on their centres | a pin that fills its bore; a constant pair still evaluated per pose |
-| 7 (`linkage/verify.go` `markConstantPairs`; `internal/motionengine/engine.go`: `motionPair.constant` with the one cached outcome, `travel` zero for it, a mover whose evaluated pairs are all constant never placed; `linkage/box.go`: no joint term for it) | §5.9's constant pairs; scene 8's `Exact` rows and once-measured collision, its two-stacked-joints variant; the rule's internal test; §11's symmetric fixtures' pairs read once | — |
+| 7 (`linkage/verify.go` `markConstantPairs`; `internal/motionengine/engine.go`: `Pair.Constant` with its one cached outcome `Pair.Once`, `travel` zero for it, a mover whose evaluated pairs are all constant never placed; `linkage/box.go`: no joint term for it) | §5.9's constant pairs; scene 8's `Exact` rows and once-measured collision, its two-stacked-joints variant; §11's symmetric fixtures' pairs read once | — |
 
 ## 13. Settled points
 
@@ -1566,7 +1561,8 @@ its `Message` names the budget and the cells it held.
 **`Diagnostic` has one joint-box field.** `Cell *JointCell` is the cell a joint-box finding concerns: for a cell
 finding the cell itself, for a centre finding the cell whose centre was evaluated — which may since have
 been split, so it need not be in `Cells`. It is nil on every diagnostic `Verify`, `VerifyMotion` and
-`VerifyLinkage` emit, and on the budget and reading findings. `report.go` owns it, and verification §1.1 states it. `At` is nil in a
+`VerifyLinkage` emit, and on the budget and reading findings. `report.go` owns it, and verification §1.1 states it.
+`At` is nil in a
 joint-box report: a cell has no scalar parameter.
 
 `Cells` lists the leaves of the subdivision and nothing else, so they tile the box exactly, as
@@ -1739,30 +1735,27 @@ certify when `lo_m > τ_half`, so a clear region at gap `g` resolves into cells 
 
 - **Two joints.** Scene 6 (§14.8): the crane's boom under the mast's quarter turn (`ρ ≈ 91`) and a `30`
   mm slide, so `τ_half` at the root is `½·(91·(4π/9) + 30) ≈ 79` mm. At `WithResolution(Scalar(1.0/64))`
-  the leaves number at most `4096`; the estimate is a few hundred clear leaves, about `90` undecided leaves
-  along the boundary curve, and the colliding side split to the floor. The blocked certificate does not
+  the leaves number at most `4096` (`64` cells per axis); the clear side resolves into leaves, a band of undecided
+  leaves follows the boundary curve, and the colliding side splits to the floor. The blocked certificate does not
   shorten that: the boom's overlap never exceeds about `2100` mm³ against an area of `2200` mm², so a
-  colliding cell blocks only once its `τ_half` falls under about `0.9` mm, near `1/128` of the `θ` range,
-  below this floor. Measured: `2781` centres into `1391` leaves (`56` clear, `44` undecided, `1291`
-  colliding), the overlap-volume proof at each colliding centre being the dominant cost; at
-  `Scalar(1.0/16)`, `213` centres. The projection bound (§5.8) clears cells near the
+  colliding cell blocks only once its `τ_half` falls under about `0.9` mm, below this floor. The overlap-volume proof
+  at each colliding centre is the dominant cost. The projection bound (§5.8) clears cells near the
   boundary that the travel bound left undecided, so it costs fewer centres on the clear side and none on
   the colliding one. The test runs at `Scalar(1.0/16)` for that cost.
 - **Three joints.** The three-joint arm of §10 with each joint over `[0°, 90°]`. The verdict is cheap,
   since the elbows are declared, the shoulder-wrist pair is settled by its layer and only the wrist's pairs
-  with the posts are evaluated. The whole-box reading is not under the travel bound alone. The wrist's leading corner `(150, −10)` sits at
+  with the posts are evaluated. The whole-box reading is not under the travel bound alone. The wrist's leading corner
+  `(150, −10)` sits at
   `X = 50·(cos θ₁ + cos(θ₁ + θ₂) + cos(θ₁ + θ₂ + θ₃)) + 10·sin(θ₁ + θ₂ + θ₃)`, whose largest value over
   the box, `100 + √2600`, is reached at `(0°, 0°, atan(1/5) ≈ 11.31°)` with the corner at the post's
   mid-height, so the box's minimum gap is `60 − 10·√26 ≈ 9.0098` mm, on the box's edge `θ₁ = θ₂ = 0`,
   and every first derivative of the gap vanishes there: a **flat minimum**. The gap grows with the square
   of each joint's turn while `τ_half` shrinks only linearly with the cell, so step 6 crowds cells around
-  that edge. Under the travel bound alone the default budget evaluates `16383` centres and reads `Suspect`, the
-  reading beyond tolerance and the budget finding raised, and `WithCellBudget(65536)` still does not meet
-  the gate. The
-  projection certificate (§5.8) bounds the gap over a cell to second order: with `Σ B_ij ≈ 700` mm/rad²
-  for this pair, the reading closes at a half-span of about `4e-3` rad. Measured with it: `Sound` in `417`
-  centres at the defaults and at `WithResolution(Scalar(1.0/1024))`; at
-  `WithResolution(Scalar(1.0/64))` the reading stops coarse at `259` centres and reads `Suspect`. A caller
+  that edge. Under the travel bound alone the default budget is exhausted: the box reads `Suspect`, the reading beyond
+  tolerance and the budget finding raised. The
+  projection certificate (§5.8) bounds the gap over a cell to second order: the reading closes at a half-span of a few
+  `1e-3` rad. With it the box reads `Sound` at the defaults (`TestVerifyJointBoxThreeJointFlatMinimum`). A stated
+  `WithResolution` coarser than that half-span stops the reading coarse and reads `Suspect`. A caller
   who wants the verdict alone states `WithResolution`, which stops the reading at the same floor. The layer exclusion is
   what makes a planar stack cheap: a pair it settles costs no cell, and scene 1's arms without the wall
   read `Sound` from the root alone.
@@ -1780,7 +1773,7 @@ is `InDelta` at a stated slack, and each guarding leg is deleted once and seen t
 z ∈ [30, 100]`. The boom's `+5` tip corner sits at `y(θ, d) = (60 + d)·sin θ + 5·cos θ`, which increases
 in `d` and, since `∂y/∂θ = (60 + d)·cos θ − 5·sin θ > 0` for `θ < 85.2°`, in `θ` over the whole box. The
 colliding region is therefore `{y(θ, d) > 62}`, closed toward larger `θ` and `d`, and its boundary is the
-one curve `d*(θ) = (62 − 5·cos θ)/sin θ − 60`, from `θ* = asin(62/√(90² + 5²)) − atan(5/90) ≈ 40.29°` at
+one curve `d*(θ) = (62 − 5·cos θ)/sin θ − 60`, from `θ* = asin(62/√(90² + 5²)) − atan(5/90) ≈ 40.28°` at
 `d = 30` to `d* ≈ 2.075` at `θ = 80°`. The `(mast, boom)` pair is settled by the layer exclusion along `Z`
 and the `(mast, wall)` pair by its swept box, so each centre evaluates `(boom, wall)` alone. At
 `WithResolution(Scalar(1.0/16))` — §14.7 gives the cost at `1/64` — assert:
@@ -1802,8 +1795,7 @@ and the `(mast, wall)` pair by its swept box, so each centre evaluates `(boom, w
   below `10·cos θ`, `50·sin θ` and `20`, so that only the one corner has crossed, its `Volume` is the
   triangular prism `10·δ²/(2·sin θ·cos θ)` within `1e-6`, `Bound` below `Value`; at least one collision is
   that shallow.
-- `CellsEvaluated` is below the default budget and no `DiagJointBoxBudgetExhausted` is raised. The test
-  file records the measured count.
+- `CellsEvaluated` is below the default budget and no `DiagJointBoxBudgetExhausted` is raised.
 - `examples/` holds `Example_verify_joint_box` on this scene at `WithResolution(Scalar(1.0/16))`, printing
   `Status`, the first collision's bodies and its `θ` and `d` to two decimals; the centres are dyadic, so
   the printed values hold on every platform.
@@ -1814,9 +1806,9 @@ box's minimum, a bound no pose measures, and the reading could never close. Now 
 and the minimum gap over the box is `100 − y(80°, 30) = 100 − 90·sin 80° − 5·cos 80° ≈ 10.499` mm, at the
 box's corner. Assert `Sound`, every leaf `CellClear` with its bound below the true gap at its worst corner,
 `Clearance` enclosing `10.499` with `ToleranceSatisfied` at the defaults, `ReadingResolution` `1/16384`,
-fewer than `1024` centres and no leaf narrower than `1/1024` (measured: `43`; the projection bound meets
-the gate at the verdict floor, §5.8); at `WithMotionTolerance(Scalar(1e-4))`, `Sound` with some leaf
-narrower than `1/1024` along `θ` (measured: `55`), red when the reading floor is dropped; `WithMinClearance`
+fewer than `1024` centres and no leaf narrower than `1/1024` (the projection bound meets the gate at the verdict
+floor, §5.8); at `WithMotionTolerance(Scalar(1e-4))`, `Sound` with some leaf
+narrower than `1/1024` along `θ`, red when the reading floor is dropped; `WithMinClearance`
 `10` mm `AssessmentMet`, at the default tolerance and at a relative tolerance of `0.5`, where only the
 margin's own refinement proves it; `11` mm `AssessmentViolated` with a `DiagMotionClearanceViolated` whose
 `Cell` is set. At `WithResolution(Scalar(1.0/64))` the reading is beyond tolerance and the report `Suspect`
@@ -1826,7 +1818,7 @@ with no leaf narrower than `1/64`; red when a stated resolution leaves the readi
 three-joint arm with each joint over `[0°, 90°]`, at the defaults. Its minimum is §14.7's `60 − 10·√26
 ≈ 9.0098` mm at `(0°, 0°, atan(1/5))`, where the wrist's corner `(150, −10)` faces the post at
 mid-height. Assert `Sound`, no `DiagJointBoxBudgetExhausted`, `Clearance` enclosing the minimum with
-`ToleranceSatisfied`, `CellsEvaluated` below `4096` (measured: `417` centres into `209` leaves), every
+`ToleranceSatisfied`, `CellsEvaluated` below `4096` every
 leaf's bound at or below the smallest upper end of its centre's rows, and, at each of the leaf's centre
 and eight corners where the wrist's corner faces the post (`|Y| ≤ 10`), a bound at or below the
 closed-form gap `160 − X` there, which is at least the cell's minimum. Red when the projection bound is
@@ -1846,25 +1838,24 @@ along `θ` alone. Red when a prismatic ancestor is charged `w_j` in `B` (the rem
 of the projection bound's (the slide's span is then the larger share and the reading splits along `d`),
 and when `Rem` is dropped or halved (a leaf's bound exceeds `g` at its far end: near `0°` the gap is
 concave and needs a remainder of about `½·|g''|·h² ≈ 20·h²`, which `½·ρ·h² ≈ 25·h²` covers and half of it
-does not). At `WithCellBudget(1)` the root's bound, if any, is below `15`. Measured: `23` centres into `12`
-leaves.
+does not). At `WithCellBudget(1)` the root's bound, if any, is below `15`.
 
 **Scene 14's box — the two arms.** §5.8's two arms with each joint over `[−30°, 30°]`: the gap `110 −
 50·(cos θ_A + cos θ_B) − 5·(|sin θ_A| + |sin θ_B|)` has four flat minima of `110 − 10·√101 ≈ 9.501` mm, at
 `(±θ*, ±θ*)` with `tan θ* = 1/10`, each with some corner pair at a shared height. Assert `Sound`,
 `Clearance` enclosing `9.501`, every `CellClear` leaf's bound at or below the exact distance between the
-two arms' outlines at its centre, and `CellsEvaluated` below the budget (measured: `263` centres into
-`132` leaves); red when the partner's expansion is dropped from a link-link pair.
+two arms' outlines at its centre, and `CellsEvaluated` below the budget; red when the partner's expansion is dropped
+from a link-link pair.
 
 **The tilted box and the slot (hull points in the cell form).** Scene 13's box carried by the tilt of
 §15.10, the slide along the tilt of `X` and the swing about the tilt of `Z`: every distance is the untilted
 box's, but the wall is met along no coordinate direction and the boxes stand far outside the bodies.
 Assert `Sound`, the reading enclosing `15`, every leaf's bound at or below `g` at its far `θ` end, and
-fewer than `256` centres (measured: `23`, as untilted); red when the hull bound is dropped (`4607`
-centres under box corners alone) and when the face normals are dropped (`Suspect`). §5.8's slot rocking
+fewer than `256` centres; red when the hull bound is dropped (box corners alone need more) and when the face normals
+are dropped (`Suspect`). §5.8's slot rocking
 over `[−20°, 20°]` under a wall, a box of one joint, keeps its box corners, since its outer loop holds
 arcs: `Sound`, the reading enclosing `5`, every leaf's bound at or below the gap's least value over it
-(measured: `563` centres); red when an arc is read at its start point.
+; red when an arc is read at its start point.
 
 **The symmetric body in a box.** §11's disc of radius `5` beside a wall `7` mm away, spinning over
 `[0°, 90°]` on a revolute about `Z` under a carriage that slides `[0, 20]` mm along `Y`, the wall long
@@ -1880,8 +1871,8 @@ direction test is skipped).
 **The blocked box.** The near wall again, over `θ ∈ [70°, 80°]`, `d ∈ [25, 30]`: `y(70°, 25) ≈ 81.6 > 62`,
 so every configuration collides, and at `θ = 75°, d = 27.5` the boom passes through the whole wall with
 overlap `100·20/sin θ ≈ 2071` mm³ against a boom area of `2200` mm², so the blocked certificate closes
-once `τ_half` falls under about `0.9` mm — cells of `1/32` along `θ` and `1/8` along `d`; measured, `255`
-centres into `128` leaves. Assert every leaf `CellBlocked`, `CellsEvaluated` below `1024`, no undecided or
+once `τ_half` falls under about `0.9` mm. Assert every leaf `CellBlocked`,
+`CellsEvaluated` below `1024`, no undecided or
 merely colliding leaf. Red when the blocked
 certificate is dropped: the run then splits to the floor, exhausts the budget, and reads `CellColliding`
 with `DiagJointBoxBudgetExhausted`.
@@ -1915,17 +1906,17 @@ Shard assignment of these tests and examples is owned by `agent-docs/testing.md`
 | 1 (`linkage/box.go`; `internal/motionengine/engine.go`'s `evaluatePose` split into building a pose's groups and running its pairs, `intervalOutcome`'s pair walk and `conclude`'s status fold (both in `internal/motionengine/pair.go`) shared, `VerifyMotion` and `VerifyLinkage` bit-identical) | `JointBox`, `JointRange`, `JointBoxOption` with `MotionOption` embedding it, `WithCellBudget`, `JointConfiguration` and `Linkage.Configuration`; `VerifyJointBox` with the centre certificate, `CellClear`/`CellColliding`/`CellUndecided`, step 5's split rule and order, the floor and the budget, `Diagnostic.Cell`, `DiagJointBoxBudgetExhausted`, the settled pairs, held links and declared contacts over the box, the whole-box reading over the leaves as they stand; scene 6's verdict and tiling assertions at `WithResolution(Scalar(1.0/16))`, since every colliding cell splits to the floor, its example, the budget, one-joint and standing tests | a colliding region's interior: every colliding cell splits to the floor or the budget |
 | 2 | the blocked certificate and `CellBlocked`; scene 6's blocked assertions, still at `Scalar(1.0/16)` (§14.7), the blocked box, and the blocked allowance pinned per moving body | a clear box's whole-box reading at the default floor |
 | 3 | step 6: the whole-box reading's refinement, the reading floor and `ReadingResolution`, the margin; the clear box and its reading; the three-joint cost of §14.7 measured and recorded | a stated `WithResolution` too coarse for the reading; a gap constant along an axis, or a flat minimum, whose gate needs more than the budget |
-| P1 (`linkage/bound.go`: the corner velocities, `B_ij`, `Rem` and `L_n` over the six directions, read once per pose; `internal/motionengine/engine.go`: `motionDriver` gains an optional projection bound per pair and interval, `intervalOutcome` (`internal/motionengine/pair.go`) takes the larger of the two bounds, `singleMotion` supplies none so `VerifyMotion` is bit-identical; `linkage/verify.go`: the driver's bound for a tree, nil on a path with a dependent joint) | §5.8's interval form for `VerifyLinkage`; the three-joint drive, scene 13, scene 14 and the internal tests of §5.8; the agreement test restated; §10's measured counts, `TestVerifyLinkageReadingFloor`'s default leg and the benchmark's reported poses re-measured and recorded | the box's flat minimum (§14.7); a disc or a tilted contact still pays the travel bound's linear cost |
-| P1b (`linkage/bound.go`: `jointStep` and the segment term in `projectionSide`; `linkage/verify.go`: the driver's steps per interval, negated from the far end) | §5.8's segment term on an interval no waypoint bends; the three-joint drive's `rel = 1e-5` leg and the reading floor's leg there; the out-and-back pin; the segment term's internal test; the measured counts re-recorded | as after P1 |
+| P1 (`linkage/bound.go`: the corner velocities, `B_ij`, `Rem` and `L_n` over the six directions, read once per pose; `internal/motionengine/engine.go`: `Driver` gains an optional `Projection` per pair and interval, `intervalOutcome` (`internal/motionengine/pair.go`) takes the larger of the two bounds, `Single` supplies none, so `VerifyMotion` is bit-identical until M1; `linkage/verify.go`: the driver's bound for a tree, nil on a path with a dependent joint) | §5.8's interval form for `VerifyLinkage`; the three-joint drive, scene 13, scene 14; the agreement test restated; §10's measured counts, `TestVerifyLinkageReadingFloor`'s default leg and the benchmark's reported poses re-measured and recorded | the box's flat minimum (§14.7); a disc or a tilted contact still pays the travel bound's linear cost |
+| P1b (`linkage/bound.go`: `jointStep` and the segment term in `projectionSide`; `linkage/verify.go`: the driver's steps per interval, negated from the far end) | §5.8's segment term on an interval no waypoint bends; the three-joint drive's `rel = 1e-5` leg and the reading floor's leg there; the out-and-back pin; the measured counts re-recorded | as after P1 |
 | S1 (`linkage/bound.go`: `bodySymmetryAxis`, `symmetricAboutJoint`; `linkage/verify.go`: the driver's per-mover symmetry and `pathOf`) | §5.2's symmetry rule in the drive's travel and projection bounds; the symmetric-body tests and the off-axis disc of §11 | the box's cells still charge a symmetric body's own joint, until the cell form takes the rule after P2 |
 | S2 (`linkage/boxcell.go`: `branchTerms` and `cellProjection` read `linkageDriver.pathOf`) | §5.2's symmetry rule in the cell form: `τ_half`, the blocked allowance and the projection bound; the symmetric body in a box (§14.8) | — |
 | D1 (`linkage/loopdrive.go`: `dependentHull`, `dependentAt`; `linkage/verify.go`: a dependent's centre and `h` per end, no segment term over one) | §5.8's expansion over a loop's dependent joint on a drive; the crank-rocker's block under a ceiling (§15.10) | the box's cells over a loop still take the travel bound alone for a dependent, until the cell form takes the expansion after P2 |
 | D2 (`linkage/boxcell.go`: `linkagebound.DependentCellReach` per cell, the dependent's centre in `cellProjection`, its share charged to its driver) | §5.8's expansion over a dependent in the cell form (§16.3); the block under a ceiling in a loop box (§16.8) | — |
-| H1 (`linkage/verify.go`: `bodyPoints` over `linkagebound.PrismHullPoints`, the point readings, `linkagebound.Side.ExtentsAlong` and the hull bound over every candidate direction, and the driver's larger bound) | §5.8's hull points and directions on a drive; the tilted pendulum and the tilted wall | the box's cells still read box corners and coordinate directions, until the cell form takes the hull after P2 |
-| C1 (`internal/linkagebound/reach.go`: the cylinder beside the ball in `ReadReachBounds`) | §5.2's cylinder reading of `ρ_{ik}`, the ball's reach kept for the swept box; its internal test | — |
+| H1 (`linkage/verify.go`: the hull point reading (`cornerKey.hull`) over `linkagebound.PrismHullPoints`, the point readings, `linkagebound.Side.ExtentsAlong` and the hull bound over every candidate direction, and the driver's larger bound) | §5.8's hull points and directions on a drive; the tilted pendulum and the tilted wall | the box's cells still read box corners and coordinate directions, until the cell form takes the hull after P2 |
+| C1 (`internal/linkagebound/reach.go`: the cylinder beside the ball in `ReadReachBounds`) | §5.2's cylinder reading of `ρ_{ik}`, the ball's reach kept for the swept box | — |
 | H2 (`linkage/boxcell.go`: `cellProjection` over hull points and face normals, `linkagebound.AttainedDirection`, `linkagebound.AddHullShares`) | §5.8's hull points and directions in the cell form; the tilted box and the slot (§14.8) | — |
-| M1 (`internal/motionengine/engine.go`: `singleMotion`'s projection bound, its points per pose and its remainder; motion §5.2) | §5.8's interval form for `VerifyMotion`, the motion read as one joint; motion §9 tests 22–25; the agreement test asserting equal reports; motion §9 tests 2 and 13's default-floor legs restated | — |
-| P2 (`linkage/boxcell.go`: `classify` takes the larger of `lo_m − τ_half` and `L_n(C)`; `splitAxis` here and `readingAxis` in `linkage/box.go` read the attained bound's own shares, §5.8) | §5.8's cell form for `VerifyJointBox`; scene 12, scene 13's and scene 14's boxes; §14.7's three-joint count and the clear box's `137` re-measured and recorded | a disc or a tilted contact in a box |
+| M1 (`internal/motionengine/engine.go`: `Single.Projection`, with `linkagebound.MotionProjection`'s points per pose and remainder; motion §5.2) | §5.8's interval form for `VerifyMotion`, the motion read as one joint; motion §9 tests 22–25; the agreement test asserting equal reports; motion §9 tests 2 and 13's default-floor legs restated | — |
+| P2 (`linkage/boxcell.go`: `classify` takes the larger of `lo_m − τ_half` and `L_n(C)`; `splitAxis` here and `readingAxis` in `linkage/box.go` read the attained bound's own shares, §5.8) | §5.8's cell form for `VerifyJointBox`; scene 12, scene 13's and scene 14's boxes; §14.7's three-joint count and the clear box's count re-measured and recorded | a disc or a tilted contact in a box |
 
 The projection bound leaves every collision and every outcome the travel bound certified unchanged: a
 pose the larger bound spares lies inside an interval or cell proven clear, where no collision sits. Where
@@ -2045,7 +2036,8 @@ publishes, so limits on it have nothing to compare against. The closing pin's bo
 ### 15.2 The scene
 
 decad builds one private `sketch.Sketch` per loop and per drive, from the loop's recorded pins and nothing
-else (`internal/loopscene/builder.go`), as `internal/prismcells` builds a scene from recorded sections. The scene is never published and no
+else (`internal/loopscene/builder.go`), as `internal/prismcells` builds a scene from recorded sections. The scene is
+never published and no
 `sketch` type crosses decad's API.
 
 **Frame.** The plane's axes are `u* = u/|u|` and `v* = v/|v|`, with `u` and `v` exact rational directions,
@@ -2101,7 +2093,8 @@ measures its angle from the parent's line, which turns with the slide.
 **The bars are the document's.** A bar's exact length is the root of the exact rational squared distance
 `L² = |d|² − (d·n)²/|n|²` between its two pins in the plane, `d` their difference, which is in general
 irrational. Each `NewDistance` carries the target `RatSqrtUp(L²)` and is stated to `Enclose` with
-`WithTargetRange(d, RatSqrtDown(L²), RatSqrtUp(L²))` (sketch #155): every claim of every enclosure holds for every length in that interval, so for the exact
+`WithTargetRange(d, RatSqrtDown(L²), RatSqrtUp(L²))` (sketch #155): every claim of every enclosure holds for every
+length in that interval, so for the exact
 one, and the scene describes the document's own loop. `LoopBar.Length` publishes the interval — `Value` the
 up-rounded root, `Bound` the one-float gap down to the lower root, `Exact` with a zero `Bound` when `L²` is a
 float's square. Nothing about the bars is left uncharged.
@@ -2113,7 +2106,8 @@ reads exactly `0`, so the driver's target IS the joint value in the scene's sens
 driver takes the driving `NewDistance(A, P)`. Its zero-pose reading is the exact `κ·|Dir|`, which lies
 between the floats around its root. The anchor sits behind `P₀` on the side where `q ≥ 0` and ahead of it,
 at `A = P₀ + κ·Dir`, on the side where `q ≤ 0`, so on either side the target `κ·|Dir| + |q|` grows with
-`|q|`. Every ask is placed by that offset as for a revolute driver below `Common`, described next. A revolute driver whose parent is another loop link has no fixed
+`|q|`. Every ask is placed by that offset as for a revolute driver below `Common`, described next. A revolute driver
+whose parent is another loop link has no fixed
 reference: its parent turns. It takes the driving `NewAngle(parentLine, bar)` from its parent's line, as
 a dependent of that parent would, whose zero-pose reading `r₀` is the angle between two of the
 document's lines — irrational in general, and a 2D answer decad does not compute. `sketch` reads it: a
@@ -2146,14 +2140,16 @@ rare and never silent.
 (the sign of the exact dot product). A right-handed rotation by `q` about `+n` is a counterclockwise turn
 by `q` in `(u, v)`, so a joint's value `q_k` appears in the scene as `s_k·q_k`, and a driven angle's
 reading maps back as `s_k·(reading − reading₀)` (§15.4). The primary slide's `s_k` is the sense of its
-`Dir` against `u`, and an anchored slide's is `+1`, since its reading grows as it slides along `Dir`. `Enclose` solves at the range's lower end and
+`Dir` against `u`, and an anchored slide's is `+1`, since its reading grows as it slides along `Dir`. `Enclose` solves
+at the range's lower end and
 continues upward only (`WithContinuation` requires `lo == prev.Range().Hi`), and the branch decad states is
 the zero pose, so every chain of enclosures starts at the driver value `0` and grows toward larger values.
 The scene is therefore built on the side of the plane that makes the driver's scene value `|q|`: for a
 drive that takes a revolute driver's value negative in the scene, `v` is negated (the mirror image, normal
 `−n`, every revolute `s_k` flipped). For the primary slide driven backward `u` and `v` are both negated (a
 half turn in the plane, the same normal, the slide's `s_k` flipped). An anchored slide driver keeps one
-frame on both sides and moves its anchor ahead instead. Readings map back through that side's signs. Every side describes one mechanism and seeds at the same zero pose. A drive builds the scene for
+frame on both sides and moves its anchor ahead instead. Readings map back through that side's signs. Every side
+describes one mechanism and seeds at the same zero pose. A drive builds the scene for
 every side its sub-segments read (§15.8): one for a driver that keeps one side of `0`, both for one that
 crosses it.
 
@@ -2178,8 +2174,8 @@ admission is `E0`'s own certificate. `E0` refusing is an error from the call (§
 radian pair (§2.3), and a turn is irrational in radians, so decad asks about the float range
 `[q_lo(s), q_hi(s)]` that bounds `|q(s)|` from outside: `proofbound.RatFloatDown` and `RatFloatUp` of the
 rational interval `2π·|turn| + |base|` with `π` at both enclosures, in radians, or the exact millimetre value
-read as the float it is when it is one. A pose at `s` is a **point ask** `Enclose(driver, q_lo, q_hi)`, one
-piece about `1e-13` wide; an interval `[s_a, s_b]` is a **cell ask** `Enclose(driver, q_hi(s_a), q_lo(s_b))`,
+read as the float it is when it is one. A pose at `s` is a **point ask** `Enclose(driver, q_lo, q_hi)`, a range
+only as wide as the outward float rounding; an interval `[s_a, s_b]` is a **cell ask** `Enclose(driver, q_hi(s_a), q_lo(s_b))`,
 its range ordered by the scene's `q`. A cell whose range would be empty is refused as `sketch` refuses one.
 
 **Every ask is continued from a canonical predecessor**, so that each enclosure certifies the zero-pose
@@ -2193,8 +2189,8 @@ value is nearer `0`, toward its far end:
 | the **approach**, when the near end has `q_near > 0`: `Enclose(driver, 0, q_lo(s_near))` | `E0` |
 | the point at the near end | the approach, or `E0` itself when `q_near = 0` |
 | the cell of a dyadic interval `[s_a, s_b]` of §6's grid, read in chain direction | the point at its chain-start |
-| the point at a grid parameter `s` of depth `d ≤ 30` (the least `d` with `s` a multiple of `2^−d`), other than the near end | the depth-`d` cell that ends at `s` in chain direction |
-| the point at a deeper parameter (a renderer's frame at `i/300`, as a float) | the cell from the nearest depth-`14` grid parameter on its near side (`linkageReadingFloor`) to it, itself continued from that grid parameter's point |
+| the point at a grid parameter `s` of depth `d ≤ 30` (the least `d` with `s` a multiple of `2^−d`; `linkagebound.GridDepth` is `30`), other than the near end | the depth-`d` cell that ends at `s` in chain direction |
+| the point at a deeper parameter (a renderer's frame at `i/300`, as a float) | the cell from the nearest depth-`14` grid parameter on its near side (`linkageReadingFloor`, `2^14`) to it, itself continued from that grid parameter's point |
 | any point or cell of a sub-segment that holds its driver | the point at its near end: the sub-segment has one driver value, so one point |
 
 A cell's chain-start never passes the sub-segment's near end: where the grid rule would start a cell
@@ -2228,10 +2224,9 @@ as a `MotionParam` carries an angle.
 
 **A driver over many turns.** `Enclose` reduces an angle past `64` rad by whole turns before its series,
 up to `2^40` rad, with its claim unchanged, so a revolute driver may run any number of turns from the zero
-pose. A cell over many turns needs pieces in proportion: the crank-rocker uses about `1400` a turn, and
-`sketch`'s default budget of `4096` pieces would refuse the decomposition's whole-drive cell past about
-three turns. Each ask whose range spans more than one turn of an angular driver therefore states
-`WithMaxPieces` of `4096` per whole turn it spans, rounded up (`loopchain.PieceBudget`); every other ask keeps the
+pose. A cell over many turns needs pieces in proportion: the crank-rocker's whole-drive cell over ten and a quarter
+turns exhausts `sketch`'s default budget of `4096` pieces (`TestVerifyLinkageLoopManyTurns`). Each ask whose range spans more than one turn of an angular driver therefore states
+`WithMaxPieces` of `4096` (`loopchain.PiecesPerTurn`) per whole turn it spans, rounded up (`loopchain.PieceBudget`); every other ask keeps the
 default. The budget decides only how far `sketch` works before it refuses, never what it claims.
 
 ### 15.4 What a pose proves
@@ -2255,8 +2250,7 @@ of `ParamSinCos(lo)` widened on both sides by `lo.SpanUpper(hi)`, since sine and
 in the angle, and the exact translation by `[lo, hi]` along the unit direction for a prismatic. `AtRange(p,
 p)` is `At(p)`. The ideal poses compose as §5.1 composes them, each stated joint at its exact value; `η_k`
 is `PoseDeviation` against that enclosure, so the distance between the float pose at the label and any
-rotation in the interval is charged: about `ρ_{kk}` times the half-width, `1e-12` mm for a point ask on a
-`100` mm link. `η` grows through the composition for every link below a dependent joint. A collision
+rotation in the interval is charged: about `ρ_{kk}` times the half-width, a tiny distance for a point ask. `η` grows through the composition for every link below a dependent joint. A collision
 transfers through that `η` or it is not a collision, and a gap row is widened by it, as §5.1 states.
 
 `LinkagePose` carries each value's proven half-width (§2.4):
@@ -2453,7 +2447,8 @@ rationals around it instead (`crossingCuts` in `internal/linkagebound/`): `t₀`
 enclosure, the two
 readings are widened outward by the gap between them, and the driver's value at each cut is then proven,
 for every `π` in the enclosure, to carry the sign of the waypoint on its side. On §15.10's `−30° → 1 rad`
-drive the cuts lie `2e-76` apart. The segment becomes three sub-segments: up to the lower cut, on its waypoint's side, and
+drive the cuts lie about `2e-76` apart: three times the spread of `t₀` over `π`'s enclosure, itself
+`1e-75` wide. The segment becomes three sub-segments: up to the lower cut, on its waypoint's side, and
 on from the upper cut, on the other's, each with its near end at its cut — a nonzero driver value, reached
 by an approach from `E0` as for a sub-segment that starts off `0` — and between them the **straddle**,
 which has no chain. Anywhere on the straddle the driver's value lies between its values at the two cuts,
@@ -2480,14 +2475,14 @@ chain — the centre's point ask and the hull over the cell's driver range — o
 ### 15.9 Cost
 
 An `Enclose` point ask is cheap; a cell costs its pieces, and `sketch`'s tightness rule splits a full turn of
-the crank-rocker into about `1400` pieces (§15.3). The decomposition asks a certifiable drive as one cell. A
+the crank-rocker into many pieces (§15.3). The decomposition asks a certifiable drive as one cell. A
 pose at depth `d` asks at most `d` new cells and one point, and the cells of one depth tile the drive once,
 so a verification that reaches depth `d` everywhere asks about `d` times the full-range work. The kernel cost
 per pose is §10's. A tilted loop costs the scene nothing measurable, but on a tilted mechanism the links'
 axis-aligned `Bounds()` boxes overlap along `n`, so the layer exclusion (§5.7) settles no pair and the pair
 kernel evaluates every one.
 
-A drive over many turns pays for its whole-drive cell, about `1400` pieces a turn on the crank-rocker, so the
+A drive over many turns pays for its whole-drive cell, a number of pieces that grows with the turns it spans, so the
 `0° → 3690°` drive of §15.10 is dominated by that one cell. A pose at depth `d` then costs about `d` times
 that. A fold costs each cell that runs into it the certificate of §15.6.
 
@@ -2503,7 +2498,7 @@ closed form where it is an inverse.
 **Scene 7 — the crank-rocker and a wall (the acceptance target).** Ground pivots `O2 = (0, 0, 0)` and
 `O4 = (100, 0, 0)`, axes `+Z`. Link 1, the crank: a prism `x ∈ [0, 30], y ∈ [−4, 4], z ∈ [0, 8]` on a
 revolute about `Z` through `O2`. Link 2, the coupler, under the crank: a bar of half-width `4` from
-`A = (30, 0)` to `B = (75.714285…, 65.652118…)` — the closed-form `B` at `θ2 = 0` — `z ∈ [10, 18]`, on a
+`A = (30, 0)` to `B = (75.714285…, 65.652144…)` — the closed-form `B` at `θ2 = 0` — `z ∈ [10, 18]`, on a
 revolute about `Z` through `A`. Link 3, the follower, under the ground: a bar of half-width `4` from `O4`
 to `B`, `z ∈ [20, 28]`, on a revolute about `Z` through `O4`. `Close(coupler, follower, B, +Z)`. The
 follower's top corner is `B − 4·n4`, `n4 = (−sin θ4, cos θ4)`, at height `y = 70·sin θ4 − 4·cos θ4`,
@@ -2517,7 +2512,7 @@ highest at the follower's minimum `θ4 = 101.5370°` (`θ2 = 38.5727°`): `69.38
   66.792358°`, `s₂ = 0.742137`. At `WithResolution(Scalar(1.0/256))` assert: `Status` `Interfering`; the
   first `LinkCollision` is `(follower, wall)` at the grid point `36/256`, the first above `s₁`; every
   collision lies in `(s₁, s₂)` with `Bound` below `Value`; every `IntervalClear` interval ends at or below
-  `s₁` or starts at or above `s₂`; the last interval is `IntervalClear`. Measured: `22` poses.
+  `s₁` or starts at or above `s₂`; the last interval is `IntervalClear`.
 - At `θ2 = 38.671875°`, the grid point `110/256` nearest the follower's minimum, as the end of a drive
   `0° → 38.671875°` evaluated at its endpoints alone: the corner's depth `δ = y − 68.5` is below
   `8·|cos θ4|`, so the overlap is the triangular prism `8·δ²/(2·sin θ4·(−cos θ4))` mm³, asserted within
@@ -2544,7 +2539,7 @@ highest at the follower's minimum `θ4 = 101.5370°` (`θ2 = 38.5727°`): `69.38
 the follower's layer, `z ∈ [23.6, 24.4]`. The follower's end face sweeps every radius from `70` to
 `70.114` mm about `O4`, so a pin on the corner's own path would sit inside the bar for a wide stretch of the
 drive; the pin is centred `70.55` mm from `O4`, `0.2°` past the corner's polar angle at `θ2 = 16.875°`,
-where only the corner grazes it, from `θ2 = 16.551652°` to `19.24°` (the onset bracketed by bisection of
+where only the corner grazes it, from `θ2 = 16.551652°` to `19.245°` (the onset bracketed by bisection of
 the separating-axis gap between the follower's outline and the pin's), and again near `60°`. Between the
 grid points `θ2 = 11.25°` and `22.5°` of `WithResolution(Scalar(1.0/8))` the corner moves `3.6` mm and
 passes the pin. Assert `Suspect`, no `Collision`, the interval `[1/8, 1/4]` `IntervalUndecided`; at
@@ -2558,8 +2553,7 @@ y ∈ [67.5, 77.5], z ∈ [39, 49]`. The follower turns by `Δ = θ4(θ2) − θ
 `66·cos Δ + 4·|sin Δ|` and the gap is smallest, `67.5 − √4372 ≈ 1.379` mm, where `Δ = −atan(4/66)`, a flat
 minimum of the drive met twice. At the defaults assert `Sound`, the reading enclosing it, every
 `IntervalClear` interval at or below the closed-form gap at its ends, and no interval narrower than
-`1/1024`; measured `36` poses down to `1/128`, against `1119` down to `1/8192` under the travel bound
-alone. Red when the dependent's expansion is dropped, and when `h` is read from the end's enclosure alone
+`1/1024`. Red when the dependent's expansion is dropped, and when `h` is read from the end's enclosure alone
 or as a quarter of the hull — the pin legs of this section then certify across their collisions.
 
 **The turn-back (the two-sided hull).** Scene 7 without the wall, the crank driven `0° → 81.857366°`,
@@ -2608,15 +2602,14 @@ in scene 7's layout with `A = (50, 0)` and the closed-form `B` at `θ2 = 0` (`θ
 body. The loop folds at `cos θ2 = 0.04`, `θ2 = 87.707557°`.
 
 - Driven `0° → 90°` at the defaults: `Status` `Suspect`; no `Collision`; every pose's `At` below
-  `s_fold = 0.974528`; the last pose's `At` within one verdict floor below it — measured `997/1024 =
-  0.973633`; the last interval is `IntervalUndecided` from the last pose to `1`, with no pose at `1`; the
+  `s_fold = 0.974528`; the last pose's `At` within one verdict floor (`1/1024`) below it; the last interval is `IntervalUndecided` from the last pose to `1`, with no pose at `1`; the
   report's one diagnostic is that interval's `DiagMotionUndecidedInterval`, with `At` its `From` and a
   `Message` naming the loop and stating the fold; every earlier interval is `IntervalClear` (the layer
   exclusion settles every pair, so the certificate is about the loop alone). The fold's interval in that
   `Message` holds `acos(0.04) = 1.530785652` rad, is under `1e-10` rad wide, and its upper end is the
   value the joint is said never to pass. Red when a pose past the fold is built from certified values (a
   pose at `998/1024` is then published), and when `Reached` stands for `Fold.Lo` (the interval is then
-  about `3e-8` rad wide).
+  wider).
 - `Schedule.PoseAt(ctx, Scalar(1))` on that drive is `ErrUnsupported`, `errors.Is` finds
   `sketch.ErrNotCertified` and `errors.As` a `*sketch.FoldError`, the cause of the cell holding the fold,
   and its message states the same interval; `Linkage.PoseAt` agrees.
@@ -2694,12 +2687,10 @@ equals every evaluated pose.
 
 Red when the anchor of a backward slide driver stays behind its rider (every such drive refuses), when
 any one of the rocking block's five frame distances or the yoke's `ZA` is dropped (the rail turns or
-slides free and `E0` refuses), and when an anchored dependent's sense is `−1`. An internal test moves the trammel's
-anchor along `Y` to `1` mm behind its rider and drives the slide along `X` `0 → 8` mm, which takes the
-other slide `16` mm down and past it: the report is not `Sound`, a diagnostic names the anchor, and every
-evaluated pose reads the slide along `Y` at `√(2500 − x²) − 30`. Red when the positivity check is deleted:
-the chain then reads the folded distance past the anchor. The zero-pose falsifier refuses each of the
-rocking block's six scene pins, the rail frame's three among them, moved by `1e-6` mm.
+slides free and `E0` refuses), and when an anchored dependent's sense is `−1`. No test drives a slide past
+its anchor or moves a pin of the rocking block, so the positivity check of an anchored slide's reading
+(`loopchain.Scene.anchorsAhead`) and the zero-pose falsifier's refusal of a moved pin are covered only through
+the scenes above.
 
 **Drives over a loop.** Scene 7's crank-rocker without a wall; every assertion on a dependent value is the
 closed form at the crank angle the drive states, within `1e-9`, at every pose the check evaluates and at
@@ -3000,9 +2991,9 @@ Each centre costs §14.7's kernel pose plus one point ask, and each distinct loo
 pieces serve every cell over it. At a floor of `1/2^d` along the loop axis the asks number about `2^(d+1)` cells
 and points — the chain a `VerifyLinkage` over `Min → Max` builds — so the enclosure work is small next to the
 kernel work. The root's cell ask, over the whole range, costs the most pieces. A stuck cell costs its one refused
-point ask, which the cache answers from its predecessor's refusal. The tests of §16.8 record the centre and leaf
-counts of each box (scene 11 at `WithResolution(Scalar(1.0/16))`: `393` centres; the one-axis loop box: `89`; the
-fold box: `21`).
+point ask, which the cache answers from its predecessor's refusal. The tests of §16.8 bound the centre count of
+the boxes that have a cap: scene 11 stays below the default budget, the fold box below `64` and the blocked box
+below `512`.
 
 ### 16.8 Required tests
 
@@ -3037,8 +3028,7 @@ dependent turns over `[−8.7632°, 3.0248°]` — leaves its swept box meeting 
   with `Bounds[2]` positive and below `1e-9`, and `Bounds[0]`, `Bounds[3]` zero; `Cell.Min[2]` and
   `Cell.Max[2]` enclose the closed form's extremes over the cell's crank range (at its ends, or at `θ2*`
   where the cell holds it), and their width is at most `1.05` times the true variation plus `1e-6` rad —
-  `sketch`'s piece slack is `5%` of the hull plus `1e-7` of the coordinate scale. Measured, the widest is
-  `1.0052` times the true variation, `1.2e-4` rad over it.
+  `sketch`'s piece slack is `5%` of the hull plus `1e-7` of the coordinate scale.
 - Every `CellClear` leaf has `y_c(θ̂) < 72 − d_hi`, with `θ̂` the crank value of the cell nearest `θ2*` —
   `y_c`'s maximum over the cell — and `Clearance.Value` at or below `72 − d_hi − y_c(θ̂)`, the true minimum
   gap over the cell. This is the leg that goes red when the dependent's term is dropped from `τ_half`.
@@ -3055,8 +3045,7 @@ dependent turns over `[−8.7632°, 3.0248°]` — leaves its swept box meeting 
 - No finding carries the reach guard's cause: the decomposition certifies the whole drive, so no cell's
   hull is held to `m_j` (§15.5). A leaf whose hull is refused publishes the zero `units.Value` for both
   dependents and is undecided or colliding.
-- `CellsEvaluated` is below the default budget and no `DiagJointBoxBudgetExhausted` is raised; the test
-  file records the count: `393` centres into `197` leaves, `20` clear, `168` colliding, `9` undecided.
+- `CellsEvaluated` is below the default budget and no `DiagJointBoxBudgetExhausted` is raised.
 
 **The clear box and its reading.** Scene 11 with the gate over `[0, 2]` mm: `d*` is at least `2.6143`, so
 no configuration collides, and the minimum gap over the box is `72 − 2 − 69.3857 = 0.6143` mm at
@@ -3064,13 +3053,12 @@ no configuration collides, and the minimum gap over the box is `72 − 2 − 69.
 falls linearly along the gate, so the reading meets the default tolerance by refining the gate axis. At the
 defaults assert `Sound`; every leaf `CellClear` with `Clearance.Value` at or below
 `72 − d_hi − y_c(θ̂)`; `Clearance` enclosing `0.6143` with `ToleranceSatisfied`; `ReadingResolution`
-`1/16384`; some leaf narrower than `1/1024` along one axis; `CellsEvaluated` below the budget (measured:
-`63` centres into `32` leaves, the narrowest `1/2048` of a range). At `WithMotionTolerance(Scalar(0.5))`,
-where only a margin's own refinement decides it, `WithMinClearance` `0.5` mm reads `AssessmentMet` (`19`
-centres) and `0.7` mm `AssessmentViolated` (`27` centres) with a `DiagMotionClearanceViolated` whose
+`1/16384`; some leaf narrower than `1/1024` along one axis; `CellsEvaluated` below the budget. At `WithMotionTolerance(Scalar(0.5))`,
+where only a margin's own refinement decides it, `WithMinClearance` `0.5` mm reads `AssessmentMet`
+and `0.7` mm `AssessmentViolated` with a `DiagMotionClearanceViolated` whose
 `Cell` is set. Red when the dependent's term is dropped from `τ_half` (a leaf's bound exceeds the true gap
 at its worst configuration), when the reading stops at the verdict floor (no leaf is narrower than
-`1/1024`; the gate is met there at `69` centres), and when the margin's refinement is dropped (both
+`1/1024`), and when the margin's refinement is dropped (both
 margins read `AssessmentUndecided`).
 
 **The one-axis loop box.** Scene 7's linkage and wall (`y ∈ [68.5, 78.5]`), the crank alone over
@@ -3079,12 +3067,12 @@ margins read `AssessmentUndecided`).
 leaf's range lies inside `[0, s₁]` or `[s₂, 1]`; every `CellColliding` leaf's centre lies inside
 `(s₁, s₂)`; every `CellBlocked` leaf's range lies inside `(s₁, s₂)` — none blocks at this floor, since the
 corner's overlap is at most about `16` mm³ against the follower's area, so blocking needs `τ_half` under
-about `7e-3` mm, cells near `1/5000` of the range; the leaves holding `s₁` and `s₂` are undecided or
+about `7e-3` mm, a cell far narrower than this floor; the leaves holding `s₁` and `s₂` are undecided or
 colliding; every undecided leaf is at the floor; every collision's `Volume` is the triangular prism above
 within `1e-6` where the corner's depth is below `8·|cos θ4|`; `Center.Values[2]` is within `1e-9` rad of
 the closed form with `Bounds[2]` positive and below `1e-9`. This is the leg that goes red when the
 dependent's term is dropped from the blocked allowance: `τ_half` of `(follower, wall)` is then `0`, every
-colliding centre blocks, and the leaf holding `s₁` reads `CellBlocked` though its lower part is clear. Measured: `89` centres into `45` leaves.
+colliding centre blocks, and the leaf holding `s₁` reads `CellBlocked` though its lower part is clear.
 
 **The turn-back cell.** Scene 7 without the wall, the crank over `[0°, 81.857366°]` — the follower returns
 to `θ4(0)` at the range's end (§15.10) — and a `0.8` mm pin in the follower's layer (`z ∈ [23.6, 24.4]`)
@@ -3095,15 +3083,14 @@ long edge stands `8.0955` mm from the pin's nearest corner, the gap row's value 
 follower's hull over the range is `[−8.7632°, 0]` from `θ4(0)`, so `δ = 8.7314° = 0.15240` rad and the
 pair's `τ_half` is about `11.1` mm. Assert `CellUndecided`. Red when `δ` is half the hull's width — `5.6`
 mm, and the root reads `CellClear` across a struck pin — and when the dependent's term is dropped. A pin on
-the corner itself is no fixture for the leg: the bar's trailing edge passes within `2.2` mm of it at the
+the corner itself is no fixture for the leg: the bar's trailing edge passes within a few mm of it at the
 centre, under either `τ_half`.
 
 **The held loop.** Scene 11 with the crank over `[30°, 30°]` and the gate over `[0, 10]`, at
 `WithResolution(Scalar(1.0/64))`: the follower stands at `θ4(30°) = 101.9717°`, `y_c = 69.3072`, and the
 boundary is `d_30 = 2.6928`. Assert every `CellClear` leaf has `d_hi ≤ d_30` and every colliding or blocked
 leaf's centre `d_c > d_30`; every leaf's `Center.Values[2]` is within `1e-9` rad of `θ4(30°) − θ4(0) =
-−8.3285°` with `Bounds[2]` positive and below `1e-9`, and `Cell.Min[2]`, `Cell.Max[2]` within `1e-9` of it
-(measured: `97` centres into `49` leaves). Red when a held driver's loop stands at the zero pose: the
+−8.3285°` with `Bounds[2]` positive and below `1e-9`, and `Cell.Min[2]`, `Cell.Max[2]` within `1e-9` of it. Red when a held driver's loop stands at the zero pose: the
 boundary is then `4.9601`, and a clear leaf's bound exceeds its true gap.
 
 **The fold box.** Scene 9's four-bar (ground `100`, crank `50`, coupler `60`, follower `50`), the crank
@@ -3112,36 +3099,36 @@ no collision; every `CellClear` leaf's range ends at or below `s_fold`; the leaf
 undecided and at the floor; every leaf past it is undecided with a zero `Center`, no row, and a finding
 whose `Cell` is set and whose `Message` names the loop and states the fold, its interval holding
 `acos(0.04)` and under `1e-10` rad wide; some such leaf is wider
-than the verdict floor; `CellsEvaluated` is below `64` (measured: `21` centres into `11` leaves). Red when
+than the verdict floor; `CellsEvaluated` is below `64`. Red when
 the hull gate is dropped — the root's hull spans the fold, every pair is settled, and the root reads
 `CellClear` and the report `Sound` — and when a stuck cell splits to the floor: every leaf past the fold is
-then floor-sized, `67` centres.
+then floor-sized and `CellsEvaluated` passes `64`.
 
 **The projection over a dependent in a box.** §15.10's block riding the follower under a ceiling, the
 ceiling on a prismatic joint under the ground along `(0, −1, 0)`, the box the crank over `[0°, 90°]` and
 the ceiling over `[0, 1]` mm: the gap `67.5 − d − 66·cos Δ − 4·|sin Δ|` is smallest, `66.5 − √4372 ≈
 0.379` mm, at `d = 1` where `Δ = −atan(4/66)`, flat along the crank twice. At the defaults assert `Sound`,
 the reading enclosing it, and every leaf's bound at or below the closed-form gap at its centre and
-corners. Measured: `137` centres into `69` leaves, against `6457` and `Suspect` under the travel bound
-alone. Red when the dependent's expansion is dropped (the travel bound alone), when `h_j` is read from
+corners. Under the travel bound alone the box reads `Suspect`. Red when the dependent's expansion is dropped (the travel bound alone), when `h_j` is read from
 `M_j` alone, and when it is a quarter of the hull's width (a leaf's bound exceeds the gap at a corner).
 
 **A dependent slide in a box.** §15.10's Scotch yoke, the block over `[−4, 4]` mm on the yoke, the yoke a
 dependent slide, beside a wall `x ∈ [25.5, 60]` in the yoke's layer alone: the gap
 `25.5 − 2 − √(900 − (24 + q)²)` is smallest, `23.5 − √500 ≈ 1.14` mm, at `q = −4`. Assert `Sound`, the
 reading enclosing it, every leaf's yoke range holding the closed form, and every leaf's bound at or below
-the gap at its lower end (measured: `23` centres). Red when the dependent slide's term is dropped from
+the gap at its lower end. Red when the dependent slide's term is dropped from
 `τ_half`, from the projection's half-spans, or from both: the root claims more than the gap.
 
 **The blocked box.** Scene 11 with the gate shortened to `x ∈ [60, 120]` (area `2600` mm²), the crank over
 `[35°, 42°]` and the gate over `[8, 10]`, at `WithResolution(Scalar(1.0/64))`. Over that crank range `y_c`
 stays within `[69.3725, 69.3857]`, so the corner's depth below the underside `y = 72 − d ∈ [62, 64]` is at
 least `5.37` mm, past the bar's full width `8·|cos θ4| ≈ 1.61`, and the overlap is the trapezoidal prism
-`8·8·(δ − 4·|cos θ4|)/sin θ4 ≥ 298` mm³; at the floor the allowance is about
-`½·(2/64)·2600 + ρ·δ_f·2368 ≈ 57` mm³. Assert every leaf `CellBlocked`, no undecided or colliding leaf,
-`CellsEvaluated` below `512` (measured: `65` centres into `33` leaves), and every collision's `Volume` the
+`8·8·(δ − 4·|cos θ4|)/sin θ4 ≥ 298` mm³; at the floor the allowance is
+`½·(2/64)·2600 + ρ·δ_f·2368` mm³, with `½·(2/64)·2600 ≈ 41` and `δ_f` at most about the follower's whole turn over
+the range, `1.3e-4` rad, so under `65`. Assert every leaf `CellBlocked`, no undecided or colliding leaf,
+`CellsEvaluated` below `512`, and every collision's `Volume` the
 trapezoidal prism within `1e-6`. Red when the blocked certificate is dropped: every cell then splits to the
-floor along both axes, `8191` centres, each leaf `CellColliding`.
+floor along both axes, each leaf `CellColliding` and `CellsEvaluated` past `512`.
 
 **Standing tests.** Errors, one subtest per row of §16.6: a box listing the crank and the follower, the
 flat four-bar of scene 9 (`E0` refuses,
@@ -3258,7 +3245,7 @@ type Prismatic struct {
 // from 0, where each moving body sits under From composed onto its own
 // placement, to 1, where it sits under To. The path rotates through the
 // shorter arc between the two orientations and slides uniformly along the
-// rotation axis (Chasles; r3 agent-docs/screw-motion-design.md).
+// rotation axis (Chasles; r3 docs/screw-motion-design.md).
 type Between struct {
     From r3.Transform // the pose at s = 0; r3.Identity() is the moving set as it currently sits
     To   r3.Transform // the pose at s = 1
@@ -3281,7 +3268,7 @@ float. A `From` equal to `To` names no path and is `ErrDegenerate` (§8).
 `Prismatic`, where `d` is `Dir` normalised by `r3.Vec.Normalize`. For a `Between`, `PoseAt(s)` reads the
 relative motion `rel = From⁻¹ ∘ To` (`From.Inverse().Then(To)`), decomposes it with `rel.Screw()` into the
 axis direction `Axis`, the axis point `Point`, the angle `θ ∈ [0, π]` radians and the slide `d` (r3
-`agent-docs/screw-motion-design.md` §3–§4), and returns `From.Then(screw.At(s))`: the rotation by `s·θ` about the
+`docs/screw-motion-design.md` §3–§4), and returns `From.Then(screw.At(s))`: the rotation by `s·θ` about the
 line through `Point` along `Axis`, slid by `s·d` along it, applied after `From`. At `s == 0` it returns
 `From` and at `s == 1` it returns `To`, both as stated: `screw.At(0)` is the identity bit for bit, so
 `From.Then(screw.At(0))` IS `From`, while `screw.At(1)` rebuilds `rel` only to rounding (r3 §7), so the
@@ -4072,7 +4059,7 @@ the endpoints alone.
     rest box `[0, 10]` grown by `30` excludes the wall, and the report reads `Sound`.
 19. **The stated `To` is covered.** The arm against test 2's wall (`y ∈ [60, 80]`) under
     `Between{From: RotationAround((1e6, 3e5, 0), Z, 90°).Inverse(), To: r3.Identity()}`, endpoints only:
-    the arm starts about `1.5e6` mm away and arrives at `s = 1` exactly where it sits, `46` mm from the
+    the relative motion translates the arm by about `1.5e6` mm, and it arrives at `s = 1` exactly where it sits, `46` mm from the
     wall. The relative
     motion is the far rotation itself, whose read screw rebuilds it only to about `ε·|t| ≈ 1e-10` mm (r3
     §7), so the ideal end misses the identity by that much, while the kernel's own `s = 1` reading is the
@@ -4127,18 +4114,17 @@ the endpoints alone.
     `Status`, poses and interval outcomes, each `Clearance` within `1e-9`. Red when the projection bound
     is dropped. A step negated from the wrong end turns tests 2, 3, 5, 13–16 and this one red.
 
-Three legs of the `Between` bound sit below any public fixture's observability and are pinned by internal
-tests, each on the production function: `motionbound.PathAreaUpper`'s stretch base — a
-base above `1` scales both the unscaled shortcut and the stretched allowance, and the base `1` reproduces
-the `Revolute` value exactly — which goes red when the base is dropped; `motionbound.BasisSigmaUpper`, exactly `1` for
-the identity and strictly above `1` for a basis whose columns are not exactly orthonormal; and the
-`Between` frame's ideal end, which maps the rest-box corners of the screw arm, of test 19's far pivot and
-of test 15's offset axis to within `1e-9·(1 + |t|)` of their images under `To` — a test, not an admission
-gate, and it admits nothing. Test 15's offset axis is the fixture that shows a frame composed in the wrong
-order: its `From` translates the blade off the screw axis, so the screw before `From` and the screw after
-it land the corners tens of millimetres apart. The screw arm and test 19 cannot show it, because their
-`From` commutes with the screw — the identity in one, a rotation about the screw's own axis in the other —
-so both orders give the same end.
+Three legs of the `Between` bound sit below any public fixture's observability: `motionbound.PathAreaUpper`'s
+stretch base (a base above `1` scales both the unscaled shortcut and the stretched allowance, and the base `1`
+reproduces the `Revolute` value exactly), `motionbound.BasisSigmaUpper` (exactly `1` for the identity and strictly
+above `1` for a basis whose columns are not exactly orthonormal), and the `Between` frame's ideal end (the
+rest-box corners of the screw arm, of test 19's far pivot and of test 15's offset axis, mapped to within
+`1e-9·(1 + |t|)` of their images under `To`). No internal test pins any of the three directly; they are not
+implemented as unit tests. The public fixtures reach them only in aggregate. Test 15's offset axis is the fixture
+that shows a frame composed in the wrong order: its `From` translates the blade off the screw axis, so the screw
+before `From` and the screw after it land the corners tens of millimetres apart. The screw arm and test 19 cannot
+show it, because their `From` commutes with the screw (the identity in one, a rotation about the screw's own axis
+in the other), so both orders give the same end.
 
 Shard registration of these tests, fuzz targets and examples follows `agent-docs/testing.md`.
 
@@ -4164,7 +4150,7 @@ What stays `Suspect` is what §7 lists: pairs the clearance kernel leaves undeci
 **What each dependency supplies.**
 
 - `r3`, at the revision `go.mod` pins, provides `Transform.Screw`, `Screw.At` and `Transform.Interpolate` (r3
-  `agent-docs/screw-motion-design.md`). `Between` reads the axis, point, angle and
+  `docs/screw-motion-design.md`). `Between` reads the axis, point, angle and
   slide with `Screw` — once per `PoseAt` call, and once per `VerifyMotion` for the exact frame — builds every
   pose with `At`, and never calls `Interpolate`, whose pose alone would not give the travel bound its
   parameters. `Screw` is a deterministic function of its input bits, which is what lets the frame and
