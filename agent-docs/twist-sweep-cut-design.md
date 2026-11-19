@@ -115,8 +115,7 @@ Refused, soundly:
 Bound quality. The Cut's volume bound is the mesh path's occupied-volume proof
 for the whole pair: each operand's displacement times its held area. The
 target's share falls with its chord request (§7.4), and the tool's with its
-refinement (§7.5). For the 37.5 mm tube bored four times the bound is 104 mm3,
-26 mm3 for each bore.
+refinement (§7.5).
 
 ## 6. A near miss the refinement still refuses
 
@@ -198,8 +197,8 @@ the pair tolerance. Every other operand is requested at
 
 `booleaneval.evaluate` and `Evaluate`'s shifted retry use it for both operands,
 and `verifyrun.newVerifyMeshCache` uses it for each shared mesh, so `Verify`
-meshes a body as the construction did. The pair tolerance itself, the gate, the
-volume proofs and `dPair` do not depend on it. The request is finer only when
+meshes a body as the construction did. The pair tolerance itself, the gate and the
+volume proofs do not depend on it. The request is finer only when
 another operand's held floor raised the pair tolerance, so a pair of two
 analytic operands is meshed at the pair tolerance.
 
@@ -221,9 +220,8 @@ whole pair's diameter. When that attempt refuses at any stage,
 finer chord never refuses a Cut the pair's chord admits. A tool of planes keeps
 the pair's chord: its rim lies on its own exact planes. Unions keep it too;
 the same rule on Unions asks some revolves for more facets than their mesh
-ceiling allows. The ratio keeps ordinary pairs on the pair's chord; without it,
-a 190-part assembly built in 90 s instead of 69 s. The same soundness argument
-covers the finer request.
+ceiling allows. The ratio keeps ordinary pairs on the pair's chord. The same
+soundness argument covers the finer request.
 
 Soundness. A mesh publishes the sagitta it took, and every proof reads that
 published figure, never the request (tessellation §2). A finer request makes
@@ -231,9 +229,8 @@ the published figure smaller. The tangency gate's slack is a sum of published
 displacements, so it falls with them, and the gate still admits a meet only on
 a witness deeper than the slack. No gate changes.
 
-Cost. The tube's outer cylinder goes from about 17 to about 180 segments. A coil
-or mitred-sweep cut of a larger part meshes its partner finer by the same
-ratio, up to `MaxFacetPairTestsPerCall`, which still refuses an excess.
+Cost. A coil or mitred-sweep cut of a larger part meshes its partner finer by
+the same ratio, up to `MaxFacetPairTestsPerCall`, which still refuses an excess.
 
 ### 7.5 A twisted sweep refines to a finer, fixed target
 
@@ -248,14 +245,12 @@ ratio, up to `MaxFacetPairTestsPerCall`, which still refuses an excess.
   ceiling). A refinement that is no closer than the sweep's own `Delta` is
   not offered.
 
-For the sleeve tool this is about 350 cells and a `Delta` of about 0.015 mm,
-against 0.43 mm.
 The proofs are the stationed build's own (§3, Soundness): `RefinedMesh`
 refuses when the mesh proves more than `RefinedDelta` promised.
 
 ### 7.6 What is admitted
 
-Measured on the sleeve (apitest `TestCutChainedTwistedBoresAndWindows`):
+The sleeve test (apitest `TestCutChainedTwistedBoresAndWindows`) shows:
 
 - Four one-sided bore cuts (stations 8.6 to 19.5 mm and -19.5 to -8.6 mm on
   each axis) are admitted by default, then two narrow slanted prism windows
@@ -264,9 +259,6 @@ Measured on the sleeve (apitest `TestCutChainedTwistedBoresAndWindows`):
 - The result is a solid, `Tessellate(VerifyAll)` passes, and the volume lies
   within its certified bound of the tube minus an independently integrated
   overlap.
-- Certified figures for the chain: volume 20020 mm3 with bound 104 mm3 (0.5% of
-  the tube; 26 mm3 per bore), boundary bound 0.031 mm (`Mesh.Bound`). A bore
-  clearance of 0.2 mm is proven six times over by the boundary bound.
 - A window wide enough to reach a bore's rim is refused by default with the
   chain-depth message (it meets rimmed strips, §7.2 item 3) and admitted with
   `WithChainTolerance(0.1 mm)`, with the same volume check
