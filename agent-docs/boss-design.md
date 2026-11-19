@@ -1,7 +1,8 @@
 # Boss design
 
-`Boss` raises a round boss on a planar or cylindrical face, with an optional blind pilot hole. It builds a cylinder tool, unions it
-to the body and cuts the pilot with the tools `Hole` builds, all in one atomic commit. It adds no geometry kernel.
+`Boss` raises a round boss on a planar or cylindrical face, with an optional blind pilot hole. It builds a cylinder
+tool, unions it to the body and cuts the pilot with the tools `Hole` builds, all in one atomic commit. It adds no
+geometry kernel.
 
 ## 1. Contract
 
@@ -22,6 +23,14 @@ type BossSpec struct {
     Draft      units.Value
     RootFillet units.Value
     Shape      HoleShape
+    Ribs       *BossRibs
+    Tilt, TiltDirection units.Value
+}
+
+type BossRibs struct {
+    Count                     int
+    Thickness, Length, Height units.Value
+    Angle                     units.Value
 }
 
 func Boss(ctx context.Context, b *Body, spec BossSpec) (*Body, error)
