@@ -228,7 +228,7 @@ parallel; the default is 0.5 degrees. a is an Angle in (0, 90 degrees).
 <pre>func WithContactTolerance(tol units.Value) <a href="#CheckOption">CheckOption</a></pre>
 
 WithContactTolerance sets the gap at which two parts count as touching; the
-default is 0.05 mm.
+default is 0.25 mm.
 
 <a name="WithFitTolerance"></a>
 #### func WithFitTolerance
@@ -236,7 +236,7 @@ default is 0.05 mm.
 <pre>func WithFitTolerance(tol units.Value) <a href="#CheckOption">CheckOption</a></pre>
 
 WithFitTolerance sets the largest axis distance and radius disagreement a
-match allows; the default is 0.25 mm.
+match allows; the default is 0.05 mm.
 
 <a name="WithMaxFit"></a>
 #### func WithMaxFit
