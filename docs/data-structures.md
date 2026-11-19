@@ -123,7 +123,8 @@ configuration option.
 | `decad.SketchLine` | struct | An axis line in the sketch plane. | The caller |
 | `decad.ConstructionAxis` | struct | A world-space point and a direction. | The caller |
 | `decad.EdgeAxis` | struct | A linear edge of a body, selected by query. | The caller |
-| `decad.LoftSection` | struct | One recorded section of a smooth `decad.LoftSections` feature. | The caller |
+| `decad.LoftSection` | struct | One recorded section of a smooth `decad.LoftSections` feature, including its sketch and profile. | The caller |
+| `decad.CircularLoftCorrespondence` | struct | Four exact rational Bernstein maps for a circular loft's cardinal quarters. | The caller |
 | `decad.LoftSplit` | struct | One recorded segment of one loop and the parameter fractions at which `decad.WithLoftSplits` cuts it. | The caller |
 | `decad.ClosestPoint` | struct | The nearest point of a body or face to a query point, its distance reading and how far it can lie from the true surface. | `Body.ClosestPoint`, `Face.ClosestPoint` |
 | `decad.MeshBody` | struct | An imported triangle mesh: vertices, triangles and what they say. Not a `decad.Body`. | `decad.ReadSTL`, `decad.ReadOBJ`, `decad.ReadThreeMF`, `decad.ReadSTEP`, `decad.NewMeshBody` |

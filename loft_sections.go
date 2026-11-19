@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/big"
+	"slices"
 
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/freeform"
@@ -23,6 +25,18 @@ type LoftSection struct {
 	Profile *sketch.Profile
 }
 
+// CircularLoftCorrespondence gives one rational Bernstein map for each
+// cardinal quarter, starting at +X and proceeding counterclockwise. Each
+// map uses two to six strictly increasing numerators over its positive
+// denominator, starting at zero and ending at the denominator.
+type CircularLoftCorrespondence struct {
+	Numerators   [4][]int64
+	Denominators [4]int64
+	// SmoothCircularBands keeps the first circular band linear and uses
+	// smoothstep for subsequent circular bands.
+	SmoothCircularBands bool
+}
+
 // LoftSections builds one solid through three or more Sketch profiles.
 // The three-section quadratic route admits positive homothetic whole-line loops
 // star-shaped about their common origin. A varying four-arc circular section
@@ -34,8 +48,44 @@ type LoftSection struct {
 // require ascending, equally spaced world-XY planes and interpolate every section
 // exactly. Three to 1024 sections of one fitted edge and whole lines may turn
 // about the plane origin on strictly ascending world-XY planes (agent-docs/loft-sections-design.md).
+// A four-quarter-arc circle may also transition to four-edge sections of one
+// fitted edge and three lines, with a certified rational wall.
 // Other shapes refuse.
 func LoftSections(ctx context.Context, d *Document, sections ...LoftSection) (*Body, error) {
+	return loftSections(ctx, d, nil, false, sections...)
+}
+
+// LoftSectionsWithCircularCorrespondence builds a circular-to-spline loft
+// using explicit cardinal-quarter parameter maps. The maps and the source
+// sections must satisfy the exact admission and continuity proofs in
+// agent-docs/loft-sections-design.md §14.
+func LoftSectionsWithCircularCorrespondence(ctx context.Context, d *Document,
+	correspondence CircularLoftCorrespondence, sections ...LoftSection) (*Body, error) {
+	if ctx == nil || d == nil || len(sections) < 3 {
+		return nil, fmt.Errorf("%w: LoftSections needs a context, document and at least three sections", ErrDegenerate)
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	maps := make([][]*big.Rat, 4)
+	for quarter, controls := range correspondence.Numerators {
+		denominator := correspondence.Denominators[quarter]
+		if denominator <= 0 || len(controls) < 2 || len(controls) > 6 || controls[0] != 0 ||
+			controls[len(controls)-1] != denominator {
+			return nil, fmt.Errorf("%w: circular correspondence map %d needs two to six controls from zero to one", ErrUnsupported, quarter)
+		}
+		maps[quarter] = make([]*big.Rat, len(controls))
+		for i, value := range controls {
+			if i > 0 && value <= controls[i-1] {
+				return nil, fmt.Errorf("%w: circular correspondence map %d must strictly increase", ErrUnsupported, quarter)
+			}
+			maps[quarter][i] = big.NewRat(value, denominator)
+		}
+	}
+	return loftSections(ctx, d, maps, correspondence.SmoothCircularBands, sections...)
+}
+
+func loftSections(ctx context.Context, d *Document, maps [][]*big.Rat, smoothCircularBands bool, sections ...LoftSection) (*Body, error) {
 	if ctx == nil || d == nil || len(sections) < 3 {
 		return nil, fmt.Errorf("%w: LoftSections needs a context, document and at least three sections", ErrDegenerate)
 	}
@@ -52,6 +102,12 @@ func LoftSections(ctx context.Context, d *Document, sections ...LoftSection) (*B
 	if sketches[0] != nil {
 		defer d.resultIn(d.ContainerOfSketch(sketches[0]))()
 	}
+	if circularFitCandidate(sections) {
+		return d.buildCircularFitSections(ctx, sections, maps, smoothCircularBands)
+	}
+	if maps != nil {
+		return nil, fmt.Errorf("%w: explicit circular correspondence needs circular and spline sections", ErrUnsupported)
+	}
 	if len(sections) > 3 && twistedFitCandidate(sections[0]) {
 		return d.buildTwistedFitSections(ctx, sections)
 	}
@@ -66,6 +122,72 @@ func LoftSections(ctx context.Context, d *Document, sections ...LoftSection) (*B
 		return d.buildTwistedFitSections(ctx, sections)
 	}
 	return body, err
+}
+
+// circularFitCandidate chooses the §14 route by source entity kinds; the
+// builder authenticates every record before accepting it.
+func circularFitCandidate(sections []LoftSection) bool {
+	if len(sections) < 3 || sections[0].Profile == nil || len(sections[0].Profile.Holes) != 0 ||
+		len(sections[0].Profile.Outer) != 4 {
+		return false
+	}
+	for _, edge := range sections[0].Profile.Outer {
+		if _, ok := edge.Entity.(*sketch.Arc); !ok {
+			return false
+		}
+	}
+	return slices.ContainsFunc(sections[1:], circularTargetCandidate)
+}
+
+func circularTargetCandidate(section LoftSection) bool {
+	if section.Profile == nil || len(section.Profile.Holes) != 0 || len(section.Profile.Outer) != 4 {
+		return false
+	}
+	fits := 0
+	for _, edge := range section.Profile.Outer {
+		switch edge.Entity.(type) {
+		case *sketch.FitSpline, *sketch.Spline:
+			fits++
+		case *sketch.Line:
+		default:
+			return false
+		}
+	}
+	return fits == 1
+}
+
+// buildCircularFitSections records the source sketches and builds §14's
+// rational transition through the internal smooth-loft kernel.
+func (d *Document) buildCircularFitSections(ctx context.Context, sections []LoftSection, maps [][]*big.Rat, smoothCircularBands bool) (*Body, error) {
+	if len(sections) > smoothloft.MaxTwistedSections {
+		return nil, fmt.Errorf("%w: circular fitted LoftSections accepts at most %d sections",
+			ErrUnsupported, smoothloft.MaxTwistedSections)
+	}
+	records := make([]profileRecord, len(sections))
+	planes := make([]planeRecord, len(sections))
+	work := make([]*freeform.FreeformWork, len(sections))
+	for i, section := range sections {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		if section.Sketch == nil || section.Profile == nil {
+			return nil, fmt.Errorf("%w: LoftSections section %d needs a sketch and profile", ErrDegenerate, i)
+		}
+		profile, plane, sketchArea, err := sectioncert.RecordProfile(section.Sketch, section.Profile)
+		if err != nil {
+			return nil, err
+		}
+		work[i] = freeform.NewFreeformWork()
+		if _, err := profile.FalsifyLoftRecordedArea(sketchArea, work[i]); err != nil {
+			return nil, err
+		}
+		records[i], planes[i] = profile, plane
+	}
+	built, err := smoothloft.BuildCircularFitsWithMaps(ctx, records, planes, work, maps, smoothCircularBands)
+	if err != nil {
+		return nil, err
+	}
+	return d.buildSmoothSectionBody(ctx, built, planes[0], planes[len(planes)-1])
 }
 
 // buildThreeSections owns the routes of §§1–8, which take exactly three sections.
@@ -255,6 +377,7 @@ func (d *Document) buildSmoothSectionBody(ctx context.Context, built smoothloft.
 	body, err := bodyResult(facetedrecord.Build(ctx, envOf(documentNode(d), ref), facetedPayload{
 		SmoothRectSection:       built.RectangularSection,
 		SmoothHomotheticSection: built.HomotheticSection,
+		CircularFitPrimitive:    built.CircularFitPrimitive,
 		Verts:                   built.Vertices, Tris: built.Triangles, Src: built.Sources,
 		Groups: groups, VertexBound: vertexBound, MeshBound: built.MeshBound,
 		VolSymDiff: built.VolSymDiff, AreaSlack: built.AreaSlack,

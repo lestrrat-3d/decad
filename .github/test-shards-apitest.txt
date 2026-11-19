@@ -3010,6 +3010,16 @@
 12	1.05	TestLoftFilletCircleFragmentRefusals
 12	0.03	TestLoftFromPointConeOverACircle
 12	0.00	TestLoftPlacedReflectionHerringbone
+12	0.00	TestLoftSectionsCircularFitDiamond
+12	0.00	TestCircularLoftCorrespondenceRejectsInvalidMaps
+12	0.00	TestCircularLoftCorrespondenceSmoothCircularBands
+12	0.00	TestLoftSectionsCircularFitFlatQuarter
+12	0.00	TestLoftSectionsCircularFitFlatQuarterRecordedKnots
+12	0.00	TestLoftSectionsCircularFitOffCenter
+12	0.00	TestLoftSectionsCircularFitRefusesDifferentRecordDirections
+12	0.00	TestLoftSectionsCircularFitRotatedSourceSeam
+12	0.00	TestLoftSectionsCircularFitTransverseHole
+12	0.00	TestLoftSectionsCircularFitVariesAndRefusesAtomically
 12	0.07	TestLoftSectionsConstantCurvesKeepAnalyticFacesAndProof
 12	0.09	TestLoftSectionsFourRoundedProfilesRefuseUnprovedShape
 12	0.00	TestLoftSectionsRefusesUnprovenScaleAndSpacing

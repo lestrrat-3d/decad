@@ -118,7 +118,7 @@ func sectionDisplacement(payload topo.Payload) float64 {
 }
 
 // heldPrimitiveFloor is the proven held bound of an operand built as a fixed
-// held mesh in one construction — a LoftFaces MeshBound, or a coil's, mitred
+// held mesh in one construction — a LoftFaces or circular-fit loft MeshBound, or a coil's, mitred
 // sweep's, or twisted sweep's delta (agent-docs/faceted-vertex-bounds-design.md §5).
 // Its restatement cannot be meshed closer than that, and every facet it
 // touches the partner with holds at most that bound, so raising the pair
@@ -128,7 +128,7 @@ func sectionDisplacement(payload topo.Payload) float64 {
 func heldPrimitiveFloor(payload topo.Payload) float64 {
 	switch p := payload.(type) {
 	case facetedrecord.Payload:
-		if p.LoftFacesPrimitive {
+		if p.LoftFacesPrimitive || p.CircularFitPrimitive {
 			return p.MeshBound
 		}
 		return 0

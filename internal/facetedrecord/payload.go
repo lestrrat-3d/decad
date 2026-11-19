@@ -76,6 +76,9 @@ type Payload struct {
 	// LoftFacesPrimitive identifies one certified LoftFaces held mesh. Rigid
 	// placement preserves this source; a Boolean result starts a new chain.
 	LoftFacesPrimitive bool
+	// CircularFitPrimitive identifies a certified circular-to-fitted loft.
+	// Rigid placement preserves it; scaling and Boolean results clear it.
+	CircularFitPrimitive bool
 	// LoftFacesCap records the authenticated final cap map of an original
 	// LoftFaces body. A Cut result receives only the one-use cone trim record.
 	LoftFacesCap  *LoftFacesCapRecord

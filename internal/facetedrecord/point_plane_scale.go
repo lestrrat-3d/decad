@@ -91,6 +91,7 @@ func ScaleImageWithSummary(ctx context.Context, body *topo.Body, fp Payload, anc
 	next.RevolveLoftJoin = nil
 	next.RevolveLoftSector = nil
 	next.LoftFacesPrimitive = false
+	next.CircularFitPrimitive = false
 	next.LoftFacesCap = nil
 	next.LoftFacesToe = nil
 	next.LoftFacesTrim = nil

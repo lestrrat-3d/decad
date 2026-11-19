@@ -64,6 +64,10 @@ func twistCounts(ctx context.Context, bounds [][]twistBounds, target *big.Rat) (
 	for i := range nt {
 		nt[i] = 1
 		for k := range bounds {
+			maxTerm := mul(mul(rint(8), third), rint(twistMaxT*twistMaxT))
+			if bounds[k][i].mtt.Cmp(maxTerm) > 0 {
+				return nil, nil, twistUnsupported("twisted loft exceeds its height-band ceiling for a 0.05 mm mesh bound")
+			}
 			nt[i] = max(nt[i], twistCountFor(bounds[k][i].mtt, third))
 		}
 		if nt[i] > twistMaxT {
@@ -76,8 +80,16 @@ func twistCounts(ctx context.Context, bounds [][]twistBounds, target *big.Rat) (
 		}
 		nu[k] = 1
 		for i, b := range bounds[k] {
+			maxTerm := mul(mul(rint(8), third), rint(twistMaxU*twistMaxU))
+			if b.muu.Cmp(maxTerm) > 0 {
+				return nil, nil, twistUnsupported("twisted loft exceeds its station ceiling for a 0.05 mm mesh bound")
+			}
 			nu[k] = max(nu[k], twistCountFor(b.muu, third))
 			// The twist term mut/(4 nu nt) <= third.
+			mixedMax := mul(mul(rint(4*twistMaxU), rint(int64(nt[i]))), third)
+			if b.mut.Cmp(mixedMax) > 0 {
+				return nil, nil, twistUnsupported("twisted loft exceeds its station ceiling for a 0.05 mm mesh bound")
+			}
 			need := max(1, int(math.Ceil(ratFloat(div(b.mut, mul(rint(4), mul(third, rint(int64(nt[i])))))))))
 			for need > 1 && div(b.mut, mul(rint(4), mul(rint(int64(need-1)), rint(int64(nt[i]))))).Cmp(third) <= 0 {
 				need--
@@ -123,9 +135,32 @@ func twistSelectCounts(ctx context.Context, bounds [][]twistBounds, maxTriangles
 
 func buildTwistedMesh(ctx context.Context, patches [][]twistPatch, edgeOf []int, edges int,
 	planes []sectionrecord.PlaneRecord, zs []*big.Rat) (Build, error) {
-	bounds := make([][]twistBounds, len(patches))
-	commons := make([][]*twistCommon, len(patches))
-	for k := range patches {
+	return buildSectionMesh(ctx, patches, nil, edgeOf, edges, planes, zs)
+}
+
+func buildSectionMesh(ctx context.Context, patches [][]twistPatch, rational [][]rationalTransition,
+	edgeOf []int, edges int, planes []sectionrecord.PlaneRecord, zs []*big.Rat) (Build, error) {
+	count := len(patches)
+	if rational != nil {
+		count = len(rational)
+	}
+	bounds := make([][]twistBounds, count)
+	commons := make([][]*twistCommon, count)
+	for k := range bounds {
+		if rational != nil {
+			bounds[k] = make([]twistBounds, len(rational[k]))
+			for i, p := range rational[k] {
+				if err := ctx.Err(); err != nil {
+					return Build{}, err
+				}
+				var err error
+				bounds[k][i], err = p.bounds()
+				if err != nil {
+					return Build{}, err
+				}
+			}
+			continue
+		}
 		bounds[k] = make([]twistBounds, len(patches[k]))
 		commons[k] = make([]*twistCommon, len(patches[k]))
 		for i := range patches[k] {
@@ -139,7 +174,7 @@ func buildTwistedMesh(ctx context.Context, patches [][]twistPatch, edgeOf []int,
 	}
 	var stations []twistStation
 	var stationEdge []int
-	for k := range patches {
+	for k := range bounds {
 		for a := range nu[k] {
 			stations = append(stations, twistStation{span: k, a: int64(a)})
 			stationEdge = append(stationEdge, edgeOf[k])
@@ -159,7 +194,7 @@ func buildTwistedMesh(ctx context.Context, patches [][]twistPatch, edgeOf []int,
 	origin := planes[0].Origin
 	o := twistOriginOf(rf(origin.X), rf(origin.Y))
 	weights := make([][4]int64, ringSize)
-	spanStart := make([]int, len(patches)+1)
+	spanStart := make([]int, len(bounds)+1)
 	for q, st := range stations {
 		weights[q] = twistBernsteinScaled(st.a, int64(nu[st.span]))
 		spanStart[st.span+1] = q + 1
@@ -173,8 +208,24 @@ func buildTwistedMesh(ctx context.Context, patches [][]twistPatch, edgeOf []int,
 		zf, _ := z.Float64()
 		wt := twistBernsteinScaled(int64(rg.band), int64(nt[rg.span]))
 		var rho twistRoundMax
+		exactRho := new(big.Rat)
 		var x, y big.Int
-		for k := range patches {
+		for k := range bounds {
+			if rational != nil {
+				for q := spanStart[k]; q < spanStart[k+1]; q++ {
+					u := big.NewRat(stations[q].a, int64(nu[k]))
+					p := rational[k][rg.span].at(u, t)
+					x, y := add(p.U, rf(origin.X)), add(p.V, rf(origin.Y))
+					xf, yf := ratFloat(x), ratFloat(y)
+					v := r3.Vec{X: xf, Y: yf, Z: zf}
+					if !proofbound.FiniteVec(v) {
+						return twistUnsupported("circular fitted loft station exceeds float64")
+					}
+					verts[r*ringSize+q] = v
+					exactRho = maxRat(exactRho, add(abs(sub(x, rf(xf))), abs(sub(y, rf(yf)))))
+				}
+				continue
+			}
 			curve := commons[k][rg.span].curveAt(wt, nu[k], nt[rg.span], o)
 			for q := spanStart[k]; q < spanStart[k+1]; q++ {
 				curve.point(weights[q], &x, &y)
@@ -190,7 +241,7 @@ func buildTwistedMesh(ctx context.Context, patches [][]twistPatch, edgeOf []int,
 		}
 		// Z is the same at every station of the ring, so its rounding adds
 		// to the largest planar rounding.
-		rhos[r] = add(rho.rat(), abs(sub(z, rf(zf))))
+		rhos[r] = add(maxRat(rho.rat(), exactRho), abs(sub(z, rf(zf))))
 		return nil
 	})
 	if err != nil {
@@ -242,7 +293,7 @@ func buildTwistedMesh(ctx context.Context, patches [][]twistPatch, edgeOf []int,
 	// upward once, at the end.
 	meshBound, volume, area, radius := new(big.Rat), new(big.Rat), new(big.Rat), new(big.Rat)
 	two := mul(rint(2), rho)
-	for k := range patches {
+	for k := range bounds {
 		u := rint(int64(nu[k]))
 		for i, b := range bounds[k] {
 			t := rint(int64(nt[i]))
