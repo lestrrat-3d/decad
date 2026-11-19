@@ -3155,14 +3155,14 @@ Every implementation PR MUST add geometry assertions, not run-only coverage.
 
 | PR | Lands | Still staged |
 |---|---|---|
-| **A** (landed) | option records; tangent expansion; asymmetric chamfer of prism lateral edges and revolve junctions; `WithNoOpenings` accepted and refused per receiver | cap/shell reach; brep and stacked asymmetric selections outside routes E/L (SX16); all SX9/SX10 |
-| **B** (landed) | revolve junction rewrite + roles + surveys | cap loops; shell reach |
-| **C1** (landed) | multi-region `stackedPrismPayload` (the lining reading); cups recorded on it; base S12 lifted through BX8 | closed + side-opening prism shell; revolve side opening; cap loops |
-| **C2** (landed) | closed prism shell (BX5): the void-shell stack, its tessellation | side-opening prism shell (BX4, Part O); revolve side opening; cap loops |
-| **C3** (landed) | revolve shell side opening, full and partial turn, right-angle rims (§9.3.2) | a slanted rim; cap loops |
-| **C4** (landed) | the side opening of Part O §12, six PRs: the rim rule and the revolve's slanted rim (PR 1, landed), the rectilinear prism side opening as a `brepPayload` (PR 2, landed), circular walks (PR 3, landed), oblique walks (PR 4, landed), arc–arc corners and oblique arc joins (PR 5, landed), a kept arc extended past its end (PR 6, landed) | per that document's increment table; cap loops |
-| **D** (partial) | partial-turn revolve shell with both angular caps removed and no side opening (BX7); full-turn closed shell under `WithNoOpenings` (BX6), §9.3.1 | a side opening, full or partial turn (C3 lands it); cap loops |
-| **E** | `capBlendPayload`; complete cap-loop chamfer at an equal setback and at two distances (§8.3.1); analytic integrals | complete cap-loop fillet; DX4 admission for a mitered circular wall or a reflex corner; DX6 clearance model; partial cap-loop chamfers beyond modify-general §4.3a; mixed edge classes; faceted receivers |
+| **A** | option records; tangent expansion; asymmetric chamfer of prism lateral edges and revolve junctions; `WithNoOpenings` accepted and refused per receiver | brep and stacked asymmetric selections outside routes E/L (SX16); all SX9/SX10 |
+| **B** | revolve junction rewrite + roles + surveys | none |
+| **C1** | multi-region `stackedPrismPayload` (the lining reading); cups recorded on it; base S12 lifted through BX8 | side-opening prism shell beyond C4's rectilinear case |
+| **C2** | closed prism shell (BX5): the void-shell stack, its tessellation | side-opening prism shell beyond C4's rectilinear case (BX4, Part O) |
+| **C3** | revolve shell side opening, full and partial turn, right-angle rims (§9.3.2) | none |
+| **C4** | the side opening of Part O §12: the rim rule and the revolve's slanted rim, the rectilinear prism side opening as a `brepPayload`, circular walks, oblique walks, arc–arc corners and oblique arc joins, a kept arc extended past its end | per that document's increment table |
+| **D** | partial-turn revolve shell with both angular caps removed and no side opening (BX7); full-turn closed shell under `WithNoOpenings` (BX6), §9.3.1 | none |
+| **E** | `capBlendPayload`; complete cap-loop chamfer at an equal setback and at two distances (§8.3.1); analytic integrals | DX4 admission for a mitered circular wall or a reflex corner; DX6 clearance model; partial cap-loop chamfers beyond modify-general §4.3a; mixed edge classes; faceted receivers |
 
 Each PR lands its result payload, structural topology, measurement path, and
 tests together. A PR may leave a DX question staged only where
@@ -12447,13 +12447,13 @@ Before T1 to T4, a probe through a `go.mod` replace in a scratch copy of the gal
 | Variant | First refusal |
 |---|---|
 | exact lever (`TestLever` with its skip removed) | `Cut`: "the operands' held facets come within the chord tolerance without provably interpenetrating deeper than it …" (`meshbool.RefuseUndecidableProximity`) |
-| notch radius `r_n + 0.02` | the cut builds on the mesh path; `Fillet`: "a blend circle does not reach an end face" (`internal/retainedblend/arc_section.go`) |
+| notch radius widened | the cut builds on the mesh path; `Fillet`: "a blend circle does not reach an end face" (`internal/retainedblend/arc_section.go`) |
 | exact lever as two extrudes (band S with the dart, band F with the notched outline) and `Union` | `Union`: the same proximity refusal |
 | both of the above with the slot holes left out | the same refusals |
-| notch radius `r_n + 0.02`, fillet skipped | the D bore `Cut` builds on the mesh path; the gallery's edge finish refuses `ErrDegenerate`: "a chamfer of 0.75 mm empties a circular wall of radius 0.666164 mm" (the corner round `K`) |
+| notch radius widened, fillet skipped | the D bore `Cut` builds on the mesh path; the gallery's edge finish refuses `ErrDegenerate`: a chamfer empties the circular wall of the corner round `K` |
 
-The last row is a gallery sizing matter, not a decad gap: a 0.75 mm chamfer cannot run along a 0.666 mm round, in
-decad or in Fusion. It applies to the exact lever too.
+The last row is a gallery sizing matter, not a decad gap: a chamfer wider than the corner round `K`'s radius cannot run
+along it, in decad or in Fusion. It applies to the exact lever too.
 
 ### 2. The cut refusal
 
