@@ -1,7 +1,7 @@
 # PNG export design
 
-`export.PNG(ctx, w, body, tol, view, opts...)` draws one body's tessellation as a PNG image, and `export.PNGBodies` draws several in one (§5), so a program can look at a
-part. It takes the chord tolerance and `decad.TessellateOption` values of the other writers, defaults to `VerifyNone`,
+`export.PNG(ctx, w, body, tol, view, opts...)` draws one body's tessellation as a PNG image, and `export.PNGBodies`
+draws several in one (§5), so a program can look at a part. It takes the chord tolerance and `decad.TessellateOption` values of the other writers, defaults to `VerifyNone`,
 and adds a `View`. The drawing is plain-data code in `internal/raster/`: an orthographic camera, a depth buffer and
 flat shading, with no dependency beyond the standard library's `image/png`.
 
@@ -79,11 +79,11 @@ projection `export.DXF` uses (`agent-docs/dxf-export-design.md`), so they are th
 
 | Decision | Rule |
 |---|---|
-| O1 | An edge is a feature as `drawing.Project` says: an edge used once or three or more times, a crease of more than 30 degrees, or a silhouette. The diagonal of a flat face is not drawn. |
+| O1 | An edge is a feature as `drawing.Project` says (`agent-docs/dxf-export-design.md` D3). The diagonal of a flat face is not drawn. |
 | O2 | Only the visible runs are drawn. A hidden run, one behind a surface, is not. |
 | O3 | A segment is drawn one pixel wide in dark grey, `(32, 32, 32)`, by `raster.DrawSegments`: points about every half pixel along it, each in the pixel that holds it, so an edge at a pixel's boundary lies in the pixel to its right or below. The outline is drawn over the shading and hides it. |
 | O4 | The edges are mapped with the same projection as the shading, so each outline pixel lies on the edge between its shaded faces, to a pixel. |
-| O5 | The zero value draws no outline, and the bytes are those of §1 to §5. `PNGBodies` and `MeshPNG` take the field too. |
+| O5 | The zero value draws no outline, and the bytes are those of §1 to §5. `PNGBodies` and `MeshPNG` take every `View` field this document describes. |
 
 ## 7. Perspective
 
@@ -97,7 +97,7 @@ projection `export.DXF` uses (`agent-docs/dxf-export-design.md`), so they are th
 | V4 | The depth test reads minus the reciprocal of that distance, which is linear in screen space across a triangle, so a nearer triangle hides a farther one in either drawing order. |
 | V5 | A face looks away when its normal points along the line of sight from the eye to the face's centre, not along the camera's axis, so two faces of one body can differ in facing where an orthographic camera would agree. |
 | V6 | Shading uses the camera's axes and headlight as P7 does. Outlines take the field as §12 says. |
-| V7 | `PNGBodies` and `MeshPNG` take the field too. |
+| V7 | `PNGBodies` and `MeshPNG` take the field as O5 says. |
 
 ## 8. A colour for each body
 
@@ -120,7 +120,7 @@ finds behind a surface (`agent-docs/dxf-export-design.md` D5, D6).
 | E1 | Each hidden run is drawn in light grey, `(150, 150, 150)`, by `raster.DrawDashed`: along it, from its start, 4 pixels drawn and 3 skipped, in the half-pixel steps of `DrawSegments`. A run shorter than 4 pixels is drawn whole. |
 | E2 | The dashes are drawn over the shading and under the outlines, so with `Outlines` set a visible edge covers a dash where the two cross. |
 | E3 | The zero value draws none, and the bytes are those of §1 to §8. `HiddenEdges` is independent of `Outlines`. |
-| E4 | `HiddenEdges` takes `FieldOfView` as §12 says. `PNGBodies` and `MeshPNG` take the field too, and a hidden run is hidden by any body. |
+| E4 | `HiddenEdges` takes `FieldOfView` as §12 says. `PNGBodies` and `MeshPNG` take `HiddenEdges` as O5 says, and a hidden run is hidden by any body. |
 
 ## 10. Shadows
 
@@ -132,7 +132,7 @@ finds behind a surface (`agent-docs/dxf-export-design.md` D5, D6).
 | H2 | Each covered pixel's world point is rebuilt from its place and depth, mapped into the light's view and compared with the nearest depth there. The pixel is in shadow when the map's depth is nearer by more than a bias of `1.5 + 2·tan θ` pixels of the map, `θ` being the angle between the face's normal and the light, so no face shadows itself. |
 | H3 | A pixel in shadow takes its face's base colour at the ambient level, 0.3, which is the level of a face turned from the light. A face turned from the light is left as it was. So a convex part shows no shadow on itself, and the bytes of a lone block are those without `Shadows`. |
 | H4 | The shadow of a body falls on the others drawn in the same image by `PNGBodies`. The shadow is hard, one light, one sample, so its edge is as fine as the map and the image. |
-| H5 | The zero value draws none, and the bytes are those of §1 to §9. `Shadows` takes `FieldOfView` as §13 says. `MeshPNG` and `PNGBodies` take the field too. |
+| H5 | The zero value draws none, and the bytes are those of §1 to §9. `Shadows` takes `FieldOfView` as §13 says. `MeshPNG` and `PNGBodies` take `Shadows` as O5 says. |
 
 ## 11. A colour for the faces that look away
 
