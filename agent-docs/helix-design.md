@@ -753,6 +753,19 @@ A coil built directly (no boolean) reads Table CM: `Volume` within
 
 ## 10. Determinism, cancellation and budgets
 
+For coils exceeding the generic loft triangle ceiling, audit held triangles in
+consecutive blocks of 2048. Build bounding-box trees over the actual held
+triangles. Reject only strictly separated boxes; test every remaining pair
+using the generic exact contact rules. Preflight all block and tree visits
+against one 64 million scan ceiling and all retained pairs against one eight
+million pair ceiling. Compact original vertex identities per block pair before
+exact classification. A second traversal classifies the preflighted pairs.
+Skip exact tables for block pairs with no candidates. The summed triangle
+counts of all other block-pair tables have an eight million facet ceiling,
+preflighted before any such table is built.
+Finite-coordinate, index and collapsed-triangle checks precede both traversals.
+The generic loft audit and its limits remain unchanged.
+
 Equal profile record, axis, pitch, turns, hand and placement produce the
 same stations, held table, triangle order, roles and readings: every trig
 value is a fixed-precision enclosure's midpoint, and every float product and

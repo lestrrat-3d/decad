@@ -433,7 +433,13 @@ func Build(ctx context.Context, rec Record) (Shell, error) {
 	if err := ctx.Err(); err != nil {
 		return Shell{}, err
 	}
-	if err := loftmesh.LoftCrossingAudit(proofbound.NewWorkBudget(ctx), sh.Verts, sh.Tris); err != nil {
+	audit := loftmesh.LoftCrossingAudit
+	if len(sh.Tris) > loftmesh.MaxLoftAuditTriangles {
+		audit = func(b *proofbound.WorkBudget, v []r3.Vec, t [][3]int) error {
+			return loftmesh.LoftCrossingAuditTiled(b, v, t, 1<<20)
+		}
+	}
+	if err := audit(proofbound.NewWorkBudget(ctx), sh.Verts, sh.Tris); err != nil {
 		if contact, ok := errors.AsType[*loftmesh.LoftContactError](err); ok {
 			// CS9: CP5 already proved the true solid simple, so a held
 			// crossing is a station artefact, never a defect of the solid.
