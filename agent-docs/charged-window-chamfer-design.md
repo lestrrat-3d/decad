@@ -1,11 +1,11 @@
 # Charged window chamfer design
 
 `Chamfer` of a window rim of a holed A1 stacked BRep after a retained edge blend: the gallery balance wheel's windows
-after its Ø14 `Boss` root fillet. Status: approved for building in two increments (§6). W1 and W2 are built.
+after its Ø14 `Boss` root fillet. W1 and W2 (§6) are built.
 A top-face window run that meets a root fillet (§5) is out of scope and refused.
 
 Navigation (not authority): what the wheel needs → §1; the oblique walls (W1) → §2; the charged chain (W2) → §3;
-readers → §4; the refused run → §5; increments and size → §6.
+readers → §4; the refused run → §5; increments → §6.
 
 ## 1. Problem
 
@@ -13,18 +13,14 @@ The wheel is a disc of radius 42 with four windows between arms. Each window is 
 (radius 7), two oblique sides, an outer arc and four corner rounds. A Ø14 boss with `RootFillet` 0.5 stands on the top
 face (boss-root-overflow C3), a D bore is cut, and every rim and window edge of both caps is chamfered by 0.5.
 
-Probe on `main` at 2172cce965 (scratch copy of the gallery):
+After the boss fillet and the bore cut, every swept circular wall keeps its charge (δ = 9.8e-14, retained-edge-blend
+§6.1), and the 8 oblique window sides and the 4 fillet faces are `Faceted`. The rim circles of both caps chamfer
+without further work. Two things let the bottom-face windows build:
 
-| Step | Result |
-|---|---|
-| boss fillet, bore cut | every swept circular wall keeps its charge (δ = 9.8e-14, retained-edge-blend §6.1); the 8 oblique window sides and the 4 fillet faces are `Faceted` |
-| rim circles on both caps | builds |
-| a bottom window's arcs | "a tangent chain whose walls state a displacement is not built" |
-| a bottom window's sides | `FacetedCurve` rims: the stacked view leaves an oblique swept plane untagged (brep-modify §2.3) |
-| windows' inner radius 7.6 instead of 7 | every rim and window chamfers today (the union is C0) |
-
-Two gaps stand between the bottom-face windows and a build: the oblique sides carry no tag (W1, §2), and a tangent
-chain reads no charged wall (W2, §3).
+- The oblique sides carry a tag (W1, §2). Without it the stacked view leaves an oblique swept plane untagged
+  (brep-modify §2.3), and the sides' rims are `FacetedCurve`.
+- A tangent chain reads charged walls (W2, §3). Without it a window's arcs refuse with "a tangent chain whose walls
+  state a displacement is not built".
 
 ## 2. The oblique walls (W1)
 
@@ -260,15 +256,12 @@ reading of the fillet face from its blend construction. It refuses as an open ch
 
 ## 6. Increments
 
-Each increment is one PR, merged after green CI and an independent review of its soundness-sensitive diff.
+| # | What exists | Unlocks |
+|---|---|---|
+| W1 | §2: the view tags oblique walls with `TagDeparture` and `ExtentDelta`; `SourceTag` carries it; placement and scale drop it | `Line3` window side rims after a blend; no new blend |
+| W2 | §3: a closed chamfer chain reads charged walls, beside other edges of one selection | the wheel's bottom-face window chamfers |
 
-| # | Increment | Unlocks | Estimate |
-|---|---|---|---|
-| W1 | §2: the view tags oblique walls with `TagDeparture` and `ExtentDelta`; `SourceTag` carries it; placement and scale drop it | `Line3` window side rims after a blend; no new blend | built |
-| W2 | §3: a closed chamfer chain reads charged walls, beside other edges of one selection | the wheel's bottom-face window chamfers | built |
-
-The options weighed before this design: building §5 as well (3 to 6 weeks more, gated on Fusion), or moving the
-windows' inner radius to 7.6 in the gallery (no decad work). The user kept the radius at 7 and chose W1 and W2.
+The top-face window run (§5) is not built.
 
 ## 7. Rejected shortcuts
 
