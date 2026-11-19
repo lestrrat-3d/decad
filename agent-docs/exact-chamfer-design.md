@@ -2,7 +2,7 @@
 
 Exact setback points for `Chamfer` of a straight edge between two retained planes of a mesh Boolean result
 (retained-edge-blend R1): root cause (§1), required behavior (§2), approach (§3), construction (§4), bounds and
-soundness (§5), performance (§6), tests (§7), risks (§8), open questions (§9), tasks (§10).
+soundness (§5), performance (§6), tests (§7), risks (§8), open questions (§9), where it lives (§10).
 
 Amends `agent-docs/modify-design.md` Part E §5.0 step 1, §5.2 and §6.3 (Claim K). Companion to
 `agent-docs/coplanar-contact-design.md` (exact faces are what its §3.1 admits) and
@@ -15,12 +15,12 @@ Navigation, not authority.
 | Question | Section |
 |---|---|
 | Where does the 0.0201 bound come from? | §1 |
-| What must hold after this lands? | §2 |
+| What must hold on the exact path? | §2 |
 | Why exact feet and not a rotated face or a snapped point? | §3 |
 | How is a foot computed and bounded? | §4 |
 | Why is the result sound, exact or not? | §5 |
-| Does the dovetail pass after this lands? | §2, §9 |
-| What does the implementer build, in what order? | §10 |
+| Does the dovetail pass? | §2, §9 |
+| Where does each part live? | §10 |
 
 ## Assumptions
 
@@ -40,9 +40,8 @@ Navigation, not authority.
 ## 1. Problem and root cause
 
 The gallery dovetail chamfers the two lip edges of a socket made by `Cut` (0.5 mm, edges along the slide axis, the
-flank tilted 10° from square). Measured per stage on origin/main `3427283341` (dated illustration, 2026-11-18):
-the socket `Cut` reads volume bound `2.0e-12`, the chamfered socket `0.020087`. Repro: `.tmp/gallery` in this
-worktree, `go test ./features/dovetail -run TestZZStages -v`.
+flank tilted 10° from square). The `τ` path (§4.1's fallback) gives the chamfered socket a volume bound of
+`0.020087`, against `2.0e-12` for the socket `Cut` alone.
 
 The lip edges take `retainedblend.Chamfer` → `rewriteLineEdge` (R1). The bound has one cause:
 
@@ -63,11 +62,8 @@ The lip edges take `retainedblend.Chamfer` → `rewriteLineEdge` (R1). The bound
    "exact rational arithmetic … rounded once" and "a vertex position bound is the rounding of that computation"; the
    code does neither for R1.
 
-The receiver's corners are exact enough for an exact construction. A probe printing the bounds of the chain vertices
-next to each lip edge end (dated illustration, 2026-11-18) read: on origin/main, both `A` chains `[0]`, the `B`
-chains `[6.0e-16, 0]` and `[6.0e-16, 7.6e-16, 0]` (artifact vertices first, the zero-bound corner last); on the
-coplanar-contact snapshot (its §7 planar simplification), every one 0. §4.1's carrier rule therefore finds zero-bound
-carriers on both.
+The receiver's corners are exact enough for an exact construction: `TestRetainedLineChamferExact` asserts every vertex
+of the `Cut` socket has bound 0 before it chamfers. §4.1's carrier rule therefore finds zero-bound carriers.
 
 Two further facts bound what any Chamfer change can reach:
 
@@ -77,20 +73,9 @@ Two further facts bound what any Chamfer change can reach:
   that hold a tilted foot keep a rounding-level bound (about `2e-16` mm) under any float representation.
 - **The tail half fails by a different route.** The tail is an exact prism chamfered by the section rewrite
   (`offset2d.setbackFoot`), whose record denotes its float feet (modify §5 convention, `SectionDelta` 0). The trimmed
-  flank therefore runs through the rounded foot `(5.971137795417325, 5.5075961234938955)`, which lies strictly
-  outside the original flank line (exact orientation test). On the coplanar-contact snapshot (`feat-coplanar-on`
-  `3fc622affc`) the chamfered tail against an unchamfered socket reads `Suspect`, "proven to overlap"; the unchamfered
-  pair reads `Sound`.
-
-Measured on that snapshot (dated illustration, 2026-11-18; tail = chamfered tail half, socket = socket half):
-
-| Tail | Socket | Socket volume bound | `Verify` |
-|---|---|---|---|
-| plain | plain | `2.8e-14` | `Sound`, `Intersect` empty |
-| chamfered | plain | `2.8e-14` | `Suspect`, proven overlap (tail flank rotated) |
-| plain | chamfered (today) | `0.020087` | `Suspect`, `unsupported_pair_contact` |
-| plain | chamfered, `τ` dropped (probe) | `9.5e-12` | `Suspect`, `unsupported_pair_contact` |
-| exact prism, one wall slope 1/6 | `Cut` socket, square lip chamfered with exact feet (probe) | `0` | `Sound`, `Intersect` empty |
+  flank therefore runs through the rounded foot, which lies strictly outside the original flank line (exact
+  orientation test). The chamfered tail against an unchamfered socket reads `Suspect`, "proven to overlap"; the
+  unchamfered pair reads `Sound`.
 
 **Out of scope:** the prism section-rewrite chamfer (tail, §9 Q2); contact classification of faces with a
 rounding-level bound (§9 Q1); fillets; R2–R7, chain, mitre and corner routes (§9 Q4); the chamfer face's tag (§9 Q3);
@@ -105,11 +90,10 @@ the proximity gate.
   enclosure, below `2e-14` mm at coordinates under 100 mm).
 - **E3.** A face rebuilt by an R1 chamfer whose vertices all have bound 0 has `FaceBound` 0, and the chamfer adds
   nothing to `VolSymDiff` when every foot is exact.
-- **E4.** The dovetail socket's lip chamfer reads a volume bound below `1e-11` (today `0.020087`), and its lip top
+- **E4.** The dovetail socket's lip chamfer reads a volume bound below `1e-11` (the fallback reads `0.020087`), and its lip top
   feet (`x = ±5.5`) carry bound 0.
 - **E5.** An R1 chamfer of a square lip on a mesh `Cut` socket, paired with an exact flush prism, reads `Sound`,
-  `Intersect` returns `BooleanEmpty`, and `Union` volume equals the sum of the halves (§7.3). Needs coplanar-contact
-  Task 10 on origin/main (not there as of `cea1a4c570`).
+  `Intersect` returns `BooleanEmpty`, and `Union` volume equals the sum of the halves. No test pins E5 yet (§7.3).
 - **E6.** No foot claims less than its proven distance from the ideal foot. An edge with no zero-bound carrier, or
   with an oblique end, keeps today's `w.tau + slack` path.
 - **Not reached by this design:** the dovetail pair `Sound`. Its flank feet are irrational (§1), and its tail flank is
@@ -212,7 +196,7 @@ conversion delta, so both are the exact requested distances.
 
 | File | Change |
 |---|---|
-| `internal/retainedblend/line_exact.go` (new) | `chamferFeetInput`, `lineFoot`, `exactChamferFeet` |
+| `internal/retainedblend/line_exact.go` | `chamferFeetInput`, `lineFoot`, `exactChamferFeet`, `chamferCarriers` |
 | `internal/retainedblend/line_rewrite.go` | `rewriteLineEdge` calls `exactChamferFeet` for chamfers |
 | `internal/retainedblend/plane_charge.go` | `planeFacetVolume` takes optional corner bounds; `chargePlaneFace` passes them |
 | `internal/retainedblend/rewrite.go` | `work.cornerSlab` field |
@@ -289,12 +273,11 @@ of it (faceted-vertex-bounds §2). The gates of §6.2 are unchanged, so `K` and 
 
 ## 6. Performance
 
-- Added work per R1 chamfer edge: four feet, each about 30 `big.Rat` operations on numbers of a few hundred bits plus
-  one `SqrtFixed` (a 400-bit integer square root), and one exact orientation per new facet already paid by
-  `planeFacetVolume`. Expected tens of microseconds per edge; the mesh rebuild (`facetedrecord.Build`) dominates.
-- Gallery hot path: the whole dovetail stage test, every Boolean and both chamfers included, runs in 0.02 s.
-- Task 3 adds `BenchmarkRetainedLineChamfer`; Task 4 compares before and after. The target is within 5% or 0.2 ms per
-  edge, whichever is larger.
+- Added work per R1 chamfer edge: four feet, each a fixed number of `big.Rat` operations plus one `SqrtFixed`, and one
+  exact orientation per new facet already paid by `planeFacetVolume`. The mesh rebuild (`facetedrecord.Build`)
+  dominates.
+- `BenchmarkRetainedLineChamfer` (`apitest/retained_blend_fillet_bench_test.go`) chamfers both lips of fixture S in one
+  call.
 - Smaller bounds can make later Booleans cheaper: the proximity pre-pass skips exact face pairs without a gather.
 
 ## 7. Test plan
@@ -331,50 +314,44 @@ the mesh path. Tenon T: the prism through `(−5, 0), (5, 0), (6, 6), (−5, 6)`
   bound of the exact chamfer plane, measured with U3's 512-bit `big.Float` feet (the plane is irrational).
 - R4 variation: S with the slope-1/4 wall (prism through `(−5, −6), (3.5, −6), (6.5, 6), (−5, 6)`) and `d = 1.0` on
   the square lip: exact as R1 (module boundary: independent cases).
-- R5 tilted exact planes (Task 5): a block `x ∈ [−20, 20]`, `y ∈ [−10, 25]`, `z ∈ [0, 10]` sketched on XZ and
+- R5 tilted exact planes: a block `x ∈ [−20, 20]`, `y ∈ [−10, 25]`, `z ∈ [0, 10]` sketched on XZ and
   extruded along +Y, `Cut` by the square prism through `(0, 0), (6, 8), (−2, 14), (−8, 6)` sketched on XY and
   extruded `z ∈ [−1, 11]`. Chamfer the hole's corner edge at `(0, 0)` (concave, a fill) with `d = 1.25`: feet
   `(0.75, 1, z)` and `(−1, 0.75, z)` with bound 0, volume change exactly `+0.5 × 1.25² × 10 = 7.8125`, and
   `Volume.Bound` at most `1e-13` above the `Cut`'s (the `Cut` itself leaves rational wall corners that are not floats,
-  with bounds near `1e-15`, so the walls' facets charge their tag distance, about `3.6e-14` in all, not `0`;
-  the corner minimum is not exercised end to end here and is covered by the unit cases) The walls' float tags need not contain their
-  corners. R1 refusing this edge → stop and report.
+  so the walls' facets charge their tag distance, not `0`; the corner minimum is covered by the unit cases). The walls' float tags need not contain their
+  corners.
 
-### 7.3 API contact (`apitest/retained_chamfer_contact_test.go`; needs coplanar-contact Task 10 on origin/main)
+### 7.3 API contact (not implemented)
+
+`apitest/retained_chamfer_contact_test.go` does not exist. It would pin:
 
 - C1: S with the square lip chamfered `0.5`, and T, in one document: `Verify` → `Sound`, no diagnostics;
   `Intersect` → `BooleanError` with `Code == BooleanEmpty`; `Union` volume equals `vol(S') + vol(T)` with bound 0.
 - C2: C1 with `d = 0.25`, S on R4's slope-1/4 wall, and T through `(−5, 0), (5, 0), (6.5, 6), (−5, 6)`.
 - C3 known limit: S with the tilted lip chamfered `0.5`, and T: `Verify` → `Suspect` with
-  `DiagUnsupportedPairContact`. Comment: flips to `Sound` when §9 Q1 lands.
+  `DiagUnsupportedPairContact`, flipping to `Sound` when §9 Q1 lands.
 
 ### 7.4 Consumer acceptance (gallery, not committed here)
 
-- Stage repro (`.tmp/gallery`, `go test ./features/dovetail -run TestZZStages -v`): "cut chamfered" bound `< 1e-11`
-  (today `0.020087`). Reachable with this design alone: §1's probe found zero-bound carriers on origin/main.
+- Stage repro: the "cut chamfered" bound is below `1e-11`, reachable with the exact path alone.
 - Pair: tail and chamfered socket → `Verify` `Sound`, `Intersect` `BooleanEmpty`, `Union` volume equals the sum.
-  Expected `Suspect` until §9 Q1 and Q2 land; record the status and every face bound in the PR.
+  Expected `Suspect` until §9 Q1 and Q2 land.
 
-### 7.5 Existing tests this change flips
+### 7.5 Tests that expect zero bound growth
 
-- `requireVolumeChange` and `requireAreaChange` (`apitest/faceted_retained_blend_test.go`) require a positive bound
-  growth. An R1 chamfer with exact feet grows it by 0. Change both to `require.GreaterOrEqual(growth, 0.0)`; with
-  growth 0, `InDelta` then demands the exact change.
-- Known flip: `TestFacetedRetainedBlendStraight/concave_edges_at_a_wall's_foot` (its concave chamfer at line 818
-  changes volume by exactly `−10` with growth 0). A probe that held grid-exact feet at bound 0 on origin/main
-  (`go test ./apitest ./internal/retainedblend . -run 'Retained|Chamfer'`) failed only there.
-- Any further test that pins a chamfer foot's bound at `τ` or a chamfer's volume bound near `2⁻¹⁰·d·area`, found by
-  Task 4's focused run: list each by name in the PR with old and new values; edit it only inside
-  `apitest/faceted_retained_blend_test.go` or stop and report.
+`requireVolumeChange` and `requireAreaChange` (`apitest/faceted_retained_blend_test.go`) require
+`growth >= 0`, because an R1 chamfer with exact feet grows the bound by 0; with growth 0, `InDelta` demands the exact
+change. `TestFacetedRetainedBlendStraight/concave_edges_at_a_wall's_foot` changes volume by exactly `−10` with growth 0.
 
 ## 8. Risks
 
 | Risk | Effect | Mitigation |
 |---|---|---|
 | The dovetail stays `Suspect` after this lands | the consumer goal is not met | §2 and §9 state it; C3 pins the limit |
-| A test pins a `τ`-sized chamfer bound | CI red on Task 4 | §7.5; flips are listed per test |
+| A test pins a `τ`-sized chamfer bound | a test fails on exact feet | §7.5 |
 | A bound raised after `retriangulate` read by §4.4 | slab term too small | §4.4 limits it to R1, which writes no bound after |
-| No zero-bound carrier on a receiver | falls back to `τ` | §1 probe; Task 7 reports the carriers' bounds |
+| No zero-bound carrier on a receiver | falls back to `τ` | §4.1 fallback; §7.4 reports the carriers' bounds |
 
 ## 9. Open questions
 
@@ -415,7 +392,7 @@ the mesh path. Tenon T: the prism through `(−5, 0), (5, 0), (6, 6), (−5, 6)`
 
 **Q5. Faces that state a plane displacement** (`AxialDelta` above 0) keep today's feet and the τ bound.
 
-- A. Keep the restriction (as built). Gains: the existing pin `TestChamferChargesPlaneAxialDelta` (a stated
+- A. Keep the restriction. Gains: the existing pin `TestChamferChargesPlaneAxialDelta` (a stated
   displacement reaches the vertex bounds) holds. Costs: such chamfers keep the `τ`-sized volume bound.
 - B. Drop it. The carriers are true points, so the exact feet do not read the tags. Gains: exact feet there too.
   Costs: that test's pin changes.
@@ -426,84 +403,17 @@ exactness there. Costs: one foot formula per route. Recommend after Q1, which de
 
 ## 10. Tasks
 
-Each task merges on its own with `go test ./...`, `go vet ./...` and `golangci-lint run` passing (CI runs the full
-suite; run the focused command locally). A Sonnet agent implements each task; a fresh Opus agent reviews it against §5
-before merge. Every production PR carries the Module boundary gate evidence (`agent-docs/module-boundary.md`): owning
-section §4 of this doc, input class "R1 chamfer of a straight edge between two retained planes of a mesh Boolean
-result", the focused tests, and no new root adapter.
+The exact feet, the corner slab term and their tests are implemented. The API contact tests (§7.3) and the gallery
+acceptance run (§7.4) are not.
 
-### Task 1: Land the design doc
+| Part | Location |
+|---|---|
+| Feet and carriers (§4.1, §4.2) | `lineFoot`, `chamferFeetInput`, `exactChamferFeet`, `chamferCarriers` in `internal/retainedblend/line_exact.go`; unit tests `TestExactChamferFeet` (§7.1) |
+| Wiring (§4.3) | `rewriteLineEdge` in `internal/retainedblend/line_rewrite.go` |
+| Slab term (§4.4) | `work.cornerSlab` (`rewrite.go`), the `beta` parameter of `planeFacetVolume` (`plane_charge.go`); `TestPlaneFacetVolumeCornerBounds` |
+| Root tests (§7.2) | `TestRetainedLineChamferExact` in `retained_line_chamfer_exact_test.go` |
+| Benchmark | `BenchmarkRetainedLineChamfer` in `apitest/retained_blend_fillet_bench_test.go` |
+| Amended owners | `agent-docs/modify-design.md` Part E §5.0 step 1, §5.2, §6.3 |
 
-- **Files:** `agent-docs/exact-chamfer-design.md`, `agent-docs/layout/design-docs.md`.
-- **What:** Commit this doc and its layout row.
-- **Depends on:** none.
-- **Done when:** `go test . -run '^TestCLAUDEMDLayoutStaysCompact$' -count=1` passes.
-
-### Task 2: Exact chamfer feet
-
-- **Files:** `internal/retainedblend/line_exact.go` (new), `internal/retainedblend/line_exact_internal_test.go` (new).
-- **What:** `lineFoot`, `chamferFeetInput`, `exactChamferFeet` per §4.1–§4.2 and §4.5. No caller yet.
-- **Depends on:** 1.
-- **Pattern refs:** `proofbound.SqrtFixed`, `proofbound.BoxMidStation`, `stitchflux.RatVecOf`; exact plane reads in
-  `internal/retainedblend/plane_charge.go`.
-- **Tests:** U1–U5 (§7.1), as subtests of `TestExactChamferFeet`.
-- **Done when:** `go test ./internal/retainedblend -run 'TestExactChamferFeet' -count=1` passes.
-
-### Task 3: Benchmark baseline
-
-- **Files:** `apitest/retained_blend_fillet_bench_test.go`.
-- **What:** `BenchmarkRetainedLineChamfer`: fixture S, chamfer both lips `0.5` in one call. Lands before Task 4 so
-  Task 4's PR can compare.
-- **Depends on:** 1.
-- **Done when:** `go test ./apitest -run '^$' -bench 'BenchmarkRetainedLineChamfer' -count=1` runs.
-
-### Task 4: Hold R1 chamfer feet exactly
-
-- **Files:** `internal/retainedblend/line_rewrite.go`, `retained_line_chamfer_exact_test.go` (new),
-  `apitest/faceted_retained_blend_test.go`, `.github/test-shards.txt`, `agent-docs/modify-design.md` Part E.
-- **What:** `chamferCarriers` and the §4.3 wiring with the §4.1 fallback; amend retained-edge-blend §5.0 step 1 ("a
-  chamfer's feet follow `agent-docs/exact-chamfer-design.md` §4"), §5.2 and §6.3's strip-vertex sentence. Add
-  `TestRetainedLineChamferExact` to the last numbered shard of `.github/test-shards.txt`.
-- **Depends on:** 2, 3.
-- **Pattern refs:** `requireFacetBoundsHold` and `lineEdgeAt` in `retained_blend_facet_bound_test.go`;
-  `straightEdge`, `requireVolumeChange` in `apitest/faceted_retained_blend_test.go`.
-- **Tests:** R1–R4 (§7.2) as subtests of `TestRetainedLineChamferExact`; §7.5 flips.
-- **Done when:** `go test . -run 'TestRetainedLineChamferExact' -count=1`,
-  `go test ./internal/retainedblend ./apitest -run 'Retained|Chamfer' -count=1` and
-  `go test . ./apitest/ -run '^TestCI' -count=1` pass, and the PR carries `benchstat` of
-  `go test ./apitest -run '^$' -bench 'BenchmarkRetainedLineChamfer' -count=6` on Task 4's parent and on Task 4,
-  meeting §6's target.
-
-### Task 5: Slab term reads final corner bounds on R1
-
-- **Files:** `internal/retainedblend/plane_charge.go`, `internal/retainedblend/plane_charge_internal_test.go`,
-  `internal/retainedblend/rewrite.go`, `internal/retainedblend/line_rewrite.go`, `retained_line_chamfer_exact_test.go`,
-  `agent-docs/modify-design.md` Part E.
-- **What:** §4.4: `work.cornerSlab`, the `beta` parameter, and `rewriteLineEdge` setting the flag on the exact path;
-  amend Claim K's slab term and its proof sentence for R1.
-- **Depends on:** 4.
-- **Tests:** `TestPlaneFacetVolumeCornerBounds`: with `beta` nil the charge is unchanged; a facet with zero-bound
-  corners on a tilted plane whose float tag misses them by rounding charges 0; corner bounds above `h_t + δ` charge
-  `h_t + δ`; a positive corner bound below it charges the bound times the area. R5 (§7.2) as a subtest of
-  `TestRetainedLineChamferExact`.
-- **Done when:** `go test ./internal/retainedblend -run 'TestPlaneFacetVolume' -count=1`,
-  `go test . -run 'TestRetainedLineChamferExact' -count=1` and
-  `go test ./internal/retainedblend ./apitest . -run 'Retained|Chamfer|Fillet' -count=1` pass.
-
-### Task 6: Exact contact through an R1 chamfer
-
-- **Files:** `apitest/retained_chamfer_contact_test.go` (new), `.github/test-shards-apitest.txt`.
-- **What:** C1–C3 (§7.3) as subtests of `TestRetainedChamferContact`; add it to the last numbered apitest shard.
-- **Depends on:** 4; coplanar-contact Task 10 merged on origin/main (not merged as of `cea1a4c570`). Not merged → stop
-  and report.
-- **Pattern refs:** `apitest/boolean_gap_tolerance_test.go` (`BooleanEmpty` assertion).
-- **Done when:** `go test ./apitest -run 'TestRetainedChamferContact' -count=1` and
-  `go test . ./apitest/ -run '^TestCI' -count=1` pass.
-
-### Task 7: Consumer acceptance
-
-- **Files:** none in this repository.
-- **What:** In the gallery, point `go.mod` at the merged commit and run §7.4. Report the stage bounds, the six carrier
-  bounds of each lip edge, the pair's `Verify` status and diagnostics, and every socket face's bound.
-- **Depends on:** 4, 5.
-- **Done when:** "cut chamfered" reads a volume bound `< 1e-11`, and the report states the pair's status.
+A change to this construction passes the Module boundary gate (`agent-docs/module-boundary.md`): owning section §4,
+input class "R1 chamfer of a straight edge between two retained planes of a mesh Boolean result", no new root adapter.
