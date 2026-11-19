@@ -9,7 +9,7 @@ discipline and the build-time simplicity-audit pattern this document reuses,
 "modify §N"), `agent-docs/spline-design.md` (the exactness-tier reasoning this
 document's Table S row S3 follows, "spline §N"), `agent-docs/tessellation-design.md`
 ("tessellation §N"), `agent-docs/verification-design.md` ("verification §N"),
-`agent-docs/evaluator-design.md` ("replay §N"), and `agent-docs/interference-design.md`
+and `agent-docs/interference-design.md`
 / `agent-docs/clearance-design.md` (the staged-consumer precedent Table D follows).
 
 `agent-docs/api-design.md` §8 includes Loft in the feature vocabulary and points here
@@ -1611,9 +1611,9 @@ discipline: every vertex coordinate is a float, taken exactly as a
 and `spline_bezier.go` already follow), accumulated into the rational volume
 and three rational centroid coordinates (anchored at `p0`'s own
 `PlaneRecord.Origin`, mirroring `internal/momentregion`'s own
-anchor-then-publish-once discipline, §3). At publication, the volume rounds
-once and each centroid coordinate rounds once — the identical `addExact` /
-`translateExactMoments` / `publishExact` shape `internal/momentregion` already
+anchor-then-publish-once discipline, `agent-docs/contained-cut-moments-design.md`'s "Common anchor"). At publication, the volume rounds
+once and each centroid coordinate rounds once — the identical `State.AddExact` /
+`momentline.TranslateExactMoments` / `State.PublishExact` shape `internal/momentregion` already
 implements for a 2D region's exact rational accumulator, extended here to a
 3D triangulated boundary rather than invented as new machinery.
 
@@ -2136,8 +2136,8 @@ excludes, never a reason to loosen §5.1's chord target or its cap.
   has nonzero area, and its reported bound ENCLOSES `|held - true|` against a
   high-precision reference, never merely asserted present — over a table of
   slivers of steeply falling aspect ratio and at least one large-coordinate
-  case, and over a many-triangle wall set so the summation loop is covered
-  beside the per-triangle brackets. One fixture drives the summation SCALE to
+  case (no loft test builds that table yet), and over a many-triangle wall set so the summation loop is covered
+  beside the per-triangle brackets. One fixture, not yet implemented (no test builds it; the derivation stands), drives the summation SCALE to
   `+Inf` while the summed value stays finite and every triangle's own bracket
   has zero width — two congruent rectangles of width 2^-27 and height
   2^27 − 2^-26 on the planes z = 0 and z = 2^996, whose four long wall
