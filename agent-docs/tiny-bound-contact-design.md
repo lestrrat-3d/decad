@@ -394,7 +394,7 @@ On exact-chamfer §4.1's exact path, after §4.2 computes the enclosures of the 
    every selected edge took the exact path; any other call sets none.
 
 Claim X becomes: each held foot is within its bound of the meeting point it stands for, exactly. Claim K is unchanged in
-form with these bounds. The ideal-feet enclosure of exact-chamfer Task 2 stays in use for step 1.
+form with these bounds. The ideal-feet enclosure of exact-chamfer §4.1–§4.2 (`exactChamferFeet`) stays in use for step 1.
 
 ## 9. Verify, Intersect and Union
 
@@ -687,8 +687,7 @@ the exact path" (Task 11); the focused cases; no new root adapter.
   there), `internal/retainedblend/line_exact_internal_test.go`, `retained_line_chamfer_exact_test.go`,
   `agent-docs/exact-chamfer-design.md` (§2 E1–E2, §4.2, §5 Claim X).
 - **What:** §8.2.
-- **Depends on:** 3; exact-chamfer Task 5 merged on origin/main (it creates `line_exact.go` and both tests). Not merged →
-  stop and report.
+- **Depends on:** 3; exact-chamfer §10's slab term and feet, which create `line_exact.go` and both tests.
 - **Tests:** U10; exact-chamfer R1–R5 updated to the rational feet.
 - **Done when:** `go test ./internal/retainedblend/ . -run 'Chamfer' -count=1` passes.
 
