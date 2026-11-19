@@ -12638,8 +12638,10 @@ a single graph over the target cylinder's angle.
 
 The positive mouth uses 4,096 whole-turn cells. Each cell evaluates the
 source feet over outward rational sine, cosine, square-root and normal-angle
-intervals. It requires the outer foot outside the bore, the bore foot
-inside the target, and an outward support dot product at the bore foot.
+intervals. Each derivative product, quotient, square root and trig step rounds
+its derivative enclosure outward onto a dyadic with 128 significant bits, which
+only widens it; the coordinate enclosures are never rounded. It requires the
+outer foot outside the bore, the bore foot inside the target, and an outward support dot product at the bore foot.
 The first, mixed and last polar-cross-product coefficients are positive,
 which makes every band cross-section advance around the bore. The two
 Jacobian endpoint coefficients have the same strict sign, excluding a band

@@ -15,9 +15,10 @@ import (
 )
 
 // The crossRef helpers and crossBoreCellProofReference are the cell proof over
-// reduced big.Rat intervals, the form crossBoreCellProof had before it kept
-// unreduced rationals. They are the reference its results must equal bit for
-// bit.
+// reduced big.Rat intervals, with no rounding of any derivative part.
+// crossBoreCellProof rounds its derivative parts outward at 2^-127, below the
+// float readout, so its four float readings (Width, SampleError, Speed and
+// BandLength) must still equal the reference bit for bit.
 type crossRefIV = proofbound.RatInterval
 
 func crossRefPoint(x float64) crossRefIV { return proofbound.PointInterval(proofarith.FloatRat(x)) }
@@ -98,6 +99,14 @@ func crossRefJacobian(aY, aZ, dY, dZ crossRefDual) crossRefIV {
 // comparison charges libm and coordinate rounding instead of assuming ulps.
 func crossBoreCellProofReference(rec *facetedrecord.CrossCylinderBoreRecord, setback float64,
 	i int, angularGap *big.Rat) (CellResult, error) {
+	res, _, err := crossBoreCellProofReferenceDerivs(rec, setback, i, angularGap)
+	return res, err
+}
+
+// crossBoreCellProofReferenceDerivs is crossBoreCellProofReference that also
+// returns the six derivative intervals, in the order of CellExact.Derivs.
+func crossBoreCellProofReferenceDerivs(rec *facetedrecord.CrossCylinderBoreRecord, setback float64,
+	i int, angularGap *big.Rat) (CellResult, [6]crossRefIV, error) {
 	const n = 2 * HalfStations
 	turn := big.NewRat(int64(i), n)
 	s, c := proofbound.TurnSinCosInterval(turn)
@@ -108,40 +117,40 @@ func crossBoreCellProofReference(rec *facetedrecord.CrossCylinderBoreRecord, set
 	xd, ok := crossRefDSqrt(crossRefDSub(crossRefDMul(Rd, Rd),
 		crossRefDMul(crossRefDMul(rd, rd), crossRefDMul(cd, cd))))
 	if !ok {
-		return CellResult{}, fmt.Errorf("%w: the cross-bore seam has no real X", decaderr.ErrUnsupported)
+		return CellResult{}, [6]crossRefIV{}, fmt.Errorf("%w: the cross-bore seam has no real X", decaderr.ErrUnsupported)
 	}
 	c2 := crossRefDMul(cd, cd)
 	Qd, ok := crossRefDSqrt(crossRefDSub(crossRefDMul(Rd, Rd),
 		crossRefDMul(crossRefDMul(rd, rd), crossRefDMul(c2, c2))))
 	if !ok {
-		return CellResult{}, fmt.Errorf("%w: the cross-bore normal has no length", decaderr.ErrUnsupported)
+		return CellResult{}, [6]crossRefIV{}, fmt.Errorf("%w: the cross-bore normal has no length", decaderr.ErrUnsupported)
 	}
 	do, ok := crossRefDQuo(crossRefDMul(crossRefDMul(dd, cd), xd), crossRefDMul(Rd, Qd))
 	if !ok {
-		return CellResult{}, fmt.Errorf("%w: the outer setback has no finite angle", decaderr.ErrUnsupported)
+		return CellResult{}, [6]crossRefIV{}, fmt.Errorf("%w: the outer setback has no finite angle", decaderr.ErrUnsupported)
 	}
 	sodo, codo, ok := crossRefDSinCos(do)
 	if !ok {
-		return CellResult{}, fmt.Errorf("%w: the outer setback has no trig enclosure", decaderr.ErrUnsupported)
+		return CellResult{}, [6]crossRefIV{}, fmt.Errorf("%w: the outer setback has no trig enclosure", decaderr.ErrUnsupported)
 	}
 	outX := crossRefDSub(crossRefDMul(xd, codo), crossRefDMul(crossRefDMul(rd, cd), sodo))
 	outY := crossRefDAdd(crossRefDMul(xd, sodo), crossRefDMul(crossRefDMul(rd, cd), codo))
 	outZ, ok := crossRefDQuo(crossRefDMul(crossRefDMul(dd, Rd), sd), Qd)
 	if !ok {
-		return CellResult{}, fmt.Errorf("%w: the outer setback has no Z", decaderr.ErrUnsupported)
+		return CellResult{}, [6]crossRefIV{}, fmt.Errorf("%w: the outer setback has no Z", decaderr.ErrUnsupported)
 	}
 	outZ = crossRefDAdd(crossRefDMul(rd, sd), outZ)
 	db, ok := crossRefDQuo(crossRefDMul(crossRefDMul(dd, cd), sd), Qd)
 	if !ok {
-		return CellResult{}, fmt.Errorf("%w: the bore setback has no finite angle", decaderr.ErrUnsupported)
+		return CellResult{}, [6]crossRefIV{}, fmt.Errorf("%w: the bore setback has no finite angle", decaderr.ErrUnsupported)
 	}
 	sodb, codb, ok := crossRefDSinCos(db)
 	if !ok {
-		return CellResult{}, fmt.Errorf("%w: the bore setback has no trig enclosure", decaderr.ErrUnsupported)
+		return CellResult{}, [6]crossRefIV{}, fmt.Errorf("%w: the bore setback has no trig enclosure", decaderr.ErrUnsupported)
 	}
 	dOverQ, ok := crossRefDQuo(dd, Qd)
 	if !ok {
-		return CellResult{}, fmt.Errorf("%w: the bore setback has no X", decaderr.ErrUnsupported)
+		return CellResult{}, [6]crossRefIV{}, fmt.Errorf("%w: the bore setback has no X", decaderr.ErrUnsupported)
 	}
 	inX := crossRefDMul(xd, crossRefDSub(crossRefConst(crossRefPoint(1)), dOverQ))
 	inY := crossRefDMul(rd, crossRefDSub(crossRefDMul(cd, codb), crossRefDMul(sd, sodb)))
@@ -153,14 +162,14 @@ func crossBoreCellProofReference(rec *facetedrecord.CrossCylinderBoreRecord, set
 	polarMid, ok := crossRefQuo(crossRefAdd(crossRefPolar(inY, inZ, outY, outZ),
 		crossRefPolar(outY, outZ, inY, inZ)), crossRefPoint(2))
 	if !ok {
-		return CellResult{}, fmt.Errorf("%w: the band polar proof is undefined", decaderr.ErrUnsupported)
+		return CellResult{}, [6]crossRefIV{}, fmt.Errorf("%w: the band polar proof is undefined", decaderr.ErrUnsupported)
 	}
 	if outerBore.Lo.Sign() <= 0 || innerTarget.Lo.Sign() <= 0 || support.Lo.Sign() <= 0 ||
 		crossRefPolar(inY, inZ, inY, inZ).Lo.Sign() <= 0 ||
 		crossRefPolar(outY, outZ, outY, outZ).Lo.Sign() <= 0 || polarMid.Lo.Sign() <= 0 ||
 		crossRefJacobian(inY, inZ, diffY, diffZ).Hi.Sign() >= 0 ||
 		crossRefJacobian(outY, outZ, diffY, diffZ).Hi.Sign() >= 0 {
-		return CellResult{}, fmt.Errorf("%w: a cross-bore chamfer cell loses clearance or folds", decaderr.ErrUnsupported)
+		return CellResult{}, [6]crossRefIV{}, fmt.Errorf("%w: a cross-bore chamfer cell loses clearance or folds", decaderr.ErrUnsupported)
 	}
 	negativeX := crossRefSub(crossRefPoint(0), xd.v)
 	negativeY, negativeZ := crossRefMul(r, c), crossRefMul(r, s)
@@ -199,7 +208,7 @@ func crossBoreCellProofReference(rec *facetedrecord.CrossCylinderBoreRecord, set
 	return CellResult{
 		Width: width, SampleError: proofbound.Radius3D(sampleError),
 		Speed: proofbound.Radius3D(speed), BandLength: proofbound.Radius3D(bandCoord),
-	}, nil
+	}, [6]crossRefIV{outX.d, outY.d, outZ.d, inX.d, inY.d, inZ.d}, nil
 }
 
 // crossBoreSampleCells lists every stride-th cell plus the cells around the
@@ -258,6 +267,43 @@ func TestCrossBoreLazyCellsMatchReference(t *testing.T) {
 				return
 			}
 			require.Positive(t, failed)
+		})
+	}
+}
+
+// TestCrossBoreDerivativeEnclosuresAreRoundedOutward checks that every
+// derivative enclosure CellExactProof publishes contains the unrounded
+// reference one and that each of its ends stays small.
+func TestCrossBoreDerivativeEnclosuresAreRoundedOutward(t *testing.T) {
+	const maxEndBits = 512
+	gap := new(big.Rat).Quo(new(big.Rat).Mul(big.NewRat(2, 1), proofbound.PiUpper),
+		big.NewRat(2*HalfStations, 1))
+	for _, tc := range []struct {
+		name    string
+		rec     facetedrecord.CrossCylinderBoreRecord
+		setback float64
+	}{
+		{"five by one", facetedrecord.CrossCylinderBoreRecord{Radius: 5, Bore: 1, Height: 10, CenterZ: 5, SourceBound: 1e-9}, 0.5},
+		{"eight by one and half",
+			facetedrecord.CrossCylinderBoreRecord{Radius: 8, Bore: 1.5, Height: 16, CenterZ: 8, SourceBound: 1e-9}, 0.1875},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			for _, i := range crossBoreSampleCells(8) {
+				_, want, err := crossBoreCellProofReferenceDerivs(&tc.rec, tc.setback, i, gap)
+				require.NoError(t, err, "cell %d", i)
+				got, err := CellExactProof(tc.rec.Radius, tc.rec.Bore, tc.setback, i, gap)
+				require.NoError(t, err, "cell %d", i)
+				for c := range got.Derivs {
+					lo, hi := got.Derivs[c].Lo, got.Derivs[c].Hi
+					require.LessOrEqual(t, lo.Rat().Cmp(want[c].Lo), 0, "cell %d derivative %d low end", i, c)
+					require.GreaterOrEqual(t, hi.Rat().Cmp(want[c].Hi), 0, "cell %d derivative %d high end", i, c)
+					for _, end := range []proofarith.LazyRat{lo, hi} {
+						num, den := end.Parts()
+						require.LessOrEqual(t, max(num.BitLen(), den.BitLen()), maxEndBits,
+							"cell %d derivative %d end size", i, c)
+					}
+				}
+			}
 		})
 	}
 }

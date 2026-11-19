@@ -16,6 +16,9 @@ import (
 // one subtraction. Every value that leaves either goes through Rat, or
 // through a rounding equal to the lowest-terms one (proofbound.LazyRatFloatUp),
 // so a callee sees what big.Rat's own operations would have produced.
+// LazyRoundDown and LazyRoundUp replace a value by a dyadic on the stated
+// side, so the cross-bore cell's derivative enclosures are enclosures, not the
+// values big.Rat would produce.
 type LazyRat struct{ n, d *big.Int }
 
 var lazyOne = big.NewInt(1)
@@ -276,4 +279,55 @@ func LazyIntervalQuo(a, b LazyInterval) (LazyInterval, bool) {
 // LazyIntervalWiden is proofbound.IntervalWiden: Lo-w and Hi+w.
 func LazyIntervalWiden(a LazyInterval, w LazyRat) LazyInterval {
 	return LazyInterval{LazySub(a.Lo, w), LazyAdd(a.Hi, w)}
+}
+
+// LazyRoundDown returns the largest dyadic m/2^s that is at most x, with
+// s = bits - (len(n) - len(d)) for x = n/d, so that
+// 2^(bits-1) < |x|·2^s < 2^(bits+1). LazyRoundUp returns the smallest such
+// dyadic that is at least x. x is returned unchanged when it is zero or when
+// n and d together hold at most 4·bits bits. bits must be positive.
+//
+// Soundness. m = floor(x·2^s) (down) or ceil(x·2^s) (up) in exact integer
+// arithmetic, so m/2^s <= x (down) or m/2^s >= x (up) holds exactly, and no
+// float is involved. The rounding is outward only. When x·2^s is an integer
+// the value is unchanged. From the bit lengths, log2|x| lies in
+// (len(n)-len(d)-1, len(n)-len(d)+1), so |x|·2^s > 2^(bits-1) >= 1 and the
+// rounded value is nonzero with the sign of x: an endpoint never crosses
+// zero, and an interval that excludes zero still excludes it. The relative
+// error is below 2^(1-bits). The operands are never written, so the
+// immutability contract of LazyRat holds.
+func LazyRoundDown(x LazyRat, bits int) LazyRat { return lazyRound(x, bits, false) }
+
+// LazyRoundUp is the upward counterpart of LazyRoundDown.
+func LazyRoundUp(x LazyRat, bits int) LazyRat { return lazyRound(x, bits, true) }
+
+// LazyIntervalRoundOut is [LazyRoundDown(a.Lo, bits), LazyRoundUp(a.Hi, bits)],
+// an interval that contains a. a's ends must be set.
+func LazyIntervalRoundOut(a LazyInterval, bits int) LazyInterval {
+	return LazyInterval{Lo: LazyRoundDown(a.Lo, bits), Hi: LazyRoundUp(a.Hi, bits)}
+}
+
+func lazyRound(x LazyRat, bits int, up bool) LazyRat {
+	if x.n.Sign() == 0 || x.n.BitLen()+x.d.BitLen() <= 4*bits {
+		return x
+	}
+	s := bits - (x.n.BitLen() - x.d.BitLen())
+	n, d := x.n, x.d
+	if s >= 0 {
+		n = new(big.Int).Lsh(x.n, uint(s))
+	} else {
+		d = new(big.Int).Lsh(x.d, uint(-s))
+	}
+	// QuoRem truncates toward zero, so rem has the sign of n.
+	m, rem := new(big.Int).QuoRem(n, d, new(big.Int))
+	if up && rem.Sign() > 0 {
+		m.Add(m, lazyOne)
+	}
+	if !up && rem.Sign() < 0 {
+		m.Sub(m, lazyOne)
+	}
+	if s <= 0 {
+		return LazyRat{n: m.Lsh(m, uint(-s)), d: lazyOne}
+	}
+	return lazyFrac(m, new(big.Int).Lsh(lazyOne, uint(s)))
 }
