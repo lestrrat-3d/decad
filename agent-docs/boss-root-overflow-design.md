@@ -148,7 +148,7 @@ A `Boss` with `RootFillet` builds by rule CO when every row holds. The first fai
 | A2 | `A` and `B` are retained tags. A stated departure, including a shared span's width charge on `B` (§5.4), is carried into the bounds or refused. |
 | A3 | The root is one closed circle (C0, C1) or a set of disjoint concave arcs of the circle `r = R` on `A`, each spanning less than `π` (C2, C3). |
 | A4 | Every cliff face whose edge with `A` meets `D` is a retained `Plane` or `Cylinder` parallel to the boss axis, convex to `A` along that edge. |
-| A5 | Each arc end is C2 or C3, decided as §5.2 states. A C2 end crosses `B` at an angle whose charged sine exceeds `minSine` (retained-edge-blend §4.5). |
+| A5 | Each arc end is C2 or C3, decided as §5.2 states. A C2 end crosses `B` at an angle whose charged sine exceeds `minSine` (retained-edge-blend §4.4). |
 | A6 | Each C1 arc is decided coincident as §5.2 states. Away from C1 arcs, every boundary point of `A` inside `D` lies on a cliff edge of A4 that runs from a C2 or C3 end out of `D`. |
 | A7 | No face of `S` other than `A`, `B`, the cliff faces and a C3 end's side face `K` (proved G1 to `B` and `G`, meeting `P` only along the generator through the arc end, §5.5.1) meets `P`. No cliff face holds another edge inside `P`'s reach (retained-edge-blend SR5's end-face rule). |
 | A8 | The cap on each cliff face is a simple region of that face, and the held audit of the rewritten mesh passes (retained-edge-blend SR7). |
