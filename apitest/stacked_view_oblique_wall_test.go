@@ -94,8 +94,9 @@ func TestStackedViewObliqueWallTag(t *testing.T) {
 		}
 	})
 
+	// The next two subtests share doc. Chamfer reads document state that Extrude's commit writes, so they must not
+	// overlap and stay sequential.
 	t.Run("a Chamfer of a side rim alone refuses at its tangent junction", func(t *testing.T) {
-		t.Parallel()
 		w := walls[0]
 		for _, e := range w.face.Edges() {
 			if _, line := e.Curve().(decad.Line3); !line {
@@ -120,7 +121,6 @@ func TestStackedViewObliqueWallTag(t *testing.T) {
 	})
 
 	t.Run("a mesh Cut away from the windows keeps the sides tagged", func(t *testing.T) {
-		t.Parallel()
 		pocket := boxBodyAtZ(t, doc, 19.5, -0.5, 20.5, 0.5, 1, 2)
 		cut, err := decad.Cut(t.Context(), part, pocket)
 		require.NoError(t, err)
