@@ -10,15 +10,14 @@ proofs the mesh boolean consumes. Companion to
 "verification §N"). `agent-docs/modify-design.md` owns the cup payload; this document
 owns how that payload is tessellated.
 
-This design may land in increments (§13). A payload row that has not landed is
-`ErrUnsupported`; no increment returns a mesh before that row's boundary and
-area proofs are met. Boolean admission additionally requires the row's
-occupied-volume proof.
+A payload row without an implementation is `ErrUnsupported`; no payload returns a mesh before that row's
+boundary and area proofs are met. Boolean admission additionally requires the row's occupied-volume proof.
+§13 lists the increments T1–T11 that built the rows.
 
 ## 1. Contract
 
 `Mesh` is an output, NEVER a body representation (core §3 invariant 1). Its
-public accessors remain:
+public surface is:
 
 ```go
 type Verification int
@@ -53,7 +52,7 @@ boundary audit this payload supports ran and passed, the facet-contact audit
 included. `VolumeVerified()` reports that the occupied-volume proof holds, which
 is what admits the mesh to `Union`, `Cut` and `Intersect` (§11). A payload whose
 own occupied-volume proof has not landed returns `VolumeVerified() == false` at
-every level, exactly as its `symDiffOK` is false today (§2), and a stitched
+every level, exactly as its `symDiffOK` is false (§2), and a stitched
 body's volume proof rests on its vertices being exact rather than on more work —
 so neither reading is derivable from the other.
 
@@ -207,12 +206,12 @@ pair a `VerifyAll` one does.
 
 **§1's table states no vertex-link requirement for a `BodySolid` mesh, but
 §12's "a vertex link is not one connected cycle" refusal row assumes one
-runs.** Today only the revolve, one-span arc sweep, cap-loop chamfer and stitched-solid
-restatement paths (§2's `stitchPayload` row, `internal/stitchtess/stitch.go`) actually
-call `tessellation.RequireVertexLinks` on their solid branch, beside `internal/tessellation.RequireClosedMesh`:
-each welds or joins independently walked or independently authored geometry,
-where nothing upstream already proves a pinched vertex cannot occur the way a
-single swept prism or cup section's own construction does.
+runs.** A payload calls `tessellation.RequireVertexLinks` on its solid branch, beside
+`internal/tessellation.RequireClosedMesh`, only where it welds or joins independently walked or independently
+authored geometry (the revolve, composite sweep, cap-blend, chamfer and stitched-solid paths, e.g.
+§2's `stitchPayload` row, `internal/stitchtess/stitch.go`). Nothing upstream proves a pinched vertex cannot occur
+there, as a single swept prism or cup section's own construction does for those. A payload that does not call it
+has no such audit.
 
 **The free-boundary row's attribution needs no role at all for an OPEN
 stitched sheet's mesh** (`stitchPayload`, T8), unlike every other sheet row
@@ -269,8 +268,8 @@ for them, leaves `symDiffOK` false, and so never reaches a boolean at all. That
 withholding costs a caller nothing it can consume — §11 admits only a proven
 operand, and the mesh boolean is `areaSlack`'s only consumer — while publishing
 a partly composed term would widen what the mesh asserts past what it proved.
-`volSymDiff` is mandatory before a boolean may consume it; an export-only
-increment may return a mesh with `symDiffOK == false`. `Mesh.Bound()` is the
+`volSymDiff` is mandatory before a boolean may consume it; a payload without that proof may return an
+export-only mesh with `symDiffOK == false`. `Mesh.Bound()` is the
 maximum `sourceBound` over the body, for every payload class. For an analytic
 payload, each source bound includes every displacement introduced by the
 current tessellation, including trim chording and every proven coordinate-
@@ -302,7 +301,8 @@ boolean can retain only one sign.
 right signed volume while losing material outside one wall and gaining the same
 amount inside a hole. Cancellation is forbidden.
 
-The payload table is normative. Its `prismPayload` row covers an analytic and a
+The payload table is normative. Its lowercase work names (`sweptVolumeAllow`, `perturbedAreaUpper`,
+`perturbedTriangleAreaAllow`) are the exported `proofbound` functions of those names. Its `prismPayload` row covers an analytic and a
 free-form wall alike: a section carrying a free-form (Tier A NURBS) wall chords
 through `agent-docs/spline-design.md` §10 P5's own dyadic station chain, whose sagitta,
 station rounding, area slack and occupied-volume terms enter the same columns an
@@ -327,7 +327,6 @@ analytic walk's do (`agent-docs/tessellation-reach-design.md` §5).
 | `bodyPatchPayload` (all-planar) | triangulate each live `Plane`/`Line3` face over one shared vertex table; orient new fills against the source facets; reverse the set under a reflected placement | largest bound of vertices used by that face, plus its `AxialDelta`; every face requires zero `normalBound` | max per-face source bound | sum of per-triangle `perturbedTriangleAreaAllow` at the triangle's largest vertex bound plus its face's `AxialDelta` | no occupied-volume proof; `symDiffOK == false` for every `BodySheet` result |
 | `bodyPatchPayload` (circular prism source) | replay the one-circle source prism's wall chording; fill one or both end rings with triangles over the same station indices; map all facets to live faces | source wall's proven bound, or the filled rim's sagitta under the source frame's stretch plus the source coordinate and axial bounds; later rigid placement adds its linear stretch and point rounding | max per-face source bound | compare exact held-triangle area intervals with each live face's certified area, summing the nonnegative gaps | no occupied-volume proof; `symDiffOK == false` for every `BodySheet` result |
 | `chainPayload` | read straight off each wall's own `Face` -> `Loop` -> `CoEdge` -> `Vertex`, an exact planar quad per `LineSeg` segment (`agent-docs/surface-design.md` §13.4 Table G); a curved or free-form segment's `Cylinder`/`NURBSSurface` wall is `ErrUnsupported` (`internal/chainrecord/tessellate.go`) | the largest corner `Vertex.Bound()` over that wall's four corners, plus `sectionDelta`; zero for an unplaced, unwidened wall | max per-face source bound | the per-triangle perturbation each corner's own bound admits, plus `sectionDelta`'s wall-length term over the sweep height when nonzero | no occupied-volume proof, `symDiffOK == false`, permanently (`agent-docs/surface-design.md` §10); a `chainSweepPayload`'s one-span straight reduction wraps this row unchanged (`internal/sweeprecord`'s `FinishChain`) |
-
 | `chainSweepPayload` (one arc) | two endpoint rings of one authenticated off-axis `LineSeg`, at the denoted angular sequence (sweep §15.9) | outward denoted-angle/true-radius chord sagitta plus bounded true-source-to-stored endpoint displacement, including path-axis and placement errors | the one wall's source bound | non-cancelling Revolve `CellSlack` and path-axis/source/angle Jacobian difference per angular cell, plus `CoordinateAreaAllow` | no occupied-volume proof; `symDiffOK == false` for this sheet |
 
 ### Composite sweep shared grid
@@ -497,17 +496,18 @@ meridian junctions (§8) all charge it. A brep face's open wall
 own chording: each of its two end samples charges its own record's denoted
 end bound, and every other use placing a vertex there adds its own.
 
-One curve may use at most `maxChordsPerWalk` chords. The global revolve angular
-sequence has the same cap. The complete call also has these fixed ceilings:
+One curve may use at most `freeform.MaxChordsPerWalk` (`1 << 14`) chords. The global revolve angular
+sequence has the same cap. The complete call also has these fixed ceilings
+(`internal/revolveproof/budget.go`, `proofbound.MaxFacetPairTestsPerCall`):
 
 ```text
-maxFacetsPerMesh         = 65_536
-maxFacetWorkPerCall      = 262_144
-maxFacetPairTestsPerCall = 8_000_000
+maxFacetsPerMesh                    = 65_536
+maxFacetWorkPerCall                 = 262_144
+proofbound.MaxFacetPairTestsPerCall = 8_000_000
 ```
 
 `maxFacetWorkPerCall` counts every facet assembled across the initial attempt
-and every refinement retry. `maxFacetPairTestsPerCall` counts each revolve
+and every refinement retry. `MaxFacetPairTestsPerCall` counts each revolve
 candidate-sweep visit and reserves one step for every candidate pair it may
 test across refinement attempts. Neither counter resets during refinement.
 A composite sweep's cross-span audit charges the same ceiling the same way:
@@ -520,13 +520,13 @@ if that attempt exceeds `maxFacetsPerMesh`, or if adding it would exceed
 `maxFacetWorkPerCall`. Once the triangles exist, the revolve contact audit
 orders their boxes on one coordinate and builds only pairs that can still touch
 under the charged displacement. Each sweep probe and candidate pair consumes
-the cumulative `maxFacetPairTestsPerCall` budget. The whole candidate list and
+the cumulative `MaxFacetPairTestsPerCall` budget. The whole candidate list and
 its exact-test allowance fit that budget before any exact pair predicate starts;
 exceeding it refuses before the next scan or predicate. The exact audit uses
 the same predicates and required-contact rules as before. Overflow or a finer
 request than any cap admits → `ErrUnsupported`.
 
-**`maxFacetPairTestsPerCall` is charged only when the audit it bounds will
+**`MaxFacetPairTestsPerCall` is charged only when the audit it bounds will
 run.** A level that declines the contact audit does no pair work and is charged
 none. `maxFacetsPerMesh`
 and `maxFacetWorkPerCall` bound allocation instead and are charged at every
@@ -758,7 +758,9 @@ unplaced axis-aligned profile has zero bound. `VerifyAll` sums one cap
 segment-area allowance per curved walk and the per-triangle coordinate
 movement allowance. A Patch sheet has no occupied-volume proof.
 
-A `capblend.DisplacedPayload` reserves its largest `LoopDelta` the same way (`capblend.TessellateDisplacedMesh`): a tolerance at or below it refuses with `ErrUnsupported`, and the chord budget is `DownRound(DownRound(chord − max LoopDelta))`.
+A `capblend.DisplacedPayload` reserves its largest `LoopDelta` the same way (`capblend.TessellateDisplacedMesh`):
+a tolerance at or below it refuses with `ErrUnsupported`, and the chord budget is
+`DownRound(DownRound(chord − max LoopDelta))`.
 
 ## 6. Cup
 
@@ -1388,6 +1390,9 @@ sample to make an analytic mesh close. Refine or refuse.
 
 ## 13. Increments
 
+Every increment below has shipped. Each "Stays staged" entry names work that increment left out; an entry that no
+later row lands is not implemented.
+
 | Increment | Lands | Stays staged |
 |---|---|---|
 | **T1** | common proof record + audits; prism/cup/faceted paths expressed by §§2–7 without changing their public API | revolve |
@@ -1428,9 +1433,8 @@ edge must reuse the same vertex indices, not merely equal coordinates.
 - Assert byte-identical repeated STL/OBJ output.
 - Assert the chording component is `<= tol` and the smallest valid count at
   threshold tolerances on both sides of every chord-count change. Include a
-  payload-displacement fixture whose complete `Bound` exceeds `tol`, the
-  radius-1 full-turn `n = 122` threshold, and each closed-walk/axis-to-axis
-  minimum. For radius 1,
+  payload-displacement fixture whose complete `Bound` exceeds `tol`, and each
+  closed-walk/axis-to-axis minimum. For radius 1,
   cover budgets equal to and above `2r`, including 5 mm: choose the minimum
   count without evaluating an out-of-domain inverse. Exercise inverse
   underflow, unrepresentable ceiling, and cap overflow; each MUST refuse before
@@ -1539,13 +1543,10 @@ edge must reuse the same vertex indices, not merely equal coordinates.
 
 ## 15. Open implementation choice
 
-The behavior is fixed through T4. The proof implementation may combine complete
-sign decomposition with certified interval subdivision for §10.2's absolute
-Jacobian-difference integral and §11's absolute triple integral. Either path is
-admissible only when it proves the same outward-rounded `Ecell` or `Icell` under
-the shared fixed subdivision budget; heuristic quadrature is not. Choose during
-the owning increment from measured complexity and proof tests, without changing
-the mesh or boolean contract.
+§10.2's absolute Jacobian-difference integral and §11's absolute triple integral use complete sign
+decomposition where it exists in closed form and certified interval subdivision otherwise. Either path is
+admissible only when it proves the same outward-rounded `Ecell` or `Icell` under the shared fixed subdivision
+budget; heuristic quadrature is not. The paths below are the ones implemented.
 
 **T2's `Ecell` is complete sign decomposition, in closed form.** For a STRAIGHT
 generator both densities collapse and the decomposition needs no root isolation
@@ -1567,14 +1568,12 @@ sign-fixed piece integrates through its own polynomial primitive. A pole fan is
 the same statement with the domain's pole edge collapsed: `Jtrue` and `Jheld`
 are both linear in `t` through the origin there. `cos dphi` and `sin dphi` enter
 only through the ideal triangle's own enclosed area, never inside a root
-isolation, so no widening can lose a sign on a thin cell — which is what made
-the alternative worth considering. One evaluation answers for every angular
+isolation, so no widening can lose a sign on a thin cell. One evaluation answers for every angular
 interval of a cell, because interval `l`'s ideal samples are the exact rotation
 of interval 0's about the axis and a rotation is an isometry.
 
 **T3's `Ecell` is certified interval subdivision.** A CIRCULAR generator has no
-closed-form sign decomposition to take, which is the whole reason the choice
-went the other way. Matching the arc to its chord by the shared parameter gives
+closed-form sign decomposition. Matching the arc to its chord by the shared parameter gives
 the arc a CONSTANT speed `r*abs(dTheta)`, so `Jtrue` keeps the straight case's
 independence from `u`:
 
@@ -1647,5 +1646,5 @@ stops converging.
 Because the absolute value is taken inside every piece, nothing cancels and the
 sum is an upper bound at any depth. `Mmeridian` is closed form beside it: the
 sliver between each meridian arc and its chord is charged its own proven total
-area times a proven upper bound on `rho` over it, and `chordSegmentArea` already
+area times a proven upper bound on `rho` over it, and `revolvemesh.ChordSegmentArea` already
 states the first without a trig call.
