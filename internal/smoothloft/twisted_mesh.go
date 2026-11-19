@@ -78,7 +78,7 @@ func twistCounts(ctx context.Context, bounds [][]twistBounds, target *big.Rat) (
 		for i, b := range bounds[k] {
 			nu[k] = max(nu[k], twistCountFor(b.muu, third))
 			// The twist term mut/(4 nu nt) <= third.
-			need := int(math.Ceil(ratFloat(div(b.mut, mul(rint(4), mul(third, rint(int64(nt[i]))))))))
+			need := max(1, int(math.Ceil(ratFloat(div(b.mut, mul(rint(4), mul(third, rint(int64(nt[i])))))))))
 			for need > 1 && div(b.mut, mul(rint(4), mul(rint(int64(need-1)), rint(int64(nt[i]))))).Cmp(third) <= 0 {
 				need--
 			}
@@ -214,17 +214,24 @@ func buildTwistedMesh(ctx context.Context, patches [][]twistPatch, edgeOf []int,
 	capPoints := make([]sectionrecord.Point2, ringSize)
 	cycle := make([]int, ringSize)
 	for q := range ringSize {
-		capPoints[q] = sectionrecord.Point2{U: verts[q].X, V: verts[q].Y}
 		cycle[q] = q
 	}
-	capTris, err := triangulation.Triangulate(ctx, capPoints, [][]int{cycle})
-	if err != nil {
-		return Build{}, triangulation.WrapLoftError(err)
-	}
 	last := (len(rings) - 1) * ringSize
-	for _, tri := range capTris {
-		tris = append(tris, [3]int{tri[0], tri[2], tri[1]}, [3]int{last + tri[0], last + tri[1], last + tri[2]})
-		sources = append(sources, edges, edges+1)
+	for capIndex, offset := range [...]int{0, last} {
+		for q := range ringSize {
+			capPoints[q] = sectionrecord.Point2{U: verts[offset+q].X, V: verts[offset+q].Y}
+		}
+		capTris, err := triangulation.Triangulate(ctx, capPoints, [][]int{cycle})
+		if err != nil {
+			return Build{}, triangulation.WrapLoftError(err)
+		}
+		for _, tri := range capTris {
+			if capIndex == 0 {
+				tri[1], tri[2] = tri[2], tri[1]
+			}
+			tris = append(tris, [3]int{offset + tri[0], offset + tri[1], offset + tri[2]})
+			sources = append(sources, edges+capIndex)
+		}
 	}
 	if err := loftmesh.LoftCrossingAuditBounded(proofbound.NewWorkBudget(ctx), verts, tris,
 		twistMaxTriangles, twistMaxScans); err != nil {
