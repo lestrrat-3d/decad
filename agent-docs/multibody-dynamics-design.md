@@ -138,9 +138,8 @@ one on the top row. Three radius-`8 mm` source spheres with centers released at 
 over `x = 120`, offset in `y` so the second lands on the first and the third on them (`y = 10, 14, 6`).
 One source cylinder (`Ø20 × 30 mm`, axis along `z`) released axially with its lower disk at `z = 80 mm`
 over `(160, 10)`. The floor is `360×2000×10 mm`, spanning `x = −60…300`, `y = −990…1010`: the glancing
-sphere impacts leave the spheres rolling along `y` at up to about `410 mm/s` (no rolling resistance is
-modeled), up to `766 mm` from their drop line by `2 s`, and the sphere-box contact needs each sphere's
-contact inside the floor's top face. Gravity `-9810 mm/s²`, box and floor
+sphere impacts leave the spheres rolling along `y` (no rolling resistance is modeled), and the
+sphere-box contact needs each sphere's contact inside the floor's top face. Gravity `-9810 mm/s²`, box and floor
 restitution `0.3`, sphere restitution `0.6`, so a pair takes the smaller (rigid-dynamics "World and State"):
 `0.3` against the floor and the boxes, `0.6` between spheres. The cylinder takes the boxes' material.
 Friction `0.4` everywhere, density `0.001 kg/mm³`, `dt = 1/256 s` so every kick `−9810/256 mm/s` is exact,
@@ -658,8 +657,7 @@ divided by the body's longest island lever, so a body rolling at a few rad/s und
 bodies of an island pair are co-moving when their published spins are equal and every component of their
 linear velocities differs by at most `VelocityResidual/8`; each connected group of them whose every member
 lies within `VelocityResidual/16` of the group's mass-weighted mean, per component, publishes that mean for
-every member. Float rounding leaves a bouncing or resting stack's bodies about `1e-14` to `1e-7 mm/s`
-apart, and only exactly equal velocities let `SweepPair` prove the touch that continues the stack, as the
+every member. Float rounding leaves a bouncing or resting stack's bodies slightly apart in velocity, and only exactly equal velocities let `SweepPair` prove the touch that continues the stack, as the
 two-body sphere path's common zero-restitution velocity does for one pair. These choices serve the
 continuation: a resting island must publish exactly equal normal velocities on its touching pairs, and
 exactly zero spin, before `SweepPair` can prove a persistent touch from it. None of them is a claim; the
@@ -751,8 +749,8 @@ admits (§6.1; contact-geometry §3), so the torque of an impulse about the mass
 radius times the impulse: over the lever interval the angular residual spreads by up to `b_k·|J_k|_1` per
 component at each point, `b_k` the body's own witness ball (`OnA.Bound` on side `A`, `OnB.Bound` on side
 `B`) and `|J_k|_1` the L1 norm of the point's impulse interval at its upper end. A `0.03 mm` ball under the
-§2 bottle's `1877 kg·mm/s` landing impulse is a torque of `55 kg·mm²/s`, and no gate can certify the spin
-closer than the admitted geometry fixes it. The angular law's limit therefore carries that spread as the
+§2 bottle's landing impulse spreads the torque by `0.03 mm` times that impulse, and no gate can certify the
+spin closer than the admitted geometry fixes it. The angular law's limit therefore carries that spread as the
 body's WITNESS TORQUE `T_β = Σ_k b_k·|J_k|_1` over the body's points, and nothing else widens it: the
 mass-center ball, the normal ball and the inertia intervals stay in the residual alone, so a mass center or
 normal too uncertain for the published spin is refused as before
@@ -766,13 +764,12 @@ contact points, `I*·(Δω_pub − Δω*)` is that residual at one admissible in
 `|Δω_pub − Δω*|_2 <= √3·L_β / λ_lo`: the published spin lies within
 `√3·(AngularVelocityResidual + (ImpulseResidual·ρ + T_β) / λ_lo)` of the law at the true contact points.
 That claim is the one every exact fixture already makes, since an exact planar body's `T_β` is the rounding
-of its vertices times the impulse and no published number of theirs changes; for the §2 bottle it is the
-record of §13 PR 20g: `WitnessSpin` about `0.5 rad/s` at the landing and `0.04 rad/s` at each resting kick.
-Raising `AngularVelocityResidual` to the landing's `0.5 rad/s` instead would state one flat tolerance for
+of its vertices times the impulse and no published number of theirs changes; for the §2 bottle the landing
+island publishes a `WitnessSpin` below `1 rad/s` (`dynamics/island_test.go`, `dynamics/scene_test.go`).
+Raising `AngularVelocityResidual` to the landing's `WitnessSpin` instead would state one flat tolerance for
 every body and every event, widen every body's energy allowance with it (rigid-dynamics "Completion,
-conservation, and trace"), and leave the resting kicks' tenfold smaller uncertainty unstated; shrinking `HeldChord` until the
-spread fits the old limit needs `δ` below `1e-7 mm`, tens of thousands of base vertices at a classification
-cost of seconds per step already at `0.03 mm`.
+conservation, and trace"), and leave the smaller uncertainty of other events unstated; shrinking `HeldChord`
+until the spread fits the old limit multiplies the base vertices the classification must visit.
 
 The velocity rows carry no such term: non-penetration, complementarity, stick and slip enclose each point's
 velocity over the lever interval, so a spinning displaced body's point speed spreads by `|ω'|·b_k` (and the
@@ -2676,7 +2673,7 @@ the user-facing inventory; the "Files" lines below do not repeat it.
   second shell, a `1 mm` cube standing on the floor wholly inside the sunk box (no crossing, so §9.1's
   nesting cast never runs and only the column test sees it), publishes one corner; each part of
   condition 3 deleted, its region helper accepts a point set over a hole, across an L's notch or around a
-  hole (`planar_face_penetration_internal_test.go`); the lifted set deleted, the barely turned cube
+  hole (`TestHullInsideRegion` in that same file); the lifted set deleted, the barely turned cube
   publishes its sunk corner alone. `.github/test-shards-apitest.txt`
   lists the `apitest` tests.
 - Depends on: PRs 11, 14a, 14c.
@@ -3060,11 +3057,11 @@ PRs 14b, 14c and 14e touch disjoint files and may land in any order; PR 14d foll
   fixture keeps its numbers: an exact body's `T_β` is the rounding of its witnesses times the impulse, and
   every refusal fixture at the angular law stands by more than that.
 - Depends on: PR 20c.
-- Rejected alternatives, each recorded in §6.3: a scene-wide `AngularVelocityResidual` of `0.5 rad/s`, and a
+- Rejected alternatives, each recorded in §6.3: a scene-wide `AngularVelocityResidual` raised to the landing's `WitnessSpin`, and a
   `HeldChord` small enough for the spread to fit the old limit.
 - `bodyWitnessTorque` (`dynamics/island_certify.go`) sums `T_β` per body. The bottle's held base
-  lifts `49` vertices; it lands at step `9` (`WitnessSpin` about `0.5 rad/s`), rebounds at `0.3` again at
-  step `15`, meets the floor below `ImpactSpeed` and rests at step `17` (`WitnessSpin` about `0.04 rad/s`).
+  lifts `49` vertices; it lands at step `9`, rebounds at `0.3` again at
+  step `15`, meets the floor below `ImpactSpeed` and rests at step `17`.
   `IslandProposalGates` solves a step's initial contacts and the drop's landing is an interior impact, so
   the tamper fixture (`TestIslandWitnessTorqueGates`) starts the bottle `1/32 mm` above the floor, inside
   the lifted band, closing at the landing's `383.203125 mm/s`; with `T_β` zeroed its landing is refused at the drop's
@@ -3158,8 +3155,8 @@ touching, or overlapping. It also owns a read-only sweep that finds the first
 certifiable contact interval for two moving bodies. The `dynamics` subpackage
 owns body roles, material parameters, loads, velocity changes, and the state
 produced by each step. It consumes `decad` pair reports and sweep certificates.
-`Document.VerifyMotion` is a prescribed-motion verification API with no
-response calculation. A viewer such as `kinetograph` may replay a
+`Document.VerifyMotion` (`motion_verify.go`; `agent-docs/linkage-check-design.md` Part M) is a
+prescribed-motion verification API with no response calculation. A viewer such as `kinetograph` may replay a
 dynamics trace; it does not decide contact or change the solver result. The
 `_gallery` module replays a `dynamics.Timeline` through the kinetograph node
 kind Part N §11 specifies; the viewer shows the
