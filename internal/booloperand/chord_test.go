@@ -74,6 +74,7 @@ func TestChordShare(t *testing.T) {
 			floor   float64
 		}{
 			{facetedrecord.Payload{LoftFacesPrimitive: true, MeshBound: 0.25}, 0.25},
+			{facetedrecord.Payload{CircularFitPrimitive: true, MeshBound: 0.125}, 0.125},
 			{coilshell.Payload{Delta: 0.125}, 0.125},
 			{sweepmitre.Payload{Delta: 0.375}, 0.375},
 			{twistsweep.Payload{Delta: 0.0625}, 0.0625},

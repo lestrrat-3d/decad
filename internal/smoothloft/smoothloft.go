@@ -18,17 +18,18 @@ import (
 // admitted LoftSections surface. Rectangular builders also retain its exact
 // height curves for an interior Section query.
 type Build struct {
-	Vertices           []r3.Vec
-	Triangles          [][3]int
-	Sources            []int
-	EdgeCount          int
-	MeshBound          float64
-	VolSymDiff         float64
-	AreaSlack          float64
-	Diameter           float64
-	ArcRadii           [4]float64
-	RectangularSection *RectangularSection
-	HomotheticSection  *HomotheticSection
+	Vertices             []r3.Vec
+	Triangles            [][3]int
+	Sources              []int
+	EdgeCount            int
+	MeshBound            float64
+	VolSymDiff           float64
+	AreaSlack            float64
+	Diameter             float64
+	ArcRadii             [4]float64
+	RectangularSection   *RectangularSection
+	HomotheticSection    *HomotheticSection
+	CircularFitPrimitive bool
 }
 
 func rint(n int64) *big.Rat      { return big.NewRat(n, 1) }

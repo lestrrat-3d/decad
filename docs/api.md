@@ -159,7 +159,8 @@ a sheet. The `decad.Section` type constraint covers both.
 | `decad.Sweep` | A section moved along a `*decad.Path`. |
 | `decad.Loft` | A ruled solid between two profiles on different planes. |
 | `decad.LoftChain` | A ruled sheet between two open chains. |
-| `decad.LoftSections` | A smooth solid through three or more profiles, including up to 1024 sections of one fitted edge and whole lines that turn about the plane origin. |
+| `decad.LoftSections` | A smooth solid through three or more profiles, including fitted-edge sections that turn about the plane origin and a four-arc circular section transitioning to fitted-edge sections. |
+| `decad.LoftSectionsWithCircularCorrespondence` | A circular-to-spline loft with caller-supplied rational quarter correspondence maps. |
 | `decad.LoftFaces` | A solid through ordered cap faces. `decad.WithConeTangentEnd` ends it with a section tangent to a cone. |
 | `decad.LoftFromPoint` | A solid from an apex point to a profile. |
 | `decad.Coil` | A profile moved along a screw motion, such as a thread or spring. |

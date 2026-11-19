@@ -4,6 +4,7 @@ import (
 	"context"
 	"math/big"
 	"testing"
+	"time"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/freeform"
@@ -11,6 +12,36 @@ import (
 	"github.com/lestrrat-3d/r3"
 	"github.com/stretchr/testify/require"
 )
+
+type cancelDuringBounds struct {
+	checks int
+	done   chan struct{}
+}
+
+func (c *cancelDuringBounds) Deadline() (time.Time, bool) { return time.Time{}, false }
+func (c *cancelDuringBounds) Done() <-chan struct{}       { return c.done }
+func (c *cancelDuringBounds) Value(any) any               { return nil }
+
+func (c *cancelDuringBounds) Err() error {
+	c.checks++
+	if c.checks > 1 {
+		if c.checks == 2 {
+			close(c.done)
+		}
+		return context.Canceled
+	}
+	return nil
+}
+
+func TestCircularMeshCancelsBetweenBounds(t *testing.T) {
+	center := twistTestPoint(0, 0)
+	curve := circularChart(rint(1), center, 0, rint(0), rint(1))
+	transition := rationalTransition{a: curve, b: curve}
+	ctx := &cancelDuringBounds{done: make(chan struct{})}
+	_, err := buildSectionMesh(ctx, nil, [][]rationalTransition{{transition, transition}}, nil, 0, nil, nil)
+	require.ErrorIs(t, err, context.Canceled)
+	require.Equal(t, 2, ctx.checks)
+}
 
 func TestTwistedCountsZeroMixedBound(t *testing.T) {
 	line := twistTestLinePatch(twistTestPoint(4, -2), twistTestPoint(4, 2)).bounds()
@@ -30,6 +61,50 @@ func TestTwistedCountsZeroMixedBound(t *testing.T) {
 	}
 	_, _, previous := twistTerms(other, nu[0]-1, nt[1])
 	require.Greater(t, previous.Cmp(div(target, rint(3))), 0)
+}
+
+func TestTwistedCountsRejectsBoundsBeyondCeilings(t *testing.T) {
+	target := big.NewRat(3, 100)
+	third := big.NewRat(1, 100)
+	huge := new(big.Rat).SetInt(new(big.Int).Lsh(big.NewInt(1), 2048))
+	delta := new(big.Rat).SetFrac(big.NewInt(1), new(big.Int).Exp(big.NewInt(10), big.NewInt(30), nil))
+	heightMax := mul(mul(rint(8), third), rint(twistMaxT*twistMaxT))
+	stationMax := mul(mul(rint(8), third), rint(twistMaxU*twistMaxU))
+	mixedMax := mul(mul(rint(4), third), rint(twistMaxU))
+	for _, tc := range []struct {
+		name          string
+		muu, mtt, mut *big.Rat
+		want          string
+	}{
+		{"height", rint(0), huge, rint(0), "height-band ceiling"},
+		{"station", huge, rint(0), rint(0), "station ceiling"},
+		{"mixed", rint(0), rint(0), huge, "station ceiling"},
+		{"height just over", rint(0), add(heightMax, delta), rint(0), "height-band ceiling"},
+		{"station just over", add(stationMax, delta), rint(0), rint(0), "station ceiling"},
+		{"mixed just over", rint(0), rint(0), add(mixedMax, delta), "station ceiling"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, _, err := twistCounts(t.Context(), [][]twistBounds{{{muu: tc.muu, mtt: tc.mtt, mut: tc.mut}}}, target)
+			require.ErrorIs(t, err, decaderr.ErrUnsupported)
+			require.ErrorContains(t, err, tc.want)
+		})
+	}
+	for _, tc := range []struct {
+		name          string
+		muu, mtt, mut *big.Rat
+		wantU, wantT  int
+	}{
+		{"height at ceiling", rint(0), heightMax, rint(0), 1, twistMaxT},
+		{"station at ceiling", stationMax, rint(0), rint(0), twistMaxU, 1},
+		{"mixed at ceiling", rint(0), rint(0), mixedMax, twistMaxU, 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			nu, nt, err := twistCounts(t.Context(), [][]twistBounds{{{muu: tc.muu, mtt: tc.mtt, mut: tc.mut}}}, target)
+			require.NoError(t, err)
+			require.Equal(t, []int{tc.wantU}, nu)
+			require.Equal(t, []int{tc.wantT}, nt)
+		})
+	}
 }
 
 func TestTwistedMeshStraightSquare(t *testing.T) {

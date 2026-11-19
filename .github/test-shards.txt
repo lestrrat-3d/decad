@@ -335,3 +335,4 @@
 12	0.02	TestSweepPairPlacedFacetedFloorImpactAndDeparture
 12	0.68	TestTryAllEdgeChamferGates
 12	0.11	TestTwistWideThinRectangleTransform
+12	0.00	TestCircularFitPrimitiveEligibility

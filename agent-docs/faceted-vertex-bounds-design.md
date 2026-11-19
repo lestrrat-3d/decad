@@ -408,21 +408,21 @@ is the one the boolean needs and the request never refuses.
 
 **A held primitive raises the pair's tolerance.** An operand built as one
 fixed held mesh — a coil, mitred sweep, or twisted sweep with proven `delta`,
-or one certified `LoftFaces` result with proven `MeshBound` — raises the
+or one certified `LoftFaces` or circular-to-fitted `LoftSections` result with
+proven `MeshBound` — raises the
 pair's chord tolerance itself to that bound, as a displaced prism section
 already raises it past twice its displacement (`meshbool.PairChordFrom`, through
 `booloperand.heldPrimitiveFloor` beside `booloperand.sectionDisplacement`). Every facet such an
 operand touches the partner with then holds `δ(t) ≤ heldBound ≤ tol`, so the gate
 below admits it. A boolean result's `MeshBound` does not raise the pair
 tolerance: it is the figure a chain grows, and the gate exists to refuse it.
-Rigid placement of `LoftFaces` keeps the primitive classification while
-charging its new bound; a Boolean result clears it.
-The partner pays for the raise: a chorded analytic partner is meshed at the
-raised `tol`, so its mesh may be coarser than the pair's size alone would ask, and the result's rims and area and volume bounds compose from that
-coarser mesh. Its published bounds still hold, since every tessellation
-proves its `sourceBound`, `areaSlack` and `volSymDiff` for the tolerance it
-was asked at. Otherwise the request for a chorded analytic operand stays
-`tol`. After the contact classification has run
+Rigid placement of either loft keeps the primitive classification while
+charging its new bound; scaling and a Boolean result clear it.
+The analytic partner is meshed at the smaller of the pair tolerance and the
+larger of its diameter-derived chord tolerance and its own floor
+(`meshbool.OperandChord`). A held primitive's raised pair tolerance therefore
+does not coarsen that partner. The result's rim, area and volume bounds compose
+the bounds each operand publishes. After the contact classification has run
 and before any facet is cut, the gate walks every operand facet the
 classification reports as meeting the other operand (`ContactPoint`,
 `ContactSegment`, or within the pre-pass slack) and refuses with

@@ -139,6 +139,20 @@ func TestPlacementDropsExtentDelta(t *testing.T) {
 	require.GreaterOrEqual(t, f.NormalBound, obliqueTheta)
 }
 
+func TestPlacementPreservesCircularFitPrimitive(t *testing.T) {
+	fp, _ := obliqueTetra(t, obliqueGroup(t))
+	fp.CircularFitPrimitive = true
+	shift, err := r3.Translation(r3.NewVec(0.1, 0.2, 0.3))
+	require.NoError(t, err)
+	env := topo.Env{Doc: &topo.Document{}, Ref: 9, Alloc: topotest.Alloc{}}
+	placed, err := fp.Placed(t.Context(), env, shift)
+	require.NoError(t, err)
+	got, ok := placed.Payload.(facetedrecord.Payload)
+	require.True(t, ok)
+	require.True(t, got.CircularFitPrimitive)
+	require.GreaterOrEqual(t, got.MeshBound, fp.MeshBound)
+}
+
 func TestExactGroupPlacedDropsExtentDelta(t *testing.T) {
 	t.Parallel()
 	q, delta, verts := exactGroupFixture(t, 20)

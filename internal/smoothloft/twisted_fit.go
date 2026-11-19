@@ -101,7 +101,12 @@ func twistGather(ctx context.Context, profiles []momentinput.Profile,
 // cyclic order and checks its own exact joins.
 func twistGatherOne(profile momentinput.Profile, work *freeform.FreeformWork,
 	fitAt0, count int) ([][]twistSpan, error) {
-	fit, err := twistFitIndex(profile)
+	return gatherSplineOne(profile, work, fitAt0, count, twistFitIndex)
+}
+
+func gatherSplineOne(profile momentinput.Profile, work *freeform.FreeformWork,
+	fitAt0, count int, index func(momentinput.Profile) (int, error)) ([][]twistSpan, error) {
+	fit, err := index(profile)
 	if err != nil {
 		return nil, err
 	}
@@ -140,7 +145,7 @@ func twistGatherOne(profile momentinput.Profile, work *freeform.FreeformWork,
 				start, end = end, start
 			}
 			edges[a] = []twistSpan{twistLineSpan(start, end)}
-		case sectionrecord.FitSplineSeg:
+		case sectionrecord.FitSplineSeg, sectionrecord.SplineSeg:
 			if len(fittedSpans) == 0 || len(fittedSpans) > 32 {
 				return nil, twistUnsupported("a twisted loft fit spline needs 1 to 32 curve spans")
 			}

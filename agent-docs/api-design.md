@@ -1080,6 +1080,11 @@ before the axis gates and any commit (`agent-docs/surface-design.md` §13.2).
 `Profile` together. It admits the bounded classes in
 `agent-docs/loft-sections-design.md`.
 
+`LoftSectionsWithCircularCorrespondence` takes the same sections and an explicit
+`CircularLoftCorrespondence` of four rational Bernstein maps. It admits the
+flat-quarter circular-to-spline class and proves the chosen correspondence as
+specified in `agent-docs/loft-sections-design.md` §14.
+
 `LoftFaces(ctx, sections, opts...)` consumes two to thirty-two ordered planar caps from
 authenticated point-loft Split slabs. It retains their original Sketch
 profile and exact cut-plane maps through rigid placement and positive

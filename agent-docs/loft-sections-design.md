@@ -13,6 +13,15 @@ type LoftSection struct {
 }
 
 func LoftSections(ctx context.Context, d *Document, sections ...LoftSection) (*Body, error)
+
+type CircularLoftCorrespondence struct {
+    Numerators   [4][]int64
+    Denominators [4]int64
+    SmoothCircularBands bool
+}
+
+func LoftSectionsWithCircularCorrespondence(ctx context.Context, d *Document,
+    correspondence CircularLoftCorrespondence, sections ...LoftSection) (*Body, error)
 ```
 
 The call requires at least three sections. Each passes the ordinary profile
@@ -820,3 +829,112 @@ expression over exact control nets, so the error bound is provable as stated. No
 search or sampled residual admits input. For the 41-section ribbon of
 `TestLoftSectionsTwistedRibbonKeepsVolumeAndMeshProof` the test pins `MeshBound` at most
 0.05 mm and the volume bound under 2% of the reference volume.
+
+## 14. Four-arc circle to fitted section
+
+`LoftSectionsWithCircularCorrespondence` explicitly selects this route and
+supplies four monotone Bernstein parameter maps, indexed by cardinal quarter
+from +X counterclockwise. A map has two to six integer numerators over one
+positive denominator; the first numerator is zero, the last equals the
+denominator, and every consecutive numerator strictly increases. Invalid maps
+refuse before a document change. The map applies to the entire exact quarter
+before restricting it to subpatches. It therefore changes the correspondence
+between sections without approximating any section curve. The explicit route
+requires the flat-quarter correspondence below and the shared-ratio proof in
+§14.1; other shapes refuse. `LoftSections` keeps its existing correspondence.
+When `SmoothCircularBands` is set, the first circular band remains linear and
+later circular bands use smoothstep. Otherwise all circular bands are linear.
+
+The initial profiles are circles, each recorded as four whole,
+counterclockwise cardinal quarter arcs. Their radius is positive and at most
+32 mm. They share a center and recorded seam. Their common center may differ
+from the common plane origin only when the origin lies strictly inside the
+circle. The first arc may start at any cardinal point; its record order fixes
+the face order and the quarter charts. At least one later profile has four
+corresponding whole edges in the same cyclic order: one fit spline or cubic
+control-point spline and three lines. Corresponding target edges have matching
+record kinds and fitted span counts. Control-point spline records must have
+the same recorded walk direction in every section; differing directions
+refuse even when the geometric walks match. Their planes use the same world-XY axes
+and origin, with strictly increasing Z. Each source arc names one wall face
+`side(0,k)`. Ordinarily, split an arc and its paired spline edge at the Bézier
+span boundaries, assigning each of its `n` fitted spans one `1/n` interval of
+the arc chart in walk order; splitting does not add a face or alter the source
+record. A line uses one whole chart interval.
+
+When the three lines form one upward vertical segment and the spline has an
+even number of spans, the first cardinal quarter instead maps to the entire
+flat and the other three map to equal thirds of the spline's parameter.
+Original line joins and spline span ends remain subpatch boundaries. The
+flat joins' exact normalized positions must agree across all fitted sections;
+otherwise this correspondence refuses. A control-point spline's thirds use
+Sketch's actual float knot values as exact rationals, including reversal.
+Source arc roles follow the original circle records even when its seam moves.
+
+For each matched subspan, let `R(u)` be the exact circular arc and `F(u)` the
+exact fitted or line curve, both relative to the common origin. Represent
+`R=A/W` and `F=B/W`, where `W` is a positive polynomial denominator derived
+from the rational quadratic circle chart. Obtain `B` by multiplying the
+exact polynomial curve by `W`.
+For the quarter from `(r,0)` to `(0,r)`, use
+`R(v) = center + r(1-v², 2v)/(1+v²)` for `0 <= v <= 1`; the other quarters are
+its exact cardinal rotations about the center. The denominator `1+v²` is at
+least one.
+Circular-section bands vary their radius linearly or by smoothstep according
+to `SmoothCircularBands` above. The first band between a circle and a fitted
+section denotes
+
+```text
+C(u,t) = ((1-s) A(u) + s B(u)) / W(u),    s = 3t² - 2t³.
+```
+
+Later bands use the same smoothstep blend between their two fitted or line
+sections. This construction meets each recorded section exactly and does not
+replace the circle by a polygon. Fitted bands have zero height derivative at
+their joins; a linearly varying circular band may meet the next band at a crease.
+Restrict and degree-elevate the exact Bernstein controls
+when matching span intervals. The chart denominator must have a strictly
+positive exact lower bound on each subspan.
+
+For admission, `cross(C,C_u)` has the sign of its numerator over `W²`. Its
+quadratic Bernstein rows in `s` are `cross(A,A')`,
+`(cross(A,B') + cross(B,A'))/2`, and `cross(B,B')`. Restrict these rows in
+both parameters with exact rational Bernstein subdivision and prove every
+coefficient positive. The proof alternates parameter splits to depth 12 and
+polls cancellation; a nonpositive corner or a cell still unproved at that
+depth refuses. Together with the authenticated first circle and
+ascending Z, this gives the radial-graph embedding proof of §13.2.
+
+The distance, occupied-volume and area certificates of §§13.3–13.4 apply to
+this surface using certified derivative bounds. In the L1 norm, set
+`B_u = max(B_u(R), B_u(F))`, `M_uu = max(M_uu(R), M_uu(F))`,
+`B_t = 3/2 sup|F-R|`, `M_tt = 6 sup|F-R|`, and
+`M_ut = 3/2 sup|F'-R'|`. Bound the differences with exact Bernstein
+coefficients of the common-denominator numerators and a positive lower bound
+on `W` and `W²`. Bounds on the circle's derivatives must likewise be certified
+over each chart. Round stations once, charge their exact rounding, independently
+triangulate both end rings, and retain the crossing and closed-shell audits.
+The existing triangle, station and mesh-bound ceilings apply; a failed proof
+or non-finite result refuses. Cancellation propagates.
+For a linear circular band use `B_t = sup|F-R|`, `M_tt = 0`, and
+`M_ut = sup|F'-R'|` instead.
+
+### 14.1 Cross-span tangent continuity
+
+The polar certificate proves embedding, not tangent continuity. Each input
+spline's internal joins must have exactly coincident points, parallel
+derivatives and a positive derivative dot product; otherwise the loft refuses.
+At a join smooth in every section, independently reparameterize each span with
+a monotone cubic fixing zero and one. Choose positive rational endpoint
+derivatives that make its two one-sided derivatives equal. Controls
+`[0,d0/3,1-d1/3,1]` are strictly increasing when `0 < d0,d1 <= 1`.
+Composition preserves each recorded curve and makes blended derivatives agree
+at the join for every height. The resulting rational numerators and common
+denominators go through the same exact polar and derivative proofs above.
+A corner inside one source face refuses. A corner between distinct source
+faces remains an edge, and is not treated as smooth.
+
+The explicit correspondence route preserves the supplied whole-quarter maps
+without per-span reparameterization. At every join smooth in all sections,
+the exact ratio of its two one-sided derivatives must be the same in every
+section. That common ratio keeps each blended join G1; a mismatch refuses.

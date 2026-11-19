@@ -46,6 +46,7 @@ func TestScaleImage(t *testing.T) {
 		src.Xform = move
 		src.Groups = []facetedrecord.Group{{Surface: surfacegeom.Plane{Frame: frame}}}
 		src.LoftFacesPrimitive = true
+		src.CircularFitPrimitive = true
 		src.CopyLineage = &facetedrecord.FacetedCopyLineage{}
 		src.PointPlaneSourceEligible = true
 
@@ -62,6 +63,7 @@ func TestScaleImage(t *testing.T) {
 		require.Equal(t, r3.Identity(), got.Xform)
 		// Source roles do not survive the image.
 		require.False(t, got.LoftFacesPrimitive)
+		require.False(t, got.CircularFitPrimitive)
 		require.False(t, got.PointPlaneSourceEligible)
 		require.Nil(t, got.CopyLineage)
 		require.Nil(t, got.ExactCopyMoments)
@@ -74,6 +76,7 @@ func TestScaleImage(t *testing.T) {
 		// The source payload is unchanged.
 		require.False(t, src.Groups[0].NormalBound == 2)
 		require.True(t, src.LoftFacesPrimitive)
+		require.True(t, src.CircularFitPrimitive)
 	})
 
 	const noSource = "no certified similarity source"
