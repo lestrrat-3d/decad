@@ -135,7 +135,7 @@ func exactApply(move r3.Transform, p r3.Vec) [3]*big.Float {
 }
 
 // TestWalkEndpointAllow pins agent-docs/prism-boolean-design.md §7's δ_walk
-// mechanism (task fu143): a positive OPERAND envelope — the magnitude of the
+// mechanism: a positive OPERAND envelope — the magnitude of the
 // values the walk's own arithmetic touches, which is what this helper's
 // contract requires and never the endpoint that arithmetic produced — answers
 // a bound at least the worst-case lerp2 rounding its own doc comment derives
@@ -189,8 +189,7 @@ func TestWalkEndpointAllow(t *testing.T) {
 // (required test, §13): for every one of many random perturbations of up
 // to delta per vertex, the resulting triangle's own area must lie within
 // [heldArea - allow, heldArea + allow], at aspect ratios 1, 1e-3 and 1e-6 —
-// the same slivers loft_moments_internal_test.go's area-bound tests use,
-// since a thin triangle is exactly where a naive bound scaled off the held
+// down to slivers, since a thin triangle is exactly where a naive bound scaled off the held
 // total stops enclosing anything.
 func TestPerturbedTriangleAreaAllowEnclosesBruteForceSweep(t *testing.T) {
 	t.Parallel()
@@ -198,8 +197,8 @@ func TestPerturbedTriangleAreaAllowEnclosesBruteForceSweep(t *testing.T) {
 		return b.Sub(a).Cross(c.Sub(a)).Len() / 2
 	}
 
-	// Two orthonormal, non-axis-aligned directions, matching
-	// loft_moments_internal_test.go's own sliver construction.
+	// Two orthonormal, non-axis-aligned directions, so the sliver is not
+	// aligned with any coordinate axis.
 	dir := r3.NewVec(0.6, 0.8, 0)
 	perp := r3.NewVec(-0.48, 0.36, 0.8)
 	require.InDelta(t, 0, dir.Dot(perp), 1e-15)
@@ -598,7 +597,7 @@ func TestSnapToZeroAllowEnclosesTheOverwrittenCoordinate(t *testing.T) {
 
 // TestProductUpperRefusesRatherThanAnnihilatesARefusal pins the second half of
 // the family TestOutwardRoundingNeverPublishesAFlushedZero
-// (bounds_flush_internal_test.go) opens: +Inf is a REFUSAL, not a magnitude, so
+// (above) opens: +Inf is a REFUSAL, not a magnitude, so
 // an absent factor may not cancel it away.
 //
 // The arithmetic identity Inf*0 = NaN is not what this guards — proofbound.ProductUpper
@@ -929,7 +928,7 @@ type cellQuad struct {
 // rawNormShortfallFloor below marks where a rounded square can first lose
 // enough bits for naiveNorm to understate the exact norm. Fixtures that claim
 // this shortfall need a component above that floor; this comment gives the
-// derivation for fixtures in this file and bounds_sweep_internal_test.go.
+// derivation for fixtures in this file.
 //
 // naiveNorm's sum of three squares is exact whenever it fits under 2^53, so
 // naiveNorm is CORRECTLY ROUNDED there and cannot understate (or overstate)
@@ -1022,9 +1021,8 @@ func provenNormFixtures() []cellQuad {
 			// the two reviewer fixtures above no longer can: every leg here
 			// sits at 1.2-2.4e8 mm, comfortably past the ~94.9e6 floor, and
 			// naiveNorm's product reads a ratio of 0.99999999999999998 against
-			// the exact one — an ulp-scale miss, the same mechanism
-			// verify_internal_test.go's bodyGateDiameter fixtures pin, not
-			// the "cancelling twist" row's proportional one.
+			// the exact one — an ulp-scale miss, not the "cancelling
+			// twist" row's proportional one.
 			name:                   "large-magnitude corners",
 			vLo:                    r3.NewVec(-119_517_970, 133_048_312, -145_410_237),
 			vHi:                    r3.NewVec(-145_514_262, -119_093_827, 180_975_874),

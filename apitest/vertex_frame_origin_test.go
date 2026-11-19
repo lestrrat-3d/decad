@@ -293,9 +293,8 @@ func TestClearanceFrameOriginGapEnclosesExactGap(t *testing.T) {
 // TestVertexIntegerOriginBoundStaysZero is the exact half of the per-vertex
 // lift charge: on an XY-parallel sketch plane at a nonzero INTEGER origin, an
 // integer rectangle lifts exactly, so every prism, revolve and chamfer vertex
-// keeps Exact with a zero bound (clearance_lift_internal_test.go pins the
-// same for the clearance kernel's carriers). Shown to fail: replacing the
-// exact measurement with a magnitude charge (proofbound.RigidRoundAllow at the
+// keeps Exact with a zero bound. Shown to fail: replacing the exact
+// measurement with a magnitude charge (proofbound.RigidRoundAllow at the
 // coordinate and origin envelope) in prismPayload.LiftedVertex turns the prism
 // and chamfer subtests red, and in revolvePayload.sweptVertex the revolve
 // subtest.

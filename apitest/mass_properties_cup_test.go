@@ -25,9 +25,8 @@ import (
 //   - The placement's orthonormality-defect widening: with it zeroed, the
 //     placed cup of TestMassPropertiesCupOuterMinusCavity misses a reference
 //     component.
-// The level and thickness displacement legs are recorded in
-// mass_properties_cup_internal_test.go, whose displacements are large enough
-// to separate them.
+// The level and thickness displacement legs are not separated by any test:
+// this file's displacements are too small to tell them apart.
 
 const cupDensity = 1.0 / 1024
 

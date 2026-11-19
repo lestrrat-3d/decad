@@ -33,7 +33,8 @@ import (
 // model below owns the per-operation terms; each closure reads only its own
 // operand's shape (its control count, its numerator and denominator bit
 // lengths, its dyadic exponent) and never a caller's loop bound.
-// spline_sagitta_metering_internal_test.go guards that rule in this file and
+// TestSplineBoundsRunNoExactArithmeticOutsideAMeteredPrimitive
+// (spline_sagitta_metering_test.go) guards that rule in this file and
 // spline_derivative_bounds.go: exact arithmetic runs only inside a metered
 // primitive's own body.
 

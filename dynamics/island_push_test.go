@@ -18,8 +18,7 @@ import (
 //   - the doubling that makes a sub-ulp push move the rounded pose: the same
 //     refusal;
 //   - the correction allowance: TestCorrectedRelationPushRespectsAllowance
-//     (island_push_internal_test.go) pushes a sphere past an allowance it
-//     does not fit. The bounce fixtures cannot reach that leg: their
+//     (below) pushes a sphere past an allowance it does not fit. The bounce fixtures cannot reach that leg: their
 //     allowance carries the bracket travel, about 1e-7 mm, and their push is
 //     an ulp.
 //

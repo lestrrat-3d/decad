@@ -17,7 +17,7 @@ import (
 // operand. Reflected bodies are built with Copy/Transform under
 // r3.Reflection. The L is agent-docs/mirror-pattern-design.md §2's: the union of
 // [0, 20]×[0, 5] and [0, 5]×[5, 20], 175 mm², swept 10 mm. The re-wound
-// record's mechanics are prism_boolean_reflected_internal_test.go's.
+// record's own mechanics are not asserted in isolation by any test.
 
 // reflectedLPts is the mirror design's L, drawn as one outer loop.
 var reflectedLPts = [][2]float64{{0, 0}, {20, 0}, {20, 5}, {5, 5}, {5, 20}, {0, 20}}

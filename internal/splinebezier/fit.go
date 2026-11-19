@@ -39,7 +39,8 @@ func FitCoords(points []Point2) [][2]float64   { return fitCoords(points) }
 // — v(p) = a·v[i] + b·v[i+1] + ((a³−a)·m[i] + (b³−b)·m[i+1])·h²/6 — is the
 // curve's definition, term for term the same arrangement evalCubicSpan
 // computes. Spans() still earns its keep as an independent oracle for testing
-// this conversion (spline_fit_internal_test.go), never as its input.
+// this conversion (TestFitSplineBezierMatchesSketchInterpolant in fit_test.go),
+// never as its input.
 //
 // geom.NewFitInterpolant COLLAPSES consecutive fit points closer than an
 // absolute 1e-12, keeping the FIRST of each run (geom/fitspline.go's

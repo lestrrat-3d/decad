@@ -47,7 +47,7 @@ import (
 // cannot fire, so no fixture reaches it. The replay's travel charge inside a
 // certified clear span is §4.3's own inequality; a sound sweep leaves no
 // span whose margin falls below a pose rounding, so
-// contact_sweep_band_internal_test.go shows that leg on the bound itself.
+// no fixture reaches that leg, and no test asserts it on the bound itself.
 
 // edgeBoxScene is a source box 8 mm square in x and z and 8 mm long in y,
 // turned 45° about Y so its edge x = z = 0 rests on a wide floor whose top

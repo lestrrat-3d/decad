@@ -17,7 +17,7 @@ import (
 // (prism-boolean §3.4) builds analytically, its crossings charged the
 // displacement they can amplify, and a tangent crossing falls back to the
 // mesh path. The charge's own mechanics are
-// internal/prismcells/crossing_internal_test.go's.
+// internal/prismcells/crossing_test.go's.
 
 // zRotation is RotationAround the world z axis through the origin.
 func zRotation(t *testing.T, angle units.Value) r3.Transform {

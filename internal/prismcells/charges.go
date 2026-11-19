@@ -20,7 +20,7 @@ type (
 
 // ProfileHasTrimmedCircularSource reports whether a section carries an ArcSeg or
 // CircleSeg whose recorded range is narrower than its own natural domain
-// (task fu143, §3.4's obligations). Such a segment enters BuildScene's
+// (§3.4's obligations). Such a segment enters BuildScene's
 // private scene through entities built from TWO cos/sin-computed points, so
 // its rebuilt carrier's radius and sweep both move, not merely its
 // endpoints — the mechanism WalkChargeOf's plain coordinate charge does not
@@ -74,7 +74,7 @@ func WholeSegmentRange(tStart, tEnd float64) bool {
 	return (tStart == 0 || tStart == 1) && (tEnd == 0 || tEnd == 1)
 }
 
-// WalkChargeOf is §7's δ_walk mechanism (task fu143): the charge ONE consumed
+// WalkChargeOf is §7's δ_walk mechanism: the charge ONE consumed
 // source segment owes for entering BuildScene's private scene at its own
 // WALKED endpoint(s) rather than at the coordinates its record states
 // verbatim.

@@ -15,9 +15,10 @@ import (
 // This file is agent-docs/surface-design.md §15's T200-T206 for Offset (§17):
 // the patch arm's translation, the prism arm's certified section offset, and
 // the refusal set of Table R rows R37-R41. T207, the internal exact-generation
-// gate, is offset_internal_test.go's, as are the whole-interval certification
-// and the one-region payload shape that lets §17.2 drop Thicken's
-// source-and-offset nesting audit.
+// gate, the whole-interval certification and the one-region payload shape
+// that lets §17.2 drop Thicken's source-and-offset nesting audit are not
+// asserted in isolation by any test; this file reaches them only through the
+// public Offset.
 
 // offsetPrismSheet builds a 100x60 mm rectangle surface-extruded 10 mm Along —
 // the profile-fed prism sheet §17.1 admits — and returns it with its document.

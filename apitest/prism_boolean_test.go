@@ -16,9 +16,8 @@ import (
 // This file is agent-docs/prism-boolean-design.md PR1's black-box test suite
 // (§14, §15): the analytic reduction for Union over co-directional coplanar
 // straight prisms. boxBody/ballBody (clearance_test.go) are the shared
-// helpers. Per-gate (G1-G6) isolation lives in
-// prism_boolean_internal_test.go, which reads the gate decisions directly —
-// most of these gate misses share a sketch/cap plane with their pair (the
+// helpers. No test isolates the gates (G1-G6) by reading
+// the gate decisions directly; most of these gate misses share a sketch/cap plane with their pair (the
 // ordinary shape this design targets), so a black-box fallback reaches the
 // SAME pre-existing coplanar-contact refusal the mesh path has always had
 // (evaluator-design §9's own limitation, and this design's whole reason to

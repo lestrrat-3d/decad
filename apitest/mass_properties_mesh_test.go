@@ -16,7 +16,8 @@ import (
 // octagons against independent integrals, and a cap-chamfered box against its
 // closed form.
 // The tolerance ladder's own steps, on revolves read off their meshes, are
-// asserted in mass_properties_mesh_internal_test.go.
+// reached only in aggregate by TestMassPropertiesCapChamferFallback and
+// TestMassPropertiesRevolvedSphere; no test asserts each step in isolation.
 
 // meshMassDensity is dyadic, so ρ enters every expected value exactly.
 var meshMassDensity = units.KilogramsPerCubicMillimeter(1.0 / 1024)

@@ -27,8 +27,8 @@ import (
 //     TestMassPropertiesTiltedFrameBox both miss the mass.
 //   - The occupied-volume error E, and its V leg alone: with either zeroed,
 //     TestMassPropertiesDisplacedLevelBox misses the denoted mass. The
-//     remaining legs are recorded in mass_properties_rotated_internal_test.go,
-//     whose displacements are large enough to separate them.
+//     remaining legs are not separated by any test: this file's displacements
+//     are too small to tell them apart.
 
 const rotatedDensity = 1.0 / 1024
 

@@ -672,8 +672,8 @@ func TestVerifyMotionSweptBoxCoversTravelFromRest(t *testing.T) {
 // TestVerifyMotionNonMutationAndDeterminism is §9 test 7 (interference
 // §10.1) for a colliding and an undecided motion: the live body set and its
 // order survive the call, and two calls on the same inputs return reports
-// equal in every field. The producer identity half lives in
-// motion_internal_test.go, which can read it.
+// equal in every field. The producer identity half is
+// unreachable through the public API and has no test.
 func TestVerifyMotionNonMutationAndDeterminism(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
@@ -702,9 +702,9 @@ func TestVerifyMotionNonMutationAndDeterminism(t *testing.T) {
 // million millimetres away, each 10 mm from a wall placed for that pose. The
 // far pivot's pose rounds at its magnitude, so its gap bound exceeds the
 // origin pivot's, and both stay far inside the tolerance gate for a 50 mm
-// body. That the deviation η itself reaches the published gap is pinned by
-// motion_internal_test.go, which can compare the pose's gap against the
-// kernel's own.
+// body. That the deviation η itself reaches the published gap is not pinned by
+// any test: it needs a comparison of the pose's gap against the kernel's own,
+// which the public API cannot make.
 func TestVerifyMotionPoseDeviationIsCharged(t *testing.T) {
 	t.Parallel()
 	endBound := func(t *testing.T, cx float64) float64 {
@@ -735,7 +735,7 @@ func TestVerifyMotionPoseDeviationIsCharged(t *testing.T) {
 // agent-docs/linkage-check-design.md Part M §8's table the public API can reach, each
 // asserting the sentinel, no report, and an unchanged document. The row for
 // a body this evaluator did not build is unreachable through the public API
-// and lives in motion_internal_test.go.
+// and has no test.
 func TestVerifyMotionErrors(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()

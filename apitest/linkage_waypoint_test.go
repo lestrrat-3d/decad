@@ -13,8 +13,8 @@ import (
 // This file holds scene 5 of agent-docs/linkage-check-design.md §11: drives that
 // pass through waypoints (§2.3). A drive whose sweeps carry n − 1 Via values
 // has n segments of equal share, segment j covering s ∈ [j/n, (j+1)/n], and
-// each joint runs linearly between consecutive waypoints. The internal test
-// of the travel bound across a waypoint sits in linkage_internal_test.go.
+// each joint runs linearly between consecutive waypoints. No test asserts the travel
+// bound across a waypoint in isolation; this file reaches it only in aggregate.
 
 // requireNoClearIntervalHolds asserts no IntervalClear interval of the
 // report holds s.

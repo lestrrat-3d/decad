@@ -446,8 +446,10 @@ func TestBodyPatchCapsBothBoundedRimsOnARotatedSketchPlane(t *testing.T) {
 // errors.Is and the document left unchanged. R6 (non-planar/bounded chain)
 // and R18 (orientation disagreement) reach no shape decad's public seam can
 // author directly (agent-docs/surface-design.md §2.3: every builder leaves one
-// shell consistently oriented) and are pinned in patch_body_internal_test.go
-// instead, alongside R19's own no-payload receiver.
+// shell consistently oriented). R18 is pinned by
+// TestOrientChainRejectsDisagreeingAdjacentFaces in
+// internal/patchchain/body_test.go; this suite does not reach R6 or R19's own
+// no-payload receiver.
 func TestBodyPatchTableR(t *testing.T) {
 	t.Parallel()
 
