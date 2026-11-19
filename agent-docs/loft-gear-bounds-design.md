@@ -236,7 +236,7 @@ unbounded in general (`TestSpanMatchedDeltaUpperEnclosesWhatTheSagittaMisses`).
 Area bound is the binding reading on the gear cases, so a coarser fraction leaves `Area` less margin below the
 default tolerance. §8's tooth and gear rows assert `Sound` and a ratio below `1e-3` at this constant.
 
-`TestLoftArcWedgeVerifiesSound` pins loft §14's arc wedge (`m = 65`) under this constant.
+`TestLoftArcWedgeVerifiesSound` pins loft §14's arc wedge (`m = 75`) under this constant.
 
 ## 6. The audit: sweep enumeration, wall-wall pairs, one proof per cap
 
