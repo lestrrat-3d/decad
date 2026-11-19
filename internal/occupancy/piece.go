@@ -53,14 +53,23 @@ func ratOf(f float64) *big.Rat { return new(big.Rat).SetFloat64(f) }
 
 func xvecOf(v r3.Vec) xvec { return xvec{ratOf(v.X), ratOf(v.Y), ratOf(v.Z)} }
 
+// applyExact is M·p + T, exactly, in lowest terms. The three sums each form
+// one fraction and reduce once (fracSum). A zero factor adds exactly zero, so
+// the term is skipped; both signs are read first, so a nil coordinate panics
+// where the product would.
 func (a Affine) applyExact(p xvec) xvec {
 	var out xvec
+	var sum fracSum
 	for i := range 3 {
-		s := ratOf(a.T[i])
+		sum.start(ratOf(a.T[i]))
 		for j := range 3 {
-			s.Add(s, new(big.Rat).Mul(ratOf(a.M[i][j]), p[j]))
+			m := ratOf(a.M[i][j])
+			if m.Sign() == 0 || p[j].Sign() == 0 {
+				continue
+			}
+			sum.addProduct(m, p[j])
 		}
-		out[i] = s
+		out[i] = sum.rat()
 	}
 	return out
 }
