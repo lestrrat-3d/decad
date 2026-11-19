@@ -37,8 +37,7 @@ mean the same part. The parts keep their own section numbers.
 (evaluator-design §9). For a pair of straight prisms extruded from the same
 plane — the normal shape of a combined part built from sketch-adjacent
 features (a hub and its teeth, a boss and a plate) — that pipeline is
-structurally worst-cased three ways, all traced in
-`.tmp/boolean-redesign/README.md` and `.tmp/gear-generator-feedback/README.md`:
+structurally worst-cased three ways:
 
 1. **Limited chaining.** Each rim's bound composes across operations, and a
    later boolean on the same lineage whose contacts touch a rim coarser than
@@ -53,24 +52,18 @@ structurally worst-cased three ways, all traced in
    SX9 refuses every modify op on it permanently, and `internal/verifyrun/survey.go` refuses all
    three shape surveys.
 
-Two upstream `sketch` changes since that report — commits `e0d5d49` ("resolve
-coincident carriers into regions") and `18a947b` ("certify curve/curve
-crossings as exact") — remove the two obstacles that previously ruled out
-routing this work through `sketch` instead of building a second, decad-owned
-2D intersection kernel: a circle×circle crossing now reports
-`TExact = true` on every fragment (verified against
-`sketch@f982746`, `.tmp/decad-2d-region-asks/probe`), and a tooth arc lying
-exactly on a hub circle now arranges without the `Degenerate` flag into two
-clean regions sharing that arc as one boundary, instead of one region
-reporting the whole hub disk with the coincident boundary split arbitrarily
-between the two. **This design routes the 2D combination through `sketch` on
-that basis and does not bend the hard rule in CLAUDE.md**: "an intersection ...
-ask `sketch`, consume its answer." decad builds a scene holding both operands'
-recorded entities, asks `sketch` to arrange it, and selects among the returned
-regions; §4 states precisely, for each op, how that selection is made without
-decad computing a crossing or a containment test of its own — and names the
-one sub-case (general-position holed union, PR3) where the honest answer is
-"not yet," staged rather than smuggled in.
+`sketch` supplies the two answers that make a second, decad-owned 2D
+intersection kernel unnecessary. A circle×circle crossing reports
+`TExact = true` on every fragment. A tooth arc lying exactly on a hub circle
+arranges without the `Degenerate` flag into two clean regions that share that arc
+as one boundary.
+
+**This design routes the 2D combination through `sketch`, as CLAUDE.md's hard rule
+requires** ("an intersection ... ask `sketch`, consume its answer"). decad builds a
+scene holding both operands' recorded entities, asks `sketch` to arrange it, and
+selects among the returned regions. §4 states, for each op, how that selection is
+made without decad computing a crossing or a containment test of its own. The one
+sub-case without a route is a general-position holed union (§4.4, G6).
 
 **Success criterion.** For the admitted class (§2): a chained boolean carries
 no accumulated tessellation bound; a shared or crossing extrusion plane is the
@@ -82,8 +75,8 @@ outside it, and where a nonzero displacement's cost per consumer is decided.
 
 ## 2. Approach
 
-**Chosen direction.** PR1 dispatches a reject-only admission gate from
-`performBoolean` for `Union`, ahead of the shared `evaluateBoolean` mesh
+**Chosen direction.** `performBoolean` dispatches a reject-only admission gate for
+`Union`, `Cut` and `Intersect`, ahead of the shared `evaluateBoolean` mesh
 pipeline. An admitted pair combines its two operands' `ProfileRecord`s through
 a private `sketch` scene decad builds. It records the selected result regions
 through the existing seam (`RecordProfile`/`recordEdge`), audits the assembly
@@ -93,21 +86,16 @@ the re-expressed operand's rounding and the cut parameters `sketch` computes
 for surviving fragments reach every measurement. It also preserves each sweep
 end's axial displacement so every measurement keeps the bounds its operands
 already proved.
-`Cut` and `Intersect` remain on the mesh path until later increments. A
-non-admitted `Union` pair — wrong payload class, planes that are neither the
-same nor a shared-axis offset (G3), a segment kind
-outside the admitted set, an unequal z-interval for `Union` that
-Part G §3 A1 does not stack, or a topology this
-increment's region resolution does not cover — takes the
-unchanged mesh path, with **zero
-behavior change**: no new error, no new refusal text, nothing a caller not
-making booleans this shape will ever observe.
+A non-admitted pair takes the unchanged mesh path, with **zero behavior change**:
+no new error, no new refusal text. Non-admission covers a wrong payload class,
+planes that are neither the same nor a shared-axis offset (G3), a segment kind
+outside the admitted set, an unequal `Union` z-interval that Part G §3 A1 does
+not stack, and a topology the region resolution does not cover (§4.4).
 
 **Alternatives considered:**
 
-- **Decad builds its own 2D regularized-boolean kernel** (the investigation's
-  "candidate B", predating the upstream `sketch` fixes) — rejected now that
-  the two `sketch` asks it needed for the gear's normal case landed anyway;
+- **Decad builds its own 2D regularized-boolean kernel** — rejected because
+  `sketch` already answers the two asks the gear's normal case needs;
   building a second intersection kernel duplicates work `sketch` already does,
   with no performance or correctness win over it that CLAUDE.md's "Ask
   `sketch` for 2D answers by default" rule would accept as the reason for a
@@ -117,20 +105,16 @@ making booleans this shape will ever observe.
   regions, and §9.4 states its reason; this design's section combination
   stays with `sketch`.
 - **General exact analytic B-rep boolean** (arbitrary curved-surface pairs,
-  algebraic root isolation) — the eventual vN destination (api-design §2.1),
-  multi-quarter scope; this design's gate/audit/authentication pattern is its
-  first honest increment, not a competing direction.
-- **Mesh-path palliatives** (a caller-set chord tolerance) —
-  removes only the chaining consequence, and only partially; the coplanar
-  refusal — which blocks the gear workload *twice*, independent of chaining —
-  stands untouched. Not pursued as the primary fix, though `WithPairTolerance`
-  remains a defensible independent ask for genuinely general-position pairs
-  outside this design's admitted class.
+  algebraic root isolation) — the eventual vN destination (api-design §2.1).
+  This design's gate/audit/authentication pattern is its first step, not a
+  competing direction.
+- **Mesh-path palliatives** (a caller-set chord tolerance) — remove only the
+  chaining consequence, and only partially. The coplanar refusal stands untouched.
+  Not pursued.
 - **Keep the CSG tree, answer queries against it without evaluating** — breaks
   the promised B-rep-shaped surface (`Faces()`, selectors, stops) and, for the
-  workload that exists, converges on this design's own 2D combination anyway
-  to answer the wall/undercut surveys — see `.tmp/boolean-redesign/README.md`
-  §3.D for the full argument. Not pursued.
+  wall/undercut surveys, converges on this design's own 2D combination anyway.
+  Not pursued.
 
 ## 3. The admitted class
 
@@ -139,7 +123,7 @@ making booleans this shape will ever observe.
 Checked before any `sketch` call, on the two operands' *current* payloads
 (`prismPayload`, which includes a shell-built tube — modify §8's
 `prismshell.BuildTube` builds one). Every row is a routing decision: failing it takes the
-unchanged mesh path with no error surfaced, identical to today's behavior for
+unchanged mesh path with no error surfaced, identical to the mesh path's behavior for
 that pair.
 
 | # | Condition | Why exact, not tolerant |
@@ -147,7 +131,7 @@ that pair.
 | G1 | Both operands' payload is `prismPayload`. | Structural — the class this design's reduction applies to (modify §2's same reduction, extended to two operands). |
 | G2 | None: a reflected accumulated placement admits (Part G §3 A4). When the composed relative map of §4.1 is a reflection (`Transform.IsReflection`), operand B's record is re-wound before any entity is created; two operands under one reflected placement meet G3's shared-axis arm with no re-expression. | G3 reads the world normal through `ApplyDir`, which maps a reflection's sweep direction like any other. The re-winding restores the "outer CCW, holes CW" convention §4.2's flag comparison reads. |
 | G3 | The composed world normals agree exactly, and the coplanar, shared-frame-axis, or placed-axis arm below holds. | Use stored floats and exact rational arithmetic for the axis arms; a rounded residual never admits a pair. |
-| G4 | Every segment of both operands' `ProfileRecord` (`Outer` and every loop of `Holes`) is a `LineSeg`, `CircleSeg`, or `ArcSeg`. | `geom.BoundaryEdge.TExact`'s own contract is a **whole-scene** gate (`sketch`'s `geom/region.go`): one `Ellipse`/`EllipticalArc`/`Conic`/`Spline`/`ClosedSpline`/`FitSpline`/`NURBS` anywhere in an arrangement makes every bound in it — including unrelated line/circle/arc edges — report `TExact = false`. A single free-form segment on either operand would silently blind the whole combination, not just its own edges, so the gate excludes the kind entirely rather than trying to admit "the free-form parts don't touch." Staged: §9's free-form row. |
+| G4 | Every segment of both operands' `ProfileRecord` (`Outer` and every loop of `Holes`) is a `LineSeg`, `CircleSeg`, or `ArcSeg`. | `geom.BoundaryEdge.TExact`'s own contract is a **whole-scene** gate (`sketch`'s `geom/region.go`): one `Ellipse`/`EllipticalArc`/`Conic`/`Spline`/`ClosedSpline`/`FitSpline`/`NURBS` anywhere in an arrangement makes every bound in it — including unrelated line/circle/arc edges — report `TExact = false`. A single free-form segment on either operand would silently blind the whole combination, not just its own edges, so the gate excludes the kind entirely rather than trying to admit "the free-form parts don't touch." The free-form segment is not admitted (§4.4's last row). |
 | G5 | Apply G3's exact rational axial shift to B's interval, then check §3.2's interval relation exactly for every level each held float, displacement and denotation allows. | A rounded float sum cannot decide whether a tool reaches a target cap, and neither can two held floats that each round a different level. |
 | G6 | `Union` needs both operands hole-free. `Cut` needs the tool hole-free; the target may carry holes. `Intersect` needs both operands hole-free except for the one-hole clean-nesting arm below. | `Union`'s select-all rule would include a hole's void. A holed `Cut` tool can leave separate lumps that one `ProfileRecord` cannot carry. The admitted holed `Intersect` has one nested result profile, including its hole. |
 
@@ -180,9 +164,9 @@ these arms:
   certificate. `Intersect` requires identical rectangle bounds; `Cut`
   requires the tool rectangle to lie strictly inside the target rectangle.
   These are sufficient profile certificates; every other placed-axis pair falls back
-  to the existing mesh path. The earlier shared-frame-axis arm keeps its
-  existing profile admission. `Verify`'s read-only Intersect twin consumes
-  the same new certificate and applies its existing positive-volume gate.
+  to the mesh path. The shared-frame-axis arm has its own profile admission.
+  `Verify`'s read-only Intersect twin reads the same certificate and applies its
+  positive-volume gate.
 
 For both axis arms, B's denoted prism has A's exact section coordinates and
 only its sweep interval moves by `s` (G5). The placed-axis arm does not rely
@@ -277,28 +261,21 @@ the resulting hole sets. `Intersect` with a
 stacked operand takes the mesh path over that payload's tessellation;
 `Union` with one follows Part G §3 A1.
 
-Disjoint intervals (for `Union` and for `Intersect`) are **staged, not
+Disjoint intervals (for `Union` and for `Intersect`) are **not
 refused**: they fall through the gate to the unchanged mesh path.
 
 ### 3.3 The rotated-section problem
 
 The consumer's teeth are placed copies arranged by a circular pattern, so
-each tooth's section arrives at a different world rotation. Two probes
-establish the following against `r3@2e6d6464` —
-`.tmp/boolean-redesign/probe/` and, for the swept counts and the `Frame.N()`
-reading, `r3`'s own `.tmp/decad-axis-exact-rotation-ask/probe/`:
+each tooth's section arrives at a different world rotation. Against `r3`:
 
 - `r3.RotationAround` about `(0,0,1)` keeps the composed plane's normal
   **exactly** `(0,0,1)` (G3's exact `==` test passes) for only a minority
-  of step counts. Swept over every count from 3 to 60, **48 of the 58 have at
-  least one inexact step**, including every count from 19 upward and also 7,
-  10, 13, 14, 16 and 17; the z-component picks up a nonzero float
-  (`0.99999999999999989` at `n = 17`) and G3 correctly refuses the pair to
-  the mesh path. The exact counts are the sparse case, not the rule, and the
-  consumer's own range of 12 to 45 teeth sits almost entirely inside the
-  inexact set. The cause is the general Rodrigues evaluation, whose
-  `cos + fl(1 − cos)` term is exact only when the roundings happen to
-  cooperate, so this is a missing guarantee rather than a defect.
+  of step counts. For most counts some step leaves the z-component a nonzero
+  float, and G3 correctly refuses the pair to the mesh path. The cause is the
+  general Rodrigues evaluation, whose `cos + fl(1 − cos)` term is exact only
+  when the roundings happen to cooperate, so this is a missing guarantee
+  rather than a defect.
 - A hand-built basis through `r3.FromBasis` (literal `0.0` z-components,
   `U = (cos θ, sin θ, 0)`, `V = (−sin θ, cos θ, 0)`) stays exactly planar for
   every `n` probed, because the zero components are literal, not computed. It
@@ -321,15 +298,11 @@ test would be exactly the admission-gate-on-a-residual the hard rule forbids;
 loosening G3 would also loosen the axis identity §4.2's coordinate
 re-expression and §4.3's coincident-carrier detection lean on. The practical
 consequence is that a circular pattern built with `r3.RotationAround` alone
-silently under-triggers this design at most step counts, falling back to the
-unchanged, working mesh path. That is a missed optimization rather than a new
-failure mode, but it is the common case and not the exception. A consumer can
-use `FromBasis` to clear G3, and the crossings its re-expression can move are
-then charged as §3.4 states. **The r3 upstream ask is filed** at
-`r3/.tmp/decad-axis-exact-rotation-ask/`, requesting a rotation constructor
-whose result leaves a plane perpendicular to its axis exactly perpendicular.
-This design does not block on it: nothing here requires it, and nothing here
-regresses without it.
+takes the unchanged, working mesh path at most step counts. That is a missed
+optimization, not a new failure mode. A consumer can use `FromBasis` to clear
+G3, and the crossings its re-expression can move are then charged as §3.4
+states. An `r3` rotation constructor that leaves a plane perpendicular to its
+axis exactly perpendicular would remove the miss; nothing here depends on it.
 
 ### 3.4 What "admitted" means, precisely
 
@@ -343,7 +316,7 @@ silent fallback stops being available:
    arrangers' tiny-segment pair work. Exceeding it is an `ErrUnsupported`
    refusal (§9), never an unbounded private worker. A pair within the cap
    builds the private scene, arranges it, and attempts to resolve a unique
-   candidate result. **A pair whose topology this increment's resolution logic
+   candidate result. **A pair whose topology the resolution logic
    does not cover (§4.4) is treated exactly like a stage-1 gate miss: silent
    fallback, no error.** When `sketch` returns any `Partial` boundary edge
    and either source carries a nonzero section displacement, either source
@@ -401,9 +374,9 @@ For an admitted pair, decad builds one private `sketch.Sketch` (the same
   this boolean computed, not one the record states — charged as §7's
   `δ_walk`. A trimmed circular carrier (`ArcSeg`/`CircleSeg`) moves by more
   than its two endpoints — its rebuilt radius and sweep move too, since the
-  scene's arc is built through cos/sin-computed points — so this increment
+  scene's arc is built through cos/sin-computed points — so the gate
   refuses a pair carrying one before the scene is even built
-  (`prismProfileHasTrimmedCircularSource`) rather than publish an
+  (`prismcells.ProfileHasTrimmedCircularSource`) rather than publish an
   under-charged bound for it; the routing is the same silent §3.4
   fallback as every other entry-gate miss. A `Cut` of a bore tool out of a
   union's merged outer loop, which holds trimmed `CircleSeg`s, therefore takes
@@ -499,7 +472,7 @@ directed-edge-loop-closure shape `internal/facetedtopology/build.go`'s face-loop
 already performs for the mesh boolean's own loops); a chain that does not
 close into exactly one simple loop — a disjoint pair of footprints producing
 two separate lumps, which the single-outer-loop `ProfileRecord` cannot
-represent — is not resolved by this increment (§4.4).
+represent — is not resolved (§4.4).
 
 **`Cut`/`Intersect`, "clean" sub-case: structural whole-loop match, no
 per-cell classification at all.** When operand B's boundary does not touch
@@ -641,7 +614,7 @@ window no single partner explains leaves the scene unresolved (§4.4).
 Every resolution path (§4.2) ends with a candidate `ProfileRecord`: either
 one `s.Profiles()` result taken verbatim (the clean-nesting match, no
 assembly), or a merged set of surviving boundary edges chained into a closed
-loop (`Union`'s select-all case, and the staged crossing case). Each surviving
+loop (`Union`'s select-all case, and the crossing case). Each surviving
 edge is converted to a `CurveSegment` through the **existing**, unmodified
 `recordEdge`/`falsifyRange` pair in seam.go (package-internal, so this new
 code calls it directly) — every fragment's `TExact` admission and reject-only
@@ -663,9 +636,9 @@ regardless of who authored the input curves it was cut from.
 | Interface-aligned blind `Cut` whose displaced tool end or interface has no recorded denoted level, whose denoted levels differ, touching opposed holes, or section displacement | Equal denoted levels with monotone holes and proved separate opposed holes build, and overlapping opposed holes of axis-aligned lines, circles and arcs at an undisplaced level build general-boolean §3 A8's BRep; these cases take the mesh path (stacked §2.1, §7 stage 3) |
 | `Cut` whose tool crosses an existing hole's boundary instead of enclosing it whole | no whole-loop match; a blind tool takes general-boolean §3 A7 (one hole), else the mesh path, and A9 where the mesh path refuses |
 | `Intersect` with disjoint intervals | G5, mesh path (result is empty; unchanged `BooleanEmpty`) |
-| `Union` with a holed operand | G6, mesh path; §9 PR3; unequal intervals with a hole sharing a span with the other outline build as an A1 brep (general-boolean §3 "A1 as a brep", holed operands) |
+| `Union` with a holed operand | G6, mesh path; unequal intervals with a hole sharing a span with the other outline build as an A1 brep (general-boolean §3 "A1 as a brep", holed operands) |
 | A split arranged boundary with a nonzero source displacement, a nonzero walk charge, or a nonidentity re-expression — any one of the three alone | §3.4 safety routing, mesh path; a future crossing-sensitivity proof may admit it |
-| `Cut` with a holed tool | G6, mesh path; the surviving material inside each tool hole is a separate lump, so it waits on the multi-lump prism payload of the row below, not on PR3 |
+| `Cut` with a holed tool | G6, mesh path; the surviving material inside each tool hole is a separate lump, so it waits on the multi-lump prism payload of the row below |
 | `Intersect` with a holed operand outside §3.1's one-hole clean-nesting arm | G6, mesh path; the result may require several regions or a split boundary |
 | A shared span `prismcells.CoincidentEdges` cannot attribute to one partner, or a cell walking a circular run past another cell's vertex | unresolved, mesh path (Part G §3 A3) |
 | A displaced pair whose shared span lies inside or outside the result | mesh path: the true walls can part, and no recorded edge bounds the sliver (Part G §3 A3) |
@@ -673,7 +646,7 @@ regardless of who authored the input curves it was cut from.
 | A `Cut` tool whose circle or arc touches a target wall at one point without crossing it (a round pocket tangent to a hole or to the outer wall) | mesh path through §4.2's tangent-contact query: a blind pocket builds a faceted result; a tool through the whole target takes the mesh path too, which may refuse it with `BooleanUnsupportedContact` |
 | A `Cut`/`Intersect` selection covering two or more disjoint regions (a multi-region coplanar overlap) | no BODY is built: a `ProfileRecord` carries one outer loop, so resolution fails to close one (§4.2) and the pair takes the mesh path, waiting on a multi-lump prism payload that is not currently planned. `Verify`'s interference reading answers such a pair anyway, without a body, through §4.5's overlap-area reading |
 | A disjoint-footprint `Union` (two separate lumps) | resolution fails to close one loop (§4.2); Part G §3 A5 builds a prism group when the loops are proven disjoint. `Verify` answers the pair through its disjoint/overlap partition (`agent-docs/verification-design.md` §1) rather than through §4.5 |
-| A free-form (Tier A spline) segment that never touches the other operand | excluded by G4 today (whole-scene `TExact` gate, §3.1); worth revisiting once the two-operand scene construction is proven, since the segment itself would ride through untouched |
+| A free-form (Tier A spline) segment that never touches the other operand | excluded by G4 (whole-scene `TExact` gate, §3.1) |
 
 ### 4.5 The overlap-area reading: a volume, never a body
 
@@ -745,8 +718,8 @@ no new helper is introduced.
 
 **The sum.** The reading publishes the charged sum of the cells' volumes: the
 value is their float sum, whose own accumulated rounding `internal/proofbound/bounds.go`'s
-`exactSumRound` charges against the exact rational sum, and the bound is
-`absSumUpper` over the cells' own bounds and that rounding. `exactnessOf` then
+`ExactSumRound` charges against the exact rational sum, and the bound is
+`proofbound.AbsSumUpper` over the cells' own bounds and that rounding. `exactnessOf` then
 reads the summed bound, so the reading is `Exact` only where every cell is —
 which a crossing selection never is, since a genuine crossing splits at least
 one edge and §7's `δ_cut` is positive on every split fragment. A multi-region
@@ -933,7 +906,7 @@ the shared audit"). Order matches modify §4's:
 | closure | the merged loop's own RECORDED coordinates join at every junction (seam §3's `edgeJoin`/`falsifyLoopJoins`, unmodified), run after the chain resolves — past §3.4's point of no return | `ErrUnrecordableProfile` (RB9), a refusal, not a reroute — the same treatment RB8 already gives a `recordEdge` rejection at this stage |
 | S8-equiv | assembled loop's signed area does not flip/collapse | `ErrDegenerate` |
 | S7-equiv | no non-adjacent segment pair crosses or contacts within the diameter-anchored `contactFloor` band (verification §4's noise floor, reused unchanged) | `ErrUnsupported` |
-| S9-equiv | outer loop provably contains every hole (both operands' original holes survive into the result unchanged, since `Union`'s admitted class is hole-free per G6 — this step is a no-op until §9 PR3 relaxes G6's union arm) | `ErrDegenerate` (decidably broken) / `ErrUnsupported` (undecidable) |
+| S9-equiv | outer loop provably contains every hole (both operands' original holes survive into the result unchanged, since `Union`'s admitted class is hole-free per G6 — this step is a no-op while G6 keeps the union arm hole-free) | `ErrDegenerate` (decidably broken) / `ErrUnsupported` (undecidable) |
 
 ## 7. Exactness derivation
 
@@ -981,10 +954,10 @@ send it to zero.
 
 Its size is the parameter allowance times how fast the carrier moves under it.
 The carrier is exact, so the endpoint can only slide ALONG it:
-`|P(t) − P(t*)| ≤ |t − t*| · sup|dP/dt|`. `internal/proofbound/bounds.go`'s `cutParamUlps` states
+`|P(t) − P(t*)| ≤ |t − t*| · sup|dP/dt|`. `internal/proofbound/bounds.go`'s `CutParamUlps` states
 the parameter allowance once — the quantitative reading decad gives `TExact`'s
 "to machine precision" claim (`agent-docs/sketch-seam-design.md` §1) — and
-`cutDisplacementAllow` multiplies it by the carrier's own speed over its full
+`CutDisplacementAllow` multiplies it by the carrier's own speed over its full
 parameterisation: the chord for a line, `2πR` for a circle or an arc.
 `δ_cut` is the largest such allowance over the surviving fragments, and zero
 when every survivor is a whole edge.
@@ -1003,7 +976,7 @@ displacement was. It is the only kind that reaches this charge: a trimmed
 circular carrier would enter through two `cos`/`sin`-computed points, moving
 its rebuilt radius and sweep as well as its endpoints, and §4.1 refuses such a
 pair before the scene is built rather than charge it (below). `internal/proofbound/bounds.go`'s
-`walkEndpointAllow` states the allowance, at the magnitude of the operands
+`WalkEndpointAllow` states the allowance, at the magnitude of the operands
 that walk's OWN arithmetic touches and never at the endpoint it produced:
 `momentregion.Lerp2` computes
 `fl(a + fl(t·fl(b−a)))` from the carrier's own recorded `Start` and `End` — a
@@ -1012,15 +985,15 @@ commits all three roundings and walks the same point — and that difference
 CANCELS, so a fragment near the plane
 origin on a far-reaching carrier rounds by ulps of the CARRIER while its own
 endpoint magnitude stays tiny. A trimmed `LineSeg` therefore charges the
-envelope of its recorded `Start`/`End` coordinates (`walkChargeOf`'s
+envelope of its recorded `Start`/`End` coordinates (`prismcells.WalkChargeOf`'s
 `lineWalkOperandUpper`), folded together with the walked endpoint so the
-envelope stands whatever the recorded parameter is. `walkChargeOf` still
+envelope stands whatever the recorded parameter is. `prismcells.WalkChargeOf` still
 states a circular answer — `segmentWalk.coordUpper`, whose `|cu|+|cv|+r+r` L1
 form already bounds the centre and radius a `cos`/`sin` walk works on — but
 the §4.1 refusal means no boolean reaches that arm; it stands so a charge,
 never a silent zero, is what any future widening of that refusal would meet.
 Each operand owes the largest such allowance over its OWN
-consumed segments — `δ_walkA` and `δ_walkB`, the `a` and `b` fields of
+consumed segments — `δ_walkA` and `δ_walkB`, the `A` and `B` fields of
 `prismcells.SceneDelta`, each holding that operand's walk charge ALONE — and the
 charge stands even when both operands carry zero displacement and the
 re-expression is the identity — the same
@@ -1033,7 +1006,7 @@ coordinate-envelope charge does not state — so a positive `δ_walk` is only
 ever computed over a trimmed `LineSeg`. Every circular carrier that survives
 §4.1 is WHOLE and therefore charges zero, whichever field holds which bound
 (Reversed swaps them, so a WHOLE arc's `TStart`/`TEnd` are `{0, 1}` in either
-order — see `walkChargeOf`'s own doc comment). WHOLE is read off the RECORDED
+order — see `prismcells.WalkChargeOf`'s own doc comment). WHOLE is read off the RECORDED
 range for every kind, a `CircleSeg`
 included, and never off the walk's own closed-ness: that flag is
 decided within a tolerance of a full turn, and a decad-side tolerance that
@@ -1068,7 +1041,7 @@ operand that does NOT win the `max` never silently drops out.
 `δ_cut` taken over that cell's OWN surviving fragments rather than over a
 merged loop's. Nothing else in the formula changes for it, and the reading's
 charged sum of the cells' volumes adds only that sum's own accumulated
-rounding (`internal/proofbound/bounds.go`'s `exactSumRound`).
+rounding (`internal/proofbound/bounds.go`'s `ExactSumRound`).
 
 It is **exactly zero in one decidable case**: both inputs carry zero
 displacement, operand B's section map into A's frame is the identity under
@@ -1084,8 +1057,7 @@ entity's full domain. A partial overlap, which splits at least two walls,
 never reaches the zero case, and neither does a union whose result the caller
 would call "obviously exact": the recorded walk closes only to within
 `δ_cut`, and a zero bound over it would be a claim the evaluator cannot make.
-Narrowing the zero case to require every CONSUMED segment whole, not only
-every SURVIVING edge, is what closes the gap this task found: an OPERAND can
+The zero case requires every CONSUMED segment whole, not only every SURVIVING edge, because an OPERAND can
 carry a segment recorded over a range narrower than its own entity's full
 domain — the entity's own `sketch` arrangement trimmed it there, at THAT
 segment's own recording, whether from an ordinary sketch cut (`RecordProfile`
@@ -1115,7 +1087,7 @@ level widened by its displacement, reaches past the winner's range (exact over
 the larger of the two displacements, which covers either. A tie (exact
 `big.Rat` equality) takes A's float with the larger of the two. When B's
 shifted endpoint `z + s` wins it rounds to the nearest float once, and
-`rationalFloatError` over the exact rational charges that rounding into that
+`proof.RationalFloatError` over the exact rational charges that rounding into that
 end's `z0Delta`/`z1Delta` beside the displacement. The rounding term is zero whenever `z + s` is a float
 — every datum-plane offset by a whole number of millimetres — and positive
 for an offset such as 0.1 mm under a 0.3 mm tool.
@@ -1145,9 +1117,9 @@ extension is two pieces, each in the existing machinery's own shape:
   the section in its plane and the other displaces its sweep level.
 - **`internal/proofbound/bounds.go` gains the helpers for the mechanism**, under that file's own
   rule that each error mechanism has exactly one helper and no measurement site
-  computes a bound inline. `cutDisplacementAllow` owns the cut-parameter
-  mechanism above, turning `cutParamUlps` and a carrier's own speed into the
-  coordinate displacement `δ_cut` reads. `walkEndpointAllow` owns `δ_walk`'s
+  computes a bound inline. `CutDisplacementAllow` owns the cut-parameter
+  mechanism above, turning `CutParamUlps` and a carrier's own speed into the
+  coordinate displacement `δ_cut` reads. `WalkEndpointAllow` owns `δ_walk`'s
   own mechanism the same way, turning the envelope of the SOURCE operands a
   walk's own arithmetic touches into the coordinate displacement its computed
   endpoint owes; the caller supplies that envelope (above), and the
@@ -1251,15 +1223,13 @@ a differently-authored model of the same intent can clear it.
 
 ## 10. Work budget and cancellation
 
-Reuses `internal/proofbound/budget.go`'s existing `workBudget` (`newWorkBudget(ctx)`), the same
+Reuses `internal/proofbound/budget.go`'s `proofbound.WorkBudget` (`NewWorkBudget(ctx)`), the same
 shared counter Fillet/Chamfer/Shell already thread through their own audits
-(`agent-docs/modify-design.md` §5). PR1 opens one counter per
-`tryPrismUnion` attempt and threads it through: the G4 segment scan, scene
-construction (one charge per created entity), the §4.2 selection/merge walk
-(one charge per candidate edge/cell touched, matching `crossingAuditBudget`'s
-own per-pair charge shape), and §6's audit (its existing budget parameter,
-unchanged). Polled at phase boundaries and at least every 256 candidates,
-identical to the existing pattern. `prismcells.MaxArrangementSegments` is the
+(`agent-docs/modify-design.md` §5). One counter is opened per analytic boolean
+attempt and threaded through the G4 segment scan, scene construction (one
+charge per created entity), the §4.2 selection/merge walk (one charge per
+candidate edge or cell touched), and §6's audit (its budget parameter). It is
+polled at phase boundaries and at least every 256 candidates. `prismcells.MaxArrangementSegments` is the
 single code-owned pre-`Profiles` cap: it bounds the private arrangers'
 tiny-segment pair work for the pinned line/circle/arc density. That pair work
 is one `O(n^2)` pass with no broadphase, so the cap bounds a single
@@ -1351,7 +1321,7 @@ face this rule leaves unnamed selects by geometric predicate (`Facing`,
 | Tessellation | The result is an ordinary `prismPayload` and `agent-docs/tessellation-design.md` §5's prism contract applies, with §7's section displacement as a term of its own there: it displaces the analytic boundary a mesh approximates, so it does not ride in that contract's stored-coordinate rounding term, while the per-end axial displacement still does. Tessellation §5 reserves the section displacement from the requested tolerance before chording, refuses a tolerance it exhausts, and charges it to every face bound and to `areaSlack`, so chording plus that displacement stays within `tol`. The reservation covers no other term: the per-end axial displacement rides on top of it and can lift the published `Bound` above `tol`, which tessellation §1's Tolerance row allows. A mesh of an assembled body is `Exact`-trimmed only where every one of those displacements is zero. |
 | `ThroughAll` / `ThroughAllSide` | The extent reading states its interval over the RECORDED section and does not carry §7's section displacement, so at `δ > 0` the stop returns `ErrUnsupported`: it has no stated displacement to charge to the level it resolves. At `δ == 0` it reads the extent as before, beside whatever displacement that reading publishes on its own account. |
 | Clearance kernel | Unchanged where `δ == 0` — dispatches on payload class; `prismPayload` already has full analytic support (`internal/clearance/pairkernel`'s coplanar `Plane`×`Plane` certificate, `offsetPair`, etc.). Where `δ > 0` the kernel builds no model for the body and the pair reads `Suspect`: every certificate it emits is an exact statement about the carriers it read, and a carrier the payload holds only within `δ` of the one it denotes cannot support one. Widening the kernel's own candidate intervals by `δ` is a separate piece of work, not this design's. |
-| Interference (`Verify`) | **Wired to the analytic path (PR4), over two read-only entry points tried in order.** After its containment and represented-set-equality certificates, `internal/verifyrun/interference.go`'s `measuredInterference` calls `booleandispatch.AnalyticIntersect` (`boolean.go`) — a read-only twin of `performBoolean`'s analytic dispatch that runs `prismboolean.Try`/`prismrecord.Build` under a temporary producer identity and never commits, so it consumes neither operand — and publishes the built payload's own volume. A pair that twin does not admit (`ok == false`) next reaches §4.5's overlap-area reading (PR5), which measures a selection covering any number of disjoint regions and publishes a volume with no body at all; the two-stage order keeps every pair the twin already answers byte-identical. A pair neither admits falls back unchanged to `evaluateBoolean`'s read-only mesh intersection. Both analytic answers are still subject to §6's positive-volume gate (`agent-docs/interference-design.md` §6). "Admitted" covers `Union`'s select-all path, `Cut`/`Intersect`'s clean-nesting sub-case, the crossing sub-case (PR3), and since PR5 a multi-region coplanar overlap. `agent-docs/interference-design.md` §5.2 records the boundary this closes. |
+| Interference (`Verify`) | **Reads the analytic path through two read-only entry points, tried in order.** After its containment and represented-set-equality certificates, `internal/verifyrun/interference.go`'s `MeasuredInterference` calls `booleandispatch.AnalyticIntersect` (`boolean.go`) — a read-only twin of `performBoolean`'s analytic dispatch that runs `prismboolean.Try`/`prismrecord.Build` under a temporary producer identity and never commits, so it consumes neither operand — and publishes the built payload's own volume. A pair that twin does not admit (`ok == false`) next reaches §4.5's overlap-area reading, which measures a selection covering any number of disjoint regions and publishes a volume with no body at all; the two-stage order keeps every pair the twin already answers byte-identical. A pair neither admits falls back unchanged to `evaluateBoolean`'s read-only mesh intersection. Both analytic answers are still subject to §6's positive-volume gate (`agent-docs/interference-design.md` §6). "Admitted" covers `Union`'s select-all path, `Cut`/`Intersect`'s clean-nesting sub-case, the crossing sub-case, and a multi-region coplanar overlap. `agent-docs/interference-design.md` §5.2 records the boundary this closes. |
 | Surveys (wall/undercut/min-radius) | No new code — they dispatch on payload class, and support is immediate where `δ == 0`. The undercut reading is a normal-direction membership and is unaffected at any `δ`. The wall and min-radius readings publish the bound their own arithmetic proves at `δ == 0` — a candidate's own division or square root, never the section displacement — and are staged at `δ > 0`, answering undecided (`Suspect`, never a silent pass): `δ` is not a term either reading may absorb into that bound, because the wall reading is not a quantity a displacement widens by a fixed amount — its allowance-angle contact families (verification §6) can change membership under a boundary perturbation, so a proven displaced reading needs the survey's own theory extended, not a term added to a bound. |
 | `Verify`'s structural/tolerance gates | Structurally unchanged — `prismPayload` is valid by construction as always. The TOLERANCE gate anchors each reading against a reference the body's own geometry supplies, and at `δ > 0` it cannot read that geometry through the clearance kernel's model, which the row above declines to build. It reads station witnesses on the body's OWN recorded section instead (`gatewitness.Prism`), each charged its own lift's gap, and hands them to the same shared reader every arm publishes through: `pointSetDiameterWithBudget` states the winning pair's own distance computed over exact rationals and rounded toward zero, never the float scan's norm. The gate then shrinks that station maximum by twice the SUM of `δ`, the axial displacement and the widest station gap, rounding the shrunken value toward zero as well (`lowerDiameterForDisplacement`), which verification design §3 proves a lower bound on the denoted body's own diameter. A displaced body is therefore judged on the same terms as any other: a reading passes when its bound meets the tolerance and reports `Suspect` with a stated `Required` threshold when it does not. |
 | `Fillet` / `Chamfer` | A result with `δ > 0` and no valid carrier record keeps `prismrecord.Payload.RequireExactSection`'s refusal (brep-modify RB6). A result with a valid record (Part K §3; the record is bound to the body that `prismrecord.BuildWithRecord` minted it for, `prismrecord.Build` and `Placed` drop it, and readers use `prismrecord.CarrierRecordOf`) takes the lateral carrier route for lateral edges (§7): a `Fillet` refusal of Table CB is `ErrUnsupported`, and a `Chamfer` refusal falls through to RB6's route. A cap-loop `Chamfer` whose selected loops are all exact in the record builds a `capblend.DisplacedPayload` (Part K §8); any other cap-loop `Chamfer` keeps RB6. |
@@ -1412,87 +1382,71 @@ face this rule leaves unnamed selects by geometric predicate (`Facing`,
   contract would ripple through topology, tessellation, every survey, the
   clearance kernel, the modify ops and §4.1's equality certificate, which is
   the opposite of the smallest sound extension. `Verify` needs no body, so it
-  is given the volume alone. The cost is a visible asymmetry: a pair `Verify`
-  reports an `Interference` for is a pair `Intersect` still routes to the mesh
-  path. Two alternatives were rejected. Extending `prismcells.Merge` to emit
+  is given the volume alone. The cost is a visible asymmetry: `Intersect` still routes to the mesh
+  path a pair for which `Verify` reports an `Interference`. Two alternatives were rejected. Extending `prismcells.Merge` to emit
   several loops cannot work at all — a `ProfileRecord` has one `Outer`.
   Restating the volume composition inside the reading, rather than building one
   `prismPayload` per cell and reusing `evalPrism`, would put a second owner on
   `internal/proofbound/bounds.go`'s section-displacement and axial mechanisms, which that file's
   own rule forbids.
-  <!-- The asymmetry sentence above is well formed, not malformed: it joins two
-       contact relative clauses with stranded prepositions — "a pair [that]
-       `Verify` reports an `Interference` for" IS "a pair [that] `Intersect`
-       still routes to the mesh path" — the same shape as "a book I paid for is
-       a book I keep". The "for is" adjacency makes it a garden-path read, which
-       is a cost in fluency and not in meaning. The same fact is stated
-       independently at this bullet's own header, §4.4's multi-region row, §4.5's
-       second paragraph, §13's Interference consumers row, and
-       `agent-docs/interference-design.md`'s decision list, so no reader depends on
-       parsing this one sentence to learn the decision. -->
 - **§3.1 G6 restricts `Union` to hole-free operands and `Cut` to a hole-free
-  tool.** The union restriction is increment 1/2's, deferring the general
-  per-cell classification (§4.2's crossing sub-case) to PR3 even though it is
-  fully specified here; chosen to ship the gear's actual workload (hole-free
-  hub+teeth union, clean-nesting bore cut) without waiting on the harder
-  general case. The tool restriction outlives PR3: a holed tool leaves a lump
+  tool.** The union restriction keeps the gear's workload (hole-free hub+teeth
+  union, clean-nesting bore cut) off the harder per-cell classification
+  (§4.2's crossing sub-case). The tool restriction is structural: a holed tool leaves a lump
   per tool hole, so it waits on the multi-lump prism payload §4.4 names, and a
   consumer that wants that cut analytically can express the same intent as one
   `Cut` per hole-free tool region.
 
 ## 14. Increments
 
+All seven shipped. Each item names what exists and the tests that pin it; §15 lists the tests.
+
 1. **PR1 — gate + scene construction + `Union`'s select-all path.** G1–G6,
    §4.1's scene builder and re-expression, `Union`'s select-all/merge/chain,
    §6's audit reuse, §5's authentication, §7's exactness (the section
-   displacement bound on `prismPayload`, its one `internal/proofbound/bounds.go` helper, and
+   displacement bound on `prismPayload`, its helpers in `internal/proofbound/bounds.go`, and
    `evalPrism`'s composition of it), and `performBoolean`'s branch before
-   `evaluateBoolean` to build via `evalPrism` instead of `facetedrecord.Build`
+   `evaluateBoolean` that builds via `evalPrism` instead of `facetedrecord.Build`
    on admission. A split boundary routes to the mesh path before recording
    when either source carries a section displacement, either source carries a
    nonzero walk charge (§7's `δ_walk`), or B's re-expression is nonidentity —
    any one of the three alone (§3.4).
-   Tests: a two-box union sharing a cap plane (the "control" case from the
-   consumer's report) builds analytically, with `Exact` volume where both boxes
-   sit on one frame (§7's `δ == 0` case); the gear's tooth-on-hub
-   shared-carrier union builds with the correct region set and an
+   Tests: a two-box union sharing a cap plane builds analytically, with `Exact`
+   volume where both boxes sit on one frame (§7's `δ == 0` case); the gear's
+   tooth-on-hub shared-carrier union builds with the correct region set and an
    `Approximate` volume within the composed bound of the closed-form Pappus/
    Green's-theorem answer; a non-coplanar pair still takes the mesh path
-   unchanged (regression).
+   unchanged.
 2. **PR2 — `Cut`/`Intersect` clean-nesting sub-case.** The structural
-   whole-loop match (§4.2), reusing PR1's scene infrastructure and §5's
-   existing profile recording (no new authentication code). Tests:
-   a bore cut through a hole-free hub (the F1 workload) builds analytically
-   with the correct hole added and the target's original outer loop
+   whole-loop match (§4.2) over PR1's scene infrastructure and §5's
+   profile recording. Tests: a bore cut through a hole-free hub builds
+   analytically with the correct hole added and the target's original outer loop
    byte-identical to its pre-cut record; an `Intersect` of a fully-nested pair
    returns the inner operand's own geometry.
 3. **PR3 — crossing sub-case for `Cut`/`Intersect`.** §4.2's edge-orientation
-   propagation over hole-free operands (`internal/prismcells/payload_resolve.go`), reusing
-   PR1's `prismcells.Merge` chain/merge tail and §6's audit over its own
+   propagation over hole-free operands (`internal/prismcells/payload_resolve.go`), over
+   PR1's `prismcells.Merge` chain/merge tail and §6's audit of its own
    per-op cell selection. Tests: two overlapping (not coincident-carrier)
    prisms cut/intersect correctly against the mesh path's own answer on the
    same pair (property test, volumes agree within the analytic path's
    tighter bound). A cell reachable only through a coincident carrier reads
    it through Part G §3 A3. G6's `Union` arm still
-   excludes a holed operand (its `Cut` tool arm stands regardless, §13) — a
-   holed hub unions with a tooth correctly once that lands.
-4. **PR4 — interference wiring + docs.** Public boolean calls use the analytic
+   excludes a holed operand; its `Cut` tool arm is structural (§13).
+4. **PR4 — interference wiring.** Public boolean calls use the analytic
    path when a pair qualifies, pinned by direct construction tests on admitted
-   coplanar pairs. `internal/verifyrun/interference.go`'s `measuredInterference` reaches the same
+   coplanar pairs. `internal/verifyrun/interference.go`'s `MeasuredInterference` reaches the same
    read-only analytic intersection dispatch `performBoolean` uses
    (`booleandispatch.AnalyticIntersect`) after its containment and
    represented-set-equality certificates, falling back unchanged to the mesh
    path when the analytic path does not admit the pair; a test asserts an
    exact overlap volume on an admitted coplanar-prism pair that meets §7's
-   exactness conditions. `agent-docs/interference-design.md` §5.2 carries a pointer
-   noting the prism case is superseded here. `agent-docs/evaluator-design.md` §9
-   gets a pointer to this document (§ done alongside this design, see the
-   CLAUDE.md diff).
+   exactness conditions. `agent-docs/interference-design.md` §5.2 and
+   `agent-docs/evaluator-design.md` §9 point to this document.
 5. **PR5 — §4.5's multi-region overlap-area reading.** The per-cell record,
    per-cell `prismPayload`, `evalPrism` volume and charged sum, entered after
    `booleandispatch.AnalyticIntersect` returns `ok == false`, over the shared
-   admission/scene/classification of PR1–PR3. Nothing in the public
-   `Union`/`Cut`/`Intersect` surface changes, and no bound helper is added.
+   admission/scene/classification of PR1–PR3. It adds no bound helper and
+   changes nothing in the public `Union`/`Cut`/`Intersect` surface.
    Tests: §15's multi-region rows.
 6. **PR6 — G3's shared-axis arm.** A tool sketched on `CreateOffsetPlane` of
    the target's datum plane is admitted with an identity re-expression and
@@ -1500,15 +1454,14 @@ face this rule leaves unnamed selects by geometric predicate (`Facing`,
    charged into the axial displacement. The mesh path's chain-depth refusal
    names the operand and states that a boolean takes no tolerance. Tests:
    §15's offset-plane rows.
-7. **PR7 — the blind `Cut`**, after the shared-axis offset-plane arm of G3
-   and the exact rational G5 it brings. §3.2's two blind rows over `prismcells.ResolveCut`'s
-   clean-nesting match, the `stackedPrismPayload` they build, its body,
+7. **PR7 — the blind `Cut`.** It rests on G3's shared-axis offset-plane arm
+   and the exact rational G5. §3.2's two blind rows over `prismcells.ResolveCut`'s
+   clean-nesting match build a `stackedPrismPayload`, with its body,
    measurements and tessellation, and a spanning `Cut` on a stacked target
-   that runs the match once per slab. `prismboolean.TryBlindStackedCut`,
+   runs the match once per slab. `prismboolean.TryBlindStackedCut`,
    `TryStackedBlindCut` and `TryStackedThroughCut` return the admitted
    `stackedPrismPayload`, and `performBoolean` builds it through
-   `stackedrecord.Build`. Tests:
-   Part S §8. That document's §7 owns the later stages.
+   `stackedrecord.Build`. Tests: Part S §8. Part S §7 owns the later stages.
 
 ## 15. Required tests
 
@@ -1562,7 +1515,7 @@ areas, residuals), never merely "it ran" — CLAUDE.md's own rule.
 - The walk charge survives `momentregion.Lerp2`'s CANCELLATION: over a table of trimmed
   `LineSeg` carriers whose `End − Start` cancels — the extreme one reaching
   `±1e12`, and a plain 200 mm carrier whose fragment sits on the sketch origin,
-  which needs no extreme coordinate at all — `walkChargeOf`'s answer contains
+  which needs no extreme coordinate at all — `prismcells.WalkChargeOf`'s answer contains
   the EXACT rational residual of the endpoint `momentregion.Lerp2` walked to, at both
   recorded bounds, compared squared over `math/big.Rat` so no square root or
   float difference can flatter it. Each row also asserts its own premise: that
@@ -1669,11 +1622,11 @@ areas, residuals), never merely "it ran" — CLAUDE.md's own rule.
   `fl(15.6)`: the FLOAT sum `15.6 + 0.4` is exactly `16` while the exact
   rational sum `fl(15.6) + fl(0.4)` is below `16`. The test asserts both
   premises itself, so a float-sum comparison would admit the pair and the
-  `big.Rat` comparison refuses it (`prismCutZIntervalSpans == false`).
+  `big.Rat` comparison refuses it (`prismplacement.CutZIntervalSpans == false`).
 - `Intersect`'s shifted-endpoint charge: a 1 mm target on XY intersected with
   a 0.3 mm tool on `CreateOffsetPlane(XY, 0.1)` publishes `z0Delta == 0`
   (B's `z0' = fl(0.1)` is a float) and `z1Delta > 0` equal to
-  `rationalFloatError(fl(0.1) + fl(0.3), z1)` (no float), and the published
+  `proof.RationalFloatError(fl(0.1) + fl(0.3), z1)` (no float), and the published
   volume bound contains the exact rational volume `area · (fl(0.3))`. The
   fixture is shown to fail with the charge deleted.
 - The chain-depth refusal's wording: two tools transformed 16 mm down and
@@ -1746,8 +1699,8 @@ fallback), Part B ("prism-boolean §N": the gates,
 scene, cell classification and displacement bounds this design reuses),
 Part S ("stacked §N") and
 `agent-docs/mirror-pattern-design.md` ("mirror §N"). Core §N is
-`agent-docs/api-design.md`; seam §N is `agent-docs/sketch-seam-design.md`. Every row of §2
-was measured with the probe under `.tmp/probe/` at `8cc06f90`.
+`agent-docs/api-design.md`; seam §N is `agent-docs/sketch-seam-design.md`. The rows of §2 describe
+the mesh path's behaviour on the listed scenes before Part G; their figures are illustrative.
 
 ### 1. Problem
 
@@ -1905,8 +1858,7 @@ plate: the select-all merge leaves two loops, which a stacked slab's one
 region cannot state. Stacked §2.2's I5 reads, for
 a union-built stack, "every slab's outer loop equals the previous slab's or
 is proven nested by the clean-nesting match", I6/I7 generalise to the
-exposure records the match derives, and the implementation PR changes that
-document on the same branch. The inner level a shifted operand contributes
+exposure records the match derives. The inner level a shifted operand contributes
 rounds once and is charged by `rationalFloatError` into that interface's
 `z0Delta`/`z1Delta`, exactly as stacked's blind cut charges its floor. A
 union-built slab records the rational its operands denote at each level
@@ -1956,10 +1908,7 @@ boss wall continues the window wall below the plate's face.
   decad for cost alone, sparing the arrangement for pairs that cannot share
   a span, and only rejects.
 - *Cap.* Every scene of a build that passes the pre-filter arranges under
-  twice the global segment cap (`gatedArrangementSegments`, 8192). The
-  arrangement measures near linear in the counted segments: 4 ms for a
-  6,664-segment scene of a spoked disc and its boss, 59 ms for 32 mutually
-  crossing circles at 8,192.
+  twice `prismcells.MaxArrangementSegments` (`gatedArrangementSegments`, 8192).
 - *Gate.* Every scene the build uses is arranged and charged first. Some
   scene must report a span between a hole entity of one operand and an
   outer entity of the other. A span between two records of one operand must
@@ -2264,19 +2213,17 @@ or the existing equal axis-aligned rectangle certificate. `Intersect`
 requires equal rectangle bounds; `Cut` requires the tool's bounds to lie
 strictly inside the target's bounds. Stacked Union still checks its own
 intervals, slabs and interfaces.
-Other placed-axis pairs keep the mesh route. The existing same-transform
-shared-axis arm retains its prior profile admission. `Verify` keeps its
-existing read-only Intersect path and positive-volume gate for a pair
-admitted by the new arm.
+Other placed-axis pairs keep the mesh route. The same-transform shared-axis arm
+admits profiles by its own rule. `Verify` reads a pair the placed-axis arm
+admits through its read-only Intersect path and positive-volume gate.
 A one-sided reflection is a nonidentity re-expression, so a reflected pair
 whose outlines cross takes A6's crossing charge, and one whose outlines share
 a wall takes A3's reading (M3, T2).
 
 ##### A3 — shared walls
 
-`sketch` resolves two operands' entities on one carrier — two lines since
-`sketch`'s "Coincident line carriers", an arc and a circle or two arcs
-before that — by emitting their shared span once, under the entity it names,
+`sketch` resolves two operands' entities on one carrier (two lines, an arc and
+a circle, or two arcs; `sketch`'s "Coincident line carriers") by emitting their shared span once, under the entity it names,
 and withdrawing it from the other, the losing entity, as a window its
 fragments do not cover. `prismcells.CoincidentEdges` reads every such span
 from that report alone: the windows are the gaps in the losing entity's own
@@ -2727,7 +2674,7 @@ then lines and circles only. The result is the `brepPayload` of §4.
 | B8 | No cap or wall of one operand is coplanar with a face of the other (same plane, exact: the two planes' recorded normals bit-identical and their origins' difference exactly along it), unless the pair is also co-directional, which class A owns. "Flush cap contact" below lifts B8 for a tool cap alone. | a coplanar contact across a perpendicular pair is an edge-on contact the per-face scenes do not classify |
 
 Every miss takes the mesh path with no error. The arrangement cap
-(`prismMaxArrangementSegments`) and cancellation are prism-boolean §10's,
+(`prismcells.MaxArrangementSegments`) and cancellation are prism-boolean §10's,
 charged per scene.
 
 ##### B.2 What is refused, and stays refused
@@ -3287,6 +3234,10 @@ type brepPayload struct {
 }
 ```
 
+The code's types are `breprecord.Face` and `breprecord.Payload` (`internal/breprecord/payload.go`), with exported
+field names. They add `Blend` (route E's fillet or chamfer face), `Stack`, `PointQueryCut`, `SlabCut`,
+`CarrierCharge` and `LoopBands`, which other documents own.
+
 A prism is a `brepPayload` with two planar faces and one swept face per
 segment; a stacked prism is one with its columns and planar patches. The
 face view of §B1 is this record, built on demand from either payload and
@@ -3594,9 +3545,9 @@ The 3D computations decad performs, each with its bound:
 | Computation | How | Bound | Reject-only check |
 |---|---|---|---|
 | Perpendicularity, B3 | `==` on the dot product of stored world normals | a decision | misses take the mesh path |
-| Trace of a plane of Y in X's plane | two points of the plane through `Frame.ToLocal` into X's frame; under B4 every coordinate is a sum of signed stored floats, held exactly, and the trace is the line through them | zero under B4 (`rationalFloatError` of each coordinate is computed and must be `0`; a nonzero one refuses the pair in this increment) | — |
+| Trace of a plane of Y in X's plane | two points of the plane through `Frame.ToLocal` into X's frame; under B4 every coordinate is a sum of signed stored floats, held exactly, and the trace is the line through them | zero under B4 (`rationalFloatError` of each coordinate is computed and must be `0`; a nonzero one refuses the pair) | — |
 | Level of a perpendicular face of Y along `N_X` | the exact rational `p · N_X` of a recorded point `p` of that face (`big.Rat` over stored floats); the held float is rounded once | `rationalFloatError` into that patch's `z0Delta`/`z1Delta`, prism-boolean G5's own mechanism | interval comparisons are exact over `big.Rat` |
-| Chord endpoints, surviving fragments | `sketch`'s certified cut parameters | `δ_cut` (prism-boolean §7's `cutDisplacementAllow`) plus the walk's rounding | `TExact == false` refuses (`ErrUnrecordableProfile`); the seam's range falsifier rejects a disproven flag |
+| Chord endpoints, surviving fragments | `sketch`'s certified cut parameters | `δ_cut` (prism-boolean §7's `proofbound.CutDisplacementAllow`) plus the walk's rounding | `TExact == false` refuses (`ErrUnrecordableProfile`); the seam's range falsifier rejects a disproven flag |
 | Canonical vertex | three planes: their exact levels; a cylinder: the keyed table's one float (§10) | zero for three planes; the larger of the key's `δ_cut` plus walk rounding and the float's proven distance from the crossing (`classbgeom.CrossingOffsetUpper`), charged to every face that uses it | a crossing whose free coordinate lies within twice its displacement of the cylinder's centre is too close to tangency to key and misses |
 | Re-expression of Y's section into F's frame | one rigid 2D map per coordinate | zero under B4; `δ_reexpress` otherwise (§8) | — |
 | Curved × curved separation, B7 | outward-rounded per-wall boxes compared exactly | a decision | refuses any overlap, including false overlaps |
@@ -3638,8 +3589,8 @@ refuses it as RB1 or takes the mesh path, as before.
   roles change under the caller.
 - **Loosen B3/B4 to a tolerance.** A near-perpendicular pair's traces are
   then rounded lines, and a cut on a rounded line amplifies by `1/sin θ` with
-  no charge; A6 is where that charge lives, and until it lands the pair takes
-  the mesh path.
+  no charge; Class B has no such charge (A6's charge covers only the prism
+  pair), so the pair takes the mesh path.
 - **Derive a cylinder's θ-trim from `acos`.** The trim is the arc fragment
   `sketch` certifies in the section scene; no angle is ever computed.
 - **Admit cylinder × cylinder at "small radius" or "far apart" by a
@@ -3788,8 +3739,8 @@ are relations, never literals.
   touch is arranged with no cut, and an amplified pair's RB9 (fu141's
   overshooting quadrilateral crossed by a box) falls back while the same
   quadrilateral's uncut merge keeps refusing; the
-  formerly rerouted fixtures (a nonidentity shallow crossing, a displaced
-  chain, a walk charge, a placed `Verify` pair) build or measure with a
+  fixtures for a nonidentity shallow crossing, a displaced
+  chain, a walk charge and a placed `Verify` pair build or measure with a
   section displacement covering the input displacement over the crossing
   sine.
 - **B cross-drill**: S1 builds a `brepPayload` with 7 faces (6 planar, 1
@@ -3961,9 +3912,9 @@ are relations, never literals.
   feeds the centroid and the walls' areas, and a sliver away from every
   recorded edge moves neither by a distance. A mirrored half beside its
   source joins through the mirror join, which carries no displacement.
-- **Should B4 (signed-permutation frames) be relaxed before A6 lands?**
-  Recommendation: no. A rounded trace has no charge without A6, and the
-  datum planes cover the measured workload.
+- **Should B4 (signed-permutation frames) be relaxed?**
+  Decided: no. Class B has no charge for a rounded trace, and the
+  datum planes cover the workload.
 - **Should class B's roles mint `capStart`/`capEnd` when a result keeps an
   operand's caps whole?** Recommendation: no; prism-boolean §11's fresh-roles
   decision stands, and a cap kept whole is still a face of a new record.
@@ -3999,7 +3950,7 @@ are relations, never literals.
 
 ### 11. PR split
 
-Each PR ships code and tests; this document ships with PR 1.
+Each item is implemented and tested. The labels (PR 1, 1b, 2 ...) are the names other documents cite.
 
 1. **A1 stacked union.** Overlapping/touching `Union` intervals, slab
    splitting, per-slab select-all merge, interface exposure by the
@@ -4007,7 +3958,7 @@ Each PR ships code and tests; this document ships with PR 1.
 1b. **A1 as a brep.** The flush and crossing interfaces as a `brepPayload`
    over the same slabs: cached interface scenes, cell classification,
    canonical vertices, merged planar walls, swept pieces, §9's A1 brep
-   tests. Depends on PRs 5 and 8.
+   tests. Builds on PRs 5 and 8.
 1c. **A1 brep operand.** The result's `stack`, several records per slab and
    per interface, `ClassifyRegions` and the region-aware span reading, the
    brep build's own slab merges, §9's A1 brep operand tests.
@@ -4021,7 +3972,7 @@ Each PR ships code and tests; this document ships with PR 1.
    and crossing sub-case, the disjoint `Union` to a one-slab group, with
    mirror §11 PR 4.
 4. **A6 crossing-sensitivity charge.** Certified `sin θ_low`, the amplified
-   fragment charge replacing §3.4's reroute, the noise-floor refusal, the
+   fragment charge in place of §3.4's reroute, the noise-floor refusal, the
    rotated-tooth and S9 fixtures.
 5. **`brepPayload` foundation.** The record, the face view of prism and
    stacked payloads, topology and roles, measurements, tessellation with the
@@ -4054,7 +4005,7 @@ Two independently created Lofts can therefore join the same prism in separate
 pair operations. A many-body call can arrange their certified private prism
 records in one scene when each Loft overlaps the first prism over positive
 area, and all inputs share the same whole-line, hole-free plane and interval.
-Otherwise the transient many-body pair chain remains available.
+Otherwise the many-body call uses the transient pair chain.
 
 The Loft-to-prism source certificate requires all of these facts:
 
@@ -4195,8 +4146,8 @@ Alternatives considered:
   geometry from compounding (vertex-bounds §5), so the gain on succeeding calls is small.
 - Regroup before dispatch only when the plan is all analytic: rejected. It needs a mesh-only pair to vanish under
   reordering, which the fixtures surveyed never showed, and it costs analytic attempts on every chained call.
-- Walk through `Transform`/`Copy` (a rigid motion distributes over Boolean operations): rejected for this
-  increment. It needs placed leaves built inside the plan; nothing in the fixtures requires it.
+- Walk through `Transform`/`Copy` (a rigid motion distributes over Boolean operations): rejected.
+  It needs placed leaves built inside the plan; nothing in the fixtures requires it.
 - A public opt-in or opt-out option, or an `OpDiag` warning naming the regroup: rejected. It adds public API under
   core §6 review for behavior that only turns refusals into proven results.
 - General distributive rewrites for mixed chains remain outside `boolchain`. The narrow target-side coarse-held
@@ -4368,7 +4319,7 @@ Rules:
 
 #### Execution in booleandispatch
 
-`internal/booleandispatch/dispatch.go` splits `Body` without changing its behavior:
+`internal/booleandispatch/dispatch.go` splits `Body` into `Analytic` and a mesh tail:
 
 ```go
 // Analytic runs every route Body tries before the mesh pipeline, in Body's order.
@@ -4378,10 +4329,10 @@ func Analytic(ctx context.Context, op meshbool.OperationKind, env topo.Env, a, b
     hooks Hooks) (*topo.Body, bool, error)
 ```
 
-`Body` becomes `Analytic`, then the unchanged mesh tail (from `booleaneval.Evaluate` through the final
+`Body` runs `Analytic`, then the mesh tail (from `booleaneval.Evaluate` through the final
 `ctx.Err()` check) when `Analytic` misses. `refuseSheetOperand` stays at its current position inside `Analytic`.
 
-New file `internal/booleandispatch/regroup.go`:
+`internal/booleandispatch/regroup.go`:
 
 ```go
 // Regroup evaluates chain's plan (boolchain.Run). Step k builds under producer env.Ref+k.
@@ -4423,7 +4374,7 @@ sampled distance or bound comparison admits anything.
 
 #### Root wrapper
 
-New root file `boolean_regroup.go`. It stays in root because it reads `Document.producers`, which only root holds.
+Root file `boolean_regroup.go`. It stays in root because it reads `Document.producers`, which only root holds.
 
 ```go
 // regroupBoolean tries the chain regroup for a refused two-body Boolean. ok=false means
@@ -4447,11 +4398,10 @@ func (h historyProducers) BooleanProducer(n *topo.Body) (meshbool.OperationKind,
   `d.evalContext(ctx)`, and calls `booleandispatch.Regroup(ectx, chain, envOf(documentNode(d), d.nextProducerID()),
   booleanHooks(cfg), regroupSurfaces)`. `regroupSurfaces(err error) bool` is the predicate Execution in
   booleandispatch defines.
-- Disjunction chains return `ok == false` until Task 5 enables them.
-- `booleanHooks(cfg booleanConfig) booleandispatch.Hooks` is extracted from `booleanBodyWith` (`boolean.go`) by
-  Task 3; `booleanBodyWith` and `regroupBoolean` both call it.
+- `booleanHooks(cfg booleanConfig) booleandispatch.Hooks` (`boolean.go`) supplies the root-owned hooks;
+  `booleanBodyWith` and `regroupBoolean` both call it.
 
-`performBoolean` change:
+`performBoolean` calls `regroupBoolean` after the paired Cut continuation declines (Paired Cut continuation):
 
 ```go
 body, err := booleanBodyWith(ctx, op, a, b, d.nextProducerID(), cfg)
@@ -4470,7 +4420,7 @@ if err != nil {
 // commitOperationSpanIn(ctx, nil, kind, operationInputsForBoolean(op, a, b), body, span, a, b)
 ```
 
-`containedCutQuantities` runs on the rescued body unchanged: its relation reads the public `a` and `b`, and the
+`containedCutQuantities` runs on the rescued body: its relation reads the public `a` and `b`, and the
 rescued body denotes `a − b` (Admitted identities).
 
 #### Source reachability and retention
@@ -4530,9 +4480,9 @@ counters may advance, as for any failed build.
 
 #### Public behavior
 
-No exported symbol changes. Callers observe: a refused two-body Boolean may now return a body; that body's selector
-roles follow Result identity and history. Task 4 updates core §8 "The chain depth", evaluator §9's gate bullet,
-`docs/api.md`, the `Union`/`Cut`/`Intersect` doc comments (`boolean.go`) and the two missing-features rows.
+No exported symbol is added. A refused two-body Boolean may return a body; that body's selector roles follow
+Result identity and history. Core §8 "The chain depth", evaluator §9's gate bullet, `docs/api.md`, the
+`Union`/`Cut`/`Intersect` doc comments (`boolean.go`) and the two missing-features rows describe it.
 
 ### Performance
 
@@ -4588,7 +4538,7 @@ Assertions for every F fixture:
 - The call returns a solid, one lump, watertight (`requireBodyWatertight`).
 - `|Volume − reference| ≤ Volume.Bound + 1e-6` mm³ (the float slack `apitest/faceted_plane_slab_test.go` uses), and
   `Bound < 1e-3 · reference`.
-- `tookMeshPath(result)` is true (the one mesh step is honest). Task 1 pins this premise on the hand-built final step.
+- `tookMeshPath(result)` is true (the one mesh step is honest). `TestRegroupPlansBuildByHand` pins this premise on the hand-built final step.
 - History: the last record has the caller's kind, the two public operands as consumed inputs with the roles
   `operationInputsForBoolean` gives (`target`/`tool` for `Cut`, `a`/`b` for `Intersect`, `first`/`others` for
   two-body `Union`), and outputs `[result]`. For each leaf behind an expanded operand (`box` and `t1` in F1, F2, F4;
@@ -4617,135 +4567,61 @@ Assertions for every F fixture:
 
 #### Existing tests this change flips
 
-`TestChainToleranceAdmitsAContactOnACoarserRim` (`apitest/chain_tolerance_test.go`) and the "a contact on a curved
-rim still refuses" subtest of `TestFacetedPlaneSlab` (`apitest/faceted_plane_slab_test.go`) assert F1's sequential
-refusal. Rule: insert D1's `Copy` so they keep testing the sequential gate, and read `held` from the copy. Any other
-test whose refusal regroup rescues: if the test's purpose is the gate or contact refusal itself, insert the `Copy`;
-otherwise assert the rescued geometry against a closed form. The same rule covers the sequential-premise subtests of
-`TestRegroupPlansBuildByHand`: Task 4 inserts the `Copy` before the final sequential call of F1, F2 and F4, and
-Task 5 does so for F3.
+`TestChainToleranceAdmitsAContactOnACoarserRim` (`apitest/chain_tolerance_test.go`), the "a contact on a curved
+rim still refuses" subtest of `TestFacetedPlaneSlab` (`apitest/faceted_plane_slab_test.go`) and the
+sequential-premise subtests of `TestRegroupPlansBuildByHand` test the sequential refusal. Each calls `Copy` on the
+chain's intermediate body, because a `Copy` ends the history chain and the final call is then the sequential gate.
+Rule for any other test whose refusal regroup rescues: if its purpose is the gate or contact refusal itself,
+insert the `Copy`; otherwise assert the rescued geometry against a closed form.
 
 ### Open questions
 
-- Decide whether a regrouped result should carry a public warning (e.g. `OpDiagChainRegrouped`) because selector
-  roles differ from a sequential result. Adding it costs a core §6/operation-diagnostics review, `docs/api.md` and
-  `docs/data-structures.md` edits. Leaving it out keeps the public surface unchanged; the default here is to leave it
-  out.
+- A regrouped result carries no public warning, although its selector roles differ from a sequential result.
+  Adding one (e.g. an `OpDiagChainRegrouped` code, which does not exist) would need a core §6 and
+  operation-diagnostics review plus `docs/api.md` and `docs/data-structures.md` edits.
 
 ### Tasks
 
-Run Task 1 first; its stop condition gates everything. Task 1 is a commit, not a PR: the repository ships no
-design-only PR, so Task 1 and Task 3 form the first PR on this branch. Task 2 can run in parallel with Task 3 on its
-own branch; its PR merges after the Task 1+3 PR. Tasks 4 and 5 are one PR each, in order, after Tasks 2 and 3.
-Before the first push of any task with Go changes, run `golangci-lint run --timeout=5m` at CI's version and
-`go vet ./...`, per `~/.claude/docs/git-operations.md` "Go Lint Before PR". Every task that edits
-`agent-docs/layout/` runs `go test . -run '^TestCLAUDEMDLayoutStaysCompact$'`; keep each layout cell at or under
-300 characters by rewording, never by adding detail. The branch was cut at `b2b42d30b`; rebase onto `main` before
-the first push (expect conflicts only in `agent-docs/missing-features.md` and `.github/test-shards-apitest.txt`).
+All of Part R is implemented. Each task below gives its owner and its pinning tests.
 
 #### Task 1: Design doc and the hand-built plans
 
-- **Files**: Part R (this doc), `agent-docs/operation-history-design.md`
-  (no-replay and retention edits, already on the branch), `agent-docs/layout/design-docs-gaps.md` (row, already on
-  the branch), new `apitest/boolean_regroup_plan_test.go`, `.github/test-shards-apitest.txt`.
-- **What**: Through public calls only, run each F fixture's sequential chain and its regrouped plan by hand. Pin the
-  premises the design depends on.
-- **Depends on**: none.
-- **Pattern refs**: `apitest/faceted_plane_slab_test.go`, `apitest/boolean_test.go`
-  `TestBooleanChainDepthGateReadsOnlyTheTouchedRims`.
-- **Tests**: `TestRegroupPlansBuildByHand` with one subtest per F fixture asserting: each sequential chain's final call
-  fails with `errors.Is(err, decad.ErrUnsupported)`; each plan step marked analytic in Fixtures has
-  `tookMeshPath == false`; each plan's final `Full` step has `tookMeshPath == true`; each plan's final body meets the
-  F assertions on volume, bound and watertightness. One subtest per D1 and D4 asserting the sequential refusal
-  persists through the `Copy` and the tilted `t2'`, and that `Union(t1, t2')` takes the mesh path. Add the test name
-  to shard 10.
-- **Done when**: `go test ./apitest/ -run '^TestRegroupPlansBuildByHand$'` passes,
-  `go test . ./apitest/ -run '^TestCI'` passes, and `go test . -run '^TestCLAUDEMDLayoutStaysCompact$'` passes.
-- **Stop condition**: if any premise fails (a sequential chain builds, an analytic step takes the mesh path, a final
-  step is admitted by an analytic route, a plan's final call refuses, or a volume misses its reference), stop. Report
-  the fixture, the failing call, the error or readings, and do not change dimensions or the design.
+Owner: none (tests only). `TestRegroupPlansBuildByHand` (`apitest/boolean_regroup_plan_test.go`) has one subtest per
+F fixture asserting: the sequential chain's final call fails with `errors.Is(err, decad.ErrUnsupported)`; each plan
+step marked analytic in Fixtures has `tookMeshPath == false`; the final `Full` step has `tookMeshPath == true`; the
+final body meets the F assertions on volume, bound and watertightness. D1 and D4 subtests assert the sequential
+refusal persists through the `Copy` and the tilted `t2'`, and that `Union(t1, t2')` takes the mesh path.
 
 #### Task 2: `internal/boolchain` normal form and plan
 
-- **Files**: new `internal/boolchain/chain.go`, `internal/boolchain/plan.go`, `internal/boolchain/chain_test.go`,
-  `internal/boolchain/plan_test.go`; `agent-docs/layout/verification.md` (row).
-- **What**: `Literal`, `Chain`, `Source`, `Flatten`, `Step`, `Steps`, `Run`, `MaxLiterals` per Chain normal form,
-  Eligibility of an expandable body and Plan. No caller yet.
-- **Depends on**: Task 1.
-- **Interface**:
-  ```go
-  const MaxLiterals = 6
-  type Literal struct { Body *topo.Body; Negated bool }
-  type Chain struct { Disjunction bool; Literals []Literal } // conjunction: Literals[0] positive
-  type Source interface {
-      BooleanProducer(n *topo.Body) (meshbool.OperationKind, []*topo.Body, bool)
-  }
-  func Flatten(op meshbool.OperationKind, a, b *topo.Body, src Source) (Chain, bool)
-  func Run(ctx context.Context, chain Chain, steps Steps) (*topo.Body, bool, error)
-  ```
-  Package doc names this design. Imports limited to `topo`, `meshbool`, `facetedrecord`, `opdiagnostic`.
-- **Tests**: Unit tests (`internal/boolchain`) above.
-- **Done when**: `go test ./internal/boolchain/` passes, `golangci-lint run ./internal/boolchain/...` is clean, and
-  `go test . -run '^TestCLAUDEMDLayoutStaysCompact$'` passes.
+Owner: `internal/boolchain/chain.go` and `plan.go` (Chain normal form, Plan). Tests: `TestFlatten*`
+(`chain_test.go`) and `TestRun*` (`plan_test.go`).
 
 #### Task 3: Split `booleandispatch.Body` into `Analytic` plus the mesh tail
 
-- **Files**: `internal/booleandispatch/dispatch.go`, `boolean.go` (extract `booleanHooks`), new root
-  `boolean_dispatch_split_test.go`, `.github/test-shards.txt`, `agent-docs/layout/internal-checks.md`
-  (`internal/booleandispatch/` row: add "`Analytic` route prefix").
-- **What**: Move every route before `booleaneval.Evaluate` into `Analytic` with identical order, error mapping and
-  sheet refusal. `Body` calls `Analytic`, then the unchanged mesh tail on a miss. Extract
-  `booleanHooks(cfg booleanConfig) booleandispatch.Hooks` from `booleanBodyWith` unchanged. No behavior change.
-- **Depends on**: Task 1.
-- **Tests**: `TestBooleanDispatchAnalyticPrefix` (root package, hooks from `booleanHooks(booleanConfig{})`, context
-  from `d.evalContext`): boxes x 0..10 and x 5..15 (y 0..10, z 0..10) on one XY frame → `Analytic(OpUnion)` ok with a
-  `prismPayload` of volume 1500 mm³; F1's `box` and `t1`, rebuilt in the test with `Extrude`, `Fillet` and
-  `Transform` as `apitest/faceted_source_retention_test.go` builds them (root tests cannot use `apitest` helpers) →
-  `Analytic(OpCut)` misses with nil error and `Body` returns a `facetedPayload` whose volume is within its bound plus
-  1e-6 of `Vbox − 320π`. Add the name to shard 10.
-- **Done when**: `go test . -run '^TestBooleanDispatchAnalyticPrefix$'` passes, `go vet ./internal/booleandispatch/`
-  is clean, `go test . -run '^TestCLAUDEMDLayoutStaysCompact$'` passes, and the PR's CI is green.
+Owner: `internal/booleandispatch/dispatch.go`. `TestBooleanDispatchAnalyticPrefix`
+(`boolean_dispatch_split_test.go`) uses boxes x 0..10 and x 5..15 (y 0..10, z 0..10) on one XY frame:
+`Analytic(OpUnion)` is ok with a `prismPayload` of volume 1500 mm³. It also rebuilds F1's `box` and `t1` with
+`Extrude`, `Fillet` and `Transform` (root tests cannot use `apitest` helpers): `Analytic(OpCut)` misses with a
+nil error, and `Body` returns a `facetedPayload` whose volume is within its bound plus 1e-6 of `Vbox − 320π`.
 
 #### Task 4: Conjunction regroup end to end
 
-- **Files**: `boolean.go` (`performBoolean`, `booleanHooks`, `Union`/`Cut`/`Intersect` doc comments), new
-  `boolean_regroup.go`, new `internal/booleandispatch/regroup.go`, new `apitest/boolean_regroup_test.go`,
-  `apitest/boolean_regroup_plan_test.go` (insert the `Copy` before the final sequential call of F1, F2 and F4, per
-  Existing tests this change flips), `apitest/chain_tolerance_test.go`, `apitest/faceted_plane_slab_test.go`,
-  `.github/test-shards-apitest.txt`, `agent-docs/api-design.md` (§8 "The chain depth"), `agent-docs/evaluator-design.md`
-  (§9 gate bullet, plus one rule: a route that moves accepted geometry MUST record an `opdiagnostic.Record` with a
-  `Change` mechanism, because Eligibility of an expandable body relies on it),
-  `agent-docs/missing-features.md` (the two narrowed Booleans rows), `agent-docs/layout/booleans.md`
-  (`boolean_regroup.go` row), `agent-docs/layout/internal-checks.md` (`internal/booleandispatch/` row: add the chain
-  regroup executor), `docs/api.md` (Booleans note), plus any `apitest/*_test.go` or root `*_test.go` file whose
-  refusal assertion CI shows flipped, updated per Existing tests this change flips and listed in the PR body.
-- **What**: Wire Trigger, Root wrapper and Execution in booleandispatch for conjunction chains (`Cut`, `Intersect`).
-  `regroupBoolean` returns `ok == false` for a disjunction.
-- **Depends on**: Tasks 2 and 3.
-- **Pattern refs**: `boolean_many.go` `tryPrismUnionChain` (private steps, producer span, final commit).
-- **Tests**: `TestBooleanRegroupConjunction` with F1, F2, F4 and D1, D3, D4 per Test plan; the flipped tests per
-  Existing tests this change flips. A root test `TestRegroupSurfacesInvariantBreaks` checks `regroupSurfaces` on a
-  `BooleanEvaluatorFailure`, a `BooleanEmpty`, a `BooleanUnsupportedContact` and a bare `ErrBooleanFailed` (true,
-  false, false, true). Add names to shard 10.
-- **Done when**: `go test ./apitest/ -run '^(TestBooleanRegroupConjunction|TestChainToleranceAdmitsAContactOnACoarserRim|TestFacetedPlaneSlab|TestRegroupPlansBuildByHand)$'`
-  passes, `go test . ./apitest/ -run '^TestCI'` passes, `go test . -run '^TestCLAUDEMDLayoutStaysCompact$'` passes,
-  and the PR's CI is green.
+Owners: the plan executor `internal/booleandispatch/regroup.go`, and the root wrapper in `boolean_regroup.go` and
+`boolean.go` (`historyProducers`, `regroupSurfaces`, `booleanHooks`). Tests: `TestBooleanRegroupConjunction`
+(`apitest/boolean_regroup_test.go`) and `TestRegroupSurfacesInvariantBreaks` (`boolean_regroup_test.go`), which checks
+`regroupSurfaces` on a `BooleanEvaluatorFailure` (true), a `BooleanEmpty` (false), a `BooleanUnsupportedContact`
+(false) and a bare `ErrBooleanFailed` (true).
 
 #### Task 5: Disjunction regroup
 
-- **Files**: `boolean_regroup.go` (remove the disjunction gate), `apitest/boolean_regroup_test.go`,
-  `apitest/boolean_regroup_plan_test.go` (insert the `Copy` before F3's final sequential call),
-  `.github/test-shards-apitest.txt`, `agent-docs/api-design.md` (§8 "The chain depth": name `Union`),
-  `docs/api.md`, `agent-docs/missing-features.md` (contact row wording, if Task 4's names only `Cut`/`Intersect`),
-  plus any `apitest/*_test.go` or root `*_test.go` file whose refusal assertion CI shows flipped, updated per Existing
-  tests this change flips and listed in the PR body.
-- **What**: Enable `Union` chains per Plan's disjunction.
-- **Depends on**: Task 4.
-- **Tests**: `TestBooleanRegroupDisjunction` with F3 and D2. Before writing D2's assertions, confirm the sequential
-  `Union(first, t2)` refuses; if it builds, drop the D2 e2e case, keep the `Flatten` mixed-chain unit test, and say
-  so in the PR body. Add names to shard 10.
-- **Done when**: `go test ./apitest/ -run '^(TestBooleanRegroupDisjunction|TestRegroupPlansBuildByHand)$'` passes,
-  `go test . ./apitest/ -run '^TestCI'` passes, and the PR's CI is green.
+`TestBooleanRegroupDisjunction` covers F3 and D2. The plan executor handles a disjunction; `regroupBoolean` has no
+disjunction gate.
+
+The test names are in `.github/test-shards.txt` and `.github/test-shards-apitest.txt`. Layout rows:
+`agent-docs/layout/booleans.md` (`boolean_regroup.go`), `verification.md` (`internal/boolchain/`),
+`internal-checks.md` (`internal/booleandispatch/`). `TestCLAUDEMDLayoutStaysCompact` keeps each layout cell at
+or under 300 characters.
 
 ## Part C — Boolean continuation
 
@@ -4972,10 +4848,9 @@ prism by a same-plane prism tool whose sweep ends inside the target, and a
 `Union` of two co-directional prisms or stacked prisms whose sweep intervals
 overlap or touch without being equal (Part G §3 A1).
 `agent-docs/modify-design.md` Part R §9.1 records the prism shells on it — the cup
-and the both-caps shell of a holed section (§2.4); this document owns the
-payload itself (its record,
-its invariants, how its body is built and measured, how it tessellates, and
-what every consumer does with it), and Part B owns the
+and the both-caps shell of a holed section (§2.4). This document owns the
+payload itself (its record, its invariants, how its body is built and measured,
+how it tessellates, and what every consumer does with it). Part B owns the
 boolean admission that produces one. References of the form "core §N" are to
 `agent-docs/api-design.md`, "prism-boolean §N" to Part B,
 "modify-reach §N" to `agent-docs/modify-design.md` Part R, "tessellation §N" to
@@ -5098,10 +4973,9 @@ Measurements, tessellation and every bound read the held floats and their
 displacements
 as before, so a displaced level still reads `Approximate` (§4).
 
-Modify-reach §9.1 wrote a `Shared` field on the interface for the material on
-both sides of the plane. It is not stored: that material is the narrower side's
-own region, nothing emits a face for it, and storing it would add an invariant
-the audit below would have to re-check without any consumer reading it.
+An interface stores no field for the material on both sides of its plane. That
+material is the narrower side's own region and nothing emits a face for it, so a
+stored copy would add an invariant for the audit below to re-check with no reader.
 
 #### 2.2 Invariants
 
@@ -5335,14 +5209,13 @@ operand `FeatureRef` is carried forward (prism-boolean §11).
 
 Every quantity is a bounded sum of per-slab or per-column terms through
 `internal/proofbound/bounded.go`'s arithmetic, so every float operation between a proven term and
-the published value charges its own rounding. No new `internal/proofbound/bounds.go` helper is
-needed.
+the published value charges its own rounding.
 
 | Quantity | Composition |
 |---|---|
 | `Volume` | `Σ_k A_k · h_k` — each slab's region area (with `sectionDisplacementArea(sectionDelta, walks_k, perimeter_k)` folded into its bound, as `evalPrism` does) times its bounded height |
 | `Area` | the first region's area (bottom cap) + the last region's area (top cap) + each exposed record's area (`momentinput.LoopEnclosedArea` of its outer loop) + `Σ_columns perimeter · height` |
-| `Centroid` | `Σ_k m_k · c_k / Σ_k m_k`, with `m_k = A_k · h_k` and `c_k` the region's centroid lifted to the slab's bounded midpoint through `prismPayload.Point`; taken component by component in bounded arithmetic, each `c_k` component carrying `prismrecord.Payload.PointBound`'s radius as its bound, and the three component bounds folded into one radius through `radius3D`. `prismrecord.Payload.CentroidGeometryBound`, the largest over the outer runs, plus `sectionDelta`, caps the result as `evalPrism`'s does |
+| `Centroid` | `Σ_k m_k · c_k / Σ_k m_k`, with `m_k = A_k · h_k` and `c_k` the region's centroid lifted to the slab's bounded midpoint through `prismPayload.Point`; taken component by component in bounded arithmetic, each `c_k` component carrying `prismrecord.Payload.PointBound`'s radius as its bound, and the three component bounds folded into one radius through `proofbound.Radius3D`. `prismrecord.Payload.CentroidGeometryBound`, the largest over the outer runs, plus `sectionDelta`, caps the result as `evalPrism`'s does |
 | `Bounds` | the union of `prismrecord.Bounds` over each outer run: one outer-only prism per run of slabs sharing an outer record, over that run's interval with its end levels' displacements and the payload's `sectionDelta`, the largest run bound covering the union. A cut-built stack is one run, the outer-only prism on the full interval |
 | `ExtentAlong` | the extreme over every outer run's reading |
 | `AxialDelta` | the largest level displacement over every slab |
@@ -5437,15 +5310,15 @@ reads its `sectionDelta` through `booloperand.sectionDisplacement`, as it reads 
 
 ### 7. Stages
 
-Each admitted arm ships its implementation and tests together.
+Stages 1 to 3 are implemented. Stage 4 is not.
 
 1. **Blind cut and through cuts on the result.** The payload, `stackedrecord.Build`,
-   `tessellateStacked` with its occupied-volume proof, prism-boolean §3.2's two
-   new `Cut` rows (a blind tool on a prism target, a spanning tool on a stacked
-   target), the `Verify` gate arm, `booloperand.sectionDisplacement`'s arm, the explicit
+   `tessellateStacked` with its occupied-volume proof, prism-boolean §3.2's
+   `Cut` rows for a blind tool on a prism target and a spanning tool on a stacked
+   target, the `Verify` gate arm, `booloperand.sectionDisplacement`'s arm, the explicit
    stagings in §6, and an executable example. The gallery's landing clip cuts
-   one blind hole per frame and renders the body, so the tessellator ships in
-   the same stage as the cut that produces the payload.
+   one blind hole per frame and renders the body, so the tessellator belongs
+   to the same stage as the cut that produces the payload.
 2. **Enclosing counterbore.** A blind tool around existing holes builds when
    sketch returns the target's outside cell with the tool as one hole and a
    second cell inside the tool with precisely the enclosed holes. The exposed
@@ -5507,13 +5380,13 @@ Each admitted arm ships its implementation and tests together.
    levels (§2.1) where the tool ends at a target cap. A round pocket across a
    round hole, where two circles cross, takes the mesh path, and a pocket
    enclosing the hole keeps stage 2's payload.
-4. **Surveys and clearance.** DX7, DX8, DX6 and `analyticBodiesEqual` for the
-   stacked payload.
+4. **Surveys and clearance (not implemented).** DX7, DX8, DX6 and `analyticBodiesEqual` for the
+   stacked payload; §6 states the current staged answers.
 
-Not planned here: a blind tool crossing the target's boundary (a side notch),
+Not implemented: a blind tool crossing the target's boundary (a side notch),
 whose per-slab walls split at the crossing; it takes the mesh path, and
 general-boolean §3 A9 builds it as a BRep where the mesh path refuses.
-Also not planned: `Fillet`/`Chamfer` on a stacked body (`agent-docs/modify-design.md` Part B takes it
+Also not implemented: `Fillet`/`Chamfer` on a stacked body (`agent-docs/modify-design.md` Part B takes it
 through the face view).
 
 ### 8. Required tests
@@ -5664,7 +5537,7 @@ lying inside the disc, then a `Chamfer` of the hole rims on both caps. The
 motivating part has 5 windows (each an inner arc, an outer arc, 2 lines and 4
 sketch-fillet arcs), 15 teeth (a tooth and 14 copies), a 30-root fillet and a
 D bore; it stays in the consumer repository (`agent-docs/testing.md`, Test
-scope). Today:
+scope). Without a carrier record:
 
 1. A hole-free disc united with one tooth takes the pair route (prism-boolean
    G6 refuses a holed operand there) and records the disc as
@@ -5677,9 +5550,9 @@ scope). Today:
    whole-line prisms, and the pair fold stops once the disc circle is trimmed
    (prism-boolean §4.1). The set falls to the mesh path and its edges are
    `FacetedCurve`s.
-3. `prismcells.RegionsWithinWorkCap` counts 256 densified segments per circle
-   and per arc. The wheel's union counts about 8000 and the bore `Cut` after the
-   fillet about 19000, against `MaxArrangementSegments = 4096`.
+3. A count of 256 densified segments per circle and per arc (the count before
+   §4's per-entity rule) puts the wheel's union and its bore `Cut` after the
+   fillet over `MaxArrangementSegments = 4096`.
 4. The windows make the disc a holed operand, and the cap-loop chamfer
    (`capBlendPayload`, reach §8.3) has no displacement term.
 
@@ -5708,8 +5581,8 @@ pair `Union` record; the extended one-scene `Union`; the clean-nesting `Cut`
 record; the arrangement stability audit; the lateral carrier route of `Fillet`
 and `Chamfer`; and `sectionaudit.Nesting`'s candidate points (§6.5). It builds
 the wheel's union, its root fillet and its bore `Cut` with exact analytic
-faces. In PR 1 a cap-loop `Chamfer` of a displaced receiver keeps today's
-answer: `RequireExactSection`'s refusal, or brep-modify §2.2's faceted view.
+faces. A cap-loop `Chamfer` of a displaced receiver outside PR 2's route is refused by
+`RequireExactSection`, or takes brep-modify §2.2's faceted view.
 
 **PR 2** (§8 and the PR-2 rows of §10): the cap-loop `Chamfer` of exact loops
 of a receiver with a valid record, built as a separate payload type
@@ -5718,7 +5591,7 @@ chamfers the wheel's window rims on both caps with exact analytic faces. PR 2
 also measures a lateral blend's arc ends at their read ends (§7.7, "Arc read
 ends" and "Seam snap"), and declines a mesh `Boolean`'s source tag on every
 displaced wall of a `DisplacedPayload` (§8.7, rule DW; displaced prisms keep
-today's tags). Nothing in PR 1 depends on it.
+their tags). Nothing in PR 1 depends on PR 2.
 
 #### 2.2 Alternatives considered
 
@@ -5948,14 +5821,12 @@ caller (the stacked-union, section-history, within, pattern-assembly,
 revolve-bore, revolve-plan, loft-direct, class-B, stacked-record, pair,
 one-scene and group callers): a pair with arcs that used to stop at the cap
 now reaches its route. A whole circle keeps its count of 256, so the
-rectangular plate with fourteen circular holes and a circular tool still fits. As a dated illustration, the wheel's union counts about 2000
-and its bore `Cut` after the fillet about 3700.
+rectangular plate with fourteen circular holes and a circular tool still fits.
 
-A caller that used to stop at the cap now runs its analytic route further, so a
-set that used to mesh (a silent cap miss) or refuse with the cap's
-`WorkLimitError` can now refuse with that route's own typed error instead. PR 1
-tests one such caller: an arc-heavy pair that used to exceed the cap now reaches
-the pair route and answers that route's result or refusal.
+A set that the old per-circle count stopped at the cap (a silent miss to the mesh path, or a
+`WorkLimitError` refusal) now runs its analytic route and can refuse with that
+route's own typed error instead. A test covers one such caller: an arc-heavy pair
+now reaches the pair route and answers that route's result or refusal.
 
 ### 5. Producers (PR 1)
 
@@ -6041,7 +5912,7 @@ every failure is a silent miss and the set takes the next `Union` route
 (`unionmany.Routes`), as A6's `AmplifiedFallback` does for a pair; cancellation
 still returns its error. `StraightLoftUnionMany` converts its lofts and calls
 `UnionMany`, so a converted set outside the line class reaches the extended
-class too, where it used to miss. `UnionMany` runs first in `unionmany.Routes`,
+class too. `UnionMany` runs first in `unionmany.Routes`,
 and the extended class takes no set a later route owns: the free-form routes
 (`axialsection`) fail U2, the loft and revolve routes fail U1, and
 `prismpattern.UnionMany`'s copied-prism join roots each copy on an arc of the
@@ -6417,8 +6288,8 @@ lines, `|p − q| ≥ max(|p − O|, |q − O|)·s1` holds along the whole lines
 ray test decides: once S7 has proven no crossing or contact, every point of a
 loop classifies the whole loop, and a later start is read only where the ray
 test cannot decide an earlier one (a start on another loop's carrier circle, as
-a window's start on a concentric window's circle). Without it the wheel's union
-audit, and any modify audit of the windowed disc, answered S9.
+a window's start on a concentric window's circle). A single fixed start would
+answer S9 for the wheel's union audit and for any modify audit of the windowed disc.
 
 ### 7. Lateral `Fillet` and `Chamfer` of a recorded receiver (PR 1)
 
@@ -6435,8 +6306,7 @@ chamfer is symmetric. Any other selection (a cap edge, a cap loop,
 selection keeps today's routes. A receiver with no valid record keeps today's
 behaviour exactly.
 
-- `Fillet`: a Table CB refusal is returned (`ErrUnsupported`). Today's answer
-  for these receivers was also a refusal.
+- `Fillet`: a Table CB refusal is returned (`ErrUnsupported`).
 - `Chamfer`: a Table CB refusal falls through to `RequireExactSection` and
   brep-modify §2.2's faceted view, exactly as for a receiver with no record, so
   no chamfer that builds today stops building. `ErrDegenerate` (S4, and S5 for
@@ -6597,9 +6467,8 @@ a pointwise move of at most `h_loop` each (Lemma H, Corollary W), so no contact
 appears on `S*_out`, nesting does not change (§6.5's candidate-point argument
 then rests on this certified verdict), and no loop's area can change sign. Each
 `h_loop[l]` is at most `SectionDelta_out` (§7.7); the row reads each loop's own
-bound. Modify §5's own S7, used by every other modify op, keeps its float test;
-fixing its near-end gap is a follow-up outside both PRs
-(`agent-docs/missing-features.md`, §11).
+bound. Modify §5's own S7, used by every other modify op, keeps its float test and
+its near-end gap (`agent-docs/missing-features.md`).
 
 #### 7.7 Result record
 
@@ -6685,13 +6554,6 @@ the snap, the segment the record describes, and the snap's moves (`Read`,
 counted twice: once inside the post-snap distance and once through `seamMove`.
 That overcharges by at most the snap's own move, a few ulps, and is sound;
 `carrierRewriteRecord` needs no pre-snap profile.
-
-On main the record charges `WalkEndBoundAllow` (zero there) at an untouched
-`End`-side end, adds only `ρ_new` (and none on the `unchanged` arm), and
-charges no snap move to `ed`. A published junction entry can then fall short by
-`ρ_recv`, `ρ_old`, or a snap's `End`-side move, each a few ulps times `R`. PR 2
-replaces those charges with the two rules above, with §10's tests that each
-entry covers its read-end distance.
 
 `SectionDelta_out` is the larger of the largest entry and `max_l h_loop[l]`
 (CR4), rounded up, and zero when every entry is zero. Kept loops (cloned, not
@@ -7001,9 +6863,8 @@ on every displaced wall of a `DisplacedPayload`, `Plane` and `Cylinder` alike: a
 whose roles name no single side loop and no band patch of a selected loop (the
 band-patch roles are those `Base.Patches` lists). The rule is per loop: a
 `DisplacedPayload` holds no per-segment record. Every other face keeps its tag.
-`faceLoop` moves from `internal/brepmodify` into a package both `brepmodify`
-and `booleaneval` can import (`brepmodify` imports `booleaneval`), which holds
-the rule.
+The rule lives in `internal/displacedface` (`FaceLoop`), which both `brepmodify`
+and `booleaneval` import (`brepmodify` imports `booleaneval`).
 
 `sourceGroup` (defined in `internal/booleaneval/eval_mesh.go`) takes no context
 or budget, so the decision is made once per operand where the operand's faces
@@ -7016,10 +6877,10 @@ the evaluator's replay path, since `booloperand.ChordShareReplay`'s default arm
 refuses it, so the rule needs no replay metering.
 
 **Displaced prisms keep today's tags.** A `prismrecord.Payload` with
-`SectionDelta > 0` reaches `sourceGroup` as it does on main: its walls keep
+`SectionDelta > 0` reaches `sourceGroup`, and its walls keep
 their retained tags with zero departure, which Claim R does not support for a
 wall whose carrier is displaced. Neither a per-loop nor a per-segment prism arm
-ships in PR 2. A per-segment arm would keep a wall on an exact carrier
+exists. A per-segment arm would keep a wall on an exact carrier
 (record entry `ε = 0`, the reasoning of prism-boolean §7's "Exact carriers") and
 decline the rest, but a fillet's feet leave ulp-sized carrier entries on the
 adjacent line walls of a faceted retained blend's operand, so it declines tags
@@ -7109,8 +6970,8 @@ PR 1, each beside the code it covers:
   `δ_End` at that arc's start junction `j − 1`, its `ArcSeg.End` in field order;
   an instance of a source with two narrowed lines meeting at distinct read ends
   carries none; an instance of a displaced source carries none.
-- `prismcells` cap callers: an arc-heavy pair that used to exceed the cap
-  reaches the pair route and answers its result or its own typed refusal.
+- `prismcells` cap callers: an arc-heavy pair reaches the pair route and answers its result or its own typed
+  refusal.
 - `prismboolean`: the extended `Union` of a disc with two windows and three teeth
   (one rotated copy) keeps two holes and the teeth, matches the volume of the
   same part drawn in one sketch within both bounds, and gives the windows
@@ -7253,24 +7114,22 @@ verifies its boundary and volume. Full consumer models stay out of decad's tests
 
 ### 11. Documents to update in the same change
 
+Each document below states one effect of this design. A change to the effect changes both places.
+
 PR 1:
 
-- Part B: §4.1 (the bore `Cut` order), §4.6 (the
-  extended class and its fallback), §8 row 3, §10 (the per-entity count and the
-  builder's authoritative count), §12's modify row.
-- Part G A6: that the readings this document
-  defines (§5.3's vertex reading, ASA2, CB2) prove a crossing's existence and
-  uniqueness through Lemma T, and that a recorded union result fillets. The A6
-  text keeps its own pair reading as it is and does not claim that every A6
-  reading has Lemma T's form.
+- Part B: §4.1 (the bore `Cut` order), §4.6 (the extended class and its fallback), §8 row 3, §10 (the per-entity
+  count and the builder's authoritative count), §12's modify row.
+- Part G A6: the readings this document defines (§5.3's vertex reading, ASA2, CB2) prove a crossing's existence and
+  uniqueness through Lemma T, and a recorded union result fillets. A6 keeps its own pair reading and does not claim
+  that every A6 reading has Lemma T's form.
 - `agent-docs/modify-design.md` Part B Table RB row RB6, and §2.2 (a CB refusal of
   `Chamfer` falls through to it).
 - `agent-docs/modify-design.md` §5 test 4 (the nesting candidate points).
 - `agent-docs/mirror-pattern-design.md` §4.3 (the instance's record).
-- `agent-docs/missing-features.md` where it lists the displaced-receiver refusal,
-  and a new entry: modify §5's S7 contact test reads float `segMinDist`, which
-  reports a crossing within `segCrossEps` of a segment end as a positive gap
-  (§6.2); moving it to `SegGapLower` is a follow-up outside both PRs.
+- `agent-docs/missing-features.md`: the displaced-receiver refusal, and the entry that modify §5's S7 contact test
+  reads float `segMinDist`, which reports a crossing within `segCrossEps` of a segment end as a positive gap (§6.2).
+  Moving S7 to `SegGapLower` is not implemented.
 - `agent-docs/layout/design-docs.md` row for this document, and rows for any new
   root `.go` file.
 
@@ -7296,11 +7155,9 @@ PR 2:
   the tag of every displaced wall of a `DisplacedPayload`, per loop, at both
   `sourceGroup` callers; a displaced prism's walls keep today's tags, an open
   gap).
-- `agent-docs/missing-features.md`: the displaced-receiver modify row changes in
-  the same commit as the code, since its "Today" cell names the cap-loop
-  `Chamfer`'s current answer. Its rows for chorded loft plane normals, other
-  displaced classes' source tags, face readers of displaced walls and
-  displaced-junction convexity stay open.
+- `agent-docs/missing-features.md`: the displaced-receiver modify row, whose "Today" cell names the cap-loop
+  `Chamfer`'s answer. Its rows for chorded loft plane normals, other displaced classes' source tags, face readers
+  of displaced walls and displaced-junction convexity are open.
 
 ### 12. Decisions the user may want to overturn
 
@@ -7345,7 +7202,7 @@ PR 2:
   loop, which declines some exact-carrier walls of a displaced loop; a
   per-segment rule would need the payload to carry the receiver's carrier
   entries.
-- **Displaced prisms keep today's tags in PR 2.** Declining them, per loop or
+- **Displaced prisms keep their tags.** Declining them, per loop or
   per segment, would make three faceted-retained-blend apitests refuse
   (`TestFacetedRetainedBlendConcaveArcEnd` among them: a fillet's feet leave
   ulp-sized carrier entries on the adjacent line walls). The cost: a displaced
@@ -7681,7 +7538,7 @@ compares their volume with the same lobes drawn at their own angles.
 ## Part U — Union fold
 
 `Union` of three or more bodies takes the certified routes of `boolean_many.go` as a set. When none of them takes the set,
-it joins the bodies two at a time, left to right, instead of refusing. The fold is `boolean_fold.go`.
+it joins the bodies two at a time, left to right, instead of refusing. The fold is `unionFold` in `boolean_many.go`.
 
 ### 1. Rules
 
@@ -7768,7 +7625,7 @@ fragment `sketch` reports inexact.
 
 A trimmed segment is the one that matters in practice: the union of a disc and a lobe records the circle between them as a
 fragment, so the result is not an operand of a second two-body Union. The many-operand Union joins all operands in one scene
-and so avoids it. A later `DeclareLoop` element that names an entity with a parameter range would admit chains.
+and so avoids it. A `DeclareLoop` element that names an entity with a parameter range, which would admit chains, is not implemented.
 
 ### 4. Limits
 
@@ -7777,8 +7634,8 @@ and so avoids it. A later `DeclareLoop` element that names an entity with a para
   operand (Part P). A placement that tilts the sweep planes is a miss.
 - The loft fillet (§17) takes the corner this union leaves, a line or arc meeting a trimmed circle fragment, so a root
   fillet, then a bore and an outer-cap chamfer, apply to the result.
-- Union only. Cut and Intersect, and sections with holes, are later.
-- The 2D union adds a certified `sketch` arrangement per Union: about 20 ms for 25 regions with fit splines.
+- Union only. Cut, Intersect and sections with holes are not implemented.
+- The 2D union adds one certified `sketch` arrangement per Union.
 
 ### 5. Tests
 
