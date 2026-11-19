@@ -103,13 +103,13 @@ func lengthCheckOption(v units.Value, what string, allowZero bool, set func(*con
 }
 
 // WithFitTolerance sets the largest axis distance and radius disagreement a
-// match allows; the default is 0.25 mm.
+// match allows; the default is 0.05 mm.
 func WithFitTolerance(tol units.Value) CheckOption {
 	return lengthCheckOption(tol, "fit tolerance", false, func(c *config, v float64) { c.fitTol = v })
 }
 
 // WithContactTolerance sets the gap at which two parts count as touching; the
-// default is 0.05 mm.
+// default is 0.25 mm.
 func WithContactTolerance(tol units.Value) CheckOption {
 	return lengthCheckOption(tol, "contact tolerance", false, func(c *config, v float64) { c.contactTol = v })
 }
