@@ -1,9 +1,10 @@
 # Mesh wall and undercut survey design
 
 `Verify` with `WithMinWallThickness` surveys the wall of a faceted body, the result of a mesh Boolean, by casting rays
-through its held mesh, and with `WithPullDirection` surveys its undercuts the same way (§6). The survey finds thin walls and cannot rule them out, so it proves a body too thin and never
-proves one thick enough. The sampling is plain-data code in `internal/meshthick/`, and `internal/verifyrun/faceted_wall.go`
-turns it into the wall reading the report publishes.
+through its held mesh, and with `WithPullDirection` surveys its undercuts the same way (§6). The survey finds thin
+walls and cannot rule them out, so it proves a body too thin and never proves one thick enough. The sampling is
+plain-data code in `internal/meshthick/`, and `internal/verifyrun/faceted_wall.go` turns it into the wall reading the
+report publishes.
 
 ## 1. What it measures
 
@@ -13,14 +14,13 @@ turns it into the wall reading the report publishes.
 | W2 | The sampled thickness `s` is the smallest sample. The thinnest wall of the true body is no larger than `s`, because it is the minimum over every surface point and the samples are a subset of them. |
 | W3 | The upper bound is `s + 2·MeshBound + 1e-9·max(diameter, s)`: `s` widened by the held mesh's proven displacement bound at each end of the wall, and by an allowance for the float rounding of the ray casts. |
 | W4 | The reading published as the wall is the interval from zero to that upper bound: value and bound both half of it, `Approximate`. The lower end is zero because the rays prove no wall is thick enough. |
-| W5 | The interval is below the tool exactly when the upper bound is, which is `DiagWallTooThin` and `Violating`, proven. An interval that reaches the tool straddles it, which is `DiagUndecidedWall` and `Suspect`. A body whose rays all miss, or whose mesh held no triangle, reads `DiagUnsupportedSurveyPayload` as before. |
+| W5 | The interval is below the tool exactly when the upper bound is, which is `DiagWallTooThin` and `Violating`, proven. An interval that reaches the tool straddles it, which is `DiagUndecidedWall` and `Suspect`. A body whose rays all miss, or whose mesh held no triangle, reads `DiagUnsupportedSurveyPayload`. |
 | W6 | The reading's bound is half its upper end, so the tolerance gate always reports `DiagMeasurementBeyondTolerance` beside it. That finding is `Suspect` and never hides a `Violating` one. |
 
 ## 2. What it does not claim
 
 The survey never reports a body `Sound` on the wall: a passing wall check needs a lower bound, and rays give only an
-upper one. A thick body reads `Suspect` with an undecided wall, as it did when the survey was unsupported, and a thin
-one now reads `Violating`.
+upper one. A thick body reads `Suspect` with an undecided wall, and a thin one reads `Violating`.
 
 A knife edge counts. A ray from a face near an acute edge, such as the rim where a bore meets a face at a shallow
 angle, leaves the material a short way off, so such an edge reads as a wall as thin as the ray. The wall is thin there.
