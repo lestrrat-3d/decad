@@ -61,11 +61,9 @@ general reading. "Canonical" means the +X body stays verbatim behind the canonic
 
 ### 2.1 Placement gates that stay
 
-The repository holds 114 non-test `r3.Identity()` comparisons. All but the
-eleven below sit on other routes (Loft cylinder, mirror, sweep, stitch, shell)
-and none of them reads the axis. The eleven route gates require unplaced
-records or a placed copy whose `Xform` equals its recorded motion. The general
-class is unplaced too, so they stay unchanged:
+Eleven `r3.Identity()` comparisons gate this route. Every other non-test comparison sits on another route
+(Loft cylinder, mirror, sweep, stitch, shell) and none reads the axis. The eleven require unplaced records or a
+placed copy whose `Xform` equals its recorded motion. The general class is unplaced too, so they are unchanged:
 
 - `sector_union.go` `SectorUnionMany` (`placed.Xform != ...Motion`).
 - `NextSectorUnion` (`jp.Xform != r3.Identity()`).
@@ -146,8 +144,8 @@ These sites take `PointConeSource` limits or `RecordedSection` spans. They run
 +X math on them and must decline a general record (§4.6):
 
 - `cone_from_face.go` (`RecordedSection`, `revolveMeridianCone`).
-- `loft_faces.go:128`.
-- `internal/loftfacestrim/trim.go:73,143,329`.
+- `loft_faces.go` (the toe and heel cone limits it reads).
+- `internal/loftfacestrim/trim.go` `RecordConeToe`, `ConeHeelBoolean` and `TangentHeelMeshes.ClearsResult`.
 - `internal/facetedrecord/trim_checks.go` `CapOutsideToeCone`.
 - `CapOutsideHeelCone` and `loftface.ConePullback`.
 
@@ -204,9 +202,8 @@ Two predicates exist, and nothing else selects a branch.
 
 - **Frame predicate**, on a Revolve record: `coneaxis.FrameCanonical(frame, ax)`
   is true exactly when the record's `r3.Frame` and `revolveaxis.Frame` pass
-  today's gate. That gate is frame origin
-  `0`, `U = X`, `V = Y`, `Ax` `AU = AV = 0`, `DU = 1`, `DV = 0`, and all four
-  bounds `0`. It selects the record-reading branch in `RecordedSection`,
+  the +X gate. That gate is frame origin `0`, `U = X`, `V = Y`, `Ax` `AU = AV = 0`, `DU = 1`, `DV = 0`, and all
+  four bounds `0`. It selects the record-reading branch in `RecordedSection`,
   `SpanFace`, `RootCandidates` and `PointConeSource`.
 - **Axis predicate**, on the axis value: `Axis.Canonical()` is true exactly when
   `A` equals `r3.Vec{X: 1}`. It selects the arithmetic branch in `pointcone`,
@@ -218,7 +215,8 @@ takes the record's frame, resolved axis and `AxisVec` as plain values, because
 `revolveplan.Payload`. A record that passes the frame predicate gets the
 constant `A = r3.Vec{X: 1}`; its `AxisVec` is never read. Any other record gets
 `A = AxisVec`, and it is refused unless it meets the conditions of §3.6 and
-`AxisVec` is a finite nonzero vector in the plane. A `PointConeLimit` stores the axis value of the tool record that made it.
+`AxisVec` is a finite nonzero vector in the plane. A `PointConeLimit` stores the axis value of the tool record
+that made it.
 
 Records that pass the frame predicate therefore always have `Canonical()` true,
 and every +X fixture runs both canonical branches. A record outside the frame
@@ -322,7 +320,7 @@ plane is refused (§4.1), so the exact pair above always exists.
 
 ### 3.6 Recording `A`
 
-`revolveplan.Payload` gains `AxisVec r3.Vec`. `Revolve` and the chain Revolve
+`revolveplan.Payload` has the field `AxisVec r3.Vec`. `Revolve` and the chain Revolve
 set it when all of the following hold:
 
 - The frame origin is the world origin.
@@ -429,7 +427,7 @@ canonical axis. Any other record needs `OfRevolve` and then reads:
 - `Slope = (c − c_far)/R_rim` is exact and homogeneous.
 - `c > 0` and `c_far < 0` hold as today.
 
-`PointConeLimit` gains the field `Axis coneaxis.Axis`. `PointConeSource` is
+`PointConeLimit` has the field `Axis coneaxis.Axis`. `PointConeSource` is
 the one constructor that sets it.
 
 ### 4.4 Tooth and its trims (`PointConeBoolean`, `CertifySector`)
@@ -587,7 +585,7 @@ For a canonical certificate the branch is the current code.
 
 The crossing `alpha = c/(s + k·σ)` equals the +X `a/(x + k·rho)` of the same
 geometry expressed in axis coordinates. `FactorDyadic` keeps its single
-`DySqrt` enclosure, now on `σ²`. Its point and `Q` errors are errors of
+`DySqrt` enclosure, taken on `σ²`. Its point and `Q` errors are errors of
 `p·alpha` and do not depend on the axis. `FactorRat` takes the same
 substitution.
 
@@ -730,7 +728,7 @@ angle zero. `RevolveSectionAngles` reads its radius as `R/|A|↓` too, and
 
 `revolveFarRootPointAbout` builds its generator `W + s·(E0 cos θ + E1 sin θ)`
 from the same basis, starting at the reported apex `O_r`. Each root node is then snapped to its ring vertex, and the
-measured `Snap` is charged in `localBound` as it is today. A root node's
+measured `Snap` is charged in `localBound`, as in the +X route. A root node's
 displacement is therefore covered by the ring vertex gap plus `Snap`, and needs
 no separate charge.
 
@@ -751,7 +749,7 @@ and never the result.
 
 ### 5.9 Adversarial review
 
-Each question below was checked against the sections above.
+Each answer points to the section that owns the argument.
 
 1. **Can a general record reach +X-only math?** Only through `PointConeSource`,
    `RecordedSection`, a join record or a placement. §4.4 compares axes at
@@ -1046,9 +1044,8 @@ Two kinds of digest test exist:
   Its cones include a non-positive apex, which sends `PointConeFactor` to
   `FactorRat`. The test calls `FactorRat` directly for every cone and
   `FactorDyadic` for the positive ones. `PointConeSource` refuses a
-  non-positive apex, so no public fixture reaches that branch. A coverage run
-  of the `TestSectorRouteDigest*` tests over `internal/pointcone` shows `FactorRat` is
-  never executed, so this test is the only digest that covers it.
+  non-positive apex, so no public fixture reaches that branch and this test is the only digest that covers
+  `FactorRat`.
 
 The apitest digest tests skip unless `DECAD_SECTOR_DIGEST` names a directory,
 so they do not run in CI. The fixtures they build stay covered there by the
@@ -1117,8 +1114,7 @@ any other takes the +X route (`agent-docs/revolve-loft-design.md`,
 "Coaxial cylinder Cut"). Both build the annular result in
 `buildSectorAnnularCut` and the band result in `BuildSectorBandCut`, which
 read the axis only through `sectorBoreAxis`: `xBoreAxis` holds the +X body
-verbatim, and `generalBoreAxis` the readings below. Nothing here reads a gear: the class is any join of §1 and one
-coaxial prism.
+verbatim, and `generalBoreAxis` the readings below. The class is any join of §1 and one coaxial prism.
 
 ### 9.1 Tool admission
 
@@ -1276,7 +1272,6 @@ readings, with the patch axes of §9.6.
 `SectorCylinderCut` selects the general route on the certificate's
 `General` field alone, so every +X fixture runs the +X route. `xBoreAxis`
 holds the +X ring, band crossing, span test, triangle test, patch axes and
-height verbatim,
-and `SectorBorePatches` is `SectorBorePatchesOnto` with `{1, 2}`. The digest
+height verbatim, and `SectorBorePatches` is `SectorBorePatchesOnto` with `{1, 2}`. The digest
 of §8.2, which covers the four +X bore tests, is byte-equal with and without
 the general route.
