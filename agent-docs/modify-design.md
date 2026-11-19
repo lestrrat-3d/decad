@@ -4206,7 +4206,8 @@ Route S (S-1):
   SG2. A hole 1.5 mm under the top on a 2 mm shell builds
   through the crossing reach: the cavity's top splits in two, the rim holds
   both pieces, and the volume is `5632 + 220π − 16·(25·acos 0.9 − 4.5·√4.75)`.
-  Two cuts refuse on the cavity's charge (§3.3 step 4's rules), SG6:
+  Two cuts refuse on the cavity's charge (§3.3 step 4's rules), SG6 (the two inputs below are worked examples that no
+  test pins):
   the 40×20×20 box drilled R = 3.1 along y through `(20, ·, 15.90004)`,
   top removed at 1 mm, whose dilated hole notches the cap through the
   crossing reach with a positive charge (built, its notch vertex on `y = 1`
@@ -5079,7 +5080,7 @@ Route P:
 Route E:
 
 - S1, fillet the edge along `z` at `(x, y) = (0, 0)`, `r = 2`: a `brepPayload`
-  of 8 faces, volume within its bound of `15920 − 160π`, the `y = 0` face's
+  of 8 faces, volume within its bound of `15920 + 20π`, the `y = 0` face's
   `x = 0` segment at `x = 2`, both caps carrying the arc about `(2, 2)` with
   feet `(0, 2)` and `(2, 0)`, one `fillet(k)` role on the new wall.
 - B1, chamfer the edge along `z` at `(0, 0)`, `d = 2`: `Exact` `13960`.
@@ -5122,11 +5123,11 @@ Route E:
 - Chaining: chamfer S1's edge along `z` at `(0, 0)`, then chamfer the edge
   along `x` at `(y, z) = (0, 0)` on the result → SB7. Filleting all twelve
   straight edges of S1 takes route V (Part V).
-- Consumers on the S1 fillet result: `Verify` `Sound` at the default
-  tolerance, the mesh's occupied-volume proof covering `15920 − 160π`, STEP's
-  analytic arm (the fillet wall two arcs and two lines), the undercut survey
-  listing the fillet wall under a pull along `(1, 1, 0)` and not along `z`,
-  and transformed by a translation reproducing volume and area.
+- Consumers on the S1 fillet result: its volume reads within its bound of `15920 + 20π`
+  (`TestBrepSingleYCapEdgeAfterRestatement`, the edge along `y` at `(x, z) = (0, 20)`; the edge along `z` removes the
+  same `20·r²(1 − π/4)`). No test runs `Verify`, STEP export, the undercut survey or a translation on this single-edge
+  result; those consumers are covered on loop fillets (`TestVertexBlendThreeEdgeOpenChain` for `Verify`,
+  `TestBrepLoopFilletPublicSTEP`, `TestBrepLoopFilletUndercutReadsEachPipePatch`).
 
 Displaced reading (§4.4; `apitest/revolve_shaft_class_b_blend_test.go`,
 `internal/brepmodify/displaced_blend_test.go`):
@@ -6502,9 +6503,15 @@ circle. The record does not define exact spheres there.
 | cross-drilled 40×20×20 bar, all 12 straight edges, `r=2` | 8 spheres; volume `14848 + 308π/3` |
 | rounded plate P8, top loop over radius-3 side arcs, `r=3` | 4 spheres; volume `14416 + 207π`; tessellates |
 
-The tests assert closed topology, bounded volume readings, patch kinds, and
-the cap mesh for the radius-equality cases. The near-equal trapezoid case of
-section 4 asserts a typed refusal and leaves the receiver live.
+The volume column is the hand derivation for each row. Tests assert the volume of the rows `14848 + 848π/3`
+(`apitest/brep_loop_fillet_test.go`), `47320/3 + 56π` (same file), `8322 − 14π/3 − π²/4` and `8316 − 43π/12 − π²/8`
+(`apitest/brep_partial_root_fillet_test.go`), `7920` (`apitest/chamfer_test.go`), `7880`
+(`apitest/modify_options_test.go`) and the two trapezoid wedge rows `32400 − 53/2` (`apitest/chamfer_test.go`) and
+`32400 − 53·0.75` (`apitest/modify_options_test.go`). The other volume figures (`15264 + 544π/3`, `15840 + 40π`,
+`15153 − 297π/8`, `14848 + 308π/3`, `14416 + 207π` and the trapezoid quarter-cylinder rows) are derived values that no
+test asserts. The tests also assert closed topology, bounded volume readings, patch kinds, and the cap mesh for the
+radius-equality cases. The near-equal trapezoid case of section 4 asserts a typed refusal and leaves the receiver
+live.
 
 ## Part A — Edge blend variants
 
@@ -8718,11 +8725,12 @@ from the azimuths the route places those ends at (`arcRowSteps`,
 5. The rounding. A vertex's azimuth is computed from its row's ends and its
    fraction within `16π·u` of the value the bound reads, `u = 2⁻⁵³`, and the
    half-angle form puts the step within a few `u` of itself. `σ_g` as computed
-   is within `2u·r = 2¹¹·u·τ` of the exact sagitta. The rows refuse unless
+   is within `2u·r` of the exact sagitta, `r` the profile's radius, which the row cap
+   (`maxSectionRows`) keeps within a fixed multiple of `τ`. The rows refuse unless
    certify's margin `δ ≥ 64·ulp·ρ_g` is under `τ` (`sectionRows`), so
    `τ − σ_g ≥ τ/2` gives `C_g ≥ 2·10⁻⁷`, and the azimuths' rounding moves `Δφ`
    by at most `6·10⁻⁸` of `C_g` and the term by at most `1.2·10⁻⁷` of itself.
-   That and the sagitta's `2¹¹·u·τ` lie inside the `2⁻¹⁶·(τ − σ_g) ≥ 2⁻¹⁷·τ`
+   That and the sagitta's `2u·r` lie inside the `2⁻¹⁶·(τ − σ_g) ≥ 2⁻¹⁷·τ`
    the step gives up (`stepCut`).
 
 The rows' own spacing is a choice, not a bound: `arcRows` halves a gap while
@@ -12444,18 +12452,18 @@ inside. The mirror vertex `a'` is the same.
 The result is a valid solid. Above 5.80 the outline runs along `K` into `B` with a smooth (G1) joint at `a` and `a'`.
 The floor at 5.80 is the dart top plus two crescents between `G` and `B`, each narrowing to a zero-width point at `a`.
 
-Before T1 to T4, a probe through a `go.mod` replace in a scratch copy of the gallery gave these first refusals:
+Current behaviour of the cases the table names, with the tests that assert it:
 
-| Variant | First refusal |
+| Variant | Behaviour |
 |---|---|
-| exact lever (`TestLever` with its skip removed) | `Cut`: "the operands' held facets come within the chord tolerance without provably interpenetrating deeper than it …" (`meshbool.RefuseUndecidableProximity`) |
-| notch radius widened | the cut builds on the mesh path; `Fillet`: "a blend circle does not reach an end face" (`internal/retainedblend/arc_section.go`) |
-| exact lever as two extrudes (band S with the dart, band F with the notched outline) and `Union` | `Union`: the same proximity refusal |
-| both of the above with the slot holes left out | the same refusals |
-| notch radius widened, fillet skipped | the D bore `Cut` builds on the mesh path; the gallery's edge finish refuses `ErrDegenerate`: a chamfer empties the circular wall of the corner round `K` |
+| exact lever (the fork with the notch, no, one or two oblique slot holes) | `Cut` builds a `brepPayload` through general-boolean §3 A9, volume within its bound of the closed form, one `Reflex` edge (`TestSideNotchCutTangentFork`); the mesh path alone refuses the contact at `a` and `a'` with `meshbool.RefuseUndecidableProximity`. The notch floor's arc then takes a 0.5 fillet (`TestBossRootTangentFork`). No test builds the complete lever. |
+| notch radius widened | `Cut` takes the mesh path or declines with `ErrUnsupported` (`TestSideNotchCutDeclinesObliqueCut`); no test fillets its floor arc. |
+| exact lever as two extrudes (band S with the dart, band F with the notched outline) and `Union` | not asserted by a test |
+| both of the above with the slot holes left out | the no-slot case of the first row is asserted (`TestSideNotchCutTangentFork`); the widened-notch case is not |
+| notch radius widened, fillet skipped | not asserted by a test |
 
-The last row is a gallery sizing matter, not a decad gap: a chamfer wider than the corner round `K`'s radius cannot run
-along it, in decad or in Fusion. It applies to the exact lever too.
+A chamfer wider than the corner round `K`'s radius cannot run along it, in decad or in Fusion, so a gallery edge finish
+sized that wide refuses `ErrDegenerate`. The same holds for the exact lever.
 
 ### 2. The cut refusal
 
@@ -12583,7 +12591,7 @@ runs. The rejected options:
 - O3: build T4 as one generalized C3 increment with boss-root P6, so one construction serves both gallery models.
 - O4: change the fork geometry so no tool face touches the target. `r_n + 0.02` cuts today, and the bore after it,
   but the fillet then refuses (X1, §3), and no tested geometry builds both.
-- O5: keep `TestLever` skipped. The lever and every lever test stay unbuilt.
+- O5: build no lever test. No test in this repository builds the complete lever, and none is planned.
 
 ## Part X — Perpendicular cylinder bore-mouth chamfer
 
