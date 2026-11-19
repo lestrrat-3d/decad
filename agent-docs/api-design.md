@@ -22,7 +22,7 @@ specified in `agent-docs/sweep-design.md`. The sheet body — a body that enclos
 material region — and the operations that build, fill and close one are
 specified in `agent-docs/surface-design.md`.
 
-Two design-only proposals extend operation observability without changing this
+Two companion designs extend operation observability without changing this
 contract: `agent-docs/operation-history-design.md` covers evaluator proof
 lineage, source-derived quantity calculations, and immutable execution records;
 `agent-docs/operation-diagnostics-design.md` covers structured operation
@@ -673,25 +673,14 @@ source certificate is what bounds the true patch normals
 alone does not imply a normal bound (`agent-docs/payload-verification-design.md`
 §5/§8), and no certificate details enter the public API.
 
-<!-- The NormalAt sentence is claim + pointer, which the authoring rule in
-~/.claude/docs/agent-instructions.md sanctions for a non-owning site: "One full
-derivation per why, at the owning site; every repeat becomes claim + pointer."
-Its never-restate rule bans the pointer-WITH-GLOSS shape, and no clause of spline
-§7's derivation is unpacked here — not the (u, v) root-find, not the faceted
-answer's union of held-facet certificates, not the other variants' own
-closed-form bound, not the undercut survey reading normals off the payload
-walk. Two sentences of the same claim+pointer shape already ship in this
-file: the Faceted.Bound sentence immediately above, and the
-DiagUnsupportedPairContact sentence in §8's boolean-error taxonomy, which even
-names the owner's constant. This reading of the authoring rule is the project's
-settled one. -->
+<!-- The NormalAt sentence is claim + pointer; the derivation lives in spline §7. -->
 
 A `switch` on `Surface` MUST carry a `default` — vN adds variants.
 
 ### 6.2 Supporting types
 
 The rest of the vocabulary the signatures above and below name. Shapes given here
-are load-bearing; the rest are deferred, not undecided.
+are load-bearing.
 
 **Profile measurements and provenance.** `MeasureProfile` authenticates a live
 sketch profile and returns a
@@ -751,7 +740,7 @@ whether the sheet lies wholly inside or wholly outside it, WITHOUT asserting
 which side. A solid-solid row's meaning — the two bodies do not overlap, and
 how close they come — is unchanged.
 
-The rest are deferred:
+The remaining opaque handle types:
 
 ```go
 type FeatureRef struct{ /* ... */ }    // an opaque handle to the feature that created a body or face
@@ -795,8 +784,7 @@ const (
 `Direction` — the enumerated sense a standalone extent carries — is *not* deferred:
 it is specified in full in §8.1, and declared there.
 
-The remaining topology of §2's chain, each deferred but for the one method that
-carries its weight:
+The remaining topology of §2's chain:
 
 ```go
 // Lump is a connected piece of a body — solid or sheet. Body.Lumps() returning
@@ -828,9 +816,10 @@ boundary component, such as a `Cut` by a wholly embedded tool. `Extrude` and
 open-path `Sweep` does the same. A partial `Revolve` opens its groove at the
 angular caps. Those bodies have one connected, non-void shell. The `Shell`
 operation that removes a face leaves an opening, so its inner and outer skins
-connect. `Shell` accepts the closed `WithNoOpenings()` form of
-`agent-docs/modify-design.md` Part R §9.2 and returns `ErrUnsupported` for it on every
-receiver until reach §14 rows C and D build it. Sheet shells
+connect. `Shell` accepts the closed `WithNoOpenings()` form, which builds a closed hollow
+body for a full-turn `Revolve` and a straight prism; `agent-docs/modify-design.md`
+Part R §9 and `Shell`'s doc comment name the receivers it builds and the calls it
+refuses. Sheet shells
 always report `IsVoid() == false`, even when closed
 (`agent-docs/surface-design.md` §2.2). `Stitch` refuses a closed assembly whose
 components are not proven separate, rather than publish an unrecorded cavity.
@@ -839,8 +828,7 @@ components are not proven separate, rather than publish an unrecorded cavity.
 
 An operation is a package-level function. A query is a method. This section
 owns the rule; a companion design that writes an operation as a method
-(`func (d *Document) Sweep(...)`) means the
-free function the table below names for it.
+(`func (d *Document) Sweep(...)`) means the free function of the same name.
 
 **An operation is any call that builds a body, retires a body, or registers a
 body in a document.** It is a free function, so the document and every body it
@@ -875,9 +863,8 @@ then options. An operation that takes a body reaches the document through that
 body (§6) and takes no `*Document` argument. An operation that takes no body
 (a feature built from a sketch) takes the `*Document` first.
 
-| Shipped method form | Free function |
-|---|---|
-| `Document.Sweep` over a profile or a chain | `Sweep(ctx, doc, s, sec, path, opts...)`, one generic function over `Section` (§8) |
+`Sweep(ctx, doc, s, sec, path, opts...)` is one generic function over `Section` (§8),
+for a profile or a chain.
 
 **Every operation that builds a body from a sketch takes a `ctx`, `Extrude`,
 `Revolve` over a chain included.** Each checks `ctx` at
@@ -889,8 +876,7 @@ that takes one. The build can run long: a free-form wall proves its curvature
 sign over a bounded work budget (`agent-docs/spline-design.md` §5.2), and a nonzero
 `WithTaper` builds through the draft evaluator.
 
-`Union`, `Cut`, `Intersect`, `CombineJoin`, `Stitch`, `Transform` and `Copy`
-already have this form. `Transform(ctx, b, t)` places a body, and
+`Union`, `Cut`, `Intersect`, `Stitch`, `Transform` and `Copy` have this form. `Transform(ctx, b, t)` places a body, and
 `Copy(ctx, b, WithCopyPlacement(t))` copies it under a rigid motion (§8).
 
 **A builder is not an operation.** `Linkage` is a mutable value that records
@@ -901,9 +887,7 @@ would be an operation and would follow the rule above.
 
 **New API follows the rule.** A new public entry point that builds, retires or
 registers a body is a free function. A new read is a method on the value it
-reads. The code in the root package carries the method form of every row in the
-table; each migrates to its free function in the change that updates that operation's
-companion design.
+reads.
 
 ### 6.4 The report package
 
@@ -977,13 +961,9 @@ order/ranges, polylines, holes, area and validity. For a profile returned by
 those indices and every exported field to match. It records the fresh match,
 never caller-mutable `p`. No match is `ErrInvalidProfile` (§12).
 
-A `*sketch.Profile` is freshly allocated by every `Profiles()` or
-`UnionProfiles()` call, so pointer membership cannot authenticate it. Exact
-snapshot matching preserves the profile value while obtaining a trusted copy.
-`Profile.Sketch()` still proves
-the source sketch; a different source is `ErrForeignProfile`. Either foreign
-case could otherwise lift another sketch's plane-local coordinates through
-`s`'s frame and silently place the wrong solid.
+Every `Profiles()` or `UnionProfiles()` call allocates a fresh `*sketch.Profile`, so pointer
+membership cannot authenticate one; the exact snapshot match does. A profile from another sketch is
+`ErrForeignProfile`: lifting its plane-local coordinates through `s`'s frame would silently place the wrong solid.
 
 **A *stale* profile is detected, and rejected.** A profile is a snapshot: one
 built before a later `Solve`, parameter edit or geometry change still holds
@@ -1088,17 +1068,13 @@ for `WithTaper` of any angle, zero included, on a chain. That refusal follows
 the chain's seam gates and nil-option check and precedes extent resolution and
 any commit (`agent-docs/surface-design.md` §13.2).
 
-`Sweep` infers `S` from `sec`, so no call site names the type argument. A
-profile section builds a solid, or a sheet under `WithSurfaceResult()`. A
-chain section builds a sheet, so `Sweep` returns `ErrUnsupported` for
+`Sweep` and `Revolve` infer `S` the same way. A profile section builds a solid, or a sheet under
+`WithSurfaceResult()`. A chain section builds a sheet, so `Sweep` returns `ErrUnsupported` for
 `WithSurfaceResult()` and `WithSweepTwist` on a chain, before any commit
 (`agent-docs/surface-design.md` §13.2, `agent-docs/sweep-design.md` §15.3).
 
-`Revolve` infers `S` the same way. A profile section builds a solid, or a
-sheet under `WithSurfaceResult()`. A chain section builds a sheet, so `Revolve`
-returns `ErrUnsupported` for `WithSurfaceResult()` on a chain, after the
-chain's seam gates and before the axis gates and any commit
-(`agent-docs/surface-design.md` §13.2).
+`Revolve` returns `ErrUnsupported` for `WithSurfaceResult()` on a chain, after the chain's seam gates and
+before the axis gates and any commit (`agent-docs/surface-design.md` §13.2).
 
 `LoftSections(ctx, doc, sections ...LoftSection)` carries each `Sketch` and
 `Profile` together. It admits the bounded classes in
@@ -1157,12 +1133,9 @@ a cylinder. A `nil` ctx, a `nil` body or a body of no document is
 provenance numbering are unchanged. The rule is in
 `agent-docs/loft-face-sections-design.md`.
 
-Each takes the **sketch** as well as the profile, because a `sketch.Profile`'s
-geometry is plane-local and the plane is the sketch's (§7). `p` MUST be a
-current, unaltered profile of `s`: another sketch's profile or a foreign
-boundary entity is `ErrForeignProfile`, a stale one is `ErrStaleProfile`, and a
-snapshot that does not match a fresh `s.Profiles()` result is
-`ErrInvalidProfile` (§7/§12). decad
+Each takes the **sketch** as well as the profile (§7). `p` MUST be a current, unaltered profile of `s`:
+another sketch's profile or a foreign boundary entity is `ErrForeignProfile`, a stale one is `ErrStaleProfile`, and a
+snapshot that does not match a fresh `s.Profiles()` result is `ErrInvalidProfile` (§7/§12). decad
 reads the plane through `s.Plane()` and its frame through `s.Plane().Frame()`, and
 records the plane and profile as internal `sectionrecord.PlaneRecord` and
 `momentinput.Profile` values before
@@ -1291,10 +1264,9 @@ const (
 branch. The three separate a caller's three moves: `BooleanEmpty` — the model is
 sound and the operation asked for nothing (change the geometry, or drop the
 call); `BooleanUnsupportedContact` — the model is valid but past this
-evaluator's reach (choose a construction that does not lean on that limit, or
-wait for vN); `BooleanEvaluatorFailure` — a bug to file. Mixing the
-three under one sentinel is what makes `errors.Is(err, ErrBooleanFailed)` too
-coarse to drive recovery, so the `Code` draws the line the sentinel cannot.
+evaluator's reach (choose a construction that does not lean on that limit);
+`BooleanEvaluatorFailure` — a bug to file. `errors.Is(err, ErrBooleanFailed)` is too coarse to drive
+recovery, so the `Code` draws the line the sentinel cannot.
 
 **A valid-model boolean limit is staged, not malformed.** A curved-surface or
 coplanar contact this evaluator cannot classify, and an analytic
@@ -1311,11 +1283,8 @@ coarse-chording `ErrDegenerate` on that operand — a finer chord tolerance may
 clear it — not a `BooleanError`. So `ErrDegenerate` covers BOTH an input with
 no usable geometry (its §12 meaning) AND the coarse-chording tessellation
 refusal, while the typed `BooleanError` family covers the empty result, the
-unclassifiable contact, and the evaluator-internal failure. This
-sentinel mapping fixes the test impact mechanically: a valid-contact assertion
-checks `errors.Is(err, ErrUnsupported)` where a coarser taxonomy would check
-`ErrDegenerate`, and landing those assertion changes is the implementation PR's
-work, not this contract's.
+unclassifiable contact, and the evaluator-internal failure. A
+valid-contact assertion therefore checks `errors.Is(err, ErrUnsupported)`.
 
 This is one taxonomy with `Verify` FOR A CONTACT THAT REACHES `Verify`'s
 read-only boolean: an unsupported-contact pair the boolean gives its
@@ -1331,10 +1300,7 @@ gap, no interference. The read-only analytic `OpIntersect` dispatch
 admitted coplanar prism pair's overlap outright. Neither emits a
 `DiagUnsupportedPairContact`.
 
-**What each boolean refusal leaves the caller.**
-"Choose a construction that does not lean on a tangent contact" names a move
-without naming the move, so the two refusals a modelling caller actually meets
-are stated here concretely.
+**What each boolean refusal leaves the caller.** The two refusals a modelling caller meets are stated here.
 
 **The coplanar contact.** The analytic reduction
 (`agent-docs/prism-boolean-design.md`) admits co-directional straight prisms
@@ -1426,10 +1392,8 @@ a contact on an earlier rim whose bound has outgrown the pair tolerance is
 refused, and a contact elsewhere continues. A restating operand therefore
 contributes at most the pair's chord tolerance `tol` to any rim, as a freshly
 chorded operand does, so a rim between two such facets carries at most
-`2·tol/sin θ` of its own facet pair. Where the comparison does refuse, it is geometry rather than an
-argument the caller got wrong. The booleans take no chord-tolerance parameter (§9),
-by the same decision that puts the tolerance's whole effect on the result's
-proven `Bound`. The bounds are readable rather than merely printed in the
+`2·tol/sin θ` of its own facet pair. A refusal here reflects the geometry, not a caller error.
+The booleans take no chord-tolerance parameter (§9). The bounds are readable rather than merely printed in the
 refusal: each `Vertex`, edge and face of a `Faceted` body reports its own
 bound, and `Body.Tessellate` at any tolerance the faceted body already meets
 returns a `Mesh` whose `Bound` is the largest of them, so a caller can see
@@ -2099,7 +2063,7 @@ parseable or persistent format.
 - **kind** is `edges` for an `EdgeQuery`, `faces` for a `FaceQuery`.
   (`SelectionError.Kind`'s `SelectorKind.String()` is the
   singular `edge` / `face`, naming the entity; the query prefix is plural and the
-  error's kind field singular, deliberately distinct.)
+  error's kind field singular.)
 - **preds** are the first branch's clauses in query order, `, `-separated; no
   clause renders `edges()`.
 - **branches** is one `.or(<pred>, <pred>, …)` per `Or` call, in call order,
@@ -2132,10 +2096,8 @@ with these payload forms:
   `math.Copysign(0, -1)`, is replaced with `+0.0` before formatting), then
   written as the shortest round-tripping float
   (`strconv.FormatFloat(c, 'g', -1, 64)`), so `parallel_to(0,0,1)`. The
-  normalization is load-bearing for the "equal recorded queries render
-  identically" contract: `-0.0 == 0.0`, so two value-equal vectors — say two
-  `Facing` predicates — must render the same, but `FormatFloat` writes a
-  negative zero as `"-0"`; normalizing first keeps them identical. Rendering is
+  normalization keeps equal queries rendering identically: `-0.0 == 0.0`,
+  but `FormatFloat` writes a negative zero as `"-0"`. Rendering is
   total, so an unresolved query still prints: a non-finite component reads
   `NaN` / `+Inf` / `-Inf` as that formatter writes it, and the zero vector
   reads `0,0,0`.
@@ -2156,14 +2118,11 @@ So `Faces(Planar(), Facing(z)).Exactly(1)` renders
 renders `faces(face_created_by(3:"capStart")).or(face_created_by(3:"capEnd")).exactly(2)`
 when `b`'s producer is 3.
 
-This is also why the decad code and the eventual Fusion code stay structurally
-parallel: a real Fusion script must pick edges by geometric predicate too.
-
 ## 10. Verification — the product
 
 The 3D counterpart of `sketch.Verify`. One non-mutating call; a rich report; a
 `Status` at both the body and the document level, aggregated by a fixed severity
-precedence; and one bit an agent gates on. Deliberately mirrors
+precedence; and one bit an agent gates on. It mirrors
 `sketch.VerificationReport` / `WorldVerificationReport`.
 
 ```go
@@ -2191,9 +2150,8 @@ contract pins down:
   wrong `Kind` is `ErrUnitKind`, a negative one is `ErrNegativeMagnitude`, a
   non-finite one is `ErrNotFinite` (§12) — and a `Report` is returned only when
   the verification actually ran.
-  §12 admits no alternative: a `Report.Err` field an agent could forget to read
-  is exactly the deferred health state §4 rejects in Fusion, and a `bool` is no
-  better.
+  A `Report.Err` field an agent could forget to read is the deferred health state
+  §4 rejects in Fusion, and a `bool` is no better (§12).
 - **Every bounded result the report carries is judged.** A `Measurement`, a
   `VecMeasurement` or a `Box` (§5.3) whose `Bound` is beyond the caller's
   tolerance makes the report `Suspect` — on a body or on a pair, nothing is
@@ -2217,7 +2175,7 @@ contract pins down:
 
 `agent-docs/multibody-dynamics-design.md` Part C specifies pair-contact and two-body sweep
 queries and the separate dynamics subpackage. Their source-box and vertical
-rebound slices are available; other cases remain staged.
+rebound slices are available; other cases are staged.
 
 Fusion answers **none** of a single validity verdict (with diagnostics), an
 explicit wall-survey outcome and interval (B-rep), a confirmed-undercut list
@@ -2256,11 +2214,11 @@ indices but no proof term. All accept `WithVerification` to demand a stronger
 proof and accept its refusals. An STL file from a sheet is not a solid; at
 `VerifyNone`, a solid mesh is closed but not proven free of self-intersection.
 `ThreeMF` writes a sheet as a 3MF `surface` object and a solid as a `model`
-object. See `agent-docs/format-io-design.md`. `export.GLTF` writes the same
+object (`agent-docs/format-io-design.md`). `export.GLTF` writes the same
 mesh as a glTF 2.0 file with an embedded buffer, in metres, and defaults to
-`VerifyNone` like the others. See `agent-docs/format-io-design.md`. `export.PNG` draws the mesh as an
-orthographic flat-shaded image from a `View`. See `agent-docs/png-export-design.md`. `export.DXF` writes the mesh's feature edges as
-a 2D DXF drawing with hidden edges on their own layer. See `agent-docs/dxf-export-design.md`.
+`VerifyNone` like the others (`agent-docs/format-io-design.md`). `export.PNG` draws the mesh as an
+orthographic flat-shaded image from a `View` (`agent-docs/png-export-design.md`). `export.DXF` writes the mesh's
+feature edges as a 2D DXF drawing with hidden edges on their own layer (`agent-docs/dxf-export-design.md`).
 
 `Tessellate` and every writer pass `ctx` through chording, loop-clearance
 scans, cap triangulation, mesh audits, and faceted restatement. Cancellation
@@ -2346,7 +2304,7 @@ the resulting bodies, measurements, and verification reports directly.
   displaces along the target face's normal and whose sign says which side of that
   face the sweep stops on (§8.1); `ExtrudeOpts.Taper` (`WithTaper`, §8.1),
   whose sign says which way the wall leans; and `Draft`'s angle
-  (`agent-docs/modify-design.md` Part D §10), read the same way about its neutral plane. Neither carries a `Direction` to reverse,
+  (`agent-docs/modify-design.md` Part D §10), read the same way about its neutral plane. None carries a `Direction` to reverse,
   so a negative value there is a legal intent, not an error.
 - **`ErrCardinality` takes precedence at zero matches.** A failed cardinality
   assertion is `ErrCardinality` **even when the selector matched nothing** — and
@@ -2365,11 +2323,11 @@ the resulting bodies, measurements, and verification reports directly.
 
 Assemblies (`Component`/`Occurrence` instancing and the DAG that comes with it; a
 `Container` that only groups members of one document is not one,
-`agent-docs/container-design.md`), a
-feature tree / timeline / rollback, native analytic STEP export, sheet metal, STEP, IGES
-and 3MF import, turning an imported mesh into a `Body`, GUI or view state of any kind, and
-Fusion code generation. STL and OBJ import into the separate `MeshBody` type is in
-(`agent-docs/mesh-import-design.md`).
+`agent-docs/container-design.md`), a feature tree / timeline / rollback, sheet metal
+beyond the bent strip `SheetMetal` builds, GUI or view state of any kind, and Fusion
+code generation. STL, OBJ, 3MF, IGES and STEP files import into the separate `MeshBody` type
+(`agent-docs/mesh-import-design.md`), and `SolidFromMesh` turns a closed `MeshBody` into a `Body`
+(`agent-docs/mesh-solid-design.md`).
 
 Sheet bodies themselves are **not** a non-goal — `agent-docs/surface-design.md` owns
 them. `Thicken` admits the sheet families §16.1 names and `Offset` the two

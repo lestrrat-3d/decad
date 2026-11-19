@@ -348,8 +348,8 @@ func r19Fixture(t *testing.T, control [4][2]float64) (*sketch.Sketch, *sketch.Pr
 // ways to reach it: two genuine curvature sign changes inside one span, an
 // interior cusp the coefficient fold alone would call strictly signed, and a
 // coincident first control pair whose cusp a half-open root count alone would
-// miss (spline_convexity_internal_test.go pins all three at the certificate
-// level; this pins them as BUILD refusals through the public Extrude).
+// miss (internal/freeform/spline_convexity_chain_test.go pins the cusp and
+// conflicting-curvature cases at the certificate level; this pins them as BUILD refusals through the public Extrude).
 func TestExtrudeFreeformR19RefusesTheBuild(t *testing.T) {
 	t.Parallel()
 	cases := map[string][4][2]float64{

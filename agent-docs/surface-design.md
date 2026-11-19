@@ -71,9 +71,8 @@ Ten tables are normative:
 ### 1.2 What this design names and stages
 
 Each command below builds part of its reach and refuses the rest. The second
-column names what a caller reaches today and §1.1 lists; the third names the
-refusal a caller reads for the rest, and the increment that takes it up where
-one is queued.
+column names what a caller reaches and §1.1 lists; the third names the refusal
+a caller reads for the rest.
 
 | Command | What builds | What is still staged |
 |---|---|---|
@@ -118,20 +117,17 @@ A boundary-interpolating patch fails both. Its coordinates come from a blend
 nobody stated, and its area integrand is the square root of a quartic even in
 the simplest ruled case — the patch between two straight edges that are not
 coplanar — so §8's rule that a sheet's `Area` is its faces' areas from the
-engine that already computes each one has no engine to name. The tree already
-shows this: `bounds_wall_area_internal_test.go`'s `convergedRuledArea` reaches a
-ruled patch's area only by sweeping a numerical integral at increasing
-resolutions until it settles, and it is used only to VALIDATE a bound, never to
-publish a reading. A quantity the repository can reach no other way is a
-quantity with no closed form here.
+engine that already computes each one has no engine to name. A ruled patch's area is
+reachable only by a numerical integral swept at increasing resolutions until it
+settles, and a quantity the repository can reach no other way has no closed
+form here.
 `agent-docs/spline-design.md` cannot state the missing rule either: its §2 admits
 whole recorded entities alone and mints no curve, and its §7 fixes both
 free-form surface variants as the exact extrusion or revolution of a recorded
 curve — a one-parameter rigid motion that GENERATES the surface. A boundary
 names no such motion (`agent-docs/spline-design.md` §7.1).
 
-**What of the two intents a caller can already reach**, so that the refusal
-costs no move: a closed PLANAR boundary is `PatchProfile` or `PatchEdges`
+**Two intents a caller can already reach** without the fitted patch: a closed PLANAR boundary is `PatchProfile` or `PatchEdges`
 (§5); a ruled wall between two recorded closed sections is `Loft` under
 `WithSurfaceResult` (Table W), whose wall is flat triangles between proven
 stations rather than a fitted surface; the same between two open chains is
@@ -142,12 +138,11 @@ names once those are subtracted is exactly the fitted non-planar patch, which
 is what this paragraph refuses. `PatchEdges`'s own non-planar chain is the same
 refusal reached from the other side, and R6 carries it.
 
-**What would have to exist**, recorded so nobody re-derives it: a surface the
+**What would have to exist:** a surface the
 boundary DETERMINES rather than one a blend picks, with closed forms for its
 coordinates, its normal, its area and its self-intersection test.
 
-**This is NOT an upstream ask, and filing one would go to the wrong place.**
-Every ask in `agent-docs/spline-design.md` §9 is an ask to `sketch`, and `sketch` is a
+**This is not an upstream ask.** Every ask in `agent-docs/spline-design.md` §9 is an ask to `sketch`, and `sketch` is a
 2D constraint engine that publishes no surface at all — no change to it reaches
 either command. The change that would unblock these two is a new exact surface
 kernel inside decad, which is a different engine rather than an increment of
@@ -157,8 +152,7 @@ this one.
 
 **No shipped operation's result depends on which side of a sheet the caller
 meant while leaving the caller no way to say so.** Reversing a sheet's
-published normals and co-edge senses therefore closes no gap, and no increment
-takes it up. Every operation that could read a side either reads none, or takes
+published normals and co-edge senses therefore closes no gap, and nothing is queued for it. Every operation that could read a side either reads none, or takes
 the side as an argument:
 
 - `Thicken` takes `ThickenSide` and changes no source face (§16.1). §16.4 owns
@@ -405,7 +399,7 @@ computed.** The walls' two rim levels come from the sketch plane and a stated
 coordinate from the same recorded profile — so each rim edge and its matching
 patch edge hold the same `float64` values with a zero bound, which is exactly
 what Table J admits. A box built with a `ToFace` stop instead of a stated
-distance does not close in this increment, because the stop's level is
+distance does not close, because the stop's level is
 computed and carries a bound (§6.2).
 
 ### 3.1 `Free()` — the free-edge predicate
@@ -527,8 +521,7 @@ boundary carries them. Nothing is integrated twice and nothing new is proven.
 each chain planar and simple **independently**, and returns a new body
 carrying `b`'s faces plus one new planar face per chain. `b` is retired.
 
-**This is a one-time amendment to the original one-chain design: the
-selection must partition into one or more closed chains, each proven planar
+**The selection must partition into one or more closed chains, each proven planar
 and simple on its own, rather than being exactly one closed chain.** A
 one-chain rule makes the operation nearly unreachable on the sheets it was
 written for: a surface-extruded plate's eight free edges are two congruent
@@ -551,14 +544,7 @@ Four gates, in this order, and each is reject-only:
    every vertex the selection reaches must have degree exactly 2. A
    2-regular (multi)graph is a disjoint union of cycles, so this single
    condition is what proves the partition exists, not merely a necessary
-   symptom of it. It corrects two things the original one-chain wording got
-   wrong: a single CLOSED edge is a complete chain on its own and is the
-   commonest thing anyone patches, which "shared with exactly two other
-   selected edges" wrongly refused (a whole circle shares its vertex with no
-   OTHER selected edge at all); and a two-edge chain of two arcs over one
-   vertex pair gives each of the two vertices ONE other edge, which the
-   degree-over-all-uses reading admits and the "two other edges" reading did
-   not. Any vertex at a degree other than 2 is `ErrDegenerate` (R5).
+   symptom of it. It admits two shapes a "shared with exactly two other selected edges" reading would refuse: a single CLOSED edge is a complete chain on its own (a whole circle shares its vertex with no OTHER selected edge at all), and a two-edge chain of two arcs over one vertex pair gives each of the two vertices ONE other edge. Any vertex at a degree other than 2 is `ErrDegenerate` (R5).
 3. **Each chain is planar, proven exactly.** Every chain vertex lies on one
    plane, decided over the exact rational lift of `internal/proof/dyadic.go` — a zero
    determinant, never a residual against a fitted plane. Three or more chain
@@ -677,7 +663,7 @@ or circle, the axis's own anchor and direction bounds, the end angle's
 certified sine and cosine and the placement as exact leaves, and
 `revolvemesh.CircleGap` bounds the whole image circle against the held one.
 A coil stamps it on both cap rims of every arc and circle
-(`coilRimCurveBound`, `agent-docs/helix-design.md` Table CB): the recorded circle
+(`rimCurveBound`, `internal/coilshell/rim.go`; `agent-docs/helix-design.md` Table CB): the recorded circle
 carried through the screw motion at the cap's turn and the exact denoted
 map, its centre, its two in-plane axes and its radius as exact leaves. A
 coil's rim vertices carry their station bound `β`, so `PatchEdges` refuses
@@ -756,8 +742,8 @@ for two solids.
 
 **A free edge of one operand joins a free edge of another when, and only when,
 both denote the same curve over the same range, proven from the records, or
-the document's gap tolerance admits the pair (the amendment below).** Every row must hold. A pair failing any row does not
-join, and both edges stay free — it is not an error (§6.3).
+the document's gap tolerance admits the pair (the amendment below).** Every row must hold. A pair failing any row
+does not join, and both edges stay free. That is not an error (§6.3).
 
 **Table J — free-edge join admission**
 
@@ -771,11 +757,10 @@ join, and both edges stay free — it is not an error (§6.3).
 
 **Table J amendment — J5 for a `Line3`, and for a `Circle3` or `Arc3` with a
 proven curve bound.** A `Line3` answers J5 **vacuously**: a straight edge's
-whole geometry lives in its two vertices, which J4 already compares, so J3 states
-nothing further about the variant itself to prove, and J5's vertex half is
-exactly what `stitchrecord.VertexTable`'s own merge rule enforces (`internal/stitchrecord/plan.go`)
-— two vertices merge into one table class only when both carry a zero bound,
-so a shared class already proves J4 and J5's vertex half together.
+whole geometry lives in its two vertices, which J4 already compares, so J3 has
+nothing further to prove about the variant. J5's vertex half is what the merge rule of
+`stitchrecord.VertexTable` enforces (`internal/stitchrecord/plan.go`): two vertices merge into one table class
+only when both carry a zero bound, so a shared class proves J4 and J5's vertex half together.
 
 `Circle3` and `Arc3` carry `Center`, `Axis` and `Radius` with no bound field, but
 the edge carries one: `Edge.CurveBounded` and `Edge.CurveBound` bound how far the
@@ -843,8 +828,7 @@ whole (R7) rather than leaving individual pairs unjoined. A whole `Circle3` is t
 exception: its zero-bound arm needs equal axes, so an opposite-axis pair stays
 unjoined, because the weld derives coedge directions from vertex classes alone.
 
-**J5 is the load-bearing row, and it is what makes this sound rather than
-merely strict.** Bit-identical held coordinates prove the two edges' *held*
+**J5 is what makes the join sound rather than merely strict.** Bit-identical held coordinates prove the two edges' *held*
 data equal; they prove nothing about the two *true* curves when each is only
 known within its own bound. Two edges each bounded by 1e-6 mm may hold the
 same coordinate and lie 2e-6 mm apart, and welding them would claim a meeting
@@ -863,7 +847,7 @@ first; the CURVE token below proves the second, and neither discharges the
 other.
 
 A `curveToken` (`internal/denotation/token.go`) is minted once per denoted curve or point by
-the evaluator that first builds it — today a straight prism's own rim edge
+the evaluator that first builds it: a straight prism's own rim edge
 and rim vertex (`internal/prismrecord/build.go`, minted fresh per edge and per vertex, with
 no `sectionDelta == 0` precondition: unlike coplanarity, an identity claims
 nothing about the section itself) and a revolve's own internal junction edge
@@ -885,8 +869,8 @@ the same document-local counter, which never repeats and never resets.
 
 **The certificate admits; J3/J4's bit-identical comparison stays a
 reject-only guard layered on top of it, and bit-identity alone never
-admits.** `stitchrecord.VertexTable.classOf` (`internal/stitchrecord/plan.go`) gains a SECOND merge
-route beside the existing zero-bound one: two vertices with the bit-identical
+admits.** `stitchrecord.VertexTable.classOf` (`internal/stitchrecord/plan.go`) has a SECOND merge
+route beside the zero-bound one: two vertices with the bit-identical
 held key that also carry an equal non-zero token merge into one class too,
 whatever bound either carries — narrowed by the same bit-identical key the
 zero-bound route already requires, so a token match at a DIFFERENT held
@@ -901,7 +885,7 @@ would let a token match alone admit a pair whose HELD geometry disagrees,
 which is exactly the tolerant admission this design refuses (`CLAUDE.md`'s
 reject-only rule; `TestStitchNonzeroBoundRimStaysFreeAgainstExactPatch` is
 the permanent proof that bit-identity alone never admits, and it stays green
-unchanged by this certificate).
+with the certificate in place).
 
 A rebuild from a record — `Transform`/`Copy` re-evaluating a
 straight prism or a revolve from `prismrecord.Build`/`revolveplan.Build`
@@ -1000,7 +984,7 @@ assembled triangle set**, and its bound is zero only when every held vertex
 is exact AND that exact rational is itself representable in `units.Value`'s
 `float64` magnitude — never unconditionally. Every held vertex is exact
 whenever every welded vertex CLASS carries a zero bound, which is every case
-this evaluator admitted before the CURVE certificate (§6.2's amendment): the
+this evaluator admits without the CURVE certificate (§6.2's amendment): the
 one rounding `Volume` then ever carries is the single publication step,
 `Exact` exactly when the published number IS the sum (the box's 60000 mm³, a
 small integer, always is), `Approximate` with a proven bound otherwise (a
@@ -1010,10 +994,10 @@ representable in cubic millimetres to the last bit).
 **A weld the certificate admits changes what the triangle set's own vertices
 are held to be, and `Volume`/`Centroid` charge exactly that.** A welded class
 the certificate proves coincident by identity, rather than by a proven-zero
-bound, is no longer zero-bound itself — the triangle set the tetrahedron sum
+bound, is not zero-bound itself, so the triangle set the tetrahedron sum
 runs over is only within that class's own bound of the body's true vertices,
-never `Exact` regardless of what the exact-rational sum over the HELD
-vertices happens to round to. `stitchrecord.Build` charges this as
+never `Exact`, whatever the exact-rational sum over the HELD
+vertices rounds to. `stitchrecord.Build` charges this as
 `massDelta`, `sweptVolumeAllow(massDelta, areaUpper)` widening the same term
 a PLACEMENT's own rounding already widens (`delta`) rather than a second,
 parallel proof: `massDelta` is `delta` further widened by the largest bound
@@ -1027,14 +1011,13 @@ over their own publication rounding, `Bounds` needing nothing further since
 `stitchrecord`'s `bounds` already inflates each operand's own box by its own `Bound`.
 
 **A curved face's flux term is not a tetrahedron sum**, and a per-surface
-closed-form flux integral over an arbitrary trimmed analytic patch is its own
-piece of work. §14's increment 3 lands `Plane`, `Cylinder`, `Cone`, `Sphere`
-and `Torus`. Together they give a second admission rule beside the
+closed-form flux integral over an arbitrary trimmed analytic patch exists only for
+`Plane`, `Cylinder`, `Cone`, `Sphere` and `Torus`. Together they give a second admission rule beside the
 tetrahedron sum's: **every face is either a `Plane` bounded entirely by
 `Line3` edges (the tetrahedron path, unchanged), or a variant with a landed
 flux arm, and every face carries a zero `normalBound`, and every revolve
 face's tag is exactly its record.** `internal/stitchrecord/flux.go` owns the flux arms and
-the tag gate (below), `stitchrecord.RuleSAdmits` owns the second rule below.
+the tag gate (below), and `stitchrecord.RuleSAdmits` owns Rule S (below).
 
 **The `Cone` arm needs no general trimmed-boundary contour sum**, for the
 identical reason `Plane` and `Cylinder` do not: this evaluator's own scope
@@ -1069,7 +1052,7 @@ every angle, not only the degenerate ones, because `conservativeValueError`'s
 structural bound on a `Sin`/`Cos` result is wider than the result itself.
 So a nonzero `Radius` refuses (`ErrUnsupported`, R8) rather than publish an
 apex this evaluator cannot bound, exercised at a hand-built internal
-fixture. `coneApex` separately refuses a degenerate `HalfAngle` (`0`, or a
+fixture. `stitchflux.ConeApex` separately refuses a degenerate `HalfAngle` (`0`, or a
 non-finite one caught one layer up by `units.Value.In`) regardless of
 `Radius`, since no real `wallCone` ever carries one. The first-moment
 sibling needs `tan²β` too, but reads it from the two rims' own radii and
@@ -1173,7 +1156,7 @@ own circumference or a face's own area, a torus's two rims and its own
 proven area do not determine `Major` and `Minor` independently even
 together — the identical ambiguity above. So this arm reads
 `Torus.Major`/`Torus.Minor` from the tag directly, gated on
-`torusAxisIsCoordinateAligned` (the axis is exactly a signed coordinate
+`stitchflux.AxisIsCoordinateAligned` (the axis is exactly a signed coordinate
 vector, and `Center` sits exactly on it through the world origin) — the one
 condition under which that read carries the identical zero bound
 `stitchflux.CircleRadius`'s own doc comment names for the other radius fields'
@@ -1182,7 +1165,7 @@ from `Center` (`boundedDot`, EXACT under an axis-aligned `Axis`) are checked
 against `±Minor` EXACTLY — never a tolerance, since a small residual proves
 nothing (CLAUDE.md's own rule) — which is what proves `sinφ = ∓1` and so
 `cosφ = 0`, `φ = ±π/2` EXACTLY, a pure algebraic consequence of the check
-rather than a measurement of an angle. `torusFaceFluxAndMoment`'s own doc
+rather than a measurement of an angle. `stitchflux.TorusFaceFluxAndMoment`'s own doc
 comment carries the closed forms this gate makes reachable,
 
 	K_F = 3·π²·Major·Minor² + 4·π·Minor·(Major² + Minor²)
@@ -1196,11 +1179,10 @@ own vector area is the zero vector, and `flux_F` is exactly `K_F` for every
 anchor.
 
 **`topo.Face.NormalBound` is nonzero exactly for a cap-blend band patch**
-(topology.go's own field doc): the face is a ruled surface and the `Cone` or
+(`topo.Face.NormalBound`'s own field doc, `internal/topo/face.go`): the face is a ruled surface and the `Cone` or
 `Plane` it publishes is that surface only to within a measured departure.
 Integrating a closed form over the tag would be unsound for such a face, so
-every admitting arm — the tetrahedron path included, not only the new flux
-arms — requires a zero `normalBound`. An `Unstitch`ed fillet or chamfer face
+every admitting arm, the tetrahedron path included, requires a zero `normalBound`. An `Unstitch`ed fillet or chamfer face
 re-stitched into a closed set refuses on this gate alone (§15's T38).
 
 **A revolve face is admitted only where its tag IS the surface its record
@@ -1243,16 +1225,14 @@ apex `o + W·z_a` from its denoted surface and widens every apex coordinate
 and the moment (§15's T212). A stitch's own placement is still `delta`.
 
 **The split is "`Plane` bounded entirely by `Line3`" versus everything
-else, never "planar versus curved".** The old wording ("all faces planar")
-was already wrong for a reachable shape: a `Plane` face bounded by a
+else, never "planar versus curved".** A `Plane` face bounded by a
 `Circle3`/`Arc3` edge triangulates, under the tetrahedron path's own
 polygon-from-coedge-start-vertices construction, to a boundary that drops
-the arc's own bulge. No construction reaching `Stitch` today puts such a
+the arc's own bulge. No construction reaching `Stitch` puts such a
 face through that path without ALSO putting a genuinely curved surface
-elsewhere in the same closed set (which already refused before
-triangulation), so the shape was latent rather than live — closed here
-regardless, by `stitchrecord.FaceIsTetrahedronEligible`'s own edge-kind check
-(`internal/stitchrecord/flux.go`), rather than left for a future fixture to discover it live.
+elsewhere in the same closed set, so no fixture reaches the shape.
+`stitchrecord.FaceIsTetrahedronEligible`'s own edge-kind check
+(`internal/stitchrecord/flux.go`) refuses it regardless.
 
 **Rule S — the construction-proof gate a curved closed set needs, since the
 reused crossing audit cannot run on one.** That audit (this section's own
@@ -1314,11 +1294,10 @@ chain's own edge set, never a proper subset of it: a receiver whose end
 holds more than one disjoint free-edge loop — an annular profile's inner and
 outer rims at one level — proves nothing about the WHOLE end's
 non-self-intersection from patching only one of them, so admitting on a
-subset would be unsound. Only `prismPayload` mints level tokens today, so
+subset would be unsound. Only `prismPayload` mints level tokens, so
 Rule P admits a `PatchEdges`-capped surface-extruded tube's rims and nothing
-wider yet: a loft, sweep or revolve receiver's own `PatchEdges`-capped sheet
-stays undecided until a later increment mints a level token for it too, as
-does a chain a SECOND `PatchEdges` call selects from an already-patched
+wider: a loft, sweep or revolve receiver's own `PatchEdges`-capped sheet
+stays undecided, as does a chain a SECOND `PatchEdges` call selects from an already-patched
 body — `patchchain.copyFacesUnder` does not propagate a level token onto the
 copies it mints, so nothing but the receiver's OWN first-hand rim ever
 carries one.
@@ -1327,7 +1306,7 @@ carries one.
 every arm.** Rule S proves non-self-intersection; it says nothing about
 whether the faces and edges meeting at one VERTEX stay in one connected
 piece, which `stitchrecord.CheckClosure`'s own directed-edge parity leg does not
-ask either (agent-docs/surface-design.md's own record: a profile that touches its
+ask either (a profile that touches its
 revolve axis at more than one isolated point can pinch a revolved boundary
 at those points, non-manifold there even though the parity leg and Rule S
 both pass; two otherwise-unconnected stitched bodies that share exactly one
@@ -1348,7 +1327,7 @@ meeting at the shared vertex stay in one connected piece — the vertex-link
 audit is the only leg standing between that shape and a falsely published
 solid. The curved arm's own reachable fixtures still cannot trip it, for
 two different reasons depending on the surface kind. Every admitted
-`Plane`/`Cylinder`/`Cone`/`Torus` shape this increment's own scope reaches
+`Plane`/`Cylinder`/`Cone`/`Torus` shape reachable today
 stays strictly clear of the revolve axis — a `Cone` wall's own scope
 restriction (the paragraph above) admits only two full-circle rims at two
 distinct, provably positive radii, never a rim collapsed onto the axis, and
@@ -1366,10 +1345,9 @@ just as safe, since a sphere closing at two ordinary poles has no pinch to
 catch in the first place. A boundary pinch at an isolated INTERIOR point,
 which needs a generatrix that touches the axis at a point other than its
 own endpoint to produce, stays out of reach on the curved arm regardless
-of surface kind. The leg stands as a proven-safe backstop for a curved
-fixture whose generatrix touches the axis at an interior point, not a case
-any of this increment's own curved tests can observe firing — the
-all-planar T76 fixture above is what observes the leg firing at all.
+of surface kind. The leg is a backstop for a curved
+fixture whose generatrix touches the axis at an interior point. No curved
+test observes it firing; the all-planar T76 fixture above does.
 
 **What is proven, and what is not, for a curved closed set.** Closure (the
 directed-edge parity leg) and manifoldness at every vertex (the hoisted
@@ -1384,10 +1362,10 @@ reused rather than re-derived.
 sheet validity audit: a stitched solid's triangulated, exactly welded face set
 is exactly this audit's input, but a surface-extruded sheet's curved walls
 are not, and §9.1 reads their recorded topology directly rather than
-chording them into one. §9.1 does gain one new admission, though: a
+chording them into one. §9.1 admits leg 4 for one stitch case: a
 `stitchPayload` whose own crossing audit ran and passed — closed or open
-alike — admits leg 4 the same way a proven-simple surface-result prism does,
-which is the open-case decision two paragraphs below.
+alike — admits leg 4 the same way a proven-simple surface-result prism does
+(the open-case decision in the next paragraph).
 
 **The crossing audit runs on the OPEN case too, not on the closed case
 alone.** A clean stitched sheet — every welded edge proven contact-clean —
@@ -1456,20 +1434,20 @@ shape no caller asked for.
 **`Unstitch` inverts `Stitch` exactly where `Stitch` reaches.** Every edge
 `Unstitch` frees was welded from a proven-coincident pair, so Table J
 re-admits every one of them and re-stitching the results reproduces the body
-— now true for a BOUNDED weld too, not only an exact one, because
+— for a BOUNDED weld as well as an exact one, because
 `stitchrecord`'s `copyFaceUnder` propagates the CURVE half of the shared-denotation
 certificate (composing the applied motion) rather than dropping it, so the
 second `Stitch`'s own certificate route re-admits exactly the pair the
 original build already proved coincident (§6.2's amendment, §15's T42).
 
-**A revolve's own internal junction weld now round-trips too, closing back
+**A revolve's own internal junction weld round-trips too, closing back
 to what the never-unstitched sheet itself already published — its own
 free-edge shape, not the whole boundary.** `internal/revolveplan/build.go` mints a curve
 token for a junction edge and its shared vertex (the boundary an internal
 `Circle3`/`Arc3` shares between two adjacent side faces before Unstitch ever
 splits them), so `Unstitch` then `Stitch` re-admits that pair on the
 certificate route (`sameCurveVariant`'s own bit-identical guard) exactly as
-it always could for a straight prism's own `Line3` rim. A revolve's SEAM —
+it does for a straight prism's own `Line3` rim. A revolve's SEAM —
 its boundary copy at `phi0`/`phi1`, a partial revolve's own free rim — mints
 no token and never had a partner to weld against, before or after the round
 trip, so it stays free either way: the round trip closes what was welded
@@ -1493,8 +1471,8 @@ geometry of its own — so `normalBound` (how far that surface departs from
 that tag) and `AxialDelta` (that same tag's own displacement along that same
 normal) stay exactly as true of the copy as they were of the source.
 `hasAxialDelta` and `normalBound` copy verbatim; `Unstitch`'s public
-call always places under the identity transform (`Unstitch`), so a
-verbatim copy is correct for every call the public API makes today.
+call always places under the identity transform, so a
+verbatim copy is correct for every public call.
 `unstitchPayload.Placed`'s own replay under a composed, non-identity
 transform additionally widens `AxialDelta` by `absSumUpper` against the
 placement's own proven displacement, the same treatment the vertex bound and
@@ -1552,19 +1530,16 @@ tightest one this evaluator could in principle prove. So an unplaced curved
 face's box still reads `Exact` with a zero bound whenever the unplaced
 receiver's own box did: that claims no further widening is needed to stay
 sound, never that the box is this one face's tightest possible reading. A
-future increment that wants to say "sound but not tight" for a `Box` needs a
-new field to say it with. This is the one place in this design where `Exact`
+statement of "sound but not tight" would need a new `Box` field. This is the one place in this design where `Exact`
 does not imply tight, and it is a limit of `Box`'s own shape, not of this
-evaluator: recorded here rather than left for a reader to discover by
-surprise.
+evaluator.
 
 ## 7. Table R — refusals and their sentinels
 
 Every refusal is at the call, before any commit; the document and every
-operand are unchanged. No new sentinel is introduced: each row lands on one
-of `agent-docs/api-design.md` §12's existing vocabulary, and the distinction the
-caller acts on is the one that vocabulary already draws — `ErrDegenerate` is
-input with no usable geometry, `ErrUnsupported` is this evaluator's reach.
+operand are unchanged. Each row uses a sentinel from `agent-docs/api-design.md` §12.
+The caller acts on its distinction: `ErrDegenerate` is input with no usable
+geometry, `ErrUnsupported` is this evaluator's reach.
 
 **Table R — refusals**
 
@@ -1594,7 +1569,7 @@ input with no usable geometry, `ErrUnsupported` is this evaluator's reach.
 | R22 | `Revolve` handed a chain with both free ends on the resolved axis, or an on-axis free end whose incident walk lies along the axis | `ErrUnsupported` |
 | R34 | `Sweep` over a chain along a composite path outside `agent-docs/sweep-design.md` §15.8's class (Table SC row SC7) | `ErrUnsupported` |
 | R35 | `LoftChain` whose two recorded planes are not exactly parallel, or whose to-plane origin does not lie strictly on the from-plane's positive side (`agent-docs/loft-design.md` §16.2, Table SL row SL5) | `ErrUnsupported` |
-| R36 | `LoftChain` over a curved correspondence, before the increment that states each computed station's own side (`agent-docs/loft-design.md` Table SL row SL7) | `ErrUnsupported` |
+| R36 | `LoftChain` over a curved correspondence, because no side is yet stated for each computed station (`agent-docs/loft-design.md` Table SL row SL7) | `ErrUnsupported` |
 | R24 | `Thicken` outside §16.1's seven sheet families, on a solid or unrecorded sheet, or on a receiver outside its admitted section class | `ErrUnsupported` |
 | R25 | `Thicken` with a wrong-kind, non-finite, negative or zero thickness | `ErrUnitKind` / `ErrNotFinite` / `ErrNegativeMagnitude` / `ErrDegenerate`, respectively |
 | R26 | `Thicken`'s offset or assembled section drops a feature, cannot close a join, crosses or touches itself or the source boundary, fails strict nesting, or has an undecided offset audit | `ErrUnsupported` |
@@ -1611,7 +1586,7 @@ input with no usable geometry, `ErrUnsupported` is this evaluator's reach.
 | R41 | `Offset` on a retired receiver | `ErrRetiredBody` |
 | R43 | `Thicken` on a revolve sheet or a chain revolve shell whose axis is not stated exactly along a recorded plane axis, whose swept offset has no proven strictly positive radius from that axis over the whole interval, or whose assembled section leaves the axis side undecided (§16.5, §16.7) | `ErrUnsupported` |
 | R44 | `Thicken` on a chain-fed sheet holding more than one recorded walk, carrying a nonzero section displacement, or holding a walk outside §16.6's axis-parallel right-angle class | `ErrUnsupported` |
-| R45 | A chain `Extrude` or a chain `Sweep`'s tessellation or export over a chain holding a curved (`CircleSeg`/`ArcSeg` fragment) or free-form wall, before the increment that chords that wall too | `ErrUnsupported` |
+| R45 | A chain `Extrude` or a chain `Sweep`'s tessellation or export over a chain holding a curved (`CircleSeg`/`ArcSeg` fragment) or free-form wall, because no mesh chords that wall yet | `ErrUnsupported` |
 | R46 | `PatchEdges` chain holding a circular edge whose curve bound could not be proven (a cap copy at a sweep end with no denotation, a bound not below half the radius), so the new face has no proven area (§5.2) | `ErrUnsupported` |
 
 R6, R8, R10 and R20 are `ErrUnsupported` rather than `ErrDegenerate` on
@@ -1626,16 +1601,13 @@ same reason: an inconsistent assembly is the problem, not this evaluator's
 reach. R19 joins R11, R15 and R17: a body this evaluator did not build is a
 different operation's receiver, not a later version of this one.
 
-R21 reuses the four seam sentinels rather than minting chain-specific ones.
-Each already names a CAUSE — a foreign source, a stale snapshot, a failed
-authentication, a range this seam cannot record exactly — and the caller's
-repair for each is identical whether a profile or a chain carried it, so a
-parallel set would double the branches a caller writes while every branch's
-move stayed the same (§12 widens each sentinel's stated cause to name both).
+R21 reuses the four seam sentinels. Each names a CAUSE — a foreign source, a
+stale snapshot, a failed authentication, a range this seam cannot record
+exactly — and the caller's repair is the same whether a profile or a chain
+carried it (§12 widens each sentinel's stated cause to name both).
 R29 is `ErrUnsupported`; its pair-sharing-no-generator case is permanent
 (`agent-docs/surface-intersection-design.md` §4). R30 joins R5, R7 and R9 as
 `ErrDegenerate` when a tool separates nothing.
-
 
 R22, R34, R36 and R45 are `ErrUnsupported` and STAGED: each names real
 geometry, and each waits on a topology build rather than on a different
@@ -1643,11 +1615,11 @@ operation. R43 and R44 are `ErrUnsupported` and NOT staged in that sense:
 each names a receiver whose own geometry the proof cannot decide — an axis
 whose re-expression rounds, a swept offset that reaches the axis, a section
 displacement no exact-generation gate can hold — so the caller's move is to
-change the model rather than to wait for a later increment (§16.5 to §16.7).
+change the model (§16.5 to §16.7).
 R35 is `ErrUnsupported` and NOT staged in the same sense: the ribbon
 between two non-parallel open walks exists, and what this evaluator lacks is a
-stated positive side for it (`agent-docs/loft-design.md` §16.2), which is a reach
-boundary its own §16.6 names rather than a build waiting in a queue. The one
+stated positive side for it (`agent-docs/loft-design.md` §16.2), a reach
+boundary its own §16.6 names. The one
 refusal in §13 that is permanent has no Table R row at all, because the
 compiler carries it: `PatchProfile` takes a `*sketch.Profile`, and
 `WithSurfaceResult()` implements no chain option tier — `ChainLoftOption`
@@ -1673,9 +1645,8 @@ R37, R38 and R39 take `ErrUnsupported` for the reasons R24, R26 and R27 take
 it: a receiver family this evaluator holds no recorded generator for, a
 construction it cannot prove, and a value it cannot generate exactly are each
 this evaluator's reach rather than geometry with
-no usable shape. R40 and R41 restate R25 and R28 for the second entry point
-rather than widening either row, so a caller reading one refusal reads both the
-same way.
+no usable shape. R40 and R41 restate R25 and R28 for `Offset`,
+so a caller reads both entry points the same way.
 
 ## 8. Measurements
 
@@ -1688,16 +1659,15 @@ same way.
 
 **`Volume` and `Centroid` refuse a sheet by kind, not by soundness.** On a
 solid, `ErrNotSolid` reports a defect (`IsSolid()` false on a `BodySolid`
-body); on a sheet it reports a category. `Kind()` is what distinguishes them,
-which is §2.1's whole argument, and `agent-docs/api-design.md` §6's rule that
+body); on a sheet it reports a category. `Kind()` distinguishes them
+(§2.1), and `agent-docs/api-design.md` §6's rule that
 `volume == 0` must never mean both "empty" and "not a solid" is what makes
 the error the right shape in both cases.
 
 **A sheet has no area centroid in this design.** The centroid of a region and
 the centroid of a surface are different quantities, and adding a second
 `Centroid` meaning on the same method would be exactly the overloaded
-answer §4 of the core rejects. A later design may add a separate reading; this
-one does not.
+answer §4 of the core rejects. No separate reading exists.
 
 Every reading a sheet carries is judged by the tolerance gate exactly as a
 solid's is (`agent-docs/verification-design.md` §2, §5). That gate's reference
@@ -1781,8 +1751,10 @@ proof only while the profile and axis are unchanged; otherwise it scans the
 recorded profile again at zero. A revolve build calls
 `revolveplan.ResolveAxisSide`, whose `revolveaxis.AuditProfileAxisContact`
 refuses a free-form segment when `Frame.RadialLower` is not positive, so this leg adds no free-form gate of its own. A partial-turn revolve sheet, or one whose radial minimum is not proven
-clear of the axis, earns no such proof: the fourth leg has nothing to stand
-on, which is undecided, not a violation. Any other construction earns no
+clear of the axis, earns no such proof: the fourth leg is undecided, not a violation. A one-span straight sweep, a chain-fed prism ribbon, a one-span straight chain
+sweep and a chain loft ribbon earn it likewise (`sweeprecord.Payload.ProvesSimple`,
+`chainrecord.Payload.ProvesSimple`, `sweeprecord.ChainPayload.ProvesSimple`,
+`loftrecord.ChainPayload.ProvesSimple`). Any other construction earns no
 proof either, for the same reason, EXCEPT a `bodyPatchPayload` that admits
 under §6.4's Rule P: the identical `topo.ProvesSimple` predicate serves
 both `Stitch` and `Verify`, so a `PatchEdges`-capped sheet that closes its
@@ -1803,10 +1775,10 @@ question about material — how thin a wall is, how tight a concave feature is
 requested survey needs a proven solid"; §12 widens its stated cause to
 include a sheet asking either one, so a caller branching on it already
 handles this. The undercut survey is different: draft analysis on an
-oriented sheet is a real question — Fusion answers it — and §14's increment 3
-takes it up over a surface-extruded prism sheet's positive side, the one
+oriented sheet is a real question — Fusion answers it — and §14 Table D row 3
+answers it over a surface-extruded prism sheet's positive side, the one
 sheet family whose walls carry every input the existing reader needs
-(§9.1's Table V row above). A sheet whose family the survey cannot yet
+(Table V's `Undercut` row). A sheet whose family the survey cannot yet
 answer reads `CoverageUnavailable` through `DiagUnsupportedSurveyPayload`
 rather than `DiagSurveyPrerequisite` — it is not blocked on having no
 material, it is blocked on this evaluator not yet proving one over that
@@ -1814,9 +1786,9 @@ family's geometry.
 
 ### 9.2 What a sound sheet costs
 
-**This is true only for a family whose construction proves §9.1's fourth
-leg** — today the surface-extruded prism and the surface-result loft, each at
-a zero displacement (sectionDelta for the loft). **A document holding only
+**This holds only for a family whose construction proves §9.1's fourth
+leg** — the families §9.1 lists, each at a zero displacement
+(`sectionDelta` for a loft). **A document holding only
 sheets from such a family verifies fully and reads `Sound`, provided no survey
 was requested.** Nothing about a PROVEN sheet makes a report `Suspect` on its
 own: its boundary quantities are gated like any other, its validity is decided
@@ -1843,16 +1815,15 @@ alone and with no survey requested, already reads `Suspect` through
 `Validity.Outcome == ValidityUndecided` and its `DiagUndecidedValidity`
 diagnostic. A full-turn revolve sheet whose radial minimum is proven clear of
 the axis instead earns the fourth leg by construction (§9.1) and can read
-`ValidityValid`. The arc-reduced and composite sweep sheets a later increment
-adds inherit the partial-turn sheet's undecided leg for the identical reason:
-neither construction has a crossing-audit proof, nor §9.1's full-turn
-argument, for `Verify`'s switch to read.
+`ValidityValid`. An arc-reduced or composite sweep sheet has the
+same undecided leg for the same reason: neither construction has a
+crossing-audit proof, nor §9.1's full-turn argument, for `Verify`'s switch to read.
 
 ### 9.3 Pairs
 
 **A stitched `BodySolid` takes the solid-solid path (`pairkernel.Pair`), never
 this section's own `pairkernel.SheetSolid`** — §6.3's Table C already decided it is
-a solid, not a sheet, so none of this section's box rule or its diagnostics
+a solid, not a sheet, so this section's box rule and diagnostics do not
 govern it; `agent-docs/clearance-design.md` §2/§8 own its own carrier-model gate
 and the diagnostics a pair holding one reads.
 
@@ -1876,9 +1847,8 @@ confidently-wrong outcome the project exists to prevent.
 - **boxes meet** → the decision procedure below always runs, whether or not a
   gap was asked for — a crossing must be checked either way.
 
-That keeps the noise where the question is live. A model with a sheet parked
-away from every solid verifies clean; a sheet that might be cutting through
-one is decided.
+A model with a sheet parked away from every solid verifies clean; a sheet that
+might be cutting through one is decided.
 
 **A sheet whose own validity is undecided or invalid does not take this box
 rule.** It inherits the existing filter that only a proven-valid body enters
@@ -1891,7 +1861,7 @@ help needed from the pair rule.
 operand offers a closed boundary to cast the other against — the procedure's
 last step needs a solid's boundary to cast a witness through — so a
 sheet-sheet pair whose boxes meet goes straight to `DiagUnsupportedPairSheet`,
-`Suspect`, exactly as increment 1 left it.
+`Suspect`.
 
 **The decision procedure, for a sheet operand against a proven solid whose
 boxes meet OR whose separated boxes were asked for a gap
@@ -1945,7 +1915,7 @@ skipped as an optimization: it has nothing left to prove.
 
 **The report each outcome produces:**
 
-- **Crossing** → the pair reads `Interfering` and carries exactly one new
+- **Crossing** → the pair reads `Interfering` and carries exactly one
   diagnostic, `DiagSheetSolidCrossing` — stable token
   `"sheet_solid_crossing"`, `Reading` `ReadingNone`, every `Observed*`,
   `Required` and `Body` nil, `Pair` set. No `Interference` row is emitted: a
@@ -1958,7 +1928,7 @@ skipped as an optimization: it has nothing left to prove.
   that follows.
 - **Undecided** (missing model, unsure candidate, or a failed witness cast)
   while the boxes MEET → the pair keeps `DiagUnsupportedPairSheet`,
-  `Suspect`. Its message now names the kernel's own failure to settle the
+  `Suspect`. Its message names the kernel's own failure to settle the
   pair, not an unsupported sheet operand — a sheet body is fully supported;
   some of its pairs are not yet decidable. The same undecided answer while
   the boxes are SEPARATED is `DiagUndecidedClearance` instead, `Suspect`: box
@@ -1970,8 +1940,8 @@ skipped as an optimization: it has nothing left to prove.
 **`DiagUnsupportedPairSheet` is the existing code in the
 `DiagUnsupportedPair*` family**, stable token `"unsupported_pair_sheet"`,
 `Reading` `ReadingNone`, every `Observed*` and `Required` nil, `Pair` set,
-contributing `Suspect`. `DiagSheetSolidCrossing` is the new sibling code the
-decision procedure adds. §12 records both.
+contributing `Suspect`. `DiagSheetSolidCrossing` is its sibling code for the
+decision procedure's crossing outcome. §12 records both.
 
 ## 10. Tessellation and export
 
@@ -1979,7 +1949,7 @@ decision procedure adds. §12 records both.
 manifold-with-boundary audit.** `agent-docs/tessellation-design.md` §1.2 owns that
 audit's three requirements, the fact that every other row of its §1 contract
 binds a sheet mesh unchanged, why a sheet mesh reaches no boolean, and what
-`STL` and `OBJ` write. §12 records the amendment that added it.
+`STL` and `OBJ` write. §12 records the amendment.
 
 A surface-result **prism** (`Extrude`) sheet tessellates and exports: its
 walls chord exactly as the solid the same record would build, both caps are
@@ -2057,8 +2027,7 @@ the box worked example's own case.
 **An OPEN, all-planar stitched body IS a sheet** (`Kind() == BodySheet`,
 Table X's `Tessellate`/`STL`/`OBJ` row), and its mesh is the identical
 restatement of the same triangle set `Stitch`'s own build already assembled —
-the one it triangulated to check its own perturbed area sum (§6.4) and, until
-this increment, discarded afterward. It runs
+the one it triangulated to check its own perturbed area sum (§6.4). It runs
 `agent-docs/tessellation-design.md` §1.2's manifold-with-boundary audit in the
 closed-mesh audit's place, exactly as a surface-result prism or revolve
 sheet's own mesh does above: `topobuild.RequireSheetMesh` has
@@ -2089,11 +2058,9 @@ identical reasoning Table X's boolean row states for any sheet, a closed one
 on the `booloperand.RequireVolumeProof` arm — whatever the exact
 tetrahedron sum itself already proves about signed volume.
 
-Two consequences this design leans on, stated here as claims and derived there.
-A sheet mesh is never a boolean operand, which is what Table X's boolean row
-rests on. An open body's STL is not a solid file, and `export.STL`'s doc comment
-says so, which is how a caller learns it before handing the file to a slicer
-rather than after.
+Two consequences hold. A sheet mesh is never a boolean operand, which Table X's
+boolean row rests on. An open body's STL is not a solid file, and `export.STL`'s
+doc comment says so.
 
 ### 10.1 Curved stitched mesh from one revolve sheet
 
@@ -2101,7 +2068,7 @@ Table D row 9 admits a curved or mixed stitched body only when every source
 face came from one `revolvePayload` sheet, the source face set is complete,
 `Stitch` made no new edge weld or vertex-class merge, and the stitch
 placement is the identity.
-The source mesh is built through `tessellateRevolve` at the requested chord
+The source mesh is built through `revolvetess.TessellateRevolve` at the requested chord
 tolerance and verification level. Its faces may be `Plane`, `Cylinder`,
 `Cone`, `Sphere` or `Torus`, the same surface kinds the flux integral admits.
 Any other surface kind, incomplete source face set, new weld or vertex merge, or
@@ -2152,7 +2119,7 @@ are the complete set of single-face sheets made by `Unstitch` on one
 revolve sheet, with no placement on the pieces or on the stitch. Every
 `unstitchPayload.Face` must belong to that same original sheet, and each
 original face must appear once. The original may be retired: its payload
-and faces remain readable, and `tessellateRevolve` works from that immutable
+and faces remain readable, and `revolvetess.TessellateRevolve` works from that immutable
 record. This route admits a new weld only when each welded pair of copied
 `Edge`s maps back to the SAME original `*Edge` and every vertex class maps
 back to ONE original `*Vertex`. It also requires every original two-face
@@ -2205,7 +2172,7 @@ above governs its mesh or its boolean reach: §10's own stitched-solid
 paragraph and `agent-docs/tessellation-design.md` §2's `stitchPayload` row state
 its mesh, and the boolean row's own reasoning above — no occupied-volume
 proof, so no boolean admits it — is exactly what a stitched solid's mesh
-restates unchanged, until a later increment states one.
+restates unchanged.
 
 ## 12. Table A — the contract amendments this design forces
 
@@ -2240,7 +2207,7 @@ reverses a decision already taken.
 | `agent-docs/api-design.md` §8 | the v1 feature vocabulary gains `LoftChain`, and `Extrude`, `Sweep` and `Revolve` take a `Section`; the signatures land beside the existing surface block |
 | `agent-docs/api-design.md` §12 | `ErrForeignProfile`, `ErrStaleProfile`, `ErrInvalidProfile` and `ErrUnrecordableProfile` each state that their cause is a profile OR an open chain (§7 there, §13.3 here) |
 | `agent-docs/sketch-seam-design.md` §2 | the recording IR gains `ChainRecord` and `RecordChain`, over the same ten `CurveSegment` variants; §2.1's admission list gains the chain's own interior-junction reading (§13.3) |
-| `agent-docs/api-design.md` §2.1 | the admitted-class sentence names the shared-generator predicate and both owning documents, in place of the one class it named before |
+| `agent-docs/api-design.md` §2.1 | the admitted-class sentence names the shared-generator predicate and both owning documents, in place of a single named class |
 | `agent-docs/api-design.md` §8 | the v1 feature vocabulary gains `Trim`, `Extend` and `Split`, with `TrimSide`; the signatures land beside the existing surface block (`agent-docs/surface-intersection-design.md` §8) |
 | `agent-docs/prism-boolean-design.md` §3.4 | states that the same three displacement causes REFUSE rather than reroute wherever no mesh path exists, which is every sheet-involving pair (`agent-docs/surface-intersection-design.md` §2.1 S7, §5) |
 | `agent-docs/layout/` | a row for this document and one for `agent-docs/surface-intersection-design.md`, and one per `.go` file each increment adds; the chain increment adds no file, so `record.go`'s and `seam.go`'s own rows name the chain instead |
@@ -2281,11 +2248,9 @@ existing seam govern it with no new rule.
   condition on curves this chain does not use leaves it valid, and an
   unattributable one invalidates every chain and every profile at once.
 
-Every ask this section once held is answered by the published type, and decad
-still assembles no chain of its own: which entities form a run, and in what
-order, is a 2D arrangement question `sketch` answers (`CLAUDE.md`). One field
-decad must not read as a measurement is `Chain.Length` — §13.3 states why, and
-comparing it is the whole of what decad does with it.
+decad assembles no chain of its own: which entities form a run, and in what
+order, is a 2D arrangement question `sketch` answers (`CLAUDE.md`). decad never
+reads `Chain.Length` as a measurement. §13.3 states why and what decad does with it.
 
 **`sketch` cuts the walk wherever it cannot continue unambiguously, so one
 curve a caller drew is not always one chain.** The cut points are a vertex where
@@ -2436,7 +2401,8 @@ read through `s.Plane().Frame()`. The chain and profile admission gates live in
 **What it cannot share is `LoopRecord`.** A `LoopRecord` states that its last
 segment's walk closes onto its first, and every consumer downstream reads one as
 the boundary of a closed region — `internal/momentregion`'s region integrals,
-`triangulate.go`'s cap tiling, `segment_walk.go`'s region walks. A chain states
+`internal/triangulation/triangulate.go`'s cap tiling and the segment walks
+(`internal/boundarywalk/segment_walk.go`). A chain states
 the opposite at its two ends, so recording one as a `LoopRecord` carrying a flag
 would hand each of those consumers a closure that is not there. Two further
 things fall away with the loop: a `ChainRecord` holds no `Holes`, since an open
@@ -2448,8 +2414,8 @@ or `*ClosedSpline` edge is a closed run `sketch` publishes as a `Profile` or
 publishes nowhere, and so never reaches a chain. Nor does a `ChainRecord` feed
 any region reading: `internal/momentregion` integrates `Area`, `Centroid` and
 `SecondMoments` over a region, and a chain bounds none. Its only 2D reading is
-per-segment arc length, through `segment_walk.go` and, for a free-form segment,
-`internal/freeform/spline_length.go`'s proven bracket.
+per-segment arc length, through `internal/boundarywalk/segment_walk.go` and, for a
+free-form segment, `internal/freeform/spline_length.go`'s proven bracket.
 
 **The gates are the existing ones, in the existing order, and every sentinel is
 reused unchanged.**
@@ -2600,13 +2566,12 @@ every selector predicate reads its faces and edges. A chain-fed prism ribbon
 built from `LineSeg` segments alone tessellates and exports through §10's
 manifold-with-boundary audit, reading each wall's own exact planar quad
 straight off its topology with no chording at all — a curved
-(`CircleSeg`/`ArcSeg` fragment) or free-form wall is `ErrUnsupported` (R45)
-until the increment that chords it too; a chain-fed revolve ribbon's mesh
-remains `ErrUnsupported`:
+(`CircleSeg`/`ArcSeg` fragment) or free-form wall is `ErrUnsupported` (R45). A
+chain-fed revolve ribbon's mesh is `ErrUnsupported` too:
 `tessellateBodyContext` has no `chainRevolvePayload` arm, and `planRevolve` plus
 its wraparound axis-incidence audit consume closed loops. The existing pole-fan
 chording does not prove that an open walk's free pole gets one manifold
-boundary. Its mesh is a separate increment. A one-line chain `Sweep` over a
+boundary. A one-line chain `Sweep` over a
 single arc instead uses §15.9's limited open-wall mesh. A ribbon is an
 ordinary `Stitch` operand: a
 straight walk's free edges are all `Line3`, so Table J's J5 answers vacuously
@@ -2645,7 +2610,7 @@ reads a ribbon's free edges as one closed chain and admits or refuses it on
 
 ## 14. Table D — delivery
 
-Each increment is a PR series behind this contract. Staging surfaces exactly
+Each increment is a set of changes behind this contract. Staging surfaces exactly
 as `agent-docs/evaluator-design.md` §11 states it: an intent the evaluator cannot
 BUILD is `ErrUnsupported` at the call, and a `Verify` question it cannot
 ANSWER is accepted and reads `Suspect`.
@@ -2684,8 +2649,7 @@ It depends on none of increments 2–6.
 **Increment 15 has increment 7's dependency set exactly, and neither increment
 depends on the other**: 7 builds a solid from the offset section and 15 a
 sheet, over the same `offset2d.OffsetProfile` construction and the same two gates. Either
-may land first; 15 after 7 costs less review, because the gates 15 reuses are
-then already in the tree.
+may land first.
 
 **Increments 16, 17 and 18 each depend on increment 7 alone**, for the section
 offset, the exact-generation gate and the interval scan every one of them
@@ -2708,15 +2672,13 @@ audit and the prism sheet mesh — every one of which it consumes unchanged, and
 none of which it amends. It depends on none of 2, 3, 4 or 5, and none of them
 depends on it: a ribbon reaches `Stitch` and `PatchEdges` as an ordinary sheet
 operand once increment 2 lands, which is increment 2's own reach rather than a
-prerequisite of this one. It is numbered after 5 only so that no reference to
-an earlier row has to move, and any order among 2 through 6 that keeps 1 first
-is admissible; 7 comes after 6 wherever 6 lands.
+prerequisite of this one. Any order among 2 through 6 that keeps 1 first
+is admissible; 7 comes after 6.
 
 **Increment 4 depends on neither 2 nor 3, and they do not depend on it.**
 Increment 5 depends on increment 2 for the triangle set and topology its own
 mesh restates, and on increment 3 for identifying — never yet covering — the
-curved and flux-integrated stitched solids its own mesh does not reach; it is
-numbered after 3 and 4 only so that no reference to them has to move. Any
+curved and flux-integrated stitched solids its own mesh does not reach; any
 order among 3, 4 and 5 is admissible.
 
 **A closed sheet is increment 4's own question, and no earlier increment meets
@@ -2808,7 +2770,7 @@ The row-9 curved-mesh obligations are:
 | T13 | every Table R row | the stated sentinel, with `errors.Is` holding, and no document change |
 | T14 | a wall extruded 5 inches `Along` (a nonzero-bound top rim, `document.go`'s unit-conversion rounding) against a patch built directly at the identical millimetre level (zero bound) | the stitch returns a **sheet**, not an error; `Edges(Free()).Exactly(12)` resolves — none of the four bit-identical rim/patch corner pairs join, because Table J's J5 refuses a nonzero-bound held value even where J4's coordinates match |
 | T15 | `PatchEdges` filling a `PatchProfile` sheet's own sole 4-edge boundary | two faces; `Area` doubles to 12000 mm², `Exact`; `Edges(Free())` matches nothing; the new face's normal is the exact negation of the original face's |
-| T16 | `PatchEdges` filling a single closed circular rim (a `PatchProfile` circle's own sole free edge) | which the original one-chain wording would have refused (§5.2); two faces, `Edges(Free())` matches nothing |
+| T16 | `PatchEdges` filling a single closed circular rim (a `PatchProfile` circle's own sole free edge) | §5.2 admits it; two faces, `Edges(Free())` matches nothing |
 | T17 | `PatchEdges` capping BOTH rims of a surface-extruded tube's `Edges(Free()).Exactly(8)` in one call | this contract's own flagship case; two new 6000 mm² faces, `Exact`; `Edges(Free())` matches nothing |
 | T18 | `PatchEdges` closing a stitched-but-still-open sheet's own last free edge | `Kind() == BodySheet` still, `IsSolid() == false`; `Edges(Free())` matches nothing |
 | T19 | `PatchEdges` filling a `rectWithHoleSketch` `PatchProfile` sheet's own HOLE loop (`Edges(Free(), Concave())`) | two faces; the hole's own edge now bounds both; the four outer edges stay free; every face's normal equals the holed face's own, unlike T15 — a hole loop is walked clockwise, so the opposite sense the patch takes reads counter-clockwise and lands on the SAME side; `Area` returns to the rectangle's full 6000 mm², `Approximate` |
@@ -2819,9 +2781,9 @@ The row-9 curved-mesh obligations are:
 | T24 | a surface-result `Revolve` sheet whose fourth leg is undecided (`ValidityUndecided`), any pull requested | `Coverage == CoverageUnavailable` with one `DiagSurveyPrerequisite` whose message names the undecided-validity cause, never a sheet-material cause |
 | T25 | `publishUndercutResult` driven directly (internal) on a `BodySheet` body with `ValidityValid` and a populated `undercutOutcome` | the survey outcome is published as given, not replaced by the prerequisite refusal |
 | T26 | `PatchEdges` capping BOTH rims of a `Symmetric` (both ends unit-converted, so both bounded) surface-extruded wall in ONE call — the LEVEL certificate's own flagship | no error, where the same chain carried no level token would be R6; `Kind() == BodySheet`; 6 faces; `Edges(Free())` matches nothing; `Area` is `Approximate` with `Bound.Base() > 0` |
-| T27 | gate 3's level arm admits a chain whose vertices and edges all carry one shared, non-zero `levelID`, and refuses the same shape carrying no level token at all | direct unit coverage of `provePatchChainPlane`'s two arms (`patch_body_internal_test.go`), since a real body's own free-edge chain always carries a level token when its build minted one |
-| T28 | two vertices whose held coordinates and held bounds are bit-identical, minted under two different `levelID`s | `PatchEdges`'s own public seam cannot construct one chain spanning two independently built bodies — a chain requires two edges to SHARE a vertex pointer, which only one evaluator's own build or a zero-bound weld creates, and Table J refuses a zero-bound weld of a bounded pair — so this is pinned directly against `provePatchChainPlane`: still `ErrUnsupported`, proving the certificate is an identity check, never a tolerance |
-| T29 | `buildFace` (`internal/patchchain/body.go`) over a chain the level arm admitted | the new face's `AxialDelta`/`hasAxialDelta` carry the chain's own proven axial bound, the same fields a prism cap already publishes |
+| T27 | gate 3's level arm admits a chain whose vertices and edges all carry one shared, non-zero `levelID`, and refuses the same shape carrying no level token at all | direct unit coverage of `patchchain.ProveChainPlane`'s two arms (`internal/patchchain/prove_chain_test.go`), since a real body's own free-edge chain always carries a level token when its build minted one |
+| T28 | two vertices whose held coordinates and held bounds are bit-identical, minted under two different `levelID`s | `PatchEdges`'s own public seam cannot construct one chain spanning two independently built bodies — a chain requires two edges to SHARE a vertex pointer, which only one evaluator's own build or a zero-bound weld creates, and Table J refuses a zero-bound weld of a bounded pair — so this is pinned directly against `patchchain.ProveChainPlane`: still `ErrUnsupported`, proving the certificate is an identity check, never a tolerance |
+| T29 | `buildFace` (`internal/patchchain/body.go`, `TestBuildFaceCarriesTheLevelBoundOntoTheNewFacesAxialDelta`) over a chain the level arm admitted | the new face's `AxialDelta`/`hasAxialDelta` carry the chain's own proven axial bound, the same fields a prism cap already publishes |
 | T30 | `PatchEdges` capping both rims of a `Distance` (one end recorded, one end unit-converted) surface-extruded wall in one call — the single-bounded-end case | no error: the recorded end's chain passes gate 3's first (exact) arm, the computed end's chain passes the second (level) arm, in the same call |
 | T31 | `annularSketch` revolved a full turn as a surface, stitched alone | `Kind() == BodySolid`; `Volume` 2000π mm³, `Approximate`, enclosing the analytic value within its own `Bound`; `Area` 800π mm², bit-identical to the equivalent solid revolve's; `Centroid` (5, 0, 0), `Approximate`; `Edges(Free())` matches nothing |
 | T32 | the same profile built as a solid `Revolve` with no option, and separately stitched from the surface-result build | the two bodies' `Volume` and `Centroid` agree within the two independently-composed bounds — the independent-producer cross-check, which proves the flux arms against the unrelated revolve engine rather than against its own arithmetic |
@@ -2846,7 +2808,7 @@ The row-9 curved-mesh obligations are:
 | T51 | the same profile built as a solid `Revolve` with no option, and separately stitched from the surface-result build | the two bodies' `Volume` and `Centroid` agree within the two independently-composed bounds — the independent-producer cross-check, proving the `Sphere` arm against the unrelated revolve engine rather than against its own arithmetic |
 | T52 | T50's fixture swept across a family of radii and off-origin diameters (the generating semicircle's own centre moved along the axis) | `\|published − analytic\| <= Bound` on `Volume` and each `Centroid` coordinate for every member |
 | T53 | `offAxisSemicircleSketch` revolved a full turn as a surface, stitched alone — one `Cylinder` wall and one `Torus` wall spanning exactly the tube's own outer half, `φ ∈ [−π/2, π/2]` | `Kind() == BodySolid`; `Volume` and `Area`, `Approximate`, each enclosing its own hand-derived (Pappus, over the 2D half-disc profile) analytic value within `Bound`; `Centroid` (5, 0, 0), `Approximate`; `Edges(Free())` matches nothing (`TestStitchTorusRevolveSheetClosesToASolid`) |
-| T54 | the same profile built as a solid `Revolve` with no option, and separately stitched from the surface-result build | the two bodies' `Volume` agree within the two independently-composed bounds — the independent-producer cross-check, proving the `Torus` arm against the unrelated revolve engine rather than against its own arithmetic. The matching `Centroid` comparison is real but WEAK for this fixture: the direct revolve engine's own centroid bound comes out about 80 mm wide for this 20 mm-wide solid — clear of the roughly 460 mm the `Sphere` arm's own cross-check hits for a profile touching the axis at both poles, since this fixture stays off the axis, but still far too wide to be decisive on its own; T53 and T55 carry the tight, decisive centroid proof |
+| T54 | the same profile built as a solid `Revolve` with no option, and separately stitched from the surface-result build | the two bodies' `Volume` agree within the two independently-composed bounds — the independent-producer cross-check, proving the `Torus` arm against the unrelated revolve engine rather than against its own arithmetic. The matching `Centroid` comparison is real but WEAK for this fixture: the direct revolve engine's own centroid bound is several times the 20 mm width of the solid, too wide to be decisive on its own; T53 and T55 carry the tight, decisive centroid proof |
 | T55 | T53's fixture swept across a family of `Major`/`Minor` radii and axial centres | `\|published − analytic\| <= Bound` on `Volume` and `Centroid` for every member |
 | T56 | a hand-built `Torus` face whose `Axis` is not exactly a signed coordinate vector, or whose `Center` sits off that axis line, driven directly at `stitchrecord.FaceFluxAndMoment` (internal — every public fixture revolves about `uAxis`, coordinate-aligned through the origin, so no public fixture reaches this gate) | `ErrUnsupported` (R8): this evaluator has no sound bound for `Major`/`Minor`'s own rounding off a coordinate-aligned axis |
 | T57 | a hand-built `Torus` face whose two rims sit at axial offsets from `Center` other than exactly `±Minor` (a narrower window, a wider one, or both rims on the same side), driven directly at `stitchrecord.FaceFluxAndMoment` (internal — every reachable revolve wall junction in this tree happens to land on the exact half window, so no public fixture reaches this gate) | `ErrUnsupported` (R8): this evaluator has no sound way to recover a narrower angular window without an unbounded trig computation |
@@ -2885,11 +2847,11 @@ The row-9 curved-mesh obligations are:
 | T98 | `annularSketch` revolved a quarter turn `Along` about `uAxis`, then transformed under a rotation about the normalized (1, 2, 3) (`TestVertexPlacedRevolveBoundEnclosesDisplacement`) | the four cap vertices at φ = 0 sit inside their own published bounds, and at least one reads `Approximate` over a strictly positive bound. The sweep starts where sine and cosine evaluate to exactly (1, 0), so the row charges the frame lift and the placement alone and not the angular denotation `apitest/revolve_bounds_test.go` already covers. Shown-to-fail: replacing `internal/revolveplan/build.go`'s `sweptVertex` comparison with a zero bound turns the assertions red |
 | T99 | a 100×60×20 mm box `Chamfer`ed 5 mm on its complete end-cap loop, then transformed under T96's own motion (`TestVertexPlacedCapBlendBoundEnclosesDisplacement`) | the four cap-level corners sit inside their own published bounds, and at least one reads `Approximate` over a strictly positive bound. A 5 mm chamfer sets each corner back exactly 5 mm along both adjacent edges, so the cap-level corners are the plane-local (5, 5), (95, 5), (95, 55) and (5, 55) at z = 20 by construction and the truth needs no offset-solve reproduction. Shown-to-fail: deleting the lift term `internal/capblend/band.go`'s `capVertexAt` charges in `capblend.BuildBand` turns the assertions red |
 | T100 | the same prism, revolve and cap-blend shapes built axis-aligned and unplaced (`TestVertexAxisAlignedUnplacedBoundStaysZero`) | every vertex of all three bodies reads `Exact` with a `Bound` of exactly zero: the charge the four rows above pin must not widen the common, exact-arithmetic case. Shown-to-fail: replacing the exact per-vertex lift measurement with a magnitude charge, nonzero whenever a coordinate is, in `prismPayload.LiftedVertex` turns the prism and cap-blend assertions red, and in `revolvePayload.sweptVertex` the revolve one |
-| T110 | `semicircleSketch`'s half-disc (radius 5, centred at u=5) revolved a full turn about its own diameter, `Body.Centroid` (`TestRevolveSemicircleFullTurnCentroidBoundTightens`) | the published bound is a tiny fraction of the body's own 10 mm diameter (never a literal, since `circularSecondMomentInterval`'s bound is architecture-dependent) and still encloses the true (5, 0, 0) centroid — `moments_circular.go`'s new `circularSecondMomentInterval` replaces the old bound of exactly 460.625 mm, wide enough to admit any centroid inside the body. Shown-to-fail: forcing `circularSecondMomentInterval` to answer `ok == false` reproduces the old 460.625 mm envelope and turns the tightness assertion red |
-| T111 | `MeasuredProfile.SecondMoments()` on `semicircleSketch`'s own profile record (`TestSecondMomentsSemicircleBoundTightens`) | each of `UU`/`UV`/`VV`'s bound is a tiny fraction of its own value, never hundreds of times it (`UV`'s bound was 38385.42 mm⁴ against a 416.67 mm⁴ value before this fix). Shown-to-fail: forcing `circularSecondMomentInterval` to answer `ok == false` reproduces the old three magnitudes and turns every tightness assertion red |
-| T112 | an all-straight-line profile's `SecondMoments` (`TestSecondMomentsRectangle`, unchanged by this fix — a `LineSeg`-only region never reaches `addCircular`) | `Exact` with a zero bound on all three components, exactly as before: the fix touches only the circular-segment arm, never the exact-rational line path |
-| T113 | the 5 mm-radius ball (`semicircleSketch` revolved a full turn), `Body.Volume` (`TestRevolveSemicircleVolumeBoundUnaffected`) | the bound stays a tiny fraction of the volume, unmoved by this fix: `Volume` is Pappus's first theorem over the region's first moments alone (`axisMoments`'s `q`), which `circularSecondMomentInterval` never touches. Verified by hand: disabling `circularSecondMomentInterval` (forcing `ok == false`) leaves this reading's value and bound bit-for-bit unchanged while T110/T111's tightness assertions go red |
-| T114 | `semicircleSketch`'s half-disc revolved a quarter turn (90°) about its own diameter, `Body.Centroid` (`TestRevolveSemicirclePartialSweepCentroidBoundTightens`) | the published bound is a tiny fraction of the body's own diameter and still encloses the centroid the half-disc's own analytic `q`/`mzr`/`mrr` (independently derived: `q = ⅔r³`, `mzr = ⅔r⁴`, `mrr = πr⁴/8`) predict through the same partial-sweep formula `TestRevolvePartialCentroidBoundTightens` uses — replacing the old 638.75 mm envelope, the quarter-turn case the investigation measured as the worse of the two. Shown-to-fail: forcing `circularSecondMomentInterval` to answer `ok == false` reproduces the old 638.75 mm envelope and turns the tightness assertion red |
+| T110 | `semicircleSketch`'s half-disc (radius 5, centred at u=5) revolved a full turn about its own diameter, `Body.Centroid` (`TestRevolveSemicircleFullTurnCentroidBoundTightens`) | the published bound is a tiny fraction of the body's own 10 mm diameter (never a literal, since `circularSecondMomentInterval`'s bound is architecture-dependent) and still encloses the true (5, 0, 0) centroid. Shown-to-fail: forcing `circularSecondMomentInterval` to answer `ok == false` widens the bound to an envelope wide enough to admit any centroid inside the body and turns the tightness assertion red |
+| T111 | `MeasuredProfile.SecondMoments()` on `semicircleSketch`'s own profile record (`TestSecondMomentsSemicircleBoundTightens`) | each of `UU`/`UV`/`VV`'s bound is a tiny fraction of its own value, never hundreds of times it. Shown-to-fail: forcing `circularSecondMomentInterval` to answer `ok == false` widens all three bounds and turns every tightness assertion red |
+| T112 | an all-straight-line profile's `SecondMoments` (`TestSecondMomentsRectangle` — a `LineSeg`-only region never reaches `addCircular`) | `Exact` with a zero bound on all three components, the circular-segment arm never touches the exact-rational line path |
+| T113 | the 5 mm-radius ball (`semicircleSketch` revolved a full turn), `Body.Volume` (`TestRevolveSemicircleVolumeBoundUnaffected`) | the bound stays a tiny fraction of the volume, independent of `circularSecondMomentInterval`: `Volume` is Pappus's first theorem over the region's first moments alone (`axisMoments`'s `q`), which `circularSecondMomentInterval` never touches. Verified by hand: disabling `circularSecondMomentInterval` (forcing `ok == false`) leaves this reading's value and bound bit-for-bit unchanged while T110/T111's tightness assertions go red |
+| T114 | `semicircleSketch`'s half-disc revolved a quarter turn (90°) about its own diameter, `Body.Centroid` (`TestRevolveSemicirclePartialSweepCentroidBoundTightens`) | the published bound is a tiny fraction of the body's own diameter and still encloses the centroid the half-disc's own analytic `q`/`mzr`/`mrr` (independently derived: `q = ⅔r³`, `mzr = ⅔r⁴`, `mrr = πr⁴/8`) predict through the same partial-sweep formula `TestRevolvePartialCentroidBoundTightens` uses . Shown-to-fail: forcing `circularSecondMomentInterval` to answer `ok == false` widens the bound to a far wider envelope and turns the tightness assertion red |
 | T120 | an inner box (`stitchBoxSheetsAtOffset`, x∈[20,40], y∈[20,40], z∈[2,3]) wholly inside T1's own outer box, all six sheets `Stitch`ed in one call (`TestStitchRefusesNestedBoxes`) | `ErrUnsupported` (R20); the document and every operand are unchanged — without the separation check this fixture publishes 60400 mm³ `Exact` against a true 60000 mm³, the point-set volume the nesting double-counts |
 | T121 | the same shape as T120 with the inner box shrunk 1 mm off every wall of the outer box (x∈[1,99], y∈[1,59], z∈[1,9] inside T1's box), all six sheets `Stitch`ed in one call (`TestStitchRefusesNestedBoxesWithAGap`) | `ErrUnsupported` (R20); without the separation check this fixture publishes 105472 mm³ `Exact` against a true 60000 mm³ — wrong by more than three quarters, nowhere near a rounding miss |
 | T122 | two hand-built, bit-identical (fully overlapping) zero-bound square faces, each its own single-face lump, driven directly at `stitchtess.Restate` on a hand-built `stitchPayload` — bypassing `Stitch`'s own public seam, since T120's own lump-separation gate refuses this shape before a body ever reaches tessellation (internal; no test covers this row) | `symDiffOK` is `false` even though `stitchbounds.ZeroBound` holds: `stitchtess.Restate`'s own lump-separation reading refuses independently of `stitchrecord.Build`'s, so the zero occupied-volume claim stays sound even if that earlier gate were ever loosened or bypassed |
@@ -2951,7 +2913,7 @@ deleted separately.
 
 T154's ordered polygon vertices are (0,0), (10,0), (10,8), (20,8),
 (20,0), (30,0), (30,20), (20,20), (20,12), (10,12), (10,20), (0,20),
-in millimetres. The current `Shell` call on the solid prism with both caps
+in millimetres. `Shell` on the solid prism with both caps
 removed and the same 3 mm inward thickness returns `the rewrite crosses
 itself`, so the intended offset refusal is reachable. Deleting the crossing
 audit changes T154's required crossing diagnostic. At 0.5 mm inward, the
@@ -2987,12 +2949,12 @@ prints, so each assertion reads the number rather than only the sentinel.
 | T177 | the same block `Split` by a ribbon from the line (−10,30)–(40,30) — a tool that enters the block's footprint and stops inside it | `ErrDegenerate` (R30); the document and both operands are unchanged. This is the fixture that pins `sketch`'s own pruning: the inside stub bounds no published cell, the target's section is returned whole, and no split exists to return |
 | T178 | a sketch holding the line (0,0)–(100,0) and a second line at x = 40 crossing it; the left fragment extruded 10 mm `Along` as a chain — a 400 mm² ribbon — then `Extend`ed on its x = 40 sweep edge against a solid extruded from the square (70,−10)–(90,10) over a spanning interval | no error; `Area` is `Approximate` with a strictly positive `Bound` over an interval enclosing 700 mm²; `Bounds` now reaches x = 70; the ribbon's other recorded bound is byte-identical to its own pre-extend record (`Point2` fields, not just area) — `agent-docs/surface-intersection-design.md` §3.1's full-domain recreation introduces no coordinate of its own. The same call on a CLOSED-footprint sheet is `ErrUnsupported` (RS12), the receiver having no section end to lengthen |
 | T179 | T178's fixture with a tool whose section crosses the carrier only beyond x = 100 — past the recorded entity's own natural domain | `ErrUnsupported` (R29, RS4), message naming the carrier's own domain; the document is unchanged. The same tool moved inside the domain succeeds, so the refusal is the domain's doing and not the tool's |
-| T180 | the closed rectangle meridian r ∈ [3, 5], z ∈ [0, 20] revolved a full turn under `WithSurfaceResult` — a closed tube sheet of area 352π mm² — `Trim`med `KeepOutside` by a solid revolve of the rectangle meridian r ∈ [2, 8], z ∈ [5, 10] about the identical axis on the identical frame | `Kind() == BodySheet`; 2 lumps, 3 faces each; `Edges(Free()).Exactly(4)`, the two circles each surviving walk's own free ends sweep (Table G's full-revolution row); `Area` `Approximate` with a strictly positive `Bound` over an interval enclosing 272π mm²; `Volume()` is `ErrNotSolid`; `Tessellate` returns `ErrUnsupported`, because a trimmed revolve sheet's payload is `chainRevolvePayload`, which has no tessellation arm (`apitest/surface_trim_revolve_test.go`; `apitest/tessellate_payload_name_test.go` pins the refusal text). The receiver's section must CLOSE: `agent-docs/surface-intersection-design.md` §2.2 gives `Trim` a closed-loop receiver in both families, and §4's RS3 row refuses a ribbon because `sketch` prunes a dangling spur, publishing an inside stub and an outside stub identically. Shown-to-fail: forcing the result's `sectionDelta` to zero drops the area bound from 3.7e-12 to 1.3e-13 mm² and turns the measured-floor assertion on it red, and publishes the box `Exact` at a zero bound, turning both of its assertions red. The area ENCLOSURE stays green under that forcing — the noise bound still covers the 1.1e-13 mm² the held sum sits from the analytic answer — so the floor assertion is the leg proving §7.1's fold reaches the revolve's own Pappus moment, and the enclosure is what proves the charge is not covering a wrong answer |
+| T180 | the closed rectangle meridian r ∈ [3, 5], z ∈ [0, 20] revolved a full turn under `WithSurfaceResult` — a closed tube sheet of area 352π mm² — `Trim`med `KeepOutside` by a solid revolve of the rectangle meridian r ∈ [2, 8], z ∈ [5, 10] about the identical axis on the identical frame | `Kind() == BodySheet`; 2 lumps, 3 faces each; `Edges(Free()).Exactly(4)`, the two circles each surviving walk's own free ends sweep (Table G's full-revolution row); `Area` `Approximate` with a strictly positive `Bound` over an interval enclosing 272π mm²; `Volume()` is `ErrNotSolid`; `Tessellate` returns `ErrUnsupported`, because a trimmed revolve sheet's payload is `chainRevolvePayload`, which has no tessellation arm (`apitest/surface_trim_revolve_test.go`; `apitest/tessellate_payload_name_test.go` pins the refusal text). The receiver's section must CLOSE: `agent-docs/surface-intersection-design.md` §2.2 gives `Trim` a closed-loop receiver in both families, and §4's RS3 row refuses a ribbon because `sketch` prunes a dangling spur, publishing an inside stub and an outside stub identically. Shown-to-fail: forcing the result's `sectionDelta` to zero drops the area bound by more than an order of magnitude and turns the measured-floor assertion on it red, and publishes the box `Exact` at a zero bound, turning both of its assertions red. The area ENCLOSURE stays green under that forcing — the noise bound still covers the distance the held sum sits from the analytic answer — so the floor assertion is the leg proving §7.1's fold reaches the revolve's own Pappus moment, and the enclosure is what proves the charge is not covering a wrong answer |
 | T181 | the revolve sheet of T180 against a co-directional prism solid sharing its axis direction, and separately a revolve-built cylinder of the same radius against that same prism | `ErrUnsupported` (R29) both ways: S1 reads the two payload families and refuses a mixed pair, and it reads the payload rather than the shape, so a cylinder authored as a revolve refuses where the same cylinder authored as an extruded circle is admitted. The message names the two generators, not the payload class |
-| T182 | T180's receiver against three revolve tools in turn: one whose axis anchor differs in the last ulp, one about a PARALLEL axis 2 mm away, and one whose angular span stops inside the receiver's | `ErrUnsupported` (R29) in every case, each read by MESSAGE TEXT and not by `errors.Is` alone, so each is pinned to its own gate: S4 names the axis and S6 names the angular span. The document and every operand are unchanged in all three. Shown-to-fail: loosening S4's stored-float axis comparison to an angle comparison admits BOTH the last-ulp pair and the parallel-axis pair, and no later gate refuses either. The parallel pair then completes a trim publishing 854.513 mm² — the answer for a genuinely CO-AXIAL tool — for a tool that is not co-axial at all, so the loosened gate publishes a wrong answer rather than a wider bound. The last-ulp pair alone would not show it, a nudge that small sitting under every bound this fixture publishes, so the parallel case is the leg proving S4's exactness load-bearing rather than shadowed by a later gate |
-| T183 | the radius-3 mm cylinder band over the line meridian from (3, 0) to (3, 100) recorded over `t` ∈ [0, 0.4] and spun a FULL turn about the same axis — 240π mm² — `Extend`ed along its own carrier against a co-axial revolve solid of the meridian rectangle r ∈ [2, 8], v ∈ [60, 80] | the nearer of the tool's two crossings wins and the band becomes v ∈ [0, 60] — `Area` `Approximate` over an interval enclosing 360π mm², `Bounds` reaching v = 60, and the UNTOUCHED v = 0 rim's position byte-identical to the pre-extend body's, read by ELIMINATION against the rim that moved. The same receiver and tool spun a quarter turn reach the nearer cut at v = 60; the area interval encloses 90π mm², the bounds reach v = 0 and 60, four edges are free, and the angular endpoints are unchanged. A cap-copy edge or mixed free-edge selection refuses without publishing a body. Three refusals name their gates: crossings inside the covered range are RS4; a parallel axis is S4; and T180's closed tube has no open meridian to lengthen. Shown-to-fail: forcing the result's `sectionDelta` to zero drops the area bound from 3.6e-12 to 2.1e-13 mm² and the box bound from 3.6e-13 to 7.1e-15 mm, turning both measured-floor assertions red |
+| T182 | T180's receiver against three revolve tools in turn: one whose axis anchor differs in the last ulp, one about a PARALLEL axis 2 mm away, and one whose angular span stops inside the receiver's | `ErrUnsupported` (R29) in every case, each read by MESSAGE TEXT and not by `errors.Is` alone, so each is pinned to its own gate: S4 names the axis and S6 names the angular span. The document and every operand are unchanged in all three. Shown-to-fail: loosening S4's stored-float axis comparison to an angle comparison admits BOTH the last-ulp pair and the parallel-axis pair, and no later gate refuses either. The parallel pair then completes a trim publishing the answer for a genuinely CO-AXIAL tool for a tool that is not co-axial at all, so the loosened gate publishes a wrong answer rather than a wider bound. The last-ulp pair alone would not show it, a nudge that small sitting under every bound this fixture publishes, so the parallel case is the leg proving S4's exactness load-bearing rather than shadowed by a later gate |
+| T183 | the radius-3 mm cylinder band over the line meridian from (3, 0) to (3, 100) recorded over `t` ∈ [0, 0.4] and spun a FULL turn about the same axis — 240π mm² — `Extend`ed along its own carrier against a co-axial revolve solid of the meridian rectangle r ∈ [2, 8], v ∈ [60, 80] | the nearer of the tool's two crossings wins and the band becomes v ∈ [0, 60] — `Area` `Approximate` over an interval enclosing 360π mm², `Bounds` reaching v = 60, and the UNTOUCHED v = 0 rim's position byte-identical to the pre-extend body's, read by ELIMINATION against the rim that moved. The same receiver and tool spun a quarter turn reach the nearer cut at v = 60; the area interval encloses 90π mm², the bounds reach v = 0 and 60, four edges are free, and the angular endpoints are unchanged. A cap-copy edge or mixed free-edge selection refuses without publishing a body. Three refusals name their gates: crossings inside the covered range are RS4; a parallel axis is S4; and T180's closed tube has no open meridian to lengthen. Shown-to-fail: forcing the result's `sectionDelta` to zero drops the area bound and the box bound by more than an order of magnitude each, turning both measured-floor assertions red |
 
-| T184 | `Split` over the revolve family, each target spun about the sketch plane's v axis and cut by a co-axial chain `Revolve` sheet of one line: the solid cylinder r ∈ [0, 4], v ∈ [0, 10] by the disc at v = 6; the ball of radius 5 by the equatorial disc; the torus of tube radius 3 about r = 10 by the cylinder sheet r = 10; the cylinder a quarter turn, by a quarter-turn disc and separately by a full-turn one; and the torus a half turn | 2 bodies each, `Kind() == BodySolid`; each piece's `Volume` and `Area` intervals enclose the whole closed-form bracket taken over `math/big.Rat` from a 60-digit π: 96π and 64π mm³ for the cylinder, 250π/3 mm³ twice for the ball, 90π² ∓ 36π mm³ for the torus, 24π and 16π mm³ for the quarter cylinder, 45π² ∓ 18π mm³ for the half torus; the full-turn centroids lie within their bounds of the closed-form points; the pieces' summed volume interval encloses the target's closed form and overlaps the target's own reading; every piece tessellates watertight. Shown-to-fail: forcing each piece's `sectionDelta` to zero leaves the line and circle fixtures at most 2.9e-13 mm³ of volume bound against at least 1.1e-11 mm³ charged, and turns the 1e-12 floor assertion red on each of them while every enclosure stays green. The ball's pieces publish a bound wider than their volume under either setting: their meridian holds a trimmed `ArcSeg`, whose region integral `circularbounds` proves no interval for |
+| T184 | `Split` over the revolve family, each target spun about the sketch plane's v axis and cut by a co-axial chain `Revolve` sheet of one line: the solid cylinder r ∈ [0, 4], v ∈ [0, 10] by the disc at v = 6; the ball of radius 5 by the equatorial disc; the torus of tube radius 3 about r = 10 by the cylinder sheet r = 10; the cylinder a quarter turn, by a quarter-turn disc and separately by a full-turn one; and the torus a half turn | 2 bodies each, `Kind() == BodySolid`; each piece's `Volume` and `Area` intervals enclose the whole closed-form bracket taken over `math/big.Rat` from a 60-digit π: 96π and 64π mm³ for the cylinder, 250π/3 mm³ twice for the ball, 90π² ∓ 36π mm³ for the torus, 24π and 16π mm³ for the quarter cylinder, 45π² ∓ 18π mm³ for the half torus; the full-turn centroids lie within their bounds of the closed-form points; the pieces' summed volume interval encloses the target's closed form and overlaps the target's own reading; every piece tessellates watertight. Shown-to-fail: forcing each piece's `sectionDelta` to zero leaves the line and circle fixtures a volume bound under the 1e-12 mm³ floor, and turns the floor assertion red on each of them while every enclosure stays green. The ball's pieces publish a bound wider than their volume under either setting: their meridian holds a trimmed `ArcSeg`, whose region integral `circularbounds` proves no interval for |
 | T185 | T184's cylinder, full turn and quarter turn | the cut disc of each full-turn piece selects as `Faces(Planar(), Facing(±y)).Exactly(1)` with an area interval enclosing 16π mm² and every edge at v = 6, and each piece's single `Cylindrical()` wall encloses 48π or 32π mm²; no quarter-turn piece carries a role its target's faces carried or one the other piece carries, `FaceCreatedBy(CapStart(target))` is `ErrNoMatch` on a piece, and each piece's own `CapStart`/`CapEnd` selects one 4 × h rectangle; the torus split replays to the same piece order and the same volumes |
 | T186 | revolve pairs `Split` declines: a tool about a parallel axis 2 mm away, a quarter-turn tool against a full-turn target, a disc at v = 20 that separates nothing, a sheet target, a solid tool, a T184 piece split again, and a straight-sweep ribbon against a revolve target | `ErrUnsupported`, `ErrDegenerate` for the disc that separates nothing; each read by message text, naming the axis, the angular span, the empty separation, the solid target, the sheet tool, the section displacement and the straight-sweep generator in turn; the document and the target's `Area` are unchanged in every case |
 | T190 | T130's single 40 mm line chain, `Sweep` along a one-span `LineTo` path from the sketch plane's origin 10 mm along its positive normal | `Kind() == BodySheet`, `IsSolid() == false`, `Volume()` is `ErrNotSolid`; exactly 1 face; `Edges(Free()).Exactly(4)`; `Bounds` is the 40×0×10 slab, `Exact`; and `Area` is bit-identical to T130's own chain `Extrude` reading, value, `Exactness` and `Bound` alike — the equality is the assertion, since the two calls denote one ribbon and reach it by two different height derivations |
@@ -3046,10 +3008,10 @@ The copy and revolve-tag obligations are:
 
 | # | Fixture | Assertion |
 |---|---------|-----------|
-| T209 | a holed disk's end-cap chamfer, unstitched, each cone band sheet's free rims filled by `PatchEdges` | the copied band's `NormalAt` equals its source's, bound included, and placing the patched sheet is `ErrUnsupported`. Shown-to-fail: `patchchain.copyFacesUnder` without `normalBound` published 2.2e-16 against the source's 8.7e-16 and placed the copy |
+| T209 | a holed disk's end-cap chamfer, unstitched, each cone band sheet's free rims filled by `PatchEdges` | the copied band's `NormalAt` equals its source's, bound included, and placing the patched sheet is `ErrUnsupported`. Shown-to-fail: `patchchain.copyFacesUnder` without `normalBound` published a smaller bound than the source's and placed the copy |
 | T210 | a plate extruded 3 in, unstitched; its end cap and four walls stitched back into an open box whose bottom rim `PatchEdges` fills; a pin `ToFace` the patched cap | the pin's `Bounds` equal those of the same pin stopped at the unstitched cap, `Approximate`. Shown-to-fail: `patchchain.copyFacesUnder` without `AxialDelta` published the stop `Exact` with a zero bound |
-| T211 | full-turn revolve sheets of a quadrilateral whose side climbs 5e-10 over a unit run (tagged `Cylinder`), and of one whose side leans 5e-10 off perpendicular (tagged `Plane`) | `Stitch` is `ErrUnsupported` (R8); were it admitted, its volume and centroid would have to enclose the record's exact Pappus readings. Shown-to-fail: without `stitchrecord`'s `fluxTagsDenoted` the volumes sat 2.1e-9 and 1.6e-9 mm³ off under 7.0e-15 and 5.7e-15 bounds |
-| T212 | a decimal trapezoid's full-turn sheet (two `Cylinder`, two `Cone` walls), stitched; and, internally, T46-style cone wall whose tag apex is moved 1e-6 mm along the axis with its record unchanged | the stitched volume and centroid enclose the record's exact Pappus readings; the moved apex's flux and moment bounds enclose the exact-apex readings. Shown-to-fail: dropping `ConeInput.ApexBound`'s widening left the moved flux 9.4e-6 off under a 3.6e-14 bound |
+| T211 | full-turn revolve sheets of a quadrilateral whose side climbs 5e-10 over a unit run (tagged `Cylinder`), and of one whose side leans 5e-10 off perpendicular (tagged `Plane`) | `Stitch` is `ErrUnsupported` (R8); were it admitted, its volume and centroid would have to enclose the record's exact Pappus readings. Shown-to-fail: without `stitchrecord`'s `fluxTagsDenoted` the volumes sat far outside their published bounds |
+| T212 | a decimal trapezoid's full-turn sheet (two `Cylinder`, two `Cone` walls), stitched; and, internally, T46-style cone wall whose tag apex is moved 1e-6 mm along the axis with its record unchanged | the stitched volume and centroid enclose the record's exact Pappus readings; the moved apex's flux and moment bounds enclose the exact-apex readings. Shown-to-fail: dropping `ConeInput.ApexBound`'s widening left the moved flux far outside its published bound |
 | T213 | one-span straight and quarter-arc sweep sheets thickened on their admitted sides | the solid keeps `side(0,i,j)` roles and path-order caps, measures the reduced annulus's volume, verifies Sound, tessellates with a volume proof, and replays under placement; a composite sheet is T157b |
 | T214 | one real Sketch line swept through a half-circle, then thickened 1 mm | the solid measures 12π mm³ and 30π+8 mm², keeps start/end cap roles in path order, passes 0.1 mm `VerifyAll`, and replays under placement; negative and centered sides retain the same volume and move the Y interval |
 
@@ -3150,7 +3112,7 @@ radius-`t` arc and a concave inside corner miters, as `agent-docs/modify-design.
 never shifted by changing the source prism's axial levels.
 
 `offset2d.OffsetProfile` supplies each requested closed section;
-`offset2d.AuditOffsetSectionBudget` checks each one. Its `reverseLoopRecordContext`
+`offset2d.AuditOffsetSectionBudget` checks each one. Its `offset2d.ReverseLoopRecordContext`
 and `prismshell.BuildTube` already form and build the one-sided,
 hole-free annulus. A centered call forms the analogous annulus from TWO
 offsets and uses `prismrecord.Build`. `internal/cupwall/payload.go`'s calls to
@@ -3212,9 +3174,9 @@ Never infer exactness from a small residual or from `math.Hypot`, `Atan2`,
 `prismPayload.SectionDelta == 0` truthful, so `prismrecord.Build`'s existing
 moment and extent proofs apply, and it is what lets §16.5's and §16.7's
 results hold a revolve record whose own section carries no displacement
-term at all. A future increment may carry a proven
-nonzero generated-section displacement through EVERY downstream reading
-instead of refusing it. The rejected alternative is feeding rounded offset
+term at all. Carrying a proven nonzero
+generated-section displacement through EVERY downstream reading, instead of
+refusing it, is not implemented. The rejected alternative is feeding rounded offset
 coordinates to `prismrecord.Build` with a zero `sectionDelta` and publishing
 measurements of a more precise wall than the record denotes.
 
@@ -3282,12 +3244,12 @@ downstream orientation reader sees the reversal. §1.4 records why no increment
 takes it up: no shipped operation's result turns on a side its caller cannot
 already name.
 
-This fixed-distance section construction does not land tapered extrude.
-`WithTaper` needs an offset for EVERY axial level and a proof that no two
+This fixed-distance section construction is not a tapered extrude.
+A taper needs an offset for EVERY axial level and a proof that no two
 intermediate sections or their ruled walls cross, including a proof for
 computed taper angles and their bounds. Certifying one endpoint section with
-`offset2d.OffsetProfile` proves none of those statements. `agent-docs/evaluator-design.md`
-§12's tapered-extrude refusal therefore remains in force.
+`offset2d.OffsetProfile` proves none of those statements. `Thicken` takes no
+taper option; `agent-docs/modify-design.md` Part D owns the tapered extrude.
 
 ### 16.5 The revolve sheet
 
@@ -3320,7 +3282,7 @@ names it as the radial-axis half of this arm's missing proof.
 **The construction** takes §16.2's offsets unchanged: `Q+ = P ⊕ t` positive,
 `Q- = P ⊖ t` negative, both at `t/2` centered, and the result's section is
 `Q+ ∖ P`, `P ∖ Q-` or `Q+ ∖ Q-` with the inner loop reversed into the hole walk
-by `reverseLoopRecordContext` — the identical annulus `prismshell.BuildTube`
+by `offset2d.ReverseLoopRecordContext` — the identical annulus `prismshell.BuildTube`
 assembles for a prism. That section then goes to `revolveplan.Build` under
 a `revolvePayload` whose `phi0`, `phi1`, `full`, `den`, `frame` and `xform` are
 the sheet's own, unchanged, and whose `surfaceResult` is false. No level, no
@@ -3375,9 +3337,9 @@ undecided axis side for the annulus are R43.
 |---|---|
 | faces | one wall per segment of EACH result loop, plus two planar cap faces when the source sweep is partial and none when it is full. An inserted corner arc counts as a segment and sweeps a `Torus`; a line parallel to the axis a `Cylinder` and one perpendicular a `Plane` |
 | lumps and shells | one lump. A full revolution puts the hole loop's own closed wall set in a second, VOID shell of that lump — the toroidal cavity the annulus sweeps — while a partial sweep's two caps join both loops into one shell |
-| `Volume` | `boundedMul(q, sweep)`, Pappus's second theorem over the annulus's own `∫ρ dA`, plus `revolveAxisAdmitVolumeCharge`. Its bound composes the region integral's own bound, `regionSnapAllow.first`, the sweep's own `sweepDenotation` width, and `boundedMul`'s product charge. The snap term is zero wherever the annulus's least radius clears the re-resolved frame's own `snapTol`, and positive where it does not — the radial gate proves that radius STRICTLY positive, which is a weaker statement than clearing the snap band, so the charge is carried rather than argued away |
+| `Volume` | `boundedMul(q, sweep)`, Pappus's second theorem over the annulus's own `∫ρ dA`, plus `revolvemass.AdmitVolumeCharge`. Its bound composes the region integral's own bound, `regionSnapAllow.first`, the sweep's own `sweepDenotation` width, and `boundedMul`'s product charge. The snap term is zero wherever the annulus's least radius clears the re-resolved frame's own `snapTol`, and positive where it does not — the radial gate proves that radius STRICTLY positive, which is a weaker statement than clearing the snap band, so the charge is carried rather than argued away |
 | `Area` | `boundedAdd` over each wall's `boundedMul(walkAxisMoment, sweep)`, plus both cap faces' own area and bound for a partial sweep. A circular wall's moment carries `circularAxisMomentTotal`'s rational enclosure and a straight wall's its mean-radius composition |
-| `Centroid` | `boundedDiv(mzr, q)` along the axis, plus the in-plane radial term for a partial sweep, `math.Min`-ed against `revolveCentroidGeometryBound` and then charged `revolveAxisAdmitBandCharge` |
+| `Centroid` | `boundedDiv(mzr, q)` along the axis, plus the in-plane radial term for a partial sweep, `math.Min`-ed against `revolvemass`'s `centroidGeometryBound` and then charged `revolvemass.AdmitBandCharge` |
 | `Bounds` | `revolveplan.Bounds` verbatim, charging the frame lift and the accumulated placement the sheet's own extent reading already charged |
 
 No bound in that table is new, because no geometry is: the annulus is an
@@ -3447,7 +3409,7 @@ there is no second construction to compare against — which is also why this ar
 runs no `offset2d.AuditOffsetSectionBudget`: that audit compares an offset section to
 its source section, and a ribbon has no source section.
 
-**The endpoint audit.** `crossingAuditBudget` over the assembled loop's segment
+**The endpoint audit.** `sectionaudit.Crossing` over the assembled loop's segment
 entries refuses a crossing, a tangency or a shared boundary point at the
 requested thickness — R26. Nesting is vacuous: the section is one loop.
 
@@ -3499,7 +3461,7 @@ that rule is stated for a RECORDED profile rather than for a section this arm
 generated. The strict `ρ > 0` requirement therefore refuses the pole, naming
 the least radius it found, instead of building a section no axis-incidence
 audit has cleared. Admitting it needs that audit restated for a generated
-section, which is its own increment.
+section, which is not implemented.
 
 **What the result publishes** is §16.5's table over ONE loop rather than two:
 one wall per assembled section segment, two planar cap faces when the sweep is
@@ -3656,7 +3618,7 @@ one recorded generator and a closed-form rule that carries it a stated distance.
 |---|---|---|
 | `PatchProfile`, `patchPayload` | admitted | the offset of a planar face along its own normal is that face translated, so §17.2's patch arm is a rigid motion over the unchanged recorded profile |
 | profile-fed prism sheet, `prismPayload` with `surfaceResult == true` | admitted under §17.2's gates | one outer loop, no holes; either all `LineSeg` walks parallel to recorded U or V, or one whole `CircleSeg`; `sectionDelta == 0` |
-| every other sheet family — revolve, sweep, loft, stitched, chain ribbon, chain revolve shell, `PatchEdges`, `Unstitch` | R37 | an offset publishes ONE surface at a stated normal distance, and this evaluator has that construction for a closed recorded section alone. §16.6's ribbon reaches its own result by assembling a CLOSED ring rather than by offsetting an open walk, so neither chain-fed family states an offset surface at all; a revolve or sweep meridian's own offset surface is a later increment's to state; and §16.8 states what the loft, stitched, `PatchEdges` and `Unstitch` families are missing for either operation |
+| every other sheet family — revolve, sweep, loft, stitched, chain ribbon, chain revolve shell, `PatchEdges`, `Unstitch` | R37 | an offset publishes ONE surface at a stated normal distance, and this evaluator has that construction for a closed recorded section alone. §16.6's ribbon reaches its own result by assembling a CLOSED ring rather than by offsetting an open walk, so neither chain-fed family states an offset surface at all; a revolve or sweep meridian's own offset surface is not stated; and §16.8 states what the loft, stitched, `PatchEdges` and `Unstitch` families are missing for either operation |
 | a `BodySolid` receiver | R37 | a solid encloses material, so offsetting its skin states nothing about the region; `Shell` is the operation that offsets a solid's section, and `agent-docs/modify-design.md` §8 owns it |
 
 ### 17.2 Construction and refusal
@@ -3698,7 +3660,7 @@ difference.** The source-and-offset disjointness-and-nesting audit §16.2 runs
 before building an annulus has nothing here to run on — the result holds ONE
 region, bounded by `Q` alone, and denotes nothing whatever about `P`, so no
 nesting relation is published and none is needed. The result is likewise not an
-outer region less an inner one, so `reverseLoopRecordContext` and
+outer region less an inner one, so `offset2d.ReverseLoopRecordContext` and
 `prismshell.BuildTube` are not on this path. Everything else §16.2 states — the
 exact-generation gate below, the offset audit, the interval certification and
 the refusal set — is this arm's unchanged.
