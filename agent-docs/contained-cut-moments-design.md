@@ -2,11 +2,9 @@
 
 ## Status and owners
 
-The contained-Cut source-moment consumer is implemented for a rectangular
-prism target and whole circular-prism tool. The implementation follows this
-design's admission, interval, selection, and fallback rules. "Exact rotation
-copy" transfers the captured evidence through one direct public
-`Copy(..., WithCopyRotation(...))` and is implemented too.
+The contained-Cut source-moment consumer covers a rectangular prism target and
+a whole circular-prism tool. "Exact rotation copy" transfers the captured
+evidence through one direct public `Copy(..., WithCopyRotation(...))`.
 
 `operation-history-design.md` "Contained Cut centroid" owns the existing
 source-volume and source-centroid calculations. This document owns the
@@ -16,8 +14,8 @@ one source class.
 Use `agent-docs/multibody-dynamics-design.md` Part M §2–§3 for moment meanings, density, physical
 inertia signs, and positivity. Use `evaluator-design.md` §9 for the real mesh
 Boolean and `interference-design.md` §4 for strict whole-solid containment.
-`prism-boolean-design.md` and `agent-docs/prism-boolean-design.md` Part G own Boolean route
-admission. This slice adds no route or geometric admission.
+`agent-docs/prism-boolean-design.md` Part G owns Boolean route admission.
+This design adds no route or geometric admission.
 
 ## Evaluator result
 
@@ -27,9 +25,9 @@ and second moments before retiring either operand. Let the resulting faceted
 body's `MassProperties` compare a source-derived result with its ordinary
 audited-mesh result. Select the entire source result only under "Selection".
 
-The concrete benefit is smaller certified mass and inertia bounds for an
+The benefit is smaller certified mass and inertia bounds for an
 already-buildable hollow solid. The source consumer does not inherit the
-mesh's occupied-volume approximation. This slice claims no runtime reduction
+mesh's occupied-volume approximation. It claims no runtime reduction
 and no additional `MassProperties` admission.
 
 The first acceptance fixture is the real geometry in
@@ -166,7 +164,7 @@ is an error, not permission to consume its source moments.
 Validate present moment evidence before using it. Obtain the ordinary result
 through the existing `facetedMassProperties` path, with its matching VerifyAll
 certificate and all its existing audits. If that path fails, return its
-existing error; this slice does not rescue its admission.
+existing error; source evidence never rescues its admission.
 
 If source publication succeeds, compare both candidates:
 
@@ -224,8 +222,8 @@ Preserve `MeshBound`, vertex bounds, `VolSymDiff`, `AreaSlack`, topology,
 provenance, public history, and existing selected Volume and centroid readings.
 The direct exact-rotation Copy exception is owned by "Exact rotation copy"
 and does not extend this Cut's source admission.
-No general analytic reconstruction, chained-Cut proof, external kernel,
-OCCT source, new module, or public API belongs to this slice.
+General analytic reconstruction, a chained-Cut proof, an external kernel,
+OCCT source, a new module and public API are outside this design.
 
 ## Exact rotation copy
 
@@ -257,7 +255,7 @@ Runtime reduction is not an acceptance claim.
 - General Copy and Transform cover more placements but must transfer the
   actual float delta, including determinant and stretch.
 - Direct exact rotation Copy reuses the existing exact image map, admitted
-  source and query gates. This is the selected route.
+  source and query gates. This is the route taken.
 
 ### Copy admission and scope
 
