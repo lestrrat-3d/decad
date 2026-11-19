@@ -3,6 +3,7 @@ package meshbool
 import (
 	"context"
 	"fmt"
+	"math"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/proof"
@@ -55,10 +56,89 @@ func coplanarKeep(op OperationKind, second, sameFacing bool) bool {
 // triangulation diagonal of the partner's patch lies in both facets sharing it,
 // and both are partners, so both are covers.
 func coverOf(other *BoolMesh, partners []int, p proof.Xpt, twin func(m *BoolMesh, f, k int) (int, bool, error)) ([]int, error) {
+	return coverOfWithBounds(other, partners, p, twin, nil)
+}
+
+type roundedCoverBounds struct {
+	min, max [3]float64
+	valid    bool
+}
+
+type roundedCoverBoundsCache map[int]roundedCoverBounds
+
+func roundedCoverBoundsFor(xt [3]proof.Xpt) roundedCoverBounds {
+	var coords [3][3]float64
+	for i, p := range xt {
+		v := p.Vec()
+		coords[0][i], coords[1][i], coords[2][i] = v.X, v.Y, v.Z
+	}
+	var bounds roundedCoverBounds
+	bounds.valid = true
+	for axis := range 3 {
+		lo, hi := coords[axis][0], coords[axis][0]
+		for _, value := range coords[axis] {
+			if !roundedCoordinateFinite(value) {
+				return roundedCoverBounds{}
+			}
+			if value < lo {
+				lo = value
+			}
+			if value > hi {
+				hi = value
+			}
+		}
+		bounds.min[axis], bounds.max[axis] = lo, hi
+	}
+	return bounds
+}
+
+func roundedProbeCoords(p proof.Xpt) ([3]float64, bool) {
+	v := p.Vec()
+	coords := [3]float64{v.X, v.Y, v.Z}
+	for _, value := range coords {
+		if !roundedCoordinateFinite(value) {
+			return [3]float64{}, false
+		}
+	}
+	return coords, true
+}
+
+func roundedCoordinateFinite(value float64) bool {
+	return !math.IsNaN(value) && !math.IsInf(value, 0)
+}
+
+func roundedCoverBoxReject(probe [3]float64, probeValid bool, bounds roundedCoverBounds) bool {
+	if !probeValid || !bounds.valid {
+		return false
+	}
+	for axis, value := range probe {
+		if value < bounds.min[axis] || value > bounds.max[axis] {
+			return true
+		}
+	}
+	return false
+}
+
+func coverOfWithBounds(other *BoolMesh, partners []int, p proof.Xpt, twin func(m *BoolMesh, f, k int) (int, bool, error), bounds roundedCoverBoundsCache) ([]int, error) {
+	var probe [3]float64
+	probeValid := false
+	if bounds != nil {
+		probe, probeValid = roundedProbeCoords(p)
+	}
 	var cover []int
 	for _, j := range partners {
 		xt := XtriCorners(other, j)
 		nb := other.Norms[j]
+		if bounds != nil {
+			triBounds, ok := bounds[j]
+			if !ok {
+				triBounds = roundedCoverBoundsFor(xt)
+				bounds[j] = triBounds
+			}
+			if roundedCoverBoxReject(probe, probeValid, triBounds) {
+				continue
+			}
+		}
 		if !PointOnTri(p, xt, nb) {
 			continue
 		}
