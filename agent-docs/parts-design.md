@@ -1,15 +1,8 @@
 # Parts design
 
-The package lands in the PRs of §13, and each PR carries the part of this document it implements. P1 and E1 have landed: `Kind`, `Material`, `Part`, `Joint`, `Axis`, `Set`, axis matching (§7.1), `Explode`, `Graph` and
-`export.ThreeMFItems`. P2 added `Views`, P3 added `BOM` and `Summary`, and P4a adds `Check` for `PinInBore`,
-`PinInSlot`, `FaceContact` and `Tie` joints and the box-screened list of pairs no joint names (§7.2), and P4b adds
-point witnesses, `Contact` and `Keepout` checks, `WithWitnessSearch` and `WithVerifyReport`. P5 added `Set.Linkage`, and P6 adds
-`Infer` and `JointReport.Inferred`. P7 adds staged explosion with per-stage, per-part and overall distance control (§5.2
-to §5.6), and the derived removal order (§5.7, §5.8) has landed. P9 adds the layer spread and guide lines (§5.9, §5.10).
-P10 gives each explicit stage its own layer, stacks a derived rigid group along its pin, and runs each guide to the part's
-joint partner (§5.9 L2, L4a, §5.10). P11 lays the spread out compactly: every layer stays on its axis, steps sideways
-only where a part joined to it would be covered, and settles along the axis; each guide says whether its part lies on
-its partner's line (§5.9 L4, L5, §5.10 T6).
+The package is implemented: `Kind`, `Material`, `Part`, `Joint`, `Axis`, `Set`, axis matching (§7.1), `Explode` with
+stages, derived removal order, layer spread and guide lines (§5), `Graph`, `Views`, `BOM`, `Summary`, `Check` with point
+witnesses and `Contact`/`Keepout` checks (§7.2), `Infer` (§7.3), `Set.Linkage` (§7.4) and `export.ThreeMFItems` (§9.1).
 
 **`github.com/lestrrat-3d/decad/parts` is a generic schematic and exploded view of a build made of separate bodies.**
 Its two primary outputs are:
@@ -74,10 +67,9 @@ hand-written stand-ins for what this package provides:
 | Drawing, labels, colours, leader lines | The consumer draws (§11). decad returns placements, anchor points and segments. |
 | A second geometry kernel | Every geometric reading comes from an existing public query (§9). |
 
-Scope was cut from the original request in four places. Snap fits are not a joint kind: their geometry is a contact
-at rest, so they are a `Contact` joint with a name. Press fits are a `PinInBore` with a negative clearance. Lap joints
-are not a kind: a lap is a `FaceContact` plus one `PinInBore` per pin, shown as separate edges. Coplanar-face
-inference is deferred (§7.3).
+Four requested items have no joint kind of their own. A snap fit is a contact at rest, so it is a `Contact` joint with a
+name. A press fit is a `PinInBore` with a negative clearance. A lap joint is a `FaceContact` plus one `PinInBore` per
+pin, shown as separate edges. Coplanar-face inference is not implemented (§7.3).
 
 ## 2. Package
 
@@ -116,7 +108,7 @@ on one `Set` may run concurrently while nothing mutates it; each keeps its state
 
 ## 3. Public API
 
-Doc comments below are the intended comments; implementation PRs may tighten wording, never meaning.
+The code blocks below show the exported types with their doc comments.
 
 ### 3.1 Parts and sets
 
@@ -228,7 +220,7 @@ type Joint struct {
     // Direction is a Slides joint's direction for a FaceContact, in assembled
     // world coordinates. Zero elsewhere.
     Direction r3.Vec
-    // Pull (P7) is the direction in which A leaves B in an exploded view, in
+    // Pull is the direction in which A leaves B in an exploded view, in
     // assembled world coordinates, or zero. On a PinInBore or PinInSlot it
     // picks the sense along the axis; on any other kind it is the direction
     // (§5.1 E2). Its length does not matter.
@@ -260,13 +252,17 @@ func (s *Set) Explode(ctx context.Context, opts ...ExplodeOption) (*Exploded, er
 func WithExplodeGround(name string) ExplodeOption  // default: the manufactured part of largest volume
 func WithExplodeGap(gap units.Value) ExplodeOption // default 10 mm past full disengagement
 
-// P7 (§5.2–§5.6):
+// Stages, gaps and scale (§5.2–§5.6):
 func WithExplodeStages(stages ...Stage) ExplodeOption           // ordered stages; unnamed parts form a last stage
 func WithPartGap(part string, gap units.Value) ExplodeOption    // one part's gap, over its stage's
 func WithExplodeScale(scale units.Value) ExplodeOption          // a Dimensionless multiplier on every offset; default units.Scalar(1)
 
-// P9 (§5.9):
+// Layer spread (§5.9):
 func WithoutExplodeSpread() ExplodeOption // derived: keep the layers stacked along their axis
+
+// Derived removal order (§5.8):
+func WithDerivedExplode() ExplodeOption                // derive the order and direction of the parts no stage names
+func WithRemoval(part string, r Removal) ExplodeOption // needs WithDerivedExplode
 
 // Hidden lists the pairs of exploded parts where one may hide the other seen
 // along view, by their projected boxes (§5.6). It moves nothing.
@@ -333,7 +329,7 @@ type JointReport struct {
     Request     CheckRequest    // the effective tolerances and options
     Joints      []JointResult   // one per declared joint, in Join order
     Unexplained []PairFinding   // part pairs whose boxes meet and that no joint names (§7.2 U1)
-    Inferred    []InferredJoint // inferred matches no declared joint covers (from P6)
+    Inferred    []InferredJoint // inferred matches no declared joint covers
 }
 
 type CheckRequest struct {
@@ -406,9 +402,9 @@ lower-case words the examples show.
 
 ## 4. Worked examples
 
-Each `// Output:` block is the contract the PR that adds the example meets.
+Each `// Output:` block is verified by `go test`.
 
-**Exploded view and diagram, P1** (`examples/parts_explode_example_test.go`). A 20 x 20 x 10 mm plate has a Ø6.4
+**Exploded view and diagram** (`examples/parts_explode_example_test.go`). A 20 x 20 x 10 mm plate has a Ø6.4
 bore, and a Ø6 pin runs through it from z = −2 to z = 15. The pin is joined as a `PinInBore`. `Explode` reads the
 axis from the two cylinder faces and pulls the pin out along +Z: that way it travels 12 mm to clear the plate and the
 other way 15 mm (E3), and it moves 10 mm farther (E4).
@@ -472,15 +468,15 @@ func Example_parts_explode() {
         return
     }
     for _, p := range ex.Parts {
-        fmt.Printf("%s: offset (%g, %g, %g)\n", p.Name, p.Offset.X, p.Offset.Y, p.Offset.Z)
+        fmt.Printf("%s: offset (%g, %g, %g), pulled by %s\n", p.Name, p.Offset.X, p.Offset.Y, p.Offset.Z, p.Pull)
     }
     if err := set.Graph(nil).WriteMermaid(os.Stdout); err != nil {
         fmt.Printf("failed to write the diagram: %s\n", err)
         return
     }
     // Output:
-    // plate: offset (0, 0, 0)
-    // pin: offset (0, 0, 22)
+    // plate: offset (0, 0, 0), pulled by none
+    // pin: offset (0, 0, 22), pulled by axis from faces
     // flowchart LR
     //   plate["plate"]
     //   pin["pin"]
@@ -488,17 +484,17 @@ func Example_parts_explode() {
 }
 ```
 
-`extrudeCircle(doc, centre, radius, z0, height)` joins `extrudeBlock` in `examples/helpers_test.go` in P1. The exact
-Mermaid text is fixed by P1's `WriteMermaid` tests (§6.1); the lines above are its shape for a set whose parts all sit
-in the root container.
+`extrudeCircle(doc, centre, radius, z0, height)` sits beside `extrudeBlock` in `examples/helpers_test.go`. The
+`WriteMermaid` tests fix the exact Mermaid text (§6.1); the lines above are its shape for a set whose parts all sit in
+the root container.
 
-**Joint check, P4a** (`examples/parts_joints_example_test.go`). The same pin and plate, joined with
-`Clearance: units.Millimeters(0.2)` and checked with `Set.Check`, printing three lines: `pin~plate: confirmed`,
-`radial clearance 0.20 mm, engaged 10 mm` and `0 unexplained pairs`. The pin passes through the bore, so the plate's
-box and the pin's box meet; the joint names that pair, so it is not unexplained. A second joint declared with
+**Joint check** (`examples/parts_joints_example_test.go`). The same pin and plate, joined with
+`Clearance: units.Millimeters(0.2)` and checked with `Set.Check`, prints two lines: `pin~plate: confirmed, radial
+clearance 0.20 mm` and `0 unexplained contacts`. The pin passes through the bore, so the two boxes meet; the joint names
+that pair, so it is not unexplained. A second joint declared with
 `Clearance: units.Millimeters(0.3)` would print `contradicted (clearance)`.
 
-**Staged explosion, P7** (`examples/parts_explode_stages_example_test.go`). A housing of two 40 x 20 x 10 mm halves,
+**Staged explosion** (`examples/parts_explode_stages_example_test.go`). A housing of two 40 x 20 x 10 mm halves,
 split at z = 0, holds a 12 x 6 x 8 mm lever in a pocket; one Ø4 pin runs along Z through both halves and the lever.
 The one-stage explosion lifts the top half off but leaves the lever inside the bottom half's box. Three stages take
 the top off, lift the lever out of the opened housing, then pull the pin.
@@ -641,11 +637,9 @@ type Exploded struct {
     Parts    []ExplodedPart // in Set order, body-less parts omitted
     Leaders  []Leader
     Overlaps [][2]string    // part pairs whose exploded boxes still meet
-    // P7:
     Stages []string    // the stage names in the order they ran; "" is the last, implicit stage (S1)
     Scale  units.Value // the WithExplodeScale multiplier, Dimensionless
     Short  []string    // parts whose Clearance is below their gap (S9), in Set order
-    // P9:
     Guides []Guide     // one line per moved part, from where it assembles on its joint partner to its Anchor (§5.10)
     Spread *Spread     // the layer spread of a derived explode (§5.9); nil without one
 }
@@ -657,7 +651,6 @@ type ExplodedPart struct {
     Depth     int          // joint steps from the ground; -1 when no joint reaches it
     Anchor    r3.Vec       // label anchor: exploded box centre
     Pull      PullSource   // AxisFromFaces, AxisDeclared, FaceNormal, BoxCentres, PullDeclared, StageDirection, WorldAxis, RemovalDirection, None
-    // P7:
     Stage     string       // the last stage that moved it; "" for the ground and the implicit last stage
     Dir       r3.Vec       // the unit direction of that stage's move; zero when it did not move
     Travel    units.Value  // the distance that stage's clearing rule needed (S4, S5), before the gap and scale
@@ -666,19 +659,16 @@ type ExplodedPart struct {
     Clearance units.Value  // after the last stage: the least box distance to any part it is not joined to; zero when boxes meet
     Path      PathState    // PathClear, PathBlocked, PathEnclosed, PathStuck, PathNone (S7)
     Blocker   string       // the part that blocked or enclosed the path, or that Clearance was read against
-    // P8:
     Order, Round int       // 1-based position in the derived removal order and its round; 0 when not derived
-    // P9:
     Layer     int          // its layer in the spread (§5.9 L2); 0 for the base and without a spread
     Slide     r3.Vec       // what the spread added to Offset, scaled; zero when it did not run
-    // P10:
     Stack     int          // its 1-based place in a stacked group (§5.9 L4a); 0 when not stacked
 }
 
 type Leader struct {
     Joint    string
     From, To r3.Vec // exploded coordinates: the port on A, the port on B
-    // Separation (P7) is the distance between the two parts' exploded boxes,
+    // Separation is the distance between the two parts' exploded boxes,
     // zero when they meet: how far a pin ended up from the part it passes
     // through, which Clearance (joined parts excluded) does not say.
     Separation units.Value
@@ -690,27 +680,27 @@ type Leader struct {
 | Rule | Decision |
 |---|---|
 | E1 | The joint graph is walked breadth-first from the ground, joints in `Join` order, so each part has one parent joint; a part reached twice keeps its first parent. Parts no joint reaches keep a zero offset and `Depth` −1. |
-| E2 | A part's direction from its parent: a `PinInBore` or `PinInSlot` pulls along its axis, from the faces when §7.1 matches them, else the declared `Axis`, else as a `Contact`; a `FaceContact` along the contact face's normal, away from the parent; `Contact` and `Tie` along the line between the two box centres. A declared `Joint.Pull` (P7) replaces the face normal and the box-centre line, and on an axis kind fixes the sense, so E3 compares one sense only; `Pull` then reads `PullDeclared`. `Pull` records which was used, so a viewer can flag a guessed direction. A stage's `Direction` replaces all of these for its members, and `Pull` reads `StageDirection` (§5.3 S3). |
+| E2 | A part's direction from its parent: a `PinInBore` or `PinInSlot` pulls along its axis, from the faces when §7.1 matches them, else the declared `Axis`, else as a `Contact`; a `FaceContact` along the contact face's normal, away from the parent; `Contact` and `Tie` along the line between the two box centres. A declared `Joint.Pull` replaces the face normal and the box-centre line, and on an axis kind fixes the sense, so E3 compares one sense only; `Pull` then reads `PullDeclared`. `Pull` records which was used, so a viewer can flag a guessed direction. A stage's `Direction` replaces all of these for its members, and `Pull` reads `StageDirection` (§5.3 S3). |
 | E3 | For each sense along the direction, the travel is the distance that takes the part's box, at its parent's offset, clear of the exploded box of its parent and of every other part it is joined to that the walk has already placed. A sense is free when `Document.SweptBox` along that travel is `StrictlyDisjoint` from the box of every part not joined to it, each at its current offset (a part not yet placed sits where it was assembled); strictly disjoint boxes prove the path clear. Parts joined to the moving part never block it. A free sense beats a blocked one, then the shorter travel wins, then the sense whose largest direction component is positive. |
 | E4 | The offset is the chosen travel plus `WithExplodeGap`, along the chosen sense, added to the parent's offset. A `FaceContact` has one sense, away from the parent. |
 | E5 | `Leaders` join the two ports of each joint (§6.2 V3) in exploded coordinates, so a consumer can draw the dotted line a pin travels. |
 | E6 | `Overlaps` reports exploded box pairs that still meet. It is advice for the consumer, not a proof. |
 
-A matched axis carries its point at the middle of the engagement, which is the joint's port (V3). `Explode` needs no `Verify`. It reads faces, boxes and swept boxes only, so it works on a model whose pair check is
-slow or undecided (§14).
+A matched axis carries its point at the middle of the engagement, which is the joint's port (V3). `Explode` needs no
+`Verify`: it reads faces, boxes and swept boxes only, so it works on a model whose pair check is slow or undecided
+(§14).
 
 ### 5.2 Why one stage is not enough
 
 E3 and E4 move each part just clear of its parent and the joined parts already placed, plus one gap. A part nested
 inside an enclosure is joined to its pins, not to the enclosure's other walls, so it moves clear of its pin and stays
-inside the enclosure. On the crossbow (51 parts, ground `receiver-right`) the release nut, sear, trigger bar, hooks,
-carriage and links end up inside the boxes of the receiver halves, the side plates and the stock, and the gallery
-replaced `Explode`'s offsets with a hand-written table of 40 offsets to show them (dated illustration, 2026-11). One
-global gap cannot fix it: raising it moves the enclosure and the mechanism alike.
+inside the enclosure. In the gallery's crossbow, the release nut, sear, trigger bar, hooks, carriage and links end up
+inside the boxes of the receiver halves, the side plates and the stock. One global gap cannot fix it: raising it moves
+the enclosure and the mechanism alike.
 
 Exploded-view tools solve this with ordered steps: take the shell off, lift the mechanism out, then pull its pins.
-P7 adds exactly that, with each stage's parts clearing either their joined neighbours (as today) or everything still
-standing, and with directions still taken from the joints unless a stage states one.
+Stages (§5.3) do that. Each stage's parts clear either their joined neighbours or everything still standing, and
+directions come from the joints unless a stage states one.
 
 ### 5.3 Stages
 
@@ -766,21 +756,20 @@ which S9 reports. `PathClear` proves the straight path clear of every part not j
 proves that a part can leave an enclosure along its path: `PathEnclosed` says the box test cannot tell, which is the
 usual case for a mechanism inside a housing, and the exploded picture is a layout, not an assembly sequence (§1).
 
-Cost: S5 is one interval per standing part per sense, so `n²` box comparisons per stage, about 2,600 for 51 parts. S7
-adds one `SweptBox` per standing part per sense, the same calls §5.1 makes today, at about 30 ms for the crossbow's
-one stage (dated illustration). The standing boxes are computed once per stage. Larger distances cost nothing extra:
-`t` comes from the interval union, not from stepping.
+Cost: S5 is one interval per standing part per sense, so `n²` box comparisons per stage. S7 adds one `SweptBox` per
+standing part per sense, the same calls §5.1 makes. The standing boxes are computed once per stage. Larger distances
+cost nothing extra: `t` comes from the interval union, not from stepping.
 
 ### 5.5 Output and determinism
 
 `Explode` is deterministic: stages run in the given order, members in walk order, senses and ties as E3, and every
 quantity is computed from boxes and offsets in a fixed order. Equal inputs give equal `Exploded` values and therefore
-equal `export.ThreeMFItems` bytes. `Stages`, `Scale` and the P7 fields of `ExplodedPart` record what was asked
-(`Gap`, `Stage`, `Dir`) and what came out (`Travel`, `Moved`, `Clearance`, `Path`, `Blocker`), so the gallery can
-assert a separation instead of reading pixels.
+equal `export.ThreeMFItems` bytes. `Stages`, `Scale` and the stage fields of `ExplodedPart` record what was asked
+(`Gap`, `Stage`, `Dir`) and what came out (`Travel`, `Moved`, `Clearance`, `Path`, `Blocker`), so a caller can assert a
+separation instead of reading pixels.
 
-Nothing else changes with stages. `Views` and `Graph` do not read `Exploded`. `Summary` prints the new columns
-(§8.2). `export.ThreeMFItems` takes each `ExplodedPart.Placement` as before, and `Leaders` follow the final offsets.
+`Views` and `Graph` do not read `Exploded`. `Summary` prints the stage columns (§8.2). `export.ThreeMFItems` takes each
+`ExplodedPart.Placement`, and `Leaders` follow the final offsets.
 
 ### 5.6 What stays the caller's, and the rejected view-driven explosion
 
@@ -790,7 +779,7 @@ offsets because each stage's offsets are a prefix of the result (a part not yet 
 
 **A view-driven explosion is rejected.** Pushing parts that hide others along a viewing direction would tie the
 layout to one camera, while the same `Exploded` feeds several views, the exploded 3MF and the summary; the gallery
-draws the crossbow's one explosion from four cameras (an overall view, left, right and top). Occlusion is
+draws the crossbow's one explosion from four cameras. Occlusion is
 the renderer's knowledge (perspective, field of view, image size), and minimising it has no unique answer, so the
 result would shift with small model edits. Moving a part along its joint does not even help when the joint runs along
 the view. Instead `Exploded.Hidden(view)` reports, without moving anything, each pair whose boxes, projected
@@ -985,46 +974,33 @@ footprint is the rectangle its box covers across `Axis`, read along `Shear` and 
 | L5 | **Settle**, after the steps. On the `+Axis` side, layers `k = 1, 2, ...` are taken in turn: layer `k` moves along `u` as one, by the largest over its members of D7's interval rule (`beyondAll`) with gap `g` against every part that is not in layer `k` or beyond it on this side, at their current offsets: the base, the layers of this side already settled, and the layers of the other side. Then the `-Axis` side follows the same way, against the settled `+Axis` side too. A layer moves only outward, so D7's order along the axis stays, and only as far as its members must go to pass, by `g`, the boxes they meet along the axis: a part whose footprint stands at least `g` beside a nearer part keeps its height. |
 | L6 | **When.** The spread runs inside `explodeplan.Run` after the last stage and before S8's scale, so S8 scales the pushes and steps with everything else, and S9's `Clearance` and `Short`, `Overlaps`, `Leaders`, `Guides` and `Hidden` read the spread layout. `Path` and `Blocker` stay the stage's: the spread is a layout step, not a removal path, and a derived part's path is swept in D7's layout. |
 | L7 | **What it keeps, at scale 1.** (i) Inside a layer only the members of a stacked group move relative to the rest, so every pair of parts outside stacked groups keeps its box distance, `Overlaps` entry or absence, and D6 order. A stacked member ends at least `g` past every box of its layer it passes along `u` and meets no other box of its layer, so stacking adds no `Overlaps` entry and removes the entries between the members of each stacked group. (ii) After L5, two parts of different layers are at least `g` apart along some world axis: each part of a settled layer is past, by `g`, every standing box whose footprint comes within `g` of its own, and at least `g` beside every other. So they never meet and never enter `Overlaps`; where `Overlaps` was empty it stays empty. (iii) A part moves only outward along `Axis` and across it by its layer's step, so wherever two footprints overlap, the part of the round removed later stays nearer the base, as D7 placed it. (iv) The spread is deterministic: every quantity comes from boxes, mates in `Join` order and parts in `Set` order with the ties above. (v) For every view `v` with `v·Rows = 0` and `(v·Axis)(v·Shear) <= 0`, and every mate L4 does not skip whose parts `P` and `Q` lie on the side the camera looks from (`v·u < 0` for `Q`'s layer), `P` in a nearer layer than `Q`, with overlapping footprints: `P`'s projection along `v` reaches beyond `Q`'s, so `Hidden(v)` never lists `Q` in front of `P` with `Covered` 1. The proof: after L4, `P` reaches at least `m` beyond `Q` toward `-e` or along `±Rows`. A band along `Rows` stays in the image, which contains `Rows`. For the band toward `-e`, write `v = -a u + b e` with `a, b ≥ 0`; `w = b u + a e` lies in the image (`w·v = 0`), and since the footprints overlap, L5 keeps `Q` past `P` along `u` by at least `g`, so the least `w` coordinate of `Q`'s box exceeds `P`'s by `b (q - p) + a m > 0`, with `p` and `q` the two boxes' near faces along `u`. `ProjectedCover`'s image basis for a view with `v·Rows = 0` is `Rows` and `w`, up to sign, so `P`'s rectangle reaches past `Q`'s and `Covered` is below 1. The set holds `Spread.View`, the view along `-u`, and every view at right angles to `Axis` and `Rows`. |
-| L8 | **Where it cannot promise.** Views with a component along `Rows`, and views from the other side of the base, for which a layer on the far side lies behind the base. Parts that no joint names: a part can be wholly hidden by a part of another layer it is not joined to, as the escapement's back great-wheel bearing lies behind the great wheel. Coaxial mates on their axis: a bearing behind the plate whose bore holds it shows only through the bore, and `Hidden` lists the escapement's three front bearings behind the front plate with `Covered` 1 (predicted from a probe of the unspread layout, 2026-11-13). Parts inside one layer may hide each other, as before the spread; in a stacked group the members stacked outward have smaller footprints than the member that stays, so seen from the side the layer leaves toward each covers part of the members before it and is not covered, while from the other side a larger member may hide a smaller one. A scale other than 1 voids (ii) and (v) as S8 says, and `Overlaps`, `Short` and `Hidden` report the scaled layout. Boxes are larger than parts: a step is sized by `Q`'s box, so a long narrow part with one wide feature steps as far as that feature asks, and a listed pair may not hide in pixels. |
+| L8 | **Where it cannot promise.** Views with a component along `Rows`, and views from the other side of the base, for which a layer on the far side lies behind the base. Parts that no joint names: a part can be wholly hidden by a part of another layer it is not joined to, as the escapement's back great-wheel bearing lies behind the great wheel. Coaxial mates on their axis: a bearing behind the plate whose bore holds it shows only through the bore, and `Hidden` lists the escapement's three front bearings behind the front plate with `Covered` 1. Parts inside one layer may hide each other, as before the spread; in a stacked group the members stacked outward have smaller footprints than the member that stays, so seen from the side the layer leaves toward each covers part of the members before it and is not covered, while from the other side a larger member may hide a smaller one. A scale other than 1 voids (ii) and (v) as S8 says, and `Overlaps`, `Short` and `Hidden` report the scaled layout. Boxes are larger than parts: a step is sized by `Q`'s box, so a long narrow part with one wide feature steps as far as that feature asks, and a listed pair may not hide in pixels. |
 | L9 | **Cost.** One pass over the parts for the footprints; one interval per standing part for each stacked member and for each member of each settled layer, so `n²` box comparisons in all; and per layer at most one pass more than its mates over the mates; no tessellation, `SweptBox` or blocking table. |
 
-**Why the gate is a thinness ratio and a coaxial test.** The extents were measured on the test fixtures and the
-gallery's derived models (dated illustration, 2026-11-13; gallery `7302e55e8` built against this branch):
+**Why the gate is a thinness ratio and a coaxial test.** `TestSpreadGate` pins these assemblies, which must stay
+stacked, against the gate:
 
-| Assembly | Thinness | Coaxial | Must |
-|---|---|---|---|
-| `collarSet` | 1.50 | yes | stay |
-| `gearboxSet` | 0.95 | — | stay |
-| `planetStack` | 0.80 | — | stay |
-| `tBoltSet` | 0.77 | yes | stay |
-| `TestDerivedPinsBesideCarrier` | 0.60 | no | stay |
-| gallery planetary gearbox | 0.55 | no | stay |
-| `capturedSet` | 0.50 | yes | stay |
-| gallery cycloidal, two discs | 0.31 | yes | stay |
-| gallery cycloidal, one disc | 0.22 | yes | stay |
-| `boltRingSet` | 0.22 | yes | stay |
-| gallery escapement | 0.22 | no | spread |
+| Assembly | Thinness | Coaxial |
+|---|---|---|
+| `collarSet` | 1.50 | not read |
+| `gearboxSet` | 0.95 | not read |
+| `movementSet` with arbors 100 mm behind the plate | 122/120 | no |
+| `boltRingSet(t, 8)` | 13/60 | yes |
 
-A dash marks a coaxial test that does not decide the outcome: the ratio alone keeps that assembly unchanged. The
-runner reads the coaxial test for every request, so `Spread.Coaxial` is reported whether or not the ratio decided. The
-ratio `1/3` is the geometric middle of the flattest stacked assembly that must stay (0.50) and the plate assemblies
-(0.22), so neither group sits near it. Thinness alone cannot tell the escapement from the cycloidal drive, which is as
-flat: the drive's layers all surround one axis, so each layer's rim shows around the same line in an oblique view and
-its README already shows that stacked column. The escapement's layers sit off one another's axes (its back great-wheel
-bearing at y = -46, its suspension cap at y = 70), and a small layer off the axis under a wide plate is what hides. The
-coaxial test needs no tolerance to tune: it fails exactly when some layer's centre lies outside some other layer's
-footprint.
+The first three stay because the ratio is at least 1/3. `boltRingSet` stays because its layers are coaxial. The
+runner reads the coaxial test for every request, so `Spread.Coaxial` is reported whether or not the ratio decided.
+Thinness alone cannot tell a plate assembly that needs the spread from a flat drive whose layers all surround one
+axis: the drive's layers show their rims around the same line in an oblique view, so its stacked column already reads
+well. The escapement's layers sit off one another's axes, and a small layer off the axis under a wide plate is what
+hides. The coaxial test needs no tolerance to tune: it fails exactly when some layer's centre lies outside some other
+layer's footprint.
 
-**Why steps, and not a grid or a uniform shear.** The escapement's D7 layout spans 134.2 x 232.5 mm across Z and
-235.5 mm along it (measured with a probe against this branch, 2026-11-13). Giving every layer its own cell of a grid
-keeps every layer clear of every other from a set of views, but puts the 14 layers in 5 columns over 553.1 x 613.6 x
-484.6 mm (measured, same probe), far from where they assemble, so a reader needs a guide line for every part; the
-gallery owner found it spread out too much. Shearing every layer by one fixed step leans each column but moves
-every wheel off the axis of the bearings it turns in: a step of 25 mm a layer, what the crutch needs, gives 386.7 x
-232.5 x 251.0 mm and takes 23 of the 28 guides off their parts' lines (predicted). Stepping only where a joined part
-would be covered moves the escapement's last three layers by 25 mm and leaves every arbor, wheel and bearing on its
-axis: 134.2 x 232.5 x 331.4 mm, a sixteenth of the grid's volume (predicted from a probe of the unspread layout,
-2026-11-13).
+**Why steps, and not a grid or a uniform shear.** Giving every layer its own cell of a grid keeps every layer clear
+of every other from a set of views, but puts the escapement's 14 layers in columns far from where they assemble, so a
+reader needs a guide line for every part. Shearing every layer by one fixed step, what the crutch needs, leans each
+column but moves every wheel off the axis of the bearings it turns in. Stepping only where a joined part would be
+covered moves the escapement's last three layers by 25 mm and leaves every arbor, wheel and bearing on its axis, in a
+layout far smaller than the grid's.
 
 **Why the steps lean along the shorter side.** A step widens the layout along `Shear`, so taking the shorter side keeps
 the footprint nearer square. `Shear` points positive because nothing in the shape says which side the camera belongs
@@ -1038,33 +1014,27 @@ each: on the escapement, a step for the front bearings under the 116 mm front pl
 
 **Why settle and not slabs.** Putting each layer wholly past the one before along the axis keeps layers apart from
 every view along it, which a grid needs and steps do not. The settle lets layers whose footprints stand apart share
-heights, as D7 does: the escapement's back pallet and back great-wheel bearings, layers +4 and +2, both stay at a
-41 mm offset, and the layout is 331.4 mm tall (predicted) where slabs with the same stacks made it 484.6 mm (measured
-with the grid runner, dated illustration, 2026-11-13).
+heights, as D7 does: the escapement's back pallet and back great-wheel bearings, layers +4 and +2, both stay at one
+offset, and the layout is far shorter than slabs with the same stacks would make it.
 
 **Why a stacked shaft sits beyond its wheel, not threaded through it.** A shaft drawn through its wheel would show the
 fit best, but the members of a D4 group block each other along the axis in the tessellation, which is why D4 formed
 the group: no axial place of the wheel inside the shaft's span is known to be free, and the escape wheel's D bore
-cannot pass the round band of its arbor (below). Left as D4 places them, the shaft sits inside the wheel and is drawn
+cannot pass the round band of its arbor (see "Why stacks" below). Left as D4 places them, the shaft sits inside the wheel and is drawn
 as a stub in its hub. L4a moves the smaller member past the larger along their shared axis and L5 settles the next
-layers past it, so each escapement column reads, along one line, back bearing, wheel, arbor, front bearing: the escape
-column's boxes span z 70.6..75.6, 151.3..176.1, 184.1..222.1 and 230.1..235.1 (predicted). Each end of the shaft points
+layers past it, so each escapement column reads, along one line, back bearing, wheel, arbor, front bearing. Each end of the shaft points
 into the bore of the bearing it turns in, so the column needs no guide.
 
 **Why explicit stages get layers.** In the base layer an explicit stage's parts sat on the ground: the escapement's
-nuts, moved 20 to 27 mm by their stage, and its suspension pin, drawn 11 mm out by a stage, were listed by `Hidden` as
-`Nut 1` over `Back Plate` and `Suspension Pin` over `Back Plate` from the gallery's camera (dated illustration,
-2026-11-13, probe). In a layer of its own a stage's parts are settled past the base: the nuts rise 9.2 mm so the gap
-lies between them and the back plate (predicted).
+nuts and its suspension pin, drawn out by a stage, were listed by `Hidden` as `Nut 1` over `Back Plate` and
+`Suspension Pin` over `Back Plate` from the gallery's camera. In a layer of its own a stage's parts are settled past
+the base, so the gap lies between them and the back plate.
 
 **Why stacks, and why the largest member stays.** Every escapement arbor with the parts pressed on it, and the
 suspension pin with the front plate, leaves as one D4 group: the members block each other along +Z (the search leaves
-the pin and the plate as the only two parts of their group, so the plate blocks the pin). In the two pairs checked
-against the gallery's model code, the shaft's flat stops short of the D bore it sits in: the suspension pin's flat ends
-at z 33.95 under a collar that starts at z 34, and the escape arbor's flat starts at z 0.5 inside a wheel that starts
-at z 0.2. The round band, 0.05 and 0.3 mm tall, overlaps the material beside the bore's flat, which lies 0.05 mm
-farther from the axis than the shaft's flat, so the tessellation reads the bore's part as standing ahead of the shaft
-(dated illustration, 2026-11-13). D4 then gives the group one offset and the members' boxes meet. L4a draws each
+the pin and the plate as the only two parts of their group, so the plate blocks the pin). In the gallery's model code, the shaft's flat stops short of the D bore it sits
+in, so a thin round band of the shaft overlaps the material beside the bore's flat, which lies slightly farther from
+the axis than the shaft's flat, and the tessellation reads the bore's part as standing ahead of the shaft. D4 then gives the group one offset and the members' boxes meet. L4a draws each
 member on its own along the shaft's axis. The member with the largest footprint stays nearest the assembly and smaller
 members go outward: seen from the side the layer leaves toward, a small member in front of a large one leaves both in
 view, and a large member in front would cover the small one.
@@ -1073,20 +1043,18 @@ the pin as unable to leave first.
 
 **Escapement acceptance.** The escapement needs `WithExplodeGround("Back Plate")` and its four nuts held in place by an
 explicit stage without a direction (they are captured in the back plate, so the derived search alone reports them as
-having no free direction). With the nuts' stage, every derived part leaves along +Z in 12 rounds, L3 holds (`Thinness`
-0.22, not coaxial), and the nuts form layer +1 and the rounds layers +2 to +13: 14 layers. `Shear` is X (116 mm across
-against 232). L4a stacks the four rigid groups: each arbor past its wheel or anchor (the great-wheel arbor past the
-great wheel and the drum) and the suspension pin past the front plate. L4 finds one covered mate: the crutch (layer
-+10, footprint x -6..6, y 7.6..62.6) lies inside the pendulum's (layer +11, x -25..25, y -134.4..80.6) and they are
-joined by a `Contact`. `m` is 6, half the crutch's 12 mm side, so layers +11 to +13 (the pendulum, its bearing and the
-suspension cap) step 25 mm along X. L5 then pushes the layers past the stacked members. The layout spans 134.2 x 232.5
-x 331.4 mm (`Width`, `Depth`, `Height`), and `Overlaps` is empty. From a camera placed along (-1, 0, 1.2) from the
-target, `Hidden` lists 39 pairs, 6 of them inside one layer, and the pairs of joined parts with `Covered` 1 are exactly
-the three front bearings behind the front plate, each on its bore's axis. Seven guides are not `Inline`: those of the
-pendulum, its bearing, the suspension cap and the four nuts; of these only the pendulum's and the pendulum bearing's
-have a `Size` of 13 mm or more (predicted from a probe of the unspread layout, 2026-11-13). The gallery's
-`TestEscapementExploded` then asserts that the meshes stay apart, that `Width`, `Depth` and `Height` stay below 150,
-250 and 350 mm, and that every pair `Hidden` lists with `Covered` 1 between two parts a joint names is joined by a pin
+having no free direction). With the nuts' stage, every derived part leaves along +Z in 12 rounds, L3 holds (not
+coaxial), and the nuts form layer +1 and the rounds layers +2 to +13: 14 layers. `Shear` is X (116 mm across against
+232). L4a stacks the four rigid groups: each arbor past its wheel or anchor (the great-wheel arbor past the great wheel
+and the drum) and the suspension pin past the front plate. L4 finds one covered mate: the crutch (layer +10) lies
+inside the pendulum's footprint (layer +11) and they are joined by a `Contact`. `m` is 6, half the crutch's 12 mm side,
+so layers +11 to +13 (the pendulum, its bearing and the suspension cap) step 25 mm along X. L5 then pushes the layers
+past the stacked members, and `Overlaps` is empty. From a camera placed along (-1, 0, 1.2) from the target, the pairs
+of joined parts that `Hidden` lists with `Covered` 1 are exactly the three front bearings behind the front plate, each
+on its bore's axis. The guides that are not `Inline` are those of the pendulum, its bearing, the suspension cap and the
+four nuts; of these only the pendulum's and the pendulum bearing's have a `Size` of 13 mm or more. The gallery's
+`TestEscapementExploded` asserts that the meshes stay apart, that `Width`, `Depth` and `Height` stay below 150, 250
+and 350 mm, and that every pair `Hidden` lists with `Covered` 1 between two parts a joint names is joined by a pin
 along `Spread.Axis`, the two `Offset`s differing along it only. The gallery draws the guides that are not `Inline` and
 have a `Size` of 13 mm or more.
 
@@ -1129,7 +1097,7 @@ the part's centre: `arbor k in the plate` (A `arbor k`, B `back plate`) for k = 
 `arbor k in the bridge`; `screw k in the bridge` for k = 1, 2. The walk (E1) gives the partners of §5.10: `back plate`
 for the arbors, `arbor k` for `wheel k`, `arbor 1` for the bridge and `bridge` for the screws. The joints add `Z` to the
 candidate directions, which already hold it, and derived parts run with no parent (D7), so the D7 offsets above do not
-depend on them (measured, 2026-11-13).
+depend on them.
 
 **The pressed movement.** `movementSet(t, tail, true)` changes `arbor 2` only: no collar behind the plate, a collar of
 radius 4 over z 7..9 under `wheel 2` and one over z 12..13.5 above it, so `arbor 2` and `wheel 2` block each other along
@@ -1147,8 +1115,7 @@ radius 4 over z 7..9 under `wheel 2` and one over z 12..13.5 above it, so `arbor
 | `bridge` | `removal 2` | 2 | (0, 0, 35) | +4 | 0 | (0, 0, 25) | (0, 0, 60) |
 | `screw 1` | `removal 1` | 1 | (0, 0, 52) | +5 | 0 | (0, 0, 25) | (0, 0, 77) |
 
-The stage and D7 columns are measured with the current runner (2026-11-13); the others follow from L2 to L5, computed
-by a probe of the opt-out run. Once the bridge and wheels 1 and 3 are gone, neither `arbor 2` nor `wheel 2` can leave
+The stage and D7 columns are what the runner gives with the spread opted out; the others follow from L2 to L5. Once the bridge and wheels 1 and 3 are gone, neither `arbor 2` nor `wheel 2` can leave
 alone (each blocks the other along +Z), so D4 takes them out as one group in search round 4; arbors 1 and 3, free from
 the start, move to that last round (D3a). `screw 2` leaves first in its explicit stage (17 mm: 12 to clear the bridge
 plus the gap), so `wheel 3` clears its box grown by the gap (D7) and sits 31 mm above `wheel 1`. L4a keeps `wheel 2`
@@ -1162,7 +1129,7 @@ Along `Spread.View`, `Hidden` lists `arbor 2` over `wheel 2` with `Covered` 11/8
 **The covered movement.** `movementSet(t, 10, false)` with a `dial` added: a block x -60..60, y -40..40, z 23..25,
 above the arbors' tips at 22, joined to the bridge by a `Contact` named `dial on the bridge` (A `dial`, B `bridge`) and
 fixed to +Z by `WithRemoval`. It leaves first, so the screws leave in round 2, the bridge in round 3 and the wheels and
-arbors in round 4; its D7 offset is (0, 0, 23), z 46..48, 5 mm past the screw heads (measured, 2026-11-13). `Thinness`
+arbors in round 4; its D7 offset is (0, 0, 23), z 46..48, 5 mm past the screw heads. `Thinness`
 is 35/120. The dial's layer +4 covers the bridge in layer +2: the bridge's footprint, x -50..50 and y -20..20, lies
 inside the dial's, and `m` is 5, so L4 steps layer +4 by 25 along Y. The dial then spans y -15..65 and the bridge
 reaches 5 mm beyond it toward -Y. Nothing else moves. The layout spans 105 x 120 x 85 mm (y -40..65, z -37..48).
@@ -1201,9 +1168,9 @@ type Guide struct {
 | T1 | Every `Explode`, derived or not, fills `Guides`: one per part other than the ground whose `To` differs from its `From`, in `Parts` order. A part whose `Offset` equals its partner's has none: a part that moved only with its partner, and a member of a rigid group that L4a did not stack whose partner is in the group. |
 | T2 | The partner is the part's parent in the joint walk E1, the walk that gives `Depth`, in a derived explode too: D7 does not carry a derived part with its parent, but the parent is still a part it joins. A part no joint reaches (`Depth` -1) has the ground as its partner and an empty `Joint`. The ground and `Join` order decide the walk, so they decide the partner. |
 | T3 | `From` is the part's assembled box moved by the partner's final `Offset`, and `To` the same box moved by the part's own final `Offset`, each read as its centre exactly as `Anchor` is; `To` equals `Anchor` and two equal offsets give equal points. So `To - From` is the part's `Offset` less its partner's: the guide shows where the part goes on its partner wherever the spread put the two. A part and its partner in one stacked group give a guide along the shaft between them (`wheel 2` to `arbor 2` in the pressed movement: 27 mm along -Z). |
-| T4 | `Size` is the longest edge of the part's box as `Explode` reads it (grown by its bound), a `Length`. decad drops no guide by size: the caller compares `Size` with a threshold of its own. The escapement's nuts are 4.6 mm, its bolts 12 mm, its suspension cap 7.4 mm and its bearings 14 mm (dated illustration, 2026-11-13). |
-| T5 | Guides and `Leaders` are both kept. A leader (E5) joins the two ports of one joint, one leader per joint: the escapement has 43, among them both bearings of each arbor and every contact. A guide is one per part, along its parent joint only, from box centre to box centre: when its `Joint` names a joint whose `A` is the part, `To - From` equals that leader's `From - To`, and when `B` is the part, its `To - From`. Leaders draw every connection; guides draw where each part goes, one line each, with a `Size` to filter by. |
-| T6 | `Inline` is true when `abs((To - From)·d) >= cos(WithAxisTolerance) · len(To - From)`, with `d` the part's `Dir`, or its partner's `Dir` when the part's is zero; it is false when both are zero. decad drops no guide for it either: the caller leaves out the guides that are `Inline`, as it leaves out those below its `Size` threshold. A part that left along its partner's axis and was pushed only along that axis is `Inline`: a pin pulled out of its bore, a wheel stacked along its shaft, a layer that L5 pushed. A part that a step (L4) moved off its partner's line, or whose move is not along the line to its partner, is not: on the escapement, the pendulum, its bearing and the suspension cap after their step, and the nuts, which their stage moved off the back plate's corners and L5 raised (predicted). |
+| T4 | `Size` is the longest edge of the part's box as `Explode` reads it (grown by its bound), a `Length`. decad drops no guide by size: the caller compares `Size` with a threshold of its own. |
+| T5 | Guides and `Leaders` are both kept. A leader (E5) joins the two ports of one joint, one leader per joint: the escapement has one per joint, among them both bearings of each arbor and every contact. A guide is one per part, along its parent joint only, from box centre to box centre: when its `Joint` names a joint whose `A` is the part, `To - From` equals that leader's `From - To`, and when `B` is the part, its `To - From`. Leaders draw every connection; guides draw where each part goes, one line each, with a `Size` to filter by. |
+| T6 | `Inline` is true when `abs((To - From)·d) >= cos(WithAxisTolerance) · len(To - From)`, with `d` the part's `Dir`, or its partner's `Dir` when the part's is zero; it is false when both are zero. decad drops no guide for it either: the caller leaves out the guides that are `Inline`, as it leaves out those below its `Size` threshold. A part that left along its partner's axis and was pushed only along that axis is `Inline`: a pin pulled out of its bore, a wheel stacked along its shaft, a layer that L5 pushed. A part that a step (L4) moved off its partner's line, or whose move is not along the line to its partner, is not: on the escapement, the pendulum, its bearing and the suspension cap after their step, and the nuts, which their stage moved off the back plate's corners and L5 raised. |
 
 Guides are data. decad draws nothing, and a guide may pass through other parts' boxes. The caller draws each kept
 guide as a dashed world-space segment from `From` to `To` with a renderer that draws 3D polylines, for example
@@ -1211,118 +1178,52 @@ solidlens `Scene.Lines` (§11).
 
 **Why partner guides.** A guide from the part's assembled place would run under every layer between the base and the
 part. From the partner's place it shows only how the part sits on its partner, so in the spread layout it is along the
-axis for a part on its partner's axis, and across it for a part a step moved. Of the escapement's 28 guides, 21 are
-`Inline`; the 2 that are not and have a `Size` of 13 mm or more cross nowhere from the gallery's camera (predicted from
-a probe of the unspread layout, orthographic projection along (1, 0, -1.2), 2026-11-13).
+axis for a part on its partner's axis, and across it for a part a step moved. On the escapement most guides are `Inline`; the
+two that are not and have a `Size` of 13 mm or more cross nowhere from the gallery's camera.
 
 #### Implementation of §5.9 and §5.10
 
-The compact spread lands as P11, one PR. It adds no file, so no layout row is added; the row text of
-`internal/explodeplan/` changes as the table says. The opt-out, the gate (L1 to L3), the explicit layers of L2 and the
-stacks (L4a) keep their code.
+The spread is defined by boxes, joint kinds and joint axes alone and names no model, so it passes the module boundary
+gate (`agent-docs/module-boundary.md`) for every derived explode whose gate (L3) holds. The algorithms are plain-data
+code in `internal/explodeplan`; `parts` adapts its joints into them.
 
-Module boundary gate (`agent-docs/module-boundary.md`): the input class is every derived explode whose gate (L3)
-holds, and the behavior is defined by boxes, joint kinds and joint axes alone, with no reference to a named model. The
-steps, the cover test and the settle are plain-data algorithms in `internal/explodeplan` (boxes, offsets, layer
-numbers, `Mate` indices); `parts` only adapts its joints into `Mate`s, as it already adapts them into `Stacks`. Four
-independent cases vary the geometry: plain boxes on both sides of the base (`TestSpreadSteps`, `TestSpreadSettle`), the
-pressed movement (a stack that the settle must pass), the covered movement (a contact over a wider part) and the
-gallery escapement.
-
-| File | Change |
+| File | Role |
 |---|---|
-| `internal/explodeplan/spread.go` | The types below. `spread` keeps the explicit half of L2, the coaxial test and the stacks, then calls `steps` and `settle`; the slab loop, the column search and the cell moves, `cellSizes`, `gridSizes` and `aspect` go. `footprint`, `extent`, `move` and `stack` stay; `stack` reads the area along `Shear` and `Rows`. Components along an axis are read with `Vec.Dot` and moves built with `Vec.Scale` and `Vec.Add`; no coordinate math of its own. |
-| `internal/explodeplan/stages.go` | No change: `Run` calls the spread step after the last stage, and `finish` scales `Slide` with `Offset`. |
-| `parts/explode_spread.go` | `Spread` with §5.9's fields and doc comments (`Across`, `Rows`, `Columns` and `Aspect` go; `Shear`, `Height` come; `Width`, `Depth` and `View` take their new meaning). `planSpread` sets `req.Shear` to the shorter cross axis (the axis it now calls `across`) and `req.Rows` to the other, and fills `req.Mates`: one `explodeplan.Mate{A: joints[n].A, B: joints[n].B, Coaxial: axes[n] != nil && abs(axes[n].Dir·Axis) >= CosTol}` per entry of `joints`, in order. `report(out explodeplan.SpreadOutcome, moved []explodeplan.Box)` builds the public `Spread`: `Width`, `Depth` and `Height` from the union of `moved` (the exploded boxes after the scale) read along `Shear`, `Rows` and `Axis` with `Vec.Dot`, as `units.Millimeters`; `View` from `Shear.Sub(Axis).Normalize()`. |
-| `parts/explode.go` | `Guide.Inline` and the `Guide` doc comment of §5.10; the `Slide` doc comment of §5.9. `buildExploded` takes `cosTol float64` (`math.Cos(c.axisTol)`) and sets `Inline` by T6 with `res[k].Dir`, else `res[p].Dir`. `Explode` calls `spreadReq.report(out.Spread, ex.boxes)`. The `Explode` doc comment's spread sentence reads: "For a thin derived explode whose layers are not coaxial, the layers are laid out compactly: rigid groups stacked along their shaft, a layer stepped sideways where a part joined to it would be covered, and the layers settled along their axis (§5.9)." |
-| `parts/explode_derive.go` | The `WithDerivedExplode` doc comment's spread sentence reads: "For a thin assembly whose layers are not coaxial, the layers are laid out compactly (§5.9); WithoutExplodeSpread keeps them stacked." |
-| `parts/summary.go` | When `Spread` ran, one line after the exploded table: `Spread: <Layers> layers along (x, y, z), stepped along (x, y, z), <Width> x <Depth> x <Height> mm; seen along (x, y, z) no part wholly hides a part it is joined to.` with `Axis`, `Shear` and `View` printed `%g` and the extents `%.4g`. |
-| `docs/api.md` | The spread paragraph: a derived explode of a thin assembly whose layers are not coaxial keeps every layer on its axis; it stacks a derived rigid group joined by pins along the axis, largest footprint nearest the assembly (`ExplodedPart.Stack`); it steps a layer along `Spread.Shear` only where a part joined to it, not on a shared axis, would be covered; and it settles the layers along the axis so no two parts of different layers meet. `Exploded.Spread` reports the gate, `Shear`, the extents `Width`, `Depth` and `Height` and a `View`; each guide's `Inline` says whether the part sits on its partner's line. |
-| `docs/data-structures.md` | The `parts.Spread`, `parts.Guide` row: "The layer spread of a derived explode (gate, axis, step axis, extents, a view) and the dotted line from where one part assembles on its joint partner to its exploded place, with the part's size and whether it lies on its partner's line." |
-| `examples/parts_explode_spread_example_test.go` | The set adds a `dial`, a block x -60..60, y -40..40, z 23..25 (`Manufactured`), joined last as `dial on bridge` (`Contact`, A `dial`, B `bridge`), and the explode adds `WithRemoval("dial", Removal{Direction: (0, 0, 1)})`. The doc comment reads: "A derived explode of a thin assembly keeps every part on the axis it assembles on, in removal order along it. When a part would cover a part it is joined to, its layer steps sideways along Spread.Shear, just far enough to show the covered part. Guides gives each part a line from where it assembles on its joint partner; Inline marks the lines a reader does not need." It prints `Spread` (`Ran`, `Axis`, `Layers`, `Shear`), each part's `Layer` and `Slide`, and each guide that is not `Inline`. The `// Output:` block is: `spread ran: true, axis (0, 0, 1), 6 layers, steps along (0, 1, 0)`, then `plate: layer 0, slide (0, 0, 0)`, `arbor: layer -1, slide (0, 0, 0)`, `wheel: layer 1, slide (0, 0, 0)`, `bridge: layer 2, slide (0, 0, 0)`, `screw: layer 3, slide (0, 0, 0)`, `dial: layer 4, slide (0, 25, 0)`, and `dial guide: to bridge along "dial on bridge", from (0, 0, 28) to (0, 25, 47), size 120 mm` (predicted by a probe of the opt-out run, 2026-11-13: the dial's D7 offset is (0, 0, 23) in round 1, `Thinness` 35/120). |
-| `agent-docs/layout/internal-features.md` | The `internal/explodeplan/` row's `spread.go` note reads "coaxial test, stacks, steps, settle" in place of "coaxial test, slabs, cell grid". |
+| `internal/explodeplan/spread.go` | `Spread` (the request), `Mate` (one L4 joint: parts `A` and `B` and whether it is a pin along the axis) and `SpreadOutcome`. `spread` runs the explicit half of L2, the coaxial test and the stacks (L4a), then `steps` (L4), `covered` (L4's cover test) and `settle` (L5). Components along an axis use `Vec.Dot`, moves `Vec.Scale` and `Vec.Add`. |
+| `internal/explodeplan/stages.go` | `Run` calls the spread after the last stage. `finish` scales `Slide` with `Offset`. |
+| `parts/explode_spread.go` | The public `Spread` and `WithoutExplodeSpread`. `planSpread` sets `Shear` to the shorter cross axis, `Rows` to the other, and fills `Mates` from the joints (`Coaxial` when a joint's axis lies within the axis tolerance of `Axis`). `report` builds `Spread`: `Width`, `Depth` and `Height` from the union of the exploded boxes after the scale, `View` from `Shear − Axis`, normalised. |
+| `parts/explode.go` | `Guide`, including `Inline` (T6), and the `Slide` field. `buildExploded` sets `Inline` from the part's `Dir`, else its partner's. |
+| `parts/summary.go` | When `Spread` ran, one line after the exploded table: layer count, `Axis`, `Shear`, the extents and `View`. |
 
-```go
-// internal/explodeplan
+In `steps`, the covered mate's footprint sides along `e` and `Rows` are read as the min and max of the box corners' dot
+products. `settle`'s standing set for layer `k` on side `s` is every part whose layer `l` has `l·s <= 0` or `l·s < k`.
+`examples/parts_explode_spread_example_test.go` shows a covered case with a `dial` over a bridge: its layer steps along
+`Spread.Shear` and its guide is the one that is not `Inline`.
 
-// Spread asks Run for the layer spread of agent-docs/parts-design.md §5.9.
-type Spread struct {
-    Axis, Shear, Rows r3.Vec  // unit positive world axes: the explode axis, the step axis, the third axis
-    Layer             []int   // per part: the derived half of L2, signed, 0 for every other part
-    CosTol            float64 // cos of the axis tolerance (L1, L2)
-    Gap               float64 // g of L4a, L4 and L5, mm, at least 1
-    Thin              bool    // L3 (a) and (b) hold; Run adds (c)
-    Stacks            [][]int // derived rigid groups L4a may stack, members ascending
-    Mates             []Mate  // L4's mates, one per joint between parts with bodies, in Join order
-}
+Tests, each asserting computed geometry on the fixtures of "Test fixture: a flat movement" (§5.9):
 
-// Mate is one joint of L4: parts A and B, and whether the joint is a pin whose
-// axis lies within the axis tolerance of the explode axis.
-type Mate struct {
-    A, B    int
-    Coaxial bool
-}
-
-// SpreadOutcome is what the spread step did.
-type SpreadOutcome struct {
-    Layer   []int // per part: its layer after the explicit half of L2; set whether or not the spread ran
-    Layers  int   // the number of layers, the base included
-    Stack   []int // per part: its L4a place, 0 when not stacked or when the spread did not run
-    Coaxial bool
-    Ran     bool
-}
-
-// steps is L4: per side, outward, the least step along the side's sense of
-// Shear that leaves each covered mate's inner part a band of m toward the
-// opposite sense, every layer starting from the step of the one before.
-func (r *runner) steps(sp *Spread, layers map[int][]int, layer []int)
-
-// covered reports whether p, the inner part's box, is covered by q, the outer
-// part's, with e the outer layer's step sense: their footprints overlap and p
-// reaches beyond q by less than m toward -e and toward both senses of rows. It
-// returns what p lacks toward -e.
-func covered(p, q Box, e, rows r3.Vec, g float64) (float64, bool)
-
-// settle is L5: per side, outward, each layer moved along its outward sense as
-// one by the largest beyondAll of its members against every part not in it or
-// beyond it on that side.
-func (r *runner) settle(sp *Spread, layers map[int][]int, layer []int)
-```
-
-`steps` reads offsets after the stacks; a layer's step moves its members with `move`, so it lands in `Slide`. In
-`covered`, a footprint side along `e` is read as `min` and `max` of `b.Min.Dot(e)` and `b.Max.Dot(e)` (`e` may point
-negative), along `rows` as `b.Min.Dot(rows)` and `b.Max.Dot(rows)`; `m = min(g, min(sideE, sideR)/2)`; the footprints
-overlap when both overlaps exceed 1e-9; `p` has its band when `pE0 <= qE0 - m + 1e-9`, `pR0 <= qR0 - m + 1e-9` or
-`pR1 >= qR1 + m - 1e-9`; the lack is `pE0 - (qE0 - m)`. The coaxial skip compares the two parts' current offsets, each
-plus its layer's step along its `e`: the difference less its component along `Axis` has length at most 1e-6. `settle`'s
-standing set for layer `k` on side `s` is every part whose layer `l` has `l·s <= 0` or `l·s < k`.
-
-Tests, each asserting computed geometry. "Fails without" names the change that turns it red, to be run once before
-the PR (delete the step, watch the test fail, restore it). The numbers come from the tables of §5.9 "Test fixture" and
-from a probe that runs L4 and L5 by hand-written code over the opt-out runs (2026-11-13).
-
-| Test | Asserts | Fails without |
-|---|---|---|
-| `TestSpreadMovement` (`parts/explode_spread_test.go`) | The opt-out half as now. With the spread: `Ran`, `Axis` (0, 0, 1), `Shear` (0, 1, 0), `Layers` 5, `Width` 80 mm, `Depth` 120 mm, `Height` 78 mm (each within 1e-6, each a `Length`), `View` (0, 1, -1)/√2 with length 1 within 1e-12; for every part `Slide` zero, `Offset` equal to the opt-out run's and `Layer`, `Round`, `Order`, `Stage` and `Dir` as the fixture table and the opt-out run; `Overlaps` empty; every pair of parts of different layers at least 5 mm apart along Z, X or Y (the largest of the three gaps); a second run gives equal offsets. The assertions on `Across`, `Rows`, `Columns`, `Aspect`, the cells, the gaps along both Z and across Z, and an empty `Hidden` go: the compact layout keeps the bridge over the wheels on their axes. | — (it pins that a layout D7 already separates and whose mates show stays as D7 placed it; the grid gave every layer but the base a slide) |
-| `TestSpreadGate` | unchanged | — |
-| `TestSpreadGuides` (`parts/explode_spread_test.go`) | `movementSet(t, 10, false)` with the spread: 9 guides in `Parts` order, every one `Inline`; `wheel 2`: `Partner` `arbor 2`, `Joint` `wheel 2 on arbor 2`, `From` (0, 0, -16.5), `To` (0, 0, 12.5), `Size` 24 mm; `arbor 2`: `back plate`, `arbor 2 in the plate`, (0, 0, 6), (0, 0, -21), 32 mm; `bridge`: `arbor 1`, `arbor 1 in the bridge`, (0, 0, -10.5), (0, 0, 20.5), 100 mm; `screw 1`: `bridge`, `screw 1 in the bridge`, (45, 15, 17), (45, 15, 34), 14 mm; the `Anchor`, offset and leader identities as now. With `WithExplodeScale(2)`: `wheel 2` `From` (0, 0, -43.5), `To` (0, 0, 14.5). | T6: `Inline` false |
-| `TestSpreadStackedGroup` (`parts/explode_spread_test.go`) | the pressed movement: the opt-out half as now. With the spread: `Layers` 7, `Width` 80, `Depth` 120, `Height` 134 mm; every part's `Stage`, `Layer`, `Stack`, `Slide` and `Offset` as the pressed table, within 1e-6, and `Offset - Slide` equal to the opt-out run's `Offset`; `arbor 2`'s box bottom 5 mm above `wheel 2`'s top (38 and 33); their `Anchor`s equal in X and Y at (0, 0); `Overlaps` empty; `Hidden(Spread.View)` holds `Front` `arbor 2`, `Back` `wheel 2` with `Covered` 11/81 within 1e-9; `wheel 2`'s guide `Partner` `arbor 2`, `From` (0, 0, 58.5), `To` (0, 0, 31.5), `Inline`. | the stacks (L4a): `arbor 2` keeps `wheel 2`'s offset and `Overlaps` lists the pair; the settle (L5): the bridge stays at (0, 0, 35) and `Overlaps` lists `arbor 2` and `bridge` |
-| `TestSpreadExplicitLayer` (`parts/explode_spread_test.go`) | the same run: `screw 2` has `Stage` `screw`, `Order` 0, `Layer` 1, `Slide` zero, `Offset` (0, 0, 17); `back plate` alone has `Layer` 0; `arbor 1` and `arbor 3` -1, `wheel 1` and `wheel 3` 3, `bridge` 4, `screw 1` 5. The `Hidden` assertion goes. | the explicit half of L2: `screw 2` reads `Layer` 0 and `bridge` 3 |
-| `TestSpreadSteps` (new, `parts/explode_spread_test.go`) | the covered movement, gap 5. Opt-out: `dial` `Round` 1, `Layer` 4, `Offset` (0, 0, 23); `Hidden((0, 0, -1))` lists `Front` `dial`, `Back` `bridge` with `Covered` 1. With the spread: `Ran`, `Shear` (0, 1, 0), `Layers` 6, `Width` 105, `Depth` 120, `Height` 85 mm; `dial` `Slide` (0, 25, 0) and `Offset` (0, 25, 23); every other part's `Slide` zero; the bridge's box reaches 5 mm beyond the dial's toward -Y (-20 against -15); `Overlaps` empty; `Hidden((0, 0, -1))` lists `dial` over `bridge` with `Covered` 7/8 and `Hidden(Spread.View)` with 11/43, each within 1e-9; the dial's guide `Partner` `bridge`, `Joint` `dial on the bridge`, `From` (0, 0, 28), `To` (0, 25, 47), not `Inline`, and every other guide `Inline`. | the steps (L4): the dial's `Slide` is zero and `Hidden((0, 0, -1))` reads `Covered` 1 |
-| `TestExplodeGuides` (`parts/explode_test.go`) | as now, and every guide it reads is `Inline`: the pin, the top, `pin1` and each bolt of `boltRingSet(t, 8)`. | T6: `Inline` false |
-| `TestSpreadSettle` (new, `internal/explodeplan/spread_test.go`, replacing `TestSpreadSlabs`) | plain boxes, no stages, gap 2, `Thin`: base [0, 10]² x [0, 2]; layer +1 [20, 26] x [0, 6] x [5, 6] stays (its footprint stands apart); layer +2 [4, 8]² x [3, 4] over the base moves +1 to z 4..5; layer +3 [21, 25] x [1, 5] x [2, 3] under layer +1 moves +6 to z 8..9; layer -1 [60, 66] x [0, 6] x [-3, -1] stays; layer -2 [2, 8]² x [-1, 1] inside the base moves -3 to z -4..-2. Offsets and slides along Z exactly [0, 0, 1, 6, 0, -3], X and Y zero; with scale 2 every offset and slide doubles. | the settle: layers +2, +3 and -2 keep a zero offset and meet the base or layer +1 |
-| `TestSpreadSteps` (new, `internal/explodeplan/spread_test.go`, replacing `TestSpreadGrid` and `TestSpreadCleanViews`) | plain boxes, gap 2, `Thin`, `Shear` Y, `Rows` X: G [0, 50]² x [0, 2] (layer 0), P [10, 20]² x [4, 6] (+1), Q [5, 25]² x [8, 10] (+2), R [10, 20]² x [12, 14] (+3), U [10, 20]² x [-6, -4] (-1), V [5, 25]² x [-10, -8] (-2); `Mates` {G, P, coaxial}, {P, Q}, {Q, R, coaxial}, {P, R, coaxial}, {U, V}. Slides: Q and R (0, 7, 0), V (0, -7, 0), the rest zero: Q steps by 10 - (5 - 2) = 7, R keeps Q's step because their pin stays on its axis, and {P, R}, off its axis after the step, finds P's band of 7 toward -Y already. `ProjectedCover(P, Q, v)`: P is in front or `Covered` is below 1 along (0, 0, -1) (0.8), (0, 1, -1), (0, 1, -3) and (0, 3, -1); likewise U against V along (0, 0, 1) (0.8), (0, -1, 1) and (0, -1, 3); along (0, -1, -1), outside the set, Q covers P with `Covered` 1. | the steps: Q's slide is zero and along (0, 0, -1) Q covers P with `Covered` 1 |
-| `TestSpreadCoaxial` (`internal/explodeplan/spread_test.go`) | the first and third cases as now; in the second, with one footprint moved off the axis, `Coaxial` false and `Ran` true, and every `Slide` zero: the layers already stand apart and no mate is given. | — (the assertion on a nonzero slide goes: the compact layout moves nothing that needs no move) |
-| `TestSpreadLayers`, `TestSpreadStacks` (`internal/explodeplan/spread_test.go`) | unchanged assertions; the `Spread` literals name `Shear` in place of `Across`. | — |
+| Test | Asserts |
+|---|---|
+| `TestSpreadMovement` (`parts/explode_spread_test.go`) | With the spread: `Ran`, `Axis` (0, 0, 1), `Shear` (0, 1, 0), `Layers` 5, `Width` 80 mm, `Depth` 120 mm, `Height` 78 mm (each a `Length`), `View` (0, 1, -1)/√2 with length 1. Every `Slide` is zero and every `Offset` equals the opt-out run's. `Overlaps` is empty, parts of different layers are at least 5 mm apart along Z, X or Y, and a second run gives equal offsets. A layout D7 already separates, whose mates show, stays as D7 placed it. |
+| `TestSpreadGate` | The gate holds back a tall stack, the gearbox, a flat coaxial ring of bolts and a thick off-axis movement: `Ran` is false, `Thinness` and `Coaxial` are as the gate table of §5.9 states, and every `Slide` is zero. A non-derived explode has a nil `Spread`; `WithoutExplodeSpread` without `WithDerivedExplode` is `decad.ErrDegenerate`. |
+| `TestSpreadGuides` | On the movement: 9 guides in `Parts` order, all `Inline`; `wheel 2`: `Partner` `arbor 2`, `Joint` `wheel 2 on arbor 2`, `From` (0, 0, -16.5), `To` (0, 0, 12.5), `Size` 24 mm; `arbor 2`: `back plate`, `arbor 2 in the plate`, (0, 0, 6), (0, 0, -21), 32 mm; `bridge`: `arbor 1`, `arbor 1 in the bridge`, (0, 0, -10.5), (0, 0, 20.5), 100 mm; `screw 1`: `bridge`, `screw 1 in the bridge`, (45, 15, 17), (45, 15, 34), 14 mm. With `WithExplodeScale(2)`, `wheel 2` has `From` (0, 0, -43.5) and `To` (0, 0, 14.5). |
+| `TestSpreadStackedGroup` | The pressed movement: `Layers` 7, `Width` 80, `Depth` 120, `Height` 134 mm; every part's `Stage`, `Layer`, `Stack`, `Slide` and `Offset` as the pressed table; `arbor 2`'s box bottom 5 mm above `wheel 2`'s top (38 and 33); `Overlaps` empty; `Hidden(Spread.View)` holds `arbor 2` in front of `wheel 2` with `Covered` 11/81; `wheel 2`'s guide has `Partner` `arbor 2`, `From` (0, 0, 58.5), `To` (0, 0, 31.5) and is `Inline`. Without the stacks `arbor 2` keeps `wheel 2`'s offset and `Overlaps` lists the pair; without the settle `Overlaps` lists `arbor 2` and `bridge`. |
+| `TestSpreadExplicitLayer` | `screw 2` has `Stage` `screw`, `Order` 0, `Layer` 1, zero `Slide`, `Offset` (0, 0, 17); `back plate` alone has `Layer` 0; `arbor 1` and `arbor 3` -1, `wheel 1` and `wheel 3` 3, `bridge` 4, `screw 1` 5. |
+| `TestSpreadSteps` (`parts/explode_spread_test.go`) | The covered movement, gap 5. Without the spread, `dial` has `Round` 1, `Layer` 4, `Offset` (0, 0, 23), and `Hidden((0, 0, -1))` lists `dial` over `bridge` with `Covered` 1. With it: `Ran`, `Shear` (0, 1, 0), `Layers` 6, `Width` 105, `Depth` 120, `Height` 85 mm; `dial` `Slide` (0, 25, 0), every other `Slide` zero; the bridge's box reaches 5 mm beyond the dial's toward -Y; `Overlaps` empty; `Hidden((0, 0, -1))` gives `Covered` 7/8 and `Hidden(Spread.View)` 11/43; the dial's guide (`Partner` `bridge`, `Joint` `dial on the bridge`, `From` (0, 0, 28), `To` (0, 25, 47)) is the only one not `Inline`. |
+| `TestExplodeGuides` (`parts/explode_test.go`) | Every guide of the pin, the top, `pin1` and each bolt of `boltRingSet(t, 8)` is `Inline`. |
+| `TestSpreadSettle` (`internal/explodeplan/spread_test.go`) | Plain boxes, gap 2, `Thin`: layers whose footprints stand apart keep their height, others move outward just past the boxes they meet, on both sides of the base. Offsets and slides along Z are exactly [0, 0, 1, 6, 0, -3] and double with scale 2. |
+| `TestSpreadSteps` (`internal/explodeplan/spread_test.go`) | Plain boxes, gap 2, `Thin`, `Shear` Y, `Rows` X, with `Mates` G-P (coaxial), P-Q, Q-R (coaxial), P-R (coaxial), U-V. Q and R slide (0, 7, 0), V (0, -7, 0), the rest zero: Q steps by 10 − (5 − 2) = 7, R keeps Q's step because their pin stays on its axis, and P-R, off its axis after the step, finds P's band already. `ProjectedCover(P, Q, v)` shows P in front or `Covered` below 1 along (0, 0, -1) (0.8), (0, 1, -1), (0, 1, -3) and (0, 3, -1); likewise U against V. Along (0, -1, -1), outside the set, Q covers P with `Covered` 1. |
+| `TestSpreadCoaxial` (`internal/explodeplan/spread_test.go`) | Coaxial layers do not run the spread. With one footprint off the axis, `Coaxial` is false, `Ran` true and every `Slide` zero. |
+| `TestSpreadLayers`, `TestSpreadStacks` (`internal/explodeplan/spread_test.go`) | The layer numbering of L2 and the stacks of L4a. |
 
 #### Risks
 
 | Choice | What each option costs |
 |---|---|
-| Automatic gate (chosen) or opt-in | The request asks for automatic. The gate's ratio and coaxial test are read off eleven assemblies; an assembly between 0.22 and 0.5, or a nearly coaxial stack with one small part off the axis (the planetary gearbox has a layer centred 5.2 mm off, beside a 7.4 mm wide one), can land on either side. `WithoutExplodeSpread` turns a wrong spread off; nothing turns a missed one on, so a model that needs it above 1/3 asks for a gate change. Opt-in would never surprise a caller but would not meet the request. |
-| Steps only where a mate is covered (chosen), a uniform shear, or a grid | Steps keep every part on its axis and the layout compact (the escapement at 134.2 x 232.5 x 331.4 mm, predicted) but promise only that no joined part of a nearer layer is wholly covered, from views at right angles to `Rows`; a part behind one it is not joined to can stay hidden (L8). A uniform shear (386.7 x 232.5 x 251.0 mm at 25 mm a layer, predicted) moves every column off its bearings' axes. A grid (553.1 x 613.6 x 484.6 mm, measured) hides nothing between layers from a set of views, but places parts far from where they assemble. |
+| Automatic gate (chosen) or opt-in | The request asks for automatic. The gate's ratio and coaxial test are set from a few assemblies; an assembly between the flat plate assemblies and the stacked ones, or a nearly coaxial stack with one small part off the axis, can land on either side. `WithoutExplodeSpread` turns a wrong spread off; nothing turns a missed one on, so a model that needs it above 1/3 asks for a gate change. Opt-in would never surprise a caller but would not meet the request. |
+| Steps only where a mate is covered (chosen), a uniform shear, or a grid | Steps keep every part on its axis and the layout compact (the escapement stays within 150 x 250 x 350 mm) but promise only that no joined part of a nearer layer is wholly covered, from views at right angles to `Rows`; a part behind one it is not joined to can stay hidden (L8). A uniform shear moves every column off its bearings' axes. A grid hides nothing between layers from a set of views, but places parts far from where they assemble. |
 | Coaxial mates not stepped (chosen) or stepped too | A part on its partner's axis reads along that axis, through a bore or around a shaft, but `Hidden` lists it behind its partner (the escapement's front bearings behind the front plate, `Covered` 1). Stepping such pairs would clear the bearings only by moving the 116 mm plate's layer past them, taking every column off its axis. |
-| Settle (chosen) or slabs | The settle keeps D7's shared heights for layers whose footprints stand apart (331.4 mm tall for the escapement, predicted); slabs, which put each layer wholly past the one before, made it 484.6 mm with the same stacks (measured with the grid runner) and buy nothing the steps' promise needs. |
+| Settle (chosen) or slabs | The settle keeps D7's shared heights for layers whose footprints stand apart; slabs, which put each layer wholly past the one before, make the layout taller with the same stacks and buy nothing the steps' promise needs. |
 | Clean views fixed by world-axis signs | `Shear` points positive because nothing in the shape says which side the camera belongs on. For the escapement, `Spread.View` places the camera along (-1, 0, 1) from the target, and the gallery's camera along (-1, 0, 1.2) is in L7's set. A camera on the opposite side along X, or one with a component along Y, is not covered by the promise (L8). |
 | Explicit stages as layers nearest the base (chosen), or kept in the base, or placed outermost | Nearest the base follows the order along the axis the stages already give (every round clears an explicit stage's parts, D7) and changes nothing for an assembly without explicit stages. Kept in the base, a stage's parts sit on the ground and the settle does not lift them. Outermost would read as "removed first" but would put them past every derived layer, far from the ground they were lifted off. |
 | Stacking order by footprint (chosen) or by trailing face | Footprint order puts the smaller member outward, in front for a camera on the side the layer leaves toward: the escapement's arbors in front of their wheels. Trailing order (D6's) would keep the arbor, whose tail reaches lowest, in place and put the wheel in front of it, hiding the arbor from the gallery's camera. Neither order helps a camera on the far side (L8). |
@@ -1363,7 +1264,7 @@ part and a rounded node for a purchased one, and one edge per joint labelled wit
 fixed, and its status when known. Mermaid is text an agent reads directly and GitHub renders, so decad needs no graph
 layout. A drawn layout belongs to the consumer.
 
-With a `JointReport` (P4a), an edge's label ends with its status and, when not `Confirmed`, its cause in brackets
+With a `JointReport`, an edge's label ends with its status and, when not `Confirmed`, its cause in brackets
 (`pin in bore, turns, contradicted (clearance)`). A `Contradicted` edge is drawn with a crossed end (`--x`) and an
 `Undecided` one dotted (`-.->`), so the problem joints stand out in a rendered diagram as well as in its text. A
 `NotChecked` edge keeps the plain arrow.
@@ -1417,7 +1318,7 @@ and plane records that `parts` reads through `Face.Surface`, `Face.NormalAt`, `M
 | M5 | A mesh Boolean result keeps a `Cylinder` or `Plane` tag on a face only where faceted source retention proved it (`agent-docs/faceted-source-retention-design.md`, the `RetainedTag` faces); a displaced retained tag matches with its bound charged. A face whose `Surface` is `Faceted` never matches, and `Face.NormalAt` refuses it with `ErrUnsupported`, so it is never asked for a normal here. A joint whose faces do not match falls back to its declared `Axis`, then to box centres (E2). |
 | M6 | Two or more matches for one declared joint: the one with the longest axial overlap wins, then the smallest `Measured`. Matches of one cylinder split into several faces join into one match. |
 | M7 | `FaceContact`: a planar face of A and one of B with opposed normals within `AxisTolerance`, planes within `MaxFit` of each other, and a positive overlap of their vertex boxes projected onto the plane; the largest overlap wins. The overlap is the box rectangle, so it never under-reports the shared area; it is enough to pick a pull direction, and `Check` confirms shared area with a witness instead (§7.2 J3). |
-| M8 | Faces are read from a mesh made with `VerifyNone` at a chord tolerance of 0.05 mm, then 0.1, 0.2, 0.5 and 5 mm, whichever the body first accepts (the 0.1 and 0.2 mm rungs come with P4a, so a body that refuses 0.05 mm, as a model built with a 0.1 mm chain tolerance does, is not read at 0.5 mm); the mesh gives only the vertices of each face. A face's reading bound is the bound `Face.NormalAt` reports, taken in millimetres for every length test it takes part in. A body no tolerance meshes reads as having no matchable face. |
+| M8 | Faces are read from a mesh made with `VerifyNone` at a chord tolerance of 0.05 mm, then 0.1, 0.2, 0.5 and 5 mm, whichever the body first accepts, so a body that refuses 0.05 mm, as a model built with a 0.1 mm chain tolerance does, is not read as coarsely as 0.5 mm; the mesh gives only the vertices of each face. A face's reading bound is the bound `Face.NormalAt` reports, taken in millimetres for every length test it takes part in. A body no tolerance meshes reads as having no matchable face. |
 
 ### 7.2 Checking
 
@@ -1426,12 +1327,10 @@ the faces and bounds of its two parts? It reads face tags, mesh vertices, body b
 queries with stated bounds, and never calls `Document.Verify`. It does not prove that two parts' interiors are
 disjoint; that is a pair proof, `Verify`'s, which `WithVerifyReport` can feed in when the caller already has one.
 
-`Check` takes this form because the pair proof does not decide a real build's joints. Measured on the crossbow's 51
-parts (2026-11, a dated illustration): `Verify(WithClearances)` took 9 min 57 s and left 771 of 1,275 pairs
-undecided, 64 of them declared joint pairs. Of those 64, 59 involve faceted mesh Boolean parts; about 250 undecided
-pairs in all involve the rivets (a `Union` of two cylinders) or the disc (a chamfered cylinder with no clearance
-reader); 22 are face-on-face contacts. A clearance-kernel fix for oblique pins in bores, designed separately, decides
-one of the 64. A joint check built on the pair proof would leave most joints `Undecided`.
+`Check` takes this form because the pair proof does not decide a real build's joints. On a 51-part crossbow,
+`Verify(WithClearances)` leaves most pairs undecided, among them most declared joint pairs: faceted mesh Boolean parts,
+rivets (a `Union` of two cylinders), a chamfered disc with no clearance reader, and face-on-face contacts. A joint
+check built on the pair proof would leave most joints `Undecided`.
 
 #### 7.2.1 Shared readings
 
@@ -1480,7 +1379,7 @@ question about recorded entities, so `sketch` is not asked.
 | R3 | `Check` never calls `Verify` itself. A report of another document, or one older than a body of the `Set` (it does not name that body), is `decad.ErrDegenerate`. |
 
 `Check` returns a report whenever it ran. A `Contradicted` joint is a finding, not an error. `Inferred` lists `Infer`'s
-matches whose pair no declared joint names (from P6; empty before it).
+matches whose pair no declared joint names.
 
 #### 7.2.5 What stays undecided, and why
 
@@ -1494,8 +1393,7 @@ matches whose pair no declared joint names (from P6; empty before it).
 
 #### 7.2.6 Cost
 
-`Check` costs one `VerifyAll` tessellation per part (G0), the face matching `Explode` already runs (25 ms for the
-crossbow's 51 parts, on cached meshes), one box test per pair, and at most 256 `DistanceToPoint` calls (128 points,
+`Check` costs one `VerifyAll` tessellation per part (G0), the face matching `Explode` already runs, one box test per pair, and at most 256 `DistanceToPoint` calls (128 points,
 two bodies each) per `Contact` or `Keepout` joint, and per `Unexplained` pair under `WithWitnessSearch`. Each call
 reads the body's cached verified mesh. There is no pair proof and no all-pairs distance. The witness search runs
 pairs concurrently, since `DistanceToPoint` is a read of immutable bodies.
@@ -1505,9 +1403,8 @@ pairs concurrently, since `DistanceToPoint` is a read of immutable bodies.
 `Infer` runs M1–M5 over every candidate pair, in both directions (a pin of either part in a receiver of the other),
 and returns each match as a `PinInBore` or `PinInSlot` joint with its measured clearance. Each match of a pair is
 returned, not only the best of M6: a joint name is `A~B`, with `#2`, `#3` for further matches of one pair. It reads
-faces from the `VerifyNone` ladder of M8, as `Explode` does. Coplanar `FaceContact` inference is deferred: it needs the overlap area of two planar faces'
-trims, a 2D question for `sketch` (a private scene of both loops), and no consumer needs it before the gallery's
-declared laps are checked. Touching pairs without a cylinder match appear in `Unexplained` instead.
+faces from the `VerifyNone` ladder of M8, as `Explode` does. Coplanar `FaceContact` inference is not implemented: it needs the overlap area of two planar faces'
+trims, a 2D question for `sketch` (a private scene of both loops). Touching pairs without a cylinder match appear in `Unexplained` instead.
 
 ### 7.4 Moving joints and the linkage check
 
@@ -1552,13 +1449,11 @@ finite, non-negative `units.Density` (`decad.ErrUnitKind`, `decad.ErrNotFinite`,
 `Summary.WriteMarkdown` writes, in this order: the bill of materials table; the joint table with statuses and reasons
 when `Joints` is set; the `Unexplained` pairs; the exploded depth and pull table when `Exploded` is set; the Mermaid
 diagram. Numbers print with their bounds. The joint table lists the Set's joints with the status the report gives;
-the cause, the evidence (`Measured`, `Engaged`, `Gap`, faces read) and the `Unexplained` table come with `Check`
-(P4a), and `Near` with P4b. From P7 the exploded table adds the stage, the moved distance, the clearance, the path
-state and its blocker for each part, and lists `Short`. When the layer spread ran, one line after the exploded table
+the cause and the evidence (`Measured`, `Engaged`, `Gap`, faces read) are shown beside it, and `Unexplained` pairs
+carry `Near` when the witness search ran. The exploded table gives each part's stage, moved distance, clearance, path
+state and blocker, and lists `Short`. When the layer spread ran, one line after the exploded table
 names its layers, axis, `Shear`, extents and `View` (§5.10 "Implementation"). `WriteMarkdown` takes no context: it reads
-volumes and faces only.
-This is the agent's primary view of the schematic: it reads a
-page, not pixels. Images come from the consumer (§11).
+volumes and faces only. An agent reads this page, not pixels; images come from the consumer (§11).
 
 ## 9. Reuse
 
@@ -1575,20 +1470,20 @@ page, not pixels. Images come from the consumer (§11).
 | Volume, mass | `Body.Volume`, `units` arithmetic | none |
 | Transforms | `r3.Translation`, `Then`, `Apply`, `ApplyDir` | none |
 
-New internal packages, each taking plain data (`r3.Vec`, slices, floats in millimetres):
+Three internal packages each take plain data (`r3.Vec`, slices, floats in millimetres):
 
 | Package | Holds |
 |---|---|
 | `internal/jointinfer/` | cylinder and slot matching of M1–M6 on plain cylinder and plane records |
-| `internal/explodeplan/` | the breadth-first walk, travels and offsets of E1–E4, and the port points of V3; from P7 the stage runner of S1–S9 (interval union, union boxes, clearances, scale) and the projected-box overlap of `Hidden`, all on plain boxes, with the swept-box question still asked through its `Blocker` interface |
-| `internal/jointcheck/` | the per-kind rules J1–J5 and G1, G3–G5 on plain matches, boxes and distance intervals; the vertex sample of G2; the overlap witness of J3; the unexplained screen of U1 (P4a) |
+| `internal/explodeplan/` | the breadth-first walk, travels and offsets of E1–E4, and the port points of V3; the stage runner of S1–S9 (interval union, union boxes, clearances, scale) and the projected-box overlap of `Hidden`, all on plain boxes, with the swept-box question still asked through its `Blocker` interface |
+| `internal/jointcheck/` | the per-kind rules J1–J5 and G1, G3–G5 on plain matches, boxes and distance intervals; the vertex sample of G2; the overlap witness of J3; the unexplained screen of U1 |
 
 `parts` keeps only the adapters: it reads faces, boxes and meshes, calls `Body.DistanceToPoint` for the sample points
 `internal/jointcheck` chooses, and hands the intervals back.
 
 ### 9.1 The multi-object 3MF writer
 
-`export` gains one generic writer, so a caller can write the whole build, assembled or exploded, as one 3MF of named
+`export` has one generic writer that writes the whole build, assembled or exploded, as one 3MF of named
 objects. It knows nothing of parts or of any process, and `parts` does not call it.
 
 ```go
@@ -1609,12 +1504,12 @@ func ThreeMFItems(ctx context.Context, w io.Writer, items []ThreeMFItem, tol uni
 ```
 
 Vertices are moved before writing rather than through the 3MF `transform` attribute, so every reader places them the
-same way. `agent-docs/format-io-design.md` gains a section for it in PR E1. With each `ExplodedPart.Placement` as an
+same way. `agent-docs/format-io-design.md` describes it. With each `ExplodedPart.Placement` as an
 item's placement it writes the exploded view as a file any 3MF viewer opens.
 
 ## 10. Gate analysis
 
-`agent-docs/module-boundary.md` must pass before implementation. This section is the evidence each PR quotes.
+This section is the evidence for the gate in `agent-docs/module-boundary.md`.
 
 ### 10.1 Reusable CAD behavior
 
@@ -1623,7 +1518,7 @@ item's placement it writes the exploded view as a file any 3MF viewer opens.
 | Input class stated | Axis matching: faces whose `Surface` is a `Plane` or `Cylinder`, exact or retained with a bound. Explode and views: any live solid body with bounds and a boundary-proved tessellation. Checking: the same faces for pin, slot and face joints, and any solid with bounds, plus a `VerifyAll` tessellation for point witnesses, for contact and keepout joints. 3MF items: any bodies `ThreeMF` writes, under any proper rigid placement. |
 | Behavior by geometric invariants | Coaxiality and radius difference (M3), opposed parallel planes (M4), box travel and swept-box disjointness (E3), box clearance intervals along a direction and box distances (S5, S9), projected box overlap (`Hidden`), box overlap centres (V3), box gaps and point-distance witnesses (G1, G2), plane distance and a shared-area witness (J3). None names a part. |
 | No part-specific or process-specific dispatch | No route reads a name, a fixture, a gallery model or a manufacturing process. Part names are labels only. |
-| Independent cases | §12 lists a pin and plate, a press fit, a slider in a groove, a lap with two pins, a pin through two plates, two touching blocks, two L-shaped plates whose boxes overlap but whose faces do not, a keepout pair with meeting boxes, a faceted-face joint, a rotated copy, and for P7 a housing holding a lever, a group lifted as one, a direction that never clears and a scaled layout; each varies the geometry its rule reads. Stage membership is the caller's naming, never a route the package chooses by part. The crossbow is an acceptance run in the gallery, never a decad fixture (`agent-docs/testing.md` "Test scope"). |
+| Independent cases | §12 lists a pin and plate, a press fit, a slider in a groove, a lap with two pins, a pin through two plates, two touching blocks, two L-shaped plates whose boxes overlap but whose faces do not, a keepout pair with meeting boxes, a faceted-face joint, a rotated copy, and for staged explosion a housing holding a lever, a group lifted as one, a direction that never clears and a scaled layout; each varies the geometry its rule reads. Stage membership is the caller's naming, never a route the package chooses by part. The crossbow is an acceptance run in the gallery, never a decad fixture (`agent-docs/testing.md` "Test scope"). |
 
 ### 10.2 Root package placement
 
@@ -1686,13 +1581,13 @@ computed geometry: offsets, axes, clearances, gaps, coordinates. Fixtures are th
 | Test | Shows | PR |
 |---|---|---|
 | `TestSetRefusals` | every `Add` and `Join` refusal; `Group` from containers | P1 |
-| `TestMatchPinInBore` | the pin and plate match with axis (10, 10, z) and `Measured` 0.2; an off-axis pin and a 2 mm-clearance pin do not | P1 |
-| `TestMatchPinInSlot` | a Ø4 pin in a 4.4 mm groove matches with `Measured` 0.4; walls not parallel to the pin do not | P1 |
-| `TestMatchFaceted` | a joint whose bore reads `Faceted` falls back to its declared `Axis`, then to box centres; no `NormalAt` call on the faceted face | P1 |
-| `TestExplode` | the pin and plate (§4); a lap with two pins: pins along their axes by travel plus gap, plates apart along the face normal; a pin through two plates whose −Z path is blocked takes +Z by `SweptBox` | P1 |
+| `TestMatchBore` (`internal/jointinfer`) | the pin and plate match with axis (10, 10, z) and `Measured` 0.2; an off-axis pin and a 2 mm-clearance pin do not | P1 |
+| `TestMatchSlot` (`internal/jointinfer`) | a Ø4 pin in a 4.4 mm groove matches with `Measured` 0.4; walls not parallel to the pin do not | P1 |
+| `TestExplodeFacetedBoreFallsBack` | a joint whose bore reads `Faceted` falls back to its declared `Axis`, then to box centres; no `NormalAt` call on the faceted face | P1 |
+| `TestExplodePinAndPlate`, `TestExplodeLap`, `TestExplodeBlockedSense` | the pin and plate (§4); a lap with two pins: pins along their axes by travel plus gap, plates apart along the face normal; a pin through two plates whose −Z path is blocked takes +Z by `SweptBox` | P1 |
 | `TestExplodeUnreached` | a part no joint reaches keeps a zero offset and `Depth` −1 | P1 |
 | `TestGraphMermaid` | the lap's diagram: subgraphs per container, node shapes per kind, one labelled edge per joint, parsed line by line | P1 |
-| `TestViews` | centring, `WithPartPose`, ports at a pin's axis midpoint and at a box-overlap centre | P2 |
+| `TestViewsCentringAndPorts`, `TestViewsPosesAndFallbackPorts` | centring, `WithPartPose`, ports at a pin's axis midpoint and at a box-overlap centre | P2 |
 | `TestThreeMFItems` | object names, moved vertices, one tessellation for a repeated body, reflection refusal, determinism | E1 |
 | `TestBOM`, `TestSummaryMarkdown` | the lap's rows, `Spec` grouping and its volume falsifier; the page's sections in order | P3 |
 | `TestCheckPins` | Ø6 in Ø6.4: `Confirmed`, `Measured` 0.2, `Engaged` 10; declared 0.3 `Contradicted` (`CauseClearance`); a declared axis 1 mm off `Contradicted` (`CauseAxis`); a pin 1 mm off the bore's axis `Contradicted` (`CauseNoMatch`) with `Reason` naming both radii; a Ø6.1 pin in a Ø6 bore declared −0.05 `Confirmed`, undeclared `Contradicted` (`CauseInterference`); a pin 5 mm clear of the plate `Contradicted` (`CauseApart`) | P4a |
@@ -1700,14 +1595,14 @@ computed geometry: offsets, axes, clearances, gaps, coordinates. Fixtures are th
 | `TestCheckUnread` | a bore whose face reads `Faceted` (a rotated copy past retention) makes its pin joint `Undecided` (`CauseUnreadFace`), never `Contradicted`; its declared `Axis` is reported | P4a |
 | `TestCheckFaceContact` | two stacked blocks `Confirmed` with a witness on the shared plane; blocks 0.5 mm apart `Contradicted` (`CauseApart`); two L-shaped plates on one plane whose vertex boxes overlap but whose faces do not stay `Undecided` (`CauseNoWitness`), never `Confirmed` | P4a |
 | `TestCheckUnexplained` | touching blocks with no joint are listed with their box overlap; with a `FaceContact` they are not; blocks 1 mm apart are not listed (U3) | P4a |
-| `TestCheckNoVerify` | `Check` on the pin and plate leaves the document's history and live set as they were, and its result is the same with and without `WithVerifyReport` when the report adds nothing | P4a |
-| `TestGraphStatus` | edge labels end with status and cause; contradicted edges use `--x`, undecided ones `-.->` | P4a |
+| `TestCheckLeavesTheDocumentAlone` | `Check` on the pin and plate leaves the document's history and live set as they were, and its result is the same with and without `WithVerifyReport` when the report adds nothing | P4a |
+| `TestGraphMermaid` | also the status labels: an edge label ends with status and cause, and a contradicted edge uses `--x` | P4a |
 | `TestCheckContact` | a block resting on another `Confirmed` with a witness whose `Gap` upper end is within 0.25 mm; blocks 2 mm apart `Contradicted` (`CauseApart`); a contact between parts meshed coarser than the tolerance allows `Undecided` ("below resolution", G5) | P4b |
 | `TestCheckKeepout` | blocks 5 mm apart with `MinGap` 2 `Confirmed` by boxes; L-shaped parts whose boxes meet but whose nearest points are 1 mm apart `Contradicted` (`CauseTooClose`) by a witness; the same parts 3 mm apart `Undecided` (`CauseNeedsPairProof`), then `Confirmed` with a `WithVerifyReport` report | P4b |
 | `TestCheckWitnessSearch` | `WithWitnessSearch` sets `Near` on an unexplained touching pair and not on a pair whose boxes meet while its bodies stay 1 mm apart | P4b |
 | `TestLinkage` | a hinge and a slider become a revolute and a prismatic link with declared contacts; a loop joint comes back unplaced; `VerifyLinkage` runs on the result | P5 |
 | `TestInfer` | a lap with two pins infers both pins and nothing else; a rotated copy infers through retained tags (M5) | P6 |
-| `TestExplodeStagesDefault` | no stages gives the offsets of P1's `TestExplode` exactly, with every P7 field filled: `Stage` "", `Gap` 10 mm, `Moved` the offset's length | P7 |
+| `TestExplodeStagesDefault` | no stages gives the offsets of `TestExplodePinAndPlate` and `TestExplodeLap` exactly, with every staging field filled: `Stage` "", `Gap` 10 mm, `Moved` the offset's length | P7 |
 | `TestExplodeStagesHousing` | the §4 housing: the one-stage overlap, the three stage offsets, `Travel` 24 and `Moved` 34 for the lever, `PathEnclosed` with both blockers, zero `Overlaps` and `Short` | P7 |
 | `TestExplodeClearAllIntervals` | a box moving through a row of three standing boxes with gaps of 3, 8 and 30 mm between them and a 5 mm gap asked: it stops in the 30 mm space, not the 8 mm one, at the travel the interval union gives | P7 |
 | `TestExplodeTogether` | two parts lifted as one keep their relative place; a later stage takes them apart from there; `Leaders` follow the final offsets | P7 |
@@ -1736,9 +1631,9 @@ in `decad-gallery`. Each phase is accepted when its real output passes through t
 an exploded image and a diagram of all 51 parts, P2 by a part sheet, P4a and P4b by the whole assembly's `Check`, P5
 by its linkage.
 
-**`Check` on the crossbow.** The model declares 82 joints: 46 `PinInBore`, 4 `PinInSlot`, 15 `FaceContact`, 9
-`Contact` and 8 `Tie` (the bands). The figures below are dated illustrations from P1's acceptance run (2026-11) and
-the model's layout, not measurements of `Check`:
+**`Check` on the crossbow.** The gallery model declares 82 joints: 46 `PinInBore`, 4 `PinInSlot`, 15 `FaceContact`, 9
+`Contact` and 8 `Tie` (the bands). The expectations below come from what `Explode` read on that model and from its
+layout; they are targets for the gallery's run, not measurements of `Check`:
 
 | Kind | Joints | Expected | Basis |
 |---|---|---|---|
@@ -1750,13 +1645,11 @@ the model's layout, not measurements of `Check`:
 
 **Targets.** Of the 74 checked joints, at least 51 `Confirmed` (40 + 4 + 7), the 6 misdeclared rivet joints
 `Contradicted`, no `Contradicted` joint the gallery cannot trace to a modelling error, and every `Undecided` one
-carrying a cause. Time: P4a's structural rules under 5 s for the whole model after its parts are built (the face
-matching alone takes 25 ms on cached meshes; `VerifyAll` tessellation of 51 parts dominates); P4b's witnesses under 60 s
-more with `WithWitnessSearch`, against 9 min 57 s for `Verify`. A miss on either target stops the PR and is reported
-with the measurement.
+carrying a cause. Time: the structural rules under 5 s for the whole model after its parts are built (`VerifyAll`
+tessellation of 51 parts dominates), and the witnesses under 60 s more with `WithWitnessSearch`.
 
-**Staged explosion on the crossbow (P7).** The gallery's hand-tuned layout (`StagedExplosion` in
-`models/crossbow/schematic_explode.go`, dated illustration, 2026-11) shows what the stages must reproduce. The
+**Staged explosion on the crossbow.** The gallery's hand-tuned layout (`StagedExplosion` in
+`models/crossbow/schematic_explode.go`) shows what the stages must reproduce. The
 one-stage `Explode` left the receiver halves, side plates and links in front of the mechanism; it pulled the hooks,
 trigger, limbs and bands, whose joints are contacts or ties, along box-centre lines; 15 exploded box pairs met. The
 hand layout opens the receiver symmetrically and sends the side layers out along ±Y in the order the parts come off
@@ -1785,8 +1678,7 @@ contact and tie joints of the hooks, trigger, limbs and bands (±Y by side for t
 | train pins | the train's five pins again | `ClearAll`, gap 10 mm, joint axes | each 10 mm out of the lifted train |
 | "" | the bow, its pins and posts, the band strands | `ClearJoined`, `WithExplodeGap`, `Pull` on the limbs | forward of the fore-end |
 
-Eleven stages for 51 parts replace 40 hand-set offsets; every distance comes from the boxes, so a model edit moves
-the layout with it. Targets, each read from `Exploded`, not from an image:
+Every distance comes from the boxes, so a model edit moves the layout with it. Targets, each read from `Exploded`, not from an image:
 
 - `Overlaps` holds no pair of two `Manufactured` parts after the last stage; pairs with a band strand are listed and
   accepted, because a strand runs between parts that move apart. The hand layout's 2 is the bar to match.
@@ -1794,79 +1686,51 @@ the layout with it. Targets, each read from `Exploded`, not from an image:
 - `Short` names no part of the open, shell, plates, hooks, followers, links, hook pins, train or top stages.
 - `Hidden` along each of the gallery's four exploded cameras reports no `Covered` of 1 for the release nut, sear,
   trigger bar, hooks, carriage or links.
-- `Explode` with the eleven stages takes under 0.5 s on the built model (one stage takes about 30 ms, dated
-  illustration), and two runs give equal exploded 3MF bytes.
+- Two runs of `Explode` with the stages give equal exploded 3MF bytes.
 
-The table is a plan, not a measurement. The first P7 crossbow run (2026-11, ground `receiver-right`, the gallery's own
-`Schematic` joints with `Pull` declared) reached every target with thirteen stages: the table's eleven, with the
-train's five parts moving one by one (`Together` kept the interlocked release nut and sear overlapping, so it is not
-used for the train) and the bow in two stages of its own (risers and limbs along +X, then their pins on their axes),
-and with every gap 20 mm except the shell's 10 for `receiver-front` by `WithPartGap`. It left no two manufactured parts
-meeting (two band-strand pairs meet), every pin and slot leader at least 20 mm, no `Hidden` cover of 1 on the release
-nut, sear, trigger bar, hooks, carriage or links along the gallery's four cameras, `Short` naming only the bow pins and
-the band strands, and the largest offset 287 mm (the lug pin; the hand layout's 205 mm). Explode took 38 ms and two
-runs wrote equal 3MF bytes.
+The table is a plan, not a measurement. In the gallery's own `Schematic` joints, the train's five parts move one by one
+(`Together` keeps the interlocked release nut and sear overlapping), so it is not used for the train.
 
-**CI shards** (`agent-docs/testing.md`). `parts/` is a new package: the CI workflow's race job must name it, or
-`TestCIWorkflowRaceShardsCoverEveryPackage` fails; it joins the `./decadtest/ ./export/ ./internal/decaderr/ ./parts/` job
-(the support-package job and shard 0), moving to its own runner only if measured time asks. The new internal packages fall under `./internal/...`. No
-root-package test is added, so `.github/test-shards.txt` and `test-shards-apitest.txt` stay unchanged. The examples
-run in the independent examples job. Run `go test . ./apitest/ -run '^TestCI'` before each push.
+**CI shards** (`agent-docs/testing.md`). `parts/` is in the CI race job `./decadtest/ ./export/ ./internal/decaderr/
+./parts/` (the support-package job and shard 0); `TestCIWorkflowRaceShardsCoverEveryPackage` fails when a package is in
+no race job. The internal packages fall under `./internal/...`. No root-package test belongs to `parts`, so
+`.github/test-shards.txt` and `test-shards-apitest.txt` do not list it. The examples run in the independent examples
+job. Run `go test . ./apitest/ -run '^TestCI'` before each push.
 
 ## 13. Phasing
 
-The order puts a real exploded view and connection diagram of the crossbow first. Each PR carries its section of this
-document, its layout rows, its `docs/api.md` and `docs/data-structures.md` entries, its examples, and the Module
-boundary gate evidence in its description. P1 also carries this document. Sizes are rough line counts with tests.
+Each phase shipped with its section of this document, its layout rows, its `docs/api.md` and
+`docs/data-structures.md` entries, its examples and the Module boundary gate evidence. Every phase below has shipped.
 
-| PR | Content | Needs | Size |
-|---|---|---|---|
-| P1 | this document; `Kind`, `Material`, `Part`, `Joint`, `Axis`, `Set`, `Add`, `Join`; `internal/jointinfer` axis matching (M1–M6); `Explode` with `internal/explodeplan`; `Graph` and `WriteMermaid`; explode example; CI job entry | — | 1,300 |
-| E1 | `export.ThreeMFItems` and its section in `agent-docs/format-io-design.md` | — | 300 |
-| P2 | `Views` and ports; views example | P1 | 350 |
-| P3 | `BOM`, `Summary`; summary example | P1 | 500 |
-| P4a | the §7.2 design delta; `internal/jointcheck`; `Check` for `PinInBore`, `PinInSlot`, `FaceContact` and `Tie` (G0, G1, G3, G4, J1–J3, J6), `Unexplained` by boxes (U1, U3), `JointReport`, `CheckRequest`, `Cause`; M8's finer rungs; edge statuses in `Graph`; the joint table's cause and evidence columns in `Summary`; joints example | P1–P3 (landed) | 900 |
-| P4b | point witnesses (G2, G5), `Contact` and `Keepout` (J4, J5), `WithWitnessSearch` (U2), `WithVerifyReport` (R1–R3) | P4a | 600 |
-| P5 | `Set.Linkage` | P4a | 450 |
-| P6 | `Infer` and `JointReport.Inferred` | P4a | 300 |
-| P7 | the §5.2–§5.6 design delta; `Stage`, `Clearing`, `PathState`, `Occlusion`; `Joint.Pull` and `PullDeclared`; `WithExplodeStages`, `WithPartGap`, `WithExplodeScale`; the stage runner in `internal/explodeplan` (S1–S9), the ground in a stage with a `Direction`; the P7 fields of `Exploded`, `ExplodedPart` and `Leader`; `Exploded.Hidden`; the exploded table's new columns in `Summary`; staged example | P1–P6 (landed) | 850 |
-| P9 | §5.9 and §5.10 with H1; `WithoutExplodeSpread`, `Spread`, `Guide`, `Exploded.Guides`, `Exploded.Spread`, `ExplodedPart.Layer` and `Slide`; `internal/explodeplan` spread step, stops and `Outcome`; exact `Hidden`; the summary line; spread example | P7 and §5.8 (landed) | 700 |
-| P10 | §5.9 L2's explicit-stage layers, L4a stacks and `ExplodedPart.Stack`; §5.10's partner guides (`Guide` fields `Partner`, `Joint`, `From`, `To`, `Size`); the joints and the pressed variant of `movementSet` | P9 (landed) | 450 |
-| P11 | §5.9 L4 steps and L5 settle in place of slabs and the cell grid; `Spread.Shear`, `Width`, `Depth`, `Height` and `View`; `explodeplan.Mate`; §5.10 T6's `Guide.Inline`; the covered movement; the files and tests of §5.10 "Implementation of §5.9 and §5.10" | P10 (landed) | 500 |
-
-P1 to P6 have landed. P7 is one PR; `Hidden` (about 100 lines with its test) can leave it for a follow-up if review
-asks for a smaller one.
-
-**Parallel work.** P4a comes first: it decides the pin, slot and face joints, 65 of the crossbow's 74 checked joints,
-without a single distance query. After P4a, P4b, P5 and P6 run in parallel; none edits another's rules. P5 reads
-only `JointResult.Axis`, which P4a fills.
-
-P1 is the largest PR because the exploded view needs the axis matching; splitting it further would ship a `Set`
-nobody can look at. If review asks for a smaller first PR, P1 splits into P1a (`Set`, `Join`, `Graph`,
-`WriteMermaid`: the diagram, 500) and P1b (`internal/jointinfer`, `Explode`: the exploded view, 800).
-
-Before P1 grows past its first case, `Explode` runs on the real 51-part crossbow and the count of joints whose `Pull`
-is `BoxCentres` (no axis from faces or declaration) is recorded. Before P4a grows past the pin case, `Check` runs on
-the real crossbow and its time and status counts are recorded against §12's targets; before P4b grows past the
-`Contact` case, the same for the witnesses. Before P7 grows past the housing case, the gallery's crossbow runs the
-stages of §12 and its `Overlaps`, `Short` and timing are recorded. If a run misses its target, expansion of that PR
-stops and the blocker is reported.
+| PR | Content | Needs |
+|---|---|---|
+| P1 | this document; `Kind`, `Material`, `Part`, `Joint`, `Axis`, `Set`, `Add`, `Join`; `internal/jointinfer` axis matching (M1–M6); `Explode` with `internal/explodeplan`; `Graph` and `WriteMermaid`; explode example; CI job entry | — |
+| E1 | `export.ThreeMFItems` and its section in `agent-docs/format-io-design.md` | — |
+| P2 | `Views` and ports; views example | P1 |
+| P3 | `BOM`, `Summary`; summary example | P1 |
+| P4a | the §7.2 design delta; `internal/jointcheck`; `Check` for `PinInBore`, `PinInSlot`, `FaceContact` and `Tie` (G0, G1, G3, G4, J1–J3, J6), `Unexplained` by boxes (U1, U3), `JointReport`, `CheckRequest`, `Cause`; M8's finer rungs; edge statuses in `Graph`; the joint table's cause and evidence columns in `Summary`; joints example | P1–P3 |
+| P4b | point witnesses (G2, G5), `Contact` and `Keepout` (J4, J5), `WithWitnessSearch` (U2), `WithVerifyReport` (R1–R3) | P4a |
+| P5 | `Set.Linkage` | P4a |
+| P6 | `Infer` and `JointReport.Inferred` | P4a |
+| P7 | the §5.2–§5.6 design delta; `Stage`, `Clearing`, `PathState`, `Occlusion`; `Joint.Pull` and `PullDeclared`; `WithExplodeStages`, `WithPartGap`, `WithExplodeScale`; the stage runner in `internal/explodeplan` (S1–S9), the ground in a stage with a `Direction`; the P7 fields of `Exploded`, `ExplodedPart` and `Leader`; `Exploded.Hidden`; the exploded table's new columns in `Summary`; staged example | P1–P6 |
+| P9 | §5.9 and §5.10 with H1; `WithoutExplodeSpread`, `Spread`, `Guide`, `Exploded.Guides`, `Exploded.Spread`, `ExplodedPart.Layer` and `Slide`; `internal/explodeplan` spread step, stops and `Outcome`; exact `Hidden`; the summary line; spread example | P7 and §5.8 |
+| P10 | §5.9 L2's explicit-stage layers, L4a stacks and `ExplodedPart.Stack`; §5.10's partner guides (`Guide` fields `Partner`, `Joint`, `From`, `To`, `Size`); the joints and the pressed variant of `movementSet` | P9 |
+| P11 | §5.9 L4 steps and L5 settle in place of slabs and the cell grid; `Spread.Shear`, `Width`, `Depth`, `Height` and `View`; `explodeplan.Mate`; §5.10 T6's `Guide.Inline`; the covered movement; the files and tests of §5.10 "Implementation of §5.9 and §5.10" | P10 |
 
 ## 14. Risks and open questions
 
 | Risk or unknown | What settles it |
 |---|---|
-| A face of a mesh Boolean result keeps a `Cylinder` tag only where retention proved it; other faces read `Faceted`. The crossbow's moving parts are placed by rotations about +Y, so their bores may read as displaced retained tags or as `Faceted`, and M3 may not match them. | P1's crossbow run counts `Pull` sources. A declared `Axis` covers each unmatched pin; the exploded view stays right, and `Pull` shows which axes were stated rather than read. |
-| `Verify` is slow and mostly undecided on a real build (9 min 57 s, 64 of 82 crossbow joint pairs undecided), so `Check` does not use it. Its pair proof stays the only proof that interiors are disjoint. | `Check` is structural (§7.2). Faster, more decisive pair proofs are clearance-kernel work, a decad change outside `parts`; `WithVerifyReport` reads one when a caller has it. |
-| `DistanceToPoint`'s enclosure width on a faceted part is unknown; if it is much wider than the mesh bound, G5 leaves most `Contact` joints `Undecided`. | P4b's first crossbow run measures the witness sums for the 9 contacts. |
-| The cost of `VerifyAll` tessellation and of `DistanceToPoint` per call on the crossbow's parts is unmeasured. The gallery already meshes all 51 parts with `VerifyAll` at 0.1 mm in its tests. | The P4a and P4b crossbow runs against §12's targets. |
-| A 64-point sample per side can miss a small touching spot, leaving a true contact `Undecided`. | `CauseNoWitness` says so; raising the sample is a constant to revisit with the P4b measurement. |
+| A face of a mesh Boolean result keeps a `Cylinder` tag only where retention proved it; other faces read `Faceted`. The crossbow's moving parts are placed by rotations about +Y, so their bores may read as displaced retained tags or as `Faceted`, and M3 may not match them. | The gallery's crossbow run counts the joints whose `Pull` is `BoxCentres`. A declared `Axis` covers each unmatched pin; the exploded view stays right, and `Pull` shows which axes were stated rather than read. |
+| `Verify` is slow and mostly undecided on a real build, so `Check` does not use it. Its pair proof stays the only proof that interiors are disjoint. | `Check` is structural (§7.2). Faster, more decisive pair proofs are clearance-kernel work, a decad change outside `parts`; `WithVerifyReport` reads one when a caller has it. |
+| `DistanceToPoint`'s enclosure width on a faceted part is unknown; if it is much wider than the mesh bound, G5 leaves most `Contact` joints `Undecided`. | A crossbow run measures the witness sums for the 9 contacts. |
+| The cost of `VerifyAll` tessellation and of `DistanceToPoint` per call on the crossbow's parts is unmeasured. The gallery already meshes all 51 parts with `VerifyAll` at 0.1 mm in its tests. | The crossbow runs against §12's targets. |
+| A 64-point sample per side can miss a small touching spot, leaving a true contact `Undecided`. | `CauseNoWitness` says so; raising the sample size is a constant to revisit with a measurement. |
 | E3's box test is coarse: a long pin's swept box may meet a neighbour's box though the pin's path is clear. | E3 then falls back to the shorter travel, and `Overlaps` reports any exploded boxes that still meet. |
-| Boxes are a poor stand-in for long, diagonal or L-shaped parts: a crossbow link's box covers much empty space, so `ClearAll` can push parts far past what the eye needs, and `Overlaps` can list pairs that do not touch. | The P7 crossbow run shows how wide the result gets. Clearing against meshes instead of boxes is a later option if boxes prove too coarse; P7 does not add it. |
+| Boxes are a poor stand-in for long, diagonal or L-shaped parts: a crossbow link's box covers much empty space, so `ClearAll` can push parts far past what the eye needs, and `Overlaps` can list pairs that do not touch. | A crossbow run shows how wide the result gets. Clearing against meshes instead of boxes is not implemented. |
 | `ClearAll` along an axis can send a part through the far side of a wide enclosure; the move is legal, and `PathEnclosed` says the box test could not judge the path. | A stage `Direction` or an earlier stage that opens the enclosure; the caller chooses. |
 | A `Pull` declared on a joint states the author's intent, not geometry; a wrong one sends a part the wrong way. | `Pull` reads `PullDeclared` in the output, and the `Overlaps`, `Short` and `Separation` readings show a bad result. |
 | The layer spread's gate, its steps, its view promise and its settle each have a drawback on every option. | The "Risks" table at the end of §5.10. |
-| The request mentioned a joint-chain checking program on branch `feat-joint-chain-check`. No such branch or worktree exists; the work merged as #665, "check joint chains with VerifyLinkage", and is the linkage check §7.4 consumes. | Nothing further, unless another branch was meant. |
 
 ## 15. Gallery adoption
 
