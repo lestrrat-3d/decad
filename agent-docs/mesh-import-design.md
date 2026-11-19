@@ -1,8 +1,8 @@
 # Mesh import design
 
-`ReadSTL` and `ReadOBJ` read an STL or OBJ file into a `MeshBody`: triangles and nothing else. A `MeshBody` is not a `Body`. It
-has no faces, edges or analytic surfaces, and no feature, Boolean or `Verify` takes it, and only the mesh writers of §6 export it. It reads out what its
-triangles say, so a mesh from another tool can be checked (is it closed, how much does it hold, how large is it)
+`ReadSTL` and `ReadOBJ` read an STL or OBJ file into a `MeshBody`: triangles and nothing else. A `MeshBody` is not a
+`Body`. It has no faces, edges or analytic surfaces, and no feature, Boolean or `Verify` takes it, and only the mesh
+writers of §6 export it. It reads out what its triangles say, so a mesh from another tool can be checked (is it closed, how much does it hold, how large is it)
 before a model is built around it. The separate type is `agent-docs/api-design.md` invariant 5.
 
 ## 1. Contract
@@ -30,8 +30,8 @@ func WithMaxMeshBytes(n int64) MeshImportOption
 var ErrMalformedMesh, ErrMeshTooLarge error
 ```
 
-The readers live in the root package because a separate public package would need its own race shard in
-`.github/workflows/ci.yml`. The parsing is plain-data code in `internal/meshparse/`.
+The readers live in the root package because a separate public package would need its own race shard
+(`agent-docs/testing.md`, Shard manifests). The parsing is plain-data code in `internal/meshparse/`.
 
 | Decision | Rule |
 |---|---|
@@ -76,7 +76,7 @@ triangles, two shells and an inverted mesh.
 
 ## 5. Not covered
 
-- STEP and IGES import, and 3MF materials, colours, slices and beam lattices.
+- STEP and IGES import (`agent-docs/format-io-design.md`), and 3MF materials, colours, slices and beam lattices (T8).
 - Turning a `MeshBody` into a `Body`, or taking one in a feature, a Boolean or `Verify`.
 - Reduction that keeps the surface within a stated distance of the source, and remeshing.
 - Repair beyond §7: self-intersections, edges three triangles use, bent holes closed to their true surface, and slivers.
