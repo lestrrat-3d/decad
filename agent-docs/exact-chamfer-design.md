@@ -40,8 +40,8 @@ Navigation, not authority.
 ## 1. Problem and root cause
 
 The gallery dovetail chamfers the two lip edges of a socket made by `Cut` (0.5 mm, edges along the slide axis, the
-flank tilted 10° from square). The `τ` path (§4.1's fallback) gives the chamfered socket a volume bound of
-`0.020087`, against `2.0e-12` for the socket `Cut` alone.
+flank tilted 10° from square). The `τ` path (§4.1's fallback) gives the chamfered socket a volume bound far above the
+socket `Cut` alone; the exact path pins growth at most `1e-11` (`TestRetainedLineChamferExact`).
 
 The lip edges take `retainedblend.Chamfer` → `rewriteLineEdge` (R1). The bound has one cause:
 
@@ -49,13 +49,11 @@ The lip edges take `retainedblend.Chamfer` → `rewriteLineEdge` (R1). The bound
    (`internal/retainedblend/rewrite.go`), the chord tolerance of a fillet's cylinder rows. `rewriteLineEdge` gives
    every row vertex the bound `w.tau + slack` (`internal/retainedblend/line_rewrite.go`, `w.vertex(setbackPoint(...),
    w.tau+slack)`). A chamfer has two straight rows and no chord, yet each of its four feet gets
-   `2⁻¹¹ + 2.27e-13 = 4.8828125e-4` mm. Measured: every new vertex reads `±0.0004882812502273737`.
+   the bound `w.tau + slack`, about `2⁻¹¹` mm for the dovetail's `d = 0.5`.
 2. **Claim K multiplies it by the strip.** `measureChange` charges `ε·(area(strip) + area(blend))` with `ε` the
-   strip's largest vertex bound: `4.8828e-4 × (10.2846 + 10.2846) = 0.010044` per edge, `0.020087` for two. That is
-   the whole volume bound.
+   strip's largest vertex bound. That product is the whole volume bound.
 3. **Face bounds follow.** The eight faces holding a foot (two lip tops, two flanks, two chamfer faces, two end faces)
-   read area bounds `0.016–0.036` (`FaceAreaGeom`: `δ_f × perimeter`; chamfer face
-   `4.8828e-4 × 33.2856 = 0.016254`), and their `FaceBound` is `4.88e-4`, so coplanar-contact §3.1 refuses every pair
+   read area bounds of `FaceAreaGeom`, `δ_f × perimeter`, and their `FaceBound` is the foot bound, so coplanar-contact §3.1 refuses every pair
    that touches them.
 4. **Feet are computed in floats.** `setbackPoint(e₀ + wA·tA, d̂, g)` normalizes normals and divides by `d̂·n_G`. A lip
    top foot that is exactly `x = −5.5` comes out `−5.500000000000001`. retained-edge-blend §4 and §5.2 already require
@@ -70,12 +68,12 @@ Two further facts bound what any Chamfer change can reach:
 - **Tilted feet are irrational.** A foot on a tilted face is `V + tA·u/|u|` with `|u|²` a dyadic rational that is not a
   square, so it has no float. Float points on the dovetail flank's line through `(−5, 0)` and `(−6.05796188425079, 6)`
   are spaced by the whole edge: none lies between `z = 0` and `z = 6`. The flank, the chamfer face and the end faces
-  that hold a tilted foot keep a rounding-level bound (about `2e-16` mm) under any float representation.
+  that hold a tilted foot keep a rounding-level bound (at most `1e-14` mm in R3's test) under any float representation.
 - **The tail half fails by a different route.** The tail is an exact prism chamfered by the section rewrite
   (`offset2d.setbackFoot`), whose record denotes its float feet (modify §5 convention, `SectionDelta` 0). The trimmed
   flank therefore runs through the rounded foot, which lies strictly outside the original flank line (exact
-  orientation test). The chamfered tail against an unchamfered socket reads `Suspect`, "proven to overlap"; the
-  unchamfered pair reads `Sound`.
+  orientation test). The chamfered tail therefore overlaps an unchamfered socket by a held float
+  residual, and no test pins the pair's `Verify` status.
 
 **Out of scope:** the prism section-rewrite chamfer (tail, §9 Q2); contact classification of faces with a
 rounding-level bound (§9 Q1); fillets; R2–R7, chain, mitre and corner routes (§9 Q4); the chamfer face's tag (§9 Q3);
@@ -90,7 +88,7 @@ the proximity gate.
   enclosure, below `2e-14` mm at coordinates under 100 mm).
 - **E3.** A face rebuilt by an R1 chamfer whose vertices all have bound 0 has `FaceBound` 0, and the chamfer adds
   nothing to `VolSymDiff` when every foot is exact.
-- **E4.** The dovetail socket's lip chamfer reads a volume bound below `1e-11` (the fallback reads `0.020087`), and its lip top
+- **E4.** The dovetail socket's lip chamfer reads a volume bound below `1e-11` (the fallback bound is far larger), and its lip top
   feet (`x = ±5.5`) carry bound 0.
 - **E5.** An R1 chamfer of a square lip on a mesh `Cut` socket, paired with an exact flush prism, reads `Sound`,
   `Intersect` returns `BooleanEmpty`, and `Union` volume equals the sum of the halves. No test pins E5 yet (§7.3).
@@ -111,10 +109,9 @@ all exact charge 0.
 **Alternatives considered:**
 
 - **Drop `τ`, keep the float computation with `64·ulp·scale`.** Rejected: `setbackPoint` divides by `d̂·n_G` down to
-  `10⁻³` and normalizes twice, so `64·ulp` of scale is not a proven bound once `τ` stops hiding it; it never reaches 0
-  (probe: `9.5e-12`, still `Suspect`).
-- **Snap feet to a float grid and claim zero.** Unsound: a snapped tilted foot is off its plane (probe: plane slab
-  charge `6.6e-8`, pair `undecided`).
+  `10⁻³` and normalizes twice, so `64·ulp` of scale is not a proven bound once `τ` stops hiding it; it never reaches 0.
+- **Snap feet to a float grid and claim zero.** Unsound: a snapped tilted foot is off its plane, so the slab
+  term of §4.4 must charge that distance.
 - **Rotate the trimmed face through the float foot** (the prism convention). Makes an exact polyhedron but moves a face
   off its plane; the chamfered tail shows the result: a held overlap against a flush partner.
 - **Chamfer by a polyhedral cutter `Cut`.** The cutter's corners round the same way, and the `Cut` adds rim bounds of
