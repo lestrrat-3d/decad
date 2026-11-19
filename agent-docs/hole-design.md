@@ -11,7 +11,8 @@ func Hole(ctx context.Context, b *Body, spec HoleSpec) (*Body, error)
 ```
 
 `HoleSpec` holds `Face` (a `FaceSelector`), `At` (a world `r3.Vec`), `Diameter`, `Depth` (`ThroughHole` or
-`BlindHole`), an optional `Head` (`Counterbore` or `Countersink`) and an optional `Shape` (`RectangularHole`, §5, `SlotHole`, §6, or `PolygonHole`, §10). `Hole` retires `b` and returns the drilled body.
+`BlindHole`), an optional `Head` (`Counterbore` or `Countersink`) and an optional `Shape` (`RectangularHole`, §5, `SlotHole`, §6, `PolygonHole`, §10, or `OutlineHole`, §13), an optional `Thread`
+(§8) and an optional `Draft` (§9). `Hole` retires `b` and returns the drilled body.
 
 | Decision | Rule |
 |---|---|
@@ -47,7 +48,7 @@ face. A countersink cut gives a faceted result whose planar faces are split into
 ## 4. Not covered
 
 - A hole in a face that is not an analytic plane or cylinder, or in a sheet. A draft in a hole on a cylindrical face.
-- A noncircular hole other than `RectangularHole`, `SlotHole` and a regular `PolygonHole`, a threaded shaped hole, and a thread on a counterbore or countersink.
+- A noncircular hole other than `RectangularHole`, `SlotHole`, a regular `PolygonHole` and an `OutlineHole`, a threaded shaped hole, and a thread on a counterbore or countersink.
 - Several holes in one call. Call `Hole` per hole, or build one hole and use `Patterned`.
 
 ## 5. Rectangular holes
