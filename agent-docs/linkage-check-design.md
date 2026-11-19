@@ -875,8 +875,7 @@ each of its ends, which is at least the minimum over it.
   than `1/1024`; the segment term closes the reading before the verdict floor. Red when the projection bound
   is dropped: the reading then refines to `1/16384` (§10). The reading floor's leg (§11) runs the same arm at
   `WithMotionTolerance(Scalar(1e-5))`: `Sound` with some interval narrower than `1/1024`
-  (`TestVerifyLinkageReadingFloor`); red when the segment term is dropped, since the box form's first-order defect
-  then leaves the reading beyond tolerance at the reading floor.
+  (`TestVerifyLinkageReadingFloor`).
 - **Scene 13 — the pendulum (the remainder's leg).** A block `x ∈ [−5, 5], y ∈ [−50, −40], z ∈ [0, 10]`
   hangs from a revolute joint about `Z` through the origin and swings `0° → 90°` toward a wall
   `x ∈ [−100, 100], y ∈ [20, 40], z ∈ [−10, 20]` above the pivot. Its highest corner is `(5, −40)`, at
@@ -887,8 +886,8 @@ each of its ends, which is at least the minimum over it.
   covers the remainder and half of it does not near `0°`. Assert, at `WithResolution(Scalar(1.0/16))`,
   every `IntervalClear` interval's `Clearance` at or below `g` at its far end; red when `Rem` is dropped
   and when it is halved. At `WithMotionTolerance(Scalar(1e-5))` assert `Sound`: the minimum, `15` mm at
-  the drive's end, is approached at `40` mm per radian and the travel bound sits about `5.1` mm per radian
-  of the last step below it, so the gate admits it only at a step below the reading floor, and the travel bound reads
+  the drive's end, is approached at `40` mm per radian and the travel bound sits below it by an amount proportional
+  to the last step, so the gate admits it only at a step below the reading floor, and the travel bound reads
   `Suspect` alone, which is the leg that goes red when the projection bound is dropped. The same scene stated along each of the six directions — the wall on each
   side of the pivot, the block hanging opposite — reads `Sound` at that tolerance; red when that direction
   is dropped. **The pendulum under a slide:** the pivot carried by a prismatic joint along `X` under the
@@ -1088,9 +1087,9 @@ clear sweep, plus further poses to bracket each contact's onset.
 Measured on `BenchmarkVerifyLinkageThreeJointArm` (three stacked `50` mm links each turning `0° → 90°`,
 the two elbows declared, a post `10` mm past the wrist and a far post): the declared elbows touch and
 publish nothing, the shoulder-wrist pair is settled by the layer exclusion (§5.7), and four pairs are
-evaluated per pose. At `WithResolution(Scalar(1.0/64))` the verdict settles in `9` poses,
+evaluated per pose. At `WithResolution(Scalar(1.0/64))` the verdict settles in few poses,
 every interval `IntervalClear` and the reading beyond tolerance. At the defaults the projection bound
-(§5.8) closes the reading around its one minimum: `15` poses, `Sound`; the benchmark reports both counts as
+(§5.8) closes the reading around its one minimum a few halvings later, `Sound`; the benchmark reports both counts as
 `poses/op`. The travel bound alone settles the verdict in more poses and refines the reading to the reading floor.
 
 **The whole-drive reading at the default floor.** The verdict is cheap; the reading need not be. A certified
@@ -1102,7 +1101,7 @@ why the reading has its own floor (§3): refinement past the verdict floor goes 
 the smallest bound, so around an isolated minimum it costs about `log₂(16)` halvings per tie broken (the three-joint
 arm above reads this way under the travel bound alone).
 The projection bound of §5.8 sits second order in the step below the gap, and closes such a minimum's
-reading a few halvings past the width at which the verdict settles (`15` poses for the same arm); the reading
+reading a few halvings past the width at which the verdict settles; the reading
 floor then serves a tighter tolerance and the pairs that certificate leaves loose. A caller who states
 `WithResolution` stops the reading there too, and a clear drive whose reading the stated floor leaves
 coarse reads `Suspect` with a `DiagMeasurementBeyondTolerance` on it. A minimum that holds along the drive —
@@ -1259,7 +1258,7 @@ y ∈ [30, 40], z ∈ [−10, 5]` sits under the arm's final place.
   and when the drive is read as a hold from them; `20° → 90° → 20°` strikes it, red when the link is read
   as one constant placement from its ends.
 - Limits: a `Via` value past `Max` or below `Min` with both ends inside is `ErrDegenerate` naming the link
-  and the value, red when only the ends are checked; a drive whose every waypoint is inside poses, and its
+  and the value; a drive whose every waypoint is inside poses, and its
   value at the waypoint's fraction is the waypoint as stated. `PoseAt` on a four-segment drive, whose
   waypoints sit at dyadic fractions, returns each waypoint exactly at its fraction, the segment's line
   inside it, and the first and last segments' lines outside `[0, 1]`. No test pins `|Δq_i|` against the hand sum in
@@ -1351,7 +1350,7 @@ through `(0, 3, 0)`, `3` mm off its axis, whose gap `7 − 3·sin θ` falls to `
 is skipped; and the disc on a joint about `X` through its centre, tumbling, whose top reaches
 `5·(cos θ + sin θ)` toward a wall along `Y` `7` mm away, red when the direction test is skipped. A full
 revolve — a cone about `X` — turning on its own axis `5` mm below a wall is admitted: its one interval is
-`IntervalClear` in `2` poses, red when the rule is dropped.
+`IntervalClear` in `2` poses.
 
 **Standing tests.** Errors, one subtest per row of §8 and per constructor refusal of §2; non-mutation and
 determinism as motion §9 test 7; cancellation; pose deviation charged (a joint centre at `(1e6, 0, 0)`
@@ -1753,8 +1752,7 @@ certify when `lo_m > τ_half`, so a clear region at gap `g` resolves into cells 
   of each joint's turn while `τ_half` shrinks only linearly with the cell, so step 6 crowds cells around
   that edge. Under the travel bound alone the default budget is exhausted: the box reads `Suspect`, the reading beyond
   tolerance and the budget finding raised. The
-  projection certificate (§5.8) bounds the gap over a cell to second order: the reading closes at a half-span of a few
-  `1e-3` rad. With it the box reads `Sound` at the defaults (`TestVerifyJointBoxThreeJointFlatMinimum`). A stated
+  projection certificate (§5.8) bounds the gap over a cell to second order: the reading closes at a small half-span. With it the box reads `Sound` at the defaults (`TestVerifyJointBoxThreeJointFlatMinimum`). A stated
   `WithResolution` coarser than that half-span stops the reading coarse and reads `Suspect`. A caller
   who wants the verdict alone states `WithResolution`, which stops the reading at the same floor. The layer exclusion is
   what makes a planar stack cheap: a pair it settles costs no cell, and scene 1's arms without the wall
@@ -2112,7 +2110,7 @@ reference: its parent turns. It takes the driving `NewAngle(parentLine, bar)` fr
 a dependent of that parent would, whose zero-pose reading `r₀` is the angle between two of the
 document's lines — irrational in general, and a 2D answer decad does not compute. `sketch` reads it: a
 **probe** scene, the same scene on the same side with the loop driven by a joint whose parent is
-`Common` and this angle driven, answers `r₀` as its `E0` reading, an interval about `1e-15` wide that holds
+`Common` and this angle driven, answers `r₀` as its `E0` reading, a narrow interval that holds
 the exact angle, after the probe's own falsifier has run. The driver's target is then `r₀ + |q|`: every
 ask on the scene asks the floats outward from `r₀`'s ends plus `q`'s, `E0` asks `[r₀]` itself, and the
 approach starts at its upper end, so every claim covers the exact `r₀ + |q|` and the chain's continuity
@@ -2539,10 +2537,9 @@ highest at the follower's minimum `θ4 = 101.5370°` (`θ2 = 38.5727°`): `69.38
 the follower's layer, `z ∈ [23.6, 24.4]`. The follower's end face sweeps every radius from `70` to
 `70.114` mm about `O4`, so a pin on the corner's own path would sit inside the bar for a wide stretch of the
 drive; the pin is centred `70.55` mm from `O4`, `0.2°` past the corner's polar angle at `θ2 = 16.875°`,
-where only the corner grazes it, from `θ2 = 16.551652°` to `19.245°` (the onset bracketed by bisection of
+where only the corner grazes it, from `θ2 = 16.551652°` to a later angle (the onset bracketed by bisection of
 the separating-axis gap between the follower's outline and the pin's), and again near `60°`. Between the
-grid points `θ2 = 11.25°` and `22.5°` of `WithResolution(Scalar(1.0/8))` the corner moves `3.6` mm and
-passes the pin. Assert `Suspect`, no `Collision`, the interval `[1/8, 1/4]` `IntervalUndecided`; at
+grid points `θ2 = 11.25°` and `22.5°` of `WithResolution(Scalar(1.0/8))` the corner passes the pin. Assert `Suspect`, no `Collision`, the interval `[1/8, 1/4]` `IntervalUndecided`; at
 `WithResolution(Scalar(1.0/1024))` `Interfering` with the first `Collision.At` above `16.551652/90` and
 within `2/1024` of it. This is the leg that goes red when a dependent joint contributes nothing to `τ`:
 the coarse interval then certifies from its ends.
@@ -2703,7 +2700,7 @@ every `k/16` of a schedule, with each non-dyadic boundary added.
 - **Out and back.** The crank `0° → 30° → 0°` and a `0.8` mm pin in the follower's layer centred on the
   follower's top corner at `θ2 = 30°`. Endpoints alone: both read the zero pose, and the one interval,
   holding the waypoint, is `IntervalUndecided` — the follower's travel is summed over its two pieces, about
-  twice the corner's `10.2` mm arc, against endpoint gaps summing to about `19.2` mm. At
+  twice the corner's arc, which exceeds the sum of the two endpoint gaps. At
   `WithResolution(Scalar(1.0/2))` the pin is struck at `s = 1/2`. Red when one piece's term stands for the
   sum: the interval certifies and the report reads `Sound` past a collision.
 - **Crossing zero.** The crank `−30° → 60°`, across `0` at the non-dyadic `s = 1/3`: the stretch below
@@ -3510,7 +3507,8 @@ of interference §3 over every (placed mover, static) pair. Three rules make it 
   read off its payload envelope (`internal/prismrecord`'s profile envelopes and the axial extent for a prism, the
   revolve's generator envelope and radius for a revolve). `η_k` is then subtracted from `lo_k` exactly as
   `pairkernel.DeltaWiden` subtracts a delta, rounding down, and `exact` collapses to false whenever it is
-  nonzero. It is of order `1e-15 · R0` and never matters to a verdict in practice, which is precisely why it
+  nonzero. It is the rounding of the float composition scaled by `R0`, far below any fixture's margins, and never matters to a
+  verdict in practice, which is precisely why it
   must be charged rather than argued away: a bound stops covering a value the moment unproven float ops touch
   it, and the pose is such an op.
 
@@ -3541,7 +3539,7 @@ against `T*(1)∘P0`, and `η_To` is `motionbound.PoseDeviation` of `C_1` agains
 with `rot = B(To)` and `shift = t(To)`, both point intervals). Every gap row and every transferred collision
 at `s = 1` therefore holds for the ideal end, which the interval certificate consumes, AND for the stated
 `To`, which the caller named. `η_ideal(1)` is of order `ε·|t(rel)|` — about `1e-10` mm for a pivot `1e6` mm
-away, `1e-14` mm for coordinates of order ten — and is strictly positive wherever `θ ≠ 0`, because the
+away, and far smaller for coordinates of order ten — and is strictly positive wherever `θ ≠ 0`, because the
 enclosures it is built from have nonzero width; `η_To` is the rounding of one `Then`, exactly zero for an
 unplaced mover. The path the report speaks for is `T*(s)`, `s ∈ [0, 1]`: a rigid screw motion throughout,
 starting at the stated `From` and ending within `η_ideal(1)` of the stated `To`. Nothing is claimed about
@@ -3941,7 +3939,7 @@ farthest corner `(48, 14)` sits at exactly `50` mm from the axis and at polar an
 8. **Pose deviation is charged.** For a `Revolute` stated in degrees with `Center` at `(1e6, 0, 0)`, assert
    that the pose's `Clearance.Gap.Bound` exceeds the same pose's bound with `Center` at the origin, and that
    both are below the tolerance gate for a 50 mm body. The leg is small by construction; the test shows it is
-   nonzero and sized to the pivot, which is what deleting it would zero.
+   nonzero and sized to the pivot.
 9. **Errors.** One subtest per row of §8's table, each asserting `errors.Is` and that the document is
    unchanged.
 10. **Cancellation.** A context cancelled during bisection returns `ctx.Err()` and a nil report, with the
@@ -4111,8 +4109,9 @@ the endpoints alone.
     velocity loses its slide term `d·k`.
 25. **The agreement with `VerifyLinkage`** (linkage §11). A one-link linkage on a revolute joint and the
     same arm under the equivalent `Revolute`, on tests 1, 2 and 4 bisected, report the same collisions,
-    `Status`, poses and interval outcomes, each `Clearance` within `1e-9`. Red when the projection bound
-    is dropped. A step negated from the wrong end turns tests 2, 3, 5, 13–16 and this one red.
+    `Status`, poses and interval outcomes, each `Clearance` within `1e-9`. The leg seen to fail is the link's own
+    revolute term `ρ_{kk}·|Δq_k|` in `τ`: fixture 2's swing then certifies at the endpoints and the interval
+    outcomes part from `VerifyMotion`'s.
 
 Three legs of the `Between` bound sit below any public fixture's observability: `motionbound.PathAreaUpper`'s
 stretch base (a base above `1` scales both the unscaled shortcut and the stretched allowance, and the base `1`
