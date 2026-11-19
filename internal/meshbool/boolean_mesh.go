@@ -475,6 +475,7 @@ func keepSide(ctx context.Context, m, other *BoolMesh, cuts map[int][]Xseg, bloc
 // for the uncut-component flood fill; a region it covers by a partner is kept
 // or dropped by coplanarKeep, never by parity or anchor.
 func keepSideWith(ctx context.Context, m, other *BoolMesh, cuts map[int][]Xseg, blocked map[[2]int]struct{}, rims map[string]float64, wantInside, flip bool, keyOf func(proof.Xpt) string, opts keepOptions) ([]KeptFacet, error) {
+	var coverBounds roundedCoverBoundsCache
 	isCut := func(i int) bool {
 		if _, ok := cuts[i]; ok {
 			return true
@@ -534,7 +535,10 @@ func keepSideWith(ctx context.Context, m, other *BoolMesh, cuts map[int][]Xseg, 
 			cornerKeys := [3]string{keyOf(m.Xverts[corners[0]]), keyOf(m.Xverts[corners[1]]), keyOf(m.Xverts[corners[2]])}
 			for _, reg := range result.regions {
 				if partners := opts.Coplanar[i]; len(partners) > 0 {
-					cover, err := coverOf(other, partners, reg.Probe, nil)
+					if coverBounds == nil {
+						coverBounds = make(roundedCoverBoundsCache)
+					}
+					cover, err := coverOfWithBounds(other, partners, reg.Probe, nil, coverBounds)
 					if err != nil {
 						return nil, err
 					}

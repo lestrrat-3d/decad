@@ -222,6 +222,14 @@ facet order.
 The covered part of facet `i` is `∪ (ta ∩ tb)` over `coplanar[i]`, the same point set as the covered parts of those B
 facets, so keeping one copy leaves neither a hole nor a duplicate.
 
+Before the exact cover predicate in the ordinary `keepSideWith` pass, a partner may be rejected when the nearest-float
+probe lies strictly outside the closed axis-aligned interval of one coordinate of its triangle. Build each interval
+from the three exact vertices converted with `Xpt.Vec`, and cache it lazily by partner facet for one `keepSideWith`
+call. Round each exact probe with the same conversion. Reject only when the probe and all three converted vertices
+are finite, and a coordinate is strictly below the rounded minimum or above the rounded maximum. Otherwise run the
+existing exact predicate. Round-to-nearest is monotone, so a point inside or on the exact triangle cannot fall outside
+any such rounded interval. Keep partner order, exact boundary checks, and replay work accounting unchanged.
+
 ### 3.5 Bounds of new vertices
 
 A clipped endpoint lies on two exact facets. `CutCornerBound` gives a point that is neither a facet corner nor a rim key
@@ -407,6 +415,10 @@ is never hidden as contact.
   every admitted pair, so two finely triangulated coplanar faces of `n` and `m` facets cost `O(n·m)` clips and one facet
   can collect many segments. `cutBatchSize` bounds live memory. `BenchmarkCoplanarCaps` times a `Union` of two 64-gon
   prisms stacked cap to cap (§13 D2).
+- **Coplanar coverage.** A rounded axis-aligned interval reject in §3.4 can avoid exact `PointOnTri` work when a
+  rounded probe lies strictly outside a triangle's rounded vertex range. Bounds come from exact vertices, and every
+  nonfinite or inconclusive case reaches the exact predicate. Keep partner order and boundary refusal unchanged.
+  Measure the rejected share and net consumer time before retaining the filter.
 
 ## 11. Test plan
 
@@ -427,6 +439,7 @@ analytic prism path does not take the pair.
 | U6 | `TestKeepSideCoplanarMixedSides` | synthetic mixed facing | expected contact refusal |
 | U7 | `TestKeepSideCoplanarNoSegment` | facet with coplanar partners and no surviving segment | one region, classified by cover |
 | U8 | `TestKeepSideCoplanarInteriorCorner` | partner patch corner strictly inside a facet, with a partner diagonal ending there | no branch refusal; kept area equals hand value |
+| U9 | `TestRoundedCoverBoxRejectStrictFiniteOnly`, `TestRoundedCoverBoxRejectFallsThroughForNonfiniteValues` | inside, edge and vertex probes, strict outside, nonfinite rounded values | only finite strict outside probes reject; all other cases retain exact coverage and errors |
 | G1 | `TestCoplanarGateInexactFace` | coplanar pair where B's face has `FaceBound > 0` and its facet `FacetBound == 0` | `TouchCoplanar`; red leg: admit on `FacetBound` alone |
 | G2 | `TestComposeOccupancyDropsCoplanar` (`internal/booleaneval`) | tracked `Union` with an admitted pair | no occupancy record; same held result as with tracking off |
 | M1 | `TestStitchManifoldContact` | edge-only and vertex-only `Union` | returns `Legacy` (`TouchCoplanar` / `touchPoint`, contacts equal to the refused-pair refusal); red leg: no audit gives `ErrBooleanFailed` or a pinched mesh |
