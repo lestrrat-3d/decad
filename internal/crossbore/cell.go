@@ -42,9 +42,16 @@ func crossDAdd(a, b crossDual) crossDual {
 func crossDSub(a, b crossDual) crossDual {
 	return crossDual{v: crossSub(a.v, b.v), d: crossSub(a.d, b.d)}
 }
+
+// crossDerivBits is the significand size the derivative enclosures are rounded
+// outward to (see the CellExactProof comment).
+const crossDerivBits = 128
+
+func crossRoundD(a crossIV) crossIV { return proofarith.LazyIntervalRoundOut(a, crossDerivBits) }
+
 func crossDMul(a, b crossDual) crossDual {
 	return crossDual{v: crossMul(a.v, b.v),
-		d: crossAdd(crossMul(a.d, b.v), crossMul(a.v, b.d))}
+		d: crossRoundD(crossAdd(crossMul(a.d, b.v), crossMul(a.v, b.d)))}
 }
 func crossDQuo(a, b crossDual) (crossDual, bool) {
 	v, ok := crossQuo(a.v, b.v)
@@ -52,7 +59,10 @@ func crossDQuo(a, b crossDual) (crossDual, bool) {
 		return crossDual{}, false
 	}
 	d, ok := crossQuo(crossSub(crossMul(a.d, b.v), crossMul(a.v, b.d)), crossSq(b.v))
-	return crossDual{v: v, d: d}, ok
+	if !ok {
+		return crossDual{}, false
+	}
+	return crossDual{v: v, d: crossRoundD(d)}, true
 }
 func crossDSqrt(a crossDual) (crossDual, bool) {
 	v, ok := crossSqrt(a.v)
@@ -60,15 +70,18 @@ func crossDSqrt(a crossDual) (crossDual, bool) {
 		return crossDual{}, false
 	}
 	d, ok := crossQuo(a.d, crossMul(crossTwo, v))
-	return crossDual{v: v, d: d}, ok
+	if !ok {
+		return crossDual{}, false
+	}
+	return crossDual{v: v, d: crossRoundD(d)}, true
 }
 func crossDSinCos(a crossDual) (crossDual, crossDual, bool) {
 	s, c, ok := proofbound.LazyRadSinCosSpan(a.v)
 	if !ok {
 		return crossDual{}, crossDual{}, false
 	}
-	return crossDual{v: s, d: crossMul(c, a.d)},
-		crossDual{v: c, d: crossSub(crossZero, crossMul(s, a.d))}, true
+	return crossDual{v: s, d: crossRoundD(crossMul(c, a.d))},
+		crossDual{v: c, d: crossRoundD(crossSub(crossZero, crossMul(s, a.d)))}, true
 }
 
 // CellResult is what MirroredCellMaxima returns: the maxima of the coordinate
@@ -100,7 +113,10 @@ type CellExact struct {
 //
 // The cell's intervals keep unreduced rationals (proofarith.LazyRat); a value
 // is read in lowest terms where it leaves the proof: a square-root input, the
-// sine/cosine span input and width, and the float readers.
+// sine/cosine span input and width, and the float readers. Each derivative
+// product, quotient, square root and trig step rounds its derivative enclosure
+// outward onto a dyadic with crossDerivBits significant bits, which only
+// widens it; the coordinate enclosures are never rounded.
 //
 // radius is the outer cylinder's R and bore the bore's r, in the fixed pose of
 // agent-docs/modify-design.md Part X with the bore axis at Z−c = 0;
