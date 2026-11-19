@@ -254,11 +254,11 @@ ceiling for a later serial `Union`. Every other build uses the 0.1 mm ceiling.
 A cap station of the tool's upper cone whose Q falls short of 1 by more than the
 sample's error is refused, because the cone cap would then reach the far source
 plane. When the Boolean that recorded the cone was called with
-`WithMatchingFaces`, a shortfall of at most 64 steps at 1 is taken as the
+`WithMatchingFaces`, a shortfall of at most `pointcone.MatchingFaceSlack` (64 binary64 steps at 1) is taken as the
 intended match instead: the station takes the far point, charged for its
 distance from the smooth cone point like a station inside the error band. A
 larger shortfall refuses. The refusal names the shortfall, and when it is within
-the 64 steps it says to pass `WithMatchingFaces` to the Cut or Intersect that made
+that slack it says to pass `WithMatchingFaces` to the Cut or Intersect that made
 the cone cut. Every sector carries the same cap, so the joined mesh grows with the sector
 count. With fewer than four sources, the first attempt subdivides each cap four
 times; with four or more sources, it subdivides each cap twice. When the
@@ -270,7 +270,7 @@ bound refusal lowers the cone cap limit, a specific cap/root adjacency contact
 or a placed cap whose root contact misses the ring stations by more than the
 seam allowance quarters the angular sag allowance, and an occupied-volume
 refusal scales that allowance by a factor from 0.1 to 0.5 set by its measured
-margin. Each new
+margin (`max(0.1, min(0.5, 0.5·gain/bound))`, `internal/revolveshell/sector_join_build.go`). Each new
 mesh must pass the same exact audit. Refusal leaves all operands live. The
 source class requires an unplaced, full Revolve about an axis that
 `agent-docs/revolve-axis-design.md` §3 admits. Transformed Revolves and
@@ -308,18 +308,14 @@ station. Equality at either band radius refuses the route.
 
 The retained Union station gaps are rechecked with rational intervals. The
 circular bore ring bounds its own trigonometric rounding and chord sag at
-those stations. Existing bore callers keep their 0.025 radian station limit;
+those stations. Existing bore callers keep their 0.025 radian station limit (`circularbounds.BoreRing`);
 this route supplies the certified joined ring's largest step and requires a
 0.1 mm result boundary bound. The rewrite limits stations to 4,608, audited
 triangles to 1,321,696 and audit scans to 400 million. It checks connected
 orientation, vertex links and triangle contacts before building a result.
-The station limit is the 2,304 stations of the module-4 four-tooth gear's two-pass
-join at the plain 0.01 starting sag, doubled. Chord sag grows with the square of
-the angular step, so a fitted-route join that starts at a quarter of that sag
-(0.0025) halves the step and doubles the stations. The 32-tooth straight bevel
-driving gear then holds 2,368 stations, 437,248 joined triangles and, after the
-bore, 446,720 audited triangles and 23,034,858 audit scans, under the
-1,321,696-triangle and 400-million-scan ceilings.
+The station limit is `revolvemesh.SectorBoreMaxStations` (4,608). Chord sag grows with the square of the angular step,
+so a fitted-route join that starts at a quarter of the plain sag halves the step and doubles the stations.
+`TestSectorRingMaxStepStationCap` accepts rings of 2,304 and 2,368 stations and refuses one past the cap.
 The result audit proposes each copied face group and each half-annulus as a
 projected YZ patch. It proves each patch from the result triangles; failed
 proposals retain every pair. Only pairs inside a proven patch leave the exact
@@ -370,14 +366,9 @@ arc of a thick tube asks for more facets than `maxFacetsPerMesh` (65 536, `inter
 facet-contact work than `proofbound.MaxFacetPairTestsPerCall` (8 000 000) allows. Facets scale as 1/tolerance.
 
 A torus of major radius 4 and minor radius 1, unioned with a radius-1 stem ending on its tube centreline, at the
-pair tolerance (`apitest/revolve_operand_coarsening_test.go`):
-
-| Sweep | Angular stations | Facets | Refusal |
-|---|---|---|---|
-| 300° | 347 | 129 452 | per-mesh facet ceiling |
-| 180° | 228 | 93 886 | per-mesh facet ceiling |
-| 60° | 84 | 38 246 | facet-pair audit ceiling |
-| 20° | 30 | 14 814 | none |
+pair tolerance exceeds those ceilings at sweeps of 60°, 180° and 300°. `TestUnionTorusArcWithStemCoarsensItsOperandPastTheCeilings`
+(`apitest/revolve_operand_coarsening_test.go`) runs each: the union succeeds through the retry of §2, matches the
+grid-integrated volume, and reads a volume bound below 2% of the volume.
 
 ### 2. The retry
 
