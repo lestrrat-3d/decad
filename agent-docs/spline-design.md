@@ -176,7 +176,7 @@ exactly → `ErrUnrecordableProfile`.
 | **R5** | `Chamfer` corner with a free-form carrier | `ErrUnsupported`, except a smooth outer cap loop of fit splines and lines (modify-reach §8.5) | yes for a curved walk, §4.1 |
 | **R6** | *retired at §10 P4b* — a Tier A free-form walk, `FitSplineSeg` among them, now builds | — | retired |
 | **R7** | exact-rational conversion, length bracketing, integration or topology reconstruction exceeds its work budget (2^20 exact-rational units, raised for a loft's station walk to `Spent + 8192 · stationCap(P)`, and for a profile `Extrude` and the tessellation of the prism it builds to `min(2^26, max(2^20, 2^17 · pieces))` where `pieces` counts the cubic pieces of the section's fit splines, the tessellation replaying the build's recorded charge in steps each below the cost ceiling; 2^28 reconstruction units, raised to 2^32 for a profile `Extrude`, whose region sketch authenticated, and for the tessellation replay of a charge the build admitted) | `ErrUnsupported` | no, §5.2, §6.1 |
-| **R8** | chording a free-form walk needs more than the chord cap | `ErrUnsupported` | no, reuses `errTooManyChords` |
+| **R8** | chording a free-form walk needs more than the chord cap | `ErrUnsupported` | no, reuses `freeform.ErrTooManyChords` |
 | **R9** | a `Verify` reading's proof does not close — its bracket cannot separate it from its threshold, or a §6.3 certificate fails | not an error — `Suspect` | no, §8 |
 | **R10** | a Tier B or Tier C walk reaches a BUILD before its moments land | `ErrUnsupported` | no, §8 |
 | **R11** | a free-form bracket cannot decide a BUILD-time comparison | `ErrUnsupported` | no, §6.4 |
@@ -188,28 +188,6 @@ exactly → `ErrUnrecordableProfile`.
 | **R17** | a `FitSplineSeg`'s converted chain does not reach its own record's natural-end fit point — sketch's dedup (`fitChordEps`) collapsed it into its predecessor | `ErrDegenerate` | yes, §5.1.2 |
 | **R18** | a free-form directional-extreme enclosure no float64 interval holds — an end past `MaxFloat64`, or a width past it | `ErrUnsupported` | yes, §6.2 |
 | **R19** | a free-form wall edge whose chain proves no single curvature sign — a span whose speed is not proven nonzero, a span's Bernstein certificate still mixed at the depth cap, two spans or a joint in conflict, or a joint the walk reverses at | `ErrUnsupported` | no, §6.5 |
-
-<!-- R16 was challenged as narrower than the evaluator's actual refusal
-behaviour, on the theory that a stalled (non-increasing) cumulative chord
-parameter could reach ErrUnsupported through a clause R16 does not name.
-Checked against sketch's geom/fitspline.go size(): at i=1 the loop tests
-Params[1] first (finite for the 2-point prefix {0,0},{1e300,0}, which
-succeeds with params=[0 1e+300]) and Points[1] (finite), so the only clause
-that can return prefix 1 is !spanFinite(0) — a non-finite SPAN COEFFICIENT,
-exactly what R16 names. The non-increasing-parameter check further down the
-function is never reached at that prefix. This is structurally forced: a
-stalled span has h=0 between distinct post-dedup points, so the natural-cubic
-solve divides by zero and poisons the second derivatives the published span
-coefficients are built from, which is what makes spanFinite(0) fail first.
-Four stall shapes were tried, including ones with a healthy leading chain
-({0,0},{1,1},{1e300,1},{1e300,1+1e-6}; {0,0},{1,1},{2,0},{1e300,0},
-{1e300,1e-6}; {0,0},{1e300,0},{1e300,1e-6},{1e300,2e-6}), and every one
-reported prefix 1 (the span-coefficient clause). A decad-side probe building
-a ProfileRecord from a FitSplineSeg over {0,0},{1e300,0},{1e300,1e-6} plus a
-closing LineSeg and calling Area() returned "a fit splines interpolant runs
-off the float64 range and cannot be described, though the fit points are
-finite" — errors.Is ErrUnsupported true, ErrNotFinite false, ErrDegenerate
-false, the same sentinel and message R16 already names. -->
 
 R9 is the one row that is not a refusal. An intent the evaluator cannot BUILD is
 `ErrUnsupported` at the call; a `Verify` question it cannot ANSWER is accepted
@@ -450,9 +428,8 @@ doc comment says the two agree only "to rounding, not bit for bit" — its
 `Params`/`Points`/`SecondDerivs` never do. Integrating `Spans()`'s floats
 exactly would publish a possibly-zero bound, hence a possible `Exact` claim,
 for a curve displaced from the recorded one by an amount nothing bounds —
-exactly the false-`Exact` failure `clampedUniformKnots`'s own doc comment
-(§5.1) forbids for a `SplineSeg`'s re-derived knot vector, and the same
-argument settles it here. `Params`/`Points`/`SecondDerivs` carry the standing
+exactly the false-`Exact` failure §5.1 forbids for a `SplineSeg`'s re-derived
+knot vector, and the same argument settles it here. `Params`/`Points`/`SecondDerivs` carry the standing
 every other Tier A kind's defining data has: sketch's own computed floats,
 taken exactly, over which the stated arithmetic IS the curve's definition.
 `h` is the one term neither `Eval` nor `Spans` publishes, and both recompute
@@ -474,7 +451,7 @@ Every operand is `Params`/`Points`/`SecondDerivs` taken as an exact `big.Rat`,
 so nothing rounds. `b3` of span `i` and `b0` of span `i+1` are both the
 rational lifted from the same float `Points[i+1][coord]`, so consecutive spans
 share their boundary control point EXACTLY — by identity, not by proximity —
-which is what `bezierSpan`'s own contract requires.
+which is what `freeform.BezierSpan`'s contract requires.
 
 That guarantee covers only the shared boundary POINT, not the shared tangent
 DIRECTION: `SecondDerivs` is sketch's own float solve of the natural-cubic
@@ -551,7 +528,7 @@ evaluation of the same formula: a second evaluation would add its own error to a
 bound that already speaks for the rounding.
 
 Rational coefficient size grows with degree and span count. Charge every span,
-every coefficient product and every integral term against a `freeformWork`
+every coefficient product and every integral term against a `freeform.FreeformWork`
 counter (`internal/freeform/work_budget.go`), and refuse as R7 when it runs out. NEVER widen to a
 float path to stay inside the budget.
 
@@ -615,12 +592,12 @@ count alone only once it has allocated two rationals per control point and a
 whole rational knot vector. The open-spline charge is quadratic, so a refused
 record allocates orders of magnitude more than any accepted one ever could.
 
-A `FitSplineSeg`'s charge (`fitInterpolantCost`, §5.1.2) sits beside these,
+A `FitSplineSeg`'s charge (`freeform.FitInterpolantCost`, §5.1.2) sits beside these,
 levied from its `Fit` slice's own length before `geom.NewFitInterpolant`
 allocates or solves anything. It is LINEAR, carrying no quadratic term at
 all: a natural cubic interpolant gives one span per interval directly, with no
 knot vector and so no insertion pass to charge for — unlike an open spline's
-quadratic `clampedConversionCost`, which pays for repeatedly scanning and
+quadratic `freeform.ClampedConversionCost`, which pays for repeatedly scanning and
 copying growing control and knot vectors as each of possibly many knots is
 inserted one at a time.
 
@@ -700,7 +677,7 @@ reconstruction ceiling admits ordinary
 analytic plates with several circular holes without widening the conversion and
 integration ceiling. The conversion charges beneath the exact-rational ceiling
 must still move ahead of the chains they precede, because a closed spline converts
-linearly while integrating its chain costs some 270 times more per span, so a
+linearly while integrating its chain costs far more per span, so a
 record whose integration is over budget allocates every span before that ceiling
 can see it.
 
@@ -761,7 +738,7 @@ equally true of it.
 
 The per-element diagnostic is part of that bound. A description formatted for
 every knot and every weight rather than only for the element that fails made the
-content scan roughly seventy times the cost of the slice walk it is, so a "single
+content scan cost many times the slice walk it is, so a "single
 linear pass over slices the caller already holds" is a claim about the WALK and
 the walk alone.
 
@@ -776,7 +753,7 @@ implementation cannot falsify itself.
 `ConicSeg` and whole `EllipseSeg` have closed-form moments carrying π, trig or
 `atanh` terms. That is the standing `CircleSeg`/`ArcSeg` already have: the closed
 form is exact in the reals, and the reported result is a `ratInterval` bracket
-around the float evaluation (`internal/momentregion`). Same machinery, new formulas.
+around the float evaluation (`internal/momentregion`). The machinery is the same; the formulas differ.
 
 ### 5.4 Tier C — certified quadrature for a rational NURBS
 
@@ -913,11 +890,9 @@ through that ratio rounded to 64 bits, and multiplying the numerator or the
 denominator by a power of two changes neither. So the reported interval is the
 same bit for bit; `internal/freeform`'s `TestSpanLengthBracketMatchesReference`
 holds it to a copy of the per-midpoint aligned form on degenerate, wide,
-extreme-scale and random spans. The gain is cost. On the gear-tooth loft
-records measured (2026-10), a converted fit-spline span's `den` was 3 or 9
-times `2^159` to `2^169`, so lifting it turns `den²` in every leaf comparison
-from six words into one, and a split no longer aligns two operands at every
-midpoint.
+extreme-scale and random spans. The gain is cost. A converted fit-spline span's `den` is
+a small odd number times a large power of two, so lifting that power turns `den²` in every leaf
+comparison into one word, and a split no longer aligns two operands at every midpoint.
 
 **The subdivision carries the control polygon's LEGS, never its points.**
 Every bound a leaf takes reads either a leg `Pᵢ₊₁ − Pᵢ` or the chord
@@ -1091,8 +1066,8 @@ itself.
 **A stationarity polynomial that is identically ZERO makes its objective
 constant, and a zero root count is never on its own the proof of anything.**
 Isolation returns an empty list for every polynomial below degree 1 —
-`internal/polynomial/rat_poly.go` trims trailing zero coefficients and returns early for
-`rpDeg < 1` — so a nonzero constant, which genuinely has no root, and the zero
+`RpIsolateRootsContext` (`internal/polynomial/sturm.go`) trims trailing zero coefficients and returns early
+for `RpDeg(p) < 1` — so a nonzero constant, which genuinely has no root, and the zero
 polynomial, which is a root everywhere, come back identical. The rows above
 survive that because each candidate set carries BOTH span endpoints and a
 constant attains its extreme there: a collapsed span (§5.1) has a constant
@@ -1118,8 +1093,7 @@ same split rather than a kind-based exemption: it keeps its zero bound and
 endpoint, an arc's own recorded endpoint, an exactly representable circular apex
 — and publishes a width where one is held by a candidate this evaluator computed,
 a trimmed circular endpoint or a computed arc radius among them. `prismrecord.Bounds` reports
-exactly that split (P4a) — reachable through the public surface now that §10
-P4b retires R6.
+exactly that split (P4a), and §10 P4b makes it reachable through the public surface by retiring R6.
 
 **The one extreme that has no interval to report is R18**, §6.1's R15 one row
 over. The enclosure is exact and rational, so it is proven whatever its
@@ -1199,7 +1173,7 @@ are floats taken exactly as rationals (§5.1):
   certificate outright. Its root count is not evidence either way, because
   isolation returns the same empty list for the zero polynomial as for a positive
   constant `S` (§6.2). For a NONZERO `S`, count its real roots on the closed span
-  with `ratPoly`'s Sturm chain (§6.2): `S ≥ 0` with no root there proves `S > 0`,
+  with `RatPoly`'s Sturm chain (§6.2): `S ≥ 0` with no root there proves `S > 0`,
   and bracketing `S`'s minimum over its own isolated stationary points and the
   span endpoints gives the floor `s_min` that the Lipschitz and curvature
   brackets need. The certificate closes only where that bracket's LOWER end is
@@ -1374,7 +1348,7 @@ difference at all, so the `p(p−1)·Δ²P_i` factor above does not exist and
 span IS a straight segment. Carry it as a degree-`0` Bernstein form holding
 one coefficient, that coefficient exactly `0`, which the all-zero rule below
 reads as verdict `0`. That is an ordinary admitted input rather than an edge
-case: `record.go`'s `validateNURBSSegmentSizes` refuses only `Degree < 1`, and
+case: `validateNURBSSegmentSizes` (`internal/sectionrecord/validate.go`) refuses only `Degree < 1`, and
 Table F puts a unit-weight `NURBSSeg` in Tier A whatever its degree, so a
 3-control degree-1 record converts to two degree-1 spans and reaches this
 section. Above `p = 1` the coefficient array's length is fixed by the stated
@@ -1382,8 +1356,7 @@ degree `2p − 3` regardless of a vanishing leading coefficient, and NO verdict
 depends on `K`'s true degree: a `p = 2` span's `K` is the constant
 `4·cross(ΔP₀, ΔP₁)` — one degree below the stated bound, and exactly `4` times
 that span's lone control-polygon turn — carried as the two equal Bernstein
-coefficients of a degree-1 form, whose signs are that constant's own
-(`spline_convexity_internal_test.go` pins both cases).
+coefficients of a degree-1 form, whose signs are that constant's own.
 
 **The span's speed must be proven nonzero BEFORE a single coefficient is
 read.** `sign(K)` is the signed curvature's own sign only where the speed is
@@ -1450,7 +1423,7 @@ Now read `K`'s coefficients:
   one sign throughout. Subdivide the span at its midpoint by exact dyadic de
   Casteljau — the same split `internal/freeform/spline_length.go` already runs — and fold the
   children's verdicts. The cap is a FIXED depth rather than a measured target,
-  and it is `freeformLengthDepth`, the same constant §6.1's own bracket
+  and it is `FreeformLengthDepth` (10), the same constant §6.1's own bracket
   subdivides to (`internal/freeform/spline_length.go` owns its value). A child still mixed at
   that depth refuses: Table R row **R19**, `ErrUnsupported`.
 
@@ -1464,7 +1437,7 @@ Bernstein coefficients agree on every sign too: a child's `K` is its parent's
 restricted `K` scaled by `1/8` per level, a POSITIVE factor, since halving the
 parameter halves `C′` and quarters `C″`. So a fold over the children needs no
 joint term of its own, and either route to the children's coefficients reads
-the same verdict (`spline_convexity_internal_test.go` pins both).
+the same verdict.
 
 This proves a sign; it never measures one. Nothing here samples `C(t)`, and
 no residual is available to fall back on — a sign is not a quantity to bound
@@ -1478,9 +1451,7 @@ rational its float already is, so a control written below as `0.9` or `−1/12`
 enters as the binary float64 nearest that number, and a quantity computed from
 such a control carries the lift rather than the round value. A figure with
 more digits than are worth writing is quoted to the digits shown. Both are
-marked `≈`. `spline_convexity_internal_test.go` pins each marked figure at the
-precision its own text states and holds the exact rational there; it pins each
-unmarked one exactly.
+marked `≈`.
 
 **NEVER read the control polygon's own turns instead.** A chain whose turns
 all share one sign proves nothing about the curve's curvature: the classical
@@ -1493,8 +1464,7 @@ sign changes. `record.go` admits that net as a degree-3 `NURBSSeg` at unit
 weights and §5.1 converts it to exactly one span, so a polygon-turn rule would
 publish `convex` for a wall whose curvature changes sign twice. The Bernstein
 certificate above refuses it instead, and subsumes the polygon test wherever
-the polygon test would have been right
-(`spline_convexity_internal_test.go` pins both facts).
+the polygon test would have been right.
 
 **The verdicts fold, and `0` is the identity.** The proof runs PER SPAN, so
 fold a subdivided span's children together, then fold every span of the chain
@@ -1547,22 +1517,6 @@ multiplicity equal to the degree is a genuine C⁰ corner and folds by the cross
 product exactly as stated above, exactly as Table K's degree-1 `NURBSSeg`
 example does.
 
-<!-- Refutation of a review finding against the paragraph above, which claimed the rule is stated
-     unconditionally and so also covers a fit point where the interpolant's tangent vanishes — a case
-     §6.5's regularity precondition must refuse as R19. The mechanism cannot occur, because the
-     precondition is a PER-SPAN gate that runs before any joint verdict exists.
-     `freeformWallConvexityContext` (`internal/freeform/spline_convexity.go`) calls `spanConvexitySignContext` for each
-     span — whose first statement is `requireSpanSpeedRegularContext` — before it forms any joint's
-     verdict, so both spans adjacent to a joint have already been admitted or the walk has already
-     refused. §6.4's own statement of the ordering says the same ("The span's speed must be proven
-     nonzero BEFORE a single coefficient is read"), and the joint paragraph above opens by relying on
-     it. Checked against the finding's own example: for `FitSplineSeg` fit points (0,0), (1,0), (0,0)
-     the conversion yields spans (0,0),(1/2,0),(1,0),(1,0) and (1,0),(1,0),(1/2,0),(0,0), so the
-     derivative at the middle fit point is exactly zero as the finding says — and
-     `requireSpanSpeedRegularContext` refuses both spans with R19, publishing no joint verdict at all.
-     The paragraph above therefore governs only joints on spans the precondition already admitted. -->
-
-
 A span with no nonzero control edge is a COLLAPSED span (§5.1) — one point, no
 direction — and supplies no joint of its own: skip it and pair its neighbours
 across it. Two or more CONSECUTIVE collapsed spans are skipped as one RUN, and
@@ -1587,7 +1541,7 @@ the same run pairs around the closing joint instead.
   case of its own, and so does a collinear net of any length: the degree-2
   `NURBSSeg` on `(0, 0)`, `(1, 0)`, `(2, 0)` at unit weights — three DISTINCT
   positions, and `record.go` gates a net's shape nowhere — has `K ≡ 0` and
-  takes the loop-role rule (`spline_convexity_internal_test.go` pins it). A
+  takes the loop-role rule. A
   chain of degree-1 spans lands here whenever no joint of it turns, since every
   such span's `K` is identically zero by the degree rule above; one whose joints
   DO turn takes its sign from those joints exactly as any other chain does, and
@@ -1606,13 +1560,13 @@ coefficient test alone publishes a bool: the interior-cusp net's
 `K ≈ −3/2·(2t − 1)²` is MIXED at the top level and one-signed with strict
 entries on every dyadic child, so a fold reading the coefficients alone calls
 it strictly `−` and publishes `convex` for an edge that doubles back on itself
-(`spline_convexity_internal_test.go` pins both nets). The refusal is a BUILD
+(`TestInteriorCuspFailsClosedSpanRegularity` and `TestEndpointCuspFailsClosedSpanRegularity` in
+`internal/freeform/spline_convexity_chain_test.go` pin both nets). The refusal is a BUILD
 refusal because evaluator §3 decides `convex` at build and a bool has no
 `Suspect` to fall back on — this is the one place a zero-speed span costs a
 body, and §6.3's own two certificates still cost only their two `Verify`
-readings. Table R marks R19 non-permanent for exactly this kind of case: a
-later increment that splits a wall edge at its cusp gives each piece a
-curvature sign, and nothing here forecloses it.
+readings. Table R marks R19 non-permanent for exactly this kind of case: splitting a wall edge at its cusp
+would give each piece a curvature sign, and nothing here forecloses that.
 
 **The orientation convention, stated explicitly.** The sign that reaches the
 bool is the turn in the LOOP'S OWN WALK direction, never the recorded
@@ -1629,9 +1583,8 @@ leaves `C″` unchanged, so it negates `K`.
 fold.** `freeformBezierSpans` returns the same spans in the same order whatever
 the recorded range order is, and reports the reversal beside them, so every span
 verdict and every joint cross product is computed on that natural chain and the
-reversal moves nothing but the sign of the answer
-(`spline_convexity_internal_test.go` pins the identical chain under both range
-orders). Negating `0` is `0`, so a straight walk recorded in either sense takes
+reversal moves nothing but the sign of the answer.
+Negating `0` is `0`, so a straight walk recorded in either sense takes
 the loop-role rule; and a refusal is not a sign to negate — R19 stands under
 either order.
 
@@ -1647,8 +1600,7 @@ pushes a converted control outside the recorded points' own hull. Fit points
 `(0, 0)`, `(1, 0)`, `(2, 1)`, `(3, 0)` convert to a first span whose `v`
 controls are `0`, `≈ −0.0790`, `≈ −0.1580`, `0`, and that span's curve dips to
 `v ≈ −0.0912`, below every recorded point's own `v`
-(`spline_convexity_internal_test.go` pins it; the parameters are sketch's own
-cumulative chord lengths, never a uniform `h`). That closed form emits one
+(the parameters are sketch's own cumulative chord lengths, never a uniform `h`). That closed form emits one
 CUBIC Bézier per interval between consecutive ACTIVE fit points, four control
 points every time, so every span it produces has `p = 3` and no degenerate
 degree reaches this section from that kind.
@@ -1673,17 +1625,16 @@ Both the extrusion and the revolution of a B-spline are EXACTLY NURBS surfaces:
 
 Loft §18 also admits a direct Loft's moving-center or cardinal-quarter-turn
 whole-circle hole wall. Both authenticated circles use the same rational
-quadratic quarter-arc basis and exact station correspondence. Its exact
-axial frame proof and world-XY center lifts gate these surfaces; rounded
-frame equality does not. The recorded frames map each control into world
-space before linear interpolation of the weighted controls. This yields an
-exact ruled degree `(2, 1)` net, derived from the two source records. This
-net remains private under the same public marker.
+quadratic quarter-arc basis and exact station correspondence. An exact axial
+frame proof and world-XY center lifts gate these surfaces; rounded frame
+equality does not. The recorded frames map each control into world space
+before linear interpolation of the weighted controls, which yields an exact
+ruled degree `(2, 1)` net derived from the two source records. That net stays
+private under the same public marker.
 
 So core §6.1's promise holds unstrained: an analytic `Surface` variant is
 `Exact` by construction. A `NURBSSurface` built from a recorded or exactly
-source-derived control net IS
-the surface, not an approximation of it. `Faceted` remains the only inexact
+source-derived control net IS the surface, not an approximation of it. `Faceted` remains the only inexact
 variant, and no new exactness machinery enters the public API.
 
 **The control net stays private in v1.** The variant is a tagged, opaque marker
@@ -1746,16 +1697,13 @@ would unblock them is a new exact surface kernel inside decad.
 ## 8. Table C — per-capability reach
 
 **Every build reads its section's moments, so a body's tier reach is its
-section's.** A section whose free-form walks are all Tier A is the one §10's
-P4b builds — Table R R6, which refused every free-form walk at the build
-regardless of tier, is retired; a section carrying a Tier B or Tier C walk is
-still `ErrUnsupported` at EVERY build until §10's P9 supplies that tier's
-moments (§5.3, §5.4) — Table R R10. "Tier A section"
-below names exactly that condition, and includes a section holding a
-`FitSplineSeg` walk (§5.1.2) — its moments are Tier A, and P4b is the
-increment that extends that reach to the build. A `MeasuredProfile` moment
-reading is not a build and is unaffected — `FitSplineSeg` already had that
-reach for the moments path (§5.1.2) before P4b.
+section's.** A section whose free-form walks are all Tier A builds (§10 P4b).
+Table R R6, which refused every free-form walk at the build regardless of tier,
+is retired. A section carrying a Tier B or Tier C walk is `ErrUnsupported` at
+EVERY build until §10's P9 supplies that tier's moments (§5.3, §5.4) — Table R
+R10. "Tier A section" below names exactly that condition, and includes a
+section holding a `FitSplineSeg` walk (§5.1.2), whose moments are Tier A. A
+`MeasuredProfile` moment reading is not a build, so R10 does not touch it.
 
 **A Tier A section's exactly-rational reach is its free-form walks' alone.**
 Analytic walks join them in the same section freely (§4.1), and a circular one
@@ -1767,7 +1715,7 @@ every walk of the section is itself exactly rational (§3).
 |---|---|---|
 | `MeasuredProfile.Area`/`Centroid`/`SecondMoments` | Tier A exactly rational, rounded once; B/C proven interval | §5 |
 | `Extrude` | Tier A section; `Volume` from the Tier A rational, `Area`/`Box` bounded | §6.1 length, §6.2 extremes, §7 surfaces; a through-all stop reading the bracket is §6.4; a wall edge's convexity is §6.5 |
-| `Loft` | a same-kind Tier A free-form paired segment (`agent-docs/loft-design.md` §1, §5.1's free-form arm), chorded at shared dyadic fractions of the span-index coordinate the two curves' own Bézier span decompositions define, never of a recorded knot domain; every reading carries the applicable chorded allowance (`agent-docs/loft-design.md` §5.2). Existing `spanSpeedUpper` and `spanMatchedDeltaUpper` derivations satisfy the bound inputs, and `SpanTangentEnergyUpper` integrates each cell's tangent deviation energy exactly; unequal Bézier span counts use exact common subdivision (`agent-docs/loft-design.md` §5.1) | §6.2.1's sagitta, measured per dyadic level under the existing Loft station cap; the wall stays flat triangles built between held stations and needs no §7 surface. Downstream reach follows `agent-docs/loft-design.md` Table D rows D1–D3, not this document's P5 |
+| `Loft` | a same-kind Tier A free-form paired segment (`agent-docs/loft-design.md` §1, §5.1's free-form arm), chorded at shared dyadic fractions of the span-index coordinate the two curves' own Bézier span decompositions define, never of a recorded knot domain; every reading carries the applicable chorded allowance (`agent-docs/loft-design.md` §5.2). The `freeform.SpanSpeedUpper` and `freeform.SpanMatchedDeltaUpper` derivations satisfy the bound inputs, and `SpanTangentEnergyUpper` integrates each cell's tangent deviation energy exactly; unequal Bézier span counts use exact common subdivision (`agent-docs/loft-design.md` §5.1) | §6.2.1's sagitta, measured per dyadic level under the existing Loft station cap; the wall stays flat triangles built between held stations and needs no §7 surface. Downstream reach follows `agent-docs/loft-design.md` Table D rows D1–D3, not this document's P5 |
 | `Tessellate`, `STL`, `OBJ` | an EXTRUDED free-form-walled body chords through §6.2.1's dyadic station chain, like every OTHER body `Extrude` builds; the fixed work budget (R7) and the per-curve chord cap (R8) are its only refusals. Loft follows `agent-docs/loft-design.md` Table D row D1 | §6.2.1's sagitta over the single-chain station walk; rides the existing prism path, NOT tessellation T5 (`agent-docs/tessellation-reach-design.md` §5) |
 | `Union`/`Cut`/`Intersect` | an EXTRUDED free-form-walled operand is admitted through its chorded mesh, `Faceted` output as always. Loft follows `agent-docs/loft-design.md` Table D row D2 | the mesh boolean reads triangles, not kinds, so the chording is the whole reduction |
 | interference proof | an EXTRUDED free-form-walled body is decided through its chorded mesh. Loft follows `agent-docs/loft-design.md` Table D row D3 | read-only mesh intersection over the same chording the export path builds |
@@ -1778,11 +1726,11 @@ every walk of the section is itself exactly rational (§3).
 | `Revolve` | Tier A free-form walks with proven axis clearance | NURBS wall, bounded `Area`, rational `Volume`, and `Tessellate(VerifyAll)` through §6.2.1's stations and tessellation §§8–11 |
 | `Fillet`/`Chamfer`/`Shell` | refused per R3–R5, except the §4.1 analytic-corner slice | §4.1, with the free-form audit and its R11 refusal in §6.4 |
 
-The sequencing that falls out: **chording an extruded free-form section rides the
-existing prism tessellation path.** Only the boundary chording is per-segment.
-`triangulate.go` and the loop-clearance audit consume chorded 2D samples and need
-no change. So export, booleans and interference proof — the north-star oracle
-capabilities — land early, before revolve and before the surveys.
+**Chording an extruded free-form section uses the existing prism tessellation
+path.** Only the boundary chording is per-segment. `triangulate.go` and the
+loop-clearance audit consume chorded 2D samples unchanged. So export, booleans
+and interference proof — the north-star oracle capabilities — need neither
+revolve nor the surveys.
 
 ### 8.1 Wall thickness is the one capability with no complete candidate set
 
@@ -1808,8 +1756,7 @@ volume and interference before it can prove wall thickness.
 
 ## 9. Upstream asks to sketch
 
-Ordered by reach per unit of upstream work. None is a prerequisite for §10's
-first four increments.
+Ordered by reach per unit of upstream work. No shipped capability depends on either.
 
 2. **Pin `EllipticalArc` endpoints onto the parametric ellipse.** Retires R2
    (§2.2): sketch's own coincidence constraint carries each moved endpoint to the
@@ -1826,15 +1773,16 @@ first four increments.
 
 ## 10. Increments
 
-Each increment is a PR series behind the same public contract; nothing ships
-half-silent. These stages do not consume a global evaluator increment number.
+Each row is a stage behind the same public contract. P7 (certified `Wall`), P9 (Tier B/C moments) and P10
+(the §4.1 analytic-corner modify slice) are not implemented; every other row is. These stages carry no global
+evaluator increment number.
 
 | # | Lands | Public effect |
 |---|---|---|
 | **P1** | this document + the core/evaluator table updates it resolves | none |
 | **P2** | Bézier conversion, exact Tier A moments, the §5.2 budget | `MeasuredProfile.Area`/`Centroid`/`SecondMoments` answer for Tier A, bounded by one rounding. |
 | **P3** | walk-kind discriminant across every `segmentWalk` consumer | none — behaviour preserved |
-| **P4a** | §6.2 row 1's directional-extreme bracket, wired into the prism bounds reading and into §6.4's straddle-narrowed through-all stop gate | none on its own — the bracket's reach through the public surface waits on P4b, below; the stop charges a met body's bracket to the level it resolves and R11 refuses only a straddling one, `extentAlongWork`'s wider refusal serving the clearance short-circuit alone, and R18 is live on the enclosure-to-float64 conversion the bracket publishes through |
+| **P4a** | §6.2 row 1's directional-extreme bracket, wired into the prism bounds reading and into §6.4's straddle-narrowed through-all stop gate | none on its own — the bracket's reach through the public surface waits on P4b, below; the stop charges a met body's bracket to the level it resolves and R11 refuses only a straddling one, `prismrecord.Payload.ExtentAlongWork`'s wider refusal serving the clearance short-circuit alone, and R18 is live on the enclosure-to-float64 conversion the bracket publishes through |
 | **P4b** | `NURBSSurface`/`NURBSCurve`, free-form extrude side faces, `NormalAt` refusal, §6.5's wall-edge convexity proof and its R19 refusal | Tier A free-form prisms build, `FitSplineSeg` walks among them since P4b is where R6's build refusal lifts (§5.1.2); `Volume` from the Tier A rational, `Area`/`Box` bounded. A Tier B or C section is R10; an undecidable through-all stop is R11; a wall edge whose curvature sign the chain does not prove is R19 |
 | **P5** | extruded free-form chording with proven sagitta + area slack | `Tessellate`/`STL`/`OBJ`, booleans, interference proof for extruded free-form walls. Wall reading explicitly `Suspect` |
 | **P6** | §6.3's speed floor and origin-exclusion certificates, hodograph normal cones, bracketed curvature extremes | `Undercut` and `ConcaveRadius` each answer where the certificates that reading needs close, and read `Suspect` per §6.3's cost table where they do not |
@@ -2065,7 +2013,7 @@ rules).
   in disguise), a valid single-span record whose DEGREE alone exhausts that
   budget through §6.1's subdivision charge rather than through the integration
   one (R7 again), a free-form walk whose chording needs more than the chord cap
-  (R8 `ErrUnsupported` through `errTooManyChords`), a curve whose arc-length
+  (R8 `ErrUnsupported` through `freeform.ErrTooManyChords`), a curve whose arc-length
   enclosure runs past `MaxFloat64` (R15 `ErrUnsupported`, and NEVER
   `ErrNotFinite`), a section whose directional-extreme enclosure along one
   direction runs past that same range while another direction still reads
@@ -2185,7 +2133,7 @@ rules).
   so the test cannot pass by refusing every fit spline outright; and the
   reversed-range (`TStart=1, TEnd=0`) case, where the same collapse sits at the
   walk's own START rather than its end.
-- Assert the `fitInterpolantCost` charge fires, and is measured rather than
+- Assert the `freeform.FitInterpolantCost` charge fires, and is measured rather than
   merely read off the formula: a fit-point count whose linear charge alone
   exceeds the ceiling must refuse promptly, allocating on the order of its own
   `Fit` slice rather than on the order of the interpolant
