@@ -938,3 +938,43 @@ The explicit correspondence route preserves the supplied whole-quarter maps
 without per-span reparameterization. At every join smooth in all sections,
 the exact ratio of its two one-sided derivatives must be the same in every
 section. That common ratio keeps each blended join G1; a mismatch refuses.
+
+### 14.2 Emerging flat at a circle vertex
+
+An explicit emerging-flat option admits the vertical three-line target chain
+of §14 when its supporting line contains the +X vertex of the final prefix
+circle. The caller selects this correspondence; ordinary circular lofts keep
+§14's existing behavior. The common origin remains strictly inside each
+circle. The other target edge is an exact G1 cubic spline. The entire flat
+corresponds to that single circle vertex, and the spline corresponds in walk
+order to the four complete circle quarters. Split the spline at the quarter
+parameters and every recorded knot, without changing its authenticated curve.
+Retain every recorded flat-line join. All target sections must share the same
+exact spline partition and normalized flat-line joins. The prefix circles
+share center and seam as in §14. The flat must lie in the final circle's
+vertical tangent support line and ascend in the admitted walk. Any case that
+cannot satisfy these exact conditions refuses before publication.
+
+In a circular prefix band the flat's entire virtual span is the moving +X
+circle vertex. In the first fitted band, for that span, write the vertex as P
+and the exact target line as F(u), so C(u,t) = P + s(F(u) - P), with
+s = 3t² - 2t³. Since P and F lie on the same supporting line,
+`cross(C, C_u) = s cross(P, F')` relative to the common origin. Require the
+second factor to be strictly positive exactly, and permit the resulting zero
+only on the named source vertex. Later fitted bands and all non-flat spans
+retain the strict polar proof of §14. Flat endpoints are real corners of the
+emerging face; no zero derivative is claimed to be a smooth join. All other
+smooth joins retain their existing exact continuity checks.
+
+The virtual grid still supplies the exact derivative and rounding bounds.
+On every circular-prefix ring, alias all flat stations to the one +X vertex.
+Omit cells collapsed at both ends. At the first outgoing strip emit one
+triangle for each flat subedge, using that shared vertex and the two target
+stations. Other cells retain their two triangles. Compact cap cycles before
+triangulation; the cap at the circular end has the actual circle boundary.
+Keep the crossing, embedding, shell, area, volume, work and cancellation checks.
+The four circle walls retain their real `side(0,k)` roles. Each emerging flat
+line owns its real `side(firstFit,k)` role, where `firstFit` and `k` identify
+its first fitted section and recorded edge. The target faces publish their exact
+vertical plane; its world X coordinate must be exactly representable as a
+float64. No source-circle edge is invented.

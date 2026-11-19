@@ -145,6 +145,13 @@ func BuildCircularFits(ctx context.Context, profiles []momentinput.Profile,
 // map set retains BuildCircularFits' default correspondence.
 func BuildCircularFitsWithMaps(ctx context.Context, profiles []momentinput.Profile,
 	planes []sectionrecord.PlaneRecord, work []*freeform.FreeformWork, maps [][]*big.Rat, smoothCircularBands bool) (Build, error) {
+	return BuildCircularFitsWithOptions(ctx, profiles, planes, work, maps, smoothCircularBands, false)
+}
+
+// BuildCircularFitsWithOptions additionally permits the explicitly selected emerging flat.
+func BuildCircularFitsWithOptions(ctx context.Context, profiles []momentinput.Profile,
+	planes []sectionrecord.PlaneRecord, work []*freeform.FreeformWork, maps [][]*big.Rat,
+	smoothCircularBands, emergingFlat bool) (Build, error) {
 	if maps != nil {
 		if len(maps) != 4 {
 			return Build{}, twistUnsupported("circular fitted loft needs four correspondence maps")
@@ -248,14 +255,24 @@ func BuildCircularFitsWithMaps(ctx context.Context, profiles []momentinput.Profi
 		}
 	}
 	var chartIntervals [][]circularInterval
-	halfGroups, halfIntervals, useHalves := circularFlatQuarter(sections[0].edges, fitAt0, knots)
+	correspond := circularFlatQuarter
+	if emergingFlat {
+		correspond = circularEmergingFlat
+		if maps == nil {
+			return Build{}, twistUnsupported("emerging flat needs explicit circular correspondence")
+		}
+	}
+	halfGroups, halfIntervals, useHalves := correspond(sections[0].edges, fitAt0, knots)
 	if maps != nil && !useHalves {
+		if emergingFlat {
+			return Build{}, twistUnsupported("emerging flat needs three ascending collinear vertical lines and a spline")
+		}
 		return Build{}, twistUnsupported("explicit circular correspondence needs a vertical flat and an even-span spline")
 	}
 	if useHalves {
 		sections[0].edges, chartIntervals = halfGroups, halfIntervals
 		for i := 1; i < len(sections); i++ {
-			groups, intervals, ok := circularFlatQuarter(sections[i].edges, fitAt0, knots)
+			groups, intervals, ok := correspond(sections[i].edges, fitAt0, knots)
 			if !ok {
 				return Build{}, twistUnsupported("circular fitted loft flat correspondence differs between sections")
 			}
@@ -274,8 +291,26 @@ func BuildCircularFitsWithMaps(ctx context.Context, profiles []momentinput.Profi
 			sections[i].edges = groups
 		}
 	}
+	var emergingPlaneX *float64
+	if emergingFlat {
+		if !useHalves {
+			return Build{}, twistUnsupported("emerging flat needs three collinear vertical lines")
+		}
+		tangent := add(center.U, radii[len(radii)-1])
+		for _, section := range sections {
+			if section.edges[0][0][0].U.Cmp(tangent) != 0 {
+				return Build{}, twistUnsupported("emerging flat must stay on the final circle's +X tangent")
+			}
+		}
+		x, err := exactFloat(add(rf(planes[0].Origin.X), tangent))
+		if err != nil {
+			return Build{}, twistUnsupported("emerging flat tangent plane world X must be exactly representable")
+		}
+		emergingPlaneX = &x
+	}
 	var patches [][]rationalTransition
 	var edgeOf []int
+	var emerging []bool
 	for edge, spans := range sections[0].edges {
 		for j := range spans {
 			quarter := (firstQuarter + edge) % 4
@@ -283,7 +318,17 @@ func BuildCircularFitsWithMaps(ctx context.Context, profiles []momentinput.Profi
 			face := edge
 			if useHalves {
 				quarter, interval = edge, chartIntervals[edge][j]
+				if emergingFlat {
+					if edge == 0 {
+						quarter, interval = 0, circularInterval{rint(0), rint(0)}
+					} else {
+						quarter = edge - 1
+					}
+				}
 				face = (quarter - firstQuarter + 4) % 4
+				if emergingFlat && edge == 0 {
+					face = 4 + j
+				}
 			}
 			chart := circularChart(radius, center, quarter, interval.lo, interval.hi)
 			if maps != nil {
@@ -309,15 +354,27 @@ func BuildCircularFitsWithMaps(ctx context.Context, profiles []momentinput.Profi
 			}
 			patches = append(patches, row)
 			edgeOf = append(edgeOf, face)
+			emerging = append(emerging, emergingFlat && edge == 0)
 		}
 	}
-	patches, err = rationalSmoothPatches(ctx, patches, edgeOf, firstFit, maps != nil)
+	patches, err = rationalSmoothPatchesMode(ctx, patches, edgeOf, firstFit, maps != nil, emerging)
 	if err != nil {
 		return Build{}, err
 	}
-	built, err := buildSectionMesh(ctx, nil, patches, edgeOf, 4, planes, zs)
+	edgeCount := 4
+	if emergingFlat {
+		edgeCount = 7
+	}
+	built, err := buildSectionMeshMode(ctx, nil, patches, edgeOf, edgeCount, planes, zs, emerging, firstFit)
 	if err != nil {
 		return Build{}, err
+	}
+	if emergingFlat {
+		built.EmergingPlaneX = emergingPlaneX
+		built.SideRoles = make([]string, edgeCount)
+		for i := range 3 {
+			built.SideRoles[4+i] = fmt.Sprintf("side(%d,%d)", firstFit, (fitAt0+1+i)%4)
+		}
 	}
 	built.CircularFitPrimitive = true
 	return built, nil

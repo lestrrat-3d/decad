@@ -22,6 +22,8 @@ type Build struct {
 	Triangles            [][3]int
 	Sources              []int
 	EdgeCount            int
+	SideRoles            []string
+	EmergingPlaneX       *float64
 	MeshBound            float64
 	VolSymDiff           float64
 	AreaSlack            float64

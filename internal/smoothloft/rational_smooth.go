@@ -14,6 +14,11 @@ import (
 // grouping it as one smooth wall would hide the edge.
 func rationalSmoothPatches(ctx context.Context, patches [][]rationalTransition, edgeOf []int,
 	firstFit int, preserveParameter bool) ([][]rationalTransition, error) {
+	return rationalSmoothPatchesMode(ctx, patches, edgeOf, firstFit, preserveParameter, nil)
+}
+
+func rationalSmoothPatchesMode(ctx context.Context, patches [][]rationalTransition, edgeOf []int,
+	firstFit int, preserveParameter bool, emerging []bool) ([][]rationalTransition, error) {
 	n, levels := len(patches), len(patches[0])+1
 	curves := make([][]rationalCurve, levels)
 	start, end := make([][]*big.Rat, levels), make([][]*big.Rat, levels)
@@ -39,6 +44,9 @@ func rationalSmoothPatches(ctx context.Context, patches [][]rationalTransition, 
 			return nil, err
 		}
 		next := (k + 1) % n
+		if len(emerging) != 0 && (emerging[k] || emerging[next]) {
+			continue
+		}
 		ls, rs := make([]*big.Rat, levels), make([]*big.Rat, levels)
 		smooth := true
 		for i := range levels {
@@ -82,6 +90,18 @@ func rationalSmoothPatches(ctx context.Context, patches [][]rationalTransition, 
 			commonA := rationalCurve{x: polynomial.RpMul(a.x, b.w), y: polynomial.RpMul(a.y, b.w), w: w}
 			commonB := rationalCurve{x: polynomial.RpMul(b.x, a.w), y: polynomial.RpMul(b.y, a.w), w: w}
 			patches[k][i] = rationalTransition{a: commonA, b: commonB, linear: patches[k][i].linear}
+			if len(emerging) != 0 && emerging[k] && i < firstFit {
+				if i == firstFit-1 {
+					p := patches[k][i].at(rint(0), rint(0))
+					f0 := patches[k][i].at(rint(0), rint(1))
+					f1 := patches[k][i].at(rint(1), rint(1))
+					if p.U.Cmp(f0.U) != 0 || p.U.Cmp(f1.U) != 0 ||
+						mul(p.U, sub(f1.V, f0.V)).Sign() <= 0 {
+						return nil, twistUnsupported("emerging flat lacks a positive exact polar determinant")
+					}
+				}
+				continue
+			}
 			if err := rationalPolarPositive(ctx, rationalPolarRows(commonA, commonB), proofbound.NewWorkBudget(ctx)); err != nil {
 				return nil, fmt.Errorf("circular fitted loft span %d band %d: %w", k, i, err)
 			}

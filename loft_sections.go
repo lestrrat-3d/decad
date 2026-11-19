@@ -35,6 +35,11 @@ type CircularLoftCorrespondence struct {
 	// SmoothCircularBands keeps the first circular band linear and uses
 	// smoothstep for subsequent circular bands.
 	SmoothCircularBands bool
+	// EmergingFlat maps the three ascending, collinear target lines from the
+	// final circle's +X vertex. Every fitted flat must remain on that circle's
+	// tangent line; the fitted spline maps around all four circle quarters.
+	// The tangent plane's world X coordinate must be exactly representable.
+	EmergingFlat bool
 }
 
 // LoftSections builds one solid through three or more Sketch profiles.
@@ -52,7 +57,7 @@ type CircularLoftCorrespondence struct {
 // fitted edge and three lines, with a certified rational wall.
 // Other shapes refuse.
 func LoftSections(ctx context.Context, d *Document, sections ...LoftSection) (*Body, error) {
-	return loftSections(ctx, d, nil, false, sections...)
+	return loftSections(ctx, d, nil, false, false, sections...)
 }
 
 // LoftSectionsWithCircularCorrespondence builds a circular-to-spline loft
@@ -82,10 +87,10 @@ func LoftSectionsWithCircularCorrespondence(ctx context.Context, d *Document,
 			maps[quarter][i] = big.NewRat(value, denominator)
 		}
 	}
-	return loftSections(ctx, d, maps, correspondence.SmoothCircularBands, sections...)
+	return loftSections(ctx, d, maps, correspondence.SmoothCircularBands, correspondence.EmergingFlat, sections...)
 }
 
-func loftSections(ctx context.Context, d *Document, maps [][]*big.Rat, smoothCircularBands bool, sections ...LoftSection) (*Body, error) {
+func loftSections(ctx context.Context, d *Document, maps [][]*big.Rat, smoothCircularBands, emergingFlat bool, sections ...LoftSection) (*Body, error) {
 	if ctx == nil || d == nil || len(sections) < 3 {
 		return nil, fmt.Errorf("%w: LoftSections needs a context, document and at least three sections", ErrDegenerate)
 	}
@@ -103,7 +108,7 @@ func loftSections(ctx context.Context, d *Document, maps [][]*big.Rat, smoothCir
 		defer d.resultIn(d.ContainerOfSketch(sketches[0]))()
 	}
 	if circularFitCandidate(sections) {
-		return d.buildCircularFitSections(ctx, sections, maps, smoothCircularBands)
+		return d.buildCircularFitSectionsMode(ctx, sections, maps, smoothCircularBands, emergingFlat)
 	}
 	if maps != nil {
 		return nil, fmt.Errorf("%w: explicit circular correspondence needs circular and spline sections", ErrUnsupported)
@@ -159,6 +164,10 @@ func circularTargetCandidate(section LoftSection) bool {
 // buildCircularFitSections records the source sketches and builds §14's
 // rational transition through the internal smooth-loft kernel.
 func (d *Document) buildCircularFitSections(ctx context.Context, sections []LoftSection, maps [][]*big.Rat, smoothCircularBands bool) (*Body, error) {
+	return d.buildCircularFitSectionsMode(ctx, sections, maps, smoothCircularBands, false)
+}
+
+func (d *Document) buildCircularFitSectionsMode(ctx context.Context, sections []LoftSection, maps [][]*big.Rat, smoothCircularBands, emergingFlat bool) (*Body, error) {
 	if len(sections) > smoothloft.MaxTwistedSections {
 		return nil, fmt.Errorf("%w: circular fitted LoftSections accepts at most %d sections",
 			ErrUnsupported, smoothloft.MaxTwistedSections)
@@ -183,7 +192,7 @@ func (d *Document) buildCircularFitSections(ctx context.Context, sections []Loft
 		}
 		records[i], planes[i] = profile, plane
 	}
-	built, err := smoothloft.BuildCircularFitsWithMaps(ctx, records, planes, work, maps, smoothCircularBands)
+	built, err := smoothloft.BuildCircularFitsWithOptions(ctx, records, planes, work, maps, smoothCircularBands, emergingFlat)
 	if err != nil {
 		return nil, err
 	}
@@ -359,8 +368,19 @@ func (d *Document) buildSmoothSectionBody(ctx context.Context, built smoothloft.
 	ref := d.nextProducerID()
 	groups := make([]facetGroup, built.EdgeCount+2)
 	for i := range built.EdgeCount {
+		role := fmt.Sprintf("side(0,%d)", i)
+		if i < len(built.SideRoles) && built.SideRoles[i] != "" {
+			role = built.SideRoles[i]
+		}
 		groups[i] = facetGroup{Origins: []provenance.Ref{{Producer: ref,
-			Role: fmt.Sprintf("side(0,%d)", i)}}, Surface: surfacegeom.NURBSSurface{}}
+			Role: role}}, Surface: surfacegeom.NURBSSurface{}}
+		if built.EmergingPlaneX != nil && i >= 4 {
+			frame, err := r3.NewFrame(r3.Vec{X: *built.EmergingPlaneX}, r3.Vec{Y: 1}, r3.Vec{Z: 1})
+			if err != nil {
+				return nil, err
+			}
+			groups[i].Surface, groups[i].Planar = surfacegeom.Plane{Frame: frame}, true
+		}
 		if i < len(built.ArcRadii) && built.ArcRadii[i] > 0 {
 			groups[i].Surface = surfacegeom.Cylinder{Origin: start.Origin, Axis: r3.Vec{Z: 1},
 				Radius: units.Millimeters(built.ArcRadii[i])}
