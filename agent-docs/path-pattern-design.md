@@ -1,7 +1,7 @@
 # Path pattern design
 
-`PathPattern` repeats a body at points spaced along a `Path`, by count or by distance. It places each instance with `Copy` and a
-translation and adds no geometry kernel. The points come from `internal/pathsample/`, which works on plain
+`PathPattern` repeats a body at points spaced along a `Path`, by count or by distance. It places each instance with
+`Copy` and a translation and adds no geometry kernel. The points come from `internal/pathsample/`, which works on plain
 millimetre vectors.
 
 ## 1. Contract
@@ -20,7 +20,7 @@ func WithPathPivot(pivot r3.Vec) PathPatternOption
 | P2 | Instance `i` is `Copy(b, WithCopyPlacement(Translation(point(i) − point(0))))`, where `point(i)` lies `i/(count − 1)` of the way along the path's total length. The last instance sits at the path's end. |
 | P3 | Instances keep the orientation of `b` unless `WithPathFollow` is given (§5). |
 | P4 | Points are spaced by arc length over the whole path, not per segment. A short segment can hold no instance and a long one many. |
-| P5 | A `WithPathCount` below 2, a nil path and a retired body are `ErrDegenerate`, `ErrDegenerate` and `ErrRetiredBody`. A nil context or a body of no document is `ErrDegenerate`. |
+| P5 | A `WithPathCount` below 2, a nil path, a nil context and a body of no document are `ErrDegenerate`. A retired body is `ErrRetiredBody`. |
 | P6 | A failed or canceled call retires every copy it already made and returns the error, so no copy outlives the call. |
 | P7 | Exactly one of `WithPathCount` (P1, P2) and `WithPathSpacing` (§6) places the instances. Neither, both, or either given twice is `ErrDegenerate`. The count is an `int`: it counts instances and measures nothing, like `LinearPattern.Count`. The spacing is a length `units.Value`. A failure is reported as an `OperationCopy` failure. |
 

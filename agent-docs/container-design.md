@@ -64,7 +64,7 @@ An operation that commits many bodies puts every one of them in the same contain
 
 An operation that reads more than one body or sketch, or a body and a sketch, refuses when they sit in
 different containers (a boolean's operands, a loft's sections, a pattern join's target and feature,
-an extent that names a body, `SweepPair`'s two bodies): the error is `ErrCrossContainer` (new sentinel, `errors.Is`) naming both
+an extent that names a body, `SweepPair`'s two bodies): the error is `ErrCrossContainer` (match with `errors.Is`), naming both
 container paths. The check runs with the other operand checks, before any geometry work, and a
 refused call leaves the document unchanged.
 
@@ -114,10 +114,7 @@ that never uses a container reports each of its bodies as a root body.
 | `apitest.TestContainerChildNamed` | repeated calls return one container; names under different parents differ; empty name is `ErrDegenerate` |
 | `apitest.TestContainerNewUniqueChild` | suffixes in order, a taken suffix is skipped, `NewChild` still refuses a duplicate |
 | `apitest.TestContainerVerifyContainers` | root bodies, empty and nested containers, the error text, and a clean layout after `AddBody` |
-
-
-| Test | What it shows |
-|---|---|
+| `apitest.TestContainerSketchAndPlaneMembership` | `AddSketch` and `AddPlane` move a sketch or plane between containers |
 | `apitest.TestContainerTree` | names, parents, children order, unique sibling names, foreign container |
 | `apitest.TestContainerPlacement` | each row of §2 lands where the table says |
 | `apitest.TestContainerCrossRefusal` | a boolean, a stitch and an extrude to a body in another container refuse with `ErrCrossContainer`, leaving the document unchanged |

@@ -59,10 +59,10 @@ notched extrusion. Benchmarks include smaller notched profiles to measure the se
 
 ## 4. Not covered
 
-- Hatching other than a section cut (§10), centre lines of anything but a whole circle or arc (§11), dimensions other than the overall size, diameters and radii, and a title block with more than a title, six fields and a scale.
-- Arcs and ellipses, a circle only partly seen, and DXF versions after release 12.
+- Hatching other than a section cut (§10), centre lines of anything but a whole circle or arc (§11), dimensions other
+  than the overall size, diameters and radii, and a title block with more than a title, six fields and a scale.
+- Ellipses, a circle or arc seen only in part, and DXF versions after release 12.
 - View labels and a layout other than one row.
-- A tolerance on the hidden-line test finer than the depth buffer's pixel.
 
 ## 5. Several views on one sheet
 
@@ -116,8 +116,8 @@ const (
 
 ## 7. True circles
 
-`DXF`, `DXFViews` and `DXFSheet` draw a whole circular edge as a `CIRCLE` entity where the drawing sees it as a circle and sees it
-whole, in place of its polygon of `LINE`s. `MeshDXF` has no edges to read and draws chords as ever.
+`DXF`, `DXFViews` and `DXFSheet` draw a whole circular edge as a `CIRCLE` entity, in place of its polygon of `LINE`s,
+where the drawing sees it as a circle and sees it whole. `MeshDXF` has no edges to read and draws chords as ever.
 
 | Decision | Rule |
 |---|---|
@@ -136,8 +136,8 @@ whole, in place of its polygon of `LINE`s. `MeshDXF` has no edges to read and dr
 
 ## 8. Diameters and radii on a sheet
 
-With `DXFPaper.Dimensions`, `DXFSheet` also states the size of each circle and arc a view draws whole (§7), on the `DIMENSION` and
-`TEXT` layers.
+With `DXFPaper.Dimensions`, `DXFSheet` also states the size of each circle and arc a view draws whole (§7), on the
+`DIMENSION` and `TEXT` layers.
 
 | Decision | Rule |
 |---|---|
@@ -148,7 +148,8 @@ With `DXFPaper.Dimensions`, `DXFSheet` also states the size of each circle and a
 
 ## 9. Title block fields
 
-`DXFPaper.Fields` adds up to six labelled entries to the title block: a part number, an author, a revision, a date, a material, a sheet number.
+`DXFPaper.Fields` adds up to six labelled entries to the title block, such as a part number, an author, a revision, a
+date, a material or a sheet number.
 
 | Decision | Rule |
 |---|---|

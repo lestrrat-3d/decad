@@ -50,21 +50,20 @@ one record set, so a pattern of N holes is one analytic arrangement.
 
 ## 2. Measured current behaviour
 
-These rows are the baseline scenes that prism-boolean Part G cites by label. Results for M2–M5, T1, T2, W1–W4 and W6
-are the outcomes before general-boolean classes A3 and A4 and the mirror join (§5) admitted them. Part G §3's
-"Clears" column and §3's `Union`/`Cut`/`Intersect` row give the current outcome of each.
+These rows are the scenes that prism-boolean Part G cites by label. Each result is the current outcome; Part G §3's
+"Clears" column names the class that admits each scene.
 
 | Row | Scene | Result |
 |---|---|---|
 | M1 | L prism (1750 mm³) `Copy` across the plane x = 30 | analytic, `Exact` 1750 mm³, centroid x = 53.2143 (= 60 − 6.7857), bounds `Exact`, `Facing(+x)` one face, 17 of 18 edges convex on both bodies, mesh signed volume +1750, `Verify` `Sound`, wall measured, `Fillet` OK |
 | M1 | STEP of the mirrored L | analytic writer path |
-| M2 | `Union(L, mirror across the wall x = 20)` (touching along the wall) | `BooleanUnsupportedContact`: coplanar facets |
-| M3 | `Union(L, mirror across x = 15)` (overlapping) | `BooleanUnsupportedContact`: coplanar facets |
-| M4 | `Union(mirrored L, same-plane box)` | `BooleanUnsupportedContact`: coplanar facets |
-| M5 | `Cut(mirrored L, same-plane cylinder)` | mesh path: 8 `Faceted` faces |
+| M2 | `Union(L, mirror across the wall x = 20)` (touching along the wall) | `Union` takes the mesh path and refuses with `BooleanUnsupportedContact`: coplanar facets (the shared wall lies inside the union and the image is displaced). The mirror join (§5) builds this pair. |
+| M3 | `Union(L, mirror across x = 15)` (overlapping) | analytic (A3, A4): one lump, 3000 mm³ (`TestPrismUnionSharedWallMirroredL`), `Verify` `Sound` |
+| M4 | `Union(mirrored L, same-plane box)` | analytic through the re-wound record (A4); a box holding the image unions to the box (`TestPrismUnionReflectedOperandInsideBox`: 6 faces, 9000 mm³) |
+| M5 | `Cut(mirrored L, same-plane cylinder)` | analytic (A4), `Approximate`, one cylindrical face, 1750 − π·1.5²·10 mm³ within a bound under 1e-6 (`TestPrismCutReflectedTargetByCylinder`) |
 | M6 | `Transform(ctx, body, reflection)` | analytic, input retired, one live body |
-| T1 | `Cut(mirrored L, mirrored cylinder)` (both reflected, proper relative map) | `BooleanUnsupportedContact`: G2 refuses either reflected operand |
-| T2 | `Verify` on L beside an overlapping mirror | `Suspect`, `unsupported_pair_contact` |
+| T1 | `Cut(mirrored L, mirrored cylinder)` (both reflected, proper relative map) | analytic through the shared-axis arm (A4), volume 1750 − π·1.5²·10 mm³ within a bound under 1e-9 (`TestPrismCutBothReflectedSharedAxis`) |
+| T2 | `Verify` on L beside an overlapping mirror | `Interfering`, one row of 500 mm³ (A3 reads the shared collinear walls as one carrier) |
 | T3 | `Verify` on L beside a separated mirror | `Sound`, clearance 20 mm |
 | M7 | partial revolve (270°) mirrored | same volume and bound, mesh winding outward, `Verify` `Sound` |
 | M8 | loft mirrored | volume 1100 `Approximate` (the unmirrored loft is `Exact`), mesh outward |
@@ -77,9 +76,9 @@ are the outcomes before general-boolean classes A3 and A4 and the mirror join (�
 | S5c | six cylinders `Copy`-rotated about the plate normal (60° steps) | six analytic cuts (every rotation here keeps the normal exact) |
 | P1 | hub ∪ six teeth placed by `RotationAround` (60° steps) | tooth 1 analytic; tooth 2 `BooleanUnsupportedContact` (§3.4 reroute, then coplanar facets) |
 | P2 | four disjoint pegs by `Copy` + `Union` | `Faceted`, 4 lumps, `Exact` 500 mm³, wall `unavailable`; as a `Cut` tool: `BooleanUnsupportedContact` |
-| W1–W4 | `Union` of two boxes sharing a wall (whole, partial, longer, 1 mm overlap with collinear walls) | `ErrUnsupported`: "the union scene's arrangement reports an invalid region" (RB1) |
+| W1–W4 | `Union` of two boxes sharing a wall (whole, partial, longer, 1 mm overlap with collinear walls) | analytic (A3): one prism of 2000, 1600, 3000 and 1900 mm³ (`TestPrismBooleanSharedWallBoxes`) |
 | W5 | the same with no collinear walls | analytic, 800 mm³ |
-| W6 | `Cut` by a box sharing the wall | `BooleanUnsupportedContact` |
+| W6 | `Cut` by a box sharing the wall | analytic (A3): the box is left, 1000 mm³ (`TestPrismBooleanSharedWallBoxes`) |
 
 ## 3. How a reflection is carried
 

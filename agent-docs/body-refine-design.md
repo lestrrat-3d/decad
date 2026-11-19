@@ -5,13 +5,13 @@ its leaves denote, and returns a fresh body whose `Mesh.Bound()` is that certifi
 held vertex.
 Companion to `agent-docs/faceted-vertex-bounds-design.md` ("vertex-bounds §N"), whose §3.2 rim rule and §3.6
 shallow-crossing note this design answers, and to `agent-docs/tessellation-design.md` ("tessellation §N"), whose
-§7 restatement refusal it lifts for a refined body. Increments R1–R6 (§9) implement it.
+§7 restatement refusal it lifts for a refined body. §9 lists the pieces that implement it.
 
 ## 1. Problem
 
 A chain of `Union` calls over placed solid cylinders publishes a held bound far above the chording that built it.
-Six spans of radius 0.35 mm joined end to end at bends (the Gallery yarn leader's construction, reproduced in
-§8's probe with a 0.1 mm chain tolerance) gives, per left-fold step:
+Six spans of radius 0.35 mm joined end to end at bends (the Gallery yarn leader's construction, reproduced by
+§8's `leader` case with a 0.1 mm chain tolerance) gives, per left-fold step:
 
 | Step | Joint | `MeshBound` | worst rim: `δA`, `δB`, `sin θ`, `nA·nB` |
 |---|---|---|---|
@@ -248,37 +248,23 @@ func Refine(ctx context.Context, source *Body, maxBound units.Value) (*Body, err
 `docs/api.md` (Booleans), `docs/data-structures.md` (Meshes), `examples/refine_example_test.go` and
 `apitest/refine_test.go` cover the public slice.
 
-## 8. Feasibility probe
+## 8. Feasibility check
 
-The probe is an uncommitted scratch test (`.tmp/refine-probe/` in the worktree that wrote this document). It
-builds the six-span leader through the public `Extrude`, `Transform` and `Union`. It reads the held mesh,
-measures each held point's distance out of the true union (exact line–cylinder intervals over 4000 directions),
-and checks the held volume interval against the closed form
+`apitest/refine_test.go` builds the six-span leader through the public `Extrude`, `Transform` and `Union` (the
+`leader` case: radius 0.35 mm, `Refine` at 0.12 mm). It checks the held volume interval against the closed form
 
 ```text
 V = Σ π r² L_i − Σ_joints (4/3) r³ tan(α_j / 2)
 ```
 
 (each joint's overlap of two butt-ended cylinders with turn angle `α_j`, valid when every span is longer than
-`r·tan(α_j/2)`).
-
-| Quantity | Value |
-|---|---|
-| held `MeshBound` (today) | 0.2423 mm |
-| largest held-to-true distance over the held mesh | 0.0061 mm |
-| R1's exact `FacetBound` over all 914 held facets (64-gon pieces, ladder from 0.001 mm, depth 20) | 0.0355 mm, none refused |
-| `max δ_i` (true-to-held side, before `W` and `e_deep`) | 0.00478 mm |
-| held volume interval | 142.2414 ± 2.1660 mm³, containing the closed form 144.4022 mm³ |
-
-The distance row is a measurement, not a proof. The `FacetBound` row is the exact certificate (i) over pieces the
-probe built itself. Through the production path (leaf records from `occupancyleaf`, `Refine` at 0.12 mm on 24
-workers) the same leader certifies a `Mesh.Bound()` of 0.0446 mm in 1.7 s. `apitest/refine_test.go` runs it as the
-`leader` case. The search direction set, not the geometry, accounts for the gap to 0.0061 mm. The closed form
-landing at the top of the interval is expected, because every leaf is inscribed.
+`r·tan(α_j/2)`). The held `MeshBound` is 0.2423 mm (§1), and before `Refine` the test requires `Tessellate` at 0.12 mm
+to refuse. After `Refine` the leader certifies a `Mesh.Bound()` of 0.0446 mm. The closed form lands at the top of the
+held volume interval, as expected, because every leaf is inscribed.
 
 ## 9. Increments
 
-| Inc | Lands | Red leg |
+| Inc | Covers | Red leg |
 |---|---|---|
 | R1 | `internal/occupancy`: circle-prism `U` under a rotated placement; exact piece-misses-`U`; facet search with ceiling | a point just inside the true circle is never separated, and one past the polygon's circumradius always is; a chord facet is never certified below its sagitta; a facet inside two leaves must clear the deeper; a work ceiling of 10 refuses |
 | R2 | the occupancy record composed by the ordinary mesh `Union` (weld, smallest sine, checked tangency slack), bound to its held mesh | a placed Union result no longer carries a readable record, so `Refine` refuses it |
@@ -289,12 +275,12 @@ landing at the top of the interval is expected, because every leaf is inscribed.
 
 ### Gallery parts
 
-| Part | Held bound | After `Refine` | `Refine` time | `Refine` call |
-|---|---|---|---|---|
-| `yarn-leader` | 0.2423 mm | 0.0446 mm | 1.7 s | `yarn.go`: `return b.refine(b.union(spans...), 0.12)` |
-| `brake-band` | 0.2713 mm | 0.0297 mm | 0.09 s | `brake_cord.go`: `return b.refine(b.union(cord, leftEye, rightEye), 0.12)` |
-| `treadle-flex-connector` | 0.0758 mm | 0.0071 mm | about 4.5 s | `connector.go`: `return b.refine(b.cut(body, ...), 0.01)` around the second Cut |
-| `brake-spring-*` | 2.075 mm | 0.0889 mm at the default pose | about 8.5 s | `brake.go`: `return b.brakeRotate(b.refine(b.union(coil, frontLeg, rearLeg, frontEye, rearEye), 0.12), front, phase)` |
+| Part | Held bound | After `Refine` | `Refine` call |
+|---|---|---|---|
+| `yarn-leader` | 0.2423 mm | 0.0446 mm | `yarn.go`: `return b.refine(b.union(spans...), 0.12)` |
+| `brake-band` | 0.2713 mm | 0.0297 mm | `brake_cord.go`: `return b.refine(b.union(cord, leftEye, rightEye), 0.12)` |
+| `treadle-flex-connector` | 0.0758 mm | 0.0071 mm | `connector.go`: `return b.refine(b.cut(body, ...), 0.01)` around the second Cut |
+| `brake-spring-*` | 2.075 mm | 0.0889 mm at the default pose | `brake.go`: `return b.brakeRotate(b.refine(b.union(coil, frontLeg, rearLeg, frontEye, rearEye), 0.12), front, phase)` |
 
 Each call sits inside the part's constructor, before `builder.part` applies the head tilt or `brakeRotate` turns
 the spring. A Union result placed after its last Union has no record, and placing the refined body keeps its
@@ -346,8 +332,7 @@ unbuilt.
 
 ## 10. Risks
 
-- `Cross` grows by `2/s` per step where crossings sit near earlier sites, which is exponential in such a chain.
-  It reaches 2.2e-8 mm after the leader's five steps.
+- `Cross` grows by `2/s` per step where crossings sit near earlier sites, which is exponential in such a chain. It stays negligible over the leader's five steps.
 - A facet's bulge is one number over the whole facet. A wall facet runs a whole span, so a site or hole near one
   end reaches the other. Reading each contact's bulge at its own segment (`LocalBulgeAt`) keeps the deep term local,
   but `MeshBounds` still reads whole facets.
@@ -355,6 +340,5 @@ unbuilt.
 - A chain must first survive its own folds. The chain-depth gate (vertex-bounds §5) still reads the crossing
   bounds unless an operand was refined, so a chain must call `Refine` between folds to use R6.
 - Tracking costs every ordinary Union and Cut of tracked operands a bulge pass, and sometimes a second pre-pass.
-  The Gallery default Build takes 60.6 s with tracking against 37.7 s without.
 - Coil facets bound no poke of their own: each keeps its own two-sided bound as its bulge.
 - Replay and ordered-shift paths are still not tracked.

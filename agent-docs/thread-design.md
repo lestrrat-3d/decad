@@ -14,6 +14,7 @@ type ThreadSpec struct {
     Length   units.Value
     Form     ThreadForm
     LeadIn   units.Value
+    LeadInAngle units.Value
 }
 
 type ThreadForm struct {
@@ -57,7 +58,7 @@ exactly.
 
 - A thread on a face beside a larger face or a shoulder. The groove runs out of the face's ends and cuts the
   neighbour. Thread a rod that ends at the thread, or cut the thread before adding the shoulder.
-- A runout that tapers the groove out, and a lead-in of another angle than 45 degrees.
+- A runout that tapers the groove out.
 - Tapered (pipe) forms and the UN inch series' own tables: a UN thread is the ISO profile at a pitch of `25.4 / threads per inch`.
 - Tables beyond the metric coarse series, explicit metric pitches and the Unified fractional sizes of §9, such as ISO fine series by size, tapered pipe threads and trapezoidal tables. The caller states any other pitch.
 - Cosmetic threads that mark a face and cut nothing.

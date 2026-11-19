@@ -49,8 +49,7 @@ according to the writer path.
   product of its two ends taken from the apex), with both kinds present. A loop chamfer's convex corner
   gives two arcs and two generators; a reflex corner gives one arc and two generators meeting at the apex
   vertex. Every such corner cone is a cap-blend band patch whose tag states a departure, so a chamfered
-  body takes the faceted writer, and no producer builds a cone patch the analytic writer receives. The
-  arm's own tests write the chamfer corners through the writer directly. Its face sense is its outward
+  body takes the faceted writer. Its face sense is its outward
   normal against the radial direction at its first vertex off the axis, since the `CONICAL_SURFACE`
   normal leans away from the axis at every point off it.
   A sphere patch has one loop of at least three `Arc3` edges, each a great circle: its `Center` and
@@ -68,9 +67,7 @@ according to the writer path.
   check covers cone, sphere and horn torus patches only. The same reason
   holds for the other arms, which do not apply it: a plane, cylinder or other torus face writes its held
   vertex coordinates through its curves and surface whatever bound they carry, so such a file states
-  points the body does not prove lie on them. The bounds those faces carry today are rounding, measured on amd64 at
-  most 5.3e-15 mm on a shell with an oblique opening, and 7.7e-14 mm and 1.5e-13 mm on the round bosses
-  crossing a plate's outline. Applying the
+  points the body does not prove lie on them. The bounds those faces carry are rounding. Applying the
   check to every arm would send each of those bodies to the faceted writer
   (`agent-docs/missing-features.md`).
   A cone, sphere or horn torus patch's loop is walked by the edge-use rule, never by a parameter-plane
@@ -84,7 +81,7 @@ according to the writer path.
   placement writes analytically when the translated carrier matches the tag exactly and the synthetic point
   and outward normal checks pass. The placement must be finite and valid with an exactly identity basis. A sphere uses a north-pole vertex loop.
   A ring uses two shared circle edges, each used in opposite directions. Unsupported or inexact cases fall back
-  to the faceted writer. `ReadSTEP` still refuses whole spheres and tori (I15 and I4).
+  to the faceted writer. `ReadSTEP` still refuses whole spheres and tori (STEP import I15 and I4 in `agent-docs/format-io-design.md`).
   Emit one `ADVANCED_FACE`
   per body face. Share `VERTEX_POINT`s and `EDGE_CURVE`s by body topology
   identity. An `Arc3` edge is a `CIRCLE` placed about its own `Axis`, with the
@@ -139,7 +136,7 @@ according to the writer path.
   end cap's angular displacement already refuses it. The check only refuses: such a face is not proven
   to lie on its tag, so a file stating that surface would claim more than the body proves. `export`
   reads the face through `internal/facedeparture`, which the root package installs
-  (`face_departure.go`), since a public `Face` exposes none of these fields.
+  (`reader_install.go`), since a public `Face` exposes none of these fields.
   The bodies the check sends to the faceted writer include every Loft with a cap not proven to lie
   exactly on its section plane, which states the loft's vertex displacement (`agent-docs/loft-design.md`
   §18; a cap on a tilted plane whose held points round off it), every join Loft whose admitted caps
@@ -149,9 +146,7 @@ according to the writer path.
   loop chamfer's corner cone, which is a cap-blend band patch (`agent-docs/modify-design.md` Part R
   §8.3), every drafted wall, plane or cone, whose tag is a rounding of the tilted surface
   (`agent-docs/modify-design.md` Part D DD4), every partial revolution, and every revolved cone. Their
-  departures are rounding-sized, measured on amd64 at 5.0e-14 mm on the end cap of a loft with a
-  radius-1 hole on the frame tilted to (1, 0, 4), 3.6e-16 mm on the offset `ToFace` cap, 4.3e-17 to 2.2e-16 on the chamfer cones, 1.5e-16 to
-  2.9e-16 on the drafted walls, and 2.3e-15 mm on the apex of a frustum revolved from radius 3 to 7.1.
+  departures are rounding-sized and differ between architectures.
   A revolved tube's cylinders and annular caps equal their records and keep the analytic writer, and
   so does a world-frame Loft of a square with a centred circle hole, whose bore and caps are exact. A
   revolved ball's sphere and a revolved ring's torus may use the complete-surface arm described above. No producer builds a full conical wall or a
@@ -227,5 +222,5 @@ parts to `STEPItem{Name, Body, Placement, Tolerance, Color}` as it does for `Thr
 | A8 | Not written: material, mass, density, body-less parts. A reflection or invalid placement is `ErrDegenerate`. The whole `step.File` is built before the writer is touched. |
 
 `decad.ReadSTEP` refuses such a file with `ErrUnsupported` because it does not read placements. The tests check the
-graph with the `step.File` entities (`export/step_items_test.go`); no external STEP reader was available when this
-shipped, so reader acceptance (IDT item order, shared context, colours on solids) is unverified outside decad.
+graph with the `step.File` entities (`export/step_items_test.go`); reader acceptance (IDT item order, shared context, colours on
+solids) is unverified outside decad.

@@ -366,11 +366,11 @@ this document owns the retry.
 
 A boolean chords every operand at the pair tolerance, `meshbool.ChordFactor` (2e-5) times the pair diameter
 (`internal/meshbool/chord.go`). A revolve mesh is one meridian chording times one global angular count, so a long
-arc of a thick tube asks for more facets than `maxFacetsPerMesh` (65 536) allows, or more facet-contact work than
-`maxFacetPairTestsPerCall` allows. Facets scale as 1/tolerance.
+arc of a thick tube asks for more facets than `maxFacetsPerMesh` (65 536, `internal/revolveproof/budget.go`) allows, or more
+facet-contact work than `proofbound.MaxFacetPairTestsPerCall` (8 000 000) allows. Facets scale as 1/tolerance.
 
 A torus of major radius 4 and minor radius 1, unioned with a radius-1 stem ending on its tube centreline, at the
-pair tolerance (`apitest/revolve_local_refinement_test.go`):
+pair tolerance (`apitest/revolve_operand_coarsening_test.go`):
 
 | Sweep | Angular stations | Facets | Refusal |
 |---|---|---|---|
@@ -410,10 +410,9 @@ volume plus the stem volume outside the arc, the latter by midpoint integration,
 
 ### 4. Why not a finer mesh near the contact
 
-A mesh refined only near the contact (non-uniform angular stations, a per-interval area and volume proof) was
-designed first and not built. A revolve mesh publishes no per-vertex bound, so a face's published bound is its
-coarsest chording, and a finer patch tightens no bound any proof reads. The retry gives the same bounds and
-changes none of the revolve proofs.
+Refining the mesh only near the contact (non-uniform angular stations, a per-interval area and volume proof) is not
+implemented. A revolve mesh publishes no per-vertex bound, so a face's published bound is its
+coarsest chording, and a finer patch tightens no bound any proof reads. The retry changes none of the revolve proofs.
 
 ### 5. Test obligations
 

@@ -1,10 +1,12 @@
 # Interchange format design
 
-One part per file-format reader or writer that is small enough to share a document. Each part keeps its own `§` numbers; cite a `§` number as "Part name §N". STEP export has its own document, `agent-docs/step-export-design.md`.
+One part per file-format reader or writer that is small enough to share a document. Each part keeps its own `§`
+numbers; cite a `§` number as "Part name §N". STEP export has its own document, `agent-docs/step-export-design.md`.
 
 ## STEP import
 
-`ReadSTEP` reads the planar-, cylinder- and cone-faced solids of a STEP file into a `MeshBody`. It is the import counterpart of the faceted and
+`ReadSTEP` reads the planar-, cylinder- and cone-faced solids of a STEP file into a `MeshBody`. It is the import
+counterpart of the faceted and
 planar arms of `export.STEP` (`agent-docs/step-export-design.md`) and adds no geometry kernel. Three plain-data packages
 do the work: `internal/stepread` parses the file's syntax, `internal/stepbrep` reads its B-rep and `internal/polytri` cuts
 a planar polygon with holes into triangles.
@@ -81,7 +83,7 @@ func ReadIGES(ctx context.Context, r io.Reader, opts ...MeshImportOption) (*Mesh
 ## IGES export
 
 `export.IGES` writes a body as the planar-faced manifold solid B-reps of an IGES 5.3 file, the form `ReadIGES` reads
-(the IGES import part). It is the faceted arm of the STEP writer (`agent-docs/step-export-design.md` §9)
+(the IGES import part). It is the faceted arm of the STEP writer (`agent-docs/step-export-design.md`, Geometry contract and §9)
 in IGES records: one planar face for each triangle of the body's verified tessellation.
 
 ### 1. Contract
@@ -198,8 +200,8 @@ and millimetre units.
 
 ## G-code perimeter export
 
-`export.GCodePerimeters` writes the first stage of a slicer: the toolpath that prints a body's outline layer by layer, with rectilinear infill when asked.
-It reads the same section outline as `export.DXFSection` (`agent-docs/section-outline-design.md`).
+`export.GCodePerimeters` writes the first stage of a slicer: the toolpath that prints a body's outline layer by layer,
+with rectilinear infill when asked. It reads the same section outline as `export.DXFSection` (`agent-docs/section-outline-design.md`).
 
 ### 1. Contract
 
