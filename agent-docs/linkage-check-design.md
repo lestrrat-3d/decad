@@ -908,14 +908,10 @@ each of its ends, which is at least the minimum over it.
   narrower than `1/1024`; red when the partner's expansion is dropped from a link-link pair (the bound
   then exceeds `g` at an interval end near a minimum). Measured: `23` poses, against `445` down to
   `1/4096` under the travel bound alone.
-- **Internal tests** in `linkage_internal_test.go`: `B_ij` against finite differences of `n·x_c` on §11's
-  four-joint chain — revolute, prismatic, revolute, prismatic — at a grid of configurations, every
-  difference quotient at or below its `B_ij`, red when the prismatic-ancestor zero and the revolute's `w_j`
-  are exchanged; `v_{i,c}` against the closed-form `ω × r` of scene 1's forearm corner under each of its
-  two joints, red when the parent's pose is dropped from the elbow's axis; `L_n` for scene 13's first
-  interval against the hand sum, red when the remainder or the first-order term is dropped; and the
-  certificate taking the larger bound — on the disc of §11 every interval's bound equals the travel
-  bound's bit for bit, red when the projection bound is taken alone.
+- **Unit-level checks of `B_ij`, `v_{i,c}`, `L_n` and the larger-of-two-bounds rule are not implemented.**
+  No test differentiates `n·x_c` against `B_ij`, compares a corner velocity with `ω × r`, or sums `L_n` by
+  hand. The bounds are exercised through the scenes above (`apitest/linkage_projection_test.go`,
+  `apitest/linkage_box_projection_test.go`), whose assertions fail when a bound is unsound or too loose.
 - **The tilted pendulum (hull points and directions).** Scene 13 carried by the rotation that takes `X`
   to `(1, −1, 0)/√2` and `Z` to `(1, 1, 1)/√3`, block and wall placed by it and the joint about the tilt
   of `Z`: every distance is scene 13's, but the wall is met along no coordinate direction and both boxes
@@ -1369,13 +1365,11 @@ widens a row's `Bound` as motion §9 test 8 shows, carried through a child link'
 exclusion of a far body, and a swept box grown by every ancestor joint's travel from the zero pose (scene
 1's shoulder swinging `80° → 90°` with the elbow held carries the forearm into a wall `46` mm beyond its
 zero-pose box); `PoseAt` composition pinned on three joints with closed-form world points (`(96, 0, 0)` on
-link 2 under scene 1 at `s = 1/3` is `(48·cos 30°, 48·sin 30°, 0) + (48, 0, 0)`). Internal tests in
-`linkage_internal_test.go` pin the ball propagation on a four-joint chain — revolute, prismatic, revolute,
-prismatic, so every row of §5.2's table is walked — against hand-computed radii and show each ball step go
-red when its term is dropped; pin the telescoping `τ` against the hand sum for a static partner and below
-two common ancestors, each joint's term red when dropped; pin the ideal pose of scene 1's forearm against
-its closed-form images, red when the parent's pose or the composition order is dropped; and pin a link-link
-pair's gap as the kernel's widened by `η_A + η_B`, red when the partner's `η` is dropped.
+link 2 under scene 1 at `s = 1/3` is `(48·cos 30°, 48·sin 30°, 0) + (48, 0, 0)`). No test pins the ball propagation on a four-joint
+chain, the telescoping `τ`, the ideal pose of scene 1's forearm or a link-link gap's `η_A + η_B` widening in
+isolation; those are not implemented as unit tests. `apitest/linkage_test.go` covers them only through the
+scene verdicts (`TestVerifyLinkageFoldingArm`, `TestVerifyLinkageSweptBoxCoversAncestorTravel`,
+`TestLinkagePoseAt`).
 
 Shard assignment of these tests and examples is owned by `agent-docs/testing.md`.
 
@@ -1907,11 +1901,10 @@ certified clear, when the revolute ball's radius is dropped from `ρ_{ik}`.
 
 **Standing tests.** Errors, one subtest per row of §14.6 and per shared row of §8; non-mutation and
 determinism; cancellation; pose deviation charged at a centre; `Configuration` pinned against scene 1's
-closed-form point and against `PoseAt` at `s = 1/3`. Internal tests in `linkage_box_internal_test.go` pin
-`τ_half` for scene 6's root against `½·(ρ·(4π/9) + 30)` with `ρ` the ball reading, each joint's term red
-when dropped; the split-axis choice (the `θ` axis first at the root, since `91·(4π/9) > 30`); the
-shallowest-first order on a hand-built tree; and the blocked allowance as `A·τ_half` per moving body, red
-when a static partner is charged an area or a moving one is not.
+closed-form point and against `PoseAt` at `s = 1/3`. No test pins `τ_half`, the split-axis choice or the
+shallowest-first order on a hand-built tree, or the blocked allowance as `A·τ_half`; those are not
+implemented as unit tests. `apitest/linkage_box_test.go` covers them through scene 6's verdict and tiling
+(`TestVerifyJointBoxCrane`, `TestVerifyJointBoxBlocked`, `TestVerifyJointBoxBudget`).
 
 Shard assignment of these tests and examples is owned by `agent-docs/testing.md`.
 
@@ -2758,31 +2751,12 @@ follower, a schedule pose outside `[0, 1]`, `Configuration` on scene 7's
 linkage; and a drive listing no loop
 joint standing every link at the zero pose with zero `Bounds`. Non-mutation of the document and
 determinism of two reports as motion §9 test 7; cancellation at every depth of the check, inside an
-`Enclose` call among them, returns `ctx.Err()` and no report. Internal tests pin `MotionFrame.AtRange` on a synthetic interval `[θ − w, θ + w]`: every
-entry of its rotation contains the rotation at both ends, and its sine entry's width is at least
-`2·w·cos θ` minus the point enclosure's own width — red when `AtRange` drops the widening and reads one
-end alone; pin the dependent `|Δq_k|` of §15.5 on hand-made `A`, `B`, `H` for the monotone and the
-turn-back case — red when it is the span of the ends; pin the canonical chain on a four-level grid: for a
-drive from `10°`, the point at `5/8` is continued from the cell `[1/2, 5/8]`, that from the point at `1/2`,
-that from the cell `[0, 1/2]`, that from the point at `0`, that from the approach, by asserting the cache
-holds exactly those keys after one point ask; pin the zero-pose falsifier, on scene 7's loop and on its
-tilt about `(1, 1, 1)`: each of the four pins' recorded positions moved by `1e-6` mm after the scene is
-built is refused, the record as built admitted — red, on both, when the pin-in-box check is deleted; pin
-the straddle on the crank `−30° → 1 rad`: three sub-segments that tile the segment, the mirrored side
-below and the scene's own above, each neighbour's chain starting at its cut, the cuts under `1e-60`
-apart; a pose inside the straddle holds both neighbours' values at their cuts and lies within `1e-12` of
-`0`; the pieces of `[1/4, 1/2]` tile it with the straddle in the middle — red when the straddle is not a
-sub-segment, which leaves a gap no fixture's pose or travel term is wide enough to show; pin the interval gate: a refused cell put in place of a certified one
-leaves the interval refused with `sketch`'s cause — red when the gate's refusal is deleted, which no
-public fixture shows, since a real chain refuses the point at a refused cell's end too; and pin the scene's
-frame: for each of the six axis senses and both scene sides, `U` and `V` are unit coordinate axes bit for
-bit, `U × V` is the closure axis times the side, and a pin's plane position is the caller's coordinates bit
-for bit, its exact enclosure that one value; for a loop with a slide, for each of the four slide
-directions perpendicular to the axis and on the half-turned side too, `U` is the slide's sense, negated on
-the half-turned side; and for the tilted axes `(1, 1, 1)` and `(−0.3, 2, 0.7)`, with and without a slide,
-on every side, `u ⟂ v`, `u × v` along the side's normal, `u` along the slide's own sense, and a pin's two
-enclosures each below `1e-12` wide with `x² + y²` holding the pin's exact squared distance from the axis
-— red when the coordinates are not divided by `|u|` and `|v|`. A slide's reading
+`Enclose` call among them, returns `ctx.Err()` and no report. No unit test pins `MotionFrame.AtRange`, the dependent `|Δq_k|`, the canonical chain's cache keys, the
+zero-pose falsifier's refusal of a moved pin, the interval gate or the scene frame's axes; those are not
+implemented as unit tests. Their behaviour is covered through the scene tests: the straddle at a driver's
+zero crossing by `apitest/linkage_loop_drive_test.go` (`TestVerifyLinkageLoopCrossingZero` and the tests after
+it), the tilted frames by `apitest/linkage_loop_tilted_test.go`, and the refusals by
+`TestLinkageLoopRefusals` in `apitest/linkage_loop_test.go`. A slide's reading
 sense `s_k` against `u` is not a leg any fixture can fail: `u` is the slide's own sense on every side a
 dependent primary slide is read on, since only the primary slide's own drive half-turns the scene; nor
 is the zero whole-turn count of a horizontal distance, whose continued readings agree to the boxes' width.
@@ -2886,7 +2860,7 @@ are therefore §6's grid, and §15.3's canonical rule names every ask's predeces
 continued from the point at its chain-start, a point at depth `d` from the depth-`d` cell ending at it —
 whatever order the subdivision asks them in. A cell asks for:
 
-- its **centre**: the point ask at `m`, on the sub-segment `subAt(m)` picks (§15.8), giving each
+- its **centre**: the point ask at `m`, on the sub-segment `linkagebound.DriverSegments.At(m)` picks (§15.8), giving each
   dependent's enclosure `M_j = [m_lo, m_hi]` — inside a straddle, the hull of its asks (§15.8);
 - its **hull**: `intervalSpans(a, b)` — the point asks at `a` and `b` and the cell ask between them, per
   sub-segment piece the interval is cut into (§15.5) — and over the pieces the hull `H_j = [h_lo, h_hi]` of
@@ -3178,14 +3152,10 @@ crossing it at an irrational fraction cut around a straddle (§15.8), each with 
 `WithResolution(Scalar(1.0/4))`: every centre reads the closed form within `1e-9`, the stretch below `0` on
 the mirrored scene; red when every cell reads on the scene's own side. `PoseAt` of the held drive at a leaf's stated centre values
 agrees with its `Center.Values` within `1e-9` and with the closed form. Non-mutation and determinism as
-motion §9 test 7; cancellation at every depth, inside an `Enclose` call among them. Internal tests pin `δ_j` on hand-made `M` and `H` — `M` at an end of `H` gives the hull's
-whole width, `M` in its middle half of it — red when it is half the hull's width or §15.5's two-sided term;
-pin the split axis at the root of scene 11 built from boxes, the follower a box `x ∈ [70, 100]` with
-`ρ = √(30² + 4²)` and the gate over `[0, 5]` mm — the crank's share is exactly `2·ρ·δ ≈ 12` mm against the
-gate's `5`, so the crank splits first although it is not on the pair's path — red when a dependent's term
-is charged to no axis or dropped; and pin the stuck rule on a hand-built decomposition, a cell inside the
-refused set left unsplit, one straddling it split along the loop axis, one meeting it at a point only
-left unsplit.
+motion §9 test 7; cancellation at every depth, inside an `Enclose` call among them. No unit test pins `δ_j` on hand-made `M` and `H` (the code is `DependentCellDelta` in
+`internal/linkagebound/cell.go`), the split axis at scene 11's root or the stuck rule on a hand-built
+decomposition; those are not implemented as unit tests. `apitest/linkage_box_loop_test.go` covers them through
+the scenes (`TestVerifyJointBoxLoopGate`, `TestVerifyJointBoxLoopFold`, which asserts the stuck rule).
 
 Shard registration of these tests follows `agent-docs/testing.md`.
 
