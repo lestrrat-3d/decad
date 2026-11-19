@@ -140,6 +140,12 @@ func buildTwistedMesh(ctx context.Context, patches [][]twistPatch, edgeOf []int,
 
 func buildSectionMesh(ctx context.Context, patches [][]twistPatch, rational [][]rationalTransition,
 	edgeOf []int, edges int, planes []sectionrecord.PlaneRecord, zs []*big.Rat) (Build, error) {
+	return buildSectionMeshMode(ctx, patches, rational, edgeOf, edges, planes, zs, nil, 0)
+}
+
+func buildSectionMeshMode(ctx context.Context, patches [][]twistPatch, rational [][]rationalTransition,
+	edgeOf []int, edges int, planes []sectionrecord.PlaneRecord, zs []*big.Rat,
+	emerging []bool, firstFit int) (Build, error) {
 	count := len(patches)
 	if rational != nil {
 		count = len(rational)
@@ -251,28 +257,74 @@ func buildSectionMesh(ctx context.Context, patches [][]twistPatch, rational [][]
 	for _, r := range rhos {
 		rho = maxRat(rho, r)
 	}
+	// Keep the virtual grid for bounds, but alias the inactive flat to its
+	// authenticated source vertex in the emitted topology.
+	indices := make([]int, len(verts))
+	if len(emerging) == 0 || !emerging[0] {
+		for i := range indices {
+			indices[i] = i
+		}
+	} else {
+		flatSpans := 0
+		for flatSpans < len(emerging) && emerging[flatSpans] {
+			flatSpans++
+		}
+		flatEnd := spanStart[flatSpans]
+		compact := make([]r3.Vec, 0, len(verts))
+		for r, rg := range rings {
+			collapsed := rg.span < firstFit-1 || (rg.span == firstFit-1 && rg.band == 0)
+			apex := -1
+			for q := range ringSize {
+				if collapsed && q <= flatEnd {
+					if apex < 0 {
+						apex = len(compact)
+						compact = append(compact, verts[r*ringSize+q])
+					}
+					indices[r*ringSize+q] = apex
+				} else {
+					indices[r*ringSize+q] = len(compact)
+					compact = append(compact, verts[r*ringSize+q])
+				}
+			}
+		}
+		verts = compact
+	}
 	tris := make([][3]int, 0, 2*ringSize*(len(rings)-1)+4*(ringSize-2))
 	sources := make([]int, 0, cap(tris))
+	appendTri := func(a, b, c, source int) {
+		if a != b && b != c && c != a {
+			tris = append(tris, [3]int{a, b, c})
+			sources = append(sources, source)
+		}
+	}
 	for r := range len(rings) - 1 {
 		for q := range ringSize {
 			next := (q + 1) % ringSize
-			a0, b0 := r*ringSize+q, r*ringSize+next
-			a1, b1 := (r+1)*ringSize+q, (r+1)*ringSize+next
-			tris = append(tris, [3]int{a0, b0, b1}, [3]int{a0, b1, a1})
-			sources = append(sources, stationEdge[q], stationEdge[q])
+			a0, b0 := indices[r*ringSize+q], indices[r*ringSize+next]
+			a1, b1 := indices[(r+1)*ringSize+q], indices[(r+1)*ringSize+next]
+			appendTri(a0, b0, b1, stationEdge[q])
+			appendTri(a0, b1, a1, stationEdge[q])
 		}
 	}
-	capPoints := make([]sectionrecord.Point2, ringSize)
-	cycle := make([]int, ringSize)
-	for q := range ringSize {
-		cycle[q] = q
-	}
-	last := (len(rings) - 1) * ringSize
-	for capIndex, offset := range [...]int{0, last} {
+	for capIndex, r := range [...]int{0, len(rings) - 1} {
+		cycle := make([]int, 0, ringSize)
+		points := make([]sectionrecord.Point2, 0, ringSize)
+		ids := make([]int, 0, ringSize)
 		for q := range ringSize {
-			capPoints[q] = sectionrecord.Point2{U: verts[offset+q].X, V: verts[offset+q].Y}
+			id := indices[r*ringSize+q]
+			if len(ids) > 0 && id == ids[len(ids)-1] {
+				continue
+			}
+			ids = append(ids, id)
 		}
-		capTris, err := triangulation.Triangulate(ctx, capPoints, [][]int{cycle})
+		if len(ids) > 1 && ids[0] == ids[len(ids)-1] {
+			ids = ids[:len(ids)-1]
+		}
+		for i, id := range ids {
+			cycle = append(cycle, i)
+			points = append(points, sectionrecord.Point2{U: verts[id].X, V: verts[id].Y})
+		}
+		capTris, err := triangulation.Triangulate(ctx, points, [][]int{cycle})
 		if err != nil {
 			return Build{}, triangulation.WrapLoftError(err)
 		}
@@ -280,8 +332,7 @@ func buildSectionMesh(ctx context.Context, patches [][]twistPatch, rational [][]
 			if capIndex == 0 {
 				tri[1], tri[2] = tri[2], tri[1]
 			}
-			tris = append(tris, [3]int{offset + tri[0], offset + tri[1], offset + tri[2]})
-			sources = append(sources, edges+capIndex)
+			appendTri(ids[tri[0]], ids[tri[1]], ids[tri[2]], edges+capIndex)
 		}
 	}
 	if err := loftmesh.LoftCrossingAuditBounded(proofbound.NewWorkBudget(ctx), verts, tris,

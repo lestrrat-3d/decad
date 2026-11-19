@@ -3177,3 +3177,8 @@
 12	0.01	TestVerifySeatedWalkChargedPairIsMeasured
 12	0.00	TestVertexIntegerOriginBoundStaysZero
 12	0.01	TestWallHolePlateReadsThickness
+12	0.00	TestCircularLoftEmergingFlat
+12	0.00	TestCircularLoftEmergingFlatRefusesOffTangent
+12	0.00	TestCircularLoftEmergingFlatRefusesLaterOffTangent
+12	0.00	TestCircularLoftEmergingFlatRefusesBentChain
+12	0.00	TestCircularLoftEmergingFlatRefusesUnrepresentablePlane
