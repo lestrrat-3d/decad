@@ -6,7 +6,7 @@ history (§5), scope across ops and routes (§6), interaction with coplanar cont
 (§9), tests (§10), risks (§11), open questions (§12), tasks (§13).
 
 Companion to `agent-docs/evaluator-design.md` §3 ("Canonicalize at build") and §9 ("Ordinary mesh output"), and to
-`agent-docs/coplanar-contact-design.md` (answers its §15 Q1). Adds no public API and no option.
+`agent-docs/coplanar-contact-design.md` (§15 Q1). Adds no public API and no option.
 
 ## Router
 
@@ -21,7 +21,7 @@ Navigation, not authority.
 | Does it apply to Cut, Intersect and the analytic routes? | §6 |
 | Why must coplanar contact land first? | §7 |
 | Why can a merge never change geometry or hide a real edge? | §8 |
-| What does the implementer build, in what order? | §13 |
+| Where does each part live? | §13 |
 
 ## Assumptions
 
@@ -42,17 +42,14 @@ Navigation, not authority.
 
 ## 1. Current behavior
 
-Measured on `origin/main` at `3427283341` (dated illustration, 2026-11-18; probe kept in
-`.tmp/zz_scratch_probe_test.go.txt` of the design worktree, not committed).
+Flush pairs by route:
 
 | Pair | Route | Result |
 |---|---|---|
 | box A `[0,1]³`, box B `[0.5,1.5]×[0,1]×[1,2]` built on an offset sketch plane | brep (`TryStackedUnion`) | 10 faces; each y wall is ONE face (`face(4)`, `face(6)`). Coplanar walls are already merged. The merged walls carry only fresh roles: `boolupstream` attributes a face only when exactly one operand face lies on its plane. |
 | A, B side by side, equal sweep interval | prism (`prismboolean.Try`) | 6 faces; merged sides carry every segment role (`side(0,0) side(0,1) side(0,2)`) |
-| A `[0,10]³`, B the same box moved by `Transform` to `(0.5, 0, 10)` | mesh path | 12 faces; B shifted by the gap retry (y walls at `-2.1e-6`), `CodeGapShiftApplied`. Walls not even coplanar. |
-| same, with `coplanarcontact.With(ctx, true)` | mesh path | 12 faces, no shift, every face a retained `Plane`; A's and B's y walls are separate faces on one plane (seam edge) |
-| host box + perpendicular hexagonal prism with oblique flanks, chamfered, ends flush with the host's ends | mesh path | 15 faces; tail shrunk by the gap retry (ends at `y = 1.88e-6` and `15.999998`), two `1e-5 mm²` sliver faces, tail faces `Faceted`. The rendered seam is a real 1.9 µm step. |
-| same, with `coplanarcontact.With(ctx, true)` | mesh path | 14 faces, no shift, all faces retained `Plane`, every end-face vertex `β = 0`; host end face (`side(0,0)`) and tail end face (`capEnd`) are separate faces on `y = 0`; same at `y = 16` |
+| A `[0,10]³`, B the same box moved by `Transform` to `(0.5, 0, 10)` | mesh path | 10 faces; each y wall is one face holding facets of both operands (R1, A1) |
+| host box + perpendicular hexagonal prism with oblique flanks, chamfered, ends flush with the host's ends | mesh path | one face on each end plane; the host end face (`side(0,0)`) and the tail end face (`capEnd`) merge (R2, A2) |
 
 Findings:
 
@@ -60,11 +57,9 @@ Findings:
   and brep results build one face per exact planar region. `solidFromMesh` (the orthogonal route) groups facets by
   exact oriented plane (`meshplane.Groups`). The plain flush box Union of the earlier probe went through the brep route
   and its 10 faces ARE the merged result.
-- **The mesh path never merges.** `facetedrecord.assembleBody` builds one face per connected patch of one source group
-  (`facetproof.SourcePatches`, evaluator §9). Two operand faces are two groups, so they stay two faces.
-- **Today the dovetail-like pair is not flush at all.** The gap retry moves the second operand. Coplanar contact
-  (`agent-docs/coplanar-contact-design.md`) removes the move. After it lands, the faces are exactly coplanar and
-  exact, and only this design's merge is missing.
+- **The mesh path merges in `booleandispatch.meshBody`.** `facetedrecord.assembleBody` builds one face per connected
+  patch of one source group (`facetproof.SourcePatches`, evaluator §9). `facemerge.Merge` first relabels adjacent
+  coplanar patches of different operands into one group, so they assemble into one face.
 - `topology.go` `Face.Origins` states that canonicalization may merge coplanar faces and a merged face carries all
   contributing roles. That holds for prism segment canonicalization (evaluator §3). It does not hold for the brep
   route's merged walls, which lose the operand roles (§12 Q2).
@@ -92,7 +87,7 @@ brep route drops (§12 Q2).
 
 **Success criteria.**
 
-- **S1.** After coplanar contact is on, the flush host-box + perpendicular trapezoid-prism Union has exactly one face on
+- **S1.** The flush host-box + perpendicular trapezoid-prism Union has exactly one face on
   each end plane, and no edge whose two faces both lie on that plane.
 - **S2.** The `Transform`-placed flush box-on-box Union has 10 faces, each y wall one face.
 - **S3.** Volume, area, `MeshBound`, `VolSymDiff`, every vertex position and bound are bit-identical with and without
@@ -152,8 +147,8 @@ Group `g` is a candidate when all hold:
 3. every vertex of every facet of `g` has `VertexBound == 0`;
 4. every facet of `g` lies in one `meshplane.Groups` group that is `Planar` (run `meshplane.Groups` once over the
    candidate facets of steps 1–3 only). A zero-area facet is its own non-`Planar` group and so rejects its source group.
-   Measured with the coplanar switch on (dated illustration, 2026-11-18): R1 and R2 (§10.2) hold no zero-area facet.
-   If a later result's end-face group holds one, S1 fails for it; §12 Q5 owns that case.
+   R1 and R2 (§10.2) hold no zero-area facet. A result whose end-face group holds one fails S1; §12 Q5 owns that
+   case.
 
 ### 4.3 Merge edges and components
 
@@ -199,7 +194,7 @@ Members are the distinct groups of the component, in increasing index.
 |---|---|
 | `Face.Origins`, `FaceCreatedBy`, `Walls`, `CapStart`/`CapEnd` refs | The merged face lists every member's roles; each selects it (evaluator §3: "a canonicalization merge UNIONS the merged faces' roles"). Selections like `Facing(-y).Exactly(2)` that counted both faces now see one (counts churn, `api-design.md` §3). |
 | `topo.Face.Upstream` | union of the members' `Upstream`; `Origins()` appends it as today |
-| `topo.Face.Source` (`provenance.SourcePatch`) | merged record with `Members`. No production reader of `Face.Source` exists today besides the shift-certificate seals (Task 2 makes them walk `Members`). When operation history implements "Face correspondence" (`operation-history-design.md`), it must expand `Members`, which keeps every incoming relationship as that doc requires. |
+| `topo.Face.Source` (`provenance.SourcePatch`) | merged record with `Members`. No production reader of `Face.Source` exists today besides the shift-certificate seals (they walk `Members`). When operation history implements "Face correspondence" (`operation-history-design.md`), it must expand `Members`, which keeps every incoming relationship as that doc requires. |
 | retained `Plane` tag, `CapRecord` | the donor's; valid for the whole merged face because every member lies on the donor's true plane (§8 step 4). Sketch-on-face (reading `Face.Surface().(Plane).Frame`) and `ToFace` read it. |
 | `facetedrecord.SourceTag` in a later Boolean | reads the merged face's tag and `Source` as for any face; the merged face becomes one source group of the next result |
 | `boolchain.Expandable`, regroup, Section from history | unchanged: the merge adds no `OperationWarnings` entry and keeps the payload type |
@@ -221,15 +216,14 @@ Members are the distinct groups of the component, in increasing index.
 ## 7. Interaction with coplanar contact
 
 - **Dependency.** Two result faces from different operands can share an exact edge on one plane only if the operand
-  faces touched coplanar along it. Today that contact is refused and the gap retry moves an operand, so the merge
-  never fires. Coplanar contact Task 10 (switch removal) makes such results exist. Wiring (Task 3 here) depends on it
-  and on coplanar contact Task 11, whose API tests count faces this merge changes.
-- **Q1 there.** `coplanar-contact-design.md` §8 kept two faces and §15 Q1 deferred the merge. This design answers Q1
-  with the merge. Task 5 updates §8, §12 and §15 there to current state.
+  faces touched coplanar along it. Coplanar contact admits that contact, so such results exist; without it the gap
+  retry would move an operand and the merge would never fire.
+- **Q1 there.** `coplanar-contact-design.md` §8 kept two faces and §15 Q1 deferred the merge. This design is the
+  merge that Q1 resolves to.
 - **Exact-face reading.** Coplanar contact admits operand facets on `FacetBound == 0` plus a zero face gate reading
   (§3.1 there), and its §7 makes result faces with float corners hold `β == 0`. This design reads the result's own
-  `β`, which is that same zero bound one step later. Measured with the switch on: every end-face vertex of the
-  dovetail-like result already reads `β = 0`, before §7 lands.
+  `β`, which is that same zero bound one step later. Every end-face vertex of the
+  dovetail-like result reads `β = 0`.
 - **Planar simplification (§7 there)** runs inside the stitch, per source id, before the merge. The merge changes no
   vertex, so it needs no re-simplification. Former seam vertices stay as chain-interior points of maximal edges.
 
@@ -269,8 +263,7 @@ true union is one planar face of the solid.
   (one exact dyadic cross product and plane key per facet), one `SourcePatches` pass (assembly runs it again later),
   one pass over `Adj` (3 per facet), union-find, and the boundary check (linear in component facets). All linear; no
   facet-pair work.
-- Against the Boolean itself (exact facet-pair predicates, stitch, closure audit, assembly) this is expected well under
-  5% of a Union's time. Task 2's `BenchmarkMerge` and Task 3's before/after `go test -bench` numbers in the PR verify it.
+- `BenchmarkMerge` (`internal/facemerge/merge_bench_test.go`, a 64×64-cell two-operand plate) measures the pass.
 - Fewer faces make assembly and later selection marginally cheaper. Verify and other internal `Evaluate` callers pay
   nothing (§3).
 
@@ -303,10 +296,9 @@ the `x = 2` face one B group. Non-candidate marker for U5 and U6: a retained `Pl
 
 ### 10.2 Root tests (`union_face_merge_test.go`, package `decad`)
 
-Run after coplanar contact Task 11. Each asserts the result payload is `facetedrecord.Payload` (the mesh path). If a
-fixture reaches an analytic route instead, stop and report; do not change production code to force the route. Every
-fixture below was measured on the mesh path with the coplanar switch on (dated illustration, 2026-11-18; "before"
-counts in brackets).
+Each asserts the result payload is `facetedrecord.Payload` (the mesh path). R1 to R4 are
+`TestUnionFaceMergeFlushBoxes`, `TestUnionFaceMergeDovetailEnds`, `TestUnionFaceMergeSurvivesPlacement` and
+`TestUnionFaceMergeKeepsRoundedFacesApart`. "Before" face counts, without the merge, are in brackets.
 
 | ID | Case | Expectation |
 |---|---|---|
@@ -317,6 +309,9 @@ counts in brackets).
 
 ### 10.3 API tests (`apitest/union_face_merge_test.go`)
 
+A1 to A7 are `TestUnionFaceMergeFlushBoxes`, `...DovetailEnds`, `...CutStepDown`, `...IntersectSteppedPrisms`,
+`...KeepsOffsetPlanesApart`, `...ThenChamfer` and `...ThenCut`.
+
 | ID | Case | Expectation |
 |---|---|---|
 | A1 | R1 pair | `Faces(Facing(-y)).Exactly(1)` resolves; `FaceCreatedBy` with A's and with B's `side(0,0)` role each select that one face; surface `Plane`; no operation diagnostic |
@@ -324,28 +319,22 @@ counts in brackets).
 | A3 | `Cut` step-down: target profile `(0,0) (20,0) (19,10) (10,10) (10,5) (0,5)` on R2's tool plane, extruded 10 `Against`; tool: box `[0,11]×[0,12]×[0,6]` moved by `Transform` by `(10, -1, 5)` | 6 faces [7]; `Facing(+z)` `Exactly(1)` with both the target's and the tool's roles; volume 987.5 exact |
 | A4 | `Intersect` of stepped prisms on R2's tool plane, each extruded 10 `Against`: A profile `(0,0) (12,0) (12,20) (6,20) (6,10) (0,10)`; B profile `(1,0) (13,0) (13,10) (4,10) (4,20) (1,20)` moved by `Transform` by `(1, 0, 0)` (B's high part spans x `[2,5]`, so no riser touches) | 6 faces (box `[2,12]×[0,10]×[0,10]`); `Facing(+z)` `Exactly(1)` with roles from both (A's top bounds x `[2,6]`, A's copy where both tops coincide on `[5,6]`; B's top bounds `[6,12]`); volume 1000 exact |
 | A5 | R1 pair with B moved by `(0.5, 2^-40, 10)` | the two `Facing(-y)` faces stay separate (a sliver of A's top lies between them) |
-| A6 | R1 result, then `Chamfer` of the edge between B's top and the merged `-y` face, distance 1 | succeeds; volume drops by `0.5·1·1·10` within bound; seam check passes on the result. If `Chamfer` refuses, stop and report the refusal; do not weaken the test |
+| A6 | R1 result, then `Chamfer` of the edge between B's top and the merged `-y` face, distance 1 | succeeds; volume drops by `0.5·1·1·10` within bound; seam check passes on the result. |
 | A7 | R1 result, then `Cut` of a 2×2×2 pocket box moved by `Transform` to `(4, 4, 19)` (into B's top) | the Cut succeeds on the mesh path; the merged `-y` and `+y` faces are each still one face with both operands' roles |
 
-A3, A4 and A7 were not all measured. If any of them refuses, or its result is not a Faceted mesh result (check
-in a root test as §10.2 does), stop and report; do not change production code to force the route.
-Measured on Task 4: A4 takes the prism route and a mesh-path variant refuses the coplanar overlap, so A4 pins the
-route's own one-face result and the mesh merge has no Intersect coverage. A7 with a box pocket takes the orthogonal
-route, which mints fresh roles, so Task 4 uses a cylindrical pocket (radius 1 at (5, 5), z from 19 to 21), which
-stays on the mesh path.
+A4 takes the prism route and a mesh-path variant refuses the coplanar overlap, so A4 pins the route's own one-face
+result and the mesh merge has no Intersect coverage. A7 with a box pocket takes the orthogonal route, which mints
+fresh roles, so A7 uses a cylindrical pocket (radius 1 at (5, 5), z from 19 to 21), which stays on the mesh path.
 
-### 10.4 Existing tests this change flips
+### 10.4 Face counts that depend on the merge
 
-Tests that count faces, edges or vertices on mesh results of flush pairs: at least the coplanar contact API tests
-(`apitest/coplanar_contact_test.go` P1 and any face-count assertion on A1, A2, A5, R1–R4), tests asserting two
-faces on one plane, and `faceted_group_source_test.go` / `faceted_group_source_identity_test.go` where they assert a
-per-face `Source` on a merged face. Find them with `go test ./... 2>&1 | grep -E '^(--- FAIL|FAIL)'` after Task 3. Rule: update a
-count only where the difference is exactly the merged pairs, and list each updated test in the PR. Any other failure
-is a regression: stop and report.
+Tests that count faces, edges or vertices on mesh results of flush pairs (the coplanar contact API tests,
+`faceted_group_source_test.go` and `faceted_group_source_identity_test.go` where they assert a per-face `Source`)
+expect the merged count. A count differs from the unmerged count only by the merged pairs.
 
 ### 10.5 Consumer acceptance (gallery; not committed in decad)
 
-In the gallery worktree with a `replace` of decad to this worktree: build the dovetail demo for every parameter set of
+Outside decad, in the gallery module with a `replace` of decad: build the dovetail demo for every parameter set of
 its tests. Required: the tail block has exactly one face on each end plane and passes the seam check; no
 `CodeGapShiftApplied`; the rendered end faces show no line across the tail root.
 
@@ -353,142 +342,51 @@ its tests. Required: the tail block has exactly one face on each end plane and p
 
 | Risk | Effect | Mitigation |
 |---|---|---|
-| A reader of groups by operand ordinal after `meshBody` meets an orphan group | that record-based route declines on a merged result | skip list (Assumptions); §5 table; full suite after Task 3; stop and report any decline |
-| `ToFace`/`MirrorFace` require a convex outline on a tilted face; a merged face can be non-convex | a stop that worked on one of the halves refuses on the merged face | the stop reads the face the user selects; record any flipped test; §12 Q3 |
-| Face/edge count churn for callers using `Exactly(n)` | caller assertions fail | counts are not contract (`api-design.md` §3); docs state the rule (Task 5) |
-| Merge on results of coplanar contact tests while that series is still landing | file conflicts in shared test files | Task 3 depends on coplanar contact Task 11; Task 5 on its Task 12 |
-| A pinch or loop shape the boundary check misses | topology build error turns a success into a failure (S5) | §4.4 check; U5, U6; Task 3 full suite |
+| A reader of groups by operand ordinal after `meshBody` meets an orphan group | that record-based route declines on a merged result | skip list (Assumptions); §5 table; the full suite |
+| `ToFace`/`MirrorFace` require a convex outline on a tilted face; a merged face can be non-convex | a stop that worked on one of the halves refuses on the merged face | the stop reads the face the user selects; §12 Q3 |
+| Face/edge count churn for callers using `Exactly(n)` | caller assertions fail | counts are not contract (`api-design.md` §3); `agent-docs/evaluator-design.md` §3 states the rule |
+| A pinch or loop shape the boundary check misses | topology build error turns a success into a failure (S5) | §4.4 check; U5, U6 |
 
 ## 12. Open questions
 
-- **Q1. Merge faces of the same operand too?** Option A, never (designed): gains stable face sets for operands whose
+- **Q1. Merge faces of the same operand too?** Option A, never (chosen): gains stable face sets for operands whose
   builder kept coplanar faces apart on purpose (Loft rungs, evaluator §3); costs leaving seams an operand already had.
   Option B, any pair: gains removing inherited seams; costs overriding evaluator §3's Loft rule, more test churn, and
   face-count changes on results whose seams this boolean did not make. Recommendation: A, because it changes only seams
   the boolean creates.
-- **Q2. Restore operand roles on the brep route's merged walls?** Option A, leave (designed here): no cost now; a
+- **Q2. Restore operand roles on the brep route's merged walls?** Option A, leave (chosen): no cost now; a
   brep-route flush wall answers `FaceCreatedBy` only for its fresh `face(i)` role, unlike the mesh route. Option B,
   extend `boolupstream` to give a face the roles of every operand face on its plane that it overlaps: gains one
   provenance answer across routes; costs an exact area-overlap proof per face and operand face (today it reads planes
-  only), a separate design. Recommendation: B as a follow-up design, because selection by an operand role differs by
+  only), a separate design. Recommendation: B as a separate design, because selection by an operand role differs by
   route today.
 - **Q3. Keep a non-convex merged face as one face when `ToFace` needs a convex outline?** Option A, merge anyway
-  (designed): gains the Fusion-like face set; costs a `ToFace` stop onto such a tilted merged face that the separate
-  halves would have accepted (whether any test hits it is unknown until Task 3's full run). Option B, skip components
+  (chosen): gains the Fusion-like face set; costs a `ToFace` stop onto such a tilted merged face that the separate
+  halves would have accepted (no test hits it). Option B, skip components
   whose union is non-convex: keeps `ToFace` reach; costs the seam on exactly the dovetail-like faces (they are
   non-convex), failing S1. Recommendation: A, because B defeats the purpose.
 - **Q4. Merge bounded planar faces whose planes a record proves equal (`CapRecord`, `capplane`)?** Option A, no
-  (designed): no such adjacency arises while coplanar contact refuses bounded faces (its §4). Option B, yes: gains
+  (chosen): no such adjacency arises while coplanar contact refuses bounded faces (its §4). Option B, yes: gains
   merges once bounded contact is admitted; costs a record-identity path for side walls (which carry no `CapRecord`) and
   a proof that the donor tag's bound covers the merged extent. Recommendation: A until a route admits bounded coplanar
   contact.
 
-- **Q5. Zero-area facets in a candidate group.** Option A, a zero-area facet rejects its group (designed): simple;
-  costs a missed merge, with no message, if a result ever holds such a sliver on a coplanar face (none in R1 or R2,
-  measured). Option B, treat a zero-area facet whose vertices lie exactly on the group's plane as neutral: gains
+- **Q5. Zero-area facets in a candidate group.** Option A, a zero-area facet rejects its group (chosen): simple;
+  costs a missed merge, with no message, if a result ever holds such a sliver on a coplanar face (none in R1 or R2). Option B, treat a zero-area facet whose vertices lie exactly on the group's plane as neutral: gains
   robustness to stitch slivers; costs one exact on-plane test per such vertex and a §4.4 rule for its edges.
   Recommendation: A until a test or consumer shows a sliver.
 
 ## 13. Tasks
 
-Each task merges alone with `go test ./...`, `go vet ./...` and `golangci-lint run` passing. A Sonnet implementer
-builds each task; a fresh Opus `design-doc-implementation-reviewer` reviews it before merge. Production PRs carry the
-Module boundary gate evidence (`agent-docs/module-boundary.md`): owning section §4 of this doc, input class "planar
-faces of a generic mesh Boolean result (Union, Cut, Intersect)", the focused tests, and no new root adapter.
+The design is implemented except the gallery acceptance run (§10.5).
 
-### Task 1: Land the design doc
+| Part | Location |
+|---|---|
+| Merged source record | `provenance.SourcePatch.Members` and `SourcePatch.Same` (`internal/provenance/source_patch.go`); the shift-certificate seals in `internal/booleaneval/shift_certificate_capture_seal.go` and `shift_certificate_snapshot.go` walk `Members` and compare with `Same` |
+| Merge | `facemerge.Input` and `facemerge.Merge` (`internal/facemerge/merge.go`), charged one `Step` per facet visit on `proofbound.NewWorkBudget`; a length mismatch or out-of-range `Src` is `decaderr.ErrBooleanFailed` |
+| Wiring | `Evaluation.OperandAGroups` (`internal/booleaneval/eval.go`) and the `facemerge.Merge` call in `booleandispatch.meshBody` (`internal/booleandispatch/dispatch.go`), taken only when `eval.Shift == nil`, `eval.Audit != nil` and `ObliqueBoss` and `CrossCylinderBore` are nil |
+| Tests | §10.1 in `internal/facemerge/merge_test.go`; §10.2 in `union_face_merge_test.go`; §10.3 in `apitest/union_face_merge_test.go` |
+| Owning docs | `agent-docs/evaluator-design.md` §3 and §9, `agent-docs/coplanar-contact-design.md` §8, §12 and §15 |
 
-- **Files:** `agent-docs/union-face-merge-design.md`, `agent-docs/layout/design-docs.md`.
-- **What:** Commit this doc and a layout row under 300 characters.
-- **Depends on:** none.
-- **Done when:** `go test . -run '^TestCLAUDEMDLayoutStaysCompact$' -count=1` passes.
-
-### Task 2: `internal/facemerge` and the merged source record
-
-- **Files:** `internal/provenance/source_patch.go`, `internal/provenance/source_patch_test.go` (new),
-  `internal/booleaneval/shift_certificate_capture_seal.go`, `internal/booleaneval/shift_certificate_snapshot.go`,
-  `internal/facemerge/merge.go` (new), `internal/facemerge/merge_test.go` (new),
-  `internal/facemerge/merge_bench_test.go` (new), `agent-docs/layout/booleans.md`.
-- **What:**
-  - Add `Members []*SourcePatch` to `provenance.SourcePatch`, with a doc comment: set only on the record of a group a
-    canonicalization merge joined (agent-docs/union-face-merge-design.md §4.6); lists each member's record in group
-    order; `Producer`, `Operand` and `Ordinal` copy `Members[0]`; `Parent` is nil, so ancestry readers walk `Members`.
-  - The slice makes `SourcePatch` non-comparable. Add `func (p SourcePatch) Same(q SourcePatch) bool` (every scalar
-    field and `Parent` equal; `Members` equal in length and element pointers). Replace `*source.ptr != source.value`
-    (capture seal) and `*x.ptr != x.value` (snapshot) with `!...Same(...)`. Make both seals' ancestry walks (count and
-    collect) visit `Members` as well as `Parent`, under the existing depth 64 and budget charges.
-  - Then §4 as
-
-  ```go
-  // Input is a mesh Boolean result's held mesh, source groups and closure-audit adjacency.
-  type Input struct {
-  	Verts          []r3.Vec
-  	VertexBound    []float64
-  	Tris           [][3]int
-  	Src            []int
-  	Groups         []facetedrecord.Group
-  	Adj            [][]int
-  	OperandAGroups int
-  }
-
-  // Merge relabels every admitted component (agent-docs/union-face-merge-design.md §4) to one appended group.
-  // It never modifies in. changed is false when nothing merged; src and groups are then in.Src and in.Groups.
-  func Merge(ctx context.Context, in Input) (src []int, groups []facetedrecord.Group, changed bool, err error)
-  ```
-
-  Charge `proofbound.NewWorkBudget(ctx)` one `Step` per facet visit, as `facetproof.SourcePatches` does. A length
-  mismatch among `Tris`, `Src`, `Adj`, `VertexBound`/`Verts`, or an out-of-range `Src`, is `decaderr.ErrBooleanFailed`.
-  No production caller yet.
-- **Depends on:** 1.
-- **Pattern refs:** `facetproof.SourcePatches` (`internal/facetproof/body.go`); `meshplane.Groups`
-  (`internal/meshplane/groups.go`); `meshPlaneGroups` in `solid_from_mesh.go`. U1 and U6 obtain `Adj` from
-  `facetproof.AuditFacetedMesh` and assemble with `facetedrecord.AssembleBody`.
-- **Tests:** U1–U10 (§10.1). `TestSourcePatchSame`: equal records, a differing scalar, a differing `Members` pointer.
-  `BenchmarkMerge`: a 64×64-cell two-operand plate (alternating cells), reported in the PR.
-- **Done when:** `go build ./...` succeeds, `go test ./internal/facemerge/ ./internal/provenance/ ./internal/facetedrecord/ ./internal/booleaneval/ -count=1` passes and `go test ./internal/facemerge/ -run '^$' -bench Merge -benchtime 5x -count=1` runs.
-
-### Task 3: Wire the merge into the mesh Boolean result
-
-- **Files:** `internal/booleaneval/eval.go`, `internal/booleandispatch/dispatch.go`, `union_face_merge_test.go` (new),
-  `.github/test-shards.txt`, every test file §10.4's rule updates (list each in the PR).
-- **What:** Add `Evaluation.OperandAGroups int`, set to `targetFaces` in `evaluate`. In `booleandispatch.meshBody`,
-  after the recognizers and before `facetedrecord.BuildWithProof`: when `eval.Shift == nil`, `eval.Audit != nil`, and
-  `ObliqueBoss` and `CrossCylinderBore` are both nil, call `facemerge.Merge` with `eval.Audit.Adj`
-  and store the returned `Src` and `Groups` in `eval.Payload`. The audit stays valid for `BuildWithProof`: it reads
-  only `Verts` and `Tris`. A `Merge` error returns through `hooks.AsBooleanError` like a `BuildWithProof` error.
-- **Depends on:** 2, and coplanar contact Task 11 merged on `origin/main` (Task 10 removes `internal/coplanarcontact/`;
-  Task 11 adds `apitest/coplanar_contact_test.go`, whose counts this task updates). If either is missing, stop.
-- **Tests:** R1–R4 (§10.2). Record `go test ./apitest/ -run '^$' -bench 'Union' -benchtime 5x -count=1` before and
-  after in the PR (§9).
-- **Done when:** `go test . -run 'TestUnionFaceMerge' -count=1` and `go test . ./apitest/ -run '^TestCI' -count=1` pass
-  locally, and the PR's CI (the full suite) is green.
-
-### Task 4: API coverage
-
-- **Files:** `apitest/union_face_merge_test.go` (new), `.github/test-shards-apitest.txt`.
-- **What:** A1–A7 (§10.3) as `TestUnionFaceMerge*` functions; a shared `requireNoSeam(t, body)` helper implementing
-  §10's seam check.
-- **Depends on:** 3.
-- **Done when:** `go test ./apitest/ -run 'TestUnionFaceMerge' -count=1` and `go test . ./apitest/ -run '^TestCI' -count=1` pass.
-
-### Task 5: Owning docs to current state
-
-- **Files:** `agent-docs/evaluator-design.md` (§3 "Canonicalize at build": add the mesh Boolean rule as a pointer to
-  this doc, and state the exception that two coplanar faces of one operand (Loft rungs included) join when a face of
-  the other operand is adjacent to both; §9 "Ordinary mesh output": a patch may join patches of other operands per this doc),
-  `agent-docs/coplanar-contact-design.md` (§8 coplanar-rim bullet, §12 last row, §15 Q1: point here),
-  `internal/facetedrecord/group.go` (package doc sentence on patches), `topology.go` (`Face.Origins` doc),
-  `boolean.go` (`Union` doc: "its faces are grouped by the operands' source faces" gains the merge),
-  `docs/api.md` and `docs/data-structures.md` (only where `grep -n -i 'source face\|connected patch\|FaceCreatedBy' docs/api.md docs/data-structures.md` finds the per-source-face statement).
-- **What:** State current behavior only; no changelog wording.
-- **Depends on:** 4, and coplanar contact Task 12 merged (its doc is no longer being edited).
-- **Done when:** `go test . -run '^TestCLAUDEMDLayoutStaysCompact$' -count=1` and `go vet ./...` pass, and
-  `grep -n 'stay separate faces on one plane' agent-docs/coplanar-contact-design.md` prints nothing.
-
-### Task 6: Consumer acceptance run
-
-- **Files:** none in decad (scratch module under the gallery worktree's `.tmp/`).
-- **What:** §10.5 against the decad commit of Task 4.
-- **Depends on:** 4.
-- **Done when:** the dovetail demo tests pass with the replace, and a script over the tail block reports one face per
-  end plane and no seam edge for every parameter set; report the numbers to the parent.
+A change to this merge passes the Module boundary gate (`agent-docs/module-boundary.md`): owning section §4, input
+class "planar faces of a generic mesh Boolean result (Union, Cut, Intersect)", no new root adapter.
