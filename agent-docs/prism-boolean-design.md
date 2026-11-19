@@ -605,7 +605,7 @@ operand's membership across it. Read as an edge of the named operand alone,
 the span is one the other operand's propagation may cross: the tooth-only
 cell then inherits "inside the hub" from the hub's cell across the tooth's
 own root arc, so `Intersect(hub, tooth)` would publish the whole tooth
-(220.84 mm³ for the §15 tooth) and `Verify` would report the touching pair
+(`TestPrismBooleanToothTouchingHubDoesNotOverlap`) and `Verify` would report the touching pair
 `Interfering`. A
 window no single partner explains leaves the scene unresolved (§4.4).
 
@@ -1500,36 +1500,21 @@ areas, residuals), never merely "it ran" — CLAUDE.md's own rule.
   outer loop (verbatim reproduction, §4.2's structural-match claim) — for a
   target and tool whose own consumed segments are whole, the only case this
   claim holds for (§4.2's own qualification).
-- A trimmed source segment's walked endpoint is charged (task fu143): an
-  operand whose OWN recorded profile carries a segment ranged narrower than
-  its entity's full domain (a `LineSeg` fragment of a larger sketch-cut line,
-  the ordinary shape a `sketch` arrangement produces for a rectangle split by
-  another entity) reports a positive `sectionDelta` from `Union`, `Cut`'s
-  clean-nesting match, and `Intersect`'s clean-nesting match alike, and each
-  op's published volume bound contains the residual against the exactly
-  computed union of the two operands' own DENOTED sections (`math/big.Rat`
-  over the operands' own recorded floats, never a second float answer). The
-  same fixture with every consumed segment whole publishes a `sectionDelta`
-  of exactly `0.0` on all three ops, pinning that the new charge does not
-  fire on the case §7 already kept exact.
-- The walk charge survives `momentregion.Lerp2`'s CANCELLATION: over a table of trimmed
-  `LineSeg` carriers whose `End − Start` cancels — the extreme one reaching
-  `±1e12`, and a plain 200 mm carrier whose fragment sits on the sketch origin,
-  which needs no extreme coordinate at all — `prismcells.WalkChargeOf`'s answer contains
-  the EXACT rational residual of the endpoint `momentregion.Lerp2` walked to, at both
-  recorded bounds, compared squared over `math/big.Rat` so no square root or
-  float difference can flatter it. Each row also asserts its own premise: that
-  charging the walked endpoint's own envelope (`segmentWalk.coordUpper`)
-  instead of the carrier's would under-charge exactly on the rows that cancel
-  and NOT on an ordinary uncancelling fragment, so a row that stops
-  reproducing the shape fails rather than passing quietly.
-- The trimmed-circular refusal reads the RECORDED range, not the walk's
-  closed-ness: a `CircleSeg` whose `TEnd` is one ulp short of `1` — a range
-  the walk's own tolerance still calls a closed turn, which the fixture must
-  assert directly so the case cannot silently stop being the one under test —
-  refuses all three ops (`ok == false`, no error), while the same pair with
-  the bound recorded exactly resolves analytically, so the fallback is the
-  trim's own doing.
+- A trimmed source segment's walked endpoint is charged (§7's δ_walk). Two tests pin it:
+  `TestReflectedRewindReversesLoopAndChargesTrimmedLine` (`internal/prismcells`) asserts that
+  `prismcells.WalkChargeOf` is positive for a `LineSeg` ranged to `TEnd: 0.5` and that `RewindLoop` returns that
+  same charge bit for bit, and `TestCleanNestingCutRecordNarrowedLines` asserts that a clean-nesting `Cut` over
+  lines narrowed to `0.25..0.75` carries a walk allowance in its carrier record's entries. No test yet runs a
+  trimmed-fragment operand through `Union`, `Cut` and `Intersect` and compares each published bound with an
+  exact `math/big.Rat` residual, and none checks that the all-whole variant publishes a `sectionDelta` of exactly
+  `0.0`. No test drives `WalkChargeOf` over lines whose `End − Start` cancels in `momentregion.Lerp2`, and none
+  compares the line operand envelope against the walked endpoint's own `coordUpper`.
+- The trimmed-circular refusal reads the RECORDED range, not the walk's closed-ness: a `CircleSeg` whose `TEnd` is
+  one ulp short of `1` refuses all three ops (`ok == false`, no error), while the same pair with the bound
+  recorded exactly resolves analytically. `ProfileHasTrimmedCircularSource` (`internal/prismcells/charges.go`)
+  implements the refusal; no test pins it through a boolean. The only test with `TEnd: math.Nextafter(1, 0)` on a
+  `CircleSeg` is `apitest` `TestRegionMomentsRejectMalformedTopology`'s `NearlyFullCircle` row, which asserts
+  `decad.ErrDegenerate` from the moment readers.
 - Exactness, one test per §7 arm: a line-only merged section over operands
   that share a frame AND whose merge cut nothing (a contained footprint)
   reports `Exact` volume with a zero bound; a partially overlapping pair of
@@ -1727,7 +1712,7 @@ Outside prism-boolean's admitted class a boolean tessellates both operands
    of the same part drawn as an analytic cut.
 3. **Chains stop early.** A faceted face's bound is the largest over its
    facets, so a plate's side wall carrying one hole's rim is coarse over its
-   whole length, and a third cross hole 20 mm from any rim refuses on the
+   whole length, and a third cross hole refuses on the
    chain-depth gate (§2 S11).
 
 A fourth limit sits beside them: a revolve with a spherical face cannot be
@@ -1750,31 +1735,31 @@ its source surface tags.
 |---|---|---|---|
 | S1 | 40×20×20 box `Cut` by Ø6 cylinder along y through its middle | mesh | 7 `Faceted` faces, a mesh-bounded volume (closed form 15434.51), `Fillet`: no analytic edge, wall `unavailable` |
 | S2 | Ø30×20 cylinder `Union` Ø8 radial boss | mesh | 5 `Faceted` faces, mesh-bounded volume |
-| S3 | full revolve (cylinder along x) `Union` box crossing it | mesh | 13 `Faceted` faces, mesh-bounded volume |
+| S3 | full revolve (cylinder along x) `Union` box crossing it | mesh | `Faceted` faces, mesh-bounded volume |
 | S3b | the same revolve `Union` a coaxial disk sharing its end plane (flange) | mesh at the survey commit; common-axis Revolve when both inputs qualify | `BooleanUnsupportedContact` at the survey commit; analytic common-axis result now |
 | S4a | plate `Cut` through hole, both on XY | analytic | 7 faces, closed-form volume bound |
 | S4b | 20×20×10 plate with Ø4 through hole, then `Cut` Ø8 counterbore from z = 7 | analytic | 9 faces, volume 4000 − 76π mm³ within its published bound (`apitest/counterbore_test.go`) |
 | S4c/d | the same counterbore first, then the Ø4 through hole inside it | analytic | the same 9 faces and bounded volume |
-| S5 | plate `Cut` by six `Copy`-translated cylinders | analytic | six results, `sectionDelta > 0`: `Fillet` refuses, wall `undecided` |
+| S5 | plate `Cut` by six `Copy`-translated cylinders | analytic | at the survey commit: six results, `sectionDelta > 0`: `Fillet` refuses, wall `undecided`. Today the cut still records no carrier record, because §5.4 of Part K needs the identity re-expression (`prismcells.CleanCutRecord`) and a translated tool is not one. The `Fillet` refusal therefore stands. No test asserts this fixture; `TestChamferPlateAfterPatternSocketCut` pins the same refusal for the loops of rotated pattern sockets |
 | S5b | the six holes each drawn in a sketch | analytic | closed-form bound, `Fillet` OK |
-| S6a | filleted box `Cut` by a cross cylinder | mesh | 11 `Faceted` faces, mesh-bounded volume |
-| S6b | filleted box `Cut` by a same-plane cylinder | analytic | 11 faces, closed-form volume bound |
-| S7 | two Ø10 cylinders crossing at right angles, `Union` and `Cut` | mesh | `Faceted`, mesh-bounded volume |
+| S6a | filleted box `Cut` by a cross cylinder | mesh | `Faceted` faces, mesh-bounded volume |
+| S6b | filleted box `Cut` by a same-plane cylinder | analytic | closed-form volume bound |
+| S7 | two Ø10 cylinders crossing at right angles, `Union` and `Cut` | mesh | at the survey commit: `Faceted`, mesh-bounded volume. Not asserted by a test for equal diameters. `TestSectionMeshBooleanHistoryRefusesCutCurves` shows the mesh path for a Ø12 and a Ø8 cylinder crossing at right angles |
 | S8 | sphere r = 10 `Cut` by a box, or by a Ø6 cylinder | mesh | `ErrUnsupported`: "more than 65536 facets in one revolve mesh" at the pair tolerance (`revolveproof` `maxFacetsPerMesh`) |
-| S9 | box `Intersect` the same box rotated 45° about z | mesh | `BooleanUnsupportedContact` (coplanar caps); rotated 90°: "come within the chord tolerance without provably interpenetrating" |
+| S9 | box `Intersect` the same box rotated 45° about z | mesh at the survey commit; analytic with A6's charge | `BooleanUnsupportedContact` (coplanar caps) at the survey commit; an analytic octagonal prism with 10 faces and an `Approximate` volume now (`TestPrismIntersectRotatedBoxBuildsAnalyticOctagon`). Rotated 90° at the survey commit: "come within the chord tolerance without provably interpenetrating" |
 | S10 | box `Cut` by a cylinder on a plane tilted 30° | mesh | 7 `Faceted` faces, mesh-bounded volume |
 | S11 | 60×20×10 bar, three cross holes at x = 10, 30, 50 | mesh | holes 1–2 build; hole 3 refuses because the target's held mesh bound where the pair meets exceeds the pair tolerance. Both long side walls carry that bound over their whole face; the box's other faces carry 0 |
-| S12 | two disjoint boxes `Union` | mesh | `Faceted`, 2 lumps, `Exact` volume, wall `unavailable` |
+| S12 | two disjoint boxes `Union` | mesh at the survey commit; multi-region prism with A5 | `Faceted`, 2 lumps, `Exact` volume, wall `unavailable` at the survey commit; two lumps, `Exact` volume and no `Faceted` face now (§9, A5 N-hole cut) |
 | S12c | two boxes touching at one vertical edge | mesh | `BooleanUnsupportedContact` |
-| W1–W4 | two boxes sharing a wall (whole, partial, longer, 1 mm overlap with collinear walls) | analytic | RB1 `ErrUnsupported`: the arrangement reports an invalid region |
+| W1–W4 | two boxes sharing a wall (whole, partial, longer, 1 mm overlap with collinear walls) | analytic | RB1 `ErrUnsupported`: the arrangement reports an invalid region at the survey commit; one analytic prism now (A3, `TestPrismBooleanSharedWallBoxes`) |
 | W5 | two boxes overlapping with no collinear wall | analytic | builds |
-| W6 | box `Cut` by a box sharing its wall | mesh | `BooleanUnsupportedContact` |
+| W6 | box `Cut` by a box sharing its wall | mesh at the survey commit; analytic with A3 | `BooleanUnsupportedContact` at the survey commit; an analytic prism now (`TestPrismBooleanSharedWallBoxes`) |
 | B1 | box `Cut` by a 10×10 square cross slot | mesh | 10 `Faceted` faces, exact-integral volume |
 | B2 | Ø20×40 rod `Cut` by a 4 mm keyway box | mesh | 7 `Faceted` faces, mesh-bounded volume |
-| B3 | plate `Union` Ø10 boss standing on its top (z 10..25) | mesh | `BooleanUnsupportedContact` (held facets within tolerance) |
+| B3 | plate `Union` Ø10 boss standing on its top (z 10..25) | mesh at the survey commit; A1 stacked prism | `BooleanUnsupportedContact` (held facets within tolerance) at the survey commit; an analytic stacked prism now (`TestStackedUnionBossOnPlate`) |
 | B4 | plate `Union` the boss rooted inside (z 5..25) | mesh | 8 `Faceted` faces, mesh-bounded volume, no analytic edge |
 | B5 | plate `Union` a side pin whose end cap lies in the plate's face | mesh at the survey commit; class B "Flush cap contact" when both are perpendicular datum-placed prisms | `BooleanUnsupportedContact` at the survey commit; analytic brep now |
-| P1 | hub ∪ six teeth placed by `RotationAround` | analytic → mesh | tooth 2 `BooleanUnsupportedContact` (prism-boolean §3.4 reroute) |
+| P1 | hub ∪ six teeth placed by `RotationAround` | analytic → mesh | tooth 2 `BooleanUnsupportedContact` (prism-boolean §3.4 reroute) at the survey commit. A tooth whose root arc lies on the hub circle still falls back to the mesh path and refuses with `ErrUnsupported`, "held facets come within the chord tolerance" (`TestPrismUnionToothOnHubCircleFallsBackAtTheTangentRoot`); a rotated tooth rooted inside the hub builds analytically (`TestPrismUnionRotatedToothBuildsAnalytic`) |
 | P2 | plate `Cut` by a four-lump faceted tool | mesh | `BooleanUnsupportedContact` |
 | M2–M5, T1 | reflected operands (mirror §2) | mesh | coplanar refusal, or a `Faceted` result |
 
@@ -2362,7 +2347,7 @@ distance instead of prism-boolean §3.4 rerouting the pair
   `ε = 1e-9` of verification §4 (`sectionaudit.ContactEps`) has no charge,
   nor does a bound that does not settle or an edge that does not record.
   Neither check admits anything. `sketch` itself declines to certify a
-  line/line cut much shallower than `sin θ ≈ 1e-8` (`TExact = false`), so
+  line/line cut that is very shallow (`TExact = false`), so
   the floor is reached through tangent junctions, whose bound is zero;
 - a pair whose cuts carry an input displacement never refuses on the
   analytic path: a crossing with no charge, and any merge, audit or
@@ -2522,8 +2507,8 @@ and loop-closure rules. A circle's shared sampled junction may round off a
 whole line's carrier without changing that line's authored endpoint.
 Every shared span the reading does record must also pass
 `prismcells.CoincidentReading.ExactLineCarriers`: both recorded lines lie on
-precisely one line. A lower or upper hole's edge 1e-12 mm or one ulp off the
-other side's edge misses, in either orientation. A span on a circle carrier,
+precisely one line. A lower or upper hole's edge a hair off the
+other side's edge (a 5e-13 mm offset in `TestCoincidentReadingRequiresExactFiniteLineContact`) misses, in either orientation. A span on a circle carrier,
 an arc of one side lying on a circle of the other, has no exact line, so the
 same reading misses it. Two crossing axis-aligned lines meet at their exact
 levels, and with both checks such a vertex is exact. A line crossing a circle
@@ -2731,7 +2716,7 @@ interval joined to X's faces:
 Each slab face becomes a planar face in `g` carrying Y's section as a new
 hole: a straight wall by the rectangle it sweeps, a planar face by its region
 through the signed permutation between its frame and `g`, walked back
-(`rewindLoop`) where that map reverses the plane. No edge of either section
+(`prismcells.RewindLoop`) where that map reverses the plane. No edge of either section
 is cut, so the section and parallel-face scenes are not built. S1's
 cross-drilled box, B1's cross slot, a blind cross hole, a pin rooted in a
 wall, S11's chain of cross holes and a cross hole under a blind pocket are in
@@ -2740,7 +2725,7 @@ the reach.
 A `Cut` of a prism target outside it takes the crossing reach
 (`internal/classbgeom/crossing_cut.go`), whose scenes cut edges: B2's keyway, a hole breaking
 out of a face, a tool crossing a wall. It needs both operands hole-free, every level
-displacement zero, and a frame for faces normal to e that carries X's axes
+displacement zero (a positive charge from `OfPayloads` refuses it with `ErrUnsupported`), and a frame for faces normal to e that carries X's axes
 bit for bit. Every planar face of either operand is decided by its own
 scene (§5), every crossing a scene computes takes the one float §10's keyed
 crossing table records for it, every edge is split at every vertex on it,
@@ -3481,7 +3466,8 @@ circular fragment as an arc pinned there about its recorded centre — and
 every face edge is split at every recorded vertex on it: a line at each
 vertex lying on both its face and its carrier, an arc at the angle of each
 vertex on its cylinder, read at the face's level. Two vertices of one
-cylinder closer than 1e-9 rad are not ordered and miss.
+cylinder closer in angle than the split tolerance of 1e-9 rad (`tol` in `internal/classbgeom/split.go`) are not
+ordered and miss.
 
 The scene's own point at a junction is a line's end wherever a line meets
 there, since the line keeps its fixed coordinate exact. Its displacement
@@ -3499,12 +3485,12 @@ its side of the centre `c` sits at `c ± √b` with
 with `a = |f − c|`, exact rationals over the recorded floats and `√b` rounded
 down. decad states this 2D quantity itself because no `sketch` answer bounds
 it: the scene placed the vertex through a recorded cut parameter, and `δ_cut`
-charges that parameter 8 ulps of `[0, 1]` times the trace's speed, while far
+charges that parameter `proofbound.CutParamUlps` (8) ulps of `[0, 1]` times the trace's speed, while far
 from the plane origin the parameter is off by the coordinates' own rounding,
-about `ulp(|f|)` over the trace length. A 40 mm box cut 100 m from the origin
-by a drill breaking out of its top places the vertex `5e-12` mm from the
-crossing against a `δ_cut` of `4e-14`, and every face pinned there inherits
-that distance. The bound is a charge, never an admission: it widens the faces
+about `ulp(|f|)` over the trace length. A box cut 100 m from the origin by a
+drill breaking out of its top places the vertex farther from the crossing than `δ_cut`
+(`apitest/classb_junction_test.go`, `TestClassBCrossingVertexFarFromOrigin`), and every face pinned there
+inherits that distance. The bound is a charge, never an admission: it widens the faces
 that use the key and decides nothing.
 
 The two other places that pin a walked point at a crossing charge the same
@@ -3528,8 +3514,8 @@ its circle — answers +Inf: the keyed table misses, and the join's
 displacement is infinite, which the face view's consumers refuse. A vertex
 exactly at its crossing is charged zero, so an exact record stays `Exact`.
 Without this charge a Ø10 boss crossing a 40 mm plate's wall 1e6 mm from the
-origin reads its A1 brep's area `5.5e-9` mm² off the exact value under a
-`2.0e-10` bound.
+origin reads its A1 brep's area off the exact value by more than its bound
+(`apitest/stacked_union_brep_far_test.go`, `TestStackedUnionCrossingBossFarFromOrigin`).
 
 A circular wall's pieces are read off the planar faces across its axis: X's
 caps and Y's walls along e for a cylinder of X, Y's caps and X's walls across
@@ -3705,7 +3691,7 @@ are relations, never literals.
   displacement, and T2 measures one `Interference` row of 500 mm³. A box
   beside its own mirror image across x = 10 takes the mesh path for
   `Union` (a displaced interior span) and builds the box for `Cut`. A wall
-  leaning 1.07e-14 mm inside the identity band charges at least that exact
+  leaning inside the identity band charges at least its exact
   distance into `Cut`'s section displacement. A tooth whose root arc lies on
   a hub's circle: `Cut` of the tooth by the hub leaves the tooth,
   `Intersect` builds no analytic body, `Verify` reports no interference, and
@@ -3814,7 +3800,7 @@ are relations, never literals.
   brep in either position; a fourth hole overlapping the first misses B7 and
   takes the mesh path, pinned.
 - **B gate misses**: S10 (tilted plane), S7 (cylinder × cylinder), a
-  non-perpendicular pair 1e-12 off, a non-permutation frame pair, a slanted
+  non-perpendicular pair, a non-permutation frame pair, a slanted
   tool wall (B6) and a tool wall in the target's cap plane (B8) each take the
   mesh path; the non-perpendicular fixture asserts `N_A · N_B != 0` itself.
 - **B rooted and through, every op**: a Ø6 pin rooted in a 40×20×10 plate's
@@ -3926,9 +3912,9 @@ are relations, never literals.
   larger upstream change than a carrier rule.
 - **Crossing vertices across scenes (decided: a keyed table).** Two scenes
   that cut one carrier pair record the crossing at different floats: a circle of radius 10 at the
-  origin against the line u = 2 records `(2, 9.7979589711327115)` on the line
-  and `(2.0000000000000013, 9.7979589711327115)` on the circle, and moving the
-  line's ends to v = ±20 records `(2, 9.797958971132708)` on the line. §4.2's
+  origin against the line u = 2 records the crossing at a float that differs
+  in the last places on the line and on the circle, and moving the line's ends
+  records a third float on the line. §4.2's
   pairing by record identity therefore cannot join faces that different
   scenes cut. Options: key each crossing by the two carriers that make it
   and the side of the circle's centre it lies on, record one float per key
@@ -4112,8 +4098,12 @@ No missing-features row closes. Effect per row or claim:
 - Bound tightening of chains that succeed today: none, by the Trigger decision.
 
 The concrete gain is a set of ordinary refused chains: two overlapping parallel holes placed off the body's frame
-(fixture F1), a straight hole that breaks into an earlier translated hole (F2), a box beside a plate that already
-carries a mesh-only boss under `ExactOnly` (F3), and an analytic intersect after a mesh cut (F4).
+(fixture F1), a straight hole that breaks into an earlier translated hole (F2), and an analytic intersect after a
+mesh cut (F4). F3, a box beside a plate that already carries a boss under `ExactOnly`, is not shown to be a
+refused chain. `TestRegroupPlansBuildByHand` shows that the sequential join of a copy of the plate and boss with the
+box succeeds by the grid route (volume 12240). `TestBooleanRegroupDisjunction` runs the call without the copy and
+asserts the same volume, a mesh-path watertight result and the regrouped history shape, but it does not assert that
+the sequential call refuses first, so it does not show that the regroup is what builds F3.
 
 ### Assumptions
 
@@ -4315,9 +4305,8 @@ Rules:
 - Three or more remaining literals decline without any `Full` call.
 - Two remaining literals that are not both negative decline without any `Full` call.
 - Check `ctx.Err()` before every callback.
-- With `MaxLiterals = 6`, `Exact` runs at most 90 times: each Absorb pass tries each pending literal once per `acc`
-  version (at most 30 per Absorb, two Absorbs), and Merge tries at most 10 initial pairs plus 16 pairs with merged
-  items.
+- With `MaxLiterals = 6`, the number of `Exact` calls is small: the miss cache admits each `(op, x, y)` key once, and
+  the keys come from at most six literal bodies and the bodies Merge and Absorb produce.
 
 #### Execution in booleandispatch
 
@@ -4490,7 +4479,7 @@ Result identity and history. Core §8 "The chain depth", evaluator §9's gate bu
 
 - Calls that succeed today pay nothing.
 - A refused call with an expandable operand pays one history map read under `RLock` per examined body (the walk
-  stops past `MaxLiterals` literals), at most 90 `Exact` attempts and the bounded `Full` steps in Plan.
+  stops past `MaxLiterals` literals), one `Exact` attempt per distinct `(op, x, y)` key (Plan) and the bounded `Full` steps.
 - An `Exact` miss on a structural gate costs a payload type switch; a miss after a private `sketch` scene costs
   that scene.
 - No timing threshold is set. Repository rule: measure on CI, not locally.
@@ -4589,7 +4578,9 @@ All of Part R is implemented. Each task below gives its owner and its pinning te
 #### Task 1: Design doc and the hand-built plans
 
 Owner: none (tests only). `TestRegroupPlansBuildByHand` (`apitest/boolean_regroup_plan_test.go`) has one subtest per
-F fixture asserting: the sequential chain's final call fails with `errors.Is(err, decad.ErrUnsupported)`; each plan
+F fixture asserting: for F1, F2 and F4 the sequential chain's final call fails with
+`errors.Is(err, decad.ErrUnsupported)`. F3's subtest instead joins a `Copy` of `Union(plate, boss)` with `box2`
+sequentially, which succeeds by the grid route with the F3 volume, a mesh-path result and watertightness. Each plan
 step marked analytic in Fixtures has `tookMeshPath == false`; the final `Full` step has `tookMeshPath == true`; the
 final body meets the F assertions on volume, bound and watertightness. D1 and D4 subtests assert the sequential
 refusal persists through the `Copy` and the tilted `t2'`, and that `Union(t1, t2')` takes the mesh path.
@@ -4617,8 +4608,10 @@ Owners: the plan executor `internal/booleandispatch/regroup.go`, and the root wr
 
 #### Task 5: Disjunction regroup
 
-`TestBooleanRegroupDisjunction` covers F3 and D2. The plan executor handles a disjunction; `regroupBoolean` has no
-disjunction gate.
+`TestBooleanRegroupDisjunction` covers F3 and D2. Its F3 subtest calls `Union(Union(plate, boss), box2)` with no
+`Copy` and asserts the F3 volume, the mesh-path watertight result and the history assertions of Fixtures. It does not
+assert that the sequential call refuses beforehand. D2 asserts the refusal of `Union(first, t2)` over a `Cut` result.
+The plan executor handles a disjunction; `regroupBoolean` has no disjunction gate.
 
 The test names are in `.github/test-shards.txt` and `.github/test-shards-apitest.txt`. Layout rows:
 `agent-docs/layout/booleans.md` (`boolean_regroup.go`), `verification.md` (`internal/boolchain/`),
@@ -4878,8 +4871,8 @@ the body misses G1 and takes the mesh path too, and the mesh path's chain depth
 (core §8) refuses the second through hole after a blind bore:
 
 ```
-decad: not supported by the current evaluator: requested tolerance 0.00268 mm
-is below the faceted body's minimum mesh bound 0.00509 mm; ...
+decad: not supported by the current evaluator: requested tolerance 0.25 mm
+is below the faceted body's minimum mesh bound 0.5 mm; ...
 ```
 
 A plate with a blind hole is an ordinary part. The two natural ways to draw its
@@ -5035,7 +5028,7 @@ line's endpoint lying on it either, such as a triangle's apex on a square's
 side, so `prismcells.RegionContact` also puts every two lines of two regions
 to sketch's line query: `geom.LineLineIntersection` gives the carriers'
 common point, and `geom.ClosestPointOnLine` reads its parameter along each
-segment, within 1e-9 of [0, 1]. Parallel carriers report no point; the
+segment, within 1e-9 of [0, 1] (`lineContactBand`). Parallel carriers report no point; the
 arrangement cuts collinear lines where they overlap or meet. A union-built
 stack's interface reads `RegionContact` over its nesting match
 (general-boolean §3 A1), so a boss outline touching the plate's edge at one
@@ -5043,7 +5036,7 @@ point is a miss there, and `Cut`'s clean-nesting, enclosing and group matches
 read it too (prism-boolean §4.2). The A1 BRep's holed floor round separate
 bosses reads it per ring through `prismcells.RingContact`, and its slab loops
 through `prismcells.ProveGroupApart` (general-boolean §3 "A1 as a brep"). A vertex lying on another region's line whose two
-edges leave that line within sketch's parallel band (about 1e-9 rad) is
+edges leave that line within sketch's parallel band is
 reported by neither line query; sketch's arrangement reports such a region
 invalid, and the pair is refused before any contact reading runs
 (`apitest/union_tangent_contact_test.go`).
@@ -5388,8 +5381,8 @@ Stages 1 to 3 are implemented. Stage 4 is not.
 Not implemented: a blind tool crossing the target's boundary (a side notch),
 whose per-slab walls split at the crossing; it takes the mesh path, and
 general-boolean §3 A9 builds it as a BRep where the mesh path refuses.
-Also not implemented: `Fillet`/`Chamfer` on a stacked body (`agent-docs/modify-design.md` Part B takes it
-through the face view).
+`Fillet` and `Chamfer` of a stacked body build through the face view
+(`agent-docs/modify-design.md` Part B), not through this payload (§6).
 
 ### 8. Required tests
 
@@ -5403,7 +5396,7 @@ arm64.
   the rational answer. Its centroid bound contains the rational answer;
   the Z coordinate is `Approximate` when that answer is not a float.
 - A round blind bore: `Approximate` volume within the published bound of
-  `A·h − π r² d`, and the bound below `1e-9` of the value.
+  `A·h − π r² d`.
 - Blind bore then two through bolt holes: all three build analytically, the
   volume lands within its bound of the closed form, and the face count is ten.
 - A tool whose cap lies exactly in the target's far face builds (the mesh path
@@ -5488,7 +5481,8 @@ arm64.
 - Export: STEP of the pocketed plate writes one shell.
 - `Verify` on the pocketed plate is `Sound` with no survey asked; with the wall
   survey asked it reports `DiagUnsupportedSurveyPayload` and `Suspect`.
-- `Fillet` on the pocketed plate is `ErrUnsupported`.
+- `Fillet` of the pocketed plate's four vertical convex edges builds, and its volume reading covers `896 + 10π`
+  (`TestBlindPocketFilletsItsOuterEdges`).
 - `Transform` under a rotation keeps the volume, exactness and face count.
 - Cancellation during the second slab's arrangement returns `ctx.Err()` and
   leaves both operands live.
@@ -5536,15 +5530,15 @@ Table RB row RB6). Every analytic `Union` that cuts an edge carries
 plane with all-line teeth (one tooth and its frame-keeping `PatternCopies`
 instances), then a concave `Fillet` of every root, then a `Cut` by a bore tool
 lying inside the disc, then a `Chamfer` of the hole rims on both caps. The
-motivating part has 5 windows (each an inner arc, an outer arc, 2 lines and 4
-sketch-fillet arcs), 15 teeth (a tooth and 14 copies), a 30-root fillet and a
+motivating part has several windows (each an inner arc, an outer arc, two lines and
+four sketch-fillet arcs), many teeth (a tooth and its copies), a fillet of every root and a
 D bore; it stays in the consumer repository (`agent-docs/testing.md`, Test
 scope). Without a carrier record:
 
 1. A hole-free disc united with one tooth takes the pair route (prism-boolean
    G6 refuses a holed operand there) and records the disc as
    a trimmed `CircleSeg` and the flanks as narrowed `LineSeg`s. Its
-   `SectionDelta` is a few `1e-13` mm of cut-parameter rounding, so `Fillet` of
+   `SectionDelta` is cut-parameter rounding, so `Fillet` of
    the root edges refuses.
 2. The disc united with the tooth and its copies misses every analytic route.
    Each copy is displaced (mirror-pattern §6.2 charges its rounding). The
@@ -5782,7 +5776,7 @@ to 1 segment, a whole circle to 256, and an arc to `max(2, ⌈256·sweep/(2π)�
 where `sweep = Arc.Sweep()` is `wrapSweep(atan2(Start − Center), atan2(End −
 Center))` over the scene entity's own floats, a value in `(0, 2π]`. The cap
 `MaxArrangementSegments = 4096` bounds the densified count of one scene, which
-is what bounds sketch's quadratic pass (about 1.4 s and 16 MB, unchanged).
+is what bounds sketch's quadratic pass.
 
 **The screen.** `RegionsWithinWorkCap` counts a line as 1 and a circular segment
 as `prismcells.CircularSegmentCount(seg)`:
@@ -6208,7 +6202,7 @@ exact length (both legs of a corner path, or the chord) is added to that edge's
 `c_e`, so every `G` also covers it. The certified gap is
 `G(e, f) = SegGapLower(w_e, w_f) − c_e − c_f`.
 
-A scene can hold about `10⁴` edge pairs. Each pair first compares the exact
+A scene can hold many edge pairs. Each pair first compares the exact
 distance between the two walks' bounding boxes (each box from the walk's ends
 and, for an arc, from the same endpoint enclosures `SegGapLower` uses and its
 extreme points in range, widened by `c`): a box gap above
@@ -6774,8 +6768,7 @@ selected loop) as `prismrecord.Build` charges `SectionDelta`. With
   which charges every walk length `SectionDisplacementLength(LoopDelta[l], 1)`,
   every rim vertex `LoopDelta[l]` and every side face area through its walk
   length.
-- **Perimeter.** `P_l` is the upper end of the `loopLen` that call returns (today
-  `capblend.Build` discards it).
+- **Perimeter.** `P_l` is the upper end of the `loopLen` that call returns.
 - **Enclosed area.** `A_l = proofbound.SectionDisplacementArea(LoopDelta[l], n_l,
   P_l)` is added to `loopArea.Bound` before the slab multiply, so `BoundedMul`
   carries it into the slab volume (times the straight height) and into the slab's
@@ -7057,7 +7050,7 @@ PR 2, each beside the code it covers. The twin of a displaced build is the same
   offset audit refuses the crossing first; `prismcells` tests it on
   `CertifiedContact` directly. T3's case is a displaced loop whose
   segment pairs are all adjacent, so T2 tests none of them: a thin triangle of
-  height below `8·LoopDelta`, whose area enclosure holds zero.
+  height `4·LoopDelta`, whose area enclosure holds zero.
 - `capblend` tessellation: a tolerance at or below `max LoopDelta` refuses.
   Above it, a `VerifyAll` mesh closes, every outer-wall facet and both caps state
   a bound of at least `LoopDelta[0]`, and `VolSymDiff` is at least
@@ -7182,8 +7175,9 @@ PR 2:
 - **A `Chamfer` CB refusal falls through** to the faceted view; a `Fillet` CB
   refusal is returned.
 - **An arc-bearing instance raises its `SectionDelta`** to its largest entry
-  and `h_loop` (an arc-end junction entry `δ_End` of about `7e`, and through
-  Lemma H's arc row an `h` of roughly `23e`, against the `3e` arc charge) so its
+  and `h_loop` (an arc-end junction entry `δ_End` of about `7e`, since `3e + 4e·(R + 2e)/(R_E − 2e)`
+  is about `7e` when `R_E` is near `R`; and through Lemma H's arc row `ε + 2·(ε + δ_m)`, with `ε = 3e` the arc
+  charge and `δ_m = 7e`, an `h` of about `23e`) so its
   record satisfies CR4. Withholding the record instead would keep today's value
   and stop every arc-bearing copy from filleting. An all-line copy, such as a
   tooth, keeps its `SectionDelta`.
@@ -7551,7 +7545,7 @@ it joins the bodies two at a time, left to right, instead of refusing. The fold 
 | U3 | The chain is run on copies first, each retired when read, so a step that refuses leaves every body live and the document as it was, and the refusal returned is the many-body one. Only a chain that completes on the copies is run on the bodies. The copies leave history entries. |
 | U4 | The result retires the bodies and every intermediate, and the history holds one `OperationUnion` for each step. |
 | U5 | The volume of the result is that of the union to the exactness of the mesh steps, whatever the order. The tests compute it independently by integrating the union's cross-section. |
-| U6 | A pattern joined to its base, `PatternCopies` then `Union(target, feature, copies...)`, takes the fold as any `Union` does. The tests join three overlapping round pins and three overlapping hexagonal pins, as tall as a slanted mesh plate and flush with both its faces, to the plate (7500 within a bound under 0.1), and, under `ExactOnly`, keep the refusal with the plate, the pin and its copies live. |
+| U6 | A pattern joined to its base, `PatternCopies` then `Union(target, feature, copies...)`, takes the fold as any `Union` does. The tests join three overlapping round pins and three overlapping hexagonal pins, as tall as a slanted mesh plate and flush with both its faces, to the plate (volume 7500 within a bound under 0.1 for the hexagonal pins and under 5 for the round pins), and, under `ExactOnly`, keep the refusal with the plate, the pin and its copies live. |
 | U8 | The first Union of a fold whose second operand is flush with the first's faces shrinks it inside (gap-tolerance design §5.2 item 6), so the next Union meets the first operand's own faces and not a translation's sliver; a round pin, held within its chord bound, shrinks past that bound and the result's bound states it. |
 | U7 | A fold step meets contacts whose normal is the zero vector, from a sliver facet of the earlier result that is too thin to normalise. The shifted retry gives such a contact no direction to open along (`shiftOpens` skips it) and reaches its slack along the shift's own length (`shiftNeed`), where before it left no direction at all and ended the retry. |
 

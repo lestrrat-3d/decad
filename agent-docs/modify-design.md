@@ -1588,7 +1588,7 @@ sub-ranges: each contributes `(dc/2 − mid)` times the difference of the
 enclosed feet at its two ends, plus at most `width²/4` times its velocity
 box's half-width, and the moment crosses that enclosure with the exact arm
 `v − c`. The error falls as the square of the sub-range count, and the
-lens-shaped test corners are charged within 2% of their exact share. The
+lens-shaped test corners are charged within a few percent of their exact share. The
 share is zero at a reflex foot, a G1 join and a whole turn, whose loci are
 straight, and a corner whose share cannot be bounded makes the volume bound
 unbounded. The built volume's own error holds none of this flux: it cancels
@@ -1702,7 +1702,7 @@ term:
   `(e_r + |Δr|·e_z/h)/h`; its held side and cap radii widen `e_r` by their own
   allowances. The term charges `2·(δ + δ_z·max(1, |Δr|/h))/h` with `h` at the
   bottom of its span. It is zero only where every one of those displacements
-  is. Without it, a 0.1 mm chamfer on a 20 mm square drawn at `v = 10⁶` publishes
+  is. Without it, a small chamfer on a square drawn far from the origin (`apitest/capblend_bounds_test.go`) publishes
   a bound far below the walls' distance from the exact 45° normal.
 - A flat patch also states `topo.Face.FlatPatch` while its stamp is below the cap: it denotes the plane through its
   straight side directrix and the parallel cap directrix over the window its one loop bounds, so a mesh Boolean
@@ -1908,7 +1908,7 @@ the span, the smallest float at or above `dc + dcDelta`
 `ErrUnsupported` whichever sentinel the second run raised, since the stated
 setback lies somewhere in the span and this evaluator cannot decide which
 side of the failure it is on. The contact floor (`1e-9` of the section's
-diameter) is about 10⁸ times a real conversion's rounding, so the second run
+diameter) is many orders of magnitude above a real conversion's rounding, so the second run
 changes the answer only where a corner's miter foot moves faster than that
 ratio per unit of offset; it is run rather than argued away because that
 speed is `1/sin(α/2)` at a corner of angle `α` and has no bound.
@@ -1973,7 +1973,7 @@ extension and the probe of its end:
   cutter lies flush with the next wall along the corner's vertical edge. The mesh Boolean cannot classify that touch,
   and its gap shift (gap-tolerance §5.2) moves the cutter outward off the next wall's plane. The moved clip face then
   crosses the run's wall at the corner's turn, and beside an arc the rim there divides the wall's chord bound by
-  `sin(turn)`: about 0.08 mm at a turn of 10 degrees on a body 40 mm across. So on a prism whose document's gap
+  `sin(turn)`, which is almost six times at a turn of 10 degrees. So on a prism whose document's gap
   tolerance is at least 0.004 mm (`partialCornerRelief`), the clip also holds a polygon inscribed in the circle of
   that radius about the corner, one chord per sixteenth of a turn over the angles the sector leaves out. The cutter
   then stays at least `0.004 min(cos(turn/2), cos(c/2))` mm from the next wall, `c` the angle each chord spans, more
@@ -2387,8 +2387,8 @@ the material):
 3. One `Cut` removes it, and with both rims selected one `Cut` removes both: the two cutters lie at the two ends
    of the sweep and touch nothing, so their `Union` is one tool that holds both. Two `Cut`s would cross the second
    rim's wall facets after the first had left them carrying its rim bound. Each rim crosses the wall at 45°, which
-   amplifies the bound it meets, and the wall's facets run the whole sweep, so the second rim would read about
-   twice the first's bound. One `Cut` meets fresh wall facets at every rim and holds the one-rim bound. The cut's
+   amplifies the bound it meets, and the wall's facets run the whole sweep, so the second rim would read a larger
+   bound than the first. One `Cut` meets fresh wall facets at every rim and holds the one-rim bound. The cut's
    result is held as a mesh, so its readings and bounds are the Boolean's own.
 
 Which `o` and `scale` build depends on the shape. `rimAttempts` tries `(0.5d, 1.5)`, then `(0.35d, 1.5)` for a
@@ -2952,7 +2952,8 @@ explicit unsupported-payload dispatch rather than a generic undecided result
 Clearance may also return undecided for surface cells its certified kernel does
 not solve. This is the existing `Verify` contract, not a modify-build refusal.
 
-DX6 is staged for the cap-loop chamfer, as the table says (§14). It is required for the cap-loop fillet.
+DX6 is staged for the cap-loop chamfer, as the table says (§14). The cap-loop fillet builds today as a `brepPayload`
+(reach RF3), so its clearance reading is Table DG6's, not DX6.
 
 The chamfer's DX3 reading is a mesh. A patch tessellator must chord the
 cap-level offset boundary and the side-level original boundary into one strip,
@@ -3204,7 +3205,7 @@ and whose Table SB rows SB3, SB4, SB5 and SB10 it narrows. Part F
 Part R ("reach §N") keeps the cap-loop chamfer's
 construction and proofs (§8.3, §8.4), which route L reuses.
 
-Six tables are normative:
+Seven tables are normative:
 
 | Table | Owns | Section |
 |---|---|---|
@@ -3339,6 +3340,9 @@ reference frame, embeds and `brepTopology` are brep-modify §4.1's.
 | TC5 | Every hole loop of every (b) face belongs to exactly one tool, and every (c) face to exactly one tool. |
 | TC6 | Every face has `delta = 0` (SB1) and every (c) face's two levels carry zero displacement; a (b) face whose level carries a displacement reads as no rectangle, as route P's P2(b) reader refuses it. |
 
+Table TC ends at TC6. TC7 is the construction check on the strips beyond the pierced walls (§3.3 step 3), not a
+recognition condition.
+
 A stacked union outside the admitted boss cases below fails TC1: three
 planar faces across `k`. A blind pocket fails TC2: its floor is a third
 planar face across `k`,
@@ -3434,10 +3438,9 @@ rings with the two rings exchanged (`brepfilletmesh.Input.RootAxis`), so each
 ring turns about the root edge. Its ring count covers each cell's `|T|/4`
 twist bound as well as the sagitta, and each cell is charged the smaller of
 that bound and its height bound (loop-fillet §7.1). The band's cells are
-planar, so the mesh `Bound` stays within the requested tolerance: about
-0.0006 mm at `tol = 0.1` and 3.7e-8 mm at `tol = 0.0001`, where the count
-reaches the 4096-ring cap, for the 60×40×20 box with its 20×20×10 boss
-shelled `t = 2`. `Tessellate(VerifyAll)` charges the band's chorded volume,
+planar, so the mesh `Bound` stays within the requested tolerance, and
+a tighter tolerance raises the ring count until it reaches the cap
+`tessellation.MaxFilletRings`. `Tessellate(VerifyAll)` charges the band's chorded volume,
 surface departure and vertex motion before publishing its occupied-volume
 bound. A later `Fillet` or `Chamfer` runs on the body's faceted view, and a
 selection that maps to the view and that the retained edge blend recognizes
@@ -4025,6 +4028,10 @@ SB2, SB1 and route P (brep-modify §6's stages 2a–2b):
 | Stage | Gates |
 |---|---|
 | 2c. entry | independent straight edges → route E (brep-modify §6); complete planar-face loops → route L: LB1, LB2; an asymmetric selection outside both routes is SX16 |
+| 3. topology | LB3, LB4, LB6 (SL2); LB5 (SX7) |
+| 4. existence | SX6, SX13 per band as the contour is built |
+| 5. audit | per band SX14, SX7, SX12 on the contour; per (pl) face S8, S6, S7, S9; per `F` S8, S7, S9 |
+| 6. build | the record's closure; `capblend.BuildBand` per band (SX15 as each patch is oriented) |
 
 For a `Fillet`, §4.3c tries the exact P8 cap edge before the brep receiver.
 Route V also partitions complete loops and independent
@@ -4032,10 +4039,6 @@ straight edges before LB1/LB2. A selected straight-edge chain or one EB8
 single edge on part of one planar-face loop, including a swept wall restated
 as a plane, takes the partial fillet route
 (Part V §2).
-| 3. topology | LB3, LB4, LB6 (SL2); LB5 (SX7) |
-| 4. existence | SX6, SX13 per band as the contour is built |
-| 5. audit | per band SX14, SX7, SX12 on the contour; per (pl) face S8, S6, S7, S9; per `F` S8, S7, S9 |
-| 6. build | the record's closure; `capblend.BuildBand` per band (SX15 as each patch is oriented) |
 
 ### 5. Tables BG and DG — results and downstream
 
@@ -4203,7 +4206,8 @@ Route S (S-1):
   SG2. A hole 1.5 mm under the top on a 2 mm shell builds
   through the crossing reach: the cavity's top splits in two, the rim holds
   both pieces, and the volume is `5632 + 220π − 16·(25·acos 0.9 − 4.5·√4.75)`.
-  Two cuts refuse on the cavity's charge (§3.3 step 4's rules), SG6:
+  Two cuts refuse on the cavity's charge (§3.3 step 4's rules), SG6 (the two inputs below are worked examples that no
+  test pins):
   the 40×20×20 box drilled R = 3.1 along y through `(20, ·, 15.90004)`,
   top removed at 1 mm, whose dilated hole notches the cap through the
   crossing reach with a positive charge (built, its notch vertex on `y = 1`
@@ -4459,9 +4463,9 @@ is a `facetedPayload`: its volume, area and box bounds grow by the view's
 band chords, and every later reading, modify op and Boolean reads its held
 mesh. The view's root band takes the ring count and the cell charge of
 loop-fillet §7.1, so for the 60×40×20 box with a 20×20×10 boss
-shelled `t = 2` and filleted at `r = 3` the volume bound is about ±2.2 mm³ and
-the area bound about 9.4 mm², both below `Verify`'s default relative limits,
-and `Verify` reads the result `Sound`.
+shelled `t = 2` and filleted at `r = 3` the volume and area bounds stay below
+`Verify`'s default relative limits, and `Verify` reads the result `Sound`
+(`apitest/shell_then_blend_test.go`).
 
 For the box above, open at the boss top, `Fillet` of the four outer box
 verticals at `r = 3` leaves `√2·t − (√2−1)·r = 1.586` mm of wall on each
@@ -4500,8 +4504,7 @@ call falls through to this view exactly as for a receiver with no record. The
 result is a
 `facetedPayload`, as in §2.1. For the 3 mm rounded-triangle plate of
 `apitest/chamfer_pattern_socket_test.go` with three pattern-copied sockets, a
-0.5 mm chamfer of both outlines in one call builds; its volume bound is about
-±2 mm³.
+0.5 mm chamfer of both outlines in one call builds.
 
 #### 2.3 A stacked or slab-cut BRep: the faceted view after the receivers
 
@@ -5077,7 +5080,7 @@ Route P:
 Route E:
 
 - S1, fillet the edge along `z` at `(x, y) = (0, 0)`, `r = 2`: a `brepPayload`
-  of 8 faces, volume within its bound of `15920 − 160π`, the `y = 0` face's
+  of 8 faces, volume within its bound of `15920 + 20π`, the `y = 0` face's
   `x = 0` segment at `x = 2`, both caps carrying the arc about `(2, 2)` with
   feet `(0, 2)` and `(2, 0)`, one `fillet(k)` role on the new wall.
 - B1, chamfer the edge along `z` at `(0, 0)`, `d = 2`: `Exact` `13960`.
@@ -5120,11 +5123,11 @@ Route E:
 - Chaining: chamfer S1's edge along `z` at `(0, 0)`, then chamfer the edge
   along `x` at `(y, z) = (0, 0)` on the result → SB7. Filleting all twelve
   straight edges of S1 takes route V (Part V).
-- Consumers on the S1 fillet result: `Verify` `Sound` at the default
-  tolerance, the mesh's occupied-volume proof covering `15920 − 160π`, STEP's
-  analytic arm (the fillet wall two arcs and two lines), the undercut survey
-  listing the fillet wall under a pull along `(1, 1, 0)` and not along `z`,
-  and transformed by a translation reproducing volume and area.
+- Consumers on the S1 fillet result: its volume reads within its bound of `15920 + 20π`
+  (`TestBrepSingleYCapEdgeAfterRestatement`, the edge along `y` at `(x, z) = (0, 20)`; the edge along `z` removes the
+  same `20·r²(1 − π/4)`). No test runs `Verify`, STEP export, the undercut survey or a translation on this single-edge
+  result; those consumers are covered on loop fillets (`TestVertexBlendThreeEdgeOpenChain` for `Verify`,
+  `TestBrepLoopFilletPublicSTEP`, `TestBrepLoopFilletUndercutReadsEachPipePatch`).
 
 Displaced reading (§4.4; `apitest/revolve_shaft_class_b_blend_test.go`,
 `internal/brepmodify/displaced_blend_test.go`):
@@ -5702,14 +5705,15 @@ near-tangent reach in either reading, a radial step, or a restated arc on
 either side refuses (`filletband.Loop.Charged`, SL2).
 
 The rounded hexagon of §8 (corner circle 2.51, corner rounds 0.8, fillet 0.6)
-has twelve LF5′ joins of both signs, with `ρ′` at most about `1.6·10⁻¹⁶` mm.
+has LF5′ joins of both signs, each with a `ρ′` at rounding level, far below
+any tessellation tolerance.
 
 #### 5.6 Off-radius arcs — restatement
 
 An `ArcSeg` denotes Start's radius up to End's angle and a radial step from
 that point to End (`agent-docs/evaluator-design.md` §4), and a sketch solve
-leaves its End a few ulps off the circle its Start states (5 of the rounded
-hexagon's 6 corner arcs). Table CF reads such an arc as the record denotes it,
+leaves its End a few ulps off the circle its Start states (most of the rounded
+hexagon's corner arcs). Table CF reads such an arc as the record denotes it,
 the annular sector about the recorded centre `C` at Start's radius up to
 End's angle, so the strip proof restates the loop as
 `agent-docs/tessellation-reach-design.md` §7.1 does: each off-radius arc is
@@ -5899,12 +5903,14 @@ these, and every meridian at the corner widens its `LengthBound` by them.
 
 #### 5.8 Reference numbers
 
-The rounded hexagon's near-tangent strip allowance (§5.5) sums to about
-`3·10⁻¹⁶` mm³, and its restatement allowance (§5.6) to about `5·10⁻¹³` mm³,
-dominated by `4Δ·P`. Its largest step is about `3.3·10⁻¹⁶` mm, so `stepRoot`
-is about `9·10⁻⁸` mm. That sets every local reach near `10⁻⁷` mm and each
-patch's area widening near `10⁻⁷` mm², both far below a tessellation
-tolerance.
+The rounded hexagon's allowances are rounding-sized. Its near-tangent strip
+allowance (§5.5) and its restatement allowance (§5.6, dominated by `4Δ·P`)
+are tiny volumes. Its largest radial step is a few ulps, and `stepRoot` is a
+square root of that step, so it is far larger than the step but still small.
+Every local reach and each patch's area widening stays far below a
+tessellation tolerance.
+`TestFilletLoopNearTangentJoins` asserts the volume's published bound is
+under 0.01 mm³.
 
 ### 6. Table SF — refusals and gate order
 
@@ -6043,8 +6049,9 @@ bound:
    differ by a multiple of `T` of size at most `1/4`. It holds for every
    cell. It also counts movement within the cell's own plane: the box's
    straight-walk cell from one miter to the next has `|T| = 2·r·Δg`, whose
-   `|T|/4` alone exceeds `tol` at the sagitta count (0.46 mm for `r = 3` at
-   `tol = 0.1`, where the last strip has `Δg = cos(0.4π) = 0.309`).
+   `|T|/4` alone exceeds `tol` at the sagitta count (`2·3·0.309/4 ≈ 0.46` mm
+   for `r = 3` at `tol = 0.1`, where 5 rings make the last strip's
+   `Δg = cos(0.4π) = 0.309`).
 2. **Height bound** (`proofbound.CellHeightOffsetUpper`). Let `Π` be the
    plane through `vLo`, `vHi`, `wLo`, `n = (vHi − vLo) × (wLo − vLo)`, and
    `h(p) = n̂·(p − vLo)`. The precondition is that the cell projected onto
@@ -6080,7 +6087,7 @@ corners: on a straight walk ring `k`'s chord runs along the walk's offset
 line, on a circular walk between two azimuths at radius `ρ_k`, and on a
 reflex connector between two azimuths of the arc of radius `t_k` about the
 apex, so rings `k` and `k+1` give parallel chords run the same way. The held
-corners carry rounding, so `H` is not zero but reads about `1e-15` mm, and
+corners carry rounding, so `H` is not zero but a rounding-level distance, and
 the charge drops from `|T|/4` to that. An LF8 seam's ring positions follow
 offset-carrier intersections and need not give parallel chords; there the
 smaller bound is whichever the cell's corners give. `Emit` skips the height
@@ -6093,16 +6100,18 @@ A patch's `Bound` is `s_φ + s_ring + charge + seam gaps`, composed with
 `F.delta`, the level displacement, the axial term and the vertex store.
 `n_φ` holds `s_φ` within `tol/2`, and the charge is at rounding level, so a
 band whose patches are all straight walks between line–line miters, on a
-record with no displacement, publishes `Bound ≤ tol`: the
-60×40×20 box's top loop filleted at `r = 3` reads about 0.037 mm at `tol =
-0.1` and 0.0047 mm at `tol = 0.01`, with 5 and 14 rings. `capblend.ChordLoop`
+record with no displacement, publishes `Bound ≤ tol`
+(`TestBrepLoopFilletTessellateWithinTolerance` asserts it with 5 and 14 rings
+at `tol` 0.1 and 0.01 on the box's top loop at `r = 3`). There
+`s_φ = r·(1 − cos(Δφ/2))` is 0.037 mm at 5 rings and 0.0047 mm at 14. `capblend.ChordLoop`
 spends the whole chord budget on the in-plane walk count `n(w)`, so `s_ring`
 on a circular walk, and the connector arc's sagitta at a reflex corner,
-reach up to `tol`, and such a patch can read up to about `1.5·tol`. At `tol
-= 0.01` the round boss's root loop filleted at `r = 1` reads `s_φ` 0.0048 +
+reach up to `tol`, and such a patch can read up to about `1.5·tol`. By the same
+formulas, at `tol
+= 0.01` the round boss's root loop filleted at `r = 1` has `s_φ` 0.0048 +
 `s_ring` 0.0098 = 0.0146 mm, the pocket mouth and the L prism's top loop at
-`r = 1.5` read `s_φ` 0.0046 + connector sagitta 0.0094 = 0.0141 mm, and the
-rounded plate's top loop at `r = 2` reads `s_φ` 0.0043 + `s_ring` 0.0093 =
+`r = 1.5` have `s_φ` 0.0046 + connector sagitta 0.0094 = 0.0141 mm, and the
+rounded plate's top loop at `r = 2` has `s_φ` 0.0043 + `s_ring` 0.0093 =
 0.0135 mm. At `tol = 0.1` only the round boss root exceeds `tol`, at 0.034 +
 0.091 = 0.126 mm.
 
@@ -6133,30 +6142,33 @@ API; a bound is asserted as a relation, never a literal.
 | | one hole rim, `r = 1` (R = 3, on the upright leg's `x = 0` face) | `6π` | `+π` | −1 | `17280 − 72π − ((23/3)π − 2π²) = 17280 − (239/3)π + 2π²`; `Torus{Center: the hole centre on the face, Axis: x̂, Major: 4, Minor: 1}` |
 | **P8** 40×20×20, four vertical edges filleted `r = 3`, Ø6 along y | top loop, `r = 2` | `96 + 6π` | `−π` (four LF2 at `β = π/2`) | −1 | `15280 − (384 − (256/3)π − 2π²) = 14896 + (256/3)π + 2π²`; four `Cylinder` and four `Torus{Major: 1, Minor: 2}` (spindle) patches joined by eight `Arc3` quarter meridians, no ellipse |
 
-Bound fixture, shown to fail first: the trapezoid `(0, 0)`, `(100, 0)`,
+Bound fixture: the trapezoid `(0, 0)`, `(100, 0)`,
 `(72, 45)`, `(28, 45)` extruded 10 with a blind 20×20 pocket 5 deep (a
-stacked receiver of 30400, route L's own fixture), top loop filleted `r = 1`. Its slanted sides have
+stacked receiver of 30400, route L's own fixture), top loop filleted `r = 1`.
+`filletband`'s `TestCoefficientsOfTheTrapezoid` asserts `κ`, `a₁` and `a₂`
+below and checks `A(t)` and `M(t)` against the exact offset polygon at `t = 1`
+and `t = 3`. Its slanted sides have
 length 53 and `cos θ = 28/53`, `sin θ = 45/53` at the base corners, so
 `κ = cot(θ/2) = 9/5` there and `tan(θ/2) = 5/9` at the top corners:
 `a₁ = 250`, `a₂ = −212/45`, and the volume `V_receiver − (250(1 − π/4) −
-(212/45)(5/3 − π/2))` is an exact rational-`π` closed form the test
-encloses. Legs recorded in the test: (1) every cap-level vertex's bound
-encloses its exact rational contour corner, and deleting the `F.delta`
-charge turns all four corners red (route L's mechanism); (2) the centroid of
-the body placed `10⁶` mm along every axis encloses the placed exact centroid,
-and deleting the frame-lift rounding term of the centroid turns it red
-(reach §8.4's placed-plate mechanism). The centroid's x is exactly 50, which
-lifts to `10⁶ + 50` with no rounding, so a placement along x alone leaves the
-term unexercised. The volume's own bound
-is the enclosures' reach alone and cannot be made to fail by deleting one
-term, which the test records.
+(212/45)(5/3 − π/2))` is an exact rational-`π` closed form. No public-API
+test fillets this trapezoid end to end. The checks that fixture needs are
+these. Every cap-level vertex's bound must enclose its exact rational
+contour corner, and deleting the `F.delta` charge must turn the corners red
+(route L's mechanism). The centroid of the body placed along every axis must
+enclose the placed exact centroid, and deleting the frame-lift rounding term of
+the centroid must turn it red (reach §8.4's placed-plate mechanism). The
+centroid's x is exactly 50, which lifts to `10⁶ + 50` with no rounding
+for a placement of `10⁶` mm, so a placement along x alone leaves the term
+unexercised. The volume's own bound is the enclosures' reach alone and cannot
+be made to fail by deleting one term.
 
 Near-tangent and off-radius fixtures (§5.5–§5.7).
 `apitest/fillet_near_tangent_loop_test.go` covers the following cases:
 
 - It fillets the start cap loop of a rounded hexagon (corner circle 2.51,
   `sketch.CreateFillet` corner rounds 0.8, 3 tall) by 0.6 and encloses its
-  Pappus closed form; 5 of its 6 arcs are off-radius.
+  Pappus closed form; most of its arcs are off-radius.
 - It fillets the same loop by 0.025 in, an inexact conversion.
 - It fillets the R4.5/R22 tangent-arc plate's start loop by 0.5, with arc–arc
   joins and off-radius arcs.
@@ -6286,7 +6298,7 @@ The fillet arm is complete; no later PR is planned. Its code lives in `internal/
 `internal/brepfilletmesh/` and `internal/brepbandmesh/` (§7.1 rings), `internal/survey2d/` and
 `internal/verifyrun/brep.go` (DF7/DF8 surveys), and `export/step_analytic.go` with
 `export/step_analytic_torus.go` (DF10). Still refused: SF1, SB5 (single edges sharing a vertex outside
-route V), SX5 (revolve cap edges), SX4 (partial loops outside the selected-chain route), the clearance
+route V), SX5 (revolve cap edges), SL1 (partial loops outside the selected-chain route), the clearance
 model (DF6, `Suspect`), and variable-radius fillets (no entry point).
 
 ### 12. Hand-off
@@ -6464,9 +6476,9 @@ loop-fillet terms.
 | mixed loop and single-edge `Chamfer` | existing SL1 refusal |
 
 A trapezoid with slanted sides demonstrates the near-equal refusal: one
-rewritten arc has a held radius of about `1.000000000000006 mm` for a
-`1 mm` fillet, while another has an endpoint slightly off its exact
-radius-one circle. The record does not define exact spheres there.
+rewritten arc has a held radius a few rounding steps above the `1 mm` fillet
+radius, while another has an endpoint slightly off its exact radius-one
+circle. The record does not define exact spheres there.
 
 ### 5. Integration fixtures
 
@@ -6491,9 +6503,15 @@ radius-one circle. The record does not define exact spheres there.
 | cross-drilled 40×20×20 bar, all 12 straight edges, `r=2` | 8 spheres; volume `14848 + 308π/3` |
 | rounded plate P8, top loop over radius-3 side arcs, `r=3` | 4 spheres; volume `14416 + 207π`; tessellates |
 
-The tests assert closed topology, bounded volume readings, patch kinds, and
-the cap mesh for the radius-equality cases. The trapezoid test asserts a
-typed refusal and leaves the receiver live.
+The volume column is the hand derivation for each row. Tests assert the volume of the rows `14848 + 848π/3`
+(`apitest/brep_loop_fillet_test.go`), `47320/3 + 56π` (same file), `8322 − 14π/3 − π²/4` and `8316 − 43π/12 − π²/8`
+(`apitest/brep_partial_root_fillet_test.go`), `7920` (`apitest/chamfer_test.go`), `7880`
+(`apitest/modify_options_test.go`) and the two trapezoid wedge rows `32400 − 53/2` (`apitest/chamfer_test.go`) and
+`32400 − 53·0.75` (`apitest/modify_options_test.go`). The other volume figures (`15264 + 544π/3`, `15840 + 40π`,
+`15153 − 297π/8`, `14848 + 308π/3`, `14416 + 207π` and the trapezoid quarter-cylinder rows) are derived values that no
+test asserts. The tests also assert closed topology, bounded volume readings, patch kinds, and the cap mesh for the
+radius-equality cases. The near-equal trapezoid case of section 4 asserts a typed refusal and leaves the receiver
+live.
 
 ## Part A — Edge blend variants
 
@@ -6951,8 +6969,7 @@ normal is the float cross product of two edges, accepted only when it is longer
 than twice `proofbound.FacetAreaTermSlop` of the facet's corners: the float and
 exact normals then make an angle under 90 degrees, so the frame's winding agrees
 with the facet's exact winding. A shorter normal may be rounding noise of the
-wrong sign, as the cross product of a near-collinear facet of edges about 100 mm
-is, and the facet refuses (SR5, "a wall facet has no plane"). The check only refuses.
+wrong sign, as the cross product of a long near-collinear facet is, and the facet refuses (SR5, "a wall facet has no plane"). The check only refuses.
 
 On the arc and chain routes (an exact main plane; R3's angle-main band keeps the
 rules above) the end plane's `on` set also holds every vertex of the boundary of
@@ -7043,8 +7060,8 @@ wall on it, and its `NormalBound` lowers the sine by at most itself, since
   `√(1 − (r·n)²)`. A wall point within `reach` of `G` has `|r·n| ≤ (h + reach) / R`,
   `h` the axis's distance from `G`, because `n·(p − o) = n·(c − o) + R·(r·n)` when
   the axial term vanishes. This is `√(R² − (h + reach)²) / R`, the arc route's
-  `√(R² − h²) / R` at reach zero (0.866 for the notched round's side roots, 0.66
-  for the end-round chord-row fixture). The axis may lie on either side
+  `√(R² − h²) / R` at reach zero (0.866 for a radius-3 wall with its axis 1.5 mm from `G`, as in
+  `wall_sine_internal_test.go`). The axis may lie on either side
   of `G`, and a bore wall is the same surface.
 - Any other wall, a cylinder with a tilted axis, a cone, a sphere and a wall whose
   tag states a departure, has no `s_lo`, and the reading refuses.
@@ -7244,7 +7261,7 @@ chamfer's alike (§6.3, Strip triangles).
 An open tangent chain whose arc ends lie on such a plane takes the same rows
 (retained-modify-reach §5.5 step 5), once the walk decides the arc's end vertex.
 The walk reads a held arc whose chain has short steps (retention E7 skips them),
-so a pocket mouth whose 3 mm corners' axes lie 2.55 mm or nearer to the end plane
+so a pocket mouth whose 3 mm corners' axes lie 2.5 mm and 2.75 mm from the end plane
 builds as well (`apitest/faceted_retained_blend_arc_end_plane_test.go`).
 
 **A wall that runs on past an end plane.** A concave arc may end where the
@@ -7358,7 +7375,7 @@ rim's radius and `θ_c` for `c`'s azimuth in the arc's signed angle `θ` (`arc_e
   end's band is unchanged). A chain vertex that fails either check refuses SR5 ("the wall's chain
   along a cylinder end face does not lie on the end's generator"). Besides the chain, the
   held mesh may hold, beside `V`, boundary vertices of the wall that are the arc's own, `n₁, n₂, …`
-  from `V` outward (a tessellation point of the boss's base circle that falls within 10⁻³ mm of
+  from `V` outward (a tessellation point of the boss's base circle that falls beside
   `V`). Such a vertex lying within `β + slack + τ` of `Π` has no decided side, and a side read
   from its held offset leaves the cut along `Π` short of `V`. It is read as on `Π`: a choice, as
   `signRead` makes (§4.3), charged by the same distance, the one from the held point to the band's
@@ -7697,14 +7714,13 @@ and the perimeter carries `proofbound.ChainLengthBound`'s `2δ` for each of the
 rims' segments. The largest facet bound is a rim vertex's,
 `(ε + β_wall)/sin θ` (faceted-vertex-bounds §3.2). The body's area bound sums
 the face terms, the area bound carried from the Boolean, and the two tools' row gaps and seals.
-`Verify` reads the d = 1.5 and d = 0.5 results Sound. At r = 7, d = 0.5 the bound exceeds
-`Verify`'s relative tolerance and `Verify` reads the area Suspect.
+`Verify` reads the d = 1.5 and d = 0.5 results Sound (`TestRetainedSaddleChamfer`). At r = 7, d = 0.5 the band
+rims' length bounds keep the area bound past `Verify`'s relative tolerance, so that case does not claim Sound.
 
 **Reach.** Built and checked: r/R = 0.3 (d = 0.5, 1.5) and 0.7 (d = 0.5) on a
 Revolve shaft, and r/R = 0.3 (d = 1.5) on an Extrude shaft under each
-assignment of the two axes to world coordinates and under a translation. The cell proofs also pass at r/R = 0.75;
-recognition stops at `1/√2`, where the opening stops being one graph over the
-shaft's angle.
+assignment of the two axes to world coordinates and under a translation. Recognition stops at `1/√2`, where the
+opening stops being one graph over the shaft's angle: a bore of radius 7.5 in the R = 10 shaft refuses SR1.
 
 #### 4.10 R7 fillet, the rolling ball in a saddle
 
@@ -7763,8 +7779,9 @@ inside it and farther outside it. The fillet is the pipe
 `F(θ, t) = c(θ) + ρ·w/|w|`. The direction `w` blends `a1` into the bisector
 `b = (a1 + a2)/|a1 + a2|` over `t ∈ [0, 1/2]` and `b` into `a2` over
 `[1/2, 1]`, each half as `(1 − τ)·from + τ·to`. Splitting at the bisector keeps
-the parameter's angular speed within a factor 1.4 of uniform, where the single
-blend from `a1` to `a2` varies by a factor 4.
+the parameter's angular speed near uniform. A linear blend over an angle α runs
+`1/cos²(α/2)` times faster at its midpoint than at its ends, and each half spans
+half the angle the single blend from `a1` to `a2` does.
 
 **Stations and rows.** The strip has `N = 256` stations `θ_k = 2πk/N` and the
 rows `t_j` that split each half of the widest arc φ* into equal angles no
@@ -7792,7 +7809,7 @@ the larger cylinder `X_w = √(R'² − r'²) − r'/32`, below T2's least x, ke
 held edge, turns the window (nine offsets of its corners) or moves the plane
 (four places), else SR5. A cut along a curve of T1's own family would miss
 facets: the larger wall's held facets are strips from the seam to the wall's
-ends (168 strips 80 mm long on the R = 10 Revolve), T1 runs almost along the
+ends (on the R = 10 Revolve they run the shaft's 80 mm length), T1 runs almost along the
 generators at its two ends, and such a curve crosses a strip between the
 strip's vertices.
 
@@ -7915,7 +7932,6 @@ time.
 **Result.** The walls keep their `Cylinder` tags; each fillet is a `Faceted`
 face. On the R = 10, r = 3 shaft `Tessellate(…, VerifyAll)` verifies
 the two-mouth result's boundary and volume at ρ = 0.5.
-The block's and the rod's results below read Sound under `Verify`.
 
 **Reach.** Built and checked inside the larger cylinder: a Revolve shaft with
 r/R = 0.3 (ρ = 0.5, 1.5) and 0.7 (ρ = 0.5), a `Hole` through the shaft's wall
@@ -8101,8 +8117,8 @@ the wall's cut in `G`'s plane lies within its bound of the circle, inside or
 outside it. Where the ball's gap to the circle at the profile's last row
 before `T_B` is under that, the row lies beyond the wall's cut and the loop
 crosses itself: on the R = 10 shaft whose keyway runs from x = 20.37 off the
-end, the r = 0.3 fillet's last row lies 0.00111 mm inside the circle, and the
-cut's band corner 0.00186 mm. The route then spaces the rows again
+end, the r = 0.3 fillet's last row lies nearer the circle than the cut's band corner
+does (`faceted_retained_blend_keyway_test.go`). The route then spaces the rows again
 (`clearCusp`): the last gap before `T_B` spans the tube angle `ψ` at which the
 ball lies `need` from the circle, `need` the largest bound of the band's
 corner and the wall's run in `G`'s plane at every end that takes a cap, plus
@@ -8114,8 +8130,8 @@ rows fails `capSimple`, so a cap that is already simple keeps them, and
 `capSimple` decides the cap on the new rows too. The wider gap's sagitta is
 charged as §6.3, "The cusp's last gap", states. A fillet whose tangent point
 on `A` lies no farther than `need` from the circle refuses SR5, "the fillet's
-arc comes no more than … mm from the wall's circle". On that shaft r = 0.008
-builds, and r = 0.007 refuses earlier, in `solveSection`, with "the blend's
+arc comes no more than … mm from the wall's circle". On that shaft r = 0.007
+refuses in `solveSection`, with "the blend's
 tangent point does not lie on the wall's face": `T_B` lies under `minSine`
 radians about the axis from the edge. The route refuses a wall that extends beside a
 concave edge, or beside a convex edge whose plane is reflex at the
@@ -8536,10 +8552,8 @@ nearest point to it in that half-plane is `C`; so `|C' − C| ≤ ε` with
 The ball's gap at `ψ` is about `D·r·ψ²/(2R)` and `σ` about `r·ψ²/8`, so `σ` is
 about `need·R/(4D)`, a quarter of the wall's bound at the cusp. With `4σ`
 near `ε` the charge stays near `ε`: on the R = 10 shaft the r = 0.3 fillet's
-gap spans `ψ` = 0.133 against the step 0.088, `σ` = 0.00066 mm against
-`τ` = 0.00029, and `Mesh.Bound` reads 0.00227 mm, against 0.00246 for r = 0.5,
-whose rows need no new spacing. The rows keep the profile's count or one
-fewer: 22 at r = 0.3 and 21 against 22 at r = 0.1.
+gap spans a wider `ψ` than the profile's step and its `σ` exceeds `τ`, yet every facet lies within its own bound
+and `Mesh.Bound` (`TestRetainedBlendKeywayCuspBounds`). The rows keep the profile's count or one fewer.
 
 An arc's rows (§4.4) end on planes `G` parallel to the axis at distance `h`
 from it. The row at profile parameter `s`, the circle of radius `ρ(s)` at height
@@ -8573,11 +8587,9 @@ small, and with the profile's rows a hole mouth's fillet strays about 4 times
    the band's gap (`arcRows`, Strip triangles). The rows start from the
    profile's own count, a fillet's arc sagitta within `τ/4` on the arc route
    (`arcProfileShare`) and `τ/2` on the chain route (`profileShare`), or two
-   rows for a chamfer. The blend refuses (SR5) past 1,024 rows, and at once
-   when `δ ≥ τ`, where no number of rows certifies. Over `R` of 1, 2, 5, 10,
-   20, 50 and 100 mm, `r` of 0.1, 0.2, 0.5, 1, 2 and 4 mm on either side of the
-   wall, both signs of `z`, and `X/ρ` from 1 down to 10⁻⁶ at the smallest row, a
-   fillet takes at most 69 rows and a chamfer at most 51.
+   rows for a chamfer. The blend refuses (SR5) past 1,024 rows (`maxSectionRows`), and at once
+   when `δ ≥ τ`, where no number of rows certifies. Across ordinary sizes of `R` and `r`, both signs of `z` and
+   small `X/ρ`, the rows stay far below that limit.
 
 Every chord on every end plane then lies within `τ` of its arc of the end curve,
 which each row vertex's bound, at least `τ + slack`, states. The last chord ends at
@@ -8647,13 +8659,10 @@ both ways, the near-end term aside, which the rows' steps hold within `τ`.
 *Column limit.* A row takes at most 4,096 columns over a closed rim's turn or
 an open row's span (`columnCount`, `maxStripColumns`). The column step shrinks
 with `√(size/ρ)`, so a blend tiny against its rim would need more: on a closed
-rim a fillet reaches the limit below `r/ρ_hi` of about `6.0·10⁻⁴`, and a
-chamfer, whose columns take all of `τ`, below `d/ρ_hi` of about `3.0·10⁻⁴`. On
-the arc route the last row's step reaches it first (step 4 below): on the Ø8
-bore's mouth whose wall row meets the end plane at the sine 0.4, a fillet
-below `r/R` of about `1.8·10⁻³` and a chamfer below `d/R` of about `9.1·10⁻⁴`;
-at the sine 0.2 the wall gate ("the held bounds cannot show that the blend
-leaves the wall") refuses first, below about `3.7·10⁻³`. Such a blend refuses
+rim a fillet reaches the limit at a smaller `r/ρ_hi` than a chamfer, whose columns take all of `τ`, does at
+`d/ρ_hi`. On the arc route the last row's step reaches it first (step 4 below), at a larger ratio: on the Ø8
+bore's mouth whose wall row meets the end plane at the sine 0.4, the limit is reached; at the sine 0.2 the wall gate
+("the held bounds cannot show that the blend leaves the wall") refuses first. Such a blend refuses
 (SR5) rather than step coarser than its bound states.
 
 *Closed rims and meridian columns split `τ` between the two terms.* The terms
@@ -8716,11 +8725,12 @@ from the azimuths the route places those ends at (`arcRowSteps`,
 5. The rounding. A vertex's azimuth is computed from its row's ends and its
    fraction within `16π·u` of the value the bound reads, `u = 2⁻⁵³`, and the
    half-angle form puts the step within a few `u` of itself. `σ_g` as computed
-   is within `2u·r = 2¹¹·u·τ` of the exact sagitta. The rows refuse unless
+   is within `2u·r` of the exact sagitta, `r` the profile's radius, which the row cap
+   (`maxSectionRows`) keeps within a fixed multiple of `τ`. The rows refuse unless
    certify's margin `δ ≥ 64·ulp·ρ_g` is under `τ` (`sectionRows`), so
    `τ − σ_g ≥ τ/2` gives `C_g ≥ 2·10⁻⁷`, and the azimuths' rounding moves `Δφ`
    by at most `6·10⁻⁸` of `C_g` and the term by at most `1.2·10⁻⁷` of itself.
-   That and the sagitta's `2¹¹·u·τ` lie inside the `2⁻¹⁶·(τ − σ_g) ≥ 2⁻¹⁷·τ`
+   That and the sagitta's `2u·r` lie inside the `2⁻¹⁶·(τ − σ_g) ≥ 2⁻¹⁷·τ`
    the step gives up (`stepCut`).
 
 The rows' own spacing is a choice, not a bound: `arcRows` halves a gap while
@@ -8784,7 +8794,7 @@ the sphere, no nearer `C` than the triangle's plane, so `r − |x − C|` is at 
 `r` less that plane's distance from `C`; the point of the sphere on the ray
 from `C` through `x` lies that far from it, which bounds both directions. A
 patch triangle reaches farther from the sphere than the rows' chords along its
-sides: about 2.6 times as far on the grid of the rows' count. The rows are
+sides: farther, by more than twice the sagitta of its side chords (`TestOctantDepartureCoversSamples`). The rows are
 therefore added until the grid's own departure (`octantDeparture`, the grid's
 shape at unit radius) times `r` is within the corner route's tolerance, and the
 blend refuses (SR5) past 1,024 rows. Each patch vertex also takes its
@@ -9110,7 +9120,7 @@ Each stage below is built. Its gate is the §9 rows named.
 - **Cut the shaft wall along a curve of T1's family.** The shaft's held facets
   are long strips, and such a curve crosses a strip between its vertices: a cut
   that reads the level at the vertices misses the strip, and a ring cut from the
-  vertex levels lies up to a facet's width (0.4 mm on the R = 10 shaft) off the
+  vertex levels lies up to a facet's width off the
   curve, far beyond the strip's first row. §4.10 cuts by planes instead.
 
 ### 13. Decisions the user may want to overturn
@@ -9122,11 +9132,11 @@ Each stage below is built. Its gate is the §9 rows named.
 | Chord tolerance `τ = 2⁻¹⁰·r` for the blend grid | fixed ratio of the radius | follow the body's `MeshBound`: finer blend, many more facets |
 | Several selected edges | one at a time on the evolving mesh; each later rim is found again by its circle | require disjoint regions `K` and build them together |
 | `Shell` of a retained body | stays SX9 | a separate design |
-| R7 tool stations | `N = 1024` (`crossbore.ToolStations`) | `N = 4096`: `ε` four times smaller, but a rim vertex's bound falls only by the wall's share while the rims hold four times the segments, so their length bounds grow; more facets and time |
-| R7 band rows and area cells | `M = 8` rows and 8 area cells per quad (`crossbore.ToolRows`, `ToolAreaCells`); `Verify` reads the R = 10, r = 3, d = 1.5 result Sound (`apitest/retained_saddle_chamfer_test.go`) | more rows or cells: a smaller `ε` or area bound for more facets and time; fewer stations with the same rows and cells: a larger bound that can read Suspect |
+| R7 tool stations | `N = 1024` (`crossbore.ToolStations`) | `N = 4096`: a smaller `ε`, but a rim vertex's bound falls only by the wall's share while the rims hold four times the segments, so their length bounds grow; more facets and time |
+| R7 band rows and area cells | `M = 8` rows and 8 area cells per quad (`crossbore.ToolRows`, `ToolAreaCells`); `Verify` reads the R = 10, r = 3, d = 1.5 result Sound (`TestRetainedSaddleChamfer`, `apitest/retained_saddle_chamfer_test.go`; its r = 7 row does not assert Sound) | more rows or cells: a smaller `ε` or area bound for more facets and time; fewer stations with the same rows and cells: a larger bound that can read Suspect |
 | R7 cut's chain allowance | raised to the walls' held bounds and `ε` (§4.9) | keep the document's: every R7 cut on a Boolean result refuses at the chain-depth gate |
-| R7 ratio | `2r² < R²` | admit what the cell proofs pass (r/R = 0.75 builds with the gate dropped): wider reach, no checked fixture past 0.7 |
-| R7 fillet stations and rows | `N = 256` (`saddlecanal.Stations`), rows for `τ = 2⁻¹⁰·ρ` | `N = 1024` as §4.9: ε about a quarter, four times the facets and time |
+| R7 ratio | `2r² < R²` | admit what the cell proofs pass: wider reach, but no checked fixture past r/R = 0.7 (the r = 7 rows of `apitest/retained_saddle_fillet_test.go`) |
+| R7 fillet stations and rows | `N = 256` (`saddlecanal.Stations`), rows for `τ = 2⁻¹⁰·ρ` | `N = 1024` as §4.9: a smaller ε for four times the facets and more time |
 | R7 fillet cell split along t | every cell splits in two along t (`rowSplit`): the fillet's area enclosure narrows (`saddlecanal.rowSplit` = 2) for more proof time | no split: less proof time, and a wider area bound that can pass `Verify`'s relative tolerance; or more splits: a narrower enclosure for more time |
 | R7 fillet face | untagged `Faceted`, role `fillet(k)` | a sealed `Canal` surface variant (`agent-docs/trim-graph-design.md` increment 9): a tag a reader can query, a new public type |
 | R7 fillet sign patterns | σ = (−1, +1) at a convex edge (the cross hole's mouth) and σ = (+1, +1) at either edge (crossing bores, a boss's root) | the patterns of B8 as well |
@@ -9156,7 +9166,7 @@ Navigation only; the sections own the content.
 | Why `Shell`, `Draft`, `Offset`, many-body `Union`, cone and torus blends stay refused | §9 |
 | Refusal rows and gate order | §10 |
 | Tests and their red legs | §12 |
-| PR order | §14 |
+| Increments | §14 |
 
 ### 1. Probe
 
@@ -9301,7 +9311,7 @@ retained cylinder wall `W_k` whose axis is normal to `P`, and consecutive edges 
 (§5.2). A closed chamfer chain may also have walls and a base that state a positional charge
 (`agent-docs/charged-window-chamfer-design.md` §3); every other chain reads only exact tags.
 
-| RC | Chain | Ends | Staged |
+| RC | Chain | Ends | Built in |
 |---|---|---|---|
 | **C1** | closed: every edge of one loop of `P` | none | increment M3 |
 | **C2** | open | each end at a three-face corner of a straight R1 edge, on an end plane `G` normal to the edge or meeting the wall square (§5.5 step 5, "An oblique end face"), where the wall is convex or continues past a convex `G`, the base is convex (or, for a concave chain, wraps the corner and `G` is convex) and `G` is convex or reflex (§5.5 step 5), or of a convex chain's R4 arc that blend §4.4 admits, on an end plane parallel to its axis and convex at the corner | increments M4, M4b, M8, M10 |
@@ -10189,9 +10199,9 @@ cutter, whose Cut refuses them. No case reaches the line on `G`, which reads the
 
 - **Chain junctions.** The default proof is short and matches reach §5. It admits a tangency gap of 64 ulps at
   most (the rounding of sketch-built tags) and refuses every part whose wall and fillet tags miss tangency by
-  more, for example a 40.1 mm box. The wider bounded rule admits those parts. It costs
-  a new proof that the seam lies within `√(2R·δ)` of the foot and that the crease angle is at most `√(2δ/R)`,
-  with `δ` the exact tangency defect, both charged into the junction rows.
+  more, for example a box whose wall and fillet tags were rounded apart. The wider bounded rule admits those
+  parts. It costs a new proof that the seam lies within `√(2R·δ)` of the foot and that the crease angle is at most
+  `√(2δ/R)`, with `δ` the exact tangency defect, both charged into the junction rows.
 - **`Shell` and `Draft`.** The mesh Cut would keep an immutable record of its operands `T` and `U`. Then
   `Shell(T − U) = (T − U) − ((T ⊖_F t) − (U ⊕ t))` holds for modify §8's erosion when `F` are faces of `T` and `U`
   crosses `T` by more than `t`, and `Draft(T − U) = Draft(T) − U` holds when every drafted face descends from `T`.
@@ -11169,17 +11179,17 @@ and orientation, and adds its own rounding, area, and volume charges. A proof
 refusal leaves the source Sweep and document unchanged. `capEnd` remains
 selectable on the placed Sweep.
 
-The public gate uses a solved 8×6 mm rounded rectangle with 1.5 mm corners,
-a 5 mm path, 30° twist, and 1 mm inward Shell thickness. Its 3,456-triangle
-cup reports a 0.015314 mm boundary bound and a 16.076 mm³ volume allowance;
-`Tessellate(0.1 mm, VerifyAll)` reports boundary and volume verified.
-A 0.01 mm request refuses at the same fixed mesh. Starting-cap, outward,
-and over-thick calls also refuse without changing the document.
-The placed public gate applies a 23° rotation about `(1,2,3)` followed by a
-`(9,-4,7)` mm translation. Both `Copy` and `Transform` Sweep sources select
-one `capEnd` and shell successfully. Their cups pass `VerifyAll` at 0.1 mm
-with a boundary bound below 0.015314 mm and a volume allowance below
-16.076 mm³.
+The public gate (`apitest/shell_twisted_sweep_test.go`) uses a solved 8×6 mm rounded rectangle with 1.5 mm
+corners, a 5 mm path, 30° twist, and 1 mm inward Shell thickness. The cup's volume bound stays below 20 mm³ and its
+volume lower bound stays positive. `Tessellate(0.1 mm, VerifyAll)` reports boundary and volume verified, with a
+boundary bound below 0.1 mm and exactly 3,456 triangles: four Lines at 8 cells and four Arcs at 16 cells make 96
+contour cells, which take two triangles on each of two walls over eight axial cells, plus 96 triangles on each of the
+bottom fan, the floor fan and the top annulus. A 0.01 mm request refuses at the same fixed mesh. Starting-cap,
+outward, and over-thick calls also refuse without changing the document.
+The placed public gate applies a 23° rotation about `(1,2,3)` followed by a `(9,-4,7)` mm translation. Both `Copy`
+and `Transform` Sweep sources select one `capEnd` and shell successfully. Their cups pass `VerifyAll` at 0.1 mm with
+the unplaced cup's triangle count, a volume that matches it within 1e-9 mm³, a volume bound no smaller than its bound
+and within 1e-8 mm³ of it, and a mesh bound within 1e-8 mm of its mesh bound.
 
 ## Part D — Draft
 
@@ -11921,12 +11931,10 @@ straight walk's `ε` the larger of its two ends'. `capblend.NearTangentVolume` c
 `capband.NearTangentCharges`, which reads every corner as the admission does.
 A band with no near-tangent join adds no term, so its `volSymDiff` is the sum
 it was, and a band without a corner of two arcs sums only its line–arc
-terms. For the near-tangent slot of §11 (F3 with its right centre `2⁻⁴⁰` mm
-off), `S ≈ 2⁻⁸⁰/25` and `Ncorner` is below `10⁻²⁰` mm³; the change a reader
-sees in `volSymDiff` is the vertex-motion term, the held foot sitting about
-`d·sin θ` from B1's. For the split disc of §11 (a radius-5 circle drawn as two
-half arcs, the second's centre `δ = 2⁻⁴⁸` mm off), `ρλ` is near `4·10⁻¹⁵` mm²
-per corner and `Ncorner` near `7·10⁻¹⁴` mm³.
+terms. For the near-tangent slot of §11 (F3 with its right centre `2⁻⁴⁰` mm off), `S ≈ 2⁻⁸⁰/25`, so `Ncorner` is tiny; the change a reader sees in
+`volSymDiff` is the vertex-motion term, the held foot sitting about `d·sin θ` from B1's. The split disc of §11 (a radius-5 circle drawn as two half arcs, the second's centre `δ = 2⁻⁴⁸`
+mm off) charges the `ρλ` and `2.08ρ²` terms per corner. `TestDraftNearTangentChargeCoversEveryTerm` pins the sum
+term by term (`internal/draftrecord/near_tangent_arcs_test.go`).
 
 ### 10. `Draft`
 
@@ -12166,7 +12174,7 @@ the red run's failing assertion in the test's comment, and restore the leg.
 **Refusal fixtures**, one per SD row that `Extrude` can reach, each asserting
 `errors.Is` on the sentinel and that `Document.Bodies()` is unchanged: SD2
 (`90°`), SD3 (a spline wall), SD4 (a semicircular bite meeting its lines at
-right angles), SD5 (F2 with `α` such that `d ≥ R`), SD6 (F1 with `d ≥ a/2`,
+right angles), SD5 (a radius-5 disk drafted `30°` over 10 mm, so `d ≥ R`), SD6 (F1 with `d ≥ a/2`,
 and F7 with `d` closing the ring), SD7 (a thin rectangle whose short walls'
 miters cross), SD8 (a plate whose off-centre hole widens across the outer
 wall), SD12, SD13 (an angle of
@@ -12381,7 +12389,7 @@ undecided.
 - **Selection vocabulary**: `Walls(b)` is a `FacePredicate` beside
   `CapStart`/`CapEnd`; there is no nil-selector form.
 - **Surveys**: undercut is decided off the patches' normal model (DD7); wall
-  and concave-radius surveys are staged (DD8).
+  and concave-radius surveys are not built (DD8, §14).
 - **Hand-offs**: none (§3).
 
 ### 14. PR split
@@ -12427,7 +12435,9 @@ result → §4; soundness → §5; increments and size → §6; options → §7.
 ### 1. Problem
 
 The decad-gallery swisslever lever (`models/swisslever/lever.go`, `buildLever`) is one extrude, one cut and one fillet.
-Coordinates below are the lever sketch's, origin at the pallet arbor.
+Coordinates below are the lever sketch's, origin at the pallet arbor. The `z` intervals and the fillet radius are the
+gallery model's; the fork's plan coordinates are the constants of `leverForkSketch`
+(`apitest/side_notch_cut_test.go`), and `r_c`, `G`'s radius and the notch walls' end `(±1, 44)` follow from them.
 
 | Body | Profile | Interval |
 |---|---|---|
@@ -12442,18 +12452,18 @@ inside. The mirror vertex `a'` is the same.
 The result is a valid solid. Above 5.80 the outline runs along `K` into `B` with a smooth (G1) joint at `a` and `a'`.
 The floor at 5.80 is the dart top plus two crescents between `G` and `B`, each narrowing to a zero-width point at `a`.
 
-Before T1 to T4, a probe through a `go.mod` replace in a scratch copy of the gallery gave these first refusals:
+Current behaviour of the cases the table names, with the tests that assert it:
 
-| Variant | First refusal |
+| Variant | Behaviour |
 |---|---|
-| exact lever (`TestLever` with its skip removed) | `Cut`: "the operands' held facets come within the chord tolerance without provably interpenetrating deeper than it …" (`meshbool.RefuseUndecidableProximity`) |
-| notch radius widened | the cut builds on the mesh path; `Fillet`: "a blend circle does not reach an end face" (`internal/retainedblend/arc_section.go`) |
-| exact lever as two extrudes (band S with the dart, band F with the notched outline) and `Union` | `Union`: the same proximity refusal |
-| both of the above with the slot holes left out | the same refusals |
-| notch radius widened, fillet skipped | the D bore `Cut` builds on the mesh path; the gallery's edge finish refuses `ErrDegenerate`: a chamfer empties the circular wall of the corner round `K` |
+| exact lever (the fork with the notch, no, one or two oblique slot holes) | `Cut` builds a `brepPayload` through general-boolean §3 A9, volume within its bound of the closed form, one `Reflex` edge (`TestSideNotchCutTangentFork`); the mesh path alone refuses the contact at `a` and `a'` with `meshbool.RefuseUndecidableProximity`. The notch floor's arc then takes a 0.5 fillet (`TestBossRootTangentFork`). No test builds the complete lever. |
+| notch radius widened | `Cut` takes the mesh path or declines with `ErrUnsupported` (`TestSideNotchCutDeclinesObliqueCut`); no test fillets its floor arc. |
+| exact lever as two extrudes (band S with the dart, band F with the notched outline) and `Union` | not asserted by a test |
+| both of the above with the slot holes left out | the no-slot case of the first row is asserted (`TestSideNotchCutTangentFork`); the widened-notch case is not |
+| notch radius widened, fillet skipped | not asserted by a test |
 
-The last row is a gallery sizing matter, not a decad gap: a chamfer wider than the corner round `K`'s radius cannot run
-along it, in decad or in Fusion. It applies to the exact lever too.
+A chamfer wider than the corner round `K`'s radius cannot run along it, in decad or in Fusion, so a gallery edge finish
+sized that wide refuses `ErrDegenerate`. The same holds for the exact lever.
 
 ### 2. The cut refusal
 
@@ -12512,7 +12522,8 @@ wherever the ports cannot be ordered (equal curvature, or a line and an arc on o
 - Widened notch: `B`'s end `(r_n + 0.02, k_y)` lies inside the horn, and the oblique wall crosses `K` about 0.1 mm
   above `k_y` (the arcs `B` and `K` themselves do not meet: their circles cross at about `y = k_y ± 0.14`, each point on
   one arc only). `B` therefore ends at the oblique wall, as in the exact lever. The arc blend ends each row on the plane at
-  each arc end (retained-edge-blend R4). That plane lies 1.6727 mm from `B`'s axis. The floor row's circle has radius
+  each arc end (retained-edge-blend R4). That plane contains the oblique wall, which leaves `B`'s end toward `(1, 44)`, so it lies
+  `(r_n + 0.02)·5.12535/√(5.12535² + 0.68767²)` = 1.6727 mm from `B`'s axis. The floor row's circle has radius
   `r_n + 0.02 − 0.6` = 1.0877 mm and never reaches it, so `arcRim.section` refuses. The shape is boss-root-overflow X1
   (an arc ending on a wall that rises from the floor). It says nothing about the exact case.
 - Exact lever: never reached before T2, because the cut refused first. By construction it is boss-root-overflow's rule CO on an
@@ -12580,7 +12591,7 @@ runs. The rejected options:
 - O3: build T4 as one generalized C3 increment with boss-root P6, so one construction serves both gallery models.
 - O4: change the fork geometry so no tool face touches the target. `r_n + 0.02` cuts today, and the bore after it,
   but the fillet then refuses (X1, §3), and no tested geometry builds both.
-- O5: keep `TestLever` skipped. The lever and every lever test stay unbuilt.
+- O5: build no lever test. No test in this repository builds the complete lever, and none is planned.
 
 ## Part X — Perpendicular cylinder bore-mouth chamfer
 
