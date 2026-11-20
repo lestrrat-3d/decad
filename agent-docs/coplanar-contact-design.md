@@ -403,7 +403,8 @@ is never hidden as contact.
 ## 10. Performance
 
 - **Non-coplanar pairs.** Added work: one bool test on the coplanar branch, one map lookup per in-plane edge, and §7's
-  per-result candidate scan (linear in result facets, one exact orientation per corner). §7's `EarClipX` is
+  per-result candidate scan (linear in result facets, one exact plane-side sign per distinct vertex against a normal
+  formed once per face). §7's `EarClipX` is
   superlinear in a loop's corner count and runs only on candidate faces; the fallback's second rounding runs only when
   the first fails. `BenchmarkMeshBooleanCrossing` (`internal/meshbool/coplanar_bench_test.go`) times two crossing
   boxes through `MeshBooleanStats` and `StitchFacetsWith` with `SimplifyPlanar`.
