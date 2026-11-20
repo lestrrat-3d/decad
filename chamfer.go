@@ -242,6 +242,12 @@ func Chamfer(ctx context.Context, b *Body, sel EdgeSelector, d units.Value,
 				return nil, err
 			}
 		}
+		if !ok {
+			out, ok, err = extendTransverseRim(ctx, doc, b, edgeNodes(edges)[0], dmm)
+			if err != nil {
+				return nil, err
+			}
+		}
 		if ok {
 			return commitResult(ctx, OperationChamfer, b, out)
 		}

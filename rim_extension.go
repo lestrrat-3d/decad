@@ -75,3 +75,46 @@ func publishPreparedRim(ctx context.Context, env topo.Env, b *Body, result rimex
 	}
 	return publishRim(ctx, env, p, local, m)
 }
+
+func extendTransverseRim(ctx context.Context, d *Document, b *Body, e *topo.Edge, setback float64) (brepmodify.Result, bool, error) {
+	var none brepmodify.Result
+	if _, suppressed := ctx.Value(operationHistorySuppressedKey{}).(*operationHistoryCapture); suppressed {
+		return none, false, nil
+	}
+	m := proofbound.NewStrictReplayBudget()
+	c, ok, err := rimextension.IdentifyTransverse(ctx, &b.n, e, m)
+	if !ok || err != nil {
+		return none, false, err
+	}
+	h, ok, err := rimHistorySnapshot(ctx, d, m)
+	if !ok || err != nil {
+		return none, false, err
+	}
+	r := rimFaceReader{pairedHistorySource{h}, m, map[*topo.Body][]*topo.Face{}}
+	a := rimextension.Admission{Stock: &b.n, Section: c.Section, Setback: setback, Allowed: c.Allowed}
+	for _, p := range []struct {
+		f *topo.Face
+		v *rimextension.BoundFace
+	}{{c.Cap, &a.Cap}, {c.Side, &a.Side}, {c.Boss, &a.Boss}} {
+		if p.f.TagDeparture != 0 || p.f.AxialDelta != 0 || p.f.ExtentDelta != 0 {
+			return none, false, nil
+		}
+		*p.v, ok, err = r.bindSource(ctx, b, p.f, false, true)
+		if !ok || err != nil {
+			return none, false, err
+		}
+	}
+	for _, f := range c.Stops {
+		v, ok, err := r.bindSource(ctx, b, f, true, true)
+		if !ok || err != nil {
+			return none, false, err
+		}
+		a.Stop = append(a.Stop, v)
+	}
+	env := envOf(b.n.Doc, b.n.Doc.NextProducer)
+	p, ok, err := rimextension.PrepareTransverse(ctx, env, a, c, m)
+	if !ok || err != nil {
+		return none, false, err
+	}
+	return publishPreparedRim(ctx, env, b, p, m)
+}

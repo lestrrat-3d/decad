@@ -56,6 +56,10 @@ func (m *rewrite) extendWall() error {
 		if m.out.Sources[es[e]] != m.groups.Boss {
 			continue
 		}
+		if m.groups.OpenCylinderEnd && m.distance(e[0])[1].Sign() == 0 && m.distance(e[1])[1].Sign() == 0 &&
+			m.exact(e[0])[2].Cmp(m.chart.end[2]) == 0 && m.exact(e[1])[2].Cmp(m.chart.end[2]) == 0 {
+			continue
+		}
 		var top [2]int
 		for i, id := range e {
 			p := m.exact(id)
@@ -188,6 +192,12 @@ func (m *rewrite) finish() error {
 	}
 	if err := m.fillPlane(2, m.groups.Bevel, 0, 1); err != nil {
 		return err
+	}
+	if m.groups.OpenCylinderEnd {
+		es, err := m.boundary()
+		if err != nil || len(es) == 0 {
+			return err
+		}
 	}
 	if err := m.fillPlane(1, m.groups.Extension, 1, 2); err != nil {
 		return err

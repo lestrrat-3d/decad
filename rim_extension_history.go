@@ -5,11 +5,15 @@ import (
 	"slices"
 
 	"github.com/lestrrat-3d/decad/internal/boolchain"
+	"github.com/lestrrat-3d/decad/internal/breprecord"
 	"github.com/lestrrat-3d/decad/internal/loftrecord"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/rimextension"
+	"github.com/lestrrat-3d/decad/internal/sectionrecord"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/decad/internal/topobuild"
+	"github.com/lestrrat-3d/r3"
 )
 
 type rimFaceReader struct {
@@ -46,6 +50,12 @@ func (r rimFaceReader) faceList(ctx context.Context, b *topo.Body) ([]*topo.Face
 }
 
 func (r rimFaceReader) bind(ctx context.Context, stock *Body, final *topo.Face, tool bool) (rimextension.BoundFace, bool, error) {
+	return r.bindSource(ctx, stock, final, tool, false)
+}
+
+// bindSource can resolve the analytic carrier shared by several trimmed
+// components. The transverse window independently proves the retained domain.
+func (r rimFaceReader) bindSource(ctx context.Context, stock *Body, final *topo.Face, tool, carrier bool) (rimextension.BoundFace, bool, error) {
 	var none rimextension.BoundFace
 	cur, f := stock, final
 	cutTools := 0
@@ -102,11 +112,39 @@ func (r rimFaceReader) bind(ctx context.Context, stock *Body, final *topo.Face, 
 			}
 			f, cur = fs[p.Ordinal], bodyHandle(b)
 		case OperationChamfer, OperationFillet:
-			if len(op.inputs) != 1 || op.inputs[0].Use != InputConsumed || op.inputs[0].Body == nil || f.Source == nil {
+			if len(op.inputs) != 1 || op.inputs[0].Use != InputConsumed || op.inputs[0].Body == nil {
 				return none, false, nil
 			}
 			b := op.inputs[0].Body
 			if !slices.Contains(r.history.h.consumers[b], op) {
+				return none, false, nil
+			}
+			if carrier && op.kind == OperationFillet && !tool && cutTools == 0 {
+				if p, ok := cur.n.Payload.(breprecord.Payload); ok && p.Xform == r3.Identity() {
+					if len(f.Origins) != 1 {
+						return none, false, nil
+					}
+					if e := r.meter.SpendWork(ctx, uint64(4*len(p.Faces)+1)); e != nil {
+						return none, false, e
+					}
+					matches := 0
+					for i, fr := range p.Faces {
+						if !breprecord.MatchRecordFace(&cur.n, f, nil, i) {
+							continue
+						}
+						_, arc := fr.Wall.(sectionrecord.ArcSeg)
+						_, cyl := f.Surface.(surfacegeom.Cylinder)
+						if !arc || !cyl || fr.Region != nil || fr.Delta != 0 || fr.Z0Delta != 0 || fr.Z1Delta != 0 {
+							return none, false, nil
+						}
+						matches++
+					}
+					if matches == 1 {
+						return rimextension.BoundFace{Body: &cur.n, Native: f, Final: final}, true, nil
+					}
+				}
+			}
+			if f.Source == nil {
 				return none, false, nil
 			}
 			fs, e := r.faceList(ctx, &b.n)
@@ -120,6 +158,12 @@ func (r rimFaceReader) bind(ctx context.Context, stock *Body, final *topo.Face, 
 			for _, v := range fs {
 				if v.Source == f.Source {
 					if previous != nil {
+						if carrier && equalRimCarrier(previous, v) {
+							op := r.history.h.producers[b]
+							if op != nil && op.kind == OperationUnion && !v.Source.Blend && len(v.Source.Members) == 0 {
+								continue
+							}
+						}
 						return none, false, nil
 					}
 					previous = v
@@ -134,4 +178,9 @@ func (r rimFaceReader) bind(ctx context.Context, stock *Body, final *topo.Face, 
 		}
 	}
 	return none, false, nil
+}
+
+func equalRimCarrier(a, b *topo.Face) bool {
+	_, isPlane := a.Surface.(surfacegeom.Plane)
+	return isPlane && a.Body == b.Body && a.Source != nil && a.Source == b.Source && a.Surface == b.Surface && a.Reversed == b.Reversed && a.RetainedTag && b.RetainedTag && a.TagDeparture == 0 && b.TagDeparture == 0 && a.ExtentDelta == 0 && b.ExtentDelta == 0 && a.AxialDelta == 0 && b.AxialDelta == 0 && a.Denoted == nil && b.Denoted == nil
 }
