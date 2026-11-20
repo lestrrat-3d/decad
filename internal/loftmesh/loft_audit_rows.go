@@ -7,6 +7,7 @@ import (
 	"runtime"
 	"slices"
 	"sync"
+	"unsafe"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/orderedwork"
@@ -195,7 +196,8 @@ func preflightLoftRowsWorkers(budget *proofbound.WorkBudget, tree loftRowScan, m
 		observe = observer[0]
 	}
 	var scanned uint64
-	if workers >= 2 {
+	// The serial observer consumes each pair immediately without temporary candidate rows.
+	if workers >= 2 && !budget.Replay {
 		out := make([]loftRowResult, min(loftRowChunkRows, len(members)))
 		for lo := 0; lo < len(members); {
 			hi := loftRowChunkEnd(members, starts, lo)
@@ -281,11 +283,30 @@ func streamLoftPairsWorkers(budget *proofbound.WorkBudget, tree loftRowScan, mem
 	count, ceiling uint64, batchSize int, tris [][3]int, boxes [][2]r3.Vec, data *LoftAuditData,
 	shortcuts LoftAuditShortcuts, work *LoftAuditWork, testPair func(i, j int) error,
 	workers int) (int, int, error) {
-	batch := loftCandidates{
-		starts: make([]int, 1, min(len(members)+1, batchSize+1)),
-		js:     make([]int32, 0, min(int(count), batchSize)),
-	}
+	rowsCap := min(len(members)+1, batchSize+1)
+	pairsCap := min(int(count), batchSize)
 	var row []int32
+	if budget.Replay {
+		// Counts are already known. Fill one reusable row on the caller's
+		// goroutine so no worker can grow uncharged candidate storage.
+		workers = 1
+		maxRow := 0
+		for _, i := range members {
+			if err := budget.Step(); err != nil {
+				return -1, -1, err
+			}
+			maxRow = max(maxRow, starts[i+1]-starts[i])
+		}
+		rowsCap = len(members) + 1
+		pairsCap = max(pairsCap, maxRow)
+		for _, a := range [][2]uint64{{uint64(maxRow), 4}, {uint64(rowsCap), uint64(unsafe.Sizeof(int(0)))}, {uint64(pairsCap), 4}} {
+			if err := reserveLoftReplayArray(budget, a[0], a[1]); err != nil {
+				return -1, -1, err
+			}
+		}
+		row = make([]int32, 0, maxRow)
+	}
+	batch := loftCandidates{starts: make([]int, 1, rowsCap), js: make([]int32, 0, pairsCap)}
 	var scanned uint64
 	var emitted uint64
 	flush := func() (int, int, error) {
@@ -340,8 +361,18 @@ func streamLoftPairsWorkers(budget *proofbound.WorkBudget, tree loftRowScan, mem
 			}
 		} else {
 			row = row[:0]
+			overrun := false
 			rowWork, exceeded, err := tree.visitRow(budget, i, ceiling-scanned,
-				func(j int) { row = append(row, int32(j)) })
+				func(j int) {
+					if budget.Replay && len(row) >= starts[i+1]-starts[i] {
+						overrun = true
+						return
+					}
+					row = append(row, int32(j))
+				})
+			if overrun {
+				return -1, -1, fmt.Errorf("%w: loft row exceeded its recorded count", decaderr.ErrUnsupported)
+			}
 			if err != nil {
 				return -1, -1, err
 			}

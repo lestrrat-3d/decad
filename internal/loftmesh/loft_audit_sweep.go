@@ -10,6 +10,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+	"unsafe"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
@@ -624,6 +625,9 @@ func parallelLoftPairsWorkers(budget *proofbound.WorkBudget, workers int, cands 
 	newClassify func() func(i, j int) (uint8, error), work *LoftAuditWork) (int, int, error) {
 	workers, reserved := orderedwork.ReserveWorkers(workers)
 	defer orderedwork.ReleaseWorkers(reserved)
+	if err := reserveLoftReplayArray(budget, uint64(len(cands.js)), 1); err != nil {
+		return -1, -1, err
+	}
 	results := make([]uint8, len(cands.js))
 	type failure struct {
 		index int
@@ -1014,7 +1018,13 @@ type loftCandidates struct {
 // scans exactly the pairs the first pass scanned, which that pass already
 // held to its limit.
 func sweepCandidates(budget *proofbound.WorkBudget, s pairScan, starts []int, count uint64, keep func(i, j int) bool) (loftCandidates, error) {
+	if err := reserveLoftReplayArray(budget, count, 4); err != nil {
+		return loftCandidates{}, err
+	}
 	c := loftCandidates{starts: starts, js: make([]int32, count)}
+	if err := reserveLoftReplayArray(budget, uint64(len(starts)-1), uint64(unsafe.Sizeof(int(0)))); err != nil {
+		return loftCandidates{}, err
+	}
 	next := slices.Clone(starts[:len(starts)-1])
 	_, _, err := s.visit(budget, math.MaxUint64, func(i, j int) {
 		if !keep(i, j) {
@@ -1066,6 +1076,9 @@ func sweepCandidatesByRows(budget *proofbound.WorkBudget, s pairScan, members, s
 // before it sees the cancellation.
 func sweepCandidatesRowsWorkers(budget *proofbound.WorkBudget, tree loftRowPairScan, members, starts []int,
 	count, scanned uint64, workers int) (loftCandidates, error) {
+	if err := reserveLoftReplayArray(budget, count, 4); err != nil {
+		return loftCandidates{}, err
+	}
 	c := loftCandidates{starts: starts, js: make([]int32, count)}
 	mismatch := make([]bool, len(members))
 	if _, err := orderedwork.Each(len(members), workers, 64, budget.Err, func(k int) error {
@@ -1104,4 +1117,14 @@ func (c loftCandidates) each(fn func(i, j int) error) error {
 		}
 	}
 	return nil
+}
+
+func reserveLoftReplayArray(budget *proofbound.WorkBudget, count, size uint64) error {
+	if !budget.Replay || count == 0 {
+		return nil
+	}
+	if err := budget.Reserve(count); err != nil {
+		return err
+	}
+	return budget.ReserveBytesMul(count, size)
 }
