@@ -71,6 +71,14 @@ func TestNarrowNearContactsMatchesTightGather(t *testing.T) {
 	closeA, closeB := gap(t, r3.NewVec(0.3, 0.2, 1.015))
 	crossA, crossB := gap(t, r3.NewVec(0.5, 0.5, 0.5))
 	edgeA, edgeB := treeEdgePair(t)
+	// Cases share meshes, and the parallel subtests gather over them at once.
+	// A gather only reads the float-normal cache when it is full, as it is
+	// before production workers start.
+	for _, bm := range []*BoolMesh{nearA, nearB, closeA, closeB, crossA, crossB, edgeA, edgeB} {
+		for i := range bm.Tris {
+			bm.PrepareFloatNormal(i)
+		}
+	}
 	broadSlack := 0.2 * (1 + 1e-9)
 	type narrowCase struct {
 		name     string
