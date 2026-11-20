@@ -13,6 +13,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/surfacenormal"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
+	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
 )
 
@@ -105,11 +106,10 @@ func TestTrueFacePlane(t *testing.T) {
 func TestRimPointOnCarrier(t *testing.T) {
 	t.Parallel()
 	// Wall facet 0 has one corner, vertex 0, on the rim; facet 1 of the other mesh is carrier-exact, facet 0 not.
-	wall := &BoolMesh{
-		Verts:   []r3.Vec{r3.NewVec(1, 0, 0), r3.NewVec(1, 0, -3), r3.NewVec(1.1, 0.4, -3)},
-		Tris:    [][3]int{{0, 1, 2}},
-		RimVert: map[int]bool{0: true},
-	}
+	wall, err := PrepContext(t.Context(), []r3.Vec{r3.NewVec(1, 0, 0), r3.NewVec(1, 0, -3), r3.NewVec(1.1, 0.4, -3)},
+		[][3]int{{0, 1, 2}}, []int{0})
+	require.NoError(t, err)
+	wall.RimVert = map[int]bool{0: true}
 	other := &BoolMesh{Carrier: []bool{false, true}}
 	keyOf := func(p proof.Xpt) string { return p.Key() }
 	at := func(v r3.Vec) TriContact {
@@ -391,4 +391,101 @@ func TestSeatOrientationMatchesPerCorner(t *testing.T) {
 		require.Positive(t, seen[name][false], "%s refuses some case", name)
 	}
 	require.Positive(t, uncertain, "some in-plane sign takes the exact path")
+}
+
+// refRimPointOnCarrier is rimPointOnCarrier's reference: each rim vertex's key read from a fresh lift of its float.
+func refRimPointOnCarrier(m *BoolMesh, t int, c TriContact, other *BoolMesh, x int, keyOf func(proof.Xpt) string) bool {
+	if c.Kind != ContactPoint || m.RimVert == nil || other.Carrier == nil || !other.Carrier[x] {
+		return false
+	}
+	key := ""
+	for _, v := range m.Tris[t] {
+		if !m.RimVert[v] {
+			continue
+		}
+		if key == "" {
+			key = keyOf(c.P0)
+		}
+		if keyOf(proof.XptOf(m.Verts[v])) == key {
+			return true
+		}
+	}
+	return false
+}
+
+// countingKeyMemo is newKeyMemo that also counts the points it had not yet seen by pointers, each a fresh Key.
+type countingKeyMemo struct {
+	keyOf  func(proof.Xpt) string
+	seen   map[[4]*big.Int]struct{}
+	misses int
+}
+
+func newCountingKeyMemo() *countingKeyMemo {
+	return &countingKeyMemo{keyOf: newKeyMemo(), seen: map[[4]*big.Int]struct{}{}}
+}
+
+func (c *countingKeyMemo) key(p proof.Xpt) string {
+	raw := [4]*big.Int{p.X, p.Y, p.Z, p.W}
+	if _, ok := c.seen[raw]; !ok {
+		c.seen[raw] = struct{}{}
+		c.misses++
+	}
+	return c.keyOf(p)
+}
+
+// TestRimPointKeyMatchesLift pins rimPointOnCarrier, which keys a rim vertex by its prepared lift (BoolMesh.Xverts),
+// to the reference that keys a fresh lift of its float. Two wall facets share an edge, its two vertices on the rim;
+// the mesh runs as given in the plane x = 1, with one vertex moved 1/1024 off it, and turned 31° about (1, 2, 3).
+// Every contact point at a vertex, at a vertex moved by 1/1024, and at each prepared lift itself, against each facet,
+// gives the reference's answer; each prepared lift's key equals its fresh lift's; and a second pass over the same
+// contacts reads every key from the memo.
+//
+// Legs shown to fail: keying a fresh lift again leaves the second pass missing the memo, and keying the facet's first
+// corner for every rim vertex answers a contact the reference refuses.
+func TestRimPointKeyMatchesLift(t *testing.T) {
+	t.Parallel()
+	turn, err := r3.Rotation(r3.NewVec(1, 2, 3), units.Degrees(31))
+	require.NoError(t, err)
+	base := []r3.Vec{r3.NewVec(1, 0, 0), r3.NewVec(1, 0, -3), r3.NewVec(1, 2.5, -3), r3.NewVec(1, 2.5, 0)}
+	moved := []r3.Vec{base[0], base[1], base[2], base[3].Add(r3.NewVec(1.0/1024, 0, 0))}
+	var turned []r3.Vec
+	for _, v := range base {
+		turned = append(turned, turn.Apply(v))
+	}
+	other := &BoolMesh{Carrier: []bool{true}}
+	accepted, refused := 0, 0
+	for name, verts := range map[string][]r3.Vec{"planar": base, "off-plane": moved, "turned": turned} {
+		wall, err := PrepContext(t.Context(), verts, [][3]int{{0, 1, 2}, {0, 2, 3}}, []int{0, 0})
+		require.NoError(t, err)
+		wall.RimVert = map[int]bool{0: true, 2: true}
+		for v := range wall.Verts {
+			require.Equal(t, proof.XptOf(wall.Verts[v]).Key(), wall.Xverts[v].Key(), "%s vertex %d", name, v)
+		}
+		var contacts []TriContact
+		for v, p := range wall.Verts {
+			for _, q := range []proof.Xpt{proof.XptOf(p), proof.XptOf(p.Add(r3.NewVec(0, 0, 1.0/1024))), wall.Xverts[v]} {
+				contacts = append(contacts, TriContact{Kind: ContactPoint, P0: q, P1: q})
+			}
+		}
+		memo := newCountingKeyMemo()
+		for pass := range 2 {
+			before := memo.misses
+			for i, c := range contacts {
+				for f := range wall.Tris {
+					want := refRimPointOnCarrier(wall, f, c, other, 0, newKeyMemo())
+					require.Equal(t, want, rimPointOnCarrier(wall, f, c, other, 0, memo.key), fmt.Sprintf("%s contact %d facet %d", name, i, f))
+					if want {
+						accepted++
+					} else {
+						refused++
+					}
+				}
+			}
+			if pass == 1 {
+				require.Equal(t, before, memo.misses, "%s: the second pass reads every key from the memo", name)
+			}
+		}
+	}
+	require.Positive(t, accepted, "some contact lies at a rim vertex")
+	require.Positive(t, refused, "some contact lies off the rim")
 }
