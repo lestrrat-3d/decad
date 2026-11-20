@@ -3193,3 +3193,4 @@
 12	0.00	TestOffsetPadShoulderChamfer
 12	0.00	TestAlignedPadRimOnTrimmedFlange
 12	0.00	TestConcentricPrismStations
+12	0.00	TestRetainedArcDiskUnion

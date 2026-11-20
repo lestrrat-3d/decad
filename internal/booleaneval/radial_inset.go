@@ -49,7 +49,7 @@ func retryRadialInsetUnion(ctx context.Context, a, b *topo.Body, meshes OperandM
 	if err != nil || !ready {
 		return Evaluation{}, false, err
 	}
-	alt := &radialInsetMesher{meshes, disk, alternative, chord, budget}
+	alt := &radialInsetMesher{meshes, disk, alternative, chord, budget, false}
 	result, err := evaluate(ctx, meshbool.OpUnion, a, b, alt, chordScale, nil, nil, twins, nil, nil, nil, nil, 0)
 	if err != nil {
 		if ctx.Err() != nil {
@@ -70,10 +70,11 @@ func retryRadialInsetUnion(ctx context.Context, a, b *topo.Body, meshes OperandM
 
 type radialInsetMesher struct {
 	OperandMesher
-	body   *topo.Body
-	mesh   *topo.Mesh
-	chord  float64
-	budget *proofbound.ReplayBudget
+	body       *topo.Body
+	mesh       *topo.Mesh
+	chord      float64
+	budget     *proofbound.ReplayBudget
+	stockFirst bool
 }
 
 func (m *radialInsetMesher) TessellateOperand(ctx context.Context, body *topo.Body, chord float64) (*topo.Mesh, bool, error) {

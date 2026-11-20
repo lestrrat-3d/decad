@@ -147,6 +147,11 @@ func VolumeReading(ctx context.Context, audit *facetproof.MeshAudit, volSymDiff 
 func Evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 	meshes OperandMesher, chordScale float64, capFace, coneFace *topo.Face) (Evaluation, error) {
 	if op == meshbool.OpUnion && capFace == nil && coneFace == nil {
+		if result, ok, err := retainedDiskUnion(ctx, a, b, meshes, chordScale); err != nil && !stationTrialDeclined(err) {
+			return Evaluation{}, err
+		} else if ok {
+			return result, nil
+		}
 		result, ok, err := matchedPrismUnion(ctx, a, b, meshes, chordScale)
 		if err != nil && !stationTrialDeclined(err) {
 			return Evaluation{}, err
@@ -769,6 +774,8 @@ func evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 	var proximityErr error
 	if replay != nil {
 		proximityErr = meshbool.RefuseUndecidableProximityReplay(ctx, ma, mbDecide, bmA, bmB, memo, capFace, coneFace, replay)
+	} else if inset, ok := meshes.(*radialInsetMesher); ok && inset.stockFirst && !hasShifts && fixed == nil && a == inset.body && ma == inset.mesh {
+		proximityErr = meshbool.RefuseProximityWithPlaneEvidence(ctx, mbDecide, ma, bmB, bmA, meshbool.NewContactMemo(bmB, bmA), nil, nil, inset.budget.WorkBudget(ctx))
 	} else if matchedStations && !hasShifts && fixed == nil && a == station.disk.body {
 		// The penetration witness searches the first operand's faces first.
 		// Use the same flange-first proof for either spelling of this Union.
