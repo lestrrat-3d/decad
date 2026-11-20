@@ -1457,15 +1457,32 @@ work intervals inside quadratic/refinement loops, as interference §7 specifies.
   error only when its inherited boundary certificate proves that its true patch
   equals the held polygons (`agent-docs/tessellation-design.md` §2/§7, payload
   verification §5).
-- **The near-miss facet distance is read only against the slack.**
-  `GatherNearContacts` reads a `ContactNone` pair's `TriTriDistance` only as
-  `> slack`, and `meshbool.TriTriDistanceExceeds`
-  (`internal/meshbool/triangle_distance.go`) returns that comparison for every
-  input. It skips the candidates that a separating axis along either facet's
-  float normal proves exceed the slack, float error included, and computes the
-  remaining candidates with `TriTriDistance`'s own code. A pair that neither
-  normal separates is measured in full. The function's comment holds the
-  error bounds.
+- **A near-miss facet pair is far only when a proof says so.**
+  `GatherNearContacts` drops a `ContactNone` pair only when
+  `meshbool.TriTriDistanceExceeds` (`internal/meshbool/triangle_distance.go`)
+  answers true. The float distance `TriTriDistance` only shortcuts "near": a
+  reading at or below the slack keeps the pair. Its candidates carry an
+  absolute float error that its relative nudge does not cover, larger for two
+  edges near parallel and for a sliver facet, so a reading above the slack
+  proves nothing. A far answer needs the reading above the slack and one of
+  two proofs that the exact distance between the float triangles exceeds the
+  slack: a gap along one of eighteen axes (the facet normals, the nine
+  edge-edge cross products, each edge crossed with its own facet's normal,
+  and the offset between the float closest points of the nearest edge pair),
+  read in floats with their rounding charged, or the exact distance proof
+  behind `DisjointTriDistanceAbove` (`triDistanceExactAbove`), which at slack
+  zero proves the facets disjoint.
+  Any direction bounds the distance below by the gap of the projections over
+  its length, so an axis needs no exactness of its own; the nearest-edge
+  offset and the facet normals are the separating directions of a pair whose
+  nearest points lie on edges or inside a facet, which keeps the exact path
+  to pairs near the slack or with poorly placed float closest points. A gap
+  along a facet normal also lets the float reading skip the candidates it
+  bounds. The answer never turns from false to true as the slack grows,
+  which `meshbool.narrowNearContacts` relies on. The tangency gate, the bounded
+  replay gather and the partial-chamfer cutter clearance
+  (`internal/brepmodify/partial_loop_clear.go`) all read this answer. The
+  function's comment holds the error bounds.
 - **A tighter depth check may reuse a bounded broad contact set.**
   `RefuseUndecidableProximity` derives local slack from contacts gathered at the
   face-pair slack, then gathers tight contacts when that slack is smaller.
