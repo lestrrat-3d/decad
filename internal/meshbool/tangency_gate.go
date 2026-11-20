@@ -96,7 +96,9 @@ func RefuseUndecidableProximity(ctx context.Context, ma, mb *topo.Mesh, bmA, bmB
 			return nil
 		}
 		broadSlack := slack * (1 + 1e-9)
-		broad, deferred, err := GatherNearContacts(ctx, bmA, ga.facets, bmB, gb.facets, broadSlack, memo)
+		var log []gatheredPair
+		broad, deferred, err := gatherNearContactsLog(ctx, bmA, ga.facets, bmB, gb.facets, broadSlack, memo,
+			NearContactRunner(broadSlack), ContactBatchSize, &log)
 		if err != nil {
 			return err
 		}
@@ -127,7 +129,7 @@ func RefuseUndecidableProximity(ctx context.Context, ma, mb *topo.Mesh, bmA, bmB
 		contacts := broad
 		if narrowed {
 			tightSlack = local * (1 + 1e-9)
-			contacts, deferred, err = GatherNearContacts(ctx, bmA, ga.facets, bmB, gb.facets, tightSlack, memo)
+			contacts, deferred, err = narrowNearContacts(ctx, bmA, ga.facets, bmB, gb.facets, tightSlack, memo, broad, log)
 			if err != nil {
 				return err
 			}
@@ -275,6 +277,69 @@ func gateFacePair(ga, gb faceFacets, capFace, coneFace *topo.Face,
 		return nil
 	}
 	return examine(ga, gb, slack, false)
+}
+
+// narrowNearContacts returns what GatherNearContacts(ctx, bmA, fis, bmB, fjs, slack, memo) returns when it runs
+// right after the gather that returned broad without deferring and logged log, at a broadSlack no smaller than slack.
+// It reads the answer from log instead of scanning and classifying again.
+//
+// Every pair the tight gather queues is in log, in log's order. Both gathers walk fis in order and the positions in
+// fjs in ascending order. The tight gather queues a pair only if BoxesWithin keeps it at slack, and BoxesWithin
+// keeps it at broadSlack too, because rounded subtraction is monotone. When it queries a box tree it also needs
+// BoxesOverlap with the box expandBoxForSlack widens by slack, and the box widened by broadSlack contains that one.
+// gatherUsesTree answers the same for both slacks once slack >= 0. So the tight queue is log restricted by the
+// tight gather's own two tests, which narrowNearContacts applies.
+//
+// The broad gather stored every pair it classified, so each queued pair is a memo hit: the tight gather classifies
+// nothing, stores nothing and reads the contacts log records. None is a ContactRegion, or the broad gather would
+// have deferred. A ContactNone pair farther than broadSlack is farther than slack, because TriTriDistanceExceeds
+// is TriTriDistance > slack for every input (agent-docs/evaluator-design.md §9); any other ContactNone pair is
+// measured at slack as the tight gather measures a memo hit.
+//
+// The tight gather polls ctx once per 256 facet pairs it scans, once per queued pair as it queues it and again as
+// it reads it back, twice per batch it flushes, and once at the end. Nothing it reads between polls changes, so
+// narrowNearContacts makes that many polls and returns the first error. A negative or NaN slack runs the gather.
+func narrowNearContacts(ctx context.Context, bmA *BoolMesh, fis []int, bmB *BoolMesh, fjs []int, slack float64,
+	memo *ContactMemo, broad NearContacts, log []gatheredPair) (NearContacts, bool, error) {
+	if !(slack >= 0) {
+		return GatherNearContacts(ctx, bmA, fis, bmB, fjs, slack, memo)
+	}
+	useTree := gatherUsesTree(len(fis), len(fjs), slack)
+	var nc NearContacts
+	seenA := map[int]struct{}{}
+	seenB := map[int]struct{}{}
+	queued := 0
+	for _, p := range log {
+		boxA, boxB := bmA.Boxes[p.I], bmB.Boxes[p.J]
+		if useTree && !BoxesOverlap(expandBoxForSlack(boxA, slack), boxB) {
+			continue
+		}
+		if !BoxesWithin(boxA, boxB, slack) {
+			continue
+		}
+		queued++
+		if p.Kind == ContactNone && (p.Far || TriTriDistanceExceeds(TriCorners(bmA, p.I), TriCorners(bmB, p.J), slack)) {
+			continue
+		}
+		if p.Span >= 0 {
+			nc.Spans = append(nc.Spans, broad.Spans[p.Span])
+		}
+		if _, seen := seenA[p.I]; !seen {
+			seenA[p.I] = struct{}{}
+			nc.CloseA = append(nc.CloseA, p.I)
+		}
+		if _, seen := seenB[p.J]; !seen {
+			seenB[p.J] = struct{}{}
+			nc.CloseB = append(nc.CloseB, p.J)
+		}
+	}
+	batches := (queued + ContactBatchSize - 1) / ContactBatchSize
+	for range len(fis)*len(fjs)/256 + 2*queued + 2*batches + 1 {
+		if err := ctx.Err(); err != nil {
+			return NearContacts{}, false, err
+		}
+	}
+	return nc, false, nil
 }
 
 func refuseCoarseNearContacts(bmA, bmB *BoolMesh, nc NearContacts) error {
