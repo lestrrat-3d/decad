@@ -78,3 +78,12 @@ func OperandChord(pairTol, diameter, floor float64, restating bool) float64 {
 	}
 	return math.Min(pairTol, math.Max(diameter*ChordFactor, floor))
 }
+
+// EvaluationChord keeps an extended cutter from coarsening the fresh target
+// mesh that later cuts inherit. A held target keeps its ordinary pair request.
+func (a ChordOperand) EvaluationChord(pairTol, diameter, scale float64, restating, cutTarget bool) float64 {
+	if cutTarget && !restating {
+		diameter = min(diameter, a.Hi.Sub(a.Lo).Len())
+	}
+	return OperandChord(pairTol, diameter*scale, a.Floor*scale, restating)
+}

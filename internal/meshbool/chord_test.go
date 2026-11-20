@@ -25,3 +25,15 @@ func TestOverlapDiameter(t *testing.T) {
 	_, ok = OverlapDiameter(bar, face)
 	require.False(t, ok)
 }
+
+func TestExtendedCutterTargetChord(t *testing.T) {
+	t.Parallel()
+	target := ChordOperand{Hi: r3.Vec{X: 3, Y: 4}}
+	pair := 7 * ChordFactor
+	require.Equal(t, 5*ChordFactor, target.EvaluationChord(pair, 7, 1, false, true))
+	require.Equal(t, pair, target.EvaluationChord(pair, 7, 1, true, true))
+	require.Equal(t, pair, target.EvaluationChord(pair, 7, 1, false, false))
+	require.Equal(t, 2*ChordFactor, target.EvaluationChord(pair, 2, 1, false, true))
+	target.Floor = 6 * ChordFactor
+	require.Equal(t, target.Floor/2, target.EvaluationChord(pair/2, 7, 0.5, false, true))
+}
