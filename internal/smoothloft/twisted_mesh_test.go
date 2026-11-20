@@ -8,8 +8,11 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/momentinput"
+	"github.com/lestrrat-3d/decad/internal/sectioncert"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/r3"
+	"github.com/lestrrat-3d/sketch"
 	"github.com/stretchr/testify/require"
 )
 
@@ -231,5 +234,225 @@ func TestTwistedSelectCountsFallsBackPastTheCeiling(t *testing.T) {
 		cancel()
 		_, _, err := twistSelectCounts(ctx, bounds, triangles[0])
 		require.ErrorIs(t, err, context.Canceled)
+	})
+}
+
+// circularMeshCall holds the arguments the circular fitted route hands to
+// the mesh builder.
+type circularMeshCall struct {
+	rational [][]rationalTransition
+	edgeOf   []int
+	edges    int
+	planes   []sectionrecord.PlaneRecord
+	zs       []*big.Rat
+	emerging []bool
+	firstFit int
+}
+
+func (c circularMeshCall) build(ctx context.Context, planes []sectionrecord.PlaneRecord) (Build, error) {
+	return buildSectionMeshMode(ctx, nil, c.rational, c.edgeOf, c.edges, planes, c.zs, c.emerging, c.firstFit)
+}
+
+// circularFitRecords records a circular fitted loft: two circles about
+// (0.25, 0.125) followed by two quarter-spline squares, one section per
+// millimetre of height.
+func circularFitRecords(t *testing.T) ([]momentinput.Profile, []sectionrecord.PlaneRecord, []*freeform.FreeformWork) {
+	t.Helper()
+	const circles = 2
+	offsets := [2]float64{0.05, 0.1}
+	w := sketch.NewWorld()
+	profiles := make([]momentinput.Profile, circles+len(offsets))
+	planes := make([]sectionrecord.PlaneRecord, len(profiles))
+	work := make([]*freeform.FreeformWork, len(profiles))
+	for i := range profiles {
+		plane := w.XY()
+		if i > 0 {
+			var err error
+			plane, err = w.CreateOffsetPlane(w.XY(), float64(i))
+			require.NoError(t, err)
+		}
+		s, err := w.CreateSketch(plane)
+		require.NoError(t, err)
+		point := func(x, y float64) *sketch.Point {
+			p := s.CreatePoint(x, y)
+			s.Fix(p)
+			return p
+		}
+		if i < circles {
+			origin := point(0.25, 0.125)
+			v := []*sketch.Point{point(1.25, 0.125), point(0.25, 1.125), point(-0.75, 0.125), point(0.25, -0.875)}
+			for j := range v {
+				s.CreateArc(origin, v[j], v[(j+1)%len(v)])
+			}
+		} else {
+			off := offsets[i-circles]
+			v := []*sketch.Point{point(1, 0), point(0, 1), point(-1, 0), point(0, -1)}
+			_, err = s.CreateSpline(v[0], point(0.75+off, 0.25+off), point(0.5+off, 0.5+off),
+				point(0.25+off, 0.75+off), v[1])
+			require.NoError(t, err)
+			for j := 1; j < len(v); j++ {
+				s.CreateLine(v[j], v[(j+1)%len(v)])
+			}
+		}
+		_, err = s.Solve(t.Context())
+		require.NoError(t, err)
+		var profile *sketch.Profile
+		for _, p := range s.Profiles() {
+			if p.Valid && len(p.Holes) == 0 && len(p.Outer) == 4 {
+				profile = p
+			}
+		}
+		require.NotNil(t, profile, "section %d has no four-edge profile", i)
+		var area float64
+		profiles[i], planes[i], area, err = sectioncert.RecordProfile(s, profile)
+		require.NoError(t, err)
+		work[i] = freeform.NewFreeformWork()
+		_, err = profiles[i].FalsifyLoftRecordedArea(area, work[i])
+		require.NoError(t, err)
+	}
+	return profiles, planes, work
+}
+
+// circularStationReference evaluates every ring vertex of c through the
+// per-call rationalTransition.at, shifted by origin, in mesh order.
+func circularStationReference(t *testing.T, c circularMeshCall, origin r3.Vec) ([]*big.Rat, []*big.Rat, []r3.Vec) {
+	t.Helper()
+	bounds := make([][]twistBounds, len(c.rational))
+	for k := range c.rational {
+		for _, p := range c.rational[k] {
+			b, err := p.bounds()
+			require.NoError(t, err)
+			bounds[k] = append(bounds[k], b)
+		}
+	}
+	nu, nt, err := twistSelectCounts(t.Context(), bounds, twistMaxTriangles)
+	require.NoError(t, err)
+	var xs, ys []*big.Rat
+	var verts []r3.Vec
+	for i := range nt {
+		for b := range nt[i] + 1 {
+			if i > 0 && b == 0 {
+				continue
+			}
+			tt := big.NewRat(int64(b), int64(nt[i]))
+			z := add(c.zs[i], mul(sub(c.zs[i+1], c.zs[i]), tt))
+			zf, _ := z.Float64()
+			for k := range c.rational {
+				for a := range nu[k] {
+					p := c.rational[k][i].at(big.NewRat(int64(a), int64(nu[k])), tt)
+					x, y := add(p.U, rf(origin.X)), add(p.V, rf(origin.Y))
+					xs, ys = append(xs, x), append(ys, y)
+					verts = append(verts, r3.Vec{X: ratFloat(x), Y: ratFloat(y), Z: zf})
+				}
+			}
+		}
+	}
+	return xs, ys, verts
+}
+
+// requireSameElements compares slices element by element and reports only
+// the mismatch count and the first mismatching index, never the slices.
+func requireSameElements[T comparable](t *testing.T, want, got []T, label string) {
+	t.Helper()
+	require.Len(t, got, len(want), label)
+	mismatches, first := 0, -1
+	for i := range want {
+		if want[i] != got[i] {
+			if first < 0 {
+				first = i
+			}
+			mismatches++
+		}
+	}
+	require.Zero(t, mismatches, "%s: first mismatch at index %d of %d", label, first, len(want))
+}
+
+// TestCircularMeshStationTableMatchesAt checks that the station table
+// reproduces the per-call rationalTransition.at evaluation exactly, on the
+// transitions a recorded circular fitted loft builds.
+func TestCircularMeshStationTableMatchesAt(t *testing.T) {
+	profiles, planes, work := circularFitRecords(t)
+	var calls []circularMeshCall
+	circularMesh = func(ctx context.Context, patches [][]twistPatch, rational [][]rationalTransition,
+		edgeOf []int, edges int, planes []sectionrecord.PlaneRecord, zs []*big.Rat,
+		emerging []bool, firstFit int) (Build, error) {
+		calls = append(calls, circularMeshCall{rational, edgeOf, edges, planes, zs, emerging, firstFit})
+		return buildSectionMeshMode(ctx, patches, rational, edgeOf, edges, planes, zs, emerging, firstFit)
+	}
+	t.Cleanup(func() { circularMesh = buildSectionMeshMode })
+	built, err := BuildCircularFits(t.Context(), profiles, planes, work)
+	require.NoError(t, err)
+	require.Len(t, calls, 1)
+	c := calls[0]
+	require.Len(t, c.rational[0], 3)
+	require.True(t, c.rational[0][0].linear, "the circle-to-circle span blends linearly")
+	require.False(t, c.rational[0][1].linear, "the circle-to-fit span blends by smoothstep")
+	require.NotContains(t, c.emerging, true)
+
+	_, _, want := circularStationReference(t, c, c.planes[0].Origin)
+	requireSameElements(t, want, built.Vertices, "recorded loft")
+
+	// A shifted, non-dyadic origin checks the origin folded into the table.
+	shifted := append([]sectionrecord.PlaneRecord(nil), c.planes...)
+	shifted[0].Origin.X += 0.1
+	shifted[0].Origin.Y -= 0.3
+	xs, ys, want := circularStationReference(t, c, shifted[0].Origin)
+	got, err := c.build(t.Context(), shifted)
+	require.NoError(t, err)
+	requireSameElements(t, want, got.Vertices, "shifted origin")
+
+	t.Run("exact station values", func(t *testing.T) {
+		ox, oy := rf(shifted[0].Origin.X), rf(shifted[0].Origin.Y)
+		bounds := make([][]twistBounds, len(c.rational))
+		for k := range c.rational {
+			for _, p := range c.rational[k] {
+				b, err := p.bounds()
+				require.NoError(t, err)
+				bounds[k] = append(bounds[k], b)
+			}
+		}
+		nu, nt, err := twistSelectCounts(t.Context(), bounds, twistMaxTriangles)
+		require.NoError(t, err)
+		t.Logf("nu=%v nt=%v vertices=%d", nu, nt, len(xs))
+		n, mismatches, first := 0, 0, -1
+		for i := range nt {
+			for b := range nt[i] + 1 {
+				if i > 0 && b == 0 {
+					continue
+				}
+				tt := big.NewRat(int64(b), int64(nt[i]))
+				for k := range c.rational {
+					s := smoothstep(tt)
+					if c.rational[k][i].linear {
+						s = tt
+					}
+					for a := range nu[k] {
+						x, y := c.rational[k][i].station(big.NewRat(int64(a), int64(nu[k])), ox, oy).at(s)
+						if x.Cmp(xs[n]) != 0 || y.Cmp(ys[n]) != 0 {
+							if first < 0 {
+								first = n
+							}
+							mismatches++
+						}
+						n++
+					}
+				}
+			}
+		}
+		require.Equal(t, len(xs), n)
+		require.Zero(t, mismatches, "first exact mismatch at vertex %d of %d", first, n)
+	})
+
+	t.Run("one span per table group", func(t *testing.T) {
+		saved := twistStationTable
+		twistStationTable = 1
+		t.Cleanup(func() { twistStationTable = saved })
+		split, err := c.build(t.Context(), shifted)
+		require.NoError(t, err)
+		requireSameElements(t, got.Vertices, split.Vertices, "one span per group")
+		requireSameElements(t, got.Triangles, split.Triangles, "triangles")
+		requireSameElements(t, got.Sources, split.Sources, "sources")
+		require.Equal(t, [4]float64{got.MeshBound, got.VolSymDiff, got.AreaSlack, got.Diameter},
+			[4]float64{split.MeshBound, split.VolSymDiff, split.AreaSlack, split.Diameter})
 	})
 }
