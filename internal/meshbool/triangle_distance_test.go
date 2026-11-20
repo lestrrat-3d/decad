@@ -153,6 +153,52 @@ func requireExceedsMatchesReference(t *testing.T, ta, tb [3]r3.Vec, slack float6
 	return got
 }
 
+// TestTriTriDistanceExceedsFloatSweep checks, without the exact reference,
+// the properties of TriTriDistanceExceeds that need no exact distance, over
+// many exceedsPair pairs: a far answer needs the float reading, the replay
+// answers as the plain function for every input, and where a facet normal
+// separates the pair (its axis proves the exact distance) far is the float
+// reading itself. Each pair is read at one slack from exceedsSlacks, cycling
+// through the list, so every mode meets every slack kind.
+func TestTriTriDistanceExceedsFloatSweep(t *testing.T) {
+	t.Parallel()
+	n := 60_000
+	if raceDetector {
+		n = 6_000
+	}
+	rng := rand.New(rand.NewPCG(31, 32))
+	var far, normalSeparated int
+	for i := range n {
+		mode := i % exceedsPairModes
+		ta, tb := exceedsPair(rng, mode)
+		d := TriTriDistance(ta, tb)
+		slacks := exceedsSlacks(d)
+		slack := slacks[(i/exceedsPairModes)%len(slacks)]
+		got := TriTriDistanceExceeds(ta, tb, slack)
+		replayed, err := triTriDistanceExceedsReplay(t.Context(), ta, tb, slack, proofbound.NewReplayTrialBudget())
+		require.NoError(t, err)
+		require.Equal(t, got, replayed, "mode %d slack %v distance %v: %v %v", mode, slack, d, ta, tb)
+		if got {
+			far++
+			require.Greater(t, d, slack, "mode %d slack %v: a far answer needs the float reading: %v %v",
+				mode, slack, ta, tb)
+		}
+		m, ok := triPairScale(ta, tb)
+		if !ok || !(slack >= 0 && slack <= math.MaxFloat64) {
+			continue
+		}
+		thr := slack + (slack+m)*0x1p-26 + 0x1p-199
+		if axisGapExceeds(triNormal(ta), ta, tb, m, thr) || axisGapExceeds(triNormal(tb), ta, tb, m, thr) {
+			normalSeparated++
+			require.Equal(t, d > slack, got, "mode %d slack %v distance %v: a normal axis leaves the float reading: %v %v",
+				mode, slack, d, ta, tb)
+		}
+	}
+	label := fmt.Sprintf("far=%d normalSeparated=%d", far, normalSeparated)
+	require.Positive(t, far, label)
+	require.Positive(t, normalSeparated, label)
+}
+
 // TestTriTriDistanceExceedsMatchesDistance compares TriTriDistanceExceeds with
 // the float distance and an exact rational reference, over pairs that touch,
 // cross, sit parallel, stay apart, are degenerate slivers, or carry large,
