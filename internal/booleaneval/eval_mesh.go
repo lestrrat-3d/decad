@@ -9,7 +9,9 @@ import (
 	"github.com/lestrrat-3d/decad/internal/booloperand"
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
+	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/decad/internal/topobuild"
@@ -119,52 +121,75 @@ func operandChord(ctx context.Context, b *topo.Body, pairTol, dPair, chordScale 
 
 // chordDiameter is the diameter a pair's freshly chorded operands are
 // requested by: the overlap's when ctx allows it (WithOverlapChord) and
-// OverlapChorded holds, else the pair's own.
+// a smaller diameter applies, else the pair's own.
 func chordDiameter(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body, dPair float64) float64 {
 	if !overlapAllowed(ctx) {
 		return dPair
 	}
-	if d, ok := overlapDiameter(ctx, op, a, b, dPair); ok {
+	if d, choice := overlapDiameter(ctx, op, a, b, dPair); choice != PairDiameter {
 		return d
 	}
 	return dPair
 }
 
-// OverlapChorded reports whether a Cut's tool has a face that is not a plane
-// and the operand boxes overlap in at most 1/meshbool.OverlapChordRatio of
-// the pair's diameter (meshbool.OverlapDiameter), so that under
-// WithOverlapChord its fresh operands are chorded by the overlap. A tool of
-// planes leaves its rim on its own exact planes and keeps the pair's chord, as
-// a Union does.
-func OverlapChorded(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body) bool {
+// CutChordChoice selects the diameter for freshly tessellated Cut operands.
+type CutChordChoice int
+
+const (
+	PairDiameter CutChordChoice = iota
+	OverlapDiameter
+	TargetDiameter
+)
+
+// PreferredCutChord chooses a finer request when only a small region overlaps
+// or a cylindrical tool extends outside a held target.
+func PreferredCutChord(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body) CutChordChoice {
 	_, dPair, err := booloperand.PairChord(ctx, a, b)
 	if err != nil {
-		return false
+		return PairDiameter
 	}
-	_, ok := overlapDiameter(ctx, op, a, b, dPair)
-	return ok
+	_, choice := overlapDiameter(ctx, op, a, b, dPair)
+	return choice
 }
 
-func overlapDiameter(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body, dPair float64) (float64, bool) {
+func overlapDiameter(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body, dPair float64) (float64, CutChordChoice) {
 	if op != meshbool.OpCut || !hasCurvedFace(b) {
-		return 0, false
+		return 0, PairDiameter
 	}
-	d, ok := meshbool.OverlapDiameter(booloperand.ChordShare(ctx, a), booloperand.ChordShare(ctx, b))
+	target := booloperand.ChordShare(ctx, a)
+	d, ok := meshbool.OverlapDiameter(target, booloperand.ChordShare(ctx, b))
 	if !ok {
-		return 0, false
+		return 0, PairDiameter
 	}
 	if c, clipped := clipOverlapDiameter(a, b); clipped && c < d {
 		d = c
 	}
-	if d*meshbool.OverlapChordRatio > dPair {
-		return 0, false
+	if d*meshbool.OverlapChordRatio <= dPair {
+		return d, OverlapDiameter
 	}
-	return d, true
+	// An extended cutter can enlarge the pair box even though its new bore wall
+	// lies inside the target. Preserve that wall at the target's own chord.
+	if _, held := a.Payload.(facetedrecord.Payload); !held {
+		return 0, PairDiameter
+	}
+	p, ok := b.Payload.(prismrecord.Payload)
+	if !ok || p.SurfaceResult || len(p.Profile.Holes) != 0 || len(p.Profile.Outer.Segments) != 1 {
+		return 0, PairDiameter
+	}
+	c, ok := p.Profile.Outer.Segments[0].(sectionrecord.CircleSeg)
+	if !ok || !c.CCW || c.TStart != 0 || c.TEnd != 1 {
+		return 0, PairDiameter
+	}
+	d = target.Hi.Sub(target.Lo).Len()
+	if d > 0 && d < dPair {
+		return d, TargetDiameter
+	}
+	return 0, PairDiameter
 }
 
 type overlapChordKey struct{}
 
-// WithOverlapChord marks ctx so a Cut that OverlapChorded admits chords its
+// WithOverlapChord marks ctx so a Cut with a smaller preferred diameter chords its
 // fresh operands by the overlap. Only the caller that retries the Cut at the
 // pair's own chord on any refusal sets it (booleandispatch.BodyScaled).
 func WithOverlapChord(ctx context.Context) context.Context {

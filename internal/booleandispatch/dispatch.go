@@ -28,7 +28,9 @@ import (
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/obliqueboss"
 	"github.com/lestrrat-3d/decad/internal/prismboolean"
+	"github.com/lestrrat-3d/decad/internal/prismcells"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
+	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/revolvebore"
 	"github.com/lestrrat-3d/decad/internal/revolveplan"
 	"github.com/lestrrat-3d/decad/internal/revolveshell"
@@ -371,13 +373,24 @@ func BodyScaled(ctx context.Context, op meshbool.OperationKind, env topo.Env, a,
 		return n, nil
 	}
 
-	// A Cut whose operands overlap in a small part of the pair is first meshed
-	// at the overlap's finer chord (booleaneval.OverlapChorded). When that
-	// attempt refuses at any stage, the Cut runs again at the pair's own
-	// chord, so the finer chord never refuses a Cut the pair's chord admits.
-	if booleaneval.OverlapChorded(ctx, op, a, b) {
-		body, err := meshBody(booleaneval.WithOverlapChord(ctx), op, env, a, b, hooks, scale)
-		if err == nil || ctx.Err() != nil {
+	// A small overlap and a protruding cylindrical tool can each justify
+	// a finer chord. Preserve the existing small-overlap fallback. For the
+	// target-sized request retry only geometric refusals.
+	if choice := booleaneval.PreferredCutChord(ctx, op, a, b); choice != booleaneval.PairDiameter {
+		preferredHooks := hooks
+		retry := choice == booleaneval.OverlapDiameter
+		if choice == booleaneval.TargetDiameter {
+			// The public error mapper may erase the evaluator's refusal tag.
+			preferredHooks.AsBooleanError = func(op meshbool.OperationKind, cause error) error {
+				retry = retryTargetChord(cause)
+				if _, ok := errors.AsType[*proofbound.WorkLimitError](cause); ok || prismcells.IsWorkLimit(cause) {
+					return cause
+				}
+				return hooks.AsBooleanError(op, cause)
+			}
+		}
+		body, err := meshBody(booleaneval.WithOverlapChord(ctx), op, env, a, b, preferredHooks, scale)
+		if err == nil || ctx.Err() != nil || !retry {
 			return body, err
 		}
 	}
@@ -417,6 +430,18 @@ func sideNotch(ctx context.Context, env topo.Env, a, b *topo.Body) (*topo.Body, 
 		return nil, false, err
 	}
 	return body, true, nil
+}
+
+// retryTargetChord retries a geometric refusal at the original pair chord.
+func retryTargetChord(err error) bool {
+	if err == nil || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) || prismcells.IsWorkLimit(err) {
+		return false
+	}
+	if _, ok := errors.AsType[*proofbound.WorkLimitError](err); ok {
+		return false
+	}
+	_, expected := errors.AsType[*meshbool.BooleanExpectedError](err)
+	return expected || errors.Is(err, decaderr.ErrUnsupported)
 }
 
 // meshBody is BodyScaled's mesh pipeline at the chord ctx selects.

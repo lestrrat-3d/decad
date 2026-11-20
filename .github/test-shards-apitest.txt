@@ -3189,3 +3189,4 @@
 12	0.00	TestCircularUnionContact
 12	0.00	TestCircularUnionZeroGap
 12	0.00	TestCurvedFilletBandChord
+12	0.00	TestCoaxialPocketAfterFacetedCuts
