@@ -3,6 +3,7 @@ package meshbool
 import (
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -10,9 +11,13 @@ import (
 // depth scan passes over blocks that cannot settle a candidate"). depthBeyond's
 // block scan skips a block or facet box whose PointBoxDist P proves that every
 // facet it covers reads a depthFacetDistance D above a threshold t. The
-// threshold is a positive float with fl(fl(fl(t·c) − R) − E) > b, the
-// certificate depthCertificate would give a minimum of t, so any minimum at or
-// above t certifies p deeper than b.
+// threshold is t = fl(fl(fl(b + E) + R̄)·(1 + 2^-38)), a positive float with
+// fl(fl(fl(t·c) − R̄) − E) > b, where R̄ >= R = PointRoundBound is
+// depthRoundBoundUpper, which needs no exact arithmetic. The certificate
+// fl(fl(fl(x·c) − r) − e) never decreases as x grows and never increases as r
+// grows, because each step rounds a monotone function of the step before it.
+// So the certificate depthCertificate gives any minimum at or above t, with
+// the true R, is above b: any such minimum certifies p deeper than b.
 //
 // The lower bound. Write u = 2^-53, M the coordinate magnitude of
 // depthCertificate (at most 2^500 whenever t is set), d* the exact distance
@@ -28,8 +33,8 @@ import (
 //
 //   - An edge reading. pointSegDist3 clamps its parameter into [0, 1], so the
 //     exact point q0 + t·(q1 − q0) lies on the closed edge whatever the
-//     rounding of t. The computed point lies within 2.02u·|q1 − q0| + u·M <=
-//     8.74u·M of it, and the subtraction and Len (fast path within 2.6u,
+//     rounding of t. The computed point lies within 2.02u·|q1 − q0| + √3·u·M
+//     <= 8.74u·M of it, and the subtraction and Len (fast path within 2.6u,
 //     nested math.Hypot within 8.3u, both relative) lose at most 10u of the
 //     result. Every point of the edge is at least d* from pf, so the reading
 //     is at least (1 − 10u)·d* − 8.8u·M.
@@ -80,18 +85,25 @@ import (
 // reads above t (the band). For a box outside the band, P >= B means the
 // unpruned scan skips it too (B' <= B), and otherwise P <= t < B' or the flag
 // is clear (B' = B), so the unpruned scan enters it too. A box in the band is
-// passed over when depthAbove shows that every facet the unpruned scan could
-// take inside it reads above t: a facet box at or past B is never entered,
-// a box depthPrunable proves is above t, and a remaining facet is read. When
-// depthAbove fails and the flag is set, the scan cannot know whether the
-// unpruned scan enters the box, so it starts over without the prune. When
-// the flag is clear it enters the box as the unpruned scan does. So outside
-// the passed-over boxes both scans take the same facets in the same order. A
-// facet that settles has fl(D·c) <= b, so it reads below t and is never
-// passed over: both scans settle on the same facet. Once B drops to t or
-// below, B' = B and the flag clears. A scan that ends with the flag set has
-// B' >= min(B, t') > t, so the certificate of B' is above b and the answer is
-// "deeper". Otherwise B' = B and the certificate decides as before.
+// passed over when depthPrunable proves it above t. A facet box in the band
+// that depthPrunable does not prove is read, and with the flag set a reading
+// above t passes it over too. Any other box in the band the scan enters as
+// the unpruned scan does while the flag is clear. With the flag set it cannot
+// know whether the unpruned scan enters that box, so it starts over without
+// the prune. So outside the passed-over boxes both scans take the same facets
+// in the same order. A facet that settles has fl(D·c) <= b, while the
+// certificate of t above b gives fl(t·c) > b, so it reads below t and is
+// never passed over: both scans settle on the same facet. Once B drops to t
+// or below, B' = B and the flag clears. A scan that ends with the flag set
+// has B' >= min(B, t') > t, so the certificate of B' is above b and the
+// answer is "deeper". Otherwise B' = B and the certificate decides as before.
+//
+// The cost. Until it starts over, the pruned scan enters a box only when the
+// unpruned scan does, so every box distance it reads the unpruned scan reads
+// too. Its only other reading is a facet in the band with the flag set, at
+// most one for each facet box both scans read. So a scan that starts over
+// costs at most about twice the unpruned scan, and the prune itself never
+// computes PointRoundBound.
 const (
 	// depthPruneShrink is 1 − 128u, which covers the 24u the box argument
 	// needs and the rounding of the product.
@@ -193,7 +205,8 @@ func (bm *BoolMesh) depthKappaFit() bool {
 // setThreshold computes the prune threshold t and the slack factors a1, a2
 // on first use. It leaves t at +Inf, which turns the prune off, when b is
 // negative, infinite or NaN, when M exceeds depthReachLimit or is not finite,
-// or when the certificate of t is not above b.
+// or when t is not finite and positive or its certificate, taken with R̄ in
+// place of R, is not above b.
 func (s *depthScan) setThreshold() {
 	s.tdSet = true
 	s.td = math.Inf(1)
@@ -205,13 +218,29 @@ func (s *depthScan) setThreshold() {
 		return
 	}
 	e := depthErrBound(m)
-	r := PointRoundBound(s.p, s.pf)
+	r := depthRoundBoundUpper(s.pf)
 	t := float64(float64(float64(s.b+e)+r) * depthThresholdPad)
 	if !(t > 0) || math.IsInf(t, 1) || !(depthCertFrom(t, r, e) > s.b) {
 		return
 	}
 	s.td = t
 	s.a1, s.a2 = depthSlackFactors(m)
+}
+
+// depthRoundBoundUpper is R̄, an upper bound on PointRoundBound(p, pf) for
+// every exact p whose nearest float is pf, computed without exact
+// arithmetic: Radius3D(ProvenUpRound(g)), g the largest gap between a
+// coordinate magnitude of pf and the next float above it. Each coordinate of
+// p lies within half the gap on its side of pf, which is at most g/2, so the
+// rounded per-coordinate gap PointRoundBound reads is at most g, and
+// ProvenUpRound and Radius3D never decrease. It is +Inf when a coordinate is
+// the largest finite float.
+func depthRoundBoundUpper(pf r3.Vec) float64 {
+	gap := func(c float64) float64 {
+		a := math.Abs(c)
+		return math.Nextafter(a, math.Inf(1)) - a
+	}
+	return proofbound.Radius3D(proofbound.ProvenUpRound(max(gap(pf.X), gap(pf.Y), gap(pf.Z))))
 }
 
 // depthSlackFactors are the slack factors a1 = fl(2^-44·m + 2^-490) and a2 =
@@ -240,39 +269,18 @@ func (s *depthScan) depthPrunable(d, kappa float64) bool {
 	return float64(float64(d*depthPruneShrink)-slack) > s.td
 }
 
-// depthAbove reports whether every facet the unpruned scan could take inside
-// block j of level, whose box reads d, reads above t. It changes no state.
-func (s *depthScan) depthAbove(level, j int, d float64) bool {
-	if s.depthPrunable(d, s.other.depthKappa[level+1][j]) {
-		return true
-	}
-	lo := j * depthFanout
-	if level == 0 {
-		for i := lo; i < min(lo+depthFanout, len(s.other.Tris)); i++ {
-			if q := PointBoxDist(s.pf, s.other.Boxes[i]); q < s.best && !s.depthPrunable(q, s.other.depthKappa[0][i]) &&
-				!(depthFacetDistance(s.pf, TriCorners(s.other, i), s.other.depthNormal(i)) > s.td) {
-				return false
-			}
-		}
-		return true
-	}
-	for k := lo; k < min(lo+depthFanout, len(s.other.depthLevels[level-1])); k++ {
-		if q := PointBoxDist(s.pf, s.other.depthLevels[level-1][k]); q < s.best && !s.depthAbove(level-1, k, q) {
-			return false
-		}
-	}
-	return true
-}
-
 // prunedBlock is block with the threshold prune. It returns the settling
-// facet, -1, or depthScanRestart when the scan must start over unpruned.
+// facet, -1, or depthScanRestart when the scan must start over unpruned. It
+// passes over a box in the band that depthPrunable proves. Any other box in
+// the band it enters as block does while it has passed over nothing, and
+// otherwise starts over.
 func (s *depthScan) prunedBlock(level, j int) int {
 	d := PointBoxDist(s.pf, s.other.depthLevels[level][j])
 	if d >= s.best {
 		return -1
 	}
 	if s.inBand(d) {
-		if s.depthAbove(level, j, d) {
+		if s.depthPrunable(d, s.other.depthKappa[level+1][j]) {
 			s.passed = true
 			return -1
 		}
@@ -299,7 +307,9 @@ func (s *depthScan) prunedBlock(level, j int) int {
 
 // prunedFacet is one step of facets with the threshold prune. A facet read
 // while the pass-over flag is clear joins the minimum, as the unpruned scan
-// takes it too.
+// takes it too. With the flag set, a facet in the band that depthPrunable
+// does not prove is read: a reading above t passes it over, and any other
+// starts the scan over.
 func (s *depthScan) prunedFacet(i int) int {
 	d := PointBoxDist(s.pf, s.other.Boxes[i])
 	if d >= s.best {

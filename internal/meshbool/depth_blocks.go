@@ -3,7 +3,6 @@ package meshbool
 import (
 	"math"
 
-	"github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -81,8 +80,8 @@ func (bm *BoolMesh) depthBlocksFit(n int) bool {
 // depthScan is the running state of depthBeyond's facet scan: the rounded
 // query point, the mesh, the bound and the running minimum. The remaining
 // fields serve the depth threshold prune (depth_prune.go): whether it runs,
-// the exact query point, the threshold t with its slack factors once
-// computed, and whether the scan has passed over a box.
+// the threshold t with its slack factors once computed, and whether the scan
+// has passed over a box.
 type depthScan struct {
 	pf    r3.Vec
 	other *BoolMesh
@@ -90,7 +89,6 @@ type depthScan struct {
 	best  float64
 
 	prune  bool
-	p      proof.Xpt
 	tdSet  bool
 	td     float64
 	a1, a2 float64

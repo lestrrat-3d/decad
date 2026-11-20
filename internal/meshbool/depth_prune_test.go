@@ -37,7 +37,7 @@ func unprunedDepthBeyond(p proof.Xpt, other *BoolMesh, b float64, hint *int) boo
 // depthThresholdAt is the prune threshold depthBeyond computes for p and b,
 // +Inf when the prune is off.
 func depthThresholdAt(p proof.Xpt, m *BoolMesh, b float64) float64 {
-	s := depthScan{pf: p.Vec(), other: m, b: b, p: p}
+	s := depthScan{pf: p.Vec(), other: m, b: b}
 	s.setThreshold()
 	return s.td
 }
@@ -126,9 +126,11 @@ func depthZeroNormalMesh(t testing.TB, m *BoolMesh) *BoolMesh {
 // facet-order definition (refDepthBeyond). For each mesh and query it places
 // the bound so that the prune threshold falls just below and just above every
 // box reading, facet distance and prune value of the query, and around the
-// query's certified depth by a few ulps and a few u·M. Meshes: cylinders near
-// the origin and far from it, cube grids, sliver soups, sliver tetrahedra,
-// a mesh with a zero-normal facet and one with odd boxes. Every comparison
+// query's certified depth by a few ulps and a few u·M. Queries include exact
+// non-float points just inside a face, whose PointRoundBound the threshold
+// must cover. Meshes: cylinders near the origin and far from it, cube grids,
+// sliver soups, sliver tetrahedra, a mesh with a zero-normal facet and one
+// with odd boxes. Every comparison
 // runs with no hint, a sampled hint and a hint carried from bound to bound, and
 // must give the same answer and leave the same hint. The sweep must pass over
 // boxes on deep answers. TestDepthPruneRestartsOnMisreadSliver covers the
@@ -175,6 +177,19 @@ func TestDepthPruneMatchesUnprunedScan(t *testing.T) {
 			rng.Shuffle(len(qs), func(i, j int) { qs[i], qs[j] = qs[j], qs[i] })
 			qs = qs[:4*queries]
 		}
+		// Exact points about 1e-7 of the way from a face point towards the
+		// vertex centroid. PointRoundBound is positive for them and the
+		// nearest reading is small, so the threshold's pad alone does not
+		// cover R and the threshold must carry R̄.
+		var centroid r3.Vec
+		for _, v := range m.Verts {
+			centroid = centroid.Add(v)
+		}
+		centroid = centroid.Scale(1 / float64(len(m.Verts)))
+		near := depthSamplePoints(m, max(1, len(m.Tris)/queries))
+		for _, sp := range near[:min(queries, len(near))] {
+			qs = append(qs, proof.Xlerp(sp, proof.XptOf(centroid), big.NewInt(int64(1+rng.IntN(6))), big.NewInt(7_000_001)))
+		}
 		for qi, p := range qs {
 			pf := p.Vec()
 			reach := max(math.Abs(pf.X), math.Abs(pf.Y), math.Abs(pf.Z), m.depthCoordReach())
@@ -209,7 +224,7 @@ func TestDepthPruneMatchesUnprunedScan(t *testing.T) {
 				if len(m.depthLevels) == 0 || !m.depthKappaFit() {
 					continue
 				}
-				s := depthScan{pf: pf, other: m, b: b, best: math.Inf(1), prune: true, p: p}
+				s := depthScan{pf: pf, other: m, b: b, best: math.Inf(1), prune: true}
 				switch s.prunedBlock(len(m.depthLevels)-1, 0) {
 				case depthScanRestart:
 					restarts++
@@ -233,8 +248,10 @@ func TestDepthPruneMatchesUnprunedScan(t *testing.T) {
 // small facets far away, three small facets inside the sliver's box near its
 // far corner, and the sliver last. With b at the sliver's reading the
 // unpruned scan settles on the sliver. The pruned scan passes over the far
-// block, then finds the sliver inside the next block's band and must start
-// over rather than pass over it, so it settles on the same facet.
+// block, then finds the sliver's block in the band, which depthPrunable does
+// not prove, and must start over rather than pass over it, so it settles on
+// the same facet. A second mesh puts three far facets and the sliver in one
+// block, so the scan starts over on reading the sliver itself.
 func TestDepthPruneRestartsOnMisreadSliver(t *testing.T) {
 	t.Parallel()
 	p := r3.Vec{X: -0.3809082442329791, Y: -0.3389216007473093, Z: -0.1640515350442391}
@@ -270,8 +287,24 @@ func TestDepthPruneRestartsOnMisreadSliver(t *testing.T) {
 		require.Equal(t, 7, hRef)
 		require.False(t, depthBeyond(xp, m, b, &hGot), "bound %g", b)
 		require.Equal(t, 7, hGot, "bound %g", b)
-		s := depthScan{pf: pf, other: m, b: b, best: math.Inf(1), prune: true, p: xp}
+		s := depthScan{pf: pf, other: m, b: b, best: math.Inf(1), prune: true}
 		require.Equal(t, depthScanRestart, s.prunedBlock(len(m.depthLevels)-1, 0), "bound %g", b)
+	}
+
+	// One block holding three far facets and the sliver. The block reads
+	// the sliver's box distance, so the scan enters it, passes over the far
+	// facets one by one, and then reads the sliver itself in the band: the
+	// reading is at or below the threshold, so it must start over there.
+	one := depthMesh(t, append(append([]r3.Vec(nil), verts[:9]...), sliver[:]...), tris[:4])
+	require.Len(t, one.depthLevels, 1)
+	for _, b := range []float64{d, math.Nextafter(d, math.Inf(1)), d + 1e-9, d + 1e-6} {
+		hRef, hGot := -1, -1
+		require.False(t, unprunedDepthBeyond(xp, one, b, &hRef))
+		require.Equal(t, 3, hRef)
+		require.False(t, depthBeyond(xp, one, b, &hGot), "one block, bound %g", b)
+		require.Equal(t, 3, hGot, "one block, bound %g", b)
+		s := depthScan{pf: pf, other: one, b: b, best: math.Inf(1), prune: true}
+		require.Equal(t, depthScanRestart, s.prunedBlock(0, 0), "one block, bound %g", b)
 	}
 }
 
@@ -417,6 +450,42 @@ func TestDepthPruneValueBelowFacetDistance(t *testing.T) {
 		}
 	}
 	t.Logf("largest shortfall: %.3g of S; largest prune value over the reading: %.3g u·M", worstLemma, worstValue)
+}
+
+// TestDepthRoundBoundUpper checks that depthRoundBoundUpper(p.Vec()) is at
+// least PointRoundBound(p, p.Vec()) for exact points between two floats: in
+// general position, straddling a power of two (where the gap below a float is
+// half the gap above it), next to zero and the smallest subnormal, and at
+// large magnitudes. It also requires the bound to come within a factor 8 of
+// the exact one somewhere, so a bound that only ever reads +Inf fails.
+func TestDepthRoundBoundUpper(t *testing.T) {
+	t.Parallel()
+	rng := rand.New(rand.NewPCG(13, 29))
+	pairs := [][2]r3.Vec{
+		{{X: 1, Y: -2, Z: 4}, {X: math.Nextafter(1, 0), Y: math.Nextafter(-2, 0), Z: math.Nextafter(4, 0)}},
+		{{X: 1, Y: 0.5, Z: 8}, {X: math.Nextafter(1, 2), Y: math.Nextafter(0.5, 1), Z: math.Nextafter(8, 9)}},
+		{{}, {X: math.SmallestNonzeroFloat64, Y: -math.SmallestNonzeroFloat64, Z: 2 * math.SmallestNonzeroFloat64}},
+		{{X: 0x1p400, Y: -0x1p300, Z: 3e100}, {X: math.Nextafter(0x1p400, 0), Y: math.Nextafter(-0x1p300, 0), Z: math.Nextafter(3e100, 0)}},
+	}
+	for range 200 {
+		s := math.Pow(2, float64(rng.IntN(120)-60))
+		a := r3.NewVec(s*(2*rng.Float64()-1), s*(2*rng.Float64()-1), s*(2*rng.Float64()-1))
+		pairs = append(pairs, [2]r3.Vec{a, {X: math.Nextafter(a.X, 0), Y: math.Nextafter(a.Y, math.Inf(1)), Z: math.Nextafter(a.Z, 0)}})
+	}
+	tight := false
+	for k, pr := range pairs {
+		for num := int64(1); num < 13; num++ {
+			p := proof.Xlerp(proof.XptOf(pr[0]), proof.XptOf(pr[1]), big.NewInt(num), big.NewInt(13))
+			pf := p.Vec()
+			exact, upper := PointRoundBound(p, pf), depthRoundBoundUpper(pf)
+			require.GreaterOrEqual(t, upper, exact, "pair %d step %d/13: R̄ %g below PointRoundBound %g", k, num, upper, exact)
+			if exact > 0 && upper <= 8*exact {
+				tight = true
+			}
+		}
+	}
+	require.True(t, tight, "R̄ never came within a factor 8 of PointRoundBound")
+	require.True(t, math.IsInf(depthRoundBoundUpper(r3.Vec{X: math.MaxFloat64}), 1))
 }
 
 // TestDepthKappaOf checks depthKappaOf: 0 for a zero normal, +Inf for a box

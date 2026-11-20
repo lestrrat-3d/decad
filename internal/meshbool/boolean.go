@@ -521,7 +521,7 @@ func depthBeyond(p proof.Xpt, other *BoolMesh, b float64, hint *int) bool {
 			return false
 		}
 	}
-	s := depthScan{pf: pf, other: other, b: b, best: math.Inf(1), prune: true, p: p}
+	s := depthScan{pf: pf, other: other, b: b, best: math.Inf(1), prune: true}
 	settled := s.scan()
 	if settled >= 0 {
 		if hint != nil {

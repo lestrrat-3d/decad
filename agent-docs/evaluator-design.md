@@ -1444,8 +1444,8 @@ work intervals inside quadratic/refinement loops, as interference §7 specifies.
     is the facet that settled the previous candidate of the same search.
   Both shortcuts only answer "not deeper", so they cannot make a witness. A NaN
   `b` fails every shortcut comparison. A candidate the shortcuts do not settle
-  finishes the definition's own scan, or the threshold prune of the next item
-  proves it deeper, and either way it pays `PointRoundBound`. Exact parity
+  finishes the definition's own scan and pays `PointRoundBound`, unless the
+  threshold prune of the next item proves it deeper first. Exact parity
   still runs only for a candidate past `b`, so the witness verdicts and the
   context polls are those of the definition.
   A TANGENCY — facets that touch without crossing — has no positive-bound contact
@@ -1461,12 +1461,17 @@ work intervals inside quadratic/refinement loops, as interference §7 specifies.
 - **The witness depth scan passes over blocks that cannot settle a
   candidate.** `meshbool.depthBeyond` runs the block scan with a threshold
   prune (`internal/meshbool/depth_prune.go`, which derives each constant
-  below). The threshold is `t = fl(fl(fl(b + E) + R)·(1 + 2^-38))`. The
-  prune runs only when `b` is finite and non-negative, `M <= 2^500` and the
-  certificate of `t`, `fl(fl(fl(t·c) − R) − E)`, is above `b`. That
-  certificate never decreases as its minimum grows, so any minimum at or above
-  `t` certifies the candidate deeper than `b`. The scan computes `t` the
-  first time a box reading and the running minimum both lie above `b`.
+  below). The threshold is `t = fl(fl(fl(b + E) + R̄)·(1 + 2^-38))`, where
+  `R̄ = Radius3D(ProvenUpRound(g))`, `g` the largest gap from a coordinate
+  magnitude of the rounded point to the next float above it. Each coordinate
+  of the exact point lies within `g/2` of its nearest float, so `R̄` bounds
+  `PointRoundBound` from above without exact arithmetic. The prune runs only
+  when `b` is finite and non-negative, `M <= 2^500` and
+  `fl(fl(fl(t·c) − R̄) − E)` is above `b`. That certificate never decreases
+  as its minimum grows and never increases as its rounding term grows, so any
+  minimum at or above `t` certifies the candidate deeper than `b` with the
+  true `PointRoundBound`. The scan computes `t` the first time a box reading
+  and the running minimum both lie above `b`.
   - The lower bound. Take a facet with float corners, exact normal `N`, every
     edge at least `2^-499.5` long, longest edge `L` and `κ >= L²/|N|`, and let
     `d*` be the exact distance to it from the rounded point. Then
@@ -1498,20 +1503,24 @@ work intervals inside quadratic/refinement loops, as interference §7 specifies.
     order. Let `B` be the pruned scan's minimum and `B'` the minimum the scan
     without the prune holds at the same point of the traversal. Until the scan
     passes over a box, `B' = B`. It passes over a box only while `B > t` and
-    the box reads above `t`, and only when `depthAbove` shows that every
-    facet the unpruned scan could take inside it reads above `t`: a box
-    reading at or past `B` is never entered, a box the test above passes is
-    above `t`, and any other facet is read. From then on `B'` is `B` lowered
-    only by readings above `t`. Both scans skip a box reading at or past `B`.
-    Both enter a box reading at most `t`, and any box while nothing has been
-    passed over. For any other box whose `depthAbove` fails, the unpruned
-    scan may or may not enter it, so the scan starts over without the prune.
-    Outside the boxes passed over, both scans read the same facets in the
-    same order. A settling facet has `fl(D·c) <= b < fl(t·c)`, so it reads
-    below `t` and is never passed over, and both scans settle on the same
-    facet. Once `B` drops to `t` or below, `B' = B` again. A scan that ends
-    after passing over a box has `B' > t`, so the answer is "deeper";
-    otherwise `B' = B` and the certificate decides as before.
+    the box reads above `t`, and only when the box test above proves the box,
+    or, once a box has been passed over, when a facet box's own facet reads
+    above `t`. From then on `B'` is `B` lowered only by readings above `t`.
+    Both scans skip a box reading at or past `B`. Both enter a box reading at
+    most `t`, and any box while nothing has been passed over. For any other
+    box, the unpruned scan may or may not enter it, so the scan starts over
+    without the prune. Outside the boxes passed over, both scans read the
+    same facets in the same order. A settling facet has
+    `fl(D·c) <= b < fl(t·c)`, so it reads below `t` and is never passed over,
+    and both scans settle on the same facet. Once `B` drops to `t` or below,
+    `B' = B` again. A scan that ends after passing over a box has `B' > t`,
+    so the answer is "deeper"; otherwise `B' = B` and the certificate decides
+    as before.
+  - The cost. Until it starts over, the pruned scan enters a box only when
+    the unpruned scan does, so it reads no box distance the unpruned scan
+    does not, plus at most one facet reading per facet box. A scan that
+    starts over therefore costs at most about twice the unpruned scan, and
+    the prune never computes `PointRoundBound`.
   The budgeted scan (`scanDepthShared`, `internal/meshbool/depth_shared.go`)
   charges one budget step for each block and facet it visits, so it runs
   without the prune and its charges stay those of the unpruned scan.
