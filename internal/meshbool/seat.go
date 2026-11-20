@@ -604,7 +604,8 @@ func rimPointOnCarrier(m *BoolMesh, t int, c TriContact, other *BoolMesh, x int,
 		if key == "" {
 			key = keyOf(c.P0)
 		}
-		if keyOf(proof.XptOf(m.Verts[v])) == key {
+		// The vertex's prepared lift (BoolMesh.Xverts) keeps one set of pointers, so the memo reads its key once.
+		if keyOf(m.Xverts[v]) == key {
 			return true
 		}
 	}
