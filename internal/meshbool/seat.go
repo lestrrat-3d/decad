@@ -254,19 +254,43 @@ func (bm *BoolMesh) analyticPlaneFacet(m *topo.Mesh, t int) bool {
 	return ok && slab == 0
 }
 
-// carrierFace reports whether every facet is carrier-exact and every corner lies in the first facet's plane.
+// facetPlane reads the side of a vertex against the plane of one facet: the sign of det[b−a, c−a, v−a], as
+// proof.OrientSign reads it. The uncertain case reads the exact sign from the facet's prepared lift and normal
+// (BoolMesh.Xverts, BoolMesh.Norms) and the vertex's prepared lift, so nothing is lifted again.
+type facetPlane struct {
+	a, b, c r3.Vec
+	xa, n   proof.Xpt
+}
+
+// newFacetPlane is the plane of facet t of bm.
+func newFacetPlane(bm *BoolMesh, t int) facetPlane {
+	p := bm.Tris[t]
+	return facetPlane{a: bm.Verts[p[0]], b: bm.Verts[p[1]], c: bm.Verts[p[2]], xa: bm.Xverts[p[0]], n: bm.Norms[t]}
+}
+
+// side is the sign of vertex v of m against the plane.
+func (p facetPlane) side(m *BoolMesh, v int) int {
+	return proof.OrientSignPrepared(p.a, p.b, p.c, m.Verts[v], p.xa, m.Xverts[v], p.n)
+}
+
+// carrierFace reports whether every facet is carrier-exact and every corner lies in the first facet's plane. A corner
+// shared by several facets is tested once.
 func (bm *BoolMesh) carrierFace(facets []int) bool {
 	if len(facets) == 0 {
 		return false
 	}
-	p := bm.Tris[facets[0]]
-	a, b, c := bm.Verts[p[0]], bm.Verts[p[1]], bm.Verts[p[2]]
+	pl := newFacetPlane(bm, facets[0])
+	tested := make(map[int]struct{}, len(facets)+2)
 	for _, t := range facets {
 		if !bm.Carrier[t] {
 			return false
 		}
 		for _, v := range bm.Tris[t] {
-			if proof.OrientSign(a, b, c, bm.Verts[v]) != 0 {
+			if _, done := tested[v]; done {
+				continue
+			}
+			tested[v] = struct{}{}
+			if pl.side(bm, v) != 0 {
 				return false
 			}
 		}
@@ -320,10 +344,20 @@ func (bm *BoolMesh) wallLeaves(face *topo.Face, facets []int, edges [][3]int, pf
 	for _, t := range facets {
 		exact = exact && bm.isExact(t)
 	}
+	// Each vertex off the rim is tested once, however many facets share it.
+	pl := newFacetPlane(bm, pf)
+	tested := make(map[int]struct{}, len(facets)+2)
 	if exact {
 		for _, t := range facets {
 			for _, v := range bm.Tris[t] {
-				if !onRim[v] && proof.OrientSign(a, b, c, bm.Verts[v]) >= 0 {
+				if onRim[v] {
+					continue
+				}
+				if _, done := tested[v]; done {
+					continue
+				}
+				tested[v] = struct{}{}
+				if pl.side(bm, v) >= 0 {
 					return false
 				}
 			}
@@ -344,8 +378,12 @@ func (bm *BoolMesh) wallLeaves(face *topo.Face, facets []int, edges [][3]int, pf
 			if onRim[v] {
 				continue
 			}
+			if _, done := tested[v]; done {
+				continue
+			}
+			tested[v] = struct{}{}
 			// The material side of pf is opposite its outward normal: OrientSign reads it negative.
-			if proof.OrientSign(a, b, c, bm.Verts[v]) >= 0 {
+			if pl.side(bm, v) >= 0 {
 				return false
 			}
 			if !(-normal.Dot(bm.Verts[v].Sub(a)) > beta+slack) {
@@ -597,9 +635,15 @@ func seatSkip(bmX *BoolMesh, fx []int, bmW *BoolMesh, fw []int) bool {
 		return false
 	}
 	seats := bmW.Seats[bmW.Src[fw[0]]]
+	var tested map[int]struct{}
 	for _, s := range seats {
-		p := bmW.Tris[s.pf]
-		a, b, c := bmW.Verts[p[0]], bmW.Verts[p[1]], bmW.Verts[p[2]]
+		pl := newFacetPlane(bmW, s.pf)
+		// A vertex of fx shared by several facets is tested once against this seat's plane.
+		if tested == nil {
+			tested = make(map[int]struct{}, len(fx)+2)
+		} else {
+			clear(tested)
+		}
 		ok := true
 		for _, x := range fx {
 			if !bmX.Carrier[x] {
@@ -607,8 +651,13 @@ func seatSkip(bmX *BoolMesh, fx []int, bmW *BoolMesh, fw []int) bool {
 				break
 			}
 			for _, v := range bmX.Tris[x] {
-				if proof.OrientSign(a, b, c, bmX.Verts[v]) != 0 {
+				if _, done := tested[v]; done {
+					continue
+				}
+				tested[v] = struct{}{}
+				if pl.side(bmX, v) != 0 {
 					ok = false
+					break
 				}
 			}
 			if !ok || proof.XdotSign(bmX.Norms[x], bmW.Norms[s.pf]) >= 0 {
