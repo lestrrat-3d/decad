@@ -8,11 +8,13 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/facetproof"
+	"github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
 )
 
 func TestReplayFacetProofContextParityAndLimits(t *testing.T) {
+	const exact = "exact"
 	ctx := t.Context()
 	t.Run("analytic tetrahedron volume", func(t *testing.T) {
 		vertices := []r3.Vec{{}, {X: 1}, {Y: 1}, {Z: 1}}
@@ -46,7 +48,7 @@ func TestReplayFacetProofContextParityAndLimits(t *testing.T) {
 	}
 	work, records := m.Usage()
 	bytes := m.Bytes()
-	for _, short := range []string{"exact", "work", "records", "bytes"} {
+	for _, short := range []string{exact, "work", "records", "bytes"} {
 		t.Run(short, func(t *testing.T) {
 			m := proofbound.NewReplayTrialBudget()
 			w, r, z := proofbound.ReplayTrialWork-work, proofbound.ReplayTrialRecords-records, proofbound.ReplayTrialBytes-bytes
@@ -68,10 +70,10 @@ func TestReplayFacetProofContextParityAndLimits(t *testing.T) {
 				t.Fatal(err)
 			}
 			_, _, _, _, err := run(m)
-			if short == "exact" && err != nil {
+			if short == exact && err != nil {
 				t.Fatalf("exact: %v", err)
 			}
-			if short != "exact" && !errors.Is(err, decaderr.ErrUnsupported) {
+			if short != exact && !errors.Is(err, decaderr.ErrUnsupported) {
 				t.Fatalf("one-short %s: %v", short, err)
 			}
 		})
@@ -87,6 +89,42 @@ func TestReplayFacetProofContextParityAndLimits(t *testing.T) {
 	for i := range ordinary {
 		if replay[i].Cmp(ordinary[i]) != 0 {
 			t.Fatalf("moment %d changed", i)
+		}
+	}
+	// A stale determinant cache must not alter replay of the supplied facets.
+	audit.Det[0] = proof.DyInt(99)
+	recomputed, err := facetproof.FirstMomentsReplay(ctx, proofbound.NewReplayTrialBudget().WorkBudget(ctx), audit, tris)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := range ordinary {
+		if recomputed[i].Cmp(ordinary[i]) != 0 {
+			t.Fatalf("uncached moment %d changed", i)
+		}
+	}
+	momentMeter := proofbound.NewReplayTrialBudget()
+	if _, err := facetproof.FirstMomentsReplay(ctx, momentMeter.WorkBudget(ctx), audit, tris); err != nil {
+		t.Fatal(err)
+	}
+	mw, mr := momentMeter.Usage()
+	mb := momentMeter.Bytes()
+	for _, short := range []string{exact, "work", "records", "bytes"} {
+		w, r, z := mw, mr, mb
+		switch short {
+		case "work":
+			w--
+		case "records":
+			r--
+		case "bytes":
+			z--
+		}
+		limited, err := proofbound.NewReplayBudgetLimits(w, r, z)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, err = facetproof.FirstMomentsReplay(ctx, limited.WorkBudget(ctx), audit, tris)
+		if short == exact && err != nil || short != exact && !errors.Is(err, decaderr.ErrUnsupported) {
+			t.Fatalf("moment budget %s: %v", short, err)
 		}
 	}
 	beta := make([]float64, len(verts))

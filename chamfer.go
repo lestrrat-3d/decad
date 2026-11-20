@@ -229,6 +229,17 @@ func Chamfer(ctx context.Context, b *Body, sel EdgeSelector, d units.Value,
 	if err != nil {
 		return nil, err
 	}
+	// A tangent edge on an overlapping cylinder ends the exposed run at its
+	// support. Establish this from both original solids before growing a chain.
+	if !o.TangentChain && o.Asymmetric == nil && len(edges) == 1 && dDelta == 0 {
+		out, ok, err := extendStraightRim(ctx, doc, b, edgeNodes(edges)[0], dmm)
+		if err != nil {
+			return nil, err
+		}
+		if ok {
+			return commitResult(ctx, OperationChamfer, b, out)
+		}
+	}
 	// Reach stage 2 (agent-docs/modify-design.md Part R §4/§5): the seed query's
 	// cardinality has been enforced above; the tangent chain expands it. Expand
 	// first so every added edge can also receive an asymmetric reference face.
