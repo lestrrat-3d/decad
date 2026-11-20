@@ -93,6 +93,7 @@ func RefuseProximityWithPlaneEvidence(ctx context.Context, ma, mb *topo.Mesh, bm
 	if err != nil {
 		return err
 	}
+	var separation *proofbound.ReplayBudget
 	examine := func(ga, gb faceFacets, slack float64, certified bool) error {
 		if certified {
 			return refuseFacetContact(ctx, bmA, bmB, ga.facets, gb.facets, memo)
@@ -116,6 +117,15 @@ func RefuseProximityWithPlaneEvidence(ctx context.Context, ma, mb *topo.Mesh, bm
 		}
 		if deferred || len(broad.CloseA) == 0 {
 			return nil
+		}
+		if (bmA.Gate > 0 && coarsestSlab(bmA, broad.CloseA) > bmA.Gate) || (bmB.Gate > 0 && coarsestSlab(bmB, broad.CloseB) > bmB.Gate) {
+			if separation == nil {
+				separation = proofbound.NewStrictReplayBudget()
+			}
+			apart, err := separatedCoarseFaces(ctx, bmA, bmB, ga.facets, gb.facets, memo, separation)
+			if err != nil || apart {
+				return err
+			}
 		}
 		if err := refuseCoarseNearContacts(bmA, bmB, broad); err != nil {
 			return err

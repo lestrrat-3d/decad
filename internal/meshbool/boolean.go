@@ -126,11 +126,15 @@ func RefuseCoarseHeldContact(m *BoolMesh, operand int, facets []int) error {
 	if m.Gate <= 0 {
 		return nil
 	}
+	return refuseCoarseHeldMaximum(m, operand, coarsestSlab(m, facets))
+}
+
+func coarsestSlab(m *BoolMesh, facets []int) float64 {
 	worst := 0.0
 	for _, f := range facets {
 		worst = max(worst, m.SlabBound[f])
 	}
-	return refuseCoarseHeldMaximum(m, operand, worst)
+	return worst
 }
 
 func refuseCoarseHeldMaximum(m *BoolMesh, operand int, worst float64) error {
