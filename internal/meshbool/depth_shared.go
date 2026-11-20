@@ -216,7 +216,7 @@ func depthHintProposalShared(pf r3.Vec, other *BoolMesh, b float64, hint *int,
 		if !validDepthFacet(other, h) || h >= len(other.Boxes) {
 			return -1, false, fmt.Errorf("%w: invalid depth hint facet %d", decaderr.ErrUnsupported, h)
 		}
-		up := math.Max(PointBoxDist(pf, other.Boxes[h]), PointTriDistance(pf, TriCorners(other, h)))
+		up := math.Max(PointBoxDist(pf, other.Boxes[h]), depthFacetDistance(pf, TriCorners(other, h), other.depthNormal(h)))
 		if up*(1-1e-12) <= b {
 			return h, true, nil
 		}
@@ -260,10 +260,7 @@ func depthScanBeyondShared(ctx context.Context, p proof.Xpt, other *BoolMesh, b 
 		}
 		return false, nil
 	}
-	depth := 0.0
-	if s.best > 0 && !proofbound.IsNonFinite(s.best) {
-		depth = s.best*(1-1e-12) - PointRoundBound(p, pf)
-	}
+	depth := depthCertificate(s.best, p, pf, other)
 	return !(depth <= b), nil
 }
 
@@ -278,7 +275,7 @@ func scanDepthShared(s *depthScan, start int, budget *proofbound.WorkBudget) (in
 			if PointBoxDist(s.pf, s.other.Boxes[i]) >= s.best {
 				continue
 			}
-			s.best = math.Min(s.best, PointTriDistance(s.pf, TriCorners(s.other, i)))
+			s.best = math.Min(s.best, depthFacetDistance(s.pf, TriCorners(s.other, i), s.other.depthNormal(i)))
 			if s.best*(1-1e-12) <= s.b {
 				return i, nil
 			}

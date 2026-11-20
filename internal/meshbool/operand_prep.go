@@ -59,6 +59,7 @@ func PrepContext(ctx context.Context, verts []r3.Vec, tris [][3]int, src []int) 
 			bm.Owner[[2]int{tri[k], tri[(k+1)%3]}] = i
 		}
 	}
+	bm.setDepthNormals()
 	bm.setDepthBlocks()
 	return bm, nil
 }
@@ -143,7 +144,7 @@ func prepContextBudgeted(ctx context.Context, verts []r3.Vec, tris [][3]int, src
 	if err := budget.ReserveRecords(ctx, uint64(len(verts))); err != nil {
 		return nil, err
 	}
-	if err := budget.ReserveRecords(ctx, 7*uint64(len(tris))); err != nil {
+	if err := budget.ReserveRecords(ctx, 8*uint64(len(tris))); err != nil {
 		return nil, err
 	}
 	bm := &BoolMesh{Verts: verts, Tris: tris, Src: src}
@@ -208,5 +209,6 @@ func prepContextBudgeted(ctx context.Context, verts []r3.Vec, tris [][3]int, src
 			bm.Owner[[2]int{tri[k], tri[(k+1)%3]}] = i
 		}
 	}
+	bm.setDepthNormals()
 	return bm, nil
 }

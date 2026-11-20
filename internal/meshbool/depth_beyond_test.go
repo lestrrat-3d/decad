@@ -9,7 +9,6 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/proof"
-	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
 	"github.com/stretchr/testify/require"
 )
@@ -25,12 +24,9 @@ func refCertifiedInteriorDepth(p proof.Xpt, other *BoolMesh) float64 {
 		if PointBoxDist(pf, other.Boxes[i]) >= best {
 			continue
 		}
-		best = math.Min(best, PointTriDistance(pf, TriCorners(other, i)))
+		best = math.Min(best, depthFacetDistance(pf, TriCorners(other, i), other.depthNormal(i)))
 	}
-	if best <= 0 || proofbound.IsNonFinite(best) {
-		return 0
-	}
-	return best*(1-1e-12) - PointRoundBound(p, pf)
+	return depthCertificate(best, p, pf, other)
 }
 
 func refDeepWitnessAt(ctx context.Context, p proof.Xpt, other *BoolMesh, b float64) (bool, error) {

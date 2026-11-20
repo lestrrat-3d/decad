@@ -478,11 +478,12 @@ func deepWitnessAt(ctx context.Context, p proof.Xpt, other *BoolMesh, b float64,
 }
 
 // CertifiedInteriorDepth is a certified LOWER bound (mm) on the distance from the
-// exact interior point p to the boundary of the other operand's mesh: the float
-// point-to-facet distances, taken at their minimum and nudged DOWN for their own
-// float error, then reduced by an upper bound on p's exact→float rounding. It is
-// only ever read as "> b", so under-reporting is safe (it over-refuses, never
-// over-admits).
+// exact point p to the boundary of the other operand's mesh: the float
+// point-to-facet distances (depthFacetDistance), taken at their minimum and
+// nudged DOWN by a relative 1e-12 and an absolute bound on their own float
+// error, then reduced by an upper bound on p's exact→float rounding
+// (depthCertificate, which holds the proof). It is only ever read as "> b",
+// so under-reporting is safe (it over-refuses, never over-admits).
 func CertifiedInteriorDepth(p proof.Xpt, other *BoolMesh) float64 {
 	pf := p.Vec()
 	best := math.Inf(1)
@@ -490,22 +491,14 @@ func CertifiedInteriorDepth(p proof.Xpt, other *BoolMesh) float64 {
 		// The facet lies inside its own containing box, so the point's distance
 		// to that box never exceeds its distance to the facet. A box already at or
 		// beyond the running minimum therefore cannot hold a nearer facet — skip
-		// it. This prunes on distance alone and cannot lower the minimum below the
-		// unpruned value; any float-boundary case where a skipped box rounds a hair
-		// past the true nearest is already covered by the 1e-12 down-nudge below,
-		// so the certified LOWER bound is preserved.
+		// it. A skipped box's own rounding is a relative error the 1e-12 nudge
+		// covers (depthCertificate).
 		if PointBoxDist(pf, other.Boxes[i]) >= best {
 			continue
 		}
-		best = math.Min(best, PointTriDistance(pf, TriCorners(other, i)))
+		best = math.Min(best, depthFacetDistance(pf, TriCorners(other, i), other.depthNormal(i)))
 	}
-	if best <= 0 || proofbound.IsNonFinite(best) {
-		return 0
-	}
-	// best is the float distance from the ROUNDED point pf; the true distance
-	// from the exact point p is at least (best, nudged down for the distance
-	// evaluation's own float error) minus how far pf sits from p.
-	return best*(1-1e-12) - PointRoundBound(p, pf)
+	return depthCertificate(best, p, pf, other)
 }
 
 // depthBeyond reports !(CertifiedInteriorDepth(p, other) <= b) for every
@@ -521,7 +514,7 @@ func depthBeyond(p proof.Xpt, other *BoolMesh, b float64, hint *int) bool {
 	pf := p.Vec()
 	if hint != nil && *hint >= 0 && *hint < len(other.Tris) {
 		h := *hint
-		up := math.Max(PointBoxDist(pf, other.Boxes[h]), PointTriDistance(pf, TriCorners(other, h)))
+		up := math.Max(PointBoxDist(pf, other.Boxes[h]), depthFacetDistance(pf, TriCorners(other, h), other.depthNormal(h)))
 		if up*(1-1e-12) <= b {
 			return false
 		}
@@ -534,10 +527,7 @@ func depthBeyond(p proof.Xpt, other *BoolMesh, b float64, hint *int) bool {
 		}
 		return false
 	}
-	depth := 0.0
-	if s.best > 0 && !proofbound.IsNonFinite(s.best) {
-		depth = s.best*(1-1e-12) - PointRoundBound(p, pf)
-	}
+	depth := depthCertificate(s.best, p, pf, other)
 	// Negated rather than written as depth > b, so a NaN b answers as
 	// DeepWitnessAt's original "depth <= b" test answered it.
 	return !(depth <= b)
@@ -701,8 +691,10 @@ func PointBoxDist(p r3.Vec, box [2]r3.Vec) float64 {
 // PointTriDistance is the distance from a point to a closed triangle: the
 // perpendicular foot when it lands inside, otherwise the nearest edge.
 //
-// It stays out of line so depthBeyond's hint reading and its scan run the same
-// compiled code (agent-docs/evaluator-design.md §9).
+// It projects along triNormal, the float cross product of the edges, whose
+// direction errs by up to about 2^-53 over the sine of the facet's smallest
+// angle; the witness depth scan reads depthFacetDistance instead. It stays out
+// of line so every caller runs the same compiled code.
 //
 //go:noinline
 func PointTriDistance(p r3.Vec, t [3]r3.Vec) float64 {
@@ -733,10 +725,11 @@ func pointSegDist3(p, q0, q1 r3.Vec) float64 {
 // triNormal is the unnormalised facet normal PointTriDistance projects along.
 func triNormal(t [3]r3.Vec) r3.Vec { return t[1].Sub(t[0]).Cross(t[2].Sub(t[0])) }
 
-// pointTriFoot is PointTriDistance's perpendicular-foot reading, for
-// n = triNormal(t): the distance from p to its foot on t's plane and true when
-// the foot lands inside t, and false when PointTriDistance falls back to the
-// nearest edge. Every product in it is rounded on its own (r3's explicit
+// pointTriFoot is the perpendicular-foot reading along a normal n of t:
+// triNormal(t) for PointTriDistance and the TriTriDistance checks, the depth
+// normal for depthFacetDistance. It returns the distance from p to its foot on
+// the plane through t[0] normal to n and true when PointInTriangle places the
+// foot inside t, and false when the caller falls back to the nearest edge. Every product in it is rounded on its own (r3's explicit
 // float64 conversions), so no fused multiply-add can make its value depend on
 // the function it is inlined into.
 func pointTriFoot(p r3.Vec, t [3]r3.Vec, n r3.Vec) (float64, bool) {

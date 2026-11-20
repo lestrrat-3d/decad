@@ -106,6 +106,11 @@ type BoolMesh struct {
 	// depthLevels are setDepthBlocks' summaries of Boxes, which let
 	// depthBeyond pass over runs of facets its prune would skip.
 	depthLevels [][][2]r3.Vec
+	// depthNorms and depthReach are setDepthNormals' per-facet normals and
+	// largest vertex coordinate magnitude, which depthFacetDistance and
+	// depthCertificate read.
+	depthNorms []r3.Vec
+	depthReach float64
 }
 
 // TwinFacet returns the facet across edge k of facet f — the neighbour a
