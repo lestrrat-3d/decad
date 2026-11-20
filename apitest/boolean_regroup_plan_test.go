@@ -11,8 +11,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// The hand-built plans of agent-docs/prism-boolean-design.md Part R (Test plan): each
-// fixture's sequential chain refuses, and the regrouped plan builds through public calls.
+// The hand-built plans of agent-docs/prism-boolean-design.md Part R (Test plan): F2 and F4's
+// sequential chains refuse, F1's builds because its second hole lands on the first hole's
+// retained cylinder wall, and each regrouped plan builds through public calls.
 // The test pins the premises the regroup depends on, namely which steps take the mesh path.
 
 // regroupBoxVolume is the volume of retentionScene.roundedBox: 40x20x20 with four vertical
@@ -95,8 +96,12 @@ func TestRegroupPlansBuildByHand(t *testing.T) {
 		// A Copy ends the history chain, so the final call is the sequential gate, not a regroup.
 		held, err := decad.Copy(t.Context(), first)
 		require.NoError(t, err)
-		_, err = decad.Cut(t.Context(), held, slabYTool(t, sc, 22, 3))
-		require.ErrorIs(t, err, decad.ErrUnsupported)
+		// The second hole's rim reads the first hole's cylinder slab, not the first rim's
+		// bound (agent-docs/faceted-source-retention-design.md §11, Claim C).
+		want := regroupBoxVolume - 20*(25*math.Pi-regroupLens(4, 3, 2))
+		sequential, err := decad.Cut(t.Context(), held, slabYTool(t, sc, 22, 3))
+		require.NoError(t, err)
+		requireRegroupResult(t, sequential, want)
 
 		sc = newRetentionScene()
 		box, t1, t2 := sc.roundedBox(t), sc.tool(t, 20), slabYTool(t, sc, 22, 3)
@@ -105,7 +110,7 @@ func TestRegroupPlansBuildByHand(t *testing.T) {
 		require.False(t, tookMeshPath(u), "Union(t1, t2) is analytic")
 		got, err := decad.Cut(t.Context(), box, u)
 		require.NoError(t, err)
-		requireRegroupResult(t, got, regroupBoxVolume-20*(25*math.Pi-regroupLens(4, 3, 2)))
+		requireRegroupResult(t, got, want)
 	})
 
 	t.Run("F2 a straight hole into an earlier hole", func(t *testing.T) {
@@ -181,10 +186,12 @@ func TestRegroupPlansBuildByHand(t *testing.T) {
 		requireRegroupResult(t, got, 2560-16*(32*math.Pi/3+4*math.Sqrt(3)))
 	})
 
+	// D1 and D4 cut a tapered first hole: its Cone wall states no slab thinner than the
+	// first rim's bound, so the sequential chain refuses.
 	t.Run("D1 a Copy keeps the sequential refusal", func(t *testing.T) {
 		t.Parallel()
 		sc := newRetentionScene()
-		first, err := decad.Cut(t.Context(), sc.roundedBox(t), sc.tool(t, 20))
+		first, err := decad.Cut(t.Context(), sc.roundedBox(t), sc.taperedTool(t))
 		require.NoError(t, err)
 		cp, err := decad.Copy(t.Context(), first)
 		require.NoError(t, err)
@@ -202,7 +209,7 @@ func TestRegroupPlansBuildByHand(t *testing.T) {
 			return b
 		}
 		sc := newRetentionScene()
-		first, err := decad.Cut(t.Context(), sc.roundedBox(t), sc.tool(t, 20))
+		first, err := decad.Cut(t.Context(), sc.roundedBox(t), sc.taperedTool(t))
 		require.NoError(t, err)
 		// A Copy ends the history chain, so the final call is the sequential gate, not a regroup.
 		held, err := decad.Copy(t.Context(), first)
