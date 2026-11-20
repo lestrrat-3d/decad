@@ -77,11 +77,7 @@ func UnionMany(ctx context.Context, env topo.Env,
 		return nil, true, err
 	}
 	profiles := make([]momentinput.Profile, len(operands))
-	type sourceLine struct {
-		owner int
-		line  sectionrecord.LineSeg
-	}
-	var lines []sourceLine
+	var lines []prismcells.OwnedLine
 	var first prismrecord.Payload
 	z0Delta, z1Delta := 0.0, 0.0
 	for i, operand := range operands {
@@ -109,7 +105,7 @@ func UnionMany(ctx context.Context, env topo.Env,
 			if !ok || !prismcells.WholeSegmentRange(line.TStart, line.TEnd) {
 				return nil, false, nil
 			}
-			lines = append(lines, sourceLine{owner: i, line: line})
+			lines = append(lines, prismcells.OwnedLine{Owner: i, Line: line})
 		}
 		profiles[i] = p.Profile
 		z0Delta = max(z0Delta, p.Z0Delta)
@@ -123,19 +119,13 @@ func UnionMany(ctx context.Context, env topo.Env,
 		return nil, true, prismcells.WithWorkLimit(fmt.Errorf("%w: Union's one-scene prism arrangement needs %d segments, above its %d-segment cap",
 			decaderr.ErrUnsupported, segments, prismcells.MaxArrangementSegments), segments)
 	}
-	for i, line := range lines {
-		for _, prior := range lines[:i] {
-			if prior.owner == line.owner {
-				continue
-			}
-			if err := budget.Step(); err != nil {
-				return nil, true, err
-			}
-			if prismcells.SameLineCarrier(prior.line, line.line) {
-				return nil, true, fmt.Errorf("%w: Union's one-scene prism class needs distinct source line carriers",
-					decaderr.ErrUnsupported)
-			}
-		}
+	shared, err := prismcells.SharedLineCarrier(budget, lines)
+	if err != nil {
+		return nil, true, err
+	}
+	if shared {
+		return nil, true, fmt.Errorf("%w: Union's one-scene prism class needs distinct source line carriers",
+			decaderr.ErrUnsupported)
 	}
 	s, tags, charge, err := prismcells.BuildSceneRegions(budget, prismcells.SceneProfiles(profiles), nil,
 		&prismcells.Reexpression{Identity: true})

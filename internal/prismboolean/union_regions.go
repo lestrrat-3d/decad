@@ -254,32 +254,22 @@ var errSharedLine = errors.New("prismboolean: two operands share a line carrier"
 // distinctLineCarriers is U5's line half: no two operands' lines lie on one
 // infinite line.
 func distinctLineCarriers(budget *proofbound.WorkBudget, profiles []momentinput.Profile) error {
-	type sourceLine struct {
-		owner int
-		line  sectionrecord.LineSeg
-	}
-	var lines []sourceLine
+	var lines []prismcells.OwnedLine
 	for i, p := range profiles {
 		for _, loop := range append([]sectionrecord.LoopRecord{p.Outer}, p.Holes...) {
 			for _, segment := range loop.Segments {
 				if line, ok := segment.(sectionrecord.LineSeg); ok {
-					lines = append(lines, sourceLine{owner: i, line: line})
+					lines = append(lines, prismcells.OwnedLine{Owner: i, Line: line})
 				}
 			}
 		}
 	}
-	for i, line := range lines {
-		for _, prior := range lines[:i] {
-			if prior.owner == line.owner {
-				continue
-			}
-			if err := budget.Step(); err != nil {
-				return err
-			}
-			if prismcells.SameLineCarrier(prior.line, line.line) {
-				return errSharedLine
-			}
-		}
+	shared, err := prismcells.SharedLineCarrier(budget, lines)
+	if err != nil {
+		return err
+	}
+	if shared {
+		return errSharedLine
 	}
 	return nil
 }
