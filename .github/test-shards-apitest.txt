@@ -3194,14 +3194,4 @@
 12	0.00	TestCircularLoftEmergingFlatRefusesLaterOffTangent
 12	0.00	TestCircularLoftEmergingFlatRefusesBentChain
 12	0.00	TestCircularLoftEmergingFlatRefusesUnrepresentablePlane
-12	0.00	TestPlateCollarRimChamfer
-12	0.00	TestCylinderWallChainKeepsEachRimBound
-12	0.00	TestCircularUnionCancellation
-12	0.00	TestCircularUnionContact
-12	0.00	TestCircularUnionZeroGap
-12	0.00	TestCurvedFilletBandChord
-12	0.00	TestCoaxialPocketAfterFacetedCuts
-12	0.00	TestOffsetPadShoulderChamfer
-12	0.00	TestAlignedPadRimOnTrimmedFlange
-12	0.00	TestConcentricPrismStations
 12	0.00	TestCutRegisteredPrismArc
