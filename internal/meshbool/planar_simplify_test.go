@@ -2,12 +2,15 @@ package meshbool
 
 import (
 	"errors"
+	"fmt"
 	"math/big"
+	"slices"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/lestrrat-3d/decad/internal/proof"
+	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -511,4 +514,122 @@ func TestSimplifyPlanarStartsAtABoundaryVertex(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, changed)
 	require.Len(t, out.Xverts, 8, "the centre vertex is dropped")
+}
+
+// perCornerPlanar is the reference plane test of planarCandidate: every corner
+// of every facet, repeats included, reads OrientSignExact zero against the
+// first facet's points, and that facet is not collinear.
+func perCornerPlanar(in PlanarMesh, facets []int) bool {
+	first := in.Tris[facets[0]]
+	a, b, c := in.Xverts[first[0]], in.Xverts[first[1]], in.Xverts[first[2]]
+	for _, f := range facets {
+		for _, v := range in.Tris[f] {
+			if v == first[0] || v == first[1] || v == first[2] {
+				continue
+			}
+			if proof.OrientSignExact(a, b, c, in.Xverts[v]) != 0 {
+				return false
+			}
+		}
+	}
+	n := proof.Xcross(proof.Xsub(b, a), proof.Xsub(c, a))
+	return n.X.Sign() != 0 || n.Y.Sign() != 0 || n.Z.Sign() != 0
+}
+
+// TestPlanarCandidateMatchesPerCorner pins planarCandidate's plane test, one
+// sign per distinct vertex against a normal formed once, to the per-corner
+// OrientSignExact reference: on every face of a planar box, a box whose top
+// holds two interior vertices, and a tent whose first top facet is collinear,
+// each as given and with each one of the face's vertices moved off its plane.
+// Every face is one hole-free region, so the plane test alone decides.
+//
+// Legs shown to fail: testing the first facet alone, marking the wrong vertex
+// as tested, or reading a vertex against itself instead of the base point
+// accepts a moved vertex the reference refuses.
+func TestPlanarCandidateMatchesPerCorner(t *testing.T) {
+	// The box top as six facets round interior vertices 8 and 9, starting on
+	// the rim, so 8 is shared by four facets and tested after facet 0.
+	twoInterior := planarBox(0)
+	twoInterior.Xverts = append(twoInterior.Xverts, proof.XptOf(r3.Vec{X: 0.5, Y: 0.5, Z: 2}))
+	twoInterior.Approx = append(twoInterior.Approx, r3.Vec{X: 0.5, Y: 0.5, Z: 2})
+	twoInterior.Xbeta = append(twoInterior.Xbeta, 0)
+	var tris [][3]int
+	var src []int
+	for _, tr := range [][3]int{{4, 5, 9}, {5, 8, 9}, {8, 7, 9}, {7, 4, 9}, {5, 6, 8}, {6, 7, 8}} {
+		tris, src = append(tris, tr), append(src, 1)
+	}
+	for i, tr := range twoInterior.Tris {
+		if twoInterior.Src[i] != 1 {
+			tris, src = append(tris, tr), append(src, twoInterior.Src[i])
+		}
+	}
+	twoInterior.Tris, twoInterior.Src = tris, src
+	twoInterior.FacetBound = make([]float64, len(tris))
+
+	moved := func(in PlanarMesh, v int) PlanarMesh {
+		const d = 1.0 / 1024
+		xs := slices.Clone(in.Xverts)
+		xs[v] = proof.XptOf(in.Approx[v].Add(r3.Vec{X: d, Y: d, Z: d}))
+		in.Xverts = xs
+		return in
+	}
+	seen := map[bool]int{}
+	for _, fx := range []struct {
+		name string
+		in   PlanarMesh
+	}{
+		{"box", planarBox(0)},
+		{"two interior", twoInterior},
+		{"collinear tent", tentWithCollinearFirst()},
+	} {
+		owner := make(map[[2]int]int)
+		for f, tri := range fx.in.Tris {
+			for k := range 3 {
+				owner[[2]int{tri[k], tri[(k+1)%3]}] = f
+			}
+		}
+		faces := map[int][]int{}
+		for f, s := range fx.in.Src {
+			faces[s] = append(faces[s], f)
+		}
+		for s, facets := range faces {
+			verts := map[int]struct{}{}
+			for _, f := range facets {
+				for _, v := range fx.in.Tris[f] {
+					verts[v] = struct{}{}
+				}
+			}
+			cases := map[string]PlanarMesh{"as given": fx.in}
+			for v := range verts {
+				cases[fmt.Sprintf("vertex %d moved", v)] = moved(fx.in, v)
+			}
+			for name, in := range cases {
+				want := perCornerPlanar(in, facets)
+				seen[want]++
+				n, regions, ok, err := planarCandidate(t.Context(), proofbound.NewWorkBudget(t.Context()), in, owner, facets, s)
+				require.NoError(t, err)
+				require.Equal(t, want, ok, "%s face %d, %s", fx.name, s, name)
+				if !ok {
+					continue
+				}
+				first := in.Tris[facets[0]]
+				a, b, c := in.Xverts[first[0]], in.Xverts[first[1]], in.Xverts[first[2]]
+				require.Equal(t, proof.Xcross(proof.Xsub(b, a), proof.Xsub(c, a)).Key(), n.Key())
+				require.Len(t, regions, 1)
+			}
+		}
+	}
+	require.Positive(t, seen[true], "some face is planar")
+	require.Positive(t, seen[false], "some face is refused")
+
+	tent := tentWithCollinearFirst()
+	var top []int
+	for f, s := range tent.Src {
+		if s == 1 {
+			top = append(top, f)
+		}
+	}
+	_, _, ok, err := planarCandidate(t.Context(), proofbound.NewWorkBudget(t.Context()), tent, map[[2]int]int{}, top, 1)
+	require.NoError(t, err)
+	require.False(t, ok, "a collinear first facet gives no plane")
 }

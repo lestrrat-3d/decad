@@ -3,6 +3,7 @@ package meshbool
 import (
 	"context"
 	"errors"
+	"math/big"
 	"slices"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
@@ -225,6 +226,13 @@ func planarCandidate(ctx context.Context, budget *proofbound.WorkBudget, in Plan
 			}
 		}
 	}
+	// The reference normal is constant for the face, and a vertex is tested
+	// once however many facets it touches. n·(v−a) has the sign of
+	// det[b−a, c−a, v−a], so a collinear reference (n = 0) reads zero
+	// everywhere and is refused after the loop.
+	n := proof.Xcross(proof.Xsub(b, a), proof.Xsub(c, a))
+	var scratch [3]big.Int
+	tested := make(map[int]struct{}, len(facets)+2)
 	for _, f := range facets {
 		if err := budget.Step(); err != nil {
 			return none, nil, false, err
@@ -236,12 +244,15 @@ func planarCandidate(ctx context.Context, budget *proofbound.WorkBudget, in Plan
 			if v == first[0] || v == first[1] || v == first[2] {
 				continue
 			}
-			if proof.OrientSignExact(a, b, c, in.Xverts[v]) != 0 {
+			if _, done := tested[v]; done {
+				continue
+			}
+			tested[v] = struct{}{}
+			if proof.XdotDiffSignScratch(&scratch, n, in.Xverts[v], a) != 0 {
 				return none, nil, false, nil
 			}
 		}
 	}
-	n := proof.Xcross(proof.Xsub(b, a), proof.Xsub(c, a))
 	if n.X.Sign() == 0 && n.Y.Sign() == 0 && n.Z.Sign() == 0 {
 		// A collinear reference facet gives no plane to test against.
 		return none, nil, false, nil
