@@ -16,6 +16,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/rimextension"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/topo"
@@ -199,7 +200,34 @@ func upperNativeRim(ctx context.Context, d *Document, body *Body, edge *topo.Edg
 				continue
 			}
 			height := proofbound.RatFloatUp(new(big.Rat).Abs(rimSub(hi, lo)))
-			return directUpperRim(ctx, envOf(body.n.Doc, d.nextProducerID()), &body.n, finalCap, finalWall, center, hinge, radius, setback, height, budget)
+			result, ok, err := directUpperRim(ctx, envOf(body.n.Doc, d.nextProducerID()), &body.n, finalCap, finalWall, center, hinge, radius, setback, height, budget)
+			if ok && err == nil {
+				target := bodyHandle(result.Body)
+				top := rimAdd(hinge, rimRat(setback))
+				bottom := rimSub(top, new(big.Rat).Abs(rimSub(hi, lo)))
+				var cone *topo.Face
+				for _, f := range topobuild.Faces(result.Body) {
+					s := f.Source
+					if s != nil && s.Blend && s.Producer == result.Body.Origin.Producer && s.Ordinal == 0 {
+						if cone != nil {
+							return result, ok, err
+						}
+						cone = f
+					}
+				}
+				if cone == nil {
+					return result, ok, err
+				}
+				target.upperRimProof = &upperRimProof{
+					stock: body, result: target, cone: cone, pad: pad,
+					wall: rimHistoryFace(finalWall, targets, pad, i), sourceWall: finalWall, shift: moves[pad],
+					geometry: rimextension.OuterAdmission{
+						CenterX: center[0], CenterZ: center[2], Hinge: hinge, PadTop: top,
+						PadBottom: bottom, Radius: rimRat(radius), NoseSetback: rimRat(setback),
+					},
+				}
+			}
+			return result, ok, err
 		}
 		break
 	}

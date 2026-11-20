@@ -14,7 +14,11 @@ func ExtensionBound(ctx context.Context, a Admission, m Mesh, group int, budget 
 	if !ok || e != nil {
 		return 0, false, e
 	}
-	h, ok := newChart(a.Section)
+	return cylinderExtensionBound(ctx, a.Section, n, m, group, budget)
+}
+
+func cylinderExtensionBound(ctx context.Context, section Section, n windowNative, m Mesh, group int, budget *proofbound.ReplayBudget) (float64, bool, error) {
+	h, ok := newChart(section)
 	if !ok {
 		return 0, false, nil
 	}

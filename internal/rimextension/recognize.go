@@ -195,6 +195,18 @@ func (s stockFaces) stop(ctx context.Context, c *Candidate, start, end r3.Vec, b
 // Identify follows held adjacency only. The resulting candidate is never
 // sufficient to admit a modification without the independent source checks.
 func Identify(ctx context.Context, b *topo.Body, e *topo.Edge, budget *proofbound.ReplayBudget) (Candidate, bool, error) {
+	return identify(ctx, b, e, 0, budget)
+}
+
+// IdentifyOuter follows adjacency in the signed longitudinal chart.
+func IdentifyOuter(ctx context.Context, b *topo.Body, e *topo.Edge, wing int, budget *proofbound.ReplayBudget) (Candidate, bool, error) {
+	if wing != -1 && wing != 1 {
+		return Candidate{}, false, nil
+	}
+	return identify(ctx, b, e, wing, budget)
+}
+
+func identify(ctx context.Context, b *topo.Body, e *topo.Edge, wing int, budget *proofbound.ReplayBudget) (Candidate, bool, error) {
 	var c Candidate
 	if b == nil || !b.Solid || e == nil || !e.Convex || len(e.Faces) != 2 || e.Start == nil || e.End == nil || e.Start == e.End {
 		return c, false, nil
@@ -216,6 +228,12 @@ func Identify(ctx context.Context, b *topo.Body, e *topo.Edge, budget *proofboun
 	if c.Cap == nil || c.Side == nil {
 		return c, false, nil
 	}
+	if wing != 0 {
+		pl, isPlane := c.Cap.Surface.(surfacegeom.Plane)
+		if !isPlane || (pl.Frame.N().Y < 0) != c.Cap.Reversed {
+			return c, false, nil
+		}
+	}
 	a, bv := e.Start.Position, e.End.Position
 	if a.X == bv.X || a.Y != bv.Y {
 		return c, false, nil
@@ -223,6 +241,16 @@ func Identify(ctx context.Context, b *topo.Body, e *topo.Edge, budget *proofboun
 	s, ok, err := loadStock(ctx, b, budget)
 	if !ok || err != nil {
 		return c, false, err
+	}
+	if wing != 0 {
+		if err := budget.ReserveBundle(ctx, 4*uint64(len(s.p.Verts)), uint64(len(s.p.Verts)), 24*uint64(len(s.p.Verts))); err != nil {
+			return c, false, err
+		}
+		s.p.Verts = slices.Clone(s.p.Verts)
+		for i, v := range s.p.Verts {
+			s.p.Verts[i] = ShoulderPoint(v, wing)
+		}
+		a, bv = ShoulderPoint(a, wing), ShoulderPoint(bv, wing)
 	}
 	ok, err = s.stop(ctx, &c, a, bv, budget)
 	if !ok && err == nil {
@@ -251,7 +279,7 @@ func Identify(ctx context.Context, b *topo.Body, e *topo.Edge, budget *proofboun
 			}
 			f := s.fs[s.p.FaceOf[k]]
 			cf, found := cylinder(f)
-			if !found || f == c.Round || cf.Origin.X != cr.Origin.X || cf.Origin.Z != cr.Origin.Z || math.Abs(cf.Radius.Base()-cr.Radius.Base()) > s.p.MeshBound {
+			if !found || f == c.Round || wing == 0 && (cf.Origin.X != cr.Origin.X || cf.Origin.Z != cr.Origin.Z) || math.Abs(cf.Radius.Base()-cr.Radius.Base()) > s.p.MeshBound {
 				continue
 			}
 			if c.Boss != nil && c.Boss != f {

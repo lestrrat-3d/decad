@@ -34,6 +34,54 @@ func Prepare(ctx context.Context, env topo.Env, a Admission, c Candidate, w Wind
 	if !ok || err != nil {
 		return Prepared{}, false, err
 	}
+	return prepareOutput(ctx, env, a, old, out, radial, w, 2, 0, m)
+}
+
+// PrepareOuter maps the held mesh into the shoulder chart and returns the
+// result in world coordinates before building its error and moment bounds.
+func PrepareOuter(ctx context.Context, env topo.Env, a OuterAdmission, c Candidate, w WindowBounds, m *proofbound.ReplayBudget) (Prepared, bool, error) {
+	old, ok := a.Stock.Payload.(facetedrecord.Payload)
+	if !ok || a.Wing != 1 && a.Wing != -1 {
+		return Prepared{}, false, nil
+	}
+	if err := m.ReserveBundle(ctx, uint64(8*len(old.Verts)), uint64(len(old.Verts)), uint64(len(old.Verts))*24); err != nil {
+		return Prepared{}, false, err
+	}
+	v := make([]r3.Vec, len(old.Verts))
+	for i, p := range old.Verts {
+		v[i] = ShoulderPoint(p, a.Wing)
+	}
+	out, ok, err := Apply(ctx, Mesh{Vertices: v, Triangles: old.Tris, Sources: old.Src}, c.Section, c.Groups, c.StopFacets, w.support, m)
+	if !ok || err != nil {
+		return Prepared{}, false, err
+	}
+	n, _, ok, err := outerNative(ctx, a, m)
+	if !ok || err != nil {
+		return Prepared{}, false, err
+	}
+	// A finite end face has its own blend identity and its own surface
+	// witness. Only the longitudinal wall extension follows the cylinder.
+	endFaces := 0
+	for i, t := range out.Triangles {
+		if out.Sources[i] == c.Groups.Extension && out.Vertices[t[0]].X == c.Section.End.X && out.Vertices[t[1]].X == c.Section.End.X && out.Vertices[t[2]].X == c.Section.End.X {
+			out.Sources[i] = len(old.Groups) + 2
+			endFaces++
+		}
+	}
+	if endFaces == 0 {
+		return Prepared{}, false, nil
+	}
+	radial, ok, err := cylinderExtensionBound(ctx, c.Section, n, out, c.Groups.Extension, m)
+	if !ok || err != nil {
+		return Prepared{}, false, err
+	}
+	for i, p := range out.Vertices {
+		out.Vertices[i] = r3.NewVec(-p.Z, p.Y, -float64(a.Wing)*p.X)
+	}
+	return prepareOutput(ctx, env, a.Admission, old, out, radial, w, 3, a.Wing, m)
+}
+
+func prepareOutput(ctx context.Context, env topo.Env, a Admission, old facetedrecord.Payload, out Mesh, radial float64, w WindowBounds, newGroups, wing int, m *proofbound.ReplayBudget) (Prepared, bool, error) {
 	setback := a.Setback
 	if err := m.ReserveBundle(ctx, uint64(12*(len(old.Tris)+len(out.Triangles))), uint64(4*(len(old.Tris)+len(out.Triangles))), uint64(256*(len(old.Tris)+len(out.Triangles)))); err != nil {
 		return Prepared{}, false, err
@@ -42,7 +90,7 @@ func Prepare(ctx context.Context, env topo.Env, a Admission, c Candidate, w Wind
 		Verts: out.Vertices, Tris: out.Triangles, Src: out.Sources, Groups: slices.Clone(old.Groups),
 		VertexBound: slices.Clone(old.VertexBound), MeshBound: old.MeshBound, Xform: r3.Identity(),
 	}
-	for i := range 2 {
+	for i := range newGroups {
 		p.Groups = append(p.Groups, facetedrecord.Group{Origins: []provenance.Ref{{Producer: env.Ref, Role: "chamfer(0)"}}, Source: facetedrecord.BlendSource(env.Ref, i)})
 	}
 	for i := range p.Groups {
@@ -83,7 +131,16 @@ func Prepare(ctx context.Context, env topo.Env, a Admission, c Candidate, w Wind
 	// chart point. Three whole ulps bound the Euclidean rounding displacement.
 	maxCoord := max(math.Abs(lo.X), math.Abs(lo.Y), math.Abs(lo.Z), math.Abs(hi.X), math.Abs(hi.Y), math.Abs(hi.Z))
 	rounding := proofbound.ProductUpper(3, math.Nextafter(maxCoord, inf)-maxCoord)
-	bound := proofbound.AbsSumUpper(old.MeshBound, radial, w.Deviation, rounding)
+	inherited := old.MeshBound
+	if wing != 0 {
+		var ok bool
+		var err error
+		inherited, ok, err = localInheritedBound(ctx, old, current, w.support, wing, m)
+		if !ok || err != nil {
+			return Prepared{}, false, err
+		}
+	}
+	bound := proofbound.AbsSumUpper(inherited, radial, w.Deviation, rounding)
 	for _, t := range p.Tris {
 		if !previous[t] {
 			for _, j := range t {

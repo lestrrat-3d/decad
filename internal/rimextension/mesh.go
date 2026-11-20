@@ -128,6 +128,41 @@ func (m *rewrite) convex(p []int, group int) {
 	for _, n := range sum {
 		n.Quo(n, count)
 	}
+	// A sub-ulp-wide polygon can round its mean onto its own edge.
+	// A fan from an existing corner preserves every boundary split without
+	// introducing another rounded vertex.
+	m.spend(uint64(len(p))*96, uint64(len(p))*2048)
+	if m.err != nil {
+		return
+	}
+	rounded := lift(sum.vec())
+	for i, a := range p {
+		if !collinear(lift(m.out.Vertices[a]), lift(m.out.Vertices[p[(i+1)%len(p)]]), rounded) {
+			continue
+		}
+		m.spend(uint64(len(p)*len(p))*96, uint64(len(p)*len(p))*2048)
+		if m.err != nil {
+			return
+		}
+		for j, apex := range p {
+			valid := true
+			for k := 1; k+1 < len(p); k++ {
+				b, c := p[(j+k)%len(p)], p[(j+k+1)%len(p)]
+				if collinear(lift(m.out.Vertices[apex]), lift(m.out.Vertices[b]), lift(m.out.Vertices[c])) {
+					valid = false
+					break
+				}
+			}
+			if valid {
+				for k := 1; k+1 < len(p); k++ {
+					m.emit(apex, p[(j+k)%len(p)], p[(j+k+1)%len(p)], group)
+				}
+				return
+			}
+		}
+		m.err = errChart
+		return
+	}
 	center := m.insert(sum)
 	for i, a := range p {
 		m.emit(a, p[(i+1)%len(p)], center, group)

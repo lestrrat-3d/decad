@@ -592,7 +592,8 @@ type Body struct {
 	// n is the node data internal packages read and build (internal/topo).
 	n topo.Body
 	// blindProof binds the private blind Cut to its source history and ledger.
-	blindProof *blindGroupProof
+	blindProof    *blindGroupProof
+	upperRimProof *upperRimProof
 
 	// pairReports keeps the recent ContactPair reports this body is the
 	// first operand of; it changes no outcome either. ContactPair stores each

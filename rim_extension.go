@@ -55,6 +55,11 @@ func extendStraightRim(ctx context.Context, d *Document, b *Body, e *topo.Edge, 
 	if !ok || err != nil {
 		return none, false, err
 	}
+	return publishPreparedRim(ctx, env, b, result, m)
+}
+
+func publishPreparedRim(ctx context.Context, env topo.Env, b *Body, result rimextension.Prepared, m *proofbound.ReplayBudget) (brepmodify.Result, bool, error) {
+	var none brepmodify.Result
 	old, ok := b.n.Payload.(facetedrecord.Payload)
 	if !ok {
 		return none, false, nil
