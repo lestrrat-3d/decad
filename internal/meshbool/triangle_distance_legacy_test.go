@@ -237,24 +237,37 @@ func legacyClosestEdgeOffset(ta, tb [3]r3.Vec) r3.Vec {
 	return axis
 }
 
+// requireRawBitsf requires got to carry want's exact bits, NaN payload and
+// sign included. The current and legacy code run the same float operations
+// on one machine, so even a NaN must match bit for bit; requireSameBitsf
+// lets any two NaNs match because math.Min's payload differs across
+// architectures, which this comparison does not involve.
+func requireRawBitsf(t *testing.T, want, got float64, format string, args ...any) {
+	t.Helper()
+	if math.Float64bits(want) != math.Float64bits(got) {
+		require.FailNow(t, "bit mismatch", "%s: want %v (%#x) got %v (%#x)", fmt.Sprintf(format, args...),
+			want, math.Float64bits(want), got, math.Float64bits(got))
+	}
+}
+
 // requireEdgeOffsetMatchesLegacy holds one pair at one slack to the legacy
-// code: the float reading and the nearest-edge offset bit for bit (a NaN
-// matches any NaN), the replay distance's full-scan offset, the plain answer, and the replay's answer, error and
-// charged work, on a trial budget and, when tight is set, on budgets cut to
-// the legacy work less one and to half of it.
+// code: the float reading and the nearest-edge offset bit for bit, the
+// replay distance's full-scan offset, the plain answer, and the replay's
+// answer, error and charged work, on a trial budget and, when tight is set,
+// on budgets cut to the legacy work less one and to half of it.
 func requireEdgeOffsetMatchesLegacy(t *testing.T, ta, tb [3]r3.Vec, slack float64, tight bool, label string) {
 	t.Helper()
 	d, offset := triTriDistanceEdgeOffset(ta, tb)
-	requireSameBitsf(t, legacyTriTriDistance(ta, tb), d, "%s distance", label)
+	requireRawBitsf(t, legacyTriTriDistance(ta, tb), d, "%s distance", label)
 	want := legacyClosestEdgeOffset(ta, tb)
-	requireSameBitsf(t, want.X, offset.X, "%s offset X", label)
-	requireSameBitsf(t, want.Y, offset.Y, "%s offset Y", label)
-	requireSameBitsf(t, want.Z, offset.Z, "%s offset Z", label)
+	requireRawBitsf(t, want.X, offset.X, "%s offset X", label)
+	requireRawBitsf(t, want.Y, offset.Y, "%s offset Y", label)
+	requireRawBitsf(t, want.Z, offset.Z, "%s offset Z", label)
 	_, replayOffset, err := triTriDistanceReplay(t.Context(), ta, tb, slack, false, proofbound.NewReplayTrialBudget())
 	require.NoError(t, err, label)
-	requireSameBitsf(t, want.X, replayOffset.X, "%s replay offset X", label)
-	requireSameBitsf(t, want.Y, replayOffset.Y, "%s replay offset Y", label)
-	requireSameBitsf(t, want.Z, replayOffset.Z, "%s replay offset Z", label)
+	requireRawBitsf(t, want.X, replayOffset.X, "%s replay offset X", label)
+	requireRawBitsf(t, want.Y, replayOffset.Y, "%s replay offset Y", label)
+	requireRawBitsf(t, want.Z, replayOffset.Z, "%s replay offset Z", label)
 	require.Equal(t, legacyTriTriDistanceExceeds(ta, tb, slack), TriTriDistanceExceeds(ta, tb, slack), label)
 
 	legacyBudget, budget := proofbound.NewReplayTrialBudget(), proofbound.NewReplayTrialBudget()

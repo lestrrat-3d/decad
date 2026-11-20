@@ -592,8 +592,9 @@ func TriTriDistance(ta, tb [3]r3.Vec) float64 {
 
 // triTriDistanceEdgeOffset returns TriTriDistance(ta, tb) and the nearest
 // edge pair's offset: the segSegOffset of the first edge pair, in the loop's
-// order, whose length is below every earlier pair's, or the zero vector when
-// no length is below +Inf. Each edge candidate is that offset's length, as
+// order, that reaches the smallest length below +Inf. A tie keeps the earlier
+// pair, a NaN or +Inf length is never picked, and the offset is the zero
+// vector when no length is below +Inf. Each edge candidate is that offset's length, as
 // SegSegDist3 computes it, so the distance reads the same nine offsets.
 func triTriDistanceEdgeOffset(ta, tb [3]r3.Vec) (float64, r3.Vec) {
 	best := posInf
