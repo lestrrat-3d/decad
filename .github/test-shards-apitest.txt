@@ -2647,6 +2647,7 @@
 10	0.00	TestThickenStraightSweepSheetBuildsReplayableSolid
 10	0.00	TestToFacePlacedStopNormal
 10	0.00	TestUndercutsTiltedPull
+10	46.89	TestUnionChainRimSplitRebuild
 10	0.01	TestUnionManyChainsMixedHeightPrisms
 10	0.00	TestUnionProfileRejectsStaleSelection
 10	0.63	TestUnionShoulderedHubAndRadialLug

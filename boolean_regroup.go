@@ -12,6 +12,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/booloperand"
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
+	"github.com/lestrrat-3d/decad/internal/rimsplit"
 	"github.com/lestrrat-3d/decad/internal/topo"
 )
 
@@ -262,6 +263,43 @@ func regroupBoolean(ctx context.Context, d *Document, op meshbool.OperationKind,
 	}
 	n, span, ok, err := booleandispatch.Regroup(ectx, chain, envOf(documentNode(d), d.nextProducerID()),
 		booleanHooks(cfg), regroupSurfaces)
+	if err != nil || !ok {
+		return nil, 0, false, err
+	}
+	return bodyHandle(n), span, true, nil
+}
+
+// rimSplitRebuild retries a two-body Union that the local chain-depth gate refused on
+// an operand's held facets: booleandispatch.RebuildUnionSplit rebuilds the recorded
+// Union history beneath both operands with rim splitting on, then joins them
+// (agent-docs/prism-boolean-design.md Part R, "Rim-split rebuild"). ok=false means
+// the caller returns cause unchanged. A non-nil error is cancellation or a surfaced
+// invariant break. It stays in root because it reads Document.producers through
+// historyProducers and the document's rim-split option, and maps BooleanError codes
+// (regroupSurfaces), all root-only.
+func rimSplitRebuild(ctx context.Context, d *Document, op meshbool.OperationKind, a, b *Body,
+	cfg booleanConfig, cause error) (*Body, producerID, bool, error) {
+	if op != meshbool.OpUnion || cfg.matchingFaces || d.rimSplit || rimsplit.Of(ctx) {
+		return nil, 0, false, nil
+	}
+	operand, ok := booleandispatch.CoarseHeldOperand(cause)
+	if !ok {
+		return nil, 0, false, nil
+	}
+	coarse := &a.n
+	if operand == 1 {
+		coarse = &b.n
+	}
+	src := historyProducers{d}
+	if _, _, ok := boolchain.Expandable(src, coarse); !ok {
+		return nil, 0, false, nil
+	}
+	ectx, err := d.evalContext(ctx)
+	if err != nil {
+		return nil, 0, false, err
+	}
+	n, span, ok, err := booleandispatch.RebuildUnionSplit(ectx, &a.n, &b.n, src,
+		envOf(documentNode(d), d.nextProducerID()), booleanHooks(cfg), regroupSurfaces)
 	if err != nil || !ok {
 		return nil, 0, false, err
 	}

@@ -1196,8 +1196,9 @@ work intervals inside quadratic/refinement loops, as interference §7 specifies.
   tolerance raised to its own held floor, which its restatement always meets,
   so the request never refuses; which of its facets the pair may cut is the
   rim bullet's gate below (`agent-docs/faceted-vertex-bounds-design.md` §5). A pair the gate
-  refuses is retried from the source bodies of its chain when the chain regroup applies
-  (`agent-docs/prism-boolean-design.md` Part R). A route that moves accepted geometry
+  refuses is retried from the source bodies of its chain when the chain regroup applies, and a refused
+  `Union` is then rebuilt from its recorded `Union` history with rim splitting on
+  (`agent-docs/prism-boolean-design.md` Part R, "Rim-split rebuild"). A route that moves accepted geometry
   MUST record an `opdiagnostic.Record` with a `Change` mechanism, because the regroup
   reads that field to tell a result that denotes its operation exactly from one that does not.
   `Verify`'s read-only intersection instead meshes each other body once per
