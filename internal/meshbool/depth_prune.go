@@ -98,12 +98,16 @@ import (
 // has B' >= min(B, t') > t, so the certificate of B' is above b and the
 // answer is "deeper". Otherwise B' = B and the certificate decides as before.
 //
-// The cost. Until it starts over, the pruned scan enters a box only when the
-// unpruned scan does, so every box distance it reads the unpruned scan reads
-// too. Its only other reading is a facet in the band with the flag set, at
-// most one for each facet box both scans read. So a scan that starts over
-// costs at most about twice the unpruned scan, and the prune itself never
-// computes PointRoundBound.
+// The cost. Let U be the number of readings (box distances and facet
+// distances) the unpruned scan makes. Until it starts over, the pruned scan
+// enters a box only when the unpruned scan does, so it reads no box distance
+// the unpruned scan does not. Its only other reading is a facet in the band
+// with the flag set, at most one for each facet box the unpruned scan reads.
+// A scan that starts over has done at most that much and then runs the
+// unpruned scan, so its total is at most 2·U plus one facet reading for each
+// facet box the unpruned scan reads. That bound is on all readings together:
+// depthFacetDistance calls alone can exceed twice the unpruned scan's on a
+// small scan. The prune itself never computes PointRoundBound.
 const (
 	// depthPruneShrink is 1 − 128u, which covers the 24u the box argument
 	// needs and the rounding of the product.

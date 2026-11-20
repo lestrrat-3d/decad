@@ -1516,11 +1516,16 @@ work intervals inside quadratic/refinement loops, as interference §7 specifies.
     `B' = B` again. A scan that ends after passing over a box has `B' > t`,
     so the answer is "deeper"; otherwise `B' = B` and the certificate decides
     as before.
-  - The cost. Until it starts over, the pruned scan enters a box only when
-    the unpruned scan does, so it reads no box distance the unpruned scan
-    does not, plus at most one facet reading per facet box. A scan that
-    starts over therefore costs at most about twice the unpruned scan, and
-    the prune never computes `PointRoundBound`.
+  - The cost. Let `U` be the number of readings (box distances and facet
+    distances) the unpruned scan makes. Until it starts over, the pruned scan
+    enters a box only when the unpruned scan does, so it reads no box
+    distance the unpruned scan does not, plus at most one facet reading per
+    facet box the unpruned scan reads. A scan that starts over has done at
+    most that much and then runs the unpruned scan, so its total is at most
+    `2·U` plus one facet reading per facet box the unpruned scan reads. The
+    bound covers all readings together; `depthFacetDistance` calls alone can
+    exceed twice the unpruned scan's on a small scan. The prune never
+    computes `PointRoundBound`.
   The budgeted scan (`scanDepthShared`, `internal/meshbool/depth_shared.go`)
   charges one budget step for each block and facet it visits, so it runs
   without the prune and its charges stay those of the unpruned scan.
