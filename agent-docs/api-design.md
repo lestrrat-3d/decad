@@ -1391,8 +1391,10 @@ there is nothing to retry with. The document's gap tolerance is not that
 parameter and does not lift the refusal. The document's chain tolerance
 (`decad.WithChainTolerance`) does: a touched bound within it is admitted, every
 bound the result carries is still proven, and the result's `Bound` reads the
-larger figure that admits. The document's `decad.WithRimSplit` keeps a rim's bound beside the rim
-(faceted-vertex-bounds §3.7), so a later contact far from it reads the face's own bound.
+larger figure that admits. A later contact on a retained cylinder wall reads how far the cylinder
+lies from the touched facet's plane, not an earlier rim's bound on that facet (faceted-source-retention
+§11, Claim C). On other curved faces the document's `decad.WithRimSplit` keeps a rim's bound beside the
+rim (faceted-vertex-bounds §3.7), so a later contact far from it reads the face's own bound.
 Geometry the new pair does not touch keeps the bound it
 already published and is never the reason for a refusal, so a result whose
 `Bound` exceeds the next pair's chord tolerance in untouched regions is still

@@ -58,6 +58,18 @@ func finishBoolMeshReplay(ctx context.Context, m *topo.Mesh, bm *meshbool.BoolMe
 		if err := bm.SetChargedSlabBoundsReplay(ctx, retainedPlaneOf(m), budget); err != nil {
 			return nil, err
 		}
+		// retainedCylinderOf decides each denoted Cylinder face once, as
+		// retainedPlaneOf decides a plane.
+		denoted = denotedCylinderFaces(m)
+		if err := budget.SpendWork(ctx, denoted*denotedPlaneWork); err != nil {
+			return nil, err
+		}
+		if err := budget.ReserveRecords(ctx, denoted); err != nil {
+			return nil, err
+		}
+		if err := bm.SetCylinderSlabBoundsReplay(ctx, retainedCylinderOf(m), budget); err != nil {
+			return nil, err
+		}
 	}
 
 	return bm, nil

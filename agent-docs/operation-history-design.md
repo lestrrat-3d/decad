@@ -682,7 +682,7 @@ The retained-plane certificate travels with the faceted payload. Each stage carr
 | Facet cutting and weld | `meshbool` `SourceIDs`, `KeptFacet.Src`, `StitchFacetsContext` | Each kept or split facet's group index. |
 | Patch assembly | `facetedrecord/assemble.go` | One face per connected patch of a group, with the group's tag. |
 | Edge chains | `facetedtopology` | Per-face indices only; it never reads groups. |
-| Later mesh Boolean | `booleaneval/retained_plane.go`, `meshbool/plane_slab.go` | The slab bound of retention §11 for an admitted plane facet. |
+| Later mesh Boolean | `booleaneval/retained_plane.go`, `retained_cylinder.go`, `meshbool/plane_slab.go`, `cylinder_slab.go` | The slab bound of retention §11 for an admitted plane or cylinder facet. |
 | Placement | `facetedrecord/placed.go`, `place.go`, `point_plane_scale.go` | Every group, with `NormalBound` recomputed by retention §3.4. |
 | Retained blend | `retainedblend/route.go` and the `*_rewrite.go` files | The copied groups, plus a new blend group for each blended edge. |
 
@@ -718,7 +718,8 @@ Phase 7 has four tasks, all implemented:
 | 7.4 Fallback fixtures | 7.1 | 7.2, 7.3 |
 
 Each fixture builds bodies through the public API, then reads internal fields from the root package. It compares
-two runs, each in its own document: the ordinary run, and a control run that disables only `retainedPlaneOf`.
+two runs, each in its own document: the ordinary run, and a control run that disables only `retainedPlaneOf` and
+`retainedCylinderOf`.
 The control refuses every second cut of the P3 scene, so a fixture compares the real run's build against the
 control's refusal, and where both runs build it compares vertex lists in a loop and reports the first differing
 index only. A failure never dumps a mesh or topology graph. No bound literal is pinned, because float bounds
@@ -731,7 +732,7 @@ names go in shard 10 of `.github/test-shards.txt`.
 - Files: `internal/booleaneval/retained_plane.go`, `eval_mesh.go`'s `PrepBoolMesh` path, and root
   `faceted_source_patch_test.go`.
 - Control: `booleaneval.WithoutRetainedPlaneSlab(ctx)` is a context option in the style of
-  `meshbool.WithContactWorkers`. Under it, `PrepBoolMesh` passes a plane reader that admits no facet, so every
+  `meshbool.WithContactWorkers`. Under it, `PrepBoolMesh` reads no retained plane or cylinder, so every
   facet keeps `FacetBound`. Production code never sets the option. The full-displacement control is this option
   on the real producer's result; no payload is built by hand.
 - Fixture: Retention §1's P3 scene in the root package is a 40×20×20 box, four lateral edges filleted at 3 mm,
@@ -764,7 +765,7 @@ names go in shard 10 of `.github/test-shards.txt`.
   the control's bound for the same vertex, and each vertex lies within its bound of the exact circle. The volume
   removed by the later cut matches its closed form within the published bounds. A cut through the torus rim, which
   also pierces the bottom plane, builds in both runs. The torus-rim vertices carry equal bounds in both runs,
-  because a curved group takes no slab, and the bottom plane's vertices are strictly tighter in the real run.
+  because a torus group takes no slab, and the bottom plane's vertices are strictly tighter in the real run.
   The chamfer face is a `RetainedTag` `Plane` with `NormalBound == 0`, and its rim vertex bounds are strictly
   below the control's for the same vertices.
 - Red leg: In a scratch edit, clear `Retained` on the copied groups in `retainedblend` `work.build`. The top
@@ -817,11 +818,11 @@ names go in shard 10 of `.github/test-shards.txt`.
     through the cap in the sketch plane, then a second pin 4 mm along x. Both pins end inside the material, so
     the second cut meets no wall of the part. First assert that the cap carries a `RetainedTag` and a denoted
     patch. The later cut then matches the control.
-  - Curved rim: The cut through the first bore's wall in `TestFacetedPlaneSlab` refuses identically in both
-    runs.
+  - Curved rim: The cut through the first bore's retained cylinder wall builds where the control refuses, and
+    its volume matches the closed form of the two overlapping bores (retention §11, Claim C).
 - Red leg: Drop the `NormalBound == 0` test in `retainedPlaneOf`. The placed cases then tighten. Drop the
-  `Denoted` test and the denoted case builds. Set every facet's `SlabBound` to 0 in `SetSlabBounds` and the
-  curved-rim case builds.
+  `Denoted` test and the denoted case builds. Drop the `SetCylinderSlabBounds` call in `prepBoolMesh` and the
+  curved-rim case refuses.
 
 Phase 7 acceptance: A later calculation consumes the real prior builder's evidence. Source identity alone
 upgrades neither geometry nor public completeness.

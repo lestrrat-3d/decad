@@ -101,7 +101,7 @@ func denotedPlaneFaces(m *topo.Mesh) uint64 {
 type withoutRetainedPlaneSlabKey struct{}
 
 // WithoutRetainedPlaneSlab returns a context under which PrepBoolMesh reads no
-// retained plane, so every facet keeps its FacetBound. It is the
+// retained plane or cylinder, so every facet keeps its FacetBound. It is the
 // full-displacement control that tests compare a real run against; production
 // code never sets it.
 func WithoutRetainedPlaneSlab(ctx context.Context) context.Context {

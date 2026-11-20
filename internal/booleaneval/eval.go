@@ -624,7 +624,7 @@ func evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 	if replay != nil {
 		bmB, err = PrepBoolMeshReplay(ctx, mb, srcB, !hasShifts && !retainedPlaneSlabDisabled(ctx), replay)
 	} else if hasShifts {
-		bmB, err = prepBoolMesh(ctx, mb, srcB, func(int) (r3.Frame, float64, bool) { return r3.Frame{}, 0, false })
+		bmB, err = prepBoolMesh(ctx, mb, srcB, false)
 	} else {
 		bmB, err = PrepBoolMesh(ctx, mb, srcB)
 	}
