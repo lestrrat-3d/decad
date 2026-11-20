@@ -135,6 +135,10 @@ func fittedOnDenominator(span twistSpan, w polynomial.RatPoly) rationalCurve {
 		y: polynomial.RpMul(freeform.RpFromBernstein(y), w), w: w}
 }
 
+// circularMesh meshes the circular fitted transitions. It is a variable only
+// so a test can see the transitions the route builds; nothing else assigns it.
+var circularMesh = buildSectionMeshMode
+
 // BuildCircularFits constructs §14's exact four-arc to fitted transition.
 func BuildCircularFits(ctx context.Context, profiles []momentinput.Profile,
 	planes []sectionrecord.PlaneRecord, work []*freeform.FreeformWork) (Build, error) {
@@ -365,7 +369,7 @@ func BuildCircularFitsWithOptions(ctx context.Context, profiles []momentinput.Pr
 	if emergingFlat {
 		edgeCount = 7
 	}
-	built, err := buildSectionMeshMode(ctx, nil, patches, edgeOf, edgeCount, planes, zs, emerging, firstFit)
+	built, err := circularMesh(ctx, nil, patches, edgeOf, edgeCount, planes, zs, emerging, firstFit)
 	if err != nil {
 		return Build{}, err
 	}

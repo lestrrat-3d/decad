@@ -22,6 +22,11 @@ const (
 	twistMaxScans     = 4096 * twistMaxTriangles
 )
 
+// twistStationTable caps the entries of one group's rational station table,
+// which a group exceeds only when one span alone needs more. It is a variable
+// only so a test can force one span per group; nothing else assigns it.
+var twistStationTable = 1 << 14
+
 var (
 	twistLimit = big.NewRat(1, 20) // refusal ceiling for the published bound, mm
 	// twistTargets are the mesh distances each patch may be refined to, finest
@@ -189,7 +194,9 @@ func buildSectionMeshMode(ctx context.Context, patches [][]twistPatch, rational 
 	ringSize := len(stations)
 	type ring struct{ span, band int }
 	var rings []ring
+	ringStart := make([]int, len(nt)+1) // rings of span i are ringStart[i]..ringStart[i+1]-1
 	for i := range nt {
+		ringStart[i] = len(rings)
 		for b := range nt[i] + 1 {
 			if i > 0 && b == 0 {
 				continue
@@ -197,6 +204,7 @@ func buildSectionMeshMode(ctx context.Context, patches [][]twistPatch, rational 
 			rings = append(rings, ring{span: i, band: b})
 		}
 	}
+	ringStart[len(nt)] = len(rings)
 	origin := planes[0].Origin
 	o := twistOriginOf(rf(origin.X), rf(origin.Y))
 	weights := make([][4]int64, ringSize)
@@ -207,7 +215,9 @@ func buildSectionMeshMode(ctx context.Context, patches [][]twistPatch, rational 
 	}
 	rhos := make([]*big.Rat, len(rings))
 	verts := make([]r3.Vec, len(rings)*ringSize)
-	err = twistParallel(ctx, len(rings), func(r int) error {
+	// ringVerts fills ring r. On the rational route, table holds the ring's
+	// span at every station q, and the ring only reads it.
+	ringVerts := func(r int, table []rationalStation) error {
 		rg := rings[r]
 		t := big.NewRat(int64(rg.band), int64(nt[rg.span]))
 		z := add(zs[rg.span], mul(sub(zs[rg.span+1], zs[rg.span]), t))
@@ -216,12 +226,18 @@ func buildSectionMeshMode(ctx context.Context, patches [][]twistPatch, rational 
 		var rho twistRoundMax
 		exactRho := new(big.Rat)
 		var x, y big.Int
+		var smooth *big.Rat
+		if rational != nil {
+			smooth = smoothstep(t)
+		}
 		for k := range bounds {
 			if rational != nil {
+				s := smooth
+				if rational[k][rg.span].linear {
+					s = t
+				}
 				for q := spanStart[k]; q < spanStart[k+1]; q++ {
-					u := big.NewRat(stations[q].a, int64(nu[k]))
-					p := rational[k][rg.span].at(u, t)
-					x, y := add(p.U, rf(origin.X)), add(p.V, rf(origin.Y))
+					x, y := table[q].at(s)
 					xf, yf := ratFloat(x), ratFloat(y)
 					v := r3.Vec{X: xf, Y: yf, Z: zf}
 					if !proofbound.FiniteVec(v) {
@@ -249,9 +265,43 @@ func buildSectionMeshMode(ctx context.Context, patches [][]twistPatch, rational 
 		// to the largest planar rounding.
 		rhos[r] = add(maxRat(rho.rat(), exactRho), abs(sub(z, rf(zf))))
 		return nil
-	})
-	if err != nil {
-		return Build{}, err
+	}
+	// The station values depend on the span and station but not on the band,
+	// so each is evaluated once and shared by the span's rings. Spans run in
+	// groups whose table holds at most twistStationTable entries (or one span),
+	// so a long loft never holds every span's table at once.
+	var originX, originY *big.Rat
+	if rational != nil {
+		originX, originY = rf(origin.X), rf(origin.Y)
+	}
+	for lo, hi := 0, 0; lo < len(nt); lo = hi {
+		hi = len(nt)
+		var table []rationalStation
+		if rational != nil {
+			hi = min(hi, lo+max(1, twistStationTable/max(ringSize, 1)))
+			table = make([]rationalStation, (hi-lo)*ringSize)
+			err := twistParallel(ctx, len(table), func(j int) error {
+				i, q := lo+j/ringSize, j%ringSize
+				k := stations[q].span
+				table[j] = rational[k][i].station(big.NewRat(stations[q].a, int64(nu[k])), originX, originY)
+				return nil
+			})
+			if err != nil {
+				return Build{}, err
+			}
+		}
+		first := ringStart[lo]
+		err := twistParallel(ctx, ringStart[hi]-first, func(j int) error {
+			r := first + j
+			if table == nil {
+				return ringVerts(r, nil)
+			}
+			off := (rings[r].span - lo) * ringSize
+			return ringVerts(r, table[off:off+ringSize])
+		})
+		if err != nil {
+			return Build{}, err
+		}
 	}
 	rho := new(big.Rat)
 	for _, r := range rhos {

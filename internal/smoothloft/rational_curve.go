@@ -79,7 +79,7 @@ func (p rationalTransition) bounds() (twistBounds, error) {
 }
 
 func (p rationalTransition) at(u, t *big.Rat) freeform.RatPoint {
-	s := mul(mul(t, t), sub(rint(3), mul(rint(2), t)))
+	s := smoothstep(t)
 	if p.linear {
 		s = t
 	}
@@ -88,6 +88,33 @@ func (p rationalTransition) at(u, t *big.Rat) freeform.RatPoint {
 		return div(add(mul(sub(rint(1), s), x), mul(s, y)), polynomial.RpEval(p.a.w, u))
 	}
 	return freeform.RatPoint{U: blend(p.a.x, p.b.x), V: blend(p.a.y, p.b.y)}
+}
+
+// smoothstep is the blend weight s(t) = t²(3-2t) of a non-linear transition.
+func smoothstep(t *big.Rat) *big.Rat {
+	return mul(mul(t, t), sub(rint(3), mul(rint(2), t)))
+}
+
+// rationalStation is a transition at one station u, shifted by a plane
+// origin. Its point at blend weight s is (x0 + s·dx, y0 + s·dy), which
+// equals at(u, t) + origin exactly for s = s(t): every term is an exact
+// rational, and big.Rat keeps each value in lowest terms.
+type rationalStation struct {
+	x0, y0, dx, dy *big.Rat
+}
+
+// station evaluates the five station polynomials of p at u once, so the
+// rings of a span share them.
+func (p rationalTransition) station(u, originX, originY *big.Rat) rationalStation {
+	w := polynomial.RpEval(p.a.w, u)
+	ax, ay := div(polynomial.RpEval(p.a.x, u), w), div(polynomial.RpEval(p.a.y, u), w)
+	bx, by := div(polynomial.RpEval(p.b.x, u), w), div(polynomial.RpEval(p.b.y, u), w)
+	return rationalStation{x0: add(ax, originX), y0: add(ay, originY), dx: sub(bx, ax), dy: sub(by, ay)}
+}
+
+// at returns the shifted point at blend weight s. It reads st and s only.
+func (st rationalStation) at(s *big.Rat) (*big.Rat, *big.Rat) {
+	return add(st.x0, mul(s, st.dx)), add(st.y0, mul(s, st.dy))
 }
 
 func rationalCross(ax, ay, bx, by polynomial.RatPoly) polynomial.RatPoly {
