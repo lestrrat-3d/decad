@@ -304,14 +304,13 @@ func evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 	// cache keys on the level, so a caller's own earlier unverified mesh at
 	// this same internal tolerance is a different entry and is never handed
 	// back here.
-	chordA := 0.0
-	if replay != nil {
-		chordA, err = operandChordReplay(ctx, a, tolMM, dPair, chordScale, replay)
-		if err != nil {
-			return Evaluation{}, err
-		}
-	} else {
-		chordA = operandChord(ctx, a, tolMM, chordDiameter(ctx, op, a, b, dPair), chordScale)
+	diam := dPair
+	if replay == nil {
+		diam = chordDiameter(ctx, op, a, b, dPair)
+	}
+	chordA, err := evaluationOperandChord(ctx, a, tolMM, diam, chordScale, op == meshbool.OpCut, replay)
+	if err != nil {
+		return Evaluation{}, err
 	}
 	ma, restatingA, err := meshes.TessellateOperand(ctx, a, chordA)
 	if err != nil {
@@ -328,14 +327,9 @@ func evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 	if err := ctx.Err(); err != nil {
 		return Evaluation{}, err
 	}
-	chordB := 0.0
-	if replay != nil {
-		chordB, err = operandChordReplay(ctx, b, tolMM, dPair, chordScale, replay)
-		if err != nil {
-			return Evaluation{}, err
-		}
-	} else {
-		chordB = operandChord(ctx, b, tolMM, chordDiameter(ctx, op, a, b, dPair), chordScale)
+	chordB, err := evaluationOperandChord(ctx, b, tolMM, diam, chordScale, false, replay)
+	if err != nil {
+		return Evaluation{}, err
 	}
 	var mb *topo.Mesh
 	var restatingB bool

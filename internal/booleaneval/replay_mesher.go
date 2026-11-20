@@ -171,12 +171,22 @@ func (m replayMesher) TessellateOperand(ctx context.Context, b *topo.Body, chord
 }
 
 func operandChordReplay(ctx context.Context, b *topo.Body, pairTol, dPair, chordScale float64, budget *proofbound.ReplayBudget) (float64, error) {
-	share, err := booloperand.ChordShareReplay(ctx, b, budget)
-	if err != nil {
-		return 0, err
+	return evaluationOperandChord(ctx, b, pairTol, dPair, chordScale, false, budget)
+}
+
+func evaluationOperandChord(ctx context.Context, b *topo.Body, pairTol, diameter, scale float64, cutTarget bool, budget *proofbound.ReplayBudget) (float64, error) {
+	var share meshbool.ChordOperand
+	if budget == nil {
+		share = booloperand.ChordShare(ctx, b)
+	} else {
+		var err error
+		share, err = booloperand.ChordShareReplay(ctx, b, budget)
+		if err != nil {
+			return 0, err
+		}
 	}
 	_, restating := booloperand.HeldFloor(b)
-	return meshbool.OperandChord(pairTol, dPair*chordScale, share.Floor*chordScale, restating), nil
+	return share.EvaluationChord(pairTol, diameter, scale, restating, cutTarget), nil
 }
 
 func facesReplay(ctx context.Context, b *topo.Body, budget *proofbound.ReplayBudget) ([]*topo.Face, error) {
