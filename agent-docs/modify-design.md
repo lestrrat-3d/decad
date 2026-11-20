@@ -12779,6 +12779,21 @@ The public regression joins a transverse web and a circular pad to an
 extruded flange. It checks the original side and finished bevel heights at
 the same transverse station, and verifies the closed shell and volume.
 
+### Circular pad aligned with an adjoining flange
+
+A full rim can survive later cuts even when the flange and the pad meet at
+the lower edge of the chamfer. Follow the selected cap and cylinder back
+to the same native circular extrusion. Use all the stock facets and their
+displacement bounds to check the entire support of the radial map above
+the heel, out to nine eighths of the pad radius. Any other source reaching this volume must belong to the same native
+flange extrusion, whose upper plane lies at or below the heel. A hole or a
+second solid entering the disk above that plane prevents this construction.
+
+The lower ring of the held cylinder must close along the authenticated
+flange faces at a single height. Include the difference between this height
+and the exact heel in the map's displacement bound. Retain the original
+pad, cylinder and new cone identities for later shoulder checks.
+
 ### Offset circular support beyond a stopped shoulder
 
 A straight edge on the opposite side of the flange may reach its rounded
