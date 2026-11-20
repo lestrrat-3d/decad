@@ -4674,10 +4674,10 @@ piece beside a rim keeps the rim's bound, so a chain whose next contact lands on
 the rebuild, exactly as it would in a `WithRimSplit` document.
 
 **Test.** `TestUnionChainRimSplitRebuild` (`apitest/union_rim_split_rebuild_test.go`) joins a post leaning 9°
-from a revolved plate and six revolved struts (neck, cone and strut) that rise at 60° into the post's axis on one
+from a revolved plate and four revolved struts (neck, cone and strut) that rise at 60° into the post's axis on one
 side, under a 0.01 mm chain tolerance. The struts join the post from the top down or from the bottom up and the
 post then joins the plate, or the post joins the plate first and the struts follow; each order is built
-right-handed and mirrored. The sequential chain refuses at the third or fourth strut in every case. With the
+right-handed and mirrored. The sequential chain refuses at the third or fourth strut join in every case. With the
 rebuild each builds one watertight solid whose volume encloses the closed-form plate and post plus a grid integral
 of the strut volume outside the post. `TestRebuildUnion` (`internal/boolchain/rebuild_test.go`) pins the
 rebuild's call order, step bound and misses; `TestCoarseHeldOperand` pins the trigger's classifier.

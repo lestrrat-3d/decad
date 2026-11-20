@@ -179,11 +179,11 @@ func strutOutside(nu, n int) float64 {
 }
 
 // strutChainTolerance is the strutted post's chain tolerance: above the bound
-// one strut's rim leaves on the post wall, below the bound the rims of six
+// one strut's rim leaves on the post wall, below the bound the rims of four
 // struts reach when each is composed from the previous one's.
 const (
 	strutChainTolerance = 0.01
-	strutCount          = 6
+	strutCount          = 4
 )
 
 // strutOrders join the parts two at a time: each strut onto the post from the
