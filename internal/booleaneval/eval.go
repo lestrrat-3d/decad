@@ -146,6 +146,15 @@ func VolumeReading(ctx context.Context, audit *facetproof.MeshAudit, volSymDiff 
 // (agent-docs/gap-tolerance-design.md §5.2).
 func Evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 	meshes OperandMesher, chordScale float64, capFace, coneFace *topo.Face) (Evaluation, error) {
+	if op == meshbool.OpUnion && capFace == nil && coneFace == nil {
+		result, ok, err := matchedPrismUnion(ctx, a, b, meshes, chordScale)
+		if err != nil && !stationTrialDeclined(err) {
+			return Evaluation{}, err
+		}
+		if ok {
+			return result, nil
+		}
+	}
 	twins := &operandTwins{}
 	ev, err := evaluate(ctx, op, a, b, meshes, chordScale, capFace, coneFace, twins, nil, nil, nil, nil, 0)
 	// On a coarse held contact, try the same operands with a directional
@@ -752,9 +761,18 @@ func evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 	} else {
 		memo = meshbool.NewContactMemo(bmA, bmB)
 	}
+	station, matchedStations := meshes.(*stationMesher)
+	matchedStations = matchedStations && station.matches(a, b, ma, mb)
+	if matchedStations && !hasShifts && fixed == nil && replay == nil {
+		ctx = meshbool.WithAxialRims(ctx, bmA, bmB, ma, mb, station.rims, station.budget)
+	}
 	var proximityErr error
 	if replay != nil {
 		proximityErr = meshbool.RefuseUndecidableProximityReplay(ctx, ma, mbDecide, bmA, bmB, memo, capFace, coneFace, replay)
+	} else if matchedStations && !hasShifts && fixed == nil && a == station.disk.body {
+		// The penetration witness searches the first operand's faces first.
+		// Use the same flange-first proof for either spelling of this Union.
+		proximityErr = meshbool.RefuseUndecidableProximity(ctx, mbDecide, ma, bmB, bmA, meshbool.NewContactMemo(bmB, bmA), nil, nil)
 	} else {
 		var planeBudget *proofbound.WorkBudget
 		if inset, ok := meshes.(*radialInsetMesher); ok && !hasShifts && fixed == nil {
@@ -788,7 +806,7 @@ func evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 	// leaves the true operand where it was (agent-docs/gap-tolerance-design.md
 	// §4), so b's record holds once its leaves' bounds and drift grow by that.
 	_, radiallyInset := meshes.(*radialInsetMesher)
-	trackOccupancy := !radiallyInset && (op == meshbool.OpUnion || op == meshbool.OpCut) &&
+	trackOccupancy := !matchedStations && !radiallyInset && (op == meshbool.OpUnion || op == meshbool.OpCut) &&
 		replay == nil && ordered == nil && fixed == nil && capFace == nil && coneFace == nil
 	if trackOccupancy {
 		if occA = occupancyleaf.Of(a, ma); occA != nil {

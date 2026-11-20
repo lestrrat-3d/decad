@@ -80,6 +80,7 @@ func pairCuts(ctx context.Context, ma, mb *BoolMesh, memo *ContactMemo, keyOf fu
 	work := 0
 	boxTree := newBoxTree(mb.Boxes)
 	candidates := make([]int, 0, 64)
+	nativeRims := axialRimsFor(ctx, ma, mb)
 	contacts := NewContactBatchExecutor(ctx, ma, mb, memo, ContactWorkers(ctx), func(pair ContactPair, c TriContact) error {
 		i, j := pair.I, pair.J
 		ta := TriCorners(ma, i)
@@ -125,6 +126,13 @@ func pairCuts(ctx context.Context, ma, mb *BoolMesh, memo *ContactMemo, keyOf fu
 			sin = SinLowerBound(c.Sin2)
 		}
 		rim := rimBoundFromSin(ma.SlabBound[i], mb.SlabBound[j], sin, c.Sin2 != nil)
+		if nativeRims != nil {
+			var err error
+			rim, err = nativeRims.bound(ctx, i, j, c.P0, c.P1, rim)
+			if err != nil {
+				return err
+			}
+		}
 		maxRim = max(maxRim, rim)
 		minSin = min(minSin, sin)
 		if !math.IsInf(deepTerm, 1) {
