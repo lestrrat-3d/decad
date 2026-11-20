@@ -22,6 +22,7 @@ type OuterAdmission struct {
 	Admission
 	Wing                                                            int
 	Cone                                                            *topo.Face
+	RetainedDiskWalls                                               []*topo.Face
 	CenterX, CenterZ, Hinge, PadBottom, PadTop, Radius, NoseSetback *big.Rat
 }
 
@@ -43,7 +44,8 @@ func outerNative(ctx context.Context, a OuterAdmission, meter *proofbound.Replay
 		return n, nil, false, nil
 	}
 	for _, f := range []BoundFace{a.Cap, a.Side, a.Round, a.Boss} {
-		if f.Final == nil || f.Final.Body != a.Stock || f.Native == nil || f.Native.Body != f.Body || !windowFinite(f.Translation) {
+		nativeOnly := f.Native == a.Round.Native && f.Body == a.Round.Body && f.Final == nil && a.Boss.Final == a.Cone
+		if (!nativeOnly && (f.Final == nil || f.Final.Body != a.Stock)) || f.Native == nil || f.Native.Body != f.Body || !windowFinite(f.Translation) {
 			return n, nil, false, nil
 		}
 	}
@@ -162,6 +164,14 @@ func outerNative(ctx context.Context, a OuterAdmission, meter *proofbound.Replay
 	u, v, uk, vk = minus(u, ox), minus(v, oz), minus(uk, ox), minus(vk, oz)
 	cr2 := plus(times(u, u), times(v, v))
 	du, dv := minus(n.cx, ox), minus(n.cz, oz)
+	if a.Boss.Final == a.Cone {
+		// With concentric disks the whole native arc stays inside the pad.
+		crEnd := plus(times(uk, uk), times(vk, vk))
+		if du.Sign() != 0 || dv.Sign() != 0 || crEnd.Cmp(cr2) != 0 || cr2.Cmp(times(n.r, n.r)) > 0 {
+			return n, nil, false, nil
+		}
+		return n, new(big.Rat), true, nil
+	}
 	if dv.Sign() >= 0 {
 		return n, nil, false, nil
 	}

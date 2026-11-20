@@ -14,6 +14,8 @@ type Section struct{ Stop, End, Toe, Heel r3.Vec }
 
 // Groups maps the affected held facets to their owning source groups.
 type Groups struct {
+	ClosedTerminal                    bool
+	RetainedDiskGroups                map[int]bool
 	Cap, Side, Boss, Bevel, Extension int
 	Stop                              map[int]bool
 	// OpenCylinderEnd allows a terminal boundary already closed by the cylinder.

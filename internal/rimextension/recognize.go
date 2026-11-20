@@ -47,7 +47,7 @@ type stockFaces struct {
 func loadStock(ctx context.Context, b *topo.Body, budget *proofbound.ReplayBudget) (stockFaces, bool, error) {
 	var s stockFaces
 	p, ok := b.Payload.(facetedrecord.Payload)
-	if !ok || !b.Solid || p.Xform != r3.Identity() || (!p.BooleanSimilaritySource && !p.ContactAudited) || len(p.Tris) > 32768 || len(p.Verts) > 16384 || len(p.Verts) != len(p.VertexBound) || len(p.FaceOf) != len(p.Tris) || len(p.Src) != len(p.Tris) {
+	if !ok || !b.Solid || p.Xform != r3.Identity() || (!p.BooleanSimilaritySource && !p.ContactAudited) || len(p.Tris) > proofbound.MaxRetainedRimFacets || len(p.Verts) > proofbound.MaxRetainedRimVertices || len(p.Verts) != len(p.VertexBound) || len(p.FaceOf) != len(p.Tris) || len(p.Src) != len(p.Tris) {
 		return s, false, nil
 	}
 	n := uint64(len(p.Tris))
@@ -96,9 +96,9 @@ func (s stockFaces) onStop(i int, x float64) bool {
 	t := s.p.Tris[i]
 	return s.p.Verts[t[0]].X == x && s.p.Verts[t[1]].X == x && s.p.Verts[t[2]].X == x
 }
-func (s stockFaces) stop(ctx context.Context, c *Candidate, start, end r3.Vec, roundFace func(*topo.Face) bool, budget *proofbound.ReplayBudget) (bool, error) {
+func (s stockFaces) stop(ctx context.Context, c *Candidate, start, end r3.Vec, roundFace func(*topo.Face) bool, coneEnd bool, budget *proofbound.ReplayBudget) (bool, error) {
 	seed := -1
-	var round *topo.Face
+	var round, cone *topo.Face
 	for i, t := range s.p.Tris {
 		if s.fs[s.p.FaceOf[i]] != c.Cap {
 			continue
@@ -122,9 +122,17 @@ func (s stockFaces) stop(ctx context.Context, c *Candidate, start, end r3.Vec, r
 						return false, nil
 					}
 					round = f
+				} else if _, flat := f.Surface.(surfacegeom.Faceted); coneEnd && flat && len(f.Origins) == 1 && f.Origins[0].Role == "chamfer(0)" {
+					if cone != nil && cone != f {
+						return false, nil
+					}
+					cone = f
 				}
 			}
 		}
+	}
+	if round == nil {
+		round = cone
 	}
 	if seed < 0 || round == nil {
 		return false, nil
@@ -254,19 +262,25 @@ func identify(ctx context.Context, b *topo.Body, e *topo.Edge, wing int, budget 
 		a, bv = ShoulderPoint(a, wing), ShoulderPoint(bv, wing)
 	}
 	roundFace := func(f *topo.Face) bool { _, yes := cylinder(f); return yes }
-	ok, err = s.stop(ctx, &c, a, bv, roundFace, budget)
+	ok, err = s.stop(ctx, &c, a, bv, roundFace, wing != 0, budget)
 	if !ok && err == nil {
 		c.Stops = nil
-		ok, err = s.stop(ctx, &c, bv, a, roundFace, budget)
+		ok, err = s.stop(ctx, &c, bv, a, roundFace, wing != 0, budget)
 	}
 	if !ok || err != nil {
 		return c, false, err
 	}
-	cr, _ := cylinder(c.Round)
+	cr, heldRound := cylinder(c.Round)
+	if !heldRound {
+		c.Boss = c.Round
+	}
 	start, end := c.Section.Stop, c.Section.End
 	// The support extends to the outside of the cap, unlike the profile's
 	// own round end. Require adjacency to the cap in the selected X interval.
 	for i, t := range s.p.Tris {
+		if !heldRound {
+			break
+		}
 		if s.fs[s.p.FaceOf[i]] != c.Cap {
 			continue
 		}
@@ -361,10 +375,10 @@ func IdentifyTransverse(ctx context.Context, b *topo.Body, e *topo.Edge, m *proo
 		v, ok := f.Surface.(surfacegeom.Cylinder)
 		return ok && f.RetainedTag && !f.Reversed && v.Axis == (r3.Vec{X: 1})
 	}
-	ok, err = s.stop(ctx, &c, a, bv, round, m)
+	ok, err = s.stop(ctx, &c, a, bv, round, false, m)
 	if !ok && err == nil {
 		c.Stops = nil
-		ok, err = s.stop(ctx, &c, bv, a, round, m)
+		ok, err = s.stop(ctx, &c, bv, a, round, false, m)
 	}
 	if !ok || err != nil {
 		return c, false, err

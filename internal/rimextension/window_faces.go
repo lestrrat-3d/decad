@@ -108,6 +108,30 @@ func WindowSourcesCovered(ctx context.Context, verts []r3.Vec, tris [][3]int, gr
 			}
 		}
 		if !separate {
+			if err := meter.ReserveBundle(ctx, 64, 1, 16384); err != nil {
+				return false, err
+			}
+			// Along x +/- z the complete linear window reaches its extreme at a corner.
+			sz := 1
+			if slope.Sign() < 0 {
+				sz = -1
+			}
+			zEnd := plus(z, times(slope, minus(hi[0], x)))
+			zOff := hi[2]
+			if sz < 0 {
+				zOff = lo[2]
+			}
+			maximum := plus(hi[0], signed(plus(zEnd, zOff), sz))
+			radiusProjection := times(&radius, scalar(proofbound.RatSqrtUp(scalar(2))))
+			outside := true
+			for _, j := range t {
+				v := verts[j]
+				outside = outside && minus(plus(scalar(v.X), signed(scalar(v.Z), sz)), radiusProjection).Cmp(maximum) > 0
+			}
+			if outside {
+				continue
+			}
+
 			return false, nil
 		}
 	}

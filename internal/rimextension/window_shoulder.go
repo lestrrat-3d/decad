@@ -53,9 +53,13 @@ func ShoulderRoundBeyondEnd(arc momentinput.ArcSeg, endpoint momentinput.Point2,
 // after the disk's pole, while the innermost toe remains outside the disk.
 // Disk ordinates have a finite slope on the remainder. The terminal width
 // is positive when the actual moved disk misses the side's native endpoint.
-type shoulderDiskRange struct{ switchX, minOrdinate, terminalGapUpper *big.Rat }
+type shoulderDiskRange struct{ switchX, minOrdinate, terminalGapUpper, crossing *big.Rat }
 
 func shoulderDiskDomain(ctx context.Context, n windowNative, start, span *big.Rat, meter *proofbound.ReplayBudget) (shoulderDiskRange, bool, error) {
+	return shoulderDiskRangeAt(ctx, n, start, span, false, meter)
+}
+
+func shoulderDiskRangeAt(ctx context.Context, n windowNative, start, span *big.Rat, aligned bool, meter *proofbound.ReplayBudget) (shoulderDiskRange, bool, error) {
 	var none shoulderDiskRange
 	if meter == nil || n.out != 1 || n.r.Sign() <= 0 || span.Sign() <= 0 || start.Cmp(n.last) >= 0 {
 		return none, false, nil
@@ -79,7 +83,7 @@ func shoulderDiskDomain(ctx context.Context, n windowNative, start, span *big.Ra
 		at := minus(n.cx, divide(times(n.m, h), plus(scalar(1), times(n.m, n.m))))
 		return residual(wmin(right, wmax(left, at)), offset)
 	}
-	if minimum(start, n.last, scalar(0)).Sign() <= 0 {
+	if !aligned && minimum(start, n.last, scalar(0)).Sign() <= 0 {
 		return none, false, nil
 	}
 	// At the terminal toe the circle must actually enter the strip.
@@ -97,10 +101,17 @@ func shoulderDiskDomain(ctx context.Context, n windowNative, start, span *big.Ra
 				return none, false, nil
 			}
 			gap := minus(minus(n.side(n.last), n.cz), endOrd)
+			if aligned {
+				cross, _, ok, err := windowCrossing(ctx, n, at, meter)
+				if !ok || err != nil {
+					return none, false, err
+				}
+				return shoulderDiskRange{at, minOrd, scalar(0), cross}, true, nil
+			}
 			if gap.Sign() <= 0 {
 				return none, false, nil
 			}
-			return shoulderDiskRange{at, minOrd, gap}, true, nil
+			return shoulderDiskRange{at, minOrd, gap, nil}, true, nil
 		}
 		if minus(at, pole).Cmp(divide(minus(n.last, pole), scalar(1<<20))) <= 0 {
 			return none, false, nil
