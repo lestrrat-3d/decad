@@ -12,12 +12,12 @@ import (
 )
 
 // chainedCut returns the error of the second Cut of the curved-rim chain of
-// TestFacetedPlaneSlab: its tool's wall crosses the first hole's wall, whose
-// facets hold the first Cut's rim bound.
+// TestFacetedPlaneSlab: its tool's wall crosses the first, tapered hole's
+// wall, whose facets hold the first Cut's rim bound.
 func chainedCut(t *testing.T, opts ...decad.DocumentOption) (*decad.Body, error) {
 	t.Helper()
 	sc := &retentionScene{w: sketch.NewWorld(), doc: decad.New(opts...)}
-	first, err := decad.Cut(t.Context(), sc.roundedBox(t), sc.tool(t, 20))
+	first, err := decad.Cut(t.Context(), sc.roundedBox(t), sc.taperedTool(t))
 	require.NoError(t, err)
 	// A Copy ends the operation history's Boolean chain, so the refusal under test is
 	// the sequential gate, not a chain the regroup rebuilds.
@@ -63,8 +63,9 @@ func TestChainToleranceAdmitsAContactOnACoarserRim(t *testing.T) {
 		require.NotNil(t, warnings[0].Chain)
 		require.Equal(t, touched*1.01, warnings[0].Chain.ChainAllowance.Base())
 
-		// Two Ø8 and Ø6 holes through a 40x20x20 box with 3 mm corner fillets: the
-		// holes overlap, so the removed volume is at most the sum of the two bores.
+		// A tapered hole at most Ø8 and a Ø6 hole through a 40x20x20 box with 3 mm
+		// corner fillets: the holes overlap, so the removed volume is at most the sum
+		// of a Ø8 and a Ø6 bore.
 		got, err := cut.Volume()
 		require.NoError(t, err)
 		whole := (800 - 4*(1-math.Pi/4)*9) * 20

@@ -294,7 +294,7 @@
 1	0.04	TestCapBlendUndecidedPatchKeepsProvenUndercut
 1	0.01	TestCapHelpers
 1	0.65	TestChainToleranceAdmitsAContactOnACoarserRim
-1	3.40	TestChainedCutsWithoutRimSplitKeepTheSpread
+1	3.40	TestChainedCutsWithoutRimSplitReadTheWallSlab
 1	0.00	TestChamferAllEdgesOfBareBoxStaysPlaced
 1	0.00	TestChamferContextCancellationLeavesReceiverLive
 1	4.66	TestCircularPatternAgreesWithTheUnionOfTurnedCubes
@@ -3184,3 +3184,4 @@
 12	0.00	TestCircularLoftEmergingFlatRefusesBentChain
 12	0.00	TestCircularLoftEmergingFlatRefusesUnrepresentablePlane
 12	0.00	TestPlateCollarRimChamfer
+12	0.00	TestCylinderWallChainKeepsEachRimBound

@@ -225,6 +225,10 @@ other corners, operand corners or points `δ(t)` covers. The piece's facet bound
 rim's bound stands for the whole piece. A facet that runs the height of a tube wall carries it along the whole
 height, and the next boolean that crosses the piece, however far from the rim, reads it and amplifies it again.
 
+`RimBound` reads the facet's slab (faceted-source-retention §11), so on a retained `Plane` or `Cylinder` the later
+boolean reads how far the true face lies from the piece's plane, which the rim's corner bound does not raise, and a
+chain of rims on one such wall does not compound. On any other curved face the slab is the facet bound.
+
 `meshbool.SplitSpread` splits such a piece. On each edge from a rim corner `u` to another corner `v` it places a
 candidate point `x` at `1/2^j` of the edge from `u`, with the largest `j` that keeps `x` at least `4 β(u)` from `u`
 and deeper than a multiple of the clearance below from the other operand's held boundary. The piece becomes a rim

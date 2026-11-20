@@ -17,7 +17,10 @@ type identRimSplit struct{}
 // the face, so a later boolean that crosses them far from the rim reads that
 // bound again and amplifies it. With this option such a facet is split near the
 // rim, and the later boolean reads the face's own bound on the far piece. A
-// facet is split only where the whole far piece is proven, by an exact
+// later boolean already reads a retained Cylinder face's own departure without
+// a split, so the option matters for the other curved faces: a cone, sphere,
+// torus or free-form wall, and a cylinder whose tag a placement moved off its
+// surface. A facet is split only where the whole far piece is proven, by an exact
 // distance, to stand clear of the other operand's boundary by the bounds both
 // operands hold; a facet with no such split stays whole and keeps the rim's
 // bound. The result holds more facets. A Fillet or Chamfer that reads a split

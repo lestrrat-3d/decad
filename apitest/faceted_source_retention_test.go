@@ -79,6 +79,33 @@ func (sc *retentionScene) revolvedTool(t *testing.T, cx float64) *decad.Body {
 	return translated(t, pin, 0, 0, 10)
 }
 
+// taperedTool builds a tapered tool along y about the line (20, ·, 10) by
+// revolving the trapezoid from u = 20 to radius 4 at v = -10 and radius 3.5 at
+// v = 50 about the line u = 20, then moving it up by 10. Its wall is a Cone,
+// which states no slab thinner than its facets' bound, so a later contact on
+// the facets beside its rim reads that rim's bound.
+func (sc *retentionScene) taperedTool(t *testing.T) *decad.Body {
+	t.Helper()
+	const cx = 20.0
+	s, err := sc.w.CreateSketch(sc.w.XY())
+	require.NoError(t, err)
+	corners := [][2]float64{{cx, -10}, {cx + 4, -10}, {cx + 3.5, 50}, {cx, 50}}
+	points := make([]*sketch.Point, len(corners))
+	for i, c := range corners {
+		points[i] = s.CreatePoint(c[0], c[1])
+		s.Fix(points[i])
+	}
+	for i := range points {
+		s.CreateLine(points[i], points[(i+1)%len(points)])
+	}
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	axis := decad.SketchLine{Start: decad.Point2{U: cx, V: 0}, End: decad.Point2{U: cx, V: 1}}
+	pin, err := decad.Revolve(t.Context(), sc.doc, s, s.Profiles()[0], axis, decad.FullRevolution{})
+	require.NoError(t, err)
+	return translated(t, pin, 0, 0, 10)
+}
+
 func retentionKinds(b *decad.Body) map[string]int {
 	kinds := map[string]int{}
 	for _, f := range b.Faces() {

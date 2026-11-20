@@ -151,11 +151,13 @@ func TestBooleanRegroupConjunction(t *testing.T) {
 			[]*decad.Body{box, t1})
 	})
 
-	// The declines leave the document as it was and return the sequential refusal.
+	// The declines leave the document as it was and return the sequential refusal: the
+	// second tool's wall crosses the first, tapered hole's wall, whose facets hold the
+	// first Cut's rim bound.
 	t.Run("D1 a Copy is a leaf", func(t *testing.T) {
 		t.Parallel()
 		sc := newRetentionScene()
-		built, err := decad.Cut(t.Context(), sc.roundedBox(t), sc.tool(t, 20))
+		built, err := decad.Cut(t.Context(), sc.roundedBox(t), sc.taperedTool(t))
 		require.NoError(t, err)
 		cp, err := decad.Copy(t.Context(), built)
 		require.NoError(t, err)
@@ -169,7 +171,7 @@ func TestBooleanRegroupConjunction(t *testing.T) {
 	t.Run("D3 matching faces skips the regroup", func(t *testing.T) {
 		t.Parallel()
 		sc := newRetentionScene()
-		first, err := decad.Cut(t.Context(), sc.roundedBox(t), sc.tool(t, 20))
+		first, err := decad.Cut(t.Context(), sc.roundedBox(t), sc.taperedTool(t))
 		require.NoError(t, err)
 		tool := slabYTool(t, sc, 22, 3)
 		historyLen := len(sc.doc.OperationHistory().Operations())
@@ -181,7 +183,7 @@ func TestBooleanRegroupConjunction(t *testing.T) {
 	t.Run("D4 final mesh cut refuses", func(t *testing.T) {
 		t.Parallel()
 		sc := newRetentionScene()
-		first, err := decad.Cut(t.Context(), sc.roundedBox(t), sc.tool(t, 20))
+		first, err := decad.Cut(t.Context(), sc.roundedBox(t), sc.taperedTool(t))
 		require.NoError(t, err)
 		tool := regroupTilted(t, sc)
 		historyLen := len(sc.doc.OperationHistory().Operations())
@@ -213,7 +215,7 @@ func TestBooleanRegroupDisjunction(t *testing.T) {
 	t.Run("D2 a Cut result in a disjunction is a leaf", func(t *testing.T) {
 		t.Parallel()
 		sc := newRetentionScene()
-		first, err := decad.Cut(t.Context(), sc.roundedBox(t), sc.tool(t, 20))
+		first, err := decad.Cut(t.Context(), sc.roundedBox(t), sc.taperedTool(t))
 		require.NoError(t, err)
 		tool := slabYTool(t, sc, 22, 3)
 		historyLen := len(sc.doc.OperationHistory().Operations())

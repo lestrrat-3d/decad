@@ -4538,6 +4538,10 @@ Assertions for every F fixture:
 
 #### Decline fixtures
 
+The decline fixtures' sequential chains cut a tapered first hole (`retentionScene.taperedTool`) in place of `t1`: a
+second hole on a retained cylinder wall builds sequentially (faceted-source-retention §11, Claim C), and a `Cone`
+wall keeps the refusal under test.
+
 | ID | Setup | Why regroup declines | Assert |
 |---|---|---|---|
 | D1 | F1, but `Cut(Copy(first), t2)` | `Copy` producer: leaf, no expansion | `ErrUnsupported`, one diagnostic `OpDiagOperandBoundExceeded`, history length and `doc.Bodies()` unchanged |
@@ -4578,12 +4582,14 @@ All of Part R is implemented. Each task below gives its owner and its pinning te
 #### Task 1: Design doc and the hand-built plans
 
 Owner: none (tests only). `TestRegroupPlansBuildByHand` (`apitest/boolean_regroup_plan_test.go`) has one subtest per
-F fixture asserting: for F1, F2 and F4 the sequential chain's final call fails with
-`errors.Is(err, decad.ErrUnsupported)`. F3's subtest instead joins a `Copy` of `Union(plate, boss)` with `box2`
+F fixture asserting: for F2 and F4 the sequential chain's final call fails with
+`errors.Is(err, decad.ErrUnsupported)`. F1's sequential chain builds with the F1 volume, because its second hole's rim
+reads the first hole's retained cylinder slab (faceted-source-retention §11, Claim C). F3's subtest instead joins a `Copy` of `Union(plate, boss)` with `box2`
 sequentially, which succeeds by the grid route with the F3 volume, a mesh-path result and watertightness. Each plan
 step marked analytic in Fixtures has `tookMeshPath == false`; the final `Full` step has `tookMeshPath == true`; the
 final body meets the F assertions on volume, bound and watertightness. D1 and D4 subtests assert the sequential
-refusal persists through the `Copy` and the tilted `t2'`, and that `Union(t1, t2')` takes the mesh path.
+refusal persists through the `Copy` and the tilted `t2'`, and that `Union(t1, t2')` takes the mesh path. Their
+sequential chains cut a tapered first hole (`retentionScene.taperedTool`), whose `Cone` wall states no thinner slab.
 
 #### Task 2: `internal/boolchain` normal form and plan
 

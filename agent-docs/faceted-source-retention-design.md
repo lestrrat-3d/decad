@@ -388,6 +388,7 @@ expression) and not a printed number.
 | `internal/contactfaceted/floor.go` | predicate of §4 |
 | `internal/facetedrecord/edge_curve.go`, `topology.go`, `internal/topo/edge.go` | edge curves and their witness flag (§10) |
 | `internal/meshbool/plane_slab.go`, `internal/booleaneval/retained_plane.go` | slab bound of a retained plane facet (§11) |
+| `internal/meshbool/cylinder_slab.go`, `internal/booleaneval/retained_cylinder.go` | slab bound of a retained cylinder facet (§11, Claim C) |
 | `internal/booleaneval/chorded_loft_plane.go` | states a chorded loft wall's displacement (§11) |
 | `mirror.go`, `internal/extent` | admit a retained `Plane` per §4 |
 | `internal/selectorquery/topo_views.go` | none; the existing views read the tag |
@@ -670,11 +671,49 @@ later small hole that lands on such a facet however far from the bore. A fan
 facet whose corners lie exactly in the plane has a slab of zero, so the hole
 builds.
 
+**Claim C (a retained cylinder).** Let a facet have its true piece on the
+cylinder `T` of axis `O + s·D` and radius `R` (Claim R), within `β` of the
+facet, and let `P` be the facet's plane with normal `N`. Write `σ(p) = D·(p − O)`,
+`ν` for the unit part of `N` normal to `D`, `M = |N × D|/|D|`, and `τ` for the
+unit vector along `D × N`. Take `x` in the true piece and `y` in the facet with
+`|x − y| ≤ β`, and split `x − O = (σ(x)/D·D)·D + z`, `z ⊥ D`, `|z| = R`. Then
+
+```text
+N·(x − c0) = (N·D/D·D)·σ(x) + M·(ν·z) − N·(c0 − O)
+```
+
+`σ(x)` lies within `β·|D|` of the corners' range of `σ`, and `τ·z` within `β` of
+the corners' range of `τ·(p − O)`, because both are affine and the projection
+normal to `D` does not lengthen distances. Since `y` lies on `P`, the smallest
+`ν·y_⊥` over the facet is at a corner; when it exceeds `β`, every such `z` has
+`ν·z > 0`, so `ν·z = √(R² − (τ·z)²)`, which the `τ` range bounds above and below.
+The distance from `x` to `P` is `|N·(x − c0)|/|N|`, so the true piece lies within
+the largest value of that expression over the ranges. ∎
+
+For a facet of a chorded wall the result is about the chord's sagitta, however
+large `β` is. A facet beside an earlier rim carries the rim's bound as `β`, and
+the slab keeps a later `RimBound` from reading it, so the rims a chain of
+Booleans leaves on one cylinder wall do not compound.
+`meshbool.CylinderSlab` forms `N`, `D·D`, `N × D`, `σ` and the `τ` numerators
+exactly from the held floats and combines them in float intervals rounded
+outward. It proves nothing, and the facet keeps `β`, when the plane holds the
+axis direction's normal (`N × D = 0`) or the corner test fails. A cylinder that
+states a wall charge `δ` (`AxialDelta`: the true wall lies within `δ` of the
+tag) reads `β + δ` for `β` and adds `δ`.
+
+A facet takes the cylinder slab only when its source face is a `RetainedTag`
+`Cylinder` with no tag departure (`TagDeparture == 0`) and either no denoted
+patch or a denoted revolve patch whose tag is exactly the cylinder the patch
+sweeps (`stitchflux.TagIsDenoted`), with a finite, non-negative wall charge
+(`booleaneval.retainedCylinderOf`). A placed tag with a stated departure keeps
+`β`. The face's `NormalBound` holds the held displacement term, which bears on
+`NormalAt` and not on where the true piece lies, so it is not read.
+
 **What reads the slab.** The slab bound replaces `β` in the
 held-mesh gate (`RefuseCoarseHeldContact`) and in `RimBound`. A vertex the
 cutter places on a facet's interior keeps `β`, because its true boundary point
-may sit anywhere in the plane within `β`. A curved retained group has no such
-split, so a cylinder or sphere keeps `β`, and a refusal whose worst facet is a cylinder stays.
+may sit anywhere within `β`. A `Cone`, `Sphere` or `Torus` group keeps `β`, and a
+refusal whose worst facet lies on one stays.
 
 ## 12. Rejected shortcuts
 

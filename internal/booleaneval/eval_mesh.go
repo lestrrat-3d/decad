@@ -70,16 +70,12 @@ func summarizeChainAllowance(a *meshbool.BoolMesh, operandA int, b *meshbool.Boo
 // The contact is exactly what this pipeline must not miss, so the operand is
 // refused rather than partly examined. Loud beats silently wrong.
 func PrepBoolMesh(ctx context.Context, m *topo.Mesh, src []int) (*meshbool.BoolMesh, error) {
-	if retainedPlaneSlabDisabled(ctx) {
-		return prepBoolMesh(ctx, m, src, func(int) (r3.Frame, float64, bool) { return r3.Frame{}, 0, false })
-	}
-	return prepBoolMesh(ctx, m, src, retainedPlaneOf(m))
+	return prepBoolMesh(ctx, m, src, !retainedPlaneSlabDisabled(ctx))
 }
 
-// prepBoolMesh is PrepBoolMesh with the retained-plane reading as a parameter:
-// a moved operand's facets lie on no retained plane.
-func prepBoolMesh(ctx context.Context, m *topo.Mesh, src []int,
-	retained func(facet int) (r3.Frame, float64, bool)) (*meshbool.BoolMesh, error) {
+// prepBoolMesh is PrepBoolMesh with the retained-surface reading as a
+// parameter: a moved operand's facets lie on no retained plane or cylinder.
+func prepBoolMesh(ctx context.Context, m *topo.Mesh, src []int, retained bool) (*meshbool.BoolMesh, error) {
 	bm, err := meshbool.PrepContext(ctx, m.Vertices, m.Triangles, src)
 	if err != nil {
 		return nil, err
@@ -98,7 +94,10 @@ func prepBoolMesh(ctx context.Context, m *topo.Mesh, src []int,
 	if rec := m.Planar(); rec != nil {
 		setPlanarBounds(bm, m, rec)
 	}
-	bm.SetChargedSlabBounds(retained)
+	if retained {
+		bm.SetChargedSlabBounds(retainedPlaneOf(m))
+		bm.SetCylinderSlabBounds(retainedCylinderOf(m))
+	}
 	return bm, nil
 }
 

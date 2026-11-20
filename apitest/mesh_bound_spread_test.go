@@ -95,8 +95,8 @@ func spreadBound(t *testing.T, body *decad.Body) float64 {
 // near the first cut's figure. A far piece is split off only where the whole
 // piece is proven to stand clear of the tool, so a few long facets beside the
 // chain stay whole and the second cut's bound is not quite the first's: it stays
-// under 1.7 times the first cut's, where the document without WithRimSplit
-// reaches over 2 times. The volume still encloses the independent integral.
+// under 1.7 times the first cut's. The volume still encloses the independent
+// integral.
 func TestChainedCutsFarApartKeepOneRimBound(t *testing.T) {
 	t.Parallel()
 	doc := decad.New(decad.WithChainTolerance(units.Millimeters(0.2)), decad.WithRimSplit())
@@ -133,10 +133,13 @@ func TestChainedCutsOverTheRimStillReadItsBound(t *testing.T) {
 	require.Greater(t, spreadBound(t, second), 1.2*boundFirst)
 }
 
-// A document that does not set WithRimSplit keeps its rims in one piece: the
-// second cut reads the first cut's rim bound along the whole wall and
-// amplifies it, as it always has.
-func TestChainedCutsWithoutRimSplitKeepTheSpread(t *testing.T) {
+// A document that does not set WithRimSplit keeps its rims in one piece, so
+// the wall facets the first cut crosses carry its rim bound along the whole
+// tube. The tube's walls are retained cylinders, and the rim the second cut
+// makes reads how far the cylinder lies from each facet's plane, not that
+// corner bound, so the second cut's bound stays at the first's where the
+// facet bound alone would amplify it over 1.5 times.
+func TestChainedCutsWithoutRimSplitReadTheWallSlab(t *testing.T) {
 	t.Parallel()
 	doc := decad.New(decad.WithChainTolerance(units.Millimeters(0.2)))
 	tube := twistBoreTube(t, doc, spreadTubeOuter, spreadTubeInner, spreadTubeHeight)
@@ -145,5 +148,5 @@ func TestChainedCutsWithoutRimSplitKeepTheSpread(t *testing.T) {
 	boundFirst := spreadBound(t, first)
 	second, err := spreadCut(t, doc, first, 28)
 	require.NoError(t, err)
-	require.Greater(t, spreadBound(t, second), 1.5*boundFirst)
+	require.LessOrEqual(t, spreadBound(t, second), 1.2*boundFirst)
 }

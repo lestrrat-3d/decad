@@ -88,11 +88,12 @@ func requireTwoBores(t *testing.T, b *Body) {
 }
 
 // TestFacetedSourcePatchFallback shows the retained-plane slab stays off where
-// placement leaves a plane tag a float image off its plane, where a face
-// carries a denoted patch, and where the contact lies on a curved rim, and
-// stays on for an exact translation and for one whose rounding stays within
-// the planes (agent-docs/faceted-source-retention-design.md §3.4). Each case
-// runs against booleaneval.WithoutRetainedPlaneSlab.
+// placement leaves a plane tag a float image off its plane and where a face
+// carries a denoted patch, and stays on for an exact translation and for one
+// whose rounding stays within the planes
+// (agent-docs/faceted-source-retention-design.md §3.4). A contact on a retained
+// cylinder's rim reads the cylinder's slab. Each case runs against
+// booleaneval.WithoutRetainedPlaneSlab.
 func TestFacetedSourcePatchFallback(t *testing.T) {
 	t.Parallel()
 
@@ -193,24 +194,36 @@ func TestFacetedSourcePatchFallback(t *testing.T) {
 		requireSameRefusal(t, realErr, ctrlErr)
 	})
 
-	t.Run("a cut through a curved rim refuses as the control does", func(t *testing.T) {
+	t.Run("a cut through a curved rim builds where the control refuses", func(t *testing.T) {
 		t.Parallel()
-		run := func(ctx context.Context) error {
+		run := func(ctx context.Context) (*Body, error) {
 			// The tool's wall crosses the first bore's wall, whose facets hold
-			// the rim's bound: a cylinder states no thinner slab.
+			// the rim's bound. The bore's wall is a retained cylinder, which
+			// lies within its chord's sagitta of each facet's plane, so the new
+			// rim reads that slab (faceted-source-retention §11, Claim C).
 			sc := &slabScene{w: sketch.NewWorld(), doc: New()}
 			built, err := Cut(ctx, sc.roundedBox(ctx, t), sc.yTool(ctx, t, 20, 4))
 			require.NoError(t, err)
-			// A Copy ends the operation history's Boolean chain, so the refusal under test
+			// A Copy ends the operation history's Boolean chain, so the cut under test
 			// is the sequential gate and not a chain the regroup rebuilds.
 			first, err := Copy(ctx, built)
 			require.NoError(t, err)
-			_, err = Cut(ctx, first, sc.yTool(ctx, t, 22, 3))
-			return err
+			return Cut(ctx, first, sc.yTool(ctx, t, 22, 3))
 		}
-		realErr := run(t.Context())
-		ctrlErr := run(booleaneval.WithoutRetainedPlaneSlab(t.Context()))
-		requireSameRefusal(t, realErr, ctrlErr)
+		got, err := run(t.Context())
+		require.NoError(t, err)
+		require.True(t, got.IsSolid())
+		// The Ø8 and Ø6 bores overlap in a lens, and both run the full 20 mm.
+		const r1, r2, d = 4.0, 3.0, 2.0
+		lens := r1*r1*math.Acos((d*d+r1*r1-r2*r2)/(2*d*r1)) + r2*r2*math.Acos((d*d+r2*r2-r1*r1)/(2*d*r2)) -
+			0.5*math.Sqrt((-d+r1+r2)*(d+r1-r2)*(d-r1+r2)*(d+r1+r2))
+		want := (800-4*(1-math.Pi/4)*9)*20 - 20*(math.Pi*(r1*r1+r2*r2)-lens)
+		volume, err := got.Volume()
+		require.NoError(t, err)
+		require.InDelta(t, want, volume.Value.Mag(), volume.Bound.Mag()+1e-6)
+
+		_, ctrlErr := run(booleaneval.WithoutRetainedPlaneSlab(t.Context()))
+		slabRefusal(t, ctrlErr)
 	})
 }
 
