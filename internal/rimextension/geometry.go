@@ -16,6 +16,8 @@ type Section struct{ Stop, End, Toe, Heel r3.Vec }
 type Groups struct {
 	Cap, Side, Boss, Bevel, Extension int
 	Stop                              map[int]bool
+	// OpenCylinderEnd allows a terminal boundary already closed by the cylinder.
+	OpenCylinderEnd bool
 }
 
 type point [3]*big.Rat

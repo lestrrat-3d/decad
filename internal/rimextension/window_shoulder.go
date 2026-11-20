@@ -108,3 +108,18 @@ func shoulderDiskDomain(ctx context.Context, n windowNative, start, span *big.Ra
 		right = at
 	}
 }
+
+// TransverseLoftStop reads the outward lobe beside the original side plane.
+// The signed shoulder chart points toward decreasing world X.
+func TransverseLoftStop(ctx context.Context, p *loftrecord.Payload, wing int, capY, sideX, lowX, highX *big.Rat, meter *proofbound.ReplayBudget) (station, toeX, heelY *big.Rat, ok bool, err error) {
+	chart, ok, err := shoulderLoft(ctx, p, wing, meter)
+	if !ok || err != nil {
+		return nil, nil, nil, false, err
+	}
+	neg := func(a *big.Rat) *big.Rat { return new(big.Rat).Neg(a) }
+	q, ok, err := loftWindowSeam(ctx, &chart, r3.Vec{}, capY, neg(sideX), neg(highX), neg(lowX), -1, meter)
+	if !ok || err != nil {
+		return nil, nil, nil, false, err
+	}
+	return signed(q.x, -wing), neg(q.toeZ), q.heelY, true, nil
+}

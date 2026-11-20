@@ -12805,3 +12805,23 @@ at its centroid. When the rounded centroid lies on a boundary edge, use
 a fan from an existing vertex whose triangles all have nonzero area.
 Preserve every split on the original boundary and verify the final
 embedding after mapping the mesh back to world coordinates.
+
+### A stopped shoulder ending on a transverse cylinder
+
+When the two plane normals point along positive X and Y, the exposed edge runs along Z.
+The selected endpoint must adjoin a swept cylinder parallel to X. Rotate the held coordinates
+into (Z, X, Y) to continue the bevel. The cylindrical seam can close the terminal boundary.
+Omit a terminal face only after every edge has its opposite incident triangle.
+
+Recover the two cheek faces from their native prism and the finite quarter circle from its
+original Fillet. The prior cut's two selected Loft wall roles must resolve to the corresponding
+source line segments in both sections. Their common endpoint interpolates along the bevel.
+Its intersections with the native cap and side give the toe and heel at the old stop.
+
+Within the proof window, check every foreign facet inflated by its own displacement bound.
+Below the old stop, the cylinder graph separates the window into two connected height intervals.
+The footprint inside both cheek planes contains a cap witness above the cylinder. The footprint
+outside either plane contains an outward cylinder witness. Their displacement balls stay inside
+their respective cells. The two plane normals and the outward cylinder distinguish the occupied
+side in each cell. Charge the old seam displacement, the cylinder interpolation, the terminal
+ordinate difference and coordinate rounding before the final shell and crossing audits.

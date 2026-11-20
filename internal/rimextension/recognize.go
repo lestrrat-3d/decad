@@ -16,12 +16,12 @@ import (
 // Candidate identifies the existing stop and the native carriers needed to
 // certify it. Faces and Allowed are indexed by the input's source groups.
 type Candidate struct {
-	Section                Section
-	Groups                 Groups
-	StopFacets             map[int]bool
-	Cap, Side, Boss, Round *topo.Face
-	Stops                  []*topo.Face
-	Allowed                map[int]bool
+	Section                          Section
+	Groups                           Groups
+	StopFacets                       map[int]bool
+	Cap, Side, Boss, Round, StopWall *topo.Face
+	Stops                            []*topo.Face
+	Allowed                          map[int]bool
 }
 
 func exactCap(f *topo.Face) bool {
@@ -96,7 +96,7 @@ func (s stockFaces) onStop(i int, x float64) bool {
 	t := s.p.Tris[i]
 	return s.p.Verts[t[0]].X == x && s.p.Verts[t[1]].X == x && s.p.Verts[t[2]].X == x
 }
-func (s stockFaces) stop(ctx context.Context, c *Candidate, start, end r3.Vec, budget *proofbound.ReplayBudget) (bool, error) {
+func (s stockFaces) stop(ctx context.Context, c *Candidate, start, end r3.Vec, roundFace func(*topo.Face) bool, budget *proofbound.ReplayBudget) (bool, error) {
 	seed := -1
 	var round *topo.Face
 	for i, t := range s.p.Tris {
@@ -117,7 +117,7 @@ func (s stockFaces) stop(ctx context.Context, c *Candidate, start, end r3.Vec, b
 				seed = k
 			}
 			if v == end || w == end {
-				if _, ok := cylinder(f); ok {
+				if roundFace(f) {
 					if round != nil && round != f {
 						return false, nil
 					}
@@ -130,6 +130,7 @@ func (s stockFaces) stop(ctx context.Context, c *Candidate, start, end r3.Vec, b
 		return false, nil
 	}
 	c.Round = round
+	c.StopWall = s.fs[s.p.FaceOf[seed]]
 	pending := []int{seed}
 	c.StopFacets = map[int]bool{seed: true}
 	stops := map[*topo.Face]bool{}
@@ -252,10 +253,11 @@ func identify(ctx context.Context, b *topo.Body, e *topo.Edge, wing int, budget 
 		}
 		a, bv = ShoulderPoint(a, wing), ShoulderPoint(bv, wing)
 	}
-	ok, err = s.stop(ctx, &c, a, bv, budget)
+	roundFace := func(f *topo.Face) bool { _, yes := cylinder(f); return yes }
+	ok, err = s.stop(ctx, &c, a, bv, roundFace, budget)
 	if !ok && err == nil {
 		c.Stops = nil
-		ok, err = s.stop(ctx, &c, bv, a, budget)
+		ok, err = s.stop(ctx, &c, bv, a, roundFace, budget)
 	}
 	if !ok || err != nil {
 		return c, false, err
@@ -304,3 +306,84 @@ func identify(ctx context.Context, b *topo.Body, e *topo.Edge, wing int, budget 
 	c.Groups.Extension = c.Groups.Bevel + 1
 	return c, true, nil
 }
+
+// IdentifyTransverse finds a stopped rim joining two coordinate planes to a
+// cylinder parallel to X. Its world-to-chart permutation preserves orientation.
+func IdentifyTransverse(ctx context.Context, b *topo.Body, e *topo.Edge, m *proofbound.ReplayBudget) (Candidate, bool, error) {
+	var c Candidate
+	if m == nil || b == nil || !b.Solid || e == nil || !e.Convex || len(e.Faces) != 2 || e.Start == nil || e.End == nil {
+		return c, false, nil
+	}
+	if _, ok := e.Curve.(surfacegeom.Line3); !ok {
+		return c, false, nil
+	}
+	a, bv := e.Start.Position, e.End.Position
+	if a.X != bv.X || a.Y != bv.Y || a.Z == bv.Z {
+		return c, false, nil
+	}
+	for _, f := range e.Faces {
+		if f == nil || f.Body != b || !f.RetainedTag {
+			return c, false, nil
+		}
+		pl, ok := f.Surface.(surfacegeom.Plane)
+		if !ok {
+			return c, false, nil
+		}
+		n := pl.Frame.N()
+		if f.Reversed {
+			n = n.Scale(-1)
+		}
+		switch n {
+		case r3.Vec{X: 1}:
+			c.Cap = f
+		case r3.Vec{Y: 1}:
+			c.Side = f
+		default:
+			return c, false, nil
+		}
+	}
+	if c.Cap == nil || c.Side == nil {
+		return c, false, nil
+	}
+	s, ok, err := loadStock(ctx, b, m)
+	if !ok || err != nil {
+		return c, false, err
+	}
+	if err := m.ReserveBundle(ctx, 4*uint64(len(s.p.Verts)), uint64(len(s.p.Verts)), 24*uint64(len(s.p.Verts))); err != nil {
+		return c, false, err
+	}
+	s.p.Verts = slices.Clone(s.p.Verts)
+	for i, v := range s.p.Verts {
+		s.p.Verts[i] = TransversePoint(v)
+	}
+	a, bv = TransversePoint(a), TransversePoint(bv)
+	round := func(f *topo.Face) bool {
+		v, ok := f.Surface.(surfacegeom.Cylinder)
+		return ok && f.RetainedTag && !f.Reversed && v.Axis == (r3.Vec{X: 1})
+	}
+	ok, err = s.stop(ctx, &c, a, bv, round, m)
+	if !ok && err == nil {
+		c.Stops = nil
+		ok, err = s.stop(ctx, &c, bv, a, round, m)
+	}
+	if !ok || err != nil {
+		return c, false, err
+	}
+	c.Boss = c.Round
+	c.Allowed = map[int]bool{}
+	for _, f := range append(slices.Clone(c.Stops), c.Cap, c.Side, c.Boss) {
+		g, ok := s.groups[f]
+		if !ok || g < 0 {
+			return c, false, nil
+		}
+		c.Allowed[g] = true
+	}
+	c.Groups.Cap, c.Groups.Side, c.Groups.Boss = s.groups[c.Cap], s.groups[c.Side], s.groups[c.Boss]
+	c.Groups.Bevel = len(s.p.Groups)
+	c.Groups.Extension = c.Groups.Bevel + 1
+	c.Groups.OpenCylinderEnd = true
+	return c, true, nil
+}
+
+// TransversePoint rotates a world-space point into the transverse rim chart.
+func TransversePoint(v r3.Vec) r3.Vec { return r3.Vec{X: v.Z, Y: v.X, Z: v.Y} }
