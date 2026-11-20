@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/proof"
-	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
 	"github.com/stretchr/testify/require"
 )
@@ -19,7 +18,7 @@ func refDepthBeyond(p proof.Xpt, other *BoolMesh, b float64, hint *int) bool {
 	pf := p.Vec()
 	if hint != nil && *hint >= 0 && *hint < len(other.Tris) {
 		h := *hint
-		up := math.Max(PointBoxDist(pf, other.Boxes[h]), PointTriDistance(pf, TriCorners(other, h)))
+		up := math.Max(PointBoxDist(pf, other.Boxes[h]), depthFacetDistance(pf, TriCorners(other, h), other.depthNormal(h)))
 		if up*(1-1e-12) <= b {
 			return false
 		}
@@ -31,7 +30,7 @@ func refDepthBeyond(p proof.Xpt, other *BoolMesh, b float64, hint *int) bool {
 		if PointBoxDist(pf, other.Boxes[i]) >= best {
 			continue
 		}
-		best = math.Min(best, PointTriDistance(pf, TriCorners(other, i)))
+		best = math.Min(best, depthFacetDistance(pf, TriCorners(other, i), other.depthNormal(i)))
 		if best*(1-1e-12) <= b {
 			if hint != nil {
 				*hint = i
@@ -39,10 +38,7 @@ func refDepthBeyond(p proof.Xpt, other *BoolMesh, b float64, hint *int) bool {
 			return false
 		}
 	}
-	depth := 0.0
-	if best > 0 && !proofbound.IsNonFinite(best) {
-		depth = best*(1-1e-12) - PointRoundBound(p, pf)
-	}
+	depth := depthCertificate(best, p, pf, other)
 	// Negated rather than written as depth > b, so a NaN b answers as
 	// DeepWitnessAt's original "depth <= b" test answered it.
 	return !(depth <= b)

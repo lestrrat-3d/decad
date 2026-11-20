@@ -16,7 +16,7 @@ func prepContextReplay(ctx context.Context, verts []r3.Vec, tris [][3]int, src [
 	if err := b.ReserveRecords(ctx, 1+uint64(len(verts))+4*uint64(len(tris))); err != nil {
 		return nil, err
 	}
-	for _, a := range [][2]uint64{{1, uint64(unsafe.Sizeof(BoolMesh{}))}, {uint64(len(verts)), uint64(unsafe.Sizeof(proof.Xpt{}))}, {uint64(len(tris)), uint64(unsafe.Sizeof(proof.Xpt{}))}, {uint64(len(tris)), uint64(unsafe.Sizeof(r3.Vec{}))}, {uint64(len(tris)), uint64(unsafe.Sizeof(bool(false)))}, {uint64(len(tris)), uint64(unsafe.Sizeof([2]r3.Vec{}))}} {
+	for _, a := range [][2]uint64{{1, uint64(unsafe.Sizeof(BoolMesh{}))}, {uint64(len(verts)), uint64(unsafe.Sizeof(proof.Xpt{}))}, {uint64(len(tris)), uint64(unsafe.Sizeof(proof.Xpt{}))}, {uint64(len(tris)), uint64(unsafe.Sizeof(r3.Vec{}))}, {uint64(len(tris)), uint64(unsafe.Sizeof(r3.Vec{}))}, {uint64(len(tris)), uint64(unsafe.Sizeof(bool(false)))}, {uint64(len(tris)), uint64(unsafe.Sizeof([2]r3.Vec{}))}} {
 		if err := b.ReserveArray(ctx, a[0], a[1]); err != nil {
 			return nil, err
 		}
@@ -82,6 +82,7 @@ func prepContextReplay(ctx context.Context, verts []r3.Vec, tris [][3]int, src [
 			}
 		}
 	}
+	bm.setDepthNormals()
 	return bm, nil
 }
 

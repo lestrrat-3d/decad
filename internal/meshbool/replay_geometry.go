@@ -120,6 +120,7 @@ func (g *ReplayGeometry) View(ctx context.Context, verts []r3.Vec, tris [][3]int
 	}
 	for _, spec := range [][2]uint64{{1, uint64(unsafe.Sizeof(BoolMesh{}))},
 		{uint64(len(tris)), uint64(unsafe.Sizeof(r3.Vec{}))},
+		{uint64(len(tris)), uint64(unsafe.Sizeof(r3.Vec{}))},
 		{uint64(len(tris)), uint64(unsafe.Sizeof(false))},
 		{uint64(len(tris)), uint64(unsafe.Sizeof([2]r3.Vec{}))}} {
 		if err := b.ReserveArray(ctx, spec[0], spec[1]); err != nil {
@@ -140,7 +141,9 @@ func (g *ReplayGeometry) View(ctx context.Context, verts []r3.Vec, tris [][3]int
 	if err != nil {
 		return nil, false, err
 	}
-	return &BoolMesh{Verts: verts, Tris: tris, Src: src, Xverts: xverts, Norms: norms,
+	bm := &BoolMesh{Verts: verts, Tris: tris, Src: src, Xverts: xverts, Norms: norms,
 		Fnorms: make([]r3.Vec, len(tris)), FnormsReady: make([]bool, len(tris)),
-		Boxes: append([][2]r3.Vec(nil), g.boxes...), replayOwner: g.owner}, true, nil
+		Boxes: append([][2]r3.Vec(nil), g.boxes...), replayOwner: g.owner}
+	bm.setDepthNormals()
+	return bm, true, nil
 }

@@ -1395,16 +1395,31 @@ work intervals inside quadratic/refinement loops, as interference §7 specifies.
   the accepted price.
 - **The witness depth scan stops once a candidate is settled as no deeper than
   `b`.** `meshbool.CertifiedInteriorDepth` defines the certified lower-bound
-  distance: the float minimum `F` of the point-to-facet distances over a
-  box-pruned scan of the other operand's facets, read as `0` when `F <= 0` or
-  `F` is not finite and as `fl(F·c) − R` otherwise, with `c = 1 − 1e-12` and
-  `R = PointRoundBound ∈ [0, +Inf]`. A witness needs that value `> b`.
+  distance. `F` is the float minimum of `depthFacetDistance` over a box-pruned
+  scan of the other operand's facets. That distance takes the perpendicular
+  foot along the facet's depth normal when the foot reads inside the facet,
+  and the nearest closed edge otherwise. The depth normal is the exact normal
+  of the facet's float corners, scaled by a power of two that puts its
+  largest component in (1, 4) and rounded to nearest per component; the
+  float cross product of the edges is not used, because its direction errs
+  by about `u/sin` of the facet's smallest angle (`u = 2^-53`). Let `M` be
+  the largest coordinate magnitude of the rounded query point and of the
+  mesh's vertices. The value is `0` when `F <= 0`, `F` is not finite or `M`
+  exceeds `2^500`, and `fl(fl(fl(F·c) − R) − E)` otherwise, with
+  `c = 1 − 1e-12`, `R = PointRoundBound ∈ [0, +Inf]` and
+  `E = ProvenUpRound(2^-45·M + 2^-500)`. `F` is at most `(1+12u)` times the
+  exact distance from the rounded point plus `132u·M`. That error is fixed by
+  the coordinates' magnitude, not by the distance, so a relative factor alone
+  cannot cover it at a small depth: `E` charges it at `256u·M`, the `2^-500`
+  floor covers underflow, and `c` covers the relative errors. The proof is on
+  `depthCertificate` (`internal/meshbool/depth_certificate.go`). A witness
+  needs the value `> b`.
   `meshbool.depthBeyond` (`internal/meshbool/boolean.go`) gives the same answer
-  for every input and stops early on a shallow candidate. Any `M >= F` with
-  `fl(M·c) <= b` settles "not deeper than `b`": `M` is a distance, so `b >= 0`
-  and `0 <= b`, and `fl(F·c) − R <= fl(F·c) <= fl(M·c) <= b`, because rounding
-  a product by a positive constant is monotone and `R >= 0`. Two values of `M`
-  are available before the scan ends:
+  for every input and stops early on a shallow candidate. Any `M' >= F` with
+  `fl(M'·c) <= b` settles "not deeper than `b`": `M'` is a distance, so
+  `b >= 0` and `0 <= b`, and the value is at most `fl(F·c) <= fl(M'·c) <= b`,
+  because rounding is monotone and `R, E >= 0`. Two values of `M'` are
+  available before the scan ends:
   - The running minimum at any step bounds `F`, because the scan only lowers
     it. The scan keeps the definition's facet order and prune, so it stops on
     the first step whose minimum settles the answer. It passes over a run of
@@ -1420,12 +1435,12 @@ work intervals inside quadratic/refinement loops, as interference §7 specifies.
     it covers. The prune would skip each of those facets without moving the
     minimum, so the scan takes the same facet distances in the same order and
     ends with the same minimum and the same settling facet.
-  - A hint facet `h` bounds `F` by `max(PointBoxDist, PointTriDistance)` at
+  - A hint facet `h` bounds `F` by `max(PointBoxDist, depthFacetDistance)` at
     `h`. The full scan reaches `h` with running minimum `B`. It either skips
     `h` because `PointBoxDist >= B`, so `F <= B <= PointBoxDist`, or it takes
-    the minimum with `PointTriDistance`, so `F <= PointTriDistance`. Both
-    functions are `//go:noinline`, so the hint reading runs the code the scan
-    runs and returns the same bits. The hint is the facet that settled the
+    the minimum with `depthFacetDistance`, so `F <= depthFacetDistance`. Both
+    functions are `//go:noinline` and read the same depth normal, so the hint
+    reading runs the code the scan runs and returns the same bits. The hint is the facet that settled the
     previous candidate of the same search.
   Both shortcuts only answer "not deeper", so they cannot make a witness. A NaN
   `b` fails every shortcut comparison. A candidate the shortcuts do not settle

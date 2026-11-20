@@ -124,7 +124,7 @@ func (s *depthScan) facets(lo, hi int) int {
 		if PointBoxDist(s.pf, s.other.Boxes[i]) >= s.best {
 			continue
 		}
-		s.best = math.Min(s.best, PointTriDistance(s.pf, TriCorners(s.other, i)))
+		s.best = math.Min(s.best, depthFacetDistance(s.pf, TriCorners(s.other, i), s.other.depthNormal(i)))
 		if s.best*(1-1e-12) <= s.b {
 			return i
 		}
