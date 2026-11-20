@@ -32,3 +32,6 @@ go.work.sum
 
 # Frames and videos `go run . clip` writes by default
 /_gallery/out/
+
+# Lean proof build products
+/_proofs/.lake/

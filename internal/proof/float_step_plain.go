@@ -10,6 +10,8 @@ import "math"
 // own cases before stepping, as in math.Nextafter.
 
 // NextUp is math.Nextafter(x, +Inf), bit for bit, for every float64 x.
+//
+// Lean proofs depend on this function; see _proofs/trace.json.
 func NextUp(x float64) float64 {
 	const sign = uint64(1) << 63
 	const infinity = uint64(0x7ff0000000000000)
@@ -60,4 +62,6 @@ func NextDown(x float64) float64 {
 }
 
 // Abs is math.Abs, bit for bit, for every float64 x.
+//
+// Lean proofs depend on this function; see _proofs/trace.json.
 func Abs(x float64) float64 { return math.Abs(x) }

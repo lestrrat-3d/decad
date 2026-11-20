@@ -16,6 +16,8 @@ import (
 // shifts write through Rat.Num and Rat.Denom, which are documented references
 // into the receiver; after SetInt64 the denominator is an initialised 1, so
 // Denom never hands back the detached value it returns for a zero-value Rat.
+//
+// Lean proofs depend on this function; see _proofs/trace.json.
 func FloatRat(value float64) *big.Rat {
 	if math.IsNaN(value) || math.IsInf(value, 0) {
 		return nil
@@ -173,6 +175,8 @@ func RatFloat64(q *big.Rat) (float64, bool) {
 }
 
 // RationalFloatError returns |exact-held| rounded upward.
+//
+// Lean proofs depend on this function; see _proofs/trace.json.
 func RationalFloatError(exact *big.Rat, held float64) float64 {
 	if exact == nil || !finite(held) {
 		return math.Inf(1)
@@ -244,6 +248,8 @@ func AddRoundError(a, b, held float64) float64 {
 }
 
 // MulRoundError returns the exact rounding error of the held product.
+//
+// Lean proofs depend on this function; see _proofs/trace.json.
 func MulRoundError(a, b, held float64) float64 {
 	if finite(a) && finite(b) && finite(held) && held == a*b {
 		if a == 0 || b == 0 {
@@ -311,6 +317,8 @@ func DivRoundError(a, b, held float64) float64 {
 
 // ProvenUpRound rounds a proven positive bound outward. A positive value that
 // flushed to zero must still publish a positive bound.
+//
+// Lean proofs depend on this function; see _proofs/trace.json.
 func ProvenUpRound(value float64) float64 {
 	if value > 0 {
 		return NextUp(value)
