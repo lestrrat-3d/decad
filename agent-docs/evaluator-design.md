@@ -1454,7 +1454,9 @@ work intervals inside quadratic/refinement loops, as interference §7 specifies.
 - **A tighter depth check may reuse a bounded broad contact set.**
   `RefuseUndecidableProximity` derives local slack from contacts gathered at the
   face-pair slack, then gathers tight contacts when that slack is smaller.
-  Every tight contact is also in the broad set. `ProvenDepthExceeds` may use the
+  Every tight contact is also in the broad set, so `meshbool.narrowNearContacts`
+  reads the tight gather's answer from the broad gather's pairs, in their order
+  and with the same context polls, instead of scanning again. `ProvenDepthExceeds` may use the
   broad set at the tighter threshold when its facet and span counts fit
   `MaxDepthWitnessFacets` and `MaxDepthWitnessSpans`: extra broad facets can
   nominate additional points, but `DeepWitnessAt` still proves strict

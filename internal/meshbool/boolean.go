@@ -174,6 +174,24 @@ func GatherNearContacts(ctx context.Context, bmA *BoolMesh, fis []int, bmB *Bool
 // relative to each read, and the poll schedule is the one the gate always had.
 // run must fill Measured and Far as NearContactRunner(slack) does.
 func gatherNearContacts(ctx context.Context, bmA *BoolMesh, fis []int, bmB *BoolMesh, fjs []int, slack float64, memo *ContactMemo, run ContactBatchRunner, limit int) (NearContacts, bool, error) {
+	return gatherNearContactsLog(ctx, bmA, fis, bmB, fjs, slack, memo, run, limit, nil)
+}
+
+// gatheredPair is one facet pair a gather read back from its classifier, in
+// the order it read them: the pair's contact kind, whether a ContactNone pair
+// lies farther than the gather's slack, and the index in Spans of a
+// ContactSegment pair's span (-1 for any other pair).
+type gatheredPair struct {
+	I, J int
+	Kind ContactKind
+	Far  bool
+	Span int
+}
+
+// gatherNearContactsLog is gatherNearContacts, and when log is not nil it
+// also appends every pair it reads back to *log. A deferred gather's log is
+// incomplete and means nothing.
+func gatherNearContactsLog(ctx context.Context, bmA *BoolMesh, fis []int, bmB *BoolMesh, fjs []int, slack float64, memo *ContactMemo, run ContactBatchRunner, limit int, log *[]gatheredPair) (NearContacts, bool, error) {
 	var nc NearContacts
 	seenA := map[int]bool{}
 	seenB := map[int]bool{}
@@ -192,9 +210,18 @@ func gatherNearContacts(ctx context.Context, bmA *BoolMesh, fis []int, bmB *Bool
 			if !r.Measured { // a memo hit: no worker measured it
 				far = TriTriDistanceExceeds(TriCorners(bmA, i), TriCorners(bmB, j), slack)
 			}
+			if log != nil {
+				*log = append(*log, gatheredPair{I: i, J: j, Kind: c.Kind, Far: far, Span: -1})
+			}
 			if far {
 				return nil
 			}
+		} else if log != nil {
+			span := -1
+			if c.Kind == ContactSegment {
+				span = len(nc.Spans)
+			}
+			*log = append(*log, gatheredPair{I: i, J: j, Kind: c.Kind, Span: span})
 		}
 		if c.Kind == ContactSegment {
 			nc.Spans = append(nc.Spans, ContactSpan{I: i, J: j, P0: c.P0, P1: c.P1})
@@ -212,7 +239,7 @@ func gatherNearContacts(ctx context.Context, bmA *BoolMesh, fis []int, bmB *Bool
 	// A face pair usually queues few contacts, so keep its initial buffers
 	// small without changing when the ordered batch is flushed.
 	contacts.initialCapacity = contactBatchInitialCapacity
-	useTree := len(fis) > 0 && len(fjs) > 0 && len(fis)*len(fjs) > 16384 && slack >= 0 && !math.IsNaN(slack)
+	useTree := gatherUsesTree(len(fis), len(fjs), slack)
 	var tree heldBoxTree
 	var candidateIDs []int
 	nextPoll := 256
@@ -290,6 +317,12 @@ func gatherNearContacts(ctx context.Context, bmA *BoolMesh, fis []int, bmB *Bool
 		return NearContacts{}, false, err
 	}
 	return nc, false, nil
+}
+
+// gatherUsesTree reports whether a gather over nfis × nfjs facets at slack
+// queries a box tree for its candidates instead of testing every pair.
+func gatherUsesTree(nfis, nfjs int, slack float64) bool {
+	return nfis > 0 && nfjs > 0 && nfis*nfjs > 16384 && slack >= 0 && !math.IsNaN(slack)
 }
 
 func expandBoxForSlack(box [2]r3.Vec, slack float64) [2]r3.Vec {
