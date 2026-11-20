@@ -50,3 +50,17 @@ func TestMovedGroupDropsExtentDelta(t *testing.T) {
 	require.Equal(t, 5e-15, unmoved.ExtentDelta)
 	require.Equal(t, 3e-14, unmoved.NormalBound)
 }
+
+func TestMovedGroupRetainsOnlyExactPlaneImage(t *testing.T) {
+	frame, err := r3.NewFrame(r3.Vec{Z: 1}, r3.Vec{X: 1}, r3.Vec{Y: 1})
+	require.NoError(t, err)
+	g := facetedrecord.Group{Surface: surfacegeom.Plane{Frame: frame}, Retained: true}
+	verts := []r3.Vec{{Z: 1}, {X: 1, Z: 1}}
+	exact := boolshift.MovedGroup(g, 0, true, map[int]boolshift.PieceShift{0: {Move: r3.Vec{Z: .5}}}, verts, 1)
+	require.NotNil(t, exact.PlacedPlane)
+	rounded := boolshift.MovedGroup(g, 0, true, map[int]boolshift.PieceShift{0: {Move: r3.Vec{Z: 0x1p-54}}}, verts, 1)
+	require.Nil(t, rounded.PlacedPlane)
+	g.ExtentDelta = .01
+	departed := boolshift.MovedGroup(g, 0, true, map[int]boolshift.PieceShift{0: {Move: r3.Vec{Z: .5}}}, verts, 1)
+	require.Nil(t, departed.PlacedPlane)
+}
