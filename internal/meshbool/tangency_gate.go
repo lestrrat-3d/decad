@@ -305,8 +305,9 @@ func gateFacePair(ga, gb faceFacets, capFace, coneFace *topo.Face,
 // The broad gather stored every pair it classified, so each queued pair is a memo hit: the tight gather classifies
 // nothing, stores nothing and reads the contacts log records. None is a ContactRegion, or the broad gather would
 // have deferred. A ContactNone pair farther than broadSlack is farther than slack, because TriTriDistanceExceeds
-// is TriTriDistance > slack for every input (agent-docs/evaluator-design.md §9); any other ContactNone pair is
-// measured at slack as the tight gather measures a memo hit.
+// never turns from true to false as slack shrinks: its float reading, axis thresholds and exact comparison are
+// each monotone in slack (agent-docs/evaluator-design.md §9). Any other ContactNone pair is measured at slack as
+// the tight gather measures a memo hit.
 //
 // The tight gather polls ctx once per 256 facet pairs it scans, once per queued pair as it queues it and again as
 // it reads it back, twice per batch it flushes, and once at the end. Nothing it reads between polls changes, so

@@ -36,7 +36,7 @@ examples, or changing CI shards.
 
 ## Nested modules
 
-Nested modules (`_gallery/`, `_shardgen/`) take the versions of shared dependencies from the
+Nested modules (`_gallery/`, `_shardgen/`, `_proofs/`) take the versions of shared dependencies from the
 root `go.mod`. CI's `golangci-lint` job runs `scripts/tidy-dependent-go-modules.sh --check`,
 which fails when any nested `go.mod` or `go.sum` differs from the tidied result and leaves
 the checkout unchanged. To fix a failure, run `scripts/tidy-dependent-go-modules.sh` and

@@ -1,0 +1,21 @@
+name = "decadProofs"
+defaultTargets = ["Decad"]
+
+[leanOptions]
+autoImplicit = false
+relaxedAutoImplicit = false
+pp.unicode.fun = true
+weak.linter.mathlibStandardSet = true
+maxSynthPendingDepth = 3
+# Mathlib's file-header rule requires a Mathlib copyright block; this project is not part of Mathlib.
+weak.linter.style.header = false
+# Mathlib wraps at 100 columns; this repository's prose and comment limit is about 120.
+weak.linter.style.longLine = false
+
+[[require]]
+name = "mathlib"
+scope = "leanprover-community"
+rev = "v4.36.0"
+
+[[lean_lib]]
+name = "Decad"

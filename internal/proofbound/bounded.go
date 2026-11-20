@@ -34,6 +34,9 @@ func ExactScalar(value float64) BoundedScalar {
 	return BoundedScalar{Value: value}
 }
 
+// MeasuredScalar returns value held with the proven bound bound.
+//
+// Lean proofs depend on this function; see _proofs/trace.json.
 func MeasuredScalar(value, bound float64) BoundedScalar {
 	return BoundedScalar{Value: value, Bound: bound}
 }
@@ -81,6 +84,12 @@ func BoundedMin(a, b BoundedScalar) BoundedScalar {
 	return MeasuredScalar(value, math.Max(UpRound(value-lo), UpRound(hi-value)))
 }
 
+// BoundedMul returns the held product of a and b with a bound that covers every
+// product of values inside a's and b's intervals: the three ProductUpper terms
+// |a|·b.Bound, |b|·a.Bound and a.Bound·b.Bound plus the exact rounding error of
+// the held product, summed upward by AbsSumUpper.
+//
+// Lean proofs depend on this function; see _proofs/trace.json.
 func BoundedMul(a, b BoundedScalar) BoundedScalar {
 	value := a.Value * b.Value
 	bound := AbsSumUpper(
@@ -304,6 +313,10 @@ func ConservativeValueError(held, trueAbsUpper float64) float64 {
 	return AbsSumUpper(held, math.Max(0, trueAbsUpper))
 }
 
+// AbsSumUpper adds the absolute values of its arguments in order, rounding each
+// partial sum upward with UpRound, so the result is at least their exact sum.
+//
+// Lean proofs depend on this function; see _proofs/trace.json.
 func AbsSumUpper(values ...float64) float64 {
 	total := 0.0
 	for _, value := range values {
@@ -327,6 +340,8 @@ func AbsSumUpper(values ...float64) float64 {
 // rather than being annihilated by it: an unbounded factor times an absent one
 // bounds nothing, and answering 0 there would republish a refusal as a proven
 // zero.
+//
+// Lean proofs depend on this function; see _proofs/trace.json.
 func ProductUpper(a, b float64) float64 {
 	if math.IsInf(a, 1) || math.IsInf(b, 1) {
 		return math.Inf(1)

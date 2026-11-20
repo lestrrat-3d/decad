@@ -206,6 +206,8 @@ const (
 // positive is therefore holding a flush, not an answer, and must reach it
 // through ProvenUpRound — or through ProductUpper and DivUpper, which carry
 // that rule for the multiply and the divide that commit the flush.
+//
+// Lean proofs depend on this function; see _proofs/trace.json.
 func UpRound(x float64) float64 {
 	if x > 0 {
 		return proofarith.NextUp(x)
@@ -234,6 +236,8 @@ func UpRound(x float64) float64 {
 //
 // A caller whose operands are NOT proven positive keeps UpRound: a zero that
 // is honestly zero must stay zero.
+//
+// Lean proofs depend on this function; see _proofs/trace.json.
 func ProvenUpRound(x float64) float64 {
 	return proofarith.ProvenUpRound(x)
 }

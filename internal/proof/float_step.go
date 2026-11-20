@@ -16,6 +16,8 @@ import "math"
 // else — subnormals, the range ends, infinities and NaN — takes
 // math.Nextafter itself. The float64() conversions forbid fusing the product
 // into the sum.
+//
+// Lean proofs depend on this function; see _proofs/trace.json.
 func NextUp(x float64) float64 {
 	if x >= 0x1p-969 && x < math.MaxFloat64 {
 		y := x + float64(x*0x1p-53)
@@ -55,6 +57,8 @@ func NextDown(x float64) float64 {
 // Under -race, the build CI tests with, math.Abs's bit cast is checked and
 // race-instrumented on every call and runs several times slower than Abs.
 // The plain build favours math.Abs, so measure both builds before switching.
+//
+// Lean proofs depend on this function; see _proofs/trace.json.
 func Abs(x float64) float64 {
 	if x < 0 {
 		return -x

@@ -28,6 +28,8 @@ func LazyOf(r *big.Rat) LazyRat { return LazyRat{n: r.Num(), d: r.Denom()} }
 
 // lazyFrac takes ownership of n and d (d > 0), cancels their common power of
 // two and returns n/d.
+//
+// Lean proofs depend on this function; see _proofs/trace.json.
 func lazyFrac(n, d *big.Int) LazyRat {
 	if n.Sign() == 0 {
 		return LazyRat{n: n, d: lazyOne}
@@ -296,9 +298,13 @@ func LazyIntervalWiden(a LazyInterval, w LazyRat) LazyInterval {
 // zero, and an interval that excludes zero still excludes it. The relative
 // error is below 2^(1-bits). The operands are never written, so the
 // immutability contract of LazyRat holds.
+//
+// Lean proofs depend on this function; see _proofs/trace.json.
 func LazyRoundDown(x LazyRat, bits int) LazyRat { return lazyRound(x, bits, false) }
 
 // LazyRoundUp is the upward counterpart of LazyRoundDown.
+//
+// Lean proofs depend on this function; see _proofs/trace.json.
 func LazyRoundUp(x LazyRat, bits int) LazyRat { return lazyRound(x, bits, true) }
 
 // LazyIntervalRoundOut is [LazyRoundDown(a.Lo, bits), LazyRoundUp(a.Hi, bits)],
@@ -307,6 +313,11 @@ func LazyIntervalRoundOut(a LazyInterval, bits int) LazyInterval {
 	return LazyInterval{Lo: LazyRoundDown(a.Lo, bits), Hi: LazyRoundUp(a.Hi, bits)}
 }
 
+// lazyRound rounds x = n/d outward to a dyadic m/2^s, upward when up is true and
+// downward otherwise, with s = bits - (n.BitLen() - d.BitLen()). It returns x
+// unchanged when n is zero or n and d together hold at most 4·bits bits.
+//
+// Lean proofs depend on this function; see _proofs/trace.json.
 func lazyRound(x LazyRat, bits int, up bool) LazyRat {
 	if x.n.Sign() == 0 || x.n.BitLen()+x.d.BitLen() <= 4*bits {
 		return x
