@@ -15,6 +15,13 @@ import (
 	"github.com/lestrrat-3d/r3"
 )
 
+// CutFacetBound covers the registered true patch. Preserve retains the old
+// facet assignment as well wherever the two correspondences can overlap.
+type CutFacetBound struct {
+	Distance float64
+	Preserve bool
+}
+
 // BoolMesh is one operand's tessellation prepared for exact work: float
 // vertices lifted to rationals, exact facet normals and their lazy rounded-
 // float cache, facet boxes for pair pruning, and the global source-face id
@@ -42,6 +49,8 @@ type BoolMesh struct {
 	// FacetBound except for a facet of a retained plane, whose true piece lies
 	// in that exact plane (SetSlabBounds).
 	SlabBound []float64
+	// CutGateBounds applies only to coarse-contact tests for one prepared pair.
+	CutGateBounds map[int]float64
 	// PlanarOwn, when set, is facet t's bound away from its face's trim
 	// chording (topo.PlanarRecord): +Inf off a planar face. PlanarChords[t]
 	// are the chords of t's face and PlanarReach[t] how far from them the

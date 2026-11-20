@@ -20,6 +20,7 @@ type upperRimProof struct {
 	alignedCheek           *topo.Body
 	stock, result          *Body
 	pad                    *topo.Body
+	alignedCheek           *topo.Body
 	wall, sourceWall, cone *topo.Face
 	shift                  r3.Vec
 	geometry               rimextension.OuterAdmission

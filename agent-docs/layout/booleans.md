@@ -35,6 +35,9 @@ Boolean files and modify operations. The rules for rows live in `agent-docs/layo
 | `rim_extension_history.go` | Binds held faces to their original extrusions and ruled cutting tool for a straight Chamfer. See modify design. |
 | `rim_outer_native.go` | Binds the terminal profile arc on the original flange when the cap joins a concentric cone heel. |
 | `rim_outer.go` | Binds a circular pad and its earlier cone to a stopped flange shoulder before publication. |
+| `native_cheek_band.go` | Registers the held arc strip and checks the surviving native face boundary. |
+| `native_cheek_contact_bounds.go` | Bounds the whole Loft tool and selects the native arc for a local Cut contact. |
+| `native_cheek_cut.go` | Replays the aligned pad and Cut inputs for a cylindrical contact proof. |
 | `native_rim_aligned.go` | Checks the cheek faces along the lower edge of a pad chamfer. |
 | `native_rim_annulus.go` | Verifies the full cap and cylindrical band of a native pad on later edited stock. |
 | `native_rim_chamfer.go` | Authenticates the retained cylinder, Boolean history, and stock clearance for a circular chamfer. |
