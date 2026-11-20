@@ -106,6 +106,9 @@ type BoolMesh struct {
 	// depthLevels are setDepthBlocks' summaries of Boxes, which let
 	// depthBeyond pass over runs of facets its prune would skip.
 	depthLevels [][][2]r3.Vec
+	// depthKappa holds setDepthKappa's per-facet κ bounds and their block
+	// maxima, which depthBeyond's threshold prune reads.
+	depthKappa [][]float64
 	// depthNorms and depthReach are setDepthNormals' per-facet normals and
 	// largest vertex coordinate magnitude, which depthFacetDistance and
 	// depthCertificate read.

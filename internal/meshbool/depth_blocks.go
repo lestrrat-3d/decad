@@ -24,8 +24,10 @@ var everywhereBox = [2]r3.Vec{
 // ordered (a NaN coordinate, or a low corner past the high one on an axis)
 // gets everywhereBox. Every block contains the boxes it covers, so its
 // PointBoxDist is no larger than theirs (agent-docs/evaluator-design.md §9).
-// PrepContext calls it once Boxes is filled, and a caller that changes Boxes
-// afterwards must call it again.
+// It then fills depthKappa (setDepthKappa) for the depth threshold prune.
+// PrepContext calls it once Boxes and the depth normals are filled, and a
+// caller that changes Verts, Tris, Boxes or Norms afterwards must call it
+// again.
 func (bm *BoolMesh) setDepthBlocks() {
 	bm.depthLevels = nil
 	level := bm.Boxes
@@ -33,6 +35,7 @@ func (bm *BoolMesh) setDepthBlocks() {
 		level = unionRuns(level, depthFanout)
 		bm.depthLevels = append(bm.depthLevels, level)
 	}
+	bm.setDepthKappa()
 }
 
 // unionRuns returns the union box of every run of size consecutive boxes, or
@@ -75,12 +78,21 @@ func (bm *BoolMesh) depthBlocksFit(n int) bool {
 }
 
 // depthScan is the running state of depthBeyond's facet scan: the rounded
-// query point, the mesh, the bound and the running minimum.
+// query point, the mesh, the bound and the running minimum. The remaining
+// fields serve the depth threshold prune (depth_prune.go): whether it runs,
+// the threshold t with its slack factors once computed, and whether the scan
+// has passed over a box.
 type depthScan struct {
 	pf    r3.Vec
 	other *BoolMesh
 	b     float64
 	best  float64
+
+	prune  bool
+	tdSet  bool
+	td     float64
+	a1, a2 float64
+	passed bool
 }
 
 // scan runs CertifiedInteriorDepth's facet scan, in facet order with its box
@@ -88,12 +100,21 @@ type depthScan struct {
 // minimum to a value that settles p as no deeper than b. It returns that
 // facet, or -1 when the scan ends unsettled with the definition's minimum in
 // best. It descends the depth blocks when they fit the mesh, and scans the
-// facets directly otherwise.
+// facets directly otherwise. With prune set and depthKappa fitting the
+// blocks, it runs prunedBlock instead; a scan that ends with passed set has
+// proven p deeper than b and leaves best above the threshold, and a scan the
+// prune gives up on starts over without it.
 func (s *depthScan) scan() int {
 	n := len(s.other.Tris)
 	top := len(s.other.depthLevels) - 1
 	if top < 0 || !s.other.depthBlocksFit(n) {
 		return s.facets(0, n)
+	}
+	if s.prune && s.other.depthKappaFit() {
+		if i := s.prunedBlock(top, 0); i != depthScanRestart {
+			return i
+		}
+		s.best, s.passed = math.Inf(1), false
 	}
 	return s.block(top, 0)
 }

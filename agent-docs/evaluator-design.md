@@ -1444,7 +1444,8 @@ work intervals inside quadratic/refinement loops, as interference §7 specifies.
     is the facet that settled the previous candidate of the same search.
   Both shortcuts only answer "not deeper", so they cannot make a witness. A NaN
   `b` fails every shortcut comparison. A candidate the shortcuts do not settle
-  finishes the definition's own scan and pays `PointRoundBound`. Exact parity
+  finishes the definition's own scan and pays `PointRoundBound`, unless the
+  threshold prune of the next item proves it deeper first. Exact parity
   still runs only for a candidate past `b`, so the witness verdicts and the
   context polls are those of the definition.
   A TANGENCY — facets that touch without crossing — has no positive-bound contact
@@ -1457,6 +1458,77 @@ work intervals inside quadratic/refinement loops, as interference §7 specifies.
   error only when its inherited boundary certificate proves that its true patch
   equals the held polygons (`agent-docs/tessellation-design.md` §2/§7, payload
   verification §5).
+- **The witness depth scan passes over blocks that cannot settle a
+  candidate.** `meshbool.depthBeyond` runs the block scan with a threshold
+  prune (`internal/meshbool/depth_prune.go`, which derives each constant
+  below). The threshold is `t = fl(fl(fl(b + E) + R̄)·(1 + 2^-38))`, where
+  `R̄ = Radius3D(ProvenUpRound(g))`, `g` the largest gap from a coordinate
+  magnitude of the rounded point to the next float above it. Each coordinate
+  of the exact point lies within `g/2` of its nearest float, so `R̄` bounds
+  `PointRoundBound` from above without exact arithmetic. The prune runs only
+  when `b` is finite and non-negative, `M <= 2^500` and
+  `fl(fl(fl(t·c) − R̄) − E)` is above `b`. That certificate never decreases
+  as its minimum grows and never increases as its rounding term grows, so any
+  minimum at or above `t` certifies the candidate deeper than `b` with the
+  true `PointRoundBound`. The scan computes `t` the first time a box reading
+  and the running minimum both lie above `b`.
+  - The lower bound. Take a facet with float corners, exact normal `N`, every
+    edge at least `2^-499.5` long, longest edge `L` and `κ >= L²/|N|`, and let
+    `d*` be the exact distance to it from the rounded point. Then
+    `depthFacetDistance` reads `D >= (1 − 20u)·d* − S`, with
+    `S = 2σκ + 20u·M + 2^-1000` and `σ = 83u·M + 2^-568`. A facet with
+    `N = 0` always reads its edges and has `S = 9u·M + 2^-1000`. An edge
+    reading clamps its parameter into `[0, 1]`, so it measures to a point of
+    the closed edge, moved by at most `8.74u·M` of rounding. A foot reading is
+    at least `(1 − 20u)` times the plane distance less `20u·M`. But
+    `PointInTriangle` can accept a foot outside the facet: each edge test
+    errs by at most `|e||N'|·σ`, so an accepted exact foot lies within `σ` of
+    every edge's inner half-plane. Those points form the facet grown by `σ`
+    about its incentre, whose corners lie `σ/sin(α/2) <= 2σκ` from the
+    facet's corners (`α` the corner's angle). So the plane distance is at
+    least `d* − 2σκ`. A sliver's `κ` is large, and the misreading is real:
+    the tests hold a sliver at 1 mm scale whose foot reads about `6e-4` below
+    its box distance.
+  - The box. Building the per-facet `κ` table checks that each facet box
+    holds its corners, and gives `κ = +Inf` when it does not or when an edge
+    is too short. A block holds the boxes it covers and takes the largest `κ`
+    among them. `PointBoxDist` reads `P` at most `(1 + 3.6u)` times the exact
+    box distance plus `2^-536`, and the exact box distance is at most `d*` for
+    every facet inside. The scan passes over a box when
+    `fl(fl(P·(1 − 2^-46)) − s) > t`, with `s = fl(fl(κ·a1) + a2)`,
+    `a1 = fl(2^-44·M + 2^-490)` and `a2 = fl(2^-47·M + 2^-490)`. Every facet
+    inside then reads `D > t`.
+  - The same answer and the same hint. Both depend on the order in which the
+    block scan lowers its running minimum, so the pruned scan keeps that
+    order. Let `B` be the pruned scan's minimum and `B'` the minimum the scan
+    without the prune holds at the same point of the traversal. Until the scan
+    passes over a box, `B' = B`. It passes over a box only while `B > t` and
+    the box reads above `t`, and only when the box test above proves the box,
+    or, once a box has been passed over, when a facet box's own facet reads
+    above `t`. From then on `B'` is `B` lowered only by readings above `t`.
+    Both scans skip a box reading at or past `B`. Both enter a box reading at
+    most `t`, and any box while nothing has been passed over. For any other
+    box, the unpruned scan may or may not enter it, so the scan starts over
+    without the prune. Outside the boxes passed over, both scans read the
+    same facets in the same order. A settling facet has
+    `fl(D·c) <= b < fl(t·c)`, so it reads below `t` and is never passed over,
+    and both scans settle on the same facet. Once `B` drops to `t` or below,
+    `B' = B` again. A scan that ends after passing over a box has `B' > t`,
+    so the answer is "deeper"; otherwise `B' = B` and the certificate decides
+    as before.
+  - The cost. Let `U` be the number of readings (box distances and facet
+    distances) the unpruned scan makes. Until it starts over, the pruned scan
+    enters a box only when the unpruned scan does, so it reads no box
+    distance the unpruned scan does not, plus at most one facet reading per
+    facet box the unpruned scan reads. A scan that starts over has done at
+    most that much and then runs the unpruned scan, so its total is at most
+    `2·U` plus one facet reading per facet box the unpruned scan reads. The
+    bound covers all readings together; `depthFacetDistance` calls alone can
+    exceed twice the unpruned scan's on a small scan. The prune never
+    computes `PointRoundBound`.
+  The budgeted scan (`scanDepthShared`, `internal/meshbool/depth_shared.go`)
+  charges one budget step for each block and facet it visits, so it runs
+  without the prune and its charges stay those of the unpruned scan.
 - **A near-miss facet pair is far only when a proof says so.**
   `GatherNearContacts` drops a `ContactNone` pair only when
   `meshbool.TriTriDistanceExceeds` (`internal/meshbool/triangle_distance.go`)
