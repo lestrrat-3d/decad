@@ -387,7 +387,7 @@ func buildPaired(ctx context.Context, env topo.Env, pl Payload, budget *proofbou
 
 	pl.Verts, pl.Tris, pl.Walls = a.Verts, a.Tris, a.Walls
 	if pl.SourceIdentity == nil {
-		pl.SourceIdentity = &SourceIdentity{Origin: ref}
+		pl.SourceIdentity = &SourceIdentity{Origin: ref, direct: sealDirectSections(body, pl)}
 	}
 	pl.CapStartCount, pl.Cell, pl.Side = a.CapStartCount, a.Cell, a.Side
 	pl.Segment = make([][]int, len(pairs))

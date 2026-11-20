@@ -12733,3 +12733,48 @@ tool's band with the same cell tests at its own station count
 `apitest/cross_cylinder_bore_chamfer_test.go` builds the cut, chamfers the positive mouth, and checks one
 `boreMouthChamfer` face. `Tessellate(0.1 mm, VerifyAll)` reports boundary and volume verified, the boundary bound is
 below 0.1 mm, and the volume reading's lower bound is positive.
+
+### Continuing a straight chamfer to a cylindrical support
+
+A straight cap edge can remain between a stopped chamfer and a cylindrical
+support tangent to the cap's outer profile. Chamfer at the previous setback
+continues the bevel across the stop and tapers into the cylinder. It preserves
+the cylinder's diameter and retains the seating face outside the extension.
+
+The bounded class has a coordinate-aligned cap, a perpendicular planar side,
+and a cylindrical support normal to the cap. The side and the support trim
+must each be single-valued over a coordinate along the run. One end of the
+selected edge has the existing chamfer stop. The other meets the convex
+rounded end of the same native extruded profile. Its cylinder must lie inside
+or coincide with the supporting cylinder. Both mirror senses are admissible.
+
+Bound every candidate face's reach in the affected window before using its
+retained surface. Bind native cap, side and support to their original
+extrusions and authenticate the previous cutter's terminating support. A
+third surface entering the window, an ambiguous stop, a missing native
+record, or an uncertified material orientation declines the route.
+
+Within the window below the cap the boss supplies the only boundary. Above
+it the original cap can add material on crossing upward. An oriented true
+cap point between the boss and side witnesses the extruded stock there.
+A held point supplies this witness only if its full source displacement ball
+stays within that connected region. Determine clearance from the actual
+native records including placement and construction error.
+
+Clip the held cap and side and remove the old stop wall. Extend the existing
+cylinder trim to the new bevel plane at each shared edge. Triangulate the
+bevel and its end from the resulting boundary. Charge the radial departure,
+the stop's source displacement and coordinate rounding. Verify the closed
+oriented shell and every crossing pair involving a changed facet before
+publication. The result carries boundary, area and occupied-volume bounds.
+
+The implemented chart uses world X along the run and a cap normal to Y.
+A direct ruled Loft supplies the stopped cut. Its two original bounded
+line-and-arc profiles, frames and alignment must match their construction
+records. A cut-tool face must trace through exactly one subtraction.
+Every stock face must trace through none. Moved tools decline this route.
+The held edit must fit the same finite window used for the source proof.
+
+The public regression joins a transverse web and a circular pad to an
+extruded flange. It checks the original side and finished bevel heights at
+the same transverse station, and verifies the closed shell and volume.

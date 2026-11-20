@@ -28,7 +28,10 @@ type TwistAreaCellClaims struct {
 
 // SourceIdentity names the producer of the original Loft. It is shared only
 // by that Loft and its own placed copies.
-type SourceIdentity struct{ Origin provenance.Producer }
+type SourceIdentity struct {
+	Origin provenance.Producer
+	direct *directSections
+}
 
 // Payload is the evaluator's own record of a lofted body: the two
 // authenticated sections, their planes and frames, the per-loop alignment,

@@ -13,13 +13,13 @@ func ReplayDetDyadic(ctx context.Context, a, b, c Xpt, meter ReplayKeyBudget) (D
 		if p.W == nil || p.W.Sign() <= 0 {
 			return fail(errReplayInvalidDeterminantDenominator)
 		}
-		if _, ok := powerOfTwoExp(p.W); !ok {
-			return fail(errReplayNonDyadicDeterminant)
-		}
 		for _, v := range [4]*big.Int{p.X, p.Y, p.Z, p.W} {
 			if v == nil || v.BitLen() > 1024 {
 				return fail(errReplayReplayDeterminantInputWidth)
 			}
+		}
+		if _, ok := powerOfTwoExp(p.W); !ok {
+			return fail(errReplayNonDyadicDeterminant)
 		}
 	}
 	diff := func(x, y, z, w *big.Int) (*big.Int, error) { return ReplayProductDifference(ctx, x, y, z, w, meter) }

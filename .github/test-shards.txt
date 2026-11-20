@@ -337,6 +337,7 @@
 12	0.11	TestTwistWideThinRectangleTransform
 12	0.00	TestCircularFitPrimitiveEligibility
 12	0.00	TestChamferRetainedCylinderRim
+12	0.00	TestChamferStraightRunAtCircularSupport
 12	0.00	TestRetainedRimCancellationDuringPublication
 12	0.00	TestRetainedRimCancelledPublication
 12	0.00	TestRetainedRimExhaustedPublication
