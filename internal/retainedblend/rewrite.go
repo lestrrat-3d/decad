@@ -668,16 +668,31 @@ func (w *work) strip(tag blendTag, ringA, ringB []ringPt, group int) {
 	}
 	rows = append(rows, ringB)
 	for i := 0; i+1 < len(rows); i++ {
-		for _, t := range zipper(rows[i], rows[i+1]) {
-			a, b, c := w.verts[t[0]], w.verts[t[1]], w.verts[t[2]]
-			centroid := a.Add(b).Add(c).Scale(1.0 / 3)
-			if b.Sub(a).Cross(c.Sub(a)).Dot(tag.outward(centroid)) < 0 {
+		band := zipper(rows[i], rows[i+1])
+		// The zipper winds every triangle of a band the same way, so the band is oriented once, by the net of its
+		// facets' alignment with the outward direction. A facet's own sign cannot decide it: a sliver at the ring's
+		// seam, whose two ring points differ by rounding, has a sign that is noise and would be wound against its
+		// neighbours, leaving the held boundary open.
+		flip := w.bandAgainstOutward(tag, band)
+		for _, t := range band {
+			if flip {
 				t[1], t[2] = t[2], t[1]
 			}
 			w.emit(t, group)
 		}
 	}
 	w.chargeBand(from, bandAxis{o: w.r.center, n: w.r.n, ok: true}, tag.rhoHi, tag.lastSag, w.r.slack())
+}
+
+// bandAgainstOutward reports whether the band's facets, summed, wind against tag.outward.
+func (w *work) bandAgainstOutward(tag blendTag, band [][3]int) bool {
+	net := 0.0
+	for _, t := range band {
+		a, b, c := w.verts[t[0]], w.verts[t[1]], w.verts[t[2]]
+		centroid := a.Add(b).Add(c).Scale(1.0 / 3)
+		net += b.Sub(a).Cross(c.Sub(a)).Dot(tag.outward(centroid))
+	}
+	return net < 0
 }
 
 // zipper joins two closed rings, each sorted by angle, into a band of
