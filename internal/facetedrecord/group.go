@@ -87,7 +87,9 @@ type Group struct {
 	// while Surface equals it: every path that moves the tag without proving the image again voids it, and only a
 	// placement sets it.
 	PlacedPlane *surfacegeom.Plane
-	Denoted     *surfacenormal.Revolved
+	// FilletCarrier is the positional evidence of the source fillet.
+	FilletCarrier *topo.FilletCarrier
+	Denoted       *surfacenormal.Revolved
 	// NormalBound covers the tag's normal departure from its denoted patch.
 	// A placed planar tag conservatively uses the maximum distance of two
 	// unit normals when its rounded frame has no tighter certificate.

@@ -709,6 +709,16 @@ sweeps (`stitchflux.TagIsDenoted`), with a finite, non-negative wall charge
 `β`. The face's `NormalBound` holds the held displacement term, which bears on
 `NormalAt` and not on where the true piece lies, so it is not read.
 
+A retained straight fillet on a circular rim can also carry a certified
+distance from its ideal torus to the stored torus. The producer includes
+rounding in the cylinder, cap level, center and major radius. On an unshifted
+Boolean contact refusal, the evaluator can bound the signed height of the
+finite patch over its held triangle. It uses the torus signed-distance
+gradient over the triangle's existing two-sided neighborhood and charges
+the certified carrier distance. Bounded interval subdivision may tighten
+the one-sided slab. The original two-sided bound still governs the finite
+trim. Placement, scaling and gap movement discard the carrier certificate.
+
 **What reads the slab.** The slab bound replaces `β` in the
 held-mesh gate (`RefuseCoarseHeldContact`) and in `RimBound`. A vertex the
 cutter places on a facet's interior keeps `β`, because its true boundary point

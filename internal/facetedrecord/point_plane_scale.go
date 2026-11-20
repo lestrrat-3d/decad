@@ -103,6 +103,7 @@ func ScaleImageWithSummary(ctx context.Context, body *topo.Body, fp Payload, anc
 	next.Groups = append([]Group(nil), fp.Groups...)
 	for i := range next.Groups {
 		group := &next.Groups[i]
+		group.FilletCarrier = nil
 		if err := budget.Step(); err != nil {
 			return Payload{}, nil, err
 		}

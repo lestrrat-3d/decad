@@ -534,8 +534,9 @@ func (w *work) angleOf(p r3.Vec) float64 {
 
 // blendTag is the exact surface of the blend face and its orientation.
 type blendTag struct {
-	surface  surfacegeom.Surface
-	reversed bool
+	torusCarrier *topo.FilletCarrier
+	surface      surfacegeom.Surface
+	reversed     bool
 	// outward returns the outward normal of the blend at p.
 	outward func(p r3.Vec) r3.Vec
 	// rows are the intermediate rows of the grid, from the plane ring toward
@@ -560,6 +561,7 @@ func (w *work) tagGroup(g facetedrecord.Group, tag blendTag) facetedrecord.Group
 	}
 	if w.r.charge == 0 {
 		g.Surface, g.Retained, g.Reversed = tag.surface, true, tag.reversed
+		g.FilletCarrier = tag.torusCarrier
 		return g
 	}
 	if _, plane := tag.surface.(surfacegeom.Plane); !plane {
@@ -581,11 +583,8 @@ func (w *work) torusTag() blendTag {
 	r, rr := w.r, w.spec.r
 	rhoC := r.radius + r.kappa*rr
 	zetaC := r.side * rr
-	tag := blendTag{
-		surface: surfacegeom.Torus{
-			Center: r.center.Add(r.n.Scale(zetaC)), Axis: r.n,
-			Major: units.Millimeters(rhoC), Minor: units.Millimeters(rr),
-		},
+	torus := surfacegeom.Torus{Center: r.center.Add(r.n.Scale(zetaC)), Axis: r.n, Major: units.Millimeters(rhoC), Minor: units.Millimeters(rr)}
+	tag := blendTag{surface: torus, torusCarrier: roundedRimTorus(r, rr, torus),
 		reversed: !r.convex,
 		trueArea: math.Pi*math.Pi*rr*rhoC - 2*math.Pi*r.kappa*rr*rr,
 	}

@@ -36,6 +36,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/rimsplit"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/decad/internal/topobuild"
@@ -147,6 +148,13 @@ func Evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 	meshes OperandMesher, chordScale float64, capFace, coneFace *topo.Face) (Evaluation, error) {
 	twins := &operandTwins{}
 	ev, err := evaluate(ctx, op, a, b, meshes, chordScale, capFace, coneFace, twins, nil, nil, nil, nil, 0)
+	// On a coarse held contact, try the same operands with a directional
+	// bound from their authenticated torus patches. The meter covers every
+	// aligned attempt in this one Union.
+	if _, coarse := errors.AsType[*meshbool.CoarseHeldContactError](err); op == meshbool.OpUnion && coarse && !retainedPlaneSlabDisabled(ctx) && (hasFilletTorus(a) || hasFilletTorus(b)) {
+		ctx = context.WithValue(ctx, torusSlabTrialKey{}, proofbound.NewReplayTrialBudget())
+		ev, err = evaluate(ctx, op, a, b, meshes, chordScale, capFace, coneFace, twins, nil, nil, nil, nil, 0)
+	}
 	if err == nil {
 		return ev, nil
 	}
@@ -721,6 +729,17 @@ func evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 	if err := ctx.Err(); err != nil {
 		return Evaluation{}, err
 	}
+	// Only an unshifted ordinary operand's source records authenticate its
+	// current carrier. A single bounded meter covers both operands.
+	if trial, ok := ctx.Value(torusSlabTrialKey{}).(*proofbound.ReplayBudget); ok && !hasShifts && fixed == nil && replay == nil {
+		budget := trial.WorkBudget(ctx)
+		if err := bmA.TightenTorusSlabs(ma, budget); err != nil {
+			return Evaluation{}, err
+		}
+		if err := bmB.TightenTorusSlabs(mb, budget); err != nil {
+			return Evaluation{}, err
+		}
+	}
 	// One memo per call, over exactly the two prepared operand tessellations
 	// the gate and the mesh pass both walk; it is dropped when the call
 	// returns (meshbool.ContactMemo).
@@ -1142,4 +1161,21 @@ func surfaceSlabs(body *topo.Body, mesh *topo.Mesh, bm *meshbool.BoolMesh, move 
 		}
 	}
 	bm.FaceSurface = face
+}
+
+type torusSlabTrialKey struct{}
+
+func hasFilletTorus(body *topo.Body) bool {
+	payload, ok := body.Payload.(facetedrecord.Payload)
+	if !ok {
+		return false
+	}
+	for _, g := range payload.Groups {
+		if g.FilletCarrier != nil {
+			if _, ok := g.FilletCarrier.Surface.(surfacegeom.Torus); ok {
+				return true
+			}
+		}
+	}
+	return false
 }

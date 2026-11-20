@@ -95,6 +95,7 @@ func MovedGroupWithShift(g facetedrecord.Group, piece int, ok bool, sh PieceShif
 		return bare
 	}
 	placedPlane := facetedrecord.PlacedPlane(g, tag, delta)
+	g.FilletCarrier = nil
 	g.Surface = tag
 	g.PlacedPlane = placedPlane
 	g.NormalBound = min(2, proofbound.AbsSumUpper(g.NormalBound, add))
