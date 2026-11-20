@@ -372,6 +372,7 @@ package.
   - [func LoftFaces](<#LoftFaces>)
   - [func LoftFromPoint](<#LoftFromPoint>)
   - [func LoftSections](<#LoftSections>)
+  - [func LoftSectionsWithCircularCorrespondence](<#LoftSectionsWithCircularCorrespondence>)
   - [func Mirrored](<#Mirrored>)
   - [func MirroredCopy](<#MirroredCopy>)
   - [func MoveFace](<#MoveFace>)
@@ -439,6 +440,7 @@ package.
 - [type ChamferOption](<#ChamferOption>)
   - [func WithAsymmetricChamfer](<#WithAsymmetricChamfer>)
 - [type Circle3](<#Circle3>)
+- [type CircularLoftCorrespondence](<#CircularLoftCorrespondence>)
 - [type CircularPattern](<#CircularPattern>)
 - [type Clearance](<#Clearance>)
 - [type ClosestPoint](<#ClosestPoint>)
@@ -2438,7 +2440,20 @@ centered rectangles may vary width and height independently. All of those routes
 require ascending, equally spaced world-XY planes and interpolate every section
 exactly. Three to 1024 sections of one fitted edge and whole lines may turn
 about the plane origin on strictly ascending world-XY planes (agent-docs/loft-sections-design.md).
+A four-quarter-arc circle may also transition to four-edge sections of one
+fitted edge and three lines, with a certified rational wall.
 Other shapes refuse.
+
+<a name="LoftSectionsWithCircularCorrespondence"></a>
+#### func LoftSectionsWithCircularCorrespondence
+
+<pre>func LoftSectionsWithCircularCorrespondence(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>, d *<a href="#Document">Document</a>,
+    correspondence <a href="#CircularLoftCorrespondence">CircularLoftCorrespondence</a>, sections ...<a href="#LoftSection">LoftSection</a>) (*<a href="#Body">Body</a>, <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
+
+LoftSectionsWithCircularCorrespondence builds a circular-to-spline loft
+using explicit cardinal-quarter parameter maps. The maps and the source
+sections must satisfy the exact admission and continuity proofs in
+agent-docs/loft-sections-design.md §14.
 
 <a name="Mirrored"></a>
 #### func Mirrored
@@ -3078,7 +3093,10 @@ same-placement, hole-free whole-line prisms with distinct source line
 carriers, plus certified straight bevel tooth patterns. Other
 prism inputs use the two-body evaluator in order, with one final commit.
 A three-source chain whose second pair refuses on its first operand's held
-bound can try the other grouping (prism-boolean §4.7).
+bound can try the other grouping (prism-boolean §4.7). A two-body Union
+refused because a facet it touches holds an earlier rim's bound is rebuilt
+from its operands' recorded Union history with rim splitting on, as under
+WithRimSplit, and then joined (prism-boolean Part R, "Rim-split rebuild").
 Each pair must pass its own proof. Failure or cancellation leaves every
 input live. A two-body result from the mesh path is a [Faceted](<#Faceted>) body:
 its faces are grouped by the operands' source faces, with adjacent exactly
@@ -3903,6 +3921,27 @@ positional distance. Passing the option twice is ErrDegenerate.
 
 Circle3 is a circular edge. Center is in millimetres, [Axis](<#Axis>) is a unit
 normal to its plane, and Radius is the circle radius.
+
+<a name="CircularLoftCorrespondence"></a>
+### type CircularLoftCorrespondence
+
+<pre>type CircularLoftCorrespondence struct {
+    Numerators   [4][]<a href="https://pkg.go.dev/builtin#int64">int64</a>
+    Denominators [4]<a href="https://pkg.go.dev/builtin#int64">int64</a>
+    // SmoothCircularBands keeps the first circular band linear and uses
+    // smoothstep for subsequent circular bands.
+    SmoothCircularBands <a href="https://pkg.go.dev/builtin#bool">bool</a>
+    // EmergingFlat maps the three ascending, collinear target lines from the
+    // final circle&#39;s +X vertex. Every fitted flat must remain on that circle&#39;s
+    // tangent line; the fitted spline maps around all four circle quarters.
+    // The tangent plane&#39;s world X coordinate must be exactly representable.
+    EmergingFlat <a href="https://pkg.go.dev/builtin#bool">bool</a>
+}</pre>
+
+CircularLoftCorrespondence gives one rational Bernstein map for each
+cardinal quarter, starting at +X and proceeding counterclockwise. Each
+map uses two to six strictly increasing numerators over its positive
+denominator, starting at zero and ending at the denominator.
 
 <a name="CircularPattern"></a>
 ### type CircularPattern
@@ -4890,14 +4929,20 @@ than the face's own, and the facets the rim touches run on to the far end of
 the face, so a later boolean that crosses them far from the rim reads that
 bound again and amplifies it. With this option such a facet is split near the
 rim, and the later boolean reads the face's own bound on the far piece. A
-facet is split only where the whole far piece is proven, by an exact
+later boolean already reads a retained [Cylinder](<#Cylinder>) face's own departure without
+a split, so the option matters for the other curved faces: a cone, sphere,
+torus or free-form wall, and a cylinder whose tag a placement moved off its
+surface. A facet is split only where the whole far piece is proven, by an exact
 distance, to stand clear of the other operand's boundary by the bounds both
 operands hold; a facet with no such split stays whole and keeps the rim's
 bound. The result holds more facets. A Fillet or Chamfer that reads a split
 face may refuse it, since a split adds a vertex that no boundary loop of the
 face reaches; one that succeeds reads the split facets' own bounds, which are
 proven in the same way. A document that edge-finishes its mesh results
-should leave the option off. A planar face is never split.
+should leave the option off. A planar face is never split. Without the
+option, a two-body Union that the chain-depth gate refuses still rebuilds its
+operands' recorded Union history with splitting on; only the body it returns
+holds split facets.
 
 <a name="DraftOption"></a>
 ### type DraftOption
