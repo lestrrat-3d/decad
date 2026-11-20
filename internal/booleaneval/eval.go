@@ -163,6 +163,18 @@ func Evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 	if terr != nil {
 		return ev, unwrapResultFold(err)
 	}
+	if op == meshbool.OpUnion && !folded && capFace == nil && coneFace == nil {
+		result, ok, retryErr := retryRadialInsetUnion(ctx, a, b, meshes, twins, mb, tolMM, dPair, chordScale)
+		if retryErr != nil {
+			return Evaluation{}, retryErr
+		}
+		if ok {
+			return result, nil
+		}
+		if e := ctx.Err(); e != nil {
+			return Evaluation{}, e
+		}
+	}
 	attempt := func(shifts map[int]pieceShift) (Evaluation, error) {
 		ev, err := evaluate(ctx, op, a, b, meshes, chordScale, capFace, coneFace, twins, shifts, nil, nil, nil, 0)
 		return ev, unwrapResultFold(err)
@@ -725,7 +737,11 @@ func evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 	if replay != nil {
 		proximityErr = meshbool.RefuseUndecidableProximityReplay(ctx, ma, mbDecide, bmA, bmB, memo, capFace, coneFace, replay)
 	} else {
-		proximityErr = meshbool.RefuseUndecidableProximity(ctx, ma, mbDecide, bmA, bmB, memo, capFace, coneFace)
+		var planeBudget *proofbound.WorkBudget
+		if inset, ok := meshes.(*radialInsetMesher); ok && !hasShifts && fixed == nil {
+			planeBudget = inset.budget.WorkBudget(ctx)
+		}
+		proximityErr = meshbool.RefuseProximityWithPlaneEvidence(ctx, ma, mbDecide, bmA, bmB, memo, capFace, coneFace, planeBudget)
 	}
 	if err := proximityErr; err != nil {
 		err = meshbool.StagingError(op, err)
@@ -752,7 +768,8 @@ func evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 	// A gap-shift retry moves b's held mesh by at most shiftDisplacement and
 	// leaves the true operand where it was (agent-docs/gap-tolerance-design.md
 	// §4), so b's record holds once its leaves' bounds and drift grow by that.
-	trackOccupancy := (op == meshbool.OpUnion || op == meshbool.OpCut) &&
+	_, radiallyInset := meshes.(*radialInsetMesher)
+	trackOccupancy := !radiallyInset && (op == meshbool.OpUnion || op == meshbool.OpCut) &&
 		replay == nil && ordered == nil && fixed == nil && capFace == nil && coneFace == nil
 	if trackOccupancy {
 		if occA = occupancyleaf.Of(a, ma); occA != nil {

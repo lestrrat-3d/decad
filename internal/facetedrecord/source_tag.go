@@ -26,6 +26,11 @@ func SourceTag(f *topo.Face, flip bool) (Group, bool) {
 		Reversed: f.Reversed != flip,
 		Denoted:  f.Denoted,
 	}
+	if plane, ok := f.Surface.(surfacegeom.Plane); ok && f.RetainedTag && f.PlacedPlane != nil && *f.PlacedPlane == plane {
+		// A Boolean fragment is a subset of this exact retained carrier.
+		carrier := plane
+		g.PlacedPlane = &carrier
+	}
 	switch {
 	case f.Denoted != nil:
 		// NormalAt judges a denoted face against its denoted surface, which

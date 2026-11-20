@@ -94,7 +94,9 @@ func MovedGroupWithShift(g facetedrecord.Group, piece int, ok bool, sh PieceShif
 	if !stated {
 		return bare
 	}
+	placedPlane := facetedrecord.PlacedPlane(g, tag, delta)
 	g.Surface = tag
+	g.PlacedPlane = placedPlane
 	g.NormalBound = min(2, proofbound.AbsSumUpper(g.NormalBound, add))
 	// The extent bound describes the unmoved tag: it drops, the departed tag
 	// stays.

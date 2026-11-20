@@ -3185,4 +3185,7 @@
 12	0.00	TestCircularLoftEmergingFlatRefusesUnrepresentablePlane
 12	0.00	TestPlateCollarRimChamfer
 12	0.00	TestCylinderWallChainKeepsEachRimBound
+12	0.00	TestCircularUnionCancellation
+12	0.00	TestCircularUnionContact
+12	0.00	TestCircularUnionZeroGap
 12	0.00	TestCurvedFilletBandChord

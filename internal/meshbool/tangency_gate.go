@@ -71,6 +71,12 @@ import (
 // verdict decided by chord placement.
 func RefuseUndecidableProximity(ctx context.Context, ma, mb *topo.Mesh, bmA, bmB *BoolMesh,
 	memo *ContactMemo, capFace, coneFace *topo.Face) error {
+	return RefuseProximityWithPlaneEvidence(ctx, ma, mb, bmA, bmB, memo, capFace, coneFace, nil)
+}
+
+// RefuseProximityWithPlaneEvidence permits exact plane separation only for source-aligned operands.
+func RefuseProximityWithPlaneEvidence(ctx context.Context, ma, mb *topo.Mesh, bmA, bmB *BoolMesh,
+	memo *ContactMemo, capFace, coneFace *topo.Face, planeBudget *proofbound.WorkBudget) error {
 	// One counter spans the grouping and the pair scan it feeds: the grouping
 	// walks every facet and every new source face's edges, which is work the
 	// §7.2 interval covers just as the pair scan is.
@@ -90,6 +96,12 @@ func RefuseUndecidableProximity(ctx context.Context, ma, mb *topo.Mesh, bmA, bmB
 	examine := func(ga, gb faceFacets, slack float64, certified bool) error {
 		if certified {
 			return refuseFacetContact(ctx, bmA, bmB, ga.facets, gb.facets, memo)
+		}
+		if planeBudget != nil && carrierClaimPossible(ga.source) && carrierClaimPossible(gb.source) {
+			separated, err := separatedCarrierFaces(ga, gb, bmA, bmB, planeBudget)
+			if err != nil || separated {
+				return err
+			}
 		}
 		// A seat face against a wall that leaves its plane meets it only along the wall's rims (§16).
 		if seatSkip(bmA, ga.facets, bmB, gb.facets) || seatSkip(bmB, gb.facets, bmA, ga.facets) {

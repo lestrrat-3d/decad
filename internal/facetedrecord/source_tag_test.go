@@ -127,3 +127,20 @@ func TestConeRhoLower(t *testing.T) {
 	require.LessOrEqual(t, facetedrecord.ConeRhoLower(cone, -6, 0.1), 0.0,
 		"a patch that reaches back to the apex has no bound")
 }
+
+func TestSourceTagCarriesExactPlacedPlane(t *testing.T) {
+	frame, err := r3.NewFrame(r3.Vec{Z: 1}, r3.Vec{X: 1}, r3.Vec{Y: 1})
+	require.NoError(t, err)
+	plane := surfacegeom.Plane{Frame: frame}
+	face := &topo.Face{Surface: plane, RetainedTag: true, PlacedPlane: &plane}
+	group, ok := facetedrecord.SourceTag(face, false)
+	require.True(t, ok)
+	require.NotNil(t, group.PlacedPlane)
+	require.Equal(t, plane, *group.PlacedPlane)
+	changed, err := r3.NewFrame(r3.Vec{Z: 2}, r3.Vec{X: 1}, r3.Vec{Y: 1})
+	require.NoError(t, err)
+	face.Surface = surfacegeom.Plane{Frame: changed}
+	group, ok = facetedrecord.SourceTag(face, false)
+	require.True(t, ok)
+	require.Nil(t, group.PlacedPlane)
+}

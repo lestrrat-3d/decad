@@ -64,7 +64,7 @@ func ratZero(a [3]*big.Rat) bool { return a[0].Sign() == 0 && a[1].Sign() == 0 &
 func placedPlane(g Group, moved surfacegeom.Surface, delta r3.Transform) *surfacegeom.Plane {
 	tag, ok := g.Surface.(surfacegeom.Plane)
 	next, okNext := moved.(surfacegeom.Plane)
-	if !ok || !okNext || !g.Retained || g.Denoted != nil || g.AxialDelta != 0 {
+	if !ok || !okNext || !g.Retained || g.Denoted != nil || g.AxialDelta != 0 || g.ExtentDelta != 0 {
 		return nil
 	}
 	exact := g.NormalBound == 0 || g.PlacedPlane != nil && *g.PlacedPlane == tag
@@ -72,4 +72,9 @@ func placedPlane(g Group, moved surfacegeom.Surface, delta r3.Transform) *surfac
 		return nil
 	}
 	return &next
+}
+
+// PlacedPlane proves the exact image of a retained plane under delta.
+func PlacedPlane(g Group, moved surfacegeom.Surface, delta r3.Transform) *surfacegeom.Plane {
+	return placedPlane(g, moved, delta)
 }
