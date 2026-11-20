@@ -9481,6 +9481,11 @@ The rewrite touches `P`, every wall `W_k`, every seam between consecutive walls,
    | ±1 | any | reflex | reflex | the wall continues past a `G` that is reflex | refuse (SM8) |
    | +1 | reflex | reflex | any | the base and the wall both continue past `G` | refuse (SM8) |
 
+   When a straight edge ends on a normal plane, the end section lies in the triangle formed
+   by the corner and the two setback points. The ball about the corner with radius equal to
+   the larger setback contains all three points and the entire triangle. Charge the margin
+   and each boundary segment's endpoint bounds when checking the rest of the end face.
+
    The end column lies in `G`'s plane, in the quadrant between `G ∩ P` and `G ∩ W` that holds the blend's
    section. Where `G` is convex at `V` that quadrant is `G`'s own, so `G` gives the cap up; where `G` is reflex
    the quadrant lies outside `G`, so `G` takes it. The loop operation is one splice in both cases: `V` and the

@@ -318,6 +318,11 @@ func (w *work) readEndCut(ec *chainEndCut, nP, rc, pW r3.Vec, uP int, leaves, co
 		far = pW.Sub(ec.exact).Len()
 	}
 	reach := math.Max(tP, far)*math.Sqrt2 + margin
+	if ec.arc == nil && !ec.oblique {
+		// A square end's section lies in the triangle formed by its corner
+		// and setback points. Their enclosing ball about the corner is convex.
+		reach = math.Max(tP, tW) + margin
+	}
 	if ec.arc != nil {
 		reach = ec.arc.reach + margin
 	}

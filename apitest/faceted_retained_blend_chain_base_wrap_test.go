@@ -33,8 +33,13 @@ func wrapBlock(t *testing.T, corners int) *decad.Body {
 // wrapBlockIn is wrapBlock built in w and doc.
 func wrapBlockIn(t *testing.T, w *sketch.World, doc *decad.Document, corners int) *decad.Body {
 	t.Helper()
+	return wrapBlockHeight(t, w, doc, corners, 7)
+}
+
+func wrapBlockHeight(t *testing.T, w *sketch.World, doc *decad.Document, corners int, height float64) *decad.Body {
+	t.Helper()
 	plate := rectBox(t, w, doc, 0, 0, 30, 26, 10)
-	block := rectBox(t, w, doc, 10, 10, 20, 16, 7)
+	block := rectBox(t, w, doc, 10, 10, 20, 16, height)
 	if corners > 0 {
 		up := decad.ParallelTo(r3.NewVec(0, 0, 1))
 		sel := decad.Edges(up, decad.EndpointAt(r3.NewVec(20, 10, 0)))
@@ -101,6 +106,23 @@ func TestFacetedRetainedBlendChainBaseWrap(t *testing.T) {
 		}
 		requireBlendsFaceVoid(t, out, 5)
 		requireVerifiedMesh(t, out)
+	})
+
+	t.Run("a low block clears the normal end section", func(t *testing.T) {
+		t.Parallel()
+		// The block starts 1 mm below the plate top. Its free edge is
+		// 1.25 mm from the root, beyond the entire 1 mm fillet section.
+		for _, radius := range []float64{.9, 1} {
+			block := wrapBlockHeight(t, sketch.NewWorld(), decad.New(), 2, 2.25)
+			before, err := block.Volume()
+			require.NoError(t, err)
+			out, err := decad.Fillet(t.Context(), block, wrapRoot(), units.Millimeters(radius), decad.WithTangentChain())
+			require.NoError(t, err)
+			after, err := out.Volume()
+			require.NoError(t, err)
+			requireVolumeChange(t, before, after, -wrapFill(radius, 18, 2))
+			requireVerifiedMesh(t, out)
+		}
 	})
 
 	t.Run("a chamfer of the same root", func(t *testing.T) {
