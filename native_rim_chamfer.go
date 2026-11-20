@@ -205,16 +205,7 @@ func upperNativeRim(ctx context.Context, d *Document, body *Body, edge *topo.Edg
 				target := bodyHandle(result.Body)
 				top := rimAdd(hinge, rimRat(setback))
 				bottom := rimSub(top, new(big.Rat).Abs(rimSub(hi, lo)))
-				var cone *topo.Face
-				for _, f := range topobuild.Faces(result.Body) {
-					s := f.Source
-					if s != nil && s.Blend && s.Producer == result.Body.Origin.Producer && s.Ordinal == 0 {
-						if cone != nil {
-							return result, ok, err
-						}
-						cone = f
-					}
-				}
+				cone := upperRimCone(result.Body)
 				if cone == nil {
 					return result, ok, err
 				}
@@ -354,4 +345,18 @@ func rimHistorySnapshot(ctx context.Context, d *Document, b *proofbound.ReplayBu
 		h.consumers[k] = slices.Clone(v)
 	}
 	return h, true, nil
+}
+
+func upperRimCone(result *topo.Body) *topo.Face {
+	var cone *topo.Face
+	for _, f := range topobuild.Faces(result) {
+		src := f.Source
+		if src != nil && src.Blend && src.Producer == result.Origin.Producer && src.Ordinal == 0 {
+			if cone != nil {
+				return nil
+			}
+			cone = f
+		}
+	}
+	return cone
 }

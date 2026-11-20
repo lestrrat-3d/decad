@@ -38,6 +38,20 @@ func rimRound(p rimPoint) (r3.Vec, float64) {
 }
 func directUpperRim(ctx context.Context, env topo.Env, b *topo.Body, capFace, wall *topo.Face, center rimPoint,
 	hinge *big.Rat, radius, d, height float64, budget *proofbound.ReplayBudget) (brepmodify.Result, bool, error) {
+	return directUpperRimAt(ctx, env, b, capFace, wall, center, hinge, radius, d, height, budget, nil)
+}
+
+func directUpperRimAt(ctx context.Context, env topo.Env, b *topo.Body, capFace, wall *topo.Face, center rimPoint,
+	trueHinge *big.Rat, radius, d, height float64, budget *proofbound.ReplayBudget, foot *alignedRimFoot) (brepmodify.Result, bool, error) {
+	hinge := trueHinge
+	var mapOffset, footGap float64
+	if foot != nil {
+		hinge = foot.held
+		// The taper vanishes outside 9R/8. Throughout its support a
+		// change in the hinge moves the radial map by at most 9/8 of it.
+		mapOffset = proofbound.ProductUpper(1.125, foot.displacement)
+		footGap = foot.gap
+	}
 	var none brepmodify.Result
 	old, ok := b.Payload.(facetedrecord.Payload)
 	if !ok || len(old.Verts) > 65536 || len(old.Groups) > 65536 || len(old.Tris) > 65536 || len(old.Tris) != len(old.FaceOf) || len(old.Src) != len(old.Tris) || len(old.Verts) != len(old.VertexBound) || !(d > 0 && d <= radius/8) {
@@ -116,6 +130,28 @@ func directUpperRim(ctx context.Context, env topo.Env, b *topo.Body, capFace, wa
 		}
 		if old.FaceOf[i] == wallIndex {
 			lower[g] = true
+		}
+	}
+	var cheekGroups map[int]bool
+	if foot != nil {
+		if e := budget.ReserveBundle(ctx, uint64(len(old.Tris)*4), uint64(len(old.Groups)*2), uint64(len(old.Groups)*128)); e != nil {
+			return none, false, e
+		}
+		cheekGroups = map[int]bool{}
+		foreign := map[int]bool{}
+		for i, g := range old.Src {
+			fi := old.FaceOf[i]
+			if fi < 0 || fi >= len(faces) {
+				return none, false, nil
+			}
+			if _, ok := foot.cheek[faces[fi]]; ok {
+				cheekGroups[g] = true
+			} else {
+				foreign[g] = true
+			}
+		}
+		for g := range foreign {
+			delete(cheekGroups, g)
 		}
 	}
 	var maxInterp float64
@@ -257,7 +293,7 @@ func directUpperRim(ctx context.Context, env topo.Env, b *topo.Body, capFace, wa
 	if err != nil {
 		return none, false, err
 	}
-	if !chart || !rimCapChart(ctx, &p, blend, caps, lower) {
+	if !chart || !rimCapChartAt(ctx, &p, blend, caps, lower, cheekGroups, hinge) {
 		if ctx.Err() != nil {
 			return none, false, ctx.Err()
 		}
@@ -266,7 +302,7 @@ func directUpperRim(ctx context.Context, env topo.Env, b *topo.Body, capFace, wa
 	if len(moved) == 0 {
 		return none, false, nil
 	}
-	chartBound, ok := rimBandError(ctx, &p, blend, center, hinge, radius, d)
+	chartBound, ok := rimBandError(ctx, &p, blend, center, trueHinge, radius, d)
 	if !ok {
 		if ctx.Err() != nil {
 			return none, false, ctx.Err()
@@ -278,6 +314,7 @@ func directUpperRim(ctx context.Context, env topo.Env, b *topo.Body, capFace, wa
 	// bound. Its projection back to the common circle moves by at most twice
 	// that amount (one axial and one radial setback). Outside the support
 	// expanded by its facet bound, both surfaces retain the identity map.
+	chartBound = proofbound.AbsSumUpper(chartBound, footGap)
 	localMax := chartBound
 	hingeLo, _ := hinge.Float64()
 	xLo, xHi := rimSupportInterval(center[0], r1)
@@ -296,7 +333,7 @@ func directUpperRim(ctx context.Context, env topo.Env, b *topo.Body, capFace, wa
 		if min(v.X, w.X, z.X) > math.Nextafter(xHi+beta, math.Inf(1)) || max(v.X, w.X, z.X) < math.Nextafter(xLo-beta, math.Inf(-1)) || min(v.Z, w.Z, z.Z) > math.Nextafter(zHi+beta, math.Inf(1)) || max(v.Z, w.Z, z.Z) < math.Nextafter(zLo-beta, math.Inf(-1)) {
 			continue
 		}
-		local := max(chartBound, proofbound.AbsSumUpper(proofbound.ProductUpper(5, beta), maxInterp, rounding))
+		local := max(chartBound, proofbound.AbsSumUpper(proofbound.ProductUpper(5, beta), maxInterp, rounding, mapOffset))
 		localMax = max(localMax, local)
 		for _, j := range t {
 			p.VertexBound[j] = max(p.VertexBound[j], local)

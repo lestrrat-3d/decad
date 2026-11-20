@@ -186,6 +186,9 @@ func rimBandError(ctx context.Context, p *facetedrecord.Payload, group int, cent
 // upper band ring as its boundary. Its radial map rescales each ray between
 // the center and that unique polygon intersection to the true cap radius.
 func rimCapChart(ctx context.Context, p *facetedrecord.Payload, band int, caps map[int]bool, lower map[int]bool) bool {
+	return rimCapChartAt(ctx, p, band, caps, lower, nil, nil)
+}
+func rimCapChartAt(ctx context.Context, p *facetedrecord.Payload, band int, caps, lower, cheek map[int]bool, heldHinge *big.Rat) bool {
 	type edge [2]int
 	type row struct {
 		face int
@@ -248,7 +251,13 @@ func rimCapChart(ctx context.Context, p *facetedrecord.Payload, band int, caps m
 					return false
 				}
 			} else if !lower[other] {
-				return false
+				if !cheek[other] || heldHinge == nil {
+					return false
+				}
+				y, _ := heldHinge.Float64()
+				if p.Verts[pair[0].a].Y != y || p.Verts[pair[0].b].Y != y {
+					return false
+				}
 			}
 		}
 	}

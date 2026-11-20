@@ -50,6 +50,17 @@ func TestRetainedRimFiniteBandChart(t *testing.T) {
 	if !check(&p) || !rimCapChart(t.Context(), &p, 2, map[int]bool{1: true}, map[int]bool{0: true}) {
 		t.Fatal("valid cone and cap charts rejected")
 	}
+	caps := map[int]bool{1: true}
+	cheek := map[int]bool{0: true}
+	if !rimCapChartAt(t.Context(), &p, 2, caps, nil, cheek, rimRat(0)) {
+		t.Fatal("aligned cheek at the lower ring rejected")
+	}
+	if rimCapChartAt(t.Context(), &p, 2, caps, nil, cheek, rimRat(.00001)) {
+		t.Fatal("cheek displaced from the certified heel accepted")
+	}
+	if rimCapChartAt(t.Context(), &p, 2, caps, nil, map[int]bool{3: true}, rimRat(0)) {
+		t.Fatal("unregistered lower face accepted")
+	}
 	p.Verts[5].Y = .26
 	if check(&p) {
 		t.Fatal("nonplanar cap ring accepted")
