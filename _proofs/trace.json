@@ -1,0 +1,209 @@
+{
+  "entries": [
+    {
+      "file": "internal/proof/float_step.go",
+      "func": "Abs",
+      "role": "assumes",
+      "theorems": [],
+      "assumptions": [
+        "A5"
+      ],
+      "sha256": "a2e833b7aab844f982871eefc39baa99f08f603fb83ff22aba97a4953a7d0708"
+    },
+    {
+      "file": "internal/proof/float_step.go",
+      "func": "NextUp",
+      "role": "assumes",
+      "theorems": [],
+      "assumptions": [
+        "A2"
+      ],
+      "sha256": "ad0c48253b00865ffa977a019a3ecf1ad24f2992de6a2ad07281a6f43fc36807"
+    },
+    {
+      "file": "internal/proof/float_step_plain.go",
+      "func": "Abs",
+      "role": "assumes",
+      "theorems": [],
+      "assumptions": [
+        "A5"
+      ],
+      "sha256": "ce24d09f8c45c093bb2c61e8f992271eb165b7a5ab3a6d69f65d5d2835c16a2a"
+    },
+    {
+      "file": "internal/proof/float_step_plain.go",
+      "func": "NextUp",
+      "role": "assumes",
+      "theorems": [],
+      "assumptions": [
+        "A2"
+      ],
+      "sha256": "db446f4e50ebbe9dac8f2b1c0b291fd5ac9d1eecbd501120f137fe12ef737332"
+    },
+    {
+      "file": "internal/proof/lazy_rat.go",
+      "func": "LazyRoundDown",
+      "role": "models",
+      "theorems": [
+        "Decad/Rational/LazyRound.lean:Decad.Rational.lazyRound_sound"
+      ],
+      "assumptions": [
+        "A8"
+      ],
+      "sha256": "2b72821f2c1aa6a3e18a59aa6526f2b0907ece967e1c76d2880ed0295a9b393f"
+    },
+    {
+      "file": "internal/proof/lazy_rat.go",
+      "func": "LazyRoundUp",
+      "role": "models",
+      "theorems": [
+        "Decad/Rational/LazyRound.lean:Decad.Rational.lazyRound_sound"
+      ],
+      "assumptions": [
+        "A8"
+      ],
+      "sha256": "ad90b8e29e2f2ba7f336612d319ce491c65c152042847d130e4fb6fa3b44a567"
+    },
+    {
+      "file": "internal/proof/lazy_rat.go",
+      "func": "lazyFrac",
+      "role": "assumes",
+      "theorems": [],
+      "assumptions": [
+        "A8"
+      ],
+      "sha256": "314f8098e374e805e0b4853981c068638dc460879ad06ec8645a9b3713d4e9d8"
+    },
+    {
+      "file": "internal/proof/lazy_rat.go",
+      "func": "lazyRound",
+      "role": "models",
+      "theorems": [
+        "Decad/Rational/LazyRound.lean:Decad.Rational.lazyRound_sound"
+      ],
+      "assumptions": [
+        "A8"
+      ],
+      "sha256": "5ab5fe928336ed060d2a6636c9150e4cf85ad5e18e07ce9380c8fb4141bbdb4a"
+    },
+    {
+      "file": "internal/proof/rounding.go",
+      "func": "FloatRat",
+      "role": "assumes",
+      "theorems": [],
+      "assumptions": [
+        "A4"
+      ],
+      "sha256": "9e67b06bd4cad8b7f8d553e4d4d698a475f86f084ef13dc0533a2a90ef823b08"
+    },
+    {
+      "file": "internal/proof/rounding.go",
+      "func": "MulRoundError",
+      "role": "assumes",
+      "theorems": [],
+      "assumptions": [
+        "A4"
+      ],
+      "sha256": "5067b7f640cfddbab4bb52bbf4de9dcab727df5bd7a349db5b4ccb75e00fd89d"
+    },
+    {
+      "file": "internal/proof/rounding.go",
+      "func": "ProvenUpRound",
+      "role": "models",
+      "theorems": [
+        "Decad/Bounded/Upper.lean:Decad.Bounded.productUpper_ge"
+      ],
+      "assumptions": [
+        "A1",
+        "A3"
+      ],
+      "sha256": "5181f838ad80b59105d80a998c8201dc54be6e5ac1f16436f666ea0c2de22ad4"
+    },
+    {
+      "file": "internal/proof/rounding.go",
+      "func": "RationalFloatError",
+      "role": "assumes",
+      "theorems": [],
+      "assumptions": [
+        "A4"
+      ],
+      "sha256": "99dd4d19e5fb01408ace4486be4c329707385a2a4b03e9cc98f39265e5a8c1db"
+    },
+    {
+      "file": "internal/proofbound/bounded.go",
+      "func": "AbsSumUpper",
+      "role": "models",
+      "theorems": [
+        "Decad/Bounded/Upper.lean:Decad.Bounded.absSum_ge"
+      ],
+      "assumptions": [
+        "A1",
+        "A5"
+      ],
+      "sha256": "5baa39c6918f4350a766f7a1d65cb583b36712cb7fcf395abc7d7884fb916f6c"
+    },
+    {
+      "file": "internal/proofbound/bounded.go",
+      "func": "BoundedMul",
+      "role": "models",
+      "theorems": [
+        "Decad/Bounded/Mul.lean:Decad.Bounded.boundedMul_bound_sound"
+      ],
+      "assumptions": [
+        "A1",
+        "A4",
+        "A6"
+      ],
+      "sha256": "61d8744d72518d83fda7d0cd065808ad87b93ca46abe4e72714b21fdb11216fd"
+    },
+    {
+      "file": "internal/proofbound/bounded.go",
+      "func": "MeasuredScalar",
+      "role": "models",
+      "theorems": [
+        "Decad/Bounded/Mul.lean:Decad.Bounded.boundedMul_bound_sound"
+      ],
+      "assumptions": [
+        "A6"
+      ],
+      "sha256": "c12339e7e25a41adfee2ecec7a4ec39cc8ad189a82d1f82653effff170db66ce"
+    },
+    {
+      "file": "internal/proofbound/bounded.go",
+      "func": "ProductUpper",
+      "role": "models",
+      "theorems": [
+        "Decad/Bounded/Upper.lean:Decad.Bounded.productUpper_ge"
+      ],
+      "assumptions": [
+        "A1",
+        "A7"
+      ],
+      "sha256": "5293466a0713bec06787123901b533bf758feeb620b6829f83d2f611c54f3ac5"
+    },
+    {
+      "file": "internal/proofbound/bounds.go",
+      "func": "ProvenUpRound",
+      "role": "models",
+      "theorems": [
+        "Decad/Bounded/Upper.lean:Decad.Bounded.productUpper_ge"
+      ],
+      "assumptions": [
+        "A1"
+      ],
+      "sha256": "d0982b829195433ce0a79b3b7f2b001a3058c4aa3437caf633987b32e87fe4d3"
+    },
+    {
+      "file": "internal/proofbound/bounds.go",
+      "func": "UpRound",
+      "role": "models",
+      "theorems": [
+        "Decad/Bounded/Upper.lean:Decad.Bounded.add_up"
+      ],
+      "assumptions": [
+        "A1"
+      ],
+      "sha256": "eb67ec2d78689a6ac28342854ea34f9478d56fcb450c285309cd2c0abf588590"
+    }
+  ]
+}

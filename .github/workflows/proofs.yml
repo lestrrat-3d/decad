@@ -1,0 +1,85 @@
+name: Proofs
+
+# Builds the Lean proofs in _proofs/ and checks that the Go functions they model
+# have not changed. Runs only when a proof or a covered Go file changes, so it is
+# not a required check: a path-filtered required check stays pending on PRs it
+# skips. NEVER merge a PR whose Proofs run failed, even when CI gate is green.
+# agent-docs/proofs-design.md owns the design.
+
+on:
+  pull_request:
+    paths: &proof-paths
+      - '_proofs/**'
+      - '.github/workflows/proofs.yml'
+      - 'agent-docs/proofs-design.md'
+      - 'internal/proof/float_step.go'
+      - 'internal/proof/float_step_plain.go'
+      - 'internal/proof/lazy_rat.go'
+      - 'internal/proof/rounding.go'
+      - 'internal/proofbound/bounded.go'
+      - 'internal/proofbound/bounds.go'
+  push:
+    branches: [main]
+    paths: *proof-paths
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  # PR runs: a newer push cancels the older run. main runs: the running one finishes, and only the newest waiting run is kept.
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  trace:
+    name: proofs trace
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    defaults:
+      run:
+        working-directory: _proofs
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install Go
+        uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        with:
+          go-version-file: _proofs/go.mod
+          cache: false
+
+      - name: Vet the trace checker
+        run: go vet ./...
+
+      - name: Test the trace checker
+        run: go test ./...
+
+      - name: Check the trace manifest against the Go source
+        run: go run ./tracecheck
+
+  lean:
+    name: proofs build
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # use-github-cache is off because the repository's Actions cache is already at its quota,
+      # and a .lake entry would evict the Go build caches ci.yml reads. The Mathlib cache is
+      # downloaded from Mathlib's own servers instead.
+      - name: Build proofs and audit axioms
+        uses: leanprover/lean-action@ba3fdfe5c4476c925da13bf11a005ddb47e47aee # v1.7.1
+        with:
+          lake-package-directory: _proofs
+          use-github-cache: false
+          use-mathlib-cache: true
+          mk_all-check: true
+          build: true
+          build-args: --wfail
+          test: false
+          lint: false
+          axiom-audit: true
+          axiom-audit-root: Decad
+          leanchecker: false

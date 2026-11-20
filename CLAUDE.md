@@ -45,6 +45,7 @@ APIs are design-only.**
 | Answering what is missing, or closing/adding a refusal | `agent-docs/missing-features.md` |
 | Tests and CI shards | `agent-docs/testing.md` |
 | Adding or importing a `go.mod` module | `agent-docs/modules.md` |
+| Lean proofs, or a Go function listed in `_proofs/trace.json` | `agent-docs/proofs-design.md` |
 
 ## Hard rules
 
@@ -100,7 +101,8 @@ APIs are design-only.**
 - **NEVER add a `go.mod` module without recording the decision in
   `agent-docs/modules.md`.**
 - **Tooling lives in its own nested module.** `_gallery/` renders the README
-  images and landing clip, and `_shardgen/` packs the race shards. Both carry
+  images and landing clip, `_shardgen/` packs the race shards, and `_proofs/`
+  holds the Lean proofs and their trace checker. All carry
   their own `go.mod` and an `_` prefix, so the root module, its linter and
   `go list ./...` never see them. A generator NEVER joins the library's module.
 - **Correctness must be observable.** Every capability ships with a test
