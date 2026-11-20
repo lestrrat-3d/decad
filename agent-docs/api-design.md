@@ -1379,7 +1379,11 @@ that leaves the result unchanged, when its bounded plan applies
 is the single call, and a selector naming a source feature's origin may match fewer faces.
 A target-side coarse-held `Cut` refusal may also continue from an authenticated two-source `Union`, or from
 a `Cut` of that union, through the separate paired plan in `agent-docs/prism-boolean-design.md` Part R
-(Paired Cut continuation). Other refusals follow the ordinary dispatch and regroup rules.
+(Paired Cut continuation). A two-body `Union` that this gate refuses, and that the regroup does not rescue, is
+rebuilt from its recorded `Union` history with rim splitting on and then joined
+(`agent-docs/prism-boolean-design.md` Part R, "Rim-split rebuild"); the result is the same set, its history is the
+single call, and its faces hold the split facets `decad.WithRimSplit` makes.
+Other refusals follow the ordinary dispatch and regroup rules.
 The refusal names the operand (`Cut`'s target or tool; the first or second
 operand otherwise), quotes the bound of the facets the pair touches and the
 pair's chord tolerance, and states that a boolean takes no chord tolerance:

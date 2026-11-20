@@ -271,7 +271,9 @@ Further conditions:
 - A piece on a planar face is never split. A split point lies on no boundary loop of its face, and
   `internal/retainedblend` re-triangulates a face from its boundary loops and refuses a vertex off them
   (`a face holds a vertex off its boundary`).
-- Only a document that sets `decad.WithRimSplit` is split. A vertex that no boundary loop of a curved face reaches
+- Only a document that sets `decad.WithRimSplit` is split, and a two-body `Union` that §5's gate refuses, which
+  rebuilds its recorded `Union` history with splitting on (`agent-docs/prism-boolean-design.md` Part R, "Rim-split
+  rebuild"). A vertex that no boundary loop of a curved face reaches
   is refused by the retained-blend reading too (`a face holds a vertex off its boundary`, or `the blend consumes the
   wall`), so a document that edge-finishes its mesh results keeps the faces that expect it. Only a rim corner
   above the pair's chord tolerance is split. `Fillet` and `Chamfer` may refuse a split face. A blend that succeeds
@@ -454,7 +456,10 @@ the answer. It can refuse a pair whose rims would have been fine, as a global co
 **What changes for a caller.** A chain of booleans over planar-faced bodies
 is refused only where a new contact lands on earlier rim geometry whose bound has outgrown the pair tolerance;
 A result can carry a `Bound` above the next pair's tolerance in
-untouched regions and still serve as an operand. Core §8's "The chain depth"
+untouched regions and still serve as an operand. A `Union` that the gate refuses because earlier rims spread along
+long facets of a curved wall is rebuilt from its recorded `Union` history with §3.7's split on
+(`agent-docs/prism-boolean-design.md` Part R, "Rim-split rebuild"), so each step's contact composes from the
+face's own bound where the split proves it. Core §8's "The chain depth"
 paragraph, evaluator §9's operand and rim bullets and tessellation §7/§11
 state this rule.
 

@@ -133,15 +133,22 @@ func literals(bodies []*topo.Body, negated bool) []Literal {
 // mesh Boolean result (agent-docs/section-design.md).
 func Expandable(src Source, n *topo.Body) (meshbool.OperationKind, []*topo.Body, bool) {
 	p, ok := n.Payload.(facetedrecord.Payload)
-	if !ok || p.PointCone != nil {
+	if !ok || p.PointCone != nil || !WarningsMoveNoGeometry(n) {
 		return 0, nil, false
 	}
+	return src.BooleanProducer(n)
+}
+
+// WarningsMoveNoGeometry reports whether every operation warning n carries is
+// classified as leaving the accepted geometry unchanged, so that n denotes its
+// operation over its inputs exactly. n must not be nil.
+func WarningsMoveNoGeometry(n *topo.Body) bool {
 	for _, r := range n.OperationWarnings {
 		if !movesNoGeometry(r) {
-			return 0, nil, false
+			return false
 		}
 	}
-	return src.BooleanProducer(n)
+	return true
 }
 
 // movesNoGeometry reports whether r is a warning classified as leaving the

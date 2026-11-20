@@ -24,7 +24,10 @@ type identRimSplit struct{}
 // face may refuse it, since a split adds a vertex that no boundary loop of the
 // face reaches; one that succeeds reads the split facets' own bounds, which are
 // proven in the same way. A document that edge-finishes its mesh results
-// should leave the option off. A planar face is never split.
+// should leave the option off. A planar face is never split. Without the
+// option, a two-body Union that the chain-depth gate refuses still rebuilds its
+// operands' recorded Union history with splitting on; only the body it returns
+// holds split facets.
 func WithRimSplit() DocumentOption {
 	return rimSplitOption{option.New(identRimSplit{}, true)}
 }

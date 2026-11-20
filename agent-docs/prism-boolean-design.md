@@ -23,7 +23,7 @@ mean the same part. The parts keep their own section numbers.
 |---|---|---|---|
 | Part B | the unprefixed sections of this file | `prism-boolean`, `prism` | Analytic `Union`/`Cut`/`Intersect` over co-directional prisms |
 | Part G | General Boolean | `general-boolean`, `general` | Boolean classes past the prism pair, and `brepPayload` |
-| Part R | Boolean chain regroup | `boolean-chain-regroup` | Rebuilding a refused two-body Boolean from the source bodies its history names |
+| Part R | Boolean chain regroup | `boolean-chain-regroup` | Rebuilding a refused two-body Boolean from the source bodies its history names, and a refused `Union`'s history under rim splitting |
 | Part C | Boolean continuation | `boolean-continuation` | Source-expression continuation after an accepted geometry adjustment |
 | Part S | Stacked prism | `stacked-prism`, `stacked` | Stacked slabs, walls, measurements, mesh and consumers |
 | Part K | Carrier record | `carrier-record` | Carrier records of displaced prisms; producers, lateral blends, exact-loop cap chamfers |
@@ -4618,6 +4618,70 @@ The test names are in `.github/test-shards.txt` and `.github/test-shards-apitest
 `internal-checks.md` (`internal/booleandispatch/`). `TestCLAUDEMDLayoutStaysCompact` keeps each layout cell at
 or under 300 characters.
 
+### Rim-split rebuild
+
+A two-body `Union` that the local chain-depth gate refuses (vertex-bounds §5) is retried by rebuilding the
+recorded `Union` history beneath both operands with rim splitting on (vertex-bounds §3.7), then joining the two
+rebuilt operands under the same option.
+
+**Problem.** A chorded curved wall, such as an extruded or revolved cylinder, holds facets that run its whole
+length. A `Union` that cuts the wall leaves a rim vertex whose bound is `(δ_A + δ_B)/sin θ`, and every kept piece
+of a wall facet with a rim corner carries that bound, since a facet's bound is its largest corner bound. The next
+`Union` whose contact crosses the same wall facets, however far from the rim, composes its own rim from that
+bound. A row of struts joined to one side of a post, or the post joined to a plate after its struts, so compounds
+one rim per step. The gate refuses once a touched facet's bound passes the pair tolerance, or the document's chain
+tolerance, and which step refuses depends on the order of the joins and on where each operand's chords fall.
+
+`decad.WithRimSplit` keeps each rim's bound beside the rim: a split far piece reads the face's own bound, so the
+next contact composes from fresh facets. The option stays off by default because a split adds a vertex off the
+face's boundary loops, which a later `Fillet` or `Chamfer` of that face may refuse (vertex-bounds §3.7). The rebuild
+applies the option only to a chain that the gate already refused, so every call that succeeds without it returns
+the same body as before.
+
+**Trigger.** `rimSplitRebuild` (`boolean_regroup.go`) runs in `performBoolean` after the chain regroup declines,
+only when all of these hold:
+
+- The call is a two-body `Union` without `WithMatchingFaces`.
+- The document does not set `WithRimSplit`, and the context carries no rim-split choice: such a chain was already
+  built with splitting, so a rebuild repeats it.
+- The refusal carries a `meshbool.CoarseHeldContactError` (`booleandispatch.CoarseHeldOperand`), and the operand
+  it names is expandable (`boolchain.Expandable`): a mesh `Union`, `Cut` or `Intersect` result whose history
+  record and warnings let it denote its operation exactly. A held primitive, a copy or a modify result names no
+  history to rebuild.
+
+**Rebuild.** `boolchain.RebuildUnion` walks both operands depth first. A body whose producer is an expandable
+`Union` is rebuilt from its recorded inputs, in recorded order, each `Union` of k inputs folded left to right; any
+other body, including a `Cut` or `Intersect` result, is used as it is. The rebuild repeats the recorded grouping
+exactly, so the result denotes `Union(a, b)` by construction and needs no set identity. The final step joins the
+two rebuilt operands. `booleandispatch.RebuildUnionSplit` runs every step through `Body` under
+`rimsplit.With(ctx, true)`, step k under producer `env.Ref + k`, as `Regroup` does.
+
+| Rule | Statement |
+|---|---|
+| Step bound | `boolchain.MaxRebuildSteps` (32) bounds the rebuilt `Union` calls plus the final one, counted before any call. A longer history declines. It bounds the work on the refusal path; no measurement chose it. |
+| Misses | A step that fails, or whose result carries a warning that moves geometry (`boolchain.WarningsMoveNoGeometry`), ends the rebuild, and the caller's refusal is returned. A chain allowance warning moves no geometry and is kept. |
+| Errors | Cancellation returns `ctx.Err()`. A step error that `regroupSurfaces` reports is returned unchanged. |
+| Commit | As Root wrapper states for a regroup: one public record of the caller's call with its two operands, the producer span the steps used, and the final step's warnings. |
+| Representation | Every step's result holds the split facets `WithRimSplit` makes, and so does the final body. A later `Fillet` or `Chamfer` of a split face may refuse it, as in a `WithRimSplit` document. |
+
+**Soundness.** Each step is an ordinary `Union` with rim splitting on, so its admission, its rim bounds and its
+gate are that `Union`'s own (vertex-bounds §3 and §5). Rim splitting adds only proven far pieces (vertex-bounds
+§3.7). The trigger is a routing decision on the refusal's type and the recorded history; no residual, sampled
+distance or bound comparison admits anything.
+
+**Reach.** A split far piece is proven only where its whole closed triangle clears the other operand. A sliver
+piece beside a rim keeps the rim's bound, so a chain whose next contact lands on such a piece still refuses after
+the rebuild, exactly as it would in a `WithRimSplit` document.
+
+**Test.** `TestUnionChainRimSplitRebuild` (`apitest/union_rim_split_rebuild_test.go`) joins a post leaning 9°
+from a revolved plate and six revolved struts (neck, cone and strut) that rise at 60° into the post's axis on one
+side, under a 0.01 mm chain tolerance. The struts join the post from the top down or from the bottom up and the
+post then joins the plate, or the post joins the plate first and the struts follow; each order is built
+right-handed and mirrored. The sequential chain refuses at the third or fourth strut in every case. With the
+rebuild each builds one watertight solid whose volume encloses the closed-form plate and post plus a grid integral
+of the strut volume outside the post. `TestRebuildUnion` (`internal/boolchain/rebuild_test.go`) pins the
+rebuild's call order, step bound and misses; `TestCoarseHeldOperand` pins the trigger's classifier.
+
 ## Part C — Boolean continuation
 
 This part defines a read-only continuation of a refused Boolean through
@@ -7551,7 +7615,9 @@ it joins the bodies two at a time, left to right, instead of refusing. The fold 
 
 ### 2. Not covered
 
-- A chain whose step refuses on its own geometry, such as coarse held meshes: the fold returns the many-body refusal.
+- A chain whose step refuses on its own geometry: the fold returns the many-body refusal. A step that the local
+  chain-depth gate refuses first takes Part R's rim-split rebuild, as any two-body `Union` does, and the fold
+  returns the many-body refusal only when that rebuild declines too.
 
 ## Part A — Boolean of axial extrusions by the 2D Boolean of their sections
 

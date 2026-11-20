@@ -3183,3 +3183,4 @@
 12	0.00	TestCircularLoftEmergingFlatRefusesBentChain
 12	0.00	TestCircularLoftEmergingFlatRefusesUnrepresentablePlane
 12	0.00	TestPlateCollarRimChamfer
+12	0.00	TestUnionChainRimSplitRebuild
