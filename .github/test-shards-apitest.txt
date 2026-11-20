@@ -59,6 +59,7 @@
 0	0.06	TestClearanceParallelCircleRods
 0	0.03	TestClearancePlacedPinDifferential
 0	0.04	TestClosedSplineProfileAreaExactWhenRepresentable
+0	2.19	TestConcentricPrismStations
 0	0.01	TestContactPairAnalyticPrismOverlap
 0	0.00	TestContactPairBandCancels
 0	0.01	TestContactPairReportKeepsTopologyIdentity
@@ -147,7 +148,6 @@
 0	0.00	TestRegionAreaAndCentroidRectangle
 0	0.01	TestRegionMomentsArcPinToleranceFollowsCoordinateScale
 0	0.00	TestRepairMeshRefusals
-0	4.41	TestRetainedArcDiskUnion
 0	1.70	TestRetainedRotatedCopy
 0	0.26	TestRevolveBooleanChargesBothOperandVolumeProofs
 0	0.09	TestRevolveBooleanRefusesAHiddenTangency
@@ -269,6 +269,7 @@
 0	0.00	TestVertexPlacedPrismBoundEnclosesDisplacement
 0	0.01	TestWallSolidCylinder
 0	0.00	TestZeroPathHasNoSegments
+1	9.86	TestAlignedPadRimOnTrimmedFlange
 1	0.00	TestArrangeRefusals
 1	0.01	TestBlindCutKeepsExistingThroughHole
 1	0.02	TestBlindLevelRangeOuterEnd
@@ -1279,6 +1280,7 @@
 5	0.05	TestCounterboreCutKeepsAnOutsideThroughHole
 5	2.73	TestCrossingBlindPocketArcLoopsDecline
 5	6.87	TestCutTangentPocketTakesMeshPath
+5	2.63	TestCylinderWallChainKeepsEachRimBound
 5	0.03	TestDenotedLevelEqualFloatsDifferentRationalsDecline
 5	0.00	TestDenotedLevelFixtures
 5	1.03	TestDirectLoftRotatedCircleFramesPublishRuledHole
@@ -1365,6 +1367,7 @@
 5	0.03	TestRegionMomentsRejectMalformedFields
 5	2.18	TestRegroupPlansBuildByHand
 5	0.06	TestRemeshMeshEvensTheEdgesAndTheValences
+5	4.41	TestRetainedArcDiskUnion
 5	0.00	TestRevolveAboutEdgeAxis
 5	0.01	TestRevolveBlendBaseGates
 5	0.14	TestRevolveCavityMeridianSplitsShells
@@ -1496,6 +1499,7 @@
 6	0.19	TestChamferContextCancellationDuringAuditPreservesError
 6	0.00	TestChamferOverLargeSetbackRefused
 6	1.05	TestChamferTangentOutlineAfterPinUnion
+6	1.31	TestCircularUnionZeroGap
 6	0.01	TestClearanceFarOriginTiltedPlanePairContainsTruth
 6	0.02	TestClearanceRevolveAxisSnapContainsTruth
 6	0.05	TestClearanceRodPiercingBallIsNeverSound
@@ -1566,6 +1570,7 @@
 6	0.00	TestMoveFacePushesAndPullsFacesOfABox
 6	0.12	TestNormalAtAnswersRetainedSurfaces
 6	0.05	TestOffsetMitresAnLShapedSolidAtItsCorners
+6	6.09	TestOffsetPadShoulderChamfer
 6	0.00	TestOffsetPairCannotDoubleCount
 6	0.02	TestOrthogonalBooleanResultTakesAFilletAndAChamfer
 6	0.00	TestOrthogonalUnionOfSeveralBodiesTakesAnExtrudedPartner
@@ -1575,6 +1580,7 @@
 6	0.00	TestPatternCopiesNonCoDirectional
 6	0.04	TestPatternUnionOfAMeshSolidIsExact
 6	0.01	TestPlanarManifoldWithholdsCornerThroughTwoFaces
+6	4.43	TestPlateCollarRimChamfer
 6	1.25	TestPointConeTrimConeNormalAndCopyPlacement
 6	0.00	TestPointLocationDenotedLevel
 6	0.25	TestPointLocationOnFacetedAndPlacedBodies
@@ -2467,6 +2473,7 @@
 10	0.20	TestChamferWindowLoops
 10	7.53	TestChargedChainChamferEveryRimAndWindow
 10	9.38	TestChargedChainChamferMixed
+10	0.26	TestCircularUnionCancellation
 10	0.04	TestClearanceCoarseWitnessContainsTruth
 10	0.23	TestClearancePlacedPinTwoPlacements
 10	0.05	TestClearanceTiltedBoxContainsTruth
@@ -2724,6 +2731,7 @@
 11	0.09	TestClearanceTangentSpheresSuspect
 11	0.05	TestClosedShellOfNestedRectangularSlabs
 11	0.00	TestClosestPointOffSurfaceStatesTheMeshBound
+11	4.31	TestCoaxialPocketAfterFacetedCuts
 11	0.01	TestContactPairOrientedSourceBoxes
 11	0.00	TestContactPairSourceSphereAndBox
 11	0.01	TestContactPairSourceSpherePair
@@ -2919,6 +2927,8 @@
 11	0.02	TestVoidRevolveModifyOps
 11	0.00	TestWallReadingExactHeightArm
 12	0.01	TestAsymmetricChamferOnPrismCapEdge
+12	16.98	TestCircularUnionContact
+12	0.13	TestCurvedFilletBandChord
 12	2.50	TestIntersectSeatWithinGapTolerance
 12	2.10	TestIntersectPlacedSeat
 12	0.59	TestAxialSectionUnionExactTurnsKeepExactCaps
@@ -3184,13 +3194,3 @@
 12	0.00	TestCircularLoftEmergingFlatRefusesLaterOffTangent
 12	0.00	TestCircularLoftEmergingFlatRefusesBentChain
 12	0.00	TestCircularLoftEmergingFlatRefusesUnrepresentablePlane
-12	0.00	TestPlateCollarRimChamfer
-12	0.00	TestCylinderWallChainKeepsEachRimBound
-12	0.00	TestCircularUnionCancellation
-12	0.00	TestCircularUnionContact
-12	0.00	TestCircularUnionZeroGap
-12	0.00	TestCurvedFilletBandChord
-12	0.00	TestCoaxialPocketAfterFacetedCuts
-12	0.00	TestOffsetPadShoulderChamfer
-12	0.00	TestAlignedPadRimOnTrimmedFlange
-12	0.00	TestConcentricPrismStations
