@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"slices"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/gaptol"
@@ -86,124 +87,194 @@ func RefuseUndecidableProximity(ctx context.Context, ma, mb *topo.Mesh, bmA, bmB
 	if err != nil {
 		return err
 	}
-	for _, ga := range fa {
-		for _, gb := range fb {
-			if err := budget.Step(); err != nil {
-				return err
-			}
-			if capFace != nil && ga.source == capFace && gb.source == coneFace {
-				if err := refuseFacetContact(ctx, bmA, bmB, ga.facets, gb.facets, memo); err != nil {
-					return err
-				}
-				continue
-			}
-			slack := ga.delta + gb.delta
-			if slack <= 0 {
-				// Both faces are held exactly (a planar face with straight
-				// edges triangulates exactly; a Faceted face IS its polygons,
-				// core §6.1). A tangency between them is visible to the exact
-				// predicates, so there is nothing here a chord could hide.
-				continue
-			}
-			// The exactly-tangent case sits ON the boundary d = δA + δB, and
-			// both sides of that comparison are float-computed: pad the
-			// threshold so the rounding can only ever ADD a refusal, never
-			// drop one. A relative 1e-9 is nothing against any real clearance.
-			// Each face box contains all its facet boxes. BoxesWithin uses only
-			// monotone subtraction and comparison, so a separated face pair has
-			// no facet pair GatherNearContacts could queue at this same slack.
-			// Reject it before allocating that scan's maps, buffers and callback.
-			if !BoxesWithin(ga.box, gb.box, slack*(1+1e-9)) {
-				continue
-			}
-			// A seat face against a wall that leaves its plane meets it only along the wall's rims (§16).
-			if seatSkip(bmA, ga.facets, bmB, gb.facets) || seatSkip(bmB, gb.facets, bmA, ga.facets) {
-				continue
-			}
-			broadSlack := slack * (1 + 1e-9)
-			broad, deferred, err := GatherNearContacts(ctx, bmA, ga.facets, bmB, gb.facets, broadSlack, memo)
+	examine := func(ga, gb faceFacets, slack float64, certified bool) error {
+		if certified {
+			return refuseFacetContact(ctx, bmA, bmB, ga.facets, gb.facets, memo)
+		}
+		// A seat face against a wall that leaves its plane meets it only along the wall's rims (§16).
+		if seatSkip(bmA, ga.facets, bmB, gb.facets) || seatSkip(bmB, gb.facets, bmA, ga.facets) {
+			return nil
+		}
+		broadSlack := slack * (1 + 1e-9)
+		broad, deferred, err := GatherNearContacts(ctx, bmA, ga.facets, bmB, gb.facets, broadSlack, memo)
+		if err != nil {
+			return err
+		}
+		if deferred || len(broad.CloseA) == 0 {
+			return nil
+		}
+		if err := refuseCoarseNearContacts(bmA, bmB, broad); err != nil {
+			return err
+		}
+		reuseDepth := depthWitnessFits(broad)
+		if !reuseDepth {
+			deep, err := ProvenDepthExceeds(ctx, bmA, broad.CloseA, bmB, broad.CloseB, broad.Spans, broadSlack)
 			if err != nil {
 				return err
 			}
-			if deferred || len(broad.CloseA) == 0 {
-				continue
+			if deep {
+				return nil
 			}
-			if err := refuseCoarseNearContacts(bmA, bmB, broad); err != nil {
-				return err
-			}
-			reuseDepth := depthWitnessFits(broad)
-			if !reuseDepth {
-				deep, err := ProvenDepthExceeds(ctx, bmA, broad.CloseA, bmB, broad.CloseB, broad.Spans, broadSlack)
-				if err != nil {
-					return err
-				}
-				if deep {
-					continue
-				}
-			}
-			// The face-level slack covers the worst facet of either face, which a
-			// face that a boolean already shifted or cut holds far from where it
-			// meets here. A true touch lies within a facet pair's own bounds of
-			// facets that come within the face-level slack. The broad set already
-			// contains the facets needed to compute it.
-			local := localSlackFromContacts(bmA, bmB, broad, broadSlack)
-			narrowed := local < slack
-			tightSlack := broadSlack
-			contacts := broad
-			if narrowed {
-				tightSlack = local * (1 + 1e-9)
-				contacts, deferred, err = GatherNearContacts(ctx, bmA, ga.facets, bmB, gb.facets, tightSlack, memo)
-				if err != nil {
-					return err
-				}
-				if deferred || len(contacts.CloseA) == 0 {
-					if err := ctx.Err(); err != nil {
-						return err
-					}
-					continue
-				}
-			}
-			// A broad set under every depth-witness cap includes all tight
-			// contacts and can safely supply a witness at the tighter threshold.
-			// Larger sets keep the original two-stage depth search.
-			if reuseDepth {
-				deep, err := ProvenDepthExceeds(ctx, bmA, broad.CloseA, bmB, broad.CloseB, broad.Spans, tightSlack)
-				if err != nil {
-					return err
-				}
-				if deep {
-					continue
-				}
-			} else if narrowed {
-				if err := refuseCoarseNearContacts(bmA, bmB, contacts); err != nil {
-					return err
-				}
-				deep, err := ProvenDepthExceeds(ctx, bmA, contacts.CloseA, bmB, contacts.CloseB, contacts.Spans, tightSlack)
-				if err != nil {
-					return err
-				}
-				if deep {
-					continue
-				}
-			}
-			if err := ctx.Err(); err != nil {
-				return err
-			}
-			_, flat := ga.source.Surface.(surfacegeom.Plane)
-			contactsOut := nearContactNormalsFromContacts(bmA, contacts, tightSlack, !flat, firstFacet(gb.facets),
-				flatAcross(ga, bmB, gb))
-			refusal.Contacts = append(refusal.Contacts, contactsOut...)
-			if gaptol.Reach(ctx) <= 0 {
-				return refusal
-			}
-			// A caller that may move the second operand moves each connected piece
-			// of it on its own, so it needs the contacts of every piece.
 		}
+		// The face-level slack covers the worst facet of either face, which a
+		// face that a boolean already shifted or cut holds far from where it
+		// meets here. A true touch lies within a facet pair's own bounds of
+		// facets that come within the face-level slack. The broad set already
+		// contains the facets needed to compute it.
+		local := localSlackFromContacts(bmA, bmB, broad, broadSlack)
+		narrowed := local < slack
+		tightSlack := broadSlack
+		contacts := broad
+		if narrowed {
+			tightSlack = local * (1 + 1e-9)
+			contacts, deferred, err = GatherNearContacts(ctx, bmA, ga.facets, bmB, gb.facets, tightSlack, memo)
+			if err != nil {
+				return err
+			}
+			if deferred || len(contacts.CloseA) == 0 {
+				if err := ctx.Err(); err != nil {
+					return err
+				}
+				return nil
+			}
+		}
+		// A broad set under every depth-witness cap includes all tight
+		// contacts and can safely supply a witness at the tighter threshold.
+		// Larger sets keep the original two-stage depth search.
+		if reuseDepth {
+			deep, err := ProvenDepthExceeds(ctx, bmA, broad.CloseA, bmB, broad.CloseB, broad.Spans, tightSlack)
+			if err != nil {
+				return err
+			}
+			if deep {
+				return nil
+			}
+		} else if narrowed {
+			if err := refuseCoarseNearContacts(bmA, bmB, contacts); err != nil {
+				return err
+			}
+			deep, err := ProvenDepthExceeds(ctx, bmA, contacts.CloseA, bmB, contacts.CloseB, contacts.Spans, tightSlack)
+			if err != nil {
+				return err
+			}
+			if deep {
+				return nil
+			}
+		}
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		_, flat := ga.source.Surface.(surfacegeom.Plane)
+		contactsOut := nearContactNormalsFromContacts(bmA, contacts, tightSlack, !flat, firstFacet(gb.facets),
+			flatAcross(ga, bmB, gb))
+		refusal.Contacts = append(refusal.Contacts, contactsOut...)
+		if gaptol.Reach(ctx) <= 0 {
+			return refusal
+		}
+		// A caller that may move the second operand moves each connected piece
+		// of it on its own, so it needs the contacts of every piece.
+		return nil
+	}
+	if err := gateFacePairs(budget, fa, fb, capFace, coneFace, examine); err != nil {
+		return err
 	}
 	if len(refusal.Contacts) > 0 {
 		return refusal
 	}
 	return nil
+}
+
+// gateFacePairs runs the gate's cheap rejections (gateFacePair) over every face pair of fa × fb, row by row in the
+// order of fa and then of fb, and calls examine on each pair that passes them. It steps budget once per face pair,
+// before that pair's rejections, so the context polls fall at the counts a scan of every pair gives them.
+//
+// A row of more than heldBoxLeafSize faces visits only the faces of fb that a box tree over their boxes keeps, in
+// ascending index order, and steps budget past the faces it skips with StepN. The tree keeps every face whose box
+// comes within reach of ga's, where reach pads ga.delta plus the largest delta in fb as gateFacePair pads a pair's
+// slack. Rounded addition and multiplication by a positive constant are monotone, so reach is at least every pair's
+// padded slack, and BoxesWithin only gains pairs as its slack grows. A face the tree skips therefore fails the box
+// test, which does nothing but step, so the row calls examine on the same pairs in the same order between the same
+// polls. The certified cap row runs its cone pair before the box test, and a non-finite delta has no finite reach
+// to pad by, so those rows scan every pair.
+func gateFacePairs(budget *proofbound.WorkBudget, fa, fb []faceFacets, capFace, coneFace *topo.Face,
+	examine func(ga, gb faceFacets, slack float64, certified bool) error) error {
+	indexed := len(fb) > heldBoxLeafSize
+	maxDelta := math.Inf(-1)
+	for _, gb := range fb {
+		if proofbound.IsNonFinite(gb.delta) {
+			indexed = false
+			break
+		}
+		maxDelta = max(maxDelta, gb.delta)
+	}
+	var tree heldBoxTree
+	var candidates, stack []int
+	if indexed {
+		boxes := make([][2]r3.Vec, len(fb))
+		for k, gb := range fb {
+			boxes[k] = gb.box
+		}
+		tree = newQueryBoxTree(boxes)
+	}
+	for _, ga := range fa {
+		reach := (ga.delta + maxDelta) * (1 + 1e-9)
+		if !indexed || capFace != nil && ga.source == capFace || proofbound.IsNonFinite(reach) {
+			for _, gb := range fb {
+				if err := budget.Step(); err != nil {
+					return err
+				}
+				if err := gateFacePair(ga, gb, capFace, coneFace, examine); err != nil {
+					return err
+				}
+			}
+			continue
+		}
+		candidates, stack = tree.appendWithin(candidates[:0], stack, ga.box, reach)
+		slices.Sort(candidates)
+		done := 0
+		for _, k := range candidates {
+			if _, err := budget.StepN(uint64(k + 1 - done)); err != nil {
+				return err
+			}
+			done = k + 1
+			if err := gateFacePair(ga, fb[k], capFace, coneFace, examine); err != nil {
+				return err
+			}
+		}
+		if _, err := budget.StepN(uint64(len(fb) - done)); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// gateFacePair calls examine on one face pair unless a cheap rejection decides it: the certified cap pair goes to
+// examine with certified set, and any other pair needs a positive summed bound and face boxes within its padded slack.
+func gateFacePair(ga, gb faceFacets, capFace, coneFace *topo.Face,
+	examine func(ga, gb faceFacets, slack float64, certified bool) error) error {
+	if capFace != nil && ga.source == capFace && gb.source == coneFace {
+		return examine(ga, gb, 0, true)
+	}
+	slack := ga.delta + gb.delta
+	if slack <= 0 {
+		// Both faces are held exactly (a planar face with straight
+		// edges triangulates exactly; a Faceted face IS its polygons,
+		// core §6.1). A tangency between them is visible to the exact
+		// predicates, so there is nothing here a chord could hide.
+		return nil
+	}
+	// The exactly-tangent case sits ON the boundary d = δA + δB, and
+	// both sides of that comparison are float-computed: pad the
+	// threshold so the rounding can only ever ADD a refusal, never
+	// drop one. A relative 1e-9 is nothing against any real clearance.
+	// Each face box contains all its facet boxes. BoxesWithin uses only
+	// monotone subtraction and comparison, so a separated face pair has
+	// no facet pair GatherNearContacts could queue at this same slack.
+	// Reject it before allocating that scan's maps, buffers and callback.
+	if !BoxesWithin(ga.box, gb.box, slack*(1+1e-9)) {
+		return nil
+	}
+	return examine(ga, gb, slack, false)
 }
 
 func refuseCoarseNearContacts(bmA, bmB *BoolMesh, nc NearContacts) error {

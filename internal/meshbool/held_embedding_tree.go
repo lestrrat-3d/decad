@@ -262,6 +262,36 @@ func (tree *heldBoxTree) visitOverlaps(box [2]r3.Vec, poll func() error,
 	return nil
 }
 
+// appendWithin appends to dst every indexed box b with BoxesWithin(box, b, slack), in tree order, and returns dst
+// and stack, which it uses as scratch. A node's box contains every box below it, and BoxesWithin never turns false
+// as its second box grows: each side compares a corner of one box with a corner of the other moved by the same
+// slack, through comparisons and one rounded subtraction, both monotone. So a node it rejects holds no box it keeps.
+// A box with a NaN coordinate, which the tree leaves out, fails BoxesWithin too.
+func (tree *heldBoxTree) appendWithin(dst, stack []int, box [2]r3.Vec, slack float64) ([]int, []int) {
+	if len(tree.nodes) == 0 {
+		return dst, stack
+	}
+	stack = append(stack[:0], 0)
+	for len(stack) > 0 {
+		last := len(stack) - 1
+		node := tree.nodes[stack[last]]
+		stack = stack[:last]
+		if !BoxesWithin(box, node.box, slack) {
+			continue
+		}
+		if node.leafStart < 0 {
+			stack = append(stack, node.right, node.left)
+			continue
+		}
+		for _, facet := range tree.facets[node.leafStart : node.leafStart+node.leafCount] {
+			if BoxesWithin(box, tree.boxes[facet], slack) {
+				dst = append(dst, facet)
+			}
+		}
+	}
+	return dst, stack
+}
+
 func heldBoxHasNaN(box [2]r3.Vec) bool {
 	for _, point := range box {
 		if math.IsNaN(point.X) || math.IsNaN(point.Y) || math.IsNaN(point.Z) {
