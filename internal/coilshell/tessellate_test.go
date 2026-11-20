@@ -10,7 +10,9 @@ import (
 	"github.com/lestrrat-3d/decad/internal/coilshell"
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
+	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/revolveaxis"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
@@ -47,6 +49,31 @@ func squareCoil(t *testing.T) (*topo.Body, coilshell.Payload) {
 	cp, ok := body.Payload.(coilshell.Payload)
 	require.True(t, ok)
 	return body, cp
+}
+
+func TestTiledAuditMatchesGenericOnCoil(t *testing.T) {
+	_, cp := squareCoil(t)
+	const ceiling = 1 << 20
+	for _, mutate := range []bool{false, true} {
+		tris := append([][3]int(nil), cp.Tris...)
+		if mutate {
+			tris[len(tris)-1] = tris[0]
+		}
+		want := loftmesh.LoftCrossingAudit(proofbound.NewWorkBudget(t.Context()), cp.Verts, tris)
+		got := loftmesh.LoftCrossingAuditTiled(proofbound.NewWorkBudget(t.Context()), cp.Verts, tris, ceiling)
+		if mutate {
+			require.Error(t, want)
+			require.Error(t, got)
+			var wantContact, gotContact *loftmesh.LoftContactError
+			require.ErrorAs(t, want, &wantContact)
+			require.ErrorAs(t, got, &gotContact)
+			require.Equal(t, wantContact.I, gotContact.I)
+			require.Equal(t, wantContact.J, gotContact.J)
+		} else {
+			require.NoError(t, want)
+			require.NoError(t, got)
+		}
+	}
 }
 
 // pi is π to 76 digits.
