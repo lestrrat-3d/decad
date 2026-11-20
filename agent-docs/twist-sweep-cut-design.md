@@ -223,6 +223,12 @@ the same rule on Unions asks some revolves for more facets than their mesh
 ceiling allows. The ratio keeps ordinary pairs on the pair's chord. The same
 soundness argument covers the finer request.
 
+When the overlap exceeds the ratio threshold, a solid single-circle prism cutting a faceted target
+uses the target's inflated box diameter if the cutter enlarges the pair box. The bore wall lies
+inside the target. This keeps the length of the cutter outside the target from coarsening that wall
+before a shorter pocket meets it. Retry a geometric refusal at the ordinary pair chord.
+Return cancellation, work-limit refusals, and unexpected evaluator errors immediately.
+
 Soundness. A mesh publishes the sagitta it took, and every proof reads that
 published figure, never the request (tessellation §2). A finer request makes
 the published figure smaller. The tangency gate's slack is a sum of published
