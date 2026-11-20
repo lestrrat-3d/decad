@@ -14,6 +14,7 @@ package brepbandmesh
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"slices"
@@ -109,7 +110,7 @@ func Chord(ctx context.Context, bp breprecord.Payload, btopo *breprecord.Topolog
 			bands[bi] = bc
 			continue
 		}
-		lm, err := capblend.ChordLoop(ctx, budget, cbp, 0, b.Orig, chord, work)
+		lm, err := chordFullBand(ctx, budget, work, bp, b, cbp, chord)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -330,4 +331,19 @@ func chordPartialFillet(ctx context.Context, b breprecord.LoopBand, f breprecord
 	return Band{band: b, face: f, cbp: cbp, start: b.MatSign(f) > 0,
 		sideZ: sideZ, sideDelta: sideDelta,
 		fillet: &brepfilletmesh.Rings{Count: tessellation.FilletRingCount(b.Setback.AxialUpper(), chord)}, partial: partial}, nil
+}
+
+// chordFullBand shares the patch's chord budget between the contour and the
+// meridian when the band does not share stations with another band.
+func chordFullBand(ctx context.Context, budget *proofbound.WorkBudget, work *freeform.FreeformWork, bp breprecord.Payload, b breprecord.LoopBand, cbp capblend.Payload, chord float64) (capblend.LoopMesh, error) {
+	if b.Kind == breprecord.BandFillet && len(bp.LoopBands) == 1 && bp.PocketShell == nil && bp.BossShell == nil {
+		// FilletRingCount targets half the chord for meridian sagitta.
+		// If the contour cannot take the other half within its station limit,
+		// keep the original sampling and its measured departure.
+		lm, err := capblend.ChordLoop(ctx, budget, cbp, 0, b.Orig, chord/2, work)
+		if !errors.Is(err, freeform.ErrTooManyChords) {
+			return lm, err
+		}
+	}
+	return capblend.ChordLoop(ctx, budget, cbp, 0, b.Orig, chord, work)
 }
