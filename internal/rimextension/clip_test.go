@@ -2,6 +2,7 @@ package rimextension
 
 import (
 	"context"
+	"math"
 	"math/big"
 	"testing"
 
@@ -27,4 +28,12 @@ func TestClipRefusesMaterialOutsideCertifiedWindow(t *testing.T) {
 	m.err = context.Canceled
 	m.emit(0, 0, 0, 0)
 	require.ErrorIs(t, m.err, context.Canceled)
+}
+
+func TestConvexFanPreservesSplitOnNarrowTriangle(t *testing.T) {
+	v := []r3.Vec{{X: math.Nextafter(1, 0)}, {X: 1}, {X: 1, Y: 1}, {X: 1, Y: 2}}
+	m := rewrite{ctx: t.Context(), budget: proofbound.NewStrictReplayBudget(), out: Mesh{Vertices: v}, exactPoints: map[int]point{}}
+	m.convex([]int{0, 1, 2, 3}, 1)
+	require.NoError(t, m.err)
+	require.Equal(t, [][3]int{{0, 1, 2}, {0, 2, 3}}, m.out.Triangles)
 }

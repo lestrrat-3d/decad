@@ -41,7 +41,7 @@ func LoftWindowXMax(ctx context.Context, p *loftrecord.Payload, shiftX float64, 
 			if err := meter.ReserveBytes(ctx, 65536); err != nil {
 				return nil, false, err
 			}
-			u := windowSegmentUpper(seg)
+			u := windowLoftSegmentUpper(seg)
 			if u == nil {
 				return nil, false, nil
 			}

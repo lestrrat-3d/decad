@@ -19,7 +19,7 @@ func TestWindowRuledSupport(t *testing.T) {
 	}
 	p := loftrecord.Payload{SourceIdentity: new(loftrecord.SourceIdentity), AuthenticatedReconstruction: true, Frame0: frame, Frame1: frame, Xform: r3.Identity(), ConstructionDelta: 0.125}
 	p.Profile0.Outer.Segments = append(p.Profile0.Outer.Segments, momentinput.LineSeg{End: momentinput.Point2{U: 3.8}, TEnd: 1})
-	p.Profile1.Outer.Segments = append(p.Profile1.Outer.Segments, momentinput.ArcSeg{Start: momentinput.Point2{V: 4}, End: momentinput.Point2{U: -4}, TEnd: 1})
+	p.Profile1.Outer.Segments = append(p.Profile1.Outer.Segments, momentinput.ArcSeg{Start: momentinput.Point2{U: -4}, End: momentinput.Point2{V: 4}, TEnd: 1})
 	test := func(m *proofbound.ReplayBudget) (bool, error) {
 		x, ok, e := LoftWindowXMax(context.Background(), &p, 0.5, m)
 		if ok && x.Cmp(scalar(36.625)) != 0 {

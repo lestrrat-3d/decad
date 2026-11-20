@@ -76,7 +76,7 @@ func loftWindowSeam(ctx context.Context, p *loftrecord.Payload, shift r3.Vec, ca
 						ends[j][k] = plus(baseZ[j], v)
 					}
 				}
-			} else if bound := windowSegmentUpper(segs[j][i]); bound == nil || bound.Cmp(maxU[j]) >= 0 {
+			} else if bound := windowLoftSegmentUpper(segs[j][i]); bound == nil || bound.Cmp(maxU[j]) >= 0 {
 				return none, false, nil
 			}
 		}

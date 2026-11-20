@@ -12778,3 +12778,30 @@ The held edit must fit the same finite window used for the source proof.
 The public regression joins a transverse web and a circular pad to an
 extruded flange. It checks the original side and finished bevel heights at
 the same transverse station, and verifies the closed shell and volume.
+
+### Offset circular support beyond a stopped shoulder
+
+A straight edge on the opposite side of the flange may reach its rounded
+end while still outside the pad. Use the complete native pad extrusion,
+including any committed Union translation, and the prior native circular
+rim Chamfer's setback and axial levels. Follow both its retained cylinder
+and its conical blend through the subsequent Cut and Chamfer records.
+The new wedge lies below the cone hinge. Above the hinge the source cover
+and a point on the cone establish which side contains stock.
+
+Use signed world Z along the run and negative world X across it. The finite
+Loft stop determines the first station. Until the inward toe reaches the
+disk, the full wedge has planar sides. Beyond that station, bound the
+variation of the cylinder at fixed longitudinal coordinate using the
+positive lower bound on the remaining circle ordinate. The end station
+is the side-to-round junction of the selected edge. The section there
+has positive width between the flange and the offset disk. Close the cut
+with a finite planar face at that station and give it a separate blend
+identity. Charge the discrepancy at both ends, the exposed crescent on
+the original round, the curved-wall interpolation and coordinate rounding.
+
+A convex facet subdivision can be narrower than one rounding interval
+at its centroid. When the rounded centroid lies on a boundary edge, use
+a fan from an existing vertex whose triangles all have nonzero area.
+Preserve every split on the original boundary and verify the final
+embedding after mapping the mesh back to world coordinates.

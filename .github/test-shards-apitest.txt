@@ -3190,3 +3190,4 @@
 12	0.00	TestCircularUnionZeroGap
 12	0.00	TestCurvedFilletBandChord
 12	0.00	TestCoaxialPocketAfterFacetedCuts
+12	0.00	TestOffsetPadShoulderChamfer

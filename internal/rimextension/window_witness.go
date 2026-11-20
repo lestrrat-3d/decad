@@ -13,6 +13,11 @@ import (
 // Cap interior lies on the positive Y side for materialY=1 and the negative
 // side for materialY=-1.
 func WindowWitnesses(ctx context.Context, mesh Mesh, beta []float64, g Groups, w SourceWindow, center r3.Vec, radius, capY float64, outwardZ, materialY int, meter *proofbound.ReplayBudget) (bool, error) {
+	cy := scalar(capY)
+	return windowWitnessesAt(ctx, mesh, beta, g, w, scalar(center.X), scalar(center.Z), scalar(radius), cy, cy, outwardZ, materialY, meter)
+}
+
+func windowWitnessesAt(ctx context.Context, mesh Mesh, beta []float64, g Groups, w SourceWindow, cx, cz, r, cy, wallBarrier *big.Rat, outwardZ, materialY int, meter *proofbound.ReplayBudget) (bool, error) {
 	if meter == nil || len(mesh.Vertices) != len(beta) || len(mesh.Triangles) != len(mesh.Sources) || g.Cap == g.Boss ||
 		(outwardZ != 1 && outwardZ != -1) || (materialY != 1 && materialY != -1) {
 		return false, nil
@@ -22,10 +27,10 @@ func WindowWitnesses(ctx context.Context, mesh Mesh, beta []float64, g Groups, w
 	}
 	x0, x1, y0, y1 := scalar(w.XMin), scalar(w.XMax), scalar(w.YMin), scalar(w.YMax)
 	a, b, z, v := scalar(w.Side0.X), scalar(w.Side1.X), scalar(w.Side0.Z), scalar(w.Side1.Z)
-	cx, cz, r, cy := scalar(center.X), scalar(center.Z), scalar(radius), scalar(capY)
+
 	ol, oh := scalar(w.OffsetMin), scalar(w.OffsetMax)
 	if x0 == nil || x1 == nil || y0 == nil || y1 == nil ||
-		a == nil || b == nil || z == nil || v == nil || cx == nil || cz == nil || r == nil || cy == nil ||
+		a == nil || b == nil || z == nil || v == nil || cx == nil || cz == nil || r == nil || cy == nil || wallBarrier == nil ||
 		ol == nil || oh == nil || a.Cmp(b) == 0 || r.Sign() <= 0 || x0.Cmp(x1) >= 0 || cy.Cmp(y0) <= 0 || cy.Cmp(y1) >= 0 || ol.Cmp(oh) >= 0 {
 		return false, nil
 	}
@@ -122,7 +127,7 @@ func WindowWitnesses(ctx context.Context, mesh Mesh, beta []float64, g Groups, w
 					continue
 				}
 				if !capFacet {
-					if signed(minus(cy, p[1]), materialY).Cmp(&e) > 0 {
+					if signed(minus(wallBarrier, p[1]), materialY).Cmp(&e) > 0 {
 						haveBoss = true
 					}
 					continue
