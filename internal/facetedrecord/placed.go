@@ -179,6 +179,9 @@ func (fp Payload) placedWithReplay(ctx context.Context, env topo.Env, composed r
 		if delta != r3.Identity() {
 			next.Groups[i].PlacedPlane = nil
 		}
+		if exact != nil || delta != r3.Identity() {
+			next.Groups[i].FilletCarrier = nil
+		}
 		if exact != nil {
 			if err := ExactGroupPlaced(&next.Groups[i], exact, delta, fp.Verts, reach); err != nil {
 				return nil, err

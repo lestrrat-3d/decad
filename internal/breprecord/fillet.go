@@ -211,6 +211,9 @@ func attachFilletBand(ctx context.Context, alloc topo.Alloc, body *topo.Body, re
 		}
 		held, bound := heldOf(areaIv)
 		face := topobuild.NewFace(alloc, topo.Face{Area: held, AreaBound: bound, Surface: surf, Origins: []provenance.Ref{{Producer: ref, Role: b.PatchRole(p)}}, Body: body, Loops: loops})
+		if cylinder, ok := surf.(surfacegeom.Cylinder); ok && piece.Walk >= 0 && turn.Sign() == 0 && f.Delta == 0 && bp.Xform == r3.Identity() {
+			face.FilletCarrier = straightFilletCarrier(b, f, pl, fr.Walks[piece.Walk], cylinder)
+		}
 		area = proofbound.BoundedAdd(area, proofbound.MeasuredScalar(held, bound))
 		// capV, a cap contact vertex, lies on the patch's surface; the outward
 		// normal there is F's own, which faces −m along F's normal for a band
@@ -595,4 +598,48 @@ func walkTangent(w survey2d.SideWalk) (float64, float64) {
 	tu, tv := w.EndU-w.StartU, w.EndV-w.StartV
 	l := math.Hypot(tu, tv)
 	return tu / l, tv / l
+}
+
+// straightFilletCarrier proves the transverse axis/radius displacement for a
+// straight cardinal walk. The two walk endpoints must be exact, and the native
+// frame must be a signed permutation, so the input line has its stated direction.
+func straightFilletCarrier(b LoopBand, f Face, pl prismrecord.Payload, w survey2d.SideWalk, c surfacegeom.Cylinder) *topo.FilletCarrier {
+	cardinal := func(p r3.Vec) bool {
+		switch p {
+		case r3.Vec{X: 1}, r3.Vec{X: -1}, r3.Vec{Y: 1}, r3.Vec{Y: -1}, r3.Vec{Z: 1}, r3.Vec{Z: -1}:
+			return true
+		}
+		return false
+	}
+	if !cardinal(pl.Frame.U()) || !cardinal(pl.Frame.V()) || !cardinal(pl.Frame.N()) || !cardinal(c.Axis) || pl.Xform != r3.Identity() || b.Setback.DcDelta != 0 || f.Delta != 0 {
+		return nil
+	}
+	if len(w.Segs) != 1 || w.Segs[0] < 0 || w.Segs[0] >= len(b.Orig.Segments) {
+		return nil
+	}
+	if _, ok := b.Orig.Segments[w.Segs[0]].(sectionrecord.LineSeg); !ok || proofbound.WalkEndBoundAllow(w.StartBound) != 0 || proofbound.WalkEndBoundAllow(w.EndBound) != 0 {
+		return nil
+	}
+	if (w.StartU == w.EndU) == (w.StartV == w.EndV) {
+		return nil
+	}
+	tu, tv := walkTangent(w)
+	if !(math.Abs(tu) == 1 && tv == 0 || math.Abs(tv) == 1 && tu == 0) {
+		return nil
+	}
+	if c.Axis != pl.Dir(tu, tv, 0) {
+		return nil
+	}
+	radius := b.Setback.Dc
+	published, err := c.Radius.In(units.Millimeter)
+	if err != nil || published != radius {
+		return nil
+	}
+	u, v := w.StartU-radius*tv, w.StartV+radius*tu
+	z, levelDelta := b.SideLevel(f)
+	delta := proofbound.AbsSumUpper(proofbound.ExactSumRound(u, w.StartU, -radius*tv), proofbound.ExactSumRound(v, w.StartV, radius*tu), pl.PointRound(u, v, z, c.Origin), levelDelta)
+	if proofbound.IsNonFinite(delta) {
+		return nil
+	}
+	return &topo.FilletCarrier{Surface: c, Distance: delta}
 }

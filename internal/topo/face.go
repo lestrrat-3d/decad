@@ -38,6 +38,14 @@ func (r *CapRecord) Under(xform r3.Transform) *CapRecord {
 	return r
 }
 
+// FilletCarrier bounds the distance of a retained fillet's true patch
+// from Surface, in millimeters. Its source constructor accounts for the
+// rounding of its center and radii. A stale surface does not match.
+type FilletCarrier struct {
+	Surface  surfacegeom.Surface
+	Distance float64
+}
+
 // Face is the data of the root Face handle, which holds one by
 // value.
 type Face struct {
@@ -81,6 +89,8 @@ type Face struct {
 	// PlacedPlane is facetedrecord.Group.PlacedPlane on a retained Plane face: the face's true piece lies in it
 	// exactly while Surface equals it (agent-docs/coplanar-contact-design.md §17). nil for every other face.
 	PlacedPlane *surfacegeom.Plane
+	// FilletCarrier applies only to this retained torus surface.
+	FilletCarrier *FilletCarrier
 	// FlatPatch marks a built Plane face whose true patch is a planar region
 	// bounded by one loop, the true counterpart of its own loop: each true
 	// vertex within its vertex's Bound, each true edge no longer than its

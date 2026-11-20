@@ -26,6 +26,18 @@ func SourceTag(f *topo.Face, flip bool) (Group, bool) {
 		Reversed: f.Reversed != flip,
 		Denoted:  f.Denoted,
 	}
+	if f.FilletCarrier != nil {
+		switch tag := f.Surface.(type) {
+		case surfacegeom.Cylinder:
+			if f.FilletCarrier.Surface == tag {
+				g.FilletCarrier = f.FilletCarrier
+			}
+		case surfacegeom.Torus:
+			if f.RetainedTag && f.FilletCarrier.Surface == tag {
+				g.FilletCarrier = f.FilletCarrier
+			}
+		}
+	}
 	if plane, ok := f.Surface.(surfacegeom.Plane); ok && f.RetainedTag && f.PlacedPlane != nil && *f.PlacedPlane == plane {
 		// A Boolean fragment is a subset of this exact retained carrier.
 		carrier := plane
