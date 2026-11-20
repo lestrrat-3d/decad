@@ -13,7 +13,7 @@ func prepContextReplay(ctx context.Context, verts []r3.Vec, tris [][3]int, src [
 	if len(tris) > 65536 {
 		return nil, errReplayBoundedMeshPreparationFacetCapExceeded
 	}
-	if err := b.ReserveRecords(ctx, 1+uint64(len(verts))+4*uint64(len(tris))); err != nil {
+	if err := b.ReserveRecords(ctx, 1+uint64(len(verts))+5*uint64(len(tris))); err != nil {
 		return nil, err
 	}
 	for _, a := range [][2]uint64{{1, uint64(unsafe.Sizeof(BoolMesh{}))}, {uint64(len(verts)), uint64(unsafe.Sizeof(proof.Xpt{}))}, {uint64(len(tris)), uint64(unsafe.Sizeof(proof.Xpt{}))}, {uint64(len(tris)), uint64(unsafe.Sizeof(r3.Vec{}))}, {uint64(len(tris)), uint64(unsafe.Sizeof(r3.Vec{}))}, {uint64(len(tris)), uint64(unsafe.Sizeof(bool(false)))}, {uint64(len(tris)), uint64(unsafe.Sizeof([2]r3.Vec{}))}} {

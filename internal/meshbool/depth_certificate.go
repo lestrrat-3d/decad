@@ -73,9 +73,12 @@ import (
 //     scaled normal keeps n·n >= 1. An edge shorter than 2^-510 leaves every
 //     point of the facet within that length of another edge, and an edge test
 //     or squared edge length that underflows does so only within 2^-510 of an
-//     edge or for an edge that short. PointBoxDist and Len lose at most
-//     2^-536 to underflowing squares. So underflow adds at most 2^-505 to A,
-//     which depthErrFloor covers.
+//     edge or for an edge that short. PointBoxDist squares its gaps directly
+//     and loses at most 2^-536 when they underflow. Len squares only
+//     components in [2^-511, 2^511], whose squares stay normal, and passes
+//     any other vector to math.Hypot, which scales before it squares, so it
+//     loses at most 2^-1070 beyond its relative error. So underflow adds at
+//     most 2^-505 to A, which depthErrFloor covers.
 //
 // So F <= (1+12u)·(d* + A + 2^-505) with A + 2^-505 <= E. When the value is
 // positive, fl(fl(F·c) − R) − E rounds to at most fl(F·c)·(1+3u) − R − E <=
@@ -103,9 +106,9 @@ func depthCertificate(best float64, p proof.Xpt, pf r3.Vec, other *BoolMesh) flo
 	if !(m <= depthReachLimit) {
 		return 0
 	}
-	e := proofbound.ProvenUpRound(depthErrCoef*m + depthErrFloor)
 	// Each step rounds on its own, so no fused multiply-add can change the
 	// value from one architecture to the next.
+	e := proofbound.ProvenUpRound(float64(float64(depthErrCoef*m) + depthErrFloor))
 	return float64(float64(best*(1-1e-12))-PointRoundBound(p, pf)) - e
 }
 
@@ -149,7 +152,9 @@ func depthNormalOf(n proof.Xpt) r3.Vec {
 // setDepthNormals fills the depth scan's per-facet normals from Norms and the
 // largest vertex coordinate magnitude from Verts. Every preparation calls it
 // once Norms is filled, and a caller that changes Verts, Tris or Norms
-// afterwards must call it again.
+// afterwards must call it again. It charges no budget work: the budgeted
+// preparations already charged each exact normal it rounds, and they reserve
+// the depthNorms array.
 func (bm *BoolMesh) setDepthNormals() {
 	bm.depthNorms = make([]r3.Vec, len(bm.Tris))
 	for i := range bm.Tris {

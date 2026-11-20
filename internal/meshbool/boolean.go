@@ -725,10 +725,11 @@ func pointSegDist3(p, q0, q1 r3.Vec) float64 {
 // triNormal is the unnormalised facet normal PointTriDistance projects along.
 func triNormal(t [3]r3.Vec) r3.Vec { return t[1].Sub(t[0]).Cross(t[2].Sub(t[0])) }
 
-// pointTriFoot is PointTriDistance's perpendicular-foot reading, for
-// n = triNormal(t): the distance from p to its foot on t's plane and true when
-// the foot lands inside t, and false when PointTriDistance falls back to the
-// nearest edge. Every product in it is rounded on its own (r3's explicit
+// pointTriFoot is the perpendicular-foot reading along a normal n of t:
+// triNormal(t) for PointTriDistance and the TriTriDistance checks, the depth
+// normal for depthFacetDistance. It returns the distance from p to its foot on
+// the plane through t[0] normal to n and true when PointInTriangle places the
+// foot inside t, and false when the caller falls back to the nearest edge. Every product in it is rounded on its own (r3's explicit
 // float64 conversions), so no fused multiply-add can make its value depend on
 // the function it is inlined into.
 func pointTriFoot(p r3.Vec, t [3]r3.Vec, n r3.Vec) (float64, bool) {

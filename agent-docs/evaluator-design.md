@@ -1440,8 +1440,8 @@ work intervals inside quadratic/refinement loops, as interference §7 specifies.
     `h` because `PointBoxDist >= B`, so `F <= B <= PointBoxDist`, or it takes
     the minimum with `depthFacetDistance`, so `F <= depthFacetDistance`. Both
     functions are `//go:noinline` and read the same depth normal, so the hint
-    reading runs the code the scan runs and returns the same bits. The hint is the facet that settled the
-    previous candidate of the same search.
+    reading runs the code the scan runs and returns the same bits. The hint
+    is the facet that settled the previous candidate of the same search.
   Both shortcuts only answer "not deeper", so they cannot make a witness. A NaN
   `b` fails every shortcut comparison. A candidate the shortcuts do not settle
   finishes the definition's own scan and pays `PointRoundBound`. Exact parity
