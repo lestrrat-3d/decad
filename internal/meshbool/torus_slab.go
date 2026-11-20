@@ -90,8 +90,11 @@ func torusBound(tri [3]r3.Vec, beta, departure float64, s surfacegeom.Torus, gat
 	}
 	major, majorErr := s.Major.In(units.Millimeter)
 	minor, minorErr := s.Minor.In(units.Millimeter)
-	if majorErr != nil || minorErr != nil {
-		return 0, false, nil
+	if majorErr != nil {
+		return 0, false, majorErr
+	}
+	if minorErr != nil {
+		return 0, false, minorErr
 	}
 	if !(major > minor && minor > 0 && beta >= 0 && gate > 0) {
 		return 0, false, nil
