@@ -119,6 +119,15 @@ func operandChord(ctx context.Context, b *topo.Body, pairTol, dPair, chordScale 
 	return meshbool.OperandChord(pairTol, dPair*chordScale, booloperand.ChordShare(ctx, b).Floor*chordScale, restating)
 }
 
+// spansTarget selects through-cut chording when a tool extends past both
+// sides of the target box along an axis. This only chooses a mesh request.
+func spansTarget(target, tool *topo.Body) bool {
+	a, b := target.Bounds, tool.Bounds
+	return (b.Min.X < a.Min.X && a.Max.X < b.Max.X) ||
+		(b.Min.Y < a.Min.Y && a.Max.Y < b.Max.Y) ||
+		(b.Min.Z < a.Min.Z && a.Max.Z < b.Max.Z)
+}
+
 // chordDiameter is the diameter a pair's freshly chorded operands are
 // requested by: the overlap's when ctx allows it (WithOverlapChord) and
 // a smaller diameter applies, else the pair's own.

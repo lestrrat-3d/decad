@@ -308,7 +308,7 @@ func evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 	if replay == nil {
 		diam = chordDiameter(ctx, op, a, b, dPair)
 	}
-	chordA, err := evaluationOperandChord(ctx, a, tolMM, diam, chordScale, op == meshbool.OpCut, replay)
+	chordA, err := evaluationOperandChord(ctx, a, tolMM, diam, chordScale, op == meshbool.OpCut && spansTarget(a, b), replay)
 	if err != nil {
 		return Evaluation{}, err
 	}
