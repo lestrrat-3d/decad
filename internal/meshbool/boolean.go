@@ -586,10 +586,27 @@ func BoxesWithin(a, b [2]r3.Vec, slack float64) bool {
 // does not contain, so the value returned for such a pair is neither the
 // distance nor a lower bound on it and must never gate an admission.
 func TriTriDistance(ta, tb [3]r3.Vec) float64 {
+	d, _ := triTriDistanceEdgeOffset(ta, tb)
+	return d
+}
+
+// triTriDistanceEdgeOffset returns TriTriDistance(ta, tb) and the nearest
+// edge pair's offset: the segSegOffset of the first edge pair, in the loop's
+// order, whose length is below every earlier pair's, or the zero vector when
+// no length is below +Inf. Each edge candidate is that offset's length, as
+// SegSegDist3 computes it, so the distance reads the same nine offsets.
+func triTriDistanceEdgeOffset(ta, tb [3]r3.Vec) (float64, r3.Vec) {
 	best := posInf
+	nearest := posInf
+	var offset r3.Vec
 	for i := range 3 {
 		for j := range 3 {
-			best = minFloat64(best, SegSegDist3(ta[i], ta[(i+1)%3], tb[j], tb[(j+1)%3]))
+			off := segSegOffset(ta[i], ta[(i+1)%3], tb[j], tb[(j+1)%3])
+			d := off.Len()
+			best = minFloat64(best, d)
+			if d < nearest {
+				nearest, offset = d, off
+			}
 		}
 	}
 	for i := range 3 {
@@ -597,9 +614,9 @@ func TriTriDistance(ta, tb [3]r3.Vec) float64 {
 		best = minFloat64(best, PointTriDistance(tb[i], ta))
 	}
 	if best <= 0 || proofbound.IsNonFinite(best) {
-		return 0
+		return 0, offset
 	}
-	return best * (1 - 1e-12)
+	return best * (1 - 1e-12), offset
 }
 
 // SegSegDist3 is the distance between two closed 3D segments.

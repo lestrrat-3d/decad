@@ -110,6 +110,13 @@ func exceedsSlacks(d float64) []float64 {
 	return out
 }
 
+// edgeOffsetAxisExceeds reports whether the nearest edge pair's offset, as
+// triTriDistanceEdgeOffset returns it, proves a gap over thr.
+func edgeOffsetAxisExceeds(ta, tb [3]r3.Vec, m, thr float64) bool {
+	_, offset := triTriDistanceEdgeOffset(ta, tb)
+	return axisGapExceeds(offset, ta, tb, m, thr)
+}
+
 // axisProvesAbove reports whether one of TriTriDistanceExceeds's eighteen
 // axes proves the float triangles farther apart than slack.
 func axisProvesAbove(ta, tb [3]r3.Vec, slack float64) bool {
@@ -118,7 +125,7 @@ func axisProvesAbove(ta, tb [3]r3.Vec, slack float64) bool {
 		return false
 	}
 	thr := slack + (slack+m)*0x1p-26 + 0x1p-199
-	return triGapAbove(ta, tb, slack) || closestEdgeAxisGapExceeds(ta, tb, m, thr)
+	return triGapAbove(ta, tb, slack) || edgeOffsetAxisExceeds(ta, tb, m, thr)
 }
 
 // requireExceedsMatchesReference requires TriTriDistanceExceeds(ta, tb, slack)
@@ -244,7 +251,7 @@ func TestTriTriDistanceExceedsMatchesDistance(t *testing.T) {
 				onlyB++
 			default:
 				neither++
-				if d > slack && !edgeAxesGapExceeds(ta, tb, na, nb, m, thr) && !closestEdgeAxisGapExceeds(ta, tb, m, thr) {
+				if d > slack && !edgeAxesGapExceeds(ta, tb, na, nb, m, thr) && !edgeOffsetAxisExceeds(ta, tb, m, thr) {
 					exact++
 				}
 			}
@@ -343,6 +350,14 @@ func nearMissPair(rng *rand.Rand, kind nearMissKind, scale, gap, theta float64) 
 	return a, b
 }
 
+// nearMissConfigs are the near-miss table's kinds and angles.
+var nearMissConfigs = []struct {
+	kind  nearMissKind
+	theta float64
+}{{nearMissFoot, 0}, {nearMissEdge, 0}, {nearMissNearParallel, 1e-4}, {nearMissNearParallel, 1e-6},
+	{nearMissNearParallel, 1e-8}, {nearMissNearParallel, 1e-10}, {nearMissSliver, 1e-4}, {nearMissSliver, 1e-8},
+	{nearMissSliver, 1e-12}, {nearMissSliverParallel, 1e-6}, {nearMissSliverParallel, 1e-8}}
+
 // TestTriTriDistanceExceedsNearMissTables sweeps disjoint generic and sliver
 // pairs, with edges up to 1e-10 rad from parallel, at coordinate scales of 1
 // and 100 mm and gaps from 1e-9 to 1e-3 mm. At slacks on both sides of each
@@ -358,17 +373,9 @@ func TestTriTriDistanceExceedsNearMissTables(t *testing.T) {
 	if raceDetector {
 		samples = 2
 	}
-	type config struct {
-		kind  nearMissKind
-		theta float64
-	}
-	configs := []config{{nearMissFoot, 0}, {nearMissEdge, 0}, {nearMissNearParallel, 1e-4},
-		{nearMissNearParallel, 1e-6}, {nearMissNearParallel, 1e-8}, {nearMissNearParallel, 1e-10},
-		{nearMissSliver, 1e-4}, {nearMissSliver, 1e-8}, {nearMissSliver, 1e-12}, {nearMissSliverParallel, 1e-6},
-		{nearMissSliverParallel, 1e-8}}
 	rng := rand.New(rand.NewPCG(21, 22))
 	pairs, overturned, exactFar, farAtHalf := 0, 0, 0, 0
-	for _, c := range configs {
+	for _, c := range nearMissConfigs {
 		for _, scale := range []float64{1, 100} {
 			for _, gap := range []float64{1e-9, 1e-6, 1e-3} {
 				for range samples {

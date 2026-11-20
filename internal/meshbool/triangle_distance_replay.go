@@ -49,7 +49,7 @@ func triTriDistanceExceedsReplay(ctx context.Context, ta, tb [3]r3.Vec, slack fl
 	}
 	m, ok := triPairScale(ta, tb)
 	if !ok || !(slack >= 0 && slack <= math.MaxFloat64) {
-		far, err := triTriDistanceReplay(ctx, ta, tb, slack, false, b)
+		far, _, err := triTriDistanceReplay(ctx, ta, tb, slack, false, b)
 		if err != nil || !far {
 			return false, err
 		}
@@ -86,11 +86,11 @@ func triTriDistanceExceedsReplay(ctx context.Context, ta, tb [3]r3.Vec, slack fl
 			}
 		}
 		if !separated {
-			far, err := triTriDistanceReplay(ctx, ta, tb, slack, true, b)
+			far, offset, err := triTriDistanceReplay(ctx, ta, tb, slack, true, b)
 			if err != nil || !far {
 				return false, err
 			}
-			return replayRemainingAxesOrExact(ctx, ta, tb, na, nb, m, thr, slack, b)
+			return replayRemainingAxesOrExact(ctx, ta, tb, offset, na, nb, m, thr, slack, b)
 		}
 	}
 	for i := range 3 {
@@ -116,16 +116,18 @@ func triTriDistanceExceedsReplay(ctx context.Context, ta, tb [3]r3.Vec, slack fl
 
 // replayRemainingAxesOrExact proves the far answer of a pair that neither
 // facet normal nor any edge-edge axis separates: by the nearest-edge offset
-// axis (closestEdgeAxisGapExceeds), by one of the six axes made of an edge
-// crossed with its own facet's normal (na, nb), or by the exact distance.
-// With the axes already tried these are TriTriDistanceExceeds's eighteen, so
-// the answer is its own.
-func replayRemainingAxesOrExact(ctx context.Context, ta, tb [3]r3.Vec, na, nb r3.Vec, m, thr, slack float64,
+// axis (offset, as triTriDistanceReplay returns it), by one of the six axes
+// made of an edge crossed with its own facet's normal (na, nb), or by the
+// exact distance. With the axes already tried these are
+// TriTriDistanceExceeds's eighteen, so the answer is its own. The offset axis
+// is charged nine segment envelopes and an axis envelope, as building it
+// from the nine segment offsets would be.
+func replayRemainingAxesOrExact(ctx context.Context, ta, tb [3]r3.Vec, offset, na, nb r3.Vec, m, thr, slack float64,
 	b *proofbound.ReplayBudget) (bool, error) {
 	if err := b.SpendWork(ctx, 9*replayDistanceSegmentWork+replayDistanceAxisWork); err != nil {
 		return false, err
 	}
-	if closestEdgeAxisGapExceeds(ta, tb, m, thr) {
+	if axisGapExceeds(offset, ta, tb, m, thr) {
 		return true, nil
 	}
 	for i := range 3 {
@@ -151,18 +153,29 @@ func replayTriDistanceExactAbove(ctx context.Context, ta, tb [3]r3.Vec, slack fl
 	return triDistanceExactAbove(ta, tb, slack), nil
 }
 
-func triTriDistanceReplay(ctx context.Context, ta, tb [3]r3.Vec, slack float64, rejectEarly bool, b *proofbound.ReplayBudget) (bool, error) {
+// triTriDistanceReplay reports TriTriDistance(ta, tb) > slack under the
+// replay budget, and returns the nearest edge pair's offset as
+// triTriDistanceEdgeOffset picks it. With rejectEarly it stops at the first
+// candidate that settles "not above slack"; the offset then means nothing.
+func triTriDistanceReplay(ctx context.Context, ta, tb [3]r3.Vec, slack float64, rejectEarly bool,
+	b *proofbound.ReplayBudget) (bool, r3.Vec, error) {
 	best := posInf
+	nearest := posInf
+	var offset r3.Vec
 	for i := range 3 {
 		for j := range 3 {
 			if err := b.SpendWork(ctx, replayDistanceSegmentWork); err != nil {
-				return false, err
+				return false, offset, err
 			}
-			d := SegSegDist3(ta[i], ta[(i+1)%3], tb[j], tb[(j+1)%3])
+			off := segSegOffset(ta[i], ta[(i+1)%3], tb[j], tb[(j+1)%3])
+			d := off.Len()
 			if rejectEarly && !distanceCandidateExceeds(d, slack) {
-				return false, nil
+				return false, offset, nil
 			}
 			best = minFloat64(best, d)
+			if d < nearest {
+				nearest, offset = d, off
+			}
 		}
 	}
 	point := func(p r3.Vec, t [3]r3.Vec) (float64, error) {
@@ -184,18 +197,18 @@ func triTriDistanceReplay(ctx context.Context, ta, tb [3]r3.Vec, slack float64, 
 	for i := range 3 {
 		d, err := point(ta[i], tb)
 		if err != nil {
-			return false, err
+			return false, offset, err
 		}
 		if rejectEarly && !distanceCandidateExceeds(d, slack) {
-			return false, nil
+			return false, offset, nil
 		}
 		best = minFloat64(best, d)
 		d, err = point(tb[i], ta)
 		if err != nil {
-			return false, err
+			return false, offset, err
 		}
 		if rejectEarly && !distanceCandidateExceeds(d, slack) {
-			return false, nil
+			return false, offset, nil
 		}
 		best = minFloat64(best, d)
 	}
@@ -204,5 +217,5 @@ func triTriDistanceReplay(ctx context.Context, ta, tb [3]r3.Vec, slack float64, 
 	} else {
 		best *= 1 - 1e-12
 	}
-	return best > slack, nil
+	return best > slack, offset, nil
 }

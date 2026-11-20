@@ -18,7 +18,8 @@ import (
 //     slack: a gap along an axis, float error charged, or
 //     triDistanceExactAbove's exact distance. The axes are triGapAbove's
 //     seventeen and the offset between the float closest points of the
-//     nearest edge pair (closestEdgeAxisGapExceeds).
+//     nearest edge pair, which triTriDistanceEdgeOffset returns with the
+//     float reading.
 //
 // The float reading alone decides only "near". Its candidates carry an
 // absolute float error of about eps*m (m the largest coordinate magnitude),
@@ -86,7 +87,8 @@ func TriTriDistanceExceeds(ta, tb [3]r3.Vec, slack float64) bool {
 	clearA := axisGapExceeds(na, ta, tb, m, thr)
 	clearB := axisGapExceeds(nb, ta, tb, m, thr)
 	if !clearA && !clearB {
-		return TriTriDistance(ta, tb) > slack && (closestEdgeAxisGapExceeds(ta, tb, m, thr) ||
+		d, offset := triTriDistanceEdgeOffset(ta, tb)
+		return d > slack && (axisGapExceeds(offset, ta, tb, m, thr) ||
 			edgeAxesGapExceeds(ta, tb, na, nb, m, thr) || triDistanceExactAbove(ta, tb, slack))
 	}
 	for i := range 3 {
@@ -122,27 +124,6 @@ func edgeAxesGapExceeds(ta, tb [3]r3.Vec, na, nb r3.Vec, m, thr float64) bool {
 		}
 	}
 	return false
-}
-
-// closestEdgeAxisGapExceeds reports whether the offset between the float
-// closest points of the nearest edge pair, the one whose SegSegDist3 is
-// smallest (the first on a tie), proves a gap over thr. m and thr are as
-// axisGapExceeds takes them. When the nearest points of two disjoint
-// triangles lie on an edge of each, the exact offset between them separates
-// the triangles by their distance, and the float offset is that direction up
-// to rounding. A nearest point inside a facet is the facet normal's axis.
-func closestEdgeAxisGapExceeds(ta, tb [3]r3.Vec, m, thr float64) bool {
-	best := posInf
-	var axis r3.Vec
-	for i := range 3 {
-		for j := range 3 {
-			off := segSegOffset(ta[i], ta[(i+1)%3], tb[j], tb[(j+1)%3])
-			if d := off.Len(); d < best {
-				best, axis = d, off
-			}
-		}
-	}
-	return axisGapExceeds(axis, ta, tb, m, thr)
 }
 
 // triDistanceExactAbove reports whether the exact distance between the closed
