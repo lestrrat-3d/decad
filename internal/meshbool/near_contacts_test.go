@@ -15,8 +15,8 @@ import (
 )
 
 // legacyGatherNearContacts is GatherNearContacts as it was before the distance
-// moved to the batch workers: 256-pair batches, and TriTriDistance called in
-// the consume callback on the calling goroutine.
+// moved to the batch workers: 256-pair batches, and the far answer read in the
+// consume callback on the calling goroutine, from referenceExceeds.
 func legacyGatherNearContacts(ctx context.Context, bmA *BoolMesh, fis []int, bmB *BoolMesh, fjs []int, slack float64, memo *ContactMemo) (NearContacts, bool, error) {
 	var nc NearContacts
 	seenA := map[int]bool{}
@@ -27,7 +27,7 @@ func legacyGatherNearContacts(ctx context.Context, bmA *BoolMesh, fis []int, bmB
 		if c.Kind == ContactRegion {
 			return ErrContactBatchStop
 		}
-		if c.Kind == ContactNone && TriTriDistance(TriCorners(bmA, i), TriCorners(bmB, j)) > slack {
+		if c.Kind == ContactNone && referenceExceeds(TriCorners(bmA, i), TriCorners(bmB, j), slack) {
 			return nil
 		}
 		if c.Kind == ContactSegment {
@@ -336,6 +336,8 @@ func TestNearContactExecutorOrderAndBatches(t *testing.T) {
 		measured bool
 		far      bool
 	}
+	// farRef holds each pair's referenceExceeds answer, read once.
+	farRef := map[ContactPair]bool{}
 	expect := func(p ContactPair, hit bool) consumed {
 		ma.PrepareFloatNormal(p.I)
 		mb.PrepareFloatNormal(p.J)
@@ -344,7 +346,12 @@ func TestNearContactExecutorOrderAndBatches(t *testing.T) {
 		c := consumed{pair: p, contact: r.Contact}
 		if r.Contact.Kind == ContactNone && !hit {
 			c.measured = true
-			c.far = TriTriDistance(TriCorners(ma, p.I), TriCorners(mb, p.J)) > slack
+			far, ok := farRef[p]
+			if !ok {
+				far = referenceExceeds(TriCorners(ma, p.I), TriCorners(mb, p.J), slack)
+				farRef[p] = far
+			}
+			c.far = far
 		}
 		return c
 	}

@@ -59,8 +59,9 @@ type ContactPair struct {
 
 // ContactBatchResult is one pair's slot. Measured and Far are set only by
 // NearContactRunner(slack), for a ContactNone pair: Far is
-// TriTriDistanceExceeds of the pair's two facets and slack, which is
-// TriTriDistance > slack. A memo hit reaches ConsumeResult with Measured false.
+// TriTriDistanceExceeds of the pair's two facets and slack, which proves the
+// facets farther apart than slack. A memo hit reaches ConsumeResult with
+// Measured false.
 type ContactBatchResult struct {
 	Contact  TriContact
 	Err      error
@@ -251,8 +252,8 @@ func RunContactBatch(ctx context.Context, ma, mb *BoolMesh, pairs []ContactPair,
 }
 
 // NearContactRunner is RunContactBatch, except a worker that classifies a
-// ContactNone pair also decides whether TriTriDistance of its two facets
-// exceeds slack and stores that in the pair's slot, so GatherNearContacts does
+// ContactNone pair also decides TriTriDistanceExceeds of its two facets and
+// slack and stores that in the pair's slot, so GatherNearContacts does
 // not measure on its single producer goroutine. The answer is the same
 // function of the same facet corners and slack the producer would pass, and
 // the slots are still read in order.

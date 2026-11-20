@@ -19,7 +19,13 @@ import (
 // than 64 scalar operations and comparisons: fewer than 128 of 256. Setup
 // scans 18 scalar coordinates, makes two normals and a threshold; 192 covers
 // those operations and their branches. A point/segment fallback is bounded by
-// the segment envelope, including its degenerate-segment path.
+// the segment envelope, including its degenerate-segment path. The
+// nearest-edge offset axis takes nine segment offsets, each inside the
+// segment envelope with its length, and the axis envelope. An edge-normal
+// axis is one edge difference and one cross, inside the cross envelope, and
+// the axis envelope. The exact distance proof is charged spreadExactWork, as
+// SplitSpread charges one, plus one unit for lifting each of the six float
+// corners to an exact point.
 const (
 	replayDistanceSetupWork   = 192
 	replayDistanceAxisWork    = 256
@@ -27,15 +33,27 @@ const (
 	replayDistanceSegmentWork = 192
 	replayDistanceNormalWork  = 64
 	replayDistanceCrossWork   = 32
+	replayDistanceExactWork   = spreadExactWork + 6
 )
 
+// triTriDistanceExceedsReplay is TriTriDistanceExceeds under a replay budget,
+// with the same answer for every input. A pair that neither facet normal
+// separates tries the nine edge-edge axes first: one that separates proves
+// the exact distance, and the float reading then needs only the foot
+// candidates, as a normal axis leaves them. A pair no edge-edge axis
+// separates takes the float distance in full, then the nearest-edge offset
+// axis, the six edge-normal axes and the exact distance.
 func triTriDistanceExceedsReplay(ctx context.Context, ta, tb [3]r3.Vec, slack float64, b *proofbound.ReplayBudget) (bool, error) {
 	if err := b.SpendWork(ctx, replayDistanceSetupWork); err != nil {
 		return false, err
 	}
 	m, ok := triPairScale(ta, tb)
 	if !ok || !(slack >= 0 && slack <= math.MaxFloat64) {
-		return triTriDistanceReplay(ctx, ta, tb, slack, false, b)
+		far, err := triTriDistanceReplay(ctx, ta, tb, slack, false, b)
+		if err != nil || !far {
+			return false, err
+		}
+		return replayTriDistanceExactAbove(ctx, ta, tb, slack, b)
 	}
 	thr := slack + (slack+m)*0x1p-26 + 0x1p-199
 	na, nb := triNormal(ta), triNormal(tb)
@@ -68,7 +86,11 @@ func triTriDistanceExceedsReplay(ctx context.Context, ta, tb [3]r3.Vec, slack fl
 			}
 		}
 		if !separated {
-			return triTriDistanceReplay(ctx, ta, tb, slack, true, b)
+			far, err := triTriDistanceReplay(ctx, ta, tb, slack, true, b)
+			if err != nil || !far {
+				return false, err
+			}
+			return replayRemainingAxesOrExact(ctx, ta, tb, na, nb, m, thr, slack, b)
 		}
 	}
 	for i := range 3 {
@@ -90,6 +112,43 @@ func triTriDistanceExceedsReplay(ctx context.Context, ta, tb [3]r3.Vec, slack fl
 		}
 	}
 	return true, nil
+}
+
+// replayRemainingAxesOrExact proves the far answer of a pair that neither
+// facet normal nor any edge-edge axis separates: by the nearest-edge offset
+// axis (closestEdgeAxisGapExceeds), by one of the six axes made of an edge
+// crossed with its own facet's normal (na, nb), or by the exact distance.
+// With the axes already tried these are TriTriDistanceExceeds's eighteen, so
+// the answer is its own.
+func replayRemainingAxesOrExact(ctx context.Context, ta, tb [3]r3.Vec, na, nb r3.Vec, m, thr, slack float64,
+	b *proofbound.ReplayBudget) (bool, error) {
+	if err := b.SpendWork(ctx, 9*replayDistanceSegmentWork+replayDistanceAxisWork); err != nil {
+		return false, err
+	}
+	if closestEdgeAxisGapExceeds(ta, tb, m, thr) {
+		return true, nil
+	}
+	for i := range 3 {
+		if err := b.SpendWork(ctx, 2*(replayDistanceCrossWork+replayDistanceAxisWork)); err != nil {
+			return false, err
+		}
+		for _, axis := range [2]r3.Vec{ta[(i+1)%3].Sub(ta[i]).Cross(na), tb[(i+1)%3].Sub(tb[i]).Cross(nb)} {
+			if axisGapExceeds(axis, ta, tb, m, thr) {
+				return true, nil
+			}
+		}
+	}
+	return replayTriDistanceExactAbove(ctx, ta, tb, slack, b)
+}
+
+// replayTriDistanceExactAbove is triDistanceExactAbove, charged
+// replayDistanceExactWork first.
+func replayTriDistanceExactAbove(ctx context.Context, ta, tb [3]r3.Vec, slack float64,
+	b *proofbound.ReplayBudget) (bool, error) {
+	if err := b.SpendWork(ctx, replayDistanceExactWork); err != nil {
+		return false, err
+	}
+	return triDistanceExactAbove(ta, tb, slack), nil
 }
 
 func triTriDistanceReplay(ctx context.Context, ta, tb [3]r3.Vec, slack float64, rejectEarly bool, b *proofbound.ReplayBudget) (bool, error) {

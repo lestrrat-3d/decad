@@ -353,22 +353,8 @@ func triGapAbove(ta, tb [3]r3.Vec, slack float64) bool {
 	}
 	thr := slack + (slack+m)*0x1p-26 + 0x1p-199
 	na, nb := triNormal(ta), triNormal(tb)
-	if axisGapExceeds(na, ta, tb, m, thr) || axisGapExceeds(nb, ta, tb, m, thr) {
-		return true
-	}
-	for i := range 3 {
-		ea, eb := ta[(i+1)%3].Sub(ta[i]), tb[(i+1)%3].Sub(tb[i])
-		if axisGapExceeds(ea.Cross(na), ta, tb, m, thr) || axisGapExceeds(eb.Cross(nb), ta, tb, m, thr) {
-			return true
-		}
-		for j := range 3 {
-			ej := tb[(j+1)%3].Sub(tb[j])
-			if axisGapExceeds(ea.Cross(ej), ta, tb, m, thr) {
-				return true
-			}
-		}
-	}
-	return false
+	return axisGapExceeds(na, ta, tb, m, thr) || axisGapExceeds(nb, ta, tb, m, thr) ||
+		edgeAxesGapExceeds(ta, tb, na, nb, m, thr)
 }
 
 // spreadEdge names a split edge: its rim corner and other corner by exact key,

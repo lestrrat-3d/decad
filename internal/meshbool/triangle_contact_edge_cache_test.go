@@ -387,8 +387,11 @@ func TestContactBatchMatchesLegacyClassify(t *testing.T) {
 		want := make([]TriContact, len(fx.pairs))
 		wantSin2 := make([]*big.Rat, len(fx.pairs))
 		wantErr := make([]error, len(fx.pairs))
+		farRef := make([]bool, len(fx.pairs))
 		for k, pair := range fx.pairs {
 			want[k], wantSin2[k], wantErr[k] = legacyPair(fx.ma, fx.mb, pair)
+			farRef[k] = wantErr[k] == nil && want[k].Kind == ContactNone &&
+				referenceExceeds(TriCorners(fx.ma, pair.I), TriCorners(fx.mb, pair.J), nearSlack)
 		}
 		for _, workers := range []int{1, 4} {
 			for _, near := range []bool{false, true} {
@@ -410,8 +413,7 @@ func TestContactBatchMatchesLegacyClassify(t *testing.T) {
 					requireSameContact(t, s, want[k], wantSin2[k], wantErr[k], results[k].Contact, results[k].Err, label)
 					measured := near && wantErr[k] == nil && want[k].Kind == ContactNone
 					require.Equal(t, measured, results[k].Measured, label)
-					wantFar := measured &&
-						TriTriDistance(TriCorners(fx.ma, pair.I), TriCorners(fx.mb, pair.J)) > nearSlack
+					wantFar := measured && farRef[k]
 					require.Equal(t, wantFar, results[k].Far, label)
 				}
 			}

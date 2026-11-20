@@ -26,10 +26,10 @@ import (
 //
 // The test refuses and never admits. No facet may touch a cutter facet, which meshbool's exact triangle classification
 // decides on the held floats; a classification that cannot be decided, or a facet with collinear corners where the
-// classification needs a plane, refuses. A facet within its vertices' bounds plus the cutter's bound of a cutter facet
-// is too near to tell apart and refuses. A facet that crosses nothing may still lie wholly inside the cutter, so one
-// corner of every such facet is placed by the exact parity of a ray through the cutter's mesh: inside, on its boundary
-// or undecided refuses. Inflating by the bounds only refuses more.
+// classification needs a plane, refuses. A facet that meshbool.TriTriDistanceExceeds does not prove farther from a
+// cutter facet than its vertices' bounds plus the cutter's bound is too near to tell apart and refuses. A facet that
+// crosses nothing may still lie wholly inside the cutter, so one corner of every such facet is placed by the exact
+// parity of a ray through the cutter's mesh: inside, on its boundary or undecided refuses. Inflating by the bounds only refuses more.
 //
 // cutter is the body the run's cut takes, after any end clip, so the sector a clip removes is not tested.
 func (r chamferRun) checkCutterClear(ctx context.Context, body, cutter *topo.Body, bound float64) error {
@@ -120,7 +120,7 @@ func checkCutterClearOf(ctx context.Context, body, cutter *topo.Body, bound floa
 			if contact.Kind != meshbool.ContactNone {
 				return refuseOtherFace(what, contactAt3(contact, f.f))
 			}
-			if d := meshbool.TriTriDistance(c.f, f.f); d <= infl {
+			if !meshbool.TriTriDistanceExceeds(c.f, f.f, infl) {
 				return refuseOtherFace(what, f.f[0])
 			}
 		}

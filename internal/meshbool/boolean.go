@@ -563,8 +563,13 @@ func BoxesWithin(a, b [2]r3.Vec, slack float64) bool {
 // TriTriDistance is the distance between two DISJOINT triangles: the smallest
 // of the nine edge-edge distances and the six vertex-to-triangle distances,
 // which is where the minimum of two disjoint convex sets is always attained.
-// The result is nudged DOWN so its own float rounding can only widen the
-// refusal, never narrow it.
+// The result is a float estimate, scaled down by the relative factor
+// 1 - 1e-12. That factor does not bound its error: each candidate carries an
+// absolute float error of about eps*m (m the largest coordinate magnitude),
+// far more for two edges near parallel or for a sliver facet, so the result
+// can exceed the exact distance. A reading at or below a slack only ever
+// refuses; a reading above it proves nothing, and TriTriDistanceExceeds adds
+// the proof a "far" answer needs.
 //
 // Disjointness is the CALLER's obligation, discharged by the exact classifier
 // before the call, never by this routine: an intersecting pair attains its
@@ -590,6 +595,12 @@ func TriTriDistance(ta, tb [3]r3.Vec) float64 {
 
 // SegSegDist3 is the distance between two closed 3D segments.
 func SegSegDist3(p0, p1, q0, q1 r3.Vec) float64 {
+	return segSegOffset(p0, p1, q0, q1).Len()
+}
+
+// segSegOffset is the float closest point SegSegDist3 finds on the segment
+// p0p1 less the one it finds on q0q1. SegSegDist3 is its length.
+func segSegOffset(p0, p1, q0, q1 r3.Vec) r3.Vec {
 	u := p1.Sub(p0)
 	v := q1.Sub(q0)
 	w := p0.Sub(q0)
@@ -611,7 +622,7 @@ func SegSegDist3(p0, p1, q0, q1 r3.Vec) float64 {
 	if sn := -d + t*b; a > 0 {
 		s = Clamp01(sn, a)
 	}
-	return p0.Add(u.Scale(s)).Sub(q0.Add(v.Scale(t))).Len()
+	return p0.Add(u.Scale(s)).Sub(q0.Add(v.Scale(t)))
 }
 
 // Clamp01 is num/den clamped into [0, 1], or 0 when den <= 0. It returns the

@@ -5,13 +5,46 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/proof"
+	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
 )
 
-// TriTriDistanceExceeds reports TriTriDistance(ta, tb) > slack for every
-// input, including NaN, infinite and out-of-range ones. It skips the distance
-// candidates that a separating axis proves exceed slack, and answers from the
-// rest exactly as TriTriDistance's minimum would.
+// TriTriDistanceExceeds reports whether the closed float triangles ta and tb
+// provably stand farther apart than slack. It answers true only when both of
+// these hold, for every input, including NaN, infinite and out-of-range ones:
+//
+//   - The float reading is far: TriTriDistance(ta, tb) > slack.
+//   - A proof shows that the exact distance between the two triangles exceeds
+//     slack: a gap along an axis, float error charged, or
+//     triDistanceExactAbove's exact distance. The axes are triGapAbove's
+//     seventeen and the offset between the float closest points of the
+//     nearest edge pair (closestEdgeAxisGapExceeds).
+//
+// The float reading alone decides only "near". Its candidates carry an
+// absolute float error of about eps*m (m the largest coordinate magnitude),
+// far more for two edges near parallel, where SegSegDist3's a*c - b*b
+// cancels, and for a sliver facet, whose float normal is tilted. The
+// relative nudge TriTriDistance applies does not cover that error, so the
+// float reading can exceed slack while the exact distance does not.
+//
+// The answer never turns from false to true as slack grows. The float
+// reading, the axis thresholds and the exact comparison are each monotone in
+// slack, so a pair far at one slack is far at every smaller one.
+//
+// The float reading skips the distance candidates that a separating axis
+// along a facet normal proves exceed slack, and answers from the rest exactly
+// as TriTriDistance's minimum would. Such an axis is one of triGapAbove's, so
+// it also proves the exact distance. A pair that neither normal separates
+// takes TriTriDistance in full, and then needs one of the other sixteen axes
+// or the exact distance. Any direction n separates the triangles by at least
+// the gap of their projections over |n|, so an axis needs no exactness of its
+// own. The nearest-edge offset is the separating direction of a pair whose
+// nearest points lie on an edge of each, and a facet normal is that of a pair
+// whose nearest point lies inside a facet. So among pairs inside the axes'
+// range, the exact distance runs for one whose distance lies within the axis
+// threshold's margin of slack, or whose float closest points are poorly
+// placed (two edges near parallel). Corners past 2^200 in magnitude, and a
+// negative slack, skip the axes and go straight to triDistanceExactAbove.
 //
 // TriTriDistance(ta, tb) > slack holds exactly when every one of its fifteen
 // candidates d satisfies d > 0 and fl(d*(1-1e-12)) > slack: the minimum is
@@ -42,18 +75,19 @@ import (
 // the edge candidates and A's corners' foot candidates on B. The foot
 // candidates no axis bounds are computed by PointTriDistance's own foot code
 // (pointTriFoot): an edge fallback it takes is bounded by either axis.
-// Without an axis the answer is TriTriDistance's own.
+// Without a normal axis the float reading is TriTriDistance's own.
 func TriTriDistanceExceeds(ta, tb [3]r3.Vec, slack float64) bool {
 	m, ok := triPairScale(ta, tb)
 	if !ok || !(slack >= 0 && slack <= math.MaxFloat64) {
-		return TriTriDistance(ta, tb) > slack
+		return TriTriDistance(ta, tb) > slack && triDistanceExactAbove(ta, tb, slack)
 	}
 	thr := slack + (slack+m)*0x1p-26 + 0x1p-199
 	na, nb := triNormal(ta), triNormal(tb)
 	clearA := axisGapExceeds(na, ta, tb, m, thr)
 	clearB := axisGapExceeds(nb, ta, tb, m, thr)
 	if !clearA && !clearB {
-		return TriTriDistance(ta, tb) > slack
+		return TriTriDistance(ta, tb) > slack && (closestEdgeAxisGapExceeds(ta, tb, m, thr) ||
+			edgeAxesGapExceeds(ta, tb, na, nb, m, thr) || triDistanceExactAbove(ta, tb, slack))
 	}
 	for i := range 3 {
 		if !clearB {
@@ -68,6 +102,74 @@ func TriTriDistanceExceeds(ta, tb [3]r3.Vec, slack float64) bool {
 		}
 	}
 	return true
+}
+
+// edgeAxesGapExceeds reports whether one of the fifteen axes triGapAbove
+// tries after the facet normals na and nb proves a gap over thr: each edge
+// crossed with its own facet's normal, and the nine edge-edge cross products.
+// m and thr are as axisGapExceeds takes them.
+func edgeAxesGapExceeds(ta, tb [3]r3.Vec, na, nb r3.Vec, m, thr float64) bool {
+	for i := range 3 {
+		ea, eb := ta[(i+1)%3].Sub(ta[i]), tb[(i+1)%3].Sub(tb[i])
+		if axisGapExceeds(ea.Cross(na), ta, tb, m, thr) || axisGapExceeds(eb.Cross(nb), ta, tb, m, thr) {
+			return true
+		}
+		for j := range 3 {
+			ej := tb[(j+1)%3].Sub(tb[j])
+			if axisGapExceeds(ea.Cross(ej), ta, tb, m, thr) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// closestEdgeAxisGapExceeds reports whether the offset between the float
+// closest points of the nearest edge pair, the one whose SegSegDist3 is
+// smallest (the first on a tie), proves a gap over thr. m and thr are as
+// axisGapExceeds takes them. When the nearest points of two disjoint
+// triangles lie on an edge of each, the exact offset between them separates
+// the triangles by their distance, and the float offset is that direction up
+// to rounding. A nearest point inside a facet is the facet normal's axis.
+func closestEdgeAxisGapExceeds(ta, tb [3]r3.Vec, m, thr float64) bool {
+	best := posInf
+	var axis r3.Vec
+	for i := range 3 {
+		for j := range 3 {
+			off := segSegOffset(ta[i], ta[(i+1)%3], tb[j], tb[(j+1)%3])
+			if d := off.Len(); d < best {
+				best, axis = d, off
+			}
+		}
+	}
+	return axisGapExceeds(axis, ta, tb, m, thr)
+}
+
+// triDistanceExactAbove reports whether the exact distance between the closed
+// float triangles ta and tb exceeds slack. A non-finite corner, a NaN slack
+// and an infinite one answer false. A slack below zero is below every
+// distance and answers true. Otherwise disjointTriDistance2Above decides on
+// the corners' exact rationals: at slack zero it answers whether the
+// triangles are disjoint. It refuses a degenerate triangle.
+func triDistanceExactAbove(ta, tb [3]r3.Vec, slack float64) bool {
+	for _, t := range [2]*[3]r3.Vec{&ta, &tb} {
+		for _, v := range t {
+			if proofbound.IsNonFinite(v.X) || proofbound.IsNonFinite(v.Y) || proofbound.IsNonFinite(v.Z) {
+				return false
+			}
+		}
+	}
+	if slack < 0 {
+		return true
+	}
+	if !(slack <= math.MaxFloat64) {
+		return false
+	}
+	bound2 := proof.FloatRat(slack)
+	bound2.Mul(bound2, bound2)
+	a := [3]proof.Xpt{proof.XptOf(ta[0]), proof.XptOf(ta[1]), proof.XptOf(ta[2])}
+	b := [3]proof.Xpt{proof.XptOf(tb[0]), proof.XptOf(tb[1]), proof.XptOf(tb[2])}
+	return disjointTriDistance2Above(a, b, bound2)
 }
 
 // distanceCandidateExceeds reports whether the TriTriDistance candidate d,
@@ -149,6 +251,14 @@ func DisjointTriDistanceAbove(a, b [3]proof.Xpt, bound float64) bool {
 	}
 	bound2 := proof.FloatRat(bound)
 	bound2.Mul(bound2, bound2)
+	return disjointTriDistance2Above(a, b, bound2)
+}
+
+// disjointTriDistance2Above is DisjointTriDistanceAbove against the exact
+// squared bound bound2 >= 0. At bound2 zero it proves the closed triangles
+// disjoint: an axis gap is then above the bound, and a pair no axis separates
+// is refused.
+func disjointTriDistance2Above(a, b [3]proof.Xpt, bound2 *big.Rat) bool {
 	var ae, be [3]proof.Xpt
 	for i := range 3 {
 		ae[i] = proof.Xsub(a[(i+1)%3], a[i])
