@@ -12821,6 +12821,30 @@ a fan from an existing vertex whose triangles all have nonzero area.
 Preserve every split on the original boundary and verify the final
 embedding after mapping the mesh back to world coordinates.
 
+### A stopped shoulder ending on the concentric cone heel
+
+When the selected cap meets the earlier cone directly, recover its circular pad and original flange
+from that Chamfer. The two neighbors of the selected flange side must identify a unique centered arc.
+Authenticate its construction and prove that its two endpoints have equal radius about the pad center.
+The complete native arc must be inside or on the original pad. Match any additional retained disk
+walls to the same pad face and translation. The cut removes material outside the pad, so points
+already exposed on these walls remain exposed. Keep their held triangles.
+
+After the plane-only prefix, isolate the crossing of the side with the disk. Use that crossing to
+bound the end of the bevel. Require the bevel and its cylindrical extension to close the terminal
+without an additional face. Two retained wall edges may split one new vertical generator. Split
+only the new triangle, at the existing vertex strictly inside that generator, and verify closure.
+Keep every old vertex index. Discard unused new clipping points before publication.
+
+The window for an inner shoulder can use a smaller outward margin if the original margin reaches
+a neighbor. Recheck the crossing, held toe, source cover and both material witnesses in the smaller
+window. Projection along the window diagonal can separate a triangle from its corner. Charge the
+triangle's Euclidean bound in that direction.
+
+For 32,769 through 40,000 held facets and up to 20,000 vertices, final publication admits at most
+480 million work units, 24 × 2²⁰ records and 4 GiB on the same meter that checked the edit.
+Smaller meshes retain the existing limits.
+
 ### A stopped shoulder ending on a transverse cylinder
 
 When the two plane normals point along positive X and Y, the exposed edge runs along Z.

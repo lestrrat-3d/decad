@@ -190,6 +190,26 @@ func AdmitWindow(ctx context.Context, a Admission, meter *proofbound.ReplayBudge
 		OffsetMin: proofbound.RatFloatDown(offLo), OffsetMax: proofbound.RatFloatUp(offHi),
 	}
 	ok, e = WindowSourcesCovered(ctx, s.p.Verts, s.p.Tris, s.p.FaceOf, s.p.VertexBound, faceIndices, w, meter)
+	// A neighboring cap island can reach the wider witness margin while
+	// staying clear of the true crossing, the held toe and a narrower witness.
+	if !ok && e == nil {
+		margin := divide(span, scalar(16))
+		if times(minus(n.last, l), outsideSlope).Cmp(margin) >= 0 {
+			return none, false, nil
+		}
+		outer = plus(margin, ds)
+		if n.out > 0 {
+			offHi = outer
+			w.OffsetMax = proofbound.RatFloatUp(offHi)
+		} else {
+			offLo = new(big.Rat).Neg(outer)
+			w.OffsetMin = proofbound.RatFloatDown(offLo)
+		}
+		if !within(minus(scalar(a.Section.Toe.Z), h.start[2]), offLo, offHi) {
+			return none, false, nil
+		}
+		ok, e = WindowSourcesCovered(ctx, s.p.Verts, s.p.Tris, s.p.FaceOf, s.p.VertexBound, faceIndices, w, meter)
+	}
 	if !ok || e != nil {
 		return none, false, e
 	}

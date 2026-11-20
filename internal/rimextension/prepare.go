@@ -5,6 +5,8 @@ import (
 	"math"
 	"slices"
 
+	"github.com/lestrrat-3d/decad/internal/topobuild"
+
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/provenance"
@@ -51,6 +53,32 @@ func PrepareOuter(ctx context.Context, env topo.Env, a OuterAdmission, c Candida
 	for i, p := range old.Verts {
 		v[i] = ShoulderPoint(p, a.Wing)
 	}
+	c.Groups.ClosedTerminal = a.Round.Final == nil && a.Boss.Final == a.Cone
+	if c.Groups.ClosedTerminal {
+		if err := m.ReserveBundle(ctx, uint64(len(old.Tris)*4), uint64(len(old.Groups)), uint64(len(old.Groups)*96)); err != nil {
+			return Prepared{}, false, err
+		}
+		// Require every facet sharing a protected group to belong to a registered disk wall.
+		fs := topobuild.Faces(a.Stock)
+		walls := map[*topo.Face]bool{}
+		for _, f := range a.RetainedDiskWalls {
+			walls[f] = true
+		}
+		keep := map[int]bool{}
+		exclude := map[int]bool{}
+		for i, j := range old.FaceOf {
+			g := old.Src[i]
+			if walls[fs[j]] {
+				keep[g] = true
+			} else {
+				exclude[g] = true
+			}
+		}
+		for g := range exclude {
+			delete(keep, g)
+		}
+		c.Groups.RetainedDiskGroups = keep
+	}
 	out, ok, err := Apply(ctx, Mesh{Vertices: v, Triangles: old.Tris, Sources: old.Src}, c.Section, c.Groups, c.StopFacets, w.support, m)
 	if !ok || err != nil {
 		return Prepared{}, false, err
@@ -63,12 +91,12 @@ func PrepareOuter(ctx context.Context, env topo.Env, a OuterAdmission, c Candida
 	// witness. Only the longitudinal wall extension follows the cylinder.
 	endFaces := 0
 	for i, t := range out.Triangles {
-		if out.Sources[i] == c.Groups.Extension && out.Vertices[t[0]].X == c.Section.End.X && out.Vertices[t[1]].X == c.Section.End.X && out.Vertices[t[2]].X == c.Section.End.X {
+		if !c.Groups.ClosedTerminal && out.Sources[i] == c.Groups.Extension && out.Vertices[t[0]].X == c.Section.End.X && out.Vertices[t[1]].X == c.Section.End.X && out.Vertices[t[2]].X == c.Section.End.X {
 			out.Sources[i] = len(old.Groups) + 2
 			endFaces++
 		}
 	}
-	if endFaces == 0 {
+	if !c.Groups.ClosedTerminal && endFaces == 0 {
 		return Prepared{}, false, nil
 	}
 	radial, ok, err := cylinderExtensionBound(ctx, c.Section, n, out, c.Groups.Extension, m)
@@ -78,7 +106,11 @@ func PrepareOuter(ctx context.Context, env topo.Env, a OuterAdmission, c Candida
 	for i, p := range out.Vertices {
 		out.Vertices[i] = r3.NewVec(-p.Z, p.Y, -float64(a.Wing)*p.X)
 	}
-	return prepareOutput(ctx, env, a.Admission, old, out, radial, w, 3, a.Wing, m)
+	ng := 3
+	if c.Groups.ClosedTerminal {
+		ng = 2
+	}
+	return prepareOutput(ctx, env, a.Admission, old, out, radial, w, ng, a.Wing, m)
 }
 
 func prepareOutput(ctx context.Context, env topo.Env, a Admission, old facetedrecord.Payload, out Mesh, radial float64, w WindowBounds, newGroups, wing int, m *proofbound.ReplayBudget) (Prepared, bool, error) {

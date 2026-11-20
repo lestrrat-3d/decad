@@ -193,6 +193,9 @@ func (m *rewrite) finish() error {
 	if err := m.fillPlane(2, m.groups.Bevel, 0, 1); err != nil {
 		return err
 	}
+	if m.groups.ClosedTerminal {
+		return m.closeDiskGenerator()
+	}
 	if m.groups.OpenCylinderEnd {
 		es, err := m.boundary()
 		if err != nil || len(es) == 0 {
@@ -210,4 +213,61 @@ func (m *rewrite) finish() error {
 		return errChart
 	}
 	return nil
+}
+
+func (m *rewrite) closeDiskGenerator() error {
+	es, err := m.boundary()
+	if err != nil {
+		return err
+	}
+	if len(es) == 0 {
+		return nil
+	}
+	// The retained wall can split one vertical generator at an existing
+	// vertex. Conform only a single newly added triangle to both old edges.
+	if len(es) != 3 {
+		return errChart
+	}
+	for e, ti := range es {
+		if m.out.Sources[ti] != m.groups.Extension {
+			continue
+		}
+		mid := -1
+		for other, fi := range es {
+			if other[1] == e[0] && m.groups.RetainedDiskGroups[m.out.Sources[fi]] {
+				mid = other[0]
+			}
+		}
+		ji, ok := es[edge{e[1], mid}]
+		if !ok || !m.groups.RetainedDiskGroups[m.out.Sources[ji]] {
+			return errChart
+		}
+		if err := m.budget.ReserveBundle(m.ctx, 128, 4, 16384); err != nil {
+			return err
+		}
+		a, b, c := m.exact(e[0]), m.exact(e[1]), m.exact(mid)
+		if a[0].Cmp(b[0]) != 0 || a[0].Cmp(c[0]) != 0 || a[2].Cmp(b[2]) != 0 || a[2].Cmp(c[2]) != 0 || minus(c[1], a[1]).Sign()*minus(c[1], b[1]).Sign() >= 0 {
+			return errChart
+		}
+		t := m.out.Triangles[ti]
+		for j, id := range t {
+			if id == e[0] && t[(j+1)%3] == e[1] {
+				opp := t[(j+2)%3]
+				m.out.Triangles[ti] = [3]int{e[0], mid, opp}
+				m.emit(mid, e[1], opp, m.groups.Extension)
+				if m.err != nil {
+					return m.err
+				}
+				closed, err := m.boundary()
+				if err != nil {
+					return err
+				}
+				if len(closed) != 0 {
+					return errChart
+				}
+				return nil
+			}
+		}
+	}
+	return errChart
 }

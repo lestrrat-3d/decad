@@ -235,7 +235,7 @@ func (m *rewrite) conform(i int, t [3]int, p []int) []int {
 func Apply(ctx context.Context, old Mesh, section Section, groups Groups, stopFacets map[int]bool, support SourceWindow, budget *proofbound.ReplayBudget) (Mesh, bool, error) {
 	var none Mesh
 	chart, ok := newChart(section)
-	if !ok || budget == nil || len(old.Vertices) > 16384 || len(old.Triangles) > 32768 || len(old.Sources) != len(old.Triangles) || len(stopFacets) == 0 {
+	if !ok || budget == nil || len(old.Vertices) > proofbound.MaxRetainedRimVertices || len(old.Triangles) > proofbound.MaxRetainedRimFacets || len(old.Sources) != len(old.Triangles) || len(stopFacets) == 0 {
 		return none, false, nil
 	}
 	n := uint64(len(old.Triangles))
@@ -296,6 +296,37 @@ func Apply(ctx context.Context, old Mesh, section Section, groups Groups, stopFa
 	}
 	if err := m.finish(); err != nil {
 		return none, false, errUnlessChart(err)
+	}
+	if groups.ClosedTerminal {
+		oldCount := len(old.Vertices)
+		extra := len(m.out.Vertices) - oldCount
+		if err := budget.ReserveBundle(ctx, uint64(8*len(m.out.Triangles)+3*extra), uint64(extra), uint64(8*extra)); err != nil {
+			return none, false, err
+		}
+		ids := make([]int, extra)
+		for _, t := range m.out.Triangles {
+			for _, j := range t {
+				if j >= oldCount {
+					ids[j-oldCount] = 1
+				}
+			}
+		}
+		end := oldCount
+		for i, used := range ids {
+			if used != 0 {
+				m.out.Vertices[end] = m.out.Vertices[oldCount+i]
+				ids[i] = end
+				end++
+			}
+		}
+		m.out.Vertices = m.out.Vertices[:end]
+		for i, t := range m.out.Triangles {
+			for j, v := range t {
+				if v >= oldCount {
+					m.out.Triangles[i][j] = ids[v-oldCount]
+				}
+			}
+		}
 	}
 	return m.out, true, nil
 }

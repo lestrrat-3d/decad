@@ -124,7 +124,7 @@ func alignedNativeRim(ctx context.Context, d *Document, b *Body, e *topo.Edge, s
 	if cone != nil {
 		target := bodyHandle(result.Body)
 		target.upperRimProof = &upperRimProof{
-			stock: b, result: target, pad: pad, wall: a.wallSource.Native, sourceWall: a.wall, cone: cone,
+			alignedCheek: cheek, stock: b, result: target, pad: pad, wall: a.wallSource.Native, sourceWall: a.wall, cone: cone,
 			geometry: rimextension.OuterAdmission{
 				CenterX: a.center[0], CenterZ: a.center[2], Hinge: a.hinge,
 				PadBottom: rimSub(a.top, height), PadTop: a.top, Radius: rimRat(a.radius), NoseSetback: rimRat(setback),

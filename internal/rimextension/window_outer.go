@@ -88,6 +88,13 @@ func AdmitOuterWindow(ctx context.Context, a OuterAdmission, meter *proofbound.R
 		return none, false, e
 	}
 	accepted := map[*topo.Face]bool{a.Cap.Final: true, a.Side.Final: true, a.Boss.Final: true, a.Round.Final: true, a.Cone: true}
+	for _, f := range a.RetainedDiskWalls {
+		if f == nil || f.Body != a.Stock || a.Cone != a.Boss.Final {
+			return none, false, nil
+		}
+		accepted[f] = true
+	}
+	delete(accepted, nil)
 	base := a.Stop[0]
 	if base.Body == nil || !base.Body.Solid || !windowFinite(base.Translation) {
 		return none, false, nil
@@ -148,7 +155,8 @@ func AdmitOuterWindow(ctx context.Context, a OuterAdmission, meter *proofbound.R
 	ds := wmax(errSide(left), errSide(right))
 	deep := plus(times(span, scalar(1.1)), ds)
 	out := plus(divide(span, scalar(2)), ds)
-	domain, ok, e := shoulderDiskDomain(ctx, n, start, plus(deep, ds), meter)
+	aligned := a.Boss.Final == a.Cone
+	domain, ok, e := shoulderDiskRangeAt(ctx, n, start, plus(deep, ds), aligned, meter)
 	if !ok || e != nil {
 		return none, false, e
 	}
@@ -196,7 +204,11 @@ func AdmitOuterWindow(ctx context.Context, a OuterAdmission, meter *proofbound.R
 	if seam.toeZ.Cmp(side) >= 0 || minus(side, seam.toeZ).Cmp(deep) >= 0 || seam.heelY.Cmp(n.capY) >= 0 || !within(seam.heelY, yLo, yHi) {
 		return none, false, nil
 	}
-	b := windowMeasures(a.Admission, n, h, start, n.last, seam, ds, span, scaleLo, times(domain.minOrdinate, domain.minOrdinate))
+	cross := n.last
+	if aligned {
+		cross = domain.crossing
+	}
+	b := windowMeasures(a.Admission, n, h, start, cross, seam, ds, span, scaleLo, times(domain.minOrdinate, domain.minOrdinate))
 	// The terminating face is a finite section at the side/round seam. The
 	// old and new guard projections enclose its two ends. Charge its whole
 	// YZ rectangle, even if an output subdivision collapses on the rim.
@@ -208,7 +220,7 @@ func AdmitOuterWindow(ctx context.Context, a OuterAdmission, meter *proofbound.R
 	// Every point on the complete original rounded cheek is outside the
 	// moved pad. Bound its radial lip in addition to the fixed-X terminal
 	// width before accepting an endpoint comparison.
-	if lip.Sign() <= 0 || domain.terminalGapUpper.Cmp(span) >= 0 || proofbound.IsNonFinite(b.Deviation) || proofbound.IsNonFinite(b.Area) || proofbound.IsNonFinite(b.Volume) {
+	if (!aligned && lip.Sign() <= 0) || domain.terminalGapUpper.Cmp(span) >= 0 || proofbound.IsNonFinite(b.Deviation) || proofbound.IsNonFinite(b.Area) || proofbound.IsNonFinite(b.Volume) {
 		return none, false, nil
 	}
 	return b, true, nil

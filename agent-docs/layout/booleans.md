@@ -33,7 +33,8 @@ Boolean files and modify operations. The rules for rows live in `agent-docs/layo
 | `chamfer.go` | `Chamfer`: options, selector, tangent chain (extended without the option too), asymmetric reference and setback gates, then `internal/brepmodify/` builds the chamfer. See modify §7. Whole cap-loop runs: modify-reach §8.3.2. Chains across planes: retained-modify-reach §15b. |
 | `rim_extension.go` | Publishes a straight Chamfer ending on a tangent cylindrical support. See modify design. |
 | `rim_extension_history.go` | Binds held faces to their original extrusions and ruled cutting tool for a straight Chamfer. See modify design. |
-| `rim_outer.go` | Binds an offset circular pad and its earlier cone to a stopped flange shoulder before publication. |
+| `rim_outer_native.go` | Binds the terminal profile arc on the original flange when the cap joins a concentric cone heel. |
+| `rim_outer.go` | Binds a circular pad and its earlier cone to a stopped flange shoulder before publication. |
 | `native_rim_aligned.go` | Checks the cheek faces along the lower edge of a pad chamfer. |
 | `native_rim_annulus.go` | Verifies the full cap and cylindrical band of a native pad on later edited stock. |
 | `native_rim_chamfer.go` | Authenticates the retained cylinder, Boolean history, and stock clearance for a circular chamfer. |

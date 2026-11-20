@@ -2,6 +2,7 @@ package decad
 
 import (
 	"context"
+
 	"slices"
 
 	"github.com/lestrrat-3d/decad/internal/brepmodify"
@@ -16,6 +17,7 @@ import (
 // evaluator. A later shoulder replays that operation's consumed stock and
 // follows the selected wall through the intervening modifications.
 type upperRimProof struct {
+	alignedCheek           *topo.Body
 	stock, result          *Body
 	pad                    *topo.Body
 	wall, sourceWall, cone *topo.Face
@@ -115,7 +117,8 @@ func extendOuterRim(ctx context.Context, d *Document, b *Body, e *topo.Edge, set
 			return none, false, err
 		}
 		r := rimFaceReader{pairedHistorySource{h}, m, map[*topo.Body][]*topo.Face{}}
-		rec, ok, err := r.outerAncestor(ctx, b, c.Boss, false)
+		_, fromCone := c.Boss.Surface.(surfacegeom.Faceted)
+		rec, ok, err := r.outerAncestor(ctx, b, c.Boss, fromCone)
 		if !ok || err != nil {
 			return none, false, err
 		}
@@ -162,9 +165,36 @@ func extendOuterRim(ctx context.Context, d *Document, b *Body, e *topo.Edge, set
 			f      *topo.Face
 			target *rimextension.BoundFace
 		}{{c.Cap, &a.Cap}, {c.Side, &a.Side}, {c.Round, &a.Round}} {
+			if p.target == &a.Round && c.Round == c.Boss {
+				if a.Cone != c.Boss || rec.alignedCheek != a.Side.Body || a.Cap.Body != a.Side.Body {
+					return none, false, nil
+				}
+				ok, err = r.bindAdjacentRound(ctx, &a)
+				if !ok || err != nil {
+					return none, false, err
+				}
+				continue
+			}
 			*p.target, ok, err = r.bind(ctx, b, p.f, false)
 			if !ok || err != nil {
 				return none, false, err
+			}
+		}
+		if a.Round.Final == nil {
+			if len(rec.wall.Origins) != 1 {
+				return none, false, nil
+			}
+			for _, f := range fs {
+				if len(f.Origins) != 1 || f.Origins[0] != rec.wall.Origins[0] {
+					continue
+				}
+				native, ok, err := r.bind(ctx, b, f, false)
+				if err != nil {
+					return none, false, err
+				}
+				if ok && native.Body == rec.pad && native.Native == rec.wall && native.Translation == rec.shift {
+					a.RetainedDiskWalls = append(a.RetainedDiskWalls, f)
+				}
 			}
 		}
 		for _, f := range c.Stops {
