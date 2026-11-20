@@ -106,10 +106,23 @@ func depthCertificate(best float64, p proof.Xpt, pf r3.Vec, other *BoolMesh) flo
 	if !(m <= depthReachLimit) {
 		return 0
 	}
-	// Each step rounds on its own, so no fused multiply-add can change the
-	// value from one architecture to the next.
-	e := proofbound.ProvenUpRound(float64(float64(depthErrCoef*m) + depthErrFloor))
-	return float64(float64(best*(1-1e-12))-PointRoundBound(p, pf)) - e
+	e := depthErrBound(m)
+	return depthCertFrom(best, PointRoundBound(p, pf), e)
+}
+
+// depthErrBound is depthCertificate's E for the coordinate magnitude m. Each
+// step rounds on its own, so no fused multiply-add can change the value from
+// one architecture to the next.
+func depthErrBound(m float64) float64 {
+	return proofbound.ProvenUpRound(float64(float64(depthErrCoef*m) + depthErrFloor))
+}
+
+// depthCertFrom is fl(fl(fl(best·c) − r) − e), depthCertificate's value for a
+// positive finite scan minimum best, with r = PointRoundBound and e =
+// depthErrBound. It is non-decreasing in best, because each step rounds a
+// non-decreasing function of the step before it.
+func depthCertFrom(best, r, e float64) float64 {
+	return float64(float64(best*(1-1e-12))-r) - e
 }
 
 // depthFacetDistance is the depth scan's distance from p to the facet t with
@@ -135,18 +148,23 @@ func depthFacetDistance(p r3.Vec, t [3]r3.Vec, n r3.Vec) float64 {
 // largest component in (1, 4), then rounds each component to the nearest
 // float64. A zero normal stays zero.
 func depthNormalOf(n proof.Xpt) r3.Vec {
-	top := max(n.X.BitLen(), n.Y.BitLen(), n.Z.BitLen())
-	if top == 0 {
+	if max(n.X.BitLen(), n.Y.BitLen(), n.Z.BitLen()) == 0 {
 		return r3.Vec{}
 	}
-	// The largest component lies in (2^(top−w−1), 2^(top−w+1)), w the
-	// weight's bit length, so 2^shift times it lies in (1, 4).
-	shift := n.W.BitLen() - top + 1
+	shift := depthNormalShift(n)
 	if shift >= 0 {
 		k := uint(shift)
 		return proof.Xpt{X: new(big.Int).Lsh(n.X, k), Y: new(big.Int).Lsh(n.Y, k), Z: new(big.Int).Lsh(n.Z, k), W: n.W}.Vec()
 	}
 	return proof.Xpt{X: n.X, Y: n.Y, Z: n.Z, W: new(big.Int).Lsh(n.W, uint(-shift))}.Vec()
+}
+
+// depthNormalShift is the power of two depthNormalOf scales the nonzero exact
+// normal n by. The largest component lies in (2^(top−w−1), 2^(top−w+1)), top
+// the largest component bit length and w the weight's, so 2^shift times it
+// lies in (1, 4).
+func depthNormalShift(n proof.Xpt) int {
+	return n.W.BitLen() - max(n.X.BitLen(), n.Y.BitLen(), n.Z.BitLen()) + 1
 }
 
 // setDepthNormals fills the depth scan's per-facet normals from Norms and the

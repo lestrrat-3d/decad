@@ -508,8 +508,10 @@ func CertifiedInteriorDepth(p proof.Xpt, other *BoolMesh) float64 {
 // once a candidate is settled as no deeper than b". A candidate it does not
 // settle finishes CertifiedInteriorDepth's own scan. The scan passes over a
 // run of facets at once where a depth block's box shows the prune would skip
-// every one of them (setDepthBlocks). A non-nil hint is updated to the facet
-// that settled a shallow answer.
+// every one of them (setDepthBlocks), and over a box whose facets all read
+// above a threshold that certifies p deeper than b (depth_prune.go; §9, "The
+// witness depth scan passes over blocks that cannot settle a candidate"). A
+// non-nil hint is updated to the facet that settled a shallow answer.
 func depthBeyond(p proof.Xpt, other *BoolMesh, b float64, hint *int) bool {
 	pf := p.Vec()
 	if hint != nil && *hint >= 0 && *hint < len(other.Tris) {
@@ -519,13 +521,16 @@ func depthBeyond(p proof.Xpt, other *BoolMesh, b float64, hint *int) bool {
 			return false
 		}
 	}
-	s := depthScan{pf: pf, other: other, b: b, best: math.Inf(1)}
+	s := depthScan{pf: pf, other: other, b: b, best: math.Inf(1), prune: true, p: p}
 	settled := s.scan()
 	if settled >= 0 {
 		if hint != nil {
 			*hint = settled
 		}
 		return false
+	}
+	if s.passed {
+		return true
 	}
 	depth := depthCertificate(s.best, p, pf, other)
 	// Negated rather than written as depth > b, so a NaN b answers as
