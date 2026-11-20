@@ -2,18 +2,18 @@ package decad
 
 import (
 	"context"
-	"github.com/lestrrat-3d/decad/internal/breprecord"
-	"github.com/lestrrat-3d/decad/internal/sectionrecord"
-	"github.com/lestrrat-3d/decad/internal/surfacegeom"
-	"github.com/lestrrat-3d/r3"
 	"slices"
 
 	"github.com/lestrrat-3d/decad/internal/boolchain"
+	"github.com/lestrrat-3d/decad/internal/breprecord"
 	"github.com/lestrrat-3d/decad/internal/loftrecord"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/rimextension"
+	"github.com/lestrrat-3d/decad/internal/sectionrecord"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/decad/internal/topobuild"
+	"github.com/lestrrat-3d/r3"
 )
 
 type rimFaceReader struct {

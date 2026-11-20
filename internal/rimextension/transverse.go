@@ -138,10 +138,10 @@ func transverseCylinder(a Admission, wing int, w SourceWindow) (windowNative, bo
 
 // transverseWitness lifts an interior point of a held triangle. Its complete
 // displacement ball must remain in the desired connected source cell.
-func transverseWitness(ctx context.Context, mesh Mesh, beta []float64, id int, cap bool, w SourceWindow, n windowNative, stop point, wing int, setback *big.Rat, m *proofbound.ReplayBudget) (bool, error) {
+func transverseWitness(ctx context.Context, mesh Mesh, beta []float64, id int, planar bool, w SourceWindow, n windowNative, stop point, wing int, setback *big.Rat, m *proofbound.ReplayBudget) (bool, error) {
 	var pt point
 	var i, j, k int
-	if cap {
+	if planar {
 		i, j, k = 0, 1, 2
 		pt[i] = minus(stop[0], signed(times(setback, scalar(.6)), wing))
 		pt[j] = minus(stop[1], times(setback, scalar(.5)))
@@ -186,7 +186,7 @@ func transverseWitness(ctx context.Context, mesh Mesh, beta []float64, id int, c
 		if !inside || signed(minus(stop[0], pt[0]), wing).Cmp(errBound) <= 0 || u.Cmp(errBound) <= 0 || v.Cmp(errBound) <= 0 {
 			continue
 		}
-		if cap {
+		if planar {
 			u, v = minus(u, errBound), minus(v, errBound)
 			if minus(stop[1], pt[1]).Cmp(errBound) <= 0 || plus(times(u, u), times(v, v)).Cmp(times(n.r, n.r)) <= 0 {
 				continue
