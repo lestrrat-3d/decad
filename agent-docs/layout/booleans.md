@@ -31,6 +31,9 @@ Boolean files and modify operations. The rules for rows live in `agent-docs/layo
 |---|---|
 | `fillet.go` | `Fillet`: options, selector, tangent chain and thickness gates, then `internal/brepmodify/` builds the fillet. See modify §6. |
 | `chamfer.go` | `Chamfer`: options, selector, tangent chain (extended without the option too), asymmetric reference and setback gates, then `internal/brepmodify/` builds the chamfer. See modify §7. Whole cap-loop runs: modify-reach §8.3.2. Chains across planes: retained-modify-reach §15b. |
+| `native_rim_chamfer.go` | Authenticates the retained cylinder, Boolean history, and stock clearance for a circular chamfer. |
+| `native_rim_surface.go` | Builds the finite chamfer band and verifies the edited shell before publication. |
+| `native_rim_chart.go` | Checks angular coverage, orientation, and the cone approximation bound. |
 | `chamfer_wedges.go` | `chamferByWedges`: several convex edges of an axis-square mesh solid that share corners, chamfered as the solid less each edge's wedge, with the fit check on the grid. See orthogonal Boolean B17. |
 | `fillet_chord.go` | Public `FilletChord`: reads the chord, gates each edge as right-angled, then calls `Fillet` with the radius. See fillet-chord design. |
 | `edge_dihedral.go` | `Edge.planarDihedral`, the angle across the corner of a convex or concave planar edge that `ChamferAngle` and `FilletChord` share. |

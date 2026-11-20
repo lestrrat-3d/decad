@@ -298,6 +298,15 @@ func Chamfer(ctx context.Context, b *Body, sel EdgeSelector, d units.Value,
 				return commitResult(ctx, OperationChamfer, b, res)
 			}
 		}
+		if errors.Is(err, ErrUnsupported) && asym == nil && !o.TangentChain && len(edges) == 1 && dDelta == 0 {
+			rr, ok, re := upperNativeRim(ctx, doc, b, edgeNodes(edges)[0], dmm)
+			if re != nil {
+				return nil, re
+			}
+			if ok {
+				return commitResult(ctx, OperationChamfer, b, rr)
+			}
+		}
 		return nil, err
 	}
 	return commitResult(ctx, OperationChamfer, b, res)

@@ -336,3 +336,14 @@
 12	0.68	TestTryAllEdgeChamferGates
 12	0.11	TestTwistWideThinRectangleTransform
 12	0.00	TestCircularFitPrimitiveEligibility
+12	0.00	TestChamferRetainedCylinderRim
+12	0.00	TestRetainedRimCancellationDuringPublication
+12	0.00	TestRetainedRimCancelledPublication
+12	0.00	TestRetainedRimExhaustedPublication
+12	0.00	TestRetainedRimFiniteBandChart
+12	0.00	TestRetainedRimProtectedTriangle
+12	0.00	TestRetainedRimProtectsMovedTool
+12	0.00	TestRetainedRimPublicationCounters
+12	0.00	TestRetainedRimRejectsNarrowStockAboveHinge
+12	0.00	TestRetainedRimSeamContact
+12	0.00	TestRetainedRimSupportCancellation

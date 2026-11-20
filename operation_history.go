@@ -304,7 +304,7 @@ func stampOperationWarningKind(body *Body, kind OperationKind) {
 	}
 	if cert, ok := body.n.PrivateShift.(*booleaneval.ShiftCertificate); ok {
 		valid := kind == OperationCut && cert.SealPublicCutWarning(body.n.Origin.Producer, body.n.OperationWarnings, int(kind))
-		valid = valid || kind == OperationUnion && cert.SealPublicUnionShrinkWarning(body.n.Origin.Producer,
+		valid = valid || kind == OperationUnion && cert.SealPublicUnionAdjustmentWarning(body.n.Origin.Producer,
 			body.n.OperationWarnings, int(kind))
 		if !valid {
 			body.n.PrivateShift = nil

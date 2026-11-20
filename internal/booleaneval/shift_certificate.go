@@ -85,11 +85,11 @@ func (c *ShiftCertificate) SealPublicCutWarning(result provenance.Producer, warn
 	return true
 }
 
-// SealPublicUnionShrinkWarning binds the unique accepted shrink warning to its
-// committed Union. A warning without the captured mesh snapshots is not proof.
-func (c *ShiftCertificate) SealPublicUnionShrinkWarning(result provenance.Producer,
+// SealPublicUnionAdjustmentWarning binds a shrink or translation and its
+// captured mesh snapshots to the committed Union.
+func (c *ShiftCertificate) SealPublicUnionAdjustmentWarning(result provenance.Producer,
 	warnings []opdiagnostic.Record, publicOperation int) bool {
-	if c == nil || c.sealed || !c.IsPureShrink() || len(warnings) != 1 {
+	if c == nil || c.sealed || !c.IsPureShrink() && !c.IsTranslation() || len(warnings) != 1 {
 		return false
 	}
 	w := warnings[0]
@@ -274,4 +274,9 @@ func shiftGeometry(m *topo.Mesh, pc pieces, shift pieceShift) (r3.Vec, float64, 
 		return center, 0, 0
 	}
 	return center, radius, shift.Grow / radius
+}
+
+// SealPublicUnionShrinkWarning admits only the shrink case.
+func (c *ShiftCertificate) SealPublicUnionShrinkWarning(result provenance.Producer, warnings []opdiagnostic.Record, publicOperation int) bool {
+	return c.IsPureShrink() && c.SealPublicUnionAdjustmentWarning(result, warnings, publicOperation)
 }
