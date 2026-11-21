@@ -288,14 +288,9 @@ func placeProxy(ctx context.Context, set *FacetedCopySet, budget *proofbound.Wor
 			decaderr.ErrUnsupported, i+1)
 	}
 	if record != nil {
-		linearGap, translationGap, ok := record.Gap(set.Moves[i])
-		if !ok {
-			return facetproof.PlacedMesh{}, fmt.Errorf("%w: copied proxy tool %d has no finite rotation gap",
-				decaderr.ErrUnsupported, i+1)
-		}
-		return facetproof.PlaceMeshDenoting(ctx, budget, proxy.Vertices, proxy.Triangles,
+		return facetproof.PlaceRotatedMesh(ctx, budget, proxy.Vertices, proxy.Triangles,
 			proxy.VertexBound, proxy.VolSymDiff, proxy.AreaSlack, set.Moves[i],
-			linearGap, translationGap)
+			record)
 	}
 	linear, err := massmoment.PlacementRotation(set.Moves[i])
 	if err != nil {

@@ -367,7 +367,9 @@ An exact-rotation placement (`WithCopyRotation`) places the held mesh by the
 same float transform, but denotes an exactly orthogonal rational rotation. It
 adds `|Q - D|·|v|_max + |t_Q - t_D|` to each vertex's rounding allowance in
 place of the stretch factor and determinant charge, where `Q` is the exact
-rotation and `D` the float one. It drops every analytic surface tag and
+rotation and `D` the float one. If the held mesh folds, the retry rounds each
+`Q*v + t_Q` directly. Its vertex charge bounds the distance from that rational
+point to the final held corner, including any embedding repair. It drops every analytic surface tag and
 `denoted` patch, because those describe the float placement.
 
 ### 4.4 Faceted restatement

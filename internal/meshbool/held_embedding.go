@@ -2211,15 +2211,7 @@ func ExactRigidImage(b r3.Basis, t, p r3.Vec) proof.Xpt {
 	x := coord(b.EX.X, b.EY.X, b.EZ.X, t.X)
 	y := coord(b.EX.Y, b.EY.Y, b.EZ.Y, t.Y)
 	z := coord(b.EX.Z, b.EY.Z, b.EZ.Z, t.Z)
-	w := new(big.Int).Set(x.Denom())
-	for _, r := range []*big.Rat{y, z} {
-		g := new(big.Int).GCD(nil, nil, w, r.Denom())
-		w.Mul(w, new(big.Int).Quo(r.Denom(), g))
-	}
-	num := func(r *big.Rat) *big.Int {
-		return new(big.Int).Mul(r.Num(), new(big.Int).Quo(w, r.Denom()))
-	}
-	return proof.Xpt(proof.XhpStripTwosOwned(proof.Xhp{X: num(x), Y: num(y), Z: num(z), W: w}))
+	return proof.XptFromRats(x, y, z)
 }
 
 // serialClean is parallelClean's first scan on the calling goroutine over the

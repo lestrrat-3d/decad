@@ -361,3 +361,17 @@ func mapR3Error(err error) error {
 		return fmt.Errorf("%w: the rotation is not representable: %w", decaderr.ErrNotFinite, err)
 	}
 }
+
+// Image applies the denoted rigid motion to a finite source vertex exactly.
+func (r *Rotation) Image(v r3.Vec) proof.Xpt {
+	input := [3]*big.Rat{proof.FloatRat(v.X), proof.FloatRat(v.Y), proof.FloatRat(v.Z)}
+	var out [3]big.Rat
+	for i := range out {
+		out[i].Set(r.t[i])
+		var product big.Rat
+		for j := range input {
+			out[i].Add(&out[i], product.Mul(r.m[i][j], input[j]))
+		}
+	}
+	return proof.XptFromRats(&out[0], &out[1], &out[2])
+}
