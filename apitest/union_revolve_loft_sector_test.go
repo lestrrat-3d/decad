@@ -98,6 +98,7 @@ func TestUnionSlopedHubCapAndRadialLug(t *testing.T) {
 }
 
 func TestUnionShoulderedHubAndTwoRadialLugs(t *testing.T) {
+	t.Parallel()
 	_, hub, trimmed := shoulderedHubAndRadialLug(t)
 	hubVolume, err := hub.Volume()
 	require.NoError(t, err)
@@ -218,6 +219,7 @@ func TestUnionShoulderedHubAndThreeRadialLugsVariadic(t *testing.T) {
 }
 
 func TestUnionShoulderedHubWithNearAxisCopy(t *testing.T) {
+	t.Parallel()
 	for _, serial := range []bool{false, true} {
 		name := "variadic"
 		if serial {
@@ -255,6 +257,7 @@ func TestUnionShoulderedHubWithNearAxisCopy(t *testing.T) {
 }
 
 func TestUnionNearAxisCopyOverlapLeavesInputsLive(t *testing.T) {
+	t.Parallel()
 	doc, hub, trimmed := shoulderedHubAndRadialLug(t)
 	farTurn, err := r3.Rotation(r3.NewVec(1, 0, 0), units.Radians(2*math.Pi*5/16))
 	require.NoError(t, err)

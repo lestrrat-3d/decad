@@ -6,6 +6,7 @@ import (
 )
 
 func TestCutBandCapRegistration(t *testing.T) {
+	t.Parallel()
 	held := big.NewRat(1, 1)
 	for _, sign := range []int64{-1, 1} {
 		step := big.NewRat(sign, 1<<55)

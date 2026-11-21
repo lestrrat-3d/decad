@@ -12,6 +12,7 @@ import (
 )
 
 func TestSectionRuledSquareLoftFeedsExtrude(t *testing.T) {
+	t.Parallel()
 	bottom, bottomProfile, top, topProfile := loftSquaresAt(t, r3.NewVec(0, 0, 0), 5, 4, 2)
 	source, err := decad.Loft(t.Context(), decad.New(), bottom, bottomProfile, top, topProfile)
 	require.NoError(t, err)

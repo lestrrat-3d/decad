@@ -704,6 +704,7 @@ func TestSweepPairRollingOnTrayFloor(t *testing.T) {
 }
 
 func TestSweepPairRollingTowardTrayWall(t *testing.T) {
+	t.Parallel()
 	// The roll drift of TestSweepPairRollingCylinder over a sixteenth of a
 	// second, toward the tray's wall at y = −7.625, 1 mm from the cylinder's
 	// side at the start. The cylinder turns about its own axis, so its end

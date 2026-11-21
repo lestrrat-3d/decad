@@ -11,6 +11,7 @@ import (
 )
 
 func TestContainedCutUsesCertifiedSourceVolumeAndRecordsHistory(t *testing.T) {
+	t.Parallel()
 	world := sketch.NewWorld()
 	doc := New()
 

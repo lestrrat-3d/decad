@@ -52,6 +52,7 @@ func pointLoftSliceSheetDirected(t *testing.T, doc *decad.Document,
 }
 
 func TestPointLoftParallelSheetReversedLineKeepsOutwardCapNormals(t *testing.T) {
+	t.Parallel()
 	for _, reverse := range []bool{false, true} {
 		t.Run(map[bool]string{false: "forward", true: "reverse"}[reverse], func(t *testing.T) {
 			doc := decad.New()

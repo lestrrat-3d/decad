@@ -17,6 +17,7 @@ import (
 )
 
 func TestRetainedRimFiniteBandChart(t *testing.T) {
+	t.Parallel()
 	center := rimVec(r3.Vec{})
 	rim := func() facetedrecord.Payload {
 		var p facetedrecord.Payload
@@ -83,6 +84,7 @@ func TestRetainedRimFiniteBandChart(t *testing.T) {
 }
 
 func TestRetainedRimRejectsNarrowStockAboveHinge(t *testing.T) {
+	t.Parallel()
 	frame, e := r3.NewFrame(r3.Vec{}, r3.Vec{X: 1}, r3.Vec{Z: -1})
 	if e != nil {
 		t.Fatal(e)
@@ -111,6 +113,7 @@ func TestRetainedRimRejectsNarrowStockAboveHinge(t *testing.T) {
 }
 
 func TestRetainedRimProtectsMovedTool(t *testing.T) {
+	t.Parallel()
 	pad := &topo.Body{Bounds: measurement.Box{Min: r3.Vec{X: 0, Y: 0, Z: 0}, Max: r3.Vec{X: 1, Y: 1, Z: 1}}}
 	tool := &topo.Body{Bounds: measurement.Box{Min: r3.Vec{X: 1.005, Y: 0, Z: 0}, Max: r3.Vec{X: 2, Y: 1, Z: 1}}}
 	stock := rimMovedBounds(pad, r3.Vec{})
@@ -123,6 +126,7 @@ func TestRetainedRimProtectsMovedTool(t *testing.T) {
 }
 
 func TestRetainedRimSupportCancellation(t *testing.T) {
+	t.Parallel()
 	one := big.NewRat(1, 1)
 	eps := big.NewRat(1, 1<<55)
 	lo, _ := rimSupportInterval(rimSub(one, eps), one)
@@ -133,6 +137,7 @@ func TestRetainedRimSupportCancellation(t *testing.T) {
 }
 
 func TestRetainedRimExhaustedPublication(t *testing.T) {
+	t.Parallel()
 	p := facetedrecord.Payload{Verts: []r3.Vec{{}, {X: 1}, {Y: 1}, {Z: 1}}, Tris: [][3]int{{0, 2, 1}, {0, 1, 3}, {0, 3, 2}, {1, 2, 3}}}
 	budget := proofbound.NewStrictReplayBudget()
 	if e := budget.SpendWork(t.Context(), proofbound.ReplayTrialWork); e != nil {
@@ -146,6 +151,7 @@ func TestRetainedRimExhaustedPublication(t *testing.T) {
 }
 
 func TestRetainedRimProtectedTriangle(t *testing.T) {
+	t.Parallel()
 	old := facetedrecord.Payload{Verts: []r3.Vec{{}, {X: 1}, {Y: 1}, {X: 4}, {X: 5}, {X: 4, Y: 1}}, Tris: [][3]int{{0, 1, 2}, {3, 4, 5}}}
 	classify := func(p facetedrecord.Payload) bool {
 		local, ok, err := rimLocalTriangles(t.Context(), old, p, r3.Vec{}, r3.Vec{X: 1, Y: 1, Z: 1}, proofbound.NewStrictReplayBudget())
@@ -171,6 +177,7 @@ func TestRetainedRimProtectedTriangle(t *testing.T) {
 }
 
 func TestRetainedRimSeamContact(t *testing.T) {
+	t.Parallel()
 	old := facetedrecord.Payload{Verts: []r3.Vec{{}, {X: 2}, {Y: 1}, {Y: -1}}, Tris: [][3]int{{0, 1, 2}, {1, 0, 3}}}
 	p := old
 	p.Verts = append([]r3.Vec(nil), old.Verts...)
@@ -186,6 +193,7 @@ func TestRetainedRimSeamContact(t *testing.T) {
 }
 
 func TestRetainedRimCancelledPublication(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 	p := facetedrecord.Payload{Verts: []r3.Vec{{}, {X: 1}, {Y: 1}, {Z: 1}}, Tris: [][3]int{{0, 2, 1}, {0, 1, 3}, {0, 3, 2}, {1, 2, 3}}}
@@ -196,6 +204,7 @@ func TestRetainedRimCancelledPublication(t *testing.T) {
 }
 
 func TestRetainedRimPublicationCounters(t *testing.T) {
+	t.Parallel()
 	b := proofbound.NewStrictReplayBudget()
 	ctx := t.Context()
 	if err := b.SpendWork(ctx, 197); err != nil {
@@ -226,6 +235,7 @@ func TestRetainedRimPublicationCounters(t *testing.T) {
 }
 
 func TestRetainedRimCancellationDuringPublication(t *testing.T) {
+	t.Parallel()
 	mid := newCancelAfterContext(t.Context(), 5)
 	p := facetedrecord.Payload{Verts: []r3.Vec{{}, {X: 1}, {Y: 1}, {Z: 1}}, Tris: [][3]int{{0, 2, 1}, {0, 1, 3}, {0, 3, 2}, {1, 2, 3}}}
 	out, ok, err := publishRim(mid, topo.Env{}, p, p.Tris, proofbound.NewStrictReplayBudget())

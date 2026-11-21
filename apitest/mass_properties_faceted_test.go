@@ -12,6 +12,7 @@ import (
 )
 
 func TestFacetedMassPropertiesUnionAndRefusals(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	base := boxBodyAtZ(t, doc, -5, -5, 5, 5, 0, 10)
 	// Placed up to z = 8 so the analytic union's shared-axis gate declines

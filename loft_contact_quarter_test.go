@@ -477,6 +477,7 @@ func TestQuarterRootBracketPreflight(t *testing.T) {
 }
 
 func TestLoftQuarterHeldPairRealProducerGate(t *testing.T) {
+	t.Parallel()
 	ctx := t.Context()
 	world := sketch.NewWorld()
 	doc := New()

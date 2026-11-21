@@ -91,6 +91,7 @@ func TestBrepChamferAllStraightOuterEdgesSetbackAdmission(t *testing.T) {
 }
 
 func TestBrepChamferAllStraightOuterEdgesPlacement(t *testing.T) {
+	t.Parallel()
 	quarterTurn, err := r3.FromBasis(r3.Basis{
 		EX: r3.NewVec(0, 0, 1), EY: r3.NewVec(0, 1, 0), EZ: r3.NewVec(-1, 0, 0),
 	}, r3.NewVec(20, 0, 0))

@@ -425,6 +425,7 @@ func TestContactPairPlanarManifoldEdgeCrossing(t *testing.T) {
 }
 
 func TestContactPairPlanarManifoldSlopedNormal(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	wedge, wedgePose := wedgeBody(t, doc)
 	box := boxBody(t, doc, 0, 0, 4, 4, 4)
@@ -839,6 +840,7 @@ func TestPlanarManifoldNonConvexGuest(t *testing.T) {
 // plane, so the face supports nothing, and no face of the guest holds a step
 // corner strictly inside it: no manifold.
 func TestPlanarManifoldNonConvexGuestBehind(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	step := prismBody(t, doc, [][2]float64{{0, 0}, {20, 0}, {20, 5}, {10, 5}, {10, 10}, {0, 10}}, 10)
 	guest := prismBody(t, doc, [][2]float64{{-5, 0}, {-2, 0}, {-2, 10}, {8, 10}, {8, 12}, {-5, 12}}, 6)

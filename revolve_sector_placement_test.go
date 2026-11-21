@@ -13,6 +13,7 @@ import (
 )
 
 func TestRevolveSectorNearUnitAxisPlacement(t *testing.T) {
+	t.Parallel()
 	turn, err := r3.Rotation(r3.NewVec(1, 0, 0), units.Radians(2*math.Pi*5/16))
 	require.NoError(t, err)
 	require.GreaterOrEqual(t, turn.Basis().EX.X, math.Nextafter(1, 0))

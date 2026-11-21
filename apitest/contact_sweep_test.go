@@ -623,6 +623,7 @@ func TestSweepPairTwoMoversAndDeparture(t *testing.T) {
 }
 
 func TestSweepPairRotatingPathClear(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	a := boxBody(t, doc, 0, 0, 10, 10, 10)
 	b := boxBody(t, doc, 30, 0, 40, 10, 10)

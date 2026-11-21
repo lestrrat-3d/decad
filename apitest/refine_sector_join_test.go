@@ -114,6 +114,7 @@ func TestRefineSectorJoinKeepsLaterOperations(t *testing.T) {
 // TestRefineSectorJoinRefusals checks that a target the join cannot meet is
 // ErrUnsupported naming the bound, and leaves the source live and unchanged.
 func TestRefineSectorJoinRefusals(t *testing.T) {
+	t.Parallel()
 	doc, joined := refineSectorHubAndLugs(t)
 	held := refineSectorFloor(t, joined)
 	bodies := doc.Bodies()

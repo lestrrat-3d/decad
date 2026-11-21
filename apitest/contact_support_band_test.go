@@ -244,6 +244,7 @@ func TestContactPairSupportSetTray(t *testing.T) {
 }
 
 func TestContactPairSupportBandValidation(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	floor, cube := supportCubeScene(t, doc, 100)
 	pose := tiltedCubePose(t, r3.Vec{})

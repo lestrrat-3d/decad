@@ -25,6 +25,7 @@ func compositeThickenPath(t testing.TB) *decad.Path {
 
 // TestThickenCompositeSweepSheetBuildsExactSolid is T157b's build half.
 func TestThickenCompositeSweepSheetBuildsExactSolid(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name string
 		side decad.ThickenSide

@@ -589,6 +589,7 @@ func requireGapHolds(t *testing.T, report *decad.ContactReport, truth *big.Float
 //   - the snapshot cache's chord key: with every cached snapshot serving every
 //     chord, the coarse query publishes the fine mesh's bound.
 func TestHeldMeshAdmitsEveryPayload(t *testing.T) {
+	t.Parallel()
 	const chord = .03
 	doc := decad.New()
 	floor := boxBodyAtZ(t, doc, -100, -100, 100, 100, -10, 10)

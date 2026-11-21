@@ -64,6 +64,7 @@ func TestLoftSectionsFiveIndependentRectanglesKeepVolumeAndMeshProof(t *testing.
 }
 
 func TestLoftSectionsSixIndependentRectanglesHoldEverySection(t *testing.T) {
+	t.Parallel()
 	sections := manyRectangleSections(t, []float64{2, 3, 4, 5, 6, 7},
 		[]float64{3, 4, 5, 7, 8, 9}, []float64{0, 4, 8, 12, 16, 20})
 	body, err := decad.LoftSections(t.Context(), decad.New(), sections...)

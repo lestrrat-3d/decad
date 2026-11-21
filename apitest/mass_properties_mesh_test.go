@@ -329,6 +329,7 @@ func TestMassPropertiesCapChamferFallback(t *testing.T) {
 }
 
 func TestMassPropertiesRevolvedSphere(t *testing.T) {
+	t.Parallel()
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	require.NoError(t, err)

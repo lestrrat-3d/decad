@@ -42,6 +42,7 @@ func TestFacetedPrismUnionUntouchedOuterEdgeFillet(t *testing.T) {
 }
 
 func TestFacetedPrismUnionFilletReversedSources(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	base := boxBodyAtZ(t, doc, -7, -5, 11, 9, 1, 8)
 	lug := boxBodyAtZ(t, doc, 8, -2, 14, 2, 2, 6)

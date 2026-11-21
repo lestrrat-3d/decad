@@ -12,6 +12,7 @@ import (
 )
 
 func TestSectionDirectLoftAnnulusFeedsExtrude(t *testing.T) {
+	t.Parallel()
 	source := directLoftCircles(t, true, 1, 2, 1, 0)
 	require.NoError(t, decad.Remove(source))
 	frame, err := r3.NewFrame(r3.NewVec(0, 0, 1), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
@@ -199,6 +200,7 @@ func TestSectionDirectLoftVaryingAnnulusFeedsExtrude(t *testing.T) {
 }
 
 func TestSectionDirectLoftVaryingCircleWithTwoHolesFeedsExtrude(t *testing.T) {
+	t.Parallel()
 	world := sketch.NewWorld()
 	topPlane, err := world.CreateOffsetPlane(world.XY(), 2)
 	require.NoError(t, err)
@@ -301,6 +303,7 @@ func TestSectionDirectLoftVaryingCircleRefusesPlacement(t *testing.T) {
 }
 
 func TestSectionDirectLoftVaryingCircleRefusesShiftedSourceOrigin(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name  string
 		shift r3.Vec

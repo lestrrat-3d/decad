@@ -11,6 +11,7 @@ import (
 )
 
 func TestChamferRetainedCylinderRim(t *testing.T) {
+	t.Parallel()
 	ctx := t.Context()
 	doc := New()
 	a := internalBoxBody(t, doc, 0, 0, 10, 10, 10)

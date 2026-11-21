@@ -80,6 +80,7 @@ func requireLineChordEncloses(t *testing.T, m decad.Measurement, unit units.Unit
 // Pappus' Θ·Q, and dense samples of both true helicoidal walls lie within the
 // mesh's published bound. The samples are a falsifier and prove nothing.
 func TestCoilChordsLongRadialLines(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name            string
 		r0, r1, spanDeg float64
@@ -165,6 +166,7 @@ func lineChordWedgeJoinsRing(t *testing.T, r0, r1, ringR0, ringR1, spanDeg float
 // per radial line its walls held 0.072 to 0.096 mm, the Union still joined
 // them, and the result's box bound read 0.14 to 0.18 mm.
 func TestCoilTrimmedRampWedgeJoinsRing(t *testing.T) {
+	t.Parallel()
 	t.Run("r 3..11 on ring 2.5..14", func(t *testing.T) { lineChordWedgeJoinsRing(t, 3, 11, 2.5, 14, 32.5) })
 	t.Run("r 2.5..14 on ring 2..14.5", func(t *testing.T) { lineChordWedgeJoinsRing(t, 2.5, 14, 2, 14.5, 32.5) })
 }
@@ -173,6 +175,7 @@ func TestCoilTrimmedRampWedgeJoinsRing(t *testing.T) {
 // over 3.5 degrees to a ring under a 0.1 mm chain tolerance. With one chord
 // per radial line its walls held 0.36 to 0.38 mm and the Union refused them.
 func TestCoilTrimmedSteepWedgeJoinsRing(t *testing.T) {
+	t.Parallel()
 	t.Run("r 3..11 on ring 2.5..14", func(t *testing.T) { lineChordWedgeJoinsRing(t, 3, 11, 2.5, 14, 3.5) })
 	t.Run("r 2.5..14 on ring 2..14.5", func(t *testing.T) { lineChordWedgeJoinsRing(t, 2.5, 14, 2, 14.5, 3.5) })
 }
@@ -184,6 +187,7 @@ func TestCoilTrimmedSteepWedgeJoinsRing(t *testing.T) {
 // where 256 chords per line exceeded its pair ceiling, and Bounds still reads
 // far below the 0.4 mm one chord per line held.
 func TestCoilSteepLongSpanStaysInsideTheAuditCeiling(t *testing.T) {
+	t.Parallel()
 	const span, r0, r1 = 38.0, 2.7, 11.3
 	fall := 4 * span / 3.5
 	s, p := lineChordMeridian(t, lineChordRect(r0, r1, -5.4, 0))

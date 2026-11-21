@@ -11,6 +11,7 @@ import (
 )
 
 func TestSweepCompositeTierAFitProfile(t *testing.T) {
+	t.Parallel()
 	world := sketch.NewWorld()
 	s, err := world.CreateSketch(world.XY())
 	require.NoError(t, err)

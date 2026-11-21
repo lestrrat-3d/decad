@@ -13,6 +13,7 @@ import (
 // The end of a straight flange sits on a circular pad. The prior cut leaves
 // a straight run of cap edge between its stopping wall and the pad tangent.
 func TestChamferStraightRunAtCircularSupport(t *testing.T) {
+	t.Parallel()
 	ctx := t.Context()
 	doc := New()
 	w := sketch.NewWorld()

@@ -98,6 +98,7 @@ func finiteConicalBlank(t *testing.T, doc *decad.Document) *decad.Body {
 }
 
 func TestCurvedLoftFacesUnionStopsAtTheChainDepthGate(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	inner := fittedSectorPointLoft(t, doc)
 	slabs := make([]*decad.Body, 0, 8)

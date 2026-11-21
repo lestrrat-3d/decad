@@ -121,6 +121,7 @@ func TestRevolveQuarterCapRadialRimFilletRefusesOtherSources(t *testing.T) {
 // production proof instead integrates the held mesh and encloses its missing
 // occupied volume by station widths.
 func TestRevolveQuarterCapRadialRimFilletMeasurements(t *testing.T) {
+	t.Parallel()
 	const length, radius, fillet = 10.0, 8.0, 1.0
 	_, source := rimQuarterCylinder(t, 0, length, radius, 90)
 	out, err := decad.Fillet(t.Context(), source, quarterRim(length), units.Millimeters(fillet))

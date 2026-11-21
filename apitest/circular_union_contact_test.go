@@ -25,6 +25,7 @@ func circularUnionPair(t *testing.T, doc *decad.Document, centerX float64) (*dec
 }
 
 func TestCircularUnionContact(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name           string
 		centerX        float64
