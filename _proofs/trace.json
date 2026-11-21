@@ -318,6 +318,34 @@
       "sha256": "99dd4d19e5fb01408ace4486be4c329707385a2a4b03e9cc98f39265e5a8c1db"
     },
     {
+      "file": "internal/proof/sqrt_seed.go",
+      "func": "leading64",
+      "role": "assumes",
+      "theorems": [],
+      "assumptions": [
+        "A19"
+      ],
+      "sha256": "f084f159c74c6e0cfa6eef7c4ab275a8a58b1d105884fdb9edbc28b278f4c6b8"
+    },
+    {
+      "file": "internal/proof/sqrt_seed.go",
+      "func": "ratioSqrtSeedLeading",
+      "role": "models",
+      "theorems": [
+        "Decad/Sqrt/Seed.lean:Decad.Sqrt.seed_sound",
+        "Decad/Sqrt/Seed.lean:Decad.Sqrt.seedQ_bounds",
+        "Decad/Sqrt/Seed.lean:Decad.Sqrt.div64_precondition",
+        "Decad/Sqrt/Seed.lean:Decad.Sqrt.seed_no_wrap",
+        "Decad/Sqrt/Seed.lean:Decad.Sqrt.seed_enclosure"
+      ],
+      "assumptions": [
+        "A17",
+        "A18",
+        "A20"
+      ],
+      "sha256": "5262a6a663c771a42462273eaa019e614759a8c7336e6fe510fef9dd593e0fca"
+    },
+    {
       "file": "internal/proofbound/bounded.go",
       "func": "AbsSumUpper",
       "role": "models",

@@ -35,6 +35,7 @@ _proofs/
   Decad/Orientation/Sum2.lean     exact 24-component determinant split and the Sum2 sign threshold
   Decad/Orientation/Grow.lean     exact zero-eliminating expansion fallback and its sign read
   Decad/Enclosure/Float.lean      outward float enclosures and the box dot-product enclosure
+  Decad/Sqrt/Seed.lean            quotient seed window of `ratioSqrtSeedLeading`
   go.mod                 module github.com/lestrrat-3d/decad/_proofs; standard library only
   trace.json             theorem to Go function manifest
   tracecheck/            package main: manifest checker and its tests
@@ -128,6 +129,7 @@ All theorems build with no `sorry`, and `axiom-audit` accepts only `propext`, `C
 | `Orientation.growAux_sum`, `growAux_length`, `growAux_ne_zero`, `orientGrow_sound` | Orientation/Grow | `proof.orientSignGrow`, `orientationExpansion.add` |
 | `Enclosure.down_le`, `stepDown_le`, `stepUp_ge`, `mulDown_le`, `mulUp_ge` | Enclosure/Float | `proof.floatDown`, `floatUp`, `floatMulDown`, `floatMulUp` |
 | `Enclosure.floatBounds_enclose`, `prod_ge`, `prod_le`, `axisLo_le`, `axisHi_ge`, `dotSub_enclosure` | Enclosure/Float | `proof.FloatBounds`, `DotSubEnclosure` |
+| `Sqrt.seedQ_bounds`, `div64_precondition`, `seed_no_wrap`, `seed_enclosure`, `seed_sound` | Sqrt/Seed | `proof.ratioSqrtSeedLeading`, `leading64` |
 
 - `Float.gridModel`: `F = {δ·k | k : ℤ}`, `rn x = δ·round(x/δ)`, `nu f = f + δ`, any `δ > 0`. It does not model
   binary64. Without an instance, an inconsistent `FloatModel` would make every theorem vacuously true.
@@ -166,6 +168,15 @@ All theorems build with no `sorry`, and `axiom-audit` accepts only `propext`, `C
 - Not covered: the infinity and NaN behavior of these functions (overflow is A7), and `DvFloatBox`, which applies
   `FloatBounds` to each component.
 
+- `seedQ_bounds`: for 64-bit words `num`, `den` with the top bit set, the quotient `⌊num·2^k / den⌋` lies in
+  `[2^63, 2^64)` for `k = 63` (`num ≥ den`) and `k = 64` (`num < den`). `div64_precondition` shows `bits.Div64`'s
+  `hi < den` holds in both cases.
+- `seed_enclosure`, `seed_sound`: the exact scaled quotient is within 3 of `q`, so a 64-bit rounding of it lies in
+  `[q-8, q+8]`. When `float64(q-8) = float64(q+8)`, every real in that window converts to the same float.
+  `seed_no_wrap` shows the `q > 2^64 - 9` guard keeps `q + 8` from wrapping `uint64`.
+- Not covered: the exponent scaling, `math.Sqrt` and `math.Ldexp` after the seed, and the claim that the
+  full-division path returns the same float.
+
 ## Assumptions
 
 The proofs do NOT prove the rows below. A change that breaks a row can make a proved bound false while every
@@ -189,6 +200,10 @@ theorem still builds.
 | A14 | `orientationExpansion.add` keeps the expansion nonoverlapping, so the final highest component strictly outweighs the sum of the rest (Shewchuk, Theorem 10, round-to-even) | hypothesis `hdom` of `orientGrow_sound` | `TestOrientSignExpansionMatchesExactDeterminant`, `TestOrientSignExpansionNearCoplanarMatchesExactDeterminant` | `orientation_expansion.go orientSignGrow`, `orientationExpansion.add` |
 | A15 | `math.Nextafter(x, +Inf)` and `math.Nextafter(x, -Inf)` return the float just above and just below a finite float `x` | `nu`; `nd f = -nu(-f)` | Go `math` docs; `TestFloatStepMatchesMath` (`internal/proof/float_step_test.go`) | `float_enclosure.go floatDown`, `floatUp` |
 | A16 | `Dyadic.Float64` returns the round-to-nearest float of the dyadic, and its exact flag is true only when that float equals the dyadic | hypothesis `hex` of `floatBounds_enclose`; `rn` | Doc comment of `Dyadic.Float64`; `TestFloatBoundsBracketDyadic` | `float_enclosure.go FloatBounds` |
+| A17 | `float64(uint64)` is round-to-nearest-even, so it is monotone | hypothesis `hmono` of `seed_sound` | Go spec, conversions; code reading | `sqrt_seed.go ratioSqrtSeedLeading` |
+| A18 | `bits.Div64(hi, lo, y)` returns `⌊(hi·2^64 + lo) / y⌋` when `hi < y` | `seedQ` | Go `math/bits` docs | `sqrt_seed.go ratioSqrtSeedLeading` |
+| A19 | `leading64(x)` is the top 64 bits `num` of `x`, padded with low zeros when `x` is shorter, so `x / 2^s` lies in `[num, num + 1)` for the shift `s` | hypotheses `hu`, `hv` of `seed_enclosure` and `seed_sound` | Doc comment of `leading64`; `sqrt_seed_test.go` | `sqrt_seed.go leading64` |
+| A20 | The full `big.Float` division rounds the quotient to 64 bits, so its mantissa is within `1/2` of the exact scaled quotient | hypothesis `hr` of `seed_sound` | `big.Float` docs; `sqrt_seed_test.go` | `sqrt_seed.go ratioSqrtSeedLeading` |
 
 - Adding a row = new id `A<n+1>`. NEVER renumber. Delete a row only when no manifest entry cites it.
 - `FloatModel` is the seam for discharging A1 to A3: a concrete binary64 model instantiating it proves its

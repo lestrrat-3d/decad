@@ -9,3 +9,4 @@ public import Decad.Orientation.Grow
 public import Decad.Orientation.Orient2
 public import Decad.Orientation.Sum2
 public import Decad.Rational.LazyRound
+public import Decad.Sqrt.Seed

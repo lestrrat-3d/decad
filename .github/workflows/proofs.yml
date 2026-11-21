@@ -18,6 +18,7 @@ on:
       - 'internal/proof/lazy_rat.go'
       - 'internal/proof/orientation_expansion.go'
       - 'internal/proof/rounding.go'
+      - 'internal/proof/sqrt_seed.go'
       - 'internal/proofbound/bounded.go'
       - 'internal/proofbound/bounds.go'
   push:
