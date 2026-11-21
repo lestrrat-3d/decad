@@ -30,7 +30,7 @@ func arcAreaBenchmarkInputs() []struct {
 func BenchmarkArcAreaRepresentative(b *testing.B) {
 	pitch, turns := big.NewRat(3, 2), big.NewRat(5, 1)
 	for _, fixture := range arcAreaBenchmarkInputs() {
-		profile, err := coil.Loops(fixture.loop, nil, 16)
+		profile, err := coil.Loops(fixture.loop, nil, 16, coil.LinePlan{})
 		if err != nil {
 			b.Fatal(err)
 		}

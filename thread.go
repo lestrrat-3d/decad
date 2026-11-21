@@ -355,7 +355,7 @@ func buildThreadCoil(ctx context.Context, d *Document, frame r3.Frame, plan thre
 		return nil, err
 	}
 	axis := SketchLine{Start: Point2{U: 0, V: 0}, End: Point2{U: 0, V: 1}}
-	var opts []CoilOption
+	opts := []CoilOption{wholeLinesOption{}}
 	if leftHand {
 		opts = append(opts, WithLeftHand())
 	}

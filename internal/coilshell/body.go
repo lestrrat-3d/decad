@@ -77,13 +77,15 @@ func BuildBody(ctx context.Context, env topo.Env, cp Payload) (*topo.Body, error
 
 // coilMoments is Table CM's region integrals A_Ω, Q, I and M about the
 // axis. A polygon reads its exact shoelace sums over the recorded vertices
-// (coil.RegionMoments). A profile with an arc reads the recorded region's
+// (coil.RegionMoments): its segments' walk starts, never a chorded line's
+// generated stations. A profile with an arc reads the recorded region's
 // plane-origin integrals, the ones Revolve reads, each enclosed by its own
 // proven bound, re-referenced into the axis frame over intervals.
 func coilMoments(ctx context.Context, cp Payload, rec Record) (coil.Moments, error) {
 	if !rec.Profile.HasArcs() {
-		area := coil.PolygonArea(rec.U, rec.V, rec.LoopIdx)
-		return coil.RegionMoments(rec.Rho, rec.Zeta, rec.LoopIdx, area, rec.Axis.Side), nil
+		corners := rec.Profile.Corners()
+		area := coil.PolygonArea(rec.U, rec.V, corners)
+		return coil.RegionMoments(rec.Rho, rec.Zeta, corners, area, rec.Axis.Side), nil
 	}
 	ig, err := cp.Profile.EvaluatorIntegralsContext(ctx, freeform.MomentSecondOrder, freeform.NewFreeformWork())
 	if err != nil {

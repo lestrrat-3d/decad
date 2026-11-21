@@ -46,7 +46,10 @@ type Payload struct {
 	Turns           float64
 	LeftHand        bool
 	StationsPerTurn int64
-	Xform           r3.Transform
+	// WholeLines keeps every profile line as one chord: a derived coil such
+	// as Thread bounds its departure through StationsPerTurn instead.
+	WholeLines bool
+	Xform      r3.Transform
 
 	Verts       []r3.Vec
 	VertexBound []float64
@@ -80,7 +83,7 @@ func (cp Payload) Record() (Record, error) {
 		},
 		Pitch: cp.Pitch, Turns: cp.Turns, LeftHand: cp.LeftHand,
 		StationsPerTurn: stationsPerTurn, MaxStations: MaxStations,
-		ArcChordsPerTurn: ArcChordsPerTurn,
+		ArcChordsPerTurn: ArcChordsPerTurn, WholeLines: cp.WholeLines,
 	})
 }
 
@@ -99,6 +102,7 @@ func (cp Payload) Placed(ctx context.Context, env topo.Env, composed r3.Transfor
 		Turns:           cp.Turns,
 		LeftHand:        cp.LeftHand,
 		StationsPerTurn: cp.StationsPerTurn,
+		WholeLines:      cp.WholeLines,
 		Xform:           composed,
 	})
 }

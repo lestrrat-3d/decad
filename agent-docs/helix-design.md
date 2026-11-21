@@ -257,10 +257,13 @@ whose ends sit at radii `ρ_min < ρ_max` carries about
 sag and the shift term, the formulas give `δ ≈ 1.04e-3 mm` for a square
 profile `ρ ∈ [2, 3]` (the §13 spring) and `δ ≈ 1.95e-3 mm` for a profile
 `ρ ∈ [2, 4]`, each inside the default `Verify` tolerance
-(`agent-docs/verification-design.md` §2). A profile whose radial run exceeds its
-inner radius loses part of that gain (§5.4's `c < 1`) and can still read
-`Bounds` past the tolerance and verify `Suspect`: the profile
-`ρ ∈ [0.5, 3]` gives `δ ≈ 1.4e-2 mm`. Only `Bounds` and the faceted bounds
+(`agent-docs/verification-design.md` §2). A line whose radial run exceeds its
+inner radius loses part of that gain (§5.4's `c < 1`), and a steep screw
+(large `k/ρ_min`) multiplies the twist: held as one chord, the profile
+`ρ ∈ [0.5, 3]` gives `δ ≈ 1.4e-2 mm`, and a rectangle `ρ ∈ [3, 11]` rising
+`4 mm` over `3.5°` gives `δ ≈ 0.36 mm`. §5.3 cuts such a line into shorter
+chords, which brings them to `δ ≈ 1.8e-3 mm` and `δ ≈ 0.002 mm`. Only
+`Bounds` and the faceted bounds
 carry `δ`; the three other readings are closed forms. The cap admits 128
 turns of any profile, and the facet-pair budget
 (`proofbound.MaxFacetPairTestsPerCall`) bounds what the audit can run.
@@ -268,11 +271,13 @@ turns of any profile, and the facet-pair budget
 ### 5.3 Held vertices
 
 **The profile station chain.** The held profile is a chain of stations,
-loft §5.1's chord chain read on one section (`coil.Loops`). A `LineSeg`
-contributes its walk start, a recorded point. An `ArcSeg` or a whole
-`CircleSeg` contributes its walk start and the `m − 1` interior stations of
-its `m` chords, at the exact parameters `t_k = TStart + (k/m)·(TEnd − TStart)`,
-so a wall cell is chorded along the profile as well as along the helix. An
+loft §5.1's chord chain read on one section (`coil.Loops`). Every segment
+contributes its walk start and the `m − 1` interior stations of its `m`
+chords, so a wall cell is chorded along the profile as well as along the
+helix. An `ArcSeg` or a whole `CircleSeg` places them at the exact
+parameters `t_k = TStart + (k/m)·(TEnd − TStart)`. A `LineSeg`'s walk start
+is a recorded point, and its interior stations sit at the exact points of
+its walk at the parameters "Line chords" below chooses. An
 arc of sweep `Δ` takes `m = ⌈coilshell.ArcChordsPerTurn·Δ/2π⌉` chords, at least
 one, and a whole circle takes `coilshell.ArcChordsPerTurn`, both decided from the
 held float sweep, which decides a count and nothing else.
@@ -282,14 +287,53 @@ wall triangles, inside the audit's ceiling `loftmesh.MaxLoftAuditTriangles` of 6
 holds 61 440, and a sixth turn passes the ceiling. A whole circle at 16
 chords reaches the ceiling at 8 turns.
 
+**Line chords.** A line held as one chord makes each wall cell span its
+whole radial run, and §5.4's twist term grows with `|Δρ|`, the station step
+and `k/ρ_min`. `coil.LinePlan.Cuts` decides where a line is cut from the
+held float axis, pitch and station step, which decide the cuts and nothing
+else; it evaluates §5.4's `sag + twist + shift` in floats against the target
+`max(coil.LineChordTarget, 2·sag)`, with `LineChordTarget = 0.002 mm` and
+`sag = ρ_max·h²/2` the line's helix sag, which no profile chord shortens. A
+line whose one cell meets the target keeps one chord. Any other line is cut
+from its walk start outward, each chord the longest whose radial run stays
+within its own inner radius (`c = 1`) and whose cell meets the target, so the
+chords grade with the radius as the twist term's `k/ρ_min` does. A line that
+would take more than `coil.MaxLineChords = 256` chords aims at the smallest
+target that fits the ceiling instead. Each cut is a float walk parameter
+`t`, read exactly, and its station is the float nearest the exact point
+`start + t·(end − start)`.
+
+At `0.002 mm` a chorded wall sits ten times inside a `0.02 mm` chain
+tolerance (`WithChainTolerance`), so the rims later booleans trim across it
+stay admitted: a chain of cuts by steep coil tools, with unions of the
+results, measured `0.004 mm` too coarse and `0.002 mm` enough. The §13 springs
+(`ρ ∈ [2, 3]` and `ρ ∈ [2, 4]`) meet the target with one chord and keep their
+stations, triangles and readings. A derived coil that bounds its own
+departure through its station density (`Thread`, `Hole` and `Boss` threads)
+passes the private `wholeLinesOption` and keeps one chord per line.
+`coilshell.Loops` caps each line at
+`coilshell.MaxChordedWallTriangles/(2·N·segments)` chords, with
+`MaxChordedWallTriangles = 2^14`: chorded cells are thin radially and long
+along the helix, so their boxes overlap many neighbours in §5.5's sweep, and
+a steep coil over `38°` (28 stations) chorded to 28 800 wall triangles exceeded
+the audit's pair ceiling. It also keeps every line at one chord when the
+chorded shell would hold more than `loftmesh.MaxLoftAuditTriangles` wall and
+cap triangles, so chording never moves a coil past the untiled crossing
+audit or the CS8 facet ceiling. Each decision reads the record alone, so a placement
+(§5.6) repeats it. A rectangle `ρ ∈ [3, 11]` rising `4 mm` over `32.5°`
+takes about 37 chords per radial line at 24 helix stations; over `3.5°` it
+reaches the 256-chord ceiling at 3 stations and holds `δ ≈ 0.002 mm`.
+
 Every station carries a plane round `s_v`, the distance from its held point
 to the point the record denotes there: zero at a line end and at an arc's
 `Start`, which is the denoted start; the radial residual
 (`circularbounds.ArcRadialResidualUpper`) at an arc's `End`, which the arc
 denotes on `Start`'s radius at `End`'s angle and which the next segment
-shares as its walk start; and at a generated station, the plane distance
-from the float nearest the midpoint of `circularbounds.EndpointInterval`'s
-enclosure to its far corner. A whole circle records no point at all, so even
+shares as its walk start; at a generated arc or circle station, the plane
+distance from the float nearest the midpoint of
+`circularbounds.EndpointInterval`'s enclosure to its far corner; and at a
+generated line station, the distance from the float nearest the exact
+rational point to that point. A whole circle records no point at all, so even
 its walk start is generated. The station's held coordinates `(ρ_v, ζ_v)` lift
 the held point exactly; every bound and closed form reads them widened by
 `s_v`, which encloses the denoted point.
@@ -357,9 +401,10 @@ in `coil.Loops`'s loop-major order.
 ### 5.4 Chord departure and the per-vertex bound
 
 A wall cell is profile chord `v → w` over stations `j → j + 1`. On a line,
-the chord is the segment; because it is straight, `Φ` is linear along it at
-every fixed `θ`, so the true cell is a ruled surface whose rulings are the
-segment's images and whose two edges are helix arcs of radii `ρ_v` and `ρ_w` over `Δθ = 2π/N`
+the chord is the piece of the segment between its two denoted stations, the
+whole segment when the line holds one chord; because it is straight, `Φ` is
+linear along it at every fixed `θ`, so the true cell is a ruled surface whose
+rulings are the piece's images and whose two edges are helix arcs of radii `ρ_v` and `ρ_w` over `Δθ = 2π/N`
 per turn fraction `Δt = turns / N`. The held cell is the two triangles the
 quad splits into along the diagonal `tessellate.go` uses for a prism's
 lateral quad.
@@ -418,6 +463,17 @@ cell's parameter rectangle, so the correspondence stays two-sided. The
 chord's own legs read the radii of its two DENOTED ends, the held radii
 widened by the stations' plane rounds; the triangles on those denoted
 corners lie within `maxRound` of the held ones.
+
+**A line chord.** A line cut into `m` chords (§5.3) is the arc case with
+`arcSag = 0`: the denoted piece between two denoted stations is straight, so
+each chord's true cell is the ruled surface above, and its legs read the
+radii of the chord's own two denoted ends, the held radii widened by the
+stations' plane rounds. Each chord's cell therefore carries its own `Δρ` and
+`ρ_min`, which is what shortens the twist term. `Build` reads
+`rec.Rho[v]` and `rec.Rho[w]` per chord and `MeshProofs` reads
+`coil.CellProofUpper` per chord with no sagitta; a line chord adds nothing
+to the cap, whose true boundary is the line the held stations lie within
+their rounds of.
 
 `coil.CellDepartureUpper` evaluates `sag + twist + shift` exactly over the
 radii's interval ends, once per chord, and the build adds `arcSag`. The
@@ -515,9 +571,11 @@ sum.
 
 Let `Q = ∫_Ω ρ dA`, `I = ∫_Ω ρ² dA` and `M = ∫_Ω ρζ dA` be the profile's
 axis-frame moments and `A_Ω` its area. For a `LineSeg`-only profile they
-are the polygon's own integrals over every vertex's `(ζ, ρ)` interval
-(`coil.RegionMoments`), exact rationals for an exact axis frame, and `A_Ω`
-is the exact shoelace area of the recorded vertices. A profile with an arc
+are the polygon's own integrals over every recorded vertex's `(ζ, ρ)`
+interval (`coil.RegionMoments` over `coil.Profile.Corners`, the segments'
+walk starts, never a chorded line's generated stations), exact rationals
+for an exact axis frame, and `A_Ω` is the exact shoelace area of the
+recorded vertices. A profile with an arc
 reads the recorded region's plane-origin integrals `∫dA`, `∫u dA`, `∫v dA`,
 `∫u² dA`, `∫uv dA` and `∫v² dA`, the ones `Revolve` reads, each enclosed by
 its own proven bound, and re-references them into the axis frame over
@@ -899,6 +957,28 @@ local model.
   `TestCoordsAndMoments`, `TestSegmentAreaAndLengths`, `TestCellDepartureUpper` and
   `TestCellProofDensityEnclosesTheSampledGap` pin §5.2, §7 and §5.4's terms; `TestLoopsReadsLinePolygons` pins
   the line station chain.
+- `internal/coil/line_chords_test.go`: `TestLinePlanKeepsShortLinesWhole` (the spring's annulus and band and a
+  thread flank keep one chord), `TestLinePlanCutsLongRadialLines` (shallow and steep radial lines at
+  `ρ ∈ [3, 11]`, `ρ ∈ [2.5, 14]` and `ρ ∈ [2.7, 11.3]`, and one at `ρ ∈ [0.5, 3]`, take graded chords whose
+  exact `coil.CellDepartureUpper` meets the target, or the target the ceiling raises, with `c = 1`),
+  `TestLinePlanHonoursItsChordCeiling` (`LinePlan.MaxChords`) and `TestLoopsChordsLongLines` (§5.3's line
+  chords: exact corners, generated stations within their rounds, no sagitta, `Corners`).
+- `TestLoopsKeepsLinesWholePastTheAuditCeiling` (`internal/coilshell/loops_test.go`): the profile
+  `ρ ∈ [0.5, 3]` is chorded at 2 turns, and held at one chord per line at 20 turns and when a derived coil asks
+  for whole lines.
+- `TestCoilChordsLongRadialLines` (`apitest/coil_line_chords_test.go`): a rectangle `z ∈ [−5.4, 0]` at
+  `ρ ∈ [3, 11]` and at `ρ ∈ [2.5, 14]`, rising `4 mm` over `32.5°` and over `3.5°`, reads `Bounds` within
+  `0.003 mm`, `Volume` within bound of `Θ·Q`, and dense samples of both helicoidal walls within the mesh's
+  bound. With chording off, the bound check fails on all four.
+- `TestCoilSteepLongSpanStaysInsideTheAuditCeiling` (same file): a rectangle `ρ ∈ [2.7, 11.3]` falling `4 mm` per
+  `3.5°` over `38°` builds inside the chorded wall budget, reads `Bounds` below `0.02 mm` (about `0.4 mm` with
+  one chord per line) and `Volume` within bound of `Θ·Q`. With 256 chords per line the audit's pair ceiling
+  refused it.
+- `TestCoilTrimmedRampWedgeJoinsRing` and `TestCoilTrimmedSteepWedgeJoinsRing` (same file): each wedge,
+  trimmed to `z ≥ −0.4` by `Intersect` with a slab, joins a revolved ring (`ρ ∈ [2.5, 14]` for the
+  `ρ ∈ [3, 11]` wedge, `ρ ∈ [2, 14.5]` for the `ρ ∈ [2.5, 14]` wedge) under `WithChainTolerance(0.1 mm)`. The
+  trimmed wedge and the union enclose their closed-form volumes, and the union's box bound stays below
+  `0.05 mm`. With chording off, both steep cases refuse at the chain-depth gate.
 - `internal/coil/arc_area_test.go`: `TestLoopsChordsArcs` (§5.3's arc chords and refusals),
   `TestArcAreaEnclosesTheQuadrature` (§11.1's bracket against an independent quadrature of a whole circle and a
   semicircle), `TestArcAreaWorkerCountsAgree` and `TestCellProofArcLegs`.
@@ -941,9 +1021,9 @@ local model.
   `Volume`'s exact enclosure holds `det L · 12.5π` and the start cap's `Area` holds `|L·U × L·V|`. Legs to show
   failing: the `|det L|` factor, the cap area's defect widening.
 - §5.4's `β`: dense samples of every cell's true wall lie within the cell's facet bound of its two held
-  triangles, on the square spring, a profile `ρ ∈ [2, 4]`, a profile `ρ ∈ [0.5, 3]` (`c < 1`), a profile whose
-  middle band touches no annular wall, and arc chords. Legs to show failing: twist, sag, twist's `(1 − c)` part,
-  `arcSag`.
+  triangles, on the square spring, a profile `ρ ∈ [2, 4]`, a profile `ρ ∈ [0.5, 3]` at 20 turns (one chord per
+  line, `c < 1`), a profile whose middle band touches no annular wall, chorded lines, and arc chords. Legs to
+  show failing: twist, sag, twist's `(1 − c)` part, `arcSag`.
 - `Verify` on the spring: validity proven, every reading within the default tolerance, the gate diameter equal
   to the held diameter less `2δ`.
 - The held mesh's area lies within `areaSlack` of `Area` on the spring, the profile `ρ ∈ [2, 4]` and the profile

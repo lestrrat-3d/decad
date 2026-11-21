@@ -139,6 +139,8 @@ type Input struct {
 	// ArcChordsPerTurn is the number of chords a full turn of a circular
 	// profile segment is cut into (coil.Loops).
 	ArcChordsPerTurn int
+	// WholeLines keeps every profile line as one chord (Loops).
+	WholeLines bool
 }
 
 // AxisInput holds the measured point and direction of the profile-plane axis.
@@ -159,9 +161,71 @@ func axisOf(in AxisInput) (coil.Axis, error) {
 	return coil.Axis{AU: aU, AV: aV, DU: dU, DV: dV, Side: in.Side}, nil
 }
 
+// MaxChordedWallTriangles is the wall triangle budget line chording may
+// spend (agent-docs/helix-design.md §5.3): each line takes at most
+// MaxChordedWallTriangles/(2·N·segments) chords. Chorded cells are thin
+// radially and long along the helix, so their boxes overlap many neighbours
+// in the crossing audit's sweep: a steep coil chorded to 28 800 wall
+// triangles exceeded the audit's pair ceiling, and the budget keeps chording
+// well below that.
+const MaxChordedWallTriangles = 1 << 14
+
+// Loops reads the profile's station chain (coil.Loops), each arc cut by
+// arcChordsPerTurn and each line by the coil.LinePlan of this axis, pitch and
+// station step (agent-docs/helix-design.md §5.3). A chain whose chorded lines
+// would hold more than loftmesh.MaxLoftAuditTriangles wall and cap triangles
+// keeps every line as one chord instead, so chording never moves a coil past
+// the crossing audit's untiled ceiling or the facet ceiling. wholeLines
+// keeps every line as one chord, for a derived coil that bounds its own
+// departure through its station density. The decision reads the record
+// alone, so every placement repeats it.
+func Loops(profile momentinput.Profile, axis AxisInput, pitch, turns float64, stationsPerTurn int64, arcChordsPerTurn int, wholeLines bool) (coil.Profile, error) {
+	unsplit := func() (coil.Profile, error) {
+		return coil.Loops(profile.Outer, profile.Holes, arcChordsPerTurn, coil.LinePlan{})
+	}
+	if wholeLines {
+		return unsplit()
+	}
+	turnsRat := proofarith.FloatRat(turns)
+	if turnsRat == nil || turnsRat.Sign() <= 0 {
+		return unsplit()
+	}
+	n, ok := coil.StationCount(turnsRat, stationsPerTurn)
+	if !ok || n <= 0 || n > MaxStations {
+		return unsplit()
+	}
+	segments := len(profile.Outer.Segments)
+	for _, h := range profile.Holes {
+		segments += len(h.Segments)
+	}
+	plan := coil.LinePlan{
+		AU: axis.AU, AV: axis.AV, DU: axis.DU, DV: axis.DV, Side: axis.Side, Pitch: pitch, Step: turns / float64(n),
+		MaxChords: int(min(int64(coil.MaxLineChords), MaxChordedWallTriangles/(2*n*int64(max(segments, 1))))),
+	}
+	prof, err := coil.Loops(profile.Outer, profile.Holes, arcChordsPerTurn, plan)
+	if err != nil {
+		return coil.Profile{}, err
+	}
+	split := false
+	for _, s := range prof.Segments {
+		if !s.IsArc() && s.Chords > 1 {
+			split = true
+			break
+		}
+	}
+	if !split {
+		return prof, nil
+	}
+	stations, holes := int64(len(prof.Pts)), int64(len(prof.LoopIdx)-1)
+	if 2*n*stations+2*(stations+2*holes-2) > loftmesh.MaxLoftAuditTriangles {
+		return unsplit()
+	}
+	return prof, nil
+}
+
 // Read resolves the recorded coil into exact section and placement inputs.
 func Read(in Input) (Record, error) {
-	prof, err := coil.Loops(in.Profile.Outer, in.Profile.Holes, in.ArcChordsPerTurn)
+	prof, err := Loops(in.Profile, in.Axis, in.Pitch, in.Turns, in.StationsPerTurn, in.ArcChordsPerTurn, in.WholeLines)
 	if err != nil {
 		return Record{}, err
 	}

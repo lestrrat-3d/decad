@@ -49,7 +49,7 @@ func bite() sectionrecord.LoopRecord {
 
 func TestLoopsChordsArcs(t *testing.T) {
 	t.Run("round wire", func(t *testing.T) {
-		prof, err := coil.Loops(roundWire(), nil, 16)
+		prof, err := coil.Loops(roundWire(), nil, 16, coil.LinePlan{})
 		require.NoError(t, err)
 		require.Len(t, prof.Pts, 16)
 		require.Len(t, prof.Segments, 1)
@@ -69,7 +69,7 @@ func TestLoopsChordsArcs(t *testing.T) {
 		require.Equal(t, 0, prof.Prev(0))
 	})
 	t.Run("slot", func(t *testing.T) {
-		prof, err := coil.Loops(slot(), nil, 16)
+		prof, err := coil.Loops(slot(), nil, 16, coil.LinePlan{})
 		require.NoError(t, err)
 		// Each semicircle takes 8 chords: 1 + 8 + 1 + 8 stations.
 		require.Len(t, prof.Pts, 18)
@@ -90,7 +90,7 @@ func TestLoopsChordsArcs(t *testing.T) {
 		require.Equal(t, 3, prof.Chord[17].Segment)
 		require.Nil(t, prof.Chord[0].Sag)
 		require.Equal(t, 1, prof.Next(0))
-		rev, err := coil.Loops(bite(), nil, 16)
+		rev, err := coil.Loops(bite(), nil, 16, coil.LinePlan{})
 		require.NoError(t, err)
 		require.True(t, rev.Segments[1].Reversed)
 		// The reversed arc walks from its End and takes ⌈16·0.285⌉ = 5 chords.
@@ -106,21 +106,21 @@ func TestLoopsChordsArcs(t *testing.T) {
 		arc := trimmed.Segments[1].(sectionrecord.ArcSeg)
 		arc.TEnd = 0.5
 		trimmed.Segments[1] = arc
-		_, err := coil.Loops(trimmed, nil, 16)
+		_, err := coil.Loops(trimmed, nil, 16, coil.LinePlan{})
 		require.ErrorIs(t, err, decaderr.ErrUnsupported)
 
 		half := roundWire()
 		c := half.Segments[0].(sectionrecord.CircleSeg)
 		c.TEnd = 0.5
 		half.Segments[0] = c
-		_, err = coil.Loops(half, nil, 16)
+		_, err = coil.Loops(half, nil, 16, coil.LinePlan{})
 		require.ErrorIs(t, err, decaderr.ErrUnsupported)
 
 		ellipse := sectionrecord.LoopRecord{Segments: []sectionrecord.CurveSegment{
 			sectionrecord.EllipseSeg{Center: sectionrecord.Point2{U: 3}, Rx: units.Millimeters(0.5), Ry: units.Millimeters(0.3),
 				Rotation: units.Degrees(0), CCW: true, TStart: 0, TEnd: 1},
 		}}
-		_, err = coil.Loops(ellipse, nil, 16)
+		_, err = coil.Loops(ellipse, nil, 16, coil.LinePlan{})
 		require.ErrorIs(t, err, decaderr.ErrUnsupported)
 	})
 }
@@ -162,7 +162,7 @@ func TestArcAreaEnclosesTheQuadrature(t *testing.T) {
 	}
 
 	t.Run("whole circle", func(t *testing.T) {
-		prof, err := coil.Loops(roundWire(), nil, 16)
+		prof, err := coil.Loops(roundWire(), nil, 16, coil.LinePlan{})
 		require.NoError(t, err)
 		got, ok, err := coil.ArcArea(t.Context(), prof.Segments[0], vAxis(), pitch, turns)
 		require.NoError(t, err)
@@ -188,7 +188,7 @@ func TestArcAreaEnclosesTheQuadrature(t *testing.T) {
 		require.Greater(t, (hi-lo)/want, 1e-9)
 	})
 	t.Run("semicircle", func(t *testing.T) {
-		prof, err := coil.Loops(slot(), nil, 16)
+		prof, err := coil.Loops(slot(), nil, 16, coil.LinePlan{})
 		require.NoError(t, err)
 		got, ok, err := coil.ArcArea(t.Context(), prof.Segments[1], vAxis(), pitch, turns)
 		require.NoError(t, err)
@@ -211,7 +211,7 @@ func TestArcAreaEnclosesTheQuadrature(t *testing.T) {
 
 		// The bite's arc about (3.6, 0.5), radius √0.41, walked in reverse,
 		// covers the same angles as its forward sweep.
-		rev, err := coil.Loops(bite(), nil, 16)
+		rev, err := coil.Loops(bite(), nil, 16, coil.LinePlan{})
 		require.NoError(t, err)
 		back, ok, err := coil.ArcArea(t.Context(), rev.Segments[1], vAxis(), pitch, turns)
 		require.NoError(t, err)
@@ -267,7 +267,7 @@ func TestArcAreaWorkerCountsAgree(t *testing.T) {
 		{name: "reversed arc", loop: bite(), segment: 1},
 	} {
 		t.Run(fixture.name, func(t *testing.T) {
-			profile, err := coil.Loops(fixture.loop, nil, 16)
+			profile, err := coil.Loops(fixture.loop, nil, 16, coil.LinePlan{})
 			require.NoError(t, err)
 			segment := profile.Segments[fixture.segment]
 			pitch, turns := big.NewRat(3, 2), big.NewRat(5, 1)
@@ -283,7 +283,7 @@ func TestArcAreaWorkerCountsAgree(t *testing.T) {
 			require.Equal(t, want[1], one.Hi.RatString())
 		})
 	}
-	profile, err := coil.Loops(roundWire(), nil, 16)
+	profile, err := coil.Loops(roundWire(), nil, 16, coil.LinePlan{})
 	require.NoError(t, err)
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
