@@ -15,6 +15,7 @@ on:
       - 'internal/proof/float_step.go'
       - 'internal/proof/float_step_plain.go'
       - 'internal/proof/lazy_rat.go'
+      - 'internal/proof/orientation_expansion.go'
       - 'internal/proof/rounding.go'
       - 'internal/proofbound/bounded.go'
       - 'internal/proofbound/bounds.go'

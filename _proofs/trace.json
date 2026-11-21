@@ -87,6 +87,90 @@
       "sha256": "5ab5fe928336ed060d2a6636c9150e4cf85ad5e18e07ce9380c8fb4141bbdb4a"
     },
     {
+      "file": "internal/proof/orientation_expansion.go",
+      "func": "Orient2SignExpansion",
+      "role": "models",
+      "theorems": [
+        "Decad/Orientation/Orient2.lean:Decad.Orientation.orient2Sign_sound"
+      ],
+      "assumptions": [
+        "A9",
+        "A10",
+        "A11"
+      ],
+      "sha256": "8decff0d2c7b37141f441ab41cdd3555c1cab54c10e667ce302764de726cbe38"
+    },
+    {
+      "file": "internal/proof/orientation_expansion.go",
+      "func": "exactDifference",
+      "role": "assumes",
+      "theorems": [],
+      "assumptions": [
+        "A10"
+      ],
+      "sha256": "fb6452b11cc945ad636d2f3e55d632820b4f04793a43d6eb24c12770f2dd40e4"
+    },
+    {
+      "file": "internal/proof/orientation_expansion.go",
+      "func": "floatSign",
+      "role": "models",
+      "theorems": [
+        "Decad/Orientation/Orient2.lean:Decad.Orientation.sgn_add_of_abs_lt"
+      ],
+      "assumptions": [],
+      "sha256": "bfb8307f99cc734bc23db570cb56dd5359a7661623609ab1cb65e2614a09446c"
+    },
+    {
+      "file": "internal/proof/orientation_expansion.go",
+      "func": "orientSignSum2",
+      "role": "models",
+      "theorems": [
+        "Decad/Orientation/Sum2.lean:Decad.Orientation.sum2_sign_sound",
+        "Decad/Orientation/Sum2.lean:Decad.Orientation.scale_bound",
+        "Decad/Orientation/Sum2.lean:Decad.Orientation.sum24_eq_det"
+      ],
+      "assumptions": [
+        "A9",
+        "A10",
+        "A12",
+        "A13"
+      ],
+      "sha256": "2d1c23d24f1b562402ea3af4f40a9d6ee077a63d19c30f1309d5fa488b5159a1"
+    },
+    {
+      "file": "internal/proof/orientation_expansion.go",
+      "func": "sum2Step",
+      "role": "assumes",
+      "theorems": [],
+      "assumptions": [
+        "A9",
+        "A12"
+      ],
+      "sha256": "15ede9294e552db11d534355ff45af760e06dde0d5c2a1e659fb37f304f8d39f"
+    },
+    {
+      "file": "internal/proof/orientation_expansion.go",
+      "func": "tripleComponents",
+      "role": "models",
+      "theorems": [
+        "Decad/Orientation/Sum2.lean:Decad.Orientation.tripleSum_eq"
+      ],
+      "assumptions": [
+        "A10"
+      ],
+      "sha256": "69d6beff3e0cbb2df70e8cb50946a57d30876fca11df106292a23f59d9ea69a6"
+    },
+    {
+      "file": "internal/proof/orientation_expansion.go",
+      "func": "twoSum",
+      "role": "assumes",
+      "theorems": [],
+      "assumptions": [
+        "A9"
+      ],
+      "sha256": "952464f1f82fe1708c5c105d30f4940e5bb7a8de592fd4d665ce3e455b3488a0"
+    },
+    {
       "file": "internal/proof/rounding.go",
       "func": "FloatRat",
       "role": "assumes",
