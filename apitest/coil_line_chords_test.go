@@ -74,8 +74,9 @@ func requireLineChordEncloses(t *testing.T, m decad.Measurement, unit units.Unit
 
 // TestCoilChordsLongRadialLines checks a coil whose radial profile lines run
 // far past their inner radius at a steep screw (agent-docs/helix-design.md
-// §5.3): Bounds reads within coil.LineChordTargetScale (0.15%) of the outer
-// radius where one chord per line read 0.072 to 0.38 mm, Volume encloses
+// §5.3): Bounds reads within 0.003 mm (coil.LineChordTarget, 0.002 mm, which
+// the widest steep line raises to fit coil.MaxLineChords) where one chord per
+// line read 0.072 to 0.38 mm, Volume encloses
 // Pappus' Θ·Q, and dense samples of both true helicoidal walls lie within the
 // mesh's published bound. The samples are a falsifier and prove nothing.
 func TestCoilChordsLongRadialLines(t *testing.T) {
@@ -95,7 +96,7 @@ func TestCoilChordsLongRadialLines(t *testing.T) {
 			require.NoError(t, err)
 			bound, err := box.Bound.In(units.Millimeter)
 			require.NoError(t, err)
-			require.LessOrEqual(t, bound, 0.0015*c.r1+1e-9)
+			require.LessOrEqual(t, bound, 0.003)
 
 			theta := c.spanDeg * math.Pi / 180
 			vol, err := b.Volume()

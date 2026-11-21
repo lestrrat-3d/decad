@@ -41,6 +41,20 @@ type stationsPerTurnOption int64
 
 func (stationsPerTurnOption) coilOption() {}
 
+// wholeLinesOption is private to derived operations such as Thread, which
+// bound their departure through the station density: it keeps every profile
+// line as one chord (agent-docs/helix-design.md §5.3).
+type wholeLinesOption struct{}
+
+func (wholeLinesOption) coilOption() {}
+
+// coilConfig is the decoded CoilOption set.
+type coilConfig struct {
+	leftHand        bool
+	stationsPerTurn int64
+	wholeLines      bool
+}
+
 // WithLeftHand turns the section left-handed about the axis direction while
 // it advances along it. The default is right-handed. Passing it twice is
 // ErrDegenerate.
@@ -48,30 +62,31 @@ func WithLeftHand() CoilOption {
 	return leftHandOption{}
 }
 
-func decodeCoilOptions(opts []CoilOption) (bool, int64, error) {
-	leftHand := false
-	stationsPerTurn := int64(coilshell.StationsPerTurn)
+func decodeCoilOptions(opts []CoilOption) (coilConfig, error) {
+	cfg := coilConfig{stationsPerTurn: int64(coilshell.StationsPerTurn)}
 	stationsSet := false
 	for _, raw := range opts {
 		if raw == nil {
-			return false, 0, fmt.Errorf(`%w: a nil option names nothing to apply`, ErrDegenerate)
+			return coilConfig{}, fmt.Errorf(`%w: a nil option names nothing to apply`, ErrDegenerate)
 		}
 		switch option := raw.(type) {
 		case leftHandOption:
-			if leftHand {
-				return false, 0, fmt.Errorf(`%w: WithLeftHand was passed more than once`, ErrDegenerate)
+			if cfg.leftHand {
+				return coilConfig{}, fmt.Errorf(`%w: WithLeftHand was passed more than once`, ErrDegenerate)
 			}
-			leftHand = true
+			cfg.leftHand = true
 		case stationsPerTurnOption:
 			if stationsSet || option <= 0 {
-				return false, 0, fmt.Errorf(`%w: invalid coil station density`, ErrDegenerate)
+				return coilConfig{}, fmt.Errorf(`%w: invalid coil station density`, ErrDegenerate)
 			}
-			stationsPerTurn, stationsSet = int64(option), true
+			cfg.stationsPerTurn, stationsSet = int64(option), true
+		case wholeLinesOption:
+			cfg.wholeLines = true
 		default:
-			return false, 0, fmt.Errorf(`%w: the coil option is not a decad coil option (%T)`, ErrDegenerate, raw)
+			return coilConfig{}, fmt.Errorf(`%w: the coil option is not a decad coil option (%T)`, ErrDegenerate, raw)
 		}
 	}
-	return leftHand, stationsPerTurn, nil
+	return cfg, nil
 }
 
 // Coil moves the closed profile p of sketch s along the screw motion about
@@ -93,8 +108,9 @@ func decodeCoilOptions(opts []CoilOption) (bool, int64, error) {
 // ArcSeg or CircleSeg (ErrUnsupported); an arc is held as 16 chords per turn
 // of its sweep. A line is held as one chord or, where one chord's wall cells
 // would depart from the true wall by more than 0.15% of the line's outer
-// radius (a long radial run on a steep screw), as up to 128 equal chords
-// that meet it (agent-docs/helix-design.md §5.3). A coil needing more than
+// radius (a long radial run on a steep screw), as up to 256 chords graded by
+// radius, each holding within 0.002 mm where the station step allows
+// (agent-docs/helix-design.md §5.3). A coil needing more than
 // 32768 stations at 256 per turn, or
 // more than 1048576 triangles, is ErrUnsupported, as is one whose held shell
 // crosses itself where two turns pass closer than the station chords
@@ -119,7 +135,7 @@ func Coil(ctx context.Context, d *Document, s *sketch.Sketch, p *sketch.Profile,
 	if err != nil {
 		return nil, err
 	}
-	leftHand, stationsPerTurn, err := decodeCoilOptions(opts)
+	cfg, err := decodeCoilOptions(opts)
 	if err != nil {
 		return nil, err
 	}
@@ -177,11 +193,11 @@ func Coil(ctx context.Context, d *Document, s *sketch.Sketch, p *sketch.Profile,
 		AU: line.AU, AV: line.AV, AUBound: line.AUBound, AVBound: line.AVBound,
 		DU: line.DU, DV: line.DV, DUBound: line.DUBound, DVBound: line.DVBound,
 		Side: side,
-	}, pitchMM, turnCount, stationsPerTurn, coilshell.ArcChordsPerTurn)
+	}, pitchMM, turnCount, cfg.stationsPerTurn, coilshell.ArcChordsPerTurn, cfg.wholeLines)
 	if err != nil {
 		return nil, err
 	}
-	if err := coil.Preflight(turnCount, len(prof.Pts), len(prof.LoopIdx)-1, stationsPerTurn, coilshell.MaxStations, maxCoilFacets); err != nil {
+	if err := coil.Preflight(turnCount, len(prof.Pts), len(prof.LoopIdx)-1, cfg.stationsPerTurn, coilshell.MaxStations, maxCoilFacets); err != nil {
 		return nil, err
 	}
 
@@ -192,8 +208,9 @@ func Coil(ctx context.Context, d *Document, s *sketch.Sketch, p *sketch.Profile,
 		Side:            side,
 		Pitch:           pitchMM,
 		Turns:           turnCount,
-		LeftHand:        leftHand,
-		StationsPerTurn: stationsPerTurn,
+		LeftHand:        cfg.leftHand,
+		StationsPerTurn: cfg.stationsPerTurn,
+		WholeLines:      cfg.wholeLines,
 		Xform:           r3.Identity(),
 	}))
 	if err != nil {

@@ -1,6 +1,7 @@
 package coil_test
 
 import (
+	"math"
 	"math/big"
 	"testing"
 
@@ -40,76 +41,81 @@ func TestLinePlanKeepsShortLinesWhole(t *testing.T) {
 	}{
 		{"zero plan", coil.LinePlan{}, sectionrecord.Point2{U: 3}, sectionrecord.Point2{U: 11}},
 		{"spring annulus", spring, sectionrecord.Point2{U: 2}, sectionrecord.Point2{U: 3}},
+		{"wide spring annulus", spring, sectionrecord.Point2{U: 2}, sectionrecord.Point2{U: 4}},
 		{"spring band", spring, sectionrecord.Point2{U: 3}, sectionrecord.Point2{U: 3, V: 1}},
 		{"thread flank", thread, sectionrecord.Point2{U: 4.1}, sectionrecord.Point2{U: 5.3, V: 0.69}},
 	} {
 		t.Run(c.name, func(t *testing.T) {
-			require.Equal(t, 1, c.plan.Chords(c.a, c.b))
+			require.Nil(t, c.plan.Cuts(c.a, c.b))
 		})
 	}
 	a, b := line(3, 0, 11, 0)
-	require.Equal(t, 1, coil.LinePlan{DV: 1, Side: 1, Pitch: 100, Step: 0.001}.Chords(a, b),
+	require.Nil(t, coil.LinePlan{DV: 1, Side: 1, Pitch: 100, Step: 0.001}.Cuts(a, b),
 		"a profile on the plan's negative side states no radii and keeps one chord")
 }
 
-// TestLinePlanChordsLongRadialLines checks that a radial line whose single
-// cell's §5.4 departure passes the target is cut into the fewest equal chords
+// TestLinePlanCutsLongRadialLines checks that a radial line whose single
+// cell's §5.4 departure passes max(LineChordTarget, 2·sag) is cut into chords
 // whose every cell's exact departure (coil.CellDepartureUpper over the exact
-// chord radii) meets LineChordTargetScale times the larger radius, and whose
-// every chord's radial run stays within its inner radius.
-func TestLinePlanChordsLongRadialLines(t *testing.T) {
+// chord radii) meets that target,
+// whose every radial run stays within its inner radius, and which grow
+// outward as the twist term's pitch/ρ_min shrinks.
+func TestLinePlanCutsLongRadialLines(t *testing.T) {
 	for _, c := range []struct {
 		name               string
 		r0, r1, rise, span float64
-		least              int
+		capped             float64
 	}{
-		{"shallow ramp", 3, 11, 4, 32.5 / 360, 2},
+		{"shallow ramp", 3, 11, 4, 32.5 / 360, 1},
 		{"steep face", 3, 11, 4, 3.5 / 360, 2},
-		{"wide shallow ramp", 2.5, 14, 4, 32.5 / 360, 2},
+		{"wide shallow ramp", 2.5, 14, 4, 32.5 / 360, 1},
 		{"wide steep face", 2.5, 14, 4, 3.5 / 360, 2},
-		{"near the axis", 0.5, 3, 3, 2, 5},
+		{"steep tool past the face", 2.7, 11.3, 4 * 5.5 / 3.5, 5.5 / 360, 2},
+		{"near the axis", 0.5, 3, 3, 2, 1},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			plan, step := vAxisPlan(c.rise, c.span)
 			pitch := new(big.Rat).SetFloat64(plan.Pitch)
-			m := plan.Chords(sectionrecord.Point2{U: c.r0}, sectionrecord.Point2{U: c.r1})
-			require.GreaterOrEqual(t, m, c.least)
-			require.Less(t, m, coil.MaxLineChords)
+			cuts := plan.Cuts(sectionrecord.Point2{U: c.r0}, sectionrecord.Point2{U: c.r1})
+			require.NotEmpty(t, cuts)
+			require.LessOrEqual(t, len(cuts)+1, coil.MaxLineChords)
 			r0, r1 := new(big.Rat).SetFloat64(c.r0), new(big.Rat).SetFloat64(c.r1)
-			target := new(big.Rat).SetFloat64(coil.LineChordTargetScale * c.r1)
-			at := func(k, m int) *big.Rat {
-				f := big.NewRat(int64(k), int64(m))
+			params := []*big.Rat{new(big.Rat)}
+			for _, f := range cuts {
+				params = append(params, new(big.Rat).SetFloat64(f))
+			}
+			params = append(params, big.NewRat(1, 1))
+			at := func(f *big.Rat) *big.Rat {
 				return new(big.Rat).Add(r0, new(big.Rat).Mul(f, new(big.Rat).Sub(r1, r0)))
 			}
-			worst := func(m int) *big.Rat {
-				out := new(big.Rat)
-				for k := range m {
-					dep, ok := coil.CellDepartureUpper(coil.Point(at(k, m)), coil.Point(at(k+1, m)), pitch, step)
-					require.True(t, ok)
-					if dep.Cmp(out) > 0 {
-						out = dep
-					}
-				}
-				return out
+			h := math.Pi * plan.Step
+			targetF := math.Max(coil.LineChordTarget, c.r1*h*h)
+			if len(cuts)+1 > coil.MaxLineChords-8 {
+				// The ceiling raised the target to the smallest that fits it.
+				targetF *= c.capped
 			}
-			require.LessOrEqual(t, worst(m).Cmp(target), 0, "every chord's cell meets the target")
-			first := new(big.Rat).Sub(at(1, m), at(0, m))
-			require.LessOrEqual(t, first.Cmp(r0), 0, "the innermost chord's run stays within its inner radius")
+			target := new(big.Rat).SetFloat64(targetF * (1 + 1e-9))
+			for k := range len(params) - 1 {
+				a, b := at(params[k]), at(params[k+1])
+				require.Positive(t, b.Cmp(a), "chord %d runs outward", k)
+				dep, ok := coil.CellDepartureUpper(coil.Point(a), coil.Point(b), pitch, step)
+				require.True(t, ok)
+				require.LessOrEqual(t, dep.Cmp(target), 0, "chord %d of %d meets the target %v", k, len(params)-1, targetF)
+				require.LessOrEqual(t, new(big.Rat).Sub(b, a).Cmp(a), 0, "chord %d's run stays within its inner radius", k)
+			}
+			first := new(big.Rat).Sub(params[1], params[0])
+			inner := new(big.Rat).Sub(params[len(params)-2], params[len(params)-3])
+			require.Positive(t, inner.Cmp(first), "the outer chords are longer than the innermost")
 			whole, ok := coil.CellDepartureUpper(coil.Point(r0), coil.Point(r1), pitch, step)
 			require.True(t, ok)
-			require.Positive(t, whole.Cmp(target), "one chord misses the target")
-			if m > 2 {
-				fewer := worst(m - 1)
-				shortRun := new(big.Rat).Sub(at(1, m-1), at(0, m-1)).Cmp(r0) <= 0
-				require.False(t, fewer.Cmp(target) <= 0 && shortRun, "one chord fewer would meet the target")
-			}
+			require.Positive(t, whole.Cmp(new(big.Rat).SetFloat64(targetF)), "one chord misses the target")
 		})
 	}
 }
 
 // TestLoopsChordsLongLines checks the station chain of a chorded rectangle:
 // every recorded corner is held exactly, every generated station sits within
-// its plane round of the exact point at its walk parameter k/m, no line chord
+// its plane round of the exact point at its cut's walk parameter, no line chord
 // carries a sagitta, and Corners lists the recorded corners alone.
 func TestLoopsChordsLongLines(t *testing.T) {
 	loop := rectLoop(3, 11, -5.4, 0)
@@ -117,11 +123,12 @@ func TestLoopsChordsLongLines(t *testing.T) {
 	prof, err := coil.Loops(loop, nil, 16, plan)
 	require.NoError(t, err)
 	require.Len(t, prof.Segments, 4)
-	radial := plan.Chords(sectionrecord.Point2{U: 3}, sectionrecord.Point2{U: 11})
+	radial := len(plan.Cuts(sectionrecord.Point2{U: 3}, sectionrecord.Point2{U: 11})) + 1
 	require.Greater(t, radial, 1)
-	require.Equal(t, []int{radial, 1, radial, 1},
+	inward := len(plan.Cuts(sectionrecord.Point2{U: 11}, sectionrecord.Point2{U: 3})) + 1
+	require.Equal(t, []int{radial, 1, inward, 1},
 		[]int{prof.Segments[0].Chords, prof.Segments[1].Chords, prof.Segments[2].Chords, prof.Segments[3].Chords})
-	require.Len(t, prof.Pts, 2*radial+2)
+	require.Len(t, prof.Pts, radial+inward+2)
 	require.Len(t, prof.LoopIdx, 1)
 	require.Len(t, prof.LoopIdx[0], len(prof.Pts))
 
@@ -142,10 +149,12 @@ func TestLoopsChordsLongLines(t *testing.T) {
 		if seg.Reversed {
 			start, end = end, start
 		}
+		cuts := plan.Cuts(start, end)
+		require.Len(t, cuts, seg.Chords-1)
 		for k := 1; k < seg.Chords; k++ {
 			v := seg.First + k
 			require.Equal(t, si, prof.Chord[v].Segment)
-			f := big.NewRat(int64(k), int64(seg.Chords))
+			f := new(big.Rat).SetFloat64(cuts[k-1])
 			exact := func(a, b float64) *big.Rat {
 				ra, rb := new(big.Rat).SetFloat64(a), new(big.Rat).SetFloat64(b)
 				return new(big.Rat).Add(ra, new(big.Rat).Mul(f, new(big.Rat).Sub(rb, ra)))

@@ -139,6 +139,8 @@ type Input struct {
 	// ArcChordsPerTurn is the number of chords a full turn of a circular
 	// profile segment is cut into (coil.Loops).
 	ArcChordsPerTurn int
+	// WholeLines keeps every profile line as one chord (Loops).
+	WholeLines bool
 }
 
 // AxisInput holds the measured point and direction of the profile-plane axis.
@@ -164,11 +166,16 @@ func axisOf(in AxisInput) (coil.Axis, error) {
 // station step (agent-docs/helix-design.md §5.3). A chain whose chorded lines
 // would hold more than loftmesh.MaxLoftAuditTriangles wall and cap triangles
 // keeps every line as one chord instead, so chording never moves a coil past
-// the crossing audit's untiled ceiling or the facet ceiling. The decision
-// reads the record alone, so every placement repeats it.
-func Loops(profile momentinput.Profile, axis AxisInput, pitch, turns float64, stationsPerTurn int64, arcChordsPerTurn int) (coil.Profile, error) {
+// the crossing audit's untiled ceiling or the facet ceiling. wholeLines
+// keeps every line as one chord, for a derived coil that bounds its own
+// departure through its station density. The decision reads the record
+// alone, so every placement repeats it.
+func Loops(profile momentinput.Profile, axis AxisInput, pitch, turns float64, stationsPerTurn int64, arcChordsPerTurn int, wholeLines bool) (coil.Profile, error) {
 	unsplit := func() (coil.Profile, error) {
 		return coil.Loops(profile.Outer, profile.Holes, arcChordsPerTurn, coil.LinePlan{})
+	}
+	if wholeLines {
+		return unsplit()
 	}
 	turnsRat := proofarith.FloatRat(turns)
 	if turnsRat == nil || turnsRat.Sign() <= 0 {
@@ -202,7 +209,7 @@ func Loops(profile momentinput.Profile, axis AxisInput, pitch, turns float64, st
 
 // Read resolves the recorded coil into exact section and placement inputs.
 func Read(in Input) (Record, error) {
-	prof, err := Loops(in.Profile, in.Axis, in.Pitch, in.Turns, in.StationsPerTurn, in.ArcChordsPerTurn)
+	prof, err := Loops(in.Profile, in.Axis, in.Pitch, in.Turns, in.StationsPerTurn, in.ArcChordsPerTurn, in.WholeLines)
 	if err != nil {
 		return Record{}, err
 	}
