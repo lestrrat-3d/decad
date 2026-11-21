@@ -318,7 +318,7 @@ func PrepareTransverse(ctx context.Context, env topo.Env, a Admission, c Candida
 	wide := minus(scalar(w.YMax), scalar(w.YMin))
 	deep := minus(scalar(w.OffsetMax), scalar(w.OffsetMin))
 	area := plus(times(span, plus(wide, deep)), times(plus(scalar(1), slope), times(wide, deep)))
-	bounds := WindowBounds{Deviation: proofbound.RatFloatUp(plus(times(plus(scalar(4), slope), delta), term)), Area: proofbound.RatFloatUp(times(scalar(4), area)), Volume: proofbound.RatFloatUp(times(span, times(wide, deep))), support: w}
+	bounds := WindowBounds{Deviation: proofbound.RatFloatUp(plus(times(plus(scalar(4), slope), delta), term)), Area: proofbound.RatFloatUp(times(scalar(4), area)), Volume: proofbound.RatFloatUp(times(span, times(wide, deep))), support: w, coveredFaces: ids}
 	if math.IsInf(bounds.Deviation, 0) || math.IsInf(bounds.Area, 0) || math.IsInf(bounds.Volume, 0) {
 		return none, false, nil
 	}

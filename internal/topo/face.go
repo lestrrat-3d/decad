@@ -46,10 +46,11 @@ type FilletCarrier struct {
 	Distance float64
 }
 
-// Face is the data of the root Face handle, which holds one by
-// value.
+// Face is the data of the root Face handle, which holds one by value.
 type Face struct {
 	prismFaceToken PrismFaceToken
+	meshSlab       *MeshPlaneSlab
+	meshSlabOwner  *Face
 	// Area is the held surface area in millimetres².
 	Area float64
 	// AreaBound is the proven error bound on Area: analytic float evaluation

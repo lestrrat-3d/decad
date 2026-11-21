@@ -46,6 +46,9 @@ func SolidFromMesh(ctx context.Context, d *Document, m *MeshBody) (result *Body,
 	if err != nil {
 		return nil, err
 	}
+	if err := facetedrecord.BindMeshPlaneSlabs(ctx, &body.n); err != nil {
+		return nil, err
+	}
 	if err := d.commitOperationIn(ctx, nil, OperationSolidFromMesh, nil, body); err != nil {
 		return nil, err
 	}

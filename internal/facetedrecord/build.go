@@ -25,7 +25,15 @@ func Build(ctx context.Context, env topo.Env, pp Payload) (*topo.Body, error) {
 // result mesh. Placement calls Build and proves its moved mesh anew.
 func BuildWithProof(ctx context.Context, env topo.Env, pp Payload,
 	audit *facetproof.MeshAudit, volume measurement.Measurement, volRat *big.Rat) (*topo.Body, error) {
+	return BuildWithSourcePlaneProof(ctx, env, pp, audit, volume, volRat, false)
+}
+
+// BuildWithSourcePlaneProof also transfers finite source-plane bounds when
+// the caller has certified the output as unshifted Boolean fragments.
+func BuildWithSourcePlaneProof(ctx context.Context, env topo.Env, pp Payload,
+	audit *facetproof.MeshAudit, volume measurement.Measurement, volRat *big.Rat, transfer bool) (*topo.Body, error) {
 	in := meshOfPayload(pp)
+	in.transferMeshSlabs = transfer
 	body, faceOf, diameterReading, err := AssembleBody(ctx, env, in,
 		audit, volume, volRat)
 	if err != nil {
@@ -74,14 +82,16 @@ func BuildWithProofBounded(ctx context.Context, budget *proofbound.WorkBudget, e
 // BuildWithProofReplay keeps the bounded single-shell arithmetic checks while
 // admitting up to 65,536 facets under the caller's cumulative replay budget.
 func BuildWithProofReplay(ctx context.Context, budget *proofbound.WorkBudget, env topo.Env, pp Payload,
-	audit *facetproof.MeshAudit, volume measurement.Measurement, volRat *big.Rat) (*topo.Body, bool, error) {
+	audit *facetproof.MeshAudit, volume measurement.Measurement, volRat *big.Rat, transferMeshSlabs bool) (*topo.Body, bool, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, false, err
 	}
 	if budget == nil || audit == nil || volRat == nil {
 		return nil, false, nil
 	}
-	body, faceOf, diameter, ok, err := assembleBodyBounded(ctx, budget, env, meshOfPayload(pp), audit, volume, volRat, 65536)
+	in := meshOfPayload(pp)
+	in.transferMeshSlabs = transferMeshSlabs
+	body, faceOf, diameter, ok, err := assembleBodyBounded(ctx, budget, env, in, audit, volume, volRat, 65536)
 	if err != nil || !ok {
 		return nil, ok, err
 	}

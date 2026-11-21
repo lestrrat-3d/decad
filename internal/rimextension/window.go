@@ -241,6 +241,7 @@ func AdmitWindow(ctx context.Context, a Admission, meter *proofbound.ReplayBudge
 	}
 	bounds := windowMeasures(a, n, h, start, l, seam, ds, span, scaleLo, bottom)
 	bounds.support = support
+	bounds.coveredFaces = faceIndices
 	if proofbound.IsNonFinite(bounds.Deviation) || proofbound.IsNonFinite(bounds.Area) || proofbound.IsNonFinite(bounds.Volume) {
 		return none, false, nil
 	}

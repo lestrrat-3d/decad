@@ -31,7 +31,9 @@ import (
 // Group is one source face's provenance, carried into the payload so a
 // rebuild (Transform) reproduces the same origins.
 type Group struct {
-	Origins []provenance.Ref
+	// MeshSlab applies only to original raw input and verified subsets.
+	MeshSlab *topo.MeshPlaneSlab
+	Origins  []provenance.Ref
 	// Upstream is the operand roles an analytic Boolean proved the source
 	// face lies inside (topo.Face.Upstream), carried apart from Origins so a
 	// recognizer that matches a face by its own roles reads the same Origins
@@ -102,4 +104,13 @@ type Group struct {
 	// exact; any curved source makes the rim's true length unboundable
 	// without curvature knowledge, and Edge.Length must refuse.
 	Planar bool
+}
+
+// RestrictMeshPlaneSlab drops a group claim if any source fragment is
+// affected, or if the current source face lacks the same positional proof.
+// Calling this for every fragment also covers disconnected source groups.
+func (g *Group) RestrictMeshPlaneSlab(face *topo.Face, affected bool) {
+	if affected || face.MeshPlaneSlab() != g.MeshSlab {
+		g.MeshSlab = nil
+	}
 }

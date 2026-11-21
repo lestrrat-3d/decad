@@ -20,6 +20,7 @@ import (
 func sourceGroup(owner *topo.Body, operand, ordinal int, f *topo.Face, flip bool,
 	placed placedDepartures, walls map[*topo.Face]struct{}) facetedrecord.Group {
 	group, _ := facetedrecord.SourceTag(f, flip)
+	group.MeshSlab = f.MeshPlaneSlab()
 	group = placed.charge(group, f, ordinal)
 	group = chordedLoftPlane(group, owner, f)
 	group = displacedWall(group, f, walls)

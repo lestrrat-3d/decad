@@ -349,3 +349,4 @@
 12	0.00	TestRetainedRimSeamContact
 12	0.00	TestRetainedRimSupportCancellation
 12	0.00	TestCutBandCapRegistration
+12	0.00	TestRawMeshPlaneOnBooleanFragments
