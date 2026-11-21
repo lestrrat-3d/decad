@@ -629,6 +629,14 @@ from a retained face with no record, and a translation, a placement and a
 moved piece keep a displacement stated with no record, because it is relative
 to the tag alone. A cap of a loft is a true plane and states none.
 
+A directly constructed mixed line-and-arc loft also records each straight cell's
+departure from each of its two wall planes. The four exact endpoint corners lie
+within the assembly's vertex displacement of their held positions. Their convex
+hull contains both straight wall halves. The largest of the four held distances
+to the tagged plane plus that displacement therefore bounds the whole cell.
+The Boolean uses the smaller of that bound and the loft-wide departure only for
+the original face and plane stored together at construction.
+
 A rim between a displaced plane and another plane or a cylinder parallel to
 the plane's normal moves by at most `4000δ` (planes meeting at a sine of at
 least `1e-3`). `RetainedEdgeCurve` widens its line falsifier by that, and only

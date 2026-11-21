@@ -42,6 +42,7 @@ type SourceIdentity struct {
 // rest the two caps' own triangulations — kept on the payload so a later
 // Tessellate (PR 2) restates it rather than rebuilding it.
 type Payload struct {
+	wallPlanes map[*topo.Face]wallPlaneBound
 	// SourceIdentity is shared only by the original Loft and its own placed
 	// copies. It lets a structural consumer require one authenticated source.
 	SourceIdentity     *SourceIdentity

@@ -415,6 +415,13 @@ func buildPaired(ctx context.Context, env topo.Env, pl Payload, budget *proofbou
 	// chording commits.
 	pl.SectionDelta = sectionDelta
 	pl.Chorded = loftmesh.IsChorded(pairs, sectionDelta, sectionMatchedDelta)
+	pl.wallPlanes = nil
+	if pl.Chorded && pl.MatchesDirectSections(body) && len(pl.BlendSegs) == 0 {
+		pl.wallPlanes, err = recordStraightWalls(budget, pairs, a, walls)
+		if err != nil {
+			return nil, err
+		}
+	}
 	body.Payload = pl
 	return body, nil
 }
