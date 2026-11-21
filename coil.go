@@ -91,7 +91,11 @@ func decodeCoilOptions(opts []CoilOption) (bool, int64, error) {
 // profile's extent along the axis MUST stay below the pitch, or two turns
 // would meet (ErrUnsupported). Every profile segment MUST be a whole LineSeg,
 // ArcSeg or CircleSeg (ErrUnsupported); an arc is held as 16 chords per turn
-// of its sweep. A coil needing more than 32768 stations at 256 per turn, or
+// of its sweep. A line is held as one chord or, where one chord's wall cells
+// would depart from the true wall by more than 0.15% of the line's outer
+// radius (a long radial run on a steep screw), as up to 128 equal chords
+// that meet it (agent-docs/helix-design.md §5.3). A coil needing more than
+// 32768 stations at 256 per turn, or
 // more than 1048576 triangles, is ErrUnsupported, as is one whose held shell
 // crosses itself where two turns pass closer than the station chords
 // resolve, or whose crossing audit passes its triangle or pair ceiling.
@@ -169,7 +173,11 @@ func Coil(ctx context.Context, d *Document, s *sketch.Sketch, p *sketch.Profile,
 	}
 
 	// CS7 and CS8.
-	prof, err := coil.Loops(profile.Outer, profile.Holes, coilshell.ArcChordsPerTurn)
+	prof, err := coilshell.Loops(profile, coilshell.AxisInput{
+		AU: line.AU, AV: line.AV, AUBound: line.AUBound, AVBound: line.AVBound,
+		DU: line.DU, DV: line.DV, DUBound: line.DUBound, DVBound: line.DVBound,
+		Side: side,
+	}, pitchMM, turnCount, stationsPerTurn, coilshell.ArcChordsPerTurn)
 	if err != nil {
 		return nil, err
 	}

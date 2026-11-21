@@ -15,11 +15,12 @@ import (
 
 // Profile is a coil profile's held station chain (agent-docs/helix-design.md §5.3
 // and §11 PR 3): every station once, loop-major (outer loop first, then each
-// hole), and per loop the station indices in walk order. A LineSeg
-// contributes its walk start. An ArcSeg or a whole CircleSeg contributes its
-// walk start and the interior stations of its chords, loft §5.1's chord
-// chain, so a wall cell is chorded along the profile as well as along the
-// helix. Station v's chord runs to the next station of its loop.
+// hole), and per loop the station indices in walk order. Every segment
+// contributes its walk start and the interior stations of its chords, loft
+// §5.1's chord chain, so a wall cell is chorded along the profile as well as
+// along the helix: an ArcSeg or a whole CircleSeg by its sweep, a LineSeg by
+// its LinePlan, one chord unless its single cell's departure passes the
+// plan's target. Station v's chord runs to the next station of its loop.
 type Profile struct {
 	Pts     []sectionrecord.Point2
 	LoopIdx [][]int
@@ -34,6 +35,18 @@ type Profile struct {
 	Segments []Segment
 }
 
+// Corners returns, per loop, the walk start of every recorded segment in walk
+// order: on a line-only profile its recorded vertices, without the generated
+// interior stations of its chords. A profile whose every segment holds one
+// chord answers its LoopIdx.
+func (p Profile) Corners() [][]int {
+	out := make([][]int, len(p.LoopIdx))
+	for _, s := range p.Segments {
+		out[s.Loop] = append(out[s.Loop], s.First)
+	}
+	return out
+}
+
 // Chord is one profile chord: the recorded segment it belongs to, an index
 // into Profile.Segments, and for an arc chord Sag, the bound on how far the
 // recorded arc departs from the chord between its two denoted ends at a
@@ -46,7 +59,7 @@ type Chord struct {
 
 // Segment is one recorded segment of a coil profile: its normalized record,
 // its loop and position in the loop, the station its walk starts at, and the
-// chords it is cut into (one for a line). Closed marks a whole circle, or a
+// chords it is cut into. Closed marks a whole circle, or a
 // whole-turn arc whose End is its Start, a loop on its own; Reversed marks a walk against the curve's natural sense.
 type Segment struct {
 	Record        sectionrecord.CurveSegment
@@ -104,16 +117,111 @@ func (s Segment) IsArc() bool {
 	}
 }
 
+// LineChordTargetScale is the per-cell departure a chorded line aims at, as a
+// fraction of the line's larger radius (agent-docs/helix-design.md §5.3). It
+// is the twisted sweep's refinement target (internal/twistsweep), so a coil
+// wall and a refined twisted wall hold about the same relative distance.
+const LineChordTargetScale = 0.0015
+
+// MaxLineChords is the most chords one line is cut into. At the target a
+// steep wall (a rise near 4 mm over a few degrees at radii 2.5 to 14 mm)
+// needs about 80; past the ceiling the line takes the ceiling.
+const MaxLineChords = 128
+
+// LinePlan decides how many chords each LineSeg of a coil profile is cut
+// into (agent-docs/helix-design.md §5.3). A line held as one chord makes
+// every wall cell span its whole radial run, and §5.4's twist term grows
+// with that run, the station step and pitch/ρ_min. Cutting the line into m
+// equal chords gives every cell its own end radii. The plan holds the axis,
+// the pitch and the station step as floats, which decide a count and
+// nothing else: every bound reads the exact radii of each chord's ends. The
+// zero plan holds every line as one chord.
+type LinePlan struct {
+	// AU, AV is a point of the axis and DU, DV its direction, in plane
+	// coordinates; Side puts the profile on the positive side of
+	// e_r = Side·(−DV, DU).
+	AU, AV, DU, DV float64
+	Side           int
+	// Pitch is the advance per turn and Step the station step in turns.
+	Pitch, Step float64
+}
+
+// Chords is the chord count of the line from start to end. A line whose
+// one cell's §5.4 departure (sag, twist and shift) already meets the target,
+// LineChordTargetScale times its larger radius, keeps one chord. Any other
+// takes the fewest equal chords, up to MaxLineChords, for which every chord's
+// radial run stays within its own inner radius and every cell meets the
+// target.
+func (lp LinePlan) Chords(start, end sectionrecord.Point2) int {
+	if !(lp.Step > 0) || lp.Side == 0 || proofbound.IsNonFinite(lp.Step) || proofbound.IsNonFinite(lp.Pitch) {
+		return 1
+	}
+	rho := func(p sectionrecord.Point2) float64 {
+		r := (p.V-lp.AV)*lp.DU - (p.U-lp.AU)*lp.DV
+		if lp.Side < 0 {
+			return -r
+		}
+		return r
+	}
+	r0, r1 := rho(start), rho(end)
+	if !(r0 > 0) || !(r1 > 0) || proofbound.IsNonFinite(r0) || proofbound.IsNonFinite(r1) {
+		return 1
+	}
+	target := LineChordTargetScale * math.Max(r0, r1)
+	if lp.departure(r0, r1) <= target {
+		return 1
+	}
+	for m := 2; m <= MaxLineChords; m++ {
+		if lp.chordsMeet(r0, r1, m, target) {
+			return m
+		}
+	}
+	return MaxLineChords
+}
+
+// chordsMeet reports whether every one of m equal chords of the line keeps
+// its radial run within its inner radius and its cell's departure within
+// target.
+func (lp LinePlan) chordsMeet(r0, r1 float64, m int, target float64) bool {
+	for i := range m {
+		a := r0 + (r1-r0)*float64(i)/float64(m)
+		b := r0 + (r1-r0)*float64(i+1)/float64(m)
+		if math.Abs(b-a) > math.Min(a, b) || lp.departure(a, b) > target {
+			return false
+		}
+	}
+	return true
+}
+
+// departure is CellDepartureUpper's sum in floats for one cell at radii a
+// and b: sag + twist + shift with h = π·Step, k = Pitch/2π and
+// c = min(1, ρ_min/|Δρ|). It decides a count only.
+func (lp LinePlan) departure(a, b float64) float64 {
+	h := math.Pi * lp.Step
+	k := lp.Pitch / (2 * math.Pi)
+	lo, hi := math.Min(a, b), math.Max(a, b)
+	out := hi * h * h / 2
+	dr := hi - lo
+	if dr == 0 {
+		return out
+	}
+	c := math.Min(1, lo/dr)
+	twist := dr * h / 2 * ((1 - c) + c*(h+k/lo))
+	shift := c * c * dr * dr * h * h / (8 * lo)
+	return out + twist + shift
+}
+
 // Loops returns the held station chain of a coil profile whose segments
 // are whole LineSegs, whole ArcSegs and whole CircleSegs (agent-docs/helix-design.md
 // Table CS row CS7). chordsPerTurn is the number of chords a full turn of an
 // arc is cut into; an arc of sweep Δ takes ⌈chordsPerTurn·Δ/2π⌉ of them, at
-// least one, and a whole circle takes chordsPerTurn, at least three. Any
+// least one, and a whole circle takes chordsPerTurn, at least three. lines
+// decides each line's chord count (LinePlan.Chords). Any
 // other kind is ErrUnsupported, as is a trimmed segment, a circle sharing its
 // loop, and a loop whose segment ends do not meet exactly: none of those has
 // an exact recorded vertex for the held station-0 section to hold at the
 // junction.
-func Loops(outer sectionrecord.LoopRecord, holes []sectionrecord.LoopRecord, chordsPerTurn int) (Profile, error) {
+func Loops(outer sectionrecord.LoopRecord, holes []sectionrecord.LoopRecord, chordsPerTurn int, lines LinePlan) (Profile, error) {
 	loops := append([]sectionrecord.LoopRecord{outer}, holes...)
 	var out Profile
 	for i, loop := range loops {
@@ -126,7 +234,6 @@ func Loops(outer sectionrecord.LoopRecord, holes []sectionrecord.LoopRecord, cho
 				return Profile{}, err
 			}
 			seg := Segment{Record: segment, Loop: i, Index: j, First: len(out.Pts)}
-			segIndex := len(out.Segments)
 			var start sectionrecord.Point2
 			switch s := segment.(type) {
 			case sectionrecord.LineSeg:
@@ -139,10 +246,10 @@ func Loops(outer sectionrecord.LoopRecord, holes []sectionrecord.LoopRecord, cho
 					return Profile{}, fmt.Errorf(`%w: a coil sweeps whole profile segments only; loop %d segment %d is a trimmed line`,
 						decaderr.ErrUnsupported, i, j)
 				}
-				seg.Chords = 1
-				out.Pts = append(out.Pts, start)
-				out.Round = append(out.Round, 0)
-				out.Chord = append(out.Chord, Chord{Segment: segIndex})
+				seg.Chords = lines.Chords(start, ends[j])
+				if err := out.addLine(&seg, start, ends[j]); err != nil {
+					return Profile{}, err
+				}
 			case sectionrecord.ArcSeg:
 				if err := out.addArc(&seg, s, chordsPerTurn, ends, i, j); err != nil {
 					return Profile{}, err
@@ -183,6 +290,41 @@ func Loops(outer sectionrecord.LoopRecord, holes []sectionrecord.LoopRecord, cho
 		out.LoopIdx = append(out.LoopIdx, idx)
 	}
 	return out, nil
+}
+
+// addLine appends a whole LineSeg's walk start, a recorded point, and the
+// seg.Chords − 1 interior stations of its chords at the exact walk
+// parameters k/m: each is the float nearest the exact point
+// start + (k/m)·(end − start), with the distance to it as its plane round.
+// Every chord of a line carries no sagitta.
+func (p *Profile) addLine(seg *Segment, start, end sectionrecord.Point2) error {
+	segIndex := len(p.Segments)
+	p.Pts = append(p.Pts, start)
+	p.Round = append(p.Round, 0)
+	p.Chord = append(p.Chord, Chord{Segment: segIndex})
+	m := seg.Chords
+	if m == 1 {
+		return nil
+	}
+	u0, v0 := proofarith.FloatRat(start.U), proofarith.FloatRat(start.V)
+	u1, v1 := proofarith.FloatRat(end.U), proofarith.FloatRat(end.V)
+	if u0 == nil || v0 == nil || u1 == nil || v1 == nil {
+		return fmt.Errorf(`%w: coil profile loop %d line %d states no finite end`, decaderr.ErrUnsupported, seg.Loop, seg.Index)
+	}
+	du, dv := new(big.Rat).Sub(u1, u0), new(big.Rat).Sub(v1, v0)
+	for k := 1; k < m; k++ {
+		f := big.NewRat(int64(k), int64(m))
+		u := new(big.Rat).Add(u0, new(big.Rat).Mul(f, du))
+		v := new(big.Rat).Add(v0, new(big.Rat).Mul(f, dv))
+		pt, round, ok := heldOf(Point(u), Point(v))
+		if !ok {
+			return fmt.Errorf(`%w: coil profile loop %d line %d states no station %d`, decaderr.ErrUnsupported, seg.Loop, seg.Index, k)
+		}
+		p.Pts = append(p.Pts, pt)
+		p.Round = append(p.Round, round)
+		p.Chord = append(p.Chord, Chord{Segment: segIndex})
+	}
+	return nil
 }
 
 // arcChords is the chord count of a circular sweep of held angle sweep: the

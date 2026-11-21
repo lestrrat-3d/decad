@@ -159,9 +159,50 @@ func axisOf(in AxisInput) (coil.Axis, error) {
 	return coil.Axis{AU: aU, AV: aV, DU: dU, DV: dV, Side: in.Side}, nil
 }
 
+// Loops reads the profile's station chain (coil.Loops), each arc cut by
+// arcChordsPerTurn and each line by the coil.LinePlan of this axis, pitch and
+// station step (agent-docs/helix-design.md §5.3). A chain whose chorded lines
+// would hold more than loftmesh.MaxLoftAuditTriangles wall and cap triangles
+// keeps every line as one chord instead, so chording never moves a coil past
+// the crossing audit's untiled ceiling or the facet ceiling. The decision
+// reads the record alone, so every placement repeats it.
+func Loops(profile momentinput.Profile, axis AxisInput, pitch, turns float64, stationsPerTurn int64, arcChordsPerTurn int) (coil.Profile, error) {
+	unsplit := func() (coil.Profile, error) {
+		return coil.Loops(profile.Outer, profile.Holes, arcChordsPerTurn, coil.LinePlan{})
+	}
+	turnsRat := proofarith.FloatRat(turns)
+	if turnsRat == nil || turnsRat.Sign() <= 0 {
+		return unsplit()
+	}
+	n, ok := coil.StationCount(turnsRat, stationsPerTurn)
+	if !ok || n <= 0 || n > MaxStations {
+		return unsplit()
+	}
+	plan := coil.LinePlan{AU: axis.AU, AV: axis.AV, DU: axis.DU, DV: axis.DV, Side: axis.Side, Pitch: pitch, Step: turns / float64(n)}
+	prof, err := coil.Loops(profile.Outer, profile.Holes, arcChordsPerTurn, plan)
+	if err != nil {
+		return coil.Profile{}, err
+	}
+	split := false
+	for _, s := range prof.Segments {
+		if !s.IsArc() && s.Chords > 1 {
+			split = true
+			break
+		}
+	}
+	if !split {
+		return prof, nil
+	}
+	stations, holes := int64(len(prof.Pts)), int64(len(prof.LoopIdx)-1)
+	if 2*n*stations+2*(stations+2*holes-2) > loftmesh.MaxLoftAuditTriangles {
+		return unsplit()
+	}
+	return prof, nil
+}
+
 // Read resolves the recorded coil into exact section and placement inputs.
 func Read(in Input) (Record, error) {
-	prof, err := coil.Loops(in.Profile.Outer, in.Profile.Holes, in.ArcChordsPerTurn)
+	prof, err := Loops(in.Profile, in.Axis, in.Pitch, in.Turns, in.StationsPerTurn, in.ArcChordsPerTurn)
 	if err != nil {
 		return Record{}, err
 	}

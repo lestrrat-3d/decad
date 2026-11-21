@@ -3195,3 +3195,6 @@
 12	0.00	TestCircularLoftEmergingFlatRefusesBentChain
 12	0.00	TestCircularLoftEmergingFlatRefusesUnrepresentablePlane
 12	0.00	TestCutRegisteredPrismArc
+12	0.00	TestCoilChordsLongRadialLines
+12	0.00	TestCoilTrimmedRampWedgeJoinsRing
+12	0.00	TestCoilTrimmedSteepWedgeJoinsRing

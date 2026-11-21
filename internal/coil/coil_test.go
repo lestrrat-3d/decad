@@ -257,7 +257,7 @@ func TestLoopsReadsLinePolygons(t *testing.T) {
 		sectionrecord.LineSeg{Start: sectionrecord.Point2{U: 2, V: 1}, End: sectionrecord.Point2{U: 3, V: 1}, TStart: 1, TEnd: 0},
 		sectionrecord.LineSeg{Start: sectionrecord.Point2{U: 2, V: 1}, End: sectionrecord.Point2{U: 2}, TStart: 0, TEnd: 1},
 	}}
-	prof, err := coil.Loops(square, nil, 16)
+	prof, err := coil.Loops(square, nil, 16, coil.LinePlan{})
 	require.NoError(t, err)
 	require.Len(t, prof.Pts, 4)
 	require.Equal(t, [][]int{{0, 1, 2, 3}}, prof.LoopIdx)
@@ -266,13 +266,13 @@ func TestLoopsReadsLinePolygons(t *testing.T) {
 	trimmed := square
 	trimmed.Segments = append([]sectionrecord.CurveSegment(nil), square.Segments...)
 	trimmed.Segments[0] = sectionrecord.LineSeg{Start: sectionrecord.Point2{U: 2}, End: sectionrecord.Point2{U: 3}, TStart: 0, TEnd: 0.5}
-	_, err = coil.Loops(trimmed, nil, 16)
+	_, err = coil.Loops(trimmed, nil, 16, coil.LinePlan{})
 	require.ErrorIs(t, err, decaderr.ErrUnsupported)
 
 	gap := square
 	gap.Segments = append([]sectionrecord.CurveSegment(nil), square.Segments...)
 	gap.Segments[1] = sectionrecord.LineSeg{Start: sectionrecord.Point2{U: 3}, End: sectionrecord.Point2{U: 3, V: 0.9}, TStart: 0, TEnd: 1}
-	_, err = coil.Loops(gap, nil, 16)
+	_, err = coil.Loops(gap, nil, 16, coil.LinePlan{})
 	require.ErrorIs(t, err, decaderr.ErrUnsupported)
 }
 
