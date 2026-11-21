@@ -34,6 +34,7 @@ _proofs/
   Decad/Orientation/Orient2.lean  TwoSum components of the 2D orientation sign and the sign of a nonoverlapping sum
   Decad/Orientation/Sum2.lean     exact 24-component determinant split and the Sum2 sign threshold
   Decad/Orientation/Grow.lean     exact zero-eliminating expansion fallback and its sign read
+  Decad/Enclosure/Float.lean      outward float enclosures and the box dot-product enclosure
   go.mod                 module github.com/lestrrat-3d/decad/_proofs; standard library only
   trace.json             theorem to Go function manifest
   tracecheck/            package main: manifest checker and its tests
@@ -125,6 +126,8 @@ All theorems build with no `sorry`, and `axiom-audit` accepts only `propext`, `C
 | `Orientation.parts_sum`, `expansionSign_eq`, `orient2Sign_sound`, `sgn_add_of_abs_lt` | Orientation/Orient2 | `proof.Orient2SignExpansion`, `floatSign` |
 | `Orientation.tripleSum_eq`, `sum24_eq_det`, `scale_bound`, `sum2_sign_sound` | Orientation/Sum2 | `proof.orientSignSum2`, `tripleComponents` |
 | `Orientation.growAux_sum`, `growAux_length`, `growAux_ne_zero`, `orientGrow_sound` | Orientation/Grow | `proof.orientSignGrow`, `orientationExpansion.add` |
+| `Enclosure.down_le`, `stepDown_le`, `stepUp_ge`, `mulDown_le`, `mulUp_ge` | Enclosure/Float | `proof.floatDown`, `floatUp`, `floatMulDown`, `floatMulUp` |
+| `Enclosure.floatBounds_enclose`, `prod_ge`, `prod_le`, `axisLo_le`, `axisHi_ge`, `dotSub_enclosure` | Enclosure/Float | `proof.FloatBounds`, `DotSubEnclosure` |
 
 - `Float.gridModel`: `F = {δ·k | k : ℤ}`, `rn x = δ·round(x/δ)`, `nu f = f + δ`, any `δ > 0`. It does not model
   binary64. Without an instance, an inconsistent `FloatModel` would make every theorem vacuously true.
@@ -152,6 +155,16 @@ All theorems build with no `sorry`, and `axiom-audit` accepts only `propext`, `C
 - `orientGrow_sound`: `orientSignGrow` returns the sign of the exact determinant, including zero, when the final
   expansion's highest component strictly outweighs the sum of the others (A14).
 - Not covered: `OrientSignExpansion`'s control flow, and the grid argument that makes the FMA remainders exact.
+- `down_le`: rounding to nearest then stepping down never lands above `x`, the counterpart of `up_ge`.
+  `nd f = -nu(-f)` models `math.Nextafter(x, -Inf)` (A15).
+- `floatBounds_enclose`: `FloatBounds` returns two floats around `d`. An exact flag means the conversion equals `d`
+  (A16).
+- `axisLo_le`, `axisHi_ge`: the least of the four directed corner products is at most `x·y` for `x` and `y` in their
+  intervals, and the greatest is at least `x·y`. `prod_ge` and `prod_le` carry the real-number argument.
+- `dotSub_enclosure`: with float box ends and float `cLo`, `cHi`, the returned `lo` is at most `x·y - c` and the
+  returned `hi` at least it, for every point in the boxes and every `c` in `[cLo, cHi]`.
+- Not covered: the infinity and NaN behavior of these functions (overflow is A7), and `DvFloatBox`, which applies
+  `FloatBounds` to each component.
 
 ## Assumptions
 
@@ -160,13 +173,13 @@ theorem still builds.
 
 | Id | Assumption | Lean form | Go evidence | Covered Go entries |
 |---|---|---|---|---|
-| A1 | Each modeled float `+`/`*` on finite operands without overflow returns the round-to-nearest-even value: Go IEEE 754 binary64, and no fused multiply-add on the modeled path | `rn`, `rn_mem`, `rn_near` | Code reading. Go may fuse `x*y+z` across statements and inlined calls on arm64/ppc64/s390x. Dated check (Go 1.27.4, `GOARCH=arm64 -tags race -gcflags=-S ./internal/proofbound/`): no `FMADDD`/`FMSUBD` in `ProductUpper`, `BoundedMul`, `AbsSumUpper`, `UpRound`; `NextUp` is called, not inlined | `proofbound` `AbsSumUpper`, `BoundedMul`, `ProductUpper`, `ProvenUpRound`, `UpRound`; `proof.ProvenUpRound` |
+| A1 | Each modeled float `+`/`*` on finite operands without overflow returns the round-to-nearest-even value: Go IEEE 754 binary64, and no fused multiply-add on the modeled path | `rn`, `rn_mem`, `rn_near` | Code reading. Go may fuse `x*y+z` across statements and inlined calls on arm64/ppc64/s390x. Dated check (Go 1.27.4, `GOARCH=arm64 -tags race -gcflags=-S ./internal/proofbound/`): no `FMADDD`/`FMSUBD` in `ProductUpper`, `BoundedMul`, `AbsSumUpper`, `UpRound`; `NextUp` is called, not inlined | `proofbound` `AbsSumUpper`, `BoundedMul`, `ProductUpper`, `ProvenUpRound`, `UpRound`; `proof.ProvenUpRound`; `float_enclosure.go floatMulDown`, `floatMulUp`, `DotSubEnclosure` |
 | A2 | `proof.NextUp(f)` is the least float above finite `f` (both build files) | `nu`, `nu_mem`, `lt_nu`, `nu_min` | `TestFloatStepMatchesMath` (`internal/proof/float_step_test.go`) against `math.Nextafter` | `float_step.go NextUp`, `float_step_plain.go NextUp` |
 | A3 | Floats are multiples of `2^-1074` = `math.SmallestNonzeroFloat64`, so a float sum is 0 or at least `δ` in magnitude | `δ`, `δ_pos`, `δ_mem`, `add_grid`, `zero_mem`, `neg_mem` | IEEE 754 encoding; code reading of `proof.ProvenUpRound` | `rounding.go ProvenUpRound` |
 | A4 | `proof.MulRoundError(a, b, a*b)` returns a float ≥ `|a·b − held|` (FMA residual exact under the `Ilogb` gate; else `RationalFloatError`) | hypotheses `hr`, `hrF` of `boundedMul_bound_sound` | Gate derivation in `ExactFloatSquare`'s doc comment; `internal/proof/rounding_test.go` | `rounding.go MulRoundError`, `RationalFloatError`, `FloatRat` |
 | A5 | `proof.Abs(x) = |x|` for finite `x` (both build files) | `|·|` in `absSum` | Code reading; `float_step_test.go` | `float_step.go Abs`, `float_step_plain.go Abs`, `proofbound.AbsSumUpper` |
 | A6 | Input bounds are finite and non-negative; operand values finite | hypotheses `hEa0`, `hEb0`; finiteness implicit | `BoundedScalar` construction sites; not checked | `bounded.go BoundedMul`, `MeasuredScalar` |
-| A7 | No overflow: every modeled intermediate is finite. `+Inf` results and the `+Inf` refusal branches are not modeled | omitted | `ProductUpper`'s `+Inf` branch; code reading | `bounded.go ProductUpper` |
+| A7 | No overflow: every modeled intermediate is finite. `+Inf` results and the `+Inf` refusal branches are not modeled | omitted | `ProductUpper`'s `+Inf` branch; code reading | `bounded.go ProductUpper`, `float_enclosure.go DotSubEnclosure` |
 | A8 | `math/big`: `QuoRem` truncates (`n = d·q + r`, `|r| < d`, `r` has `n`'s sign); `Lsh` multiplies by `2^k`; `BitLen` is `Nat.size` of the absolute value; `lazyFrac(n, d)` represents `n/d` | `Int.tdiv`, `Int.tmod`, `Nat.size` in `lazyRoundModel` | Go `math/big` docs; `lazy_round_test.go` | `lazy_rat.go lazyFrac`, `LazyRoundDown`, `LazyRoundUp`, `lazyRound` |
 | A9 | `twoSum(a, b)` returns `fl(a+b)` and the exact error `a+b-fl(a+b)` (Knuth's TwoSum), no overflow, no fused multiply-add on the path | the model writes the error as the exact real difference | `orientation_expansion_test.go`, `orientation_expansion_2d_test.go` compare against exact integer arithmetic | `orientation_expansion.go twoSum`, `sum2Step` |
 | A10 | For differences `exactDifference` admits, each product and its FMA remainder are exact: the rounded product and `math.FMA(x, y, -product)` add to `x·y` | `tripleSum`, `parts` write each remainder as the exact difference | Grid argument in the doc comments of `Orient2SignExpansion` and `OrientSignExpansion`; the same tests | `orientation_expansion.go exactDifference`, `tripleComponents` |
@@ -174,6 +187,8 @@ theorem still builds.
 | A12 | Sum2 over the 24 components obeys `|res - s| <= eps·|s| + g·S` with `eps = 2^-53`, `g = gamma(23)^2` (Ogita, Rump and Oishi 2005, Proposition 4.5) | hypothesis `hSum2` of `sum2_sign_sound` | `TestOrientationFiltersDecideAboveProvenErrorBound` | `orientation_expansion.go orientSignSum2`, `sum2Step` |
 | A13 | `S <= (1+3·eps)/(1-gamma(5))·mag`: each triple's four components sum to at most `(1+3·eps)·|hi|` in magnitude, and a float sum of six nonnegative values is at least `(1-gamma(5))` of their exact sum | hypothesis `hS` of `sum2_sign_sound` | Derivation in `orientSignSum2`'s doc comment; not checked | `orientation_expansion.go orientSignSum2` |
 | A14 | `orientationExpansion.add` keeps the expansion nonoverlapping, so the final highest component strictly outweighs the sum of the rest (Shewchuk, Theorem 10, round-to-even) | hypothesis `hdom` of `orientGrow_sound` | `TestOrientSignExpansionMatchesExactDeterminant`, `TestOrientSignExpansionNearCoplanarMatchesExactDeterminant` | `orientation_expansion.go orientSignGrow`, `orientationExpansion.add` |
+| A15 | `math.Nextafter(x, +Inf)` and `math.Nextafter(x, -Inf)` return the float just above and just below a finite float `x` | `nu`; `nd f = -nu(-f)` | Go `math` docs; `TestFloatStepMatchesMath` (`internal/proof/float_step_test.go`) | `float_enclosure.go floatDown`, `floatUp` |
+| A16 | `Dyadic.Float64` returns the round-to-nearest float of the dyadic, and its exact flag is true only when that float equals the dyadic | hypothesis `hex` of `floatBounds_enclose`; `rn` | Doc comment of `Dyadic.Float64`; `TestFloatBoundsBracketDyadic` | `float_enclosure.go FloatBounds` |
 
 - Adding a row = new id `A<n+1>`. NEVER renumber. Delete a row only when no manifest entry cites it.
 - `FloatModel` is the seam for discharging A1 to A3: a concrete binary64 model instantiating it proves its

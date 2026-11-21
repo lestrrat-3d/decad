@@ -14,6 +14,8 @@ import (
 // rounds to the nearest float, so the exact value lies strictly between that
 // float's neighbours. That also holds when the conversion overflows to an
 // infinity: the infinity's neighbour toward zero is MaxFloat64.
+//
+// Lean proofs depend on this function; see _proofs/trace.json.
 func FloatBounds(d Dyadic) (float64, float64) {
 	f, exact := d.Float64()
 	if exact {
@@ -46,16 +48,34 @@ func DvFloatBox(v DyV3) FloatBox3 {
 // infinity steps to MaxFloat64 toward zero, which the exact result also
 // passes. The explicit float64 conversion of a product stops the compiler from
 // fusing it into a later add, which would round differently.
-func floatDown(x float64) float64       { return math.Nextafter(x, math.Inf(-1)) }
-func floatUp(x float64) float64         { return math.Nextafter(x, math.Inf(1)) }
+
+// floatDown is the float just below x.
+//
+// Lean proofs depend on this function; see _proofs/trace.json.
+func floatDown(x float64) float64 { return math.Nextafter(x, math.Inf(-1)) }
+
+// floatUp is the float just above x.
+//
+// Lean proofs depend on this function; see _proofs/trace.json.
+func floatUp(x float64) float64 { return math.Nextafter(x, math.Inf(1)) }
+
+// floatMulDown is the product of a and b rounded to nearest, then stepped down.
+//
+// Lean proofs depend on this function; see _proofs/trace.json.
 func floatMulDown(a, b float64) float64 { return floatDown(float64(a * b)) }
-func floatMulUp(a, b float64) float64   { return floatUp(float64(a * b)) }
+
+// floatMulUp is the product of a and b rounded to nearest, then stepped up.
+//
+// Lean proofs depend on this function; see _proofs/trace.json.
+func floatMulUp(a, b float64) float64 { return floatUp(float64(a * b)) }
 
 // DotSubEnclosure returns floats lo ≤ x·y − c ≤ hi for every pair of vectors
 // in the boxes x and y and every c in [cLo, cHi]. Each product lies between
 // its least and greatest corner product. A NaN, from an infinity times zero or
 // opposed infinities, makes an end NaN, which every ordered comparison treats
 // as undecided.
+//
+// Lean proofs depend on this function; see _proofs/trace.json.
 func DotSubEnclosure(x, y FloatBox3, cLo, cHi float64) (float64, float64) {
 	lo, hi := 0.0, 0.0
 	for axis := range 3 {

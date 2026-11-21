@@ -12,6 +12,7 @@ on:
       - '_proofs/**'
       - '.github/workflows/proofs.yml'
       - 'agent-docs/proofs-design.md'
+      - 'internal/proof/float_enclosure.go'
       - 'internal/proof/float_step.go'
       - 'internal/proof/float_step_plain.go'
       - 'internal/proof/lazy_rat.go'
