@@ -27,6 +27,8 @@ func RatioSqrtSeed(n, d *big.Int, denomExp int) (float64, bool) {
 // num and den (each in [2^63, 2^64)), and the quotient exponent exp =
 // n.BitLen() − d.BitLen() + 1 − denomExp. The seed reads nothing else, so a
 // caller holding the numerator as machine words seeds without a big.Int.
+//
+// Lean proofs depend on this function; see _proofs/trace.json.
 func ratioSqrtSeedLeading(num, den uint64, exp int) (float64, bool) {
 	hi, lo := num>>1, num<<63
 	if num < den {
@@ -60,6 +62,8 @@ func ratioSqrtSeedLeading(num, den uint64, exp int) (float64, bool) {
 
 // leading64 is the top 64 bits of x, padded with low zeros for shorter
 // positive integers. It reads at most three words on either Go word size.
+//
+// Lean proofs depend on this function; see _proofs/trace.json.
 func leading64(x *big.Int) uint64 {
 	width := x.BitLen()
 	if width <= 64 {
