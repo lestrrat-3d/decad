@@ -251,6 +251,11 @@ func OrientedInteriorWitness(a, b OrientedBox, etaA, etaB *big.Rat) bool {
 	}
 	for _, pair := range [][2]OrientedBox{{a, b}, {b, a}} {
 		projectors, usable := prepareOrientedFaceProjectors(pair[1])
+		// The candidate midpoint of a vertex and its foot is
+		// (vertex·normSquared + scaled) / (2·normSquared) in every coordinate,
+		// so all candidates of one projector share a denominator.
+		var denominators [6]*big.Rat
+		var limitsA, limitsB [6][6]*big.Rat
 		for _, vertex := range OrientedWitnessSamples(pair[0]) {
 			for index := range projectors {
 				if !usable[index] {
@@ -260,13 +265,16 @@ func OrientedInteriorWitness(a, b OrientedBox, etaA, etaB *big.Rat) bool {
 				if !ok {
 					continue
 				}
-				var candidate [3]*big.Rat
-				normSquared := projection.normSquared.Rat()
+				var numerator proofarith.DyV3
 				for k := range 3 {
-					foot := new(big.Rat).Quo(projection.scaled[k].Rat(), normSquared)
-					candidate[k] = new(big.Rat).Quo(new(big.Rat).Add(vertex[k].Rat(), foot), big.NewRat(2, 1))
+					numerator[k] = proofarith.DyAdd(proofarith.DyMul(vertex[k], projection.normSquared),
+						projection.scaled[k])
 				}
-				if try(candidate) {
+				if denominators[index] == nil {
+					denominators[index] = proofarith.DyShift(projection.normSquared, 1).Rat()
+				}
+				if insideA.containsScaled(numerator, denominators[index], &limitsA[index]) &&
+					insideB.containsScaled(numerator, denominators[index], &limitsB[index]) {
 					return true
 				}
 			}
@@ -337,6 +345,7 @@ func OrientedWitnessSamples(box OrientedBox) []proofarith.DyV3 {
 
 type orientedInsidePlane struct {
 	normal [3]*big.Rat
+	exact  proofarith.DyV3 // the same normal, as exact Dyadics
 	limit  *big.Rat
 }
 
@@ -370,6 +379,7 @@ func prepareOrientedInside(box OrientedBox, eta *big.Rat) (orientedInsidePlanes,
 				}
 			}
 			plane := &planes[axis*2+side]
+			plane.exact = signed
 			for k := range 3 {
 				plane.normal[k] = signed[k].Rat()
 			}
@@ -387,6 +397,26 @@ func (planes *orientedInsidePlanes) contains(point [3]*big.Rat) bool {
 			projected.Add(projected, new(big.Rat).Mul(plane.normal[k], point[k]))
 		}
 		if projected.Cmp(plane.limit) >= 0 {
+			return false
+		}
+	}
+	return true
+}
+
+// containsScaled reports contains(numerator/denominator) for a point whose
+// coordinates are the exact Dyadic numerators over one positive Rat
+// denominator. The test projected < limit becomes dot(normal, numerator) <
+// limit·denominator, so no coordinate is ever divided or GCD-reduced.
+// scaledLimits holds limit·denominator per plane, filled on first use.
+func (planes *orientedInsidePlanes) containsScaled(
+	numerator proofarith.DyV3, denominator *big.Rat, scaledLimits *[6]*big.Rat,
+) bool {
+	for i := range planes {
+		plane := &planes[i]
+		if scaledLimits[i] == nil {
+			scaledLimits[i] = new(big.Rat).Mul(plane.limit, denominator)
+		}
+		if proofarith.DvDot(plane.exact, numerator).Rat().Cmp(scaledLimits[i]) >= 0 {
 			return false
 		}
 	}
