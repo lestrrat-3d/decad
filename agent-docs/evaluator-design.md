@@ -931,9 +931,12 @@ corner of the image's float box. Vertex rounding and a swept-volume allowance
 are added after the exact map. A non-finite bound refuses the placement.
 A faceted copy made with `WithCopyRotation` instead denotes an exactly
 orthogonal rational rotation `Q` with translation `t`, recorded at Copy time.
-Its held vertices are placed by the same float basis, and each vertex pays
+The evaluator first places held vertices by the same float basis. Each vertex pays
 `|Q - D|` times its largest coordinate plus `|t - t_D|` in place of the length
-stretch and determinant charge, because `Q` keeps length, area and volume. The
+stretch and determinant charge, because `Q` keeps length, area and volume.
+If this rounded mesh folds, the evaluator rounds the exact images `Q*v + t`
+directly and checks embedding again. Each vertex then pays its measured
+rounding and any embedding correction against that exact image. The
 group centroids are re-derived as `Q*c + t` in rational arithmetic with no
 stretch charge. Every record that describes the float placement instead of `Q`
 is dropped: every group denoted patch, every non-retained group surface tag,

@@ -273,12 +273,8 @@ func (fp Payload) placedWithReplay(ctx context.Context, env topo.Env, composed r
 	var charge massmoment.MapCharge
 	var placed facetproof.PlacedMesh
 	if exact != nil {
-		linearGap, translationGap, ok := exact.Gap(delta)
-		if !ok {
-			return nil, fmt.Errorf("%w: the exact rotation has no finite gap to the float placement", decaderr.ErrUnsupported)
-		}
-		placed, err = facetproof.PlaceMeshDenoting(ctx, budget, fp.Verts, fp.Tris, fp.VertexBound,
-			fp.VolSymDiff, fp.AreaSlack, delta, linearGap, translationGap)
+		placed, err = facetproof.PlaceRotatedMesh(ctx, budget, fp.Verts, fp.Tris, fp.VertexBound,
+			fp.VolSymDiff, fp.AreaSlack, delta, exact)
 	} else {
 		if replay != nil {
 			charge = replayCharge

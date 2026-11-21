@@ -587,3 +587,16 @@ func xhpCoordRat(n, w *big.Int) *big.Rat {
 	}
 	return r
 }
+
+// XptFromRats places three rational coordinates over their least common denominator.
+func XptFromRats(x, y, z *big.Rat) Xpt {
+	w := new(big.Int).Set(x.Denom())
+	for _, r := range []*big.Rat{y, z} {
+		g := new(big.Int).GCD(nil, nil, w, r.Denom())
+		w.Mul(w, new(big.Int).Quo(r.Denom(), g))
+	}
+	num := func(r *big.Rat) *big.Int {
+		return new(big.Int).Mul(r.Num(), new(big.Int).Quo(w, r.Denom()))
+	}
+	return Xpt(XhpStripTwosOwned(Xhp{X: num(x), Y: num(y), Z: num(z), W: w}))
+}

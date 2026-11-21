@@ -8,6 +8,7 @@ import (
 	"unsafe"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
+	"github.com/lestrrat-3d/decad/internal/exactrotation"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/orderedwork"
 	"github.com/lestrrat-3d/decad/internal/proof"
@@ -84,7 +85,11 @@ func PlaceMeshDenoting(ctx context.Context, budget *proofbound.WorkBudget, verts
 
 // denotingGap is the distance between the float placement and the exactly
 // orthogonal map the placed mesh denotes.
-type denotingGap struct{ linear, translation float64 }
+type denotingGap struct {
+	linear, translation float64
+	// rotation supplies the denoted image directly on a held-fold retry.
+	rotation *exactrotation.Rotation
+}
 
 func placeMeshGap(ctx context.Context, budget *proofbound.WorkBudget, verts []r3.Vec, tris [][3]int,
 	vertexBound []float64, volSymDiff, areaSlack, stretch, volumeCharge float64,
@@ -143,7 +148,14 @@ func placeMeshGapBudget(ctx context.Context, budget *proofbound.WorkBudget, vert
 		if gap != nil {
 			extra[i] = proofbound.AbsSumUpper(proofbound.ProductUpper(gap.linear, maxAbs), gap.translation)
 		}
-		if replay {
+		if gap != nil && gap.rotation != nil {
+			exact[i] = gap.rotation.Image(v)
+			next.Verts[i] = exact[i].Vec()
+			if proofbound.FiniteVec(next.Verts[i]) {
+				d, _ := meshbool.CoordDistance(exact[i], next.Verts[i]).Float64()
+				vertexAllow[i] = proofbound.Radius3D(proofbound.ProvenUpRound(d))
+			}
+		} else if replay {
 			var err error
 			exact[i], err = proof.ReplayExactAffineImage(ctx, basis.EX, basis.EY, basis.EZ, tr, v, replayExactMeter{budget})
 			if err != nil {
