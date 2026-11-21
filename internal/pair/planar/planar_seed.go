@@ -52,12 +52,33 @@ func (k *planarKernel) seedSide(verts, tris *planarPrep) {
 				d := at[axis] - (box.lo[axis]+box.hi[axis])/2
 				centre += d * d
 			}
-			facets = seedKeep(facets, seedFacets, seedPick{t, gapSquaredBelow(verts.vertBox[vertex.index], box), centre})
+			facets = seedKeep(facets, seedFacets, seedPick{t, seedGapSquared(verts.vertBox[vertex.index], box), centre})
 		}
 		for _, facet := range facets {
 			k.vertexFacet(verts, vertex.index, tris, facet.index)
 		}
 	}
+}
+
+// seedGapSquared is the squared float gap between two boxes in plain float
+// arithmetic. It only ranks which facets to read exactly, so it needs no
+// directed rounding: every guess is read exactly afterwards and the answer is
+// the same for any ranking.
+func seedGapSquared(a, b floatBox) float64 {
+	sum := 0.0
+	for axis := range 3 {
+		var gap float64
+		switch {
+		case a.hi[axis] < b.lo[axis]:
+			gap = b.lo[axis] - a.hi[axis]
+		case b.hi[axis] < a.lo[axis]:
+			gap = a.lo[axis] - b.hi[axis]
+		default:
+			continue
+		}
+		sum += gap * gap
+	}
+	return sum
 }
 
 // seedSamples bounds the vertices of each solid the nearest-vertex walk starts
