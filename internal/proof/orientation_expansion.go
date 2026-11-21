@@ -213,6 +213,8 @@ func sum2Step(pi, sigma, p float64) (float64, float64) {
 
 // orientSignGrow is the exact sign of det[ba, ca, da] for admitted
 // differences, from the full zero-eliminating expansion of its 24 components.
+//
+// Lean proofs depend on this function; see _proofs/trace.json.
 func orientSignGrow(ba, ca, da r3.Vec) int {
 	var sum orientationExpansion
 	for _, term := range [...][3]float64{
@@ -249,6 +251,9 @@ type orientationExpansion struct {
 	n     int
 }
 
+// add appends q to the expansion with Grow-Expansion and drops zero components.
+//
+// Lean proofs depend on this function; see _proofs/trace.json.
 func (e *orientationExpansion) add(q float64) {
 	if q == 0 {
 		return

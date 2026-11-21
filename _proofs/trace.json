@@ -122,6 +122,20 @@
     },
     {
       "file": "internal/proof/orientation_expansion.go",
+      "func": "orientSignGrow",
+      "role": "models",
+      "theorems": [
+        "Decad/Orientation/Grow.lean:Decad.Orientation.orientGrow_sound"
+      ],
+      "assumptions": [
+        "A9",
+        "A10",
+        "A14"
+      ],
+      "sha256": "7cf564ada3e27fbc028a376ab8c6a23c84b2845e26e496740903c526a667fa88"
+    },
+    {
+      "file": "internal/proof/orientation_expansion.go",
       "func": "orientSignSum2",
       "role": "models",
       "theorems": [
@@ -136,6 +150,20 @@
         "A13"
       ],
       "sha256": "2d1c23d24f1b562402ea3af4f40a9d6ee077a63d19c30f1309d5fa488b5159a1"
+    },
+    {
+      "file": "internal/proof/orientation_expansion.go",
+      "func": "orientationExpansion.add",
+      "role": "models",
+      "theorems": [
+        "Decad/Orientation/Grow.lean:Decad.Orientation.growAux_sum",
+        "Decad/Orientation/Grow.lean:Decad.Orientation.growAux_length",
+        "Decad/Orientation/Grow.lean:Decad.Orientation.growAux_ne_zero"
+      ],
+      "assumptions": [
+        "A9"
+      ],
+      "sha256": "07105cf2c0eeecfcaff199f1bb8a5294ba1a1b5e09a7caf0acaf2445e7030e99"
     },
     {
       "file": "internal/proof/orientation_expansion.go",
