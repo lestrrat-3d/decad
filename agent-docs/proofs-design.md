@@ -31,6 +31,8 @@ _proofs/
   Decad/Bounded/Upper.lean   upRound, provenUp, productUpper, absSum and their bound theorems
   Decad/Bounded/Mul.lean     mul_enclosure, boundedMul_bound_sound
   Decad/Rational/LazyRound.lean  floor/ceiling, outward, error, sign, scale, relative error, lazyRound model
+  Decad/Orientation/Orient2.lean  TwoSum components of the 2D orientation sign and the sign of a nonoverlapping sum
+  Decad/Orientation/Sum2.lean     exact 24-component determinant split and the Sum2 sign threshold
   go.mod                 module github.com/lestrrat-3d/decad/_proofs; standard library only
   trace.json             theorem to Go function manifest
   tracecheck/            package main: manifest checker and its tests
@@ -119,6 +121,8 @@ All theorems build with no `sorry`, and `axiom-audit` accepts only `propext`, `C
 | `Bounded.mul_enclosure`, `boundedMul_bound_sound` | Bounded/Mul | `proofbound.BoundedMul`, `MeasuredScalar` |
 | `Rational.down_is_floor`, `up_is_ceil`, `round_outward`, `round_error`, `round_sign` | Rational/LazyRound | `proof.lazyRound` |
 | `Rational.scale_range`, `round_rel_error`, `lazyRoundModel`, `lazyRound_sound` | Rational/LazyRound | `proof.lazyRound`, `LazyRoundDown`, `LazyRoundUp` |
+| `Orientation.parts_sum`, `expansionSign_eq`, `orient2Sign_sound`, `sgn_add_of_abs_lt` | Orientation/Orient2 | `proof.Orient2SignExpansion`, `floatSign` |
+| `Orientation.tripleSum_eq`, `sum24_eq_det`, `scale_bound`, `sum2_sign_sound` | Orientation/Sum2 | `proof.orientSignSum2`, `tripleComponents` |
 
 - `Float.gridModel`: `F = {δ·k | k : ℤ}`, `rn x = δ·round(x/δ)`, `nu f = f + δ`, any `δ > 0`. It does not model
   binary64. Without an instance, an inconsistent `FloatModel` would make every theorem vacuously true.
@@ -133,6 +137,16 @@ All theorems build with no `sorry`, and `axiom-audit` accepts only `propext`, `C
   one-step correction, and `m / 2^s`.
 - `lazyRound_sound`: for `d > 0` and `bits ≥ 1` the result is at most `n/d` (down) or at least `n/d` (up). When
   the early return does not fire it is also nonzero with the sign of `n/d` and within `2^(1−bits)·|n/d|`.
+
+- `orient2Sign_sound`: with the two exact products `p = bau·cav` and `q = -(bav·cau)`, the sign
+  `Orient2SignExpansion` returns is the sign of `p + q`, including zero, when Two_Two_Sum's four components are
+  nonoverlapping (A11). The model writes each `TwoSum` error and FMA remainder as the exact real difference (A9, A10).
+- `sum24_eq_det`: the 24 components of `tripleComponents` over the six triples add up to the exact 3×3 determinant.
+- `scale_bound`: `g·(1+3ε)/(1-γ(5)) ≤ 2^-96` with `ε = 2^-53`, `g = γ(23)²`. It is a rational inequality checked by `norm_num`.
+- `sum2_sign_sound`: with the Sum2 error bound (A12) and `S ≤ (1+3ε)/(1-γ(5))·mag` (A13), a result above
+  `2^-96·mag` means the exact sum is positive, and below `-2^-96·mag` negative.
+- Not covered: `orientSignGrow` and `orientationExpansion.add` (the exact fallback), `OrientSignExpansion`'s
+  control flow, and the grid argument that makes the FMA remainders exact.
 
 ## Assumptions
 
@@ -149,6 +163,11 @@ theorem still builds.
 | A6 | Input bounds are finite and non-negative; operand values finite | hypotheses `hEa0`, `hEb0`; finiteness implicit | `BoundedScalar` construction sites; not checked | `bounded.go BoundedMul`, `MeasuredScalar` |
 | A7 | No overflow: every modeled intermediate is finite. `+Inf` results and the `+Inf` refusal branches are not modeled | omitted | `ProductUpper`'s `+Inf` branch; code reading | `bounded.go ProductUpper` |
 | A8 | `math/big`: `QuoRem` truncates (`n = d·q + r`, `|r| < d`, `r` has `n`'s sign); `Lsh` multiplies by `2^k`; `BitLen` is `Nat.size` of the absolute value; `lazyFrac(n, d)` represents `n/d` | `Int.tdiv`, `Int.tmod`, `Nat.size` in `lazyRoundModel` | Go `math/big` docs; `lazy_round_test.go` | `lazy_rat.go lazyFrac`, `LazyRoundDown`, `LazyRoundUp`, `lazyRound` |
+| A9 | `twoSum(a, b)` returns `fl(a+b)` and the exact error `a+b-fl(a+b)` (Knuth's TwoSum), no overflow, no fused multiply-add on the path | the model writes the error as the exact real difference | `orientation_expansion_test.go`, `orientation_expansion_2d_test.go` compare against exact integer arithmetic | `orientation_expansion.go twoSum`, `sum2Step` |
+| A10 | For differences `exactDifference` admits, each product and its FMA remainder are exact: the rounded product and `math.FMA(x, y, -product)` add to `x·y` | `tripleSum`, `parts` write each remainder as the exact difference | Grid argument in the doc comments of `Orient2SignExpansion` and `OrientSignExpansion`; the same tests | `orientation_expansion.go exactDifference`, `tripleComponents` |
+| A11 | Two_Two_Sum's output `x3, x2, x1, x0` is nonoverlapping, so each nonzero component outweighs the sum of those below it (Shewchuk, Theorems 12 and 18) | `NonOverlap` | `TestOrient2SignExpansionMatchesExactCross` | `orientation_expansion.go Orient2SignExpansion` |
+| A12 | Sum2 over the 24 components obeys `|res - s| <= eps·|s| + g·S` with `eps = 2^-53`, `g = gamma(23)^2` (Ogita, Rump and Oishi 2005, Proposition 4.5) | hypothesis `hSum2` of `sum2_sign_sound` | `TestOrientationFiltersDecideAboveProvenErrorBound` | `orientation_expansion.go orientSignSum2`, `sum2Step` |
+| A13 | `S <= (1+3·eps)/(1-gamma(5))·mag`: each triple's four components sum to at most `(1+3·eps)·|hi|` in magnitude, and a float sum of six nonnegative values is at least `(1-gamma(5))` of their exact sum | hypothesis `hS` of `sum2_sign_sound` | Derivation in `orientSignSum2`'s doc comment; not checked | `orientation_expansion.go orientSignSum2` |
 
 - Adding a row = new id `A<n+1>`. NEVER renumber. Delete a row only when no manifest entry cites it.
 - `FloatModel` is the seam for discharging A1 to A3: a concrete binary64 model instantiating it proves its

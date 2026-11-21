@@ -50,6 +50,8 @@ func OrientSignExpansion(a, b, c, d r3.Vec) (int, bool) {
 // its largest nonzero component, and an all-zero expansion is an exact zero.
 // See https://www.cs.cmu.edu/~quake/robust.html. Each product is wrapped in
 // float64(), so no compiler fuses it into an addition.
+//
+// Lean proofs depend on this function; see _proofs/trace.json.
 func Orient2SignExpansion(au, av, bu, bv, cu, cv float64) (int, bool) {
 	bau, bav, cau, cav := bu-au, bv-av, cu-au, cv-av
 	if !exactDifference(bu, au, bau) || !exactDifference(bv, av, bav) ||
@@ -78,6 +80,8 @@ func Orient2SignExpansion(au, av, bu, bv, cu, cv float64) (int, bool) {
 }
 
 // floatSign is the sign of a non-NaN float, zero for either zero.
+//
+// Lean proofs depend on this function; see _proofs/trace.json.
 func floatSign(x float64) int {
 	switch {
 	case x > 0:
@@ -89,6 +93,8 @@ func floatSign(x float64) int {
 }
 
 // twoSum is Knuth's TwoSum: the rounded a + b and its exact error.
+//
+// Lean proofs depend on this function; see _proofs/trace.json.
 func twoSum(a, b float64) (float64, float64) {
 	sum := a + b
 	virtual := sum - a
@@ -99,6 +105,8 @@ func twoSum(a, b float64) (float64, float64) {
 // [2^-200, 2^200] and exact. TwoDiff reconstructs the subtraction's error; a
 // nonzero tail requires the general integer path, rather than a rounded
 // difference.
+//
+// Lean proofs depend on this function; see _proofs/trace.json.
 func exactDifference(p, q, diff float64) bool {
 	if !(diff == 0 || diff >= 0x1p-200 && diff <= 0x1p200 || diff <= -0x1p-200 && diff >= -0x1p200) {
 		return false
@@ -134,6 +142,8 @@ func exactDifference(p, q, diff float64) bool {
 // compiler fuses it into that addition and changes TwoSum's operands. The
 // steps are written out in registers rather than looped over an array, whose
 // every access the race detector instruments.
+//
+// Lean proofs depend on this function; see _proofs/trace.json.
 func orientSignSum2(ba, ca, da r3.Vec) (int, bool) {
 	var pi, sigma float64
 	h0, l0, th0, tl0 := tripleComponents(ba.X, ca.Y, da.Z)
@@ -180,6 +190,8 @@ func orientSignSum2(ba, ca, da r3.Vec) (int, bool) {
 
 // tripleComponents returns four floats whose exact sum is x*y*z: hi is the
 // rounded product and lo, tailHi, tailLo the FMA remainders.
+//
+// Lean proofs depend on this function; see _proofs/trace.json.
 func tripleComponents(x, y, z float64) (float64, float64, float64, float64) {
 	xy := float64(x * y)
 	xyTail := math.FMA(x, y, -xy)
@@ -190,6 +202,8 @@ func tripleComponents(x, y, z float64) (float64, float64, float64, float64) {
 
 // sum2Step is one TwoSum step of Sum2: the new running sum, and sigma plus
 // the exact error of that sum.
+//
+// Lean proofs depend on this function; see _proofs/trace.json.
 func sum2Step(pi, sigma, p float64) (float64, float64) {
 	sum := pi + p
 	virtual := sum - pi
