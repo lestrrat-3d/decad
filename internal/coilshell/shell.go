@@ -161,6 +161,15 @@ func axisOf(in AxisInput) (coil.Axis, error) {
 	return coil.Axis{AU: aU, AV: aV, DU: dU, DV: dV, Side: in.Side}, nil
 }
 
+// MaxChordedWallTriangles is the wall triangle budget line chording may
+// spend (agent-docs/helix-design.md §5.3): each line takes at most
+// MaxChordedWallTriangles/(2·N·segments) chords. Chorded cells are thin
+// radially and long along the helix, so their boxes overlap many neighbours
+// in the crossing audit's sweep: a steep coil chorded to 28 800 wall
+// triangles exceeded the audit's pair ceiling, and the budget keeps chording
+// well below that.
+const MaxChordedWallTriangles = 1 << 14
+
 // Loops reads the profile's station chain (coil.Loops), each arc cut by
 // arcChordsPerTurn and each line by the coil.LinePlan of this axis, pitch and
 // station step (agent-docs/helix-design.md §5.3). A chain whose chorded lines
@@ -185,7 +194,14 @@ func Loops(profile momentinput.Profile, axis AxisInput, pitch, turns float64, st
 	if !ok || n <= 0 || n > MaxStations {
 		return unsplit()
 	}
-	plan := coil.LinePlan{AU: axis.AU, AV: axis.AV, DU: axis.DU, DV: axis.DV, Side: axis.Side, Pitch: pitch, Step: turns / float64(n)}
+	segments := len(profile.Outer.Segments)
+	for _, h := range profile.Holes {
+		segments += len(h.Segments)
+	}
+	plan := coil.LinePlan{
+		AU: axis.AU, AV: axis.AV, DU: axis.DU, DV: axis.DV, Side: axis.Side, Pitch: pitch, Step: turns / float64(n),
+		MaxChords: int(min(int64(coil.MaxLineChords), MaxChordedWallTriangles/(2*n*int64(max(segments, 1))))),
+	}
 	prof, err := coil.Loops(profile.Outer, profile.Holes, arcChordsPerTurn, plan)
 	if err != nil {
 		return coil.Profile{}, err

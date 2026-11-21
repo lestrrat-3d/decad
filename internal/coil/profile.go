@@ -146,6 +146,17 @@ type LinePlan struct {
 	Side           int
 	// Pitch is the advance per turn and Step the station step in turns.
 	Pitch, Step float64
+	// MaxChords caps each line's chord count below MaxLineChords; zero
+	// leaves MaxLineChords.
+	MaxChords int
+}
+
+// maxChords is the plan's chord ceiling per line.
+func (lp LinePlan) maxChords() int {
+	if lp.MaxChords > 0 && lp.MaxChords < MaxLineChords {
+		return lp.MaxChords
+	}
+	return MaxLineChords
 }
 
 // Cuts returns the walk parameters, increasing inside (0, 1), at which the
@@ -155,8 +166,9 @@ type LinePlan struct {
 // one chord. Any other is cut from its walk start outward, each chord the
 // longest whose radial run stays within its own inner radius and whose cell
 // meets the target, so the chords grade with the radius as the twist term's
-// pitch/ρ_min does. A line that would take more than MaxLineChords chords
-// aims at the smallest target that fits the ceiling instead.
+// pitch/ρ_min does. A line that would take more chords than the plan's
+// ceiling (MaxChords, at most MaxLineChords) aims at the smallest target that
+// fits the ceiling instead.
 func (lp LinePlan) Cuts(start, end sectionrecord.Point2) []float64 {
 	if !(lp.Step > 0) || lp.Side == 0 || proofbound.IsNonFinite(lp.Step) || proofbound.IsNonFinite(lp.Pitch) {
 		return nil
@@ -174,13 +186,13 @@ func (lp LinePlan) Cuts(start, end sectionrecord.Point2) []float64 {
 	}
 	h := math.Pi * lp.Step
 	target := math.Max(LineChordTarget, math.Max(r0, r1)*h*h)
-	if lp.departure(r0, r1) <= target {
+	if lp.departure(r0, r1) <= target || lp.maxChords() < 2 {
 		return nil
 	}
 	if cuts, ok := lp.grade(r0, r1, target); ok {
 		return cuts
 	}
-	// The target needs more than MaxLineChords chords: raise it to the
+	// The target needs more chords than the ceiling: raise it to the
 	// smallest that fits the ceiling, which one chord's departure bounds.
 	lo, hi := target, lp.departure(r0, r1)
 	best, _ := lp.grade(r0, r1, hi)
@@ -196,13 +208,13 @@ func (lp LinePlan) Cuts(start, end sectionrecord.Point2) []float64 {
 }
 
 // grade cuts the line at radii r0 → r1 from its walk start outward, each
-// chord the longest that fits target. ok is false when that takes more than
-// MaxLineChords chords.
+// chord the longest that fits target. ok is false when that takes more
+// chords than the plan's ceiling.
 func (lp LinePlan) grade(r0, r1, target float64) ([]float64, bool) {
 	at := func(t float64) float64 { return r0 + t*(r1-r0) }
 	var cuts []float64
 	from := 0.0
-	for len(cuts) < MaxLineChords-1 {
+	for len(cuts) < lp.maxChords()-1 {
 		if lp.fits(at(from), r1, target) {
 			return cuts, true
 		}

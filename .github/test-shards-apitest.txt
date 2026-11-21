@@ -3198,3 +3198,4 @@
 12	0.00	TestCoilChordsLongRadialLines
 12	0.00	TestCoilTrimmedRampWedgeJoinsRing
 12	0.00	TestCoilTrimmedSteepWedgeJoinsRing
+12	0.00	TestCoilSteepLongSpanStaysInsideTheAuditCeiling

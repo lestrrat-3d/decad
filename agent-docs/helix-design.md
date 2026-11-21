@@ -311,10 +311,15 @@ results, measured `0.004 mm` too coarse and `0.002 mm` enough. The §13 springs
 stations, triangles and readings. A derived coil that bounds its own
 departure through its station density (`Thread`, `Hole` and `Boss` threads)
 passes the private `wholeLinesOption` and keeps one chord per line.
-`coilshell.Loops` also keeps every line at one chord when the chorded shell
-would hold more than `loftmesh.MaxLoftAuditTriangles` wall and cap
-triangles, so chording never moves a coil past the untiled crossing audit or
-the CS8 facet ceiling. Each decision reads the record alone, so a placement
+`coilshell.Loops` caps each line at
+`coilshell.MaxChordedWallTriangles/(2·N·segments)` chords, with
+`MaxChordedWallTriangles = 2^14`: chorded cells are thin radially and long
+along the helix, so their boxes overlap many neighbours in §5.5's sweep, and
+a steep coil over `38°` (28 stations) chorded to 28 800 wall triangles exceeded
+the audit's pair ceiling. It also keeps every line at one chord when the
+chorded shell would hold more than `loftmesh.MaxLoftAuditTriangles` wall and
+cap triangles, so chording never moves a coil past the untiled crossing
+audit or the CS8 facet ceiling. Each decision reads the record alone, so a placement
 (§5.6) repeats it. A rectangle `ρ ∈ [3, 11]` rising `4 mm` over `32.5°`
 takes about 37 chords per radial line at 24 helix stations; over `3.5°` it
 reaches the 256-chord ceiling at 3 stations and holds `δ ≈ 0.002 mm`.
@@ -955,7 +960,8 @@ local model.
 - `internal/coil/line_chords_test.go`: `TestLinePlanKeepsShortLinesWhole` (the spring's annulus and band and a
   thread flank keep one chord), `TestLinePlanCutsLongRadialLines` (shallow and steep radial lines at
   `ρ ∈ [3, 11]`, `ρ ∈ [2.5, 14]` and `ρ ∈ [2.7, 11.3]`, and one at `ρ ∈ [0.5, 3]`, take graded chords whose
-  exact `coil.CellDepartureUpper` meets the target, or the target the ceiling raises, with `c = 1`) and `TestLoopsChordsLongLines` (§5.3's line
+  exact `coil.CellDepartureUpper` meets the target, or the target the ceiling raises, with `c = 1`),
+  `TestLinePlanHonoursItsChordCeiling` (`LinePlan.MaxChords`) and `TestLoopsChordsLongLines` (§5.3's line
   chords: exact corners, generated stations within their rounds, no sagitta, `Corners`).
 - `TestLoopsKeepsLinesWholePastTheAuditCeiling` (`internal/coilshell/loops_test.go`): the profile
   `ρ ∈ [0.5, 3]` is chorded at 2 turns, and held at one chord per line at 20 turns and when a derived coil asks
@@ -964,6 +970,10 @@ local model.
   `ρ ∈ [3, 11]` and at `ρ ∈ [2.5, 14]`, rising `4 mm` over `32.5°` and over `3.5°`, reads `Bounds` within
   `0.003 mm`, `Volume` within bound of `Θ·Q`, and dense samples of both helicoidal walls within the mesh's
   bound. With chording off, the bound check fails on all four.
+- `TestCoilSteepLongSpanStaysInsideTheAuditCeiling` (same file): a rectangle `ρ ∈ [2.7, 11.3]` falling `4 mm` per
+  `3.5°` over `38°` builds inside the chorded wall budget, reads `Bounds` below `0.02 mm` (about `0.4 mm` with
+  one chord per line) and `Volume` within bound of `Θ·Q`. With 256 chords per line the audit's pair ceiling
+  refused it.
 - `TestCoilTrimmedRampWedgeJoinsRing` and `TestCoilTrimmedSteepWedgeJoinsRing` (same file): each wedge,
   trimmed to `z ≥ −0.4` by `Intersect` with a slab, joins a revolved ring (`ρ ∈ [2.5, 14]` for the
   `ρ ∈ [3, 11]` wedge, `ρ ∈ [2, 14.5]` for the `ρ ∈ [2.5, 14]` wedge) under `WithChainTolerance(0.1 mm)`. The

@@ -172,3 +172,18 @@ func TestLoopsChordsLongLines(t *testing.T) {
 	require.Len(t, whole.Pts, 4)
 	require.Equal(t, whole.LoopIdx, whole.Corners())
 }
+
+// TestLinePlanHonoursItsChordCeiling checks that a plan whose MaxChords sits
+// below the chords its target needs cuts the line into at most MaxChords
+// chords, and that a ceiling below two keeps one chord.
+func TestLinePlanHonoursItsChordCeiling(t *testing.T) {
+	plan, _ := vAxisPlan(4, 3.5/360)
+	a, b := sectionrecord.Point2{U: 3}, sectionrecord.Point2{U: 11}
+	require.Greater(t, len(plan.Cuts(a, b))+1, 16)
+	plan.MaxChords = 16
+	cuts := plan.Cuts(a, b)
+	require.NotEmpty(t, cuts)
+	require.LessOrEqual(t, len(cuts)+1, 16)
+	plan.MaxChords = 1
+	require.Nil(t, plan.Cuts(a, b))
+}

@@ -176,3 +176,28 @@ func TestCoilTrimmedSteepWedgeJoinsRing(t *testing.T) {
 	t.Run("r 3..11 on ring 2.5..14", func(t *testing.T) { lineChordWedgeJoinsRing(t, 3, 11, 2.5, 14, 3.5) })
 	t.Run("r 2.5..14 on ring 2..14.5", func(t *testing.T) { lineChordWedgeJoinsRing(t, 2.5, 14, 2, 14.5, 3.5) })
 }
+
+// TestCoilSteepLongSpanStaysInsideTheAuditCeiling checks a steep coil over a
+// long span (a rectangle ρ ∈ [2.7, 11.3] falling 4 mm per 3.5 degrees over 38
+// degrees, 28 helix stations): its line chords stay inside
+// coilshell.MaxChordedWallTriangles, so the crossing audit admits the shell
+// where 256 chords per line exceeded its pair ceiling, and Bounds still reads
+// far below the 0.4 mm one chord per line held.
+func TestCoilSteepLongSpanStaysInsideTheAuditCeiling(t *testing.T) {
+	const span, r0, r1 = 38.0, 2.7, 11.3
+	fall := 4 * span / 3.5
+	s, p := lineChordMeridian(t, lineChordRect(r0, r1, -5.4, 0))
+	axis := decad.SketchLine{Start: decad.Point2{V: 1}, End: decad.Point2{}}
+	b, err := decad.Coil(t.Context(), decad.New(), s, p, axis, units.Millimeters(fall*360/span), units.Scalar(span/360),
+		decad.WithLeftHand())
+	require.NoError(t, err)
+	box, err := b.Bounds()
+	require.NoError(t, err)
+	bound, err := box.Bound.In(units.Millimeter)
+	require.NoError(t, err)
+	require.Less(t, bound, 0.02)
+	theta := span * math.Pi / 180
+	vol, err := b.Volume()
+	require.NoError(t, err)
+	requireLineChordEncloses(t, vol, units.CubicMillimeter, theta*(r1*r1-r0*r0)/2*5.4, "volume")
+}
