@@ -32,7 +32,8 @@ const loftWallRolePrefix = "side("
 // not a finite non-negative number states nothing a slab could charge, so its
 // group keeps no tag.
 func chordedLoftPlane(group facetedrecord.Group, owner *topo.Body, f *topo.Face) facetedrecord.Group {
-	if _, plane := group.Surface.(surfacegeom.Plane); !plane || !group.Retained {
+	plane, ok := group.Surface.(surfacegeom.Plane)
+	if !ok || !group.Retained {
 		return group
 	}
 	lp, ok := owner.Payload.(loftrecord.Payload)
@@ -48,6 +49,9 @@ func chordedLoftPlane(group facetedrecord.Group, owner *topo.Body, f *topo.Face)
 		group.CapRecord, group.AxialDelta, group.HasAxialDelta = nil, 0, false
 		group.ExtentDelta = 0
 		return group
+	}
+	if local, ok := lp.StraightWallPlaneBound(f, plane); ok {
+		delta = min(delta, local)
 	}
 	group.AxialDelta, group.HasAxialDelta = max(group.AxialDelta, delta), true
 	return group
