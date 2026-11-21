@@ -467,6 +467,30 @@ face's own bound where the split proves it. Core §8's "The chain depth"
 paragraph, evaluator §9's operand and rim bullets and tessellation §7/§11
 state this rule.
 
+### Cylindrical sides at an aligned pad
+
+An unshifted Cut by a direct Loft can retry a coarse contact on a stock whose
+aligned pad rim still identifies the native flange. The proof registers all facets
+of one convex circular side over the heights that can reach the complete tool.
+Projection in angle and height must cover the native strip once, with outward
+orientation, matched endpoints and a bounded radial distance on each facet.
+
+The complete current shell must exclude any foreign trim boundary from the open
+strip. A held point whose original error ball lies strictly inside its angular and
+axial limits supplies a surviving point on the same true face. The registered cap
+height includes the exact displacement from its rounded held level. A radial
+closing chord to the following walk contributes its full length. Other native
+planes may touch an endpoint. If a plane crosses near an endpoint, the proof
+can use a smaller angular interval. Each facet receiving the registered bound must
+keep both its original error ball and its registered image inside the certified
+angular range. At the transition, the larger of its original slab bound and
+registered bound covers both assignments. The full facet bound must cover the
+registered distance in either case. Exterior angular and axial intervals exclude
+a continuation of the same face beyond its native end or cap.
+
+Only the coarse-contact gate reads these local distances. Cutting and publishing
+the intersection curves use the operand's original bounds.
+
 ## 6. Measured growth
 
 The fixture used by §8's tests is a tree of mitred sweeps: a 16-gon trunk of circumradius 5 mm along a two-span

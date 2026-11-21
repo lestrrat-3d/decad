@@ -3194,3 +3194,4 @@
 12	0.00	TestCircularLoftEmergingFlatRefusesLaterOffTangent
 12	0.00	TestCircularLoftEmergingFlatRefusesBentChain
 12	0.00	TestCircularLoftEmergingFlatRefusesUnrepresentablePlane
+12	0.00	TestCutRegisteredPrismArc

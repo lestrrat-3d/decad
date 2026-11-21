@@ -162,6 +162,10 @@ func Evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 	}
 	twins := &operandTwins{}
 	ev, err := evaluate(ctx, op, a, b, meshes, chordScale, capFace, coneFace, twins, nil, nil, nil, nil, 0)
+	if _, coarse := errors.AsType[*meshbool.CoarseHeldContactError](err); coarse && op == meshbool.OpCut && ctx.Value(wholeCutKey{}) != nil {
+		trial := context.WithValue(ctx, wholeCutTrialKey{}, true)
+		ev, err = evaluate(trial, op, a, b, meshes, chordScale, capFace, coneFace, twins, nil, nil, nil, nil, 0)
+	}
 	// On a coarse held contact, try the same operands with a directional
 	// bound from their authenticated torus patches. The meter covers every
 	// aligned attempt in this one Union.
@@ -765,6 +769,16 @@ func evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 	if matchedStations && !hasShifts && fixed == nil && replay == nil {
 		ctx = meshbool.WithAxialRims(ctx, bmA, bmB, ma, mb, station.rims, station.budget)
 	}
+	localCut := false
+	if ctx.Value(wholeCutTrialKey{}) == true && op == meshbool.OpCut && !hasShifts && ordered == nil && fixed == nil && replay == nil && capFace == nil && coneFace == nil {
+		localCut, err = bindWholeCut(ctx, a, b, ma, mb, bmA)
+		if err != nil {
+			return Evaluation{}, err
+		}
+		if localCut {
+			defer func() { bmA.CutGateBounds = nil }()
+		}
+	}
 	var proximityErr error
 	if replay != nil {
 		proximityErr = meshbool.RefuseUndecidableProximityReplay(ctx, ma, mbDecide, bmA, bmB, memo, capFace, coneFace, replay)
@@ -807,7 +821,7 @@ func evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 	// leaves the true operand where it was (agent-docs/gap-tolerance-design.md
 	// §4), so b's record holds once its leaves' bounds and drift grow by that.
 	_, radiallyInset := meshes.(*radialInsetMesher)
-	trackOccupancy := !matchedStations && !radiallyInset && (op == meshbool.OpUnion || op == meshbool.OpCut) &&
+	trackOccupancy := !localCut && !matchedStations && !radiallyInset && (op == meshbool.OpUnion || op == meshbool.OpCut) &&
 		replay == nil && ordered == nil && fixed == nil && capFace == nil && coneFace == nil
 	if trackOccupancy {
 		if occA = occupancyleaf.Of(a, ma); occA != nil {

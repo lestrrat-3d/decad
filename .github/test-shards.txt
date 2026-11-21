@@ -348,3 +348,4 @@
 12	0.00	TestRetainedRimRejectsNarrowStockAboveHinge
 12	0.00	TestRetainedRimSeamContact
 12	0.00	TestRetainedRimSupportCancellation
+12	0.00	TestCutBandCapRegistration

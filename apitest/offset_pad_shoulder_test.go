@@ -111,21 +111,26 @@ func TestOffsetPadShoulderChamfer(t *testing.T) {
 		require.NoError(t, e)
 		require.True(t, m.VolumeVerified())
 		require.True(t, m.BoundaryVerified())
-		vs := m.Vertices()
-		height := math.Inf(-1)
-		for _, tri := range m.Triangles() {
-			a, b, c := vs[tri[0]], vs[tri[1]], vs[tri[2]]
-			u, v := b.Sub(a), c.Sub(a)
-			det := u.X*v.Z - u.Z*v.X
-			if det == 0 {
-				continue
-			}
-			weightB := ((px-a.X)*v.Z - (pz-a.Z)*v.X) / det
-			weightC := ((pz-a.Z)*u.X - (px-a.X)*u.Z) / det
-			if weightB >= 0 && weightC >= 0 && weightB+weightC <= 1 {
-				height = max(height, a.Y+weightB*u.Y+weightC*v.Y)
-			}
-		}
-		require.InDelta(t, row.height, height, 1e-8)
+		require.InDelta(t, row.height, highestMeshYAt(m, px, pz), 1e-8)
 	}
+}
+
+func highestMeshYAt(m *decad.Mesh, px, pz float64) float64 {
+	vs := m.Vertices()
+	height := math.Inf(-1)
+	for _, tri := range m.Triangles() {
+		a, b, c := vs[tri[0]], vs[tri[1]], vs[tri[2]]
+		u, v := b.Sub(a), c.Sub(a)
+		det := u.X*v.Z - u.Z*v.X
+		if det == 0 {
+			continue
+		}
+		weightB := ((px-a.X)*v.Z - (pz-a.Z)*v.X) / det
+		weightC := ((pz-a.Z)*u.X - (px-a.X)*u.Z) / det
+		if weightB >= 0 && weightC >= 0 && weightB+weightC <= 1 {
+			height = max(height, a.Y+weightB*u.Y+weightC*v.Y)
+		}
+	}
+
+	return height
 }
