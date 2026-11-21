@@ -147,22 +147,44 @@ func CheckPlanarPose(s *PlanarSolid, topo *PlanarTopology, poll func() error) (b
 		return CheckPlanarSolid(s, poll)
 	}
 	normal := planarNormals(s)
-	volume := proof.DyZero()
-	origin := s.Verts[0]
-	for t, tri := range s.Tris {
+	for t := range s.Tris {
 		if err := poll(); err != nil {
 			return false, err
 		}
 		if proof.DvIsZero(normal[t]) {
 			return false, nil
 		}
-		volume = proof.DyAdd(volume, proof.DvDot(normal[t], proof.DvSub(s.Verts[tri[0]], origin)))
 	}
-	if volume.Sign() <= 0 {
+	if !floatVolumePositive(s, normal) && exactVolume(s, normal).Sign() <= 0 {
 		return false, nil
 	}
 	s.pose = newPlanarPose(s, topo, normal)
 	return true, nil
+}
+
+// exactVolume is six times the solid's signed volume, summed exactly.
+func exactVolume(s *PlanarSolid, normal []proof.DyV3) proof.Dyadic {
+	volume := proof.DyZero()
+	origin := s.Verts[0]
+	for t, tri := range s.Tris {
+		volume = proof.DyAdd(volume, proof.DvDot(normal[t], proof.DvSub(s.Verts[tri[0]], origin)))
+	}
+	return volume
+}
+
+// floatVolumePositive reports whether the float enclosure of exactVolume lies
+// above zero. A true answer proves the exact volume positive, since every
+// term's enclosure holds its exact value and the downward-rounded sum of the
+// lower ends is at or below the exact sum. False proves nothing: the caller
+// then sums exactly. A NaN end, from an infinity times zero, compares false.
+func floatVolumePositive(s *PlanarSolid, normal []proof.DyV3) bool {
+	origin := pointFloatBox(s.Verts[0])
+	lowest := 0.0
+	for t, tri := range s.Tris {
+		lo, _ := dotEnclosure(pointFloatBox(s.Verts[tri[0]]), origin, pointFloatBox(normal[t]))
+		lowest = addDown(lowest, lo)
+	}
+	return lowest > 0
 }
 
 // planarNormals is every triangle's (b−a)×(c−a).
