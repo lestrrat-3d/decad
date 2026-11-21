@@ -72,6 +72,7 @@ func TestSectionCardinalConeFeedsVerifiedExtrude(t *testing.T) {
 }
 
 func TestSectionCardinalConeInexactRadiusFeedsVerifiedExtrude(t *testing.T) {
+	t.Parallel()
 	doc, cone := sectionConeSource(t, 3)
 	section, profiles, err := cone.Section(t.Context(), sectionConePlane(t, 1))
 	require.NoError(t, err)

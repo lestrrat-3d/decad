@@ -56,6 +56,7 @@ func coneFromFaceSelector(t *testing.T, blank *Body, a, b planePoint) FaceSelect
 }
 
 func TestConeFromFaceIsStrictlyOffBlankFaces(t *testing.T) {
+	t.Parallel()
 	section := coneFromFaceSpiralSection()
 	toeRoot, toeOuter, ded, heelOuter := section[4], section[5], section[3], section[2]
 	far := units.Millimeters(-5)

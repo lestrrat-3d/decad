@@ -147,6 +147,7 @@ func TestSweepPairBoundedFacetedFloorStrictClearReplay(t *testing.T) {
 }
 
 func TestSweepPairPlacedFacetedFloorImpactAndDeparture(t *testing.T) {
+	t.Parallel()
 	doc, _, placed := boundedFacetedFloorFixture(t)
 	floor := internalOffsetBox(t, doc, -20, -20, 20, 20, -10,
 		Distance{D: units.Millimeters(10), Dir: Along})

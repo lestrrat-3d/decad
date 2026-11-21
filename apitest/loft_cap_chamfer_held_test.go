@@ -103,6 +103,7 @@ func TestLoftCapChamferRoundedTwistedGear(t *testing.T) {
 // linearly with height, and Simpson's rule gives its volume exactly. The
 // inset caps are squares of side s−2d.
 func TestLoftCapChamferSquareFrustum(t *testing.T) {
+	t.Parallel()
 	const height, s0, s1, d = 6.0, 10.0, 7.0, 0.4
 	w := sketch.NewWorld()
 	sk0, p0, _ := squareSection(t, w, w.XY(), s0, 0, 0)

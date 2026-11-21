@@ -346,6 +346,7 @@ func TestMassPropertiesRevolveArcWedge(t *testing.T) {
 // Shown-to-fail: publishing the rigid path's ρ·V and Q·I·Qᵀ, Q the polar
 // factor of M, made the mass miss.
 func TestMassPropertiesRevolveRotated(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	sk, profile := polygonSketch(t, [][2]float64{{0, 4}, {8, 4}, {8, 8}})
 	body, err := decad.Revolve(t.Context(), doc, sk, profile, uAxis, decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along})

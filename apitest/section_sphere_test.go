@@ -95,6 +95,7 @@ func TestSectionCardinalSphereNonSquareFeedsVerifiedExtrude(t *testing.T) {
 }
 
 func TestSectionObliqueCenterSphereFeedsVerifiedExtrude(t *testing.T) {
+	t.Parallel()
 	sphere := sectionSphereSource(t)
 	frame, err := r3.NewFrame(r3.Vec{X: 5}, r3.Vec{X: 1}, r3.Vec{Y: 1, Z: 1})
 	require.NoError(t, err)
@@ -283,6 +284,7 @@ func TestSectionObliqueSphereRefusesTangentExterior(t *testing.T) {
 }
 
 func TestSectionCardinalSphereCutsAcrossRevolveAxis(t *testing.T) {
+	t.Parallel()
 	sphere := sectionSphereSource(t)
 	frame, err := r3.NewFrame(r3.Vec{X: 1}, r3.Vec{Y: 1}, r3.Vec{Z: 1})
 	require.NoError(t, err)
@@ -343,6 +345,7 @@ func TestSectionCardinalSphereNonSquarePlacementAndPlaneSense(t *testing.T) {
 }
 
 func TestSectionCardinalSphereRefusesUnprovedCuts(t *testing.T) {
+	t.Parallel()
 	sphere := sectionSphereSource(t)
 	for _, tc := range []struct {
 		name  string

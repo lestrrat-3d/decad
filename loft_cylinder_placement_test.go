@@ -588,6 +588,7 @@ func TestLoftCylinderCommonPlacementRejectsRoundedComposition(t *testing.T) {
 }
 
 func TestLoftCylinderCommonPlacementLeavesOtherPrismsGeneric(t *testing.T) {
+	t.Parallel()
 	lower := loftCylinderTestFrame(t, r3.Vec{}, r3.Vec{X: 1}, r3.Vec{Y: 1})
 	upper := loftCylinderTestFrame(t, r3.Vec{Z: 2}, r3.Vec{X: 1}, r3.Vec{Y: 1})
 	doc, blank, _ := loftCylinderPlacedTabPair(t, lower, upper)

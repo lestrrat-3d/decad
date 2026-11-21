@@ -74,6 +74,7 @@ func TestTwistWideThinRectangleFullTurn(t *testing.T) {
 // A twisted tool built at the origin and moved onto a tilted, offset axis keeps
 // its stationed twist usable under Transform.
 func TestTwistWideThinRectangleTransform(t *testing.T) {
+	t.Parallel()
 	const w, th, length = 15.4, 4.75, 6.0
 	body, err := wideRectTwist(t, w, th, length, 43.6)
 	require.NoError(t, err)

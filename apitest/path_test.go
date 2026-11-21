@@ -149,6 +149,7 @@ func TestNewPathRejectsInvalidGeometry(t *testing.T) {
 }
 
 func TestNewPathUsesExactArcCollinearity(t *testing.T) {
+	t.Parallel()
 	start := r3.NewVec(math.MaxFloat64, math.MaxFloat64, math.MaxFloat64)
 	through := r3.NewVec(math.MaxFloat64, math.Nextafter(math.MaxFloat64, 0), math.MaxFloat64)
 	end := r3.NewVec(math.Nextafter(math.MaxFloat64, 0), math.MaxFloat64, math.MaxFloat64)

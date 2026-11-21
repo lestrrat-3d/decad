@@ -388,6 +388,7 @@ func TestLoftContactDirectShellUnionVaryingRectangleBothOrders(t *testing.T) {
 }
 
 func TestLoftContactDirectShellUnionRealVaryingTab(t *testing.T) {
+	t.Parallel()
 	ctx := t.Context()
 	world := sketch.NewWorld()
 	frame, err := r3.NewFrame(r3.Vec{Y: 1},

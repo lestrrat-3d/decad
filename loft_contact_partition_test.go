@@ -243,6 +243,7 @@ func TestLoftContactPartitionCapMapRefusesAmbiguousFragments(t *testing.T) {
 }
 
 func TestLoftContactPartitionInteriorCutIsNotCapChord(t *testing.T) {
+	t.Parallel()
 	prism, loft := loftPartitionRealBodies(t,
 		[4]float64{8, 4, 12, 6}, [4]float64{8, 4, 13, 6}, 0, 4)
 	partition, admitted, err := loftdirect.CertifyLoftSourcePartition(t.Context(), bodyNode(prism), bodyNode(loft),

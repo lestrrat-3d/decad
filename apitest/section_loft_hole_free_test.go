@@ -113,6 +113,7 @@ func TestSectionDirectHoleFreeLoftRefusesTwistedCorrespondence(t *testing.T) {
 }
 
 func TestSectionDirectHoleFreeLoftRefusesShiftedSourceX(t *testing.T) {
+	t.Parallel()
 	source := holeFreeLoftWithShiftedTop(t, r3.NewVec(1, 0, 2))
 	requireDirectLoftSectionUnsupported(t, source, r3.NewVec(0, 0, 1))
 }

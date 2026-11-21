@@ -145,6 +145,7 @@ func TestSweepTwistRoundedProfileVerifyAll(t *testing.T) {
 }
 
 func TestSweepTwistRoundedProfileAxisRefusalIsAtomic(t *testing.T) {
+	t.Parallel()
 	s, profile := roundedTwistProfile(t, 1)
 	path, err := decad.NewPath(r3.Vec{}, decad.LineTo{End: r3.NewVec(0, 0, 5)})
 	require.NoError(t, err)

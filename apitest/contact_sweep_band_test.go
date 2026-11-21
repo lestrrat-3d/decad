@@ -302,6 +302,7 @@ func TestSweepPairPlanarExactTouchTrack(t *testing.T) {
 }
 
 func TestSweepPairPlanarDepartureFromEdge(t *testing.T) {
+	t.Parallel()
 	const step = 1.0 / (1 << 20)
 	// The box rises at 2.5 mm/s while spinning about its resting edge. The
 	// edge rides the spin axis, so its rate stays 2.5 mm/s with a zero K_p,

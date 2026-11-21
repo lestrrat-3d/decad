@@ -11,6 +11,7 @@ import (
 )
 
 func TestRawMeshPlaneOnBooleanFragments(t *testing.T) {
+	t.Parallel()
 	ctx, doc := t.Context(), New()
 	mesh := func(at r3.Vec) *MeshBody {
 		t.Helper()

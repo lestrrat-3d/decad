@@ -369,6 +369,7 @@ func TestLoftCircleSourceSpanRefusesInvalidRecord(t *testing.T) {
 }
 
 func TestLoftFitSplineSourceCapsRealWedge(t *testing.T) {
+	t.Parallel()
 	world, base, top := wedgePlanes(t)
 	lowerSketch, lowerProfile := wedgeSplineSketch(t, world, base)
 	upperSketch, upperProfile := wedgeSplineSketch(t, world, top)

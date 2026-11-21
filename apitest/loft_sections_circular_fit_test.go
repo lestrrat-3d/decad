@@ -81,6 +81,7 @@ func circularFitSectionsAtCenter(t *testing.T, offsets [2]float64, firstQuarter,
 }
 
 func TestLoftSectionsCircularFitOffCenter(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name   string
 		center [2]float64
@@ -115,6 +116,7 @@ func TestLoftSectionsCircularFitOffCenter(t *testing.T) {
 }
 
 func TestLoftSectionsCircularFitFlatQuarter(t *testing.T) {
+	t.Parallel()
 	w := sketch.NewWorld()
 	sections := make([]decad.LoftSection, 3)
 	for i := range sections {
@@ -237,6 +239,7 @@ func TestLoftSectionsCircularFitFlatQuarter(t *testing.T) {
 }
 
 func TestCircularLoftCorrespondenceRejectsInvalidMaps(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name        string
 		controls    []int64
@@ -264,6 +267,7 @@ func TestCircularLoftCorrespondenceRejectsInvalidMaps(t *testing.T) {
 }
 
 func TestCircularLoftCorrespondenceSmoothCircularBands(t *testing.T) {
+	t.Parallel()
 	w := sketch.NewWorld()
 	sections := make([]decad.LoftSection, 4)
 	for i := range sections {
@@ -364,6 +368,7 @@ func TestCircularLoftCorrespondenceSmoothCircularBands(t *testing.T) {
 }
 
 func TestLoftSectionsCircularFitFlatQuarterRecordedKnots(t *testing.T) {
+	t.Parallel()
 	w := sketch.NewWorld()
 	sections := make([]decad.LoftSection, 3)
 	for i := range sections {
@@ -423,6 +428,7 @@ func TestLoftSectionsCircularFitFlatQuarterRecordedKnots(t *testing.T) {
 }
 
 func TestLoftSectionsCircularFitRefusesDifferentRecordDirections(t *testing.T) {
+	t.Parallel()
 	w := sketch.NewWorld()
 	sections := make([]decad.LoftSection, 3)
 	for i := range sections {
@@ -547,6 +553,7 @@ func circularFitReferenceVolume(t *testing.T, offsets [2]float64) float64 {
 }
 
 func TestLoftSectionsCircularFitDiamond(t *testing.T) {
+	t.Parallel()
 	sections := circularFitSections(t, [2]float64{}, 0, 1)
 	doc := decad.New()
 	body, err := decad.LoftSections(t.Context(), doc, sections...)
@@ -579,6 +586,7 @@ func TestLoftSectionsCircularFitDiamond(t *testing.T) {
 }
 
 func TestLoftSectionsCircularFitVariesAndRefusesAtomically(t *testing.T) {
+	t.Parallel()
 	sections := circularFitSections(t, [2]float64{0.08, 0.15}, 0, 1)
 	doc := decad.New()
 	body, err := decad.LoftSections(t.Context(), doc, sections...)
@@ -632,6 +640,7 @@ func TestLoftSectionsCircularFitVariesAndRefusesAtomically(t *testing.T) {
 }
 
 func TestLoftSectionsCircularFitRotatedSourceSeam(t *testing.T) {
+	t.Parallel()
 	sections := circularFitSections(t, [2]float64{}, 1, 1)
 	body, err := decad.LoftSections(t.Context(), decad.New(), sections...)
 	require.NoError(t, err)
@@ -646,6 +655,7 @@ func TestLoftSectionsCircularFitRotatedSourceSeam(t *testing.T) {
 }
 
 func TestLoftSectionsCircularFitTransverseHole(t *testing.T) {
+	t.Parallel()
 	sections := circularFitSections(t, [2]float64{0.08, 0.15}, 0, 2)
 	doc := decad.New()
 	body, err := decad.LoftSections(t.Context(), doc, sections...)

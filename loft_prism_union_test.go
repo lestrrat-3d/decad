@@ -128,6 +128,7 @@ func TestAxialLoftPrismUnionManyIndependentTabs(t *testing.T) {
 }
 
 func TestAxialLoftPrismUnionTangentDoesNotAdmit(t *testing.T) {
+	t.Parallel()
 	doc := New()
 	blank := internalBoxBody(t, doc, 0, 0, 10, 10, 4)
 	tangent := axialLineLoft(t, doc, 10, 4, 12, 6, 4)
@@ -187,6 +188,7 @@ func TestAxialLoftPrismUnionRefusesUnequalCapsAndCancellation(t *testing.T) {
 // first operand is a prism, every other operand is a prism or an exact axial
 // Loft, at least one is a Loft, and each Loft overlaps the first prism.
 func TestStraightLoftPrismUnionManyGates(t *testing.T) {
+	t.Parallel()
 	doc := New()
 	blank := internalBoxBody(t, doc, 0, 0, 10, 10, 4)
 	other := internalBoxBody(t, doc, 20, 0, 30, 10, 4)

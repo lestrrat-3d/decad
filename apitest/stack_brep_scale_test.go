@@ -98,6 +98,7 @@ func TestStackBrepScaledAtPlacedAndRepeated(t *testing.T) {
 }
 
 func TestStackBrepScaledAtRefusesCurvedStack(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	plate := boxBody(t, doc, -10, -10, 10, 10, 5)
 	w := sketch.NewWorld()

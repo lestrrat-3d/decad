@@ -197,6 +197,7 @@ func TestSectionRevolveMeridianAxialTubeTwoRegions(t *testing.T) {
 }
 
 func TestSectionRevolveMeridianAxialArcEnd(t *testing.T) {
+	t.Parallel()
 	_, capsule := meridianCapsule(t)
 	section, profiles, err := capsule.Section(t.Context(), meridianFrame(t, r3.Vec{}, r3.Vec{X: 1}, r3.Vec{Z: 1}))
 	require.NoError(t, err)

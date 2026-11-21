@@ -153,6 +153,7 @@ func TestContactPairExactPlanarHexagonOnTray(t *testing.T) {
 }
 
 func TestContactPairExactPlanarNesting(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	hollow := hollowBody(t, doc)
 	id := r3.Identity()

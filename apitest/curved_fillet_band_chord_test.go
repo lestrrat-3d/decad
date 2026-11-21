@@ -11,6 +11,7 @@ import (
 // The patch on a rounded corner has curvature along its contour and across
 // its fillet. Both contribute to the bound consumed by a later mesh boolean.
 func TestCurvedFilletBandChord(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	part := wedgeRoundedRectAtZ(t, doc, -3, -3, 3, 3, 1, 0, 2)
 	rim := decad.Edges(decad.OuterLoopOf(decad.CapStart(part)))

@@ -33,6 +33,7 @@ func (c *cancelAfterFirstProfile) Err() error {
 }
 
 func TestCircularFitPrimitiveEligibility(t *testing.T) {
+	t.Parallel()
 	w := sketch.NewWorld()
 	sections := make([]LoftSection, 4)
 	for i := range sections {

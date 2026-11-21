@@ -17,6 +17,7 @@ import (
 // sphere or cylinder (which keep their exact contact families) are refused,
 // as is a curved body at a zero chord.
 func TestPlanarPoseAdmissionGates(t *testing.T) {
+	t.Parallel()
 	doc := New()
 	box := internalBoxBody(t, doc, 0, 0, 10, 10, 10)
 	ball := internalBallBody(t, doc, 4)

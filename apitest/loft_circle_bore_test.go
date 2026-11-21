@@ -351,6 +351,7 @@ func circleUseTangent(use decad.CoEdge, radial r3.Vec) r3.Vec {
 }
 
 func TestDirectLoftWholeCircleHolePublishesCircularTopology(t *testing.T) {
+	t.Parallel()
 	world := sketch.NewWorld()
 	upper, err := world.CreateOffsetPlane(world.XY(), 2)
 	require.NoError(t, err)

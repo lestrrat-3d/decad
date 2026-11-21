@@ -15,6 +15,7 @@ import (
 )
 
 func TestCircleSourceCandidateProducer(t *testing.T) {
+	t.Parallel()
 	body := publicCirclePrimitive(t)
 	doc := body.Document()
 	turn, err := r3.Rotation(r3.Vec{X: -2, Y: 3, Z: 1}, units.Radians(-.23))
