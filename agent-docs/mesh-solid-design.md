@@ -19,6 +19,15 @@ func SolidFromMesh(ctx context.Context, d *Document, m *MeshBody) (*Body, error)
 | M5 | The faces are Faceted: they carry no analytic surface tag, so selection by `Planar` or a normal does not find them, and a Boolean takes them through the generic mesh path with its pair tolerance. The result is registered in the document as one `OperationSolidFromMesh` entry with no input. A refusal leaves the document unchanged. |
 | M6 | A group whose exact normal has one non-zero part, so the plane is square to a world axis, keeps that plane as a retained tag: its frame has the group's first vertex as origin, which lies on the plane exactly, and the unit axes ordered so the frame's normal is the outward one. The tag departs from the exact plane by nothing, so its normal bound is zero. Every other group stays Faceted, because no float unit normal names its plane. |
 
+An oblique exact mesh face can supply a private Boolean slab without an
+analytic surface tag. The source triangle and the frame built from it share
+one corner. The exact cross products of their normals give an upper bound
+on the sine of their angle. Multiplying by the mesh diameter bounds the
+normal distance over every triangle in the same oriented plane group.
+An unshifted Boolean fragment inherits that bound. A native rim chamfer can
+keep it only when the construction proves every source fragment of the group
+lies outside the edit. A placement or generic rebuild drops the certificate.
+
 ## 2. Blends on a mesh solid
 
 A retained plane is what the retained edge blend reads (`agent-docs/modify-design.md` Part E, `agent-docs/modify-design.md` Part M),

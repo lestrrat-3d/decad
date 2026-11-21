@@ -21,11 +21,20 @@ import (
 func TestMixedLoftWallUsesItsOwnPlane(t *testing.T) {
 	// A quarter disk gives two straight source segments and one curved one.
 	origin, u, v := momentinput.Point2{}, momentinput.Point2{U: 2}, momentinput.Point2{V: 2}
-	profile := momentinput.Profile{Outer: momentinput.LoopRecord{Segments: []momentinput.CurveSegment{
-		momentinput.LineSeg{Start: origin, End: u, TEnd: 1},
+	// The direct-rim recognizer keeps at most 64 segments. The native wall
+	// proof reads the construction's own pairing, even for a longer loop.
+	const divisions = 64
+	var segments []momentinput.CurveSegment
+	for i := range divisions {
+		start := momentinput.Point2{U: 2 * float64(i) / divisions}
+		end := momentinput.Point2{U: 2 * float64(i+1) / divisions}
+		segments = append(segments, momentinput.LineSeg{Start: start, End: end, TEnd: 1})
+	}
+	segments = append(segments,
 		momentinput.ArcSeg{Center: origin, Start: u, End: v, TEnd: 1},
 		momentinput.LineSeg{Start: v, End: origin, TEnd: 1},
-	}}}
+	)
+	profile := momentinput.Profile{Outer: momentinput.LoopRecord{Segments: segments}}
 	p0 := sectionrecord.PlaneRecord{U: r3.Vec{X: 1}, V: r3.Vec{Y: 1}}
 	p1 := p0
 	p1.Origin = r3.Vec{Z: 3}
@@ -64,6 +73,6 @@ func TestMixedLoftWallUsesItsOwnPlane(t *testing.T) {
 			curved++
 		}
 	}
-	require.Equal(t, 4, straight)
+	require.Equal(t, 2*(divisions+1), straight)
 	require.Positive(t, curved)
 }

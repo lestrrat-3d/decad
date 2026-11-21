@@ -35,6 +35,11 @@ func retainedPlaneOf(m *topo.Mesh) func(facet int) (r3.Frame, float64, bool) {
 			return r3.Frame{}, 0, false
 		}
 		f := m.Source[facet]
+		if claim := f.MeshPlaneSlab(); claim != nil {
+			if claim.Distance >= 0 && !math.IsInf(claim.Distance, 0) {
+				return claim.Frame, claim.Distance, true
+			}
+		}
 		if f == nil || !f.RetainedTag || f.NormalBound != 0 {
 			return r3.Frame{}, 0, false
 		}

@@ -386,7 +386,8 @@ func buildPaired(ctx context.Context, env topo.Env, pl Payload, budget *proofbou
 	}
 
 	pl.Verts, pl.Tris, pl.Walls = a.Verts, a.Tris, a.Walls
-	if pl.SourceIdentity == nil {
+	originalSections := pl.SourceIdentity == nil
+	if originalSections {
 		pl.SourceIdentity = &SourceIdentity{Origin: ref, direct: sealDirectSections(body, pl)}
 	}
 	pl.CapStartCount, pl.Cell, pl.Side = a.CapStartCount, a.Cell, a.Side
@@ -416,7 +417,7 @@ func buildPaired(ctx context.Context, env topo.Env, pl Payload, budget *proofbou
 	pl.SectionDelta = sectionDelta
 	pl.Chorded = loftmesh.IsChorded(pairs, sectionDelta, sectionMatchedDelta)
 	pl.wallPlanes = nil
-	if pl.Chorded && pl.MatchesDirectSections(body) && len(pl.BlendSegs) == 0 {
+	if pl.Chorded && originalSections && len(pl.BlendSegs) == 0 && originalLineArcSections(pl) {
 		pl.wallPlanes, err = recordStraightWalls(budget, pairs, a, walls)
 		if err != nil {
 			return nil, err

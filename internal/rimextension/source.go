@@ -28,4 +28,5 @@ type Admission struct {
 type WindowBounds struct {
 	Deviation, Area, Volume float64
 	support                 SourceWindow
+	coveredFaces            map[int]bool
 }

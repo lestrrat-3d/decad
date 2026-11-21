@@ -217,6 +217,7 @@ func AdmitOuterWindow(ctx context.Context, a OuterAdmission, meter *proofbound.R
 	// fixed-u width at this operation's terminal plane.
 	b.Deviation = proofbound.AbsSumUpper(b.Deviation, proofbound.RatFloatUp(lip), proofbound.RatFloatUp(domain.terminalGapUpper))
 	b.support = support
+	b.coveredFaces = ids
 	// Every point on the complete original rounded cheek is outside the
 	// moved pad. Bound its radial lip in addition to the fixed-X terminal
 	// width before accepting an endpoint comparison.

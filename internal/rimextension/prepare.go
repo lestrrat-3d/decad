@@ -122,6 +122,18 @@ func prepareOutput(ctx context.Context, env topo.Env, a Admission, old facetedre
 		Verts: out.Vertices, Tris: out.Triangles, Src: out.Sources, Groups: slices.Clone(old.Groups),
 		VertexBound: slices.Clone(old.VertexBound), MeshBound: old.MeshBound, Xform: r3.Identity(),
 	}
+	// WindowSourcesCovered excluded every other complete true source
+	// patch from the edit. Drop a shared group if any part can meet it.
+	if slices.ContainsFunc(old.Groups, func(g facetedrecord.Group) bool { return g.MeshSlab != nil }) {
+		if err := m.ReserveBundle(ctx, uint64(len(old.Tris))*2, 0, uint64(len(old.Tris))*32); err != nil {
+			return Prepared{}, false, err
+		}
+		faces := topobuild.Faces(a.Stock)
+		for i, g := range old.Src {
+			fi := old.FaceOf[i]
+			p.Groups[g].RestrictMeshPlaneSlab(faces[fi], w.coveredFaces == nil || w.coveredFaces[fi])
+		}
+	}
 	for i := range newGroups {
 		p.Groups = append(p.Groups, facetedrecord.Group{Origins: []provenance.Ref{{Producer: env.Ref, Role: "chamfer(0)"}}, Source: facetedrecord.BlendSource(env.Ref, i)})
 	}

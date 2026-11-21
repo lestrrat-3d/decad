@@ -356,7 +356,7 @@ func (fp Payload) placedWithReplay(ctx context.Context, env topo.Env, composed r
 			return nil, fmt.Errorf("%w: bounded placement volume refused", decaderr.ErrUnsupported)
 		}
 		volume := measurement.Measurement{Value: units.CubicMillimeters(v), Exactness: measurement.ExactnessOf(vb), Bound: units.CubicMillimeters(vb)}
-		body, ok, err = BuildWithProofReplay(ctx, budget, env, next, audit, volume, vr)
+		body, ok, err = BuildWithProofReplay(ctx, budget, env, next, audit, volume, vr, false)
 		if err == nil && !ok {
 			err = fmt.Errorf("%w: bounded placement body refused", decaderr.ErrUnsupported)
 		}

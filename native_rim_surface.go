@@ -327,6 +327,11 @@ func directUpperRimAt(ctx context.Context, env topo.Env, b *topo.Body, capFace, 
 		}
 		v, w, z := old.Verts[t[0]], old.Verts[t[1]], old.Verts[t[2]]
 		beta := max(old.VertexBound[t[0]], old.VertexBound[t[1]], old.VertexBound[t[2]])
+		// The annulus proof excludes all faces except the cap, wall and
+		// authenticated cheek patches from the true bevel support.
+		f := faces[old.FaceOf[i]]
+		p.Groups[old.Src[i]].RestrictMeshPlaneSlab(f, foot == nil || f == capFace || f == wall || foot.cheek[f] != nil)
+
 		if math.Nextafter(max(v.Y, w.Y, z.Y)+beta, math.Inf(1)) < math.Nextafter(hingeLo, math.Inf(-1)) {
 			continue
 		}
@@ -413,10 +418,11 @@ func publishRim(ctx context.Context, env topo.Env, p facetedrecord.Payload, loca
 		return none, false, err
 	}
 	vol := measurement.Measurement{Value: units.CubicMillimeters(v), Bound: units.CubicMillimeters(b), Exactness: measurement.ExactnessOf(b)}
-	out, ok, err := facetedrecord.BuildWithProofReplay(ctx, work, env, p, audit, vol, rat)
+	out, ok, err := facetedrecord.BuildWithProofReplay(ctx, work, env, p, audit, vol, rat, true)
 	if !ok || err != nil {
 		return none, false, err
 	}
+
 	return brepmodify.Result{Body: out}, true, nil
 }
 

@@ -26,7 +26,8 @@ import (
 // its per-facet source grouping and the proven error terms the measurements
 // compose from.
 type Mesh struct {
-	Verts []r3.Vec
+	transferMeshSlabs bool
+	Verts             []r3.Vec
 	// VertexBound is β(v) per held vertex (agent-docs/faceted-vertex-bounds-design.md
 	// §2, §4.1).
 	VertexBound []float64
@@ -324,6 +325,9 @@ func assembleBody(ctx context.Context, shared *proofbound.WorkBudget, env topo.E
 				Body:        body,
 			})
 			group := in.Groups[in.Src[i]]
+			if in.transferMeshSlabs {
+				f.SetMeshPlaneSlab(group.MeshSlab)
+			}
 			if group.HasCentroid && patchForGroup(in.Src[i]) == patch[i] {
 				f.Centroid, f.HasCentroid = group.Centroid, true
 			}

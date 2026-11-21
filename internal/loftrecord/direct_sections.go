@@ -19,12 +19,12 @@ type directSections struct {
 	alignment []int
 }
 
-func directSectionClass(p Payload) bool {
+func originalLineArcSections(p Payload) bool {
 	if !p.AuthenticatedReconstruction || p.SurfaceResult || p.ThroughBoreCut || p.Xform != r3.Identity() || p.ConstructionDelta != 0 || p.JoinDelta != 0 || p.JoinPlaneGap != 0 || len(p.Alignment) > 1 {
 		return false
 	}
 	for _, profile := range [2]momentinput.Profile{p.Profile0, p.Profile1} {
-		if len(profile.Holes) != 0 || len(profile.Outer.Segments) == 0 || len(profile.Outer.Segments) > 64 {
+		if len(profile.Holes) != 0 || len(profile.Outer.Segments) == 0 {
 			return false
 		}
 		for _, s := range profile.Outer.Segments {
@@ -37,6 +37,10 @@ func directSectionClass(p Payload) bool {
 	}
 	return true
 }
+func directSectionClass(p Payload) bool {
+	return len(p.Profile0.Outer.Segments) <= 64 && len(p.Profile1.Outer.Segments) <= 64 && originalLineArcSections(p)
+}
+
 func sealDirectSections(b *topo.Body, p Payload) *directSections {
 	if !directSectionClass(p) {
 		return nil

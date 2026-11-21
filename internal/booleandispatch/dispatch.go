@@ -479,10 +479,11 @@ func meshBody(ctx context.Context, op meshbool.OperationKind, env topo.Env, a, b
 
 	volume := measurement.Measurement{Value: units.CubicMillimeters(eval.Volume),
 		Exactness: measurement.ExactnessOf(eval.VolumeBound), Bound: units.CubicMillimeters(eval.VolumeBound)}
-	body, err := facetedrecord.BuildWithProof(ctx, env, eval.Payload, eval.Audit, volume, eval.VolumeRat)
+	body, err := facetedrecord.BuildWithSourcePlaneProof(ctx, env, eval.Payload, eval.Audit, volume, eval.VolumeRat, eval.Shift == nil)
 	if err != nil {
 		return nil, hooks.AsBooleanError(op, err)
 	}
+
 	body.OperationWarnings = append(body.OperationWarnings, eval.Diagnostics(op)...)
 	if op == meshbool.OpCut && (eval.ShiftCertificate.IsTranslation() || eval.ShiftCertificate.IsPureGrowth()) ||
 		op == meshbool.OpUnion && eval.ShiftCertificate != nil && eval.ShiftCertificate.IsSingleComponentAdjustment() {
