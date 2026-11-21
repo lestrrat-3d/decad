@@ -1,6 +1,82 @@
 {
   "entries": [
     {
+      "file": "internal/proof/float_enclosure.go",
+      "func": "DotSubEnclosure",
+      "role": "models",
+      "theorems": [
+        "Decad/Enclosure/Float.lean:Decad.Enclosure.dotSub_enclosure",
+        "Decad/Enclosure/Float.lean:Decad.Enclosure.axisLo_le",
+        "Decad/Enclosure/Float.lean:Decad.Enclosure.axisHi_ge"
+      ],
+      "assumptions": [
+        "A1",
+        "A7"
+      ],
+      "sha256": "6403052b49519706a656d91432a5b8c9382cdb84ea372c74af48157fcaab7a1a"
+    },
+    {
+      "file": "internal/proof/float_enclosure.go",
+      "func": "FloatBounds",
+      "role": "models",
+      "theorems": [
+        "Decad/Enclosure/Float.lean:Decad.Enclosure.floatBounds_enclose"
+      ],
+      "assumptions": [
+        "A15",
+        "A16"
+      ],
+      "sha256": "28586f26e69ae3bf43f956464c303c36916ddc91d3fec0d3ec771f27a571186d"
+    },
+    {
+      "file": "internal/proof/float_enclosure.go",
+      "func": "floatDown",
+      "role": "models",
+      "theorems": [
+        "Decad/Enclosure/Float.lean:Decad.Enclosure.down_le"
+      ],
+      "assumptions": [
+        "A15"
+      ],
+      "sha256": "717003875410a8d031faf17bf15b927bb66a4d0444969114c1ae1d511333b010"
+    },
+    {
+      "file": "internal/proof/float_enclosure.go",
+      "func": "floatMulDown",
+      "role": "models",
+      "theorems": [
+        "Decad/Enclosure/Float.lean:Decad.Enclosure.mulDown_le"
+      ],
+      "assumptions": [
+        "A1"
+      ],
+      "sha256": "9800390a0530207cd2041306549890f1aa6ed79d029f083f11914cced4d83264"
+    },
+    {
+      "file": "internal/proof/float_enclosure.go",
+      "func": "floatMulUp",
+      "role": "models",
+      "theorems": [
+        "Decad/Enclosure/Float.lean:Decad.Enclosure.mulUp_ge"
+      ],
+      "assumptions": [
+        "A1"
+      ],
+      "sha256": "0558421eb501609b0ffd441f65d2380304c184ff1a688ec5c386e583ed7129d7"
+    },
+    {
+      "file": "internal/proof/float_enclosure.go",
+      "func": "floatUp",
+      "role": "models",
+      "theorems": [
+        "Decad/Enclosure/Float.lean:Decad.Enclosure.stepUp_ge"
+      ],
+      "assumptions": [
+        "A15"
+      ],
+      "sha256": "b93a29a053d5118254ea583627420e004c43f2ab8c6c203ce2daa9eb87623994"
+    },
+    {
       "file": "internal/proof/float_step.go",
       "func": "Abs",
       "role": "assumes",
