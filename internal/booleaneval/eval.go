@@ -684,6 +684,9 @@ func evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 			if err := bmB.SetExactFacets(mb); err != nil {
 				return Evaluation{}, err
 			}
+			// Coplanar planar faces whose outlines keep their arrangement are admitted like exact ones
+			// (agent-docs/flush-contact-design.md §4.5).
+			meshbool.AttachFlushFaces(ma, mb, bmA, bmB, flushPlanar(a), flushPlanar(b), proofbound.NewWorkBudget(ctx))
 			// An unshifted Intersect also reads its seats: carrier-exact faces resting on each other, and the walls
 			// that leave their planes (agent-docs/coplanar-contact-design.md §16).
 			if op == meshbool.OpIntersect {

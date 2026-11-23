@@ -69,6 +69,23 @@ already charges area under it. For a CURVED true face the affine triangle is
 not the true piece, and the corner bounds alone do not cover the chord
 sagitta between them; §2.1 states how such a mesh enters this model.
 
+**End correspondence.** Flush admission (`agent-docs/flush-contact-design.md` §4.2) reads one more property of
+these bounds, an invariant of every producer whose faces read as carrier faces: every held outline vertex `v` of a
+planar face stands for one point `v*` of the true outline with `|v − v*| ≤ ρ(v)` (flush-contact §4.3), the held
+outline edge `(a, b)` stands for the true outline arc from `a*` to `b*`, and at a corner vertex `v*` is the true
+corner. The producers keep it as follows:
+
+- an analytic payload (prism, BRep, cup, every chorded analytic mesh): a vertex that ends a rim between two planar
+  faces is a record vertex (a section vertex, a cap–wall corner, a sketch fillet's tangent point), displaced only by
+  the coordinate, section, axial and placement terms §2.1's reading folds into `β`;
+- a Faceted payload (§3): a kept operand vertex keeps its point and bound (§3.1); a vertex placed on a held facet
+  edge (§3.3), and every vertex in the middle of an outline chain along one neighbour face, stands for the affine
+  point of that edge's true counterpart within its `β`; a rim vertex at a corner stands for the meet of its two rim
+  segments' true curves, within `ρ(v)`, which can exceed `β` (flush-contact §4.3);
+- placement and similarity map `v*` with the body (§4) and charge the rounding in `β`.
+
+A producer that cannot state it does not enter flush admission: its faces read as no carrier faces.
+
 ### 2.1 What each mesh publishes
 
 A mesh node (`topo.Mesh`) keeps a per-vertex record beside `FaceBound`:

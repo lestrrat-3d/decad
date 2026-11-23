@@ -43,24 +43,7 @@ type rimSeat struct {
 // Each such edge of W is marked in RimEdge.
 func (bm *BoolMesh) SetSeats(m *topo.Mesh, placed []bool) {
 	n := len(bm.Tris)
-	bm.Carrier = make([]bool, n)
-	for t := range n {
-		bm.Carrier[t] = bm.SlabBound[t] == 0 || bm.analyticPlaneFacet(m, t) || t < len(placed) && placed[t]
-	}
-	// A placed face's true plane is read exactly from its record, once per face (§17).
-	planes := map[*topo.Face]*exactPlane{}
-	for t := range n {
-		if bm.Carrier[t] || t >= len(m.Source) || m.Source[t] == nil {
-			continue
-		}
-		f := m.Source[t]
-		pl, seen := planes[f]
-		if !seen {
-			pl = trueFacePlane(f)
-			planes[f] = pl
-		}
-		bm.Carrier[t] = pl != nil && pl.holds(bm.Verts[bm.Tris[t][0]], bm.Verts[bm.Tris[t][1]], bm.Verts[bm.Tris[t][2]])
-	}
+	bm.Carrier = bm.carrierFacets(m, placed)
 	bm.RimEdge = make([][3]bool, n)
 	bm.RimVert = map[int]bool{}
 	bm.Seats = map[int][]rimSeat{}
@@ -140,6 +123,35 @@ func (bm *BoolMesh) SetSeats(m *topo.Mesh, placed []bool) {
 			}
 		}
 	}
+}
+
+// carrierFacets reads, per facet of bm, whether its true piece lies in the facet's own plane (§16.1, carrierFacet).
+func (bm *BoolMesh) carrierFacets(m *topo.Mesh, placed []bool) []bool {
+	carrier := make([]bool, len(bm.Tris))
+	planes := map[*topo.Face]*exactPlane{}
+	for t := range carrier {
+		carrier[t] = bm.carrierFacet(m, t, placed, planes)
+	}
+	return carrier
+}
+
+// carrierFacet reports whether facet t's true piece lies in the facet's own plane: its SlabBound is zero, its face is
+// an unplaced analytic plane it lies in exactly, placed marks it, or a record names its face's exact plane and the
+// facet lies in it (§17). planes caches each face's record plane, which is read once per face.
+func (bm *BoolMesh) carrierFacet(m *topo.Mesh, t int, placed []bool, planes map[*topo.Face]*exactPlane) bool {
+	if bm.SlabBound[t] == 0 || bm.analyticPlaneFacet(m, t) || t < len(placed) && placed[t] {
+		return true
+	}
+	if t >= len(m.Source) || m.Source[t] == nil {
+		return false
+	}
+	f := m.Source[t]
+	pl, seen := planes[f]
+	if !seen {
+		pl = trueFacePlane(f)
+		planes[f] = pl
+	}
+	return pl != nil && pl.holds(bm.Verts[bm.Tris[t][0]], bm.Verts[bm.Tris[t][1]], bm.Verts[bm.Tris[t][2]])
 }
 
 // exactPlane is the plane through o normal to n, both exact rationals.
@@ -276,26 +288,43 @@ func (p facetPlane) side(m *BoolMesh, v int) int {
 // carrierFace reports whether every facet is carrier-exact and every corner lies in the first facet's plane. A corner
 // shared by several facets is tested once.
 func (bm *BoolMesh) carrierFace(facets []int) bool {
+	ok, _ := bm.carrierFaceBy(facets, func(t int) bool { return bm.Carrier[t] }, nil)
+	return ok
+}
+
+// carrierFaceBy is carrierFace with each facet's carrier-exactness read by carrier. A non-nil step is charged once per
+// facet and once per exact sign, and its error ends the read.
+func (bm *BoolMesh) carrierFaceBy(facets []int, carrier func(t int) bool, step func() error) (bool, error) {
 	if len(facets) == 0 {
-		return false
+		return false, nil
 	}
 	pl := newFacetPlane(bm, facets[0])
 	tested := make(map[int]struct{}, len(facets)+2)
 	for _, t := range facets {
-		if !bm.Carrier[t] {
-			return false
+		if step != nil {
+			if err := step(); err != nil {
+				return false, err
+			}
+		}
+		if !carrier(t) {
+			return false, nil
 		}
 		for _, v := range bm.Tris[t] {
 			if _, done := tested[v]; done {
 				continue
 			}
 			tested[v] = struct{}{}
+			if step != nil {
+				if err := step(); err != nil {
+					return false, err
+				}
+			}
 			if pl.side(bm, v) != 0 {
-				return false
+				return false, nil
 			}
 		}
 	}
-	return true
+	return true, nil
 }
 
 // closedLoops reports whether the edges, each (facet, edge index), meet each vertex they touch exactly twice: their
@@ -613,18 +642,19 @@ func rimPointOnCarrier(m *BoolMesh, t int, c TriContact, other *BoolMesh, x int,
 }
 
 // seatPoint reports whether a point contact of facets i of ma and j of mb may be owned by the coplanar pass: two
-// exact facets, as §3.3 states, or a carrier-exact facet against a wall's rim facet, or two carrier-exact facets, of
-// an Intersect that read seats (§16).
-func seatPoint(ma, mb *BoolMesh, i, j int) bool {
-	if ma.isExact(i) && mb.isExact(j) {
-		return true
+// exact facets, as §3.3 states, or two facets of a flush pair (agent-docs/flush-contact-design.md §4.6), or a
+// carrier-exact facet against a wall's rim facet, or two carrier-exact facets, of an Intersect that read seats (§16).
+func seatPoint(ma, mb *BoolMesh, i, j int) (bool, error) {
+	exact, err := pairExact(ma, mb, i, j)
+	if err != nil || exact {
+		return exact, err
 	}
 	if ma.Seats == nil || mb.Seats == nil {
-		return false
+		return false, nil
 	}
 	okA := ma.Carrier[i] || rimFacet(ma, i)
 	okB := mb.Carrier[j] || rimFacet(mb, j)
-	return okA && okB && (ma.Carrier[i] || mb.Carrier[j])
+	return okA && okB && (ma.Carrier[i] || mb.Carrier[j]), nil
 }
 
 // seatSkip reports whether the face pair of facets fx of bmX and fw of bmW needs no proximity proof (§16): fx is a

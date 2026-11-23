@@ -34,7 +34,8 @@ Navigation, not authority.
 
 - "Carrier-exact facet" is coplanar-contact §16.1's notion computed for every op: `SlabBound == 0`, an unplaced
   analytic plane the facet lies in exactly (`analyticPlaneFacet`), or a record naming the face's exact plane
-  (`trueFacePlane`, §17). The placed analytic reading (`placedCarriers`, §17.2) is not used (§13 Q2).
+  (`trueFacePlane`, §17). The placed analytic reading (`placedCarriers`, §17.2) is not used (§13 Q2). A face that
+  carries a `CapRecord` is read against the plane its record denotes instead of its float tag (§4.1).
 - A face is **planar** when its true face is provably a plane: its surface is a `surfacegeom.Plane` or
   `topo.Face.HeldPlanar` holds (a Faceted face descending only from planar sources); it states no axial displacement
   and no extent departure (`AxialDelta`, `ExtentDelta`) unless it states `FlatPatch`; and it is no wall of a chorded
@@ -147,6 +148,15 @@ face, and its first facet. Carrier-exactness per facet comes from `carrierFacets
 `SetSeats` (lines 46–63), which `SetSeats` then calls unchanged; flush reads pass `placed = nil` and also require the
 facet's face to be planar (Assumptions), which keeps a chorded loft wall, a single held triangle on a curved surface,
 from reading as a carrier face. A face is read lazily.
+
+A face that carries a `CapRecord` (an analytic cap, or a Faceted group that retained one) is a carrier face only when
+every facet corner also lies exactly in the plane its record denotes: `{B(O + u·U + v·V + z·N) + t}` with `B`, `t` the
+record's `Xform`, every held value an exact rational, and `z` the denoted level `ZDenoted`, or the held level `Z` when
+the face states a zero `AxialDelta` (`capRecordPlane`). The float `Plane` tag is a rounded re-expression of that
+plane: where `O + Z·N` rounds, the tag and the held corners sit off the true cap while the face still states a zero
+displacement against its record, so `analyticPlaneFacet` alone would read a cap the true face does not lie in. Such a
+cap is no carrier face, and its coplanar contact keeps today's refusal and shift (§8). A face without a record keeps
+the `carrierFacets` reading; `SetSeats` is unchanged.
 
 ### 4.2 Vertex correspondence
 
@@ -349,6 +359,7 @@ pairs, and a refusal there is a decline (S5).
 | Case | Why |
 |---|---|
 | A coplanar pair whose faces are not both carrier faces in one exact plane | F1 |
+| A cap whose held corners leave the plane its `CapRecord` denotes, such as a cap at a level that rounds | F1, §4.1 |
 | A moving part within its radius plus the other reach of the other outline that is not a robust crossing (an arc that crosses or touches the other outline; a rounded vertex on the other outline; a near-parallel crossing) | F3 |
 | A point contact between a wall facet and a flush face's partner that is not an exact or flush pair | the isolated-point rule keeps its refusal |
 | Faces whose planes agree only within a bound, placed by an inexact turn | coplanar-contact §17.4, §18 |
@@ -391,10 +402,11 @@ face on the flush plane with one outer loop.
 | R3 | `TestFlushContactChain` | hull: R1's profile drawn on `y = -1`, extruded 9 toward +y, cut back by a box over `y ∈ [-3, 0]`; tongue: hull minus a block `x ∈ [-3,3]`, `y ∈ [3,3.5]`, `z ∈ [-0.5, 8]` (lower face flush on the foot tops at `z = -0.5`); host: Union of a prism drawn on `y = 0` (profile `x ∈ [-10,10]`, `z ∈ [-10,0]`, corner `(-10,-10)` rounded by a sketch fillet of radius 2) extruded 16 toward +y and a co-directional prism drawn on `y = 8` (profile `x ∈ [-10,10]`, `z ∈ [-10,-5]`) extruded 12 toward +y | no `CodeGapShiftApplied` on the tongue or the result; flush check on `y = 0`; volume equals `V(host) + V(tongue) − V(host ∩ tongue)` within the summed bounds (each read by decad) |
 | R4 | `TestFlushContactKeepsApart` | R1's tool on `y = 2^-40` and on `y = 10^-3` | two faces on the two planes, no merged group, volume within bound |
 | R5 | `TestFlushContactArcCrossingRefused` | tool profile a circle of radius 1 about `(0, 0)` drawn flush, so its chords cross the host's edge `z = 0` | default document: `CodeGapShiftApplied`; `ExactOnly`: `BooleanUnsupportedContact` |
-| R6 | `TestFlushContactTurnedRefused` | R1's tool turned 30° about z and back | `CodeGapShiftApplied`, no merged group |
+| R6 | `TestFlushContactTurnedRefused` | R1's tool turned 37° about z and back (30° and back composes to the identity exactly) | `CodeGapShiftApplied`, no merged group |
 | R7 | `TestFlushContactCutFlushEnd` | R3's end Cut alone; then the block 2^-40 higher | no shift and no face on `z = -0.5` inside `y ∈ [3, 3.5]`; then a thin slab remains (a face at `z = -0.5 + 2^-40`) |
-| R8 | `TestFlushContactChordedLoft` | a chorded circular loft (two circles of radius 2, 3 apart along z) whose start cap states no displacement (`AxialDelta == 0`, `loftrecord.stateCapLevels`) and lies flush on a box face, the box face's edge crossing the cap 0.5 from its centre | the cap reads as a carrier face and its rim edges as neither line nor straight (the walls are not planar), so the arc chords crossing the box edge refuse the pair: `CodeGapShiftApplied` as today; red without the `chordedLoftWall` exclusion (the pair is admitted) |
+| R8 | `TestFlushContactChordedLoft` | a chorded circular loft (two circles of radius 2, 3 apart along z) whose start cap states no displacement (`AxialDelta == 0`, `loftrecord.stateCapLevels`) and lies flush on a box face, the box overlapping the loft's foot (`z ∈ [0, 1]`) and its edge crossing the cap 0.5 from its centre | the cap reads as a carrier face and its rim edges as neither line nor straight (the walls are not planar), so the arc chords crossing the box edge refuse the pair: `CodeGapShiftApplied` as today; red without the `chordedLoftWall` exclusion (the pair is admitted) |
 | R9 | `TestFlushContactClipBounds` | R1 identity | every result vertex the coplanar pass placed on the flush plane carries `β ≥` the tool cap facets' bound there; the exact R5 of union-face-merge keeps its bounds |
+| R11 | `TestFlushContactRoundedCapLevelRefused` | `ExactOnly`: a square tool on the frame through `z = 1e9`, extruded `nextafter(2, 0)`, its end cap held at the blank Loft's upper cap level while its record denotes a level `2^-52` lower; `Cut` | `ErrUnsupported` (the cap is no carrier face, §4.1); red without the `CapRecord` rule (a hole through the cap) |
 | R10 | `TestFlushContactReplay` | `booleaneval.EvaluateReplay(ctx, OpUnion, host.n, tool.n, 1, proofbound.NewReplayTrialBudget())` on R1 identity's operands | no error, `Shift == nil`, and the payload's facets on `y = 0` all in source groups of both operands' flush faces (the bounded pass admits the flush pair) |
 
 ### 10.3 API test (`apitest/flush_contact_test.go`)

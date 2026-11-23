@@ -30,6 +30,8 @@ type pairCutsResult struct {
 	// (agent-docs/coplanar-contact-design.md §3.2). Both are nil unless a pair
 	// was admitted.
 	CoplanarA, CoplanarB map[int][]int
+	// CoplanarBounds is coplanarPass.bounds: nil unless a flush pair was admitted.
+	CoplanarBounds map[string]float64
 	// Owned holds the exact key of every point the coplanar pass accepted, and
 	// is nil unless some pair or edge was admitted.
 	Owned map[string]struct{}
@@ -86,7 +88,11 @@ func pairCuts(ctx context.Context, ma, mb *BoolMesh, memo *ContactMemo, keyOf fu
 		ta := TriCorners(ma, i)
 		tb := TriCorners(mb, j)
 		if c.Kind == ContactRegion {
-			admitted := ma.isExact(i) && mb.isExact(j) || seatPair(ma, mb, i, j)
+			admitted, err := pairExact(ma, mb, i, j)
+			if err != nil {
+				return err
+			}
+			admitted = admitted || seatPair(ma, mb, i, j)
 			if !admitted {
 				refused = true
 			}
@@ -116,9 +122,17 @@ func pairCuts(ctx context.Context, ma, mb *BoolMesh, memo *ContactMemo, keyOf fu
 		if c.Kind == ContactPoint {
 			pointTouches = append(pointTouches, c.P0)
 			pointFacets = append(pointFacets, [2]int{i, j})
-			// A coplanar point touch of two exact facets is accepted unless a
-			// crossing segment ends there, which the rim map settles below.
-			pointCoplanar = append(pointCoplanar, c.Coplanar && ma.isExact(i) && mb.isExact(j))
+			// A coplanar point touch of two exact facets, or of a flush pair, is
+			// accepted unless a crossing segment ends there, which the rim map
+			// settles below.
+			coplanarPoint := false
+			if c.Coplanar {
+				var err error
+				if coplanarPoint, err = pairExact(ma, mb, i, j); err != nil {
+					return err
+				}
+			}
+			pointCoplanar = append(pointCoplanar, coplanarPoint)
 			return nil
 		}
 		sin := 0.0
@@ -233,8 +247,16 @@ func pairCuts(ctx context.Context, ma, mb *BoolMesh, memo *ContactMemo, keyOf fu
 			if err != nil {
 				return pairCutsResult{}, err
 			}
-			if side == EdgeCoplanarBounded && (ma.isExact(p.I) && mb.isExact(p.J) ||
-				rimEdge(ma, p.I, p.C.EdgeA) && slices.Contains(cp.coplanarA[adjacent], p.J)) {
+			accept := false
+			if side == EdgeCoplanarBounded {
+				// The wall's rim on a flush face is an outline edge of it, which the flush verdict covers
+				// (agent-docs/flush-contact-design.md §4.6).
+				if accept, err = inPlaneEdgeAdmitted(ma, mb, p.I, p.J, adjacent, p.J); err != nil {
+					return pairCutsResult{}, err
+				}
+				accept = accept || rimEdge(ma, p.I, p.C.EdgeA) && slices.Contains(cp.coplanarA[adjacent], p.J)
+			}
+			if accept {
 				if err := cp.acceptEdge(p, adjacent, p.J, keyOf); err != nil {
 					return pairCutsResult{}, err
 				}
@@ -254,8 +276,14 @@ func pairCuts(ctx context.Context, ma, mb *BoolMesh, memo *ContactMemo, keyOf fu
 			if err != nil {
 				return pairCutsResult{}, err
 			}
-			if side == EdgeCoplanarBounded && (ma.isExact(p.I) && mb.isExact(p.J) ||
-				rimEdge(mb, p.J, p.C.EdgeB) && slices.Contains(cp.coplanarA[p.I], adjacent)) {
+			accept := false
+			if side == EdgeCoplanarBounded {
+				if accept, err = inPlaneEdgeAdmitted(ma, mb, p.I, p.J, p.I, adjacent); err != nil {
+					return pairCutsResult{}, err
+				}
+				accept = accept || rimEdge(mb, p.J, p.C.EdgeB) && slices.Contains(cp.coplanarA[p.I], adjacent)
+			}
+			if accept {
 				if err := cp.acceptEdge(p, p.I, adjacent, keyOf); err != nil {
 					return pairCutsResult{}, err
 				}
@@ -335,7 +363,11 @@ func pairCuts(ctx context.Context, ma, mb *BoolMesh, memo *ContactMemo, keyOf fu
 			if len(every) < maxTouchContacts {
 				every = append(every, touchOf(ma, pointFacets[k][0], pointFacets[k][1]))
 			}
-			if seatPoint(ma, mb, pointFacets[k][0], pointFacets[k][1]) {
+			seat, err := seatPoint(ma, mb, pointFacets[k][0], pointFacets[k][1])
+			if err != nil {
+				return pairCutsResult{}, err
+			}
+			if seat {
 				_, owned := cp.owned[key]
 				if pointCoplanar[k] || owned {
 					cp.owned[key] = struct{}{}
@@ -357,6 +389,7 @@ func pairCuts(ctx context.Context, ma, mb *BoolMesh, memo *ContactMemo, keyOf fu
 		MaxRim: maxRim, MinSin: minSin, DeepTerm: deepTerm, Contacts: contactSites}
 	if len(cp.coplanarA) > 0 {
 		res.CoplanarA, res.CoplanarB = cp.coplanarA, cp.coplanarB
+		res.CoplanarBounds = cp.bounds
 	}
 	if len(cp.owned) > 0 {
 		res.Owned = cp.owned
@@ -391,6 +424,10 @@ type coplanarPass struct {
 	reserve              func(n uint64) error
 	coplanarA, coplanarB map[int][]int
 	owned                map[string]struct{}
+	// bounds holds, by exact key, the bound of every point a flush pair's clip placed: the largest over such pairs of
+	// both facets' FacetBound and the pair's crossing bound (agent-docs/flush-contact-design.md §4.8). An exact pair
+	// records none.
+	bounds map[string]float64
 	// legacyGrazes and legacyPoints are the contacts the switch-off pass would
 	// have collected for what this pass accepted; the coplanar facet pairs
 	// themselves are pairCuts' own list.
@@ -403,10 +440,45 @@ type coplanarPass struct {
 func (cp *coplanarPass) admit(ma, mb *BoolMesh, i, j int, keyOf func(proof.Xpt) string, appendCut func(side, facet int, seg Xseg) error) error {
 	cp.coplanarA[i] = append(cp.coplanarA[i], j)
 	cp.coplanarB[j] = append(cp.coplanarB[j], i)
-	if err := cp.clipEdges(mb, j, ma, i, keyOf, func(seg Xseg) error { return appendCut(0, i, seg) }); err != nil {
+	record := func(Xseg) {}
+	if !ma.isExact(i) || !mb.isExact(j) {
+		verdict, err := flushVerdict(ma, mb, i, j)
+		if err != nil {
+			return err
+		}
+		if verdict.Clear {
+			b := max(ma.FacetBound[i], mb.FacetBound[j], verdict.Cross)
+			record = func(seg Xseg) {
+				if cp.bounds == nil {
+					cp.bounds = map[string]float64{}
+				}
+				for _, p := range [2]proof.Xpt{seg.A, seg.B} {
+					k := keyOf(p)
+					cp.bounds[k] = max(cp.bounds[k], b)
+				}
+			}
+		}
+	}
+	if err := cp.clipEdges(mb, j, ma, i, keyOf, func(seg Xseg) error {
+		record(seg)
+		return appendCut(0, i, seg)
+	}); err != nil {
 		return err
 	}
-	return cp.clipEdges(ma, i, mb, j, keyOf, func(seg Xseg) error { return appendCut(1, j, seg) })
+	return cp.clipEdges(ma, i, mb, j, keyOf, func(seg Xseg) error {
+		record(seg)
+		return appendCut(1, j, seg)
+	})
+}
+
+// inPlaneEdgeAdmitted is the in-plane edge rule of agent-docs/coplanar-contact-design.md §3.3 for the edge contact of
+// facet i of ma and facet j of mb: both facets exact, or the coplanar facets a of ma and b of mb, one of which is the
+// edge's in-plane neighbour, on a flush pair (agent-docs/flush-contact-design.md §4.6).
+func inPlaneEdgeAdmitted(ma, mb *BoolMesh, i, j, a, b int) (bool, error) {
+	if ma.isExact(i) && mb.isExact(j) {
+		return true, nil
+	}
+	return flushPair(ma, mb, a, b)
 }
 
 // clipEdges clips the patch-boundary edges of facet src of from to the closed

@@ -37,10 +37,7 @@ func chordedLoftPlane(group facetedrecord.Group, owner *topo.Body, f *topo.Face)
 		return group
 	}
 	lp, ok := owner.Payload.(loftrecord.Payload)
-	if !ok || !lp.Chorded {
-		return group
-	}
-	if !slices.ContainsFunc(f.Origins, func(o provenance.Ref) bool { return strings.HasPrefix(o.Role, loftWallRolePrefix) }) {
+	if !ok || !chordedLoftWall(owner, f) {
 		return group
 	}
 	delta := lp.Proof.FacetDeparture
@@ -55,4 +52,30 @@ func chordedLoftPlane(group facetedrecord.Group, owner *topo.Body, f *topo.Face)
 	}
 	group.AxialDelta, group.HasAxialDelta = max(group.AxialDelta, delta), true
 	return group
+}
+
+// chordedLoftWall reports whether f is a wall face of owner, a loft with a chorded cell: a Plane through three held
+// vertices of a curved ruled wall, which is not the surface the loft denotes
+// (agent-docs/faceted-source-retention-design.md §11, "Chorded loft walls").
+func chordedLoftWall(owner *topo.Body, f *topo.Face) bool {
+	lp, ok := owner.Payload.(loftrecord.Payload)
+	if !ok || !lp.Chorded {
+		return false
+	}
+	return slices.ContainsFunc(f.Origins, func(o provenance.Ref) bool { return strings.HasPrefix(o.Role, loftWallRolePrefix) })
+}
+
+// flushPlanar returns the planar test flush admission reads for owner's faces (agent-docs/flush-contact-design.md
+// Assumptions): the true face is provably a plane when its surface is a Plane or it is HeldPlanar, it states no axial
+// displacement and no extent departure unless it is a FlatPatch, and it is no chorded loft wall.
+func flushPlanar(owner *topo.Body) func(*topo.Face) bool {
+	return func(f *topo.Face) bool {
+		if _, plane := f.Surface.(surfacegeom.Plane); !plane && !f.HeldPlanar {
+			return false
+		}
+		if !f.FlatPatch && (f.AxialDelta != 0 || f.ExtentDelta != 0) {
+			return false
+		}
+		return !chordedLoftWall(owner, f)
+	}
 }

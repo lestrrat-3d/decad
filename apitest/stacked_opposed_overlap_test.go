@@ -1,6 +1,7 @@
 package apitest_test
 
 import (
+	"math"
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
@@ -78,10 +79,37 @@ func TestStackedOpposedOverlapPockets(t *testing.T) {
 }
 
 // TestStackedOpposedTouchingPocketsRefuse keeps opposed pockets that only
-// touch off every analytic route: along an edge the floor and ceiling would
-// put four faces on one edge, and at a corner or a tangency the body would
-// meet itself at one point. Under ExactOnly the mesh path refuses the contact.
+// touch along an edge or at a corner off every analytic route: the floor and
+// ceiling would put four faces on one edge, or the body would meet itself at
+// one point. Under ExactOnly the mesh path refuses the contact.
 func TestStackedOpposedTouchingPocketsRefuse(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name        string
+		top, bottom [4]float64
+	}{
+		{name: "edge", top: [4]float64{-6, -2, -2, 2}, bottom: [4]float64{-2, -2, 2, 2}},
+		{name: "corner", top: [4]float64{-6, -2, -2, 2}, bottom: [4]float64{-2, 2, 2, 6}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			doc := decad.New(decad.ExactOnly())
+			_, err := opposedPockets(t, doc, tc.top, tc.bottom, true)
+			require.ErrorIs(t, err, decad.ErrUnsupported)
+			var be *decad.BooleanError
+			require.ErrorAs(t, err, &be)
+			require.Equal(t, decad.BooleanUnsupportedContact, be.Code)
+		})
+	}
+}
+
+// TestStackedOpposedTangentPocketsCutFlush cuts a round bottom pocket whose
+// circle touches the top pocket's outline at one point, (-2, 0) on z = 6. It
+// leaves the analytic routes, and the mesh path builds it: the round tool's
+// lower cap lies flush on the plate's bottom face, far from its outline, so
+// the pair is a flush pair (agent-docs/flush-contact-design.md §2), and the
+// result's volume is the plate's less both pockets.
+func TestStackedOpposedTangentPocketsCutFlush(t *testing.T) {
 	t.Parallel()
 	box := func(x0, y0, x1, y1, z0, h float64) func(*testing.T, *decad.Document) *decad.Body {
 		return func(t *testing.T, doc *decad.Document) *decad.Body { return boxBodyAtZ(t, doc, x0, y0, x1, y1, z0, h) }
@@ -92,13 +120,12 @@ func TestStackedOpposedTouchingPocketsRefuse(t *testing.T) {
 	for _, tc := range []struct {
 		name        string
 		top, bottom func(*testing.T, *decad.Document) *decad.Body
+		volume      float64
 	}{
-		{name: "edge", top: box(-6, -2, -2, 2, 6, 4), bottom: box(-2, -2, 2, 2, 0, 6)},
-		{name: "corner", top: box(-6, -2, -2, 2, 6, 4), bottom: box(-2, 2, 2, 6, 0, 6)},
-		// Circles of radius 1 about x = -3 and x = -1 touch at (-2, 0); the
-		// circle about x = -1 touches the rectangle's edge x = -2 there too.
-		{name: "tangent-circles", top: round(-3, 1, 6, 4), bottom: round(-1, 1, 0, 6)},
-		{name: "tangent-rectangle-circle", top: box(-6, -2, -2, 2, 6, 4), bottom: round(-1, 1, 0, 6)},
+		// Circles of radius 1 about x = -3 and x = -1 touch at (-2, 0).
+		{name: "tangent-circles", top: round(-3, 1, 6, 4), bottom: round(-1, 1, 0, 6), volume: 4000 - 10*math.Pi},
+		// The circle about x = -1 touches the rectangle's edge x = -2 at (-2, 0).
+		{name: "tangent-rectangle-circle", top: box(-6, -2, -2, 2, 6, 4), bottom: round(-1, 1, 0, 6), volume: 4000 - 64 - 6*math.Pi},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
@@ -107,11 +134,12 @@ func TestStackedOpposedTouchingPocketsRefuse(t *testing.T) {
 			part, err := decad.Cut(t.Context(), plate, tc.top(t, doc))
 			require.NoError(t, err)
 			require.Equal(t, "decad.stackedPrismPayload", decadtest.PayloadClass(part))
-			_, err = decad.Cut(t.Context(), part, tc.bottom(t, doc))
-			require.ErrorIs(t, err, decad.ErrUnsupported)
-			var be *decad.BooleanError
-			require.ErrorAs(t, err, &be)
-			require.Equal(t, decad.BooleanUnsupportedContact, be.Code)
+			out, err := decad.Cut(t.Context(), part, tc.bottom(t, doc))
+			require.NoError(t, err)
+			require.Empty(t, out.OperationDiagnostics(), "no gap shift")
+			volume, err := out.Volume()
+			require.NoError(t, err)
+			require.LessOrEqual(t, math.Abs(volume.Value.Base()-tc.volume), volume.Bound.Base())
 		})
 	}
 }

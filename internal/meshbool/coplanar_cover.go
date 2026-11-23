@@ -19,6 +19,9 @@ type keepOptions struct {
 	// Op is the boolean operation, and Second says m is its second operand.
 	Op     OperationKind
 	Second bool
+	// Bounds holds, by exact key, the bound of each point a flush pair's clip placed: a kept corner that is not one of
+	// its facet's own corners takes at least it (agent-docs/flush-contact-design.md §4.8).
+	Bounds map[string]float64
 }
 
 // ContactKeys is what the stitch needs to tell a contact pinch from a broken
