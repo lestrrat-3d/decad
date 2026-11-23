@@ -1733,6 +1733,22 @@ work intervals inside quadratic/refinement loops, as interference §7 specifies.
   and the measured displacement of every vertex the check moved joins the
   motion's own rounding allowance. So every `Faceted` body is embedded when it
   is created, which is what its tessellation's `BoundaryVerified()` reports.
+
+  A placement has one more stage, because its source is itself a rounded mesh.
+  A float-box move spreads exact points that round together over neighbouring
+  floats, which leaves a chain of held vertices an ulp or a few apart. A motion
+  to coordinates with a coarser ulp rounds the chain together again, and no
+  float box can hold its vertices apart. When the nearest rounding stays folded
+  after the float-box and gap-tolerance searches, the placement rounds every
+  exact image again so that each axis keeps the order of the exact
+  coordinates: equal coordinates stay equal, and a coordinate that nearest
+  rounding merges with a smaller one steps to the float after it
+  (`internal/facetproof/placement_order.go`). Then the same check and
+  searches run again. The stage needs a positive gap tolerance, and it runs
+  only when every vertex it moves stays within that reach of its exact image.
+  A moved vertex pays its measured distance, and the placement reports the
+  move as the gap-tolerance search does (`agent-docs/gap-tolerance-design.md`
+  §5.1). The bounded replay placement does not run this stage.
 - **Ordinary mesh output**: faces are `Faceted`, one per CONNECTED PATCH of a current operand
   face, except that a patch joins the patches of the other operand that are adjacent, exactly coplanar and
   same-facing (`agent-docs/union-face-merge-design.md`). Each patch keeps that face's origins, and its inherited Boolean roles
