@@ -226,3 +226,216 @@ func TestUnionFaceMergeKeepsRoundedFacesApart(t *testing.T) {
 		require.Empty(t, members, "no group is merged")
 	}
 }
+
+// flushPlacement is a signed axis permutation: the images of +x, +y and +z. It places a flush fixture exactly, with
+// no rounding, so the fixture's planes stay exact in every placement.
+type flushPlacement struct {
+	name    string
+	x, y, z r3.Vec
+}
+
+func (p flushPlacement) apply(v r3.Vec) r3.Vec {
+	return p.x.Scale(v.X).Add(p.y.Scale(v.Y)).Add(p.z.Scale(v.Z))
+}
+
+// toward is the extrude direction that runs along local dir from a sketch whose local normal is u × v: a mirroring
+// placement reverses the frame's normal.
+func (p flushPlacement) toward(u, v, dir r3.Vec) Direction {
+	n := p.apply(u).Cross(p.apply(v))
+	if n.Dot(p.apply(dir)) > 0 {
+		return Along
+	}
+	return Against
+}
+
+// axis is the world axis index of the image of local +y, the normal of the flush plane.
+func (p flushPlacement) axis() int {
+	switch {
+	case p.y.X != 0:
+		return 0
+	case p.y.Y != 0:
+		return 1
+	}
+	return 2
+}
+
+var flushPlacements = []flushPlacement{
+	{"identity", r3.Vec{X: 1}, r3.Vec{Y: 1}, r3.Vec{Z: 1}},
+	{"quarter turn about z", r3.Vec{Y: 1}, r3.Vec{X: -1}, r3.Vec{Z: 1}},
+	{"quarter turn about x", r3.Vec{X: 1}, r3.Vec{Z: 1}, r3.Vec{Y: -1}},
+	{"mirrored in x", r3.Vec{X: -1}, r3.Vec{Y: 1}, r3.Vec{Z: 1}},
+	{"mirrored in y", r3.Vec{X: 1}, r3.Vec{Y: -1}, r3.Vec{Z: 1}},
+}
+
+// flushPolygonPrism extrudes the closed polygon pts, drawn in the local plane spanned by u and v through origin, by
+// length along local dir. Every vertex is fixed.
+func flushPolygonPrism(t *testing.T, doc *Document, p flushPlacement, origin, u, v, dir r3.Vec, pts [][2]float64, length float64) *Body {
+	t.Helper()
+	world := sketch.NewWorld()
+	frame, err := r3.NewFrame(p.apply(origin), p.apply(u), p.apply(v))
+	require.NoError(t, err)
+	plane, err := world.CreatePlaneFromFrame(frame)
+	require.NoError(t, err)
+	s, err := world.CreateSketch(plane)
+	require.NoError(t, err)
+	verts := make([]*sketch.Point, len(pts))
+	for i, q := range pts {
+		verts[i] = s.CreatePoint(q[0], q[1])
+		s.Fix(verts[i])
+	}
+	for i := range verts {
+		s.CreateLine(verts[i], verts[(i+1)%len(verts)])
+	}
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	require.Len(t, s.Profiles(), 1)
+	body, err := Extrude(t.Context(), doc, s, s.Profiles()[0], Distance{D: units.Millimeters(length), Dir: p.toward(u, v, dir)})
+	require.NoError(t, err)
+	return body
+}
+
+// chordRoundTongue is a strip x in [-1, 1] rising to z = 6 from feet at z = -2, with an 8-chord quarter round of
+// radius 0.7 at each root. The host's edge at z = 0 crosses both rounds, so the crossing points are no floats.
+func chordRoundTongue() [][2]float64 {
+	pts := [][2]float64{{-2.4, -2}, {2.4, -2}, {2.4, -0.5}}
+	for i := range 9 {
+		a := (270 - 90*float64(i)/8) * math.Pi / 180
+		pts = append(pts, [2]float64{1.7 + 0.7*math.Cos(a), 0.2 + 0.7*math.Sin(a)})
+	}
+	pts = append(pts, [2]float64{1, 6}, [2]float64{-1, 6})
+	for i := range 9 {
+		a := (0 - 90*float64(i)/8) * math.Pi / 180
+		pts = append(pts, [2]float64{-1.7 + 0.7*math.Cos(a), 0.2 + 0.7*math.Sin(a)})
+	}
+	return append(pts, [2]float64{-2.4, -0.5})
+}
+
+// areaAbove is the area of the polygon pts clipped to the half plane z >= 0.
+func areaAbove(pts [][2]float64) float64 {
+	var clipped [][2]float64
+	for i, a := range pts {
+		b := pts[(i+1)%len(pts)]
+		if a[1] >= 0 {
+			clipped = append(clipped, a)
+		}
+		if (a[1] < 0) != (b[1] < 0) {
+			s := a[1] / (a[1] - b[1])
+			clipped = append(clipped, [2]float64{a[0] + s*(b[0]-a[0]), 0})
+		}
+	}
+	area := 0.0
+	for i, a := range clipped {
+		b := clipped[(i+1)%len(clipped)]
+		area += a[0]*b[1] - b[0]*a[1]
+	}
+	return math.Abs(area) / 2
+}
+
+// flushTongueUnion is the Union of the host box [-10, 10] × [0, 16] × [-10, 0] and the chord-round tongue drawn on
+// the plane y = offset and extruded 4 toward +y, under placement p. At offset 0 the tongue's start cap is flush with
+// the host's y = 0 face and overlaps it below z = 0.
+func flushTongueUnion(t *testing.T, p flushPlacement, offset float64) *Body {
+	t.Helper()
+	doc := New()
+	x, y, z := r3.Vec{X: 1}, r3.Vec{Y: 1}, r3.Vec{Z: 1}
+	host := flushPolygonPrism(t, doc, p, r3.Vec{}, x, y, z.Scale(-1), [][2]float64{{-10, 0}, {10, 0}, {10, 16}, {-10, 16}}, 10)
+	tongue := flushPolygonPrism(t, doc, p, r3.Vec{Y: offset}, x, z, y, chordRoundTongue(), 4)
+	joined, err := Union(t.Context(), host, tongue)
+	require.NoError(t, err)
+	return joined
+}
+
+// facesOnPlane returns the indices of the faces whose every facet lies on the plane coord = at.
+func facesOnPlane(fp facetedPayload, b *Body, axis int, at float64) []int {
+	var out []int
+	for i, f := range b.Faces() {
+		if faceOnPlane(fp, b, f, axis, at) {
+			out = append(out, i)
+		}
+	}
+	return out
+}
+
+func requireNoGapShift(t *testing.T, b *Body) {
+	t.Helper()
+	for _, d := range b.OperationDiagnostics() {
+		require.NotEqual(t, OpDiagGapShiftApplied, d.Code)
+	}
+}
+
+func TestUnionFaceMergeChordRoundCap(t *testing.T) {
+	t.Parallel()
+	for _, p := range flushPlacements {
+		t.Run(p.name, func(t *testing.T) {
+			t.Parallel()
+			joined := flushTongueUnion(t, p, 0)
+			fp := mergeFaceted(t, joined)
+			requireNoGapShift(t, joined)
+			requireVolumeNear(t, joined, 3200+4*areaAbove(chordRoundTongue()))
+			for _, f := range joined.Faces() {
+				_, faceted := f.Surface().(Faceted)
+				require.False(t, faceted, "every face keeps its analytic tag")
+			}
+			// The host face and the tongue's cap become one face, which holds rounded crossing points of the host's
+			// edge with the chords: the merge reads its plane from a facet whose corners are exact.
+			on := facesOnPlane(fp, joined, p.axis(), 0)
+			require.Len(t, on, 1, "one face on the flush plane")
+			face := joined.Faces()[on[0]]
+			require.Len(t, face.Loops(), 1)
+			require.True(t, face.Loops()[0].IsOuter())
+			bounded := false
+			for t2, fi := range fp.FaceOf {
+				if fi != on[0] {
+					continue
+				}
+				src := fp.Groups[fp.Src[t2]].Source
+				require.NotNil(t, src)
+				require.Len(t, src.Members, 2)
+				for _, v := range fp.Tris[t2] {
+					bounded = bounded || fp.VertexBound[v] > 0
+				}
+			}
+			require.True(t, bounded, "the merged face holds a vertex with a positive bound")
+			// 6 host faces with the flush face merged, the tongue's far cap, its top, its two sides and the two chords
+			// of each round that stand above the host.
+			require.Len(t, joined.Faces(), 14)
+		})
+	}
+}
+
+func TestUnionFaceMergeChordRoundCapSurvivesPlacement(t *testing.T) {
+	t.Parallel()
+	want := faceSummary(flushTongueUnion(t, flushPlacements[0], 0))
+	require.Len(t, want, 14)
+	moved := mergeTranslated(t, flushTongueUnion(t, flushPlacements[0], 0), 3, -2, 5)
+	require.Equal(t, want, faceSummary(moved))
+	mirror, err := r3.NewFrame(r3.Vec{}, r3.Vec{Y: 1}, r3.Vec{Z: 1})
+	require.NoError(t, err)
+	reflect, err := r3.Reflection(mirror)
+	require.NoError(t, err)
+	mirrored, err := Transform(t.Context(), flushTongueUnion(t, flushPlacements[0], 0), reflect)
+	require.NoError(t, err)
+	require.Len(t, mirrored.Faces(), 14)
+	fp := mergeFaceted(t, mirrored)
+	require.Len(t, facesOnPlane(fp, mirrored, 1, 0), 1)
+}
+
+func TestUnionFaceMergeKeepsOffsetCapApart(t *testing.T) {
+	t.Parallel()
+	for _, offset := range []float64{math.Ldexp(1, -40), 1e-3} {
+		joined := flushTongueUnion(t, flushPlacements[0], offset)
+		fp := mergeFaceted(t, joined)
+		requireNoGapShift(t, joined)
+		// The tongue starts inside the host, so only its part above z = 0 adds volume.
+		requireVolumeNear(t, joined, 3200+4*areaAbove(chordRoundTongue()))
+		host := facesOnPlane(fp, joined, 1, 0)
+		capFaces := facesOnPlane(fp, joined, 1, offset)
+		require.Len(t, host, 1, "offset %g: the host face", offset)
+		require.Len(t, capFaces, 1, "offset %g: the tongue's cap", offset)
+		for _, g := range fp.Groups {
+			if g.Source != nil {
+				require.Empty(t, g.Source.Members, "offset %g: no group is merged", offset)
+			}
+		}
+	}
+}

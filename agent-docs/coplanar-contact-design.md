@@ -366,8 +366,8 @@ With no refusal, `Evaluate` returns the first attempt:
   (`facetedrecord.SourceTag`).
 - `RetainedEdgeCurve` publishes `Line3` for every rim between two retained non-parallel planes (E2, E6).
 - Two coplanar faces of different operands that share an edge (flush walls of a `Union`) become one face in the
-  mesh Boolean result (`agent-docs/union-face-merge-design.md`), so no rim lies between them. Faces with a positive bound stay
-  separate.
+  mesh Boolean result (`agent-docs/union-face-merge-design.md`), so no rim lies between them. A face stays separate
+  when no facet with zero bound at all three corners fixes its plane.
 - Vertex bounds are the measured weld gaps: zero for every float vertex, and §7 leaves no artifact vertex on a
   simplified face.
 
