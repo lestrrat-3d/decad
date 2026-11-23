@@ -467,11 +467,20 @@ func TestChamferCapLoopSubsetEnds(t *testing.T) {
 	refusals := []struct {
 		name string
 		pts  [][2]float64
-		from int // the selected edge runs from pts[from] to pts[from+1]
+		from int    // the selected edge runs from pts[from] to pts[from+1]
+		msg  string // a part of the refusal's text
 	}{
-		{"convex end at 30 degrees", [][2]float64{{0, 0}, {30, 0}, {30 + 10*math.Cos(math.Pi/6), 5}, {0, 20}}, 0},
-		{"concave end at 120 degrees", [][2]float64{{0, 0}, {30, 0}, {30, 10}, {10, 10}, {15, 10 + 5*math.Sqrt(3)}, {0, 20}}, 2},
-		{"run-out longer than the next edge", [][2]float64{{0, 0}, {30, 0}, {30.5, 0.5 * math.Sqrt(3)}, {0, 20}}, 0},
+		{"convex end at 8 degrees", [][2]float64{{0, 0}, {30, 0}, {30 + 10*math.Cos(8*math.Pi/180), 10 * math.Sin(8*math.Pi/180)},
+			{0, 20}}, 0, "covers only part of a cap loop"},
+		{"concave end at 120 degrees", [][2]float64{{0, 0}, {30, 0}, {30, 10}, {10, 10}, {15, 10 + 5*math.Sqrt(3)}, {0, 20}}, 2,
+			"route E"},
+		// The bevel's run-out, d/sin(60) = 0.577 along the next edge, takes more than two thirds of its 0.6 mm.
+		{"run-out longer than the next edge", [][2]float64{{0, 0}, {30, 0}, {30.3, 0.3 * math.Sqrt(3)}, {0, 20}}, 0,
+			"next edge is shorter than the bevel's run-out"},
+		// The next edge, 0.9 mm at 60 degrees, holds the run-out, but the edge after it turns back over the bevel's
+		// footprint past the end.
+		{"edge after a short next edge within the bevel's footprint", [][2]float64{{0, 0}, {30, 0},
+			{30.45, 0.45 * math.Sqrt(3)}, {31.2, 0.03}, {31.2, 20}, {0, 20}}, 0, "in the bevel's run-out past"},
 	}
 	for _, rc := range refusals {
 		t.Run("refuses "+rc.name, func(t *testing.T) {
@@ -484,6 +493,7 @@ func TestChamferCapLoopSubsetEnds(t *testing.T) {
 			}
 			_, err := chamfer(t, body, sel)
 			require.ErrorIs(t, err, decad.ErrUnsupported)
+			require.ErrorContains(t, err, rc.msg)
 		})
 	}
 

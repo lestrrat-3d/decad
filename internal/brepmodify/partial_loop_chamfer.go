@@ -31,11 +31,13 @@ import (
 // above the plane that leaves the wall at depth d and the cap at d. Segments of a chain that meet at a sharp corner are
 // mitred inside the cutter, the same as at a corner of a whole loop. Each end of a chain is read on its own:
 //
-//   - A convex end turned by 45 degrees or more is served by the cutter reaching past the end, so the bevel ends on the
-//     wall beside the next edge as a chamfer's bevel does. A line run's cutter reaches along the run's tangent. An arc
-//     run's cutter follows its own moved circle, the same angle on every ring, so the bevel runs out as the cone itself
-//     does. Below 90 degrees the bevel runs out onto that wall, so the next edge must be at least 1.5 reach/sin(turn)
-//     long.
+//   - A convex end is served by the cutter reaching past the end, so the bevel ends on the wall beside the next edge as
+//     a chamfer's bevel does: an end of a line run turned by 10 degrees or more, an end of an arc run turned by 45
+//     degrees or more. A line run's cutter reaches along the run's tangent. An arc run's cutter follows its own moved
+//     circle, the same angle on every ring, so the bevel runs out as the cone itself does. Below 90 degrees the bevel
+//     runs out onto that wall, so the next edge must be at least 1.5 reach/sin(turn) long; a next line shorter than
+//     that after a line run still serves when it is at least 1.5 d/sin(turn) long and no other edge of the loop lies in
+//     the bevel's footprint past the end (shortNextEdge).
 //   - A concave end turned by up to 90 degrees beside a line stops the bevel on the next face's plane, carried back over
 //     the run's band: the cutter loses a local sector about the corner, so the bevel tapers toward the corner's
 //     vertical edge and the next face grows by a coplanar triangle. There is no square end. On a prism whose
@@ -46,7 +48,7 @@ import (
 //     sector's reach is refused. Beside an arc that curves toward the material the sector stops at the foot of the
 //     next wall's line, and a plane that misses the bevel's top edge cannot cap it and is refused.
 //
-// Any other end is refused rather than guessed: a convex end turned by less than 45 degrees, a concave end turned by
+// Any other end is refused rather than guessed: a convex end turned by less than those angles, a concave end turned by
 // more than 90 degrees, or a concave end beside an arc whose next wall's plane misses the bevel. So is a chain whose cutter would reach material of the loop's
 // other walls, past an end or in its margin beside the run, and a chain whose offset consumes an arc.
 //
@@ -320,6 +322,8 @@ type runEnd struct {
 	concave         bool
 	turn            float64
 	e2Len           float64
+	// nextArc is set when the next edge is an arc.
+	nextArc bool
 	// foot is set at a concave end whose run segment is an arc curving toward the material: the distance from v, along
 	// the next wall's line carried back over the run, to the foot of the perpendicular from the arc's centre. Past the
 	// foot that line turns back toward the arc, so the end clip stops there.
@@ -327,8 +331,13 @@ type runEnd struct {
 }
 
 const (
-	minConvexTurn  = 45 * math.Pi / 180
-	maxConcaveTurn = 90 * math.Pi / 180
+	// minConvexTurn is the smallest turn of a convex end of an arc run. Its cutter follows its own circle past the
+	// end (arcRunOutAngle), and shallower ends of it are not built.
+	minConvexTurn = 45 * math.Pi / 180
+	// minLineConvexTurn is the smallest turn of a convex end of a line run. Below it the bevel's run-out onto the next
+	// wall, d cot(turn) long, passes 5.7 d and meets that wall within 10 degrees of grazing.
+	minLineConvexTurn = 10 * math.Pi / 180
+	maxConcaveTurn    = 90 * math.Pi / 180
 )
 
 // ends reads both ends of the run : convex corners turned 45 degrees or more, concave corners turned up to 90
@@ -353,6 +362,7 @@ func (r chamferRun) ends() ([2]runEnd, bool) {
 			other = prev
 		}
 		e.e2Len = other.p0.dist(other.p1)
+		e.nextArc = other.arc
 		runSeg := prev
 		if !atEnd {
 			runSeg = next
@@ -365,7 +375,10 @@ func (r chamferRun) ends() ([2]runEnd, bool) {
 		if e.concave {
 			return e, e.turn <= maxConcaveTurn+1e-9 && !other.arc
 		}
-		return e, e.turn >= minConvexTurn-1e-12
+		if runSeg.arc {
+			return e, e.turn >= minConvexTurn-1e-12
+		}
+		return e, e.turn >= minLineConvexTurn-1e-12
 	}
 	a, ok1 := read(r.before(), first, false)
 	b, ok2 := read(last, r.after(), true)
@@ -490,11 +503,12 @@ func (r chamferRun) checkExtension(d, reach float64) error {
 			// The end clip removes what lies past the run's end.
 			return nil
 		}
-		if e.turn < math.Pi/2-1e-9 {
-			// The bevel runs out onto the next wall, which must be long enough to hold the run-out.
-			if e.e2Len < 1.5*reach/math.Sin(e.turn) {
-				return fmt.Errorf(`%w: a chamfered run ends at a corner whose next edge is shorter than the bevel's run-out`,
-					decaderr.ErrUnsupported)
+		if e.turn < math.Pi/2-1e-9 && e.e2Len < 1.5*reach/math.Sin(e.turn) {
+			// The bevel runs out onto the next wall, which must be long enough to hold the run-out. A next line shorter
+			// than the cutter's reach still holds it when the bevel's own run-out ends on it, 1.5 d/sin(turn) along it,
+			// and no other edge of the loop comes within that footprint past the end (shortNextEdge).
+			if err := r.shortNextEdge(e, seg, tan, in, d, reach, poly); err != nil {
+				return err
 			}
 		}
 		var reg probeRegion

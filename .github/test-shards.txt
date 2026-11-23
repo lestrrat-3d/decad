@@ -350,3 +350,5 @@
 12	0.00	TestRetainedRimSupportCancellation
 12	0.00	TestCutBandCapRegistration
 12	0.00	TestRawMeshPlaneOnBooleanFragments
+12	0.00	TestChamferCapRunShallowEnd
+12	0.00	TestChamferCapRunsWithSharedCornerAndShallowEnds

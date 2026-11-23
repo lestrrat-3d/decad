@@ -202,36 +202,86 @@ func (reg probeRegion) refuseMaterial(l *chamferLoop, poly []pt2) error {
 	refuse := fmt.Errorf(`%w: material of the cap lies beside a chamfered run's end, where the bevel would cut it`,
 		decaderr.ErrUnsupported)
 	for i, a := range poly {
-		b := poly[(i+1)%len(poly)]
-		if max(a.x, b.x) < reg.lo.x || min(a.x, b.x) > reg.hi.x || max(a.y, b.y) < reg.lo.y || min(a.y, b.y) > reg.hi.y {
-			continue
-		}
-		ts := []float64{0, 1}
-		d := b.sub(a)
-		for _, ln := range reg.lines {
-			if den := ln.n.dot(d); den != 0 {
-				ts = append(ts, (ln.c-ln.n.dot(a))/den)
-			}
-		}
-		for _, c := range reg.circles {
-			f := a.sub(c.c)
-			qa, qb, qc := d.dot(d), 2*f.dot(d), f.dot(f)-c.r*c.r
-			if disc := qb*qb - 4*qa*qc; qa > 0 && disc >= 0 {
-				root := math.Sqrt(disc)
-				ts = append(ts, (-qb-root)/(2*qa), (-qb+root)/(2*qa))
-			}
-		}
-		ts = slices.DeleteFunc(ts, func(t float64) bool { return t < 0 || t > 1 })
-		slices.Sort(ts)
-		for k := 0; k+1 < len(ts); k++ {
-			if ts[k+1] > ts[k] && reg.member(a.add(d.scale((ts[k]+ts[k+1])/2))) {
-				return refuse
-			}
+		if reg.stretchIn(a, poly[(i+1)%len(poly)]) {
+			return refuse
 		}
 	}
 	for _, p := range reg.sweep() {
 		if contains(poly, p) == l.outer {
 			return refuse
+		}
+	}
+	return nil
+}
+
+// stretchIn reports whether the segment ab has a stretch in the region: it lies between two consecutive crossings of
+// the segment with the region's boundary curves, so the middle of each such stretch is tested.
+func (reg probeRegion) stretchIn(a, b pt2) bool {
+	if max(a.x, b.x) < reg.lo.x || min(a.x, b.x) > reg.hi.x || max(a.y, b.y) < reg.lo.y || min(a.y, b.y) > reg.hi.y {
+		return false
+	}
+	ts := []float64{0, 1}
+	d := b.sub(a)
+	for _, ln := range reg.lines {
+		if den := ln.n.dot(d); den != 0 {
+			ts = append(ts, (ln.c-ln.n.dot(a))/den)
+		}
+	}
+	for _, c := range reg.circles {
+		f := a.sub(c.c)
+		qa, qb, qc := d.dot(d), 2*f.dot(d), f.dot(f)-c.r*c.r
+		if disc := qb*qb - 4*qa*qc; qa > 0 && disc >= 0 {
+			root := math.Sqrt(disc)
+			ts = append(ts, (-qb-root)/(2*qa), (-qb+root)/(2*qa))
+		}
+	}
+	ts = slices.DeleteFunc(ts, func(t float64) bool { return t < 0 || t > 1 })
+	slices.Sort(ts)
+	for k := 0; k+1 < len(ts); k++ {
+		if ts[k+1] > ts[k] && reg.member(a.add(d.scale((ts[k]+ts[k+1])/2))) {
+			return true
+		}
+	}
+	return false
+}
+
+// shortNextEdge decides a convex end e of a line run whose next edge is shorter than the cutter's reach along it,
+// 1.5 reach/sin(turn). The end is built when the next edge is a line that holds the bevel's own run-out with room to
+// spare, at least 1.5 d/sin(turn) long, and no edge of the loop but the next edge has a stretch in the bevel's
+// footprint past the end: the strip from the corner along tan, as far as the cutter reaches past the end, and 1.5 d
+// into the material along in. The material the cutter meets in that strip then lies between the run's wall carried on
+// and the next wall, where the bevel runs out onto the next wall, and the bevel ends on that wall alone. The probe of
+// the region past the end (refuseMaterial) still tests the rest of the cutter's reach. Any other such end is refused.
+func (r chamferRun) shortNextEdge(e runEnd, seg loopSeg, tan, in pt2, d, reach float64, poly []pt2) error {
+	refuse := fmt.Errorf(`%w: a chamfered run ends at a corner whose next edge is shorter than the bevel's run-out`,
+		decaderr.ErrUnsupported)
+	if seg.arc || e.nextArc || e.e2Len < 1.5*d/math.Sin(e.turn) {
+		return refuse
+	}
+	ext, width := e.extFor(d, reach), 1.5*d
+	reg := probeRegion{lo: pt2{math.Inf(1), math.Inf(1)}, hi: pt2{math.Inf(-1), math.Inf(-1)}}
+	reg.lines = []probeLine{{tan, tan.dot(e.v)}, {tan, tan.dot(e.v) + ext}, {in, in.dot(e.v)}, {in, in.dot(e.v) + width}}
+	for _, a := range []float64{0, ext} {
+		for _, b := range []float64{0, width} {
+			p := e.v.add(tan.scale(a)).add(in.scale(b))
+			reg.lo = pt2{min(reg.lo.x, p.x), min(reg.lo.y, p.y)}
+			reg.hi = pt2{max(reg.hi.x, p.x), max(reg.hi.y, p.y)}
+		}
+	}
+	reg.member = func(p pt2) bool {
+		a, b := p.sub(e.v).dot(tan), p.sub(e.v).dot(in)
+		return a > 0 && a < ext && b > 0 && b < width
+	}
+	v2 := e.v.add(e.e2away.scale(e.e2Len))
+	at := func(p, q pt2) bool { return p.dist(q) <= 1e-9*max(1, q.len()) }
+	for i, a := range poly {
+		b := poly[(i+1)%len(poly)]
+		if (at(a, e.v) && at(b, v2)) || (at(a, v2) && at(b, e.v)) {
+			continue
+		}
+		if reg.stretchIn(a, b) {
+			return fmt.Errorf(`%w: another edge of the loop lies in the bevel's run-out past a chamfered run's end`,
+				decaderr.ErrUnsupported)
 		}
 	}
 	return nil
