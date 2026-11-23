@@ -114,8 +114,10 @@ func validate(in Input) error {
 }
 
 // candidateGroups applies design §4.2 rules 1 to 3 and the finite-vertex precondition of meshplane.Groups. A group
-// is a candidate when it owns a facet, is planar, has a tag that depends on no extent, and every vertex of every
-// facet has bound zero.
+// is a candidate when it owns a facet, is planar, has a tag that depends on no extent, every vertex of every facet
+// has a finite coordinate and a finite non-negative bound, and at least one facet has bound zero at all three
+// corners. That facet is its true piece exactly, so it fixes the true face's plane; rule 4 (facetPlanes) then
+// requires every other facet of the group to lie in that plane.
 func candidateGroups(budget *proofbound.WorkBudget, in Input) ([]bool, error) {
 	owns := make([]bool, len(in.Groups))
 	for _, g := range in.Src {
@@ -128,6 +130,7 @@ func candidateGroups(budget *proofbound.WorkBudget, in Input) ([]bool, error) {
 		}
 		candidate[g] = owns[g] && group.Planar && tagIsExtentFree(group)
 	}
+	anchored := make([]bool, len(in.Groups))
 	for t, tri := range in.Tris {
 		if err := budget.Step(); err != nil {
 			return nil, err
@@ -136,13 +139,22 @@ func candidateGroups(budget *proofbound.WorkBudget, in Input) ([]bool, error) {
 		if !candidate[g] {
 			continue
 		}
+		exact := true
 		for _, v := range tri {
+			b := in.VertexBound[v]
 			// Written so that a NaN bound or coordinate rejects the group.
-			if !(in.VertexBound[v] == 0) || !finite(in.Verts[v]) {
+			if !(b >= 0) || math.IsInf(b, 1) || !finite(in.Verts[v]) {
 				candidate[g] = false
 				break
 			}
+			exact = exact && b == 0
 		}
+		if candidate[g] && exact {
+			anchored[g] = true
+		}
+	}
+	for g := range candidate {
+		candidate[g] = candidate[g] && anchored[g]
 	}
 	return candidate, nil
 }

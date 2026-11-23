@@ -31,8 +31,9 @@ Navigation, not authority.
 - Faces of the SAME operand never merge with each other directly. Their split was the operand builder's own decision
   (evaluator §3 keeps coplanar Loft rungs apart). They can end up in one face through a face of the other operand that
   is adjacent to both (§4.4).
-- "Exact" means the result's own vertex bound `β(v) == 0` for every vertex of every facet of the group
-  (`Payload.VertexBound`, `agent-docs/faceted-vertex-bounds-design.md` §2). No new exactness notion.
+- "Plane-exact" reads only the result's own vertex bounds (`Payload.VertexBound`,
+  `agent-docs/faceted-vertex-bounds-design.md` §2): the group holds a facet whose three corners have `β(v) == 0`.
+  No new exactness notion.
 - A payload carrying a structural record (`ObliqueBoss`, `CrossCylinderBore`) is not merged. Those records feed
   record-based rebuild routes proved against the unmerged face set. `PrismUnionFillet` does not block the merge:
   every Union of two prism bodies carries it, its consumers require single-role faces at the selected edge and
@@ -67,19 +68,19 @@ Findings:
 ## 2. Correct behavior and definitions
 
 **Rule.** In a mesh Boolean result, two faces that come from different operands merge into one face when they are
-adjacent, both exact, on the same exact carrier plane, and face the same way. The merged face carries every role and
+adjacent, both plane-exact, on the same exact carrier plane, and face the same way. The merged face carries every role and
 history record of every face it joins.
 
 | Term | Definition |
 |---|---|
 | Adjacent | The two faces' held facets share at least one held edge of positive length (an edge of `facetproof.MeshAudit.Adj`). Faces that meet only at a vertex are not adjacent. |
-| Exact | Every vertex of every facet of the face's source group has `β(v) == 0`. Then each held facet is the true boundary piece (`Payload.MeshBound` doc), so the held polygons ARE the true face. |
+| Plane-exact | Some facet of the face's source group has `β(v) == 0` at all three corners. For a planar true face that facet IS its true piece (`faceted-vertex-bounds-design.md` §2), so the true face lies in the facet's plane. Other facets may hold vertices with `β > 0`, such as the rounded point where an edge of one operand crosses a slanted chord of the other; the plane rule below still puts every facet in that same plane. |
 | Same exact carrier plane | All facets of both groups lie on one plane as exact rationals over the held float coordinates: `meshplane.Groups` gives them one group (normal `(b−a)×(c−a)` and offset `n·a` equal up to a positive factor). |
 | Orientation | The facets' winding gives the outward normal. `meshplane.Groups` keys on the oriented plane, so one group means equal outward normals. Opposite-facing faces on one plane never merge. |
 | Material side | The side opposite the outward normal. Equal outward normals put the material of both faces on the same side, so the shared edge has a flat (half-turn) material angle and is no feature of the solid. |
 | Holes | A merged region may have holes, including a hole neither face had (a ring closed by the other operand). The outer loop is chosen by evaluator §9's area-vector rule. |
 | Non-simply-connected, pinched | A merged region whose boundary touches itself at a vertex (4 or more region-boundary edges at one vertex) is NOT merged; its faces stay as they are (§4.4). |
-| Planes equal within a bound | Not merged. A face with any `β > 0`, or two planes that differ in any bit of the held rationals, keeps its own face and the seam edge stays. Only exact carrier planes merge. |
+| Planes equal within a bound | Not merged. A face with no zero-bound facet, or two planes that differ in any bit of the held rationals, keeps its own face and the seam edge stays. Only exact carrier planes merge. |
 
 **Out of scope:** curved faces; faces of one operand with each other (Assumptions); the analytic routes, which already
 merge (§6); faces with a positive bound whose planes some record proves equal (§12 Q4); rewriting the operand roles the
@@ -144,7 +145,8 @@ Group `g` is a candidate when all hold:
 1. it owns at least one facet, and `Groups[g].Planar`;
 2. `Groups[g].Surface == nil`, or `Groups[g].Retained` with a `surfacegeom.Plane` surface, `Denoted == nil`,
    `ExtentDelta == 0` and `!ViewCharge` (a tag whose validity depends on the face's extent cannot move to a larger face);
-3. every vertex of every facet of `g` has `VertexBound == 0`;
+3. every vertex of every facet of `g` has a finite coordinate and a finite `VertexBound >= 0`, and at least one facet
+   of `g` has `VertexBound == 0` at all three corners (the anchor facet);
 4. every facet of `g` lies in one `meshplane.Groups` group that is `Planar` (run `meshplane.Groups` once over the
    candidate facets of steps 1–3 only). A zero-area facet is its own non-`Planar` group and so rejects its source group.
    R1 and R2 (§10.2) hold no zero-area facet. A result whose end-face group holds one fails S1; §12 Q5 owns that
@@ -232,10 +234,14 @@ Members are the distinct groups of the component, in increasing index.
 Claim: a merge changes no point of the held or true boundary, no measurement and no bound, and joins only faces whose
 true union is one planar face of the solid.
 
-1. **Held equals true.** A candidate's facets have `β = 0` at every vertex, so `δ(t) = 0` and each held facet is the
-   true boundary piece (`Payload.MeshBound`: no true boundary point lies farther than `δ(t)` from its held piece).
+1. **The true plane is the held plane.** A candidate's anchor facet has `β = 0` at its three corners, so `δ(t) = 0`
+   and, the true face being planar (`Group.Planar`), the held triangle is its true piece exactly
+   (`faceted-vertex-bounds-design.md` §2). The facet has positive area (rule 4 rejects a zero-area facet), so the true
+   face lies in the anchor's plane, and rule 4 puts every facet of the group in that same held plane. A vertex with
+   `β > 0` moves its true point only within that plane: it changes where the face's boundary runs, never which plane
+   the face lies in.
 2. **Exact identity.** `meshplane.Groups` decides plane identity by exact dyadic arithmetic over the held floats, with
-   no residual and no threshold. By step 1 the true faces lie in the planes the held facets span, so equal held
+   no residual and no threshold. By step 1 each true face lies in the plane its held facets span, so equal held
    oriented planes mean equal true oriented planes. This is an exact proof over decad's own held data, not an
    admission gate on a residual (CLAUDE.md "A decad-side check may only FALSIFY"), and it computes no 2D answer that
    `sketch` would own.
@@ -285,7 +291,8 @@ the `x = 2` face one B group. Non-candidate marker for U5 and U6: a retained `Pl
 |---|---|---|---|
 | U1 | `TestMergeSplitBox` | base fixture | 4 merged groups appended; the `x = 0` and `x = 2` facets keep their groups; `facetedrecord.AssembleBody` gives 6 faces, 12 edges, 8 vertices |
 | U2 | `TestMergeSameOperand` | base fixture, every group in operand A | `changed == false` |
-| U3 | `TestMergePositiveBound` | base fixture plus one vertex `(0.5, 0.5, 1)` inside the top's A half (fanned), with `β = 1e-15` | the top pair stays unmerged; the other 3 pairs merge |
+| U3 | `TestMergePositiveBound` | base fixture plus one vertex `(0.5, 0.5, 1)` inside the top's A half (fanned), with `β = 1e-15` | every facet of the top's A half holds it, so no facet anchors the plane; the top pair stays unmerged; the other 3 pairs merge |
+| U3b | `TestMergeBoundedCorner` | base fixture with `β = 1e-15` at the corner `(0, 1, 1)`; then at `(2, 1, 1)`; then a NaN, infinite or negative bound at `(0, 1, 1)` | all 4 pairs merge (each A half keeps an anchor facet); then the top and back pairs stay unmerged (every facet of their B halves holds the corner); then the top and back pairs stay unmerged |
 | U4 | `TestMergeOffsetPlane` | base fixture with the two top vertices at `x = 2` raised by `2^-40` (the top's B half tilts; every other face stays planar) | the top pair stays unmerged |
 | U5 | `TestMergePinch` | 3×3-cell top over a 3×3×1 box; the centre cell and the corner cell `[2,3]×[2,3]` are marker groups (no candidate); the other 7 top cells alternate A and B | no top facet changes group (the C-shaped region touches itself at vertex `(2, 2, 1)`) |
 | U6 | `TestMergeRing` | as U5 but only the centre cell is a marker group; the 8 ring cells alternate A and B | one merged top group; its assembled face has 1 outer and 1 inner loop |
@@ -296,9 +303,10 @@ the `x = 2` face one B group. Non-candidate marker for U5 and U6: a retained `Pl
 
 ### 10.2 Root tests (`union_face_merge_test.go`, package `decad`)
 
-Each asserts the result payload is `facetedrecord.Payload` (the mesh path). R1 to R4 are
-`TestUnionFaceMergeFlushBoxes`, `TestUnionFaceMergeDovetailEnds`, `TestUnionFaceMergeSurvivesPlacement` and
-`TestUnionFaceMergeKeepsRoundedFacesApart`. "Before" face counts, without the merge, are in brackets.
+Each asserts the result payload is `facetedrecord.Payload` (the mesh path). R1 to R7 are
+`TestUnionFaceMergeFlushBoxes`, `TestUnionFaceMergeDovetailEnds`, `TestUnionFaceMergeSurvivesPlacement`,
+`TestUnionFaceMergeKeepsRoundedFacesApart`, `TestUnionFaceMergeChordRoundCap`,
+`TestUnionFaceMergeChordRoundCapSurvivesPlacement` and `TestUnionFaceMergeKeepsOffsetCapApart`. "Before" face counts, without the merge, are in brackets.
 
 | ID | Case | Expectation |
 |---|---|---|
@@ -306,6 +314,9 @@ Each asserts the result payload is `facetedrecord.Payload` (the mesh path). R1 t
 | R2 | host: rectangle `[-10,10]×[0,16]` on XY extruded 10 `Against` (toward −z); tool: profile `(-5,-1) (5,-1) (5,0) (6,6) (-6,6) (-5,0)` on the plane through the origin with axes +x, +z (normal −y), extruded 16 `Against` (toward +y); `Union` | 10 faces [12]; exactly one face on `y = 0` and one on `y = 16`, each with one loop, which is outer; each lists the host's `side` role and the tool's cap role; seam check passes; volume 4256 exact (`3200 + 16·66`) |
 | R3 | R1's result moved by `Transform` (translation, then an exact quarter turn about z) and by `Copy` | face count, loop counts and every face's `Origins` unchanged |
 | R4 | R1 pair with B rotated 30° about z then −30° (rounding vertices, `coplanar-contact-design.md` §11.3) | `CodeGapShiftApplied`; no merged group; 12 faces |
+| R5 | host box `[-10,10]×[0,16]×[-10,0]`; tool: a strip `x ∈ [-1,1]` up to `z = 6` from feet at `z = -2`, with an 8-chord quarter round of radius 0.7 at each root, drawn on `y = 0` and extruded 4 toward +y; the host's edge at `z = 0` crosses both rounds at points that are no floats; built in five exact placements (identity, quarter turns about z and x, mirrors in x and y); `Union` | no gap shift, no `Faceted` face; one face on the flush plane, with one outer loop, whose facets come from both operands and hold a vertex with `β > 0`; 14 faces; volume `3200 + 4·A` with `A` the tool profile's area above `z = 0` |
+| R6 | R5 result moved by a translation, and by an exact reflection across `x = 0` | face summary unchanged; one face on `y = 0` |
+| R7 | R5 with the tool drawn on `y = 2^-40` and on `y = 10^-3` (its cap inside the host below `z = 0`) | the host face and the tool's cap stay two faces; no merged group; volume `3200 + 4·A` |
 
 ### 10.3 API tests (`apitest/union_face_merge_test.go`)
 

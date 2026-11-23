@@ -91,6 +91,40 @@ func TestMergePositiveBound(t *testing.T) {
 	requireMergedPairs(t, in, src, groups, splitPairs[0], splitPairs[2], splitPairs[3])
 }
 
+func TestMergeBoundedCorner(t *testing.T) {
+	t.Parallel()
+	// The box corner (0, 1, 1) is in one facet of the top's A half and one of the back's A half; each half keeps a
+	// facet whose corners are all exact, which fixes its plane, so every pair merges. The x = 0 face, whose two
+	// facets both hold the corner, has no partner and keeps its group.
+	m := splitBox(nil, nil)
+	in := m.input(t, plainGroups(10), splitBoxA)
+	in.VertexBound[m.index[r3.NewVec(0, 1, 1)]] = 1e-15
+	src, groups, changed, err := facemerge.Merge(t.Context(), in)
+	require.NoError(t, err)
+	require.True(t, changed)
+	requireMergedPairs(t, in, src, groups, splitPairs[:]...)
+	body, _ := assemble(t, in, src, groups)
+	require.Len(t, topobuild.Faces(body), 6)
+
+	// The corner (2, 1, 1) is in every facet of the top's and the back's B halves, which then fix no plane.
+	in = m.input(t, plainGroups(10), splitBoxA)
+	in.VertexBound[m.index[r3.NewVec(2, 1, 1)]] = 1e-15
+	src, groups, changed, err = facemerge.Merge(t.Context(), in)
+	require.NoError(t, err)
+	require.True(t, changed)
+	requireMergedPairs(t, in, src, groups, splitPairs[0], splitPairs[2])
+
+	// A NaN or infinite bound rejects its group.
+	for _, bad := range []float64{math.NaN(), math.Inf(1), -1} {
+		in = m.input(t, plainGroups(10), splitBoxA)
+		in.VertexBound[m.index[r3.NewVec(0, 1, 1)]] = bad
+		src, groups, changed, err = facemerge.Merge(t.Context(), in)
+		require.NoError(t, err)
+		require.True(t, changed)
+		requireMergedPairs(t, in, src, groups, splitPairs[0], splitPairs[2])
+	}
+}
+
 func TestMergeOffsetPlane(t *testing.T) {
 	t.Parallel()
 	m := splitBox(nil, nil)
