@@ -89,8 +89,9 @@ history certificates). Every other pair reaches the mesh boolean, where, without
 `TestCoplanarContactMadeByCut` (R1 to R4, §11.2) pins the made-body pairs that hit steps 4 and 5.
 
 **Out of scope:** curved coplanar or tangent contact; non-coplanar grazes and isolated point touches; contact between
-faces with a positive bound (they keep the refusal and retry); `ErrCrossContainer`; changes to the gap-retry
-ladder; the analytic (prism, class B, brep) paths; merging coplanar faces of different operands into one face.
+faces with a positive bound that are no flush pair (they keep the refusal and retry; flush pairs are
+`agent-docs/flush-contact-design.md`); `ErrCrossContainer`; changes to the gap-retry ladder; the analytic (prism,
+class B, brep) paths; merging coplanar faces of different operands into one face.
 
 ## 2. Correct behavior and success criteria
 
@@ -127,14 +128,17 @@ A facet `t` of a prepared operand is **exact** when both hold:
 - the gate reading of its source face is zero, computed by `meshbool.FaceGateDelta`, the helper `facesOfMesh` uses.
 
 A coplanar facet pair `(i, j)` (all six plane-side signs zero, the `CountZero == 3` branch) is **admitted** when
-facet `i` of A and facet `j` of B are both exact. Otherwise a coplanar pair with `CoplanarOverlap` true is **refused**: a
-`coplanarContactOf` contact, `TouchCoplanar`, Slack 0, Decisive when facing opposite. The refused path leads to the
-gap-retry ladder.
+`pairExact(i, j)` holds: facet `i` of A and facet `j` of B are both exact, or their faces are a flush pair
+(`flushPair`, `agent-docs/flush-contact-design.md` §2, §4.5). Otherwise a coplanar pair with `CoplanarOverlap` true is
+**refused**: a `coplanarContactOf` contact, `TouchCoplanar`, Slack 0, Decisive when facing opposite. The refused path
+leads to the gap-retry ladder. `Exact` and every reader of it alone (`seat.go` wall exactness) are unchanged.
 
 Face-level exactness, not carrier coplanarity, is the admission test because `interference-design.md` §5.2 forbids
 settling a coplanar pair on carrier coplanarity alone: a planar face with a chorded rim holds an inscribed outline. A
 zero face reading is the tessellation's claim that every held polygon of the face IS the true trimmed patch. It is the
-predicate the gate already skips on, which makes §6 hold by construction.
+predicate the gate already skips on, which makes §6 hold by construction. A flush pair settles the pair on carrier
+coplanarity together with outlines that keep their arrangement under every move their bounds allow (flush-contact
+§4.4), which covers the inscribed outline.
 
 ### 3.2 Pair pass (`pairCuts`)
 
@@ -177,12 +181,14 @@ its own patch rim.
 | both 0 | impossible | `ErrBooleanFailed` (the facet itself would be coplanar with the partner) |
 
 `EdgeSide` also returns the index of the adjacent facet that lies in the plane. A coplanar-bounded edge is accepted
-when that facet and the partner facet form an admitted pair recorded by §3.2 step 2. It then adds its two segment
+when the edge's own facet and the partner facet are both exact, or the in-plane facet and the partner facet lie on a
+flush pair (flush-contact §4.6: the edge's own facet is a wall whose rim is an outline edge of the flush face), and the
+in-plane facet and the partner facet form an admitted pair recorded by §3.2 step 2. It then adds its two segment
 endpoints to `owned`, appends `touchOf(ma, p.I, p.J)` to `legacyGrazes`, and does nothing else: no cut (the segment
 runs on the facet's own edge, and the admitted pair already cut the partner), no block (the coplanar facet takes the
 cut path, §3.4, so no flood fill crosses the edge). Two other cases:
 
-- The pair is refused (an inexact facet): §3.1's refusal returns before the in-plane loop runs.
+- The pair is refused (an inexact facet off a flush pair): §3.1's refusal returns before the in-plane loop runs.
 - No such pair was recorded: `ErrBooleanFailed`. The two facets share a positive-length segment in one plane, so box
   enumeration visited them.
 
@@ -232,15 +238,19 @@ any such rounded interval. Keep partner order, exact boundary checks, and replay
 
 ### 3.5 Bounds of new vertices
 
-A clipped endpoint lies on two exact facets. `CutCornerBound` gives a point that is neither a facet corner nor a rim key
-the facet's `FacetBound`, which is 0 for an exact facet. No `rims` entry is added for coplanar points, so `RimBound`
-and `MaxRim` are unchanged.
+A clipped endpoint of an exact pair lies on two exact facets. `CutCornerBound` gives a point that is neither a facet
+corner nor a rim key the facet's `FacetBound`, which is 0 for an exact facet. No `rims` entry is added for coplanar
+points, so `RimBound` and `MaxRim` are unchanged. A clipped endpoint of a flush pair `(ta, tb)` records
+`max(FacetBound[ta], FacetBound[tb], Cross)`, the largest over such pairs, and the side pass gives a kept corner that
+is not one of its facet's corners at least that record (flush-contact §4.8). An exact pair records nothing.
 
 ## 4. Composition with face bounds, `Plane` records and the `Faceted` fallback
 
-- **Positive face bound.** A face whose gate reading is positive never enters §3. Its coplanar contacts are refused
-  with `TouchCoplanar` and the gap retry runs as documented. This covers curved faces, planar faces with chorded rims,
-  every shifted or grown attempt (Assumptions), and mesh results whose vertices round.
+- **Positive face bound.** A face whose gate reading is positive enters §3 only through a flush pair
+  (`agent-docs/flush-contact-design.md`): two planar carrier faces in one exact plane whose outlines keep their
+  arrangement. Its other coplanar contacts are refused with `TouchCoplanar` and the gap retry runs as documented. This
+  covers curved faces, planar faces whose chorded rims come near the other outline, every shifted or grown attempt
+  (Assumptions), and mesh results whose vertices round near the other outline.
 - **Surface kind is not read.** Admission reads bounds only. A `Faceted` face with zero bound is admitted. A `Plane`
   face with a positive bound is refused. The retained tag matters for what the result keeps (§8), not for admission.
 - **Rounding-only bounds.** §7 removes the bound where it comes only from artifact vertices, so a face whose true face
@@ -291,7 +301,9 @@ the first `ContactRegion`; the caller skips the face pair) to be backed by a ref
 - A face pair with summed reading `<= 0` is skipped before any gather. Both faces are exact, every coplanar
   pair between them is admitted and classified exactly, and nothing a chord could hide exists.
 - A face pair with a positive sum has at least one inexact face. Every coplanar facet pair in it holds a facet of that
-  face, so §3.1 refuses it with `TouchCoplanar` in the mesh pass. The deferral stays backed.
+  face, so §3.1 refuses it with `TouchCoplanar` in the mesh pass, unless the two faces are a flush pair, whose
+  admission classifies their contact on held facets that keep the true arrangement (flush-contact §4.7, F5). The
+  deferral stays backed either way.
 
 **The occupancy re-run** (`composeOccupancy`, `internal/booleaneval/eval.go`) runs the gate again over widened face
 bounds after the mesh pass. An admitted exact pair can get positive slack there, and no mesh refusal backs that
@@ -367,9 +379,9 @@ With no refusal, `Evaluate` returns the first attempt:
 - `RetainedEdgeCurve` publishes `Line3` for every rim between two retained non-parallel planes (E2, E6).
 - Two coplanar faces of different operands that share an edge (flush walls of a `Union`) become one face in the
   mesh Boolean result (`agent-docs/union-face-merge-design.md`), so no rim lies between them. A face stays separate
-  when no facet with zero bound at all three corners fixes its plane.
+  when neither a facet with zero bound at all three corners nor an exact retained plane tag fixes its plane.
 - Vertex bounds are the measured weld gaps: zero for every float vertex, and §7 leaves no artifact vertex on a
-  simplified face.
+  simplified face. A flush pair's clipped points carry §3.5's flush record.
 
 ## 9. Soundness
 
@@ -377,8 +389,9 @@ Claim: for every admitted pair the held result equals the exact boolean of the h
 equal the true ones on every admitted facet, so a true overlap is reported by the same paths as any crossing pair and
 is never hidden as contact.
 
-1. **Held equals true on admitted facets.** §3.1 admits only facets whose true piece equals the held facet: zero facet
-   bound and zero face reading. Every predicate in §3 is an exact sign over those held values.
+1. **Held equals true on admitted facets.** §3.1 admits facets whose true piece equals the held facet: zero facet
+   bound and zero face reading. Every predicate in §3 is an exact sign over those held values. A flush pair's held
+   facets keep the true arrangement instead, and its points carry bounds that cover both outlines (flush-contact §7).
 2. **Coincident points.** At a point of `ta ∩ tb` in a region's interior both boundaries coincide, and the material
    sides come from the exact outward normals of oriented, audited closed meshes. §3.4's table is the point-set
    definition of each op there. Skipping internal patch edges changes no cover: a region crossing such an edge lies in
@@ -394,9 +407,9 @@ is never hidden as contact.
    exact volume, and the `V − E > 0` gate (`interference-design.md` §6) decides the row unchanged.
 5. **Overlap just beyond zero.** An overlap of depth `d > 0` between exact faces is a non-coplanar crossing with exact
    rims, classified exactly for every `d`. With a positive bound the gate still refuses unless the crossing is proven
-   deeper than the summed bound. No pair moves from refused to touching except through §3.1.
-6. **Bounded faces and gates.** §4 and §6 keep every refusal for faces with a positive bound, and the occupancy re-run
-   cannot defer an admitted pair (§6).
+   deeper than the summed bound. No pair moves from refused to touching except through §3.1, flush pairs included.
+6. **Bounded faces and gates.** §4 and §6 keep every refusal for faces with a positive bound that are no flush pair,
+   and the occupancy re-run cannot defer an admitted pair (§6).
 7. **Simplification** changes no exact surface and drops no nonzero claim (§7.2), so it cannot turn an overlap into a
    contact or the reverse.
 

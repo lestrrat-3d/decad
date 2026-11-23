@@ -355,3 +355,13 @@
 12	0.00	TestUnionFaceMergeChordRoundCap
 12	0.00	TestUnionFaceMergeChordRoundCapSurvivesPlacement
 12	0.00	TestUnionFaceMergeKeepsOffsetCapApart
+12	0.00	TestFlushContactArcCap
+12	0.00	TestFlushContactArcCapExactOnly
+12	0.00	TestFlushContactChain
+12	0.00	TestFlushContactKeepsApart
+12	0.00	TestFlushContactArcCrossingRefused
+12	0.00	TestFlushContactTurnedRefused
+12	0.00	TestFlushContactCutFlushEnd
+12	0.00	TestFlushContactChordedLoft
+12	0.00	TestFlushContactClipBounds
+12	0.00	TestFlushContactRoundedCapLevelRefused

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math"
 	"math/big"
+	"slices"
 
 	"github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -75,6 +76,9 @@ type BoolMesh struct {
 	// piece (agent-docs/coplanar-contact-design.md §3.1). SetExactFacets fills
 	// it; nil reads as all false.
 	Exact []bool
+	// Flush, when set, is the flush-pair memo this operand shares with its partner for one unshifted, unfixed live
+	// attempt (agent-docs/flush-contact-design.md §4.5, AttachFlushFaces); nil reads every pair as not flush.
+	Flush *FlushFaces
 	// Carrier, RimEdge and Seats are an unshifted Intersect's seat readings (agent-docs/coplanar-contact-design.md
 	// §16, SetSeats): Carrier[t] reports that facet t's true piece lies in its own plane, RimEdge[t][k] that edge k of
 	// facet t is a wall's rim in a carrier-exact neighbour's plane, and Seats lists each wall's seat planes by source
@@ -337,12 +341,12 @@ func meshBooleanStats(ctx context.Context, op OperationKind, ma, mb *BoolMesh, m
 		return nil, Stats{}, err
 	}
 	keepA, err := keepSideWith(ctx, ma, mb, cuts.CutsA, cuts.BlockedA, cuts.Rims, wantA, false, keyOf,
-		keepOptions{Coplanar: cuts.CoplanarA, Op: op})
+		keepOptions{Coplanar: cuts.CoplanarA, Op: op, Bounds: cuts.CoplanarBounds})
 	if err != nil {
 		return nil, Stats{}, coplanarRefusal(cuts, err)
 	}
 	keepB, err := keepSideWith(ctx, mb, ma, cuts.CutsB, cuts.BlockedB, cuts.Rims, wantB, flipB, keyOf,
-		keepOptions{Coplanar: cuts.CoplanarB, Op: op, Second: true})
+		keepOptions{Coplanar: cuts.CoplanarB, Op: op, Second: true, Bounds: cuts.CoplanarBounds})
 	if err != nil {
 		return nil, Stats{}, coplanarRefusal(cuts, err)
 	}
@@ -516,6 +520,10 @@ func keepSideWith(ctx context.Context, m, other *BoolMesh, cuts map[int][]Xseg, 
 			for k, p := range tri {
 				keys[k] = keyOf(p)
 				beta[k] = CutCornerBound(m, i, cornerKeys, keys[k], rims)
+				// A point a flush pair's clip placed keeps that pair's bound (agent-docs/flush-contact-design.md §4.8).
+				if b, ok := opts.Bounds[keys[k]]; ok && !slices.Contains(cornerKeys[:], keys[k]) {
+					beta[k] = max(beta[k], b)
+				}
 			}
 			emit(tri, beta, keys, m.Src[i], i)
 		}

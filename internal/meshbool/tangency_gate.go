@@ -62,7 +62,12 @@ import (
 // attempt that is not replayed, shifted or a fixed tool), and refused with
 // TouchCoplanar otherwise. A face pair with a positive sum holds an inexact
 // face, and every coplanar facet pair in it holds a facet of that face, which
-// the mesh pass refuses with TouchCoplanar. The one exception is the occupancy
+// the mesh pass refuses with TouchCoplanar unless the two faces are a flush
+// pair (agent-docs/flush-contact-design.md §4.7): planar carrier faces in one
+// exact plane whose held outlines keep their arrangement under their bounds,
+// so the pass classifies their contact on held facets that carry the true
+// arrangement. Every deferral is thus backed by exact classification, a flush
+// admission, or a refusal. The one exception is the occupancy
 // re-run of composeOccupancy, which widens the face bounds after the mesh pass;
 // it drops its record whenever the pass admitted a coplanar point.
 //

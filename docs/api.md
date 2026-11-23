@@ -312,8 +312,10 @@ faces. The level must hold no rounding. Any circle or arc in the result makes th
 small proven bound; rectangles alone read `Exact`. A second pocket on one face that meets nothing of the other
 face's pockets at that level takes the faceted path. Pockets that only touch, along an edge, at a corner or where a
 circle is tangent to the other pocket's edge, two circles of opposite pockets that meet, and a pocket wall at an angle
-to the sketch axes take the faceted path. It classifies the coplanar contact of exact faces, and under `ExactOnly` it
-refuses a coplanar contact of a curved face or of a face with a positive bound with a `BooleanError` of code
+to the sketch axes take the faceted path. It classifies the coplanar contact of exact faces, and of two planar faces
+held within a bound that lie in one exact plane and whose outlines keep their arrangement under that bound (a flush
+pair, such as a tool cap with a true arc far from the other face's edges). Under `ExactOnly` it refuses a coplanar
+contact of a curved face, or of a face with a positive bound that is no flush pair, with a `BooleanError` of code
 `BooleanUnsupportedContact`.
 
 A `Cut` whose round tool touches a wall of the target at one point without crossing it, such as a round pocket

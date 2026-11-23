@@ -859,16 +859,24 @@ This section owes the hidden-tangency gate (`meshbool.FacesNearMiss`, `internal/
 returns `near = false` for the whole face pair on the first facet pair it
 classifies as a positive-area coplanar overlap, deferring the pair to the mesh
 pass. The deferral is sound only where the mesh pass either refuses the pair or
-classifies it exactly. The mesh pass classifies a coplanar pair only when both
-facets are exact (a zero facet bound on a face the tessellation reads at zero,
-`agent-docs/coplanar-contact-design.md` §3.1), which is the reading the gate
-itself skips on, and it refuses every other coplanar pair. Carrier coplanarity
-ALONE settles nothing. A planar face's carrier plane is exact, but its outline is not: near
+classifies it on held facets whose arrangement is the true one. The mesh pass
+classifies a coplanar pair when both facets are exact (a zero facet bound on a
+face the tessellation reads at zero, `agent-docs/coplanar-contact-design.md`
+§3.1), which is the reading the gate itself skips on, or when the two faces are a
+flush pair (`agent-docs/flush-contact-design.md` §2, §4.7): planar carrier faces
+in one exact plane whose held outlines keep their arrangement under every move
+their vertex bounds allow. It refuses every other coplanar pair. So the deferral
+is backed by exact classification, a flush admission, or a refusal. `Verify`'s
+measured interference reads the same mesh pass, so it reads flush pairs the same
+way. Carrier coplanarity ALONE settles nothing. A planar face's carrier plane is exact, but its outline is not: near
 a curved rim the held outline is inscribed, so two operands whose true rims
 touch can leave their held outlines a chord apart, and the arrangement above —
 projected triangle boundaries split into maximal positive-area cells — then has
 no positive-area cell to classify at all. The cells carry no outline allowance
-of their own that would cover that gap.
+of their own that would cover that gap. A flush pair supplies that allowance: a
+moving part of either outline must stay farther than its own radius plus the
+other outline's reach from the other outline, or cross it robustly
+(`agent-docs/flush-contact-design.md` §4.4).
 
 The patch relation does not decide the whole pair by itself. Opposing cells are
 `boundaryaudit.PairTouching` only when the analytic/contact pass proves no overlap elsewhere.
