@@ -103,7 +103,11 @@ tag, takes no shift, and merges the two coplanar faces (§5).
   host's outline is refused as today (retry in a default document, `BooleanUnsupportedContact` under `ExactOnly`); a
   tool placed by an inexact turn keeps today's shifted result.
 - **S4.** Every Boolean that succeeds today still succeeds; an exact pair's result does not change.
-- **S5.** The bounded replay admits a subset of the pairs the live pass admits; a pair it does not admit is a decline.
+
+**Live pass only.** Flush admission runs in the live mesh pass alone. The bounded replay evaluation
+(`booleaneval.EvaluateReplay*`, with `pair_cuts.go` and the `brake_*_replay` pass behind it) has no production caller,
+so the bounded pass attaches no `FlushFaces`, reads no flush pairs, and refuses a coplanar pair of inexact faces as it
+does any other.
 
 ## 3. Approach
 
@@ -189,9 +193,8 @@ placement displacement"), which §2.1's reading folds into `β`.
 
 ### 4.3 What may move
 
-For a carrier face `F` in plane `P`, walk every facet of `F` and edge `k` with the operand's twin lookup (`TwinFacet`
-live; `twinFacetReplay` in the bounded pass, charged as there). A missing twin is a broken mesh in the live pass
-(`ErrBooleanFailed`) and a decline in the bounded pass. For an outline edge `(a, b)` with twin face `G`:
+For a carrier face `F` in plane `P`, walk every facet of `F` and edge `k` with the operand's twin lookup
+(`TwinFacet`). A missing twin is a broken mesh (`ErrBooleanFailed`). For an outline edge `(a, b)` with twin face `G`:
 
 - it is **straight** when `F` and `G` are planar and `G`'s true plane provably differs from `P`: `G` is a carrier face
   with a corner of its first facet off `P` (exact sign), or `G`'s `Plane` surface has a unit normal farther than
@@ -245,11 +248,10 @@ budget once per box comparison and once per crossing test, and uses no meshbool 
 
 ### 4.5 Where flush pairs are computed
 
-`booleaneval.evaluate` attaches one `FlushFaces` to both prepared operands right after `SetExactFacets`, on exactly
-the attempts that call it: the unshifted, unfixed live attempt (charging `proofbound.NewWorkBudget(ctx)`) and the
-unshifted, unfixed bounded replay (charging the replay meter: one unit per facet read for carrier faces and outlines,
-one per exact sign, one per box or crossing test, and the records the memo holds). The memo is keyed by the unordered
-pair of global source ids, so a gate call with the operands swapped reads the same verdict. A face pair is decided
+`booleaneval.evaluate` attaches one `FlushFaces` to both prepared operands right after `SetExactFacets`, on the
+unshifted, unfixed live attempt alone, charging `proofbound.NewWorkBudget(ctx)` once per facet read, exact sign, and
+box or crossing test. The bounded replay attempt attaches none (§2, "Live pass only"). The memo is keyed by the
+unordered pair of global source ids, so a gate call with the operands swapped reads the same verdict. A face pair is decided
 only after a cheap exact check that the two faces' first facets share a plane.
 
 `flushPair(mx, my, i, j) (bool, error)` reads the memo; `pairExact(ma, mb, i, j) (bool, error)` is
@@ -259,11 +261,13 @@ only after a cheap exact check that the two faces' first facets share a plane.
 
 | Site | Live (`boolean_pair_cuts.go`) | Bounded (`pair_cuts.go`) | Rule |
 |---|---|---|---|
-| coplanar region pair (coplanar-contact §3.2) | `admitted :=` | `admitted :=` | `pairExact(i, j)` |
-| coplanar point touch | `pointCoplanar` | `pointCoplanar` | `c.Coplanar && pairExact(i, j)` |
-| in-plane edge of `ma` (§3.3) | `EdgeCoplanarBounded` branch | the same | today's exact rule, or `flushPair(adjacent, p.J)` with `adjacent` recorded with `p.J` in `cp.coplanarA` |
-| in-plane edge of `mb` | the same | the same | today's exact rule, or `flushPair(p.I, adjacent)` recorded in `cp.coplanarA[p.I]` |
-| isolated point (`seatPoint`, bounded `pair_cuts.go:781`) | unchanged | unchanged | `pairExact(i, j)` replaces the exact pair; a point between a wall facet and a flush face stays a refusal (§8) |
+| coplanar region pair (coplanar-contact §3.2) | `admitted :=` | exact pair only | `pairExact(i, j)` |
+| coplanar point touch | `pointCoplanar` | exact pair only | `c.Coplanar && pairExact(i, j)` |
+| in-plane edge of `ma` (§3.3) | `EdgeCoplanarBounded` branch | exact pair only | today's exact rule, or `flushPair(adjacent, p.J)` with `adjacent` recorded with `p.J` in `cp.coplanarA` |
+| in-plane edge of `mb` | the same | exact pair only | today's exact rule, or `flushPair(p.I, adjacent)` recorded in `cp.coplanarA[p.I]` |
+| isolated point (`seatPoint`) | `pairExact` | exact pair only | `pairExact(i, j)` replaces the exact pair; a point between a wall facet and a flush face stays a refusal (§8) |
+
+The bounded column reads exact pairs alone: that pass has no production caller and attaches no `FlushFaces` (§2).
 
 The in-plane edge case reads `adjacent`, the coplanar neighbour `EdgeSide` returns, because the edge's own facet is a
 wall that does not lie in the plane: the wall's rim is an outline edge of the flush face, which §4.4 covers, and the
@@ -286,9 +290,8 @@ coplanar-contact §3.5 gives a clipped endpoint the bound of the facet it is cut
 On a flush pair the endpoint lies on a held edge of the partner facet and inside the facet it cuts, and the result's
 boundary may follow either outline there. The coplanar pass records, for each clipped endpoint of a flush (non-exact)
 pair `(ta, tb)`, the key with `max(FacetBound[ta], FacetBound[tb], Cross)`, keeping the largest over pairs. Keep side
-gives a kept corner that is neither an operand corner nor a rim key `max(FacetBound[i], record[key])` (live
-`keepSideWith` after `CutCornerBound`; bounded `cutCornerBoundReplay` through its reserved table). An exact pair
-records nothing, so its results do not change.
+gives a kept corner that is neither an operand corner nor a rim key `max(FacetBound[i], record[key])`
+(`keepSideWith` after `CutCornerBound`). An exact pair records nothing, so its results do not change.
 
 ## 5. Face merge anchor
 
@@ -351,8 +354,7 @@ gives the true result within the bounds the result carries, and nothing the gate
 - **F6. The merge stays exact.** §5 fixes the true plane exactly. The two merged faces are truly adjacent along a
   true seam, which F3 gives (union-face-merge §8 step 3 assumes it); steps 2–8 there hold unchanged.
 
-The bounded replay reads the same rule from the same fields; where its meshes carry coarser data it admits fewer
-pairs, and a refusal there is a decline (S5).
+The bounded replay admits no flush pair (§2, "Live pass only"), so it adds nothing to these claims.
 
 ## 8. Refusals that stay
 
@@ -407,7 +409,6 @@ face on the flush plane with one outer loop.
 | R8 | `TestFlushContactChordedLoft` | a chorded circular loft (two circles of radius 2, 3 apart along z) whose start cap states no displacement (`AxialDelta == 0`, `loftrecord.stateCapLevels`) and lies flush on a box face, the box overlapping the loft's foot (`z ∈ [0, 1]`) and its edge crossing the cap 0.5 from its centre | the cap reads as a carrier face and its rim edges as neither line nor straight (the walls are not planar), so the arc chords crossing the box edge refuse the pair: `CodeGapShiftApplied` as today; red without the `chordedLoftWall` exclusion (the pair is admitted) |
 | R9 | `TestFlushContactClipBounds` | R1 identity | every result vertex the coplanar pass placed on the flush plane carries `β ≥` the tool cap facets' bound there; the exact R5 of union-face-merge keeps its bounds |
 | R11 | `TestFlushContactRoundedCapLevelRefused` | `ExactOnly`: a square tool on the frame through `z = 1e9`, extruded `nextafter(2, 0)`, its end cap held at the blank Loft's upper cap level while its record denotes a level `2^-52` lower; `Cut` | `ErrUnsupported` (the cap is no carrier face, §4.1); red without the `CapRecord` rule (a hole through the cap) |
-| R10 | `TestFlushContactReplay` | `booleaneval.EvaluateReplay(ctx, OpUnion, host.n, tool.n, 1, proofbound.NewReplayTrialBudget())` on R1 identity's operands | no error, `Shift == nil`, and the payload's facets on `y = 0` all in source groups of both operands' flush faces (the bounded pass admits the flush pair) |
 
 ### 10.3 API test (`apitest/flush_contact_test.go`)
 
@@ -445,7 +446,7 @@ Cut or the tongue Union, and their stem chamfers build.
 |---|---|---|
 | A test or consumer relied on the shifted result of a flush pair | different face count, tags and diagnostics | §10.4; counts are not contract (`api-design.md` §3) |
 | §4.8 raises bounds of points on flush pairs | a later gate reads a larger bound | only flush pairs, which today shift by far more |
-| Live admits a pair the replay declines | a chain regroup or history replay declines | S5, R10 |
+| The bounded replay evaluation gains a production caller | that caller refuses flush pairs the live pass admits | attach `FlushFaces` on the bounded attempt and its admission sites before wiring the caller (§2, "Live pass only") |
 | Verify's measured interference now admits flush pairs | an `Intersect` of flush bodies reads the same as the Boolean | the same rule and proof (F5) |
 
 ## 13. Open questions
@@ -487,18 +488,10 @@ class "coplanar planar faces of a mesh Boolean's two operands", no new root adap
   `internal/meshbool/flush_faces.go` (new), `seat.go` (`carrierFacets`), `boolean_mesh.go` (`Flush` field,
   keep-side bound), `boolean_pair_cuts.go`, `coplanar_cover.go`, `tangency_gate.go` (doc comment);
   `internal/booleaneval/eval.go` (attach); root `flush_contact_test.go`; `apitest/flush_contact_test.go`;
-  `.github/test-shards.txt`, `.github/test-shards-apitest.txt`; the §11 docs except the replay sentences.
+  `.github/test-shards.txt`, `.github/test-shards-apitest.txt`; the §11 docs.
 - Work: §4.1–§4.8 for the live pass. Tests U8, U9, R1–R9, A1, and every §10.4 flip.
 - Depends on: Tasks 1, 2.
 - Done when: `go test ./internal/meshbool/ ./internal/booleaneval/ ./internal/facemerge/ ./internal/flushface/`
   pass; `go test . ./apitest/ -run 'FlushContact|UnionFaceMerge|Coplanar|Seat|Contact'` passes;
   `go test . ./apitest/ -run '^TestCI'` passes; lint clean; CI green.
 
-### Task 4: Flush faces, bounded replay
-
-- Files: `internal/meshbool/flush_faces.go` (replay reads), `pair_cuts.go`, `brake_boolean_replay.go`,
-  `internal/booleaneval/eval.go` (replay attach); root `flush_contact_test.go` (R10).
-- Work: §4.5's replay charges and `twinFacetReplay`; the bounded admission sites of §4.6 and `cutCornerBoundReplay`
-  of §4.8.
-- Depends on: Task 3.
-- Done when: R10 passes; `go test . -run 'FlushContact|BooleanGroupHistory|Replay'` passes; lint clean; CI green.
