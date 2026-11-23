@@ -135,6 +135,10 @@ reach, and zero keeps the float-box search alone.
    smallest this search can give. Ties go to the earlier candidate.
 5. Passes repeat as in the float-box stage. Each move strictly lowers the mesh's failing-pair count, so the search
    cannot cycle, and its order is fixed, so equal inputs give equal held meshes.
+6. A rigid placement that is still folded rounds its exact images again, keeping the order of the exact coordinates
+   on each axis, and runs stages 1 to 5 again from there (`agent-docs/evaluator-design.md` §9). It runs only when
+   every vertex it moves stays within the reach of its exact image. It reports the largest distance of a moved
+   vertex as a reach move, with `EmbeddingReachApplied`.
 
 ### 5.2 The shifted Boolean retry
 

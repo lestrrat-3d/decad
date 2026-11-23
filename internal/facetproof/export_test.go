@@ -23,3 +23,7 @@ var GroupedVertexRange = groupedVertexRange
 
 // ComponentMembers lists each facet component's members in walk order.
 var ComponentMembers = componentMembers
+
+// OrderedRounding is the order-keeping rounding of a placement's last
+// embedding stage.
+var OrderedRounding = orderedRounding

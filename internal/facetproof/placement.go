@@ -2,6 +2,7 @@ package facetproof
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"sync"
@@ -240,7 +241,11 @@ func placeMeshGapBudget(ctx context.Context, budget *proofbound.WorkBudget, vert
 	if replay {
 		moved, repair, err = keepPlacedEmbeddedWithAxesReplay(ctx, exact, next.Verts, next.Tris, [3]r3.Vec{basis.EX, basis.EY, basis.EZ}, denotes, budget)
 	} else {
-		moved, repair, err = keepPlacedEmbeddedWithAxes(ctx, exact, next.Verts, next.Tris, [3]r3.Vec{basis.EX, basis.EY, basis.EZ}, denotes)
+		axes := [3]r3.Vec{basis.EX, basis.EY, basis.EZ}
+		moved, repair, err = keepPlacedEmbeddedWithAxes(ctx, exact, next.Verts, next.Tris, axes, denotes)
+		if fold := (*meshbool.HeldFoldError)(nil); errors.As(err, &fold) {
+			moved, repair, err = placeOrdered(ctx, exact, next.Verts, next.Tris, axes, denotes, vertexAllow, err)
+		}
 	}
 	if err != nil {
 		areaDone.Wait()
