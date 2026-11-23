@@ -1940,8 +1940,10 @@ read on its own, with `over` the cutter's overshoot above the cap and outside th
 `reach = dc + 2 over` how far the cutter reaches into the material at its top plus that margin; one `reach` serves the
 extension and the probe of its end:
 
-- A convex end turned by 45 degrees or more reaches past the end, so the bevel ends on the wall beside the next edge,
-  where it runs out onto that wall over `dc` times the cotangent of the turn. The cutter reaches
+- A convex end reaches past the end, so the bevel ends on the wall beside the next edge, where it runs out onto that
+  wall over `dc` times the cotangent of the turn: an end of a line run turned by 10 degrees or more, an end of an arc
+  run turned by 45 degrees or more. Below 10 degrees the run-out passes `5.7 dc` and meets the next wall within 10
+  degrees of grazing. The cutter reaches
   `max(dc, 1.5 reach cot(turn))`. A line run's cutter reaches along the run's tangent. An arc run's cutter follows its
   own circle, moved with each ring, past the end: the same angle and the same chord count (read at the largest ring's
   radius) on every ring, so the rings pair vertex for vertex, and the bevel runs out as the cone itself does. The angle
@@ -1951,7 +1953,13 @@ extension and the probe of its end:
   whose bevel circle at the cap does not get `over` past that line within a half turn, a convex arc of radius `R` with
   `R - dc` below the next wall's distance from its centre plus `over`, has no run-out onto the wall (the cutter would
   carve a sector of the wall's material and leave a step) and is `ErrUnsupported`. A turn under 90 degrees needs the next
-  edge at least `1.5 reach / sin(turn)` long. The run-out removes `dc^3 cot(turn)/6` beyond the perpendicular end's wedge (a
+  edge at least `1.5 reach / sin(turn)` long. After a line run a shorter next line still serves when it holds the
+  bevel's own run-out with room to spare, at least `1.5 dc / sin(turn)` long (the bevel's top edge meets it
+  `dc / sin(turn)` from the corner), and no other edge of the loop has a stretch in the bevel's footprint past the end:
+  the strip from the corner along the run's tangent for the cutter's extension and `1.5 dc` into the material. The
+  material the cutter meets there then lies between the run's wall carried on and the next wall, above the bevel
+  plane, so the bevel ends on the next wall alone, as at a longer edge. A blade's gable, whose sides turn 42.5 degrees
+  off a blade 1.65 mm wide and are 1.22 mm long, takes this at a setback of 0.5 mm. The run-out removes `dc^3 cot(turn)/6` beyond the perpendicular end's wedge (a
   negative amount past 90 degrees).
 - A concave end turned by up to 90 degrees beside a line stops the bevel on the next face's plane, carried back over
   the run's band. The cutter loses a sector of a disc about the corner, bounded by the next wall's line carried back
@@ -1988,8 +1996,10 @@ extension and the probe of its end:
   and at most 0.004 mm wide. A document whose gap tolerance is under 0.004 mm, an exact-only one included, and a
   faceted receiver take no relief; their Cut takes the gap shift where the tolerance allows it.
 
-Any other end is `ErrUnsupported`: a convex end turned by less than 45 degrees, a concave end turned by more than 90
-degrees, a concave end beside an arc whose next wall's plane misses the bevel, a run-out longer than the next edge, an
+Any other end is `ErrUnsupported`: a convex end turned by less than those angles, a concave end turned by more than 90
+degrees, a concave end beside an arc whose next wall's plane misses the bevel, a run-out longer than the next edge (a
+next edge under `1.5 reach / sin(turn)` beside an arc, or under `1.5 dc / sin(turn)`, or with another edge in the
+bevel's footprint past the end), an
 arc run whose extension turns more than a half turn, and a chain that comes back into the end sector. So is a chain
 whose extension would meet material of the cap, within `reach` of the run's end (the region past the end, less the
 run-out zone beside the next wall, which is the strip a line end reaches or the annular sector an arc end reaches, is
