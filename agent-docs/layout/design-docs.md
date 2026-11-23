@@ -26,6 +26,7 @@ The rules for rows live in `agent-docs/layout.md`.
 | `agent-docs/interference-design.md` | Read-only pair overlap and bounded volume proofs. |
 | `agent-docs/coplanar-contact-design.md` | Exact coplanar contact classification in the mesh boolean and exact planar faces of its results. |
 | `agent-docs/tiny-bound-contact-design.md` | Exact planar face carriers, the carrier snap of rounded vertices, and rational chamfer feet. |
+| `agent-docs/flush-contact-design.md` | Admitting the coplanar contact of two planar faces held within a bound when both planes are exact and the outlines keep their arrangement. |
 | `agent-docs/union-face-merge-design.md` | Merging adjacent coplanar same-facing faces of different operands in a mesh Boolean result into one face. |
 | `agent-docs/exact-chamfer-design.md` | Exact setback points and bounds for the retained R1 straight-edge `Chamfer` of a mesh Boolean result. |
 | `agent-docs/hole-design.md` | `Hole`: face and point placement, size gates, tool shapes and the atomic cut. |
