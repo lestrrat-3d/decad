@@ -125,6 +125,48 @@ func TestMergeBoundedCorner(t *testing.T) {
 	}
 }
 
+func TestMergeTagAnchor(t *testing.T) {
+	t.Parallel()
+	// Every vertex carries a bound, so no facet anchors a plane; only the top groups' exact retained tags can.
+	bounded := func(top func(facetedrecord.Group) facetedrecord.Group) facemerge.Input {
+		m := splitBox(nil, nil)
+		groups := plainGroups(10)
+		groups[gTopA], groups[gTopB] = top(groups[gTopA]), top(groups[gTopB])
+		in := m.input(t, groups, splitBoxA)
+		for v := range in.VertexBound {
+			in.VertexBound[v] = 1e-6
+		}
+		return in
+	}
+	in := bounded(func(g facetedrecord.Group) facetedrecord.Group { return retainedPlane(t, g, 1) })
+	src, groups, changed, err := facemerge.Merge(t.Context(), in)
+	require.NoError(t, err)
+	require.True(t, changed)
+	requireMergedPairs(t, in, src, groups, splitPairs[1])
+	body, _ := assemble(t, in, src, groups)
+	require.Len(t, topobuild.Faces(body), 9)
+
+	// A tag that states a normal departure, or one an ulp-scale step off the facets' plane, anchors nothing.
+	for name, top := range map[string]func(facetedrecord.Group) facetedrecord.Group{
+		"departure": func(g facetedrecord.Group) facetedrecord.Group {
+			g = retainedPlane(t, g, 1)
+			g.NormalBound = 1e-12
+			return g
+		},
+		"off plane": func(g facetedrecord.Group) facetedrecord.Group { return retainedPlane(t, g, 1+math.Ldexp(1, -40)) },
+		"displaced": func(g facetedrecord.Group) facetedrecord.Group {
+			g = retainedPlane(t, g, 1)
+			g.AxialDelta, g.HasAxialDelta = 1e-9, true
+			return g
+		},
+	} {
+		in := bounded(top)
+		_, _, changed, err := facemerge.Merge(t.Context(), in)
+		require.NoError(t, err, name)
+		require.False(t, changed, name)
+	}
+}
+
 func TestMergeOffsetPlane(t *testing.T) {
 	t.Parallel()
 	m := splitBox(nil, nil)
