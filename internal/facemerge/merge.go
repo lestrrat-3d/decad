@@ -15,6 +15,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/facetproof"
 	"github.com/lestrrat-3d/decad/internal/meshplane"
+	"github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
@@ -116,8 +117,8 @@ func validate(in Input) error {
 // candidateGroups applies design §4.2 rules 1 to 3 and the finite-vertex precondition of meshplane.Groups. A group
 // is a candidate when it owns a facet, is planar, has a tag that depends on no extent, every vertex of every facet
 // has a finite coordinate and a finite non-negative bound, and at least one facet has bound zero at all three
-// corners. That facet is its true piece exactly, so it fixes the true face's plane; rule 4 (facetPlanes) then
-// requires every other facet of the group to lie in that plane.
+// corners, or its retained plane tag is exact and holds every vertex (tagAnchored). That facet or tag fixes the true
+// face's plane; rule 4 (facetPlanes) then requires every facet of the group to lie in one plane.
 func candidateGroups(budget *proofbound.WorkBudget, in Input) ([]bool, error) {
 	owns := make([]bool, len(in.Groups))
 	for _, g := range in.Src {
@@ -153,10 +154,52 @@ func candidateGroups(budget *proofbound.WorkBudget, in Input) ([]bool, error) {
 			anchored[g] = true
 		}
 	}
+	// A group no zero-bound facet anchors may be anchored by its tag: a retained plane that is the true plane itself,
+	// with every vertex lying in it exactly (agent-docs/flush-contact-design.md §5).
+	byTag := make([]bool, len(in.Groups))
+	for g := range candidate {
+		if candidate[g] && !anchored[g] && tagAnchored(in.Groups[g]) {
+			byTag[g], anchored[g] = true, true
+		}
+	}
+	for t, tri := range in.Tris {
+		if err := budget.Step(); err != nil {
+			return nil, err
+		}
+		g := in.Src[t]
+		if !byTag[g] || !anchored[g] {
+			continue
+		}
+		pl, ok := in.Groups[g].Surface.(surfacegeom.Plane)
+		if !ok {
+			anchored[g] = false
+			continue
+		}
+		frame := pl.Frame
+		o := proof.DyVec(frame.Origin())
+		n := proof.DvCross(proof.DyVec(frame.U()), proof.DyVec(frame.V()))
+		for _, v := range tri {
+			if !proof.DvDot(n, proof.DvSub(proof.DyVec(in.Verts[v]), o)).IsZero() {
+				anchored[g] = false
+				break
+			}
+		}
+	}
 	for g := range candidate {
 		candidate[g] = candidate[g] && anchored[g]
 	}
 	return candidate, nil
+}
+
+// tagAnchored reports the record half of the tag anchor (agent-docs/flush-contact-design.md §5): a retained plane tag
+// with no stated normal departure and no axial displacement, which retainedPlaneOf reads as the face's true plane.
+// candidateGroups then requires every vertex of the group to lie in it exactly.
+func tagAnchored(g facetedrecord.Group) bool {
+	if !g.Retained || g.NormalBound != 0 || g.HasAxialDelta && g.AxialDelta != 0 {
+		return false
+	}
+	_, ok := g.Surface.(surfacegeom.Plane)
+	return ok
 }
 
 func finite(v r3.Vec) bool {

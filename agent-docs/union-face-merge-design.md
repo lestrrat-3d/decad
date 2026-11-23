@@ -31,9 +31,10 @@ Navigation, not authority.
 - Faces of the SAME operand never merge with each other directly. Their split was the operand builder's own decision
   (evaluator §3 keeps coplanar Loft rungs apart). They can end up in one face through a face of the other operand that
   is adjacent to both (§4.4).
-- "Plane-exact" reads only the result's own vertex bounds (`Payload.VertexBound`,
-  `agent-docs/faceted-vertex-bounds-design.md` §2): the group holds a facet whose three corners have `β(v) == 0`.
-  No new exactness notion.
+- "Plane-exact" reads the result's own vertex bounds (`Payload.VertexBound`,
+  `agent-docs/faceted-vertex-bounds-design.md` §2) or its retained plane tag: the group holds a facet whose three
+  corners have `β(v) == 0`, or a tag that is the true plane itself and holds every vertex exactly
+  (`agent-docs/flush-contact-design.md` §5). No new exactness notion.
 - A payload carrying a structural record (`ObliqueBoss`, `CrossCylinderBore`) is not merged. Those records feed
   record-based rebuild routes proved against the unmerged face set. `PrismUnionFillet` does not block the merge:
   every Union of two prism bodies carries it, its consumers require single-role faces at the selected edge and
@@ -74,7 +75,7 @@ history record of every face it joins.
 | Term | Definition |
 |---|---|
 | Adjacent | The two faces' held facets share at least one held edge of positive length (an edge of `facetproof.MeshAudit.Adj`). Faces that meet only at a vertex are not adjacent. |
-| Plane-exact | Some facet of the face's source group has `β(v) == 0` at all three corners. For a planar true face that facet IS its true piece (`faceted-vertex-bounds-design.md` §2), so the true face lies in the facet's plane. Other facets may hold vertices with `β > 0`, such as the rounded point where an edge of one operand crosses a slanted chord of the other; the plane rule below still puts every facet in that same plane. |
+| Plane-exact | Some facet of the face's source group has `β(v) == 0` at all three corners: for a planar true face that facet IS its true piece (`faceted-vertex-bounds-design.md` §2), so the true face lies in the facet's plane. Or the group's retained `Plane` tag states no normal departure and no axial displacement, so it is the true plane (`retainedPlaneOf`), and every vertex lies in it exactly (the tag anchor). Other facets may hold vertices with `β > 0`, such as the rounded point where an edge of one operand crosses a slanted chord of the other; the plane rule below still puts every facet in that same plane. |
 | Same exact carrier plane | All facets of both groups lie on one plane as exact rationals over the held float coordinates: `meshplane.Groups` gives them one group (normal `(b−a)×(c−a)` and offset `n·a` equal up to a positive factor). |
 | Orientation | The facets' winding gives the outward normal. `meshplane.Groups` keys on the oriented plane, so one group means equal outward normals. Opposite-facing faces on one plane never merge. |
 | Material side | The side opposite the outward normal. Equal outward normals put the material of both faces on the same side, so the shared edge has a flat (half-turn) material angle and is no feature of the solid. |
@@ -145,8 +146,10 @@ Group `g` is a candidate when all hold:
 1. it owns at least one facet, and `Groups[g].Planar`;
 2. `Groups[g].Surface == nil`, or `Groups[g].Retained` with a `surfacegeom.Plane` surface, `Denoted == nil`,
    `ExtentDelta == 0` and `!ViewCharge` (a tag whose validity depends on the face's extent cannot move to a larger face);
-3. every vertex of every facet of `g` has a finite coordinate and a finite `VertexBound >= 0`, and at least one facet
-   of `g` has `VertexBound == 0` at all three corners (the anchor facet);
+3. every vertex of every facet of `g` has a finite coordinate and a finite `VertexBound >= 0`, and either at least one
+   facet of `g` has `VertexBound == 0` at all three corners (the anchor facet), or `g` is `Retained` with a `Plane`
+   surface, `NormalBound == 0`, no axial displacement, and every vertex lies exactly in the tag's plane (the tag
+   anchor, `agent-docs/flush-contact-design.md` §5);
 4. every facet of `g` lies in one `meshplane.Groups` group that is `Planar` (run `meshplane.Groups` once over the
    candidate facets of steps 1–3 only). A zero-area facet is its own non-`Planar` group and so rejects its source group.
    R1 and R2 (§10.2) hold no zero-area facet. A result whose end-face group holds one fails S1; §12 Q5 owns that
@@ -223,8 +226,8 @@ Members are the distinct groups of the component, in increasing index.
 - **Q1 there.** `coplanar-contact-design.md` §8 kept two faces and §15 Q1 deferred the merge. This design is the
   merge that Q1 resolves to.
 - **Exact-face reading.** Coplanar contact admits operand facets on `FacetBound == 0` plus a zero face gate reading
-  (§3.1 there), and its §7 makes result faces with float corners hold `β == 0`. This design reads the result's own
-  `β`, which is that same zero bound one step later. Every end-face vertex of the
+  (§3.1 there), or a flush pair of carrier faces (`agent-docs/flush-contact-design.md`), and its §7 makes result faces
+  with float corners hold `β == 0`. This design reads the result's own `β` or exact retained tag. Every end-face vertex of the
   dovetail-like result reads `β = 0`.
 - **Planar simplification (§7 there)** runs inside the stitch, per source id, before the merge. The merge changes no
   vertex, so it needs no re-simplification. Former seam vertices stay as chain-interior points of maximal edges.
@@ -237,7 +240,9 @@ true union is one planar face of the solid.
 1. **The true plane is the held plane.** A candidate's anchor facet has `β = 0` at its three corners, so `δ(t) = 0`
    and, the true face being planar (`Group.Planar`), the held triangle is its true piece exactly
    (`faceted-vertex-bounds-design.md` §2). The facet has positive area (rule 4 rejects a zero-area facet), so the true
-   face lies in the anchor's plane, and rule 4 puts every facet of the group in that same held plane. A vertex with
+   face lies in the anchor's plane, and rule 4 puts every facet of the group in that same held plane. A tag anchor is
+   the true plane itself (`retainedPlaneOf`; faceted-source-retention Claim R) and holds every held vertex exactly,
+   which gives the same conclusion. A vertex with
    `β > 0` moves its true point only within that plane: it changes where the face's boundary runs, never which plane
    the face lies in.
 2. **Exact identity.** `meshplane.Groups` decides plane identity by exact dyadic arithmetic over the held floats, with
@@ -292,6 +297,7 @@ the `x = 2` face one B group. Non-candidate marker for U5 and U6: a retained `Pl
 | U1 | `TestMergeSplitBox` | base fixture | 4 merged groups appended; the `x = 0` and `x = 2` facets keep their groups; `facetedrecord.AssembleBody` gives 6 faces, 12 edges, 8 vertices |
 | U2 | `TestMergeSameOperand` | base fixture, every group in operand A | `changed == false` |
 | U3 | `TestMergePositiveBound` | base fixture plus one vertex `(0.5, 0.5, 1)` inside the top's A half (fanned), with `β = 1e-15` | every facet of the top's A half holds it, so no facet anchors the plane; the top pair stays unmerged; the other 3 pairs merge |
+| U3c | `TestMergeTagAnchor` | base fixture with every vertex `β = 1e-6` and the top groups retained planes at `z = 1`; then a tag stating `NormalBound = 1e-12`, a tag `2^-40` off the facets, a tag with an axial displacement | the top pair merges (9 faces); then nothing merges in each case |
 | U3b | `TestMergeBoundedCorner` | base fixture with `β = 1e-15` at the corner `(0, 1, 1)`; then at `(2, 1, 1)`; then a NaN, infinite or negative bound at `(0, 1, 1)` | all 4 pairs merge (each A half keeps an anchor facet); then the top and back pairs stay unmerged (every facet of their B halves holds the corner); then the top and back pairs stay unmerged |
 | U4 | `TestMergeOffsetPlane` | base fixture with the two top vertices at `x = 2` raised by `2^-40` (the top's B half tilts; every other face stays planar) | the top pair stays unmerged |
 | U5 | `TestMergePinch` | 3×3-cell top over a 3×3×1 box; the centre cell and the corner cell `[2,3]×[2,3]` are marker groups (no candidate); the other 7 top cells alternate A and B | no top facet changes group (the C-shaped region touches itself at vertex `(2, 2, 1)`) |
@@ -376,11 +382,8 @@ its tests. Required: the tail block has exactly one face on each end plane and p
   halves would have accepted (no test hits it). Option B, skip components
   whose union is non-convex: keeps `ToFace` reach; costs the seam on exactly the dovetail-like faces (they are
   non-convex), failing S1. Recommendation: A, because B defeats the purpose.
-- **Q4. Merge bounded planar faces whose planes a record proves equal (`CapRecord`, `capplane`)?** Option A, no
-  (chosen): no such adjacency arises while coplanar contact refuses bounded faces (its §4). Option B, yes: gains
-  merges once bounded contact is admitted; costs a record-identity path for side walls (which carry no `CapRecord`) and
-  a proof that the donor tag's bound covers the merged extent. Recommendation: A until a route admits bounded coplanar
-  contact.
+- **Q4. Merge bounded planar faces whose planes a record proves equal?** Resolved by
+  `agent-docs/flush-contact-design.md` §5: an exact retained plane tag that holds every vertex anchors the plane.
 
 - **Q5. Zero-area facets in a candidate group.** Option A, a zero-area facet rejects its group (chosen): simple;
   costs a missed merge, with no message, if a result ever holds such a sliver on a coplanar face (none in R1 or R2). Option B, treat a zero-area facet whose vertices lie exactly on the group's plane as neutral: gains
