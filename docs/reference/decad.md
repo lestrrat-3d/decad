@@ -358,6 +358,8 @@ package.
   - [func ConeFromFace](<#ConeFromFace>)
   - [func Copy](<#Copy>)
   - [func Cut](<#Cut>)
+  - [func CutExtrude](<#CutExtrude>)
+  - [func CutRevolve](<#CutRevolve>)
   - [func Draft](<#Draft>)
   - [func Emboss](<#Emboss>)
   - [func Extend](<#Extend>)
@@ -1986,6 +1988,42 @@ Intersect calls is retried from the source bodies of that chain
 (agent-docs/prism-boolean-design.md Part R); only a failure of that retry too
 returns the refusal.
 It returns ctx.Err() unchanged when ctx is canceled before the document commit.
+
+<a name="CutExtrude"></a>
+#### func CutExtrude
+
+<pre>func CutExtrude(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>, target *<a href="#Body">Body</a>, s *sketch.Sketch, profiles []*sketch.Profile, e <a href="#Extent">Extent</a>,
+    opts ...<a href="#ExtrudeOption">ExtrudeOption</a>) (result *<a href="#Body">Body</a>, retErr <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
+
+CutExtrude removes from target the volume that sweeping profiles of s along
+the sketch normal per e would fill, and returns the result, retiring target
+(agent-docs/cut-profile-design.md). It is the feature form of Extrude
+followed by Cut: the swept tool exists only inside the call, is never
+registered, and leaves no body in the document.
+
+Every profile obeys Extrude's gates and options, and the extent resolves
+exactly as Extrude resolves it, so a [ToFace](<#ToFace>) or [ThroughAll](<#ThroughAll>) stop reads live
+bodies, target among them. Several profiles are one feature: their tools are
+united with one another and target is cut once. Profiles whose tools touch
+or overlap are therefore removed as one volume.
+
+target MUST be a live solid. A nil context, target or sketch, or an empty
+or nil profile list, is ErrDegenerate. A tool that removes everything is
+ErrBooleanFailed, and every other refusal is Extrude's or Cut's own. Every
+failure leaves target live and the document unchanged. The history records
+one OperationCutExtrude whose consumed input is target.
+
+<a name="CutRevolve"></a>
+#### func CutRevolve
+
+<pre>func CutRevolve(ctx context.<a href="https://pkg.go.dev/context#Context">Context</a>, target *<a href="#Body">Body</a>, s *sketch.Sketch, profiles []*sketch.Profile, axis <a href="#Axis">Axis</a>,
+    a <a href="#AngularExtent">AngularExtent</a>, opts ...<a href="#RevolveOption">RevolveOption</a>) (result *<a href="#Body">Body</a>, retErr <a href="https://pkg.go.dev/builtin#error">error</a>)</pre>
+
+CutRevolve removes from target the volume that revolving profiles of s about
+axis through a would fill, and returns the result, retiring target
+(agent-docs/cut-profile-design.md). It is the feature form of Revolve
+followed by Cut, with the gates, grouping and failure behaviour of
+[CutExtrude](<#CutExtrude>). The history records one OperationCutRevolve.
 
 <a name="Draft"></a>
 #### func Draft
@@ -7701,7 +7739,7 @@ OperationInput identifies a body argument and its public role.
 
 OperationKind names a public modeling or selector-resolution call.
 
-<a name="OperationUnknown"></a><a name="OperationExtrude"></a><a name="OperationRevolve"></a><a name="OperationSweep"></a><a name="OperationLoft"></a><a name="OperationLoftChain"></a><a name="OperationLoftSections"></a><a name="OperationLoftFromPoint"></a><a name="OperationPatchProfile"></a><a name="OperationPatchEdges"></a><a name="OperationCut"></a><a name="OperationUnion"></a><a name="OperationIntersect"></a><a name="OperationTransform"></a><a name="OperationCopy"></a><a name="OperationPatternCopies"></a><a name="OperationPatterned"></a><a name="OperationFillet"></a><a name="OperationChamfer"></a><a name="OperationShell"></a><a name="OperationDraft"></a><a name="OperationOffset"></a><a name="OperationThicken"></a><a name="OperationStitch"></a><a name="OperationUnstitch"></a><a name="OperationTrim"></a><a name="OperationExtend"></a><a name="OperationSplit"></a><a name="OperationWeb"></a><a name="OperationConeFromFace"></a><a name="OperationRemove"></a><a name="OperationSelectEdges"></a><a name="OperationSelectFaces"></a><a name="OperationHole"></a><a name="OperationEmboss"></a><a name="OperationCoil"></a><a name="OperationMirrored"></a><a name="OperationMirroredCopy"></a><a name="OperationScaledAt"></a><a name="OperationLoftFaces"></a><a name="OperationThread"></a><a name="OperationBoss"></a><a name="OperationSolidFromMesh"></a><a name="OperationMoveFace"></a><a name="OperationStretch"></a><a name="OperationQuarterTurn"></a><a name="OperationRefine"></a>
+<a name="OperationUnknown"></a><a name="OperationExtrude"></a><a name="OperationRevolve"></a><a name="OperationSweep"></a><a name="OperationLoft"></a><a name="OperationLoftChain"></a><a name="OperationLoftSections"></a><a name="OperationLoftFromPoint"></a><a name="OperationPatchProfile"></a><a name="OperationPatchEdges"></a><a name="OperationCut"></a><a name="OperationUnion"></a><a name="OperationIntersect"></a><a name="OperationTransform"></a><a name="OperationCopy"></a><a name="OperationPatternCopies"></a><a name="OperationPatterned"></a><a name="OperationFillet"></a><a name="OperationChamfer"></a><a name="OperationShell"></a><a name="OperationDraft"></a><a name="OperationOffset"></a><a name="OperationThicken"></a><a name="OperationStitch"></a><a name="OperationUnstitch"></a><a name="OperationTrim"></a><a name="OperationExtend"></a><a name="OperationSplit"></a><a name="OperationWeb"></a><a name="OperationConeFromFace"></a><a name="OperationRemove"></a><a name="OperationSelectEdges"></a><a name="OperationSelectFaces"></a><a name="OperationHole"></a><a name="OperationEmboss"></a><a name="OperationCoil"></a><a name="OperationMirrored"></a><a name="OperationMirroredCopy"></a><a name="OperationScaledAt"></a><a name="OperationLoftFaces"></a><a name="OperationThread"></a><a name="OperationBoss"></a><a name="OperationSolidFromMesh"></a><a name="OperationMoveFace"></a><a name="OperationStretch"></a><a name="OperationQuarterTurn"></a><a name="OperationRefine"></a><a name="OperationCutExtrude"></a><a name="OperationCutRevolve"></a>
 
 <pre>const (
     OperationUnknown <a href="#OperationKind">OperationKind</a> = iota
@@ -7751,6 +7789,8 @@ OperationKind names a public modeling or selector-resolution call.
     OperationStretch
     OperationQuarterTurn
     OperationRefine
+    OperationCutExtrude
+    OperationCutRevolve
 )</pre>
 
 <a name="OperationKind.String"></a>
