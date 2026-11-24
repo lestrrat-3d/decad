@@ -33,7 +33,7 @@ import (
 //     gap exceeds the exact minimum, so the exact prune would also prune. In
 //     every other case the exact test decides, as before. The deep-vertex
 //     scan (planarKernel.deepInside) skips a triangle the same way, against
-//     the float upper bound of the squared margin, and polls first.
+//     the float upper bound of the squared margin.
 //   - A hinted bound on the minimum. The caller may name one candidate pair,
 //     usually the nearest pair of an earlier call (ClassifyPlanarHinted). Its
 //     exact squared distance, when it offers one, is a candidate, so it is at
@@ -52,12 +52,18 @@ import (
 //     a hint's does, whether or not the caller named one.
 //     The cap is a candidate's exact distance, so every argument above holds
 //     for it and the answers are the same with or without the guess.
-//   - Box trees. The crossing and distance scans ask a tree over the other
-//     solid's facet, or edge, float boxes (planar_boxtree.go) for the boxes the
-//     pre-test above keeps, in index order, instead of testing every one. A
-//     node's box holds its boxes, so a node the pre-test prunes holds none
-//     that it keeps. The visit order is unchanged; a scan polls once per
-//     query and once per box kept.
+//   - Box trees. The crossing, distance and deep-vertex scans ask a tree over
+//     the other solid's facet, or edge, float boxes (planar_boxtree.go) for the
+//     boxes the pre-test above keeps, in index order, instead of testing every
+//     one. A node's box holds its boxes, so a node the pre-test prunes holds
+//     none that it keeps. The visit order is unchanged; a scan polls once per
+//     query and once per box kept. The deep-vertex scan's casts ask, per ray
+//     axis, a tree over the facet boxes with that axis collapsed for the
+//     facets the axis pre-test keeps, and add every facet seen edge-on
+//     (axisCastIndex), so each ray reads the facets castAlong reads.
+//   - The deep-vertex scan's outer box. A closed solid lies in the union of
+//     its facet boxes, so a vertex whose float box misses that union is
+//     outside the solid, never deep, and needs no scan or cast.
 //   - Per-triangle side planes for the vertex-facet test. The edge test
 //     ((w−u)×(x−u))·n equals (x−u)·(n×(w−u)) exactly, by the scalar triple
 //     product, so its sign is the same. The plane n×(w−u) is computed once per

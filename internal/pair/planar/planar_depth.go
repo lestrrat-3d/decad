@@ -21,11 +21,23 @@ import (
 // float-pose overlap to the ideal path. margin must be nonnegative; poll is
 // charged once per exact predicate group.
 func PlanarDeepVertex(a, b *PlanarSolid, margin proof.Dyadic, poll func() error) (bool, error) {
+	return planarDeepVertex(a, b, margin, deepVertexScanFirst, poll)
+}
+
+// deepVertexScanFirst is how many vertices of each side PlanarDeepVertex reads
+// by a scan over every triangle before it reads the rest through box trees.
+// The trees cost about as much to build as that many scans, so a call that
+// stops early, at a deep vertex, pays no more than before for them.
+const deepVertexScanFirst = 32
+
+// planarDeepVertex is PlanarDeepVertex with the number of vertices per side
+// read by the plain scan (deepInsideScan) given as scanFirst; the rest are read
+// through box trees (deepInside). Both give the same answer.
+func planarDeepVertex(a, b *PlanarSolid, margin proof.Dyadic, scanFirst int, poll func() error) (bool, error) {
 	marginSquared := proof.DyMul(margin, margin)
 	pa, pb := preparePlanar(a), preparePlanar(b)
-	// The float boxes turn on deepInside's gap pre-test, the cast's axis
-	// pre-test and the facet box pre-test (planar_prune.go); none changes an
-	// answer or a poll.
+	// The float boxes turn on deepInside's gap pre-test, box trees and indexed
+	// casts, and the scan's pre-tests (planar_prune.go); none changes an answer.
 	pa.floatBoxes()
 	pb.floatBoxes()
 	_, marginUp := proof.FloatBounds(marginSquared)
@@ -38,7 +50,11 @@ func PlanarDeepVertex(a, b *PlanarSolid, margin proof.Dyadic, poll func() error)
 	for _, side := range [][2]*planarPrep{{pa, pb}, {pb, pa}} {
 		from, to := side[0], side[1]
 		for v, point := range from.s.Verts {
-			deep, err := k.deepInside(point, from.vertBox[v], to, marginSquared, marginUp, marginRadiusUp)
+			read := k.deepInside
+			if v < scanFirst {
+				read = k.deepInsideScan
+			}
+			deep, err := read(point, from.vertBox[v], to, marginSquared, marginUp, marginRadiusUp)
 			if err != nil || deep {
 				return deep, err
 			}
@@ -50,10 +66,47 @@ func PlanarDeepVertex(a, b *PlanarSolid, margin proof.Dyadic, poll func() error)
 // deepInside reports whether p lies strictly inside solid with every
 // boundary triangle farther than sqrt(marginSquared) away. pb is p's outward
 // float box; marginUp bounds marginSquared above, and marginRadiusUp bounds
-// the nonnegative distance margin above. Their reject-only box tests run after
-// each triangle poll. Without the solid's float boxes every triangle takes the
-// exact test.
+// the nonnegative distance margin above.
+//
+// A point whose box misses the solid's box lies outside it and is not deep.
+// Otherwise the box tree hands over, in index order, the triangles the gap
+// pre-test keeps, and the cast reads only the triangles its axis pre-test
+// keeps (castIndexed): the triangles tested exactly are those deepInsideScan
+// tests, in the same order, so the answer is its answer. It polls once for the
+// box test, once per query and once per triangle kept. Without the solid's
+// float boxes it is deepInsideScan.
 func (k *planarKernel) deepInside(
+	p proof.DyV3, pb floatBox, solid *planarPrep, marginSquared proof.Dyadic, marginUp, marginRadiusUp float64,
+) (bool, error) {
+	if solid.triBox == nil {
+		return k.deepInsideScan(p, pb, solid, marginSquared, marginUp, marginRadiusUp)
+	}
+	if err := k.poll(); err != nil {
+		return false, err
+	}
+	tree := solid.boxTree()
+	if len(tree.nodes) == 0 || floatApart(pb, tree.nodes[0].box) {
+		return false, nil
+	}
+	expanded := expandFloatBox(pb, marginRadiusUp)
+	k.near = tree.queryWithin(pb, marginUp, k.near)
+	for _, t := range k.near {
+		if err := k.poll(); err != nil {
+			return false, err
+		}
+		if withinMargin(p, solid, t, expanded, marginSquared) {
+			return false, nil
+		}
+	}
+	result, err := k.castIndexed(p, solid)
+	return result == castInside, err
+}
+
+// deepInsideScan is deepInside over every triangle, then a cast over every
+// triangle. With the solid's float boxes, a triangle the gap pre-test puts
+// past the margin is skipped after its poll, and the cast runs its axis
+// pre-test.
+func (k *planarKernel) deepInsideScan(
 	p proof.DyV3, pb floatBox, solid *planarPrep, marginSquared proof.Dyadic, marginUp, marginRadiusUp float64,
 ) (bool, error) {
 	boxed := solid.triBox != nil
@@ -65,24 +118,30 @@ func (k *planarKernel) deepInside(
 		if err := k.poll(); err != nil {
 			return false, err
 		}
-		// Separation from the outward-expanded point box proves the exact
-		// triangle lies farther than the margin on at least one axis.
-		if boxed && floatApart(expanded, solid.triBox[t]) {
-			continue
-		}
 		if boxed && gapSquaredBelowLimit(pb, solid.triBox[t], marginUp) > marginUp {
 			continue
 		}
-		if proof.DyCmp(boxGapSquared(p, p, solid.triLo[t], solid.triHi[t]), marginSquared) > 0 {
-			continue
-		}
-		d := pointTriangle(solid, t, p)
-		if proof.DyCmp(d.num, proof.DyMul(marginSquared, d.den)) <= 0 {
+		if withinMargin(p, solid, t, expanded, marginSquared) {
 			return false, nil
 		}
 	}
 	result, err := k.cast(p, solid)
 	return result == castInside, err
+}
+
+// withinMargin reports whether triangle t lies within the margin of p, which
+// then is not deep. expanded is p's float box grown by the margin when the
+// solid carries float boxes; separation from it proves the exact triangle
+// farther than the margin on one axis.
+func withinMargin(p proof.DyV3, solid *planarPrep, t int, expanded floatBox, marginSquared proof.Dyadic) bool {
+	if solid.triBox != nil && floatApart(expanded, solid.triBox[t]) {
+		return false
+	}
+	if proof.DyCmp(boxGapSquared(p, p, solid.triLo[t], solid.triHi[t]), marginSquared) > 0 {
+		return false
+	}
+	d := pointTriangle(solid, t, p)
+	return proof.DyCmp(d.num, proof.DyMul(marginSquared, d.den)) <= 0
 }
 
 // expandFloatBox outward-expands b by radius on each axis. radius must be a

@@ -885,6 +885,105 @@ func TestCastAxisExactCoordinatePlanePretest(t *testing.T) {
 	}
 }
 
+// TestCastIndexedKeepsAnswers holds the axis cast index to castAlong's float
+// pre-test, over triangle sets on a coarse grid several tree leaves long: on
+// each axis it lists exactly the triangles the pre-test keeps, in ascending
+// order, each axis ray over that list returns what the exact ray returns, and
+// castIndexed returns what cast returns, polling at most once more per ray
+// than cast.
+//
+// Legs shown to fail: an index without its parallel triangles, and a query box
+// left uncollapsed on the ray's axis, each fail this test.
+func TestCastIndexedKeepsAnswers(t *testing.T) {
+	t.Parallel()
+	rng := rand.New(rand.NewPCG(3121, 3307))
+	coordinate := func() proof.Dyadic {
+		d := proof.DyInt(int64(rng.IntN(9) - 4))
+		if rng.IntN(4) == 0 {
+			d = proof.DyAdd(d, proof.DyMul(proof.MustDyOf(rng.Float64()), proof.MustDyOf(rng.Float64())))
+		}
+		return d
+	}
+	outcomes := map[castResult]int{}
+	skipped := 0
+	for range 120 {
+		var s PlanarSolid
+		for len(s.Tris) < 40 {
+			appendRandomTriangle(&s, rng, coordinate)
+		}
+		prep := preparePlanar(&s)
+		prep.floatBoxes()
+		for range 12 {
+			p := proof.DyV3{coordinate(), coordinate(), coordinate()}
+			if rng.IntN(2) == 0 {
+				// p in the plane of an axis-aligned triangle, often.
+				v := s.Verts[rng.IntN(len(s.Verts))]
+				axis := rng.IntN(3)
+				p[axis] = v[axis]
+			}
+			pb := pointFloatBox(p)
+			for _, dir := range rayLadder[:6] {
+				axis := rayAxis(dir)
+				var want []int
+				for tri := range s.Tris {
+					if prep.normal[tri][axis].Sign() != 0 && floatApartOff(pb, prep.triBox[tri], axis) {
+						skipped++
+						continue
+					}
+					want = append(want, tri)
+				}
+				visit := prep.axisCast(axis).visit(pb, nil)
+				require.Equal(t, len(want), len(visit), "p %v dir %v: visit", p, dir)
+				for i := range want {
+					require.Equal(t, want[i], visit[i], "p %v dir %v: visit %d", p, dir, i)
+				}
+				exact, _ := castAlongExactPolls(p, dir, prep)
+				polls := 0
+				k := planarKernel{poll: countingPoll(&polls)}
+				got, err := k.castOver(p, pb, true, dir, prep, visit)
+				require.NoError(t, err)
+				require.Equal(t, exact, got, "p %v dir %v", p, dir)
+				require.LessOrEqual(t, polls, len(visit), "p %v dir %v: polls", p, dir)
+				outcomes[exact]++
+			}
+			var castPolls, indexedPolls int
+			want, err := (&planarKernel{poll: countingPoll(&castPolls)}).cast(p, prep)
+			require.NoError(t, err)
+			got, err := (&planarKernel{poll: countingPoll(&indexedPolls)}).castIndexed(p, prep)
+			require.NoError(t, err)
+			require.Equal(t, want, got, "p %v", p)
+			require.LessOrEqual(t, indexedPolls, castPolls+len(rayLadder), "p %v: polls", p)
+		}
+	}
+	require.Positive(t, skipped, "premise: the float pre-test skips some triangles")
+	for _, outcome := range []castResult{castInside, castOutside, castOnBoundary, castAmbiguous} {
+		require.Positive(t, outcomes[outcome], "premise: outcome %d occurs", outcome)
+	}
+}
+
+// TestDeepInsideSkipsPointOutsideSolidBox holds deepInside's outer box test: a
+// point whose float box misses the closed solid's box is not deep after a
+// single poll, and that poll's error is returned.
+func TestDeepInsideSkipsPointOutsideSolidBox(t *testing.T) {
+	t.Parallel()
+	solid := cubeSolid(proof.DyZero(), proof.DyInt(1), 0)
+	prep := preparePlanar(&solid)
+	prep.floatBoxes()
+	p := proof.DyV3{proof.DyInt(2), proof.MustDyOf(0.5), proof.MustDyOf(0.5)}
+	polls := 0
+	k := planarKernel{poll: countingPoll(&polls)}
+	deep, err := k.deepInside(p, pointFloatBox(p), prep, proof.DyZero(), 0, 0)
+	require.NoError(t, err)
+	require.False(t, deep)
+	require.Equal(t, 1, polls)
+
+	stop := fmt.Errorf("stopped")
+	k = planarKernel{poll: func() error { return stop }}
+	deep, err = k.deepInside(p, pointFloatBox(p), prep, proof.DyZero(), 0, 0)
+	require.ErrorIs(t, err, stop)
+	require.False(t, deep)
+}
+
 // TestRayAxisNamesAxisRays holds rayAxis to the ladder: the six axis rays
 // name their axis and every other ray none.
 func TestRayAxisNamesAxisRays(t *testing.T) {

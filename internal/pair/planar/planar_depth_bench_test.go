@@ -59,3 +59,24 @@ func BenchmarkPlanarDeepVertex(b *testing.B) {
 		}
 	}
 }
+
+// BenchmarkPlanarDeepVertexFirstDeep times a call whose first vertex is deep:
+// a subdivided box nested in a larger one, so the scan stops after one vertex.
+func BenchmarkPlanarDeepVertexFirstDeep(b *testing.B) {
+	inner := benchmarkSubdividedBox(8, 0)
+	outer := benchmarkSubdividedBox(32, 0)
+	for i := range outer.Verts {
+		for axis := range 3 {
+			outer.Verts[i][axis] = proof.DyShift(outer.Verts[i][axis], 2)
+		}
+	}
+	margin := proof.DyZero()
+	b.ReportAllocs()
+	b.ResetTimer()
+	for range b.N {
+		deep, err := PlanarDeepVertex(&inner, &outer, margin, benchmarkNoPoll)
+		if err != nil || !deep {
+			b.Fatalf("PlanarDeepVertex returned deep=%v, err=%v", deep, err)
+		}
+	}
+}
