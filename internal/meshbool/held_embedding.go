@@ -708,38 +708,55 @@ func (e *heldEmbedding) cleanPairs(query []int, queryFacet []bool, tree *heldBox
 		return poll()
 	}
 	stack := make([]int, 0, 64)
-	oriented := tree.oriented
+	// The tree's fields are read into locals once: under the race detector
+	// every read through tree is a checked shared read, and the loops below
+	// would repeat them per node and candidate.
+	oriented, nodes, boxes, facets, ceiling := tree.oriented, tree.nodes, tree.boxes, tree.facets, tree.queryCeiling
+	slotBoxes := tree.slotBoxes
+	var leafFacets [heldBoxLeafSize]int
+	var leafBoxes [heldBoxLeafSize][2]r3.Vec
 	for _, i := range query {
 		if !e.facetOpenFloat(i) {
 			if zeroXpt(e.normal(i)) {
 				return false, nil
 			}
 		}
-		box := tree.boxes[i]
-		if len(tree.nodes) == 0 {
+		box := boxes[i]
+		if len(nodes) == 0 {
 			continue
 		}
 		stack = append(stack[:0], 0)
 		for len(stack) > 0 {
 			last := len(stack) - 1
 			nodeIndex := stack[last]
-			node := tree.nodes[nodeIndex]
+			node := nodes[nodeIndex]
 			stack = stack[:last]
 			if err := step(); err != nil {
 				return false, err
 			}
-			if len(tree.queryCeiling) > 0 && tree.queryCeiling[nodeIndex] <= i {
+			if len(ceiling) > 0 && ceiling[nodeIndex] <= i {
 				continue
 			}
 			if !BoxesOverlap(box, node.box) {
 				continue
 			}
 			if node.leafStart >= 0 {
-				for _, j := range tree.facets[node.leafStart : node.leafStart+node.leafCount] {
+				// A leaf's facets and their boxes are copied to the stack in
+				// two block reads; slotBoxes[s] is boxes[facets[s]].
+				n := copy(leafFacets[:], facets[node.leafStart:node.leafStart+node.leafCount])
+				if len(slotBoxes) == len(facets) {
+					copy(leafBoxes[:], slotBoxes[node.leafStart:node.leafStart+n])
+				} else {
+					for k := range n {
+						leafBoxes[k] = boxes[leafFacets[k]]
+					}
+				}
+				for k := range n {
+					j := leafFacets[k]
 					if err := step(); err != nil {
 						return false, err
 					}
-					if j == i || j < i && queryFacet[j] || !BoxesOverlap(box, tree.boxes[j]) {
+					if j == i || j < i && queryFacet[j] || !BoxesOverlap(box, leafBoxes[k]) {
 						continue
 					}
 					if oriented && !BoxesOverlap(e.triBox(i), e.triBox(j)) {
@@ -1270,21 +1287,48 @@ func (e *heldEmbedding) projection(i int) *heldProjectedFacet {
 }
 
 func heldProjectedPoint(p *heldProjectedFacet, axis, vertex int) [2]float64 {
-	axes := [...][2]int{{0, 1}, {2, 0}, {1, 2}}
-	return [2]float64{p.points[vertex][axes[axis][0]], p.points[vertex][axes[axis][1]]}
+	u, v := heldProjectionAxes(axis)
+	return [2]float64{p.points[vertex][u], p.points[vertex][v]}
+}
+
+// heldProjectionAxes is the coordinate pair of axis's plane: (x, y), (z, x) or
+// (y, z). A switch, not a lookup table, so its callers read no shared data.
+func heldProjectionAxes(axis int) (int, int) {
+	switch axis {
+	case 1:
+		return 2, 0
+	case 2:
+		return 1, 2
+	}
+	return 0, 1
 }
 
 // projectionsSeparated proves two triangles disjoint when one coordinate
 // projection has a strict separating edge. A projected contact is necessary
 // for a 3D contact, and Orient2Float abstains near rounding uncertainty.
+//
+// The two cached facets are copied to the stack once. The up to eighteen edge
+// tests then read only those copies and their own arguments, not the shared
+// caches the race detector instruments on every read.
 func (e *heldEmbedding) projectionsSeparated(i, j int) bool {
-	a, b := e.projection(i), e.projection(j)
+	a, b := *e.projection(i), *e.projection(j)
 	for axis := range 3 {
 		if !a.stable[axis] || !b.stable[axis] {
 			continue
 		}
+		// Indexing the copies directly, not through a pointer, keeps these
+		// reads off the race detector: they are reads of this frame.
+		u, v := heldProjectionAxes(axis)
+		pa := [3][2]float64{{a.points[0][u], a.points[0][v]}, {a.points[1][u], a.points[1][v]},
+			{a.points[2][u], a.points[2][v]}}
+		pb := [3][2]float64{{b.points[0][u], b.points[0][v]}, {b.points[1][u], b.points[1][v]},
+			{b.points[2][u], b.points[2][v]}}
 		for k := range 3 {
-			if projectedEdgeSeparates(a, b, axis, k) || projectedEdgeSeparates(b, a, axis, k) {
+			n := (k + 1) % 3
+			if heldEdgeSeparates(a.signs[axis][k], pa[k][0], pa[k][1], pa[n][0], pa[n][1],
+				pb[0][0], pb[0][1], pb[1][0], pb[1][1], pb[2][0], pb[2][1]) ||
+				heldEdgeSeparates(b.signs[axis][k], pb[k][0], pb[k][1], pb[n][0], pb[n][1],
+					pa[0][0], pa[0][1], pa[1][0], pa[1][1], pa[2][0], pa[2][1]) {
 				return true
 			}
 		}
@@ -1292,21 +1336,34 @@ func (e *heldEmbedding) projectionsSeparated(i, j int) bool {
 	return false
 }
 
-func projectedEdgeSeparates(a, b *heldProjectedFacet, axis, edge int) bool {
-	sign := int(a.signs[axis][edge])
+// projectedEdgeSeparates reports whether edge (edge, edge+1) of triangle a,
+// whose cached orientation sign is sign8, leaves every corner of b strictly
+// on the side away from a's third corner, both read in one coordinate plane.
+func projectedEdgeSeparates(sign8 int8, a, b [3][2]float64, edge int) bool {
+	start, end := a[edge], a[(edge+1)%3]
+	return heldEdgeSeparates(sign8, start[0], start[1], end[0], end[1],
+		b[0][0], b[0][1], b[1][0], b[1][1], b[2][0], b[2][1])
+}
+
+// heldEdgeSeparates is projectedEdgeSeparates for the edge from (sx, sy) to
+// (ex, ey) and the corners (p0x, p0y), (p1x, p1y) and (p2x, p2y). Every input
+// is a scalar argument, so the test reads no memory.
+func heldEdgeSeparates(sign8 int8, sx, sy, ex, ey, p0x, p0y, p1x, p1y, p2x, p2y float64) bool {
+	sign := int(sign8)
 	if sign == 0 {
 		return false
 	}
-	start := heldProjectedPoint(a, axis, edge)
-	end := heldProjectedPoint(a, axis, (edge+1)%3)
-	bx, by := end[0]-start[0], end[1]-start[1]
+	bx, by := ex-sx, ey-sy
 	mxEdge, myEdge := proof.Abs(bx), proof.Abs(by)
 	// A nonzero cached sign means Orient2Float admitted both edge
 	// differences. Compute them once for all three queried points and check
 	// only each point's new differences, with the same error bound.
-	for vertex := range 3 {
-		point := heldProjectedPoint(b, axis, vertex)
-		cx, cy := point[0]-start[0], point[1]-start[1]
+	// Indexed, not ranged over values: a range over the array reads it
+	// through a moving pointer, which the race detector instruments; an
+	// index into a local array it does not.
+	corners := [3][2]float64{{p0x, p0y}, {p1x, p1y}, {p2x, p2y}}
+	for k := range corners {
+		cx, cy := corners[k][0]-sx, corners[k][1]-sy
 		mx, my := proof.Abs(cx), proof.Abs(cy)
 		if !(cx == 0 || mx >= 0x1p-300 && mx <= 0x1p250) ||
 			!(cy == 0 || my >= 0x1p-300 && my <= 0x1p250) {
@@ -2164,6 +2221,12 @@ func (e *heldEmbedding) candidates(i int) ([]int, error) {
 		out = append(out, int(j))
 		return nil
 	}
+	// The budget, grid and stamps are read into locals once; under the race
+	// detector each read through e is a checked shared read, repeated here
+	// per candidate. Only a budget with a record limit steps and reserves per
+	// candidate; Reserve is a no-op on any other.
+	budget, stamp, cells, dimY, dimZ := e.budget, e.stamp, e.cells, e.dims[1], e.dims[2]
+	bounded := budget.ReserveFn != nil
 	c0, c1 := e.cellRange(e.triBox(i))
 	for x := c0[0]; x <= c1[0]; x++ {
 		for y := c0[1]; y <= c1[1]; y++ {
@@ -2171,19 +2234,21 @@ func (e *heldEmbedding) candidates(i int) ([]int, error) {
 				if err := e.scanStep(); err != nil {
 					return nil, err
 				}
-				for _, j := range e.cells[(x*e.dims[1]+y)*e.dims[2]+z] {
-					if e.budget.ReserveFn != nil {
-						if err := e.budget.Step(); err != nil {
+				for _, j := range cells[(x*dimY+y)*dimZ+z] {
+					if bounded {
+						if err := budget.Step(); err != nil {
 							return nil, err
 						}
 					}
-					if e.stamp[j] == id {
+					if stamp[j] == id {
 						continue
 					}
-					if err := e.budget.Reserve(1); err != nil {
-						return nil, err
+					if bounded {
+						if err := budget.Reserve(1); err != nil {
+							return nil, err
+						}
 					}
-					e.stamp[j] = id
+					stamp[j] = id
 					out = append(out, int(j))
 				}
 			}
@@ -2235,14 +2300,20 @@ func (e *heldEmbedding) serialClean(query []int, queryFacet []bool) (bool, error
 		if err != nil {
 			return false, err
 		}
+		// pairEmbedded with facet i's box read once: nothing moves during
+		// this scan, so every call would read the same box.
+		budget, box := e.budget, e.triBox(i)
 		for _, j := range cands {
-			if err := e.budget.Step(); err != nil {
+			if err := budget.Step(); err != nil {
 				return false, err
 			}
 			if j == i || j < i && queryFacet[j] {
 				continue
 			}
-			if !e.pairEmbedded(i, j) {
+			if !BoxesOverlap(box, e.triBox(j)) {
+				continue
+			}
+			if !e.pairEmbeddedOverlapping(i, j) {
 				return false, nil
 			}
 		}
