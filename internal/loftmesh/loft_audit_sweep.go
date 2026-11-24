@@ -1026,14 +1026,24 @@ func sweepCandidates(budget *proofbound.WorkBudget, s pairScan, starts []int, co
 		return loftCandidates{}, err
 	}
 	next := slices.Clone(starts[:len(starts)-1])
-	_, _, err := s.visit(budget, math.MaxUint64, func(i, j int) {
+	fill := func(i, j int) {
 		if !keep(i, j) {
 			return
 		}
 		c.js[next[i]] = int32(j)
 		next[i]++
-	})
-	if err != nil {
+	}
+	if tree, ok := s.(treeScan); ok && len(tree.nodes) != 0 {
+		// pairWalker makes visit's walk without the budget, iteratively over
+		// the flat tree: the same pairs and the same unit count. The units
+		// are then stepped at once, so the budget fails at the step visit
+		// would fail at, and a failed fill is discarded either way.
+		w := pairWalker{t: &tree, limit: math.MaxUint64, fn: fill}
+		w.walk(0, 0)
+		if _, err := budget.StepN(w.scanned); err != nil {
+			return loftCandidates{}, err
+		}
+	} else if _, _, err := s.visit(budget, math.MaxUint64, fill); err != nil {
 		return loftCandidates{}, err
 	}
 	for i := range len(starts) - 1 {
