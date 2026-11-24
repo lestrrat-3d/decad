@@ -53,6 +53,8 @@ const (
 	OperationStretch
 	OperationQuarterTurn
 	OperationRefine
+	OperationCutExtrude
+	OperationCutRevolve
 )
 
 // String returns the stable lower-snake token for k.
@@ -111,4 +113,6 @@ var operationKindNames = [...]string{
 	"stretch",
 	"quarter_turn",
 	"refine",
+	"cut_extrude",
+	"cut_revolve",
 }
