@@ -1,6 +1,7 @@
 package decad_test
 
 import (
+	"bytes"
 	"go/ast"
 	"go/parser"
 	"go/token"
@@ -270,8 +271,11 @@ func TestTopoDocumentWriteGuard(t *testing.T) {
 		if err != nil {
 			return err
 		}
+		if !mentionsDocumentWriteName(src) {
+			return nil
+		}
 		fset := token.NewFileSet()
-		f, err := parser.ParseFile(fset, path, src, 0)
+		f, err := parser.ParseFile(fset, path, src, parser.SkipObjectResolution)
 		if err != nil {
 			return err
 		}
@@ -280,6 +284,23 @@ func TestTopoDocumentWriteGuard(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.Empty(t, bad, "only root writes a document node's live set and counters, and only root locks LiveMu for writing")
+}
+
+// mentionsDocumentWriteName reports whether src holds the name of a
+// documentWriteFields field or of LiveMu. documentNodeWrites reports only
+// nodes that name one of them, and a Go identifier is spelled out in its
+// source, so a file without any of the names has nothing to report and is not
+// parsed.
+func mentionsDocumentWriteName(src []byte) bool {
+	if bytes.Contains(src, []byte("LiveMu")) {
+		return true
+	}
+	for name := range documentWriteFields {
+		if bytes.Contains(src, []byte(name)) {
+			return true
+		}
+	}
+	return false
 }
 
 func documentNodeWrites(fset *token.FileSet, f *ast.File) []string {
