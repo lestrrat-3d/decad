@@ -79,9 +79,10 @@ func (s groupedTreeScan) visitRow(budget *proofbound.WorkBudget, i int,
 // the exceed are walkRow's over each group in turn.
 func (s groupedTreeScan) walkRow(i int, limit uint64, fn func(j int)) (uint64, bool) {
 	bi := box6(s.boxes[i])
+	own := s.family[i]
 	var scanned uint64
-	for k := range s.groups {
-		if s.keys[k] >= 0 && s.keys[k] == s.family[i] {
+	for k, key := range s.keys {
+		if key >= 0 && key == own {
 			continue
 		}
 		if s.rootRejects(&bi, i, k) {
@@ -104,9 +105,10 @@ func (s groupedTreeScan) walkRow(i int, limit uint64, fn func(j int)) (uint64, b
 // walkRow passes them to fn.
 func (s groupedTreeScan) walkRowAppend(i int, limit uint64, out []int32) ([]int32, uint64, bool) {
 	bi := box6(s.boxes[i])
+	own := s.family[i]
 	var scanned uint64
-	for k := range s.groups {
-		if s.keys[k] >= 0 && s.keys[k] == s.family[i] {
+	for k, key := range s.keys {
+		if key >= 0 && key == own {
 			continue
 		}
 		if s.rootRejects(&bi, i, k) {
@@ -220,57 +222,60 @@ type crossWalker struct {
 }
 
 // walk visits the node pair (x, y) of a and b and everything below it in
-// cross's order. It reports whether the work limit was exceeded.
+// cross's order. It reports whether the work limit was exceeded. As in
+// pairWalker.walk, the trees' slice headers and the counters are locals, so
+// under -race the loops read only the trees' arrays.
 func (w *crossWalker) walk(x, y int) bool {
 	fa, fb := w.a.flat, w.b.flat
+	nboxA, leftA, rightA, startA, endA, orderA, boxA := fa.nbox, fa.left, fa.right, fa.start, fa.end, fa.order, fa.box
+	nboxB, leftB, rightB, startB, endB, orderB, boxB := fb.nbox, fb.left, fb.right, fb.start, fb.end, fb.order, fb.box
+	fn := w.fn
+	scanned, limit := w.scanned, w.limit
 	stack := make([][2]int32, 1, 2*flatWalkStack)
 	stack[0] = [2]int32{int32(x), int32(y)}
 	for len(stack) > 0 {
 		top := stack[len(stack)-1]
 		stack = stack[:len(stack)-1]
 		x, y := int(top[0]), int(top[1])
-		w.scanned++
-		if w.scanned > w.limit {
+		scanned++
+		if scanned > limit {
+			w.scanned = scanned
 			return true
 		}
-		if !boxes6Overlap(fa.nbox[6*x:6*x+6:6*x+6], fb.nbox[6*y:6*y+6:6*y+6]) {
+		if !boxes6Overlap(nboxA[6*x:6*x+6:6*x+6], nboxB[6*y:6*y+6:6*y+6]) {
 			continue
 		}
-		nx, ny := &w.a.nodes[x], &w.b.nodes[y]
-		if nx.left < 0 && ny.left < 0 {
-			if w.leafPairs(nx, ny) {
-				return true
+		sx, ex, sy, ey := startA[x], endA[x], startB[y], endB[y]
+		lx, ly := leftA[x], leftB[y]
+		if lx < 0 && ly < 0 {
+			// Every member pair of the two leaves, as box positions in order.
+			for ia := sx; ia < ex; ia++ {
+				for ib := sy; ib < ey; ib++ {
+					scanned++
+					if scanned > limit {
+						w.scanned = scanned
+						return true
+					}
+					if !boxes6Overlap(boxA[6*ia:6*ia+6:6*ia+6], boxB[6*ib:6*ib+6:6*ib+6]) {
+						continue
+					}
+					i, j := int(orderA[ia]), int(orderB[ib])
+					if i > j {
+						i, j = j, i
+					}
+					fn(i, j)
+				}
 			}
 			continue
 		}
 		// Pushed in reverse so the first pair pops first.
-		if ny.left < 0 || (nx.left >= 0 && nx.end-nx.start >= ny.end-ny.start) {
-			stack = append(stack, [2]int32{int32(nx.right), int32(y)}, [2]int32{int32(nx.left), int32(y)})
+		if ly < 0 || (lx >= 0 && ex-sx >= ey-sy) {
+			stack = append(stack, [2]int32{rightA[x], int32(y)}, [2]int32{lx, int32(y)})
 			continue
 		}
-		stack = append(stack, [2]int32{int32(x), int32(ny.right)}, [2]int32{int32(x), int32(ny.left)})
+		stack = append(stack, [2]int32{int32(x), rightB[y]}, [2]int32{int32(x), ly})
 	}
-	return false
-}
-
-// leafPairs is walk's leaf-leaf case: every member pair of the two leaves.
-func (w *crossWalker) leafPairs(nx, ny *treeNode) bool {
-	for _, ia := range w.a.order[nx.start:nx.end] {
-		for _, ib := range w.b.order[ny.start:ny.end] {
-			w.scanned++
-			if w.scanned > w.limit {
-				return true
-			}
-			i, j := int(ia), int(ib)
-			if !meshbool.BoxesOverlap(w.a.boxes[i], w.b.boxes[j]) {
-				continue
-			}
-			if i > j {
-				i, j = j, i
-			}
-			w.fn(i, j)
-		}
-	}
+	w.scanned = scanned
 	return false
 }
 
