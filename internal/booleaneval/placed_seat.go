@@ -57,6 +57,8 @@ func placedCarriers(ctx context.Context, body *topo.Body, m *topo.Mesh) ([]bool,
 	for i, f := range placed {
 		index[f] = i
 	}
+	cof := cofactor(linear)
+	exact := exactVerts{verts: m.Vertices}
 	planes := make(map[int]*ratPlane)
 	var out []bool
 	for t, f := range m.Source {
@@ -71,12 +73,12 @@ func placedCarriers(ctx context.Context, body *topo.Body, m *topo.Mesh) ([]bool,
 		if !seen {
 			if _, isPlane := f.Surface.(surfacegeom.Plane); isPlane && unplaced[i].Surface.Kind() == f.Surface.Kind() {
 				if p0, ok := identityPlane(unplaced[i]); ok {
-					pl = p0.image(linear, shift)
+					pl = p0.imageWith(linear, cof, shift)
 				}
 			}
 			planes[i] = pl
 		}
-		if pl == nil || !pl.holds(m.Vertices, m.Triangles[t]) {
+		if pl == nil || !pl.holdsExact(&exact, m.Triangles[t]) {
 			continue
 		}
 		if out == nil {
@@ -107,14 +109,28 @@ func identityPlane(f *topo.Face) (ratPlane, bool) {
 	return ratPlane{o: o, n: ratCross3(u, v)}, true
 }
 
-// ratPlane is the plane through o normal to n, exact rationals.
+// ratPlane is the plane through o normal to n, exact rationals. d is n·o
+// when image built the plane, and nil otherwise.
 type ratPlane struct {
 	o, n [3]*big.Rat
+	d    *big.Rat
 }
 
 // image is the plane's exact image under x ↦ L·x + t: through L·o + t, normal to (L·u)×(L·v) for any u, v spanning
 // it, which is cof(L)·n. nil when L maps the plane to no plane.
 func (p ratPlane) image(linear [3][3]*big.Rat, shift [3]*big.Rat) *ratPlane {
+	return p.imageWith(linear, cofactor(linear), shift)
+}
+
+// cofactor is cof(L): column k is the cross product of the other two columns of L, in cyclic order. The image of
+// every plane under one placement shares it.
+func cofactor(linear [3][3]*big.Rat) [3][3]*big.Rat {
+	col := func(k int) [3]*big.Rat { return [3]*big.Rat{linear[0][k], linear[1][k], linear[2][k]} }
+	return [3][3]*big.Rat{ratCross3(col(1), col(2)), ratCross3(col(2), col(0)), ratCross3(col(0), col(1))}
+}
+
+// imageWith is image with cof(L) given as c.
+func (p ratPlane) imageWith(linear, c [3][3]*big.Rat, shift [3]*big.Rat) *ratPlane {
 	var o [3]*big.Rat
 	for i := range 3 {
 		s := new(big.Rat).Set(shift[i])
@@ -123,10 +139,6 @@ func (p ratPlane) image(linear [3][3]*big.Rat, shift [3]*big.Rat) *ratPlane {
 		}
 		o[i] = s
 	}
-	// cof(L)·n, the direction of L⁻ᵀ·n: column k of cof(L) is the cross product of the other two columns of L, in
-	// cyclic order.
-	col := func(k int) [3]*big.Rat { return [3]*big.Rat{linear[0][k], linear[1][k], linear[2][k]} }
-	c := [3][3]*big.Rat{ratCross3(col(1), col(2)), ratCross3(col(2), col(0)), ratCross3(col(0), col(1))}
 	var n [3]*big.Rat
 	for i := range 3 {
 		s := new(big.Rat)
@@ -138,25 +150,60 @@ func (p ratPlane) image(linear [3][3]*big.Rat, shift [3]*big.Rat) *ratPlane {
 	if n[0].Sign() == 0 && n[1].Sign() == 0 && n[2].Sign() == 0 {
 		return nil
 	}
-	return &ratPlane{o: o, n: n}
+	d := new(big.Rat)
+	for i := range 3 {
+		d.Add(d, new(big.Rat).Mul(n[i], o[i]))
+	}
+	return &ratPlane{o: o, n: n, d: d}
 }
 
-// holds reports whether every corner of triangle tri lies exactly in the plane.
-func (p *ratPlane) holds(verts []r3.Vec, tri [3]int) bool {
+// holdsExact reports whether every corner of triangle tri lies exactly in a
+// plane image built, reading each corner's exact value once per mesh through
+// exact: n·e = d is n·(e − o) = 0.
+func (p *ratPlane) holdsExact(exact *exactVerts, tri [3]int) bool {
+	s, term := new(big.Rat), new(big.Rat)
 	for _, v := range tri {
-		e, ok := massmoment.ExactVec(verts[v])
+		e, ok := exact.at(v)
 		if !ok {
 			return false
 		}
-		s := new(big.Rat)
+		s.SetInt64(0)
 		for i := range 3 {
-			s.Add(s, new(big.Rat).Mul(p.n[i], new(big.Rat).Sub(e[i], p.o[i])))
+			s.Add(s, term.Mul(p.n[i], e[i]))
 		}
-		if s.Sign() != 0 {
+		if s.Cmp(p.d) != 0 {
 			return false
 		}
 	}
 	return true
+}
+
+// exactVerts reads mesh vertices as exact rationals on first use and keeps
+// them for the other triangles that share each vertex.
+type exactVerts struct {
+	verts []r3.Vec
+	vals  [][3]*big.Rat
+	state []int8 // 0 unread, 1 exact, -1 not exactly representable
+}
+
+func (x *exactVerts) at(v int) ([3]*big.Rat, bool) {
+	if x.state == nil {
+		x.vals = make([][3]*big.Rat, len(x.verts))
+		x.state = make([]int8, len(x.verts))
+	}
+	switch x.state[v] {
+	case 1:
+		return x.vals[v], true
+	case -1:
+		return [3]*big.Rat{}, false
+	}
+	e, ok := massmoment.ExactVec(x.verts[v])
+	if !ok {
+		x.state[v] = -1
+		return [3]*big.Rat{}, false
+	}
+	x.vals[v], x.state[v] = e, 1
+	return e, true
 }
 
 func ratCross3(a, b [3]*big.Rat) [3]*big.Rat {
