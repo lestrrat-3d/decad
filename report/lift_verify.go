@@ -74,7 +74,10 @@ func LiftVerifyReport[B1 comparable, F1 any, B2 comparable, F2 any](l *RefLift[B
 			return ClearanceOf[B2]{A: l.Body(c.A), B: l.Body(c.B), Gap: c.Gap}
 		}),
 		Diagnostics: l.diagnostics(r.Diagnostics),
-		Status:      r.Status,
+		SkippedPairs: liftSlice(r.SkippedPairs, func(p DiagnosticPairOf[B1]) DiagnosticPairOf[B2] {
+			return DiagnosticPairOf[B2]{A: l.Body(p.A), B: l.Body(p.B)}
+		}),
+		Status: r.Status,
 	}
 }
 

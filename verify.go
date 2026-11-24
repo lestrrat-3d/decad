@@ -83,19 +83,61 @@ func WithClearances() VerifyOption {
 	return verifyOptionValue{verifyoption.WithClearances()}
 }
 
-func resolveVerifyOptions(opts []VerifyOption) (verifyConfig, error) {
-	encoded := make([]verifyoption.Token, len(opts))
-	for i, opt := range opts {
-		if opt == nil {
-			continue
-		}
-		value, ok := opt.(verifyOptionValue)
-		if !ok {
+// WithSkippedPair leaves the unordered pair of a and b out of Verify's
+// pairwise partition, for a caller that proves that pair by other means, such
+// as ContactPair, or whose bodies share space by design (verification §1.3).
+// Verify proves nothing about a skipped pair: it emits no Interference,
+// Clearance or pair Diagnostic for it, the pair adds nothing to Status, and
+// Report.SkippedPairs names it. Each body's own checks still run. a and b
+// MUST be distinct, non-nil live bodies of the verified document; Verify
+// rejects any other pair before it does any work, with ErrDegenerate,
+// ErrForeignBody or ErrRetiredBody. Naming a pair more than once, in either
+// order, skips it once.
+func WithSkippedPair(a, b *Body) VerifyOption {
+	return skippedPairOption{a: a, b: b}
+}
+
+// skippedPairOption carries body handles, which internal/verifyoption cannot
+// name: the root gate checks them against the document and hands their nodes
+// to internal/verifyrun.
+type skippedPairOption struct{ a, b *Body }
+
+func (skippedPairOption) verifyOption() {}
+
+// resolveVerifyOptions validates opts for a Verify call on d. It stays in
+// root because WithSkippedPair's bodies are root handles: their document and
+// liveness checks (Document.requireLive) read the document's live set.
+func (d *Document) resolveVerifyOptions(opts []VerifyOption) (verifyConfig, error) {
+	encoded := make([]verifyoption.Token, 0, len(opts))
+	var skipped []verifyoption.SkippedPair
+	for _, opt := range opts {
+		switch value := opt.(type) {
+		case nil:
+			// verifyoption.Resolve rejects the nil option.
+			encoded = append(encoded, nil)
+		case verifyOptionValue:
+			encoded = append(encoded, value.encoded)
+		case skippedPairOption:
+			if value.a == value.b && value.a != nil {
+				return verifyConfig{}, fmt.Errorf("%w: a skipped pair needs two distinct bodies", ErrDegenerate)
+			}
+			if err := d.requireLive(value.a); err != nil {
+				return verifyConfig{}, err
+			}
+			if err := d.requireLive(value.b); err != nil {
+				return verifyConfig{}, err
+			}
+			skipped = append(skipped, verifyoption.SkippedPair{A: bodyNode(value.a), B: bodyNode(value.b)})
+		default:
 			return verifyConfig{}, fmt.Errorf("%w: the verification option is not a decad option (%T)", ErrDegenerate, opt)
 		}
-		encoded[i] = value.encoded
 	}
-	return verifyoption.Resolve(encoded)
+	cfg, err := verifyoption.Resolve(encoded)
+	if err != nil {
+		return verifyConfig{}, err
+	}
+	cfg.SkippedPairs = skipped
+	return cfg, nil
 }
 
 // Verify is one non-mutating call over the live model: solidity and boundary
@@ -129,7 +171,7 @@ func (d *Document) Verify(ctx context.Context, opts ...VerifyOption) (*Report, e
 	if d == nil {
 		return nil, fmt.Errorf(`%w: a nil document owns no model`, ErrDegenerate)
 	}
-	cfg, err := resolveVerifyOptions(opts)
+	cfg, err := d.resolveVerifyOptions(opts)
 	if err != nil {
 		return nil, err
 	}

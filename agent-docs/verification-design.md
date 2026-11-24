@@ -34,6 +34,7 @@ type Report struct {
     Clearances    []Clearance    // WithClearances(): minimum gap between disjoint pairs
     Diagnostics   []Diagnostic   // the flattened, canonical inventory: body diagnostics in body order,
                                  // then pair diagnostics in pair order, each finding once (§1.1, §6)
+    SkippedPairs  []DiagnosticPair // WithSkippedPair(): the pairs left out of pair work, in pair order (§1.3)
     Status        Status         // Unverified on a zero value; Verify always returns a decided status
 }
 
@@ -995,6 +996,38 @@ when the context is already canceled. The document remains unchanged, and the
 caller must not treat an interrupted call as a verification result. The context
 is the public work control; verification adds no separate work-limit or
 progress API.
+
+### 1.3 Pairs the caller proves elsewhere
+
+`WithSkippedPair(a, b *Body)` leaves one unordered body pair out of the
+pairwise partition. It serves a caller that proves the pair by other means,
+for example `ContactPair` on a bolt seated in its pocket, or whose two bodies
+share space by design, for example a meshing gear pair or a bolt threaded
+through its nut. Without it such a caller pays for a proof whose result it
+discards, and on a large assembly that proof can dominate the call.
+
+- **Input.** `a` and `b` are distinct, non-nil, live bodies of the verified
+  document. Any other pair is refused during option validation, before any
+  work and before the context is consulted: `ErrDegenerate` for a nil body
+  or one body named twice, `ErrForeignBody` and `ErrRetiredBody` as
+  `Document.requireLive` reports them. The option may repeat. A pair named
+  more than once, in either order, is skipped once.
+- **Behavior.** A skipped pair gets no pair job (interference §2), so no box
+  test, analytic or planar relation, history proof, mesh or clearance
+  measurement runs for it, and no mesh is prepared for it. It emits no
+  `Interference` or `Clearance` row and no pair `Diagnostic`, including
+  `DiagUndecidedClearance` under `WithClearances()`, and adds nothing to
+  `Status`. Each body's own checks run unchanged.
+- **Report.** `Report.SkippedPairs` names every skipped pair once, in the
+  `i < j` pair order of the live bodies, with `A` the earlier body. It is nil
+  when the call skipped no pair, so a report that skips nothing is unchanged.
+  A `Sound` report with skipped pairs proves nothing about those pairs; a
+  caller that gates on `Passed()` owns their proof.
+
+The skip is not a waiver of a finding: it names pairs before any proof runs,
+and it does not depend on what the proof would have found. A caller that
+wants a pair's overlap reported but tolerated keeps the pair and reads its
+row.
 
 ## 2. Tolerance — what "beyond the caller's tolerance" means
 

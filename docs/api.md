@@ -504,6 +504,7 @@ report has an undecided-clearance diagnostic and no clearance row.
 | `decad.WithPullDirection` | Finds undercuts along a mold pull direction. |
 | `decad.WithConcaveRadius` | Reports concave corner radii. |
 | `decad.WithClearances` | Reports the gaps between bodies. |
+| `decad.WithSkippedPair` | Leaves one body pair out of the pair checks; `Report.SkippedPairs` lists it. |
 
 `decad.Status` is the verdict, from best to worst: `decad.Sound`, `decad.Suspect`, `decad.Violating`,
 `decad.Interfering`, `decad.Unsound`. `decad.Unverified` means nothing was decided.
