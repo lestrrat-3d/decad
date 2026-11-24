@@ -111,10 +111,11 @@ func surveyPublication(in surveyResults) verifypublish.SurveyPublication[*topo.B
 
 // publishReport builds the document report from its already decided rows.
 func publishReport(req vocab.VerifyRequest, bodies []*BodyReport, interferences []Interference,
-	clearances []Clearance, diagnostics []Diagnostic, status vocab.Status) *Report {
+	clearances []Clearance, diagnostics []Diagnostic, skipped []vocab.DiagnosticPairOf[*topo.Body],
+	status vocab.Status) *Report {
 	return &Report{
 		Request: req, Bodies: bodies, Interferences: interferences,
-		Clearances: clearances, Diagnostics: diagnostics, Status: status,
+		Clearances: clearances, Diagnostics: diagnostics, SkippedPairs: skipped, Status: status,
 	}
 }
 

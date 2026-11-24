@@ -20,6 +20,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/tolerance"
 	"github.com/lestrrat-3d/decad/internal/topo"
+	"github.com/lestrrat-3d/decad/internal/verifyoption"
 )
 
 // This file is Verify's pair partition (agent-docs/interference-design.md §2):
@@ -49,7 +50,7 @@ type verifyPairOutcome struct {
 // report: separated boxes settle it and no gap was asked for, or both
 // operands are sheets with separated boxes. The context is polled once per
 // pair, as the pair walk always has.
-func verifyPairJobs(ctx context.Context, bodies []*BodyReport, cfg verifyConfig) ([]verifyPairJob, error) {
+func verifyPairJobs(ctx context.Context, bodies []*BodyReport, cfg verifyConfig, skip pairSkips) ([]verifyPairJob, error) {
 	var jobs []verifyPairJob
 	for i := range bodies {
 		for j := i + 1; j < len(bodies); j++ {
@@ -57,6 +58,9 @@ func verifyPairJobs(ctx context.Context, bodies []*BodyReport, cfg verifyConfig)
 				return nil, err
 			}
 			a, b := bodies[i].Body, bodies[j].Body
+			if skip.has(a, b) {
+				continue
+			}
 			boxProven := measurement.BoxesDisjoint(bodies[i].Bounds.Box, bodies[j].Bounds.Box)
 			if boxProven {
 				sheetPair := a.Kind == topo.BodySheet && b.Kind == topo.BodySheet
@@ -68,6 +72,44 @@ func verifyPairJobs(ctx context.Context, bodies []*BodyReport, cfg verifyConfig)
 		}
 	}
 	return jobs, nil
+}
+
+// pairSkips is the set of unordered body pairs the caller left out of pair
+// work (verification §1.3), keyed in both orders.
+type pairSkips map[[2]*topo.Body]struct{}
+
+func newPairSkips(pairs []verifyoption.SkippedPair) pairSkips {
+	if len(pairs) == 0 {
+		return nil
+	}
+	skip := make(pairSkips, 2*len(pairs))
+	for _, p := range pairs {
+		skip[[2]*topo.Body{p.A, p.B}] = struct{}{}
+		skip[[2]*topo.Body{p.B, p.A}] = struct{}{}
+	}
+	return skip
+}
+
+func (s pairSkips) has(a, b *topo.Body) bool {
+	_, ok := s[[2]*topo.Body{a, b}]
+	return ok
+}
+
+// inOrder lists the skipped pairs among bodies once each, in the i < j pair
+// order of bodies, or nil when nothing was skipped.
+func (s pairSkips) inOrder(bodies []*topo.Body) []vocab.DiagnosticPairOf[*topo.Body] {
+	if len(s) == 0 {
+		return nil
+	}
+	out := []vocab.DiagnosticPairOf[*topo.Body]{}
+	for i, a := range bodies {
+		for _, b := range bodies[i+1:] {
+			if s.has(a, b) {
+				out = append(out, vocab.DiagnosticPairOf[*topo.Body]{A: a, B: b})
+			}
+		}
+	}
+	return out
 }
 
 // proveVerifyPair runs agent-docs/interference-design.md §2's walk over one pair:

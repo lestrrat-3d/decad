@@ -70,6 +70,10 @@ measured gap (`Sound`, a `Clearance` row under `WithClearances()`), or
 `DiagUnsupportedPairSheet` naming the pair and no row when the procedure
 cannot settle it, including every sheet-sheet pair.
 
+A pair the caller named with `WithSkippedPair` gets no job at all
+(verification §1.3): none of the steps below runs for it, and it emits no row
+or diagnostic.
+
 For each pair:
 
 1. Check `ctx`.

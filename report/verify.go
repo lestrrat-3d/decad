@@ -158,14 +158,18 @@ type BodyReportOf[BodyT comparable, FaceT any, CellT any] struct {
 // the whole call: body diagnostics in body order, then pair diagnostics in
 // pair order, each finding present exactly once (proposal §10, §11); it is
 // empty EXACTLY when Status == Sound, and Status is the worst
-// DiagnosticOf.Status in it. The zero Report is Unverified and carries no
-// verdict.
+// DiagnosticOf.Status in it. SkippedPairs names, once each and in pair
+// order with A the earlier body, every pair the caller left out of pair work
+// (verification §1.3); it is nil when the call skipped none. Verify proves
+// nothing about those pairs, so Status says nothing about them. The zero
+// Report is Unverified and carries no verdict.
 type ReportOf[BodyT comparable, FaceT any, CellT any] struct {
 	Request       VerifyRequest
 	Bodies        []*BodyReportOf[BodyT, FaceT, CellT]
 	Interferences []InterferenceOf[BodyT]
 	Clearances    []ClearanceOf[BodyT]
 	Diagnostics   []DiagnosticOf[BodyT, CellT]
+	SkippedPairs  []DiagnosticPairOf[BodyT]
 	Status        Status
 }
 

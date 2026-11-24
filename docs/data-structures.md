@@ -200,7 +200,7 @@ configuration option.
 
 | Type | Kind | Holds | Obtained from |
 |---|---|---|---|
-| `decad.Report` | struct | Request, body reports, interferences, clearances, diagnostics and status. | `Document.Verify` |
+| `decad.Report` | struct | Request, body reports, interferences, clearances, diagnostics, skipped pairs and status. | `Document.Verify` |
 | `decad.VerifyRequest` | struct | The effective settings of one verification call. | `Report.Request` |
 | `decad.BodyReport` | struct | One body's status, validity, topology counts and survey results. | `Report.ForBody` |
 | `decad.Status` | enum | `decad.Sound`, `decad.Suspect`, `decad.Violating`, `decad.Interfering`, `decad.Unsound` or `decad.Unverified`. | `Report.Status` |
@@ -420,8 +420,8 @@ faces the triangles come from.
 ## Reports
 
 `Document.Verify` returns a `*decad.Report`. The report holds the effective `Request`, one `decad.BodyReport` per body,
-the `Interferences` and `Clearances` between bodies, the `Diagnostics` that explain any verdict, and an overall
-`decad.Status`. A `decad.BodyReport` holds that body's `Status`, `Validity`, `Topology` (lump and void counts), area,
+the `Interferences` and `Clearances` between bodies, the `Diagnostics` that explain any verdict, the
+`SkippedPairs` the caller left out with `decad.WithSkippedPair`, and an overall `decad.Status`. A `decad.BodyReport` holds that body's `Status`, `Validity`, `Topology` (lump and void counts), area,
 bounds and the optional wall, undercut and concave-radius results. A `decad.Diagnostic` names a
 `decad.DiagnosticCode`, the body or pair it concerns, the observed and required values, and a message.
 

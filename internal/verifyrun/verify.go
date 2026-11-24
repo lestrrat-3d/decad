@@ -98,7 +98,8 @@ func Run(ctx context.Context, h Hooks, bodies []*topo.Body, cfg verifyConfig) (*
 	// see proveVerifyPair (internal/verifyrun/pairs.go) and agent-docs/surface-design.md §9.3.
 	// The pairs box separation does not finish are proven on a bounded
 	// worker pool and folded back in pair order.
-	jobs, err := verifyPairJobs(ctx, pairBodies, cfg)
+	skip := newPairSkips(cfg.SkippedPairs)
+	jobs, err := verifyPairJobs(ctx, pairBodies, cfg, skip)
 	if err != nil {
 		return nil, err
 	}
@@ -130,7 +131,8 @@ func Run(ctx context.Context, h Hooks, bodies []*topo.Body, cfg verifyConfig) (*
 	}
 
 	report.Status = aggregateStatus(report, undecided)
-	return publishReport(req, report.Bodies, report.Interferences, report.Clearances, report.Diagnostics, report.Status), nil
+	return publishReport(req, report.Bodies, report.Interferences, report.Clearances, report.Diagnostics,
+		skip.inOrder(bodies), report.Status), nil
 }
 
 // bodyCheckWorkers limits the pool to the measured prism wall-survey path.

@@ -8,6 +8,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 	"github.com/lestrrat-go/option/v3"
@@ -135,6 +136,16 @@ type Config struct {
 	Pull          *r3.Vec
 	ConcaveRadius bool
 	Clearances    bool
+	// SkippedPairs are the body pairs WithSkippedPair named, validated by the
+	// root Verify gate as distinct live bodies of the verified document.
+	// Their order and orientation carry no meaning.
+	SkippedPairs []SkippedPair
+}
+
+// SkippedPair is one unordered body pair Verify leaves out of pair work
+// (agent-docs/verification-design.md §1.3).
+type SkippedPair struct {
+	A, B *topo.Body
 }
 
 // Resolve folds and validates the options. Every parameter

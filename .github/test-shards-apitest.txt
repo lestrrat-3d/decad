@@ -3206,3 +3206,6 @@
 12	0.00	TestCutExtrudeRefusalLeavesTargetLive
 12	0.00	TestCutRevolveGroove
 12	0.00	TestCutExtrudeSeveralProfilesOneFeature
+12	0.00	TestVerifySkippedPairReportsNothingForThePair
+12	0.00	TestVerifySkippedPairOmitsItsClearance
+12	0.00	TestVerifySkippedPairRejectsInvalidPairs
