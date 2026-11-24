@@ -210,42 +210,61 @@ func failAfter(n int, count *int, stop error) func() error {
 // axis ray.
 const deepVertexQueryPolls = 8
 
-// requireDeepVertexMatches holds PlanarDeepVertex to the exact scan over every
-// triangle on one configuration: the same answer with no error, at most
-// deepVertexQueryPolls more polls per vertex than the scan, and a budget that
-// ends the call at its first poll, one before its last or its last returns
-// that error and no deep vertex. It returns the answer. Two closed solids,
-// which PlanarDeepVertex requires, are held to the plain scan
-// (planarDeepVertexExactScan); loose triangles, which exercise the pre-tests
-// and casts on more configurations, to the scan with the outer box rule.
+// requireDeepVertexMatches holds PlanarDeepVertex and planarDeepVertex with
+// every vertex read through the box trees to the exact scan over every
+// triangle on one configuration, whose solids hold at most
+// deepVertexScanFirst vertices each. PlanarDeepVertex then reads every vertex
+// by the plain scan: the same answer and polls. The tree reads give the same
+// answer with at most deepVertexQueryPolls more polls per vertex. Two closed
+// solids, which PlanarDeepVertex requires, are held to the plain scan; loose
+// triangles, which exercise the pre-tests and casts on more configurations,
+// to the scan with the outer box rule. On either path a budget that ends the
+// call at its first poll, one before its last or its last returns that error
+// and no deep vertex. It returns the answer.
 func requireDeepVertexMatches(t *testing.T, a, b *PlanarSolid, margin proof.Dyadic, msg string) bool {
 	t.Helper()
+	require.LessOrEqual(t, len(a.Verts), deepVertexScanFirst, msg)
+	require.LessOrEqual(t, len(b.Verts), deepVertexScanFirst, msg)
 	closed := true
 	for _, s := range []*PlanarSolid{a, b} {
 		ok, err := CheckPlanarSolid(s, func() error { return nil })
 		require.NoError(t, err, msg)
 		closed = closed && ok
 	}
-	var wantPolls, gotPolls int
-	want, wantErr := planarDeepVertexExactScan(preparePlanar(a), preparePlanar(b), margin, !closed, countingPoll(&wantPolls))
-	got, gotErr := PlanarDeepVertex(a, b, margin, countingPoll(&gotPolls))
-	if want != got || wantErr != nil || gotErr != nil ||
-		gotPolls > wantPolls+deepVertexQueryPolls*(len(a.Verts)+len(b.Verts)) {
-		t.Fatalf("%s: closed %v, deep %v/%v, errors %v/%v, polls %v/%v (scan/indexed)",
-			msg, closed, want, got, wantErr, gotErr, wantPolls, gotPolls)
-	}
+	var scanPolls, outerPolls int
+	scan, scanErr := planarDeepVertexExactScan(preparePlanar(a), preparePlanar(b), margin, false, countingPoll(&scanPolls))
+	outer, outerErr := planarDeepVertexExactScan(preparePlanar(a), preparePlanar(b), margin, !closed, countingPoll(&outerPolls))
+	require.NoError(t, scanErr, msg)
+	require.NoError(t, outerErr, msg)
+
 	stop := errors.New("budget")
-	for _, limit := range []int{1, gotPolls - 1, gotPolls} {
-		if limit < 1 {
-			continue
+	for _, scanFirst := range []int{0, deepVertexScanFirst} {
+		var polls int
+		got, err := planarDeepVertex(a, b, margin, scanFirst, countingPoll(&polls))
+		want, wantPolls := outer, outerPolls+deepVertexQueryPolls*(len(a.Verts)+len(b.Verts))
+		if scanFirst > 0 {
+			want, wantPolls = scan, scanPolls
 		}
-		var count int
-		deep, err := PlanarDeepVertex(a, b, margin, failAfter(limit, &count, stop))
-		if deep || !errors.Is(err, stop) || count != limit {
-			t.Fatalf("%s limit %d of %d: deep %v, error %v, polls %d", msg, limit, gotPolls, deep, err, count)
+		if want != got || err != nil || polls > wantPolls || (scanFirst > 0 && polls != wantPolls) {
+			t.Fatalf("%s scan first %d: closed %v, deep %v/%v, error %v, polls %v/%v (scan/read)",
+				msg, scanFirst, closed, want, got, err, wantPolls, polls)
+		}
+		for _, limit := range []int{1, polls - 1, polls} {
+			if limit < 1 {
+				continue
+			}
+			var count int
+			deep, err := planarDeepVertex(a, b, margin, scanFirst, failAfter(limit, &count, stop))
+			if deep || !errors.Is(err, stop) || count != limit {
+				t.Fatalf("%s scan first %d limit %d of %d: deep %v, error %v, polls %d",
+					msg, scanFirst, limit, polls, deep, err, count)
+			}
 		}
 	}
-	return want
+	if !closed {
+		return scan
+	}
+	return outer
 }
 
 // TestPlanarDeepVertexFloatBoxesKeepAnswers holds PlanarDeepVertex, whose
