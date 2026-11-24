@@ -182,43 +182,46 @@ func saddleWedgeOf(R, r, d float64) saddleWedge {
 	}
 }
 
-// saddleGrid sums f over an n × m midpoint grid in (θ, s) of piece p, with
-// the cell's two edge vectors.
-func saddleGrid(p func(theta, u float64) r3.Vec, f func(mid, dt, du r3.Vec) float64) float64 {
+// saddleGrid sums, over an n × m midpoint grid in (θ, s) of piece p, each
+// cell's flux mid·(dt × du) and area |dt × du|, with dt and du the cell's two
+// edge vectors. Neighbouring cells share corners, so each row of corners is
+// evaluated once and carried to the next row.
+func saddleGrid(p func(theta, u float64) r3.Vec) (float64, float64) {
 	const n, m = 4000, 40
-	total := 0.0
+	lower, upper := make([]r3.Vec, m+1), make([]r3.Vec, m+1)
+	for j := range m + 1 {
+		lower[j] = p(0, float64(j)/m)
+	}
+	flux, area := 0.0, 0.0
 	for i := range n {
 		t0, t1 := 2*math.Pi*float64(i)/n, 2*math.Pi*float64(i+1)/n
+		for j := range m + 1 {
+			upper[j] = p(t1, float64(j)/m)
+		}
 		for j := range m {
 			u0, u1 := float64(j)/m, float64(j+1)/m
-			p00, p10, p01, p11 := p(t0, u0), p(t1, u0), p(t0, u1), p(t1, u1)
+			p00, p10, p01, p11 := lower[j], upper[j], lower[j+1], upper[j+1]
 			dt := p10.Sub(p00).Add(p11.Sub(p01)).Scale(0.5)
 			du := p01.Sub(p00).Add(p11.Sub(p10)).Scale(0.5)
-			total += f(p((t0+t1)/2, (u0+u1)/2), dt, du)
+			normal := dt.Cross(du)
+			flux += p((t0+t1)/2, (u0+u1)/2).Dot(normal)
+			area += normal.Len()
 		}
+		lower, upper = upper, lower
 	}
-	return total
+	return flux, area
 }
 
-// saddleWedgeVolume is the volume one mouth's chamfer removes, by the
-// divergence theorem over the wedge's closed boundary: the flux of p/3
-// through each piece.
-func saddleWedgeVolume(R, r, d float64) float64 {
+// saddleWedgeMeasures returns the volume and the area one mouth's chamfer
+// removes. The volume follows from the divergence theorem over the wedge's
+// closed boundary: the flux of p/3 through each piece. The area is the shaft
+// wall from the seam to O and the bore wall from the seam to B, less the band.
+func saddleWedgeMeasures(R, r, d float64) (float64, float64) {
 	w := saddleWedgeOf(R, r, d)
-	flux := func(p func(theta, u float64) r3.Vec) float64 {
-		return saddleGrid(p, func(mid, dt, du r3.Vec) float64 { return mid.Dot(dt.Cross(du)) })
-	}
-	return math.Abs(flux(w.band)-flux(w.outer)+flux(w.bore)) / 3
-}
-
-// saddleAreaChange is the area one mouth's chamfer removes: the shaft wall
-// from the seam to O and the bore wall from the seam to B, less the band.
-func saddleAreaChange(R, r, d float64) float64 {
-	w := saddleWedgeOf(R, r, d)
-	area := func(p func(theta, u float64) r3.Vec) float64 {
-		return saddleGrid(p, func(_, dt, du r3.Vec) float64 { return dt.Cross(du).Len() })
-	}
-	return area(w.outer) + area(w.bore) - area(w.band)
+	bandFlux, bandArea := saddleGrid(w.band)
+	outerFlux, outerArea := saddleGrid(w.outer)
+	boreFlux, boreArea := saddleGrid(w.bore)
+	return math.Abs(bandFlux-outerFlux+boreFlux) / 3, outerArea + boreArea - bandArea
 }
 
 // saddleWorld maps a point of the fixed pose to the world for the mouth on
@@ -270,7 +273,8 @@ func TestRetainedSaddleChamfer(t *testing.T) {
 			require.NoError(t, err)
 			after, err := out.Volume()
 			require.NoError(t, err)
-			want := 2 * saddleWedgeVolume(saddleR, tc.r, tc.d)
+			wedgeVolume, wedgeArea := saddleWedgeMeasures(saddleR, tc.r, tc.d)
+			want := 2 * wedgeVolume
 			removed := before.Value.Base() - after.Value.Base()
 			require.InDelta(t, want, removed, before.Bound.Base()+after.Bound.Base(),
 				"the chamfer removes both wedges")
@@ -282,7 +286,7 @@ func TestRetainedSaddleChamfer(t *testing.T) {
 			require.NoError(t, err)
 			areaAfter, err := out.Area()
 			require.NoError(t, err)
-			wantArea := 2 * saddleAreaChange(saddleR, tc.r, tc.d)
+			wantArea := 2 * wedgeArea
 			areaBounds := areaBefore.Bound.Base() + areaAfter.Bound.Base()
 			require.InDelta(t, wantArea, areaBefore.Value.Base()-areaAfter.Value.Base(), areaBounds,
 				"the chamfer trades both walls' strips for the bands")
@@ -395,7 +399,7 @@ func TestRetainedSaddleChamferRefusals(t *testing.T) {
 func TestRetainedSaddleChamferExtrudeShaft(t *testing.T) {
 	t.Parallel()
 	const r, d = 3.0, 1.5
-	wedge := saddleWedgeVolume(saddleR, r, d)
+	wedge, _ := saddleWedgeMeasures(saddleR, r, d)
 	signs := []float64{1, -1}
 	if raceDetector {
 		signs = []float64{-1}
