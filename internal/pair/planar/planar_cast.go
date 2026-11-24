@@ -206,27 +206,40 @@ func pointInFacetBoxedEdges(p *planarPrep, t int, x hpoint, xb floatBox, boxed b
 		return false
 	}
 	tri := p.s.Tris[t]
-	if p.planeSign(t, x) != 0 {
-		return false
-	}
 	planes, boxes := p.sidePlanes(t)
-	weightSign := x.w.Sign()
-	for i := range 3 {
-		sign, decided := 0, false
-		if boxed && weightSign != 0 {
+	// The answer is the conjunction of the plane test and the three side
+	// tests, so their order does not change it. The float side signs run
+	// first: they reject most boxed candidates, coplanar slivers around a
+	// contact point, before the exact plane sign.
+	var signs [3]int
+	var decided [3]bool
+	if weightSign := x.w.Sign(); boxed && weightSign != 0 {
+		for i := range 3 {
 			// The float test uses x/w; the exact homogeneous sign includes w.
-			sign, decided = floatDotSign(xb, p.vertBox[tri[i]], boxes[i])
+			sign, ok := floatDotSign(xb, p.vertBox[tri[i]], boxes[i])
+			if !ok {
+				continue
+			}
 			if weightSign < 0 {
 				sign = -sign
 			}
+			if sign < 0 {
+				return false
+			}
+			signs[i], decided[i] = sign, true
 		}
-		if !decided {
-			sign = proof.DvDot(x.from(p.s.Verts[tri[i]]), planes[i]).Sign()
+	}
+	if p.planeSign(t, x) != 0 {
+		return false
+	}
+	for i := range 3 {
+		if !decided[i] {
+			signs[i] = proof.DvDot(x.from(p.s.Verts[tri[i]]), planes[i]).Sign()
 		}
 		if edges != nil {
-			edges[i] = sign
+			edges[i] = signs[i]
 		}
-		if sign < 0 {
+		if signs[i] < 0 {
 			return false
 		}
 	}
