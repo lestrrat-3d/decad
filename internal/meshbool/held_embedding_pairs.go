@@ -81,6 +81,14 @@ func (e *heldEmbedding) cleanSelfPairs(tasks []heldNodePair, tree *heldBoxTree) 
 		remaining = interval
 		return poll()
 	}
+	// The tree's fields and each visited node are read into locals once: under
+	// the race detector every read through tree or a node pointer is a checked
+	// shared read, and the leaf loops below would repeat them per candidate.
+	nodes, facets, slotBoxes, slotWorld, oriented := tree.nodes, tree.facets, tree.slotBoxes, tree.slotWorld, tree.oriented
+	// column and columnWorld hold the current leaf pair's b boxes. They are
+	// declared once, not per leaf pair, so nothing re-zeroes them; each copy
+	// overwrites the slots the loops below read.
+	var column, columnWorld [heldBoxLeafSize][2]r3.Vec
 	stack := make([]heldNodePair, 0, 64)
 	for _, task := range tasks {
 		stack = append(stack[:0], task)
@@ -91,7 +99,7 @@ func (e *heldEmbedding) cleanSelfPairs(tasks []heldNodePair, tree *heldBoxTree) 
 			if err := step(); err != nil {
 				return false, err
 			}
-			a, b := &tree.nodes[pair.a], &tree.nodes[pair.b]
+			a, b := nodes[pair.a], nodes[pair.b]
 			if !BoxesOverlap(a.box, b.box) {
 				continue
 			}
@@ -102,8 +110,14 @@ func (e *heldEmbedding) cleanSelfPairs(tasks []heldNodePair, tree *heldBoxTree) 
 			}
 			self := pair.a == pair.b
 			end := b.leafStart + b.leafCount
+			// The first row that meets b's hull copies b's boxes (and world
+			// boxes of an oriented tree) to the stack, and every row reads
+			// those copies. One block copy
+			// replaces a shared-slice read per candidate; the boxes and every
+			// test are the same.
+			copied := false
 			for s := a.leafStart; s < a.leafStart+a.leafCount; s++ {
-				box := tree.slotBoxes[s]
+				box := slotBoxes[s]
 				// Most rows and candidates miss, in no pattern a branch
 				// predictor learns, so the box tests below are BoxesOverlap
 				// read through axisMeet: the same six comparisons, all
@@ -117,27 +131,34 @@ func (e *heldEmbedding) cleanSelfPairs(tasks []heldNodePair, tree *heldBoxTree) 
 					continue
 				}
 				var world [2]r3.Vec
-				if tree.oriented {
-					world = tree.slotWorld[s]
+				if oriented {
+					world = slotWorld[s]
 				}
-				i := tree.facets[s]
+				i := facets[s]
 				start := b.leafStart
 				if self {
 					start = s + 1
+				}
+				if !copied {
+					copy(column[:], slotBoxes[b.leafStart:end])
+					if oriented {
+						copy(columnWorld[:], slotWorld[b.leafStart:end])
+					}
+					copied = true
 				}
 				for t := start; t < end; t++ {
 					if err := step(); err != nil {
 						return false, err
 					}
-					c := tree.slotBoxes[t]
+					c := column[t-b.leafStart]
 					if axisMeet(lx, hx, c[0].X, c[1].X)&axisMeet(ly, hy, c[0].Y, c[1].Y)&
 						axisMeet(lz, hz, c[0].Z, c[1].Z) == 0 {
 						continue
 					}
-					if tree.oriented && !BoxesOverlap(world, tree.slotWorld[t]) {
+					if oriented && !BoxesOverlap(world, columnWorld[t-b.leafStart]) {
 						continue
 					}
-					j := tree.facets[t]
+					j := facets[t]
 					lo, hi := i, j
 					if lo > hi {
 						lo, hi = hi, lo
