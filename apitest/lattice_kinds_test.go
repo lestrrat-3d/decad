@@ -2,7 +2,6 @@ package apitest_test
 
 import (
 	"context"
-	"fmt"
 	"math"
 	"testing"
 
@@ -105,6 +104,7 @@ type latticeTrig struct{ s, c, s2, c2 float64 }
 // The expressions keep the direct fields' operation order. The grid evaluates
 // the same coordinates on each axis, so their trigonometric values can be reused.
 var latticeSampleFields = map[string]func(x, y, z latticeTrig) float64{
+	"gyroid":    func(x, y, z latticeTrig) float64 { return x.s*y.c + y.s*z.c + z.s*x.c },
 	"Schwarz P": func(x, y, z latticeTrig) float64 { return x.c + y.c + z.c },
 	"diamond": func(x, y, z latticeTrig) float64 {
 		return x.s*y.s*z.s + x.s*y.c*z.c + x.c*y.s*z.c + x.c*y.c*z.s
@@ -135,22 +135,26 @@ func latticeSampleGrid() [160]latticeTrig {
 	return grid
 }
 
-func sharedKindFraction(kind latticeKind, level float64) float64 {
-	return sharedFractions.get(fmt.Sprintf("%s/%v", kind.name, level), func() float64 {
-		grid := latticeSampleGrid()
-		field := latticeSampleFields[kind.name]
-		inside := 0
-		for _, x := range grid {
-			for _, y := range grid {
-				for _, z := range grid {
-					if math.Abs(field(x, y, z)) <= level {
-						inside++
-					}
+// sampledFieldFraction is fieldFraction for a field of latticeSampleFields: the
+// same grid and the same count, with each axis's trigonometric values computed
+// once.
+func sampledFieldFraction(field func(x, y, z latticeTrig) float64, level float64) float64 {
+	grid := latticeSampleGrid()
+	inside := 0
+	for _, x := range grid {
+		for _, y := range grid {
+			for _, z := range grid {
+				if math.Abs(field(x, y, z)) <= level {
+					inside++
 				}
 			}
 		}
-		return float64(inside) / (160 * 160 * 160)
-	})
+	}
+	return float64(inside) / (160 * 160 * 160)
+}
+
+func sharedKindFraction(kind latticeKind, level float64) float64 {
+	return sharedFraction(kind.name, kind.field, level)
 }
 
 func TestLatticeKindsAreClosedSolidsOfTheExpectedFraction(t *testing.T) {

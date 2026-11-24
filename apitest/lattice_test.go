@@ -62,9 +62,15 @@ var (
 	sharedLattices  sharedOnce[builtLattice]
 )
 
-// sharedFraction is fieldFraction computed once per (name, level) for the whole test binary.
+// sharedFraction is fieldFraction computed once per (name, level) for the whole test binary. A field
+// listed in latticeSampleFields is counted by sampledFieldFraction, which gives the same count.
 func sharedFraction(name string, field func(x, y, z float64) float64, level float64) float64 {
-	return sharedFractions.get(fmt.Sprintf("%s/%v", name, level), func() float64 { return fieldFraction(field, level) })
+	return sharedFractions.get(fmt.Sprintf("%s/%v", name, level), func() float64 {
+		if sampled, ok := latticeSampleFields[name]; ok {
+			return sampledFieldFraction(sampled, level)
+		}
+		return fieldFraction(field, level)
+	})
 }
 
 // sharedLattice builds a lattice once per (name, spec) for the whole test binary. The tests only read the
