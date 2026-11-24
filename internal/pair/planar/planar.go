@@ -344,6 +344,9 @@ type planarPrep struct {
 	sideBoxes [][3]floatBox
 	sidesSet  []bool
 	offsets   []facetOffset
+	// axisCasts are the axis-ray cast indexes (castIndexed), built on first
+	// use.
+	axisCasts [3]*axisCastIndex
 }
 
 type facetOffset struct {
@@ -513,6 +516,8 @@ type planarKernel struct {
 	sites   []contactSite
 	seen    map[PlanarContact]struct{}
 	crossed []PlanarCrossing
+	// near and castVisit are scratch lists the deep-vertex scan reuses.
+	near, castVisit []int
 }
 
 func orientSign(p *planarPrep, t int, v proof.DyV3) int {

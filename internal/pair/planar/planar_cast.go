@@ -48,10 +48,29 @@ func (k *planarKernel) cast(p proof.DyV3, solid *planarPrep) (castResult, error)
 // passes beside (planar_prune.go). An axis ray also skips a facet whose exact
 // plane is parallel to the ray and does not contain p.
 func (k *planarKernel) castAlong(p proof.DyV3, pb floatBox, boxed bool, dir [3]int64, solid *planarPrep) (castResult, error) {
+	return k.castOver(p, pb, boxed, dir, solid, nil)
+}
+
+// castOver is castAlong over the triangles in visit, in its ascending order,
+// or over every triangle when visit is nil. visit must hold every triangle
+// castAlong does not skip without an exact test (axisCastIndex.visit), so the
+// ray reads the same triangles and returns the same result; it polls once per
+// triangle it reads.
+func (k *planarKernel) castOver(p proof.DyV3, pb floatBox, boxed bool, dir [3]int64, solid *planarPrep,
+	visit []int) (castResult, error) {
 	d := proof.DyV3{proof.DyInt(dir[0]), proof.DyInt(dir[1]), proof.DyInt(dir[2])}
 	axis := rayAxis(dir)
 	crossings := 0
-	for t, tri := range solid.s.Tris {
+	count := len(solid.s.Tris)
+	if visit != nil {
+		count = len(visit)
+	}
+	for i := range count {
+		t := i
+		if visit != nil {
+			t = visit[i]
+		}
+		tri := solid.s.Tris[t]
 		if err := k.poll(); err != nil {
 			return castAmbiguous, err
 		}
@@ -132,6 +151,95 @@ func (k *planarKernel) castAlong(p proof.DyV3, pb floatBox, boxed bool, dir [3]i
 		return castInside, nil
 	}
 	return castOutside, nil
+}
+
+// castIndexed is cast for many points against one solid: each axis ray reads
+// only the triangles its float pre-test keeps, found through the solid's axis
+// cast index, instead of polling every triangle. Every ray returns what
+// castAlong returns, so the result is cast's. solid must carry its float
+// boxes. The other rays read every triangle, as cast does.
+func (k *planarKernel) castIndexed(p proof.DyV3, solid *planarPrep) (castResult, error) {
+	pb := pointFloatBox(p)
+	for _, dir := range rayLadder {
+		var visit []int
+		if axis := rayAxis(dir); axis >= 0 {
+			if err := k.poll(); err != nil {
+				return castAmbiguous, err
+			}
+			k.castVisit = solid.axisCast(axis).visit(pb, k.castVisit)
+			visit = k.castVisit
+		}
+		result, err := k.castOver(p, pb, true, dir, solid, visit)
+		if err != nil {
+			return castAmbiguous, err
+		}
+		if result != castAmbiguous {
+			return result, nil
+		}
+	}
+	return castAmbiguous, nil
+}
+
+// axisCastIndex finds, for a ray along one coordinate axis, the triangles
+// castAlong reads past its float pre-test: every triangle whose normal has a
+// zero component on the axis, which the pre-test never skips, and every
+// other triangle whose float box meets p's on both other axes. The tree holds
+// the triangles' float boxes with the ray's axis collapsed to zero, so its
+// floatApart is floatApartOff on that axis.
+type axisCastIndex struct {
+	axis     int
+	tree     *boxTree
+	parallel []int
+	query    []int
+}
+
+// axisCast returns p's index for rays along axis, built on first use.
+// floatBoxes must have run.
+func (p *planarPrep) axisCast(axis int) *axisCastIndex {
+	if p.axisCasts[axis] != nil {
+		return p.axisCasts[axis]
+	}
+	boxes := make([]floatBox, len(p.triBox))
+	index := &axisCastIndex{axis: axis}
+	for t, box := range p.triBox {
+		box.lo[axis], box.hi[axis] = 0, 0
+		boxes[t] = box
+		if p.normal[t][axis].Sign() == 0 {
+			index.parallel = append(index.parallel, t)
+		}
+	}
+	index.tree = newBoxTree(boxes)
+	p.axisCasts[axis] = index
+	return index
+}
+
+// visit returns into out, in ascending order and without repeats, the
+// triangles a ray from a point with float box pb along the index's axis
+// reads: the tree's triangles not apart from pb off the axis, merged with
+// the parallel ones.
+func (c *axisCastIndex) visit(pb floatBox, out []int) []int {
+	// The tree's boxes hold zero on the collapsed axis, so a query box
+	// collapsed the same way is tested on the two other axes only.
+	q := pb
+	q.lo[c.axis], q.hi[c.axis] = 0, 0
+	c.query = c.tree.query(q, c.query)
+	out = out[:0]
+	i, j := 0, 0
+	for i < len(c.query) || j < len(c.parallel) {
+		switch {
+		case j == len(c.parallel) || (i < len(c.query) && c.query[i] < c.parallel[j]):
+			out = append(out, c.query[i])
+			i++
+		case i == len(c.query) || c.parallel[j] < c.query[i]:
+			out = append(out, c.parallel[j])
+			j++
+		default:
+			out = append(out, c.query[i])
+			i++
+			j++
+		}
+	}
+	return out
 }
 
 // rayAxis returns the coordinate axis a ray direction runs along, or -1 when
