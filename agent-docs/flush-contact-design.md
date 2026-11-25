@@ -362,7 +362,7 @@ The bounded replay admits no flush pair (§2, "Live pass only"), so it adds noth
 |---|---|
 | A coplanar pair whose faces are not both carrier faces in one exact plane | F1 |
 | A cap whose held corners leave the plane its `CapRecord` denotes, such as a cap at a level that rounds | F1, §4.1 |
-| A moving part within its radius plus the other reach of the other outline that is not a robust crossing (an arc that crosses or touches the other outline; a rounded vertex on the other outline; a near-parallel crossing) | F3 |
+| A moving part within its radius plus the other reach of the other outline that is not a robust crossing (an arc that crosses or touches the other outline; a rounded vertex on the other outline; a near-parallel crossing), unless the operands form a separated cap pair | F3; `agent-docs/coplanar-contact-design.md` §19 |
 | A point contact between a wall facet and a flush face's partner that is not an exact or flush pair | the isolated-point rule keeps its refusal |
 | Faces whose planes agree only within a bound, placed by an inexact turn | coplanar-contact §17.4, §18 |
 | A placed analytic body (`placedCarriers`) | §13 Q2 |

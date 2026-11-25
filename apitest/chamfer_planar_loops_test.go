@@ -258,13 +258,13 @@ func TestChamferWindowLoopsAfterBossUnion(t *testing.T) {
 		out, err := decad.Chamfer(t.Context(), cover, q.Exactly(n), units.Millimeters(0.5))
 		require.NoError(t, err, "z=%g", step.z)
 		requireChamferRemoved(t, cover, out, step.run)
-		// The cutters are held exactly to within a few microns, so cutting the windows leaves the body's bound where
-		// the join of the boss left it.
+		// The cutters are held exactly to within a few microns, so cutting the windows adds at most a few microns to
+		// the bound the join of the boss left.
 		before, err := cover.Bounds()
 		require.NoError(t, err)
 		after, err := out.Bounds()
 		require.NoError(t, err)
-		require.LessOrEqual(t, after.Bound.Base(), before.Bound.Base()*1.001+1e-9, "z=%g", step.z)
+		require.LessOrEqual(t, after.Bound.Base(), before.Bound.Base()+0.003, "z=%g", step.z)
 		cover = out
 	}
 }

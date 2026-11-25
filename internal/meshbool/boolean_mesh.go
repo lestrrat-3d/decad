@@ -341,12 +341,12 @@ func meshBooleanStats(ctx context.Context, op OperationKind, ma, mb *BoolMesh, m
 		return nil, Stats{}, err
 	}
 	keepA, err := keepSideWith(ctx, ma, mb, cuts.CutsA, cuts.BlockedA, cuts.Rims, wantA, false, keyOf,
-		keepOptions{Coplanar: cuts.CoplanarA, Op: op, Bounds: cuts.CoplanarBounds})
+		keepOptions{Coplanar: cuts.CoplanarA, Op: op, Bounds: cuts.CoplanarBounds, Band: cuts.BandA})
 	if err != nil {
 		return nil, Stats{}, coplanarRefusal(cuts, err)
 	}
 	keepB, err := keepSideWith(ctx, mb, ma, cuts.CutsB, cuts.BlockedB, cuts.Rims, wantB, flipB, keyOf,
-		keepOptions{Coplanar: cuts.CoplanarB, Op: op, Second: true, Bounds: cuts.CoplanarBounds})
+		keepOptions{Coplanar: cuts.CoplanarB, Op: op, Second: true, Bounds: cuts.CoplanarBounds, Band: cuts.BandB})
 	if err != nil {
 		return nil, Stats{}, coplanarRefusal(cuts, err)
 	}
@@ -524,6 +524,11 @@ func keepSideWith(ctx context.Context, m, other *BoolMesh, cuts map[int][]Xseg, 
 				if b, ok := opts.Bounds[keys[k]]; ok && !slices.Contains(cornerKeys[:], keys[k]) {
 					beta[k] = max(beta[k], b)
 				}
+			}
+			// A piece of a separated cap pair near the pair's outlines takes the pair's reach at its corners near
+			// them, or at every corner when none is (agent-docs/coplanar-contact-design.md §19.5).
+			for _, band := range opts.Band[i] {
+				band.raise(tri, &beta)
 			}
 			emit(tri, beta, keys, m.Src[i], i)
 		}

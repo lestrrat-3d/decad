@@ -65,6 +65,10 @@ func TestLoftMirrorUnionSealsTheSharedCap(t *testing.T) {
 	}
 }
 
+// TestLoftMirrorUnionKeepsUnrelatedSourcesSeparate unions a loft with the mirrored copy of another loft of the same
+// sections. The mirror join reads one source only, so it declines, and the mesh Union decides the pair: the two lofts
+// lie on opposite sides of the shared cap's plane (agent-docs/coplanar-contact-design.md §19). Its result carries the
+// operands' cap roles, never the join's own.
 func TestLoftMirrorUnionKeepsUnrelatedSourcesSeparate(t *testing.T) {
 	t.Parallel()
 	s0, p0, s1, p1 := loftSquares(t, 2, 1)
@@ -75,7 +79,17 @@ func TestLoftMirrorUnionKeepsUnrelatedSourcesSeparate(t *testing.T) {
 	require.NoError(t, err)
 	upper, err := decad.MirroredCopy(t.Context(), other, loftMirrorPlane(t))
 	require.NoError(t, err)
-	_, err = decad.Union(t.Context(), lower, upper)
-	require.ErrorIs(t, err, decad.ErrUnsupported)
-	require.Len(t, doc.Bodies(), 3)
+	joined, err := decad.Union(t.Context(), lower, upper)
+	require.NoError(t, err)
+	require.True(t, joined.IsSolid())
+	_, err = decad.Faces(decad.FaceCreatedBy(decad.CapStart(joined))).Exactly(1).SelectFaces(joined)
+	require.Error(t, err, "the mirror join's own start cap is absent")
+	for _, role := range []decad.FeatureRef{decad.CapStart(lower), decad.CapStart(upper)} {
+		_, err := decad.Faces(decad.FaceCreatedBy(role)).Exactly(1).SelectFaces(joined)
+		require.NoError(t, err)
+	}
+	volume, err := joined.Volume()
+	require.NoError(t, err)
+	want := 2 * 10 * (16 + math.Sqrt(16*4) + 4) / 3
+	require.LessOrEqual(t, math.Abs(volume.Value.Base()-want), volume.Bound.Base()+1e-9)
 }

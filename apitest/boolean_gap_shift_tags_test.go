@@ -11,8 +11,11 @@ import (
 )
 
 // restingBossCase is a plate with round bosses of radius 6 and height 8
-// standing on its top face at z = 10. The last boss rests with a bound, so the
-// Union that adds it takes the shifted retry and moves it by s.
+// standing on its top face at z = 10. The last boss rests with a bound on a
+// Union result, whose payload proves no half-space, so the two form no
+// separated cap pair (agent-docs/coplanar-contact-design.md §19) and the Union
+// that adds the boss takes the shifted retry and moves it by s. A boss on a
+// plain plate forms such a pair and takes no retry (TestUnionSharedCapBossOnPlate).
 type restingBossCase struct {
 	name string
 	// make builds the joined body; at is the unmoved centre of the boss the
@@ -25,19 +28,6 @@ type restingBossCase struct {
 
 func restingBossCases() []restingBossCase {
 	return []restingBossCase{
-		{
-			name: "a Transform'd boss on a plate",
-			make: func(t *testing.T, doc *decad.Document) *decad.Body {
-				t.Helper()
-				plate := boxBody(t, doc, 0, 0, 100, 60, 10)
-				boss := translated(t, circlePrismAtZ(t, doc, 20, 30, 6, 10, 8), 30, 0, 0)
-				joined, err := decad.Union(t.Context(), plate, boss)
-				require.NoError(t, err)
-				return joined
-			},
-			at:     r3.NewVec(50, 30, 10),
-			bosses: 1,
-		},
 		{
 			name: "a Transform'd boss on a plate and boss",
 			make: func(t *testing.T, doc *decad.Document) *decad.Body {
