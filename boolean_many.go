@@ -14,48 +14,63 @@ import (
 // single result only after its complete proof and cancellation check. The
 // certified pattern evaluators construct all tools in one operation.
 func performUnionMany(ctx context.Context, operands []*Body) (*Body, error) {
-	a := operands[0]
-	if a == nil || a.n.Doc == nil {
-		return nil, fmt.Errorf("%w: the first operand belongs to no document", ErrDegenerate)
-	}
-	d := documentHandle(a.n.Doc)
-	ctx, err := d.evalContext(ctx)
+	d, ctx, err := prepareUnionMany(ctx, operands)
 	if err != nil {
-		return nil, err
-	}
-	seen := make(map[*Body]struct{}, len(operands))
-	for _, operand := range operands {
-		if err := d.requireLive(operand); err != nil {
-			return nil, err
-		}
-		if _, duplicate := seen[operand]; duplicate {
-			return nil, fmt.Errorf("%w: Union needs distinct bodies", ErrDegenerate)
-		}
-		seen[operand] = struct{}{}
-	}
-	if err := d.requireSameContainer(operands); err != nil {
-		return nil, err
-	}
-	for _, operand := range operands {
-		if err := refuseSheetOperand(operand, "Union"); err != nil {
-			return nil, err
-		}
-	}
-	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
 	body, span, err := unionManyBodies(ctx, d, d.nextProducerID(), operands)
 	if err != nil {
 		return nil, err
 	}
+	if err := commitUnionMany(ctx, d, operands, body, span); err != nil {
+		return nil, err
+	}
+	return body, nil
+}
+
+// prepareUnionMany gates the operands of a Union of three or more bodies and
+// returns their document with the evaluation context. It changes nothing.
+func prepareUnionMany(ctx context.Context, operands []*Body) (*Document, context.Context, error) {
+	a := operands[0]
+	if a == nil || a.n.Doc == nil {
+		return nil, ctx, fmt.Errorf("%w: the first operand belongs to no document", ErrDegenerate)
+	}
+	d := documentHandle(a.n.Doc)
+	ctx, err := d.evalContext(ctx)
+	if err != nil {
+		return nil, ctx, err
+	}
+	seen := make(map[*Body]struct{}, len(operands))
+	for _, operand := range operands {
+		if err := d.requireLive(operand); err != nil {
+			return nil, ctx, err
+		}
+		if _, duplicate := seen[operand]; duplicate {
+			return nil, ctx, fmt.Errorf("%w: Union needs distinct bodies", ErrDegenerate)
+		}
+		seen[operand] = struct{}{}
+	}
+	if err := d.requireSameContainer(operands); err != nil {
+		return nil, ctx, err
+	}
+	for _, operand := range operands {
+		if err := refuseSheetOperand(operand, "Union"); err != nil {
+			return nil, ctx, err
+		}
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, ctx, err
+	}
+	return d, ctx, nil
+}
+
+// commitUnionMany records body as the one Union of operands, retiring them.
+func commitUnionMany(ctx context.Context, d *Document, operands []*Body, body *Body, span producerID) error {
 	inputs := make([]OperationInput, len(operands))
 	for i, operand := range operands {
 		inputs[i] = OperationInput{Body: operand, Role: operationRoleOperand, Use: InputConsumed}
 	}
-	if err := d.commitOperationSpanIn(ctx, nil, OperationUnion, inputs, body, span, operands...); err != nil {
-		return nil, err
-	}
-	return body, nil
+	return d.commitOperationSpanIn(ctx, nil, OperationUnion, inputs, body, span, operands...)
 }
 
 // unionManyBodies is the many-operand Union's route chain. It evaluates under

@@ -1152,6 +1152,7 @@ parameter:
 
 ```go
 func Union(ctx context.Context, first *Body, others ...*Body) (*Body, error)
+func UnionRefined(ctx context.Context, bodies []*Body, maxBound units.Value) (*Body, error)
 func Cut(ctx context.Context, target, tool *Body, opts ...BooleanOption) (*Body, error)
 func Intersect(ctx context.Context, a, b *Body, opts ...BooleanOption) (*Body, error)
 ```
@@ -1170,6 +1171,18 @@ where a pair's source records keep a cone limit (a point-Loft cut or
 intersected by a cone about an axis through the world origin in a world
 coordinate plane); elsewhere it has no effect. The
 construction is in `agent-docs/revolve-loft-design.md`.
+
+`UnionRefined` joins a straight-bevel sector join of three or more bodies directly at the refinement bound
+(`agent-docs/body-refine-design.md` §7.1), where `Union` followed by `Refine` builds it at 0.1 mm and then again at
+the bound. It takes the bodies before the bound, as §6.3 orders a free function's parameters. It is a separate
+function rather than a `Union` option, since the options tier of `Cut` and `Intersect` carries declarations, not a
+result bound, and `Union` has no options. It returns the joined body or an error with nothing committed: a set the
+direct build does not take (a pair, a union of another kind, a join folded two bodies at a time) is `ErrUnsupported`
+before anything is built, and its message says to call `Union`, then `Refine`. It differs from that pair in the
+face and producer identities of the result, which stay `Union`'s, in its history, which holds one `Union` entry and
+no `Refine` entry so later producer identities are one lower, in the way `LocatePoint`, a two-body `Section` and
+the regroup of a later `Cut` or `Union` read it, as a `Union` of its operands where the pair's refined body is a
+leaf, and in a bound the join cannot meet, which commits nothing where the pair keeps the 0.1 mm join.
 
 `Union` requires at least two distinct live bodies from one document. A
 two-body call uses the pair evaluator. For three or more bodies, one operation
