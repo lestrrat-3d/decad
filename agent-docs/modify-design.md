@@ -7976,9 +7976,16 @@ faces `G₀` and `G₁`. Everything else in the held mesh is copied unchanged.
    loops other than the rim are kept with their vertices, the rim loop gives way
    to a polygon of `N` vertices on the setback circle (R2) or a cut line (R1), and
    the region is triangulated again by ear clipping over those loops, with one
-   bridge from each hole to the outer loop. The ear clipping uses every loop
-   vertex, collinear ones included, so the face keeps the vertices its
-   neighbours share. The ear clipping reads each vertex in world coordinates
+   bridge from each hole to the outer loop. A bridge is the nearest segment that
+   crosses no edge and runs through the region; among equally near segments it
+   is the one Go 1.27.4's pdqsort leaves first (`planar_bridge_first.go`), a copy
+   that freezes that first pick to Go 1.27.4's `slices.SortFunc` order. The
+   fallback after a rejected pick still calls the toolchain's `slices.SortFunc`.
+   If a Go upgrade changes its tie order the property test fails; then update the
+   copy from the new `slices/zsortanyfunc.go` and compare the gallery swisslever
+   fingerprint before accepting. The
+   ear clipping uses every loop vertex, collinear ones included, so the face
+   keeps the vertices its neighbours share. The ear clipping reads each vertex in world coordinates
    along the plane frame's axes, not relative to the rim. For a plane normal to
    a coordinate axis that reading is exact, so two distinct boundary vertices
    stay distinct however close a mesh Boolean left them; on a tilted plane far

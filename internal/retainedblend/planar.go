@@ -131,11 +131,7 @@ func triangulateRegion(ps []pt2, outer []int, holes [][]int) ([][3]int, error) {
 // bridgeNearest splices one hole into the merged polygon along the shortest
 // segment that crosses no edge and runs through the region.
 func bridgeNearest(ps []pt2, merged []int, holes [][]int) ([]int, [][]int, error) {
-	type candidate struct {
-		d       float64
-		m, h    int // position in merged, position in the hole
-		holeIdx int
-	}
+	type candidate = bridgeCandidate
 	var cands []candidate
 	count := 0
 	for _, hole := range holes {
@@ -179,24 +175,38 @@ func bridgeNearest(ps []pt2, merged []int, holes [][]int) ([]int, [][]int, error
 	if count > 0 {
 		cands = make([]candidate, 0, count)
 	}
-	for hi, hole := range holes {
-		for hk, hv := range hole {
-			for mi, mv := range merged {
-				du, dw := ps[hv].u-ps[mv].u, ps[hv].w-ps[mv].w
-				cands = append(cands, candidate{d: du*du + dw*dw, m: mi, h: hk, holeIdx: hi})
+	buildCandidates := func() {
+		cands = cands[:0]
+		for hi, hole := range holes {
+			for hk, hv := range hole {
+				for mi, mv := range merged {
+					du, dw := ps[hv].u-ps[mv].u, ps[hv].w-ps[mv].w
+					cands = append(cands, candidate{d: du*du + dw*dw, m: mi, h: hk, holeIdx: hi})
+				}
 			}
 		}
+	}
+	accepts := func(c candidate) bool {
+		hole := holes[c.holeIdx]
+		a, b := ps[merged[c.m]], ps[hole[c.h]]
+		return bridgeClear(ps, merged, holes, c.holeIdx, c.m, c.h) &&
+			insidePolygon(ps, merged, pt2{(a.u + b.u) / 2, (a.w + b.w) / 2})
+	}
+	buildCandidates()
+	// Tied nearest candidates usually pass, and the sort below would then pick the one pdqsort leaves first. Pick
+	// that one without sorting everything; when it is rejected, sort in enumeration order as before.
+	if len(cands) > 0 {
+		bridgeFirstSort(cands)
+		if c := cands[0]; accepts(c) {
+			spliced, rest := spliceBridge(merged, holes, c.holeIdx, c.m, c.h)
+			return spliced, rest, nil
+		}
+		buildCandidates()
 	}
 	// cmp.Compare orders NaN before every number, so the order stays total.
 	slices.SortFunc(cands, func(a, b candidate) int { return cmp.Compare(a.d, b.d) })
 	for _, c := range cands {
-		hole := holes[c.holeIdx]
-		a, b := ps[merged[c.m]], ps[hole[c.h]]
-		if !bridgeClear(ps, merged, holes, c.holeIdx, c.m, c.h) {
-			continue
-		}
-		mid := pt2{(a.u + b.u) / 2, (a.w + b.w) / 2}
-		if !insidePolygon(ps, merged, mid) {
+		if !accepts(c) {
 			continue
 		}
 		spliced, rest := spliceBridge(merged, holes, c.holeIdx, c.m, c.h)
