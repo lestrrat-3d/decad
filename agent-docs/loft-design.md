@@ -1465,6 +1465,18 @@ step the shared budget for each node visit and leaf comparison; the classifier
 steps it once per replayed pair. If the row query exceeds the ceiling after
 the selected S8 scan passes, the audit returns S8's resource refusal before
 any pair classification.
+A patch that fails the projected-patch proof only on orientation gets one
+second proof on a reduced patch (`provenProjectedPatch`): the patch without its
+inverted triangles, those whose projected sign is not the strict majority sign,
+and without every triangle sharing a vertex with one of them. It is tried only
+for 1 to 32 inverted triangles. The straight-bevel cone caps need it: each has a
+few inverted slivers at the heel root seam. The audit stays exact because the
+proof's theorem holds for any triangle set. The reduced patch is the family, so
+only pairs inside it are omitted. Every dropped triangle belongs to no family
+and is audited against every other triangle, the reduced patch's own included.
+The ring and the cap on inverted triangles choose which patches prove, never a
+verdict. A patch that fails again, or fails for another reason, stays whole in
+the audit as before.
 When projected-patch proofs omit within-patch pairs, the row query uses one
 tree per proof family and skips only the row's own proven family. It still
 counts each visited node and compared box under the same ceiling, then sorts
