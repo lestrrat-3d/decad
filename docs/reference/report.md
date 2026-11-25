@@ -981,6 +981,7 @@ ValidityValid.
     Interferences []<a href="#InterferenceOf">InterferenceOf</a>[BodyT]
     Clearances    []<a href="#ClearanceOf">ClearanceOf</a>[BodyT]
     Diagnostics   []<a href="#DiagnosticOf">DiagnosticOf</a>[BodyT, CellT]
+    SkippedPairs  []<a href="#DiagnosticPairOf">DiagnosticPairOf</a>[BodyT]
     Status        <a href="#Status">Status</a>
 }</pre>
 
@@ -992,8 +993,11 @@ the call. Diagnostics is the canonical inventory for counting and logging
 the whole call: body diagnostics in body order, then pair diagnostics in
 pair order, each finding present exactly once (proposal §10, §11); it is
 empty EXACTLY when [Status](<#Status>) == Sound, and [Status](<#Status>) is the worst
-[DiagnosticOf](<#DiagnosticOf>).Status in it. The zero Report is Unverified and carries no
-verdict.
+[DiagnosticOf](<#DiagnosticOf>).Status in it. SkippedPairs names, once each and in pair
+order with A the earlier body, every pair the caller left out of pair work
+(verification §1.3); it is nil when the call skipped none. Verify proves
+nothing about those pairs, so [Status](<#Status>) says nothing about them. The zero
+Report is Unverified and carries no verdict.
 
 <a name="LiftVerifyReport"></a>
 #### func LiftVerifyReport

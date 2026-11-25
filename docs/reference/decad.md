@@ -906,6 +906,7 @@ package.
   - [func WithConcaveRadius](<#WithConcaveRadius>)
   - [func WithMinWallThickness](<#WithMinWallThickness>)
   - [func WithPullDirection](<#WithPullDirection>)
+  - [func WithSkippedPair](<#WithSkippedPair>)
   - [func WithTolerance](<#WithTolerance>)
 - [type VerifyRequest](<#VerifyRequest>)
 - [type Vertex](<#Vertex>)
@@ -9358,6 +9359,22 @@ WithMinWallThickness asks whether a wall is thinner than minimum.
 <pre>func WithPullDirection(v r3.Vec) <a href="#VerifyOption">VerifyOption</a></pre>
 
 WithPullDirection asks for undercuts against the stated direction.
+
+<a name="WithSkippedPair"></a>
+#### func WithSkippedPair
+
+<pre>func WithSkippedPair(a, b *<a href="#Body">Body</a>) <a href="#VerifyOption">VerifyOption</a></pre>
+
+WithSkippedPair leaves the unordered pair of a and b out of Verify's
+pairwise partition, for a caller that proves that pair by other means, such
+as ContactPair, or whose bodies share space by design (verification §1.3).
+Verify proves nothing about a skipped pair: it emits no [Interference](<#Interference>),
+[Clearance](<#Clearance>) or pair [Diagnostic](<#Diagnostic>) for it, the pair adds nothing to [Status](<#Status>), and
+[Report](<#Report>).SkippedPairs names it. Each body's own checks still run. a and b
+MUST be distinct, non-nil live bodies of the verified document; Verify
+rejects any other pair before it does any work, with ErrDegenerate,
+ErrForeignBody or ErrRetiredBody. Naming a pair more than once, in either
+order, skips it once.
 
 <a name="WithTolerance"></a>
 #### func WithTolerance
