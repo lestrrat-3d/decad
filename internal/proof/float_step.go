@@ -53,6 +53,40 @@ func NextDown(x float64) float64 {
 	return math.Nextafter(x, math.Inf(-1))
 }
 
+// StepUp returns NextUp(x) and true when |x| lies in [2^-969, MaxFloat64),
+// the range NextUp steps by float arithmetic; otherwise it returns false and
+// the caller calls NextUp. It is NextUp's arithmetic branches, small enough to
+// inline: under -race every call that is not inlined pays a race-detector
+// entry and exit, which costs more than the step itself.
+func StepUp(x float64) (float64, bool) {
+	if x >= 0x1p-969 && x < math.MaxFloat64 {
+		y := x + float64(x*0x1p-53)
+		if y == x {
+			y = x + float64(x*0x1p-52)
+		}
+		return y, true
+	}
+	if x <= -0x1p-969 && x >= -math.MaxFloat64 {
+		return x - float64(x*0x1p-53), true
+	}
+	return 0, false
+}
+
+// StepDown is NextDown's StepUp: NextDown(x) and true on the same range.
+func StepDown(x float64) (float64, bool) {
+	if x <= -0x1p-969 && x > -math.MaxFloat64 {
+		y := x + float64(x*0x1p-53)
+		if y == x {
+			y = x + float64(x*0x1p-52)
+		}
+		return y, true
+	}
+	if x >= 0x1p-969 && x <= math.MaxFloat64 {
+		return x - float64(x*0x1p-53), true
+	}
+	return 0, false
+}
+
 // Abs is math.Abs, bit for bit, by comparison instead of a bit cast.
 // Under -race, the build CI tests with, math.Abs's bit cast is checked and
 // race-instrumented on every call and runs several times slower than Abs.

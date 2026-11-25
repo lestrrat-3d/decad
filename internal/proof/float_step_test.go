@@ -9,7 +9,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestFloatStepMatchesMath compares NextUp, NextDown and Abs with
+// TestFloatStepMatchesMath compares NextUp, NextDown, StepUp and StepDown
+// (wherever they answer) and Abs with
 // math.Nextafter and math.Abs by exact bit pattern: signed zeros, infinities,
 // NaN payloads, the range ends, every power of two with its neighbours, and
 // random bit patterns.
@@ -19,6 +20,12 @@ func TestFloatStepMatchesMath(t *testing.T) {
 		require.Equal(t, math.Float64bits(wantUp), math.Float64bits(up), "NextUp(%x)", math.Float64bits(x))
 		down, wantDown := proof.NextDown(x), math.Nextafter(x, math.Inf(-1))
 		require.Equal(t, math.Float64bits(wantDown), math.Float64bits(down), "NextDown(%x)", math.Float64bits(x))
+		if step, ok := proof.StepUp(x); ok {
+			require.Equal(t, math.Float64bits(wantUp), math.Float64bits(step), "StepUp(%x)", math.Float64bits(x))
+		}
+		if step, ok := proof.StepDown(x); ok {
+			require.Equal(t, math.Float64bits(wantDown), math.Float64bits(step), "StepDown(%x)", math.Float64bits(x))
+		}
 		abs, wantAbs := proof.Abs(x), math.Abs(x)
 		require.Equal(t, math.Float64bits(wantAbs), math.Float64bits(abs), "Abs(%x)", math.Float64bits(x))
 	}
