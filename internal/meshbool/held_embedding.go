@@ -200,6 +200,7 @@ func repairHeldEmbeddingShared(ctx context.Context, h HeldRounding, memo bool, s
 	// padded grid that keeps covering facets while repair moves vertices.
 	parallelFirst := memo && budget.ReserveFn == nil && len(query) >= 4096 && runtime.GOMAXPROCS(0) > 1
 	if parallelFirst {
+		e.collect = true
 		clean, err := e.parallelClean(ctx, query)
 		if err != nil {
 			return 0, nil, err
@@ -270,7 +271,14 @@ func repairHeldEmbeddingShared(ctx context.Context, h HeldRounding, memo bool, s
 				// the few the exact predicates decide.
 				e.pairs = map[uint64]uint64{}
 			}
-			offenders, failing, err := e.offenders(check)
+			var offenders, failing []int
+			var err error
+			if stage == 0 && sweep == 0 && e.seed != nil {
+				offenders, failing, err = e.seededOffenders(check)
+			} else {
+				offenders, failing, err = e.offenders(check)
+			}
+			e.seed = nil
 			if err != nil {
 				return 0, nil, err
 			}
@@ -461,9 +469,16 @@ const (
 
 // parallelClean tests each box-overlapping pair involving a query facet once. A
 // failing pair sends the caller through the original ordered repair scan.
+// When e.collect is set and the scan is neither a self scan nor an oriented
+// one, it does not stop at the first failing pair: it decides every pair and
+// leaves the failing pairs and the collapsed query facets in e.seed, which
+// seededOffenders turns into the first sweep's result.
 // Each worker polls after at most 256/workers operations, so their combined
 // unchecked work stays below one polling interval.
 func (e *heldEmbedding) parallelClean(ctx context.Context, query []int) (bool, error) {
+	wantCollect := e.collect
+	e.collect = false
+	e.seed = nil
 	workers := min(runtime.GOMAXPROCS(0), 4)
 	if err := e.budget.Err(); err != nil {
 		return false, err
@@ -531,6 +546,22 @@ func (e *heldEmbedding) parallelClean(ctx context.Context, query []int) (bool, e
 	if !oriented {
 		tree = newHeldBoxTree(e)
 	}
+	collect := wantCollect && !allQuery && !oriented
+	var seed heldSeed
+	if collect {
+		// offenders never scans a collapsed query facet's own pairs, and every
+		// other query facet decides its pair with it. Scanning it as a
+		// non-query facet gives the same pair set.
+		for _, i := range query {
+			if e.facetOpenFloat(i) || !zeroXpt(e.normal(i)) {
+				continue
+			}
+			if queryFacet[i] {
+				seed.collapsed = append(seed.collapsed, i)
+			}
+			queryFacet[i] = false
+		}
+	}
 	if !allQuery {
 		if err := tree.prepareQueryCeilings(ctx, queryFacet); err != nil {
 			return false, err
@@ -564,6 +595,7 @@ func (e *heldEmbedding) parallelClean(ctx context.Context, query []int) (bool, e
 	}
 	clean := make([]bool, workers)
 	errors := make([]error, workers)
+	fails := make([][][2]int, workers)
 	e.pollErr = ctx.Err
 	e.pollInterval = proofbound.WorkPollInterval / workers
 	e.pollRemaining = e.pollInterval
@@ -599,6 +631,8 @@ func (e *heldEmbedding) parallelClean(ctx context.Context, query []int) (bool, e
 				local = base.readOnlyScanCopy(ctx, workers, true)
 			}
 			clean[worker] = true
+			local.collect = collect
+			local.failOut = &fails[worker]
 			for {
 				start := int(next.Add(int64(chunkSize))) - chunkSize
 				if start >= count {
@@ -618,6 +652,8 @@ func (e *heldEmbedding) parallelClean(ctx context.Context, query []int) (bool, e
 	}
 	group.Wait()
 	e.pollErr = nil
+	e.collect = false
+	e.failOut = nil
 	if workers > 1 {
 		// Repair may move vertices and invalidate their cached exact lifts.
 		// The shared once guards are only valid for the read-only scan.
@@ -634,6 +670,15 @@ func (e *heldEmbedding) parallelClean(ctx context.Context, query []int) (bool, e
 			return false, errors[worker]
 		}
 		if !clean[worker] {
+			return false, nil
+		}
+	}
+	if collect {
+		for _, f := range fails {
+			seed.pairs = append(seed.pairs, f...)
+		}
+		if len(seed.pairs) > 0 || len(seed.collapsed) > 0 {
+			e.seed = &seed
 			return false, nil
 		}
 	}
@@ -713,11 +758,15 @@ func (e *heldEmbedding) cleanPairs(query []int, queryFacet []bool, tree *heldBox
 	// would repeat them per node and candidate.
 	oriented, nodes, boxes, facets, ceiling := tree.oriented, tree.nodes, tree.boxes, tree.facets, tree.queryCeiling
 	slotBoxes := tree.slotBoxes
+	collect, failOut := e.collect, e.failOut
 	var leafFacets [heldBoxLeafSize]int
 	var leafBoxes [heldBoxLeafSize][2]r3.Vec
 	for _, i := range query {
 		if !e.facetOpenFloat(i) {
 			if zeroXpt(e.normal(i)) {
+				if collect {
+					continue
+				}
 				return false, nil
 			}
 		}
@@ -763,6 +812,10 @@ func (e *heldEmbedding) cleanPairs(query []int, queryFacet []bool, tree *heldBox
 						continue
 					}
 					if !e.pairEmbeddedOverlapping(i, j) {
+						if collect {
+							*failOut = append(*failOut, [2]int{i, j})
+							continue
+						}
 						return false, nil
 					}
 				}
@@ -847,6 +900,12 @@ type heldEmbedding struct {
 	pollErr       func() error
 	pollInterval  int
 	pollRemaining int
+	// collect makes cleanPairs record each failing pair in *failOut and go
+	// on, instead of stopping at the first. Only parallelClean's workers set
+	// them. seed is what the collecting scan found, for the first sweep.
+	collect bool
+	failOut *[][2]int
+	seed    *heldSeed
 	// inc and taken are needed only when the ordered repair may move vertices.
 	inc   [][]int
 	taken map[r3.Vec]int
@@ -2319,6 +2378,52 @@ func (e *heldEmbedding) serialClean(query []int, queryFacet []bool) (bool, error
 		}
 	}
 	return true, nil
+}
+
+// heldSeed is the outcome of a complete first scan that found failures: the
+// pairs (i, j) that failed, with i a query facet, and the query facets that
+// have collapsed to no plane.
+type heldSeed struct {
+	pairs     [][2]int
+	collapsed []int
+}
+
+// seededOffenders returns what offenders(query) returns, built from e.seed
+// instead of another scan of every query facet. The first scan decided every
+// box-overlapping pair with a query facet once, at the positions offenders
+// would read, and pairEmbedded is symmetric, so which side decided a pair does
+// not matter. offenders sorts its vertices and lists failing facets in query
+// order, so the order in which pairs were found does not matter either.
+func (e *heldEmbedding) seededOffenders(query []int) ([]int, []int, error) {
+	queryFacet := make([]bool, len(e.h.Tris))
+	for _, i := range query {
+		queryFacet[i] = true
+	}
+	fail := make([]bool, len(e.h.Tris))
+	movable := make([]bool, len(e.h.Verts))
+	vertices := make([]int, 0)
+	for _, i := range e.seed.collapsed {
+		fail[i] = true
+	}
+	for _, p := range e.seed.pairs {
+		for k, f := range p {
+			if queryFacet[f] {
+				fail[f] = true
+				e.addMovable(movable, &vertices, p[1-k])
+			}
+		}
+	}
+	var failing []int
+	for _, i := range query {
+		if fail[i] {
+			failing = append(failing, i)
+			e.addMovable(movable, &vertices, i)
+		}
+	}
+	if err := heldSortInts(e.budget, vertices); err != nil {
+		return nil, nil, err
+	}
+	return vertices, failing, nil
 }
 
 // heldSortInts counts every comparison on bounded paths and keeps the existing
