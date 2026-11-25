@@ -162,6 +162,14 @@ func repairHeldEmbeddingSummary(ctx context.Context, h HeldRounding, memo bool, 
 	return repairHeldEmbeddingShared(ctx, h, memo, summary, proofbound.NewWorkBudget(ctx))
 }
 
+// heldRepairUsesTree reports whether repair indexes its candidates with a box
+// tree. A budget with a step or record limit counts each candidate against
+// that limit, and the grid's candidate lists define the count, so it keeps the
+// grid; every other budget takes the tree.
+func heldRepairUsesTree(budget *proofbound.WorkBudget) bool {
+	return budget.StepFn == nil && budget.ReserveFn == nil
+}
+
 // repairHeldEmbeddingShared uses the caller's work budget. Its record
 // allocations are not yet fully precharged, so it is not an admission proof.
 func repairHeldEmbeddingShared(ctx context.Context, h HeldRounding, memo bool, summary *EmbeddingReach,
@@ -196,6 +204,7 @@ func repairHeldEmbeddingShared(ctx context.Context, h HeldRounding, memo bool, s
 		return 0, nil, err
 	}
 	e := newHeldEmbeddingScan(h, budget, memo)
+	e.useTree = heldRepairUsesTree(budget)
 	// The tree reads fixed facet boxes. Only a failed first scan needs the
 	// padded grid that keeps covering facets while repair moves vertices.
 	parallelFirst := memo && budget.ReserveFn == nil && len(query) >= 4096 && runtime.GOMAXPROCS(0) > 1
@@ -906,6 +915,12 @@ type heldEmbedding struct {
 	collect bool
 	failOut *[][2]int
 	seed    *heldSeed
+	// useTree makes buildGrid index repair candidates with rtree, a box tree
+	// over the padded boxes, instead of the grid. rstack is its traversal
+	// stack, reused across queries.
+	useTree bool
+	rtree   *heldBoxTree
+	rstack  []int
 	// inc and taken are needed only when the ordered repair may move vertices.
 	inc   [][]int
 	taken map[r3.Vec]int
@@ -2144,7 +2159,8 @@ func floatBracket(r *big.Rat) []float64 {
 }
 
 // buildGrid registers every facet's padded box in a uniform grid sized to
-// about one cell per facet.
+// about one cell per facet. With useTree it builds a box tree over the padded
+// boxes instead (treeCandidates).
 func (e *heldEmbedding) buildGrid() error {
 	maxAbs, maxDev := 0.0, 0.0
 	for v, p := range e.h.Verts {
@@ -2172,6 +2188,11 @@ func (e *heldEmbedding) buildGrid() error {
 
 	lo := r3.NewVec(math.Inf(1), math.Inf(1), math.Inf(1))
 	hi := r3.NewVec(math.Inf(-1), math.Inf(-1), math.Inf(-1))
+	var padded [][2]r3.Vec
+	if e.useTree {
+		padded = make([][2]r3.Vec, len(e.h.Tris))
+	}
+	padVec := r3.NewVec(e.pad, e.pad, e.pad)
 	for i, t := range e.h.Tris {
 		if e.budget.ReserveFn != nil {
 			if err := e.budget.Step(); err != nil {
@@ -2183,9 +2204,19 @@ func (e *heldEmbedding) buildGrid() error {
 			e.box[i] = b
 			e.boxOK[i] = true
 		}
+		if e.useTree {
+			padded[i] = [2]r3.Vec{b[0].Sub(padVec), b[1].Add(padVec)}
+			continue
+		}
 		lo = r3.NewVec(math.Min(lo.X, b[0].X), math.Min(lo.Y, b[0].Y), math.Min(lo.Z, b[0].Z))
 		hi = r3.NewVec(math.Max(hi.X, b[1].X), math.Max(hi.Y, b[1].Y), math.Max(hi.Z, b[1].Z))
 	}
+	if e.useTree {
+		tree := newQueryBoxTree(padded)
+		e.rtree, e.cells, e.wide = &tree, nil, nil
+		return nil
+	}
+	e.rtree = nil
 	lo = lo.Sub(r3.NewVec(e.pad, e.pad, e.pad))
 	hi = hi.Add(r3.NewVec(e.pad, e.pad, e.pad))
 	ext := hi.Sub(lo)
@@ -2259,6 +2290,9 @@ func (e *heldEmbedding) cellRange(b [2]r3.Vec) ([3]int, [3]int) {
 // candidates lists, once each, the facets registered in any cell facet i's
 // padded box reaches, plus every wide facet.
 func (e *heldEmbedding) candidates(i int) ([]int, error) {
+	if e.rtree != nil {
+		return e.treeCandidates(i)
+	}
 	e.stampID++
 	id := e.stampID
 	// The list is reused across calls: each caller is done with it before

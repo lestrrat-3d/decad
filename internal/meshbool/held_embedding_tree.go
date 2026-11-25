@@ -15,7 +15,8 @@ import (
 )
 
 // heldBoxTree indexes the unchanged facet boxes for the first read-only scan.
-// Repair still uses the padded grid because a moved vertex changes its box.
+// Repair indexes boxes padded by the largest move (heldEmbedding.rtree), or
+// uses the padded grid, because a moved vertex changes its box.
 type heldBoxTree struct {
 	nodes  []heldBoxNode
 	boxes  [][2]r3.Vec
@@ -551,4 +552,48 @@ func buildBoxTreeWork(boxes [][2]r3.Vec, budget *proofbound.WorkBudget, spatial 
 		tree.slotBoxes[i] = boxes[id]
 	}
 	return tree, nil
+}
+
+// treeCandidates lists the facets whose padded box, at the time buildGrid ran,
+// overlaps facet i's current box padded the same way. A move never takes a
+// facet's box farther than pad from where it was, so two facets whose current
+// boxes overlap each list the other, as the grid's cells do. The facets it
+// leaves out have disjoint boxes, which pairOK answers as embedded. The list
+// is in tree order and is reused by the next call.
+func (e *heldEmbedding) treeCandidates(i int) ([]int, error) {
+	tree := e.rtree
+	b := e.triBox(i)
+	pad := r3.NewVec(e.pad, e.pad, e.pad)
+	box := [2]r3.Vec{b[0].Sub(pad), b[1].Add(pad)}
+	out := e.cands[:0]
+	if len(tree.nodes) == 0 {
+		e.cands = out
+		return out, nil
+	}
+	nodes, facets, boxes := tree.nodes, tree.facets, tree.boxes
+	stack := append(e.rstack[:0], 0)
+	for len(stack) > 0 {
+		last := len(stack) - 1
+		node := nodes[stack[last]]
+		stack = stack[:last]
+		if err := e.scanStep(); err != nil {
+			e.rstack = stack
+			return nil, err
+		}
+		if !BoxesOverlap(box, node.box) {
+			continue
+		}
+		if node.leafStart < 0 {
+			stack = append(stack, node.right, node.left)
+			continue
+		}
+		for _, f := range facets[node.leafStart : node.leafStart+node.leafCount] {
+			if BoxesOverlap(box, boxes[f]) {
+				out = append(out, f)
+			}
+		}
+	}
+	e.rstack = stack
+	e.cands = out
+	return out, nil
 }
