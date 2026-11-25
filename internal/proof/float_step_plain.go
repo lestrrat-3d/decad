@@ -61,6 +61,13 @@ func NextDown(x float64) float64 {
 	return math.Float64frombits(b)
 }
 
+// StepUp returns NextUp(x) and true. The race build answers false outside the
+// range it steps by float arithmetic; this build's NextUp inlines for every x.
+func StepUp(x float64) (float64, bool) { return NextUp(x), true }
+
+// StepDown returns NextDown(x) and true, as StepUp does for NextUp.
+func StepDown(x float64) (float64, bool) { return NextDown(x), true }
+
 // Abs is math.Abs, bit for bit, for every float64 x.
 //
 // Lean proofs depend on this function; see _proofs/trace.json.

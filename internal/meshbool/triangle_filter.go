@@ -53,6 +53,24 @@ func FivNextDown(x float64) float64 { return proof.NextDown(x) }
 
 func FivNextUp(x float64) float64 { return proof.NextUp(x) }
 
+// fivOutward is FloatInterval{FivNextDown(lo), FivNextUp(hi)}. Add, Sub, Mul
+// and Div spell the same widening out in their own bodies: they are not
+// inlined, and the inlined steps keep their common case free of further
+// calls, each of which -race instruments on entry and exit.
+func fivOutward(lo, hi float64) FloatInterval {
+	if d, ok := proof.StepDown(lo); ok {
+		lo = d
+	} else {
+		lo = proof.NextDown(lo)
+	}
+	if u, ok := proof.StepUp(hi); ok {
+		hi = u
+	} else {
+		hi = proof.NextUp(hi)
+	}
+	return FloatInterval{Lo: lo, Hi: hi}
+}
+
 // abstains reports whether iv is the abstain sentinel.
 func (a FloatInterval) Abstains() bool { return a == FivAbstain }
 
@@ -85,7 +103,7 @@ func FivRounded(x float64) FloatInterval {
 	if proofbound.IsNonFinite(x) {
 		return FivAbstain
 	}
-	return FloatInterval{Lo: FivNextDown(x), Hi: FivNextUp(x)}
+	return fivOutward(x, x)
 }
 
 func (a FloatInterval) Add(b FloatInterval) FloatInterval {
@@ -93,7 +111,17 @@ func (a FloatInterval) Add(b FloatInterval) FloatInterval {
 	if proofbound.IsNonFinite(lo) || proofbound.IsNonFinite(hi) {
 		return FivAbstain
 	}
-	return FloatInterval{Lo: FivNextDown(lo), Hi: FivNextUp(hi)}
+	if d, ok := proof.StepDown(lo); ok {
+		lo = d
+	} else {
+		lo = proof.NextDown(lo)
+	}
+	if u, ok := proof.StepUp(hi); ok {
+		hi = u
+	} else {
+		hi = proof.NextUp(hi)
+	}
+	return FloatInterval{Lo: lo, Hi: hi}
 }
 
 func (a FloatInterval) Sub(b FloatInterval) FloatInterval {
@@ -101,7 +129,17 @@ func (a FloatInterval) Sub(b FloatInterval) FloatInterval {
 	if proofbound.IsNonFinite(lo) || proofbound.IsNonFinite(hi) {
 		return FivAbstain
 	}
-	return FloatInterval{Lo: FivNextDown(lo), Hi: FivNextUp(hi)}
+	if d, ok := proof.StepDown(lo); ok {
+		lo = d
+	} else {
+		lo = proof.NextDown(lo)
+	}
+	if u, ok := proof.StepUp(hi); ok {
+		hi = u
+	} else {
+		hi = proof.NextUp(hi)
+	}
+	return FloatInterval{Lo: lo, Hi: hi}
 }
 
 func (a FloatInterval) Mul(b FloatInterval) FloatInterval {
@@ -132,7 +170,17 @@ func (a FloatInterval) Mul(b FloatInterval) FloatInterval {
 	if proofbound.IsNonFinite(lo) || proofbound.IsNonFinite(hi) {
 		return FivAbstain
 	}
-	return FloatInterval{Lo: FivNextDown(lo), Hi: FivNextUp(hi)}
+	if d, ok := proof.StepDown(lo); ok {
+		lo = d
+	} else {
+		lo = proof.NextDown(lo)
+	}
+	if u, ok := proof.StepUp(hi); ok {
+		hi = u
+	} else {
+		hi = proof.NextUp(hi)
+	}
+	return FloatInterval{Lo: lo, Hi: hi}
 }
 
 // div guards the one case the other three operations do not have: a
@@ -153,7 +201,17 @@ func (a FloatInterval) Div(b FloatInterval) FloatInterval {
 	}
 	lo := math.Min(math.Min(q0, q1), math.Min(q2, q3))
 	hi := math.Max(math.Max(q0, q1), math.Max(q2, q3))
-	return FloatInterval{Lo: FivNextDown(lo), Hi: FivNextUp(hi)}
+	if d, ok := proof.StepDown(lo); ok {
+		lo = d
+	} else {
+		lo = proof.NextDown(lo)
+	}
+	if u, ok := proof.StepUp(hi); ok {
+		hi = u
+	} else {
+		hi = proof.NextUp(hi)
+	}
+	return FloatInterval{Lo: lo, Hi: hi}
 }
 
 // FivVec is a 3-vector of floatIntervals: the interval mirror of xpt, over
