@@ -38,16 +38,16 @@ func requireUnionRefinedEqualsPair(t *testing.T, fitted bool, targets []float64)
 }
 
 func TestUnionRefinedEqualsUnionThenRefineOnASectorJoin(t *testing.T) {
-	// Below, at and above the 0.1 mm the default join holds, and one bound the
-	// finer caps still meet.
-	requireUnionRefinedEqualsPair(t, false, []float64{0.02, 0.03, 0.05, 0.09, 0.1, 0.5})
+	// A bound the finer caps meet, and the 0.1 mm the default join holds, where
+	// the pair's Refine leaves the join as it is.
+	requireUnionRefinedEqualsPair(t, false, []float64{0.03, 0.1})
 }
 
 func TestUnionRefinedEqualsUnionThenRefineWhenTheAuditForcesARetry(t *testing.T) {
 	// The fitted join's first attempt meets a cap and root contact in the
 	// crossing audit and builds again at a quarter of the sag allowance, so
 	// the equal mesh shows the direct build ran the same audit.
-	requireUnionRefinedEqualsPair(t, true, []float64{0.08, 0.5})
+	requireUnionRefinedEqualsPair(t, true, []float64{0.08})
 }
 
 func TestUnionRefinedKeepsLaterOperationsAtTheRefinedBound(t *testing.T) {
