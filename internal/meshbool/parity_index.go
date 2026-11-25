@@ -10,7 +10,9 @@ import (
 const ParityIndexMinFacets = 64
 
 // ParityIndexMaxMemberships caps the (cell, facet) memberships of one index:
-// an axis whose placement lists more gets no index and runs the plain scan.
+// an axis whose placement lists more is placed again on a grid with half the
+// cells per side, down to 4 inner cells, and an axis that lists more even then
+// gets no index and runs the plain scan.
 // The placement collects memberships as runs (parityPlacement) of 8 bytes,
 // each listing at least one membership, in a slice allocated once at its
 // final bound; one facet adds at most c = 258 runs before the check, so the
@@ -246,13 +248,38 @@ func (pm *ParityMesh) buildParityIndex(axis, u, v int) *ParityIndex {
 // facet, returning the index with its lists still unfilled and the placement
 // that fills them, or nil when the mesh is too small, has a facet the grid
 // cannot place or lists more than the membership cap after duplicate
-// projected-segment facets have been skipped.
+// projected-segment facets have been skipped. A placement over the cap is
+// repeated on a grid with half as many cells per side while the grid keeps at
+// least 4 inner cells; only the cap triggers a repeat, so a facet the grid
+// refuses ends the search at once. The cell contract does not depend on the
+// grid size, so the answers of a coarser index equal those of the plain scan.
 func (pm *ParityMesh) placeParityIndex(axis, u, v int) (*ParityIndex, *parityPlacement) {
 	n := len(pm.Tris)
 	if n < ParityIndexMinFacets || n > math.MaxInt32 {
 		return nil, nil
 	}
 	limit := pm.membershipLimit()
+	boxes, umin, umax, vmin, vmax, ok := pm.parityBoxBounds(axis, u, v)
+	if !ok {
+		return nil, nil
+	}
+	inner := parityGridInner(n)
+	for {
+		idx, pl, status := pm.placeParityGrid(u, v, boxes, umin, umax, vmin, vmax, inner, limit)
+		if status == parityPlaceOK {
+			return idx, pl
+		}
+		if status == parityPlaceRefused || inner/2 < parityGridMinInner {
+			return nil, nil
+		}
+		inner /= 2
+	}
+}
+
+// parityBoxBounds builds every facet box on the axis and returns them with the
+// projected bounds of the mesh, or false when a coordinate leaves the range
+// guard or the mesh has no extent in the projection plane.
+func (pm *ParityMesh) parityBoxBounds(axis, u, v int) ([]ParityFacetBox, float64, float64, float64, float64, bool) {
 	boxes := pm.FacetBoxes(axis)
 	umin, umax := math.Inf(1), math.Inf(-1)
 	vmin, vmax := math.Inf(1), math.Inf(-1)
@@ -264,25 +291,48 @@ func (pm *ParityMesh) placeParityIndex(axis, u, v int) (*ParityIndex, *parityPla
 		for _, vi := range pm.Tris[ti] {
 			vert := pm.Verts[vi]
 			if !parityCoordGuarded(CoordOf(vert, u)) || !parityCoordGuarded(CoordOf(vert, v)) {
-				return nil, nil
+				return nil, 0, 0, 0, 0, false
 			}
 		}
 		if proofbound.IsNonFinite(b.MinU) || proofbound.IsNonFinite(b.MaxU) ||
 			proofbound.IsNonFinite(b.MinV) || proofbound.IsNonFinite(b.MaxV) {
-			return nil, nil
+			return nil, 0, 0, 0, 0, false
 		}
 		umin, umax = math.Min(umin, b.MinU), math.Max(umax, b.MaxU)
 		vmin, vmax = math.Min(vmin, b.MinV), math.Max(vmax, b.MaxV)
 	}
 	if !(umin < umax) || !(vmin < vmax) {
-		return nil, nil
+		return nil, 0, 0, 0, 0, false
 	}
-	inner := min(max(int(math.Ceil(2*math.Sqrt(float64(n)))), 4), 256)
+	return boxes, umin, umax, vmin, vmax, true
+}
+
+// parityGridMinInner is the fewest inner cells per side a grid keeps.
+const parityGridMinInner = 4
+
+// parityGridInner is the inner cells per side of the first grid tried for a
+// mesh of n facets.
+func parityGridInner(n int) int {
+	return min(max(int(math.Ceil(2*math.Sqrt(float64(n)))), parityGridMinInner), 256)
+}
+
+// Outcomes of one grid placement.
+const (
+	parityPlaceOK      = iota
+	parityPlaceOverCap // more memberships than the cap: a coarser grid may fit
+	parityPlaceRefused // a facet the grid cannot place: no grid is tried again
+)
+
+// placeParityGrid places every facet on a grid of inner cells per side and
+// reports whether it fit the membership limit.
+func (pm *ParityMesh) placeParityGrid(u, v int, boxes []ParityFacetBox, umin, umax, vmin, vmax float64,
+	inner, limit int) (*ParityIndex, *parityPlacement, int) {
+	n := len(pm.Tris)
 	idx := &ParityIndex{u: newParityGridAxis(umin, umax, inner), v: newParityGridAxis(vmin, vmax, inner)}
 	c := inner + 2
 	kinds, bound, ok := pm.parityFacetKinds(idx, u, v, boxes)
 	if !ok {
-		return nil, nil
+		return nil, nil, parityPlaceRefused
 	}
 	// One facet adds at most c runs, and a facet is placed only while the
 	// memberships, which are at least the runs, are within the cap, so the
@@ -290,7 +340,7 @@ func (pm *ParityMesh) placeParityIndex(axis, u, v int) (*ParityIndex, *parityPla
 	pl := &parityPlacement{c: c, facetRuns: make([]int32, n+1), runs: make([][2]int32, 0, min(bound, limit+c))}
 	for ti, tri := range pm.Tris {
 		if pl.memberships > limit {
-			return nil, nil // too many memberships: the scan stays plain
+			return nil, nil, parityPlaceOverCap
 		}
 		placed := true
 		switch kinds[ti] {
@@ -300,14 +350,14 @@ func (pm *ParityMesh) placeParityIndex(axis, u, v int) (*ParityIndex, *parityPla
 			placed = idx.addLine(pm, pl, tri, u, v)
 		}
 		if !placed {
-			return nil, nil
+			return nil, nil, parityPlaceRefused
 		}
 		pl.facetRuns[ti+1] = int32(len(pl.runs))
 	}
 	if pl.memberships > limit {
-		return nil, nil
+		return nil, nil, parityPlaceOverCap
 	}
-	return idx, pl
+	return idx, pl, parityPlaceOK
 }
 
 // How the placement lists one facet.

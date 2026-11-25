@@ -899,9 +899,10 @@ func TestParityLineAtRefusesUnderflowAndOverflow(t *testing.T) {
 }
 
 // TestParityIndexMembershipCap pins the membership cap: an index of exactly the
-// cap is built, one membership over it is refused, a refused axis scans plainly
-// with the answers and error of the old scan, and the default cap leaves room
-// below int32.
+// cap is built, a placement over it is repeated on a grid with half the cells
+// per side down to 4 inner cells, an axis no such grid fits gets no index and
+// scans plainly with the answers and error of the old scan, and the default cap
+// leaves room below int32.
 func TestParityIndexMembershipCap(t *testing.T) {
 	t.Parallel()
 	// An override can only lower the production cap.
@@ -927,16 +928,28 @@ func TestParityIndexMembershipCap(t *testing.T) {
 			require.NotNil(t, got, `an index of exactly the cap is built`)
 			require.Equal(t, full.ids, got.ids)
 
+			// One membership under the total builds the next grid that fits,
+			// and a cap no grid fits refuses.
+			chain, ok := parityGridChain(NewParityMesh(fx.verts, fx.tris), 0)
+			require.True(t, ok)
 			for _, limit := range []int{total - 1, total / 2, 1} {
 				over := NewParityMesh(fx.verts, fx.tris)
 				over.maxMemberships = limit
-				require.True(t, over.buildParityIndex(0, 1, 2) == nil, `limit %d refuses`, limit)
+				idx := over.buildParityIndex(0, 1, 2)
+				require.Equal(t, parityExpectedGrid(chain, limit), parityGridCells(idx), `limit %d`, limit)
+				if idx != nil {
+					require.LessOrEqual(t, len(idx.ids), limit, `limit %d`, limit)
+					require.Less(t, parityGridCells(idx), parityGridCells(full), `limit %d`, limit)
+				}
 			}
+			noGrid := NewParityMesh(fx.verts, fx.tris)
+			noGrid.maxMemberships = 1
+			require.True(t, noGrid.buildParityIndex(0, 1, 2) == nil, `a cap no grid fits refuses`)
 
 			// The refused axis answers like the plain scan, error text included.
 			all := parityAllFacets(len(fx.tris))
 			refused := NewParityMesh(fx.verts, fx.tris)
-			refused.maxMemberships = total - 1
+			refused.maxMemberships = 1
 			plain := NewParityMesh(fx.verts, fx.tris)
 			plain.Unfiltered = true
 			rng := rand.New(rand.NewPCG(0x77, 0x78))

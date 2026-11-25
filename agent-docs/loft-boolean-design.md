@@ -808,9 +808,9 @@ signed zero do not change that key. Different segments on the same slanted
 supporting line remain listed. Of the facets on one axis-parallel line only the
 first is listed, since it is the one that ends the scan. The membership cap
 counts the remaining placements after these duplicate skips; when that count
-exceeds the cap, the axis uses the plain scan. Every skipped duplicate keeps
-its original facet position, so exact scanning still polls cancellation on the
-plain scan's schedule.
+exceeds the cap, the placement retries on a coarser grid. Every skipped
+duplicate keeps its original facet position, so exact scanning still polls
+cancellation on the plain scan's schedule.
 
 The grid is `internal/meshbool/parity_index.go`'s parity index, and that file's
 comments own the derivations below. Its placement runs under a range guard.
@@ -838,9 +838,13 @@ and polls the context at every multiple of 256 in original facet position,
 as the plain scan does.
 
 An axis whose placement would list more than `2²³` (cell, facet) memberships
-(`ParityIndexMaxMemberships`) gets no index and the scan on that axis is the
-plain one. The placement collects each facet's cells as runs, one per grid
-column (one per grid row for a steep segment), and expands the runs in
+(`ParityIndexMaxMemberships`) is placed again on a grid with half as many cells
+per side, while the grid keeps at least 4 inner cells; an axis that lists more
+even then gets no index and the scan on that axis is the plain one. Only the cap triggers a coarser
+grid: a facet the grid cannot place ends the search at once. The cell contract
+does not depend on the grid size, so every grid gives the plain scan's answers.
+The placement collects each facet's cells as runs, one per
+grid column (one per grid row for a steep segment), and expands the runs in
 ascending facet order into a counting sort, so the lists are those one append
 per membership would build. A run costs 8 bytes and lists at least one
 membership, and a facet adds at most 258 runs before the check, so the cap
