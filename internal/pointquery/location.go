@@ -16,22 +16,20 @@ import (
 // PreparedMesh keeps the exact parity projections and index for repeated
 // queries against one immutable held mesh.
 type PreparedMesh struct {
-	verts  []r3.Vec
-	tris   [][3]int
-	subset []int
-	mu     sync.Mutex
+	verts []r3.Vec
+	tris  [][3]int
+	mu    sync.Mutex
+	// parity is guarded by mu.
 	parity *meshbool.ParityMesh
+	// distanceOnce builds distance on the first query that needs a distance.
+	// The index is read-only after that, so queries read it without mu.
+	distanceOnce sync.Once
+	distance     *distanceIndex
 }
 
 // NewPreparedMesh prepares reusable query data for one immutable held mesh.
 func NewPreparedMesh(verts []r3.Vec, tris [][3]int) *PreparedMesh {
-	subset := make([]int, len(tris))
-	for i := range subset {
-		subset[i] = i
-	}
-	return &PreparedMesh{
-		verts: verts, tris: tris, subset: subset, parity: meshbool.NewParityMesh(verts, tris),
-	}
+	return &PreparedMesh{verts: verts, tris: tris, parity: meshbool.NewParityMesh(verts, tris)}
 }
 
 // Location is the proof result over a verified mesh and its true body.
@@ -72,6 +70,16 @@ func LocateWithDistance(ctx context.Context, p r3.Vec, verts []r3.Vec, tris [][3
 	return locate(ctx, p, verts, tris, boundaryBound, symDiffBound, distanceSquared, nil, true)
 }
 
+// cleanDistanceIndex returns the distance index, built on first use, or nil
+// when the mesh failed its check and distance queries keep MeshDistanceSquared.
+func (m *PreparedMesh) cleanDistanceIndex() *distanceIndex {
+	m.distanceOnce.Do(func() { m.distance = buildDistanceIndex(m.verts, m.tris) })
+	if !m.distance.clean {
+		return nil
+	}
+	return m.distance
+}
+
 func locate(ctx context.Context, p r3.Vec, verts []r3.Vec, tris [][3]int,
 	boundaryBound, symDiffBound float64, distanceSquared *big.Rat, prepared *PreparedMesh, escape bool) (Location, error) {
 	if len(tris) == 0 || math.IsNaN(boundaryBound) || math.IsInf(boundaryBound, 0) ||
@@ -79,22 +87,19 @@ func locate(ctx context.Context, p r3.Vec, verts []r3.Vec, tris [][3]int,
 		boundaryBound < 0 || symDiffBound < 0 {
 		return Undecided, nil
 	}
-	var subset []int
-	if prepared != nil {
-		subset = prepared.subset
-	} else {
-		subset = make([]int, len(tris))
-		for i := range subset {
-			subset[i] = i
-		}
-	}
 	var inside, onBoundary bool
 	var err error
 	if prepared == nil {
+		subset := make([]int, len(tris))
+		for i := range subset {
+			subset[i] = i
+		}
 		inside, onBoundary, err = meshbool.MeshParityContext(ctx, proof.XptOf(p), verts, tris, subset)
 	} else {
+		// MeshParityAllContext returns what MeshParityPreparedContext returns
+		// over every facet, error text included, and may use a parity index.
 		prepared.mu.Lock()
-		inside, onBoundary, err = meshbool.MeshParityPreparedContext(ctx, proof.XptOf(p), prepared.parity, subset)
+		inside, onBoundary, err = meshbool.MeshParityAllContext(ctx, proof.XptOf(p), prepared.parity)
 		prepared.mu.Unlock()
 	}
 	if err != nil && !errors.Is(err, decaderr.ErrBooleanFailed) {
@@ -106,6 +111,14 @@ func locate(ctx context.Context, p r3.Vec, verts []r3.Vec, tris [][3]int,
 			return OnBoundary, nil
 		}
 		return Undecided, nil
+	}
+	if distanceSquared == nil && prepared != nil {
+		if index := prepared.cleanDistanceIndex(); index != nil {
+			distanceSquared, err = index.distanceSquared(ctx, p, tris)
+			if err != nil {
+				return Undecided, err
+			}
+		}
 	}
 	if distanceSquared == nil {
 		distanceSquared, err = MeshDistanceSquared(ctx, p, verts, tris)
