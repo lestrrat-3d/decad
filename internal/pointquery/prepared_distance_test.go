@@ -5,6 +5,7 @@ package pointquery
 import (
 	"context"
 	"errors"
+	"math"
 	"math/rand/v2"
 	"sync"
 	"testing"
@@ -169,4 +170,11 @@ func errorText(err error) string {
 		return ""
 	}
 	return err.Error()
+}
+
+func TestDistanceIndexFitsLimit(t *testing.T) {
+	require.True(t, distanceIndexFits(0))
+	require.True(t, distanceIndexFits(math.MaxInt32))
+	require.False(t, distanceIndexFits(math.MaxInt32+1))
+	require.False(t, distanceIndexFits(math.MaxInt))
 }

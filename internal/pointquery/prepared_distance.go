@@ -14,6 +14,10 @@ import (
 // distanceLeafSize is the most triangles a distance index leaf holds.
 const distanceLeafSize = 8
 
+// distanceIndexFits reports whether n triangles can be addressed by the
+// int32 fields of distanceNode and distanceIndex.order.
+func distanceIndexFits(n int) bool { return n <= math.MaxInt32 }
+
 // distancePollInterval is how many heap pops a distance query makes between
 // context checks.
 const distancePollInterval = 256
@@ -46,11 +50,12 @@ func vecArray(v r3.Vec) [3]float64 { return [3]float64{v.X, v.Y, v.Z} }
 // buildDistanceIndex checks the mesh once, with the checks MeshDistanceSquared
 // makes on every call: every vertex finite, every triangle index in range and
 // every triangle's exact normal nonzero. It returns an index that is not clean
-// when any check fails or the mesh has no triangle. The check does not poll a
+// when any check fails, the mesh has no triangle or it has more triangles
+// than int32 addresses. The check does not poll a
 // context.
 func buildDistanceIndex(verts []r3.Vec, tris [][3]int) *distanceIndex {
 	d := &distanceIndex{}
-	if len(tris) == 0 {
+	if len(tris) == 0 || !distanceIndexFits(len(tris)) {
 		return d
 	}
 	for _, v := range verts {
