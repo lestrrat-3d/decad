@@ -158,6 +158,22 @@ triangle is degenerate. A mesh with a degenerate triangle keeps the
 index-order scan. Either way the query returns the value, budget steps and
 errors of the index-order scan.
 
+`LocatePoint` queries a prepared mesh (`PreparedMesh`) through a distance
+index instead. The first query that needs a distance checks the mesh once with
+the checks above: every vertex finite, every triangle index in range, and
+every triangle's exact normal nonzero. A mesh that passes gets a box tree over
+its triangles. A query searches the tree nearest box first, using the same
+downward-rounded box bound as `MeshDistanceSquared`, and stops at the first
+entry whose bound is at or above the upward-rounded exact minimum. It compares
+exact fractions and normalises only a new minimum to a `big.Rat`. The result is
+the exact minimum `MeshDistanceSquared` returns for that mesh. A mesh that
+fails the check keeps `MeshDistanceSquared`, with its value and errors. The
+index query returns the value and errors of `MeshDistanceSquared` but polls the
+context on its own schedule: before the search and every 256 heap pops, not
+once per budget step. A cancelled context still returns the context error.
+`LocatePoint`'s parity step on a prepared mesh calls `MeshParityAllContext`,
+which returns what the scan over facets 0 to n-1 returns.
+
 The distance query reads §2's mesh proof only; it does not consult §7 or §8.
 When §2 proves the point outside, that interval encloses the distance to the
 solid. When §2 proves inside or on the boundary, return exact zero. When the

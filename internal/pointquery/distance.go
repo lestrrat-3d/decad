@@ -93,9 +93,19 @@ func triangleNormal(a, b, c proof.DyV3) proof.DyV3 {
 // dyadic numerator by one positive dyadic denominator. A zero normal is an
 // error.
 func triangleDistanceSquared(p, a, b, c proof.DyV3) (*big.Rat, error) {
+	distance, err := triangleDistanceFraction(p, a, b, c)
+	if err != nil {
+		return nil, err
+	}
+	return distance.rat(), nil
+}
+
+// triangleDistanceFraction is triangleDistanceSquared before its one
+// normalisation: the exact value as a fraction with a positive denominator.
+func triangleDistanceFraction(p, a, b, c proof.DyV3) (dyFraction, error) {
 	normal := triangleNormal(a, b, c)
 	if proof.DvIsZero(normal) {
-		return nil, fmt.Errorf(`%w: point query mesh contains a degenerate triangle`, decaderr.ErrUnsupported)
+		return dyFraction{}, fmt.Errorf(`%w: point query mesh contains a degenerate triangle`, decaderr.ErrUnsupported)
 	}
 	triangle := [3]proof.DyV3{a, b, c}
 	projectionInside := true
@@ -109,7 +119,7 @@ func triangleDistanceSquared(p, a, b, c proof.DyV3) (*big.Rat, error) {
 	}
 	if projectionInside {
 		offset := proof.DvDot(proof.DvSub(p, a), normal)
-		return dyFraction{proof.DyMul(offset, offset), proof.DvDot(normal, normal)}.rat(), nil
+		return dyFraction{proof.DyMul(offset, offset), proof.DvDot(normal, normal)}, nil
 	}
 	minimum := segmentDistanceSquared(p, a, b)
 	for i := 1; i < 3; i++ {
@@ -117,7 +127,7 @@ func triangleDistanceSquared(p, a, b, c proof.DyV3) (*big.Rat, error) {
 			minimum = distance
 		}
 	}
-	return minimum.rat(), nil
+	return minimum, nil
 }
 
 // boxDistanceSquared is a lower bound used only to skip a triangle whose
