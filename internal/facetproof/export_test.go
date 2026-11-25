@@ -27,3 +27,7 @@ var ComponentMembers = componentMembers
 // OrderedRounding is the order-keeping rounding of a placement's last
 // embedding stage.
 var OrderedRounding = orderedRounding
+
+// PlacementCertificateShadow makes a certified placement also run the held
+// embedding scan and refuse when the scan finds anything to move.
+var PlacementCertificateShadow = &placementCertificateShadow

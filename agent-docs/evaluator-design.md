@@ -1749,6 +1749,39 @@ work intervals inside quadratic/refinement loops, as interference §7 specifies.
   A moved vertex pays its measured distance, and the placement reports the
   move as the gap-tolerance search does (`agent-docs/gap-tolerance-design.md`
   §5.1). The bounded replay placement does not run this stage.
+
+  **A rigid copy inherits its source's separation.** `PatternCopies` and
+  `Patterned` place one source many times, and each copy would otherwise be
+  scanned from scratch. From the second request for a mesh, the placements under
+  one pattern call share a certificate of the source
+  (`internal/meshbool/held_certificate.go`, which holds the full proof). A copy
+  skips the scan when its facets are checked as follows, and the scan runs
+  unchanged for every copy the check does not pass, so a certified copy returns
+  what a clean scan returns: no moves and no repair.
+  - **Pull back.** A copy's vertex is the nearest float to the exact image
+    `D·v + t`, so it lies within `δ` of that image, where `δ` is the placement's
+    own rounding allowance. If `e < 1/2` is the entrywise absolute sum of
+    `DᵀD − I` (computed exactly), `D⁻¹` stretches by at most `1/√(1−e) ≤ 1 + e`,
+    so the copy is the image under `D`, `t` of the source with every vertex
+    moved by at most `ε' = (1+e)·δ`. The map is a bijection, so the copy's facets
+    meet exactly as the moved source's do.
+  - **Three sets.** Every pair of facets is one of: sharing at least one vertex
+    index (checked exactly on each copy with the scan's own predicate,
+    duplicates and reversed windings included); sharing none and separated by an
+    axis of the source whose gap exceeds `2τ|n|` (`τ = 2⁻³⁰ mm`), or by boxes
+    more than `4τ` apart, so that a move of `ε' ≤ τ` per vertex cannot close it;
+    or thin, meaning neither, and checked exactly on each copy. Each facet's
+    normal is also checked non-zero on each copy.
+  - **Float error.** The gap is read relative to one corner of the pair and
+    charged 1e-12 times the sum of absolute terms of each dot product, far above
+    the roundoff of the arithmetic, with guards that reject any value that could
+    under- or overflow. Every test fails on NaN.
+  - **Cache.** Certificates are keyed by the content of the source vertices and
+    facets, built on the second request for a mesh, and refused for a source with
+    a repeated index in a facet, a non-finite or huge coordinate, or more than
+    4096 thin pairs. A copy whose `ε'` exceeds `τ` (about 262 m from the origin)
+    or whose `e` reaches 1/2 falls back to the scan. A placement through an
+    exact rotation's retry always scans.
 - **Ordinary mesh output**: faces are `Faceted`, one per CONNECTED PATCH of a current operand
   face, except that a patch joins the patches of the other operand that are adjacent, exactly coplanar and
   same-facing (`agent-docs/union-face-merge-design.md`). Each patch keeps that face's origins, and its inherited Boolean roles

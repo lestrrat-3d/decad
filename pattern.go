@@ -148,6 +148,11 @@ func (b *Body) patternReceiver(ctx context.Context, spec PatternSpec) (*Document
 // base, base+1, ..., registering none of them.
 func (rp resolvedPattern) buildInstances(ctx context.Context, d *Document, base producerID, payload topo.Payload, keeping bool) ([]*Body, error) {
 	out := make([]*Body, 0, rp.Count-1)
+	if rp.Count > 2 {
+		// Two or more placed copies of one faceted source share a certificate that
+		// the source's embedding carries to each rigid copy (meshbool.PlacementCertificates).
+		ctx = meshbool.WithPlacementCertificates(ctx)
+	}
 	for i := 1; i < rp.Count; i++ {
 		if err := ctx.Err(); err != nil {
 			return nil, err

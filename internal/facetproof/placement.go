@@ -242,9 +242,18 @@ func placeMeshGapBudget(ctx context.Context, budget *proofbound.WorkBudget, vert
 		moved, repair, err = keepPlacedEmbeddedWithAxesReplay(ctx, exact, next.Verts, next.Tris, [3]r3.Vec{basis.EX, basis.EY, basis.EZ}, denotes, budget)
 	} else {
 		axes := [3]r3.Vec{basis.EX, basis.EY, basis.EZ}
-		moved, repair, err = keepPlacedEmbeddedWithAxes(ctx, exact, next.Verts, next.Tris, axes, denotes)
-		if fold := (*meshbool.HeldFoldError)(nil); errors.As(err, &fold) {
-			moved, repair, err = placeOrdered(ctx, exact, next.Verts, next.Tris, axes, denotes, vertexAllow, err)
+		// A copy proven embedded from its source's certificate returns what a clean scan
+		// returns: no moves and no repair. Exact-rotation images are not the affine
+		// image the certificate reasons about, so they scan.
+		certified := false
+		if gap == nil || gap.rotation == nil {
+			certified, err = certifiedCopy(ctx, exact, verts, tris, next, basis, vertexAllow, denotes, axes)
+		}
+		if err == nil && !certified {
+			moved, repair, err = keepPlacedEmbeddedWithAxes(ctx, exact, next.Verts, next.Tris, axes, denotes)
+			if fold := (*meshbool.HeldFoldError)(nil); errors.As(err, &fold) {
+				moved, repair, err = placeOrdered(ctx, exact, next.Verts, next.Tris, axes, denotes, vertexAllow, err)
+			}
 		}
 	}
 	if err != nil {

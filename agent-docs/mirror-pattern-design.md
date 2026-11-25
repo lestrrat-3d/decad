@@ -231,6 +231,12 @@ receiver, and every non-co-directional motion, instances through
 `Copy` with `WithCopyPlacement` under the composed rigid motion, which is what a caller's own
 loop would do.
 
+Two or more such faceted copies of one source share a certificate of the
+source's embedding: `PatternCopies` and `Patterned` carry a certificate cache on the
+context of their instance loop, and a copy the certificate covers skips the held
+embedding scan and returns what a clean scan returns
+(`agent-docs/evaluator-design.md` §9, "A rigid copy inherits its source's separation").
+
 ### 4.4 Exact rotation copies
 
 ```go
