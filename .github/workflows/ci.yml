@@ -509,6 +509,20 @@ jobs:
         packages: [""]
     runs-on: ${{ matrix.os }}
     steps:
+      # Record the CPU model so intermittent runtime crashes can be matched to CPU types.
+      - name: Print CPU model (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: (Get-CimInstance Win32_Processor).Name
+
+      - name: Print CPU model (Linux)
+        if: runner.os == 'Linux'
+        run: lscpu | grep 'Model name'
+
+      - name: Print CPU model (macOS)
+        if: runner.os == 'macOS'
+        run: sysctl -n machdep.cpu.brand_string
+
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
