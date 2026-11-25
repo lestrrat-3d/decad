@@ -3209,3 +3209,11 @@
 12	0.00	TestVerifySkippedPairReportsNothingForThePair
 12	0.00	TestVerifySkippedPairOmitsItsClearance
 12	0.00	TestVerifySkippedPairRejectsInvalidPairs
+12	0.00	TestUnionRefinedEqualsUnionThenRefineOnASectorJoin
+12	0.00	TestUnionRefinedKeepsLaterOperationsAtTheRefinedBound
+12	0.00	TestUnionRefinedRefusesABoundTheJoinCannotMeetAndChangesNothing
+12	0.00	TestUnionRefinedRejectsABadBoundBeforeBuilding
+12	0.00	TestUnionRefinedRejectsNilContextAndTooFewBodies
+12	0.00	TestUnionRefinedStopsOnACanceledContext
+12	0.00	TestUnionRefinedOfAPairIsUnionThenRefine
+12	0.00	TestUnionRefinedKeepsTheUnionWhenRefineRefusesANonMeshJoin
