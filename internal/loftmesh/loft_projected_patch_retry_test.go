@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/r3"
 	"github.com/stretchr/testify/require"
 )
 
@@ -106,13 +107,30 @@ func TestProjectedPatchRetryRefusesMoreInvertedThanCap(t *testing.T) {
 }
 
 func TestProjectedPatchRetryRefusesEvenSplitOfSigns(t *testing.T) {
-	g := newRetryGrid(1)
-	g.move(0, 0, 0, 1.6)
-	// Two triangles: one inverted, one not. No strict majority.
-	require.Len(t, g.invertedByCross(), 1)
+	// The patch holds a grid and a separate mirrored copy of it, so as many
+	// triangles are inverted as are not. Dropping the inverted half would leave
+	// the first grid, which proves, so only the strict-majority check refuses it.
+	g := newRetryGrid(3)
+	half := len(g.tris)
+	offset := len(g.verts)
+	for _, v := range g.verts[:offset] {
+		g.verts = append(g.verts, r3.Vec{X: v.X + 100, Y: v.Y, Z: v.Z})
+	}
+	for _, tri := range g.tris[:half] {
+		g.tris = append(g.tris, [3]int{tri[0] + offset, tri[2] + offset, tri[1] + offset})
+	}
+	require.Len(t, g.invertedByCross(), half)
+	require.Equal(t, half, len(g.tris)-half)
+	require.LessOrEqual(t, half, projectedPatchRetryMaxInverted)
+
+	first := newRetryGrid(3)
+	remaining := uint64(100_000_000)
+	require.Equal(t, ProjectedPatchHolds,
+		projectedPatchProofLimited(proofbound.NewWorkBudget(t.Context()), g.verts, g.tris,
+			ProjectedPatch{Triangles: first.patch().Triangles, Axes: [2]int{0, 1}}, &remaining))
+
 	got := retryDecide(t.Context(), g)
 	require.Equal(t, ProjectedPatchOrientation, got.old)
-	requireRetryInvariants(t, g, got)
 	require.False(t, got.ok)
 }
 

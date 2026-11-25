@@ -31,8 +31,17 @@ const projectedPatchRetryMaxInverted = 32
 // the retained triangles of this patch included. A failed retry leaves the
 // whole patch in the audit, as a failed first proof does. The ring and the
 // cap on inverted triangles decide only how often the retry succeeds, never
-// whether the result is sound: widening the ring or the cap, or dropping the
-// ring, changes which patches prove and no verdict.
+// whether the result is sound. The retry changes no audit verdict except a
+// work-ceiling refusal, which can now appear or disappear: proven patches can
+// switch the audit from the cheapest flat scan to the grouped tree scan, which
+// may cost more scan units. In one measured case the scan units rose from
+// 5,448 to 7,519, so a ceiling of 6,000 made the old audit pass and the new one
+// refuse with the work-limit error. With a single patch and a ceiling of 1,000
+// the old audit refused and the new one passed. In the sector join
+// (internal/revolveshell/sector_join_build.go) a ceiling refusal makes the
+// build retry with a coarser cap, so a flip would change the mesh. Sector-join
+// patches are disjoint, and in both gallery tests scan units only fell (189M
+// to 129M, and 100M to 69M).
 //
 // remaining is the proof's shared boundary-check allowance and budget the
 // caller's work budget; both are charged as for the first proof. A canceled

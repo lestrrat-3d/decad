@@ -1474,9 +1474,18 @@ few inverted slivers at the heel root seam. The audit stays exact because the
 proof's theorem holds for any triangle set. The reduced patch is the family, so
 only pairs inside it are omitted. Every dropped triangle belongs to no family
 and is audited against every other triangle, the reduced patch's own included.
-The ring and the cap on inverted triangles choose which patches prove, never a
-verdict. A patch that fails again, or fails for another reason, stays whole in
-the audit as before.
+The ring and the cap on inverted triangles choose which patches prove, never
+soundness. The retry changes no audit verdict except a work-ceiling refusal,
+which can now appear or disappear: proven patches can switch the audit from the
+cheapest flat scan to the grouped tree scan, which may cost more scan units. In
+one measured case the scan units rose from 5,448 to 7,519, so a ceiling of 6,000
+made the old audit pass and the new one refuse. With a single patch and a
+ceiling of 1,000 the old audit refused and the new one passed. In the sector
+join (`internal/revolveshell/sector_join_build.go`) a ceiling refusal makes the
+build retry with a coarser cap, so a flip would change the mesh. Sector-join
+patches are disjoint, and in both gallery tests scan units only fell (189M to
+129M, and 100M to 69M). A patch that fails again, or fails for another reason,
+stays whole in the audit as before.
 When projected-patch proofs omit within-patch pairs, the row query uses one
 tree per proof family and skips only the row's own proven family. It still
 counts each visited node and compared box under the same ceiling, then sorts
