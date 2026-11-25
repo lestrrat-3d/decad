@@ -285,7 +285,11 @@ func repairHeldEmbeddingShared(ctx context.Context, h HeldRounding, memo bool, s
 			if stage == 0 && sweep == 0 && e.seed != nil {
 				offenders, failing, err = e.seededOffenders(check)
 			} else {
+				// The memo was created empty for this pass, and the pass
+				// decides each pair at most once, so no lookup in it can hit.
+				e.skipLookup = stage == 0 && sweep == 0 && memo && len(e.pairs) == 0
 				offenders, failing, err = e.offenders(check)
+				e.skipLookup = false
 			}
 			e.seed = nil
 			if err != nil {
@@ -921,6 +925,10 @@ type heldEmbedding struct {
 	useTree bool
 	rtree   *heldBoxTree
 	rstack  []int
+	// skipLookup makes pairOK decide a pair without reading the pair memo
+	// (it still stores what the exact predicates decide). Only the first
+	// sweep sets it, over a memo that starts empty.
+	skipLookup bool
 	// inc and taken are needed only when the ordered repair may move vertices.
 	inc   [][]int
 	taken map[r3.Vec]int
@@ -1087,8 +1095,10 @@ func (e *heldEmbedding) pairOK(i, j int, keepFloat bool) bool {
 	}
 	key := uint64(lo)<<32 | uint64(hi)
 	stamp := gLo<<32 | gHi<<1
-	if p, ok := e.pairs[key]; ok && p&^1 == stamp {
-		return p&1 == 1
+	if !e.skipLookup {
+		if p, ok := e.pairs[key]; ok && p&^1 == stamp {
+			return p&1 == 1
+		}
 	}
 	ok, exact := e.pairEmbeddedPath(i, j)
 	if !exact && !keepFloat {
