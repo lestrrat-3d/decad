@@ -4,7 +4,8 @@ Exact classification of coplanar facet contacts in the mesh boolean, and exact p
 cause (§1), required behavior (§2), the classification rule (§3), composition with face bounds and records (§4), the
 manifold audit (§5), the proximity gates' obligation (§6), planar face simplification (§7), records of results (§8),
 soundness (§9), performance (§10), tests (§11), risks (§12), user decisions (§13), code map (§14), open questions
-(§15), seats in an Intersect (§16), placed seats (§17) and flush planes that agree only within a bound (§18).
+(§15), seats in an Intersect (§16), placed seats (§17), flush planes that agree only within a bound (§18) and
+separated cap pairs (§19).
 
 Implements `agent-docs/interference-design.md` §5.2 and §11 row 4. Companion to `agent-docs/evaluator-design.md` §9
 (mesh boolean), `agent-docs/gap-tolerance-design.md` §5.2 (shifted retry),
@@ -32,6 +33,8 @@ Navigation, not authority.
 | Why can a seat on a bored pocket floor be admitted in an `Intersect`? | §16 |
 | How is a placed body's true plane read? | §17 |
 | Why do planes that agree only within a bound go to the gap-tolerance retry? | §18 |
+| How are two bodies on opposite sides of a shared cap, such as a frustum and a cone on one circle, decided? | §19 |
+| Why does the shifted retry never read a separation certificate? | §19.7 |
 
 ## Assumptions
 
@@ -305,6 +308,9 @@ the first `ContactRegion`; the caller skips the face pair) to be backed by a ref
   admission classifies their contact on held facets that keep the true arrangement (flush-contact §4.7, F5). The
   deferral stays backed either way.
 
+**A separated cap pair** (§19) skips the pre-pass as a whole on its unshifted attempt: its operands meet only over the
+caps' common region, which has interior (§19.3).
+
 **The occupancy re-run** (`composeOccupancy`, `internal/booleaneval/eval.go`) runs the gate again over widened face
 bounds after the mesh pass. An admitted exact pair can get positive slack there, and no mesh refusal backs that
 deferral. `composeOccupancy` returns nil (no occupancy record; the boolean result is unchanged) whenever
@@ -509,7 +515,8 @@ shifted volume bound) or a positive rounding bound needs a fixture whose contact
 `roundTrip` keeps the retry and `CodeGapShiftApplied`. The retry assertions of `apitest.TestBooleanGapTolerance`,
 `apitest.TestVerifyGapToleranceDecidesAFlushPair`, `apitest.TestBooleanGapToleranceEdgeAndPointTouches`,
 `apitest.TestBooleanGapToleranceRestingBossJoinsPlate` and `apitest.TestBooleanGapShiftKeepsTranslatedTags` use such
-fixtures. Rules:
+fixtures. A boss resting on a plain plate is a separated cap pair (§19) and takes no retry, so the boss tests rest it
+on a plate that is a mesh `Union` result, whose payload states no cap side. Rules:
 
 - Build the fixture with `roundTrip`: B turned by an `r3` rotation of 20° about the diagonal axis `(1, 1, 1)`, then by
   −20°, so its float vertices round. A turn about a cardinal axis keeps the corners exact. Before relying on a fixture,
@@ -929,3 +936,158 @@ the 0.01 mm reach. Holding the swivel's bore finer where it is built would decid
 
 `TestIntersectSeat` and `TestIntersectPlacedSeat` run in an `ExactOnly` document, so they keep testing the exact
 path alone.
+
+## 19. Separated cap pairs
+
+Two bodies that meet across one planar cap each, such as a lofted frustum and a revolved cone on one circle or a boss
+standing on a plate, lie on opposite sides of the caps' plane. Their caps' outlines are chorded, so §3.1 reads the caps
+inexact, and flush admission (`agent-docs/flush-contact-design.md` §4.4) refuses them wherever one outline comes within
+its reach of the other, as two chordings of one circle do all round it. Without this section the proximity gate then
+refuses the walls that leave the rims: a chorded loft wall facet comes within the summed face bounds of the other
+body's cap and wall and proves no crossing deeper than that. The shifted retry cannot open those contacts for an
+oblique frustum: its wall normals round the rim run from +0.9 to about −0.6 along the axis, so no one translation within
+the reach clears them all. This section decides such a pair on the unshifted attempt, with no shift.
+
+Code: `internal/meshbool/separated_caps.go`, `internal/flushface/deep.go`, `internal/booleaneval/cap_sides.go`; the
+callers in `internal/booleaneval/eval.go`, `internal/meshbool/flush_faces.go`, `boolean_pair_cuts.go` and
+`boolean_mesh.go`.
+
+### 19.1 The rule
+
+Operands A and B form a **separated cap pair** on an exact plane P when all hold:
+
+1. A states a cap side (§19.2) whose face X lies in P, and B one whose face Y lies in P with the opposite outward
+   normal. So A lies in one closed half-space of P and meets P only in the closure of X, and B in the other one and Y.
+2. Every held corner of X and of Y lies in P exactly, and the first facet of each faces out of its own operand.
+3. Every held vertex of A lies in A's closed half-space, no facet of A outside X lies in P, and a facet of A outside X
+   that touches P does so at an edge or a vertex of X's facets. The same holds for B and Y.
+4. Some point of P lies inside both held faces, farther from each held outline than that face's outline reach (§19.4).
+
+All signs are exact rationals over held floats and recorded leaves. `SeparatedOperands` looks for such a pair among the
+two operands' cap sides; `separatedPair` decides one face pair, memoised.
+
+### 19.2 Cap sides
+
+A `meshbool.CapSide` is a payload's claim: its true solid lies in the closed half-space `{x : N·(x − O) ≤ 0}`, the
+true face `Face` lies in the plane `N·(x − O) = 0`, and the solid meets that plane only in the closure of `Face`.
+`booleaneval.capSides` reads three payloads; every other payload, every mesh `Boolean` result included, states none.
+
+| Payload | Read when | Why the claim holds |
+|---|---|---|
+| straight prism (`prismrecord.Payload`) | not a sheet; exactly two `CapRecord` faces whose record planes (`capRecordPlane`) are exact, parallel and distinct (`SlabCapSides`) | the walls run along the frame normal from one cap level to the other |
+| plain loft (`loftrecord.Payload`) | not a sheet; no fillet connector, bore, construction or join displacement, or join gap; the same two caps | the walls are ruled between the two sections, and a segment from one of two parallel planes to the other lies between them and meets each only at its end |
+| revolve (`revolveplan.Payload`) | not a sheet; zero `SectionDelta`; every face but a partial sweep's end cap records straight meridian segments with exact ends on one exact axis frame (`RevolveCapSides`) | see below |
+
+A revolve record places meridian point `(z, ρ)` at `O + B₀·ρ·cos φ + B₁·ρ·sin φ + B₂·z`. With `n = B₀ × B₁`,
+`n·(x − O − z₀·B₂) = (n·B₂)·(z − z₀)`, so the solid lies between the planes of its lowest and highest meridian levels,
+which straight segments reach at their ends. A level gives a side only when exactly one face lies wholly at it and
+every other meridian end at that level has a radius that face's ends have; otherwise the solid meets the plane in a
+circle beside the cap. Arcs reach their extreme levels between their ends, so a meridian with an arc gives no side.
+
+### 19.3 What the pair decides
+
+**Claim P1.** Under §19.1 items 1 and 4, the true solids meet exactly in `cl(X) ∩ cl(Y)`, and that region holds a disc
+of positive radius.
+
+A lies in its closed half-space and B in the other, whose intersection is P, so `A ∩ B ⊆ (A ∩ P) ∩ (B ∩ P)`, which is
+`cl(X) ∩ cl(Y)` by item 1. Neither interior reaches P, so the interiors are disjoint. §19.4 gives the disc.
+
+The pair is read in three places:
+
+- **Proximity gate.** `booleaneval.evaluate` skips `RefuseUndecidableProximity` for the attempt. The gate asks whether
+  two true surfaces touch or cross where only the chords could tell. By P1 they never cross and touch over the caps'
+  common region, which has interior, so no answer depends on where a chord falls. Item 3 puts the held meshes in the
+  same half-spaces, so every held contact lies in P, and the mesh pass classifies it exactly or refuses.
+- **Coplanar pass.** `flushPair` answers true for the facets of X and Y, so §3.2 admits their coplanar pairs and §3.4's
+  table keeps or drops each region. The table is the point-set definition of each operation for the held operands,
+  exact or not; §19.5 charges how far the held result lies from the true one.
+- **Occupancy.** The attempt tracks no occupancy record (`composeOccupancy` would re-run the gate it skipped).
+
+### 19.4 Overlap with a margin
+
+`flushface.Deep` accepts a point p of P for face F with reach `D(F)`, the largest outline vertex radius `ρ` of
+`agent-docs/flush-contact-design.md` §4.3, when p's squared distance from every held outline edge exceeds `D(F)²` and a
+ray from p crosses the outline an odd number of times. Both read the plane that drops the normal's largest axis, which
+shortens no distance, in exact rationals; a float distance below the margin rejects first. The candidates are the mean
+of each face's outline corners, their midpoint, and up to 64 facet centroids of each face.
+
+**Claim P2.** Such a p lies inside the true face, together with the disc of radius `d − D(F)` about it, `d` its
+distance from the held outline.
+
+By the end correspondence of `agent-docs/flush-contact-design.md` §4.2, every held outline vertex lies within its `ρ` of
+its true point, and the true outline arc between two such points lies within the larger radius of the chord. Each
+chord, its arc and the two short segments to the true points lie in the capsule of radius `D(F)` about the chord, a
+convex set, so the held and the true outline are homotopic inside the union of those capsules. p lies outside that
+union, so both outlines wind about p the same number of times, and p lies inside the held face.
+
+A tangent contact, two caps that touch at a point or along an edge or overlap by less than their reaches, has no such
+point. Such a pair keeps the gate's refusal and the retry, as before this section.
+
+### 19.5 Bounds of the result
+
+Let R be the true `Union`. A held point x of P that a face of the pair keeps lies within `max(D(X), D(Y))` of R's
+boundary:
+
+- x in X but not in Y, both true: x is on R's boundary.
+- x outside true X: x lies between a held chord of X and its arc, within `D(X)` of the true outline of X, whose points
+  are on R's boundary or are limits of points of P that are.
+- x inside true Y but outside held Y: likewise within `D(Y)` of the true outline of Y.
+
+So a kept point needs the reach only inside the strip of half-width `max(D(X), D(Y))` about the two held outlines
+(`separatedBand`). The pass records each admitted facet's band (`addBand`); the side pass lifts the corners of a kept
+piece near the band to `reach = D(X) + D(Y)`, at the corners near it, or at all three when only the piece's interior
+comes near (`separatedBand.raise`). The piece's facet bound is its largest corner bound, so every point of it is
+charged, while a corner far from both outlines keeps its own bound for the facets that share it. A contact segment
+whose ends both lie in P is a touch of the two outlines, not a crossing, so its rim bound is the reach, not the slab
+tube `(δA + δB)/sin θ` of `agent-docs/faceted-vertex-bounds-design.md` §3.2, which reads the walls as crossing where
+they only meet in P. The slider's frustum and cone junction holds about 0.0059 mm instead of 0.015 to 0.020 mm, below
+the next `Union`'s chord tolerance.
+
+### 19.6 Edges and points in the plane
+
+With the pair found, `pairCuts` accepts an edge graze whose two edges lie in P (`separatedEdge`, `acceptSeparated`) and
+owns a point contact in P (`separatedPoint`). Every facet off P lies strictly on its own operand's side except its
+boundary, so a probe inside it is outside the other operand, and exact parity classifies it without the graze's side
+test. The manifold audit (§5) still refuses a result that meets itself along an edge or at a point.
+
+### 19.7 The retry
+
+Cap sides reach only the unshifted live attempt: `AttachCapSides` runs beside `AttachFlushFaces`, which no shifted,
+grown, fixed-tool or replayed attempt calls, and `SeparatedOperands` runs only on that attempt. `separatedEdge` and
+`separatedPoint` read only the plane that call found. Each claim is about the operands as given.
+
+A moved operand no longer lies in its half-space: a `Union` sinks B into A by up to the reach. The retry's attempts
+carry no cap side, so the gate, the coplanar admission, the in-plane rules and the rim bounds run on them exactly as
+without this section, and no moved operand is judged by a separation it lost. When the certified attempt succeeds, no
+retry runs and the result states `A∘B`, with no `CodeGapShiftApplied`. When it refuses for another reason (§19.8), the
+retry runs from that refusal as it did before, under the full gate.
+
+### 19.8 Kept refusals
+
+| Case | Why |
+|---|---|
+| Caps that touch, or overlap by less than their reaches | no deep point (§19.4) |
+| A mesh `Boolean` result, a revolve with an arc or a section displacement, a filleted, bored or joined loft, a sheet | no cap side (§19.2) |
+| A placed body whose cap plane holds no held corner exactly | §19.1 item 2 |
+| A meridian or held wall that touches the plane beside the cap | §19.2, §19.1 item 3 |
+| An extruded circle and a revolve of the same radius | near-coincident chords (below) |
+| The bounded replay | it attaches no flush faces (flush-contact §2), so it refuses the inexact caps as before |
+
+An extruded circle and a revolve of the same radius chord the circle at the same angles, but their vertices differ by
+an ulp. The coplanar pass then leaves slivers narrower than the float grid between each pair of near-coincident chords,
+and the stitch's rounding folds them (`HeldFoldError`). A default document takes the growth retry
+(`agent-docs/gap-tolerance-design.md` §5.2 item 7); `ExactOnly` refuses.
+
+### 19.9 Tests
+
+Root tests in `union_shared_cap_test.go`. Each `TestUnionSharedCap*` test that succeeds asserts one lump, no
+`CodeGapShiftApplied`, a volume equal to the operands' sum within the three bounds, and a box spanning both operands'.
+
+| Test | Case | Expect |
+|---|---|---|
+| `TestUnionSharedCapObliqueLoftAndCone` | Ø4 base 1.9 off the axis at 235°, lofted to a 0.9922 circle 1.25 above on the axis; a cone on it | `Union` builds; `Intersect` empty; `Cut` keeps the frustum (red: gate refuses) |
+| `TestUnionSharedCapCylinderAndCone` | a lofted cylinder of radius 1 and a cone on its cap, `ExactOnly` | `Union` builds (fails red: the gate refuses) |
+| `TestUnionSharedCapPartialOverlap` | a cone whose cap overlaps a frustum's top over a lens, `ExactOnly` | `Union` builds (fails red: the gate refuses) |
+| `TestUnionSharedCapBossOnPlate` | an extruded boss standing inside a plate's top, default and `ExactOnly` | `Union` builds with no shift (fails red: the retry shifts, `ExactOnly` refuses) |
+| `TestUnionSharedCapTangentCapsRefused` | a cone whose cap touches a frustum's top at one point, `ExactOnly` | `BooleanUnsupportedContact` (passes before; fails red when §19.4 accepts every pair) |
+| `TestRevolveCapSidesNeedTheCapAloneOnItsPlane` | a cone, and a revolve whose meridian returns to its lowest level at radius 1 | two sides, then only the top side |

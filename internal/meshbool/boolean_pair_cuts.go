@@ -32,6 +32,8 @@ type pairCutsResult struct {
 	CoplanarA, CoplanarB map[int][]int
 	// CoplanarBounds is coplanarPass.bounds: nil unless a flush pair was admitted.
 	CoplanarBounds map[string]float64
+	// BandA and BandB are coplanarPass.bandA and bandB: nil unless a separated cap pair was admitted.
+	BandA, BandB map[int][]*separatedBand
 	// Owned holds the exact key of every point the coplanar pass accepted, and
 	// is nil unless some pair or edge was admitted.
 	Owned map[string]struct{}
@@ -145,6 +147,13 @@ func pairCuts(ctx context.Context, ma, mb *BoolMesh, memo *ContactMemo, keyOf fu
 			rim, err = nativeRims.bound(ctx, i, j, c.P0, c.P1, rim)
 			if err != nil {
 				return err
+			}
+		}
+		// A contact in the plane that separates the operands is a touch of the two caps' outlines, not a crossing: its
+		// true point lies within the pair's reach of it in that plane (agent-docs/coplanar-contact-design.md §19.5).
+		if r0, ok0 := separatedPoint(ma, c.P0); ok0 {
+			if _, ok1 := separatedPoint(ma, c.P1); ok1 {
+				rim = r0
 			}
 		}
 		maxRim = max(maxRim, rim)
@@ -261,6 +270,10 @@ func pairCuts(ctx context.Context, ma, mb *BoolMesh, memo *ContactMemo, keyOf fu
 					return pairCutsResult{}, err
 				}
 				skipCut, grazed = true, true
+			} else if side == EdgeGraze && p.C.EdgeB >= 0 && separatedEdge(ma, p.I, p.C.EdgeA) {
+				// Both rims lie in the plane that separates the operands (agent-docs/coplanar-contact-design.md §19.6).
+				cp.acceptSeparated(p, keyOf)
+				skipCut, grazed = true, true
 			} else if side != EdgeCrossing {
 				if len(grazes) < maxTouchContacts {
 					grazes = append(grazes, touchOf(ma, p.I, p.J))
@@ -287,6 +300,9 @@ func pairCuts(ctx context.Context, ma, mb *BoolMesh, memo *ContactMemo, keyOf fu
 				if err := cp.acceptEdge(p, p.I, adjacent, keyOf); err != nil {
 					return pairCutsResult{}, err
 				}
+				skipCut, grazed = true, true
+			} else if side == EdgeGraze && p.C.EdgeA >= 0 && separatedEdge(mb, p.J, p.C.EdgeB) {
+				cp.acceptSeparated(p, keyOf)
 				skipCut, grazed = true, true
 			} else if side != EdgeCrossing {
 				if len(grazes) < maxTouchContacts {
@@ -363,6 +379,12 @@ func pairCuts(ctx context.Context, ma, mb *BoolMesh, memo *ContactMemo, keyOf fu
 			if len(every) < maxTouchContacts {
 				every = append(every, touchOf(ma, pointFacets[k][0], pointFacets[k][1]))
 			}
+			// A point in the plane that separates the operands is where the two caps' outlines touch
+			// (agent-docs/coplanar-contact-design.md §19.6).
+			if _, ok := separatedPoint(ma, p); ok {
+				cp.owned[key] = struct{}{}
+				continue
+			}
 			seat, err := seatPoint(ma, mb, pointFacets[k][0], pointFacets[k][1])
 			if err != nil {
 				return pairCutsResult{}, err
@@ -390,6 +412,7 @@ func pairCuts(ctx context.Context, ma, mb *BoolMesh, memo *ContactMemo, keyOf fu
 	if len(cp.coplanarA) > 0 {
 		res.CoplanarA, res.CoplanarB = cp.coplanarA, cp.coplanarB
 		res.CoplanarBounds = cp.bounds
+		res.BandA, res.BandB = cp.bandA, cp.bandB
 	}
 	if len(cp.owned) > 0 {
 		res.Owned = cp.owned
@@ -428,6 +451,10 @@ type coplanarPass struct {
 	// both facets' FacetBound and the pair's crossing bound (agent-docs/flush-contact-design.md §4.8). An exact pair
 	// records none.
 	bounds map[string]float64
+	// bandA and bandB hold, for each facet of an operand that a separated cap pair admitted, that pair's band: a piece
+	// the side pass keeps near it takes the pair's reach (separatedBand.raise, agent-docs/coplanar-contact-design.md
+	// §19.5).
+	bandA, bandB map[int][]*separatedBand
 	// legacyGrazes and legacyPoints are the contacts the switch-off pass would
 	// have collected for what this pass accepted; the coplanar facet pairs
 	// themselves are pairCuts' own list.
@@ -446,7 +473,10 @@ func (cp *coplanarPass) admit(ma, mb *BoolMesh, i, j int, keyOf func(proof.Xpt) 
 		if err != nil {
 			return err
 		}
-		if verdict.Clear {
+		if verdict.Separated {
+			cp.bandA = addBand(cp.bandA, i, verdict.Band)
+			cp.bandB = addBand(cp.bandB, j, verdict.Band)
+		} else if verdict.Clear {
 			b := max(ma.FacetBound[i], mb.FacetBound[j], verdict.Cross)
 			record = func(seg Xseg) {
 				if cp.bounds == nil {
@@ -580,6 +610,27 @@ func (cp *coplanarPass) acceptEdge(p PairContact, a, b int, keyOf func(proof.Xpt
 	cp.owned[keyOf(p.C.P0)] = struct{}{}
 	cp.owned[keyOf(p.C.P1)] = struct{}{}
 	return nil
+}
+
+// addBand records band for facet f in bands, once, and returns bands.
+func addBand(bands map[int][]*separatedBand, f int, band *separatedBand) map[int][]*separatedBand {
+	if band == nil {
+		return bands
+	}
+	if bands == nil {
+		bands = map[int][]*separatedBand{}
+	}
+	if !slices.Contains(bands[f], band) {
+		bands[f] = append(bands[f], band)
+	}
+	return bands
+}
+
+// acceptSeparated owns the two ends of an edge contact between two rims that lie in the plane separating the operands
+// (agent-docs/coplanar-contact-design.md §19.6).
+func (cp *coplanarPass) acceptSeparated(p PairContact, keyOf func(proof.Xpt) string) {
+	cp.owned[keyOf(p.C.P0)] = struct{}{}
+	cp.owned[keyOf(p.C.P1)] = struct{}{}
 }
 
 // legacy is the refusal the pass returns with the switch off for the contacts

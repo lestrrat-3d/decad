@@ -28,7 +28,25 @@ type FlushFaces struct {
 	ops    [2]*flushOperand
 	budget *proofbound.WorkBudget
 	// memo holds each decided pair's verdict, keyed by the global source ids of the first and the second operand's face.
-	memo map[[2]int]flushface.Verdict
+	memo map[[2]int]pairVerdict
+	// sides holds each operand's cap sides (AttachCapSides), sepMemo each decided separated pair keyed as memo is, and
+	// inside whether an operand's held mesh lies in the half-space of one of its sides, keyed by operand and side index
+	// (agent-docs/coplanar-contact-design.md §19).
+	sides   [2][]CapSide
+	sepMemo map[[2]int]separation
+	inside  map[[2]int]bool
+	// plane is the first operand's cap side of the separated cap pair SeparatedOperands found, nil until it finds one,
+	// and planeReach that pair's reach.
+	plane      *CapSide
+	planeReach float64
+}
+
+// pairVerdict is a face pair's admission: a flush verdict, or a separated cap pair (Separated, with Clear set too and
+// Band the strip about the two outlines whose kept pieces take the pair's reach, §19.5).
+type pairVerdict struct {
+	flushface.Verdict
+	Separated bool
+	Band      *separatedBand
 }
 
 // flushOperand is one operand's lazily read faces.
@@ -44,6 +62,8 @@ type flushOperand struct {
 	faces    map[int]*flushFace
 	// planes caches each face's record plane for carrierFacet.
 	planes map[*topo.Face]*exactPlane
+	// srcByFace maps a source face to its source id, filled on first use (srcOf).
+	srcByFace map[*topo.Face]int
 }
 
 // flushFace is one source face's reading. head fills src, facets, first and planar; the carrier and outline reads
@@ -67,7 +87,7 @@ type flushFace struct {
 // or crossing test.
 func AttachFlushFaces(ma, mb *topo.Mesh, bmA, bmB *BoolMesh, planarA, planarB func(*topo.Face) bool,
 	budget *proofbound.WorkBudget) {
-	ff := &FlushFaces{budget: budget, memo: map[[2]int]flushface.Verdict{}}
+	ff := &FlushFaces{budget: budget, memo: map[[2]int]pairVerdict{}}
 	ff.ops[0] = newFlushOperand(ma, bmA, planarA)
 	ff.ops[1] = newFlushOperand(mb, bmB, planarB)
 	bmA.Flush, bmB.Flush = ff, ff
@@ -82,17 +102,17 @@ func newFlushOperand(m *topo.Mesh, bm *BoolMesh, planar func(*topo.Face) bool) *
 	return op
 }
 
-// flushVerdict is the flush verdict of the faces of facet i of mx and facet j of my, which belong to different
-// operands. A pair the operands share no memo for is not flush.
-func flushVerdict(mx, my *BoolMesh, i, j int) (flushface.Verdict, error) {
+// flushVerdict is the admission of the faces of facet i of mx and facet j of my, which belong to different operands:
+// a flush pair or a separated cap pair. A pair the operands share no memo for is neither.
+func flushVerdict(mx, my *BoolMesh, i, j int) (pairVerdict, error) {
 	ff := mx.Flush
 	if ff == nil || my.Flush != ff || mx == my {
-		return flushface.Verdict{}, nil
+		return pairVerdict{}, nil
 	}
 	return ff.pair(mx, i, my, j)
 }
 
-// flushPair reports whether facet i of mx and facet j of my lie on a flush pair of faces.
+// flushPair reports whether facet i of mx and facet j of my lie on a flush pair of faces or a separated cap pair.
 func flushPair(mx, my *BoolMesh, i, j int) (bool, error) {
 	v, err := flushVerdict(mx, my, i, j)
 	return v.Clear, err
@@ -107,7 +127,7 @@ func pairExact(ma, mb *BoolMesh, i, j int) (bool, error) {
 	return flushPair(ma, mb, i, j)
 }
 
-func (ff *FlushFaces) pair(mx *BoolMesh, i int, my *BoolMesh, j int) (flushface.Verdict, error) {
+func (ff *FlushFaces) pair(mx *BoolMesh, i int, my *BoolMesh, j int) (pairVerdict, error) {
 	var x, y int
 	switch {
 	case ff.ops[0].bm == mx && ff.ops[1].bm == my:
@@ -115,16 +135,28 @@ func (ff *FlushFaces) pair(mx *BoolMesh, i int, my *BoolMesh, j int) (flushface.
 	case ff.ops[0].bm == my && ff.ops[1].bm == mx:
 		x, y = j, i
 	default:
-		return flushface.Verdict{}, nil
+		return pairVerdict{}, nil
 	}
 	o0, o1 := ff.ops[0], ff.ops[1]
 	key := [2]int{o0.bm.Src[x], o1.bm.Src[y]}
 	if v, ok := ff.memo[key]; ok {
 		return v, nil
 	}
-	v, err := ff.decide(o0, key[0], o1, key[1])
+	fv, err := ff.decide(o0, key[0], o1, key[1])
 	if err != nil {
-		return flushface.Verdict{}, err
+		return pairVerdict{}, err
+	}
+	v := pairVerdict{Verdict: fv}
+	if !fv.Clear {
+		// Outlines that need not keep their arrangement, such as two caps on one circle, are still admitted when the
+		// operands lie on opposite sides of the faces' plane (agent-docs/coplanar-contact-design.md §19).
+		sep, err := ff.separatedPair(key[0], key[1])
+		if err != nil {
+			return pairVerdict{}, err
+		}
+		if sep.ok {
+			v = pairVerdict{Clear: true, Separated: true, Band: sep.band}
+		}
 	}
 	ff.memo[key] = v
 	return v, nil

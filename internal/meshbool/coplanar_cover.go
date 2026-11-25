@@ -22,6 +22,9 @@ type keepOptions struct {
 	// Bounds holds, by exact key, the bound of each point a flush pair's clip placed: a kept corner that is not one of
 	// its facet's own corners takes at least it (agent-docs/flush-contact-design.md §4.8).
 	Bounds map[string]float64
+	// Band holds, for each facet of m that a separated cap pair admitted, that pair's band: a kept piece near the band
+	// takes the band's reach (separatedBand.raise, agent-docs/coplanar-contact-design.md §19.5).
+	Band map[int][]*separatedBand
 }
 
 // ContactKeys is what the stitch needs to tell a contact pinch from a broken

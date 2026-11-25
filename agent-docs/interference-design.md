@@ -869,8 +869,14 @@ face the tessellation reads at zero, `agent-docs/coplanar-contact-design.md`
 §3.1), which is the reading the gate itself skips on, or when the two faces are a
 flush pair (`agent-docs/flush-contact-design.md` §2, §4.7): planar carrier faces
 in one exact plane whose held outlines keep their arrangement under every move
-their vertex bounds allow. It refuses every other coplanar pair. So the deferral
-is backed by exact classification, a flush admission, or a refusal. `Verify`'s
+their vertex bounds allow, or when the operands form a separated cap pair
+(`agent-docs/coplanar-contact-design.md` §19): their true solids lie in opposite
+closed half-spaces of the faces' plane and meet over a disc of positive radius, so
+whatever arrangement the held outlines take the pair overlaps nowhere and touches
+over an area, and the held result differs from the true one only within the
+bounds §19.5 there charges. It refuses every other coplanar pair. So the deferral
+is backed by exact classification, a flush admission, a separated cap pair, or a
+refusal. `Verify`'s
 measured interference reads the same mesh pass, so it reads flush pairs the same
 way. Carrier coplanarity ALONE settles nothing. A planar face's carrier plane is exact, but its outline is not: near
 a curved rim the held outline is inscribed, so two operands whose true rims

@@ -146,9 +146,10 @@ A mesh Boolean refuses four contacts the exact predicates cannot classify:
 
 - **Coplanar overlap.** Two operand facets overlap in one plane, so no side of the other operand is proven for the
   shared region. The exact facets of two zero-bound faces are classified without a retry
-  (`agent-docs/coplanar-contact-design.md`), so this retry meets a coplanar overlap only on a face with a positive
-  bound, or when the exact classification leaves an operand meeting itself along an edge or at a vertex. The refusal
-  it returns is then the one the retry reads.
+  (`agent-docs/coplanar-contact-design.md`), and so are the faces of a flush pair (`agent-docs/flush-contact-design.md`)
+  and of a separated cap pair (`agent-docs/coplanar-contact-design.md` §19), so this retry meets a coplanar overlap
+  only on a face with a positive bound outside those pairs, or when the exact classification leaves an operand meeting
+  itself along an edge or at a vertex. The refusal it returns is then the one the retry reads.
 - **Graze.** An edge of one operand grazes along a facet of the other.
 - **Point touch.** The operands touch at an isolated point.
 - **Proximity.** Facets of a curved face of one operand come within the chord tolerance of the other operand's
@@ -264,6 +265,12 @@ at the contact, whether it is Decisive, a Slack, and the second operand's facet 
    an empty result is taken: any other swapped outcome is dropped and the first refusal returned, so no result body
    ever comes from the swap with the operand roles reversed. A pair with a cap or cone certificate is not swapped,
    because the certificates name each operand's role.
+
+A separated cap pair (`agent-docs/coplanar-contact-design.md` §19) is decided on the unshifted attempt and reaches this
+retry only when that attempt refuses for another reason, such as a stitch fold. Its certificate states that each
+operand lies in one closed half-space of the caps' plane, which a move into overlap breaks, so no retried attempt reads
+it: cap sides are attached to the unshifted live attempt alone, and every retried attempt runs the full gate and the
+coplanar admission of the moved operand (coplanar-contact §19.7).
 
 The moved operand is the solid the Boolean decides about, so the proximity gate and the exact predicates read it
 (`boolshift` `decisionMesh`). Its true solid is the exact move of the true operand, each piece translated by `s` and,
@@ -407,8 +414,8 @@ owns that refusal in the same change.
 | `apitest.TestCoplanarContactRoundedFixtureKeepsRetry` | A box rounded by two turns about the body diagonal keeps the retry and its `ExactOnly` refusal; exact boxes are classified without it. |
 | `apitest.TestBooleanGapTolerance` | Union, Cut and Intersect of rounded boxes that touch or sit flush: the result, the bound that covers the true volume, a tighter bound from a smaller tolerance, and the refusals `ExactOnly` and a slot keep. |
 | `apitest.TestBooleanGapToleranceEdgeAndPointTouches` | A shared corner, a knife edge inside a wider wedge and two crossing edges: Union, Cut and Intersect, the volume bound, and the `ExactOnly` refusal. |
-| `apitest.TestBooleanGapToleranceRestingBossJoinsPlate` | A `Transform`ed boss resting on a plate unions into one lump whose volume bound covers `60000 + 288π`, with the boss's top below z = 18, and `Verify` reads `Sound`. |
-| `apitest.TestBooleanGapShiftKeepsTranslatedTags` | A `Transform`ed boss on a plate, and a second sketched boss on a plate and boss, join through the retry: the moved wall reads as a radius-6 `Cylinder` about the boss's axis moved by `s`, the top as a `Plane` at `18 + s.z`, and the root and rim as `Circle3` edges. |
+| `apitest.TestBooleanGapToleranceRestingBossJoinsPlate` | A `Transform`ed boss on a plate that carries a short boss unions into one lump whose volume bound covers `60000 + 432π`, its top below z = 18; `Verify` reads `Sound`. |
+| `apitest.TestBooleanGapShiftKeepsTranslatedTags` | A second boss on a plate and boss joins through the retry: the moved wall is a radius-6 `Cylinder` about the axis moved by `s`, the top a `Plane` at `18 + s.z`, root and rim `Circle3` edges. |
 | `apitest.TestBooleanGapShiftFilletsRestingBoss` | A radius-1 `Fillet` of every root and rim of the same bodies builds one `Torus` per edge, its volume bound covers the hand volume `60000 + n·(288π + 4π·A·d)` and the moved solid's, smaller by `36π·|s.z|`, and `Verify` reads `Sound`. |
 | `apitest.TestBooleanGapToleranceStaysExactForCurvedContact` | A tangent cylinder on a plate stays refused under `ExactOnly`. |
 | `apitest.TestVerifyGapToleranceDecidesAFlushPair` | `Verify` reads a rounded flush pair's overlap with a covering bound, leaves it staged under `ExactOnly`, and reports an invalid tolerance. |

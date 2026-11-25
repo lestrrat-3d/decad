@@ -237,30 +237,34 @@ func TestBooleanGapToleranceStaysExactForCurvedContact(t *testing.T) {
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 }
 
-// TestBooleanGapToleranceRestingBossJoinsPlate unions a plate with a round boss
-// that a Transform placed on the plate's top face. The placed boss carries a
-// bound, so its facets meet the plate's top within the chord tolerance and the
-// retry moves it. The boss must sink into the plate, so the result is one solid
-// whose volume is the plate's plus the boss's: 100·60·10 + π·6²·8 = 60000 + 288π.
+// TestBooleanGapToleranceRestingBossJoinsPlate unions a plate that already
+// carries a short boss with a round boss that a Transform placed on the
+// plate's top face. The placed boss carries a bound, so its facets meet the
+// plate's top within the chord tolerance. The plate is a mesh Union result,
+// whose payload proves no half-space, so the two form no separated cap pair
+// (agent-docs/coplanar-contact-design.md §19) and the retry moves the boss. The
+// boss must sink into the plate, so the result is one solid whose volume is the
+// plate's plus both bosses': 100·60·10 + π·6²·(4 + 8) = 60000 + 432π.
 func TestBooleanGapToleranceRestingBossJoinsPlate(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
-	plate := boxBody(t, doc, 0, 0, 100, 60, 10)
+	plate, err := decad.Union(t.Context(), boxBody(t, doc, 0, 0, 100, 60, 10), circlePrismAtZ(t, doc, 20, 30, 6, 10, 4))
+	require.NoError(t, err)
 	boss := translated(t, circlePrismAtZ(t, doc, 20, 30, 6, 10, 8), 30, 0, 0)
 	joined, err := decad.Union(t.Context(), plate, boss)
 	require.NoError(t, err)
 	require.True(t, joined.IsSolid())
 	require.Len(t, joined.Lumps(), 1, "the boss rests on the plate, so the union is one piece")
 	require.Len(t, joined.Shells(), 1)
-	requireVolumeWithin(t, joined, 60000+288*math.Pi)
+	requireVolumeWithin(t, joined, 60000+432*math.Pi)
 	box, err := joined.Bounds()
 	require.NoError(t, err)
 	require.Less(t, box.Max.Z, 18.0, "the boss sank into the plate, so its top lies below z = 18")
 	require.GreaterOrEqual(t, box.Max.Z+box.Bound.Base(), 18.0, "the box's bound covers the unmoved top")
 
 	diagnostics := joined.OperationDiagnostics()
-	require.Len(t, diagnostics, 1)
-	require.Equal(t, decad.OpDiagGapShiftApplied, diagnostics[0].Code)
+	require.NotEmpty(t, diagnostics)
+	require.Equal(t, decad.OpDiagGapShiftApplied, diagnostics[len(diagnostics)-1].Code)
 
 	report, err := doc.Verify(t.Context())
 	require.NoError(t, err)

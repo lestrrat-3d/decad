@@ -687,6 +687,9 @@ func evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 			// Coplanar planar faces whose outlines keep their arrangement are admitted like exact ones
 			// (agent-docs/flush-contact-design.md §4.5).
 			meshbool.AttachFlushFaces(ma, mb, bmA, bmB, flushPlanar(a), flushPlanar(b), proofbound.NewWorkBudget(ctx))
+			// Caps whose operands lie on opposite sides of their plane are admitted too, whatever their outlines
+			// (agent-docs/coplanar-contact-design.md §19).
+			meshbool.AttachCapSides(bmA, bmB, capSides(a), capSides(b))
 			// An unshifted Intersect also reads its seats: carrier-exact faces resting on each other, and the walls
 			// that leave their planes (agent-docs/coplanar-contact-design.md §16).
 			if op == meshbool.OpIntersect {
@@ -782,21 +785,32 @@ func evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 			defer func() { bmA.CutGateBounds = nil }()
 		}
 	}
-	var proximityErr error
-	if replay != nil {
-		proximityErr = meshbool.RefuseUndecidableProximityReplay(ctx, ma, mbDecide, bmA, bmB, memo, capFace, coneFace, replay)
-	} else if inset, ok := meshes.(*radialInsetMesher); ok && inset.stockFirst && !hasShifts && fixed == nil && a == inset.body && ma == inset.mesh {
-		proximityErr = meshbool.RefuseProximityWithPlaneEvidence(ctx, mbDecide, ma, bmB, bmA, meshbool.NewContactMemo(bmB, bmA), nil, nil, inset.budget.WorkBudget(ctx))
-	} else if matchedStations && !hasShifts && fixed == nil && a == station.disk.body {
-		// The penetration witness searches the first operand's faces first.
-		// Use the same flange-first proof for either spelling of this Union.
-		proximityErr = meshbool.RefuseUndecidableProximity(ctx, mbDecide, ma, bmB, bmA, meshbool.NewContactMemo(bmB, bmA), nil, nil)
-	} else {
-		var planeBudget *proofbound.WorkBudget
-		if inset, ok := meshes.(*radialInsetMesher); ok && !hasShifts && fixed == nil {
-			planeBudget = inset.budget.WorkBudget(ctx)
+	// Operands that lie on opposite sides of one plane and share a disc of it meet only there, so the gate has
+	// nothing a chord could hide (agent-docs/coplanar-contact-design.md §19.3). Only the unshifted live attempt
+	// carries cap sides: a moved operand no longer lies on its side of the plane.
+	separated := false
+	if replay == nil && fixed == nil && !hasShifts && capFace == nil && coneFace == nil {
+		if separated, err = meshbool.SeparatedOperands(bmA, bmB); err != nil {
+			return Evaluation{}, err
 		}
-		proximityErr = meshbool.RefuseProximityWithPlaneEvidence(ctx, ma, mbDecide, bmA, bmB, memo, capFace, coneFace, planeBudget)
+	}
+	var proximityErr error
+	if !separated {
+		if replay != nil {
+			proximityErr = meshbool.RefuseUndecidableProximityReplay(ctx, ma, mbDecide, bmA, bmB, memo, capFace, coneFace, replay)
+		} else if inset, ok := meshes.(*radialInsetMesher); ok && inset.stockFirst && !hasShifts && fixed == nil && a == inset.body && ma == inset.mesh {
+			proximityErr = meshbool.RefuseProximityWithPlaneEvidence(ctx, mbDecide, ma, bmB, bmA, meshbool.NewContactMemo(bmB, bmA), nil, nil, inset.budget.WorkBudget(ctx))
+		} else if matchedStations && !hasShifts && fixed == nil && a == station.disk.body {
+			// The penetration witness searches the first operand's faces first.
+			// Use the same flange-first proof for either spelling of this Union.
+			proximityErr = meshbool.RefuseUndecidableProximity(ctx, mbDecide, ma, bmB, bmA, meshbool.NewContactMemo(bmB, bmA), nil, nil)
+		} else {
+			var planeBudget *proofbound.WorkBudget
+			if inset, ok := meshes.(*radialInsetMesher); ok && !hasShifts && fixed == nil {
+				planeBudget = inset.budget.WorkBudget(ctx)
+			}
+			proximityErr = meshbool.RefuseProximityWithPlaneEvidence(ctx, ma, mbDecide, bmA, bmB, memo, capFace, coneFace, planeBudget)
+		}
 	}
 	if err := proximityErr; err != nil {
 		err = meshbool.StagingError(op, err)
@@ -824,7 +838,7 @@ func evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 	// leaves the true operand where it was (agent-docs/gap-tolerance-design.md
 	// §4), so b's record holds once its leaves' bounds and drift grow by that.
 	_, radiallyInset := meshes.(*radialInsetMesher)
-	trackOccupancy := !localCut && !matchedStations && !radiallyInset && (op == meshbool.OpUnion || op == meshbool.OpCut) &&
+	trackOccupancy := !localCut && !separated && !matchedStations && !radiallyInset && (op == meshbool.OpUnion || op == meshbool.OpCut) &&
 		replay == nil && ordered == nil && fixed == nil && capFace == nil && coneFace == nil
 	if trackOccupancy {
 		if occA = occupancyleaf.Of(a, ma); occA != nil {
