@@ -1152,6 +1152,7 @@ parameter:
 
 ```go
 func Union(ctx context.Context, first *Body, others ...*Body) (*Body, error)
+func UnionRefined(ctx context.Context, maxBound units.Value, first *Body, others ...*Body) (*Body, error)
 func Cut(ctx context.Context, target, tool *Body, opts ...BooleanOption) (*Body, error)
 func Intersect(ctx context.Context, a, b *Body, opts ...BooleanOption) (*Body, error)
 ```
@@ -1170,6 +1171,14 @@ where a pair's source records keep a cone limit (a point-Loft cut or
 intersected by a cone about an axis through the world origin in a world
 coordinate plane); elsewhere it has no effect. The
 construction is in `agent-docs/revolve-loft-design.md`.
+
+`UnionRefined` is `Union` followed by `Refine` (`agent-docs/body-refine-design.md` §7), taking the refinement
+bound first as every bounded operation here does. It exists because a straight-bevel sector join built by `Union` is
+audited at 0.1 mm and then rebuilt by `Refine`: the one call builds it once at the bound the caller wants. It is a
+separate function rather than a `Union` option, since the options tier of `Cut` and `Intersect` carries
+declarations, not a result bound, and `Union` has no options. It keeps `Union`'s operands, retirement and errors.
+The only differences are the bound argument's own errors, which are raised before anything is built, the face
+identities of a sector join, and one history entry, `Union`, where the pair records `Union` and `Refine`.
 
 `Union` requires at least two distinct live bodies from one document. A
 two-body call uses the pair evaluator. For three or more bodies, one operation

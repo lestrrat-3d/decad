@@ -16,8 +16,23 @@ import (
 // Loft source, followed by copies of that same source. Operand order does
 // not assign a geometric role; source records do. The certificate may be
 // about +X or about a general axis (agent-docs/revolve-axis-design.md).
+// It builds the join at SectorJoinDefaultCeiling.
 func SectorUnionMany(ctx context.Context, env topo.Env,
 	operands []*topo.Body) (*topo.Body, bool, error) {
+	return SectorUnionManyAt(ctx, env, operands, SectorJoinDefaultCeiling)
+}
+
+// SectorUnionManyAt is SectorUnionMany with the join built directly at the
+// boundary bound ceiling, in mm, instead of at SectorJoinDefaultCeiling. It
+// admits the same operands. The ceiling is clamped to
+// [0, SectorJoinDefaultCeiling] as RebuildSectorsJoin clamps it, and the join
+// retains it, so the result equals SectorUnionMany's join rebuilt by
+// RebuildSectorsJoin at ceiling: both call buildSectorsJoin with the same
+// certificate, the same sources (cert.Trimmed, then the placed copies) and
+// the same clamped ceiling. A ceiling that admits no mesh, or one the join
+// cannot meet, is decaderr.ErrUnsupported from a matched set.
+func SectorUnionManyAt(ctx context.Context, env topo.Env,
+	operands []*topo.Body, ceiling float64) (*topo.Body, bool, error) {
 	for blankIndex, blank := range operands {
 		for firstIndex, first := range operands {
 			if firstIndex == blankIndex {
@@ -47,8 +62,12 @@ func SectorUnionMany(ctx context.Context, env topo.Env,
 			if !RevolveSectorSourcesSeparate(sources, cert.Section.Axis) {
 				return nil, true, fmt.Errorf("%w: complete sector sources are not separate", decaderr.ErrUnsupported)
 			}
-			body, err := BuildSectorsJoin(ctx, env,
-				cert, sources)
+			ceiling = min(ceiling, SectorJoinDefaultCeiling)
+			if !(ceiling > 0) {
+				return nil, true, fmt.Errorf("%w: sector join ceiling %g mm admits no mesh",
+					decaderr.ErrUnsupported, ceiling)
+			}
+			body, err := buildSectorsJoin(ctx, env, cert, sources, ceiling)
 			return body, true, err
 		}
 	}

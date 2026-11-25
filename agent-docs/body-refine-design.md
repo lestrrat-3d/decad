@@ -248,6 +248,31 @@ func Refine(ctx context.Context, source *Body, maxBound units.Value) (*Body, err
 `docs/api.md` (Booleans), `docs/data-structures.md` (Meshes), `examples/refine_example_test.go` and
 `apitest/refine_test.go` cover the public slice.
 
+### 7.1 UnionRefined
+
+```go
+// UnionRefined joins first and others as Union does and returns the result refined as Refine would to maxBound.
+func UnionRefined(ctx context.Context, maxBound units.Value, first *Body, others ...*Body) (*Body, error)
+```
+
+A straight-bevel sector join (§4, Sector joins) built by `Union` is audited at 0.1 mm, and `Refine` then discards it
+and rebuilds it from the same certificate and sources at `maxBound`. `UnionRefined` builds that join once.
+
+- For a set of three or more bodies that is a sector join, `revolveshell.SectorUnionManyAt` calls `buildSectorsJoin`
+  with ceiling `min(maxBound, 0.1 mm)`. `Refine` reaches the same call: `RebuildSectorsJoin` clamps its ceiling to
+  `min(maxBound, 0.1 mm, record ceiling)`, and the record ceiling of a join `Union` just built is 0.1 mm, and it
+  passes the record's `First` and `Placed`, which `SectorUnionMany` filled from `cert.Trimmed` and the placed
+  operands. Both calls get equal inputs, so the result has the same vertices, triangles, bounds, `Volume` and
+  `Area` bit for bit. Its faces keep `Union`'s producer and face identities, where `Refine` makes fresh ones,
+  and the history holds one `Union` entry and no `Refine` entry.
+- A join already built at a ceiling of at most `min(maxBound, 0.1 mm)` is not rebuilt. Any other union, including
+  a pair of bodies and a join a pair-at-a-time fold built, is `Union` followed by `Refine`.
+- A join that cannot meet `maxBound` is `ErrUnsupported` before any commit, with every operand live. The caller
+  may then call `Union`, which keeps the 0.1 mm join as the pair does when its `Refine` refuses.
+- When the `Refine` step of the second kind refuses, the union is already committed. `UnionRefined` returns it
+  beside the error, the one case where both are non-nil.
+- `maxBound` is checked as `Refine` checks it, but before anything is built.
+
 ## 8. Feasibility check
 
 `apitest/refine_test.go` builds the six-span leader through the public `Extrude`, `Transform` and `Union` (the

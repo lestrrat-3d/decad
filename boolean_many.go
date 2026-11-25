@@ -12,8 +12,10 @@ import (
 
 // performUnionMany validates every input before evaluation and commits the
 // single result only after its complete proof and cancellation check. The
-// certified pattern evaluators construct all tools in one operation.
-func performUnionMany(ctx context.Context, operands []*Body) (*Body, error) {
+// certified pattern evaluators construct all tools in one operation. A
+// straight-bevel sector join is built directly at the boundary bound
+// sectorCeiling, in mm.
+func performUnionMany(ctx context.Context, operands []*Body, sectorCeiling float64) (*Body, error) {
 	a := operands[0]
 	if a == nil || a.n.Doc == nil {
 		return nil, fmt.Errorf("%w: the first operand belongs to no document", ErrDegenerate)
@@ -44,7 +46,7 @@ func performUnionMany(ctx context.Context, operands []*Body) (*Body, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	body, span, err := unionManyBodies(ctx, d, d.nextProducerID(), operands)
+	body, span, err := unionManyBodies(ctx, d, d.nextProducerID(), operands, sectorCeiling)
 	if err != nil {
 		return nil, err
 	}
@@ -62,8 +64,9 @@ func performUnionMany(ctx context.Context, operands []*Body) (*Body, error) {
 // producer identity ref and returns the result beside the span of producer
 // identities it used. It commits nothing and checks no cancellation after the
 // last route, so the caller does.
-func unionManyBodies(ctx context.Context, d *Document, ref producerID, operands []*Body) (*Body, producerID, error) {
-	body, span, err := unionManyRoutes(ctx, d, ref, operands)
+func unionManyBodies(ctx context.Context, d *Document, ref producerID, operands []*Body,
+	sectorCeiling float64) (*Body, producerID, error) {
+	body, span, err := unionManyRoutes(ctx, d, ref, operands, sectorCeiling)
 	if err == nil || !errors.Is(err, ErrUnsupported) {
 		return body, span, err
 	}
@@ -91,8 +94,10 @@ func unionManyBodies(ctx context.Context, d *Document, ref producerID, operands 
 // unionManyRoutes unwraps private Document.n and Body.n fields, supplies the
 // handle allocator through envOf, and preserves the caller's producer identity
 // for unionmany.Routes. The returned node becomes a root handle for its caller.
-func unionManyRoutes(ctx context.Context, d *Document, ref producerID, operands []*Body) (*Body, producerID, error) {
-	node, span, err := unionmany.Routes(ctx, envOf(documentNode(d), ref), ref, bodyNodes(operands), verifyAllMesher{})
+func unionManyRoutes(ctx context.Context, d *Document, ref producerID, operands []*Body,
+	sectorCeiling float64) (*Body, producerID, error) {
+	node, span, err := unionmany.RoutesAt(ctx, envOf(documentNode(d), ref), ref, bodyNodes(operands),
+		verifyAllMesher{}, sectorCeiling)
 	return bodyHandle(node), span, err
 }
 
