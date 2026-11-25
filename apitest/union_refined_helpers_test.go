@@ -3,7 +3,9 @@ package apitest_test
 import (
 	"crypto/sha256"
 	"encoding/binary"
+	"fmt"
 	"math"
+	"slices"
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
@@ -16,8 +18,18 @@ import (
 // unjoined: a revolved hub and six copies of one wide point-Loft lug.
 func unionRefinedOperands(t testing.TB) (*decad.Document, *decad.Body, []*decad.Body) {
 	t.Helper()
+	return unionRefinedSet(t, false)
+}
+
+// unionRefinedSet is unionRefinedOperands with lugs whose flanks are fitted
+// splines when fitted is set. That join's first construction attempt meets a
+// cap and root contact in the crossing audit, quarters the sag allowance and
+// builds again, so a build that skipped the audit would differ from one that
+// ran it.
+func unionRefinedSet(t testing.TB, fitted bool) (*decad.Document, *decad.Body, []*decad.Body) {
+	t.Helper()
 	const count = 6
-	doc, hub, lug, _, _ := taperedHubAndRadialLugWidth(t, 9, 7.5, 4.3, 0.8, false)
+	doc, hub, lug, _, _ := taperedHubAndRadialLugWidth(t, 9, 7.5, 4.3, 0.8, fitted)
 	lugs := []*decad.Body{lug}
 	for i := 1; i < count; i++ {
 		turn, err := r3.Rotation(r3.Vec{X: 1}, units.Radians(2*math.Pi*float64(i)/float64(count)))
@@ -39,6 +51,7 @@ type unionRefinedFingerprint struct {
 	box                 [7]uint64
 	floor               uint64
 	euler               int
+	warnings            []string
 }
 
 func fingerprintUnionRefined(t *testing.T, body *decad.Body) unionRefinedFingerprint {
@@ -69,14 +82,17 @@ func fingerprintUnionRefined(t *testing.T, body *decad.Body) unionRefinedFingerp
 		math.Float64bits(box.Bound.Base())}
 	fp.floor = math.Float64bits(refineSectorFloor(t, body))
 	fp.euler = revolveLugEuler(mesh)
+	for _, d := range body.OperationDiagnostics() {
+		fp.warnings = append(fp.warnings, fmt.Sprintf("%s/%s/%s", d.Code, d.Severity, d.Message))
+	}
 	return fp
 }
 
-// unionThenRefine is the pair UnionRefined replaces, on a fresh copy of the
+// unionThenRefine is the pair UnionRefined replaces, on a fresh set of
 // operands.
-func unionThenRefine(t *testing.T, bound units.Value) (*decad.Document, *decad.Body, error) {
+func unionThenRefine(t *testing.T, fitted bool, bound units.Value) (*decad.Document, *decad.Body, error) {
 	t.Helper()
-	doc, hub, lugs := unionRefinedOperands(t)
+	doc, hub, lugs := unionRefinedSet(t, fitted)
 	joined, err := decad.Union(t.Context(), hub, lugs...)
 	require.NoError(t, err)
 	refined, err := decad.Refine(t.Context(), joined, bound)
@@ -92,4 +108,13 @@ func requireOperationKinds(t *testing.T, doc *decad.Document, after int, want ..
 		got = append(got, op.Kind())
 	}
 	require.Equal(t, want, got)
+}
+
+// requireUnionRefinedUnchanged requires that the document still holds exactly the
+// bodies and history it held. It compares the body lists and counts, never a
+// body, because a failing comparison of bodies dumps their whole mesh.
+func requireUnionRefinedUnchanged(t *testing.T, doc *decad.Document, bodies []*decad.Body, history int) {
+	t.Helper()
+	require.True(t, slices.Equal(bodies, doc.Bodies()), "the live bodies changed")
+	require.Equal(t, history, len(doc.OperationHistory().Operations()))
 }

@@ -251,26 +251,31 @@ func Refine(ctx context.Context, source *Body, maxBound units.Value) (*Body, err
 ### 7.1 UnionRefined
 
 ```go
-// UnionRefined joins first and others as Union does and returns the result refined as Refine would to maxBound.
-func UnionRefined(ctx context.Context, maxBound units.Value, first *Body, others ...*Body) (*Body, error)
+// UnionRefined joins bodies, a straight-bevel sector join, directly at the refinement bound maxBound.
+func UnionRefined(ctx context.Context, bodies []*Body, maxBound units.Value) (*Body, error)
 ```
 
 A straight-bevel sector join (§4, Sector joins) built by `Union` is audited at 0.1 mm, and `Refine` then discards it
 and rebuilds it from the same certificate and sources at `maxBound`. `UnionRefined` builds that join once.
 
-- For a set of three or more bodies that is a sector join, `revolveshell.SectorUnionManyAt` calls `buildSectorsJoin`
-  with ceiling `min(maxBound, 0.1 mm)`. `Refine` reaches the same call: `RebuildSectorsJoin` clamps its ceiling to
-  `min(maxBound, 0.1 mm, record ceiling)`, and the record ceiling of a join `Union` just built is 0.1 mm, and it
-  passes the record's `First` and `Placed`, which `SectorUnionMany` filled from `cert.Trimmed` and the placed
-  operands. Both calls get equal inputs, so the result has the same vertices, triangles, bounds, `Volume` and
-  `Area` bit for bit. Its faces keep `Union`'s producer and face identities, where `Refine` makes fresh ones,
-  and the history holds one `Union` entry and no `Refine` entry.
-- A join already built at a ceiling of at most `min(maxBound, 0.1 mm)` is not rebuilt. Any other union, including
-  a pair of bodies and a join a pair-at-a-time fold built, is `Union` followed by `Refine`.
-- A join that cannot meet `maxBound` is `ErrUnsupported` before any commit, with every operand live. The caller
-  may then call `Union`, which keeps the 0.1 mm join as the pair does when its `Refine` refuses.
-- When the `Refine` step of the second kind refuses, the union is already committed. `UnionRefined` returns it
-  beside the error, the one case where both are non-nil.
+- `UnionRefined` gates the operands as `Union` of three or more bodies does, then calls
+  `revolveshell.SectorUnionManyAt` with ceiling `min(maxBound, 0.1 mm)`. It does not run the other routes of
+  `unionmany.Routes`: their operands are prism and Loft payloads, and a sector join's blank is a Revolve, so none
+  of them takes a set the sector route takes. `Refine` reaches the same `buildSectorsJoin` call:
+  `RebuildSectorsJoin` clamps its ceiling to `min(maxBound, 0.1 mm, record ceiling)`, the record ceiling of a join
+  `Union` just built is 0.1 mm, and it passes the record's `First` and `Placed`, which `SectorUnionMany` filled from
+  `cert.Trimmed` and the placed operands. Both calls get equal inputs, so the result has the same vertices,
+  triangles, bounds, `Volume` and `Area` bit for bit.
+- The result differs from the pair's in these ways. Its faces keep `Union`'s producer and face identities, where
+  `Refine` makes fresh ones. The history holds one `Union` entry and no `Refine` entry, so later producer
+  identities are one lower. `LocatePoint`, a two-body `Section` and the Part R regroup read the result through that
+  history as a `Union` of its operands, where they read the pair's refined body as a leaf. A join that cannot meet
+  the bound is refused with nothing committed, where the pair keeps the 0.1 mm join.
+- `UnionRefined` commits the join or nothing, so a cancellation or a refusal leaves the document unchanged and
+  every operand live. A set the sector route does not match (a pair, a union of another kind, a join folded two
+  bodies at a time, whose operand is an earlier join) is `ErrUnsupported` before anything is built, with a message
+  that says to call `Union`, then `Refine`. A set the route matches but cannot build, at the bound or at
+  all, is `ErrUnsupported` with the same advice.
 - `maxBound` is checked as `Refine` checks it, but before anything is built.
 
 ## 8. Feasibility check

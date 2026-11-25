@@ -229,7 +229,7 @@ exactly. Tessellation carries bounds for rounding at the two cap rims.
 | Function | Result |
 |---|---|
 | `decad.Union` | The volume enclosed by two or more bodies. |
-| `decad.UnionRefined` | `decad.Union` followed by `decad.Refine`. A bevel gear join of a revolved blank and three or more tooth copies is built once, at the bound you ask for, instead of at 0.1 mm and again by `Refine`. It returns the same mesh, volume and bounds as the pair, with the faces of `Union` and one history entry. A join that cannot meet the bound is `decad.ErrUnsupported` and nothing changes; call `decad.Union` then. |
+| `decad.UnionRefined` | A bevel gear join of three or more bodies (a revolved blank and two or more tooth copies), built once at the bound you ask for and returned as `decad.Union` followed by `decad.Refine` returns it, with the faces of `Union` and one history entry. It takes the bodies as a slice, then the bound. It returns the joined body or an error with nothing committed. A set that is not such a join (a pair, a union of another kind, a join folded two bodies at a time) is `decad.ErrUnsupported` before anything is built, and a join that cannot meet the bound is `decad.ErrUnsupported` too; the message says to call `decad.Union`, then `decad.Refine`. |
 | `decad.Cut` | The target minus the tool. A straight-profile twisted `Sweep` is an admitted tool: a boolean restates its closer stationed boundary, and refuses a crossing or gap narrower than the two operands' held bounds together. A straight through-bore of a loft, including one whose upper section is the lower one turned about the axis, keeps the result a loft, so `CapStart` and `CapEnd` of the result still name its caps. A straight through-bore of a loft joined to its mirror image, such as a herringbone gear, bores both halves. |
 | `decad.Intersect` | The volume common to both bodies. |
 | `decad.Split` | One solid per arranged target cell. |
@@ -249,7 +249,7 @@ A bevel gear join, a `decad.Union` of a revolved blank and copies of one `decad.
 heel cones, holds up to 0.1 mm because its cone caps stop refining there. `decad.Refine` of that join, before any later
 `Cut` or placement, is the one case that moves vertices: it rebuilds the join with finer cone caps until the held bound
 is at most `maxBound`, at two to five times the triangles and several seconds more per member. Cuts and unions after it
-keep the finer bound. `decad.UnionRefined(ctx, maxBound, blank, teeth...)` returns the same refined join without
+keep the finer bound. `decad.UnionRefined(ctx, bodies, maxBound)` returns the same refined join of a blank and its teeth without
 building the 0.1 mm join first.
 
 After ordinary analytic admission misses, a blind prism Cut can use translated

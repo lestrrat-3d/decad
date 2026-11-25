@@ -38,18 +38,8 @@ func (e *SectionUnionError) Unwrap() error { return e.Err }
 // body unchanged.
 // ctx, env.Doc, env.Alloc, mesher and every operand must not be nil, and
 // operands must contain at least three bodies belonging to env.Doc.
-//
-// Routes builds a Revolve-sector join at revolveshell.SectorJoinDefaultCeiling.
 func Routes(ctx context.Context, env topo.Env, ref provenance.Producer,
 	operands []*topo.Body, mesher verifiedmesh.Mesher) (*topo.Body, provenance.Producer, error) {
-	return RoutesAt(ctx, env, ref, operands, mesher, revolveshell.SectorJoinDefaultCeiling)
-}
-
-// RoutesAt is Routes with a Revolve-sector join built directly at the boundary
-// bound sectorCeiling, in mm (revolveshell.SectorUnionManyAt). No other route
-// reads it, and a set that takes another route is unchanged by it.
-func RoutesAt(ctx context.Context, env topo.Env, ref provenance.Producer,
-	operands []*topo.Body, mesher verifiedmesh.Mesher, sectorCeiling float64) (*topo.Body, provenance.Producer, error) {
 	env.Ref = ref
 	a := operands[0]
 	if node, matched, err := prismboolean.UnionMany(ctx, env, operands); matched || err != nil {
@@ -70,7 +60,7 @@ func RoutesAt(ctx context.Context, env topo.Env, ref provenance.Producer,
 		body, matched, err = loftcylinder.UnionTeeth(ctx, env, mesher, a, tools)
 	}
 	if !matched && err == nil {
-		body, matched, err = revolveshell.SectorUnionManyAt(ctx, env, operands, sectorCeiling)
+		body, matched, err = revolveshell.SectorUnionMany(ctx, env, operands)
 	}
 	// A set of prisms with a free-form section joins through the union of its
 	// sections ahead of the copied-prism route, so whether the copies' placements

@@ -17,7 +17,6 @@ import (
 	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
-	"github.com/lestrrat-3d/decad/internal/revolveshell"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/units"
 	"github.com/lestrrat-go/option/v3"
@@ -123,12 +122,6 @@ import (
 // It returns ctx.Err() unchanged when ctx is canceled before the document
 // commit.
 func Union(ctx context.Context, first *Body, others ...*Body) (*Body, error) {
-	return unionAt(ctx, revolveshell.SectorJoinDefaultCeiling, first, others)
-}
-
-// unionAt is Union with a straight-bevel sector join built at the boundary
-// bound sectorCeiling, in mm. Only a set of three or more bodies reads it.
-func unionAt(ctx context.Context, sectorCeiling float64, first *Body, others []*Body) (*Body, error) {
 	if ctx == nil {
 		return nil, fmt.Errorf("%w: a nil context cannot control a boolean", ErrDegenerate)
 	}
@@ -142,7 +135,7 @@ func unionAt(ctx context.Context, sectorCeiling float64, first *Body, others []*
 	bodies := make([]*Body, 0, len(others)+1)
 	bodies = append(bodies, first)
 	bodies = append(bodies, others...)
-	body, err := performUnionMany(ctx, bodies, sectorCeiling)
+	body, err := performUnionMany(ctx, bodies)
 	if errors.Is(err, ErrUnsupported) && isManyUnionRefusal(err) {
 		// No certified route takes the set as a whole: join the bodies two at a time,
 		// after trying the whole chain on copies (agent-docs/prism-boolean-design.md Part U).
