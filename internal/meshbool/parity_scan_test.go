@@ -15,7 +15,7 @@ import (
 // referenceFacetBox is BuildFacetBox with the area decided only by the float
 // filter and then the rational cross over freshly lifted projections: the
 // construction the float-side exact legs (projectedAreaSign) must reproduce
-// field for field.
+// field for field, AxisSegment included.
 func referenceFacetBox(pm *ParityMesh, u, v, ti int) ParityFacetBox {
 	tri := pm.Tris[ti]
 	a, b, c := pm.Verts[tri[0]], pm.Verts[tri[1]], pm.Verts[tri[2]]
@@ -40,6 +40,9 @@ func referenceFacetBox(pm *ParityMesh, u, v, ti int) ParityFacetBox {
 		return box
 	}
 	box.Nondegenerate = Cross2xSign(newXP2FromFloats(au, av), newXP2FromFloats(bu, bv), newXP2FromFloats(cu, cv)) != 0
+	// The rule Rejects states: a segment of nonzero length on a line of
+	// constant u or of constant v, read from the rational area and the bounds.
+	box.AxisSegment = !box.Nondegenerate && (box.MinU == box.MaxU) != (box.MinV == box.MaxV)
 	return box
 }
 
