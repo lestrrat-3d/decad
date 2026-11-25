@@ -839,8 +839,8 @@ as the plain scan does.
 
 An axis whose placement would list more than `2²³` (cell, facet) memberships
 (`ParityIndexMaxMemberships`) is placed again on a grid with half as many cells
-per side, down to 4 inner cells; an axis that lists more even then gets no index
-and the scan on that axis is the plain one. Only the cap triggers a coarser
+per side, while the grid keeps at least 4 inner cells; an axis that lists more
+even then gets no index and the scan on that axis is the plain one. Only the cap triggers a coarser
 grid: a facet the grid cannot place ends the search at once. The cell contract
 does not depend on the grid size, so every grid gives the plain scan's answers.
 The placement collects each facet's cells as runs, one per

@@ -192,3 +192,28 @@ func parityCoarseQueries(fx parityIndexFixture, ring int) []proof.Xpt {
 	}
 	return parityIndexQueries(rng, fx)
 }
+
+// parityGridInners lists the inner cell counts the retry can visit for a mesh
+// of n facets, from the first grid down to the floor.
+func parityGridInners(n int) []int {
+	var inners []int
+	for inner := parityGridInner(n); inner >= parityGridMinInner; inner /= 2 {
+		inners = append(inners, inner)
+	}
+	return inners
+}
+
+// parityIndexOnGrid builds the filled index of one swept axis on a grid of
+// inner cells per side, with no cap. It reports false when the grid refuses.
+func parityIndexOnGrid(pm *ParityMesh, axis, u, v, inner int) (*ParityIndex, bool) {
+	boxes, umin, umax, vmin, vmax, ok := pm.parityBoxBounds(axis, u, v)
+	if !ok {
+		return nil, false
+	}
+	idx, pl, status := pm.placeParityGrid(u, v, boxes, umin, umax, vmin, vmax, inner, math.MaxInt32/2)
+	if status != parityPlaceOK {
+		return nil, false
+	}
+	pl.fill(idx)
+	return idx, true
+}
