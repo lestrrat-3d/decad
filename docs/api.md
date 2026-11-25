@@ -47,8 +47,8 @@ and `units` supplies typed quantities.
 
 1. Solve a 2D profile in a `sketch.Sketch`.
 2. Create a `decad.Document` with `decad.New`.
-3. Turn the profile into a body with a feature function such as `decad.Extrude`.
-4. Modify or combine bodies with further feature functions.
+3. Turn the profile into a body with a feature command such as `decad.Extrude`, and run it with `Do(ctx)`.
+4. Modify or combine bodies with further feature commands.
 5. Call `Document.Verify` and gate on `Report.Passed`.
 6. Read measurements, tessellate, or export.
 
@@ -63,8 +63,16 @@ A `*decad.Body` never changes. A feature returns a new body and retires its inpu
 
 ### Features build and methods ask
 
-Features are package functions that take a context and return `(*Body, error)`. Methods on bodies, faces and edges
-only read.
+A feature is a command. A package function such as `decad.Fillet` takes the bodies and the mandatory inputs and
+returns the command. Each optional input is a method that sets it and returns the same command. `Do(ctx)` runs the
+command once and returns what the feature builds, usually `(*Body, error)`.
+
+`Do` refuses a nil context before it reads any input, and a canceled context returns `ctx.Err()` unchanged with
+nothing built. A command runs once: a second `Do` returns `decad.ErrConsumed`, so build a new command to retry.
+Calling an option method twice keeps the second value.
+
+Methods on bodies, faces and edges only read. A read that takes a context, such as `Body.Tessellate` or
+`Document.Verify`, takes it first and its options last, as functional options.
 
 ### Typed quantities
 
@@ -94,6 +102,8 @@ See [Errors](#errors).
 
 A `decad.Document` is not safe for concurrent mutation. Bodies are immutable and safe to read from any goroutine.
 `Document.Bodies`, `decad.Remove` and `Document.Verify` may run concurrently with each other.
+A feature command is not safe for concurrent use. When two goroutines call `Do` on one command, the feature runs
+once and the other call returns `decad.ErrConsumed`.
 
 ## Documents and bodies
 
@@ -651,6 +661,7 @@ Branch on a sentinel with `errors.Is`.
 | `decad.ErrCrossContainer` | One operation read bodies or sketches from different containers. |
 | `decad.ErrContainerLayout` | `ContainerReport.Err` found a body in the root or an empty container. |
 | `decad.ErrRetiredBody` | A body was already consumed by a feature. |
+| `decad.ErrConsumed` | `Do` was called on a feature command that already ran. |
 | `decad.ErrMalformedMesh`, `decad.ErrMeshTooLarge` | An STL or OBJ file was malformed, or held more than the import limits allow. |
 | `decad.ErrForeignProfile`, `decad.ErrStaleProfile`, `decad.ErrInvalidProfile`, `decad.ErrUnrecordableProfile` | A sketch profile was rejected. |
 

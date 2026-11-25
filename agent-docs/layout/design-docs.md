@@ -11,6 +11,7 @@ The rules for rows live in `agent-docs/layout.md`.
 |---|---|
 | `agent-docs/container-design.md` | `Container`: grouping of sketches, planes and bodies, result placement, `AddBody`, `ErrCrossContainer`. |
 | `agent-docs/api-design.md` | Public API contract for modeling, features, selectors, and verification. |
+| `agent-docs/command-api-design.md` | Operation commands: constructor and method rules, the `Do` run order, error tags, lint, family verdicts and the migration stack. |
 | `docs/api.md` | User-facing API reference by task; `apitest/api_reference_test.go` checks its names exist. |
 | `docs/data-structures.md` | User-facing type index and structure guide; `apitest/api_reference_test.go` checks it lists every exported type. |
 | `agent-docs/sketch-seam-design.md` | `sketch` recording: `TExact`, `CurveSegment`, and `ErrUnrecordableProfile`. |

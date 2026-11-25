@@ -22,6 +22,9 @@ specified in `agent-docs/sweep-design.md`. The sheet body — a body that enclos
 material region — and the operations that build, fill and close one are
 specified in `agent-docs/surface-design.md`.
 
+The command form of every operation — constructor, methods and `Do(ctx)` — is
+specified in `agent-docs/command-api-design.md`.
+
 Two companion designs extend operation observability without changing this
 contract: `agent-docs/operation-history-design.md` covers evaluator proof
 lineage, source-derived quantity calculations, and immutable execution records;
@@ -111,9 +114,9 @@ These are cheap now and expensive to retrofit. They are the upgrade path.
 | 1 | **NEVER expose triangles as the representation.** `Tessellate(ctx, tol)` is an output; the public vocabulary is `Body → Face → Edge → Vertex` even while the backing is approximate. | A public `Triangles()` is a one-way door; callers depend on it and vN can never remove it. |
 | 2 | **Every measurement carries `Exactness`, from the first commit.** | Makes the upgrade **monotonic, not breaking**: callers already branch on `Approximate`; in vN that branch stops being taken and nobody's code changes. A bare `float64` today means adding exactness later breaks every call site. |
 | 3 | **Selectors, never topology indices.** `Body.Faces()` / `Edges()` / `Vertices()` exist for **traversal and inspection only**; no feature or selector names a face, an edge or a vertex by index or by a bare topology pointer. | An exact kernel produces a different (more correct) face/edge decomposition. If `Edges()[3]` is the API, index order becomes a de facto contract and vN breaks every model. |
-| 4 | **Booleans never mutate their operands, and take no target-out parameter.** `Union(ctx, first, others...) (*Body, error)` — never Fusion's in-place `booleanOperation(target, tool, type) -> bool`. | A signature free of in-place mutation lets the implementation be swapped with zero API churn. |
+| 4 | **Booleans never mutate their operands, and take no target-out parameter.** `Union(bodies...).Do(ctx) (*Body, error)` — never Fusion's in-place `booleanOperation(target, tool, type) -> bool`. | A signature free of in-place mutation lets the implementation be swapped with zero API churn. |
 | 5 | **Imported meshes are a separate type.** A `MeshBody` never claims to be a solid B-rep. | For imported triangle soup, no future kernel can recover exactness. Keeping it separate stops approximate-forever geometry from contaminating the type we promise to make exact. |
-| 6 | **Operations are free functions; queries are methods.** `Fillet(ctx, b, sel, r)`, not `b.Fillet(...)`; `b.Volume()` stays a method (§6.3). | A body-consuming call written as a method reads as an edit of the receiver. A free function states that every body it names is an input and that the result is a new body. |
+| 6 | **Operations are commands built by free functions; queries are methods.** `Fillet(b, sel, r).Do(ctx)`, not `b.Fillet(...)`; `b.Volume()` stays a method (§6.3). | A body-consuming call written as a method reads as an edit of the receiver. A free-function constructor states that every body it names is an input and that the result is a new body. |
 
 **What will still churn**, stated honestly: face/edge *counts* may change under an
 exact kernel (canonicalize under evaluator §3's rules, so v1 counts
@@ -141,7 +144,7 @@ Loosely based on the Fusion SDK. The odd parts are thrown away deliberately.
 | Fusion artifact | Why it exists | decad instead |
 |---|---|---|
 | `ObjectCollection` (+ `XxxList` + `Xxxs`) | COM cannot marshal native lists | `[]T`, variadic |
-| `createInput()` → `setByX()` → `add(input)` ceremony | No overloading/named args in COM; mirrors modal GUI dialogs | One call, options struct / functional options |
+| `createInput()` → `setByX()` → `add(input)` ceremony: an input object created from a collection, filled in, then handed to a separate `add` | No overloading/named args in COM; mirrors modal GUI dialogs | An operation is one expression: a free function builds a command from the mandatory inputs, chained methods set optional ones, and `Do(ctx)` runs it once (`agent-docs/command-api-design.md`). Nothing is added to a collection, and a used command runs no second time. Queries take functional options. |
 | `ValueInput` (`createByReal(2)` for a taper silently means **2 radians**) | GUI expression fields pushed into the modeling API | `units.Value` — typed quantities that cannot be misread |
 | Proxies: `nativeObject` / `assemblyContext` / `createForAssemblyContext` | Avoiding explicit transform arguments | Component-local coords + **explicit** transforms |
 | `Base.isValid` (means "not deleted", NOT geometrically valid) | Live-kernel handles dying under you | Immutable bodies. NEVER ship an `IsValid()` with that meaning. |
@@ -164,7 +167,7 @@ dimensional values, so a quantity never changes type crossing the seam. We do
 NOT invent a parallel unit system.
 
 ```go
-body, err := decad.Extrude(ctx, doc, s, prof, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+body, err := decad.Extrude(doc, s, prof, decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(ctx)
 ```
 
 `units.Millimeters(6)` can never silently mean centimeters — which is precisely
@@ -321,7 +324,7 @@ retired from the document.
 
 **A `*Body` carries its owning `*Document`.** This is what lets a boolean keep the
 signature invariant #4 demands — no target-out parameter, no operand mutated —
-while `Document.Bodies()` stays truthful: `Union(ctx, a, b)` reaches the document
+while `Document.Bodies()` stays truthful: `Union(a, b).Do(ctx)` reaches the document
 *through* `a`, so retiring the operands and registering the result happen inside
 the operation, with no `*Document` argument and no caller bookkeeping. Operands
 themselves are untouched: retiring is a change of *document* membership, not of
@@ -353,7 +356,7 @@ op, or to an extent that names a body (`ToFace`, §8.1) is `ErrRetiredBody` (§1
 Using such a body as a stop would resolve topology outside the live model.
 
 It follows that **bodies from different documents cannot be combined**.
-`Union(ctx, a, b)` where `a` and `b` have different owners has no defined result — which
+`Union(a, b).Do(ctx)` where `a` and `b` have different owners has no defined result — which
 document would own it? — and is `ErrForeignBody` (§12).
 
 ```go
@@ -824,17 +827,19 @@ always report `IsVoid() == false`, even when closed
 (`agent-docs/surface-design.md` §2.2). `Stitch` refuses a closed assembly whose
 components are not proven separate, rather than publish an unrecorded cavity.
 
-### 6.3 Operation form: free functions, and methods for queries
+### 6.3 Operation form: commands from free functions, and methods for queries
 
-An operation is a package-level function. A query is a method. This section
-owns the rule; a companion design that writes an operation as a method
-(`func (d *Document) Sweep(...)`) means the free function of the same name.
+An operation is a command built by a package-level function. A query is a
+method. This section owns which calls are operations;
+`agent-docs/command-api-design.md` owns the command form. A companion design
+that writes an operation as a method (`func (d *Document) Sweep(...)`) or with
+a leading `ctx` means the command of the same name.
 
 **An operation is any call that builds a body, retires a body, or registers a
-body in a document.** It is a free function, so the document and every body it
-consumes appear in the argument list. Calls read the same whether they take one
-body (`Fillet(ctx, b, sel, r)`), two (`Cut(ctx, target, tool)`) or none
-(`Extrude(ctx, doc, s, p, e)`).
+body in a document.** Its constructor is a free function, so the document and
+every body it consumes appear in the constructor's argument list. Calls read
+the same whether they take one body (`Fillet(b, sel, r).Do(ctx)`), two
+(`Cut(target, tool).Do(ctx)`) or none (`Extrude(doc, s, p, e).Do(ctx)`).
 
 **A query is a read that changes nothing.** It retires no body, registers no
 body, and leaves `Document.Bodies()` as it found it. A query is a method on the
@@ -856,28 +861,36 @@ value it reads, so a retired body still answers it (§6). The query set is:
 the shell operation, so the connected set of faces between a `Lump` and its
 `Face`s is `FaceShell`, and `Body.Shells()` returns `[]*FaceShell`.
 
-**Form of a free function.** Parameters appear in this order: `ctx` when the
-operation takes one, then the owning `*Document` when no body argument
-identifies it, then the body or bodies operated on, then the remaining inputs,
-then options. An operation that takes a body reaches the document through that
-body (§6) and takes no `*Document` argument. An operation that takes no body
-(a feature built from a sketch) takes the `*Document` first.
+**Form of an operation constructor.** Parameters appear in this order: the
+owning `*Document` when no body argument identifies it, then the body or bodies
+operated on, then the remaining mandatory inputs. A variadic operand slot comes
+last. The constructor takes no `ctx` and no options. Each optional input is a
+method on the returned command, and `Do(ctx)` runs it. An operation that takes
+a body reaches the document through that body (§6) and takes no `*Document`
+argument. An operation that takes no body (a feature built from a sketch)
+takes the `*Document` first.
 
-`Sweep(ctx, doc, s, sec, path, opts...)` is one generic function over `Section` (§8),
-for a profile or a chain.
+`Sweep(doc, s, sec, path)` is one generic constructor over `Section` (§8), for
+a profile or a chain.
 
-**Every operation that builds a body from a sketch takes a `ctx`, `Extrude`,
-`Revolve` over a chain included.** Each checks `ctx` at
-entry, between recording the section, resolving the extent and building the
-body, and inside the build evaluators. A canceled `ctx` returns `ctx.Err()`
-unchanged before commit and leaves `Document.Bodies()` and every other body as
-it found them. A nil `ctx` is `ErrDegenerate`, on §8's rule for every operation
-that takes one. The build can run long: a free-form wall proves its curvature
-sign over a bounded work budget (`agent-docs/spline-design.md` §5.2), and a nonzero
-`WithTaper` builds through the draft evaluator.
+**Every operation takes its `ctx` at `Do`, `Extrude` and `Revolve` over a chain
+included.** `Do` refuses a nil `ctx` with `ErrDegenerate` before it reads any
+operand or option. A sketch-fed operation then checks `ctx` between recording
+the section, resolving the extent and building the body, and inside the build
+evaluators. A canceled `ctx` returns `ctx.Err()` unchanged before commit and
+leaves `Document.Bodies()` and every other body as it found them. The build can
+run long: a free-form wall proves its curvature sign over a bounded work budget
+(`agent-docs/spline-design.md` §5.2), and a nonzero taper builds through the
+draft evaluator.
 
-`Union`, `Cut`, `Intersect`, `Stitch`, `Transform` and `Copy` have this form. `Transform(ctx, b, t)` places a body, and
-`Copy(ctx, b, WithCopyPlacement(t))` copies it under a rigid motion (§8).
+`Union`, `Cut`, `Intersect`, `Stitch`, `Transform` and `Copy` have this form.
+`Transform(b, t).Do(ctx)` places a body, and `Copy` copies one under a rigid
+motion (§8).
+
+**A query keeps the function form.** A query method takes `ctx` first when it
+takes one and its options last, as functional options (`option/v3`):
+`b.Tessellate(ctx, tol, opts...)`, `d.Verify(ctx, opts...)`. So do the export
+writers, the mesh pipeline and `New`'s document options.
 
 **A builder is not an operation.** `Linkage` is a mutable value that records
 joints and loops, and its methods (`Close`, `DeclareJointContact`, `Ground`,
@@ -886,7 +899,8 @@ value. They stay methods. A `Linkage` method that built or retired a body
 would be an operation and would follow the rule above.
 
 **New API follows the rule.** A new public entry point that builds, retires or
-registers a body is a free function. A new read is a method on the value it
+registers a body is a command built by a free function
+(`agent-docs/command-api-design.md`). A new read is a method on the value it
 reads.
 
 ### 6.4 The report package
@@ -935,7 +949,7 @@ s.Solve(ctx)
 prof := s.Profiles()[0]
 
 doc := decad.New()
-body, err := decad.Extrude(ctx, doc, s, prof, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+body, err := decad.Extrude(doc, s, prof, decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(ctx)
 ```
 
 **A feature takes the sketch and the profile, in that order.** A
@@ -1794,10 +1808,11 @@ everywhere:
   document has retired is `ErrRetiredBody` (§6);
 - the feature **depends on** that body. It is not consumed or retired.
 
-Options carry the rest (`WithTaper(units.Degrees(3))`), via
-`github.com/lestrrat-go/option/v3` — the house functional-options library, and an
-approved dependency. Every option must have one clear, validated effect on the
-feature call and must leave the document unchanged when validation fails.
+Command methods carry the rest (`Extrude(doc, s, p, e).Taper(units.Degrees(3))`,
+`agent-docs/command-api-design.md`). Every method must have one clear effect,
+validated at `Do`, and must leave the document unchanged when validation fails.
+Queries take functional options via `github.com/lestrrat-go/option/v3` — the
+house functional-options library, and an approved dependency.
 
 ## 9. Selectors — intent, not identity
 
@@ -1947,10 +1962,10 @@ invalidate a hand-typed number, and the one selection style that survives a
 rebuild is the geometric one selectors exist to provide.
 
 ```go
-body, err = decad.Fillet(ctx, body,
+body, err = decad.Fillet(body,
     decad.Edges(decad.Convex(), decad.ParallelTo(r3.NewVec(0, 0, 1))),
     units.Millimeters(2),
-)
+).Do(ctx)
 ```
 
 **A selector that matches nothing is an error, loudly.** A fillet that silently
@@ -2300,7 +2315,9 @@ the resulting bodies, measurements, and verification reports directly.
   must; option semantics in `agent-docs/verification-design.md`),
   `ErrUnsupported` (the current evaluator cannot yet build the requested intent;
   staging is explicit and rejected at the call, never silently approximated or
-  narrowed; `agent-docs/evaluator-design.md` §2). `BooleanError` carries a `Code`
+  narrowed; `agent-docs/evaluator-design.md` §2), `ErrConsumed` (`Do` was called
+  on an operation command that already ran; `agent-docs/command-api-design.md`
+  §7). `BooleanError` carries a `Code`
   (empty / unsupported-contact / evaluator-failure), wrapping `ErrBooleanFailed`
   (empty, evaluator-failure) or `ErrUnsupported` (unsupported-contact); a valid
   tangent or coplanar contact this evaluator cannot classify is
@@ -2342,6 +2359,9 @@ the resulting bodies, measurements, and verification reports directly.
   is non-mutating and safe. The live body set alone is guarded, so `Bodies`,
   `Remove` and `Verify` may run concurrently with one another; a `Verify`
   reports on the set as it stood when the call began.
+- An operation command is NOT safe for concurrent use. Racing `Do` calls on one
+  command run the operation at most once, and every other call returns
+  `ErrConsumed` (`agent-docs/command-api-design.md` §8).
 
 ## 13. Non-goals for v1
 
@@ -2368,5 +2388,5 @@ turns on a side its caller cannot already name (`agent-docs/surface-design.md` �
 
 The assemblies non-goal rests on a capability in hand, not on an instancing
 graph: interference and clearance (§10) are computed between
-**explicitly-placed bodies** — `Transform(ctx context.Context, body *Body, t r3.Transform)` (§8) — which needs
+**explicitly-placed bodies** — `Transform(body, t).Do(ctx)` (§8) — which needs
 no `Component`/`Occurrence` machinery.

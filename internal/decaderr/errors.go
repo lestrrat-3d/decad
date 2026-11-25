@@ -54,3 +54,6 @@ var ErrNotFinite = errors.New("decad: non-finite value")
 
 // ErrUnsupported is the value behind decad.ErrUnsupported.
 var ErrUnsupported = errors.New("decad: not supported by the current evaluator")
+
+// ErrConsumed is the value behind decad.ErrConsumed.
+var ErrConsumed = errors.New("decad: command has already run")
