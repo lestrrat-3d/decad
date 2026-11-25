@@ -283,8 +283,8 @@ func loftCrossingAuditLimitedWithStreaming(budget *proofbound.WorkBudget, verts 
 	provenPatches := 0
 	remainingPatchChecks := uint64(100_000_000)
 	for family, patch := range patches {
-		if projectedPatchProofLimited(budget, verts, tris, patch,
-			&remainingPatchChecks) != ProjectedPatchHolds {
+		patch, ok := provenProjectedPatch(budget, verts, tris, patch, &remainingPatchChecks)
+		if !ok {
 			continue
 		}
 		if err := budget.Err(); err != nil {
