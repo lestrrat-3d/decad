@@ -582,7 +582,7 @@ func TestParityFacetBoxStatesTheProjection(t *testing.T) {
 		}
 	})
 
-	t.Run(`a projection with no area is never usable`, func(t *testing.T) {
+	t.Run(`a projection with no area and no axis-parallel line is never usable`, func(t *testing.T) {
 		for _, tc := range []struct {
 			name  string
 			verts []r3.Vec
@@ -591,8 +591,8 @@ func TestParityFacetBoxStatesTheProjection(t *testing.T) {
 				r3.NewVec(0, 0, 0), r3.NewVec(0, 1, 2), r3.NewVec(0, 3, 6)}},
 			{`a repeated corner`, []r3.Vec{
 				r3.NewVec(0, 0, 0), r3.NewVec(0, 0, 0), r3.NewVec(0, 1, 4)}},
-			{`a facet flat against the swept axis`, []r3.Vec{
-				r3.NewVec(0, 0, 5), r3.NewVec(1, 1, 5), r3.NewVec(2, 4, 5)}},
+			{`one projected point`, []r3.Vec{
+				r3.NewVec(0, 3, 5), r3.NewVec(1, 3, 5), r3.NewVec(2, 3, 5)}},
 		} {
 			t.Run(tc.name, func(t *testing.T) {
 				pm := meshbool.NewParityMesh(tc.verts, [][3]int{{0, 1, 2}})
@@ -603,6 +603,30 @@ func TestParityFacetBoxStatesTheProjection(t *testing.T) {
 					`an unusable box rejects nothing, however far away the query is`)
 			})
 		}
+	})
+
+	t.Run(`an axis-parallel segment rejects exactly the queries off its line`, func(t *testing.T) {
+		// Swept axis 0 with (u, v) = (y, z): the corners project to (0, 5),
+		// (1, 5) and (4, 5), a segment on the line v = 5.
+		flatV := []r3.Vec{r3.NewVec(0, 0, 5), r3.NewVec(1, 1, 5), r3.NewVec(2, 4, 5)}
+		pm := meshbool.NewParityMesh(flatV, [][3]int{{0, 1, 2}})
+		box := pm.BuildFacetBox(0, 1, 2, 0)
+		require.False(t, box.Nondegenerate, `a segment has no area`)
+		require.True(t, box.AxisSegment, `a segment on a line of constant v is flagged`)
+		require.True(t, box.Rejects(-1e9, -1e9), `a query off the line is rejected, far or near`)
+		require.True(t, box.Rejects(2, math.Nextafter(5, 6)), `one float step off the line is rejected`)
+		require.True(t, box.Rejects(2, math.Nextafter(5, 4)), `one float step off the line is rejected`)
+		require.False(t, box.Rejects(2, 5), `a query on the line inside the box is not`)
+		require.False(t, box.Rejects(100, 5), `a query on the line beyond the box is not`)
+		require.False(t, box.Rejects(-1e9, 5), `a query on the line far beyond the box is not`)
+
+		// The same corners with u and v swapped: a segment on the line u = 5.
+		flatU := []r3.Vec{r3.NewVec(0, 5, 0), r3.NewVec(1, 5, 1), r3.NewVec(2, 5, 4)}
+		pm = meshbool.NewParityMesh(flatU, [][3]int{{0, 1, 2}})
+		box = pm.BuildFacetBox(0, 1, 2, 0)
+		require.True(t, box.AxisSegment, `a segment on a line of constant u is flagged`)
+		require.True(t, box.Rejects(4, 1), `a query off the line is rejected`)
+		require.False(t, box.Rejects(5, 100), `a query on the line is not`)
 	})
 
 	t.Run(`a non-finite coordinate leaves the box unusable`, func(t *testing.T) {

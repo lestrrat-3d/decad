@@ -170,18 +170,64 @@ const (
 // segment's LINE, however far outside this box, makes all three signs vanish
 // and the ray AMBIGUOUS. Skipping such a facet would drop an ambiguity the
 // reference path reports, so a facet whose projected area cannot be proven
-// nonzero is never filtered.
+// nonzero is filtered only in the one case AxisSegment names.
+//
+// AxisSegment marks a facet whose projection is a segment of nonzero length on
+// a line of constant u or of constant v (exactly one of MinU == MaxU and
+// MinV == MaxV holds, and the exact area is zero). It is false for every other
+// box, including every box a replay tree merges.
 type ParityFacetBox struct {
 	MinU, MaxU, MinV, MaxV float64
 	Nondegenerate          bool
 	Built                  bool
+	AxisSegment            bool
 }
 
 // rejects reports whether a query projected to (fu, fv) provably lies strictly
 // outside this facet's projection. The caller owes it a finite (fu, fv) —
 // MeshParityPreparedContext checks the query's own floatFinite once per scan
 // rather than once per facet.
+//
+// An AxisSegment box rejects every query off its line, and only those. The
+// proof that classifyFacet returns facetOutside for such a query, whichever
+// way the facet's signs fall, runs as follows.
+//
+// Say the line is v = c, the facet's projected corners are (ua, c), (ub, c)
+// and (uc, c), and the query's exact projection is (qu, qv). Every projected
+// coordinate is a float lifted exactly (newXP2FromFloats), so Cross2xSign over
+// them is exact, and for a segment on v = c
+//
+//	s1 = sign((ub − ua)·(qv − c)),
+//	s2 = sign((uc − ub)·(qv − c)),
+//	s3 = sign((ua − uc)·(qv − c)).
+//
+// Let d1 = ub − ua, d2 = uc − ub, d3 = ua − uc, and σ = sign(qv − c). The
+// differences sum to zero. They are not all zero, because MinU < MaxU for a
+// segment of nonzero length. A nonzero set of reals that sums to zero has a
+// positive member and a negative member. If σ ≠ 0, then s1, s2, s3 are the
+// signs of d1, d2, d3 times σ, so the three signs include a positive and a
+// negative one: classifyFacet returns facetOutside, either at once when
+// s1·s2 < 0 or after s3, on the neg && pos test. Neither return reads the
+// facet's normal, so it does not matter whether the facet is parallel to the
+// ray. The same argument holds for a line u = const with the roles of u and v
+// swapped, because the sign of (b − a) × (q − a) then is −(vb − va)·(qu − c).
+//
+// The query's float fv is the nearest float to qv, and round-to-nearest is
+// monotone. The line's c is a float, so qv = c implies fv = c. The test
+// fv ≠ c therefore proves qv ≠ c, and so σ ≠ 0. The converse does not hold,
+// so a query with fv == c is never rejected: it reaches classifyFacet, which
+// may report it ambiguous.
+//
+// A rejected facet is exactly one the scan would have continued past, so the
+// order of the remaining facets, and the facet at which an ambiguity is first
+// seen, do not change.
 func (b *ParityFacetBox) Rejects(fu, fv float64) bool {
+	if b.AxisSegment {
+		if b.MinV == b.MaxV {
+			return fv != b.MinV
+		}
+		return fu != b.MinU
+	}
 	return b.Nondegenerate &&
 		(fu < b.MinU || fu > b.MaxU || fv < b.MinV || fv > b.MaxV)
 }
@@ -224,6 +270,10 @@ func (pm *ParityMesh) BuildFacetBox(axis, u, v, ti int) ParityFacetBox {
 	}
 	if s, ok := projectedAreaSign(au, av, bu, bv, cu, cv); ok {
 		box.Nondegenerate = s != 0
+		// Zero exact area with exactly one flat extent: all three corners
+		// share one v (or one u) and not all three share the other, which is
+		// the segment ParityFacetBox.Rejects states its proof for.
+		box.AxisSegment = s == 0 && (box.MinU == box.MaxU) != (box.MinV == box.MaxV)
 		return box
 	}
 	qa := pm.VertexProjection(axis, u, v, tri[0])
