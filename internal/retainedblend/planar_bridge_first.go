@@ -32,9 +32,17 @@ package retainedblend
 
 // bridgeNearest picks, among candidates at the same distance, the one slices.SortFunc leaves first. Which of several
 // equal keys comes first is decided by the pdqsort steps of the Go toolchain, not by decad, and the chosen bridge
-// shapes every triangulation built from it. This file copies those steps from Go 1.27.4 so the choice stays what
-// current results depend on, whatever a later toolchain does to its sort. Sorting every candidate only to read the
-// first costs O(n log n); this copy runs only the steps on ranges that hold index 0, which costs O(n).
+// shapes every triangulation built from it. This file copies the steps that place index 0 from Go 1.27.4's
+// slices/zsortanyfunc.go, so the first-element pick is frozen to the order of Go 1.27.4's slices.SortFunc whatever a
+// later toolchain does. Sorting every candidate only to read the first costs O(n log n); this copy runs only the
+// steps on ranges that hold index 0, which costs O(n).
+//
+// Only the first-element pick is frozen. When that pick is rejected, bridgeNearest still calls the toolchain's own
+// slices.SortFunc for the rest of the scan, so a later toolchain can change that path's tie order.
+//
+// TestBridgeFirstSortSweepMatchesSortFunc and the other tests against slices.SortFunc are a tripwire. If a Go
+// upgrade changes SortFunc's tie order, they fail. Then update this copy from the new toolchain's
+// slices/zsortanyfunc.go, and compare the gallery swisslever fingerprint before accepting the change.
 //
 // The copy is specialised to bridgeCandidate ordered by cmp.Less(a.d, b.d), which equals cmp.Compare(a.d, b.d) < 0
 // for every pair (NaN included); pdqsort reads only that outcome. Steps on disjoint ranges touch disjoint elements,
