@@ -14,14 +14,9 @@ import (
 func TestCopyMirrorPlaneDeepCopiesItsSelector(t *testing.T) {
 	t.Parallel()
 	q := Faces(Planar())
-	before := q.String()
 	value := copyMirrorPlane(MirrorFace{Face: q}).(MirrorFace).Face.(*FaceQuery)
 	pointer := copyMirrorPlane(&MirrorFace{Face: q}).(*MirrorFace).Face.(*FaceQuery)
-	require.NotSame(t, q, value)
-	require.NotSame(t, q, pointer)
-	require.NotEqual(t, before, q.Exactly(3).String())
-	require.Equal(t, before, value.String())
-	require.Equal(t, before, pointer.String())
+	requireIndependentCopies(t, q, map[string]*FaceQuery{"value": value, "pointer": pointer})
 
 	frame := &MirrorFrame{Frame: r3.Frame{}}
 	cp := copyMirrorPlane(frame).(*MirrorFrame)

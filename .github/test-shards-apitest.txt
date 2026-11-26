@@ -1094,7 +1094,6 @@
 4	0.01	TestOuterLoopOfKeepsBoreEdgesSharp
 4	0.12	TestOverBudgetConversionRefusesBeforeLifting
 4	0.00	TestOverClampedNURBSRefusesAsUnsupported
-4	0.00	TestPathPatternCountRefusals
 4	0.03	TestPathPatternUnionUnitesTheInstancesWithTheTarget
 4	10.05	TestPatternUnionKeepsLobesThatMissTheBaseByAMicronApart
 4	4.87	TestPatternedLobesJoinADisc
