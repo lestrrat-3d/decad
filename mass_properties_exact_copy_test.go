@@ -128,7 +128,7 @@ func TestExactCopyMomentEvidenceRollback(t *testing.T) {
 		source.n.VolumeLineage.Target.Value.Base() + 1)
 	bodies := doc.Bodies()
 	operations := doc.OperationHistory().Operations()
-	nextProducer := doc.nextProducerID()
+	nextProducer := doc.producerAt(t.Context())
 	_, err = Copy(t.Context(), source, WithCopyRotation(r3.NewVec(10, 10, 10),
 		r3.NewVec(1, 2, 3), units.Degrees(37)))
 	require.ErrorIs(t, err, ErrBooleanFailed)
@@ -136,7 +136,7 @@ func TestExactCopyMomentEvidenceRollback(t *testing.T) {
 	for i := range bodies {
 		require.Same(t, bodies[i], doc.Bodies()[i])
 	}
-	require.Equal(t, nextProducer, doc.nextProducerID())
+	require.Equal(t, nextProducer, doc.producerAt(t.Context()))
 	current := doc.OperationHistory().Operations()
 	require.Len(t, current, len(operations))
 	for i := range operations {

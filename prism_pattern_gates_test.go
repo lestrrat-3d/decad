@@ -31,7 +31,7 @@ func prismPatternUnionMany(t *testing.T, mesher interface {
 }, bodies ...*Body) (bool, error) {
 	t.Helper()
 	d := documentHandle(bodies[0].n.Doc)
-	_, ok, err := prismpattern.UnionMany(t.Context(), envOf(documentNode(d), d.nextProducerID()), mesher, bodyNodes(bodies))
+	_, ok, err := prismpattern.UnionMany(t.Context(), envOf(documentNode(d), d.producerAt(t.Context())), mesher, bodyNodes(bodies))
 	return ok, err
 }
 

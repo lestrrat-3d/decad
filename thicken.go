@@ -81,7 +81,7 @@ func Thicken(ctx context.Context, b *Body, thickness units.Value,
 	if b.Kind() != BodySheet {
 		return nil, fmt.Errorf(`%w: Thicken requires a sheet body`, ErrUnsupported)
 	}
-	node, err := thickenbuild.Thicken(ctx, envOf(b.n.Doc, b.n.Doc.NextProducer), &b.n, thickenbuild.Side(side), tmm, tDelta)
+	node, err := thickenbuild.Thicken(ctx, envOf(b.n.Doc, documentHandle(b.n.Doc).producerID(ctx)), &b.n, thickenbuild.Side(side), tmm, tDelta)
 	if err != nil {
 		return nil, err
 	}

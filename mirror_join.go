@@ -74,7 +74,7 @@ func (b *Body) mirroredJoin(ctx context.Context, plane MirrorPlane) (*Body, erro
 		return nil, err
 	}
 	budget := proofbound.NewWorkBudget(ctx)
-	ref := d.nextProducerID()
+	ref := d.producerAt(ctx)
 	var body *Body
 	switch p := b.n.Payload.(type) {
 	case prismPayload:

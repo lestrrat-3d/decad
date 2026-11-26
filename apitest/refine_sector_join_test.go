@@ -118,9 +118,10 @@ func TestRefineSectorJoinRefusals(t *testing.T) {
 	doc, joined := refineSectorHubAndLugs(t)
 	held := refineSectorFloor(t, joined)
 	bodies := doc.Bodies()
-	_, err := decad.Refine(t.Context(), joined, units.Millimeters(0.001))
+	refined, err := decad.Refine(t.Context(), joined, units.Millimeters(0.001))
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.Contains(t, err.Error(), "mm boundary proof")
+	require.True(t, refined == nil)
 	require.Equal(t, bodies, doc.Bodies())
 	require.Equal(t, held, refineSectorFloor(t, joined))
 }

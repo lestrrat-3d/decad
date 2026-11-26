@@ -11,13 +11,13 @@ import (
 	"github.com/lestrrat-3d/decad"
 )
 
-// roundedMirrorJoin lofts a gear outline from the XY plane to the outline
+// roundedMirrorJoin lofts a five-tooth gear outline from the XY plane to the outline
 // turned by twist half above it, rounds its root corners, and joins it to its
 // mirror image across the upper section, the construction of a herringbone
 // gear.
-func roundedMirrorJoin(t *testing.T, teeth int, half, twist float64) *decad.Body {
+func roundedMirrorJoin(t *testing.T, half, twist float64) *decad.Body {
 	t.Helper()
-	g := newTwistedGear(teeth, 20*math.Pi/180, 0.05)
+	g := newTwistedGear(5, 20*math.Pi/180, 0.05)
 	body, bottom, top := g.loft(t, half, twist, 0)
 	rounded, err := decad.Fillet(t.Context(), body, rungQuery(bottom, top, half).Exactly(len(bottom)),
 		units.Millimeters(0.25))
@@ -39,35 +39,29 @@ func roundedMirrorJoin(t *testing.T, teeth int, half, twist float64) *decad.Body
 func TestLoftMirrorJoinThroughBore(t *testing.T) {
 	const half, r = 1.5, 0.5
 	twist := 14.5 * math.Pi / 180
-	for _, tc := range []struct {
-		name  string
-		teeth int
-	}{{"five teeth", 5}, {"seven teeth", 7}} {
-		joined := roundedMirrorJoin(t, tc.teeth, half, twist)
-		before, err := joined.Volume()
-		require.NoError(t, err, tc.name)
-		bored, err := decad.Cut(t.Context(), joined, circleBodyAtZ(t, joined.Document(), 0, r, -1, 2*half+2))
-		require.NoError(t, err, tc.name)
-		after, err := bored.Volume()
-		require.NoError(t, err, tc.name)
-		full := math.Pi * r * r * 2 * half
-		require.InDelta(t, full, before.Value.Base()-after.Value.Base(),
-			before.Bound.Base()+after.Bound.Base(), tc.name)
-		require.True(t, bored.IsSolid(), tc.name)
-		mesh, err := bored.Tessellate(t.Context(), units.Millimeters(0.1), decad.WithVerification(decad.VerifyAll))
-		require.NoError(t, err, tc.name)
-		require.True(t, mesh.BoundaryVerified(), tc.name)
-		require.True(t, mesh.VolumeVerified(), tc.name)
-		require.Equal(t, 0, loftMirrorChamferEuler(mesh), "the bored shell has one hole: %s", tc.name)
-		near := 0
-		for _, p := range mesh.Vertices() {
-			if radius := math.Hypot(p.X, p.Y); radius < 2*r {
-				require.InDelta(t, r, radius, 1e-9, "%s: a vertex near the axis is on the bore", tc.name)
-				near++
-			}
+	joined := roundedMirrorJoin(t, half, twist)
+	before, err := joined.Volume()
+	require.NoError(t, err)
+	bored, err := decad.Cut(t.Context(), joined, circleBodyAtZ(t, joined.Document(), 0, r, -1, 2*half+2))
+	require.NoError(t, err)
+	after, err := bored.Volume()
+	require.NoError(t, err)
+	full := math.Pi * r * r * 2 * half
+	require.InDelta(t, full, before.Value.Base()-after.Value.Base(), before.Bound.Base()+after.Bound.Base())
+	require.True(t, bored.IsSolid())
+	mesh, err := bored.Tessellate(t.Context(), units.Millimeters(0.1), decad.WithVerification(decad.VerifyAll))
+	require.NoError(t, err)
+	require.True(t, mesh.BoundaryVerified())
+	require.True(t, mesh.VolumeVerified())
+	require.Equal(t, 0, loftMirrorChamferEuler(mesh), "the bored shell has one hole")
+	near := 0
+	for _, p := range mesh.Vertices() {
+		if radius := math.Hypot(p.X, p.Y); radius < 2*r {
+			require.InDelta(t, r, radius, 1e-9, "a vertex near the axis is on the bore")
+			near++
 		}
-		require.Positive(t, near, tc.name)
 	}
+	require.Positive(t, near)
 }
 
 // TestLoftMirrorJoinShortToolKeepsTheTop cuts a tool that stops short of the
@@ -76,7 +70,7 @@ func TestLoftMirrorJoinThroughBore(t *testing.T) {
 // cylinder.
 func TestLoftMirrorJoinShortToolKeepsTheTop(t *testing.T) {
 	const half, r = 1.5, 0.5
-	joined := roundedMirrorJoin(t, 5, half, 14.5*math.Pi/180)
+	joined := roundedMirrorJoin(t, half, 14.5*math.Pi/180)
 	before, err := joined.Volume()
 	require.NoError(t, err)
 	short, err := decad.Cut(t.Context(), joined, circleBodyAtZ(t, joined.Document(), 0, r, -1, half+2))

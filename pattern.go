@@ -99,7 +99,7 @@ func PatternCopies(ctx context.Context, b *Body, spec PatternSpec) ([]*Body, err
 	if err != nil {
 		return nil, err
 	}
-	out, err := rp.buildInstances(ctx, d, d.nextProducerID(), b.n.Payload, keeping)
+	out, err := rp.buildInstances(ctx, d, d.producerAt(ctx), b.n.Payload, keeping)
 	if err != nil {
 		return nil, err
 	}
@@ -227,7 +227,7 @@ func Patterned(ctx context.Context, b *Body, spec PatternSpec) (*Body, error) {
 	if err != nil {
 		return nil, err
 	}
-	base := d.nextProducerID()
+	base := d.producerAt(ctx)
 	if keeping && b.Kind() != BodySheet {
 		sp, ok, err := patternassembly.Group(ctx, rp.Spec, b.n.Payload)
 		if err != nil {

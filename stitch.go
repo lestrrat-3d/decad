@@ -91,7 +91,7 @@ func Stitch(ctx context.Context, bodies ...*Body) (result *Body, retErr error) {
 	}
 	plan := stitchrecord.BuildTolerantPlan(srcFaces, gaptol.Reach(ctx))
 
-	ref := d.nextProducerID()
+	ref := d.producerAt(ctx)
 	body, err := bodyResult(stitchrecord.Build(ctx, envOf(documentNode(d), ref), srcFaces, plan, r3.Identity()))
 	if err != nil {
 		return nil, err

@@ -426,7 +426,7 @@ func buildRevolveLoop(ctx context.Context, alloc topo.Alloc, body *topo.Body, re
 			center, jAxis, jRadius := rp.JunctionCircle(b, j.z, j.rho)
 			switch {
 			case rp.Full && !j.onAxis:
-				seam := rp.sweptVertex(alloc, b, j.z, j.rho, at, body.Doc.MintCurve(), rp.end0())
+				seam := rp.sweptVertex(alloc, b, j.z, j.rho, at, body.Doc.MintCurve(ctx), rp.end0())
 				latitudeLength := 2 * math.Pi * j.rho
 				latitudeBound := proofbound.ConservativeValueError(latitudeLength, proofbound.ProductUpper(w.AxisRadiusUpper, proofbound.TwoPiUpper()))
 				if rhoEnc, ok := junctionRadiusInterval(j.rho, w.StartVBound); ok {
@@ -442,18 +442,18 @@ func buildRevolveLoop(ctx context.Context, alloc topo.Alloc, body *topo.Body, re
 					// shared, by construction, between side faces i-1 and i
 					// of THIS build alone (fullRevLoops below), exactly the
 					// role a prism's own rim edge plays for its two caps.
-					Denot: body.Doc.MintCurve(),
+					Denot: body.Doc.MintCurve(ctx),
 					Curve: surfacegeom.Circle3{Center: center, Axis: jAxis, Radius: jRadius},
 					Start: seam,
 					End:   seam,
 				})
 			case !rp.Full:
 				if j.onAxis {
-					j.v0 = rp.sweptVertex(alloc, b, j.z, j.rho, at, body.Doc.MintCurve(), rp.end0(), rp.end1())
+					j.v0 = rp.sweptVertex(alloc, b, j.z, j.rho, at, body.Doc.MintCurve(ctx), rp.end0(), rp.end1())
 					j.v1 = j.v0
 				} else {
-					j.v0 = rp.sweptVertex(alloc, b, j.z, j.rho, at, body.Doc.MintCurve(), rp.end0())
-					j.v1 = rp.sweptVertex(alloc, b, j.z, j.rho, at, body.Doc.MintCurve(), rp.end1())
+					j.v0 = rp.sweptVertex(alloc, b, j.z, j.rho, at, body.Doc.MintCurve(ctx), rp.end0())
+					j.v1 = rp.sweptVertex(alloc, b, j.z, j.rho, at, body.Doc.MintCurve(ctx), rp.end1())
 					arcLength := j.rho * dphi
 					dphiUpper := proofbound.AbsSumUpper(math.Abs(dphi), sweep.Bound)
 					arcBound := proofbound.ConservativeValueError(arcLength, proofbound.ProductUpper(w.AxisRadiusUpper, dphiUpper))
@@ -471,7 +471,7 @@ func buildRevolveLoop(ctx context.Context, alloc topo.Alloc, body *topo.Body, re
 						// (internal/denotation): this junction arc is shared, by
 						// construction, between side faces i-1 and i of THIS
 						// build alone.
-						Denot: body.Doc.MintCurve(),
+						Denot: body.Doc.MintCurve(ctx),
 						Curve: surfacegeom.Arc3{Center: center, Axis: jAxis, Radius: jRadius},
 						Start: j.v0,
 						End:   j.v1,
@@ -946,7 +946,7 @@ func buildChainRevolveWalls(ctx context.Context, alloc topo.Alloc, body *topo.Bo
 		center := rp.point(b, j.z, 0, 0)
 		switch {
 		case rp.Full && !j.onAxis:
-			seam := rp.sweptVertex(alloc, b, j.z, j.rho, at, body.Doc.MintCurve(), rp.end0())
+			seam := rp.sweptVertex(alloc, b, j.z, j.rho, at, body.Doc.MintCurve(ctx), rp.end0())
 			latitudeLength := 2 * math.Pi * j.rho
 			latitudeBound := proofbound.ConservativeValueError(latitudeLength, proofbound.ProductUpper(axisRadiusUpper, proofbound.TwoPiUpper()))
 			if rhoEnc, ok := junctionRadiusInterval(j.rho, rhoBound); ok {
@@ -957,18 +957,18 @@ func buildChainRevolveWalls(ctx context.Context, alloc topo.Alloc, body *topo.Bo
 				Convex:      turn > 0,
 				Length:      latitudeLength,
 				LengthBound: frame.LengthBound(latitudeLength, latitudeBound),
-				Denot:       body.Doc.MintCurve(),
+				Denot:       body.Doc.MintCurve(ctx),
 				Curve:       surfacegeom.Circle3{Center: center, Axis: wDir.Scale(sweepSign), Radius: units.Millimeters(j.rho)},
 				Start:       seam,
 				End:         seam,
 			})
 		case !rp.Full:
 			if j.onAxis {
-				j.v0 = rp.sweptVertex(alloc, b, j.z, j.rho, at, body.Doc.MintCurve(), rp.end0(), rp.end1())
+				j.v0 = rp.sweptVertex(alloc, b, j.z, j.rho, at, body.Doc.MintCurve(ctx), rp.end0(), rp.end1())
 				j.v1 = j.v0
 			} else {
-				j.v0 = rp.sweptVertex(alloc, b, j.z, j.rho, at, body.Doc.MintCurve(), rp.end0())
-				j.v1 = rp.sweptVertex(alloc, b, j.z, j.rho, at, body.Doc.MintCurve(), rp.end1())
+				j.v0 = rp.sweptVertex(alloc, b, j.z, j.rho, at, body.Doc.MintCurve(ctx), rp.end0())
+				j.v1 = rp.sweptVertex(alloc, b, j.z, j.rho, at, body.Doc.MintCurve(ctx), rp.end1())
 				arcLength := j.rho * dphi
 				dphiUpper := proofbound.AbsSumUpper(math.Abs(dphi), sweep.Bound)
 				arcBound := proofbound.ConservativeValueError(arcLength, proofbound.ProductUpper(axisRadiusUpper, dphiUpper))
@@ -982,7 +982,7 @@ func buildChainRevolveWalls(ctx context.Context, alloc topo.Alloc, body *topo.Bo
 					Convex:      turn > 0,
 					Length:      arcLength,
 					LengthBound: frame.LengthBound(arcLength, arcBound),
-					Denot:       body.Doc.MintCurve(),
+					Denot:       body.Doc.MintCurve(ctx),
 					Curve:       surfacegeom.Arc3{Center: center, Axis: wDir.Scale(sweepSign), Radius: units.Millimeters(j.rho)},
 					Start:       j.v0,
 					End:         j.v1,

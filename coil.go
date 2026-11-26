@@ -201,7 +201,7 @@ func Coil(ctx context.Context, d *Document, s *sketch.Sketch, p *sketch.Profile,
 		return nil, err
 	}
 
-	body, err := bodyResult(coilshell.BuildBody(ctx, envOf(documentNode(d), d.nextProducerID()), coilPayload{
+	body, err := bodyResult(coilshell.BuildBody(ctx, envOf(documentNode(d), d.producerAt(ctx)), coilPayload{
 		Profile:         profile,
 		Frame:           frame,
 		Line:            line,

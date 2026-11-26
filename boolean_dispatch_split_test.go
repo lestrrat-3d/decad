@@ -51,7 +51,7 @@ func TestBooleanDispatchAnalyticPrefix(t *testing.T) {
 		a, b := splitTestBox(t, doc, 0, 10), splitTestBox(t, doc, 5, 15)
 		ctx, err := doc.evalContext(t.Context())
 		require.NoError(t, err)
-		env := envOf(documentNode(doc), doc.nextProducerID())
+		env := envOf(documentNode(doc), doc.producerAt(t.Context()))
 		n, ok, err := booleandispatchAnalytic(ctx, meshbool.OpUnion, env, a, b)
 		require.NoError(t, err)
 		require.True(t, ok)
@@ -95,7 +95,7 @@ func TestBooleanDispatchAnalyticPrefix(t *testing.T) {
 
 		ctx, err := doc.evalContext(t.Context())
 		require.NoError(t, err)
-		env := envOf(documentNode(doc), doc.nextProducerID())
+		env := envOf(documentNode(doc), doc.producerAt(t.Context()))
 		n, ok, err := booleandispatchAnalytic(ctx, meshbool.OpCut, env, box, tool)
 		require.NoError(t, err)
 		require.False(t, ok)
@@ -105,7 +105,7 @@ func TestBooleanDispatchAnalyticPrefix(t *testing.T) {
 		called := false
 		hooks := booleanHooks(booleanConfig{})
 		hooks.Mesher = cancelOperandMesher{cancel: cancel, called: &called}
-		beforeID := doc.nextProducerID()
+		beforeID := doc.producerAt(t.Context())
 		beforeHistory := len(doc.OperationHistory().Operations())
 		beforeBodies := doc.Bodies()
 		boxMesh, toolMesh := box.n.Tess.Load(), tool.n.Tess.Load()
@@ -113,7 +113,7 @@ func TestBooleanDispatchAnalyticPrefix(t *testing.T) {
 		_, err = booleandispatch.BodyScaled(cancelled, meshbool.OpCut, env, &box.n, &tool.n, hooks, 0.25)
 		require.True(t, called)
 		require.ErrorIs(t, err, context.Canceled)
-		require.Equal(t, beforeID, doc.nextProducerID())
+		require.Equal(t, beforeID, doc.producerAt(t.Context()))
 		require.Len(t, doc.OperationHistory().Operations(), beforeHistory)
 		require.Len(t, doc.Bodies(), len(beforeBodies))
 		for i, body := range doc.Bodies() {
@@ -128,7 +128,7 @@ func TestBooleanDispatchAnalyticPrefix(t *testing.T) {
 			require.Same(t, toolFaces[i], face)
 		}
 
-		got, err := booleanBodyWith(ctx, meshbool.OpCut, box, tool, doc.nextProducerID(), booleanConfig{})
+		got, err := booleanBodyWith(ctx, meshbool.OpCut, box, tool, doc.producerAt(t.Context()), booleanConfig{})
 		require.NoError(t, err)
 		_, isFaceted := got.n.Payload.(facetedPayload)
 		require.True(t, isFaceted)

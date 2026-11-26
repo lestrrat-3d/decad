@@ -293,7 +293,7 @@ func performBoolean(ctx context.Context, op meshbool.OperationKind, a, b *Body, 
 			return nil, err
 		}
 		budget := proofbound.NewReplayTrialBudget()
-		candidate, admitted, err := groupBlindCutBodyWithBudget(evalCtx, a, b, d.nextProducerID(), budget)
+		candidate, admitted, err := groupBlindCutBodyWithBudget(evalCtx, a, b, d.producerAt(ctx), budget)
 		if err != nil {
 			return nil, err
 		}
@@ -304,7 +304,7 @@ func performBoolean(ctx context.Context, op meshbool.OperationKind, a, b *Body, 
 			return candidate, nil
 		}
 	}
-	body, err := booleanBodyWith(ctx, op, a, b, d.nextProducerID(), cfg)
+	body, err := booleanBodyWith(ctx, op, a, b, d.producerAt(ctx), cfg)
 	span := producerID(1)
 	var paired pairedCutAncestry
 	pairedUsed := false

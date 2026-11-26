@@ -145,34 +145,16 @@ func spokedHubBead(rho float64) (alpha0, bead, quadErr float64) {
 	return alpha0, 4 * arc, 4 * quad
 }
 
-// TestBossRootTangentSpokedHub builds the Ø14 boss with a 0.5 root fillet on the spoked disc. Each of the four root
-// arcs ends where a window corner round touches the boss wall.
-func TestBossRootTangentSpokedHub(t *testing.T) {
-	t.Parallel()
+// requireSpokedHubTangentEnds checks the Ø14 boss with a 0.5 root fillet on the spoked disc: each of the four root
+// arcs ends where a window corner round touches the boss wall. out is the filleted boss and alpha0 the window's half
+// width from spokedHubBead. It reads the verified mesh and the caps through point containment.
+func requireSpokedHubTangentEnds(t *testing.T, out *decad.Body, alpha0 float64) {
+	t.Helper()
 	const (
 		hub, rG, dRound, top = tangentHub, tangentRound, tangentCentre, tangentTop
-		rho                  = 0.5
 	)
-	alpha0, bead, quadErr := spokedHubBead(rho)
-
-	_, plain := spokedHubDisc(t)
-	s, err := bossOnTop(t, plain, 14, 0)
-	require.NoError(t, err)
-	vs, bs := volumeAndBound(t, s)
-
-	_, disc := spokedHubDisc(t)
-	out, err := bossOnTop(t, disc, 14, 0.5)
-	require.NoError(t, err)
-	require.True(t, out.IsSolid())
 	mesh := requireSolidVerified(t, out, 0.01)
 	meshBound := mesh.Bound().Base()
-
-	v, bound := volumeAndBound(t, out)
-	t.Logf("V(S) %.9g (bound %g), bead %.9g (quadrature error %.3g), V(result) %.9g (bound %g), "+
-		"|V(result) - V(S) - bead| %.3g, allowance %.3g, mesh bound %g",
-		vs, bs, bead, quadErr, v, bound, math.Abs(v-vs-bead), bound+bs+quadErr, meshBound)
-	require.Less(t, quadErr, 1e-9, "the quadrature resolves the bead far below the bound")
-	require.LessOrEqual(t, math.Abs(v-(vs+bead)), bound+bs+quadErr)
 
 	require.Greater(t, capOffset, meshBound)
 	// The caps: at radius 7.2 the window's boundary is the round, and the bead stands 0.1 high there. A point 0.03
@@ -370,7 +352,7 @@ func kinkedHubDisc(t *testing.T, shrink float64) *decad.Body {
 // the fillet refuses: a kink of 3e-8 reaches the charged-arc gate that only a proven corner passes, and a kink the
 // union's shared-span gate cannot resolve takes the mesh path, whose boss has no root edge to fillet. The hand-drawn
 // disc's corners are tangent only as closely as its float construction makes them, which differs between platforms,
-// so no case here asserts a build; TestBossRootTangentSpokedHub builds the sketch-filleted disc.
+// so no case here asserts a build; TestBossRootFilletSpokedHub's "14 builds with tangent ends" builds the sketch-filleted disc.
 func TestBossRootTangentRefusesKinkedJoint(t *testing.T) {
 	t.Parallel()
 	for _, tc := range []struct {
