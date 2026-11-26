@@ -2434,8 +2434,8 @@
 9	0.01	TestUnionCupOperand
 9	0.02	TestUnionManyChainsMixedHeightPrisms
 9	0.01	TestUnionRectangularFacePatchAcrossOtherAxis
-9	11.59	TestUnionRefinedEqualsUnionThenRefineOnASectorJoin
-9	30.41	TestUnionRefinedEqualsUnionThenRefineWhenTheAuditForcesARetry
+9	4.00	TestUnionRefinedEqualsUnionThenRefineOnASectorJoin
+9	20.00	TestUnionRefinedEqualsUnionThenRefineWhenTheAuditForcesARetry
 9	3.31	TestUnionRefinedKeepsLaterOperationsAtTheRefinedBound
 9	0.30	TestUnionRoundedStemWithFlushArm
 9	0.79	TestUnionSlopedHubCapAndRadialLug
