@@ -10,7 +10,7 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// WithSweepTwist rotates the profile as it travels along the path, so the
+// Twist rotates the profile as it travels along the path, so the
 // result spirals. Use it for twisted bars, drill-bit flutes and decorative
 // columns. The angle is the total turn from the start of the path to its end.
 func Example_sweep_twist() {
@@ -34,8 +34,7 @@ func Example_sweep_twist() {
 		fmt.Printf("failed to build path: %s\n", err)
 		return
 	}
-	bar, err := decad.Sweep(context.Background(), decad.New(), s, s.Profiles()[0], path,
-		decad.WithSweepTwist(units.Degrees(30)))
+	bar, err := decad.Sweep(decad.New(), s, s.Profiles()[0], path).Twist(units.Degrees(30)).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to sweep: %s\n", err)
 		return

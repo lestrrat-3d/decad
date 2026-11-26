@@ -125,7 +125,7 @@ func TestPrismPatternFilletBodyGates(t *testing.T) {
 	setup := func(t *testing.T) (*Body, []*Edge) {
 		t.Helper()
 		_, blank, section, rotated := prismPatternTabBodies(t, prismPatternInsetBlank)
-		joined, err := Union(t.Context(), blank, section, rotated)
+		joined, err := Union(blank, section, rotated).Do(t.Context())
 		require.NoError(t, err)
 		edges, err := prismPatternRootSelection(t, joined).SelectEdges(joined)
 		require.NoError(t, err)

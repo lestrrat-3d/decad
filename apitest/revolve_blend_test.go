@@ -54,7 +54,7 @@ func meridianSketch(t *testing.T, pts [][2]float64) (*sketch.Sketch, *sketch.Pro
 func revolveMeridian(t *testing.T, doc *decad.Document, pts [][2]float64, a decad.AngularExtent) *decad.Body {
 	t.Helper()
 	s, p := meridianSketch(t, pts)
-	body, err := decad.Revolve(t.Context(), doc, s, p, uAxis, a)
+	body, err := decad.Revolve(doc, s, p, uAxis, a).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -124,7 +124,7 @@ func TestRevolveFilletShoulderTorus(t *testing.T) {
 	_, isCircle := picked[0].Curve().(decad.Circle3)
 	require.True(t, isCircle, `a full turn sweeps the junction to a latitude circle`)
 
-	filleted, err := decad.Fillet(t.Context(), shaft, concaveJunctions(), units.Millimeters(r))
+	filleted, err := decad.Fillet(shaft, concaveJunctions(), units.Millimeters(r)).Do(t.Context())
 	require.NoError(t, err)
 	require.True(t, filleted.IsSolid())
 	requireManifold(t, filleted)
@@ -173,7 +173,7 @@ func TestRevolveFilletPartialTurnArc(t *testing.T) {
 	// rewrites the same meridian: the torus is the full turn's, and the volume
 	// is a quarter of it.
 	const r = 2.0
-	full, err := decad.Fillet(t.Context(), revolveMeridian(t, decad.New(), shaftMeridian, decad.FullRevolution{}), concaveJunctions(), units.Millimeters(r))
+	full, err := decad.Fillet(revolveMeridian(t, decad.New(), shaftMeridian, decad.FullRevolution{}), concaveJunctions(), units.Millimeters(r)).Do(t.Context())
 	require.NoError(t, err)
 
 	doc := decad.New()
@@ -184,7 +184,7 @@ func TestRevolveFilletPartialTurnArc(t *testing.T) {
 	_, isArc := picked[0].Curve().(decad.Arc3)
 	require.True(t, isArc, `a partial turn sweeps the junction to an arc`)
 
-	filleted, err := decad.Fillet(t.Context(), quarter, concaveJunctions(), units.Millimeters(r))
+	filleted, err := decad.Fillet(quarter, concaveJunctions(), units.Millimeters(r)).Do(t.Context())
 	require.NoError(t, err)
 	requireManifold(t, filleted)
 
@@ -219,7 +219,7 @@ func TestRevolveFilletSphere(t *testing.T) {
 	doc := decad.New()
 	body := revolveMeridian(t, doc, pts, decad.FullRevolution{})
 	nose := decad.Edges(decad.Circular(), decad.EndpointAt(r3.NewVec(10, 5, 0)))
-	filleted, err := decad.Fillet(t.Context(), body, nose, units.Millimeters(r))
+	filleted, err := decad.Fillet(body, nose, units.Millimeters(r)).Do(t.Context())
 	require.NoError(t, err)
 	requireManifold(t, filleted)
 
@@ -256,7 +256,7 @@ func TestRevolveChamferChordKinds(t *testing.T) {
 	const d = 1.0
 	doc := decad.New()
 	ring := revolveMeridian(t, doc, [][2]float64{{10, 2}, {12, 4}, {10, 6}, {8, 4}}, decad.FullRevolution{})
-	chamfered, err := decad.Chamfer(t.Context(), ring, decad.Edges(decad.Circular()).Exactly(4), units.Millimeters(d))
+	chamfered, err := decad.Chamfer(ring, decad.Edges(decad.Circular()).Exactly(4), units.Millimeters(d)).Do(t.Context())
 	require.NoError(t, err)
 	requireManifold(t, chamfered)
 
@@ -300,7 +300,7 @@ func TestRevolveChamferShoulderCone(t *testing.T) {
 	const d = 2.0
 	doc := decad.New()
 	shaft := revolveMeridian(t, doc, shaftMeridian, decad.FullRevolution{})
-	chamfered, err := decad.Chamfer(t.Context(), shaft, concaveJunctions(), units.Millimeters(d))
+	chamfered, err := decad.Chamfer(shaft, concaveJunctions(), units.Millimeters(d)).Do(t.Context())
 	require.NoError(t, err)
 	requireManifold(t, chamfered)
 
@@ -334,10 +334,10 @@ func TestRevolveBlendNonJunctionRefused(t *testing.T) {
 		doc := decad.New()
 		quarter := revolveMeridian(t, doc, shaftMeridian, decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along})
 		sel := decad.Edges(decad.ParallelTo(r3.NewVec(1, 0, 0)))
-		_, err := decad.Fillet(t.Context(), quarter, sel, units.Millimeters(1))
+		_, err := decad.Fillet(quarter, sel, units.Millimeters(1)).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		requireReasonLeads(t, err, `a fillet of a revolve edge that is not a swept meridian junction`)
-		_, err = decad.Chamfer(t.Context(), quarter, sel, units.Millimeters(1))
+		_, err = decad.Chamfer(quarter, sel, units.Millimeters(1)).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		requireReasonLeads(t, err, `a chamfer of a revolve edge that is not a swept meridian junction`)
 		require.Equal(t, []*decad.Body{quarter}, doc.Bodies(), `the refusal leaves the receiver live`)
@@ -347,13 +347,13 @@ func TestRevolveBlendNonJunctionRefused(t *testing.T) {
 		// They are circular like the junction arcs, and still no junction's.
 		doc := decad.New()
 		quarter := revolveMeridian(t, doc, shaftMeridian, decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along})
-		filleted, err := decad.Fillet(t.Context(), quarter, concaveJunctions(), units.Millimeters(2))
+		filleted, err := decad.Fillet(quarter, concaveJunctions(), units.Millimeters(2)).Do(t.Context())
 		require.NoError(t, err)
 		capArcs := decad.Edges(decad.Circular(), decad.EndpointAt(r3.NewVec(10, 7, 0)))
 		picked, err := capArcs.SelectEdges(filleted)
 		require.NoError(t, err)
 		require.NotEmpty(t, picked)
-		_, err = decad.Chamfer(t.Context(), filleted, capArcs, units.Millimeters(0.5))
+		_, err = decad.Chamfer(filleted, capArcs, units.Millimeters(0.5)).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.ErrorContains(t, err, `not a swept meridian junction`)
 		require.Equal(t, []*decad.Body{filleted}, doc.Bodies())
@@ -367,23 +367,23 @@ func TestRevolveBlendBaseGates(t *testing.T) {
 		// every wall from both ends: base S6, with each matched latitude circle
 		// rendered as the closed circle it is.
 		ring := revolvedRing(t)
-		_, err := decad.Fillet(t.Context(), ring, decad.Edges(decad.Circular()), units.Millimeters(6))
+		_, err := decad.Fillet(ring, decad.Edges(decad.Circular()), units.Millimeters(6)).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		requireReasonLeads(t, err, `is consumed by its corner setbacks`)
 		require.ErrorContains(t, err,
 			`selected edge[0] closed circle through (0,5,0), centre (0,0,0), radius 5 mm`)
 		require.NotContains(t, err.Error(), `to (0,5,0)`)
-		_, err = decad.Chamfer(t.Context(), revolvedRing(t), decad.Edges(decad.Circular()), units.Millimeters(6))
+		_, err = decad.Chamfer(revolvedRing(t), decad.Edges(decad.Circular()), units.Millimeters(6)).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		requireReasonLeads(t, err, `is consumed by its corner setbacks`)
 	})
 	t.Run(`smooth junction`, func(t *testing.T) {
 		// A filleted shaft's fillet arc meets the shoulder face tangentially:
 		// the junction between them is still an edge, and no corner — base S4.
-		filleted, err := decad.Fillet(t.Context(), revolveMeridian(t, decad.New(), shaftMeridian, decad.FullRevolution{}), concaveJunctions(), units.Millimeters(2))
+		filleted, err := decad.Fillet(revolveMeridian(t, decad.New(), shaftMeridian, decad.FullRevolution{}), concaveJunctions(), units.Millimeters(2)).Do(t.Context())
 		require.NoError(t, err)
 		smooth := decad.Edges(decad.Circular(), decad.EndpointAt(r3.NewVec(10, 7, 0))).Exactly(1)
-		_, err = decad.Fillet(t.Context(), filleted, smooth, units.Millimeters(1))
+		_, err = decad.Fillet(filleted, smooth, units.Millimeters(1)).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrDegenerate)
 		require.ErrorContains(t, err, `there is no corner to round`)
 	})
@@ -398,7 +398,7 @@ var notchMeridian = [][2]float64{{0, 0}, {4, 0}, {5, 1}, {6, 0}, {10, 0}, {10, 4
 func TestRevolveFilletAxisGates(t *testing.T) {
 	t.Parallel()
 	t.Run(`builds above the axis`, func(t *testing.T) {
-		filleted, err := decad.Fillet(t.Context(), revolveMeridian(t, decad.New(), notchMeridian, decad.FullRevolution{}), concaveJunctions(), units.Millimeters(0.5))
+		filleted, err := decad.Fillet(revolveMeridian(t, decad.New(), notchMeridian, decad.FullRevolution{}), concaveJunctions(), units.Millimeters(0.5)).Do(t.Context())
 		require.NoError(t, err)
 		blends := blendFaces(t, filleted, "fillet")
 		require.Len(t, blends, 1)
@@ -413,7 +413,7 @@ func TestRevolveFilletAxisGates(t *testing.T) {
 		// a recorded arc centred there.
 		doc := decad.New()
 		body := revolveMeridian(t, doc, notchMeridian, decad.FullRevolution{})
-		_, err := decad.Fillet(t.Context(), body, concaveJunctions(), units.Millimeters(1))
+		_, err := decad.Fillet(body, concaveJunctions(), units.Millimeters(1)).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.ErrorContains(t, err, `spindle torus`)
 		require.Equal(t, []*decad.Body{body}, doc.Bodies(), `the refusal leaves the receiver live`)
@@ -425,7 +425,7 @@ func TestRevolveBlendRolesSurvivePlacementAndReplay(t *testing.T) {
 	const r = 2.0
 	build := func(t *testing.T) *decad.Body {
 		t.Helper()
-		body, err := decad.Fillet(t.Context(), revolveMeridian(t, decad.New(), shaftMeridian, decad.FullRevolution{}), concaveJunctions(), units.Millimeters(r))
+		body, err := decad.Fillet(revolveMeridian(t, decad.New(), shaftMeridian, decad.FullRevolution{}), concaveJunctions(), units.Millimeters(r)).Do(t.Context())
 		require.NoError(t, err)
 		return body
 	}
@@ -454,7 +454,7 @@ func TestRevolveBlendRolesSurvivePlacementAndReplay(t *testing.T) {
 	// and the torus moves with the body.
 	move, err := r3.Translation(r3.NewVec(5, -3, 7))
 	require.NoError(t, err)
-	placed, err := decad.Transform(t.Context(), second, move)
+	placed, err := decad.Transform(second, move).Do(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, roles(first), roles(placed))
 	torus := blendFaces(t, placed, "fillet")[0].Surface().(decad.Torus)
@@ -467,9 +467,9 @@ func TestRevolveBlendRolesSurvivePlacementAndReplay(t *testing.T) {
 	// placed shaft gives the placed fillet.
 	doc := decad.New()
 	shaft := revolveMeridian(t, doc, shaftMeridian, decad.FullRevolution{})
-	movedShaft, err := decad.Transform(t.Context(), shaft, move)
+	movedShaft, err := decad.Transform(shaft, move).Do(t.Context())
 	require.NoError(t, err)
-	movedFillet, err := decad.Fillet(t.Context(), movedShaft, concaveJunctions(), units.Millimeters(r))
+	movedFillet, err := decad.Fillet(movedShaft, concaveJunctions(), units.Millimeters(r)).Do(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, roles(first), roles(movedFillet))
 	require.Equal(t, torus, blendFaces(t, movedFillet, "fillet")[0].Surface())
@@ -485,7 +485,7 @@ func TestRevolveFilletSurveys(t *testing.T) {
 	// −x the fillet torus, whose normals sweep from +x to +ρ, is the one face
 	// that opposes the pull at a point without being antiparallel.
 	doc := decad.New()
-	filleted, err := decad.Fillet(t.Context(), revolveMeridian(t, doc, shaftMeridian, decad.FullRevolution{}), concaveJunctions(), units.Millimeters(2))
+	filleted, err := decad.Fillet(revolveMeridian(t, doc, shaftMeridian, decad.FullRevolution{}), concaveJunctions(), units.Millimeters(2)).Do(t.Context())
 	require.NoError(t, err)
 	rep := decadtest.Verify(t, doc, decad.WithMinWallThickness(units.Millimeters(1)),
 		decad.WithPullDirection(r3.NewVec(1, 0, 0)), decad.WithConcaveRadius())
@@ -503,7 +503,7 @@ func TestRevolveFilletTessellates(t *testing.T) {
 	t.Parallel()
 	// Table DX row DX3: the result is an ordinary revolvePayload, so the
 	// revolve tessellator meshes it, watertight, within its own bound.
-	filleted, err := decad.Fillet(t.Context(), revolveMeridian(t, decad.New(), shaftMeridian, decad.FullRevolution{}), concaveJunctions(), units.Millimeters(2))
+	filleted, err := decad.Fillet(revolveMeridian(t, decad.New(), shaftMeridian, decad.FullRevolution{}), concaveJunctions(), units.Millimeters(2)).Do(t.Context())
 	require.NoError(t, err)
 	mesh, err := filleted.Tessellate(t.Context(), units.Millimeters(0.05))
 	require.NoError(t, err)

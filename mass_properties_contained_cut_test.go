@@ -18,7 +18,7 @@ import (
 
 func TestContainedCutSourceMassProperties(t *testing.T) {
 	doc, target, tool := containedCutCentroidSources(t)
-	result, err := Cut(t.Context(), target, tool)
+	result, err := Cut(target, tool).Do(t.Context())
 	require.NoError(t, err)
 	require.NotNil(t, result.n.VolumeLineage)
 	require.NotNil(t, result.n.VolumeLineage.Moments)
@@ -79,7 +79,7 @@ func TestContainedCutMomentEvidenceRollback(t *testing.T) {
 	bodiesBefore := doc.Bodies()
 	operationsBefore := doc.OperationHistory().Operations()
 	producerBefore := doc.producerAt(t.Context())
-	_, err := Cut(t.Context(), target, tool)
+	_, err := Cut(target, tool).Do(t.Context())
 	require.ErrorContains(t, err, "contained-cut moment evidence is invalid")
 	require.ErrorContains(t, err, "target source volume")
 	require.ErrorIs(t, err, decaderr.ErrBooleanFailed)

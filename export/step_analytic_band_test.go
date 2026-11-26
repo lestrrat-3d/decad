@@ -42,7 +42,7 @@ func bandBox(t *testing.T, doc *decad.Document, x0, y0, x1, y1, h float64) *deca
 	s.Fix(rect.A)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
+	body, err := decad.Extrude(doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(h), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -56,7 +56,7 @@ func bandDrilledBox(t *testing.T, round float64) *decad.Body {
 	body := bandBox(t, doc, 0, 0, 40, 20, 20)
 	if round > 0 {
 		var err error
-		body, err = decad.Fillet(t.Context(), body, decad.Edges(decad.ParallelTo(bandUp)).Exactly(4), units.Millimeters(round))
+		body, err = decad.Fillet(body, decad.Edges(decad.ParallelTo(bandUp)).Exactly(4), units.Millimeters(round)).Do(t.Context())
 		require.NoError(t, err)
 	}
 	w := sketch.NewWorld()
@@ -69,9 +69,9 @@ func bandDrilledBox(t *testing.T, round float64) *decad.Body {
 	s.CreateCircle(c, 3)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	drill, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Symmetric{D: units.Millimeters(11)})
+	drill, err := decad.Extrude(doc, s, s.Profiles()[0], decad.Symmetric{D: units.Millimeters(11)}).Do(t.Context())
 	require.NoError(t, err)
-	out, err := decad.Cut(t.Context(), body, drill)
+	out, err := decad.Cut(body, drill).Do(t.Context())
 	require.NoError(t, err)
 	return out
 }
@@ -92,9 +92,9 @@ func bandRoundBoss(t *testing.T) *decad.Body {
 	s.CreateCircle(c, 5)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	boss, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(15), Dir: decad.Along})
+	boss, err := decad.Extrude(doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(15), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
-	out, err := decad.Union(t.Context(), plate, boss)
+	out, err := decad.Union(plate, boss).Do(t.Context())
 	require.NoError(t, err)
 	return out
 }
@@ -143,7 +143,7 @@ func bandLoopQuery(loop *decad.Loop) *decad.EdgeQuery {
 func bandFillet(t *testing.T, body *decad.Body, level float64, li int, r float64) *decad.Body {
 	t.Helper()
 	face := bandFacing(t, body, bandUp, level)
-	out, err := decad.Fillet(t.Context(), body, bandLoopQuery(face.Loops()[li]), units.Millimeters(r))
+	out, err := decad.Fillet(body, bandLoopQuery(face.Loops()[li]), units.Millimeters(r)).Do(t.Context())
 	require.NoError(t, err)
 	return out
 }
@@ -644,9 +644,9 @@ func bandPocketMouthFilletAt(t *testing.T, off float64) *decad.Body {
 	s.Fix(r.A)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	tool, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
+	tool, err := decad.Extrude(doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(5), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
-	cut, err := decad.Cut(t.Context(), plate, tool)
+	cut, err := decad.Cut(plate, tool).Do(t.Context())
 	require.NoError(t, err)
 	return bandFillet(t, cut, 10, 1, 1.5)
 }

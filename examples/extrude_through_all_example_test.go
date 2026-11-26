@@ -40,15 +40,15 @@ func Example_extrude_through_all() {
 
 	// Extrude the plate first, so there is a body for the pin to pass through.
 	doc := decad.New()
-	if _, err := decad.Extrude(context.Background(), doc, s, plateProfile,
-		decad.Distance{D: units.Millimeters(10), Dir: decad.Along}); err != nil {
+	if _, err := decad.Extrude(doc, s, plateProfile,
+		decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(context.Background()); err != nil {
 		fmt.Printf("failed to extrude plate: %s\n", err)
 		return
 	}
 
 	// Then extrude the pin through all. It stops at the plate's far side,
 	// so its height equals the plate's thickness.
-	pin, err := decad.Extrude(context.Background(), doc, s, pinProfile, decad.ThroughAll{Dir: decad.Along})
+	pin, err := decad.Extrude(doc, s, pinProfile, decad.ThroughAll{Dir: decad.Along}).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to extrude pin: %s\n", err)
 		return

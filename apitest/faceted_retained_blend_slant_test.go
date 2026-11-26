@@ -33,7 +33,7 @@ func TestFacetedRetainedBlendSlantedEndBound(t *testing.T) {
 			held, err := body.Tessellate(t.Context(), units.Millimeters(0.1))
 			require.NoError(t, err)
 
-			out, err := decad.Fillet(t.Context(), body, c.seed(), units.Millimeters(1), decad.WithTangentChain())
+			out, err := decad.Fillet(body, c.seed(), units.Millimeters(1)).TangentChain().Do(t.Context())
 			require.NoError(t, err)
 
 			mesh, err := out.Tessellate(t.Context(), units.Millimeters(0.1), decad.WithVerification(decad.VerifyAll))
@@ -63,12 +63,12 @@ func TestFacetedRetainedBlendArcSlantedEndBound(t *testing.T) {
 				sc := newRetentionScene()
 				bar := xCylinderAt(t, sc.doc, 0, 0, 3, -15, 15)
 				box := placed(t, rectBox(t, sc.w, sc.doc, 0, -half, earLen, half, 4), -5)
-				body, err := decad.Union(t.Context(), bar, box)
+				body, err := decad.Union(bar, box).Do(t.Context())
 				require.NoError(t, err)
 				held, err := body.Tessellate(t.Context(), units.Millimeters(0.1))
 				require.NoError(t, err)
 
-				out, err := decad.Fillet(t.Context(), body, earArc(t, body), units.Millimeters(size))
+				out, err := decad.Fillet(body, earArc(t, body), units.Millimeters(size)).Do(t.Context())
 				require.NoError(t, err)
 				mesh, err := out.Tessellate(t.Context(), units.Millimeters(0.1), decad.WithVerification(decad.VerifyAll))
 				require.NoError(t, err)

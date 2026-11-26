@@ -30,13 +30,13 @@ func TestSTEPRefusesAnOffsetToFaceCap(t *testing.T) {
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	doc := decad.New()
-	plate, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	plate, err := decad.Extrude(doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
-	pin, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.ToFace{
+	pin, err := decad.Extrude(doc, s, s.Profiles()[0], decad.ToFace{
 		Body:   plate,
 		Face:   capEndFace(plate),
 		Offset: units.Millimeters(0.1),
-	})
+	}).Do(t.Context())
 	require.NoError(t, err)
 
 	top := 0

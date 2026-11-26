@@ -29,8 +29,8 @@ func Example_chamfer() {
 		return
 	}
 	doc := decad.New()
-	box, err := decad.Extrude(context.Background(), doc, s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
+	box, err := decad.Extrude(doc, s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(20), Dir: decad.Along}).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to extrude: %s\n", err)
 		return
@@ -38,8 +38,8 @@ func Example_chamfer() {
 
 	// Cut each vertical edge back 10 mm on both sides. The box gains one
 	// flat face per edge.
-	beveled, err := decad.Chamfer(context.Background(), box,
-		decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1))), units.Millimeters(10))
+	beveled, err := decad.Chamfer(box,
+		decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1))), units.Millimeters(10)).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to chamfer: %s\n", err)
 		return

@@ -36,7 +36,7 @@ func publicCirclePrimitive(t *testing.T) *Body {
 	if _, err = s.Solve(t.Context()); err != nil {
 		t.Fatal(err)
 	}
-	source, err := Extrude(t.Context(), d, s, s.Profiles()[0], Distance{D: units.Millimeters(10), Dir: Along})
+	source, err := Extrude(d, s, s.Profiles()[0], Distance{D: units.Millimeters(10), Dir: Along}).Do(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -52,7 +52,7 @@ func publicCirclePrimitive(t *testing.T) *Body {
 	if err != nil {
 		t.Fatal(err)
 	}
-	placed, err := Transform(t.Context(), source, placement)
+	placed, err := Transform(source, placement).Do(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -45,14 +45,13 @@ func TestShellStackedBossKeepsThicknessAtRoot(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			doc := decad.New()
-			stack, err := decad.Union(t.Context(), boxBody(t, doc, 0, 0, 60, 40, 20),
-				boxBodyAtZ(t, doc, 20, 10, 40, 30, 20, 10))
+			stack, err := decad.Union(boxBody(t, doc, 0, 0, 60, 40, 20), boxBodyAtZ(t, doc, 20, 10, 40, 30, 20, 10)).Do(t.Context())
 			require.NoError(t, err)
 			var shell *decad.Body
 			if tc.closed {
-				shell, err = decad.Shell(t.Context(), stack, nil, units.Millimeters(2), decad.WithNoOpenings())
+				shell, err = decad.ShellClosed(stack, units.Millimeters(2)).Do(t.Context())
 			} else {
-				shell, err = decad.Shell(t.Context(), stack, tc.remove(stack), units.Millimeters(2))
+				shell, err = decad.Shell(stack, tc.remove(stack), units.Millimeters(2)).Do(t.Context())
 			}
 			require.NoError(t, err)
 			volume, err := shell.Volume()
@@ -79,8 +78,8 @@ func TestShellRoundStackedBossKeepsThicknessAtRoot(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
 	stack := roundBossFromSketch(t, doc, 10, 10)
-	shell, err := decad.Shell(t.Context(), stack,
-		decad.Faces(decad.FaceCreatedBy(decad.CapEnd(stack))).Exactly(1), units.Millimeters(1))
+	shell, err := decad.Shell(stack,
+		decad.Faces(decad.FaceCreatedBy(decad.CapEnd(stack))).Exactly(1), units.Millimeters(1)).Do(t.Context())
 	require.NoError(t, err)
 	volume, err := shell.Volume()
 	require.NoError(t, err)
@@ -137,11 +136,10 @@ func TestShellStackedBossConcaveRadius(t *testing.T) {
 	t.Run("rectangular", func(t *testing.T) {
 		t.Parallel()
 		doc := decad.New()
-		stack, err := decad.Union(t.Context(), boxBody(t, doc, 0, 0, 60, 40, 20),
-			boxBodyAtZ(t, doc, 20, 10, 40, 30, 20, 10))
+		stack, err := decad.Union(boxBody(t, doc, 0, 0, 60, 40, 20), boxBodyAtZ(t, doc, 20, 10, 40, 30, 20, 10)).Do(t.Context())
 		require.NoError(t, err)
-		_, err = decad.Shell(t.Context(), stack, decad.Faces(decad.FaceCreatedBy(decad.CapStart(stack))).Exactly(1),
-			units.Millimeters(2))
+		_, err = decad.Shell(stack, decad.Faces(decad.FaceCreatedBy(decad.CapStart(stack))).Exactly(1),
+			units.Millimeters(2)).Do(t.Context())
 		require.NoError(t, err)
 		report, err := doc.Verify(t.Context(), decad.WithConcaveRadius())
 		require.NoError(t, err)
@@ -152,8 +150,8 @@ func TestShellStackedBossConcaveRadius(t *testing.T) {
 		t.Parallel()
 		doc := decad.New()
 		stack := roundBossFromSketch(t, doc, 10, 10)
-		_, err := decad.Shell(t.Context(), stack,
-			decad.Faces(decad.FaceCreatedBy(decad.CapEnd(stack))).Exactly(1), units.Millimeters(1))
+		_, err := decad.Shell(stack,
+			decad.Faces(decad.FaceCreatedBy(decad.CapEnd(stack))).Exactly(1), units.Millimeters(1)).Do(t.Context())
 		require.NoError(t, err)
 		report, err := doc.Verify(t.Context(), decad.WithConcaveRadius())
 		require.NoError(t, err)

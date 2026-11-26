@@ -22,7 +22,7 @@ func blindPocketPlate(t *testing.T) *decad.Body {
 	doc := decad.New()
 	plate := boxBody(t, doc, 0, 0, 20, 20, 8)
 	tool := translated(t, diskBody(t, doc, 10, 10, 2), 0, 0, -15)
-	body, err := decad.Cut(t.Context(), plate, tool)
+	body, err := decad.Cut(plate, tool).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }

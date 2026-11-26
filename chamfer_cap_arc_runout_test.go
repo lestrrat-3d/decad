@@ -157,7 +157,7 @@ func TestChamferKeyholeRimRun(t *testing.T) {
 				t.Run(fmt.Sprintf("r %v w %v flat %v d %v mirror %v", k.r, k.w, k.flat, d, sx), func(t *testing.T) {
 					t.Parallel()
 					body := k.body(t, sx)
-					out, err := decad.Chamfer(t.Context(), body, k.rim(sx), units.Millimeters(d))
+					out, err := decad.Chamfer(body, k.rim(sx), units.Millimeters(d)).Do(t.Context())
 					require.NoError(t, err)
 					require.True(t, out.IsSolid())
 					m, err := out.Volume()
@@ -181,7 +181,7 @@ func TestChamferKeyholeRimRunRefusesNarrowSlot(t *testing.T) {
 	t.Parallel()
 	k := keyhole{4, 0.1, 0}
 	body := k.body(t, 1)
-	_, err := decad.Chamfer(t.Context(), body, k.rim(1), units.Millimeters(0.5))
+	_, err := decad.Chamfer(body, k.rim(1), units.Millimeters(0.5)).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 }
 
@@ -224,7 +224,7 @@ func TestChamferConvexArcRunOutOnNextWall(t *testing.T) {
 				}
 			})
 			sel := decad.Edges(decad.EndpointAt(r3.Vec{X: sx * p1[0], Y: p1[1], Z: 5}), decad.Circular())
-			out, err := decad.Chamfer(t.Context(), body, sel, units.Millimeters(d))
+			out, err := decad.Chamfer(body, sel, units.Millimeters(d)).Do(t.Context())
 			require.NoError(t, err)
 			require.True(t, out.IsSolid())
 			for _, z := range []float64{0.1, 0.25, 0.4} {
@@ -281,7 +281,7 @@ func TestChamferConvexArcRunOutRefusesASmallArc(t *testing.T) {
 				}
 			})
 			sel := decad.Edges(decad.EndpointAt(r3.Vec{X: p1[0], Y: p1[1], Z: 5}), decad.Circular())
-			_, err := decad.Chamfer(t.Context(), body, sel, units.Millimeters(c.d))
+			_, err := decad.Chamfer(body, sel, units.Millimeters(c.d)).Do(t.Context())
 			require.ErrorIs(t, err, decad.ErrUnsupported)
 		})
 	}
@@ -318,7 +318,7 @@ func TestChamferKeyholeRimRunRefusesAThinPeninsula(t *testing.T) {
 				}
 			})
 			sel := decad.Edges(decad.EndpointAt(r3.Vec{X: w, Y: -y0, Z: 5}), decad.Circular())
-			_, err := decad.Chamfer(t.Context(), body, sel, units.Millimeters(d))
+			_, err := decad.Chamfer(body, sel, units.Millimeters(d)).Do(t.Context())
 			require.ErrorIs(t, err, decad.ErrUnsupported)
 		})
 	}
@@ -335,7 +335,7 @@ func TestChamferLineRunRefusesAThinTabPastItsEnd(t *testing.T) {
 			s.Fix(q)
 		}
 	})
-	_, err := decad.Chamfer(t.Context(), body, topEdges(topEdge{r3.Vec{}, r3.Vec{X: 1}}), units.Millimeters(0.5))
+	_, err := decad.Chamfer(body, topEdges(topEdge{r3.Vec{}, r3.Vec{X: 1}}), units.Millimeters(0.5)).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 }
 
@@ -352,7 +352,7 @@ func TestChamferKeyholeRimRunWithAWideSetback(t *testing.T) {
 			t.Run(fmt.Sprintf("r %v flat %v d %v", k.r, k.flat, d), func(t *testing.T) {
 				t.Parallel()
 				body := k.body(t, 1)
-				out, err := decad.Chamfer(t.Context(), body, k.rim(1), units.Millimeters(d))
+				out, err := decad.Chamfer(body, k.rim(1), units.Millimeters(d)).Do(t.Context())
 				require.NoError(t, err)
 				m, err := out.Volume()
 				require.NoError(t, err)

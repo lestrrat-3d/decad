@@ -39,7 +39,7 @@ func TestConcentricPrismStations(t *testing.T) {
 			return nil
 		}
 		extrude := func(s *sketch.Sketch, h float64, dir decad.Direction) *decad.Body {
-			b, e := decad.Extrude(ctx, d, s, profile(s), decad.Distance{D: units.Millimeters(h), Dir: dir})
+			b, e := decad.Extrude(d, s, profile(s), decad.Distance{D: units.Millimeters(h), Dir: dir}).Do(ctx)
 			require.NoError(t, e)
 			return b
 		}
@@ -65,7 +65,7 @@ func TestConcentricPrismStations(t *testing.T) {
 		if reversed {
 			plate, pad = pad, plate
 		}
-		joined, e := decad.Union(ctx, plate, pad)
+		joined, e := decad.Union(plate, pad).Do(ctx)
 		require.NoError(t, e)
 		require.Empty(t, joined.OperationDiagnostics())
 		m, e := joined.Tessellate(ctx, units.Millimeters(.5), decad.WithVerification(decad.VerifyAll))

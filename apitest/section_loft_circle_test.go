@@ -14,7 +14,7 @@ import (
 func TestSectionDirectLoftAnnulusFeedsExtrude(t *testing.T) {
 	t.Parallel()
 	source := directLoftCircles(t, true, 1, 2, 1, 0)
-	require.NoError(t, decad.Remove(source))
+	require.NoError(t, decad.Remove(source).Do(t.Context()))
 	frame, err := r3.NewFrame(r3.NewVec(0, 0, 1), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
 	require.NoError(t, err)
 	section, profiles, err := source.Section(t.Context(), frame)
@@ -29,8 +29,8 @@ func TestSectionDirectLoftAnnulusFeedsExtrude(t *testing.T) {
 	area, err := measured.Area()
 	require.NoError(t, err)
 	require.LessOrEqual(t, math.Abs(area.Value.Base()-13.75*math.Pi), area.Bound.Base()+1e-12)
-	child, err := decad.Extrude(t.Context(), decad.New(), section, profiles[0],
-		decad.Distance{D: units.Millimeters(2), Dir: decad.Along})
+	child, err := decad.Extrude(decad.New(), section, profiles[0],
+		decad.Distance{D: units.Millimeters(2), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	volume, err := child.Volume()
 	require.NoError(t, err)
@@ -55,8 +55,8 @@ func TestSectionDirectLoftRectangularOuterFeedsExtrude(t *testing.T) {
 	area, err := measured.Area()
 	require.NoError(t, err)
 	require.LessOrEqual(t, math.Abs(area.Value.Base()-(100-2.25*math.Pi)), area.Bound.Base()+1e-12)
-	child, err := decad.Extrude(t.Context(), decad.New(), section, profiles[0],
-		decad.Distance{D: units.Millimeters(2), Dir: decad.Along})
+	child, err := decad.Extrude(decad.New(), section, profiles[0],
+		decad.Distance{D: units.Millimeters(2), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	volume, err := child.Volume()
 	require.NoError(t, err)
@@ -73,7 +73,7 @@ func TestSectionDirectLoftVaryingCircleFeedsExtrude(t *testing.T) {
 	require.NoError(t, err)
 	bottom, bottomProfile := loftCircleProfile(t, world, world.XY(), 1)
 	top, topProfile := loftCircleProfile(t, world, topPlane, 3)
-	source, err := decad.Loft(t.Context(), decad.New(), bottom, bottomProfile, top, topProfile)
+	source, err := decad.Loft(decad.New(), bottom, bottomProfile, top, topProfile).Do(t.Context())
 	require.NoError(t, err)
 	frame, err := r3.NewFrame(r3.NewVec(0, 0, 1), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
 	require.NoError(t, err)
@@ -88,8 +88,8 @@ func TestSectionDirectLoftVaryingCircleFeedsExtrude(t *testing.T) {
 	areaMeasure, err := area.Area()
 	require.NoError(t, err)
 	require.LessOrEqual(t, math.Abs(areaMeasure.Value.Base()-4*math.Pi), areaMeasure.Bound.Base()+1e-12)
-	child, err := decad.Extrude(t.Context(), decad.New(), section, profiles[0],
-		decad.Distance{D: units.Millimeters(2), Dir: decad.Along})
+	child, err := decad.Extrude(decad.New(), section, profiles[0],
+		decad.Distance{D: units.Millimeters(2), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	volume, err := child.Volume()
 	require.NoError(t, err)
@@ -110,7 +110,7 @@ func TestSectionDirectLoftVaryingCircleTranslatedFrameFeedsExtrude(t *testing.T)
 	require.NoError(t, err)
 	bottom, bottomProfile := loftCircleProfile(t, world, bottomPlane, 1)
 	top, topProfile := loftCircleProfile(t, world, topPlane, 3)
-	source, err := decad.Loft(t.Context(), decad.New(), bottom, bottomProfile, top, topProfile)
+	source, err := decad.Loft(decad.New(), bottom, bottomProfile, top, topProfile).Do(t.Context())
 	require.NoError(t, err)
 	frame, err := r3.NewFrame(r3.NewVec(10, 20, 1), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
 	require.NoError(t, err)
@@ -118,8 +118,8 @@ func TestSectionDirectLoftVaryingCircleTranslatedFrameFeedsExtrude(t *testing.T)
 	require.NoError(t, err)
 	require.Len(t, profiles, 1)
 	require.Equal(t, 2.0, profiles[0].Outer[0].Entity.(*sketch.Circle).R())
-	child, err := decad.Extrude(t.Context(), decad.New(), section, profiles[0],
-		decad.Distance{D: units.Millimeters(2), Dir: decad.Along})
+	child, err := decad.Extrude(decad.New(), section, profiles[0],
+		decad.Distance{D: units.Millimeters(2), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	volume, err := child.Volume()
 	require.NoError(t, err)
@@ -146,7 +146,7 @@ func TestSectionDirectLoftMovingCircleTracksCenter(t *testing.T) {
 	}
 	bottom, bottomProfile := build(world.XY(), 0)
 	top, topProfile := build(topPlane, 1)
-	source, err := decad.Loft(t.Context(), decad.New(), bottom, bottomProfile, top, topProfile)
+	source, err := decad.Loft(decad.New(), bottom, bottomProfile, top, topProfile).Do(t.Context())
 	require.NoError(t, err)
 	frame, err := r3.NewFrame(r3.NewVec(0, 0, 1.5), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
 	require.NoError(t, err)
@@ -156,8 +156,8 @@ func TestSectionDirectLoftMovingCircleTracksCenter(t *testing.T) {
 	circle := profiles[0].Outer[0].Entity.(*sketch.Circle)
 	require.Equal(t, 4.0, circle.R())
 	require.Equal(t, 0.5, circle.Center.X())
-	child, err := decad.Extrude(t.Context(), decad.New(), section, profiles[0],
-		decad.Distance{D: units.Millimeters(2), Dir: decad.Along})
+	child, err := decad.Extrude(decad.New(), section, profiles[0],
+		decad.Distance{D: units.Millimeters(2), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	volume, err := child.Volume()
 	require.NoError(t, err)
@@ -187,8 +187,8 @@ func TestSectionDirectLoftVaryingAnnulusFeedsExtrude(t *testing.T) {
 	areaMeasure, err := area.Area()
 	require.NoError(t, err)
 	require.LessOrEqual(t, math.Abs(areaMeasure.Value.Base()-18*math.Pi), areaMeasure.Bound.Base()+1e-12)
-	child, err := decad.Extrude(t.Context(), decad.New(), section, profiles[0],
-		decad.Distance{D: units.Millimeters(2), Dir: decad.Along})
+	child, err := decad.Extrude(decad.New(), section, profiles[0],
+		decad.Distance{D: units.Millimeters(2), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	volume, err := child.Volume()
 	require.NoError(t, err)
@@ -227,7 +227,7 @@ func TestSectionDirectLoftVaryingCircleWithTwoHolesFeedsExtrude(t *testing.T) {
 	}
 	bottom, bottomProfile := build(world.XY(), 8, 1)
 	top, topProfile := build(topPlane, 9, 1.5)
-	source, err := decad.Loft(t.Context(), decad.New(), bottom, bottomProfile, top, topProfile)
+	source, err := decad.Loft(decad.New(), bottom, bottomProfile, top, topProfile).Do(t.Context())
 	require.NoError(t, err)
 	frame, err := r3.NewFrame(r3.NewVec(0, 0, 1), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
 	require.NoError(t, err)
@@ -244,8 +244,8 @@ func TestSectionDirectLoftVaryingCircleWithTwoHolesFeedsExtrude(t *testing.T) {
 	area, err := measured.Area()
 	require.NoError(t, err)
 	require.LessOrEqual(t, math.Abs(area.Value.Base()-69.125*math.Pi), area.Bound.Base()+1e-12)
-	child, err := decad.Extrude(t.Context(), decad.New(), section, profiles[0],
-		decad.Distance{D: units.Millimeters(2), Dir: decad.Along})
+	child, err := decad.Extrude(decad.New(), section, profiles[0],
+		decad.Distance{D: units.Millimeters(2), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	volume, err := child.Volume()
 	require.NoError(t, err)
@@ -262,7 +262,7 @@ func TestSectionDirectLoftVaryingCircleRefusesUnprovedPlanes(t *testing.T) {
 	require.NoError(t, err)
 	bottom, bottomProfile := loftCircleProfile(t, world, world.XY(), 1)
 	top, topProfile := loftCircleProfile(t, world, topPlane, 3)
-	source, err := decad.Loft(t.Context(), decad.New(), bottom, bottomProfile, top, topProfile)
+	source, err := decad.Loft(decad.New(), bottom, bottomProfile, top, topProfile).Do(t.Context())
 	require.NoError(t, err)
 	for _, tc := range []struct {
 		name   string
@@ -293,11 +293,11 @@ func TestSectionDirectLoftVaryingCircleRefusesPlacement(t *testing.T) {
 	require.NoError(t, err)
 	bottom, bottomProfile := loftCircleProfile(t, world, world.XY(), 1)
 	top, topProfile := loftCircleProfile(t, world, topPlane, 3)
-	source, err := decad.Loft(t.Context(), decad.New(), bottom, bottomProfile, top, topProfile)
+	source, err := decad.Loft(decad.New(), bottom, bottomProfile, top, topProfile).Do(t.Context())
 	require.NoError(t, err)
 	move, err := r3.Translation(r3.NewVec(10, 0, 0))
 	require.NoError(t, err)
-	placed, err := decad.Transform(t.Context(), source, move)
+	placed, err := decad.Transform(source, move).Do(t.Context())
 	require.NoError(t, err)
 	requireDirectLoftSectionUnsupported(t, placed, r3.NewVec(0, 0, 1))
 }
@@ -319,7 +319,7 @@ func TestSectionDirectLoftVaryingCircleRefusesShiftedSourceOrigin(t *testing.T) 
 			require.NoError(t, err)
 			bottom, bottomProfile := loftCircleProfile(t, world, world.XY(), 1)
 			top, topProfile := loftCircleProfile(t, world, topPlane, 3)
-			source, err := decad.Loft(t.Context(), decad.New(), bottom, bottomProfile, top, topProfile)
+			source, err := decad.Loft(decad.New(), bottom, bottomProfile, top, topProfile).Do(t.Context())
 			require.NoError(t, err)
 			requireDirectLoftSectionUnsupported(t, source, r3.NewVec(0, 0, 1))
 		})
@@ -342,7 +342,7 @@ func TestSectionDirectLoftMovingCircleRefusesNonexactY(t *testing.T) {
 	}
 	bottom, bottomProfile := build(world.XY(), 0)
 	top, topProfile := build(topPlane, 1)
-	source, err := decad.Loft(t.Context(), decad.New(), bottom, bottomProfile, top, topProfile)
+	source, err := decad.Loft(decad.New(), bottom, bottomProfile, top, topProfile).Do(t.Context())
 	require.NoError(t, err)
 	requireDirectLoftSectionUnsupported(t, source, r3.NewVec(0, 0, 0.2))
 }
@@ -373,7 +373,7 @@ func TestSectionDirectLoftRefusesPlacementAndShiftedOrigin(t *testing.T) {
 	constant := directLoftCircles(t, false, 1, 1, 0, 0)
 	move, err := r3.Translation(r3.NewVec(10, 0, 0))
 	require.NoError(t, err)
-	placed, err := decad.Transform(t.Context(), constant, move)
+	placed, err := decad.Transform(constant, move).Do(t.Context())
 	require.NoError(t, err)
 	requireDirectLoftSectionUnsupported(t, placed, r3.NewVec(0, 0, 1))
 }
@@ -386,10 +386,10 @@ func TestSectionDirectLoftRefusesNonExactCenter(t *testing.T) {
 func TestSectionDirectLoftRefusesCutSource(t *testing.T) {
 	bottom, bottomProfile, top, topProfile := loftSquaresAt(t, r3.NewVec(0, 0, 0), 5, 5, 2)
 	doc := decad.New()
-	blank, err := decad.Loft(t.Context(), doc, bottom, bottomProfile, top, topProfile)
+	blank, err := decad.Loft(doc, bottom, bottomProfile, top, topProfile).Do(t.Context())
 	require.NoError(t, err)
 	tool := verticalCylinder(t, doc, 0, 0, 1)
-	cut, err := decad.Cut(t.Context(), blank, tool)
+	cut, err := decad.Cut(blank, tool).Do(t.Context())
 	require.NoError(t, err)
 	faces, err := decad.Faces(decad.FaceCreatedBy(decad.CapStart(cut))).Exactly(1).SelectFaces(cut)
 	require.NoError(t, err)

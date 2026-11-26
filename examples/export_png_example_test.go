@@ -34,8 +34,8 @@ func Example_export_png() {
 		fmt.Printf("failed to solve: %s\n", err)
 		return
 	}
-	box, err := decad.Extrude(context.Background(), decad.New(), s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	box, err := decad.Extrude(decad.New(), s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to extrude: %s\n", err)
 		return
@@ -81,8 +81,8 @@ func Example_export_png_bodies() {
 			fmt.Printf("failed to solve: %s\n", err)
 			return
 		}
-		part, err := decad.Extrude(context.Background(), doc, s, s.Profiles()[0],
-			decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
+		part, err := decad.Extrude(doc, s, s.Profiles()[0],
+			decad.Distance{D: units.Millimeters(5), Dir: decad.Along}).Do(context.Background())
 		if err != nil {
 			fmt.Printf("failed to extrude: %s\n", err)
 			return
@@ -125,8 +125,8 @@ func Example_export_png_colors() {
 			fmt.Printf("failed to solve: %s\n", err)
 			return
 		}
-		part, err := decad.Extrude(context.Background(), doc, s, s.Profiles()[0],
-			decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
+		part, err := decad.Extrude(doc, s, s.Profiles()[0],
+			decad.Distance{D: units.Millimeters(5), Dir: decad.Along}).Do(context.Background())
 		if err != nil {
 			fmt.Printf("failed to extrude: %s\n", err)
 			return
@@ -167,8 +167,8 @@ func Example_export_png_outlines() {
 		fmt.Printf("failed to solve: %s\n", err)
 		return
 	}
-	box, err := decad.Extrude(context.Background(), decad.New(), s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	box, err := decad.Extrude(decad.New(), s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to extrude: %s\n", err)
 		return
@@ -217,8 +217,8 @@ func Example_export_png_perspective() {
 			fmt.Printf("failed to solve: %s\n", err)
 			return
 		}
-		block, err := decad.Extrude(context.Background(), doc, s, s.Profiles()[0],
-			decad.Distance{D: units.Millimeters(spec.height), Dir: decad.Along})
+		block, err := decad.Extrude(doc, s, s.Profiles()[0],
+			decad.Distance{D: units.Millimeters(spec.height), Dir: decad.Along}).Do(context.Background())
 		if err != nil {
 			fmt.Printf("failed to extrude: %s\n", err)
 			return
@@ -271,8 +271,8 @@ func Example_export_png_hidden_edges() {
 		fmt.Printf("failed to solve: %s\n", err)
 		return
 	}
-	cube, err := decad.Extrude(context.Background(), decad.New(), s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
+	cube, err := decad.Extrude(decad.New(), s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(20), Dir: decad.Along}).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to extrude: %s\n", err)
 		return
@@ -318,8 +318,8 @@ func Example_export_png_shadows() {
 		if _, err := s.Solve(context.Background()); err != nil {
 			return nil, err
 		}
-		return decad.Extrude(context.Background(), doc, s, s.Profiles()[0],
-			decad.Distance{D: units.Millimeters(height), Dir: decad.Along})
+		return decad.Extrude(doc, s, s.Profiles()[0],
+			decad.Distance{D: units.Millimeters(height), Dir: decad.Along}).Do(context.Background())
 	}
 	plate, err := block(0, 0, 60, 40, 2)
 	if err != nil {
@@ -384,8 +384,8 @@ func Example_export_png_soft_shadows() {
 		if _, err := s.Solve(context.Background()); err != nil {
 			return nil, err
 		}
-		return decad.Extrude(context.Background(), doc, s, s.Profiles()[0],
-			decad.Distance{D: units.Millimeters(height), Dir: decad.Along})
+		return decad.Extrude(doc, s, s.Profiles()[0],
+			decad.Distance{D: units.Millimeters(height), Dir: decad.Along}).Do(context.Background())
 	}
 	plate, err := block(0, 0, 60, 40, 2)
 	if err != nil {
@@ -495,8 +495,8 @@ func Example_export_png_perspective_edges() {
 		fmt.Printf("failed to solve: %s\n", err)
 		return
 	}
-	block, err := decad.Extrude(context.Background(), decad.New(), s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	block, err := decad.Extrude(decad.New(), s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to extrude: %s\n", err)
 		return
@@ -552,8 +552,8 @@ func Example_export_png_gloss() {
 		fmt.Printf("failed to solve: %s\n", err)
 		return
 	}
-	block, err := decad.Extrude(context.Background(), doc, s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	block, err := decad.Extrude(doc, s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to extrude: %s\n", err)
 		return

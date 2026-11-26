@@ -18,7 +18,7 @@ func TestFacetedSourcePlacement(t *testing.T) {
 	drill := func(t *testing.T) *decad.Body {
 		t.Helper()
 		sc := newRetentionScene()
-		drilled, err := decad.Cut(t.Context(), sc.roundedBox(t), sc.tool(t, 20))
+		drilled, err := decad.Cut(sc.roundedBox(t), sc.tool(t, 20)).Do(t.Context())
 		require.NoError(t, err)
 		return drilled
 	}
@@ -49,7 +49,7 @@ func TestFacetedSourcePlacement(t *testing.T) {
 		drilled := drill(t)
 		move, err := r3.Translation(r3.NewVec(7, -3, 100))
 		require.NoError(t, err)
-		placed, err := decad.Transform(t.Context(), drilled, move)
+		placed, err := decad.Transform(drilled, move).Do(t.Context())
 		require.NoError(t, err)
 		before := read(t, drilled, nil, nil)
 		var points []r3.Vec
@@ -70,7 +70,7 @@ func TestFacetedSourcePlacement(t *testing.T) {
 		drilled := drill(t)
 		turn, err := r3.RotationAround(r3.NewVec(20, 10, 0), r3.NewVec(0, 0, 1), units.Degrees(20))
 		require.NoError(t, err)
-		placed, err := decad.Transform(t.Context(), drilled, turn)
+		placed, err := decad.Transform(drilled, turn).Do(t.Context())
 		require.NoError(t, err)
 		before := read(t, drilled, nil, nil)
 		var points []r3.Vec
@@ -94,10 +94,10 @@ func TestFacetedSourcePlacement(t *testing.T) {
 		drilled := drill(t)
 		turn, err := r3.RotationAround(r3.NewVec(20, 10, 0), r3.NewVec(0, 0, 1), units.Degrees(20))
 		require.NoError(t, err)
-		placed, err := decad.Transform(t.Context(), drilled, turn)
+		placed, err := decad.Transform(drilled, turn).Do(t.Context())
 		require.NoError(t, err)
 		wall := decad.Faces(decad.Planar(), decad.Facing(turn.ApplyDir(r3.NewVec(1, 0, 0))))
-		_, err = decad.MirroredCopy(t.Context(), placed, decad.MirrorFace{Body: placed, Face: wall})
+		_, err = decad.MirroredCopy(placed, decad.MirrorFace{Body: placed, Face: wall}).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 	})
 }

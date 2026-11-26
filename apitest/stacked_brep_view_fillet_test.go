@@ -33,14 +33,14 @@ func TestStackedBrepViewFillet(t *testing.T) {
 		x     float64
 	}{
 		{name: "a7-pocket-across-hole", x: 10, build: func(t *testing.T, doc *decad.Document) *decad.Body {
-			part, err := decad.Cut(t.Context(), boxBody(t, doc, -10, -10, 10, 10, 10), circleBodyAtZ(t, doc, 0, 3, 0, 10))
+			part, err := decad.Cut(boxBody(t, doc, -10, -10, 10, 10, 10), circleBodyAtZ(t, doc, 0, 3, 0, 10)).Do(t.Context())
 			require.NoError(t, err)
-			part, err = decad.Cut(t.Context(), part, boxBodyAtZ(t, doc, -2, -1.5, 6, 1.5, 6, 4))
+			part, err = decad.Cut(part, boxBodyAtZ(t, doc, -2, -1.5, 6, 1.5, 6, 4)).Do(t.Context())
 			require.NoError(t, err)
 			return part
 		}},
 		{name: "a1-boss-across-outline", x: -10, build: func(t *testing.T, doc *decad.Document) *decad.Body {
-			part, err := decad.Union(t.Context(), boxBody(t, doc, -10, -10, 10, 10, 10), circleBodyAtZ(t, doc, 10, 3, 7, 6))
+			part, err := decad.Union(boxBody(t, doc, -10, -10, 10, 10, 10), circleBodyAtZ(t, doc, 10, 3, 7, 6)).Do(t.Context())
 			require.NoError(t, err)
 			return part
 		}},
@@ -54,7 +54,7 @@ func TestStackedBrepViewFillet(t *testing.T) {
 
 			edge := decad.Edges(decad.EndpointAt(r3.Vec{X: tc.x, Y: -10, Z: 10}),
 				decad.EndpointAt(r3.Vec{X: tc.x, Y: 10, Z: 10})).Exactly(1)
-			out, err := decad.Fillet(t.Context(), part, edge, mm(0.5))
+			out, err := decad.Fillet(part, edge, mm(0.5)).Do(t.Context())
 			require.NoError(t, err)
 			after, err := out.Volume()
 			require.NoError(t, err)
@@ -103,7 +103,7 @@ func TestStackedBrepViewFilletReachesRetainedBlend(t *testing.T) {
 		require.NoError(t, err)
 		before, err := part.Volume()
 		require.NoError(t, err)
-		out, err := decad.Fillet(t.Context(), part, decad.Edges(decad.Reflex(), decad.Circular()), mm(0.5))
+		out, err := decad.Fillet(part, decad.Edges(decad.Reflex(), decad.Circular()), mm(0.5)).Do(t.Context())
 		require.NoError(t, err)
 		require.True(t, out.IsSolid())
 		after, err := out.Volume()
@@ -117,16 +117,16 @@ func TestStackedBrepViewFilletReachesRetainedBlend(t *testing.T) {
 		doc := decad.New()
 		fork := forkBody(t, doc, 0, mm(6.5), 0, leverForkSketch(false, forkOptions{}))
 		notch := forkBody(t, doc, 2.5, mm(5), 0, leverForkSketch(true, forkOptions{}))
-		part, err := decad.Cut(t.Context(), fork, notch)
+		part, err := decad.Cut(fork, notch).Do(t.Context())
 		require.NoError(t, err)
 		before, err := part.Volume()
 		require.NoError(t, err)
 		edge := decad.Edges(decad.Reflex(), decad.Circular()).Exactly(1)
 		// A refusal leaves the body in place for the build below.
-		_, err = decad.Fillet(t.Context(), part, edge, mm(0.6))
+		_, err = decad.Fillet(part, edge, mm(0.6)).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.ErrorContains(t, err, "a setback point falls on a vertex of its face's boundary")
-		out, err := decad.Fillet(t.Context(), part, edge, mm(0.5))
+		out, err := decad.Fillet(part, edge, mm(0.5)).Do(t.Context())
 		require.NoError(t, err)
 		require.True(t, out.IsSolid())
 		after, err := out.Volume()

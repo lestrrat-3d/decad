@@ -30,7 +30,7 @@ func foldCone(t *testing.T, doc *decad.Document, x0 float64) *decad.Body {
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	axis := decad.SketchLine{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 1, V: 0}}
-	body, err := decad.Revolve(t.Context(), doc, s, s.Profiles()[0], axis, decad.FullRevolution{})
+	body, err := decad.Revolve(doc, s, s.Profiles()[0], axis, decad.FullRevolution{}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -73,7 +73,7 @@ func TestUnionOfSeveralBodiesFoldsThemTwoAtATime(t *testing.T) {
 	doc := decad.New()
 	a, b := foldCone(t, doc, 0), foldCone(t, doc, 6)
 	c := boxBodyAtZ(t, doc, 3, -2, 9, 2, -1, 2)
-	out, err := decad.Union(t.Context(), a, b, c)
+	out, err := decad.Union(a, b, c).Do(t.Context())
 	require.NoError(t, err)
 	require.Len(t, doc.Bodies(), 1)
 	require.True(t, doc.Bodies()[0] == out)
@@ -88,7 +88,7 @@ func TestUnionFoldIsTheSameWhateverTheOrder(t *testing.T) {
 	volume := func(order [3]int) float64 {
 		doc := decad.New()
 		set := []*decad.Body{foldCone(t, doc, 0), foldCone(t, doc, 6), boxBodyAtZ(t, doc, 3, -2, 9, 2, -1, 2)}
-		out, err := decad.Union(t.Context(), set[order[0]], set[order[1]], set[order[2]])
+		out, err := decad.Union(set[order[0]], set[order[1]], set[order[2]]).Do(t.Context())
 		require.NoError(t, err)
 		v, err := out.Volume()
 		require.NoError(t, err)
@@ -105,10 +105,10 @@ func TestUnionFoldRefusalsLeaveEveryBodyLive(t *testing.T) {
 	doc := decad.New()
 	a, b := foldCone(t, doc, 0), foldCone(t, doc, 6)
 	c := boxBodyAtZ(t, doc, 3, -2, 9, 2, -1, 2)
-	_, err := decad.Union(t.Context(), a, b, a)
+	_, err := decad.Union(a, b, a).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrDegenerate, "a repeated body")
 	require.Len(t, doc.Bodies(), 3)
-	_, err = decad.Union(t.Context(), a, b, nil)
+	_, err = decad.Union(a, b, nil).Do(t.Context())
 	require.Error(t, err)
 	require.Len(t, doc.Bodies(), 3, "a refusal leaves the three bodies and no copy")
 	require.True(t, c.Kind() == decad.BodySolid)

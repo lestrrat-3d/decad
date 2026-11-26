@@ -29,7 +29,7 @@ func turnedShaftWithCrossPin(t *testing.T) *decad.Body {
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	axis := decad.SketchLine{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 1, V: 0}}
-	shaft, err := decad.Revolve(t.Context(), doc, s, s.Profiles()[0], axis, decad.FullRevolution{})
+	shaft, err := decad.Revolve(doc, s, s.Profiles()[0], axis, decad.FullRevolution{}).Do(t.Context())
 	require.NoError(t, err)
 
 	plane, err := w.CreateOffsetPlane(w.XY(), -15)
@@ -41,9 +41,9 @@ func turnedShaftWithCrossPin(t *testing.T) *decad.Body {
 	hs.CreateCircle(centre, 3)
 	_, err = hs.Solve(t.Context())
 	require.NoError(t, err)
-	pin, err := decad.Extrude(t.Context(), doc, hs, hs.Profiles()[0], decad.Distance{D: units.Millimeters(45), Dir: decad.Along})
+	pin, err := decad.Extrude(doc, hs, hs.Profiles()[0], decad.Distance{D: units.Millimeters(45), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
-	joined, err := decad.Union(t.Context(), shaft, pin)
+	joined, err := decad.Union(shaft, pin).Do(t.Context())
 	require.NoError(t, err)
 	return joined
 }
@@ -88,7 +88,7 @@ func TestBlendRefusalNamesCrossingCylinders(t *testing.T) {
 	t.Run(`chamfer of cross-pin roots`, func(t *testing.T) {
 		t.Parallel()
 		body := turnedShaftWithCrossPin(t)
-		_, err := decad.Chamfer(t.Context(), body, crossHoleMouths(t, body), units.Millimeters(0.5))
+		_, err := decad.Chamfer(body, crossHoleMouths(t, body), units.Millimeters(0.5)).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		requireReasonLeads(t, err, `this evaluator chamfers a straight prism, its one-line Sweep reduction, or a revolve only`)
 		requireReasonLeads(t, err, crossingCylindersReason)
@@ -100,10 +100,9 @@ func TestBlendRefusalNamesCrossingCylinders(t *testing.T) {
 		t.Parallel()
 		doc := decad.New()
 		rod := diskBody(t, doc, 0, 0, 15)
-		boss, err := decad.Boss(t.Context(), rod, decad.BossSpec{Face: decad.Faces(decad.Cylindrical()),
-			At: r3.NewVec(15, 0, 10), Diameter: units.Millimeters(10), Height: units.Millimeters(8)})
+		boss, err := decad.Boss(rod, decad.Faces(decad.Cylindrical()), r3.NewVec(15, 0, 10), units.Millimeters(10), units.Millimeters(8)).Do(t.Context())
 		require.NoError(t, err)
-		_, err = decad.Chamfer(t.Context(), boss, decad.Edges(decad.Concave()).Exactly(1), units.Millimeters(1))
+		_, err = decad.Chamfer(boss, decad.Edges(decad.Concave()).Exactly(1), units.Millimeters(1)).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		requireReasonLeads(t, err, `this evaluator chamfers a straight prism, its one-line Sweep reduction, or a revolve only`)
 		requireReasonLeads(t, err, crossingCylindersReason)

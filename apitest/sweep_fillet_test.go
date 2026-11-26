@@ -23,7 +23,7 @@ func straightSweepSquare(t *testing.T) (*decad.Document, *decad.Body) {
 	path, err := decad.NewPath(r3.Vec{}, decad.LineTo{End: r3.NewVec(0, 0, 10)})
 	require.NoError(t, err)
 	doc := decad.New()
-	body, err := decad.Sweep(t.Context(), doc, s, s.Profiles()[0], path)
+	body, err := decad.Sweep(doc, s, s.Profiles()[0], path).Do(t.Context())
 	require.NoError(t, err)
 	return doc, body
 }
@@ -39,7 +39,7 @@ func TestSweepLineFilletVerticalEdgesVerified(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, selected, 4)
 
-	rounded, err := decad.Fillet(t.Context(), body, convexVerticalSweepEdges(), units.Millimeters(1))
+	rounded, err := decad.Fillet(body, convexVerticalSweepEdges(), units.Millimeters(1)).Do(t.Context())
 	require.NoError(t, err)
 	volume, err := rounded.Volume()
 	require.NoError(t, err)
@@ -57,7 +57,7 @@ func TestSweepLineFilletVerticalEdgesVerified(t *testing.T) {
 
 	move, err := r3.Translation(r3.NewVec(3, -2, 5))
 	require.NoError(t, err)
-	placed, err := decad.Transform(t.Context(), rounded, move)
+	placed, err := decad.Transform(rounded, move).Do(t.Context())
 	require.NoError(t, err)
 	placedVolume, err := placed.Volume()
 	require.NoError(t, err)
@@ -72,8 +72,8 @@ func TestSweepLineFilletVerticalEdgesVerified(t *testing.T) {
 func TestSweepLineFilletCapEdgeRefuses(t *testing.T) {
 	t.Parallel()
 	doc, body := straightSweepSquare(t)
-	_, err := decad.Fillet(t.Context(), body, decad.Edges(decad.ParallelTo(r3.NewVec(1, 0, 0))),
-		units.Millimeters(1))
+	_, err := decad.Fillet(body, decad.Edges(decad.ParallelTo(r3.NewVec(1, 0, 0))),
+		units.Millimeters(1)).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.ErrorContains(t, err, "one cap edge at a time")
 	require.Equal(t, []*decad.Body{body}, doc.Bodies())
@@ -88,7 +88,7 @@ func TestSweepLineFilletSingleTopCapEdgeVerified(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, selected, 1)
 
-	rounded, err := decad.Fillet(t.Context(), body, sel, units.Millimeters(1))
+	rounded, err := decad.Fillet(body, sel, units.Millimeters(1)).Do(t.Context())
 	require.NoError(t, err)
 	volume, err := rounded.Volume()
 	require.NoError(t, err)
@@ -112,11 +112,11 @@ func TestSweepLineFilletPlacedBottomCapEdgeVerified(t *testing.T) {
 	_, body := straightSweepSquare(t)
 	motion, err := r3.Translation(r3.NewVec(3, -2, 5))
 	require.NoError(t, err)
-	placed, err := decad.Transform(t.Context(), body, motion)
+	placed, err := decad.Transform(body, motion).Do(t.Context())
 	require.NoError(t, err)
 	sel := decad.Edges(decad.ParallelTo(r3.NewVec(1, 0, 0)),
 		decad.EndpointAt(r3.NewVec(3, -2, 5))).Exactly(1)
-	rounded, err := decad.Fillet(t.Context(), placed, sel, units.Millimeters(1))
+	rounded, err := decad.Fillet(placed, sel, units.Millimeters(1)).Do(t.Context())
 	require.NoError(t, err)
 	volume, err := rounded.Volume()
 	require.NoError(t, err)
@@ -135,9 +135,9 @@ func TestSweepLineFilletPlacedReceiver(t *testing.T) {
 	_, body := straightSweepSquare(t)
 	move, err := r3.Translation(r3.NewVec(3, -2, 5))
 	require.NoError(t, err)
-	placed, err := decad.Transform(t.Context(), body, move)
+	placed, err := decad.Transform(body, move).Do(t.Context())
 	require.NoError(t, err)
-	rounded, err := decad.Fillet(t.Context(), placed, convexVerticalSweepEdges(), units.Millimeters(1))
+	rounded, err := decad.Fillet(placed, convexVerticalSweepEdges(), units.Millimeters(1)).Do(t.Context())
 	require.NoError(t, err)
 	volume, err := rounded.Volume()
 	require.NoError(t, err)
@@ -154,13 +154,13 @@ func TestSweepFilletRefusesArcCompositeAndMitredPaths(t *testing.T) {
 	cases := []struct {
 		name          string
 		path          *decad.Path
-		opts          []decad.SweepOption
+		mitred        bool
 		centredSquare bool
 	}{
 		{name: "arc", path: mustPathArc(t)},
 		{name: "composite", path: mustPath(t, r3.Vec{}, r3.NewVec(0, 0, 5), r3.NewVec(0, 0, 10))},
 		{name: "mitred", path: mustPath(t, r3.Vec{}, r3.NewVec(0, 0, 10), r3.NewVec(10, 0, 10)),
-			opts: []decad.SweepOption{decad.WithMitredJoins()}, centredSquare: true},
+			mitred: true, centredSquare: true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -169,9 +169,13 @@ func TestSweepFilletRefusesArcCompositeAndMitredPaths(t *testing.T) {
 				s, profile = squareSweepSketch(t, 2)
 			}
 			doc := decad.New()
-			body, err := decad.Sweep(t.Context(), doc, s, profile, tc.path, tc.opts...)
+			cmd := decad.Sweep(doc, s, profile, tc.path)
+			if tc.mitred {
+				cmd.MitredJoins()
+			}
+			body, err := cmd.Do(t.Context())
 			require.NoError(t, err)
-			_, err = decad.Fillet(t.Context(), body, decad.Edges().AtLeast(1), units.Millimeters(1))
+			_, err = decad.Fillet(body, decad.Edges().AtLeast(1), units.Millimeters(1)).Do(t.Context())
 			require.ErrorIs(t, err, decad.ErrUnsupported)
 			require.Equal(t, []*decad.Body{body}, doc.Bodies())
 		})

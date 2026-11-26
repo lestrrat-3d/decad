@@ -41,7 +41,7 @@ func borePlate(t *testing.T, doc *decad.Document, cut bool) *decad.Body {
 	if cut {
 		plate := boxBodyAtZ(t, doc, 0, 0, 20, 20, 0, 10)
 		tool := circlePrismAtZ(t, doc, 10, 10, 3.2, -1, 12)
-		body, err := decad.Cut(t.Context(), plate, tool)
+		body, err := decad.Cut(plate, tool).Do(t.Context())
 		require.NoError(t, err)
 		return body
 	}
@@ -62,7 +62,7 @@ func borePlate(t *testing.T, doc *decad.Document, cut bool) *decad.Body {
 		}
 	}
 	require.NotNil(t, holed)
-	body, err := decad.Extrude(t.Context(), doc, s, holed, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	body, err := decad.Extrude(doc, s, holed, decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -85,14 +85,14 @@ func placedPinInBore(t *testing.T, p bandPlacement, cut, split bool, pinD float6
 	if p.deg == 0 {
 		return doc, plate, pin
 	}
-	plate, err := decad.Transform(t.Context(), plate, placement(t, p, 1))
+	plate, err := decad.Transform(plate, placement(t, p, 1)).Do(t.Context())
 	require.NoError(t, err)
 	turns := []float64{1}
 	if split {
 		turns = []float64{0.5, 0.5}
 	}
 	for _, f := range turns {
-		pin, err = decad.Transform(t.Context(), pin, placement(t, p, f))
+		pin, err = decad.Transform(pin, placement(t, p, f)).Do(t.Context())
 		require.NoError(t, err)
 	}
 	return doc, plate, pin

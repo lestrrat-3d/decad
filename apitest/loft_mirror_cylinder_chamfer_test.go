@@ -20,11 +20,11 @@ func TestLoftMirrorCylinderBoreChamfersExteriorCaps(t *testing.T) {
 	require.NoError(t, err)
 	bottomSketch, bottomProfile := loftMirrorChamferSection(t, world, world.XY(), 0)
 	middleSketch, middleProfile := loftMirrorChamferSection(t, world, middlePlane, 0.03)
-	lower, err := decad.Loft(t.Context(), doc, bottomSketch, bottomProfile, middleSketch, middleProfile)
+	lower, err := decad.Loft(doc, bottomSketch, bottomProfile, middleSketch, middleProfile).Do(t.Context())
 	require.NoError(t, err)
-	upper, err := decad.MirroredCopy(t.Context(), lower, decad.MirrorFrame{Frame: middleFrame})
+	upper, err := decad.MirroredCopy(lower, decad.MirrorFrame{Frame: middleFrame}).Do(t.Context())
 	require.NoError(t, err)
-	pair, err := decad.Union(t.Context(), lower, upper)
+	pair, err := decad.Union(lower, upper).Do(t.Context())
 	require.NoError(t, err)
 	pattern := []*decad.Body{pair}
 	// Feed copies in reverse angular order. The certified source Join sorts
@@ -39,22 +39,22 @@ func TestLoftMirrorCylinderBoreChamfersExteriorCaps(t *testing.T) {
 		if i == 5 {
 			require.Equal(t, math.Nextafter(1, 0), turn.Basis().EZ.Z)
 		}
-		turned, err := decad.Copy(t.Context(), pair, decad.WithCopyPlacement(turn))
+		turned, err := decad.Copy(pair).Place(decad.CopyTransform{Transform: turn}).Do(t.Context())
 		require.NoError(t, err)
 		pattern = append(pattern, turned)
 	}
 	blank := circleBodyAtZ(t, doc, 0, 4, 0, 2)
-	joined, err := decad.Union(t.Context(), blank, pattern...)
+	joined, err := decad.Union(append([]*decad.Body{blank}, pattern...)...).Do(t.Context())
 	require.NoError(t, err)
 	bore := circleBodyAtZ(t, doc, 0, 0.5, -1, 4)
-	cut, err := decad.Cut(t.Context(), joined, bore)
+	cut, err := decad.Cut(joined, bore).Do(t.Context())
 	require.NoError(t, err)
-	_, err = decad.Chamfer(t.Context(), cut, decad.Edges(decad.OuterLoopOf(decad.CapStart(cut))),
-		units.Millimeters(0.03))
+	_, err = decad.Chamfer(cut, decad.Edges(decad.OuterLoopOf(decad.CapStart(cut))),
+		units.Millimeters(0.03)).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	outerCaps := decad.Edges(decad.OuterLoopOf(decad.CapStart(cut))).
 		Or(decad.OuterLoopOf(decad.CapEnd(cut)))
-	chamfered, err := decad.Chamfer(t.Context(), cut, outerCaps, units.Millimeters(0.03))
+	chamfered, err := decad.Chamfer(cut, outerCaps, units.Millimeters(0.03)).Do(t.Context())
 	require.NoError(t, err)
 	for _, role := range []decad.FeatureRef{decad.CapStart(chamfered), decad.CapEnd(chamfered)} {
 		faces, err := decad.Faces(decad.FaceCreatedBy(role)).Exactly(1).SelectFaces(chamfered)

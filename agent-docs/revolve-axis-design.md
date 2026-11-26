@@ -39,7 +39,7 @@ world origin:
 1. `Revolve` of the blank section.
 2. `Cut` with a toe cone Revolve and `Intersect` with a heel cone Revolve of a
    point Loft whose apex is the world origin (`revolveplan.PointConeBoolean`).
-3. `Copy(..., WithCopyPlacement(m))` of the trimmed tooth, where `m` is a
+3. `Copy(...).Place(CopyTransform{m})` of the trimmed tooth, where `m` is a
    rotation about the axis up to rounding (§4.5).
 4. Serial and variadic `Union` (`revolveshell.SectorUnion`,
    `NextSectorUnion`, `SectorUnionMany`).
@@ -822,8 +822,8 @@ A model in the general class does the following:
   heel `Intersect`.
 - Places the source tooth so its two root contacts do not straddle `−E0`, the
   right normal of the axis in the sketch plane. Copies may lie anywhere.
-- Copies it with `WithCopyPlacement(r3.Rotation(axis, θ))` about the
-  float-normalized `A` and never uses `WithCopyRotation`. A copy whose axis
+- Copies it with `CopyTransform{r3.Rotation(axis, θ)}` about the
+  float-normalized `A` and never uses `CopyRotation`. A copy whose axis
   drifts past `DriftSinLimit` declines.
 - Does not `Transform` the blank or the joined body before the Union.
 - For a bore, draws both blank caps as straight lines at one exact axial
@@ -875,7 +875,7 @@ removed.
   - an on-axis point one unit in the last place off the axis;
   - a non-coordinate frame;
   - a `LoftFaces` cut with a general cone, a heel `Intersect` with one,
-    `LoftFaces` with `WithConeTangentEnd` and one, and `CapOutside*`;
+    `LoftFaces` with `LoftFacesToCone` and one, and `CapOutside*`;
   - `ConeFromFace` registering a cone that reads back about another axis;
   - the bore `Cut` of a join whose tooth trim holds a limit about another
     axis than its certificate (§9.1).

@@ -47,7 +47,7 @@ func alignedTrimmedPad(t *testing.T, bore bool) {
 		return nil
 	}
 	extrude := func(s *sketch.Sketch, h float64, dir decad.Direction) *decad.Body {
-		b, e := decad.Extrude(ctx, d, s, profile(s), decad.Distance{D: units.Millimeters(h), Dir: dir})
+		b, e := decad.Extrude(d, s, profile(s), decad.Distance{D: units.Millimeters(h), Dir: dir}).Do(ctx)
 		require.NoError(t, e)
 		return b
 	}
@@ -70,20 +70,20 @@ func alignedTrimmedPad(t *testing.T, bore bool) {
 	padSketch := frame(r3.Vec{X: 8, Y: -.5}, x, z)
 	padSketch.CreateCircle(padSketch.Origin(), 2.5)
 	pad := extrude(padSketch, .75, decad.Against)
-	joined, e := decad.Union(ctx, plate, pad)
+	joined, e := decad.Union(plate, pad).Do(ctx)
 	require.NoError(t, e)
 	require.Empty(t, joined.OperationDiagnostics())
 	drill := frame(r3.Vec{X: 8 + width - .7, Y: -.5, Z: -5}, x, y)
 	drill.CreateCircle(drill.Origin(), .2)
-	joined, e = decad.Cut(ctx, joined, extrude(drill, 10, decad.Along))
+	joined, e = decad.Cut(joined, extrude(drill, 10, decad.Along)).Do(ctx)
 	require.NoError(t, e)
 	if bore {
 		s := frame(r3.Vec{X: 8, Y: .5}, x, z)
 		s.CreateCircle(s.Origin(), .2)
-		joined, e = decad.Cut(ctx, joined, extrude(s, 2, decad.Along))
+		joined, e = decad.Cut(joined, extrude(s, 2, decad.Along)).Do(ctx)
 		require.NoError(t, e)
 	}
-	res, e := decad.Chamfer(ctx, joined, decad.Edges(decad.OuterLoopOf(decad.CapStart(pad))).Exactly(1), units.Millimeters(.25))
+	res, e := decad.Chamfer(joined, decad.Edges(decad.OuterLoopOf(decad.CapStart(pad))).Exactly(1), units.Millimeters(.25)).Do(ctx)
 	if bore {
 		require.ErrorIs(t, e, decad.ErrUnsupported)
 		return

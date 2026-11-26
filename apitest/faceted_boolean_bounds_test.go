@@ -15,9 +15,8 @@ func TestFacetedUnionKeepsUntouchedVertexAndFaceBounds(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
 	ts, tp := polygonSweepSketch(t, 16, 5)
-	trunk, err := decad.Sweep(t.Context(), doc, ts, tp,
-		mustPath(t, r3.NewVec(0, 0, 0), r3.NewVec(0, 0, 30), r3.NewVec(3, 0, 60)),
-		decad.WithMitredJoins(), decad.WithSectionScale(scalars(1, 0.9)...))
+	trunk, err := decad.Sweep(doc, ts, tp,
+		mustPath(t, r3.NewVec(0, 0, 0), r3.NewVec(0, 0, 30), r3.NewVec(3, 0, 60))).MitredJoins().SectionScale(scalars(1, 0.9)...).Do(t.Context())
 	require.NoError(t, err)
 	trunkBounds := make(map[r3.Vec]units.Value)
 	for _, vertex := range trunk.Vertices() {
@@ -32,10 +31,9 @@ func TestFacetedUnionKeepsUntouchedVertexAndFaceBounds(t *testing.T) {
 	for k := range 3 {
 		phi := golden * float64(k)
 		u := r3.NewVec(math.Cos(phi), math.Sin(phi), 0)
-		branch, err := decad.Sweep(t.Context(), doc, bs, bp,
+		branch, err := decad.Sweep(doc, bs, bp,
 			mustPath(t, r3.NewVec(0, 0, 0), r3.NewVec(0, 0, 2.5), r3.NewVec(0.8, 0.3, 6),
-				r3.NewVec(2.5, 0.6, 9.5)),
-			decad.WithMitredJoins(), decad.WithSectionScale(scalars(1.375/1.5, 1.2/1.5, 1/1.5)...))
+				r3.NewVec(2.5, 0.6, 9.5))).MitredJoins().SectionScale(scalars(1.375/1.5, 1.2/1.5, 1/1.5)...).Do(t.Context())
 		require.NoError(t, err)
 		direction := u.Scale(math.Sin(alpha)).Add(r3.NewVec(0, 0, math.Cos(alpha)))
 		forward := r3.NewVec(0, 0, 1).Cross(direction)
@@ -45,9 +43,9 @@ func TestFacetedUnionKeepsUntouchedVertexAndFaceBounds(t *testing.T) {
 		require.NoError(t, err)
 		placement, err := r3.FromFrame(frame)
 		require.NoError(t, err)
-		branch, err = decad.Transform(t.Context(), branch, placement)
+		branch, err = decad.Transform(branch, placement).Do(t.Context())
 		require.NoError(t, err)
-		result, err = decad.Union(t.Context(), result, branch)
+		result, err = decad.Union(result, branch).Do(t.Context())
 		require.NoError(t, err)
 	}
 
@@ -127,7 +125,7 @@ func TestFacetedPlacementKeepsNearOriginVertexBoundTight(t *testing.T) {
 	doc := decad.New()
 	plate := boxBody(t, doc, 0, 0, 20, 20, 8)
 	tool := translated(t, diskBody(t, doc, 0, 0, 2), 10, 10, -10)
-	drilled, err := decad.Cut(t.Context(), plate, tool)
+	drilled, err := decad.Cut(plate, tool).Do(t.Context())
 	require.NoError(t, err)
 	origin, far := r3.NewVec(0, 0, 0), r3.NewVec(20, 20, 8)
 	sourceBounds := make(map[r3.Vec]units.Value)
@@ -146,7 +144,7 @@ func TestFacetedPlacementKeepsNearOriginVertexBoundTight(t *testing.T) {
 	require.NoError(t, err)
 	motion, err := rotation.Then(shift)
 	require.NoError(t, err)
-	placed, err := decad.Transform(t.Context(), drilled, motion)
+	placed, err := decad.Transform(drilled, motion).Do(t.Context())
 	require.NoError(t, err)
 	boundAt := func(target r3.Vec) units.Value {
 		for _, vertex := range placed.Vertices() {

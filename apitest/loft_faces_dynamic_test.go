@@ -31,7 +31,7 @@ func TestLoftFacesTwoAndThreeCapsFromPointSlabs(t *testing.T) {
 	s.Fix(p.A)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	loft, err := decad.LoftFromPoint(t.Context(), doc, r3.Vec{}, s, s.Profiles()[0])
+	loft, err := decad.LoftFromPoint(doc, r3.Vec{}, s, s.Profiles()[0]).Do(t.Context())
 	require.NoError(t, err)
 	makeSheet := func(x float64) *decad.Body {
 		sheetSketch, err := world.CreateSketch(world.XY())
@@ -43,16 +43,16 @@ func TestLoftFacesTwoAndThreeCapsFromPointSlabs(t *testing.T) {
 		sheetSketch.CreateLine(a, b)
 		_, err = sheetSketch.Solve(t.Context())
 		require.NoError(t, err)
-		sheet, err := decad.Extrude(t.Context(), doc, sheetSketch, sheetSketch.Chains()[0], decad.TwoSided{
+		sheet, err := decad.Extrude(doc, sheetSketch, sheetSketch.Chains()[0], decad.TwoSided{
 			One: decad.DistanceSide{D: units.Millimeters(20)},
 			Two: decad.DistanceSide{D: units.Millimeters(20)},
-		})
+		}).Do(t.Context())
 		require.NoError(t, err)
 		return sheet
 	}
-	first, err := decad.Split(t.Context(), loft, makeSheet(9))
+	first, err := decad.Split(loft, makeSheet(9)).Do(t.Context())
 	require.NoError(t, err)
-	second, err := decad.Split(t.Context(), first[0], makeSheet(8))
+	second, err := decad.Split(first[0], makeSheet(8)).Do(t.Context())
 	require.NoError(t, err)
 	near, far := second[1], first[1]
 	sections := []*decad.Face{
@@ -61,24 +61,24 @@ func TestLoftFacesTwoAndThreeCapsFromPointSlabs(t *testing.T) {
 		neutralSlabCap(t, far, decad.CapEnd(far)),
 	}
 	before := doc.Bodies()
-	_, err = decad.LoftFaces(t.Context(), sections[:1])
+	_, err = decad.LoftFaces(sections[:1]).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrDegenerate)
 	require.Equal(t, before, doc.Bodies())
 	tooMany := make([]*decad.Face, 33)
 	for i := range tooMany {
 		tooMany[i] = sections[i%len(sections)]
 	}
-	_, err = decad.LoftFaces(t.Context(), tooMany)
+	_, err = decad.LoftFaces(tooMany).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrDegenerate)
 	require.Equal(t, before, doc.Bodies())
-	_, err = decad.LoftFaces(t.Context(), []*decad.Face{sections[0], sections[1], sections[1]})
+	_, err = decad.LoftFaces([]*decad.Face{sections[0], sections[1], sections[1]}).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.Equal(t, before, doc.Bodies())
-	_, err = decad.LoftFaces(t.Context(), []*decad.Face{sections[0], sections[2], sections[1]})
+	_, err = decad.LoftFaces([]*decad.Face{sections[0], sections[2], sections[1]}).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.Equal(t, before, doc.Bodies())
 
-	twoCaps, err := decad.LoftFaces(t.Context(), sections[:2])
+	twoCaps, err := decad.LoftFaces(sections[:2]).Do(t.Context())
 	require.NoError(t, err)
 	verify := func(body *decad.Body, wantVolume float64) {
 		t.Helper()
@@ -93,7 +93,7 @@ func TestLoftFacesTwoAndThreeCapsFromPointSlabs(t *testing.T) {
 	}
 	verify(twoCaps, 217.0/75.0)
 
-	result, err := decad.LoftFaces(t.Context(), sections)
+	result, err := decad.LoftFaces(sections).Do(t.Context())
 	require.NoError(t, err)
 	verify(result, 488.0/75.0)
 }

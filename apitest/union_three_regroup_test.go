@@ -42,13 +42,13 @@ func threePrismUnionInputs(t *testing.T, g r3.Frame, thickness float64) (*decad.
 			}
 		}
 		require.True(t, profile != nil)
-		body, err := decad.Extrude(ctx, doc, s, profile, decad.Distance{D: units.Millimeters(length), Dir: decad.Along})
+		body, err := decad.Extrude(doc, s, profile, decad.Distance{D: units.Millimeters(length), Dir: decad.Along}).Do(ctx)
 		require.NoError(t, err)
 		f, err := r3.NewFrame(origin, u, v)
 		require.NoError(t, err)
 		xf, err := r3.FromFrame(f)
 		require.NoError(t, err)
-		body, err = decad.Transform(ctx, body, xf)
+		body, err = decad.Transform(body, xf).Do(ctx)
 		require.NoError(t, err)
 		return body
 	}
@@ -64,7 +64,7 @@ func TestUnionThreeRegroupsCoarseHeldContact(t *testing.T) {
 	require.NoError(t, err)
 	doc, inputs := threePrismUnionInputs(t, g, 2)
 	before := len(doc.OperationHistory().Operations())
-	result, err := decad.Union(ctx, inputs[0], inputs[1], inputs[2])
+	result, err := decad.Union(inputs[0], inputs[1], inputs[2]).Do(ctx)
 	require.NoError(t, err)
 	require.True(t, tookMeshPath(result))
 	require.Empty(t, result.OperationDiagnostics())
@@ -107,7 +107,7 @@ func TestUnionThreeRejectsAdjustedRegroup(t *testing.T) {
 	require.NoError(t, err)
 	doc, inputs := threePrismUnionInputs(t, g, 1)
 	before := doc.OperationHistory().Operations()
-	_, err = decad.Union(t.Context(), inputs[0], inputs[1], inputs[2])
+	_, err = decad.Union(inputs[0], inputs[1], inputs[2]).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.Contains(t, err.Error(), "first operand holds its mesh")
 	after := doc.OperationHistory().Operations()

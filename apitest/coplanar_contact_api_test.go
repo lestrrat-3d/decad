@@ -91,7 +91,7 @@ func requireNoShift(t *testing.T, body *decad.Body) {
 
 func requireEmptyIntersect(t *testing.T, a, b *decad.Body, noShift bool) {
 	t.Helper()
-	_, err := decad.Intersect(t.Context(), a, b)
+	_, err := decad.Intersect(a, b).Do(t.Context())
 	var be *decad.BooleanError
 	require.ErrorAs(t, err, &be)
 	require.Equal(t, decad.BooleanEmpty, be.Code)
@@ -146,7 +146,7 @@ func TestCoplanarContactFaceToFace(t *testing.T) {
 			t.Run(tc.name+"/"+mode, func(t *testing.T) {
 				t.Parallel()
 				a, b, _ := coplanarPair(t, tc.b, opts)
-				u, err := decad.Union(t.Context(), a, b)
+				u, err := decad.Union(a, b).Do(t.Context())
 				require.NoError(t, err)
 				require.True(t, tookMeshPath(u), "the pair reaches the mesh evaluator")
 				require.Len(t, u.Lumps(), tc.lumps)
@@ -163,14 +163,14 @@ func TestCoplanarContactFaceToFace(t *testing.T) {
 				if tc.inter == 0 {
 					requireEmptyIntersect(t, a, b, true)
 				} else {
-					common, err := decad.Intersect(t.Context(), a, b)
+					common, err := decad.Intersect(a, b).Do(t.Context())
 					require.NoError(t, err)
 					requireExactVolume(t, common, tc.inter)
 					requireNoShift(t, common)
 				}
 
 				a, b, _ = coplanarPair(t, tc.b, opts)
-				cut, err := decad.Cut(t.Context(), a, b)
+				cut, err := decad.Cut(a, b).Do(t.Context())
 				require.NoError(t, err)
 				if tc.cutAnalytic {
 					// A blind pocket with a flush top is built analytically, so its
@@ -212,15 +212,15 @@ func TestCoplanarContactOverlapBeyondZero(t *testing.T) {
 		t.Run(mode, func(t *testing.T) {
 			t.Parallel()
 			a, bb, _ := coplanarPair(t, b, opts)
-			u, err := decad.Union(t.Context(), a, bb)
+			u, err := decad.Union(a, bb).Do(t.Context())
 			require.NoError(t, err)
 			requireExactVolume(t, u, 2000-95*eps)
 			a, bb, _ = coplanarPair(t, b, opts)
-			cut, err := decad.Cut(t.Context(), a, bb)
+			cut, err := decad.Cut(a, bb).Do(t.Context())
 			require.NoError(t, err)
 			requireExactVolume(t, cut, 1000-95*eps)
 			a, bb, _ = coplanarPair(t, b, opts)
-			common, err := decad.Intersect(t.Context(), a, bb)
+			common, err := decad.Intersect(a, bb).Do(t.Context())
 			require.NoError(t, err)
 			v, err := common.Volume()
 			require.NoError(t, err)
@@ -248,7 +248,7 @@ func TestCoplanarContactEdgeAndVertexOnly(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 			a, bb, _ := coplanarPair(t, b, nil)
-			u, err := decad.Union(t.Context(), a, bb)
+			u, err := decad.Union(a, bb).Do(t.Context())
 			require.NoError(t, err)
 			require.Len(t, u.Lumps(), map[string]int{"A3 edge only": 1, "A4 vertex only": 1}[name])
 			shifted := false
@@ -261,7 +261,7 @@ func TestCoplanarContactEdgeAndVertexOnly(t *testing.T) {
 			require.InDelta(t, 2000, volumeMM(t, v), boundMM3(t, v)+1e-9)
 
 			a, bb, _ = coplanarPair(t, b, []decad.DocumentOption{decad.ExactOnly()})
-			_, err = decad.Union(t.Context(), a, bb)
+			_, err = decad.Union(a, bb).Do(t.Context())
 			var be *decad.BooleanError
 			require.ErrorAs(t, err, &be)
 			require.Equal(t, decad.BooleanUnsupportedContact, be.Code)
@@ -270,7 +270,7 @@ func TestCoplanarContactEdgeAndVertexOnly(t *testing.T) {
 				a, bb, _ = coplanarPair(t, b, opts)
 				requireEmptyIntersect(t, a, bb, false)
 				a, bb, _ = coplanarPair(t, b, opts)
-				cut, err := decad.Cut(t.Context(), a, bb)
+				cut, err := decad.Cut(a, bb).Do(t.Context())
 				require.NoError(t, err, mode)
 				requireExactVolume(t, cut, 1000)
 				_, _, doc := coplanarPair(t, b, opts)
@@ -310,28 +310,28 @@ func TestCoplanarContactMadeByCut(t *testing.T) {
 	fixtures := []fixture{
 		{name: "R1 tenon in a slot made by two Cuts", build: func(t *testing.T, doc *decad.Document) (*decad.Body, *decad.Body) {
 			host := slotHost(t, doc)
-			one, err := decad.Cut(t.Context(), host, meshBoxAt(t, doc, 6, -1, 10, 17, 4, 7))
+			one, err := decad.Cut(host, meshBoxAt(t, doc, 6, -1, 10, 17, 4, 7)).Do(t.Context())
 			require.NoError(t, err)
-			slot, err := decad.Cut(t.Context(), one, meshBoxAt(t, doc, 10, -1, 14, 17, 4, 7))
+			slot, err := decad.Cut(one, meshBoxAt(t, doc, 10, -1, 14, 17, 4, 7)).Do(t.Context())
 			require.NoError(t, err)
 			return slot, meshBoxAt(t, doc, 6, 0, 14, 16, 4, 6)
 		}, union: 20 * 16 * 10},
 		{name: "R2 box under a box made by Cut, flush walls", build: func(t *testing.T, doc *decad.Document) (*decad.Body, *decad.Body) {
-			upper, err := decad.Cut(t.Context(), meshBoxAt(t, doc, 0, 0, 10, 10, 10, 10), meshBoxAt(t, doc, 8, 8, 11, 11, 19, 2))
+			upper, err := decad.Cut(meshBoxAt(t, doc, 0, 0, 10, 10, 10, 10), meshBoxAt(t, doc, 8, 8, 11, 11, 19, 2)).Do(t.Context())
 			require.NoError(t, err)
 			return upper, meshBoxAt(t, doc, 0, 0, 10, 10, 0, 10)
 		}, union: 1000 + 1000 - 4},
 		{name: "R3 trapezoid prism in a socket made by Cut", build: func(t *testing.T, doc *decad.Document) (*decad.Body, *decad.Body) {
-			socket, err := decad.Cut(t.Context(), slotHost(t, doc), meshPrismAt(t, doc, 0, 7, dovetailTool))
+			socket, err := decad.Cut(slotHost(t, doc), meshPrismAt(t, doc, 0, 7, dovetailTool)).Do(t.Context())
 			require.NoError(t, err)
 			return socket, meshPrismAt(t, doc, 0, 6, dovetailTenon)
 		}, union: 20 * 16 * 10},
 		{name: "R4 trapezoid made by a flush Union in a socket made by Cut", build: func(t *testing.T, doc *decad.Document) (*decad.Body, *decad.Body) {
-			socket, err := decad.Cut(t.Context(), slotHost(t, doc), meshPrismAt(t, doc, 0, 7, dovetailTool))
+			socket, err := decad.Cut(slotHost(t, doc), meshPrismAt(t, doc, 0, 7, dovetailTool)).Do(t.Context())
 			require.NoError(t, err)
 			// Each half is drawn at the origin and moved into place, so the Union of
 			// the two flush walls is a mesh result.
-			tenon, err := decad.Union(t.Context(), meshPrismAt(t, doc, 3.5, 6, dovetailTenonL), meshPrismAt(t, doc, 10, 6, dovetailTenonR))
+			tenon, err := decad.Union(meshPrismAt(t, doc, 3.5, 6, dovetailTenonL), meshPrismAt(t, doc, 10, 6, dovetailTenonR)).Do(t.Context())
 			require.NoError(t, err)
 			require.True(t, tookMeshPath(tenon), "the tenon is a mesh Union result")
 			return socket, tenon
@@ -360,7 +360,7 @@ func TestCoplanarContactMadeByCut(t *testing.T) {
 				require.NoError(t, err)
 				ov, err := other.Volume()
 				require.NoError(t, err)
-				u, err := decad.Union(t.Context(), target, other)
+				u, err := decad.Union(target, other).Do(t.Context())
 				require.NoError(t, err)
 				requireNoShift(t, u)
 				uv, err := u.Volume()
@@ -370,7 +370,7 @@ func TestCoplanarContactMadeByCut(t *testing.T) {
 				require.InDelta(t, f.union, volumeMM(t, uv), bound)
 
 				_, target, other = build()
-				cut, err := decad.Cut(t.Context(), target, other)
+				cut, err := decad.Cut(target, other).Do(t.Context())
 				require.NoError(t, err)
 				cv, err := cut.Volume()
 				require.NoError(t, err)
@@ -388,7 +388,7 @@ func TestCoplanarContactKeepsRecords(t *testing.T) {
 	doc := decad.New()
 	a := coplanarA.build(t, doc)
 	b := coplanarBox{0.5, 0, 10.5, 10, 10, 10}.build(t, doc)
-	u, err := decad.Union(t.Context(), a, b)
+	u, err := decad.Union(a, b).Do(t.Context())
 	require.NoError(t, err)
 	require.Empty(t, u.OperationDiagnostics())
 	require.Len(t, u.Faces(), 10, "the two flush y walls are one face each, so ten faces remain")
@@ -397,7 +397,7 @@ func TestCoplanarContactKeepsRecords(t *testing.T) {
 		require.True(t, ok, "face %d keeps its Plane record", i)
 	}
 	tool := meshBoxAt(t, doc, 3, 3, 7, 7, 8, 10)
-	cut, err := decad.Cut(t.Context(), u, tool)
+	cut, err := decad.Cut(u, tool).Do(t.Context())
 	require.NoError(t, err)
 	requireExactVolume(t, cut, 2000-4*4*10)
 	require.Empty(t, cut.OperationDiagnostics())
@@ -460,7 +460,7 @@ func TestCoplanarContactRandomBoxPairs(t *testing.T) {
 					return a.build(t, doc), b.build(t, doc), doc
 				}
 				x, y, _ := pair()
-				u, err := decad.Union(t.Context(), x, y)
+				u, err := decad.Union(x, y).Do(t.Context())
 				switch class {
 				case classEdge, classVertex:
 					// A3's outcome: the exact pass leaves the result meeting itself,
@@ -497,18 +497,18 @@ func TestCoplanarContactRandomBoxPairs(t *testing.T) {
 
 				x, y, _ = pair()
 				if class == classOverlap {
-					common, err := decad.Intersect(t.Context(), x, y)
+					common, err := decad.Intersect(x, y).Do(t.Context())
 					require.NoError(t, err)
 					requireVolumeByRoute(t, common, overlap)
 				} else {
-					_, err := decad.Intersect(t.Context(), x, y)
+					_, err := decad.Intersect(x, y).Do(t.Context())
 					var be *decad.BooleanError
 					require.ErrorAs(t, err, &be)
 					require.Equal(t, decad.BooleanEmpty, be.Code)
 				}
 
 				x, y, _ = pair()
-				cut, err := decad.Cut(t.Context(), x, y)
+				cut, err := decad.Cut(x, y).Do(t.Context())
 				if va == overlap {
 					var be *decad.BooleanError
 					require.ErrorAs(t, err, &be)

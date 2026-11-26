@@ -174,10 +174,10 @@ func bossTop(t *testing.T, bossR float64) *decad.Body {
 	s.CreateCircle(c, bossR)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	boss, err := decad.Extrude(t.Context(), sc.doc, s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(10.5), Dir: decad.Against})
+	boss, err := decad.Extrude(sc.doc, s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(10.5), Dir: decad.Against}).Do(t.Context())
 	require.NoError(t, err)
-	joined, err := decad.Union(t.Context(), blendPlate(t, sc), translated(t, boss, 0, 0, 30.001))
+	joined, err := decad.Union(blendPlate(t, sc), translated(t, boss, 0, 0, 30.001)).Do(t.Context())
 	require.NoError(t, err)
 	return joined
 }
@@ -196,11 +196,11 @@ func TestFacetedRetainedBlendStripInterior(t *testing.T) {
 			gx := openBoxR - h
 			sc := newRetentionScene()
 			block := placed(t, rectBox(t, sc.w, sc.doc, -5, -5, gx, 25, 30), -5)
-			trimmed, err := decad.Cut(t.Context(), roundedCornerBox(t, sc), block)
+			trimmed, err := decad.Cut(roundedCornerBox(t, sc), block).Do(t.Context())
 			require.NoError(t, err)
 			seed := arcSeedAt(t, trimmed, 20)
 			old := originsOf(trimmed)
-			out, err := decad.Fillet(t.Context(), trimmed, seed, units.Millimeters(tc.r), decad.WithTangentChain())
+			out, err := decad.Fillet(trimmed, seed, units.Millimeters(tc.r)).TangentChain().Do(t.Context())
 			require.NoError(t, err)
 			made := madeFaces(old, out)
 			keep := func(f *decad.Face) bool {
@@ -225,10 +225,10 @@ func TestFacetedRetainedBlendStripInterior(t *testing.T) {
 				const bore = 4.0
 				h := bore * math.Sqrt(1-c*c)
 				sc := newRetentionScene()
-				bored, err := decad.Cut(t.Context(), blendPlate(t, sc), zCylinderAt(t, sc, h, 10, bore, -30, 30))
+				bored, err := decad.Cut(blendPlate(t, sc), zCylinderAt(t, sc, h, 10, bore, -30, 30)).Do(t.Context())
 				require.NoError(t, err)
 				old := originsOf(bored)
-				out, err := decad.Fillet(t.Context(), bored, arcSeedAt(t, bored, 20), units.Millimeters(d))
+				out, err := decad.Fillet(bored, arcSeedAt(t, bored, 20), units.Millimeters(d)).Do(t.Context())
 				require.NoError(t, err)
 				made := madeFaces(old, out)
 				profile := blendProfile{cx: h, cy: 10, rc: bore + d, zc: 20 - d, r: d, a0: math.Pi / 2, span: math.Pi / 2}
@@ -247,7 +247,7 @@ func TestFacetedRetainedBlendStripInterior(t *testing.T) {
 			const top = 30.001
 			joined := bossTop(t, tc.bossR)
 			old := originsOf(joined)
-			out, err := decad.Fillet(t.Context(), joined, rimAt(t, joined, top), units.Millimeters(tc.r))
+			out, err := decad.Fillet(joined, rimAt(t, joined, top), units.Millimeters(tc.r)).Do(t.Context())
 			require.NoError(t, err)
 			made := madeFaces(old, out)
 			profile := blendProfile{cx: 20, cy: 10, rc: tc.bossR - tc.r, zc: top - tc.r, r: tc.r, span: math.Pi / 2}
@@ -263,13 +263,13 @@ func TestFacetedRetainedBlendStripInterior(t *testing.T) {
 	t.Run("a fillet tiny against its rim refuses", func(t *testing.T) {
 		t.Parallel()
 		joined := bossTop(t, 9)
-		_, err := decad.Fillet(t.Context(), joined, rimAt(t, joined, 30.001), units.Millimeters(0.004))
+		_, err := decad.Fillet(joined, rimAt(t, joined, 30.001), units.Millimeters(0.004)).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.ErrorContains(t, err, "the blend's strip needs more than 4096 columns on a circle of radius 9 mm")
 		sc := newRetentionScene()
-		bored, err := decad.Cut(t.Context(), blendPlate(t, sc), zCylinderAt(t, sc, 20, 10, 9, -30, 30))
+		bored, err := decad.Cut(blendPlate(t, sc), zCylinderAt(t, sc, 20, 10, 9, -30, 30)).Do(t.Context())
 		require.NoError(t, err)
-		_, err = decad.Fillet(t.Context(), bored, rimAt(t, bored, 20), units.Millimeters(0.002))
+		_, err = decad.Fillet(bored, rimAt(t, bored, 20), units.Millimeters(0.002)).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.ErrorContains(t, err, "the blend's strip needs more than 4096 columns")
 	})
@@ -283,7 +283,7 @@ func TestFacetedRetainedBlendStripInterior(t *testing.T) {
 		const r = 0.4
 		cut := flatBall(t, 0, 0)
 		old := originsOf(cut)
-		out, err := decad.Fillet(t.Context(), cut, discRim(t, cut), units.Millimeters(r))
+		out, err := decad.Fillet(cut, discRim(t, cut), units.Millimeters(r)).Do(t.Context())
 		require.NoError(t, err)
 		made := madeFaces(old, out)
 		// The ball touches the plane z = −1 from below and the sphere from
@@ -309,7 +309,7 @@ func TestFacetedRetainedBlendStripInterior(t *testing.T) {
 			three := decad.Edges(decad.EndpointAt(corner), decad.ParallelTo(x)).
 				Or(decad.EndpointAt(corner), decad.ParallelTo(y)).Or(decad.EndpointAt(corner), decad.ParallelTo(z))
 			box := blockIn(t, decad.New(), r3.NewVec(0, 0, 0), r3.NewVec(20, 20, 10))
-			out, err := decad.Fillet(t.Context(), box, three, units.Millimeters(r))
+			out, err := decad.Fillet(box, three, units.Millimeters(r)).Do(t.Context())
 			require.NoError(t, err)
 			centre := r3.NewVec(r, r, 10-r)
 			// The octant is the face whose corners all lie r from its centre.

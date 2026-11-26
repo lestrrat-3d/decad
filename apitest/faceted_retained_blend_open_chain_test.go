@@ -33,7 +33,7 @@ func openChainBox(t *testing.T, z float64) (*decad.Body, decad.EdgeSelector) {
 // openCornerBox builds the open-corner box in sc.
 func openCornerBox(t *testing.T, sc *retentionScene) *decad.Body {
 	t.Helper()
-	drilled, err := decad.Cut(t.Context(), roundedCornerBox(t, sc), sc.tool(t, 20))
+	drilled, err := decad.Cut(roundedCornerBox(t, sc), sc.tool(t, 20)).Do(t.Context())
 	require.NoError(t, err)
 	return drilled
 }
@@ -48,12 +48,12 @@ func roundedCornerBox(t *testing.T, sc *retentionScene) *decad.Body {
 	s.Fix(r.A)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	box, err := decad.Extrude(t.Context(), sc.doc, s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
+	box, err := decad.Extrude(sc.doc, s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(20), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
-	corner, err := decad.Fillet(t.Context(), box,
+	corner, err := decad.Fillet(box,
 		decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1)), decad.EndpointAt(r3.Vec{})).Exactly(1),
-		units.Millimeters(openBoxR))
+		units.Millimeters(openBoxR)).Do(t.Context())
 	require.NoError(t, err)
 	return corner
 }
@@ -93,8 +93,8 @@ func rectBox(t *testing.T, w *sketch.World, doc *decad.Document, x0, y0, x1, y1,
 	s.Fix(r.A)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	b, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
+	b, err := decad.Extrude(doc, s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(h), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	return b
 }
@@ -104,7 +104,7 @@ func placed(t *testing.T, b *decad.Body, dz float64) *decad.Body {
 	t.Helper()
 	move, err := r3.Translation(r3.Vec{Z: dz})
 	require.NoError(t, err)
-	out, err := decad.Transform(t.Context(), b, move)
+	out, err := decad.Transform(b, move).Do(t.Context())
 	require.NoError(t, err)
 	return out
 }
@@ -136,9 +136,9 @@ func roundedPocketAt(t *testing.T, closed bool, floor float64) *decad.Body {
 		vertical = decad.Edges(up, decad.EndpointAt(r3.NewVec(30, 10, 0))).
 			Or(up, decad.EndpointAt(r3.NewVec(30, 30, 0))).Exactly(2)
 	}
-	tool, err := decad.Fillet(t.Context(), tool, vertical, units.Millimeters(3))
+	tool, err := decad.Fillet(tool, vertical, units.Millimeters(3)).Do(t.Context())
 	require.NoError(t, err)
-	out, err := decad.Cut(t.Context(), plate, placed(t, tool, floor))
+	out, err := decad.Cut(plate, placed(t, tool, floor)).Do(t.Context())
 	require.NoError(t, err)
 	return out
 }
@@ -152,7 +152,7 @@ func TestFacetedRetainedBlendOpenChain(t *testing.T) {
 		before, err := drilled.Volume()
 		require.NoError(t, err)
 		const r = 1.0
-		out, err := decad.Fillet(t.Context(), drilled, seed, units.Millimeters(r), decad.WithTangentChain())
+		out, err := decad.Fillet(drilled, seed, units.Millimeters(r)).TangentChain().Do(t.Context())
 		require.NoError(t, err)
 		after, err := out.Volume()
 		require.NoError(t, err)
@@ -170,7 +170,7 @@ func TestFacetedRetainedBlendOpenChain(t *testing.T) {
 		before, err := drilled.Area()
 		require.NoError(t, err)
 		const r = 1.0
-		out, err := decad.Fillet(t.Context(), drilled, seed, units.Millimeters(r), decad.WithTangentChain())
+		out, err := decad.Fillet(drilled, seed, units.Millimeters(r)).TangentChain().Do(t.Context())
 		require.NoError(t, err)
 		after, err := out.Area()
 		require.NoError(t, err)
@@ -198,7 +198,7 @@ func TestFacetedRetainedBlendOpenChain(t *testing.T) {
 		t.Parallel()
 		drilled, seed := openChainBox(t, 20)
 		const r = 1.0
-		out, err := decad.Fillet(t.Context(), drilled, seed, units.Millimeters(r), decad.WithTangentChain())
+		out, err := decad.Fillet(drilled, seed, units.Millimeters(r)).TangentChain().Do(t.Context())
 		require.NoError(t, err)
 		// Two junctions between a line blend and the corner torus, and one end
 		// curve of each line blend on its end face.
@@ -239,7 +239,7 @@ func TestFacetedRetainedBlendOpenChain(t *testing.T) {
 		drilled, seed := openChainBox(t, 0)
 		before, err := drilled.Volume()
 		require.NoError(t, err)
-		out, err := decad.Fillet(t.Context(), drilled, seed, units.Millimeters(1), decad.WithTangentChain())
+		out, err := decad.Fillet(drilled, seed, units.Millimeters(1)).TangentChain().Do(t.Context())
 		require.NoError(t, err)
 		after, err := out.Volume()
 		require.NoError(t, err)
@@ -255,7 +255,7 @@ func TestFacetedRetainedBlendOpenChain(t *testing.T) {
 		outline := decad.Edges(decad.EndpointAt(r3.NewVec(40, 0, 20)), decad.EndpointAt(r3.NewVec(3, 0, 20))).
 			Or(decad.EndpointAt(r3.NewVec(3, 0, 20)), decad.EndpointAt(r3.NewVec(0, 3, 20))).
 			Or(decad.EndpointAt(r3.NewVec(0, 3, 20)), decad.EndpointAt(r3.NewVec(0, 20, 20)))
-		out, err := decad.Fillet(t.Context(), drilled, outline.Exactly(3), units.Millimeters(1))
+		out, err := decad.Fillet(drilled, outline.Exactly(3), units.Millimeters(1)).Do(t.Context())
 		require.NoError(t, err)
 		after, err := out.Volume()
 		require.NoError(t, err)
@@ -267,7 +267,7 @@ func TestFacetedRetainedBlendOpenChain(t *testing.T) {
 		drilled, seed := openChainBox(t, 20)
 		before, err := drilled.Volume()
 		require.NoError(t, err)
-		out, err := decad.Chamfer(t.Context(), drilled, seed, units.Millimeters(1), decad.WithTangentChain())
+		out, err := decad.Chamfer(drilled, seed, units.Millimeters(1)).TangentChain().Do(t.Context())
 		require.NoError(t, err)
 		after, err := out.Volume()
 		require.NoError(t, err)
@@ -280,8 +280,7 @@ func TestFacetedRetainedBlendOpenChain(t *testing.T) {
 		drilled, seed := openChainBox(t, 20)
 		before, err := drilled.Volume()
 		require.NoError(t, err)
-		out, err := decad.Chamfer(t.Context(), drilled, seed, units.Millimeters(2), decad.WithTangentChain(),
-			decad.WithAsymmetricChamfer(decad.Faces(decad.Facing(r3.NewVec(0, 0, 1))), units.Millimeters(1)))
+		out, err := decad.Chamfer(drilled, seed, units.Millimeters(2)).TangentChain().Asymmetric(decad.Faces(decad.Facing(r3.NewVec(0, 0, 1))), units.Millimeters(1)).Do(t.Context())
 		require.NoError(t, err)
 		after, err := out.Volume()
 		require.NoError(t, err)
@@ -291,9 +290,9 @@ func TestFacetedRetainedBlendOpenChain(t *testing.T) {
 	t.Run("the arc alone without the option names the option", func(t *testing.T) {
 		t.Parallel()
 		drilled, seed := openChainBox(t, 20)
-		_, err := decad.Fillet(t.Context(), drilled, seed, units.Millimeters(1))
+		_, err := decad.Fillet(drilled, seed, units.Millimeters(1)).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
-		require.ErrorContains(t, err, "WithTangentChain")
+		require.ErrorContains(t, err, "TangentChain")
 	})
 
 	t.Run("a junction the tags miss by a rounding is filleted", func(t *testing.T) {
@@ -307,13 +306,13 @@ func TestFacetedRetainedBlendOpenChain(t *testing.T) {
 		s.Fix(r.A)
 		_, err = s.Solve(t.Context())
 		require.NoError(t, err)
-		box, err := decad.Extrude(t.Context(), sc.doc, s, s.Profiles()[0],
-			decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
+		box, err := decad.Extrude(sc.doc, s, s.Profiles()[0],
+			decad.Distance{D: units.Millimeters(20), Dir: decad.Along}).Do(t.Context())
 		require.NoError(t, err)
-		rounded, err := decad.Fillet(t.Context(), box,
-			decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1))).Exactly(4), units.Millimeters(2.7))
+		rounded, err := decad.Fillet(box,
+			decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1))).Exactly(4), units.Millimeters(2.7)).Do(t.Context())
 		require.NoError(t, err)
-		drilled, err := decad.Cut(t.Context(), rounded, sc.tool(t, 20))
+		drilled, err := decad.Cut(rounded, sc.tool(t, 20)).Do(t.Context())
 		require.NoError(t, err)
 		var outline *decad.EdgeQuery
 		named := 0
@@ -330,7 +329,7 @@ func TestFacetedRetainedBlendOpenChain(t *testing.T) {
 			outline = outline.Or(decad.EndpointAt(p), decad.EndpointAt(q))
 		}
 		require.Equal(t, 8, named)
-		out, err := decad.Fillet(t.Context(), drilled, outline.Exactly(named), units.Millimeters(0.5))
+		out, err := decad.Fillet(drilled, outline.Exactly(named), units.Millimeters(0.5)).Do(t.Context())
 		require.NoError(t, err)
 		require.True(t, out.IsSolid())
 	})

@@ -13,6 +13,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/meshplane"
+	"github.com/lestrrat-3d/decad/internal/opcommand"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/provenance"
@@ -25,7 +26,7 @@ import (
 // solidFromMeshScans is the pair-scan budget of the crossing audit SolidFromMesh runs.
 const solidFromMeshScans = 16_000_000
 
-// SolidFromMesh turns a closed [MeshBody] into a solid [Body] of d, so an imported
+// SolidFromMesh returns the command that turns a closed [MeshBody] into a solid [Body] of d, so an imported
 // or built mesh takes part in Booleans, mass properties, selection and Verify as a
 // body does (agent-docs/mesh-solid-design.md). The mesh is the solid: its vertices
 // are held exactly, so the body's boundary bound is zero and its volume is the
@@ -39,9 +40,36 @@ const solidFromMeshScans = 16_000_000
 // open, non-manifold or wound inward is ErrNotSolid, one with no positive volume is
 // ErrNotSolid, one with a crossing is ErrDegenerate, and one of more than 65,528
 // triangles, or whose audit exceeds its work ceiling, is ErrUnsupported. A nil
-// context, document or mesh is ErrDegenerate. A failure leaves d unchanged.
-func SolidFromMesh(ctx context.Context, d *Document, m *MeshBody) (result *Body, retErr error) {
-	defer func() { retErr = operationError(OperationSolidFromMesh, retErr) }()
+// context given to Do, a nil document or a nil mesh is ErrDegenerate. A failure leaves d unchanged.
+func SolidFromMesh(d *Document, m *MeshBody) *SolidFromMeshCommand {
+	c := &SolidFromMeshCommand{d: d, m: m}
+	if d == nil {
+		c.state.Record("d", errNilDocument)
+	}
+	return c
+}
+
+// SolidFromMeshCommand turns a closed mesh into a solid. Build it with [SolidFromMesh].
+type SolidFromMeshCommand struct {
+	state opcommand.State // consumed flag and first recorded fault
+	d     *Document       // stored as given
+	m     *MeshBody       // stored as given
+}
+
+// Do converts the mesh and registers the solid, or returns the error of the first gate that refuses. A second
+// call returns [ErrConsumed].
+func (c *SolidFromMeshCommand) Do(ctx context.Context) (*Body, error) {
+	return runCommand(ctx, &c.state, OperationSolidFromMesh, c.run)
+}
+
+func (c *SolidFromMeshCommand) run(ctx context.Context) (*Body, error) {
+	return solidFromMesh(ctx, c.d, c.m)
+}
+
+// solidFromMesh is SolidFromMesh's implementation, for the command and for a composite that registers the solid
+// as an intermediate. ctx is not nil, and the errors it returns carry no operation tag
+// (agent-docs/command-api-design.md §11).
+func solidFromMesh(ctx context.Context, d *Document, m *MeshBody) (*Body, error) {
 	body, err := solidFromMeshBody(ctx, d, m)
 	if err != nil {
 		return nil, err
@@ -56,7 +84,7 @@ func SolidFromMesh(ctx context.Context, d *Document, m *MeshBody) (result *Body,
 }
 
 // solidFromMeshBody proves m a solid and builds its Faceted body without registering it, for
-// SolidFromMesh and for an operation that commits the body as its own result.
+// solidFromMesh and for an operation that commits the body as its own result.
 func solidFromMeshBody(ctx context.Context, d *Document, m *MeshBody) (*Body, error) {
 	if ctx == nil || d == nil {
 		return nil, fmt.Errorf(`%w: a conversion needs a context and a document`, ErrDegenerate)

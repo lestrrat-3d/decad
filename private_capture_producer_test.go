@@ -21,7 +21,7 @@ func privateCaptureBox(t *testing.T, ctx context.Context, d *Document, x0, size,
 	s.Fix(rect.A)
 	_, err = s.Solve(ctx)
 	require.NoError(t, err)
-	b, err := Extrude(ctx, d, s, s.Profiles()[0], Distance{D: units.Millimeters(height), Dir: Along})
+	b, err := Extrude(d, s, s.Profiles()[0], Distance{D: units.Millimeters(height), Dir: Along}).Do(ctx)
 	require.NoError(t, err)
 	return b
 }
@@ -35,7 +35,7 @@ func TestPrivateConstructionFilletTakesDistinctProducer(t *testing.T) {
 	live := privateCaptureBox(t, t.Context(), d, 0, 20, 10)
 	ctx, capture := privateConstructionContext(t.Context())
 	tool := privateCaptureBox(t, ctx, d, 100, 10, 5)
-	rounded, err := Fillet(ctx, live, Edges(ParallelTo(r3.NewVec(0, 0, 1))), units.Millimeters(2))
+	rounded, err := Fillet(live, Edges(ParallelTo(r3.NewVec(0, 0, 1))), units.Millimeters(2)).Do(ctx)
 	require.NoError(t, err)
 	require.NotEqual(t, tool.n.Origin.Producer, rounded.n.Origin.Producer)
 	require.Equal(t, capture.base+1, rounded.n.Origin.Producer)
@@ -48,7 +48,7 @@ func TestPrivateConstructionChamferTakesDistinctProducer(t *testing.T) {
 	live := privateCaptureBox(t, t.Context(), d, 0, 20, 10)
 	ctx, capture := privateConstructionContext(t.Context())
 	tool := privateCaptureBox(t, ctx, d, 100, 10, 5)
-	cut, err := Chamfer(ctx, live, Edges(ParallelTo(r3.NewVec(0, 0, 1))), units.Millimeters(2))
+	cut, err := Chamfer(live, Edges(ParallelTo(r3.NewVec(0, 0, 1))), units.Millimeters(2)).Do(ctx)
 	require.NoError(t, err)
 	require.NotEqual(t, tool.n.Origin.Producer, cut.n.Origin.Producer)
 	require.Equal(t, capture.base+1, cut.n.Origin.Producer)

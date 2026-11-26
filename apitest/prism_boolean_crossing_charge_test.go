@@ -115,10 +115,10 @@ func TestPrismIntersectRotatedBoxBuildsAnalyticOctagon(t *testing.T) {
 	a := boxBody(t, doc, -10, -10, 10, 10, 10)
 	src := boxBody(t, doc, -10, -10, 10, 10, 10)
 	tr := zRotation(t, units.Degrees(45))
-	b, err := decad.Transform(t.Context(), src, tr)
+	b, err := decad.Transform(src, tr).Do(t.Context())
 	require.NoError(t, err)
 
-	got, err := decad.Intersect(t.Context(), a, b)
+	got, err := decad.Intersect(a, b).Do(t.Context())
 	require.NoError(t, err)
 	require.False(t, tookMeshPath(got))
 	require.Len(t, got.Faces(), 10, "an octagonal prism: 8 walls and 2 caps")
@@ -151,10 +151,10 @@ func TestPrismUnionRotatedToothBuildsAnalytic(t *testing.T) {
 	doc := decad.New()
 	hub := hubBody(t, doc, 20, 10)
 	src := boxBody(t, doc, 18, -1.5, 25, 1.5, 10)
-	tooth, err := decad.Transform(t.Context(), src, zRotation(t, units.Radians(math.Pi/3)))
+	tooth, err := decad.Transform(src, zRotation(t, units.Radians(math.Pi/3))).Do(t.Context())
 	require.NoError(t, err)
 
-	got, err := decad.Union(t.Context(), hub, tooth)
+	got, err := decad.Union(hub, tooth).Do(t.Context())
 	require.NoError(t, err)
 	require.False(t, tookMeshPath(got))
 	vol, err := got.Volume()
@@ -179,10 +179,10 @@ func TestPrismUnionToothOnHubCircleFallsBackAtTheTangentRoot(t *testing.T) {
 	doc := decad.New(decad.ExactOnly())
 	hub := hubBody(t, doc, 20, 10)
 	src := toothBody(t, doc, 20, 25, -0.1, 0.1, 10)
-	tooth, err := decad.Transform(t.Context(), src, zRotation(t, units.Radians(math.Pi/3)))
+	tooth, err := decad.Transform(src, zRotation(t, units.Radians(math.Pi/3))).Do(t.Context())
 	require.NoError(t, err)
 
-	_, err = decad.Union(t.Context(), hub, tooth)
+	_, err = decad.Union(hub, tooth).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.ErrorContains(t, err, "held facets come within the chord tolerance",
 		"the mesh path's own refusal, reached by falling back")

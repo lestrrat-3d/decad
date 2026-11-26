@@ -34,7 +34,7 @@ func capLoopSubsetBody(t *testing.T, draw func(s *sketch.Sketch)) *decad.Body {
 		}
 	}
 	require.NotNil(t, pr)
-	body, err := decad.Extrude(ctx, decad.New(), s, pr, decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
+	body, err := decad.Extrude(decad.New(), s, pr, decad.Distance{D: units.Millimeters(5), Dir: decad.Along}).Do(ctx)
 	require.NoError(t, err)
 	return body
 }
@@ -83,7 +83,7 @@ func TestChamferCapLoopSubset(t *testing.T) {
 			s.Fix(e)
 		})
 		sel := topEdges(topEdge{r3.Vec{}, r3.Vec{X: 1}}, topEdge{r3.Vec{}, r3.Vec{Y: 1}})
-		out, err := decad.Chamfer(t.Context(), body, sel, units.Millimeters(d))
+		out, err := decad.Chamfer(body, sel, units.Millimeters(d)).Do(t.Context())
 		require.NoError(t, err)
 		require.True(t, out.IsSolid())
 		// Two wedges of d*d/2 by their lengths, less the pyramid d^3/3 they share at the mitred corner.
@@ -105,7 +105,7 @@ func TestChamferCapLoopSubset(t *testing.T) {
 			s.Fix(e)
 		})
 		sel := topEdges(topEdge{r3.Vec{}, r3.Vec{X: 1}}, topEdge{r3.Vec{}, r3.Vec{Y: 1}}, topEdge{r3.Vec{X: 30, Y: 10}, r3.Vec{X: 1}})
-		out, err := decad.Chamfer(t.Context(), body, sel, units.Millimeters(d))
+		out, err := decad.Chamfer(body, sel, units.Millimeters(d)).Do(t.Context())
 		require.NoError(t, err)
 		require.True(t, out.IsSolid())
 		want := 30*10*5 - (30+10+30)*d*d/2 + 2*d*d*d/3
@@ -133,7 +133,7 @@ func TestChamferCapLoopSubset(t *testing.T) {
 		})
 		sel := topEdges(topEdge{r3.Vec{X: 2}, r3.Vec{X: 1}}, topEdge{r3.Vec{X: 30}, r3.Vec{Y: 1}},
 			topEdge{r3.Vec{Y: 10}, r3.Vec{X: 1}})
-		out, err := decad.Chamfer(t.Context(), body, sel, units.Millimeters(d))
+		out, err := decad.Chamfer(body, sel, units.Millimeters(d)).Do(t.Context())
 		require.NoError(t, err)
 		require.True(t, out.IsSolid())
 		before := volumeOf(t, body)
@@ -161,7 +161,7 @@ func TestChamferCapLoopSubset(t *testing.T) {
 		before := volumeOf(t, body)
 		sel := topEdges(topEdge{r3.Vec{}, r3.Vec{X: 1}}, topEdge{r3.Vec{Y: 10}, r3.Vec{X: 1}}).
 			Or(decad.EndpointAt(r3.Vec{X: 25, Z: 5}), decad.Circular())
-		out, err := decad.Chamfer(t.Context(), body, sel, units.Millimeters(d))
+		out, err := decad.Chamfer(body, sel, units.Millimeters(d)).Do(t.Context())
 		require.NoError(t, err)
 		require.True(t, out.IsSolid())
 		want := before - (2*25*d*d/2 + math.Pi*(5-d/3)*d*d/2)
@@ -183,7 +183,7 @@ func TestChamferCapLoopSubset(t *testing.T) {
 		})
 		sel := decad.Edges(decad.EndpointAt(r3.Vec{Z: 5}), decad.ParallelTo(r3.Vec{X: 1})).
 			Or(decad.EndpointAt(r3.Vec{}), decad.ParallelTo(r3.Vec{X: 1}))
-		out, err := decad.Chamfer(t.Context(), body, sel, units.Millimeters(d))
+		out, err := decad.Chamfer(body, sel, units.Millimeters(d)).Do(t.Context())
 		require.NoError(t, err)
 		require.True(t, out.IsSolid())
 		require.InDelta(t, 30*10*5-2*30*d*d/2, volumeOf(t, out), 1e-6)
@@ -203,7 +203,7 @@ func TestChamferCapLoopSubset(t *testing.T) {
 			}
 		})
 		before := volumeOf(t, body)
-		out, err := decad.Chamfer(t.Context(), body, topEdges(topEdge{r3.Vec{X: 30, Y: 10}, r3.Vec{X: 1}}), units.Millimeters(d))
+		out, err := decad.Chamfer(body, topEdges(topEdge{r3.Vec{X: 30, Y: 10}, r3.Vec{X: 1}}), units.Millimeters(d)).Do(t.Context())
 		require.NoError(t, err)
 		require.True(t, out.IsSolid())
 		// A 90 degree concave end stops the bevel on the next wall's plane, x = 10.
@@ -226,7 +226,7 @@ func TestChamferCapLoopSubset(t *testing.T) {
 		before := volumeOf(t, body)
 		// The bottom line ends at the arc's tangent junction, so the chamfer runs on round the arc and along the top
 		// line to the wall x = 0 (Pappus: the arc's wedge centroid lies d/3 inside its radius 5).
-		out, err := decad.Chamfer(t.Context(), body, topEdges(topEdge{r3.Vec{}, r3.Vec{X: 1}}), units.Millimeters(d))
+		out, err := decad.Chamfer(body, topEdges(topEdge{r3.Vec{}, r3.Vec{X: 1}}), units.Millimeters(d)).Do(t.Context())
 		require.NoError(t, err)
 		require.True(t, out.IsSolid())
 		// The result is a Cut by a faceted cutter, read within its volume bound.
@@ -286,7 +286,7 @@ func TestChamferCapLoopSubsetEnds(t *testing.T) {
 	cot := func(deg float64) float64 { return 1 / math.Tan(deg*math.Pi/180) }
 	chamfer := func(t *testing.T, body *decad.Body, sel *decad.EdgeQuery) (*decad.Body, error) {
 		t.Helper()
-		return decad.Chamfer(t.Context(), body, sel, units.Millimeters(d))
+		return decad.Chamfer(body, sel, units.Millimeters(d)).Do(t.Context())
 	}
 
 	for _, sx := range []float64{1, -1} {
@@ -606,7 +606,7 @@ func TestChamferCapLoopSubsetEnds(t *testing.T) {
 		t.Parallel()
 		const R, phi, sig, dc, kept = 13.2, 11.43, 60.0, 0.25, 0.01519
 		body, sel := arcIntoConcave(t, R, phi, 0)
-		out, err := decad.Chamfer(t.Context(), body, sel, units.Millimeters(dc))
+		out, err := decad.Chamfer(body, sel, units.Millimeters(dc)).Do(t.Context())
 		require.NoError(t, err)
 		want := 20*dc*dc/2 + sig*math.Pi/180*(R*dc*dc/2-dc*dc*dc/6) - kept
 		require.InDelta(t, volumeOf(t, body)-want, volumeOf(t, out), 0.06)
@@ -771,7 +771,7 @@ func TestChamferCapLoopSubsetEnds(t *testing.T) {
 			}
 		}
 		require.NotNil(t, pr)
-		body, err := decad.Extrude(ctx, decad.New(), s, pr, decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
+		body, err := decad.Extrude(decad.New(), s, pr, decad.Distance{D: units.Millimeters(5), Dir: decad.Along}).Do(ctx)
 		require.NoError(t, err)
 		out, err := chamfer(t, body, topEdges(topEdge{r3.Vec{X: 10, Y: 5}, r3.Vec{X: 1}}, topEdge{r3.Vec{X: 20, Y: 5}, r3.Vec{Y: 1}}))
 		require.NoError(t, err)

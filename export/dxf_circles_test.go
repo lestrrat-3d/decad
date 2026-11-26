@@ -196,7 +196,7 @@ func roundedPlate(t *testing.T) *decad.Body {
 	s.CreateArc(pt(5, 5), pt(0, 5), pt(5, 0))
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	plate, err := decad.Extrude(t.Context(), decad.New(), s, s.Profiles()[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	plate, err := decad.Extrude(decad.New(), s, s.Profiles()[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	return plate
 }

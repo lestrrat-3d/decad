@@ -18,7 +18,7 @@ func TestFacetedMassPropertiesUnionAndRefusals(t *testing.T) {
 	// Placed up to z = 8 so the analytic union's shared-axis gate declines
 	// the pair and the union is the faceted body this test measures.
 	upper := translated(t, boxBodyAtZ(t, doc, -2, -2, 2, 2, 0, 4), 0, 0, 8)
-	union, err := decad.Union(t.Context(), base, upper)
+	union, err := decad.Union(base, upper).Do(t.Context())
 	require.NoError(t, err)
 	mesh, err := union.Tessellate(t.Context(), units.Millimeters(1),
 		decad.WithVerification(decad.VerifyAll))
@@ -73,7 +73,7 @@ func TestFacetedMassPropertiesUnionAndRefusals(t *testing.T) {
 
 	shift, err := r3.Translation(r3.Vec{X: .1})
 	require.NoError(t, err)
-	placed, err := decad.Transform(t.Context(), union, shift)
+	placed, err := decad.Transform(union, shift).Do(t.Context())
 	require.NoError(t, err)
 	placedVolume, err := placed.Volume()
 	require.NoError(t, err)
@@ -126,7 +126,7 @@ func TestFacetedMassPropertiesLumpsAndVoid(t *testing.T) {
 		doc := decad.New()
 		a := boxBodyAtZ(t, doc, 0, 0, 10, 10, 0, 10)
 		b := boxBodyAtZ(t, doc, 20, 20, 30, 30, 0, 10)
-		union, err := decad.Union(t.Context(), a, b)
+		union, err := decad.Union(a, b).Do(t.Context())
 		require.NoError(t, err)
 		require.Len(t, union.Lumps(), 2)
 		got, err := union.MassProperties(t.Context(), density)
@@ -148,7 +148,7 @@ func TestFacetedMassPropertiesLumpsAndVoid(t *testing.T) {
 		doc := decad.New()
 		outer := boxBodyAtZ(t, doc, 0, 0, 20, 20, 0, 8)
 		tool := boxBodyAtZ(t, doc, 8, 8, 12, 12, 2, 4)
-		hollow, err := decad.Cut(t.Context(), outer, tool)
+		hollow, err := decad.Cut(outer, tool).Do(t.Context())
 		require.NoError(t, err)
 		got, err := hollow.MassProperties(t.Context(), density)
 		require.NoError(t, err)

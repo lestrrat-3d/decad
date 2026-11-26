@@ -634,17 +634,24 @@ const (
 // Trim cuts the receiver where it meets tool and returns the kept pieces as
 // one sheet body. The receiver and tool are consumed on the document's
 // uniform terms (core §6); a refusal consumes neither.
-func Trim(ctx context.Context, b *Body, tool *Body, side TrimSide) (*Body, error)
+func Trim(b *Body, tool *Body, side TrimSide) *TrimCommand
+func (c *TrimCommand) Do(ctx context.Context) (*Body, error)
 
 // Extend lengthens the receiver along the named edges' own carriers until
 // they meet tool, and returns the lengthened sheet.
-func Extend(ctx context.Context, b *Body, edges *EdgeQuery, tool *Body) (*Body, error)
+func Extend(b *Body, edges *EdgeQuery, tool *Body) *ExtendCommand
+func (c *ExtendCommand) Do(ctx context.Context) (*Body, error)
 
 // Split cuts target with tool and returns one body per piece, in a
 // deterministic order this evaluator states. Both operands are consumed on the
 // document's uniform terms, exactly as Cut consumes its two.
-func Split(ctx context.Context, target, tool *Body) ([]*Body, error)
+func Split(target, tool *Body) *SplitCommand
+func (c *SplitCommand) Do(ctx context.Context) ([]*Body, error)
 ```
+
+Each is a command with no method (`agent-docs/command-api-design.md` §12). A constructor records a nil receiver (a
+nil target for `Split`) and `Extend` copies its edge query at the call. A refusal in this document names the call by
+its constructor, and every error `Do` returns carries the command's own `OperationKind`.
 
 `Extend` names the edges to lengthen through the existing selector vocabulary
 (core §9), never by index — core §3's invariant 3 admits no other shape. Its

@@ -45,8 +45,8 @@ func measureCases(b *testing.B) []measureCase {
 	// A 40x24x12 box with its four vertical edges rounded at radius 6: the
 	// footprint loses (4-pi)r^2 at each corner and the wall runs the rounded
 	// perimeter 2(40+24) - 8r + 2*pi*r.
-	fillet := must(decad.Fillet(b.Context(), benchBox(),
-		decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1))), units.Millimeters(6)))
+	fillet := must(decad.Fillet(benchBox(),
+		decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1))), units.Millimeters(6)).Do(b.Context()))
 	footprint := 40*24 - (4-math.Pi)*36
 	perimeter := 2*(40+24) - 8*6 + 2*math.Pi*6
 	return []measureCase{

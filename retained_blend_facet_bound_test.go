@@ -131,7 +131,7 @@ func (sc *stripScene) rect(t testing.TB, x0, y0, x1, y1, h float64) *Body {
 	s.Fix(r.A)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	b, err := Extrude(t.Context(), sc.doc, s, s.Profiles()[0], Distance{D: units.Millimeters(h), Dir: Along})
+	b, err := Extrude(sc.doc, s, s.Profiles()[0], Distance{D: units.Millimeters(h), Dir: Along}).Do(t.Context())
 	require.NoError(t, err)
 	return b
 }
@@ -146,7 +146,7 @@ func (sc *stripScene) disc(t testing.TB, cx, r, h float64, dir Direction) *Body 
 	s.CreateCircle(c, r)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	b, err := Extrude(t.Context(), sc.doc, s, s.Profiles()[0], Distance{D: units.Millimeters(h), Dir: dir})
+	b, err := Extrude(sc.doc, s, s.Profiles()[0], Distance{D: units.Millimeters(h), Dir: dir}).Do(t.Context())
 	require.NoError(t, err)
 	return b
 }
@@ -155,7 +155,7 @@ func moved(t testing.TB, b *Body, d r3.Vec) *Body {
 	t.Helper()
 	tr, err := r3.Translation(d)
 	require.NoError(t, err)
-	out, err := Transform(t.Context(), b, tr)
+	out, err := Transform(b, tr).Do(t.Context())
 	require.NoError(t, err)
 	return out
 }
@@ -217,11 +217,10 @@ func TestRetainedBlendStripFacetBounds(t *testing.T) {
 			t.Parallel()
 			const top = 30.001
 			sc := newStripScene()
-			joined, err := Union(t.Context(), sc.rect(t, 0, 0, 40, 20, 20),
-				moved(t, sc.disc(t, 20, 3, 10.5, Against), r3.Vec{Z: top}))
+			joined, err := Union(sc.rect(t, 0, 0, 40, 20, 20), moved(t, sc.disc(t, 20, 3, 10.5, Against), r3.Vec{Z: top})).Do(t.Context())
 			require.NoError(t, err)
 			fresh := freshFaces(joined)
-			out, err := Fillet(t.Context(), joined, circularAt(t, joined, top, false), units.Millimeters(r))
+			out, err := Fillet(joined, circularAt(t, joined, top, false), units.Millimeters(r)).Do(t.Context())
 			require.NoError(t, err)
 			requireFacetBoundsHold(t, out, fresh(out),
 				stripProfile{o: r3.NewVec(20, 10, 0), rc: 3 - r, zc: top - r, r: r, span: math.Pi / 2})
@@ -237,11 +236,10 @@ func TestRetainedBlendStripFacetBounds(t *testing.T) {
 		t.Parallel()
 		const top, R, d = 30.001, 9.0, 0.003
 		sc := newStripScene()
-		joined, err := Union(t.Context(), sc.rect(t, 0, 0, 40, 20, 20),
-			moved(t, sc.disc(t, 20, R, 10.5, Against), r3.Vec{Z: top}))
+		joined, err := Union(sc.rect(t, 0, 0, 40, 20, 20), moved(t, sc.disc(t, 20, R, 10.5, Against), r3.Vec{Z: top})).Do(t.Context())
 		require.NoError(t, err)
 		fresh := freshFaces(joined)
-		out, err := Chamfer(t.Context(), joined, circularAt(t, joined, top, false), units.Millimeters(d))
+		out, err := Chamfer(joined, circularAt(t, joined, top, false), units.Millimeters(d)).Do(t.Context())
 		require.NoError(t, err)
 		requireFacetBoundsHold(t, out, fresh(out),
 			stripProfile{o: r3.NewVec(20, 10, 0), seg: true, p0: [2]float64{R - d, top}, p1: [2]float64{R, top - d}})
@@ -254,14 +252,13 @@ func TestRetainedBlendStripFacetBounds(t *testing.T) {
 		const r, q, R = 2.5, 0.4, 3.0
 		gx := R - (R-r)*math.Sqrt(1-q*q)
 		sc := newStripScene()
-		box, err := Fillet(t.Context(), sc.rect(t, 0, 0, 40, 20, 20),
-			Edges(ParallelTo(r3.NewVec(0, 0, 1)), EndpointAt(r3.Vec{})).Exactly(1), units.Millimeters(R))
+		box, err := Fillet(sc.rect(t, 0, 0, 40, 20, 20),
+			Edges(ParallelTo(r3.NewVec(0, 0, 1)), EndpointAt(r3.Vec{})).Exactly(1), units.Millimeters(R)).Do(t.Context())
 		require.NoError(t, err)
-		trimmed, err := Cut(t.Context(), box, moved(t, sc.rect(t, -5, -5, gx, 25, 30), r3.Vec{Z: -5}))
+		trimmed, err := Cut(box, moved(t, sc.rect(t, -5, -5, gx, 25, 30), r3.Vec{Z: -5})).Do(t.Context())
 		require.NoError(t, err)
 		fresh := freshFaces(trimmed)
-		out, err := Fillet(t.Context(), trimmed, circularAt(t, trimmed, 20, true), units.Millimeters(r),
-			WithTangentChain())
+		out, err := Fillet(trimmed, circularAt(t, trimmed, 20, true), units.Millimeters(r)).TangentChain().Do(t.Context())
 		require.NoError(t, err)
 		made := fresh(out)
 		corner := func(f *Face) bool {
@@ -280,11 +277,10 @@ func TestRetainedBlendStripFacetBounds(t *testing.T) {
 		const bore, d, c = 4.0, 4.0, 0.2
 		h := bore * math.Sqrt(1-c*c)
 		sc := newStripScene()
-		bored, err := Cut(t.Context(), sc.rect(t, 0, 0, 40, 20, 20),
-			moved(t, sc.disc(t, h, bore, 60, Along), r3.Vec{Z: -30 + 0.001}))
+		bored, err := Cut(sc.rect(t, 0, 0, 40, 20, 20), moved(t, sc.disc(t, h, bore, 60, Along), r3.Vec{Z: -30 + 0.001})).Do(t.Context())
 		require.NoError(t, err)
 		fresh := freshFaces(bored)
-		out, err := Fillet(t.Context(), bored, circularAt(t, bored, 20, true), units.Millimeters(d))
+		out, err := Fillet(bored, circularAt(t, bored, 20, true), units.Millimeters(d)).Do(t.Context())
 		require.NoError(t, err)
 		requireFacetBoundsHold(t, out, fresh(out), stripProfile{o: r3.NewVec(h, 10, 0), rc: bore + d, zc: 20 - d, r: d,
 			a0: math.Pi / 2, span: math.Pi / 2})
@@ -298,11 +294,10 @@ func TestRetainedBlendStripFacetBounds(t *testing.T) {
 		const bore, d, c = 4.0, 2.0, 0.4
 		h := bore * math.Sqrt(1-c*c)
 		sc := newStripScene()
-		bored, err := Cut(t.Context(), sc.rect(t, 0, 0, 40, 20, 20),
-			moved(t, sc.disc(t, h, bore, 60, Along), r3.Vec{Z: -30 + 0.001}))
+		bored, err := Cut(sc.rect(t, 0, 0, 40, 20, 20), moved(t, sc.disc(t, h, bore, 60, Along), r3.Vec{Z: -30 + 0.001})).Do(t.Context())
 		require.NoError(t, err)
 		fresh := freshFaces(bored)
-		out, err := Chamfer(t.Context(), bored, circularAt(t, bored, 20, true), units.Millimeters(d))
+		out, err := Chamfer(bored, circularAt(t, bored, 20, true), units.Millimeters(d)).Do(t.Context())
 		require.NoError(t, err)
 		requireFacetBoundsHold(t, out, fresh(out), stripProfile{o: r3.NewVec(h, 10, 0), seg: true,
 			p0: [2]float64{bore + d, 20}, p1: [2]float64{bore, 20 - d}})
@@ -316,14 +311,13 @@ func TestRetainedBlendStripFacetBounds(t *testing.T) {
 		const d, q, R = 2.5, 0.2, 3.0
 		gx := R - (R-d)*math.Sqrt(1-q*q)
 		sc := newStripScene()
-		box, err := Fillet(t.Context(), sc.rect(t, 0, 0, 40, 20, 20),
-			Edges(ParallelTo(r3.NewVec(0, 0, 1)), EndpointAt(r3.Vec{})).Exactly(1), units.Millimeters(R))
+		box, err := Fillet(sc.rect(t, 0, 0, 40, 20, 20),
+			Edges(ParallelTo(r3.NewVec(0, 0, 1)), EndpointAt(r3.Vec{})).Exactly(1), units.Millimeters(R)).Do(t.Context())
 		require.NoError(t, err)
-		trimmed, err := Cut(t.Context(), box, moved(t, sc.rect(t, -5, -5, gx, 25, 30), r3.Vec{Z: -5}))
+		trimmed, err := Cut(box, moved(t, sc.rect(t, -5, -5, gx, 25, 30), r3.Vec{Z: -5})).Do(t.Context())
 		require.NoError(t, err)
 		fresh := freshFaces(trimmed)
-		out, err := Chamfer(t.Context(), trimmed, circularAt(t, trimmed, 20, true), units.Millimeters(d),
-			WithTangentChain())
+		out, err := Chamfer(trimmed, circularAt(t, trimmed, 20, true), units.Millimeters(d)).TangentChain().Do(t.Context())
 		require.NoError(t, err)
 		made := fresh(out)
 		corner := func(f *Face) bool {
@@ -349,13 +343,13 @@ func TestRetainedBlendStripFacetBounds(t *testing.T) {
 		s.CreateArc(s.CreatePoint(0, 0), end, o)
 		_, err = s.Solve(t.Context())
 		require.NoError(t, err)
-		ball, err := Revolve(t.Context(), sc.doc, s, s.Profiles()[0],
-			SketchLine{Start: Point2{U: 0, V: 0}, End: Point2{U: 1, V: 0}}, FullRevolution{})
+		ball, err := Revolve(sc.doc, s, s.Profiles()[0],
+			SketchLine{Start: Point2{U: 0, V: 0}, End: Point2{U: 1, V: 0}}, FullRevolution{}).Do(t.Context())
 		require.NoError(t, err)
-		capped, err := Cut(t.Context(), ball, moved(t, sc.rect(t, -100, -100, 100, 100, 20), r3.Vec{Z: cutZ}))
+		capped, err := Cut(ball, moved(t, sc.rect(t, -100, -100, 100, 100, 20), r3.Vec{Z: cutZ})).Do(t.Context())
 		require.NoError(t, err)
 		fresh := freshFaces(capped)
-		out, err := Fillet(t.Context(), capped, circularAt(t, capped, cutZ, false), units.Millimeters(r))
+		out, err := Fillet(capped, circularAt(t, capped, cutZ, false), units.Millimeters(r)).Do(t.Context())
 		require.NoError(t, err)
 		zc := cutZ - r
 		rc := math.Sqrt((R-r)*(R-r) - zc*zc)
@@ -378,14 +372,14 @@ func TestRetainedBlendStripFacetBounds(t *testing.T) {
 		s.CreateCircle(c, 4)
 		_, err = s.Solve(t.Context())
 		require.NoError(t, err)
-		tool, err := Extrude(t.Context(), sc.doc, s, s.Profiles()[0], Symmetric{D: units.Millimeters(30)})
+		tool, err := Extrude(sc.doc, s, s.Profiles()[0], Symmetric{D: units.Millimeters(30)}).Do(t.Context())
 		require.NoError(t, err)
-		grooved, err := Cut(t.Context(), sc.rect(t, 0, 0, 40, 20, 20), moved(t, tool, r3.Vec{X: 20}))
+		grooved, err := Cut(sc.rect(t, 0, 0, 40, 20, 20), moved(t, tool, r3.Vec{X: 20})).Do(t.Context())
 		require.NoError(t, err)
 		fresh := freshFaces(grooved)
 		k := 10 - math.Sqrt(16-4)
-		out, err := Fillet(t.Context(), grooved, lineEdgeAt(t, grooved, r3.NewVec(0, k, 20), r3.NewVec(1, 0, 0)),
-			units.Millimeters(1))
+		out, err := Fillet(grooved, lineEdgeAt(t, grooved, r3.NewVec(0, k, 20), r3.NewVec(1, 0, 0)),
+			units.Millimeters(1)).Do(t.Context())
 		require.NoError(t, err)
 		requireFacetBoundsHold(t, out, fresh(out), stripProfile{o: r3.NewVec(0, 6, 19), r: 1, line: r3.NewVec(1, 0, 0)})
 	})
@@ -395,12 +389,12 @@ func TestRetainedBlendStripFacetBounds(t *testing.T) {
 		b := sc.rect(t, 0, 0, 40, 20, 20)
 		for _, x := range []float64{14, 21} {
 			var err error
-			b, err = Cut(t.Context(), b, moved(t, sc.disc(t, x, 4, 40, Along), r3.Vec{Z: -10 + 0.001}))
+			b, err = Cut(b, moved(t, sc.disc(t, x, 4, 40, Along), r3.Vec{Z: -10 + 0.001})).Do(t.Context())
 			require.NoError(t, err)
 		}
 		fresh := freshFaces(b)
 		ridge := r3.NewVec(17.5, 10-math.Sqrt(16-3.5*3.5), 20)
-		out, err := Fillet(t.Context(), b, lineEdgeAt(t, b, ridge, r3.NewVec(0, 0, 1)), units.Millimeters(1))
+		out, err := Fillet(b, lineEdgeAt(t, b, ridge, r3.NewVec(0, 0, 1)), units.Millimeters(1)).Do(t.Context())
 		require.NoError(t, err)
 		requireFacetBoundsHold(t, out, fresh(out),
 			stripProfile{o: r3.NewVec(17.5, 10-math.Sqrt(25-3.5*3.5), 0), r: 1, line: r3.NewVec(0, 0, 1)})
@@ -422,12 +416,12 @@ func TestRetainedBlendStripFacetBounds(t *testing.T) {
 		}
 		m, err := NewMeshBody(t.Context(), v, tris)
 		require.NoError(t, err)
-		box, err := SolidFromMesh(t.Context(), New(), m)
+		box, err := SolidFromMesh(New(), m).Do(t.Context())
 		require.NoError(t, err)
 		corner := r3.NewVec(0, 0, 10)
 		three := Edges(EndpointAt(corner), ParallelTo(r3.NewVec(1, 0, 0))).
 			Or(EndpointAt(corner), ParallelTo(r3.NewVec(0, 1, 0))).Or(EndpointAt(corner), ParallelTo(r3.NewVec(0, 0, 1)))
-		out, err := Fillet(t.Context(), box, three, units.Millimeters(r))
+		out, err := Fillet(box, three, units.Millimeters(r)).Do(t.Context())
 		require.NoError(t, err)
 		centre := r3.NewVec(r, r, 10-r)
 		octant := func(f *Face) bool {
@@ -444,8 +438,7 @@ func BenchmarkRetainedBlendHighColumnChamfer(b *testing.B) {
 	for range b.N {
 		b.StopTimer()
 		sc := newStripScene()
-		joined, err := Union(b.Context(), sc.rect(b, 0, 0, 40, 20, 20),
-			moved(b, sc.disc(b, 20, radius, 10.5, Against), r3.Vec{Z: top}))
+		joined, err := Union(sc.rect(b, 0, 0, 40, 20, 20), moved(b, sc.disc(b, 20, radius, 10.5, Against), r3.Vec{Z: top})).Do(b.Context())
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -456,7 +449,7 @@ func BenchmarkRetainedBlendHighColumnChamfer(b *testing.B) {
 		selected := circularAt(b, joined, top, false)
 
 		b.StartTimer()
-		out, err := Chamfer(b.Context(), joined, selected, units.Millimeters(distance))
+		out, err := Chamfer(joined, selected, units.Millimeters(distance)).Do(b.Context())
 		b.StopTimer()
 		if err != nil {
 			b.Fatal(err)
@@ -588,11 +581,10 @@ func TestRetainedBlendStripPatchCovered(t *testing.T) {
 		const bore, d, c = 4.0, 4.0, 0.2
 		h := bore * math.Sqrt(1-c*c)
 		sc := newStripScene()
-		bored, err := Cut(t.Context(), sc.rect(t, 0, 0, 40, 20, 20),
-			moved(t, sc.disc(t, h, bore, 60, Along), r3.Vec{Z: -30 + 0.001}))
+		bored, err := Cut(sc.rect(t, 0, 0, 40, 20, 20), moved(t, sc.disc(t, h, bore, 60, Along), r3.Vec{Z: -30 + 0.001})).Do(t.Context())
 		require.NoError(t, err)
 		fresh := freshFaces(bored)
-		out, err := Fillet(t.Context(), bored, circularAt(t, bored, 20, true), units.Millimeters(d))
+		out, err := Fillet(bored, circularAt(t, bored, 20, true), units.Millimeters(d)).Do(t.Context())
 		require.NoError(t, err)
 		pts := torusPatch(r3.NewVec(h, 10, 0), bore+d, 20-d, d, math.Pi/2, math.Pi/2, 48, 1200, 0,
 			func(p r3.Vec) bool { return p.X > 0 })
@@ -607,14 +599,13 @@ func TestRetainedBlendStripPatchCovered(t *testing.T) {
 		const r, q, R = 2.5, 0.4, 3.0
 		gx := R - (R-r)*math.Sqrt(1-q*q)
 		sc := newStripScene()
-		box, err := Fillet(t.Context(), sc.rect(t, 0, 0, 40, 20, 20),
-			Edges(ParallelTo(r3.NewVec(0, 0, 1)), EndpointAt(r3.Vec{})).Exactly(1), units.Millimeters(R))
+		box, err := Fillet(sc.rect(t, 0, 0, 40, 20, 20),
+			Edges(ParallelTo(r3.NewVec(0, 0, 1)), EndpointAt(r3.Vec{})).Exactly(1), units.Millimeters(R)).Do(t.Context())
 		require.NoError(t, err)
-		trimmed, err := Cut(t.Context(), box, moved(t, sc.rect(t, -5, -5, gx, 25, 30), r3.Vec{Z: -5}))
+		trimmed, err := Cut(box, moved(t, sc.rect(t, -5, -5, gx, 25, 30), r3.Vec{Z: -5})).Do(t.Context())
 		require.NoError(t, err)
 		fresh := freshFaces(trimmed)
-		out, err := Fillet(t.Context(), trimmed, circularAt(t, trimmed, 20, true), units.Millimeters(r),
-			WithTangentChain())
+		out, err := Fillet(trimmed, circularAt(t, trimmed, 20, true), units.Millimeters(r)).TangentChain().Do(t.Context())
 		require.NoError(t, err)
 		made := fresh(out)
 		corner := func(f *Face) bool {
@@ -724,10 +715,10 @@ func TestRetainedBlendKeywayCuspBounds(t *testing.T) {
 			s.Fix(rect.C)
 			_, err = s.Solve(t.Context())
 			require.NoError(t, err)
-			shaft, err := Revolve(t.Context(), sc.doc, s, s.Profiles()[0],
-				SketchLine{Start: planePoint{}, End: planePoint{U: 1}}, FullRevolution{})
+			shaft, err := Revolve(sc.doc, s, s.Profiles()[0],
+				SketchLine{Start: planePoint{}, End: planePoint{U: 1}}, FullRevolution{}).Do(t.Context())
 			require.NoError(t, err)
-			keyway, err := Cut(t.Context(), shaft, moved(t, sc.rect(t, x0, -3, 90, 3, 6), r3.Vec{Z: 6.5}))
+			keyway, err := Cut(shaft, moved(t, sc.rect(t, x0, -3, 90, 3, 6), r3.Vec{Z: 6.5})).Do(t.Context())
 			require.NoError(t, err)
 			fresh := freshFaces(keyway)
 			k := r3.NewVec(x0, 3, math.Sqrt(91))
@@ -737,8 +728,8 @@ func TestRetainedBlendKeywayCuspBounds(t *testing.T) {
 					at = p
 				}
 			}
-			out, err := Fillet(t.Context(), keyway, Edges(EndpointAt(at), ParallelTo(r3.NewVec(1, 0, 0))).Exactly(1),
-				units.Millimeters(r))
+			out, err := Fillet(keyway, Edges(EndpointAt(at), ParallelTo(r3.NewVec(1, 0, 0))).Exactly(1),
+				units.Millimeters(r)).Do(t.Context())
 			require.NoError(t, err)
 			q := newKeywayCusp(r)
 			blend := fresh(out)

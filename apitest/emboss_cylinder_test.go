@@ -61,8 +61,8 @@ func TestEmbossRaisesAReliefOnARod(t *testing.T) {
 	doc := decad.New()
 	rod := circleBodyAtZ(t, doc, 0, R, 0, L)
 	s, profiles := tangentSketch(t, R, L/2, halfY, halfZ)
-	out, err := decad.Emboss(t.Context(), rod, s, profiles, decad.Faces(decad.Cylindrical()),
-		decad.EmbossRaised, units.Millimeters(h))
+	out, err := decad.Emboss(rod, s, profiles, decad.Faces(decad.Cylindrical()),
+		decad.EmbossRaised, units.Millimeters(h)).Do(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, []*decad.Body{out}, doc.Bodies())
 	// The relief stands from the rod's wall, x = √(R² − y²), up to the plane x = R + h, over a
@@ -92,8 +92,8 @@ func TestEmbossEngravesIntoARod(t *testing.T) {
 	const R, L, h, halfY, halfZ = 10.0, 16.0, 2.0, 3.0, 3.0
 	rod := circleBodyAtZ(t, decad.New(), 0, R, 0, L)
 	s, profiles := tangentSketchAt(t, R, math.Pi/4, L/2, halfY, halfZ)
-	out, err := decad.Emboss(t.Context(), rod, s, profiles, decad.Faces(decad.Cylindrical()),
-		decad.EmbossEngraved, units.Millimeters(h))
+	out, err := decad.Emboss(rod, s, profiles, decad.Faces(decad.Cylindrical()),
+		decad.EmbossEngraved, units.Millimeters(h)).Do(t.Context())
 	require.NoError(t, err)
 	// The engraving is cut h deep from the tangent plane: over the width the wall is below the
 	// plane, so what is removed is the wall's x above the floor R − h.
@@ -108,14 +108,14 @@ func TestEmbossRaisesAReliefInABore(t *testing.T) {
 	const Rb, h, halfY, halfZ = 8.0, 3.0, 3.0, 2.0
 	doc := decad.New()
 	block := boxBody(t, doc, -20, -20, 20, 20, 10)
-	part, err := decad.Cut(t.Context(), block, circleBodyAtZ(t, doc, 0, Rb, -1, 12))
+	part, err := decad.Cut(block, circleBodyAtZ(t, doc, 0, Rb, -1, 12)).Do(t.Context())
 	require.NoError(t, err)
 	// The bore's wall looks toward the axis, so a relief on the plane tangent at x = 8 grows
 	// into the bore, toward −x, from the wall x = √(Rb² − y²) to the plane's x = Rb − h. The sketch
 	// plane has its normal along +X, so the relief is on its outward-from-the-material side.
 	s, profiles := tangentSketch(t, Rb, 5, halfY, halfZ)
-	out, err := decad.Emboss(t.Context(), part, s, profiles, decad.Faces(decad.Cylindrical()),
-		decad.EmbossRaised, units.Millimeters(h))
+	out, err := decad.Emboss(part, s, profiles, decad.Faces(decad.Cylindrical()),
+		decad.EmbossRaised, units.Millimeters(h)).Do(t.Context())
 	require.NoError(t, err)
 	added := 2 * halfZ * chordWeightedFlat(halfY, func(y float64) float64 { return math.Sqrt(Rb*Rb-y*y) - (Rb - h) })
 	volume, err := out.Volume()
@@ -128,14 +128,18 @@ func TestEmbossOnACylinderRefusals(t *testing.T) {
 	doc := decad.New()
 	rod := circleBodyAtZ(t, doc, 0, 10, 0, 16)
 	face := decad.Faces(decad.Cylindrical())
-	emboss := func(at, halfY float64, opts ...decad.EmbossOption) error {
+	emboss := func(at, halfY float64, rim ...units.Value) error {
 		s, profiles := tangentSketch(t, at, 8, halfY, 3)
-		_, err := decad.Emboss(t.Context(), rod, s, profiles, face, decad.EmbossRaised, units.Millimeters(3), opts...)
+		cmd := decad.Emboss(rod, s, profiles, face, decad.EmbossRaised, units.Millimeters(3))
+		for _, r := range rim {
+			cmd.RimFillet(r)
+		}
+		_, err := cmd.Do(t.Context())
 		return err
 	}
 	require.ErrorIs(t, emboss(9, 3), decad.ErrDegenerate, "a plane inside the rod is not tangent")
 	require.ErrorIs(t, emboss(11, 3), decad.ErrDegenerate, "a plane off the rod is not tangent")
 	require.ErrorIs(t, emboss(10, 11), decad.ErrDegenerate, "a relief as wide as the rod")
-	require.ErrorIs(t, emboss(10, 3, decad.WithEmbossRimFillet(units.Millimeters(0.5))), decad.ErrUnsupported)
+	require.ErrorIs(t, emboss(10, 3, units.Millimeters(0.5)), decad.ErrUnsupported)
 	require.Equal(t, []*decad.Body{rod}, doc.Bodies(), "every refusal leaves the rod live")
 }

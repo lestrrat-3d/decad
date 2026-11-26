@@ -17,9 +17,9 @@ func hingeAndSlider(t *testing.T) (*parts.Set, *decad.Document) {
 	t.Helper()
 	doc := decad.New()
 	base := block(t, doc, 0, 0, 40, 20, 0, 10)
-	base, err := decad.Cut(t.Context(), base, cylinder(t, doc, 10, 3.2, -1, 12))
+	base, err := decad.Cut(base, cylinder(t, doc, 10, 3.2, -1, 12)).Do(t.Context())
 	require.NoError(t, err)
-	base, err = decad.Cut(t.Context(), base, block(t, doc, 27.8, 4, 32.2, 16, -1, 12))
+	base, err = decad.Cut(base, block(t, doc, 27.8, 4, 32.2, 16, -1, 12)).Do(t.Context())
 	require.NoError(t, err)
 	s := parts.NewSet(doc)
 	mustAdd(t, s,

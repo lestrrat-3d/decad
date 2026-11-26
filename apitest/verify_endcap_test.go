@@ -27,14 +27,14 @@ func xScrew(t *testing.T, doc *decad.Document, x0, cy, cz float64) *decad.Body {
 	s.CreateCircle(c, 1)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(4), Dir: decad.Along})
+	body, err := decad.Extrude(doc, s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(4), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	box, err := body.Bounds()
 	require.NoError(t, err)
 	move, err := r3.Translation(r3.Vec{X: x0 - box.Min.X, Y: cy, Z: cz})
 	require.NoError(t, err)
-	placed, err := decad.Transform(t.Context(), body, move)
+	placed, err := decad.Transform(body, move).Do(t.Context())
 	require.NoError(t, err)
 	return placed
 }

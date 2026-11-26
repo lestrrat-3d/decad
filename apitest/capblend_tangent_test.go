@@ -30,15 +30,15 @@ func TestTangentJoinedOffsetsBuildBothFeatures(t *testing.T) {
 				s.Fix(rect.A)
 				_, err = s.Solve(t.Context())
 				require.NoError(t, err)
-				box, err := decad.Extrude(t.Context(), decad.New(), s, s.Profiles()[0], decad.Distance{D: units.Millimeters(height), Dir: decad.Along})
+				box, err := decad.Extrude(decad.New(), s, s.Profiles()[0], decad.Distance{D: units.Millimeters(height), Dir: decad.Along}).Do(t.Context())
 				require.NoError(t, err)
-				rounded, err := decad.Fillet(t.Context(), box, decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1))), units.Millimeters(radius))
+				rounded, err := decad.Fillet(box, decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1))), units.Millimeters(radius)).Do(t.Context())
 				require.NoError(t, err)
 				return rounded
 			}
 
 			rounded := roundedBox()
-			chamfered, err := decad.Chamfer(t.Context(), rounded, capLoopEdges(rounded), units.Millimeters(setback))
+			chamfered, err := decad.Chamfer(rounded, capLoopEdges(rounded), units.Millimeters(setback)).Do(t.Context())
 			require.NoError(t, err)
 			requireManifold(t, chamfered)
 			chamferVolume, err := chamfered.Volume()
@@ -47,7 +47,7 @@ func TestTangentJoinedOffsetsBuildBothFeatures(t *testing.T) {
 			require.InDelta(t, wantChamfer, chamferVolume.Value.Mag(), 1e-6)
 
 			rounded = roundedBox()
-			shelled, err := decad.Shell(t.Context(), rounded, topCap(rounded), units.Millimeters(setback))
+			shelled, err := decad.Shell(rounded, topCap(rounded), units.Millimeters(setback)).Do(t.Context())
 			require.NoError(t, err)
 			requireManifold(t, shelled)
 			shellVolume, err := shelled.Volume()
@@ -71,11 +71,11 @@ func TestTangentJoinedSlotChamferAtOffsetOrigin(t *testing.T) {
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	require.Len(t, s.Profiles(), 1)
-	body, err := decad.Extrude(t.Context(), decad.New(), s, s.Profiles()[0], decad.Distance{D: units.Millimeters(height), Dir: decad.Along})
+	body, err := decad.Extrude(decad.New(), s, s.Profiles()[0], decad.Distance{D: units.Millimeters(height), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 
 	for _, setback := range []float64{0.505, 1.005} {
-		chamfered, err := decad.Chamfer(t.Context(), body, capLoopEdges(body), units.Millimeters(setback))
+		chamfered, err := decad.Chamfer(body, capLoopEdges(body), units.Millimeters(setback)).Do(t.Context())
 		require.NoError(t, err)
 		requireManifold(t, chamfered)
 		volume, err := chamfered.Volume()
@@ -87,7 +87,7 @@ func TestTangentJoinedSlotChamferAtOffsetOrigin(t *testing.T) {
 		// A feature consumes its receiver. Rebuild from the still-live sketch
 		// before the next setback.
 		if setback != 1.005 {
-			body, err = decad.Extrude(t.Context(), decad.New(), s, s.Profiles()[0], decad.Distance{D: units.Millimeters(height), Dir: decad.Along})
+			body, err = decad.Extrude(decad.New(), s, s.Profiles()[0], decad.Distance{D: units.Millimeters(height), Dir: decad.Along}).Do(t.Context())
 			require.NoError(t, err)
 		}
 	}
@@ -121,7 +121,7 @@ func TestTangentJoinedRotatedSlotChamfer(t *testing.T) {
 			_, err = s.Solve(t.Context())
 			require.NoError(t, err)
 			require.Len(t, s.Profiles(), 1)
-			body, err := decad.Extrude(t.Context(), decad.New(), s, s.Profiles()[0], decad.Distance{D: units.Millimeters(height), Dir: decad.Along})
+			body, err := decad.Extrude(decad.New(), s, s.Profiles()[0], decad.Distance{D: units.Millimeters(height), Dir: decad.Along}).Do(t.Context())
 			require.NoError(t, err)
 			for _, v := range body.Vertices() {
 				p := v.Position().Value
@@ -131,7 +131,7 @@ func TestTangentJoinedRotatedSlotChamfer(t *testing.T) {
 				}
 			}
 
-			chamfered, err := decad.Chamfer(t.Context(), body, capLoopEdges(body), units.Millimeters(setback))
+			chamfered, err := decad.Chamfer(body, capLoopEdges(body), units.Millimeters(setback)).Do(t.Context())
 			require.NoError(t, err)
 			requireManifold(t, chamfered)
 			volume, err := chamfered.Volume()
@@ -180,7 +180,7 @@ func TestCapLoopChamferRefusesNearTangentCorner(t *testing.T) {
 		_, err := s.Solve(t.Context())
 		require.NoError(t, err)
 		require.Len(t, s.Profiles(), 1)
-		body, err := decad.Extrude(t.Context(), decad.New(), s, s.Profiles()[0], decad.Distance{D: units.Millimeters(height), Dir: decad.Along})
+		body, err := decad.Extrude(decad.New(), s, s.Profiles()[0], decad.Distance{D: units.Millimeters(height), Dir: decad.Along}).Do(t.Context())
 		require.NoError(t, err)
 		return body
 	}
@@ -209,7 +209,7 @@ func TestCapLoopChamferRefusesNearTangentCorner(t *testing.T) {
 	}
 	requireRefusal := func(t *testing.T, body *decad.Body, corner string) {
 		t.Helper()
-		_, err := decad.Chamfer(t.Context(), body, capLoopEdges(body), units.Millimeters(0.5))
+		_, err := decad.Chamfer(body, capLoopEdges(body), units.Millimeters(0.5)).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.NotErrorIs(t, err, decad.ErrNotFinite)
 		require.ErrorContains(t, err, `corner at `+corner)
@@ -222,7 +222,7 @@ func TestCapLoopChamferRefusesNearTangentCorner(t *testing.T) {
 	t.Run("kink 2e-9 from 0.9π", func(t *testing.T) {
 		t.Parallel()
 		body := kinked(t, 0.9*math.Pi, 2e-9)
-		_, err := decad.Chamfer(t.Context(), body, capLoopEdges(body), units.Millimeters(0.5))
+		_, err := decad.Chamfer(body, capLoopEdges(body), units.Millimeters(0.5)).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.ErrorContains(t, err, `the offset changes the section's topology`)
 		require.ErrorContains(t, err, `the two walls meeting at (0, -10) on loop 0`)
@@ -232,7 +232,7 @@ func TestCapLoopChamferRefusesNearTangentCorner(t *testing.T) {
 		body := kinked(t, 3*math.Pi/4, 1e-7)
 		before, err := body.Volume()
 		require.NoError(t, err)
-		chamfered, err := decad.Chamfer(t.Context(), body, capLoopEdges(body), units.Millimeters(0.5))
+		chamfered, err := decad.Chamfer(body, capLoopEdges(body), units.Millimeters(0.5)).Do(t.Context())
 		require.NoError(t, err)
 		requireManifold(t, chamfered)
 		after, err := chamfered.Volume()

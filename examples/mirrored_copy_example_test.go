@@ -36,8 +36,8 @@ func Example_mirrored_copy() {
 		return
 	}
 	doc := decad.New()
-	l, err := decad.Extrude(context.Background(), doc, s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	l, err := decad.Extrude(doc, s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to extrude: %s\n", err)
 		return
@@ -46,7 +46,7 @@ func Example_mirrored_copy() {
 	// The upright's outer wall is the only flat face that faces -X, and it
 	// lies in the plane x = 0. Mirror across it.
 	wall := decad.Faces(decad.Planar(), decad.Facing(r3.NewVec(-1, 0, 0)))
-	image, err := decad.MirroredCopy(context.Background(), l, decad.MirrorFace{Body: l, Face: wall})
+	image, err := decad.MirroredCopy(l, decad.MirrorFace{Body: l, Face: wall}).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to mirror: %s\n", err)
 		return

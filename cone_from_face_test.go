@@ -75,7 +75,7 @@ func TestConeFromFaceIsStrictlyOffBlankFaces(t *testing.T) {
 			blank := spiralTestRevolveBlank(t, section)
 			doc := documentHandle(blank.n.Doc)
 			before := len(doc.Bodies())
-			cone, err := ConeFromFace(t.Context(), blank, coneFromFaceSelector(t, blank, tc.a, tc.b), far)
+			cone, err := ConeFromFace(blank, coneFromFaceSelector(t, blank, tc.a, tc.b), far).Do(t.Context())
 			require.NoError(t, err)
 			require.Len(t, doc.Bodies(), before+1)
 			require.NoError(t, doc.requireLive(blank), "the source stays live")
@@ -111,13 +111,13 @@ func TestConeFromFaceRefuses(t *testing.T) {
 
 	t.Run("plane side", func(t *testing.T) {
 		blank := spiralTestRevolveBlank(t, section)
-		_, err := ConeFromFace(t.Context(), blank, faceOf(t, blank, isPlane), far)
+		_, err := ConeFromFace(blank, faceOf(t, blank, isPlane), far).Do(t.Context())
 		require.ErrorIs(t, err, ErrUnsupported)
 		require.ErrorContains(t, err, "no offset cone")
 	})
 	t.Run("cylinder side", func(t *testing.T) {
 		blank := spiralTestRevolveBlank(t, cylinderSection)
-		_, err := ConeFromFace(t.Context(), blank, faceOf(t, blank, isCylinder), far)
+		_, err := ConeFromFace(blank, faceOf(t, blank, isCylinder), far).Do(t.Context())
 		require.ErrorIs(t, err, ErrUnsupported)
 		require.ErrorContains(t, err, "no offset cone")
 	})
@@ -125,16 +125,16 @@ func TestConeFromFaceRefuses(t *testing.T) {
 		blank := spiralTestRevolveBlank(t, section)
 		move, err := r3.Translation(r3.Vec{X: 1})
 		require.NoError(t, err)
-		placed, err := Transform(t.Context(), blank, move)
+		placed, err := Transform(blank, move).Do(t.Context())
 		require.NoError(t, err)
-		_, err = ConeFromFace(t.Context(), placed, faceOf(t, placed, isCone), far)
+		_, err = ConeFromFace(placed, faceOf(t, placed, isCone), far).Do(t.Context())
 		require.ErrorIs(t, err, ErrUnsupported)
 	})
 	t.Run("retired body", func(t *testing.T) {
 		blank := spiralTestRevolveBlank(t, section)
 		sel := faceOf(t, blank, isCone)
-		require.NoError(t, Remove(blank))
-		_, err := ConeFromFace(t.Context(), blank, sel, far)
+		require.NoError(t, Remove(blank).Do(t.Context()))
+		_, err := ConeFromFace(blank, sel, far).Do(t.Context())
 		require.ErrorIs(t, err, ErrRetiredBody)
 	})
 	t.Run("far", func(t *testing.T) {
@@ -147,7 +147,7 @@ func TestConeFromFaceRefuses(t *testing.T) {
 			// Below the face but above the origin: revolveplan.PointConeSource needs far < 0.
 			"positive below the face": units.Millimeters(1),
 		} {
-			_, err := ConeFromFace(t.Context(), blank, sel, value)
+			_, err := ConeFromFace(blank, sel, value).Do(t.Context())
 			require.ErrorIs(t, err, ErrUnsupported, name)
 		}
 		for name, value := range map[string]units.Value{
@@ -155,24 +155,24 @@ func TestConeFromFaceRefuses(t *testing.T) {
 			"nan":          units.Millimeters(math.NaN()),
 			"infinite":     units.Millimeters(math.Inf(-1)),
 		} {
-			_, err := ConeFromFace(t.Context(), blank, sel, value)
+			_, err := ConeFromFace(blank, sel, value).Do(t.Context())
 			require.ErrorIs(t, err, ErrDegenerate, name)
 		}
 		require.Len(t, documentHandle(blank.n.Doc).Bodies(), 1, "refusals leave the document unchanged")
 	})
 	t.Run("selector cardinality", func(t *testing.T) {
 		blank := spiralTestRevolveBlank(t, section)
-		_, err := ConeFromFace(t.Context(), blank, Faces(), far)
+		_, err := ConeFromFace(blank, Faces(), far).Do(t.Context())
 		require.ErrorIs(t, err, ErrCardinality)
-		_, err = ConeFromFace(t.Context(), blank, nil, far)
+		_, err = ConeFromFace(blank, nil, far).Do(t.Context())
 		require.ErrorIs(t, err, ErrDegenerate)
 	})
 	t.Run("nil arguments", func(t *testing.T) {
 		blank := spiralTestRevolveBlank(t, section)
 		sel := faceOf(t, blank, isCone)
-		_, err := ConeFromFace(nil, blank, sel, far) //nolint:staticcheck // a nil context is the case under test.
+		_, err := ConeFromFace(blank, sel, far).Do(nil) //nolint:staticcheck // a nil context is the case under test.
 		require.ErrorIs(t, err, ErrDegenerate)
-		_, err = ConeFromFace(t.Context(), nil, sel, far)
+		_, err = ConeFromFace(nil, sel, far).Do(t.Context())
 		require.ErrorIs(t, err, ErrDegenerate)
 	})
 }
@@ -183,7 +183,7 @@ func TestConeFromFaceCancelled(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 	before := documentHandle(blank.n.Doc).Bodies()
-	_, err := ConeFromFace(ctx, blank, sel, units.Millimeters(-5))
+	_, err := ConeFromFace(blank, sel, units.Millimeters(-5)).Do(ctx)
 	require.ErrorIs(t, err, context.Canceled)
 	require.Equal(t, before, documentHandle(blank.n.Doc).Bodies())
 }
@@ -223,8 +223,8 @@ func coneFromFaceNextFeatureOrigins(t *testing.T, d *Document) [][]provenance.Re
 	}
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	next, err := Revolve(t.Context(), d, s, s.Profiles()[0],
-		SketchLine{Start: planePoint{}, End: planePoint{U: 1}}, FullRevolution{})
+	next, err := Revolve(d, s, s.Profiles()[0],
+		SketchLine{Start: planePoint{}, End: planePoint{U: 1}}, FullRevolution{}).Do(t.Context())
 	require.NoError(t, err)
 	var origins [][]provenance.Ref
 	for _, face := range next.Faces() {
@@ -246,7 +246,7 @@ func coneFromFaceRefusalKeepsDocument(t *testing.T, section []planePoint, a, b p
 	doc := documentHandle(blank.n.Doc)
 	before := doc.Bodies()
 	producer := doc.producerAt(t.Context())
-	_, err := ConeFromFace(t.Context(), blank, coneFromFaceSelector(t, blank, a, b), far)
+	_, err := ConeFromFace(blank, coneFromFaceSelector(t, blank, a, b), far).Do(t.Context())
 	require.ErrorIs(t, err, want)
 	require.ErrorContains(t, err, message)
 	require.Equal(t, before, doc.Bodies())
@@ -282,7 +282,7 @@ func TestCommitExactPointConeRefusalKeepsDocument(t *testing.T) {
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	built, err := revolveProfileBuild(t.Context(), doc, s, s.Profiles()[0],
-		SketchLine{Start: planePoint{}, End: planePoint{U: 1}}, FullRevolution{}, nil)
+		SketchLine{Start: planePoint{}, End: planePoint{U: 1}}, FullRevolution{}, false)
 	require.NoError(t, err)
 	require.Equal(t, before, doc.Bodies(), "building registers nothing")
 	require.Equal(t, producer, doc.producerAt(t.Context()))
@@ -296,8 +296,8 @@ func TestCommitExactPointConeRefusalKeepsDocument(t *testing.T) {
 func TestConeFromFaceNonConvexSectionIsAccepted(t *testing.T) {
 	section := coneFromFaceNonConvexSection()
 	blank := spiralTestRevolveBlank(t, section)
-	cone, err := ConeFromFace(t.Context(), blank, coneFromFaceSelector(t, blank, section[4], section[5]),
-		units.Millimeters(-5))
+	cone, err := ConeFromFace(blank, coneFromFaceSelector(t, blank, section[4], section[5]),
+		units.Millimeters(-5)).Do(t.Context())
 	require.NoError(t, err)
 	limit, ok := revolveplan.PointConeSource(&cone.n)
 	require.True(t, ok)
@@ -314,7 +314,7 @@ func TestConeFromFaceNonConvexSectionIsAccepted(t *testing.T) {
 func TestConeFromFaceMoreRefusals(t *testing.T) {
 	far := units.Millimeters(-5)
 	t.Run("zero-body", func(t *testing.T) {
-		_, err := ConeFromFace(t.Context(), bornBody(&Body{}), Faces(), far)
+		_, err := ConeFromFace(bornBody(&Body{}), Faces(), far).Do(t.Context())
 		require.ErrorIs(t, err, ErrDegenerate)
 	})
 	extrudedBox := func(t *testing.T) *Body {
@@ -333,14 +333,14 @@ func TestConeFromFaceMoreRefusals(t *testing.T) {
 		s.CreateLine(e, a)
 		_, err = s.Solve(t.Context())
 		require.NoError(t, err)
-		box, err := Extrude(t.Context(), New(), s, s.Profiles()[0], Distance{D: units.Millimeters(2), Dir: Along})
+		box, err := Extrude(New(), s, s.Profiles()[0], Distance{D: units.Millimeters(2), Dir: Along}).Do(t.Context())
 		require.NoError(t, err)
 		return box
 	}
 	t.Run("non-revolve body", func(t *testing.T) {
 		box := extrudedBox(t)
 		sel := Faces(FaceCreatedBy(featureRefOf(box.Faces()[0].originRefs()[0]))).Exactly(1)
-		_, err := ConeFromFace(t.Context(), box, sel, far)
+		_, err := ConeFromFace(box, sel, far).Do(t.Context())
 		require.ErrorIs(t, err, ErrUnsupported)
 		require.Len(t, documentHandle(box.n.Doc).Bodies(), 1)
 	})
@@ -350,9 +350,9 @@ func TestConeFromFaceMoreRefusals(t *testing.T) {
 		foreign := extrudedBox(t).Faces()[0].originRefs()[0]
 		// A selector that matches nothing and one that fails its assertion
 		// are both cardinality failures of the implicit exactly-one.
-		_, err := ConeFromFace(t.Context(), blank, Faces(FaceCreatedBy(featureRefOf(foreign))), far)
+		_, err := ConeFromFace(blank, Faces(FaceCreatedBy(featureRefOf(foreign))), far).Do(t.Context())
 		require.ErrorIs(t, err, ErrCardinality)
-		_, err = ConeFromFace(t.Context(), blank, Faces().Exactly(2), far)
+		_, err = ConeFromFace(blank, Faces().Exactly(2), far).Do(t.Context())
 		require.ErrorIs(t, err, ErrCardinality)
 		require.Len(t, documentHandle(blank.n.Doc).Bodies(), 1)
 		require.Equal(t, before, blank.n.Doc.NextProducer)
@@ -372,7 +372,7 @@ func TestConeFromFaceCancelledDuringConstruction(t *testing.T) {
 		doc := documentHandle(blank.n.Doc)
 		before, producer := doc.Bodies(), doc.producerAt(t.Context())
 		ctx := newCancelAfterContext(t.Context(), cancelAt)
-		_, err := ConeFromFace(ctx, blank, sel, units.Millimeters(-5))
+		_, err := ConeFromFace(blank, sel, units.Millimeters(-5)).Do(ctx)
 		if err == nil {
 			require.Greater(t, cancelAt, 3, "the build polls the context after the entry check")
 			require.True(t, canceledLate, "a cancellation landed inside construction")
@@ -403,8 +403,70 @@ func spiralTestRevolveBlank(t *testing.T, section []planePoint) *Body {
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	require.Len(t, s.Profiles(), 1)
-	blank, err := Revolve(t.Context(), doc, s, s.Profiles()[0],
-		SketchLine{Start: planePoint{}, End: planePoint{U: 1}}, FullRevolution{})
+	blank, err := Revolve(doc, s, s.Profiles()[0],
+		SketchLine{Start: planePoint{}, End: planePoint{U: 1}}, FullRevolution{}).Do(t.Context())
 	require.NoError(t, err)
 	return blank
+}
+
+// TestConeFromFaceCommand holds ConeFromFace to the order of
+// agent-docs/command-api-design.md §3: a second Do is ErrConsumed, a nil ctx
+// is refused before a recorded fault, and a canceled ctx comes back by
+// identity with the document unchanged.
+func TestConeFromFaceCommand(t *testing.T) {
+	section := coneFromFaceSpiralSection()
+	heel := func(t *testing.T) (*Body, FaceSelector) {
+		blank := spiralTestRevolveBlank(t, section)
+		return blank, coneFromFaceSelector(t, blank, section[3], section[2])
+	}
+	far := units.Millimeters(-5)
+
+	t.Run("consumed", func(t *testing.T) {
+		blank, sel := heel(t)
+		cmd := ConeFromFace(blank, sel, far)
+		cone, err := cmd.Do(t.Context())
+		require.NoError(t, err)
+		require.NotNil(t, cone)
+		bodies := documentHandle(blank.n.Doc).Bodies()
+		again, err := cmd.Do(t.Context())
+		require.ErrorIs(t, err, ErrConsumed)
+		require.Nil(t, again)
+		require.Equal(t, bodies, documentHandle(blank.n.Doc).Bodies())
+	})
+	t.Run("nil context", func(t *testing.T) {
+		blank, sel := heel(t)
+		cmd := ConeFromFace(blank, sel, far)
+		var nilCtx context.Context
+		_, err := cmd.Do(nilCtx)
+		require.ErrorIs(t, err, ErrDegenerate)
+		_, err = cmd.Do(t.Context())
+		require.ErrorIs(t, err, ErrConsumed)
+	})
+	t.Run("nil context precedes a nil body", func(t *testing.T) {
+		var nilCtx context.Context
+		_, err := ConeFromFace(nil, nil, far).Do(nilCtx)
+		require.ErrorIs(t, err, ErrDegenerate)
+		require.NotContains(t, err.Error(), "names no body")
+		_, err = ConeFromFace(nil, nil, far).Do(t.Context())
+		require.ErrorIs(t, err, ErrDegenerate)
+		require.ErrorContains(t, err, "names no body")
+	})
+	t.Run("canceled", func(t *testing.T) {
+		blank, sel := heel(t)
+		before := len(documentHandle(blank.n.Doc).Bodies())
+		ctx, cancel := context.WithCancel(t.Context())
+		cancel()
+		_, err := ConeFromFace(blank, sel, far).Do(ctx)
+		require.Equal(t, context.Canceled, err)
+		require.Len(t, documentHandle(blank.n.Doc).Bodies(), before)
+	})
+	t.Run("selector copied", func(t *testing.T) {
+		blank, sel := heel(t)
+		query := sel.(*FaceQuery)
+		cmd := ConeFromFace(blank, query, far)
+		query.Exactly(5) // a later change that would refuse the one face
+		cone, err := cmd.Do(t.Context())
+		require.NoError(t, err)
+		require.NotNil(t, cone)
+	})
 }

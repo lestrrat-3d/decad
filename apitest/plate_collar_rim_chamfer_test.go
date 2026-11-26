@@ -31,7 +31,7 @@ func annulusAt(t *testing.T, doc *decad.Document, rIn, rOut, z0, h float64) *dec
 		if !pr.Valid || len(pr.Holes) != 1 {
 			continue
 		}
-		b, err := decad.Extrude(t.Context(), doc, s, pr, decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
+		b, err := decad.Extrude(doc, s, pr, decad.Distance{D: units.Millimeters(h), Dir: decad.Along}).Do(t.Context())
 		require.NoError(t, err)
 		return b
 	}
@@ -44,7 +44,7 @@ func plateCollar(t *testing.T, collarZ0 float64) (*decad.Body, error) {
 	doc := decad.New()
 	plate := annulusAt(t, doc, 4.55, 32.65, 8.095, 1.2)
 	collar := annulusAt(t, doc, 4.55, 5.9, collarZ0, 18.9-collarZ0)
-	return decad.Union(t.Context(), plate, collar)
+	return decad.Union(plate, collar).Do(t.Context())
 }
 
 // TestPlateCollarRimChamfer chamfers the bore's rim on the bed face of a plate joined to a collar that starts inside
@@ -56,7 +56,7 @@ func TestPlateCollarRimChamfer(t *testing.T) {
 	before, err := body.Volume()
 	require.NoError(t, err)
 	rim := boreRim(t, body)
-	out, err := decad.Chamfer(t.Context(), body, rim.Exactly(1), units.Millimeters(0.5))
+	out, err := decad.Chamfer(body, rim.Exactly(1), units.Millimeters(0.5)).Do(t.Context())
 	require.NoError(t, err)
 	require.True(t, out.IsSolid())
 	after, err := out.Volume()

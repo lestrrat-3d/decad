@@ -19,7 +19,7 @@ func requireBoredLoft(t *testing.T, body *decad.Body, height, r float64, msg str
 	before, err := body.Volume()
 	require.NoError(t, err, msg)
 	tool := circleBodyAtZ(t, body.Document(), 0, r, -1, height+2)
-	bored, err := decad.Cut(t.Context(), body, tool)
+	bored, err := decad.Cut(body, tool).Do(t.Context())
 	require.NoError(t, err, msg)
 	after, err := bored.Volume()
 	require.NoError(t, err, msg)
@@ -48,8 +48,8 @@ func TestLoftBoreTwistedSections(t *testing.T) {
 	twist := 14.5 * math.Pi / 180
 	g := newTwistedGear(5, 20*math.Pi/180, 0.05)
 	body, bottom, top := g.loft(t, height, twist, 0)
-	rounded, err := decad.Fillet(t.Context(), body, rungQuery(bottom, top, height).Exactly(len(bottom)),
-		units.Millimeters(0.25))
+	rounded, err := decad.Fillet(body, rungQuery(bottom, top, height).Exactly(len(bottom)),
+		units.Millimeters(0.25)).Do(t.Context())
 	require.NoError(t, err)
 	bored := requireBoredLoft(t, rounded, height, 0.5, "gear")
 	require.Equal(t, len(bottom), filletRoleCount(bored), "the rounded roots stay")
@@ -57,7 +57,7 @@ func TestLoftBoreTwistedSections(t *testing.T) {
 	w := sketch.NewWorld()
 	sk0, p0, _ := squareSection(t, w, w.XY(), 10, 0, 0)
 	sk1, p1, _ := squareSection(t, w, splitTopPlane(t, w, height), 7, -30*math.Pi/180, 0)
-	square, err := decad.Loft(t.Context(), decad.New(), sk0, p0, sk1, p1)
+	square, err := decad.Loft(decad.New(), sk0, p0, sk1, p1).Do(t.Context())
 	require.NoError(t, err)
 	requireBoredLoft(t, square, height, 1, "square")
 }

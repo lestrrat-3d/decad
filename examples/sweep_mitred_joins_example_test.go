@@ -9,7 +9,7 @@ import (
 	"github.com/lestrrat-3d/sketch"
 )
 
-// WithMitredJoins lets a sweep follow a path that has sharp corners. Each
+// MitredJoins lets a sweep follow a path that has sharp corners. Each
 // corner is cut at half the angle between the two straight spans, like a
 // picture frame, so the sections meet without a gap. Use it for angled tubes
 // and supports made of straight segments.
@@ -49,7 +49,7 @@ func Example_sweep_mitred_joins() {
 	}
 
 	doc := decad.New()
-	branch, err := decad.Sweep(context.Background(), doc, s, s.Profiles()[0], path, decad.WithMitredJoins())
+	branch, err := decad.Sweep(doc, s, s.Profiles()[0], path).MitredJoins().Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to sweep: %s\n", err)
 		return

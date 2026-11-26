@@ -48,8 +48,7 @@ func TestSweepTwistRoundedLargeProfileVerifyAll(t *testing.T) {
 	s, profile := roundedLargeTwistProfile(t)
 	path, err := decad.NewPath(r3.Vec{}, decad.LineTo{End: r3.NewVec(0, 0, 5)})
 	require.NoError(t, err)
-	body, err := decad.Sweep(t.Context(), decad.New(), s, profile, path,
-		decad.WithSweepTwist(units.Degrees(30)))
+	body, err := decad.Sweep(decad.New(), s, profile, path).Twist(units.Degrees(30)).Do(t.Context())
 	require.NoError(t, err)
 	mesh, err := body.Tessellate(t.Context(), units.Millimeters(0.1),
 		decad.WithVerification(decad.VerifyAll))
@@ -67,8 +66,7 @@ func TestSweepTwistRoundedLargeProfileKeepsCoarseCertifiedBuild(t *testing.T) {
 	s, profile := roundedLargeTwistProfile(t)
 	path, err := decad.NewPath(r3.Vec{}, decad.LineTo{End: r3.NewVec(0, 0, 5)})
 	require.NoError(t, err)
-	body, err := decad.Sweep(t.Context(), decad.New(), s, profile, path,
-		decad.WithSweepTwist(units.Radians(1.4)))
+	body, err := decad.Sweep(decad.New(), s, profile, path).Twist(units.Radians(1.4)).Do(t.Context())
 	require.NoError(t, err)
 	mesh, err := body.Tessellate(t.Context(), units.Millimeters(0.2),
 		decad.WithVerification(decad.VerifyAll))

@@ -39,12 +39,11 @@ func spreadTool(t *testing.T, doc *decad.Document, z float64) *decad.Body {
 	require.NoError(t, err)
 	path, err := decad.NewPath(r3.Vec{}, decad.LineTo{End: r3.NewVec(0, 0, spreadToolSpan)})
 	require.NoError(t, err)
-	tool, err := decad.Sweep(t.Context(), doc, s, s.Profiles()[0], path,
-		decad.WithSweepTwist(units.Degrees(spreadToolTwist)))
+	tool, err := decad.Sweep(doc, s, s.Profiles()[0], path).Twist(units.Degrees(spreadToolTwist)).Do(t.Context())
 	require.NoError(t, err)
 	move, err := r3.Translation(r3.NewVec(spreadToolOffset, 0, z))
 	require.NoError(t, err)
-	placed, err := decad.Transform(t.Context(), tool, move)
+	placed, err := decad.Transform(tool, move).Do(t.Context())
 	require.NoError(t, err)
 	return placed
 }
@@ -78,7 +77,7 @@ func spreadOverlap(z float64) float64 {
 
 func spreadCut(t *testing.T, doc *decad.Document, body *decad.Body, z float64) (*decad.Body, error) {
 	t.Helper()
-	return decad.Cut(t.Context(), body, spreadTool(t, doc, z))
+	return decad.Cut(body, spreadTool(t, doc, z)).Do(t.Context())
 }
 
 func spreadBound(t *testing.T, body *decad.Body) float64 {

@@ -39,7 +39,7 @@ func TestSweepChainOneLineRibbonMatchesExtrudeChain(t *testing.T) {
 	s, ch := lineChainSketch(t)
 
 	doc := decad.New()
-	body, err := decad.Sweep(t.Context(), doc, s, ch, straightSweepPath(t, 10))
+	body, err := decad.Sweep(doc, s, ch, straightSweepPath(t, 10)).Do(t.Context())
 	require.NoError(t, err)
 
 	require.Equal(t, decad.BodySheet, body.Kind())
@@ -62,7 +62,7 @@ func TestSweepChainOneLineRibbonMatchesExtrudeChain(t *testing.T) {
 	// The same walk through chain Extrude, in its own document so neither build
 	// can observe the other.
 	sibling := decad.New()
-	ribbon, err := decad.Extrude(t.Context(), sibling, s, ch, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	ribbon, err := decad.Extrude(sibling, s, ch, decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 
 	sweptArea, err := body.Area()
@@ -76,7 +76,7 @@ func TestSweepChainOneLineRibbonMatchesExtrudeChain(t *testing.T) {
 	// motion, so the ribbon's area is unmoved and its box translates with it.
 	motion, err := r3.Translation(r3.NewVec(100, 0, 0))
 	require.NoError(t, err)
-	placed, err := decad.Transform(t.Context(), body, motion)
+	placed, err := decad.Transform(body, motion).Do(t.Context())
 	require.NoError(t, err)
 	placedArea, err := placed.Area()
 	require.NoError(t, err)
@@ -95,7 +95,7 @@ func TestSweepChainRibbonReadsValid(t *testing.T) {
 	t.Parallel()
 	s, ch := lineChainSketch(t)
 	doc := decad.New()
-	body, err := decad.Sweep(t.Context(), doc, s, ch, straightSweepPath(t, 10))
+	body, err := decad.Sweep(doc, s, ch, straightSweepPath(t, 10)).Do(t.Context())
 	require.NoError(t, err)
 
 	rep, err := doc.Verify(t.Context())
@@ -132,7 +132,7 @@ func TestSweepChainMultiSegmentWallSet(t *testing.T) {
 	require.Len(t, chains[0].Edges, 3)
 
 	doc := decad.New()
-	body, err := decad.Sweep(t.Context(), doc, s, chains[0], straightSweepPath(t, 10))
+	body, err := decad.Sweep(doc, s, chains[0], straightSweepPath(t, 10)).Do(t.Context())
 	require.NoError(t, err)
 	require.Len(t, body.Faces(), 3)
 
@@ -228,7 +228,7 @@ func TestSweepChainTiltedPathAreaBoundEnclosesAnalyticValue(t *testing.T) {
 	require.NoError(t, err)
 
 	doc := decad.New()
-	body, err := decad.Sweep(t.Context(), doc, s, ch, path)
+	body, err := decad.Sweep(doc, s, ch, path).Do(t.Context())
 	require.NoError(t, err)
 	require.Len(t, body.Faces(), 1)
 
@@ -272,13 +272,13 @@ func TestSweepChainRefusesAnOffNormalPath(t *testing.T) {
 
 	offPlane, err := decad.NewPath(r3.NewVec(0, 0, 3), decad.LineTo{End: r3.NewVec(0, 0, 13)})
 	require.NoError(t, err)
-	_, err = decad.Sweep(t.Context(), doc, s, ch, offPlane)
+	_, err = decad.Sweep(doc, s, ch, offPlane).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrDegenerate)
 	require.ErrorContains(t, err, "must start in the profile plane")
 
 	reversed, err := decad.NewPath(r3.NewVec(0, 0, 0), decad.LineTo{End: r3.NewVec(0, 0, -10)})
 	require.NoError(t, err)
-	_, err = decad.Sweep(t.Context(), doc, s, ch, reversed)
+	_, err = decad.Sweep(doc, s, ch, reversed).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrDegenerate)
 	require.ErrorContains(t, err, "positive normal")
 
@@ -299,7 +299,7 @@ func TestSweepChainCompositeRefusesSourceAcrossArcAxis(t *testing.T) {
 		decad.ArcThrough{Through: r3.NewVec(5, 0, 25), End: r3.NewVec(10, 0, 20)},
 	)
 	require.NoError(t, err)
-	_, err = decad.Sweep(t.Context(), doc, s, ch, composite)
+	_, err = decad.Sweep(doc, s, ch, composite).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrDegenerate)
 	require.ErrorContains(t, err, "sweep path span 1")
 	require.ErrorContains(t, err, "the revolve axis passes through the region")
@@ -336,13 +336,13 @@ func TestSweepChainSeamGatesPrecedeThePathGates(t *testing.T) {
 	require.NoError(t, err)
 
 	doc := decad.New()
-	_, err = decad.Sweep(t.Context(), doc, s, ch, offPlane)
+	_, err = decad.Sweep(doc, s, ch, offPlane).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrStaleProfile)
 	require.Empty(t, doc.Bodies())
 }
 
 // TestSweepChainRefusesProfileOnlyOptions covers the options a chain section
-// cannot honour: a chain sweep always returns a sheet, so WithSurfaceResult has
+// cannot honour: a chain sweep always returns a sheet, so SurfaceResult has
 // no solid to toggle, and twist, mitred joins and section scale build solids
 // from a profile only. Each refuses with ErrUnsupported and leaves the
 // document unchanged.
@@ -351,20 +351,22 @@ func TestSweepChainRefusesProfileOnlyOptions(t *testing.T) {
 	s, ch := lineChainSketch(t)
 
 	tests := []struct {
-		name string
-		opt  decad.SweepOption
+		name  string
+		apply func(*decad.SweepCommand)
 	}{
-		{"surface result", decad.WithSurfaceResult()},
-		{"twist", decad.WithSweepTwist(units.Degrees(30))},
-		{"zero twist", decad.WithSweepTwist(units.Degrees(0))},
-		{"mitred joins", decad.WithMitredJoins()},
-		{"section scale", decad.WithSectionScale(scalars(1)...)},
+		{"surface result", func(c *decad.SweepCommand) { c.SurfaceResult() }},
+		{"twist", func(c *decad.SweepCommand) { c.Twist(units.Degrees(30)) }},
+		{"zero twist", func(c *decad.SweepCommand) { c.Twist(units.Degrees(0)) }},
+		{"mitred joins", func(c *decad.SweepCommand) { c.MitredJoins() }},
+		{"section scale", func(c *decad.SweepCommand) { c.SectionScale(scalars(1)...) }},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			doc := decad.New()
-			_, err := decad.Sweep(t.Context(), doc, s, ch, straightSweepPath(t, 7), tc.opt)
+			cmd := decad.Sweep(doc, s, ch, straightSweepPath(t, 7))
+			tc.apply(cmd)
+			_, err := cmd.Do(t.Context())
 			require.ErrorIs(t, err, decad.ErrUnsupported)
 			require.Empty(t, doc.Bodies())
 		})
@@ -382,11 +384,11 @@ func TestSweepChainOptionRefusalFollowsTheSeam(t *testing.T) {
 	require.NoError(t, err)
 
 	doc := decad.New()
-	_, err = decad.Sweep(t.Context(), doc, otherSketch, ch, straightSweepPath(t, 10), decad.WithSurfaceResult())
+	_, err = decad.Sweep(doc, otherSketch, ch, straightSweepPath(t, 10)).SurfaceResult().Do(t.Context())
 	require.Error(t, err)
 	require.NotErrorIs(t, err, decad.ErrUnsupported, "the seam error wins over the option refusal")
 
-	_, err = decad.Sweep(t.Context(), doc, s, ch, offPlane, decad.WithSurfaceResult())
+	_, err = decad.Sweep(doc, s, ch, offPlane).SurfaceResult().Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported, "the option refusal wins over the path-geometry gate")
 	require.Empty(t, doc.Bodies())
 }
@@ -398,9 +400,9 @@ func TestSweepTypedNilSectionIsDegenerate(t *testing.T) {
 	s, _ := lineChainSketch(t)
 	doc := decad.New()
 
-	_, err := decad.Sweep(t.Context(), doc, s, (*sketch.Profile)(nil), straightSweepPath(t, 10))
+	_, err := decad.Sweep(doc, s, (*sketch.Profile)(nil), straightSweepPath(t, 10)).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrDegenerate)
-	_, err = decad.Sweep(t.Context(), doc, s, (*sketch.Chain)(nil), straightSweepPath(t, 10))
+	_, err = decad.Sweep(doc, s, (*sketch.Chain)(nil), straightSweepPath(t, 10)).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrDegenerate)
 	require.Empty(t, doc.Bodies())
 }
@@ -415,7 +417,7 @@ func TestSweepChainStagedSurveyNamesPayloadClass(t *testing.T) {
 	t.Parallel()
 	s, ch := lineChainSketch(t)
 	doc := decad.New()
-	body, err := decad.Sweep(t.Context(), doc, s, ch, straightSweepPath(t, 10))
+	body, err := decad.Sweep(doc, s, ch, straightSweepPath(t, 10)).Do(t.Context())
 	require.NoError(t, err)
 	report, err := doc.Verify(t.Context(), decad.WithPullDirection(r3.NewVec(0, 0, 1)))
 	require.NoError(t, err)

@@ -58,7 +58,7 @@ import (
 func chamferedBlock(t *testing.T, doc *decad.Document) (*decad.Body, float64) {
 	t.Helper()
 	box := boxBody(t, doc, -6, -6, 6, 6, 12)
-	block, err := decad.Chamfer(t.Context(), box, capLoopEdges(box), units.Millimeters(.1))
+	block, err := decad.Chamfer(box, capLoopEdges(box), units.Millimeters(.1)).Do(t.Context())
 	require.NoError(t, err)
 	mesh, err := block.Tessellate(t.Context(), units.Millimeters(1))
 	require.NoError(t, err)
@@ -74,11 +74,11 @@ func knobBody(t *testing.T, doc *decad.Document) (*decad.Body, float64) {
 	t.Helper()
 	base := boxBody(t, doc, -5, -5, 5, 5, 10)
 	disc := discBody(t, doc, 0, 2, 4)
-	disc, err := decad.Transform(t.Context(), disc, contactPose(t, r3.Vec{Z: 8}))
+	disc, err := decad.Transform(disc, contactPose(t, r3.Vec{Z: 8})).Do(t.Context())
 	require.NoError(t, err)
-	union, err := decad.Union(t.Context(), base, disc)
+	union, err := decad.Union(base, disc).Do(t.Context())
 	require.NoError(t, err)
-	knob, err := decad.Transform(t.Context(), union, contactPose(t, r3.Vec{X: .125}))
+	knob, err := decad.Transform(union, contactPose(t, r3.Vec{X: .125})).Do(t.Context())
 	require.NoError(t, err)
 	mesh, err := knob.Tessellate(t.Context(), units.Millimeters(1))
 	require.NoError(t, err)
@@ -251,9 +251,9 @@ func pocketedBlock(t *testing.T, doc *decad.Document) (*decad.Body, float64) {
 	t.Helper()
 	block := boxBody(t, doc, -10, -10, 10, 10, 10)
 	pocket := discBody(t, doc, 0, 2, 3)
-	pocket, err := decad.Transform(t.Context(), pocket, contactPose(t, r3.Vec{Z: 8}))
+	pocket, err := decad.Transform(pocket, contactPose(t, r3.Vec{Z: 8})).Do(t.Context())
 	require.NoError(t, err)
-	block, err = decad.Cut(t.Context(), block, pocket)
+	block, err = decad.Cut(block, pocket).Do(t.Context())
 	require.NoError(t, err)
 	mesh, err := block.Tessellate(t.Context(), seatRequest().HeldChord)
 	require.NoError(t, err)
@@ -267,7 +267,7 @@ func socketHead(t *testing.T, doc *decad.Document) (*decad.Body, float64) {
 	t.Helper()
 	head := discBody(t, doc, 0, 1.9, 2)
 	socket := boxBodyAtZ(t, doc, -0.5, -0.5, 0.5, 0.5, 1.5, 1)
-	head, err := decad.Cut(t.Context(), head, socket)
+	head, err := decad.Cut(head, socket).Do(t.Context())
 	require.NoError(t, err)
 	mesh, err := head.Tessellate(t.Context(), seatRequest().HeldChord)
 	require.NoError(t, err)
@@ -515,8 +515,8 @@ func partsBinBottle(t *testing.T, doc *decad.Document) *decad.Body {
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	require.Len(t, s.Profiles(), 1)
-	body, err := decad.Revolve(t.Context(), doc, s, s.Profiles()[0], decad.SketchLine{
-		Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 0, V: 1}}, decad.FullRevolution{})
+	body, err := decad.Revolve(doc, s, s.Profiles()[0], decad.SketchLine{
+		Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 0, V: 1}}, decad.FullRevolution{}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -525,7 +525,7 @@ func partsBinBottle(t *testing.T, doc *decad.Document) *decad.Body {
 func partsBinCup(t *testing.T, doc *decad.Document) *decad.Body {
 	t.Helper()
 	box := boxBody(t, doc, -12, -8, 12, 8, 16)
-	cup, err := decad.Shell(t.Context(), box, topCap(box), units.Millimeters(2))
+	cup, err := decad.Shell(box, topCap(box), units.Millimeters(2)).Do(t.Context())
 	require.NoError(t, err)
 	return cup
 }
@@ -541,7 +541,7 @@ func partsBinLoft(t *testing.T, doc *decad.Document) *decad.Body {
 		{8.5, 0}, {8, 8}, {0, 8.5}, {-8, 8}, {-8.5, 0}, {-8, -8}, {0, -8.5}, {8, -8}})
 	s1, p1 := meshPolygonSketch(t, w, top, [][2]float64{
 		{6, -2.5}, {6, 2.5}, {2.5, 6}, {-2.5, 6}, {-6, 2.5}, {-6, -2.5}, {-2.5, -6}, {2.5, -6}})
-	loft, err := decad.Loft(t.Context(), doc, s0, p0, s1, p1)
+	loft, err := decad.Loft(doc, s0, p0, s1, p1).Do(t.Context())
 	require.NoError(t, err)
 	return loft
 }
@@ -554,7 +554,7 @@ func partsBinSweep(t *testing.T, doc *decad.Document) *decad.Body {
 	s, profile := meshPolygonSketch(t, w, w.XY(), sweepHexagonCorners)
 	path, err := decad.NewPath(r3.Vec{}, decad.LineTo{End: r3.NewVec(0, 0, 14)})
 	require.NoError(t, err)
-	body, err := decad.Sweep(t.Context(), doc, s, profile, path)
+	body, err := decad.Sweep(doc, s, profile, path).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -691,7 +691,7 @@ func TestHeldMeshAdmitsEveryPayload(t *testing.T) {
 	// The 2.1 mm chamfer's feet are not dyadic: its δ is the rounding of its
 	// offset contour.
 	box := boxBody(t, doc, -6, -6, 6, 6, 12)
-	block, err := decad.Chamfer(t.Context(), box, capLoopEdges(box), units.Millimeters(2.1))
+	block, err := decad.Chamfer(box, capLoopEdges(box), units.Millimeters(2.1)).Do(t.Context())
 	require.NoError(t, err)
 	chamfered, err := doc.ContactPair(t.Context(), floor, block, r3.Identity(), up, req)
 	require.NoError(t, err)
@@ -788,7 +788,7 @@ func TestHeldChordValidation(t *testing.T) {
 func tiltedBlock(t *testing.T, doc *decad.Document, y0, setback float64) (*decad.Body, float64) {
 	t.Helper()
 	box := boxBody(t, doc, -6, y0, 6, y0+12, 12)
-	block, err := decad.Chamfer(t.Context(), box, capLoopEdges(box), units.Millimeters(setback))
+	block, err := decad.Chamfer(box, capLoopEdges(box), units.Millimeters(setback)).Do(t.Context())
 	require.NoError(t, err)
 	mesh, err := block.Tessellate(t.Context(), units.Millimeters(1))
 	require.NoError(t, err)

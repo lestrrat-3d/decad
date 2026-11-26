@@ -12,16 +12,15 @@ import (
 )
 
 // This file is agent-docs/rib-design.md §7's and agent-docs/boss-design.md §5's
-// public-surface tests for WithRibDraft and BossSpec.Draft.
+// public-surface tests for Draft and BossCommand.Draft.
 
 func TestRibDraftThinsTheRibAsItRises(t *testing.T) {
 	t.Parallel()
 	for _, deg := range []float64{3, 5} {
 		_, part := ribPart(t)
 		s, lines := ribSketch(t, [4]float64{3, 20, 37, 20})
-		out, err := decad.WebPath(t.Context(), part, s, lines, units.Millimeters(2),
-			decad.Distance{D: units.Millimeters(11), Dir: decad.Along},
-			decad.WithRibOverrun(units.Millimeters(1)), decad.WithRibDraft(units.Degrees(deg)))
+		out, err := decad.WebPath(part, s, lines, units.Millimeters(2),
+			decad.Distance{D: units.Millimeters(11), Dir: decad.Along}).Overrun(units.Millimeters(1)).Draft(units.Degrees(deg)).Do(t.Context())
 		require.NoError(t, err)
 		// The sketch plane is at z = 4 and the pocket floor at z = 5. At the height t
 		// above the plane the rib is 2 − 2·t·tan(angle) thick, and its 30 mm
@@ -37,9 +36,8 @@ func TestRibDraftNegativeThickensTheRib(t *testing.T) {
 	t.Parallel()
 	_, part := ribPart(t)
 	s, lines := ribSketch(t, [4]float64{3, 20, 37, 20})
-	out, err := decad.WebPath(t.Context(), part, s, lines, units.Millimeters(2),
-		decad.Distance{D: units.Millimeters(11), Dir: decad.Along},
-		decad.WithRibOverrun(units.Millimeters(1)), decad.WithRibDraft(units.Degrees(-4)))
+	out, err := decad.WebPath(part, s, lines, units.Millimeters(2),
+		decad.Distance{D: units.Millimeters(11), Dir: decad.Along}).Overrun(units.Millimeters(1)).Draft(units.Degrees(-4)).Do(t.Context())
 	require.NoError(t, err)
 	tan := math.Tan(-4 * math.Pi / 180)
 	added := 30 * ((2*11 - 121*tan) - (2*1 - 1*tan))
@@ -55,9 +53,8 @@ func TestRibDraftOfAWebAndLastWins(t *testing.T) {
 	t.Parallel()
 	_, part := ribPart(t)
 	s, lines := ribSketch(t, [4]float64{3, 12, 37, 12}, [4]float64{3, 28, 37, 28})
-	out, err := decad.WebPath(t.Context(), part, s, lines, units.Millimeters(2),
-		decad.Distance{D: units.Millimeters(11), Dir: decad.Along},
-		decad.WithRibOverrun(units.Millimeters(1)), decad.WithRibDraft(units.Degrees(10)), decad.WithRibDraft(units.Degrees(5)))
+	out, err := decad.WebPath(part, s, lines, units.Millimeters(2),
+		decad.Distance{D: units.Millimeters(11), Dir: decad.Along}).Overrun(units.Millimeters(1)).Draft(units.Degrees(10)).Draft(units.Degrees(5)).Do(t.Context())
 	require.NoError(t, err)
 	tan := math.Tan(5 * math.Pi / 180)
 	added := 2 * 30 * ((2*11 - 121*tan) - (2*1 - 1*tan))
@@ -75,8 +72,8 @@ func TestRibDraftRefusals(t *testing.T) {
 	} {
 		doc, part := ribPart(t)
 		s, lines := ribSketch(t, [4]float64{3, 20, 37, 20})
-		_, err := decad.WebPath(t.Context(), part, s, lines, units.Millimeters(2),
-			decad.Distance{D: units.Millimeters(11), Dir: decad.Along}, decad.WithRibDraft(tc.draft))
+		_, err := decad.WebPath(part, s, lines, units.Millimeters(2),
+			decad.Distance{D: units.Millimeters(11), Dir: decad.Along}).Draft(tc.draft).Do(t.Context())
 		require.ErrorIs(t, err, tc.want, name)
 		require.Equal(t, []*decad.Body{part}, doc.Bodies(), "%s: a refused rib leaves the part live and alone", name)
 	}
@@ -86,9 +83,7 @@ func TestBossDraftNarrowsTheBossTowardItsTop(t *testing.T) {
 	t.Parallel()
 	for _, deg := range []float64{2, 6} {
 		_, plate := bossPlate(t)
-		spec := bossSpec(plate, true, nil)
-		spec.Draft = units.Degrees(deg)
-		out, err := decad.Boss(t.Context(), plate, spec)
+		out, err := bossCommand(plate, true).Draft(units.Degrees(deg)).Do(t.Context())
 		require.NoError(t, err)
 		// A frustum of radius 4 at the plate's face and 4 − 8·tan(angle) at its top, 8 mm tall.
 		tan := math.Tan(deg * math.Pi / 180)
@@ -101,9 +96,7 @@ func TestBossDraftNarrowsTheBossTowardItsTop(t *testing.T) {
 func TestBossDraftNegativeWidensIt(t *testing.T) {
 	t.Parallel()
 	_, plate := bossPlate(t)
-	spec := bossSpec(plate, true, nil)
-	spec.Draft = units.Degrees(-3)
-	out, err := decad.Boss(t.Context(), plate, spec)
+	out, err := bossCommand(plate, true).Draft(units.Degrees(-3)).Do(t.Context())
 	require.NoError(t, err)
 	tan := math.Tan(-3 * math.Pi / 180)
 	decadtest.MeasuresVolume(t, out, units.CubicMillimeters(bossPlateVolume+cylinderFrustum(4, 4-8*tan, 8)),
@@ -115,16 +108,13 @@ func TestBossDraftKeepsThePilotInsideTheNarrowedTop(t *testing.T) {
 	_, plate := bossPlate(t)
 	// A 8 mm boss drafted 10 degrees is 8 − 16·tan(10) = 5.18 mm across at its top,
 	// so a 6 mm pilot would break through the wall there.
-	spec := bossSpec(plate, true, &decad.BossBore{Diameter: units.Millimeters(6), Depth: units.Millimeters(4)})
-	spec.Draft = units.Degrees(10)
-	doc := plate
-	_, err := decad.Boss(t.Context(), doc, spec)
+	_, err := bossCommand(plate, true).
+		Bore(decad.NewBossBore(units.Millimeters(6), units.Millimeters(4))).Draft(units.Degrees(10)).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrDegenerate)
 	// A 3 mm pilot fits.
 	_, plate2 := bossPlate(t)
-	spec2 := bossSpec(plate2, true, &decad.BossBore{Diameter: units.Millimeters(3), Depth: units.Millimeters(4)})
-	spec2.Draft = units.Degrees(10)
-	_, err = decad.Boss(t.Context(), plate2, spec2)
+	_, err = bossCommand(plate2, true).
+		Bore(decad.NewBossBore(units.Millimeters(3), units.Millimeters(4))).Draft(units.Degrees(10)).Do(t.Context())
 	require.NoError(t, err)
 }
 
@@ -139,9 +129,7 @@ func TestBossDraftRefusals(t *testing.T) {
 		"a draft as a length":         {units.Millimeters(1), decad.ErrUnitKind},
 	} {
 		doc, plate := bossPlate(t)
-		spec := bossSpec(plate, true, nil)
-		spec.Draft = tc.draft
-		_, err := decad.Boss(t.Context(), plate, spec)
+		_, err := bossCommand(plate, true).Draft(tc.draft).Do(t.Context())
 		require.ErrorIs(t, err, tc.want, name)
 		require.Equal(t, []*decad.Body{plate}, doc.Bodies(), "%s: a refused boss leaves the plate live and alone", name)
 	}

@@ -19,7 +19,7 @@ func BenchmarkFlushUnion(b *testing.B) {
 		lower := boxBody(b, doc, 0, 0, 10, 10, 10)
 		upper := translated(b, boxBody(b, doc, 0, 0, 10, 10, 10), 0.5, 0, 10)
 		b.StartTimer()
-		if _, err := decad.Union(context.Background(), lower, upper); err != nil {
+		if _, err := decad.Union(lower, upper).Do(context.Background()); err != nil {
 			b.Fatal(err)
 		}
 	}

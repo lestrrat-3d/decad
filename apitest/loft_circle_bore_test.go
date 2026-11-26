@@ -48,7 +48,7 @@ func TestLoftCircleBoreRoundedAxisDoesNotPublishCylinder(t *testing.T) {
 	s0, p0 := section(basePlane)
 	s1, p1 := section(topPlane)
 	doc := decad.New()
-	blank, err := decad.Loft(t.Context(), doc, s0, p0, s1, p1)
+	blank, err := decad.Loft(doc, s0, p0, s1, p1).Do(t.Context())
 	require.NoError(t, err)
 	toolWorld := sketch.NewWorld()
 	toolPlane, err := toolWorld.CreatePlaneFromFrame(baseFrame)
@@ -60,10 +60,10 @@ func TestLoftCircleBoreRoundedAxisDoesNotPublishCylinder(t *testing.T) {
 	toolSketch.CreateCircle(center, 1)
 	_, err = toolSketch.Solve(t.Context())
 	require.NoError(t, err)
-	tool, err := decad.Extrude(t.Context(), doc, toolSketch, toolSketch.Profiles()[0],
-		decad.Distance{D: units.Millimeters(6), Dir: decad.Along})
+	tool, err := decad.Extrude(doc, toolSketch, toolSketch.Profiles()[0],
+		decad.Distance{D: units.Millimeters(6), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
-	cut, err := decad.Cut(t.Context(), blank, tool)
+	cut, err := decad.Cut(blank, tool).Do(t.Context())
 	require.NoError(t, err)
 	requireLoftBoreFaceted(t, cut, 3.125)
 }
@@ -115,7 +115,7 @@ func TestLoftCircleBoreRoundedAdmissionRefusals(t *testing.T) {
 			s0, p0 := section(basePlane)
 			s1, p1 := section(topPlane)
 			doc := decad.New(decad.ExactOnly())
-			blank, err := decad.Loft(t.Context(), doc, s0, p0, s1, p1)
+			blank, err := decad.Loft(doc, s0, p0, s1, p1).Do(t.Context())
 			require.NoError(t, err)
 			toolWorld := sketch.NewWorld()
 			toolPlane, err := toolWorld.CreatePlaneFromFrame(base)
@@ -127,10 +127,10 @@ func TestLoftCircleBoreRoundedAdmissionRefusals(t *testing.T) {
 			toolSketch.CreateCircle(center, 1)
 			_, err = toolSketch.Solve(t.Context())
 			require.NoError(t, err)
-			tool, err := decad.Extrude(t.Context(), doc, toolSketch, toolSketch.Profiles()[0],
-				decad.Distance{D: units.Millimeters(tc.height + 2), Dir: decad.Along})
+			tool, err := decad.Extrude(doc, toolSketch, toolSketch.Profiles()[0],
+				decad.Distance{D: units.Millimeters(tc.height + 2), Dir: decad.Along}).Do(t.Context())
 			require.NoError(t, err)
-			cut, err := decad.Cut(t.Context(), blank, tool)
+			cut, err := decad.Cut(blank, tool).Do(t.Context())
 			if err != nil {
 				// An unproved tool-center lift takes the general boolean path,
 				// which can refuse near-coincident held facets.
@@ -164,7 +164,7 @@ func requireLoftBoreFaceted(t *testing.T, cut *decad.Body, height float64) {
 func TestLoftThroughBoreCutPublishesCircularTopology(t *testing.T) {
 	bottom, bottomProfile, top, topProfile := loftSquaresAt(t, r3.NewVec(0, 0, 0), 5, 5, 2)
 	doc := decad.New()
-	blank, err := decad.Loft(t.Context(), doc, bottom, bottomProfile, top, topProfile)
+	blank, err := decad.Loft(doc, bottom, bottomProfile, top, topProfile).Do(t.Context())
 	require.NoError(t, err)
 
 	world := sketch.NewWorld()
@@ -179,10 +179,10 @@ func TestLoftThroughBoreCutPublishesCircularTopology(t *testing.T) {
 	s.CreateCircle(center, 1)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	tool, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(4), Dir: decad.Along})
+	tool, err := decad.Extrude(doc, s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(4), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
-	cut, err := decad.Cut(t.Context(), blank, tool)
+	cut, err := decad.Cut(blank, tool).Do(t.Context())
 	require.NoError(t, err)
 	requireManifold(t, cut)
 
@@ -243,7 +243,7 @@ func TestLoftThroughBoreCutPublishesCircularTopology(t *testing.T) {
 		t.Run(placed.name, func(t *testing.T) {
 			motion, err := placed.transform()
 			require.NoError(t, err)
-			placedBody, err := decad.Copy(t.Context(), cut, decad.WithCopyPlacement(motion))
+			placedBody, err := decad.Copy(cut).Place(decad.CopyTransform{Transform: motion}).Do(t.Context())
 			require.NoError(t, err)
 			requireManifold(t, placedBody)
 			caps, err := decad.Faces(decad.FaceCreatedBy(decad.CapStart(placedBody))).Exactly(1).SelectFaces(placedBody)
@@ -264,7 +264,7 @@ func TestLoftThroughBoreCutPublishesCircularTopology(t *testing.T) {
 		bores := []struct{ x, y, radius float64 }{{1, 0.5, 1}, {-2, 1, 0.75}, {0, -2, 0.5}}
 		for i, bore := range bores[1:] {
 			tool := circlePrismAtZ(t, doc, bore.x, bore.y, bore.radius, 0, 2)
-			body, err = decad.Cut(t.Context(), body, tool)
+			body, err = decad.Cut(body, tool).Do(t.Context())
 			require.NoError(t, err)
 			materialArea -= math.Pi * bore.radius * bore.radius
 			_, err := decad.Faces(decad.Cylindrical()).Exactly(i + 2).SelectFaces(body)
@@ -369,7 +369,7 @@ func TestDirectLoftWholeCircleHolePublishesCircularTopology(t *testing.T) {
 		require.NoError(t, err)
 		sections[i], profiles[i] = s, s.Profiles()[0]
 	}
-	body, err := decad.Loft(t.Context(), decad.New(), sections[0], profiles[0], sections[1], profiles[1])
+	body, err := decad.Loft(decad.New(), sections[0], profiles[0], sections[1], profiles[1]).Do(t.Context())
 	require.NoError(t, err)
 	requireManifold(t, body)
 	for _, role := range []decad.FeatureRef{decad.CapStart(body), decad.CapEnd(body)} {
@@ -405,8 +405,8 @@ func TestExtrudedBoxThroughBoreCutPublishesCircularTopology(t *testing.T) {
 	_, err = boxSketch.Solve(t.Context())
 	require.NoError(t, err)
 	doc := decad.New()
-	box, err := decad.Extrude(t.Context(), doc, boxSketch, boxSketch.Profiles()[0],
-		decad.Distance{D: units.Millimeters(2), Dir: decad.Along})
+	box, err := decad.Extrude(doc, boxSketch, boxSketch.Profiles()[0],
+		decad.Distance{D: units.Millimeters(2), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	frame, err := r3.NewFrame(r3.NewVec(0, 0, -1), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
 	require.NoError(t, err)
@@ -419,10 +419,10 @@ func TestExtrudedBoxThroughBoreCutPublishesCircularTopology(t *testing.T) {
 	toolSketch.CreateCircle(center, 1)
 	_, err = toolSketch.Solve(t.Context())
 	require.NoError(t, err)
-	tool, err := decad.Extrude(t.Context(), doc, toolSketch, toolSketch.Profiles()[0],
-		decad.Distance{D: units.Millimeters(4), Dir: decad.Along})
+	tool, err := decad.Extrude(doc, toolSketch, toolSketch.Profiles()[0],
+		decad.Distance{D: units.Millimeters(4), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
-	cut, err := decad.Cut(t.Context(), box, tool)
+	cut, err := decad.Cut(box, tool).Do(t.Context())
 	require.NoError(t, err)
 	for _, role := range []decad.FeatureRef{decad.CapStart(cut), decad.CapEnd(cut)} {
 		faces, err := decad.Faces(decad.FaceCreatedBy(role)).Exactly(1).SelectFaces(cut)

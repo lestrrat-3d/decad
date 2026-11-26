@@ -35,7 +35,7 @@ func TestSweepChainCardinalLineArcSheet(t *testing.T) {
 	t.Parallel()
 	s, chain, path := cardinalLineArcChain(t)
 	doc := decad.New()
-	sheet, err := decad.Sweep(t.Context(), doc, s, chain, path)
+	sheet, err := decad.Sweep(doc, s, chain, path).Do(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, decad.BodySheet, sheet.Kind())
 	require.Len(t, sheet.Faces(), 2)
@@ -68,7 +68,7 @@ func TestSweepChainCardinalLineArcSheet(t *testing.T) {
 	require.Equal(t, before, len(doc.Bodies()))
 	motion, err := r3.Translation(r3.NewVec(1, 0, 0))
 	require.NoError(t, err)
-	_, err = decad.Transform(t.Context(), sheet, motion)
+	_, err = decad.Transform(sheet, motion).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.Equal(t, before, len(doc.Bodies()))
 }

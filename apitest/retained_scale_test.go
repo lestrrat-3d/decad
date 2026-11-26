@@ -19,11 +19,11 @@ func TestRetainedScaledAtKeepsCurvedTags(t *testing.T) {
 	for _, factor := range []float64{2, 1.1} {
 		t.Run(units.Scalar(factor).String(), func(t *testing.T) {
 			sc := newRetentionScene()
-			drilled, err := decad.Cut(t.Context(), sc.roundedBox(t), sc.tool(t, 20))
+			drilled, err := decad.Cut(sc.roundedBox(t), sc.tool(t, 20)).Do(t.Context())
 			require.NoError(t, err)
 			t.Logf("before kinds %v", retentionKinds(drilled))
 			anchor := r3.NewVec(5, -3, 2)
-			scaled, err := decad.ScaledAt(t.Context(), drilled, anchor, units.Scalar(factor))
+			scaled, err := decad.ScaledAt(drilled, anchor, units.Scalar(factor)).Do(t.Context())
 			require.NoError(t, err)
 			kinds := retentionKinds(scaled)
 			t.Logf("after kinds %v", kinds)

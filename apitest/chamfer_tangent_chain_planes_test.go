@@ -65,7 +65,7 @@ func (sc *tcScene) prism(t *testing.T, origin, u, v r3.Vec, segs []tcSeg, ext de
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	require.Len(t, s.Profiles(), 1)
-	b, err := decad.Extrude(t.Context(), sc.doc, s, s.Profiles()[0], ext)
+	b, err := decad.Extrude(sc.doc, s, s.Profiles()[0], ext).Do(t.Context())
 	require.NoError(t, err)
 	return b
 }
@@ -164,7 +164,7 @@ func tcBar(t *testing.T, sc *tcScene, r, l float64) *decad.Body {
 	elev := sc.prism(t, r3.NewVec(0, r+1, 0), tcX, tcZ, []tcSeg{
 		tcLine(-r-1, 0, l, 0), tcArc(l, r, l, 0, l, 2*r), tcLine(l, 2*r, -r-1, 2*r), tcLine(-r-1, 2*r, -r-1, 0),
 	}, tcAlong(2*r+2))
-	b, err := decad.Intersect(t.Context(), plan, elev)
+	b, err := decad.Intersect(plan, elev).Do(t.Context())
 	require.NoError(t, err)
 	return b
 }
@@ -206,7 +206,7 @@ func tcCut(t *testing.T, b *decad.Body, tools ...*decad.Body) *decad.Body {
 	t.Helper()
 	for _, tool := range tools {
 		var err error
-		b, err = decad.Cut(t.Context(), b, tool)
+		b, err = decad.Cut(b, tool).Do(t.Context())
 		require.NoError(t, err)
 	}
 	return b
@@ -214,14 +214,19 @@ func tcCut(t *testing.T, b *decad.Body, tools ...*decad.Body) *decad.Body {
 
 const tcD = 0.5
 
-func tcChamfer(t *testing.T, b *decad.Body, edges []*decad.Edge, opts ...decad.ChamferOption) (*decad.Body, error) {
+// tcChamfer chamfers edges at setback tcD. chain adds the TangentChain method.
+func tcChamfer(t *testing.T, b *decad.Body, edges []*decad.Edge, chain ...bool) (*decad.Body, error) {
 	t.Helper()
-	return tcChamferBy(t, b, edges, tcD, opts...)
+	return tcChamferBy(t, b, edges, tcD, chain...)
 }
 
-func tcChamferBy(t *testing.T, b *decad.Body, edges []*decad.Edge, d float64, opts ...decad.ChamferOption) (*decad.Body, error) {
+func tcChamferBy(t *testing.T, b *decad.Body, edges []*decad.Edge, d float64, chain ...bool) (*decad.Body, error) {
 	t.Helper()
-	return decad.Chamfer(t.Context(), b, tcSelect(t, edges), units.Millimeters(d), opts...)
+	cmd := decad.Chamfer(b, tcSelect(t, edges), units.Millimeters(d))
+	if len(chain) > 0 && chain[0] {
+		cmd.TangentChain()
+	}
+	return cmd.Do(t.Context())
 }
 
 // tcEndPiece is the volume a chamfer of setback tcD removes beyond its full wedge where its straight end runs onto an
@@ -314,7 +319,7 @@ func tcSolvedPrism(t *testing.T, sc *tcScene, s *sketch.Sketch) *decad.Body {
 	_, err := s.Solve(t.Context())
 	require.NoError(t, err)
 	require.Len(t, s.Profiles(), 1)
-	b, err := decad.Extrude(t.Context(), sc.doc, s, s.Profiles()[0], decad.Symmetric{D: units.Millimeters(10)})
+	b, err := decad.Extrude(sc.doc, s, s.Profiles()[0], decad.Symmetric{D: units.Millimeters(10)}).Do(t.Context())
 	require.NoError(t, err)
 	return b
 }
@@ -502,14 +507,14 @@ func TestChamferTangentChainAcrossPlanes(t *testing.T) {
 			require.NoError(t, err)
 			tcRequireChamfer(t, b, out, rim(b), barWant)
 		})
-		t.Run(fmt.Sprintf("a bar of radius %g from one seed under WithTangentChain", size.r), func(t *testing.T) {
+		t.Run(fmt.Sprintf("a bar of radius %g from one seed under TangentChain", size.r), func(t *testing.T) {
 			t.Parallel()
 			b := tcBar(t, newTCScene(), size.r, size.l)
 			seed := tcEdgesWhere(b, func(e *decad.Edge, m r3.Vec) bool {
 				return tcIsArc(e) && tcNear(m.Z, 2*size.r) && m.X < 0
 			})
 			require.Len(t, seed, 1)
-			out, err := tcChamfer(t, b, seed, decad.WithTangentChain())
+			out, err := tcChamfer(t, b, seed, true)
 			require.NoError(t, err)
 			tcRequireChamfer(t, b, out, rim(b), barWant)
 		})

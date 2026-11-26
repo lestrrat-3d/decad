@@ -27,7 +27,7 @@ func lapBox(t *testing.T, doc *decad.Document, x0, y0, x1, y1, z0 float64) *deca
 	s.CreateRectangle(x0, y0, x1, y1)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(6), Dir: decad.Along})
+	body, err := decad.Extrude(doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(6), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -55,9 +55,9 @@ func TestVerifyBoxAlgebra(t *testing.T) {
 			plate := lapBox(t, doc, 0, -10, 20, 10, -3)
 			railLap := lapBox(t, doc, 0, -10, 20, 10, tc.lapBottom)
 			plateLap := lapBox(t, doc, -40, -3, 40, 3, -6)
-			rail, err := decad.Cut(t.Context(), rail, railLap)
+			rail, err := decad.Cut(rail, railLap).Do(t.Context())
 			require.NoError(t, err)
-			plate, err = decad.Cut(t.Context(), plate, plateLap)
+			plate, err = decad.Cut(plate, plateLap).Do(t.Context())
 			require.NoError(t, err)
 			report, err := doc.Verify(t.Context())
 			require.NoError(t, err)
@@ -97,7 +97,7 @@ func TestVerifyBoxAlgebraRotatedRail(t *testing.T) {
 			turn, err := r3.RotationAround(r3.Vec{}, r3.Vec{Z: 1}, units.Radians(0.6))
 			require.NoError(t, err)
 			turned := func(b *decad.Body) *decad.Body {
-				out, err := decad.Transform(t.Context(), b, turn)
+				out, err := decad.Transform(b, turn).Do(t.Context())
 				require.NoError(t, err)
 				return out
 			}
@@ -105,9 +105,9 @@ func TestVerifyBoxAlgebraRotatedRail(t *testing.T) {
 			railLap := lapBox(t, doc, 0, -10, 20, 10, tc.lapBottom)
 			plate := lapBox(t, doc, 0, -10, 20, 10, -3)
 			plateLap := turned(lapBox(t, doc, -40, -3, 40, 3, -6))
-			rail, err = decad.Cut(t.Context(), rail, railLap)
+			rail, err = decad.Cut(rail, railLap).Do(t.Context())
 			require.NoError(t, err)
-			plate, err = decad.Cut(t.Context(), plate, plateLap)
+			plate, err = decad.Cut(plate, plateLap).Do(t.Context())
 			require.NoError(t, err)
 			report, err := doc.Verify(t.Context())
 			require.NoError(t, err)

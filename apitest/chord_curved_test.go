@@ -34,7 +34,7 @@ func TestFilletChordRoundsTheRimsOfARod(t *testing.T) {
 	doc := decad.New()
 	rod := circleBodyAtZ(t, doc, 0, 5, 0, 20)
 	// A right angle: a chord of √2 is a radius of 1.
-	out, err := decad.FilletChord(t.Context(), rod, decad.Edges(decad.Circular()), units.Millimeters(math.Sqrt2))
+	out, err := decad.FilletChord(rod, decad.Edges(decad.Circular()), units.Millimeters(math.Sqrt2)).Do(t.Context())
 	require.NoError(t, err)
 	require.Len(t, doc.Bodies(), 1)
 	require.True(t, doc.Bodies()[0] == out)
@@ -51,8 +51,8 @@ func TestChamferAngleBevelsTheRimsOfARod(t *testing.T) {
 	// centroid lies a third of the way in from the wall corner along the cap.
 	const d = 2.0
 	other := d * math.Tan(math.Pi/6)
-	out, err := decad.ChamferAngle(t.Context(), rod, decad.Edges(decad.Circular()), units.Millimeters(d),
-		decad.Faces(decad.Planar()), units.Degrees(30))
+	out, err := decad.ChamferAngle(rod, decad.Edges(decad.Circular()), units.Millimeters(d),
+		decad.Faces(decad.Planar()), units.Degrees(30)).Do(t.Context())
 	require.NoError(t, err)
 	ring := 2 * math.Pi * (5 - d/3) * 0.5 * d * other
 	v, err := out.Volume()
@@ -78,10 +78,10 @@ func TestFilletChordStillRefusesACurvedFaceBesideAStraightEdge(t *testing.T) {
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	doc := decad.New()
-	prism, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
+	prism, err := decad.Extrude(doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(5), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	edge := decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1)), decad.EndpointAt(r3.NewVec(10, 0, 0))).Exactly(1)
-	_, err = decad.FilletChord(t.Context(), prism, edge, units.Millimeters(1))
+	_, err = decad.FilletChord(prism, edge, units.Millimeters(1)).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.ErrorContains(t, err, "planar faces")
 	require.Len(t, doc.Bodies(), 1)

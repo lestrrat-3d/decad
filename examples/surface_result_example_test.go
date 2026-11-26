@@ -10,7 +10,7 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// WithSurfaceResult makes a feature return a sheet instead of a solid: only the
+// SurfaceResult makes a feature return a sheet instead of a solid: only the
 // walls, with no end caps. Use a sheet when you want a surface to work with
 // (trim it, patch it, offset it, stitch it into a solid) rather than a closed
 // volume. The option works the same way on Extrude, Revolve, Loft and Sweep.
@@ -29,12 +29,11 @@ func Example_surface_result() {
 		return
 	}
 
-	// Extrude as usual, adding WithSurfaceResult. The result is a four-wall
+	// Extrude as usual, adding SurfaceResult. The result is a four-wall
 	// tube with open ends.
 	doc := decad.New()
-	tube, err := decad.Extrude(context.Background(), doc, s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(10), Dir: decad.Along},
-		decad.WithSurfaceResult())
+	tube, err := decad.Extrude(doc, s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).SurfaceResult().Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to extrude: %s\n", err)
 		return

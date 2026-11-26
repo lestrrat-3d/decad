@@ -30,8 +30,8 @@ func Example_transform() {
 		return
 	}
 	doc := decad.New()
-	plate, err := decad.Extrude(context.Background(), doc, s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	plate, err := decad.Extrude(doc, s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to extrude: %s\n", err)
 		return
@@ -44,7 +44,7 @@ func Example_transform() {
 		fmt.Printf("failed to build motion: %s\n", err)
 		return
 	}
-	moved, err := decad.Transform(context.Background(), plate, motion)
+	moved, err := decad.Transform(plate, motion).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to transform: %s\n", err)
 		return

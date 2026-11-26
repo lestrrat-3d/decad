@@ -51,19 +51,19 @@ func TestClassBPinIntoFarProng(t *testing.T) {
 				return a, b
 			}
 			a, b := pair(decad.New())
-			union, err := decad.Union(t.Context(), a, b)
+			union, err := decad.Union(a, b).Do(t.Context())
 			require.NoError(t, err)
 			requireExactFlushResult(t, union, 11, 5000+180*math.Pi)
 
 			a, b = pair(decad.New())
-			common, err := decad.Intersect(t.Context(), a, b)
+			common, err := decad.Intersect(a, b).Do(t.Context())
 			require.NoError(t, err)
 			requireExactFlushResult(t, common, 3, 45*math.Pi)
 			if tc.pinFirst {
 				return
 			}
 			a, b = pair(decad.New())
-			cut, err := decad.Cut(t.Context(), a, b)
+			cut, err := decad.Cut(a, b).Do(t.Context())
 			require.NoError(t, err)
 			requireExactFlushResult(t, cut, 12, 5000-45*math.Pi)
 		})
@@ -72,12 +72,12 @@ func TestClassBPinIntoFarProng(t *testing.T) {
 	// interval: Union reads as above, and Cut drills a blind hole one ulp deep.
 	long := math.Nextafter(20, 21)
 	doc := decad.New()
-	union, err := decad.Union(t.Context(), uPlate(t, doc), pinAlongX(t, doc, 10, long))
+	union, err := decad.Union(uPlate(t, doc), pinAlongX(t, doc, 10, long)).Do(t.Context())
 	require.NoError(t, err)
 	requireExactFlushResult(t, union, 11, 5000+180*math.Pi)
 
 	doc = decad.New()
-	cut, err := decad.Cut(t.Context(), uPlate(t, doc), pinAlongX(t, doc, 10, long))
+	cut, err := decad.Cut(uPlate(t, doc), pinAlongX(t, doc, 10, long)).Do(t.Context())
 	require.NoError(t, err)
 	requireExactFlushResult(t, cut, 12, 5000-9*math.Pi*(long-20))
 }
@@ -101,46 +101,46 @@ func TestClassBPinToFarOuterWall(t *testing.T) {
 	t.Run("flush", func(t *testing.T) {
 		t.Parallel()
 		doc := decad.New()
-		union, err := decad.Union(t.Context(), uPlate(t, doc), pin(doc, 40))
+		union, err := decad.Union(uPlate(t, doc), pin(doc, 40)).Do(t.Context())
 		require.NoError(t, err)
 		requireExactFlushResult(t, union, 11, 5000+180*math.Pi)
 
 		doc = decad.New()
-		cut, err := decad.Cut(t.Context(), uPlate(t, doc), pin(doc, 40))
+		cut, err := decad.Cut(uPlate(t, doc), pin(doc, 40)).Do(t.Context())
 		require.NoError(t, err)
 		requireExactFlushResult(t, cut, 11, 5000-90*math.Pi)
 
 		doc = decad.New()
-		common, err := decad.Intersect(t.Context(), uPlate(t, doc), pin(doc, 40))
+		common, err := decad.Intersect(uPlate(t, doc), pin(doc, 40)).Do(t.Context())
 		require.NoError(t, err)
 		requireExactFlushResult(t, common, 3, 90*math.Pi)
 	})
 	t.Run("one_ulp_short", func(t *testing.T) {
 		t.Parallel()
 		doc := decad.New()
-		cut, err := decad.Cut(t.Context(), uPlate(t, doc), pin(doc, short))
+		cut, err := decad.Cut(uPlate(t, doc), pin(doc, short)).Do(t.Context())
 		require.NoError(t, err)
 		requireExactFlushResult(t, cut, 12, 5000-9*math.Pi*(short-30))
 
 		doc = decad.New()
-		union, err := decad.Union(t.Context(), uPlate(t, doc), pin(doc, short))
+		union, err := decad.Union(uPlate(t, doc), pin(doc, short)).Do(t.Context())
 		require.NoError(t, err)
 		requireExactFlushResult(t, union, 11, 5000+180*math.Pi)
 	})
 	t.Run("one_ulp_long", func(t *testing.T) {
 		t.Parallel()
 		doc := decad.New()
-		cut, err := decad.Cut(t.Context(), uPlate(t, doc), pin(doc, long))
+		cut, err := decad.Cut(uPlate(t, doc), pin(doc, long)).Do(t.Context())
 		require.NoError(t, err)
 		requireExactFlushResult(t, cut, 11, 5000-90*math.Pi)
 
 		doc = decad.New()
-		common, err := decad.Intersect(t.Context(), uPlate(t, doc), pin(doc, long))
+		common, err := decad.Intersect(uPlate(t, doc), pin(doc, long)).Do(t.Context())
 		require.NoError(t, err)
 		requireExactFlushResult(t, common, 3, 90*math.Pi)
 
 		doc = decad.New()
-		union, err := decad.Union(t.Context(), uPlate(t, doc), pin(doc, long))
+		union, err := decad.Union(uPlate(t, doc), pin(doc, long)).Do(t.Context())
 		require.NoError(t, err)
 		requireExactFlushResult(t, union, 13, 5000+9*math.Pi*(20+(long-40)))
 	})
@@ -167,12 +167,12 @@ func TestClassBPinThroughSlottedPlate(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			doc := decad.New()
-			union, err := decad.Union(t.Context(), slottedPlate(t, doc), pinAlongX(t, doc, tc.x0, tc.length))
+			union, err := decad.Union(slottedPlate(t, doc), pinAlongX(t, doc, tc.x0, tc.length)).Do(t.Context())
 			require.NoError(t, err)
 			requireExactFlushResult(t, union, tc.unionFaces, tc.unionVolume)
 
 			doc = decad.New()
-			cut, err := decad.Cut(t.Context(), slottedPlate(t, doc), pinAlongX(t, doc, tc.x0, tc.length))
+			cut, err := decad.Cut(slottedPlate(t, doc), pinAlongX(t, doc, tc.x0, tc.length)).Do(t.Context())
 			require.NoError(t, err)
 			requireExactFlushResult(t, cut, 12, 6500-270*math.Pi)
 		})
@@ -188,7 +188,7 @@ func TestClassBPinThroughSlottedPlate(t *testing.T) {
 func TestClassBMultiFacePinMisses(t *testing.T) {
 	t.Parallel()
 	type pair func(*testing.T, *decad.Document) (*decad.Body, *decad.Body)
-	union := func(t *testing.T, a, b *decad.Body) (*decad.Body, error) { return decad.Union(t.Context(), a, b) }
+	union := func(t *testing.T, a, b *decad.Body) (*decad.Body, error) { return decad.Union(a, b).Do(t.Context()) }
 	for _, tc := range []struct {
 		name string
 		pair pair
@@ -198,7 +198,7 @@ func TestClassBMultiFacePinMisses(t *testing.T) {
 		{name: "intersect_two_lands", pair: func(t *testing.T, doc *decad.Document) (*decad.Body, *decad.Body) {
 			return slottedPlate(t, doc), pinAlongX(t, doc, -5, 50)
 		}, op: func(t *testing.T, a, b *decad.Body) (*decad.Body, error) {
-			return decad.Intersect(t.Context(), a, b)
+			return decad.Intersect(a, b).Do(t.Context())
 		}, want: 270 * math.Pi},
 		{name: "union_displaced_far_cap", pair: func(t *testing.T, doc *decad.Document) (*decad.Body, *decad.Body) {
 			return uPlate(t, doc), pinAlongXAt(t, doc, 10, 5, units.Inches(25.0/25.4))

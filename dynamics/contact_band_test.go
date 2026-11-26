@@ -44,13 +44,13 @@ func knobBody(t *testing.T, doc *decad.Document) (*decad.Body, float64) {
 	s.CreateCircle(center, 2)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	disc, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(4), Dir: decad.Along})
+	disc, err := decad.Extrude(doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(4), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
-	disc, err = decad.Transform(t.Context(), disc, translation(t, r3.Vec{Z: 8}))
+	disc, err = decad.Transform(disc, translation(t, r3.Vec{Z: 8})).Do(t.Context())
 	require.NoError(t, err)
-	union, err := decad.Union(t.Context(), base, disc)
+	union, err := decad.Union(base, disc).Do(t.Context())
 	require.NoError(t, err)
-	knob, err := decad.Transform(t.Context(), union, translation(t, r3.Vec{X: .125}))
+	knob, err := decad.Transform(union, translation(t, r3.Vec{X: .125})).Do(t.Context())
 	require.NoError(t, err)
 	mesh, err := knob.Tessellate(t.Context(), units.Millimeters(1))
 	require.NoError(t, err)
@@ -85,7 +85,7 @@ func octagonBody(t *testing.T, doc *decad.Document) *decad.Body {
 	}
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(8), Dir: decad.Along})
+	body, err := decad.Extrude(doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(8), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -269,7 +269,7 @@ func TestDisplacedBlockRestsOnTray(t *testing.T) {
 	doc := decad.New()
 	tray := tumbleTray(t, doc)
 	box := makeBox(t, doc, -6, -6, 6, 6, 0, 12)
-	block, err := decad.Chamfer(t.Context(), box, decad.Edges(decad.CreatedBy(decad.CapEnd(box))), units.Millimeters(2.1))
+	block, err := decad.Chamfer(box, decad.Edges(decad.CreatedBy(decad.CapEnd(box))), units.Millimeters(2.1)).Do(t.Context())
 	require.NoError(t, err)
 	mesh, err := block.Tessellate(t.Context(), units.Millimeters(1))
 	require.NoError(t, err)
@@ -359,8 +359,8 @@ func bottleBody(t *testing.T, doc *decad.Document) *decad.Body {
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	require.Len(t, s.Profiles(), 1)
-	body, err := decad.Revolve(t.Context(), doc, s, s.Profiles()[0], decad.SketchLine{
-		Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 0, V: 1}}, decad.FullRevolution{})
+	body, err := decad.Revolve(doc, s, s.Profiles()[0], decad.SketchLine{
+		Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 0, V: 1}}, decad.FullRevolution{}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }

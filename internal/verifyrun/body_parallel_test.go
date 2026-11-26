@@ -42,18 +42,17 @@ func bodySurveyDocument(tb testing.TB, shape string, count int) (*decad.Document
 	}
 	require.NotNil(tb, profile)
 	doc := decad.New()
-	var opts []decad.ExtrudeOption
+	extrude := decad.Extrude(doc, s, profile, decad.Distance{D: units.Millimeters(200), Dir: decad.Along})
 	if shape == bodySurveySheet {
-		opts = append(opts, decad.WithSurfaceResult())
+		extrude.SurfaceResult()
 	}
-	body, err := decad.Extrude(tb.Context(), doc, s, profile,
-		decad.Distance{D: units.Millimeters(200), Dir: decad.Along}, opts...)
+	body, err := extrude.Do(tb.Context())
 	require.NoError(tb, err)
 	bodies := []*decad.Body{body}
 	for i := 1; i < count; i++ {
 		placement, err := r3.Translation(r3.NewVec(100*float64(i), 0, 0))
 		require.NoError(tb, err)
-		placed, err := decad.Copy(tb.Context(), body, decad.WithCopyPlacement(placement))
+		placed, err := decad.Copy(body).Place(decad.CopyTransform{Transform: placement}).Do(tb.Context())
 		require.NoError(tb, err)
 		bodies = append(bodies, placed)
 	}

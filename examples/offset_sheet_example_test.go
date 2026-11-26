@@ -15,7 +15,7 @@ import (
 // source sheet is kept.
 func Example_offset_sheet() {
 	// Offset works on sheets, so make one: extrude a rectangle with
-	// WithSurfaceResult to get four walls and no caps.
+	// SurfaceResult to get four walls and no caps.
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	if err != nil {
@@ -29,8 +29,8 @@ func Example_offset_sheet() {
 		return
 	}
 	doc := decad.New()
-	sheet, err := decad.Extrude(context.Background(), doc, s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(10), Dir: decad.Along}, decad.WithSurfaceResult())
+	sheet, err := decad.Extrude(doc, s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).SurfaceResult().Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to extrude: %s\n", err)
 		return
@@ -38,7 +38,7 @@ func Example_offset_sheet() {
 
 	// Grow the sheet outward by 3 mm. Each corner becomes a rounded wall so
 	// the new sheet stays 3 mm from the old one everywhere.
-	grown, err := decad.Offset(context.Background(), sheet, units.Millimeters(3))
+	grown, err := decad.Offset(sheet, units.Millimeters(3)).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to offset: %s\n", err)
 		return

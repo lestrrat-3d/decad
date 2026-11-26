@@ -61,9 +61,9 @@ func TestClearanceRevolveAxisReexpressionContainsTruth(t *testing.T) {
 			doc := decad.New()
 			const a = 1048576.3
 			s := rectSketch(t, 0.201, 0, 0.601, 1)
-			_, err := decad.Revolve(t.Context(), doc, s, s.Profiles()[0],
+			_, err := decad.Revolve(doc, s, s.Profiles()[0],
 				decad.SketchLine{Start: decad.Point2{U: a, V: 0}, End: decad.Point2{U: a, V: 1}},
-				decad.AngleExtent{A: units.Degrees(deg), Dir: decad.Along})
+				decad.AngleExtent{A: units.Degrees(deg), Dir: decad.Along}).Do(t.Context())
 			require.NoError(t, err)
 			boxBodyAtZ(t, doc, -1, -1, 0, 2, -0.25, 0.5)
 			requireGapEncloses(t, clearanceRow(t, doc), ratOf(0.201))
@@ -89,9 +89,9 @@ func TestClearanceRevolveAxisCornerContainsTruth(t *testing.T) {
 			doc := decad.New()
 			const a = 1048576.3
 			s := rectSketch(t, 0.201, 0, 0.601, 1)
-			_, err := decad.Revolve(t.Context(), doc, s, s.Profiles()[0],
+			_, err := decad.Revolve(doc, s, s.Profiles()[0],
 				decad.SketchLine{Start: decad.Point2{U: a, V: 0}, End: decad.Point2{U: a, V: 1}},
-				decad.AngleExtent{A: units.Degrees(deg), Dir: decad.Along})
+				decad.AngleExtent{A: units.Degrees(deg), Dir: decad.Along}).Do(t.Context())
 			require.NoError(t, err)
 			boxBodyAtZ(t, doc, -1, -2, 0, -0.05, -0.25, 0.5)
 			gap := clearanceRow(t, doc)
@@ -140,7 +140,7 @@ func TestClearanceRevolveAxisSnapContainsTruth(t *testing.T) {
 			s.CreateArc(c, end, start)
 			_, err = s.Solve(t.Context())
 			require.NoError(t, err)
-			_, err = decad.Revolve(t.Context(), doc, s, s.Profiles()[0], uAxis, decad.FullRevolution{})
+			_, err = decad.Revolve(doc, s, s.Profiles()[0], uAxis, decad.FullRevolution{}).Do(t.Context())
 			require.NoError(t, err)
 			g := r / 10
 			boxBodyAtZ(t, doc, -r/4, r+g, r/4, 2*r, -r/4, r/2)

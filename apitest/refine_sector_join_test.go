@@ -22,11 +22,11 @@ func refineSectorHubAndLugs(t *testing.T) (*decad.Document, *decad.Body) {
 	for i := 1; i < count; i++ {
 		turn, err := r3.Rotation(r3.Vec{X: 1}, units.Radians(2*math.Pi*float64(i)/float64(count)))
 		require.NoError(t, err)
-		copied, err := decad.Copy(t.Context(), lug, decad.WithCopyPlacement(turn))
+		copied, err := decad.Copy(lug).Place(decad.CopyTransform{Transform: turn}).Do(t.Context())
 		require.NoError(t, err)
 		lugs = append(lugs, copied)
 	}
-	joined, err := decad.Union(t.Context(), hub, lugs...)
+	joined, err := decad.Union(append([]*decad.Body{hub}, lugs...)...).Do(t.Context())
 	require.NoError(t, err)
 	return doc, joined
 }
@@ -54,7 +54,7 @@ func TestRefineSectorJoinReachesTargetBound(t *testing.T) {
 		before, err := joined.Volume()
 		require.NoError(t, err)
 
-		refined, err := decad.Refine(t.Context(), joined, units.Millimeters(target))
+		refined, err := decad.Refine(joined, units.Millimeters(target)).Do(t.Context())
 		require.NoError(t, err, "target %g", target)
 		require.NotContains(t, doc.Bodies(), joined)
 		require.Contains(t, doc.Bodies(), refined)
@@ -78,10 +78,10 @@ func TestRefineSectorJoinReachesTargetBound(t *testing.T) {
 // one more lug keeps the refined bound instead of falling back to the default.
 func TestRefineSectorJoinKeepsLaterOperations(t *testing.T) {
 	doc, joined := refineSectorHubAndLugs(t)
-	refined, err := decad.Refine(t.Context(), joined, units.Millimeters(0.03))
+	refined, err := decad.Refine(joined, units.Millimeters(0.03)).Do(t.Context())
 	require.NoError(t, err)
 	tool := revolveSectorCylinderTool(t, doc, 1, 4, 6, 0)
-	cut, err := decad.Cut(t.Context(), refined, tool)
+	cut, err := decad.Cut(refined, tool).Do(t.Context())
 	require.NoError(t, err)
 	require.LessOrEqual(t, refineSectorFloor(t, cut), 0.05)
 	_, err = cut.Tessellate(t.Context(), units.Millimeters(0.05), decad.WithVerification(decad.VerifyAll))
@@ -94,18 +94,18 @@ func TestRefineSectorJoinKeepsLaterOperations(t *testing.T) {
 	for i := 1; i < 6; i++ {
 		turn, err := r3.Rotation(r3.Vec{X: 1}, units.Radians(2*math.Pi*float64(i)/6))
 		require.NoError(t, err)
-		copied, err := decad.Copy(t.Context(), lug, decad.WithCopyPlacement(turn))
+		copied, err := decad.Copy(lug).Place(decad.CopyTransform{Transform: turn}).Do(t.Context())
 		require.NoError(t, err)
 		copies = append(copies, copied)
 	}
-	four, err := decad.Union(t.Context(), hub, lug, copies[0], copies[1], copies[2])
+	four, err := decad.Union(hub, lug, copies[0], copies[1], copies[2]).Do(t.Context())
 	require.NoError(t, err)
 	held := refineSectorFloor(t, four)
 	require.Greater(t, held, 0.03)
-	refinedFour, err := decad.Refine(t.Context(), four, units.Millimeters(0.03))
+	refinedFour, err := decad.Refine(four, units.Millimeters(0.03)).Do(t.Context())
 	require.NoError(t, err)
 	require.LessOrEqual(t, refineSectorFloor(t, refinedFour), 0.03)
-	five, err := decad.Union(t.Context(), refinedFour, copies[3])
+	five, err := decad.Union(refinedFour, copies[3]).Do(t.Context())
 	require.NoError(t, err)
 	require.LessOrEqual(t, refineSectorFloor(t, five), 0.03)
 	require.Contains(t, doc2.Bodies(), five)
@@ -118,7 +118,7 @@ func TestRefineSectorJoinRefusals(t *testing.T) {
 	doc, joined := refineSectorHubAndLugs(t)
 	held := refineSectorFloor(t, joined)
 	bodies := doc.Bodies()
-	refined, err := decad.Refine(t.Context(), joined, units.Millimeters(0.001))
+	refined, err := decad.Refine(joined, units.Millimeters(0.001)).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.Contains(t, err.Error(), "mm boundary proof")
 	require.True(t, refined == nil)
@@ -133,7 +133,7 @@ func TestRefineSectorJoinNeverLoosens(t *testing.T) {
 	held := refineSectorFloor(t, joined)
 	before, err := joined.Volume()
 	require.NoError(t, err)
-	refined, err := decad.Refine(t.Context(), joined, units.Millimeters(0.09))
+	refined, err := decad.Refine(joined, units.Millimeters(0.09)).Do(t.Context())
 	require.NoError(t, err)
 	require.LessOrEqual(t, refineSectorFloor(t, refined), held)
 	after, err := refined.Volume()

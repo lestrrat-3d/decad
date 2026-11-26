@@ -13,7 +13,7 @@ import (
 
 func TestSectionMatchingRectangularHoleLoftFeedsExtrude(t *testing.T) {
 	bottom, bottomProfile, top, topProfile := loftHoledSquares(t)
-	source, err := decad.Loft(t.Context(), decad.New(), bottom, bottomProfile, top, topProfile)
+	source, err := decad.Loft(decad.New(), bottom, bottomProfile, top, topProfile).Do(t.Context())
 	require.NoError(t, err)
 	frame, err := r3.NewFrame(r3.NewVec(0, 0, 5), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
 	require.NoError(t, err)
@@ -30,8 +30,8 @@ func TestSectionMatchingRectangularHoleLoftFeedsExtrude(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 1500.0, area.Value.Base())
 	require.Zero(t, area.Bound.Base())
-	child, err := decad.Extrude(t.Context(), decad.New(), section, profiles[0],
-		decad.Distance{D: units.Millimeters(2), Dir: decad.Along})
+	child, err := decad.Extrude(decad.New(), section, profiles[0],
+		decad.Distance{D: units.Millimeters(2), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	volume, err := child.Volume()
 	require.NoError(t, err)
@@ -49,7 +49,7 @@ func TestSectionMatchingTwoCircleHolesLoftFeedsExtrude(t *testing.T) {
 	require.NoError(t, err)
 	bottom, bottomProfile := sectionTwoCircleProfile(t, world, world.XY(), 2)
 	top, topProfile := sectionTwoCircleProfile(t, world, topPlane, 2)
-	source, err := decad.Loft(t.Context(), decad.New(), bottom, bottomProfile, top, topProfile)
+	source, err := decad.Loft(decad.New(), bottom, bottomProfile, top, topProfile).Do(t.Context())
 	require.NoError(t, err)
 	frame, err := r3.NewFrame(r3.NewVec(0, 0, 1), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
 	require.NoError(t, err)
@@ -62,8 +62,8 @@ func TestSectionMatchingTwoCircleHolesLoftFeedsExtrude(t *testing.T) {
 	area, err := measured.Area()
 	require.NoError(t, err)
 	require.LessOrEqual(t, math.Abs(area.Value.Base()-(100-2*math.Pi)), area.Bound.Base()+1e-12)
-	child, err := decad.Extrude(t.Context(), decad.New(), section, profiles[0],
-		decad.Distance{D: units.Millimeters(2), Dir: decad.Along})
+	child, err := decad.Extrude(decad.New(), section, profiles[0],
+		decad.Distance{D: units.Millimeters(2), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	volume, err := child.Volume()
 	require.NoError(t, err)
@@ -80,7 +80,7 @@ func TestSectionMatchingLoftRefusesDifferentHoleRecords(t *testing.T) {
 	require.NoError(t, err)
 	bottom, bottomProfile := sectionTwoCircleProfile(t, world, world.XY(), 2)
 	top, topProfile := sectionTwoCircleProfile(t, world, topPlane, math.Nextafter(2, 3))
-	source, err := decad.Loft(t.Context(), decad.New(), bottom, bottomProfile, top, topProfile)
+	source, err := decad.Loft(decad.New(), bottom, bottomProfile, top, topProfile).Do(t.Context())
 	require.NoError(t, err)
 	frame, err := r3.NewFrame(r3.NewVec(0, 0, 1), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
 	require.NoError(t, err)
@@ -94,7 +94,7 @@ func TestSectionMatchingLoftRefusesFacetedCutHole(t *testing.T) {
 	origin := r3.NewVec(0, 0, 0.1)
 	bottom, bottomProfile, top, topProfile := loftSquaresAt(t, origin, 5, 5, 2)
 	doc := decad.New()
-	blank, err := decad.Loft(t.Context(), doc, bottom, bottomProfile, top, topProfile)
+	blank, err := decad.Loft(doc, bottom, bottomProfile, top, topProfile).Do(t.Context())
 	require.NoError(t, err)
 	world := sketch.NewWorld()
 	toolFrame, err := r3.NewFrame(origin, r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
@@ -108,10 +108,10 @@ func TestSectionMatchingLoftRefusesFacetedCutHole(t *testing.T) {
 	toolSketch.CreateCircle(center, 1)
 	_, err = toolSketch.Solve(t.Context())
 	require.NoError(t, err)
-	tool, err := decad.Extrude(t.Context(), doc, toolSketch, toolSketch.Profiles()[0],
-		decad.Distance{D: units.Millimeters(3), Dir: decad.Along})
+	tool, err := decad.Extrude(doc, toolSketch, toolSketch.Profiles()[0],
+		decad.Distance{D: units.Millimeters(3), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
-	cut, err := decad.Cut(t.Context(), blank, tool)
+	cut, err := decad.Cut(blank, tool).Do(t.Context())
 	require.NoError(t, err)
 	sectionFrame, err := r3.NewFrame(r3.NewVec(0, 0, 1), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
 	require.NoError(t, err)
@@ -123,11 +123,11 @@ func TestSectionMatchingLoftRefusesFacetedCutHole(t *testing.T) {
 
 func TestSectionMatchingLoftRefusesFilletRewrite(t *testing.T) {
 	bottom, bottomProfile, top, topProfile := loftSquaresAt(t, r3.NewVec(0, 0, 0), 5, 5, 2)
-	source, err := decad.Loft(t.Context(), decad.New(), bottom, bottomProfile, top, topProfile)
+	source, err := decad.Loft(decad.New(), bottom, bottomProfile, top, topProfile).Do(t.Context())
 	require.NoError(t, err)
 	corner := decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1)),
 		decad.EndpointAt(r3.NewVec(-5, -5, 0))).Exactly(1)
-	rounded, err := decad.Fillet(t.Context(), source, corner, units.Millimeters(1))
+	rounded, err := decad.Fillet(source, corner, units.Millimeters(1)).Do(t.Context())
 	require.NoError(t, err)
 	frame, err := r3.NewFrame(r3.NewVec(0, 0, 1), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
 	require.NoError(t, err)

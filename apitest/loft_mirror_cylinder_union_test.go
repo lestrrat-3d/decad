@@ -55,26 +55,26 @@ func TestUnionMirroredRadialTabsWithNearAxialCopy(t *testing.T) {
 	require.NoError(t, err)
 	bottomSketch, bottomProfile := loftMirrorTabSection(t, world, world.XY(), 0)
 	middleSketch, middleProfile := loftMirrorTabSection(t, world, middlePlane, 0.2)
-	lower, err := decad.Loft(t.Context(), doc, bottomSketch, bottomProfile, middleSketch, middleProfile)
+	lower, err := decad.Loft(doc, bottomSketch, bottomProfile, middleSketch, middleProfile).Do(t.Context())
 	require.NoError(t, err)
-	upper, err := decad.MirroredCopy(t.Context(), lower, decad.MirrorFrame{Frame: middleFrame})
+	upper, err := decad.MirroredCopy(lower, decad.MirrorFrame{Frame: middleFrame}).Do(t.Context())
 	require.NoError(t, err)
-	pair, err := decad.Union(t.Context(), lower, upper)
+	pair, err := decad.Union(lower, upper).Do(t.Context())
 	require.NoError(t, err)
 	angle := 2 * math.Pi / 17
 	// These two copies are 0.45 radians apart; the 0.2-radian twist
 	// requires a height-dependent separator for their full source walls.
 	firstMotion, err := r3.Rotation(r3.Vec{Z: 1}, units.Radians(10*angle-0.45))
 	require.NoError(t, err)
-	firstCopy, err := decad.Copy(t.Context(), pair, decad.WithCopyPlacement(firstMotion))
+	firstCopy, err := decad.Copy(pair).Place(decad.CopyTransform{Transform: firstMotion}).Do(t.Context())
 	require.NoError(t, err)
 	nearMotion, err := r3.Rotation(r3.Vec{Z: 1}, units.Radians(10*angle))
 	require.NoError(t, err)
 	require.Equal(t, math.Nextafter(1, 0), nearMotion.Basis().EZ.Z)
-	nearCopy, err := decad.Copy(t.Context(), pair, decad.WithCopyPlacement(nearMotion))
+	nearCopy, err := decad.Copy(pair).Place(decad.CopyTransform{Transform: nearMotion}).Do(t.Context())
 	require.NoError(t, err)
 	blank := circleBodyAtZ(t, doc, 0, 3, 0, 2)
-	joined, err := decad.Union(t.Context(), blank, pair, firstCopy, nearCopy)
+	joined, err := decad.Union(blank, pair, firstCopy, nearCopy).Do(t.Context())
 	require.NoError(t, err)
 	mesh, err := joined.Tessellate(t.Context(), units.Millimeters(0.1),
 		decad.WithVerification(decad.VerifyAll))
@@ -110,11 +110,11 @@ func loftMirrorCylinderTwoTabParts(t *testing.T, nearAxial bool) (
 	require.NoError(t, err)
 	bottomSketch, bottomProfile := loftMirrorTabSection(t, world, world.XY(), 0)
 	middleSketch, middleProfile := loftMirrorTabSection(t, world, middlePlane, 0.1)
-	lower, err := decad.Loft(t.Context(), doc, bottomSketch, bottomProfile, middleSketch, middleProfile)
+	lower, err := decad.Loft(doc, bottomSketch, bottomProfile, middleSketch, middleProfile).Do(t.Context())
 	require.NoError(t, err)
-	upper, err := decad.MirroredCopy(t.Context(), lower, decad.MirrorFrame{Frame: middleFrame})
+	upper, err := decad.MirroredCopy(lower, decad.MirrorFrame{Frame: middleFrame}).Do(t.Context())
 	require.NoError(t, err)
-	pair, err = decad.Union(t.Context(), lower, upper)
+	pair, err = decad.Union(lower, upper).Do(t.Context())
 	require.NoError(t, err)
 	angle := units.Degrees(90)
 	if nearAxial {
@@ -125,7 +125,7 @@ func loftMirrorCylinderTwoTabParts(t *testing.T, nearAxial bool) (
 	if nearAxial {
 		require.Equal(t, math.Nextafter(1, 0), quarterTurn.Basis().EZ.Z)
 	}
-	turnedPair, err = decad.Copy(t.Context(), pair, decad.WithCopyPlacement(quarterTurn))
+	turnedPair, err = decad.Copy(pair).Place(decad.CopyTransform{Transform: quarterTurn}).Do(t.Context())
 	require.NoError(t, err)
 	blank = circleBodyAtZ(t, doc, 0, 3, 0, 2)
 	return doc, blank, pair, turnedPair
@@ -135,13 +135,13 @@ func loftMirrorCylinderTwoTabParts(t *testing.T, nearAxial bool) (
 func loftMirrorCylinderJoin(t *testing.T, nearAxial bool, blank, pair, turnedPair *decad.Body) *decad.Body {
 	t.Helper()
 	if nearAxial {
-		joined, err := decad.Union(t.Context(), blank, pair, turnedPair)
+		joined, err := decad.Union(blank, pair, turnedPair).Do(t.Context())
 		require.NoError(t, err)
 		return joined
 	}
-	joined, err := decad.Union(t.Context(), blank, pair)
+	joined, err := decad.Union(blank, pair).Do(t.Context())
 	require.NoError(t, err)
-	joined, err = decad.Union(t.Context(), joined, turnedPair)
+	joined, err = decad.Union(joined, turnedPair).Do(t.Context())
 	require.NoError(t, err)
 	return joined
 }
@@ -157,7 +157,7 @@ func TestLoftMirrorCylinderBoreCutsRepeatedRadialTabs(t *testing.T) {
 	before, err := joined.Volume()
 	require.NoError(t, err)
 	bore := circleBodyAtZ(t, doc, 0, 0.5, -1, 4)
-	cut, err := decad.Cut(t.Context(), joined, bore)
+	cut, err := decad.Cut(joined, bore).Do(t.Context())
 	require.NoError(t, err)
 	after, err := cut.Volume()
 	require.NoError(t, err)
@@ -185,7 +185,7 @@ func TestLoftMirrorCylinderBoreRejectsToolEndingInsideUpperHalf(t *testing.T) {
 	// Moving the top blank cap off the reflection height must refuse the
 	// specialized route instead of accepting a near-coincident middle seam.
 	otherBlank := circleBodyAtZ(t, doc, 0, 3, 0, 2.1)
-	_, err := decad.Union(t.Context(), otherBlank, pair)
+	_, err := decad.Union(otherBlank, pair).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	joined := loftMirrorCylinderJoin(t, false, blank, pair, turnedPair)
 	mesh, err := joined.Tessellate(t.Context(), units.Millimeters(0.1),
@@ -207,7 +207,7 @@ func TestLoftMirrorCylinderBoreRejectsToolEndingInsideUpperHalf(t *testing.T) {
 	require.Greater(t, centroid.Bound.Base(), 0.0)
 
 	tool := circleBodyAtZ(t, doc, 0, 0.5, -1, 2.5)
-	_, err = decad.Cut(t.Context(), joined, tool)
+	_, err = decad.Cut(joined, tool).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.ErrorContains(t, err, "tool ends inside the upper half")
 	require.Contains(t, doc.Bodies(), joined)
@@ -216,7 +216,7 @@ func TestLoftMirrorCylinderBoreRejectsToolEndingInsideUpperHalf(t *testing.T) {
 func TestLoftMirrorCylinderBorePreservesNearAxialBridge(t *testing.T) {
 	doc, joined, _ := loftMirrorCylinderTwoTabs(t, true)
 	bore := circleBodyAtZ(t, doc, 0, 0.5, -1, 4)
-	cut, err := decad.Cut(t.Context(), joined, bore)
+	cut, err := decad.Cut(joined, bore).Do(t.Context())
 	require.NoError(t, err)
 	bottom, err := decad.Faces(decad.FaceCreatedBy(decad.CapStart(cut))).Exactly(1).SelectFaces(cut)
 	require.NoError(t, err)

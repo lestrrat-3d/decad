@@ -26,8 +26,8 @@ func xzBox(t *testing.T, y0, z0, z1 float64) *decad.Body {
 	s.Fix(r.A)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	box, err := decad.Extrude(t.Context(), decad.New(), s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(3.6), Dir: decad.Against})
+	box, err := decad.Extrude(decad.New(), s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(3.6), Dir: decad.Against}).Do(t.Context())
 	require.NoError(t, err)
 	return box
 }
@@ -47,8 +47,8 @@ func TestBrepRouteEFilletEndFacesAgree(t *testing.T) {
 		for _, x := range []float64{-3.5, 3.5} {
 			for _, y := range []float64{box.y0, box.y0 + 3.6} {
 				body := xzBox(t, box.y0, box.z0, box.z1)
-				out, err := decad.Fillet(t.Context(), body, decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1)),
-					decad.EndpointAt(r3.NewVec(x, y, box.z0))).Exactly(1), units.Millimeters(r))
+				out, err := decad.Fillet(body, decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1)),
+					decad.EndpointAt(r3.NewVec(x, y, box.z0))).Exactly(1), units.Millimeters(r)).Do(t.Context())
 				require.NoError(t, err, "edge at x = %g, y = %g", x, y)
 
 				// The box loses the corner region over the edge's length.
@@ -114,8 +114,8 @@ func framePrism(t *testing.T, doc *decad.Document, f r3.Frame, depth float64, di
 	}
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(depth), Dir: dir})
+	body, err := decad.Extrude(doc, s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(depth), Dir: dir}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -135,12 +135,12 @@ func TestBrepRouteEFilletObliqueBossEdges(t *testing.T) {
 			for _, corner := range boss {
 				doc := decad.New()
 				plate := xyPrism(t, doc, 0, 10, [][2]float64{{-20, -20}, {20, -20}, {20, 20}, {-20, 20}})
-				body, err := decad.Union(t.Context(), plate, xyPrism(t, doc, 10, 15, boss))
+				body, err := decad.Union(plate, xyPrism(t, doc, 10, 15, boss)).Do(t.Context())
 				require.NoError(t, err)
 				before, err := body.Volume()
 				require.NoError(t, err)
-				out, err := decad.Fillet(t.Context(), body, decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1)),
-					decad.EndpointAt(r3.NewVec(corner[0], corner[1], 25))).Exactly(1), units.Millimeters(r))
+				out, err := decad.Fillet(body, decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1)),
+					decad.EndpointAt(r3.NewVec(corner[0], corner[1], 25))).Exactly(1), units.Millimeters(r)).Do(t.Context())
 				require.NoError(t, err, "lean %g, top %g, corner %v", lean, top, corner)
 				after, err := out.Volume()
 				require.NoError(t, err)

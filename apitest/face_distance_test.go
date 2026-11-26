@@ -34,7 +34,7 @@ func TestFaceDistanceFromBoxCap(t *testing.T) {
 			require.LessOrEqual(t, math.Abs(got.Value.Base()-tc.want), got.Bound.Base()+1e-15)
 		})
 	}
-	require.NoError(t, decad.Remove(box))
+	require.NoError(t, decad.Remove(box).Do(t.Context()))
 	retired, err := top.DistanceToPoint(t.Context(), r3.NewVec(5, 5, 5), units.Millimeters(0.1))
 	require.NoError(t, err)
 	require.Equal(t, 5.0, retired.Value.Base())
@@ -66,8 +66,8 @@ func TestFaceDistanceFromSheet(t *testing.T) {
 	s.Fix(rect.A)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	sheet, err := decad.Extrude(t.Context(), decad.New(), s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(10), Dir: decad.Along}, decad.WithSurfaceResult())
+	sheet, err := decad.Extrude(decad.New(), s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).SurfaceResult().Do(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, decad.BodySheet, sheet.Kind())
 	faces, err := decad.Faces(decad.Facing(r3.NewVec(1, 0, 0))).Exactly(1).SelectFaces(sheet)

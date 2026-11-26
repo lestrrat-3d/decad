@@ -27,8 +27,8 @@ func TestEmbossOnAMeshSolidReadsExactly(t *testing.T) {
 			doc := decad.New()
 			plate := blockIn(t, doc, r3.NewVec(0, 0, 0), r3.NewVec(40, 30, 10))
 			s, profiles := embossSketch(t, 10, [4]float64{10, 10, 20, 16})
-			out, err := decad.Emboss(t.Context(), plate, s, profiles, decad.Faces(decad.Facing(r3.NewVec(0, 0, 1))),
-				tc.mode, units.Millimeters(2))
+			out, err := decad.Emboss(plate, s, profiles, decad.Faces(decad.Facing(r3.NewVec(0, 0, 1))),
+				tc.mode, units.Millimeters(2)).Do(t.Context())
 			require.NoError(t, err)
 			require.Equal(t, []*decad.Body{out}, doc.Bodies())
 			volume, err := out.Volume()

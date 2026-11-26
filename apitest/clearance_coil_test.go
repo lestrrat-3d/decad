@@ -13,7 +13,7 @@ func TestVerifyCoilClearanceAgainstPrism(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
 	s, profile := clearanceCoilSquare(t)
-	spring, err := decad.Coil(t.Context(), doc, s, profile, clearanceCoilAxis, units.Millimeters(1.5), units.Scalar(2))
+	spring, err := decad.Coil(doc, s, profile, clearanceCoilAxis, units.Millimeters(1.5), units.Scalar(2)).Do(t.Context())
 	require.NoError(t, err)
 	core := clearanceCoilBox(t, doc)
 
@@ -32,10 +32,10 @@ func TestVerifyCoilClearanceAgainstUnsupportedRevolveIsSuspect(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
 	s, profile := clearanceCoilSquare(t)
-	_, err := decad.Coil(t.Context(), doc, s, profile, clearanceCoilAxis, units.Millimeters(1.5), units.Scalar(2))
+	_, err := decad.Coil(doc, s, profile, clearanceCoilAxis, units.Millimeters(1.5), units.Scalar(2)).Do(t.Context())
 	require.NoError(t, err)
 	ringSketch, ringProfile := clearanceCoilLoops(t, [][2]float64{{10, 0}, {11, 0}, {11, 1}, {10, 1}})
-	_, err = decad.Revolve(t.Context(), doc, ringSketch, ringProfile, clearanceCoilAxis, decad.FullRevolution{})
+	_, err = decad.Revolve(doc, ringSketch, ringProfile, clearanceCoilAxis, decad.FullRevolution{}).Do(t.Context())
 	require.NoError(t, err)
 
 	report, err := doc.Verify(t.Context(), decad.WithClearances())
@@ -93,8 +93,8 @@ func clearanceCoilBox(t *testing.T, doc *decad.Document) *decad.Body {
 	}
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	box, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(2), Dir: decad.Along})
+	box, err := decad.Extrude(doc, s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(2), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	return box
 }

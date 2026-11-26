@@ -108,9 +108,9 @@ func TestLookupThreadSizeCutsTheThreadItNames(t *testing.T) {
 	major, err := size.Major.In(units.Millimeter)
 	require.NoError(t, err)
 	rod := circleBodyAtZ(t, decad.New(), 0, major/2, 0, 20)
-	out, err := decad.Thread(t.Context(), rod, decad.ThreadSpec{Face: decad.Faces(decad.Cylindrical()), Pitch: size.Pitch})
+	out, err := decad.Thread(rod, decad.Faces(decad.Cylindrical()), size.Pitch).Do(t.Context())
 	require.NoError(t, err)
 	v, err := out.Volume()
 	require.NoError(t, err)
-	requireThreadVolume(t, v, math.Pi*25*20-removedExternal(5, 20, 1.5))
+	requireThreadVolume(t, v, math.Pi*25*20-removedExternal(5, 20))
 }

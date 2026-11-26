@@ -83,7 +83,7 @@ func emergingFlatCorrespondence() decad.CircularLoftCorrespondence {
 func TestCircularLoftEmergingFlat(t *testing.T) {
 	t.Parallel()
 	sections := emergingFlatSections(t, 1)
-	body, err := decad.LoftSectionsWithCircularCorrespondence(t.Context(), decad.New(), emergingFlatCorrespondence(), sections...)
+	body, err := decad.LoftSections(decad.New(), sections...).CircularCorrespondence(emergingFlatCorrespondence()).Do(t.Context())
 	require.NoError(t, err)
 	mesh, err := body.Tessellate(t.Context(), units.Millimeters(0.05), decad.WithVerification(decad.VerifyAll))
 	require.NoError(t, err)
@@ -142,7 +142,7 @@ func TestCircularLoftEmergingFlat(t *testing.T) {
 func TestCircularLoftEmergingFlatRefusesOffTangent(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
-	_, err := decad.LoftSectionsWithCircularCorrespondence(t.Context(), doc, emergingFlatCorrespondence(), emergingFlatSections(t, 1.125)...)
+	_, err := decad.LoftSections(doc, emergingFlatSections(t, 1.125)...).CircularCorrespondence(emergingFlatCorrespondence()).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.Empty(t, doc.Bodies())
 }
@@ -150,7 +150,7 @@ func TestCircularLoftEmergingFlatRefusesOffTangent(t *testing.T) {
 func TestCircularLoftEmergingFlatRefusesLaterOffTangent(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
-	_, err := decad.LoftSectionsWithCircularCorrespondence(t.Context(), doc, emergingFlatCorrespondence(), emergingFlatSections(t, 1, 1.125)...)
+	_, err := decad.LoftSections(doc, emergingFlatSections(t, 1, 1.125)...).CircularCorrespondence(emergingFlatCorrespondence()).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.Empty(t, doc.Bodies())
 }
@@ -158,7 +158,7 @@ func TestCircularLoftEmergingFlatRefusesLaterOffTangent(t *testing.T) {
 func TestCircularLoftEmergingFlatRefusesBentChain(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
-	_, err := decad.LoftSectionsWithCircularCorrespondence(t.Context(), doc, emergingFlatCorrespondence(), emergingFlatSectionsShape(t, true, 0, 1)...)
+	_, err := decad.LoftSections(doc, emergingFlatSectionsShape(t, true, 0, 1)...).CircularCorrespondence(emergingFlatCorrespondence()).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.ErrorContains(t, err, "three ascending collinear vertical lines and a spline")
 	require.Empty(t, doc.Bodies())
@@ -167,7 +167,7 @@ func TestCircularLoftEmergingFlatRefusesBentChain(t *testing.T) {
 func TestCircularLoftEmergingFlatRefusesUnrepresentablePlane(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
-	_, err := decad.LoftSectionsWithCircularCorrespondence(t.Context(), doc, emergingFlatCorrespondence(), emergingFlatSectionsShape(t, false, 0.1, 1)...)
+	_, err := decad.LoftSections(doc, emergingFlatSectionsShape(t, false, 0.1, 1)...).CircularCorrespondence(emergingFlatCorrespondence()).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.ErrorContains(t, err, "tangent plane world X must be exactly representable")
 	require.Empty(t, doc.Bodies())

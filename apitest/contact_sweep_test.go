@@ -525,7 +525,7 @@ func TestSweepPairSourceSphereTouchContinuation(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, decad.SweepUndecided, refused.Outcome)
 	offOrigin := ballBody(t, doc, 5)
-	offOrigin, err = decad.Transform(t.Context(), offOrigin, contactPose(t, r3.Vec{X: 2}))
+	offOrigin, err = decad.Transform(offOrigin, contactPose(t, r3.Vec{X: 2})).Do(t.Context())
 	require.NoError(t, err)
 	initial, err := doc.ContactPair(t.Context(), floor, offOrigin, r3.Identity(), rotating.From,
 		contactRequest())
@@ -555,7 +555,7 @@ func TestSweepPairRefusesSeparatedOffOriginRotatingSphere(t *testing.T) {
 	doc := decad.New()
 	floor := boxBodyAtZ(t, doc, -20, -20, 20, 20, -10, 10)
 	ball := ballBody(t, doc, 5)
-	ball, err := decad.Transform(t.Context(), ball, contactPose(t, r3.Vec{X: 2}))
+	ball, err := decad.Transform(ball, contactPose(t, r3.Vec{X: 2})).Do(t.Context())
 	require.NoError(t, err)
 	from := contactPose(t, r3.Vec{Z: 25})
 	contact, err := doc.ContactPair(t.Context(), floor, ball, r3.Identity(), from,
@@ -659,7 +659,7 @@ func TestSweepPairRotatingPathClear(t *testing.T) {
 	// placement with the query pose in float can hide part of their error.
 	placement, err := r3.Translation(r3.Vec{X: 1e9})
 	require.NoError(t, err)
-	placed, err := decad.Copy(t.Context(), a, decad.WithCopyPlacement(placement))
+	placed, err := decad.Copy(a).Place(decad.CopyTransform{Transform: placement}).Do(t.Context())
 	require.NoError(t, err)
 	motion := sweepDrift(r3.Vec{}, .1)
 	motion.Center = r3.Vec{X: 1e9 + 5, Y: 5, Z: 5}

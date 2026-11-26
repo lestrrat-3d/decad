@@ -38,11 +38,11 @@ func TestLoftFilletRectangleCorner(t *testing.T) {
 	}
 	s0, p0 := profile(w.XY())
 	s1, p1 := profile(upper)
-	body, err := decad.Loft(t.Context(), decad.New(), s0, p0, s1, p1)
+	body, err := decad.Loft(decad.New(), s0, p0, s1, p1).Do(t.Context())
 	require.NoError(t, err)
 	query := decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1)),
 		decad.EndpointAt(r3.NewVec(0, 0, 0))).Exactly(1)
-	rounded, err := decad.Fillet(t.Context(), body, query, units.Millimeters(1))
+	rounded, err := decad.Fillet(body, query, units.Millimeters(1)).Do(t.Context())
 	require.NoError(t, err)
 	volume, err := rounded.Volume()
 	require.NoError(t, err)
@@ -58,7 +58,7 @@ func TestLoftFilletRectangleCorner(t *testing.T) {
 	require.Positive(t, filletRoles)
 	shift, err := r3.Translation(r3.NewVec(20, 0, 0))
 	require.NoError(t, err)
-	placedCopy, err := decad.Copy(t.Context(), rounded, decad.WithCopyPlacement(shift))
+	placedCopy, err := decad.Copy(rounded).Place(decad.CopyTransform{Transform: shift}).Do(t.Context())
 	require.NoError(t, err)
 	copyFilletRoles := 0
 	for _, face := range placedCopy.Faces() {
@@ -191,7 +191,7 @@ func TestLoftFilletCurvedRootJunctions(t *testing.T) {
 	require.NoError(t, err)
 	s0, p0, rootPoints := curvedRootProfile(t, world, world.XY(), false)
 	s1, p1, _ := curvedRootProfile(t, world, upper, false)
-	body, err := decad.Loft(t.Context(), decad.New(), s0, p0, s1, p1)
+	body, err := decad.Loft(decad.New(), s0, p0, s1, p1).Do(t.Context())
 	require.NoError(t, err)
 	before, err := body.Volume()
 	require.NoError(t, err)
@@ -209,8 +209,8 @@ func TestLoftFilletCurvedRootJunctions(t *testing.T) {
 		}
 	}
 	require.Equal(t, 2*lobes, len(roots))
-	_, err = decad.Fillet(t.Context(), body, decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1)),
-		decad.EndpointAt(roots[0])).Exactly(1), units.Millimeters(100))
+	_, err = decad.Fillet(body, decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1)),
+		decad.EndpointAt(roots[0])).Exactly(1), units.Millimeters(100)).Do(t.Context())
 	require.Error(t, err)
 	var splineStation r3.Vec
 	for _, edge := range axial {
@@ -222,14 +222,14 @@ func TestLoftFilletCurvedRootJunctions(t *testing.T) {
 		}
 	}
 	require.NotEqual(t, r3.Vec{}, splineStation)
-	_, err = decad.Fillet(t.Context(), body, decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1)),
-		decad.EndpointAt(splineStation)).Exactly(1), units.Millimeters(radius))
+	_, err = decad.Fillet(body, decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1)),
+		decad.EndpointAt(splineStation)).Exactly(1), units.Millimeters(radius)).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	query := decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1)), decad.EndpointAt(roots[0]))
 	for _, point := range roots[1:] {
 		query.Or(decad.ParallelTo(r3.NewVec(0, 0, 1)), decad.EndpointAt(point))
 	}
-	rounded, err := decad.Fillet(t.Context(), body, query.Exactly(2*lobes), units.Millimeters(radius))
+	rounded, err := decad.Fillet(body, query.Exactly(2*lobes), units.Millimeters(radius)).Do(t.Context())
 	require.NoError(t, err)
 	require.True(t, rounded.IsSolid())
 	after, err := rounded.Volume()
@@ -240,8 +240,8 @@ func TestLoftFilletCurvedRootJunctions(t *testing.T) {
 	require.NoError(t, err)
 	referenceSketch0, referenceProfile0, _ := curvedRootProfile(t, referenceWorld, referenceWorld.XY(), true)
 	referenceSketch1, referenceProfile1, _ := curvedRootProfile(t, referenceWorld, referenceUpper, true)
-	reference, err := decad.Loft(t.Context(), decad.New(), referenceSketch0, referenceProfile0,
-		referenceSketch1, referenceProfile1)
+	reference, err := decad.Loft(decad.New(), referenceSketch0, referenceProfile0,
+		referenceSketch1, referenceProfile1).Do(t.Context())
 	require.NoError(t, err)
 	referenceVolume, err := reference.Volume()
 	require.NoError(t, err)

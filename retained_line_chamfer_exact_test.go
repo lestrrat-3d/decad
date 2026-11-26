@@ -38,13 +38,13 @@ func (sc *stripScene) lipSocket(t testing.TB, x4, x6 float64) (*Body, FeatureRef
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	// Against the sketch normal the prism spans y ∈ [0, 18]; shifted by −1 it passes both ends of the block.
-	tool, err := Extrude(t.Context(), sc.doc, s, s.Profiles()[0], Distance{D: units.Millimeters(18), Dir: Against})
+	tool, err := Extrude(sc.doc, s, s.Profiles()[0], Distance{D: units.Millimeters(18), Dir: Against}).Do(t.Context())
 	require.NoError(t, err)
 	move, err := r3.Translation(r3.Vec{Y: -1})
 	require.NoError(t, err)
-	tool, err = Transform(t.Context(), tool, move)
+	tool, err = Transform(tool, move).Do(t.Context())
 	require.NoError(t, err)
-	socket, err := Cut(t.Context(), block, tool)
+	socket, err := Cut(block, tool).Do(t.Context())
 	require.NoError(t, err)
 	return socket, lips
 }
@@ -141,19 +141,19 @@ func TestRetainedLineChamferExact(t *testing.T) {
 	// chamfered cuts the socket, chamfers sel by d and returns the result with the volumes before and after.
 	// options builds the chamfer's options from the lips' face feature.
 	chamfered := func(t *testing.T, x4, x6 float64, sel EdgeSelector, d float64,
-		options func(lips FeatureRef) []ChamferOption) (out *Body, before, after Measurement) {
+		options func(lips FeatureRef, c *ChamferCommand) *ChamferCommand) (out *Body, before, after Measurement) {
 		t.Helper()
 		sc := newStripScene()
 		cut, lips := sc.lipSocket(t, x4, x6)
 		requireZeroBounds(t, cut)
-		var opts []ChamferOption
+		cmd := Chamfer(cut, sel, units.Millimeters(d))
 		if options != nil {
-			opts = options(lips)
+			cmd = options(lips, cmd)
 		}
 		var err error
 		before, err = cut.Volume()
 		require.NoError(t, err)
-		out, err = Chamfer(t.Context(), cut, sel, units.Millimeters(d), opts...)
+		out, err = cmd.Do(t.Context())
 		require.NoError(t, err)
 		after, err = out.Volume()
 		require.NoError(t, err)
@@ -172,8 +172,8 @@ func TestRetainedLineChamferExact(t *testing.T) {
 		t.Parallel()
 		// Both walls square, so both lips are exact; the bottom face is the reference of each.
 		out, before, after := chamfered(t, 5, 5, lipEdges(-5, 5), 0.5,
-			func(lips FeatureRef) []ChamferOption {
-				return []ChamferOption{WithAsymmetricChamfer(Faces(FaceCreatedBy(lips)), units.Millimeters(0.25))}
+			func(lips FeatureRef, c *ChamferCommand) *ChamferCommand {
+				return c.Asymmetric(Faces(FaceCreatedBy(lips)), units.Millimeters(0.25))
 			})
 		requireZeroBounds(t, out)
 		require.Equal(t, before.Bound.Mag(), after.Bound.Mag())
@@ -215,11 +215,11 @@ func TestRetainedLineChamferExact(t *testing.T) {
 		_, err = xz.Solve(t.Context())
 		require.NoError(t, err)
 		// Along the sketch normal the block spans y ∈ [−35, 0]; shifted by 25 it spans y ∈ [−10, 25].
-		block, err := Extrude(t.Context(), sc.doc, xz, xz.Profiles()[0], Distance{D: units.Millimeters(35), Dir: Along})
+		block, err := Extrude(sc.doc, xz, xz.Profiles()[0], Distance{D: units.Millimeters(35), Dir: Along}).Do(t.Context())
 		require.NoError(t, err)
 		move, err := r3.Translation(r3.Vec{Y: 25})
 		require.NoError(t, err)
-		block, err = Transform(t.Context(), block, move)
+		block, err = Transform(block, move).Do(t.Context())
 		require.NoError(t, err)
 		xy, err := sc.w.CreateSketch(sc.w.XY())
 		require.NoError(t, err)
@@ -236,18 +236,18 @@ func TestRetainedLineChamferExact(t *testing.T) {
 		_, err = xy.Solve(t.Context())
 		require.NoError(t, err)
 		// Along +Z the prism spans z ∈ [0, 12]; shifted down by 1 it passes both faces of the block.
-		tool, err := Extrude(t.Context(), sc.doc, xy, xy.Profiles()[0], Distance{D: units.Millimeters(12), Dir: Along})
+		tool, err := Extrude(sc.doc, xy, xy.Profiles()[0], Distance{D: units.Millimeters(12), Dir: Along}).Do(t.Context())
 		require.NoError(t, err)
 		down, err := r3.Translation(r3.Vec{Z: -1})
 		require.NoError(t, err)
-		tool, err = Transform(t.Context(), tool, down)
+		tool, err = Transform(tool, down).Do(t.Context())
 		require.NoError(t, err)
-		cut, err := Cut(t.Context(), block, tool)
+		cut, err := Cut(block, tool).Do(t.Context())
 		require.NoError(t, err)
 		before, err := cut.Volume()
 		require.NoError(t, err)
 		sel := Edges(EndpointAt(r3.NewVec(0, 0, 0)), ParallelTo(r3.NewVec(0, 0, 1))).Exactly(1)
-		out, err := Chamfer(t.Context(), cut, sel, units.Millimeters(1.25))
+		out, err := Chamfer(cut, sel, units.Millimeters(1.25)).Do(t.Context())
 		require.NoError(t, err)
 		after, err := out.Volume()
 		require.NoError(t, err)

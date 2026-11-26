@@ -254,11 +254,11 @@ ceiling for a later serial `Union`. Every other build uses the 0.1 mm ceiling.
 A cap station of the tool's upper cone whose Q falls short of 1 by more than the
 sample's error is refused, because the cone cap would then reach the far source
 plane. When the Boolean that recorded the cone was called with
-`WithMatchingFaces`, a shortfall of at most `pointcone.MatchingFaceSlack` (64 binary64 steps at 1) is taken as the
+`MatchingFaces`, a shortfall of at most `pointcone.MatchingFaceSlack` (64 binary64 steps at 1) is taken as the
 intended match instead: the station takes the far point, charged for its
 distance from the smooth cone point like a station inside the error band. A
 larger shortfall refuses. The refusal names the shortfall, and when it is within
-that slack it says to pass `WithMatchingFaces` to the Cut or Intersect that made
+that slack it says to call `MatchingFaces` on the Cut or Intersect command that made
 the cone cut. Every sector carries the same cap, so the joined mesh grows with the sector
 count. With fewer than four sources, the first attempt subdivides each cap four
 times; with four or more sources, it subdivides each cap twice. When the

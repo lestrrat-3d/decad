@@ -33,8 +33,8 @@ func Example_verify_waive_diagnostic() {
 			fmt.Printf("failed to solve: %s\n", err)
 			return
 		}
-		plate, err := decad.Extrude(context.Background(), doc, s, s.Profiles()[0],
-			decad.Distance{D: units.Millimeters(0.5), Dir: decad.Along})
+		plate, err := decad.Extrude(doc, s, s.Profiles()[0],
+			decad.Distance{D: units.Millimeters(0.5), Dir: decad.Along}).Do(context.Background())
 		if err != nil {
 			fmt.Printf("failed to extrude: %s\n", err)
 			return

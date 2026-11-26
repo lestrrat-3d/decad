@@ -49,7 +49,7 @@ func yarnPack(t *testing.T, doc *decad.Document) *decad.Body {
 		}
 	}
 	require.NotNil(t, profile)
-	body, err := decad.Extrude(t.Context(), doc, s, profile, decad.Distance{D: units.Millimeters(112), Dir: decad.Along})
+	body, err := decad.Extrude(doc, s, profile, decad.Distance{D: units.Millimeters(112), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -68,7 +68,7 @@ func witnessBar(t *testing.T, doc *decad.Document, inner float64, sweep decad.An
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	require.Len(t, s.Profiles(), 1)
-	body, err := decad.Revolve(t.Context(), doc, s, s.Profiles()[0], decad.ConstructionAxis{Dir: r3.Vec{Z: 1}}, sweep)
+	body, err := decad.Revolve(doc, s, s.Profiles()[0], decad.ConstructionAxis{Dir: r3.Vec{Z: 1}}, sweep).Do(t.Context())
 	require.NoError(t, err)
 	angle := math.Remainder((7-100/(2*math.Pi*31))*math.Pi/3+math.Pi/2-math.Asin(2/packRadius), 2*math.Pi)
 	c, sn := math.Cos(angle), math.Sin(angle)
@@ -76,7 +76,7 @@ func witnessBar(t *testing.T, doc *decad.Document, inner float64, sweep decad.An
 	require.NoError(t, err)
 	xf, err := r3.FromFrame(f)
 	require.NoError(t, err)
-	placed, err := decad.Transform(t.Context(), body, xf)
+	placed, err := decad.Transform(body, xf).Do(t.Context())
 	require.NoError(t, err)
 	return placed
 }
@@ -146,9 +146,9 @@ func yarnRod(t *testing.T, doc *decad.Document, a, c r3.Vec) *decad.Body {
 	s.CreateCircle(centre, 0.35)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(d.Len()), Dir: decad.Along})
+	body, err := decad.Extrude(doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(d.Len()), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
-	placed, err := decad.Transform(t.Context(), body, xf)
+	placed, err := decad.Transform(body, xf).Do(t.Context())
 	require.NoError(t, err)
 	return placed
 }
@@ -199,11 +199,11 @@ func TestVerifyIdentityPlacedChain(t *testing.T) {
 			yarn := yarnRod(t, doc, p, packTangent(58, -160, 22, tc.rt))
 			if tc.chain {
 				feed := yarnRod(t, doc, yarnPoint(58, -224, 22), p)
-				joined, err := decad.Union(t.Context(), feed, yarn)
+				joined, err := decad.Union(feed, yarn).Do(t.Context())
 				require.NoError(t, err)
-				refined, err := decad.Refine(t.Context(), joined, units.Millimeters(0.12))
+				refined, err := decad.Refine(joined, units.Millimeters(0.12)).Do(t.Context())
 				require.NoError(t, err)
-				yarn, err = decad.Transform(t.Context(), refined, r3.Identity())
+				yarn, err = decad.Transform(refined, r3.Identity()).Do(t.Context())
 				require.NoError(t, err)
 			}
 			report, err := doc.Verify(t.Context())

@@ -206,36 +206,50 @@ func TestSelectionErrorFaceQuery(t *testing.T) {
 	require.Equal(t, 0, se.Actual)
 }
 
-func TestImplicitExactlyOneStopFailedAssertionPassesThrough(t *testing.T) {
+// TestImplicitExactlyOneStopAssertions pins what the implicit exactly-one of a
+// ToFace stop does to a query's own cardinality assertion (core §9).
+func TestImplicitExactlyOneStopAssertions(t *testing.T) {
 	t.Parallel()
-	s, plateProf, pinProf := plateAndPin(t)
-	doc := decad.New()
-	plate, err := decad.Extrude(t.Context(), doc, s, plateProf, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
-	require.NoError(t, err)
-
-	// The query's own explicit assertion fails first: a plate has six planar
-	// faces, not three. The caller gets that SelectionError unchanged — its
-	// Expected reflects the caller's own assertion, never overwritten to
-	// "exactly 1" (core §9).
-	_, err = decad.Extrude(t.Context(), doc, s, pinProf, decad.ToFace{Body: plate, Face: decad.Faces(decad.Planar()).Exactly(3)})
-	require.ErrorIs(t, err, decad.ErrCardinality)
-	var se *decad.SelectionError
-	require.ErrorAs(t, err, &se)
-	require.Equal(t, "exactly 3", se.Expected)
-	require.Equal(t, 6, se.Actual)
+	for name, tc := range map[string]struct {
+		query    *decad.FaceQuery
+		expected string
+	}{
+		// The query's own explicit assertion fails first: a plate has six
+		// planar faces, not three. The caller gets that SelectionError
+		// unchanged, never overwritten to "exactly 1".
+		"a failed assertion passes through": {decad.Faces(decad.Planar()).Exactly(3), "exactly 3"},
+		// A satisfied .Exactly(6) resolves to six faces; the stop turns that
+		// into Expected "exactly 1" / Actual 6, exactly as an unasserted
+		// many-match would.
+		"a satisfied assertion is rewritten": {decad.Faces(decad.Planar()).Exactly(6), "exactly 1"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			s, plateProf, pinProf := plateAndPin(t)
+			doc := decad.New()
+			plate, err := decad.Extrude(doc, s, plateProf, decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(t.Context())
+			require.NoError(t, err)
+			_, err = decad.Extrude(doc, s, pinProf, decad.ToFace{Body: plate, Face: tc.query}).Do(t.Context())
+			require.ErrorIs(t, err, decad.ErrCardinality)
+			var se *decad.SelectionError
+			require.ErrorAs(t, err, &se)
+			require.Equal(t, tc.expected, se.Expected)
+			require.Equal(t, 6, se.Actual)
+		})
+	}
 }
 
 func TestImplicitExactlyOneStopSuccessfulManyRewritten(t *testing.T) {
 	t.Parallel()
 	s, plateProf, pinProf := plateAndPin(t)
 	doc := decad.New()
-	plate, err := decad.Extrude(t.Context(), doc, s, plateProf, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	plate, err := decad.Extrude(doc, s, plateProf, decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 
 	// An unasserted query that resolves to several faces succeeds at
 	// SelectFaces, and the stop — which needs one — rewrites it to Expected
 	// "exactly 1" / Actual the resolved count, preserving the query rendering.
-	_, err = decad.Extrude(t.Context(), doc, s, pinProf, decad.ToFace{Body: plate, Face: decad.Faces(decad.Planar())})
+	_, err = decad.Extrude(doc, s, pinProf, decad.ToFace{Body: plate, Face: decad.Faces(decad.Planar())}).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrCardinality)
 	var se *decad.SelectionError
 	require.ErrorAs(t, err, &se)
@@ -244,36 +258,17 @@ func TestImplicitExactlyOneStopSuccessfulManyRewritten(t *testing.T) {
 	require.Equal(t, "faces(planar)", se.Query)
 }
 
-func TestImplicitExactlyOneStopSatisfiedAssertionRewritten(t *testing.T) {
-	t.Parallel()
-	s, plateProf, pinProf := plateAndPin(t)
-	doc := decad.New()
-	plate, err := decad.Extrude(t.Context(), doc, s, plateProf, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
-	require.NoError(t, err)
-
-	// A satisfied .Exactly(6) resolves to six faces; the stop turns that into
-	// Expected "exactly 1" / Actual 6, exactly as an unasserted many-match
-	// would — a satisfied assertion whose count is not one is still the
-	// implicit exactly-one's to own (core §9).
-	_, err = decad.Extrude(t.Context(), doc, s, pinProf, decad.ToFace{Body: plate, Face: decad.Faces(decad.Planar()).Exactly(6)})
-	require.ErrorIs(t, err, decad.ErrCardinality)
-	var se *decad.SelectionError
-	require.ErrorAs(t, err, &se)
-	require.Equal(t, "exactly 1", se.Expected)
-	require.Equal(t, 6, se.Actual)
-}
-
 func TestImplicitExactlyOneStopUnassertedZeroRewritten(t *testing.T) {
 	t.Parallel()
 	s, plateProf, pinProf := plateAndPin(t)
 	doc := decad.New()
-	plate, err := decad.Extrude(t.Context(), doc, s, plateProf, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	plate, err := decad.Extrude(doc, s, plateProf, decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 
 	// An unasserted resolution that matched nothing is ErrNoMatch from
 	// SelectFaces; the stop rewrites it into ErrCardinality with Expected
 	// "exactly 1" and Actual 0 — no longer ErrNoMatch.
-	_, err = decad.Extrude(t.Context(), doc, s, pinProf, decad.ToFace{Body: plate, Face: decad.Faces(decad.Cylindrical())})
+	_, err = decad.Extrude(doc, s, pinProf, decad.ToFace{Body: plate, Face: decad.Faces(decad.Cylindrical())}).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrCardinality)
 	require.NotErrorIs(t, err, decad.ErrNoMatch)
 	var se *decad.SelectionError
@@ -286,7 +281,7 @@ func TestImplicitExactlyOneStopForeignSelectorRejected(t *testing.T) {
 	t.Parallel()
 	s, plateProf, pinProf := plateAndPin(t)
 	doc := decad.New()
-	plate, err := decad.Extrude(t.Context(), doc, s, plateProf, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	plate, err := decad.Extrude(doc, s, plateProf, decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 
 	// decad owns the selector vocabulary: a foreign FaceSelector that only
@@ -294,7 +289,7 @@ func TestImplicitExactlyOneStopForeignSelectorRejected(t *testing.T) {
 	// sealed marker is malformed input, rejected as ErrDegenerate — never a
 	// plain untyped cardinality error that errors.As could not reach.
 	foreign := wrappedFaceSelector{FaceQuery: decad.Faces(decad.Planar())}
-	_, err = decad.Extrude(t.Context(), doc, s, pinProf, decad.ToFace{Body: plate, Face: foreign})
+	_, err = decad.Extrude(doc, s, pinProf, decad.ToFace{Body: plate, Face: foreign}).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrDegenerate)
 	require.NotErrorIs(t, err, decad.ErrCardinality)
 	var se *decad.SelectionError
@@ -306,13 +301,13 @@ func TestImplicitExactlyOneEdgeAxis(t *testing.T) {
 	s, p := annularSketch(t)
 	doc := decad.New()
 	es, ep := plateSketch(t)
-	host, err := decad.Extrude(t.Context(), doc, es, ep, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	host, err := decad.Extrude(doc, es, ep, decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 
 	t.Run("FailedAssertionPassesThrough", func(t *testing.T) {
 		// The selector's own .Exactly(2) fails against the host's many edges;
 		// the axis gets that SelectionError unchanged.
-		_, err := decad.Revolve(t.Context(), doc, s, p, decad.EdgeAxis{Body: host, Edge: decad.Edges().Exactly(2)}, decad.FullRevolution{})
+		_, err := decad.Revolve(doc, s, p, decad.EdgeAxis{Body: host, Edge: decad.Edges().Exactly(2)}, decad.FullRevolution{}).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrCardinality)
 		var se *decad.SelectionError
 		require.ErrorAs(t, err, &se)
@@ -322,7 +317,7 @@ func TestImplicitExactlyOneEdgeAxis(t *testing.T) {
 	t.Run("SuccessfulManyRewritten", func(t *testing.T) {
 		// An unasserted query matches every edge; the axis needs one and
 		// rewrites to Expected "exactly 1".
-		_, err := decad.Revolve(t.Context(), doc, s, p, decad.EdgeAxis{Body: host, Edge: decad.Edges()}, decad.FullRevolution{})
+		_, err := decad.Revolve(doc, s, p, decad.EdgeAxis{Body: host, Edge: decad.Edges()}, decad.FullRevolution{}).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrCardinality)
 		var se *decad.SelectionError
 		require.ErrorAs(t, err, &se)
@@ -332,7 +327,7 @@ func TestImplicitExactlyOneEdgeAxis(t *testing.T) {
 	t.Run("UnassertedZeroRewritten", func(t *testing.T) {
 		// A plate has no circular edges: zero matches, rewritten to Expected
 		// "exactly 1" / Actual 0, no longer ErrNoMatch.
-		_, err := decad.Revolve(t.Context(), doc, s, p, decad.EdgeAxis{Body: host, Edge: decad.Edges(decad.Circular())}, decad.FullRevolution{})
+		_, err := decad.Revolve(doc, s, p, decad.EdgeAxis{Body: host, Edge: decad.Edges(decad.Circular())}, decad.FullRevolution{}).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrCardinality)
 		require.NotErrorIs(t, err, decad.ErrNoMatch)
 		var se *decad.SelectionError
@@ -345,7 +340,7 @@ func TestImplicitExactlyOneEdgeAxis(t *testing.T) {
 		// *decad.EdgeQuery to promote the sealed marker is malformed input,
 		// rejected as ErrDegenerate — never a plain untyped cardinality error.
 		foreign := wrappedEdgeSelector{EdgeQuery: decad.Edges()}
-		_, err := decad.Revolve(t.Context(), doc, s, p, decad.EdgeAxis{Body: host, Edge: foreign}, decad.FullRevolution{})
+		_, err := decad.Revolve(doc, s, p, decad.EdgeAxis{Body: host, Edge: foreign}, decad.FullRevolution{}).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrDegenerate)
 		require.NotErrorIs(t, err, decad.ErrCardinality)
 		var se *decad.SelectionError

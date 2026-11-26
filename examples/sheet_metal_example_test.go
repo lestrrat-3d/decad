@@ -12,13 +12,7 @@ import (
 // them, and reports the blank it is cut from. Here a 30 mm and a 20 mm leg of 2 mm steel,
 // 10 mm wide, meet in a right-angle bend of 3 mm inside radius.
 func Example_sheet_metal() {
-	bracket, report, err := decad.SheetMetal(context.Background(), decad.New(), decad.SheetMetalSpec{
-		Thickness:   units.Millimeters(2),
-		InnerRadius: units.Millimeters(3),
-		Width:       units.Millimeters(10),
-		Legs:        []units.Value{units.Millimeters(30), units.Millimeters(20)},
-		Bends:       []units.Value{units.Degrees(90)},
-	})
+	bracket, report, err := decad.SheetMetal(decad.New(), units.Millimeters(2), units.Millimeters(3), units.Millimeters(10), []units.Value{units.Millimeters(30), units.Millimeters(20)}, []units.Value{units.Degrees(90)}).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to build the strip: %s\n", err)
 		return

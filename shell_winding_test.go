@@ -21,15 +21,15 @@ func TestShellWindingRefusesAnInsideOutCavity(t *testing.T) {
 	doc := New()
 	box := internalBoxBodyAtZ(t, doc, -10, -10, 10, 10, 0, 10)
 	rod := internalCircleBody(t, doc, 0, 3, -1, Distance{D: units.Millimeters(12), Dir: Along})
-	drilled, err := Cut(t.Context(), box, rod)
+	drilled, err := Cut(box, rod).Do(t.Context())
 	require.NoError(t, err)
-	closed, err := Shell(t.Context(), drilled, nil, units.Millimeters(1), WithNoOpenings())
+	closed, err := ShellClosed(drilled, units.Millimeters(1)).Do(t.Context())
 	require.NoError(t, err)
 	sp, ok := closed.n.Payload.(stackedPrismPayload)
 	require.True(t, ok)
 	require.True(t, sp.ClosedShell)
 
-	marked, err := Transform(t.Context(), closed, mustTranslation(r3.NewVec(0, 0, 50)))
+	marked, err := Transform(closed, mustTranslation(r3.NewVec(0, 0, 50))).Do(t.Context())
 	require.NoError(t, err)
 	require.Len(t, marked.Lumps(), 1)
 	_, err = marked.Tessellate(t.Context(), units.Millimeters(0.1), WithVerification(VerifyNone))
@@ -39,7 +39,7 @@ func TestShellWindingRefusesAnInsideOutCavity(t *testing.T) {
 	// record's own Placed build, and its lump reading is what the audit reads.
 	sp.ClosedShell = false
 	marked.n.Payload = sp
-	unmarked, err := Transform(t.Context(), marked, mustTranslation(r3.NewVec(0, 0, 50)))
+	unmarked, err := Transform(marked, mustTranslation(r3.NewVec(0, 0, 50))).Do(t.Context())
 	require.NoError(t, err)
 	require.Len(t, unmarked.Lumps(), 2, `the cavity reads as a second lump`)
 	for _, level := range []Verification{VerifyNone, VerifyAll} {

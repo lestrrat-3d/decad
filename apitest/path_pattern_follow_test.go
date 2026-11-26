@@ -12,7 +12,7 @@ import (
 )
 
 // This file is agent-docs/path-pattern-design.md §5's public-surface tests for
-// WithPathFollow, on the 4 x 4 x 2 block of path_pattern_test.go.
+// Follow, on the 4 x 4 x 2 block of path_pattern_test.go.
 
 // followPath runs 10 mm along +X, then turns a quarter circle of radius 10 about
 // (10, 10) counter-clockwise, to end at (20, 10) heading +Y.
@@ -43,7 +43,7 @@ func turnedBlockBounds(angle float64, at r3.Vec) (r3.Vec, r3.Vec) {
 func TestPathPatternFollowTurnsCopiesWithThePath(t *testing.T) {
 	t.Parallel()
 	_, block := patternBlock(t)
-	copies, err := decad.PathPattern(t.Context(), block, followPath(t), decad.WithPathCount(3), decad.WithPathFollow())
+	copies, err := decad.PathPattern(block, followPath(t), decad.PathCount{Count: 3}).Follow().Do(t.Context())
 	require.NoError(t, err)
 	require.Len(t, copies, 2)
 	// The middle copy sits on the arc at the length (10 + 5π)/2, which is
@@ -64,7 +64,7 @@ func TestPathPatternFollowOnAStraightPathKeepsTheOrientation(t *testing.T) {
 	_, block := patternBlock(t)
 	path, err := decad.NewPath(r3.Vec{}, decad.LineTo{End: r3.Vec{X: 30, Y: 30}})
 	require.NoError(t, err)
-	copies, err := decad.PathPattern(t.Context(), block, path, decad.WithPathCount(2), decad.WithPathFollow())
+	copies, err := decad.PathPattern(block, path, decad.PathCount{Count: 2}).Follow().Do(t.Context())
 	require.NoError(t, err)
 	requireBoundsNear(t, copies[0], r3.Vec{X: 30, Y: 30}, r3.Vec{X: 34, Y: 34, Z: 2})
 }
@@ -74,15 +74,13 @@ func TestPathPatternFollowRefusals(t *testing.T) {
 	doc, block := patternBlock(t)
 	doubled, err := decad.NewPath(r3.Vec{}, decad.LineTo{End: r3.Vec{X: 10}}, decad.LineTo{End: r3.Vec{}})
 	require.NoError(t, err)
-	_, err = decad.PathPattern(t.Context(), block, doubled, decad.WithPathCount(3), decad.WithPathFollow())
+	_, err = decad.PathPattern(block, doubled, decad.PathCount{Count: 3}).Follow().Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrDegenerate, "a path that ends heading back along its start has no shortest turn")
-	_, err = decad.PathPattern(t.Context(), block, doubled, decad.WithPathCount(5), decad.WithPathFollow())
+	_, err = decad.PathPattern(block, doubled, decad.PathCount{Count: 5}).Follow().Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrDegenerate)
 	require.Equal(t, []*decad.Body{block}, doc.Bodies(), "a failed pattern retires the copies it made")
-	_, err = decad.PathPattern(t.Context(), block, doubled, decad.WithPathCount(3))
+	_, err = decad.PathPattern(block, doubled, decad.PathCount{Count: 3}).Do(t.Context())
 	require.NoError(t, err, "without the option the same path is a plain pattern")
-	_, err = decad.PathPattern(t.Context(), block, followPath(t), decad.WithPathCount(3), nil)
-	require.ErrorIs(t, err, decad.ErrDegenerate)
 }
 
 func TestPathPatternPivotTurnsCopiesAboutThePivot(t *testing.T) {
@@ -91,14 +89,13 @@ func TestPathPatternPivotTurnsCopiesAboutThePivot(t *testing.T) {
 	// About the block's own centre a quarter turn leaves it square on its place, so the
 	// last copy is the block moved by the path's end: x 20 to 24, y 10 to 14. About the
 	// path's start the same turn swings it to x 16 to 20.
-	copies, err := decad.PathPattern(t.Context(), block, followPath(t), decad.WithPathCount(3),
-		decad.WithPathFollow(), decad.WithPathPivot(r3.Vec{X: 2, Y: 2}))
+	copies, err := decad.PathPattern(block, followPath(t), decad.PathCount{Count: 3}).FollowAbout(r3.Vec{X: 2, Y: 2}).Do(t.Context())
 	require.NoError(t, err)
 	requireBoundsNear(t, copies[1], r3.Vec{X: 20, Y: 10, Z: 0}, r3.Vec{X: 24, Y: 14, Z: 2})
 	for _, c := range copies {
 		decadtest.MeasuresVolume(t, c, units.CubicMillimeters(32))
 	}
-	moved, err := decad.PathPattern(t.Context(), block, followPath(t), decad.WithPathCount(3), decad.WithPathFollow())
+	moved, err := decad.PathPattern(block, followPath(t), decad.PathCount{Count: 3}).Follow().Do(t.Context())
 	require.NoError(t, err)
 	requireBoundsNear(t, moved[1], r3.Vec{X: 16, Y: 10, Z: 0}, r3.Vec{X: 20, Y: 14, Z: 2})
 }
@@ -106,8 +103,7 @@ func TestPathPatternPivotTurnsCopiesAboutThePivot(t *testing.T) {
 func TestPathPatternPivotAtThePathStartIsTheDefault(t *testing.T) {
 	t.Parallel()
 	_, block := patternBlock(t)
-	copies, err := decad.PathPattern(t.Context(), block, followPath(t), decad.WithPathCount(3),
-		decad.WithPathFollow(), decad.WithPathPivot(r3.Vec{}))
+	copies, err := decad.PathPattern(block, followPath(t), decad.PathCount{Count: 3}).FollowAbout(r3.Vec{}).Do(t.Context())
 	require.NoError(t, err)
 	lo, hi := turnedBlockBounds(math.Pi/2, r3.Vec{X: 20, Y: 10})
 	requireBoundsNear(t, copies[1], lo, hi)
@@ -116,12 +112,8 @@ func TestPathPatternPivotAtThePathStartIsTheDefault(t *testing.T) {
 func TestPathPatternPivotRefusals(t *testing.T) {
 	t.Parallel()
 	_, block := patternBlock(t)
-	_, err := decad.PathPattern(t.Context(), block, followPath(t), decad.WithPathCount(3), decad.WithPathPivot(r3.Vec{}))
-	require.ErrorIs(t, err, decad.ErrDegenerate, "a pivot without a turn")
-	_, err = decad.PathPattern(t.Context(), block, followPath(t), decad.WithPathCount(3),
-		decad.WithPathFollow(), decad.WithPathPivot(r3.Vec{X: math.NaN()}))
+	_, err := decad.PathPattern(block, followPath(t), decad.PathCount{Count: 3}).FollowAbout(r3.Vec{X: math.NaN()}).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrNotFinite)
-	_, err = decad.PathPattern(t.Context(), block, followPath(t), decad.WithPathSpacing(units.Millimeters(5)),
-		decad.WithPathFollow(), decad.WithPathPivot(r3.Vec{Z: math.Inf(1)}))
+	_, err = decad.PathPattern(block, followPath(t), decad.PathSpacing{Spacing: units.Millimeters(5)}).FollowAbout(r3.Vec{Z: math.Inf(1)}).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrNotFinite)
 }

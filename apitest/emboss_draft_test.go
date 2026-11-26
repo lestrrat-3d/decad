@@ -12,7 +12,7 @@ import (
 )
 
 // This file is agent-docs/emboss-design.md §6's public-surface tests for
-// WithEmbossDraft, on the plate of emboss_test.go with a 10 x 10 mm square relief
+// Draft, on the plate of emboss_test.go with a 10 x 10 mm square relief
 // 3 mm deep or tall. A wall that leans by an angle θ moves in by t·tan θ at the
 // depth t, so a square of side L has the side L − 2t·tan θ there and the relief
 // the volume of ∫ (L − 2t·tan θ)² dt over its height.
@@ -32,8 +32,7 @@ func TestEmbossDraftRaisedNarrowsTowardTheTop(t *testing.T) {
 	for _, deg := range []float64{3, 5, 10} {
 		_, plate := embossPlate(t)
 		s, profiles := embossSketch(t, 10, [4]float64{10, 10, 20, 20})
-		out, err := decad.Emboss(t.Context(), plate, s, profiles, embossFace(true, plate), decad.EmbossRaised, units.Millimeters(3),
-			decad.WithEmbossDraft(units.Degrees(deg)))
+		out, err := decad.Emboss(plate, s, profiles, embossFace(true, plate), decad.EmbossRaised, units.Millimeters(3)).Draft(units.Degrees(deg)).Do(t.Context())
 		require.NoError(t, err)
 		a := 2 * math.Tan(deg*math.Pi/180)
 		decadtest.MeasuresVolume(t, out, units.CubicMillimeters(embossPlateVolume+draftedSquare(10, 3, a)),
@@ -46,8 +45,7 @@ func TestEmbossDraftNegativeWidensTowardTheTop(t *testing.T) {
 	t.Parallel()
 	_, plate := embossPlate(t)
 	s, profiles := embossSketch(t, 10, [4]float64{10, 10, 20, 20})
-	out, err := decad.Emboss(t.Context(), plate, s, profiles, embossFace(true, plate), decad.EmbossRaised, units.Millimeters(3),
-		decad.WithEmbossDraft(units.Degrees(-5)))
+	out, err := decad.Emboss(plate, s, profiles, embossFace(true, plate), decad.EmbossRaised, units.Millimeters(3)).Draft(units.Degrees(-5)).Do(t.Context())
 	require.NoError(t, err)
 	a := -2 * math.Tan(5*math.Pi/180)
 	decadtest.MeasuresVolume(t, out, units.CubicMillimeters(embossPlateVolume+draftedSquare(10, 3, a)),
@@ -58,8 +56,7 @@ func TestEmbossDraftEngravedNarrowsTowardTheFloor(t *testing.T) {
 	t.Parallel()
 	_, plate := embossPlate(t)
 	s, profiles := embossSketch(t, 10, [4]float64{10, 10, 20, 20})
-	out, err := decad.Emboss(t.Context(), plate, s, profiles, embossFace(true, plate), decad.EmbossEngraved, units.Millimeters(3),
-		decad.WithEmbossDraft(units.Degrees(5)))
+	out, err := decad.Emboss(plate, s, profiles, embossFace(true, plate), decad.EmbossEngraved, units.Millimeters(3)).Draft(units.Degrees(5)).Do(t.Context())
 	require.NoError(t, err)
 	a := 2 * math.Tan(5*math.Pi/180)
 	decadtest.MeasuresVolume(t, out, units.CubicMillimeters(embossPlateVolume-draftedSquare(10, 3, a)),
@@ -79,8 +76,7 @@ func TestEmbossDraftZeroIsAStraightWall(t *testing.T) {
 	t.Parallel()
 	_, plate := embossPlate(t)
 	s, profiles := embossSketch(t, 10, [4]float64{10, 10, 20, 20})
-	out, err := decad.Emboss(t.Context(), plate, s, profiles, embossFace(true, plate), decad.EmbossRaised, units.Millimeters(3),
-		decad.WithEmbossDraft(units.Degrees(0)))
+	out, err := decad.Emboss(plate, s, profiles, embossFace(true, plate), decad.EmbossRaised, units.Millimeters(3)).Draft(units.Degrees(0)).Do(t.Context())
 	require.NoError(t, err)
 	decadtest.MeasuresVolume(t, out, units.CubicMillimeters(embossPlateVolume+300), decadtest.WithinRel(units.Scalar(1e-9)))
 }
@@ -88,16 +84,15 @@ func TestEmbossDraftZeroIsAStraightWall(t *testing.T) {
 func TestEmbossDraftRefusals(t *testing.T) {
 	t.Parallel()
 	for name, tc := range map[string]struct {
-		opt  decad.EmbossOption
-		want error
+		angle units.Value
+		want  error
 	}{
-		"a right angle": {decad.WithEmbossDraft(units.Degrees(90)), decad.ErrDegenerate},
-		"a nil option":  {nil, decad.ErrDegenerate},
-		"a length":      {decad.WithEmbossDraft(units.Millimeters(1)), decad.ErrUnitKind},
+		"a right angle": {units.Degrees(90), decad.ErrDegenerate},
+		"a length":      {units.Millimeters(1), decad.ErrUnitKind},
 	} {
 		doc, plate := embossPlate(t)
 		s, profiles := embossSketch(t, 10, [4]float64{10, 10, 20, 20})
-		_, err := decad.Emboss(t.Context(), plate, s, profiles, embossFace(true, plate), decad.EmbossRaised, units.Millimeters(3), tc.opt)
+		_, err := decad.Emboss(plate, s, profiles, embossFace(true, plate), decad.EmbossRaised, units.Millimeters(3)).Draft(tc.angle).Do(t.Context())
 		require.ErrorIs(t, err, tc.want, name)
 		require.Equal(t, []*decad.Body{plate}, doc.Bodies(), "%s: a refused emboss leaves the plate live and alone", name)
 	}

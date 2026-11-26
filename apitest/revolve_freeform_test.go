@@ -45,7 +45,7 @@ func fittedSplineRevolveVolume(t *testing.T, s *sketch.Sketch, profile *sketch.P
 func TestRevolveFittedSplineProfile(t *testing.T) {
 	s, profile := fittedSplineRevolveProfile(t)
 	axis := decad.SketchLine{Start: decad.Point2{U: -5, V: -5}, End: decad.Point2{U: -5, V: 5}}
-	body, err := decad.Revolve(t.Context(), decad.New(), s, profile, axis, decad.FullRevolution{})
+	body, err := decad.Revolve(decad.New(), s, profile, axis, decad.FullRevolution{}).Do(t.Context())
 	require.NoError(t, err)
 	require.True(t, body.IsSolid())
 	found := false
@@ -76,8 +76,8 @@ func TestRevolveFittedSplineProfile(t *testing.T) {
 func TestRevolveFittedSplinePartial(t *testing.T) {
 	s, profile := fittedSplineRevolveProfile(t)
 	axis := decad.SketchLine{Start: decad.Point2{U: -5, V: -5}, End: decad.Point2{U: -5, V: 5}}
-	body, err := decad.Revolve(t.Context(), decad.New(), s, profile, axis,
-		decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along})
+	body, err := decad.Revolve(decad.New(), s, profile, axis,
+		decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	freeformEdges := 0
 	for _, edge := range body.Edges() {

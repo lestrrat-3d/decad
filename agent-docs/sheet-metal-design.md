@@ -6,12 +6,19 @@ sheet-metal environment that a verification oracle needs first: the bent shape a
 ## 1. Contract
 
 ```go
-func SheetMetal(ctx context.Context, d *Document, spec SheetMetalSpec) (*Body, SheetMetalReport, error)
+func SheetMetal(d *Document, thickness, innerRadius, width units.Value, legs, bends []units.Value) *SheetMetalCommand
+func (c *SheetMetalCommand) KFactor(k units.Value) *SheetMetalCommand
+func (c *SheetMetalCommand) Do(ctx context.Context) (*Body, SheetMetalReport, error)
 ```
+
+The constructor records a nil document, named `d`, and copies both slices. `KFactor` stores its value, and
+`Do` refuses a bad one naming `KFactor` as the subject, after the three lengths and before the leg count. A second
+`KFactor` call replaces the first. Every error is tagged `OperationSheetMetal`. The command form is
+`agent-docs/command-api-design.md`.
 
 | Decision | Rule |
 |---|---|
-| M1 | The spec is `Thickness`, `InnerRadius` and `Width` (positive lengths), a `KFactor` in (0, 1] (the zero Value takes 0.44), `Legs` (positive lengths, the flat portions) and `Bends` (nonzero angles under a half turn, one fewer than the legs; positive turns counter-clockwise in the strip's plane, negative clockwise). A wrong unit kind is `ErrUnitKind`, a negative length `ErrNegativeMagnitude`, a non-finite one `ErrNotFinite`, and every other violation `ErrDegenerate`. |
+| M1 | The arguments are `thickness`, `innerRadius` and `width` (positive lengths), `legs` (positive lengths, the flat portions) and `bends` (nonzero angles under a half turn, one fewer than the legs; positive turns counter-clockwise in the strip's plane, negative clockwise). `KFactor` is in (0, 1] and is 0.44 unless the method is called. A wrong unit kind is `ErrUnitKind`, a negative length `ErrNegativeMagnitude`, a non-finite one `ErrNotFinite`, and every other violation `ErrDegenerate`. |
 | M2 | The strip lies in the XY plane, its first leg from the origin along +X, and is `Width` deep along +Z; `Transform` places it. The centreline is the legs joined by arcs of radius `InnerRadius + Thickness/2` about a centre on the side each bend turns toward, so a leg meets its bend tangentially. |
 | M3 | The outline is the centreline offset `Thickness/2` each side: lines along the legs and arcs about the bends' centres, the inner face of radius `InnerRadius` and the outer `InnerRadius + Thickness`, closed by a line across each end. It is extruded by `Extrude`, so the volume is `Thickness · Width · (Σ legs + Σ |angle| · (InnerRadius + Thickness/2))`. |
 | M4 | An outline that is not one simple loop, as a strip whose legs come back over themselves, is refused by the sketch or by the profile record and builds nothing. |

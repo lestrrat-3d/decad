@@ -11,7 +11,7 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// PathPattern with WithPathCount repeats a body along a path, such as bolts
+// PathPattern with PathCount repeats a body along a path, such as bolts
 // along a curved flange or ribs along a rail. The copies sit at equal distances
 // measured along the path's length and keep the body's orientation. The body
 // itself counts as the first instance, taken to sit at the path's start.
@@ -29,8 +29,8 @@ func Example_path_pattern() {
 		return
 	}
 	doc := decad.New()
-	peg, err := decad.Extrude(context.Background(), doc, s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(2), Dir: decad.Along})
+	peg, err := decad.Extrude(doc, s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(2), Dir: decad.Along}).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to extrude: %s\n", err)
 		return
@@ -44,7 +44,7 @@ func Example_path_pattern() {
 		fmt.Printf("failed to build path: %s\n", err)
 		return
 	}
-	copies, err := decad.PathPattern(context.Background(), peg, path, decad.WithPathCount(4))
+	copies, err := decad.PathPattern(peg, path, decad.PathCount{Count: 4}).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to pattern: %s\n", err)
 		return
@@ -63,7 +63,7 @@ func Example_path_pattern() {
 	// x 20.0..24.0, y 20.0..24.0
 }
 
-// WithPathFollow turns each copy to follow the path, as a car follows a road.
+// Follow turns each copy to follow the path, as a car follows a road.
 // The body sits at the path's start with its own +X along the path, and each
 // copy is turned by the bend of the path up to its point.
 func Example_path_pattern_follow() {
@@ -80,8 +80,8 @@ func Example_path_pattern_follow() {
 		return
 	}
 	doc := decad.New()
-	peg, err := decad.Extrude(context.Background(), doc, s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(2), Dir: decad.Along})
+	peg, err := decad.Extrude(doc, s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(2), Dir: decad.Along}).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to extrude: %s\n", err)
 		return
@@ -95,7 +95,7 @@ func Example_path_pattern_follow() {
 		fmt.Printf("failed to build path: %s\n", err)
 		return
 	}
-	copies, err := decad.PathPattern(context.Background(), peg, path, decad.WithPathCount(4), decad.WithPathFollow())
+	copies, err := decad.PathPattern(peg, path, decad.PathCount{Count: 4}).Follow().Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to pattern: %s\n", err)
 		return
@@ -114,7 +114,7 @@ func Example_path_pattern_follow() {
 	// x 16.0..20.0, y 20.0..24.0
 }
 
-// PathPattern with WithPathSpacing places copies at a stated distance along the
+// PathPattern with PathSpacing places copies at a stated distance along the
 // path instead of a count: here a peg every 12 mm along a 30 mm line. The last copy sits
 // short of the path's end when the distance does not divide its length.
 func Example_path_pattern_spaced() {
@@ -131,8 +131,8 @@ func Example_path_pattern_spaced() {
 		return
 	}
 	doc := decad.New()
-	peg, err := decad.Extrude(context.Background(), doc, s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(2), Dir: decad.Along})
+	peg, err := decad.Extrude(doc, s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(2), Dir: decad.Along}).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to extrude: %s\n", err)
 		return
@@ -142,7 +142,7 @@ func Example_path_pattern_spaced() {
 		fmt.Printf("failed to build path: %s\n", err)
 		return
 	}
-	copies, err := decad.PathPattern(context.Background(), peg, path, decad.WithPathSpacing(units.Millimeters(12)))
+	copies, err := decad.PathPattern(peg, path, decad.PathSpacing{Spacing: units.Millimeters(12)}).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to pattern: %s\n", err)
 		return
@@ -160,7 +160,7 @@ func Example_path_pattern_spaced() {
 	// x 24..28
 }
 
-// WithPathPivot sets the point a followed turn swings about. By default each
+// FollowAbout sets the point a followed turn swings about. By default each
 // copy turns about the path's start, so a body that sits away from it swings
 // round that point. Here a 4 mm peg turns a quarter turn at the end of a path
 // that bends left: about its own centre it stays square on its place, and about
@@ -179,8 +179,8 @@ func Example_path_pattern_pivot() {
 		return
 	}
 	doc := decad.New()
-	peg, err := decad.Extrude(context.Background(), doc, s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(2), Dir: decad.Along})
+	peg, err := decad.Extrude(doc, s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(2), Dir: decad.Along}).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to extrude: %s\n", err)
 		return
@@ -193,8 +193,7 @@ func Example_path_pattern_pivot() {
 		return
 	}
 	for _, pivot := range []r3.Vec{{}, {X: 2, Y: 2}} {
-		copies, err := decad.PathPattern(context.Background(), peg, path, decad.WithPathCount(2),
-			decad.WithPathFollow(), decad.WithPathPivot(pivot))
+		copies, err := decad.PathPattern(peg, path, decad.PathCount{Count: 2}).FollowAbout(pivot).Do(context.Background())
 		if err != nil {
 			fmt.Printf("failed to pattern: %s\n", err)
 			return
@@ -227,8 +226,8 @@ func Example_path_pattern_join() {
 		if _, err := s.Solve(context.Background()); err != nil {
 			return nil, err
 		}
-		return decad.Extrude(context.Background(), doc, s, s.Profiles()[0],
-			decad.Distance{D: units.Millimeters(height), Dir: decad.Along})
+		return decad.Extrude(doc, s, s.Profiles()[0],
+			decad.Distance{D: units.Millimeters(height), Dir: decad.Along}).Do(context.Background())
 	}
 	bar, err := build(30, 4, 1)
 	if err != nil {
@@ -245,12 +244,12 @@ func Example_path_pattern_join() {
 		fmt.Printf("failed to build path: %s\n", err)
 		return
 	}
-	copies, err := decad.PathPattern(context.Background(), peg, path, decad.WithPathCount(3))
+	copies, err := decad.PathPattern(peg, path, decad.PathCount{Count: 3}).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to copy: %s\n", err)
 		return
 	}
-	joined, err := decad.Union(context.Background(), bar, append([]*decad.Body{peg}, copies...)...)
+	joined, err := decad.Union(append([]*decad.Body{bar}, append([]*decad.Body{peg}, copies...)...)...).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to join: %s\n", err)
 		return

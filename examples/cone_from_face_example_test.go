@@ -38,7 +38,7 @@ func Example_cone_from_face() {
 	}
 	doc := decad.New()
 	axis := decad.SketchLine{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 1, V: 0}}
-	part, err := decad.Revolve(context.Background(), doc, s, s.Profiles()[0], axis, decad.FullRevolution{})
+	part, err := decad.Revolve(doc, s, s.Profiles()[0], axis, decad.FullRevolution{}).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to revolve: %s\n", err)
 		return
@@ -55,8 +55,8 @@ func Example_cone_from_face() {
 
 	// Build the full cone from that face. The last argument is the far plane,
 	// as an X coordinate below the origin, where the cone stops.
-	cone, err := decad.ConeFromFace(context.Background(), part,
-		decad.Faces(decad.FaceCreatedBy(side)).Exactly(1), units.Millimeters(-5))
+	cone, err := decad.ConeFromFace(part,
+		decad.Faces(decad.FaceCreatedBy(side)).Exactly(1), units.Millimeters(-5)).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to build cone: %s\n", err)
 		return

@@ -18,7 +18,7 @@ import (
 func crossDrilled(t *testing.T) *decad.Body {
 	t.Helper()
 	sc := newRetentionScene()
-	out, err := decad.Cut(t.Context(), sc.roundedBox(t), sc.tool(t, 20))
+	out, err := decad.Cut(sc.roundedBox(t), sc.tool(t, 20)).Do(t.Context())
 	require.NoError(t, err)
 	return out
 }
@@ -47,8 +47,7 @@ func TestFacetedRetainedChamferTwoDistance(t *testing.T) {
 		require.NoError(t, err)
 		// The front face (outward normal -y) takes 2 mm, the bore wall 1 mm.
 		const dA, dB, rad = 2.0, 1.0, 4.0
-		chamfered, err := decad.Chamfer(t.Context(), drilled, mouthAtY(t, drilled, 0), units.Millimeters(dA),
-			decad.WithAsymmetricChamfer(decad.Faces(decad.Facing(r3.NewVec(0, -1, 0))), units.Millimeters(dB)))
+		chamfered, err := decad.Chamfer(drilled, mouthAtY(t, drilled, 0), units.Millimeters(dA)).Asymmetric(decad.Faces(decad.Facing(r3.NewVec(0, -1, 0))), units.Millimeters(dB)).Do(t.Context())
 		require.NoError(t, err)
 		after, err := chamfered.Volume()
 		require.NoError(t, err)
@@ -66,8 +65,7 @@ func TestFacetedRetainedChamferTwoDistance(t *testing.T) {
 			Or(decad.EndpointAt(r3.NewVec(40, 0, 0)), decad.ParallelTo(z)).Exactly(2)
 		// The faces x = 0 and x = 40 take 3 mm; the front face y = 0 takes 1 mm.
 		ref := decad.Faces(decad.Facing(r3.NewVec(-1, 0, 0))).Or(decad.Facing(r3.NewVec(1, 0, 0)))
-		chamfered, err := decad.Chamfer(t.Context(), bored, edges, units.Millimeters(3),
-			decad.WithAsymmetricChamfer(ref, units.Millimeters(1)))
+		chamfered, err := decad.Chamfer(bored, edges, units.Millimeters(3)).Asymmetric(ref, units.Millimeters(1)).Do(t.Context())
 		require.NoError(t, err)
 		after, err := chamfered.Volume()
 		require.NoError(t, err)
@@ -88,9 +86,8 @@ func TestFacetedRetainedChamferTwoDistance(t *testing.T) {
 			grooved := groovedPlate(t)
 			before, err := grooved.Volume()
 			require.NoError(t, err)
-			chamfered, err := decad.Chamfer(t.Context(), grooved,
-				straightEdge(t, grooved, r3.NewVec(0, k[0], 20), r3.NewVec(1, 0, 0)), units.Millimeters(c.dB),
-				decad.WithAsymmetricChamfer(decad.Faces(decad.Cylindrical()), units.Millimeters(c.dA)))
+			chamfered, err := decad.Chamfer(grooved,
+				straightEdge(t, grooved, r3.NewVec(0, k[0], 20), r3.NewVec(1, 0, 0)), units.Millimeters(c.dB)).Asymmetric(decad.Faces(decad.Cylindrical()), units.Millimeters(c.dA)).Do(t.Context())
 			require.NoError(t, err)
 			after, err := chamfered.Volume()
 			require.NoError(t, err)
@@ -110,7 +107,7 @@ func TestFacetedRetainedChamferTwoDistance(t *testing.T) {
 	t.Run("arc that breaks out of the side, reference the plane", func(t *testing.T) {
 		t.Parallel()
 		sc := newRetentionScene()
-		broken, err := decad.Cut(t.Context(), blendPlate(t, sc), zCylinderAt(t, sc, 2, 10, 4, -30, 30))
+		broken, err := decad.Cut(blendPlate(t, sc), zCylinderAt(t, sc, 2, 10, 4, -30, 30)).Do(t.Context())
 		require.NoError(t, err)
 		before, err := broken.Volume()
 		require.NoError(t, err)
@@ -122,8 +119,7 @@ func TestFacetedRetainedChamferTwoDistance(t *testing.T) {
 		}
 		require.NotNil(t, sel)
 		const dA, dB = 1.0, 0.5
-		chamfered, err := decad.Chamfer(t.Context(), broken, sel, units.Millimeters(dA),
-			decad.WithAsymmetricChamfer(decad.Faces(decad.Facing(r3.NewVec(0, 0, 1))), units.Millimeters(dB)))
+		chamfered, err := decad.Chamfer(broken, sel, units.Millimeters(dA)).Asymmetric(decad.Faces(decad.Facing(r3.NewVec(0, 0, 1))), units.Millimeters(dB)).Do(t.Context())
 		require.NoError(t, err)
 		after, err := chamfered.Volume()
 		require.NoError(t, err)

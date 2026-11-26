@@ -28,7 +28,7 @@ func arcEndBody(t *testing.T) (*decad.Body, decad.EdgeSelector) {
 	sc := newRetentionScene()
 	corner := roundedCornerBox(t, sc)
 	block := placed(t, rectBox(t, sc.w, sc.doc, -5, -5, arcEndGx, 25, 30), -5)
-	trimmed, err := decad.Cut(t.Context(), corner, block)
+	trimmed, err := decad.Cut(corner, block).Do(t.Context())
 	require.NoError(t, err)
 	return trimmed, arcSeedAt(t, trimmed, 20)
 }
@@ -74,7 +74,7 @@ func TestFacetedRetainedBlendArcEnd(t *testing.T) {
 		before, err := body.Volume()
 		require.NoError(t, err)
 		const r = 1.0
-		out, err := decad.Fillet(t.Context(), body, seed, units.Millimeters(r), decad.WithTangentChain())
+		out, err := decad.Fillet(body, seed, units.Millimeters(r)).TangentChain().Do(t.Context())
 		require.NoError(t, err)
 		after, err := out.Volume()
 		require.NoError(t, err)
@@ -87,7 +87,7 @@ func TestFacetedRetainedBlendArcEnd(t *testing.T) {
 		t.Parallel()
 		body, seed := arcEndBody(t)
 		const r = 0.5
-		out, err := decad.Fillet(t.Context(), body, seed, units.Millimeters(r), decad.WithTangentChain())
+		out, err := decad.Fillet(body, seed, units.Millimeters(r)).TangentChain().Do(t.Context())
 		require.NoError(t, err)
 		cylinders, tori, majors := blendKinds(out, r)
 		require.Equal(t, 1, cylinders)
@@ -121,8 +121,7 @@ func TestFacetedRetainedBlendArcEnd(t *testing.T) {
 		before, err := body.Volume()
 		require.NoError(t, err)
 		const r = 1.0
-		out, err := decad.Fillet(t.Context(), body, arcSeedAt(t, body, 0), units.Millimeters(r),
-			decad.WithTangentChain())
+		out, err := decad.Fillet(body, arcSeedAt(t, body, 0), units.Millimeters(r)).TangentChain().Do(t.Context())
 		require.NoError(t, err)
 		after, err := out.Volume()
 		require.NoError(t, err)
@@ -137,7 +136,7 @@ func TestFacetedRetainedBlendArcEnd(t *testing.T) {
 		before, err := body.Volume()
 		require.NoError(t, err)
 		const d = 1.0
-		out, err := decad.Chamfer(t.Context(), body, seed, units.Millimeters(d), decad.WithTangentChain())
+		out, err := decad.Chamfer(body, seed, units.Millimeters(d)).TangentChain().Do(t.Context())
 		require.NoError(t, err)
 		after, err := out.Volume()
 		require.NoError(t, err)
@@ -163,7 +162,7 @@ func TestFacetedRetainedBlendArcEnd(t *testing.T) {
 		before, err := body.Area()
 		require.NoError(t, err)
 		const r = 1.0
-		out, err := decad.Fillet(t.Context(), body, seed, units.Millimeters(r), decad.WithTangentChain())
+		out, err := decad.Fillet(body, seed, units.Millimeters(r)).TangentChain().Do(t.Context())
 		require.NoError(t, err)
 		after, err := out.Area()
 		require.NoError(t, err)
@@ -175,7 +174,7 @@ func TestFacetedRetainedBlendArcEnd(t *testing.T) {
 		// The end face lies 1.5 mm from the axis, so the plane's setback circle
 		// of radius 3 - 2 = 1 never reaches it.
 		body, seed := arcEndBody(t)
-		_, err := decad.Fillet(t.Context(), body, seed, units.Millimeters(2), decad.WithTangentChain())
+		_, err := decad.Fillet(body, seed, units.Millimeters(2)).TangentChain().Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.ErrorContains(t, err, "does not reach an end face")
 	})

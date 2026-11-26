@@ -48,10 +48,9 @@ func TestHoleThreadInARod(t *testing.T) {
 	const R, L, depth = 25.0, 16.0, 6.0
 	doc := decad.New()
 	rod := circleBodyAtZ(t, doc, 0, R, 0, L)
-	out, err := decad.Hole(t.Context(), rod, decad.HoleSpec{
-		Face: decad.Faces(decad.Cylindrical()), At: r3.NewVec(R, 0, L/2),
-		Diameter: units.Millimeters(2 * tapRadius), Depth: decad.BlindHole{Depth: units.Millimeters(depth)},
-		Thread: &decad.HoleThread{Pitch: units.Millimeters(tapPitch)}})
+	out, err := decad.Hole(rod, decad.Faces(decad.Cylindrical()), r3.NewVec(R, 0, L/2), units.Millimeters(2*tapRadius), decad.BlindHole{Depth: units.Millimeters(depth)}).
+		Thread(decad.NewHoleThread(units.Millimeters(tapPitch))).
+		Do(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, []*decad.Body{out}, doc.Bodies())
 	wall := func(y float64) float64 { return math.Sqrt(R*R - y*y) }
@@ -68,17 +67,16 @@ func TestHoleThreadOutOfABore(t *testing.T) {
 	const Rb = 6.0
 	doc := decad.New()
 	block := boxBody(t, doc, -20, -20, 20, 20, 10)
-	part, err := decad.Cut(t.Context(), block, circleBodyAtZ(t, doc, 0, Rb, -1, 12))
+	part, err := decad.Cut(block, circleBodyAtZ(t, doc, 0, Rb, -1, 12)).Do(t.Context())
 	require.NoError(t, err)
 	// A tapped hole from the bore wall at (6, 0, 5) out along +X, 8 mm deep from the tangent plane.
 	// The wall of a bore rises toward the plane, so the material starts at x = √(R² − y²), below
 	// the plane by R − √(R² − y²) = -(sag): the groove's lower limit is the negative sag, which
 	// the overlap with [0, span] clips to the plane.
 	const depth = 8.0
-	out, err := decad.Hole(t.Context(), part, decad.HoleSpec{
-		Face: decad.Faces(decad.Cylindrical()), At: r3.NewVec(Rb, 0, 5),
-		Diameter: units.Millimeters(2 * tapRadius), Depth: decad.BlindHole{Depth: units.Millimeters(depth)},
-		Thread: &decad.HoleThread{Pitch: units.Millimeters(tapPitch)}})
+	out, err := decad.Hole(part, decad.Faces(decad.Cylindrical()), r3.NewVec(Rb, 0, 5), units.Millimeters(2*tapRadius), decad.BlindHole{Depth: units.Millimeters(depth)}).
+		Thread(decad.NewHoleThread(units.Millimeters(tapPitch))).
+		Do(t.Context())
 	require.NoError(t, err)
 	wall := func(y float64) float64 { return math.Sqrt(Rb*Rb - y*y) }
 	// The material along the hole axis runs from the wall at x = wall(y) (below the plane x = 6) to
@@ -100,10 +98,9 @@ func TestHoleThreadInAThinRodIsTheBooleansRefusal(t *testing.T) {
 	// cut is the evaluator's own ErrUnsupported and leaves the rod live.
 	doc := decad.New()
 	rod := circleBodyAtZ(t, doc, 0, 6, 0, 16)
-	_, err := decad.Hole(t.Context(), rod, decad.HoleSpec{
-		Face: decad.Faces(decad.Cylindrical()), At: r3.NewVec(6, 0, 8),
-		Diameter: units.Millimeters(2 * tapRadius), Depth: decad.BlindHole{Depth: units.Millimeters(5)},
-		Thread: &decad.HoleThread{Pitch: units.Millimeters(tapPitch)}})
+	_, err := decad.Hole(rod, decad.Faces(decad.Cylindrical()), r3.NewVec(6, 0, 8), units.Millimeters(2*tapRadius), decad.BlindHole{Depth: units.Millimeters(5)}).
+		Thread(decad.NewHoleThread(units.Millimeters(tapPitch))).
+		Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.Equal(t, []*decad.Body{rod}, doc.Bodies())
 }

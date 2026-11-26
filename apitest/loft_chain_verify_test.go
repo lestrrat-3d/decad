@@ -14,7 +14,7 @@ func TestLoftChainVerifyValidityAfterAudit(t *testing.T) {
 			pts := [][2]float64{{0, 0}, {10, 0}, {10, 8}, {22, 8}}
 			s0, ch0, s1, ch1 := chainLoftPair(t, 5, pts, pts)
 			doc := decad.New()
-			body, err := decad.LoftChain(t.Context(), doc, s0, ch0, s1, ch1)
+			body, err := decad.LoftChain(doc, s0, ch0, s1, ch1).Do(t.Context())
 			require.NoError(t, err)
 			require.Len(t, body.Faces(), 6)
 
@@ -23,9 +23,9 @@ func TestLoftChainVerifyValidityAfterAudit(t *testing.T) {
 				require.NoError(t, err)
 				require.NotEqual(t, r3.Identity(), motion)
 				if mode == "placed" {
-					body, err = decad.Transform(t.Context(), body, motion)
+					body, err = decad.Transform(body, motion).Do(t.Context())
 				} else {
-					body, err = decad.Copy(t.Context(), body, decad.WithCopyPlacement(motion))
+					body, err = decad.Copy(body).Place(decad.CopyTransform{Transform: motion}).Do(t.Context())
 				}
 				require.NoError(t, err)
 			}

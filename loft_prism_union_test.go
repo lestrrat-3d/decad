@@ -31,7 +31,7 @@ func axialLineLoft(t *testing.T, doc *Document, x0, y0, x1, y1, height float64) 
 		require.NoError(t, err)
 		sections[i], profiles[i] = s, s.Profiles()[0]
 	}
-	body, err := Loft(t.Context(), doc, sections[0], profiles[0], sections[1], profiles[1])
+	body, err := Loft(doc, sections[0], profiles[0], sections[1], profiles[1]).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -40,7 +40,7 @@ func TestAxialLoftPrismUnionRectangularTab(t *testing.T) {
 	doc := New()
 	blank := internalBoxBody(t, doc, 0, 0, 10, 10, 4)
 	tab := axialLineLoft(t, doc, 8, 4, 12, 6, 4)
-	joined, err := Union(t.Context(), blank, tab)
+	joined, err := Union(blank, tab).Do(t.Context())
 	require.NoError(t, err)
 	_, analytic := joined.n.Payload.(prismPayload)
 	require.True(t, analytic, "the certified source route should return an analytic prism")
@@ -82,12 +82,12 @@ func TestAxialLoftPrismUnionIndependentUnequalTabs(t *testing.T) {
 			var first *Body
 			var err error
 			if reverse {
-				first, err = Union(t.Context(), right, blank)
+				first, err = Union(right, blank).Do(t.Context())
 			} else {
-				first, err = Union(t.Context(), blank, right)
+				first, err = Union(blank, right).Do(t.Context())
 			}
 			require.NoError(t, err)
-			joined, err := Union(t.Context(), first, left)
+			joined, err := Union(first, left).Do(t.Context())
 			require.NoError(t, err)
 			_, analytic := joined.n.Payload.(prismPayload)
 			require.True(t, analytic)
@@ -116,7 +116,7 @@ func TestAxialLoftPrismUnionManyIndependentTabs(t *testing.T) {
 				bodyNodes(operands))
 			require.NoError(t, err)
 			require.True(t, admitted, "the independent tabs should use one prism scene")
-			joined, err := Union(t.Context(), operands[0], operands[1:]...)
+			joined, err := Union(append([]*Body{operands[0]}, operands[1:]...)...).Do(t.Context())
 			require.NoError(t, err)
 			_, analytic := joined.n.Payload.(prismPayload)
 			require.True(t, analytic)
@@ -162,7 +162,7 @@ func TestAxialLoftPrismUnionRefusesVaryingSource(t *testing.T) {
 		require.NoError(t, err)
 		sketches[i], profiles[i] = s, s.Profiles()[0]
 	}
-	body, err := Loft(t.Context(), New(), sketches[0], profiles[0], sketches[1], profiles[1])
+	body, err := Loft(New(), sketches[0], profiles[0], sketches[1], profiles[1]).Do(t.Context())
 	require.NoError(t, err)
 	_, admitted, err := loftrecord.ExactAxialPrism(t.Context(), body.n.Payload.(loftPayload))
 	require.NoError(t, err)

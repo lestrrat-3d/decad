@@ -28,8 +28,8 @@ func Example_hole_cylinder() {
 		fmt.Printf("failed to solve: %s\n", err)
 		return
 	}
-	shaft, err := decad.Extrude(context.Background(), decad.New(), s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
+	shaft, err := decad.Extrude(decad.New(), s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(20), Dir: decad.Along}).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to extrude: %s\n", err)
 		return
@@ -37,12 +37,7 @@ func Example_hole_cylinder() {
 
 	// A 3 mm hole all the way across, starting at the shaft's side at x = 5,
 	// halfway along its length.
-	drilled, err := decad.Hole(context.Background(), shaft, decad.HoleSpec{
-		Face:     decad.Faces(decad.Cylindrical()),
-		At:       r3.Vec{X: 5, Y: 0, Z: 10},
-		Diameter: units.Millimeters(3),
-		Depth:    decad.ThroughHole{},
-	})
+	drilled, err := decad.Hole(shaft, decad.Faces(decad.Cylindrical()), r3.Vec{X: 5, Y: 0, Z: 10}, units.Millimeters(3), decad.ThroughHole{}).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to drill: %s\n", err)
 		return

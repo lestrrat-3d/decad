@@ -23,8 +23,8 @@ func TestExtrudeRejectsOverflowedVolume(t *testing.T) {
 	require.Len(t, s.Profiles(), 1)
 
 	doc := decad.New()
-	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(1e103), Dir: decad.Along})
+	body, err := decad.Extrude(doc, s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(1e103), Dir: decad.Along}).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrNotFinite)
 	require.Nil(t, body)
 }
@@ -43,7 +43,7 @@ func TestRevolveRejectsOverflowedVolume(t *testing.T) {
 
 	doc := decad.New()
 	axis := decad.SketchLine{Start: decad.Point2{}, End: decad.Point2{V: 1}}
-	body, err := decad.Revolve(t.Context(), doc, s, s.Profiles()[0], axis, decad.FullRevolution{})
+	body, err := decad.Revolve(doc, s, s.Profiles()[0], axis, decad.FullRevolution{}).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrNotFinite)
 	require.Nil(t, body)
 }
@@ -53,8 +53,8 @@ func TestExtrudeCoalescedEdgesCarryLengthBounds(t *testing.T) {
 	s, profile := polygonSketch(t, [][2]float64{
 		{0, 0}, {1, 1}, {2, 2}, {1, 3}, {0, 2},
 	})
-	body, err := decad.Extrude(t.Context(), decad.New(), s, profile,
-		decad.Distance{D: units.Millimeters(1), Dir: decad.Along})
+	body, err := decad.Extrude(decad.New(), s, profile,
+		decad.Distance{D: units.Millimeters(1), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 
 	coalesced := 0

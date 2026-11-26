@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// The join tests of agent-docs/mirror-pattern-design.md §8: Mirrored with WithJoin
+// The join tests of agent-docs/mirror-pattern-design.md §8: MirroredJoin
 // rewrites a prism's or a stacked prism's own section into the union of the
 // receiver and its image, and refuses every receiver §5.1 does not admit.
 
@@ -61,8 +61,8 @@ func TestMirrorJoinOneWallMakesATee(t *testing.T) {
 	t.Parallel()
 	sc := newMirrorScene()
 	l := sc.mirrorL(t)
-	tee, err := decad.Mirrored(t.Context(), l, decad.MirrorFace{
-		Body: l, Face: decad.Faces(decad.Planar(), decad.Facing(joinMinusX))}, decad.WithJoin())
+	tee, err := decad.MirroredJoin(l, decad.MirrorFace{
+		Body: l, Face: decad.Faces(decad.Planar(), decad.Facing(joinMinusX))}).Do(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, []*decad.Body{tee}, sc.doc.Bodies())
 
@@ -88,7 +88,7 @@ func TestMirrorJoinOneWallMakesATee(t *testing.T) {
 	report, err := sc.doc.Verify(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, decad.Sound, report.Status, "diagnostics: %v", report.Diagnostics)
-	_, err = decad.Fillet(t.Context(), tee, decad.Edges(decad.Convex(), decad.ParallelTo(joinPlusZ)), units.Millimeters(1))
+	_, err = decad.Fillet(tee, decad.Edges(decad.Convex(), decad.ParallelTo(joinPlusZ)), units.Millimeters(1)).Do(t.Context())
 	require.NoError(t, err)
 }
 
@@ -109,8 +109,8 @@ func TestMirrorJoinTwoWallsMakesARing(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, tips, 2, "the premise: the two tip walls are the only +x faces")
 
-	ring, err := decad.Mirrored(t.Context(), u, decad.MirrorFace{
-		Body: u, Face: decad.Faces(decad.Planar(), decad.Facing(joinPlusX))}, decad.WithJoin())
+	ring, err := decad.MirroredJoin(u, decad.MirrorFace{
+		Body: u, Face: decad.Faces(decad.Planar(), decad.Facing(joinPlusX))}).Do(t.Context())
 	require.NoError(t, err)
 	v, err := ring.Volume()
 	require.NoError(t, err)
@@ -155,11 +155,11 @@ func TestMirrorJoinKeepsHolesAndTheirImages(t *testing.T) {
 	}
 	require.NotNil(t, profile)
 	doc := decad.New()
-	plate, err := decad.Extrude(t.Context(), doc, s, profile, mirrorAlong(4))
+	plate, err := decad.Extrude(doc, s, profile, mirrorAlong(4)).Do(t.Context())
 	require.NoError(t, err)
 
-	joined, err := decad.Mirrored(t.Context(), plate, decad.MirrorFace{
-		Body: plate, Face: decad.Faces(decad.Planar(), decad.Facing(joinMinusX))}, decad.WithJoin())
+	joined, err := decad.MirroredJoin(plate, decad.MirrorFace{
+		Body: plate, Face: decad.Faces(decad.Planar(), decad.Facing(joinMinusX))}).Do(t.Context())
 	require.NoError(t, err)
 	v, err := joined.Volume()
 	require.NoError(t, err)
@@ -185,13 +185,13 @@ func TestMirrorJoinStackedPlate(t *testing.T) {
 	top, err := sc.w.CreateOffsetPlane(sc.w.XY(), 6)
 	require.NoError(t, err)
 	pocket := sc.box(t, top, 3, 3, 7, 7, mirrorAlong(4))
-	part, err := decad.Cut(t.Context(), plate, pocket)
+	part, err := decad.Cut(plate, pocket).Do(t.Context())
 	require.NoError(t, err)
 	v, err := part.Volume()
 	require.NoError(t, err)
 	require.Equal(t, 936.0, volumeMM(t, v))
 
-	joined, err := decad.Mirrored(t.Context(), part, decad.MirrorFace{Body: part, Face: joinWallAt(t, part, joinPlusX, 10)}, decad.WithJoin())
+	joined, err := decad.MirroredJoin(part, decad.MirrorFace{Body: part, Face: joinWallAt(t, part, joinPlusX, 10)}).Do(t.Context())
 	require.NoError(t, err)
 	v, err = joined.Volume()
 	require.NoError(t, err)
@@ -226,7 +226,7 @@ func TestMirrorJoinRefusals(t *testing.T) {
 		sc := newMirrorScene()
 		box := sc.box(t, sc.w.XY(), 0, 0, 20, 10, mirrorAlong(10))
 		before := sc.doc.Bodies()
-		_, err := decad.Mirrored(t.Context(), box, mirrorAtX30(t), decad.WithJoin())
+		_, err := decad.MirroredJoin(box, mirrorAtX30(t)).Do(t.Context())
 		requireJoinRefused(t, err, decad.ErrUnsupported, "MirrorFace", sc.doc, before)
 	})
 	t.Run("a cap", func(t *testing.T) {
@@ -234,7 +234,7 @@ func TestMirrorJoinRefusals(t *testing.T) {
 		sc := newMirrorScene()
 		box := sc.box(t, sc.w.XY(), 0, 0, 20, 10, mirrorAlong(10))
 		before := sc.doc.Bodies()
-		_, err := decad.Mirrored(t.Context(), box, decad.MirrorFace{Body: box, Face: topCap(box)}, decad.WithJoin())
+		_, err := decad.MirroredJoin(box, decad.MirrorFace{Body: box, Face: topCap(box)}).Do(t.Context())
 		requireJoinRefused(t, err, decad.ErrDegenerate, "not a wall", sc.doc, before)
 	})
 	t.Run("a curved wall", func(t *testing.T) {
@@ -242,7 +242,7 @@ func TestMirrorJoinRefusals(t *testing.T) {
 		sc := newMirrorScene()
 		pin := sc.cylinder(t, sc.w.XY(), 0, 0, 2, mirrorAlong(10))
 		before := sc.doc.Bodies()
-		_, err := decad.Mirrored(t.Context(), pin, decad.MirrorFace{Body: pin, Face: decad.Faces(decad.Cylindrical())}, decad.WithJoin())
+		_, err := decad.MirroredJoin(pin, decad.MirrorFace{Body: pin, Face: decad.Faces(decad.Cylindrical())}).Do(t.Context())
 		requireJoinRefused(t, err, decad.ErrDegenerate, "curved wall", sc.doc, before)
 	})
 	t.Run("another body's face", func(t *testing.T) {
@@ -251,8 +251,8 @@ func TestMirrorJoinRefusals(t *testing.T) {
 		box := sc.box(t, sc.w.XY(), 0, 0, 20, 10, mirrorAlong(10))
 		wall := sc.box(t, sc.w.XY(), 30, 0, 35, 10, mirrorAlong(10))
 		before := sc.doc.Bodies()
-		_, err := decad.Mirrored(t.Context(), box, decad.MirrorFace{
-			Body: wall, Face: decad.Faces(decad.Planar(), decad.Facing(joinMinusX))}, decad.WithJoin())
+		_, err := decad.MirroredJoin(box, decad.MirrorFace{
+			Body: wall, Face: decad.Faces(decad.Planar(), decad.Facing(joinMinusX))}).Do(t.Context())
 		requireJoinRefused(t, err, decad.ErrUnsupported, "face of the receiver", sc.doc, before)
 	})
 	t.Run("no face", func(t *testing.T) {
@@ -260,7 +260,7 @@ func TestMirrorJoinRefusals(t *testing.T) {
 		sc := newMirrorScene()
 		box := sc.box(t, sc.w.XY(), 0, 0, 20, 10, mirrorAlong(10))
 		before := sc.doc.Bodies()
-		_, err := decad.Mirrored(t.Context(), box, decad.MirrorFace{Body: box, Face: decad.Faces(decad.Cylindrical())}, decad.WithJoin())
+		_, err := decad.MirroredJoin(box, decad.MirrorFace{Body: box, Face: decad.Faces(decad.Cylindrical())}).Do(t.Context())
 		requireJoinRefused(t, err, decad.ErrCardinality, "", sc.doc, before)
 		var se *decad.SelectionError
 		require.ErrorAs(t, err, &se)
@@ -275,8 +275,8 @@ func TestMirrorJoinRefusals(t *testing.T) {
 			{0, 0}, {30, 0}, {30, 2.5}, {20, 2.5}, {20, 17.5}, {30, 17.5}, {30, 20}, {0, 20},
 		}, mirrorAlong(10))
 		before := sc.doc.Bodies()
-		_, err := decad.Mirrored(t.Context(), u, decad.MirrorFace{
-			Body: u, Face: decad.Faces(decad.Planar(), decad.Facing(joinPlusX))}, decad.WithJoin())
+		_, err := decad.MirroredJoin(u, decad.MirrorFace{
+			Body: u, Face: decad.Faces(decad.Planar(), decad.Facing(joinPlusX))}).Do(t.Context())
 		requireJoinRefused(t, err, decad.ErrDegenerate, "(J3)", sc.doc, before)
 	})
 	t.Run("a wall fragment (J4)", func(t *testing.T) {
@@ -286,7 +286,7 @@ func TestMirrorJoinRefusals(t *testing.T) {
 		sc := newMirrorScene()
 		square := sc.box(t, sc.w.XY(), 0, 0, 10, 10, mirrorAlong(10))
 		tri := sc.poly(t, sc.w.XY(), [][2]float64{{5, 5}, {16, 5}, {5, 16}}, mirrorAlong(10))
-		part, err := decad.Union(t.Context(), square, tri)
+		part, err := decad.Union(square, tri).Do(t.Context())
 		require.NoError(t, err)
 		for _, f := range part.Faces() {
 			require.NotEqual(t, decad.KindFaceted, f.Surface().Kind(), "the premise: the union is analytic")
@@ -295,8 +295,8 @@ func TestMirrorJoinRefusals(t *testing.T) {
 		require.NoError(t, err)
 		require.Len(t, walls, 1)
 		before := sc.doc.Bodies()
-		_, err = decad.Mirrored(t.Context(), part, decad.MirrorFace{
-			Body: part, Face: decad.Faces(decad.Planar(), decad.Facing(joinPlusX))}, decad.WithJoin())
+		_, err = decad.MirroredJoin(part, decad.MirrorFace{
+			Body: part, Face: decad.Faces(decad.Planar(), decad.Facing(joinPlusX))}).Do(t.Context())
 		requireJoinRefused(t, err, decad.ErrUnsupported, "(J4)", sc.doc, before)
 	})
 	t.Run("an arc bulging past the line (J5)", func(t *testing.T) {
@@ -316,8 +316,8 @@ func TestMirrorJoinRefusals(t *testing.T) {
 		require.NoError(t, err)
 		require.Less(t, box.Min.X, 0.0, "the premise: the arc bulges past x = 0")
 		before := sc.doc.Bodies()
-		_, err = decad.Mirrored(t.Context(), body, decad.MirrorFace{
-			Body: body, Face: decad.Faces(decad.Planar(), decad.Facing(joinMinusX))}, decad.WithJoin())
+		_, err = decad.MirroredJoin(body, decad.MirrorFace{
+			Body: body, Face: decad.Faces(decad.Planar(), decad.Facing(joinMinusX))}).Do(t.Context())
 		requireJoinRefused(t, err, decad.ErrUnsupported, "(J5)", sc.doc, before)
 	})
 	t.Run("a displaced section (J7)", func(t *testing.T) {
@@ -330,27 +330,27 @@ func TestMirrorJoinRefusals(t *testing.T) {
 		tool := sc.box(t, sc.w.XY(), 4, 4, 6, 6, mirrorAlong(5))
 		shift, err := r3.Translation(r3.NewVec(0.1, 0, 0))
 		require.NoError(t, err)
-		moved, err := decad.Transform(t.Context(), tool, shift)
+		moved, err := decad.Transform(tool, shift).Do(t.Context())
 		require.NoError(t, err)
-		part, err := decad.Cut(t.Context(), plate, moved)
+		part, err := decad.Cut(plate, moved).Do(t.Context())
 		require.NoError(t, err)
 		v, err := part.Volume()
 		require.NoError(t, err)
 		require.NotEqual(t, decad.Exact, v.Exactness, "the premise: the cut carries a displacement")
 		before := sc.doc.Bodies()
-		_, err = decad.Mirrored(t.Context(), part, decad.MirrorFace{Body: part, Face: joinWallAt(t, part, joinMinusX, 0)}, decad.WithJoin())
+		_, err = decad.MirroredJoin(part, decad.MirrorFace{Body: part, Face: joinWallAt(t, part, joinMinusX, 0)}).Do(t.Context())
 		requireJoinRefused(t, err, decad.ErrUnsupported, "(J7)", sc.doc, before)
 	})
 	t.Run("a revolve (J1)", func(t *testing.T) {
 		t.Parallel()
 		sc := newMirrorScene()
 		s, profile := meshPolygonSketch(t, sc.w, sc.w.XY(), [][2]float64{{0, 2}, {10, 2}, {10, 6}, {0, 6}})
-		body, err := decad.Revolve(t.Context(), sc.doc, s, profile,
+		body, err := decad.Revolve(sc.doc, s, profile,
 			decad.SketchLine{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 1, V: 0}},
-			decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along})
+			decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along}).Do(t.Context())
 		require.NoError(t, err)
 		before := sc.doc.Bodies()
-		_, err = decad.Mirrored(t.Context(), body, decad.MirrorFace{Body: body, Face: decad.Faces(decad.FaceCreatedBy(decad.CapStart(body)))}, decad.WithJoin())
+		_, err = decad.MirroredJoin(body, decad.MirrorFace{Body: body, Face: decad.Faces(decad.FaceCreatedBy(decad.CapStart(body)))}).Do(t.Context())
 		requireJoinRefused(t, err, decad.ErrUnsupported, "prism", sc.doc, before)
 	})
 	t.Run("a canceled context", func(t *testing.T) {
@@ -360,8 +360,8 @@ func TestMirrorJoinRefusals(t *testing.T) {
 		canceled, cancel := context.WithCancel(t.Context())
 		cancel()
 		before := sc.doc.Bodies()
-		_, err := decad.Mirrored(canceled, l, decad.MirrorFace{
-			Body: l, Face: decad.Faces(decad.Planar(), decad.Facing(joinMinusX))}, decad.WithJoin())
+		_, err := decad.MirroredJoin(l, decad.MirrorFace{
+			Body: l, Face: decad.Faces(decad.Planar(), decad.Facing(joinMinusX))}).Do(canceled)
 		requireJoinRefused(t, err, context.Canceled, "", sc.doc, before)
 	})
 }
@@ -391,7 +391,7 @@ func joinBulgeBody(t *testing.T, sc *mirrorScene) *decad.Body {
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	require.Len(t, s.Profiles(), 1)
-	body, err := decad.Extrude(t.Context(), sc.doc, s, s.Profiles()[0], mirrorAlong(5))
+	body, err := decad.Extrude(sc.doc, s, s.Profiles()[0], mirrorAlong(5)).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -406,11 +406,11 @@ func TestMirrorJoinChargesPublicVolumeBound(t *testing.T) {
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	doc := decad.New()
-	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], mirrorAlong(3))
+	body, err := decad.Extrude(doc, s, s.Profiles()[0], mirrorAlong(3)).Do(t.Context())
 	require.NoError(t, err)
-	joined, err := decad.Mirrored(t.Context(), body, decad.MirrorFace{
+	joined, err := decad.MirroredJoin(body, decad.MirrorFace{
 		Body: body, Face: decad.Faces(decad.Planar(), decad.Facing(joinMinusX)),
-	}, decad.WithJoin())
+	}).Do(t.Context())
 	require.NoError(t, err)
 	volume, err := joined.Volume()
 	require.NoError(t, err)

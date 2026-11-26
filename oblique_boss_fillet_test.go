@@ -26,8 +26,8 @@ func buildObliqueBossSources(t *testing.T, center, tiltAxis r3.Vec) (*Body, *Bod
 	if _, err := plateSketch.Solve(ctx); err != nil {
 		t.Fatal(err)
 	}
-	plate, err := Extrude(ctx, doc, plateSketch, plateSketch.Profiles()[0],
-		Distance{D: units.Millimeters(5), Dir: Along})
+	plate, err := Extrude(doc, plateSketch, plateSketch.Profiles()[0],
+		Distance{D: units.Millimeters(5), Dir: Along}).Do(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -41,8 +41,8 @@ func buildObliqueBossSources(t *testing.T, center, tiltAxis r3.Vec) (*Body, *Bod
 	if _, err := bossSketch.Solve(ctx); err != nil {
 		t.Fatal(err)
 	}
-	boss, err := Extrude(ctx, doc, bossSketch, bossSketch.Profiles()[0],
-		Distance{D: units.Millimeters(6), Dir: Along})
+	boss, err := Extrude(doc, bossSketch, bossSketch.Profiles()[0],
+		Distance{D: units.Millimeters(6), Dir: Along}).Do(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -58,7 +58,7 @@ func buildObliqueBossSources(t *testing.T, center, tiltAxis r3.Vec) (*Body, *Bod
 	if err != nil {
 		t.Fatal(err)
 	}
-	boss, err = Transform(ctx, boss, pose)
+	boss, err = Transform(boss, pose).Do(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -81,7 +81,7 @@ func testObliqueBossJunctionFilletPublicWorkflow(t *testing.T, tiltAxis r3.Vec) 
 	t.Helper()
 	ctx := t.Context()
 	plate, boss := buildObliqueBossSources(t, r3.Vec{X: 10, Y: 10, Z: 3.5}, tiltAxis)
-	joined, err := Union(ctx, plate, boss)
+	joined, err := Union(plate, boss).Do(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -113,14 +113,14 @@ func testObliqueBossJunctionFilletPublicWorkflow(t *testing.T, tiltAxis r3.Vec) 
 	if selected, err := query.SelectEdges(joined); err != nil || len(selected) != 1 {
 		t.Fatalf("junction query selected %d edges: %v", len(selected), err)
 	}
-	if _, err := Fillet(ctx, joined, query, units.Millimeters(1.1)); !errors.Is(err, ErrUnsupported) {
+	if _, err := Fillet(joined, query, units.Millimeters(1.1)).Do(ctx); !errors.Is(err, ErrUnsupported) {
 		t.Fatalf("oversize junction fillet: got %v, want ErrUnsupported", err)
 	}
 	before, err := joined.Volume()
 	if err != nil {
 		t.Fatal(err)
 	}
-	filleted, err := Fillet(ctx, joined, query, units.Millimeters(0.5))
+	filleted, err := Fillet(joined, query, units.Millimeters(0.5)).Do(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}

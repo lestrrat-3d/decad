@@ -61,20 +61,20 @@ func (bf bossFoot) build(t *testing.T) *decad.Body {
 		}
 		_, err = s.Solve(t.Context())
 		require.NoError(t, err)
-		tool, err := decad.Extrude(t.Context(), sc.doc, s, s.Profiles()[0],
-			decad.Distance{D: units.Millimeters(25), Dir: decad.Along})
+		tool, err := decad.Extrude(sc.doc, s, s.Profiles()[0],
+			decad.Distance{D: units.Millimeters(25), Dir: decad.Along}).Do(t.Context())
 		require.NoError(t, err)
-		boss, err = decad.Cut(t.Context(), boss, placed(t, tool, 4))
+		boss, err = decad.Cut(boss, placed(t, tool, 4)).Do(t.Context())
 		require.NoError(t, err)
 	}
-	body, err := decad.Union(t.Context(), body, boss)
+	body, err := decad.Union(body, boss).Do(t.Context())
 	require.NoError(t, err)
 	if bf.roofed {
 		roof := rectBox(t, sc.w, sc.doc, 0, 0, 80, 60, 10)
-		body, err = decad.Union(t.Context(), body, placed(t, roof, 25))
+		body, err = decad.Union(body, placed(t, roof, 25)).Do(t.Context())
 		require.NoError(t, err)
 	}
-	body, err = decad.Cut(t.Context(), body, zCylinderAt(t, sc, bf.hole[0], bf.hole[1], bf.hole[2], -5, 40))
+	body, err = decad.Cut(body, zCylinderAt(t, sc, bf.hole[0], bf.hole[1], bf.hole[2], -5, 40)).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -167,7 +167,7 @@ func TestFacetedRetainedBlendBossFoot(t *testing.T) {
 		const r = 3.0
 		body := boxBoss.build(t)
 		before := requireBossVolume(t, body, boxBoss.volume())
-		filleted, err := decad.Fillet(t.Context(), body, bossSides(t, body, boxBoss.corners()), units.Millimeters(r))
+		filleted, err := decad.Fillet(body, bossSides(t, body, boxBoss.corners()), units.Millimeters(r)).Do(t.Context())
 		require.NoError(t, err)
 		after, err := filleted.Volume()
 		require.NoError(t, err)
@@ -193,7 +193,7 @@ func TestFacetedRetainedBlendBossFoot(t *testing.T) {
 		const d = 2.0
 		body := boxBoss.build(t)
 		before := requireBossVolume(t, body, boxBoss.volume())
-		chamfered, err := decad.Chamfer(t.Context(), body, bossSides(t, body, boxBoss.corners()), units.Millimeters(d))
+		chamfered, err := decad.Chamfer(body, bossSides(t, body, boxBoss.corners()), units.Millimeters(d)).Do(t.Context())
 		require.NoError(t, err)
 		after, err := chamfered.Volume()
 		require.NoError(t, err)
@@ -215,7 +215,7 @@ func TestFacetedRetainedBlendBossFoot(t *testing.T) {
 		slanted.lean = 1
 		body := slanted.build(t)
 		before := requireBossVolume(t, body, slanted.volume())
-		filleted, err := decad.Fillet(t.Context(), body, bossSides(t, body, [][2]float64{{32, 20}}), units.Millimeters(r))
+		filleted, err := decad.Fillet(body, bossSides(t, body, [][2]float64{{32, 20}}), units.Millimeters(r)).Do(t.Context())
 		require.NoError(t, err)
 		after, err := filleted.Volume()
 		require.NoError(t, err)
@@ -234,7 +234,7 @@ func TestFacetedRetainedBlendBossFoot(t *testing.T) {
 		pillar.roofed = true
 		body := pillar.build(t)
 		before := requireBossVolume(t, body, pillar.volume())
-		filleted, err := decad.Fillet(t.Context(), body, bossSides(t, body, pillar.corners()[:1]), units.Millimeters(r))
+		filleted, err := decad.Fillet(body, bossSides(t, body, pillar.corners()[:1]), units.Millimeters(r)).Do(t.Context())
 		require.NoError(t, err)
 		after, err := filleted.Volume()
 		require.NoError(t, err)
@@ -251,7 +251,7 @@ func TestFacetedRetainedBlendBossFoot(t *testing.T) {
 		// upper half lies in the corner the fillet removes, and it crosses the
 		// cap the plate's top takes.
 		body := withCavity(t, boxBoss.build(t), 30.25, 20.25, 30.75, 20.75, 9, 11)
-		_, err := decad.Fillet(t.Context(), body, bossSides(t, body, boxBoss.corners()[:1]), units.Millimeters(3))
+		_, err := decad.Fillet(body, bossSides(t, body, boxBoss.corners()[:1]), units.Millimeters(3)).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.ErrorContains(t, err, "the cap an end face takes meets another facet of the body at")
 	})
@@ -263,7 +263,7 @@ func TestFacetedRetainedBlendBossFoot(t *testing.T) {
 		near := boxBoss
 		near.hole = [3]float64{28, 18, 1}
 		body := near.build(t)
-		_, err := decad.Fillet(t.Context(), body, bossSides(t, body, near.corners()[:1]), units.Millimeters(3))
+		_, err := decad.Fillet(body, bossSides(t, body, near.corners()[:1]), units.Millimeters(3)).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.ErrorContains(t, err, "another part of an end face comes within the blend's reach of the corner")
 	})
@@ -289,19 +289,19 @@ func TestFacetedRetainedBlendBossFoot(t *testing.T) {
 		}
 		_, err = s.Solve(t.Context())
 		require.NoError(t, err)
-		prism, err := decad.Extrude(t.Context(), sc.doc, s, s.Profiles()[0], decad.Symmetric{D: units.Millimeters(10)})
+		prism, err := decad.Extrude(sc.doc, s, s.Profiles()[0], decad.Symmetric{D: units.Millimeters(10)}).Do(t.Context())
 		require.NoError(t, err)
 		shift, err := r3.Translation(r3.Vec{Y: 10})
 		require.NoError(t, err)
-		prism, err = decad.Transform(t.Context(), prism, shift)
+		prism, err = decad.Transform(prism, shift).Do(t.Context())
 		require.NoError(t, err)
-		stepped, err := decad.Cut(t.Context(), prism, zCylinderAt(t, sc, 30, 10, 3, -30, 30))
+		stepped, err := decad.Cut(prism, zCylinderAt(t, sc, 30, 10, 3, -30, 30)).Do(t.Context())
 		require.NoError(t, err)
 		before, err := stepped.Volume()
 		require.NoError(t, err)
 		const r = 2.0
-		out, err := decad.Fillet(t.Context(), stepped, straightEdge(t, stepped, r3.NewVec(20, 0, 30), zAxis),
-			units.Millimeters(r))
+		out, err := decad.Fillet(stepped, straightEdge(t, stepped, r3.NewVec(20, 0, 30), zAxis),
+			units.Millimeters(r)).Do(t.Context())
 		require.NoError(t, err)
 		after, err := out.Volume()
 		require.NoError(t, err)

@@ -26,7 +26,7 @@ type meshInput struct {
 func closedCubeInput(t *testing.T) meshInput {
 	t.Helper()
 	cube := decadtest.NewBlock(t, decad.New(), 0, 0, 20, 20, units.Millimeters(20))
-	body, err := decad.Shell(t.Context(), cube, nil, units.Millimeters(3), decad.WithNoOpenings())
+	body, err := decad.ShellClosed(cube, units.Millimeters(3)).Do(t.Context())
 	require.NoError(t, err)
 	mesh, err := body.Tessellate(t.Context(), units.Millimeters(0.1), decad.WithVerification(decad.VerifyBoundary))
 	require.NoError(t, err)

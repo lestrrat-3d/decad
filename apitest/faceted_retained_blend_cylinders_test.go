@@ -31,7 +31,7 @@ func borePair(t *testing.T) *decad.Body {
 	b := blendPlate(t, sc)
 	for _, a := range pairAxes {
 		var err error
-		b, err = decad.Cut(t.Context(), b, zCylinderAt(t, sc, a[0], a[1], pairRad, -10, 30))
+		b, err = decad.Cut(b, zCylinderAt(t, sc, a[0], a[1], pairRad, -10, 30)).Do(t.Context())
 		require.NoError(t, err)
 	}
 	return b
@@ -112,7 +112,7 @@ func TestFacetedRetainedBlendParallelCylinders(t *testing.T) {
 		before, err := b.Volume()
 		require.NoError(t, err)
 		const r = 1.0
-		filleted, err := decad.Fillet(t.Context(), b, pairEdge(t, b), units.Millimeters(r))
+		filleted, err := decad.Fillet(b, pairEdge(t, b), units.Millimeters(r)).Do(t.Context())
 		require.NoError(t, err)
 		after, err := filleted.Volume()
 		require.NoError(t, err)
@@ -139,7 +139,7 @@ func TestFacetedRetainedBlendParallelCylinders(t *testing.T) {
 		before, err := b.Volume()
 		require.NoError(t, err)
 		const d = 0.7
-		chamfered, err := decad.Chamfer(t.Context(), b, pairEdge(t, b), units.Millimeters(d))
+		chamfered, err := decad.Chamfer(b, pairEdge(t, b), units.Millimeters(d)).Do(t.Context())
 		require.NoError(t, err)
 		after, err := chamfered.Volume()
 		require.NoError(t, err)
@@ -170,15 +170,14 @@ func TestFacetedRetainedBlendParallelCylinders(t *testing.T) {
 	t.Run("a valley that ends on the plate and on the boss top refuses", func(t *testing.T) {
 		t.Parallel()
 		sc := newRetentionScene()
-		tools, err := decad.Union(t.Context(), zCylinderAt(t, sc, pairAxes[0][0], pairAxes[0][1], pairRad, 10, 30),
-			zCylinderAt(t, sc, pairAxes[1][0], pairAxes[1][1], pairRad, 10, 30))
+		tools, err := decad.Union(zCylinderAt(t, sc, pairAxes[0][0], pairAxes[0][1], pairRad, 10, 30), zCylinderAt(t, sc, pairAxes[1][0], pairAxes[1][1], pairRad, 10, 30)).Do(t.Context())
 		require.NoError(t, err)
-		b, err := decad.Union(t.Context(), blendPlate(t, sc), tools)
+		b, err := decad.Union(blendPlate(t, sc), tools).Do(t.Context())
 		require.NoError(t, err)
 		// The valley is concave, so it must end on a face that is reflex at the
 		// corner. The boss top is, but the plate's top face is convex there.
-		_, err = decad.Fillet(t.Context(), b,
-			straightEdge(t, b, r3.NewVec(pairCorner[0], pairCorner[1], 20), r3.NewVec(0, 0, 1)), units.Millimeters(1))
+		_, err = decad.Fillet(b,
+			straightEdge(t, b, r3.NewVec(pairCorner[0], pairCorner[1], 20), r3.NewVec(0, 0, 1)), units.Millimeters(1)).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 	})
 
@@ -186,7 +185,7 @@ func TestFacetedRetainedBlendParallelCylinders(t *testing.T) {
 		t.Parallel()
 		sc := newRetentionScene()
 		b := blendPlate(t, sc)
-		b, err := decad.Cut(t.Context(), b, zCylinderAt(t, sc, 20, 10, 4.5, -10, 30))
+		b, err := decad.Cut(b, zCylinderAt(t, sc, 20, 10, 4.5, -10, 30)).Do(t.Context())
 		require.NoError(t, err)
 		s, err := sc.w.CreateSketch(sc.w.YZ())
 		require.NoError(t, err)
@@ -195,13 +194,13 @@ func TestFacetedRetainedBlendParallelCylinders(t *testing.T) {
 		s.CreateCircle(c, 3)
 		_, err = s.Solve(t.Context())
 		require.NoError(t, err)
-		cross, err := decad.Extrude(t.Context(), sc.doc, s, s.Profiles()[0], decad.Symmetric{D: units.Millimeters(30)})
+		cross, err := decad.Extrude(sc.doc, s, s.Profiles()[0], decad.Symmetric{D: units.Millimeters(30)}).Do(t.Context())
 		require.NoError(t, err)
 		shift, err := r3.Translation(r3.Vec{X: 20.001})
 		require.NoError(t, err)
-		cross, err = decad.Transform(t.Context(), cross, shift)
+		cross, err = decad.Transform(cross, shift).Do(t.Context())
 		require.NoError(t, err)
-		b, err = decad.Cut(t.Context(), b, cross)
+		b, err = decad.Cut(b, cross).Do(t.Context())
 		require.NoError(t, err)
 		// The two bores meet along a curve that is not a straight generator, so
 		// none of its edges is a Line3 between two cylinders. The straight
@@ -223,8 +222,8 @@ func TestFacetedRetainedBlendParallelCylinders(t *testing.T) {
 			found = true
 			_, isLine := e.Curve().(decad.Line3)
 			require.False(t, isLine)
-			out, err := decad.Fillet(t.Context(), b, decad.Edges(decad.EndpointAt(e.Start().Position().Value),
-				decad.EndpointAt(e.End().Position().Value)).AtLeast(1), units.Millimeters(0.5))
+			out, err := decad.Fillet(b, decad.Edges(decad.EndpointAt(e.Start().Position().Value),
+				decad.EndpointAt(e.End().Position().Value)).AtLeast(1), units.Millimeters(0.5)).Do(t.Context())
 			if err != nil || e.Start().Position().Value != e.End().Position().Value {
 				require.ErrorIs(t, err, decad.ErrUnsupported)
 				break

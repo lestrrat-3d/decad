@@ -32,7 +32,7 @@ func TestVerifyEmptyIntersectionProvesDisjoint(t *testing.T) {
 			t.Parallel()
 			doc := decad.New()
 			bore := placedAlongZ(t, coaxialSection(t, doc, 20, 10, 30, 4), -5.001)
-			plate, err := decad.Cut(t.Context(), slab(t, doc, 0, 0, 40, 20, 0, 10, r3.Identity()), bore)
+			plate, err := decad.Cut(slab(t, doc, 0, 0, 40, 20, 0, 10, r3.Identity()), bore).Do(t.Context())
 			require.NoError(t, err)
 			require.Equal(t, "decad.facetedPayload", decadtest.PayloadClass(plate))
 			pin := placedAlongZ(t, coaxialSection(t, doc, tc.pinX, 10, 40, 2), -10)

@@ -20,7 +20,7 @@ func tCap(t *testing.T) *decad.Document {
 	base := blockIn(t, doc, r3.NewVec(0, 0, 0), r3.NewVec(10, 10, 4))
 	post := blockIn(t, doc, r3.NewVec(4, 4, 4), r3.NewVec(6, 6, 10))
 	lid := blockIn(t, doc, r3.NewVec(0, 0, 10), r3.NewVec(10, 10, 14))
-	_, err := decad.Union(t.Context(), base, post, lid)
+	_, err := decad.Union(base, post, lid).Do(t.Context())
 	require.NoError(t, err)
 	return doc
 }
@@ -71,7 +71,7 @@ func TestOrthogonalUndercutSurveyListsEveryBlockedFace(t *testing.T) {
 	// A shelled box with a closed cavity: the cavity's floor and ceiling shadow each other along z.
 	cavityDoc := decad.New()
 	block := blockIn(t, cavityDoc, r3.NewVec(0, 0, 0), r3.NewVec(20, 20, 20))
-	_, err = decad.Shell(t.Context(), block, nil, units.Millimeters(2), decad.WithNoOpenings())
+	_, err = decad.ShellClosed(block, units.Millimeters(2)).Do(t.Context())
 	require.NoError(t, err)
 	hollow, err := cavityDoc.Verify(t.Context(), decad.WithPullDirection(r3.NewVec(0, 0, 1)))
 	require.NoError(t, err)

@@ -24,7 +24,7 @@ func benchBoxBody(b *testing.B, doc *decad.Document, x0, y0, x1, y1, h float64) 
 	s.Fix(rect.A)
 	_, err = s.Solve(b.Context())
 	require.NoError(b, err)
-	body, err := decad.Extrude(b.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
+	body, err := decad.Extrude(doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(h), Dir: decad.Along}).Do(b.Context())
 	require.NoError(b, err)
 	return body
 }
@@ -44,11 +44,11 @@ func benchRodBody(b *testing.B, doc *decad.Document, cx, cy, r float64) *decad.B
 	s.CreateCircle(center, r)
 	_, err = s.Solve(b.Context())
 	require.NoError(b, err)
-	body, err := decad.Extrude(b.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
+	body, err := decad.Extrude(doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(20), Dir: decad.Along}).Do(b.Context())
 	require.NoError(b, err)
 	tr, err := r3.Translation(r3.Vec{X: 0, Y: 0, Z: -6})
 	require.NoError(b, err)
-	moved, err := decad.Transform(b.Context(), body, tr)
+	moved, err := decad.Transform(body, tr).Do(b.Context())
 	require.NoError(b, err)
 	return moved
 }
@@ -67,7 +67,7 @@ func BenchmarkBooleanUnionRodThroughPlate(b *testing.B) {
 		plate := benchBoxBody(b, doc, 0, 0, 20, 20, 8)
 		rod := benchRodBody(b, doc, 12, 10, 6)
 		b.StartTimer()
-		got, err := decad.Union(b.Context(), plate, rod)
+		got, err := decad.Union(plate, rod).Do(b.Context())
 		require.NoError(b, err)
 		require.Len(b, got.Lumps(), 1)
 	}
@@ -88,10 +88,10 @@ func BenchmarkBooleanUnionCrossedRods(b *testing.B) {
 		require.NoError(b, err)
 		xf, err := rot.Then(tr)
 		require.NoError(b, err)
-		c, err = decad.Transform(b.Context(), c, xf)
+		c, err = decad.Transform(c, xf).Do(b.Context())
 		require.NoError(b, err)
 		b.StartTimer()
-		got, err := decad.Union(b.Context(), a, c)
+		got, err := decad.Union(a, c).Do(b.Context())
 		require.NoError(b, err)
 		require.NotNil(b, got)
 	}
@@ -139,10 +139,10 @@ func benchmarkUnionFacetCandidateCase(b *testing.B, radiusA, radiusB float64, de
 		require.NoError(b, err)
 		xf, err := rot.Then(tr)
 		require.NoError(b, err)
-		bodyB, err = decad.Transform(b.Context(), bodyB, xf)
+		bodyB, err = decad.Transform(bodyB, xf).Do(b.Context())
 		require.NoError(b, err)
 		b.StartTimer()
-		got, err := decad.Union(b.Context(), a, bodyB)
+		got, err := decad.Union(a, bodyB).Do(b.Context())
 		if err != nil {
 			b.Fatal(err)
 		}

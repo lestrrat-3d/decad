@@ -51,7 +51,7 @@ func roundedTwistLocalAreaSource(t *testing.T) (*Document, *Body, twistedSweepPa
 	path, err := NewPath(r3.Vec{}, LineTo{End: r3.NewVec(0, 0, 5)})
 	require.NoError(t, err)
 	doc := New()
-	body, err := Sweep(t.Context(), doc, s, profile, path, WithSweepTwist(units.Degrees(30)))
+	body, err := Sweep(doc, s, profile, path).Twist(units.Degrees(30)).Do(t.Context())
 	require.NoError(t, err)
 	payload, ok := body.n.Payload.(twistedSweepPayload)
 	require.True(t, ok)
@@ -248,15 +248,15 @@ func TestTwistLocalAreaRealBooleanArcSubset(t *testing.T) {
 	s.Fix(rect.A)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	box, err := Extrude(t.Context(), doc, s, s.Profiles()[0], Distance{
+	box, err := Extrude(doc, s, s.Profiles()[0], Distance{
 		D: units.Millimeters(1), Dir: Along,
-	})
+	}).Do(t.Context())
 	require.NoError(t, err)
 	move, err := r3.Translation(r3.NewVec(0, 0, 2))
 	require.NoError(t, err)
-	box, err = Transform(t.Context(), box, move)
+	box, err = Transform(box, move).Do(t.Context())
 	require.NoError(t, err)
-	joined, err := Union(t.Context(), swept, box)
+	joined, err := Union(swept, box).Do(t.Context())
 	require.NoError(t, err)
 	mesh, err := joined.Tessellate(t.Context(), units.Millimeters(0.2), WithVerification(VerifyAll))
 	require.NoError(t, err)

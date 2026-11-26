@@ -27,8 +27,8 @@ func (sc *blendScene) plate(ctx context.Context, t *testing.T) *Body {
 	s.Fix(r.A)
 	_, err = s.Solve(ctx)
 	require.NoError(t, err)
-	plate, err := Extrude(ctx, sc.doc, s, s.Profiles()[0],
-		Distance{D: units.Millimeters(20), Dir: Along})
+	plate, err := Extrude(sc.doc, s, s.Profiles()[0],
+		Distance{D: units.Millimeters(20), Dir: Along}).Do(ctx)
 	require.NoError(t, err)
 	return plate
 }
@@ -44,12 +44,12 @@ func (sc *blendScene) zTool(ctx context.Context, t *testing.T, cx, cy, r float64
 	s.CreateCircle(c, r)
 	_, err = s.Solve(ctx)
 	require.NoError(t, err)
-	pin, err := Extrude(ctx, sc.doc, s, s.Profiles()[0],
-		Distance{D: units.Millimeters(60), Dir: Along})
+	pin, err := Extrude(sc.doc, s, s.Profiles()[0],
+		Distance{D: units.Millimeters(60), Dir: Along}).Do(ctx)
 	require.NoError(t, err)
 	move, err := r3.Translation(r3.Vec{Z: -29.999})
 	require.NoError(t, err)
-	placed, err := Transform(ctx, pin, move)
+	placed, err := Transform(pin, move).Do(ctx)
 	require.NoError(t, err)
 	return placed
 }
@@ -74,11 +74,11 @@ func blendRun(ctx context.Context, t *testing.T, blend func(*Body) (*Body, error
 	cx, cy, r float64) (bored, blended, out *Body, err error) {
 	t.Helper()
 	sc := &blendScene{w: sketch.NewWorld(), doc: New()}
-	bored, err = Cut(ctx, sc.plate(ctx, t), sc.zTool(ctx, t, 20, 10, 4))
+	bored, err = Cut(sc.plate(ctx, t), sc.zTool(ctx, t, 20, 10, 4)).Do(ctx)
 	require.NoError(t, err)
 	blended, err = blend(bored)
 	require.NoError(t, err)
-	out, err = Cut(ctx, blended, sc.zTool(ctx, t, cx, cy, r))
+	out, err = Cut(blended, sc.zTool(ctx, t, cx, cy, r)).Do(ctx)
 	return bored, blended, out, err
 }
 
@@ -178,7 +178,7 @@ func TestFacetedSourcePatchBlendThenCut(t *testing.T) {
 	t.Run("mouth fillet then cut beside the mouth", func(t *testing.T) {
 		t.Parallel()
 		fillet := func(b *Body) (*Body, error) {
-			return Fillet(t.Context(), b, zRimEdge(t, b, 20), units.Millimeters(1))
+			return Fillet(b, zRimEdge(t, b, 20), units.Millimeters(1)).Do(t.Context())
 		}
 		const cx, cy, r = 32.0, 10.0, 2.0
 		bored, blended, out, err := blendRun(t.Context(), t, fillet, cx, cy, r)
@@ -204,7 +204,7 @@ func TestFacetedSourcePatchBlendThenCut(t *testing.T) {
 	t.Run("cut through the torus rim takes no slab there", func(t *testing.T) {
 		t.Parallel()
 		fillet := func(b *Body) (*Body, error) {
-			return Fillet(t.Context(), b, zRimEdge(t, b, 20), units.Millimeters(1))
+			return Fillet(b, zRimEdge(t, b, 20), units.Millimeters(1)).Do(t.Context())
 		}
 		// The tool lies within 5 mm of the bore axis, so it crosses the torus
 		// (radius 4 to 5 at the top) and never the top plane. It runs through
@@ -239,7 +239,7 @@ func TestFacetedSourcePatchBlendThenCut(t *testing.T) {
 		t.Parallel()
 		chamfer := func(b *Body) (*Body, error) {
 			sel := Edges(ParallelTo(r3.NewVec(0, 1, 0)), EndpointAt(r3.NewVec(0, 0, 20))).Exactly(1)
-			return Chamfer(t.Context(), b, sel, units.Millimeters(1))
+			return Chamfer(b, sel, units.Millimeters(1)).Do(t.Context())
 		}
 		const cx, cy, r = 1.5, 8.0, 1.0
 		_, blended, out, err := blendRun(t.Context(), t, chamfer, cx, cy, r)

@@ -22,7 +22,7 @@ func TestDraftOfAMeshBoxLeansEveryWallAboutTheBottom(t *testing.T) {
 	t.Parallel()
 	doc, block := blockSolid(t, r3.NewVec(0, 0, 0), r3.NewVec(20, 10, 8))
 	bottom := decad.NeutralFace{Body: block, Face: decad.Faces(decad.Facing(r3.NewVec(0, 0, -1)))}
-	out, err := decad.Draft(t.Context(), block, meshWalls(), bottom, units.Degrees(5))
+	out, err := decad.Draft(block, meshWalls(), bottom, units.Degrees(5)).Do(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, []*decad.Body{out}, doc.Bodies())
 	k := math.Tan(5 * math.Pi / 180)
@@ -54,7 +54,7 @@ func TestDraftOfAMeshBoxAboutTheTopWidensTheOtherWay(t *testing.T) {
 	t.Parallel()
 	_, block := blockSolid(t, r3.NewVec(0, 0, 0), r3.NewVec(20, 10, 8))
 	top := decad.NeutralFace{Body: block, Face: decad.Faces(decad.Facing(r3.NewVec(0, 0, 1)))}
-	out, err := decad.Draft(t.Context(), block, meshWalls(), top, units.Degrees(5))
+	out, err := decad.Draft(block, meshWalls(), top, units.Degrees(5)).Do(t.Context())
 	require.NoError(t, err)
 	k := math.Tan(5 * math.Pi / 180)
 	// About the top the body narrows toward the bottom: the same volume as narrowing upward from the bottom.
@@ -77,20 +77,20 @@ func TestDraftOfAMeshSolidRefusesWhatIsNotAllWallsOfAPrism(t *testing.T) {
 	bottom := decad.NeutralFace{Body: block, Face: decad.Faces(decad.Facing(r3.NewVec(0, 0, -1)))}
 	// Only two of the four walls.
 	two := decad.Faces(decad.Facing(r3.NewVec(1, 0, 0))).Or(decad.Facing(r3.NewVec(-1, 0, 0)))
-	_, err := decad.Draft(t.Context(), block, two, bottom, units.Degrees(5))
+	_, err := decad.Draft(block, two, bottom, units.Degrees(5)).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	// A cap among the walls.
 	withCap := meshWalls().Or(decad.Facing(r3.NewVec(0, 0, 1)))
-	_, err = decad.Draft(t.Context(), block, withCap, bottom, units.Degrees(5))
+	_, err = decad.Draft(block, withCap, bottom, units.Degrees(5)).Do(t.Context())
 	require.Error(t, err)
 	// An L: a section of eight corners is still a prism, but a body of three levels is not.
 	doc := decad.New()
 	a := blockIn(t, doc, r3.NewVec(0, 0, 0), r3.NewVec(20, 10, 8))
 	c := blockIn(t, doc, r3.NewVec(0, 0, 0), r3.NewVec(10, 10, 4))
-	stepped, err := decad.Union(t.Context(), a, c)
+	stepped, err := decad.Union(a, c).Do(t.Context())
 	require.NoError(t, err)
-	_, err = decad.Draft(t.Context(), stepped, meshWalls(),
-		decad.NeutralFace{Body: stepped, Face: decad.Faces(decad.Facing(r3.NewVec(0, 0, -1)))}, units.Degrees(5))
+	_, err = decad.Draft(stepped, meshWalls(),
+		decad.NeutralFace{Body: stepped, Face: decad.Faces(decad.Facing(r3.NewVec(0, 0, -1)))}, units.Degrees(5)).Do(t.Context())
 	require.Error(t, err)
 	require.Equal(t, []*decad.Body{stepped}, doc.Bodies(), "a refusal leaves the body live")
 }

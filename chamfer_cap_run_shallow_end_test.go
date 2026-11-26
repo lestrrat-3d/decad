@@ -49,7 +49,7 @@ func TestChamferCapRunShallowEnd(t *testing.T) {
 				body := polyBody(t, sx, c.pts)
 				n := len(c.pts)
 				sel := topEdges(lineEdge(sx, c.pts[0], c.pts[1]), lineEdge(sx, c.pts[n-1], c.pts[0]))
-				out, err := decad.Chamfer(t.Context(), body, sel, units.Millimeters(d))
+				out, err := decad.Chamfer(body, sel, units.Millimeters(d)).Do(t.Context())
 				require.NoError(t, err)
 				require.True(t, out.IsSolid())
 				end := turnAt(c.pts[0], c.pts[1], c.pts[2])
@@ -106,12 +106,12 @@ func bladeBody(t *testing.T, joined bool) *decad.Body {
 	}
 	require.NotNil(t, pr)
 	// The sketch plane's normal is -y, so Against extrudes along +y.
-	body, err := decad.Extrude(t.Context(), doc, s, pr, decad.Distance{D: units.Millimeters(6), Dir: decad.Against})
+	body, err := decad.Extrude(doc, s, pr, decad.Distance{D: units.Millimeters(6), Dir: decad.Against}).Do(t.Context())
 	require.NoError(t, err)
 	if !joined {
 		return body
 	}
-	out, err := decad.Union(t.Context(), body, box(t, doc, [3]float64{20, 2, 43}, [3]float64{22, 4, 46}))
+	out, err := decad.Union(body, box(t, doc, [3]float64{20, 2, 43}, [3]float64{22, 4, 46})).Do(t.Context())
 	require.NoError(t, err)
 	return out
 }
@@ -156,7 +156,7 @@ func TestChamferCapRunsWithSharedCornerAndShallowEnds(t *testing.T) {
 				n++
 			}
 			require.Equal(t, 10, n, "the face's long runs hold ten edges")
-			out, err := decad.Chamfer(t.Context(), body, q.Exactly(n), units.Millimeters(d))
+			out, err := decad.Chamfer(body, q.Exactly(n), units.Millimeters(d)).Do(t.Context())
 			require.NoError(t, err)
 			require.True(t, out.IsSolid())
 			before, err := body.Volume()

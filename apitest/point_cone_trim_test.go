@@ -35,7 +35,7 @@ func pointConeTooth(t *testing.T, doc *decad.Document) *decad.Body {
 	profiles := s.Profiles()
 	require.Len(t, profiles, 1)
 	require.True(t, profiles[0].Valid)
-	tooth, err := decad.LoftFromPoint(t.Context(), doc, r3.Vec{}, s, profiles[0])
+	tooth, err := decad.LoftFromPoint(doc, r3.Vec{}, s, profiles[0]).Do(t.Context())
 	require.NoError(t, err)
 	return tooth
 }
@@ -58,8 +58,8 @@ func pointConeTool(t testing.TB, doc *decad.Document, apex float64) *decad.Body 
 	require.NoError(t, err)
 	profiles := s.Profiles()
 	require.Len(t, profiles, 1)
-	tool, err := decad.Revolve(t.Context(), doc, s, profiles[0],
-		decad.SketchLine{Start: decad.Point2{}, End: decad.Point2{U: 1}}, decad.FullRevolution{})
+	tool, err := decad.Revolve(doc, s, profiles[0],
+		decad.SketchLine{Start: decad.Point2{}, End: decad.Point2{U: 1}}, decad.FullRevolution{}).Do(t.Context())
 	require.NoError(t, err)
 	return tool
 }
@@ -105,16 +105,16 @@ func TestPointConeTrimKeepsFittedSidesAndCone(t *testing.T) {
 			if tc.ordered {
 				toe := pointConeTool(t, doc, 5)
 				var err error
-				tooth, err = decad.Cut(t.Context(), tooth, toe)
+				tooth, err = decad.Cut(tooth, toe).Do(t.Context())
 				require.NoError(t, err)
 			}
 			tool := pointConeTool(t, doc, tc.apex)
 			var got *decad.Body
 			var err error
 			if tc.cut {
-				got, err = decad.Cut(t.Context(), tooth, tool)
+				got, err = decad.Cut(tooth, tool).Do(t.Context())
 			} else {
-				got, err = decad.Intersect(t.Context(), tooth, tool)
+				got, err = decad.Intersect(tooth, tool).Do(t.Context())
 			}
 			require.NoError(t, err)
 			require.True(t, got.IsSolid())
@@ -139,7 +139,7 @@ func TestPointConeTrimConeNormalAndCopyPlacement(t *testing.T) {
 		}
 	}
 	require.NotNil(t, sourceCone)
-	cut, err := decad.Cut(t.Context(), tooth, tool)
+	cut, err := decad.Cut(tooth, tool).Do(t.Context())
 	require.NoError(t, err)
 	var cone *decad.Face
 	for _, face := range cut.Faces() {
@@ -160,7 +160,7 @@ func TestPointConeTrimConeNormalAndCopyPlacement(t *testing.T) {
 	require.Equal(t, sourceNormal.Bound, normal.Bound)
 	move, err := r3.Translation(r3.NewVec(1, 2, 3))
 	require.NoError(t, err)
-	placed, err := decad.Copy(t.Context(), cut, decad.WithCopyPlacement(move))
+	placed, err := decad.Copy(cut).Place(decad.CopyTransform{Transform: move}).Do(t.Context())
 	require.NoError(t, err)
 	requirePointConeMesh(t, placed)
 	var moved decad.Cone
@@ -189,9 +189,9 @@ func TestPointConeTrimContainingCutCannotBuildInvertedBand(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
 	tooth := pointConeTooth(t, doc)
-	inside, err := decad.Intersect(t.Context(), tooth, pointConeTool(t, doc, 5))
+	inside, err := decad.Intersect(tooth, pointConeTool(t, doc, 5)).Do(t.Context())
 	require.NoError(t, err)
-	_, err = decad.Cut(t.Context(), inside, pointConeTool(t, doc, 12))
+	_, err = decad.Cut(inside, pointConeTool(t, doc, 12)).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrBooleanFailed)
 	var booleanErr *decad.BooleanError
 	require.ErrorAs(t, err, &booleanErr)

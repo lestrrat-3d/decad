@@ -36,9 +36,9 @@ func TestArrangeStacksWhatTheBedCannotHoldInLayers(t *testing.T) {
 	blocks := layeredBlocks(t, doc)
 	// The bed holds two 8 x 8 blocks side by side, so the third goes above, a gap over the taller
 	// of the first two: its base at the bed's surface z = 5 plus 5 + 1.
-	_, err := decad.Arrange(t.Context(), blocks, arrangeBed(20, 10, 1))
+	_, err := decad.Arrange(blocks, arrangeBed(20, 10, 1)).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrDegenerate, "without a height there is one layer, and three blocks do not fit")
-	out, err := decad.Arrange(t.Context(), blocks, layeredBed(100))
+	out, err := decad.Arrange(blocks, layeredBed(100)).Do(t.Context())
 	require.NoError(t, err)
 	require.Len(t, doc.Bodies(), 3)
 	decadtest.MeasuresBounds(t, out[0], r3.Vec{X: 101, Y: 201, Z: 5}, r3.Vec{X: 109, Y: 209, Z: 10}, decadtest.Within(units.Millimeters(1e-6)))
@@ -54,10 +54,10 @@ func TestArrangeLayersKeepToTheHeightLimit(t *testing.T) {
 	doc := decad.New()
 	blocks := layeredBlocks(t, doc)
 	// Two layers, 5 and 4 tall with a gap of 1, stand 10 high.
-	_, err := decad.Arrange(t.Context(), blocks, layeredBed(9.5))
+	_, err := decad.Arrange(blocks, layeredBed(9.5)).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrDegenerate)
 	require.Equal(t, blocks, doc.Bodies(), "a refused arrangement moves nothing")
-	_, err = decad.Arrange(t.Context(), blocks, layeredBed(10.5))
+	_, err = decad.Arrange(blocks, layeredBed(10.5)).Do(t.Context())
 	require.NoError(t, err)
 }
 
@@ -67,13 +67,13 @@ func TestArrangeLayersRefusals(t *testing.T) {
 	blocks := layeredBlocks(t, doc)
 	bed := layeredBed(100)
 	bed.Height = units.Degrees(5)
-	_, err := decad.Arrange(t.Context(), blocks, bed)
+	_, err := decad.Arrange(blocks, bed).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnitKind)
 	bed.Height = units.Millimeters(-5)
-	_, err = decad.Arrange(t.Context(), blocks, bed)
+	_, err = decad.Arrange(blocks, bed).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrNegativeMagnitude)
 	// A block wider than the bed fits no layer, however high the bed.
 	wide := decadtest.NewBlock(t, doc, 5000, 0, 5030, 8, units.Millimeters(2))
-	_, err = decad.Arrange(t.Context(), []*decad.Body{wide}, layeredBed(100))
+	_, err = decad.Arrange([]*decad.Body{wide}, layeredBed(100)).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrDegenerate)
 }

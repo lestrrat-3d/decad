@@ -3186,7 +3186,7 @@ bodies does or does not meet the rest of the document anywhere along a stated on
 lists "do these bodies interfere, and what is the clearance?" among the questions decad is answerable for,
 and core §13 settles how
 such a pair is positioned: interference and clearance run between explicitly placed bodies, through
-`Transform(ctx, body, t)`, with no assembly machinery. A motion check is that same pair question asked over a
+`Transform(body, t).Do(ctx)`, with no assembly machinery. A motion check is that same pair question asked over a
 family of placements `t(s)`, `s ∈ [From, To]`, instead of at one placement. It consumes exactly what core
 §13 already grants — a rigid motion stated by the caller as an `r3.Transform` — and adds no `Component`, no
 `Occurrence`, no joint graph, no timeline and no view state. Every v1 non-goal of core §13 stays a non-goal.

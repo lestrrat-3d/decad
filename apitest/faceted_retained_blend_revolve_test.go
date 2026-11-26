@@ -30,7 +30,7 @@ func revolvedShaft(t *testing.T, sc *retentionScene) *decad.Body {
 	s.Fix(r.A)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := decad.Revolve(t.Context(), sc.doc, s, s.Profiles()[0], uAxis, decad.FullRevolution{})
+	body, err := decad.Revolve(sc.doc, s, s.Profiles()[0], uAxis, decad.FullRevolution{}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -45,8 +45,8 @@ func extrudedShaft(t *testing.T, sc *retentionScene) *decad.Body {
 	s.CreateCircle(c, shaftR)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := decad.Extrude(t.Context(), sc.doc, s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(shaftL), Dir: decad.Along})
+	body, err := decad.Extrude(sc.doc, s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(shaftL), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -61,12 +61,12 @@ func flatTool(t *testing.T, sc *retentionScene) *decad.Body {
 	s.Fix(r.A)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	box, err := decad.Extrude(t.Context(), sc.doc, s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
+	box, err := decad.Extrude(sc.doc, s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(20), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	move, err := r3.Translation(r3.Vec{Z: flatZ})
 	require.NoError(t, err)
-	placed, err := decad.Transform(t.Context(), box, move)
+	placed, err := decad.Transform(box, move).Do(t.Context())
 	require.NoError(t, err)
 	return placed
 }
@@ -140,7 +140,7 @@ func TestFacetedRetainedBlendRevolvedShaft(t *testing.T) {
 	flatShaft := func(t *testing.T) *decad.Body {
 		t.Helper()
 		sc := newRetentionScene()
-		cut, err := decad.Cut(t.Context(), revolvedShaft(t, sc), flatTool(t, sc))
+		cut, err := decad.Cut(revolvedShaft(t, sc), flatTool(t, sc)).Do(t.Context())
 		require.NoError(t, err)
 		return cut
 	}
@@ -172,9 +172,9 @@ func TestFacetedRetainedBlendRevolvedShaft(t *testing.T) {
 		// exact frame, so the tag is not provably the record's surface.
 		sc := newRetentionScene()
 		turn := rotation(t, r3.Vec{}, r3.NewVec(0, 0, 1), 0.3)
-		turned, err := decad.Transform(t.Context(), revolvedShaft(t, sc), turn)
+		turned, err := decad.Transform(revolvedShaft(t, sc), turn).Do(t.Context())
 		require.NoError(t, err)
-		cut, err := decad.Cut(t.Context(), turned, flatTool(t, sc))
+		cut, err := decad.Cut(turned, flatTool(t, sc)).Do(t.Context())
 		require.NoError(t, err)
 		var q *decad.EdgeQuery
 		for _, e := range cut.Edges() {
@@ -194,7 +194,7 @@ func TestFacetedRetainedBlendRevolvedShaft(t *testing.T) {
 			}
 		}
 		require.NotNil(t, q)
-		_, err = decad.Fillet(t.Context(), cut, q, units.Millimeters(2))
+		_, err = decad.Fillet(cut, q, units.Millimeters(2)).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 	})
 
@@ -211,9 +211,9 @@ func TestFacetedRetainedBlendRevolvedShaft(t *testing.T) {
 			size := tc.size
 			var blended *decad.Body
 			if tc.fillet {
-				blended, err = decad.Fillet(t.Context(), cut, flatEdges(t, cut), units.Millimeters(size))
+				blended, err = decad.Fillet(cut, flatEdges(t, cut), units.Millimeters(size)).Do(t.Context())
 			} else {
-				blended, err = decad.Chamfer(t.Context(), cut, flatEdges(t, cut), units.Millimeters(size))
+				blended, err = decad.Chamfer(cut, flatEdges(t, cut), units.Millimeters(size)).Do(t.Context())
 			}
 			require.NoError(t, err)
 			after, err := blended.Volume()
@@ -236,15 +236,15 @@ func TestFacetedRetainedBlendRevolvedShaft(t *testing.T) {
 
 			// The Extrude twin blends the same flat to the same volume.
 			sc := newRetentionScene()
-			twinCut, err := decad.Cut(t.Context(), extrudedShaft(t, sc), flatTool(t, sc))
+			twinCut, err := decad.Cut(extrudedShaft(t, sc), flatTool(t, sc)).Do(t.Context())
 			require.NoError(t, err)
 			twinBefore, err := twinCut.Volume()
 			require.NoError(t, err)
 			var twin *decad.Body
 			if tc.fillet {
-				twin, err = decad.Fillet(t.Context(), twinCut, flatEdges(t, twinCut), units.Millimeters(size))
+				twin, err = decad.Fillet(twinCut, flatEdges(t, twinCut), units.Millimeters(size)).Do(t.Context())
 			} else {
-				twin, err = decad.Chamfer(t.Context(), twinCut, flatEdges(t, twinCut), units.Millimeters(size))
+				twin, err = decad.Chamfer(twinCut, flatEdges(t, twinCut), units.Millimeters(size)).Do(t.Context())
 			}
 			require.NoError(t, err)
 			twinAfter, err := twin.Volume()
@@ -264,12 +264,12 @@ func slotTool(t *testing.T, sc *retentionScene) *decad.Body {
 	s.Fix(r.A)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	box, err := decad.Extrude(t.Context(), sc.doc, s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
+	box, err := decad.Extrude(sc.doc, s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(20), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	move, err := r3.Translation(r3.Vec{Z: 3})
 	require.NoError(t, err)
-	placed, err := decad.Transform(t.Context(), box, move)
+	placed, err := decad.Transform(box, move).Do(t.Context())
 	require.NoError(t, err)
 	return placed
 }
@@ -312,9 +312,9 @@ func TestFacetedRetainedBlendRevolvedRim(t *testing.T) {
 				require.NoError(t, err)
 				var out *decad.Body
 				if tc.fillet {
-					out, err = decad.Fillet(t.Context(), b, endRim(t, b), units.Millimeters(r))
+					out, err = decad.Fillet(b, endRim(t, b), units.Millimeters(r)).Do(t.Context())
 				} else {
-					out, err = decad.Chamfer(t.Context(), b, endRim(t, b), units.Millimeters(r))
+					out, err = decad.Chamfer(b, endRim(t, b), units.Millimeters(r)).Do(t.Context())
 				}
 				require.NoError(t, err)
 				after, err := out.Volume()
@@ -323,7 +323,7 @@ func TestFacetedRetainedBlendRevolvedRim(t *testing.T) {
 			}
 
 			sc := newRetentionScene()
-			cut, err := decad.Cut(t.Context(), revolvedShaft(t, sc), slotTool(t, sc))
+			cut, err := decad.Cut(revolvedShaft(t, sc), slotTool(t, sc)).Do(t.Context())
 			require.NoError(t, err)
 			blended, before, after := blend(cut)
 			requireVolumeChange(t, before, after, want)
@@ -334,7 +334,7 @@ func TestFacetedRetainedBlendRevolvedRim(t *testing.T) {
 
 			// The Extrude twin blends the same rim to the same volume.
 			tsc := newRetentionScene()
-			twinCut, err := decad.Cut(t.Context(), extrudedShaft(t, tsc), slotTool(t, tsc))
+			twinCut, err := decad.Cut(extrudedShaft(t, tsc), slotTool(t, tsc)).Do(t.Context())
 			require.NoError(t, err)
 			_, twinBefore, twinAfter := blend(twinCut)
 			requireVolumeChange(t, twinBefore, twinAfter, want)

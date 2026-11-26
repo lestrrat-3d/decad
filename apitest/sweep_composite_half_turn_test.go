@@ -38,7 +38,7 @@ func halfTurnPairSweep(t *testing.T, x0, end float64) (*decad.Document, *decad.B
 	)
 	require.NoError(t, err)
 	doc := decad.New()
-	body, err := decad.Sweep(t.Context(), doc, s, s.Profiles()[0], path)
+	body, err := decad.Sweep(doc, s, s.Profiles()[0], path).Do(t.Context())
 	return doc, body, err
 }
 

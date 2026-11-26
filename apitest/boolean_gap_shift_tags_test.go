@@ -33,11 +33,11 @@ func restingBossCases() []restingBossCase {
 			make: func(t *testing.T, doc *decad.Document) *decad.Body {
 				t.Helper()
 				plate := boxBody(t, doc, 0, 0, 100, 60, 10)
-				first, err := decad.Union(t.Context(), plate, circlePrismAtZ(t, doc, 20, 30, 6, 10, 8))
+				first, err := decad.Union(plate, circlePrismAtZ(t, doc, 20, 30, 6, 10, 8)).Do(t.Context())
 				require.NoError(t, err)
 				first = withRestingBossPost(t, doc, first)
 				second := translated(t, circlePrismAtZ(t, doc, 20, 30, 6, 10, 8), 30, 0, 0)
-				joined, err := decad.Union(t.Context(), first, second)
+				joined, err := decad.Union(first, second).Do(t.Context())
 				require.NoError(t, err)
 				return joined
 			},
@@ -56,7 +56,7 @@ const restingBossPostVolume = 0.3 * 0.3 * 2
 // §20.2) and the boss's Union takes the shifted retry.
 func withRestingBossPost(t *testing.T, doc *decad.Document, plate *decad.Body) *decad.Body {
 	t.Helper()
-	joined, err := decad.Union(t.Context(), plate, boxBodyAtZ(t, doc, 55.55, 35.55, 55.85, 35.85, 0, 12))
+	joined, err := decad.Union(plate, boxBodyAtZ(t, doc, 55.55, 35.55, 55.85, 35.85, 0, 12)).Do(t.Context())
 	require.NoError(t, err)
 	return joined
 }
@@ -162,7 +162,7 @@ func TestBooleanGapShiftFilletsRestingBoss(t *testing.T) {
 			joined := tc.make(t, doc)
 
 			edges := 2 * tc.bosses
-			filleted, err := decad.Fillet(t.Context(), joined, decad.Edges(decad.Circular()).Exactly(edges), units.Millimeters(r))
+			filleted, err := decad.Fillet(joined, decad.Edges(decad.Circular()).Exactly(edges), units.Millimeters(r)).Do(t.Context())
 			require.NoError(t, err)
 			var tori int
 			for _, f := range filleted.Faces() {

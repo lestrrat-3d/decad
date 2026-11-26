@@ -32,7 +32,7 @@ func lowStack(t *testing.T, doc *decad.Document) *decad.Body {
 	t.Helper()
 	plate := twoSidedRect(t, doc, 0, 0, 20, 20, units.Millimeters(2), units.Millimeters(3))
 	boss := twoSidedRect(t, doc, 5, 5, 15, 15, units.Inches(0.2), units.Millimeters(3))
-	stack, err := decad.Union(t.Context(), plate, boss)
+	stack, err := decad.Union(plate, boss).Do(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, stackedPrismClass, decadtest.PayloadClass(stack), "the union builds a stack")
 	return stack
@@ -49,9 +49,9 @@ func stackTopTool(t *testing.T, doc *decad.Document, stack *decad.Body) *decad.B
 	s.Fix(rect.A)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	tool, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.TwoSided{
+	tool, err := decad.Extrude(doc, s, s.Profiles()[0], decad.TwoSided{
 		One: decad.ToFace{Body: stack, Face: decad.Faces(decad.FaceCreatedBy(decad.CapEnd(stack)))},
-		Two: decad.DistanceSide{D: units.Millimeters(20)}})
+		Two: decad.DistanceSide{D: units.Millimeters(20)}}).Do(t.Context())
 	require.NoError(t, err)
 	return tool
 }
@@ -75,7 +75,7 @@ func TestStackedUnionToFaceDenotedLevel(t *testing.T) {
 		doc := decad.New()
 		stack := lowStack(t, doc)
 		plate := twoSidedRect(t, doc, 30, 0, 50, 20, units.Inches(0.2), units.Millimeters(3))
-		part, err := decad.Cut(t.Context(), plate, stackTopTool(t, doc, stack))
+		part, err := decad.Cut(plate, stackTopTool(t, doc, stack)).Do(t.Context())
 		require.NoError(t, err)
 		require.Equal(t, prismClass, decadtest.PayloadClass(part), "the stop denotes the plate's top")
 		require.Len(t, part.Lumps(), 1)
@@ -87,7 +87,7 @@ func TestStackedUnionToFaceDenotedLevel(t *testing.T) {
 		doc := decad.New()
 		stack := lowStack(t, doc)
 		plate := twoSidedRect(t, doc, 30, 0, 50, 20, units.Millimeters(5.08), units.Millimeters(3))
-		part, err := decad.Cut(t.Context(), plate, stackTopTool(t, doc, stack))
+		part, err := decad.Cut(plate, stackTopTool(t, doc, stack)).Do(t.Context())
 		requireDeclinedSpan(t, part, err, skinnedPlateVolume(denotedDepth(units.Millimeters(5.08)), d, 1))
 	})
 }
@@ -105,7 +105,7 @@ func TestStackedUnionChainedDenotedLevel(t *testing.T) {
 		doc := decad.New()
 		stack := lowStack(t, doc)
 		boss2 := twoSidedRect(t, doc, 12, 8, 18, 12, units.Inches(0.2), units.Millimeters(3))
-		joined, err := decad.Union(t.Context(), stack, boss2)
+		joined, err := decad.Union(stack, boss2).Do(t.Context())
 		require.NoError(t, err)
 		require.Equal(t, stackedPrismClass, decadtest.PayloadClass(joined), "the tied denoted tops merge")
 		require.Len(t, joined.Lumps(), 1)
@@ -118,7 +118,7 @@ func TestStackedUnionChainedDenotedLevel(t *testing.T) {
 		doc := decad.New()
 		stack := lowStack(t, doc)
 		boss2 := twoSidedRect(t, doc, 12, 8, 18, 12, units.Millimeters(5.08), units.Millimeters(3))
-		joined, err := decad.Union(t.Context(), stack, boss2)
+		joined, err := decad.Union(stack, boss2).Do(t.Context())
 		require.NoError(t, err)
 		require.True(t, tookMeshPath(joined), "two denoted tops are no tie")
 		// The first boss less the 12 mm² overlap stands to 0.2 in; the second
@@ -142,7 +142,7 @@ func TestStackedUnionBrepChainedDenotedLevel(t *testing.T) {
 		t.Helper()
 		plate := twoSidedRect(t, doc, 0, 0, 20, 20, units.Millimeters(2), units.Millimeters(3))
 		boss := twoSidedRect(t, doc, 15, 5, 25, 15, units.Inches(0.2), units.Millimeters(3))
-		body, err := decad.Union(t.Context(), plate, boss)
+		body, err := decad.Union(plate, boss).Do(t.Context())
 		require.NoError(t, err)
 		require.Equal(t, brepClass, decadtest.PayloadClass(body), "the crossing interface builds an A1 BRep")
 		return body
@@ -152,7 +152,7 @@ func TestStackedUnionBrepChainedDenotedLevel(t *testing.T) {
 		doc := decad.New()
 		first := a1(t, doc)
 		boss2 := twoSidedRect(t, doc, 20, 8, 28, 12, units.Inches(0.2), units.Millimeters(3))
-		joined, err := decad.Union(t.Context(), first, boss2)
+		joined, err := decad.Union(first, boss2).Do(t.Context())
 		require.NoError(t, err)
 		require.Equal(t, brepClass, decadtest.PayloadClass(joined), "the tied denoted tops merge")
 		want := new(big.Rat).Add(big.NewRat(2310, 1), scaled(112, d, -2))
@@ -163,7 +163,7 @@ func TestStackedUnionBrepChainedDenotedLevel(t *testing.T) {
 		doc := decad.New()
 		first := a1(t, doc)
 		boss2 := twoSidedRect(t, doc, 20, 8, 28, 12, units.Millimeters(5.08), units.Millimeters(3))
-		joined, err := decad.Union(t.Context(), first, boss2)
+		joined, err := decad.Union(first, boss2).Do(t.Context())
 		require.NoError(t, err)
 		require.True(t, tookMeshPath(joined), "two denoted tops are no tie")
 		// The first boss less the 20 mm² overlap stands to 0.2 in; the second
@@ -185,7 +185,7 @@ func splitSheet(t *testing.T, doc *decad.Document, e decad.Extent) *decad.Body {
 	s.CreateLine(a, s.CreatePoint(10, 25))
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	sheet, err := decad.Extrude(t.Context(), doc, s, s.Chains()[0], e)
+	sheet, err := decad.Extrude(doc, s, s.Chains()[0], e).Do(t.Context())
 	require.NoError(t, err)
 	return sheet
 }
@@ -209,7 +209,7 @@ func TestSurfaceSplitChainSheetDenotedLevel(t *testing.T) {
 			t.Parallel()
 			doc := decad.New()
 			plate := upPlate(t, doc, tc.top)
-			pieces, err := decad.Split(t.Context(), plate, splitSheet(t, doc, tc.sheet))
+			pieces, err := decad.Split(plate, splitSheet(t, doc, tc.sheet)).Do(t.Context())
 			require.NoError(t, err)
 			require.Len(t, pieces, 2)
 			for _, piece := range pieces {
@@ -222,7 +222,7 @@ func TestSurfaceSplitChainSheetDenotedLevel(t *testing.T) {
 		t.Parallel()
 		doc := decad.New()
 		plate := upPlate(t, doc, units.Millimeters(5.08))
-		_, err := decad.Split(t.Context(), plate, splitSheet(t, doc, decad.Distance{D: units.Inches(0.2), Dir: decad.Along}))
+		_, err := decad.Split(plate, splitSheet(t, doc, decad.Distance{D: units.Inches(0.2), Dir: decad.Along})).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.ErrorContains(t, err, sweepSpanMiss)
 	})
@@ -237,8 +237,8 @@ func TestSurfaceSplitPieceKeepsDenotedLevel(t *testing.T) {
 	inch := units.Inches(0.2)
 	doc := decad.New()
 	plate := upPlate(t, doc, inch)
-	pieces, err := decad.Split(t.Context(), plate, splitSheet(t, doc, decad.TwoSided{
-		One: decad.DistanceSide{D: inch}, Two: decad.DistanceSide{D: units.Millimeters(3)}}))
+	pieces, err := decad.Split(plate, splitSheet(t, doc, decad.TwoSided{
+		One: decad.DistanceSide{D: inch}, Two: decad.DistanceSide{D: units.Millimeters(3)}})).Do(t.Context())
 	require.NoError(t, err)
 	require.Len(t, pieces, 2)
 	var left *decad.Body
@@ -250,7 +250,7 @@ func TestSurfaceSplitPieceKeepsDenotedLevel(t *testing.T) {
 		}
 	}
 	require.NotNil(t, left, "one piece lies over x 0..10")
-	part, err := decad.Cut(t.Context(), left, twoSidedRect(t, doc, 2, 8, 6, 12, inch, units.Millimeters(2)))
+	part, err := decad.Cut(left, twoSidedRect(t, doc, 2, 8, 6, 12, inch, units.Millimeters(2))).Do(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, prismClass, decadtest.PayloadClass(part), "the piece keeps the denoted top")
 	requireRationalVolumeCovered(t, part, scaled(184, denotedDepth(inch), 0))
@@ -264,13 +264,13 @@ func TestShellTubeKeepsDenotedLevel(t *testing.T) {
 	inch := units.Inches(0.2)
 	doc := decad.New()
 	plate := upPlate(t, doc, inch)
-	tube, err := decad.Shell(t.Context(), plate,
+	tube, err := decad.Shell(plate,
 		decad.Faces(decad.FaceCreatedBy(decad.CapEnd(plate))).Or(decad.FaceCreatedBy(decad.CapStart(plate))),
-		units.Millimeters(2))
+		units.Millimeters(2)).Do(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, prismClass, decadtest.PayloadClass(tube))
 	requireRationalVolumeCovered(t, tube, scaled(144, denotedDepth(inch), 0))
-	part, err := decad.Cut(t.Context(), tube, twoSidedRect(t, doc, 0.5, 8, 1.5, 9, inch, units.Millimeters(2)))
+	part, err := decad.Cut(tube, twoSidedRect(t, doc, 0.5, 8, 1.5, 9, inch, units.Millimeters(2))).Do(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, prismClass, decadtest.PayloadClass(part), "the tube keeps the denoted top")
 	requireRationalVolumeCovered(t, part, scaled(143, denotedDepth(inch), 0))
@@ -286,11 +286,11 @@ func TestPatternedGroupKeepsDenotedLevel(t *testing.T) {
 	doc := decad.New()
 	plate := upPlate(t, doc, inch)
 	peg := twoSidedRect(t, doc, 2, 8, 6, 12, inch, units.Millimeters(2))
-	group, err := decad.Patterned(t.Context(), peg, decad.LinearPattern{Dir: r3.NewVec(1, 0, 0),
-		Step: units.Millimeters(8), Count: 2})
+	group, err := decad.Patterned(peg, decad.LinearPattern{Dir: r3.NewVec(1, 0, 0),
+		Step: units.Millimeters(8), Count: 2}).Do(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, stackedPrismClass, decadtest.PayloadClass(group))
-	part, err := decad.Cut(t.Context(), plate, group)
+	part, err := decad.Cut(plate, group).Do(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, prismClass, decadtest.PayloadClass(part), "the group keeps the denoted top")
 	requireRationalVolumeCovered(t, part, scaled(368, denotedDepth(inch), 0))
@@ -315,7 +315,7 @@ func extendRibbon(t *testing.T, doc *decad.Document, top units.Value) *decad.Bod
 		if len(chain.Edges) != 1 || chain.Edges[0].Entity != line || chain.Edges[0].TStart != 0 {
 			continue
 		}
-		ribbon, err := decad.Extrude(t.Context(), doc, s, chain, decad.Distance{D: top, Dir: decad.Along})
+		ribbon, err := decad.Extrude(doc, s, chain, decad.Distance{D: top, Dir: decad.Along}).Do(t.Context())
 		require.NoError(t, err)
 		return ribbon
 	}
@@ -339,7 +339,7 @@ func TestSurfaceExtendChainDenotedLevel(t *testing.T) {
 		doc := decad.New()
 		ribbon := extendRibbon(t, doc, inch)
 		tool := twoSidedRect(t, doc, 70, -10, 90, 10, inch, units.Millimeters(0))
-		got, err := decad.Extend(t.Context(), ribbon, query(), tool)
+		got, err := decad.Extend(ribbon, query(), tool).Do(t.Context())
 		require.NoError(t, err)
 		area, err := got.Area()
 		require.NoError(t, err)
@@ -354,7 +354,7 @@ func TestSurfaceExtendChainDenotedLevel(t *testing.T) {
 		doc := decad.New()
 		ribbon := extendRibbon(t, doc, units.Millimeters(5.08))
 		tool := twoSidedRect(t, doc, 70, -10, 90, 10, inch, units.Millimeters(0))
-		_, err := decad.Extend(t.Context(), ribbon, query(), tool)
+		_, err := decad.Extend(ribbon, query(), tool).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.ErrorContains(t, err, "the tool does not span the receiver over the sweep parameter")
 	})

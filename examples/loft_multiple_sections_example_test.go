@@ -44,7 +44,7 @@ func Example_loft_multiple_sections() {
 
 	// The result is one solid. Its volume carries a bound because the
 	// bulging skin is curved.
-	body, err := decad.LoftSections(context.Background(), decad.New(), sections[:]...)
+	body, err := decad.LoftSections(decad.New(), sections[:]...).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to loft: %s\n", err)
 		return

@@ -9,7 +9,7 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// WithTaper adds a draft angle to an extrude: every wall leans inward as it
+// Taper adds a draft angle to an extrude: every wall leans inward as it
 // leaves the sketch plane. Molded and cast parts need this so they can be
 // released from the mold. The far end of the body is smaller than the sketch.
 func Example_extrude_taper() {
@@ -29,11 +29,10 @@ func Example_extrude_taper() {
 	}
 
 	// Extrude 10 mm with a 5 degree taper. For comparison, the same extrude
-	// without WithTaper would hold 20 x 20 x 10 = 4000 mm^3.
+	// without Taper would hold 20 x 20 x 10 = 4000 mm^3.
 	doc := decad.New()
-	body, err := decad.Extrude(context.Background(), doc, s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(10), Dir: decad.Along},
-		decad.WithTaper(units.Degrees(5)))
+	body, err := decad.Extrude(doc, s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Taper(units.Degrees(5)).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to extrude: %s\n", err)
 		return

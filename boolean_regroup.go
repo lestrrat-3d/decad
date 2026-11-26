@@ -381,11 +381,11 @@ func (h historyProducers) SameSetProducer(n *topo.Body) (*topo.Body, bool) {
 }
 
 // ExactShiftProducer reports the source of n and the exact world translation
-// when n is a direct copy made by WithCopyLiftTranslation: the true solid of n
+// when n is a direct copy made by CopyLiftTranslation: the true solid of n
 // is the source's moved by exactly that vector. The operation record, the
 // referenced source and the source's producer must all agree with the copy's
 // lineage, and the copy must hold no private shift or operation warning. A
-// copy made with WithCopyPlacement or WithCopyRotation, a copy of a copy and a
+// copy made with CopyTransform or CopyRotation, a copy of a copy and a
 // Transform of a copy are not read (agent-docs/interference-design.md §3.2).
 func (h historyProducers) ExactShiftProducer(n *topo.Body) (*topo.Body, [3]*big.Rat, bool) {
 	h.d.n.LiveMu.RLock()

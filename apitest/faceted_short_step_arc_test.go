@@ -39,18 +39,18 @@ func TestFacetedShortStepArc(t *testing.T) {
 		prev = next
 	}
 	meridian.CreateLine(prev, first)
-	drum, err := decad.Revolve(ctx, doc, meridian, shortStepProfile(t, meridian),
-		decad.ConstructionAxis{Origin: r3.Vec{Z: h}, Dir: r3.Vec{Y: 1}}, decad.FullRevolution{})
+	drum, err := decad.Revolve(doc, meridian, shortStepProfile(t, meridian),
+		decad.ConstructionAxis{Origin: r3.Vec{Z: h}, Dir: r3.Vec{Y: 1}}, decad.FullRevolution{}).Do(ctx)
 	require.NoError(t, err)
 
 	angle := 60 * math.Pi / 180
 	u := r3.Vec{X: math.Cos(angle), Z: math.Sin(angle)}
 	ws := shortStepSketch(t, r3.Vec{Z: h, Y: -16.5}, u, r3.Vec{Y: 1}.Cross(u))
 	shortStepWindow(t, ws, 14, 24, 40*math.Pi/180, 1.0)
-	window, err := decad.Extrude(ctx, doc, ws, shortStepProfile(t, ws),
-		decad.Distance{D: units.Millimeters(6), Dir: decad.Along})
+	window, err := decad.Extrude(doc, ws, shortStepProfile(t, ws),
+		decad.Distance{D: units.Millimeters(6), Dir: decad.Along}).Do(ctx)
 	require.NoError(t, err)
-	body, err := decad.Cut(ctx, drum, window)
+	body, err := decad.Cut(drum, window).Do(ctx)
 	require.NoError(t, err)
 
 	// The window loops on the plate's two faces, y = -11.5 and y = -15.5:
@@ -87,7 +87,7 @@ func TestFacetedShortStepArc(t *testing.T) {
 	require.Equal(t, 2, loops, "the window has a loop on each plate face")
 	require.Equal(t, 8, arcs, "each loop holds four rounds")
 
-	out, err := decad.Chamfer(ctx, body, sel.Exactly(16), units.Millimeters(0.5))
+	out, err := decad.Chamfer(body, sel.Exactly(16), units.Millimeters(0.5)).Do(ctx)
 	require.NoError(t, err)
 	require.True(t, out.IsSolid())
 }
@@ -175,15 +175,15 @@ func TestFacetedShortStepArcAtCapRound(t *testing.T) {
 	block := shortStepPrism(t, doc, r3.Vec{X: left}, r3.Vec{Y: 1}, r3.Vec{Z: 1},
 		[][2]float64{{front, floor}, {back, floor}, {back, top}, {front, top}}, []float64{3, 3, 3, 3}, 51)
 	caps := decad.Edges(decad.OuterLoopOf(decad.CapStart(block))).Or(decad.OuterLoopOf(decad.CapEnd(block)))
-	block, err := decad.Fillet(ctx, block, caps, units.Millimeters(2))
+	block, err := decad.Fillet(block, caps, units.Millimeters(2)).Do(ctx)
 	require.NoError(t, err)
 	cavity := shortStepPrism(t, doc, r3.Vec{X: left + 9.8}, r3.Vec{Y: 1}, r3.Vec{Z: 1},
 		[][2]float64{{front + 9.8, floor + 5}, {back - 9.8, floor + 5}, {back - 9.8, top + 1}, {front + 9.8, top + 1}},
 		[]float64{0, 3, 0, 0}, 31)
-	tray, err := decad.Cut(ctx, block, cavity)
+	tray, err := decad.Cut(block, cavity).Do(ctx)
 	require.NoError(t, err)
 	ear := shortStepBox(t, doc, -19, -11, -40, -24, floor-8, floor+1)
-	out, err := decad.Union(ctx, tray, ear)
+	out, err := decad.Union(tray, ear).Do(ctx)
 	require.NoError(t, err)
 
 	var found *decad.Edge
@@ -229,7 +229,7 @@ func shortStepPrism(t *testing.T, doc *decad.Document, o, u, v r3.Vec, xy [][2]f
 		_, err := sketch.CreateFillet(s, lines[(i+n-1)%n], lines[i], pts[i], radii[i])
 		require.NoError(t, err)
 	}
-	b, err := decad.Extrude(t.Context(), doc, s, shortStepProfile(t, s), decad.Distance{D: units.Millimeters(length), Dir: decad.Along})
+	b, err := decad.Extrude(doc, s, shortStepProfile(t, s), decad.Distance{D: units.Millimeters(length), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	return b
 }
@@ -238,7 +238,7 @@ func shortStepBox(t *testing.T, doc *decad.Document, x0, x1, y0, y1, z0, z1 floa
 	s := shortStepSketch(t, r3.Vec{Z: z0}, r3.Vec{X: 1}, r3.Vec{Y: 1})
 	r := s.CreateRectangle(x0, y0, x1, y1)
 	s.Fix(r.A)
-	b, err := decad.Extrude(t.Context(), doc, s, shortStepProfile(t, s), decad.Distance{D: units.Millimeters(z1 - z0), Dir: decad.Along})
+	b, err := decad.Extrude(doc, s, shortStepProfile(t, s), decad.Distance{D: units.Millimeters(z1 - z0), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	return b
 }

@@ -183,8 +183,8 @@ func UpperCapNode(far r3.Vec, sample Sample,
 		shortfall := 1 - (sample.Q + sample.QError)
 		if shortfall <= MatchingFaceSlack {
 			return r3.Vec{}, 0, fmt.Errorf("%w: sector cap reaches its far source plane: "+
-				"a cap station misses the cone by %.3g, within rounding; pass decad.WithMatchingFaces "+
-				"to the Cut or Intersect that made the cone cut if the cap is meant to touch the cone",
+				"a cap station misses the cone by %.3g, within rounding; call MatchingFaces "+
+				"on the Cut or Intersect command that made the cone cut if the cap is meant to touch the cone",
 				decaderr.ErrUnsupported, shortfall)
 		}
 		return r3.Vec{}, 0, fmt.Errorf("%w: sector cap reaches its far source plane: "+

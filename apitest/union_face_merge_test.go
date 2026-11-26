@@ -101,7 +101,7 @@ func mergeFlushBoxesIn(t *testing.T, doc *decad.Document, dx, dy float64) *decad
 	t.Helper()
 	a := boxBody(t, doc, 0, 0, 10, 10, 10)
 	b := translated(t, boxBody(t, doc, 0, 0, 10, 10, 10), dx, dy, 10)
-	joined, err := decad.Union(t.Context(), a, b)
+	joined, err := decad.Union(a, b).Do(t.Context())
 	require.NoError(t, err)
 	return joined
 }
@@ -128,7 +128,7 @@ func xzPrism(t *testing.T, doc *decad.Document, pts [][2]float64, d float64) *de
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	require.Len(t, s.Profiles(), 1)
-	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(d), Dir: decad.Against})
+	body, err := decad.Extrude(doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(d), Dir: decad.Against}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -141,7 +141,7 @@ func TestUnionFaceMergeFlushBoxes(t *testing.T) {
 	negY, posY := r3.Vec{Y: -1}, r3.Vec{Y: 1}
 	wallsA, wallsB := faceAt(t, a, faceNegY, negY, 0), faceAt(t, b, faceNegY, negY, 0)
 	farA, farB := faceAt(t, a, facePosY, posY, 10), faceAt(t, b, facePosY, posY, 10)
-	joined, err := decad.Union(t.Context(), a, b)
+	joined, err := decad.Union(a, b).Do(t.Context())
 	require.NoError(t, err)
 	require.Len(t, joined.Faces(), 10)
 	requireNoDiagnostics(t, joined)
@@ -159,7 +159,7 @@ func TestUnionFaceMergeDovetailEnds(t *testing.T) {
 	negY, posY := r3.Vec{Y: -1}, r3.Vec{Y: 1}
 	hostStart, toolStart := faceAt(t, host, faceNegY, negY, 0), faceAt(t, tool, faceNegY, negY, 0)
 	hostEnd, toolEnd := faceAt(t, host, facePosY, posY, 16), faceAt(t, tool, facePosY, posY, 16)
-	joined, err := decad.Union(t.Context(), host, tool)
+	joined, err := decad.Union(host, tool).Do(t.Context())
 	require.NoError(t, err)
 	require.Len(t, joined.Faces(), 10)
 	requireNoSeam(t, joined)
@@ -179,7 +179,7 @@ func TestUnionFaceMergeCutStepDown(t *testing.T) {
 	tool := translated(t, boxBody(t, doc, 0, 0, 11, 12, 6), 10, -1, 5)
 	posZ, negZ := r3.Vec{Z: 1}, r3.Vec{Z: -1}
 	targetTop, toolFloor := faceAt(t, target, facePosZ, posZ, 5), faceAt(t, tool, decad.Facing(negZ), negZ, -5)
-	cut, err := decad.Cut(t.Context(), target, tool)
+	cut, err := decad.Cut(target, tool).Do(t.Context())
 	require.NoError(t, err)
 	require.Len(t, cut.Faces(), 6)
 	requireNoSeam(t, cut)
@@ -195,7 +195,7 @@ func TestUnionFaceMergeIntersectSteppedPrisms(t *testing.T) {
 	doc := decad.New()
 	a := xzPrism(t, doc, [][2]float64{{0, 0}, {12, 0}, {12, 20}, {6, 20}, {6, 10}, {0, 10}}, 10)
 	b := translated(t, xzPrism(t, doc, [][2]float64{{1, 0}, {13, 0}, {13, 10}, {4, 10}, {4, 20}, {1, 20}}, 10), 1, 0, 0)
-	both, err := decad.Intersect(t.Context(), a, b)
+	both, err := decad.Intersect(a, b).Do(t.Context())
 	require.NoError(t, err)
 	require.Len(t, both.Faces(), 6)
 	requireNoSeam(t, both)
@@ -218,7 +218,7 @@ func TestUnionFaceMergeThenChamfer(t *testing.T) {
 	t.Parallel()
 	joined := mergeFlushBoxes(t, 0.5, 0)
 	edge := decad.Edges(decad.ParallelTo(r3.Vec{X: 1}), decad.EndpointAt(r3.Vec{X: 0.5, Z: 20}))
-	chamfered, err := decad.Chamfer(t.Context(), joined, edge, units.Millimeters(1))
+	chamfered, err := decad.Chamfer(joined, edge, units.Millimeters(1)).Do(t.Context())
 	require.NoError(t, err)
 	before, err := joined.Volume()
 	require.NoError(t, err)
@@ -248,10 +248,10 @@ func TestUnionFaceMergeThenCut(t *testing.T) {
 	s.CreateCircle(centre, 1)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	pocket, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(2), Dir: decad.Along})
+	pocket, err := decad.Extrude(doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(2), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 
-	cut, err := decad.Cut(t.Context(), joined, pocket)
+	cut, err := decad.Cut(joined, pocket).Do(t.Context())
 	require.NoError(t, err)
 	require.Len(t, cut.Faces(), 12, "ten faces, the pocket wall and the pocket floor")
 	require.GreaterOrEqual(t, len(near.Origins()), 2, "the merged wall lists both operands' roles")

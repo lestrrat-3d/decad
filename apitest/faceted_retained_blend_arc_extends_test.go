@@ -31,7 +31,7 @@ func earBody(t *testing.T) *decad.Body {
 	sc := newRetentionScene()
 	bar := xCylinderAt(t, sc.doc, 0, 0, 3, -15, 15)
 	box := placed(t, rectBox(t, sc.w, sc.doc, 0, -earHalf, earLen, earHalf, 4), -5)
-	body, err := decad.Union(t.Context(), bar, box)
+	body, err := decad.Union(bar, box).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -58,14 +58,14 @@ func earTube(t *testing.T) *decad.Body {
 		}
 	}
 	require.NotNil(t, ring)
-	pipe, err := decad.Extrude(t.Context(), sc.doc, s, ring, decad.Distance{D: units.Millimeters(30), Dir: decad.Along})
+	pipe, err := decad.Extrude(sc.doc, s, ring, decad.Distance{D: units.Millimeters(30), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	move, err := r3.Translation(r3.Vec{X: -15 + 0.001})
 	require.NoError(t, err)
-	tube, err := decad.Transform(t.Context(), pipe, move)
+	tube, err := decad.Transform(pipe, move).Do(t.Context())
 	require.NoError(t, err)
 	rib := placed(t, rectBox(t, sc.w, sc.doc, 0, -earHalf, earLen, earHalf, 3), -4)
-	body, err := decad.Union(t.Context(), tube, rib)
+	body, err := decad.Union(tube, rib).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -135,7 +135,7 @@ func earRegion(radius, kappa, size float64, fillet bool, f func(rho float64) flo
 func earCornerRod(t *testing.T) *decad.Body {
 	t.Helper()
 	sc := newRetentionScene()
-	body, err := decad.Union(t.Context(), blendPlate(t, sc), zCylinderAt(t, sc, -1, -1, 5, 10, 40))
+	body, err := decad.Union(blendPlate(t, sc), zCylinderAt(t, sc, -1, -1, 5, 10, 40)).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -209,9 +209,9 @@ func TestFacetedRetainedBlendArcExtends(t *testing.T) {
 				}
 				var out *decad.Body
 				if fillet {
-					out, err = decad.Fillet(t.Context(), body, seed, units.Millimeters(size))
+					out, err = decad.Fillet(body, seed, units.Millimeters(size)).Do(t.Context())
 				} else {
-					out, err = decad.Chamfer(t.Context(), body, seed, units.Millimeters(size))
+					out, err = decad.Chamfer(body, seed, units.Millimeters(size)).Do(t.Context())
 				}
 				require.NoError(t, err)
 
@@ -272,18 +272,18 @@ func TestFacetedRetainedBlendArcExtends(t *testing.T) {
 		sc := newRetentionScene()
 		bar := xCylinderAt(t, sc.doc, 0, 0, 3, -15, 15)
 		box := placed(t, rectBox(t, sc.w, sc.doc, 0, -earHalf, earLen, earHalf, 4), -5)
-		body, err := decad.Union(t.Context(), bar, box)
+		body, err := decad.Union(bar, box).Do(t.Context())
 		require.NoError(t, err)
-		body, err = decad.Cut(t.Context(), body, zCylinderAt(t, sc, -0.5, 0, 0.25, -10, 10))
+		body, err = decad.Cut(body, zCylinderAt(t, sc, -0.5, 0, 0.25, -10, 10)).Do(t.Context())
 		require.NoError(t, err)
-		_, err = decad.Fillet(t.Context(), body, earArc(t, body), units.Millimeters(1))
+		_, err = decad.Fillet(body, earArc(t, body), units.Millimeters(1)).Do(t.Context())
 		require.ErrorContains(t, err, "another part of the wall lies within the blend's reach of the edge")
 	})
 
 	t.Run("a blend too large for the rib's end face is refused", func(t *testing.T) {
 		t.Parallel()
 		body := earBody(t)
-		_, err := decad.Fillet(t.Context(), body, earArc(t, body), units.Millimeters(2.5))
+		_, err := decad.Fillet(body, earArc(t, body), units.Millimeters(2.5)).Do(t.Context())
 		require.ErrorContains(t, err, "the blend consumes the plane beside the arc")
 	})
 
@@ -296,9 +296,9 @@ func TestFacetedRetainedBlendArcExtends(t *testing.T) {
 		// face takes the cap, inside the fillet's corner region and clear of its
 		// strip.
 		cube := placed(t, rectBox(t, sc.w, sc.doc, -0.15, 0.95, -0.05, 1.05, 0.1), -3.05)
-		feet, err := decad.Union(t.Context(), box, cube)
+		feet, err := decad.Union(box, cube).Do(t.Context())
 		require.NoError(t, err)
-		body, err := decad.Union(t.Context(), bar, feet)
+		body, err := decad.Union(bar, feet).Do(t.Context())
 		require.NoError(t, err)
 		var seed decad.EdgeSelector
 		for _, e := range body.Edges() {
@@ -307,7 +307,7 @@ func TestFacetedRetainedBlendArcExtends(t *testing.T) {
 			}
 		}
 		require.NotNil(t, seed)
-		_, err = decad.Fillet(t.Context(), body, seed, units.Millimeters(1))
+		_, err = decad.Fillet(body, seed, units.Millimeters(1)).Do(t.Context())
 		require.ErrorContains(t, err, "the cap an end face takes meets another facet of the body")
 	})
 }

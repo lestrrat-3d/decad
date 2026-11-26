@@ -1,6 +1,7 @@
 package apitest_test
 
 import (
+	"context"
 	"fmt"
 	"slices"
 	"testing"
@@ -28,8 +29,8 @@ func discAt(t *testing.T, doc *decad.Document, cx, cy, z0, length, r float64) *d
 	s.CreateCircle(c, r)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(length), Dir: decad.Along})
+	body, err := decad.Extrude(doc, s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(length), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -42,7 +43,7 @@ func discAt(t *testing.T, doc *decad.Document, cx, cy, z0, length, r float64) *d
 // The master hook is the Union of a stem in the first bore and a ring high above the
 // block, clear of the block's box even moved to the second bore. The master pair is decided by the history certificate: the stem lies
 // in the tool that drilled the bore. A copy is a history leaf unless it was
-// made by WithCopyLiftTranslation directly from the master: Verify then reads
+// made by CopyLiftTranslation directly from the master: Verify then reads
 // it as the master moved by the exact vector t = lift·(to − from), and the stem
 // again lies exactly in a tool, now the second bore's.
 //
@@ -74,24 +75,24 @@ func TestVerifyHistoryCopyLiftTranslation(t *testing.T) {
 		lift := liftAbout(t, 0.15)
 		doc := decad.New()
 		on := func(b *decad.Body) *decad.Body {
-			out, err := decad.Transform(t.Context(), b, lift)
+			out, err := decad.Transform(b, lift).Do(t.Context())
 			require.NoError(t, err)
 			return out
 		}
 		drilled := on(slab(t, doc, 0, -5, 30, 5, 0, 10, r3.Identity()))
 		for _, x := range []float64{10, 20} {
 			var err error
-			drilled, err = decad.Cut(t.Context(), drilled, on(discAt(t, doc, x, 0, -1, 30, 1)))
+			drilled, err = decad.Cut(drilled, on(discAt(t, doc, x, 0, -1, 30, 1))).Do(t.Context())
 			require.NoError(t, err)
 		}
 		stem := on(discAt(t, doc, 10, 0, 2, 20, 1))
-		master, err := decad.Union(t.Context(), stem, on(hookRingSweep(t, doc, ringZ, 90)))
+		master, err := decad.Union(stem, on(hookRingSweep(t, doc, ringZ, 90))).Do(t.Context())
 		require.NoError(t, err)
 		require.True(t, tookMeshPath(master))
 		return scene{doc: doc, lift: lift, drilled: drilled, master: master}
 	}
-	copyOf := func(t *testing.T, body *decad.Body, opt decad.CopyOption) *decad.Body {
-		c, err := decad.Copy(t.Context(), body, opt)
+	copyOf := func(t *testing.T, body *decad.Body, opt decad.CopyPlacement) *decad.Body {
+		c, err := decad.Copy(body).Place(opt).Do(t.Context())
 		require.NoError(t, err)
 		return c
 	}
@@ -107,42 +108,42 @@ func TestVerifyHistoryCopyLiftTranslation(t *testing.T) {
 		masterClear bool
 	}{
 		{"exact lift move into the second bore", 20, func(t *testing.T, sc scene) *decad.Body {
-			return copyOf(t, sc.master, decad.WithCopyLiftTranslation(sc.lift, first, second))
+			return copyOf(t, sc.master, decad.CopyLiftTranslation{Lift: sc.lift, From: first, To: second})
 		}, true, true},
 		{"exact move along the top, ring 0.2 above it", 11, func(t *testing.T, sc scene) *decad.Body {
-			return copyOf(t, sc.master, decad.WithCopyLiftTranslation(sc.lift, first, second))
+			return copyOf(t, sc.master, decad.CopyLiftTranslation{Lift: sc.lift, From: first, To: second})
 		}, true, true},
 		{"exact move lifted 0.3 off the top", 11, func(t *testing.T, sc scene) *decad.Body {
-			return copyOf(t, sc.master, decad.WithCopyLiftTranslation(sc.lift, first, r3.Vec{X: 20, Z: 0.3}))
+			return copyOf(t, sc.master, decad.CopyLiftTranslation{Lift: sc.lift, From: first, To: r3.Vec{X: 20, Z: 0.3}})
 		}, true, true},
 		{"exact move lowered 0.21, ring 0.01 into the top", 11, func(t *testing.T, sc scene) *decad.Body {
-			return copyOf(t, sc.master, decad.WithCopyLiftTranslation(sc.lift, first, r3.Vec{X: 20, Z: -0.21}))
+			return copyOf(t, sc.master, decad.CopyLiftTranslation{Lift: sc.lift, From: first, To: r3.Vec{X: 20, Z: -0.21}})
 		}, false, true},
 		{"exact move lowered 1, ring across the top plane", 11, func(t *testing.T, sc scene) *decad.Body {
-			return copyOf(t, sc.master, decad.WithCopyLiftTranslation(sc.lift, first, r3.Vec{X: 20, Z: -1}))
+			return copyOf(t, sc.master, decad.CopyLiftTranslation{Lift: sc.lift, From: first, To: r3.Vec{X: 20, Z: -1}})
 		}, false, true},
 		{"float placement of the same move", 11, func(t *testing.T, sc scene) *decad.Body {
 			move, err := r3.Translation(sc.lift.Basis().EX.Scale(10))
 			require.NoError(t, err)
-			return copyOf(t, sc.master, decad.WithCopyPlacement(move))
+			return copyOf(t, sc.master, decad.CopyTransform{Transform: move})
 		}, false, true},
 		{"exact move 0.01 off the bore", 20, func(t *testing.T, sc scene) *decad.Body {
-			return copyOf(t, sc.master, decad.WithCopyLiftTranslation(sc.lift, first, r3.Vec{X: 20.01}))
+			return copyOf(t, sc.master, decad.CopyLiftTranslation{Lift: sc.lift, From: first, To: r3.Vec{X: 20.01}})
 		}, false, true},
 		{"exact move under another lift", 11, func(t *testing.T, sc scene) *decad.Body {
-			return copyOf(t, sc.master, decad.WithCopyLiftTranslation(liftAbout(t, 0.15+1e-9), first, second))
+			return copyOf(t, sc.master, decad.CopyLiftTranslation{Lift: liftAbout(t, 0.15+1e-9), From: first, To: second})
 		}, false, true},
 		{"exact move that sinks the ring into the block", 9.5, func(t *testing.T, sc scene) *decad.Body {
-			return copyOf(t, sc.master, decad.WithCopyLiftTranslation(sc.lift, first, second))
+			return copyOf(t, sc.master, decad.CopyLiftTranslation{Lift: sc.lift, From: first, To: second})
 		}, false, false},
 		{"copy of a copy", 11, func(t *testing.T, sc scene) *decad.Body {
-			away := copyOf(t, sc.master, decad.WithCopyLiftTranslation(sc.lift, first, r3.Vec{X: 20, Y: 40}))
-			return copyOf(t, away, decad.WithCopyLiftTranslation(sc.lift, r3.Vec{X: 20, Y: 40}, second))
+			away := copyOf(t, sc.master, decad.CopyLiftTranslation{Lift: sc.lift, From: first, To: r3.Vec{X: 20, Y: 40}})
+			return copyOf(t, away, decad.CopyLiftTranslation{Lift: sc.lift, From: r3.Vec{X: 20, Y: 40}, To: second})
 		}, false, true},
 		{"exact move of a refined master", 11, func(t *testing.T, sc scene) *decad.Body {
-			refined, err := decad.Refine(t.Context(), sc.master, units.Millimeters(0.05))
+			refined, err := decad.Refine(sc.master, units.Millimeters(0.05)).Do(t.Context())
 			require.NoError(t, err)
-			return copyOf(t, refined, decad.WithCopyLiftTranslation(sc.lift, first, second))
+			return copyOf(t, refined, decad.CopyLiftTranslation{Lift: sc.lift, From: first, To: second})
 		}, true, true},
 	}
 	// Groups own separate documents; their cases run serially and remove their
@@ -165,7 +166,7 @@ func TestVerifyHistoryCopyLiftTranslation(t *testing.T) {
 					t.Cleanup(func() {
 						for _, body := range sc.doc.Bodies() {
 							if !slices.Contains(before, body) {
-								require.NoError(t, decad.Remove(body))
+								require.NoError(t, decad.Remove(body).Do(context.WithoutCancel(t.Context())))
 							}
 						}
 						live := sc.doc.Bodies()
@@ -235,9 +236,9 @@ func TestVerifyHistoryCopyEndCap(t *testing.T) {
 			t.Parallel()
 			doc := decad.New()
 			spindle := collarSpindle(t, doc)
-			master, err := decad.Union(t.Context(), xScrew(t, doc, 4, from.Y, 0), hookRing(t, doc, 20))
+			master, err := decad.Union(xScrew(t, doc, 4, from.Y, 0), hookRing(t, doc, 20)).Do(t.Context())
 			require.NoError(t, err)
-			copied, err := decad.Copy(t.Context(), master, decad.WithCopyLiftTranslation(r3.Identity(), from, tc.to))
+			copied, err := decad.Copy(master).Place(decad.CopyLiftTranslation{Lift: r3.Identity(), From: from, To: tc.to}).Do(t.Context())
 			require.NoError(t, err)
 			report, err := doc.Verify(t.Context())
 			require.NoError(t, err)

@@ -166,7 +166,7 @@ func (m *Mesh) Bound() units.Value { return units.Millimeters(m.n.Bound) }
 // A body this evaluator did not build at all is also [ErrUnsupported].
 //
 // A [BodySheet] built by a surface-result prism or revolve
-// (`WithSurfaceResult`) meshes its walls exactly as the solid the same
+// (`SurfaceResult`) meshes its walls exactly as the solid the same
 // record would have built. A prism sheet, and a partial-sweep revolve
 // sheet, omit both caps: no cap triangulation runs and no cap face appears
 // in SourceFaces. A full-turn revolve mints no cap in either kind, so its

@@ -62,7 +62,7 @@ func flankLobeLoft(t testing.TB, doc *decad.Document, r, rot, half float64, heig
 	}
 	s0, p0 := section(w.XY())
 	s1, p1 := section(splitTopPlane(t, w, height))
-	b, err := decad.Loft(t.Context(), doc, s0, p0, s1, p1)
+	b, err := decad.Loft(doc, s0, p0, s1, p1).Do(t.Context())
 	require.NoError(t, err)
 	return b
 }
@@ -85,7 +85,7 @@ func BenchmarkAxialSectionUnion17Lobes(b *testing.B) {
 			}
 			sum += volume.Value.Base()
 		}
-		joined, err := decad.Union(b.Context(), disc, lobes...)
+		joined, err := decad.Union(append([]*decad.Body{disc}, lobes...)...).Do(b.Context())
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -123,7 +123,7 @@ func TestAxialSectionUnionLobesOnADisc(t *testing.T) {
 				require.NoError(t, err)
 				sum += v.Value.Base()
 			}
-			joined, err := decad.Union(t.Context(), disc, lobes...)
+			joined, err := decad.Union(append([]*decad.Body{disc}, lobes...)...).Do(t.Context())
 			require.NoError(t, err)
 			require.True(t, joined.IsSolid())
 			v, err := joined.Volume()
@@ -150,20 +150,20 @@ func TestAxialSectionUnionFinishes(t *testing.T) {
 	for k := range lobes {
 		lobes[k] = lobeLoft(t, doc, r, 2*math.Pi*float64(k)/float64(n), 0.4*math.Pi/float64(n), height)
 	}
-	joined, err := decad.Union(t.Context(), disc, lobes...)
+	joined, err := decad.Union(append([]*decad.Body{disc}, lobes...)...).Do(t.Context())
 	require.NoError(t, err)
 	v0, err := joined.Volume()
 	require.NoError(t, err)
 
 	bore := circleBodyAtZ(t, doc, 0, 0.8, -1, height+2)
-	bored, err := decad.Cut(t.Context(), joined, bore)
+	bored, err := decad.Cut(joined, bore).Do(t.Context())
 	require.NoError(t, err)
 	bv, err := bored.Volume()
 	require.NoError(t, err)
 	require.InDelta(t, v0.Value.Base()-math.Pi*0.8*0.8*height, bv.Value.Base(), v0.Bound.Base()+bv.Bound.Base())
 
 	caps := decad.Edges(decad.OuterLoopOf(decad.CapStart(bored))).Or(decad.OuterLoopOf(decad.CapEnd(bored)))
-	chamfered, err := decad.Chamfer(t.Context(), bored, caps, units.Millimeters(0.03))
+	chamfered, err := decad.Chamfer(bored, caps, units.Millimeters(0.03)).Do(t.Context())
 	require.NoError(t, err)
 	cv, err := chamfered.Volume()
 	require.NoError(t, err)
@@ -197,7 +197,7 @@ func tongueLoft(t *testing.T, doc *decad.Document, height float64) *decad.Body {
 	}
 	s0, p0 := section(w.XY())
 	s1, p1 := section(splitTopPlane(t, w, height))
-	b, err := decad.Loft(t.Context(), doc, s0, p0, s1, p1)
+	b, err := decad.Loft(doc, s0, p0, s1, p1).Do(t.Context())
 	require.NoError(t, err)
 	return b
 }
@@ -215,7 +215,7 @@ func TestAxialSectionUnionPlateAndTongue(t *testing.T) {
 	require.NoError(t, err)
 	tv, err := tongue.Volume()
 	require.NoError(t, err)
-	joined, err := decad.Union(t.Context(), plate, tongue)
+	joined, err := decad.Union(plate, tongue).Do(t.Context())
 	require.NoError(t, err)
 	v, err := joined.Volume()
 	require.NoError(t, err)
@@ -246,14 +246,14 @@ func TestAxialSectionUnionLiftedLobeKeepsCapLevel(t *testing.T) {
 		if k != 0 {
 			continue
 		}
-		lobes[k], err = decad.Transform(t.Context(), lobes[k], lift)
+		lobes[k], err = decad.Transform(lobes[k], lift).Do(t.Context())
 		require.NoError(t, err)
 		for _, v := range lobes[k].Vertices() {
 			liftedTop = max(liftedTop, v.Position().Value.Z)
 		}
 	}
 	require.Greater(t, liftedTop, height, "the lifted lobe's top rounds above the disc's")
-	joined, err := decad.Union(t.Context(), disc, lobes...)
+	joined, err := decad.Union(append([]*decad.Body{disc}, lobes...)...).Do(t.Context())
 	require.NoError(t, err)
 
 	w := sketch.NewWorld()
@@ -262,7 +262,7 @@ func TestAxialSectionUnionLiftedLobeKeepsCapLevel(t *testing.T) {
 	s.CreateCircle(s.Origin(), 0.5)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	pin, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.ToFace{Body: joined, Face: capEndFace(joined)})
+	pin, err := decad.Extrude(doc, s, s.Profiles()[0], decad.ToFace{Body: joined, Face: capEndFace(joined)}).Do(t.Context())
 	require.NoError(t, err)
 	tops := 0
 	for _, v := range pin.Vertices() {
@@ -288,10 +288,10 @@ func TestAxialSectionUnionExactTurnsKeepExactCaps(t *testing.T) {
 	doc := decad.New()
 	disc := circleBodyAtZ(t, doc, 0, r, 0, height)
 	lobe := lobeLoft(t, doc, r, 0, 0.4*math.Pi/n, height)
-	copies, err := decad.PatternCopies(t.Context(), lobe,
-		decad.CircularPattern{Center: r3.Vec{}, Axis: r3.NewVec(0, 0, 1), Count: n})
+	copies, err := decad.PatternCopies(lobe,
+		decad.CircularPattern{Center: r3.Vec{}, Axis: r3.NewVec(0, 0, 1), Count: n}).Do(t.Context())
 	require.NoError(t, err)
-	joined, err := decad.Union(t.Context(), disc, append([]*decad.Body{lobe}, copies...)...)
+	joined, err := decad.Union(append([]*decad.Body{disc}, append([]*decad.Body{lobe}, copies...)...)...).Do(t.Context())
 	require.NoError(t, err)
 
 	w := sketch.NewWorld()
@@ -300,7 +300,7 @@ func TestAxialSectionUnionExactTurnsKeepExactCaps(t *testing.T) {
 	s.CreateCircle(s.Origin(), 0.5)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	pin, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.ToFace{Body: joined, Face: capEndFace(joined)})
+	pin, err := decad.Extrude(doc, s, s.Profiles()[0], decad.ToFace{Body: joined, Face: capEndFace(joined)}).Do(t.Context())
 	require.NoError(t, err)
 	tops := 0
 	for _, v := range pin.Vertices() {
@@ -328,10 +328,10 @@ func TestAxialSectionUnionCounterboreRimChamfers(t *testing.T) {
 	doc := decad.New()
 	disc := circleBodyAtZ(t, doc, 0, r, 0, height)
 	lobe := lobeLoft(t, doc, r, 0, 0.4*math.Pi/n, height)
-	copies, err := decad.PatternCopies(t.Context(), lobe,
-		decad.CircularPattern{Center: r3.Vec{}, Axis: r3.NewVec(0, 0, 1), Count: n})
+	copies, err := decad.PatternCopies(lobe,
+		decad.CircularPattern{Center: r3.Vec{}, Axis: r3.NewVec(0, 0, 1), Count: n}).Do(t.Context())
 	require.NoError(t, err)
-	joined, err := decad.Union(t.Context(), disc, append([]*decad.Body{lobe}, copies...)...)
+	joined, err := decad.Union(append([]*decad.Body{disc}, append([]*decad.Body{lobe}, copies...)...)...).Do(t.Context())
 	require.NoError(t, err)
 
 	w := sketch.NewWorld()
@@ -344,9 +344,9 @@ func TestAxialSectionUnionCounterboreRimChamfers(t *testing.T) {
 	s.CreateCircle(centre, bore)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	tool, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(2), Dir: decad.Along})
+	tool, err := decad.Extrude(doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(2), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
-	cut, err := decad.Cut(t.Context(), joined, tool)
+	cut, err := decad.Cut(joined, tool).Do(t.Context())
 	require.NoError(t, err)
 
 	var rim *decad.Edge
@@ -369,9 +369,9 @@ func TestAxialSectionUnionCounterboreRimChamfers(t *testing.T) {
 
 	v0, err := cut.Volume()
 	require.NoError(t, err)
-	chamfered, err := decad.Chamfer(t.Context(), cut,
+	chamfered, err := decad.Chamfer(cut,
 		decad.Edges(decad.EndpointAt(rim.Start().Position().Value), decad.Circular()).Exactly(1),
-		units.Millimeters(setback))
+		units.Millimeters(setback)).Do(t.Context())
 	require.NoError(t, err)
 	require.True(t, chamfered.IsSolid())
 	v1, err := chamfered.Volume()

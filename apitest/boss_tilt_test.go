@@ -23,12 +23,9 @@ func tiltPlate(t *testing.T) (*decad.Document, *decad.Body) {
 	return doc, boxBody(t, doc, -20, -20, 20, 20, 10)
 }
 
-func tiltedSpec(plate *decad.Body, tilt, direction units.Value) decad.BossSpec {
-	return decad.BossSpec{
-		Face: capFace(true, plate), At: r3.Vec{Z: 10},
-		Diameter: units.Millimeters(8), Height: units.Millimeters(8),
-		Tilt: tilt, TiltDirection: direction,
-	}
+func tiltedCommand(plate *decad.Body, tilt, direction units.Value) *decad.BossCommand {
+	return decad.Boss(plate, capFace(true, plate), r3.Vec{Z: 10}, units.Millimeters(8), units.Millimeters(8)).
+		Tilt(tilt, direction)
 }
 
 func TestBossLeansAlongAnAxis(t *testing.T) {
@@ -45,7 +42,7 @@ func TestBossLeansAlongAnAxis(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 			doc, plate := tiltPlate(t)
-			out, err := decad.Boss(t.Context(), plate, tiltedSpec(plate, units.Degrees(tc.tilt), units.Degrees(tc.direction)))
+			out, err := tiltedCommand(plate, units.Degrees(tc.tilt), units.Degrees(tc.direction)).Do(t.Context())
 			require.NoError(t, err)
 			require.Equal(t, []*decad.Body{out}, doc.Bodies())
 			a := tc.tilt * math.Pi / 180
@@ -78,34 +75,27 @@ func TestBossLeansAlongAnAxis(t *testing.T) {
 func TestBossTiltRefusals(t *testing.T) {
 	t.Parallel()
 	doc, plate := tiltPlate(t)
-	boss := func(edit func(*decad.BossSpec)) error {
-		spec := tiltedSpec(plate, units.Degrees(30), units.Value{})
-		edit(&spec)
-		_, err := decad.Boss(t.Context(), plate, spec)
-		return err
-	}
+	mm, deg := units.Millimeters, units.Degrees
+	tilted := func() *decad.BossCommand { return tiltedCommand(plate, deg(30), deg(0)) }
 	for name, tc := range map[string]struct {
-		edit func(*decad.BossSpec)
+		cmd  *decad.BossCommand
 		want error
 	}{
-		"past 60 degrees":     {func(s *decad.BossSpec) { s.Tilt = units.Degrees(61) }, decad.ErrDegenerate},
-		"a negative tilt":     {func(s *decad.BossSpec) { s.Tilt = units.Degrees(-5) }, decad.ErrNegativeMagnitude},
-		"a length for a tilt": {func(s *decad.BossSpec) { s.Tilt = units.Millimeters(1) }, decad.ErrUnitKind},
-		"a direction alone":   {func(s *decad.BossSpec) { s.Tilt = units.Value{}; s.TiltDirection = units.Degrees(10) }, decad.ErrDegenerate},
-		"a length direction":  {func(s *decad.BossSpec) { s.TiltDirection = units.Millimeters(1) }, decad.ErrUnitKind},
-		"a pilot as wide as the boss": {func(s *decad.BossSpec) {
-			s.Bore = &decad.BossBore{Diameter: units.Millimeters(8), Depth: units.Millimeters(5)}
-		}, decad.ErrDegenerate},
-		"a pilot through the back": {func(s *decad.BossSpec) {
-			s.Bore = &decad.BossBore{Diameter: units.Millimeters(3), Depth: units.Millimeters(30)}
-		}, decad.ErrDegenerate},
-		"with a draft":       {func(s *decad.BossSpec) { s.Draft = units.Degrees(2) }, decad.ErrUnsupported},
-		"with a root fillet": {func(s *decad.BossSpec) { s.RootFillet = units.Millimeters(1) }, decad.ErrUnsupported},
-		"with ribs": {func(s *decad.BossSpec) {
-			s.Ribs = &decad.BossRibs{Count: 2, Thickness: units.Millimeters(1), Length: units.Millimeters(4), Height: units.Millimeters(3)}
-		}, decad.ErrUnsupported},
+		"past 60 degrees":     {tiltedCommand(plate, deg(61), deg(0)), decad.ErrDegenerate},
+		"a negative tilt":     {tiltedCommand(plate, deg(-5), deg(0)), decad.ErrNegativeMagnitude},
+		"a length for a tilt": {tiltedCommand(plate, mm(1), deg(0)), decad.ErrUnitKind},
+		"a zero tilt":         {tiltedCommand(plate, deg(0), deg(10)), decad.ErrDegenerate},
+		"a length direction":  {tiltedCommand(plate, deg(30), mm(1)), decad.ErrUnitKind},
+		"a pilot as wide as the boss": {
+			tilted().Bore(decad.NewBossBore(mm(8), mm(5))), decad.ErrDegenerate},
+		"a pilot through the back": {
+			tilted().Bore(decad.NewBossBore(mm(3), mm(30))), decad.ErrDegenerate},
+		"with a draft":       {tilted().Draft(deg(2)), decad.ErrUnsupported},
+		"with a root fillet": {tilted().RootFillet(mm(1)), decad.ErrUnsupported},
+		"with ribs":          {tilted().Ribs(decad.NewBossRibs(2, mm(1), mm(4), mm(3))), decad.ErrUnsupported},
 	} {
-		require.ErrorIs(t, boss(tc.edit), tc.want, name)
+		_, err := tc.cmd.Do(t.Context())
+		require.ErrorIs(t, err, tc.want, name)
 	}
 	require.Equal(t, []*decad.Body{plate}, doc.Bodies(), "every refusal leaves the plate live")
 }
@@ -123,9 +113,8 @@ func TestTiltedBossTakesAPilotAlongItsAxis(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 			doc, plate := tiltPlate(t)
-			spec := tiltedSpec(plate, units.Degrees(tc.tilt), units.Degrees(tc.direction))
-			spec.Bore = &decad.BossBore{Diameter: units.Millimeters(3), Depth: units.Millimeters(5)}
-			out, err := decad.Boss(t.Context(), plate, spec)
+			out, err := tiltedCommand(plate, units.Degrees(tc.tilt), units.Degrees(tc.direction)).
+				Bore(decad.NewBossBore(units.Millimeters(3), units.Millimeters(5))).Do(t.Context())
 			require.NoError(t, err)
 			require.Equal(t, []*decad.Body{out}, doc.Bodies())
 			// The pilot is a cylinder of 1.5 mm radius and 5 mm along the axis from the middle of the top disc, wholly in
@@ -150,10 +139,9 @@ func TestTiltedBossTakesAPilotAlongItsAxis(t *testing.T) {
 func TestTiltedBossPilotTakesAHead(t *testing.T) {
 	t.Parallel()
 	_, plate := tiltPlate(t)
-	spec := tiltedSpec(plate, units.Degrees(30), units.Value{})
-	spec.Bore = &decad.BossBore{Diameter: units.Millimeters(3), Depth: units.Millimeters(5),
-		Head: decad.Counterbore{Diameter: units.Millimeters(6), Depth: units.Millimeters(2)}}
-	out, err := decad.Boss(t.Context(), plate, spec)
+	out, err := tiltedCommand(plate, units.Degrees(30), units.Degrees(0)).
+		Bore(decad.NewBossBore(units.Millimeters(3), units.Millimeters(5)).
+			Head(decad.Counterbore{Diameter: units.Millimeters(6), Depth: units.Millimeters(2)})).Do(t.Context())
 	require.NoError(t, err)
 	// The 6 mm counterbore 2 mm deep widens the pilot's first 2 mm from 3 mm to 6 mm across.
 	volume, err := out.Volume()
@@ -165,14 +153,14 @@ func TestTiltedBossPilotTakesAHead(t *testing.T) {
 func TestTiltedBossPilotFollowsABossOffTheFaceCentre(t *testing.T) {
 	t.Parallel()
 	_, plate := tiltPlate(t)
-	spec := tiltedSpec(plate, units.Degrees(30), units.Degrees(90))
-	spec.At = r3.NewVec(6, -4, 10)
-	spec.Bore = &decad.BossBore{Diameter: units.Millimeters(3), Depth: units.Millimeters(5)}
-	out, err := decad.Boss(t.Context(), plate, spec)
+	at := r3.NewVec(6, -4, 10)
+	out, err := decad.Boss(plate, capFace(true, plate), at, units.Millimeters(8), units.Millimeters(8)).
+		Tilt(units.Degrees(30), units.Degrees(90)).
+		Bore(decad.NewBossBore(units.Millimeters(3), units.Millimeters(5))).Do(t.Context())
 	require.NoError(t, err)
 	a := 30 * math.Pi / 180
 	axis := r3.NewVec(0, math.Sin(a), math.Cos(a)) // leaning toward +Y
-	point := func(along float64) r3.Vec { return spec.At.Add(axis.Scale(along)) }
+	point := func(along float64) r3.Vec { return at.Add(axis.Scale(along)) }
 	pilot, err := out.LocatePoint(t.Context(), point(7), units.Millimeters(0.05))
 	require.NoError(t, err)
 	require.Equal(t, decad.PointOutside, pilot, "the pilot runs along the axis from the boss's own point on the face")

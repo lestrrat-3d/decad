@@ -134,8 +134,8 @@ func (p revolveAxisPlacement) revolveAbout(t *testing.T, doc *decad.Document, ou
 	require.NoError(t, err)
 	profiles := s.Profiles()
 	require.Len(t, profiles, 1)
-	body, err := decad.Revolve(t.Context(), doc, s, profiles[0],
-		decad.SketchLine{Start: decad.Point2{}, End: p.axisEnd}, decad.FullRevolution{})
+	body, err := decad.Revolve(doc, s, profiles[0],
+		decad.SketchLine{Start: decad.Point2{}, End: p.axisEnd}, decad.FullRevolution{}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -188,11 +188,11 @@ func (p revolveAxisPlacement) lug(t *testing.T, doc *decad.Document) *decad.Body
 	require.NoError(t, err)
 	profiles := s.Profiles()
 	require.Len(t, profiles, 1)
-	lug, err := decad.LoftFromPoint(t.Context(), doc, r3.Vec{}, s, profiles[0])
+	lug, err := decad.LoftFromPoint(doc, r3.Vec{}, s, profiles[0]).Do(t.Context())
 	require.NoError(t, err)
-	cut, err := decad.Cut(t.Context(), lug, p.coneTool(t, doc, 7.5))
+	cut, err := decad.Cut(lug, p.coneTool(t, doc, 7.5)).Do(t.Context())
 	require.NoError(t, err)
-	trimmed, err := decad.Intersect(t.Context(), cut, p.coneTool(t, doc, 12))
+	trimmed, err := decad.Intersect(cut, p.coneTool(t, doc, 12)).Do(t.Context())
 	require.NoError(t, err)
 	return trimmed
 }
@@ -222,7 +222,7 @@ func (p revolveAxisPlacement) union(t *testing.T, outline [][2]float64, turns []
 	for _, degrees := range turns {
 		turn, err := r3.Rotation(p.axis, units.Degrees(degrees))
 		require.NoError(t, err)
-		placed, err := decad.Copy(t.Context(), lug, decad.WithCopyPlacement(turn))
+		placed, err := decad.Copy(lug).Place(decad.CopyTransform{Transform: turn}).Do(t.Context())
 		require.NoError(t, err)
 		operands = append(operands, placed)
 	}
@@ -231,11 +231,11 @@ func (p revolveAxisPlacement) union(t *testing.T, outline [][2]float64, turns []
 	if serial {
 		joined = operands[0]
 		for _, operand := range operands[1:] {
-			joined, err = decad.Union(t.Context(), joined, operand)
+			joined, err = decad.Union(joined, operand).Do(t.Context())
 			require.NoError(t, err)
 		}
 	} else {
-		joined, err = decad.Union(t.Context(), operands[0], operands[1:]...)
+		joined, err = decad.Union(append([]*decad.Body{operands[0]}, operands[1:]...)...).Do(t.Context())
 		require.NoError(t, err)
 	}
 	mesh, err := joined.Tessellate(t.Context(), units.Millimeters(0.1), decad.WithVerification(decad.VerifyAll))
@@ -362,8 +362,8 @@ func (p revolveAxisPlacement) boreTool(t *testing.T, doc *decad.Document, radius
 	s.CreateCircle(center, radius)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	tool, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(6), Dir: decad.Along})
+	tool, err := decad.Extrude(doc, s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(6), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	return tool
 }
@@ -385,7 +385,7 @@ type boreCut struct {
 func (p revolveAxisPlacement) cutBore(t *testing.T, u revolveAxisUnion, radius float64, keptCaps int) boreCut {
 	t.Helper()
 	tool := p.boreTool(t, u.doc, radius)
-	cut, err := decad.Cut(t.Context(), u.joined, tool)
+	cut, err := decad.Cut(u.joined, tool).Do(t.Context())
 	require.NoError(t, err)
 	mesh, err := cut.Tessellate(t.Context(), units.Millimeters(0.1), decad.WithVerification(decad.VerifyAll))
 	require.NoError(t, err)

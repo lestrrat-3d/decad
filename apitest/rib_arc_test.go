@@ -41,8 +41,8 @@ func TestRibArcStandsOnThePocketFloor(t *testing.T) {
 	doc, part := ribPart(t)
 	s, arc := ribArcSketch(t, 20, 20, 30, 20, 10, 20) // a half circle of radius 10
 	operationCount := len(doc.OperationHistory().Operations())
-	out, err := decad.WebPath(t.Context(), part, s, []sketch.Entity{arc}, units.Millimeters(2),
-		decad.Distance{D: units.Millimeters(11), Dir: decad.Along})
+	out, err := decad.WebPath(part, s, []sketch.Entity{arc}, units.Millimeters(2),
+		decad.Distance{D: units.Millimeters(11), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, []*decad.Body{out}, doc.Bodies(), "the part and the rib tool leave the document")
 	operations := doc.OperationHistory().Operations()
@@ -66,8 +66,8 @@ func TestRibArcOverrunLengthensEachEndByArcLength(t *testing.T) {
 	// A quarter circle of radius 10 from angle 0, lengthened 5 mm each end: a
 	// 5π + 10 mm run, thickened by 2 and standing 10 mm.
 	s, arc := ribArcSketch(t, 20, 20, 30, 20, 20, 30)
-	out, err := decad.WebPath(t.Context(), part, s, []sketch.Entity{arc}, units.Millimeters(2),
-		decad.Distance{D: units.Millimeters(11), Dir: decad.Along}, decad.WithRibOverrun(units.Millimeters(5)))
+	out, err := decad.WebPath(part, s, []sketch.Entity{arc}, units.Millimeters(2),
+		decad.Distance{D: units.Millimeters(11), Dir: decad.Along}).Overrun(units.Millimeters(5)).Do(t.Context())
 	require.NoError(t, err)
 	length := math.Pi/2*10 + 2*5
 	decadtest.MeasuresVolume(t, out, units.CubicMillimeters(ribPartVolume+length*2*10), decadtest.WithinRel(units.Scalar(1e-3)))
@@ -92,7 +92,7 @@ func TestRibArcRefusals(t *testing.T) {
 			t.Parallel()
 			doc, part := ribPart(t)
 			s, arc := ribArcSketch(t, 20, 20, 30, 20, 10, 20)
-			_, err := decad.WebPath(t.Context(), part, s, []sketch.Entity{arc}, tc.thickness, extent)
+			_, err := decad.WebPath(part, s, []sketch.Entity{arc}, tc.thickness, extent).Do(t.Context())
 			require.ErrorIs(t, err, tc.want)
 			require.Equal(t, []*decad.Body{part}, doc.Bodies(), "a refused rib leaves the part live and alone")
 		})
@@ -102,7 +102,7 @@ func TestRibArcRefusals(t *testing.T) {
 		doc, part := ribPart(t)
 		s, _ := ribArcSketch(t, 20, 20, 30, 20, 10, 20)
 		_, foreign := ribArcSketch(t, 20, 20, 30, 20, 10, 20)
-		_, err := decad.WebPath(t.Context(), part, s, []sketch.Entity{foreign}, units.Millimeters(2), extent)
+		_, err := decad.WebPath(part, s, []sketch.Entity{foreign}, units.Millimeters(2), extent).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrDegenerate)
 		require.Equal(t, []*decad.Body{part}, doc.Bodies())
 	})
@@ -110,14 +110,14 @@ func TestRibArcRefusals(t *testing.T) {
 		t.Parallel()
 		_, part := ribPart(t)
 		s, _ := ribArcSketch(t, 20, 20, 30, 20, 10, 20)
-		_, err := decad.WebPath(t.Context(), part, s, []sketch.Entity{(*sketch.Arc)(nil)}, units.Millimeters(2), extent)
+		_, err := decad.WebPath(part, s, []sketch.Entity{(*sketch.Arc)(nil)}, units.Millimeters(2), extent).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrDegenerate)
 	})
 	t.Run("an arc outside the body", func(t *testing.T) {
 		t.Parallel()
 		_, part := ribPart(t)
 		s, arc := ribArcSketch(t, 80, 80, 90, 80, 70, 80)
-		_, err := decad.WebPath(t.Context(), part, s, []sketch.Entity{arc}, units.Millimeters(2), extent)
+		_, err := decad.WebPath(part, s, []sketch.Entity{arc}, units.Millimeters(2), extent).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrDegenerate)
 	})
 }

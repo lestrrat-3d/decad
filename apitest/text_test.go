@@ -190,7 +190,7 @@ func TestTextProfilesEmbossesAndEngraves(t *testing.T) {
 		area += p.Area
 	}
 	require.Positive(t, area)
-	raised, err := decad.Emboss(t.Context(), plate, s, profiles, embossFace(true, plate), decad.EmbossRaised, units.Millimeters(2))
+	raised, err := decad.Emboss(plate, s, profiles, embossFace(true, plate), decad.EmbossRaised, units.Millimeters(2)).Do(t.Context())
 	require.NoError(t, err)
 	decadtest.MeasuresVolume(t, raised, units.CubicMillimeters(60*30*10+2*area), decadtest.WithinRel(units.Scalar(1e-6)))
 	// An engraving of the same letters in a second plate removes the same volume.
@@ -200,7 +200,7 @@ func TestTextProfilesEmbossesAndEngraves(t *testing.T) {
 	require.NoError(t, err)
 	s2, profiles2, err := decad.TextProfiles(t.Context(), w2, plane2, spec)
 	require.NoError(t, err)
-	engraved, err := decad.Emboss(t.Context(), plate2, s2, profiles2, embossFace(true, plate2), decad.EmbossEngraved, units.Millimeters(2))
+	engraved, err := decad.Emboss(plate2, s2, profiles2, embossFace(true, plate2), decad.EmbossEngraved, units.Millimeters(2)).Do(t.Context())
 	require.NoError(t, err)
 	decadtest.MeasuresVolume(t, engraved, units.CubicMillimeters(60*30*10-2*area), decadtest.WithinRel(units.Scalar(1e-6)))
 }

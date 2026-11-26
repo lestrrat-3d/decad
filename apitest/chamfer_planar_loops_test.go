@@ -45,7 +45,7 @@ func roundedTrianglePlate(t *testing.T, doc *decad.Document, world *sketch.World
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	require.Len(t, s.Profiles(), 1)
-	plate, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(3), Dir: decad.Along})
+	plate, err := decad.Extrude(doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(3), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	return plate
 }
@@ -118,7 +118,7 @@ func TestChamferTangentLineArcOutline(t *testing.T) {
 		plate := roundedTrianglePlate(t, doc, world, plateOrbit, plateRadius)
 		q, n := planeLoopEdges(t, plate, z, func(l *decad.Loop, _ []*decad.Edge) bool { return l.IsOuter() })
 		require.Equal(t, 6, n)
-		out, err := decad.Chamfer(t.Context(), plate, q.Exactly(n), units.Millimeters(0.5))
+		out, err := decad.Chamfer(plate, q.Exactly(n), units.Millimeters(0.5)).Do(t.Context())
 		require.NoError(t, err)
 		requireChamferRemoved(t, plate, out, roundedPlateOutline())
 	}
@@ -135,7 +135,7 @@ func pinBody(t *testing.T, doc *decad.Document, world *sketch.World, x, z, diame
 	s.CreateCircle(c, diameter/2)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	b, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(length), Dir: decad.Along})
+	b, err := decad.Extrude(doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(length), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	return b
 }
@@ -148,14 +148,14 @@ func TestChamferTangentOutlineAfterPinUnion(t *testing.T) {
 	doc, world := decad.New(), sketch.NewWorld()
 	plate := roundedTrianglePlate(t, doc, world, plateOrbit, plateRadius)
 	pin := pinBody(t, doc, world, plateOrbit, -9, 7.5, 9+1.5)
-	pins, err := decad.PatternCopies(t.Context(), pin, decad.CircularPattern{Center: r3.NewVec(0, 0, 0), Axis: r3.NewVec(0, 0, 1), Count: 3})
+	pins, err := decad.PatternCopies(pin, decad.CircularPattern{Center: r3.NewVec(0, 0, 0), Axis: r3.NewVec(0, 0, 1), Count: 3}).Do(t.Context())
 	require.NoError(t, err)
-	carrier, err := decad.Union(t.Context(), plate, append([]*decad.Body{pin}, pins...)...)
+	carrier, err := decad.Union(append([]*decad.Body{plate}, append([]*decad.Body{pin}, pins...)...)...).Do(t.Context())
 	require.NoError(t, err)
 	for _, z := range []float64{0, 3} {
 		q, n := planeLoopEdges(t, carrier, z, func(l *decad.Loop, _ []*decad.Edge) bool { return l.IsOuter() })
 		require.Equal(t, 6, n)
-		out, err := decad.Chamfer(t.Context(), carrier, q.Exactly(n), units.Millimeters(0.5))
+		out, err := decad.Chamfer(carrier, q.Exactly(n), units.Millimeters(0.5)).Do(t.Context())
 		require.NoError(t, err)
 		requireChamferRemoved(t, carrier, out, roundedPlateOutline())
 		carrier = out
@@ -196,7 +196,7 @@ func windowedFrame(t *testing.T, doc *decad.Document, world *sketch.World) *deca
 		}
 	}
 	require.NotNil(t, profile)
-	frame, err := decad.Extrude(t.Context(), doc, s, profile, decad.Distance{D: units.Millimeters(3), Dir: decad.Along})
+	frame, err := decad.Extrude(doc, s, profile, decad.Distance{D: units.Millimeters(3), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	return frame
 }
@@ -215,7 +215,7 @@ func TestChamferWindowLoops(t *testing.T) {
 	cover := windowedFrame(t, doc, world)
 	q, n := planeLoopEdges(t, cover, 0, func(l *decad.Loop, e []*decad.Edge) bool { return !l.IsOuter() && len(e) > 1 })
 	require.Equal(t, 12, n)
-	out, err := decad.Chamfer(t.Context(), cover, q.Exactly(n), units.Millimeters(0.5))
+	out, err := decad.Chamfer(cover, q.Exactly(n), units.Millimeters(0.5)).Do(t.Context())
 	require.NoError(t, err)
 	requireChamferRemoved(t, cover, out, windowLoopsLength())
 }
@@ -241,9 +241,9 @@ func TestChamferWindowLoopsAfterBossUnion(t *testing.T) {
 		}
 	}
 	require.NotNil(t, ring)
-	boss, err := decad.Extrude(t.Context(), doc, s, ring, decad.Distance{D: units.Millimeters(8), Dir: decad.Along})
+	boss, err := decad.Extrude(doc, s, ring, decad.Distance{D: units.Millimeters(8), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
-	cover, err := decad.Union(t.Context(), frame, boss)
+	cover, err := decad.Union(frame, boss).Do(t.Context())
 	require.NoError(t, err)
 	// The bevel on the cap face z=0 takes the rim and the bore with the windows, as one selection.
 	for _, step := range []struct {
@@ -255,7 +255,7 @@ func TestChamferWindowLoopsAfterBossUnion(t *testing.T) {
 		{3, func(l *decad.Loop, e []*decad.Edge) bool { return !l.IsOuter() && len(e) > 1 }, windowLoopsLength()},
 	} {
 		q, n := planeLoopEdges(t, cover, step.z, step.keep)
-		out, err := decad.Chamfer(t.Context(), cover, q.Exactly(n), units.Millimeters(0.5))
+		out, err := decad.Chamfer(cover, q.Exactly(n), units.Millimeters(0.5)).Do(t.Context())
 		require.NoError(t, err, "z=%g", step.z)
 		requireChamferRemoved(t, cover, out, step.run)
 		// The cutters are held exactly to within a few microns, so cutting the windows adds at most a few microns to
@@ -313,9 +313,9 @@ func windowedCoverWithBoss(t *testing.T) *decad.Body {
 		}
 	}
 	require.NotNil(t, ring)
-	boss, err := decad.Extrude(t.Context(), doc, s, ring, decad.Distance{D: units.Millimeters(8), Dir: decad.Along})
+	boss, err := decad.Extrude(doc, s, ring, decad.Distance{D: units.Millimeters(8), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
-	cover, err := decad.Union(t.Context(), frame, boss)
+	cover, err := decad.Union(frame, boss).Do(t.Context())
 	require.NoError(t, err)
 	return cover
 }
@@ -328,7 +328,7 @@ func TestChamferWindowLoopsRefusals(t *testing.T) {
 		t.Parallel()
 		cover := windowedCoverWithBoss(t)
 		q, n := planeLoopEdges(t, cover, 0, func(l *decad.Loop, e []*decad.Edge) bool { return !l.IsOuter() && len(e) > 1 })
-		_, err := decad.Chamfer(t.Context(), cover, q.Exactly(n), units.Millimeters(3))
+		_, err := decad.Chamfer(cover, q.Exactly(n), units.Millimeters(3)).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 	})
 	t.Run("part of a loop", func(t *testing.T) {
@@ -336,7 +336,7 @@ func TestChamferWindowLoopsRefusals(t *testing.T) {
 		cover := windowedCoverWithBoss(t)
 		q, n := planeLoopEdgesUpTo(t, cover, 0, func(l *decad.Loop, e []*decad.Edge) bool { return !l.IsOuter() && len(e) > 1 }, 11)
 		require.Equal(t, 11, n)
-		_, err := decad.Chamfer(t.Context(), cover, q.Exactly(n), units.Millimeters(0.5))
+		_, err := decad.Chamfer(cover, q.Exactly(n), units.Millimeters(0.5)).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 	})
 }

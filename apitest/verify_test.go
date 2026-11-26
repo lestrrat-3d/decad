@@ -18,7 +18,7 @@ func extrudePlate(t *testing.T) (*decad.Document, *decad.Body) {
 	t.Helper()
 	s, p := plateSketch(t)
 	doc := decad.New()
-	body, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	body, err := decad.Extrude(doc, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	return doc, body
 }
@@ -105,7 +105,7 @@ func TestVerifyReportForBody(t *testing.T) {
 	// membership nor liveness.
 	shift, err := r3.Translation(r3.NewVec(500, 0, 0))
 	require.NoError(t, err)
-	_, err = decad.Transform(t.Context(), body, shift)
+	_, err = decad.Transform(body, shift).Do(t.Context())
 	require.NoError(t, err)
 	stillResolves, err := report.ForBody(body)
 	require.NoError(t, err)
@@ -252,11 +252,11 @@ func TestVerifyDisjointPairIsSound(t *testing.T) {
 	doc, body := extrudePlate(t)
 	shift, err := r3.Translation(r3.NewVec(500, 0, 0))
 	require.NoError(t, err)
-	_, err = decad.Transform(t.Context(), body, shift)
+	_, err = decad.Transform(body, shift).Do(t.Context())
 	require.NoError(t, err)
 
 	s, p := plateSketch(t)
-	_, err = decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	_, err = decad.Extrude(doc, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 
 	// Two proven solids whose boxes are far apart: proven disjoint, and the
@@ -275,11 +275,11 @@ func TestVerifyTouchingBoxesAreDisjoint(t *testing.T) {
 	doc, body := extrudePlate(t)
 	shift, err := r3.Translation(r3.NewVec(100, 0, 0))
 	require.NoError(t, err)
-	_, err = decad.Transform(t.Context(), body, shift)
+	_, err = decad.Transform(body, shift).Do(t.Context())
 	require.NoError(t, err)
 
 	s, p := plateSketch(t)
-	_, err = decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	_, err = decad.Extrude(doc, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 
 	report, err := doc.Verify(t.Context())
@@ -291,7 +291,7 @@ func TestVerifyCoincidentPairIsInterfering(t *testing.T) {
 	t.Parallel()
 	doc, _ := extrudePlate(t)
 	s, p := plateSketch(t)
-	_, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	_, err := decad.Extrude(doc, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 
 	// Two coincident analytic plates have an exact set-identity certificate,
@@ -367,10 +367,10 @@ func TestVerifyClearancesMeasureBoxProvenPair(t *testing.T) {
 	doc, body := extrudePlate(t)
 	shift, err := r3.Translation(r3.NewVec(500, 0, 0))
 	require.NoError(t, err)
-	_, err = decad.Transform(t.Context(), body, shift)
+	_, err = decad.Transform(body, shift).Do(t.Context())
 	require.NoError(t, err)
 	s, p := plateSketch(t)
-	_, err = decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	_, err = decad.Extrude(doc, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 
 	// A box-proven pair is already partition-decided, but its row still
@@ -548,7 +548,7 @@ func TestVerifyCoversLiveBodiesOnly(t *testing.T) {
 	doc, body := extrudePlate(t)
 	shift, err := r3.Translation(r3.NewVec(500, 0, 0))
 	require.NoError(t, err)
-	placed, err := decad.Transform(t.Context(), body, shift)
+	placed, err := decad.Transform(body, shift).Do(t.Context())
 	require.NoError(t, err)
 
 	// The original was retired by the placement: it stays readable but it
@@ -609,7 +609,7 @@ func TestVerifyPlateWithHole(t *testing.T) {
 	require.NotNil(t, prof)
 
 	doc := decad.New()
-	_, err = decad.Extrude(t.Context(), doc, s, prof, decad.Distance{D: units.Millimeters(8), Dir: decad.Along})
+	_, err = decad.Extrude(doc, s, prof, decad.Distance{D: units.Millimeters(8), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 
 	report, err := doc.Verify(t.Context())
@@ -855,7 +855,7 @@ func TestVerifyDiagnosticsInterference(t *testing.T) {
 	// Two coincident analytic plates overlap by an exact set-identity volume.
 	doc, _ := extrudePlate(t)
 	s, p := plateSketch(t)
-	_, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	_, err := decad.Extrude(doc, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 
 	report, err := doc.Verify(t.Context())
@@ -892,14 +892,14 @@ func coplanarContactPairDocument(t *testing.T) *decad.Document {
 	p := s.Profiles()[0]
 
 	doc := decad.New(decad.ExactOnly())
-	_, err = decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	_, err = decad.Extrude(doc, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
-	box2, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	box2, err := decad.Extrude(doc, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 
 	shift, err := r3.Translation(r3.NewVec(0, 5, 5))
 	require.NoError(t, err)
-	_, err = decad.Transform(t.Context(), roundTrip(t, box2), shift)
+	_, err = decad.Transform(roundTrip(t, box2), shift).Do(t.Context())
 	require.NoError(t, err)
 	return doc
 }
@@ -919,13 +919,13 @@ func TestVerifyReadsTheCoplanarPairAsInterferingWithAGapTolerance(t *testing.T) 
 	require.NoError(t, err)
 	p := s.Profiles()[0]
 	doc := decad.New()
-	_, err = decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	_, err = decad.Extrude(doc, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
-	box2, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	box2, err := decad.Extrude(doc, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	shift, err := r3.Translation(r3.NewVec(0, 5, 5))
 	require.NoError(t, err)
-	_, err = decad.Transform(t.Context(), box2, shift)
+	_, err = decad.Transform(box2, shift).Do(t.Context())
 	require.NoError(t, err)
 
 	report, err := doc.Verify(t.Context())
@@ -1101,16 +1101,16 @@ func TestVerifyDiagnosticsUndecidedClearance(t *testing.T) {
 	// clearance kernel stages the cup payload, so the requested gap is
 	// unmeasured — DiagUndecidedClearance, never an unsupported-pair code.
 	doc, box1 := shellBox(t)
-	cup1, err := decad.Shell(t.Context(), box1, topCap(box1), units.Millimeters(5))
+	cup1, err := decad.Shell(box1, topCap(box1), units.Millimeters(5)).Do(t.Context())
 	require.NoError(t, err)
 	far, err := r3.Translation(r3.NewVec(500, 0, 0))
 	require.NoError(t, err)
-	_, err = decad.Transform(t.Context(), cup1, far)
+	_, err = decad.Transform(cup1, far).Do(t.Context())
 	require.NoError(t, err)
 	s2, p2 := plateSketch(t)
-	box2, err := decad.Extrude(t.Context(), doc, s2, p2, decad.Distance{D: units.Millimeters(shellBoxHeight), Dir: decad.Along})
+	box2, err := decad.Extrude(doc, s2, p2, decad.Distance{D: units.Millimeters(shellBoxHeight), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
-	_, err = decad.Shell(t.Context(), box2, topCap(box2), units.Millimeters(5))
+	_, err = decad.Shell(box2, topCap(box2), units.Millimeters(5)).Do(t.Context())
 	require.NoError(t, err)
 
 	// No clearance asked: the box test alone proves the pair apart, so neither
@@ -1159,7 +1159,7 @@ func TestVerifyDiagnosticsSectionDeltaPrismReadsItsOwnGateDiameter(t *testing.T)
 	lo, hi := 2-shift, 8-shift
 	b := placedFar(t, boxBody(t, doc, lo, 2, hi, 8, 10), shift)
 
-	got, err := decad.Union(t.Context(), a, b)
+	got, err := decad.Union(a, b).Do(t.Context())
 	require.NoError(t, err)
 	require.False(t, tookMeshPath(got), "the analytic reduction must own this pair")
 
@@ -1212,7 +1212,7 @@ func allPlanarBoolean(t *testing.T, scale float64) (*decad.Document, *decad.Body
 	doc := decad.New()
 	a := boxBody(t, doc, 0, 0, 10*scale, 10*scale, 10*scale)
 	b := translated(t, boxBody(t, doc, 0, 0, 10*scale, 10*scale, 10*scale), 5*scale, 5*scale, 5*scale)
-	body, err := decad.Union(t.Context(), a, b)
+	body, err := decad.Union(a, b).Do(t.Context())
 	require.NoError(t, err)
 	return doc, body
 }
@@ -1270,7 +1270,7 @@ func TestVerifyToleranceGateTracksScaleAndPlacement(t *testing.T) {
 			require.NoError(t, err)
 			placement, err := rotation.Then(translation)
 			require.NoError(t, err)
-			placed, err := decad.Transform(t.Context(), body, placement)
+			placed, err := decad.Transform(body, placement).Do(t.Context())
 			require.NoError(t, err)
 
 			report, err := doc.Verify(t.Context())
@@ -1329,13 +1329,13 @@ func computedToFacePin(t *testing.T) (*decad.Document, *decad.Body, float64) {
 	require.NotNil(t, pinProfile)
 
 	doc := decad.New()
-	plate, err := decad.Extrude(t.Context(), doc, s, plateProfile, decad.Distance{D: units.Millimeters(1e6), Dir: decad.Along})
+	plate, err := decad.Extrude(doc, s, plateProfile, decad.Distance{D: units.Millimeters(1e6), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
-	pin, err := decad.Extrude(t.Context(), doc, s, pinProfile, decad.ToFace{
+	pin, err := decad.Extrude(doc, s, pinProfile, decad.ToFace{
 		Body:   plate,
 		Face:   capEndFace(plate),
 		Offset: units.Millimeters(-0.001),
-	})
+	}).Do(t.Context())
 	require.NoError(t, err)
 
 	points := make([]r3.Vec, 0, len(pin.Vertices()))
@@ -1408,14 +1408,14 @@ func TestVerifyComputedToFaceDiameterThreshold(t *testing.T) {
 
 	t.Run("cup", func(t *testing.T) {
 		doc, pin, heldDiameter := computedToFacePin(t)
-		cup, err := decad.Shell(t.Context(), pin, topCap(pin), units.Millimeters(1))
+		cup, err := decad.Shell(pin, topCap(pin), units.Millimeters(1)).Do(t.Context())
 		require.NoError(t, err)
 		requireComputedToFaceDiameterThresholds(t, doc, cup, heldDiameter)
 	})
 
 	t.Run("cap blend", func(t *testing.T) {
 		doc, pin, heldDiameter := computedToFacePin(t)
-		chamfered, err := decad.Chamfer(t.Context(), pin, capLoopEdges(pin), units.Millimeters(1))
+		chamfered, err := decad.Chamfer(pin, capLoopEdges(pin), units.Millimeters(1)).Do(t.Context())
 		require.NoError(t, err)
 		requireComputedToFaceDiameterThresholds(t, doc, chamfered, heldDiameter)
 	})
@@ -1430,7 +1430,7 @@ func TestVerifyComputedToFaceDiameterThreshold(t *testing.T) {
 func TestVerifyCupWithinToleranceIsSound(t *testing.T) {
 	t.Parallel()
 	doc, box := shellBox(t)
-	cup, err := decad.Shell(t.Context(), box, topCap(box), units.Millimeters(5))
+	cup, err := decad.Shell(box, topCap(box), units.Millimeters(5)).Do(t.Context())
 	require.NoError(t, err)
 
 	report, err := doc.Verify(t.Context())
@@ -1469,7 +1469,7 @@ func TestVerifyCupWithinToleranceIsSound(t *testing.T) {
 func TestVerifyCapBlendChamferAreaVolumeCentroidAllPass(t *testing.T) {
 	t.Parallel()
 	doc, box := capBlendBox(t)
-	_, err := decad.Chamfer(t.Context(), box, capLoopEdges(box), units.Millimeters(5))
+	_, err := decad.Chamfer(box, capLoopEdges(box), units.Millimeters(5)).Do(t.Context())
 	require.NoError(t, err)
 
 	report, err := doc.Verify(t.Context())

@@ -519,7 +519,7 @@ func runRevolveCase(t *testing.T, su setup, ap axisPlacement, sw sweep, xf r3.Tr
 	require.NotEmpty(t, profiles, "%s produced no profile", su.name)
 
 	doc := decad.New()
-	body, err := decad.Revolve(t.Context(), doc, s, profiles[0], ap.sketchLine(), sw.ext)
+	body, err := decad.Revolve(doc, s, profiles[0], ap.sketchLine(), sw.ext).Do(t.Context())
 	if err != nil {
 		// A refusal is accepted ONLY as the strict admission gate's own named
 		// outcome — never any other error masquerading as an expected one.
@@ -551,7 +551,7 @@ func runRevolveCase(t *testing.T, su setup, ap axisPlacement, sw sweep, xf r3.Tr
 	cen0, err := body.Centroid()
 	require.NoError(t, err)
 
-	placed, err := decad.Transform(t.Context(), body, xf)
+	placed, err := decad.Transform(body, xf).Do(t.Context())
 	require.NoError(t, err)
 	checkRevolveBody(t, placed, su, ap, xf, sw)
 

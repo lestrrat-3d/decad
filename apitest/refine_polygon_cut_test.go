@@ -16,7 +16,7 @@ import (
 func lShapedTool(t *testing.T, doc *decad.Document) *decad.Body {
 	t.Helper()
 	s, profile := polygonSketch(t, [][2]float64{{-1, -1}, {4, -1}, {4, 2}, {2, 2}, {2, 6}, {-1, 6}})
-	tool, err := decad.Extrude(t.Context(), doc, s, profile, decad.Distance{D: units.Millimeters(12), Dir: decad.Along})
+	tool, err := decad.Extrude(doc, s, profile, decad.Distance{D: units.Millimeters(12), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	return placedAlongZ(t, tool, -1)
 }
@@ -33,12 +33,12 @@ func TestRefinePolygonCutChain(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
 	block := slab(t, doc, 0, 0, 20, 10, 0, 10, r3.Identity())
-	notched, err := decad.Cut(t.Context(), block, lShapedTool(t, doc))
+	notched, err := decad.Cut(block, lShapedTool(t, doc)).Do(t.Context())
 	require.NoError(t, err)
 	bore := placedAlongZ(t, coaxialSection(t, doc, 12, 5, 12, 2), -1)
-	drilled, err := decad.Cut(t.Context(), notched, bore)
+	drilled, err := decad.Cut(notched, bore).Do(t.Context())
 	require.NoError(t, err)
-	refined, err := decad.Refine(t.Context(), drilled, units.Millimeters(0.01))
+	refined, err := decad.Refine(drilled, units.Millimeters(0.01)).Do(t.Context())
 	require.NoError(t, err)
 	_, err = refined.Tessellate(t.Context(), units.Millimeters(0.01))
 	require.NoError(t, err)
@@ -56,14 +56,14 @@ func crossingRod(t *testing.T, doc *decad.Document, x0, cy, cz, r, length float6
 	s.CreateCircle(c, r)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(length), Dir: decad.Along})
+	body, err := decad.Extrude(doc, s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(length), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	box, err := body.Bounds()
 	require.NoError(t, err)
 	move, err := r3.Translation(r3.Vec{X: x0 - box.Min.X, Y: cy, Z: cz})
 	require.NoError(t, err)
-	placed, err := decad.Transform(t.Context(), body, move)
+	placed, err := decad.Transform(body, move).Do(t.Context())
 	require.NoError(t, err)
 	return placed
 }
@@ -82,7 +82,7 @@ func TestCutChordsByTheCrossing(t *testing.T) {
 	turn, err := r3.Rotation(r3.Vec{Z: 1}, units.Degrees(45))
 	require.NoError(t, err)
 	bar := slab(t, doc, 0, -6, 300, 6, 0, 12, turn)
-	drilled, err := decad.Cut(t.Context(), bar, crossingRod(t, doc, 0, 100, 6, 3, 220))
+	drilled, err := decad.Cut(bar, crossingRod(t, doc, 0, 100, 6, 3, 220)).Do(t.Context())
 	require.NoError(t, err)
 	mesh, err := drilled.Tessellate(t.Context(), units.Millimeters(1))
 	require.NoError(t, err)

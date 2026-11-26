@@ -33,7 +33,7 @@ func twoHolePlate(t *testing.T) *decad.Body {
 		}
 	}
 	require.NotNil(t, prof)
-	body, err := decad.Extrude(t.Context(), decad.New(), s, prof, decad.Distance{D: units.Millimeters(shellBoxHeight), Dir: decad.Along})
+	body, err := decad.Extrude(decad.New(), s, prof, decad.Distance{D: units.Millimeters(shellBoxHeight), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -85,7 +85,7 @@ func TestShellBothCapsHoledBands(t *testing.T) {
 		t.Run(tt.sense.String(), func(t *testing.T) {
 			t.Parallel()
 			box := twoHolePlate(t)
-			body, err := decad.Shell(t.Context(), box, bothCaps(), units.Millimeters(tt.th), decad.WithShellSense(tt.sense))
+			body, err := decad.Shell(box, bothCaps(), units.Millimeters(tt.th)).Sense(tt.sense).Do(t.Context())
 			require.NoError(t, err)
 			require.True(t, body.IsSolid())
 			requireManifold(t, body)
@@ -130,7 +130,7 @@ func TestShellBothCapsHoledBands(t *testing.T) {
 
 			rotation, err := r3.Rotation(r3.NewVec(1, 2, 3), units.Degrees(37))
 			require.NoError(t, err)
-			placed, err := decad.Transform(t.Context(), body, rotation)
+			placed, err := decad.Transform(body, rotation).Do(t.Context())
 			require.NoError(t, err)
 			require.Len(t, placed.Lumps(), 3)
 			require.Len(t, placed.Faces(), len(body.Faces()))
@@ -149,7 +149,7 @@ func TestShellBothCapsHoledBandsVerify(t *testing.T) {
 	t.Parallel()
 	box := twoHolePlate(t)
 	doc := box.Document()
-	body, err := decad.Shell(t.Context(), box, bothCaps(), units.Millimeters(3))
+	body, err := decad.Shell(box, bothCaps(), units.Millimeters(3)).Do(t.Context())
 	require.NoError(t, err)
 	require.Len(t, body.Lumps(), 3)
 	report, err := doc.Verify(t.Context())
@@ -171,7 +171,7 @@ func TestShellCupTwoHolesThroughStack(t *testing.T) {
 	const th = 3.0
 	h := shellBoxHeight
 	box := twoHolePlate(t)
-	body, err := decad.Shell(t.Context(), box, topCap(box), units.Millimeters(th))
+	body, err := decad.Shell(box, topCap(box), units.Millimeters(th)).Do(t.Context())
 	require.NoError(t, err)
 	requireManifold(t, body)
 	require.Len(t, body.Lumps(), 1, `every band hangs off the one floor`)

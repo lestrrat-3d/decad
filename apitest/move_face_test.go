@@ -30,7 +30,7 @@ func TestMoveFacePushesAndPullsFacesOfABox(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 			doc, block := blockSolid(t, r3.NewVec(0, 0, 0), r3.NewVec(10, 8, 6))
-			out, err := decad.MoveFace(t.Context(), block, decad.Faces(decad.Facing(tc.facing)), units.Millimeters(tc.distance))
+			out, err := decad.MoveFace(block, decad.Faces(decad.Facing(tc.facing)), units.Millimeters(tc.distance)).Do(t.Context())
 			require.NoError(t, err)
 			require.Equal(t, []*decad.Body{out}, doc.Bodies())
 			operations := doc.OperationHistory().Operations()
@@ -51,7 +51,7 @@ func TestMoveFaceOnAnLShape(t *testing.T) {
 	t.Parallel()
 	left := decad.Faces(decad.Facing(r3.NewVec(-1, 0, 0))) // the one face at x = 0, over y 0..4
 	volumeOf := func(distance float64) (decad.Measurement, error) {
-		out, err := decad.MoveFace(t.Context(), lPrismSolid(t), left, units.Millimeters(distance))
+		out, err := decad.MoveFace(lPrismSolid(t), left, units.Millimeters(distance)).Do(t.Context())
 		if err != nil {
 			return decad.Measurement{}, err
 		}
@@ -66,7 +66,7 @@ func TestMoveFaceOnAnLShape(t *testing.T) {
 	_, err := volumeOf(-3)
 	require.ErrorIs(t, err, decad.ErrDegenerate)
 	// The widened arm holds a point beyond the old face.
-	out, err := decad.MoveFace(t.Context(), lPrismSolid(t), left, units.Millimeters(1))
+	out, err := decad.MoveFace(lPrismSolid(t), left, units.Millimeters(1)).Do(t.Context())
 	require.NoError(t, err)
 	inside, err := out.LocatePoint(t.Context(), r3.NewVec(-0.5, 3, 1), units.Millimeters(0.01))
 	require.NoError(t, err)
@@ -78,7 +78,7 @@ func TestMoveFaceRefusals(t *testing.T) {
 	doc, block := blockSolid(t, r3.NewVec(0, 0, 0), r3.NewVec(10, 8, 6))
 	top := decad.Faces(decad.Facing(r3.NewVec(0, 0, 1)))
 	move := func(sel decad.FaceSelector, d units.Value) error {
-		_, err := decad.MoveFace(t.Context(), block, sel, d)
+		_, err := decad.MoveFace(block, sel, d).Do(t.Context())
 		return err
 	}
 	require.ErrorIs(t, move(top, units.Millimeters(0)), decad.ErrDegenerate)
@@ -88,11 +88,11 @@ func TestMoveFaceRefusals(t *testing.T) {
 	require.ErrorIs(t, move(top, units.Millimeters(math.NaN())), decad.ErrNotFinite)
 	require.ErrorIs(t, move(decad.Faces(decad.Planar()), units.Millimeters(1)), decad.ErrDegenerate, "six faces are not one")
 	require.ErrorIs(t, move(nil, units.Millimeters(1)), decad.ErrDegenerate)
-	_, err := decad.MoveFace(nil, block, top, units.Millimeters(1)) //nolint:staticcheck // a nil context is the case under test
+	_, err := decad.MoveFace(block, top, units.Millimeters(1)).Do(nil) //nolint:staticcheck // a nil context is the case under test
 	require.ErrorIs(t, err, decad.ErrDegenerate)
 	// A body that is not a faceted orthogonal solid keeps its refusal.
 	prism := boxBody(t, doc, 30, 0, 40, 8, 6)
-	_, err = decad.MoveFace(t.Context(), prism, decad.Faces(decad.Facing(r3.NewVec(0, 0, 1))), units.Millimeters(1))
+	_, err = decad.MoveFace(prism, decad.Faces(decad.Facing(r3.NewVec(0, 0, 1))), units.Millimeters(1)).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.Len(t, doc.Bodies(), 2, "every refusal leaves the document alone")
 }

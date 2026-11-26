@@ -14,8 +14,8 @@ import (
 )
 
 // This file is agent-docs/surface-design.md's T1/T9/T13-shaped public-surface tests
-// for WithSurfaceResult() on Extrude and Table X's sheet-operand refusals.
-// WithSurfaceResult() on Revolve, Sweep and Loft each have their own file,
+// for SurfaceResult on Extrude and Table X's sheet-operand refusals.
+// SurfaceResult on Revolve, Sweep and Loft each have their own file,
 // surface_revolve_test.go, surface_sweep_test.go and surface_loft_test.go.
 // Every fixture reuses plateSketch/regularNGonSketch
 // (extrude_test.go/extrude_bounds_test.go) and annularSketch/uAxis/
@@ -64,7 +64,7 @@ func TestSurfaceExtrudePlateIsASheet(t *testing.T) {
 	t.Parallel()
 	s, p := plateSketch(t)
 	doc := decad.New()
-	sheet, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along}, decad.WithSurfaceResult())
+	sheet, err := decad.Extrude(doc, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).SurfaceResult().Do(t.Context())
 	require.NoError(t, err)
 
 	require.Equal(t, decad.BodySheet, sheet.Kind())
@@ -110,7 +110,7 @@ func TestSurfaceExtrudePlateIsASheet(t *testing.T) {
 	// Bounds (§4.3): unchanged from what the same profile builds as a solid,
 	// value AND bound.
 	solidDoc := decad.New()
-	solid, err := decad.Extrude(t.Context(), solidDoc, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	solid, err := decad.Extrude(solidDoc, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	solidBox, err := solid.Bounds()
 	require.NoError(t, err)
@@ -133,7 +133,7 @@ func TestSurfaceExtrudeAreaComposesCapSubtraction(t *testing.T) {
 
 	s, p := regularNGonSketch(t, n, r)
 	solidDoc := decad.New()
-	solid, err := decad.Extrude(t.Context(), solidDoc, s, p, decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
+	solid, err := decad.Extrude(solidDoc, s, p, decad.Distance{D: units.Millimeters(h), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	solidArea, err := solid.Area()
 	require.NoError(t, err)
@@ -149,7 +149,7 @@ func TestSurfaceExtrudeAreaComposesCapSubtraction(t *testing.T) {
 
 	s2, p2 := regularNGonSketch(t, n, r)
 	sheetDoc := decad.New()
-	sheet, err := decad.Extrude(t.Context(), sheetDoc, s2, p2, decad.Distance{D: units.Millimeters(h), Dir: decad.Along}, decad.WithSurfaceResult())
+	sheet, err := decad.Extrude(sheetDoc, s2, p2, decad.Distance{D: units.Millimeters(h), Dir: decad.Along}).SurfaceResult().Do(t.Context())
 	require.NoError(t, err)
 	sheetArea, err := sheet.Area()
 	require.NoError(t, err)
@@ -177,7 +177,7 @@ func TestSurfaceExtrudeRolesResolveThroughFaceCreatedBy(t *testing.T) {
 	t.Parallel()
 	s, p := rectWithHoleSketch(t)
 	doc := decad.New()
-	sheet, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(8), Dir: decad.Along}, decad.WithSurfaceResult())
+	sheet, err := decad.Extrude(doc, s, p, decad.Distance{D: units.Millimeters(8), Dir: decad.Along}).SurfaceResult().Do(t.Context())
 	require.NoError(t, err)
 
 	faces := sheet.Faces()
@@ -203,7 +203,7 @@ func TestSurfaceExtrudeStaysASheetThroughPlacement(t *testing.T) {
 	t.Parallel()
 	s, p := plateSketch(t)
 	doc := decad.New()
-	sheet, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along}, decad.WithSurfaceResult())
+	sheet, err := decad.Extrude(doc, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).SurfaceResult().Do(t.Context())
 	require.NoError(t, err)
 	sheetBox, err := sheet.Bounds()
 	require.NoError(t, err)
@@ -212,7 +212,7 @@ func TestSurfaceExtrudeStaysASheetThroughPlacement(t *testing.T) {
 	motion, err := r3.Translation(offset)
 	require.NoError(t, err)
 
-	placed, err := decad.Transform(t.Context(), sheet, motion)
+	placed, err := decad.Transform(sheet, motion).Do(t.Context())
 	require.NoError(t, err)
 	requireSheetWithFreeEdges(t, placed)
 	placedBox, err := placed.Bounds()
@@ -220,13 +220,13 @@ func TestSurfaceExtrudeStaysASheetThroughPlacement(t *testing.T) {
 	require.Equal(t, sheetBox.Min.Add(offset), placedBox.Min)
 	require.Equal(t, sheetBox.Max.Add(offset), placedBox.Max)
 
-	dup, err := decad.Copy(t.Context(), placed)
+	dup, err := decad.Copy(placed).Do(t.Context())
 	require.NoError(t, err)
 	requireSheetWithFreeEdges(t, dup)
 
 	copyMotion, err := r3.Translation(r3.NewVec(0, 50, 0))
 	require.NoError(t, err)
-	copied, err := decad.Copy(t.Context(), dup, decad.WithCopyPlacement(copyMotion))
+	copied, err := decad.Copy(dup).Place(decad.CopyTransform{Transform: copyMotion}).Do(t.Context())
 	require.NoError(t, err)
 	requireSheetWithFreeEdges(t, copied)
 }
@@ -237,10 +237,10 @@ func newSheetAndSolid(t *testing.T) (*decad.Document, *decad.Body, *decad.Body) 
 	t.Helper()
 	doc := decad.New()
 	s1, p1 := plateSketch(t)
-	sheet, err := decad.Extrude(t.Context(), doc, s1, p1, decad.Distance{D: units.Millimeters(10), Dir: decad.Along}, decad.WithSurfaceResult())
+	sheet, err := decad.Extrude(doc, s1, p1, decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).SurfaceResult().Do(t.Context())
 	require.NoError(t, err)
 	s2, p2 := plateSketch(t)
-	solid, err := decad.Extrude(t.Context(), doc, s2, p2, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	solid, err := decad.Extrude(doc, s2, p2, decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	return doc, sheet, solid
 }
@@ -256,7 +256,7 @@ func TestSheetRefusedByBooleanAndModifyOperations(t *testing.T) {
 		t.Parallel()
 		doc, sheet, solid := newSheetAndSolid(t)
 		before := doc.Bodies()
-		_, err := decad.Union(t.Context(), sheet, solid)
+		_, err := decad.Union(sheet, solid).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.Equal(t, before, doc.Bodies())
 	})
@@ -264,7 +264,7 @@ func TestSheetRefusedByBooleanAndModifyOperations(t *testing.T) {
 		t.Parallel()
 		doc, sheet, solid := newSheetAndSolid(t)
 		before := doc.Bodies()
-		_, err := decad.Union(t.Context(), solid, sheet)
+		_, err := decad.Union(solid, sheet).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.Equal(t, before, doc.Bodies())
 	})
@@ -272,7 +272,7 @@ func TestSheetRefusedByBooleanAndModifyOperations(t *testing.T) {
 		t.Parallel()
 		doc, sheet, solid := newSheetAndSolid(t)
 		before := doc.Bodies()
-		_, err := decad.Cut(t.Context(), solid, sheet)
+		_, err := decad.Cut(solid, sheet).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.Equal(t, before, doc.Bodies())
 	})
@@ -280,7 +280,7 @@ func TestSheetRefusedByBooleanAndModifyOperations(t *testing.T) {
 		t.Parallel()
 		doc, sheet, solid := newSheetAndSolid(t)
 		before := doc.Bodies()
-		_, err := decad.Intersect(t.Context(), sheet, solid)
+		_, err := decad.Intersect(sheet, solid).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.Equal(t, before, doc.Bodies())
 	})
@@ -288,7 +288,7 @@ func TestSheetRefusedByBooleanAndModifyOperations(t *testing.T) {
 		t.Parallel()
 		doc, sheet, _ := newSheetAndSolid(t)
 		before := doc.Bodies()
-		_, err := decad.Fillet(t.Context(), sheet, decad.Edges(), units.Millimeters(1))
+		_, err := decad.Fillet(sheet, decad.Edges(), units.Millimeters(1)).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.Equal(t, before, doc.Bodies())
 	})
@@ -296,7 +296,7 @@ func TestSheetRefusedByBooleanAndModifyOperations(t *testing.T) {
 		t.Parallel()
 		doc, sheet, _ := newSheetAndSolid(t)
 		before := doc.Bodies()
-		_, err := decad.Chamfer(t.Context(), sheet, decad.Edges(), units.Millimeters(1))
+		_, err := decad.Chamfer(sheet, decad.Edges(), units.Millimeters(1)).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.Equal(t, before, doc.Bodies())
 	})
@@ -304,7 +304,7 @@ func TestSheetRefusedByBooleanAndModifyOperations(t *testing.T) {
 		t.Parallel()
 		doc, sheet, _ := newSheetAndSolid(t)
 		before := doc.Bodies()
-		_, err := decad.Shell(t.Context(), sheet, decad.Faces(), units.Millimeters(1))
+		_, err := decad.Shell(sheet, decad.Faces(), units.Millimeters(1)).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.Equal(t, before, doc.Bodies())
 	})
@@ -318,16 +318,16 @@ func TestThroughAllIgnoresASheetBody(t *testing.T) {
 	doc := decad.New()
 
 	sheetSketch, sheetProfile := plateSketch(t)
-	sheet, err := decad.Extrude(t.Context(), doc, sheetSketch, sheetProfile, decad.Distance{D: units.Millimeters(20), Dir: decad.Along}, decad.WithSurfaceResult())
+	sheet, err := decad.Extrude(doc, sheetSketch, sheetProfile, decad.Distance{D: units.Millimeters(20), Dir: decad.Along}).SurfaceResult().Do(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, decad.BodySheet, sheet.Kind())
 
 	blockSketch, blockProfile := plateSketch(t)
-	_, err = decad.Extrude(t.Context(), doc, blockSketch, blockProfile, decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
+	_, err = decad.Extrude(doc, blockSketch, blockProfile, decad.Distance{D: units.Millimeters(5), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 
 	thirdSketch, thirdProfile := plateSketch(t)
-	swept, err := decad.Extrude(t.Context(), doc, thirdSketch, thirdProfile, decad.ThroughAll{Dir: decad.Along})
+	swept, err := decad.Extrude(doc, thirdSketch, thirdProfile, decad.ThroughAll{Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 
 	// If the sheet were not skipped, its far side at z=20 would win over the
@@ -342,7 +342,7 @@ func TestSurfaceExtrudeShellOpenAgreesWithFreeEdgeDerivation(t *testing.T) {
 	t.Parallel()
 	s, p := plateSketch(t)
 	doc := decad.New()
-	sheet, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along}, decad.WithSurfaceResult())
+	sheet, err := decad.Extrude(doc, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).SurfaceResult().Do(t.Context())
 	require.NoError(t, err)
 
 	shells := sheet.Shells()
@@ -368,7 +368,7 @@ func TestSurfaceExtrudeHoledProfileReportsDisconnectedLumps(t *testing.T) {
 	t.Parallel()
 	s, p := rectWithHoleSketch(t)
 	doc := decad.New()
-	sheet, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(8), Dir: decad.Along}, decad.WithSurfaceResult())
+	sheet, err := decad.Extrude(doc, s, p, decad.Distance{D: units.Millimeters(8), Dir: decad.Along}).SurfaceResult().Do(t.Context())
 	require.NoError(t, err)
 	require.Len(t, sheet.Lumps(), 2)
 	for _, l := range sheet.Lumps() {
@@ -379,7 +379,7 @@ func TestSurfaceExtrudeHoledProfileReportsDisconnectedLumps(t *testing.T) {
 
 	s2, p2 := rectWithHoleSketch(t)
 	solidDoc := decad.New()
-	solid, err := decad.Extrude(t.Context(), solidDoc, s2, p2, decad.Distance{D: units.Millimeters(8), Dir: decad.Along})
+	solid, err := decad.Extrude(solidDoc, s2, p2, decad.Distance{D: units.Millimeters(8), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	require.Len(t, solid.Lumps(), 1)
 }
@@ -395,7 +395,7 @@ func TestSurfaceExtrudeSheetVerifiesValid(t *testing.T) {
 	t.Parallel()
 	s, p := plateSketch(t)
 	doc := decad.New()
-	sheet, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along}, decad.WithSurfaceResult())
+	sheet, err := decad.Extrude(doc, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).SurfaceResult().Do(t.Context())
 	require.NoError(t, err)
 
 	report, err := doc.Verify(t.Context())
@@ -425,7 +425,7 @@ func TestSheetWallAndConcaveRadiusKeepTheSurveyPrerequisiteRefusal(t *testing.T)
 	t.Parallel()
 	s, p := plateSketch(t)
 	doc := decad.New()
-	sheet, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along}, decad.WithSurfaceResult())
+	sheet, err := decad.Extrude(doc, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).SurfaceResult().Do(t.Context())
 	require.NoError(t, err)
 
 	// The tool (50 mm) exceeds the plate's own 10 mm spanning wall on
@@ -464,14 +464,14 @@ func TestSheetWallAndConcaveRadiusKeepTheSurveyPrerequisiteRefusal(t *testing.T)
 
 // TestSheetUndercutsListTheWallThatOpposesThePull is
 // TestUndercutsTiltedPull's own fixture (survey_test.go) with
-// WithSurfaceResult() added, which is what makes the comparison legible: the
+// SurfaceResult added, which is what makes the comparison legible: the
 // solid lists two faces, the −X wall and the bottom cap, and the sheet —
 // which builds no cap face at all — must list exactly the one wall.
 func TestSheetUndercutsListTheWallThatOpposesThePull(t *testing.T) {
 	t.Parallel()
 	s, p := plateSketch(t)
 	doc := decad.New()
-	sheet, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along}, decad.WithSurfaceResult())
+	sheet, err := decad.Extrude(doc, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).SurfaceResult().Do(t.Context())
 	require.NoError(t, err)
 
 	report, err := doc.Verify(t.Context(), decad.WithPullDirection(r3.NewVec(1, 0, 1)))
@@ -508,7 +508,7 @@ func TestSheetUndercutsProveTheAllClearUnderAnAxialPull(t *testing.T) {
 	t.Parallel()
 	s, p := plateSketch(t)
 	doc := decad.New()
-	sheet, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along}, decad.WithSurfaceResult())
+	sheet, err := decad.Extrude(doc, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).SurfaceResult().Do(t.Context())
 	require.NoError(t, err)
 
 	report, err := doc.Verify(t.Context(), decad.WithPullDirection(r3.NewVec(0, 0, 1)))
@@ -535,7 +535,7 @@ func TestSheetUndercutsReadUnavailableOnALoftSheet(t *testing.T) {
 	t.Parallel()
 	s0, p0, s1, p1 := loftSquares(t, 20, 10)
 	doc := decad.New()
-	sheet, err := decad.Loft(t.Context(), doc, s0, p0, s1, p1, decad.WithSurfaceResult())
+	sheet, err := decad.Loft(doc, s0, p0, s1, p1).SurfaceResult().Do(t.Context())
 	require.NoError(t, err)
 
 	report, err := doc.Verify(t.Context(), decad.WithPullDirection(r3.NewVec(0, 0, 1)))
@@ -561,7 +561,7 @@ func TestSheetUndercutsRefusedOnARevolveSheet(t *testing.T) {
 	t.Parallel()
 	s, p := annularSketch(t)
 	doc := decad.New()
-	sheet, err := decad.Revolve(t.Context(), doc, s, p, uAxis, quarterTurn, decad.WithSurfaceResult())
+	sheet, err := decad.Revolve(doc, s, p, uAxis, quarterTurn).SurfaceResult().Do(t.Context())
 	require.NoError(t, err)
 
 	report, err := doc.Verify(t.Context(), decad.WithPullDirection(r3.NewVec(0, 0, 1)))
@@ -586,7 +586,7 @@ func sheetBoxBody(t *testing.T, doc *decad.Document, x0, y0, x1, y1, h float64) 
 	s.Fix(rect.A)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(h), Dir: decad.Along}, decad.WithSurfaceResult())
+	body, err := decad.Extrude(doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(h), Dir: decad.Along}).SurfaceResult().Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -726,7 +726,7 @@ func TestSheetSolidPairContainedProvenSound(t *testing.T) {
 	raw := sheetBoxBody(t, doc, 5, 5, 15, 15, 10)
 	shift, err := r3.Translation(r3.NewVec(0, 0, 5))
 	require.NoError(t, err)
-	sheet, err := decad.Transform(t.Context(), raw, shift)
+	sheet, err := decad.Transform(raw, shift).Do(t.Context())
 	require.NoError(t, err)
 
 	report, err := doc.Verify(t.Context())
@@ -767,7 +767,7 @@ func TestSheetSolidPairKernelCannotSettleStaysSuspect(t *testing.T) {
 	doc := decad.New()
 	solid := boxBody(t, doc, 2, 0, 6, 2, 10)
 	s, p := fitSplineArchSketch(t)
-	sheet, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along}, decad.WithSurfaceResult())
+	sheet, err := decad.Extrude(doc, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).SurfaceResult().Do(t.Context())
 	require.NoError(t, err)
 
 	report, err := doc.Verify(t.Context())

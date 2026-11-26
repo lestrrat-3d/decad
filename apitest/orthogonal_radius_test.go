@@ -24,7 +24,7 @@ func TestOrthogonalConcaveRadiusIsAbsentFromABlockAndZeroFromAnL(t *testing.T) {
 	lDoc := decad.New()
 	a := blockIn(t, lDoc, r3.NewVec(0, 0, 0), r3.NewVec(10, 4, 4))
 	b := blockIn(t, lDoc, r3.NewVec(0, 0, 0), r3.NewVec(4, 10, 4))
-	_, err = decad.Union(t.Context(), a, b)
+	_, err = decad.Union(a, b).Do(t.Context())
 	require.NoError(t, err)
 	report, err = lDoc.Verify(t.Context(), decad.WithConcaveRadius())
 	require.NoError(t, err)
@@ -36,7 +36,7 @@ func TestOrthogonalConcaveRadiusIsAbsentFromABlockAndZeroFromAnL(t *testing.T) {
 	// A shelled cup has concave edges where the floor meets the walls.
 	cupDoc := decad.New()
 	block := blockIn(t, cupDoc, r3.NewVec(0, 0, 0), r3.NewVec(40, 30, 20))
-	_, err = decad.Shell(t.Context(), block, decad.Faces(decad.Facing(r3.NewVec(0, 0, 1))), units.Millimeters(1))
+	_, err = decad.Shell(block, decad.Faces(decad.Facing(r3.NewVec(0, 0, 1))), units.Millimeters(1)).Do(t.Context())
 	require.NoError(t, err)
 	report, err = cupDoc.Verify(t.Context(), decad.WithConcaveRadius())
 	require.NoError(t, err)

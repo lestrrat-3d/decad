@@ -202,11 +202,11 @@ func TestBossRootTangentFork(t *testing.T) {
 	doc := decad.New()
 	fork := forkBody(t, doc, 0, mm(6.5), 0, leverForkSketch(false, forkOptions{}))
 	notch := forkBody(t, doc, 2.5, mm(5), 0, leverForkSketch(true, forkOptions{}))
-	cut, err := decad.Cut(t.Context(), fork, notch)
+	cut, err := decad.Cut(fork, notch).Do(t.Context())
 	require.NoError(t, err)
 	vc, bc := volumeAndBound(t, cut)
 
-	out, err := decad.Fillet(t.Context(), cut, decad.Edges(decad.Reflex(), decad.Circular()).Exactly(1), mm(rho))
+	out, err := decad.Fillet(cut, decad.Edges(decad.Reflex(), decad.Circular()).Exactly(1), mm(rho)).Do(t.Context())
 	require.NoError(t, err)
 	require.True(t, out.IsSolid())
 	mesh := requireSolidVerified(t, out, 0.01)
@@ -342,7 +342,7 @@ func kinkedHubDisc(t *testing.T, shrink float64) *decad.Body {
 		}
 	}
 	require.NotNil(t, profile)
-	body, err := decad.Extrude(t.Context(), decad.New(), s, profile, decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
+	body, err := decad.Extrude(decad.New(), s, profile, decad.Distance{D: units.Millimeters(5), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }

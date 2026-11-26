@@ -96,7 +96,7 @@ func ValidateRecordWalks(p0, p1 momentinput.Profile, pl0, pl1 sectionrecord.Plan
 	offsets := make([]int, loopCount)
 	if alignment != nil {
 		if len(alignment) != loopCount {
-			return nil, nil, nil, fmt.Errorf(`%w: WithLoftAlignment carries %d offsets for %d loops`,
+			return nil, nil, nil, fmt.Errorf(`%w: Alignment carries %d offsets for %d loops`,
 				decaderr.ErrDegenerate, len(alignment), loopCount)
 		}
 		for i, off := range alignment {

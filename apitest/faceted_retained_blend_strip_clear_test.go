@@ -23,7 +23,7 @@ import (
 func withCavity(t *testing.T, b *decad.Body, x0, y0, x1, y1, z0, z1 float64) *decad.Body {
 	t.Helper()
 	box := rectBox(t, sketch.NewWorld(), b.Document(), x0, y0, x1, y1, z1-z0)
-	out, err := decad.Cut(t.Context(), b, placed(t, box, z0))
+	out, err := decad.Cut(b, placed(t, box, z0)).Do(t.Context())
 	require.NoError(t, err)
 	return out
 }
@@ -48,8 +48,8 @@ func TestFacetedRetainedBlendStripClear(t *testing.T) {
 		// the fillet keeps, so without the strip test the held audit passes.
 		_, bored := boredPlate(t)
 		cav := withCavity(t, bored, 5, 0.25, 7, 4.25, 15.75, 19.75)
-		_, err := decad.Fillet(t.Context(), cav, straightEdge(t, cav, r3.NewVec(0, 0, 20), r3.NewVec(1, 0, 0)),
-			units.Millimeters(2))
+		_, err := decad.Fillet(cav, straightEdge(t, cav, r3.NewVec(0, 0, 20), r3.NewVec(1, 0, 0)),
+			units.Millimeters(2)).Do(t.Context())
 		requireStripCrossed(t, err, 5, 7)
 	})
 
@@ -61,8 +61,8 @@ func TestFacetedRetainedBlendStripClear(t *testing.T) {
 		cav := withCavity(t, bored, 5, 3.25, 7, 4.25, 18.75, 19.75)
 		before, err := cav.Volume()
 		require.NoError(t, err)
-		out, err := decad.Fillet(t.Context(), cav, straightEdge(t, cav, r3.NewVec(0, 0, 20), r3.NewVec(1, 0, 0)),
-			units.Millimeters(2))
+		out, err := decad.Fillet(cav, straightEdge(t, cav, r3.NewVec(0, 0, 20), r3.NewVec(1, 0, 0)),
+			units.Millimeters(2)).Do(t.Context())
 		require.NoError(t, err)
 		after, err := out.Volume()
 		require.NoError(t, err)
@@ -81,8 +81,8 @@ func TestFacetedRetainedBlendStripClear(t *testing.T) {
 		cav := withCavity(t, bored, 5, 1.99, 7, 4, 16, 19.995)
 		before, err := cav.Volume()
 		require.NoError(t, err)
-		out, err := decad.Fillet(t.Context(), cav, straightEdge(t, cav, r3.NewVec(0, 0, 20), r3.NewVec(1, 0, 0)),
-			units.Millimeters(2))
+		out, err := decad.Fillet(cav, straightEdge(t, cav, r3.NewVec(0, 0, 20), r3.NewVec(1, 0, 0)),
+			units.Millimeters(2)).Do(t.Context())
 		require.NoError(t, err)
 		after, err := out.Volume()
 		require.NoError(t, err)
@@ -96,7 +96,7 @@ func TestFacetedRetainedBlendStripClear(t *testing.T) {
 			Or(decad.EndpointAt(r3.NewVec(0, 0, 20)), decad.ParallelTo(y))
 		_, bored := boredPlate(t)
 		cav := withCavity(t, bored, 5, 0.25, 7, 4.25, 15.75, 19.75)
-		_, err := decad.Fillet(t.Context(), cav, pair, units.Millimeters(2))
+		_, err := decad.Fillet(cav, pair, units.Millimeters(2)).Do(t.Context())
 		requireStripCrossed(t, err, 5, 7)
 	})
 
@@ -107,7 +107,7 @@ func TestFacetedRetainedBlendStripClear(t *testing.T) {
 		// 19), outside the 1 mm blend and inside the corner it removes.
 		_, bored := boredPlate(t)
 		cav := withCavity(t, bored, 24.25, 9.5, 25.25, 10.5, 18.75, 19.75)
-		_, err := decad.Fillet(t.Context(), cav, rimAt(t, cav, 20), units.Millimeters(1))
+		_, err := decad.Fillet(cav, rimAt(t, cav, 20), units.Millimeters(1)).Do(t.Context())
 		requireStripCrossed(t, err, 24.25, 25.25)
 	})
 
@@ -116,7 +116,7 @@ func TestFacetedRetainedBlendStripClear(t *testing.T) {
 		// A Ø8 bore at x = 2 breaks out of the x = 0 face, so its top rim is
 		// an arc; the cavity sits against it as the hole mouth's does.
 		sc := newRetentionScene()
-		bored, err := decad.Cut(t.Context(), blendPlate(t, sc), zCylinderAt(t, sc, 2, 10, 4, -30, 30))
+		bored, err := decad.Cut(blendPlate(t, sc), zCylinderAt(t, sc, 2, 10, 4, -30, 30)).Do(t.Context())
 		require.NoError(t, err)
 		cav := withCavity(t, bored, 6.25, 9.5, 7.25, 10.5, 18.75, 19.75)
 		var arc decad.EdgeSelector
@@ -126,7 +126,7 @@ func TestFacetedRetainedBlendStripClear(t *testing.T) {
 			}
 		}
 		require.NotNil(t, arc)
-		_, err = decad.Fillet(t.Context(), cav, arc, units.Millimeters(1))
+		_, err = decad.Fillet(cav, arc, units.Millimeters(1)).Do(t.Context())
 		requireStripCrossed(t, err, 6.25, 7.25)
 	})
 
@@ -139,8 +139,8 @@ func TestFacetedRetainedBlendStripClear(t *testing.T) {
 		grooved := groovedPlate(t)
 		cav := withCavity(t, grooved, 15, 5.5, 17, 6.5, 18.5, 19.95)
 		k := 10 - math.Sqrt(12)
-		_, err := decad.Fillet(t.Context(), cav, straightEdge(t, cav, r3.NewVec(0, k, 20), r3.NewVec(1, 0, 0)),
-			units.Millimeters(1))
+		_, err := decad.Fillet(cav, straightEdge(t, cav, r3.NewVec(0, k, 20), r3.NewVec(1, 0, 0)),
+			units.Millimeters(1)).Do(t.Context())
 		requireStripCrossed(t, err, 15, 17)
 	})
 
@@ -152,7 +152,7 @@ func TestFacetedRetainedBlendStripClear(t *testing.T) {
 		// corner the fillet removes.
 		pair := borePair(t)
 		cav := withCavity(t, pair, 17.4, 7, 17.6, 7.85, 5, 7)
-		_, err := decad.Fillet(t.Context(), cav, pairEdge(t, cav), units.Millimeters(1))
+		_, err := decad.Fillet(cav, pairEdge(t, cav), units.Millimeters(1)).Do(t.Context())
 		requireStripCrossed(t, err, 17.4, 17.6)
 	})
 }

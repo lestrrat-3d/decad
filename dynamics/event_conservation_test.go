@@ -19,9 +19,9 @@ func conservationBox(t *testing.T, doc *decad.Document, x0, x1 float64) *decad.B
 	profile.Fix(rectangle.A)
 	_, err = profile.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := decad.Extrude(t.Context(), doc, profile, profile.Profiles()[0], decad.Distance{
+	body, err := decad.Extrude(doc, profile, profile.Profiles()[0], decad.Distance{
 		D: units.Millimeters(10), Dir: decad.Along,
-	})
+	}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -33,7 +33,7 @@ func TestSpinEventConservationUsesRealPointImpulses(t *testing.T) {
 	initial := conservationBox(t, doc, -5, 5)
 	placement, err := r3.Translation(r3.Vec{Z: 10})
 	require.NoError(t, err)
-	b, err := decad.Transform(t.Context(), initial, placement)
+	b, err := decad.Transform(initial, placement).Do(t.Context())
 	require.NoError(t, err)
 	density := units.KilogramsPerCubicMillimeter(.001)
 	material := Material{Restitution: units.Scalar(.5), Friction: units.Scalar(.5)}
@@ -102,8 +102,8 @@ func TestTorqueDrivenFloorImpactChecksAngularEvent(t *testing.T) {
 	profile.Fix(rectangle.A)
 	_, err = profile.Solve(t.Context())
 	require.NoError(t, err)
-	floor, err := decad.Extrude(t.Context(), doc, profile, profile.Profiles()[0], decad.Distance{
-		D: units.Millimeters(10), Dir: decad.Along})
+	floor, err := decad.Extrude(doc, profile, profile.Profiles()[0], decad.Distance{
+		D: units.Millimeters(10), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	box := conservationBox(t, doc, -5, 5)
 	density := units.KilogramsPerCubicMillimeter(.001)

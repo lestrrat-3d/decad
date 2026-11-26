@@ -26,7 +26,7 @@ func BenchmarkCopyRadialLug(b *testing.B) {
 	}
 	i := 0
 	for b.Loop() {
-		copied, err := decad.Copy(b.Context(), lug, decad.WithCopyPlacement(turns[i%len(turns)]))
+		copied, err := decad.Copy(lug).Place(decad.CopyTransform{Transform: turns[i%len(turns)]}).Do(b.Context())
 		if err != nil {
 			b.Fatal(err)
 		}

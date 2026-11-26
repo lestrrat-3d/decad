@@ -28,8 +28,8 @@ func Example_locate_point() {
 		fmt.Printf("failed to solve: %s\n", err)
 		return
 	}
-	cube, err := decad.Extrude(context.Background(), decad.New(), s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	cube, err := decad.Extrude(decad.New(), s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to extrude: %s\n", err)
 		return

@@ -22,6 +22,9 @@ specified in `agent-docs/sweep-design.md`. The sheet body — a body that enclos
 material region — and the operations that build, fill and close one are
 specified in `agent-docs/surface-design.md`.
 
+The command form of every operation — constructor, methods and `Do(ctx)` — is
+specified in `agent-docs/command-api-design.md`.
+
 Two companion designs extend operation observability without changing this
 contract: `agent-docs/operation-history-design.md` covers evaluator proof
 lineage, source-derived quantity calculations, and immutable execution records;
@@ -111,9 +114,9 @@ These are cheap now and expensive to retrofit. They are the upgrade path.
 | 1 | **NEVER expose triangles as the representation.** `Tessellate(ctx, tol)` is an output; the public vocabulary is `Body → Face → Edge → Vertex` even while the backing is approximate. | A public `Triangles()` is a one-way door; callers depend on it and vN can never remove it. |
 | 2 | **Every measurement carries `Exactness`, from the first commit.** | Makes the upgrade **monotonic, not breaking**: callers already branch on `Approximate`; in vN that branch stops being taken and nobody's code changes. A bare `float64` today means adding exactness later breaks every call site. |
 | 3 | **Selectors, never topology indices.** `Body.Faces()` / `Edges()` / `Vertices()` exist for **traversal and inspection only**; no feature or selector names a face, an edge or a vertex by index or by a bare topology pointer. | An exact kernel produces a different (more correct) face/edge decomposition. If `Edges()[3]` is the API, index order becomes a de facto contract and vN breaks every model. |
-| 4 | **Booleans never mutate their operands, and take no target-out parameter.** `Union(ctx, first, others...) (*Body, error)` — never Fusion's in-place `booleanOperation(target, tool, type) -> bool`. | A signature free of in-place mutation lets the implementation be swapped with zero API churn. |
+| 4 | **Booleans never mutate their operands, and take no target-out parameter.** `Union(bodies...).Do(ctx) (*Body, error)` — never Fusion's in-place `booleanOperation(target, tool, type) -> bool`. | A signature free of in-place mutation lets the implementation be swapped with zero API churn. |
 | 5 | **Imported meshes are a separate type.** A `MeshBody` never claims to be a solid B-rep. | For imported triangle soup, no future kernel can recover exactness. Keeping it separate stops approximate-forever geometry from contaminating the type we promise to make exact. |
-| 6 | **Operations are free functions; queries are methods.** `Fillet(ctx, b, sel, r)`, not `b.Fillet(...)`; `b.Volume()` stays a method (§6.3). | A body-consuming call written as a method reads as an edit of the receiver. A free function states that every body it names is an input and that the result is a new body. |
+| 6 | **Operations are commands built by free functions; queries are methods.** `Fillet(b, sel, r).Do(ctx)`, not `b.Fillet(...)`; `b.Volume()` stays a method (§6.3). | A body-consuming call written as a method reads as an edit of the receiver. A free-function constructor states that every body it names is an input and that the result is a new body. |
 
 **What will still churn**, stated honestly: face/edge *counts* may change under an
 exact kernel (canonicalize under evaluator §3's rules, so v1 counts
@@ -141,7 +144,7 @@ Loosely based on the Fusion SDK. The odd parts are thrown away deliberately.
 | Fusion artifact | Why it exists | decad instead |
 |---|---|---|
 | `ObjectCollection` (+ `XxxList` + `Xxxs`) | COM cannot marshal native lists | `[]T`, variadic |
-| `createInput()` → `setByX()` → `add(input)` ceremony | No overloading/named args in COM; mirrors modal GUI dialogs | One call, options struct / functional options |
+| `createInput()` → `setByX()` → `add(input)` ceremony: an input object created from a collection, filled in, then handed to a separate `add` | No overloading/named args in COM; mirrors modal GUI dialogs | An operation is one expression: a free function builds a command from the mandatory inputs, chained methods set optional ones, and `Do(ctx)` runs it once (`agent-docs/command-api-design.md`). Nothing is added to a collection, and a used command runs no second time. Queries take functional options. |
 | `ValueInput` (`createByReal(2)` for a taper silently means **2 radians**) | GUI expression fields pushed into the modeling API | `units.Value` — typed quantities that cannot be misread |
 | Proxies: `nativeObject` / `assemblyContext` / `createForAssemblyContext` | Avoiding explicit transform arguments | Component-local coords + **explicit** transforms |
 | `Base.isValid` (means "not deleted", NOT geometrically valid) | Live-kernel handles dying under you | Immutable bodies. NEVER ship an `IsValid()` with that meaning. |
@@ -164,7 +167,7 @@ dimensional values, so a quantity never changes type crossing the seam. We do
 NOT invent a parallel unit system.
 
 ```go
-body, err := decad.Extrude(ctx, doc, s, prof, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+body, err := decad.Extrude(doc, s, prof, decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(ctx)
 ```
 
 `units.Millimeters(6)` can never silently mean centimeters — which is precisely
@@ -303,7 +306,8 @@ func (d *Document) Bodies() []*Body            // live bodies
 func (d *Document) OperationHistory() *OperationHistory // immutable successful-call snapshot
 func (d *Document) Verify(ctx context.Context, opts ...VerifyOption) (*Report, error)
 
-func Remove(b *Body) error                      // retire a live body by hand; the body names its document
+func Remove(b *Body) *RemoveCommand            // retire a live body by hand; the body names its document
+func (c *RemoveCommand) Do(ctx context.Context) error
 ```
 
 `DocumentOption` is the tier of `WithGapTolerance` and `ExactOnly`, which set the
@@ -321,7 +325,7 @@ retired from the document.
 
 **A `*Body` carries its owning `*Document`.** This is what lets a boolean keep the
 signature invariant #4 demands — no target-out parameter, no operand mutated —
-while `Document.Bodies()` stays truthful: `Union(ctx, a, b)` reaches the document
+while `Document.Bodies()` stays truthful: `Union(a, b).Do(ctx)` reaches the document
 *through* `a`, so retiring the operands and registering the result happen inside
 the operation, with no `*Document` argument and no caller bookkeeping. Operands
 themselves are untouched: retiring is a change of *document* membership, not of
@@ -345,7 +349,12 @@ operation takes it, so there is no way back into the model. Remove produces
 nothing, so no producer identity advances, and a body already built from the
 removed one keeps its geometry and its provenance. A nil body, or a
 body that belongs to no document, is `ErrDegenerate`, and a body
-already retired — consumed or removed — is `ErrRetiredBody` (§12).
+already retired — consumed or removed — is `ErrRetiredBody` (§12). Every
+error carries `OperationRemove`. `Remove(b).Do(ctx)` with a canceled `ctx`
+returns `ctx.Err()` and removes nothing, so a cleanup `Remove` that runs after
+a canceled call, or inside `t.Cleanup` where `t.Context()` is already canceled,
+needs a `ctx` that is not canceled, such as
+`context.WithoutCancel(ctx)`.
 
 **A retired body is no longer part of the model, so no operation takes one.** It is
 readable — its measurements still answer — but handing it to a boolean, to a modify
@@ -353,7 +362,7 @@ op, or to an extent that names a body (`ToFace`, §8.1) is `ErrRetiredBody` (§1
 Using such a body as a stop would resolve topology outside the live model.
 
 It follows that **bodies from different documents cannot be combined**.
-`Union(ctx, a, b)` where `a` and `b` have different owners has no defined result — which
+`Union(a, b).Do(ctx)` where `a` and `b` have different owners has no defined result — which
 document would own it? — and is `ErrForeignBody` (§12).
 
 ```go
@@ -816,7 +825,7 @@ boundary component, such as a `Cut` by a wholly embedded tool. `Extrude` and
 open-path `Sweep` does the same. A partial `Revolve` opens its groove at the
 angular caps. Those bodies have one connected, non-void shell. The `Shell`
 operation that removes a face leaves an opening, so its inner and outer skins
-connect. `Shell` accepts the closed `WithNoOpenings()` form, which builds a closed hollow
+connect. `ShellClosed(b, t)` builds a closed hollow
 body for a full-turn `Revolve` and a straight prism; `agent-docs/modify-design.md`
 Part R §9 and `Shell`'s doc comment name the receivers it builds and the calls it
 refuses. Sheet shells
@@ -824,17 +833,19 @@ always report `IsVoid() == false`, even when closed
 (`agent-docs/surface-design.md` §2.2). `Stitch` refuses a closed assembly whose
 components are not proven separate, rather than publish an unrecorded cavity.
 
-### 6.3 Operation form: free functions, and methods for queries
+### 6.3 Operation form: commands from free functions, and methods for queries
 
-An operation is a package-level function. A query is a method. This section
-owns the rule; a companion design that writes an operation as a method
-(`func (d *Document) Sweep(...)`) means the free function of the same name.
+An operation is a command built by a package-level function. A query is a
+method. This section owns which calls are operations;
+`agent-docs/command-api-design.md` owns the command form. A companion design
+that writes an operation as a method (`func (d *Document) Sweep(...)`) or with
+a leading `ctx` means the command of the same name.
 
 **An operation is any call that builds a body, retires a body, or registers a
-body in a document.** It is a free function, so the document and every body it
-consumes appear in the argument list. Calls read the same whether they take one
-body (`Fillet(ctx, b, sel, r)`), two (`Cut(ctx, target, tool)`) or none
-(`Extrude(ctx, doc, s, p, e)`).
+body in a document.** Its constructor is a free function, so the document and
+every body it consumes appear in the constructor's argument list. Calls read
+the same whether they take one body (`Fillet(b, sel, r).Do(ctx)`), two
+(`Cut(target, tool).Do(ctx)`) or none (`Extrude(doc, s, p, e).Do(ctx)`).
 
 **A query is a read that changes nothing.** It retires no body, registers no
 body, and leaves `Document.Bodies()` as it found it. A query is a method on the
@@ -854,32 +865,50 @@ value it reads, so a retired body still answers it (§6). The query set is:
 - the accessors and report methods on result types (`Report`, `MotionReport`,
   `SweepReport`, `Path`, `Mesh` and the like).
 
+**Container placement calls are neither operations nor queries.**
+`Container.AddBody`, `Container.ChildNamed` and `Container.NewUniqueChild`
+change which container holds a member and build, retire and register no body
+in the document's model. They are document mutations outside the operation set,
+so they keep the method form and take no `ctx`. The scan
+`TestNoExportedFunctionBuildsRetiresOrRegistersABody` allows `AddBody` for
+this reason.
+
 **The topology type is `FaceShell`.** The package-level name `Shell` belongs to
 the shell operation, so the connected set of faces between a `Lump` and its
 `Face`s is `FaceShell`, and `Body.Shells()` returns `[]*FaceShell`.
 
-**Form of a free function.** Parameters appear in this order: `ctx` when the
-operation takes one, then the owning `*Document` when no body argument
-identifies it, then the body or bodies operated on, then the remaining inputs,
-then options. An operation that takes a body reaches the document through that
-body (§6) and takes no `*Document` argument. An operation that takes no body
-(a feature built from a sketch) takes the `*Document` first.
+**Form of an operation constructor.** Parameters appear in this order: the
+owning `*Document` when no body argument identifies it, then the body or bodies
+operated on, then the remaining mandatory inputs. A variadic operand slot comes
+last. The constructor takes no `ctx` and no options. Each optional input is a
+method on the returned command, and `Do(ctx)` runs it. An operation that takes
+a body reaches the document through that body (§6) and takes no `*Document`
+argument. An operation that takes no body (a feature built from a sketch)
+takes the `*Document` first.
 
-`Sweep(ctx, doc, s, sec, path, opts...)` is one generic function over `Section` (§8),
-for a profile or a chain.
+`Sweep(doc, s, sec, path)` is one generic constructor over `Section` (§8), for
+a profile or a chain.
 
-**Every operation that builds a body from a sketch takes a `ctx`, `Extrude`,
-`Revolve` over a chain included.** Each checks `ctx` at
-entry, between recording the section, resolving the extent and building the
-body, and inside the build evaluators. A canceled `ctx` returns `ctx.Err()`
-unchanged before commit and leaves `Document.Bodies()` and every other body as
-it found them. A nil `ctx` is `ErrDegenerate`, on §8's rule for every operation
-that takes one. The build can run long: a free-form wall proves its curvature
-sign over a bounded work budget (`agent-docs/spline-design.md` §5.2), and a nonzero
-`WithTaper` builds through the draft evaluator.
+**Every operation takes its `ctx` at `Do`, `Extrude` and `Revolve` over a chain
+included.** `Do` refuses a nil `ctx` with `ErrDegenerate` before it reads any
+operand or option. A sketch-fed operation then checks `ctx` between recording
+the section, resolving the extent and building the body, and inside the build
+evaluators. A canceled `ctx` returns `ctx.Err()` unchanged before commit and
+leaves `Document.Bodies()` and every other body as it found them. The build can
+run long: a free-form wall proves its curvature sign over a bounded work budget
+(`agent-docs/spline-design.md` §5.2), and a nonzero taper builds through the
+draft evaluator.
 
-`Union`, `Cut`, `Intersect`, `Stitch`, `Transform` and `Copy` have this form. `Transform(ctx, b, t)` places a body, and
-`Copy(ctx, b, WithCopyPlacement(t))` copies it under a rigid motion (§8).
+Every operation has this form, the placement family included. `Transform(b, t).Do(ctx)` places a body, and
+`Copy(b).Place(p).Do(ctx)` copies one under a rigid motion (§8). `Mirrored`, `MirroredJoin`, `MirroredCopy`,
+`ScaledAt`, `QuarterTurn`, `Stretch`, `PatternCopies`, `Patterned`, `PathPattern` and `Arrange` take their
+mandatory inputs the same way, and `agent-docs/mirror-pattern-design.md`, `agent-docs/path-pattern-design.md` and
+`agent-docs/arrange-design.md` own their rules.
+
+**A query keeps the function form.** A query method takes `ctx` first when it
+takes one and its options last, as functional options (`option/v3`):
+`b.Tessellate(ctx, tol, opts...)`, `d.Verify(ctx, opts...)`. So do the export
+writers, the mesh pipeline and `New`'s document options.
 
 **A builder is not an operation.** `Linkage` is a mutable value that records
 joints and loops, and its methods (`Close`, `DeclareJointContact`, `Ground`,
@@ -888,7 +917,8 @@ value. They stay methods. A `Linkage` method that built or retired a body
 would be an operation and would follow the rule above.
 
 **New API follows the rule.** A new public entry point that builds, retires or
-registers a body is a free function. A new read is a method on the value it
+registers a body is a command built by a free function
+(`agent-docs/command-api-design.md`). A new read is a method on the value it
 reads.
 
 ### 6.4 The report package
@@ -937,7 +967,7 @@ s.Solve(ctx)
 prof := s.Profiles()[0]
 
 doc := decad.New()
-body, err := decad.Extrude(ctx, doc, s, prof, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+body, err := decad.Extrude(doc, s, prof, decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(ctx)
 ```
 
 **A feature takes the sketch and the profile, in that order.** A
@@ -1037,25 +1067,42 @@ exactly identical curved sections, linearly varying four-arc circles, and the
 bounded varying fitted-flank class with fixed arcs; or four rounded-rectangle
 sections with cubic width and fixed height and corner radius.
 `agent-docs/loft-design.md` §20 owns the separate
-`LoftFromPoint(ctx, doc, apex, sketch, profile)` solid construction from
+`LoftFromPoint(doc, apex, sketch, profile)` solid construction from
 an exact world point to one recorded Sketch profile. `agent-docs/sweep-design.md` owns `Sweep`'s
 signature, spatial `Path`, frame transport, refusals, and staged reach.
 `agent-docs/helix-design.md` owns `Coil`'s signature, its axis and its extent in
 turns.
 `agent-docs/surface-design.md` owns `PatchProfile`, `PatchEdges`, `Stitch`, `Unstitch` and `Thicken`,
-together with `WithSurfaceResult()`, the option that
+together with `SurfaceResult`, the method that
 makes `Extrude`, `Revolve`, `Sweep` and `Loft` return their wall set as a
 sheet instead of closing it into a solid, and the chain-fed forms that
-sweep an open curve (§13 there). `agent-docs/modify-design.md` Part D owns `WithTaper`'s
+sweep an open curve (§13 there). `agent-docs/modify-design.md` Part D owns `Taper`'s
 build and `Draft`, the face draft of an existing prism, with its
 `NeutralFace`/`NeutralFrame` planes and the `Walls(b)` selector.
 
 ```go
-func Extrude[S Section](ctx context.Context, d *Document, s *sketch.Sketch, sec S, e Extent, opts ...ExtrudeOption) (*Body, error)
-func Revolve[S Section](ctx context.Context, d *Document, s *sketch.Sketch, sec S, axis Axis, a AngularExtent, opts ...RevolveOption) (*Body, error)
-func Sweep[S Section](ctx context.Context, d *Document, s *sketch.Sketch, sec S, path *Path, opts ...SweepOption) (*Body, error)
-func Coil(ctx context.Context, d *Document, s *sketch.Sketch, p *sketch.Profile, axis Axis, pitch, turns units.Value, opts ...CoilOption) (*Body, error)
-func LoftFromPoint(ctx context.Context, d *Document, apex r3.Vec, s *sketch.Sketch, p *sketch.Profile) (*Body, error)
+func Extrude[S Section](d *Document, s *sketch.Sketch, sec S, e Extent) *ExtrudeCommand
+func (c *ExtrudeCommand) Taper(a units.Value) *ExtrudeCommand
+func (c *ExtrudeCommand) SurfaceResult() *ExtrudeCommand
+func (c *ExtrudeCommand) Do(ctx context.Context) (*Body, error)
+
+func Revolve[S Section](d *Document, s *sketch.Sketch, sec S, axis Axis, a AngularExtent) *RevolveCommand
+func (c *RevolveCommand) SurfaceResult() *RevolveCommand
+func (c *RevolveCommand) Do(ctx context.Context) (*Body, error)
+
+func Sweep[S Section](d *Document, s *sketch.Sketch, sec S, path *Path) *SweepCommand
+func (c *SweepCommand) Twist(angle units.Value) *SweepCommand
+func (c *SweepCommand) MitredJoins() *SweepCommand
+func (c *SweepCommand) SectionScale(factors ...units.Value) *SweepCommand
+func (c *SweepCommand) SurfaceResult() *SweepCommand
+func (c *SweepCommand) Do(ctx context.Context) (*Body, error)
+
+func Coil(d *Document, s *sketch.Sketch, p *sketch.Profile, axis Axis, pitch, turns units.Value) *CoilCommand
+func (c *CoilCommand) LeftHand() *CoilCommand
+func (c *CoilCommand) Do(ctx context.Context) (*Body, error)
+
+func LoftFromPoint(d *Document, apex r3.Vec, s *sketch.Sketch, p *sketch.Profile) *LoftFromPointCommand
+func (c *LoftFromPointCommand) Do(ctx context.Context) (*Body, error)
 
 // Section is the sketch geometry a section-fed operation consumes: a closed
 // *sketch.Profile or an open *sketch.Chain.
@@ -1063,31 +1110,31 @@ type Section interface{ *sketch.Profile | *sketch.Chain }
 ```
 
 `Extrude` infers `S` from `sec`, so no call site names the type argument. A
-profile section builds a solid, or a sheet under `WithSurfaceResult()`, and a
-nonzero `WithTaper` builds a draft body. A chain section builds a sheet with no
-draft build, so `Extrude` returns `ErrUnsupported` for `WithSurfaceResult()` and
-for `WithTaper` of any angle, zero included, on a chain. That refusal follows
-the chain's seam gates and nil-option check and precedes extent resolution and
+profile section builds a solid, or a sheet under `SurfaceResult`, and a
+nonzero `Taper` builds a draft body. A chain section builds a sheet with no
+draft build, so `Extrude` returns `ErrUnsupported` for `SurfaceResult` and
+for `Taper` of any angle, zero included, on a chain. That refusal follows
+the chain's seam gates and precedes extent resolution and
 any commit (`agent-docs/surface-design.md` §13.2).
 
 `Sweep` and `Revolve` infer `S` the same way. A profile section builds a solid, or a sheet under
-`WithSurfaceResult()`. A chain section builds a sheet, so `Sweep` returns `ErrUnsupported` for
-`WithSurfaceResult()` and `WithSweepTwist` on a chain, before any commit
+`SurfaceResult`. A chain section builds a sheet, so `Sweep` returns `ErrUnsupported` for
+`SurfaceResult` and `Twist` on a chain, before any commit
 (`agent-docs/surface-design.md` §13.2, `agent-docs/sweep-design.md` §15.3).
 
-`Revolve` returns `ErrUnsupported` for `WithSurfaceResult()` on a chain, after the chain's seam gates and
+`Revolve` returns `ErrUnsupported` for `SurfaceResult` on a chain, after the chain's seam gates and
 before the axis gates and any commit (`agent-docs/surface-design.md` §13.2).
 
-`LoftSections(ctx, doc, sections ...LoftSection)` carries each `Sketch` and
+`LoftSections(doc, sections ...LoftSection)` carries each `Sketch` and
 `Profile` together. It admits the bounded classes in
 `agent-docs/loft-sections-design.md`.
 
-`LoftSectionsWithCircularCorrespondence` takes the same sections and an explicit
+`LoftSections(...).CircularCorrespondence(c)` takes the same sections and an explicit
 `CircularLoftCorrespondence` of four rational Bernstein maps. It admits the
 flat-quarter circular-to-spline class and proves the chosen correspondence as
 specified in `agent-docs/loft-sections-design.md` §14.
 
-`LoftFaces(ctx, sections, opts...)` consumes two to thirty-two ordered planar caps from
+`LoftFaces(sections)` consumes two to thirty-two ordered planar caps from
 authenticated point-loft Split slabs. It retains their original Sketch
 profile and exact cut-plane maps through rigid placement and positive
 uniform scale. It reaches the document through the body of `sections[0]`
@@ -1095,33 +1142,28 @@ and takes no `*Document` (§6.3). Its bounded source class and proof are in
 `agent-docs/loft-face-sections-design.md`.
 
 ```go
-// LoftFacesOption configures LoftFaces.
-type LoftFacesOption interface {
-	option.Interface
-	loftFacesOption()
-}
+func LoftFaces(sections []*Face) *LoftFacesCommand
 
-func LoftFaces(ctx context.Context, sections []*Face, opts ...LoftFacesOption) (*Body, error)
-
-// WithConeTangentEnd ends the loft with a constructed section tangent to
+// LoftFacesToCone ends the loft with a constructed section tangent to
 // cone along the ruling whose radius points along radial.
-func WithConeTangentEnd(cone *Body, radial r3.Vec) LoftFacesOption
+func LoftFacesToCone(sections []*Face, cone *Body, radial r3.Vec) *LoftFacesCommand
+
+func (c *LoftFacesCommand) Do(ctx context.Context) (*Body, error)
 ```
 
-With `WithConeTangentEnd`, `sections` holds one to thirty-one caps, in
+With `LoftFacesToCone`, `sections` holds one to thirty-one caps, in
 the same order (the least slab's toe cap, then heel caps in source order),
 and the last section is built from `cone`'s exact apex and slope instead of
 being selected. The result is an ordinary LoftFaces body: its end face
 carries the cap-end role of the new loft and a rounded `Plane` tag, and
-`Cut` and `Intersect` continue from it as they do without the option. The
-option is accepted at most once. A nil option, a repeated option, a nil
+`Cut` and `Intersect` continue from it as they do for `LoftFaces`. A nil
 cone, a `radial` with a nonzero `X` or without a finite nonzero `(Y, Z)`,
 and a section count outside the bounds are `ErrDegenerate`. A cone that is
 not an unplaced exact point cone about world X is `ErrUnsupported`, a cone
 of another document `ErrForeignBody`, and a retired cone `ErrRetiredBody`.
 The construction is in `agent-docs/loft-face-sections-design.md`.
 
-`ConeFromFace(ctx, body, face, far)` is a free function that returns the full
+`ConeFromFace(body, face, far)` is a command whose `Do(ctx)` returns the full
 cone about the world X axis of a Revolve `body` whose meridian extends the
 selected conical `face`, using the nearest representable strict offset from
 that face's exact line (`far` is a `units.Value` length). This need not be one
@@ -1153,44 +1195,52 @@ implicitly-chosen target — and they never mutate an operand or take a target-o
 parameter:
 
 ```go
-func Union(ctx context.Context, first *Body, others ...*Body) (*Body, error)
-func UnionRefined(ctx context.Context, bodies []*Body, maxBound units.Value) (*Body, error)
-func Cut(ctx context.Context, target, tool *Body, opts ...BooleanOption) (*Body, error)
-func Intersect(ctx context.Context, a, b *Body, opts ...BooleanOption) (*Body, error)
+func Union(bodies ...*Body) *UnionCommand
+func (c *UnionCommand) RefineTo(maxBound units.Value) *UnionCommand
+func (c *UnionCommand) Do(ctx context.Context) (*Body, error)
+
+func Cut(target, tool *Body) *CutCommand
+func (c *CutCommand) MatchingFaces() *CutCommand
+func (c *CutCommand) Do(ctx context.Context) (*Body, error)
+
+func Intersect(a, b *Body) *IntersectCommand
+func (c *IntersectCommand) MatchingFaces() *IntersectCommand
+func (c *IntersectCommand) Do(ctx context.Context) (*Body, error)
 ```
 
 `Document.IntersectionVolume(ctx, a, b)` is the read-only form of `Intersect`: it runs the evaluation `Intersect`
-runs on the same operands in the same order (both take `buildBoolean` in `boolean.go`) and returns the volume of the
+runs on the same operands in the same order (the `Intersect` command and this query both take `buildBoolean` in `boolean.go`) and returns the volume of the
 body `Intersect` would build, as a `Measurement` equal to it bit for bit. It commits nothing, so `Bodies`, the
 operation history, producer numbering, level and curve counters and containers are unchanged and both operands stay
 live; like `Verify`, it mints its identities from a private transient source (`queryContext`). Every error is `Intersect`'s, wrapped with `operationError(OperationIntersect, err)` so its diagnostics carry the
 `OperationIntersect` tag, and an empty result is the `*BooleanError` with
 `BooleanEmpty` that carries the gap shift, if one applied. It differs from `Intersect` in two gates: the operands may
 sit in different containers, since nothing lands in either, and it is a method on the document, as §6.3 makes a query.
-A retired operand is `ErrRetiredBody`, because `Intersect` has no answer for one. It takes no options in v1.
+A retired operand is `ErrRetiredBody`, because `Intersect` has no answer for one. It takes no options in v1, and it is a query, not a command: it has no `Do` and no consumed state.
 
-`BooleanOption` is a sealed option tier for `Cut` and `Intersect`. A nil or zero
-option is `ErrDegenerate`. `WithMatchingFaces()` declares that faces of the two
+Each is a command (`agent-docs/command-api-design.md`). `Union` with fewer than two bodies is `ErrDegenerate`,
+returned by `Do`. `MatchingFaces()` declares that faces of the two
 operands are meant to match where they meet: a cap drawn to touch the tool's
 cone, or two faces meant to coincide. Faces drawn in floating point seldom
 match exactly, and a design that matches on paper can miss by a few last-place
-steps. With the option, a miss of at most 64 binary64 steps at 1 is taken as
+steps. With the declaration, a miss of at most 64 binary64 steps at 1 is taken as
 the intended match and its effect is charged into the result's error bounds. A
-larger miss disproves the declaration and refuses as it would without the
-option. The declaration comes from the caller and decad's check can only reject
-it, so the option never admits a shape for another reason. It is read only
+larger miss disproves the declaration and refuses as it would without it.
+The declaration comes from the caller and decad's check can only reject
+it, so it never admits a shape for another reason. It is read only
 where a pair's source records keep a cone limit (a point-Loft cut or
 intersected by a cone about an axis through the world origin in a world
 coordinate plane); elsewhere it has no effect. The
 construction is in `agent-docs/revolve-loft-design.md`.
 
-`UnionRefined` joins a straight-bevel sector join of three or more bodies directly at the refinement bound
-(`agent-docs/body-refine-design.md` §7.1), where `Union` followed by `Refine` builds it at 0.1 mm and then again at
-the bound. It takes the bodies before the bound, as §6.3 orders a free function's parameters. It is a separate
-function rather than a `Union` option, since the options tier of `Cut` and `Intersect` carries declarations, not a
-result bound, and `Union` has no options. It returns the joined body or an error with nothing committed: a set the
+`Union(bodies...).RefineTo(maxBound)` joins a straight-bevel sector join of three or more bodies directly at the
+refinement bound (`agent-docs/body-refine-design.md` §7.1), where `Union` followed by `Refine` builds it at 0.1 mm
+and then again at the bound. It is a method rather than a build of `Union` then `Refine`, so the history does not
+depend on the input. `Do` returns the joined body or an error with nothing committed: a set the
 direct build does not take (a pair, a union of another kind, a join folded two bodies at a time) is `ErrUnsupported`
-before anything is built, and its message says to call `Union`, then `Refine`. It differs from that pair in the
+before anything is built, and its message says to call `Union`, then `Refine`. A bad bound (`ErrUnitKind`,
+`ErrNotFinite`, `ErrNegativeMagnitude`, or zero `ErrDegenerate`) is refused by `Do` before anything is built and
+names `RefineTo` as its subject. Every error carries `OperationUnion`. It differs from that pair in the
 face and producer identities of the result, which stay `Union`'s, in its history, which holds one `Union` entry and
 no `Refine` entry so later producer identities are one lower, in the way `LocatePoint`, a two-body `Section` and
 the regroup of a later `Cut` or `Union` read it, as a `Union` of its operands where the pair's refined body is a
@@ -1237,8 +1287,8 @@ each root and cap contact against its original tooth source, and commits one
 body only after the complete output passes the boundary, volume and topology
 audits. Multi-body inputs outside these classes and the prism pair chain
 return `ErrUnsupported`.
-A call with no `others` returns `ErrDegenerate`; a
-zero-body call does not compile. A failed or canceled call leaves every
+A call with fewer than two bodies, a zero-body call included, compiles and
+returns `ErrDegenerate` from `Do`. A failed or canceled call leaves every
 operand live.
 
 No `*Document` appears in those signatures, and none is needed: a `*Body` carries
@@ -1437,45 +1487,53 @@ which regions carry coarse rims before planning the next contact. A
 construction needing many booleans through one region has to be reshaped, not
 retried.
 
-Modify operations return a new body, retiring the receiver, on the same terms:
+Modify operations return a new body, retiring the receiver, on the same terms. Each is a command
+(`agent-docs/command-api-design.md`); `Do` returns `(*Body, error)`:
 
 ```go
-func Fillet(ctx context.Context, b *Body, sel EdgeSelector, r units.Value, opts ...FilletOption) (*Body, error)
-func Chamfer(ctx context.Context, b *Body, sel EdgeSelector, d units.Value, opts ...ChamferOption) (*Body, error)
-func Shell(ctx context.Context, b *Body, sel FaceSelector, thickness units.Value, opts ...ShellOption) (*Body, error)
-func ChamferAngle(ctx context.Context, b *Body, sel EdgeSelector, d units.Value, reference FaceSelector,
-    angle units.Value) (*Body, error)
-func FilletChord(ctx context.Context, b *Body, sel EdgeSelector, chord units.Value) (*Body, error)
+func Fillet(b *Body, sel EdgeSelector, r units.Value) *FilletCommand
+func (c *FilletCommand) TangentChain() *FilletCommand
+
+func Chamfer(b *Body, sel EdgeSelector, d units.Value) *ChamferCommand
+func (c *ChamferCommand) TangentChain() *ChamferCommand
+func (c *ChamferCommand) Asymmetric(reference FaceSelector, otherDistance units.Value) *ChamferCommand
+
+func FilletChord(b *Body, sel EdgeSelector, chord units.Value) *FilletChordCommand
+
+func ChamferAngle(b *Body, sel EdgeSelector, d units.Value, reference FaceSelector,
+    angle units.Value) *ChamferAngleCommand
+
+func Shell(b *Body, sel FaceSelector, thickness units.Value) *ShellCommand
+func (c *ShellCommand) Sense(s ShellSense) *ShellCommand
+func (c *ShellCommand) FaceThickness(normal r3.Vec, t units.Value) *ShellCommand
+
+func ShellClosed(b *Body, thickness units.Value) *ShellClosedCommand
+func (c *ShellClosedCommand) Sense(s ShellSense) *ShellClosedCommand
+func (c *ShellClosedCommand) FaceThickness(normal r3.Vec, t units.Value) *ShellClosedCommand
+
+func (c *FilletCommand) Do(ctx context.Context) (*Body, error) // and every command above
 ```
 
-`FilletChord(ctx, b, sel, chord)` rounds right-angled planar edges with the radius `chord/√2` and builds the result with
-`Fillet`. `agent-docs/modify-design.md` Part A owns its rules.
+`FilletChord(b, sel, chord).Do(ctx)` rounds right-angled planar edges with the radius `chord/√2` and builds the result
+as `Fillet` does. `agent-docs/modify-design.md` Part A owns its rules.
 
 `ChamferAngle` sets back `d` on `reference` and `d·tan(angle)` on the other face of each right-angled planar edge, and
-builds the result with `Chamfer`. `agent-docs/modify-design.md` Part A owns its rules.
+builds the result as `Chamfer` does. `agent-docs/modify-design.md` Part A owns its rules.
 
 Each bounds cancellation latency in its cancellable construction
 and audit paths, including Shell's shared offset-construction, crossing, and
 nesting audit. Cancellation returns `ctx.Err()` before commit, so the receiver
 stays live and the document remains unchanged.
 
-Modify reach options state modeling intent, not evaluator switches:
+The methods state modeling intent, not evaluator switches:
 
-```go
-type FilletChamferOption interface {
-    FilletOption
-    ChamferOption
-}
-
-func WithTangentChain() FilletChamferOption
-func WithAsymmetricChamfer(reference FaceSelector, otherDistance units.Value) ChamferOption
-func WithNoOpenings() ShellOption
-```
-
-`WithTangentChain` expands selected seeds only through proven analytic G1
-continuations. `WithAsymmetricChamfer` applies positional `d` on `reference`
-and `otherDistance` on the other adjacent face. `WithNoOpenings` is the only
-shell form that accepts `sel == nil`; it conflicts with a non-nil selector.
+`TangentChain` expands selected seeds only through proven analytic G1
+continuations; calling it twice is calling it once. `Asymmetric` applies positional `d` on `reference`
+and `otherDistance` on the other adjacent face; a second call replaces the first. `ShellClosed` keeps every face
+and takes no selector. `Sense` and `FaceThickness` of `Shell` and `ShellClosed` set the wall sense and the
+per-direction thickness; `FaceThickness` called again for one world axis direction replaces that direction's
+thickness. A fault of a method value, such as a zero `Asymmetric` distance or a `Sense` that names no sense,
+is returned by `Do` at the gate where the operation checks that input, and names the method as its subject.
 `agent-docs/modify-design.md` Part R owns exact receiver/target limits, refusal order,
 payloads, and validation.
 
@@ -1484,33 +1542,35 @@ encloses no material region (§6, `BodyKind`). `Thicken` returns a solid;
 `agent-docs/surface-design.md` is normative for all these operations:
 
 ```go
-type SurfaceResultOption interface {
-    ExtrudeOption
-    RevolveOption
-    SweepOption
-    LoftOption
-}
+// Each of the four commands declares its own one-line SurfaceResult method.
+func (c *ExtrudeCommand) SurfaceResult() *ExtrudeCommand
+func (c *RevolveCommand) SurfaceResult() *RevolveCommand
+func (c *SweepCommand) SurfaceResult() *SweepCommand
+func (c *LoftCommand) SurfaceResult() *LoftCommand
 
-func WithSurfaceResult() SurfaceResultOption
+func PatchProfile(d *Document, s *sketch.Sketch, p *sketch.Profile) *PatchProfileCommand
+func (c *PatchProfileCommand) Do(ctx context.Context) (*Body, error)
+func PatchEdges(b *Body, sel EdgeSelector) *PatchEdgesCommand
+func (c *PatchEdgesCommand) Do(ctx context.Context) (*Body, error)
 
-func PatchProfile(ctx context.Context, d *Document, s *sketch.Sketch, p *sketch.Profile) (*Body, error)
-func PatchEdges(ctx context.Context, b *Body, sel EdgeSelector) (*Body, error)
-
-func Stitch(ctx context.Context, bodies ...*Body) (*Body, error)
-func Unstitch(ctx context.Context, b *Body) ([]*Body, error)
-func Thicken(ctx context.Context, b *Body, thickness units.Value, opts ...ThickenOption) (*Body, error)
-func WithThickenSide(side ThickenSide) ThickenOption
+func Stitch(bodies ...*Body) *StitchCommand
+func (c *StitchCommand) Do(ctx context.Context) (*Body, error)
+func Unstitch(b *Body) *UnstitchCommand
+func (c *UnstitchCommand) Do(ctx context.Context) ([]*Body, error)
+func Thicken(b *Body, thickness units.Value) *ThickenCommand
+func (c *ThickenCommand) Side(side ThickenSide) *ThickenCommand
+func (c *ThickenCommand) Do(ctx context.Context) (*Body, error)
 
 // The chain-fed forms. Each sweeps an OPEN sketch curve and always returns a
-// BodySheet, so WithSurfaceResult() is not among their options: ChainLoftOption
-// is LoftChain's own sealed tier, which SurfaceResultOption does not implement.
-// Extrude, Sweep and Revolve take a chain through Section instead (above).
-func LoftChain(ctx context.Context, d *Document, s0 *sketch.Sketch, c0 *sketch.Chain, s1 *sketch.Sketch, c1 *sketch.Chain, opts ...ChainLoftOption) (*Body, error)
+// BodySheet, so SurfaceResult is not among their methods: LoftChainCommand
+// has none. Extrude, Sweep and Revolve take a chain through Section instead (above).
+func LoftChain(d *Document, s0 *sketch.Sketch, c0 *sketch.Chain, s1 *sketch.Sketch, c1 *sketch.Chain) *LoftChainCommand
+func (c *LoftChainCommand) Do(ctx context.Context) (*Body, error)
 ```
 
 `ThickenSide` is `ThickenPositive` (default), `ThickenNegative` or
 `ThickenCentered`; `agent-docs/surface-design.md` §16 owns the receiver and proof
-limits. `WithSurfaceResult()` omits the faces that exist only to close the
+limits. `SurfaceResult` omits the faces that exist only to close the
 solid and changes nothing else — a wall keeps its surface, its role and every bound.
 `PatchProfile` builds a planar face from a recorded profile and consumes
 nothing; `PatchEdges` fills a closed chain of the body's free edges and
@@ -1541,12 +1601,15 @@ Transform is a body operation on the same terms: it retires the input and
 registers the transformed body.
 
 ```go
-func Transform(ctx context.Context, body *Body, t r3.Transform) (*Body, error)
-func ScaledAt(ctx context.Context, b *Body, anchor r3.Vec, factor units.Value) (*Body, error)
+func Transform(body *Body, t r3.Transform) *TransformCommand
+func ScaledAt(b *Body, anchor r3.Vec, factor units.Value) *ScaledAtCommand
+// each command has Do(ctx context.Context) (*Body, error) and no method.
 ```
 
-`Arrange(ctx, bodies, bed)` places several bodies on a flat bed by one `Transform` each (two for a body that `WithArrangeTurns` turns), in shelves of their bounding
-boxes, and `agent-docs/arrange-design.md` owns its rules.
+`Arrange(bodies, bed)` places several bodies on a flat bed by one `Transform` each (two for a body that `Turns` turns), in shelves of their bounding
+boxes, and `agent-docs/arrange-design.md` owns its rules. With `Angle`, each probe copy also records one
+`Copy` history entry on a successful call, and the helper that retires the probes records no `Remove` entry: three
+blocks give nine history entries, not six. A failed or canceled call withdraws them with the rest.
 
 This is the whole of the "explicit transforms" story: a body is positioned by an
 argument the caller states — an `r3.Transform`, a rigid motion (§5.2) — never by
@@ -1587,42 +1650,48 @@ interference placements, one cutting tool reused for several holes — would mea
 rebuilding the whole feature chain per instance. `Copy` closes that gap:
 
 ```go
-func Copy(ctx context.Context, source *Body, opts ...CopyOption) (*Body, error)
-func WithCopyPlacement(t r3.Transform) CopyOption
-func WithCopyRotation(center, axis r3.Vec, angle units.Value) CopyOption
+func Copy(source *Body) *CopyCommand
+func (c *CopyCommand) Place(p CopyPlacement) *CopyCommand
+func (c *CopyCommand) Do(ctx context.Context) (*Body, error)
+
+type CopyPlacement interface{ copyPlacement() } // sealed
+type CopyTransform struct{ Transform r3.Transform }
+type CopyRotation struct{ Center, Axis r3.Vec; Angle units.Value }
+type CopyLiftTranslation struct{ Lift r3.Transform; From, To r3.Vec }
 ```
 
-`Copy` returns a NEW live body and leaves its source **live**: the source is
-depended on, never consumed. With no options, it re-registers the source's
+`Copy` returns a command whose `Do` makes a NEW live body and leaves its source **live**: the source is
+depended on, never consumed. With no `Place` call, it re-registers the source's
 immutable payload under a new producer identity at the same placement. With
-`WithCopyPlacement(t)`, it re-evaluates the payload under the composed rigid
-motion exactly as `Transform` does. Repeated placement options use the last value.
+`Place(CopyTransform{Transform: t})`, it re-evaluates the payload under the composed rigid
+motion exactly as `Transform` does. `CopyPlacement` is sealed, so a copy takes one
+placement, and a second `Place` call replaces the first (command design rules M2, M3).
 The zero `Transform{}` is `ErrDegenerate`; `r3.Identity()` is a valid no-op.
-`WithCopyRotation(center, axis, angle)` places the copy by the rotation about the axis
-through `center`. `WithCopyPlacement` and `WithCopyRotation` are both placement
-options, so the last of either wins. A zero or non-finite axis is `ErrDegenerate`, a non-finite
+`Place(CopyRotation{Center, Axis, Angle})` places the copy by the rotation about the axis
+through `Center`. A zero or non-finite axis is `ErrDegenerate`, a non-finite
 center or angle is `ErrNotFinite`, an angle that is not an angle is
-`ErrUnitKind`, and a zero angle is the identity. A faceted copy made with it
+`ErrUnitKind`, and a zero angle is the identity. `Place` validates a rotation or lift translation when it
+is called, and `Do` returns that fault, naming `Place`, ahead of the source's own gates. A faceted copy made with it
 denotes an exactly orthogonal rational rotation about exactly that axis, chosen
-near `angle`: it agrees with `angle` to within a few float steps and is not in
+near `Angle`: it agrees with `Angle` to within a few float steps and is not in
 general the rotation by exactly that transcendental angle. The copy's held
-vertices are the ones `WithCopyPlacement` of `r3.RotationAround(center, axis,
-angle)` would hold, and their bounds charge the distance to the exact rotation.
-Every other payload is placed by `r3.RotationAround(center, axis, angle)`,
-exactly as `WithCopyPlacement` of that transform.
+vertices are the ones a `CopyTransform` of `r3.RotationAround(Center, Axis,
+Angle)` would hold, and their bounds charge the distance to the exact rotation.
+Every other payload is placed by `r3.RotationAround(Center, Axis, Angle)`,
+exactly as a `CopyTransform` of that transform.
 An exact faceted copy carries no analytic surface tags: every face reads as
 `Faceted`, so `Face.NormalAt` refuses it, and `ToFace` stops and `MirrorFace`
 refuse it. It also stops being a point-loft source and a loft mirror join copy,
 so cone trims and the loft mirror cylinder joins treat it as any other faceted
-body. A copy that needs those readings uses `WithCopyPlacement`.
+body. A copy that needs those readings uses `CopyTransform`.
 `VerifyMotion` and `VerifyLinkage` refuse to re-place an exact faceted copy, or
 any body that descends from one by `Copy`, `Transform` or `ScaledAt`, with
 `ErrUnsupported`: the check has no pose proof for a re-placed exact rotation.
 The refusal applies where a mover is placed, so a mover that is fixed, or that
-has no evaluated pair, does not reach it. A copy made with `WithCopyPlacement`
+has no evaluated pair, does not reach it. A copy made with `CopyTransform`
 is not affected when its source has no preceding exact placement; a source
 that descends from an exact copy keeps the mark through every later copy.
-A nil option is `ErrDegenerate`, and a body this evaluator did not build is
+A nil placement is `ErrDegenerate`, and a body this evaluator did not build is
 `ErrUnsupported`. Cancellation during a faceted rebuild leaves the source
 and live-body set unchanged.
 
@@ -1662,16 +1731,16 @@ Copies do not consume their source. Each successful copy gets a fresh private
 producer identity so callers can use its returned provenance values without
 persisting or constructing internal identifiers.
 
-**A hole is one call.** `Hole(ctx, b, HoleSpec)` cuts a round, rectangular or slot-shaped, through or blind hole, with an optional
-counterbore or countersink head on a round hole, at a world point on a planar face of `b`, or radially at a point on a cylindrical one. It builds the tool bodies, cuts them from `b` in one
+**A hole is one command.** `Hole(b, face, at, diameter, depth)` cuts a round, through or blind hole, with optional
+counterbore or countersink head, thread and draft methods, and `HoleShaped(b, face, at, shape, depth)` cuts a rectangular, slot, polygonal or outline-shaped one, at a world point on a planar face of `b`, or radially at a point on a cylindrical one. It builds the tool bodies, cuts them from `b` in one
 atomic commit, and retires `b`. `agent-docs/hole-design.md` owns the placement, size and refusal rules.
 
-**A rib is a thickened line or arc.** `WebPath(ctx, b, s, path, thickness, e)` thickens each `*sketch.Line` and
+**A rib is a thickened line or arc.** `WebPath(b, s, path, thickness, e)` thickens each `*sketch.Line` and
 `*sketch.Arc` of `path` across its width, a line into a rectangle and an arc into an annular band, extrudes each
-outline by `e`, and joins the ribs to `b` in one commit. A path of one entity is one rib. `WithRibOverrun` buries the
-ends of a rib in the walls it spans, and `WithRibDraft` leans its walls. `agent-docs/rib-design.md` owns the rules.
+outline by `e`, and joins the ribs to `b` in one commit. A path of one entity is one rib. `Overrun` buries the
+ends of a rib in the walls it spans, and `Draft` leans its walls. `agent-docs/rib-design.md` owns the rules.
 
-**A relief is a profile on a face.** `Emboss(ctx, b, s, profiles, face, mode, height)` extrudes closed profiles of a sketch
+**A relief is a profile on a face.** `Emboss(b, s, profiles, face, mode, height)` extrudes closed profiles of a sketch
 that lies in the plane of a planar face, outward for `EmbossRaised` and inward for `EmbossEngraved`, and joins them to
 `b` with `Union` or `Cut` in one commit. `agent-docs/emboss-design.md` owns the rules.
 
@@ -1806,10 +1875,11 @@ everywhere:
   document has retired is `ErrRetiredBody` (§6);
 - the feature **depends on** that body. It is not consumed or retired.
 
-Options carry the rest (`WithTaper(units.Degrees(3))`), via
-`github.com/lestrrat-go/option/v3` — the house functional-options library, and an
-approved dependency. Every option must have one clear, validated effect on the
-feature call and must leave the document unchanged when validation fails.
+Command methods carry the rest (`Extrude(doc, s, p, e).Taper(units.Degrees(3))`,
+`agent-docs/command-api-design.md`). Every method must have one clear effect,
+validated at `Do`, and must leave the document unchanged when validation fails.
+Queries take functional options via `github.com/lestrrat-go/option/v3` — the
+house functional-options library, and an approved dependency.
 
 ## 9. Selectors — intent, not identity
 
@@ -1959,10 +2029,10 @@ invalidate a hand-typed number, and the one selection style that survives a
 rebuild is the geometric one selectors exist to provide.
 
 ```go
-body, err = decad.Fillet(ctx, body,
+body, err = decad.Fillet(body,
     decad.Edges(decad.Convex(), decad.ParallelTo(r3.NewVec(0, 0, 1))),
     units.Millimeters(2),
-)
+).Do(ctx)
 ```
 
 **A selector that matches nothing is an error, loudly.** A fillet that silently
@@ -2312,7 +2382,9 @@ the resulting bodies, measurements, and verification reports directly.
   must; option semantics in `agent-docs/verification-design.md`),
   `ErrUnsupported` (the current evaluator cannot yet build the requested intent;
   staging is explicit and rejected at the call, never silently approximated or
-  narrowed; `agent-docs/evaluator-design.md` §2). `BooleanError` carries a `Code`
+  narrowed; `agent-docs/evaluator-design.md` §2), `ErrConsumed` (`Do` was called
+  on an operation command that already ran; `agent-docs/command-api-design.md`
+  §7). `BooleanError` carries a `Code`
   (empty / unsupported-contact / evaluator-failure), wrapping `ErrBooleanFailed`
   (empty, evaluator-failure) or `ErrUnsupported` (unsupported-contact); a valid
   tangent or coplanar contact this evaluator cannot classify is
@@ -2338,7 +2410,7 @@ the resulting bodies, measurements, and verification reports directly.
   the `Tessellate` tolerance (§11). Three `units.Value` parameters are **signed
   displacements, not magnitudes**, and are outside it: `ToFace.Offset`, which
   displaces along the target face's normal and whose sign says which side of that
-  face the sweep stops on (§8.1); `ExtrudeOpts.Taper` (`WithTaper`, §8.1),
+  face the sweep stops on (§8.1); `ExtrudeOpts.Taper` (`Taper`, §8.1),
   whose sign says which way the wall leans; and `Draft`'s angle
   (`agent-docs/modify-design.md` Part D §10), read the same way about its neutral plane. None carries a `Direction` to reverse,
   so a negative value there is a legal intent, not an error.
@@ -2355,6 +2427,9 @@ the resulting bodies, measurements, and verification reports directly.
   `Remove` and `Verify` may run concurrently with one another; a `Verify`
   reports on the set as it stood when the call began. `IntersectionVolume` may run beside `Bodies`,
   `Verify` and other `IntersectionVolume` calls, never beside `Remove` or another operation.
+- An operation command is NOT safe for concurrent use. Racing `Do` calls on one
+  command run the operation at most once, and every other call returns
+  `ErrConsumed` (`agent-docs/command-api-design.md` §8).
 
 ## 13. Non-goals for v1
 
@@ -2381,5 +2456,5 @@ turns on a side its caller cannot already name (`agent-docs/surface-design.md` �
 
 The assemblies non-goal rests on a capability in hand, not on an instancing
 graph: interference and clearance (§10) are computed between
-**explicitly-placed bodies** — `Transform(ctx context.Context, body *Body, t r3.Transform)` (§8) — which needs
+**explicitly-placed bodies** — `Transform(body, t).Do(ctx)` (§8) — which needs
 no `Component`/`Occurrence` machinery.

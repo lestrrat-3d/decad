@@ -27,15 +27,15 @@ func removedTrapezoid(lo, hi, length, pitch, flat, slope float64, fromRoot func(
 }
 
 func acmeForm() decad.ThreadForm {
-	return decad.ThreadForm{Angle: units.Degrees(29), Depth: units.Millimeters(1.1), Flat: units.Millimeters(0.74)}
+	return decad.TrapezoidThreadForm(units.Degrees(29), units.Millimeters(1.1), units.Millimeters(0.74))
 }
 
 func TestThreadFormCutsATrapezoidalGrooveInARod(t *testing.T) {
 	t.Parallel()
 	const pitch = 2.0
 	rod := circleBodyAtZ(t, decad.New(), 0, 5, 0, 20)
-	out, err := decad.Thread(t.Context(), rod, decad.ThreadSpec{
-		Face: decad.Faces(decad.Cylindrical()), Pitch: units.Millimeters(pitch), Form: acmeForm()})
+	out, err := decad.Thread(rod, decad.Faces(decad.Cylindrical()), units.Millimeters(pitch)).
+		Form(acmeForm()).Do(t.Context())
 	require.NoError(t, err)
 	volume, err := out.Volume()
 	require.NoError(t, err)
@@ -50,11 +50,11 @@ func TestThreadFormCutsATrapezoidalGrooveOutOfABore(t *testing.T) {
 	doc := decad.New()
 	block := boxBody(t, doc, -10, -10, 10, 10, 10)
 	bore := circleBodyAtZ(t, doc, 0, 4.2, -1, 12)
-	part, err := decad.Cut(t.Context(), block, bore)
+	part, err := decad.Cut(block, bore).Do(t.Context())
 	require.NoError(t, err)
-	form := decad.ThreadForm{Angle: units.Degrees(30), Depth: units.Millimeters(1), Flat: units.Millimeters(0.6)}
-	out, err := decad.Thread(t.Context(), part, decad.ThreadSpec{
-		Face: decad.Faces(decad.Cylindrical()), Pitch: units.Millimeters(pitch), Form: form})
+	form := decad.TrapezoidThreadForm(units.Degrees(30), units.Millimeters(1), units.Millimeters(0.6))
+	out, err := decad.Thread(part, decad.Faces(decad.Cylindrical()), units.Millimeters(pitch)).
+		Form(form).Do(t.Context())
 	require.NoError(t, err)
 	volume, err := out.Volume()
 	require.NoError(t, err)
@@ -65,15 +65,13 @@ func TestThreadFormCutsATrapezoidalGrooveOutOfABore(t *testing.T) {
 
 func TestThreadFormOfTheISOValuesIsTheISOThread(t *testing.T) {
 	t.Parallel()
-	iso := decad.ThreadForm{
-		Angle: units.Degrees(60), Depth: units.Millimeters(threadHeight * 17 / 24 * threadPitch),
-		Flat: units.Millimeters(threadPitch / 8),
-	}
+	iso := decad.TrapezoidThreadForm(
+		units.Degrees(60), units.Millimeters(threadHeight*17/24*threadPitch), units.Millimeters(threadPitch/8))
 	volumes := make([]decad.Measurement, 2)
 	for i, form := range []decad.ThreadForm{{}, iso} {
 		rod := circleBodyAtZ(t, decad.New(), 0, 5, 0, 20)
-		out, err := decad.Thread(t.Context(), rod, decad.ThreadSpec{
-			Face: decad.Faces(decad.Cylindrical()), Pitch: units.Millimeters(threadPitch), Form: form})
+		out, err := decad.Thread(rod, decad.Faces(decad.Cylindrical()), units.Millimeters(threadPitch)).
+			Form(form).Do(t.Context())
 		require.NoError(t, err)
 		volumes[i], err = out.Volume()
 		require.NoError(t, err)
@@ -87,9 +85,9 @@ func TestThreadFormIsWiderThanTheISOGroove(t *testing.T) {
 	// with the same flat, because its flanks open faster.
 	volume := func(angle float64) float64 {
 		rod := circleBodyAtZ(t, decad.New(), 0, 5, 0, 20)
-		out, err := decad.Thread(t.Context(), rod, decad.ThreadSpec{
-			Face: decad.Faces(decad.Cylindrical()), Pitch: units.Millimeters(3),
-			Form: decad.ThreadForm{Angle: units.Degrees(angle), Depth: units.Millimeters(1.2), Flat: units.Millimeters(0.5)}})
+		form := decad.TrapezoidThreadForm(units.Degrees(angle), units.Millimeters(1.2), units.Millimeters(0.5))
+		out, err := decad.Thread(rod, decad.Faces(decad.Cylindrical()), units.Millimeters(3)).
+			Form(form).Do(t.Context())
 		require.NoError(t, err)
 		v, err := out.Volume()
 		require.NoError(t, err)
@@ -102,47 +100,41 @@ func TestThreadFormRefusals(t *testing.T) {
 	t.Parallel()
 	rod := circleBodyAtZ(t, decad.New(), 0, 5, 0, 20)
 	thread := func(form decad.ThreadForm) error {
-		_, err := decad.Thread(t.Context(), rod, decad.ThreadSpec{
-			Face: decad.Faces(decad.Cylindrical()), Pitch: units.Millimeters(2), Form: form})
+		_, err := decad.Thread(rod, decad.Faces(decad.Cylindrical()), units.Millimeters(2)).
+			Form(form).Do(t.Context())
 		return err
 	}
-	full := acmeForm()
-	partly := full
-	partly.Flat = units.Value{}
-	require.ErrorIs(t, thread(partly), decad.ErrDegenerate, "a form with no root flat")
-	wrongKind := full
-	wrongKind.Angle = units.Millimeters(29)
-	require.ErrorIs(t, thread(wrongKind), decad.ErrUnitKind)
-	negative := full
-	negative.Angle = units.Degrees(-29)
-	require.ErrorIs(t, thread(negative), decad.ErrNegativeMagnitude)
-	wide := full
-	wide.Angle = units.Degrees(121)
-	require.ErrorIs(t, thread(wide), decad.ErrDegenerate)
-	deep := full
-	deep.Depth = units.Millimeters(5)
-	require.ErrorIs(t, thread(deep), decad.ErrDegenerate, "a groove that reaches the axis")
-	fat := full
-	fat.Flat = units.Millimeters(1.9)
-	require.ErrorIs(t, thread(fat), decad.ErrDegenerate, "a groove as wide as the pitch")
-	badDepth := full
-	badDepth.Depth = units.Degrees(1)
-	require.ErrorIs(t, thread(badDepth), decad.ErrUnitKind)
+	// acme is the Acme form with any of its three values replaced.
+	acme := func(angle, depth, flat units.Value) decad.ThreadForm {
+		return decad.TrapezoidThreadForm(angle, depth, flat)
+	}
+	angle, depth, flat := units.Degrees(29), units.Millimeters(1.1), units.Millimeters(0.74)
+	require.ErrorIs(t, thread(acme(angle, depth, units.Value{})), decad.ErrDegenerate, "a form with no root flat")
+	require.ErrorIs(t, thread(acme(units.Millimeters(29), depth, flat)), decad.ErrUnitKind)
+	require.ErrorIs(t, thread(acme(units.Degrees(-29), depth, flat)), decad.ErrNegativeMagnitude)
+	require.ErrorIs(t, thread(acme(units.Degrees(121), depth, flat)), decad.ErrDegenerate)
+	require.ErrorIs(t, thread(acme(angle, units.Millimeters(5), flat)), decad.ErrDegenerate,
+		"a groove that reaches the axis")
+	require.ErrorIs(t, thread(acme(angle, depth, units.Millimeters(1.9))), decad.ErrDegenerate,
+		"a groove as wide as the pitch")
+	require.ErrorIs(t, thread(acme(angle, units.Degrees(1), flat)), decad.ErrUnitKind)
 }
 
 func buttressForm() decad.ThreadForm {
-	return decad.ThreadForm{
-		FlankLead: units.Degrees(45), FlankTrail: units.Degrees(7),
-		Depth: units.Millimeters(1.5), Flat: units.Millimeters(0.4),
-	}
+	return buttress(units.Degrees(45), units.Degrees(7))
+}
+
+// buttress is the buttress form of buttressForm with the two flank leans replaced.
+func buttress(lead, trail units.Value) decad.ThreadForm {
+	return decad.ButtressThreadForm(lead, trail, units.Millimeters(1.5), units.Millimeters(0.4))
 }
 
 func TestThreadFormCutsAnAsymmetricButtressGroove(t *testing.T) {
 	t.Parallel()
 	const pitch = 3.0
 	rod := circleBodyAtZ(t, decad.New(), 0, 5, 0, 20)
-	out, err := decad.Thread(t.Context(), rod, decad.ThreadSpec{
-		Face: decad.Faces(decad.Cylindrical()), Pitch: units.Millimeters(pitch), Form: buttressForm()})
+	out, err := decad.Thread(rod, decad.Faces(decad.Cylindrical()), units.Millimeters(pitch)).
+		Form(buttressForm()).Do(t.Context())
 	require.NoError(t, err)
 	volume, err := out.Volume()
 	require.NoError(t, err)
@@ -157,23 +149,14 @@ func TestThreadFormAsymmetricRefusals(t *testing.T) {
 	t.Parallel()
 	rod := circleBodyAtZ(t, decad.New(), 0, 5, 0, 20)
 	thread := func(form decad.ThreadForm) error {
-		_, err := decad.Thread(t.Context(), rod, decad.ThreadSpec{
-			Face: decad.Faces(decad.Cylindrical()), Pitch: units.Millimeters(3), Form: form})
+		_, err := decad.Thread(rod, decad.Faces(decad.Cylindrical()), units.Millimeters(3)).
+			Form(form).Do(t.Context())
 		return err
 	}
-	onlyLead := buttressForm()
-	onlyLead.FlankTrail = units.Value{}
-	require.ErrorIs(t, thread(onlyLead), decad.ErrDegenerate, "both flanks or none")
-	both := buttressForm()
-	both.Angle = units.Degrees(30)
-	require.ErrorIs(t, thread(both), decad.ErrDegenerate, "an angle and flanks")
-	square := buttressForm()
-	square.FlankTrail = units.Degrees(90)
-	require.ErrorIs(t, thread(square), decad.ErrDegenerate, "a flank must lean from the radial")
-	wrongKind := buttressForm()
-	wrongKind.FlankLead = units.Millimeters(1)
-	require.ErrorIs(t, thread(wrongKind), decad.ErrUnitKind)
-	negative := buttressForm()
-	negative.FlankLead = units.Degrees(-5)
-	require.ErrorIs(t, thread(negative), decad.ErrNegativeMagnitude)
+	lead, trail := units.Degrees(45), units.Degrees(7)
+	require.ErrorIs(t, thread(buttress(lead, units.Value{})), decad.ErrDegenerate, "both flanks or none")
+	require.ErrorIs(t, thread(buttress(lead, units.Degrees(90))), decad.ErrDegenerate,
+		"a flank must lean from the radial")
+	require.ErrorIs(t, thread(buttress(units.Millimeters(1), trail)), decad.ErrUnitKind)
+	require.ErrorIs(t, thread(buttress(units.Degrees(-5), trail)), decad.ErrNegativeMagnitude)
 }

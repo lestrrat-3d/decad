@@ -16,11 +16,11 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/chainrecord"
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/opcommand"
 
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
-	"github.com/lestrrat-go/option/v3"
 )
 
 // This file is the extrude of agent-docs/evaluator-design.md §5: the feature call
@@ -39,29 +39,10 @@ import (
 // measurements throughout. Exactly representable results retain zero bounds.
 // A nonzero taper leaves this file for draft.go's extrudeDraft.
 
-// ExtrudeOption configures Extrude. A chain section accepts none of them: both
-// WithTaper and WithSurfaceResult return ErrUnsupported on a chain.
-type ExtrudeOption interface {
-	option.Interface
-	extrudeOption()
-}
-
-// WithTaper sets the extrude taper: a SIGNED displacement angle — which way
-// the wall leans. A positive taper leans every wall into the material as it
-// leaves the sketch plane, so the body narrows toward the far end; a negative
-// one widens it (agent-docs/modify-design.md Part D §2). An angle at or past a right angle
-// is [ErrDegenerate]. A nonzero taper builds over Distance, ToFace,
-// ThroughAll, Symmetric or TwoSided. WithSurfaceResult is [ErrUnsupported],
-// returned before commit. A zero taper builds the straight prism. A chain
-// section returns [ErrUnsupported] for WithTaper at any angle, zero included.
-func WithTaper(a units.Value) ExtrudeOption {
-	return extrudeOptionValue{featureoption.WithTaper(a)}
-}
-
 // Extrude sweeps the section sec of sketch s along the sketch plane's normal
 // per the linear extent e, registers the new body, and returns it. sec is a
 // closed [*sketch.Profile], which extrudes to a solid (sheet under
-// [WithSurfaceResult]), or an open [*sketch.Chain], which extrudes to a
+// SurfaceResult), or an open [*sketch.Chain], which extrudes to a
 // ribbon sheet. Both are recorded from s; the type argument S is inferred.
 //
 // A profile section MUST be a profile of s (ErrForeignProfile) and a
@@ -71,7 +52,7 @@ func WithTaper(a units.Value) ExtrudeOption {
 // bounded oblique Body.Section profile only as a solid straight prism with an
 // independent Distance extent, carrying its certified source displacement.
 // Its private Sketch certificate and marked reference loop must still match.
-// Other bounded-section consumers and options return [ErrUnsupported].
+// Other bounded-section consumers and methods return [ErrUnsupported].
 // Otherwise this evaluator builds a
 // straight prism from a profile of line, circle, arc and Tier A free-form
 // segments (a spline, a closed spline, a fit spline, or a unit-weight NURBS
@@ -86,11 +67,11 @@ func WithTaper(a units.Value) ExtrudeOption {
 // budget (row R7). A free-form curve must meet its neighbours at shared
 // endpoints unless sketch certifies a fit-spline/circle trim
 // (agent-docs/spline-design.md §2.1). Other crossing fragments are rejected as
-// ErrUnrecordableProfile before this runs. WithSurfaceResult() omits the two
+// ErrUnrecordableProfile before this runs. SurfaceResult omits the two
 // caps and publishes a sheet body instead of a solid (agent-docs/surface-design.md
 // §4).
 //
-// A nonzero [WithTaper] on a profile builds a draft body instead
+// A nonzero [ExtrudeCommand.Taper] on a profile builds a draft body instead
 // (agent-docs/modify-design.md Part D): the far cap is the profile offset by h·tan α with
 // every straight corner mitered, each straight wall a Plane leaning by the
 // taper and each circular wall a Cone. Its profile must hold line, arc and
@@ -111,8 +92,8 @@ func WithTaper(a units.Value) ExtrudeOption {
 // wall carrying internal/freeform/spline_length.go's proven bracket
 // (agent-docs/spline-design.md); a Tier B or Tier C free-form segment is
 // ErrUnsupported, exactly as a profile's own wall refuses it. A chain section
-// returns ErrUnsupported for [WithSurfaceResult], which has no solid to
-// toggle, and for [WithTaper] of any angle, zero included, since a chain
+// returns ErrUnsupported for SurfaceResult, which has no solid to
+// toggle, and for [ExtrudeCommand.Taper] of any angle, zero included, since a chain
 // extrude has no draft build. Both refusals follow the chain's seam gate and
 // precede extent resolution (agent-docs/surface-design.md §13.2).
 //
@@ -121,38 +102,97 @@ func WithTaper(a units.Value) ExtrudeOption {
 // extent and building the body, and inside the evaluators; a canceled context
 // returns ctx.Err() unchanged. Every failure and cancellation leaves the
 // document unchanged.
-func Extrude[S Section](ctx context.Context, d *Document, s *sketch.Sketch, sec S, e Extent,
-	opts ...ExtrudeOption) (*Body, error) {
-	switch v := any(sec).(type) {
+func Extrude[S Section](d *Document, s *sketch.Sketch, sec S, e Extent) *ExtrudeCommand {
+	c := &ExtrudeCommand{d: d, s: s, sec: any(sec), e: copyExtent(e)}
+	recordNilFaults(&c.state, "Extrude", d, sketchArg(s), sectionArg("sec", any(sec)))
+	return c
+}
+
+// ExtrudeCommand sweeps a section along a sketch plane's normal. Build it with
+// [Extrude].
+type ExtrudeCommand struct {
+	state   opcommand.State             // consumed flag and first recorded fault
+	d       *Document                   // stored as given
+	s       *sketch.Sketch              // stored as given
+	sec     any                         // the *sketch.Profile or *sketch.Chain given
+	e       Extent                      // copied at Extrude, with the selector of a ToFace stop
+	taper   opcommand.Slot[units.Value] // set by Taper
+	surface surfaceResultSetting        // set by SurfaceResult
+}
+
+// Taper sets the extrude taper: a SIGNED displacement angle — which way
+// the wall leans. A positive taper leans every wall into the material as it
+// leaves the sketch plane, so the body narrows toward the far end; a negative
+// one widens it (agent-docs/modify-design.md Part D §2). An angle at or past a right angle
+// is [ErrDegenerate]. A nonzero taper builds over Distance, ToFace,
+// ThroughAll, Symmetric or TwoSided. Taper with [ExtrudeCommand.SurfaceResult]
+// is [ErrUnsupported], returned before commit. A zero taper builds the straight
+// prism. A chain section returns [ErrUnsupported] for Taper at any angle, zero
+// included. A second call replaces the first.
+func (c *ExtrudeCommand) Taper(a units.Value) *ExtrudeCommand {
+	c.taper.Set(a, featureoption.ValidateTaper(a))
+	return c
+}
+
+// SurfaceResult builds the wall set and omits the two caps, publishing a sheet
+// body instead of a solid (agent-docs/surface-design.md §4). A chain section
+// returns [ErrUnsupported] for it, since a chain extrude always returns a
+// sheet. Calling it twice is the same as calling it once.
+func (c *ExtrudeCommand) SurfaceResult() *ExtrudeCommand { c.surface.set(); return c }
+
+// Do sweeps the section, registers the new body and returns it, or returns the
+// error of the first gate that refuses, leaving the document unchanged. A nil
+// ctx is ErrDegenerate, and a second call returns ErrConsumed.
+func (c *ExtrudeCommand) Do(ctx context.Context) (*Body, error) {
+	return runCommand(ctx, &c.state, OperationExtrude, c.run)
+}
+
+func (c *ExtrudeCommand) run(ctx context.Context) (*Body, error) {
+	st := extrudeSettings{surface: c.surface.on, taperSubject: "Taper", taper: c.taper}
+	return extrude(ctx, c.d, c.s, c.sec, c.e, st)
+}
+
+// extrude is Extrude's implementation. ctx is not nil, and the errors it
+// returns carry no operation tag, except the refusal of a stored method value
+// (agent-docs/command-api-design.md §11). sec is a *sketch.Profile or a
+// *sketch.Chain.
+func extrude(ctx context.Context, d *Document, s *sketch.Sketch, sec any, e Extent, st extrudeSettings) (*Body, error) {
+	switch v := sec.(type) {
 	case *sketch.Profile:
-		body, err := extrudeProfile(ctx, d, s, v, e, opts)
+		body, err := extrudeProfile(ctx, d, s, v, e, st)
 		if err != nil && errors.Is(err, ErrUnsupported) {
 			// A stop face tilted from the sweep, on a faceted solid with exact vertices, is cut to
 			// (agent-docs/orthogonal-design.md B19).
 			if tf, ok := any(e).(ToFace); ok {
-				if out, handled, _ := extrudeToTiltedFace(ctx, d, s, v, tf, opts); handled {
+				if out, handled, _ := extrudeToTiltedFace(ctx, d, s, v, tf, st); handled {
 					return out, nil
 				}
 			}
 		}
-		return body, operationError(OperationExtrude, err)
+		return body, err
 	case *sketch.Chain:
-		body, err := extrudeChain(ctx, d, s, v, e, opts)
-		return body, operationError(OperationExtrude, err)
+		return extrudeChain(ctx, d, s, v, e, st)
 	default:
-		return nil, operationError(OperationExtrude,
-			fmt.Errorf(`%w: Extrude section %T is not a profile or chain`, ErrDegenerate, sec))
+		return nil, fmt.Errorf(`%w: Extrude section %T is not a profile or chain`, ErrDegenerate, sec)
 	}
+}
+
+// extrudeTool is Extrude's implementation for a root composite that sweeps a
+// private tool or probe from a profile. It tags the error with OperationExtrude.
+// A public command that calls it re-tags the error's non-selection diagnostics
+// with its own kind (operationError), so this tag decides a diagnostic's kind
+// only for a caller inside the root that applies no outer tag.
+func extrudeTool(ctx context.Context, d *Document, s *sketch.Sketch, p *sketch.Profile, e Extent,
+	st extrudeSettings) (*Body, error) {
+	body, err := extrude(ctx, d, s, p, e, st)
+	return body, operationError(OperationExtrude, err)
 }
 
 // extrudeProfile is the profile-fed Extrude body (agent-docs/evaluator-design.md
 // §5). Its refusals run in this order: the record, the recorded-area
-// falsifier, the options, the taper checks, then the extent.
+// falsifier, the stored method faults, the taper checks, then the extent.
 func extrudeProfile(ctx context.Context, d *Document, s *sketch.Sketch, p *sketch.Profile, e Extent,
-	opts []ExtrudeOption) (*Body, error) {
-	if ctx == nil {
-		return nil, fmt.Errorf(`%w: a nil context cannot control an extrude`, ErrDegenerate)
-	}
+	st extrudeSettings) (*Body, error) {
 	if d == nil {
 		return nil, fmt.Errorf(`%w: a nil document owns no model`, ErrDegenerate)
 	}
@@ -190,7 +230,7 @@ func extrudeProfile(ctx context.Context, d *Document, s *sketch.Sketch, p *sketc
 		return nil, err
 	}
 
-	cfg, err := decodeExtrudeOptions(opts)
+	cfg, err := st.config()
 	if err != nil {
 		return nil, err
 	}
@@ -459,23 +499,15 @@ func (d *Document) resolveLinearSide(s SideExtent, frame r3.Frame, travel float6
 // build) — the same evaluator, over an open rather than a closed walk.
 
 // extrudeChain is the chain-fed Extrude body (agent-docs/surface-design.md §13).
-// Its refusals run in this order: the nil-option check, the seam gates, the
-// option refusal, then the extent.
+// Its refusals run in this order: the seam gates, the
+// method refusal, then the extent.
 func extrudeChain(ctx context.Context, d *Document, s *sketch.Sketch, ch *sketch.Chain, e Extent,
-	opts []ExtrudeOption) (*Body, error) {
-	if ctx == nil {
-		return nil, fmt.Errorf(`%w: a nil context cannot control an extrude`, ErrDegenerate)
-	}
+	st extrudeSettings) (*Body, error) {
 	if d == nil {
 		return nil, fmt.Errorf(`%w: a nil document owns no model`, ErrDegenerate)
 	}
 	if s == nil || ch == nil {
 		return nil, fmt.Errorf(`%w: Extrude requires a non-nil sketch and chain`, ErrDegenerate)
-	}
-	for _, o := range opts {
-		if o == nil {
-			return nil, fmt.Errorf(`%w: a nil option names nothing to apply`, ErrDegenerate)
-		}
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
@@ -489,9 +521,9 @@ func extrudeChain(ctx context.Context, d *Document, s *sketch.Sketch, ch *sketch
 	if err != nil {
 		return nil, err
 	}
-	// The option refusal follows the seam gate and precedes the extent work,
+	// The method refusal follows the seam gate and precedes the extent work,
 	// so a repair the caller makes in the sketch is named first.
-	if err := refuseChainExtrudeOptions(opts); err != nil {
+	if err := refuseChainExtrudeSettings(st); err != nil {
 		return nil, err
 	}
 	if err := ctx.Err(); err != nil {
@@ -544,22 +576,18 @@ func extrudeChain(ctx context.Context, d *Document, s *sketch.Sketch, ch *sketch
 	return body, nil
 }
 
-// refuseChainExtrudeOptions refuses every option a chain section cannot
+// refuseChainExtrudeSettings refuses every method a chain section cannot
 // honour with ErrUnsupported. A chain extrude always returns a sheet, so
-// WithSurfaceResult has no solid to toggle, and it has no draft build, so
-// WithTaper is refused at any angle, zero included. opts holds no nil element.
-func refuseChainExtrudeOptions(opts []ExtrudeOption) error {
-	for _, o := range opts {
-		switch o.(type) {
-		case surfaceResultOptionValue:
-			return fmt.Errorf(`%w: a chain extrude always returns a sheet; WithSurfaceResult has no solid to toggle`,
-				ErrUnsupported)
-		case extrudeOptionValue:
-			return fmt.Errorf(`%w: a chain extrude has no draft build; WithTaper builds a solid from a profile only`,
-				ErrUnsupported)
-		default:
-			return fmt.Errorf(`%w: the extrude option %T builds a solid from a profile only`, ErrUnsupported, o)
-		}
+// SurfaceResult has no solid to toggle, and it has no draft build, so Taper is
+// refused at any angle, zero included.
+func refuseChainExtrudeSettings(st extrudeSettings) error {
+	if st.surface {
+		return fmt.Errorf(`%w: a chain extrude always returns a sheet; SurfaceResult has no solid to toggle`,
+			ErrUnsupported)
+	}
+	if st.taper.IsSet() {
+		return fmt.Errorf(`%w: a chain extrude has no draft build; Taper builds a solid from a profile only`,
+			ErrUnsupported)
 	}
 	return nil
 }

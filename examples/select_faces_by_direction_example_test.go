@@ -30,8 +30,8 @@ func Example_select_faces_by_direction() {
 		return
 	}
 	doc := decad.New()
-	plate, err := decad.Extrude(context.Background(), doc, s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(8), Dir: decad.Along})
+	plate, err := decad.Extrude(doc, s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(8), Dir: decad.Along}).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to extrude: %s\n", err)
 		return

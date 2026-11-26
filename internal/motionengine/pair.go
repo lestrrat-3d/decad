@@ -162,7 +162,7 @@ func (r *Run) place(mp *Pose, i int, placed []*Placed) (*Placed, error) {
 	}
 	if fp, ok := mv.Body.Payload.(facetedrecord.Payload); ok && fp.ExactPlaced {
 		return nil, fmt.Errorf("%w: motion verification cannot re-place a body that descends from an "+
-			"exact-rotation copy (WithCopyRotation), because its pose has no deviation proof", decaderr.ErrUnsupported)
+			"exact-rotation copy (CopyRotation), because its pose has no deviation proof", decaderr.ErrUnsupported)
 	}
 	placement := mv.Body.Payload.Transform()
 	composed, err := placement.Then(group.Pose)

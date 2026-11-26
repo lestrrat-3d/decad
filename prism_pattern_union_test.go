@@ -24,7 +24,7 @@ func TestPrismPatternUnionOfCopiedExtrudes(t *testing.T) {
 	require.NoError(t, err)
 	toothVolume, err := tooth.Volume()
 	require.NoError(t, err)
-	result, err := Union(t.Context(), blank, tooth, rotated)
+	result, err := Union(blank, tooth, rotated).Do(t.Context())
 	require.NoError(t, err)
 	require.Len(t, doc.Bodies(), 1)
 	volume, err := result.Volume()
@@ -40,7 +40,7 @@ func TestPrismPatternUnionOfCopiedExtrudes(t *testing.T) {
 
 func TestPrismPatternUnionRefusesOutwardRootWithoutRetiringSources(t *testing.T) {
 	doc, blank, tooth, rotated := prismPatternTabBodies(t, 2.999)
-	_, err := Union(t.Context(), blank, tooth, rotated)
+	_, err := Union(blank, tooth, rotated).Do(t.Context())
 	require.ErrorIs(t, err, ErrUnsupported)
 	require.ErrorContains(t, err, "root is not strictly inside")
 	require.Len(t, doc.Bodies(), 3)
@@ -58,7 +58,7 @@ func TestPrismPatternUnionOfTangentRootJoinsBySectionUnion(t *testing.T) {
 		parts += v.Value.Base()
 		slack += v.Bound.Base()
 	}
-	joined, err := Union(t.Context(), blank, tooth, rotated)
+	joined, err := Union(blank, tooth, rotated).Do(t.Context())
 	require.NoError(t, err)
 	require.True(t, joined.IsSolid())
 	got, err := joined.Volume()
@@ -68,7 +68,7 @@ func TestPrismPatternUnionOfTangentRootJoinsBySectionUnion(t *testing.T) {
 
 func TestPrismPatternUnionSelectsProvenAxialChains(t *testing.T) {
 	_, blank, section, rotated := prismPatternTabBodies(t, prismPatternInsetBlank)
-	joined, err := Union(t.Context(), blank, section, rotated)
+	joined, err := Union(blank, section, rotated).Do(t.Context())
 	require.NoError(t, err)
 	require.Len(t, joined.Edges(), 36)
 	selected, err := Edges(ParallelTo(r3.Vec{Z: 1})).SelectEdges(joined)
@@ -91,7 +91,7 @@ func prismPatternTabBodies(t *testing.T, radius float64) (*Document, *Body, *Bod
 	world := sketch.NewWorld()
 	s, profile := loftCylinderTabProfile(t, ctx, world, world.XY(), 0)
 	doc := New()
-	tooth, err := Extrude(ctx, doc, s, profile, Distance{D: units.Millimeters(2), Dir: Along})
+	tooth, err := Extrude(doc, s, profile, Distance{D: units.Millimeters(2), Dir: Along}).Do(ctx)
 	require.NoError(t, err)
 	blankSketch, err := world.CreateSketch(world.XY())
 	require.NoError(t, err)
@@ -101,12 +101,12 @@ func prismPatternTabBodies(t *testing.T, radius float64) (*Document, *Body, *Bod
 	_, err = blankSketch.Solve(ctx)
 	require.NoError(t, err)
 	require.Len(t, blankSketch.Profiles(), 1)
-	blank, err := Extrude(ctx, doc, blankSketch, blankSketch.Profiles()[0],
-		Distance{D: units.Millimeters(2), Dir: Along})
+	blank, err := Extrude(doc, blankSketch, blankSketch.Profiles()[0],
+		Distance{D: units.Millimeters(2), Dir: Along}).Do(ctx)
 	require.NoError(t, err)
 	turn, err := r3.Rotation(r3.Vec{Z: 1}, units.Radians(math.Pi/2))
 	require.NoError(t, err)
-	rotated, err := Copy(ctx, tooth, WithCopyPlacement(turn))
+	rotated, err := Copy(tooth).Place(CopyTransform{Transform: turn}).Do(ctx)
 	require.NoError(t, err)
 	return doc, blank, tooth, rotated
 }

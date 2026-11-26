@@ -226,8 +226,10 @@ containment or axis admits a piece. The certificate needs no knowledge of which 
 ## 7. Public contract
 
 ```go
-// Refine returns a fresh body holding source's mesh with a certified surface bound no larger than maxBound.
-func Refine(ctx context.Context, source *Body, maxBound units.Value) (*Body, error)
+// Refine returns the command that builds a fresh body holding source's mesh with a certified surface bound
+// no larger than maxBound.
+func Refine(source *Body, maxBound units.Value) *RefineCommand
+func (c *RefineCommand) Do(ctx context.Context) (*Body, error)
 ```
 
 - `maxBound` is a length magnitude: wrong kind → `ErrUnitKind`; non-finite → `ErrNotFinite`; negative →
@@ -248,17 +250,17 @@ func Refine(ctx context.Context, source *Body, maxBound units.Value) (*Body, err
 `docs/api.md` (Booleans), `docs/data-structures.md` (Meshes), `examples/refine_example_test.go` and
 `apitest/refine_test.go` cover the public slice.
 
-### 7.1 UnionRefined
+### 7.1 Union RefineTo
 
 ```go
-// UnionRefined joins bodies, a straight-bevel sector join, directly at the refinement bound maxBound.
-func UnionRefined(ctx context.Context, bodies []*Body, maxBound units.Value) (*Body, error)
+// RefineTo joins the bodies of a Union, a straight-bevel sector join, directly at the refinement bound maxBound.
+func (c *UnionCommand) RefineTo(maxBound units.Value) *UnionCommand
 ```
 
 A straight-bevel sector join (§4, Sector joins) built by `Union` is audited at 0.1 mm, and `Refine` then discards it
-and rebuilds it from the same certificate and sources at `maxBound`. `UnionRefined` builds that join once.
+and rebuilds it from the same certificate and sources at `maxBound`. `Union(bodies...).RefineTo(maxBound)` builds that join once.
 
-- `UnionRefined` gates the operands as `Union` of three or more bodies does, then calls
+- `RefineTo` gates the operands as `Union` of three or more bodies does, then calls
   `revolveshell.SectorUnionManyAt` with ceiling `min(maxBound, 0.1 mm)`. It does not run the other routes of
   `unionmany.Routes`: their operands are prism and Loft payloads, and a sector join's blank is a Revolve, so none
   of them takes a set the sector route takes. `Refine` reaches the same `buildSectorsJoin` call:
@@ -271,12 +273,13 @@ and rebuilds it from the same certificate and sources at `maxBound`. `UnionRefin
   identities are one lower. `LocatePoint`, a two-body `Section` and the Part R regroup read the result through that
   history as a `Union` of its operands, where they read the pair's refined body as a leaf. A join that cannot meet
   the bound is refused with nothing committed, where the pair keeps the 0.1 mm join.
-- `UnionRefined` commits the join or nothing, so a cancellation or a refusal leaves the document unchanged and
+- `RefineTo` commits the join or nothing, so a cancellation or a refusal leaves the document unchanged and
   every operand live. A set the sector route does not match (a pair, a union of another kind, a join folded two
   bodies at a time, whose operand is an earlier join) is `ErrUnsupported` before anything is built, with a message
   that says to call `Union`, then `Refine`. A set the route matches but cannot build, at the bound or at
   all, is `ErrUnsupported` with the same advice.
-- `maxBound` is checked as `Refine` checks it, but before anything is built.
+- `maxBound` is checked as `Refine` checks it, but before anything is built. A bad bound is stored by `RefineTo`
+  and refused by `Do` before anything is built, with `OperationUnion`, naming `RefineTo` as its subject.
 
 ## 8. Feasibility check
 
@@ -314,7 +317,7 @@ held volume interval, as expected, because every leaf is inscribed.
 
 Each call sits inside the part's constructor, before `builder.part` applies the head tilt or `brakeRotate` turns
 the spring. A Union result placed after its last Union has no record, and placing the refined body keeps its
-bound. `b.refine` wraps `decad.Refine(b.ctx, body, units.Millimeters(bound))` and `b.fail`. The connector refines
+bound. `b.refine` wraps `decad.Refine(body, units.Millimeters(bound)).Do(b.ctx)` and `b.fail`. The connector refines
 at 0.01 mm, which serves both its 0.05 mm test and the 0.01 mm clearance screen.
 
 With these four calls the Gallery native default Build tessellates all 190 parts at 0.12 mm, and the connector

@@ -37,7 +37,7 @@ type miteredConePatch struct {
 func chamferedQuarterDiskPatch(t *testing.T, r, h, d float64) miteredConePatch {
 	t.Helper()
 	body := quarterDiskBody(t, r, h)
-	chamfered, err := decad.Chamfer(t.Context(), body, capLoopEdges(body), units.Millimeters(d))
+	chamfered, err := decad.Chamfer(body, capLoopEdges(body), units.Millimeters(d)).Do(t.Context())
 	require.NoError(t, err)
 
 	out := miteredConePatch{body: chamfered}
@@ -183,7 +183,7 @@ func TestCapBlendUnmiteredPatchNormalCarriesNoWindowSkew(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			body := tc.build(t)
-			chamfered, err := decad.Chamfer(t.Context(), body, capLoopEdges(body), units.Millimeters(tc.d))
+			chamfered, err := decad.Chamfer(body, capLoopEdges(body), units.Millimeters(tc.d)).Do(t.Context())
 			require.NoError(t, err)
 			checked := 0
 			for _, f := range chamfered.Faces() {
@@ -221,9 +221,9 @@ func TestUndercutCapBlendReceiverWallsBoundedLikePatches(t *testing.T) {
 	t.Parallel()
 	s, p := polygonSketch(t, [][2]float64{{0, 0}, {3, 9}, {-6, 12}, {-9, 3}})
 	doc := decad.New()
-	body, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	body, err := decad.Extrude(doc, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
-	chamfered, err := decad.Chamfer(t.Context(), body, capLoopEdges(body), units.Millimeters(1))
+	chamfered, err := decad.Chamfer(body, capLoopEdges(body), units.Millimeters(1)).Do(t.Context())
 	require.NoError(t, err)
 
 	report, err := chamfered.Document().Verify(t.Context(), decad.WithPullDirection(r3.NewVec(3, 9, 0)))
@@ -313,7 +313,7 @@ func TestCapBlendUndecidedPatchKeepsProvenUndercut(t *testing.T) {
 func TestCapBlendWholeTurnUndercutRespectsNormalBound(t *testing.T) {
 	t.Parallel()
 	body := circleProfile(t, 20, 10)
-	chamfered, err := decad.Chamfer(t.Context(), body, capLoopEdges(body), units.Millimeters(2))
+	chamfered, err := decad.Chamfer(body, capLoopEdges(body), units.Millimeters(2)).Do(t.Context())
 	require.NoError(t, err)
 
 	var cone *decad.Face
@@ -363,7 +363,7 @@ func TestCapBlendWholeTurnUndercutRespectsNormalBound(t *testing.T) {
 func TestCapBlendFlatPatchUndercutRespectsNormalBound(t *testing.T) {
 	t.Parallel()
 	_, box := capBlendBox(t)
-	chamfered, err := decad.Chamfer(t.Context(), box, capLoopEdges(box), units.Millimeters(5))
+	chamfered, err := decad.Chamfer(box, capLoopEdges(box), units.Millimeters(5)).Do(t.Context())
 	require.NoError(t, err)
 
 	patch := faceWithRole(t, chamfered, "chamferCap(end,0,0)")
@@ -498,7 +498,7 @@ func TestCapBlendMinRadiusUndecidedOnMiteredBand(t *testing.T) {
 func TestCapBlendMinRadiusUndecidedOnCircularBand(t *testing.T) {
 	t.Parallel()
 	body := circleProfile(t, 20, 10)
-	chamfered, err := decad.Chamfer(t.Context(), body, capLoopEdges(body), units.Millimeters(2))
+	chamfered, err := decad.Chamfer(body, capLoopEdges(body), units.Millimeters(2)).Do(t.Context())
 	require.NoError(t, err)
 	report, err := chamfered.Document().Verify(t.Context(), decad.WithConcaveRadius())
 	require.NoError(t, err)
@@ -518,7 +518,7 @@ func TestCapBlendMinRadiusUndecidedOnCircularBand(t *testing.T) {
 func TestCapBlendMinRadiusUndecidedOnPlacedBand(t *testing.T) {
 	t.Parallel()
 	_, box := plateWithDiskHole(t, 50, 50, 10)
-	chamfered, err := decad.Chamfer(t.Context(), box, decad.Edges(decad.CreatedBy(decad.CapEnd(box)), decad.LongerThan(units.Millimeters(50))), units.Millimeters(3))
+	chamfered, err := decad.Chamfer(box, decad.Edges(decad.CreatedBy(decad.CapEnd(box)), decad.LongerThan(units.Millimeters(50))), units.Millimeters(3)).Do(t.Context())
 	require.NoError(t, err)
 
 	rot, err := r3.Rotation(r3.NewVec(1, 2, 3), units.Degrees(37))
@@ -527,7 +527,7 @@ func TestCapBlendMinRadiusUndecidedOnPlacedBand(t *testing.T) {
 	require.NoError(t, err)
 	motion, err := rot.Then(trans)
 	require.NoError(t, err)
-	placed, err := decad.Transform(t.Context(), chamfered, motion)
+	placed, err := decad.Transform(chamfered, motion).Do(t.Context())
 	require.NoError(t, err)
 
 	report, err := placed.Document().Verify(t.Context(), decad.WithConcaveRadius())
@@ -583,7 +583,7 @@ func hasDiagnostic(report *decad.Report, code decad.DiagnosticCode) bool {
 func TestCapBlendReflexApexUndercutSurvey(t *testing.T) {
 	t.Parallel()
 	body := reflexLBody(t)
-	chamfered, err := decad.Chamfer(t.Context(), body, capLoopEdges(body), units.Millimeters(3))
+	chamfered, err := decad.Chamfer(body, capLoopEdges(body), units.Millimeters(3)).Do(t.Context())
 	require.NoError(t, err)
 	apex := apexPatchOf(t, chamfered, "chamferCap(end,")
 	doc := chamfered.Document()
@@ -633,7 +633,7 @@ func TestCapBlendReflexApexUndercutSurvey(t *testing.T) {
 func TestCapBlendUndercutSurvey(t *testing.T) {
 	t.Parallel()
 	_, box := capBlendBox(t)
-	chamfered, err := decad.Chamfer(t.Context(), box, capLoopEdges(box), units.Millimeters(5))
+	chamfered, err := decad.Chamfer(box, capLoopEdges(box), units.Millimeters(5)).Do(t.Context())
 	require.NoError(t, err)
 	doc := chamfered.Document()
 
@@ -677,7 +677,7 @@ func TestCapBlendMinRadiusMatchesUnchamferedSection(t *testing.T) {
 	require.Len(t, before.Bodies, 1)
 	require.NotNil(t, before.Bodies[0].ConcaveRadius.Minimum)
 
-	chamfered, err := decad.Chamfer(t.Context(), box, decad.Edges(decad.CreatedBy(decad.CapEnd(box)), decad.LongerThan(units.Millimeters(50))), units.Millimeters(3))
+	chamfered, err := decad.Chamfer(box, decad.Edges(decad.CreatedBy(decad.CapEnd(box)), decad.LongerThan(units.Millimeters(50))), units.Millimeters(3)).Do(t.Context())
 	require.NoError(t, err)
 	after, err := chamfered.Document().Verify(t.Context(), decad.WithConcaveRadius())
 	require.NoError(t, err)
@@ -704,7 +704,7 @@ func TestCapBlendMinRadiusStillAnsweredOnPlaneOnlyBand(t *testing.T) {
 	require.Equal(t, decad.ScalarAbsent, before.Bodies[0].ConcaveRadius.Outcome, "a plain rectangle has no concave feature")
 	require.Nil(t, before.Bodies[0].ConcaveRadius.Minimum, "a plain rectangle has no concave feature")
 
-	chamfered, err := decad.Chamfer(t.Context(), box, capLoopEdges(box), units.Millimeters(5))
+	chamfered, err := decad.Chamfer(box, capLoopEdges(box), units.Millimeters(5)).Do(t.Context())
 	require.NoError(t, err)
 	after, err := chamfered.Document().Verify(t.Context(), decad.WithConcaveRadius())
 	require.NoError(t, err)

@@ -24,7 +24,7 @@ func TestClosedSphereCoverage(t *testing.T) {
 	s.CreateArc(c, e, o)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	b, err := Revolve(t.Context(), New(), s, s.Profiles()[0], ConstructionAxis{Origin: r3.Vec{}, Dir: r3.NewVec(1, 0, 0)}, FullRevolution{})
+	b, err := Revolve(New(), s, s.Profiles()[0], ConstructionAxis{Origin: r3.Vec{}, Dir: r3.NewVec(1, 0, 0)}, FullRevolution{}).Do(t.Context())
 	require.NoError(t, err)
 	f := b.Faces()[0]
 	got, ok, err := closedstep.Read(t.Context(), b, f)
@@ -74,7 +74,7 @@ func TestClosedRingCoverage(t *testing.T) {
 	s.CreateCircle(c, 3)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	b, err := Revolve(t.Context(), New(), s, s.Profiles()[0], ConstructionAxis{Origin: r3.Vec{}, Dir: r3.NewVec(1, 0, 0)}, FullRevolution{})
+	b, err := Revolve(New(), s, s.Profiles()[0], ConstructionAxis{Origin: r3.Vec{}, Dir: r3.NewVec(1, 0, 0)}, FullRevolution{}).Do(t.Context())
 	require.NoError(t, err)
 	f := b.Faces()[0]
 	got, ok, err := closedstep.Read(t.Context(), b, f)

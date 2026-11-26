@@ -29,8 +29,8 @@ func newSourceScene(t *testing.T) *sourceScene {
 	s.Fix(r.A)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	sc.plate, err = Extrude(t.Context(), sc.doc, s, s.Profiles()[0],
-		Distance{D: units.Millimeters(20), Dir: Along})
+	sc.plate, err = Extrude(sc.doc, s, s.Profiles()[0],
+		Distance{D: units.Millimeters(20), Dir: Along}).Do(t.Context())
 	require.NoError(t, err)
 	return sc
 }
@@ -44,12 +44,12 @@ func (sc *sourceScene) tool(t *testing.T, cx float64) *Body {
 	ts.CreateCircle(c, 4)
 	_, err = ts.Solve(t.Context())
 	require.NoError(t, err)
-	pin, err := Extrude(t.Context(), sc.doc, ts, ts.Profiles()[0],
-		Distance{D: units.Millimeters(60), Dir: Along})
+	pin, err := Extrude(sc.doc, ts, ts.Profiles()[0],
+		Distance{D: units.Millimeters(60), Dir: Along}).Do(t.Context())
 	require.NoError(t, err)
 	move, err := r3.Translation(r3.Vec{Z: -29.999})
 	require.NoError(t, err)
-	placed, err := Transform(t.Context(), pin, move)
+	placed, err := Transform(pin, move).Do(t.Context())
 	require.NoError(t, err)
 	return placed
 }
@@ -64,7 +64,7 @@ func facetedGroups(t *testing.T, b *Body) []facetedrecord.Group {
 func TestBooleanGroupsRecordSource(t *testing.T) {
 	sc := newSourceScene(t)
 	tool := sc.tool(t, 20)
-	bored, err := Cut(t.Context(), sc.plate, tool)
+	bored, err := Cut(sc.plate, tool).Do(t.Context())
 	require.NoError(t, err)
 
 	plateFaces := len(topobuild.Faces(&sc.plate.n))
@@ -86,7 +86,7 @@ func TestBooleanGroupsRecordSource(t *testing.T) {
 
 	// A later Cut of the faceted result names the first result's records as
 	// parents of the plate-side groups.
-	second, err := Cut(t.Context(), bored, sc.tool(t, 30))
+	second, err := Cut(bored, sc.tool(t, 30)).Do(t.Context())
 	require.NoError(t, err)
 	boredFaces := topobuild.Faces(&bored.n)
 	for i, g := range facetedGroups(t, second)[:len(boredFaces)] {
@@ -99,7 +99,7 @@ func TestBooleanGroupsRecordSource(t *testing.T) {
 
 func TestRetainedBlendGroupsRecordSource(t *testing.T) {
 	sc := newSourceScene(t)
-	bored, err := Cut(t.Context(), sc.plate, sc.tool(t, 20))
+	bored, err := Cut(sc.plate, sc.tool(t, 20)).Do(t.Context())
 	require.NoError(t, err)
 	var sel EdgeSelector
 	for _, e := range bored.Edges() {
@@ -110,7 +110,7 @@ func TestRetainedBlendGroupsRecordSource(t *testing.T) {
 		}
 	}
 	require.NotNil(t, sel, "bore mouth at the top")
-	filleted, err := Fillet(t.Context(), bored, sel, units.Millimeters(1))
+	filleted, err := Fillet(bored, sel, units.Millimeters(1)).Do(t.Context())
 	require.NoError(t, err)
 
 	before, after := facetedGroups(t, bored), facetedGroups(t, filleted)

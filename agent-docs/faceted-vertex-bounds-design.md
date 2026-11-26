@@ -380,7 +380,7 @@ group proves `NormalAt` against the denoted patch's exact image and does not
 read `normalBound`. A reflection flips only a `Plane` group's orientation. A
 `NURBSSurface` tag is a marker with no geometry and does not move.
 
-An exact-rotation placement (`WithCopyRotation`) places the held mesh by the
+An exact-rotation placement (`CopyRotation`) places the held mesh by the
 same float transform, but denotes an exactly orthogonal rational rotation. It
 adds `|Q - D|·|v|_max + |t_Q - t_D|` to each vertex's rounding allowance in
 place of the stretch factor and determinant charge, where `Q` is the exact

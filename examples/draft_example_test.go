@@ -12,7 +12,7 @@ import (
 // Draft tilts the walls of a body that already exists. Molded and cast parts
 // need drafted walls so they can be pulled out of the mold. A neutral face
 // tells Draft which end stays the same size; the walls lean inward away from
-// it. If you are drawing the part from scratch, WithTaper on Extrude does the
+// it. If you are drawing the part from scratch, Taper on Extrude does the
 // same in one step.
 func Example_draft() {
 	// Make the body to draft: sketch a 20 x 20 mm square and extrude it into
@@ -30,8 +30,8 @@ func Example_draft() {
 		return
 	}
 	doc := decad.New()
-	block, err := decad.Extrude(context.Background(), doc, s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	block, err := decad.Extrude(doc, s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to extrude: %s\n", err)
 		return
@@ -41,9 +41,9 @@ func Example_draft() {
 	// face on the sketch plane, so the bottom keeps its 20 x 20 mm size and
 	// the top shrinks. (To draft only some walls, narrow the first query,
 	// for example with decad.Facing.)
-	drafted, err := decad.Draft(context.Background(), block, decad.Faces(decad.Walls(block)),
+	drafted, err := decad.Draft(block, decad.Faces(decad.Walls(block)),
 		decad.NeutralFace{Body: block, Face: decad.Faces(decad.FaceCreatedBy(decad.CapStart(block)))},
-		units.Degrees(5))
+		units.Degrees(5)).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to draft: %s\n", err)
 		return

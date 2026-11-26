@@ -151,7 +151,8 @@ func buildLattice(ctx context.Context, spec LatticeSpec, kind lattice.Kind) (*Me
 	}
 	vertices, triangles, err := lattice.Surface(ctx, kind, spec.Min, spec.Max, cell, level, res)
 	if errors.Is(err, lattice.ErrDegenerate) {
-		return nil, fmt.Errorf("%w: %s", ErrDegenerate, err)
+		// %w keeps lattice.ErrResolution reachable for Infill, which names the method.
+		return nil, fmt.Errorf("%w: %w", ErrDegenerate, err)
 	}
 	if err != nil {
 		return nil, err

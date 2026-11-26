@@ -68,7 +68,7 @@ func TestLoftLineAndArcProfileThroughBorePreservesExactSections(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			s0, p0, s1, p1 := loftSquaresAt(t, r3.NewVec(0, 0, 0), 5, 5, 2)
 			doc := decad.New(decad.ExactOnly())
-			blank, err := decad.Loft(t.Context(), doc, s0, p0, s1, p1)
+			blank, err := decad.Loft(doc, s0, p0, s1, p1).Do(t.Context())
 			require.NoError(t, err)
 
 			world := sketch.NewWorld()
@@ -93,11 +93,11 @@ func TestLoftLineAndArcProfileThroughBorePreservesExactSections(t *testing.T) {
 			_, err = toolSketch.Solve(t.Context())
 			require.NoError(t, err)
 			require.Len(t, toolSketch.Profiles(), 1)
-			tool, err := decad.Extrude(t.Context(), doc, toolSketch, toolSketch.Profiles()[0],
-				decad.Distance{D: units.Millimeters(4), Dir: decad.Along})
+			tool, err := decad.Extrude(doc, toolSketch, toolSketch.Profiles()[0],
+				decad.Distance{D: units.Millimeters(4), Dir: decad.Along}).Do(t.Context())
 			require.NoError(t, err)
 
-			cut, err := decad.Cut(t.Context(), blank, tool)
+			cut, err := decad.Cut(blank, tool).Do(t.Context())
 			require.NoError(t, err)
 			require.True(t, cut.IsSolid())
 			volume, err := cut.Volume()

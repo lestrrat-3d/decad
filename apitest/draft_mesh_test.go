@@ -220,9 +220,9 @@ func TestDraftBooleanWithStraightPrism(t *testing.T) {
 		want *big.Float
 		run  func(a, b *decad.Body) (*decad.Body, error)
 	}{
-		{"union", bfAdd(box, bf(160)), func(a, b *decad.Body) (*decad.Body, error) { return decad.Union(t.Context(), a, b) }},
-		{"cut", bfSub(box, bf(160)), func(a, b *decad.Body) (*decad.Body, error) { return decad.Cut(t.Context(), a, b) }},
-		{"intersect", bf(160), func(a, b *decad.Body) (*decad.Body, error) { return decad.Intersect(t.Context(), a, b) }},
+		{"union", bfAdd(box, bf(160)), func(a, b *decad.Body) (*decad.Body, error) { return decad.Union(a, b).Do(t.Context()) }},
+		{"cut", bfSub(box, bf(160)), func(a, b *decad.Body) (*decad.Body, error) { return decad.Cut(a, b).Do(t.Context()) }},
+		{"intersect", bf(160), func(a, b *decad.Body) (*decad.Body, error) { return decad.Intersect(a, b).Do(t.Context()) }},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
@@ -266,7 +266,7 @@ func TestDraftOverlapIsMeasured(t *testing.T) {
 	a := draftCases()[0].build(t, doc)
 	shift, err := r3.Translation(draftShift)
 	require.NoError(t, err)
-	b, err := decad.Copy(t.Context(), a, decad.WithCopyPlacement(shift))
+	b, err := decad.Copy(a).Place(decad.CopyTransform{Transform: shift}).Do(t.Context())
 	require.NoError(t, err)
 	report, err := doc.Verify(t.Context())
 	require.NoError(t, err)
@@ -289,7 +289,7 @@ func TestDraftPatterned(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
 	a := draftCases()[0].build(t, doc)
-	got, err := decad.Patterned(t.Context(), a, decad.LinearPattern{Dir: draftShift, Step: units.Millimeters(draftShift.Len()), Count: 2})
+	got, err := decad.Patterned(a, decad.LinearPattern{Dir: draftShift, Step: units.Millimeters(draftShift.Len()), Count: 2}).Do(t.Context())
 	require.NoError(t, err)
 	d := bfMul(bf(boxHeight), taperTan(5))
 	requireVolumeCovers(t, "patterned union", got, bfSub(bfMul(bf(2), boxVolume(d)), draftOverlap(d)), 1e-9)
@@ -347,11 +347,11 @@ func TestDraftMeshPlacedAndMirrored(t *testing.T) {
 			b := fx.build(t, decad.New())
 			vol, err := b.Volume()
 			require.NoError(t, err)
-			placed, err := decad.Copy(t.Context(), b, decad.WithCopyPlacement(composedRotation(t, r3.NewVec(2, -3, 5), r3.NewVec(1, 1, 1), 30, 8)))
+			placed, err := decad.Copy(b).Place(decad.CopyTransform{Transform: composedRotation(t, r3.NewVec(2, -3, 5), r3.NewVec(1, 1, 1), 30, 8)}).Do(t.Context())
 			require.NoError(t, err)
 			mirror, err := r3.NewFrame(r3.NewVec(30, 0, 0), r3.NewVec(0, 1, 0), r3.NewVec(0, 0, 1))
 			require.NoError(t, err)
-			mirrored, err := decad.MirroredCopy(t.Context(), b, decad.MirrorFrame{Frame: mirror})
+			mirrored, err := decad.MirroredCopy(b, decad.MirrorFrame{Frame: mirror}).Do(t.Context())
 			require.NoError(t, err)
 			for _, c := range []*decad.Body{placed, mirrored} {
 				mesh, err := c.Tessellate(t.Context(), units.Millimeters(0.05))
@@ -373,7 +373,7 @@ func TestDraftMeshOfBodyDraft(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
 	box := plainBox(t, doc, decad.Along)
-	got, err := decad.Draft(t.Context(), box, decad.Faces(decad.Walls(box)), capNeutral(box, decad.CapEnd), units.Degrees(5))
+	got, err := decad.Draft(box, decad.Faces(decad.Walls(box)), capNeutral(box, decad.CapEnd), units.Degrees(5)).Do(t.Context())
 	require.NoError(t, err)
 	mesh, err := got.Tessellate(t.Context(), units.Millimeters(0.1))
 	require.NoError(t, err)
@@ -425,7 +425,7 @@ func TestDraftNearTangentJoinBooleans(t *testing.T) {
 	require.NoError(t, export.STL(t.Context(), &stl, b, units.Millimeters(0.1)))
 
 	post := boxBodyAtZ(t, doc, -2, -2, 2, 2, -5, 20)
-	got, err := decad.Cut(t.Context(), b, post)
+	got, err := decad.Cut(b, post).Do(t.Context())
 	require.NoError(t, err)
 	d := bfMul(bf(8), taperTan(3))
 	straight := bfMul(bf(2), bfAdd(bf(30), bf(shift)), bfSub(bf(5), bfQuo(d, bf(2))))
@@ -447,7 +447,7 @@ func requirePastLimitNearTangentCutRefusal(t *testing.T, draw func(*sketch.Sketc
 	require.False(t, mesh.VolumeVerified())
 
 	post := boxBodyAtZ(t, doc, -2, -2, 2, 2, -5, 20)
-	_, err = decad.Cut(t.Context(), b, post)
+	_, err = decad.Cut(b, post).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.ErrorContains(t, err, "no proof of the volume")
 	require.ErrorContains(t, err, "tapered extrude")
@@ -507,7 +507,7 @@ func TestDraftTwoArcNearTangentJoinBooleans(t *testing.T) {
 	require.True(t, mesh.VolumeVerified())
 
 	post := boxBodyAtZ(t, doc, -2, -2, 2, 2, -5, 20)
-	got, err := decad.Cut(t.Context(), b, post)
+	got, err := decad.Cut(b, post).Do(t.Context())
 	require.NoError(t, err)
 	d := bfMul(bf(8), taperTan(3))
 	round := bfMul(bigPi, bfAdd(bfSub(bf(25), bfMul(bf(5), d)), bfQuo(bfMul(d, d), bf(3))))

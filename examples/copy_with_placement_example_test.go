@@ -13,7 +13,7 @@ import (
 // Copy makes a new body from an existing one and leaves the original in place.
 // Use it when a part appears several times, such as the pegs of a bolt
 // pattern: model the part once, then place each instance with
-// WithCopyPlacement. Transform, by contrast, moves a body and retires it.
+// CopyTransform. Transform, by contrast, moves a body and retires it.
 func Example_copy_with_placement() {
 	// The master part is a small peg that we will copy several times. Model it
 	// once here.
@@ -30,8 +30,8 @@ func Example_copy_with_placement() {
 		return
 	}
 	doc := decad.New()
-	master, err := decad.Extrude(context.Background(), doc, s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(4), Dir: decad.Along})
+	master, err := decad.Extrude(doc, s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(4), Dir: decad.Along}).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to extrude: %s\n", err)
 		return
@@ -45,7 +45,7 @@ func Example_copy_with_placement() {
 			fmt.Printf("failed to build translation: %s\n", err)
 			return
 		}
-		peg, err := decad.Copy(context.Background(), master, decad.WithCopyPlacement(shift))
+		peg, err := decad.Copy(master).Place(decad.CopyTransform{Transform: shift}).Do(context.Background())
 		if err != nil {
 			fmt.Printf("failed to copy: %s\n", err)
 			return

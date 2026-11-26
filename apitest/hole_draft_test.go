@@ -12,25 +12,20 @@ import (
 )
 
 // This file is agent-docs/hole-design.md §9's and agent-docs/boss-design.md §5's
-// public-surface tests for HoleSpec.Draft and BossBore.Draft, on the plate of
+// public-surface tests for HoleCommand.Draft and BossBore.Draft, on the plate of
 // hole_test.go. A bore of radius 3 at the face that leans by θ has the radius
 // 3 − t·tan θ at the depth t, so it removes a frustum.
 
-func draftSpec(plate *decad.Body, depth decad.HoleDepth, draft units.Value) decad.HoleSpec {
-	return decad.HoleSpec{
-		Face:     capFace(true, plate),
-		At:       r3.Vec{X: 10, Y: 10, Z: 10},
-		Diameter: units.Millimeters(6),
-		Depth:    depth,
-		Draft:    draft,
-	}
+func draftHole(plate *decad.Body, depth decad.HoleDepth, draft units.Value) *decad.HoleCommand {
+	return decad.Hole(plate, capFace(true, plate), r3.Vec{X: 10, Y: 10, Z: 10},
+		units.Millimeters(6), depth).Draft(draft)
 }
 
 func TestHoleDraftBlindNarrowsTowardTheBottom(t *testing.T) {
 	t.Parallel()
 	for _, deg := range []float64{2, 5} {
 		_, plate := drillPlate(t)
-		out, err := decad.Hole(t.Context(), plate, draftSpec(plate, decad.BlindHole{Depth: units.Millimeters(6)}, units.Degrees(deg)))
+		out, err := draftHole(plate, decad.BlindHole{Depth: units.Millimeters(6)}, units.Degrees(deg)).Do(t.Context())
 		require.NoError(t, err)
 		tan := math.Tan(deg * math.Pi / 180)
 		decadtest.MeasuresVolume(t, out, units.CubicMillimeters(drillPlateVolume-cylinderFrustum(3, 3-6*tan, 6)),
@@ -53,13 +48,13 @@ func TestHoleDraftBlindNarrowsTowardTheBottom(t *testing.T) {
 func TestHoleDraftThroughAndNegative(t *testing.T) {
 	t.Parallel()
 	_, plate := drillPlate(t)
-	out, err := decad.Hole(t.Context(), plate, draftSpec(plate, decad.ThroughHole{}, units.Degrees(2)))
+	out, err := draftHole(plate, decad.ThroughHole{}, units.Degrees(2)).Do(t.Context())
 	require.NoError(t, err)
 	tan := math.Tan(2 * math.Pi / 180)
 	decadtest.MeasuresVolume(t, out, units.CubicMillimeters(drillPlateVolume-cylinderFrustum(3, 3-10*tan, 10)),
 		decadtest.WithinRel(units.Scalar(1e-3)))
 	_, plate = drillPlate(t)
-	out, err = decad.Hole(t.Context(), plate, draftSpec(plate, decad.BlindHole{Depth: units.Millimeters(6)}, units.Degrees(-4)))
+	out, err = draftHole(plate, decad.BlindHole{Depth: units.Millimeters(6)}, units.Degrees(-4)).Do(t.Context())
 	require.NoError(t, err)
 	tan = math.Tan(-4 * math.Pi / 180)
 	decadtest.MeasuresVolume(t, out, units.CubicMillimeters(drillPlateVolume-cylinderFrustum(3, 3-6*tan, 6)),
@@ -69,9 +64,8 @@ func TestHoleDraftThroughAndNegative(t *testing.T) {
 func TestHoleDraftWithACounterbore(t *testing.T) {
 	t.Parallel()
 	_, plate := drillPlate(t)
-	spec := draftSpec(plate, decad.BlindHole{Depth: units.Millimeters(6)}, units.Degrees(3))
-	spec.Head = decad.Counterbore{Diameter: units.Millimeters(8), Depth: units.Millimeters(2)}
-	out, err := decad.Hole(t.Context(), plate, spec)
+	out, err := draftHole(plate, decad.BlindHole{Depth: units.Millimeters(6)}, units.Degrees(3)).
+		Head(decad.Counterbore{Diameter: units.Millimeters(8), Depth: units.Millimeters(2)}).Do(t.Context())
 	require.NoError(t, err)
 	// The recess is a straight cylinder of radius 4, 2 mm deep. Below it the bore, leaning
 	// from the face, has radius 3 − 2·tan at depth 2 and 3 − 6·tan at its bottom.
@@ -82,50 +76,57 @@ func TestHoleDraftWithACounterbore(t *testing.T) {
 
 func TestHoleDraftRefusals(t *testing.T) {
 	t.Parallel()
-	type edit func(*decad.HoleSpec)
 	for name, tc := range map[string]struct {
-		edit edit
+		cmd  func(plate *decad.Body) *decad.HoleCommand
 		want error
 	}{
-		"a right angle":  {func(s *decad.HoleSpec) { s.Draft = units.Degrees(90) }, decad.ErrDegenerate},
-		"a draft length": {func(s *decad.HoleSpec) { s.Draft = units.Millimeters(1) }, decad.ErrUnitKind},
-		"a shaped hole": {func(s *decad.HoleSpec) {
-			s.Diameter = units.Value{}
-			s.Shape = decad.SlotHole{Length: units.Millimeters(8), Width: units.Millimeters(4), Angle: units.Degrees(0)}
+		"a right angle": {func(plate *decad.Body) *decad.HoleCommand {
+			return draftHole(plate, decad.BlindHole{Depth: units.Millimeters(6)}, units.Degrees(90))
 		}, decad.ErrDegenerate},
-		"a tapped hole": {func(s *decad.HoleSpec) {
-			s.Thread = &decad.HoleThread{Pitch: units.Millimeters(0.5)}
+		"a draft length": {func(plate *decad.Body) *decad.HoleCommand {
+			return draftHole(plate, decad.BlindHole{Depth: units.Millimeters(6)}, units.Millimeters(1))
+		}, decad.ErrUnitKind},
+		"a tapped hole": {func(plate *decad.Body) *decad.HoleCommand {
+			return draftHole(plate, decad.BlindHole{Depth: units.Millimeters(6)}, units.Degrees(3)).
+				Thread(decad.NewHoleThread(units.Millimeters(0.5)))
 		}, decad.ErrDegenerate},
-		"a draft that closes the bore": {func(s *decad.HoleSpec) { s.Draft = units.Degrees(40) }, decad.ErrUnsupported},
+		"a draft that closes the bore": {func(plate *decad.Body) *decad.HoleCommand {
+			return draftHole(plate, decad.BlindHole{Depth: units.Millimeters(6)}, units.Degrees(40))
+		}, decad.ErrUnsupported},
 	} {
 		doc, plate := drillPlate(t)
-		spec := draftSpec(plate, decad.BlindHole{Depth: units.Millimeters(6)}, units.Degrees(3))
-		tc.edit(&spec)
-		_, err := decad.Hole(t.Context(), plate, spec)
+		_, err := tc.cmd(plate).Do(t.Context())
 		require.ErrorIs(t, err, tc.want, name)
 		require.Equal(t, []*decad.Body{plate}, doc.Bodies(), "%s: a refused hole leaves the plate live and alone", name)
 	}
 	doc := decad.New()
 	rod := circleBodyAtZ(t, doc, 0, 5, 0, 20)
-	_, err := decad.Hole(t.Context(), rod, decad.HoleSpec{
-		Face: decad.Faces(decad.Cylindrical()), At: r3.NewVec(5, 0, 10),
-		Diameter: units.Millimeters(3), Depth: decad.ThroughHole{}, Draft: units.Degrees(2)})
+	_, err := decad.Hole(rod, decad.Faces(decad.Cylindrical()), r3.NewVec(5, 0, 10),
+		units.Millimeters(3), decad.ThroughHole{}).
+		Draft(units.Degrees(2)).
+		Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported, "a drafted hole on a cylindrical face")
 	require.Equal(t, []*decad.Body{rod}, doc.Bodies())
+}
+
+// pilotBoss is the 8 mm wide, 8 mm tall boss on the top of the plate of
+// bossPlate with the given pilot bore.
+func pilotBoss(plate *decad.Body, bore decad.BossBore) *decad.BossCommand {
+	return decad.Boss(plate, capFace(true, plate), r3.Vec{X: 0, Y: 0, Z: 5},
+		units.Millimeters(8), units.Millimeters(8)).Bore(bore)
 }
 
 func TestBossPilotDraft(t *testing.T) {
 	t.Parallel()
 	_, plate := bossPlate(t)
-	out, err := decad.Boss(t.Context(), plate, bossSpec(plate, true, &decad.BossBore{
-		Diameter: units.Millimeters(3), Depth: units.Millimeters(6), Draft: units.Degrees(3)}))
+	out, err := pilotBoss(plate, decad.NewBossBore(units.Millimeters(3), units.Millimeters(6)).
+		Draft(units.Degrees(3))).Do(t.Context())
 	require.NoError(t, err)
 	tan := math.Tan(3 * math.Pi / 180)
 	want := bossPlateVolume + math.Pi*16*8 - cylinderFrustum(1.5, 1.5-6*tan, 6)
 	decadtest.MeasuresVolume(t, out, units.CubicMillimeters(want), decadtest.WithinRel(units.Scalar(1e-3)))
 	_, plate = bossPlate(t)
-	_, err = decad.Boss(t.Context(), plate, bossSpec(plate, true, &decad.BossBore{
-		Diameter: units.Millimeters(3), Depth: units.Millimeters(6), Draft: units.Degrees(3),
-		Thread: &decad.HoleThread{Pitch: units.Millimeters(0.5)}}))
+	_, err = pilotBoss(plate, decad.NewBossBore(units.Millimeters(3), units.Millimeters(6)).
+		Draft(units.Degrees(3)).Thread(decad.NewHoleThread(units.Millimeters(0.5)))).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrDegenerate, "a tapped pilot is straight")
 }

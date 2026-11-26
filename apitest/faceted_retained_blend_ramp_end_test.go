@@ -54,12 +54,12 @@ func rampArm(t *testing.T, riser, capChamfer bool, skew float64) *decad.Body {
 	s.CreateLine(pts[3], pts[0])
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(rampArmTop), Dir: decad.Along})
+	body, err := decad.Extrude(doc, s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(rampArmTop), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	if capChamfer {
 		loops := decad.Edges(decad.OuterLoopOf(decad.CapStart(body))).Or(decad.OuterLoopOf(decad.CapEnd(body)))
-		body, err = decad.Chamfer(t.Context(), body, loops, units.Millimeters(rampArmSize))
+		body, err = decad.Chamfer(body, loops, units.Millimeters(rampArmSize)).Do(t.Context())
 		require.NoError(t, err)
 	}
 	return rampCutOf(t, w, doc, body, riser, skew)
@@ -101,10 +101,10 @@ func rampCutOf(t *testing.T, w *sketch.World, doc *decad.Document, body *decad.B
 	}
 	_, err = ts.Solve(t.Context())
 	require.NoError(t, err)
-	tool, err := decad.Extrude(t.Context(), doc, ts, ts.Profiles()[0],
-		decad.Distance{D: units.Millimeters(30), Dir: decad.Along})
+	tool, err := decad.Extrude(doc, ts, ts.Profiles()[0],
+		decad.Distance{D: units.Millimeters(30), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
-	out, err := decad.Cut(t.Context(), body, tool)
+	out, err := decad.Cut(body, tool).Do(t.Context())
 	require.NoError(t, err)
 	return out
 }
@@ -184,7 +184,7 @@ func TestBlendChainEndsOnRamp(t *testing.T) {
 	t.Run("the outline chamfers onto the ramp, which takes both caps", func(t *testing.T) {
 		t.Parallel()
 		ramp := rampArm(t, false, false, 0)
-		out, err := decad.Chamfer(t.Context(), ramp, namedEdges(rampArmOutlineEdges(t, ramp)), units.Millimeters(size))
+		out, err := decad.Chamfer(ramp, namedEdges(rampArmOutlineEdges(t, ramp)), units.Millimeters(size)).Do(t.Context())
 		require.NoError(t, err)
 		// Two sides from the foot to the round end, and a half turn of radius 10
 		// whose material lies inside its circle (Pappus on the section).
@@ -207,8 +207,8 @@ func TestBlendChainEndsOnRamp(t *testing.T) {
 		// along the chain's round end, so the two removals differ by the ends
 		// alone.
 		step := rampArm(t, true, false, 0)
-		stepOut, err := decad.Chamfer(t.Context(), step, namedEdges(rampArmOutlineEdges(t, step)),
-			units.Millimeters(size))
+		stepOut, err := decad.Chamfer(step, namedEdges(rampArmOutlineEdges(t, step)),
+			units.Millimeters(size)).Do(t.Context())
 		require.NoError(t, err)
 		diff := removedVolume(t, step, stepOut) - removedVolume(t, ramp, out)
 		t.Logf("step less ramp %.12f, want %.12f", diff, 2*taper)
@@ -223,7 +223,7 @@ func TestBlendChainEndsOnRamp(t *testing.T) {
 		corner := r * r * (1 - math.Pi/4)
 		depth := r * (10 - 3*math.Pi) / (3 * (4 - math.Pi))
 		ramp := rampArm(t, false, false, 0)
-		out, err := decad.Fillet(t.Context(), ramp, namedEdges(rampArmOutlineEdges(t, ramp)), units.Millimeters(r))
+		out, err := decad.Fillet(ramp, namedEdges(rampArmOutlineEdges(t, ramp)), units.Millimeters(r)).Do(t.Context())
 		require.NoError(t, err)
 		// The rows on an oblique end step finer than a step's (rowStep), so the
 		// held strips differ along the whole chain: the removal is read against
@@ -250,17 +250,17 @@ func TestBlendChainEndsOnRamp(t *testing.T) {
 		// the chain: it takes its own route first, and the chain is then found
 		// again and built, as two calls in that order build it.
 		arm := rampArm(t, false, true, 0)
-		both, err := decad.Chamfer(t.Context(), arm,
-			namedEdges(append(rampArmOutlineEdges(t, arm), rampArmTopEdge(t, arm))), units.Millimeters(size))
+		both, err := decad.Chamfer(arm,
+			namedEdges(append(rampArmOutlineEdges(t, arm), rampArmTopEdge(t, arm))), units.Millimeters(size)).Do(t.Context())
 		require.NoError(t, err)
 		requireVerifiedMesh(t, both)
 
 		apart := rampArm(t, false, true, 0)
-		first, err := decad.Chamfer(t.Context(), apart, namedEdges([]*decad.Edge{rampArmTopEdge(t, apart)}),
-			units.Millimeters(size))
+		first, err := decad.Chamfer(apart, namedEdges([]*decad.Edge{rampArmTopEdge(t, apart)}),
+			units.Millimeters(size)).Do(t.Context())
 		require.NoError(t, err)
-		second, err := decad.Chamfer(t.Context(), first, namedEdges(rampArmOutlineEdges(t, first)),
-			units.Millimeters(size))
+		second, err := decad.Chamfer(first, namedEdges(rampArmOutlineEdges(t, first)),
+			units.Millimeters(size)).Do(t.Context())
 		require.NoError(t, err)
 		require.InDelta(t, removedVolume(t, apart, second), removedVolume(t, arm, both), 1e-12)
 	})
@@ -268,7 +268,7 @@ func TestBlendChainEndsOnRamp(t *testing.T) {
 	t.Run("a ramp that does not meet the side walls square is refused", func(t *testing.T) {
 		t.Parallel()
 		ramp := rampArm(t, false, false, 0.05)
-		_, err := decad.Chamfer(t.Context(), ramp, namedEdges(rampArmOutlineEdges(t, ramp)), units.Millimeters(size))
+		_, err := decad.Chamfer(ramp, namedEdges(rampArmOutlineEdges(t, ramp)), units.Millimeters(size)).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.ErrorContains(t, err, "an open tangent chain's end face does not meet its wall square")
 	})

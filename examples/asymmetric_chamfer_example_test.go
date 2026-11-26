@@ -10,7 +10,7 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// WithAsymmetricChamfer bevels an edge by two different distances, one on each
+// Chamfer(...).Asymmetric bevels an edge by two different distances, one on each
 // of the two faces that meet there. Use it when the bevel must be longer on
 // one side, for example to clear a mating part. A reference face says which
 // side takes the first distance.
@@ -30,8 +30,8 @@ func Example_asymmetric_chamfer() {
 		return
 	}
 	doc := decad.New()
-	plate, err := decad.Extrude(context.Background(), doc, s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	plate, err := decad.Extrude(doc, s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to extrude: %s\n", err)
 		return
@@ -43,8 +43,7 @@ func Example_asymmetric_chamfer() {
 	edge := decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1)),
 		decad.EndpointAt(r3.NewVec(40, 20, 0))).Exactly(1)
 	wall := decad.Faces(decad.Facing(r3.NewVec(1, 0, 0)))
-	beveled, err := decad.Chamfer(context.Background(), plate, edge, units.Millimeters(3),
-		decad.WithAsymmetricChamfer(wall, units.Millimeters(5)))
+	beveled, err := decad.Chamfer(plate, edge, units.Millimeters(3)).Asymmetric(wall, units.Millimeters(5)).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to chamfer: %s\n", err)
 		return

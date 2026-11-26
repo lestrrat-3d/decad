@@ -29,8 +29,8 @@ func Example_boss() {
 		return
 	}
 	doc := decad.New()
-	plate, err := decad.Extrude(context.Background(), doc, s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
+	plate, err := decad.Extrude(doc, s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(5), Dir: decad.Along}).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to extrude: %s\n", err)
 		return
@@ -38,13 +38,9 @@ func Example_boss() {
 
 	// An 8 mm post, 8 mm tall, in the middle of the top face (the extrude's end
 	// cap, at z = 5), with a 3 mm pilot hole 6 mm deep from the post's top.
-	boss, err := decad.Boss(context.Background(), plate, decad.BossSpec{
-		Face:     decad.Faces(decad.FaceCreatedBy(decad.CapEnd(plate))),
-		At:       r3.Vec{X: 20, Y: 20, Z: 5},
-		Diameter: units.Millimeters(8),
-		Height:   units.Millimeters(8),
-		Bore:     &decad.BossBore{Diameter: units.Millimeters(3), Depth: units.Millimeters(6)},
-	})
+	boss, err := decad.Boss(plate, decad.Faces(decad.FaceCreatedBy(decad.CapEnd(plate))), r3.Vec{X: 20, Y: 20, Z: 5}, units.Millimeters(8), units.Millimeters(8)).
+		Bore(decad.NewBossBore(units.Millimeters(3), units.Millimeters(6))).
+		Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to raise the boss: %s\n", err)
 		return
@@ -77,25 +73,16 @@ func Example_boss_tapped() {
 		fmt.Printf("failed to solve: %s\n", err)
 		return
 	}
-	plate, err := decad.Extrude(context.Background(), decad.New(), s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
+	plate, err := decad.Extrude(decad.New(), s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(5), Dir: decad.Along}).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to extrude: %s\n", err)
 		return
 	}
 
-	boss, err := decad.Boss(context.Background(), plate, decad.BossSpec{
-		Face:     decad.Faces(decad.FaceCreatedBy(decad.CapEnd(plate))),
-		At:       r3.Vec{X: 20, Y: 20, Z: 5},
-		Diameter: units.Millimeters(8),
-		Height:   units.Millimeters(8),
-		Bore: &decad.BossBore{
-			Diameter: units.Millimeters(3),
-			Depth:    units.Millimeters(6),
-			Head:     decad.Counterbore{Diameter: units.Millimeters(6), Depth: units.Millimeters(2)},
-			Thread:   &decad.HoleThread{Pitch: units.Millimeters(0.5), Length: units.Millimeters(4)},
-		},
-	})
+	boss, err := decad.Boss(plate, decad.Faces(decad.FaceCreatedBy(decad.CapEnd(plate))), r3.Vec{X: 20, Y: 20, Z: 5}, units.Millimeters(8), units.Millimeters(8)).
+		Bore(decad.NewBossBore(units.Millimeters(3), units.Millimeters(6)).Head(decad.Counterbore{Diameter: units.Millimeters(6), Depth: units.Millimeters(2)}).Thread(decad.NewHoleThread(units.Millimeters(0.5)).Length(units.Millimeters(4)))).
+		Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to raise the boss: %s\n", err)
 		return
@@ -126,19 +113,15 @@ func Example_boss_draft() {
 		fmt.Printf("failed to solve: %s\n", err)
 		return
 	}
-	plate, err := decad.Extrude(context.Background(), decad.New(), s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
+	plate, err := decad.Extrude(decad.New(), s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(5), Dir: decad.Along}).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to extrude: %s\n", err)
 		return
 	}
-	boss, err := decad.Boss(context.Background(), plate, decad.BossSpec{
-		Face:     decad.Faces(decad.FaceCreatedBy(decad.CapEnd(plate))),
-		At:       r3.Vec{X: 20, Y: 20, Z: 5},
-		Diameter: units.Millimeters(8),
-		Height:   units.Millimeters(8),
-		Draft:    units.Degrees(3),
-	})
+	boss, err := decad.Boss(plate, decad.Faces(decad.FaceCreatedBy(decad.CapEnd(plate))), r3.Vec{X: 20, Y: 20, Z: 5}, units.Millimeters(8), units.Millimeters(8)).
+		Draft(units.Degrees(3)).
+		Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to raise the boss: %s\n", err)
 		return
@@ -170,19 +153,15 @@ func Example_boss_root_fillet() {
 		fmt.Printf("failed to solve: %s\n", err)
 		return
 	}
-	plate, err := decad.Extrude(context.Background(), decad.New(), s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
+	plate, err := decad.Extrude(decad.New(), s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(5), Dir: decad.Along}).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to extrude: %s\n", err)
 		return
 	}
-	boss, err := decad.Boss(context.Background(), plate, decad.BossSpec{
-		Face:       decad.Faces(decad.FaceCreatedBy(decad.CapEnd(plate))),
-		At:         r3.Vec{X: 20, Y: 20, Z: 5},
-		Diameter:   units.Millimeters(8),
-		Height:     units.Millimeters(8),
-		RootFillet: units.Millimeters(1),
-	})
+	boss, err := decad.Boss(plate, decad.Faces(decad.FaceCreatedBy(decad.CapEnd(plate))), r3.Vec{X: 20, Y: 20, Z: 5}, units.Millimeters(8), units.Millimeters(8)).
+		RootFillet(units.Millimeters(1)).
+		Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to raise the boss: %s\n", err)
 		return
@@ -214,18 +193,13 @@ func Example_boss_shape() {
 		fmt.Printf("failed to solve: %s\n", err)
 		return
 	}
-	plate, err := decad.Extrude(context.Background(), decad.New(), s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
+	plate, err := decad.Extrude(decad.New(), s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(5), Dir: decad.Along}).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to extrude: %s\n", err)
 		return
 	}
-	boss, err := decad.Boss(context.Background(), plate, decad.BossSpec{
-		Face:   decad.Faces(decad.FaceCreatedBy(decad.CapEnd(plate))),
-		At:     r3.Vec{X: 20, Y: 20, Z: 5},
-		Height: units.Millimeters(6),
-		Shape:  decad.PolygonHole{Sides: 6, AcrossFlats: units.Millimeters(8), Angle: units.Degrees(0)},
-	})
+	boss, err := decad.BossShaped(plate, decad.Faces(decad.FaceCreatedBy(decad.CapEnd(plate))), r3.Vec{X: 20, Y: 20, Z: 5}, decad.PolygonHole{Sides: 6, AcrossFlats: units.Millimeters(8), Angle: units.Degrees(0)}, units.Millimeters(6)).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to raise the boss: %s\n", err)
 		return
@@ -258,18 +232,13 @@ func Example_boss_cylinder() {
 		fmt.Printf("failed to solve: %s\n", err)
 		return
 	}
-	rod, err := decad.Extrude(context.Background(), decad.New(), s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(16), Dir: decad.Along})
+	rod, err := decad.Extrude(decad.New(), s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(16), Dir: decad.Along}).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to extrude: %s\n", err)
 		return
 	}
-	boss, err := decad.Boss(context.Background(), rod, decad.BossSpec{
-		Face:     decad.Faces(decad.Cylindrical()),
-		At:       r3.Vec{X: 10, Y: 0, Z: 8},
-		Diameter: units.Millimeters(12),
-		Height:   units.Millimeters(20),
-	})
+	boss, err := decad.Boss(rod, decad.Faces(decad.Cylindrical()), r3.Vec{X: 10, Y: 0, Z: 8}, units.Millimeters(12), units.Millimeters(20)).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to raise the boss: %s\n", err)
 		return
@@ -289,7 +258,7 @@ func Example_boss_cylinder() {
 	// post top at x = 30 mm, volume: 7341 mm^3
 }
 
-// BossSpec.Ribs braces a round boss with triangular gusset ribs spaced round its
+// BossCommand.Ribs braces a round boss with triangular gusset ribs spaced round its
 // root, the way a moulded post is stiffened against a bending load. Here an 8 mm
 // post 8 mm tall carries four 2 mm thick ribs that reach 6 mm out along the plate
 // and climb 5 mm up the post.
@@ -306,24 +275,15 @@ func Example_boss_ribs() {
 		fmt.Printf("failed to solve: %s\n", err)
 		return
 	}
-	plate, err := decad.Extrude(context.Background(), decad.New(), s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
+	plate, err := decad.Extrude(decad.New(), s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(5), Dir: decad.Along}).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to extrude: %s\n", err)
 		return
 	}
-	boss, err := decad.Boss(context.Background(), plate, decad.BossSpec{
-		Face:     decad.Faces(decad.FaceCreatedBy(decad.CapEnd(plate))),
-		At:       r3.Vec{X: 0, Y: 0, Z: 5},
-		Diameter: units.Millimeters(8),
-		Height:   units.Millimeters(8),
-		Ribs: &decad.BossRibs{
-			Count:     4,
-			Thickness: units.Millimeters(2),
-			Length:    units.Millimeters(6),
-			Height:    units.Millimeters(5),
-		},
-	})
+	boss, err := decad.Boss(plate, decad.Faces(decad.FaceCreatedBy(decad.CapEnd(plate))), r3.Vec{X: 0, Y: 0, Z: 5}, units.Millimeters(8), units.Millimeters(8)).
+		Ribs(decad.NewBossRibs(4, units.Millimeters(2), units.Millimeters(6), units.Millimeters(5))).
+		Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to raise the boss: %s\n", err)
 		return
@@ -338,8 +298,8 @@ func Example_boss_ribs() {
 	// volume: 8524 mm^3
 }
 
-// BossSpec.Tilt leans a boss away from the face's normal, for a post that has to
-// clear a neighbour or meet a part at an angle. TiltDirection says which way it leans,
+// BossCommand.Tilt leans a boss away from the face's normal, for a post that has to
+// clear a neighbour or meet a part at an angle. Its direction argument says which way it leans,
 // as an angle about the normal from the face's U axis. Height runs along the leaning
 // axis. Here an 8 mm post stands 8 mm tall, 30 degrees off the vertical toward +X.
 func Example_boss_tilt() {
@@ -355,19 +315,15 @@ func Example_boss_tilt() {
 		fmt.Printf("failed to solve: %s\n", err)
 		return
 	}
-	plate, err := decad.Extrude(context.Background(), decad.New(), s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	plate, err := decad.Extrude(decad.New(), s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to extrude: %s\n", err)
 		return
 	}
-	boss, err := decad.Boss(context.Background(), plate, decad.BossSpec{
-		Face:     decad.Faces(decad.FaceCreatedBy(decad.CapEnd(plate))),
-		At:       r3.Vec{X: 0, Y: 0, Z: 10},
-		Diameter: units.Millimeters(8),
-		Height:   units.Millimeters(8),
-		Tilt:     units.Degrees(30),
-	})
+	boss, err := decad.Boss(plate, decad.Faces(decad.FaceCreatedBy(decad.CapEnd(plate))), r3.Vec{X: 0, Y: 0, Z: 10}, units.Millimeters(8), units.Millimeters(8)).
+		Tilt(units.Degrees(30), units.Degrees(0)).
+		Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to raise the boss: %s\n", err)
 		return

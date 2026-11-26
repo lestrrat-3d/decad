@@ -6,7 +6,7 @@ Boolean files and modify operations. The rules for rows live in `agent-docs/layo
 
 | Path | Responsibility |
 |---|---|
-| `boolean.go` | Public `Union`/`Cut`/`Intersect`, error mapping, scale-source marking, and the mesh Boolean over two bodies (`internal/booleaneval`). Routes: `internal/booleandispatch`, `internal/massdispatch`. See evaluator §9, operation-history-design. |
+| `boolean.go` | Public `Union`/`Cut`/`Intersect` commands and their `Do` over `union`/`cut`/`intersect`, error mapping, scale-source marking, and the mesh Boolean over two bodies (`internal/booleaneval`). Routes: `internal/booleandispatch`, `internal/massdispatch`. See evaluator §9, operation-history-design. |
 | `boolean_group_blind.go` | Binds root history and handles for bounded blind group Cuts and commits their result. `internal/prismboolean` owns cap selection and geometry proofs. See prism-boolean design. |
 | `boolean_group_cache.go` | Replays and compares a cached blind Cut mesh before returning it. See tessellation design. |
 | `boolean_group_history.go` | Authenticates ordered public source bodies for a prism group Union; `internal/prismboolean` replays their region and cap proofs. |
@@ -18,23 +18,23 @@ Boolean files and modify operations. The rules for rows live in `agent-docs/layo
 | `boolean_regroup.go` | Root history, handle, error and commit adapters for chain regroup, rim-split rebuild and paired Cut continuation. `internal/booleandispatch` owns the private node plan. See boolean-chain-regroup-design. |
 | `body_digest.go` | Public `Digest`, `Body.Digest` and `Document.PairDigest`: the skip, refuse and id-field lists and the document side tables handed to `internal/statedigest`. See body-digest-design. |
 | `intersection_volume.go` | `Document.IntersectionVolume`: the read-only `Intersect` query, built on `buildBoolean` with no commit. See API §8. |
-| `surface_trim.go` | Public `Trim`, `Extend` and `Split` entry checks and commits; `internal/surfacetrim/` builds them. See surface-intersection §2–§3. |
-| `point_plane_scale.go` | ScaledAt: resolves the similarity source by payload kind and commits the image; facetedrecord.ScaleImage admits and scales it. See loft-point design and evaluator §8. |
+| `surface_trim.go` | `TrimCommand`, `ExtendCommand` and `SplitCommand` over `trim`, `extend` and `split`: entry checks and commits; `internal/surfacetrim/` builds them. See surface-intersection §2–§3. |
+| `point_plane_scale.go` | The `ScaledAt` command: resolves the similarity source by payload kind and commits the image; facetedrecord.ScaleImage admits and scales it. See loft-point design and evaluator §8. |
 | `prism_scale.go` | Admits prism and full-Revolve certified similarity sources and transfers their face roles. See evaluator §8. |
 | `stack_brep_scale.go` | Admits exact line-only stacks and stack-backed BReps for certified similarity. See evaluator §8. |
 | `point_cap_extremes.go` | Resolves Split cap faces and selects the ends using facetedrecord's centroid-order proof. See loft-point design. |
 | `internal/boolupstream/` | Attributes an analytic Boolean result's planar faces to the one operand face exact plane identity proves each lies inside, and stores the roles in the payload's `Upstream`. See prism-boolean §11. |
 | `internal/capplane/` | Reads a `CapRecord` plane, a sweep axis and plane identity as exact rationals for Loft cap levels and Boolean attribution. See prism-boolean §11, loft §18. |
-| `union_refined.go` | Public `UnionRefined`: builds a straight-bevel sector join of a blank and its teeth once, at the refinement bound, or refuses before building. See body-refine §7.1. |
-| `refine.go` | Public `Refine`: re-certifies a held mesh Boolean result under a surface bound; it unwraps the faceted payload, whose `RefinedSurfaceBounds` (`internal/facetedrecord`) runs the `internal/occupancy` certificate. See body-refine §7. |
+| `union_refined.go` | `Union(...).RefineTo` implementation: builds a straight-bevel sector join of a blank and its teeth once, at the refinement bound, or refuses before building. See body-refine §7.1. |
+| `refine.go` | Public `Refine` command and its `refine` implementation: re-certifies a held mesh Boolean result under a surface bound; it unwraps the faceted payload, whose `RefinedSurfaceBounds` (`internal/facetedrecord`) runs the `internal/occupancy` certificate. See body-refine §7. |
 | `internal/occupancyleaf/` | Reads a Boolean operand payload (circle prism, coaxial stack, recorded Union result) as an occupancy record. See body-refine §4, §6. |
 
 ### Modify
 
 | Path | Responsibility |
 |---|---|
-| `fillet.go` | `Fillet`: options, selector, tangent chain and thickness gates, then `internal/brepmodify/` builds the fillet. See modify §6. |
-| `chamfer.go` | `Chamfer`: options, selector, tangent chain (extended without the option too), asymmetric reference and setback gates, then `internal/brepmodify/` builds the chamfer. See modify §7. Whole cap-loop runs: modify-reach §8.3.2. Chains across planes: retained-modify-reach §15b. |
+| `fillet.go` | `Fillet` and `FilletCommand`: the `TangentChain` method, selector and thickness gates, then `internal/brepmodify/` builds the fillet. See modify §6. |
+| `chamfer.go` | `Chamfer` and `ChamferCommand`: method, selector, chain, reference and setback gates, then `internal/brepmodify/`. See modify §7, modify-reach §8.3.2, retained-modify-reach §15b. |
 | `rim_extension.go` | Publishes a straight Chamfer ending on a tangent cylindrical support. See modify design. |
 | `rim_extension_history.go` | Binds held faces to their original extrusions and ruled cutting tool for a straight Chamfer. See modify design. |
 | `rim_outer_native.go` | Binds the terminal profile arc on the original flange when the cap joins a concentric cone heel. |
@@ -48,14 +48,14 @@ Boolean files and modify operations. The rules for rows live in `agent-docs/layo
 | `native_rim_surface.go` | Builds the finite chamfer band and verifies the edited shell before publication. |
 | `native_rim_chart.go` | Checks angular coverage, orientation, and the cone approximation bound. |
 | `chamfer_wedges.go` | `chamferByWedges`: several convex edges of an axis-square mesh solid that share corners, chamfered as the solid less each edge's wedge, with the fit check on the grid. See orthogonal Boolean B17. |
-| `fillet_chord.go` | Public `FilletChord`: reads the chord, gates each edge as right-angled, then calls `Fillet` with the radius. See fillet-chord design. |
+| `fillet_chord.go` | Public `FilletChord` and `FilletChordCommand`: reads the chord, gates each edge as right-angled, then calls the `Fillet` implementation with the radius. See fillet-chord design. |
 | `edge_dihedral.go` | `Edge.planarDihedral`, the angle across the corner of a convex or concave planar edge that `ChamferAngle` and `FilletChord` share. |
-| `chamfer_angle.go` | Public `ChamferAngle`: reads the angle, gates each edge as right-angled, then calls `Chamfer` with the second setback. See chamfer-angle design. |
-| `modify_options.go` | Public reach option tiers, codec adapters and asymmetric reference resolution (SX3). See modify-reach §2, §6. |
-| `move_face.go` | Public `MoveFace`: gates on a faceted receiver and one selected face, then `internal/orthoshell/` presses the face and `solidFromMeshBody` makes the result. See orthogonal-move design. |
-| `quarter_turn.go` | Public `QuarterTurn`: exact quarter turns of a faceted solid about a world axis by exchanging coordinates, each sum proved exact. See orthogonal-boolean design B10. |
+| `chamfer_angle.go` | Public `ChamferAngle` and `ChamferAngleCommand`: reads the angle, gates each edge as right-angled, then calls the `Chamfer` implementation with the second setback. See chamfer-angle design. |
+| `modify_options.go` | The `TangentChain` and `Asymmetric` settings the Fillet and Chamfer commands share, and asymmetric reference resolution (SX3). See modify-reach §2, §6. |
+| `move_face.go` | Public `MoveFace` and `MoveFaceCommand`: gates on a faceted receiver and one selected face, then `internal/orthoshell/` presses the face and `solidFromMeshBody` makes the result. See orthogonal-move design. |
+| `quarter_turn.go` | The `QuarterTurn` command: exact quarter turns of a faceted solid about a world axis by exchanging coordinates, each sum proved exact. See orthogonal-boolean design B10. |
 | `boolean_orthogonal.go` | Pair handle and result adapters for `internal/booleandispatch`; many-body admission and `internal/orthoshell/` grid assembly. See orthogonal-boolean design. |
 | `shell_orthogonal.go` | The orthogonal-polyhedron route of `Shell`: gates on a faceted receiver, then `internal/orthoshell/` builds the walls and `solidFromMeshBody` makes them the result. See orthogonal-shell design. |
-| `shell.go` | Public `ShellOption`, `ShellSense` and `Shell`: options, selector and thickness gates, then `internal/brepmodify/` builds the shell. Also `shellTol`. See modify §7–§9 and Table R. |
+| `shell.go` | Public `ShellSense`, `Shell`, `ShellCommand`, `ShellClosed`, `ShellClosedCommand` and the `Sense` and `FaceThickness` settings both commands share: method values, selector and thickness gates, then `internal/brepmodify/` builds the shell. Also `shellTol`. See modify §7–§9 and Table R. |
 | `brep_modify.go` | The prism cap faces a modify op classifies against, the modify commit, and the conversions to `internal/brepmodify/`, which owns the brep and stacked receiver routes. See brep-modify. |
-| `brep_modify_partial.go` | `WithTangentChain`'s public handles, selectors and refusals over `internal/tangentchain/`. See modify-reach §5. |
+| `brep_modify_partial.go` | `TangentChain`'s public handles, selectors and refusals over `internal/tangentchain/`. See modify-reach §5. |

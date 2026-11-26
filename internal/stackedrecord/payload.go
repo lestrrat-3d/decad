@@ -23,7 +23,7 @@ type Payload struct {
 	Frame        r3.Frame
 	Xform        r3.Transform
 	SectionDelta float64
-	// ClosedShell marks the record of a closed shell (WithNoOpenings,
+	// ClosedShell marks the record of a closed shell (ShellClosed,
 	// agent-docs/prism-boolean-design.md Part S §2.4). Its wall slab lines each hole
 	// of the section with a band whose OUTER loop is the cavity's hole, so
 	// that band's outer column bounds the cavity, not the body's exterior.

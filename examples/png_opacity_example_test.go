@@ -33,7 +33,7 @@ func Example_png_opacity() {
 		fmt.Printf("failed to build the lift: %s\n", err)
 		return
 	}
-	plate, err = decad.Transform(context.Background(), plate, lift)
+	plate, err = decad.Transform(plate, lift).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to lift the plate: %s\n", err)
 		return
@@ -69,6 +69,6 @@ func opacityBlock(doc *decad.Document, x0, y0, x1, y1, height float64) (*decad.B
 	if _, err := s.Solve(context.Background()); err != nil {
 		return nil, err
 	}
-	return decad.Extrude(context.Background(), doc, s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(height), Dir: decad.Along})
+	return decad.Extrude(doc, s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(height), Dir: decad.Along}).Do(context.Background())
 }

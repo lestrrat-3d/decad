@@ -30,8 +30,8 @@ func Example_export_gltf() {
 		fmt.Printf("failed to solve: %s\n", err)
 		return
 	}
-	box, err := decad.Extrude(context.Background(), decad.New(), s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(4), Dir: decad.Along})
+	box, err := decad.Extrude(decad.New(), s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(4), Dir: decad.Along}).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to extrude: %s\n", err)
 		return

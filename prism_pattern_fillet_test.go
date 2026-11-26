@@ -15,12 +15,12 @@ import (
 
 func TestPrismPatternFilletOfCopiedExtrudes(t *testing.T) {
 	doc, blank, section, rotated := prismPatternTabBodies(t, prismPatternInsetBlank)
-	joined, err := Union(t.Context(), blank, section, rotated)
+	joined, err := Union(blank, section, rotated).Do(t.Context())
 	require.NoError(t, err)
 	before, err := joined.Volume()
 	require.NoError(t, err)
 	selection := prismPatternRootSelection(t, joined)
-	rounded, err := Fillet(t.Context(), joined, selection, units.Millimeters(0.05))
+	rounded, err := Fillet(joined, selection, units.Millimeters(0.05)).Do(t.Context())
 	require.NoError(t, err)
 	require.Len(t, doc.Bodies(), 1)
 	after, err := rounded.Volume()
@@ -35,7 +35,7 @@ func TestPrismPatternFilletOfCopiedExtrudes(t *testing.T) {
 
 func TestPrismPatternFilletAcrossCircularWallStations(t *testing.T) {
 	doc, blank, section, rotated := prismPatternTabBodies(t, prismPatternInsetBlank)
-	joined, err := Union(t.Context(), blank, section, rotated)
+	joined, err := Union(blank, section, rotated).Do(t.Context())
 	require.NoError(t, err)
 	selection := prismPatternRootSelection(t, joined)
 	edges, err := selection.SelectEdges(joined)
@@ -52,8 +52,8 @@ func TestPrismPatternFilletAcrossCircularWallStations(t *testing.T) {
 		multiStation = multiStation || len(contact.RingCut.Positions) > 2
 	}
 	require.True(t, multiStation)
-	rounded, err := Fillet(t.Context(), joined, selection,
-		units.Millimeters(0.14))
+	rounded, err := Fillet(joined, selection,
+		units.Millimeters(0.14)).Do(t.Context())
 	require.NoError(t, err)
 	require.Len(t, doc.Bodies(), 1)
 	mesh, err := rounded.Tessellate(t.Context(), units.Millimeters(0.1), WithVerification(VerifyAll))
@@ -64,15 +64,15 @@ func TestPrismPatternFilletAcrossCircularWallStations(t *testing.T) {
 
 func TestPrismPatternFilletSectorBeyondRootDisk(t *testing.T) {
 	doc, blank, section, rotated := prismPatternNarrowTabBodies(t)
-	joined, err := Union(t.Context(), blank, section, rotated)
+	joined, err := Union(blank, section, rotated).Do(t.Context())
 	require.NoError(t, err)
 	// The old 3r disk reaches the fitted flank. The analytic arc and its
 	// connector cutback stay inside a narrower radial and angular envelope.
 	const radius = 0.055
 	require.Greater(t, 3+3*radius, 3.15)
 	require.Greater(t, 2*3*math.Sin(0.14), 6*radius)
-	rounded, err := Fillet(t.Context(), joined, prismPatternRootSelection(t, joined),
-		units.Millimeters(radius))
+	rounded, err := Fillet(joined, prismPatternRootSelection(t, joined),
+		units.Millimeters(radius)).Do(t.Context())
 	require.NoError(t, err)
 	require.Len(t, doc.Bodies(), 1)
 	mesh, err := rounded.Tessellate(t.Context(), units.Millimeters(0.1), WithVerification(VerifyAll))
@@ -110,7 +110,7 @@ func prismPatternNarrowTabBodies(t *testing.T) (*Document, *Body, *Body, *Body) 
 	require.NoError(t, err)
 	require.Len(t, s.Profiles(), 1)
 	doc := New()
-	section, err := Extrude(t.Context(), doc, s, s.Profiles()[0], Distance{D: units.Millimeters(2), Dir: Along})
+	section, err := Extrude(doc, s, s.Profiles()[0], Distance{D: units.Millimeters(2), Dir: Along}).Do(t.Context())
 	require.NoError(t, err)
 	blankSketch, err := world.CreateSketch(world.XY())
 	require.NoError(t, err)
@@ -119,12 +119,12 @@ func prismPatternNarrowTabBodies(t *testing.T) (*Document, *Body, *Body, *Body) 
 	blankSketch.CreateCircle(c, prismPatternInsetBlank)
 	_, err = blankSketch.Solve(t.Context())
 	require.NoError(t, err)
-	blank, err := Extrude(t.Context(), doc, blankSketch, blankSketch.Profiles()[0],
-		Distance{D: units.Millimeters(2), Dir: Along})
+	blank, err := Extrude(doc, blankSketch, blankSketch.Profiles()[0],
+		Distance{D: units.Millimeters(2), Dir: Along}).Do(t.Context())
 	require.NoError(t, err)
 	turn, err := r3.Rotation(r3.Vec{Z: 1}, units.Radians(math.Pi/2))
 	require.NoError(t, err)
-	rotated, err := Copy(t.Context(), section, WithCopyPlacement(turn))
+	rotated, err := Copy(section).Place(CopyTransform{Transform: turn}).Do(t.Context())
 	require.NoError(t, err)
 	return doc, blank, section, rotated
 }
@@ -164,9 +164,9 @@ func TestPrismPatternFilletPastShortRadialLine(t *testing.T) {
 
 			doc, blank, tooth := prismPatternGearToothBodies(t, tc.teeth, tc.root, tc.base, tc.tip,
 				tc.half, tc.inset, 2)
-			copies, err := PatternCopies(t.Context(), tooth, CircularPattern{Axis: r3.Vec{Z: 1}, Count: tc.teeth})
+			copies, err := PatternCopies(tooth, CircularPattern{Axis: r3.Vec{Z: 1}, Count: tc.teeth}).Do(t.Context())
 			require.NoError(t, err)
-			joined, err := Union(t.Context(), blank, append([]*Body{tooth}, copies...)...)
+			joined, err := Union(append([]*Body{blank}, append([]*Body{tooth}, copies...)...)...).Do(t.Context())
 			require.NoError(t, err)
 			require.NotNil(t, joined.n.Payload.(facetedPayload).PrismPatternJoin, "the copied-prism route joins")
 			before, err := joined.Volume()
@@ -191,7 +191,7 @@ func TestPrismPatternFilletPastShortRadialLine(t *testing.T) {
 			}
 			require.Equal(t, 2*tc.teeth, roots)
 
-			rounded, err := Fillet(t.Context(), joined, selection.Exactly(roots), units.Millimeters(tc.radius))
+			rounded, err := Fillet(joined, selection.Exactly(roots), units.Millimeters(tc.radius)).Do(t.Context())
 			require.NoError(t, err)
 			require.Len(t, doc.Bodies(), 1)
 			require.True(t, rounded.IsSolid())
@@ -256,7 +256,7 @@ func prismPatternGearToothBodies(t *testing.T, teeth int, root, base, tip, half,
 	require.Len(t, s.Profiles(), 1)
 	require.Len(t, s.Profiles()[0].Outer, 6)
 	doc := New()
-	tooth, err := Extrude(t.Context(), doc, s, s.Profiles()[0], Distance{D: units.Millimeters(height), Dir: Along})
+	tooth, err := Extrude(doc, s, s.Profiles()[0], Distance{D: units.Millimeters(height), Dir: Along}).Do(t.Context())
 	require.NoError(t, err)
 	blankSketch, err := world.CreateSketch(world.XY())
 	require.NoError(t, err)
@@ -265,15 +265,15 @@ func prismPatternGearToothBodies(t *testing.T, teeth int, root, base, tip, half,
 	blankSketch.CreateCircle(c, root)
 	_, err = blankSketch.Solve(t.Context())
 	require.NoError(t, err)
-	blank, err := Extrude(t.Context(), doc, blankSketch, blankSketch.Profiles()[0],
-		Distance{D: units.Millimeters(height), Dir: Along})
+	blank, err := Extrude(doc, blankSketch, blankSketch.Profiles()[0],
+		Distance{D: units.Millimeters(height), Dir: Along}).Do(t.Context())
 	require.NoError(t, err)
 	return doc, blank, tooth
 }
 
 func TestPrismPatternFilletRefusesUnprovedCornerAndLargeRadius(t *testing.T) {
 	doc, blank, section, rotated := prismPatternTabBodies(t, prismPatternInsetBlank)
-	joined, err := Union(t.Context(), blank, section, rotated)
+	joined, err := Union(blank, section, rotated).Do(t.Context())
 	require.NoError(t, err)
 	axial, err := Edges(ParallelTo(r3.Vec{Z: 1})).SelectEdges(joined)
 	require.NoError(t, err)
@@ -286,13 +286,13 @@ func TestPrismPatternFilletRefusesUnprovedCornerAndLargeRadius(t *testing.T) {
 		}
 	}
 	require.NotNil(t, exterior)
-	_, err = Fillet(t.Context(), joined, Edges(ParallelTo(r3.Vec{Z: 1}),
-		EndpointAt(exterior.Start().Position().Value)), units.Millimeters(0.05))
+	_, err = Fillet(joined, Edges(ParallelTo(r3.Vec{Z: 1}),
+		EndpointAt(exterior.Start().Position().Value)), units.Millimeters(0.05)).Do(t.Context())
 	require.ErrorIs(t, err, ErrUnsupported)
 	require.Len(t, doc.Bodies(), 1)
 	// The tab's radial root lines run from 3 to 3.35. At r = 0.4 the line
 	// foot, sqrt(9+6r) = 3.38 from the axis, lies past the line's far end.
-	_, err = Fillet(t.Context(), joined, prismPatternRootSelection(t, joined), units.Millimeters(0.4))
+	_, err = Fillet(joined, prismPatternRootSelection(t, joined), units.Millimeters(0.4)).Do(t.Context())
 	require.ErrorIs(t, err, ErrUnsupported)
 	require.ErrorContains(t, err, "contact escapes its connector")
 	require.Len(t, doc.Bodies(), 1)
@@ -319,9 +319,9 @@ func rimToothFillet(t *testing.T, tc rimToothCase, height float64) (*Body, bool)
 	half := math.Pi/(2*n) + inv - tc.thin
 	radius := 0.9 * root * (math.Pi/n - 2*(half-math.Pi/(2*n))) / 2
 	doc, blank, tooth := prismPatternGearToothBodies(t, tc.teeth, root, n/2*math.Cos(pressure), (n+2)/2, half, 0, height)
-	copies, err := PatternCopies(t.Context(), tooth, CircularPattern{Axis: r3.Vec{Z: 1}, Count: tc.teeth})
+	copies, err := PatternCopies(tooth, CircularPattern{Axis: r3.Vec{Z: 1}, Count: tc.teeth}).Do(t.Context())
 	require.NoError(t, err)
-	joined, err := Union(t.Context(), blank, append([]*Body{tooth}, copies...)...)
+	joined, err := Union(append([]*Body{blank}, append([]*Body{tooth}, copies...)...)...).Do(t.Context())
 	require.NoError(t, err)
 	_, bySections := joined.n.Payload.(loftPayload)
 
@@ -344,7 +344,7 @@ func rimToothFillet(t *testing.T, tc rimToothCase, height float64) (*Body, bool)
 	for _, corner := range corners[1:] {
 		selection.Or(ParallelTo(r3.Vec{Z: 1}), EndpointAt(corner))
 	}
-	rounded, err := Fillet(t.Context(), joined, selection.Exactly(len(corners)), units.Millimeters(radius))
+	rounded, err := Fillet(joined, selection.Exactly(len(corners)), units.Millimeters(radius)).Do(t.Context())
 	require.NoError(t, err)
 	require.Len(t, doc.Bodies(), 1)
 	require.True(t, rounded.IsSolid())

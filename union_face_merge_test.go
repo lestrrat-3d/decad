@@ -15,7 +15,7 @@ func mergeTranslated(t *testing.T, b *Body, x, y, z float64) *Body {
 	t.Helper()
 	tr, err := r3.Translation(r3.Vec{X: x, Y: y, Z: z})
 	require.NoError(t, err)
-	moved, err := Transform(t.Context(), b, tr)
+	moved, err := Transform(b, tr).Do(t.Context())
 	require.NoError(t, err)
 	return moved
 }
@@ -26,7 +26,7 @@ func mergeFlushPair(t *testing.T) *Body {
 	doc := New()
 	a := internalBoxBody(t, doc, 0, 0, 10, 10, 10)
 	b := mergeTranslated(t, internalBoxBody(t, doc, 0, 0, 10, 10, 10), 0.5, 0, 10)
-	joined, err := Union(t.Context(), a, b)
+	joined, err := Union(a, b).Do(t.Context())
 	require.NoError(t, err)
 	return joined
 }
@@ -105,9 +105,9 @@ func mergeDovetail(t *testing.T) *Body {
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	require.Len(t, s.Profiles(), 1)
-	tool, err := Extrude(t.Context(), doc, s, s.Profiles()[0], Distance{D: units.Millimeters(16), Dir: Against})
+	tool, err := Extrude(doc, s, s.Profiles()[0], Distance{D: units.Millimeters(16), Dir: Against}).Do(t.Context())
 	require.NoError(t, err)
-	joined, err := Union(t.Context(), host, tool)
+	joined, err := Union(host, tool).Do(t.Context())
 	require.NoError(t, err)
 	return joined
 }
@@ -192,7 +192,7 @@ func TestUnionFaceMergeSurvivesPlacement(t *testing.T) {
 	moved := mergeTranslated(t, mergeFlushPair(t), 3, -2, 5)
 	require.Equal(t, want, faceSummary(moved))
 
-	copied, err := Copy(t.Context(), mergeFlushPair(t))
+	copied, err := Copy(mergeFlushPair(t)).Do(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, want, faceSummary(copied))
 }
@@ -205,11 +205,11 @@ func TestUnionFaceMergeKeepsRoundedFacesApart(t *testing.T) {
 	for _, deg := range []float64{20, -20} {
 		turn, err := r3.Rotation(r3.Vec{X: 1, Y: 1, Z: 1}, units.Degrees(deg))
 		require.NoError(t, err)
-		b, err = Transform(t.Context(), b, turn)
+		b, err = Transform(b, turn).Do(t.Context())
 		require.NoError(t, err)
 	}
 	b = mergeTranslated(t, b, 0.5, 0, 10)
-	joined, err := Union(t.Context(), a, b)
+	joined, err := Union(a, b).Do(t.Context())
 	require.NoError(t, err)
 	fp := mergeFaceted(t, joined)
 	shifted := false
@@ -289,7 +289,7 @@ func flushPolygonPrism(t *testing.T, doc *Document, p flushPlacement, origin, u,
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	require.Len(t, s.Profiles(), 1)
-	body, err := Extrude(t.Context(), doc, s, s.Profiles()[0], Distance{D: units.Millimeters(length), Dir: p.toward(u, v, dir)})
+	body, err := Extrude(doc, s, s.Profiles()[0], Distance{D: units.Millimeters(length), Dir: p.toward(u, v, dir)}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -340,7 +340,7 @@ func flushTongueUnion(t *testing.T, p flushPlacement, offset float64) *Body {
 	x, y, z := r3.Vec{X: 1}, r3.Vec{Y: 1}, r3.Vec{Z: 1}
 	host := flushPolygonPrism(t, doc, p, r3.Vec{}, x, y, z.Scale(-1), [][2]float64{{-10, 0}, {10, 0}, {10, 16}, {-10, 16}}, 10)
 	tongue := flushPolygonPrism(t, doc, p, r3.Vec{Y: offset}, x, z, y, chordRoundTongue(), 4)
-	joined, err := Union(t.Context(), host, tongue)
+	joined, err := Union(host, tongue).Do(t.Context())
 	require.NoError(t, err)
 	return joined
 }
@@ -413,7 +413,7 @@ func TestUnionFaceMergeChordRoundCapSurvivesPlacement(t *testing.T) {
 	require.NoError(t, err)
 	reflect, err := r3.Reflection(mirror)
 	require.NoError(t, err)
-	mirrored, err := Transform(t.Context(), flushTongueUnion(t, flushPlacements[0], 0), reflect)
+	mirrored, err := Transform(flushTongueUnion(t, flushPlacements[0], 0), reflect).Do(t.Context())
 	require.NoError(t, err)
 	require.Len(t, mirrored.Faces(), 14)
 	fp := mergeFaceted(t, mirrored)

@@ -17,13 +17,13 @@ import (
 func chainedCut(t *testing.T, opts ...decad.DocumentOption) (*decad.Body, error) {
 	t.Helper()
 	sc := &retentionScene{w: sketch.NewWorld(), doc: decad.New(opts...)}
-	first, err := decad.Cut(t.Context(), sc.roundedBox(t), sc.taperedTool(t))
+	first, err := decad.Cut(sc.roundedBox(t), sc.taperedTool(t)).Do(t.Context())
 	require.NoError(t, err)
 	// A Copy ends the operation history's Boolean chain, so the refusal under test is
 	// the sequential gate, not a chain the regroup rebuilds.
-	held, err := decad.Copy(t.Context(), first)
+	held, err := decad.Copy(first).Do(t.Context())
 	require.NoError(t, err)
-	return decad.Cut(t.Context(), held, slabYTool(t, sc, 22, 3))
+	return decad.Cut(held, slabYTool(t, sc, 22, 3)).Do(t.Context())
 }
 
 func TestChainToleranceAdmitsAContactOnACoarserRim(t *testing.T) {
@@ -94,12 +94,12 @@ func TestChainToleranceAdmitsAContactOnACoarserRim(t *testing.T) {
 				s.Fix(r.A)
 				_, err = s.Solve(t.Context())
 				require.NoError(t, err)
-				b, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0],
-					decad.Distance{D: units.Millimeters(size), Dir: decad.Along})
+				b, err := decad.Extrude(doc, s, s.Profiles()[0],
+					decad.Distance{D: units.Millimeters(size), Dir: decad.Along}).Do(t.Context())
 				require.NoError(t, err)
 				return b
 			}
-			_, err := decad.Cut(t.Context(), box(4), box(2))
+			_, err := decad.Cut(box(4), box(2)).Do(t.Context())
 			require.ErrorIs(t, err, tc.want, "%v", tc.tol)
 		}
 	})

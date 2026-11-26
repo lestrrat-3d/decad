@@ -32,10 +32,10 @@ const cupDensity = 1.0 / 1024
 
 // cupBox extrudes the 16×8 plate at the origin by 10 and shells away its top
 // cap with the given thickness and options.
-func cupBox(t *testing.T, thickness units.Value, opts ...decad.ShellOption) *decad.Body {
+func cupBox(t *testing.T, thickness units.Value, settings ...shellSetting) *decad.Body {
 	t.Helper()
 	box := boxBody(t, decad.New(), 0, 0, 16, 8, 10)
-	cup, err := decad.Shell(t.Context(), box, topCap(box), thickness, opts...)
+	cup, err := applyShell(box, topCap(box), thickness, settings...).Do(t.Context())
 	require.NoError(t, err)
 	return cup
 }
@@ -54,7 +54,7 @@ func TestMassPropertiesCupOuterMinusCavity(t *testing.T) {
 	require.Less(t, got.Center.Value.Z, 5.0)
 
 	pose := composedRotation(t, r3.NewVec(2, -3, 5), r3.NewVec(1, 1, 1), 40, 8)
-	placed, err := decad.Copy(t.Context(), cup, decad.WithCopyPlacement(pose))
+	placed, err := decad.Copy(cup).Place(decad.CopyTransform{Transform: pose}).Do(t.Context())
 	require.NoError(t, err)
 	turned, err := placed.MassProperties(t.Context(), density)
 	require.NoError(t, err)
@@ -69,7 +69,7 @@ func TestMassPropertiesCupOuterMinusCavity(t *testing.T) {
 // circles, so the outer prism's section moments come from the circular-arc
 // integrals and carry their own enclosure.
 func TestMassPropertiesCupOutward(t *testing.T) {
-	cup := cupBox(t, units.Millimeters(2), decad.WithShellSense(decad.Outward))
+	cup := cupBox(t, units.Millimeters(2), outwardSetting())
 	got, err := cup.MassProperties(t.Context(), units.KilogramsPerCubicMillimeter(cupDensity))
 	require.NoError(t, err)
 
@@ -139,7 +139,7 @@ func TestCupInchWallEnclosesDenotedCup(t *testing.T) {
 	rho := new(big.Rat).SetFloat64(cupDensity)
 	for _, plate := range [][2]int64{{16, 8}, {100, 60}} {
 		box := boxBody(t, decad.New(), 0, 0, float64(plate[0]), float64(plate[1]), 10)
-		cup, err := decad.Shell(t.Context(), box, topCap(box), thickness)
+		cup, err := decad.Shell(box, topCap(box), thickness).Do(t.Context())
 		require.NoError(t, err)
 
 		hi := ratVec(plate[0], plate[1], 10)

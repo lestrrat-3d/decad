@@ -64,8 +64,7 @@ func TestReadSTEPRoundTripsAConcavePrism(t *testing.T) {
 
 func TestReadSTEPRoundTripsACavity(t *testing.T) {
 	t.Parallel()
-	closed, err := decad.Shell(t.Context(), decadtest.NewBlock(t, decad.New(), 0, 0, 20, 20, units.Millimeters(20)), nil,
-		units.Millimeters(3), decad.WithNoOpenings())
+	closed, err := decad.ShellClosed(decadtest.NewBlock(t, decad.New(), 0, 0, 20, 20, units.Millimeters(20)), units.Millimeters(3)).Do(t.Context())
 	require.NoError(t, err)
 	data := writeSTEP(t, closed)
 	require.Contains(t, string(data), "BREP_WITH_VOIDS")
@@ -79,11 +78,10 @@ func TestReadSTEPRoundTripsACavity(t *testing.T) {
 func TestReadSTEPRoundTripsALumpWithACavityBesideALump(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
-	closed, err := decad.Shell(t.Context(), decadtest.NewBlock(t, doc, 0, 0, 20, 20, units.Millimeters(20)), nil,
-		units.Millimeters(3), decad.WithNoOpenings())
+	closed, err := decad.ShellClosed(decadtest.NewBlock(t, doc, 0, 0, 20, 20, units.Millimeters(20)), units.Millimeters(3)).Do(t.Context())
 	require.NoError(t, err)
 	beside := decadtest.NewBlock(t, doc, 40, 0, 50, 10, units.Millimeters(10))
-	both, err := decad.Union(t.Context(), closed, beside)
+	both, err := decad.Union(closed, beside).Do(t.Context())
 	require.NoError(t, err)
 	require.Len(t, both.Lumps(), 2)
 	require.Len(t, both.Shells(), 3)
@@ -104,11 +102,11 @@ func TestSTEPWritesACavityThatTouchesTheOuterShell(t *testing.T) {
 	edgeDoc := decad.New()
 	box := decadtest.NewBlock(t, edgeDoc, 0, 0, 20, 20, units.Millimeters(20))
 	s, p := polygonSketch(t, [][2]float64{{0, 10}, {5, 5}, {10, 10}, {5, 15}})
-	prism, err := decad.Extrude(t.Context(), edgeDoc, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	prism, err := decad.Extrude(edgeDoc, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
-	prism, err = decad.Transform(t.Context(), prism, mustTranslation(t, 0, 0, 5))
+	prism, err = decad.Transform(prism, mustTranslation(t, 0, 0, 5)).Do(t.Context())
 	require.NoError(t, err)
-	edgeTouch, err := decad.Cut(t.Context(), box, prism)
+	edgeTouch, err := decad.Cut(box, prism).Do(t.Context())
 	require.NoError(t, err)
 
 	vertexDoc := decad.New()
@@ -124,11 +122,11 @@ func TestSTEPWritesACavityThatTouchesTheOuterShell(t *testing.T) {
 	_, err = cs.Solve(t.Context())
 	require.NoError(t, err)
 	axis := decad.SketchLine{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 1, V: 0}}
-	cone, err := decad.Revolve(t.Context(), vertexDoc, cs, cs.Profiles()[0], axis, decad.FullRevolution{})
+	cone, err := decad.Revolve(vertexDoc, cs, cs.Profiles()[0], axis, decad.FullRevolution{}).Do(t.Context())
 	require.NoError(t, err)
-	cone, err = decad.Transform(t.Context(), cone, mustTranslation(t, 0, 0, 10))
+	cone, err = decad.Transform(cone, mustTranslation(t, 0, 0, 10)).Do(t.Context())
 	require.NoError(t, err)
-	vertexTouch, err := decad.Cut(t.Context(), vbox, cone)
+	vertexTouch, err := decad.Cut(vbox, cone).Do(t.Context())
 	require.NoError(t, err)
 
 	for name, body := range map[string]*decad.Body{"edge": edgeTouch, "vertex": vertexTouch} {
@@ -148,8 +146,7 @@ func TestSTEPWritesACavityThatTouchesTheOuterShell(t *testing.T) {
 
 func TestReadSTEPHonoursAnOrientedVoidShellsFlag(t *testing.T) {
 	t.Parallel()
-	closed, err := decad.Shell(t.Context(), decadtest.NewBlock(t, decad.New(), 0, 0, 20, 20, units.Millimeters(20)), nil,
-		units.Millimeters(3), decad.WithNoOpenings())
+	closed, err := decad.ShellClosed(decadtest.NewBlock(t, decad.New(), 0, 0, 20, 20, units.Millimeters(20)), units.Millimeters(3)).Do(t.Context())
 	require.NoError(t, err)
 	data := writeSTEP(t, closed)
 	flipped := string(data)
@@ -178,7 +175,7 @@ func TestReadSTEPRoundTripsAFacetedCone(t *testing.T) {
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	axis := decad.SketchLine{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 1, V: 0}}
-	cone, err := decad.Revolve(t.Context(), decad.New(), s, s.Profiles()[0], axis, decad.FullRevolution{})
+	cone, err := decad.Revolve(decad.New(), s, s.Profiles()[0], axis, decad.FullRevolution{}).Do(t.Context())
 	require.NoError(t, err)
 	var out bytes.Buffer
 	require.NoError(t, export.STEP(t.Context(), &out, cone, units.Millimeters(0.5),
@@ -215,12 +212,7 @@ func TestReadSTEPReadsADrilledPlate(t *testing.T) {
 	// bottom faces are planes with a circular hole each.
 	doc := decad.New()
 	plate := decadtest.NewBlock(t, doc, 0, 0, 20, 20, units.Millimeters(10))
-	drilled, err := decad.Hole(t.Context(), plate, decad.HoleSpec{
-		Face:     capFace(true, plate),
-		At:       r3.Vec{X: 10, Y: 10, Z: 10},
-		Diameter: units.Millimeters(6),
-		Depth:    decad.ThroughHole{},
-	})
+	drilled, err := decad.Hole(plate, capFace(true, plate), r3.Vec{X: 10, Y: 10, Z: 10}, units.Millimeters(6), decad.ThroughHole{}).Do(t.Context())
 	require.NoError(t, err)
 	data := writeSTEP(t, drilled)
 	require.Contains(t, string(data), "CYLINDRICAL_SURFACE")
@@ -273,7 +265,7 @@ func TestReadSTEPReadsPartialCylinderWalls(t *testing.T) {
 	s.CreateArc(left, d, a)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	slot, err := decad.Extrude(t.Context(), decad.New(), s, s.Profiles()[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	slot, err := decad.Extrude(decad.New(), s, s.Profiles()[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	data := writeSTEP(t, slot)
 	require.Contains(t, string(data), "CYLINDRICAL_SURFACE")

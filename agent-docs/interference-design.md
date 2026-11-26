@@ -300,7 +300,7 @@ operation's exact result, and only that set enters the walk:
 - a Cut result lies in its target, an Intersect in any operand, a Union in a
   body every operand lies in, and a body lies in a Union when it lies in any
   operand or in an Intersect when it lies in every one;
-- a direct copy made by `WithCopyLiftTranslation` (`mirror-pattern-design.md`
+- a direct copy made by `CopyLiftTranslation` (`mirror-pattern-design.md`
   §4.5) reads as its source shifted by the copy's exact world vector
   (`historyProducers.ExactShiftProducer` authenticates the operation record,
   the referenced source and the lineage). The shift follows the source's
@@ -311,7 +311,7 @@ operation's exact result, and only that set enters the walk:
   the relative shift `d`: its reach gains `g·d` (`m·d`), and the end-cap slab
   is read with the prism moved by `−d` relative to the Revolve. Every other
   rule reads unshifted records and answers only when both bodies carry the
-  same shift: translating both by one vector keeps their relation. A copy made by `WithCopyPlacement` or `WithCopyRotation`, a copy of
+  same shift: translating both by one vector keeps their relation. A copy made by `CopyTransform` or `CopyRotation`, a copy of
   a copy and a `Transform` of a copy stay leaves;
 - a prism lies in another prism whose exact linear lift (frame axes carried
   by the placement basis, in rationals) is the same, with both sections and

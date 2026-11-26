@@ -22,7 +22,7 @@ func Example_parts_explode_spread() {
 		if err != nil {
 			return nil, err
 		}
-		return decad.Cut(context.Background(), b, tool)
+		return decad.Cut(b, tool).Do(context.Background())
 	}
 	cyl := func(x, y, r, z0, h float64) (*decad.Body, error) {
 		return extrudeCircle(doc, r3.Vec{X: x, Y: y}, r, z0, h)
@@ -67,7 +67,7 @@ func Example_parts_explode_spread() {
 		fmt.Printf("failed to build the collar: %s\n", err)
 		return
 	}
-	if arbor, err = decad.Union(context.Background(), arbor, collar); err != nil {
+	if arbor, err = decad.Union(arbor, collar).Do(context.Background()); err != nil {
 		fmt.Printf("failed to join the collar: %s\n", err)
 		return
 	}
@@ -89,7 +89,7 @@ func Example_parts_explode_spread() {
 		fmt.Printf("failed to build the screw head: %s\n", err)
 		return
 	}
-	screw, err := decad.Union(context.Background(), shank, head)
+	screw, err := decad.Union(shank, head).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to join the screw head: %s\n", err)
 		return

@@ -3,9 +3,13 @@ package decad
 import (
 	"context"
 	"fmt"
+	"slices"
 
+	"github.com/lestrrat-3d/decad/internal/featureoption"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
+	"github.com/lestrrat-3d/decad/internal/opcommand"
 	"github.com/lestrrat-3d/sketch"
+	"github.com/lestrrat-3d/units"
 )
 
 // CutExtrude removes from target the volume that sweeping profiles of s along
@@ -14,7 +18,7 @@ import (
 // followed by Cut: the swept tool exists only inside the call, is never
 // registered, and leaves no body in the document.
 //
-// Every profile obeys Extrude's gates and options, and the extent resolves
+// Every profile obeys Extrude's gates and Taper, and the extent resolves
 // exactly as Extrude resolves it, so a ToFace or ThroughAll stop reads live
 // bodies, target among them. Several profiles are one feature: their tools are
 // united with one another and target is cut once. Profiles whose tools touch
@@ -25,12 +29,44 @@ import (
 // ErrBooleanFailed, and every other refusal is Extrude's or Cut's own. Every
 // failure leaves target live and the document unchanged. The history records
 // one OperationCutExtrude whose consumed input is target.
-func CutExtrude(ctx context.Context, target *Body, s *sketch.Sketch, profiles []*sketch.Profile, e Extent,
-	opts ...ExtrudeOption) (result *Body, retErr error) {
-	defer func() { retErr = operationError(OperationCutExtrude, retErr) }()
-	return cutProfiles(ctx, OperationCutExtrude, target, s, profiles,
+func CutExtrude(target *Body, s *sketch.Sketch, profiles []*sketch.Profile, e Extent) *CutExtrudeCommand {
+	c := &CutExtrudeCommand{target: target, s: s, profiles: slices.Clone(profiles), e: copyExtent(e)}
+	if target == nil {
+		c.state.Record("target", errNilBody)
+	}
+	return c
+}
+
+// CutExtrudeCommand removes the volume a profile extrude would fill. Build it
+// with [CutExtrude]. It has no SurfaceResult: a cut has no sheet form.
+type CutExtrudeCommand struct {
+	state    opcommand.State             // consumed flag and first recorded fault
+	target   *Body                       // stored as given
+	s        *sketch.Sketch              // stored as given
+	profiles []*sketch.Profile           // copied at CutExtrude
+	e        Extent                      // copied at CutExtrude, with the selector of a ToFace stop
+	taper    opcommand.Slot[units.Value] // set by Taper
+}
+
+// Taper leans the tool's walls as [ExtrudeCommand.Taper] does for each
+// profile. A second call replaces the first.
+func (c *CutExtrudeCommand) Taper(a units.Value) *CutExtrudeCommand {
+	c.taper.Set(a, featureoption.ValidateTaper(a))
+	return c
+}
+
+// Do cuts the target and retires it, or returns the error of the first gate
+// that refuses, leaving the target live and the document unchanged. A nil ctx
+// is ErrDegenerate, and a second call returns ErrConsumed.
+func (c *CutExtrudeCommand) Do(ctx context.Context) (*Body, error) {
+	return runCommand(ctx, &c.state, OperationCutExtrude, c.run)
+}
+
+func (c *CutExtrudeCommand) run(ctx context.Context) (*Body, error) {
+	st := extrudeSettings{taper: c.taper, taperSubject: "Taper"}
+	return cutProfiles(ctx, OperationCutExtrude, c.target, c.s, c.profiles,
 		func(toolCtx context.Context, d *Document, p *sketch.Profile) (*Body, error) {
-			return Extrude(toolCtx, d, s, p, e, opts...)
+			return extrudeTool(toolCtx, d, c.s, p, c.e, st)
 		})
 }
 
@@ -38,13 +74,40 @@ func CutExtrude(ctx context.Context, target *Body, s *sketch.Sketch, profiles []
 // axis through a would fill, and returns the result, retiring target
 // (agent-docs/cut-profile-design.md). It is the feature form of Revolve
 // followed by Cut, with the gates, grouping and failure behaviour of
-// [CutExtrude]. The history records one OperationCutRevolve.
-func CutRevolve(ctx context.Context, target *Body, s *sketch.Sketch, profiles []*sketch.Profile, axis Axis,
-	a AngularExtent, opts ...RevolveOption) (result *Body, retErr error) {
-	defer func() { retErr = operationError(OperationCutRevolve, retErr) }()
-	return cutProfiles(ctx, OperationCutRevolve, target, s, profiles,
+// [CutExtrude]. The history records one OperationCutRevolve. It has no
+// SurfaceResult: a cut has no sheet form.
+func CutRevolve(target *Body, s *sketch.Sketch, profiles []*sketch.Profile, axis Axis,
+	a AngularExtent) *CutRevolveCommand {
+	c := &CutRevolveCommand{target: target, s: s, profiles: slices.Clone(profiles), axis: copyAxis(axis),
+		a: copyAngularExtent(a)}
+	if target == nil {
+		c.state.Record("target", errNilBody)
+	}
+	return c
+}
+
+// CutRevolveCommand removes the volume a profile revolve would fill. Build it
+// with [CutRevolve]. It has no method.
+type CutRevolveCommand struct {
+	state    opcommand.State   // consumed flag and first recorded fault
+	target   *Body             // stored as given
+	s        *sketch.Sketch    // stored as given
+	profiles []*sketch.Profile // copied at CutRevolve
+	axis     Axis              // copied at CutRevolve, with the selector of an EdgeAxis
+	a        AngularExtent     // copied at CutRevolve, with the selector of a ToFaceAngular stop
+}
+
+// Do cuts the target and retires it, or returns the error of the first gate
+// that refuses, leaving the target live and the document unchanged. A nil ctx
+// is ErrDegenerate, and a second call returns ErrConsumed.
+func (c *CutRevolveCommand) Do(ctx context.Context) (*Body, error) {
+	return runCommand(ctx, &c.state, OperationCutRevolve, c.run)
+}
+
+func (c *CutRevolveCommand) run(ctx context.Context) (*Body, error) {
+	return cutProfiles(ctx, OperationCutRevolve, c.target, c.s, c.profiles,
 		func(toolCtx context.Context, d *Document, p *sketch.Profile) (*Body, error) {
-			return Revolve(toolCtx, d, s, p, axis, a, opts...)
+			return revolve(toolCtx, d, c.s, p, c.axis, c.a, false)
 		})
 }
 
@@ -54,9 +117,6 @@ func CutRevolve(ctx context.Context, target *Body, s *sketch.Sketch, profiles []
 // removal; the cut itself is combineTools.
 func cutProfiles(ctx context.Context, kind OperationKind, target *Body, s *sketch.Sketch,
 	profiles []*sketch.Profile, build func(context.Context, *Document, *sketch.Profile) (*Body, error)) (*Body, error) {
-	if ctx == nil {
-		return nil, fmt.Errorf(`%w: a nil context cannot control a cut`, ErrDegenerate)
-	}
 	if target == nil || target.n.Doc == nil {
 		return nil, fmt.Errorf(`%w: the body belongs to no document`, ErrDegenerate)
 	}

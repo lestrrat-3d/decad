@@ -37,8 +37,8 @@ func Example_pattern_join() {
 		fmt.Printf("failed to solve: %s\n", err)
 		return
 	}
-	disc, err := decad.Extrude(ctx, doc, ds, ds.Profiles()[0],
-		decad.Distance{D: units.Millimeters(height), Dir: decad.Along})
+	disc, err := decad.Extrude(doc, ds, ds.Profiles()[0],
+		decad.Distance{D: units.Millimeters(height), Dir: decad.Along}).Do(ctx)
 	if err != nil {
 		fmt.Printf("failed to extrude the disc: %s\n", err)
 		return
@@ -94,20 +94,20 @@ func Example_pattern_join() {
 		fmt.Printf("failed to draw the upper section: %s\n", err)
 		return
 	}
-	lobe, err := decad.Loft(ctx, doc, s0, p0, s1, p1)
+	lobe, err := decad.Loft(doc, s0, p0, s1, p1).Do(ctx)
 	if err != nil {
 		fmt.Printf("failed to loft the lobe: %s\n", err)
 		return
 	}
 
 	// Repeat the lobe about the Z axis, then join the base and every lobe.
-	copies, err := decad.PatternCopies(ctx, lobe,
-		decad.CircularPattern{Axis: r3.NewVec(0, 0, 1), Count: count})
+	copies, err := decad.PatternCopies(lobe,
+		decad.CircularPattern{Axis: r3.NewVec(0, 0, 1), Count: count}).Do(ctx)
 	if err != nil {
 		fmt.Printf("failed to pattern: %s\n", err)
 		return
 	}
-	joined, err := decad.Union(ctx, disc, append([]*decad.Body{lobe}, copies...)...)
+	joined, err := decad.Union(append([]*decad.Body{disc}, append([]*decad.Body{lobe}, copies...)...)...).Do(ctx)
 	if err != nil {
 		fmt.Printf("failed to join: %s\n", err)
 		return

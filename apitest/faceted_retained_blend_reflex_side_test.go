@@ -31,7 +31,7 @@ func steppedArm(t *testing.T, outline [][2]float64) *decad.Body {
 	}
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	arm, err := decad.Extrude(t.Context(), sc.doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(6)})
+	arm, err := decad.Extrude(sc.doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(6)}).Do(t.Context())
 	require.NoError(t, err)
 	box, err := arm.Bounds()
 	require.NoError(t, err)
@@ -45,10 +45,10 @@ func steppedArm(t *testing.T, outline [][2]float64) *decad.Body {
 	cs.Fix(rect.A)
 	_, err = cs.Solve(t.Context())
 	require.NoError(t, err)
-	block, err := decad.Extrude(t.Context(), sc.doc, cs, cs.Profiles()[0],
-		decad.Distance{D: units.Millimeters(4), Dir: decad.Along})
+	block, err := decad.Extrude(sc.doc, cs, cs.Profiles()[0],
+		decad.Distance{D: units.Millimeters(4), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
-	joined, err := decad.Union(t.Context(), arm, translated(t, block, 0, 0, 12))
+	joined, err := decad.Union(arm, translated(t, block, 0, 0, 12)).Do(t.Context())
 	require.NoError(t, err)
 	return joined
 }
@@ -95,8 +95,8 @@ func TestFacetedRetainedBlendReflexSide(t *testing.T) {
 			body := steppedArm(t, tc.outline)
 			before, err := body.Volume()
 			require.NoError(t, err)
-			out, err := decad.Fillet(t.Context(), body, straightEdge(t, body, r3.NewVec(10, 0, 0), r3.NewVec(0, 0, 1)),
-				units.Millimeters(r))
+			out, err := decad.Fillet(body, straightEdge(t, body, r3.NewVec(10, 0, 0), r3.NewVec(0, 0, 1)),
+				units.Millimeters(r)).Do(t.Context())
 			require.NoError(t, err)
 			after, err := out.Volume()
 			require.NoError(t, err)
@@ -149,8 +149,8 @@ func TestFacetedRetainedBlendReflexSide(t *testing.T) {
 	t.Run("the end curve on the sloped underside", func(t *testing.T) {
 		t.Parallel()
 		body := steppedArm(t, [][2]float64{{0, 0}, {10, 0}, {10, 10}, {20, 20}, {20, 24}, {16, 24}, {2, 10}, {0, 10}})
-		out, err := decad.Fillet(t.Context(), body, straightEdge(t, body, r3.NewVec(10, 0, 0), r3.NewVec(0, 0, 1)),
-			units.Millimeters(r))
+		out, err := decad.Fillet(body, straightEdge(t, body, r3.NewVec(10, 0, 0), r3.NewVec(0, 0, 1)),
+			units.Millimeters(r)).Do(t.Context())
 		require.NoError(t, err)
 		requireEndCurveCovered(t, out, func(alpha float64) r3.Vec {
 			x := 10 - r + r*math.Cos(alpha)
@@ -166,8 +166,8 @@ func TestFacetedRetainedBlendReflexSide(t *testing.T) {
 		t.Parallel()
 		body := withCavity(t, steppedArm(t, [][2]float64{{0, 0}, {10, 0}, {10, 10}, {20, 10}, {20, 14}, {0, 14}}),
 			9.8, 0.05, 9.95, 0.2, 9, 11)
-		_, err := decad.Fillet(t.Context(), body, straightEdge(t, body, r3.NewVec(10, 0, 0), r3.NewVec(0, 0, 1)),
-			units.Millimeters(r))
+		_, err := decad.Fillet(body, straightEdge(t, body, r3.NewVec(10, 0, 0), r3.NewVec(0, 0, 1)),
+			units.Millimeters(r)).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.ErrorContains(t, err, "the cap an end face takes meets another facet of the body at")
 	})
@@ -180,8 +180,8 @@ func TestFacetedRetainedBlendReflexSide(t *testing.T) {
 		t.Run(fmt.Sprintf("an underside of slope %g refuses", k), func(t *testing.T) {
 			t.Parallel()
 			body := steppedArm(t, [][2]float64{{0, 0}, {10, 0}, {10, 10}, {11, 10 + k}, {11, 12 + k}, {0, 12 + k}})
-			_, err := decad.Fillet(t.Context(), body, straightEdge(t, body, r3.NewVec(10, 0, 0), r3.NewVec(0, 0, 1)),
-				units.Millimeters(r))
+			_, err := decad.Fillet(body, straightEdge(t, body, r3.NewVec(10, 0, 0), r3.NewVec(0, 0, 1)),
+				units.Millimeters(r)).Do(t.Context())
 			require.ErrorIs(t, err, decad.ErrUnsupported)
 			require.ErrorContains(t, err, "a row of the blend's strip is no longer than its bounds along the edge")
 		})

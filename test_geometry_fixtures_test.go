@@ -24,7 +24,7 @@ func internalBoxBody(t *testing.T, doc *Document, x0, y0, x1, y1, height float64
 	s.Fix(rect.A)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := Extrude(t.Context(), doc, s, s.Profiles()[0], Distance{D: units.Millimeters(height), Dir: Along})
+	body, err := Extrude(doc, s, s.Profiles()[0], Distance{D: units.Millimeters(height), Dir: Along}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -39,7 +39,7 @@ func internalDiscBody(t testing.TB, doc *Document, radius, height float64) *Body
 	s.CreateCircle(center, radius)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := Extrude(t.Context(), doc, s, s.Profiles()[0], Distance{D: units.Millimeters(height), Dir: Along})
+	body, err := Extrude(doc, s, s.Profiles()[0], Distance{D: units.Millimeters(height), Dir: Along}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -55,7 +55,7 @@ func internalOffsetBox(t *testing.T, doc *Document, x0, y0, x1, y1, z float64, e
 	s.Fix(rect.A)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := Extrude(t.Context(), doc, s, s.Profiles()[0], extent)
+	body, err := Extrude(doc, s, s.Profiles()[0], extent).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -77,7 +77,7 @@ func internalPolyPrismBody(t *testing.T, doc *Document, points [][2]float64, hei
 	require.NoError(t, err)
 	profiles := s.Profiles()
 	require.Len(t, profiles, 1)
-	body, err := Extrude(t.Context(), doc, s, profiles[0], Distance{D: units.Millimeters(height), Dir: Along})
+	body, err := Extrude(doc, s, profiles[0], Distance{D: units.Millimeters(height), Dir: Along}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -126,7 +126,7 @@ func internalBoxBodyAtZ(t *testing.T, doc *Document, x0, y0, x1, y1, z0, height 
 	s.Fix(rect.A)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := Extrude(t.Context(), doc, s, s.Profiles()[0], Distance{D: units.Millimeters(height), Dir: Along})
+	body, err := Extrude(doc, s, s.Profiles()[0], Distance{D: units.Millimeters(height), Dir: Along}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -143,7 +143,7 @@ func internalCircleBody(t *testing.T, doc *Document, x, radius, z float64, exten
 	s.CreateCircle(center, radius)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := Extrude(t.Context(), doc, s, s.Profiles()[0], extent)
+	body, err := Extrude(doc, s, s.Profiles()[0], extent).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -162,9 +162,9 @@ func internalRoundBoss(t *testing.T) *Body {
 	s.CreateCircle(center, 5)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	boss, err := Extrude(t.Context(), doc, s, s.Profiles()[0], Distance{D: units.Millimeters(15), Dir: Along})
+	boss, err := Extrude(doc, s, s.Profiles()[0], Distance{D: units.Millimeters(15), Dir: Along}).Do(t.Context())
 	require.NoError(t, err)
-	body, err := Union(t.Context(), plate, boss)
+	body, err := Union(plate, boss).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -216,7 +216,7 @@ func pointLoftTooth(t *testing.T, doc *Document) *Body {
 	}
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := LoftFromPoint(t.Context(), doc, r3.Vec{}, s, s.Profiles()[0])
+	body, err := LoftFromPoint(doc, r3.Vec{}, s, s.Profiles()[0]).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -235,8 +235,8 @@ func pointLoftConeTool(t *testing.T, doc *Document, apex float64) *Body {
 	}
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	tool, err := Revolve(t.Context(), doc, s, s.Profiles()[0],
-		SketchLine{Start: planePoint{}, End: planePoint{U: 1}}, FullRevolution{})
+	tool, err := Revolve(doc, s, s.Profiles()[0],
+		SketchLine{Start: planePoint{}, End: planePoint{U: 1}}, FullRevolution{}).Do(t.Context())
 	require.NoError(t, err)
 	return tool
 }

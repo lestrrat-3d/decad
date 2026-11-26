@@ -99,7 +99,7 @@ func originRectSketch(t *testing.T, o r3.Vec, u0, v0, u1, v1 float64) (*sketch.S
 func originBox(t *testing.T, doc *decad.Document, o r3.Vec, u0, v0, u1, v1, h float64, dir decad.Direction) *decad.Body {
 	t.Helper()
 	s, p := originRectSketch(t, o, u0, v0, u1, v1)
-	b, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(h), Dir: dir})
+	b, err := decad.Extrude(doc, s, p, decad.Distance{D: units.Millimeters(h), Dir: dir}).Do(t.Context())
 	require.NoError(t, err)
 	return b
 }
@@ -166,8 +166,8 @@ func TestVertexFrameOriginBoundEnclosesLift(t *testing.T) {
 		t.Run(fmt.Sprintf("revolve@%v", o), func(t *testing.T) {
 			t.Parallel()
 			s, p := originRectSketch(t, o, 0, 1, 3, 2)
-			b, err := decad.Revolve(t.Context(), decad.New(), s, p, decad.SketchLine{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 1, V: 0}},
-				decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along})
+			b, err := decad.Revolve(decad.New(), s, p, decad.SketchLine{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 1, V: 0}},
+				decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along}).Do(t.Context())
 			require.NoError(t, err)
 			// Only the start-plane vertices (phi = 0) have an angle-free exact lift.
 			worst := requireVerticesEnclosed(t, b, liftGrid(o, []float64{0, 3}, []float64{1, 2}, []float64{0}), 4)
@@ -176,7 +176,7 @@ func TestVertexFrameOriginBoundEnclosesLift(t *testing.T) {
 		t.Run(fmt.Sprintf("chamfer@%v", o), func(t *testing.T) {
 			t.Parallel()
 			box := originBox(t, decad.New(), o, 0, 0, 4, 4, 2, decad.Along)
-			c, err := decad.Chamfer(t.Context(), box, decad.Edges(decad.CreatedBy(decad.CapEnd(box))), units.Millimeters(1))
+			c, err := decad.Chamfer(box, decad.Edges(decad.CreatedBy(decad.CapEnd(box))), units.Millimeters(1)).Do(t.Context())
 			require.NoError(t, err)
 			cands := append(liftGrid(o, []float64{0, 4}, []float64{0, 4}, []float64{0, 1}), chamferTop(o)...)
 			worst := requireVerticesEnclosed(t, c, cands, 12)
@@ -187,7 +187,7 @@ func TestVertexFrameOriginBoundEnclosesLift(t *testing.T) {
 			doc := decad.New()
 			a := originBox(t, doc, o, 0, 0, 1, 1, 1, decad.Along)
 			b := originBox(t, doc, o, 0.5, 0, 1.5, 1, 1, decad.Along)
-			u, err := decad.Union(t.Context(), a, b)
+			u, err := decad.Union(a, b).Do(t.Context())
 			require.NoError(t, err)
 			requireVerticesEnclosed(t, u, liftGrid(o, []float64{0, 0.5, 1, 1.5}, []float64{0, 1}, []float64{0, 1}), 8)
 		})
@@ -196,7 +196,7 @@ func TestVertexFrameOriginBoundEnclosesLift(t *testing.T) {
 			doc := decad.New()
 			blk := originBox(t, doc, o, 0, 0, 4, 4, 2, decad.Against)
 			tool := originBox(t, doc, o, 1, 1, 3, 3, 1, decad.Against)
-			cut, err := decad.Cut(t.Context(), blk, tool)
+			cut, err := decad.Cut(blk, tool).Do(t.Context())
 			require.NoError(t, err)
 			worst := requireVerticesEnclosed(t, cut,
 				liftGrid(o, []float64{0, 1, 3, 4}, []float64{0, 1, 3, 4}, []float64{0, -1, -2}), 16)
@@ -207,7 +207,7 @@ func TestVertexFrameOriginBoundEnclosesLift(t *testing.T) {
 			doc := decad.New()
 			s1 := originBox(t, doc, o, 0, 0, 2, 1, 1, decad.Along)
 			s2 := originBox(t, doc, o, 1, 0, 3, 1, 2, decad.Along)
-			st, err := decad.Union(t.Context(), s1, s2)
+			st, err := decad.Union(s1, s2).Do(t.Context())
 			require.NoError(t, err)
 			requireVerticesEnclosed(t, st, liftGrid(o, []float64{0, 1, 2, 3}, []float64{0, 1}, []float64{0, 1, 2}), 12)
 		})
@@ -233,7 +233,7 @@ func TestVertexFarBuiltPlacedBackBoundEnclosesLift(t *testing.T) {
 	t.Run("box", func(t *testing.T) {
 		t.Parallel()
 		b := originBox(t, decad.New(), o, 0, 0, 1, 1, 1, decad.Along)
-		moved, err := decad.Transform(t.Context(), b, back)
+		moved, err := decad.Transform(b, back).Do(t.Context())
 		require.NoError(t, err)
 		worst := requireVerticesEnclosed(t, moved,
 			shiftedCands(liftGrid(o, []float64{0, 1}, []float64{0, 1}, []float64{0, 1}), tr), 8)
@@ -242,9 +242,9 @@ func TestVertexFarBuiltPlacedBackBoundEnclosesLift(t *testing.T) {
 	t.Run("chamfer", func(t *testing.T) {
 		t.Parallel()
 		box := originBox(t, decad.New(), o, 0, 0, 4, 4, 2, decad.Along)
-		c, err := decad.Chamfer(t.Context(), box, decad.Edges(decad.CreatedBy(decad.CapEnd(box))), units.Millimeters(1))
+		c, err := decad.Chamfer(box, decad.Edges(decad.CreatedBy(decad.CapEnd(box))), units.Millimeters(1)).Do(t.Context())
 		require.NoError(t, err)
-		moved, err := decad.Transform(t.Context(), c, back)
+		moved, err := decad.Transform(c, back).Do(t.Context())
 		require.NoError(t, err)
 		cands := append(liftGrid(o, []float64{0, 4}, []float64{0, 4}, []float64{0, 1}), chamferTop(o)...)
 		worst := requireVerticesEnclosed(t, moved, shiftedCands(cands, tr), 12)
@@ -319,7 +319,7 @@ func TestVertexIntegerOriginBoundStaysZero(t *testing.T) {
 	extrude := func(t *testing.T, doc *decad.Document, u0, v0, u1, v1, h float64) *decad.Body {
 		t.Helper()
 		s, p := intRect(t, u0, v0, u1, v1)
-		b, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
+		b, err := decad.Extrude(doc, s, p, decad.Distance{D: units.Millimeters(h), Dir: decad.Along}).Do(t.Context())
 		require.NoError(t, err)
 		return b
 	}
@@ -340,7 +340,7 @@ func TestVertexIntegerOriginBoundStaysZero(t *testing.T) {
 	t.Run("revolve", func(t *testing.T) {
 		t.Parallel()
 		s, p := intRect(t, 0, 5, 10, 15)
-		b, err := decad.Revolve(t.Context(), decad.New(), s, p, uAxis, decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along})
+		b, err := decad.Revolve(decad.New(), s, p, uAxis, decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along}).Do(t.Context())
 		require.NoError(t, err)
 		// The phi = 90° cap reads the libm's own sine and cosine, whose
 		// angular term is charged apart; only the start plane is exact.
@@ -356,7 +356,7 @@ func TestVertexIntegerOriginBoundStaysZero(t *testing.T) {
 	t.Run("chamfer", func(t *testing.T) {
 		t.Parallel()
 		box := extrude(t, decad.New(), 0, 0, 100, 60, 20)
-		c, err := decad.Chamfer(t.Context(), box, decad.Edges(decad.CreatedBy(decad.CapEnd(box))), units.Millimeters(5))
+		c, err := decad.Chamfer(box, decad.Edges(decad.CreatedBy(decad.CapEnd(box))), units.Millimeters(5)).Do(t.Context())
 		require.NoError(t, err)
 		requireAllZero(t, c.Vertices())
 	})

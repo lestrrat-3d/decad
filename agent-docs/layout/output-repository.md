@@ -12,16 +12,16 @@ The rules for rows live in `agent-docs/layout.md`.
 | `tessellate.go` | `Mesh`, `Body.Tessellate`, its mesh cache and proof withholding, and the call into `internal/tessdispatch/`. See tessellation design, surface §10.1. |
 | `tessellate_verification.go` | `Verification`, `WithVerification` and mesh proof publication. See tessellation §1, §4. |
 | `mesh_body.go` | Public `MeshBody`, `MeshReport` and `NewMeshBody`: the imported triangle mesh and its bounds, area, volume and point readings. `internal/meshbody/` reads the triangles. See mesh-import design. |
-| `solid_from_mesh.go` | Public `SolidFromMesh`: gates, the exact crossing audit and mesh audit, plane groups by `internal/meshplane/` tagged when square to an axis, then `facetedrecord.BuildWithProof` and one commit. See mesh-solid design. |
+| `solid_from_mesh.go` | `SolidFromMeshCommand` over `solidFromMesh`, and the unregistered `solidFromMeshBody`: gates, the exact crossing audit and mesh audit, plane groups by `internal/meshplane/` tagged when square to an axis, then `facetedrecord.BuildWithProof` and one commit. See mesh-solid design. |
 | `internal/meshplane/` | Exact dyadic plane groups of a mesh's triangles and each group's exact area centroid. See mesh-solid design M4, §7. |
 | `mesh_import.go` | Public `ReadSTL`, `ReadOBJ`, `ReadThreeMF`, `ReadSTEP`, their options and `ErrMalformedMesh`, `ErrMeshTooLarge`: limits, then `internal/meshparse/` parses and `NewMeshBody` reads the result. See mesh-import design. |
 | `mesh_repair.go` | Public `RepairMesh`, its options and `MeshRepairReport`: option gates, then `internal/meshrepair/` mends and `NewMeshBody` reads the result. See mesh-import design §7. |
 | `mesh_refine.go` | Public `RefineMesh`: gates, then `internal/meshrefine/` splits long edges and `NewMeshBody` reads the result. See mesh-import design §11. |
 | `internal/meshrefine/` | Midpoint splitting of the long edges of an indexed triangle mesh. See mesh-import design §11. |
-| `stretch.go` | Public `Stretch`: gates a faceted solid with no vertex bound, stretches its mesh by `ScaleMesh` and reads it back by `solidFromMeshBody`. See mesh-solid design §3. |
+| `stretch.go` | The `Stretch` command: gates a faceted solid with no vertex bound, stretches its mesh by `ScaleMesh` and reads it back by `solidFromMeshBody`. See mesh-solid design §3. |
 | `mesh_scale.go` | Public `ScaleMesh` and `ScaleBodyMesh`: gates, per-axis stretch about an anchor, reversed winding under an odd number of negative factors, then `NewMeshBody`. See mesh-import design §10. |
 | `subd.go` | Public `SubDMesh` and `SubDCage`: gates, then `internal/subd/` refines the cage and `NewMeshBody` reads the result. See subd design. |
-| `infill.go` | Public `Infill`, `InfillSpec` and `LatticeKind`: builds the lattice over the body's box plus a margin, makes it a solid by `SolidFromMesh` and intersects it with the body. See lattice design §5. |
+| `infill.go` | `Infill`, `InfillCommand` with `Resolution` and `Skin`, and `LatticeKind`: builds the lattice over the body's box plus a margin, makes it a solid by `SolidFromMesh` and intersects it with the body. See lattice design §5. |
 | `lattice.go` | Public `GyroidLattice`, `SchwarzPLattice`, `DiamondLattice`, `NeoviusLattice`, `IWPLattice`, `FischerKochSLattice`, `LidinoidLattice`, `SplitPLattice` and `LatticeSpec`: gates, then `internal/lattice/` builds fresh slices for private mesh-body construction. See lattice design. |
 | `internal/orthoshell/` | Grid operations and mesh admission for orthogonal polyhedra, plus straight-prism section preparation for Draft. Used by Boolean, Shell, MoveFace, Section, and Draft. See orthogonal-shell, orthogonal-move, orthogonal-section, orthogonal-boolean, and orthogonal-design B21. |
 | `internal/lattice/` | Gyroid field sampled on a grid and cut by marching tetrahedra into a closed triangle mesh. See lattice design. |
@@ -54,6 +54,7 @@ The rules for rows live in `agent-docs/layout.md`.
 | `reader_install.go` | Installs the readers behind `internal/facedeparture` (step-export design) and `decadtest.PayloadClass` (faceted-source-retention §10). |
 | `_gallery/` | Nested module for README images, landing and linkage clips, dynamics scenes; excludes SolidLens. See `main.go`. |
 | `_shardgen/` | Nested module packing root and `apitest` tests into race shards. See `main.go`. |
+| `_cmdrewrite/` | Nested module rewriting call sites of function-plus-options operations to the command form (`agent-docs/command-api-design.md` §14). Stdlib only. See `main.go`. |
 | `_proofs/` | Nested Lake project and Go module: Lean proofs, `trace.json`, trace checker. See `agent-docs/proofs-design.md`. |
 | `.github/workflows/proofs.yml` | Path-filtered Lean build, axiom audit and trace check. See `agent-docs/proofs-design.md`. |
 | `.github/workflows/` | `ci.yml`: lint, tests, tidy, vulnerability; `docs.yml`: daily regeneration of `docs/reference/`, committed to the default branch; `focused-go-test.yml`: capped named test; `refresh-gallery-images.yml`: image refresh branches; `codeql.yml`: CodeQL; `test-shards*.txt`: race shards. |

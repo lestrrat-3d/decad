@@ -24,19 +24,17 @@ func TestMeshSolidTakesStraightSidedPocketsAndBossesExactly(t *testing.T) {
 	top := decad.Faces(decad.Facing(r3.NewVec(0, 0, 1)))
 	rect := decad.RectangularHole{Width: units.Millimeters(10), Height: units.Millimeters(6), Angle: units.Degrees(0)}
 	plate := meshPlate(t)
-	pocket, err := decad.Hole(t.Context(), plate, decad.HoleSpec{
-		Face: top, At: r3.NewVec(20, 15, 10), Depth: decad.BlindHole{Depth: units.Millimeters(4)}, Shape: rect})
+	pocket, err := decad.HoleShaped(plate, top, r3.NewVec(20, 15, 10), rect, decad.BlindHole{Depth: units.Millimeters(4)}).Do(t.Context())
 	require.NoError(t, err)
 	requireVolume(t, pocket, 12000-10*6*4)
 	require.Len(t, pocket.Faces(), 6+5, "the plate's six faces and the pocket's four walls and floor")
 	plate = meshPlate(t)
-	slot, err := decad.Hole(t.Context(), plate, decad.HoleSpec{
-		Face: top, At: r3.NewVec(20, 15, 10), Depth: decad.ThroughHole{}, Shape: decad.OutlineHole{
-			Corners: []decad.Point2{{U: -4, V: -4}, {U: 4, V: -4}, {U: 4, V: 0}, {U: 0, V: 0}, {U: 0, V: 4}, {U: -4, V: 4}}}})
+	slot, err := decad.HoleShaped(plate, top, r3.NewVec(20, 15, 10), decad.OutlineHole{
+		Corners: []decad.Point2{{U: -4, V: -4}, {U: 4, V: -4}, {U: 4, V: 0}, {U: 0, V: 0}, {U: 0, V: 4}, {U: -4, V: 4}}}, decad.ThroughHole{}).Do(t.Context())
 	require.NoError(t, err)
 	requireVolume(t, slot, 12000-48*10)
 	plate = meshPlate(t)
-	boss, err := decad.Boss(t.Context(), plate, decad.BossSpec{Face: top, At: r3.NewVec(20, 15, 10), Shape: rect, Height: units.Millimeters(5)})
+	boss, err := decad.BossShaped(plate, top, r3.NewVec(20, 15, 10), rect, units.Millimeters(5)).Do(t.Context())
 	require.NoError(t, err)
 	requireVolume(t, boss, 12000+10*6*5)
 	bounds, err := boss.Bounds()
@@ -47,9 +45,7 @@ func TestMeshSolidTakesStraightSidedPocketsAndBossesExactly(t *testing.T) {
 func TestMeshSolidTakesRoundHolesWithinTheirBound(t *testing.T) {
 	t.Parallel()
 	plate := meshPlate(t)
-	drilled, err := decad.Hole(t.Context(), plate, decad.HoleSpec{
-		Face: decad.Faces(decad.Facing(r3.NewVec(0, 0, 1))), At: r3.NewVec(20, 15, 10),
-		Diameter: units.Millimeters(6), Depth: decad.ThroughHole{}})
+	drilled, err := decad.Hole(plate, decad.Faces(decad.Facing(r3.NewVec(0, 0, 1))), r3.NewVec(20, 15, 10), units.Millimeters(6), decad.ThroughHole{}).Do(t.Context())
 	require.NoError(t, err)
 	volume, err := drilled.Volume()
 	require.NoError(t, err)

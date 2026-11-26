@@ -31,7 +31,7 @@ func TestRevolveChainBuiltEnds(t *testing.T) {
 			chains := s.Chains()
 			require.Len(t, chains, 1)
 			require.Len(t, chains[0].Edges, 2)
-			body, err := Revolve(t.Context(), New(), s, chains[0], SketchLine{Start: Point2{U: 0, V: 0}, End: Point2{U: 0, V: 1}}, AngleExtent{A: units.Degrees(90), Dir: Along})
+			body, err := Revolve(New(), s, chains[0], SketchLine{Start: Point2{U: 0, V: 0}, End: Point2{U: 0, V: 1}}, AngleExtent{A: units.Degrees(90), Dir: Along}).Do(t.Context())
 			require.NoError(t, err)
 			if collinear {
 				require.Len(t, body.Faces(), 1)
@@ -72,7 +72,7 @@ func TestRevolveChainBuiltEnds(t *testing.T) {
 			}
 			motion, err := r3.Translation(r3.Vec{X: 7})
 			require.NoError(t, err)
-			placed, err := Copy(t.Context(), body, WithCopyPlacement(motion))
+			placed, err := Copy(body).Place(CopyTransform{Transform: motion}).Do(t.Context())
 			require.NoError(t, err)
 			_, _, _, err = revolveplan.FreeEnd(t.Context(), proofbound.NewWorkBudget(t.Context()), &placed.n, &ends[0].n)
 			require.ErrorIs(t, err, ErrUnsupported)

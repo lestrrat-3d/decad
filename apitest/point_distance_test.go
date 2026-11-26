@@ -37,7 +37,7 @@ func TestPointDistanceFromBox(t *testing.T) {
 			require.Zero(t, distance.Bound.Base())
 		})
 	}
-	require.NoError(t, decad.Remove(box))
+	require.NoError(t, decad.Remove(box).Do(t.Context()))
 	retired, err := box.DistanceToPoint(t.Context(), r3.NewVec(12, 5, 5), units.Millimeters(0.1))
 	require.NoError(t, err)
 	require.Equal(t, 2.0, retired.Value.Base())
@@ -54,7 +54,7 @@ func TestPointDistanceFromBore(t *testing.T) {
 	doc := decad.New()
 	plate := boxBody(t, doc, -10, -10, 10, 10, 10)
 	bore := circleBodyAtZ(t, doc, 0, 2, 0, 10)
-	part, err := decad.Cut(t.Context(), plate, bore)
+	part, err := decad.Cut(plate, bore).Do(t.Context())
 	require.NoError(t, err)
 	center, err := part.DistanceToPoint(t.Context(), r3.NewVec(0, 0, 5), units.Millimeters(0.1))
 	require.NoError(t, err)

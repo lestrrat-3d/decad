@@ -26,8 +26,8 @@ func cylinderAt(t testing.TB, doc *decad.Document, cx, cy, radius, z0, height fl
 	s.CreateCircle(c, radius)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	b, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(height), Dir: decad.Along})
+	b, err := decad.Extrude(doc, s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(height), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	return b
 }
@@ -103,10 +103,10 @@ func boltRingSet(t testing.TB, n int) *parts.Set {
 	for k := range n {
 		a := 2 * math.Pi * float64(k) / float64(n)
 		x, y := 20*math.Cos(a), 20*math.Sin(a)
-		plate = must(decad.Cut(t.Context(), plate, cylinderAt(t, doc, x, y, 2.5, -1, 8)))
+		plate = must(decad.Cut(plate, cylinderAt(t, doc, x, y, 2.5, -1, 8)).Do(t.Context()))
 		head := cylinderAt(t, doc, x, y, 4, 6, 3)
 		shank := cylinderAt(t, doc, x, y, 2, -4, 10)
-		bolts = append(bolts, parts.Part{Name: boltName(k), Kind: parts.Purchased, Body: must(decad.Union(t.Context(), head, shank))})
+		bolts = append(bolts, parts.Part{Name: boltName(k), Kind: parts.Purchased, Body: must(decad.Union(head, shank).Do(t.Context()))})
 	}
 	mustAdd(t, s, parts.Part{Name: namePlate, Kind: parts.Manufactured, Body: plate})
 	mustAdd(t, s, bolts...)

@@ -17,7 +17,7 @@ func TestBodyPatchCircularPrismSheetTessellates(t *testing.T) {
 	sourceMesh, err := tube.Tessellate(t.Context(), units.Millimeters(0.2), decad.WithVerification(decad.VerifyAll))
 	require.NoError(t, err)
 	require.True(t, sourceMesh.BoundaryVerified())
-	filled, err := decad.PatchEdges(t.Context(), tube, decad.Edges(decad.Free()).Exactly(2))
+	filled, err := decad.PatchEdges(tube, decad.Edges(decad.Free()).Exactly(2)).Do(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, decad.BodySheet, filled.Kind())
 	require.Len(t, filled.Faces(), 3)
@@ -49,8 +49,8 @@ func circularPatchTube(t *testing.T) *decad.Body {
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	doc := decad.New()
-	tube, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(20), Dir: decad.Along}, decad.WithSurfaceResult())
+	tube, err := decad.Extrude(doc, s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(20), Dir: decad.Along}).SurfaceResult().Do(t.Context())
 	require.NoError(t, err)
 	return tube
 }
@@ -72,8 +72,8 @@ func requireLiveBodyPatchMeshFaces(t *testing.T, body *decad.Body, mesh *decad.M
 func TestBodyPatchCircularPrismOneRimTessellates(t *testing.T) {
 	t.Parallel()
 	tube := circularPatchTube(t)
-	filled, err := decad.PatchEdges(t.Context(), tube, decad.Edges(decad.Free(),
-		decad.EndpointAt(r3.NewVec(10, 0, 0))).Exactly(1))
+	filled, err := decad.PatchEdges(tube, decad.Edges(decad.Free(),
+		decad.EndpointAt(r3.NewVec(10, 0, 0))).Exactly(1)).Do(t.Context())
 	require.NoError(t, err)
 	mesh, err := filled.Tessellate(t.Context(), units.Millimeters(0.2), decad.WithVerification(decad.VerifyAll))
 	require.NoError(t, err)
@@ -86,7 +86,7 @@ func TestBodyPatchCircularPrismOneRimTessellates(t *testing.T) {
 func TestBodyPatchCircularPrismPlacementAndReflection(t *testing.T) {
 	t.Parallel()
 	tube := circularPatchTube(t)
-	filled, err := decad.PatchEdges(t.Context(), tube, decad.Edges(decad.Free()).Exactly(2))
+	filled, err := decad.PatchEdges(tube, decad.Edges(decad.Free()).Exactly(2)).Do(t.Context())
 	require.NoError(t, err)
 	frame, err := r3.NewFrame(r3.Vec{}, r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
 	require.NoError(t, err)
@@ -97,7 +97,7 @@ func TestBodyPatchCircularPrismPlacementAndReflection(t *testing.T) {
 		require.NoError(t, err)
 		return motion
 	}()} {
-		placed, err := decad.Copy(t.Context(), filled, decad.WithCopyPlacement(pose))
+		placed, err := decad.Copy(filled).Place(decad.CopyTransform{Transform: pose}).Do(t.Context())
 		require.NoError(t, err)
 		mesh, err := placed.Tessellate(t.Context(), units.Millimeters(0.2), decad.WithVerification(decad.VerifyAll))
 		require.NoError(t, err)
@@ -106,9 +106,9 @@ func TestBodyPatchCircularPrismPlacementAndReflection(t *testing.T) {
 		require.Zero(t, directedEdgeCensus(t, mesh))
 		requireLiveBodyPatchMeshFaces(t, placed, mesh)
 	}
-	reflectedSource, err := decad.Transform(t.Context(), circularPatchTube(t), reflection)
+	reflectedSource, err := decad.Transform(circularPatchTube(t), reflection).Do(t.Context())
 	require.NoError(t, err)
-	filledAfterReflection, err := decad.PatchEdges(t.Context(), reflectedSource, decad.Edges(decad.Free()).Exactly(2))
+	filledAfterReflection, err := decad.PatchEdges(reflectedSource, decad.Edges(decad.Free()).Exactly(2)).Do(t.Context())
 	require.NoError(t, err)
 	mesh, err := filledAfterReflection.Tessellate(t.Context(), units.Millimeters(0.2),
 		decad.WithVerification(decad.VerifyAll))
@@ -121,10 +121,10 @@ func TestBodyPatchCircularPrismPlacementAndReflection(t *testing.T) {
 func TestBodyPatchCircularPrismNestedFillMeshRefuses(t *testing.T) {
 	t.Parallel()
 	tube := circularPatchTube(t)
-	oneRim, err := decad.PatchEdges(t.Context(), tube, decad.Edges(decad.Free(),
-		decad.EndpointAt(r3.NewVec(10, 0, 0))).Exactly(1))
+	oneRim, err := decad.PatchEdges(tube, decad.Edges(decad.Free(),
+		decad.EndpointAt(r3.NewVec(10, 0, 0))).Exactly(1)).Do(t.Context())
 	require.NoError(t, err)
-	bothRims, err := decad.PatchEdges(t.Context(), oneRim, decad.Edges(decad.Free()).Exactly(1))
+	bothRims, err := decad.PatchEdges(oneRim, decad.Edges(decad.Free()).Exactly(1)).Do(t.Context())
 	require.NoError(t, err)
 	_, err = bothRims.Tessellate(t.Context(), units.Millimeters(0.2),
 		decad.WithVerification(decad.VerifyAll))

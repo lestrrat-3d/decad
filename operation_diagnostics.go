@@ -300,11 +300,7 @@ func booleanOperandLocation(kind OperationKind, operand int) (string, *int) {
 		}
 		return "b", nil
 	case OperationUnion:
-		if operand == 0 {
-			return "first", nil
-		}
-		ordinal--
-		return "others", &ordinal
+		return "bodies", &ordinal
 	default:
 		return operationRoleOperand, &ordinal
 	}
@@ -324,7 +320,8 @@ func operationErrorCode(err error) (OperationDiagnosticCode, OperationStage, boo
 		return OpDiagEvaluatorFailure, OperationStageResult, true
 	case errors.Is(err, ErrForeignBody), errors.Is(err, ErrForeignProfile), errors.Is(err, ErrStaleProfile),
 		errors.Is(err, ErrRetiredBody), errors.Is(err, ErrNegativeMagnitude), errors.Is(err, ErrInvalidProfile),
-		errors.Is(err, ErrUnitKind), errors.Is(err, ErrNotFinite), errors.Is(err, ErrNotSolid):
+		errors.Is(err, ErrUnitKind), errors.Is(err, ErrNotFinite), errors.Is(err, ErrNotSolid),
+		errors.Is(err, ErrConsumed):
 		return OpDiagInputRejected, OperationStageInput, true
 	default:
 		return OpDiagUnknown, OperationStageUnknown, false

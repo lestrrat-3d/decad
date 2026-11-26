@@ -48,12 +48,12 @@ func TestStitchWeldsAZeroBoundCircularRim(t *testing.T) {
 	const r, h = 10.0, 15.0
 	doc := decad.New()
 	s, p := circleSketchAt(t, 0)
-	wall, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(h), Dir: decad.Along}, decad.WithSurfaceResult())
+	wall, err := decad.Extrude(doc, s, p, decad.Distance{D: units.Millimeters(h), Dir: decad.Along}).SurfaceResult().Do(t.Context())
 	require.NoError(t, err)
-	disk, err := decad.PatchProfile(t.Context(), doc, s, p)
+	disk, err := decad.PatchProfile(doc, s, p).Do(t.Context())
 	require.NoError(t, err)
 
-	sheet, err := decad.Stitch(t.Context(), wall, disk)
+	sheet, err := decad.Stitch(wall, disk).Do(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, decad.BodySheet, sheet.Kind())
 
@@ -73,13 +73,13 @@ func TestStitchLeavesANonzeroBoundCircularRimFree(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
 	s, p := circleSketchAt(t, 0)
-	wall, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Inches(5), Dir: decad.Along}, decad.WithSurfaceResult())
+	wall, err := decad.Extrude(doc, s, p, decad.Distance{D: units.Inches(5), Dir: decad.Along}).SurfaceResult().Do(t.Context())
 	require.NoError(t, err)
 	ts, tp := circleSketchAt(t, 127)
-	top, err := decad.PatchProfile(t.Context(), doc, ts, tp)
+	top, err := decad.PatchProfile(doc, ts, tp).Do(t.Context())
 	require.NoError(t, err)
 
-	sheet, err := decad.Stitch(t.Context(), wall, top)
+	sheet, err := decad.Stitch(wall, top).Do(t.Context())
 	require.NoError(t, err)
 	free, err := decad.Edges(decad.Free()).Exactly(3).SelectEdges(sheet)
 	require.NoError(t, err)
@@ -116,12 +116,12 @@ func TestStitchLeavesComplementaryArcsFree(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
 	s := halfDiskSketch(t)
-	up, err := decad.PatchProfile(t.Context(), doc, s, s.Profiles()[0])
+	up, err := decad.PatchProfile(doc, s, s.Profiles()[0]).Do(t.Context())
 	require.NoError(t, err)
-	down, err := decad.PatchProfile(t.Context(), doc, s, s.Profiles()[1])
+	down, err := decad.PatchProfile(doc, s, s.Profiles()[1]).Do(t.Context())
 	require.NoError(t, err)
 
-	sheet, err := decad.Stitch(t.Context(), up, down)
+	sheet, err := decad.Stitch(up, down).Do(t.Context())
 	require.NoError(t, err)
 	free, err := decad.Edges(decad.Free()).Exactly(2).SelectEdges(sheet)
 	require.NoError(t, err)
@@ -171,11 +171,11 @@ func TestStitchedCylinderRimKeepsConsistentNormals(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
 	s, p := circleSketchAt(t, 0)
-	wall, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(15), Dir: decad.Along}, decad.WithSurfaceResult())
+	wall, err := decad.Extrude(doc, s, p, decad.Distance{D: units.Millimeters(15), Dir: decad.Along}).SurfaceResult().Do(t.Context())
 	require.NoError(t, err)
-	disk, err := decad.PatchProfile(t.Context(), doc, s, p)
+	disk, err := decad.PatchProfile(doc, s, p).Do(t.Context())
 	require.NoError(t, err)
-	sheet, err := decad.Stitch(t.Context(), wall, disk)
+	sheet, err := decad.Stitch(wall, disk).Do(t.Context())
 	require.NoError(t, err)
 	w, d := stitchedNormals(t, sheet)
 	require.InDelta(t, 1, w.X, 1e-9)
@@ -191,12 +191,12 @@ func TestStitchDoesNotWeldAnOppositeAxisCircle(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
 	s, p := circleSketchAt(t, 0)
-	wall, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(15), Dir: decad.Along}, decad.WithSurfaceResult())
+	wall, err := decad.Extrude(doc, s, p, decad.Distance{D: units.Millimeters(15), Dir: decad.Along}).SurfaceResult().Do(t.Context())
 	require.NoError(t, err)
 	fs, fp := flippedCircleSketch(t)
-	disk, err := decad.PatchProfile(t.Context(), doc, fs, fp)
+	disk, err := decad.PatchProfile(doc, fs, fp).Do(t.Context())
 	require.NoError(t, err)
-	_, err = decad.Stitch(t.Context(), wall, disk)
+	_, err = decad.Stitch(wall, disk).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrDegenerate)
 }
 
@@ -230,7 +230,7 @@ func halfDiskWallAndPatch(t *testing.T, flipped, lower bool) (*decad.Body, *deca
 	}
 	w := sketch.NewWorld()
 	s, p := build(w, w.XY(), false)
-	wall, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(15), Dir: decad.Along}, decad.WithSurfaceResult())
+	wall, err := decad.Extrude(doc, s, p, decad.Distance{D: units.Millimeters(15), Dir: decad.Along}).SurfaceResult().Do(t.Context())
 	require.NoError(t, err)
 
 	pw := sketch.NewWorld()
@@ -242,7 +242,7 @@ func halfDiskWallAndPatch(t *testing.T, flipped, lower bool) (*decad.Body, *deca
 		require.NoError(t, err)
 	}
 	ps, pp := build(pw, plane, lower)
-	patch, err := decad.PatchProfile(t.Context(), doc, ps, pp)
+	patch, err := decad.PatchProfile(doc, ps, pp).Do(t.Context())
 	require.NoError(t, err)
 	return wall, patch
 }
@@ -253,7 +253,7 @@ func halfDiskWallAndPatch(t *testing.T, flipped, lower bool) (*decad.Body, *deca
 func TestStitchWeldsAZeroBoundArcRim(t *testing.T) {
 	t.Parallel()
 	wall, patch := halfDiskWallAndPatch(t, false, false)
-	sheet, err := decad.Stitch(t.Context(), wall, patch)
+	sheet, err := decad.Stitch(wall, patch).Do(t.Context())
 	require.NoError(t, err)
 	free, err := decad.Edges(decad.Free()).Exactly(2).SelectEdges(sheet)
 	require.NoError(t, err)
@@ -268,7 +268,7 @@ func TestStitchWeldsAZeroBoundArcRim(t *testing.T) {
 func TestStitchWeldsAnOppositeAxisArcRim(t *testing.T) {
 	t.Parallel()
 	wall, patch := halfDiskWallAndPatch(t, true, true)
-	sheet, err := decad.Stitch(t.Context(), wall, patch)
+	sheet, err := decad.Stitch(wall, patch).Do(t.Context())
 	require.NoError(t, err)
 	free, err := decad.Edges(decad.Free()).Exactly(2).SelectEdges(sheet)
 	require.NoError(t, err)
@@ -285,7 +285,7 @@ func TestStitchWeldsAnOppositeAxisArcRim(t *testing.T) {
 func TestStitchLeavesAComplementaryOppositeAxisArcFree(t *testing.T) {
 	t.Parallel()
 	wall, patch := halfDiskWallAndPatch(t, true, false)
-	sheet, err := decad.Stitch(t.Context(), wall, patch)
+	sheet, err := decad.Stitch(wall, patch).Do(t.Context())
 	require.NoError(t, err)
 	free, err := decad.Edges(decad.Free()).Exactly(4).SelectEdges(sheet)
 	require.NoError(t, err)

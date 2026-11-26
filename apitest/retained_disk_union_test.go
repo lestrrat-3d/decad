@@ -39,7 +39,7 @@ func TestRetainedArcDiskUnion(t *testing.T) {
 			return nil
 		}
 		extrude := func(s *sketch.Sketch, h float64, dir decad.Direction) *decad.Body {
-			b, e := decad.Extrude(ctx, d, s, profile(s), decad.Distance{D: units.Millimeters(h), Dir: dir})
+			b, e := decad.Extrude(d, s, profile(s), decad.Distance{D: units.Millimeters(h), Dir: dir}).Do(ctx)
 			require.NoError(t, e)
 			return b
 		}
@@ -69,7 +69,7 @@ func TestRetainedArcDiskUnion(t *testing.T) {
 		padSketch := frame(r3.Vec{X: 8, Y: -.5}, x, z)
 		padSketch.CreateCircle(padSketch.Origin(), 2.5)
 		pad := extrude(padSketch, .75, decad.Against)
-		joined, e := decad.Union(ctx, plate, pad)
+		joined, e := decad.Union(plate, pad).Do(ctx)
 		require.NoError(t, e)
 		far := frame(r3.Vec{X: 8 + width, Y: -2}, x, z)
 		far.CreateCircle(far.Origin(), 3)
@@ -77,7 +77,7 @@ func TestRetainedArcDiskUnion(t *testing.T) {
 		if diskFirst {
 			joined, boss = boss, joined
 		}
-		result, err := decad.Union(ctx, joined, boss)
+		result, err := decad.Union(joined, boss).Do(ctx)
 		require.NoError(t, err)
 		m, err := result.Tessellate(ctx, units.Millimeters(.5), decad.WithVerification(decad.VerifyAll))
 		require.NoError(t, err)

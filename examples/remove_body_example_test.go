@@ -28,8 +28,8 @@ func Example_remove_body() {
 		fmt.Printf("failed to solve: %s\n", err)
 		return
 	}
-	if _, err := decad.Extrude(context.Background(), doc, partSketch, partSketch.Profiles()[0],
-		decad.Distance{D: units.Millimeters(10), Dir: decad.Along}); err != nil {
+	if _, err := decad.Extrude(doc, partSketch, partSketch.Profiles()[0],
+		decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(context.Background()); err != nil {
 		fmt.Printf("failed to extrude part: %s\n", err)
 		return
 	}
@@ -52,8 +52,8 @@ func Example_remove_body() {
 		fmt.Printf("failed to solve: %s\n", err)
 		return
 	}
-	fixture, err := decad.Extrude(context.Background(), doc, fixtureSketch, fixtureSketch.Profiles()[0],
-		decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	fixture, err := decad.Extrude(doc, fixtureSketch, fixtureSketch.Profiles()[0],
+		decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to extrude fixture: %s\n", err)
 		return
@@ -68,7 +68,7 @@ func Example_remove_body() {
 	fmt.Printf("with fixture: %s\n", report.Status)
 
 	// Take the fixture out and verify again.
-	if err := decad.Remove(fixture); err != nil {
+	if err := decad.Remove(fixture).Do(context.Background()); err != nil {
 		fmt.Printf("failed to remove: %s\n", err)
 		return
 	}

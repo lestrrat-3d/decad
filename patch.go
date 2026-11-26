@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/opcommand"
 	"github.com/lestrrat-3d/decad/internal/patchchain"
 	"github.com/lestrrat-3d/decad/internal/sectioncert"
 	"github.com/lestrrat-3d/r3"
@@ -32,11 +33,37 @@ import (
 // boundary carrying a free-form segment this evaluator cannot integrate is
 // ErrUnsupported (Table R row R3). A failed evaluation leaves the document
 // untouched. A nil context or a nil d is ErrDegenerate.
-func PatchProfile(ctx context.Context, d *Document, s *sketch.Sketch, p *sketch.Profile) (result *Body, retErr error) {
-	defer func() { retErr = operationError(OperationPatchProfile, retErr) }()
-	if ctx == nil {
-		return nil, fmt.Errorf(`%w: a nil context cannot control a patch`, ErrDegenerate)
+func PatchProfile(d *Document, s *sketch.Sketch, p *sketch.Profile) *PatchProfileCommand {
+	c := &PatchProfileCommand{d: d, s: s, p: p}
+	if d == nil {
+		c.state.Record("d", errNilDocument)
 	}
+	return c
+}
+
+// PatchProfileCommand builds a one-face sheet from a profile. Build it with
+// [PatchProfile]. It has no method.
+type PatchProfileCommand struct {
+	state opcommand.State // consumed flag and first recorded fault
+	d     *Document       // stored as given
+	s     *sketch.Sketch  // stored as given
+	p     *sketch.Profile // stored as given
+}
+
+// Do builds the patch, registers the new body and returns it, or returns the
+// error of the first gate that refuses, leaving the document unchanged. A nil
+// ctx is ErrDegenerate, and a second call returns ErrConsumed.
+func (c *PatchProfileCommand) Do(ctx context.Context) (*Body, error) {
+	return runCommand(ctx, &c.state, OperationPatchProfile, c.run)
+}
+
+func (c *PatchProfileCommand) run(ctx context.Context) (*Body, error) {
+	return patchProfile(ctx, c.d, c.s, c.p)
+}
+
+// patchProfile is PatchProfile's implementation. ctx is not nil, and the
+// errors it returns carry no operation tag (agent-docs/command-api-design.md §11).
+func patchProfile(ctx context.Context, d *Document, s *sketch.Sketch, p *sketch.Profile) (*Body, error) {
 	if d == nil {
 		return nil, fmt.Errorf(`%w: a nil document owns no model`, ErrDegenerate)
 	}

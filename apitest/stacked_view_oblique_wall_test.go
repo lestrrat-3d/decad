@@ -82,7 +82,7 @@ func TestStackedViewObliqueWallTag(t *testing.T) {
 	}
 
 	// The mesh Cut below retires part, so the Chamfer subtest reads its own copy.
-	chamferPart, err := decad.Copy(t.Context(), part)
+	chamferPart, err := decad.Copy(part).Do(t.Context())
 	require.NoError(t, err)
 
 	t.Run("the uncharged twin states no tilt", func(t *testing.T) {
@@ -108,7 +108,7 @@ func TestStackedViewObliqueWallTag(t *testing.T) {
 					continue
 				}
 				edge := decad.Edges(decad.EndpointAt(e.Start().Position().Value), decad.EndpointAt(e.End().Position().Value)).Exactly(1)
-				_, err := decad.Chamfer(t.Context(), chamferPart, edge, units.Millimeters(0.5))
+				_, err := decad.Chamfer(chamferPart, edge, units.Millimeters(0.5)).Do(t.Context())
 				require.ErrorIs(t, err, decad.ErrUnsupported)
 				// The side's rim ends at a tangent junction with a corner round. A closed chamfer chain reads the
 				// oblique wall (charged-window-chamfer-design §3), so the selection is one edge of a chain whose
@@ -122,7 +122,7 @@ func TestStackedViewObliqueWallTag(t *testing.T) {
 
 	t.Run("a mesh Cut away from the windows keeps the sides tagged", func(t *testing.T) {
 		pocket := boxBodyAtZ(t, doc, 19.5, -0.5, 20.5, 0.5, 1, 2)
-		cut, err := decad.Cut(t.Context(), part, pocket)
+		cut, err := decad.Cut(part, pocket).Do(t.Context())
 		require.NoError(t, err)
 		// The pocket's own four walls are exact planes with no stated tilt.
 		var kept []obliqueWall

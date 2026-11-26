@@ -19,7 +19,7 @@ func BenchmarkFilletBoxAllConvexEdges(b *testing.B) {
 	wantVolume := (100*60 - (4-math.Pi)*radius*radius) * 20
 	benchmarkBoxAllConvexEdges(b, radius, wantVolume, func(ctx context.Context, body *decad.Body,
 		selector decad.EdgeSelector, amount units.Value) (*decad.Body, error) {
-		return decad.Fillet(ctx, body, selector, amount)
+		return decad.Fillet(body, selector, amount).Do(ctx)
 	})
 }
 
@@ -31,7 +31,7 @@ func BenchmarkChamferBoxAllConvexEdges(b *testing.B) {
 	wantVolume := (100*60 - 4*setback*setback/2) * 20
 	benchmarkBoxAllConvexEdges(b, setback, wantVolume, func(ctx context.Context, body *decad.Body,
 		selector decad.EdgeSelector, amount units.Value) (*decad.Body, error) {
-		return decad.Chamfer(ctx, body, selector, amount)
+		return decad.Chamfer(body, selector, amount).Do(ctx)
 	})
 }
 
@@ -69,7 +69,7 @@ func BenchmarkChamferBoxCapLoop(b *testing.B) {
 		require.NoError(b, err)
 		require.Len(b, edges, 4)
 		b.StartTimer()
-		body, err := decad.Chamfer(b.Context(), box, selector, units.Millimeters(3))
+		body, err := decad.Chamfer(box, selector, units.Millimeters(3)).Do(b.Context())
 		if err != nil {
 			b.Fatal(err)
 		}

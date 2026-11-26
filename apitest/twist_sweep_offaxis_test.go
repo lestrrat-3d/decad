@@ -32,7 +32,7 @@ func offAxisTwistTool(t *testing.T, doc *decad.Document, length, deg float64) (*
 	require.NoError(t, err)
 	path, err := decad.NewPath(r3.Vec{}, decad.LineTo{End: r3.NewVec(0, 0, length)})
 	require.NoError(t, err)
-	return decad.Sweep(t.Context(), doc, s, s.Profiles()[0], path, decad.WithSweepTwist(units.Degrees(deg)))
+	return decad.Sweep(doc, s, s.Profiles()[0], path).Twist(units.Degrees(deg)).Do(t.Context())
 }
 
 func TestSweepTwistOffAxisAngles(t *testing.T) {
@@ -116,11 +116,11 @@ func TestCutTwistedOffAxisSweepThroughTubeWall(t *testing.T) {
 		require.NoError(t, err)
 		turn, err := r3.Rotation(r3.NewVec(0, 1, 0), units.Degrees(90))
 		require.NoError(t, err)
-		tool, err = decad.Transform(t.Context(), tool, turn)
+		tool, err = decad.Transform(tool, turn).Do(t.Context())
 		require.NoError(t, err)
 		move, err := r3.Translation(r3.NewVec(radialStart, 0, mid))
 		require.NoError(t, err)
-		tool, err = decad.Transform(t.Context(), tool, move)
+		tool, err = decad.Transform(tool, move).Do(t.Context())
 		require.NoError(t, err)
 		return tube, tool
 	}
@@ -130,7 +130,7 @@ func TestCutTwistedOffAxisSweepThroughTubeWall(t *testing.T) {
 	tube, tool := setup()
 	tubeVolume, err := tube.Volume()
 	require.NoError(t, err)
-	out, err := decad.Cut(t.Context(), tube, tool)
+	out, err := decad.Cut(tube, tool).Do(t.Context())
 	require.NoError(t, err)
 	require.True(t, out.IsSolid())
 	volume, err := out.Volume()

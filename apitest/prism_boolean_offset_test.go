@@ -27,7 +27,7 @@ func offsetPlateBody(t *testing.T, doc *decad.Document, w *sketch.World, plane *
 	s.Fix(rect.A)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(16), Dir: decad.Along})
+	body, err := decad.Extrude(doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(16), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -43,7 +43,7 @@ func offsetDiscBody(t *testing.T, doc *decad.Document, w *sketch.World, plane *s
 	s.CreateCircle(center, r)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
+	body, err := decad.Extrude(doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(h), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -72,7 +72,7 @@ func TestPrismCutOffsetPlaneToolsChainAnalytically(t *testing.T) {
 		for i, tool := range offsetCutTools {
 			body := offsetDiscBody(t, doc, w, plane(w), tool.cx, tool.r, h)
 			var err error
-			got, err = decad.Cut(t.Context(), got, body)
+			got, err = decad.Cut(got, body).Do(t.Context())
 			require.NoError(t, err, "cut %d", i+1)
 			require.False(t, tookMeshPath(got), "cut %d must stay on the analytic path", i+1)
 			vol, err := got.Volume()
@@ -86,7 +86,7 @@ func TestPrismCutOffsetPlaneToolsChainAnalytically(t *testing.T) {
 		// A fillet needs an analytic body with an exact section, so its
 		// success is the public reading of the chained result's zero section
 		// displacement.
-		filleted, err := decad.Fillet(t.Context(), got, verticalConvexEdge(), units.Millimeters(2))
+		filleted, err := decad.Fillet(got, verticalConvexEdge(), units.Millimeters(2)).Do(t.Context())
 		require.NoError(t, err)
 		after, err := filleted.Volume()
 		require.NoError(t, err)
@@ -140,7 +140,7 @@ func TestPrismCutOffsetPlaneExclusionsTakeMeshPath(t *testing.T) {
 
 	requireMeshCut := func(t *testing.T, target, tool *decad.Body) {
 		t.Helper()
-		got, err := decad.Cut(t.Context(), target, tool)
+		got, err := decad.Cut(target, tool).Do(t.Context())
 		require.NoError(t, err)
 		require.True(t, tookMeshPath(got), "the pair must take the mesh path")
 	}
@@ -225,10 +225,10 @@ func TestPrismCutAgainstToolOnOffsetPlaneIsAnalytic(t *testing.T) {
 	s.CreateCircle(center, 18)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	tool, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(48), Dir: decad.Against})
+	tool, err := decad.Extrude(doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(48), Dir: decad.Against}).Do(t.Context())
 	require.NoError(t, err)
 
-	got, err := decad.Cut(t.Context(), plate, tool)
+	got, err := decad.Cut(plate, tool).Do(t.Context())
 	require.NoError(t, err)
 	require.False(t, tookMeshPath(got), "the Against tool takes the analytic path")
 	vol, err := got.Volume()

@@ -12,7 +12,7 @@ import (
 // draftMeshPrism drafts every wall of an exact-vertex faceted solid that is a straight prism along a world axis, about
 // one of its two caps (agent-docs/orthogonal-design.md B21): the draft of all the walls of a prism is the body
 // a tapered Extrude builds from the same section and sweep, so the section is read off the solid, exactly, on the grid
-// of its coordinates, and swept from the neutral cap to the other with WithTaper. The solid qualifies when it holds
+// of its coordinates, and swept from the neutral cap to the other with Taper. The solid qualifies when it holds
 // two distinct coordinates along the axis, the neutral face is a retained plane square to that axis at one of them, the
 // selection is exactly the faces that are not the two caps, and the section is one loop without a hole. handled is
 // false, with no error, when the route does not apply, and the caller keeps its refusal.
@@ -93,8 +93,8 @@ func draftMeshPrism(ctx context.Context, d *Document, b *Body, neutral *Face, se
 	if len(profiles) != 1 {
 		return nil, false, nil
 	}
-	out, err := Extrude(ctx, d, s, profiles[0],
-		Distance{D: units.Millimeters(prepared.Distance), Dir: Along}, WithTaper(angle))
+	out, err := extrudeTool(ctx, d, s, profiles[0],
+		Distance{D: units.Millimeters(prepared.Distance), Dir: Along}, withTaper(angle, ""))
 	if err != nil {
 		return nil, false, nil //nolint:nilerr // an extrude the route cannot build leaves the caller's refusal
 	}

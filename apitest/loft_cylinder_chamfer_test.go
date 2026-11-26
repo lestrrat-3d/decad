@@ -32,10 +32,10 @@ func TestLoftCylinderChamfersBothOuterCaps(t *testing.T) {
 	require.NoError(t, err)
 	bottomSketch, bottomProfile := loftMirrorChamferSection(t, world, world.XY(), 0)
 	topSketch, topProfile := loftMirrorChamferSection(t, world, topPlane, 0.02)
-	tooth, err := decad.Loft(t.Context(), doc, bottomSketch, bottomProfile, topSketch, topProfile)
+	tooth, err := decad.Loft(doc, bottomSketch, bottomProfile, topSketch, topProfile).Do(t.Context())
 	require.NoError(t, err)
 	blank := circleBodyAtZ(t, doc, 0, 4, 0, height)
-	joined, err := decad.Union(t.Context(), blank, tooth)
+	joined, err := decad.Union(blank, tooth).Do(t.Context())
 	require.NoError(t, err)
 
 	capFaces := func(b *decad.Body) [2]*decad.Face {
@@ -64,7 +64,7 @@ func TestLoftCylinderChamfersBothOuterCaps(t *testing.T) {
 
 	outerCaps := decad.Edges(decad.OuterLoopOf(decad.CapStart(joined))).
 		Or(decad.OuterLoopOf(decad.CapEnd(joined)))
-	chamfered, err := decad.Chamfer(t.Context(), joined, outerCaps, units.Millimeters(setback))
+	chamfered, err := decad.Chamfer(joined, outerCaps, units.Millimeters(setback)).Do(t.Context())
 	require.NoError(t, err)
 
 	mesh, err := chamfered.Tessellate(t.Context(), units.Millimeters(0.1),

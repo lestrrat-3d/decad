@@ -54,7 +54,7 @@ func externalThread(ctx context.Context) (*decad.Body, error) {
 		return nil, fmt.Errorf("draw thread cylinder: %w", err)
 	}
 	doc := decad.New()
-	cylinder, err := decad.Revolve(ctx, doc, section, profile, axis, decad.FullRevolution{})
+	cylinder, err := decad.Revolve(doc, section, profile, axis, decad.FullRevolution{}).Do(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("revolve thread cylinder: %w", err)
 	}
@@ -68,11 +68,11 @@ func externalThread(ctx context.Context) (*decad.Body, error) {
 	if err != nil {
 		return nil, fmt.Errorf("draw thread groove: %w", err)
 	}
-	tool, err := decad.Coil(ctx, doc, groove, grooveProfile, axis, units.Millimeters(1.5), units.Scalar(8))
+	tool, err := decad.Coil(doc, groove, grooveProfile, axis, units.Millimeters(1.5), units.Scalar(8)).Do(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("coil thread groove: %w", err)
 	}
-	thread, err := decad.Cut(ctx, cylinder, tool)
+	thread, err := decad.Cut(cylinder, tool).Do(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("cut external thread: %w", err)
 	}

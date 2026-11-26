@@ -13,7 +13,7 @@ import (
 // A rounded outline (straight edges and arcs that meet tangentially on one
 // face) is filleted as one chain. Here a box with rounded corners is cross
 // drilled by a tool that Transform moved, which makes the result a mesh
-// Boolean result; WithTangentChain expands the one named edge to the whole
+// Boolean result; TangentChain expands the one named edge to the whole
 // outline of the top face.
 func Example_fillet_rounded_outline() {
 	ctx := context.Background()
@@ -31,13 +31,13 @@ func Example_fillet_rounded_outline() {
 		fmt.Printf("failed to solve: %s\n", err)
 		return
 	}
-	box, err := decad.Extrude(ctx, doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
+	box, err := decad.Extrude(doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(20), Dir: decad.Along}).Do(ctx)
 	if err != nil {
 		fmt.Printf("failed to extrude: %s\n", err)
 		return
 	}
-	rounded, err := decad.Fillet(ctx, box, decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1))).Exactly(4),
-		units.Millimeters(3))
+	rounded, err := decad.Fillet(box, decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1))).Exactly(4),
+		units.Millimeters(3)).Do(ctx)
 	if err != nil {
 		fmt.Printf("failed to round the corners: %s\n", err)
 		return
@@ -56,7 +56,7 @@ func Example_fillet_rounded_outline() {
 		fmt.Printf("failed to solve tool sketch: %s\n", err)
 		return
 	}
-	cyl, err := decad.Extrude(ctx, doc, ts, ts.Profiles()[0], decad.Distance{D: units.Millimeters(60), Dir: decad.Along})
+	cyl, err := decad.Extrude(doc, ts, ts.Profiles()[0], decad.Distance{D: units.Millimeters(60), Dir: decad.Along}).Do(ctx)
 	if err != nil {
 		fmt.Printf("failed to extrude tool: %s\n", err)
 		return
@@ -66,12 +66,12 @@ func Example_fillet_rounded_outline() {
 		fmt.Printf("failed to build the move: %s\n", err)
 		return
 	}
-	tool, err := decad.Transform(ctx, cyl, move)
+	tool, err := decad.Transform(cyl, move).Do(ctx)
 	if err != nil {
 		fmt.Printf("failed to move the tool: %s\n", err)
 		return
 	}
-	drilled, err := decad.Cut(ctx, rounded, tool)
+	drilled, err := decad.Cut(rounded, tool).Do(ctx)
 	if err != nil {
 		fmt.Printf("failed to drill: %s\n", err)
 		return
@@ -84,7 +84,7 @@ func Example_fillet_rounded_outline() {
 
 	// The edge from (3, 0, 20) to (37, 0, 20) is one of eight in the outline.
 	edge := decad.Edges(decad.ParallelTo(r3.NewVec(1, 0, 0)), decad.EndpointAt(r3.NewVec(3, 0, 20))).Exactly(1)
-	filleted, err := decad.Fillet(ctx, drilled, edge, units.Millimeters(1), decad.WithTangentChain())
+	filleted, err := decad.Fillet(drilled, edge, units.Millimeters(1)).TangentChain().Do(ctx)
 	if err != nil {
 		fmt.Printf("failed to fillet: %s\n", err)
 		return

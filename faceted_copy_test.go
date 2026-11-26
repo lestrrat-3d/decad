@@ -16,7 +16,7 @@ import (
 
 func exactCopyOf(t *testing.T, body *Body, degrees float64) *Body {
 	t.Helper()
-	image, err := Copy(t.Context(), body, WithCopyRotation(r3.Vec{}, r3.Vec{X: 1}, units.Degrees(degrees)))
+	image, err := Copy(body).Place(CopyRotation{Center: r3.Vec{}, Axis: r3.Vec{X: 1}, Angle: units.Degrees(degrees)}).Do(t.Context())
 	require.NoError(t, err)
 	require.NotNil(t, image.n.Payload.(facetedPayload).CopyLineage.Exact)
 	return image
@@ -26,7 +26,7 @@ func ordinaryCopyOf(t *testing.T, body *Body, degrees float64) *Body {
 	t.Helper()
 	turn, err := r3.Rotation(r3.Vec{X: 1}, units.Degrees(degrees))
 	require.NoError(t, err)
-	image, err := Copy(t.Context(), body, WithCopyPlacement(turn))
+	image, err := Copy(body).Place(CopyTransform{Transform: turn}).Do(t.Context())
 	require.NoError(t, err)
 	return image
 }
@@ -201,7 +201,7 @@ func TestRealCurvedCopiedToolLineage(t *testing.T) {
 	blank, source := neutralArcSeamSource(t)
 	turn, err := r3.Rotation(r3.Vec{X: 1}, units.Degrees(180))
 	require.NoError(t, err)
-	image, err := Copy(t.Context(), source, WithCopyPlacement(turn))
+	image, err := Copy(source).Place(CopyTransform{Transform: turn}).Do(t.Context())
 	require.NoError(t, err)
 
 	set, err := facetedrecord.CertifyCopies(t.Context(), bodyNodes([]*Body{source, image}))
@@ -222,7 +222,7 @@ func TestRealCurvedCopiedToolLineage(t *testing.T) {
 	}
 	require.NotNil(t, blank, "the source is a real Revolve and LoftFaces pair")
 
-	overlap, err := Copy(t.Context(), source)
+	overlap, err := Copy(source).Do(t.Context())
 	require.NoError(t, err)
 	before := documentHandle(source.n.Doc).Bodies()
 	_, err = facetedrecord.CertifyCopies(t.Context(), bodyNodes([]*Body{source, overlap}))
@@ -232,7 +232,7 @@ func TestRealCurvedCopiedToolLineage(t *testing.T) {
 
 	quarter, err := r3.Rotation(r3.Vec{X: 1}, units.Degrees(90))
 	require.NoError(t, err)
-	third, err := Copy(t.Context(), image, WithCopyPlacement(quarter))
+	third, err := Copy(image).Place(CopyTransform{Transform: quarter}).Do(t.Context())
 	require.NoError(t, err)
 	thirdPayload := third.n.Payload.(facetedPayload)
 	require.Nil(t, thirdPayload.LoftFacesTrim)
@@ -245,7 +245,7 @@ func TestRealCurvedCopiedToolLineage(t *testing.T) {
 	require.NoError(t, err)
 	reflection, err := r3.Reflection(mirrorFrame)
 	require.NoError(t, err)
-	mirrored, err := Copy(t.Context(), source, WithCopyPlacement(reflection))
+	mirrored, err := Copy(source).Place(CopyTransform{Transform: reflection}).Do(t.Context())
 	require.NoError(t, err)
 	set, err = facetedrecord.CertifyCopies(t.Context(), bodyNodes([]*Body{source, mirrored}))
 	require.NoError(t, err)
@@ -271,14 +271,14 @@ func TestFacetedCopyLineageDirectTransfer(t *testing.T) {
 		require.NoError(t, err)
 		return turn
 	}
-	a, err := Copy(t.Context(), source, WithCopyPlacement(rotate(120)))
+	a, err := Copy(source).Place(CopyTransform{Transform: rotate(120)}).Do(t.Context())
 	require.NoError(t, err)
-	b, err := Copy(t.Context(), source, WithCopyPlacement(rotate(240)))
+	b, err := Copy(source).Place(CopyTransform{Transform: rotate(240)}).Do(t.Context())
 	require.NoError(t, err)
 	require.True(t, a.n.Payload.(facetedPayload).CopyLineage.Direct)
 	require.True(t, b.n.Payload.(facetedPayload).CopyLineage.Direct)
 
-	c, err := Copy(t.Context(), a, WithCopyPlacement(rotate(90)))
+	c, err := Copy(a).Place(CopyTransform{Transform: rotate(90)}).Do(t.Context())
 	require.NoError(t, err)
 	cLineage := c.n.Payload.(facetedPayload).CopyLineage
 	require.Same(t, source, bodyHandle(cLineage.Source))
@@ -302,7 +302,7 @@ func TestFacetedCopyLineageDirectTransfer(t *testing.T) {
 	_, err = facetedrecord.CertifyCopies(t.Context(), bodyNodes([]*Body{source, a, c}))
 	require.NoError(t, err)
 
-	moved, err := Transform(t.Context(), a, rotate(30))
+	moved, err := Transform(a, rotate(30)).Do(t.Context())
 	require.NoError(t, err)
 	require.False(t, moved.n.Payload.(facetedPayload).CopyLineage.Direct)
 }
@@ -329,7 +329,7 @@ func TestFacetedCopyTransferSeparation(t *testing.T) {
 		return turn
 	}
 	copyOf := func(body *Body, degrees float64) *Body {
-		image, err := Copy(t.Context(), body, WithCopyPlacement(rotate(degrees)))
+		image, err := Copy(body).Place(CopyTransform{Transform: rotate(degrees)}).Do(t.Context())
 		require.NoError(t, err)
 		return image
 	}

@@ -40,7 +40,7 @@ func threeRectangleSections(t *testing.T, halfX, halfY, centerX, heights [3]floa
 func TestLoftSectionsInterpolatesThreeSketchesWithCertifiedMesh(t *testing.T) {
 	t.Parallel()
 	sections := threeSquareSections(t, [3]float64{10, 15, 8}, [3]float64{0, 5, 10})
-	body, err := decad.LoftSections(t.Context(), decad.New(), sections[:]...)
+	body, err := decad.LoftSections(decad.New(), sections[:]...).Do(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, decad.BodySolid, body.Kind())
 
@@ -121,7 +121,7 @@ func TestLoftSectionsInterpolatesThreeSketchesWithCertifiedMesh(t *testing.T) {
 func TestLoftSectionsPlacedCapsRemainPlanar(t *testing.T) {
 	t.Parallel()
 	sections := threeSquareSections(t, [3]float64{10, 15, 8}, [3]float64{0, 5, 10})
-	body, err := decad.LoftSections(t.Context(), decad.New(), sections[:]...)
+	body, err := decad.LoftSections(decad.New(), sections[:]...).Do(t.Context())
 	require.NoError(t, err)
 	checkNormals := func(b *decad.Body, expected map[float64]float64) {
 		t.Helper()
@@ -143,7 +143,7 @@ func TestLoftSectionsPlacedCapsRemainPlanar(t *testing.T) {
 	checkNormals(body, map[float64]float64{0: -1, 10: 1})
 	move, err := r3.Translation(r3.NewVec(40, 0, 0))
 	require.NoError(t, err)
-	placed, err := decad.Copy(t.Context(), body, decad.WithCopyPlacement(move))
+	placed, err := decad.Copy(body).Place(decad.CopyTransform{Transform: move}).Do(t.Context())
 	require.NoError(t, err)
 	planes := 0
 	for _, face := range placed.Faces() {
@@ -161,7 +161,7 @@ func TestLoftSectionsPlacedCapsRemainPlanar(t *testing.T) {
 	require.NoError(t, err)
 	reflection, err := r3.Reflection(mirror)
 	require.NoError(t, err)
-	reflected, err := decad.Copy(t.Context(), body, decad.WithCopyPlacement(reflection))
+	reflected, err := decad.Copy(body).Place(decad.CopyTransform{Transform: reflection}).Do(t.Context())
 	require.NoError(t, err)
 	checkNormals(reflected, map[float64]float64{0: 1, -10: -1})
 	_, err = reflected.Tessellate(t.Context(), units.Millimeters(0.1), decad.WithVerification(decad.VerifyAll))
@@ -185,7 +185,7 @@ func TestLoftSectionsRefusesUnprovenScaleAndSpacing(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			sections := threeRectangleSections(t, tc.half, tc.halfY, tc.centerX, tc.heights)
 			doc := decad.New()
-			body, err := decad.LoftSections(t.Context(), doc, sections[:]...)
+			body, err := decad.LoftSections(doc, sections[:]...).Do(t.Context())
 			require.Nil(t, body)
 			require.ErrorIs(t, err, decad.ErrUnsupported)
 			require.Empty(t, doc.Bodies())
@@ -197,7 +197,7 @@ func TestLoftSectionsRequiresThreeSections(t *testing.T) {
 	t.Parallel()
 	sections := threeSquareSections(t, [3]float64{10, 15, 8}, [3]float64{0, 5, 10})
 	doc := decad.New()
-	body, err := decad.LoftSections(t.Context(), doc, sections[:2]...)
+	body, err := decad.LoftSections(doc, sections[:2]...).Do(t.Context())
 	require.Nil(t, body)
 	require.ErrorIs(t, err, decad.ErrDegenerate)
 	require.Empty(t, doc.Bodies())

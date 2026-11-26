@@ -26,7 +26,7 @@ func arcPocketBody(t *testing.T, doc *decad.Document, planeZ float64, depth unit
 	draw(s)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: depth, Dir: dir})
+	body, err := decad.Extrude(doc, s, s.Profiles()[0], decad.Distance{D: depth, Dir: dir}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -173,10 +173,10 @@ func TestCrossingBlindPocketArcLoops(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			doc := decad.New()
-			part, err := decad.Cut(t.Context(), tc.plate(t, doc), tc.hole(t, doc))
+			part, err := decad.Cut(tc.plate(t, doc), tc.hole(t, doc)).Do(t.Context())
 			require.NoError(t, err)
 			require.Equal(t, "decad.prismPayload", decadtest.PayloadClass(part))
-			part, err = decad.Cut(t.Context(), part, tc.tool(t, doc))
+			part, err = decad.Cut(part, tc.tool(t, doc)).Do(t.Context())
 			require.NoError(t, err)
 			require.Equal(t, "decad.brepPayload", decadtest.PayloadClass(part))
 			requireEveryEdgeOnTwoFaces(t, part)
@@ -269,9 +269,9 @@ func TestCrossingBlindPocketArcLoopsDecline(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			doc := decad.New()
-			part, err := decad.Cut(t.Context(), boxBody(t, doc, -10, -10, 10, 10, 10), tc.hole(t, doc))
+			part, err := decad.Cut(boxBody(t, doc, -10, -10, 10, 10, 10), tc.hole(t, doc)).Do(t.Context())
 			require.NoError(t, err)
-			part, err = decad.Cut(t.Context(), part, tc.tool(t, doc))
+			part, err = decad.Cut(part, tc.tool(t, doc)).Do(t.Context())
 			require.NoError(t, err)
 			require.True(t, tookMeshPath(part), "class %s", decadtest.PayloadClass(part))
 			if tc.k == "" {

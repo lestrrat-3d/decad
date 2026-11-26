@@ -14,7 +14,7 @@ import (
 func coedgeBox(t *testing.T) *decad.Body {
 	t.Helper()
 	s, p := plateSketch(t)
-	body, err := decad.Extrude(t.Context(), decad.New(), s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	body, err := decad.Extrude(decad.New(), s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -139,7 +139,7 @@ func requireSolidTopologyBaseline(t *testing.T, body *decad.Body, wantFaces, wan
 // extrude and a full-revolution annulus. None of today's builders produces a
 // free edge or an open shell, so every one of these reads false — the
 // negative space Table K and §2.2 both require before a later PR's
-// WithSurfaceResult can ever make it read true.
+// SurfaceResult can ever make it read true.
 func TestSolidBodiesReportSolidKindAndNoFreeBoundary(t *testing.T) {
 	t.Parallel()
 
@@ -267,8 +267,8 @@ func TestEdgeFacesAreTheBodyFaces(t *testing.T) {
 	}
 
 	s, p := plateSketch(t)
-	sheet, err := decad.Extrude(t.Context(), decad.New(), s, p,
-		decad.Distance{D: units.Millimeters(10), Dir: decad.Along}, decad.WithSurfaceResult())
+	sheet, err := decad.Extrude(decad.New(), s, p,
+		decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).SurfaceResult().Do(t.Context())
 	require.NoError(t, err)
 	sheetFaces := sheet.Faces()
 	require.Len(t, sheetFaces, 4)
@@ -443,10 +443,10 @@ func TestBodyDocumentIsTheDocument(t *testing.T) {
 
 	up, err := r3.Translation(r3.Vec{X: 0, Y: 0, Z: 50})
 	require.NoError(t, err)
-	moved, err := decad.Transform(t.Context(), a, up)
+	moved, err := decad.Transform(a, up).Do(t.Context())
 	require.NoError(t, err)
 	require.Same(t, doc, moved.Document())
-	copied, err := decad.Copy(t.Context(), b)
+	copied, err := decad.Copy(b).Do(t.Context())
 	require.NoError(t, err)
 	require.Same(t, doc, copied.Document())
 
@@ -458,15 +458,15 @@ func TestBodyDocumentIsTheDocument(t *testing.T) {
 	require.False(t, slices.Contains(live, a), "a moved source leaves the live set")
 	live[0] = nil
 	require.NotNil(t, doc.Bodies()[0], "Bodies returns a fresh slice")
-	_, err = decad.Transform(t.Context(), a, up)
+	_, err = decad.Transform(a, up).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrRetiredBody)
 
 	for _, body := range doc.Bodies() {
-		require.NoError(t, decad.Remove(body))
+		require.NoError(t, decad.Remove(body).Do(t.Context()))
 	}
 	require.Nil(t, doc.Bodies())
 	require.Same(t, doc, b.Document(), "a removed body still names its document")
-	require.ErrorIs(t, decad.Remove(b), decad.ErrRetiredBody)
+	require.ErrorIs(t, decad.Remove(b).Do(t.Context()), decad.ErrRetiredBody)
 
 	var zero decad.Body
 	require.Nil(t, zero.Document())
@@ -489,29 +489,29 @@ func TestZeroAndNilBodyOperandsAreRejected(t *testing.T) {
 		want error
 		text string
 	}{
-		"union zero target": {func() (*decad.Body, error) { return decad.Union(ctx, &decad.Body{}, box, other) },
+		"union zero target": {func() (*decad.Body, error) { return decad.Union(&decad.Body{}, box, other).Do(ctx) },
 			decad.ErrDegenerate, "the first operand belongs to no document"},
-		"union zero only": {func() (*decad.Body, error) { return decad.Union(ctx, &decad.Body{}, &decad.Body{}) },
+		"union zero only": {func() (*decad.Body, error) { return decad.Union(&decad.Body{}, &decad.Body{}).Do(ctx) },
 			decad.ErrDegenerate, "the first operand belongs to no document"},
-		"union zero tool": {func() (*decad.Body, error) { return decad.Union(ctx, box, &decad.Body{}, other) },
+		"union zero tool": {func() (*decad.Body, error) { return decad.Union(box, &decad.Body{}, other).Do(ctx) },
 			decad.ErrForeignBody, "body is owned by a different document"},
-		"union nil tool": {func() (*decad.Body, error) { return decad.Union(ctx, box, nil, other) },
+		"union nil tool": {func() (*decad.Body, error) { return decad.Union(box, nil, other).Do(ctx) },
 			decad.ErrDegenerate, "a nil body names nothing to operate on"},
-		"cut zero target": {func() (*decad.Body, error) { return decad.Cut(ctx, &decad.Body{}, box) },
+		"cut zero target": {func() (*decad.Body, error) { return decad.Cut(&decad.Body{}, box).Do(ctx) },
 			decad.ErrDegenerate, "the first operand belongs to no document"},
-		"cut zero tool": {func() (*decad.Body, error) { return decad.Cut(ctx, box, &decad.Body{}) },
+		"cut zero tool": {func() (*decad.Body, error) { return decad.Cut(box, &decad.Body{}).Do(ctx) },
 			decad.ErrForeignBody, "body is owned by a different document"},
-		"cut nil tool": {func() (*decad.Body, error) { return decad.Cut(ctx, box, nil) },
+		"cut nil tool": {func() (*decad.Body, error) { return decad.Cut(box, nil).Do(ctx) },
 			decad.ErrDegenerate, "a nil body names nothing to operate on"},
-		"intersect zero": {func() (*decad.Body, error) { return decad.Intersect(ctx, &decad.Body{}, box) },
+		"intersect zero": {func() (*decad.Body, error) { return decad.Intersect(&decad.Body{}, box).Do(ctx) },
 			decad.ErrDegenerate, "the first operand belongs to no document"},
-		"copy zero": {func() (*decad.Body, error) { return decad.Copy(ctx, &decad.Body{}) },
+		"copy zero": {func() (*decad.Body, error) { return decad.Copy(&decad.Body{}).Do(ctx) },
 			decad.ErrDegenerate, "the body belongs to no document"},
-		"copy nil": {func() (*decad.Body, error) { return decad.Copy(ctx, nil) },
+		"copy nil": {func() (*decad.Body, error) { return decad.Copy(nil).Do(ctx) },
 			decad.ErrDegenerate, "the body belongs to no document"},
-		"transform zero": {func() (*decad.Body, error) { return decad.Transform(ctx, &decad.Body{}, move) },
+		"transform zero": {func() (*decad.Body, error) { return decad.Transform(&decad.Body{}, move).Do(ctx) },
 			decad.ErrDegenerate, "the body belongs to no document"},
-		"transform nil": {func() (*decad.Body, error) { return decad.Transform(ctx, nil, move) },
+		"transform nil": {func() (*decad.Body, error) { return decad.Transform(nil, move).Do(ctx) },
 			decad.ErrDegenerate, "the body belongs to no document"},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -568,7 +568,7 @@ func TestMeshSourceFacesAreTheBodyFaces(t *testing.T) {
 
 	up, err := r3.Translation(r3.Vec{X: 0, Y: 0, Z: 50})
 	require.NoError(t, err)
-	moved, err := decad.Transform(t.Context(), box, up)
+	moved, err := decad.Transform(box, up).Do(t.Context())
 	require.NoError(t, err)
 	movedMesh, err := moved.Tessellate(t.Context(), tol)
 	require.NoError(t, err)

@@ -5,11 +5,12 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/opcommand"
 	"github.com/lestrrat-3d/r3"
 )
 
-// QuarterTurn turns a faceted solid by a whole number of quarter turns about an axis through about, a world axis
-// with the right-hand sense, and returns the result as a new solid, retiring b
+// QuarterTurn returns the command that turns a faceted solid by a whole number of quarter turns about an axis
+// through about, a world axis with the right-hand sense. Do returns the result as a new solid, retiring b
 // (agent-docs/orthogonal-design.md B9). A quarter turn only exchanges and negates coordinates, so the
 // turned solid is exact where [Transform] by a 90 degree [r3.Rotation] is not: its vertices stay unbounded and it
 // stays on the exact routes of an axis-square solid.
@@ -20,11 +21,35 @@ import (
 // negative, and a multiple of four turns changes nothing, which is ErrDegenerate. A turn whose coordinates
 // cannot be held exactly (about a point the sums round on) is ErrUnsupported and changes nothing. A nil
 // context or body is ErrDegenerate.
-func QuarterTurn(ctx context.Context, b *Body, axis, about r3.Vec, turns int) (result *Body, retErr error) {
-	defer func() { retErr = operationError(OperationQuarterTurn, retErr) }()
-	if ctx == nil {
-		return nil, fmt.Errorf(`%w: a nil context cannot control a quarter turn`, ErrDegenerate)
+func QuarterTurn(b *Body, axis, about r3.Vec, turns int) *QuarterTurnCommand {
+	c := &QuarterTurnCommand{b: b, axis: axis, about: about, turns: turns}
+	if b == nil {
+		c.state.Record("body", errNilBody)
 	}
+	return c
+}
+
+// QuarterTurnCommand turns a faceted solid by whole quarter turns. Build it with [QuarterTurn].
+type QuarterTurnCommand struct {
+	state       opcommand.State // consumed flag and first recorded fault
+	b           *Body           // stored as given
+	axis, about r3.Vec          // the axis direction and a point on it, gated at Do
+	turns       int             // the number of quarter turns
+}
+
+// Do turns the body and retires it, or returns the error of the first gate that refuses. A nil ctx is
+// ErrDegenerate, and a second call returns ErrConsumed.
+func (c *QuarterTurnCommand) Do(ctx context.Context) (*Body, error) {
+	return runCommand(ctx, &c.state, OperationQuarterTurn, c.run)
+}
+
+func (c *QuarterTurnCommand) run(ctx context.Context) (*Body, error) {
+	return quarterTurn(ctx, c.b, c.axis, c.about, c.turns)
+}
+
+// quarterTurn is QuarterTurn's implementation. ctx is not nil, and the errors it returns carry no operation tag
+// (agent-docs/command-api-design.md §11).
+func quarterTurn(ctx context.Context, b *Body, axis, about r3.Vec, turns int) (*Body, error) {
 	if b == nil || b.n.Doc == nil {
 		return nil, fmt.Errorf(`%w: the body belongs to no document`, ErrDegenerate)
 	}
@@ -67,6 +92,10 @@ func QuarterTurn(ctx context.Context, b *Body, axis, about r3.Vec, turns int) (r
 	}
 	turned, err := solidFromMeshBody(ctx, d, mesh)
 	if err != nil {
+		// A cancel inside the conversion is the caller's, not an unsupported solid.
+		if cerr := ctx.Err(); cerr != nil {
+			return nil, cerr
+		}
 		return nil, fmt.Errorf("%w: the turned solid is not one the evaluator can prove: %s", ErrUnsupported, err)
 	}
 	return commitModifyResult(ctx, OperationQuarterTurn, b, turned)

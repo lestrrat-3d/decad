@@ -35,7 +35,7 @@ func TestSweepCompositeTierAFitProfile(t *testing.T) {
 	sectionCentroid, err := measured.Centroid()
 	require.NoError(t, err)
 
-	body, err := decad.Sweep(t.Context(), decad.New(), s, profiles[0], orthogonalSweepPath(t))
+	body, err := decad.Sweep(decad.New(), s, profiles[0], orthogonalSweepPath(t)).Do(t.Context())
 	require.NoError(t, err)
 	require.True(t, body.IsSolid())
 	freeformWalls := 0
@@ -96,7 +96,7 @@ func TestSweepCompositeTwoFittedSplinesReplayAndVerify(t *testing.T) {
 	sectionArea, err := measured.Area()
 	require.NoError(t, err)
 
-	body, err := decad.Sweep(t.Context(), decad.New(), s, profiles[0], orthogonalSweepPath(t))
+	body, err := decad.Sweep(decad.New(), s, profiles[0], orthogonalSweepPath(t)).Do(t.Context())
 	require.NoError(t, err)
 	volume, err := body.Volume()
 	require.NoError(t, err)
@@ -114,7 +114,7 @@ func TestSweepCompositeTwoFittedSplinesReplayAndVerify(t *testing.T) {
 	require.True(t, mesh.BoundaryVerified())
 	require.True(t, mesh.VolumeVerified())
 
-	duplicate, err := decad.Copy(t.Context(), body)
+	duplicate, err := decad.Copy(body).Do(t.Context())
 	require.NoError(t, err)
 	copyMesh, err := duplicate.Tessellate(t.Context(), units.Millimeters(0.1),
 		decad.WithVerification(decad.VerifyAll))
@@ -142,7 +142,7 @@ func TestSweepCompositeTierAWorkCeiling(t *testing.T) {
 	require.Len(t, profiles, 1)
 	require.True(t, profiles[0].Valid)
 	doc := decad.New()
-	_, err = decad.Sweep(t.Context(), doc, s, profiles[0], orthogonalSweepPath(t))
+	_, err = decad.Sweep(doc, s, profiles[0], orthogonalSweepPath(t)).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.ErrorContains(t, err, "fixed work budget of 8388608")
 	require.Empty(t, doc.Bodies())

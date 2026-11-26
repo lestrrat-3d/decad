@@ -70,7 +70,7 @@ func hubBody(t *testing.T, hub []hubSeg) *decad.Body {
 		}
 	}
 	require.NotNil(t, pr)
-	body, err := decad.Extrude(t.Context(), decad.New(), s, pr, decad.Distance{D: units.Millimeters(hubHeight), Dir: decad.Along})
+	body, err := decad.Extrude(decad.New(), s, pr, decad.Distance{D: units.Millimeters(hubHeight), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -123,7 +123,7 @@ func chamferHubPawlRuns(t *testing.T, hub []hubSeg) {
 			body := hubBody(t, hub)
 			sel, count := hubSelection(t, body, hub)
 			require.Equal(t, 36, count)
-			out, err := decad.Chamfer(t.Context(), body, sel, units.Millimeters(hubChamfer))
+			out, err := decad.Chamfer(body, sel, units.Millimeters(hubChamfer)).Do(t.Context())
 			require.NoError(t, err)
 			require.True(t, out.IsSolid())
 			mesh, err := out.Tessellate(t.Context(), units.Millimeters(0.05), decad.WithVerification(decad.VerifyAll))

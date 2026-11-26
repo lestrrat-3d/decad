@@ -37,8 +37,8 @@ func revolveDisc(ctx context.Context, t *testing.T, doc *Document, radius, z0, z
 	}
 	_, err = s.Solve(ctx)
 	require.NoError(t, err)
-	body, err := Revolve(ctx, doc, s, s.Profiles()[0], ConstructionAxis{Origin: r3.Vec{}, Dir: r3.Vec{Z: 1}},
-		FullRevolution{})
+	body, err := Revolve(doc, s, s.Profiles()[0], ConstructionAxis{Origin: r3.Vec{}, Dir: r3.Vec{Z: 1}},
+		FullRevolution{}).Do(ctx)
 	require.NoError(t, err)
 	return body
 }
@@ -68,7 +68,7 @@ func axialTool(ctx context.Context, t *testing.T, doc *Document, x, y, z0, lengt
 		}
 	}
 	require.NotNil(t, pr)
-	body, err := Extrude(ctx, doc, s, pr, Distance{D: units.Millimeters(length), Dir: Along})
+	body, err := Extrude(doc, s, pr, Distance{D: units.Millimeters(length), Dir: Along}).Do(ctx)
 	require.NoError(t, err)
 	return body
 }
@@ -100,29 +100,28 @@ func (sc revolvePlaneScene) build(ctx, control context.Context, t *testing.T) (*
 	t.Helper()
 	doc := New()
 	h := sc.z1 - sc.z0
-	body, err := Cut(ctx, revolveDisc(ctx, t, doc, sc.radius, sc.z0, sc.z1),
-		axialTool(ctx, t, doc, 0, 0, sc.z0-1, h+2, sc.bore))
+	body, err := Cut(revolveDisc(ctx, t, doc, sc.radius, sc.z0, sc.z1), axialTool(ctx, t, doc, 0, 0, sc.z0-1, h+2, sc.bore)).Do(ctx)
 	if err != nil {
 		return nil, "bore", err, nil
 	}
 	if sc.groove[1] > 0 {
 		groove := axialTool(ctx, t, doc, 0, 0, sc.z1-sc.grooveDepth, sc.grooveDepth+1, sc.groove[1], sc.groove[0])
-		if body, err = Cut(ctx, body, groove); err != nil {
+		if body, err = Cut(body, groove).Do(ctx); err != nil {
 			return nil, "groove", err, nil
 		}
 	}
 	var controlErr error
 	for i := range sc.holes {
 		if sc.copyEach {
-			body, err = Copy(ctx, body)
+			body, err = Copy(body).Do(ctx)
 			require.NoError(t, err)
 		}
 		x, y := sc.holeCentre(i)
 		hole := axialTool(ctx, t, doc, x, y, sc.z0-1, h+2, sc.holeR)
 		if i == sc.holes-1 {
-			_, controlErr = Cut(control, body, hole)
+			_, controlErr = Cut(body, hole).Do(control)
 		}
-		if body, err = Cut(ctx, body, hole); err != nil {
+		if body, err = Cut(body, hole).Do(ctx); err != nil {
 			return nil, "hole " + strconv.Itoa(i+1), err, nil
 		}
 	}

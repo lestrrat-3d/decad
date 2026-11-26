@@ -31,7 +31,7 @@ func boxBody(t testing.TB, doc *decad.Document, x0, y0, x1, y1, h float64) *deca
 	s.Fix(rect.A)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
+	body, err := decad.Extrude(doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(h), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -44,7 +44,7 @@ func boxBody(t testing.TB, doc *decad.Document, x0, y0, x1, y1, h float64) *deca
 func boxBodyAtZ(t testing.TB, doc *decad.Document, x0, y0, x1, y1, z0, h float64) *decad.Body {
 	t.Helper()
 	s := offsetBoxSketch(t, t.Context(), x0, y0, x1, y1, z0)
-	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
+	body, err := decad.Extrude(doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(h), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -64,7 +64,7 @@ func ballBody(t *testing.T, doc *decad.Document, r float64) *decad.Body {
 	s.CreateArc(c, end, o)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := decad.Revolve(t.Context(), doc, s, s.Profiles()[0], uAxis, decad.FullRevolution{})
+	body, err := decad.Revolve(doc, s, s.Profiles()[0], uAxis, decad.FullRevolution{}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -81,7 +81,7 @@ func torusBody(t testing.TB, doc *decad.Document, major, minor float64) *decad.B
 	s.CreateCircle(center, minor)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := decad.Revolve(t.Context(), doc, s, s.Profiles()[0], uAxis, decad.FullRevolution{})
+	body, err := decad.Revolve(doc, s, s.Profiles()[0], uAxis, decad.FullRevolution{}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -252,7 +252,7 @@ func tiltedPlanePair(t *testing.T, doc *decad.Document, origin r3.Vec) {
 	require.NoError(t, err)
 	require.Len(t, s.Profiles(), 2)
 	for _, p := range s.Profiles() {
-		_, err = decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(40), Dir: decad.Along})
+		_, err = decad.Extrude(doc, s, p, decad.Distance{D: units.Millimeters(40), Dir: decad.Along}).Do(t.Context())
 		require.NoError(t, err)
 	}
 }
@@ -303,7 +303,7 @@ func TestClearanceInchExtrudeAxialGapContainsTruth(t *testing.T) {
 	s.Fix(base.A)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	_, err = decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Inches(1.7), Dir: decad.Along})
+	_, err = decad.Extrude(doc, s, s.Profiles()[0], decad.Distance{D: units.Inches(1.7), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 
 	boxBodyAtZ(t, doc, 20, 10, 80, 50, 50, 10)
@@ -381,7 +381,7 @@ func TestClearanceStackedCubes(t *testing.T) {
 	b := boxBody(t, doc, 0, 0, 10, 10, 10)
 	shift, err := r3.Translation(r3.NewVec(0, 0, 12))
 	require.NoError(t, err)
-	_, err = decad.Transform(t.Context(), b, shift)
+	_, err = decad.Transform(b, shift).Do(t.Context())
 	require.NoError(t, err)
 	report, err := doc.Verify(t.Context(), decad.WithClearances())
 	require.NoError(t, err)
@@ -436,7 +436,7 @@ func TestClearancePlacedStopBuiltStackTouchingIsUndecided(t *testing.T) {
 	b := boxBody(t, doc, 30, 20, 50, 40, 10)
 	shift, err := r3.Translation(r3.NewVec(0, 0, 10))
 	require.NoError(t, err)
-	_, err = decad.Transform(t.Context(), b, shift)
+	_, err = decad.Transform(b, shift).Do(t.Context())
 	require.NoError(t, err)
 
 	report, err := doc.Verify(t.Context())
@@ -461,7 +461,7 @@ func TestClearanceTangentSpheresSuspect(t *testing.T) {
 	step := 15 / math.Sqrt(3)
 	shift, err := r3.Translation(r3.NewVec(step, step, step))
 	require.NoError(t, err)
-	_, err = decad.Transform(t.Context(), b, shift)
+	_, err = decad.Transform(b, shift).Do(t.Context())
 	require.NoError(t, err)
 
 	report, err := doc.Verify(t.Context())
@@ -502,7 +502,7 @@ func TestClearanceBeyondBoxesInHole(t *testing.T) {
 		}
 	}
 	require.NotNil(t, prof)
-	_, err = decad.Extrude(t.Context(), doc, s, prof, decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
+	_, err = decad.Extrude(doc, s, prof, decad.Distance{D: units.Millimeters(5), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	boxBody(t, doc, -2.5, -2.5, 2.5, 2.5, 5)
 	report, err := doc.Verify(t.Context(), decad.WithClearances())
@@ -536,7 +536,7 @@ func TestClearanceCoaxialPegInTube(t *testing.T) {
 	s.Fix(rect.A)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	_, err = decad.Revolve(t.Context(), doc, s, s.Profiles()[0], uAxis, decad.FullRevolution{})
+	_, err = decad.Revolve(doc, s, s.Profiles()[0], uAxis, decad.FullRevolution{}).Do(t.Context())
 	require.NoError(t, err)
 
 	w2 := sketch.NewWorld()
@@ -547,7 +547,7 @@ func TestClearanceCoaxialPegInTube(t *testing.T) {
 	s2.CreateCircle(c, 5)
 	_, err = s2.Solve(t.Context())
 	require.NoError(t, err)
-	_, err = decad.Extrude(t.Context(), doc, s2, s2.Profiles()[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	_, err = decad.Extrude(doc, s2, s2.Profiles()[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 
 	report, err := doc.Verify(t.Context(), decad.WithClearances())
@@ -567,7 +567,7 @@ func TestClearanceToriP8(t *testing.T) {
 	b := torusBody(t, doc, 10, 2)
 	shift, err := r3.Translation(r3.NewVec(0, 30, 0))
 	require.NoError(t, err)
-	_, err = decad.Transform(t.Context(), b, shift)
+	_, err = decad.Transform(b, shift).Do(t.Context())
 	require.NoError(t, err)
 
 	report, err := doc.Verify(t.Context(), decad.WithClearances())
@@ -604,11 +604,10 @@ func TestClearanceNonFinitePolynomialIsUndecided(t *testing.T) {
 	cylinderSketch.CreateCircle(cylinderCenter, cylinderRadius)
 	_, err = cylinderSketch.Solve(t.Context())
 	require.NoError(t, err)
-	_, err = decad.Extrude(t.Context(), doc,
+	_, err = decad.Extrude(doc,
 		cylinderSketch,
 		cylinderSketch.Profiles()[0],
-		decad.Distance{D: units.Millimeters(height), Dir: decad.Along},
-	)
+		decad.Distance{D: units.Millimeters(height), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 
 	torusWorld := sketch.NewWorld()
@@ -619,16 +618,15 @@ func TestClearanceNonFinitePolynomialIsUndecided(t *testing.T) {
 	torusSketch.CreateCircle(torusCenter, minor)
 	_, err = torusSketch.Solve(t.Context())
 	require.NoError(t, err)
-	torus, err := decad.Revolve(t.Context(), doc,
+	torus, err := decad.Revolve(doc,
 		torusSketch,
 		torusSketch.Profiles()[0],
 		decad.SketchLine{Start: decad.Point2{}, End: decad.Point2{V: 1}},
-		decad.FullRevolution{},
-	)
+		decad.FullRevolution{}).Do(t.Context())
 	require.NoError(t, err)
 	shift, err := r3.Translation(r3.NewVec(offset, 0, height/2))
 	require.NoError(t, err)
-	_, err = decad.Transform(t.Context(), torus, shift)
+	_, err = decad.Transform(torus, shift).Do(t.Context())
 	require.NoError(t, err)
 
 	report, err := doc.Verify(t.Context(), decad.WithClearances())
@@ -659,7 +657,7 @@ func TestClearanceConeCoarseRow(t *testing.T) {
 	s.CreateLine(top, o)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	_, err = decad.Revolve(t.Context(), doc, s, s.Profiles()[0], uAxis, decad.FullRevolution{})
+	_, err = decad.Revolve(doc, s, s.Profiles()[0], uAxis, decad.FullRevolution{}).Do(t.Context())
 	require.NoError(t, err)
 	boxBody(t, doc, 30, 12, 40, 22, 5)
 
@@ -693,7 +691,7 @@ func TestClearanceConeCoarseUndecided(t *testing.T) {
 	s.CreateLine(top, o)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	_, err = decad.Revolve(t.Context(), doc, s, s.Profiles()[0], uAxis, decad.FullRevolution{})
+	_, err = decad.Revolve(doc, s, s.Profiles()[0], uAxis, decad.FullRevolution{}).Do(t.Context())
 	require.NoError(t, err)
 	boxBody(t, doc, 7, 4, 9, 6, 2)
 
@@ -745,7 +743,7 @@ func TestClearancePlacedRotatedCube(t *testing.T) {
 	require.NoError(t, err)
 	motion, err := rot.Then(shift)
 	require.NoError(t, err)
-	_, err = decad.Transform(t.Context(), b, motion)
+	_, err = decad.Transform(b, motion).Do(t.Context())
 	require.NoError(t, err)
 
 	report, err := doc.Verify(t.Context(), decad.WithClearances())
@@ -767,7 +765,7 @@ func TestClearanceSubTolAxialOverlapMeasured(t *testing.T) {
 	other := boxBody(t, doc, 0, 0, 10, 10, 8)
 	shift, err := r3.Translation(r3.NewVec(0, 0, 8-5e-9))
 	require.NoError(t, err)
-	_, err = decad.Transform(t.Context(), other, shift)
+	_, err = decad.Transform(other, shift).Do(t.Context())
 	require.NoError(t, err)
 	report, err := doc.Verify(t.Context(), decad.WithClearances())
 	require.NoError(t, err)
@@ -802,7 +800,7 @@ func TestClearanceBallCenteredInHole(t *testing.T) {
 		}
 	}
 	require.NotNil(t, prof)
-	_, err = decad.Extrude(t.Context(), doc, s, prof, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	_, err = decad.Extrude(doc, s, prof, decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 
 	// The ball: revolved about the u axis at the origin, then placed so its
@@ -810,7 +808,7 @@ func TestClearanceBallCenteredInHole(t *testing.T) {
 	ball := ballBody(t, doc, 5)
 	shift, err := r3.Translation(r3.NewVec(0, 0, 5))
 	require.NoError(t, err)
-	_, err = decad.Transform(t.Context(), ball, shift)
+	_, err = decad.Transform(ball, shift).Do(t.Context())
 	require.NoError(t, err)
 
 	report, err := doc.Verify(t.Context(), decad.WithClearances())
@@ -836,7 +834,7 @@ func TestClearanceNearParallelPlateReadsTheCorner(t *testing.T) {
 	require.NoError(t, err)
 	motion, err := rot.Then(shift)
 	require.NoError(t, err)
-	_, err = decad.Transform(t.Context(), other, motion)
+	_, err = decad.Transform(other, motion).Do(t.Context())
 	require.NoError(t, err)
 
 	report, err := doc.Verify(t.Context(), decad.WithClearances())
@@ -861,7 +859,7 @@ func rodBody(t *testing.T, doc *decad.Document, cx, cy, r, half float64) *decad.
 	s.CreateCircle(c, r)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Symmetric{D: units.Millimeters(half)})
+	body, err := decad.Extrude(doc, s, s.Profiles()[0], decad.Symmetric{D: units.Millimeters(half)}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -922,7 +920,7 @@ func TestClearanceNearCoaxialToriAreNotExact(t *testing.T) {
 	inner := torusBody(t, doc, 5, 1)
 	shift, err := r3.Translation(r3.NewVec(0, 0, 1e-12))
 	require.NoError(t, err)
-	_, err = decad.Transform(t.Context(), inner, shift)
+	_, err = decad.Transform(inner, shift).Do(t.Context())
 	require.NoError(t, err)
 
 	report, err := doc.Verify(t.Context(), decad.WithClearances())
@@ -970,7 +968,7 @@ func TestVerifyClearanceCancellationInsideSturmChainBuild(t *testing.T) {
 	b := torusBody(t, doc, 10, 2)
 	shift, err := r3.Translation(r3.NewVec(0, 30, 0))
 	require.NoError(t, err)
-	_, err = decad.Transform(t.Context(), b, shift)
+	_, err = decad.Transform(b, shift).Do(t.Context())
 	require.NoError(t, err)
 	before := snapshotDocument(t, doc)
 	ctx := &sturmBuildCancelContext{Context: t.Context()}
@@ -1017,7 +1015,7 @@ func TestVerifyClearanceCancellationInsideVertexTier(t *testing.T) {
 	doc := decad.New()
 	for _, cx := range []float64{0, 50} {
 		s, p := polygonSketch(t, polygon(cx))
-		_, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
+		_, err := decad.Extrude(doc, s, p, decad.Distance{D: units.Millimeters(5), Dir: decad.Along}).Do(t.Context())
 		require.NoError(t, err)
 	}
 	before := snapshotDocument(t, doc)

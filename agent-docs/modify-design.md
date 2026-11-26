@@ -28,7 +28,7 @@ mean the same part. The parts keep their own section numbers.
 | Part M | Retained modify reach | `retained-modify-reach` | Modify and placement reach on retained mesh Boolean results |
 | Part O | Shell opening | `shell-opening` | Shell side openings on a prism and a revolve; Tables RO/SO/BO/DO |
 | Part S | Shell variants | `shell-variants` | `Shell` of a faceted body with bosses and of a twisted sweep |
-| Part D | Draft | `draft` | `WithTaper` and `Draft`: the sharp offset family; Tables RD/SD/BD/DD |
+| Part D | Draft | `draft` | `Taper` and `Draft`: the sharp offset family; Tables RD/SD/BD/DD |
 | Part T | Tangent side notch | `tangent-notch` | Blind side-notch `Cut` meeting the outer wall tangentially, and its floor-arc fillet |
 | Part X | Perpendicular cylinder bore-mouth chamfer | `cross-cylinder-bore-chamfer` | Source-backed perpendicular cylinder bore-mouth chamfer and mesh proof |
 
@@ -384,8 +384,12 @@ is ever made, and `Verify` reads the result exactly as it reads an extrude's.
 ## 6. Fillet
 
 ```go
-func Fillet(ctx context.Context, b *Body, sel EdgeSelector, r units.Value, opts ...FilletOption) (*Body, error)
+func Fillet(b *Body, sel EdgeSelector, r units.Value) *FilletCommand
+func (c *FilletCommand) TangentChain() *FilletCommand
+func (c *FilletCommand) Do(ctx context.Context) (*Body, error)
 ```
+
+`Do` runs the gates below in order (`agent-docs/command-api-design.md` §3).
 
 `r` is a magnitude, gated at the call like every other (S15), and a zero `r` is
 S13.
@@ -501,13 +505,16 @@ contact without either overrunning a walk, and the §5 audit catches those: S7.
 Both fire before a face is made, and neither produces a corner needing a surface
 nobody can name.
 
-A fillet's one option is reach §5's `WithTangentChain`. There is no
+A fillet's one option is reach §5's `TangentChain`. There is no
 variable-radius or setback option.
 
 ## 7. Chamfer
 
 ```go
-func Chamfer(ctx context.Context, b *Body, sel EdgeSelector, d units.Value, opts ...ChamferOption) (*Body, error)
+func Chamfer(b *Body, sel EdgeSelector, d units.Value) *ChamferCommand
+func (c *ChamferCommand) TangentChain() *ChamferCommand
+func (c *ChamferCommand) Asymmetric(reference FaceSelector, otherDistance units.Value) *ChamferCommand
+func (c *ChamferCommand) Do(ctx context.Context) (*Body, error)
 ```
 
 For R9's straight Sweep, `Chamfer` resolves the selector on the published
@@ -515,8 +522,8 @@ Sweep edges and maps each selected lateral edge to the stored prism corner.
 Equal setbacks use the ordinary section rewrite, audit and B1 build, carrying
 the same frame, interval, endpoint displacement and placement. The resulting
 `prismPayload` takes later R1 operations. A cap edge, a mixed cap/lateral
-selection or `WithAsymmetricChamfer` is `ErrUnsupported`; other Sweep kinds
-remain S3. `WithTangentChain` retains its usual selector expansion.
+selection or `Asymmetric` is `ErrUnsupported`; other Sweep kinds
+remain S3. `TangentChain` retains its usual selector expansion.
 
 The same edge class, the same gates, one simpler surface. **The bevel of a
 lateral edge is a plane**: in the section, the corner is cut off by a straight
@@ -528,7 +535,7 @@ circular one. On a straight prism that is exactly the geodesic setback from the
 edge across the adjacent face, because the boundary curve *is* that face's
 cross-section: the two readings coincide, so the definition is unambiguous
 rather than merely convenient. The setback is equal both ways unless the call
-passes reach §6's `WithAsymmetricChamfer`, which names the face that takes
+passes reach §6's `Asymmetric`, which names the face that takes
 `d` and a second distance for the other face. A distance and an angle is no
 option.
 
@@ -552,13 +559,21 @@ A convex corner's chamfer cuts material away; a concave corner's fills material
 in. Both build, from the same construction, for the same reason the fillet's
 two cases do. The result is B1.
 
-A chamfer takes reach §5's `WithTangentChain` and reach §6's
-`WithAsymmetricChamfer`.
+A chamfer takes reach §5's `TangentChain` and reach §6's
+`Asymmetric`.
 
 ## 8. Shell
 
 ```go
-func Shell(ctx context.Context, b *Body, sel FaceSelector, thickness units.Value, opts ...ShellOption) (*Body, error)
+func Shell(b *Body, sel FaceSelector, thickness units.Value) *ShellCommand
+func (c *ShellCommand) Sense(s ShellSense) *ShellCommand
+func (c *ShellCommand) FaceThickness(normal r3.Vec, t units.Value) *ShellCommand
+func (c *ShellCommand) Do(ctx context.Context) (*Body, error)
+
+func ShellClosed(b *Body, thickness units.Value) *ShellClosedCommand
+func (c *ShellClosedCommand) Sense(s ShellSense) *ShellClosedCommand
+func (c *ShellClosedCommand) FaceThickness(normal r3.Vec, t units.Value) *ShellClosedCommand
+func (c *ShellClosedCommand) Do(ctx context.Context) (*Body, error)
 ```
 
 `sel` names the faces to **remove** — the openings. What remains of the solid is
@@ -570,10 +585,10 @@ section's own offset.
 thickness is a magnitude, so it carries no sign (core §8.1's rule, applied
 here): the sense is a `ShellSense` — `Inward` (the wall grows into the original
 solid; the outer skin does not move) or `Outward` (the wall grows off it; the
-original solid becomes the cavity) — set by `WithShellSense`, decoded into
+original solid becomes the cavity) — set by `Sense`, decoded into
 the call's `internal/modifyoption.ShellConfig` record, and defaulting to `Inward`, which is
-what "shell this box" means everywhere it is said. Two `WithShellSense`
-options naming different senses are reach SX1. The thickness passes the magnitude
+what "shell this box" means everywhere it is said. A second `Sense` call replaces the first,
+and a value that names no sense is reach SX1. The thickness passes the magnitude
 gates before either question below is asked: a wrong `Kind`, a non-finite or a
 negative one is S15, and a zero one is S14.
 
@@ -693,8 +708,8 @@ tube alike. A hollow **closed** body — the one shape whose inner skin is a
 genuine void shell — would be a shell that removes *no* face, and the selector
 vocabulary cannot ask for it at all: S16 makes an empty match an error, and a
 cardinality assertion takes a positive count. It is **unspellable** through the
-removal selector, not staged: there is no face to name. `WithNoOpenings()`
-spells it instead — the one nil-selector shell (§14).
+removal selector, not staged: there is no face to name. `ShellClosed(b, t)`
+spells it instead; it takes no selector (§14).
 
 ## 9. Table B — the result
 
@@ -932,10 +947,10 @@ Part R resolves the former reach questions:
   existing undecided pair result — reach DX6, whose reader is staged for the
   cap-loop chamfer: boxes may still decide a pair, and every other requested
   pair reads `Suspect` until that reader lands;
-- `WithNoOpenings()` spells a closed shell and is the only nil-selector shell;
+- `ShellClosed(b, t)` spells a closed shell and takes no selector;
 - consuming modify results do not inherit ancestor face roles;
-- `WithAsymmetricChamfer` carries a reference face + second distance;
-- `WithTangentChain` expands only through proven analytic G1 continuations;
+- `Asymmetric` carries a reference face + second distance;
+- `TangentChain` expands only through proven analytic G1 continuations;
 - revolve meridian junctions reuse the exact section rewrite;
 - variable-radius fillets, unsupported partial cap chains, mixed edge classes,
   and faceted receivers outside explicit source-backed routes stay unsupported.
@@ -993,56 +1008,46 @@ Each excluded body exists. Table SX stages it with `ErrUnsupported` at the
 modify call. No excluded shape is approximated, clipped, or deferred into
 `Verify`.
 
-### 2. Public options
+### 2. Public methods
 
-The three method signatures stay unchanged. The extension adds these options:
+The constructors and `Do` are §6 to §8's. The reach adds these methods:
 
 ```go
-// FilletChamferOption is accepted by both Fillet and Chamfer.
-type FilletChamferOption interface {
-    FilletOption
-    ChamferOption
-}
+// TangentChain expands each selected seed across proven G1 continuations.
+// FilletCommand and ChamferCommand each declare it.
+func (c *FilletCommand) TangentChain() *FilletCommand
+func (c *ChamferCommand) TangentChain() *ChamferCommand
 
-// WithTangentChain expands each selected seed across proven G1 continuations.
-func WithTangentChain() FilletChamferOption
-
-// WithAsymmetricChamfer applies the positional distance on reference and
+// Asymmetric applies the positional distance on reference and
 // otherDistance on the other face adjacent to each selected edge.
-func WithAsymmetricChamfer(
-    reference FaceSelector,
-    otherDistance units.Value,
-) ChamferOption
+func (c *ChamferCommand) Asymmetric(reference FaceSelector, otherDistance units.Value) *ChamferCommand
 
-// WithNoOpenings asks Shell to keep every face and build a closed hollow body.
-// It is the only call form in which Shell accepts a nil face selector.
-func WithNoOpenings() ShellOption
+// ShellClosed keeps every face and builds a closed hollow body. It takes no
+// face selector.
+func ShellClosed(b *Body, thickness units.Value) *ShellClosedCommand
 ```
 
-The option constructors copy their selector inputs at the call boundary. The
-selectors resolve against the receiver during evaluation; resolved faces and
-topology indices are never retained.
+`Asymmetric` copies its reference selector at the call. The selectors resolve against the receiver at `Do`;
+resolved faces and topology indices are never retained. Each method stores its value, and `Do` folds the values
+into a private record: `internal/modifyoption.FilletConfig{TangentChain}`, the root
+`chamferSettings` (tangent chain, `Asymmetric`) and
+`internal/modifyoption.ShellConfig{Sense, NoOpenings, FaceThickness}`. A shell with
+openings states a removed-face query and a thickness; `ShellClosed` states a thickness and
+`ShellConfig{NoOpenings: true}`.
 
-Each call decodes its options into a private record (`internal/modifyoption/`):
-`FilletConfig{TangentChain}`, `ChamferConfig{TangentChain, Asymmetric}` and
-`ShellConfig{Sense, NoOpenings, FaceThickness}`. A shell with openings states a removed-face
-query and a thickness; a shell with no openings states no selector, a
-thickness and `ShellConfig{NoOpenings: true}`.
-
-An option repeated with the same intent counts once: `WithTangentChain`,
-`WithNoOpenings`, and one `WithShellSense` sense given twice. Two
-`WithShellSense` options naming different senses, and a second
-`WithAsymmetricChamfer`, name two intents and are SX1. The other distance
-passes the positional distance's magnitude gates as it is decoded: base S15
-for a wrong `Kind`, a non-finite or a negative value, and `ErrDegenerate` for
-zero, since §6 requires both distances strictly positive.
+A method called again replaces its earlier value (`agent-docs/command-api-design.md` M2). `TangentChain` called twice
+is called once, a later `Sense` replaces an earlier one, and a later `Asymmetric` replaces the earlier reference and
+distance. A `Sense` value that names no sense is SX1 (the message names it), returned by `Do` at the gate that reads the method values, and
+names `Sense` as its subject. The other distance of `Asymmetric` passes the positional distance's magnitude gates at
+that same gate, and names `Asymmetric` as its subject: base S15 for a wrong `Kind`, a non-finite or a negative
+value, and `ErrDegenerate` for zero, since §6 requires both distances strictly positive.
 
 Cardinality on the seed edge query applies **before** tangent expansion. This
 keeps `Exactly(n)` an assertion about what the caller named, not about an
 evaluator-dependent number of continuation edges.
 
-`WithNoOpenings` and a non-nil face selector conflict: SX1. A nil selector
-without `WithNoOpenings` remains base S16 (`errNilSelector`).
+`ShellClosed` has no selector, so no selector can conflict with it. A nil selector given to `Shell`
+remains base S16 (`errNilSelector`).
 
 ### 3. Table RX — receivers + targets
 
@@ -1050,9 +1055,9 @@ Base Table R still admits the shipped straight-prism cases. RX adds these rows:
 
 | RX | Receiver | Fillet / Chamfer | Shell |
 |---|---|---|---|
-| **RX1** | `prismPayload` | base lateral junctions; one straight cap edge through route E or the bounded cutter; OR every geometric edge of one or more complete cap loops. Route V admits both classes in one `Fillet` call where its partition holds (Part V) | base cap openings, with BX8 replacing base S12; OR, for a hole-free section, one proper connected run of outer side faces with any cap openings; OR `WithNoOpenings`, in either sense |
-| **RX2** | `revolvePayload` | off-axis swept meridian junctions: a full-turn latitude `Circle3` or partial-turn junction `Arc3`; one bounded quarter-turn rectangular cap rim (§7.2) | full turn: one proper connected run of generated side faces, or `WithNoOpenings`; partial turn: both angular caps MUST be removed, with an optional proper connected side-face run |
-| **RX3** | `stackedPrismPayload` | through its face view, Part B Table RB; a view that refuses is SX10 | the same, plus `WithNoOpenings` for a nested two-slab rectangular boss (modify-general §3.1a) |
+| **RX1** | `prismPayload` | base lateral junctions; one straight cap edge through route E or the bounded cutter; OR every geometric edge of one or more complete cap loops. Route V admits both classes in one `Fillet` call where its partition holds (Part V) | base cap openings, with BX8 replacing base S12; OR, for a hole-free section, one proper connected run of outer side faces with any cap openings; OR `ShellClosed`, in either sense |
+| **RX2** | `revolvePayload` | off-axis swept meridian junctions: a full-turn latitude `Circle3` or partial-turn junction `Arc3`; one bounded quarter-turn rectangular cap rim (§7.2) | full turn: one proper connected run of generated side faces, or `ShellClosed`; partial turn: both angular caps MUST be removed, with an optional proper connected side-face run |
+| **RX3** | `stackedPrismPayload` | through its face view, Part B Table RB; a view that refuses is SX10 | the same, plus `ShellClosed` for a nested two-slab rectangular boss (modify-general §3.1a) |
 | **RX4** | `capBlendPayload` | SX10 | SX10 |
 | **RX5** | `cupPayload`: a two-slab `stackedPrismPayload` record beside the shell morphology (§9.1) | base S3 | base S3 |
 | **RX6** | `facetedPayload`, including zero-bound all-planar boolean output | certified loft/cylinder outer cap `Chamfer`, including mirrored bore results, and the outer cap `Chamfer` of a hole-free mirrored Loft join (loft §19.1), one cross-cylinder bore-mouth `Chamfer`, or §10.1's isolated rectangular-prism Union edge `Fillet` or equal-setback `Chamfer`, or Part E's closed circular rim between a retained plane and a coaxial retained cylinder or a retained sphere, straight edge between two retained planes that ends on retained planes, or straight edge between a retained plane and a parallel retained cylinder that ends on planes normal to its axis, for `Fillet` or equal-setback `Chamfer`; otherwise SX9 | SX9 |
@@ -1085,7 +1090,7 @@ more specific SX row replaces that base refusal.
 
 | SX | Call | Existence | Sentinel |
 |---|---|---|---|
-| **SX1** | `WithNoOpenings` with a non-nil selector, repeated contradictory option, or malformed option payload | no single intent | `ErrDegenerate` |
+| **SX1** | a `Sense` value that names no wall sense | no single intent | `ErrDegenerate` |
 | **SX2** | tangent continuation is branch-ambiguous or the analytic oracle cannot decide G1 continuity | evaluator cannot know which chain caller named | `ErrUnsupported` |
 | **SX3** | asymmetric reference is nil, invalid, or does not identify exactly one adjacent face per expanded edge | invalid selector / cardinality | existing selector error; otherwise `ErrCardinality` |
 | **SX4** | a partial prism cap-loop `Chamfer` of at least two edges, a mixed lateral/cap `Chamfer`, a mixed revolve/cap selection, or one prism or brep loop with mixed asymmetric face assignments; route E admits one straight cap edge and route V admits complete cap loops with independent straight edges for `Fillet` | body exists; endpoint/setback transition not built | `ErrUnsupported` |
@@ -1106,7 +1111,7 @@ Gate order:
 
 | Stage | Gates |
 |---|---|
-| 1. call | base S17; option decode; SX1; base S15/S13-or-S14; seed selector S16 unless no-openings |
+| 1. call | base S17; method values (`Sense`, `Asymmetric`'s distance); SX1; base S15/S13-or-S14; seed selector S16 unless `ShellClosed` |
 | 2. expansion | resolve seed; expand tangent chain; SX2 |
 | 3. reference | resolve asymmetric reference; SX3 |
 | 4. receiver/target | base R + RX; SX4/SX5/SX8/SX9/SX10/SX16 |
@@ -1177,7 +1182,7 @@ never checked.
 
 ### 5. Tangent-chain expansion
 
-`WithTangentChain` expands every seed edge by a fixed-point walk over endpoint
+`TangentChain` expands every seed edge by a fixed-point walk over endpoint
 vertices. Expansion never changes the seed selector's cardinality result.
 
 At endpoint `v` of edge `e`, candidate `c` continues the chain only when all
@@ -1220,7 +1225,7 @@ tags: its junctions are decided by `retainedblend.Tangent` (`retained-modify-rea
 
 `internal/tangentchain/geometry.go` decides continuations;
 `brep_modify_partial.go` adapts handles, selectors and refusals. `Fillet` and `Chamfer` call it
-right after the seed query resolves. `Chamfer` also calls it without `WithTangentChain`, as the target CAD's chamfer
+right after the seed query resolves. `Chamfer` also calls it without `TangentChain`, as the target CAD's chamfer
 extends its edges along tangent chains: an expansion that grows the selection replaces it, and one that refuses (SX2,
 SX9) leaves the selection as named. The oracle is the clearance kernel's
 `Oracle.ParallelExact` (`internal/clearance/oracle.go`): an exact zero cross
@@ -1245,7 +1250,7 @@ edge.
 
 ### 6. Asymmetric chamfer
 
-Without `WithAsymmetricChamfer`, setback remains equal on both adjacent faces.
+Without `Asymmetric`, setback remains equal on both adjacent faces.
 
 With it:
 
@@ -1801,7 +1806,7 @@ residual never admits disjointness.
 
 ##### 8.3.1 Two distances
 
-`WithAsymmetricChamfer` on a complete cap loop sets `dc` and `ds` apart. The
+`Asymmetric` on a complete cap loop sets `dc` and `ds` apart. The
 construction above is unchanged; only the two numbers it reads differ.
 
 **What the reference picks.** §6's resolution pairs every selected edge with
@@ -1926,7 +1931,7 @@ A `Chamfer` that selects part of a cap loop's edges, which routes E and L above 
 selection is a set of whole runs, on a straight prism or on a faceted body (a mesh Boolean result) whose face is a
 retained plane. A run is a maximal chain of selected edges, lines and circular arcs, that continue one
 another tangentially. Every junction between a selected edge and an unselected one is a sharp corner, so no run stops
-inside a tangent chain. `WithTangentChain` makes such a set from one seed edge. A loop selected whole stays with the loop
+inside a tangent chain. `TangentChain` makes such a set from one seed edge. A loop selected whole stays with the loop
 routes. A prism's cap edge always meets its wall at a right angle, so this route does not read `Edge.Convex`, which on a
 prism is only the rim's two-dimensional turn: a loop with clockwise (concave) arc walls outside the selection is read
 like any other.
@@ -2377,7 +2382,7 @@ here, and which `brepmodify.FreeformRimChamfer` (`internal/brepmodify/freeform_r
 | Condition | Answer |
 |---|---|
 | receiver is a plain `Extrude` prism (no placement transform, no section or level displacement) whose outer loop holds a fit spline | the route below |
-| selection is every edge of a cap's outer loop, for one or both caps; equal setback; no `WithAsymmetricChamfer` | the route below |
+| selection is every edge of a cap's outer loop, for one or both caps; equal setback; no `Asymmetric` | the route below |
 | any other receiver or selection | the ordinary routes and their refusals (SX4, the free-form refusal of `offset2d`) |
 | the loop holds a segment that is not a whole fit spline or whole line | `ErrUnsupported` |
 | a joint between two segments turns by more than 10° (`rimoffset.MaxJointAngle`) | `ErrUnsupported`, naming the corner |
@@ -2532,7 +2537,7 @@ Cap slabs:
 Omit a cap slab when that cap is selected as an opening. Inward cavity height
 is `h - k*t`, where `k` is kept cap count; reaching zero is SX11.
 
-`WithNoOpenings` uses both cap slabs and a closed middle wall section: `P \ Q`
+`ShellClosed` uses both cap slabs and a closed middle wall section: `P \ Q`
 inward, `Q \ P` outward. It produces one outer shell plus one void shell.
 `FaceShell.IsVoid()` is true only on the inner shell.
 
@@ -2699,7 +2704,7 @@ or topology-changing offsets remain SX8.
 ##### 9.3.1 Construction
 
 `revolveshell.Shell` (`internal/revolveshell/shell.go`) builds the partial turn without a side opening and the
-full turn under `WithNoOpenings`, from one wall region. It never materialises
+full turn under `ShellClosed`, from one wall region. It never materialises
 the mirror half. The effective offset cut back to `ρ ≥ 0` is the
 offset of the kept chain `K` alone, the recorded meridian less its on-axis walk
 `A`. Interior corners of `K` take modify §7's join. Each end of `K` takes the
@@ -2782,7 +2787,7 @@ Stage 4's revolve gates run in this order: the receiver's section-displacement
 guard (`revolveplan.RequireExactSection`), a holed meridian (SX8), a kept angular
 cap (SX8), more than one on-axis walk (SX8), then a removed side run that is
 not one proper connected run of whole walks or that leaves two kept chains
-(SX8, §9.3.2). `WithNoOpenings` on a partial turn or on a holed meridian is SX8 before the shell is routed here.
+(SX8, §9.3.2). `ShellClosed` on a partial turn or on a holed meridian is SX8 before the shell is routed here.
 
 ##### 9.3.2 Side opening
 
@@ -2825,7 +2830,7 @@ the open chain's own S11a drop gate and the wall's §5 audit decide it.
 | **BX2** | revolve junction fillet/chamfer | `revolvePayload` over rewritten meridian | existing full/partial revolve topology | `side(i,j)` + blend role on inserted wall |
 | **BX3** | complete prism cap-loop fillet/chamfer | `capBlendPayload` | trimmed cap/sides + analytic blend patches | result side/cap roles; `filletCap(c,l,p)` / `chamferCap(c,l,p)` per patch |
 | **BX4** | prism shell with side opening | Part O Table BO: `prismPayload` over the wall section with both caps removed (BO1), else `brepPayload` (BO2) | one lump, one shell, no void | BO1: `side(0,j)`, `capStart`/`capEnd`; BO2: `face(k)`/`wall(k)` |
-| **BX5** | prism `WithNoOpenings` | `stackedPrismPayload` | one lump; outer + void shell | outer/inner/result-slab roles |
+| **BX5** | prism `ShellClosed` | `stackedPrismPayload` | one lump; outer + void shell | outer/inner/result-slab roles |
 | **BX6** | full-revolve shell | `revolvePayload` over wall region | evaluator §6's full-turn shells: one lump, an outer shell and one void shell | result `side(i,j)` roles |
 | **BX7** | partial-revolve shell with both caps open | `revolvePayload` over wall region | one shell with two rim-band caps | result sides + `capStart` / `capEnd` |
 | **BX8** | prism cap-only shell with both caps removed from a section with `k ≥ 1` holes | `stackedPrismPayload` with one slab and `1 + k` regions | `1 + k` lumps: outer wall band, then one band lining each hole | `slab(0).region(m).side(i,j)` plus exposed rim roles |
@@ -2999,8 +3004,9 @@ Every implementation PR MUST add geometry assertions, not run-only coverage.
 
 #### Options
 
-- option nil/duplicate/conflict gates;
-- `WithNoOpenings` nil-selector exception and non-nil conflict;
+- a repeated method replaces the earlier call;
+- an invalid last method call is refused;
+- `ShellClosed` takes no selector;
 - tangent-chain seed cardinality before expansion;
 - asymmetric nested selector deep-copy;
 - repeated calls select the same seeds, expansion, reference faces, and result;
@@ -3149,7 +3155,7 @@ Every implementation PR MUST add geometry assertions, not run-only coverage.
 - one/both/no cap openings produce correct slab intervals;
 - inward `h-k*t` boundary → SX11;
 - outward slabs extend by exactly `t` at kept caps;
-- `WithNoOpenings` produces outer + void shell;
+- `ShellClosed` produces outer + void shell;
 - slab interface faces cancel exactly;
 - bounded volume/area/centroid equal slab-region sums;
 - a migrated cup with `k` holes has `1 + k` wall regions, all joined through
@@ -3176,13 +3182,13 @@ Every implementation PR MUST add geometry assertions, not run-only coverage.
 
 | PR | Lands | Still staged |
 |---|---|---|
-| **A** | option records; tangent expansion; asymmetric chamfer of prism lateral edges and revolve junctions; `WithNoOpenings` accepted and refused per receiver | brep and stacked asymmetric selections outside routes E/L (SX16); all SX9/SX10 |
+| **A** | option records; tangent expansion; asymmetric chamfer of prism lateral edges and revolve junctions; `ShellClosed` accepted and refused per receiver | brep and stacked asymmetric selections outside routes E/L (SX16); all SX9/SX10 |
 | **B** | revolve junction rewrite + roles + surveys | none |
 | **C1** | multi-region `stackedPrismPayload` (the lining reading); cups recorded on it; base S12 lifted through BX8 | side-opening prism shell beyond C4's rectilinear case |
 | **C2** | closed prism shell (BX5): the void-shell stack, its tessellation | side-opening prism shell beyond C4's rectilinear case (BX4, Part O) |
 | **C3** | revolve shell side opening, full and partial turn, right-angle rims (§9.3.2) | none |
 | **C4** | the side opening of Part O §12: the rim rule and the revolve's slanted rim, the rectilinear prism side opening as a `brepPayload`, circular walks, oblique walks, arc–arc corners and oblique arc joins, a kept arc extended past its end | per that document's increment table |
-| **D** | partial-turn revolve shell with both angular caps removed and no side opening (BX7); full-turn closed shell under `WithNoOpenings` (BX6), §9.3.1 | none |
+| **D** | partial-turn revolve shell with both angular caps removed and no side opening (BX7); full-turn closed shell under `ShellClosed` (BX6), §9.3.1 | none |
 | **E** | `capBlendPayload`; complete cap-loop chamfer at an equal setback and at two distances (§8.3.1); analytic integrals | DX4 admission for a mitered circular wall or a reflex corner; DX6 clearance model; partial cap-loop chamfers beyond modify-general §4.3a; mixed edge classes; faceted receivers |
 
 Each PR lands its result payload, structural topology, measurement path, and
@@ -3255,7 +3261,7 @@ part makes on them. "builds" names the route that built it.
 | | | shell removing one y wall, or both | builds (route P cup, tube) |
 | | | shell removing the top face, or both caps | builds (route S) |
 | | | shell removing one x wall, or one y wall with the top or both caps | builds (route S, a wall run) |
-| | | closed shell (`WithNoOpenings`), inward or outward | builds (route P's prism reading along y, reach BX5; §3.2) |
+| | | closed shell (`ShellClosed`), inward or outward | builds (route P's prism reading along y, reach BX5; §3.2) |
 | **P2** pocketed plate: 40×40×10, blind 20×10 pocket 5 deep | stacked | fillet the pocket's 4 vertical edges | builds (route E) |
 | | | fillet the 4 floor edges, or the 4 mouth edges | builds (route L fillet arm) |
 | | | chamfer the 4 mouth edges, or the plate's top loop | builds (route L) |
@@ -3383,7 +3389,7 @@ cap-end or cap-start face. The rectangular-boss builder admits one nested,
 hole-free pair of axis-aligned rectangular slabs in the same frame. Both
 sections and all levels must have zero displacement. The lower slab is the
 plate, the upper slab is the boss for the top-open and bottom-open calls.
-`WithNoOpenings` (`stackedshell.Closed`) accepts that order and the reverse
+`ShellClosed` (`stackedshell.Closed`) accepts that order and the reverse
 order, where the lower slab is narrower.
 The reverse order negates both slab intervals and each section's V coordinate,
 flips the frame's V axis exactly, and rebuilds the exposed interface. It then
@@ -3619,7 +3625,7 @@ A shell that removes faces (route S) builds `Inward` only. The dilation
 edge of the receiver — a hole mouth's rim into a torus, a box corner into a
 sphere — so an outward one is SG1. A closed shell removes no face and is not
 route S: it runs first, in either sense, through the cases below.
-`WithNoOpenings` takes §3.1a's closed rectangular-boss case, and a closed
+`ShellClosed` takes §3.1a's closed rectangular-boss case, and a closed
 shell of a brep record that route P reads as a prism along some reference
 axis (brep-modify §4.1); the shell is the prism's own closed shell (reach
 BX5), a holed section's included. No face is removed, so no cap
@@ -3773,8 +3779,8 @@ Modify §1's test picks every sentinel.
 
 | SG | Call | Exists? | Sentinel |
 |---|---|---|---|
-| **SG1** | `WithShellSense(Outward)` with removed faces on a brep or stacked receiver (an outward closed shell through §3.2's prism reading builds, and so does an outward shell whose removed faces are the caps of a prism the record reads as: route P runs before route S and checks only which caps are removed) | yes; the dilation rounds the receiver's convex edges into tori and spheres this record does not hold | `ErrUnsupported` |
-| **SG2** | `WithNoOpenings` on a brep or stacked receiver outside §3.1a's nested rectangular boss and outside a shell of a brep record route P reads as a prism (§3.2); an outward one of a record that reads as a prism along more than one axis | yes; no other brep record carries a certified void shell | `ErrUnsupported` (replaces SX16's text for this call) |
+| **SG1** | `Sense(Outward)` with removed faces on a brep or stacked receiver (an outward closed shell through §3.2's prism reading builds, and so does an outward shell whose removed faces are the caps of a prism the record reads as: route P runs before route S and checks only which caps are removed) | yes; the dilation rounds the receiver's convex edges into tori and spheres this record does not hold | `ErrUnsupported` |
+| **SG2** | `ShellClosed` on a brep or stacked receiver outside §3.1a's nested rectangular boss and outside a shell of a brep record route P reads as a prism (§3.2); an outward one of a record that reads as a prism along more than one axis | yes; no other brep record carries a certified void shell | `ErrUnsupported` (replaces SX16's text for this call) |
 | **SG3** | the record is no through-cut record (Table TC) and is outside §3.1a–§3.1e: a blind port, a keyway, a crossing boss, a split or oblique wall, a displaced tool level | yes; its erosion may hold surfaces beyond the admitted cases | `ErrUnsupported`, naming the first face Table TC does not take |
 | **SG4** | a removed face that is a tool wall outside §3.1d, a tool floor or a hole wall of `S` | yes | `ErrUnsupported` |
 | **SG5** | a removed face that names no face of the record; a removed wall that is no straight wall along a section axis (a fillet cylinder: its rim is no planar face); a wall run whose end cuts backward along the removed carrier (a reflex corner: the rim lies inside the material). A set of walls that is no proper connected run is shell-opening SO6 | yes | `ErrUnsupported` |
@@ -3788,7 +3794,7 @@ reach SX10:
 |---|---|
 | 2a. record | RB dispatch; SB2; SB1 |
 | 2b. route P | brep-modify §4.2 unchanged: an axis whose prism takes the removed faces as caps builds the prism's own cup or tube |
-| 2c. route S entry | `WithNoOpenings` first: §3.1a's closed-boss case, a closed shell through route P's prism reading (§3.2), or SG2; then SG1; Table TC (SG3); §3.1d's exact circular-wall case; the remaining removed faces against the record (SG4, SG5's face and straight-wall tests) |
+| 2c. route S entry | `ShellClosed` first: §3.1a's closed-boss case, a closed shell through route P's prism reading (§3.2), or SG2; then SG1; Table TC (SG3); §3.1d's exact circular-wall case; the remaining removed faces against the record (SG4, SG5's face and straight-wall tests) |
 | 3. existence | caps alone: S18; S10 (section and height limits); S11a on `S`. A wall run: `prismshell.SideOpeningRegions` in shell-opening §5's stages 2–5 (SO6, SO3's height half, S11a and SO1, SO2, SO4 per end, S8, S11b and S9 on `W` and `C`, the area identity), then SG5's reflex-end test. Then S11a on each tool |
 | 4. offset audit | S8, S11b, S9 on `S ⊖ t` (caps alone) and on each `Tᵢ ⊕ t`; TC7 (SG6) |
 | 5. cavity | the private cuts (SG6) |
@@ -3839,7 +3845,7 @@ orientation differ.
 
 For each touched loop `ℓ` of face `F`, `dc` is its setback across `F` and
 `ds` is its setback along the faces beside `ℓ`. Without
-`WithAsymmetricChamfer`, `dc = ds = d`. With the option on a brep or stacked
+`Asymmetric`, `dc = ds = d`. With the option on a brep or stacked
 face view,
 every edge of a touched loop must consistently name either `F` or the face
 beside that edge as its reference. A reference to `F` sets `(dc, ds)` to
@@ -4131,7 +4137,7 @@ Other record-based consumers keep their existing payload gates.
   vertices states it where the trace reaches `R`'s edge, and a private
   `sketch` scene would return the cut vertices as `Partial` fragments decad
   can only reject (shell-opening §4.6).
-- **`Outward` refuses on route S, and `WithNoOpenings` builds only through a prism reading.** §3.2; an outward route S shell and a closed shell of a record that reads as no prism have no record. An outward closed shell takes the prism reading only when it is the record's one reading.
+- **`Outward` refuses on route S, and `ShellClosed` builds only through a prism reading.** §3.2; an outward route S shell and a closed shell of a record that reads as no prism have no record. An outward closed shell takes the prism reading only when it is the record's one reading.
 - **Asymmetric route L chamfers use the existing two-distance band.** The
   reference face chooses `dc` and `ds` consistently per loop. A stacked
   receiver's face view still lacks the required public face identity (SL4).
@@ -4221,7 +4227,7 @@ Route S (S-1):
   third planar face across z; a removed hole wall outside §3.1d → SG4; a removed fillet cylinder → SG5; P1 with a second Ø6 hole along y 7 mm from the first → SG6
   (the dilated holes meet); P1 at 0.1 in → SG6; a U section with a 1 mm
   slot, drilled through one arm → SG6 through TC7; `Outward` → SG1;
-  `WithNoOpenings` builds P1's closed shell through its prism reading along y
+  `ShellClosed` builds P1's closed shell through its prism reading along y
   in either sense, and outward on a brep box that reads along three axes →
   SG2. A hole 1.5 mm under the top on a 2 mm shell builds
   through the crossing reach: the cavity's top splits in two, the rim holds
@@ -4998,7 +5004,7 @@ When the third face is curved and the selected edge ends at a junction that
 `tangentchain.Continues` proves tangent (an exact `DegYes`) to an unselected
 edge, the refusal names that junction and the workaround: "the selected edge
 ends at the tangent junction `x,y,z` whose continuation is not selected;
-`WithTangentChain` selects the whole chain (brep-modify SB7)", the mesh route's
+`TangentChain` selects the whole chain (brep-modify SB7)", the mesh route's
 SM2 wording. An undecided or non-tangent junction keeps the curved-face text. `Chamfer` extends such a selection
 along its chain first (modify-reach §5.1), so it reaches this text only when that expansion is undecided.
 
@@ -6547,13 +6553,14 @@ conversion.
 #### 1. Contract
 
 ```go
-func FilletChord(ctx context.Context, b *Body, sel EdgeSelector, chord units.Value) (*Body, error)
+func FilletChord(b *Body, sel EdgeSelector, chord units.Value) *FilletChordCommand
+func (c *FilletChordCommand) Do(ctx context.Context) (*Body, error)
 ```
 
 | Decision | Rule |
 |---|---|
 | C1 | Where the two faces meet at the angle φ across the corner the arc turns π − φ, so its radius is `chord/(2·cos(φ/2))`, which is `chord/√2` on a right angle. |
-| C2 | `FilletChord` calls `Fillet(ctx, b, sel, radius)`. Receivers, routes, history entry (`OperationFillet`) and refusals are `Fillet`'s. |
+| C2 | `FilletChord`'s `Do` calls the implementation of `Fillet` with the radius. Receivers, routes, history entry (`OperationFillet`) and refusals are `Fillet`'s. |
 | C3 | `chord` is a positive length. Zero is `ErrDegenerate`, a negative value is `ErrNegativeMagnitude`, and a wrong unit kind is `ErrUnitKind`. |
 | C4 | Each selected edge has exactly two faces, both `Plane`, and is convex or concave. φ is the interior angle of a convex edge and the open wedge between the faces of a concave one, which the round fills. Any other edge is `ErrUnsupported`. |
 | C5 | A nil context or body is `ErrDegenerate`. A selector `Fillet` would refuse is passed to `Fillet` for its own error. |
@@ -6571,7 +6578,7 @@ The same-radius test of C6 only groups edges. Two equal dihedrals read from diff
 far below 1e-12, and the one radius used differs from the other edge's by less than that, far below the bound of the
 result `Fillet` publishes.
 
-`WithTangentChain` is not offered: the chain would add edges C4 has not checked.
+`TangentChain` is not offered: the chain would add edges C4 has not checked.
 
 #### 3. Exactness
 
@@ -6582,7 +6589,7 @@ on the 120 degree edges of a hexagonal prism.
 #### 4. Not covered
 
 - A curved face beside a straight or free-form edge, and a torus: the angle there varies along the edge.
-- `WithTangentChain`.
+- `TangentChain`.
 - Setback corners and curvature-continuous blends, which have no entry point.
 
 #### 5. Edges that are not right angled
@@ -6607,25 +6614,26 @@ The rim of a rod, the mouth of a bore and the foot of a boss are such edges.
 ### Angle chamfer
 
 `ChamferAngle` bevels an edge by a distance along a reference face and an angle between the bevel and that face. It
-is a feature-level entry point over `Chamfer` and `WithAsymmetricChamfer`: it computes the second setback and adds no
+is a feature-level entry point over `Chamfer` and `Asymmetric`: it computes the second setback and adds no
 geometry kernel. The setback model is Part R §6; this document owns the conversion.
 
 #### 1. Contract
 
 ```go
-func ChamferAngle(ctx context.Context, b *Body, sel EdgeSelector, d units.Value, reference FaceSelector,
-    angle units.Value) (*Body, error)
+func ChamferAngle(b *Body, sel EdgeSelector, d units.Value, reference FaceSelector,
+    angle units.Value) *ChamferAngleCommand
+func (c *ChamferAngleCommand) Do(ctx context.Context) (*Body, error)
 ```
 
 | Decision | Rule |
 |---|---|
 | A1 | The bevel leaves the reference face `d` from the edge and makes `angle` with that face. It meets the other face `d·sin(angle)/sin(φ + angle)` from the edge, where φ is the interior angle between the two faces. That is `d·tan(angle)` on a right angle. |
-| A2 | `ChamferAngle` calls `Chamfer(ctx, b, sel, d, WithAsymmetricChamfer(reference, other))`. Receivers, routes, history entry (`OperationChamfer`) and refusals are `Chamfer`'s. |
+| A2 | `ChamferAngle`'s `Do` calls the implementation of `Chamfer` with the asymmetric setback `other` on `reference`. Receivers, routes, history entry (`OperationChamfer`) and refusals are `Chamfer`'s. |
 | A3 | `angle` is strictly between 0 and a half turn. Zero or a half turn or more is `ErrDegenerate`, a negative value is `ErrNegativeMagnitude`, and a wrong unit kind is `ErrUnitKind`. An edge whose φ makes `φ + angle` reach a half turn has a bevel that never meets the other face: `ErrDegenerate`. |
 | A4 | `d` is a positive length under `Chamfer`'s own gates. |
 | A5 | Each selected edge has exactly two faces, both `Plane`, and is convex or concave. A concave edge's φ is the open wedge the faces make in the air, which the bevel fills, so the same formula holds. Any other edge is `ErrUnsupported`. |
 | A6 | A nil context, body or reference is `ErrDegenerate`. A selector `Chamfer` would refuse is passed to `Chamfer` for its own error. |
-| A7 | `WithAsymmetricChamfer` takes one second distance, so every selected edge MUST give the same one within a relative 1e-12, which equal dihedrals do. A selection that mixes angles is `ErrUnsupported`: take the angles in separate calls. |
+| A7 | `Asymmetric` takes one second distance, so every selected edge MUST give the same one within a relative 1e-12, which equal dihedrals do. A selection that mixes angles is `ErrUnsupported`: take the angles in separate calls. |
 
 #### 2. The dihedral
 
@@ -6635,7 +6643,7 @@ that. The second distance is a float function of those recorded planes and bless
 is as exact as `Chamfer`'s asymmetric result for a distance of that value. The same-distance test of A7 only groups
 edges, and the one distance used differs from another edge's by less than a relative 1e-12.
 
-`WithTangentChain` is not offered: the chain would add edges A5 has not checked.
+`TangentChain` is not offered: the chain would add edges A5 has not checked.
 
 #### 3. Exactness
 
@@ -6647,7 +6655,7 @@ angle from the volume independently of the formula.
 
 - A curved face beside a straight or free-form edge, and a torus: the angle there varies along the edge.
 - The angle measured from the other face. Name the other face as `reference`.
-- `WithTangentChain`.
+- `TangentChain`.
 
 #### 5. Edges that are not right angled
 
@@ -9187,7 +9195,7 @@ Navigation only; the sections own the content.
 | Two-distance chamfer of a retained edge | §4 |
 | Fillet or chamfer of a rounded outline (line, arc, line …) | §5 |
 | Chamfer of a tangent chain whose edges share no base plane | §15b |
-| `Copy` with `WithCopyRotation` | §6 |
+| `Copy` with `CopyRotation` | §6 |
 | `ScaledAt` | §7 |
 | Edge between two parallel cylinders | §8 |
 | Why `Shell`, `Draft`, `Offset`, many-body `Union`, cone and torus blends stay refused | §9 |
@@ -9215,15 +9223,15 @@ Every refusal is `ErrUnsupported`; the quoted text follows `decad: not supported
 | `PatternCopies`, linear and circular | builds | 6 `Plane`, 5 `Cylinder` | retention |
 | `Mirrored`, `MirroredCopy` across the +x face | builds | 6 `Plane`, 5 `Cylinder` | retention |
 | `Transform`, translation or 20° about z | builds | 6 `Plane`, 5 `Cylinder` | retention |
-| `Copy`, no option or `WithCopyPlacement` | builds | 6 `Plane`, 5 `Cylinder` | retention |
-| `Copy` with `WithCopyRotation`, 20° about z | builds | 6 `Plane`, 5 `Cylinder` | GAP-A; M2 (§6) |
+| `Copy`, no option or `CopyTransform` | builds | 6 `Plane`, 5 `Cylinder` | retention |
+| `Copy` with `CopyRotation`, 20° about z | builds | 6 `Plane`, 5 `Cylinder` | GAP-A; M2 (§6) |
 | `ScaledAt` 1.5 about `(20,10,0)` | builds | 6 `Plane`, 5 `Cylinder` | M5 (§7) |
 | `Fillet` r=1 or `Chamfer` d=1 of one or all four x-parallel edges | refused (SM2) | — | GAP-E; §5.3, §15 |
-| `Chamfer` of the four, `WithAsymmetricChamfer` 1 and 2 | refused (SM2) | — | as above |
-| `Fillet` r=1 of the four, `WithTangentChain` | builds two chains | 6 `Plane`, 13 `Cylinder`, 8 `Torus` | M3 (§5) |
-| `Chamfer` d=1 of the four, `WithTangentChain` | builds two chains | 14 `Plane`, 5 `Cylinder`, 8 `Cone` | M3 (§5) |
-| `Chamfer` of the four, asymmetric, `WithTangentChain`, reference `Faces(Facing(+z)).Or(Facing(-z))` | builds two chains | 8 `Plane`, 8 `Cone` | M3 (§5.6) |
-| `Chamfer` of the four, asymmetric, `WithTangentChain`, reference `Facing(+z)` | refused (text A) | — | §5.6 |
+| `Chamfer` of the four, `Asymmetric` 1 and 2 | refused (SM2) | — | as above |
+| `Fillet` r=1 of the four, `TangentChain` | builds two chains | 6 `Plane`, 13 `Cylinder`, 8 `Torus` | M3 (§5) |
+| `Chamfer` d=1 of the four, `TangentChain` | builds two chains | 14 `Plane`, 5 `Cylinder`, 8 `Cone` | M3 (§5) |
+| `Chamfer` of the four, asymmetric, `TangentChain`, reference `Faces(Facing(+z)).Or(Facing(-z))` | builds two chains | 8 `Plane`, 8 `Cone` | M3 (§5.6) |
+| `Chamfer` of the four, asymmetric, `TangentChain`, reference `Facing(+z)` | refused (text A) | — | §5.6 |
 | `Shell` inward, top face removed | refused (text S) | — | GAP-B; §9.1 |
 | `Draft` 2° of the walls about the bottom face | refused (SD23) | — | GAP-C; §9.2 |
 | `Offset` | refused (text O) | — | §9.3 |
@@ -9232,7 +9240,7 @@ Every refusal is `ErrUnsupported`; the quoted text follows `decad: not supported
 The refusal texts are these.
 
 - **SM2**: "the selected edge ends at the tangent junction 37,0,20 whose continuation is not selected;
-  WithTangentChain selects the whole chain" (`internal/brepmodify/edge_route.go`).
+  TangentChain selects the whole chain" (`internal/brepmodify/edge_route.go`).
 - **Text A**: SX3, "names 0 of the faces adjacent to" the edge, "it must name exactly one" (reach §6), for the chain on the bottom plane.
 - **Text S**: "this evaluator shells a straight prism or its one-line Sweep reduction only"
   (`internal/brepmodify/shell.go`).
@@ -9251,7 +9259,7 @@ The probe calls neither the two-distance chamfer of a single edge (GAP-D, M1, §
 (M6, §8); §12's fixtures cover both.
 
 On P1 the brep routes answer instead. A plain `Fillet` or `Chamfer` of an x-parallel edge refuses brep-modify SB7,
-because the face across the edge's axis at `(3,0,20)` is the curved wall. All three `WithTangentChain` rows build,
+because the face across the edge's axis at `(3,0,20)` is the curved wall. All three `TangentChain` rows build,
 the asymmetric one included. `Shell` builds (11 `Plane`, 10 `Cylinder`). `ScaledAt` refuses "scale needs an exact
 line-section stack BRep".
 
@@ -9400,7 +9408,7 @@ is the seam `{W_k, W_{k+1}}`; its face map sends `P` to a wall, test 4 of reach 
 continuation". Seeds whose chains overlap merge into one chain (reach §5's fixed point), so the four x-parallel seeds
 of §1 give two closed chains.
 
-`Chamfer` without `WithTangentChain` expands the selection the same way, as the target CAD's tangent chain does: a
+`Chamfer` without `TangentChain` expands the selection the same way, as the target CAD's tangent chain does: a
 selected edge that ends at a proven tangent junction takes its continuation, and its bevel has no free end there.
 An expansion the walk cannot decide keeps the selection as named. `Fillet` without the option builds what the caller
 named. A selection that names every edge of a chain builds the chain. A `Fillet` edge, or a `Chamfer` edge
@@ -9711,7 +9719,7 @@ its own unit test.
 
 ### 6. Exact-rotation `Copy` keeps its tags (GAP-A)
 
-`WithCopyRotation` gives a faceted copy that denotes `Q·S + t_Q`, with `Q` an exactly orthogonal rational rotation
+`CopyRotation` gives a faceted copy that denotes `Q·S + t_Q`, with `Q` an exactly orthogonal rational rotation
 (`internal/exactrotation`). `ExactGroupPlaced` drops every group's `Denoted`, and every `Surface` and `CapRecord`
 except those of a plane that `Q` maps onto itself (below), because they describe the float placement and not `Q`.
 
@@ -9860,7 +9868,7 @@ Rows narrow blend Table SR and reach SX2/SX9; sentinels follow those tables.
 | SM | Call | Sentinel |
 |---|---|---|
 | **SM1** | a chain junction whose tangency §5.2 cannot decide | `ErrUnsupported` (reach SX2's text) |
-| **SM2** | a selected edge ends at a proven tangent junction whose continuation is not selected and `WithTangentChain` is absent, on a `Fillet` or on a `Chamfer` whose expansion (§5.3) was undecided; the message names the junction point and `WithTangentChain` | `ErrUnsupported` |
+| **SM2** | a selected edge ends at a proven tangent junction whose continuation is not selected and `TangentChain` is absent, on a `Fillet` or on a `Chamfer` whose expansion (§5.3) was undecided; the message names the junction point and `TangentChain` | `ErrUnsupported` |
 | **SM3** | a chain whose edges share no base plane, other than an equal-setback `Chamfer` (§15b), a junction of two plane walls, a cylinder wall whose axis is not exactly normal to `P`, an R4 chain edge spanning more than `π`, or a chain that mixes convex and concave edges | `ErrUnsupported` |
 | **SM4** | the chain gates of §5.6: proven overlap | `ErrDegenerate` (SR4) |
 | **SM5** | the chain gates of §5.6: undecided; a strip facet, or a facet of an end face that takes a cap, that meets another facet of the body; or a chain whose resolved references mix `P` and walls | `ErrUnsupported` (SR5; SX3 first for the mix) |
@@ -9900,13 +9908,13 @@ shown red first by the change named. `A_f = r²(1 − π/4)` is a fillet's corne
 | R3 two-distance chamfer of a groove's top edge | the wall's setback generator lies at angle `dB / R` from `K` | keep `solveSection`'s `dA` for the wall: the angle reads `dA / R` |
 | R4 two-distance chamfer of an arc | as R2 over the arc's span | as R2 |
 | Two R1 edges, two reference faces, one call | each edge's setbacks match its own reference | resolve references by face pointer: the second step finds no reference |
-| Chain expansion on P2 | a top-front seed with `WithTangentChain` expands to 4 `Line3` and 4 `Arc3` in body order | keep the faceted gate in `expandTangentChain`: SX9 |
+| Chain expansion on P2 | a top-front seed with `TangentChain` expands to 4 `Line3` and 4 `Arc3` in body order | keep the faceted gate in `expandTangentChain`: SX9 |
 | Closed chain fillet on P2, r = 1 (C1) | 4 `Cylinder`, 4 `Torus` (`Major = R − r`); removed `A_f·(96 + 2π·(R − x̄))`; junctions `Arc3` of radius `r`; `VerifyAll` passes | build each junction row per edge: rows differ in the last bits, SR7 refuses |
 | Same, torus side | as above | take `κ` the other way: `Major = R + r` and the volume is off |
 | Closed chain chamfer, equal and with reference `P` | removed `(t_P·t_W / 2)·(ΣL + 2π·(R − t_P/3))` | let the arcs take `t_W` along `P`: the two-distance volume is off |
 | Two closed chains (top and bottom outline), reference naming both bases | each chain removes `(t_P·t_W / 2)·(ΣL + 2π·(R − t_P/3))`; the 8 corner faces are `Cone` of radius `R − t_P` and half-angle `atan(t_P / t_W)`, the 8 straight bevels `Plane` | a later chain loses its reference: `the reference face is not a face of the selected edge` |
 | Four x-parallel seeds | two closed chains; removed volume twice the C1 row's | skip merging overlapping chains: the corners are claimed twice and SR2 refuses |
-| One straight edge, no option | SM2 naming `WithTangentChain` and the junction point | drop SM2: the message is blend SR5's "not a retained plane" |
+| One straight edge, no option | SM2 naming `TangentChain` and the junction point | drop SM2: the message is blend SR5's "not a retained plane" |
 | All 8 edges named, no option | builds the C1 result; volume equal within both bounds | treat shared junction corners as SR2: refused |
 | Open chain (C2): one lateral fillet, seed its top edge | chain of line, arc, line; removed `A_f·(L1 + L2) + (π/2)·(R − x̄)·A_f` | stop the walk at the junction and use the R1 end rule: refused as grazing |
 | Open chain ending on an arc (C2, R4): the corner-rounded box trimmed by a plane through its arc; seed the arc | line and arc ending on `G`; removed volume `A_f·L + ∫∫ ρ·Δφ(ρ)` over the section's corner, `Δφ` the angle from `G` to the tangent point | start every row at the corner's azimuth: the end rows leave `G` (unit test) |
@@ -9959,11 +9967,11 @@ shown red first by the change named. `A_f = r²(1 − π/4)` is a fillet's corne
 | `internal/facetedrecord/place.go`, `place_tag.go`, `placed.go` | §6 |
 | `internal/facetedrecord/point_plane_scale.go`, `place_tag.go` | §7 |
 | `internal/facetedrecord/edge_curve.go` | E10 |
-| `document.go` | `WithCopyRotation`'s doc comment states the tags it keeps (§6) |
+| `document.go` | `CopyRotation`'s doc comment states the tags it keeps (§6) |
 | Part E | Table RR: the two-distance chamfer, R5, a pointer to this document's chains; §7 |
 | `agent-docs/faceted-source-retention-design.md` | §3.4 (exact rotation), §6 (`ScaledAt`), §10.1 (E10) |
 | Part R | RX6 row and SX9 text; §5's sentence that faceted curves never enter the oracle |
-| `agent-docs/missing-features.md` | the rows for faceted `Fillet`/`Chamfer` and for analytic readings of a `WithCopyRotation` copy |
+| `agent-docs/missing-features.md` | the rows for faceted `Fillet`/`Chamfer` and for analytic readings of a `CopyRotation` copy |
 | `apitest/` | the tests of §12; `apitest/faceted_retained_blend_test.go` holds the blend rows |
 | `examples/` | one executable example: the rounded box's top rim filleted after a placed-tool Cut |
 | `docs/api.md`, `docs/data-structures.md` | none: no exported name or signature changes, and their rows name no receiver class |
@@ -10004,7 +10012,7 @@ axis are refused. The edge between a `Cylinder` and a `Torus` blend of a fillet 
   which near tangency does not give.
 - **Blend each chain edge on the evolving mesh.** Blending one edge alone leaves a flat end cap in `Π_J`; the
   next edge's blend then removes that cap to zero area, which no end rule builds.
-- **Expand a `Fillet`'s tangent chain without `WithTangentChain`.** Cardinality applies to what the caller named
+- **Expand a `Fillet`'s tangent chain without `TangentChain`.** Cardinality applies to what the caller named
   (reach §2). SM2 names the option instead. `Chamfer` expands it (§5.3), as the target CAD's chamfer does.
 - **Re-derive the copy's or the scaled body's tag from its moved polygons.** It blesses a surface from the
   polygons it should be checked against (CLAUDE.md).
@@ -10078,7 +10086,7 @@ sides; a slot whose rim runs along its sides, round the bar's end on both sides 
 and bottom faces; a step whose floor's rim runs on round the step's round and up its wall. §5's base search finds no
 face for them ("the chain's edges share no base plane", SM3). An equal-setback `Chamfer` of such a chain is rewritten
 exactly on the held mesh by `rewriteCrossChain` (`internal/retainedblend/chain_cross.go`, `chain_cross_face.go`,
-`chain_cross_end.go`, `chain_cross_bevel.go`; §15b.1), with or without `WithTangentChain`. When the rewrite refuses
+`chain_cross_end.go`, `chain_cross_bevel.go`; §15b.1), with or without `TangentChain`. When the rewrite refuses
 with `ErrUnsupported`, `brepmodify.ChainCutterChamfer` cuts the chain (§15b.2). A fillet and a two-distance chamfer
 keep SM3: a two-distance chamfer's setbacks belong to the base and the walls, which swap where the base changes.
 
@@ -10202,7 +10210,7 @@ is built and tested against the receiver before any Cut.
 The result is a Boolean Cut: faceted, with the Cut's own readings.
 
 Tests: `apitest/chamfer_tangent_chain_planes_test.go` chamfers the bar at two sizes from its caps' edges, from its
-sides' arcs and from one seed under `WithTangentChain`; a step's floor rim open to the top face, and ending on an
+sides' arcs and from one seed under `TangentChain`; a step's floor rim open to the top face, and ending on an
 earlier bevel of the top rim of the same setback (the column takes the old bevel's far corner) and of a wider one
 (the wall's edge with the old bevel keeps its far part); a slot through the bar's rounded end, before and after the
 bar's rim was chamfered; a slot, a tongue open to uncut caps and a tongue ending on the caps' earlier bevels through
@@ -11226,7 +11234,7 @@ and within 1e-8 mm³ of it, and a mesh bound within 1e-8 mm of its mesh bound.
 ## Part D — Draft
 
 How decad builds a drafted body: a tapered extrude (`Extrude` with a nonzero
-`WithTaper`) and a face draft of an existing prism (`Draft`). Both
+`Taper`) and a face draft of an existing prism (`Draft`). Both
 produce a `draftPayload` for one-sided extents or a `twoSidedDraftPayload`
 for extents that cross the sketch plane. Their walls lean at a stated angle
 to the sweep axis so that a molded part releases along that axis.
@@ -11253,7 +11261,7 @@ Question router (navigation, not authority):
 |---|---|
 | What is a draft, and which offset family defines it | §1, §2 |
 | Why the far section is decad's own geometry, not a `sketch` answer | §3 |
-| What `WithTaper` admits | §4 Table RD |
+| What `Taper` admits | §4 Table RD |
 | What `Draft` admits, and its signature | §4, §10 |
 | Why a call refused, and in which order the gates run | §5 Table SD |
 | What faces, edges and roles come out | §6 Table BD |
@@ -11305,7 +11313,7 @@ sewn rim, not an internal cap.
 
 **The sign.** A positive `α` narrows the body with distance from the sketch
 plane: every wall's carrier moves `t(z)` into the material. A negative `α`
-widens it. `WithTaper` keeps its existing meaning (core §12: a signed
+widens it. `Taper` keeps its existing meaning (core §12: a signed
 displacement, outside `ErrNegativeMagnitude`), and `Draft` (§10) reads
 its angle the same way about its neutral plane.
 
@@ -11381,7 +11389,7 @@ file is written.
 
 | RD | Entry point | Admits | Result |
 |---|---|---|---|
-| **RD1** | `Extrude` with nonzero `WithTaper` | analytic walks with G1 circular joins; `Distance`, `ToFace`, `ThroughAll`, `Symmetric` or `TwoSided`; `|α| < 90°`; no `WithSurfaceResult` | a one- or two-slab draft solid (Table BD) |
+| **RD1** | `Extrude` with nonzero `Taper` | analytic walks with G1 circular joins; `Distance`, `ToFace`, `ThroughAll`, `Symmetric` or `TwoSided`; `|α| < 90°`; no `SurfaceResult` | a one- or two-slab draft solid (Table BD) |
 | **RD2** | `Draft` | a live `prismPayload` operand (an extrude, a filleted or chamfered body, a tube, or any of these after `Transform`) whose section carries no displacement; a `NeutralFace` naming one cap of the operand; a selection resolving to exactly the operand's complete wall set; `0 < |α| < 90°` | a `draftPayload` solid over the operand's section, the operand retired |
 | **RD3** | `Draft` | as RD2 with a selection naming a **subset** of the walls, where every corner between a selected and an unselected wall is a line–line corner | a `draftPayload` whose far section moves the selected walls only (§10.2) |
 
@@ -11405,7 +11413,7 @@ any evaluator?) and the sentinel that follows from it.
 | **SD9** | far loops whose nesting the containment classifier cannot decide (modify S9) | undecidable here | `ErrUnsupported` |
 | **SD10** | a far section that passes every audit at the held `d` and fails at the top of `d`'s span (§8.1; modify-reach §8.3.1's second audit) | undecidable here | `ErrUnsupported` |
 | **SD11** | not used: `Symmetric` and `TwoSided` build one draft slab per side (BD4) | — | — |
-| **SD12** | a nonzero taper with `WithSurfaceResult` | yes | `ErrUnsupported` (staged, §14) |
+| **SD12** | a nonzero taper with `SurfaceResult` | yes | `ErrUnsupported` (staged, §14) |
 | **SD13** | a `d` that rounds to zero, a far vertex bit-identical to its near vertex, or a far radius bit-identical to its near radius (`capband.BandRadius`) | yes — float64 cannot name the far section at this scale | `ErrUnsupported` (modify-reach SX13) |
 | **SD14** | a far corner whose displacement enclosure cannot be built (`offset2d.ErrUnbounded`) | yes | `ErrUnsupported` (SX14) |
 | **SD15** | a corner whose two moved carriers have no intersection — a cusp (`|cross| ≤ tol`, `dot ≤ 0`) between two lines | yes | `ErrUnsupported` (`offset2d.ErrTopology`, modify S11's row) |
@@ -11428,7 +11436,7 @@ between two lines, and a cusp at a circular walk is SD4 first, so Extrude never
 reaches SD15; `internal/offset2d/sharp_test.go` pins it.
 
 **A chain section never reaches this build.** `Extrude` over an open
-`*sketch.Chain` returns `ErrUnsupported` for `WithTaper` at any angle, zero
+`*sketch.Chain` returns `ErrUnsupported` for `Taper` at any angle, zero
 included, after the chain's seam gates and before extent resolution
 (`agent-docs/surface-design.md` §13.2), so none of Table SD applies to a chain.
 `Extrude` threads its `ctx` through the extent resolution and both slab builds
@@ -11642,7 +11650,7 @@ nothing else.
 | **DD9** | `Verify` clearance (`WithClearances`) | `Suspect` (`boundaryaudit.PairUndecided`): `newBodyGeomBudget` has no carrier model for the class. The Plane/Cone carriers are not implemented |
 | **DD10** | `Verify` interference | box-disjoint proofs from the body's `Bounds`; the read-only mesh intersection over DD1's mesh |
 | **DD11** | `MassProperties` and `dynamics` | the verified-mesh path (`verifiedMeshMassProperties`) over DD1's mesh; `ErrUnsupported` where the band admission refuses |
-| **DD12** | `Transform`, `Copy`, `Mirrored`, `MirroredCopy` | the payload implements `Transform()` and `Placed()`: a placement re-runs §7 under the composed motion, as a prism's does. `WithJoin` refuses (it rewrites a prism's or stacked prism's section) |
+| **DD12** | `Transform`, `Copy`, `Mirrored`, `MirroredCopy` | the payload implements `Transform()` and `Placed()`: a placement re-runs §7 under the composed motion, as a prism's does. `MirroredJoin` refuses (it rewrites a prism's or stacked prism's section) |
 | **DD13** | `Patterned` | `placedInstance` and a boolean `Union` (the mesh path); the frame-keeping arm does not take the class |
 | **DD14** | `Fillet`, `Chamfer`, `Shell` | A positive-taper, one-sided, full circular solid admits one complete far-cap outer rim fillet (§10.4), symmetric chamfer (§10.5), or inward shell with that cap removed (§10.6). Other selections and draft shapes remain modify S3, `ErrUnsupported` |
 | **DD15** | `Draft` of a draft body | SD23 |
@@ -11987,21 +11995,21 @@ type NeutralFrame struct {
     Frame r3.Frame
 }
 
-func Draft(ctx context.Context, b *Body, sel FaceSelector, neutral NeutralPlane, angle units.Value, opts ...DraftOption) (*Body, error)
+func Draft(b *Body, sel FaceSelector, neutral NeutralPlane, angle units.Value) *DraftCommand
+func (c *DraftCommand) Do(ctx context.Context) (*Body, error)
 
 // Walls matches every face a sweep made: the side(i, j) roles of b's own
 // producer. It is the sibling of CapStart and CapEnd.
 func Walls(b *Body) FacePredicate
 ```
 
-`Draft` is a modify operation on core §8's terms: it takes a context, resolves
+`Draft` is a modify operation on core §8's terms: its command takes a context at `Do`, resolves
 `sel` against the live operand, returns a new body and retires the operand,
 and leaves the document unchanged on any error, including `ctx.Err()`.
 `angle` is a signed `units.Value` of `Kind` Angle (core §12 lists it with
-`ToFace.Offset` and `WithTaper` as the signed displacements outside
+`ToFace.Offset` and `Taper` as the signed displacements outside
 `ErrNegativeMagnitude`); a positive angle narrows the body with distance from
-the neutral plane. `DraftOption` is a sealed option tier that carries no option; it reserves
-the signature and includes `option.Interface` in its method set.
+the neutral plane. `DraftCommand` has no method.
 
 #### 10.1 Resolution (RD2)
 
@@ -12030,7 +12038,7 @@ complete wall set is the operand's faces carrying such a role, fillet and
 chamfer rounds included.
 
 The body `Draft` builds equals the body `Extrude` would build from the same
-sketch with `WithTaper(angle)` and a `Distance` extent toward the far end,
+sketch with `Taper(angle)` and a `Distance` extent toward the far end,
 bit for bit when the operand is unplaced. §11 asserts it.
 
 #### 10.2 The subset case (RD3)
@@ -12119,7 +12127,7 @@ outside this bounded route.
 #### 10.5 One circular far-rim chamfer (DD14)
 
 `Chamfer` accepts the same source and rim as §10.4, with equal setbacks along
-the cap plane and conical wall. `WithAsymmetricChamfer` remains outside this
+the cap plane and conical wall. `Asymmetric` remains outside this
 route. The draft record and exact signed-axis sketch frame authenticate the
 source. The result keeps its placement and axial cap roles.
 
@@ -12146,7 +12154,7 @@ and the new cone meets the source cone at one whole circular junction.
 `Shell` admits the same positive-taper full-circle source as §10.4 when the
 one selected opening is its far cap and the sense is inward. The source must
 have one near-start draft slab, no hole or kept wall, and an exact signed-axis
-sketch frame. `WithNoOpenings`, outward shelling, another cap, a partial
+sketch frame. `ShellClosed`, outward shelling, another cap, a partial
 circle and an additional region remain S3.
 
 Let the source's near radius be `R`, height `h`, inward draft amount `d`,
@@ -12227,7 +12235,7 @@ negative taper and a holed section refuse.
 
 | Fixture | Asserts |
 |---|---|
-| D1 equivalence | `Draft(ctx, b, Faces(Walls(b)), NeutralFace{b, Faces(FaceCreatedBy(CapStart(b)))}, 5°)` of F1's untapered box equals F1's body: same volume, area, centroid, vertex coordinates and face count, bit for bit |
+| D1 equivalence | `Draft(b, Faces(Walls(b)), NeutralFace{b, Faces(FaceCreatedBy(CapStart(b)))}, 5°).Do(ctx)` of F1's untapered box equals F1's body: same volume, area, centroid, vertex coordinates and face count, bit for bit |
 | D2 other cap | the neutral face `CapEnd`: the far cap is `capStart`, at `z0`; volume as F1 |
 | D3 negative | `−5°` widens: volume as F5 |
 | D4 retire | the operand is retired; the result is live; the document holds one body |
@@ -12432,9 +12440,9 @@ the function doc comments, and the layout rows of the root files.
 
 | Increment | Provides | Files | Pinned by | Builds on |
 |---|---|---|---|---|
-| **1** | `Extrude` + `WithTaper` over Table RD1: `offset2d.BuildSharpLoop`; `draftPayload` with `Transform`/`Placed`; the build (§7); the measurement (§8 over `internal/capband`); `d` and its span (§8.1) with a certified tangent in `internal/proofbound`; `extrude.go` dispatches a nonzero taper to the draft build and refuses SD11/SD12; DD6's gate arm; DD12; the modify refusal messages naming the class | `internal/offset2d/sharp.go`, `internal/proofbound/interval_trig.go` (tangent), `internal/draftrecord/` (`payload.go`, `build.go`, `measure.go`), `draft.go`, `extrude.go`, `internal/clearance/pairkernel/gate.go`, `internal/gatediameter/body_gate.go`, `fillet.go`/`chamfer.go`/`shell.go` (messages), `apitest/extrude_taper_test.go`, `internal/draftrecord/build_test.go`, `internal/offset2d/sharp_test.go`, `examples/extrude_taper_example_test.go` | F1–F10 and the SD refusals of §11; the fail-first legs | — |
+| **1** | `Extrude` + `Taper` over Table RD1: `offset2d.BuildSharpLoop`; `draftPayload` with `Transform`/`Placed`; the build (§7); the measurement (§8 over `internal/capband`); `d` and its span (§8.1) with a certified tangent in `internal/proofbound`; `extrude.go` dispatches a nonzero taper to the draft build and refuses SD11/SD12; DD6's gate arm; DD12; the modify refusal messages naming the class | `internal/offset2d/sharp.go`, `internal/proofbound/interval_trig.go` (tangent), `internal/draftrecord/` (`payload.go`, `build.go`, `measure.go`), `draft.go`, `extrude.go`, `internal/clearance/pairkernel/gate.go`, `internal/gatediameter/body_gate.go`, `fillet.go`/`chamfer.go`/`shell.go` (messages), `apitest/extrude_taper_test.go`, `internal/draftrecord/build_test.go`, `internal/offset2d/sharp_test.go`, `examples/extrude_taper_example_test.go` | F1–F10 and the SD refusals of §11; the fail-first legs | — |
 | **2** | tessellation and the mesh volume proof (DD1), which serves DD2, DD3, DD4, DD10, DD11, DD13, DD17 | `internal/draftrecord/tessellate.go`, `internal/tessdispatch/dispatch.go` (dispatch), `internal/capblend/admit.go` (§9.1's three differences), `internal/draftrecord/payload.go`/`build.go` (`Patches`, `BandDelta`), `internal/booloperand/volume_proof.go` (the admission arm), `internal/massdispatch/dispatch.go` (the mesh path needs no arm), `internal/motionengine/recordradius.go`, `apitest/draft_mesh_test.go`, `internal/draftrecord/tessellate_test.go` | the mesh fixtures | 1 |
-| **3** | `Draft` over RD2: `NeutralPlane`, `NeutralFace`, `NeutralFrame` (refusing), `DraftOption`, `Walls(b)`; §10.1's resolution; SD17–SD23; core §8's pointer to this document and core §12's signed-displacement list | `draft.go`, `selector.go` (`Walls`), `internal/selectorquery/predicate.go`, `agent-docs/api-design.md` §8/§12, `apitest/draft_test.go`, `examples/draft_example_test.go` | D1–D5 | 1 |
+| **3** | `Draft` over RD2: `NeutralPlane`, `NeutralFace`, `NeutralFrame` (refusing), `Walls(b)`; §10.1's resolution; SD17–SD23; core §8's pointer to this document and core §12's signed-displacement list | `draft.go`, `selector.go` (`Walls`), `internal/selectorquery/predicate.go`, `agent-docs/api-design.md` §8/§12, `apitest/draft_test.go`, `examples/draft_example_test.go` | D1–D5 | 1 |
 | **4** | DD7: the undercut survey over draft bodies | `internal/capblendsurvey/draft.go`, `internal/capblendsurvey/undercut.go`, `internal/verifyrun/survey.go` (dispatch), `apitest/draft_verify_test.go` | the survey fixtures; the `−e` pull lists every wall | 2 |
 | **5** | RD3: the subset draft (§10.2): per-walk amounts in `BuildSharpLoop`, the mixed-corner rule, SD21 narrowed | `internal/offset2d/sharp.go`, `internal/capcontour/displacement.go`, `internal/capband/`, `draft.go`, `internal/draftrecord/build.go`, `internal/draftrecord/payload.go`, `internal/draftrecord/tessellate.go` (the mesh's per-walk setbacks), `apitest/draft_subset_test.go` | one wall of F1's box drafted: `A(z) = a(a − z·tan α)`, so `Volume = h·a(a − d/2)`; the L with one notch wall drafted; a hole drafted alone (F7's cone with vertical outer walls) | 3 |
 | **6** | RD1 with a one-sided `ToFace` or `ThroughAll`: `resolveLinearExtent` resolves the stop, then the existing single-slab draft builds with the stop's axial bound | `draft.go`, `apitest/extrude_taper_test.go` | the far-cap vertex and volume match the selected stop level within their bounds | 5 |

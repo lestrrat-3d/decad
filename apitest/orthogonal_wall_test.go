@@ -24,7 +24,7 @@ func TestOrthogonalWallSurveyProvesAThickEnoughWall(t *testing.T) {
 	doc := decad.New()
 	a := blockIn(t, doc, r3.NewVec(0, 0, 0), r3.NewVec(10, 4, 4))
 	b := blockIn(t, doc, r3.NewVec(0, 0, 0), r3.NewVec(4, 10, 4))
-	_, err := decad.Union(t.Context(), a, b) // an L whose legs are 4 mm thick: the thinnest wall is 4 mm
+	_, err := decad.Union(a, b).Do(t.Context()) // an L whose legs are 4 mm thick: the thinnest wall is 4 mm
 	require.NoError(t, err)
 	// A 2 mm tool is under the 4 mm wall: the survey proves it, where the rays could only leave it undecided.
 	report := wallReport(t, doc, 2)
@@ -52,7 +52,7 @@ func TestOrthogonalWallSurveyFindsAThinFinAndAShelledWall(t *testing.T) {
 	// A 1 mm wall of a cup: the shell's wall is the thinnest.
 	cupDoc := decad.New()
 	block := blockIn(t, cupDoc, r3.NewVec(0, 0, 0), r3.NewVec(40, 30, 20))
-	_, err := decad.Shell(t.Context(), block, decad.Faces(decad.Facing(r3.NewVec(0, 0, 1))), units.Millimeters(1))
+	_, err := decad.Shell(block, decad.Faces(decad.Facing(r3.NewVec(0, 0, 1))), units.Millimeters(1)).Do(t.Context())
 	require.NoError(t, err)
 	report := wallReport(t, cupDoc, 2)
 	d, thin := wallDiagnostic(report, decad.DiagWallTooThin)
@@ -66,7 +66,7 @@ func TestOrthogonalWallSurveyFindsAThinFinAndAShelledWall(t *testing.T) {
 	finDoc := decad.New()
 	base := blockIn(t, finDoc, r3.NewVec(0, 0, 0), r3.NewVec(20, 20, 20))
 	fin := blockIn(t, finDoc, r3.NewVec(20, 3, 3), r3.NewVec(40, 3.5, 17))
-	_, err = decad.Union(t.Context(), base, fin)
+	_, err = decad.Union(base, fin).Do(t.Context())
 	require.NoError(t, err)
 	report = wallReport(t, finDoc, 2)
 	d, thin = wallDiagnostic(report, decad.DiagWallTooThin)

@@ -32,8 +32,8 @@ func Example_extrude() {
 	// Extrude the sketch's one profile 10 mm along its normal (+Z). The
 	// document owns every body it creates.
 	doc := decad.New()
-	body, err := decad.Extrude(context.Background(), doc, s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	body, err := decad.Extrude(doc, s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to extrude: %s\n", err)
 		return

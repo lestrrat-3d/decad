@@ -25,7 +25,7 @@ type FacetedCopyLineage struct {
 	// itself, so the image's true solid is exactly motion of the source's.
 	Direct bool
 	// Exact is the rational rotation the image denotes, set only for a direct
-	// copy made with WithCopyRotation. A Transform, a copy of a copy and every
+	// copy made with CopyRotation. A Transform, a copy of a copy and every
 	// ordinary placement leave it nil.
 	Exact *exactrotation.Rotation
 }

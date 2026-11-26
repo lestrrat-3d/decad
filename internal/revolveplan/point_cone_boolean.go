@@ -16,7 +16,7 @@ import (
 // the mesh Boolean fallback for any pair outside this exact source class.
 //
 // matchingFaces marks the recorded cone limit as one whose cap meets the cone
-// within rounding by design (decad.WithMatchingFaces).
+// within rounding by design (the MatchingFaces method of decad.Cut and decad.Intersect).
 func PointConeBoolean(ctx context.Context, op meshbool.OperationKind, env topo.Env,
 	target, tool *topo.Body, matchingFaces bool) (*topo.Body, bool, error) {
 	if op != meshbool.OpCut && op != meshbool.OpIntersect {

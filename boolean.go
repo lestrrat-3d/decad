@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"slices"
 	"strings"
 
 	"github.com/lestrrat-3d/decad/internal/booleandispatch"
@@ -16,10 +17,10 @@ import (
 	"github.com/lestrrat-3d/decad/internal/massdispatch"
 	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
+	"github.com/lestrrat-3d/decad/internal/opcommand"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/units"
-	"github.com/lestrrat-go/option/v3"
 )
 
 // This file is the public boolean surface of core §8. Admitted prism and
@@ -32,9 +33,10 @@ import (
 // from their document and registers the result, reached through the operands'
 // own owning document.
 
-// Union returns the body enclosing the volume of two or more operands,
-// retiring them together from their document (core §8). A nil operand or a
-// repeated body is ErrDegenerate; a call with no other body is ErrDegenerate.
+// Union returns the command that builds the body enclosing the volume of two
+// or more operands, retiring them together from their document on Do (core §8).
+// A nil operand or a repeated body is ErrDegenerate; fewer than two bodies is
+// ErrDegenerate, returned by Do.
 // Three or more bodies admit a one-scene exact union of equal-interval,
 // same-placement, hole-free whole-line prisms with distinct source line
 // carriers, plus certified straight bevel tooth patterns. Other
@@ -119,22 +121,85 @@ import (
 // (agent-docs/prism-boolean-design.md Part U): a chain whose step refuses returns the
 // many-body refusal and leaves every body live.
 //
-// It returns ctx.Err() unchanged when ctx is canceled before the document
+// Do returns ctx.Err() unchanged when ctx is canceled before the document
 // commit.
-func Union(ctx context.Context, first *Body, others ...*Body) (*Body, error) {
-	if ctx == nil {
-		return nil, fmt.Errorf("%w: a nil context cannot control a boolean", ErrDegenerate)
+func Union(bodies ...*Body) *UnionCommand {
+	c := &UnionCommand{bodies: slices.Clone(bodies)}
+	if len(bodies) < 2 {
+		c.state.Record("bodies", fmt.Errorf("%w: Union needs at least two bodies", ErrDegenerate))
 	}
-	if len(others) == 0 {
-		return nil, fmt.Errorf("%w: Union needs at least two bodies", ErrDegenerate)
+	return c
+}
+
+// UnionCommand joins bodies. Build it with [Union].
+type UnionCommand struct {
+	state    opcommand.State // consumed flag and first recorded fault
+	bodies   []*Body         // copied at Union
+	refine   bool            // set by RefineTo
+	bound    float64         // the RefineTo bound in millimetres
+	boundErr error           // the fault of the latest RefineTo bound, refused at Do
+}
+
+// RefineTo builds the union directly at the refinement bound maxBound, in one
+// build (agent-docs/body-refine-design.md §7.1). It returns the join that
+// [Union] followed by [Refine] returns.
+//
+// The bodies MUST hold a revolved blank and two or more copies of one
+// point-Loft tooth — a straight-bevel sector join, as [Union] takes a bevel
+// gear join. The join is built once at the bound min(maxBound, 0.1 mm). Union
+// builds and audits the join at 0.1 mm, and Refine then discards that join and
+// builds it again from the same sources at maxBound, so the single build saves
+// the first. The result has the vertices, triangles, topology, bounds, Volume
+// and Area that the pair returns, bit for bit. It differs from the pair's
+// result in these ways. Its faces keep the producer and face identities the
+// Union gives, where Refine makes fresh ones. The document's operation history
+// holds one Union entry and no Refine entry, so the producer identities of
+// later operations are one lower than after the pair. LocatePoint, a two-body
+// Section and the regroup of a later Cut or Union read the result as a Union of
+// its operands through that history, where they read the pair's refined body
+// as a leaf. A join that cannot meet maxBound is refused and commits nothing,
+// where the pair keeps the 0.1 mm join of its Union.
+//
+// Do returns the joined body, or an error with nothing committed: the document
+// is unchanged and every operand stays live. A set that is not a sector join
+// the direct build takes is ErrUnsupported, refused before anything is built,
+// and its message says to call Union, then Refine. That covers a pair of
+// bodies, a union of any other kind, and a join that Union folds two bodies at
+// a time. A join that cannot meet maxBound is ErrUnsupported too, with the same
+// advice. Union's own gates on the operands apply. Every error carries
+// [OperationUnion].
+//
+// maxBound is a length: wrong kind is ErrUnitKind, non-finite ErrNotFinite,
+// negative ErrNegativeMagnitude and zero ErrDegenerate, each returned by Do
+// before anything is built and naming RefineTo as its subject. A second call
+// replaces the first.
+func (c *UnionCommand) RefineTo(maxBound units.Value) *UnionCommand {
+	c.refine = true
+	c.bound, c.boundErr = refinementBound(maxBound)
+	return c
+}
+
+// Do runs the union once and returns the joined body. A second Do returns
+// [ErrConsumed].
+func (c *UnionCommand) Do(ctx context.Context) (*Body, error) {
+	return runCommand(ctx, &c.state, OperationUnion, c.run)
+}
+
+func (c *UnionCommand) run(ctx context.Context) (*Body, error) {
+	if c.refine {
+		if c.boundErr != nil {
+			return nil, subjectError(OperationUnion, "RefineTo", c.boundErr)
+		}
+		return unionRefined(ctx, c.bodies, c.bound)
 	}
-	if len(others) == 1 {
-		body, err := performBoolean(ctx, meshbool.OpUnion, first, others[0])
-		return body, operationError(OperationUnion, err)
+	return union(ctx, c.bodies)
+}
+
+// union is Union's implementation; its errors carry no operation tag.
+func union(ctx context.Context, bodies []*Body) (*Body, error) {
+	if len(bodies) == 2 {
+		return performBoolean(ctx, meshbool.OpUnion, bodies[0], bodies[1], booleanConfig{})
 	}
-	bodies := make([]*Body, 0, len(others)+1)
-	bodies = append(bodies, first)
-	bodies = append(bodies, others...)
 	body, err := performUnionMany(ctx, bodies)
 	if errors.Is(err, ErrUnsupported) && isManyUnionRefusal(err) {
 		// No certified route takes the set as a whole: join the bodies two at a time,
@@ -143,84 +208,103 @@ func Union(ctx context.Context, first *Body, others ...*Body) (*Body, error) {
 			return folded, nil
 		}
 	}
-	return body, operationError(OperationUnion, err)
+	return body, err
 }
 
-// Cut returns target minus tool, retiring both operands from their document
-// (core §8). The target and tool roles are asymmetric. A cut that removes
-// everything is ErrBooleanFailed;
+// Cut returns the command that subtracts tool from target, retiring both
+// operands from their document on Do (core §8). The target and tool roles are
+// asymmetric. A cut that removes everything is ErrBooleanFailed;
 // the other gates match Union's.
 // A call refused with ErrUnsupported on a mesh result of earlier Cut and
 // Intersect calls is retried from the source bodies of that chain
 // (agent-docs/prism-boolean-design.md Part R); only a failure of that retry too
 // returns the refusal.
-// It returns ctx.Err() unchanged when ctx is canceled before the document commit.
-func Cut(ctx context.Context, target, tool *Body, opts ...BooleanOption) (*Body, error) {
-	body, err := performBoolean(ctx, meshbool.OpCut, target, tool, opts...)
-	return body, operationError(OperationCut, err)
+// Do returns ctx.Err() unchanged when ctx is canceled before the document commit.
+func Cut(target, tool *Body) *CutCommand {
+	return &CutCommand{target: target, tool: tool}
 }
 
-// Intersect returns the volume common to a and b, retiring both operands
-// from their document (core §8). Disjoint operands share nothing, so the
-// empty result is ErrBooleanFailed; the other gates match Union's.
+// CutCommand subtracts one body from another. Build it with [Cut].
+type CutCommand struct {
+	state  opcommand.State
+	target *Body
+	tool   *Body
+	cfg    booleanConfig
+}
+
+// MatchingFaces tells the cut that the operands' faces are meant to match
+// where they meet; see [IntersectCommand.MatchingFaces].
+func (c *CutCommand) MatchingFaces() *CutCommand {
+	c.cfg.matchingFaces = true
+	return c
+}
+
+// Do runs the cut once and returns the result body. A second Do returns
+// [ErrConsumed].
+func (c *CutCommand) Do(ctx context.Context) (*Body, error) {
+	return runCommand(ctx, &c.state, OperationCut, c.run)
+}
+
+func (c *CutCommand) run(ctx context.Context) (*Body, error) {
+	return cut(ctx, c.target, c.tool, c.cfg)
+}
+
+func cut(ctx context.Context, target, tool *Body, cfg booleanConfig) (*Body, error) {
+	return performBoolean(ctx, meshbool.OpCut, target, tool, cfg)
+}
+
+// Intersect returns the command that builds the volume common to a and b,
+// retiring both operands from their document on Do (core §8). Disjoint
+// operands share nothing, so the empty result is ErrBooleanFailed; the other
+// gates match Union's.
 // A call refused with ErrUnsupported on a mesh result of earlier Cut and
 // Intersect calls is retried from the source bodies of that chain
 // (agent-docs/prism-boolean-design.md Part R); only a failure of that retry too
 // returns the refusal.
-// It returns ctx.Err() unchanged when ctx is canceled before the document commit.
-func Intersect(ctx context.Context, a, b *Body, opts ...BooleanOption) (*Body, error) {
-	body, err := performBoolean(ctx, meshbool.OpIntersect, a, b, opts...)
-	return body, operationError(OperationIntersect, err)
+// Do returns ctx.Err() unchanged when ctx is canceled before the document commit.
+func Intersect(a, b *Body) *IntersectCommand {
+	return &IntersectCommand{a: a, b: b}
 }
 
-// BooleanOption configures Cut and Intersect. An option from another package
-// cannot implement this sealed tier.
-type BooleanOption interface {
-	option.Interface
-	booleanOption()
+// IntersectCommand builds the common volume of two bodies. Build it with
+// [Intersect].
+type IntersectCommand struct {
+	state opcommand.State
+	a, b  *Body
+	cfg   booleanConfig
 }
 
-type booleanOption struct{ option.Interface }
-
-func (booleanOption) booleanOption() {}
-
-type identMatchingFaces struct{}
-
-// WithMatchingFaces tells Cut or Intersect that the operands' faces are meant
-// to match where they meet: a cap drawn to touch the tool's cone, say, or two
+// MatchingFaces tells the intersection that the operands' faces are meant to
+// match where they meet: a cap drawn to touch the tool's cone, say, or two
 // faces meant to coincide. Faces drawn in floating point seldom match exactly;
 // each rounds on its own, so a design that matches on paper can miss by a few
-// last-place steps and be refused for it. With this option a miss of that size
+// last-place steps and be refused for it. With this method a miss of that size
 // is taken as the match the design intends, and its effect is charged into
 // the result's error bounds. A miss larger than rounding disproves the
-// declaration, and the operation refuses as it would without the option. The
-// option never admits a shape that would otherwise be refused for another
-// reason, and it has no effect on a pair whose faces do not meet.
-func WithMatchingFaces() BooleanOption {
-	return booleanOption{option.New(identMatchingFaces{}, true)}
+// declaration, and the operation refuses as it would without it. It never
+// admits a shape that would otherwise be refused for another reason, and it has
+// no effect on a pair whose faces do not meet.
+func (c *IntersectCommand) MatchingFaces() *IntersectCommand {
+	c.cfg.matchingFaces = true
+	return c
 }
 
-// booleanConfig is the folded form of a call's BooleanOptions.
+// Do runs the intersection once and returns the result body. A second Do
+// returns [ErrConsumed].
+func (c *IntersectCommand) Do(ctx context.Context) (*Body, error) {
+	return runCommand(ctx, &c.state, OperationIntersect, c.run)
+}
+
+func (c *IntersectCommand) run(ctx context.Context) (*Body, error) {
+	return intersect(ctx, c.a, c.b, c.cfg)
+}
+
+func intersect(ctx context.Context, a, b *Body, cfg booleanConfig) (*Body, error) {
+	return performBoolean(ctx, meshbool.OpIntersect, a, b, cfg)
+}
+
+// booleanConfig is the folded form of a call's methods.
 type booleanConfig struct{ matchingFaces bool }
-
-func foldBooleanOptions(opts []BooleanOption) (booleanConfig, error) {
-	var cfg booleanConfig
-	for _, opt := range opts {
-		if opt == nil {
-			return cfg, fmt.Errorf(`%w: a nil option names nothing to apply`, ErrDegenerate)
-		}
-		if o, ok := opt.(booleanOption); ok && o.Interface == nil {
-			return cfg, fmt.Errorf(`%w: a zero option names nothing to apply`, ErrDegenerate)
-		}
-		switch opt.Ident().(type) {
-		case identMatchingFaces:
-			cfg.matchingFaces = true
-		default:
-			return cfg, fmt.Errorf(`%w: the boolean option is not a decad boolean option (%T)`, ErrDegenerate, opt)
-		}
-	}
-	return cfg, nil
-}
 
 // tessellateBooleanOperand meshes one boolean operand at its own request
 // tolerance: the pair tolerance, raised to a restating operand's held floor
@@ -252,14 +336,7 @@ type booleanEvaluation struct {
 // performBoolean gates the operands, runs the read-only geometry evaluator
 // (buildBoolean), then commits the public result atomically (commitBoolean). A
 // failure before the commit leaves the live-body set, and operands unchanged.
-func performBoolean(ctx context.Context, op meshbool.OperationKind, a, b *Body, opts ...BooleanOption) (*Body, error) {
-	if ctx == nil {
-		return nil, fmt.Errorf(`%w: a nil context cannot control a boolean`, ErrDegenerate)
-	}
-	cfg, err := foldBooleanOptions(opts)
-	if err != nil {
-		return nil, err
-	}
+func performBoolean(ctx context.Context, op meshbool.OperationKind, a, b *Body, cfg booleanConfig) (*Body, error) {
 	if a == nil || a.n.Doc == nil {
 		return nil, fmt.Errorf(`%w: the first operand belongs to no document`, ErrDegenerate)
 	}

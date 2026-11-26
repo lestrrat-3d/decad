@@ -20,7 +20,7 @@ func TestStitchCurvedRevolveSheetTessellates(t *testing.T) {
 	source, err := sheet.Tessellate(t.Context(), tol)
 	require.NoError(t, err)
 
-	stitched, err := decad.Stitch(t.Context(), sheet)
+	stitched, err := decad.Stitch(sheet).Do(t.Context())
 	require.NoError(t, err)
 	mesh, err := stitched.Tessellate(t.Context(), tol)
 	require.NoError(t, err)
@@ -51,9 +51,9 @@ func TestStitchOpenCurvedRevolveSheetKeepsFreeRims(t *testing.T) {
 	t.Parallel()
 	s, p := offAxisSemicircleSketch(t)
 	doc := decad.New()
-	sheet, err := decad.Revolve(t.Context(), doc, s, p, uAxis, quarterTurn, decad.WithSurfaceResult())
+	sheet, err := decad.Revolve(doc, s, p, uAxis, quarterTurn).SurfaceResult().Do(t.Context())
 	require.NoError(t, err)
-	stitched, err := decad.Stitch(t.Context(), sheet)
+	stitched, err := decad.Stitch(sheet).Do(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, decad.BodySheet, stitched.Kind())
 	mesh, err := stitched.Tessellate(t.Context(), units.Millimeters(0.1))
@@ -78,15 +78,15 @@ func TestStitchCurvedWeldedRevolveSiblingsTessellate(t *testing.T) {
 	t.Parallel()
 	s, p := offAxisSemicircleSketch(t)
 	doc := decad.New()
-	sheet, err := decad.Revolve(t.Context(), doc, s, p, uAxis, quarterTurn, decad.WithSurfaceResult())
+	sheet, err := decad.Revolve(doc, s, p, uAxis, quarterTurn).SurfaceResult().Do(t.Context())
 	require.NoError(t, err)
 	tol := units.Millimeters(0.1)
 	original, err := sheet.Tessellate(t.Context(), tol)
 	require.NoError(t, err)
-	pieces, err := decad.Unstitch(t.Context(), sheet)
+	pieces, err := decad.Unstitch(sheet).Do(t.Context())
 	require.NoError(t, err)
 	require.Len(t, pieces, 2)
-	stitched, err := decad.Stitch(t.Context(), pieces...)
+	stitched, err := decad.Stitch(pieces...).Do(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, decad.BodySheet, stitched.Kind())
 	mesh, err := stitched.Tessellate(t.Context(), tol)
@@ -119,15 +119,15 @@ func TestStitchCurvedWeldedRevolveSiblingPlacementRefusesMesh(t *testing.T) {
 	t.Parallel()
 	s, p := offAxisSemicircleSketch(t)
 	doc := decad.New()
-	sheet, err := decad.Revolve(t.Context(), doc, s, p, uAxis, quarterTurn, decad.WithSurfaceResult())
+	sheet, err := decad.Revolve(doc, s, p, uAxis, quarterTurn).SurfaceResult().Do(t.Context())
 	require.NoError(t, err)
-	pieces, err := decad.Unstitch(t.Context(), sheet)
+	pieces, err := decad.Unstitch(sheet).Do(t.Context())
 	require.NoError(t, err)
 	motion, err := r3.Translation(r3.NewVec(100, 0, 0))
 	require.NoError(t, err)
-	placed, err := decad.Transform(t.Context(), pieces[0], motion)
+	placed, err := decad.Transform(pieces[0], motion).Do(t.Context())
 	require.NoError(t, err)
-	stitched, err := decad.Stitch(t.Context(), placed, pieces[1])
+	stitched, err := decad.Stitch(placed, pieces[1]).Do(t.Context())
 	require.NoError(t, err)
 	_, err = stitched.Tessellate(t.Context(), units.Millimeters(0.1))
 	require.ErrorIs(t, err, decad.ErrUnsupported)
@@ -139,11 +139,11 @@ func TestStitchCurvedMeshInheritsSourcePlacementBound(t *testing.T) {
 	_, sheet := annularRevolveSheet(t, 10, 5, 15)
 	motion, err := r3.Translation(r3.NewVec(1000, -500, 200))
 	require.NoError(t, err)
-	placedSource, err := decad.Transform(t.Context(), sheet, motion)
+	placedSource, err := decad.Transform(sheet, motion).Do(t.Context())
 	require.NoError(t, err)
 	source, err := placedSource.Tessellate(t.Context(), units.Millimeters(0.1))
 	require.NoError(t, err)
-	stitched, err := decad.Stitch(t.Context(), placedSource)
+	stitched, err := decad.Stitch(placedSource).Do(t.Context())
 	require.NoError(t, err)
 	mesh, err := stitched.Tessellate(t.Context(), units.Millimeters(0.1))
 	require.NoError(t, err)
@@ -167,7 +167,7 @@ func TestStitchCurvedRevolveSurfaceKindsTessellate(t *testing.T) {
 			return sheet
 		}, func(t *testing.T) *decad.Body {
 			s, p := trapezoidFrustumSketch(t, 10, 5, 15, 8, 12)
-			solid, err := decad.Revolve(t.Context(), decad.New(), s, p, uAxis, decad.FullRevolution{})
+			solid, err := decad.Revolve(decad.New(), s, p, uAxis, decad.FullRevolution{}).Do(t.Context())
 			require.NoError(t, err)
 			return solid
 		}, frustumVolume},
@@ -176,19 +176,19 @@ func TestStitchCurvedRevolveSurfaceKindsTessellate(t *testing.T) {
 			return sheet
 		}, func(t *testing.T) *decad.Body {
 			s, p := semicircleSketchAt(t, 0, 10)
-			solid, err := decad.Revolve(t.Context(), decad.New(), s, p, uAxis, decad.FullRevolution{})
+			solid, err := decad.Revolve(decad.New(), s, p, uAxis, decad.FullRevolution{}).Do(t.Context())
 			require.NoError(t, err)
 			return solid
 		}, 4.0 / 3.0 * math.Pi * 125},
 		{"torus", func(t *testing.T) *decad.Body {
 			s, p := offAxisSemicircleSketch(t)
 			doc := decad.New()
-			sheet, err := decad.Revolve(t.Context(), doc, s, p, uAxis, decad.FullRevolution{}, decad.WithSurfaceResult())
+			sheet, err := decad.Revolve(doc, s, p, uAxis, decad.FullRevolution{}).SurfaceResult().Do(t.Context())
 			require.NoError(t, err)
 			return sheet
 		}, func(t *testing.T) *decad.Body {
 			s, p := offAxisSemicircleSketch(t)
-			solid, err := decad.Revolve(t.Context(), decad.New(), s, p, uAxis, decad.FullRevolution{})
+			solid, err := decad.Revolve(decad.New(), s, p, uAxis, decad.FullRevolution{}).Do(t.Context())
 			require.NoError(t, err)
 			return solid
 		}, torusVolume},
@@ -199,7 +199,7 @@ func TestStitchCurvedRevolveSurfaceKindsTessellate(t *testing.T) {
 			tol := units.Millimeters(0.1)
 			source, err := sheet.Tessellate(t.Context(), tol)
 			require.NoError(t, err)
-			stitched, err := decad.Stitch(t.Context(), sheet)
+			stitched, err := decad.Stitch(sheet).Do(t.Context())
 			require.NoError(t, err)
 			mesh, err := stitched.Tessellate(t.Context(), tol)
 			require.NoError(t, err)
@@ -232,7 +232,7 @@ func TestStitchCurvedRevolveSurfaceKindsTessellate(t *testing.T) {
 func TestStitchCurvedRevolveMeshVerificationAndExport(t *testing.T) {
 	t.Parallel()
 	_, sheet := annularRevolveSheet(t, 10, 5, 15)
-	stitched, err := decad.Stitch(t.Context(), sheet)
+	stitched, err := decad.Stitch(sheet).Do(t.Context())
 	require.NoError(t, err)
 	tol := units.Millimeters(0.1)
 	for _, tc := range []struct {
@@ -265,9 +265,9 @@ func TestStitchCurvedMeshRefusesUnsharedChording(t *testing.T) {
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	doc := decad.New()
-	sheet, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along}, decad.WithSurfaceResult())
+	sheet, err := decad.Extrude(doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).SurfaceResult().Do(t.Context())
 	require.NoError(t, err)
-	stitched, err := decad.Stitch(t.Context(), sheet)
+	stitched, err := decad.Stitch(sheet).Do(t.Context())
 	require.NoError(t, err)
 	_, err = stitched.Tessellate(t.Context(), units.Millimeters(0.1))
 	require.ErrorIs(t, err, decad.ErrUnsupported)
@@ -275,11 +275,11 @@ func TestStitchCurvedMeshRefusesUnsharedChording(t *testing.T) {
 	require.ErrorContains(t, err, "Cylinder")
 
 	_, source := annularRevolveSheet(t, 10, 5, 15)
-	curved, err := decad.Stitch(t.Context(), source)
+	curved, err := decad.Stitch(source).Do(t.Context())
 	require.NoError(t, err)
 	motion, err := r3.Translation(r3.NewVec(100, 0, 0))
 	require.NoError(t, err)
-	placed, err := decad.Transform(t.Context(), curved, motion)
+	placed, err := decad.Transform(curved, motion).Do(t.Context())
 	require.NoError(t, err)
 	_, err = placed.Tessellate(t.Context(), units.Millimeters(0.1))
 	require.ErrorIs(t, err, decad.ErrUnsupported)
@@ -296,7 +296,7 @@ func TestStitchCurvedMeshRefusesUnsharedChording(t *testing.T) {
 func stitchedBox(t *testing.T, doc *decad.Document) *decad.Body {
 	t.Helper()
 	walls, bottom, top := stitchBoxSheets(t, doc, 10)
-	box, err := decad.Stitch(t.Context(), walls, bottom, top)
+	box, err := decad.Stitch(walls, bottom, top).Do(t.Context())
 	require.NoError(t, err)
 	return box
 }
@@ -331,7 +331,7 @@ func TestStitchSolidTessellateRecordsThePostSignFixTriangleSet(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
 	walls, bottom, top := stitchBoxSheets(t, doc, 10)
-	box, err := decad.Stitch(t.Context(), bottom, top, walls)
+	box, err := decad.Stitch(bottom, top, walls).Do(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, decad.BodySolid, box.Kind())
 
@@ -396,7 +396,7 @@ func TestStitchPlacedSolidTessellateBoundReadsVertexBound(t *testing.T) {
 	motion, err := shift.Then(rot)
 	require.NoError(t, err)
 
-	placed, err := decad.Transform(t.Context(), box, motion)
+	placed, err := decad.Transform(box, motion).Do(t.Context())
 	require.NoError(t, err)
 
 	mesh, err := placed.Tessellate(t.Context(), units.Millimeters(0.1))
@@ -442,7 +442,7 @@ func TestStitchDisplacedPatchSheetTessellatesItsOwnTriangleSet(t *testing.T) {
 	t.Parallel()
 	doc := decad.New(decad.ExactOnly())
 	walls, bottom, top := stitchBoxSheets(t, doc, 10+1e-9)
-	sheet, err := decad.Stitch(t.Context(), walls, bottom, top)
+	sheet, err := decad.Stitch(walls, bottom, top).Do(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, decad.BodySheet, sheet.Kind())
 
@@ -463,7 +463,7 @@ func TestStitchDisplacedPatchSheetTessellatesItsOwnTriangleSet(t *testing.T) {
 	require.ErrorIs(t, err, decad.ErrNotSolid)
 
 	block := boxBody(t, doc, 200, 0, 300, 60, 10)
-	_, err = decad.Union(t.Context(), sheet, block)
+	_, err = decad.Union(sheet, block).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 }
 
@@ -643,7 +643,7 @@ func TestStitchSolidUnionComposesTheCorrectVolume(t *testing.T) {
 	box := stitchedBox(t, doc)
 	block := boxBody(t, doc, 200, 0, 300, 60, 10)
 
-	got, err := decad.Union(t.Context(), box, block)
+	got, err := decad.Union(box, block).Do(t.Context())
 	require.NoError(t, err)
 
 	// Disjoint: the union is exactly the sum, two lumps, nothing chorded,
@@ -677,12 +677,12 @@ func TestStitchPlacedSolidUnionStillRefusesOnTheVolumeProof(t *testing.T) {
 	box := stitchedBox(t, doc)
 	motion, err := r3.Translation(r3.NewVec(500, 500, 500))
 	require.NoError(t, err)
-	placed, err := decad.Transform(t.Context(), box, motion)
+	placed, err := decad.Transform(box, motion).Do(t.Context())
 	require.NoError(t, err)
 	block := boxBody(t, doc, 700, 500, 800, 560, 10)
 
 	before := len(doc.Bodies())
-	_, err = decad.Union(t.Context(), placed, block)
+	_, err = decad.Union(placed, block).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.Contains(t, err.Error(), "no proof of the volume")
 	require.NotContains(t, err.Error(), "does not support payload")
@@ -698,11 +698,11 @@ func TestStitchCertificateWeldedSolidUnionStillRefusesOnTheVolumeProof(t *testin
 	t.Parallel()
 	doc := decad.New()
 	s, p := offAxisPlateSketch(t)
-	wall, err := decad.Extrude(t.Context(), doc, s, p, decad.Symmetric{D: units.Inches(2.5)}, decad.WithSurfaceResult())
+	wall, err := decad.Extrude(doc, s, p, decad.Symmetric{D: units.Inches(2.5)}).SurfaceResult().Do(t.Context())
 	require.NoError(t, err)
-	capped, err := decad.PatchEdges(t.Context(), wall, decad.Edges(decad.Free()).Exactly(8))
+	capped, err := decad.PatchEdges(wall, decad.Edges(decad.Free()).Exactly(8)).Do(t.Context())
 	require.NoError(t, err)
-	solid, err := decad.Stitch(t.Context(), capped)
+	solid, err := decad.Stitch(capped).Do(t.Context())
 	require.NoError(t, err)
 	for _, v := range solid.Vertices() {
 		require.Greater(t, v.Position().Bound.Mag(), 0.0,
@@ -715,7 +715,7 @@ func TestStitchCertificateWeldedSolidUnionStillRefusesOnTheVolumeProof(t *testin
 	block := boxBody(t, doc, far.X, far.Y, far.X+10, far.Y+10, 10)
 
 	before := len(doc.Bodies())
-	_, err = decad.Union(t.Context(), solid, block)
+	_, err = decad.Union(solid, block).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.Contains(t, err.Error(), "no proof of the volume")
 	require.NotContains(t, err.Error(), "does not support payload")

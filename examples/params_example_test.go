@@ -49,8 +49,8 @@ func Example_params() {
 		if err != nil {
 			return nil, units.Value{}, err
 		}
-		body, err := decad.Extrude(context.Background(), doc, s, s.Profiles()[0],
-			decad.Distance{D: th, Dir: decad.Along})
+		body, err := decad.Extrude(doc, s, s.Profiles()[0],
+			decad.Distance{D: th, Dir: decad.Along}).Do(context.Background())
 		if err != nil {
 			return nil, units.Value{}, err
 		}

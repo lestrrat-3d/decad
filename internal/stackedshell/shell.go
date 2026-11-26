@@ -2,7 +2,7 @@
 // agent-docs/modify-design.md Part G §3.1a-§3.1c and §3.1e: the nested rectangular
 // boss, the circular boss, the rectangular blind pocket and the coaxial
 // counterbore. Build runs the four open shells before route S's through-cut
-// reading. Closed runs the closed rectangular boss on Shell's WithNoOpenings
+// reading. Closed runs the closed rectangular boss on Shell's ShellClosed
 // path. Each builder reads only the two-slab stacked record and its face view,
 // refuses any offset it cannot represent exactly, and builds its result
 // through breprecord.
@@ -57,7 +57,7 @@ func Build(ctx context.Context, env topo.Env, sp stackedrecord.Payload, view bre
 	return nil, false, nil
 }
 
-// Closed is the WithNoOpenings stacked route: the nested rectangular boss
+// Closed is the ShellClosed stacked route: the nested rectangular boss
 // shell that keeps every face, over sp's face view, and then over the
 // reversed stack when the lower slab is the narrower one
 // (prismshell.ReverseClosedBossStack). A stack with no face view is unmatched,

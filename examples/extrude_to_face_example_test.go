@@ -41,8 +41,8 @@ func Example_extrude_to_face() {
 		fmt.Printf("failed to solve: %s\n", err)
 		return
 	}
-	stop, err := decad.Extrude(context.Background(), doc, stopSketch, stopSketch.Profiles()[0],
-		decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
+	stop, err := decad.Extrude(doc, stopSketch, stopSketch.Profiles()[0],
+		decad.Distance{D: units.Millimeters(5), Dir: decad.Along}).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to extrude stop: %s\n", err)
 		return
@@ -67,7 +67,7 @@ func Example_extrude_to_face() {
 		Body: stop,
 		Face: decad.Faces(decad.FaceCreatedBy(decad.CapStart(stop))),
 	}
-	column, err := decad.Extrude(context.Background(), doc, s, s.Profiles()[0], end)
+	column, err := decad.Extrude(doc, s, s.Profiles()[0], end).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to extrude to face: %s\n", err)
 		return

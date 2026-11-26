@@ -26,7 +26,7 @@ func Example_parts_derived_explode() {
 		fmt.Printf("failed to build the carrier bore: %s\n", err)
 		return
 	}
-	if carrier, err = decad.Cut(ctx, carrier, carrierBore); err != nil {
+	if carrier, err = decad.Cut(carrier, carrierBore).Do(ctx); err != nil {
 		fmt.Printf("failed to bore the carrier: %s\n", err)
 		return
 	}
@@ -40,7 +40,7 @@ func Example_parts_derived_explode() {
 		fmt.Printf("failed to build the collar: %s\n", err)
 		return
 	}
-	shaft, err := decad.Union(ctx, stem, collar)
+	shaft, err := decad.Union(stem, collar).Do(ctx)
 	if err != nil {
 		fmt.Printf("failed to join the collar: %s\n", err)
 		return
@@ -55,7 +55,7 @@ func Example_parts_derived_explode() {
 		fmt.Printf("failed to build the bearing bore: %s\n", err)
 		return
 	}
-	if bearing, err = decad.Cut(ctx, bearing, bearingBore); err != nil {
+	if bearing, err = decad.Cut(bearing, bearingBore).Do(ctx); err != nil {
 		fmt.Printf("failed to bore the bearing: %s\n", err)
 		return
 	}

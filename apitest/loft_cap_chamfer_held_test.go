@@ -64,8 +64,8 @@ func TestLoftCapChamferRoundedTwistedGear(t *testing.T) {
 	twist := 14.5 * math.Pi / 180
 	g := newTwistedGear(5, 20*math.Pi/180, 0.05)
 	body, bottom, top := g.loft(t, height, twist, 0)
-	source, err := decad.Fillet(t.Context(), body, rungQuery(bottom, top, height).Exactly(len(bottom)),
-		units.Millimeters(0.25))
+	source, err := decad.Fillet(body, rungQuery(bottom, top, height).Exactly(len(bottom)),
+		units.Millimeters(0.25)).Do(t.Context())
 	require.NoError(t, err)
 	before, err := source.Volume()
 	require.NoError(t, err)
@@ -74,9 +74,9 @@ func TestLoftCapChamferRoundedTwistedGear(t *testing.T) {
 	// held solid cut by the bands, whose bound also covers the ruled one.
 	held := heldVolume(t, source)
 	for _, d := range []float64{0.1, 0.3} {
-		rounded, err := decad.Copy(t.Context(), source)
+		rounded, err := decad.Copy(source).Do(t.Context())
 		require.NoError(t, err)
-		chamfered, err := decad.Chamfer(t.Context(), rounded, outerCapLoops(rounded), units.Millimeters(d))
+		chamfered, err := decad.Chamfer(rounded, outerCapLoops(rounded), units.Millimeters(d)).Do(t.Context())
 		if d > 0.2 {
 			// Twice the setback is wider than a tooth's tip land, so the inset
 			// outline would drop the tip.
@@ -108,11 +108,11 @@ func TestLoftCapChamferSquareFrustum(t *testing.T) {
 	w := sketch.NewWorld()
 	sk0, p0, _ := squareSection(t, w, w.XY(), s0, 0, 0)
 	sk1, p1, _ := squareSection(t, w, splitTopPlane(t, w, height), s1, 0, 0)
-	body, err := decad.Loft(t.Context(), decad.New(), sk0, p0, sk1, p1)
+	body, err := decad.Loft(decad.New(), sk0, p0, sk1, p1).Do(t.Context())
 	require.NoError(t, err)
 	before, err := body.Volume()
 	require.NoError(t, err)
-	chamfered, err := decad.Chamfer(t.Context(), body, outerCapLoops(body), units.Millimeters(d))
+	chamfered, err := decad.Chamfer(body, outerCapLoops(body), units.Millimeters(d)).Do(t.Context())
 	require.NoError(t, err)
 	after, err := chamfered.Volume()
 	require.NoError(t, err)
@@ -142,11 +142,11 @@ func TestLoftCapChamferTurnedSquare(t *testing.T) {
 	w := sketch.NewWorld()
 	sk0, p0, _ := squareSection(t, w, w.XY(), s, 0, 0)
 	sk1, p1, _ := squareSection(t, w, splitTopPlane(t, w, height), s, 25*math.Pi/180, 0)
-	body, err := decad.Loft(t.Context(), decad.New(), sk0, p0, sk1, p1)
+	body, err := decad.Loft(decad.New(), sk0, p0, sk1, p1).Do(t.Context())
 	require.NoError(t, err)
-	_, err = decad.Chamfer(t.Context(), body, outerCapLoops(body), units.Millimeters(height/2))
+	_, err = decad.Chamfer(body, outerCapLoops(body), units.Millimeters(height/2)).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
-	chamfered, err := decad.Chamfer(t.Context(), body, outerCapLoops(body), units.Millimeters(d))
+	chamfered, err := decad.Chamfer(body, outerCapLoops(body), units.Millimeters(d)).Do(t.Context())
 	require.NoError(t, err)
 	_, caps := capAreaTotal(t, chamfered)
 	for _, area := range caps {
@@ -165,14 +165,14 @@ func TestLoftCapChamferKeepsTheBore(t *testing.T) {
 	twist := 14.5 * math.Pi / 180
 	g := newTwistedGear(5, 20*math.Pi/180, 0.05)
 	body, bottom, top := g.loft(t, height, twist, 0)
-	rounded, err := decad.Fillet(t.Context(), body, rungQuery(bottom, top, height).Exactly(len(bottom)),
-		units.Millimeters(0.25))
+	rounded, err := decad.Fillet(body, rungQuery(bottom, top, height).Exactly(len(bottom)),
+		units.Millimeters(0.25)).Do(t.Context())
 	require.NoError(t, err)
-	bored, err := decad.Cut(t.Context(), rounded, circleBodyAtZ(t, rounded.Document(), 0, r, -1, height+2))
+	bored, err := decad.Cut(rounded, circleBodyAtZ(t, rounded.Document(), 0, r, -1, height+2)).Do(t.Context())
 	require.NoError(t, err)
 	held := heldVolume(t, bored)
 	capsBefore, _ := capAreaTotal(t, bored)
-	chamfered, err := decad.Chamfer(t.Context(), bored, outerCapLoops(bored), units.Millimeters(d))
+	chamfered, err := decad.Chamfer(bored, outerCapLoops(bored), units.Millimeters(d)).Do(t.Context())
 	require.NoError(t, err)
 	after, err := chamfered.Volume()
 	require.NoError(t, err)

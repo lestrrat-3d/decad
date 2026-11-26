@@ -50,7 +50,7 @@ func TestGroupUnionInputsUsesPublicHistory(t *testing.T) {
 		}
 	}
 	require.NotNil(t, hostProfile)
-	host, hostErr := Extrude(t.Context(), doc, hostSketch, hostProfile, Distance{D: units.Millimeters(10), Dir: Along})
+	host, hostErr := Extrude(doc, hostSketch, hostProfile, Distance{D: units.Millimeters(10), Dir: Along}).Do(t.Context())
 	require.NoError(t, hostErr)
 	makeCircle := func(x float64) *Body {
 		w := sketch.NewWorld()
@@ -61,7 +61,7 @@ func TestGroupUnionInputsUsesPublicHistory(t *testing.T) {
 		s.CreateCircle(center, 1)
 		_, err = s.Solve(t.Context())
 		require.NoError(t, err)
-		body, err := Extrude(t.Context(), doc, s, s.Profiles()[0], Distance{D: units.Millimeters(4), Dir: Along})
+		body, err := Extrude(doc, s, s.Profiles()[0], Distance{D: units.Millimeters(4), Dir: Along}).Do(t.Context())
 		require.NoError(t, err)
 		return body
 	}
@@ -69,12 +69,12 @@ func TestGroupUnionInputsUsesPublicHistory(t *testing.T) {
 		basis := r3.Basis{EX: r3.Vec{Y: -1}, EY: r3.Vec{X: 1}, EZ: r3.Vec{Z: 1}}
 		transform, transformErr := r3.FromBasis(basis, r3.Vec{X: 3, Y: y, Z: 6})
 		require.NoError(t, transformErr)
-		placed, transformErr := Transform(t.Context(), makeCircle(0), transform)
+		placed, transformErr := Transform(makeCircle(0), transform).Do(t.Context())
 		require.NoError(t, transformErr)
 		return placed
 	}
 	first, second, third := place(0), place(5), place(10)
-	group, err := Union(t.Context(), first, second, third)
+	group, err := Union(first, second, third).Do(t.Context())
 	require.NoError(t, err)
 	meter := proofbound.NewReplayTrialBudget()
 	source, ok, err := groupUnionSourceSnapshot(t.Context(), group, meter)
@@ -548,7 +548,7 @@ func TestGroupUnionInputsUsesPublicHistory(t *testing.T) {
 			}
 		}
 		require.NotNil(t, profile)
-		arcHost, err := Extrude(t.Context(), doc, s, profile, Distance{D: units.Millimeters(10), Dir: Along})
+		arcHost, err := Extrude(doc, s, profile, Distance{D: units.Millimeters(10), Dir: Along}).Do(t.Context())
 		require.NoError(t, err)
 		arcPayload := arcHost.n.Payload.(prismrecord.Payload)
 		arcMeter := proofbound.NewReplayTrialBudget()
@@ -619,7 +619,7 @@ func TestGroupUnionInputsUsesPublicHistory(t *testing.T) {
 
 	// A two-body Union uses its own ordered public input role names.
 	binaryFirst, binarySecond := makeCircle(20), makeCircle(25)
-	binaryGroup, binaryErr := Union(t.Context(), binaryFirst, binarySecond)
+	binaryGroup, binaryErr := Union(binaryFirst, binarySecond).Do(t.Context())
 	require.NoError(t, binaryErr)
 	binaryInputs, binaryOK, binaryErr := groupUnionInputs(proofbound.NewReplayTrialBudget().WorkBudget(t.Context()), binaryGroup)
 	require.NoError(t, binaryErr)
@@ -1127,11 +1127,11 @@ func BenchmarkGroupUnionSourceSnapshotFourCircles(b *testing.B) {
 		s.CreateCircle(center, 1)
 		_, err = s.Solve(b.Context())
 		require.NoError(b, err)
-		body, err := Extrude(b.Context(), doc, s, s.Profiles()[0], Distance{D: units.Millimeters(4), Dir: Along})
+		body, err := Extrude(doc, s, s.Profiles()[0], Distance{D: units.Millimeters(4), Dir: Along}).Do(b.Context())
 		require.NoError(b, err)
 		leaves = append(leaves, body)
 	}
-	group, err := Union(b.Context(), leaves[0], leaves[1:]...)
+	group, err := Union(append([]*Body{leaves[0]}, leaves[1:]...)...).Do(b.Context())
 	require.NoError(b, err)
 	b.ReportAllocs()
 	b.ResetTimer()
@@ -1147,7 +1147,7 @@ func BenchmarkGroupUnionSourceSnapshotFourCircles(b *testing.B) {
 func TestGroupDirectPrismSourceHistory(t *testing.T) {
 	doc := New()
 	source := internalBoxBody(t, doc, 0, 0, 4, 5, 6)
-	placed, err := Transform(t.Context(), source, r3.Identity())
+	placed, err := Transform(source, r3.Identity()).Do(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}

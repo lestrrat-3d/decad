@@ -33,8 +33,8 @@ func Example_verify() {
 			fmt.Printf("failed to solve: %s\n", err)
 			return
 		}
-		if _, err := decad.Extrude(context.Background(), doc, s, s.Profiles()[0],
-			decad.Distance{D: units.Millimeters(10), Dir: decad.Along}); err != nil {
+		if _, err := decad.Extrude(doc, s, s.Profiles()[0],
+			decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(context.Background()); err != nil {
 			fmt.Printf("failed to extrude: %s\n", err)
 			return
 		}
@@ -50,8 +50,8 @@ func Example_verify() {
 
 	// Add a third plate on top of the first one. The two now occupy the same
 	// space, so the model is no longer sound.
-	if _, err := decad.Extrude(context.Background(), doc, plateSketches[0], plateSketches[0].Profiles()[0],
-		decad.Distance{D: units.Millimeters(10), Dir: decad.Along}); err != nil {
+	if _, err := decad.Extrude(doc, plateSketches[0], plateSketches[0].Profiles()[0],
+		decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(context.Background()); err != nil {
 		fmt.Printf("failed to extrude: %s\n", err)
 		return
 	}

@@ -34,7 +34,7 @@ func unionRefinedSet(t testing.TB, fitted bool) (*decad.Document, *decad.Body, [
 	for i := 1; i < count; i++ {
 		turn, err := r3.Rotation(r3.Vec{X: 1}, units.Radians(2*math.Pi*float64(i)/float64(count)))
 		require.NoError(t, err)
-		copied, err := decad.Copy(t.Context(), lug, decad.WithCopyPlacement(turn))
+		copied, err := decad.Copy(lug).Place(decad.CopyTransform{Transform: turn}).Do(t.Context())
 		require.NoError(t, err)
 		lugs = append(lugs, copied)
 	}
@@ -88,14 +88,14 @@ func fingerprintUnionRefined(t *testing.T, body *decad.Body) unionRefinedFingerp
 	return fp
 }
 
-// unionThenRefine is the pair UnionRefined replaces, on a fresh set of
+// unionThenRefine is the pair RefineTo replaces, on a fresh set of
 // operands.
 func unionThenRefine(t *testing.T, fitted bool, bound units.Value) (*decad.Document, *decad.Body, error) {
 	t.Helper()
 	doc, hub, lugs := unionRefinedSet(t, fitted)
-	joined, err := decad.Union(t.Context(), hub, lugs...)
+	joined, err := decad.Union(append([]*decad.Body{hub}, lugs...)...).Do(t.Context())
 	require.NoError(t, err)
-	refined, err := decad.Refine(t.Context(), joined, bound)
+	refined, err := decad.Refine(joined, bound).Do(t.Context())
 	return doc, refined, err
 }
 

@@ -36,7 +36,7 @@ func TestExtrudeChainTessellatesOneWallRibbon(t *testing.T) {
 	ch := s.Chains()[0]
 
 	doc := decad.New()
-	body, err := decad.Extrude(t.Context(), doc, s, ch, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	body, err := decad.Extrude(doc, s, ch, decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 
 	mesh, err := body.Tessellate(t.Context(), units.Millimeters(0.1))
@@ -80,7 +80,7 @@ func TestExtrudeChainTessellatesThreeWallRibbon(t *testing.T) {
 	ch := s.Chains()[0]
 
 	doc := decad.New()
-	body, err := decad.Extrude(t.Context(), doc, s, ch, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	body, err := decad.Extrude(doc, s, ch, decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 
 	mesh, err := body.Tessellate(t.Context(), units.Millimeters(0.1))
@@ -120,7 +120,7 @@ func TestExtrudeChainTessellateRefusesCurvedWall(t *testing.T) {
 	ch := s.Chains()[0]
 
 	doc := decad.New()
-	body, err := decad.Extrude(t.Context(), doc, s, ch, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	body, err := decad.Extrude(doc, s, ch, decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 
 	_, err = body.Tessellate(t.Context(), units.Millimeters(0.1))
@@ -152,7 +152,7 @@ func TestSweepChainTessellatesRibbon(t *testing.T) {
 	doc := decad.New()
 	path, err := decad.NewPath(r3.NewVec(0, 0, 0), decad.LineTo{End: r3.NewVec(0, 0, 10)})
 	require.NoError(t, err)
-	body, err := decad.Sweep(t.Context(), doc, s, ch, path)
+	body, err := decad.Sweep(doc, s, ch, path).Do(t.Context())
 	require.NoError(t, err)
 
 	mesh, err := body.Tessellate(t.Context(), units.Millimeters(0.1))

@@ -21,7 +21,7 @@ func stopTool(t *testing.T, doc *decad.Document, e decad.Extent) *decad.Body {
 	s.Fix(rect.A)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	tool, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], e)
+	tool, err := decad.Extrude(doc, s, s.Profiles()[0], e).Do(t.Context())
 	require.NoError(t, err)
 	return tool
 }
@@ -36,7 +36,7 @@ func upPlate(t *testing.T, doc *decad.Document, top units.Value) *decad.Body {
 	s.Fix(rect.A)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	plate, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: top, Dir: decad.Along})
+	plate, err := decad.Extrude(doc, s, s.Profiles()[0], decad.Distance{D: top, Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	return plate
 }
@@ -114,7 +114,7 @@ func TestThroughStopDenotedLevelThroughHole(t *testing.T) {
 					plate = upPlate(t, doc, top)
 				}
 				tool := stopTool(t, doc, tc.tool(plate))
-				part, err := decad.Cut(t.Context(), plate, tool)
+				part, err := decad.Cut(plate, tool).Do(t.Context())
 				require.NoError(t, err)
 				requireDenotedThroughHole(t, part, height)
 			})
@@ -137,7 +137,7 @@ func TestThroughStopDenotedLevelMisses(t *testing.T) {
 		// that body's, not the plate cap's.
 		twoSidedRect(t, doc, 9, 9, 11, 11, units.Millimeters(5.08), units.Millimeters(1))
 		tool := stopTool(t, doc, decad.TwoSided{One: decad.ThroughAllSide{}, Two: decad.ThroughAllSide{}})
-		part, err := decad.Cut(t.Context(), plate, tool)
+		part, err := decad.Cut(plate, tool).Do(t.Context())
 		// The tool is flush with both faces of the plate, so the shifted retry grows it
 		// (agent-docs/gap-tolerance-design.md §5.2 item 5) and the mesh path builds the part.
 		requireDeclinedSpan(t, part, err, skinnedPlateVolume(denotedDepth(top), denotedDepth(top), 1))
@@ -162,13 +162,13 @@ func TestThroughStopDenotedLevelStackedTop(t *testing.T) {
 			stopPlate := twoSidedRect(t, doc, 30, 0, 50, 20, inch, units.Millimeters(3))
 			// A pocket from below leaves the plate's top the only face facing +z.
 			pocket := twoSidedRect(t, doc, 32, 2, 36, 6, units.Millimeters(2), units.Millimeters(10))
-			stacked, err := decad.Cut(t.Context(), stopPlate, pocket)
+			stacked, err := decad.Cut(stopPlate, pocket).Do(t.Context())
 			require.NoError(t, err)
 			require.False(t, tookMeshPath(stacked), "the pocket builds a stack")
 			plate := twoSidedRect(t, doc, 0, 0, 20, 20, tc.top, units.Millimeters(3))
 			tool := stopTool(t, doc, decad.TwoSided{One: decad.ToFace{Body: stacked, Face: facing(r3.NewVec(0, 0, 1))},
 				Two: decad.DistanceSide{D: units.Millimeters(20)}})
-			part, err := decad.Cut(t.Context(), plate, tool)
+			part, err := decad.Cut(plate, tool).Do(t.Context())
 			if tc.analytic {
 				require.NoError(t, err)
 				requireDenotedThroughHole(t, part, new(big.Rat).Add(denotedDepth(inch), big.NewRat(3, 1)))
@@ -210,7 +210,7 @@ func TestThroughStopDenotedLevelUnionKeepsDenotation(t *testing.T) {
 				o := float64(i)
 				plates[i] = twoSidedRect(t, doc, 8*o, o, 8*o+20, o+20, top, units.Millimeters(3))
 			}
-			joined, err := decad.Union(t.Context(), plates[0], plates[1:]...)
+			joined, err := decad.Union(append([]*decad.Body{plates[0]}, plates[1:]...)...).Do(t.Context())
 			if tc.mmArea != 0 {
 				// No analytic route proves one top, and the mesh path cannot
 				// decide tops 7e-17 mm apart.
@@ -222,7 +222,7 @@ func TestThroughStopDenotedLevelUnionKeepsDenotation(t *testing.T) {
 			require.False(t, tookMeshPath(joined))
 			requireRationalVolumeCovered(t, joined, new(big.Rat).Mul(big.NewRat(tc.area, 1), height(inch)))
 			tool := twoSidedRect(t, doc, 2, 8, 6, 12, inch, units.Millimeters(20))
-			part, err := decad.Cut(t.Context(), joined, tool)
+			part, err := decad.Cut(joined, tool).Do(t.Context())
 			require.NoError(t, err)
 			require.False(t, tookMeshPath(part), "the union keeps the denoted top")
 			requireRationalVolumeCovered(t, part, new(big.Rat).Mul(big.NewRat(tc.area-16, 1), height(inch)))
@@ -242,8 +242,8 @@ func symmetricTool(t *testing.T, doc *decad.Document, x0, y0, x1, y1 float64) *d
 	s.Fix(rect.A)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	tool, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0],
-		decad.Symmetric{D: units.Inches(0.4), FullLength: true})
+	tool, err := decad.Extrude(doc, s, s.Profiles()[0],
+		decad.Symmetric{D: units.Inches(0.4), FullLength: true}).Do(t.Context())
 	require.NoError(t, err)
 	return tool
 }
@@ -260,11 +260,11 @@ func TestThroughStopDenotedLevelGroupToolCut(t *testing.T) {
 	plate := twoSidedRect(t, doc, 0, 0, 20, 20, inch, units.Millimeters(3))
 	left := symmetricTool(t, doc, 2, 8, 6, 12)
 	right := symmetricTool(t, doc, 14, 8, 18, 12)
-	group, err := decad.Union(t.Context(), left, right)
+	group, err := decad.Union(left, right).Do(t.Context())
 	require.NoError(t, err)
 	require.False(t, tookMeshPath(group))
 	require.Len(t, group.Lumps(), 2)
-	part, err := decad.Cut(t.Context(), plate, group)
+	part, err := decad.Cut(plate, group).Do(t.Context())
 	require.NoError(t, err)
 	require.False(t, tookMeshPath(part), "the group keeps the denoted top, so the span is proven")
 	require.Len(t, part.Lumps(), 1)

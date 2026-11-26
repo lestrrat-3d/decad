@@ -47,8 +47,8 @@ and `units` supplies typed quantities.
 
 1. Solve a 2D profile in a `sketch.Sketch`.
 2. Create a `decad.Document` with `decad.New`.
-3. Turn the profile into a body with a feature function such as `decad.Extrude`.
-4. Modify or combine bodies with further feature functions.
+3. Turn the profile into a body with a feature command such as `decad.Extrude`, and run it with `Do(ctx)`.
+4. Modify or combine bodies with further feature commands.
 5. Call `Document.Verify` and gate on `Report.Passed`.
 6. Read measurements, tessellate, or export.
 
@@ -63,8 +63,16 @@ A `*decad.Body` never changes. A feature returns a new body and retires its inpu
 
 ### Features build and methods ask
 
-Features are package functions that take a context and return `(*Body, error)`. Methods on bodies, faces and edges
-only read.
+A feature is a command. A package function such as `decad.Fillet` takes the bodies and the mandatory inputs and
+returns the command. Each optional input is a method that sets it and returns the same command. `Do(ctx)` runs the
+command once and returns what the feature builds, usually `(*Body, error)`.
+
+`Do` refuses a nil context before it reads any input, and a canceled context returns `ctx.Err()` unchanged with
+nothing built. A command runs once: a second `Do` returns `decad.ErrConsumed`, so build a new command to retry.
+Calling an option method twice keeps the second value.
+
+Methods on bodies, faces and edges only read. A read that takes a context, such as `Body.Tessellate` or
+`Document.Verify`, takes it first and its options last, as functional options.
 
 ### Typed quantities
 
@@ -93,7 +101,9 @@ See [Errors](#errors).
 ### Concurrency
 
 A `decad.Document` is not safe for concurrent mutation. Bodies are immutable and safe to read from any goroutine.
-`Document.Bodies`, `decad.Remove` and `Document.Verify` may run concurrently with each other.
+`Document.Bodies`, `RemoveCommand.Do` and `Document.Verify` may run concurrently with each other.
+A feature command is not safe for concurrent use. When two goroutines call `Do` on one command, the feature runs
+once and the other call returns `decad.ErrConsumed`.
 
 ## Documents and bodies
 
@@ -110,7 +120,7 @@ A `decad.Document` is not safe for concurrent mutation. Bodies are immutable and
 | `Document.ContainerOf`, `Document.ContainerOfSketch` | Read the container of a body or a sketch. |
 | `Container.AddBody` | Places a live body in the container, taking it out of the container it was in, and changes nothing else. |
 | `Document.VerifyContainers`, `decad.ContainerReport`, `decad.ErrContainerLayout` | Report live bodies left directly in the root and non-root containers holding no bodies beneath them. `Passed` and `Err` summarise the report. |
-| `decad.Remove` | Retires a body from its document. |
+| `decad.Remove(b)` | Retires a body from its document. `Do` returns only an error, refuses a nil body or a body with no document with `decad.ErrDegenerate`, and returns `decad.ErrRetiredBody` for a retired one. A canceled context returns `ctx.Err()` and removes nothing, so a cleanup `Remove` after a canceled call needs `context.WithoutCancel(ctx)`. |
 | `decad.Body` | An immutable solid or sheet. |
 | `decad.BodyKind` | `decad.BodySolid` or `decad.BodySheet`. `Body.Kind` and `Body.IsSolid` read it. |
 
@@ -153,18 +163,18 @@ a sheet. The `decad.Section` type constraint covers both.
 
 | Function | Builds |
 |---|---|
-| `decad.Extrude` | A prism along the sketch normal, sized by a `decad.Extent`. |
-| `decad.Revolve` | A solid of revolution about a `decad.Axis`, sized by a `decad.AngularExtent`. |
-| `decad.SheetMetal` | A bent strip of flat legs and circular bends as a solid, with its flat pattern length from the K-factor. |
-| `decad.Sweep` | A section moved along a `*decad.Path`. |
-| `decad.Loft` | A ruled solid between two profiles on different planes. |
-| `decad.LoftChain` | A ruled sheet between two open chains. |
-| `decad.LoftSections` | A smooth solid through three or more profiles, including fitted-edge sections that turn about the plane origin and a four-arc circular section transitioning to fitted-edge sections. |
-| `decad.LoftSectionsWithCircularCorrespondence` | A circular-to-spline loft with caller-supplied rational quarter correspondence maps. |
-| `decad.LoftFaces` | A solid through ordered cap faces. `decad.WithConeTangentEnd` ends it with a section tangent to a cone. |
-| `decad.LoftFromPoint` | A solid from an apex point to a profile. |
-| `decad.Coil` | A profile moved along a screw motion, such as a thread or spring. |
-| `decad.ConeFromFace` | The cone that extends a face's straight meridian. |
+| `decad.Extrude(d, s, sec, e)` | A prism along the sketch normal, sized by a `decad.Extent`. `ExtrudeCommand.Taper` leans the walls and `ExtrudeCommand.SurfaceResult` builds a sheet. |
+| `decad.Revolve(d, s, sec, axis, a)` | A solid of revolution about a `decad.Axis`, sized by a `decad.AngularExtent`. `RevolveCommand.SurfaceResult` builds a sheet. |
+| `decad.SheetMetal(d, thickness, innerRadius, width, legs, bends)` | A bent strip of flat legs and circular bends as a solid. `Do` returns the body and a `decad.SheetMetalReport` with its flat pattern length, from the K-factor 0.44 or the one `SheetMetalCommand.KFactor` sets. An error from `Do` carries `OperationSheetMetal`, and the history records the strip's `OperationExtrude`. |
+| `decad.Sweep(d, s, sec, path)` | A section moved along a `*decad.Path`. `SweepCommand.Twist` turns the section as it travels, `SweepCommand.MitredJoins` admits corners, `SweepCommand.SectionScale` states a factor per span and `SweepCommand.SurfaceResult` builds a sheet. |
+| `decad.Loft(d, s0, p0, s1, p1)` | A ruled solid between two profiles on different planes. `LoftCommand.Alignment` and `LoftCommand.Splits` state the correspondence, and `LoftCommand.SurfaceResult` builds a sheet. |
+| `decad.LoftChain(d, s0, c0, s1, c1)` | A ruled sheet between two open chains. |
+| `decad.LoftSections(d, sections...)` | A smooth solid through three or more profiles, including fitted-edge sections that turn about the plane origin and a four-arc circular section transitioning to fitted-edge sections. `LoftSectionsCommand.CircularCorrespondence` gives a circular-to-spline loft caller-supplied rational quarter correspondence maps. |
+| `decad.LoftFaces(sections)` | A solid through ordered cap faces. `decad.LoftFacesToCone(sections, cone, radial)` ends it with a section tangent to a cone. |
+| `decad.LoftFromPoint(d, apex, s, p)` | A solid from an apex point to a profile. |
+| `decad.PatchProfile(d, s, p)` | A one-face sheet on the sketch plane from a profile. |
+| `decad.Coil(d, s, p, axis, pitch, turns)` | A profile moved along a screw motion, such as a thread or spring. `CoilCommand.LeftHand` turns it left-handed. |
+| `decad.ConeFromFace(body, face, far)` | The cone that extends a face's straight meridian. |
 
 ### Extents
 
@@ -182,16 +192,23 @@ Build a sweep path with `decad.NewPath` and `decad.LineTo`, `decad.ArcThrough`, 
 `ArcAround` takes a center, an oriented axis, and an endpoint. The start and end must have exactly equal nonzero
 distances from the center and lie perpendicular to the axis. The positive turn about the axis is less than one full turn.
 
-### Options
+### Feature methods
 
-| Function | Applies to |
+Each command declares its own methods. A method called twice keeps the second call.
+
+| Method | Command |
 |---|---|
-| `decad.WithTaper` | `decad.Extrude` |
-| `decad.WithLoftAlignment`, `decad.WithLoftSplits` | `decad.Loft` |
-| `decad.WithConeTangentEnd` | `decad.LoftFaces` |
-| `decad.WithMitredJoins`, `decad.WithSectionScale`, `decad.WithSweepTwist` | `decad.Sweep` |
-| `decad.WithLeftHand` | `decad.Coil` |
-| `decad.WithSurfaceResult` | Section features: build a sheet instead of a solid. |
+| `Taper` | `ExtrudeCommand`, `CutExtrudeCommand` |
+| `Alignment`, `Splits` | `LoftCommand` |
+| `CircularCorrespondence` | `LoftSectionsCommand` |
+| `MitredJoins`, `SectionScale`, `Twist` | `SweepCommand` |
+| `LeftHand` | `CoilCommand` |
+| `RimFillet`, `Draft` | `EmbossCommand` |
+| `Draft`, `Overrun` | `WebPathCommand` |
+| `SurfaceResult` | `ExtrudeCommand`, `RevolveCommand`, `SweepCommand`, `LoftCommand`: build a sheet instead of a solid. |
+
+`LoftChainCommand`, `LoftFromPointCommand`, `LoftFacesCommand`, `PatchProfileCommand` and `CutRevolveCommand`
+have no method.
 
 ## Modifying bodies
 
@@ -199,25 +216,27 @@ Each of these returns a new body and retires its input.
 
 | Function | Effect |
 |---|---|
-| `decad.Fillet` | Rounds selected edges with a tangent arc of a given radius. On a mesh solid, straight edges that meet end to end on one face at right-angle corners, such as a box's top loop, are rounded together and their arcs meet in a mitre at each corner; three edges meeting at a corner of three perpendicular faces end in a sphere octant. On a loft, a radius that consumes a short line between a circle and a fit spline removes the line: the arc touches the fit spline, or, where the fit spline turns away from the arc, ends at the line's far end and leaves a corner there no sharper than the line's own. A loft's two sections may differ, such as a helical gear outline lofted to the same outline turned about its axis, when they have the same kinds of curves in the same order; each section's selected corner gets its own tangent arc of the radius. |
-| `decad.Chamfer` | Bevels selected edges. `decad.WithAsymmetricChamfer` sets a second distance. Selecting the whole outer cap loop of a prism whose section is a smooth chain of fit splines bevels it within a measured ratio of the ideal chamfer, as a cut. Several convex edges of an axis-square mesh solid that share corners are bevelled as the solid less each edge's wedge, and several concave ones whose ends lie in material or open to air as the solid plus each edge's wedge. Selecting both whole outer cap loops of a loft whose two sections differ, such as a helical gear outline lofted to the same outline turned about its axis, bevels its held facets, with or without a centered through-bore: each cap is inset by the distance and joined by a band to the walls cut at that height, and the bore stays sharp. The same holds for such a loft joined to its mirror image, as for a herringbone gear, including after its through-bore. Selecting whole loops of lines and arcs with sharp corners on a flat face of a mesh Boolean result, such as the windows of a cover, bevels them by cutting with a polyhedral cutter, with the Cut's faceted readings. An edge that ends at a tangent junction takes the edges that continue it tangentially, as `decad.WithTangentChain` does. A tangent chain of a mesh Boolean result that runs over several flat faces, such as the rim of a bar rounded about different axes at its two ends or of a slot through its rounded end, is bevelled with one setback as a plane along each line and a cone along each arc, also where it ends on an earlier bevel; a chain whose faces state a displacement is bevelled by cutting with the bevel's section swept along the chain, with the Cut's faceted readings. |
-| `decad.FilletChord` | Rounds convex or concave edges between two planar faces, or circular ones between a plane and a surface of revolution, with an arc stated by its chord length. |
-| `decad.ChamferAngle` | Bevels convex or concave edges between two planar faces, or circular ones between a plane and a surface of revolution, by a distance along a reference face and an angle from that face. |
-| `decad.Stretch` | Scales a faceted solid, such as a mesh solid, by a separate factor along each world axis about an anchor, and returns a solid. |
-| `decad.MoveFace` | Press-pulls one face of a mesh solid whose faces all square to an axis along its normal; a positive distance grows the body and a negative one cuts it, and the walls beside it follow. |
-| `decad.Shell` | Removes the selected faces and lines the rest with a wall. `decad.WithShellFaceThickness` gives the walls facing one world axis direction their own thickness on a mesh solid whose faces all square to an axis. `decad.WithShellSense` picks `decad.Inward`, `decad.Outward` or, for a mesh solid whose faces all square to an axis, `decad.Centered`, a wall half the thickness each side of the surface. `decad.WithNoOpenings` keeps every face and hollows the body into one outer shell around a cavity: for a straight prism, a revolve, or a drilled bar whose hole runs straight through, where the cavity is a ring round a tube lining the hole. Outward, the cavity is the original body and each hole's lining grows into the hole, so a hole whose radius is at most the thickness is `decad.ErrUnsupported`. A mesh solid whose faces all square to an axis shells inward with mitered corners. A convex mesh Boolean result with planar faces (a tilted `decad.Cut` of a plate, say) shells inward with `decad.WithNoOpenings` into a cavity with one plane face per outer face, unless the thickness drops a face. |
-| `decad.Draft` | Leans selected walls about a `decad.NeutralPlane` (`decad.NeutralFace`). Every wall of a mesh solid with exact vertices that is a straight prism along a world axis, about one of its two caps, is drafted as the tapered extrude of its section. |
-| `decad.Hole` | Cuts a round hole (or a rectangular, slot or regular polygonal one from `HoleSpec.Shape`), optionally drafted with `HoleSpec.Draft` or tapped with a `decad.HoleThread`, at a point on a planar face (a planar face of a mesh solid tilted from every axis too, along its normal), or radially into a cylindrical one, through or blind, with an optional `decad.Counterbore` or `decad.Countersink` head. A `decad.RectangularHole` or `decad.SlotHole` shape cuts that cross-section instead, without a head. |
+| `decad.Fillet(b, sel, r)` | Rounds selected edges with a tangent arc of a given radius. On a mesh solid, straight edges that meet end to end on one face at right-angle corners, such as a box's top loop, are rounded together and their arcs meet in a mitre at each corner; three edges meeting at a corner of three perpendicular faces end in a sphere octant. On a loft, a radius that consumes a short line between a circle and a fit spline removes the line: the arc touches the fit spline, or, where the fit spline turns away from the arc, ends at the line's far end and leaves a corner there no sharper than the line's own. A loft's two sections may differ, such as a helical gear outline lofted to the same outline turned about its axis, when they have the same kinds of curves in the same order; each section's selected corner gets its own tangent arc of the radius. `FilletCommand.TangentChain` extends the selection along the edges that continue it tangentially. |
+| `decad.Chamfer(b, sel, d)` | Bevels selected edges. `ChamferCommand.Asymmetric` sets a second distance. Selecting the whole outer cap loop of a prism whose section is a smooth chain of fit splines bevels it within a measured ratio of the ideal chamfer, as a cut. Several convex edges of an axis-square mesh solid that share corners are bevelled as the solid less each edge's wedge, and several concave ones whose ends lie in material or open to air as the solid plus each edge's wedge. Selecting both whole outer cap loops of a loft whose two sections differ, such as a helical gear outline lofted to the same outline turned about its axis, bevels its held facets, with or without a centered through-bore: each cap is inset by the distance and joined by a band to the walls cut at that height, and the bore stays sharp. The same holds for such a loft joined to its mirror image, as for a herringbone gear, including after its through-bore. Selecting whole loops of lines and arcs with sharp corners on a flat face of a mesh Boolean result, such as the windows of a cover, bevels them by cutting with a polyhedral cutter, with the Cut's faceted readings. An edge that ends at a tangent junction takes the edges that continue it tangentially, as `ChamferCommand.TangentChain` does. A tangent chain of a mesh Boolean result that runs over several flat faces, such as the rim of a bar rounded about different axes at its two ends or of a slot through its rounded end, is bevelled with one setback as a plane along each line and a cone along each arc, also where it ends on an earlier bevel; a chain whose faces state a displacement is bevelled by cutting with the bevel's section swept along the chain, with the Cut's faceted readings. |
+| `decad.FilletChord(b, sel, chord)` | Rounds convex or concave edges between two planar faces, or circular ones between a plane and a surface of revolution, with an arc stated by its chord length. |
+| `decad.ChamferAngle(b, sel, d, reference, angle)` | Bevels convex or concave edges between two planar faces, or circular ones between a plane and a surface of revolution, by a distance along a reference face and an angle from that face. |
+| `decad.Stretch` | Returns a command that scales a faceted solid, such as a mesh solid, by a separate factor along each world axis about an anchor, and returns a solid. |
+| `decad.MoveFace(b, sel, distance)` | Press-pulls one face of a mesh solid whose faces all square to an axis along its normal; a positive distance grows the body and a negative one cuts it, and the walls beside it follow. |
+| `decad.Shell(b, sel, thickness)` | Removes the selected faces and lines the rest with a wall. `ShellCommand.FaceThickness` gives the walls facing one world axis direction their own thickness on a mesh solid whose faces all square to an axis, and a second call for the same direction replaces its thickness. `ShellCommand.Sense` picks `decad.Inward`, `decad.Outward` or, for a mesh solid whose faces all square to an axis, `decad.Centered`, a wall half the thickness each side of the surface. `decad.ShellClosed(b, thickness)`, which has the same `Sense` and `FaceThickness` methods, keeps every face and hollows the body into one outer shell around a cavity: for a straight prism, a revolve, or a drilled bar whose hole runs straight through, where the cavity is a ring round a tube lining the hole. Outward, the cavity is the original body and each hole's lining grows into the hole, so a hole whose radius is at most the thickness is `decad.ErrUnsupported`. A mesh solid whose faces all square to an axis shells inward with mitered corners. A convex mesh Boolean result with planar faces (a tilted `decad.Cut` of a plate, say) shells inward with `decad.ShellClosed` into a cavity with one plane face per outer face, unless the thickness drops a face. |
+| `decad.Draft(b, sel, neutral, angle)` | Leans selected walls about a `decad.NeutralPlane` (`decad.NeutralFace`). Every wall of a mesh solid with exact vertices that is a straight prism along a world axis, about one of its two caps, is drafted as the tapered extrude of its section. |
+| `decad.Hole(b, face, at, diameter, depth)` | Returns a command that cuts a round hole at a point on a planar face (a planar face of a mesh solid tilted from every axis too, along its normal), or radially into a cylindrical one, through or blind (`decad.ThroughHole` or `decad.BlindHole`). `HoleCommand.Head` adds a `decad.Counterbore` or `decad.Countersink`, `HoleCommand.Thread` taps the bore with a `decad.HoleThread` built by `decad.NewHoleThread`, and `HoleCommand.Draft` leans its wall. |
+| `decad.HoleShaped(b, face, at, shape, depth)` | Returns a command that cuts a rectangular, slot, regular polygonal or outline hole (`decad.RectangularHole`, `decad.SlotHole`, `decad.PolygonHole` or `decad.OutlineHole`) in place of the round bore. It takes no head, thread or draft. |
 | `decad.LookupThread` | Reads a thread designation such as `M10`, `M10x1.25`, `1/4-20`, `#10-24` or `G1/2` into its major diameter and pitch. |
-| `decad.Thread` | Cuts an ISO metric thread, or a trapezoidal one from a `decad.ThreadForm`, with an optional lead-in chamfer, right- or left-handed, into a cylindrical face, a rod or a bore, from its pitch, along the whole face or a stated length of it. |
-| `decad.Boss` | Raises a round boss, optionally braced with gusset ribs from `decad.BossSpec.Ribs` or leaning by `decad.BossSpec.Tilt`, or a rectangular, slot or polygonal one from `decad.BossSpec.Shape`, on a planar (a planar face of a mesh solid tilted from every axis too) or cylindrical face, with an optional blind pilot hole that may carry a counterbore, a countersink or a thread, and a fillet round its root. |
-| `decad.CutExtrude`, `decad.CutRevolve` | Cut a solid by one or more profiles of a sketch swept by an extent or revolved, as one feature with no tool body. Profiles are united and cut once. Results record `OperationCutExtrude` or `OperationCutRevolve`. |
-| `decad.WebPath` | Thickens each line and arc of a run of sketch entities, extrudes it by a `decad.Extent` and joins the ribs to the body in one step. A run of one line or one arc is one rib, and a polyline or a slot-shaped run becomes one rib. `decad.WithRibOverrun` buries the rib ends in the walls, and `decad.WithRibDraft` leans the walls. |
+| `decad.Thread(b, face, pitch)` | Returns a command that cuts an ISO metric thread into a cylindrical face, a rod or a bore, from its pitch, along the whole face. `ThreadCommand.Length` stops it after a stated length, `ThreadCommand.LeftHand` makes it left-handed, `ThreadCommand.Form` sets a trapezoidal or buttress groove (`decad.TrapezoidThreadForm` or `decad.ButtressThreadForm`), and `ThreadCommand.LeadIn` or `ThreadCommand.LeadInAngle` chamfers the face's ends first. |
+| `decad.Boss(b, face, at, diameter, height)` | Returns a command that raises a round boss on a planar (a planar face of a mesh solid tilted from every axis too) or cylindrical face. `BossCommand.Bore` drills a blind pilot hole built by `decad.NewBossBore`, which may carry a counterbore, a countersink or a thread. `BossCommand.RootFillet` rounds the root, `BossCommand.Draft` leans the wall, `BossCommand.Ribs` braces the root with the gusset ribs of `decad.NewBossRibs`, and `BossCommand.Tilt` leans the boss. |
+| `decad.BossShaped(b, face, at, shape, height)` | Returns a command that raises a boss with a rectangular, slot or polygonal section. It takes `BossShapedCommand.Bore`, `BossShapedCommand.Draft` and `BossShapedCommand.Ribs`, and no root fillet or tilt. |
+| `decad.CutExtrude(target, s, profiles, e)`, `decad.CutRevolve(target, s, profiles, axis, a)` | Cut a solid by one or more profiles of a sketch swept by an extent or revolved, as one feature with no tool body. Profiles are united and cut once. Results record `OperationCutExtrude` or `OperationCutRevolve`. |
+| `decad.WebPath(b, s, path, thickness, e)` | Thickens each line and arc of a run of sketch entities, extrudes it by a `decad.Extent` and joins the ribs to the body in one step. A run of one line or one arc is one rib, and a polyline or a slot-shaped run becomes one rib. `WebPathCommand.Overrun` buries the rib ends in the walls, and `WebPathCommand.Draft` leans the walls. |
 | `decad.TextProfiles` | Draws lines of text from a TrueType font (Go Regular by default) as closed sketch profiles for `decad.Emboss`. |
-| `decad.Emboss` | Raises or engraves closed profiles on a planar face (a planar face of a mesh solid tilted from every axis too), or on a cylindrical face from a sketch plane tangent to it. `decad.EmbossRaised` or `decad.EmbossEngraved` picks the mode, `decad.WithEmbossDraft` leans the walls and `decad.WithEmbossRimFillet` rounds the rim. |
-| `decad.Thicken` | Turns a sheet into a solid. `decad.WithThickenSide` picks the side. |
-| `decad.QuarterTurn` | Turns a mesh solid by whole quarter turns about a world axis, exchanging coordinates so the result stays exact. |
-| `decad.Offset` | Builds a second sheet at a normal distance and leaves the source live; for a mesh solid whose faces all square to an axis it moves every face and builds a second solid. |
+| `decad.Emboss(b, s, profiles, face, mode, height)` | Raises or engraves closed profiles on a planar face (a planar face of a mesh solid tilted from every axis too), or on a cylindrical face from a sketch plane tangent to it. `decad.EmbossRaised` or `decad.EmbossEngraved` picks the mode, `EmbossCommand.Draft` leans the walls and `EmbossCommand.RimFillet` rounds the rim. |
+| `decad.Thicken(b, thickness)` | Turns a sheet into a solid. `ThickenCommand.Side` picks the side. |
+| `decad.QuarterTurn` | Returns a command that turns a mesh solid by whole quarter turns about a world axis, exchanging coordinates so the result stays exact. |
+| `decad.Offset(b, distance)` | Builds a second sheet at a normal distance and leaves the source live; for a mesh solid whose faces all square to an axis it moves every face and builds a second solid. |
 
 ## Booleans
 
@@ -228,18 +247,18 @@ exactly. Tessellation carries bounds for rounding at the two cap rims.
 
 | Function | Result |
 |---|---|
-| `decad.Union` | The volume enclosed by two or more bodies. |
-| `decad.UnionRefined` | A bevel gear join of three or more bodies (a revolved blank and two or more tooth copies), built once at the bound you ask for and returned as `decad.Union` followed by `decad.Refine` returns it, with the faces of `Union` and one history entry. It takes the bodies as a slice, then the bound. It returns the joined body or an error with nothing committed. A set that is not such a join (a pair, a union of another kind, a join folded two bodies at a time) is `decad.ErrUnsupported` before anything is built, and a join that cannot meet the bound is `decad.ErrUnsupported` too; the message says to call `decad.Union`, then `decad.Refine`. |
-| `decad.Cut` | The target minus the tool. A straight-profile twisted `Sweep` is an admitted tool: a boolean restates its closer stationed boundary, and refuses a crossing or gap narrower than the two operands' held bounds together. A straight through-bore of a loft, including one whose upper section is the lower one turned about the axis, keeps the result a loft, so `CapStart` and `CapEnd` of the result still name its caps. A straight through-bore of a loft joined to its mirror image, such as a herringbone gear, bores both halves. |
-| `decad.Intersect` | The volume common to both bodies. |
-| `Document.IntersectionVolume` | The volume `decad.Intersect(a, b)` would return, as the same `Measurement` bit for bit, with nothing committed: no body is retired or added and the history is unchanged. The operands may sit in different containers. It returns `Intersect`'s errors with the same `OperationIntersect` diagnostics, an empty result as a `*decad.BooleanError` with `BooleanEmpty` that reports any gap shift, and a retired operand as `decad.ErrRetiredBody`. Concurrent calls and calls beside `Verify` on one document are safe; a call beside an operation is not. |
-| `decad.Split` | One solid per arranged target cell. |
-| `decad.Refine` | The same held mesh with a tighter proven surface bound, for mesh Unions of extruded, revolved, swept or coiled circles, then Cuts by extruded circles. A straight-bevel join of a revolved blank and point-Loft teeth is rebuilt with finer cone caps instead. |
+| `decad.Union(bodies...)` | The volume enclosed by two or more bodies. `Do` refuses fewer than two with `decad.ErrDegenerate`. |
+| `decad.Union(bodies...).RefineTo(maxBound)` | A bevel gear join of three or more bodies (a revolved blank and two or more tooth copies), built once at the bound you ask for and returned as `decad.Union` followed by `decad.Refine` returns it, with the faces of `Union` and one history entry. `Do` returns the joined body or an error with nothing committed. A set that is not such a join (a pair, a union of another kind, a join folded two bodies at a time) is `decad.ErrUnsupported` before anything is built, and a join that cannot meet the bound is `decad.ErrUnsupported` too; the message says to call `decad.Union`, then `decad.Refine`. A bad bound is refused by `Do` and names `RefineTo` as its subject. |
+| `decad.Cut(target, tool)` | The target minus the tool. A straight-profile twisted `Sweep` is an admitted tool: a boolean restates its closer stationed boundary, and refuses a crossing or gap narrower than the two operands' held bounds together. A straight through-bore of a loft, including one whose upper section is the lower one turned about the axis, keeps the result a loft, so `CapStart` and `CapEnd` of the result still name its caps. A straight through-bore of a loft joined to its mirror image, such as a herringbone gear, bores both halves. |
+| `decad.Intersect(a, b)` | The volume common to both bodies. |
+| `Document.IntersectionVolume(ctx, a, b)` | The volume `decad.Intersect(a, b).Do(ctx)` would return, as the same `Measurement` bit for bit, with nothing committed: no body is retired or added and the history is unchanged. The operands may sit in different containers. It returns `Intersect`'s errors with the same `OperationIntersect` diagnostics, an empty result as a `*decad.BooleanError` with `BooleanEmpty` that reports any gap shift, and a retired operand as `decad.ErrRetiredBody`. Concurrent calls and calls beside `Verify` on one document are safe; a call beside an operation is not. |
+| `decad.Split(target, tool)` | One solid per arranged target cell. `Do` retires both operands. |
+| `decad.Refine(source, maxBound)` | The same held mesh with a tighter proven surface bound, for mesh Unions of extruded, revolved, swept or coiled circles, then Cuts by extruded circles. A straight-bevel join of a revolved blank and point-Loft teeth is rebuilt with finer cone caps instead. |
 
 A chain of mesh `decad.Union` calls over wire-like solids (extruded cylinders, revolved rings, swept round cords, coils)
 publishes a held bound well above its chording where two walls meet nearly tangent, as they do at every bend of a
 tube built from straight spans, and `Body.Tessellate` then refuses any tolerance below it. `decad.Cut` by extruded
-cylinders, such as a bore, may follow. `decad.Refine(ctx, body, maxBound)` proves how far the held mesh lies from the
+cylinders, such as a bore, may follow. `decad.Refine(body, maxBound).Do(ctx)` proves how far the held mesh lies from the
 true solid those operations denote, facet by facet, and returns a new body, retiring the old one, whose `Tessellate`
 publishes that surface bound and succeeds at any tolerance at or above it. No vertex moves; volume, area, vertex and edge readings,
 and the bounds a later Boolean reads, stay as they were. A later `decad.Transform` keeps the refined bound, grown by
@@ -250,7 +269,7 @@ A bevel gear join, a `decad.Union` of a revolved blank and copies of one `decad.
 heel cones, holds up to 0.1 mm because its cone caps stop refining there. `decad.Refine` of that join, before any later
 `Cut` or placement, is the one case that moves vertices: it rebuilds the join with finer cone caps until the held bound
 is at most `maxBound`, at two to five times the triangles and several seconds more per member. Cuts and unions after it
-keep the finer bound. `decad.UnionRefined(ctx, bodies, maxBound)` returns the same refined join of a blank and its teeth without
+keep the finer bound. `decad.Union(bodies...).RefineTo(maxBound)` returns the same refined join of a blank and its teeth without
 building the 0.1 mm join first.
 
 After ordinary analytic admission misses, a blind prism Cut can use translated
@@ -328,7 +347,7 @@ faceted result that meshes. A tool through the whole target takes the faceted pa
 contact with a `BooleanError` of code `BooleanUnsupportedContact`, as for a round tool tangent to a box's side, or
 build a faceted result, as for one tangent inside a cylinder's wall.
 
-A tapered `decad.Extrude` (`decad.WithTaper`) is an operand when every corner where a circular wall meets its
+A tapered `decad.Extrude` (`ExtrudeCommand.Taper`) is an operand when every corner where a circular wall meets its
 neighbour is tangent. A line and an arc, or two arcs, that meet tangent up to rounding, turning by an angle whose sine
 is at most 2⁻³², count as tangent, and the sliver between them is charged into the result's volume bound. A larger
 turn is refused with `decad.ErrUnsupported`, as is a trimmed segment; the body still meshes for export.
@@ -357,7 +376,7 @@ ordinary proof limits, and a successful call records one operation in the
 original input order. The route is specified in
 [`prism-boolean §4.7`](../agent-docs/prism-boolean-design.md#47-three-source-prism-pair-retry).
 
-`Cut` and `Intersect` take options. `decad.WithMatchingFaces()` says faces of the two bodies are meant to match
+`CutCommand.MatchingFaces` and `IntersectCommand.MatchingFaces` say faces of the two bodies are meant to match
 where they meet, such as a cap drawn to touch a cone. A miss of a few last-place steps is then taken as the
 match you intended and charged into the result's error bounds; a larger miss is still refused. See
 `Example_intersect_matching_faces`.
@@ -370,7 +389,7 @@ proven exact may return a faceted body whose measurements are `decad.Approximate
 
 | Function | Effect |
 |---|---|
-| `decad.Copy` | Returns a new live body and leaves the source live. `decad.WithCopyPlacement`, `decad.WithCopyRotation` and `decad.WithCopyLiftTranslation` place it. `WithCopyLiftTranslation(lift, from, to)` moves a body by the exact world vector `lift·(to − from)`, formed in rationals, and `Verify` reads a faceted copy made this way as its source moved by that vector. A rotated copy of a mesh Boolean result keeps the retained plane, cylinder, sphere and torus surfaces of its faces; its other faces read `Faceted`. On a faceted copy rotated about z, the retained +z and -z cap planes stay exact, so `ToFace` and `MirrorFace` accept them; a retained plane the rotation turns refuses both. |
+| `decad.Copy` | Returns a command that makes a new live body and leaves the source live. `CopyCommand.Place` takes a `decad.CopyTransform`, a `decad.CopyRotation` or a `decad.CopyLiftTranslation` to place it, and a second call replaces the first. `CopyLiftTranslation{Lift, From, To}` moves a body by the exact world vector `lift·(to − from)`, formed in rationals, and `Verify` reads a faceted copy made this way as its source moved by that vector. A rotated copy of a mesh Boolean result keeps the retained plane, cylinder, sphere and torus surfaces of its faces; its other faces read `Faceted`. On a faceted copy rotated about z, the retained +z and -z cap planes stay exact, so `ToFace` and `MirrorFace` accept them; a retained plane the rotation turns refuses both. |
 | `decad.WithChainTolerance` | A `decad.New` option. Sets the coarsest bound, as a length, that a facet of an earlier boolean's result may carry where a later boolean touches it. The default is the pair's own chord tolerance, and a contact on a coarser facet is refused. A boolean that cuts across a facet an earlier cut rimmed, such as a prism window over a bored tube wall, meets it; set the tolerance to a tenth of a millimetre for that, or cut the window first. A value admits contacts up to it and the result's bound grows to match. |
 | `decad.WithRimSplit` | A `decad.New` option. Makes the document's mesh booleans split the facets a rim touches near the rim, so a later boolean that crosses them far from the rim reads the face's own bound and not the rim's. Use it with `decad.WithChainTolerance` for a chain of cuts across a curved wall. A later boolean already reads a retained cylinder wall's own departure without a split, so the option matters for a cone, sphere, torus or free-form wall, and for a cylinder whose tag a placement moved off its surface. A facet is split only where an exact distance proves the whole far piece clear of the other operand's boundary by the bounds both operands hold, so a facet beside a contact chain may stay whole and keep the rim's bound. The result holds more facets, and a planar face is never split. `Fillet` and `Chamfer` may refuse a split face. One that succeeds reads the split facets' own bounds, which are proven the same way. Leave the option off for a document that edge-finishes its mesh results. A document without the option still splits when a two-body `Union` is refused because a facet it touches carries an earlier rim's bound: the `Union` rebuilds its recorded `Union` history with splitting on and joins, and only the body it returns holds split facets. |
 | `decad.WithGapTolerance` | A `decad.New` option. Sets how far, as a length, the evaluator may move a vertex of a faceted result, or the second operand of a boolean whose faces lie in one plane, off its exact place to keep the operation from refusing. The default is 0.01 mm, and the move is added to the result's bound. |
@@ -378,17 +397,19 @@ proven exact may return a faceted body whose measurements are `decad.Approximate
 | `Document.Param`, `Document.Expr`, `Document.ParamInt` | Read a named parameter, an expression or a whole-number parameter as the value a feature takes. Editing the table and running the builder again rebuilds the model. |
 | `Document.Bindings` | Lists every parameter read in call order: name, source text, value and direct dependencies. |
 | `decad.ExactOnly` | A `decad.New` option. Refuses any operation that only such a move would allow. |
-| `decad.Transform` | Moves a body by an `r3.Transform` and retires the input. |
-| `decad.ScaledAt` | Scales a supported body uniformly about an anchor point. A scaled mesh Boolean result keeps the retained plane, cylinder, sphere and torus surfaces of its faces with their radii scaled; its other faces read `Faceted`. Other faceted solids, such as `LoftSections` and `LoftFromPoint` results or a fillet of a mesh Boolean result, scale once their held mesh passes a closure and self-crossing audit; they keep their plane faces and retained cylinder, sphere and torus faces, and their other curved faces read `Faceted`. Sheets are refused. |
-| `decad.Patterned` | Returns one body holding every instance of a `decad.PatternSpec`. |
-| `decad.PathPattern` | Returns copies of a body along a `decad.Path`: `decad.WithPathCount` spaces a count of instances at equal arc length and `decad.WithPathSpacing` places them a stated arc-length distance apart. The copies keep the body's orientation, or turn to follow the path with `decad.WithPathFollow`, about its start or a `decad.WithPathPivot` point. |
-| `decad.PatternCopies` | Returns the extra instances as separate bodies. |
-| `decad.Arrange` | Moves bodies to lie side by side on a flat bed, each resting on its surface and a gap apart; `decad.WithArrangeTurns` lets it turn them a quarter turn to fit and `decad.WithArrangeAngle` turns each to the angle of least footprint. |
-| `decad.Mirrored` | Returns the mirror image across a `decad.MirrorPlane` and retires the input. |
-| `decad.MirroredCopy` | Returns the mirror image and leaves the source live. |
+| `decad.Transform` | Returns a command that moves a body by an `r3.Transform` and retires the input. |
+| `decad.ScaledAt` | Returns a command that scales a supported body uniformly about an anchor point. A scaled mesh Boolean result keeps the retained plane, cylinder, sphere and torus surfaces of its faces with their radii scaled; its other faces read `Faceted`. Other faceted solids, such as `LoftSections` and `LoftFromPoint` results or a fillet of a mesh Boolean result, scale once their held mesh passes a closure and self-crossing audit; they keep their plane faces and retained cylinder, sphere and torus faces, and their other curved faces read `Faceted`. Sheets are refused. |
+| `decad.Patterned` | Returns a command that makes one body holding every instance of a `decad.PatternSpec`. |
+| `decad.PathPattern` | Returns a command that copies a body along a `decad.Path`. Its `decad.PathStations` argument is a `decad.PathCount`, which spaces a count of instances at equal arc length, or a `decad.PathSpacing`, which places them a stated arc-length distance apart. The copies keep the body's orientation, or turn to follow the path with `PathPatternCommand.Follow`, about its start or the point `PathPatternCommand.FollowAbout` names. |
+| `decad.PatternCopies` | Returns a command that makes the extra instances as separate bodies. |
+| `decad.Arrange` | Returns a command that moves bodies to lie side by side on a flat bed, each resting on its surface and a gap apart; `ArrangeCommand.Turns` lets it turn them a quarter turn to fit and `ArrangeCommand.Angle` turns each to the angle of least footprint. |
+| `decad.Mirrored` | Returns a command that makes the mirror image across a `decad.MirrorPlane` and retires the input. |
+| `decad.MirroredJoin` | Returns a command that mirrors a body across one of its own planar walls and joins the image to it, as one body. |
+| `decad.MirroredCopy` | Returns a command that makes the mirror image and leaves the source live. |
 
-Pattern layouts are `decad.LinearPattern` and `decad.CircularPattern`. Mirror planes are `decad.MirrorFrame` and
-`decad.MirrorFace`. `decad.WithJoin` joins a mirror to its source.
+Each of these is a command: build it, then call `Do(ctx)` once. `PatternCopies`, `PathPattern` and `Arrange` return
+`[]*decad.Body`. Pattern layouts are `decad.LinearPattern` and `decad.CircularPattern`. Mirror planes are
+`decad.MirrorFrame` and `decad.MirrorFace`.
 
 To repeat one feature and join the copies to a base, call `decad.PatternCopies`, or
 `decad.PathPattern` along a path, and pass the base, the feature and its copies to one `decad.Union`. A refused
@@ -409,11 +430,13 @@ A sheet encloses no material, so `Body.Volume` and `Body.Centroid` return `decad
 | Function | Effect |
 |---|---|
 | `decad.PatchProfile` | Builds a one-face sheet from a profile. |
-| `decad.PatchEdges` | Fills closed chains of free edges. |
-| `decad.Stitch` | Welds matching free edges across bodies. Stitching a closed sheet yields a solid. |
-| `decad.Unstitch` | Splits a body into one single-face sheet per face. |
-| `decad.Trim` | Cuts a sheet where it meets a tool and keeps `decad.KeepInside` or `decad.KeepOutside`. |
-| `decad.Extend` | Lengthens a sheet's chosen edges until they meet a tool. |
+| `decad.PatchEdges(b, sel)` | Fills closed chains of free edges. |
+| `decad.Stitch(bodies...)` | Welds matching free edges across bodies. Stitching a closed sheet yields a solid. The bodies are copied when the command is built. |
+| `decad.Unstitch(b)` | Splits a body into one single-face sheet per face. |
+| `decad.Trim(b, tool, side)` | Cuts a sheet where it meets a tool and keeps `decad.KeepInside` or `decad.KeepOutside`. |
+| `decad.Extend(b, edges, tool)` | Lengthens a sheet's chosen edges until they meet a tool. |
+
+Each of these is a command with no method. Run it with `Do(ctx)`; a command built over a nil body records that fault and `Do` returns it as `decad.ErrDegenerate`.
 
 ## Selecting topology
 
@@ -600,7 +623,7 @@ as it found it.
 ## Import
 
 `decad.ReadSTL`, `decad.ReadOBJ`, `decad.ReadThreeMF`, `decad.ReadSTEP` and `decad.ReadIGES` read a triangle mesh file, a STEP solid or a planar-faced IGES solid B-rep into a `decad.MeshBody`. A `decad.MeshBody` is not a
-`decad.Body`: no feature or Boolean takes it. `decad.SolidFromMesh` turns a closed one into a solid body that does take part, after proving the mesh does not cross itself. It reports whether its triangles close into a surface, and its bounds,
+`decad.Body`: no feature or Boolean takes it. `decad.SolidFromMesh(d, m)` builds a command whose `Do` turns a closed one into a solid body that does take part, after proving the mesh does not cross itself. It reports whether its triangles close into a surface, and its bounds,
 area and enclosed volume.
 
 | Reading | Method |
@@ -617,7 +640,7 @@ triangles that carry no surface, and `decad.WithMeshWeld`, `decad.WithMeshOrient
 close vertices, wind shells consistently and close simple holes. Read `MeshBody.Report` on the result to see whether
 the mesh closed. `decad.ReduceMesh` thins a mesh body by clustering its vertices into cells of a stated size, and `decad.ReduceMeshWithin` picks the cell for a stated surface distance and proves it. `decad.CollapseMesh` thins a closed mesh by merging its shortest edges to a stated triangle count, keeping it closed and without a proven surface distance, and `decad.RemeshMesh` rebuilds one from near-equilateral triangles of a stated edge length. `decad.RefineMesh` splits the long edges of a mesh body at their
 midpoints, so it covers the same surface with shorter edges. `decad.SubDMesh` refines a polygon cage by Catmull-Clark subdivision into a mesh body, a smooth shape drawn by moving the cage's vertices. `decad.GyroidLattice`,
-`decad.SchwarzPLattice`, `decad.DiamondLattice`, `decad.NeoviusLattice`, `decad.IWPLattice`, `decad.FischerKochSLattice`, `decad.LidinoidLattice` and `decad.SplitPLattice` fill a box with a gyroid, Schwarz P, diamond, Neovius, IWP, Fischer-Koch S, Lidinoid or Split P lattice, the walls used for print infill, as a closed mesh body, and `decad.Infill` fills a solid body with one, keeping the lattice material inside it and, when `InfillSpec.Skin` is set, a solid skin of that thickness round the part. `decad.ScaleMesh`
+`decad.SchwarzPLattice`, `decad.DiamondLattice`, `decad.NeoviusLattice`, `decad.IWPLattice`, `decad.FischerKochSLattice`, `decad.LidinoidLattice` and `decad.SplitPLattice` fill a box with a gyroid, Schwarz P, diamond, Neovius, IWP, Fischer-Koch S, Lidinoid or Split P lattice, the walls used for print infill, as a closed mesh body, and `decad.Infill(b, kind, cell, level)` returns a command that fills a solid body with one, keeping the lattice material inside it. `InfillCommand.Resolution` sets the samples to a cell and `InfillCommand.Skin` keeps a solid skin of that thickness round the part. An error from `Do` carries `OperationInfill`, except a bare Boolean error, which keeps `OperationIntersect` or `OperationUnion`. The history records the `OperationIntersect`, or with a skin the `OperationUnion`. `decad.ScaleMesh`
 stretches a mesh body by a separate factor along each axis about a point; a negative factor mirrors it.
 `decad.ScaleBodyMesh` does the same to a solid body, as a mesh, after tessellating it.
 
@@ -656,6 +679,7 @@ Branch on a sentinel with `errors.Is`.
 | `decad.ErrCrossContainer` | One operation read bodies or sketches from different containers. |
 | `decad.ErrContainerLayout` | `ContainerReport.Err` found a body in the root or an empty container. |
 | `decad.ErrRetiredBody` | A body was already consumed by a feature. |
+| `decad.ErrConsumed` | `Do` was called on a feature command that already ran. |
 | `decad.ErrMalformedMesh`, `decad.ErrMeshTooLarge` | An STL or OBJ file was malformed, or held more than the import limits allow. |
 | `decad.ErrForeignProfile`, `decad.ErrStaleProfile`, `decad.ErrInvalidProfile`, `decad.ErrUnrecordableProfile` | A sketch profile was rejected. |
 

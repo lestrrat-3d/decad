@@ -34,8 +34,8 @@ func Example_selectReflexEdges() {
 		if _, err := s.Solve(ctx); err != nil {
 			return nil, err
 		}
-		return decad.Extrude(ctx, doc, s, s.Profiles()[0],
-			decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
+		return decad.Extrude(doc, s, s.Profiles()[0],
+			decad.Distance{D: units.Millimeters(h), Dir: decad.Along}).Do(ctx)
 	}
 	// An 80 x 60 x 10 mm plate with a 20 x 20 mm boss, 15 mm tall.
 	plate, err := box(0, 0, 80, 60, 0, 10)
@@ -48,7 +48,7 @@ func Example_selectReflexEdges() {
 		fmt.Printf("failed to build the boss: %s\n", err)
 		return
 	}
-	part, err := decad.Union(ctx, plate, boss)
+	part, err := decad.Union(plate, boss).Do(ctx)
 	if err != nil {
 		fmt.Printf("failed to join: %s\n", err)
 		return
@@ -64,7 +64,7 @@ func Example_selectReflexEdges() {
 		roots[0].Wedge(), roots[0].IsConvex(), roots[0].Start().Position().Value.Z)
 
 	// Round the boss root with a 2 mm fillet. The fillet adds material.
-	rounded, err := decad.Fillet(ctx, part, decad.Edges(decad.Reflex()).Exactly(4), units.Millimeters(2))
+	rounded, err := decad.Fillet(part, decad.Edges(decad.Reflex()).Exactly(4), units.Millimeters(2)).Do(ctx)
 	if err != nil {
 		fmt.Printf("failed to fillet: %s\n", err)
 		return

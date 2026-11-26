@@ -41,8 +41,8 @@ func extrudeSolved(t *testing.T, doc *decad.Document, s *sketch.Sketch, h float6
 	_, err := s.Solve(t.Context())
 	require.NoError(t, err)
 	require.Len(t, s.Profiles(), 1)
-	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
+	body, err := decad.Extrude(doc, s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(h), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -103,8 +103,8 @@ func requireExactHistorySection(t *testing.T, body *decad.Body, frame r3.Frame, 
 	require.LessOrEqual(t, math.Abs(measured.Value.Base()-area), measured.Bound.Base())
 	require.LessOrEqual(t, measured.Bound.Base(), 1e-9)
 
-	slab, err := decad.Extrude(t.Context(), decad.New(), section, profiles[0],
-		decad.Distance{D: units.Millimeters(2), Dir: decad.Along})
+	slab, err := decad.Extrude(decad.New(), section, profiles[0],
+		decad.Distance{D: units.Millimeters(2), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	volume, err := slab.Volume()
 	require.NoError(t, err)
@@ -124,7 +124,7 @@ func TestSectionMeshBooleanFromHistory(t *testing.T) {
 	t.Run("union through the overlap", func(t *testing.T) {
 		t.Parallel()
 		doc := decad.New()
-		joined, err := decad.Union(t.Context(), historyCube(t, doc), beamAlongX(t, doc, -5, 20, 6, 14))
+		joined, err := decad.Union(historyCube(t, doc), beamAlongX(t, doc, -5, 20, 6, 14)).Do(t.Context())
 		require.NoError(t, err)
 		requireExactHistorySection(t, joined, historyLevel(t, 8), [][2]float64{
 			{-5, 3}, {0, 3}, {0, 0}, {10, 0}, {10, 3}, {15, 3},
@@ -134,7 +134,7 @@ func TestSectionMeshBooleanFromHistory(t *testing.T) {
 	t.Run("cut through the notch", func(t *testing.T) {
 		t.Parallel()
 		doc := decad.New()
-		notched, err := decad.Cut(t.Context(), historyCube(t, doc), boxBodyAtZ(t, doc, 5, 5, 15, 15, 5, 10))
+		notched, err := decad.Cut(historyCube(t, doc), boxBodyAtZ(t, doc, 5, 5, 15, 15, 5, 10)).Do(t.Context())
 		require.NoError(t, err)
 		requireExactHistorySection(t, notched, historyLevel(t, 7), [][2]float64{
 			{0, 0}, {10, 0}, {10, 5}, {5, 5}, {5, 10}, {0, 10},
@@ -143,7 +143,7 @@ func TestSectionMeshBooleanFromHistory(t *testing.T) {
 	t.Run("intersect through the overlap", func(t *testing.T) {
 		t.Parallel()
 		doc := decad.New()
-		common, err := decad.Intersect(t.Context(), historyCube(t, doc), beamAlongX(t, doc, -5, 20, 6, 14))
+		common, err := decad.Intersect(historyCube(t, doc), beamAlongX(t, doc, -5, 20, 6, 14)).Do(t.Context())
 		require.NoError(t, err)
 		requireExactHistorySection(t, common, historyLevel(t, 8), [][2]float64{
 			{0, 3}, {10, 3}, {10, 7}, {0, 7},
@@ -155,7 +155,7 @@ func TestSectionMeshBooleanFromHistory(t *testing.T) {
 		// it sweeps downward from z = 15. Its section in world XY is read in
 		// the swapped frame and re-walked.
 		doc := decad.New()
-		notched, err := decad.Cut(t.Context(), historyCube(t, doc), cornerTool(t, doc, 15, r3.Vec{Y: 1}, r3.Vec{X: 1}))
+		notched, err := decad.Cut(historyCube(t, doc), cornerTool(t, doc, 15, r3.Vec{Y: 1}, r3.Vec{X: 1})).Do(t.Context())
 		require.NoError(t, err)
 		requireExactHistorySection(t, notched, historyLevel(t, 7), [][2]float64{
 			{0, 0}, {10, 0}, {10, 5}, {5, 5}, {5, 10}, {0, 10},
@@ -189,11 +189,11 @@ func TestSectionMeshBooleanFromHistory(t *testing.T) {
 			s.Fix(rect.A)
 			move, err := r3.Translation(frame.N().Scale(-down))
 			require.NoError(t, err)
-			moved, err := decad.Transform(t.Context(), extrudeSolved(t, doc, s, length), move)
+			moved, err := decad.Transform(extrudeSolved(t, doc, s, length), move).Do(t.Context())
 			require.NoError(t, err)
 			return moved
 		}
-		notched, err := decad.Cut(t.Context(), box(0, 10, 8, 4), box(5, 15, 10, 8))
+		notched, err := decad.Cut(box(0, 10, 8, 4), box(5, 15, 10, 8)).Do(t.Context())
 		require.NoError(t, err)
 		requireExactHistorySection(t, notched, frame, [][2]float64{
 			{0, 0}, {10, 0}, {10, 5}, {5, 5}, {5, 10}, {0, 10},
@@ -218,7 +218,7 @@ func TestSectionMeshBooleanHistoryRefusals(t *testing.T) {
 		// rounded, so the mesh path shifts it: the result no longer denotes
 		// cube minus tool.
 		doc := decad.New()
-		notched, err := decad.Cut(t.Context(), historyCube(t, doc), roundedBoxBodyAtZ(t, doc, 5, 2, 15, 8, 5, 5))
+		notched, err := decad.Cut(historyCube(t, doc), roundedBoxBodyAtZ(t, doc, 5, 2, 15, 8, 5, 5)).Do(t.Context())
 		require.NoError(t, err)
 		diagnostics := notched.OperationDiagnostics()
 		require.Len(t, diagnostics, 1)
@@ -228,9 +228,9 @@ func TestSectionMeshBooleanHistoryRefusals(t *testing.T) {
 	t.Run("copy of a mesh result is read from the grid", func(t *testing.T) {
 		t.Parallel()
 		doc := decad.New()
-		notched, err := decad.Cut(t.Context(), historyCube(t, doc), boxBodyAtZ(t, doc, 5, 5, 15, 15, 5, 10))
+		notched, err := decad.Cut(historyCube(t, doc), boxBodyAtZ(t, doc, 5, 5, 15, 15, 5, 10)).Do(t.Context())
 		require.NoError(t, err)
-		duplicate, err := decad.Copy(t.Context(), notched)
+		duplicate, err := decad.Copy(notched).Do(t.Context())
 		require.NoError(t, err)
 		// The history gate refuses a copy, but a copy of an axis-square result keeps its exact vertices, so the grid
 		// reads the same notch (agent-docs/orthogonal-design.md).
@@ -243,14 +243,14 @@ func TestSectionMeshBooleanHistoryRefusals(t *testing.T) {
 		// At z = 5 the result's material is the whole square, not the square
 		// minus the tool's footprint, so the identity does not hold here.
 		doc := decad.New()
-		notched, err := decad.Cut(t.Context(), historyCube(t, doc), boxBodyAtZ(t, doc, 5, 5, 15, 15, 5, 10))
+		notched, err := decad.Cut(historyCube(t, doc), boxBodyAtZ(t, doc, 5, 5, 15, 15, 5, 10)).Do(t.Context())
 		require.NoError(t, err)
 		refuses(t, notched, 5, operandRefusal)
 	})
 	t.Run("plane missing an operand is read from the grid", func(t *testing.T) {
 		t.Parallel()
 		doc := decad.New()
-		joined, err := decad.Union(t.Context(), historyCube(t, doc), beamAlongX(t, doc, -5, 20, 6, 14))
+		joined, err := decad.Union(historyCube(t, doc), beamAlongX(t, doc, -5, 20, 6, 14)).Do(t.Context())
 		require.NoError(t, err)
 		// The history gate refuses a plane that misses an operand, but the result is a solid whose faces all square to
 		// an axis and a plane square to one, so the grid reads the cut (agent-docs/orthogonal-design.md).
@@ -262,7 +262,7 @@ func TestSectionMeshBooleanHistoryRefusals(t *testing.T) {
 		// at (7, 10) and (10, 7). Sketch names no line-arc crossing as an exact
 		// point, so the cut arc refuses.
 		doc := decad.New()
-		notched, err := decad.Cut(t.Context(), historyCube(t, doc), historyZCylinder(t, doc, 10, 10, 3, 5, 10))
+		notched, err := decad.Cut(historyCube(t, doc), historyZCylinder(t, doc, 10, 10, 3, 5, 10)).Do(t.Context())
 		require.NoError(t, err)
 		refuses(t, notched, 7, curveCutRefusal)
 	})
@@ -284,14 +284,14 @@ func TestSectionMeshBooleanHistoryRefusals(t *testing.T) {
 		s.CreateLine(a, b)
 		s.CreateLine(b, c)
 		s.CreateLine(c, a)
-		notched, err := decad.Cut(t.Context(), historyCube(t, doc), extrudeSolved(t, doc, s, 10))
+		notched, err := decad.Cut(historyCube(t, doc), extrudeSolved(t, doc, s, 10)).Do(t.Context())
 		require.NoError(t, err)
 		refuses(t, notched, 7, junctionRefusal)
 	})
 	t.Run("two separate regions are listed from the grid", func(t *testing.T) {
 		t.Parallel()
 		doc := decad.New()
-		joined, err := decad.Union(t.Context(), historyCube(t, doc), boxBodyAtZ(t, doc, 12, 3, 15, 7, 5, 10))
+		joined, err := decad.Union(historyCube(t, doc), boxBodyAtZ(t, doc, 12, 3, 15, 7, 5, 10)).Do(t.Context())
 		require.NoError(t, err)
 		// The history gate refuses two regions, but the grid reads each as a profile of one sketch.
 		require.ElementsMatch(t, []float64{100, 12}, sectionAreas(t, joined, historyLevel(t, 7)))
@@ -299,14 +299,14 @@ func TestSectionMeshBooleanHistoryRefusals(t *testing.T) {
 	t.Run("a slot splits the section into two profiles", func(t *testing.T) {
 		t.Parallel()
 		doc := decad.New()
-		slotted, err := decad.Cut(t.Context(), historyCube(t, doc), boxBodyAtZ(t, doc, 4, -5, 6, 15, 5, 10))
+		slotted, err := decad.Cut(historyCube(t, doc), boxBodyAtZ(t, doc, 4, -5, 6, 15, 5, 10)).Do(t.Context())
 		require.NoError(t, err)
 		require.ElementsMatch(t, []float64{40, 40}, sectionAreas(t, slotted, historyLevel(t, 7)))
 	})
 	t.Run("one section inside the other is read from the grid", func(t *testing.T) {
 		t.Parallel()
 		doc := decad.New()
-		joined, err := decad.Union(t.Context(), historyCube(t, doc), beamAlongX(t, doc, 2, 6, 2, 6))
+		joined, err := decad.Union(historyCube(t, doc), beamAlongX(t, doc, 2, 6, 2, 6)).Do(t.Context())
 		require.NoError(t, err)
 		// A beam wholly inside the cube leaves the cube's square: the grid reads it where the history gate does not.
 		requireExactHistorySection(t, joined, historyLevel(t, 4), [][2]float64{{0, 0}, {10, 0}, {10, 10}, {0, 10}}, 100)
@@ -372,8 +372,8 @@ func holedPlate(t *testing.T, doc *decad.Document) *decad.Body {
 	require.NoError(t, err)
 	for _, profile := range s.Profiles() {
 		if len(profile.Holes) == 1 {
-			body, err := decad.Extrude(t.Context(), doc, s, profile,
-				decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+			body, err := decad.Extrude(doc, s, profile,
+				decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(t.Context())
 			require.NoError(t, err)
 			return body
 		}
@@ -397,9 +397,9 @@ func boredTube(t *testing.T, doc *decad.Document) *decad.Body {
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	require.Len(t, s.Profiles(), 1)
-	body, err := decad.Revolve(t.Context(), doc, s, s.Profiles()[0], decad.SketchLine{
+	body, err := decad.Revolve(doc, s, s.Profiles()[0], decad.SketchLine{
 		Start: decad.Point2{}, End: decad.Point2{V: 1},
-	}, decad.FullRevolution{})
+	}, decad.FullRevolution{}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -429,8 +429,8 @@ func requireHistoryRegions(t *testing.T, body *decad.Body, frame r3.Frame, want 
 		require.LessOrEqual(t, math.Abs(area.Value.Base()-want[i].area), area.Bound.Base())
 		require.LessOrEqual(t, area.Bound.Base(), 1e-9)
 
-		slab, err := decad.Extrude(t.Context(), decad.New(), section, profile,
-			decad.Distance{D: units.Millimeters(1), Dir: decad.Along})
+		slab, err := decad.Extrude(decad.New(), section, profile,
+			decad.Distance{D: units.Millimeters(1), Dir: decad.Along}).Do(t.Context())
 		require.NoError(t, err)
 		volume, err := slab.Volume()
 		require.NoError(t, err)
@@ -461,7 +461,7 @@ func TestSectionMeshBooleanHistoryCurvesAndRegions(t *testing.T) {
 		// The beam y 7.5..9.5 runs through the plate along X. At z = 5 it
 		// leaves the part below it, with the round hole, and a 0.5 mm strip.
 		doc := decad.New()
-		slotted, err := decad.Cut(t.Context(), holedPlate(t, doc), xBeam(t, doc, -5, 20, 7.5, 9.5, -1, 11))
+		slotted, err := decad.Cut(holedPlate(t, doc), xBeam(t, doc, -5, 20, 7.5, 9.5, -1, 11)).Do(t.Context())
 		require.NoError(t, err)
 		requireHistoryRegions(t, slotted, historyLevel(t, 5), []historyRegion{
 			{area: 75 - 4*math.Pi, holes: 1},
@@ -472,7 +472,7 @@ func TestSectionMeshBooleanHistoryCurvesAndRegions(t *testing.T) {
 		t.Parallel()
 		// The common part is y 1..9 of the plate, and the hole lies inside it.
 		doc := decad.New()
-		common, err := decad.Intersect(t.Context(), holedPlate(t, doc), xBeam(t, doc, -5, 20, 1, 9, 3, 7))
+		common, err := decad.Intersect(holedPlate(t, doc), xBeam(t, doc, -5, 20, 1, 9, 3, 7)).Do(t.Context())
 		require.NoError(t, err)
 		requireHistoryRegions(t, common, historyLevel(t, 5), []historyRegion{{area: 80 - 4*math.Pi, holes: 1}})
 	})
@@ -482,7 +482,7 @@ func TestSectionMeshBooleanHistoryCurvesAndRegions(t *testing.T) {
 		// section, and the cylinder along X is a whole circle in its own
 		// parallel section. Neither bounds the other.
 		doc := decad.New()
-		joined, err := decad.Union(t.Context(), historyCube(t, doc), xCylinder(t, doc, 2, 6, 20, 5, 2))
+		joined, err := decad.Union(historyCube(t, doc), xCylinder(t, doc, 2, 6, 20, 5, 2)).Do(t.Context())
 		require.NoError(t, err)
 		requireHistoryRegions(t, joined, yzLevel(t, 5), []historyRegion{{area: 100}, {area: 4 * math.Pi}})
 	})
@@ -491,7 +491,7 @@ func TestSectionMeshBooleanHistoryCurvesAndRegions(t *testing.T) {
 		// At z = 8 the tube is an annulus r 4..10 from its meridian, and the
 		// box is a square inside the bore that touches nothing.
 		doc := decad.New()
-		joined, err := decad.Union(t.Context(), boredTube(t, doc), boxBodyAtZ(t, doc, -2, -2, 2, 2, 5, 10))
+		joined, err := decad.Union(boredTube(t, doc), boxBodyAtZ(t, doc, -2, -2, 2, 2, 5, 10)).Do(t.Context())
 		require.NoError(t, err)
 		requireHistoryRegions(t, joined, historyLevel(t, 8), []historyRegion{{area: 16}, {area: 84 * math.Pi, holes: 1}})
 	})
@@ -511,9 +511,9 @@ func TestSectionMeshBooleanHistoryRefusesCutCurves(t *testing.T) {
 	s.CreateCircle(center, 4)
 	alongY, err := r3.Translation(r3.Vec{Y: 20})
 	require.NoError(t, err)
-	tool, err := decad.Transform(t.Context(), extrudeSolved(t, doc, s, 40), alongY)
+	tool, err := decad.Transform(extrudeSolved(t, doc, s, 40), alongY).Do(t.Context())
 	require.NoError(t, err)
-	joined, err := decad.Union(t.Context(), xCylinder(t, doc, -20, 40, 0, 0, 6), tool)
+	joined, err := decad.Union(xCylinder(t, doc, -20, 40, 0, 0, 6), tool).Do(t.Context())
 	require.NoError(t, err)
 	require.True(t, tookMeshPath(joined), "the fixture is a mesh Boolean result")
 	_, _, err = joined.Section(t.Context(), yzLevel(t, 0))

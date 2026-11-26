@@ -39,9 +39,9 @@ func TestSectionObliqueCylinderFeedsVerifiedExtrude(t *testing.T) {
 	_, err = decad.MeasureProfile(section, profiles[0])
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 
-	child, err := decad.Extrude(t.Context(), decad.New(), section, profiles[0], decad.Distance{
+	child, err := decad.Extrude(decad.New(), section, profiles[0], decad.Distance{
 		D: units.Millimeters(2), Dir: decad.Along,
-	})
+	}).Do(t.Context())
 	require.NoError(t, err)
 	volume, err := child.Volume()
 	require.NoError(t, err)
@@ -63,15 +63,15 @@ func TestSectionObliqueCylinderPlacementAndReverseAxis(t *testing.T) {
 		EX: r3.Vec{X: 1}, EY: r3.Vec{Y: 1}, EZ: r3.Vec{Z: 1},
 	}, r3.NewVec(3, 4, 7))
 	require.NoError(t, err)
-	placed, err := decad.Transform(t.Context(), source, placement)
+	placed, err := decad.Transform(source, placement).Do(t.Context())
 	require.NoError(t, err)
 	frame := obliqueCylinderPlane(t, r3.NewVec(3, 4, 12), r3.NewVec(-1, 0, 0))
 	section, profiles, err := placed.Section(t.Context(), frame)
 	require.NoError(t, err)
 	require.Len(t, profiles, 1)
-	child, err := decad.Extrude(t.Context(), decad.New(), section, profiles[0], decad.Distance{
+	child, err := decad.Extrude(decad.New(), section, profiles[0], decad.Distance{
 		D: units.Millimeters(2), Dir: decad.Along,
-	})
+	}).Do(t.Context())
 	require.NoError(t, err)
 	mesh, err := child.Tessellate(t.Context(), units.Millimeters(0.1),
 		decad.WithVerification(decad.VerifyAll))
@@ -87,9 +87,9 @@ func TestSectionObliqueCylinderCapCrossingFeedsVerifiedExtrude(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, profiles, 1)
 	require.True(t, profiles[0].Valid)
-	child, err := decad.Extrude(t.Context(), decad.New(), section, profiles[0], decad.Distance{
+	child, err := decad.Extrude(decad.New(), section, profiles[0], decad.Distance{
 		D: units.Millimeters(2), Dir: decad.Along,
-	})
+	}).Do(t.Context())
 	require.NoError(t, err)
 	volume, err := child.Volume()
 	require.NoError(t, err)
@@ -120,9 +120,9 @@ func TestSectionObliqueCylinderBottomCapCrossingFeedsVerifiedExtrude(t *testing.
 	section, profiles, err := source.Section(t.Context(), frame)
 	require.NoError(t, err)
 	require.Len(t, profiles, 1)
-	child, err := decad.Extrude(t.Context(), decad.New(), section, profiles[0], decad.Distance{
+	child, err := decad.Extrude(decad.New(), section, profiles[0], decad.Distance{
 		D: units.Millimeters(2), Dir: decad.Along,
-	})
+	}).Do(t.Context())
 	require.NoError(t, err)
 	mesh, err := child.Tessellate(t.Context(), units.Millimeters(0.1),
 		decad.WithVerification(decad.VerifyAll))
@@ -137,15 +137,15 @@ func TestSectionObliqueCylinderPlacedCapCrossingFeedsVerifiedExtrude(t *testing.
 		EX: r3.Vec{X: 1}, EY: r3.Vec{Y: 1}, EZ: r3.Vec{Z: 1},
 	}, r3.NewVec(3, 4, 7))
 	require.NoError(t, err)
-	placed, err := decad.Transform(t.Context(), source, placement)
+	placed, err := decad.Transform(source, placement).Do(t.Context())
 	require.NoError(t, err)
 	frame := obliqueCylinderPlane(t, r3.NewVec(4, 2, 16), r3.NewVec(1, 0, 0))
 	section, profiles, err := placed.Section(t.Context(), frame)
 	require.NoError(t, err)
 	require.Len(t, profiles, 1)
-	child, err := decad.Extrude(t.Context(), decad.New(), section, profiles[0], decad.Distance{
+	child, err := decad.Extrude(decad.New(), section, profiles[0], decad.Distance{
 		D: units.Millimeters(2), Dir: decad.Along,
-	})
+	}).Do(t.Context())
 	require.NoError(t, err)
 	volume, err := child.Volume()
 	require.NoError(t, err)

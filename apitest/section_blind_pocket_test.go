@@ -18,7 +18,7 @@ func TestSectionBlindPocketFeedsExtrude(t *testing.T) {
 	doc := decad.New()
 	cube := boxBodyAtZ(t, doc, 0, 0, 10, 10, 0, 10)
 	tool := boxBodyAtZ(t, doc, 3, 3, 7, 7, 6, 4)
-	pocketed, err := decad.Cut(t.Context(), cube, tool)
+	pocketed, err := decad.Cut(cube, tool).Do(t.Context())
 	require.NoError(t, err)
 
 	for _, tc := range []struct {
@@ -49,8 +49,8 @@ func TestSectionBlindPocketFeedsExtrude(t *testing.T) {
 		require.LessOrEqual(t, math.Abs(area.Value.Base()-tc.area), area.Bound.Base())
 		require.LessOrEqual(t, area.Bound.Base(), 1e-9)
 
-		child, extrudeErr := decad.Extrude(t.Context(), decad.New(), section, profiles[0],
-			decad.Distance{D: units.Millimeters(2), Dir: decad.Along})
+		child, extrudeErr := decad.Extrude(decad.New(), section, profiles[0],
+			decad.Distance{D: units.Millimeters(2), Dir: decad.Along}).Do(t.Context())
 		require.NoError(t, extrudeErr)
 		volume, volumeErr := child.Volume()
 		require.NoError(t, volumeErr)
@@ -70,7 +70,7 @@ func TestSectionBlindPocketRefusesLevelsOffSlabInteriors(t *testing.T) {
 	doc := decad.New()
 	cube := boxBodyAtZ(t, doc, 0, 0, 10, 10, 0, 10)
 	tool := boxBodyAtZ(t, doc, 3, 3, 7, 7, 6, 4)
-	pocketed, err := decad.Cut(t.Context(), cube, tool)
+	pocketed, err := decad.Cut(cube, tool).Do(t.Context())
 	require.NoError(t, err)
 	for _, z := range []float64{0, 6, 10, 12} {
 		frame, frameErr := r3.NewFrame(r3.Vec{Z: z}, r3.Vec{X: 1}, r3.Vec{Y: 1})
@@ -85,7 +85,7 @@ func blindPocketBody(t *testing.T) *decad.Body {
 	doc := decad.New()
 	cube := boxBodyAtZ(t, doc, 0, 0, 10, 10, 0, 10)
 	tool := boxBodyAtZ(t, doc, 3, 3, 7, 7, 6, 4)
-	pocketed, err := decad.Cut(t.Context(), cube, tool)
+	pocketed, err := decad.Cut(cube, tool).Do(t.Context())
 	require.NoError(t, err)
 	return pocketed
 }
@@ -117,7 +117,7 @@ func TestSectionStackedPrismGateRefusals(t *testing.T) {
 		t.Parallel()
 		move, err := r3.Translation(r3.Vec{X: 20, Y: 30, Z: 1})
 		require.NoError(t, err)
-		placed, err := decad.Transform(t.Context(), blindPocketBody(t), move)
+		placed, err := decad.Transform(blindPocketBody(t), move).Do(t.Context())
 		require.NoError(t, err)
 		f, err := r3.NewFrame(r3.Vec{X: 20, Y: 30, Z: 9}, r3.Vec{X: 1}, r3.Vec{Y: 1})
 		require.NoError(t, err)

@@ -42,7 +42,7 @@ func socketTool(t *testing.T, doc *decad.Document, world *sketch.World, d bool) 
 	}
 	require.NoError(t, solveSketch(t, s))
 	require.Len(t, s.Profiles(), 1)
-	b, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
+	b, err := decad.Extrude(doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(5), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	return b
 }
@@ -125,20 +125,20 @@ func TestChamferPlateAfterPatternSocketCut(t *testing.T) {
 			doc, world := decad.New(), sketch.NewWorld()
 			plate := roundedTrianglePlate(t, doc, world, plateOrbit, plateRadius)
 			socket := socketTool(t, doc, world, tc.d)
-			copies, err := decad.PatternCopies(t.Context(), socket, decad.CircularPattern{
+			copies, err := decad.PatternCopies(socket, decad.CircularPattern{
 				Center: r3.NewVec(0, 0, 0), Axis: r3.NewVec(0, 0, 1), Count: 3,
-			})
+			}).Do(t.Context())
 			require.NoError(t, err)
 			require.Len(t, copies, 2)
 			carrier := plate
 			if tc.join {
-				tool, err := decad.Union(t.Context(), socket, copies...)
+				tool, err := decad.Union(append([]*decad.Body{socket}, copies...)...).Do(t.Context())
 				require.NoError(t, err)
-				carrier, err = decad.Cut(t.Context(), plate, tool)
+				carrier, err = decad.Cut(plate, tool).Do(t.Context())
 				require.NoError(t, err)
 			} else {
 				for _, tool := range append([]*decad.Body{socket}, copies...) {
-					carrier, err = decad.Cut(t.Context(), carrier, tool)
+					carrier, err = decad.Cut(carrier, tool).Do(t.Context())
 					require.NoError(t, err)
 				}
 			}
@@ -155,7 +155,7 @@ func TestChamferPlateAfterPatternSocketCut(t *testing.T) {
 			}
 			q, n := heightsLoopEdges(t, carrier, rotated, 0)
 			require.Positive(t, n)
-			_, err = decad.Chamfer(t.Context(), carrier, q.Exactly(n), units.Millimeters(0.5))
+			_, err = decad.Chamfer(carrier, q.Exactly(n), units.Millimeters(0.5)).Do(t.Context())
 			require.ErrorIs(t, err, decad.ErrUnsupported)
 
 			// Both outlines in one chamfer: six edges on each cap.
@@ -163,7 +163,7 @@ func TestChamferPlateAfterPatternSocketCut(t *testing.T) {
 			q, n = heightsLoopEdges(t, carrier, outer, 0, 3)
 			require.Equal(t, 12, n)
 			faces, edges := len(carrier.Faces()), len(carrier.Edges())
-			out, err := decad.Chamfer(t.Context(), carrier, q.Exactly(n), units.Millimeters(0.5))
+			out, err := decad.Chamfer(carrier, q.Exactly(n), units.Millimeters(0.5)).Do(t.Context())
 			require.NoError(t, err)
 			requireChamferRemoved(t, carrier, out, 2*roundedPlateOutline())
 

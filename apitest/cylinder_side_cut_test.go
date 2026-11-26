@@ -38,7 +38,7 @@ func TestCutRegisteredPrismArc(t *testing.T) {
 		return nil
 	}
 	extrude := func(s *sketch.Sketch, h float64, dir decad.Direction) *decad.Body {
-		b, e := decad.Extrude(ctx, d, s, profile(s), decad.Distance{D: units.Millimeters(h), Dir: dir})
+		b, e := decad.Extrude(d, s, profile(s), decad.Distance{D: units.Millimeters(h), Dir: dir}).Do(ctx)
 		require.NoError(t, e)
 		return b
 	}
@@ -68,9 +68,9 @@ func TestCutRegisteredPrismArc(t *testing.T) {
 	padSketch := frame(r3.Vec{X: 8, Y: -.5}, x, z)
 	padSketch.CreateCircle(padSketch.Origin(), 2.5)
 	pad := extrude(padSketch, .75, decad.Against)
-	joined, e := decad.Union(ctx, plate, pad)
+	joined, e := decad.Union(plate, pad).Do(ctx)
 	require.NoError(t, e)
-	joined, e = decad.Chamfer(ctx, joined, decad.Edges(decad.OuterLoopOf(decad.CapStart(pad))).Exactly(1), units.Millimeters(.25))
+	joined, e = decad.Chamfer(joined, decad.Edges(decad.OuterLoopOf(decad.CapStart(pad))).Exactly(1), units.Millimeters(.25)).Do(ctx)
 	require.NoError(t, e)
 	section := func(y, r float64) (*sketch.Sketch, *sketch.Profile) {
 		s := frame(r3.Vec{X: 8 + width, Y: y}, x, z)
@@ -87,17 +87,17 @@ func TestCutRegisteredPrismArc(t *testing.T) {
 	}
 	fl, fp := section(-1.06, 2.74)
 	fh, fq := section(-.78, 3.02)
-	first, err := decad.Loft(ctx, d, fl, fp, fh, fq)
+	first, err := decad.Loft(d, fl, fp, fh, fq).Do(ctx)
 	require.NoError(t, err)
-	joined, err = decad.Cut(ctx, joined, first)
+	joined, err = decad.Cut(joined, first).Do(ctx)
 	require.NoError(t, err)
 	l, lp := section(-.63, 3.02)
 	h, hp := section(.06, 2.74)
-	tool, e := decad.Loft(ctx, d, l, lp, h, hp)
+	tool, e := decad.Loft(d, l, lp, h, hp).Do(ctx)
 	require.NoError(t, e)
 	before, e := joined.Tessellate(ctx, units.Millimeters(.5), decad.WithVerification(decad.VerifyAll))
 	require.NoError(t, e)
-	cut, e := decad.Cut(ctx, joined, tool)
+	cut, e := decad.Cut(joined, tool).Do(ctx)
 	require.NoError(t, e)
 	m, e := cut.Tessellate(ctx, units.Millimeters(.5), decad.WithVerification(decad.VerifyAll))
 	require.NoError(t, e)

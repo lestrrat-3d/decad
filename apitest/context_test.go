@@ -58,55 +58,93 @@ func TestContextOperationsRejectNilBeforeOperands(t *testing.T) {
 	}{
 		{"Document.Verify", func(ctx context.Context) error { _, err := doc.Verify(ctx); return err }},
 		{"Document.VerifyMotion", func(ctx context.Context) error { _, err := doc.VerifyMotion(ctx, nil, nil); return err }},
-		{"PatchProfile", func(ctx context.Context) error { _, err := decad.PatchProfile(ctx, doc, nil, nil); return err }},
-		{"Document.Loft", func(ctx context.Context) error { _, err := decad.Loft(ctx, doc, nil, nil, nil, nil); return err }},
-		{"LoftChain", func(ctx context.Context) error { _, err := decad.LoftChain(ctx, doc, nil, nil, nil, nil); return err }},
+		{"PatchProfile", func(ctx context.Context) error { _, err := decad.PatchProfile(doc, nil, nil).Do(ctx); return err }},
+		{"Document.Loft", func(ctx context.Context) error { _, err := decad.Loft(doc, nil, nil, nil, nil).Do(ctx); return err }},
+		{"LoftChain", func(ctx context.Context) error {
+			_, err := decad.LoftChain(doc, nil, nil, nil, nil).Do(ctx)
+			return err
+		}},
 		{"Sweep profile", func(ctx context.Context) error {
-			_, err := decad.Sweep(ctx, doc, nil, (*sketch.Profile)(nil), nil)
+			_, err := decad.Sweep(doc, nil, (*sketch.Profile)(nil), nil).Do(ctx)
 			return err
 		}},
 		{"Sweep chain", func(ctx context.Context) error {
-			_, err := decad.Sweep(ctx, doc, nil, (*sketch.Chain)(nil), nil)
+			_, err := decad.Sweep(doc, nil, (*sketch.Chain)(nil), nil).Do(ctx)
 			return err
 		}},
 		{"Extrude profile", func(ctx context.Context) error {
-			_, err := decad.Extrude(ctx, doc, nil, (*sketch.Profile)(nil), nil)
+			_, err := decad.Extrude(doc, nil, (*sketch.Profile)(nil), nil).Do(ctx)
 			return err
 		}},
 		{"Extrude chain", func(ctx context.Context) error {
-			_, err := decad.Extrude(ctx, doc, nil, (*sketch.Chain)(nil), nil)
+			_, err := decad.Extrude(doc, nil, (*sketch.Chain)(nil), nil).Do(ctx)
 			return err
 		}},
 		{"Revolve profile", func(ctx context.Context) error {
-			_, err := decad.Revolve(ctx, doc, nil, (*sketch.Profile)(nil), nil, nil)
+			_, err := decad.Revolve(doc, nil, (*sketch.Profile)(nil), nil, nil).Do(ctx)
 			return err
 		}},
 		{"Revolve chain", func(ctx context.Context) error {
-			_, err := decad.Revolve(ctx, doc, nil, (*sketch.Chain)(nil), nil, nil)
+			_, err := decad.Revolve(doc, nil, (*sketch.Chain)(nil), nil, nil).Do(ctx)
 			return err
 		}},
-		{"Split", func(ctx context.Context) error { _, err := decad.Split(ctx, nil, nil); return err }},
-		{"Transform", func(ctx context.Context) error { _, err := decad.Transform(ctx, body, r3.Transform{}); return err }},
-		{"Copy identity", func(ctx context.Context) error { _, err := decad.Copy(ctx, body); return err }},
+		{"Split", func(ctx context.Context) error { _, err := decad.Split(nil, nil).Do(ctx); return err }},
+		{"Transform", func(ctx context.Context) error { _, err := decad.Transform(body, r3.Transform{}).Do(ctx); return err }},
+		{"Copy identity", func(ctx context.Context) error { _, err := decad.Copy(body).Do(ctx); return err }},
 		{"Copy placement", func(ctx context.Context) error {
-			_, err := decad.Copy(ctx, body, decad.WithCopyPlacement(r3.Transform{}))
+			_, err := decad.Copy(body).Place(decad.CopyTransform{Transform: r3.Transform{}}).Do(ctx)
 			return err
 		}},
-		{"PatchEdges", func(ctx context.Context) error { _, err := decad.PatchEdges(ctx, body, nil); return err }},
-		{"Body.Fillet", func(ctx context.Context) error { _, err := decad.Fillet(ctx, body, nil, units.Value{}); return err }},
-		{"Body.Chamfer", func(ctx context.Context) error { _, err := decad.Chamfer(ctx, body, nil, units.Value{}); return err }},
-		{"Body.Shell", func(ctx context.Context) error { _, err := decad.Shell(ctx, body, nil, units.Value{}); return err }},
-		{"Thicken", func(ctx context.Context) error { _, err := decad.Thicken(ctx, body, units.Value{}); return err }},
-		{"Offset", func(ctx context.Context) error { _, err := decad.Offset(ctx, body, units.Value{}); return err }},
-		{"Unstitch", func(ctx context.Context) error { _, err := decad.Unstitch(ctx, body); return err }},
+		{"PatchEdges", func(ctx context.Context) error { _, err := decad.PatchEdges(body, nil).Do(ctx); return err }},
+		{"Body.Fillet", func(ctx context.Context) error { _, err := decad.Fillet(body, nil, units.Value{}).Do(ctx); return err }},
+		{"Body.Chamfer", func(ctx context.Context) error { _, err := decad.Chamfer(body, nil, units.Value{}).Do(ctx); return err }},
+		{"Body.Shell", func(ctx context.Context) error { _, err := decad.Shell(body, nil, units.Value{}).Do(ctx); return err }},
+		{"Body.FilletChord", func(ctx context.Context) error {
+			_, err := decad.FilletChord(body, nil, units.Value{}).Do(ctx)
+			return err
+		}},
+		{"Body.ChamferAngle", func(ctx context.Context) error {
+			_, err := decad.ChamferAngle(body, nil, units.Value{}, nil, units.Value{}).Do(ctx)
+			return err
+		}},
+		{"Body.ShellClosed", func(ctx context.Context) error {
+			_, err := decad.ShellClosed(body, units.Value{}).Do(ctx)
+			return err
+		}},
+		{"Body.Draft", func(ctx context.Context) error {
+			_, err := decad.Draft(body, nil, decad.NeutralFace{}, units.Value{}).Do(ctx)
+			return err
+		}},
+		{"Body.MoveFace", func(ctx context.Context) error {
+			_, err := decad.MoveFace(body, nil, units.Value{}).Do(ctx)
+			return err
+		}},
+		{"Body.ConeFromFace", func(ctx context.Context) error {
+			_, err := decad.ConeFromFace(body, nil, units.Value{}).Do(ctx)
+			return err
+		}},
+		{"Thicken", func(ctx context.Context) error { _, err := decad.Thicken(body, units.Value{}).Do(ctx); return err }},
+		{"Offset", func(ctx context.Context) error { _, err := decad.Offset(body, units.Value{}).Do(ctx); return err }},
+		{"Unstitch", func(ctx context.Context) error { _, err := decad.Unstitch(body).Do(ctx); return err }},
 		{"Body.Tessellate", func(ctx context.Context) error { _, err := body.Tessellate(ctx, units.Value{}); return err }},
-		{"Trim", func(ctx context.Context) error { _, err := decad.Trim(ctx, body, nil, 0); return err }},
-		{"Extend", func(ctx context.Context) error { _, err := decad.Extend(ctx, body, nil, nil); return err }},
-		{"Stitch", func(ctx context.Context) error { _, err := decad.Stitch(ctx); return err }},
-		{"PathPattern", func(ctx context.Context) error { _, err := decad.PathPattern(ctx, body, nil); return err }},
-		{"Union", func(ctx context.Context) error { _, err := decad.Union(ctx, nil, nil); return err }},
-		{"Cut", func(ctx context.Context) error { _, err := decad.Cut(ctx, nil, nil); return err }},
-		{"Intersect", func(ctx context.Context) error { _, err := decad.Intersect(ctx, nil, nil); return err }},
+		{"Trim", func(ctx context.Context) error { _, err := decad.Trim(body, nil, 0).Do(ctx); return err }},
+		{"Extend", func(ctx context.Context) error { _, err := decad.Extend(body, nil, nil).Do(ctx); return err }},
+		{"Stitch", func(ctx context.Context) error { _, err := decad.Stitch().Do(ctx); return err }},
+		{"PathPattern", func(ctx context.Context) error {
+			_, err := decad.PathPattern(body, nil, decad.PathCount{Count: 3}).Do(ctx)
+			return err
+		}},
+		{"Union", func(ctx context.Context) error { _, err := decad.Union(nil, nil).Do(ctx); return err }},
+		{"Cut", func(ctx context.Context) error { _, err := decad.Cut(nil, nil).Do(ctx); return err }},
+		{"Intersect", func(ctx context.Context) error { _, err := decad.Intersect(nil, nil).Do(ctx); return err }},
+		{"Refine", func(ctx context.Context) error {
+			_, err := decad.Refine(nil, units.Radians(1)).Do(ctx)
+			return err
+		}},
+		{"Union.RefineTo", func(ctx context.Context) error {
+			_, err := decad.Union(nil).RefineTo(units.Radians(1)).Do(ctx)
+			return err
+		}},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -146,9 +184,9 @@ func TestRevolveTypedNilSectionIsDegenerate(t *testing.T) {
 	s, _, axis := coneChainAtRadius(t, 0)
 	doc := decad.New()
 
-	_, err := decad.Revolve(t.Context(), doc, s, (*sketch.Profile)(nil), axis, decad.FullRevolution{})
+	_, err := decad.Revolve(doc, s, (*sketch.Profile)(nil), axis, decad.FullRevolution{}).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrDegenerate)
-	_, err = decad.Revolve(t.Context(), doc, s, (*sketch.Chain)(nil), axis, decad.FullRevolution{})
+	_, err = decad.Revolve(doc, s, (*sketch.Chain)(nil), axis, decad.FullRevolution{}).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrDegenerate)
 	require.Empty(t, doc.Bodies())
 }
@@ -180,10 +218,10 @@ func TestRevolveCanceledContextLeavesDocumentUnchanged(t *testing.T) {
 	profileAxis := decad.SketchLine{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 1, V: 0}}
 	tests := []documentBodyCall{
 		{"profile", func(ctx context.Context, doc *decad.Document) (*decad.Body, error) {
-			return decad.Revolve(ctx, doc, profileSketch, profile, profileAxis, decad.FullRevolution{})
+			return decad.Revolve(doc, profileSketch, profile, profileAxis, decad.FullRevolution{}).Do(ctx)
 		}},
 		{"chain", func(ctx context.Context, doc *decad.Document) (*decad.Body, error) {
-			return decad.Revolve(ctx, doc, chainSketch, chain, chainAxis, decad.FullRevolution{})
+			return decad.Revolve(doc, chainSketch, chain, chainAxis, decad.FullRevolution{}).Do(ctx)
 		}},
 	}
 	requireCancellationLeavesDocumentUnchanged(t, tests)
@@ -197,9 +235,9 @@ func TestExtrudeTypedNilSectionIsDegenerate(t *testing.T) {
 	doc := decad.New()
 	e := decad.Distance{D: units.Millimeters(5), Dir: decad.Along}
 
-	_, err := decad.Extrude(t.Context(), doc, s, (*sketch.Profile)(nil), e)
+	_, err := decad.Extrude(doc, s, (*sketch.Profile)(nil), e).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrDegenerate)
-	_, err = decad.Extrude(t.Context(), doc, s, (*sketch.Chain)(nil), e)
+	_, err = decad.Extrude(doc, s, (*sketch.Chain)(nil), e).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrDegenerate)
 	require.Empty(t, doc.Bodies())
 }
@@ -216,17 +254,16 @@ func TestExtrudeCanceledContextLeavesDocumentUnchanged(t *testing.T) {
 	e := decad.Distance{D: units.Millimeters(5), Dir: decad.Along}
 	tests := []documentBodyCall{
 		{"profile", func(ctx context.Context, doc *decad.Document) (*decad.Body, error) {
-			return decad.Extrude(ctx, doc, profileSketch, profile, e)
+			return decad.Extrude(doc, profileSketch, profile, e).Do(ctx)
 		}},
 		{"tapered profile", func(ctx context.Context, doc *decad.Document) (*decad.Body, error) {
-			return decad.Extrude(ctx, doc, profileSketch, profile, e, decad.WithTaper(units.Degrees(5)))
+			return decad.Extrude(doc, profileSketch, profile, e).Taper(units.Degrees(5)).Do(ctx)
 		}},
 		{"two-sided tapered profile", func(ctx context.Context, doc *decad.Document) (*decad.Body, error) {
-			return decad.Extrude(ctx, doc, profileSketch, profile, decad.Symmetric{D: units.Millimeters(5)},
-				decad.WithTaper(units.Degrees(5)))
+			return decad.Extrude(doc, profileSketch, profile, decad.Symmetric{D: units.Millimeters(5)}).Taper(units.Degrees(5)).Do(ctx)
 		}},
 		{"chain", func(ctx context.Context, doc *decad.Document) (*decad.Body, error) {
-			return decad.Extrude(ctx, doc, chainSketch, chain, e)
+			return decad.Extrude(doc, chainSketch, chain, e).Do(ctx)
 		}},
 	}
 	requireCancellationLeavesDocumentUnchanged(t, tests)

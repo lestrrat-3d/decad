@@ -30,7 +30,7 @@ import (
 //
 // Three calls build. A partial turn with both angular caps removed sweeps the
 // wall region over the receiver's own interval. A full turn under
-// WithNoOpenings sweeps it a whole turn into a closed hollow body: the cavity
+// ShellClosed sweeps it a whole turn into a closed hollow body: the cavity
 // wall is the offset's own swept surface, a void shell beside the outer one
 // (internal/revolveplan/build.go's fullRevolveShellsContext). A side opening — a connected
 // run of generated side faces removed, on a full turn or beside both removed
@@ -45,7 +45,7 @@ import (
 
 // Shell is Shell's revolve receiver, from reach §4's stage 4 on.
 // Stage 1 — the live receiver, the options, the magnitude and the selector —
-// has already run in Shell. removed is nil for a WithNoOpenings full turn. s
+// has already run in Shell. removed is nil for a ShellClosed full turn. s
 // is +1 inward, −1 outward.
 func Shell(ctx context.Context, env topo.Env, b *topo.Body, rp revolveplan.Payload,
 	startCap, endCap *topo.Face, removed []*topo.Face, s float64, t units.Value, tmm, tDelta, tol float64) (*topo.Body, error) {

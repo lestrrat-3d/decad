@@ -119,11 +119,11 @@ func makeBox(t *testing.T, doc *decad.Document, a abox) *decad.Body {
 func runBool(ctx context.Context, op boolOp, a, b *decad.Body) (*decad.Body, error) {
 	switch op {
 	case boolUnion:
-		return decad.Union(ctx, a, b)
+		return decad.Union(a, b).Do(ctx)
 	case boolIntersect:
-		return decad.Intersect(ctx, a, b)
+		return decad.Intersect(a, b).Do(ctx)
 	default:
-		return decad.Cut(ctx, a, b)
+		return decad.Cut(a, b).Do(ctx)
 	}
 }
 
@@ -286,9 +286,9 @@ func TestBooleanBoundSoundnessRotated(t *testing.T) {
 		for _, op := range ops {
 			cfg := abConfig{op, a, b}
 			doc := decad.New()
-			ba, err := decad.Transform(t.Context(), makeBox(t, doc, a), xform)
+			ba, err := decad.Transform(makeBox(t, doc, a), xform).Do(t.Context())
 			require.NoError(t, err)
-			bb, err := decad.Transform(t.Context(), makeBox(t, doc, b), xform)
+			bb, err := decad.Transform(makeBox(t, doc, b), xform).Do(t.Context())
 			require.NoError(t, err)
 
 			got, err := runBool(t.Context(), op, ba, bb)
@@ -323,13 +323,13 @@ func TestBooleanAlgebraicIdentities(t *testing.T) {
 		for range 40 {
 			a, b := cleanTransversalPair(rng)
 			d1 := decad.New()
-			ab, err := decad.Union(t.Context(), makeBox(t, d1, a), makeBox(t, d1, b))
+			ab, err := decad.Union(makeBox(t, d1, a), makeBox(t, d1, b)).Do(t.Context())
 			if err != nil {
 				require.True(t, isBoolSentinel(err))
 				continue
 			}
 			d2 := decad.New()
-			ba, err := decad.Union(t.Context(), makeBox(t, d2, b), makeBox(t, d2, a))
+			ba, err := decad.Union(makeBox(t, d2, b), makeBox(t, d2, a)).Do(t.Context())
 			if err != nil {
 				require.True(t, isBoolSentinel(err))
 				continue
@@ -359,7 +359,7 @@ func TestBooleanAlgebraicIdentities(t *testing.T) {
 			b := abox{r3.NewVec(bx0, 0, 0), r3.NewVec(bx0+float64(3+rng.Intn(6)), float64(3+rng.Intn(6)), float64(3+rng.Intn(6)))}
 
 			doc := decad.New()
-			got, err := decad.Union(t.Context(), makeBox(t, doc, a), makeBox(t, doc, b))
+			got, err := decad.Union(makeBox(t, doc, a), makeBox(t, doc, b)).Do(t.Context())
 			require.NoError(t, err)
 			require.Len(t, got.Lumps(), 2, `disjoint operands union to two lumps`)
 			vol, err := got.Volume()
@@ -375,7 +375,7 @@ func TestBooleanAlgebraicIdentities(t *testing.T) {
 		for range 40 {
 			a, b := cleanTransversalPair(rng)
 			doc := decad.New()
-			got, err := decad.Intersect(t.Context(), makeBox(t, doc, a), makeBox(t, doc, b))
+			got, err := decad.Intersect(makeBox(t, doc, a), makeBox(t, doc, b)).Do(t.Context())
 			if err != nil {
 				require.True(t, isBoolSentinel(err))
 				continue
@@ -485,7 +485,7 @@ func TestBooleanRefusalSoundnessTangentCylinder(t *testing.T) {
 		doc := decad.New(decad.ExactOnly())
 		plate := boxBody(t, doc, 0, 0, 20, 20, 8)
 		cyl := makeCyl(doc, 20+r, 10, r)
-		_, err := decad.Union(t.Context(), plate, cyl)
+		_, err := decad.Union(plate, cyl).Do(t.Context())
 		require.ErrorIsf(t, err, decad.ErrUnsupported,
 			`an exact tangency must be refused, got %v (r=%v)`, err, r)
 		var be *decad.BooleanError
@@ -498,7 +498,7 @@ func TestBooleanRefusalSoundnessTangentCylinder(t *testing.T) {
 		doc2 := decad.New(decad.ExactOnly())
 		plate2 := boxBody(t, doc2, 0, 0, 20, 20, 8)
 		apart := makeCyl(doc2, 20+r+gap, 10, r)
-		got, err := decad.Union(t.Context(), plate2, apart)
+		got, err := decad.Union(plate2, apart).Do(t.Context())
 		require.NoErrorf(t, err, `a clearly separated pair is decidable (r=%v gap=%v)`, r, gap)
 		require.Len(t, got.Lumps(), 2)
 		requireBodyWatertight(t, got)
@@ -509,7 +509,7 @@ func TestBooleanRefusalSoundnessTangentCylinder(t *testing.T) {
 		doc3 := decad.New(decad.ExactOnly())
 		plate3 := boxBody(t, doc3, 0, 0, 20, 20, 8)
 		into := makeCyl(doc3, 20-over, 10, r)
-		got3, err := decad.Union(t.Context(), plate3, into)
+		got3, err := decad.Union(plate3, into).Do(t.Context())
 		require.NoErrorf(t, err, `a clearly overlapping pair is decidable (r=%v over=%v)`, r, over)
 		require.Len(t, got3.Lumps(), 1)
 		requireBodyWatertight(t, got3)
@@ -542,7 +542,7 @@ func plateWithHoleBody(t *testing.T, doc *decad.Document, half, rHole, h float64
 		}
 	}
 	require.NotNil(t, prof, `the plate-with-hole region should exist`)
-	body, err := decad.Extrude(t.Context(), doc, s, prof, decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
+	body, err := decad.Extrude(doc, s, prof, decad.Distance{D: units.Millimeters(h), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -597,7 +597,7 @@ func TestBooleanRefusalConcaveHoleSpuriousContact(t *testing.T) {
 		require.NoError(t, err)
 		xform, err := rot.Then(tr)
 		require.NoError(t, err)
-		moved, err := decad.Transform(t.Context(), body, xform)
+		moved, err := decad.Transform(body, xform).Do(t.Context())
 		require.NoError(t, err)
 		return moved
 	}
@@ -613,7 +613,7 @@ func TestBooleanRefusalConcaveHoleSpuriousContact(t *testing.T) {
 		doc := decad.New()
 		plate := plateWithHoleBody(t, doc, half, rHole, h)
 		p := plug(doc, rHole-gap, maxD/2)
-		_, err := decad.Union(t.Context(), plate, p)
+		_, err := decad.Union(plate, p).Do(t.Context())
 		require.Truef(t, errors.Is(err, decad.ErrUnsupported),
 			`a shallow held meet of truly disjoint surfaces must be refused, got %v (gap=%v sagitta=%v)`, err, gap, sagitta)
 		require.Len(t, doc.Bodies(), 2, `a refused boolean leaves both operands live`)
@@ -626,7 +626,7 @@ func TestBooleanRefusalConcaveHoleSpuriousContact(t *testing.T) {
 		doc := decad.New()
 		plate := plateWithHoleBody(t, doc, half, rHole, h)
 		p := plug(doc, rHole-1.0, 0)
-		got, err := decad.Union(t.Context(), plate, p)
+		got, err := decad.Union(plate, p).Do(t.Context())
 		require.NoError(t, err, `a plug clear of the hole wall is a decidable disjoint union`)
 		require.Len(t, got.Lumps(), 2, `a truly disjoint plug and plate stay two lumps`)
 		requireBodyWatertight(t, got)
@@ -639,7 +639,7 @@ func TestBooleanRefusalConcaveHoleSpuriousContact(t *testing.T) {
 		doc := decad.New()
 		plate := plateWithHoleBody(t, doc, half, rHole, h)
 		p := plug(doc, rHole+2.0, 0)
-		got, err := decad.Union(t.Context(), plate, p)
+		got, err := decad.Union(plate, p).Do(t.Context())
 		require.NoError(t, err, `a plug biting into the plate is a decidable overlap`)
 		require.Len(t, got.Lumps(), 1, `a plug overlapping the plate fuses into one lump`)
 		requireBodyWatertight(t, got)

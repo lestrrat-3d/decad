@@ -58,8 +58,8 @@ s.Solve(ctx)
 
 // Extrude it 10 mm, then verify the document.
 doc := decad.New()
-body, _ := decad.Extrude(ctx, doc, s, s.Profiles()[0],
-	decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+body, _ := decad.Extrude(doc, s, s.Profiles()[0],
+	decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(ctx)
 report, _ := doc.Verify(ctx)
 vol, _ := body.Volume()
 
