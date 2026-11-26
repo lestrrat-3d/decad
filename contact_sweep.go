@@ -145,6 +145,7 @@ func (d *Document) SweepPair(ctx context.Context, a, b *Body, pathA, pathB PairP
 	if d == nil || ctx == nil {
 		return nil, fmt.Errorf("%w: nil document or context", ErrDegenerate)
 	}
+	ctx = d.queryContext(ctx)
 	if err := d.requireLive(a); err != nil {
 		return nil, err
 	}
