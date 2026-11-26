@@ -211,12 +211,16 @@ func TestFeatures(t *testing.T) {
 		})
 	}
 	for name, call := range map[string]string{
-		"spread options":            "decad.Extrude(ctx, d, s, p, e, opts...)",
-		"option variable":           "decad.Revolve(ctx, d, s, p, ax, a, opt)",
-		"cut extrude surface":       "decad.CutExtrude(ctx, b, s, ps, e, decad.WithSurfaceResult())",
-		"option with wrong arity":   "decad.Extrude(ctx, d, s, p, e, decad.WithTaper())",
-		"loft faces option":         "decad.LoftFaces(ctx, faces, opt)",
-		"loft faces spread options": "decad.LoftFaces(ctx, faces, opts...)",
+		"spread options":                       "decad.Extrude(ctx, d, s, p, e, opts...)",
+		"option variable":                      "decad.Revolve(ctx, d, s, p, ax, a, opt)",
+		"cut extrude surface":                  "decad.CutExtrude(ctx, b, s, ps, e, decad.WithSurfaceResult())",
+		"option with wrong arity":              "decad.Extrude(ctx, d, s, p, e, decad.WithTaper())",
+		"spread tail on a fixed option":        "decad.Extrude(ctx, d, s, p, e, decad.WithTaper(xs...))",
+		"spread tail on a no-argument option":  "decad.Revolve(ctx, d, s, p, ax, a, decad.WithSurfaceResult(xs...))",
+		"spread tail on a two-argument option": "decad.Loft(ctx, d, s0, p0, s1, p1, decad.WithLoftSplits(xs...))",
+		"spread tail on the cone option":       "decad.LoftFaces(ctx, faces, decad.WithConeTangentEnd(xs...))",
+		"loft faces option":                    "decad.LoftFaces(ctx, faces, opt)",
+		"loft faces spread options":            "decad.LoftFaces(ctx, faces, opts...)",
 	} {
 		t.Run("reported "+name, func(t *testing.T) {
 			in := head + "\t_, _ = " + call + "\n}\n"

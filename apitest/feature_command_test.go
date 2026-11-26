@@ -15,11 +15,20 @@ import (
 
 // featureCommand is one sketch-fed feature command built over a fresh fixture
 // whose result is known. check asserts the computed geometry of the result.
+//
+// sweep and stride tune the mid-build cancellation sweep only
+// (TestFeatureCommandsReturnMidBuildCancellationByIdentity). sweep, when set,
+// builds a smaller fixture on the same build route once and returns a function
+// that makes a fresh command over it, so a canceled run, which leaves the
+// document unchanged, costs one command and no fixture. stride moves the cancel
+// that many checks later per run, where one check at a time would cost minutes.
 type featureCommand struct {
-	name  string
-	kind  decad.OperationKind
-	build func(t *testing.T) (do func(context.Context) (*decad.Body, error), doc *decad.Document)
-	check func(t *testing.T, got *decad.Body)
+	name   string
+	kind   decad.OperationKind
+	build  func(t *testing.T) (do func(context.Context) (*decad.Body, error), doc *decad.Document)
+	check  func(t *testing.T, got *decad.Body)
+	sweep  func(t *testing.T) (next func() func(context.Context) (*decad.Body, error), doc *decad.Document)
+	stride int64
 }
 
 func requireFeatureVolume(t *testing.T, b *decad.Body, want float64) {
@@ -53,11 +62,19 @@ func featureCommands() []featureCommand {
 				return decad.Sweep(doc, s, p, sweepLinePath(t)).Do, doc
 			},
 			check: func(t *testing.T, got *decad.Body) { requireFeatureVolume(t, got, 100*60*10) }},
-		{name: "Coil", kind: decad.OperationCoil,
+		{name: "Coil", kind: decad.OperationCoil, stride: 145,
 			build: func(t *testing.T) (func(context.Context) (*decad.Body, error), *decad.Document) {
 				s, p := coilSketch(t, [][2]float64{{2, 0}, {3, 0}, {3, 1}, {2, 1}})
 				doc := decad.New()
 				return decad.Coil(doc, s, p, coilAxis(), mm(1.5), units.Scalar(2)).Do, doc
+			},
+			// One turn polls about half as often as two on the same route.
+			sweep: func(t *testing.T) (func() func(context.Context) (*decad.Body, error), *decad.Document) {
+				s, p := coilSketch(t, [][2]float64{{2, 0}, {3, 0}, {3, 1}, {2, 1}})
+				doc := decad.New()
+				return func() func(context.Context) (*decad.Body, error) {
+					return decad.Coil(doc, s, p, coilAxis(), mm(1.5), units.Scalar(1)).Do
+				}, doc
 			},
 			check: func(t *testing.T, got *decad.Body) { requireFeatureVolume(t, got, 10*math.Pi) }},
 		{name: "Loft", kind: decad.OperationLoft,
@@ -94,6 +111,8 @@ func featureCommands() []featureCommand {
 				return decad.LoftSections(doc, sections[:]...).Do, doc
 			},
 			check: func(t *testing.T, got *decad.Body) { requireFeatureVolume(t, got, 20*20*10) }},
+		loftFacesFeature(),
+		loftFacesToConeFeature(),
 		{name: "PatchProfile", kind: decad.OperationPatchProfile,
 			build: func(t *testing.T) (func(context.Context) (*decad.Body, error), *decad.Document) {
 				s, p := plateSketch(t)
@@ -106,21 +125,21 @@ func featureCommands() []featureCommand {
 				require.NoError(t, err)
 				require.InDelta(t, 100*60, area.Value.Base(), area.Bound.Base()+1e-6)
 			}},
-		{name: "Emboss", kind: decad.OperationEmboss,
+		{name: "Emboss", kind: decad.OperationEmboss, stride: 7,
 			build: func(t *testing.T) (func(context.Context) (*decad.Body, error), *decad.Document) {
 				doc, plate := embossPlate(t)
 				s, profiles := embossSketch(t, 10, [4]float64{10, 10, 20, 16})
 				return decad.Emboss(plate, s, profiles, embossFace(true, plate), decad.EmbossRaised, mm(2)).Do, doc
 			},
 			check: func(t *testing.T, got *decad.Body) { requireFeatureVolume(t, got, embossPlateVolume+10*6*2) }},
-		{name: "WebPath", kind: decad.OperationWeb,
+		{name: "WebPath", kind: decad.OperationWeb, stride: 13,
 			build: func(t *testing.T) (func(context.Context) (*decad.Body, error), *decad.Document) {
 				doc, part := ribPart(t)
 				s, lines := ribSketch(t, [4]float64{3, 20, 37, 20})
 				return decad.WebPath(part, s, lines, mm(2), decad.Distance{D: mm(11), Dir: decad.Along}).Do, doc
 			},
 			check: func(t *testing.T, got *decad.Body) { requireFeatureVolume(t, got, ribPartVolume+30*2*10) }},
-		{name: "CutExtrude", kind: decad.OperationCutExtrude,
+		{name: "CutExtrude", kind: decad.OperationCutExtrude, stride: 7,
 			build: func(t *testing.T) (func(context.Context) (*decad.Body, error), *decad.Document) {
 				doc := decad.New()
 				plate := boxBody(t, doc, -20, -20, 20, 20, 5)
@@ -128,7 +147,7 @@ func featureCommands() []featureCommand {
 				return decad.CutExtrude(plate, s, s.Profiles(), decad.Distance{D: mm(3), Dir: decad.Along}).Do, doc
 			},
 			check: func(t *testing.T, got *decad.Body) { requireFeatureVolume(t, got, 40*40*5-4*4*3) }},
-		{name: "CutRevolve", kind: decad.OperationCutRevolve,
+		{name: "CutRevolve", kind: decad.OperationCutRevolve, stride: 172,
 			build: func(t *testing.T) (func(context.Context) (*decad.Body, error), *decad.Document) {
 				doc := decad.New()
 				plate := boxBody(t, doc, -20, -20, 20, 20, 5)
@@ -136,8 +155,73 @@ func featureCommands() []featureCommand {
 				axis := decad.SketchLine{End: decad.Point2{V: 1}}
 				return decad.CutRevolve(plate, s, s.Profiles(), axis, decad.FullRevolution{}).Do, doc
 			},
+			// A narrower groove on the same full-revolution route.
+			sweep: func(t *testing.T) (func() func(context.Context) (*decad.Body, error), *decad.Document) {
+				doc := decad.New()
+				plate := boxBody(t, doc, -20, -20, 20, 20, 5)
+				s := cutProfileSketch(t, [4]float64{3, 1, 4, 2})
+				axis := decad.SketchLine{End: decad.Point2{V: 1}}
+				return func() func(context.Context) (*decad.Body, error) {
+					return decad.CutRevolve(plate, s, s.Profiles(), axis, decad.FullRevolution{}).Do
+				}, doc
+			},
 			check: func(t *testing.T, got *decad.Body) { requireFeatureVolume(t, got, 40*40*5-16*math.Pi) }},
 	}
+}
+
+// loftFacesFeature is LoftFaces through the toe cap and the heel caps of two
+// slabs of one split point loft, whose volume is the sum of the slabs'.
+func loftFacesFeature() featureCommand {
+	var want, allowance float64 // set by build and read by check on one goroutine.
+	return featureCommand{name: "LoftFaces", kind: decad.OperationLoftFaces, stride: 27,
+		build: func(t *testing.T) (func(context.Context) (*decad.Body, error), *decad.Document) {
+			doc := decad.New()
+			kept := splitSlabs(t, doc)
+			want, allowance = 0, 0
+			for _, slab := range kept {
+				v, err := slab.Volume()
+				require.NoError(t, err)
+				want += v.Value.Base()
+				allowance += v.Bound.Base()
+			}
+			return decad.LoftFaces(slabLoftSections(t, kept)).Do, doc
+		},
+		sweep: func(t *testing.T) (func() func(context.Context) (*decad.Body, error), *decad.Document) {
+			doc := decad.New()
+			sections := slabLoftSections(t, splitSlabs(t, doc))
+			return func() func(context.Context) (*decad.Body, error) { return decad.LoftFaces(sections).Do }, doc
+		},
+		check: func(t *testing.T, got *decad.Body) {
+			v, err := got.Volume()
+			require.NoError(t, err)
+			require.Positive(t, want)
+			require.InDelta(t, want, v.Value.Base(), v.Bound.Base()+allowance+1e-9)
+		}}
+}
+
+// loftFacesToConeFeature is LoftFacesToCone over a slab of a pointed solid and
+// a cone tangent to the slab's source plane at its apex.
+func loftFacesToConeFeature() featureCommand {
+	return featureCommand{name: "LoftFacesToCone", kind: decad.OperationLoftFaces, stride: 9,
+		build: func(t *testing.T) (func(context.Context) (*decad.Body, error), *decad.Document) {
+			doc := decad.New()
+			f := newConeTangentLoft(t, doc)
+			return decad.LoftFacesToCone([]*decad.Face{f.toe, f.heel}, f.cone, f.radial).Do, doc
+		},
+		sweep: func(t *testing.T) (func() func(context.Context) (*decad.Body, error), *decad.Document) {
+			doc := decad.New()
+			f := newConeTangentLoft(t, doc)
+			return func() func(context.Context) (*decad.Body, error) {
+				return decad.LoftFacesToCone([]*decad.Face{f.toe, f.heel}, f.cone, f.radial).Do
+			}, doc
+		},
+		check: func(t *testing.T, got *decad.Body) {
+			require.True(t, got.IsSolid())
+			// examples/loft_faces_cone_tangent_example_test.go prints this fixture's volume, 0.0033 mm^3.
+			v, err := got.Volume()
+			require.NoError(t, err)
+			require.InDelta(t, 0.0033, v.Value.Base(), v.Bound.Base()+5e-5)
+		}}
 }
 
 // revolveRectangle is the rectangle (0, 5)-(10, 15) of the XY plane, which a
@@ -221,21 +305,25 @@ func TestFeatureCommandsReturnCancellationByIdentity(t *testing.T) {
 
 // A cancel that lands inside the build returns context.Canceled by identity,
 // not a sentinel wrapping it (agent-docs/command-api-design.md section 3). The
-// sweep moves the cancel one check later each run until the command finishes.
-//
-// Coil, CutRevolve, WebPath, Emboss and CutExtrude poll the context so often that moving the cancel one
-// check at a time would take minutes, so they move it by a stride; the sweep
-// still ends at the first run that succeeds.
+// sweep moves the cancel one check later each run until the command finishes,
+// or by the member's stride where its build polls so often that one check at a
+// time would cost minutes (agent-docs/command-api-design.md section 14). The
+// sweep ends at the first run that succeeds. A member with a sweep fixture
+// reuses it across the canceled runs, each of which leaves the document unchanged.
 func TestFeatureCommandsReturnMidBuildCancellationByIdentity(t *testing.T) {
 	t.Parallel()
 	const maxChecks = 6000
-	stride := map[string]int64{"Coil": 61, "CutRevolve": 61, "WebPath": 13, "Emboss": 7, "CutExtrude": 7}
 	for _, tc := range featureCommands() {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			step := max(stride[tc.name], 1)
+			step := max(tc.stride, 1)
+			fresh := func() (func(context.Context) (*decad.Body, error), *decad.Document) { return tc.build(t) }
+			if tc.sweep != nil {
+				next, fixture := tc.sweep(t)
+				fresh = func() (func(context.Context) (*decad.Body, error), *decad.Document) { return next(), fixture }
+			}
 			for n := int64(0); n < maxChecks; n += step {
-				do, doc := tc.build(t)
+				do, doc := fresh()
 				before := doc.Bodies()
 				got, err := do(newCancelAfter(t.Context(), n))
 				if err == nil {
@@ -314,10 +402,29 @@ func TestFeatureConstructorsRecordNilOperands(t *testing.T) {
 	t.Run("nil context first", func(t *testing.T) {
 		t.Parallel()
 		var nilCtx context.Context
-		_, err := decad.Extrude(nilDoc, s, p, ext).Do(nilCtx)
-		require.ErrorIs(t, err, decad.ErrDegenerate)
-		diagnostics := requireOperationKind(t, err, decad.OperationExtrude)
-		require.Empty(t, diagnostics[0].Subject.Name, "a nil context is no fault of the document")
+		for _, tc := range []struct {
+			name string
+			kind decad.OperationKind
+			do   func(context.Context) (*decad.Body, error)
+		}{
+			{"Extrude", decad.OperationExtrude, decad.Extrude(nilDoc, s, p, ext).Do},
+			{"Coil", decad.OperationCoil,
+				decad.Coil(doc, nilSketch, p, coilAxis(), units.Millimeters(1), units.Scalar(1)).Do},
+			{"LoftFromPoint", decad.OperationLoftFromPoint, decad.LoftFromPoint(doc, r3.Vec{}, s, nilProfile).Do},
+			{"LoftSections", decad.OperationLoftSections, decad.LoftSections(nilDoc).Do},
+			{"LoftFaces", decad.OperationLoftFaces, decad.LoftFaces(nil).Do},
+			{"Emboss", decad.OperationEmboss,
+				decad.Emboss(nilBody, s, nil, nil, decad.EmbossRaised, units.Millimeters(1)).Do},
+			{"WebPath", decad.OperationWeb, decad.WebPath(nilBody, s, nil, units.Millimeters(1), ext).Do},
+			{"CutExtrude", decad.OperationCutExtrude, decad.CutExtrude(nilBody, s, nil, ext).Do},
+			{"CutRevolve", decad.OperationCutRevolve,
+				decad.CutRevolve(nilBody, s, nil, decad.SketchLine{}, decad.FullRevolution{}).Do},
+		} {
+			_, err := tc.do(nilCtx)
+			require.ErrorIs(t, err, decad.ErrDegenerate, tc.name)
+			diagnostics := requireOperationKind(t, err, tc.kind)
+			require.Empty(t, diagnostics[0].Subject.Name, "%s: a nil context is no fault of an operand", tc.name)
+		}
 	})
 	t.Run("constructor fault before method fault", func(t *testing.T) {
 		t.Parallel()
@@ -329,9 +436,8 @@ func TestFeatureConstructorsRecordNilOperands(t *testing.T) {
 	})
 }
 
-// A cancel in a command whose constructor recorded a fault is not reported
-// ahead of that fault, and a recorded fault is refused ahead of every gate that
-// reads document state.
+// A command built on a body that an earlier command retired reports
+// ErrRetiredBody ahead of the fault a stored method value carries.
 func TestFeatureCommandsRefuseRetiredBodiesFirst(t *testing.T) {
 	t.Parallel()
 	mm := units.Millimeters
@@ -363,8 +469,8 @@ func TestFeatureCommandsRefuseRetiredBodiesFirst(t *testing.T) {
 	require.Equal(t, []*decad.Body{cut}, cutDoc.Bodies())
 }
 
-// Each stored method fault is refused at the gate where the old option decode
-// sat, relative to the gates around it, and names its method as the subject.
+// Each stored method fault is refused at its documented gate,
+// relative to the gates around it, and names its method as the subject.
 func TestFeatureCommandsRefuseMethodFaultsAtTheirGate(t *testing.T) {
 	t.Parallel()
 	mm := units.Millimeters
@@ -535,12 +641,21 @@ func TestFeatureCommandsCopyTheirSlices(t *testing.T) {
 	t.Run("LoftFaces sections", func(t *testing.T) {
 		t.Parallel()
 		doc := decad.New()
-		start, end := splitSlabCaps(t, doc)
-		sections := []*decad.Face{start, end}
+		kept := splitSlabs(t, doc)
+		sections := slabLoftSections(t, kept)
 		cmd := decad.LoftFaces(sections)
 		sections[0] = nil
-		_, err := cmd.Do(t.Context())
-		require.NotErrorIs(t, err, decad.ErrDegenerate, "the copy still holds the first cap")
+		got, err := cmd.Do(t.Context())
+		require.NoError(t, err, "the copy still holds the first cap")
+		want := 0.0
+		for _, slab := range kept {
+			v, err := slab.Volume()
+			require.NoError(t, err)
+			want += v.Value.Base()
+		}
+		v, err := got.Volume()
+		require.NoError(t, err)
+		require.InDelta(t, want, v.Value.Base(), v.Bound.Base()+1e-6*want)
 	})
 	t.Run("Loft alignment and splits", func(t *testing.T) {
 		t.Parallel()

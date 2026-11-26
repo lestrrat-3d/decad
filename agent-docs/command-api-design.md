@@ -108,7 +108,7 @@ command's unexported implementation owns steps 4–6.
 |---|---|
 | A1 | **Constructors and methods only store copied values.** They never read document state, body liveness, a profile's staleness, `ctx`, or another argument. |
 | A2 | A slice argument is copied with `slices.Clone` at the call. A variadic slot is copied too, so a caller's later write to its slice changes nothing. |
-| A3 | A selector query is deep-copied at the call, branch by branch, as `ChamferCommand.Asymmetric` copies its reference (`modify_options.go`, `copyFaceQuery` in `selector.go`): `Or`, `Exactly` and `AtLeast` change a query in place (`selector.go`). A selector that is not a decad query is stored as given; the selector gate refuses it at `Do` without calling it. A sealed argument that holds a selector is copied at the call with that selector deep-copied: `NeutralFace.Face` inside the `NeutralPlane` of `Draft` (a `NeutralFace` value or a non-nil `*NeutralFace`), and the same for each later argument that holds one (`ToFace` and the angular stops inside an extent, `MirrorFace`, a spec struct). |
+| A3 | A selector query is deep-copied at the call, branch by branch, as `ChamferCommand.Asymmetric` copies its reference (`modify_options.go`, `copyFaceQuery` in `selector.go`): `Or`, `Exactly` and `AtLeast` change a query in place (`selector.go`). A selector that is not a decad query is stored as given; the selector gate refuses it at `Do` without calling it. A sealed argument that holds a selector is copied at the call with that selector deep-copied: `NeutralFace.Face` inside the `NeutralPlane` of `Draft` (a `NeutralFace` value or a non-nil `*NeutralFace`), and the same for each later argument that holds one (`ToFace` and the angular stops inside an extent, `MirrorFace`, a spec struct). The pattern is one copy helper per sealed family, named `copy<Type>` and called by the constructor: `copyExtent` and `copyAngularExtent` (`extent.go`) and `copyAxis` (`revolve.go`) copy the selectors in an extent, an angular extent and an `EdgeAxis`. Stack PR 5 adds the helper for `MirrorFace`, and stack PR 6 one for each spec struct that holds a selector (`HoleSpec.Face` and the stops). |
 | A4 | Bodies, sketches, profiles, chains, paths and meshes are stored as pointers. Liveness, foreign-document, stale-profile and selector-resolution checks run at `Do` against the live document (`agent-docs/modify-design.md` §4 order). A profile is never snapshotted at build time. |
 | A5 | **A constructor or method records a fault only when both hold.** Its own argument shows the fault without reading anything else (A1), and the operation's documented gate order reports that fault ahead of every check that reads document state, liveness, `ctx.Err()` or another argument. Example: `Union` with fewer than two bodies is recorded, because `Union` refuses the count right after the nil-ctx check today. |
 | A6 | Every other invalid value is stored and refused by the operation's own gate at `Do`, in today's position. Example: a negative `Fillet` radius is stored, and S15 refuses it after the S17 liveness gate. |
@@ -171,7 +171,7 @@ serves Fillet and Chamfer, and `MatchingFaces` serves Cut and Intersect.
   result value, and a command with several results passes a struct and unpacks it.
 - **There is no shared `Command` interface.** Nothing needs one, and one would force a wrapper type per result.
 - **Every error from `Do` except cancellation is tagged with the command's own `OperationKind`.** This covers the
-  nil-ctx error, which `LoftFaces` and `Emboss` leave untagged today. `PathPattern`
+  nil-ctx error. `PathPattern`
   tags `OperationCopy` and `Arrange` tags `OperationTransform` today, and their PRs keep those kinds, since
   `OperationKind` gains no constant in this design.
 - **A recorded fault names its subject (A8) in `OperationSubject.Name`.** A gate that refuses a stored method
@@ -240,9 +240,13 @@ them (api-design §2). `PathPattern` and `Arrange` do not meet this today: `Path
 - **A root composite calls the unexported implementation, never a public command.** `hole.go`, `infill.go`,
   `pattern.go`, `path_pattern.go`, `arrange.go`, `fillet_chord.go` and `chamfer_angle.go` call `cut`, `union`,
   `copyBody` and the like. A composite allocates and consumes no command.
-- **A composite may tag the implementation's error with that operation's kind itself.** `infill.go` tags the
-  errors of `union` and `intersect` with `OperationUnion` and `OperationIntersect`, so its nested diagnostics name
-  the operation that failed.
+- **A composite may tag the implementation's error with that operation's kind itself, but the outermost command's
+  kind wins.** `operationError` re-tags every nested non-selection diagnostic with the kind it is given, and the
+  public `Do` applies it once with its own kind. A composite's own tag therefore decides a diagnostic's kind only for
+  a caller inside the root that applies no outer tag. Selection diagnostics (`OperationSelectEdges`,
+  `OperationSelectFaces`) keep their own kinds. This is the accepted behaviour for composites: `Emboss` reports its
+  nested `Union`, `Cut` and rim-fillet refusals as `OperationEmboss`, and `Infill` reports its nested `Union`,
+  `Intersect` and `Shell` refusals as `OperationInfill` once stack PR 6 converts it (§12).
 - **The rewrite tool never rewrites a root production file.** It reports a bare operation call in a non-test root
   file, and the author moves it onto the implementation by hand.
 - The implementation returns untagged errors. Only the public `Do` applies `operationError`, once.
@@ -253,6 +257,10 @@ them (api-design §2). `PathPattern` and `Arrange` do not meet this today: `Path
   command's `run` sets the method name. A composite that calls the implementation with a value it computed sets the
   name of the constructor argument that value comes from, or leaves the subject empty, so a diagnostic never names
   a method the composite's own command does not have (`ChamferAngle` names `d`, not `Asymmetric`).
+- **A stored method value's fault is named in one of two ways.** Settings that the implementation takes carry the
+  subject next to the value and its error (`extrudeSettings.taperSubject`), or the folding code returns a typed
+  error that carries the method name and `Do` turns it into the subject (`featureoption.SweepFaultError`, which
+  `foldSweepInput` converts with `subjectError`). Either way the diagnostic names the method the caller used.
 - The implementation takes a non-nil `ctx`; `Do` refused a nil one.
 
 ## 12. Family verdicts
@@ -282,12 +290,14 @@ name its methods and special rules.
   constructors (N8, §6). A section constructor records a nil document and a nil sketch, section or path (A5),
   and each `Do` of a profile-or-chain section refuses a chain's `SurfaceResult` and `Taper` at the seam gate's
   position. `Sweep.Twist` and `Sweep.SectionScale` store their validation errors, and the count of factors
-  against the path is refused at the same gate as the old option decode, naming `SectionScale`. A composite that
-  sweeps a private tool calls `extrudeTool`, which tags the error with `OperationExtrude` as the public call did.
+  against the path is refused at the same gate as the factors themselves, naming `SectionScale`. A composite that
+  sweeps a private tool calls `extrudeTool`, which tags the error with `OperationExtrude`; the composite's public
+  `Do` then re-tags it with its own kind (§11).
 - Placement and patterns: `Copy.Place` takes a sealed placement (M3). `MirroredJoin` replaces `WithJoin` (M6).
   `PathPattern` takes sealed `PathStations` (M4) and has `Follow` and `FollowAbout` (M5). Arrange has `Angle` and
   `Turns`.
-- Spec composites: each spec struct splits. Required fields become constructor arguments, and each
+- Spec composites: `Infill` has no outer tag today, so the stack PR that converts it re-tags its nested `Union`,
+  `Intersect` and `Shell` diagnostics as `OperationInfill` (§11). Each spec struct splits. Required fields become constructor arguments, and each
   zero-means-default field becomes a method whose absence means the default: `SheetMetalSpec.KFactor` zero
   meaning 0.44 becomes a `KFactor` method. Sum-type specs stay arguments. The spec-composite PR names the split
   of each struct in §12.
@@ -328,6 +338,16 @@ its option tier and its `With...` constructors in the same PR, and no wrapper su
   passes a context whose `Err` turns to `context.Canceled` after n checks and moves n one later per run until
   `Do` succeeds. Every run before that returns `context.Canceled` by identity
   (`TestModifyCommandsReturnMidBuildCancellationByIdentity`).
+- **The cancellation sweep has a cost rule.** Every family adds one sweep to race shard 12, and a sweep of a build
+  that polls `ctx` N times costs about N²/2 checks. A member whose build polls more than a few hundred times runs
+  its sweep over the smallest fixture on the same build route (a coil of one turn, a narrower groove) and moves n
+  by a stride of about N/10 instead of one, so the sweep makes about ten runs
+  (`TestFeatureCommandsReturnMidBuildCancellationByIdentity`). It builds that fixture once and makes a fresh
+  command per run, because every canceled run leaves the document unchanged. A member that polls a few hundred
+  times or fewer keeps the one-check-later rule.
+- **Each family PR updates the "today" sentences it makes false.** A sentence that says what an operation does
+  "today" or "leaves untagged today" is rewritten in the PR that changes it, in this document and the companion
+  designs.
 - A per-member test of where each stored method fault is refused: after the retired-body gate and the sheet
   refusal, before the magnitude gate, and after a nil `ctx`. Every member gets a retired-body row, and each
   member with a validating method gets rows for the method fault against the gates around it

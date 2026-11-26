@@ -104,7 +104,7 @@ closed section alone.
 one authenticated profile. §20 owns its fan topology and proof; it does not change this
 section-pair correspondence.
 
-## 2. Public signature and options
+## 2. Public signature and methods
 
 ```go
 func Loft(d *Document, s0 *sketch.Sketch, p0 *sketch.Profile,
@@ -114,10 +114,16 @@ func (c *LoftCommand) Do(ctx context.Context) (*Body, error)
 // Alignment records, per loop, which recorded segment index of the
 // SECOND profile pairs with segment index 0 of the FIRST profile's
 // corresponding loop. offsets[0] is the outer loop; offsets[1+h] is
-// p1.Holes[h]. Omitting the option means every offset is 0 — the natural
+// p1.Holes[h]. Omitting `Alignment` means every offset is 0 — the natural
 // case where both profiles were authored with matching segment order (the
 // gear generator's top loop is the bottom loop's own points, rotated).
 func (c *LoftCommand) Alignment(offsets ...int) *LoftCommand
+
+// Splits cuts recorded segments of either section (§3.1).
+func (c *LoftCommand) Splits(first, second []LoftSplit) *LoftCommand
+
+// SurfaceResult builds the wall set as a sheet.
+func (c *LoftCommand) SurfaceResult() *LoftCommand
 ```
 
 **A method is a method of `LoftCommand`, so no option value exists to be nil or foreign.** Table S row S11 is
@@ -130,12 +136,10 @@ the last call supplies the whole per-loop payload.
 (`agent-docs/surface-design.md` §3-§4).** It builds the wall triangles alone and
 omits both section caps, publishing `Kind() == BodySheet` in place of a solid
 loft, exactly as it does for `Extrude` and `Revolve` (`agent-docs/surface-design.md` Table W). Unlike
-`Alignment`, a repeated `SurfaceResult` is idempotent, never
-`ErrDegenerate`: the two options answer different questions. An alignment
-payload names one of several possible correspondences, so two occurrences name
-two candidates with no way to prefer one, while a surface result is a single
-yes/no flag with nothing to disagree about on a repeat — the same tolerance
-`Taper`'s own last-wins rule gives `Extrude` (extrude.go).
+`Alignment`, a repeated `SurfaceResult` is the same as one call: an alignment
+payload names one correspondence and a second call replaces it, while a
+surface result is a single yes/no flag with nothing to replace
+(command-api-design M2).
 
 `s0`/`p0` is the **from** section (`capStart`); `s1`/`p1` is the **to**
 section (`capEnd`) — the same naming Extrude already uses for its two caps.
@@ -1941,7 +1945,7 @@ The PR labels below are count-free and consume no global evaluator increment. Ev
 
 | PR | Lands | Still refused after it |
 |---|---|---|
-| 1 | `Loft`, structural profile conversion and alignment options, Table P pairing + Table S gates S1–S5/S9–S11, the flat-triangle wall construction (§5), the crossing audit (§6, Table S S6's RECORDED arm, S7's audit arm, S8), `Volume` / `Centroid` (§8's rational accumulator) / `Area` / `Bounds`, `Verify` (D6: the structural audit and the tolerance gate over all four). **This row is landed.** | same-kind `CircleSeg`/`ArcSeg` correspondence; N-section/guide-rail/centerline loft; `Transform`/`Copy`; reversed correspondence; surveys, clearance, interference beyond box-disjoint |
+| 1 | `Loft`, structural profile conversion and the `Alignment` method, Table P pairing + Table S gates S1–S5/S9–S11, the flat-triangle wall construction (§5), the crossing audit (§6, Table S S6's RECORDED arm, S7's audit arm, S8), `Volume` / `Centroid` (§8's rational accumulator) / `Area` / `Bounds`, `Verify` (D6: the structural audit and the tolerance gate over all four). **This row is landed.** | same-kind `CircleSeg`/`ArcSeg` correspondence; N-section/guide-rail/centerline loft; `Transform`/`Copy`; reversed correspondence; surveys, clearance, interference beyond box-disjoint |
 | 2a | `Transform` / `Copy` (D7): the payload's own proven displacement term `delta` (§5), composed into every vertex, edge length, face area, and all four body measurements; Table S gains S12 and S13. **This row is landed.** | D1/D2 (`Tessellate`/`STL`/`OBJ`, mesh-boolean admission); D3/D4's analytic-kernel case; D5 |
 | 2b | `Tessellate` / `STL` / `OBJ` (D1), mesh-boolean admission (D2). **This row is landed.** | D3/D4's analytic-kernel case, D5 |
 | 3 | same-kind `CircleSeg`/`ArcSeg` correspondence (§1): the chord-chain construction and its shared station generator (§5.1), every term §5.2's table lists that a chorded build reaches — the certified per-cell sagitta and the `sectionDelta` it publishes, the `stationRound` term `delta` gains, the `matchedDelta` those two compose, the exact bilinear-patch volume and first-moment corrections with three residual volume terms (§8.1), and the wall's certified bilinear-area reading with two residual area legs beside the two caps' `capAreaAllow` (§8) — composed into `Volume`/`Centroid`/`Area`/`Bounds`, Table S gates S14–S16, S6's COMPUTED arm, and S7's structural walk-sense arm (P5). **This row is landed.** | mixed-kind correspondence, permanently (§1); N-section and guide-rail/centerline lofts; a loft case in `internal/clearance/pairkernel/geom.go`; a non-constant-cross-section wall survey kernel |
@@ -2701,7 +2705,7 @@ is §4's, with its seam step reading two chains through `RecordChain`.
 
 | SL | Condition | Sentinel |
 |---|---|---|
-| **SL1** | a nil document, context, sketch or chain; a nil or foreign option | `ErrDegenerate` |
+| **SL1** | a nil document, context, sketch or chain | `ErrDegenerate` |
 | **SL2** | either chain fails one of `agent-docs/surface-design.md` §13.3's gates, in argument order | the seam's own: `ErrForeignProfile` / `ErrStaleProfile` / `ErrInvalidProfile` / `ErrUnrecordableProfile` |
 | **SL3** | the two walks' segment counts differ (PC's P3 row) | `ErrUnsupported`, S2's own answer |
 | **SL4** | a paired segment whose two sides are not same-kind, or a same-kind `ArcSeg` pair whose recorded ranges run opposite ways (PC's P5 row) | `ErrUnsupported` for the kind mismatch, S3; `ErrDegenerate` for the opposing walk sense, S7's structural arm |
@@ -2760,7 +2764,7 @@ not build change nothing about that.
 
 | PR | Lands | Still staged |
 |---|---|---|
-| **L1** (landed) | `LoftChain` over a `LineSeg`-only correspondence: the sealed `ChainLoftOption` tier, Table SL rows SL1 through SL6, §16.2's plane gate, the open-walk cell walk, and the four readings §16.5 states | a curved correspondence (SL7); a non-parallel plane pair; every Table D consumer beyond D6 |
+| **L1** (landed) | `LoftChain` over a `LineSeg`-only correspondence: the `LoftChainCommand` type with no methods, Table SL rows SL1 through SL6, §16.2's plane gate, the open-walk cell walk, and the four readings §16.5 states | a curved correspondence (SL7); a non-parallel plane pair; every Table D consumer beyond D6 |
 | **L2** (not implemented) | a same-kind `ArcSeg` correspondence, once §5.1's station generator states each COMPUTED station's own side against the from-plane rather than inheriting it from the plane pair | a non-parallel plane pair |
 | **L3 (reach, not committed by this document)** | a non-parallel plane pair, which needs a stated positive side that the two planes' own offset no longer supplies | — |
 
@@ -3272,7 +3276,7 @@ boundary and publishes the finite occupied-volume allowance.
 The result has the ordinary `BodySolid` readings and faceted restatement.
 It accepts placement through the faceted payload. A chord tolerance below its
 held mesh bound is `ErrUnsupported`; the caller may use a larger tolerance.
-`LoftFromPoint` has no holes, section alignment or surface result option.
+`LoftFromPointCommand` has no holes, section alignment or surface result method.
 
 ### 20.2 Planar split of a point loft
 

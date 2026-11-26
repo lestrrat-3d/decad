@@ -62,7 +62,7 @@ its sign and its refusals are `Extrude`'s (`agent-docs/modify-design.md` Part D 
 | Decision | Rule |
 |---|---|
 | D1 | A positive angle narrows a raised relief toward its top and an engraving toward its floor: the wall at depth `t` from the face has moved in by `t·tan(angle)`. A negative angle widens them. The zero value is a straight wall. |
-| D2 | The angle is `Taper`'s: an angle is required, a wrong unit kind is `ErrUnitKind`, and one at or past a right angle is `ErrDegenerate`. A nil option is `ErrDegenerate`. |
+| D2 | The angle is `Taper`'s: an angle is required, a wrong unit kind is `ErrUnitKind`, and one at or past a right angle is `ErrDegenerate`. |
 | D3 | The tool's one millimetre on the other side of the face (E4) leans the same way and lies inside the body, so the join sees the relief's own walls where they meet the face. |
 | D4 | The result is what `Union` or `Cut` gives for the drafted tool. The tests compare the volume against `∫ (L − 2t·tan(angle))² dt` for a square relief within a relative `1e-9` and probe a point a drafted wall leaves as material. |
 
@@ -72,7 +72,7 @@ its sign and its refusals are `Extrude`'s (`agent-docs/modify-design.md` Part D 
 
 | Decision | Rule |
 |---|---|
-| R1 | The radius is a positive length: zero is `ErrDegenerate`, a negative value `ErrNegativeMagnitude` and a wrong unit kind `ErrUnitKind`. The last option wins. |
+| R1 | The radius is a positive length: zero is `ErrDegenerate`, a negative value `ErrNegativeMagnitude` and a wrong unit kind `ErrUnitKind`. A second `RimFillet` call replaces the first. |
 | R2 | The rim of a raised relief is every edge of the planar faces that face outward in the plane `height` out of the embossed face. The rim of an engraving is the edges of the inner loops of the planar faces that face outward in the embossed face's own plane, which is where the engraving's wall meets that face. Both are convex edges. |
 | R3 | The relief is built, and its rim rounded, on a copy of `b` first, retired once read, so a fillet the evaluator refuses, or a rim not found in the result, leaves `b` live and the document unchanged. The copy leaves history entries. The face is resolved once, on `b`, and the copy is embossed by that plane, so a provenance selector need not match it. |
 | R4 | The result is the emboss followed by `Fillet`, so the history holds `OperationEmboss` then `OperationFillet`. A round too large for the relief is `Fillet`'s refusal. |

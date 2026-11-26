@@ -148,21 +148,25 @@ func TestLoftSplitsRefusals(t *testing.T) {
 	})
 }
 
-// TestLoftSplitsLeaveAnUnsplitLoftAlone pins that an empty split list changes nothing.
+// TestLoftSplitsLeaveAnUnsplitLoftAlone pins that an empty or nil split list is the same as no Splits call.
 func TestLoftSplitsLeaveAnUnsplitLoftAlone(t *testing.T) {
 	t.Parallel()
 	square := [][2]float64{{-2, -2}, {2, -2}, {2, 2}, {-2, 2}}
-	vol := func(first, second []decad.LoftSplit) float64 {
+	vol := func(splits func(*decad.LoftCommand) *decad.LoftCommand) float64 {
 		w := sketch.NewWorld()
 		s0, p0 := fixedPolygonProfile(t, w, w.XY(), square)
 		s1, p1 := fixedPolygonProfile(t, w, splitTopPlane(t, w, 3), [][2]float64{{-1, -1}, {1, -1}, {1, 1}, {-1, 1}})
-		b, err := decad.Loft(decad.New(), s0, p0, s1, p1).Splits(first, second).Do(t.Context())
+		b, err := splits(decad.Loft(decad.New(), s0, p0, s1, p1)).Do(t.Context())
 		require.NoError(t, err)
 		v, err := b.Volume()
 		require.NoError(t, err)
 		return v.Value.Base()
 	}
-	require.Equal(t, vol(nil, nil), vol([]decad.LoftSplit{}, []decad.LoftSplit{}))
+	none := vol(func(c *decad.LoftCommand) *decad.LoftCommand { return c })
+	require.Equal(t, none, vol(func(c *decad.LoftCommand) *decad.LoftCommand { return c.Splits(nil, nil) }))
+	require.Equal(t, none, vol(func(c *decad.LoftCommand) *decad.LoftCommand {
+		return c.Splits([]decad.LoftSplit{}, []decad.LoftSplit{})
+	}))
 }
 
 // prismatoidVolume is h/6·(A0 + 4·Amid + A1) for a ruled loft between two polygons

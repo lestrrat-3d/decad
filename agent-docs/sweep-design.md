@@ -94,14 +94,10 @@ transport, the span builders and the global audit, and replaces only the section
 // *sketch.Profile or an open *sketch.Chain.
 type Section interface{ *sketch.Profile | *sketch.Chain }
 
-func Sweep[S Section](
-    ctx context.Context,
-    d *Document,
-    s *sketch.Sketch,
-    sec S,
-    path *Path,
-    opts ...SweepOption,
-) (*Body, error)
+func Sweep[S Section](d *Document, s *sketch.Sketch, sec S, path *Path) *SweepCommand
+
+// Do runs the sweep (agent-docs/command-api-design.md §3).
+func (c *SweepCommand) Do(ctx context.Context) (*Body, error)
 
 type Path struct { /* immutable */ }
 
@@ -134,27 +130,24 @@ func (p *Path) Start() r3.Vec
 func (p *Path) End() r3.Vec
 func (p *Path) Segments() []PathSegment
 
-type SweepOption interface { /* sealed */ }
-
 // Twist rotates a profile about the transported tangent. Section 17
 // states the current straight-polygon admission and its proof.
-func Twist(angle units.Value) SweepOption
+func (c *SweepCommand) Twist(angle units.Value) *SweepCommand
 
 // SurfaceResult omits the two section caps and publishes a sheet body
-// instead of a solid (agent-docs/surface-design.md §4). Unlike every other sealed
-// SweepOption, a repeated SurfaceResult is idempotent rather than S12's
-// stated ErrDegenerate: it carries no payload for a repeat to disagree with.
-func SurfaceResult SurfaceResultOption
+// instead of a solid (agent-docs/surface-design.md §4). Calling it twice is
+// the same as calling it once: it carries no payload for a repeat to replace.
+func (c *SweepCommand) SurfaceResult() *SweepCommand
 
 // MitredJoins admits a LineTo-only path whose internal joins are corners:
 // the two spans meeting at a join are each cut on the join plane §16.3
 // states and share the section polygon on it. §16 owns it.
-func MitredJoins() SweepOption
+func (c *SweepCommand) MitredJoins() *SweepCommand
 
 // SectionScale states one dimensionless factor per path segment, in path
 // order: factors[k] is the ratio of the section at the END of span k to the
 // authored profile. §16 owns it.
-func SectionScale(factors ...units.Value) SweepOption
+func (c *SweepCommand) SectionScale(factors ...units.Value) *SweepCommand
 ```
 
 ```go
@@ -273,7 +266,7 @@ The common axis must lie in the source profile plane. The existing full
 profile sweeps a simple solid. `Sweep` evaluates that full revolution from its
 recorded profile and exact circle carrier, then publishes a `sweepPayload` that
 holds the original path and the full-revolution proof. A closed path with a
-nonzero twist, `SurfaceResult`, a corner option, or section scale is
+nonzero twist, `SurfaceResult`, `MitredJoins`, or `SectionScale` is
 staged. A near match never enters this reduction; §3.4 owns its separate
 closed-path class.
 
@@ -381,7 +374,7 @@ The existing existence rule applies: a requested solid that does not exist is
 
 | S | Condition | Sentinel | Permanent |
 |---|---|---|---|
-| **S1** | nil sketch, profile, or path; empty path; nil or foreign option | `ErrDegenerate` | yes |
+| **S1** | nil sketch, profile, or path; empty path | `ErrDegenerate` | yes |
 | **S2** | profile seam rejection | seam sentinel | seam-owned |
 | **S3** | non-finite path point, or arc construction overflows before it can state a finite carrier | `ErrNotFinite` for caller input; `ErrUnsupported` for derived range overflow | input rule is permanent; range ceiling is not |
 | **S4** | zero-length line; invalid circular segment inputs under P3 or P3a | `ErrDegenerate` | yes |
@@ -399,7 +392,7 @@ The existing existence rule applies: a requested solid that does not exist is
 
 Gate order is normative:
 
-1. Validate context, nils, owned options, and option arity.
+1. Validate context and nils.
 2. Authenticate and record the planar profile.
 3. Validate and snapshot the path.
 4. Check initial placement and tangent joins.
@@ -838,8 +831,7 @@ reading may not be.
 A chain enters through the same function a profile does:
 
 ```go
-func Sweep[S Section](ctx context.Context, d *Document, s *sketch.Sketch,
-    sec S, path *Path, opts ...SweepOption) (*Body, error)
+func Sweep[S Section](d *Document, s *sketch.Sketch, sec S, path *Path) *SweepCommand
 ```
 
 `Section` (`section.go`) is the constraint `*sketch.Profile |
@@ -850,23 +842,23 @@ consumer whose proof has not landed for a chain dispatches on the payload type
 and refuses. Each build keeps its own gate order, so the chain build runs Table
 SC below, not Table S.
 
-**A chain section accepts the one `SweepOption` type, and refuses the options
-it cannot honour at run time.** A chain sweep is always a sheet — an open walk
+**A chain section offers the same methods a profile section does, and refuses the
+methods it cannot honour at `Do`.** A chain sweep is always a sheet — an open walk
 encloses no region, so there is no cap to omit and no solid to ask for — so
 `SurfaceResult` returns `ErrUnsupported`: accepting it as a no-op would
-give one option two meanings. `Twist` returns `ErrUnsupported` for any
+give one method two meanings. `Twist` returns `ErrUnsupported` for any
 angle, zero included, because §17 admits only a solid polygon profile for
 nonzero twist (Table S row S11) and an open chain has no corresponding solid.
 `MitredJoins` and `SectionScale` return `ErrUnsupported` as well,
 because §16 builds solids from a profile only.
 
-**The option refusal runs after the chain's seam gates (SC2) and before every
-path-geometry gate (SC3 onward).** `Sweep` first checks for a nil argument and a
-nil option (SC1), then records the chain, then decodes the options and refuses
-the four above. A foreign, stale, invalid or unrecordable chain therefore still
-reports its seam sentinel when it also carries one of those options, and a
-chain that records but carries one of those options reports `ErrUnsupported`
-even when its path would also fail SC3. A malformed option, such as
+**The method refusal runs after the chain's seam gates (SC2) and before every
+path-geometry gate (SC3 onward).** `Do` first checks for a nil context (SC1),
+then records the chain, then refuses the four methods above. A foreign, stale,
+invalid or unrecordable chain therefore still reports its seam sentinel when it
+also carries one of those methods, and a chain that records but carries one of
+those methods reports `ErrUnsupported`
+even when its path would also fail SC3. A malformed method value, such as
 `Twist` with a non-angle value, reports its codec sentinel at the same
 point. A refused call commits nothing and leaves `Document.Bodies()` unchanged.
 
@@ -886,7 +878,7 @@ chain through `RecordChain` instead of a profile through `RecordProfile`.
 
 | SC | Condition | Sentinel |
 |---|---|---|
-| **SC1** | a nil document, context, sketch, section (typed-nil included) or path; an empty path; a nil option | `ErrDegenerate` |
+| **SC1** | a nil document, context, sketch, section (typed-nil included) or path; an empty path | `ErrDegenerate` |
 | **SC2** | the chain fails one of `agent-docs/surface-design.md` §13.3's gates | the seam's own: `ErrForeignProfile` / `ErrStaleProfile` / `ErrInvalidProfile` / `ErrUnrecordableProfile` |
 | **SC3** | the path start is not in the sketch plane, or its initial tangent is not codirectional with that plane's positive normal | `ErrDegenerate`, S5's rule over a chain's own recorded plane |
 | **SC4** | every path condition S3, S4, S7 and S13 through S15 already state — a non-finite point, a degenerate segment, a closed path, a non-finite derived bound, an exhausted budget, a collapse from computed-coordinate rounding | those rows' own sentinels, unchanged |
@@ -1108,14 +1100,14 @@ path. A curved profile segment's image under a span's wall lines is a conic
 section, which no admitted surface variant holds exactly; an arc span has no
 join plane this construction can state. Neither is permanent.
 
-### 16.2 The options
+### 16.2 The methods
 
 ```go
-func MitredJoins() SweepOption
-func SectionScale(factors ...units.Value) SweepOption
+func (c *SweepCommand) MitredJoins() *SweepCommand
+func (c *SweepCommand) SectionScale(factors ...units.Value) *SweepCommand
 ```
 
-A second call of either replaces the first (command-api-design M2). `SectionScale` takes exactly
+A second `SectionScale` call replaces the first (command-api-design M2), and `MitredJoins` twice is the same as once. `SectionScale` takes exactly
 `len(path.Segments())` factors, in path order; `factors[k]` is the ratio of
 the section at the end of span `k` to the AUTHORED profile, so a tree branch
 with radius `r_k` at path point `k` passes `r_k / r_0`. A factor is a
@@ -1234,7 +1226,7 @@ running SM8 in place of §7's separation audit.
 | **SM6** | a span that does not leave its start plane or reach its end plane forward; a wall line parallel to its end plane, meeting it at or behind its start, or at or past the span's apex | `ErrDegenerate` |
 | **SM7** | a wall quad whose exact area is zero, or a section with two coincident vertices | `ErrDegenerate` |
 | **SM8** | the crossing audit proves two non-adjacent faces cross; its budget runs out first | `ErrDegenerate`; `ErrUnsupported` (S9's split) |
-| **SM9** | `SurfaceResult`, a nonzero `Twist`, or a closed path, with either option | `ErrUnsupported` |
+| **SM9** | `SurfaceResult`, a nonzero `Twist`, or a closed path, with either method | `ErrUnsupported` |
 | **SM10** | `F·(F−1)/2` over Table BM's `F` exceeds `proofbound.MaxFacetPairTestsPerCall`, or the span count exceeds §11's span cap | `ErrUnsupported` (S14) |
 
 SM2's trimmed-line arm keeps every section vertex a recorded point: a cut
@@ -1370,12 +1362,12 @@ deleted once and watched fail before it is trusted.
 ### 16.11 Companion edits
 
 - §1 names §16 as the owner of the corner mode and the scale, §2 lists the
-  two options, Table S's row S6 points here, and §12 lists M1 and M2.
+  two methods, Table S's row S6 points here, and §12 lists M1 and M2.
 - `agent-docs/layout/design-docs.md` names §16 in this document's row.
 - `agent-docs/tessellation-design.md` §2 and `agent-docs/payload-verification-design.md`
   carry the `mitredSweepPayload` row.
 - `agent-docs/api-design.md` §8 already names this document as the owner of `Sweep`'s
-  options and reach; the signature is unchanged.
+  methods and reach.
 
 ## 17. Bounded twist
 

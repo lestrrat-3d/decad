@@ -14,7 +14,7 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// This file is agent-docs/helix-design.md's entry point: the CoilOption surface,
+// This file is agent-docs/helix-design.md's entry point: the CoilCommand surface,
 // Table CS's gates in §4's order, the coil payload that records a coil and
 // its placement. internal/coilshell builds §5's held shell, Table CB's
 // topology and Table CM's readings.

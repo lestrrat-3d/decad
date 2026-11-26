@@ -18,7 +18,7 @@ import (
 // followed by Cut: the swept tool exists only inside the call, is never
 // registered, and leaves no body in the document.
 //
-// Every profile obeys Extrude's gates and options, and the extent resolves
+// Every profile obeys Extrude's gates and Taper, and the extent resolves
 // exactly as Extrude resolves it, so a ToFace or ThroughAll stop reads live
 // bodies, target among them. Several profiles are one feature: their tools are
 // united with one another and target is cut once. Profiles whose tools touch

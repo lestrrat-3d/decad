@@ -8,7 +8,8 @@ that cut directly from a sketch (an extrude or revolve with the cut operation).
 
 - Input: a live solid target, a sketch, a non-empty list of profiles of that
   sketch, and an `Extent` (`CutExtrude`) or an `Axis` and `AngularExtent`
-  (`CutRevolve`), with the options `Extrude` or `Revolve` take.
+  (`CutRevolve`). `CutExtrude` has the `Taper` method that `Extrude` has, and
+  neither cut has `SurfaceResult` (command-api-design M11).
 - Each profile is swept by the ordinary `Extrude` or `Revolve`, so every gate,
   extent rule and refusal of those calls applies unchanged. Body-relative stops
   read live bodies, the target included.

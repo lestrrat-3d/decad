@@ -55,15 +55,16 @@ func (c *callSite) isCall(e ast.Expr, name string) bool {
 // option reports whether e is a call of a decad function in the qualifier
 // form this file uses, and returns its name and the source text of its
 // arguments (from the first to the last, with line breaks and comments, and
-// the dots of a spread tail).
-func (c *callSite) option(e ast.Expr) (name, argText string, args []ast.Expr, ok bool) {
+// the dots of a spread tail). spread reports a spread tail: a caller accepts
+// one only for an option whose method takes anyArgs.
+func (c *callSite) option(e ast.Expr) (name, argText string, args []ast.Expr, spread, ok bool) {
 	call, isCall := e.(*ast.CallExpr)
 	if !isCall {
-		return "", "", nil, false
+		return "", "", nil, false, false
 	}
 	fname, qual := callee(call.Fun, c.pkg, c.pkg == "")
 	if fname == "" || qual != c.pkg {
-		return "", "", nil, false
+		return "", "", nil, false, false
 	}
 	if len(call.Args) > 0 {
 		argText = c.spanOf(call.Args[0], call.Args[len(call.Args)-1])
@@ -72,7 +73,7 @@ func (c *callSite) option(e ast.Expr) (name, argText string, args []ast.Expr, ok
 		// A spread tail, WithSectionScale(factors...), keeps its dots.
 		argText += "..."
 	}
-	return fname, argText, call.Args, true
+	return fname, argText, call.Args, call.Ellipsis.IsValid(), true
 }
 
 // rule rewrites one function call. It returns the replacement text, or a
@@ -385,9 +386,9 @@ func ruleModify(name string, mandatory int, methods optionMethods) rule {
 func (c *callSite) optionChain(name string, opts []ast.Expr, methods optionMethods) (string, string) {
 	chain := ""
 	for _, opt := range opts {
-		oname, argText, args, ok := c.option(opt)
+		oname, argText, args, spread, ok := c.option(opt)
 		m, known := methods[oname]
-		if !ok || !known || (m.nargs != anyArgs && len(args) != m.nargs) {
+		if !ok || !known || (m.nargs != anyArgs && (spread || len(args) != m.nargs)) {
 			return "", name + " option " + c.text(opt) + " has no command method rule"
 		}
 		chain += "." + m.method + "(" + argText + ")"
@@ -406,7 +407,7 @@ func ruleShell(c *callSite) (string, string) {
 	var rest []ast.Expr
 	closed := false
 	for _, opt := range c.args[4:] {
-		if oname, _, args, ok := c.option(opt); ok && oname == "WithNoOpenings" && len(args) == 0 {
+		if oname, _, args, spread, ok := c.option(opt); ok && oname == "WithNoOpenings" && len(args) == 0 && !spread {
 			closed = true
 			continue
 		}
@@ -470,8 +471,8 @@ func ruleLoftFaces(c *callSite) (string, string) {
 	case 2:
 		return fmt.Sprintf("%s(%s).Do(%s)", qualify(c.pkg, "LoftFaces"), c.text(c.args[1]), ctx), ""
 	case 3:
-		name, argText, args, ok := c.option(c.args[2])
-		if ok && name == "WithConeTangentEnd" && len(args) == 2 {
+		name, argText, args, spread, ok := c.option(c.args[2])
+		if ok && name == "WithConeTangentEnd" && len(args) == 2 && !spread {
 			return fmt.Sprintf("%s(%s, %s).Do(%s)", qualify(c.pkg, "LoftFacesToCone"),
 				c.text(c.args[1]), argText, ctx), ""
 		}

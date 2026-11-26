@@ -131,7 +131,7 @@ func normalizeAxis(a Axis) (Axis, error) {
 // other Tier A free-form boundary requires proven strict clearance from the
 // axis; a free-form contact is ErrUnsupported. SurfaceResult omits the
 // two caps a partial sweep closes with and publishes a sheet instead of a
-// solid; a full revolution already closes with no cap to omit, so the option
+// solid; a full revolution already closes with no cap to omit, so the method
 // there yields a closed sheet rather than a refusal (agent-docs/surface-design.md
 // §4, Table W).
 //
@@ -209,7 +209,7 @@ func revolve(ctx context.Context, d *Document, s *sketch.Sketch, sec any, axis A
 
 // revolveProfile is the profile-fed Revolve body (agent-docs/evaluator-design.md
 // §6, agent-docs/surface-design.md §4). Its refusals run in this order: the record
-// and its seam gates, the recorded-area falsifier, the options, then the axis
+// and its seam gates, the recorded-area falsifier, then the axis
 // and extent gates.
 func revolveProfile(ctx context.Context, d *Document, s *sketch.Sketch, p *sketch.Profile, axis Axis, a AngularExtent,
 	surfaceResult bool) (*Body, error) {
@@ -545,8 +545,8 @@ func (d *Document) resolveAngleSide(s SideAngular, st angularStops, travel float
 // its recorded walk through recordChain (seam.go) rather than sectioncert.RecordProfile.
 
 // revolveChain is the chain-fed Revolve body (agent-docs/surface-design.md §13).
-// Its refusals run in this order: the nil-option check, the seam gates, the
-// option refusal, then the axis and extent gates.
+// Its refusals run in this order: the seam gates, the
+// method refusal, then the axis and extent gates.
 func revolveChain(ctx context.Context, d *Document, s *sketch.Sketch, ch *sketch.Chain, axis Axis, a AngularExtent,
 	surfaceResult bool) (*Body, error) {
 	if d == nil {
@@ -563,7 +563,7 @@ func revolveChain(ctx context.Context, d *Document, s *sketch.Sketch, ch *sketch
 	if err != nil {
 		return nil, err
 	}
-	// The option refusal follows the seam gate and precedes the axis and
+	// The method refusal follows the seam gate and precedes the axis and
 	// extent work, so a repair the caller makes in the sketch is named first.
 	if err := refuseChainRevolveSettings(surfaceResult); err != nil {
 		return nil, err

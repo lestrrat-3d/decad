@@ -52,7 +52,7 @@ import (
 // bounded oblique Body.Section profile only as a solid straight prism with an
 // independent Distance extent, carrying its certified source displacement.
 // Its private Sketch certificate and marked reference loop must still match.
-// Other bounded-section consumers and options return [ErrUnsupported].
+// Other bounded-section consumers and methods return [ErrUnsupported].
 // Otherwise this evaluator builds a
 // straight prism from a profile of line, circle, arc and Tier A free-form
 // segments (a spline, a closed spline, a fit spline, or a unit-weight NURBS
@@ -178,8 +178,10 @@ func extrude(ctx context.Context, d *Document, s *sketch.Sketch, sec any, e Exte
 }
 
 // extrudeTool is Extrude's implementation for a root composite that sweeps a
-// private tool or probe from a profile. It tags the error with OperationExtrude
-// as the public call did, so the composite's nested diagnostics are unchanged.
+// private tool or probe from a profile. It tags the error with OperationExtrude.
+// A public command that calls it re-tags the error's non-selection diagnostics
+// with its own kind (operationError), so this tag decides a diagnostic's kind
+// only for a caller inside the root that applies no outer tag.
 func extrudeTool(ctx context.Context, d *Document, s *sketch.Sketch, p *sketch.Profile, e Extent,
 	st extrudeSettings) (*Body, error) {
 	body, err := extrude(ctx, d, s, p, e, st)
@@ -188,7 +190,7 @@ func extrudeTool(ctx context.Context, d *Document, s *sketch.Sketch, p *sketch.P
 
 // extrudeProfile is the profile-fed Extrude body (agent-docs/evaluator-design.md
 // §5). Its refusals run in this order: the record, the recorded-area
-// falsifier, the options, the taper checks, then the extent.
+// falsifier, the stored method faults, the taper checks, then the extent.
 func extrudeProfile(ctx context.Context, d *Document, s *sketch.Sketch, p *sketch.Profile, e Extent,
 	st extrudeSettings) (*Body, error) {
 	if d == nil {
@@ -497,8 +499,8 @@ func (d *Document) resolveLinearSide(s SideExtent, frame r3.Frame, travel float6
 // build) — the same evaluator, over an open rather than a closed walk.
 
 // extrudeChain is the chain-fed Extrude body (agent-docs/surface-design.md §13).
-// Its refusals run in this order: the nil-option check, the seam gates, the
-// option refusal, then the extent.
+// Its refusals run in this order: the seam gates, the
+// method refusal, then the extent.
 func extrudeChain(ctx context.Context, d *Document, s *sketch.Sketch, ch *sketch.Chain, e Extent,
 	st extrudeSettings) (*Body, error) {
 	if d == nil {
@@ -519,7 +521,7 @@ func extrudeChain(ctx context.Context, d *Document, s *sketch.Sketch, ch *sketch
 	if err != nil {
 		return nil, err
 	}
-	// The option refusal follows the seam gate and precedes the extent work,
+	// The method refusal follows the seam gate and precedes the extent work,
 	// so a repair the caller makes in the sketch is named first.
 	if err := refuseChainExtrudeSettings(st); err != nil {
 		return nil, err

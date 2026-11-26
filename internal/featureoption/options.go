@@ -2,7 +2,7 @@
 // profile-fed feature commands share, and the configurations those inputs fold
 // into (agent-docs/command-api-design.md §4, rule A9). A command method stores
 // a value with the error its validation here returned, and the operation's gate
-// refuses that error where the old option decode did.
+// refuses that error at the position command-api-design A6 gives.
 package featureoption
 
 import (

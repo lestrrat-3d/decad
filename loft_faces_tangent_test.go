@@ -312,7 +312,7 @@ func TestLoftFacesConeTangentEndCancelledDuringEvaluation(t *testing.T) {
 			end := LoftFacesToCone([]*Face{f.toe, f.heel}, f.cone(t, f.doc), radial)
 			before, next := len(f.doc.Bodies()), f.doc.producerAt(t.Context())
 			_, err := end.Do(&countdownContext{Context: t.Context(), left: left})
-			require.ErrorIs(t, err, context.Canceled)
+			require.Equal(t, context.Canceled, err)
 			require.Len(t, f.doc.Bodies(), before)
 			require.Equal(t, next, f.doc.producerAt(t.Context()))
 		})

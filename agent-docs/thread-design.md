@@ -30,7 +30,7 @@ func Thread(ctx context.Context, b *Body, spec ThreadSpec) (*Body, error)
 | T1 | `Face` resolves to exactly one face of a live solid `b`, and that face's surface is a `Cylinder`. A selector that matches other than one face is `ErrDegenerate`, and a face of another surface is `ErrUnsupported`. |
 | T2 | A face whose outward normal points away from the axis is external: a rod, whose radius is the thread's major radius. A face whose outward normal points toward the axis is internal: a bore, whose radius is the thread's minor (drilled) radius. |
 | T3 | `Pitch` is a positive finite length, the axial advance per turn. Zero is `ErrDegenerate`, a negative value is `ErrNegativeMagnitude` and a wrong unit kind is `ErrUnitKind`. |
-| T4 | The thread is right-handed unless `LeftHand` is set, which gives `Coil` its `LeftHand` option (§5). |
+| T4 | The thread is right-handed unless `LeftHand` is set, which calls `CoilCommand.LeftHand` (§5). |
 | T5 | The groove profile is the ISO 68-1 basic profile restated as a four-corner polygon: flanks 30 degrees off radial, an external root flat of `P/8` at depth `0.61343·P` below the major radius, and an internal root flat of `P/4` at depth `0.54127·P` beyond the minor radius. Each groove's mouth opens `0.05·P` past the surface so the cut crosses it transversally. |
 | T6 | A groove too wide for the pitch (its axial width at or above `0.95·P`), or one whose root reaches the axis, is `ErrDegenerate`. |
 | T7 | The coil starts with its first groove wholly before the face's start plane and carries past the face's far end, so the groove runs out of both ends and every point of the face's length is cut at every angle. |

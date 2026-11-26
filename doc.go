@@ -244,7 +244,7 @@
 //	  boolean body at a tolerance finer than its bound        ErrUnsupported
 //	  a chorded free-form wall past the fixed work budget     ErrUnsupported
 //
-// Options: Revolve accepts SurfaceResult for a sheet result.
+// Methods: Revolve accepts SurfaceResult for a sheet result.
 // The TangentChain method expands a Fillet's or Chamfer's edges
 // across proven tangent continuations, Asymmetric gives a Chamfer
 // two setbacks, Sense picks a shell's wall sense, and ShellClosed builds

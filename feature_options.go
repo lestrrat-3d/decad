@@ -78,8 +78,8 @@ func joinNouns(n []string) string {
 // The shared settings of the sketch-fed feature commands. Each command declares
 // its own one-line method over one of these setters
 // (agent-docs/command-api-design.md §6); a method stores its value, and the
-// operation's gate refuses a fault of it at the position the old option decode
-// held (§4, rules A6 and A9).
+// operation's gate refuses a fault of it at the position the
+// method value is validated at (§4, rules A6 and A9).
 
 // surfaceResultSetting is the SurfaceResult setting of ExtrudeCommand,
 // RevolveCommand, SweepCommand and LoftCommand. Calling the method twice is

@@ -93,22 +93,20 @@ pitch (CS4) rather than reducing to it.
 // side of it. The section stays in the axis plane throughout, so a thread
 // profile drawn beside the axis cuts the thread it draws.
 func Coil(
-    ctx context.Context,
     doc *Document,
     s *sketch.Sketch,
     p *sketch.Profile,
     axis Axis,
     pitch units.Value,
     turns units.Value,
-    opts ...CoilOption,
-) (*Body, error)
+) *CoilCommand
 
-// CoilOption configures Coil. Sealed.
-type CoilOption interface { /* sealed */ }
+// Do builds the coil (agent-docs/command-api-design.md §3).
+func (c *CoilCommand) Do(ctx context.Context) (*Body, error)
 
 // LeftHand turns the section left-handed about the axis direction while
 // it advances along it. The default is right-handed.
-func LeftHand() CoilOption
+func (c *CoilCommand) LeftHand() *CoilCommand
 ```
 
 | Parameter | Kind | Meaning |
@@ -116,7 +114,7 @@ func LeftHand() CoilOption
 | `axis` | `Axis` | `SketchLine`, `ConstructionAxis` or `EdgeAxis` — `Revolve`'s own sealed vocabulary (`revolve.go`), resolved into the sketch plane by `axisInPlane` (`revolve.go`). The axis direction fixes the advance direction |
 | `pitch` | `units.Length`, finite, `> 0` | the axial advance per full turn |
 | `turns` | `units.Dimensionless` (`units.Scalar`), finite, `> 0` | the number of full turns; the total angle is `Θ = 2π·turns` |
-| `LeftHand()` | method, a repeat is the same as one call | reverses the rotation sense; the advance direction is unchanged |
+| `CoilCommand.LeftHand()` | method, a repeat is the same as one call | reverses the rotation sense; the advance direction is unchanged |
 
 Stating the extent in turns rather than in height keeps the angular extent
 a RATIONAL multiple of a turn: `turns` is a float, so `Θ/2π` is exact, and
@@ -193,11 +191,11 @@ The existence rule applies: a requested solid that does not exist is
 | **CS8** | the station count `N = ⌈turns · coilshell.StationsPerTurn⌉` exceeds `coilshell.MaxStations`, or the wall and cap triangle count exceeds `maxCoilFacets = 1 << 20` | `ErrUnsupported` (a resource ceiling) |
 | **CS9** | the held crossing audit proves two non-adjacent held triangles meet; or its pair budget runs out | `ErrUnsupported` in both arms: CP5 has already proven the TRUE solid simple, so a held crossing is a station artefact (two true turns closer than twice the chord departure), never a defect of the solid |
 | **CS10** | a computed station, vertex, reading or bound is non-finite, a held triangle collapses from rounding, or the denoted map's orthonormality defect (§5.3) is at or above `1/2` | `ErrUnsupported` |
-| **CS11** | `SurfaceResult` — it is not a `CoilOption`, so this is a compile-time refusal | — |
+| **CS11** | `SurfaceResult` — `CoilCommand` has no such method (command-api-design M11), so this is a compile-time refusal | — |
 
 Gate order is normative:
 
-1. Validate context, nils, owned options and option arity (CS1).
+1. Validate context and nils (CS1).
 2. Authenticate and record the planar profile (CS2).
 3. Validate pitch and turns (CS4).
 4. Resolve the axis into the plane (CS3), read the profile's radial and
@@ -847,7 +845,7 @@ restore it, and record the legs shown to fail in the test's own comment.
 
 | Layer | Contents |
 |---|---|
-| **1** | `Coil`, `CoilOption`, `LeftHand`; Table CS; §5's construction over a `LineSeg` profile; Table CB; Table CM with `proofbound.LnInterval`, `AsinhInterval` and `SqrtFixed`; CD1 and CD7; the executable example `examples/coil_example_test.go` (a square-wire spring) |
+| **1** | `Coil`, `CoilCommand`, `CoilCommand.LeftHand`; Table CS; §5's construction over a `LineSeg` profile; Table CB; Table CM with `proofbound.LnInterval`, `AsinhInterval` and `SqrtFixed`; CD1 and CD7; the executable example `examples/coil_example_test.go` (a square-wire spring) |
 | **2** | `internal/coilshell/tessellate.go`: CD2 with §5.4's `β`, §8.1 and §8.2; CD3, CD4 and CD9; the thread example `examples/thread_cut_example_test.go` |
 | **3** | `ArcSeg` and `CircleSeg` profile segments: the profile station chain for an arc (loft §5.1's chord chain, so a cell is chorded in both directions), `sag` folding the profile chord's own departure as `arcSag`, the arc wall area by §11.1's bracket, `Arc3` rim edges. The chord count is a fixed `coilshell.ArcChordsPerTurn` per turn of arc (§5.3), where loft §5.1 walks a count up to a sagitta target, because the crossing audit's triangle ceiling, not the sagitta, decides what a coil of several turns can hold. A whole circle's rim is a closed `Circle3`, the edge contract every builder follows for a closed circle. A profile with an arc reads its region moments from the recorded region's bounded plane integrals (§7) |
 | **4** | CD5: `coilPayload` in the planar pair admission and the planar snapshot |
@@ -891,7 +889,7 @@ count.
 
 | File | Owns |
 |---|---|
-| `coil.go` | `Coil`, `CoilOption`, `LeftHand`, option validation, Table CS's gates in §4's order |
+| `coil.go` | `Coil`, `CoilCommand`, `LeftHand`, Table CS's gates in §4's order |
 | `internal/coilshell/` | §5 and §8: stations, `β`, triangles, crossing audit, mesh proofs and the CD2 mesh (`Tessellate`); the coil payload and its placement (`Payload`, `BuildBody`); Table CB's topology and Table CM's four readings (`body.go`) |
 | `internal/coil/` | station fractions and trig, the profile station chain (§5.3), the lift to axis coordinates, the segment area closed form, §11.1's arc bracket, the cell departure terms, §8.1 and §8.2's sums — every function pure over `big.Rat`/`RatInterval` inputs and unit-tested against hand values |
 | `internal/proofbound/log.go` | `LnInterval`, `AsinhInterval` (§7.1) |

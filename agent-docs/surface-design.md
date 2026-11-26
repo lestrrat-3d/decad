@@ -2278,12 +2278,9 @@ generic entry point each; `LoftChain` keeps its own entry point.**
 ```go
 type Section interface{ *sketch.Profile | *sketch.Chain }
 
-func Extrude[S Section](ctx context.Context, d *Document, s *sketch.Sketch,
-    sec S, e Extent, opts ...ExtrudeOption) (*Body, error)
-func Sweep[S Section](ctx context.Context, d *Document, s *sketch.Sketch,
-    sec S, path *Path, opts ...SweepOption) (*Body, error)
-func Revolve[S Section](ctx context.Context, d *Document, s *sketch.Sketch,
-    sec S, axis Axis, a AngularExtent, opts ...RevolveOption) (*Body, error)
+func Extrude[S Section](d *Document, s *sketch.Sketch, sec S, e Extent) *ExtrudeCommand
+func Sweep[S Section](d *Document, s *sketch.Sketch, sec S, path *Path) *SweepCommand
+func Revolve[S Section](d *Document, s *sketch.Sketch, sec S, axis Axis, a AngularExtent) *RevolveCommand
 ```
 
 `Section` is declared once (`section.go`) as the sketch geometry a
@@ -2295,7 +2292,7 @@ compile time, and a typed-nil section of either kind returns `ErrDegenerate`.
 Every entry point takes the sketch beside the section, for the reason `Extrude`
 does: a section's geometry is plane-local and the plane is the sketch's
 (`agent-docs/api-design.md` §7). A chain `Extrude` resolves its extent through the
-same vocabulary a profile `Extrude` uses, and each entry point takes a
+same vocabulary a profile `Extrude` uses, and each command's `Do` takes a
 context.
 
 **`Extrude` keeps two payloads behind its one signature.** It type-switches
@@ -2307,9 +2304,9 @@ build (`extrudeChain`). The profile build records a `prismPayload`, or a
 denotes (`Z0Denoted`, `Z1Denoted`), as `prismPayload` does
 (`agent-docs/prism-boolean-design.md` Part S §2.1); a sweep's one-span payload and a
 trimmed ribbon record none. Each build keeps its own refusal order. A profile section runs the seam gates, the
-recorded-area falsifier, the option decode, the taper checks, then the extent
-gate. A chain section runs the nil-option check, the seam gates of §13.3, the
-option refusal below, then the extent gate. Both builds check `ctx` at entry,
+recorded-area falsifier, the stored method faults, the taper checks, then the extent
+gate. A chain section runs the seam gates of §13.3, the
+method refusal below, then the extent gate. Both builds check `ctx` at entry,
 between recording the section, resolving the extent and building the body, and
 inside the evaluators, which include the draft build under a nonzero
 `Taper` and the recorded-area falsifier; a nil `ctx` is `ErrDegenerate`
@@ -2330,9 +2327,9 @@ type-switches on the section and calls the profile build (`revolveProfile`) or
 the chain build (`revolveChain`). The profile build records a `revolvePayload`
 and the chain build records a `chainRevolvePayload`, for the reason `Sweep`
 keeps its two. Each build keeps its own refusal order. A profile section runs
-the seam gates and the recorded-area falsifier, then the option decode, then
-the axis and extent gates. A chain section runs the nil-option check, the seam
-gates of §13.3, the option refusal below, then the axis and extent gates. Both
+the seam gates and the recorded-area falsifier, then the axis and extent gates.
+A chain section runs the seam gates of §13.3, the method refusal below, then
+the axis and extent gates. Both
 builds check `ctx` at entry, between recording the section, resolving the axis
 and extent and building the body, and inside the evaluators; a nil `ctx` is
 `ErrDegenerate` and a canceled one returns `ctx.Err()` before commit.
@@ -2340,7 +2337,7 @@ and extent and building the body, and inside the evaluators; a nil `ctx` is
 **A chain result is always a sheet, so `SurfaceResult` returns
 `ErrUnsupported` when the section is a chain.** An open walk encloses no
 region, so there is no closing face to omit and no solid to ask for, and
-accepting the option as a no-op would give it two meanings: omit the caps for a
+accepting the method as a no-op would give it two meanings: omit the caps for a
 profile, state nothing for a chain. `Twist` returns `ErrUnsupported`
 on a chain `Sweep` too, because a nonzero twist is Table S row S11 for a
 profile-fed sweep and the chain build stages no second spelling of it.
@@ -2348,12 +2345,12 @@ profile-fed sweep and the chain build stages no second spelling of it.
 return `ErrUnsupported` on a chain `Sweep` as well. `Taper` builds a draft
 body from a profile and a chain `Extrude` has no draft build, so a chain
 `Extrude` returns `ErrUnsupported` for `Taper` at any angle, zero included.
-`RevolveOption` has no member but `SurfaceResult` today; a chain
-`Revolve` refuses any option it is handed with `ErrUnsupported`. Every one of
+`RevolveCommand` has no method but `SurfaceResult` today; a chain
+`Revolve` refuses it with `ErrUnsupported`. Every one of
 these refusals runs after the chain's seam gates and before extent resolution
 (`Extrude`), every path-geometry gate (`Sweep`) or axis gate (`Revolve`),
-commits nothing, and leaves the document unchanged. A chain `Extrude` option
-refusal therefore sits after `recordChain` and the nil-option check and before
+commits nothing, and leaves the document unchanged. A chain `Extrude` method
+refusal therefore sits after `recordChain` and before
 `normalizeExtent`. `agent-docs/sweep-design.md` §15.3 states the `Sweep` point.
 
 **`ExtrudeCommand` serves both section kinds.** A chain section
@@ -2597,12 +2594,12 @@ reads a ribbon's free edges as one closed chain and admits or refuses it on
   `agent-docs/sweep-design.md` §15.1 for the composite join, and
   `agent-docs/loft-design.md` §16.1 for Table P over two open walks, with its §16.2
   carrying the positive side a closed shell supplied and two open walks do not.
-  `LoftChain` takes a sealed chain-only option tier for §13.2's reason, so
-  `SurfaceResult` does not compile against it.
+  `LoftChainCommand` has no `SurfaceResult` method for §13.2's reason, so
+  the call does not compile.
 - **`Stitch` and `Unstitch` never see a chain.** Both take bodies, so there is
   nothing to refuse: a ribbon reaches them as the sheet it is, on §6's terms.
 - **`SurfaceResult` never builds a chain-fed sheet differently.** On
-  `LoftChain` it is a compile error, by §13.2's option tier. On a chain
+  `LoftChain` it is a compile error, because `LoftChainCommand` has no such method (§13.2). On a chain
   `Extrude`, `Sweep` or `Revolve` it returns `ErrUnsupported` at run time (R1).
 
 ## 14. Table D — delivery
@@ -2627,9 +2624,9 @@ ANSWER is accepted and reads `Suspect`.
 | 9 | §10.1's curved or mixed stitched mesh from one complete revolve sheet, closed or open. Other source constructions and new curved welds remain R32 until they can prove identical seam samples. |
 | 10 | One free pole on a chain `Revolve` (§13.3): Table G's pole topology, the wall `Area` and `Bounds` charges, one free rim after a full revolution, and T139 plus T142–T146. Both free ends on the axis stay R22; interior axis pinches are R33. The chain-fed revolve mesh remains a separate increment because its open-walk pole fan and boundary audit need their own proof |
 | 11 | §10.2's open stitched mesh from all single-face sheets unstitched from one revolve sheet. Pointer-proven re-welds reuse the source mesh's identical curved seam samples; other curved welds remain R32. |
-| 12 | `Sweep` over a chain along a ONE-SPAN straight path (`agent-docs/sweep-design.md` §15, PR C1): `SweepOption` with the chain refusals of §13.2, Table SC's gate set, the chain prism reduction over the path's own height and composed length bound, and §15's T190–T195. An arc span and every composite path stay R34 |
+| 12 | `Sweep` over a chain along a ONE-SPAN straight path (`agent-docs/sweep-design.md` §15, PR C1): `SweepCommand` with the chain refusals of §13.2, Table SC's gate set, the chain prism reduction over the path's own height and composed length bound, and §15's T190–T195. An arc span and every composite path stay R34 |
 | 13 | A chain `Sweep`'s composite (`agent-docs/sweep-design.md` §15.8): one real chain span per path span, indexed wall-rim sew per recorded segment, separation and boundary audits, and a certified sheet mesh for the radial line/half-circle class. Other composites stay R34 |
-| 14 | `LoftChain` over a `LineSeg`-only correspondence (`agent-docs/loft-design.md` §16, PR L1): the sealed `ChainLoftOption` tier, Table SL's gate set, §16.2's exactly-parallel plane gate and per-wall positive side, the open-walk cell walk with its two free end rungs, and §15's T196–T199 and T208. A curved correspondence stays R36 and a non-parallel plane pair stays R35 |
+| 14 | `LoftChain` over a `LineSeg`-only correspondence (`agent-docs/loft-design.md` §16, PR L1): the `LoftChainCommand` type with no methods, Table SL's gate set, §16.2's exactly-parallel plane gate and per-wall positive side, the open-walk cell walk with its two free end rungs, and §15's T196–T199 and T208. A curved correspondence stays R36 and a non-parallel plane pair stays R35 |
 | 15 | `Offset` for §17's patch and profile-fed prism families, both sides: the patch arm's translation over the existing placement rebuild; the prism arm's `offset2d.OffsetProfile` section reused from §16.2 with its exact-generation gate, its offset audit and its whole-interval certification, and WITHOUT the source-and-offset nesting audit an annulus needs; Table R's R37–R41; Table X's own row; and §15's T200–T207. Other sheet families stay R37 |
 | 16 | `Thicken` on a profile-fed revolve sheet (§16.5): the exact axis class, the meridian annulus over §16.2's own offsets, the radial gate over the interval scan's own boxes, the re-resolved axis frame, and §15's T158–T161 |
 | 17 | `Thicken` on a chain ribbon (§16.6): the closed-form assembled section, its exact-generation gate and endpoint crossing audit, all three sides, and §15's T162–T164 |
@@ -3246,7 +3243,7 @@ A taper needs an offset for EVERY axial level and a proof that no two
 intermediate sections or their ruled walls cross, including a proof for
 computed taper angles and their bounds. Certifying one endpoint section with
 `offset2d.OffsetProfile` proves none of those statements. `Thicken` takes no
-taper option; `agent-docs/modify-design.md` Part D owns the tapered extrude.
+taper method; `agent-docs/modify-design.md` Part D owns the tapered extrude.
 
 ### 16.5 The revolve sheet
 

@@ -2,6 +2,7 @@ package decad
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math/big"
 	"slices"
@@ -27,7 +28,7 @@ const maxLoftFacesSections = loftfacestrim.MaxSections
 // are 2 to 32 of them, or 1 to 31 with LoftFacesToCone, which adds a last,
 // constructed section. The document is the one owning the first section's
 // body, and the result is in the container of that body. A nil context, a
-// nil option, a repeated option, a nil cone, a section count outside the
+// nil cone, a section count outside the
 // bounds, a first section that is not a body face, or a radial that
 // LoftFacesToCone cannot use is ErrDegenerate. A cone that is not an
 // unplaced exact point cone about world X is ErrUnsupported. A section or cone
@@ -106,7 +107,16 @@ func (c *LoftFacesCommand) run(ctx context.Context) (*Body, error) {
 	if c.toCone {
 		cfg.tangent = &coneTangentEnd{cone: c.cone, radial: c.radial}
 	}
-	return loftFaces(ctx, c.sections, cfg)
+	body, err := loftFaces(ctx, c.sections, cfg)
+	// The evaluators wrap the cancel they meet ("loft cap 0: context canceled"),
+	// and Do returns ctx.Err() itself (agent-docs/command-api-design.md §3).
+	if err == nil {
+		return body, nil
+	}
+	if cerr := ctx.Err(); cerr != nil && errors.Is(err, cerr) {
+		return nil, cerr
+	}
+	return nil, err
 }
 
 // coneTangentEnd is the cone and ruling a LoftFacesToCone call ends its loft with.
