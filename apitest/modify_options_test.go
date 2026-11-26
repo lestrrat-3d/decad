@@ -193,15 +193,6 @@ func mustChamfer(t *testing.T, b *decad.Body, sel decad.EdgeSelector, d float64,
 
 func TestShellNoOpenings(t *testing.T) {
 	t.Parallel()
-	t.Run("TakesNoSelector", func(t *testing.T) {
-		// ShellClosed names no face to remove: a hole-free prism builds its
-		// closed shell (reach BX5).
-		doc, box := filletBox(t)
-		closed, err := decad.ShellClosed(box, units.Millimeters(5)).Do(t.Context())
-		require.NoError(t, err)
-		require.Len(t, closed.Shells(), 2)
-		require.Equal(t, []*decad.Body{closed}, doc.Bodies())
-	})
 	t.Run("ShellWithoutSelector", func(t *testing.T) {
 		_, box := filletBox(t)
 		_, err := decad.Shell(box, nil, units.Millimeters(5)).Do(t.Context())

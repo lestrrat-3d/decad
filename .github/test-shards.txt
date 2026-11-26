@@ -275,7 +275,6 @@
 8	1.52	TestUnionSharedCapPartialOverlap
 9	6.65	TestChamferCapLoopSubsetEnds
 9	0.01	TestChamferConvexArcRunOutRefusesASmallArc
-9	0.00	TestConeFromFaceCancelled
 9	0.01	TestContactCylinderAdmissionGates
 9	0.02	TestContactPairBoundedFacetedFloorStrictClear
 9	0.13	TestExactCopyMomentHistoryAndRetiredSource

@@ -30,7 +30,7 @@ func requireCancellationLeavesDocumentUnchanged(t *testing.T, tests []documentBo
 
 			const maxChecks = 1000
 			for n := 1; n <= maxChecks; n++ {
-				ctx := &cancelAtCheckContext{Context: t.Context(), n: n}
+				ctx := newCancelAfter(t.Context(), int64(n-1))
 				body, err := tc.call(ctx, doc)
 				if err == nil {
 					require.NotNil(t, body)
@@ -189,22 +189,6 @@ func TestRevolveTypedNilSectionIsDegenerate(t *testing.T) {
 	_, err = decad.Revolve(doc, s, (*sketch.Chain)(nil), axis, decad.FullRevolution{}).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrDegenerate)
 	require.Empty(t, doc.Bodies())
-}
-
-// cancelAtCheckContext reports context.Canceled from its n-th Err call on, so
-// a test can cancel an operation at each of its cancellation checks in turn.
-type cancelAtCheckContext struct {
-	context.Context //nolint:containedctx // deterministic cancellation wrapper used only within one test call.
-	n               int
-	calls           int
-}
-
-func (c *cancelAtCheckContext) Err() error {
-	c.calls++
-	if c.calls >= c.n {
-		return context.Canceled
-	}
-	return nil
 }
 
 // TestRevolveCanceledContextLeavesDocumentUnchanged cancels a profile and a

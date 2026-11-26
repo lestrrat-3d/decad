@@ -169,19 +169,6 @@ func TestDraftPlacedAndFilleted(t *testing.T) {
 	require.Greater(t, vol2.Value.Base(), 0.0)
 }
 
-// TestDraftRetires is D4: the receiver is retired, the result is live and the
-// document holds one body.
-func TestDraftRetires(t *testing.T) {
-	t.Parallel()
-	doc := decad.New()
-	box := plainBox(t, doc, decad.Along)
-	got, err := decad.Draft(box, decad.Faces(decad.Walls(box)), capNeutral(box, decad.CapStart), units.Degrees(5)).Do(t.Context())
-	require.NoError(t, err)
-	require.Equal(t, []*decad.Body{got}, doc.Bodies())
-	_, err = decad.Draft(box, decad.Faces(decad.Walls(box)), capNeutral(box, decad.CapStart), units.Degrees(5)).Do(t.Context())
-	require.ErrorIs(t, err, decad.ErrRetiredBody)
-}
-
 // TestWallsSelector pins Walls(b): every side(i, j) face of b's own producer,
 // no cap, and nothing on a body whose producer mints no walls.
 func TestWallsSelector(t *testing.T) {
@@ -300,6 +287,7 @@ func TestDraftRefusals(t *testing.T) {
 		b := plainBox(t, d2, decad.Along)
 		got, err := decad.Draft(b, walls(b), capNeutral(b, decad.CapStart), deg5).Do(t.Context())
 		require.NoError(t, err)
+		require.Equal(t, []*decad.Body{got}, d2.Bodies(), "the receiver is retired and the result is the one body")
 		_, err = decad.Draft(b, walls(b), capNeutral(b, decad.CapStart), deg5).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrRetiredBody)
 		before := d2.Bodies()

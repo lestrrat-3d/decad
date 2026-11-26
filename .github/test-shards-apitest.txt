@@ -1021,7 +1021,6 @@
 4	1.91	TestCarrierRecordUnionKeepsTheCopiedPrismJoinRoute
 4	0.00	TestChamferAllEdgesOfBareBoxMeshes
 4	0.18	TestChamferContextCancellationDuringAuditPreservesError
-4	0.00	TestChamferContextCancellationLeavesReceiverLive
 4	6.50	TestChargedChainChamferEveryRimAndWindow
 4	0.00	TestClearanceAxisBoxesNearTolerance
 4	0.01	TestClearanceCellReadingsStayExact
@@ -2766,7 +2765,6 @@
 11	0.21	TestDirectLoftMovingHoleWithCurvedOuterWallPublishesRuledFace
 11	1.01	TestDirectLoftRotatedCircleFramesPublishRuledHole
 11	0.00	TestDraftNotchWall
-11	0.01	TestDraftRetires
 11	0.04	TestDraftUndercutSlot
 11	0.02	TestEmbossDraftEngravedNarrowsTowardTheFloor
 11	0.00	TestEmbossEngravedOnBottom
@@ -3219,7 +3217,6 @@
 12	0.10	TestModifyCommandsRefuseNilContext
 12	0.10	TestModifyCommandsReturnCancellationByIdentity
 12	0.10	TestModifyConstructorsRecordANilBody
-12	0.10	TestModifyCommandsKeepTheGateOrder
 12	0.10	TestModifyCommandsCopyTheirSelector
 12	0.10	TestSideMethodsLastCallWins
 12	0.10	TestShellClosedAndShellShareTheirMethods

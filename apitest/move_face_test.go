@@ -88,11 +88,9 @@ func TestMoveFaceRefusals(t *testing.T) {
 	require.ErrorIs(t, move(top, units.Millimeters(math.NaN())), decad.ErrNotFinite)
 	require.ErrorIs(t, move(decad.Faces(decad.Planar()), units.Millimeters(1)), decad.ErrDegenerate, "six faces are not one")
 	require.ErrorIs(t, move(nil, units.Millimeters(1)), decad.ErrDegenerate)
-	_, err := decad.MoveFace(block, top, units.Millimeters(1)).Do(nil) //nolint:staticcheck // a nil context is the case under test
-	require.ErrorIs(t, err, decad.ErrDegenerate)
 	// A body that is not a faceted orthogonal solid keeps its refusal.
 	prism := boxBody(t, doc, 30, 0, 40, 8, 6)
-	_, err = decad.MoveFace(prism, decad.Faces(decad.Facing(r3.NewVec(0, 0, 1))), units.Millimeters(1)).Do(t.Context())
+	_, err := decad.MoveFace(prism, decad.Faces(decad.Facing(r3.NewVec(0, 0, 1))), units.Millimeters(1)).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.Len(t, doc.Bodies(), 2, "every refusal leaves the document alone")
 }

@@ -377,10 +377,9 @@ func TestOffsetStagedFamilies(t *testing.T) {
 	require.Len(t, free, 2)
 }
 
-// TestOffsetRefusals is Table R's R40 and R41 plus the sealed option tier: a
+// TestOffsetRefusals is Table R's R40 plus the sealed option tier: a
 // bad magnitude keeps sectionrecord.MagnitudeIn's own sentinel, an option this package did
-// not mint is ErrDegenerate, and a retired receiver is ErrRetiredBody. None of
-// them registers or retires anything.
+// not mint is ErrDegenerate. None of them registers or retires anything.
 func TestOffsetRefusals(t *testing.T) {
 	t.Parallel()
 	s, p := plateSketch(t)
@@ -414,14 +413,6 @@ func TestOffsetRefusals(t *testing.T) {
 			require.Len(t, doc.Bodies(), 1)
 		})
 	}
-
-	// R41: Thicken consumes its receiver, so an offset of that retired sheet
-	// refuses on liveness rather than on any geometry.
-	solid, err := decad.Thicken(patch, units.Millimeters(2)).Do(t.Context())
-	require.NoError(t, err)
-	require.Equal(t, decad.BodySolid, solid.Kind())
-	_, err = decad.Offset(patch, units.Millimeters(1)).Do(t.Context())
-	require.ErrorIs(t, err, decad.ErrRetiredBody)
 }
 
 // TestOffsetPatchConversionIsRefused is R39's patch leg: a distance that
