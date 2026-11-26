@@ -167,6 +167,10 @@ func passesIdentityToInterface(info *types.Info, n *ast.CallExpr) bool {
 // all three (a generic struct field, an ordered map of struct keys, an id kept in an any variable) are not
 // reported. Closing them needs boxing and generic scans, so do not read a green run as proof that no id is ordered
 // or formatted.
+//
+// It also misses an id read through unsafe. The allow-list works per function, so new id arithmetic added inside
+// a function that is already listed passes silently. Files under build tags are not scanned; today only the race
+// files carry one.
 func scanIdentityArithmetic(ms *moduleSource) []identityUse {
 	var uses []identityUse
 	for _, tp := range ms.pkgs {
@@ -313,7 +317,8 @@ const (
 var identityArithmeticAllowList = map[string]string{
 	// Fresh result ids: a base taken from the document counter (nextProducer, MintLevel, MintCurve), offset by a
 	// loop index. No input identity enters the sum.
-	"boolean.go performBoolean":                                       "base of a paired Cut's span, from the result's own fresh producer",
+	"boolean.go commitBoolean":                                        "base of a paired Cut's span, from the result's own fresh producer: base := body.n.Origin.Producer - build.span + 1",
+	"boolean.go buildBoolean":                                         "starts the span at 1",
 	"boolean_regroup.go pairedCutContinuation":                        "mints step ids from the counter; the < and > test only that the counter has room for the span",
 	"brep_modify.go commitResult":                                     "span of the result",
 	"document.go advanceProducer":                                     advancesCounter,

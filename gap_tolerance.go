@@ -85,7 +85,7 @@ func gapReachOf(opts []DocumentOption) (float64, error) {
 
 // queryContext returns ctx carrying a private transient id source for d. Every
 // ctx query method (Verify, VerifyMotion, VerifyLinkage, VerifyJointBox,
-// ContactPair, ProvePairSeparated, SweepPair, SweptBox) calls it at entry, so
+// ContactPair, ProvePairSeparated, SweepPair, SweptBox, IntersectionVolume) calls it at entry, so
 // bodies a query builds on its own worker goroutines never mint from, or move,
 // the document's level and curve counters. A nil d or ctx is returned as is.
 func (d *Document) queryContext(ctx context.Context) context.Context {
