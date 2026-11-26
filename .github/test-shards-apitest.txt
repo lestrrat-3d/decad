@@ -27,7 +27,6 @@
 0	0.01	TestArrangeAngleKeepsABodyThatIsAlreadySquare
 0	0.00	TestAsymmetricChamferReferenceRefused
 0	0.01	TestBodyPatchCircularPrismNestedFillMeshRefuses
-0	0.00	TestBodyPatchContextCancellationLeavesDocumentUnchanged
 0	0.10	TestBooleanGapToleranceEdgeAndPointTouches
 0	4.45	TestBossPilotTapped
 0	0.02	TestBossPolygonAndSlotVolumes

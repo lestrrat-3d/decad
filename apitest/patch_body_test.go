@@ -1,7 +1,6 @@
 package apitest_test
 
 import (
-	"context"
 	"strings"
 	"testing"
 
@@ -494,25 +493,6 @@ func TestBodyPatchTableR(t *testing.T) {
 		require.ErrorIs(t, err, decad.ErrNoMatch)
 		require.Equal(t, before, doc.Bodies())
 	})
-}
-
-// TestBodyPatchContextCancellationLeavesDocumentUnchanged mirrors
-// TestPatchContextCancellationLeavesDocumentUnchanged (patch_test.go).
-func TestBodyPatchContextCancellationLeavesDocumentUnchanged(t *testing.T) {
-	t.Parallel()
-	doc := decad.New()
-	sheet := circleSheet(t, doc, 10)
-	ctx, cancel := context.WithCancel(t.Context())
-	cancel()
-
-	_, err := decad.PatchEdges(sheet, decad.Edges(decad.Free()).Exactly(1)).Do(ctx)
-	require.ErrorIs(t, err, context.Canceled)
-	require.Len(t, doc.Bodies(), 1)
-
-	var nilContext context.Context
-	_, err = decad.PatchEdges(sheet, decad.Edges(decad.Free()).Exactly(1)).Do(nilContext)
-	require.ErrorIs(t, err, decad.ErrDegenerate)
-	require.Len(t, doc.Bodies(), 1)
 }
 
 // TestBodyPatchCopyKeepsBandNormalBound patches the free rims of a

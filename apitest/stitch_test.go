@@ -552,17 +552,12 @@ func TestStitchPlacedBoxIsApproximateSolid(t *testing.T) {
 }
 
 // TestStitchTableR is agent-docs/surface-design.md's T13-shaped coverage of every
-// Table R row this increment raises through the public seam: R12 (no body,
-// and a nil operand), R13 (a foreign body), R14 (a retired body), and R17
-// (a solid operand).
+// Table R row this increment raises through the public seam: R12 (a nil
+// operand), R13 (a foreign body), and R17 (a solid operand). R12 (no body) is
+// a row of TestSurfaceConstructorsRecordNilOperands and R14 (a retired body) a
+// row of TestSurfaceCommandsRefuseARetiredBody.
 func TestStitchTableR(t *testing.T) {
 	t.Parallel()
-
-	t.Run("R12 no body", func(t *testing.T) {
-		t.Parallel()
-		_, err := decad.Stitch().Do(t.Context())
-		require.ErrorIs(t, err, decad.ErrDegenerate)
-	})
 
 	t.Run("R12 nil operand", func(t *testing.T) {
 		t.Parallel()
@@ -581,16 +576,6 @@ func TestStitchTableR(t *testing.T) {
 		_, bottom2, _ := stitchBoxSheets(t, doc2, 10)
 		_, err := decad.Stitch(top1, bottom2).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrForeignBody)
-	})
-
-	t.Run("R14 retired body", func(t *testing.T) {
-		t.Parallel()
-		doc := decad.New()
-		walls, bottom, top := stitchBoxSheets(t, doc, 10)
-		_, err := decad.Stitch(walls, bottom, top).Do(t.Context())
-		require.NoError(t, err)
-		_, err = decad.Stitch(walls).Do(t.Context())
-		require.ErrorIs(t, err, decad.ErrRetiredBody)
 	})
 
 	t.Run("R17 solid operand", func(t *testing.T) {

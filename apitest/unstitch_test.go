@@ -263,8 +263,10 @@ func TestUnstitchRevolveRoundTripStaysASheet(t *testing.T) {
 	require.Len(t, restitched.Edges(), wantEdges)
 }
 
-// TestUnstitchTableR covers Unstitch's own Table R rows: R11 (a Faceted
-// body), R12 (a nil receiver), and R14 (a retired receiver).
+// TestUnstitchTableR covers Unstitch's own Table R row R11 (a Faceted body).
+// R12 (a nil receiver) and R14 (a retired receiver) are rows of
+// TestSurfaceConstructorsRecordNilOperands and
+// TestSurfaceCommandsRefuseARetiredBody.
 func TestUnstitchTableR(t *testing.T) {
 	t.Parallel()
 
@@ -281,24 +283,6 @@ func TestUnstitchTableR(t *testing.T) {
 		_, err = decad.Unstitch(cut).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.Equal(t, before, doc.Bodies())
-	})
-
-	t.Run("R12 nil receiver", func(t *testing.T) {
-		t.Parallel()
-		var nilBody *decad.Body
-		_, err := decad.Unstitch(nilBody).Do(t.Context())
-		require.ErrorIs(t, err, decad.ErrDegenerate)
-	})
-
-	t.Run("R14 retired receiver", func(t *testing.T) {
-		t.Parallel()
-		doc := decad.New()
-		box := unstitchBox(t, doc)
-		_, err := decad.Unstitch(box).Do(t.Context())
-		require.NoError(t, err)
-
-		_, err = decad.Unstitch(box).Do(t.Context())
-		require.ErrorIs(t, err, decad.ErrRetiredBody)
 	})
 }
 
