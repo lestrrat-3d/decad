@@ -333,9 +333,9 @@ type booleanEvaluation struct {
 	audit     *facetproof.MeshAudit
 }
 
-// performBoolean gates the operands, runs the read-only geometry evaluator,
-// then builds and commits the public result atomically. A failure before the
-// commit leaves the live-body set, and operands unchanged.
+// performBoolean gates the operands, runs the read-only geometry evaluator
+// (buildBoolean), then commits the public result atomically (commitBoolean). A
+// failure before the commit leaves the live-body set, and operands unchanged.
 func performBoolean(ctx context.Context, op meshbool.OperationKind, a, b *Body, cfg booleanConfig) (*Body, error) {
 	if a == nil || a.n.Doc == nil {
 		return nil, fmt.Errorf(`%w: the first operand belongs to no document`, ErrDegenerate)
@@ -353,32 +353,73 @@ func performBoolean(ctx context.Context, op meshbool.OperationKind, a, b *Body, 
 	if a == b {
 		return nil, fmt.Errorf(`%w: a boolean needs two distinct bodies`, ErrDegenerate)
 	}
+	build, err := buildBoolean(ctx, d, op, a, b, cfg)
+	if err != nil {
+		return nil, err
+	}
+	return commitBoolean(d, op, a, b, build)
+}
+
+// booleanRoute names the way buildBoolean produced its result, which decides
+// how commitBoolean writes it.
+type booleanRoute int
+
+const (
+	// routeSpan is the general route: the result commits with the producer span
+	// it occupies, or as a paired Cut when paired is set.
+	routeSpan booleanRoute = iota
+	// routeOrthogonal is the exact grid route, committed with a single producer.
+	routeOrthogonal
+	// routeBlindCut is a blind group Cut, committed with its replay budget.
+	routeBlindCut
+)
+
+// booleanBuild is the uncommitted result of buildBoolean. Nothing in it is
+// registered in the document, so dropping it leaves the live set, the history,
+// the tables and the identity counters as they were, provided the build ran
+// under a query context.
+type booleanBuild struct {
+	// ctx is the build's context, as buildBoolean narrowed it for the commit.
+	// It lives for one synchronous performBoolean call.
+	ctx    context.Context //nolint:containedctx // The commit of this build runs in the same call.
+	route  booleanRoute
+	body   *Body
+	span   producerID
+	paired pairedCutAncestry
+	// pairedUsed reports that the paired Cut continuation built body; cause is
+	// the refusal that led to it.
+	pairedUsed bool
+	cause      error
+	budget     *proofbound.ReplayBudget
+}
+
+// buildBoolean runs the geometry evaluation of a boolean on gated operands and
+// returns the uncommitted result, or the error the operation reports. It
+// registers nothing and retires nothing; under a query context it mints no
+// document identity. a and b MUST be distinct live bodies of d. Both
+// performBoolean and IntersectionVolume take this route, so a query answers as
+// the operation does.
+func buildBoolean(ctx context.Context, d *Document, op meshbool.OperationKind, a, b *Body,
+	cfg booleanConfig) (booleanBuild, error) {
 	if op == meshbool.OpCut && cheekCutCandidate(d, a) && directCheekLoft(b) {
 		ctx = withNativeCutBounds(ctx, a, b)
 	}
 	if body, ok := orthogonalBoolean(ctx, d, op, a, b); ok {
-		kind := operationKindForBoolean(op)
-		if err := d.commitOperationIn(ctx, nil, kind, operationInputsForBoolean(op, a, b), body, a, b); err != nil {
-			return nil, err
-		}
-		return body, nil
+		return booleanBuild{ctx: ctx, route: routeOrthogonal, body: body}, nil
 	}
 	_, privateHistory := ctx.Value(operationHistorySuppressedKey{}).(*operationHistoryCapture)
 	if op == meshbool.OpCut && !cfg.matchingFaces && !privateHistory {
 		evalCtx, err := d.evalContext(ctx)
 		if err != nil {
-			return nil, err
+			return booleanBuild{}, err
 		}
 		budget := proofbound.NewReplayTrialBudget()
 		candidate, admitted, err := groupBlindCutBodyWithBudget(evalCtx, a, b, d.producerAt(ctx), budget)
 		if err != nil {
-			return nil, err
+			return booleanBuild{}, err
 		}
 		if admitted {
-			if err := commitBlindGroupCut(ctx, d, a, b, candidate, budget); err != nil {
-				return nil, err
-			}
-			return candidate, nil
+			return booleanBuild{ctx: ctx, route: routeBlindCut, body: candidate, budget: budget}, nil
 		}
 	}
 	body, err := booleanBodyWith(ctx, op, a, b, d.producerAt(ctx), cfg)
@@ -390,43 +431,64 @@ func performBoolean(ctx context.Context, op meshbool.OperationKind, a, b *Body, 
 		var rerr error
 		body, span, paired, used, rerr = pairedCutContinuation(ctx, d, a, b, cfg, err)
 		if rerr != nil {
-			return nil, rerr
+			return booleanBuild{}, rerr
 		}
 		pairedUsed = used
 	}
 	if err != nil && !pairedUsed {
 		rescued, used, ok, rerr := regroupBoolean(ctx, d, op, a, b, cfg, err)
 		if rerr != nil {
-			return nil, rerr
+			return booleanBuild{}, rerr
 		}
 		if !ok {
 			rescued, used, ok, rerr = rimSplitRebuild(ctx, d, op, a, b, cfg, err)
 			if rerr != nil {
-				return nil, rerr
+				return booleanBuild{}, rerr
 			}
 		}
 		if !ok {
-			return nil, err
+			return booleanBuild{}, err
 		}
 		body, span = rescued, used
 	}
 	if op == meshbool.OpCut {
 		if err := containedCutQuantities(ctx, body, a, b); err != nil {
-			return nil, err
+			return booleanBuild{}, err
 		}
 	}
 	if err := ctx.Err(); err != nil {
-		return nil, err
+		return booleanBuild{}, err
 	}
-	if pairedUsed {
-		base := body.n.Origin.Producer - span + 1
-		if commitErr := commitPairedCut(ctx, d, a, b, body, span, base, paired, err); commitErr != nil {
-			return nil, commitErr
+	return booleanBuild{ctx: ctx, route: routeSpan, body: body, span: span, paired: paired, pairedUsed: pairedUsed,
+		cause: err}, nil
+}
+
+// commitBoolean writes a built boolean result into the document, retiring both
+// operands. A failure leaves the live-body set and operands unchanged.
+func commitBoolean(d *Document, op meshbool.OperationKind, a, b *Body, build booleanBuild) (*Body, error) {
+	ctx, body := build.ctx, build.body
+	switch build.route {
+	case routeOrthogonal:
+		kind := operationKindForBoolean(op)
+		if err := d.commitOperationIn(ctx, nil, kind, operationInputsForBoolean(op, a, b), body, a, b); err != nil {
+			return nil, err
+		}
+		return body, nil
+	case routeBlindCut:
+		if err := commitBlindGroupCut(ctx, d, a, b, body, build.budget); err != nil {
+			return nil, err
+		}
+		return body, nil
+	}
+	if build.pairedUsed {
+		base := body.n.Origin.Producer - build.span + 1
+		if err := commitPairedCut(ctx, d, a, b, body, build.span, base, build.paired, build.cause); err != nil {
+			return nil, err
 		}
 		return body, nil
 	}
 	kind := operationKindForBoolean(op)
-	if err := d.commitOperationSpanIn(ctx, nil, kind, operationInputsForBoolean(op, a, b), body, span, a, b); err != nil {
+	if err := d.commitOperationSpanIn(ctx, nil, kind, operationInputsForBoolean(op, a, b), body, build.span, a, b); err != nil {
 		return nil, err
 	}
 	return body, nil

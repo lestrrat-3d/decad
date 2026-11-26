@@ -3278,3 +3278,10 @@
 12	0.10	TestSurfaceCommandsRefuseARetiredBody
 12	0.10	TestSurfaceCommandsCopyTheirArguments
 12	0.10	TestSurfaceCommandsKeepTheirGateOrder
+2	1.60	TestIntersectionVolumeAcrossContainers
+1	41.55	TestIntersectionVolumeCommitsNothing
+2	1.97	TestIntersectionVolumeConcurrent
+2	0.01	TestIntersectionVolumeGates
+2	5.68	TestIntersectionVolumeLaterOperations
+2	23.75	TestIntersectionVolumeMatchesIntersect
+2	1.83	TestIntersectionVolumeSharedOperandsConcurrent
