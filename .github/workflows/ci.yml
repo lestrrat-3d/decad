@@ -208,6 +208,14 @@ jobs:
             race: "-race"
             shard: "12"
             packages: ""
+          - os: ubuntu-latest
+            race: "-race"
+            shard: "13"
+            packages: ""
+          - os: ubuntu-latest
+            race: "-race"
+            shard: "14"
+            packages: ""
     runs-on: ${{ matrix.os }}
     env:
       GORACE: atexit_sleep_ms=0
