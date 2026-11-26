@@ -16,24 +16,30 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestProducerCounterAccess parses every non-test .go file of the root package
-// and of internal/ and fails when one reads or writes a document's identity
-// counters (the NextProducer, NextLevel and NextCurve fields) through a
-// selector, or names nextProducerID. Only root document.go (producerAt and
-// advanceProducer) and internal/topo/document.go (ProducerAt, SeedsAt, MintLevel
-// and MintCurve) may touch the counters, so a later change that routes them
-// through the calling context edits those two files alone. A composite literal
-// that seeds a transient document names the field as a key, not a selector,
-// and passes.
+// TestProducerCounterAccess parses every non-test .go file of the module (the
+// root package, internal/, linkage/ and any other package that imports
+// internal/topo) and fails when code outside an allowed function reads or
+// writes a document's identity counters (the NextProducer, NextLevel and
+// NextCurve fields) through a selector, or names nextProducerID. Only the
+// functions producerAt and advanceProducer of root document.go and ProducerAt,
+// SeedsAt, MintLevel and MintCurve of internal/topo/document.go may touch the
+// counters, so a later change that routes them through the calling context
+// edits those functions alone. Any other function, including one added to an
+// allowed file, fails. A composite literal that seeds a transient document
+// names the field as a key, not a selector, and passes.
 func TestProducerCounterAccess(t *testing.T) {
 	t.Parallel()
 	counters := map[string]struct{}{"NextProducer": {}, "NextLevel": {}, "NextCurve": {}}
-	allowed := map[string]struct{}{"document.go": {}, "internal/topo/document.go": {}}
+	allowed := map[string]struct{}{
+		"document.go:producerAt":               {},
+		"document.go:advanceProducer":          {},
+		"internal/topo/document.go:ProducerAt": {},
+		"internal/topo/document.go:SeedsAt":    {},
+		"internal/topo/document.go:MintLevel":  {},
+		"internal/topo/document.go:MintCurve":  {},
+	}
 	var bad []string
 	check := func(path string) error {
-		if _, ok := allowed[filepath.ToSlash(path)]; ok {
-			return nil
-		}
 		src, err := os.ReadFile(path)
 		if err != nil {
 			return err
@@ -47,34 +53,44 @@ func TestProducerCounterAccess(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		ast.Inspect(f, func(n ast.Node) bool {
-			switch x := n.(type) {
-			case *ast.SelectorExpr:
-				if _, ok := counters[x.Sel.Name]; ok {
-					bad = append(bad, fset.Position(x.Pos()).String()+": "+x.Sel.Name+" accessed")
-				}
-			case *ast.Ident:
-				if x.Name == "nextProducerID" {
-					bad = append(bad, fset.Position(x.Pos()).String()+": nextProducerID named")
-				}
+		slash := filepath.ToSlash(path)
+		for _, decl := range f.Decls {
+			fn := ""
+			if fd, ok := decl.(*ast.FuncDecl); ok {
+				fn = fd.Name.Name
 			}
-			return true
-		})
+			_, ok := allowed[slash+":"+fn]
+			if ok {
+				continue
+			}
+			ast.Inspect(decl, func(n ast.Node) bool {
+				switch x := n.(type) {
+				case *ast.SelectorExpr:
+					if _, ok := counters[x.Sel.Name]; ok {
+						bad = append(bad, fset.Position(x.Pos()).String()+": "+x.Sel.Name+" accessed in "+fn)
+					}
+				case *ast.Ident:
+					if x.Name == "nextProducerID" {
+						bad = append(bad, fset.Position(x.Pos()).String()+": nextProducerID named in "+fn)
+					}
+				}
+				return true
+			})
+		}
 		return nil
 	}
-	rootFiles, err := filepath.Glob("*.go")
-	require.NoError(t, err)
-	for _, path := range rootFiles {
-		if strings.HasSuffix(path, "_test.go") {
-			continue
-		}
-		require.NoError(t, check(path))
-	}
-	err = filepath.WalkDir("internal", func(path string, de fs.DirEntry, err error) error {
+	err := filepath.WalkDir(".", func(path string, de fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
-		if de.IsDir() || !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
+		if de.IsDir() {
+			name := de.Name()
+			if path != "." && (strings.HasPrefix(name, ".") || name == "testdata" || name == "vendor") {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
 			return nil
 		}
 		return check(path)
