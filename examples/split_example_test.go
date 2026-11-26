@@ -59,7 +59,7 @@ func Example_split() {
 		return
 	}
 
-	pieces, err := decad.Split(context.Background(), block, sheet)
+	pieces, err := decad.Split(block, sheet).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to split: %s\n", err)
 		return

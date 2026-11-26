@@ -73,7 +73,7 @@ func TestPatternUnionFoldRefusalLeavesEveryBodyLive(t *testing.T) {
 	require.True(t, slices.Equal(append(slices.Clone(before), copies...), doc.Bodies()),
 		"a refused Union leaves the plate, the pin and every copy live")
 	for _, c := range copies {
-		require.NoError(t, decad.Remove(c))
+		require.NoError(t, decad.Remove(c).Do(t.Context()))
 	}
 	require.True(t, slices.Equal([]*decad.Body{plate, pin}, doc.Bodies()))
 }

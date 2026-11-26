@@ -330,11 +330,14 @@ func (c *LoftCommand) SurfaceResult() *LoftCommand
 func PatchProfile(d *Document, s *sketch.Sketch, p *sketch.Profile) *PatchProfileCommand
 
 // A planar fill of a closed chain of a body's free edges.
-func PatchEdges(ctx context.Context, b *Body, sel EdgeSelector) (*Body, error)
+func PatchEdges(b *Body, sel EdgeSelector) *PatchEdgesCommand
+func (c *PatchEdgesCommand) Do(ctx context.Context) (*Body, error)
 
 // Joining sheets, and taking a body apart.
-func Stitch(ctx context.Context, bodies ...*Body) (*Body, error)
-func Unstitch(ctx context.Context, b *Body) ([]*Body, error)
+func Stitch(bodies ...*Body) *StitchCommand
+func (c *StitchCommand) Do(ctx context.Context) (*Body, error)
+func Unstitch(b *Body) *UnstitchCommand
+func (c *UnstitchCommand) Do(ctx context.Context) ([]*Body, error)
 
 // Turn an admitted sheet into a solid (§16).
 func Thicken(b *Body, thickness units.Value) *ThickenCommand
@@ -385,7 +388,7 @@ bottom, err := decad.PatchProfile(doc, s, prof).Do(ctx)  // 1 face at z = 0
 // topSketch draws the same profile on the z = 10 plane.
 top, err := decad.PatchProfile(doc, topSketch, topProf).Do(ctx)  // 1 face at z = 10
 
-box, err := decad.Stitch(ctx, walls, bottom, top) // Kind() == BodySolid
+box, err := decad.Stitch(walls, bottom, top).Do(ctx) // Kind() == BodySolid
 vol, err := box.Volume()                          // 60000 mm³, Exact
 ```
 
@@ -515,7 +518,7 @@ boundary carries them. Nothing is integrated twice and nothing new is proven.
 
 ### 5.2 `PatchEdges` — a planar fill of one or more free-edge chains
 
-`PatchEdges(ctx, b, sel)` resolves `sel` against `b`, requires the result to be a set of
+`PatchEdges(b, sel).Do(ctx)` resolves `sel` against `b`, requires the result to be a set of
 **free** edges of `b` that partitions into one or more closed chains, proves
 each chain planar and simple **independently**, and returns a new body
 carrying `b`'s faces plus one new planar face per chain. `b` is retired.
@@ -1419,7 +1422,7 @@ answer.
 
 ### 6.5 `Unstitch`
 
-`Unstitch(ctx, b)` returns one single-face sheet body per face of `b`, in
+`Unstitch(b).Do(ctx)` returns one single-face sheet body per face of `b`, in
 `b.Faces()` order, retiring `b`. Each result carries that face's own surface,
 loops and readings; every edge of every result is free.
 

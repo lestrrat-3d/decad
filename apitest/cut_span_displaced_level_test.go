@@ -201,7 +201,7 @@ func TestCutSpanDisplacedLevelSurfaceTrim(t *testing.T) {
 				One: decad.DistanceSide{D: tc.top}, Two: decad.DistanceSide{D: units.Millimeters(3)}}).SurfaceResult().Do(t.Context())
 			require.NoError(t, err)
 			tool := twoSidedRect(t, doc, 40, -10, 60, 70, units.Inches(0.2), units.Millimeters(20))
-			trimmed, err := decad.Trim(t.Context(), sheet, tool, decad.KeepOutside)
+			trimmed, err := decad.Trim(sheet, tool, decad.KeepOutside).Do(t.Context())
 			if tc.refused {
 				require.ErrorIs(t, err, decad.ErrUnsupported)
 				require.ErrorContains(t, err, "the tool does not span the receiver over the sweep parameter")

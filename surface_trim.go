@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/lestrrat-3d/decad/internal/opcommand"
 	"github.com/lestrrat-3d/decad/internal/surfacetrim"
 )
 
@@ -22,18 +23,42 @@ import (
 // views: §11's PR4, this file's own last section. Split's revolve arm is §11's
 // PR5, in surface_split_revolve.go.
 
-// Extend lengthens b along the named edges' own carriers until
+// Extend returns the command that lengthens b along the named edges' own carriers until
 // they meet tool, and returns the lengthened sheet. It admits a b and
 // tool sharing ONE generator, exactly as Trim does — both a straight sweep, or
 // both a revolve about one axis — under surface-intersection §2.1's own gate.
-// A nil context or a nil b is ErrDegenerate.
-func Extend(ctx context.Context, b *Body, edges *EdgeQuery, tool *Body) (result *Body, retErr error) {
-	defer func() { retErr = operationError(OperationExtend, retErr) }()
-	if ctx == nil {
-		return nil, fmt.Errorf(`%w: a nil context cannot control an extension`, ErrDegenerate)
+// A nil context given to Do or a nil b is ErrDegenerate. The edge query is copied at the call.
+func Extend(b *Body, edges *EdgeQuery, tool *Body) *ExtendCommand {
+	c := &ExtendCommand{b: b, edges: copyEdgeQuery(edges), tool: tool}
+	if b == nil {
+		c.state.Record("body", errNilBody)
 	}
+	return c
+}
+
+// ExtendCommand lengthens a sheet to meet a tool. Build it with [Extend].
+type ExtendCommand struct {
+	state opcommand.State // consumed flag and first recorded fault
+	b     *Body           // stored as given
+	edges *EdgeQuery      // deep-copied at Extend
+	tool  *Body           // stored as given
+}
+
+// Do lengthens the sheet and retires both operands, or returns the error of the first gate that refuses. A second
+// call returns [ErrConsumed].
+func (c *ExtendCommand) Do(ctx context.Context) (*Body, error) {
+	return runCommand(ctx, &c.state, OperationExtend, c.run)
+}
+
+func (c *ExtendCommand) run(ctx context.Context) (*Body, error) {
+	return extend(ctx, c.b, c.edges, c.tool)
+}
+
+// extend is Extend's implementation. ctx is not nil, and the errors it returns carry no operation tag
+// (agent-docs/command-api-design.md §11).
+func extend(ctx context.Context, b *Body, edges *EdgeQuery, tool *Body) (*Body, error) {
 	if b == nil || b.n.Doc == nil {
-		return nil, fmt.Errorf(`%w: the body belongs to no document`, ErrDegenerate)
+		return nil, errNilBody
 	}
 	d := documentHandle(b.n.Doc)
 	if err := d.requireLive(b); err != nil {
@@ -88,7 +113,7 @@ func (s TrimSide) String() string {
 	}
 }
 
-// Trim cuts b where it meets tool and returns the kept pieces as
+// Trim returns the command that cuts b where it meets tool and returns the kept pieces as
 // one sheet body (agent-docs/surface-intersection-design.md §8). b and
 // tool are consumed on the document's uniform terms (core §6); a refusal
 // consumes neither. It admits a pair whose two sweeps share ONE generator —
@@ -99,14 +124,38 @@ func (s TrimSide) String() string {
 // mesh proves no occupied volume (booloperand.RequireVolumeProof),
 // so there is no mesh path for a miss to reroute to. A tool that separates no
 // fragment of b, or every fragment, is [ErrDegenerate] (R30): no
-// trimmed body exists either way. A nil context or a nil b is ErrDegenerate.
-func Trim(ctx context.Context, b *Body, tool *Body, side TrimSide) (result *Body, retErr error) {
-	defer func() { retErr = operationError(OperationTrim, retErr) }()
-	if ctx == nil {
-		return nil, fmt.Errorf(`%w: a nil context cannot control a trim`, ErrDegenerate)
+// trimmed body exists either way. A nil context given to Do or a nil b is ErrDegenerate.
+func Trim(b *Body, tool *Body, side TrimSide) *TrimCommand {
+	c := &TrimCommand{b: b, tool: tool, side: side}
+	if b == nil {
+		c.state.Record("body", errNilBody)
 	}
+	return c
+}
+
+// TrimCommand cuts a sheet where it meets a tool. Build it with [Trim].
+type TrimCommand struct {
+	state opcommand.State // consumed flag and first recorded fault
+	b     *Body           // stored as given
+	tool  *Body           // stored as given
+	side  TrimSide        // gated at Do
+}
+
+// Do trims the sheet and retires both operands, or returns the error of the first gate that refuses. A second call
+// returns [ErrConsumed].
+func (c *TrimCommand) Do(ctx context.Context) (*Body, error) {
+	return runCommand(ctx, &c.state, OperationTrim, c.run)
+}
+
+func (c *TrimCommand) run(ctx context.Context) (*Body, error) {
+	return trim(ctx, c.b, c.tool, c.side)
+}
+
+// trim is Trim's implementation. ctx is not nil, and the errors it returns carry no operation tag
+// (agent-docs/command-api-design.md §11).
+func trim(ctx context.Context, b *Body, tool *Body, side TrimSide) (*Body, error) {
 	if b == nil || b.n.Doc == nil {
-		return nil, fmt.Errorf(`%w: the body belongs to no document`, ErrDegenerate)
+		return nil, errNilBody
 	}
 	d := documentHandle(b.n.Doc)
 	if err := d.requireLive(b); err != nil {
@@ -138,21 +187,48 @@ func Trim(ctx context.Context, b *Body, tool *Body, side TrimSide) (result *Body
 	return body, nil
 }
 
-// Split cuts target with tool and returns one solid per arranged target cell
+// Split returns the command that cuts target with tool and returns one solid per arranged target cell
 // in sketch's cell order. The target is a solid and the tool a sheet sharing
 // its generator: both straight sweeps, or both revolves about one axis
 // (agent-docs/surface-intersection-design.md §2.1). Any other pair, or a miss on
 // that section's gate, is ErrUnsupported. Both operands are consumed only
 // after every piece has been built. A tool that separates no target cell is
-// ErrDegenerate, as is a nil context or a nil target. The document is the
+// ErrDegenerate, as is a nil context given to Do or a nil target. The document is the
 // target's own.
-func Split(ctx context.Context, target, tool *Body) (results []*Body, retErr error) {
-	defer func() { retErr = operationError(OperationSplit, retErr) }()
-	if ctx == nil {
-		return nil, fmt.Errorf(`%w: a nil context cannot control a split`, ErrDegenerate)
+func Split(target, tool *Body) *SplitCommand {
+	c := &SplitCommand{target: target, tool: tool}
+	if target == nil {
+		c.state.Record("target", errSplitNilTarget)
 	}
+	return c
+}
+
+// errSplitNilTarget is the refusal of a nil target, which Split records because the operation reports it right
+// after the nil ctx check.
+var errSplitNilTarget = fmt.Errorf(`%w: the split target belongs to no document`, ErrDegenerate)
+
+// SplitCommand cuts a solid into the cells a sheet separates. Build it with [Split].
+type SplitCommand struct {
+	state  opcommand.State // consumed flag and first recorded fault
+	target *Body           // stored as given
+	tool   *Body           // stored as given
+}
+
+// Do splits the target and retires both operands, or returns the error of the first gate that refuses. A second
+// call returns [ErrConsumed].
+func (c *SplitCommand) Do(ctx context.Context) ([]*Body, error) {
+	return runCommand(ctx, &c.state, OperationSplit, c.run)
+}
+
+func (c *SplitCommand) run(ctx context.Context) ([]*Body, error) {
+	return split(ctx, c.target, c.tool)
+}
+
+// split is Split's implementation. ctx is not nil, and the errors it returns carry no operation tag
+// (agent-docs/command-api-design.md §11).
+func split(ctx context.Context, target, tool *Body) ([]*Body, error) {
 	if target == nil || target.n.Doc == nil {
-		return nil, fmt.Errorf(`%w: the split target belongs to no document`, ErrDegenerate)
+		return nil, errSplitNilTarget
 	}
 	d := documentHandle(target.n.Doc)
 	if err := d.requireLive(target); err != nil {

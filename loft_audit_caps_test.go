@@ -66,7 +66,7 @@ func capsAuditSplit(t *testing.T, doc *Document, body *Body, x float64) (*Body, 
 		Two: DistanceSide{D: units.Millimeters(20)},
 	}).Do(t.Context())
 	require.NoError(t, err)
-	parts, err := Split(t.Context(), body, sheet)
+	parts, err := Split(body, sheet).Do(t.Context())
 	require.NoError(t, err)
 	require.Len(t, parts, 2)
 	return parts[0], parts[1]

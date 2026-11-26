@@ -82,7 +82,7 @@ func Example_extend() {
 	// grows the wall until it meets the block.
 	edge := decad.Edges(decad.Free(), decad.ParallelTo(r3.NewVec(0, 0, 1)),
 		decad.EndpointAt(r3.NewVec(40, 0, 0))).Exactly(1)
-	extended, err := decad.Extend(ctx, wall, edge, tool)
+	extended, err := decad.Extend(wall, edge, tool).Do(ctx)
 	if err != nil {
 		fmt.Printf("failed to extend: %s\n", err)
 		return

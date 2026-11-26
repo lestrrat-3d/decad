@@ -335,11 +335,11 @@ func TestOffsetStagedFamilies(t *testing.T) {
 	ps, pp := plateSketch(t)
 	flat, err := decad.PatchProfile(doc, ps, pp).Do(t.Context())
 	require.NoError(t, err)
-	doubled, err := decad.PatchEdges(t.Context(), flat, decad.Edges(decad.Free()).Exactly(4))
+	doubled, err := decad.PatchEdges(flat, decad.Edges(decad.Free()).Exactly(4)).Do(t.Context())
 	require.NoError(t, err)
 
 	walls, bottom, _ := stitchBoxSheets(t, doc, 10)
-	stitched, err := decad.Stitch(t.Context(), walls, bottom)
+	stitched, err := decad.Stitch(walls, bottom).Do(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, decad.BodySheet, stitched.Kind())
 

@@ -70,7 +70,7 @@ func Example_loft_faces_cone_tangent() {
 		fmt.Printf("failed to build the first sheet: %s\n", err)
 		return
 	}
-	first, err := decad.Split(ctx, spike, cut1)
+	first, err := decad.Split(spike, cut1).Do(ctx)
 	if err != nil {
 		fmt.Printf("failed to split: %s\n", err)
 		return
@@ -80,7 +80,7 @@ func Example_loft_faces_cone_tangent() {
 		fmt.Printf("failed to build the second sheet: %s\n", err)
 		return
 	}
-	second, err := decad.Split(ctx, first[0], cut2)
+	second, err := decad.Split(first[0], cut2).Do(ctx)
 	if err != nil {
 		fmt.Printf("failed to split: %s\n", err)
 		return

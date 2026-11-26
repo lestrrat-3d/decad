@@ -34,7 +34,7 @@ func TestFaceDistanceFromBoxCap(t *testing.T) {
 			require.LessOrEqual(t, math.Abs(got.Value.Base()-tc.want), got.Bound.Base()+1e-15)
 		})
 	}
-	require.NoError(t, decad.Remove(box))
+	require.NoError(t, decad.Remove(box).Do(t.Context()))
 	retired, err := top.DistanceToPoint(t.Context(), r3.NewVec(5, 5, 5), units.Millimeters(0.1))
 	require.NoError(t, err)
 	require.Equal(t, 5.0, retired.Value.Base())

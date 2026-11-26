@@ -7,12 +7,18 @@ with the proofs the builder demands, and adds no geometry kernel.
 ## 1. Contract
 
 ```go
-func SolidFromMesh(ctx context.Context, d *Document, m *MeshBody) (*Body, error)
+func SolidFromMesh(d *Document, m *MeshBody) *SolidFromMeshCommand
+func (c *SolidFromMeshCommand) Do(ctx context.Context) (*Body, error)
 ```
+
+`SolidFromMesh` is a command (`agent-docs/command-api-design.md`): it takes the document and the mesh, and `Do` runs the
+conversion once. It has no method. The constructor records a nil document under the subject `d`, and `Do` refuses a nil
+mesh at the gate. Every composite that converts a mesh calls the unexported `solidFromMesh`, which registers the solid,
+or `solidFromMeshBody`, which builds it without registering; none calls the public command.
 
 | Decision | Rule |
 |---|---|
-| M1 | `m` MUST be closed with every edge in two triangles, and wound outward: an open or non-manifold mesh and a mesh wound inward are `ErrNotSolid`, as is one whose exact signed volume is not positive. A nil context, document or mesh is `ErrDegenerate`. |
+| M1 | `m` MUST be closed with every edge in two triangles, and wound outward: an open or non-manifold mesh and a mesh wound inward are `ErrNotSolid`, as is one whose exact signed volume is not positive. A nil context given to `Do`, a nil document or a nil mesh is `ErrDegenerate`. |
 | M2 | The mesh must not cross itself. `loftmesh.LoftCrossingAuditBounded`, the exact contact audit of the lofted bodies, proves it for at most `loftmesh.MaxLoftAuditTriangles` (65,528) triangles within a 16 million pair-scan budget. A crossing it finds is `ErrDegenerate`; a larger mesh, or one whose audit exceeds its work ceiling, is `ErrUnsupported`. The audit can only refuse: no body is built that it has not cleared. |
 | M3 | The held vertices are the mesh's own floats, so the vertex bound is zero everywhere and so are the mesh bound, the volume's symmetric difference and the area slack. The volume is read from the exact signed volume of the triangles by `facetproof.AuditFacetedMesh` and `booleaneval.VolumeReading`, with whatever bound turning that rational to a float needs; the diameter bound is the bounding box's diagonal, rounded up. |
 | M4 | Triangles share a source group, and so a face, when their planes are the same exactly: the normal `(b − a) × (c − a)` and the offset `n · a`, worked exactly from the floats as dyadics and divided by the first non-zero magnitude of the normal, are equal rationals, so a plane and its orientation have one group (`internal/meshplane`). The comparison cross-multiplies by the two magnitudes; a float key, the downward rounding of each quotient, only buckets the planes, since equal planes round alike. The group is `Planar`. A triangle of no area is a group of its own, not `Planar`. Edge-connectivity then splits a group into its patches, as for any faceted body. |

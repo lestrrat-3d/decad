@@ -40,9 +40,9 @@ func TestLoftFacesThreeCapConeContinuationKeepsSource(t *testing.T) {
 		require.NoError(t, e)
 		return body
 	}
-	first, err := Split(t.Context(), point, sheet(5))
+	first, err := Split(point, sheet(5)).Do(t.Context())
 	require.NoError(t, err)
-	second, err := Split(t.Context(), first[0], sheet(4.5))
+	second, err := Split(first[0], sheet(4.5)).Do(t.Context())
 	require.NoError(t, err)
 	near, far := second[1], first[1]
 	section := func(body *Body, role provenance.Ref) *Face {

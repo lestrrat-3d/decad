@@ -35,7 +35,7 @@ func TestDocumentRemoveTakesBodyOutOfTheModel(t *testing.T) {
 	require.NoError(t, err)
 	originBefore := intruder.Origin()
 
-	require.NoError(t, decad.Remove(intruder))
+	require.NoError(t, decad.Remove(intruder).Do(t.Context()))
 	require.Equal(t, []*decad.Body{keep}, doc.Bodies(), `the removed body leaves the live set, the other stays`)
 
 	report, err = doc.Verify(t.Context())
@@ -85,7 +85,7 @@ func TestDocumentRemoveRefusals(t *testing.T) {
 		t.Parallel()
 		doc := decad.New()
 		live := boxBody(t, doc, 0, 0, 10, 10, 10)
-		require.ErrorIs(t, decad.Remove(nil), decad.ErrDegenerate)
+		require.ErrorIs(t, decad.Remove(nil).Do(t.Context()), decad.ErrDegenerate)
 		require.Equal(t, []*decad.Body{live}, doc.Bodies())
 	})
 
@@ -93,7 +93,7 @@ func TestDocumentRemoveRefusals(t *testing.T) {
 	// handed to the wrong one: the case has no expression and no sentinel.
 	t.Run("body of no document", func(t *testing.T) {
 		t.Parallel()
-		require.ErrorIs(t, decad.Remove(&decad.Body{}), decad.ErrDegenerate)
+		require.ErrorIs(t, decad.Remove(&decad.Body{}).Do(t.Context()), decad.ErrDegenerate)
 	})
 
 	t.Run("owner keeps its other bodies", func(t *testing.T) {
@@ -101,7 +101,7 @@ func TestDocumentRemoveRefusals(t *testing.T) {
 		doc, other := decad.New(), decad.New()
 		live := boxBody(t, doc, 0, 0, 10, 10, 10)
 		removed := boxBody(t, other, 0, 0, 10, 10, 10)
-		require.NoError(t, decad.Remove(removed))
+		require.NoError(t, decad.Remove(removed).Do(t.Context()))
 		require.Equal(t, []*decad.Body{live}, doc.Bodies())
 		require.Empty(t, other.Bodies())
 	})
@@ -111,8 +111,8 @@ func TestDocumentRemoveRefusals(t *testing.T) {
 		doc := decad.New()
 		live := boxBody(t, doc, 0, 0, 10, 10, 10)
 		gone := boxBody(t, doc, 20, 0, 30, 10, 10)
-		require.NoError(t, decad.Remove(gone))
-		require.ErrorIs(t, decad.Remove(gone), decad.ErrRetiredBody)
+		require.NoError(t, decad.Remove(gone).Do(t.Context()))
+		require.ErrorIs(t, decad.Remove(gone).Do(t.Context()), decad.ErrRetiredBody)
 		require.Equal(t, []*decad.Body{live}, doc.Bodies())
 	})
 
@@ -121,7 +121,7 @@ func TestDocumentRemoveRefusals(t *testing.T) {
 		doc := decad.New()
 		source := boxBody(t, doc, 0, 0, 10, 10, 10)
 		moved := translated(t, source, 20, 0, 0)
-		require.ErrorIs(t, decad.Remove(source), decad.ErrRetiredBody, `Placed already retired its receiver`)
+		require.ErrorIs(t, decad.Remove(source).Do(t.Context()), decad.ErrRetiredBody, `Placed already retired its receiver`)
 		require.Equal(t, []*decad.Body{moved}, doc.Bodies())
 	})
 }
@@ -148,7 +148,7 @@ func TestDocumentRemoveLeavesDerivedBodiesUnaffected(t *testing.T) {
 	facesBefore := len(merged.Faces())
 	originBefore := merged.Origin()
 
-	require.NoError(t, decad.Remove(source))
+	require.NoError(t, decad.Remove(source).Do(t.Context()))
 	require.Equal(t, []*decad.Body{merged}, doc.Bodies())
 
 	volAfter, err := merged.Volume()
@@ -272,7 +272,7 @@ func TestDocumentRemoveConcurrentWithVerify(t *testing.T) {
 				`call %d reports the live set just before or just after Remove(order[%d])`, i, i-1)
 		}
 		if i < count-1 {
-			require.NoError(t, decad.Remove(order[i]))
+			require.NoError(t, decad.Remove(order[i]).Do(ctx))
 		}
 	}
 	close(done)

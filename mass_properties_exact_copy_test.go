@@ -104,7 +104,7 @@ func TestExactCopyMomentHistoryAndRetiredSource(t *testing.T) {
 	historyBefore := doc.OperationHistory().Operations()
 	producer, err := doc.OperationHistory().Producer(source)
 	require.NoError(t, err)
-	require.NoError(t, Remove(source))
+	require.NoError(t, Remove(source).Do(t.Context()))
 	after, err := copyBody.MassProperties(t.Context(), units.KilogramsPerCubicMillimeter(1))
 	require.NoError(t, err)
 	require.Equal(t, before.Mass, after.Mass)

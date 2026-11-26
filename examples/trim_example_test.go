@@ -60,7 +60,7 @@ func Example_trim() {
 
 	// KeepOutside keeps the parts of the tube that are outside the bar. The
 	// bar cuts the tube's front and back walls in two, leaving two pieces.
-	trimmed, err := decad.Trim(context.Background(), tube, tool, decad.KeepOutside)
+	trimmed, err := decad.Trim(tube, tool, decad.KeepOutside).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to trim: %s\n", err)
 		return

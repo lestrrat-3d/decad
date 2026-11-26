@@ -462,11 +462,11 @@ func TestBodyDocumentIsTheDocument(t *testing.T) {
 	require.ErrorIs(t, err, decad.ErrRetiredBody)
 
 	for _, body := range doc.Bodies() {
-		require.NoError(t, decad.Remove(body))
+		require.NoError(t, decad.Remove(body).Do(t.Context()))
 	}
 	require.Nil(t, doc.Bodies())
 	require.Same(t, doc, b.Document(), "a removed body still names its document")
-	require.ErrorIs(t, decad.Remove(b), decad.ErrRetiredBody)
+	require.ErrorIs(t, decad.Remove(b).Do(t.Context()), decad.ErrRetiredBody)
 
 	var zero decad.Body
 	require.Nil(t, zero.Document())

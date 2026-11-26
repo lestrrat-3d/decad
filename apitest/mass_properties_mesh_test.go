@@ -95,7 +95,7 @@ func stitchedTetrahedron(t *testing.T, doc *decad.Document) (*decad.Body, float6
 			require.Contains(t, want, v.Position().Value, "premise: every patch corner lands exactly")
 		}
 	}
-	tetrahedron, err := decad.Stitch(t.Context(), faces...)
+	tetrahedron, err := decad.Stitch(faces...).Do(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, decad.BodySolid, tetrahedron.Kind())
 	return tetrahedron, a

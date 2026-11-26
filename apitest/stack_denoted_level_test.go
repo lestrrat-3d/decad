@@ -209,7 +209,7 @@ func TestSurfaceSplitChainSheetDenotedLevel(t *testing.T) {
 			t.Parallel()
 			doc := decad.New()
 			plate := upPlate(t, doc, tc.top)
-			pieces, err := decad.Split(t.Context(), plate, splitSheet(t, doc, tc.sheet))
+			pieces, err := decad.Split(plate, splitSheet(t, doc, tc.sheet)).Do(t.Context())
 			require.NoError(t, err)
 			require.Len(t, pieces, 2)
 			for _, piece := range pieces {
@@ -222,7 +222,7 @@ func TestSurfaceSplitChainSheetDenotedLevel(t *testing.T) {
 		t.Parallel()
 		doc := decad.New()
 		plate := upPlate(t, doc, units.Millimeters(5.08))
-		_, err := decad.Split(t.Context(), plate, splitSheet(t, doc, decad.Distance{D: units.Inches(0.2), Dir: decad.Along}))
+		_, err := decad.Split(plate, splitSheet(t, doc, decad.Distance{D: units.Inches(0.2), Dir: decad.Along})).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.ErrorContains(t, err, sweepSpanMiss)
 	})
@@ -237,8 +237,8 @@ func TestSurfaceSplitPieceKeepsDenotedLevel(t *testing.T) {
 	inch := units.Inches(0.2)
 	doc := decad.New()
 	plate := upPlate(t, doc, inch)
-	pieces, err := decad.Split(t.Context(), plate, splitSheet(t, doc, decad.TwoSided{
-		One: decad.DistanceSide{D: inch}, Two: decad.DistanceSide{D: units.Millimeters(3)}}))
+	pieces, err := decad.Split(plate, splitSheet(t, doc, decad.TwoSided{
+		One: decad.DistanceSide{D: inch}, Two: decad.DistanceSide{D: units.Millimeters(3)}})).Do(t.Context())
 	require.NoError(t, err)
 	require.Len(t, pieces, 2)
 	var left *decad.Body
@@ -339,7 +339,7 @@ func TestSurfaceExtendChainDenotedLevel(t *testing.T) {
 		doc := decad.New()
 		ribbon := extendRibbon(t, doc, inch)
 		tool := twoSidedRect(t, doc, 70, -10, 90, 10, inch, units.Millimeters(0))
-		got, err := decad.Extend(t.Context(), ribbon, query(), tool)
+		got, err := decad.Extend(ribbon, query(), tool).Do(t.Context())
 		require.NoError(t, err)
 		area, err := got.Area()
 		require.NoError(t, err)
@@ -354,7 +354,7 @@ func TestSurfaceExtendChainDenotedLevel(t *testing.T) {
 		doc := decad.New()
 		ribbon := extendRibbon(t, doc, units.Millimeters(5.08))
 		tool := twoSidedRect(t, doc, 70, -10, 90, 10, inch, units.Millimeters(0))
-		_, err := decad.Extend(t.Context(), ribbon, query(), tool)
+		_, err := decad.Extend(ribbon, query(), tool).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.ErrorContains(t, err, "the tool does not span the receiver over the sweep parameter")
 	})

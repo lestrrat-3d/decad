@@ -90,7 +90,7 @@ func TestPatternUnionRefusalLeavesEveryOperandLive(t *testing.T) {
 	require.True(t, slices.Equal(append(slices.Clone(before), copies...), doc.Bodies()),
 		"a refused Union leaves the target, the feature and every copy live")
 	for _, c := range copies {
-		require.NoError(t, decad.Remove(c))
+		require.NoError(t, decad.Remove(c).Do(t.Context()))
 	}
 	require.True(t, slices.Equal(before, doc.Bodies()))
 

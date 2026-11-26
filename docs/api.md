@@ -101,7 +101,7 @@ See [Errors](#errors).
 ### Concurrency
 
 A `decad.Document` is not safe for concurrent mutation. Bodies are immutable and safe to read from any goroutine.
-`Document.Bodies`, `decad.Remove` and `Document.Verify` may run concurrently with each other.
+`Document.Bodies`, `RemoveCommand.Do` and `Document.Verify` may run concurrently with each other.
 A feature command is not safe for concurrent use. When two goroutines call `Do` on one command, the feature runs
 once and the other call returns `decad.ErrConsumed`.
 
@@ -120,7 +120,7 @@ once and the other call returns `decad.ErrConsumed`.
 | `Document.ContainerOf`, `Document.ContainerOfSketch` | Read the container of a body or a sketch. |
 | `Container.AddBody` | Places a live body in the container, taking it out of the container it was in, and changes nothing else. |
 | `Document.VerifyContainers`, `decad.ContainerReport`, `decad.ErrContainerLayout` | Report live bodies left directly in the root and non-root containers holding no bodies beneath them. `Passed` and `Err` summarise the report. |
-| `decad.Remove` | Retires a body from its document. |
+| `decad.Remove(b)` | Retires a body from its document. `Do` returns only an error, refuses a nil body or a body with no document with `decad.ErrDegenerate`, and returns `decad.ErrRetiredBody` for a retired one. A canceled context returns `ctx.Err()` and removes nothing. |
 | `decad.Body` | An immutable solid or sheet. |
 | `decad.BodyKind` | `decad.BodySolid` or `decad.BodySheet`. `Body.Kind` and `Body.IsSolid` read it. |
 
@@ -251,7 +251,7 @@ exactly. Tessellation carries bounds for rounding at the two cap rims.
 | `decad.Union(bodies...).RefineTo(maxBound)` | A bevel gear join of three or more bodies (a revolved blank and two or more tooth copies), built once at the bound you ask for and returned as `decad.Union` followed by `decad.Refine` returns it, with the faces of `Union` and one history entry. `Do` returns the joined body or an error with nothing committed. A set that is not such a join (a pair, a union of another kind, a join folded two bodies at a time) is `decad.ErrUnsupported` before anything is built, and a join that cannot meet the bound is `decad.ErrUnsupported` too; the message says to call `decad.Union`, then `decad.Refine`. A bad bound is refused by `Do` and names `RefineTo` as its subject. |
 | `decad.Cut(target, tool)` | The target minus the tool. A straight-profile twisted `Sweep` is an admitted tool: a boolean restates its closer stationed boundary, and refuses a crossing or gap narrower than the two operands' held bounds together. A straight through-bore of a loft, including one whose upper section is the lower one turned about the axis, keeps the result a loft, so `CapStart` and `CapEnd` of the result still name its caps. A straight through-bore of a loft joined to its mirror image, such as a herringbone gear, bores both halves. |
 | `decad.Intersect(a, b)` | The volume common to both bodies. |
-| `decad.Split` | One solid per arranged target cell. |
+| `decad.Split(target, tool)` | One solid per arranged target cell. `Do` retires both operands. |
 | `decad.Refine(source, maxBound)` | The same held mesh with a tighter proven surface bound, for mesh Unions of extruded, revolved, swept or coiled circles, then Cuts by extruded circles. A straight-bevel join of a revolved blank and point-Loft teeth is rebuilt with finer cone caps instead. |
 
 A chain of mesh `decad.Union` calls over wire-like solids (extruded cylinders, revolved rings, swept round cords, coils)
@@ -429,11 +429,13 @@ A sheet encloses no material, so `Body.Volume` and `Body.Centroid` return `decad
 | Function | Effect |
 |---|---|
 | `decad.PatchProfile` | Builds a one-face sheet from a profile. |
-| `decad.PatchEdges` | Fills closed chains of free edges. |
-| `decad.Stitch` | Welds matching free edges across bodies. Stitching a closed sheet yields a solid. |
-| `decad.Unstitch` | Splits a body into one single-face sheet per face. |
-| `decad.Trim` | Cuts a sheet where it meets a tool and keeps `decad.KeepInside` or `decad.KeepOutside`. |
-| `decad.Extend` | Lengthens a sheet's chosen edges until they meet a tool. |
+| `decad.PatchEdges(b, sel)` | Fills closed chains of free edges. |
+| `decad.Stitch(bodies...)` | Welds matching free edges across bodies. Stitching a closed sheet yields a solid. The bodies are copied when the command is built. |
+| `decad.Unstitch(b)` | Splits a body into one single-face sheet per face. |
+| `decad.Trim(b, tool, side)` | Cuts a sheet where it meets a tool and keeps `decad.KeepInside` or `decad.KeepOutside`. |
+| `decad.Extend(b, edges, tool)` | Lengthens a sheet's chosen edges until they meet a tool. |
+
+Each of these is a command with no method. Run it with `Do(ctx)`; a command built over a nil body records that fault and `Do` returns it as `decad.ErrDegenerate`.
 
 ## Selecting topology
 
@@ -616,7 +618,7 @@ as it found it.
 ## Import
 
 `decad.ReadSTL`, `decad.ReadOBJ`, `decad.ReadThreeMF`, `decad.ReadSTEP` and `decad.ReadIGES` read a triangle mesh file, a STEP solid or a planar-faced IGES solid B-rep into a `decad.MeshBody`. A `decad.MeshBody` is not a
-`decad.Body`: no feature or Boolean takes it. `decad.SolidFromMesh` turns a closed one into a solid body that does take part, after proving the mesh does not cross itself. It reports whether its triangles close into a surface, and its bounds,
+`decad.Body`: no feature or Boolean takes it. `decad.SolidFromMesh(d, m)` builds a command whose `Do` turns a closed one into a solid body that does take part, after proving the mesh does not cross itself. It reports whether its triangles close into a surface, and its bounds,
 area and enclosed volume.
 
 | Reading | Method |

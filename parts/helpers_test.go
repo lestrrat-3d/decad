@@ -113,7 +113,7 @@ func facetedCopy(t *testing.T, doc *decad.Document, b *decad.Body) *decad.Body {
 	require.NoError(t, err)
 	mb, err := decad.NewMeshBody(t.Context(), mesh.Vertices(), mesh.Triangles())
 	require.NoError(t, err)
-	out, err := decad.SolidFromMesh(t.Context(), doc, mb)
+	out, err := decad.SolidFromMesh(doc, mb).Do(t.Context())
 	require.NoError(t, err)
 	return out
 }

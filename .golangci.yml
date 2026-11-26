@@ -184,6 +184,14 @@ linters:
             - github.com/lestrrat-3d/decad.Thread
             - github.com/lestrrat-3d/decad.Infill
             - github.com/lestrrat-3d/decad.SheetMetal
+            - github.com/lestrrat-3d/decad.PatchEdges
+            - github.com/lestrrat-3d/decad.Stitch
+            - github.com/lestrrat-3d/decad.Unstitch
+            - github.com/lestrrat-3d/decad.Trim
+            - github.com/lestrrat-3d/decad.Extend
+            - github.com/lestrrat-3d/decad.Split
+            - github.com/lestrrat-3d/decad.SolidFromMesh
+            - github.com/lestrrat-3d/decad.Remove
   exclusions:
     generated: lax
     presets:

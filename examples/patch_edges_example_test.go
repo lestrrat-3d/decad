@@ -39,8 +39,8 @@ func Example_patch_edges() {
 	// Free edges are edges that belong to only one face, which is what an open
 	// boundary is made of. The tube has eight: four at each end. Both loops
 	// match the query, so one call caps both ends.
-	capped, err := decad.PatchEdges(context.Background(), tube,
-		decad.Edges(decad.Free()).Exactly(8))
+	capped, err := decad.PatchEdges(tube,
+		decad.Edges(decad.Free()).Exactly(8)).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to patch: %s\n", err)
 		return

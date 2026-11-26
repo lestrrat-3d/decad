@@ -23,7 +23,7 @@ func TestMeshSolidFaceCentroidsAreTheFacesAreaCentroids(t *testing.T) {
 	tris := [][3]int{{0, 2, 1}, {3, 4, 5}, {0, 1, 4}, {0, 4, 3}, {0, 3, 5}, {0, 5, 2}, {1, 2, 5}, {1, 5, 4}}
 	m, err := decad.NewMeshBody(t.Context(), verts, tris)
 	require.NoError(t, err)
-	body, err := decad.SolidFromMesh(t.Context(), decad.New(), m)
+	body, err := decad.SolidFromMesh(decad.New(), m).Do(t.Context())
 	require.NoError(t, err)
 	var got []r3.Vec
 	for _, f := range body.Faces() {
@@ -73,7 +73,7 @@ func TestMeshSolidFaceCentroidWeighsUnequalTrianglesByArea(t *testing.T) {
 	}
 	m, err := decad.NewMeshBody(t.Context(), verts, tris)
 	require.NoError(t, err)
-	body, err := decad.SolidFromMesh(t.Context(), decad.New(), m)
+	body, err := decad.SolidFromMesh(decad.New(), m).Do(t.Context())
 	require.NoError(t, err)
 	top := body.Faces()
 	var found bool

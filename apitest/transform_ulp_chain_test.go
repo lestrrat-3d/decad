@@ -34,7 +34,7 @@ func ulpChainSolid(t *testing.T, opts ...decad.DocumentOption) (*decad.Body, []r
 	}
 	mesh, err := decad.NewMeshBody(t.Context(), verts, d.T)
 	require.NoError(t, err)
-	body, err := decad.SolidFromMesh(t.Context(), decad.New(opts...), mesh)
+	body, err := decad.SolidFromMesh(decad.New(opts...), mesh).Do(t.Context())
 	require.NoError(t, err)
 	return body, verts
 }

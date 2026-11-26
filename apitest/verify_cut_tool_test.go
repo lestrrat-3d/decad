@@ -42,7 +42,7 @@ func TestVerifyCutAgainstCopiedTool(t *testing.T) {
 			}
 			later, err := decad.Copy(original).Do(t.Context())
 			require.NoError(t, err)
-			require.NoError(t, decad.Remove(original))
+			require.NoError(t, decad.Remove(original).Do(t.Context()))
 			require.Equal(t, []*decad.Body{cut, later}, sc.doc.Bodies())
 			report, err = sc.doc.Verify(t.Context())
 			require.NoError(t, err)

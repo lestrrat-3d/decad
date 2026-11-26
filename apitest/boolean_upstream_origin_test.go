@@ -267,7 +267,7 @@ func TestMeshUnionCarriesUpstreamRoles(t *testing.T) {
 	}
 	m, err := decad.NewMeshBody(t.Context(), verts, tris)
 	require.NoError(t, err)
-	block, err := decad.SolidFromMesh(t.Context(), doc, m)
+	block, err := decad.SolidFromMesh(doc, m).Do(t.Context())
 	require.NoError(t, err)
 	out, err := decad.Union(u, block).Do(t.Context())
 	require.NoError(t, err)
@@ -358,7 +358,7 @@ func TestSheetOpsKeepUpstreamRoles(t *testing.T) {
 	boss := levelBox(t, doc, 30, 20, 50, 40, 10, 15)
 	u, err := decad.Union(plate, boss).Do(t.Context())
 	require.NoError(t, err)
-	sheets, err := decad.Unstitch(t.Context(), u)
+	sheets, err := decad.Unstitch(u).Do(t.Context())
 	require.NoError(t, err)
 	var top *decad.Body
 	for _, sheet := range sheets {
@@ -369,7 +369,7 @@ func TestSheetOpsKeepUpstreamRoles(t *testing.T) {
 	}
 	require.NotNil(t, top)
 	upstreamFace(t, top, decad.CapEnd(boss), 400, 25)
-	stitched, err := decad.Stitch(t.Context(), sheets...)
+	stitched, err := decad.Stitch(sheets...).Do(t.Context())
 	require.NoError(t, err)
 	upstreamFace(t, stitched, decad.CapEnd(boss), 400, 25)
 	upstreamFace(t, stitched, decad.CapEnd(plate), 80*60-20*20, 10)
@@ -379,14 +379,14 @@ func TestSheetOpsKeepUpstreamRoles(t *testing.T) {
 	boss2 := levelBox(t, doc2, 30, 20, 50, 40, 10, 15)
 	u2, err := decad.Union(plate2, boss2).Do(t.Context())
 	require.NoError(t, err)
-	sheets2, err := decad.Unstitch(t.Context(), u2)
+	sheets2, err := decad.Unstitch(u2).Do(t.Context())
 	require.NoError(t, err)
 	var patchedCount int
 	for _, sheet := range sheets2 {
 		if _, err := decad.Faces(decad.FaceCreatedBy(decad.CapEnd(boss2))).SelectFaces(sheet); err != nil {
 			continue
 		}
-		patched, err := decad.PatchEdges(t.Context(), sheet, decad.Edges(decad.Free()).Exactly(4))
+		patched, err := decad.PatchEdges(sheet, decad.Edges(decad.Free()).Exactly(4)).Do(t.Context())
 		require.NoError(t, err)
 		upstreamFace(t, patched, decad.CapEnd(boss2), 400, 25)
 		patchedCount++

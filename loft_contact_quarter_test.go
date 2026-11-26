@@ -220,7 +220,7 @@ func TestQuarterSourceHeldPairRefusals(t *testing.T) {
 		t.Fatalf("paired cancellation: accepted=%t err=%v slabs=%d output=%d",
 			accepted, err, got.Slabs, outputVisits)
 	}
-	if err := Remove(prism); err != nil {
+	if err := Remove(prism).Do(ctx); err != nil {
 		t.Fatal(err)
 	}
 	got, accepted, err = loftdirect.LoftQuarterSourceHeldPair(ctx, bodyNode(prism), bodyNode(loft),
@@ -322,7 +322,7 @@ func TestQuarterSourceHeldY3Refusals(t *testing.T) {
 		t.Fatalf("in-flight cancellation: accepted=%t err=%v pieces=%d output=%d",
 			accepted, err, got.Pieces, outputVisits)
 	}
-	if err := Remove(prism); err != nil {
+	if err := Remove(prism).Do(ctx); err != nil {
 		t.Fatal(err)
 	}
 	got, accepted, err = loftdirect.LoftQuarterSourceHeldY3(ctx, bodyNode(prism), bodyNode(loft),
@@ -418,7 +418,7 @@ func TestQuarterSourceHeldY1Refusals(t *testing.T) {
 		t.Fatalf("in-flight cancellation: accepted=%t err=%v pieces=%d source=%d output=%d",
 			accepted, err, got.Pieces, sourceVisits, outputVisits)
 	}
-	if err := Remove(prism); err != nil {
+	if err := Remove(prism).Do(ctx); err != nil {
 		t.Fatal(err)
 	}
 	got, accepted, err = loftdirect.LoftQuarterSourceHeldY1(ctx, bodyNode(prism), bodyNode(loft),
@@ -704,7 +704,7 @@ func TestLoftQuarterHeldPairRealProducerGate(t *testing.T) {
 	t.Run("copied prism", func(t *testing.T) {
 		copied, copyErr := Copy(prism).Do(t.Context())
 		require.NoError(t, copyErr)
-		defer func() { require.NoError(t, Remove(copied)) }()
+		defer func() { require.NoError(t, Remove(copied).Do(t.Context())) }()
 		got, accepted, readErr := loftcontact.CertifyQuarterHeldPair(t.Context(),
 			proofbound.NewWorkBudget(t.Context()), &copied.n, &loft.n)
 		require.NoError(t, readErr)
@@ -716,7 +716,7 @@ func TestLoftQuarterHeldPairRealProducerGate(t *testing.T) {
 		operation := &proofbound.WorkBudget{StepFn: func() error {
 			steps++
 			if steps == 3000 {
-				return Remove(prism)
+				return Remove(prism).Do(t.Context())
 			}
 			return nil
 		}, ErrFn: func() error { return nil }}
@@ -736,7 +736,7 @@ func TestLoftQuarterHeldPairRealProducerGate(t *testing.T) {
 		require.NoError(t, buildErr)
 		copied, copyErr := Copy(original).Do(t.Context())
 		require.NoError(t, copyErr)
-		require.NoError(t, Remove(original))
+		require.NoError(t, Remove(original).Do(t.Context()))
 		originalRecord, recordOK := original.n.Payload.(prismPayload)
 		require.True(t, recordOK)
 		copiedRecord, recordOK := copied.n.Payload.(prismPayload)
@@ -966,7 +966,7 @@ func TestLoftQuarterOriginalHeldY1RealProducer(t *testing.T) {
 	})
 
 	t.Run("retired original refuses", func(t *testing.T) {
-		require.NoError(t, Remove(loft))
+		require.NoError(t, Remove(loft).Do(t.Context()))
 		got, ok, readErr := loftcontact.CertifyQuarterHeldSeam(t.Context(),
 			proofbound.NewWallWorkBudgetWithOperation(65_536, proofbound.NewWorkBudget(t.Context())),
 			&loft.n, arcSegment, carrierY)
@@ -1173,7 +1173,7 @@ func TestLoftQuarterJunctionOneRealCase(t *testing.T) {
 	if !errors.Is(err, context.Canceled) || certified {
 		t.Fatalf("canceled source: certified=%t err=%v", certified, err)
 	}
-	if err := Remove(prism); err != nil {
+	if err := Remove(prism).Do(ctx); err != nil {
 		t.Fatal(err)
 	}
 	for _, operands := range [][2]*Body{{prism, loft}, {loft, prism}} {

@@ -39,7 +39,7 @@ func splitSlabs(t *testing.T, doc *decad.Document) []*decad.Body {
 	var kept []*decad.Body
 	for _, k := range []float64{1, 2} {
 		sheet := pointLoftSliceSheet(t, doc, span*k/6, 30)
-		parts, err := decad.Split(t.Context(), inner, sheet)
+		parts, err := decad.Split(inner, sheet).Do(t.Context())
 		require.NoError(t, err)
 		require.Len(t, parts, 2)
 		inner = parts[0]
@@ -91,9 +91,9 @@ func newConeTangentLoft(t *testing.T, doc *decad.Document) coneTangentLoft {
 		require.NoError(t, err)
 		return body
 	}
-	first, err := decad.Split(t.Context(), spike, sheet(5))
+	first, err := decad.Split(spike, sheet(5)).Do(t.Context())
 	require.NoError(t, err)
-	second, err := decad.Split(t.Context(), first[0], sheet(4.5))
+	second, err := decad.Split(first[0], sheet(4.5)).Do(t.Context())
 	require.NoError(t, err)
 	slab := second[1]
 	capOf := func(role decad.FeatureRef) *decad.Face {

@@ -27,7 +27,7 @@ func TestLoftFacesEightSourceSlabsKeepVolumeAndRejectBadCapOrder(t *testing.T) {
 	kept := make([]*decad.Body, 0, 8)
 	for k := 1; k <= 8; k++ {
 		sheet := pointLoftSliceSheet(t, doc, span*float64(k)/6, 30)
-		parts, err := decad.Split(t.Context(), inner, sheet)
+		parts, err := decad.Split(inner, sheet).Do(t.Context())
 		require.NoError(t, err)
 		require.Len(t, parts, 2)
 		inner = parts[0]

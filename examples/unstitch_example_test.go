@@ -37,7 +37,7 @@ func Example_unstitch() {
 	}
 
 	// Each of the box's six faces becomes its own sheet body in the document.
-	sheets, err := decad.Unstitch(context.Background(), box)
+	sheets, err := decad.Unstitch(box).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to unstitch: %s\n", err)
 		return

@@ -198,7 +198,7 @@ serves Fillet and Chamfer, and `MatchingFaces` serves Cut and Intersect.
 - **Racing `Do` calls run the operation at most once.** Consumption is an atomic compare-and-swap; every loser
   returns `ErrConsumed`.
 - Two commands on one document MUST NOT run `Do` concurrently: `Document` is not safe for concurrent mutation
-  (api-design §12). `Remove(b).Do(ctx)` may run concurrently with `Bodies` and `Verify`, as `Remove` may today.
+  (api-design §12). `Remove(b).Do(ctx)` may run concurrently with `Bodies` and `Verify`.
 - **There is no `Clone`.** Rebuilding is one expression, and a clone would have to deep-copy selectors again.
 
 ## 9. Atomicity
@@ -255,11 +255,9 @@ entries that the restore later withdraws, and the next call reuses their produce
 - **A root composite calls the unexported implementation, never a public command.** `hole.go`, `infill.go`,
   `pattern.go`, `path_pattern.go`, `arrange.go`, `fillet_chord.go` and `chamfer_angle.go` call `cut`, `union`,
   `copyBody` and the like. A composite allocates and consumes no command.
-  Two root files still call the public operation `SolidFromMesh`: `infill.go` and `extrude_tilted_face.go` (the
-  tilted-face Extrude route). The last stack PR (§13, PR 7) moves both calls onto the implementation,
-  `solidFromMeshBody`, in the PR that converts `SolidFromMesh`. `infill.go` keeps its `ctx.Err()` guard before it maps
-  the error to `ErrUnsupported` (§3). The tilted-face route swallows every error and falls back, so it needs no
-  guard.
+  `infill.go` and `extrude_tilted_face.go` (the tilted-face Extrude route) call `solidFromMesh`, the implementation
+  of `SolidFromMesh` that registers the solid. `infill.go` keeps its `ctx.Err()` guard before it maps the error to
+  `ErrUnsupported` (§3). The tilted-face route swallows every error and falls back, so it needs no guard.
 - **A composite may tag the implementation's error with that operation's kind itself, but the outermost command's
   kind wins.** `operationError` re-tags every nested non-selection diagnostic with the kind it is given, and the
   public `Do` applies it once with its own kind. A composite's own tag therefore decides a diagnostic's kind only for
@@ -359,9 +357,14 @@ name its methods and special rules.
   `Infill` takes its snapshot before its gates, because the skin route makes its copies ahead of the gates in
   `infillInterior`, so a refusal costs one snapshot.
 - Surface, mesh-to-solid and retirement: no methods. `Remove(b).Do(ctx)` returns `error`, so `RemoveCommand` passes
-  `struct{}` through `runCommand` as `SheetMetal` passes `sheetMetalResult`. `SolidFromMesh(d, m)` records a nil
-  document with the shared `errNilDocument` under the subject `d`, as `Loft`, `PatchProfile` and the section
-  constructors do.
+  `struct{}` through `runCommand` as `SheetMetal` passes `sheetMetalResult`, and it returns `ctx.Err()` itself when
+  `ctx` is already canceled. `SolidFromMesh(d, m)` records a nil document with the shared `errNilDocument` under the
+  subject `d`, as `Loft`, `PatchProfile` and the section constructors do, and `Do` refuses a nil mesh at the gate.
+  `PatchEdges`, `Unstitch`, `Trim`, `Extend` and `Remove` record a nil body (`body`), `Split` a nil target
+  (`target`). `Stitch` records nothing, because its gate polls `ctx` before it reads any operand, and it copies its
+  variadic slot. `PatchEdges` and `Extend` copy their selector and edge query (A3). A mid-build cancel returns
+  `ctx.Err()` itself from every member, because the wrapper of `solidFromMeshBody` guards the call (§3). The
+  implementations are `patchEdges`, `stitch`, `unstitch`, `trim`, `extend`, `split`, `solidFromMesh` and `remove`.
 - `PatternSpec` and every `Extent`, `AngularExtent`, `Axis` and `MirrorPlane` stay sealed constructor arguments.
 
 ## 13. Migration stack

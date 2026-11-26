@@ -102,7 +102,7 @@ func TestPathPatternCountRefusals(t *testing.T) {
 	t.Run("retired body", func(t *testing.T) {
 		t.Parallel()
 		_, block := patternBlock(t)
-		require.NoError(t, decad.Remove(block))
+		require.NoError(t, decad.Remove(block).Do(t.Context()))
 		_, err := decad.PathPattern(block, path, decad.PathCount{Count: 3}).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrRetiredBody)
 	})

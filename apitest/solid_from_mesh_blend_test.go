@@ -63,7 +63,7 @@ func TestSolidFromMeshTiltedFacesStayFaceted(t *testing.T) {
 	facets := importTetrahedron()
 	m, err := decad.ReadSTL(t.Context(), bytes.NewReader(importBinarySTL(facets[:])))
 	require.NoError(t, err)
-	body, err := decad.SolidFromMesh(t.Context(), decad.New(), m)
+	body, err := decad.SolidFromMesh(decad.New(), m).Do(t.Context())
 	require.NoError(t, err)
 	planes, faceted := 0, 0
 	for _, f := range body.Faces() {

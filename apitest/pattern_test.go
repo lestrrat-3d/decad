@@ -305,7 +305,7 @@ func TestPatternCopiesGates(t *testing.T) {
 	copies, err := decad.PatternCopies(peg, &decad.LinearPattern{Dir: patternX, Step: mm, Count: 2}).Do(t.Context())
 	require.NoError(t, err)
 	require.Len(t, copies, 1)
-	require.NoError(t, decad.Remove(peg))
+	require.NoError(t, decad.Remove(peg).Do(t.Context()))
 	_, err = decad.PatternCopies(peg, decad.LinearPattern{Dir: patternX, Step: mm, Count: 2}).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrRetiredBody)
 }

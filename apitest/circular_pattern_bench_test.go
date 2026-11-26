@@ -102,7 +102,7 @@ func circularPatternMeshSolidOrNil(b *testing.B, doc *decad.Document, c *cubes) 
 	if err != nil {
 		b.Fatal(err)
 	}
-	body, err := decad.SolidFromMesh(b.Context(), doc, mesh)
+	body, err := decad.SolidFromMesh(doc, mesh).Do(b.Context())
 	if err != nil {
 		return nil
 	}

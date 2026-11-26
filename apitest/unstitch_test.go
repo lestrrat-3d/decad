@@ -29,7 +29,7 @@ import (
 func unstitchBox(t *testing.T, doc *decad.Document) *decad.Body {
 	t.Helper()
 	walls, bottom, top := stitchBoxSheets(t, doc, 10)
-	box, err := decad.Stitch(t.Context(), walls, bottom, top)
+	box, err := decad.Stitch(walls, bottom, top).Do(t.Context())
 	require.NoError(t, err)
 	return box
 }
@@ -44,7 +44,7 @@ func TestUnstitchBoxYieldsSixFreeSheets(t *testing.T) {
 	wantFaces := box.Faces()
 	require.Len(t, wantFaces, 6)
 
-	results, err := decad.Unstitch(t.Context(), box)
+	results, err := decad.Unstitch(box).Do(t.Context())
 	require.NoError(t, err)
 	require.Len(t, results, 6)
 
@@ -102,7 +102,7 @@ func TestUnstitchVoidRevolveMakesNonVoidSheets(t *testing.T) {
 	voidArea, err := voidFace.Area()
 	require.NoError(t, err)
 
-	pieces, err := decad.Unstitch(t.Context(), body)
+	pieces, err := decad.Unstitch(body).Do(t.Context())
 	require.NoError(t, err)
 	require.Len(t, pieces, len(body.Faces()))
 	var foundVoidFace bool
@@ -134,11 +134,11 @@ func TestUnstitchRestitchRoundTripMatchesOriginal(t *testing.T) {
 	wantArea, err := box.Area()
 	require.NoError(t, err)
 
-	sheets, err := decad.Unstitch(t.Context(), box)
+	sheets, err := decad.Unstitch(box).Do(t.Context())
 	require.NoError(t, err)
 	require.Len(t, sheets, 6)
 
-	restitched, err := decad.Stitch(t.Context(), sheets...)
+	restitched, err := decad.Stitch(sheets...).Do(t.Context())
 	require.NoError(t, err)
 
 	require.Equal(t, decad.BodySolid, restitched.Kind())
@@ -181,19 +181,19 @@ func TestUnstitchRestitchRoundTripClosesABoundedBox(t *testing.T) {
 	s, p := offAxisPlateSketch(t)
 	wall, err := decad.Extrude(doc, s, p, decad.Symmetric{D: units.Inches(2.5)}).SurfaceResult().Do(t.Context())
 	require.NoError(t, err)
-	capped, err := decad.PatchEdges(t.Context(), wall, decad.Edges(decad.Free()).Exactly(8))
+	capped, err := decad.PatchEdges(wall, decad.Edges(decad.Free()).Exactly(8)).Do(t.Context())
 	require.NoError(t, err)
-	solid, err := decad.Stitch(t.Context(), capped)
+	solid, err := decad.Stitch(capped).Do(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, decad.BodySolid, solid.Kind())
 	wantVol, err := solid.Volume()
 	require.NoError(t, err)
 
-	sheets, err := decad.Unstitch(t.Context(), solid)
+	sheets, err := decad.Unstitch(solid).Do(t.Context())
 	require.NoError(t, err)
 	require.Len(t, sheets, 6)
 
-	restitched, err := decad.Stitch(t.Context(), sheets...)
+	restitched, err := decad.Stitch(sheets...).Do(t.Context())
 	require.NoError(t, err)
 
 	require.Equal(t, decad.BodySolid, restitched.Kind(), "the round trip closes again rather than falling back to a sheet")
@@ -236,14 +236,14 @@ func TestUnstitchRevolveRoundTripStaysASheet(t *testing.T) {
 	require.Len(t, wantFree, 8, "the profile's own seam at phi0 and phi1: a partial revolve's own free rim")
 	wantEdges := len(sheet.Edges())
 
-	pieces, err := decad.Unstitch(t.Context(), sheet)
+	pieces, err := decad.Unstitch(sheet).Do(t.Context())
 	require.NoError(t, err)
 	require.Len(t, pieces, 4)
 	for _, piece := range pieces {
 		require.Equal(t, decad.BodySheet, piece.Kind())
 	}
 
-	restitched, err := decad.Stitch(t.Context(), pieces...)
+	restitched, err := decad.Stitch(pieces...).Do(t.Context())
 	require.NoError(t, err)
 
 	require.Equal(t, decad.BodySheet, restitched.Kind())
@@ -278,7 +278,7 @@ func TestUnstitchTableR(t *testing.T) {
 		require.True(t, tookMeshPath(cut))
 
 		before := doc.Bodies()
-		_, err = decad.Unstitch(t.Context(), cut)
+		_, err = decad.Unstitch(cut).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.Equal(t, before, doc.Bodies())
 	})
@@ -286,7 +286,7 @@ func TestUnstitchTableR(t *testing.T) {
 	t.Run("R12 nil receiver", func(t *testing.T) {
 		t.Parallel()
 		var nilBody *decad.Body
-		_, err := decad.Unstitch(t.Context(), nilBody)
+		_, err := decad.Unstitch(nilBody).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrDegenerate)
 	})
 
@@ -294,10 +294,10 @@ func TestUnstitchTableR(t *testing.T) {
 		t.Parallel()
 		doc := decad.New()
 		box := unstitchBox(t, doc)
-		_, err := decad.Unstitch(t.Context(), box)
+		_, err := decad.Unstitch(box).Do(t.Context())
 		require.NoError(t, err)
 
-		_, err = decad.Unstitch(t.Context(), box)
+		_, err = decad.Unstitch(box).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrRetiredBody)
 	})
 }
@@ -337,7 +337,7 @@ func TestUnstitchAtomicCommitLeavesDocumentUnchanged(t *testing.T) {
 	measureDoc := decad.New()
 	measureBox := unstitchBox(t, measureDoc)
 	var total int
-	_, err := decad.Unstitch(countingCtx{Context: t.Context(), calls: &total}, measureBox)
+	_, err := decad.Unstitch(measureBox).Do(countingCtx{Context: t.Context(), calls: &total})
 	require.NoError(t, err)
 	require.Positive(t, total)
 
@@ -348,7 +348,7 @@ func TestUnstitchAtomicCommitLeavesDocumentUnchanged(t *testing.T) {
 	box := unstitchBox(t, doc)
 	forceErr := errors.New("forced mid-unstitch failure")
 	var calls int
-	_, err = decad.Unstitch(countingCtx{Context: t.Context(), calls: &calls, failAt: total / 2, err: forceErr}, box)
+	_, err = decad.Unstitch(box).Do(countingCtx{Context: t.Context(), calls: &calls, failAt: total / 2, err: forceErr})
 	require.ErrorIs(t, err, forceErr)
 
 	require.Len(t, doc.Bodies(), 1)
@@ -371,7 +371,7 @@ func TestUnstitchBoxFacesReportOwnTightBounds(t *testing.T) {
 	doc := decad.New()
 	box := unstitchBox(t, doc)
 
-	results, err := decad.Unstitch(t.Context(), box)
+	results, err := decad.Unstitch(box).Do(t.Context())
 	require.NoError(t, err)
 	require.Len(t, results, 6)
 
@@ -408,7 +408,7 @@ func TestUnstitchBoxFacesBoundsUnionSpansOriginal(t *testing.T) {
 	want, err := box.Bounds()
 	require.NoError(t, err)
 
-	results, err := decad.Unstitch(t.Context(), box)
+	results, err := decad.Unstitch(box).Do(t.Context())
 	require.NoError(t, err)
 	require.Len(t, results, 6)
 
@@ -451,7 +451,7 @@ func TestUnstitchCylinderWallBoundsAreSoundButWholeReceiver(t *testing.T) {
 	require.Equal(t, decad.Exact, want.Exactness)
 	require.Zero(t, want.Bound.Base())
 
-	results, err := decad.Unstitch(t.Context(), disk)
+	results, err := decad.Unstitch(disk).Do(t.Context())
 	require.NoError(t, err)
 	require.Len(t, results, 3)
 
@@ -510,7 +510,7 @@ func TestUnstitchedCapToFaceStopMatchesUnUnstitchedCap(t *testing.T) {
 	plate2, err := decad.Extrude(doc2, s, plateProf, decad.Distance{D: units.Inches(10), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	capSelector := capEndFace(plate2)
-	sheets, err := decad.Unstitch(t.Context(), plate2)
+	sheets, err := decad.Unstitch(plate2).Do(t.Context())
 	require.NoError(t, err)
 	var capSheet *decad.Body
 	for _, sh := range sheets {

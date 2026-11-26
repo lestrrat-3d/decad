@@ -306,7 +306,8 @@ func (d *Document) Bodies() []*Body            // live bodies
 func (d *Document) OperationHistory() *OperationHistory // immutable successful-call snapshot
 func (d *Document) Verify(ctx context.Context, opts ...VerifyOption) (*Report, error)
 
-func Remove(b *Body) error                      // retire a live body by hand; the body names its document
+func Remove(b *Body) *RemoveCommand            // retire a live body by hand; the body names its document
+func (c *RemoveCommand) Do(ctx context.Context) error
 ```
 
 `DocumentOption` is the tier of `WithGapTolerance` and `ExactOnly`, which set the
@@ -1524,10 +1525,13 @@ func (c *LoftCommand) SurfaceResult() *LoftCommand
 
 func PatchProfile(d *Document, s *sketch.Sketch, p *sketch.Profile) *PatchProfileCommand
 func (c *PatchProfileCommand) Do(ctx context.Context) (*Body, error)
-func PatchEdges(ctx context.Context, b *Body, sel EdgeSelector) (*Body, error)
+func PatchEdges(b *Body, sel EdgeSelector) *PatchEdgesCommand
+func (c *PatchEdgesCommand) Do(ctx context.Context) (*Body, error)
 
-func Stitch(ctx context.Context, bodies ...*Body) (*Body, error)
-func Unstitch(ctx context.Context, b *Body) ([]*Body, error)
+func Stitch(bodies ...*Body) *StitchCommand
+func (c *StitchCommand) Do(ctx context.Context) (*Body, error)
+func Unstitch(b *Body) *UnstitchCommand
+func (c *UnstitchCommand) Do(ctx context.Context) ([]*Body, error)
 func Thicken(b *Body, thickness units.Value) *ThickenCommand
 func (c *ThickenCommand) Side(side ThickenSide) *ThickenCommand
 func (c *ThickenCommand) Do(ctx context.Context) (*Body, error)

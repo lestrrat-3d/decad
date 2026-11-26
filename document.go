@@ -93,22 +93,54 @@ func (d *Document) liveBodies() []*Body {
 	return bodyHandles(d.n.Live())
 }
 
-// Remove takes b out of the live model by the caller's own hand: b leaves
-// Bodies() and Verify stops reporting on it, exactly as a body a feature
-// consumed (core §6). A removed body IS a retired body. It stays readable —
-// its measurements, topology, selectors and Origin still answer — but no
-// operation takes it (ErrRetiredBody), and nothing returns it to the model.
-// Remove produces no body, so no producer identity advances, and every other
-// body, including one built from b, keeps its geometry and provenance.
+// Remove returns the command that takes b out of the live model by the caller's own hand: after Do, b leaves
+// Bodies() and Verify stops reporting on it, exactly as a body a feature consumed (core §6). A removed body IS a
+// retired body. It stays readable — its measurements, topology, selectors and Origin still answer — but no
+// operation takes it (ErrRetiredBody), and nothing returns it to the model. Remove produces no body, so no
+// producer identity advances, and every other body, including one built from b, keeps its geometry and provenance.
 //
-// b MUST NOT be nil (ErrDegenerate), and a body that belongs to no document
-// is ErrDegenerate. The document is the one b names; a body already retired
-// — consumed by a feature or removed before — is ErrRetiredBody. A refused
-// call leaves the document unchanged. Remove may run concurrently with Bodies and Verify; a Verify
-// already under way reports on the set as it stood when the call began.
-func Remove(b *Body) error {
+// b MUST NOT be nil (ErrDegenerate), and a body that belongs to no document is ErrDegenerate. The document is the
+// one b names; a body already retired — consumed by a feature or removed before — is ErrRetiredBody. A refused
+// call leaves the document unchanged, and so does a Do whose ctx is already canceled, which returns ctx.Err().
+// Do may run concurrently with Bodies and Verify; a Verify already under way
+// reports on the set as it stood when the call began. Every error carries [OperationRemove].
+func Remove(b *Body) *RemoveCommand {
+	c := &RemoveCommand{b: b}
 	if b == nil {
-		return fmt.Errorf(`%w: a nil body names nothing to remove`, ErrDegenerate)
+		c.state.Record("body", errRemoveNilBody)
+	}
+	return c
+}
+
+// errRemoveNilBody is the refusal of a nil body, which Remove records because the operation reports it before
+// it reads anything else.
+var errRemoveNilBody = fmt.Errorf(`%w: a nil body names nothing to remove`, ErrDegenerate)
+
+// RemoveCommand takes a body out of the live model. Build it with [Remove].
+type RemoveCommand struct {
+	state opcommand.State // consumed flag and first recorded fault
+	b     *Body           // stored as given
+}
+
+// Do removes the body, or returns the error of the first gate that refuses. A nil ctx is ErrDegenerate, and a
+// second call returns ErrConsumed.
+func (c *RemoveCommand) Do(ctx context.Context) error {
+	_, err := runCommand(ctx, &c.state, OperationRemove, c.run)
+	return err
+}
+
+func (c *RemoveCommand) run(ctx context.Context) (struct{}, error) {
+	if err := ctx.Err(); err != nil {
+		return struct{}{}, err
+	}
+	return struct{}{}, remove(c.b)
+}
+
+// remove is Remove's implementation. The errors it returns carry no operation tag
+// (agent-docs/command-api-design.md §11).
+func remove(b *Body) error {
+	if b == nil {
+		return errRemoveNilBody
 	}
 	d := documentHandle(b.n.Doc)
 	if d == nil {

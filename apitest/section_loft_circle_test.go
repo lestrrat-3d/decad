@@ -14,7 +14,7 @@ import (
 func TestSectionDirectLoftAnnulusFeedsExtrude(t *testing.T) {
 	t.Parallel()
 	source := directLoftCircles(t, true, 1, 2, 1, 0)
-	require.NoError(t, decad.Remove(source))
+	require.NoError(t, decad.Remove(source).Do(t.Context()))
 	frame, err := r3.NewFrame(r3.NewVec(0, 0, 1), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
 	require.NoError(t, err)
 	section, profiles, err := source.Section(t.Context(), frame)

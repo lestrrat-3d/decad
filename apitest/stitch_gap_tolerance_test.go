@@ -27,7 +27,7 @@ func TestStitchGapTolerance(t *testing.T) {
 		t.Helper()
 		doc := decad.New(opts...)
 		walls, bottom, top := stitchBoxSheets(t, doc, 10+gap)
-		body, err := decad.Stitch(t.Context(), walls, bottom, top)
+		body, err := decad.Stitch(walls, bottom, top).Do(t.Context())
 		require.NoError(t, err)
 		return body
 	}
@@ -128,7 +128,7 @@ func TestStitchGapTolerance(t *testing.T) {
 		read := func(opts ...decad.DocumentOption) decad.Measurement {
 			doc := decad.New(opts...)
 			walls, bottom, top := stitchBoxSheetsAtOffset(t, doc, 0, 0, 0.001, 0.001, 0, 0.001)
-			cube, err := decad.Stitch(t.Context(), walls, bottom, top)
+			cube, err := decad.Stitch(walls, bottom, top).Do(t.Context())
 			require.NoError(t, err)
 			require.Equal(t, decad.BodySolid, cube.Kind())
 			volume, err := cube.Volume()

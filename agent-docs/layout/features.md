@@ -12,7 +12,7 @@ The rules for rows live in `agent-docs/layout.md`.
 | `topology.go` | Topology types from `Body` to `Vertex` and public surface and curve variants. See API §6.1 and evaluator §3. |
 | `topology_handles.go` | Born-handle constructors, node-to-handle mapping, `handleAlloc` (with `ReplayNodeSize`) and `envOf` for internal builders, `bodyResult`, and `placePayload`. See evaluator §3, §8. |
 | `container.go` | `Container`, the document's grouping of sketches, planes and bodies; placement of results, `ErrCrossContainer`, `ChildNamed`, `NewUniqueChild` and `VerifyContainers`. See `agent-docs/container-design.md`. |
-| `document.go` | `Document`: live body set, atomic operation publication, `Remove`, liveness gates, `Transform` and `Copy` with `CopyPlacement` and `copyBody`; the producer identity spelling and zero-vector predicate. See evaluator §8 and operation history. |
+| `document.go` | `Document`: live body set, atomic operation publication, `RemoveCommand`, liveness gates, `Transform` and `Copy` with `CopyPlacement` and `copyBody`; the producer identity spelling and zero-vector predicate. See evaluator §8 and operation history. |
 | `circle_affine_replay.go` | Exact affine differences for replay of placed circle sources. |
 | `circle_placement_replay.go` | Ordered placement witness and rounding checks for circle sources. |
 | `circle_primitive_seal.go` | Private circle source interface and candidate replay with placement bounds. |
@@ -50,9 +50,9 @@ The rules for rows live in `agent-docs/layout.md`.
 | `tool_combine.go` | Shared by composite features: chains Boolean steps, of one kind (`combineTools`) or several (`combineToolSteps`), over temporary tools, commits once, and retires tools without public history entries. |
 | `thicken.go` | Public `Thicken`, `ThickenCommand` with its `Side` method, thickness and sheet gates and the commit; `internal/thickenbuild/` dispatches the payload and builds. See surface §16. |
 | `offset.go` | `Offset` and `OffsetCommand` with its `Side` method: distance and sheet gates and the commit; `internal/thickenbuild/` builds the second sheet at a normal distance. See surface §17. |
-| `patch_body.go` | `PatchEdges` selection and commit; the chain gates, level proof and Rule P live in `internal/patchchain/`. See surface §5.2. |
-| `stitch.go` | `Stitch`; builds through `internal/stitchrecord/`. See surface §6.4. |
-| `unstitch.go` | `Unstitch` sheet split; builds through `internal/stitchrecord/`. See surface §6.5. |
+| `patch_body.go` | `PatchEdgesCommand` over `patchEdges`: selection and commit; the chain gates, level proof and Rule P live in `internal/patchchain/`. See surface §5.2. |
+| `stitch.go` | `StitchCommand` over `stitch`; builds through `internal/stitchrecord/`. See surface §6.4. |
+| `unstitch.go` | `UnstitchCommand` over `unstitch`, the sheet split; builds through `internal/stitchrecord/`. See surface §6.5. |
 | `extrude.go` | `Extrude`, `ExtrudeCommand` with `Taper` and `SurfaceResult`, linear-extent resolution and the chain ribbon entry point. See evaluator §5 and surface §13.2. |
 | `extrude_tilted_face.go` | `extrudeToTiltedFace`: `Extrude` to a planar face of an exact-vertex faceted solid that is tilted from the sweep, as an extrusion past the face cut by a prism on the face's own outline. See orthogonal Boolean B19. |
 | `draft.go` | `Draft`, `DraftCommand`, `NeutralPlane`, `Walls` gates, plus the tapered extrude angle and surface-result gates, extent resolution and slab dispatch. See draft §5, §7, §10. |

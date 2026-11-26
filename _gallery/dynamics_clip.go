@@ -713,7 +713,7 @@ func stitchedTetrahedron(ctx context.Context, doc *decad.Document) (*decad.Body,
 		}
 		faces = append(faces, patch)
 	}
-	return decad.Stitch(ctx, faces...)
+	return decad.Stitch(faces...).Do(ctx)
 }
 
 // trianglePatch is the triangle with the given plane-local corners, drawn on

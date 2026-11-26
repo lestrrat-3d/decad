@@ -96,7 +96,7 @@ func TestPrivateConstructionKeepsBodiesAndProducerNumbersLocal(t *testing.T) {
 func TestOperationHistoryRemovePublishesZeroOutput(t *testing.T) {
 	doc := New()
 	body := internalBoxBody(t, doc, 0, 0, 2, 2, 2)
-	require.NoError(t, Remove(body))
+	require.NoError(t, Remove(body).Do(t.Context()))
 
 	history := doc.OperationHistory()
 	operations := history.Operations()
@@ -122,7 +122,7 @@ func TestOperationHistoryRemovePublishesZeroOutput(t *testing.T) {
 
 	unstitchDoc := New()
 	stitched := internalBoxBody(t, unstitchDoc, 0, 0, 2, 2, 2)
-	sheets, err := Unstitch(t.Context(), stitched)
+	sheets, err := Unstitch(stitched).Do(t.Context())
 	require.NoError(t, err)
 	require.Len(t, sheets, 6)
 	unstitch, err := unstitchDoc.OperationHistory().Producer(sheets[0])

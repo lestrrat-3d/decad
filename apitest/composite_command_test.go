@@ -310,7 +310,7 @@ func TestCompositeCommandsRefuseARetiredBody(t *testing.T) {
 			next, doc := tc.build(t)
 			do := next()
 			for _, b := range doc.Bodies() {
-				require.NoError(t, decad.Remove(b))
+				require.NoError(t, decad.Remove(b).Do(t.Context()))
 			}
 			got, err := do(t.Context())
 			require.ErrorIs(t, err, decad.ErrRetiredBody)
@@ -397,7 +397,7 @@ func TestCompositeNilSelectorsAreRefusedAfterTheBodyGates(t *testing.T) {
 	_, err = decad.Thread(plate, nil, mm(1)).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrDegenerate)
 	require.Equal(t, []*decad.Body{plate}, doc.Bodies(), "a refusal leaves the plate live")
-	require.NoError(t, decad.Remove(plate))
+	require.NoError(t, decad.Remove(plate).Do(t.Context()))
 	_, err = decad.Hole(plate, nil, r3.Vec{}, mm(3), decad.ThroughHole{}).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrRetiredBody, "the retired-body gate precedes the selector")
 }
@@ -536,7 +536,7 @@ func TestCompositeCommandsRefuseMethodFaultsAtTheirGate(t *testing.T) {
 			}
 			do, retiredBodies := tc.build(t)
 			for _, b := range retiredBodies {
-				require.NoError(t, decad.Remove(b))
+				require.NoError(t, decad.Remove(b).Do(t.Context()))
 			}
 			_, err = do(t.Context())
 			require.ErrorIs(t, err, decad.ErrRetiredBody, "the retired-body gate precedes the method fault")

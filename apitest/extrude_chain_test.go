@@ -482,7 +482,7 @@ func TestExtrudeChainRibbonsWeldAtAProvenCoincidentPair(t *testing.T) {
 	body2, err := decad.Extrude(doc, s2, ch2, decad.Distance{D: units.Millimeters(5), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 
-	stitched, err := decad.Stitch(t.Context(), body1, body2)
+	stitched, err := decad.Stitch(body1, body2).Do(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, decad.BodySheet, stitched.Kind())
 

@@ -20,7 +20,7 @@ func blockSolid(t *testing.T, lo, hi r3.Vec) (*decad.Document, *decad.Body) {
 	m, err := decad.NewMeshBody(t.Context(), v, tris)
 	require.NoError(t, err)
 	doc := decad.New()
-	body, err := decad.SolidFromMesh(t.Context(), doc, m)
+	body, err := decad.SolidFromMesh(doc, m).Do(t.Context())
 	require.NoError(t, err)
 	return doc, body
 }
@@ -74,7 +74,7 @@ func TestShellOfAMeshSolidRefusals(t *testing.T) {
 	facets := importTetrahedron()
 	tet, err := decad.ReadSTL(t.Context(), bytes.NewReader(importBinarySTL(facets[:])))
 	require.NoError(t, err)
-	body, err := decad.SolidFromMesh(t.Context(), decad.New(), tet)
+	body, err := decad.SolidFromMesh(decad.New(), tet).Do(t.Context())
 	require.NoError(t, err)
 	_, err = decad.Shell(body, decad.Faces(decad.Facing(r3.NewVec(0, 0, -1))), units.Millimeters(0.05)).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
@@ -103,7 +103,7 @@ func lPrismSolid(t *testing.T) *decad.Body {
 	}
 	m, err := decad.NewMeshBody(t.Context(), v, tris)
 	require.NoError(t, err)
-	body, err := decad.SolidFromMesh(t.Context(), decad.New(), m)
+	body, err := decad.SolidFromMesh(decad.New(), m).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }

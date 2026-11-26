@@ -3270,3 +3270,11 @@
 12	0.50	TestCompositeMethodsRefuseAnExplicitZeroValue
 12	0.10	TestCompositeShapedConstructorsRefuseANilShape
 12	0.30	TestInfillRestoresHistoryAfterARefusal
+12	0.10	TestSurfaceCommandsRunOnceAndConsume
+12	0.10	TestSurfaceCommandsRefuseNilContext
+12	0.10	TestSurfaceCommandsReturnCancellationByIdentity
+12	0.50	TestSurfaceCommandsReturnMidBuildCancellationByIdentity
+12	0.10	TestSurfaceConstructorsRecordNilOperands
+12	0.10	TestSurfaceCommandsRefuseARetiredBody
+12	0.10	TestSurfaceCommandsCopyTheirArguments
+12	0.10	TestSurfaceCommandsKeepTheirGateOrder

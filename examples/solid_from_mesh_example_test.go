@@ -41,7 +41,7 @@ f 4 5 8
 		fmt.Printf("failed to read mesh: %s\n", err)
 		return
 	}
-	cube, err := decad.SolidFromMesh(context.Background(), decad.New(), mesh)
+	cube, err := decad.SolidFromMesh(decad.New(), mesh).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to make a solid: %s\n", err)
 		return
@@ -86,7 +86,7 @@ f 4 5 8
 		fmt.Printf("failed to read mesh: %s\n", err)
 		return
 	}
-	cube, err := decad.SolidFromMesh(context.Background(), decad.New(), mesh)
+	cube, err := decad.SolidFromMesh(decad.New(), mesh).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to make a solid: %s\n", err)
 		return

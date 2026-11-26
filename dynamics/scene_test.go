@@ -488,11 +488,10 @@ func tumbleTetrahedron(t *testing.T, doc *decad.Document) *decad.Body {
 	diagonalPlane, err := w.CreatePlaneFromFrame(diagonal)
 	require.NoError(t, err)
 	// XY's frame is (+X, +Y) and XZ's (+X, +Z).
-	tetrahedron, err := decad.Stitch(t.Context(),
-		tumbleTriangle(t, doc, w, w.XY(), [3][2]float64{{a, 0}, {0, 0}, {0, a}}),
+	tetrahedron, err := decad.Stitch(tumbleTriangle(t, doc, w, w.XY(), [3][2]float64{{a, 0}, {0, 0}, {0, a}}),
 		tumbleTriangle(t, doc, w, w.XZ(), [3][2]float64{{a, 0}, {0, 0}, {a, a}}),
 		tumbleTriangle(t, doc, w, slantedPlane, [3][2]float64{{0, 0}, {0, 16}, {a, 0}}),
-		tumbleTriangle(t, doc, w, diagonalPlane, [3][2]float64{{0, 0}, {a, 0}, {0, 16}}))
+		tumbleTriangle(t, doc, w, diagonalPlane, [3][2]float64{{0, 0}, {a, 0}, {0, 16}})).Do(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, decad.BodySolid, tetrahedron.Kind())
 	want := map[r3.Vec]struct{}{{X: a}: {}, {}: {}, {Y: a}: {}, {X: a, Z: a}: {}}

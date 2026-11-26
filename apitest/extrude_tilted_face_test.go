@@ -27,7 +27,7 @@ func rampSolid(t *testing.T, doc *decad.Document) (*decad.Body, decad.FaceSelect
 	}
 	m, err := decad.NewMeshBody(t.Context(), verts, tris)
 	require.NoError(t, err)
-	body, err := decad.SolidFromMesh(t.Context(), doc, m)
+	body, err := decad.SolidFromMesh(doc, m).Do(t.Context())
 	require.NoError(t, err)
 	// The sloped face is the one whose area centroid is the middle of the slope.
 	for _, f := range body.Faces() {

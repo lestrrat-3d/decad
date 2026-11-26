@@ -18,7 +18,7 @@ func blockIn(t *testing.T, doc *decad.Document, lo, hi r3.Vec) *decad.Body {
 	v, tris := cubeMesh(lo, hi)
 	m, err := decad.NewMeshBody(t.Context(), v, tris)
 	require.NoError(t, err)
-	body, err := decad.SolidFromMesh(t.Context(), doc, m)
+	body, err := decad.SolidFromMesh(doc, m).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }

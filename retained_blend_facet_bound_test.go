@@ -416,7 +416,7 @@ func TestRetainedBlendStripFacetBounds(t *testing.T) {
 		}
 		m, err := NewMeshBody(t.Context(), v, tris)
 		require.NoError(t, err)
-		box, err := SolidFromMesh(t.Context(), New(), m)
+		box, err := SolidFromMesh(New(), m).Do(t.Context())
 		require.NoError(t, err)
 		corner := r3.NewVec(0, 0, 10)
 		three := Edges(EndpointAt(corner), ParallelTo(r3.NewVec(1, 0, 0))).

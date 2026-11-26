@@ -355,6 +355,14 @@ returns `decad.ErrConsumed`.
 | `decad.ThreadCommand` | struct | The body, the cylindrical face, the pitch and the `ThreadCommand.LeftHand`, `ThreadCommand.Length`, `ThreadCommand.Form`, `ThreadCommand.LeadIn` and `ThreadCommand.LeadInAngle` settings. `Do` returns `*decad.Body`. | `decad.Thread` |
 | `decad.InfillCommand` | struct | The body, the lattice kind, the cell length, the wall level and the `InfillCommand.Resolution` and `InfillCommand.Skin` settings. `Do` returns `*decad.Body`. | `decad.Infill` |
 | `decad.SheetMetalCommand` | struct | The document, the thickness, the inner radius, the width, the legs, the bends and the `SheetMetalCommand.KFactor` setting. `Do` returns the body, a `decad.SheetMetalReport` and an error. | `decad.SheetMetal` |
+| `decad.PatchEdgesCommand` | struct | The body and the edge selector. `Do` returns the body with one planar face per closed chain of free edges and retires the input. | `decad.PatchEdges` |
+| `decad.StitchCommand` | struct | The sheet bodies to weld. `Do` returns `*decad.Body` and retires every operand. | `decad.Stitch` |
+| `decad.UnstitchCommand` | struct | The body to take apart. `Do` returns one single-face sheet per face as `[]*decad.Body` and retires the input. | `decad.Unstitch` |
+| `decad.TrimCommand` | struct | The sheet, the tool and the `decad.TrimSide` to keep. `Do` returns `*decad.Body` and retires both operands. | `decad.Trim` |
+| `decad.ExtendCommand` | struct | The sheet, the edge query and the tool. `Do` returns the lengthened sheet and retires both operands. | `decad.Extend` |
+| `decad.SplitCommand` | struct | The target solid and the tool sheet. `Do` returns one solid per target cell as `[]*decad.Body` and retires both operands. | `decad.Split` |
+| `decad.SolidFromMeshCommand` | struct | The document and the closed mesh. `Do` returns the solid `*decad.Body`. | `decad.SolidFromMesh` |
+| `decad.RemoveCommand` | struct | The body to retire. `Do` returns only an error. | `decad.Remove` |
 
 ### Options
 

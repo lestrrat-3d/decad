@@ -18,11 +18,11 @@ func TestPointLoftSplitAnchoredScalePreservesCapsAndVolume(t *testing.T) {
 	tooth := pointLoftRadialTab(t, doc)
 	span := pointLoftSliceSpan()
 	first := pointLoftSliceSheet(t, doc, span/6, 30)
-	parts, err := decad.Split(t.Context(), tooth, first)
+	parts, err := decad.Split(tooth, first).Do(t.Context())
 	require.NoError(t, err)
 	require.Len(t, parts, 2)
 	second := pointLoftSliceSheet(t, doc, span/3, 30)
-	parts, err = decad.Split(t.Context(), parts[0], second)
+	parts, err = decad.Split(parts[0], second).Do(t.Context())
 	require.NoError(t, err)
 	require.Len(t, parts, 2)
 	slab := parts[1]

@@ -444,7 +444,7 @@ func TestMirrorFaceResolvesAPlane(t *testing.T) {
 		require.ErrorIs(t, err, decad.ErrForeignBody)
 
 		retired := sc.box(t, sc.w.XY(), 30, 0, 40, 10, mirrorAlong(10))
-		require.NoError(t, decad.Remove(retired))
+		require.NoError(t, decad.Remove(retired).Do(t.Context()))
 		_, err = decad.MirroredCopy(box, decad.MirrorFace{Body: retired, Face: wall}).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrRetiredBody)
 		require.Equal(t, []*decad.Body{box}, sc.doc.Bodies())

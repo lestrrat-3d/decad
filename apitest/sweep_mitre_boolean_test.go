@@ -658,7 +658,7 @@ func clusteredBranchUnion(t *testing.T, branches int) *decad.Body {
 		require.LessOrEqual(t, got.Value.Base()-slack, treeVol.Value.Base()+branchVol.Value.Base(), `union %d`, k+1)
 		require.Greater(t, got.Value.Base()+slack, treeVol.Value.Base(), `union %d adds the branch's exposed part`, k+1)
 	}
-	require.NoError(t, decad.Remove(unit))
+	require.NoError(t, decad.Remove(unit).Do(t.Context()))
 	require.Equal(t, []*decad.Body{tree}, doc.Bodies())
 
 	return tree

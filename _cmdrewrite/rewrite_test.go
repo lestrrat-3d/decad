@@ -472,3 +472,94 @@ func TestComposites(t *testing.T) {
 		}
 	})
 }
+
+func TestSurfaces(t *testing.T) {
+	const head = "package p\n\nimport \"github.com/lestrrat-3d/decad\"\n\nfunc f() {\n"
+	tests := []struct{ name, in, want string }{
+		{"patch edges", "_, _ = decad.PatchEdges(ctx, b, sel)", "_, _ = decad.PatchEdges(b, sel).Do(ctx)"},
+		{"stitch", "_, _ = decad.Stitch(ctx, a, b, c)", "_, _ = decad.Stitch(a, b, c).Do(ctx)"},
+		{"stitch spread", "_, _ = decad.Stitch(ctx, bodies...)", "_, _ = decad.Stitch(bodies...).Do(ctx)"},
+		{"stitch one", "_, _ = decad.Stitch(ctx, a)", "_, _ = decad.Stitch(a).Do(ctx)"},
+		{"unstitch", "_, _ = decad.Unstitch(ctx, b)", "_, _ = decad.Unstitch(b).Do(ctx)"},
+		{"trim", "_, _ = decad.Trim(ctx, b, tool, decad.KeepInside)", "_, _ = decad.Trim(b, tool, decad.KeepInside).Do(ctx)"},
+		{"extend", "_, _ = decad.Extend(ctx, b, edges, tool)", "_, _ = decad.Extend(b, edges, tool).Do(ctx)"},
+		{"split", "_, _ = decad.Split(ctx, target, tool)", "_, _ = decad.Split(target, tool).Do(ctx)"},
+		{"solid from mesh", "_, _ = decad.SolidFromMesh(ctx, d, m)", "_, _ = decad.SolidFromMesh(d, m).Do(ctx)"},
+		{"nested calls", "_, _ = decad.Trim(ctx, mustBody(decad.Stitch(ctx, a, b)), tool, side)",
+			"_, _ = decad.Trim(mustBody(decad.Stitch(a, b).Do(ctx)), tool, side).Do(ctx)"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			out, reports, err := rewriteFile("x.go", []byte(head+"\t"+tc.in+"\n}\n"), families["surfaces"], false)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(reports) != 0 {
+				t.Fatalf("reports: %v", reports)
+			}
+			if want := head + "\t" + tc.want + "\n}\n"; string(out) != want {
+				t.Fatalf("got\n%s\nwant\n%s", out, want)
+			}
+		})
+	}
+	t.Run("stitch without a body reported", func(t *testing.T) {
+		in := head + "\t_, _ = decad.Stitch(ctx)\n}\n"
+		out, reports, err := rewriteFile("x.go", []byte(in), families["surfaces"], false)
+		if err != nil || len(reports) != 1 || string(out) != in {
+			t.Fatalf("out %q reports %v err %v", out, reports, err)
+		}
+	})
+	t.Run("root bare call", func(t *testing.T) {
+		in := "package decad\n\nfunc f() {\n\t_, _ = Split(ctx, a, b)\n}\n"
+		out, _, err := rewriteFile("x_test.go", []byte(in), families["surfaces"], true)
+		if err != nil || string(out) != "package decad\n\nfunc f() {\n\t_, _ = Split(a, b).Do(ctx)\n}\n" {
+			t.Fatalf("out %q err %v", out, err)
+		}
+	})
+	t.Run("root production file reported", func(t *testing.T) {
+		in := "package decad\n\nfunc f() {\n\t_, _ = SolidFromMesh(ctx, d, m)\n}\n"
+		out, reports, err := rewriteFile("x.go", []byte(in), families["surfaces"], true)
+		if err != nil || len(reports) != 1 || string(out) != in {
+			t.Fatalf("out %q reports %v err %v", out, reports, err)
+		}
+	})
+	t.Run("new form is no input", func(t *testing.T) {
+		in := head + "\t_, _ = decad.Split(a, b).Do(ctx)\n}\n"
+		out, reports, err := rewriteFile("x.go", []byte(in), families["surfaces"], false)
+		if err != nil || len(reports) != 0 || string(out) != in {
+			t.Fatalf("out %q reports %v err %v", out, reports, err)
+		}
+	})
+}
+
+func TestSurfacesRemoveTakesTheContextInScope(t *testing.T) {
+	const imp = "package p\n\nimport (\n\t\"context\"\n\t\"testing\"\n\n\t\"github.com/lestrrat-3d/decad\"\n)\n\n"
+	tests := []struct{ name, in, want string }{
+		{"ctx parameter", "func f(ctx context.Context) error {\n\treturn decad.Remove(b)\n}\n",
+			"func f(ctx context.Context) error {\n\treturn decad.Remove(b).Do(ctx)\n}\n"},
+		{"declared ctx", "func f() {\n\tctx := context.Background()\n\t_ = decad.Remove(b)\n}\n",
+			"func f() {\n\tctx := context.Background()\n\t_ = decad.Remove(b).Do(ctx)\n}\n"},
+		{"testing parameter", "func TestF(t *testing.T) {\n\trequire.NoError(t, decad.Remove(b))\n}\n",
+			"func TestF(t *testing.T) {\n\trequire.NoError(t, decad.Remove(b).Do(t.Context()))\n}\n"},
+		{"closure uses the outer t", "func TestF(t *testing.T) {\n\tt.Run(\"x\", func(t *testing.T) {\n\t\t_ = decad.Remove(b)\n\t})\n}\n",
+			"func TestF(t *testing.T) {\n\tt.Run(\"x\", func(t *testing.T) {\n\t\t_ = decad.Remove(b).Do(t.Context())\n\t})\n}\n"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			out, reports, err := rewriteFile("x.go", []byte(imp+tc.in), families["surfaces"], false)
+			if err != nil || len(reports) != 0 {
+				t.Fatalf("reports %v err %v", reports, err)
+			}
+			if string(out) != imp+tc.want {
+				t.Fatalf("got\n%s\nwant\n%s", out, imp+tc.want)
+			}
+		})
+	}
+	t.Run("no context in scope reported", func(t *testing.T) {
+		in := imp + "func f() error {\n\treturn decad.Remove(b)\n}\n"
+		out, reports, err := rewriteFile("x.go", []byte(in), families["surfaces"], false)
+		if err != nil || len(reports) != 1 || string(out) != in {
+			t.Fatalf("out %q reports %v err %v", out, reports, err)
+		}
+	})
+}

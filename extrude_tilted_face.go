@@ -108,7 +108,7 @@ func extrudeToTiltedFace(ctx context.Context, d *Document, s *sketch.Sketch, p *
 	if err != nil {
 		return nil, false, nil
 	}
-	tool, err := SolidFromMesh(toolCtx, d, m)
+	tool, err := solidFromMesh(toolCtx, d, m)
 	if err != nil {
 		return nil, false, nil
 	}

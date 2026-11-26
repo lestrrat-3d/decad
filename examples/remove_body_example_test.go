@@ -68,7 +68,7 @@ func Example_remove_body() {
 	fmt.Printf("with fixture: %s\n", report.Status)
 
 	// Take the fixture out and verify again.
-	if err := decad.Remove(fixture); err != nil {
+	if err := decad.Remove(fixture).Do(context.Background()); err != nil {
 		fmt.Printf("failed to remove: %s\n", err)
 		return
 	}

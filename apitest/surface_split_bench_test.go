@@ -18,7 +18,7 @@ func BenchmarkSplitBlockByRibbon(b *testing.B) {
 		target := splitBlock(b, doc)
 		tool := splitRibbon(b, doc, 110)
 		b.StartTimer()
-		pieces, err := decad.Split(b.Context(), target, tool)
+		pieces, err := decad.Split(target, tool).Do(b.Context())
 		require.NoError(b, err)
 		require.Len(b, pieces, 2)
 		for _, piece := range pieces {
@@ -51,7 +51,7 @@ func BenchmarkSplitBlockByCircle(b *testing.B) {
 		}).SurfaceResult().Do(b.Context())
 		require.NoError(b, err)
 		b.StartTimer()
-		pieces, err := decad.Split(b.Context(), target, tool)
+		pieces, err := decad.Split(target, tool).Do(b.Context())
 		require.NoError(b, err)
 		require.Len(b, pieces, 2)
 		total := 0.0
@@ -94,7 +94,7 @@ func BenchmarkSplitBlockByTwoRibbons(b *testing.B) {
 		}).Do(b.Context())
 		require.NoError(b, err)
 		b.StartTimer()
-		pieces, err := decad.Split(b.Context(), target, tool)
+		pieces, err := decad.Split(target, tool).Do(b.Context())
 		require.NoError(b, err)
 		require.Len(b, pieces, 3)
 		for _, piece := range pieces {

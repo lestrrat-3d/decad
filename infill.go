@@ -256,7 +256,7 @@ func infillInterior(ctx context.Context, b *Body, spec infillSpec) (*Body, error
 		}
 		return nil, err
 	}
-	lattice, err := SolidFromMesh(ctx, documentHandle(b.n.Doc), mesh)
+	lattice, err := solidFromMesh(ctx, documentHandle(b.n.Doc), mesh)
 	if err != nil {
 		// A cancel inside the conversion is the caller's, not a refusal of the lattice
 		// (agent-docs/command-api-design.md §3).

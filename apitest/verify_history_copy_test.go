@@ -165,7 +165,7 @@ func TestVerifyHistoryCopyLiftTranslation(t *testing.T) {
 					t.Cleanup(func() {
 						for _, body := range sc.doc.Bodies() {
 							if !slices.Contains(before, body) {
-								require.NoError(t, decad.Remove(body))
+								require.NoError(t, decad.Remove(body).Do(t.Context()))
 							}
 						}
 						live := sc.doc.Bodies()

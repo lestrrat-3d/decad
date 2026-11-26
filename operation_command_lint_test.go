@@ -236,3 +236,58 @@ func TestCompositeConstructorsAreCommandConstructors(t *testing.T) {
 		require.Contains(t, constructors, name)
 	}
 }
+
+// TestSurfaceConstructorsAreCommandConstructors fails when a surface,
+// mesh-to-solid or retirement constructor stops returning a *<X>Command, which
+// would drop it from both lint checks above
+// (agent-docs/command-api-design.md §12).
+func TestSurfaceConstructorsAreCommandConstructors(t *testing.T) {
+	t.Parallel()
+	constructors := commandConstructorNames(t)
+	for _, name := range []string{
+		"PatchEdges", "Stitch", "Unstitch", "Trim", "Extend", "Split", "SolidFromMesh", "Remove",
+	} {
+		require.Contains(t, constructors, name)
+	}
+}
+
+// TestNoExportedFunctionBuildsRetiresOrRegistersABody fails when an exported root
+// function that returns a *Body or a []*Body is no command constructor, so an
+// operation written as a function cannot return after the command-API migration
+// (agent-docs/command-api-design.md §1). The one exception is a selector
+// builder, which returns no body but a feature reference or a predicate and is
+// not in this scan.
+func TestNoExportedFunctionBuildsRetiresOrRegistersABody(t *testing.T) {
+	t.Parallel()
+	fset := token.NewFileSet()
+	pkgs, err := parser.ParseDir(fset, ".", func(fi os.FileInfo) bool {
+		return !strings.HasSuffix(fi.Name(), "_test.go")
+	}, 0)
+	require.NoError(t, err)
+	isBody := func(e ast.Expr) bool {
+		if arr, ok := e.(*ast.ArrayType); ok {
+			e = arr.Elt
+		}
+		star, ok := e.(*ast.StarExpr)
+		if !ok {
+			return false
+		}
+		id, ok := star.X.(*ast.Ident)
+		return ok && id.Name == "Body"
+	}
+	var offenders []string
+	for _, f := range pkgs["decad"].Files {
+		for _, decl := range f.Decls {
+			fn, ok := decl.(*ast.FuncDecl)
+			if !ok || fn.Recv != nil || !fn.Name.IsExported() || fn.Type.Results == nil {
+				continue
+			}
+			for _, r := range fn.Type.Results.List {
+				if isBody(r.Type) {
+					offenders = append(offenders, fn.Name.Name)
+				}
+			}
+		}
+	}
+	require.Empty(t, offenders, "an exported function returns a body: make it a command")
+}

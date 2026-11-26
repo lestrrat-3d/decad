@@ -89,7 +89,7 @@ func TestSurfaceTrimRevolveKeepOutsideSplitsIntoTwoWalks(t *testing.T) {
 	require.InDelta(t, 352*math.Pi, sheetArea.Value.Base(), 1e-9)
 
 	tool := trimRevolveRing(t, doc, 2, 5, 8, 10, false)
-	trimmed, err := decad.Trim(t.Context(), sheet, tool, decad.KeepOutside)
+	trimmed, err := decad.Trim(sheet, tool, decad.KeepOutside).Do(t.Context())
 	require.NoError(t, err)
 
 	require.Equal(t, decad.BodySheet, trimmed.Kind())
@@ -164,7 +164,7 @@ func TestSurfaceTrimRevolveRefusalsNameTheirOwnGate(t *testing.T) {
 			End:   decad.Point2{U: math.Nextafter(0, 1), V: 1},
 		}
 		tool := trimRevolveRingAxis(t, doc, 2, 5, 8, 10, false, nudged)
-		_, err := decad.Trim(t.Context(), sheet, tool, decad.KeepOutside)
+		_, err := decad.Trim(sheet, tool, decad.KeepOutside).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.Contains(t, err.Error(), "do not spin about the same axis, exactly")
 		require.Len(t, doc.Bodies(), 2)
@@ -178,7 +178,7 @@ func TestSurfaceTrimRevolveRefusalsNameTheirOwnGate(t *testing.T) {
 		// fields beside the direction's.
 		shifted := decad.SketchLine{Start: decad.Point2{U: -2, V: 0}, End: decad.Point2{U: -2, V: 1}}
 		tool := trimRevolveRingAxis(t, doc, 2, 5, 8, 10, false, shifted)
-		_, err := decad.Trim(t.Context(), sheet, tool, decad.KeepOutside)
+		_, err := decad.Trim(sheet, tool, decad.KeepOutside).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.Contains(t, err.Error(), "do not spin about the same axis, exactly")
 		require.Len(t, doc.Bodies(), 2)
@@ -188,7 +188,7 @@ func TestSurfaceTrimRevolveRefusalsNameTheirOwnGate(t *testing.T) {
 		doc := decad.New()
 		sheet := trimRevolveRing(t, doc, 3, 0, 5, 20, true)
 		tool := trimRevolvePartial(t, doc, 2, 5, 8, 10, 90, false)
-		_, err := decad.Trim(t.Context(), sheet, tool, decad.KeepOutside)
+		_, err := decad.Trim(sheet, tool, decad.KeepOutside).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.Contains(t, err.Error(), "does not cover the receiver's")
 		require.Len(t, doc.Bodies(), 2)
@@ -200,7 +200,7 @@ func TestSurfaceTrimAndExtendRevolveRefuseAxisTouch(t *testing.T) {
 		doc := decad.New()
 		sheet := trimRevolveRing(t, doc, 3, 0, 5, 20, true)
 		tool := trimRevolveRing(t, doc, 0, 5, 8, 10, false)
-		_, err := decad.Trim(t.Context(), sheet, tool, decad.KeepOutside)
+		_, err := decad.Trim(sheet, tool, decad.KeepOutside).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.ErrorContains(t, err, "both meridians clear of the revolve axis")
 		require.Equal(t, 2, len(doc.Bodies()))
@@ -213,7 +213,7 @@ func TestSurfaceTrimAndExtendRevolveRefuseAxisTouch(t *testing.T) {
 		query := decad.Edges(decad.Free(),
 			decad.EndpointAt(rims[moved].Start().Position().Value)).Exactly(1)
 		tool := trimRevolveRing(t, doc, 0, 60, 8, 80, false)
-		_, err := decad.Extend(t.Context(), ribbon, query, tool)
+		_, err := decad.Extend(ribbon, query, tool).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.ErrorContains(t, err, "both meridians clear of the revolve axis")
 		require.Equal(t, 2, len(doc.Bodies()))
@@ -234,7 +234,7 @@ func TestSurfaceTrimAndExtendRevolveRefuseAxisTouch(t *testing.T) {
 			trimRevolveAxis(), decad.FullRevolution{}).Do(t.Context())
 		require.NoError(t, err)
 		tool := trimRevolveRing(t, doc, 2, 60, 8, 80, false)
-		_, err = decad.Extend(t.Context(), ribbon, decad.Edges(decad.Free()).Exactly(1), tool)
+		_, err = decad.Extend(ribbon, decad.Edges(decad.Free()).Exactly(1), tool).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.ErrorContains(t, err, "both meridians clear of the revolve axis")
 		require.Equal(t, 2, len(doc.Bodies()))
@@ -320,7 +320,7 @@ func TestSurfaceExtendRevolveRibbonToNearestCut(t *testing.T) {
 		decad.EndpointAt(rims[moved].Start().Position().Value)).Exactly(1)
 
 	tool := trimRevolveRing(t, doc, 2, 60, 8, 80, false)
-	result, err := decad.Extend(t.Context(), ribbon, query, tool)
+	result, err := decad.Extend(ribbon, query, tool).Do(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, decad.BodySheet, result.Kind())
 
@@ -388,7 +388,7 @@ func TestSurfaceExtendRevolvePartialNearestCut(t *testing.T) {
 	start, end := untouched.Start().Position().Value, untouched.End().Position().Value
 	query := decad.Edges(decad.Free(), decad.Circular(), decad.EndpointAt(moved.Start().Position().Value)).Exactly(1)
 	tool := trimRevolvePartial(t, doc, 2, 60, 8, 80, 90, false)
-	result, err := decad.Extend(t.Context(), ribbon, query, tool)
+	result, err := decad.Extend(ribbon, query, tool).Do(t.Context())
 	require.NoError(t, err)
 	area, err := result.Area()
 	require.NoError(t, err)
@@ -432,7 +432,7 @@ func TestSurfaceExtendRevolveRefusalsNameTheirOwnGate(t *testing.T) {
 		// crossings sit before the named end rather than past it.
 		tool := trimRevolveRing(t, doc, 2, 10, 8, 20, false)
 		before := doc.Bodies()
-		_, err := decad.Extend(t.Context(), ribbon, query, tool)
+		_, err := decad.Extend(ribbon, query, tool).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.ErrorContains(t, err, "carrier's own natural domain")
 		require.Equal(t, before, doc.Bodies())
@@ -455,14 +455,14 @@ func TestSurfaceExtendRevolveRefusalsNameTheirOwnGate(t *testing.T) {
 		query := decad.Edges(decad.Free(), decad.EndpointAt(capEdge.Start().Position().Value),
 			decad.EndpointAt(capEdge.End().Position().Value)).Exactly(1)
 		before := doc.Bodies()
-		_, err = decad.Extend(t.Context(), ribbon, query, tool)
+		_, err = decad.Extend(ribbon, query, tool).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		after := doc.Bodies()
 		require.Len(t, after, len(before))
 		for i := range before {
 			require.True(t, before[i] == after[i], "body %d changed", i)
 		}
-		_, err = decad.Extend(t.Context(), ribbon, decad.Edges(decad.Free()), tool)
+		_, err = decad.Extend(ribbon, decad.Edges(decad.Free()), tool).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		after = doc.Bodies()
 		require.Len(t, after, len(before))
@@ -479,7 +479,7 @@ func TestSurfaceExtendRevolveRefusalsNameTheirOwnGate(t *testing.T) {
 			decad.EndpointAt(rims[moved].Start().Position().Value)).Exactly(1)
 		shifted := decad.SketchLine{Start: decad.Point2{U: -2, V: 0}, End: decad.Point2{U: -2, V: 1}}
 		tool := trimRevolveRingAxis(t, doc, 2, 60, 8, 80, false, shifted)
-		_, err := decad.Extend(t.Context(), ribbon, query, tool)
+		_, err := decad.Extend(ribbon, query, tool).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.ErrorContains(t, err, "do not spin about the same axis, exactly")
 		require.Len(t, doc.Bodies(), 2)
@@ -492,7 +492,7 @@ func TestSurfaceExtendRevolveRefusalsNameTheirOwnGate(t *testing.T) {
 		// Every edge, not the free ones: a closed tube sheet has no free edge
 		// at all, so a Free() clause would refuse at the SELECTOR and never
 		// reach the gate this case is about.
-		_, err := decad.Extend(t.Context(), sheet, decad.Edges(), tool)
+		_, err := decad.Extend(sheet, decad.Edges(), tool).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.ErrorContains(t, err, "open meridian")
 		require.Len(t, doc.Bodies(), 2)

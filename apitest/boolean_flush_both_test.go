@@ -28,7 +28,7 @@ func slantedPlate(t *testing.T, doc *decad.Document) *decad.Body {
 	}
 	m, err := decad.NewMeshBody(t.Context(), verts, tris)
 	require.NoError(t, err)
-	plate, err := decad.SolidFromMesh(t.Context(), doc, m)
+	plate, err := decad.SolidFromMesh(doc, m).Do(t.Context())
 	require.NoError(t, err)
 	return plate
 }

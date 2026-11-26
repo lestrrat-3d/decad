@@ -62,7 +62,7 @@ func TestPathPatternUnionRefusalLeavesEveryOperandLive(t *testing.T) {
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.True(t, slices.Equal(append([]*decad.Body{sheet, feature}, copies...), sheetDoc.Bodies()))
 	for _, c := range copies {
-		require.NoError(t, decad.Remove(c))
+		require.NoError(t, decad.Remove(c).Do(t.Context()))
 	}
 	require.Len(t, sheetDoc.Bodies(), 2)
 }

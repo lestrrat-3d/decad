@@ -6,6 +6,7 @@ import (
 	"go/format"
 	"go/parser"
 	"go/token"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -23,6 +24,9 @@ type callSite struct {
 	ellipsis bool
 	src      []byte
 	fset     *token.FileSet
+	// enclosingCtx is the context expression in scope at the call, or "" when
+	// none is evident. Only a rule whose old call took no ctx reads it.
+	enclosingCtx string
 }
 
 // text returns the source text of node, with its line breaks.
@@ -122,6 +126,7 @@ var families = map[string]map[string]rule{
 	},
 	"placement":  placementRules,
 	"composites": compositeRules,
+	"surfaces":   surfaceRules,
 	"booleans": {
 		"Union":        ruleUnion,
 		"Cut":          ruleBinary("Cut"),
@@ -294,6 +299,7 @@ func rewriteFile(name string, src []byte, rules map[string]rule, root bool) ([]b
 			}
 			text, why := r(&callSite{
 				pkg: qual, args: call.Args, ellipsis: call.Ellipsis.IsValid(), src: src, fset: fset,
+				enclosingCtx: enclosingContext(file, call),
 			})
 			if why == "" && bare && !strings.HasSuffix(name, "_test.go") {
 				// Design §11: a root composite calls the unexported implementation,
@@ -480,4 +486,81 @@ func ruleLoftFaces(c *callSite) (string, string) {
 		}
 	}
 	return "", "LoftFaces option " + c.text(c.args[len(c.args)-1]) + " has no command rule"
+}
+
+// enclosingContext returns the context expression in scope at call: the name
+// of a ctx parameter or a ctx the enclosing function declares, else
+// <t>.Context() for a testing parameter. The innermost function that offers
+// one wins, so a closure inside a test uses the test's t. It returns "" when
+// none is evident.
+func enclosingContext(file *ast.File, call *ast.CallExpr) string {
+	var funcs []ast.Node
+	ast.Inspect(file, func(n ast.Node) bool {
+		switch n.(type) {
+		case *ast.FuncDecl, *ast.FuncLit:
+			if n.Pos() <= call.Pos() && call.End() <= n.End() {
+				funcs = append(funcs, n)
+			}
+		}
+		return true
+	})
+	for _, fn := range slices.Backward(funcs) {
+		var typ *ast.FuncType
+		var body *ast.BlockStmt
+		switch f := fn.(type) {
+		case *ast.FuncDecl:
+			typ, body = f.Type, f.Body
+		case *ast.FuncLit:
+			typ, body = f.Type, f.Body
+		}
+		testing := ""
+		for _, field := range typ.Params.List {
+			text := paramTypeText(field.Type)
+			for _, name := range field.Names {
+				switch text {
+				case "context.Context":
+					if name.Name == "ctx" {
+						return "ctx"
+					}
+				case "*testing.T", "*testing.B", "testing.TB", "*testing.F":
+					if testing == "" {
+						testing = name.Name + ".Context()"
+					}
+				}
+			}
+		}
+		declared := false
+		if body != nil {
+			ast.Inspect(body, func(n ast.Node) bool {
+				if a, ok := n.(*ast.AssignStmt); ok && a.Tok == token.DEFINE && a.Pos() < call.Pos() {
+					for _, lhs := range a.Lhs {
+						if id, ok := lhs.(*ast.Ident); ok && id.Name == "ctx" {
+							declared = true
+						}
+					}
+				}
+				return true
+			})
+		}
+		if declared {
+			return "ctx"
+		}
+		if testing != "" {
+			return testing
+		}
+	}
+	return ""
+}
+
+// paramTypeText renders the simple type forms enclosingContext matches.
+func paramTypeText(e ast.Expr) string {
+	switch t := e.(type) {
+	case *ast.StarExpr:
+		return "*" + paramTypeText(t.X)
+	case *ast.SelectorExpr:
+		if id, ok := t.X.(*ast.Ident); ok {
+			return id.Name + "." + t.Sel.Name
+		}
+	}
+	return ""
 }

@@ -507,7 +507,7 @@ func BenchmarkModelingPatchFreeEdges(b *testing.B) {
 		}).SurfaceResult().Do(b.Context())
 		require.NoError(b, err)
 		b.StartTimer()
-		patched, err := decad.PatchEdges(b.Context(), sheet, decad.Edges(decad.Free()).Exactly(2))
+		patched, err := decad.PatchEdges(sheet, decad.Edges(decad.Free()).Exactly(2)).Do(b.Context())
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -550,7 +550,7 @@ func BenchmarkModelingTrimRectangleSheet(b *testing.B) {
 		}).Do(b.Context())
 		require.NoError(b, err)
 		b.StartTimer()
-		trimmed, err := decad.Trim(b.Context(), sheet, tool, decad.KeepOutside)
+		trimmed, err := decad.Trim(sheet, tool, decad.KeepOutside).Do(b.Context())
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -603,7 +603,7 @@ func BenchmarkModelingExtendChain(b *testing.B) {
 		tool, err := decad.Extrude(doc, toolSketch, toolSketch.Profiles()[0], decad.Symmetric{D: units.Millimeters(10)}).Do(b.Context())
 		require.NoError(b, err)
 		b.StartTimer()
-		extended, err := decad.Extend(b.Context(), ribbon, query, tool)
+		extended, err := decad.Extend(ribbon, query, tool).Do(b.Context())
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -624,7 +624,7 @@ func BenchmarkModelingUnstitchPrism(b *testing.B) {
 		doc := decad.New()
 		body := modelingBenchRect(b, doc, 0, 0, 20, 20, 10)
 		b.StartTimer()
-		sheets, err := decad.Unstitch(b.Context(), body)
+		sheets, err := decad.Unstitch(body).Do(b.Context())
 		if err != nil {
 			b.Fatal(err)
 		}

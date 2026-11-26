@@ -69,7 +69,7 @@ func Example_stitch() {
 	}
 
 	// Weld them. The sheets close into a box, so the result is a solid.
-	box, err := decad.Stitch(ctx, walls, bottom, top)
+	box, err := decad.Stitch(walls, bottom, top).Do(ctx)
 	if err != nil {
 		fmt.Printf("failed to stitch: %s\n", err)
 		return

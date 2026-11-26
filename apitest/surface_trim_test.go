@@ -88,7 +88,7 @@ func TestSurfaceTrimKeepOutsideSplitsIntoTwoRibbons(t *testing.T) {
 	require.NoError(t, err)
 	tool := trimSpanningTool(t, doc, 40, -10, 60, 70)
 
-	trimmed, err := decad.Trim(t.Context(), sheet, tool, decad.KeepOutside)
+	trimmed, err := decad.Trim(sheet, tool, decad.KeepOutside).Do(t.Context())
 	require.NoError(t, err)
 
 	require.Equal(t, decad.BodySheet, trimmed.Kind())
@@ -134,7 +134,7 @@ func TestSurfaceTrimKeepInsideKeepsTheCutStrips(t *testing.T) {
 	}
 	tool := trimSpanningTool(t, doc, 40, -10, 60, 70)
 
-	trimmed, err := decad.Trim(t.Context(), sheet, tool, decad.KeepInside)
+	trimmed, err := decad.Trim(sheet, tool, decad.KeepInside).Do(t.Context())
 	require.NoError(t, err)
 
 	require.Len(t, trimmed.Lumps(), 2)
@@ -176,7 +176,7 @@ func TestSurfaceTrimBoundsChargesAnExtremeWonByACut(t *testing.T) {
 	sheet := trimRectSheet(t, doc)
 	tool := trimSpanningTool(t, doc, 60, -10, 120, 70)
 
-	trimmed, err := decad.Trim(t.Context(), sheet, tool, decad.KeepOutside)
+	trimmed, err := decad.Trim(sheet, tool, decad.KeepOutside).Do(t.Context())
 	require.NoError(t, err)
 
 	require.Len(t, trimmed.Lumps(), 1)
@@ -219,7 +219,7 @@ func TestSurfaceTrimDegenerateWhenNothingSeparates(t *testing.T) {
 		sheet := trimRectSheet(t, doc)
 		tool := trimSpanningTool(t, doc, 200, -10, 220, 70)
 
-		_, err := decad.Trim(t.Context(), sheet, tool, decad.KeepOutside)
+		_, err := decad.Trim(sheet, tool, decad.KeepOutside).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrDegenerate)
 		require.Len(t, doc.Bodies(), 2)
 		require.Contains(t, doc.Bodies(), sheet)
@@ -232,7 +232,7 @@ func TestSurfaceTrimDegenerateWhenNothingSeparates(t *testing.T) {
 		sheet := trimRectSheet(t, doc)
 		tool := trimSpanningTool(t, doc, -10, -20, 110, 80)
 
-		_, err := decad.Trim(t.Context(), sheet, tool, decad.KeepOutside)
+		_, err := decad.Trim(sheet, tool, decad.KeepOutside).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrDegenerate)
 		require.Len(t, doc.Bodies(), 2)
 		require.Contains(t, doc.Bodies(), sheet)
@@ -254,7 +254,7 @@ func TestSurfaceTrimRefusesASharedWall(t *testing.T) {
 		sheet := trimRectSheet(t, doc)
 		tool := trimSpanningTool(t, doc, 40, 0, 60, 70)
 		before := doc.Bodies()
-		trimmed, err := decad.Trim(t.Context(), sheet, tool, side)
+		trimmed, err := decad.Trim(sheet, tool, side).Do(t.Context())
 		require.Nil(t, trimmed)
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.ErrorContains(t, err, "coincides with the tool's own boundary")
@@ -270,17 +270,17 @@ func TestSurfaceTrimRefusesASecondTrim(t *testing.T) {
 	doc := decad.New()
 	sheet := trimRectSheet(t, doc)
 	firstTool := trimSpanningTool(t, doc, 40, -10, 60, 70)
-	trimmed, err := decad.Trim(t.Context(), sheet, firstTool, decad.KeepOutside)
+	trimmed, err := decad.Trim(sheet, firstTool, decad.KeepOutside).Do(t.Context())
 	require.NoError(t, err)
 
 	secondTool := trimSpanningTool(t, doc, 10, -10, 20, 70)
-	_, err = decad.Trim(t.Context(), trimmed, secondTool, decad.KeepOutside)
+	_, err = decad.Trim(trimmed, secondTool, decad.KeepOutside).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.ErrorContains(t, err, "section displacement")
 
 	sheet2 := trimRectSheet(t, doc)
 	secondToolOnUntrimmed := trimSpanningTool(t, doc, 10, -10, 20, 70)
-	_, err = decad.Trim(t.Context(), sheet2, secondToolOnUntrimmed, decad.KeepOutside)
+	_, err = decad.Trim(sheet2, secondToolOnUntrimmed, decad.KeepOutside).Do(t.Context())
 	require.NoError(t, err)
 }
 
@@ -313,7 +313,7 @@ func TestSurfaceTrimS4IsExactFloatEquality(t *testing.T) {
 		placedTool, err := decad.Transform(tool, xform).Do(t.Context())
 		require.NoError(t, err)
 
-		_, err = decad.Trim(t.Context(), sheet, placedTool, decad.KeepOutside)
+		_, err = decad.Trim(sheet, placedTool, decad.KeepOutside).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.ErrorContains(t, err, "same generator")
 	})
@@ -328,7 +328,7 @@ func TestSurfaceTrimS4IsExactFloatEquality(t *testing.T) {
 		placedTool, err := decad.Transform(tool, xform).Do(t.Context())
 		require.NoError(t, err)
 
-		_, err = decad.Trim(t.Context(), sheet, placedTool, decad.KeepOutside)
+		_, err = decad.Trim(sheet, placedTool, decad.KeepOutside).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.ErrorContains(t, err, "identity")
 	})
@@ -356,7 +356,7 @@ func TestSurfaceTrimS4IsExactFloatEquality(t *testing.T) {
 		placedTool, err := decad.Transform(tool, basis).Do(t.Context())
 		require.NoError(t, err)
 
-		_, err = decad.Trim(t.Context(), sheet, placedTool, decad.KeepOutside)
+		_, err = decad.Trim(sheet, placedTool, decad.KeepOutside).Do(t.Context())
 		require.NoError(t, err)
 	})
 }
@@ -406,7 +406,7 @@ func TestSurfaceTrimRefusesAMixedFamilyPair(t *testing.T) {
 		sheet := trimRevolveCylinderSheet(t, doc)
 		tool := prismSolid(t, doc)
 
-		_, err := decad.Trim(t.Context(), sheet, tool, decad.KeepOutside)
+		_, err := decad.Trim(sheet, tool, decad.KeepOutside).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.ErrorContains(t, err, "a revolve")
 		require.ErrorContains(t, err, "a straight sweep")
@@ -418,7 +418,7 @@ func TestSurfaceTrimRefusesAMixedFamilyPair(t *testing.T) {
 		sheet := trimRevolveCylinderSheet(t, doc)
 		tool := prismSolid(t, doc)
 
-		_, err := decad.Trim(t.Context(), sheet, tool, decad.KeepOutside)
+		_, err := decad.Trim(sheet, tool, decad.KeepOutside).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.ErrorContains(t, err, "a revolve")
 		require.ErrorContains(t, err, "a straight sweep")

@@ -144,7 +144,7 @@ func (c *cubes) solid(t *testing.T, doc *decad.Document) (*decad.Body, bool) {
 	}
 	m, err := decad.NewMeshBody(t.Context(), v, tris)
 	require.NoError(t, err)
-	b, err := decad.SolidFromMesh(t.Context(), doc, m)
+	b, err := decad.SolidFromMesh(doc, m).Do(t.Context())
 	if err != nil {
 		require.True(t, errors.Is(err, decad.ErrNotSolid) || errors.Is(err, decad.ErrDegenerate) || errors.Is(err, decad.ErrUnsupported), "%v", err)
 		return nil, false

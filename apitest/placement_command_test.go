@@ -227,7 +227,7 @@ func placementCommands() []placementCommand {
 				m, err := decad.NewMeshBody(t.Context(), v, tris)
 				require.NoError(t, err)
 				doc := decad.New()
-				cube, err := decad.SolidFromMesh(t.Context(), doc, m)
+				cube, err := decad.SolidFromMesh(doc, m).Do(t.Context())
 				require.NoError(t, err)
 				spec := decad.LinearPattern{Dir: r3.NewVec(1, 0, 0), Step: mm(5), Count: 2}
 				return func() func(context.Context) ([]*decad.Body, error) {
@@ -470,7 +470,7 @@ func TestPlacementCommandsRefuseARetiredBody(t *testing.T) {
 			next, doc := tc.build(t)
 			do := next()
 			for _, b := range doc.Bodies() {
-				require.NoError(t, decad.Remove(b))
+				require.NoError(t, decad.Remove(b).Do(t.Context()))
 			}
 			got, err := do(t.Context())
 			require.ErrorIs(t, err, decad.ErrRetiredBody)

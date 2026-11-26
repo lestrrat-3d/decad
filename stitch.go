@@ -3,9 +3,11 @@ package decad
 import (
 	"context"
 	"fmt"
+	"slices"
 	"sort"
 
 	"github.com/lestrrat-3d/decad/internal/gaptol"
+	"github.com/lestrrat-3d/decad/internal/opcommand"
 	"github.com/lestrrat-3d/decad/internal/opdiagnostic"
 	"github.com/lestrrat-3d/decad/internal/stitchrecord"
 	"github.com/lestrrat-3d/decad/internal/topo"
@@ -18,7 +20,7 @@ import (
 // turns a boundary into a solid. Its evaluator is internal/stitchrecord's
 // Build.
 
-// Stitch welds every free-edge pair it can prove coincident
+// Stitch returns the command that welds every free-edge pair it can prove coincident
 // (agent-docs/surface-design.md §6.2's Table J) across bodies, assembles the
 // result, and returns one new body, retiring every operand. One operand is
 // meaningful: it re-audits that body's own boundary, which is how a closed
@@ -41,12 +43,31 @@ import (
 // with no consistent orientation is [ErrDegenerate] (R7); and a proven
 // self-contact or an exhausted audit budget surfaces the crossing audit's
 // own [ErrDegenerate]/[ErrUnsupported] (R9/R10) unchanged. A failed call
-// leaves the document and every operand unchanged.
-func Stitch(ctx context.Context, bodies ...*Body) (result *Body, retErr error) {
-	defer func() { retErr = operationError(OperationStitch, retErr) }()
-	if ctx == nil {
-		return nil, fmt.Errorf(`%w: a nil context cannot control a stitch`, ErrDegenerate)
-	}
+// leaves the document and every operand unchanged. The bodies are copied at
+// the call, and a nil ctx given to Do is [ErrDegenerate].
+func Stitch(bodies ...*Body) *StitchCommand {
+	return &StitchCommand{bodies: slices.Clone(bodies)}
+}
+
+// StitchCommand welds the free edges of sheet bodies. Build it with [Stitch].
+type StitchCommand struct {
+	state  opcommand.State // consumed flag and first recorded fault
+	bodies []*Body         // copied at Stitch
+}
+
+// Do welds the operands and retires them, or returns the error of the first gate that refuses. A second call
+// returns [ErrConsumed].
+func (c *StitchCommand) Do(ctx context.Context) (*Body, error) {
+	return runCommand(ctx, &c.state, OperationStitch, c.run)
+}
+
+func (c *StitchCommand) run(ctx context.Context) (*Body, error) {
+	return stitch(ctx, c.bodies)
+}
+
+// stitch is Stitch's implementation. ctx is not nil, and the errors it returns carry no operation tag
+// (agent-docs/command-api-design.md §11).
+func stitch(ctx context.Context, bodies []*Body) (*Body, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
