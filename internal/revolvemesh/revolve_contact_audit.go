@@ -531,20 +531,12 @@ func revolveContactAuditAllPairs(budget *proofbound.WorkBudget, data []RevolveAu
 // own subset of the pairs, such as compositesweep's cross-span audit. margin
 // must be a non-negative number (not NaN): the sweep orders by it.
 func ContactCandidates(budget *proofbound.WorkBudget, data []RevolveAuditTri, tris [][3]int, margin float64) ([][]int32, error) {
-	return revolveContactCandidates(budget, data, tris, margin)
+	return sweepContactCandidates(budget, data, tris, margin)
 }
 
-// revolveContactCandidates lists, per facet i, every j > i in ascending order
-// that the audit may have to test: every pair the box gap test does not
-// separate, and every pair that shares a vertex. Facets are swept in order of
-// their box's low coordinate on the sweep axis; for a facet i, the facets after
-// it in that order are read until the first whose low coordinate clears i's
-// high coordinate by more than margin. The gap test is monotone in that low
-// coordinate, so every later facet is cleared too, and a pair the sweep never
-// lists is one BoxGapExceeds separates on that axis alone. The caller applies
-// the same skip test the all-pairs walk applies, so it audits the same pairs
-// in the same order.
-func revolveContactCandidates(budget *proofbound.WorkBudget, data []RevolveAuditTri, tris [][3]int, margin float64) ([][]int32, error) {
+// sweepContactCandidates keeps the one-visit-per-pair scan used by composite
+// sweeps, where many boxes can overlap within a single span.
+func sweepContactCandidates(budget *proofbound.WorkBudget, data []RevolveAuditTri, tris [][3]int, margin float64) ([][]int32, error) {
 	axis := revolveSweepAxis(data)
 	order := make([]int32, len(data))
 	for i := range order {
@@ -563,25 +555,180 @@ func revolveContactCandidates(budget *proofbound.WorkBudget, data []RevolveAudit
 			if freeform.DownRound(boxCoord(data[j].Box[0], axis)-hi) > margin {
 				break
 			}
-			if BoxGapExceeds(data[i].Box, data[j].Box, margin) {
-				continue
+			if !BoxGapExceeds(data[i].Box, data[j].Box, margin) {
+				lo, up := min(i, j), max(i, j)
+				rows[lo] = append(rows[lo], up)
 			}
-			lo, up := min(i, j), max(i, j)
-			rows[lo] = append(rows[lo], up)
 		}
 	}
-	// Every pair that shares a vertex is listed regardless of its boxes.
+	if err := addIncidentCandidates(budget, rows, tris); err != nil {
+		return nil, err
+	}
+	for i, row := range rows {
+		slices.Sort(row)
+		rows[i] = slices.Compact(row)
+	}
+	return rows, nil
+}
+
+type revolveBoxNode struct {
+	box         [2]r3.Vec
+	left, right int
+	start, end  int
+}
+
+// revolveContactCandidates lists each pair whose boxes cannot be proved apart,
+// and every pair that shares a vertex.
+func revolveContactCandidates(budget *proofbound.WorkBudget, data []RevolveAuditTri, tris [][3]int, margin float64) ([][]int32, error) {
+	order := make([]int32, len(data))
+	for i := range order {
+		order[i] = int32(i)
+	}
+	if len(order) == 0 {
+		return make([][]int32, 0), nil
+	}
+	nodes := make([]revolveBoxNode, 0, len(data)*2)
+	// Select the median without sorting either half. Every comparison is
+	// charged, including a pivot that splits poorly.
+	selectMedian := func(start, end, axis, middle int) error {
+		less := func(a, b int32) bool {
+			ac := boxCoord(data[a].Box[0], axis)/2 + boxCoord(data[a].Box[1], axis)/2
+			bc := boxCoord(data[b].Box[0], axis)/2 + boxCoord(data[b].Box[1], axis)/2
+			if c := cmp.Compare(ac, bc); c != 0 {
+				return c < 0
+			}
+			return a < b
+		}
+		lo, hi := start, end-1
+		for lo < hi {
+			pivot := order[lo+(hi-lo)/2]
+			i, j := lo, hi
+			for i <= j {
+				for {
+					if err := budget.Step(); err != nil {
+						return err
+					}
+					if !less(order[i], pivot) {
+						break
+					}
+					i++
+				}
+				for {
+					if err := budget.Step(); err != nil {
+						return err
+					}
+					if !less(pivot, order[j]) {
+						break
+					}
+					j--
+				}
+				if i <= j {
+					order[i], order[j] = order[j], order[i]
+					i++
+					j--
+				}
+			}
+			if middle <= j {
+				hi = j
+			} else if middle >= i {
+				lo = i
+			} else {
+				break
+			}
+		}
+		return nil
+	}
+	var build func(int, int) (int, error)
+	build = func(start, end int) (int, error) {
+		box := data[order[start]].Box
+		for _, id := range order[start:end] {
+			if err := budget.Step(); err != nil {
+				return 0, err
+			}
+			b := data[id].Box
+			box[0].X, box[0].Y, box[0].Z = min(box[0].X, b[0].X), min(box[0].Y, b[0].Y), min(box[0].Z, b[0].Z)
+			box[1].X, box[1].Y, box[1].Z = max(box[1].X, b[1].X), max(box[1].Y, b[1].Y), max(box[1].Z, b[1].Z)
+		}
+		index := len(nodes)
+		nodes = append(nodes, revolveBoxNode{box: box, left: -1, right: -1, start: start, end: end})
+		if end-start <= 8 {
+			return index, nil
+		}
+		dx, dy, dz := box[1].X-box[0].X, box[1].Y-box[0].Y, box[1].Z-box[0].Z
+		axis := 0
+		if dy > dx {
+			axis = 1
+			dx = dy
+		}
+		if dz > dx {
+			axis = 2
+		}
+		middle := start + (end-start)/2
+		if err := selectMedian(start, end, axis, middle); err != nil {
+			return 0, err
+		}
+		left, err := build(start, middle)
+		if err != nil {
+			return 0, err
+		}
+		right, err := build(middle, end)
+		if err != nil {
+			return 0, err
+		}
+		nodes[index].left, nodes[index].right = left, right
+		return index, nil
+	}
+	if _, err := build(0, len(order)); err != nil {
+		return nil, err
+	}
+	rows := make([][]int32, len(data))
+	for i := range data {
+		stack := []int{0}
+		for len(stack) > 0 {
+			if err := budget.Step(); err != nil {
+				return nil, err
+			}
+			n := nodes[stack[len(stack)-1]]
+			stack = stack[:len(stack)-1]
+			if BoxGapExceeds(data[i].Box, n.box, margin) {
+				continue
+			}
+			if n.left >= 0 {
+				stack = append(stack, n.left, n.right)
+				continue
+			}
+			for _, j := range order[n.start:n.end] {
+				if err := budget.Step(); err != nil {
+					return nil, err
+				}
+				if int(j) > i && !BoxGapExceeds(data[i].Box, data[j].Box, margin) {
+					rows[i] = append(rows[i], j)
+				}
+			}
+		}
+	}
+	if err := addIncidentCandidates(budget, rows, tris); err != nil {
+		return nil, err
+	}
+	for i, row := range rows {
+		slices.Sort(row)
+		rows[i] = slices.Compact(row)
+	}
+	return rows, nil
+}
+
+func addIncidentCandidates(budget *proofbound.WorkBudget, rows [][]int32, tris [][3]int) error {
 	incident := make(map[int][]int32)
-	for i, t := range tris {
-		for _, v := range t {
+	for i, tri := range tris {
+		for _, v := range tri {
 			incident[v] = append(incident[v], int32(i))
 		}
 	}
-	for i, t := range tris {
-		for _, v := range t {
+	for i, tri := range tris {
+		for _, v := range tri {
 			for _, j := range incident[v] {
 				if err := budget.Step(); err != nil {
-					return nil, err
+					return err
 				}
 				if int(j) > i {
 					rows[i] = append(rows[i], j)
@@ -589,11 +736,7 @@ func revolveContactCandidates(budget *proofbound.WorkBudget, data []RevolveAudit
 			}
 		}
 	}
-	for i, row := range rows {
-		slices.Sort(row)
-		rows[i] = slices.Compact(row)
-	}
-	return rows, nil
+	return nil
 }
 
 func boxCoord(v r3.Vec, axis int) float64 {

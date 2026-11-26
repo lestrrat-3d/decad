@@ -3288,3 +3288,4 @@
 14	0.00	TestWallHeightCarriesAxialDelta
 14	0.01	TestWallSphereCentreOffAxisUndecided
 14	0.01	TestWallSphericalZoneReadsFlats
+14	0.00	TestSectionOutlineOfSphereCutByExtrudedDisk
