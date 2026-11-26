@@ -137,6 +137,7 @@ type (
 // Both bodies must be non-nil, distinct, live members of d.
 func (d *Document) ContactPair(ctx context.Context, a, b *Body, poseA, poseB r3.Transform,
 	req ContactRequest) (*ContactReport, error) {
+	ctx = d.queryContext(ctx)
 	found, err := d.contactNodes(ctx, a, b, poseA, poseB, req)
 	if err != nil {
 		return nil, err
@@ -150,6 +151,7 @@ func (d *Document) ContactPair(ctx context.Context, a, b *Body, poseA, poseB r3.
 // non-nil, distinct, live members of d.
 func (d *Document) ProvePairSeparated(ctx context.Context, a, b *Body, poseA, poseB r3.Transform,
 	req ContactRequest) (bool, error) {
+	ctx = d.queryContext(ctx)
 	if a == b && a != nil {
 		return false, fmt.Errorf("%w: contact requires distinct bodies", ErrDegenerate)
 	}

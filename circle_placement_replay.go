@@ -36,17 +36,15 @@ func captureCirclePlacement(ctx context.Context, d *Document, placed *Body, budg
 	if err := budget.SpendWork(ctx, 64); err != nil {
 		return nil, err
 	}
-	d.n.LiveMu.RLock()
-	w := d.circlePlacements[placed]
-	d.n.LiveMu.RUnlock()
+	w := d.circlePlacementOf(placed)
 	if w == nil || w.source == nil || w.placed != placed {
 		return nil, errCirclePlacementReplay
 	}
-	a, err := prismrecord.CaptureCircleBuildFaces(ctx, &w.source.n, d.circleBuilds[w.source], budget)
+	a, err := prismrecord.CaptureCircleBuildFaces(ctx, &w.source.n, d.circleBuildOf(w.source), budget)
 	if err != nil {
 		return nil, err
 	}
-	b, err := prismrecord.CaptureCircleBuildFaces(ctx, &placed.n, d.circleBuilds[placed], budget)
+	b, err := prismrecord.CaptureCircleBuildFaces(ctx, &placed.n, d.circleBuildOf(placed), budget)
 	if err != nil {
 		return nil, err
 	}
@@ -76,7 +74,7 @@ func (s *circlePlacementSnapshot) revalidate(ctx context.Context, d *Document, b
 		return err
 	}
 	w := s.witness
-	if d.circlePlacements[s.placed] != w || w.source != s.source || w.placed != s.placed ||
+	if d.circlePlacementOf(s.placed) != w || w.source != s.source || w.placed != s.placed ||
 		!sameCircleTransform(w.motion, s.motion) || !sameCircleTransform(w.composed, s.composed) ||
 		s.source.n.Doc != &d.n || s.placed.n.Doc != &d.n || s.source.n.Payload == nil || s.placed.n.Payload == nil {
 		return errCirclePlacementReplay
@@ -173,4 +171,20 @@ func (s *circlePlacementSnapshot) linearCompositionBound(ctx context.Context, d 
 		return 0, errCirclePlacementReplay
 	}
 	return bound, nil
+}
+
+// circleBuildOf returns b's circle build witness, read under LiveMu because
+// a commit on another goroutine writes the map under it.
+func (d *Document) circleBuildOf(b *Body) *prismrecord.CircleBuildWitness {
+	d.n.LiveMu.RLock()
+	defer d.n.LiveMu.RUnlock()
+	return d.circleBuilds[b]
+}
+
+// circlePlacementOf returns b's placement witness, read under LiveMu because
+// a Transform on another goroutine writes the map under it.
+func (d *Document) circlePlacementOf(b *Body) *circlePlacementWitness {
+	d.n.LiveMu.RLock()
+	defer d.n.LiveMu.RUnlock()
+	return d.circlePlacements[b]
 }

@@ -62,6 +62,7 @@ func (d *Document) VerifyMotion(ctx context.Context, moving []*Body, m Motion, o
 	if d == nil {
 		return nil, fmt.Errorf(`%w: a nil document owns no model`, ErrDegenerate)
 	}
+	ctx = d.queryContext(ctx)
 	if err := d.resolveMovers(moving); err != nil {
 		return nil, err
 	}
