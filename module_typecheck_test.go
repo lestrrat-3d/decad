@@ -181,6 +181,7 @@ func (m *moduleImporter) Import(p string) (*types.Package, error) {
 	info := &types.Info{
 		Types: map[ast.Expr]types.TypeAndValue{}, Uses: map[*ast.Ident]types.Object{},
 		Defs: map[*ast.Ident]types.Object{}, Selections: map[*ast.SelectorExpr]*types.Selection{},
+		Instances: map[*ast.Ident]types.Instance{},
 	}
 	conf := types.Config{Importer: m, IgnoreFuncBodies: m.declsOnly}
 	pkg, err := conf.Check(p, m.ms.fset, files, info)

@@ -2,6 +2,7 @@ package decad
 
 import (
 	"go/ast"
+	"go/constant"
 	"go/token"
 	"go/types"
 	"path/filepath"
@@ -32,8 +33,84 @@ type identityUse struct {
 
 func (u identityUse) String() string { return u.file + " " + u.fn }
 
+// containsIdentity reports whether t is an identity type or a slice, array, pointer or map of one. A struct that holds
+// an id is not followed: a generic function cannot do arithmetic on a field it cannot name.
+func containsIdentity(t types.Type, seen map[types.Type]struct{}) bool {
+	if t == nil {
+		return false
+	}
+	if isIdentityType(t) {
+		return true
+	}
+	if _, ok := seen[t]; ok {
+		return false
+	}
+	seen[t] = struct{}{}
+	switch u := types.Unalias(t).Underlying().(type) {
+	case *types.Slice:
+		return containsIdentity(u.Elem(), seen)
+	case *types.Array:
+		return containsIdentity(u.Elem(), seen)
+	case *types.Pointer:
+		return containsIdentity(u.Elem(), seen)
+	case *types.Map:
+		return containsIdentity(u.Key(), seen) || containsIdentity(u.Elem(), seen)
+	}
+	return false
+}
+
+// comparesToPositiveConstant reports an == or != of an identity against a constant above 0, which names one
+// particular id and so is not relabel-safe.
+func comparesToPositiveConstant(info *types.Info, n *ast.BinaryExpr) bool {
+	for _, pair := range [][2]ast.Expr{{n.X, n.Y}, {n.Y, n.X}} {
+		if !isIdentityType(info.TypeOf(pair[0])) {
+			continue
+		}
+		tv, ok := info.Types[pair[1]]
+		if !ok || tv.Value == nil {
+			continue
+		}
+		if v, ok := constant.Int64Val(tv.Value); ok && v > 0 {
+			return true
+		}
+	}
+	return false
+}
+
+// passesIdentityToInterface reports a call that hands an identity to an interface-typed parameter, which boxes it.
+func passesIdentityToInterface(info *types.Info, n *ast.CallExpr) bool {
+	sig, ok := info.TypeOf(n.Fun).(*types.Signature)
+	if !ok {
+		return false
+	}
+	params := sig.Params()
+	for i, a := range n.Args {
+		if !isIdentityType(info.TypeOf(a)) {
+			continue
+		}
+		var pt types.Type
+		switch {
+		case sig.Variadic() && i >= params.Len()-1:
+			pt = params.At(params.Len() - 1).Type()
+			if s, ok := pt.(*types.Slice); ok && !n.Ellipsis.IsValid() {
+				pt = s.Elem()
+			}
+		case i < params.Len():
+			pt = params.At(i).Type()
+		default:
+			continue
+		}
+		if _, isIface := pt.Underlying().(*types.Interface); isIface {
+			return true
+		}
+	}
+	return false
+}
+
 // scanIdentityArithmetic lists every operation outside == and != on an identity type, every conversion of one to
-// another type and every use of one as an index.
+// another type, every use of one as an index, every comparison of one with a positive constant, min and max over
+// ids, a switch on an id, an id boxed into an interface parameter, and a generic instantiated with a type that
+// holds an id.
 func scanIdentityArithmetic(ms *moduleSource) []identityUse {
 	var uses []identityUse
 	for _, tp := range ms.pkgs {
@@ -65,6 +142,9 @@ func scanIdentityNode(info *types.Info, n ast.Node, add func()) {
 	switch n := n.(type) {
 	case *ast.BinaryExpr:
 		if n.Op == token.EQL || n.Op == token.NEQ {
+			if comparesToPositiveConstant(info, n) {
+				add()
+			}
 			return
 		}
 		if isIdentityType(typeOf(n.X)) || isIdentityType(typeOf(n.Y)) {
@@ -91,7 +171,33 @@ func scanIdentityNode(info *types.Info, n ast.Node, add func()) {
 				add()
 			}
 		}
+	case *ast.SwitchStmt:
+		if n.Tag != nil && isIdentityType(typeOf(n.Tag)) {
+			add()
+		}
+	case *ast.Ident:
+		inst, ok := info.Instances[n]
+		if !ok || n.Name == "TypeFor" { // reflect.TypeFor reads only the type
+			return
+		}
+		for ta := range inst.TypeArgs.Types() {
+			if containsIdentity(ta, map[types.Type]struct{}{}) {
+				add()
+			}
+		}
 	case *ast.CallExpr:
+		if passesIdentityToInterface(info, n) {
+			add()
+		}
+		if id, ok := ast.Unparen(n.Fun).(*ast.Ident); ok {
+			if b, ok := info.Uses[id].(*types.Builtin); ok && (b.Name() == "min" || b.Name() == "max") {
+				for _, a := range n.Args {
+					if isIdentityType(typeOf(a)) {
+						add()
+					}
+				}
+			}
+		}
 		tv, ok := info.Types[n.Fun]
 		if !ok || !tv.IsType() || len(n.Args) != 1 {
 			return
@@ -152,6 +258,12 @@ var identityArithmeticAllowList = map[string]string{
 	"internal/surfacetrim/split_revolve.go SplitRevolve":              "env ref plus piece index",
 	"internal/unionmany/prism_chain.go PrismChain":                    "env ref plus pair index",
 
+	// A comparison with a constant above 0 names one id. Only tests reach it, never the Intersect path.
+	"internal/loftcontact/quarter_held_pair.go quarterPairLive": "tests-only helper, off the Intersect path; compares a producer with a constant",
+
+	// A generic instantiated with the producer type.
+	"internal/extent/through_all.go ThroughAll": "ThroughStops[T any] stores the producer and returns it unread",
+
 	// Sign checks: an id of 0 or less means "none", which the digest keeps raw.
 	"selector.go validatePredicateRef":                                      "refuses a negative producer in a caller's ref",
 	"internal/facetedrecord/exact_copy_moments.go NewExactCopyMomentRecord": "refuses a producer of 0 or less, then copies it into the int fields of digestIDFields",
@@ -171,10 +283,15 @@ func TestIdentityArithmeticAllowList(t *testing.T) {
 	for _, u := range scanIdentityArithmetic(ms) {
 		found[u.String()] = struct{}{}
 	}
+	var unlisted []string
 	for k := range found {
-		_, ok := identityArithmeticAllowList[k]
-		require.True(t, ok, "%s does arithmetic on, or converts, a producer, level or curve id: read it and list it in identityArithmeticAllowList", k)
+		if _, ok := identityArithmeticAllowList[k]; !ok {
+			unlisted = append(unlisted, k)
+		}
 	}
+	sort.Strings(unlisted)
+	require.Empty(t, unlisted,
+		"these functions do arithmetic on, or convert, a producer, level or curve id: read each and list it in identityArithmeticAllowList")
 	for k := range identityArithmeticAllowList {
 		_, ok := found[k]
 		require.True(t, ok, "%s is listed but no longer does arithmetic on an id", k)

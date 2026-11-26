@@ -40,12 +40,14 @@ type bodyDigestMemo struct {
 // first meets them, so the digest does not depend on how many operations ran
 // before. Containers, handle addresses and caches do not enter.
 //
-// Two bodies with equal digests answer every single-body query identically
-// (Volume, Bounds, Tessellate, LocatePoint, ...). For a question about two
-// bodies, use [Document.PairDigest]: two equal body digests do not cover what
-// the two bodies share. The first call walks the body, polling ctx; later
-// calls return the stored digest. A nil body or a nil ctx is [ErrDegenerate].
-// A value the encoding cannot state (a function, a channel, an unclassified
+// Two bodies with equal digests answer the single-body queries that read
+// only the body's own geometry identically (Volume, Bounds, Tessellate,
+// LocatePoint, ...). Origin() is not among them: it returns the raw producer
+// id, which the digest relabels. For a question about two bodies, use
+// [Document.PairDigest]: two equal body digests do not cover what the two
+// bodies share. The first call walks the body, polling ctx; later calls
+// return the stored digest. A nil body or a nil ctx is [ErrDegenerate]. A
+// value the encoding cannot state (a function, a channel, an unclassified
 // synchronization field, two map keys that encode alike) is [ErrUnsupported]
 // naming its field path.
 //
@@ -61,11 +63,14 @@ func (b *Body) Digest(ctx context.Context) (Digest, error) {
 
 // PairDigest returns the identity of the pair (a, b) in that order: both body
 // digests and every node and id the two walks share. Equal pair digests mean
-// Intersect(a, b), Cut(a, b) and the other two-body evaluations give the same
-// answer (agent-docs/body-digest-design.md §4). PairDigest(a, b) and
+// Intersect(a, b) gives the same answer
+// (agent-docs/body-digest-design.md §4). They do not cover Cut or any other
+// two-body evaluation: Cut reads operations and consumers, which the digest
+// omits. Both bodies must be live and in one container; equal digests of
+// bodies that break that precondition promise nothing. PairDigest(a, b) and
 // PairDigest(b, a) differ in general. A body of another document is
-// [ErrForeignBody]; a nil body, a == b or a nil ctx is [ErrDegenerate]. Retired
-// bodies are digested like live ones.
+// [ErrForeignBody]; a nil body, a == b or a nil ctx is [ErrDegenerate].
+// Retired bodies are digested like live ones.
 func (d *Document) PairDigest(ctx context.Context, a, b *Body) (Digest, error) {
 	if a == nil || b == nil {
 		return Digest{}, fmt.Errorf("%w: a nil body has no digest", ErrDegenerate)

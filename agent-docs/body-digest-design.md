@@ -8,11 +8,12 @@ root adapter.
 ## 1. API
 
 - `type Digest [32]byte`, with `String` giving 64 lowercase hex digits.
-- `(*Body).Digest(ctx)` is the identity of one body. Equal digests answer every single-body query alike (`Volume`,
-  `Bounds`, `Tessellate`, `LocatePoint`, and the rest). The first call walks the body and polls `ctx`. Later calls
+- `(*Body).Digest(ctx)` is the identity of one body. Equal digests answer the single-body queries that read only the body's
+  own geometry alike (`Volume`, `Bounds`, `Tessellate`, `LocatePoint`, and the rest). `Origin()` returns the raw
+  producer id, which the digest relabels, so it is not covered. The first call walks the body and polls `ctx`. Later calls
   return the stored digest.
 - `(*Document).PairDigest(ctx, a, b)` is the identity of the ordered pair. `PairDigest(a, b)` and `PairDigest(b, a)`
-  differ in general.
+  differ in general. Equal pair digests cover `Intersect` only, and only for two live bodies in one container.
 - A nil body or nil `ctx` is `ErrDegenerate`. In `PairDigest`, `a == b` is `ErrDegenerate` and a body of another
   document is `ErrForeignBody`. A retired body has a digest like a live one. A value the encoder cannot state is
   `ErrUnsupported` naming its field path (§5).

@@ -394,10 +394,30 @@ func (w *walker) canon(v reflect.Value) reflect.Value {
 		return v
 	}
 	h := o.Elem()
-	if h.Kind() != reflect.Pointer || h.IsNil() {
+	if h.Kind() != reflect.Pointer || h.IsNil() || h.Elem().Kind() != reflect.Struct {
+		return v
+	}
+	if !holdsNode(h.Elem(), v) {
 		return v
 	}
 	return h
+}
+
+// holdsNode reports whether the handle struct h embeds, or points to, the very node p points at. A by-value copy of
+// a node keeps its Owner but is not held by that handle.
+func holdsNode(h, p reflect.Value) bool {
+	want := p.Pointer()
+	for _, f := range h.Fields() {
+		switch {
+		case f.Type() == p.Type().Elem() && f.CanAddr():
+			if f.Addr().Pointer() == want {
+				return true
+			}
+		case f.Type() == p.Type() && f.Pointer() == want:
+			return true
+		}
+	}
+	return false
 }
 
 func (w *walker) walk(v reflect.Value) {
@@ -524,7 +544,11 @@ func (w *walker) structure(v reflect.Value, t reflect.Type) {
 			w.failf("%s", si.refuse[i])
 			return
 		}
-		w.walk(v.Field(i))
+		if si.idOf[i] != nil {
+			w.idOf(si.idOf[i], v.Field(i).Int())
+		} else {
+			w.walk(v.Field(i))
+		}
 		w.path = w.path[:len(w.path)-1]
 	}
 }

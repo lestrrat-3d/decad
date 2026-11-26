@@ -272,3 +272,37 @@ func TestSharedRelation(t *testing.T) {
 	require.NotEqual(t, statedigest.Shared(sa, sb), statedigest.Shared(pa, pb))
 	require.Equal(t, statedigest.Shared(sa, sb), statedigest.Shared(sa, sb))
 }
+
+type lineage struct {
+	A, B id
+	Copy int // holds an id as a plain int
+}
+
+func TestEncoderIDFieldsRelabel(t *testing.T) {
+	e := statedigest.New(statedigest.Config{
+		IDs:      []reflect.Type{reflect.TypeFor[id]()},
+		IDFields: map[reflect.Type]map[string]reflect.Type{reflect.TypeFor[lineage](): {"Copy": reflect.TypeFor[id]()}},
+	})
+	one := sum(t, e, &lineage{A: 5, B: 9, Copy: 5})
+	require.NotEqual(t, one, sum(t, e, &lineage{A: 9, B: 5, Copy: 5}), "Copy==A and Copy==B differ")
+	require.Equal(t, one, sum(t, e, &lineage{A: 105, B: 109, Copy: 105}), "the same relation renumbered is equal")
+	require.Equal(t, sum(t, e, &lineage{A: 5, B: 9, Copy: 0}), sum(t, e, &lineage{A: 7, B: 8, Copy: 0}))
+	require.NotEqual(t, sum(t, e, &lineage{A: 5, B: 9, Copy: 0}), sum(t, e, &lineage{A: 5, B: 9, Copy: -1}))
+}
+
+func TestEncoderStrayNodeCopyStaysSeparate(t *testing.T) {
+	e := statedigest.New(statedigest.Config{OwnerField: "Owner"})
+	type pair struct{ A, B *node }
+	h := &handle{n: node{Name: "a"}}
+	h.n.Owner = h
+	stray := h.n // keeps Owner naming h, but h does not hold it
+	stray.Name = "b"
+	g1 := sum(t, e, &pair{A: &h.n, B: &stray})
+	h2 := &handle{n: node{Name: "a"}}
+	h2.n.Owner = h2
+	g2 := sum(t, e, &pair{A: &h2.n, B: &h2.n})
+	require.NotEqual(t, g1, g2, "a by-value copy is not its source")
+	h3 := &handle{n: node{Name: "a"}}
+	h3.n.Owner = h3
+	require.Equal(t, sum(t, e, &pair{A: &h3.n, B: &h3.n}), g2, "the handle's own node still folds")
+}
