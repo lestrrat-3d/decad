@@ -264,8 +264,6 @@ func TestPlacement(t *testing.T) {
 			"_, _ = decad.Copy(b).Place(decad.CopyRotation{Center: c, Axis: ax, Angle: a}).Do(ctx)"},
 		{"copy lift translation", "_, _ = decad.Copy(ctx, b, decad.WithCopyLiftTranslation(l, from, to))",
 			"_, _ = decad.Copy(b).Place(decad.CopyLiftTranslation{Lift: l, From: from, To: to}).Do(ctx)"},
-		{"copy repeated placement keeps the last", "_, _ = decad.Copy(ctx, b, decad.WithCopyPlacement(t), decad.WithCopyRotation(c, ax, a))",
-			"_, _ = decad.Copy(b).Place(decad.CopyTransform{Transform: t}).Place(decad.CopyRotation{Center: c, Axis: ax, Angle: a}).Do(ctx)"},
 		{"mirrored", "_, _ = decad.Mirrored(ctx, b, plane)", "_, _ = decad.Mirrored(b, plane).Do(ctx)"},
 		{"mirrored join", "_, _ = decad.Mirrored(ctx, b, plane, decad.WithJoin())", "_, _ = decad.MirroredJoin(b, plane).Do(ctx)"},
 		{"mirrored copy", "_, _ = decad.MirroredCopy(ctx, b, plane)", "_, _ = decad.MirroredCopy(b, plane).Do(ctx)"},
@@ -301,18 +299,21 @@ func TestPlacement(t *testing.T) {
 		})
 	}
 	for name, call := range map[string]string{
-		"copy spread options":           "decad.Copy(ctx, b, opts...)",
-		"copy option variable":          "decad.Copy(ctx, b, opt)",
-		"copy placement wrong arity":    "decad.Copy(ctx, b, decad.WithCopyRotation(c, a))",
-		"mirrored option variable":      "decad.Mirrored(ctx, b, plane, opt)",
-		"path pattern no stations":      "decad.PathPattern(ctx, b, path, decad.WithPathFollow())",
-		"path pattern both stations":    "decad.PathPattern(ctx, b, path, decad.WithPathCount(3), decad.WithPathSpacing(s))",
-		"path pattern repeated count":   "decad.PathPattern(ctx, b, path, decad.WithPathCount(3), decad.WithPathCount(4))",
-		"path pattern pivot no follow":  "decad.PathPattern(ctx, b, path, decad.WithPathCount(3), decad.WithPathPivot(p))",
-		"path pattern spread options":   "decad.PathPattern(ctx, b, path, opts...)",
-		"arrange spread options":        "decad.Arrange(ctx, bodies, bed, opts...)",
-		"arrange spread angle":          "decad.Arrange(ctx, bodies, bed, decad.WithArrangeAngle(xs...))",
-		"transform with a stray option": "decad.Transform(ctx, b, t, opt)",
+		"copy spread options":            "decad.Copy(ctx, b, opts...)",
+		"copy option variable":           "decad.Copy(ctx, b, opt)",
+		"copy placement wrong arity":     "decad.Copy(ctx, b, decad.WithCopyRotation(c, a))",
+		"mirrored option variable":       "decad.Mirrored(ctx, b, plane, opt)",
+		"path pattern no stations":       "decad.PathPattern(ctx, b, path, decad.WithPathFollow())",
+		"path pattern both stations":     "decad.PathPattern(ctx, b, path, decad.WithPathCount(3), decad.WithPathSpacing(s))",
+		"path pattern repeated count":    "decad.PathPattern(ctx, b, path, decad.WithPathCount(3), decad.WithPathCount(4))",
+		"path pattern pivot no follow":   "decad.PathPattern(ctx, b, path, decad.WithPathCount(3), decad.WithPathPivot(p))",
+		"path pattern spread options":    "decad.PathPattern(ctx, b, path, opts...)",
+		"copy repeated placement":        "decad.Copy(ctx, b, decad.WithCopyPlacement(t), decad.WithCopyRotation(c, ax, a))",
+		"copy repeated invalid rotation": "decad.Copy(ctx, b, decad.WithCopyRotation(c, zero, a), decad.WithCopyPlacement(t))",
+		"arrange repeated angle":         "decad.Arrange(ctx, bodies, bed, decad.WithArrangeAngle(a), decad.WithArrangeAngle(b))",
+		"arrange spread options":         "decad.Arrange(ctx, bodies, bed, opts...)",
+		"arrange spread angle":           "decad.Arrange(ctx, bodies, bed, decad.WithArrangeAngle(xs...))",
+		"transform with a stray option":  "decad.Transform(ctx, b, t, opt)",
 	} {
 		t.Run("reported "+name, func(t *testing.T) {
 			in := head + "\t_, _ = " + call + "\n}\n"

@@ -10,7 +10,7 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// WithJoin makes Mirrored return one body: the original and its mirror image
+// MirroredJoin returns one body: the original and its mirror image
 // merged. Use it to model a symmetric part as a single half and mirror it
 // into the whole, so that changing the half changes both sides.
 func Example_mirror_join() {

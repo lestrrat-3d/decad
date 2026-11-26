@@ -72,7 +72,7 @@ func TestArrangeCanceledMidwayLeavesTheDocumentUnchanged(t *testing.T) {
 						require.Len(t, moved, len(blocks))
 						return true
 					}
-					require.ErrorIs(t, err, context.Canceled)
+					require.Equal(t, context.Canceled, err)
 					requireDocumentState(context.WithoutCancel(ctx), t, before, doc, blocks...)
 					if child != nil {
 						for _, b := range blocks {

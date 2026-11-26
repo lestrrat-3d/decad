@@ -761,8 +761,11 @@ type CopyCommand struct {
 // Place composes a rigid motion onto the copy's placement: p is a
 // [CopyTransform], a [CopyRotation] or a [CopyLiftTranslation]. A fault of p is
 // returned by Do ahead of the source's own gates, naming Place as its subject:
-// a nil p or an invalid value is ErrDegenerate, a non-finite one ErrNotFinite
-// and a wrong unit kind ErrUnitKind. A second call replaces the first.
+// a nil p or an invalid rotation or lift translation is ErrDegenerate, a
+// non-finite one ErrNotFinite and a wrong unit kind ErrUnitKind. A
+// CopyTransform is not checked here: the source's own gate checks it after the
+// retired-body check, and the fault names no subject. A second call replaces
+// the first.
 func (c *CopyCommand) Place(p CopyPlacement) *CopyCommand {
 	c.place.Set(resolveCopyPlacement(p))
 	return c

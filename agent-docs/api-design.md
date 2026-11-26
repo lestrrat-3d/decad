@@ -1634,7 +1634,7 @@ type CopyLiftTranslation struct{ Lift r3.Transform; From, To r3.Vec }
 `Copy` returns a command whose `Do` makes a NEW live body and leaves its source **live**: the source is
 depended on, never consumed. With no `Place` call, it re-registers the source's
 immutable payload under a new producer identity at the same placement. With
-`Place(CopyTransform{t})`, it re-evaluates the payload under the composed rigid
+`Place(CopyTransform{Transform: t})`, it re-evaluates the payload under the composed rigid
 motion exactly as `Transform` does. `CopyPlacement` is sealed, so a copy takes one
 placement, and a second `Place` call replaces the first (command design rules M2, M3).
 The zero `Transform{}` is `ErrDegenerate`; `r3.Identity()` is a valid no-op.

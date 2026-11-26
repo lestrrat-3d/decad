@@ -1,6 +1,7 @@
 package apitest_test
 
 import (
+	"errors"
 	"math"
 	"testing"
 
@@ -78,16 +79,25 @@ func TestPathPatternSpacingRefusals(t *testing.T) {
 		name    string
 		spacing units.Value
 		want    error
+		// stations is set where foldPathPattern refuses the spacing, which names the
+		// stations argument. A zero spacing or one the path cannot hold is refused
+		// later, at the sampling gate, and names no subject.
+		stations bool
 	}{
-		{"zero spacing", units.Millimeters(0), decad.ErrDegenerate},
-		{"negative spacing", units.Millimeters(-1), decad.ErrNegativeMagnitude},
-		{"spacing as an angle", units.Degrees(5), decad.ErrUnitKind},
-		{"longer than the path", units.Millimeters(31), decad.ErrDegenerate},
-		{"far too fine", units.Millimeters(1e-6), decad.ErrDegenerate},
+		{"zero spacing", units.Millimeters(0), decad.ErrDegenerate, false},
+		{"negative spacing", units.Millimeters(-1), decad.ErrNegativeMagnitude, true},
+		{"spacing as an angle", units.Degrees(5), decad.ErrUnitKind, true},
+		{"longer than the path", units.Millimeters(31), decad.ErrDegenerate, false},
+		{"far too fine", units.Millimeters(1e-6), decad.ErrDegenerate, false},
 	}
 	for _, tc := range cases {
 		_, err := decad.PathPattern(block, path, decad.PathSpacing{Spacing: tc.spacing}).Do(t.Context())
 		require.ErrorIs(t, err, tc.want, tc.name)
+		if tc.stations {
+			diagnostics, ok := errors.AsType[decad.OperationDiagnosticError](err)
+			require.True(t, ok, tc.name)
+			require.Equal(t, "stations", diagnostics.OperationDiagnostics()[0].Subject.Name, tc.name)
+		}
 	}
 	require.Equal(t, []*decad.Body{block}, doc.Bodies(), "a refused pattern leaves no copy")
 	_, err = decad.PathPattern(block, nil, decad.PathSpacing{Spacing: units.Millimeters(5)}).Do(t.Context())

@@ -191,7 +191,7 @@ func TestPathPatternCanceledMidwayLeavesTheDocumentUnchanged(t *testing.T) {
 						require.Len(t, copies, 3)
 						return true
 					}
-					require.ErrorIs(t, err, context.Canceled)
+					require.Equal(t, context.Canceled, err)
 					requireDocumentState(context.WithoutCancel(ctx), t, before, doc, block)
 					if tc.child {
 						got, cerr := doc.ContainerOf(block)

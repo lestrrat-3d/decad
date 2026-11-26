@@ -99,7 +99,9 @@ command's unexported implementation owns steps 4–6.
   inside the call, so mapping its error to `ErrUnsupported` with `%s` would hide `context.Canceled`:
   `if cerr := ctx.Err(); cerr != nil { return nil, cerr }` comes before the mapping (`move_face.go`). A
   pre-canceled `ctx` stops at the first poll and never reaches such a wrapper, so a test of cancellation by
-  identity cancels in the middle of the build (§14).
+  identity cancels in the middle of the build (§14). The mesh-to-solid wrappers (`Offset`, `MoveFace`, the
+  orthogonal shell, `Stretch`, `QuarterTurn`) guard the call to `solidFromMeshBody` this way, and any later
+  composite that maps that call's error adds the same guard first.
 - **Every other error carries the command's `OperationKind`** (§7).
 
 ## 4. Arguments — copy, store, record
@@ -243,6 +245,9 @@ entries that the restore later withdraws, and the next call reuses their produce
 - **A root composite calls the unexported implementation, never a public command.** `hole.go`, `infill.go`,
   `pattern.go`, `path_pattern.go`, `arrange.go`, `fillet_chord.go` and `chamfer_angle.go` call `cut`, `union`,
   `copyBody` and the like. A composite allocates and consumes no command.
+  `infill.go` is the one root composite that still calls a public operation, `SolidFromMesh`. The last stack PR
+  (§13, PR 7) moves that call onto the implementation, `solidFromMeshBody`, in the PR that converts
+  `SolidFromMesh`.
 - **A composite may tag the implementation's error with that operation's kind itself, but the outermost command's
   kind wins.** `operationError` re-tags every nested non-selection diagnostic with the kind it is given, and the
   public `Do` applies it once with its own kind. A composite's own tag therefore decides a diagnostic's kind only for
@@ -260,6 +265,11 @@ entries that the restore later withdraws, and the next call reuses their produce
   command's `run` sets the method name. A composite that calls the implementation with a value it computed sets the
   name of the constructor argument that value comes from, or leaves the subject empty, so a diagnostic never names
   a method the composite's own command does not have (`ChamferAngle` names `d`, not `Asymmetric`).
+- **The implementation may also tag a refused constructor argument.** `foldPathPattern` refuses a `stations`
+  value at its gate and tags the error with `OperationCopy` and the subject `stations`. The subject must travel in the
+  settings the implementation takes, as `pathFollow.subject` does, so that a composite that calls the
+  implementation with a value it computed can clear it or set the name of its own argument, by the rule above.
+  A spec composite whose fields are refused under A6 needs this.
 - **A stored method value's fault is named in one of two ways.** Settings that the implementation takes carry the
   subject next to the value and its error (`extrudeSettings.taperSubject`), or the folding code returns a typed
   error that carries the method name and `Do` turns it into the subject (`featureoption.SweepFaultError`, which
@@ -329,7 +339,7 @@ its option tier and its `With...` constructors in the same PR, and no wrapper su
 | 4 | Atomic `PathPattern` and `Arrange` (§9). It changes behaviour only on failure and cancellation and converts nothing. |
 | 5 | Placement and patterns. |
 | 6 | Spec composites. They follow PRs 2–5 because they call those operations' implementations (§11). |
-| 7 | Surface, mesh-to-solid ops and `Remove`. It deletes the rewrite tool. |
+| 7 | Surface, mesh-to-solid ops and `Remove`. It moves `infill.go`'s call of `SolidFromMesh` onto `solidFromMeshBody` (§11) and deletes the rewrite tool. |
 
 ## 14. What each family PR carries
 
@@ -345,6 +355,10 @@ its option tier and its `With...` constructors in the same PR, and no wrapper su
   (`_gallery/go.mod` `replace`), so it breaks in the same PR otherwise.
 - Tests asserting the §3 order for each member: a second `Do` is `ErrConsumed`, a nil `ctx` precedes every operand
   fault, cancellation returns `ctx.Err()` by identity, and the operation's own refusal table holds unchanged.
+- **The per-member rows run over the family's shared command table.** The retired-body row and the nil-ctx row
+  of a family iterate the one table that also drives the consumed-once and cancellation rows, so a member added to
+  the table gets every row. The nil-operand table builds a fresh command per row, because a run consumes it
+  (`placementCommands`, `TestPlacementConstructorsRecordNilOperands`).
 - A cancellation test that cancels in the middle of the build, not only a pre-canceled `ctx` (§3). The test
   passes a context whose `Err` turns to `context.Canceled` after n checks and moves n one later per run until
   `Do` succeeds. Every run before that returns `context.Canceled` by identity

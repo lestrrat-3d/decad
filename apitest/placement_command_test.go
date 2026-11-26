@@ -219,6 +219,40 @@ func placementCommands() []placementCommand {
 				requirePlacementBounds(t, got[1], r3.NewVec(30, 0, 0), r3.NewVec(34, 4, 2))
 				require.Len(t, doc.Bodies(), 3, "the source stays live")
 			}},
+		{name: "Patterned union fallback", kind: decad.OperationPatterned,
+			build: func(t *testing.T) (func() func(context.Context) ([]*decad.Body, error), *decad.Document) {
+				// A mesh solid is no prism group, and its two instances overlap, so
+				// the instances combine by Union (pattern.go, rule 3).
+				v, tris := cubeMesh(r3.Vec{}, r3.NewVec(10, 10, 10))
+				m, err := decad.NewMeshBody(t.Context(), v, tris)
+				require.NoError(t, err)
+				doc := decad.New()
+				cube, err := decad.SolidFromMesh(t.Context(), doc, m)
+				require.NoError(t, err)
+				spec := decad.LinearPattern{Dir: r3.NewVec(1, 0, 0), Step: mm(5), Count: 2}
+				return func() func(context.Context) ([]*decad.Body, error) {
+					return single(decad.Patterned(cube, spec).Do)
+				}, doc
+			},
+			check: func(t *testing.T, got []*decad.Body, doc *decad.Document) {
+				requirePlacementBounds(t, got[0], r3.NewVec(0, 0, 0), r3.NewVec(15, 10, 10))
+				requirePlacementVolume(t, got[0], 1500)
+				require.Equal(t, got, doc.Bodies(), "the source is retired")
+			}},
+		{name: "PathPattern follow", kind: decad.OperationCopy,
+			build: func(t *testing.T) (func() func(context.Context) ([]*decad.Body, error), *decad.Document) {
+				doc, block := patternBlock(t)
+				path := followPath(t)
+				return func() func(context.Context) ([]*decad.Body, error) {
+					return decad.PathPattern(block, path, decad.PathCount{Count: 3}).Follow().Do
+				}, doc
+			},
+			check: func(t *testing.T, got []*decad.Body, doc *decad.Document) {
+				require.Len(t, got, 2)
+				lo, hi := turnedBlockBounds(math.Pi/2, r3.Vec{X: 20, Y: 10})
+				requireBoundsNear(t, got[1], lo, hi)
+				require.Len(t, doc.Bodies(), 3, "the source stays live")
+			}},
 		{name: "Arrange", kind: decad.OperationTransform, stride: 30,
 			build: func(t *testing.T) (func() func(context.Context) ([]*decad.Body, error), *decad.Document) {
 				doc := decad.New()
@@ -357,30 +391,56 @@ func TestPlacementConstructorsRecordNilOperands(t *testing.T) {
 	require.NoError(t, err)
 	_, block := patternBlock(t)
 	bed := arrangeBed(30, 20, 2)
-	for _, tc := range []struct {
+	rows := []struct {
 		name    string
 		kind    decad.OperationKind
 		subject string
-		do      func(context.Context) ([]*decad.Body, error)
+		// next builds a fresh command, so the table serves each subtest once.
+		next func() func(context.Context) ([]*decad.Body, error)
 	}{
-		{nameTransform, decad.OperationTransform, subjectBody, single(decad.Transform(nilBody, r3.Identity()).Do)},
-		{"Mirrored", decad.OperationMirrored, subjectBody, single(decad.Mirrored(nilBody, plane).Do)},
-		{"MirroredJoin", decad.OperationMirrored, subjectBody, single(decad.MirroredJoin(nilBody, plane).Do)},
-		{"MirroredCopy", decad.OperationMirroredCopy, subjectBody, single(decad.MirroredCopy(nilBody, plane).Do)},
-		{"ScaledAt", decad.OperationScaledAt, subjectBody, single(decad.ScaledAt(nilBody, r3.Vec{}, units.Scalar(2)).Do)},
-		{"QuarterTurn", decad.OperationQuarterTurn, subjectBody, single(decad.QuarterTurn(nilBody, r3.NewVec(0, 0, 1), r3.Vec{}, 1).Do)},
-		{"Stretch", decad.OperationStretch, subjectBody,
-			single(decad.Stretch(nilBody, r3.Vec{}, units.Scalar(1), units.Scalar(1), units.Scalar(1)).Do)},
-		{"PatternCopies", decad.OperationPatternCopies, subjectBody, decad.PatternCopies(nilBody, spec).Do},
-		{"Patterned", decad.OperationPatterned, subjectBody, single(decad.Patterned(nilBody, spec).Do)},
-		{"PathPattern body", decad.OperationCopy, subjectBody, decad.PathPattern(nilBody, path, decad.PathCount{Count: 3}).Do},
-		{"PathPattern path", decad.OperationCopy, "path", decad.PathPattern(block, nil, decad.PathCount{Count: 3}).Do},
-		{"Arrange none", decad.OperationTransform, "bodies", decad.Arrange(nil, bed).Do},
-		{"Arrange nil first", decad.OperationTransform, "bodies", decad.Arrange([]*decad.Body{nil, block}, bed).Do},
-	} {
+		{nameTransform, decad.OperationTransform, subjectBody,
+			func() func(context.Context) ([]*decad.Body, error) {
+				return single(decad.Transform(nilBody, r3.Identity()).Do)
+			}},
+		{"Mirrored", decad.OperationMirrored, subjectBody,
+			func() func(context.Context) ([]*decad.Body, error) { return single(decad.Mirrored(nilBody, plane).Do) }},
+		{"MirroredJoin", decad.OperationMirrored, subjectBody,
+			func() func(context.Context) ([]*decad.Body, error) {
+				return single(decad.MirroredJoin(nilBody, plane).Do)
+			}},
+		{"MirroredCopy", decad.OperationMirroredCopy, subjectBody,
+			func() func(context.Context) ([]*decad.Body, error) {
+				return single(decad.MirroredCopy(nilBody, plane).Do)
+			}},
+		{"ScaledAt", decad.OperationScaledAt, subjectBody, func() func(context.Context) ([]*decad.Body, error) {
+			return single(decad.ScaledAt(nilBody, r3.Vec{}, units.Scalar(2)).Do)
+		}},
+		{"QuarterTurn", decad.OperationQuarterTurn, subjectBody, func() func(context.Context) ([]*decad.Body, error) {
+			return single(decad.QuarterTurn(nilBody, r3.NewVec(0, 0, 1), r3.Vec{}, 1).Do)
+		}},
+		{"Stretch", decad.OperationStretch, subjectBody, func() func(context.Context) ([]*decad.Body, error) {
+			return single(decad.Stretch(nilBody, r3.Vec{}, units.Scalar(1), units.Scalar(1), units.Scalar(1)).Do)
+		}},
+		{"PatternCopies", decad.OperationPatternCopies, subjectBody,
+			func() func(context.Context) ([]*decad.Body, error) { return decad.PatternCopies(nilBody, spec).Do }},
+		{"Patterned", decad.OperationPatterned, subjectBody,
+			func() func(context.Context) ([]*decad.Body, error) { return single(decad.Patterned(nilBody, spec).Do) }},
+		{"PathPattern body", decad.OperationCopy, subjectBody, func() func(context.Context) ([]*decad.Body, error) {
+			return decad.PathPattern(nilBody, path, decad.PathCount{Count: 3}).Do
+		}},
+		{"PathPattern path", decad.OperationCopy, "path", func() func(context.Context) ([]*decad.Body, error) {
+			return decad.PathPattern(block, nil, decad.PathCount{Count: 3}).Do
+		}},
+		{"Arrange none", decad.OperationTransform, "bodies",
+			func() func(context.Context) ([]*decad.Body, error) { return decad.Arrange(nil, bed).Do }},
+		{"Arrange nil first", decad.OperationTransform, "bodies", func() func(context.Context) ([]*decad.Body, error) {
+			return decad.Arrange([]*decad.Body{nil, block}, bed).Do
+		}},
+	}
+	for _, tc := range rows {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			got, err := tc.do(t.Context())
+			got, err := tc.next()(t.Context())
 			require.ErrorIs(t, err, decad.ErrDegenerate)
 			require.Nil(t, got)
 			diagnostics := requireOperationKind(t, err, tc.kind)
@@ -390,21 +450,34 @@ func TestPlacementConstructorsRecordNilOperands(t *testing.T) {
 	t.Run("nil context first", func(t *testing.T) {
 		t.Parallel()
 		var nilCtx context.Context
-		for _, tc := range []struct {
-			name string
-			kind decad.OperationKind
-			do   func(context.Context) ([]*decad.Body, error)
-		}{
-			{nameTransform, decad.OperationTransform, single(decad.Transform(nilBody, r3.Identity()).Do)},
-			{"PathPattern", decad.OperationCopy, decad.PathPattern(nilBody, path, decad.PathCount{Count: 3}).Do},
-			{"Arrange", decad.OperationTransform, decad.Arrange(nil, bed).Do},
-		} {
-			_, err := tc.do(nilCtx)
+		for _, tc := range rows {
+			_, err := tc.next()(nilCtx)
 			require.ErrorIs(t, err, decad.ErrDegenerate, tc.name)
 			diagnostics := requireOperationKind(t, err, tc.kind)
 			require.Empty(t, diagnostics[0].Subject.Name, "%s: the nil ctx fault names no subject", tc.name)
 		}
 	})
+}
+
+// Every member refuses a retired body at its gate and tags the refusal with its
+// own kind. The loop retires each live body of the member's fixture, then runs
+// a fresh command over it (agent-docs/command-api-design.md section 14).
+func TestPlacementCommandsRefuseARetiredBody(t *testing.T) {
+	t.Parallel()
+	for _, tc := range placementCommands() {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			next, doc := tc.build(t)
+			do := next()
+			for _, b := range doc.Bodies() {
+				require.NoError(t, decad.Remove(b))
+			}
+			got, err := do(t.Context())
+			require.ErrorIs(t, err, decad.ErrRetiredBody)
+			require.Nil(t, got)
+			requireOperationKind(t, err, tc.kind)
+		})
+	}
 }
 
 // Copy does not record a nil source: Copy's own gate order reads the placement

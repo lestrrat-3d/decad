@@ -20,17 +20,44 @@ var placementRules = map[string]rule{
 	"PatternCopies": ruleModify("PatternCopies", 2, nil),
 	"Patterned":     ruleModify("Patterned", 2, nil),
 	"PathPattern":   rulePathPattern,
-	"Arrange": ruleModify("Arrange", 2, optionMethods{
-		"WithArrangeTurns": {"Turns", 0}, "WithArrangeAngle": {"Angle", 1},
-	}),
+	"Arrange":       ruleArrange,
+}
+
+var ruleArrangeOptions = ruleModify("Arrange", 2, optionMethods{
+	"WithArrangeTurns": {"Turns", 0}, "WithArrangeAngle": {"Angle", 1},
+})
+
+// ruleArrange rewrites Arrange through its option methods. The old call
+// validated every WithArrangeAngle in order, so an invalid earlier one failed
+// the call. Angle replaces its earlier call, so a repeated angle is reported,
+// not rewritten into a call that now succeeds.
+func ruleArrange(c *callSite) (string, string) {
+	angles := 0
+	if len(c.args) > 3 {
+		for _, opt := range c.args[3:] {
+			if name, _, _, _, ok := c.option(opt); ok && name == "WithArrangeAngle" {
+				angles++
+			}
+		}
+	}
+	if angles > 1 {
+		return "", "Arrange call with a repeated WithArrangeAngle, whose earlier value the old call validated"
+	}
+	return ruleArrangeOptions(c)
 }
 
 // ruleCopy: Copy(ctx, b, decad.WithCopyRotation(c, a, r)) ->
 // Copy(b).Place(decad.CopyRotation{Center: c, Axis: a, Angle: r}).Do(ctx). Each
-// placement option becomes one Place call, so the last one still wins.
+// placement option becomes the one Place call. The old call validated every
+// placement option in order, so an invalid earlier option failed it. Place
+// replaces its earlier call, so a call with more than one placement option is
+// reported, not rewritten into a call that now succeeds.
 func ruleCopy(c *callSite) (string, string) {
 	if c.ellipsis || len(c.args) < 2 {
 		return "", "Copy call with a spread option list or too few arguments"
+	}
+	if len(c.args) > 3 {
+		return "", "Copy call with more than one placement option, whose earlier options the old call validated"
 	}
 	call := fmt.Sprintf("%s(%s)", qualify(c.pkg, "Copy"), c.text(c.args[1]))
 	for _, opt := range c.args[2:] {

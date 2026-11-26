@@ -25,7 +25,7 @@ Every error carries `OperationCopy`.
 
 | Decision | Rule |
 |---|---|
-| P1 | Instance 0 is `b`, taken to sit at the path's start. With `PathCount(count)` the result holds the `count − 1` other instances, as `PatternCopies` does, and `b` stays live. |
+| P1 | Instance 0 is `b`, taken to sit at the path's start. With `PathCount{Count: count}` the result holds the `count − 1` other instances, as `PatternCopies` does, and `b` stays live. |
 | P2 | Instance `i` is `Copy(b).Place(CopyTransform{Translation(point(i) − point(0))})`, where `point(i)` lies `i/(count − 1)` of the way along the path's total length. The last instance sits at the path's end. |
 | P3 | Instances keep the orientation of `b` unless `Follow` or `FollowAbout` is called (§5). |
 | P4 | Points are spaced by arc length over the whole path, not per segment. A short segment can hold no instance and a long one many. |
