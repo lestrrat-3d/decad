@@ -50,9 +50,11 @@ Navigation only, the sections own the rules:
 ```go
 // UnionCommand joins bodies. Build it with Union.
 type UnionCommand struct {
-	state  opcommand.State // consumed flag and first recorded fault (§4)
-	bodies []*Body         // copied at Union
-	bound  *units.Value    // set by RefineTo
+	state    opcommand.State // consumed flag and first recorded fault (§4)
+	bodies   []*Body         // copied at Union
+	refine   bool            // set by RefineTo
+	bound    float64         // the RefineTo bound in millimetres
+	boundErr error           // the fault of the latest RefineTo bound, refused at Do (§4, A9)
 }
 
 func Union(bodies ...*Body) *UnionCommand
@@ -106,7 +108,8 @@ command's unexported implementation owns steps 4–6.
 | A5 | **A constructor or method records a fault only when both hold.** Its own argument shows the fault without reading anything else (A1), and the operation's documented gate order reports that fault ahead of every check that reads document state, liveness, `ctx.Err()` or another argument. Example: `Union` with fewer than two bodies is recorded, because `Union` refuses the count right after the nil-ctx check today. |
 | A6 | Every other invalid value is stored and refused by the operation's own gate at `Do`, in today's position. Example: a negative `Fillet` radius is stored, and S15 refuses it after the S17 liveness gate. |
 | A7 | Only the first recorded fault is kept. A constructor runs before any method, so its faults win. Where two methods could both record and today's order distinguishes their faults, the later one in today's order is stored under A6 instead, so call order never decides which fault the caller sees. |
-| A8 | A recorded fault names its subject: the constructor parameter name (`bodies`, `target`, `tool`) or the method name (`RefineTo`). |
+| A8 | A recorded fault names its subject: the constructor parameter name (`bodies`, `target`, `tool`). A fault of a method value names the method (`RefineTo`) when the gate refuses it. |
+| A9 | **Only constructors call `State.Record`.** `Record` keeps the first fault, so a method that recorded could not be replaced by a second call (M2). A method stores its value and the error validating it produced in its own field, and the gate refuses that error at the position A6 gives. `opcommand.Slot[T]` (`Set(value, err)`, `Get()`) is the shared holder: the last `Set` replaces the value and its error. `UnionCommand.RefineTo` keeps the same two fields inline. |
 
 "Recorded" and "stored" both mean returned by `Do` before any build or commit. Neither ever makes a constructor
 or method return an error.
@@ -122,19 +125,19 @@ or method return an error.
 | M5 | A dependent option takes its parent's slot: `PathPattern(...).Follow()` or `.FollowAbout(pivot)`. Both write the one follow slot, and the last call wins (M2). |
 | M6 | **An option that changes the result kind or what a mandatory argument means is its own constructor.** `WithJoin` becomes `MirroredJoin(b, plane)`, `WithNoOpenings` becomes `ShellClosed(b, t)`, and `WithConeTangentEnd` becomes `LoftFacesToCone(sections, cone, radial)`. |
 | M7 | **A twin whose mandatory size means another quantity stays its own constructor.** `FilletChord(b, sel, chord)` sizes by chord, and `ChamferAngle(b, sel, d, reference, angle)` has its own gate order (`chamfer_angle.go`). |
-| M8 | **A twin that exists only because the parent had no option slot folds into a method.** `UnionRefined(bodies, bound)` becomes `Union(bodies...).RefineTo(bound)`, and `LoftSectionsWithCircularCorrespondence(d, c, sections...)` becomes `LoftSections(d, sections...).CircularCorrespondence(c)`. The fold keeps the twin's gates, result identities and history exactly. |
+| M8 | **A twin that exists only because the parent had no option slot folds into a method.** the refined union is `Union(bodies...).RefineTo(bound)`, and `LoftSectionsWithCircularCorrespondence(d, c, sections...)` becomes `LoftSections(d, sections...).CircularCorrespondence(c)`. The fold keeps the twin's gates, result identities and history exactly. |
 | M9 | A conflict between two different methods is refused at `Do` with today's sentinel: `Taper` with `SurfaceResult` stays `ErrUnsupported` (`extrude.go`). |
 | M10 | A method called after `Do` changes the command and nothing else, because `Do` refuses a consumed command. |
 | M11 | A method exists on a command only when today's call accepts the option without an unconditional refusal. `CutExtrudeCommand` has no `SurfaceResult`. |
 
-`RefineTo` builds the union directly at the bound for the class `UnionRefined` admits today. Any other set is
-`ErrUnsupported`, as today. It never falls back to `Union` then `Refine`, because the history would then depend
+`RefineTo` builds the union directly at the bound for its class: a revolved blank and two or more copies of one
+point-Loft tooth. Any other set is `ErrUnsupported`. It never falls back to `Union` then `Refine`, because the history would then depend
 on the input. Every error carries `OperationUnion`, and a bound fault names `RefineTo` as its subject.
 
 ## 6. Shared method groups and generics
 
-Several operations share an optional input today: `SurfaceResultOption` serves Extrude, Revolve, Sweep and Loft,
-`FilletChamferOption` serves Fillet and Chamfer, and `BooleanOption` serves Cut and Intersect.
+Several operations share an optional input: `SurfaceResult` serves Extrude, Revolve, Sweep and Loft, `TangentChain`
+serves Fillet and Chamfer, and `MatchingFaces` serves Cut and Intersect.
 
 - **Each command declares its own one-line method, and the method calls one shared unexported setter.**
 
@@ -163,13 +166,16 @@ Several operations share an optional input today: `SurfaceResultOption` serves E
   result value, and a command with several results passes a struct and unpacks it.
 - **There is no shared `Command` interface.** Nothing needs one, and one would force a wrapper type per result.
 - **Every error from `Do` except cancellation is tagged with the command's own `OperationKind`.** This covers the
-  nil-ctx error, which `Union`, `UnionRefined`, `LoftFaces` and `Emboss` leave untagged today. `PathPattern`
+  nil-ctx error, which `LoftFaces` and `Emboss` leave untagged today. `PathPattern`
   tags `OperationCopy` and `Arrange` tags `OperationTransform` today, and their PRs keep those kinds, since
   `OperationKind` gains no constant in this design.
 - **A recorded fault names its subject (A8) in `OperationSubject.Name`.** A gate that refuses a stored method
   value names the method by returning `subjectError(kind, method, err)`; the tag `runCommand` adds keeps it.
 - **Subject names follow the constructor's parameter names.** `Union(bodies ...*Body)` reports operand `i` as
   `bodies` with ordinal `i`.
+- **History roles keep their recorded values.** `OperationInput.Role` is recorded data read by the regroup and
+  point-query code. A Union input keeps the roles `first` and `others` whatever the constructor parameter is
+  called, and M8 folds keep history exactly.
 - **`ErrConsumed`** is a §12 sentinel (api-design §12, `errors.go`, `internal/decaderr/`). `Do` returns it on a
   consumed command, tagged with the command's kind, `OpDiagInputRejected` and `OperationStageInput`, with no
   subject.
@@ -203,6 +209,14 @@ them (api-design §2). `PathPattern` and `Arrange` do not meet this today: `Path
   and fails when one is missing from the setting. Each later family PR adds its constructors.
 - The lint does not catch `cmd := decad.Fillet(...); cmd.TangentChain()` with no `Do`. M1 keeps that a visible
   unused command in review rather than a silent copy.
+- The lint does not catch the chained form `decad.Cut(a, b).MatchingFaces()` written as a statement, because the
+  statement's call is the method. A repo-wide syntactic Go test fails on any expression statement whose call chain
+  starts at a command constructor and does not end in `Do`, and on a constructor call used as a statement. It
+  scans `apitest/`, `examples/`, the root tests and `_gallery/`.
+- The setting and both checks protect this repository only. A downstream caller's code gets no lint from them.
+- The `unusedresult.funcs` comment in `.golangci.yml` names the x/tools version the standard-library entries were
+  copied from (v0.52.0, inside golangci-lint v2.15.0). A golangci-lint bump re-copies that list. A stale list never
+  fails lint; it only loses the newer standard-library checks.
 
 ## 11. Callers inside the root package
 
@@ -221,6 +235,11 @@ them (api-design §2). `PathPattern` and `Arrange` do not meet this today: `Path
 - **A root composite calls the unexported implementation, never a public command.** `hole.go`, `infill.go`,
   `pattern.go`, `path_pattern.go`, `arrange.go`, `fillet_chord.go` and `chamfer_angle.go` call `cut`, `union`,
   `copyBody` and the like. A composite allocates and consumes no command.
+- **A composite may tag the implementation's error with that operation's kind itself.** `infill.go` tags the
+  errors of `union` and `intersect` with `OperationUnion` and `OperationIntersect`, so its nested diagnostics name
+  the operation that failed.
+- **The rewrite tool never rewrites a root production file.** It reports a bare operation call in a non-test root
+  file, and the author moves it onto the implementation by hand.
 - The implementation returns untagged errors. Only the public `Do` applies `operationError`, once.
   `SelectionError` and `BooleanError` keep their own kinds, as `operationError` does today.
 - The implementation takes a non-nil `ctx`; `Do` refused a nil one.
@@ -239,7 +258,7 @@ name its methods and special rules.
 | Spec composites | `Hole`, `Boss`, `Thread`, `Infill`, `SheetMetal` |
 | Surface, mesh-to-solid and retirement | `PatchEdges`, `Stitch(bodies...)`, `Unstitch`, `Trim`, `Extend`, `Split`, `SolidFromMesh`, `Remove` |
 
-- Booleans: `Union.RefineTo` folds `UnionRefined` (M8). Cut and Intersect each declare `MatchingFaces` (§6).
+- Booleans: `Union.RefineTo` is the refined union (M8). Cut and Intersect each declare `MatchingFaces` (§6).
 - Modify ops: Fillet and Chamfer each declare `TangentChain` (§6). Chamfer has `Asymmetric(reference, other)`.
   Shell has `Sense` and `FaceThickness`. Offset and Thicken have `Side`. `ShellClosed` replaces `WithNoOpenings`
   (M6). `Draft` has no method.
@@ -303,9 +322,10 @@ its option tier and its `With...` constructors in the same PR, and no wrapper su
 | `opcommand.State` | `internal/opcommand/state.go` | Zero value is a fresh command. `Record(subject, err)` keeps the first non-nil fault. `Fault()` returns it. `Consume()` reports true to exactly one caller, racing callers included. |
 | `runCommand[T]` | `operation_command.go` | Steps 1–3 of §3, then the implementation, then the `operationError` tag. A root adapter: it applies the root-owned `OperationKind`, `OperationError` and `OperationSubject`. |
 | `subjectError` | `operation_command.go` | Tags an error with the kind and names the subject on every diagnostic that names none. |
+| `opcommand.Slot[T]` | `internal/opcommand/slot.go` | Holds one method's value and the error validating it. `Set(value, err)` replaces both. `Get()` returns them. `IsSet()` reports a call. |
 | `ErrConsumed` | `internal/decaderr/errors.go`, `errors.go` | Mapped to `OpDiagInputRejected` at `OperationStageInput` by `operationErrorCode`. |
 
-The tests are `internal/opcommand/state_test.go` and `operation_command_test.go`. They cover the first fault
+The tests are `internal/opcommand/state_test.go`, `internal/opcommand/slot_test.go` and `operation_command_test.go`. They cover the first fault
 winning, one winner among racing `Consume` calls, `ErrConsumed` on a second `Do` with its tag, consumption on
 refusal, consumption before nil ctx, nil ctx before a recorded fault, a recorded fault returned before the
 operation runs with its subject, cancellation by identity and the kind tag on operation errors.
