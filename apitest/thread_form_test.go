@@ -82,18 +82,24 @@ func TestThreadFormOfTheISOValuesIsTheISOThread(t *testing.T) {
 func TestThreadFormIsWiderThanTheISOGroove(t *testing.T) {
 	t.Parallel()
 	// A 60 degree groove 1.2 mm deep cuts more of a rod than the 29 degree one 1.2 mm deep
-	// with the same flat, because its flanks open faster.
-	volume := func(angle float64) float64 {
-		rod := circleBodyAtZ(t, decad.New(), 0, 5, 0, 20)
-		form := decad.TrapezoidThreadForm(units.Degrees(angle), units.Millimeters(1.2), units.Millimeters(0.5))
-		out, err := decad.Thread(rod, decad.Faces(decad.Cylindrical()), units.Millimeters(3)).
-			Form(form).Do(t.Context())
-		require.NoError(t, err)
-		v, err := out.Volume()
-		require.NoError(t, err)
-		return v.Value.Base()
+	// with the same flat, because its flanks open faster. One 60 degree build is checked against
+	// its closed form, and the 29 degree volume comes from the closed form that
+	// TestThreadFormCutsATrapezoidalGrooveInARod checks against a build.
+	const pitch, depth, flat = 3.0, 1.2, 0.5
+	removed := func(angle float64) float64 {
+		slope := math.Tan(units.Degrees(angle).Base() / 2)
+		return removedTrapezoid(5-depth, 5, 20, pitch, flat, slope, func(rho float64) float64 { return rho - (5 - depth) })
 	}
-	require.Less(t, volume(60), volume(29))
+	rod := circleBodyAtZ(t, decad.New(), 0, 5, 0, 20)
+	form := decad.TrapezoidThreadForm(units.Degrees(60), units.Millimeters(depth), units.Millimeters(flat))
+	out, err := decad.Thread(rod, decad.Faces(decad.Cylindrical()), units.Millimeters(pitch)).
+		Form(form).Do(t.Context())
+	require.NoError(t, err)
+	v, err := out.Volume()
+	require.NoError(t, err)
+	requireThreadVolume(t, v, math.Pi*25*20-removed(60))
+	require.Less(t, v.Value.Base()+v.Bound.Base(), math.Pi*25*20-removed(29),
+		"the 60 degree groove leaves less of the rod than the 29 degree one")
 }
 
 func TestThreadFormRefusals(t *testing.T) {

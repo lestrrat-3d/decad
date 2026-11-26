@@ -92,9 +92,11 @@ func TestThreadLeadInRefusals(t *testing.T) {
 	require.True(t, doc.Bodies()[0] == rod)
 }
 
+// The 45 degree row is the angle LeadIn takes by default: leadInRod is leadInRodAt at slope 1, and
+// TestThreadLeadInChamfersBothEndsBeforeTheThread checks LeadIn against it, so both routes meet the same formula.
 func TestThreadLeadInAngleSetsTheBevelsSlope(t *testing.T) {
 	t.Parallel()
-	for name, angle := range map[string]float64{"shallow": 30, "steep": 60} {
+	for name, angle := range map[string]float64{"shallow": 30, "steep": 60, "leadin default": 45} {
 		rod := circleBodyAtZ(t, decad.New(), 0, 5, 0, 20)
 		out, err := decad.Thread(rod, decad.Faces(decad.Cylindrical()), units.Millimeters(threadPitch)).
 			LeadInAngle(units.Millimeters(0.8), units.Degrees(angle)).Do(t.Context())
@@ -103,20 +105,6 @@ func TestThreadLeadInAngleSetsTheBevelsSlope(t *testing.T) {
 		require.NoError(t, err, name)
 		requireThreadVolume(t, volume, leadInRodAt(0.8, math.Tan(angle*math.Pi/180)))
 	}
-	// 45 degrees is the default.
-	a := circleBodyAtZ(t, decad.New(), 0, 5, 0, 20)
-	b := circleBodyAtZ(t, decad.New(), 0, 5, 0, 20)
-	plain, err := decad.Thread(a, decad.Faces(decad.Cylindrical()), units.Millimeters(threadPitch)).
-		LeadIn(units.Millimeters(0.8)).Do(t.Context())
-	require.NoError(t, err)
-	angled, err := decad.Thread(b, decad.Faces(decad.Cylindrical()), units.Millimeters(threadPitch)).
-		LeadInAngle(units.Millimeters(0.8), units.Degrees(45)).Do(t.Context())
-	require.NoError(t, err)
-	pv, err := plain.Volume()
-	require.NoError(t, err)
-	av, err := angled.Volume()
-	require.NoError(t, err)
-	requireThreadVolume(t, av, pv.Value.Base())
 }
 
 func TestThreadLeadInAngleRefusals(t *testing.T) {
