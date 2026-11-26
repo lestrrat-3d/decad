@@ -88,8 +88,11 @@ and the banded crossing audit receives every loop of each cap.
 `apitest.TestLoftMirrorJoinThroughBore` bores a rounded twisted gear join of five
 teeth: it removes `πr²·2h` within the two volume bounds, passes the verified
 tessellation with one hole, and keeps every vertex near the axis on the bore.
-No gate on this route depends on the tooth count. `TestLoftMirrorJoinShortToolKeepsTheTop` checks that a tool short of
-the top cap never removes the full cylinder.
+The bore's free-form work limit scales with the outline's segment count
+(`RewriteWorkLimit`, from `StationCap`), and the five-tooth outline lies inside
+that limit's linear range, as a seven-tooth outline does.
+`TestLoftMirrorJoinShortToolKeepsTheTop` checks that a tool short of the top
+cap never removes the full cylinder.
 
 ### Scope
 
