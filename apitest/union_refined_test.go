@@ -126,16 +126,6 @@ func TestUnionRefinedRefusesBeforeBuilding(t *testing.T) {
 	history := len(doc.OperationHistory().Operations())
 	all := append([]*decad.Body{hub}, lugs...)
 
-	t.Run("a nil context and too few bodies", func(t *testing.T) {
-		//nolint:staticcheck // a nil context is the case under test
-		_, err := decad.Union(all...).RefineTo(units.Millimeters(0.05)).Do(nil)
-		require.ErrorIs(t, err, decad.ErrDegenerate)
-		_, err = decad.Union(hub).RefineTo(units.Millimeters(0.05)).Do(t.Context())
-		require.ErrorIs(t, err, decad.ErrDegenerate)
-		_, err = decad.Union(nil...).RefineTo(units.Millimeters(0.05)).Do(t.Context())
-		require.ErrorIs(t, err, decad.ErrDegenerate)
-		requireUnionRefinedUnchanged(t, doc, operands, history)
-	})
 	t.Run("repeated operands", func(t *testing.T) {
 		_, err := decad.Union(append([]*decad.Body{hub, lugs[0]}, lugs...)...).RefineTo(units.Millimeters(0.05)).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrDegenerate)
@@ -149,24 +139,6 @@ func TestUnionRefinedRefusesBeforeBuilding(t *testing.T) {
 		require.True(t, got == nil)
 		requireUnionRefinedUnchanged(t, doc, operands, history)
 	})
-	badBounds := []struct {
-		name  string
-		bound units.Value
-		want  error
-	}{
-		{"an angle", units.Radians(0.05), decad.ErrUnitKind},
-		{"NaN", units.Millimeters(math.NaN()), decad.ErrNotFinite},
-		{"below zero", units.Millimeters(-0.05), decad.ErrNegativeMagnitude},
-		{"exactly zero", units.Millimeters(0), decad.ErrDegenerate},
-	}
-	for _, tc := range badBounds {
-		t.Run("a bad bound: "+tc.name, func(t *testing.T) {
-			got, err := decad.Union(all...).RefineTo(tc.bound).Do(t.Context())
-			require.ErrorIs(t, err, tc.want)
-			require.True(t, got == nil)
-			requireUnionRefinedUnchanged(t, doc, operands, history)
-		})
-	}
 	// A hub and one lug join as a pair at 0.1 mm, and Refine refuses 0.006 mm.
 	// UnionRefined refuses the pair up front, and changes nothing, rather than
 	// return that 0.1 mm join as if it met the bound.

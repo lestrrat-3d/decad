@@ -144,6 +144,7 @@ func TestUnionCommandRecordsFewerThanTwoBodies(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
 	a := boxBody(t, doc, 0, 0, 10, 10, 10)
+	history := len(doc.OperationHistory().Operations())
 	for _, bodies := range [][]*decad.Body{nil, {a}} {
 		got, err := decad.Union(bodies...).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrDegenerate)
@@ -151,6 +152,7 @@ func TestUnionCommandRecordsFewerThanTwoBodies(t *testing.T) {
 		diagnostics := requireOperationKind(t, err, decad.OperationUnion)
 		require.Equal(t, "bodies", diagnostics[0].Subject.Name)
 		require.Equal(t, []*decad.Body{a}, doc.Bodies())
+		require.Equal(t, history, len(doc.OperationHistory().Operations()))
 	}
 }
 
@@ -190,12 +192,14 @@ func TestUnionRefineToBoundFaults(t *testing.T) {
 			a := boxBody(t, doc, 0, 0, 10, 10, 10)
 			b := translated(t, boxBody(t, doc, 0, 0, 10, 10, 10), 5, 5, 5)
 			before := doc.Bodies()
+			history := len(doc.OperationHistory().Operations())
 			got, err := decad.Union(a, b).RefineTo(tc.bound).Do(t.Context())
 			require.ErrorIs(t, err, tc.want)
 			require.Nil(t, got)
 			diagnostics := requireOperationKind(t, err, decad.OperationUnion)
 			require.Equal(t, "RefineTo", diagnostics[0].Subject.Name)
 			require.Equal(t, before, doc.Bodies())
+			require.Equal(t, history, len(doc.OperationHistory().Operations()), "a refused bound records no operation")
 		})
 	}
 
