@@ -59,6 +59,57 @@ func containsIdentity(t types.Type, seen map[types.Type]struct{}) bool {
 	return false
 }
 
+// containsIdentityDeep reports whether t is an identity type, or a struct, pointer, slice, array or map that holds
+// one at any depth. A value of such a type, handed to fmt or reflect, can have its id read or formatted.
+func containsIdentityDeep(t types.Type, seen map[types.Type]struct{}) bool {
+	if t == nil {
+		return false
+	}
+	if isIdentityType(t) {
+		return true
+	}
+	if _, ok := seen[t]; ok {
+		return false
+	}
+	seen[t] = struct{}{}
+	switch u := types.Unalias(t).Underlying().(type) {
+	case *types.Slice:
+		return containsIdentityDeep(u.Elem(), seen)
+	case *types.Array:
+		return containsIdentityDeep(u.Elem(), seen)
+	case *types.Pointer:
+		return containsIdentityDeep(u.Elem(), seen)
+	case *types.Map:
+		return containsIdentityDeep(u.Key(), seen) || containsIdentityDeep(u.Elem(), seen)
+	case *types.Struct:
+		for f := range u.Fields() {
+			if containsIdentityDeep(f.Type(), seen) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// passesIdentityToFmtOrReflect reports a call to a function or method of package fmt or reflect with an argument whose
+// static type holds an identity at any depth.
+func passesIdentityToFmtOrReflect(info *types.Info, n *ast.CallExpr) bool {
+	sel, ok := ast.Unparen(n.Fun).(*ast.SelectorExpr)
+	if !ok {
+		return false
+	}
+	fn, ok := info.Uses[sel.Sel].(*types.Func)
+	if !ok || fn.Pkg() == nil || (fn.Pkg().Path() != "fmt" && fn.Pkg().Path() != "reflect") {
+		return false
+	}
+	for _, a := range n.Args {
+		if containsIdentityDeep(info.TypeOf(a), map[types.Type]struct{}{}) {
+			return true
+		}
+	}
+	return false
+}
+
 // isPositiveIDConstant reports whether e is a constant expression of an identity type with a value above 0. Such a
 // constant names one particular id, whether it is compared, passed as an implicit argument, stored in a composite
 // literal, declared as a typed constant or assigned to a variable.
@@ -103,8 +154,19 @@ func passesIdentityToInterface(info *types.Info, n *ast.CallExpr) bool {
 
 // scanIdentityArithmetic lists every operation outside == and != on an identity type, every conversion of one to
 // another type, every use of one as an index or slice bound, every constant of an id type above 0, min, max and
-// make over ids, a range over one, a switch on an id, an id boxed into an interface parameter, and a generic instantiated with a type that
-// holds an id.
+// make over ids, a range over one, a switch on an id, an id boxed into an interface parameter, and a generic
+// instantiated with a type that holds an id.
+//
+// It also lists every call into fmt or reflect with an argument whose static type holds an id at any depth: a
+// struct field, pointer, slice, array or map element or map key. Such a call can print an id or read its value.
+//
+// The scan does not cover everything. It misses an id that reaches fmt or reflect through a value already typed as
+// an interface (any or a named interface), and an id boxed anywhere other than as a bare id argument. It misses a
+// generic function instantiated with a struct that holds an id, because containsIdentity does not follow struct
+// fields. It misses a map keyed by a struct that holds an id and later iterated in key order. Planted examples of
+// all three (a generic struct field, an ordered map of struct keys, an id kept in an any variable) are not
+// reported. Closing them needs boxing and generic scans, so do not read a green run as proof that no id is ordered
+// or formatted.
 func scanIdentityArithmetic(ms *moduleSource) []identityUse {
 	var uses []identityUse
 	for _, tp := range ms.pkgs {
@@ -213,7 +275,7 @@ func scanIdentityNode(info *types.Info, n ast.Node, add func()) {
 			}
 		}
 	case *ast.CallExpr:
-		if passesIdentityToInterface(info, n) {
+		if passesIdentityToInterface(info, n) || passesIdentityToFmtOrReflect(info, n) {
 			add()
 		}
 		if id, ok := ast.Unparen(n.Fun).(*ast.Ident); ok {
@@ -245,6 +307,7 @@ func scanIdentityNode(info *types.Info, n ast.Node, add func()) {
 const (
 	advancesCounter = "advances the document counter"
 	idFieldCopy     = "int fields of digestIDFields"
+	errorTextOnly   = "formats the value into the text of a returned modify error; no answer, ordering or digest reads it"
 )
 
 var identityArithmeticAllowList = map[string]string{
@@ -311,7 +374,18 @@ var identityArithmeticAllowList = map[string]string{
 	"internal/massdispatch/contained_cut_quantities.go CaptureContainedCutQuantities": idFieldCopy,
 	"internal/massdispatch/exact_copy.go CaptureExactCopyMoments":                     idFieldCopy,
 	"internal/massdispatch/exact_copy.go sourceMomentSnapshot":                        idFieldCopy,
-	"selection_error.go renderRef":                                                    "error text, which the digest's equal answers do not cover",
+
+	// A call into fmt or reflect with an argument whose type holds an id. Each was read.
+	"body_digest.go digestMemo":                                        "reflect.ValueOf(b) feeds the digest encoder, which relabels every id by first visit",
+	"body_digest.go bodyDigestSideTables":                              "reflect.ValueOf of document records handed to the digest encoder, which relabels every id by first visit",
+	"internal/topo/mesh.go facetBoundKey":                              "reflect Pointer() of the face-bound map: its address only, never an id, and the mesh is skipped by the digest",
+	"internal/brepmodify/chamfer.go Chamfer":                           errorTextOnly,
+	"internal/brepmodify/displaced_blend.go displacedLateralBlend":     errorTextOnly,
+	"internal/brepmodify/fillet.go Fillet":                             errorTextOnly,
+	"internal/brepmodify/revolve_blend.go BlendRevolveJunctions":       errorTextOnly,
+	"internal/loftcylinder/chamfer_middle_reach.go ChamferMiddleFacet": errorTextOnly,
+	"modify_options.go resolveAsymmetricReference":                     errorTextOnly,
+	"selection_error.go renderRef":                                     "error text, which the digest's equal answers do not cover",
 }
 
 func TestIdentityArithmeticAllowList(t *testing.T) {
