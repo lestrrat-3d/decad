@@ -56,6 +56,14 @@
 0	0.00	TestTopologyHandleSizeofProbeDoesNotCountAsAllocation
 0	0.69	TestTryAllEdgeChamferGates
 0	0.27	TestUnionFaceMergeChordRoundCapSurvivesPlacement
+0	0.01	TestRunStepsSecondRunSeesFullHistory
+0	0.05	TestRunStepsDigestIgnoresStep
+0	2.00	TestRunStepsInfillSkinRefusesPreRunBody
+0	0.05	TestRunStepsDraftMeshPrismRefusesPreRunBody
+0	0.05	TestRunStepsSwallowedScopeRefusalFailsRun
+0	0.01	TestRunStepsPanicBecomesError
+0	0.01	TestRunStepsGoexitBecomesError
+0	0.01	TestRunStepsFullSnapshotRestoreFailsRun
 1	0.00	TestCICPUClassShard6
 1	1.22	TestCIWorkflowRaceShardsCoverEveryPackage
 1	0.17	TestCLAUDEMDLayoutStaysCompact
