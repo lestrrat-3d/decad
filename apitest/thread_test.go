@@ -64,8 +64,7 @@ func TestThreadExternalRod(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
 	rod := circleBodyAtZ(t, doc, 0, 5, 0, 20)
-	out, err := decad.Thread(t.Context(), rod, decad.ThreadSpec{
-		Face: decad.Faces(decad.Cylindrical()), Pitch: units.Millimeters(threadPitch)})
+	out, err := decad.Thread(rod, decad.Faces(decad.Cylindrical()), units.Millimeters(threadPitch)).Do(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, []*decad.Body{out}, doc.Bodies(), "the rod and the coil leave the document")
 	operations := doc.OperationHistory().Operations()
@@ -86,8 +85,7 @@ func TestThreadInternalBore(t *testing.T) {
 	part, err := decad.Cut(block, bore).Do(t.Context())
 	require.NoError(t, err)
 	// The bore ends at the block's faces, so the groove runs out of both ends.
-	out, err := decad.Thread(t.Context(), part, decad.ThreadSpec{
-		Face: decad.Faces(decad.Cylindrical()), Pitch: units.Millimeters(threadPitch)})
+	out, err := decad.Thread(part, decad.Faces(decad.Cylindrical()), units.Millimeters(threadPitch)).Do(t.Context())
 	require.NoError(t, err)
 	volume, err := out.Volume()
 	require.NoError(t, err)
@@ -101,8 +99,7 @@ func TestThreadIsRightHanded(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
 	rod := circleBodyAtZ(t, doc, 0, 5, 0, 20)
-	out, err := decad.Thread(t.Context(), rod, decad.ThreadSpec{
-		Face: decad.Faces(decad.Cylindrical()), Pitch: units.Millimeters(threadPitch)})
+	out, err := decad.Thread(rod, decad.Faces(decad.Cylindrical()), units.Millimeters(threadPitch)).Do(t.Context())
 	require.NoError(t, err)
 	// Probe a point mid-groove: 0.3 mm above the root, at the groove's centre
 	// height, where the walls are 0.27 mm away on either side. At angle 0
@@ -135,25 +132,24 @@ func TestThreadIsRightHanded(t *testing.T) {
 func TestThreadRefusals(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
-		name string
-		edit func(*decad.ThreadSpec)
-		want error
+		name  string
+		face  decad.FaceSelector
+		pitch units.Value
+		want  error
 	}{
-		{"no selector", func(s *decad.ThreadSpec) { s.Face = nil }, decad.ErrDegenerate},
-		{"zero pitch", func(s *decad.ThreadSpec) { s.Pitch = units.Millimeters(0) }, decad.ErrDegenerate},
-		{"negative pitch", func(s *decad.ThreadSpec) { s.Pitch = units.Millimeters(-1) }, decad.ErrNegativeMagnitude},
-		{"pitch as an angle", func(s *decad.ThreadSpec) { s.Pitch = units.Degrees(1) }, decad.ErrUnitKind},
-		{"pitch too coarse for the rod", func(s *decad.ThreadSpec) { s.Pitch = units.Millimeters(20) }, decad.ErrDegenerate},
-		{"two faces", func(s *decad.ThreadSpec) { s.Face = decad.Faces(decad.Planar()) }, decad.ErrDegenerate},
+		{"no selector", nil, units.Millimeters(threadPitch), decad.ErrDegenerate},
+		{"zero pitch", decad.Faces(decad.Cylindrical()), units.Millimeters(0), decad.ErrDegenerate},
+		{"negative pitch", decad.Faces(decad.Cylindrical()), units.Millimeters(-1), decad.ErrNegativeMagnitude},
+		{"pitch as an angle", decad.Faces(decad.Cylindrical()), units.Degrees(1), decad.ErrUnitKind},
+		{"pitch too coarse for the rod", decad.Faces(decad.Cylindrical()), units.Millimeters(20), decad.ErrDegenerate},
+		{"two faces", decad.Faces(decad.Planar()), units.Millimeters(threadPitch), decad.ErrDegenerate},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			doc := decad.New()
 			rod := circleBodyAtZ(t, doc, 0, 5, 0, 20)
-			spec := decad.ThreadSpec{Face: decad.Faces(decad.Cylindrical()), Pitch: units.Millimeters(threadPitch)}
-			tc.edit(&spec)
-			_, err := decad.Thread(t.Context(), rod, spec)
+			_, err := decad.Thread(rod, tc.face, tc.pitch).Do(t.Context())
 			require.ErrorIs(t, err, tc.want)
 			require.Equal(t, []*decad.Body{rod}, doc.Bodies(), "a refused thread leaves the rod live and alone")
 		})
@@ -162,8 +158,7 @@ func TestThreadRefusals(t *testing.T) {
 		t.Parallel()
 		doc := decad.New()
 		block := boxBody(t, doc, 0, 0, 10, 10, 10)
-		_, err := decad.Thread(t.Context(), block, decad.ThreadSpec{
-			Face: decad.Faces(decad.FaceCreatedBy(decad.CapEnd(block))), Pitch: units.Millimeters(1)})
+		_, err := decad.Thread(block, decad.Faces(decad.FaceCreatedBy(decad.CapEnd(block))), units.Millimeters(1)).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.Equal(t, []*decad.Body{block}, doc.Bodies())
 	})

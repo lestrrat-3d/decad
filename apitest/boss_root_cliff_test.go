@@ -47,11 +47,11 @@ func holedDisc(t *testing.T, holes ...[3]float64) *decad.Body {
 func bossOnTop(t *testing.T, body *decad.Body, diameter, rootFillet float64) (*decad.Body, error) {
 	t.Helper()
 	face := decad.Faces(decad.FaceCreatedBy(decad.CapEnd(body))).Exactly(1)
-	spec := decad.BossSpec{Face: face, At: r3.Vec{Z: 5}, Diameter: units.Millimeters(diameter), Height: units.Millimeters(1)}
+	cmd := decad.Boss(body, face, r3.Vec{Z: 5}, units.Millimeters(diameter), units.Millimeters(1))
 	if rootFillet > 0 {
-		spec.RootFillet = units.Millimeters(rootFillet)
+		cmd = cmd.RootFillet(units.Millimeters(rootFillet))
 	}
-	return decad.Boss(t.Context(), body, spec)
+	return cmd.Do(t.Context())
 }
 
 func torusFaces(t *testing.T, body *decad.Body) (majors, minors []float64) {

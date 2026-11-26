@@ -36,10 +36,7 @@ func Example_thread() {
 	}
 
 	// An M10 x 1.5 thread along the rod's one cylindrical wall.
-	threaded, err := decad.Thread(context.Background(), rod, decad.ThreadSpec{
-		Face:  decad.Faces(decad.Cylindrical()),
-		Pitch: units.Millimeters(1.5),
-	})
+	threaded, err := decad.Thread(rod, decad.Faces(decad.Cylindrical()), units.Millimeters(1.5)).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to thread: %s\n", err)
 		return
@@ -80,12 +77,10 @@ func Example_thread_left_hand_length() {
 	}
 
 	// A left-hand M10 x 1.5 thread over the first 8 mm of the rod.
-	threaded, err := decad.Thread(context.Background(), rod, decad.ThreadSpec{
-		Face:     decad.Faces(decad.Cylindrical()),
-		Pitch:    units.Millimeters(1.5),
-		LeftHand: true,
-		Length:   units.Millimeters(8),
-	})
+	threaded, err := decad.Thread(rod, decad.Faces(decad.Cylindrical()), units.Millimeters(1.5)).
+		LeftHand().
+		Length(units.Millimeters(8)).
+		Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to thread: %s\n", err)
 		return
@@ -124,15 +119,9 @@ func Example_thread_form() {
 		fmt.Printf("failed to extrude: %s\n", err)
 		return
 	}
-	threaded, err := decad.Thread(context.Background(), rod, decad.ThreadSpec{
-		Face:  decad.Faces(decad.Cylindrical()),
-		Pitch: units.Millimeters(2),
-		Form: decad.ThreadForm{
-			Angle: units.Degrees(29),
-			Depth: units.Millimeters(1.1),
-			Flat:  units.Millimeters(0.74),
-		},
-	})
+	threaded, err := decad.Thread(rod, decad.Faces(decad.Cylindrical()), units.Millimeters(2)).
+		Form(decad.TrapezoidThreadForm(units.Degrees(29), units.Millimeters(1.1), units.Millimeters(0.74))).
+		Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to thread: %s\n", err)
 		return
@@ -171,16 +160,9 @@ func Example_thread_buttress() {
 		fmt.Printf("failed to extrude: %s\n", err)
 		return
 	}
-	threaded, err := decad.Thread(context.Background(), rod, decad.ThreadSpec{
-		Face:  decad.Faces(decad.Cylindrical()),
-		Pitch: units.Millimeters(3),
-		Form: decad.ThreadForm{
-			FlankLead:  units.Degrees(45),
-			FlankTrail: units.Degrees(7),
-			Depth:      units.Millimeters(1.5),
-			Flat:       units.Millimeters(0.4),
-		},
-	})
+	threaded, err := decad.Thread(rod, decad.Faces(decad.Cylindrical()), units.Millimeters(3)).
+		Form(decad.ButtressThreadForm(units.Degrees(45), units.Degrees(7), units.Millimeters(1.5), units.Millimeters(0.4))).
+		Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to thread: %s\n", err)
 		return
@@ -197,7 +179,7 @@ func Example_thread_buttress() {
 
 // LookupThread reads a designation into a thread's major diameter and pitch, so
 // "M10" is a 10 mm thread at 1.5 mm and "1/4-20" a quarter-inch thread of 20 to the
-// inch, without looking either up. Use the pitch in a ThreadSpec and the diameter to
+// inch, without looking either up. Use the pitch in a Thread command and the diameter to
 // size the rod or the bore.
 func Example_thread_lookup() {
 	for _, designation := range []string{"M10", "M10x1.25", "1/4-20"} {

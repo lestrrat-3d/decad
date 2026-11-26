@@ -20,12 +20,7 @@ func TestHoleInATiltedMeshFaceRunsAlongTheFacesNormal(t *testing.T) {
 	ramp, face := rampSolid(t, doc)
 	before, err := ramp.Volume()
 	require.NoError(t, err)
-	out, err := decad.Hole(t.Context(), ramp, decad.HoleSpec{
-		Face:     face,
-		At:       r3.NewVec(10, 5, 9),
-		Diameter: units.Millimeters(4),
-		Depth:    decad.BlindHole{Depth: units.Millimeters(3)},
-	})
+	out, err := decad.Hole(ramp, face, r3.NewVec(10, 5, 9), units.Millimeters(4), decad.BlindHole{Depth: units.Millimeters(3)}).Do(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, []*decad.Body{out}, doc.Bodies())
 	after, err := out.Volume()
@@ -53,12 +48,7 @@ func TestBossOnATiltedMeshFaceStandsAlongTheFacesNormal(t *testing.T) {
 	ramp, face := rampSolid(t, doc)
 	before, err := ramp.Volume()
 	require.NoError(t, err)
-	out, err := decad.Boss(t.Context(), ramp, decad.BossSpec{
-		Face:     face,
-		At:       r3.NewVec(10, 5, 9),
-		Diameter: units.Millimeters(4),
-		Height:   units.Millimeters(3),
-	})
+	out, err := decad.Boss(ramp, face, r3.NewVec(10, 5, 9), units.Millimeters(4), units.Millimeters(3)).Do(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, []*decad.Body{out}, doc.Bodies())
 	after, err := out.Volume()

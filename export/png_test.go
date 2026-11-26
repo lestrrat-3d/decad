@@ -57,12 +57,7 @@ func TestPNGSeesThroughAHole(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
 	plate := decadtest.NewBlock(t, doc, 0, 0, 20, 20, units.Millimeters(10))
-	drilled, err := decad.Hole(t.Context(), plate, decad.HoleSpec{
-		Face:     decad.Faces(decad.FaceCreatedBy(decad.CapEnd(plate))),
-		At:       r3.NewVec(10, 10, 10),
-		Diameter: units.Millimeters(8),
-		Depth:    decad.ThroughHole{},
-	})
+	drilled, err := decad.Hole(plate, decad.Faces(decad.FaceCreatedBy(decad.CapEnd(plate))), r3.NewVec(10, 10, 10), units.Millimeters(8), decad.ThroughHole{}).Do(t.Context())
 	require.NoError(t, err)
 	img := renderPNG(t, drilled, topDown(200))
 	require.Equal(t, pngWhite, img.RGBAAt(100, 100), "the through hole shows the background")

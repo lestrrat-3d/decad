@@ -46,9 +46,7 @@ func TestBossStandsOnARod(t *testing.T) {
 	const R, L, r, h = 10.0, 16.0, 6.0, 20.0
 	doc := decad.New()
 	rod := circleBodyAtZ(t, doc, 0, R, 0, L)
-	out, err := decad.Boss(t.Context(), rod, decad.BossSpec{
-		Face: decad.Faces(decad.Cylindrical()), At: r3.NewVec(R, 0, L/2),
-		Diameter: units.Millimeters(2 * r), Height: units.Millimeters(h)})
+	out, err := decad.Boss(rod, decad.Faces(decad.Cylindrical()), r3.NewVec(R, 0, L/2), units.Millimeters(2*r), units.Millimeters(h)).Do(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, []*decad.Body{out}, doc.Bodies(), "the rod and the pillar leave the document")
 	volume, err := out.Volume()
@@ -76,9 +74,7 @@ func TestBossStandsOnTheWallOfABore(t *testing.T) {
 	part, err := decad.Cut(block, circleBodyAtZ(t, doc, 0, Ri, -1, 12)).Do(t.Context())
 	require.NoError(t, err)
 	// The bore's wall looks toward the axis, so the boss grows from the wall into the bore.
-	out, err := decad.Boss(t.Context(), part, decad.BossSpec{
-		Face: decad.Faces(decad.Cylindrical()), At: r3.NewVec(Ri, 0, 5),
-		Diameter: units.Millimeters(2 * r), Height: units.Millimeters(h)})
+	out, err := decad.Boss(part, decad.Faces(decad.Cylindrical()), r3.NewVec(Ri, 0, 5), units.Millimeters(2*r), units.Millimeters(h)).Do(t.Context())
 	require.NoError(t, err)
 	volume, err := out.Volume()
 	require.NoError(t, err)
@@ -97,19 +93,19 @@ func TestBossOnACylinderRefusals(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
 	rod := circleBodyAtZ(t, doc, 0, 10, 0, 6)
-	spec := decad.BossSpec{Face: decad.Faces(decad.Cylindrical()), At: r3.NewVec(10, 0, 3),
-		Diameter: units.Millimeters(4), Height: units.Millimeters(5)}
-	boss := func(edit func(*decad.BossSpec)) error {
-		s := spec
-		edit(&s)
-		_, err := decad.Boss(t.Context(), rod, s)
+	boss := func(at r3.Vec, diameter float64) *decad.BossCommand {
+		return decad.Boss(rod, decad.Faces(decad.Cylindrical()), at, units.Millimeters(diameter), units.Millimeters(5))
+	}
+	run := func(c *decad.BossCommand) error {
+		_, err := c.Do(t.Context())
 		return err
 	}
-	require.ErrorIs(t, boss(func(s *decad.BossSpec) { s.RootFillet = units.Millimeters(1) }), decad.ErrUnsupported)
-	require.ErrorIs(t, boss(func(s *decad.BossSpec) { s.Draft = units.Degrees(3) }), decad.ErrUnsupported)
-	require.ErrorIs(t, boss(func(s *decad.BossSpec) { s.Diameter = units.Millimeters(20) }), decad.ErrDegenerate, "as wide as the rod")
-	require.ErrorIs(t, boss(func(s *decad.BossSpec) { s.At = r3.NewVec(9, 0, 3) }), decad.ErrDegenerate, "off the cylinder")
-	require.ErrorIs(t, boss(func(s *decad.BossSpec) { s.At = r3.NewVec(0, 0, 3) }), decad.ErrDegenerate, "on the axis")
+	onRod := r3.NewVec(10, 0, 3)
+	require.ErrorIs(t, run(boss(onRod, 4).RootFillet(units.Millimeters(1))), decad.ErrUnsupported)
+	require.ErrorIs(t, run(boss(onRod, 4).Draft(units.Degrees(3))), decad.ErrUnsupported)
+	require.ErrorIs(t, run(boss(onRod, 20)), decad.ErrDegenerate, "as wide as the rod")
+	require.ErrorIs(t, run(boss(r3.NewVec(9, 0, 3), 4)), decad.ErrDegenerate, "off the cylinder")
+	require.ErrorIs(t, run(boss(r3.NewVec(0, 0, 3), 4)), decad.ErrDegenerate, "on the axis")
 	require.Len(t, doc.Bodies(), 1)
 	require.True(t, doc.Bodies()[0] == rod, "every refusal leaves the rod live")
 }

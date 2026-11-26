@@ -202,9 +202,7 @@ func TestEmbossRefusesTiltedSketchAndUntangentCurvedFace(t *testing.T) {
 	require.ErrorIs(t, err, decad.ErrDegenerate, "a nil selector")
 	require.Equal(t, []*decad.Body{plate}, doc.Bodies())
 
-	drilled, err := decad.Hole(t.Context(), plate, decad.HoleSpec{
-		Face: embossFace(true, plate), At: r3.Vec{X: 20, Y: 15, Z: 10}, Diameter: units.Millimeters(6), Depth: decad.ThroughHole{},
-	})
+	drilled, err := decad.Hole(plate, embossFace(true, plate), r3.Vec{X: 20, Y: 15, Z: 10}, units.Millimeters(6), decad.ThroughHole{}).Do(t.Context())
 	require.NoError(t, err)
 	// A sketch on the top face's plane is not tangent to the hole's wall, so it names no relief on it.
 	_, err = decad.Emboss(drilled, flat, profiles, decad.Faces(decad.Cylindrical()), decad.EmbossRaised, units.Millimeters(2)).Do(t.Context())

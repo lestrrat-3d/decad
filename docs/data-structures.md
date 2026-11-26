@@ -131,10 +131,8 @@ configuration option.
 | `decad.MeshImportOption` | option set | A limit on `decad.ReadSTL`, `decad.ReadOBJ`, `decad.ReadThreeMF`, `decad.ReadSTEP` or `decad.ReadIGES`: `decad.WithMaxMeshTriangles` or `decad.WithMaxMeshBytes`. | The caller |
 | `export.ThreeMFItem` | struct | One object of a 3MF package: a name, a body and a rigid placement. | The caller |
 | `decad.SubDCage` | struct | A polygon cage: vertices and the faces that index them, wound counter-clockwise seen from outside. | `decad.SubDMesh` |
-| `decad.InfillSpec` | struct | An infill: the lattice kind, the cell length, the wall level, the samples to a cell and an optional skin thickness. | `decad.Infill` |
-| `decad.LatticeKind` | enum | Which lattice an infill uses: `GyroidInfill`, `SchwarzPInfill`, `DiamondInfill`, `NeoviusInfill`, `IWPInfill`, `FischerKochSInfill`, `LidinoidInfill` or `SplitPInfill`. | `decad.InfillSpec` |
-| `decad.SheetMetalSpec` | struct | A bent strip: thickness, inner bend radius, width, K-factor, flat leg lengths and bend angles. | `decad.SheetMetal` |
-| `decad.SheetMetalReport` | struct | The flat pattern of a strip: each bend's allowance and the blank's length. | `decad.SheetMetal` |
+| `decad.LatticeKind` | enum | Which lattice an infill uses: `GyroidInfill`, `SchwarzPInfill`, `DiamondInfill`, `NeoviusInfill`, `IWPInfill`, `FischerKochSInfill`, `LidinoidInfill` or `SplitPInfill`. | `decad.Infill` |
+| `decad.SheetMetalReport` | struct | The flat pattern of a strip: each bend's allowance and the blank's length. | `SheetMetalCommand.Do` |
 | `decad.LatticeSpec` | struct | A lattice: the box, the cell length, the wall level and the samples to a cell. | `decad.GyroidLattice`, `decad.SchwarzPLattice`, `decad.DiamondLattice`, `decad.NeoviusLattice`, `decad.IWPLattice`, `decad.FischerKochSLattice`, `decad.LidinoidLattice`, `decad.SplitPLattice` |
 | `decad.MeshReduceReport` | struct | The counts and the greatest vertex move `decad.ReduceMesh` reports: vertices merged, triangles dropped. | `decad.ReduceMesh` |
 | `decad.MeshRepairOption` | option set | A repair step of `decad.RepairMesh`: `decad.WithMeshWeld`, `decad.WithMeshOrient` or `decad.WithMeshFillHoles`. | The caller |
@@ -148,16 +146,13 @@ configuration option.
 | `decad.CopyRotation` | struct | A center, an axis and an angle that place a copy by an exact rotation. | The caller |
 | `decad.CopyLiftTranslation` | struct | A lift transform and two lift-local points: the copy moves by the exact world vector between them. | The caller |
 | `decad.ArrangeBed` | struct | The flat area `decad.Arrange` fills: a corner, a width, a depth, a gap and an optional height to stack in layers. | The caller |
-| `decad.ThreadSpec` | struct | One thread: the cylindrical face to cut, the pitch, the hand, an optional length, an optional groove form and an optional lead-in chamfer. | The caller |
 | `decad.ThreadSize` | struct | A thread's major diameter and pitch, as `decad.LookupThread` reads them from a designation like `M10` or `1/4-20`. | `decad.LookupThread` |
-| `decad.ThreadForm` | struct | A trapezoidal thread groove: included flank angle or two separate flank leans, depth and root flat; the zero value is the ISO profile. | `decad.ThreadSpec` |
-| `decad.BossSpec` | struct | One boss: the face it stands on, a world point, its diameter and height, an optional pilot, an optional draft, an optional root fillet, an optional non-round shape, optional gusset ribs and an optional lean. | The caller |
-| `decad.BossRibs` | struct | The gusset ribs that brace a boss's root: their count, thickness, length, height and starting angle. | The caller |
-| `decad.BossBore` | struct | A boss's blind pilot hole: diameter and depth from the boss's top, an optional head and an optional thread. | The caller |
+| `decad.ThreadForm` | struct | A thread groove: the zero value is the ISO profile, `decad.TrapezoidThreadForm` makes a symmetric trapezoid from the included flank angle, depth and root flat, and `decad.ButtressThreadForm` an asymmetric one from two flank leans, depth and root flat. | `decad.TrapezoidThreadForm`, `decad.ButtressThreadForm` |
+| `decad.BossRibs` | struct | The gusset ribs that brace a boss's root: their count, thickness, length and height, and `BossRibs.Angle` for the first rib's angle. | `decad.NewBossRibs` |
+| `decad.BossBore` | struct | A boss's blind pilot hole: diameter and depth from the boss's top, with `BossBore.Head`, `BossBore.Thread` and `BossBore.Draft` for the optional parts. | `decad.NewBossBore` |
 | `decad.SectionOutline` | struct | The closed outlines where a body's verified mesh meets a plane, and how far they lie from the true surface. | `Body.SectionOutline` |
 | `decad.SectionClearance` | struct | The least distance between the material two section outlines enclose in their plane, the closest pair of points and whether the regions overlap. | `SectionOutline.Clearance` |
-| `decad.HoleSpec` | struct | One hole: the face, a world point on it, the diameter, a depth, an optional head, an optional shape, an optional thread and an optional draft. | The caller |
-| `decad.HoleThread` | struct | The thread of a tapped hole: pitch, hand and an optional length. | The caller |
+| `decad.HoleThread` | struct | The thread of a tapped hole or pilot: its pitch, with `HoleThread.LeftHand` and `HoleThread.Length` for the optional parts. | `decad.NewHoleThread` |
 | `decad.HoleShape` | sealed interface | The cross-section of a hole that is not round. | The caller |
 | `decad.RectangularHole` | struct | A hole with a rectangular bore: width, height and a turn about the hole axis. | The caller |
 | `decad.OutlineHole` | struct | A hole with an arbitrary simple polygonal bore: corners about the hole axis in the face frame and a turn about it. | The caller |
@@ -353,6 +348,13 @@ returns `decad.ErrConsumed`.
 | `decad.PatternedCommand` | struct | The body and the pattern layout. `Do` returns one body holding every instance. | `decad.Patterned` |
 | `decad.PathPatternCommand` | struct | The body, the path, the stations and the `PathPatternCommand.Follow` or `PathPatternCommand.FollowAbout` turn. `Do` returns the copies as `[]*decad.Body`. | `decad.PathPattern` |
 | `decad.ArrangeCommand` | struct | The bodies, the bed and the `ArrangeCommand.Turns` and `ArrangeCommand.Angle` settings. `Do` returns the moved bodies as `[]*decad.Body`. | `decad.Arrange` |
+| `decad.HoleCommand` | struct | The body, the face, the point, the diameter, the depth and the `HoleCommand.Head`, `HoleCommand.Thread` and `HoleCommand.Draft` settings. `Do` returns `*decad.Body`. | `decad.Hole` |
+| `decad.HoleShapedCommand` | struct | The body, the face, the point, the shape and the depth. `Do` returns `*decad.Body`. | `decad.HoleShaped` |
+| `decad.BossCommand` | struct | The body, the face, the point, the diameter, the height and the `BossCommand.Bore`, `BossCommand.Draft`, `BossCommand.RootFillet`, `BossCommand.Ribs` and `BossCommand.Tilt` settings. `Do` returns `*decad.Body`. | `decad.Boss` |
+| `decad.BossShapedCommand` | struct | The body, the face, the point, the section shape, the height and the `BossShapedCommand.Bore`, `BossShapedCommand.Draft` and `BossShapedCommand.Ribs` settings. `Do` returns `*decad.Body`. | `decad.BossShaped` |
+| `decad.ThreadCommand` | struct | The body, the cylindrical face, the pitch and the `ThreadCommand.LeftHand`, `ThreadCommand.Length`, `ThreadCommand.Form`, `ThreadCommand.LeadIn` and `ThreadCommand.LeadInAngle` settings. `Do` returns `*decad.Body`. | `decad.Thread` |
+| `decad.InfillCommand` | struct | The body, the lattice kind, the cell length, the wall level and the `InfillCommand.Resolution` and `InfillCommand.Skin` settings. `Do` returns `*decad.Body`. | `decad.Infill` |
+| `decad.SheetMetalCommand` | struct | The document, the thickness, the inner radius, the width, the legs, the bends and the `SheetMetalCommand.KFactor` setting. `Do` returns the body, a `decad.SheetMetalReport` and an error. | `decad.SheetMetal` |
 
 ### Options
 

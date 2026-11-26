@@ -7,6 +7,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/coilshell"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
+	"github.com/lestrrat-3d/decad/internal/opcommand"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/decad/internal/threadplan"
 	"github.com/lestrrat-3d/r3"
@@ -14,55 +15,58 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// ThreadSpec describes one ISO metric thread. Face selects the cylindrical face
-// to thread and must resolve to exactly one face. Pitch is the axial advance
-// per turn, a positive length.
-//
-// The thread is right-handed unless LeftHand is set. Length is the axial length
-// to thread, measured from the end of the face with the least position along
-// the axis: the zero Value threads the whole face, and a positive length no
-// longer than the face stops the thread there, with the coil's flat end and no
-// runout (agent-docs/thread-design.md §5).
-type ThreadSpec struct {
-	Face     FaceSelector
-	Pitch    units.Value
-	LeftHand bool
-	Length   units.Value
-	// Form is the groove's cross-section. The zero Form is the 60 degree ISO
-	// basic profile; any other makes a symmetric trapezoidal groove, such as an
-	// Acme or trapezoidal thread (agent-docs/thread-design.md §6).
-	Form ThreadForm
-	// LeadIn, when set, is the distance of a 45 degree chamfer cut on each
-	// convex end of the threaded face before the thread, so a screw or a nut
-	// starts without a burr: a positive length (agent-docs/thread-design.md §7).
-	LeadIn units.Value
-	// LeadInAngle, set with LeadIn, is the angle between the lead-in's bevel and
-	// the threaded face's end face, in place of 45 degrees: LeadIn stays the
-	// bevel's distance along the end face and the bevel runs LeadIn·tan(angle)
-	// along the threaded face. It is an angle above zero and below 90 degrees
-	// (agent-docs/thread-design.md §10).
-	LeadInAngle units.Value
-}
-
-// ThreadForm is a symmetric trapezoidal groove for [ThreadSpec.Form]. Angle is
-// the included angle between the two flanks, Depth how far the groove reaches
-// from the face to its root, and Flat the width of the root. The groove mouth
-// opens a twentieth of the pitch past the face, as the ISO groove's does. Set
-// all of Angle, Depth and Flat or none: the zero ThreadForm is the ISO profile.
-// Angle is an angle above zero and up to 120 degrees, and Depth and Flat are
-// positive lengths. FlankLead and FlankTrail take the place of Angle.
+// ThreadForm is the groove's cross-section, passed to [ThreadCommand.Form]. The
+// zero ThreadForm is the 60 degree ISO basic profile. [TrapezoidThreadForm] makes a
+// symmetric trapezoidal groove, such as an Acme or trapezoidal thread, and
+// [ButtressThreadForm] an asymmetric one (agent-docs/thread-design.md §6). The
+// groove mouth opens a twentieth of the pitch past the face, as the ISO groove's
+// does.
 type ThreadForm struct {
-	Angle, Depth, Flat units.Value
-	// FlankLead and FlankTrail, set in place of Angle, give an asymmetric groove,
-	// a buttress thread's: each is the lean of a flank from the radial direction,
-	// FlankLead of the flank toward the start of the face (its least position
-	// along the axis) and FlankTrail of the one toward its far end. Each is an
-	// angle above zero and below 90 degrees, and both must be set.
-	FlankLead, FlankTrail units.Value
+	angle, depth, flat    units.Value
+	flankLead, flankTrail units.Value
 }
 
-// Thread cuts a 60 degree ISO metric thread into a cylindrical
-// face of b and returns the threaded body, retiring b (agent-docs/thread-design.md).
+// TrapezoidThreadForm returns a symmetric trapezoidal groove. angle is the
+// included angle between the two flanks, above zero and up to 120 degrees, depth
+// is how far the groove reaches from the face to its root and flat the width of
+// the root, both positive lengths.
+func TrapezoidThreadForm(angle, depth, flat units.Value) ThreadForm {
+	return ThreadForm{angle: angle, depth: depth, flat: flat}
+}
+
+// ButtressThreadForm returns an asymmetric groove, a buttress thread's. lead and
+// trail are the lean of each flank from the radial direction, lead of the flank
+// toward the start of the face (its least position along the axis) and trail of
+// the one toward its far end. Each is an angle above zero and below 90 degrees.
+// depth and flat are as in [TrapezoidThreadForm].
+func ButtressThreadForm(lead, trail, depth, flat units.Value) ThreadForm {
+	return ThreadForm{flankLead: lead, flankTrail: trail, depth: depth, flat: flat}
+}
+
+// threadSpec is the request a [ThreadCommand] hands to the implementation: the
+// constructor arguments and the methods that were called.
+type threadSpec struct {
+	face      FaceSelector
+	pitch     units.Value
+	leftHand  bool
+	length    units.Value
+	lengthSet bool
+	form      ThreadForm
+	leadIn    units.Value
+	leadAngle units.Value
+	leadSet   bool
+	angleSet  bool
+	// the subjects name the method a fault of that value points at.
+	lengthSubject, formSubject, leadInSubject, leadAngleSubject string
+}
+
+// Thread returns the command that cuts a 60 degree ISO metric thread of the given
+// pitch into a cylindrical face of b and returns the threaded body, retiring b
+// (agent-docs/thread-design.md). face must resolve to exactly one face. pitch is
+// the axial advance per turn, a positive length. The thread is right-handed and
+// runs the whole face unless [ThreadCommand.LeftHand] or [ThreadCommand.Length]
+// is called; [ThreadCommand.Form] changes the groove and [ThreadCommand.LeadIn]
+// chamfers the face's ends.
 //
 // A face whose outward normal points away from the axis is a rod: it is the
 // thread's major diameter and a groove is cut into it. A face whose outward
@@ -70,9 +74,9 @@ type ThreadForm struct {
 // diameter and the groove is cut out of the wall around it. The groove follows
 // the ISO basic profile, with an external root flat of an eighth of the pitch
 // and an internal one of a quarter, and runs the whole length of the face, or
-// the spec's Length of it. A groove over the whole face runs out past both of
-// its ends, so a larger face or a shoulder beside the threaded one is cut as
-// well: thread a rod that ends at the thread, or give a Length.
+// the [ThreadCommand.Length] of it. A groove over the whole face runs out past
+// both of its ends, so a larger face or a shoulder beside the threaded one is cut
+// as well: thread a rod that ends at the thread, or give a length.
 //
 // The thread is a Coil of the groove profile cut from b, so the result is a
 // mesh Boolean's: faceted, with the Cut's own bounds (agent-docs/helix-design.md
@@ -86,11 +90,86 @@ type ThreadForm struct {
 // for the radius, so that the groove would reach the axis, is ErrDegenerate. A
 // Coil or Cut the evaluator cannot decide is that call's own error. Every
 // failure leaves b live and the document unchanged.
-func Thread(ctx context.Context, b *Body, spec ThreadSpec) (result *Body, retErr error) {
-	defer func() { retErr = operationError(OperationThread, retErr) }()
-	if ctx == nil {
-		return nil, fmt.Errorf(`%w: a nil context cannot control a thread`, ErrDegenerate)
+func Thread(b *Body, face FaceSelector, pitch units.Value) *ThreadCommand {
+	c := &ThreadCommand{b: b, spec: threadSpec{face: copyFaceSelector(face), pitch: pitch}}
+	if b == nil {
+		c.state.Record("body", errNilBody)
 	}
+	return c
+}
+
+// ThreadCommand cuts a thread into a cylindrical face. Build it with [Thread].
+type ThreadCommand struct {
+	state opcommand.State // consumed flag and first recorded fault
+	b     *Body           // stored as given
+	spec  threadSpec      // the constructor arguments, copied, and the methods called
+}
+
+// LeftHand makes the thread left-handed. It is right-handed otherwise.
+func (c *ThreadCommand) LeftHand() *ThreadCommand {
+	c.spec.leftHand = true
+	return c
+}
+
+// Length threads only length of the face, a positive length measured from the end
+// of the face with the least position along the axis. A length no longer than the
+// face stops the thread there, with the coil's flat end and no runout
+// (agent-docs/thread-design.md §5); a longer one is ErrDegenerate, returned by Do
+// naming Length as the subject. Without it the thread runs the whole face. A
+// second call replaces the first.
+func (c *ThreadCommand) Length(length units.Value) *ThreadCommand {
+	c.spec.length, c.spec.lengthSet = length, true
+	return c
+}
+
+// Form sets the groove's cross-section (agent-docs/thread-design.md §6). A form
+// with a missing or out-of-range value is ErrDegenerate, ErrUnitKind or
+// ErrNegativeMagnitude, returned by Do naming Form as the subject. A second call
+// replaces the first.
+func (c *ThreadCommand) Form(form ThreadForm) *ThreadCommand {
+	c.spec.form = form
+	return c
+}
+
+// LeadIn cuts a 45 degree chamfer of the given distance on each convex end of the
+// threaded face before the thread, so a screw or a nut starts without a burr
+// (agent-docs/thread-design.md §7). distance is a positive length. A face with no
+// convex circular end is ErrDegenerate. A second call to LeadIn or
+// [ThreadCommand.LeadInAngle] replaces the first.
+func (c *ThreadCommand) LeadIn(distance units.Value) *ThreadCommand {
+	c.spec.leadIn, c.spec.leadAngle, c.spec.leadSet, c.spec.angleSet = distance, units.Value{}, true, false
+	return c
+}
+
+// LeadInAngle is [ThreadCommand.LeadIn] with the bevel at angle to the threaded
+// face's end face, in place of 45 degrees: distance stays the bevel's distance
+// along the end face and the bevel runs distance·tan(angle) along the threaded
+// face. angle is above zero and below 90 degrees, ErrDegenerate otherwise,
+// returned by Do naming LeadInAngle as the subject (agent-docs/thread-design.md
+// §10). A second call to LeadIn or LeadInAngle replaces the first.
+func (c *ThreadCommand) LeadInAngle(distance, angle units.Value) *ThreadCommand {
+	c.spec.leadIn, c.spec.leadAngle, c.spec.leadSet, c.spec.angleSet = distance, angle, true, true
+	return c
+}
+
+// Do cuts the thread and retires the body, or returns the error of the first gate
+// that refuses, leaving the body live and the document unchanged. A nil ctx is
+// ErrDegenerate, and a second call returns ErrConsumed.
+func (c *ThreadCommand) Do(ctx context.Context) (*Body, error) {
+	return runCommand(ctx, &c.state, OperationThread, c.run)
+}
+
+func (c *ThreadCommand) run(ctx context.Context) (*Body, error) {
+	spec := c.spec
+	spec.lengthSubject, spec.formSubject, spec.leadInSubject = "Length", "Form", "LeadIn"
+	spec.leadAngleSubject = "LeadInAngle"
+	return thread(ctx, c.b, spec)
+}
+
+// thread is the implementation of Thread. ctx is not nil, and the errors it
+// returns carry no operation tag, except the refusal of a stored method value
+// (agent-docs/command-api-design.md §11).
+func thread(ctx context.Context, b *Body, spec threadSpec) (*Body, error) {
 	if b == nil || b.n.Doc == nil {
 		return nil, fmt.Errorf(`%w: the body belongs to no document`, ErrDegenerate)
 	}
@@ -101,14 +180,14 @@ func Thread(ctx context.Context, b *Body, spec ThreadSpec) (result *Body, retErr
 	if b.Kind() != BodySolid {
 		return nil, fmt.Errorf(`%w: Thread needs a solid body`, ErrNotSolid)
 	}
-	if spec.Face == nil {
+	if spec.face == nil {
 		return nil, errNilSelector
 	}
-	pitch, err := sectionrecord.MagnitudeIn(spec.Pitch, units.Length, units.Millimeter, "the thread pitch")
+	pitch, err := sectionrecord.MagnitudeIn(spec.pitch, units.Length, units.Millimeter, "the thread pitch")
 	if err != nil {
 		return nil, err
 	}
-	face, cyl, err := resolveCylindricalFace(b, spec.Face)
+	face, cyl, err := resolveCylindricalFace(b, spec.face)
 	if err != nil {
 		return nil, err
 	}
@@ -116,20 +195,21 @@ func Thread(ctx context.Context, b *Body, spec ThreadSpec) (result *Body, retErr
 	if err != nil {
 		return nil, err
 	}
-	partial := spec.Length != (units.Value{})
+	partial := spec.lengthSet
 	if partial {
-		threaded, err := sectionrecord.MagnitudeIn(spec.Length, units.Length, units.Millimeter, "the thread length")
+		threaded, err := sectionrecord.MagnitudeIn(spec.length, units.Length, units.Millimeter, "the thread length")
 		if err != nil {
-			return nil, err
+			return nil, subjectFault(OperationThread, spec.lengthSubject, err)
 		}
 		if threaded > length {
-			return nil, fmt.Errorf(`%w: a thread length of %g mm is longer than the %g mm face`, ErrDegenerate, threaded, length)
+			return nil, subjectFault(OperationThread, spec.lengthSubject,
+				fmt.Errorf(`%w: a thread length of %g mm is longer than the %g mm face`, ErrDegenerate, threaded, length))
 		}
 		length = threaded
 	}
-	form, err := threadForm(spec.Form)
+	form, err := threadForm(spec.form)
 	if err != nil {
-		return nil, err
+		return nil, subjectFault(OperationThread, spec.formSubject, err)
 	}
 	plan, err := threadplan.ComputeForm(radius, pitch, length, external, partial, form)
 	if err != nil {
@@ -140,7 +220,7 @@ func Thread(ctx context.Context, b *Body, spec ThreadSpec) (result *Body, retErr
 	}
 	cut := func(target *Body, consumed ...OperationInput) (*Body, error) {
 		toolCtx, capture := privateConstructionContext(ctx)
-		coil, err := buildThreadCoil(toolCtx, d, frame, plan, pitch, spec.LeftHand, true)
+		coil, err := buildThreadCoil(toolCtx, d, frame, plan, pitch, spec.leftHand, true)
 		if err != nil {
 			return nil, err
 		}
@@ -148,28 +228,27 @@ func Thread(ctx context.Context, b *Body, spec ThreadSpec) (result *Body, retErr
 		defer removeTools(tools)
 		return combineTools(ctx, d, OperationThread, target, meshbool.OpCut, tools, false, nil, capture, consumed...)
 	}
-	if spec.LeadIn == (units.Value{}) {
-		if spec.LeadInAngle != (units.Value{}) {
-			return nil, fmt.Errorf(`%w: a thread lead-in angle needs a lead-in distance`, ErrDegenerate)
-		}
+	if !spec.leadSet {
 		return cut(b)
 	}
-	leadIn, err := sectionrecord.MagnitudeIn(spec.LeadIn, units.Length, units.Millimeter, "the thread lead-in")
+	leadIn, err := sectionrecord.MagnitudeIn(spec.leadIn, units.Length, units.Millimeter, "the thread lead-in")
 	if err != nil {
-		return nil, err
+		return nil, subjectFault(OperationThread, spec.leadInSubject, err)
 	}
 	if leadIn == 0 {
-		return nil, fmt.Errorf(`%w: a thread lead-in needs a positive distance`, ErrDegenerate)
+		return nil, subjectFault(OperationThread, spec.leadInSubject,
+			fmt.Errorf(`%w: a thread lead-in needs a positive distance`, ErrDegenerate))
 	}
 	leadAngle := 0.0
-	if spec.LeadInAngle != (units.Value{}) {
-		leadAngle, err = sectionrecord.MagnitudeIn(spec.LeadInAngle, units.Angle, units.Radian, "the thread lead-in angle")
+	if spec.angleSet {
+		leadAngle, err = sectionrecord.MagnitudeIn(spec.leadAngle, units.Angle, units.Radian, "the thread lead-in angle")
 		if err != nil {
-			return nil, err
+			return nil, subjectFault(OperationThread, spec.leadAngleSubject, err)
 		}
 		// A bevel along the end face or the threaded face is no chamfer.
 		if leadAngle <= 0 || leadAngle >= math.Pi/2 {
-			return nil, fmt.Errorf(`%w: a thread lead-in angle must lie above zero and below 90 degrees`, ErrDegenerate)
+			return nil, subjectFault(OperationThread, spec.leadAngleSubject,
+				fmt.Errorf(`%w: a thread lead-in angle must lie above zero and below 90 degrees`, ErrDegenerate))
 		}
 	}
 	ends := threadLeadInEdges(face)
@@ -217,13 +296,13 @@ func threadForm(f ThreadForm) (threadplan.Form, error) {
 	if f == (ThreadForm{}) {
 		return threadplan.Form{}, nil
 	}
-	asymmetric := f.FlankLead != (units.Value{}) || f.FlankTrail != (units.Value{})
+	asymmetric := f.flankLead != (units.Value{}) || f.flankTrail != (units.Value{})
 	if asymmetric {
-		if f.Angle != (units.Value{}) || f.FlankLead == (units.Value{}) || f.FlankTrail == (units.Value{}) {
-			return threadplan.Form{}, fmt.Errorf(`%w: an asymmetric thread form sets both flanks and no Angle`, ErrDegenerate)
+		if f.angle != (units.Value{}) || f.flankLead == (units.Value{}) || f.flankTrail == (units.Value{}) {
+			return threadplan.Form{}, fmt.Errorf(`%w: an asymmetric thread form sets both flanks and no angle`, ErrDegenerate)
 		}
 	}
-	if f.Depth == (units.Value{}) || f.Flat == (units.Value{}) || (!asymmetric && f.Angle == (units.Value{})) {
+	if f.depth == (units.Value{}) || f.flat == (units.Value{}) || (!asymmetric && f.angle == (units.Value{})) {
 		return threadplan.Form{}, fmt.Errorf(`%w: a thread form needs an angle, a depth and a root flat, all three or none`, ErrDegenerate)
 	}
 	flank := func(v units.Value, what string, limit float64) (float64, error) {
@@ -241,27 +320,27 @@ func threadForm(f ThreadForm) (threadplan.Form, error) {
 		}
 		return angle, nil
 	}
-	depth, err := sectionrecord.MagnitudeIn(f.Depth, units.Length, units.Millimeter, "the thread form depth")
+	depth, err := sectionrecord.MagnitudeIn(f.depth, units.Length, units.Millimeter, "the thread form depth")
 	if err != nil {
 		return threadplan.Form{}, err
 	}
-	flat, err := sectionrecord.MagnitudeIn(f.Flat, units.Length, units.Millimeter, "the thread form root flat")
+	flat, err := sectionrecord.MagnitudeIn(f.flat, units.Length, units.Millimeter, "the thread form root flat")
 	if err != nil {
 		return threadplan.Form{}, err
 	}
 	if asymmetric {
 		// A flank leans from the radial direction, so it stays under a right angle.
-		lead, err := flank(f.FlankLead, "lead flank", math.Pi/2-1e-9)
+		lead, err := flank(f.flankLead, "lead flank", math.Pi/2-1e-9)
 		if err != nil {
 			return threadplan.Form{}, err
 		}
-		trail, err := flank(f.FlankTrail, "trail flank", math.Pi/2-1e-9)
+		trail, err := flank(f.flankTrail, "trail flank", math.Pi/2-1e-9)
 		if err != nil {
 			return threadplan.Form{}, err
 		}
 		return threadplan.Form{Slope: math.Tan(lead), BackSlope: math.Tan(trail), Depth: depth, Flat: flat}, nil
 	}
-	angle, err := flank(f.Angle, "angle", 2*math.Pi/3)
+	angle, err := flank(f.angle, "angle", 2*math.Pi/3)
 	if err != nil {
 		return threadplan.Form{}, err
 	}

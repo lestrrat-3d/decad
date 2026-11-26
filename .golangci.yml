@@ -177,6 +177,13 @@ linters:
             - github.com/lestrrat-3d/decad.Patterned
             - github.com/lestrrat-3d/decad.PathPattern
             - github.com/lestrrat-3d/decad.Arrange
+            - github.com/lestrrat-3d/decad.Hole
+            - github.com/lestrrat-3d/decad.HoleShaped
+            - github.com/lestrrat-3d/decad.Boss
+            - github.com/lestrrat-3d/decad.BossShaped
+            - github.com/lestrrat-3d/decad.Thread
+            - github.com/lestrrat-3d/decad.Infill
+            - github.com/lestrrat-3d/decad.SheetMetal
   exclusions:
     generated: lax
     presets:

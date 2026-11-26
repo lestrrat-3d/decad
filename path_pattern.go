@@ -149,18 +149,24 @@ func (c *PathPatternCommand) run(ctx context.Context) ([]*Body, error) {
 	turn, turnErr := c.follow.Get()
 	return pathPattern(ctx, c.b, c.path, c.stations, pathFollow{
 		on: c.follow.IsSet(), pivot: turn.pivot, hasPivot: turn.hasPivot, err: turnErr, subject: "FollowAbout",
+		stationsSubject: "stations",
 	})
 }
 
-// pathFollow is the folded form of a path pattern's follow methods. err is the
-// fault of the pivot, refused where the option decode refused it, and subject
-// names what the diagnostic points at (agent-docs/command-api-design.md §11).
+// pathFollow is the settings of a path pattern's implementation: the folded form
+// of its follow methods and the subject of its stations. err is the fault of the
+// pivot, refused where the option decode refused it, and subject names what that
+// diagnostic points at. stationsSubject names the constructor argument a refused
+// stations value points at. A composite that calls the implementation with a value
+// it computed clears either subject or names its own argument
+// (agent-docs/command-api-design.md §11).
 type pathFollow struct {
-	on       bool
-	pivot    r3.Vec
-	hasPivot bool
-	err      error
-	subject  string
+	on              bool
+	pivot           r3.Vec
+	hasPivot        bool
+	err             error
+	subject         string
+	stationsSubject string
 }
 
 // pathPattern is PathPattern's implementation. ctx is not nil, and the errors
@@ -216,7 +222,7 @@ type pathPatternSettings struct {
 // path pattern.
 func foldPathPattern(stations PathStations, follow pathFollow) (pathPatternSettings, error) {
 	var out pathPatternSettings
-	errNil := subjectError(OperationCopy, "stations",
+	errNil := subjectFault(OperationCopy, follow.stationsSubject,
 		fmt.Errorf(`%w: a path pattern needs a PathCount or a PathSpacing to place its copies`, ErrDegenerate))
 	var spacing units.Value
 	switch s := stations.(type) {
@@ -240,13 +246,13 @@ func foldPathPattern(stations PathStations, follow pathFollow) (pathPatternSetti
 	}
 	if out.hasCount {
 		if out.count < 2 {
-			return out, subjectError(OperationCopy, "stations",
+			return out, subjectFault(OperationCopy, follow.stationsSubject,
 				fmt.Errorf(`%w: a path pattern needs a count of at least 2, got %d`, ErrDegenerate, out.count))
 		}
 	} else {
 		step, err := sectionrecord.MagnitudeIn(spacing, units.Length, units.Millimeter, "the path pattern spacing")
 		if err != nil {
-			return out, subjectError(OperationCopy, "stations", err)
+			return out, subjectFault(OperationCopy, follow.stationsSubject, err)
 		}
 		out.spacing = step
 	}

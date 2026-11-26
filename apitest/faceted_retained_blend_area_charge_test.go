@@ -27,9 +27,9 @@ func TestFacetedRetainedBlendAreaCharge(t *testing.T) {
 	top := decad.CapEnd(plate)
 	body, err := decad.Union(plate, placed(t, rectBox(t, sc.w, sc.doc, 30, 20, 50, 40, 15), 10)).Do(t.Context())
 	require.NoError(t, err)
-	body, err = decad.Hole(t.Context(), body, decad.HoleSpec{Face: decad.Faces(decad.FaceCreatedBy(top)),
-		At: r3.NewVec(15, 15, 10), Diameter: units.Millimeters(6.6), Depth: decad.ThroughHole{},
-		Head: decad.Counterbore{Diameter: units.Millimeters(11), Depth: units.Millimeters(6.4)}})
+	body, err = decad.Hole(body, decad.Faces(decad.FaceCreatedBy(top)), r3.NewVec(15, 15, 10), units.Millimeters(6.6), decad.ThroughHole{}).
+		Head(decad.Counterbore{Diameter: units.Millimeters(11), Depth: units.Millimeters(6.4)}).
+		Do(t.Context())
 	require.NoError(t, err)
 	s, err := sc.w.CreateSketch(sc.w.XY())
 	require.NoError(t, err)

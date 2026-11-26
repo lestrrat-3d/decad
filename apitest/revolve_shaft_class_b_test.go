@@ -178,8 +178,8 @@ func TestRevolvedShaftClassBCut(t *testing.T) {
 			require.NoError(t, err)
 			before, err := cut.Volume()
 			require.NoError(t, err)
-			out, err := decad.Thread(t.Context(), cut, decad.ThreadSpec{
-				Face: decad.Faces(decad.Cylindrical()), Pitch: units.Millimeters(8), Form: acmeForm()})
+			out, err := decad.Thread(cut, decad.Faces(decad.Cylindrical()), units.Millimeters(8)).
+				Form(acmeForm()).Do(t.Context())
 			require.NoError(t, err)
 			after, err := out.Volume()
 			require.NoError(t, err)

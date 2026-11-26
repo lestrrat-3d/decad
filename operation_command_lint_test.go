@@ -220,3 +220,14 @@ func TestPlacementConstructorsAreCommandConstructors(t *testing.T) {
 		require.Contains(t, constructors, name)
 	}
 }
+
+// TestCompositeConstructorsAreCommandConstructors fails when a spec-composite
+// constructor stops returning a *<X>Command, which would drop it from both lint
+// checks above (agent-docs/command-api-design.md §12).
+func TestCompositeConstructorsAreCommandConstructors(t *testing.T) {
+	t.Parallel()
+	constructors := commandConstructorNames(t)
+	for _, name := range []string{"Hole", "HoleShaped", "Boss", "BossShaped", "Thread", "Infill", "SheetMetal"} {
+		require.Contains(t, constructors, name)
+	}
+}

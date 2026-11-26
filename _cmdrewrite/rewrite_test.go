@@ -346,3 +346,116 @@ func TestPlacement(t *testing.T) {
 		}
 	})
 }
+
+func TestComposites(t *testing.T) {
+	const head = "package p\n\nimport \"github.com/lestrrat-3d/decad\"\n\nfunc f() {\n"
+	tests := []struct{ name, in, want string }{
+		{"hole", "_, _ = decad.Hole(ctx, b, decad.HoleSpec{Face: face, At: at, Diameter: d, Depth: decad.ThroughHole{}})",
+			"_, _ = decad.Hole(b, face, at, d, decad.ThroughHole{}).Do(ctx)"},
+		{"hole head thread draft", "_, _ = decad.Hole(ctx, b, decad.HoleSpec{Face: face, At: at, Diameter: d, Depth: x, " +
+			"Head: h, Thread: &decad.HoleThread{Pitch: p, LeftHand: true, Length: l}, Draft: a})",
+			"_, _ = decad.Hole(b, face, at, d, x).Head(h).Thread(decad.NewHoleThread(p).LeftHand().Length(l)).Draft(a).Do(ctx)"},
+		{"hole unset fields", "_, _ = decad.Hole(ctx, b, decad.HoleSpec{Face: face, At: at, Diameter: d, Depth: x, Head: nil, Draft: units.Value{}})",
+			"_, _ = decad.Hole(b, face, at, d, x).Do(ctx)"},
+		{"hole shaped", "_, _ = decad.Hole(ctx, b, decad.HoleSpec{Face: face, At: at, Depth: x, Shape: s})",
+			"_, _ = decad.HoleShaped(b, face, at, s, x).Do(ctx)"},
+		{"boss", "_, _ = decad.Boss(ctx, b, decad.BossSpec{Face: face, At: at, Diameter: d, Height: h})",
+			"_, _ = decad.Boss(b, face, at, d, h).Do(ctx)"},
+		{"boss every method", "_, _ = decad.Boss(ctx, b, decad.BossSpec{Face: face, At: at, Diameter: d, Height: h, " +
+			"Bore: &decad.BossBore{Diameter: bd, Depth: bz, Head: hh, Thread: &decad.HoleThread{Pitch: p}, Draft: bdr}, " +
+			"Draft: dr, Ribs: &decad.BossRibs{Count: 3, Thickness: t, Length: l, Height: rh, Angle: ra}})",
+			"_, _ = decad.Boss(b, face, at, d, h).Bore(decad.NewBossBore(bd, bz).Head(hh).Thread(decad.NewHoleThread(p)).Draft(bdr))." +
+				"Draft(dr).Ribs(decad.NewBossRibs(3, t, l, rh).Angle(ra)).Do(ctx)"},
+		{"boss root fillet", "_, _ = decad.Boss(ctx, b, decad.BossSpec{Face: face, At: at, Diameter: d, Height: h, RootFillet: r})",
+			"_, _ = decad.Boss(b, face, at, d, h).RootFillet(r).Do(ctx)"},
+		{"boss tilt", "_, _ = decad.Boss(ctx, b, decad.BossSpec{Face: face, At: at, Diameter: d, Height: h, Tilt: a, TiltDirection: dir})",
+			"_, _ = decad.Boss(b, face, at, d, h).Tilt(a, dir).Do(ctx)"},
+		{"boss tilt without direction", "_, _ = decad.Boss(ctx, b, decad.BossSpec{Face: face, At: at, Diameter: d, Height: h, Tilt: a})",
+			"_, _ = decad.Boss(b, face, at, d, h).Tilt(a, units.Degrees(0)).Do(ctx)"},
+		{"boss shaped", "_, _ = decad.Boss(ctx, b, decad.BossSpec{Face: face, At: at, Height: h, Shape: s, Draft: dr})",
+			"_, _ = decad.BossShaped(b, face, at, s, h).Draft(dr).Do(ctx)"},
+		{"thread", "_, _ = decad.Thread(ctx, b, decad.ThreadSpec{Face: face, Pitch: p})",
+			"_, _ = decad.Thread(b, face, p).Do(ctx)"},
+		{"thread every method", "_, _ = decad.Thread(ctx, b, decad.ThreadSpec{Face: face, Pitch: p, LeftHand: true, Length: l, " +
+			"Form: decad.ThreadForm{Angle: a, Depth: d, Flat: fl}, LeadIn: li, LeadInAngle: la})",
+			"_, _ = decad.Thread(b, face, p).LeftHand().Length(l).Form(decad.TrapezoidThreadForm(a, d, fl)).LeadInAngle(li, la).Do(ctx)"},
+		{"thread buttress lead-in", "_, _ = decad.Thread(ctx, b, decad.ThreadSpec{Face: face, Pitch: p, " +
+			"Form: decad.ThreadForm{FlankLead: x, FlankTrail: y, Depth: d, Flat: fl}, LeadIn: li})",
+			"_, _ = decad.Thread(b, face, p).Form(decad.ButtressThreadForm(x, y, d, fl)).LeadIn(li).Do(ctx)"},
+		{"infill", "_, _ = decad.Infill(ctx, b, decad.InfillSpec{Kind: decad.DiamondInfill, Cell: c, Level: l})",
+			"_, _ = decad.Infill(b, decad.DiamondInfill, c, l).Do(ctx)"},
+		{"infill resolution and skin", "_, _ = decad.Infill(ctx, b, decad.InfillSpec{Cell: c, Level: l, Resolution: 8, Skin: s})",
+			"_, _ = decad.Infill(b, decad.GyroidInfill, c, l).Resolution(8).Skin(s).Do(ctx)"},
+		{"sheet metal", "_, _ = decad.SheetMetal(ctx, d, decad.SheetMetalSpec{Thickness: t, InnerRadius: r, Width: w, Legs: legs, Bends: bends})",
+			"_, _ = decad.SheetMetal(d, t, r, w, legs, bends).Do(ctx)"},
+		{"sheet metal k factor", "_, _, _ = decad.SheetMetal(ctx, d, decad.SheetMetalSpec{Thickness: t, InnerRadius: r, Width: w, KFactor: k, Legs: legs, Bends: bends})",
+			"_, _, _ = decad.SheetMetal(d, t, r, w, legs, bends).KFactor(k).Do(ctx)"},
+		{"nested", "_, _ = decad.Union(ctx, mustBody(decad.Thread(ctx, b, decad.ThreadSpec{Face: face, Pitch: p})), c)",
+			"_, _ = decad.Union(ctx, mustBody(decad.Thread(b, face, p).Do(ctx)), c)"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			out, reports, err := rewriteFile("x.go", []byte(head+"\t"+tc.in+"\n}\n"), families["composites"], false)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(reports) != 0 {
+				t.Fatalf("reports: %v", reports)
+			}
+			if want := head + "\t" + tc.want + "\n}\n"; string(out) != want {
+				t.Fatalf("got\n%s\nwant\n%s", out, want)
+			}
+		})
+	}
+	for name, call := range map[string]string{
+		"spec variable":                 "decad.Hole(ctx, b, spec)",
+		"spec helper":                   "decad.Boss(ctx, b, bossSpec(b))",
+		"unkeyed spec":                  "decad.Thread(ctx, b, decad.ThreadSpec{face, p})",
+		"missing required":              "decad.Hole(ctx, b, decad.HoleSpec{Face: face, At: at, Depth: x})",
+		"unknown field":                 "decad.Hole(ctx, b, decad.HoleSpec{Face: face, At: at, Diameter: d, Depth: x, Extra: 1})",
+		"shaped hole with diameter":     "decad.Hole(ctx, b, decad.HoleSpec{Face: face, At: at, Diameter: d, Depth: x, Shape: s})",
+		"shaped hole with head":         "decad.Hole(ctx, b, decad.HoleSpec{Face: face, At: at, Depth: x, Shape: s, Head: h})",
+		"thread variable":               "decad.Hole(ctx, b, decad.HoleSpec{Face: face, At: at, Diameter: d, Depth: x, Thread: t})",
+		"left hand variable":            "decad.Thread(ctx, b, decad.ThreadSpec{Face: face, Pitch: p, LeftHand: left})",
+		"shaped boss with fillet":       "decad.Boss(ctx, b, decad.BossSpec{Face: face, At: at, Height: h, Shape: s, RootFillet: r})",
+		"shaped boss with tilt":         "decad.Boss(ctx, b, decad.BossSpec{Face: face, At: at, Height: h, Shape: s, Tilt: a})",
+		"tilt direction without tilt":   "decad.Boss(ctx, b, decad.BossSpec{Face: face, At: at, Diameter: d, Height: h, TiltDirection: dir})",
+		"bore variable":                 "decad.Boss(ctx, b, decad.BossSpec{Face: face, At: at, Diameter: d, Height: h, Bore: bore})",
+		"lead-in angle without lead-in": "decad.Thread(ctx, b, decad.ThreadSpec{Face: face, Pitch: p, LeadInAngle: a})",
+		"partial thread form":           "decad.Thread(ctx, b, decad.ThreadSpec{Face: face, Pitch: p, Form: decad.ThreadForm{Angle: a}})",
+		"mixed thread form":             "decad.Thread(ctx, b, decad.ThreadSpec{Face: face, Pitch: p, Form: decad.ThreadForm{Angle: a, FlankLead: x, Depth: d, Flat: f}})",
+		"spread":                        "decad.Infill(ctx, b, specs...)",
+		"too few arguments":             "decad.SheetMetal(ctx, d)",
+		"infill without cell":           "decad.Infill(ctx, b, decad.InfillSpec{Level: l})",
+	} {
+		t.Run("reported "+name, func(t *testing.T) {
+			in := head + "\t_, _ = " + call + "\n}\n"
+			out, reports, err := rewriteFile("x.go", []byte(in), families["composites"], false)
+			if err != nil || len(reports) != 1 || string(out) != in {
+				t.Fatalf("out %q reports %v err %v", out, reports, err)
+			}
+		})
+	}
+	t.Run("root bare call", func(t *testing.T) {
+		in := "package decad\n\nfunc f() {\n\t_, _ = Thread(ctx, b, ThreadSpec{Face: face, Pitch: p, LeftHand: true})\n}\n"
+		out, _, err := rewriteFile("x_test.go", []byte(in), families["composites"], true)
+		want := "package decad\n\nfunc f() {\n\t_, _ = Thread(b, face, p).LeftHand().Do(ctx)\n}\n"
+		if err != nil || string(out) != want {
+			t.Fatalf("out %q err %v", out, err)
+		}
+	})
+	t.Run("root production file reported", func(t *testing.T) {
+		in := "package decad\n\nfunc f() {\n\t_, _ = Infill(ctx, b, InfillSpec{Cell: c, Level: l})\n}\n"
+		out, reports, err := rewriteFile("x.go", []byte(in), families["composites"], true)
+		if err != nil || len(reports) != 1 || string(out) != in {
+			t.Fatalf("out %q reports %v err %v", out, reports, err)
+		}
+	})
+	t.Run("new names are not old-API input", func(t *testing.T) {
+		in := head + "\t_, _ = decad.Thread(b, face, p).Do(ctx)\n}\n"
+		out, reports, err := rewriteFile("x.go", []byte(in), families["composites"], false)
+		if err != nil || len(reports) != 0 || string(out) != in {
+			t.Fatalf("out %q reports %v err %v", out, reports, err)
+		}
+	})
+}

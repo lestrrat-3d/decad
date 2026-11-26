@@ -10,9 +10,9 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// A hole does not have to be round. Set HoleSpec.Shape to a RectangularHole
+// A hole does not have to be round. Build the hole with HoleShaped and a RectangularHole
 // to cut a slot-like opening, such as a window for a connector. The shape
-// replaces Diameter, which stays zero, and takes no counterbore or countersink.
+// takes the place of the diameter, and takes no counterbore or countersink.
 func Example_hole_rectangular() {
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
@@ -36,16 +36,11 @@ func Example_hole_rectangular() {
 
 	// Cut a 12 mm by 8 mm window through the middle of the top face, turned
 	// 30 degrees about the hole axis.
-	cut, err := decad.Hole(context.Background(), plate, decad.HoleSpec{
-		Face:  decad.Faces(decad.FaceCreatedBy(decad.CapEnd(plate))),
-		At:    r3.Vec{X: 20, Y: 15, Z: 10},
-		Depth: decad.ThroughHole{},
-		Shape: decad.RectangularHole{
-			Width:  units.Millimeters(12),
-			Height: units.Millimeters(8),
-			Angle:  units.Degrees(30),
-		},
-	})
+	cut, err := decad.HoleShaped(plate, decad.Faces(decad.FaceCreatedBy(decad.CapEnd(plate))), r3.Vec{X: 20, Y: 15, Z: 10}, decad.RectangularHole{
+		Width:  units.Millimeters(12),
+		Height: units.Millimeters(8),
+		Angle:  units.Degrees(30),
+	}, decad.ThroughHole{}).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to cut: %s\n", err)
 		return

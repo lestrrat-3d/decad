@@ -41,13 +41,9 @@ func Example_hole() {
 	// Drill a 6 mm hole all the way through, from the middle of the top face
 	// (the extrude's end cap, at z = 10). The head is a 12 mm wide
 	// counterbore, 4 mm deep, so a bolt head can sit flush.
-	drilled, err := decad.Hole(context.Background(), plate, decad.HoleSpec{
-		Face:     decad.Faces(decad.FaceCreatedBy(decad.CapEnd(plate))),
-		At:       r3.Vec{X: 20, Y: 15, Z: 10},
-		Diameter: units.Millimeters(6),
-		Depth:    decad.ThroughHole{},
-		Head:     decad.Counterbore{Diameter: units.Millimeters(12), Depth: units.Millimeters(4)},
-	})
+	drilled, err := decad.Hole(plate, decad.Faces(decad.FaceCreatedBy(decad.CapEnd(plate))), r3.Vec{X: 20, Y: 15, Z: 10}, units.Millimeters(6), decad.ThroughHole{}).
+		Head(decad.Counterbore{Diameter: units.Millimeters(12), Depth: units.Millimeters(4)}).
+		Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to drill: %s\n", err)
 		return
@@ -63,7 +59,7 @@ func Example_hole() {
 	// volume: 11378 mm^3
 }
 
-// A HoleSpec's Draft leans the bore's wall, as a cast or moulded hole is made so
+// HoleCommand.Draft leans the bore's wall, as a cast or moulded hole is made so
 // that its core pulls out. A positive angle narrows the bore toward its bottom.
 // Here a 6 mm hole 6 mm deep, drafted 3 degrees, is about 5.37 mm across at its floor.
 func Example_hole_draft() {
@@ -85,13 +81,9 @@ func Example_hole_draft() {
 		fmt.Printf("failed to extrude: %s\n", err)
 		return
 	}
-	drilled, err := decad.Hole(context.Background(), plate, decad.HoleSpec{
-		Face:     decad.Faces(decad.FaceCreatedBy(decad.CapEnd(plate))),
-		At:       r3.Vec{X: 10, Y: 10, Z: 10},
-		Diameter: units.Millimeters(6),
-		Depth:    decad.BlindHole{Depth: units.Millimeters(6)},
-		Draft:    units.Degrees(3),
-	})
+	drilled, err := decad.Hole(plate, decad.Faces(decad.FaceCreatedBy(decad.CapEnd(plate))), r3.Vec{X: 10, Y: 10, Z: 10}, units.Millimeters(6), decad.BlindHole{Depth: units.Millimeters(6)}).
+		Draft(units.Degrees(3)).
+		Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to drill: %s\n", err)
 		return
@@ -131,13 +123,9 @@ func Example_hole_counterbore_on_a_cylinder() {
 		fmt.Printf("failed to extrude: %s\n", err)
 		return
 	}
-	drilled, err := decad.Hole(context.Background(), rod, decad.HoleSpec{
-		Face:     decad.Faces(decad.Cylindrical()),
-		At:       r3.Vec{X: 10, Y: 0, Z: 8},
-		Diameter: units.Millimeters(3),
-		Depth:    decad.BlindHole{Depth: units.Millimeters(6)},
-		Head:     decad.Counterbore{Diameter: units.Millimeters(6), Depth: units.Millimeters(2)},
-	})
+	drilled, err := decad.Hole(rod, decad.Faces(decad.Cylindrical()), r3.Vec{X: 10, Y: 0, Z: 8}, units.Millimeters(3), decad.BlindHole{Depth: units.Millimeters(6)}).
+		Head(decad.Counterbore{Diameter: units.Millimeters(6), Depth: units.Millimeters(2)}).
+		Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to drill: %s\n", err)
 		return
@@ -180,13 +168,9 @@ func Example_hole_thread_on_a_cylinder() {
 			}
 		}
 	}
-	tapped, err := decad.Hole(context.Background(), block, decad.HoleSpec{
-		Face:     decad.Faces(decad.Cylindrical()),
-		At:       r3.Vec{X: 6, Y: 0, Z: 5},
-		Diameter: units.Millimeters(4.2),
-		Depth:    decad.BlindHole{Depth: units.Millimeters(8)},
-		Thread:   &decad.HoleThread{Pitch: units.Millimeters(0.8)},
-	})
+	tapped, err := decad.Hole(block, decad.Faces(decad.Cylindrical()), r3.Vec{X: 6, Y: 0, Z: 5}, units.Millimeters(4.2), decad.BlindHole{Depth: units.Millimeters(8)}).
+		Thread(decad.NewHoleThread(units.Millimeters(0.8))).
+		Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to tap: %s\n", err)
 		return

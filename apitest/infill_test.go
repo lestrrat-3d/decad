@@ -23,8 +23,9 @@ func TestInfillFillsABlockWithTheGyroidOnlyInsideIt(t *testing.T) {
 	doc := decad.New()
 	block := boxBody(t, doc, 5, 5, 15, 15, 12) // x, y 5 to 15, z 0 to 12
 	const cell, level = 10.0, 0.8
-	out, err := decad.Infill(t.Context(), block, decad.InfillSpec{
-		Kind: decad.GyroidInfill, Cell: units.Millimeters(cell), Level: units.Scalar(level), Resolution: 8})
+	out, err := decad.Infill(block, decad.GyroidInfill, units.Millimeters(cell), units.Scalar(level)).
+		Resolution(8).
+		Do(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, []*decad.Body{out}, doc.Bodies(), "the block and the lattice are consumed")
 	box, err := out.Bounds()
@@ -95,26 +96,21 @@ func TestInfillRefusals(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
 	block := boxBody(t, doc, 5, 5, 15, 15, 12)
-	spec := decad.InfillSpec{Kind: decad.GyroidInfill, Cell: units.Millimeters(10), Level: units.Scalar(0.8), Resolution: 8}
-	bad := spec
-	bad.Kind = decad.LatticeKind(9)
-	_, err := decad.Infill(t.Context(), block, bad)
+	infill := func(b *decad.Body, kind decad.LatticeKind, cell, level units.Value) *decad.InfillCommand {
+		return decad.Infill(b, kind, cell, level).Resolution(8)
+	}
+	gyroid, cell, level := decad.GyroidInfill, units.Millimeters(10), units.Scalar(0.8)
+	_, err := infill(block, decad.LatticeKind(9), cell, level).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrDegenerate)
-	bad = spec
-	bad.Cell = units.Degrees(5)
-	_, err = decad.Infill(t.Context(), block, bad)
+	_, err = infill(block, gyroid, units.Degrees(5), level).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnitKind)
-	bad = spec
-	bad.Cell = units.Millimeters(0)
-	_, err = decad.Infill(t.Context(), block, bad)
+	_, err = infill(block, gyroid, units.Millimeters(0), level).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrDegenerate)
-	bad = spec
-	bad.Level = units.Scalar(2)
-	_, err = decad.Infill(t.Context(), block, bad)
+	_, err = infill(block, gyroid, cell, units.Scalar(2)).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrDegenerate, "a level past the gyroid's range")
-	_, err = decad.Infill(nil, block, spec) //nolint:staticcheck // a nil context is the case under test
+	_, err = infill(block, gyroid, cell, level).Do(nil) //nolint:staticcheck // a nil context is the case under test
 	require.ErrorIs(t, err, decad.ErrDegenerate)
-	_, err = decad.Infill(t.Context(), nil, spec)
+	_, err = infill(nil, gyroid, cell, level).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrDegenerate)
 	require.Len(t, doc.Bodies(), 1, "every refusal leaves the block alone")
 	require.Equal(t, "SchwarzPInfill", decad.SchwarzPInfill.String())
@@ -132,8 +128,7 @@ func TestInfillTakesEachLatticeKind(t *testing.T) {
 		decad.FischerKochSInfill: 0.4, decad.LidinoidInfill: 0.6, decad.SplitPInfill: 0.7} {
 		doc := decad.New()
 		block := boxBody(t, doc, 5, 5, 10, 10, 6)
-		out, err := decad.Infill(t.Context(), block, decad.InfillSpec{
-			Kind: kind, Cell: units.Millimeters(10), Level: units.Scalar(level), Resolution: 8})
+		out, err := decad.Infill(block, kind, units.Millimeters(10), units.Scalar(level)).Resolution(8).Do(t.Context())
 		require.NoError(t, err, kind.String())
 		volume, err := out.Volume()
 		require.NoError(t, err)
@@ -153,9 +148,10 @@ func TestInfillKeepsASkinRoundThePart(t *testing.T) {
 	doc := decad.New()
 	block := boxBody(t, doc, 5, 5, 15, 15, 12)
 	const cell, level, skin = 10.0, 0.6, 1.0
-	out, err := decad.Infill(t.Context(), block, decad.InfillSpec{
-		Kind: decad.GyroidInfill, Cell: units.Millimeters(cell), Level: units.Scalar(level), Resolution: 8,
-		Skin: units.Millimeters(skin)})
+	out, err := decad.Infill(block, decad.GyroidInfill, units.Millimeters(cell), units.Scalar(level)).
+		Resolution(8).
+		Skin(units.Millimeters(skin)).
+		Do(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, []*decad.Body{out}, doc.Bodies(), "the block, its copies, the skin and the lattice are all consumed")
 	box, err := out.Bounds()
@@ -222,15 +218,13 @@ func TestInfillSkinRefusalsLeaveTheBlockLive(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
 	block := boxBody(t, doc, 5, 5, 15, 15, 12)
-	spec := decad.InfillSpec{Kind: decad.GyroidInfill, Cell: units.Millimeters(10), Level: units.Scalar(0.6), Resolution: 8}
 	for name, skin := range map[string]units.Value{
 		"a skin that is not a length":  units.Degrees(5),
 		"a skin thicker than the part": units.Millimeters(7),
 		"a negative skin":              units.Millimeters(-1),
 	} {
-		bad := spec
-		bad.Skin = skin
-		_, err := decad.Infill(t.Context(), block, bad)
+		_, err := decad.Infill(block, decad.GyroidInfill, units.Millimeters(10), units.Scalar(0.6)).
+			Resolution(8).Skin(skin).Do(t.Context())
 		require.Error(t, err, name)
 		require.Equal(t, []*decad.Body{block}, doc.Bodies(), "%s leaves the block alone", name)
 	}

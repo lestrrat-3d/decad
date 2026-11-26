@@ -328,9 +328,7 @@ func TestRetainedSaddleFillet(t *testing.T) {
 			t.Skip("the Cut fixtures carry the race build")
 		}
 		sc := newRetentionScene()
-		body, err := decad.Hole(t.Context(), saddleRevolve(t, sc), decad.HoleSpec{
-			Face: decad.Faces(decad.Cylindrical()), At: r3.NewVec(40, 0, saddleR),
-			Diameter: units.Millimeters(6), Depth: decad.ThroughHole{}})
+		body, err := decad.Hole(saddleRevolve(t, sc), decad.Faces(decad.Cylindrical()), r3.NewVec(40, 0, saddleR), units.Millimeters(6), decad.ThroughHole{}).Do(t.Context())
 		require.NoError(t, err)
 		out, err := decad.Fillet(body, saddleMouths(t, body, 3, 0), units.Millimeters(1.5)).Do(t.Context())
 		require.NoError(t, err)
@@ -410,8 +408,7 @@ func TestRetainedSaddleFilletRefusals(t *testing.T) {
 		// R + ρ = 16, and lies inside the bore's cut at R' + r'/32.
 		doc := decad.New()
 		rod := diskBody(t, doc, 0, 0, 15)
-		body, err := decad.Boss(t.Context(), rod, decad.BossSpec{Face: decad.Faces(decad.Cylindrical()),
-			At: r3.NewVec(15, 0, 10), Diameter: units.Millimeters(10), Height: units.Millimeters(1)})
+		body, err := decad.Boss(rod, decad.Faces(decad.Cylindrical()), r3.NewVec(15, 0, 10), units.Millimeters(10), units.Millimeters(1)).Do(t.Context())
 		require.NoError(t, err)
 		_, err = decad.Fillet(body, decad.Edges(decad.Concave()).Exactly(1), units.Millimeters(1)).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
@@ -543,11 +540,9 @@ func TestRetainedSaddleFilletOutside(t *testing.T) {
 		// crosses the first and leaves two mouths on its wall.
 		doc := decad.New()
 		plate := boxBody(t, doc, 0, 0, 80, 60, 20)
-		down, err := decad.Hole(t.Context(), plate, decad.HoleSpec{Face: decad.Faces(decad.FaceCreatedBy(decad.CapEnd(plate))),
-			At: r3.NewVec(40, 30, 20), Diameter: units.Millimeters(10), Depth: decad.ThroughHole{}})
+		down, err := decad.Hole(plate, decad.Faces(decad.FaceCreatedBy(decad.CapEnd(plate))), r3.NewVec(40, 30, 20), units.Millimeters(10), decad.ThroughHole{}).Do(t.Context())
 		require.NoError(t, err)
-		body, err := decad.Hole(t.Context(), down, decad.HoleSpec{Face: decad.Faces(decad.Facing(r3.NewVec(1, 0, 0))),
-			At: r3.NewVec(80, 30, 10), Diameter: units.Millimeters(6), Depth: decad.BlindHole{Depth: units.Millimeters(50)}})
+		body, err := decad.Hole(down, decad.Faces(decad.Facing(r3.NewVec(1, 0, 0))), r3.NewVec(80, 30, 10), units.Millimeters(6), decad.BlindHole{Depth: units.Millimeters(50)}).Do(t.Context())
 		require.NoError(t, err)
 		var q *decad.EdgeQuery
 		n := 0
@@ -576,8 +571,7 @@ func TestRetainedSaddleFilletOutside(t *testing.T) {
 		// its wall at z = 10, along x.
 		doc := decad.New()
 		rod := diskBody(t, doc, 0, 0, 15)
-		body, err := decad.Boss(t.Context(), rod, decad.BossSpec{Face: decad.Faces(decad.Cylindrical()),
-			At: r3.NewVec(15, 0, 10), Diameter: units.Millimeters(10), Height: units.Millimeters(8)})
+		body, err := decad.Boss(rod, decad.Faces(decad.Cylindrical()), r3.NewVec(15, 0, 10), units.Millimeters(10), units.Millimeters(8)).Do(t.Context())
 		require.NoError(t, err)
 		out, err := decad.Fillet(body, decad.Edges(decad.Concave()).Exactly(1), units.Millimeters(1)).Do(t.Context())
 		require.NoError(t, err)

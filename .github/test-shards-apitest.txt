@@ -3255,3 +3255,15 @@
 12	0.10	TestPlacementMethodsLastCallWins
 12	0.10	TestPlacementCommandsCopyTheirArguments
 12	0.10	TestCopyPlacementVariants
+12	1.00	TestCompositeCommandsRunOnceAndConsume
+12	0.10	TestCompositeCommandsRefuseNilContext
+12	0.10	TestCompositeCommandsReturnCancellationByIdentity
+12	3.00	TestCompositeCommandsReturnMidBuildCancellationByIdentity
+12	0.10	TestCompositeCommandsRefuseARetiredBody
+12	0.10	TestCompositeConstructorsRecordNilOperands
+12	0.10	TestCompositeNilSelectorsAreRefusedAfterTheBodyGates
+12	0.20	TestCompositeCommandsRefuseMethodFaultsAtTheirGate
+12	0.20	TestCompositeMethodsLastCallWins
+12	0.20	TestCompositeCommandsCopyTheirArguments
+12	1.00	TestCompositeCommandsKeepTheirGeometry
+12	0.10	TestInfillTagsNestedRefusalsWithItsKind

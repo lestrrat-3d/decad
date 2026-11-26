@@ -7,34 +7,35 @@ geometry kernel.
 ## 1. Contract
 
 ```go
-type BossBore struct {
-    Diameter, Depth units.Value
-    Head            HoleHead
-    Thread          *HoleThread
-    Draft           units.Value
-}
+func Boss(b *Body, face FaceSelector, at r3.Vec, diameter, height units.Value) *BossCommand
+func BossShaped(b *Body, face FaceSelector, at r3.Vec, shape HoleShape, height units.Value) *BossShapedCommand
 
-type BossSpec struct {
-    Face     FaceSelector
-    At       r3.Vec
-    Diameter units.Value
-    Height   units.Value
-    Bore       *BossBore
-    Draft      units.Value
-    RootFillet units.Value
-    Shape      HoleShape
-    Ribs       *BossRibs
-    Tilt, TiltDirection units.Value
-}
+func (c *BossCommand) Bore(bore BossBore) *BossCommand
+func (c *BossCommand) Draft(angle units.Value) *BossCommand
+func (c *BossCommand) RootFillet(radius units.Value) *BossCommand
+func (c *BossCommand) Ribs(ribs BossRibs) *BossCommand
+func (c *BossCommand) Tilt(angle, direction units.Value) *BossCommand
+func (c *BossCommand) Do(ctx context.Context) (*Body, error)
 
-type BossRibs struct {
-    Count                     int
-    Thickness, Length, Height units.Value
-    Angle                     units.Value
-}
+func (c *BossShapedCommand) Bore(bore BossBore) *BossShapedCommand
+func (c *BossShapedCommand) Draft(angle units.Value) *BossShapedCommand
+func (c *BossShapedCommand) Ribs(ribs BossRibs) *BossShapedCommand
 
-func Boss(ctx context.Context, b *Body, spec BossSpec) (*Body, error)
+func NewBossBore(diameter, depth units.Value) BossBore
+func (r BossBore) Head(head HoleHead) BossBore
+func (r BossBore) Thread(thread HoleThread) BossBore
+func (r BossBore) Draft(angle units.Value) BossBore
+
+func NewBossRibs(count int, thickness, length, height units.Value) BossRibs
+func (r BossRibs) Angle(angle units.Value) BossRibs
 ```
+
+`Boss` takes the face, the world point `at`, the diameter and the height. The methods are the optional parts, and a
+second call to one replaces the first. `BossShaped` takes a `shape` in place of the diameter (command rule M6, §7) and
+has only the methods a shaped boss accepts: no `RootFillet` and no `Tilt`. `BossBore` and `BossRibs` are values built by
+their constructors, whose optional parts are value methods that return a changed copy. A method value that is refused
+names its method (`Bore`, `Draft`, `RootFillet`, `Ribs` or `Tilt`) as the diagnostic's subject. `Do` is tagged
+`OperationBoss`. The command form is `agent-docs/command-api-design.md`.
 
 | Decision | Rule |
 |---|---|
@@ -60,26 +61,26 @@ faces are planes and cylinders where the Booleans admit them.
 
 ## 4. A pilot with a head or a thread
 
-`BossBore.Head` and `BossBore.Thread` are `HoleSpec`'s `Head` and `Thread` (`agent-docs/hole-design.md` §8) for the pilot.
+`BossBore.Head` and `BossBore.Thread` are `HoleCommand`'s `Head` and `Thread` (`agent-docs/hole-design.md` §8) for the pilot.
 
 | Decision | Rule |
 |---|---|
 | W1 | `Head` is a `Counterbore` or a `Countersink` at the pilot's mouth on the boss's top face. The gates are `Hole`'s: the head is wider than the pilot, a counterbore is shallower than the pilot, and a countersink's cone is shallower than the pilot. |
-| W2 | `Thread` taps the pilot as `Hole` does: `Diameter` is the tap drill, and `Length` is measured from where the pilot proper starts, which is the top face or a head's floor. The zero `Length` threads the pilot's whole depth and stops at its bottom, since a pilot is blind. |
+| W2 | `Thread` taps the pilot as `Hole` does: `Diameter` is the tap drill, and `Length` is measured from where the pilot proper starts, which is the top face or a head's floor. Without a `HoleThread.Length` call the thread runs the pilot's whole depth and stops at its bottom, since a pilot is blind. |
 | W3 | The pilot's tools (the bore, a head and the coil) are united with one another and cut from the boss in one step. A second cut of the boss would meet a target that already holds the first cut's coarse mesh, which the evaluator refuses when the cut's own chord tolerance is finer. |
 | W4 | One `OperationBoss` entry holds the whole. A thread whose major diameter would pass the boss's wall leaves a wall thinner than its groove: choose a boss wider than the thread's major diameter. |
 
 ## 5. A drafted boss
 
-`BossSpec.Draft` leans the boss's wall. It passes `Taper` to the `Extrude` that builds the pillar.
+`BossCommand.Draft` leans the boss's wall. It passes `Taper` to the `Extrude` that builds the pillar.
 
 | Decision | Rule |
 |---|---|
-| Y1 | `Diameter` is the boss's diameter at `Face`. A positive `Draft` makes the boss narrower toward its top, `Diameter − 2·Height·tan(Draft)` across there, and a negative one wider. The zero `Value` is a straight wall. |
+| Y1 | `Diameter` is the boss's diameter at `Face`. A positive `Draft` makes the boss narrower toward its top, `Diameter − 2·Height·tan(Draft)` across there, and a negative one wider. A zero angle, or no `Draft` call, is a straight wall. |
 | Y2 | The pillar's footing starts `embed` behind the face (B3), where the taper begins, so its circle there is wider by `embed·tan(Draft)`: the wall is then the stated diameter at the face. |
 | Y3 | `Draft` is read as a signed angle. A wrong unit kind is `ErrUnitKind`. A draft whose magnitude is at or past a right angle is `ErrDegenerate`, and one that closes or breaks the circle before the top is `Extrude`'s own refusal, `ErrUnsupported`. |
 | Y4 | The pilot opens on the boss's top face, so its diameter MUST be less than the boss's diameter there as well as at the face: a pilot that would break through the narrowed wall is `ErrDegenerate`. |
-| Y5 | `BossBore.Draft` leans the pilot's wall as `HoleSpec.Draft` does (`agent-docs/hole-design.md` §9): narrower toward its bottom for a positive angle. A tapped pilot takes none, `ErrDegenerate`. |
+| Y5 | `BossBore.Draft` leans the pilot's wall as `HoleCommand.Draft` does (`agent-docs/hole-design.md` §9): narrower toward its bottom for a positive angle. A tapped pilot takes none, `ErrDegenerate`. |
 
 ## 6. A root fillet
 
@@ -87,20 +88,20 @@ faces are planes and cylinders where the Booleans admit them.
 
 | Decision | Rule |
 |---|---|
-| R1 | The zero `Value` leaves the corner sharp. A positive length is the fillet's radius. A negative one is `ErrNegativeMagnitude` and a wrong unit kind `ErrUnitKind`. |
+| R1 | Without a `RootFillet` call the corner stays sharp. A positive length is the fillet's radius, and a zero one is `ErrDegenerate`. A negative one is `ErrNegativeMagnitude` and a wrong unit kind `ErrUnitKind`. |
 | R2 | The boss is built as before. The fillet then takes the one circular edge of the result that lies in the face's plane, about the boss's axis, with the boss's radius at the face (a drafted boss's radius at the face is its `Diameter`). Where the root circle runs off the face, so that no face of the plane has that circle as its one-edge loop, the fillet takes every root arc of the boss's radius about its axis on a planar face in that plane (concave by `IsConvex`, or reflex by `Wedge`, as a brep union's root arcs read: boss-root-overflow-design §5.5.8), each spanning less than π (a wider one is `ErrUnsupported`: "a root arc of the boss spans half its circle or more"), and the result is rule CO (boss-root-overflow-design §2.2). `edgesQuery` selects a curved edge by its convexity as well as its ends and curvature, so a root arc is never confused with a convex arc that shares its ends. The result is a mesh-free torus patch where `Fillet` admits one, and carries the fillet's own bounds. |
 | R3 | A boss and fillet are tried on a copy of `b` first: the copy is built, filleted and retired. A fillet the evaluator refuses, or a root circle not found in the result, therefore leaves `b` live and the document unchanged. The copy and its trial leave history entries. |
 | R4 | The result is `Boss`'s union and pilot cut followed by `Fillet`, so the history holds `OperationBoss` then `OperationFillet`. A fillet too large for the face, for the boss's height or for the body's other edges is `Fillet`'s refusal. |
 
 ## 7. A shaped boss
 
-`BossSpec.Shape` replaces the round section with a `RectangularHole`, `SlotHole` or `PolygonHole`, the shapes of `Hole`
+`BossShaped` replaces the round section with a `RectangularHole`, `SlotHole` or `PolygonHole`, the shapes of `Hole`
 (`agent-docs/hole-design.md` §5, §6, §10), so a rectangular rib block, a stadium lug or a hexagonal post stands on the face.
 
 | Decision | Rule |
 |---|---|
 | Q1 | The section is centred on `At` and turned as the hole shape is: a rectangle's `Width` along the face frame's U axis before `Angle` turns it, a slot's long axis along U, and a polygon with a flat toward U. The shape's size is the boss's size at the face. |
-| Q2 | `Diameter` must be the zero value (`ErrDegenerate` otherwise) and the shape's own gates are the hole's: a polygon of 3 to 64 sides, a slot longer than it is wide, positive lengths (`ErrUnitKind`, `ErrDegenerate`). |
+| Q2 | `BossShaped` takes no diameter, so a shaped boss with one cannot be written, and the shape's own gates are the hole's: a polygon of 3 to 64 sides, a slot longer than it is wide, positive lengths (`ErrUnitKind`, `ErrDegenerate`). |
 | Q3 | The pillar is the shape extruded out of the face, starting `embed` behind it, from a sketch of fixed points joined by lines and arcs, as the round pillar is from a circle. |
 | Q4 | A `Draft` moves every wall of the section by `h·tan(draft)` over a height `h`, which is the rectangle's width and height each smaller by `2h·tan(draft)`, the polygon's width across flats and the slot's width and length the same. The footing is wider by `embed·tan(draft)` on each side so the wall has the stated size at the face. A taller draft than the section can close is `Extrude`'s refusal. |
 | Q5 | A pilot opens in the top face and must be narrower than the shape's smallest width there: the rectangle's shorter side, the slot's width or the polygon's width across flats, less `2·height·tan(draft)`. Its other gates are §1's. |
@@ -123,12 +124,12 @@ through it, out of the body's material.
 
 ## 9. Gusset ribs at the foot
 
-`BossSpec.Ribs` braces the boss's root with `BossRibs.Count` triangular gusset ribs spaced evenly round its axis.
+`BossCommand.Ribs` braces the boss's root with `NewBossRibs`' count triangular gusset ribs spaced evenly round its axis.
 
 | Decision | Rule |
 |---|---|
 | G1 | `Count` is from 1 to 16 and `Thickness`, `Length` and `Height` are positive lengths (`ErrDegenerate` for zero or a count out of range, `ErrNegativeMagnitude`, `ErrUnitKind`). `Height` is at most the boss's `Height`, and `Thickness` is less than the boss's diameter, each otherwise `ErrDegenerate`. With several ribs, half the thickness is less than `r·sin(π/Count)`, `r` the boss's radius, so neighbouring ribs do not meet at the wall: otherwise `ErrDegenerate`. |
-| G2 | Rib `k` lies in the plane through the boss's axis at the angle `Angle + 2πk/Count` from the face frame's U axis, `Angle` read as an angle (the zero Value is zero) and `ErrUnitKind` for any other kind. It is `Thickness` thick, half each way from that plane. |
+| G2 | Rib `k` lies in the plane through the boss's axis at the angle `Angle + 2πk/Count` from the face frame's U axis, `Angle` read as an angle (zero without a `BossRibs.Angle` call) and `ErrUnitKind` for any other kind. It is `Thickness` thick, half each way from that plane. |
 | G3 | Its section in that plane, with a the distance from the axis and z the height above the face, is the polygon `(r/2, −e/2)`, `(r + Length, −e/2)`, `(r + Length, 0)`, `(r, Height)`, `(r/2, Height)`, `e` the footing depth `embed` of B3: it is flat across the top inside the boss, slopes down to the face at its outer end, and is buried in the boss and the plate, but lies above the pillar's footing plane so no two facets of the tools overlap in one plane (the evaluator refuses that). |
 | G4 | The pillar and the ribs are united into one tool and that tool into the body, and the pilot and its head are cut after, so a rib never closes a pilot. A boss with ribs takes no `Draft` (the wall leans from the rib's top vertex), no `RootFillet` and no cylindrical face, each `ErrUnsupported`; a `Shape` is G6's. |
 | G6 | A boss with a `Shape` takes ribs: the rib's plane meets the section's wall at `wallDistance(θ)` from the axis along the rib's direction `θ`, in place of the round boss's radius, so the rib's polygon of G3 starts at the section's smallest radius over two (inside every shape), runs to the wall plus `Length` and slopes up to `Height` at the wall. A rectangle's wall along its own axes is half its width or half its height, a polygon's flats are `AcrossFlats/2` from the axis over the cosine of the angle to the nearest flat's normal, and a slot's flats are half its width over the sine of the angle, then its round ends as a circle of half its width about the end of its straight run. G1's limits read the section's smallest radius: half its smallest width. |
@@ -137,12 +138,12 @@ through it, out of the body's material.
 
 ## 10. A tilted boss
 
-`BossSpec.Tilt` leans the boss's axis from the face's normal, and `TiltDirection` says which way.
+`BossCommand.Tilt` leans the boss's axis from the face's normal, and its `direction` argument says which way.
 
 | Decision | Rule |
 |---|---|
-| D1 | `Tilt` is an angle above zero and at most 60 degrees: zero as an angle or past 60 is `ErrDegenerate`, negative `ErrNegativeMagnitude`, a wrong unit kind `ErrUnitKind`. The zero `Value` is an upright boss. `TiltDirection` is the angle about the face's outward normal from the face frame's U axis to the direction the boss leans toward, the zero `Value` being along U; it needs a `Tilt` (`ErrDegenerate`) and is an angle. |
+| D1 | `Tilt` is an angle above zero and at most 60 degrees: zero as an angle or past 60 is `ErrDegenerate`, negative `ErrNegativeMagnitude`, a wrong unit kind `ErrUnitKind`. Without a `Tilt` call the boss is upright. `direction` is the angle about the face's outward normal from the face frame's U axis to the direction the boss leans toward, a zero angle being along U, and it is an angle. |
 | D2 | The axis is `n·cos a + t·sin a`, `n` the outward normal, `t` the unit lean direction in the face and `a` the tilt. `Height` is measured along it from the point `At` on the face to the centre of the boss's top disc, and `Diameter` is the cylinder's, square to the axis. |
 | D3 | The pillar is the circle in the plane square to the axis, centred `e = (r·sin a + MouthMargin)/cos a` along the axis behind `At`, swept by `Height + e`. Its base disc is tilted, so its highest point is `MouthMargin` under the face and its lowest `2·r·sin a + MouthMargin` under it; a body with no more depth than that behind the face is `ErrDegenerate`. |
-| D4 | A tilted boss is round and stands on a plane: a `Draft`, `RootFillet`, `Ribs`, `Shape` or a cylindrical face with it is `ErrUnsupported`. The result is the union of the pillar with the body and carries its bound. |
+| D4 | A tilted boss is round and stands on a plane: a `Draft`, `RootFillet`, `Ribs` or a cylindrical face with it is `ErrUnsupported`, and `BossShaped` has no `Tilt`. The result is the union of the pillar with the body and carries its bound. |
 | D5 | The volume above the face is exactly `π·r²·Height`: the face cuts a right cylinder through a point of its axis, and the oblique cut is balanced about that point, whatever the tilt. The tests require it inside the result's bound, the top disc's highest point `Height·cos a + r·sin a` over the face, a point on the axis inside the boss, and a point `4 + 4·cos a` mm back along the lean outside. |

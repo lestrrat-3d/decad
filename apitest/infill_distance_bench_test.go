@@ -28,10 +28,10 @@ func benchmarkInfillSkin(b *testing.B) *decad.Body {
 	if err != nil {
 		b.Fatal(err)
 	}
-	out, err := decad.Infill(b.Context(), block, decad.InfillSpec{
-		Kind: decad.GyroidInfill, Cell: units.Millimeters(10), Level: units.Scalar(0.6),
-		Resolution: 8, Skin: units.Millimeters(1),
-	})
+	out, err := decad.Infill(block, decad.GyroidInfill, units.Millimeters(10), units.Scalar(0.6)).
+		Resolution(8).
+		Skin(units.Millimeters(1)).
+		Do(b.Context())
 	if err != nil {
 		b.Fatal(err)
 	}

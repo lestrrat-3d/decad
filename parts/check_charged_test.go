@@ -67,8 +67,7 @@ func chargedHolePlate(t *testing.T, doc *decad.Document) *decad.Body {
 	body, err := decad.Extrude(doc, s, profile, decad.Distance{D: units.Millimeters(5), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	face := decad.Faces(decad.FaceCreatedBy(decad.CapEnd(body))).Exactly(1)
-	out, err := decad.Boss(t.Context(), body, decad.BossSpec{Face: face, At: r3.Vec{Z: 5},
-		Diameter: units.Millimeters(14), Height: units.Millimeters(1)})
+	out, err := decad.Boss(body, face, r3.Vec{Z: 5}, units.Millimeters(14), units.Millimeters(1)).Do(t.Context())
 	require.NoError(t, err)
 	edge := decad.Edges(decad.EndpointAt(r3.Vec{X: -12, Y: -14, Z: 5}), decad.Circular()).Exactly(1)
 	filleted, err := decad.Fillet(out, edge, units.Millimeters(0.5)).Do(t.Context())

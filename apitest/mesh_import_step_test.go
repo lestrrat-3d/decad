@@ -212,12 +212,7 @@ func TestReadSTEPReadsADrilledPlate(t *testing.T) {
 	// bottom faces are planes with a circular hole each.
 	doc := decad.New()
 	plate := decadtest.NewBlock(t, doc, 0, 0, 20, 20, units.Millimeters(10))
-	drilled, err := decad.Hole(t.Context(), plate, decad.HoleSpec{
-		Face:     capFace(true, plate),
-		At:       r3.Vec{X: 10, Y: 10, Z: 10},
-		Diameter: units.Millimeters(6),
-		Depth:    decad.ThroughHole{},
-	})
+	drilled, err := decad.Hole(plate, capFace(true, plate), r3.Vec{X: 10, Y: 10, Z: 10}, units.Millimeters(6), decad.ThroughHole{}).Do(t.Context())
 	require.NoError(t, err)
 	data := writeSTEP(t, drilled)
 	require.Contains(t, string(data), "CYLINDRICAL_SURFACE")

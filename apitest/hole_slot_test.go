@@ -23,23 +23,18 @@ const (
 // radius 2.
 var slotArea = (slotLength-slotWidth)*slotWidth + math.Pi*(slotWidth/2)*(slotWidth/2)
 
-func slotHoleSpec(plate *decad.Body, depth decad.HoleDepth, degrees float64) decad.HoleSpec {
-	return decad.HoleSpec{
-		Face:  capFace(true, plate),
-		At:    r3.Vec{X: 10, Y: 10, Z: 10},
-		Depth: depth,
-		Shape: decad.SlotHole{
-			Length: units.Millimeters(slotLength),
-			Width:  units.Millimeters(slotWidth),
-			Angle:  units.Degrees(degrees),
-		},
-	}
+func slotHole(plate *decad.Body, depth decad.HoleDepth, degrees float64) *decad.HoleShapedCommand {
+	return plateShapedHole(plate, decad.SlotHole{
+		Length: units.Millimeters(slotLength),
+		Width:  units.Millimeters(slotWidth),
+		Angle:  units.Degrees(degrees),
+	}, depth)
 }
 
 func TestHoleSlotThrough(t *testing.T) {
 	t.Parallel()
 	doc, plate := drillPlate(t)
-	out, err := decad.Hole(t.Context(), plate, slotHoleSpec(plate, decad.ThroughHole{}, 0))
+	out, err := slotHole(plate, decad.ThroughHole{}, 0).Do(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, []*decad.Body{out}, doc.Bodies())
 	decadtest.MeasuresVolume(t, out, units.CubicMillimeters(drillPlateVolume-slotArea*10))
@@ -51,7 +46,7 @@ func TestHoleSlotThrough(t *testing.T) {
 func TestHoleSlotBlindTurned(t *testing.T) {
 	t.Parallel()
 	_, plate := drillPlate(t)
-	out, err := decad.Hole(t.Context(), plate, slotHoleSpec(plate, decad.BlindHole{Depth: units.Millimeters(6)}, 90))
+	out, err := slotHole(plate, decad.BlindHole{Depth: units.Millimeters(6)}, 90).Do(t.Context())
 	require.NoError(t, err)
 	decadtest.MeasuresVolume(t, out, units.CubicMillimeters(drillPlateVolume-slotArea*6))
 	// A quarter turn lays the slot along y: its bore reaches y = 5 to 15.
@@ -70,18 +65,24 @@ func TestHoleSlotRefusals(t *testing.T) {
 		shape decad.SlotHole
 		want  error
 	}{
-		{"length equal to width", decad.SlotHole{Length: units.Millimeters(4), Width: units.Millimeters(4), Angle: units.Degrees(0)}, decad.ErrDegenerate},
-		{"length below width", decad.SlotHole{Length: units.Millimeters(3), Width: units.Millimeters(4), Angle: units.Degrees(0)}, decad.ErrDegenerate},
-		{"zero width", decad.SlotHole{Length: units.Millimeters(10), Width: units.Millimeters(0), Angle: units.Degrees(0)}, decad.ErrDegenerate},
-		{"width as an angle", decad.SlotHole{Length: units.Millimeters(10), Width: units.Degrees(4), Angle: units.Degrees(0)}, decad.ErrUnitKind},
+		{"length equal to width",
+			decad.SlotHole{Length: units.Millimeters(4), Width: units.Millimeters(4), Angle: units.Degrees(0)},
+			decad.ErrDegenerate},
+		{"length below width",
+			decad.SlotHole{Length: units.Millimeters(3), Width: units.Millimeters(4), Angle: units.Degrees(0)},
+			decad.ErrDegenerate},
+		{"zero width",
+			decad.SlotHole{Length: units.Millimeters(10), Width: units.Millimeters(0), Angle: units.Degrees(0)},
+			decad.ErrDegenerate},
+		{"width as an angle",
+			decad.SlotHole{Length: units.Millimeters(10), Width: units.Degrees(4), Angle: units.Degrees(0)},
+			decad.ErrUnitKind},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			doc, plate := drillPlate(t)
-			spec := slotHoleSpec(plate, decad.BlindHole{Depth: units.Millimeters(5)}, 0)
-			spec.Shape = tc.shape
-			_, err := decad.Hole(t.Context(), plate, spec)
+			_, err := plateShapedHole(plate, tc.shape, decad.BlindHole{Depth: units.Millimeters(5)}).Do(t.Context())
 			require.ErrorIs(t, err, tc.want)
 			require.Equal(t, []*decad.Body{plate}, doc.Bodies(), "a refused hole leaves the plate live and alone")
 		})

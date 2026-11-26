@@ -1702,8 +1702,8 @@ Copies do not consume their source. Each successful copy gets a fresh private
 producer identity so callers can use its returned provenance values without
 persisting or constructing internal identifiers.
 
-**A hole is one call.** `Hole(ctx, b, HoleSpec)` cuts a round, rectangular or slot-shaped, through or blind hole, with an optional
-counterbore or countersink head on a round hole, at a world point on a planar face of `b`, or radially at a point on a cylindrical one. It builds the tool bodies, cuts them from `b` in one
+**A hole is one command.** `Hole(b, face, at, diameter, depth)` cuts a round, through or blind hole, with optional
+counterbore or countersink head, thread and draft methods, and `HoleShaped(b, face, at, shape, depth)` cuts a rectangular, slot, polygonal or outline-shaped one, at a world point on a planar face of `b`, or radially at a point on a cylindrical one. It builds the tool bodies, cuts them from `b` in one
 atomic commit, and retires `b`. `agent-docs/hole-design.md` owns the placement, size and refusal rules.
 
 **A rib is a thickened line or arc.** `WebPath(b, s, path, thickness, e)` thickens each `*sketch.Line` and

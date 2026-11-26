@@ -37,16 +37,11 @@ func Example_hole_slot() {
 
 	// Cut a 16 mm long, 6 mm wide slot through the middle of the top face,
 	// along the X axis.
-	cut, err := decad.Hole(context.Background(), plate, decad.HoleSpec{
-		Face:  decad.Faces(decad.FaceCreatedBy(decad.CapEnd(plate))),
-		At:    r3.Vec{X: 20, Y: 15, Z: 10},
-		Depth: decad.ThroughHole{},
-		Shape: decad.SlotHole{
-			Length: units.Millimeters(16),
-			Width:  units.Millimeters(6),
-			Angle:  units.Degrees(0),
-		},
-	})
+	cut, err := decad.HoleShaped(plate, decad.Faces(decad.FaceCreatedBy(decad.CapEnd(plate))), r3.Vec{X: 20, Y: 15, Z: 10}, decad.SlotHole{
+		Length: units.Millimeters(16),
+		Width:  units.Millimeters(6),
+		Angle:  units.Degrees(0),
+	}, decad.ThroughHole{}).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to cut: %s\n", err)
 		return

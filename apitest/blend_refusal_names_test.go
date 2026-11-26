@@ -100,8 +100,7 @@ func TestBlendRefusalNamesCrossingCylinders(t *testing.T) {
 		t.Parallel()
 		doc := decad.New()
 		rod := diskBody(t, doc, 0, 0, 15)
-		boss, err := decad.Boss(t.Context(), rod, decad.BossSpec{Face: decad.Faces(decad.Cylindrical()),
-			At: r3.NewVec(15, 0, 10), Diameter: units.Millimeters(10), Height: units.Millimeters(8)})
+		boss, err := decad.Boss(rod, decad.Faces(decad.Cylindrical()), r3.NewVec(15, 0, 10), units.Millimeters(10), units.Millimeters(8)).Do(t.Context())
 		require.NoError(t, err)
 		_, err = decad.Chamfer(boss, decad.Edges(decad.Concave()).Exactly(1), units.Millimeters(1)).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)

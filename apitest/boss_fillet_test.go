@@ -12,7 +12,7 @@ import (
 )
 
 // This file is agent-docs/boss-design.md §6's public-surface tests for
-// BossSpec.RootFillet, on the plate of boss_test.go.
+// BossCommand.RootFillet, on the plate of boss_test.go.
 
 // filletRing is the volume a fillet of radius r adds round a cylinder of radius
 // R where it meets a plane: the corner square r by r less the quarter disc,
@@ -31,9 +31,7 @@ func filletRing(R, r float64) float64 {
 func TestBossRootFilletRoundsTheCornerWhereTheBossMeetsTheFace(t *testing.T) {
 	t.Parallel()
 	doc, plate := bossPlate(t)
-	spec := bossSpec(plate, true, nil)
-	spec.RootFillet = units.Millimeters(1)
-	out, err := decad.Boss(t.Context(), plate, spec)
+	out, err := bossCommand(plate, true).RootFillet(units.Millimeters(1)).Do(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, []*decad.Body{out}, doc.Bodies(), "the plate, the boss and its probe all leave the document")
 	decadtest.MeasuresVolume(t, out, units.CubicMillimeters(bossPlateVolume+math.Pi*16*8+filletRing(4, 1)),
@@ -56,34 +54,33 @@ func TestBossRootFilletRoundsTheCornerWhereTheBossMeetsTheFace(t *testing.T) {
 
 func TestBossRootFilletOnTheUndersideAndWithAPilot(t *testing.T) {
 	t.Parallel()
-	volume := func(fillet units.Value) float64 {
+	// A fillet of 0 leaves RootFillet uncalled.
+	volume := func(fillet float64) float64 {
 		_, plate := bossPlate(t)
-		spec := bossSpec(plate, false, &decad.BossBore{Diameter: units.Millimeters(3), Depth: units.Millimeters(6)})
-		spec.RootFillet = fillet
-		out, err := decad.Boss(t.Context(), plate, spec)
+		cmd := bossCommand(plate, false).Bore(decad.NewBossBore(units.Millimeters(3), units.Millimeters(6)))
+		if fillet > 0 {
+			cmd = cmd.RootFillet(units.Millimeters(fillet))
+		}
+		out, err := cmd.Do(t.Context())
 		require.NoError(t, err)
 		v, err := out.Volume()
 		require.NoError(t, err)
 		return v.Value.Base()
 	}
 	// The same boss with and without the fillet differ by the ring the fillet adds.
-	require.InDelta(t, filletRing(4, 0.5), volume(units.Millimeters(0.5))-volume(units.Value{}), 0.05)
+	require.InDelta(t, filletRing(4, 0.5), volume(0.5)-volume(0), 0.05)
 }
 
 func TestBossRootFilletRefusalsLeaveTheBodyLive(t *testing.T) {
 	t.Parallel()
 	doc, plate := bossPlate(t)
-	spec := bossSpec(plate, true, nil)
-	spec.RootFillet = units.Millimeters(-1)
-	_, err := decad.Boss(t.Context(), plate, spec)
+	_, err := bossCommand(plate, true).RootFillet(units.Millimeters(-1)).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrNegativeMagnitude)
-	spec.RootFillet = units.Degrees(1)
-	_, err = decad.Boss(t.Context(), plate, spec)
+	_, err = bossCommand(plate, true).RootFillet(units.Degrees(1)).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnitKind)
 	// A fillet wider than the plate's top can hold is the fillet's own refusal, and the
 	// plate stays live with the document as it was.
-	spec.RootFillet = units.Millimeters(30)
-	_, err = decad.Boss(t.Context(), plate, spec)
+	_, err = bossCommand(plate, true).RootFillet(units.Millimeters(30)).Do(t.Context())
 	require.Error(t, err)
 	require.Equal(t, []*decad.Body{plate}, doc.Bodies())
 }

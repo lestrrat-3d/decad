@@ -12,19 +12,41 @@ import (
 
 // This file is agent-docs/sheet-metal-design.md's public-surface tests for SheetMetal.
 
-func sheetSpec(legs []float64, bends []float64) decad.SheetMetalSpec {
-	spec := decad.SheetMetalSpec{
-		Thickness:   units.Millimeters(2),
-		InnerRadius: units.Millimeters(3),
-		Width:       units.Millimeters(10),
+// sheetArgs are the constructor arguments of SheetMetal, with the optional K-factor.
+type sheetArgs struct {
+	thickness, innerRadius, width units.Value
+	legs, bends                   []units.Value
+	k                             *units.Value
+}
+
+// sheetArgsOf is the strip of 2 mm sheet, inside radius 3 mm and width 10 mm over the given legs (mm) and bends
+// (degrees).
+func sheetArgsOf(legs []float64, bends []float64) sheetArgs {
+	a := sheetArgs{
+		thickness:   units.Millimeters(2),
+		innerRadius: units.Millimeters(3),
+		width:       units.Millimeters(10),
 	}
 	for _, l := range legs {
-		spec.Legs = append(spec.Legs, units.Millimeters(l))
+		a.legs = append(a.legs, units.Millimeters(l))
 	}
 	for _, b := range bends {
-		spec.Bends = append(spec.Bends, units.Degrees(b))
+		a.bends = append(a.bends, units.Degrees(b))
 	}
-	return spec
+	return a
+}
+
+// command is the SheetMetal command of the arguments, with KFactor called when k is set.
+func (a sheetArgs) command(doc *decad.Document) *decad.SheetMetalCommand {
+	c := decad.SheetMetal(doc, a.thickness, a.innerRadius, a.width, a.legs, a.bends)
+	if a.k != nil {
+		c.KFactor(*a.k)
+	}
+	return c
+}
+
+func sheetCommand(doc *decad.Document, legs []float64, bends []float64) *decad.SheetMetalCommand {
+	return sheetArgsOf(legs, bends).command(doc)
 }
 
 // stripVolume is thickness · width · the length of the centreline: the legs and each bend's arc at the
@@ -44,7 +66,7 @@ func TestSheetMetalBuildsAnLBracket(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
 	legs, bends := []float64{30, 20}, []float64{90}
-	body, report, err := decad.SheetMetal(t.Context(), doc, sheetSpec(legs, bends))
+	body, report, err := sheetCommand(doc, legs, bends).Do(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, []*decad.Body{body}, doc.Bodies())
 	volume, err := body.Volume()
@@ -82,7 +104,7 @@ func TestSheetMetalBuildsAChannelAndAZBend(t *testing.T) {
 		"z bend": {[]float64{10, 15, 10}, []float64{90, -90}, r3.NewVec(0, -1, 0), r3.NewVec(10+4+4+10+0, 4+15+4+1, 10)},
 	} {
 		doc := decad.New()
-		body, report, err := decad.SheetMetal(t.Context(), doc, sheetSpec(tc.legs, tc.bends))
+		body, report, err := sheetCommand(doc, tc.legs, tc.bends).Do(t.Context())
 		require.NoError(t, err, name)
 		volume, err := body.Volume()
 		require.NoError(t, err)
@@ -102,7 +124,7 @@ func TestSheetMetalBuildsBendsOfAnyAngle(t *testing.T) {
 		for i := range legs {
 			legs[i] = 12.5 + float64(i)
 		}
-		body, _, err := decad.SheetMetal(t.Context(), decad.New(), sheetSpec(legs, bends))
+		body, _, err := sheetCommand(decad.New(), legs, bends).Do(t.Context())
 		require.NoError(t, err, "%v", bends)
 		volume, err := body.Volume()
 		require.NoError(t, err)
@@ -112,50 +134,50 @@ func TestSheetMetalBuildsBendsOfAnyAngle(t *testing.T) {
 
 func TestSheetMetalFlatLengthFollowsTheKFactor(t *testing.T) {
 	t.Parallel()
-	spec := sheetSpec([]float64{30, 20}, []float64{90})
-	spec.KFactor = units.Scalar(0.5)
-	_, report, err := decad.SheetMetal(t.Context(), decad.New(), spec)
+	_, report, err := sheetCommand(decad.New(), []float64{30, 20}, []float64{90}).
+		KFactor(units.Scalar(0.5)).Do(t.Context())
 	require.NoError(t, err)
 	require.InDelta(t, 50+math.Pi/2*(3+0.5*2), report.FlatLength.Base(), 1e-12)
 }
 
 func TestSheetMetalRefusals(t *testing.T) {
 	t.Parallel()
-	good := func() decad.SheetMetalSpec { return sheetSpec([]float64{30, 20}, []float64{90}) }
+	good := func() sheetArgs { return sheetArgsOf([]float64{30, 20}, []float64{90}) }
+	k := func(v units.Value) func(*sheetArgs) { return func(s *sheetArgs) { s.k = &v } }
 	cases := map[string]struct {
-		edit func(*decad.SheetMetalSpec)
+		edit func(*sheetArgs)
 		want error
 	}{
-		"zero thickness":   {func(s *decad.SheetMetalSpec) { s.Thickness = units.Millimeters(0) }, decad.ErrDegenerate},
-		"negative radius":  {func(s *decad.SheetMetalSpec) { s.InnerRadius = units.Millimeters(-1) }, decad.ErrNegativeMagnitude},
-		"width kind":       {func(s *decad.SheetMetalSpec) { s.Width = units.Degrees(5) }, decad.ErrUnitKind},
-		"k factor range":   {func(s *decad.SheetMetalSpec) { s.KFactor = units.Scalar(1.5) }, decad.ErrDegenerate},
-		"k factor kind":    {func(s *decad.SheetMetalSpec) { s.KFactor = units.Millimeters(1) }, decad.ErrUnitKind},
-		"missing bend":     {func(s *decad.SheetMetalSpec) { s.Bends = nil }, decad.ErrDegenerate},
-		"no legs":          {func(s *decad.SheetMetalSpec) { s.Legs, s.Bends = nil, nil }, decad.ErrDegenerate},
-		"zero leg":         {func(s *decad.SheetMetalSpec) { s.Legs[0] = units.Millimeters(0) }, decad.ErrDegenerate},
-		"flat bend":        {func(s *decad.SheetMetalSpec) { s.Bends[0] = units.Degrees(0) }, decad.ErrDegenerate},
-		"half turn":        {func(s *decad.SheetMetalSpec) { s.Bends[0] = units.Degrees(180) }, decad.ErrDegenerate},
-		"bend kind":        {func(s *decad.SheetMetalSpec) { s.Bends[0] = units.Millimeters(1) }, decad.ErrUnitKind},
-		"non-finite angle": {func(s *decad.SheetMetalSpec) { s.Bends[0] = units.Degrees(math.NaN()) }, decad.ErrNotFinite},
+		"zero thickness":   {func(s *sheetArgs) { s.thickness = units.Millimeters(0) }, decad.ErrDegenerate},
+		"negative radius":  {func(s *sheetArgs) { s.innerRadius = units.Millimeters(-1) }, decad.ErrNegativeMagnitude},
+		"width kind":       {func(s *sheetArgs) { s.width = units.Degrees(5) }, decad.ErrUnitKind},
+		"k factor range":   {k(units.Scalar(1.5)), decad.ErrDegenerate},
+		"k factor kind":    {k(units.Millimeters(1)), decad.ErrUnitKind},
+		"missing bend":     {func(s *sheetArgs) { s.bends = nil }, decad.ErrDegenerate},
+		"no legs":          {func(s *sheetArgs) { s.legs, s.bends = nil, nil }, decad.ErrDegenerate},
+		"zero leg":         {func(s *sheetArgs) { s.legs[0] = units.Millimeters(0) }, decad.ErrDegenerate},
+		"flat bend":        {func(s *sheetArgs) { s.bends[0] = units.Degrees(0) }, decad.ErrDegenerate},
+		"half turn":        {func(s *sheetArgs) { s.bends[0] = units.Degrees(180) }, decad.ErrDegenerate},
+		"bend kind":        {func(s *sheetArgs) { s.bends[0] = units.Millimeters(1) }, decad.ErrUnitKind},
+		"non-finite angle": {func(s *sheetArgs) { s.bends[0] = units.Degrees(math.NaN()) }, decad.ErrNotFinite},
 	}
 	for name, tc := range cases {
 		doc := decad.New()
-		spec := good()
-		tc.edit(&spec)
-		_, _, err := decad.SheetMetal(t.Context(), doc, spec)
+		args := good()
+		tc.edit(&args)
+		_, _, err := args.command(doc).Do(t.Context())
 		require.ErrorIs(t, err, tc.want, name)
 		require.Empty(t, doc.Bodies(), "%s builds nothing", name)
 	}
 	// Four right-angle bends of 30 mm legs bring the fifth leg back over the first: the strip closes on itself
 	// and its outline is no simple loop.
 	doc := decad.New()
-	_, _, err := decad.SheetMetal(t.Context(), doc, sheetSpec([]float64{30, 30, 30, 30, 30}, []float64{90, 90, 90, 90}))
+	_, _, err := sheetCommand(doc, []float64{30, 30, 30, 30, 30}, []float64{90, 90, 90, 90}).Do(t.Context())
 	require.Error(t, err)
 	t.Logf("%v", err)
 	require.Empty(t, doc.Bodies())
-	_, _, err = decad.SheetMetal(nil, doc, good()) //nolint:staticcheck // a nil context is the case under test
+	_, _, err = good().command(doc).Do(nil) //nolint:staticcheck // a nil context is the case under test
 	require.ErrorIs(t, err, decad.ErrDegenerate)
-	_, _, err = decad.SheetMetal(t.Context(), nil, good())
+	_, _, err = good().command(nil).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrDegenerate)
 }

@@ -7,12 +7,21 @@ contract is in `agent-docs/api-design.md` §8; this document owns the decisions 
 ## 1. Contract
 
 ```go
-func Hole(ctx context.Context, b *Body, spec HoleSpec) (*Body, error)
+func Hole(b *Body, face FaceSelector, at r3.Vec, diameter units.Value, depth HoleDepth) *HoleCommand
+func HoleShaped(b *Body, face FaceSelector, at r3.Vec, shape HoleShape, depth HoleDepth) *HoleShapedCommand
+
+func (c *HoleCommand) Head(head HoleHead) *HoleCommand
+func (c *HoleCommand) Thread(thread HoleThread) *HoleCommand
+func (c *HoleCommand) Draft(angle units.Value) *HoleCommand
+func (c *HoleCommand) Do(ctx context.Context) (*Body, error)
 ```
 
-`HoleSpec` holds `Face` (a `FaceSelector`), `At` (a world `r3.Vec`), `Diameter`, `Depth` (`ThroughHole` or
-`BlindHole`), an optional `Head` (`Counterbore` or `Countersink`) and an optional `Shape` (`RectangularHole`, §5, `SlotHole`, §6, `PolygonHole`, §10, or `OutlineHole`, §13), an optional `Thread`
-(§8) and an optional `Draft` (§9). `Hole` retires `b` and returns the drilled body.
+`Hole` takes `face` (a `FaceSelector`), `at` (a world `r3.Vec`), `diameter` and `depth` (`ThroughHole` or
+`BlindHole`). `Head` (`Counterbore` or `Countersink`), `Thread` (§8) and `Draft` (§9) are its optional methods.
+`HoleShaped` takes a `shape` (`RectangularHole`, §5, `SlotHole`, §6, `PolygonHole`, §10, or `OutlineHole`, §13) in place
+of the diameter and has no method, since a shaped hole takes no head, thread or draft (command rule M6). The command
+form is `agent-docs/command-api-design.md`. `Do` retires `b` and returns the drilled body, tagged `OperationHole`.
+A method value that is refused names its method as the diagnostic's subject.
 
 | Decision | Rule |
 |---|---|
@@ -53,13 +62,13 @@ face. A countersink cut gives a faceted result whose planar faces are split into
 
 ## 5. Rectangular holes
 
-A non-nil `HoleSpec.Shape` replaces the round bore. `RectangularHole` holds `Width` and `Height` (positive lengths) and
+`HoleShaped` replaces the round bore with its shape. `RectangularHole` holds `Width` and `Height` (positive lengths) and
 `Angle`. The rectangle is centred on `At`, with `Width` along the face frame's U axis before `Angle` turns it
 counter-clockwise about the hole axis.
 
 | Decision | Rule |
 |---|---|
-| R1 | `Diameter` MUST be the zero `units.Value` and `Head` MUST be nil when `Shape` is set. Either one set is `ErrDegenerate`. |
+| R1 | `HoleShaped` takes no diameter and has no `Head` method, so a shaped hole with either cannot be written. A nil shape is `ErrDegenerate`. |
 | R2 | `Width` and `Height` are positive finite lengths and `Angle` is a finite angle. A violation is `ErrDegenerate`, or `ErrUnitKind` for a wrong unit kind. |
 | R3 | Placement (H2, H3), depth (H6, H7) and the axis check (H8) are the round hole's. |
 | R4 | The bore tool is the rectangle sketched on the mouth plane and extruded inward by the bore depth plus `holeplan.MouthMargin`. Its four corners are fixed sketch points joined by lines. |
@@ -100,38 +109,38 @@ hole's section.
 
 ## 8. Tapped holes
 
-`HoleSpec.Thread` taps a round hole in the same commit that drills it.
+`HoleCommand.Thread` taps a round hole in the same commit that drills it.
 
 ```go
-type HoleThread struct {
-    Pitch    units.Value
-    LeftHand bool
-    Length   units.Value
-}
+func NewHoleThread(pitch units.Value) HoleThread
+func (t HoleThread) LeftHand() HoleThread
+func (t HoleThread) Length(length units.Value) HoleThread
 ```
+
+`HoleThread` is a value: `LeftHand` and `Length` return a changed copy, and a second `Length` replaces the first.
 
 | Decision | Rule |
 |---|---|
 | X1 | The hole's `Diameter` is the thread's minor (tap drill) diameter, and the groove is the internal ISO profile of `agent-docs/thread-design.md` T5 about that bore. |
-| X2 | The coil is built as `Thread` builds one, with its frame on the hole axis where the bore proper starts: the face for a plain hole, the floor of a counterbore, the bottom of a countersink's cone (`holeplan.Plan.HeadDepth`). Its V axis runs into the body, and the thread is right-handed unless `LeftHand` is set. |
+| X2 | The coil is built as `Thread` builds one, with its frame on the hole axis where the bore proper starts: the face for a plain hole, the floor of a counterbore, the bottom of a countersink's cone (`holeplan.Plan.HeadDepth`). Its V axis runs into the body, and the thread is right-handed unless `HoleThread.LeftHand` is called. |
 | X3 | The coil is one more tool after the bore and its head. `combineTools` cuts the tools in order, so the thread is cut from the holed body and the whole is one `OperationHole` commit. A failure leaves the plate live and the document unchanged. |
-| X4 | `Length` is measured from where the bore proper starts. The zero `Value` threads the whole bore: a through hole's groove runs out of its far end, and a blind hole's stops at the bottom with the coil's flat end. A positive `Length` no longer than the bore stops the groove there likewise. A longer one is `ErrDegenerate`. |
+| X4 | `Length` is measured from where the bore proper starts. Without a `Length` call the thread runs the whole bore: a through hole's groove runs out of its far end, and a blind hole's stops at the bottom with the coil's flat end. A positive `Length` no longer than the bore stops the groove there likewise. A longer one is `ErrDegenerate`. |
 | X5 | A `Pitch` that is zero is `ErrDegenerate`, a negative one `ErrNegativeMagnitude` and a wrong unit kind `ErrUnitKind`. A pitch too coarse for the bore, so that the groove reaches the axis, is `ErrDegenerate`. |
-| X6 | A thread needs a round hole: a `Shape` with a thread is `ErrDegenerate`. A hole on a cylindrical face with a thread follows §12. |
+| X6 | A thread needs a round hole, and `HoleShaped` has no `Thread` method. A hole on a cylindrical face with a thread follows §12. |
 | X7 | The groove under a counterbore's floor lies inside the counterbore's radius, so the head void holds the groove's start: a counterbore narrower than the thread's major diameter would be cut into by the groove and is the caller's to avoid. |
 
 ## 9. Drafted holes
 
-`HoleSpec.Draft` leans the round bore's wall. It passes `Taper` to the `Extrude` that builds the bore tool, as
+`HoleCommand.Draft` leans the round bore's wall. It passes `Taper` to the `Extrude` that builds the bore tool, as
 `agent-docs/modify-design.md` Part D §2 states it.
 
 | Decision | Rule |
 |---|---|
-| Z1 | `Diameter` is the bore's diameter at the face. A positive `Draft` makes the bore narrower toward its bottom, with the radius `Diameter/2 − t·tan(Draft)` at the depth `t`, and a negative one wider. The zero `Value` is a straight bore. |
+| Z1 | `Diameter` is the bore's diameter at the face. A positive `Draft` makes the bore narrower toward its bottom, with the radius `Diameter/2 − t·tan(Draft)` at the depth `t`, and a negative one wider. A zero angle, or no `Draft` call, is a straight bore. |
 | Z2 | The tool starts `Margin` outside the face (H7) and the taper runs from there, so its circle is wider than the bore by `Margin·tan(Draft)`: the wall is then the stated diameter at the face (`holeplan.Plan.BoreDraft`, `holeCylinder`). |
 | Z3 | A counterbore's or countersink's own tool is not drafted. The bore proper below a counterbore leans from the face, so its radius at the counterbore's floor is `Diameter/2 − HeadDepth·tan(Draft)`. |
 | Z4 | `Draft` is read as a signed angle. A wrong unit kind is `ErrUnitKind`, a magnitude at or past a right angle is `ErrDegenerate`, and a draft that closes the bore before its bottom is the drafted `Extrude`'s own refusal, `ErrUnsupported`. |
-| Z5 | A shaped hole with a draft, a thread with a draft (a tapped hole is straight) and a draft in a hole on a cylindrical face are `ErrDegenerate`, `ErrDegenerate` and `ErrUnsupported`. |
+| Z5 | A thread with a draft (a tapped hole is straight) and a draft in a hole on a cylindrical face are `ErrDegenerate` and `ErrUnsupported`. `HoleShaped` has no `Draft` method. |
 | Z6 | `BossBore.Draft` is the same for a boss's pilot (`agent-docs/boss-design.md` §5). |
 
 ## 10. Polygonal holes
@@ -161,7 +170,7 @@ cylinder at `At`, the plane Y2 reads a blind `Depth` from.
 
 ## 12. A thread in a hole on a cylindrical face
 
-`HoleSpec.Thread` taps a hole in a cylindrical face (§7) as it taps one in a plane (§8).
+`HoleCommand.Thread` taps a hole in a cylindrical face (§7) as it taps one in a plane (§8).
 
 | Decision | Rule |
 |---|---|
@@ -171,7 +180,7 @@ cylinder at `At`, the plane Y2 reads a blind `Depth` from.
 
 ## 13. Outline holes
 
-`HoleSpec.Shape` may be an `OutlineHole{Corners, Angle}`: an arbitrary simple polygon, such as a keyed or L-shaped bore.
+The shape of `HoleShaped` may be an `OutlineHole{Corners, Angle}`: an arbitrary simple polygon, such as a keyed or L-shaped bore.
 
 | Decision | Rule |
 |---|---|

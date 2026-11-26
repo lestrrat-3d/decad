@@ -128,9 +128,9 @@ func TestCheckObliqueWallUnread(t *testing.T) {
 	twin := check(t, disc, doc)
 	require.Equal(t, parts.Confirmed, twin.Status, twin.Reason)
 
-	boss, err := decad.Boss(t.Context(), disc, decad.BossSpec{
-		Face: decad.Faces(decad.FaceCreatedBy(decad.CapEnd(disc))).Exactly(1), At: r3.Vec{Z: 5},
-		Diameter: units.Millimeters(14), Height: units.Millimeters(1), RootFillet: units.Millimeters(0.5)})
+	boss, err := decad.Boss(disc, decad.Faces(decad.FaceCreatedBy(decad.CapEnd(disc))).Exactly(1), r3.Vec{Z: 5}, units.Millimeters(14), units.Millimeters(1)).
+		RootFillet(units.Millimeters(0.5)).
+		Do(t.Context())
 	require.NoError(t, err)
 	got := check(t, boss, doc)
 	require.Equal(t, parts.Undecided, got.Status, got.Reason)

@@ -84,8 +84,7 @@ func spokedHubDisc(t *testing.T) (*decad.Document, *decad.Body) {
 func bossOnCap(t *testing.T, body *decad.Body, diameter float64) (*decad.Body, error) {
 	t.Helper()
 	face := decad.Faces(decad.FaceCreatedBy(decad.CapEnd(body))).Exactly(1)
-	return decad.Boss(t.Context(), body, decad.BossSpec{Face: face, At: r3.Vec{Z: 5},
-		Diameter: units.Millimeters(diameter), Height: units.Millimeters(1)})
+	return decad.Boss(body, face, r3.Vec{Z: 5}, units.Millimeters(diameter), units.Millimeters(1)).Do(t.Context())
 }
 
 // volumeAndBound reads a body's volume and its error bound in mm³.
@@ -278,8 +277,7 @@ func TestUnionHoledSharedSpanKidneySlot(t *testing.T) {
 	plateVolume, plateBound := volumeAndBound(t, plate)
 
 	face := decad.Faces(decad.FaceCreatedBy(decad.CapEnd(plate))).Exactly(1)
-	out, err := decad.Boss(t.Context(), plate, decad.BossSpec{Face: face, At: r3.Vec{X: cx, Y: cy, Z: 4},
-		Diameter: units.Millimeters(10), Height: units.Millimeters(2)})
+	out, err := decad.Boss(plate, face, r3.Vec{X: cx, Y: cy, Z: 4}, units.Millimeters(10), units.Millimeters(2)).Do(t.Context())
 	require.NoError(t, err)
 	requireAnalytic(t, out)
 	v, bound := volumeAndBound(t, out)
@@ -477,8 +475,7 @@ func TestUnionHoledSharedSpanScaleRefusesCharged(t *testing.T) {
 	require.NotEmpty(t, top.Origins())
 	t.Logf("top face origins %v", top.Origins())
 	selector := decad.Faces(decad.FaceCreatedBy(top.Origins()[0])).Exactly(1)
-	_, err = decad.Boss(t.Context(), out, decad.BossSpec{Face: selector, At: r3.Vec{Z: 6},
-		Diameter: units.Millimeters(4), Height: units.Millimeters(1)})
+	_, err = decad.Boss(out, selector, r3.Vec{Z: 6}, units.Millimeters(4), units.Millimeters(1)).Do(t.Context())
 	require.NoError(t, err)
 }
 

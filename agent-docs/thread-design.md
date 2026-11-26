@@ -7,30 +7,31 @@ wrapper and no geometry kernel. The groove and helix-sampling arithmetic is plai
 ## 1. Contract
 
 ```go
-type ThreadSpec struct {
-    Face     FaceSelector
-    Pitch    units.Value
-    LeftHand bool
-    Length   units.Value
-    Form     ThreadForm
-    LeadIn   units.Value
-    LeadInAngle units.Value
-}
+func Thread(b *Body, face FaceSelector, pitch units.Value) *ThreadCommand
 
-type ThreadForm struct {
-    Angle, Depth, Flat    units.Value
-    FlankLead, FlankTrail units.Value
-}
+func (c *ThreadCommand) LeftHand() *ThreadCommand
+func (c *ThreadCommand) Length(length units.Value) *ThreadCommand
+func (c *ThreadCommand) Form(form ThreadForm) *ThreadCommand
+func (c *ThreadCommand) LeadIn(distance units.Value) *ThreadCommand
+func (c *ThreadCommand) LeadInAngle(distance, angle units.Value) *ThreadCommand
+func (c *ThreadCommand) Do(ctx context.Context) (*Body, error)
 
-func Thread(ctx context.Context, b *Body, spec ThreadSpec) (*Body, error)
+func TrapezoidThreadForm(angle, depth, flat units.Value) ThreadForm
+func ButtressThreadForm(lead, trail, depth, flat units.Value) ThreadForm
 ```
+
+`Thread` takes the live solid, the face and the pitch. The methods are the optional parts, and a second call to one
+replaces the first. `LeadIn` and `LeadInAngle` write one lead-in slot. The zero `ThreadForm` is the ISO profile, and
+the two constructors make the others. A method value that is refused names its method (`Length`, `Form`, `LeadIn` or
+`LeadInAngle`) as the diagnostic's subject. `Do` is tagged `OperationThread`. The command form is
+`agent-docs/command-api-design.md`.
 
 | Decision | Rule |
 |---|---|
 | T1 | `Face` resolves to exactly one face of a live solid `b`, and that face's surface is a `Cylinder`. A selector that matches other than one face is `ErrDegenerate`, and a face of another surface is `ErrUnsupported`. |
 | T2 | A face whose outward normal points away from the axis is external: a rod, whose radius is the thread's major radius. A face whose outward normal points toward the axis is internal: a bore, whose radius is the thread's minor (drilled) radius. |
 | T3 | `Pitch` is a positive finite length, the axial advance per turn. Zero is `ErrDegenerate`, a negative value is `ErrNegativeMagnitude` and a wrong unit kind is `ErrUnitKind`. |
-| T4 | The thread is right-handed unless `LeftHand` is set, which calls `CoilCommand.LeftHand` (§5). |
+| T4 | The thread is right-handed unless `LeftHand` is called, which calls `CoilCommand.LeftHand` (§5). |
 | T5 | The groove profile is the ISO 68-1 basic profile restated as a four-corner polygon: flanks 30 degrees off radial, an external root flat of `P/8` at depth `0.61343·P` below the major radius, and an internal root flat of `P/4` at depth `0.54127·P` beyond the minor radius. Each groove's mouth opens `0.05·P` past the surface so the cut crosses it transversally. |
 | T6 | A groove too wide for the pitch (its axial width at or above `0.95·P`), or one whose root reaches the axis, is `ErrDegenerate`. |
 | T7 | The coil starts with its first groove wholly before the face's start plane and carries past the face's far end, so the groove runs out of both ends and every point of the face's length is cut at every angle. |
@@ -69,7 +70,7 @@ exactly.
 | Decision | Rule |
 |---|---|
 | H1 | `LeftHand` cuts the same groove with the coil turning the other way. Both hands remove the same volume from a whole rod, and a quarter turn on the groove is a quarter pitch lower instead of higher. |
-| H2 | `Length` is the axial length to thread, measured from the end of the face with the least position along the axis (§2). The zero `Value` threads the whole face. |
+| H2 | `Length` is the axial length to thread, measured from the end of the face with the least position along the axis (§2). Without a `Length` call the thread runs the whole face. |
 | H3 | A `Length` that is not a positive length is `ErrDegenerate`, `ErrNegativeMagnitude` or `ErrUnitKind`. One longer than the face is `ErrDegenerate`. |
 | H4 | With a `Length` the coil stops where its last groove's far flank meets the length, so the groove never reaches past it and the thread ends with the coil's flat end. The first groove still starts wholly before the start plane (T7). |
 | H5 | Past the threaded length the face is whole at every angle, and `threadplan.Compute` states the turns with `partial` set. |
@@ -79,12 +80,12 @@ The volume a partial thread removes has no closed form in one line: the tests in
 
 ## 6. Trapezoidal forms
 
-`ThreadSpec.Form` replaces the ISO basic profile with a symmetric trapezoidal groove, for Acme, trapezoidal and
+`ThreadCommand.Form` replaces the ISO basic profile with a symmetric trapezoidal groove, for Acme, trapezoidal and
 Whitworth-style threads. `threadplan.ComputeForm` takes the form, and `Compute` is `ComputeForm` with the zero form.
 
 | Decision | Rule |
 |---|---|
-| F1 | The zero `ThreadForm` is the ISO profile of T5. A form that sets one or two of `Angle`, `Depth` and `Flat` is `ErrDegenerate`. |
+| F1 | The zero `ThreadForm` is the ISO profile of T5. A form built with a zero `units.Value` for its angle, depth or flat is `ErrDegenerate`. |
 | F2 | `Angle` is the included angle between the flanks, above zero and at most 120 degrees. Each flank widens the groove by `tan(Angle/2)` per unit of depth. A wrong unit kind is `ErrUnitKind`, a negative value `ErrNegativeMagnitude`, a non-finite one `ErrNotFinite`, and zero or past 120 degrees `ErrDegenerate`. |
 | F3 | `Depth` is the root's distance from the face, below the major radius for a rod and beyond the minor radius for a bore, and `Flat` is the root's width. Both are positive lengths, read as `Pitch` is. |
 | F4 | The groove is the four-corner polygon of T5 with these three numbers: root at `Depth`, mouth `0.05·P` past the face, and the width at the mouth `Flat + 2·tan(Angle/2)·(Depth + 0.05·P)`. T6 holds for it: a groove whose width reaches `0.95·P` or whose root reaches the axis is `ErrDegenerate`. |
@@ -93,12 +94,12 @@ Whitworth-style threads. `threadplan.ComputeForm` takes the form, and `Compute` 
 
 ## 7. A lead-in chamfer
 
-`ThreadSpec.LeadIn` bevels the threaded face's ends before the groove is cut, so a screw or a nut starts without a sharp
+`ThreadCommand.LeadIn` bevels the threaded face's ends before the groove is cut, so a screw or a nut starts without a sharp
 rim.
 
 | Decision | Rule |
 |---|---|
-| L1 | The zero `Value` cuts no lead-in. A positive length is the distance of a 45 degree `Chamfer` on each convex circular edge of the threaded face: the rims at the ends of a rod, and the mouths of a bore. A negative value is `ErrNegativeMagnitude`, a wrong unit kind `ErrUnitKind`, and a face with no convex circular edge `ErrDegenerate`. |
+| L1 | Without a `LeadIn` call no lead-in is cut. A positive length is the distance of a 45 degree `Chamfer` on each convex circular edge of the threaded face: the rims at the ends of a rod, and the mouths of a bore. A negative value is `ErrNegativeMagnitude`, a wrong unit kind `ErrUnitKind`, and a face with no convex circular edge `ErrDegenerate`. |
 | L2 | The chamfer comes first and the groove is cut from the chamfered body. The groove's frame and plan are those of the unchamfered face, so the thread is the same helix whatever the lead-in. A shoulder's concave edge is not chamfered. |
 | L3 | The chamfer and thread run on a copy of `b`. The successful thread commit consumes `b` and the chamfered copy together. A refusal leaves `b` live. The copy leaves history entries. |
 | L4 | The history holds `OperationChamfer` then `OperationThread`. |
@@ -106,12 +107,12 @@ rim.
 
 ## 8. Asymmetric grooves
 
-`ThreadForm.FlankLead` and `FlankTrail` set the two flanks of the groove apart, for a buttress thread: a flank steep to the load and a shallow
-one behind it. They replace `Angle`.
+`ButtressThreadForm` sets the two flanks of the groove apart, for a buttress thread: a flank steep to the load and a shallow
+one behind it. Its `lead` and `trail` replace the angle.
 
 | Decision | Rule |
 |---|---|
-| B1 | Each flank is an angle above zero and under 90 degrees, its lean from the radial direction: `FlankLead` for the flank toward the start of the face (its least position along the axis) and `FlankTrail` for the one toward its far end. Both are set and `Angle` is not, or `ThreadForm` is symmetric as §6 says. Any other mix is `ErrDegenerate`. `Depth` and `Flat` are required as in F1. |
+| B1 | Each flank is an angle above zero and under 90 degrees, its lean from the radial direction: `FlankLead` for the flank toward the start of the face (its least position along the axis) and `FlankTrail` for the one toward its far end. `ButtressThreadForm` sets both and no angle, and `TrapezoidThreadForm` sets an angle and no flanks, so no other mix can be written. `Depth` and `Flat` are required as in F1. |
 | B2 | The groove polygon is T5's with the mouth reaching `Flat/2 + h·tan(FlankLead)` from the middle of the root toward the start and `Flat/2 + h·tan(FlankTrail)` toward the far end, `h` the root's distance from the mouth. `threadplan.Form.BackSlope` is the far flank's slope, zero meaning the start flank's. |
 | B3 | The first groove lies wholly before the start plane, so its middle sits the far reach and the margin before it, and the coil carries on until the start reach clears the far end: `(length + lead + trail + 2·margin)/pitch` turns. A groove whose two reaches together reach `0.95·P` is `ErrDegenerate`. |
 | B4 | The volume of a groove that runs out of both ends depends on the sum of the two slopes alone, so it is F5's with `tan` of the mean: the tests compute that independently, and the polygon's own corners are pinned in `threadplan`. Which flank is which is read from the polygon, not from the volume. |
@@ -133,11 +134,11 @@ the 10 mm diameter instead of stating them.
 
 ## 10. A lead-in at another angle
 
-`ThreadSpec.LeadInAngle` sets the lead-in bevel's slope, for a start steeper or shallower than 45 degrees.
+`ThreadCommand.LeadInAngle` sets the lead-in bevel's slope, for a start steeper or shallower than 45 degrees.
 
 | Decision | Rule |
 |---|---|
-| A1 | `LeadInAngle` is an angle strictly between 0 and 90 degrees and needs `LeadIn`: without a distance it is `ErrDegenerate`, as are zero as an angle, 90 degrees or more, and a negative angle `ErrNegativeMagnitude`, a wrong unit kind `ErrUnitKind`. The zero `Value` is 45 degrees and the chamfer of §7. |
+| A1 | `LeadInAngle` is an angle strictly between 0 and 90 degrees and takes the lead-in distance as its first argument, so it needs no `LeadIn` call: zero as an angle is `ErrDegenerate`, as are 90 degrees or more, and a negative angle `ErrNegativeMagnitude`, a wrong unit kind `ErrUnitKind`. A `LeadIn` call alone is 45 degrees and the chamfer of §7. |
 | A2 | The bevel is `ChamferAngle` on the same edges as L1, with `LeadIn` the distance along the end face, the end face the reference and `LeadInAngle` the angle between bevel and end face, so the bevel runs `LeadIn·tan(angle)` along the threaded face. Its receivers, routes and refusals are those of `ChamferAngle`. |
 | A3 | Order, copying and history are those of L2 to L4: `OperationChamfer` then `OperationThread`. |
 | A4 | The volume is L5's with the end face receding `tan(angle)·(ρ − (R − d))` at radius `ρ` in place of `ρ − (R − d)`, and the tests compute it for 30 and 60 degrees independently, and require 45 degrees to equal the default. |

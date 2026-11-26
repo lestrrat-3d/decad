@@ -110,7 +110,7 @@ command's unexported implementation owns steps 4–6.
 |---|---|
 | A1 | **Constructors and methods only store copied values.** They never read document state, body liveness, a profile's staleness, `ctx`, or another argument. |
 | A2 | A slice argument is copied with `slices.Clone` at the call. A variadic slot is copied too, so a caller's later write to its slice changes nothing. |
-| A3 | A selector query is deep-copied at the call, branch by branch, as `ChamferCommand.Asymmetric` copies its reference (`modify_options.go`, `copyFaceQuery` in `selector.go`): `Or`, `Exactly` and `AtLeast` change a query in place (`selector.go`). A selector that is not a decad query is stored as given; the selector gate refuses it at `Do` without calling it. A sealed argument that holds a selector is copied at the call with that selector deep-copied: `NeutralFace.Face` inside the `NeutralPlane` of `Draft` (a `NeutralFace` value or a non-nil `*NeutralFace`), and the same for each later argument that holds one (`ToFace` and the angular stops inside an extent, `MirrorFace`, a spec struct). The pattern is one copy helper per sealed family, named `copy<Type>` and called by the constructor: `copyExtent` and `copyAngularExtent` (`extent.go`) and `copyAxis` (`revolve.go`) copy the selectors in an extent, an angular extent and an `EdgeAxis`. `copyMirrorPlane` (`mirror.go`) is the helper for a `MirrorFace` and a pointer to a `MirrorFrame`, and stack PR 6 adds one for each spec struct that holds a selector (`HoleSpec.Face` and the stops). |
+| A3 | A selector query is deep-copied at the call, branch by branch, as `ChamferCommand.Asymmetric` copies its reference (`modify_options.go`, `copyFaceQuery` in `selector.go`): `Or`, `Exactly` and `AtLeast` change a query in place (`selector.go`). A selector that is not a decad query is stored as given; the selector gate refuses it at `Do` without calling it. A sealed argument that holds a selector is copied at the call with that selector deep-copied: `NeutralFace.Face` inside the `NeutralPlane` of `Draft` (a `NeutralFace` value or a non-nil `*NeutralFace`), and the same for each later argument that holds one (`ToFace` and the angular stops inside an extent, `MirrorFace`, a spec struct). The pattern is one copy helper per sealed family, named `copy<Type>` and called by the constructor: `copyExtent` and `copyAngularExtent` (`extent.go`) and `copyAxis` (`revolve.go`) copy the selectors in an extent, an angular extent and an `EdgeAxis`. `copyMirrorPlane` (`mirror.go`) is the helper for a `MirrorFace` and a pointer to a `MirrorFrame`. A spec composite copies its face selector with `copyFaceSelector` and an outline hole's corner slice with `copyHoleShape` (`hole.go`); a pointer to a depth, head or shape variant is refused at `Do`, so it needs no copy. |
 | A4 | Bodies, sketches, profiles, chains, paths and meshes are stored as pointers. Liveness, foreign-document, stale-profile and selector-resolution checks run at `Do` against the live document (`agent-docs/modify-design.md` §4 order). A profile is never snapshotted at build time. |
 | A5 | **A constructor or method records a fault only when both hold.** Its own argument shows the fault without reading anything else (A1), and the operation's documented gate order reports that fault ahead of every check that reads document state, liveness, `ctx.Err()` or another argument. Example: `Union` with fewer than two bodies is recorded, because `Union` refuses the count right after the nil-ctx check today. |
 | A6 | Every other invalid value is stored and refused by the operation's own gate at `Do`, in today's position. Example: a negative `Fillet` radius is stored, and S15 refuses it after the S17 liveness gate. |
@@ -174,8 +174,8 @@ serves Fillet and Chamfer, and `MatchingFaces` serves Cut and Intersect.
 - **There is no shared `Command` interface.** Nothing needs one, and one would force a wrapper type per result.
 - **Every error from `Do` except cancellation is tagged with the command's own `OperationKind`.** This covers the
   nil-ctx error. `PathPattern`
-  tags `OperationCopy` and `Arrange` tags `OperationTransform`, since `OperationKind` gains no constant in this
-  design.
+  tags `OperationCopy` and `Arrange` tags `OperationTransform`, since they gain no `OperationKind` constant.
+  `Infill` and `SheetMetal` have none to reuse, so they add `OperationInfill` and `OperationSheetMetal`.
 - **A recorded fault names its subject (A8) in `OperationSubject.Name`.** A gate that refuses a stored method
   value names the method by returning `subjectError(kind, method, err)`; the tag `runCommand` adds keeps it.
 - **Subject names follow the constructor's parameter names.** `Union(bodies ...*Body)` reports operand `i` as
@@ -206,7 +206,7 @@ them (api-design §2). `PathPattern` and `Arrange` publish several results throu
 `transform` implementations, so each takes a `Document` snapshot (`document.go`) before its first publication and restores
 it when the call fails or is canceled. The restore returns the live set in its order, the producer counter, the
 operation history with its producer and consumer indexes, and the container placement. No command is an exception.
-A reader that runs concurrently with such a call (already forbidden for mutators, §8) can observe copies and history
+`Infill` takes the same snapshot, because its lattice body and the copies its skin makes are published before its result. A reader that runs concurrently with such a call (already forbidden for mutators, §8) can observe copies and history
 entries that the restore later withdraws, and the next call reuses their producer numbers.
 
 ## 10. A forgotten `Do`
@@ -254,7 +254,7 @@ entries that the restore later withdraws, and the next call reuses their produce
   a caller inside the root that applies no outer tag. Selection diagnostics (`OperationSelectEdges`,
   `OperationSelectFaces`) keep their own kinds. This is the accepted behaviour for composites: `Emboss` reports its
   nested `Union`, `Cut` and rim-fillet refusals as `OperationEmboss`, and `Infill` reports its nested `Union`,
-  `Intersect` and `Shell` refusals as `OperationInfill` once stack PR 6 converts it (§12).
+  `Intersect` and `Shell` refusals as `OperationInfill` (§12).
 - **The rewrite tool never rewrites a root production file.** It reports a bare operation call in a non-test root
   file, and the author moves it onto the implementation by hand.
 - The implementation returns untagged errors. Only the public `Do` applies `operationError`, once.
@@ -266,10 +266,11 @@ entries that the restore later withdraws, and the next call reuses their produce
   name of the constructor argument that value comes from, or leaves the subject empty, so a diagnostic never names
   a method the composite's own command does not have (`ChamferAngle` names `d`, not `Asymmetric`).
 - **The implementation may also tag a refused constructor argument.** `foldPathPattern` refuses a `stations`
-  value at its gate and tags the error with `OperationCopy` and the subject `stations`. The subject must travel in the
-  settings the implementation takes, as `pathFollow.subject` does, so that a composite that calls the
-  implementation with a value it computed can clear it or set the name of its own argument, by the rule above.
-  A spec composite whose fields are refused under A6 needs this.
+  value at its gate and tags the error with `OperationCopy` and the subject in `pathFollow.stationsSubject`, which the
+  command sets to `stations`. The subject travels in the settings the implementation takes, as `pathFollow.subject`
+  does, so that a composite that calls the implementation with a value it computed can clear it or set the name of
+  its own argument, by the rule above. `subjectFault` (`hole.go`) applies it: an empty subject leaves the error
+  untagged.
 - **A stored method value's fault is named in one of two ways.** Settings that the implementation takes carry the
   subject next to the value and its error (`extrudeSettings.taperSubject`), or the folding code returns a typed
   error that carries the method name and `Do` turns it into the subject (`featureoption.SweepFaultError`, which
@@ -287,7 +288,7 @@ name its methods and special rules.
 | Modify ops | `Fillet`, `Chamfer`, `FilletChord`, `ChamferAngle`, `Shell`, `ShellClosed`, `Draft`, `Offset`, `Thicken`, `MoveFace`, `ConeFromFace` |
 | Sketch-fed features | `Extrude`, `Revolve`, `Sweep`, `Coil`, `Loft`, `LoftChain`, `LoftFromPoint`, `LoftSections`, `LoftFaces`, `LoftFacesToCone`, `PatchProfile`, `Emboss`, `WebPath`, `CutExtrude`, `CutRevolve` |
 | Placement and patterns | `Transform`, `Copy`, `Mirrored`, `MirroredJoin`, `MirroredCopy`, `ScaledAt`, `QuarterTurn`, `Stretch`, `PatternCopies`, `Patterned`, `PathPattern`, `Arrange` |
-| Spec composites | `Hole`, `Boss`, `Thread`, `Infill`, `SheetMetal` |
+| Spec composites | `Hole`, `HoleShaped`, `Boss`, `BossShaped`, `Thread`, `Infill`, `SheetMetal` |
 | Surface, mesh-to-solid and retirement | `PatchEdges`, `Stitch(bodies...)`, `Unstitch`, `Trim`, `Extend`, `Split`, `SolidFromMesh`, `Remove` |
 
 - Booleans: `Union.RefineTo` is the refined union (M8). Cut and Intersect each declare `MatchingFaces` (§6).
@@ -317,11 +318,24 @@ name its methods and special rules.
   option decode did: before the source's liveness gate, after the nil-ctx, recorded-fault and `stations` refusals.
   `PatternCopies` and `Patterned` newly tag their errors with their own kind. `Stretch` and `QuarterTurn` return
   `ctx.Err()` itself when a cancel lands inside the mesh-to-solid conversion (§3).
-- Spec composites: `Infill` has no outer tag today, so the stack PR that converts it re-tags its nested `Union`,
-  `Intersect` and `Shell` diagnostics as `OperationInfill` (§11). Each spec struct splits. Required fields become constructor arguments, and each
-  zero-means-default field becomes a method whose absence means the default: `SheetMetalSpec.KFactor` zero
-  meaning 0.44 becomes a `KFactor` method. Sum-type specs stay arguments. The spec-composite PR names the split
-  of each struct in §12.
+- Spec composites. Each spec struct splits: required fields are constructor arguments, and an optional or
+  zero-means-default field is a method whose absence means the default. A spec field that is itself a struct of
+  required and optional parts is a value built by a constructor with value methods, since its zero value would mean
+  "unset". `Hole(b, face, at, diameter, depth)` has `Head`, `Thread` and `Draft`. `HoleShaped(b, face, at, shape, depth)`
+  has no method: a shaped hole takes no diameter, head, thread or draft (M6, M11). `HoleThread` is
+  `NewHoleThread(pitch)` with `LeftHand` and `Length`. `Boss(b, face, at, diameter, height)` has `Bore`, `Draft`,
+  `RootFillet`, `Ribs` and `Tilt(angle, direction)`, and `BossShaped(b, face, at, shape, height)` has `Bore`, `Draft`
+  and `Ribs`. `BossBore` is `NewBossBore(diameter, depth)` with `Head`, `Thread` and `Draft`, and `BossRibs` is
+  `NewBossRibs(count, thickness, length, height)` with `Angle`. `Thread(b, face, pitch)` has `LeftHand`, `Length`,
+  `Form` and `LeadIn` or `LeadInAngle(distance, angle)`, which write one slot (M5); `ThreadForm` is the zero ISO form,
+  `TrapezoidThreadForm(angle, depth, flat)` or `ButtressThreadForm(lead, trail, depth, flat)`.
+  `Infill(b, kind, cell, level)` has `Resolution` and `Skin`, and `SheetMetal(d, thickness, innerRadius, width, legs,
+  bends)` has `KFactor` and `Do` returns `(*Body, SheetMetalReport, error)`. A constructor records a nil body (`body`)
+  or a nil document (`document`). Every other value is refused at its old gate, and a refused method value names its
+  method. A method called with an explicit zero value is validated as that value, so `KFactor(units.Value{})` is
+  `ErrDegenerate` and `Draft(units.Degrees(0))` is a straight wall. `Infill` and `SheetMetal` add `OperationInfill`
+  and `OperationSheetMetal`, and `Infill` re-tags its nested `Union`, `Intersect` and `Shell` diagnostics as
+  `OperationInfill` (§11). A failed or canceled `Infill` withdraws its lattice body and copies (§9).
 - Surface, mesh-to-solid and retirement: no methods. `Remove(b).Do(ctx)` returns `error`.
 - `PatternSpec` and every `Extent`, `AngularExtent`, `Axis` and `MirrorPlane` stay sealed constructor arguments.
 
