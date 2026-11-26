@@ -102,9 +102,8 @@ APIs are design-only.**
 - **NEVER add a `go.mod` module without recording the decision in
   `agent-docs/modules.md`.**
 - **Tooling lives in its own nested module.** `_gallery/` renders the README
-  images and landing clip, `_shardgen/` packs the race shards, `_cmdrewrite/`
-  rewrites call sites to the command form, and `_proofs/` holds the Lean
-  proofs and their trace checker. All carry
+  images and landing clip, `_shardgen/` packs the race shards, and `_proofs/`
+  holds the Lean proofs and their trace checker. All carry
   their own `go.mod` and an `_` prefix, so the root module, its linter and
   `go list ./...` never see them. A generator NEVER joins the library's module.
 - **Correctness must be observable.** Every capability ships with a test

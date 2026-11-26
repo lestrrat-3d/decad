@@ -10,8 +10,8 @@ result, err := cmd.Do(ctx)    // runs the operation once
 ```
 
 This document owns the command form: the type shape, the run order of `Do`, argument copying and recording,
-method rules, error tags, concurrency, the lint that catches a forgotten `Do`, the family verdicts and the
-migration stack. `agent-docs/api-design.md` §6.3 owns which calls are operations. Each operation's companion
+method rules, error tags, concurrency, the lint that catches a forgotten `Do`, the family verdicts and what
+a new command carries. `agent-docs/api-design.md` §6.3 owns which calls are operations. Each operation's companion
 design owns its gate order, refusals and build; a command never changes them.
 
 Navigation only, the sections own the rules:
@@ -28,7 +28,7 @@ Navigation only, the sections own the rules:
 | Concurrency, consumption, `Clone` | §8 |
 | How is a forgotten `Do` caught? | §10 |
 | How do root composites call operations? | §11 |
-| Which family converts in which PR, and what does a PR carry? | §12–§14 |
+| What does each family hold, and what does a new command carry? | §12, §13 |
 
 ## 1. Scope
 
@@ -66,13 +66,13 @@ func (c *UnionCommand) Do(ctx context.Context) (*Body, error)
 |---|---|
 | N1 | The constructor keeps the operation's name: `Union`, `Fillet`, `Extrude`. |
 | N2 | The command type is `<Op>Command`: `UnionCommand`, `FilletCommand`. A type cannot share the function's name in one package, `Operation` is the history record (`operation_history.go`), and `Op` is too short to read. |
-| N3 | The constructor takes every mandatory input in today's order, without `ctx` and without options. Every operand is a constructor argument, never a method, so the bodies a call consumes stay visible in one place (api-design invariant #4). |
+| N3 | The constructor takes every mandatory input in the operation's documented order, without `ctx` and without options. Every operand is a constructor argument, never a method, so the bodies a call consumes stay visible in one place (api-design invariant #4). |
 | N4 | A variadic operand slot is the constructor's last parameter: `Union(bodies ...*Body)`, `Stitch(bodies ...*Body)`, `LoftSections(d, sections ...LoftSection)`. |
 | N5 | The constructor returns `*<Op>Command`, never an error. |
 | N6 | Each optional input is one exported method named for the input, without a `With` prefix: `RefineTo`, `MatchingFaces`, `TangentChain`, `Taper`, `SurfaceResult`. |
 | N7 | `Do(ctx context.Context)` is the only method that reads `ctx`, the document or any body. |
 | N8 | A generic constructor keeps its type parameter and returns a non-generic command: `func Extrude[S Section](d *Document, s *sketch.Sketch, sec S, e Extent) *ExtrudeCommand`. The type argument changes no method and no result, so a generic command type would only make callers spell `ExtrudeCommand[*sketch.Profile]`. |
-| N9 | Every command embeds `opcommand.State` as an unexported field and its `Do` calls `runCommand` (§3, §15). |
+| N9 | Every command embeds `opcommand.State` as an unexported field and its `Do` calls `runCommand` (§3, §14). |
 
 ## 3. Do — the run order
 
@@ -86,7 +86,7 @@ command's unexported implementation owns steps 4–6.
 3. **Recorded fault.** The first fault a constructor or method recorded (§4) is returned.
 4. **Gates.** The operation's documented gate order runs unchanged, including every place it reads `ctx.Err()`
    and every refusal table it implements (e.g. `agent-docs/modify-design.md` Table S). A stored method value is
-   validated at the gate where today's option decode validated it.
+   validated at the gate that validates it.
 5. **Build.**
 6. **Commit.** The result commits atomically (§9).
 
@@ -99,7 +99,7 @@ command's unexported implementation owns steps 4–6.
   inside the call, so mapping its error to `ErrUnsupported` with `%s` would hide `context.Canceled`:
   `if cerr := ctx.Err(); cerr != nil { return nil, cerr }` comes before the mapping (`move_face.go`). A
   pre-canceled `ctx` stops at the first poll and never reaches such a wrapper, so a test of cancellation by
-  identity cancels in the middle of the build (§14). The mesh-to-solid wrappers (`Offset`, `MoveFace`, the
+  identity cancels in the middle of the build (§13). The mesh-to-solid wrappers (`Offset`, `MoveFace`, the
   orthogonal shell, `Stretch`, `QuarterTurn`) guard the call to `solidFromMeshBody` this way, and any later
   composite that maps that call's error adds the same guard first.
 - **Every other error carries the command's `OperationKind`** (§7).
@@ -112,9 +112,9 @@ command's unexported implementation owns steps 4–6.
 | A2 | A slice argument is copied with `slices.Clone` at the call. A variadic slot is copied too, so a caller's later write to its slice changes nothing. |
 | A3 | A selector query is deep-copied at the call, branch by branch, as `ChamferCommand.Asymmetric` copies its reference (`modify_options.go`, `copyFaceQuery` in `selector.go`): `Or`, `Exactly` and `AtLeast` change a query in place (`selector.go`). A selector that is not a decad query is stored as given; the selector gate refuses it at `Do` without calling it. A sealed argument that holds a selector is copied at the call with that selector deep-copied: `NeutralFace.Face` inside the `NeutralPlane` of `Draft` (a `NeutralFace` value or a non-nil `*NeutralFace`), and the same for each later argument that holds one (`ToFace` and the angular stops inside an extent, `MirrorFace`, a spec struct). The pattern is one copy helper per sealed family, named `copy<Type>` and called by the constructor: `copyExtent` and `copyAngularExtent` (`extent.go`) and `copyAxis` (`revolve.go`) copy the selectors in an extent, an angular extent and an `EdgeAxis`. `copyMirrorPlane` (`mirror.go`) is the helper for a `MirrorFace` and a pointer to a `MirrorFrame`. A spec composite copies its face selector with `copyFaceSelector` and an outline hole's corner slice with `copyHoleShape` (`hole.go`); a pointer to a depth, head or shape variant is refused at `Do`, so it needs no copy. |
 | A4 | Bodies, sketches, profiles, chains, paths and meshes are stored as pointers. Liveness, foreign-document, stale-profile and selector-resolution checks run at `Do` against the live document (`agent-docs/modify-design.md` §4 order). A profile is never snapshotted at build time. |
-| A5 | **A constructor or method records a fault only when both hold.** Its own argument shows the fault without reading anything else (A1), and the operation's documented gate order reports that fault ahead of every check that reads document state, liveness, `ctx.Err()` or another argument. Example: `Union` with fewer than two bodies is recorded, because `Union` refuses the count right after the nil-ctx check today. |
-| A6 | Every other invalid value is stored and refused by the operation's own gate at `Do`, in today's position. Example: a negative `Fillet` radius is stored, and S15 refuses it after the S17 liveness gate. |
-| A7 | Only the first recorded fault is kept. A constructor runs before any method, so its faults win. Where two methods could both record and today's order distinguishes their faults, the later one in today's order is stored under A6 instead, so call order never decides which fault the caller sees. |
+| A5 | **A constructor or method records a fault only when both hold.** Its own argument shows the fault without reading anything else (A1), and the operation's documented gate order reports that fault ahead of every check that reads document state, liveness, `ctx.Err()` or another argument. Example: `Union` with fewer than two bodies is recorded, because `Union` refuses the count right after the nil-ctx check. |
+| A6 | Every other invalid value is stored and refused by the operation's own gate at `Do`. Example: a negative `Fillet` radius is stored, and S15 refuses it after the S17 liveness gate. |
+| A7 | Only the first recorded fault is kept. A constructor runs before any method, so its faults win. Where two methods could both record and the documented order distinguishes their faults, the later one in the documented order is stored under A6 instead, so call order never decides which fault the caller sees. |
 | A8 | A recorded fault names its subject: the constructor parameter name (`bodies`, `target`, `tool`). A fault of a method value names the method (`RefineTo`) when the gate refuses it. |
 | A9 | **Only constructors call `State.Record`.** `Record` keeps the first fault, so a method that recorded could not be replaced by a second call (M2). A method stores its value and the error validating it produced in its own field, and the gate refuses that error at the position A6 gives. `opcommand.Slot[T]` (`Set(value, err)`, `Get()`) is the shared holder: the last `Set` replaces the value and its error. `UnionCommand.RefineTo` keeps the same two fields inline. |
 
@@ -126,16 +126,16 @@ or method return an error.
 | Rule | Statement |
 |---|---|
 | M1 | A method has a pointer receiver, changes the command and returns the same pointer, so `cmd.TangentChain()` written as a statement changes `cmd` rather than a dropped copy. |
-| M2 | **A second call replaces the earlier value.** This holds for every method. A repeated `Asymmetric` replaces the earlier reference and distance, and a repeated `Place` replaces the earlier placement. The `ErrDegenerate` that the old option tiers gave a repeated option has no command counterpart. `Shell.FaceThickness(normal, t)` names one world axis direction per call, so a repeat for that direction replaces its thickness and calls for other directions add to it. |
+| M2 | **A second call replaces the earlier value.** This holds for every method. A repeated `Asymmetric` replaces the earlier reference and distance, and a repeated `Place` replaces the earlier placement. `Shell.FaceThickness(normal, t)` names one world axis direction per call, so a repeat for that direction replaces its thickness and calls for other directions add to it. |
 | M3 | **Exclusive alternatives are one method taking a sealed variant.** `Copy(src).Place(p CopyPlacement)` takes `CopyTransform`, `CopyRotation` or `CopyLiftTranslation`, so the type system allows one placement. |
 | M4 | **A required choice is a sealed constructor argument**, as `Extent` and `PatternSpec` already are: `PathPattern(b, path, stations PathStations)` with `PathCount` or `PathSpacing`. |
 | M5 | A dependent option takes its parent's slot: `PathPattern(...).Follow()` or `.FollowAbout(pivot)`. Both write the one follow slot, and the last call wins (M2). |
-| M6 | **An option that changes the result kind or what a mandatory argument means is its own constructor.** `MirroredJoin(b, plane)` is the mirror that joins its image, `ShellClosed(b, t)` is the shell that keeps every face and takes no selector, and `WithConeTangentEnd` becomes `LoftFacesToCone(sections, cone, radial)`. |
+| M6 | **An option that changes the result kind or what a mandatory argument means is its own constructor.** `MirroredJoin(b, plane)` is the mirror that joins its image, `ShellClosed(b, t)` is the shell that keeps every face and takes no selector, and `LoftFacesToCone(sections, cone, radial)` is the loft that ends tangent to a cone. |
 | M7 | **A twin whose mandatory size means another quantity stays its own constructor.** `FilletChord(b, sel, chord)` sizes by chord, and `ChamferAngle(b, sel, d, reference, angle)` has its own gate order (`chamfer_angle.go`). |
-| M8 | **A twin that exists only because the parent had no option slot folds into a method.** the refined union is `Union(bodies...).RefineTo(bound)`, and `LoftSectionsWithCircularCorrespondence(d, c, sections...)` becomes `LoftSections(d, sections...).CircularCorrespondence(c)`. The fold keeps the twin's gates, result identities and history exactly. |
-| M9 | A conflict between two different methods is refused at `Do` with today's sentinel: `Taper` with `SurfaceResult` stays `ErrUnsupported` (`extrude.go`). |
+| M8 | **A twin that exists only because the parent had no option slot folds into a method.** The refined union is `Union(bodies...).RefineTo(bound)`, and `LoftSectionsWithCircularCorrespondence(d, c, sections...)` is `LoftSections(d, sections...).CircularCorrespondence(c)`. The fold keeps the twin's gates, result identities and history exactly. |
+| M9 | A conflict between two different methods is refused at `Do` with a fixed sentinel: `Taper` with `SurfaceResult` stays `ErrUnsupported` (`extrude.go`). |
 | M10 | A method called after `Do` changes the command and nothing else, because `Do` refuses a consumed command. |
-| M11 | A method exists on a command only when today's call accepts the option without an unconditional refusal. `CutExtrudeCommand` has no `SurfaceResult`. |
+| M11 | A method exists on a command only when the operation accepts the option without an unconditional refusal. `CutExtrudeCommand` has no `SurfaceResult`. |
 
 `RefineTo` builds the union directly at the bound for its class: a revolved blank and two or more copies of one
 point-Loft tooth. Any other set is `ErrUnsupported`. It never falls back to `Union` then `Refine`, because the history would then depend
@@ -163,11 +163,11 @@ serves Fillet and Chamfer, and `MatchingFaces` serves Cut and Intersect.
 - The per-type method keeps each command's method set explicit in source and in the generated reference, and lets
   its doc comment state that command's meaning.
 - **A Go method set cannot vary by type argument.** `Extrude` over `*sketch.Chain` still offers `Taper()`. The
-  chain refusal stays at `Do`, in today's gate position (`extrude.go`). N8 keeps the command type non-generic.
+  chain refusal stays at `Do`, at the gate the operation documents (`extrude.go`). N8 keeps the command type non-generic.
 
 ## 7. Results and errors
 
-- **`Do` returns exactly what the function returns today.** `UnionCommand.Do` returns `(*Body, error)`,
+- **`Do` returns exactly what the operation returns.** `UnionCommand.Do` returns `(*Body, error)`,
   `SplitCommand.Do` returns `([]*Body, error)`, `SheetMetalCommand.Do` returns
   `(*Body, SheetMetalReport, error)` and `RemoveCommand.Do` returns `error`. `runCommand` is generic over one
   result value, and a command with several results passes a struct and unpacks it.
@@ -189,8 +189,6 @@ serves Fillet and Chamfer, and `MatchingFaces` serves Cut and Intersect.
   consumed command, tagged with the command's kind, `OpDiagInputRejected` and `OperationStageInput`, with no
   subject.
 - Error text that names a `With...` option names the method instead.
-- The nil-option, zero-option and foreign-option refusals of today's option tiers have no command counterpart.
-  Their tests are deleted with the option.
 
 ## 8. Concurrency and reuse
 
@@ -217,8 +215,8 @@ entries that the restore later withdraws, and the next call reuses their produce
   `linters.settings.govet.settings.unusedresult.funcs`. Then `decad.Union(a, b)` written as a statement fails lint.
 - The setting replaces the analyzer's default list, so the list MUST also carry the standard-library defaults of
   the golangci-lint version CI pins (`golang.org/x/tools` `passes/unusedresult`).
-- The booleans PR adds the setting and a root test that lists every exported function returning `*<X>Command`
-  and fails when one is missing from the setting. Each later family PR adds its constructors.
+- A root test lists every exported function returning `*<X>Command`
+  and fails when one is missing from the setting.
 - The lint does not catch `cmd := decad.Fillet(...); cmd.TangentChain()` with no `Do`. M1 keeps that a visible
   unused command in review rather than a silent copy.
 - The lint does not catch the chained form `decad.Cut(a, b).MatchingFaces()` written as a statement, because the
@@ -265,10 +263,8 @@ entries that the restore later withdraws, and the next call reuses their produce
   `OperationSelectFaces`) keep their own kinds. This is the accepted behaviour for composites: `Emboss` reports its
   nested `Union`, `Cut` and rim-fillet refusals as `OperationEmboss`, and `Infill` reports its nested `Union`,
   `Intersect` and `Shell` refusals as `OperationInfill` (§12).
-- **The rewrite tool never rewrites a root production file.** It reports a bare operation call in a non-test root
-  file, and the author moves it onto the implementation by hand.
 - The implementation returns untagged errors. Only the public `Do` applies `operationError`, once.
-  `SelectionError` and `BooleanError` keep their own kinds, as `operationError` does today.
+  `SelectionError` and `BooleanError` keep their own kinds.
 - **The one exception is the refusal of a stored method value.** The implementation refuses it with
   `subjectError(kind, subject, err)` (§7), so that error is tagged and names its subject. The subject travels in
   the implementation's settings record, next to the value and its error (`chamferSettings.asymSubject`). The
@@ -289,7 +285,7 @@ entries that the restore later withdraws, and the next call reuses their produce
 
 ## 12. Family verdicts
 
-Every operation below becomes a command. The first list names the constructors; the bullets under each family
+Every operation below is a command. The first list names the constructors; the bullets under each family
 name its methods and special rules.
 
 | Family | Constructors |
@@ -310,7 +306,7 @@ name its methods and special rules.
   `Sweep.SectionScale`, `Sweep.Twist`, `Coil.LeftHand`, `Emboss.RimFillet`, `Emboss.Draft`, `WebPath.Draft` and
   `WebPath.Overrun`. `LoftChain`, `LoftFromPoint`, `LoftFaces`, `LoftFacesToCone`, `PatchProfile` and `CutRevolve`
   have no method. `LoftSections.CircularCorrespondence` folds its twin (M8). `LoftFacesToCone(sections, cone,
-  radial)` replaces the old cone-tangent-end option (M6). `Extrude`, `Revolve` and `Sweep` keep generic
+  radial)` is the loft with a cone tangent end, its own constructor (M6). `Extrude`, `Revolve` and `Sweep` keep generic
   constructors (N8, §6). A section constructor records a nil document and a nil sketch, section or path (A5),
   and each `Do` of a profile-or-chain section refuses a chain's `SurfaceResult` and `Taper` at the seam gate's
   position. `Sweep.Twist` and `Sweep.SectionScale` store their validation errors, and the count of factors
@@ -324,9 +320,9 @@ name its methods and special rules.
   have no method. Each constructor records a nil body, named `body`, except `Copy`, whose gate order reads the
   placement before the source, so a nil source reaches the source's own gate at `Do`. `PathPattern` records a nil
   path (`path`), `Arrange` an empty slice or a nil first body (`bodies`), and a refused stations value is named
-  `stations`. `Place`, `FollowAbout` and `Angle` store their validation errors, and `Do` refuses each where the old
-  option decode did: before the source's liveness gate, after the nil-ctx, recorded-fault and `stations` refusals.
-  `PatternCopies` and `Patterned` newly tag their errors with their own kind. `Stretch` and `QuarterTurn` return
+  `stations`. `Place`, `FollowAbout` and `Angle` store their validation errors, and `Do` refuses each
+  at one position: before the source's liveness gate, after the nil-ctx, recorded-fault and `stations` refusals.
+  `PatternCopies` and `Patterned` tag their errors with their own kind. `Stretch` and `QuarterTurn` return
   `ctx.Err()` itself when a cancel lands inside the mesh-to-solid conversion (§3).
 - Spec composites. Each spec struct splits: required fields are constructor arguments, and an optional or
   zero-means-default field is a method whose absence means the default. A spec field that is itself a struct of
@@ -341,7 +337,7 @@ name its methods and special rules.
   `TrapezoidThreadForm(angle, depth, flat)` or `ButtressThreadForm(lead, trail, depth, flat)`.
   `Infill(b, kind, cell, level)` has `Resolution` and `Skin`, and `SheetMetal(d, thickness, innerRadius, width, legs,
   bends)` has `KFactor` and `Do` returns `(*Body, SheetMetalReport, error)`. A constructor records a nil body (`body`)
-  or a nil document (`d`). Every other value is refused at its old gate, and a refused method value names its
+  or a nil document (`d`). Every other value is refused at its documented gate, and a refused method value names its
   method, `LeadInAngle` for its distance too and `Bore` for the bore's pilot thread. A method called with an explicit
   zero value is validated as that value, so `KFactor(units.Value{})` is `ErrDegenerate` and
   `Draft(units.Degrees(0))` is a straight wall. Three things are not validated as the value they hold:
@@ -367,34 +363,18 @@ name its methods and special rules.
   implementations are `patchEdges`, `stitch`, `unstitch`, `trim`, `extend`, `split`, `solidFromMesh` and `remove`.
 - `PatternSpec` and every `Extent`, `AngularExtent`, `Axis` and `MirrorPlane` stay sealed constructor arguments.
 
-## 13. Migration stack
+## 13. What a command carries
 
-The stack lands on `main` together. Each PR converts one family with a hard switch: it deletes the old function,
-its option tier and its `With...` constructors in the same PR, and no wrapper survives it.
+A new or changed command ships with each of these.
 
-| PR | Content |
-|---|---|
-| 0 (base) | This document, `internal/opcommand/`, `operation_command.go`, `ErrConsumed`, and the command-form rules in api-design §3, §4, §6.3, §8 and §12 and in `docs/api.md`. It converts no family. |
-| 1 | Booleans. It also adds the `unusedresult` setting and its root test (§10) and the rewrite tool (§14), which is deleted at stack landing. |
-| 2 | Modify ops. It proves §3 against Table S and the two-command `TangentChain` method. |
-| 3 | Sketch-fed features. It proves N8 and the four-command `SurfaceResult` method. |
-| 4 | Atomic `PathPattern` and `Arrange` (§9). It changes behaviour only on failure and cancellation and converts nothing. |
-| 5 | Placement and patterns. |
-| 6 | Spec composites. They follow PRs 2–5 because they call those operations' implementations (§11). |
-| 7 | Surface, mesh-to-solid ops and `Remove`. It moves the calls of `SolidFromMesh` in `infill.go` and `extrude_tilted_face.go` onto `solidFromMesh` (§11). |
-
-## 14. What each family PR carries
-
-- The conversion of every member of the family, each `Do` over an unexported implementation (§11), and each root
-  composite moved onto those implementations.
-- Its rows in §12 updated to the shipped names, and its signature blocks and prose in api-design §8, §9 and the
-  companion design docs rewritten to the command form. `docs/reference/` is regenerated by the Docs workflow,
-  never by a PR.
-- `docs/api.md`: every entry of the family, named by constructor and method. `docs/data-structures.md`: every new
-  command type. `apitest/api_reference_test.go` checks both.
-- `examples/`: every example that calls the family, with its `// Output:` block verified by `go test ./examples/...`.
-- `apitest/`, the root tests and `_gallery/` migrated. `_gallery/` builds against the working tree
-  (`_gallery/go.mod` `replace`), so it breaks in the same PR otherwise.
+- The command, with its `Do` over an unexported implementation (§11), and its row in §12.
+- Its signature blocks and prose in api-design §8, §9 and the companion design docs, in the command form.
+  `docs/reference/` is regenerated by the Docs workflow, never by a PR.
+- `docs/api.md`: the entry, named by constructor and method. `docs/data-structures.md`: the command type.
+  `apitest/api_reference_test.go` checks both.
+- `examples/`: every example that calls it, with its `// Output:` block verified by `go test ./examples/...`.
+- `apitest/`, the root tests and `_gallery/` calls. `_gallery/` builds against the working tree
+  (`_gallery/go.mod` `replace`), so a signature change breaks it in the same PR otherwise.
 - Tests asserting the §3 order for each member: a second `Do` is `ErrConsumed`, a nil `ctx` precedes every operand
   fault, cancellation returns `ctx.Err()` by identity, and the operation's own refusal table holds unchanged.
 - **The per-member rows run over the family's shared command table.** The retired-body row and the nil-ctx row
@@ -412,26 +392,16 @@ its option tier and its `With...` constructors in the same PR, and no wrapper su
   (`TestFeatureCommandsReturnMidBuildCancellationByIdentity`). It builds that fixture once and makes a fresh
   command per run, because every canceled run leaves the document unchanged. A member that polls a few hundred
   times or fewer keeps the one-check-later rule.
-- **Each family PR updates the "today" sentences it makes false.** A sentence that says what an operation does
-  "today" or "leaves untagged today" is rewritten in the PR that changes it, in this document and the companion
-  designs.
 - A per-member test of where each stored method fault is refused: after the retired-body gate and the sheet
   refusal, before the magnitude gate, and after a nil `ctx`. Every member gets a retired-body row, and each
   member with a validating method gets rows for the method fault against the gates around it
   (`TestModifyCommandsRefuseMethodFaultsAtTheirGate`).
-- The family's constructors in `unusedresult.funcs` (§10).
+- The constructor in `unusedresult.funcs` (§10).
 - `.github/test-shards.txt` and `.github/test-shards-apitest.txt` updated for renamed or removed tests
   (`agent-docs/testing.md`).
-- The rewrite tool's rules for the family, run over `apitest/`, `examples/`, the root tests and `_gallery/`. The tool
-  is `_cmdrewrite/`, its own nested module recorded in `agent-docs/modules.md`, because `gofmt -r` cannot match a
-  variadic option list. The rules match the pre-migration names, such as `WithTangentChain` and
-  `WithNoOpenings`. A spec field whose zero value meant unset in the old call (`Draft`, `Tilt`, `Length`, `Skin`, `KFactor` and the like) and holds a variable is reported, not rewritten, because the new method refuses a zero value. The tool's tests feed old-API code and assert the rewritten output, because the tool must
-  migrate calls that land on `main` while the stack is open. A new-name call is not input. The tool is deleted at
-  stack landing; that change also removes this bullet, §11's rewrite-tool sentence, the `_cmdrewrite/` layout row and
-  the `CLAUDE.md` tooling entry.
 - The Module boundary gate evidence (`agent-docs/module-boundary.md`) in the PR body.
 
-## 15. Shared infrastructure
+## 14. Shared infrastructure
 
 | Piece | Owner | Behaviour |
 |---|---|---|
