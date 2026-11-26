@@ -42,9 +42,10 @@ func TestUnionManyOperationWarnings(t *testing.T) {
 			warning := warnings[0]
 			require.Equal(t, decad.OpDiagGapShiftApplied, warning.Code)
 			require.Equal(t, decad.OperationUnion, warning.Operation)
-			require.Equal(t, "others", warning.Subject.Name)
+			require.Equal(t, "bodies", warning.Subject.Name)
 			require.NotNil(t, warning.Subject.Ordinal)
-			require.Equal(t, tc.ordinal, *warning.Subject.Ordinal)
+			// Operand 0 is a first body of the pair; the diagnostic names the later body.
+			require.Equal(t, tc.ordinal+1, *warning.Subject.Ordinal)
 			require.Nil(t, warning.Subject.Body)
 			require.NotNil(t, warning.Change)
 			require.Equal(t, units.Length, warning.Change.DisplacementBound.Kind())

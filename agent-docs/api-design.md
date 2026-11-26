@@ -1247,8 +1247,8 @@ each root and cap contact against its original tooth source, and commits one
 body only after the complete output passes the boundary, volume and topology
 audits. Multi-body inputs outside these classes and the prism pair chain
 return `ErrUnsupported`.
-A call with no `others` returns `ErrDegenerate`; a
-zero-body call does not compile. A failed or canceled call leaves every
+A call with fewer than two bodies, a zero-body call included, compiles and
+returns `ErrDegenerate` from `Do`. A failed or canceled call leaves every
 operand live.
 
 No `*Document` appears in those signatures, and none is needed: a `*Body` carries

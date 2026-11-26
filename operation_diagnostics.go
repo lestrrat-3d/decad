@@ -300,11 +300,7 @@ func booleanOperandLocation(kind OperationKind, operand int) (string, *int) {
 		}
 		return "b", nil
 	case OperationUnion:
-		if operand == 0 {
-			return "first", nil
-		}
-		ordinal--
-		return "others", &ordinal
+		return "bodies", &ordinal
 	default:
 		return operationRoleOperand, &ordinal
 	}

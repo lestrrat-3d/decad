@@ -144,7 +144,7 @@ type UnionCommand struct {
 // build (agent-docs/body-refine-design.md §7.1). It returns the join that
 // [Union] followed by [Refine] returns.
 //
-// The bodies MUST hold a revolved blank and three or more copies of one
+// The bodies MUST hold a revolved blank and two or more copies of one
 // point-Loft tooth — a straight-bevel sector join, as [Union] takes a bevel
 // gear join. The join is built once at the bound min(maxBound, 0.1 mm). Union
 // builds and audits the join at 0.1 mm, and Refine then discards that join and

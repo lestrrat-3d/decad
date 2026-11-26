@@ -10,7 +10,7 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// unionRefinedAdvice closes every refusal UnionRefined makes because the
+// unionRefinedAdvice closes every refusal UnionCommand.RefineTo makes because the
 // direct build does not apply.
 const unionRefinedAdvice = "RefineTo builds only a straight-bevel sector join of three or more bodies " +
 	"directly at the bound; call Union, then Refine"

@@ -278,8 +278,8 @@ and rebuilds it from the same certificate and sources at `maxBound`. `Union(bodi
   bodies at a time, whose operand is an earlier join) is `ErrUnsupported` before anything is built, with a message
   that says to call `Union`, then `Refine`. A set the route matches but cannot build, at the bound or at
   all, is `ErrUnsupported` with the same advice.
-- `maxBound` is checked as `Refine` checks it, but before anything is built. A bad bound is recorded by `RefineTo`
-  and refused by `Do` with `OperationUnion`, naming `RefineTo` as its subject.
+- `maxBound` is checked as `Refine` checks it, but before anything is built. A bad bound is stored by `RefineTo`
+  and refused by `Do` before anything is built, with `OperationUnion`, naming `RefineTo` as its subject.
 
 ## 8. Feasibility check
 

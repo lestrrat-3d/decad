@@ -154,7 +154,7 @@ func (m bevelMember) toothProfile(t *testing.T) (*sketch.Sketch, *sketch.Profile
 }
 
 // tooth lofts one tooth from the common apex and trims it at the toe cone and
-// at the heel cone, the latter with opts.
+// at the heel cone, the latter with the matching flag.
 func (m bevelMember) tooth(t *testing.T, doc *decad.Document, matching bool) (*decad.Body, error) {
 	t.Helper()
 	s, profile := m.toothProfile(t)

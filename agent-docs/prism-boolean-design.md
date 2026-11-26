@@ -4647,7 +4647,7 @@ the same body as before.
 **Trigger.** `rimSplitRebuild` (`boolean_regroup.go`) runs in `performBoolean` after the chain regroup declines,
 only when all of these hold:
 
-- The call is a two-body `Union` without `MatchingFaces`.
+- The call is a two-body `Union`.
 - The document does not set `WithRimSplit`, and the context carries no rim-split choice: such a chain was already
   built with splitting, so a rebuild repeats it.
 - The refusal carries a `meshbool.CoarseHeldContactError` (`booleandispatch.CoarseHeldOperand`), and the operand

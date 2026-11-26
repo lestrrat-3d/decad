@@ -13,10 +13,48 @@ import (
 
 const decadPath = "github.com/lestrrat-3d/decad"
 
-// rule rewrites one function call. args holds the source text of each call
-// argument, ctx first. pkg is the qualifier to prefix a decad name with, "" in
-// package decad. It returns the replacement text, or a reason it cannot.
-type rule func(pkg string, args []string, ellipsis bool) (string, string)
+// callSite is one call a rule may rewrite. args holds the call's argument
+// expressions, ctx first, so a rule can match an option by its syntax tree
+// (a name and its own arguments) instead of by its text. pkg is the qualifier
+// to prefix a decad name with, "" in package decad.
+type callSite struct {
+	pkg      string
+	args     []ast.Expr
+	ellipsis bool
+	src      []byte
+	fset     *token.FileSet
+}
+
+// text returns the source text of node, with its line breaks.
+func (c *callSite) text(node ast.Node) string {
+	return string(c.src[c.fset.Position(node.Pos()).Offset:c.fset.Position(node.End()).Offset])
+}
+
+// span returns the source text from the start of args[from] to the end of
+// args[to], inclusive, so a multi-line argument list keeps its line breaks
+// and comments.
+func (c *callSite) span(from, to int) string {
+	return c.spanOf(c.args[from], c.args[to])
+}
+
+func (c *callSite) spanOf(first, last ast.Expr) string {
+	return string(c.src[c.fset.Position(first.Pos()).Offset:c.fset.Position(last.End()).Offset])
+}
+
+// isCall reports whether e is a call of the decad function name with no
+// arguments, in the qualifier form this file uses.
+func (c *callSite) isCall(e ast.Expr, name string) bool {
+	call, ok := e.(*ast.CallExpr)
+	if !ok || len(call.Args) != 0 {
+		return false
+	}
+	fname, qual := callee(call.Fun, c.pkg, c.pkg == "")
+	return fname == name && qual == c.pkg
+}
+
+// rule rewrites one function call. It returns the replacement text, or a
+// reason it cannot.
+type rule func(c *callSite) (string, string)
 
 var families = map[string]map[string]rule{
 	"booleans": {
@@ -45,64 +83,65 @@ func qualify(pkg, name string) string {
 }
 
 // ruleUnion: Union(ctx, first, others...) -> Union(first, others...).Do(ctx).
-func ruleUnion(pkg string, args []string, ellipsis bool) (string, string) {
-	if len(args) < 2 {
+func ruleUnion(c *callSite) (string, string) {
+	if len(c.args) < 2 {
 		return "", "Union call without a context and a body"
 	}
-	ctx, rest := args[0], args[1:]
-	if ellipsis {
-		if len(rest) != 2 {
+	ctx := c.text(c.args[0])
+	if c.ellipsis {
+		if len(c.args) != 3 {
 			return "", "Union with a spread slice and extra operands"
 		}
-		bodyType := qualify(pkg, "Body")
 		return fmt.Sprintf("%s(append([]*%s{%s}, %s...)...).Do(%s)",
-			qualify(pkg, "Union"), bodyType, rest[0], rest[1], ctx), ""
+			qualify(c.pkg, "Union"), qualify(c.pkg, "Body"), c.text(c.args[1]), c.text(c.args[2]), ctx), ""
 	}
-	return fmt.Sprintf("%s(%s).Do(%s)", qualify(pkg, "Union"), strings.Join(rest, ", "), ctx), ""
+	return fmt.Sprintf("%s(%s).Do(%s)", qualify(c.pkg, "Union"), c.span(1, len(c.args)-1), ctx), ""
 }
 
 // ruleBinary: Cut(ctx, a, b, decad.WithMatchingFaces()) ->
-// Cut(a, b).MatchingFaces().Do(ctx).
+// Cut(a, b).MatchingFaces().Do(ctx). Each option is matched by its syntax
+// tree, so a later family adds a table row per option, with arguments where
+// the option has them.
 func ruleBinary(name string) rule {
-	return func(pkg string, args []string, ellipsis bool) (string, string) {
-		if ellipsis || len(args) < 3 {
+	return func(c *callSite) (string, string) {
+		if c.ellipsis || len(c.args) < 3 {
 			return "", name + " call with a spread option list or too few arguments"
 		}
-		call := fmt.Sprintf("%s(%s, %s)", qualify(pkg, name), args[1], args[2])
-		for _, opt := range args[3:] {
-			if opt != qualify(pkg, "WithMatchingFaces")+"()" {
-				return "", name + " option " + opt + " is not WithMatchingFaces()"
+		call := fmt.Sprintf("%s(%s)", qualify(c.pkg, name), c.span(1, 2))
+		for _, opt := range c.args[3:] {
+			if !c.isCall(opt, "WithMatchingFaces") {
+				return "", name + " option " + c.text(opt) + " is not WithMatchingFaces()"
 			}
 			call += ".MatchingFaces()"
 		}
-		return call + ".Do(" + args[0] + ")", ""
+		return call + ".Do(" + c.text(c.args[0]) + ")", ""
 	}
 }
 
 // ruleRefine: Refine(ctx, s, b) -> Refine(s, b).Do(ctx).
-func ruleRefine(pkg string, args []string, ellipsis bool) (string, string) {
-	if ellipsis || len(args) != 3 {
+func ruleRefine(c *callSite) (string, string) {
+	if c.ellipsis || len(c.args) != 3 {
 		return "", "Refine call without exactly a context, a body and a bound"
 	}
-	return fmt.Sprintf("%s(%s, %s).Do(%s)", qualify(pkg, "Refine"), args[1], args[2], args[0]), ""
+	return fmt.Sprintf("%s(%s).Do(%s)", qualify(c.pkg, "Refine"), c.span(1, 2), c.text(c.args[0])), ""
 }
 
 // ruleUnionRefined: UnionRefined(ctx, bodies, bound) ->
 // Union(bodies...).RefineTo(bound).Do(ctx). A slice literal spreads into its
 // elements.
-func ruleUnionRefined(pkg string, args []string, ellipsis bool) (string, string) {
-	if ellipsis || len(args) != 3 {
+func ruleUnionRefined(c *callSite) (string, string) {
+	if c.ellipsis || len(c.args) != 3 {
 		return "", "UnionRefined call without exactly a context, a slice and a bound"
 	}
-	bodies := args[1]
-	if strings.HasPrefix(bodies, "[]*") && strings.HasSuffix(bodies, "}") {
-		if open := strings.Index(bodies, "{"); open > 0 {
-			bodies = strings.TrimSpace(bodies[open+1 : len(bodies)-1])
+	bodies := c.text(c.args[1]) + "..."
+	if lit, ok := c.args[1].(*ast.CompositeLit); ok {
+		bodies = ""
+		if len(lit.Elts) > 0 {
+			bodies = c.spanOf(lit.Elts[0], lit.Elts[len(lit.Elts)-1])
 		}
-	} else {
-		bodies += "..."
 	}
-	return fmt.Sprintf("%s(%s).RefineTo(%s).Do(%s)", qualify(pkg, "Union"), bodies, args[2], args[0]), ""
+	return fmt.Sprintf("%s(%s).RefineTo(%s).Do(%s)",
+		qualify(c.pkg, "Union"), bodies, c.text(c.args[2]), c.text(c.args[0])), ""
 }
 
 // rewriteFile applies rules to every matching call in src, innermost first,
@@ -188,11 +227,14 @@ func rewriteFile(name string, src []byte, rules map[string]rule, root bool) ([]b
 			if inner {
 				return true
 			}
-			args := make([]string, len(call.Args))
-			for i, a := range call.Args {
-				args[i] = string(src[fset.Position(a.Pos()).Offset:fset.Position(a.End()).Offset])
+			text, why := r(&callSite{
+				pkg: qual, args: call.Args, ellipsis: call.Ellipsis.IsValid(), src: src, fset: fset,
+			})
+			if why == "" && bare && !strings.HasSuffix(name, "_test.go") {
+				// Design §11: a root composite calls the unexported implementation,
+				// never a public command, so the author moves it by hand.
+				why = "bare call in a root production file; call the unexported implementation instead"
 			}
-			text, why := r(qual, args, call.Ellipsis.IsValid())
 			start := fset.Position(call.Pos()).Offset
 			if why != "" {
 				key := fmt.Sprintf("%d:%s", start, why)

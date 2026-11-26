@@ -107,6 +107,14 @@ func TestContextOperationsRejectNilBeforeOperands(t *testing.T) {
 		{"Union", func(ctx context.Context) error { _, err := decad.Union(nil, nil).Do(ctx); return err }},
 		{"Cut", func(ctx context.Context) error { _, err := decad.Cut(nil, nil).Do(ctx); return err }},
 		{"Intersect", func(ctx context.Context) error { _, err := decad.Intersect(nil, nil).Do(ctx); return err }},
+		{"Refine", func(ctx context.Context) error {
+			_, err := decad.Refine(nil, units.Radians(1)).Do(ctx)
+			return err
+		}},
+		{"Union.RefineTo", func(ctx context.Context) error {
+			_, err := decad.Union(nil).RefineTo(units.Radians(1)).Do(ctx)
+			return err
+		}},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {

@@ -88,7 +88,7 @@ func fingerprintUnionRefined(t *testing.T, body *decad.Body) unionRefinedFingerp
 	return fp
 }
 
-// unionThenRefine is the pair UnionRefined replaces, on a fresh set of
+// unionThenRefine is the pair RefineTo replaces, on a fresh set of
 // operands.
 func unionThenRefine(t *testing.T, fitted bool, bound units.Value) (*decad.Document, *decad.Body, error) {
 	t.Helper()

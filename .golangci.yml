@@ -73,7 +73,10 @@ linters:
         # Replaces the analyzer's default list, so it carries the standard-library
         # defaults too. Every constructor of an operation command is listed, so that
         # a statement such as decad.Union(a, b) with no Do fails lint
-        # (agent-docs/command-api-design.md §10).
+        # (agent-docs/command-api-design.md §10). The standard-library entries are
+        # copied from the default list of golang.org/x/tools v0.52.0
+        # (passes/unusedresult), the version inside golangci-lint v2.15.0. A
+        # golangci-lint bump re-copies them.
         unusedresult:
           funcs:
             - context.WithCancel

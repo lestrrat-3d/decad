@@ -38,9 +38,33 @@ func TestBooleans(t *testing.T) {
 	})
 	t.Run("root bare call", func(t *testing.T) {
 		in := "package decad\n\nfunc f() {\n\t_, _ = Cut(ctx, a, b)\n}\n"
-		out, _, err := rewriteFile("x.go", []byte(in), families["booleans"], true)
+		out, _, err := rewriteFile("x_test.go", []byte(in), families["booleans"], true)
 		if err != nil || string(out) != "package decad\n\nfunc f() {\n\t_, _ = Cut(a, b).Do(ctx)\n}\n" {
 			t.Fatalf("out %q err %v", out, err)
+		}
+	})
+	t.Run("root production file reported", func(t *testing.T) {
+		in := "package decad\n\nfunc f() {\n\t_, _ = Cut(ctx, a, b)\n}\n"
+		out, reports, err := rewriteFile("x.go", []byte(in), families["booleans"], true)
+		if err != nil || len(reports) != 1 || string(out) != in {
+			t.Fatalf("out %q reports %v err %v", out, reports, err)
+		}
+	})
+	t.Run("multi-line arguments keep their breaks", func(t *testing.T) {
+		in := head + "\t_, _ = decad.Cut(ctx,\n\t\tfirstBodyWithALongName(1, 2),\n\t\tsecondBodyWithALongName(3, 4),\n\t\tdecad.WithMatchingFaces())\n}\n"
+		want := head + "\t_, _ = decad.Cut(firstBodyWithALongName(1, 2),\n\t\tsecondBodyWithALongName(3, 4)).MatchingFaces().Do(ctx)\n}\n"
+		out, reports, err := rewriteFile("x.go", []byte(in), families["booleans"], false)
+		if err != nil || len(reports) != 0 || string(out) != want {
+			t.Fatalf("out %q reports %v err %v", out, reports, err)
+		}
+	})
+	t.Run("skipped directories", func(t *testing.T) {
+		for name, want := range map[string]bool{
+			".worktrees": true, ".git": true, ".tmp": true, "vendor": true, "testdata": true, "apitest": false,
+		} {
+			if skipDir(name) != want {
+				t.Fatalf("skipDir(%q) != %v", name, want)
+			}
 		}
 	})
 }

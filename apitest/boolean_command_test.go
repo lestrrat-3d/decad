@@ -126,9 +126,6 @@ func TestBooleanCommandsRefuseNilContextBeforeAnyOperand(t *testing.T) {
 func TestBooleanCommandsReturnCancellationByIdentity(t *testing.T) {
 	t.Parallel()
 	for _, tc := range booleanCommands() {
-		if tc.name == "Refine" {
-			continue // its operand is built by a Union that the canceled context would stop first.
-		}
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			doc := decad.New()
