@@ -3250,6 +3250,7 @@
 12	0.30	TestPlacementCommandsReturnMidBuildCancellationByIdentity
 12	0.10	TestPlacementConstructorsRecordNilOperands
 12	0.10	TestCopyReportsItsPlacementBeforeANilSource
+12	0.10	TestPlacementCommandsRefuseARetiredBody
 12	0.10	TestPlacementCommandsRefuseMethodFaultsAtTheirGate
 12	0.10	TestPlacementMethodsLastCallWins
 12	0.10	TestPlacementCommandsCopyTheirArguments
