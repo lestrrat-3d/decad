@@ -43,7 +43,7 @@ func TestSweepClosedCircleBuildsVerifiedSolidAndReplaysPlacement(t *testing.T) {
 	s, profile := closedCircleSection(t, 9, 11)
 	path := closedCirclePath(t)
 	doc := decad.New()
-	body, err := decad.Sweep(t.Context(), doc, s, profile, path)
+	body, err := decad.Sweep(doc, s, profile, path).Do(t.Context())
 	require.NoError(t, err)
 	require.True(t, body.IsSolid())
 	require.Len(t, body.Faces(), 4)
@@ -75,7 +75,7 @@ func TestSweepClosedCircleBuildsVerifiedSolidAndReplaysPlacement(t *testing.T) {
 	decadtest.MeasuresCentroid(t, body, r3.Vec{})
 	decadtest.MeasuresBounds(t, body, r3.NewVec(-11, -1, -11), r3.NewVec(11, 1, 11))
 	axis := decad.SketchLine{Start: decad.Point2{U: 0, V: -1}, End: decad.Point2{U: 0, V: 1}}
-	reference, err := decad.Revolve(t.Context(), decad.New(), s, profile, axis, decad.FullRevolution{})
+	reference, err := decad.Revolve(decad.New(), s, profile, axis, decad.FullRevolution{}).Do(t.Context())
 	require.NoError(t, err)
 	refVolume, err := reference.Volume()
 	require.NoError(t, err)
@@ -95,7 +95,7 @@ func TestSweepClosedCircleBuildsVerifiedSolidAndReplaysPlacement(t *testing.T) {
 
 	move, err := r3.Translation(r3.NewVec(3, 4, 5))
 	require.NoError(t, err)
-	placed, err := decad.Transform(t.Context(), body, move)
+	placed, err := decad.Transform(body, move).Do(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, []*decad.Body{placed}, doc.Bodies())
 	for _, face := range placed.Faces() {
@@ -125,17 +125,21 @@ func TestSweepClosedCircleRefusesUnsupportedVariantsWithoutCommit(t *testing.T) 
 	)
 	require.NoError(t, err)
 	for _, test := range []struct {
-		name string
-		path *decad.Path
-		opts []decad.SweepOption
+		name  string
+		path  *decad.Path
+		apply func(*decad.SweepCommand)
 	}{
 		{name: "four tangent arcs", path: fourArcs},
-		{name: "surface result", path: full, opts: []decad.SweepOption{decad.WithSurfaceResult()}},
-		{name: "nonzero twist", path: full, opts: []decad.SweepOption{decad.WithSweepTwist(units.Degrees(10))}},
+		{name: "surface result", path: full, apply: func(c *decad.SweepCommand) { c.SurfaceResult() }},
+		{name: "nonzero twist", path: full, apply: func(c *decad.SweepCommand) { c.Twist(units.Degrees(10)) }},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			doc := decad.New()
-			body, err := decad.Sweep(t.Context(), doc, s, profile, test.path, test.opts...)
+			cmd := decad.Sweep(doc, s, profile, test.path)
+			if test.apply != nil {
+				test.apply(cmd)
+			}
+			body, err := cmd.Do(t.Context())
 			require.Nil(t, body)
 			require.ErrorIs(t, err, decad.ErrUnsupported)
 			require.Empty(t, doc.Bodies())
@@ -144,7 +148,7 @@ func TestSweepClosedCircleRefusesUnsupportedVariantsWithoutCommit(t *testing.T) 
 
 	crossing, crossingProfile := closedCircleSection(t, -1, 1)
 	doc := decad.New()
-	body, err := decad.Sweep(t.Context(), doc, crossing, crossingProfile, full)
+	body, err := decad.Sweep(doc, crossing, crossingProfile, full).Do(t.Context())
 	require.Nil(t, body)
 	require.ErrorIs(t, err, decad.ErrDegenerate)
 	require.Empty(t, doc.Bodies())

@@ -24,9 +24,9 @@ func obliqueSectionCube(t *testing.T) *decad.Body {
 	profiles := s.Profiles()
 	require.Len(t, profiles, 1)
 	require.True(t, profiles[0].Valid)
-	body, err := decad.Extrude(t.Context(), decad.New(), s, profiles[0], decad.Distance{
+	body, err := decad.Extrude(decad.New(), s, profiles[0], decad.Distance{
 		D: units.Millimeters(10), Dir: decad.Along,
-	})
+	}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -50,9 +50,9 @@ func TestSectionObliqueRectangleFeedsVerifiedExtrude(t *testing.T) {
 	_, err = decad.MeasureProfile(section, profiles[0])
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 
-	child, err := decad.Extrude(t.Context(), decad.New(), section, profiles[0], decad.Distance{
+	child, err := decad.Extrude(decad.New(), section, profiles[0], decad.Distance{
 		D: units.Millimeters(2), Dir: decad.Along,
-	})
+	}).Do(t.Context())
 	require.NoError(t, err)
 	volume, err := child.Volume()
 	require.NoError(t, err)
@@ -75,9 +75,9 @@ func TestSectionObliqueVerticalRectangleFeedsVerifiedExtrude(t *testing.T) {
 	section, profiles, err := body.Section(t.Context(), frame)
 	require.NoError(t, err)
 	require.Len(t, profiles, 1)
-	child, err := decad.Extrude(t.Context(), decad.New(), section, profiles[0], decad.Distance{
+	child, err := decad.Extrude(decad.New(), section, profiles[0], decad.Distance{
 		D: units.Millimeters(2), Dir: decad.Along,
-	})
+	}).Do(t.Context())
 	require.NoError(t, err)
 	mesh, err := child.Tessellate(t.Context(), units.Millimeters(0.1), decad.WithVerification(decad.VerifyAll))
 	require.NoError(t, err)
@@ -106,9 +106,9 @@ func TestSectionObliqueRectangleTriangleThroughHexagon(t *testing.T) {
 			require.NoError(t, err)
 			require.Len(t, profiles, 1)
 			require.Len(t, profiles[0].Outer, tc.edges)
-			child, err := decad.Extrude(t.Context(), decad.New(), section, profiles[0], decad.Distance{
+			child, err := decad.Extrude(decad.New(), section, profiles[0], decad.Distance{
 				D: units.Millimeters(2), Dir: decad.Along,
-			})
+			}).Do(t.Context())
 			require.NoError(t, err)
 			mesh, err := child.Tessellate(t.Context(), units.Millimeters(0.1), decad.WithVerification(decad.VerifyAll))
 			require.NoError(t, err)
@@ -125,7 +125,7 @@ func TestSectionObliqueRectanglePlacementAndAxisSense(t *testing.T) {
 		EX: r3.Vec{Y: 1}, EY: r3.Vec{X: -1}, EZ: r3.Vec{Z: 1},
 	}, r3.Vec{X: 20, Y: 30, Z: 7})
 	require.NoError(t, err)
-	body, err := decad.Transform(t.Context(), source, placement)
+	body, err := decad.Transform(source, placement).Do(t.Context())
 	require.NoError(t, err)
 	for _, u := range []r3.Vec{{X: -1}, {X: 1}} {
 		frame, err := r3.NewFrame(r3.Vec{X: 20, Y: 30, Z: 12}, u, r3.Vec{Y: 5, Z: 1})
@@ -133,9 +133,9 @@ func TestSectionObliqueRectanglePlacementAndAxisSense(t *testing.T) {
 		section, profiles, err := body.Section(t.Context(), frame)
 		require.NoError(t, err)
 		require.Len(t, profiles, 1)
-		child, err := decad.Extrude(t.Context(), decad.New(), section, profiles[0], decad.Distance{
+		child, err := decad.Extrude(decad.New(), section, profiles[0], decad.Distance{
 			D: units.Millimeters(2), Dir: decad.Along,
-		})
+		}).Do(t.Context())
 		require.NoError(t, err)
 		mesh, err := child.Tessellate(t.Context(), units.Millimeters(0.1), decad.WithVerification(decad.VerifyAll))
 		require.NoError(t, err)
@@ -179,9 +179,9 @@ func TestSectionObliqueRectangleCertificateRefusesEditsAndCopies(t *testing.T) {
 			section, profiles, err := body.Section(t.Context(), obliqueSectionFrame(t))
 			require.NoError(t, err)
 			section = tc.change(t, section)
-			_, err = decad.Extrude(t.Context(), decad.New(), section, profiles[0], decad.Distance{
+			_, err = decad.Extrude(decad.New(), section, profiles[0], decad.Distance{
 				D: units.Millimeters(2), Dir: decad.Along,
-			})
+			}).Do(t.Context())
 			require.ErrorIs(t, err, decad.ErrUnsupported)
 		})
 	}
@@ -211,9 +211,9 @@ func TestSectionObliqueRectangleMarkerCannotSupplyCertificate(t *testing.T) {
 	require.True(t, profiles[0].Valid)
 	_, err = decad.MeasureProfile(s, profiles[0])
 	require.ErrorIs(t, err, decad.ErrUnsupported)
-	_, err = decad.Extrude(t.Context(), decad.New(), s, profiles[0], decad.Distance{
+	_, err = decad.Extrude(decad.New(), s, profiles[0], decad.Distance{
 		D: units.Millimeters(2), Dir: decad.Along,
-	})
+	}).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 }
 
@@ -239,9 +239,9 @@ func TestSectionObliqueRectangleOtherRegionCannotBypassBound(t *testing.T) {
 		}
 		_, err = decad.MeasureProfile(section, profile)
 		require.ErrorIs(t, err, decad.ErrUnsupported)
-		_, err = decad.Extrude(t.Context(), decad.New(), section, profile, decad.Distance{
+		_, err = decad.Extrude(decad.New(), section, profile, decad.Distance{
 			D: units.Millimeters(2), Dir: decad.Along,
-		})
+		}).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 	}
 }
@@ -252,14 +252,14 @@ func TestSectionObliqueRectangleRefusesUnsupportedExtrudeOptions(t *testing.T) {
 	section, profiles, err := body.Section(t.Context(), obliqueSectionFrame(t))
 	require.NoError(t, err)
 	profile := profiles[0]
-	_, err = decad.Extrude(t.Context(), decad.New(), section, profile,
-		decad.Symmetric{D: units.Millimeters(2)})
+	_, err = decad.Extrude(decad.New(), section, profile,
+		decad.Symmetric{D: units.Millimeters(2)}).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
-	_, err = decad.Extrude(t.Context(), decad.New(), section, profile,
-		decad.Distance{D: units.Millimeters(2), Dir: decad.Along}, decad.WithTaper(units.Degrees(5)))
+	_, err = decad.Extrude(decad.New(), section, profile,
+		decad.Distance{D: units.Millimeters(2), Dir: decad.Along}).Taper(units.Degrees(5)).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
-	_, err = decad.Extrude(t.Context(), decad.New(), section, profile,
-		decad.Distance{D: units.Millimeters(2), Dir: decad.Along}, decad.WithSurfaceResult())
+	_, err = decad.Extrude(decad.New(), section, profile,
+		decad.Distance{D: units.Millimeters(2), Dir: decad.Along}).SurfaceResult().Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 }
 

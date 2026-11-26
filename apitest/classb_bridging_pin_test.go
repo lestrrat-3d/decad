@@ -45,7 +45,7 @@ func TestClassBBridgingPinUnion(t *testing.T) {
 			if tc.pinFirst {
 				a, b = b, a
 			}
-			got, err := decad.Union(t.Context(), a, b)
+			got, err := decad.Union(a, b).Do(t.Context())
 			require.NoError(t, err)
 			requireExactFlushResult(t, got, 11, 5000+180*math.Pi)
 		})
@@ -70,7 +70,7 @@ func TestClassBThroughPinCutAndIntersect(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			doc := decad.New()
-			got, err := decad.Cut(t.Context(), boxBody(t, doc, 0, 0, 40, 20, 10), pinFromYZ(t, doc, tc.planeX, tc.dir, 40))
+			got, err := decad.Cut(boxBody(t, doc, 0, 0, 40, 20, 10), pinFromYZ(t, doc, tc.planeX, tc.dir, 40)).Do(t.Context())
 			require.NoError(t, err)
 			requireExactFlushResult(t, got, 7, 8000-360*math.Pi)
 		})
@@ -81,7 +81,7 @@ func TestClassBThroughPinCutAndIntersect(t *testing.T) {
 		if pinFirst {
 			a, b = b, a
 		}
-		got, err := decad.Intersect(t.Context(), a, b)
+		got, err := decad.Intersect(a, b).Do(t.Context())
 		require.NoError(t, err)
 		requireExactFlushResult(t, got, 3, 360*math.Pi)
 	}
@@ -95,7 +95,7 @@ func TestClassBBridgingPinOneUlpShort(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
 	length := math.Nextafter(20, 0)
-	got, err := decad.Union(t.Context(), uPlate(t, doc), pinAlongX(t, doc, 10, length))
+	got, err := decad.Union(uPlate(t, doc), pinAlongX(t, doc, 10, length)).Do(t.Context())
 	require.NoError(t, err)
 	requireExactFlushResult(t, got, 12, 5000+9*math.Pi*length)
 }
@@ -107,8 +107,8 @@ func TestClassBBridgingPinOneUlpShort(t *testing.T) {
 func TestClassBBridgingPinMisses(t *testing.T) {
 	t.Parallel()
 	type pair func(*testing.T, *decad.Document) (*decad.Body, *decad.Body)
-	union := func(t *testing.T, a, b *decad.Body) (*decad.Body, error) { return decad.Union(t.Context(), a, b) }
-	cut := func(t *testing.T, a, b *decad.Body) (*decad.Body, error) { return decad.Cut(t.Context(), a, b) }
+	union := func(t *testing.T, a, b *decad.Body) (*decad.Body, error) { return decad.Union(a, b).Do(t.Context()) }
+	cut := func(t *testing.T, a, b *decad.Body) (*decad.Body, error) { return decad.Cut(a, b).Do(t.Context()) }
 	uAnd := func(x0 float64, length units.Value, z float64) pair {
 		return func(t *testing.T, doc *decad.Document) (*decad.Body, *decad.Body) {
 			return uPlate(t, doc), pinAlongXAt(t, doc, x0, z, length)
@@ -148,7 +148,7 @@ func TestClassBBridgingPinMisses(t *testing.T) {
 	}{
 		{op: cut, want: decad.BooleanUnsupportedContact},
 		{op: func(t *testing.T, a, b *decad.Body) (*decad.Body, error) {
-			return decad.Intersect(t.Context(), a, b)
+			return decad.Intersect(a, b).Do(t.Context())
 		}, want: decad.BooleanEmpty},
 	} {
 		doc := decad.New()

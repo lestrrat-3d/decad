@@ -34,7 +34,7 @@ func Example_revolve() {
 	// Spin the profile one full turn. The edge on the axis sweeps nothing, so
 	// the result is a solid cylinder with no hole through it.
 	doc := decad.New()
-	cylinder, err := decad.Revolve(context.Background(), doc, s, s.Profiles()[0], axis, decad.FullRevolution{})
+	cylinder, err := decad.Revolve(doc, s, s.Profiles()[0], axis, decad.FullRevolution{}).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to revolve: %s\n", err)
 		return

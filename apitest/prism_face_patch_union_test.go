@@ -31,14 +31,14 @@ func prismFacePatchPair(t *testing.T, sideX, sideY0, sideY1 float64, dir decad.D
 	w := sketch.NewWorld()
 	doc := decad.New(opts...)
 	plateSketch, plateProfile := prismFacePatchRectangle(t, w, w.XY(), 0, 0, 20, 20)
-	plate, err := decad.Extrude(t.Context(), doc, plateSketch, plateProfile,
-		decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
+	plate, err := decad.Extrude(doc, plateSketch, plateProfile,
+		decad.Distance{D: units.Millimeters(5), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	plane, err := w.CreateOffsetPlane(w.YZ(), sideX)
 	require.NoError(t, err)
 	lugSketch, lugProfile := prismFacePatchRectangle(t, w, plane, sideY0, 1, sideY1, 4)
-	lug, err := decad.Extrude(t.Context(), doc, lugSketch, lugProfile,
-		decad.Distance{D: units.Millimeters(5), Dir: dir})
+	lug, err := decad.Extrude(doc, lugSketch, lugProfile,
+		decad.Distance{D: units.Millimeters(5), Dir: dir}).Do(t.Context())
 	require.NoError(t, err)
 	return plate, lug
 }
@@ -60,7 +60,7 @@ func TestUnionRectangularFacePatchFromPerpendicularExtrudes(t *testing.T) {
 			if tc.swap {
 				plate, lug = lug, plate
 			}
-			joined, err := decad.Union(t.Context(), plate, lug)
+			joined, err := decad.Union(plate, lug).Do(t.Context())
 			require.NoError(t, err)
 			require.Len(t, joined.Lumps(), 1)
 			volume, err := joined.Volume()
@@ -86,7 +86,7 @@ func TestUnionRectangularFacePatchFromPerpendicularExtrudes(t *testing.T) {
 func TestUnionRectangularFacePatchRefusesEdgeContact(t *testing.T) {
 	t.Parallel()
 	plate, lug := prismFacePatchPair(t, 20, 20, 25, decad.Along, decad.ExactOnly())
-	joined, err := decad.Union(t.Context(), plate, lug)
+	joined, err := decad.Union(plate, lug).Do(t.Context())
 	require.Nil(t, joined)
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	var booleanErr *decad.BooleanError
@@ -99,16 +99,16 @@ func TestUnionRectangularFacePatchAcrossOtherAxis(t *testing.T) {
 	w := sketch.NewWorld()
 	doc := decad.New()
 	plateSketch, plateProfile := prismFacePatchRectangle(t, w, w.XY(), 0, 0, 20, 20)
-	plate, err := decad.Extrude(t.Context(), doc, plateSketch, plateProfile,
-		decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
+	plate, err := decad.Extrude(doc, plateSketch, plateProfile,
+		decad.Distance{D: units.Millimeters(5), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	plane, err := w.CreateOffsetPlane(w.XZ(), -20)
 	require.NoError(t, err)
 	lugSketch, lugProfile := prismFacePatchRectangle(t, w, plane, 5, 1, 15, 4)
-	lug, err := decad.Extrude(t.Context(), doc, lugSketch, lugProfile,
-		decad.Distance{D: units.Millimeters(5), Dir: decad.Against})
+	lug, err := decad.Extrude(doc, lugSketch, lugProfile,
+		decad.Distance{D: units.Millimeters(5), Dir: decad.Against}).Do(t.Context())
 	require.NoError(t, err)
-	joined, err := decad.Union(t.Context(), plate, lug)
+	joined, err := decad.Union(plate, lug).Do(t.Context())
 	require.NoError(t, err)
 	require.Len(t, joined.Lumps(), 1)
 	volume, err := joined.Volume()
@@ -126,16 +126,16 @@ func TestUnionRectangularFacePatchUsesOtherSlabAxis(t *testing.T) {
 	w := sketch.NewWorld()
 	doc := decad.New()
 	plateSketch, plateProfile := prismFacePatchRectangle(t, w, w.XY(), 0, 0, 20, 20)
-	plate, err := decad.Extrude(t.Context(), doc, plateSketch, plateProfile,
-		decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
+	plate, err := decad.Extrude(doc, plateSketch, plateProfile,
+		decad.Distance{D: units.Millimeters(5), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	plane, err := w.CreateOffsetPlane(w.YZ(), 5)
 	require.NoError(t, err)
 	lugSketch, lugProfile := prismFacePatchRectangle(t, w, plane, 20, 0, 25, 5)
-	lug, err := decad.Extrude(t.Context(), doc, lugSketch, lugProfile,
-		decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	lug, err := decad.Extrude(doc, lugSketch, lugProfile,
+		decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
-	joined, err := decad.Union(t.Context(), plate, lug)
+	joined, err := decad.Union(plate, lug).Do(t.Context())
 	require.NoError(t, err)
 	require.Len(t, joined.Lumps(), 1)
 	volume, err := joined.Volume()
@@ -157,16 +157,16 @@ func TestUnionRectangularFacePatchRefusesTaperedSource(t *testing.T) {
 	w := sketch.NewWorld()
 	doc := decad.New(decad.ExactOnly())
 	plateSketch, plateProfile := prismFacePatchRectangle(t, w, w.XY(), 0, 0, 20, 20)
-	plate, err := decad.Extrude(t.Context(), doc, plateSketch, plateProfile,
-		decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
+	plate, err := decad.Extrude(doc, plateSketch, plateProfile,
+		decad.Distance{D: units.Millimeters(5), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	plane, err := w.CreateOffsetPlane(w.YZ(), 20)
 	require.NoError(t, err)
 	lugSketch, lugProfile := prismFacePatchRectangle(t, w, plane, 5, 1, 15, 4)
-	lug, err := decad.Extrude(t.Context(), doc, lugSketch, lugProfile,
-		decad.Distance{D: units.Millimeters(5), Dir: decad.Along}, decad.WithTaper(units.Degrees(5)))
+	lug, err := decad.Extrude(doc, lugSketch, lugProfile,
+		decad.Distance{D: units.Millimeters(5), Dir: decad.Along}).Taper(units.Degrees(5)).Do(t.Context())
 	require.NoError(t, err)
-	joined, err := decad.Union(t.Context(), plate, lug)
+	joined, err := decad.Union(plate, lug).Do(t.Context())
 	require.Nil(t, joined)
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 }

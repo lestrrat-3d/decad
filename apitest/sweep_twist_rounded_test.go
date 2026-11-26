@@ -59,8 +59,7 @@ func TestSweepTwistRoundedProfileVerifyUsesHeldDiameter(t *testing.T) {
 	path, err := decad.NewPath(r3.Vec{}, decad.LineTo{End: r3.NewVec(0, 0, 5)})
 	require.NoError(t, err)
 	doc := decad.New()
-	body, err := decad.Sweep(t.Context(), doc, s, profile, path,
-		decad.WithSweepTwist(units.Degrees(30)))
+	body, err := decad.Sweep(doc, s, profile, path).Twist(units.Degrees(30)).Do(t.Context())
 	require.NoError(t, err)
 	require.True(t, body.IsSolid())
 	report, err := doc.Verify(t.Context())
@@ -87,8 +86,7 @@ func TestSweepTwistRoundedProfileVerifyAll(t *testing.T) {
 	path, err := decad.NewPath(r3.Vec{}, decad.LineTo{End: r3.NewVec(0, 0, 5)})
 	require.NoError(t, err)
 	doc := decad.New()
-	body, err := decad.Sweep(t.Context(), doc, s, profile, path,
-		decad.WithSweepTwist(units.Degrees(30)))
+	body, err := decad.Sweep(doc, s, profile, path).Twist(units.Degrees(30)).Do(t.Context())
 	require.NoError(t, err)
 	require.Len(t, doc.Bodies(), 1)
 	require.Len(t, body.Faces(), 10)
@@ -126,7 +124,7 @@ func TestSweepTwistRoundedProfileVerifyAll(t *testing.T) {
 	}
 	move, err := r3.Translation(r3.NewVec(7, -3, 11))
 	require.NoError(t, err)
-	placed, err := decad.Transform(t.Context(), body, move)
+	placed, err := decad.Transform(body, move).Do(t.Context())
 	require.NoError(t, err)
 	placedMesh, err := placed.Tessellate(t.Context(), units.Millimeters(0.1),
 		decad.WithVerification(decad.VerifyAll))
@@ -134,8 +132,7 @@ func TestSweepTwistRoundedProfileVerifyAll(t *testing.T) {
 	require.True(t, placedMesh.BoundaryVerified())
 	require.True(t, placedMesh.VolumeVerified())
 
-	negative, err := decad.Sweep(t.Context(), doc, s, profile, path,
-		decad.WithSweepTwist(units.Degrees(-30)))
+	negative, err := decad.Sweep(doc, s, profile, path).Twist(units.Degrees(-30)).Do(t.Context())
 	require.NoError(t, err)
 	negativeMesh, err := negative.Tessellate(t.Context(), units.Millimeters(0.1),
 		decad.WithVerification(decad.VerifyAll))
@@ -150,15 +147,14 @@ func TestSweepTwistRoundedProfileAxisRefusalIsAtomic(t *testing.T) {
 	path, err := decad.NewPath(r3.Vec{}, decad.LineTo{End: r3.NewVec(0, 0, 5)})
 	require.NoError(t, err)
 	doc := decad.New()
-	_, err = decad.Sweep(t.Context(), doc, s, profile, path,
-		decad.WithSweepTwist(units.Degrees(30)))
+	_, err = decad.Sweep(doc, s, profile, path).Twist(units.Degrees(30)).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.Empty(t, doc.Bodies())
 }
 
 func TestSweepTwistRoundedProfileUnionKeepsHeldProof(t *testing.T) {
 	doc, swept, box := roundedTwistUnionOperands(t, 1, 2.5)
-	joined, err := decad.Union(t.Context(), swept, box)
+	joined, err := decad.Union(swept, box).Do(t.Context())
 	require.NoError(t, err)
 	require.Len(t, doc.Bodies(), 1)
 	volume, err := joined.Volume()
@@ -192,7 +188,7 @@ func TestSweepTwistRoundedProfileUnionKeepsHeldProof(t *testing.T) {
 
 func TestSweepTwistRoundedProfileUnionRefusesNearContact(t *testing.T) {
 	doc, swept, box := roundedTwistUnionOperands(t, 2.1, 3.6)
-	_, err := decad.Union(t.Context(), swept, box)
+	_, err := decad.Union(swept, box).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.ErrorContains(t, err, "held facets come within the chord tolerance")
 	var booleanErr *decad.BooleanError
@@ -207,8 +203,7 @@ func roundedTwistUnionOperands(t *testing.T, boxMinX, boxMaxX float64) (*decad.D
 	path, err := decad.NewPath(r3.Vec{}, decad.LineTo{End: r3.NewVec(0, 0, 5)})
 	require.NoError(t, err)
 	doc := decad.New()
-	swept, err := decad.Sweep(t.Context(), doc, s, profile, path,
-		decad.WithSweepTwist(units.Degrees(30)))
+	swept, err := decad.Sweep(doc, s, profile, path).Twist(units.Degrees(30)).Do(t.Context())
 	require.NoError(t, err)
 
 	boxWorld := sketch.NewWorld()
@@ -218,12 +213,12 @@ func roundedTwistUnionOperands(t *testing.T, boxMinX, boxMaxX float64) (*decad.D
 	boxSketch.Fix(boxProfile.A)
 	_, err = boxSketch.Solve(t.Context())
 	require.NoError(t, err)
-	box, err := decad.Extrude(t.Context(), doc, boxSketch, boxSketch.Profiles()[0],
-		decad.Distance{D: units.Millimeters(1), Dir: decad.Along})
+	box, err := decad.Extrude(doc, boxSketch, boxSketch.Profiles()[0],
+		decad.Distance{D: units.Millimeters(1), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	shift, err := r3.Translation(r3.NewVec(0, 0, 2))
 	require.NoError(t, err)
-	box, err = decad.Transform(t.Context(), box, shift)
+	box, err = decad.Transform(box, shift).Do(t.Context())
 	require.NoError(t, err)
 
 	return doc, swept, box

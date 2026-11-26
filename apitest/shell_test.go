@@ -27,7 +27,7 @@ func shellBox(t *testing.T) (*decad.Document, *decad.Body) {
 	t.Helper()
 	s, p := plateSketch(t)
 	doc := decad.New()
-	body, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(shellBoxHeight), Dir: decad.Along})
+	body, err := decad.Extrude(doc, s, p, decad.Distance{D: units.Millimeters(shellBoxHeight), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	return doc, body
 }
@@ -58,7 +58,7 @@ func holedBox(t *testing.T, x0, y0, x1, y1 float64) *decad.Body {
 	}
 	require.NotNil(t, prof)
 	doc := decad.New()
-	box, err := decad.Extrude(t.Context(), doc, s, prof, decad.Distance{D: units.Millimeters(shellBoxHeight), Dir: decad.Along})
+	box, err := decad.Extrude(doc, s, prof, decad.Distance{D: units.Millimeters(shellBoxHeight), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	return box
 }
@@ -125,7 +125,7 @@ func TestShellContextCancellationDuringOffsetLeavesReceiverLive(t *testing.T) {
 	doc, box := shellBox(t)
 	ctx := &offsetPreprocessingCancelContext{Context: t.Context()}
 
-	body, err := decad.Shell(ctx, box, topCap(box), units.Millimeters(5))
+	body, err := decad.Shell(box, topCap(box), units.Millimeters(5)).Do(ctx)
 
 	require.Nil(t, body)
 	require.ErrorIs(t, err, context.Canceled)
@@ -138,7 +138,7 @@ func TestShellContextCancellationDuringOffsetSetupLeavesReceiverLive(t *testing.
 	doc, box := shellBox(t)
 	ctx := &operationCancelContext{Context: t.Context(), target: "ProfileCornerLoopsBudget"}
 
-	body, err := decad.Shell(ctx, box, topCap(box), units.Millimeters(5))
+	body, err := decad.Shell(box, topCap(box), units.Millimeters(5)).Do(ctx)
 
 	require.Nil(t, body)
 	require.ErrorIs(t, err, context.Canceled)
@@ -151,7 +151,7 @@ func TestShellContextCancellationDuringSectionSurveyLeavesReceiverLive(t *testin
 	doc, box := shellBox(t)
 	ctx := &operationCancelContext{Context: t.Context(), target: "SectionInradius"}
 
-	body, err := decad.Shell(ctx, box, topCap(box), units.Millimeters(5))
+	body, err := decad.Shell(box, topCap(box), units.Millimeters(5)).Do(ctx)
 
 	require.Nil(t, body)
 	require.ErrorIs(t, err, context.Canceled)
@@ -168,11 +168,11 @@ func TestShellContextCancellationDuringKernelSetupLeavesReceiverLive(t *testing.
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	doc := decad.New()
-	disk, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
+	disk, err := decad.Extrude(doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(20), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	ctx := &operationCancelContext{Context: t.Context(), target: "NewWallKernelBudget"}
 
-	body, err := decad.Shell(ctx, disk, topCap(disk), units.Millimeters(5))
+	body, err := decad.Shell(disk, topCap(disk), units.Millimeters(5)).Do(ctx)
 
 	require.Nil(t, body)
 	require.ErrorIs(t, err, context.Canceled)
@@ -191,7 +191,7 @@ func TestShellContextCancellationDuringAuditPreservesError(t *testing.T) {
 				cancelErr: cancelErr,
 			}
 
-			body, err := decad.Shell(ctx, box, topCap(box), units.Millimeters(5))
+			body, err := decad.Shell(box, topCap(box), units.Millimeters(5)).Do(ctx)
 
 			require.Nil(t, body)
 			require.True(t, err == cancelErr, "Shell must return the exact context error")
@@ -211,7 +211,7 @@ func TestShellSelectorAdmission(t *testing.T) {
 	t.Run("BuiltInQuery", func(t *testing.T) {
 		_, box := shellBox(t)
 
-		_, err := decad.Shell(t.Context(), box, bothCaps(), units.Millimeters(5))
+		_, err := decad.Shell(box, bothCaps(), units.Millimeters(5)).Do(t.Context())
 		require.NoError(t, err)
 	})
 
@@ -223,7 +223,7 @@ func TestShellSelectorAdmission(t *testing.T) {
 			calls:     &calls,
 		}
 
-		_, err := decad.Shell(t.Context(), box, foreign, units.Millimeters(5))
+		_, err := decad.Shell(box, foreign, units.Millimeters(5)).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrDegenerate)
 		require.Zero(t, calls, `Shell rejects a foreign selector before invoking its callback`)
 		require.Equal(t, []*decad.Body{box}, doc.Bodies(), `a rejected selector does not retire the receiver`)
@@ -234,81 +234,38 @@ func TestShellSelectorAdmission(t *testing.T) {
 		var query *decad.FaceQuery
 		var selector decad.FaceSelector = query
 
-		_, err := decad.Shell(t.Context(), box, selector, units.Millimeters(5))
+		_, err := decad.Shell(box, selector, units.Millimeters(5)).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrDegenerate)
 		require.Equal(t, []*decad.Body{box}, doc.Bodies(), `a typed nil selector does not retire the receiver`)
 	})
 }
 
-type unknownShellOption struct {
-	decad.ShellOption
-	calls *int
-}
-
-type unknownShellOptionIdent struct{}
-
-func (o unknownShellOption) Ident() any {
-	(*o.calls)++
-	return unknownShellOptionIdent{}
-}
-
-func TestShellOptionDispatch(t *testing.T) {
+func TestShellSenseDispatch(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
 		name string
-		opts []decad.ShellOption
+		set  []shellSetting
 	}{
 		{name: "default"},
-		{name: "inward", opts: []decad.ShellOption{decad.WithShellSense(decad.Inward)}},
-		{name: "outward", opts: []decad.ShellOption{decad.WithShellSense(decad.Outward)}},
+		{name: "inward", set: []shellSetting{senseSetting(decad.Inward)}},
+		{name: "outward", set: []shellSetting{outwardSetting()}},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			_, box := shellBox(t)
-			body, err := decad.Shell(t.Context(), box, topCap(box), units.Millimeters(5), tc.opts...)
+			body, err := applyShell(box, topCap(box), units.Millimeters(5), tc.set...).Do(t.Context())
 			require.NoError(t, err)
 			require.NotNil(t, body)
 		})
 	}
 
-	t.Run("ForeignImplementation", func(t *testing.T) {
-		doc, box := shellBox(t)
-		calls := 0
-		opt := unknownShellOption{
-			ShellOption: decad.WithShellSense(decad.Outward),
-			calls:       &calls,
-		}
-
-		body, err := decad.Shell(t.Context(), box, topCap(box), units.Millimeters(5), opt)
-		require.Nil(t, body)
-		require.ErrorIs(t, err, decad.ErrDegenerate)
-		require.ErrorContains(t, err, "not a decad shell option")
-		require.Zero(t, calls, `Shell rejects a foreign option before invoking its callback`)
-		require.Equal(t, []*decad.Body{box}, doc.Bodies())
-	})
-
-	t.Run("TypedNilImplementation", func(t *testing.T) {
-		doc, box := shellBox(t)
-		var opt *unknownShellOption
-		var body *decad.Body
-		var err error
-
-		require.NotPanics(t, func() {
-			body, err = decad.Shell(t.Context(), box, topCap(box), units.Millimeters(5), opt)
-		})
-		require.Nil(t, body)
-		require.ErrorIs(t, err, decad.ErrDegenerate)
-		require.ErrorContains(t, err, "not a decad shell option")
-		require.Equal(t, []*decad.Body{box}, doc.Bodies())
-	})
-
 	t.Run("UnknownSense", func(t *testing.T) {
 		doc, box := shellBox(t)
 
-		body, err := decad.Shell(t.Context(), box, topCap(box), units.Millimeters(5), decad.WithShellSense(decad.ShellSense(3)))
+		body, err := decad.Shell(box, topCap(box), units.Millimeters(5)).Sense(decad.ShellSense(3)).Do(t.Context())
 		require.Nil(t, body)
 		require.ErrorIs(t, err, decad.ErrDegenerate)
-		require.ErrorContains(t, err, "unknown shell sense 3")
+		require.ErrorContains(t, err, "unknown shell sense 3 (SX1)")
 		require.Equal(t, []*decad.Body{box}, doc.Bodies())
 	})
 }
@@ -321,7 +278,7 @@ func TestShellTubeInwardBox(t *testing.T) {
 
 	// Both caps removed, inward — a tube: a prism over the annular section
 	// {Outer: 100×60, Hole: 90×50}.
-	body, err := decad.Shell(t.Context(), box, bothCaps(), units.Millimeters(th))
+	body, err := decad.Shell(box, bothCaps(), units.Millimeters(th)).Do(t.Context())
 	require.NoError(t, err)
 	require.True(t, body.IsSolid())
 	requireManifold(t, body)
@@ -372,10 +329,10 @@ func TestShellTubeInwardCylinder(t *testing.T) {
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	doc := decad.New()
-	disk, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
+	disk, err := decad.Extrude(doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(h), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 
-	body, err := decad.Shell(t.Context(), disk, bothCaps(), units.Millimeters(th))
+	body, err := decad.Shell(disk, bothCaps(), units.Millimeters(th)).Do(t.Context())
 	require.NoError(t, err)
 	requireManifold(t, body)
 
@@ -404,7 +361,7 @@ func TestShellCupInwardBox(t *testing.T) {
 
 	// One cap removed, inward — a cup (cupPayload): the outer prism over P on
 	// [z0, z1] and the cavity prism over Q = P ⊖ t on [z0 + t, z1].
-	body, err := decad.Shell(t.Context(), box, topCap(box), units.Millimeters(th))
+	body, err := decad.Shell(box, topCap(box), units.Millimeters(th)).Do(t.Context())
 	require.NoError(t, err)
 	require.True(t, body.IsSolid())
 	requireManifold(t, body)
@@ -447,7 +404,7 @@ func TestShellCupFloorCarriesThicknessConversion(t *testing.T) {
 	require.NoError(t, err)
 
 	_, box := shellBox(t)
-	cup, err := decad.Shell(t.Context(), box, topCap(box), thickness)
+	cup, err := decad.Shell(box, topCap(box), thickness).Do(t.Context())
 	require.NoError(t, err)
 
 	floorVertices := 0
@@ -469,7 +426,7 @@ func TestShellCupOutwardBox(t *testing.T) {
 	h := shellBoxHeight
 	_, box := shellBox(t)
 
-	body, err := decad.Shell(t.Context(), box, topCap(box), units.Millimeters(th), decad.WithShellSense(decad.Outward))
+	body, err := decad.Shell(box, topCap(box), units.Millimeters(th)).Sense(decad.Outward).Do(t.Context())
 	require.NoError(t, err)
 	require.True(t, body.IsSolid())
 	requireManifold(t, body)
@@ -494,7 +451,7 @@ func TestShellCupPlacedComposes(t *testing.T) {
 	t.Parallel()
 	const th = 5.0
 	_, box := shellBox(t)
-	cup, err := decad.Shell(t.Context(), box, topCap(box), units.Millimeters(th))
+	cup, err := decad.Shell(box, topCap(box), units.Millimeters(th)).Do(t.Context())
 	require.NoError(t, err)
 	want, err := cup.Volume()
 	require.NoError(t, err)
@@ -503,7 +460,7 @@ func TestShellCupPlacedComposes(t *testing.T) {
 	// is invariant under a rigid move.
 	motion, err := r3.Translation(r3.NewVec(10, 20, 30))
 	require.NoError(t, err)
-	moved, err := decad.Transform(t.Context(), cup, motion)
+	moved, err := decad.Transform(cup, motion).Do(t.Context())
 	require.NoError(t, err)
 	require.True(t, moved.IsSolid())
 	requireManifold(t, moved)
@@ -538,7 +495,7 @@ func circleHoledBox(t testing.TB, holes ...[3]float64) (*decad.Document, *decad.
 	}
 	require.NotNil(t, prof)
 	doc := decad.New()
-	box, err := decad.Extrude(t.Context(), doc, s, prof, decad.Distance{D: units.Millimeters(shellBoxHeight), Dir: decad.Along})
+	box, err := decad.Extrude(doc, s, prof, decad.Distance{D: units.Millimeters(shellBoxHeight), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	return doc, box
 }
@@ -552,7 +509,7 @@ func TestShellCupHoledInward(t *testing.T) {
 	// One cap removed, inward, on a section with one central hole — a holed cup:
 	// a wall around the pocket, a floor, and a POST (a tube wall) around the hole
 	// rising from the floor, all one lump.
-	body, err := decad.Shell(t.Context(), box, topCap(box), units.Millimeters(th))
+	body, err := decad.Shell(box, topCap(box), units.Millimeters(th)).Do(t.Context())
 	require.NoError(t, err)
 	require.True(t, body.IsSolid())
 	requireManifold(t, body)
@@ -629,7 +586,7 @@ func TestShellCirclePostSectionGate(t *testing.T) {
 	const holeRadius = 8.0
 	t.Run("contained disk permits a cup", func(t *testing.T) {
 		doc, box := circleHoledBox(t, [3]float64{50, 30, holeRadius})
-		cup, err := decad.Shell(t.Context(), box, topCap(box), units.Millimeters(5))
+		cup, err := decad.Shell(box, topCap(box), units.Millimeters(5)).Do(t.Context())
 		require.NoError(t, err)
 		vol, err := cup.Volume()
 		require.NoError(t, err)
@@ -643,7 +600,7 @@ func TestShellCirclePostSectionGate(t *testing.T) {
 	t.Run("near section limit uses inradius refusal", func(t *testing.T) {
 		doc, box := circleHoledBox(t, [3]float64{50, 30, holeRadius})
 		// Removing both caps excludes the cup's independent height limit.
-		body, err := decad.Shell(t.Context(), box, bothCaps(), units.Millimeters(22))
+		body, err := decad.Shell(box, bothCaps(), units.Millimeters(22)).Do(t.Context())
 		require.Nil(t, body)
 		require.ErrorIs(t, err, decad.ErrDegenerate)
 		require.Contains(t, err.Error(), "section's inradius")
@@ -675,7 +632,7 @@ func TestShellCupHoledRimLoopOrder(t *testing.T) {
 	t.Parallel()
 	const th, rh = 5.0, 8.0
 	_, box := circleHoledBox(t, [3]float64{50, 30, rh})
-	body, err := decad.Shell(t.Context(), box, topCap(box), units.Millimeters(th))
+	body, err := decad.Shell(box, topCap(box), units.Millimeters(th)).Do(t.Context())
 	require.NoError(t, err)
 
 	for _, role := range []string{roleRim0, "rim(1)"} {
@@ -693,7 +650,7 @@ func TestShellCupHoledTwoPosts(t *testing.T) {
 	h := shellBoxHeight
 	doc, box := circleHoledBox(t, [3]float64{30, 30, rh}, [3]float64{70, 30, rh})
 
-	body, err := decad.Shell(t.Context(), box, topCap(box), units.Millimeters(th))
+	body, err := decad.Shell(box, topCap(box), units.Millimeters(th)).Do(t.Context())
 	require.NoError(t, err)
 	require.True(t, body.IsSolid())
 	requireManifold(t, body)
@@ -732,7 +689,7 @@ func TestShellCupHoledOutward(t *testing.T) {
 	// hole SHRINKS by t in the outer dilation Q (its wall material lies outside
 	// it), so the outer region's tunnel is radius rh − t and the pocket's post is
 	// the original radius rh.
-	body, err := decad.Shell(t.Context(), box, topCap(box), units.Millimeters(th), decad.WithShellSense(decad.Outward))
+	body, err := decad.Shell(box, topCap(box), units.Millimeters(th)).Sense(decad.Outward).Do(t.Context())
 	require.NoError(t, err)
 	require.True(t, body.IsSolid())
 	requireManifold(t, body)
@@ -759,7 +716,7 @@ func TestShellCupHoledRectangularPost(t *testing.T) {
 	// its corners (an inward-reflex corner offsets to an arc, §7), so the post
 	// wall is four planes joined by four corner cylinders — all still one lump.
 	box := holedBox(t, 40, 20, 60, 40)
-	body, err := decad.Shell(t.Context(), box, topCap(box), units.Millimeters(th))
+	body, err := decad.Shell(box, topCap(box), units.Millimeters(th)).Do(t.Context())
 	require.NoError(t, err)
 	require.True(t, body.IsSolid())
 	requireManifold(t, body)
@@ -838,13 +795,13 @@ func TestShellRefusals(t *testing.T) {
 		}
 		require.NotNil(t, prof)
 		doc := decad.New()
-		box, err := decad.Extrude(t.Context(), doc, s, prof, decad.Distance{D: units.Millimeters(shellBoxHeight), Dir: decad.Along})
+		box, err := decad.Extrude(doc, s, prof, decad.Distance{D: units.Millimeters(shellBoxHeight), Dir: decad.Along}).Do(t.Context())
 		require.NoError(t, err)
 		// The 5 mm inward wall leaves the radius-10 hole (2t = 10 < 20 diameter),
 		// so the hole survives the offset and the shell is 1 + k = 2 disjoint
 		// bands (modify-reach BX8): the 100×60 rim less the 90×50 cavity, and
 		// the ring between radius 10 and radius 15.
-		body, err := decad.Shell(t.Context(), box, bothCaps(), units.Millimeters(5))
+		body, err := decad.Shell(box, bothCaps(), units.Millimeters(5)).Do(t.Context())
 		require.NoError(t, err)
 		require.Len(t, body.Lumps(), 2)
 		requireVolumeNear(t, body, (100*60-90*50+math.Pi*(15*15-10*10))*shellBoxHeight)
@@ -855,7 +812,7 @@ func TestShellRefusals(t *testing.T) {
 		// outer wall past the hole's expanded boundary, so the shared audit
 		// reaches its crossing refusal before any band is built.
 		box := holedBox(t, 5, 25, 15, 35)
-		_, err := decad.Shell(t.Context(), box, bothCaps(), units.Millimeters(3))
+		_, err := decad.Shell(box, bothCaps(), units.Millimeters(3)).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.Equal(t, `decad: not supported by the current evaluator: the rewrite crosses itself; a resolving kernel is not available`,
 			err.Error(), `Shell keeps its established shared-audit diagnostic`)
@@ -868,7 +825,7 @@ func TestShellRefusals(t *testing.T) {
 		// cannot see it and it must be caught as the offset is built — before
 		// the bands are built. Assert the message sub-case to prove S11a fired.
 		box := holedBox(t, 65, 25, 75, 35)
-		_, err := decad.Shell(t.Context(), box, bothCaps(), units.Millimeters(6), decad.WithShellSense(decad.Outward))
+		_, err := decad.Shell(box, bothCaps(), units.Millimeters(6)).Sense(decad.Outward).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.Contains(t, err.Error(), "drops a section feature", `the erased hole is S11a, a dropped feature`)
 	})
@@ -879,7 +836,7 @@ func TestShellRefusals(t *testing.T) {
 		// builds its two bands — proving the drop detection did not
 		// over-broaden onto a valid offset.
 		box := holedBox(t, 65, 25, 75, 35)
-		body, err := decad.Shell(t.Context(), box, bothCaps(), units.Millimeters(3), decad.WithShellSense(decad.Outward))
+		body, err := decad.Shell(box, bothCaps(), units.Millimeters(3)).Sense(decad.Outward).Do(t.Context())
 		require.NoError(t, err)
 		require.Len(t, body.Lumps(), 2)
 		requireVolumeNear(t, body, (106*66-(4-math.Pi)*9-100*60+10*10-4*4)*shellBoxHeight)
@@ -888,7 +845,7 @@ func TestShellRefusals(t *testing.T) {
 	t.Run("t at or past the inradius is S10 degenerate", func(t *testing.T) {
 		_, box := shellBox(t)
 		// Inradius of a 100×60 rectangle is 30; a 35 mm inward wall eats it.
-		_, err := decad.Shell(t.Context(), box, bothCaps(), units.Millimeters(35))
+		_, err := decad.Shell(box, bothCaps(), units.Millimeters(35)).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrDegenerate)
 	})
 
@@ -896,17 +853,17 @@ func TestShellRefusals(t *testing.T) {
 		_, box := shellBox(t)
 		// 25 mm < inradius 30 (the section survives) but ≥ the 20 mm sweep, so
 		// the kept cap's floor eats the cavity.
-		_, err := decad.Shell(t.Context(), box, topCap(box), units.Millimeters(25))
+		_, err := decad.Shell(box, topCap(box), units.Millimeters(25)).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrDegenerate)
 	})
 
 	t.Run("a topology-changing offset is S11 unsupported", func(t *testing.T) {
 		_, box := shellBox(t)
-		rounded, err := decad.Fillet(t.Context(), box, verticalEdges(), units.Millimeters(2))
+		rounded, err := decad.Fillet(box, verticalEdges(), units.Millimeters(2)).Do(t.Context())
 		require.NoError(t, err)
 		// A 5 mm inward wall erodes the 2 mm corner arcs past zero — a dropped
 		// feature, which needs a trimmed-offset kernel.
-		_, err = decad.Shell(t.Context(), rounded, bothCaps(), units.Millimeters(5))
+		_, err = decad.Shell(rounded, bothCaps(), units.Millimeters(5)).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 	})
 
@@ -915,7 +872,7 @@ func TestShellRefusals(t *testing.T) {
 		// agent-docs/modify-design.md Part O: the y = 0 wall removed leaves the
 		// cavity (5,95)×(0,55) over (5,15).
 		wall := decad.Faces(decad.Facing(r3.NewVec(0, -1, 0)))
-		body, err := decad.Shell(t.Context(), box, wall, units.Millimeters(5))
+		body, err := decad.Shell(box, wall, units.Millimeters(5)).Do(t.Context())
 		require.NoError(t, err)
 		vol, err := body.Volume()
 		require.NoError(t, err)
@@ -925,13 +882,13 @@ func TestShellRefusals(t *testing.T) {
 
 	t.Run("a query matching nothing is loud", func(t *testing.T) {
 		_, box := shellBox(t)
-		_, err := decad.Shell(t.Context(), box, decad.Faces(decad.Cylindrical()), units.Millimeters(5))
+		_, err := decad.Shell(box, decad.Faces(decad.Cylindrical()), units.Millimeters(5)).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrNoMatch)
 	})
 
 	t.Run("a zero thickness is S14 degenerate", func(t *testing.T) {
 		_, box := shellBox(t)
-		_, err := decad.Shell(t.Context(), box, bothCaps(), units.Millimeters(0))
+		_, err := decad.Shell(box, bothCaps(), units.Millimeters(0)).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrDegenerate)
 	})
 }
@@ -946,17 +903,17 @@ func TestShellInwardSectionWorkBudget(t *testing.T) {
 	}
 	s, profile := polygonSketch(t, pts)
 	doc := decad.New()
-	box, err := decad.Extrude(t.Context(), doc, s, profile, decad.Distance{D: units.Millimeters(shellBoxHeight), Dir: decad.Along})
+	box, err := decad.Extrude(doc, s, profile, decad.Distance{D: units.Millimeters(shellBoxHeight), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	before := snapshotDocument(t, doc)
 
-	body, err := decad.Shell(t.Context(), box, bothCaps(), units.Millimeters(1))
+	body, err := decad.Shell(box, bothCaps(), units.Millimeters(1)).Do(t.Context())
 	require.Nil(t, body)
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.Contains(t, err.Error(), "work budget")
 	require.Contains(t, err.Error(), "candidate-family visits")
 	require.Equal(t, before.bodies, doc.Bodies(), `a refused shell must preserve live body membership and order`)
-	_, err = decad.Copy(t.Context(), box)
+	_, err = decad.Copy(box).Do(t.Context())
 	require.NoError(t, err, `the receiver must remain live after a work-budget refusal`)
 }
 
@@ -966,7 +923,7 @@ func TestShellCupDownstream(t *testing.T) {
 
 	t.Run("MinWallThickness is exact", func(t *testing.T) {
 		doc, box := shellBox(t)
-		_, err := decad.Shell(t.Context(), box, topCap(box), units.Millimeters(th))
+		_, err := decad.Shell(box, topCap(box), units.Millimeters(th)).Do(t.Context())
 		require.NoError(t, err)
 		report, err := doc.Verify(t.Context(), decad.WithMinWallThickness(units.Millimeters(1)))
 		require.NoError(t, err)
@@ -978,7 +935,7 @@ func TestShellCupDownstream(t *testing.T) {
 
 	t.Run("a lone cup verifies Sound", func(t *testing.T) {
 		doc, box := shellBox(t)
-		_, err := decad.Shell(t.Context(), box, topCap(box), units.Millimeters(th))
+		_, err := decad.Shell(box, topCap(box), units.Millimeters(th)).Do(t.Context())
 		require.NoError(t, err)
 		report, err := doc.Verify(t.Context())
 		require.NoError(t, err)
@@ -988,18 +945,18 @@ func TestShellCupDownstream(t *testing.T) {
 
 	t.Run("a box-disjoint cup pair is Sound, but WithClearances invokes the kernel and reads Suspect", func(t *testing.T) {
 		doc, box1 := shellBox(t)
-		cup1, err := decad.Shell(t.Context(), box1, topCap(box1), units.Millimeters(th))
+		cup1, err := decad.Shell(box1, topCap(box1), units.Millimeters(th)).Do(t.Context())
 		require.NoError(t, err)
 		// Move the first cup far clear, then build a second cup at the origin —
 		// two live, box-disjoint cups in one document.
 		far, err := r3.Translation(r3.NewVec(500, 0, 0))
 		require.NoError(t, err)
-		_, err = decad.Transform(t.Context(), cup1, far)
+		_, err = decad.Transform(cup1, far).Do(t.Context())
 		require.NoError(t, err)
 		s2, p2 := plateSketch(t)
-		box2, err := decad.Extrude(t.Context(), doc, s2, p2, decad.Distance{D: units.Millimeters(shellBoxHeight), Dir: decad.Along})
+		box2, err := decad.Extrude(doc, s2, p2, decad.Distance{D: units.Millimeters(shellBoxHeight), Dir: decad.Along}).Do(t.Context())
 		require.NoError(t, err)
-		_, err = decad.Shell(t.Context(), box2, topCap(box2), units.Millimeters(th))
+		_, err = decad.Shell(box2, topCap(box2), units.Millimeters(th)).Do(t.Context())
 		require.NoError(t, err)
 		require.Len(t, doc.Bodies(), 2)
 
@@ -1051,9 +1008,9 @@ func cylinderCup(t *testing.T, R, h, th float64) (*decad.Document, *decad.Body) 
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	doc := decad.New()
-	disk, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
+	disk, err := decad.Extrude(doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(h), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
-	cup, err := decad.Shell(t.Context(), disk, topCap(disk), units.Millimeters(th))
+	cup, err := decad.Shell(disk, topCap(disk), units.Millimeters(th)).Do(t.Context())
 	require.NoError(t, err)
 	return doc, cup
 }
@@ -1077,7 +1034,7 @@ func requireCupWall(t *testing.T, doc *decad.Document, tool, want float64, statu
 func TestShellCupWallContextCancellationDuringOffset(t *testing.T) {
 	t.Parallel()
 	doc, box := shellBox(t)
-	_, err := decad.Shell(t.Context(), box, topCap(box), units.Millimeters(5))
+	_, err := decad.Shell(box, topCap(box), units.Millimeters(5)).Do(t.Context())
 	require.NoError(t, err)
 
 	ctx := &offsetPreprocessingCancelContext{Context: t.Context()}
@@ -1091,7 +1048,7 @@ func TestShellCupWallContextCancellationDuringOffset(t *testing.T) {
 func TestShellCupWallContextCancellationDuringFollowUpLeavesDocumentUnchanged(t *testing.T) {
 	t.Parallel()
 	doc, box := shellBox(t)
-	_, err := decad.Shell(t.Context(), box, topCap(box), units.Millimeters(5))
+	_, err := decad.Shell(box, topCap(box), units.Millimeters(5)).Do(t.Context())
 	require.NoError(t, err)
 	bodies := doc.Bodies()
 	ctx := &operationCancelContext{Context: t.Context(), target: "SurveyLoopsBudget"}
@@ -1110,7 +1067,7 @@ func TestShellCupWallThickness(t *testing.T) {
 
 	t.Run("inward box", func(t *testing.T) {
 		doc, box := shellBox(t)
-		_, err := decad.Shell(t.Context(), box, topCap(box), units.Millimeters(th))
+		_, err := decad.Shell(box, topCap(box), units.Millimeters(th)).Do(t.Context())
 		require.NoError(t, err)
 		requireCupWall(t, doc, th, th, decad.Sound)
 	})
@@ -1119,7 +1076,7 @@ func TestShellCupWallThickness(t *testing.T) {
 		const mirrorThickness = 0.1
 		doc, box := shellBox(t)
 		bottom := decad.Faces(decad.FaceCreatedBy(decad.CapStart(box)))
-		_, err := decad.Shell(t.Context(), box, bottom, units.Millimeters(mirrorThickness))
+		_, err := decad.Shell(box, bottom, units.Millimeters(mirrorThickness)).Do(t.Context())
 		require.NoError(t, err)
 		requireCupWall(t, doc, mirrorThickness, mirrorThickness, decad.Sound)
 	})
@@ -1128,11 +1085,9 @@ func TestShellCupWallThickness(t *testing.T) {
 		const mirrorThickness = 0.1
 		doc, box := shellBox(t)
 		bottom := decad.Faces(decad.FaceCreatedBy(decad.CapStart(box)))
-		_, err := decad.Shell(t.Context(), box,
+		_, err := decad.Shell(box,
 			bottom,
-			units.Millimeters(mirrorThickness),
-			decad.WithShellSense(decad.Outward),
-		)
+			units.Millimeters(mirrorThickness)).Sense(decad.Outward).Do(t.Context())
 		require.NoError(t, err)
 		// The outward dilation's corner arcs round their centres and feet at
 		// the plate's coordinates (u near 100, v near 60, two different
@@ -1150,14 +1105,14 @@ func TestShellCupWallThickness(t *testing.T) {
 
 	t.Run("outward rounded box", func(t *testing.T) {
 		doc, box := shellBox(t)
-		_, err := decad.Shell(t.Context(), box, topCap(box), units.Millimeters(th), decad.WithShellSense(decad.Outward))
+		_, err := decad.Shell(box, topCap(box), units.Millimeters(th)).Sense(decad.Outward).Do(t.Context())
 		require.NoError(t, err)
 		requireCupWall(t, doc, th, th, decad.Sound)
 	})
 
 	t.Run("holed cup", func(t *testing.T) {
 		doc, box := circleHoledBox(t, [3]float64{50, 30, 8})
-		_, err := decad.Shell(t.Context(), box, topCap(box), units.Millimeters(th))
+		_, err := decad.Shell(box, topCap(box), units.Millimeters(th)).Do(t.Context())
 		require.NoError(t, err)
 		requireCupWall(t, doc, th, th, decad.Sound)
 	})
@@ -1167,7 +1122,7 @@ func TestShellCupWallToolVerdict(t *testing.T) {
 	t.Parallel()
 	const th = 5.0
 	doc, box := shellBox(t)
-	_, err := decad.Shell(t.Context(), box, topCap(box), units.Millimeters(th))
+	_, err := decad.Shell(box, topCap(box), units.Millimeters(th)).Do(t.Context())
 	require.NoError(t, err)
 
 	requireCupWall(t, doc, th-1, th, decad.Sound)
@@ -1183,9 +1138,9 @@ func TestShellCupWallQualifyingPinch(t *testing.T) {
 	// proves a violation.
 	s, p := polygonSketch(t, [][2]float64{{0, 0}, {100, 0}, {100, 10}})
 	doc := decad.New()
-	body, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
+	body, err := decad.Extrude(doc, s, p, decad.Distance{D: units.Millimeters(20), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
-	_, err = decad.Shell(t.Context(), body, topCap(body), units.Millimeters(1))
+	_, err = decad.Shell(body, topCap(body), units.Millimeters(1)).Do(t.Context())
 	require.NoError(t, err)
 	requireCupWall(t, doc, 0.001, 0, decad.Violating)
 
@@ -1216,13 +1171,11 @@ func TestShellCupWallOutwardCavityQualifyingPinch(t *testing.T) {
 		{0, 100},
 	})
 	doc := decad.New()
-	body, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
+	body, err := decad.Extrude(doc, s, p, decad.Distance{D: units.Millimeters(20), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
-	_, err = decad.Shell(t.Context(), body,
+	_, err = decad.Shell(body,
 		topCap(body),
-		units.Millimeters(th),
-		decad.WithShellSense(decad.Outward),
-	)
+		units.Millimeters(th)).Sense(decad.Outward).Do(t.Context())
 	require.NoError(t, err)
 	requireCupWall(t, doc, th, 0, decad.Violating)
 }
@@ -1235,7 +1188,7 @@ func TestShellCupTessellateBox(t *testing.T) {
 	const th = 5.0
 	h := shellBoxHeight
 	_, box := shellBox(t)
-	cup, err := decad.Shell(t.Context(), box, topCap(box), units.Millimeters(th))
+	cup, err := decad.Shell(box, topCap(box), units.Millimeters(th)).Do(t.Context())
 	require.NoError(t, err)
 
 	mesh, err := cup.Tessellate(t.Context(), units.Millimeters(0.1))
@@ -1325,14 +1278,14 @@ func TestShellCupTessellateReflected(t *testing.T) {
 	const th = 5.0
 	h := shellBoxHeight
 	_, box := shellBox(t)
-	cup, err := decad.Shell(t.Context(), box, topCap(box), units.Millimeters(th))
+	cup, err := decad.Shell(box, topCap(box), units.Millimeters(th)).Do(t.Context())
 	require.NoError(t, err)
 
 	mirror, err := r3.NewFrame(r3.NewVec(0, 0, 0), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
 	require.NoError(t, err)
 	refl, err := r3.Reflection(mirror)
 	require.NoError(t, err)
-	placed, err := decad.Transform(t.Context(), cup, refl)
+	placed, err := decad.Transform(cup, refl).Do(t.Context())
 	require.NoError(t, err)
 
 	mesh, err := placed.Tessellate(t.Context(), units.Millimeters(0.1))
@@ -1356,7 +1309,7 @@ func TestShellCupTessellateOutwardBox(t *testing.T) {
 	const th = 5.0
 	h := shellBoxHeight
 	_, box := shellBox(t)
-	cup, err := decad.Shell(t.Context(), box, topCap(box), units.Millimeters(th), decad.WithShellSense(decad.Outward))
+	cup, err := decad.Shell(box, topCap(box), units.Millimeters(th)).Sense(decad.Outward).Do(t.Context())
 	require.NoError(t, err)
 
 	tol := 0.1
@@ -1382,7 +1335,7 @@ func TestShellCupUndercutsBox(t *testing.T) {
 	// and the outer floor is exactly antiparallel (it separates, not hooks).
 	t.Run("clear under an axial pull", func(t *testing.T) {
 		doc, box := shellBox(t)
-		_, err := decad.Shell(t.Context(), box, topCap(box), units.Millimeters(th))
+		_, err := decad.Shell(box, topCap(box), units.Millimeters(th)).Do(t.Context())
 		require.NoError(t, err)
 		report, err := doc.Verify(t.Context(), decad.WithPullDirection(r3.NewVec(0, 0, 1)))
 		require.NoError(t, err)
@@ -1397,7 +1350,7 @@ func TestShellCupUndercutsBox(t *testing.T) {
 	// tilt, the matching cavity wall, and the outer floor.
 	t.Run("tilt hooks three faces", func(t *testing.T) {
 		doc, box := shellBox(t)
-		cup, err := decad.Shell(t.Context(), box, topCap(box), units.Millimeters(th))
+		cup, err := decad.Shell(box, topCap(box), units.Millimeters(th)).Do(t.Context())
 		require.NoError(t, err)
 		report, err := doc.Verify(t.Context(), decad.WithPullDirection(r3.NewVec(1, 0, 1)))
 		require.NoError(t, err)
@@ -1445,7 +1398,7 @@ func TestShellCupMinRadius(t *testing.T) {
 	t.Run("box cup has no concave radius", func(t *testing.T) {
 		const th = 5.0
 		doc, box := shellBox(t)
-		_, err := decad.Shell(t.Context(), box, topCap(box), units.Millimeters(th))
+		_, err := decad.Shell(box, topCap(box), units.Millimeters(th)).Do(t.Context())
 		require.NoError(t, err)
 		report, err := doc.Verify(t.Context(), decad.WithConcaveRadius())
 		require.NoError(t, err)
@@ -1477,7 +1430,7 @@ func diskHoledCup(t *testing.T, R, rh, h float64) (*decad.Document, *decad.Body)
 	}
 	require.NotNil(t, prof)
 	doc := decad.New()
-	body, err := decad.Extrude(t.Context(), doc, s, prof, decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
+	body, err := decad.Extrude(doc, s, prof, decad.Distance{D: units.Millimeters(h), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	return doc, body
 }
@@ -1494,7 +1447,7 @@ func TestShellCupHoledTessellate(t *testing.T) {
 	const th, rh = 5.0, 8.0
 	h := shellBoxHeight
 	_, box := circleHoledBox(t, [3]float64{50, 30, rh})
-	cup, err := decad.Shell(t.Context(), box, topCap(box), units.Millimeters(th))
+	cup, err := decad.Shell(box, topCap(box), units.Millimeters(th)).Do(t.Context())
 	require.NoError(t, err)
 
 	tol := 0.1
@@ -1565,7 +1518,7 @@ func TestShellCupHoledTessellateOutward(t *testing.T) {
 	const R, rh, th = 30.0, 8.0, 4.0
 	h := shellBoxHeight
 	_, disk := diskHoledCup(t, R, rh, h)
-	cup, err := decad.Shell(t.Context(), disk, topCap(disk), units.Millimeters(th), decad.WithShellSense(decad.Outward))
+	cup, err := decad.Shell(disk, topCap(disk), units.Millimeters(th)).Sense(decad.Outward).Do(t.Context())
 	require.NoError(t, err)
 
 	tol := 0.2
@@ -1612,7 +1565,7 @@ func TestShellCupHoledTessellateOutwardBox(t *testing.T) {
 	const th, rh = 5.0, 8.0
 	h := shellBoxHeight
 	_, box := circleHoledBox(t, [3]float64{50, 30, rh})
-	cup, err := decad.Shell(t.Context(), box, topCap(box), units.Millimeters(th), decad.WithShellSense(decad.Outward))
+	cup, err := decad.Shell(box, topCap(box), units.Millimeters(th)).Sense(decad.Outward).Do(t.Context())
 	require.NoError(t, err)
 
 	tol := 0.1
@@ -1645,7 +1598,7 @@ func TestShellCupHoledUndercuts(t *testing.T) {
 	// no undercut, Sound.
 	t.Run("clear under an axial pull", func(t *testing.T) {
 		doc, box := circleHoledBox(t, [3]float64{50, 30, rh})
-		_, err := decad.Shell(t.Context(), box, topCap(box), units.Millimeters(th))
+		_, err := decad.Shell(box, topCap(box), units.Millimeters(th)).Do(t.Context())
 		require.NoError(t, err)
 		report, err := doc.Verify(t.Context(), decad.WithPullDirection(r3.NewVec(0, 0, 1)))
 		require.NoError(t, err)
@@ -1661,7 +1614,7 @@ func TestShellCupHoledUndercuts(t *testing.T) {
 	// pull. The reading is Violating and names the post wall shellSide(1,0).
 	t.Run("tilt hooks the post wall", func(t *testing.T) {
 		doc, box := circleHoledBox(t, [3]float64{50, 30, rh})
-		cup, err := decad.Shell(t.Context(), box, topCap(box), units.Millimeters(th))
+		cup, err := decad.Shell(box, topCap(box), units.Millimeters(th)).Do(t.Context())
 		require.NoError(t, err)
 		report, err := doc.Verify(t.Context(), decad.WithPullDirection(r3.NewVec(1, 0, 1)))
 		require.NoError(t, err)
@@ -1690,7 +1643,7 @@ func TestShellCupHoledMinRadius(t *testing.T) {
 	t.Parallel()
 	const th, rh = 5.0, 8.0
 	doc, box := circleHoledBox(t, [3]float64{50, 30, rh})
-	_, err := decad.Shell(t.Context(), box, topCap(box), units.Millimeters(th))
+	_, err := decad.Shell(box, topCap(box), units.Millimeters(th)).Do(t.Context())
 	require.NoError(t, err)
 	report, err := doc.Verify(t.Context(), decad.WithConcaveRadius())
 	require.NoError(t, err)
@@ -1714,15 +1667,15 @@ func TestShellCupSeparatesComputedOpenAndExactFloorBounds(t *testing.T) {
 	)
 	s, plateProfile, pinProfile := plateAndPin(t)
 	doc := decad.New()
-	plate, err := decad.Extrude(t.Context(), doc, s, plateProfile, decad.Distance{D: units.Millimeters(plateHeight), Dir: decad.Along})
+	plate, err := decad.Extrude(doc, s, plateProfile, decad.Distance{D: units.Millimeters(plateHeight), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
-	pin, err := decad.Extrude(t.Context(), doc, s, pinProfile, decad.ToFace{
+	pin, err := decad.Extrude(doc, s, pinProfile, decad.ToFace{
 		Body:   plate,
 		Face:   capEndFace(plate),
 		Offset: units.Millimeters(-shortBy),
-	})
+	}).Do(t.Context())
 	require.NoError(t, err)
-	cup, err := decad.Shell(t.Context(), pin, capEndFace(pin), units.Millimeters(1))
+	cup, err := decad.Shell(pin, capEndFace(pin), units.Millimeters(1)).Do(t.Context())
 	require.NoError(t, err)
 
 	floorVertices := 0
@@ -1762,9 +1715,9 @@ func TestShellCupWallThicknessCarriesConversionDelta(t *testing.T) {
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	doc := decad.New()
-	disk, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(12), Dir: decad.Along})
+	disk, err := decad.Extrude(doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(12), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
-	_, err = decad.Shell(t.Context(), disk, topCap(disk), units.Inches(0.2))
+	_, err = decad.Shell(disk, topCap(disk), units.Inches(0.2)).Do(t.Context())
 	require.NoError(t, err)
 
 	report, err := doc.Verify(t.Context(), decad.WithMinWallThickness(units.Millimeters(1)))
@@ -1808,10 +1761,10 @@ func TestShellOutwardSmallThicknessArcRadiiRoundApart(t *testing.T) {
 			_, err = s.Solve(t.Context())
 			require.NoError(t, err)
 			doc := decad.New()
-			box, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
+			box, err := decad.Extrude(doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(h), Dir: decad.Along}).Do(t.Context())
 			require.NoError(t, err)
 
-			body, err := decad.Shell(t.Context(), box, topCap(box), units.Millimeters(th), decad.WithShellSense(decad.Outward))
+			body, err := decad.Shell(box, topCap(box), units.Millimeters(th)).Sense(decad.Outward).Do(t.Context())
 			require.NoError(t, err)
 			require.True(t, body.IsSolid())
 

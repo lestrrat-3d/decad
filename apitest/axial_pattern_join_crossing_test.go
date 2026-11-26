@@ -47,7 +47,7 @@ func crossingLoftAt(t *testing.T, doc *decad.Document, r, half, height, rot floa
 	}
 	s0, p0 := section(w.XY())
 	s1, p1 := section(splitTopPlane(t, w, height))
-	b, err := decad.Loft(t.Context(), doc, s0, p0, s1, p1)
+	b, err := decad.Loft(doc, s0, p0, s1, p1).Do(t.Context())
 	require.NoError(t, err)
 	return b
 }
@@ -71,10 +71,10 @@ func TestPatternUnionFlanksCrossTheBase(t *testing.T) {
 			doc := decad.New()
 			disc := circleBodyAtZ(t, doc, 0, r, 0, height)
 			lobe := crossingLoft(t, doc, r, half, height)
-			copies, err := decad.PatternCopies(t.Context(), lobe,
-				decad.CircularPattern{Axis: r3.NewVec(0, 0, 1), Count: n})
+			copies, err := decad.PatternCopies(lobe,
+				decad.CircularPattern{Axis: r3.NewVec(0, 0, 1), Count: n}).Do(t.Context())
 			require.NoError(t, err)
-			joined, err := decad.Union(t.Context(), disc, append([]*decad.Body{lobe}, copies...)...)
+			joined, err := decad.Union(append([]*decad.Body{disc}, append([]*decad.Body{lobe}, copies...)...)...).Do(t.Context())
 			require.NoError(t, err)
 			require.True(t, joined.IsSolid())
 
@@ -85,7 +85,7 @@ func TestPatternUnionFlanksCrossTheBase(t *testing.T) {
 			for k := range lobes {
 				lobes[k] = crossingLoftAt(t, ref, r, half, height, 2*math.Pi*float64(k)/float64(n))
 			}
-			drawn, err := decad.Union(t.Context(), rdisc, lobes...)
+			drawn, err := decad.Union(append([]*decad.Body{rdisc}, lobes...)...).Do(t.Context())
 			require.NoError(t, err)
 			gv, err := joined.Volume()
 			require.NoError(t, err)
@@ -106,26 +106,26 @@ func TestPatternUnionFlanksCrossTheBaseThenFilletBoreChamfer(t *testing.T) {
 	doc := decad.New()
 	disc := circleBodyAtZ(t, doc, 0, r, 0, height)
 	lobe := crossingLoft(t, doc, r, half, height)
-	copies, err := decad.PatternCopies(t.Context(), lobe, decad.CircularPattern{Axis: r3.NewVec(0, 0, 1), Count: n})
+	copies, err := decad.PatternCopies(lobe, decad.CircularPattern{Axis: r3.NewVec(0, 0, 1), Count: n}).Do(t.Context())
 	require.NoError(t, err)
-	joined, err := decad.Union(t.Context(), disc, append([]*decad.Body{lobe}, copies...)...)
+	joined, err := decad.Union(append([]*decad.Body{disc}, append([]*decad.Body{lobe}, copies...)...)...).Do(t.Context())
 	require.NoError(t, err)
 	v0, err := joined.Volume()
 	require.NoError(t, err)
 
 	// Where a flank leaves the base circle the surface turns inward: a concave axial edge.
 	selection := decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1)), decad.Concave()).Exactly(2 * n)
-	filleted, err := decad.Fillet(t.Context(), joined, selection, units.Millimeters(0.05))
+	filleted, err := decad.Fillet(joined, selection, units.Millimeters(0.05)).Do(t.Context())
 	require.NoError(t, err)
 	v1, err := filleted.Volume()
 	require.NoError(t, err)
 	require.Greater(t, v1.Value.Base(), v0.Value.Base(), "a concave fillet adds material")
 
 	bore := circleBodyAtZ(t, doc, 0, 0.8, -1, height+2)
-	bored, err := decad.Cut(t.Context(), filleted, bore)
+	bored, err := decad.Cut(filleted, bore).Do(t.Context())
 	require.NoError(t, err)
 	caps := decad.Edges(decad.OuterLoopOf(decad.CapStart(bored))).Or(decad.OuterLoopOf(decad.CapEnd(bored)))
-	chamfered, err := decad.Chamfer(t.Context(), bored, caps, units.Millimeters(0.02))
+	chamfered, err := decad.Chamfer(bored, caps, units.Millimeters(0.02)).Do(t.Context())
 	require.NoError(t, err)
 	require.True(t, chamfered.IsSolid())
 }

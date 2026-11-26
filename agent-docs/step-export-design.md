@@ -201,7 +201,7 @@ alone: the analytic arm builds the faces of one outer shell.
 | V8 | The signed volume of each facet set only refuses: an outer set whose volume is not positive, or a void set whose volume is not negative, is `ErrUnsupported`, so a mesh wound against its shell's kind is never written as an `ORIENTED_CLOSED_SHELL`. |
 
 The tests build a cube with a cubic cavity, a disjoint union of two blocks, and a cavity cube beside a block, check the entity counts, and check that every outer face's normal points away
-from the cube's middle and every void face's toward the cavity's. A body of a closed shell (`WithNoOpenings`) is such a
+from the cube's middle and every void face's toward the cavity's. A body of a closed shell (`ShellClosed`) is such a
 solid.
 
 ## 10. Assemblies (`STEPItems`)

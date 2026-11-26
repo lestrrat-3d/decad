@@ -50,16 +50,16 @@ func shellStop(t *testing.T, doc *decad.Document, shell *decad.Body, role string
 // shellOf shells the 20x20 block over 30..50 x 0..20 that rises by up and
 // sinks by down. A nil sel keeps every face.
 func shellOf(t *testing.T, doc *decad.Document, up, down units.Value, sel func(*decad.Body) decad.FaceSelector,
-	th units.Value, opts ...decad.ShellOption) *decad.Body {
+	th units.Value, settings ...shellSetting) *decad.Body {
 	t.Helper()
 	block := twoSidedRect(t, doc, 30, 0, 50, 20, up, down)
-	var faces decad.FaceSelector
+	var shell *decad.Body
+	var err error
 	if sel != nil {
-		faces = sel(block)
+		shell, err = applyShell(block, sel(block), th, settings...).Do(t.Context())
 	} else {
-		opts = append(opts, decad.WithNoOpenings())
+		shell, err = applyShellClosed(block, th, settings...).Do(t.Context())
 	}
-	shell, err := decad.Shell(t.Context(), block, faces, th, opts...)
 	require.NoError(t, err)
 	return shell
 }
@@ -134,13 +134,13 @@ func TestShellCupDenotedLevel(t *testing.T) {
 		run := func(t *testing.T, th, offset, plateUp, plateDown units.Value) *decad.Body {
 			t.Helper()
 			doc := decad.New()
-			var opts []decad.ShellOption
+			var settings []shellSetting
 			if tc.outward {
-				opts = append(opts, decad.WithShellSense(decad.Outward))
+				settings = append(settings, outwardSetting())
 			}
-			cup := shellOf(t, doc, tc.up, tc.down, tc.sel, th, opts...)
+			cup := shellOf(t, doc, tc.up, tc.down, tc.sel, th, settings...)
 			plate := twoSidedRect(t, doc, 0, 0, 20, 20, plateUp, plateDown)
-			part, err := decad.Cut(t.Context(), plate, shellStop(t, doc, cup, tc.role, offset, tc.upStop))
+			part, err := decad.Cut(plate, shellStop(t, doc, cup, tc.role, offset, tc.upStop)).Do(t.Context())
 			require.NoError(t, err)
 			return part
 		}
@@ -220,7 +220,7 @@ func TestShellClosedDenotedLevel(t *testing.T) {
 			}
 			shell := shellOf(t, doc, up, units.Millimeters(0), nil, tc.th)
 			plate := twoSidedRect(t, doc, 0, 0, 20, 20, tc.plateUp, three)
-			part, err := decad.Cut(t.Context(), plate, shellStop(t, doc, shell, tc.role, tc.offset, true))
+			part, err := decad.Cut(plate, shellStop(t, doc, shell, tc.role, tc.offset, true)).Do(t.Context())
 			require.NoError(t, err)
 			if tc.analytic {
 				requireDenotedThroughHole(t, part, denotedSum(tc.plateUp, three))

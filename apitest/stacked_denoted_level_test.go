@@ -27,7 +27,7 @@ func pocketBelow(t *testing.T, doc *decad.Document, x0, y0, x1, y1 float64, e de
 	s.Fix(rect.A)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], e)
+	body, err := decad.Extrude(doc, s, s.Profiles()[0], e).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -72,13 +72,13 @@ func requireRationalVolumeCovered(t *testing.T, b *decad.Body, want *big.Rat) de
 // requires the analytic stacked result with the given face count and volume.
 func requireDenotedPocketPair(t *testing.T, plate, first, second *decad.Body, faces int, want *big.Rat) {
 	t.Helper()
-	part, err := decad.Cut(t.Context(), plate, first)
+	part, err := decad.Cut(plate, first).Do(t.Context())
 	require.NoError(t, err)
 	require.False(t, tookMeshPath(part))
 	firstVolume, err := part.Volume()
 	require.NoError(t, err)
 	require.Positive(t, boundMM3(t, firstVolume), "the first floor carries a level displacement")
-	part, err = decad.Cut(t.Context(), part, second)
+	part, err = decad.Cut(part, second).Do(t.Context())
 	require.NoError(t, err)
 	require.False(t, tookMeshPath(part), "equal denoted levels share one interface")
 	require.Len(t, part.Lumps(), 1)
@@ -186,10 +186,10 @@ func TestDenotedLevelEqualFloatsDifferentRationalsDecline(t *testing.T) {
 			plate := boxBody(t, doc, 0, 0, 20, 20, denotedTop)
 			first := pocketBelow(t, doc, 2, 2, 8, 18, down(tc.first))
 			second := pocketBelow(t, doc, 12, 2, 18, 18, down(tc.second))
-			part, err := decad.Cut(t.Context(), plate, first)
+			part, err := decad.Cut(plate, first).Do(t.Context())
 			require.NoError(t, err)
 			require.False(t, tookMeshPath(part))
-			part, err = decad.Cut(t.Context(), part, second)
+			part, err = decad.Cut(part, second).Do(t.Context())
 			require.NoError(t, err)
 			require.True(t, tookMeshPath(part), "distinct denoted floors never share one interface")
 			requireRationalVolumeCovered(t, part, pocketedVolume(6*16,
@@ -205,7 +205,7 @@ func TestDenotedLevelSplitInterfaceIsReused(t *testing.T) {
 	doc := decad.New()
 	plate := boxBody(t, doc, 0, 0, 20, 20, denotedTop)
 	deep := pocketBelow(t, doc, 2, 2, 6, 18, down(units.Millimeters(5)))
-	part, err := decad.Cut(t.Context(), plate, deep)
+	part, err := decad.Cut(plate, deep).Do(t.Context())
 	require.NoError(t, err)
 	first := pocketBelow(t, doc, 8, 2, 12, 18, down(units.Inches(0.2)))
 	second := pocketBelow(t, doc, 14, 2, 18, 18, down(units.Inches(0.2)))

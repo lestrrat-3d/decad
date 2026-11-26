@@ -40,8 +40,8 @@ func block(t testing.TB, doc *decad.Document, x0, y0, x1, y1, z0, height float64
 	s.Fix(rect.A)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	b, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(height), Dir: decad.Along})
+	b, err := decad.Extrude(doc, s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(height), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	return b
 }
@@ -59,8 +59,8 @@ func cylinder(t *testing.T, doc *decad.Document, cx, radius, z0, height float64)
 	s.CreateCircle(c, radius)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	b, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(height), Dir: decad.Along})
+	b, err := decad.Extrude(doc, s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(height), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	return b
 }
@@ -75,7 +75,7 @@ func boredPlateR(t *testing.T, doc *decad.Document, radius float64) *decad.Body 
 	t.Helper()
 	plate := block(t, doc, 0, 0, 20, 20, 0, 10)
 	tool := cylinder(t, doc, 10, radius, -1, 12)
-	out, err := decad.Cut(t.Context(), plate, tool)
+	out, err := decad.Cut(plate, tool).Do(t.Context())
 	require.NoError(t, err)
 	return out
 }
@@ -113,7 +113,7 @@ func facetedCopy(t *testing.T, doc *decad.Document, b *decad.Body) *decad.Body {
 	require.NoError(t, err)
 	mb, err := decad.NewMeshBody(t.Context(), mesh.Vertices(), mesh.Triangles())
 	require.NoError(t, err)
-	out, err := decad.SolidFromMesh(t.Context(), doc, mb)
+	out, err := decad.SolidFromMesh(doc, mb).Do(t.Context())
 	require.NoError(t, err)
 	return out
 }

@@ -16,7 +16,7 @@ import (
 
 func TestExactCopyUsesContainedCutSourceMassProperties(t *testing.T) {
 	doc, target, tool := containedCutCentroidSources(t)
-	source, err := Cut(t.Context(), target, tool)
+	source, err := Cut(target, tool).Do(t.Context())
 	require.NoError(t, err)
 	require.NotNil(t, source.n.VolumeLineage.Moments)
 	require.Len(t, source.Lumps(), 1)
@@ -26,7 +26,7 @@ func TestExactCopyUsesContainedCutSourceMassProperties(t *testing.T) {
 
 	historyBefore := doc.OperationHistory().Operations()
 	center, axis := r3.NewVec(10, 10, 10), r3.NewVec(1, 2, 3)
-	copyBody, err := Copy(t.Context(), source, WithCopyRotation(center, axis, units.Degrees(37)))
+	copyBody, err := Copy(source).Place(CopyRotation{Center: center, Axis: axis, Angle: units.Degrees(37)}).Do(t.Context())
 	require.NoError(t, err)
 	require.Contains(t, doc.Bodies(), source)
 	require.Contains(t, doc.Bodies(), copyBody)
@@ -95,17 +95,16 @@ func TestExactCopyUsesContainedCutSourceMassProperties(t *testing.T) {
 
 func TestExactCopyMomentHistoryAndRetiredSource(t *testing.T) {
 	doc, target, tool := containedCutCentroidSources(t)
-	source, err := Cut(t.Context(), target, tool)
+	source, err := Cut(target, tool).Do(t.Context())
 	require.NoError(t, err)
-	copyBody, err := Copy(t.Context(), source, WithCopyRotation(r3.NewVec(10, 10, 10),
-		r3.NewVec(1, 2, 3), units.Degrees(37)))
+	copyBody, err := Copy(source).Place(CopyRotation{Center: r3.NewVec(10, 10, 10), Axis: r3.NewVec(1, 2, 3), Angle: units.Degrees(37)}).Do(t.Context())
 	require.NoError(t, err)
 	before, err := copyBody.MassProperties(t.Context(), units.KilogramsPerCubicMillimeter(1))
 	require.NoError(t, err)
 	historyBefore := doc.OperationHistory().Operations()
 	producer, err := doc.OperationHistory().Producer(source)
 	require.NoError(t, err)
-	require.NoError(t, Remove(source))
+	require.NoError(t, Remove(source).Do(t.Context()))
 	after, err := copyBody.MassProperties(t.Context(), units.KilogramsPerCubicMillimeter(1))
 	require.NoError(t, err)
 	require.Equal(t, before.Mass, after.Mass)
@@ -122,15 +121,14 @@ func TestExactCopyMomentHistoryAndRetiredSource(t *testing.T) {
 
 func TestExactCopyMomentEvidenceRollback(t *testing.T) {
 	doc, target, tool := containedCutCentroidSources(t)
-	source, err := Cut(t.Context(), target, tool)
+	source, err := Cut(target, tool).Do(t.Context())
 	require.NoError(t, err)
 	source.n.VolumeLineage.Target.Value = units.CubicMillimeters(
 		source.n.VolumeLineage.Target.Value.Base() + 1)
 	bodies := doc.Bodies()
 	operations := doc.OperationHistory().Operations()
 	nextProducer := doc.producerAt(t.Context())
-	_, err = Copy(t.Context(), source, WithCopyRotation(r3.NewVec(10, 10, 10),
-		r3.NewVec(1, 2, 3), units.Degrees(37)))
+	_, err = Copy(source).Place(CopyRotation{Center: r3.NewVec(10, 10, 10), Axis: r3.NewVec(1, 2, 3), Angle: units.Degrees(37)}).Do(t.Context())
 	require.ErrorIs(t, err, ErrBooleanFailed)
 	require.Len(t, doc.Bodies(), len(bodies))
 	for i := range bodies {
@@ -146,39 +144,37 @@ func TestExactCopyMomentEvidenceRollback(t *testing.T) {
 
 func TestExactCopyMomentScope(t *testing.T) {
 	_, target, tool := containedCutCentroidSources(t)
-	source, err := Cut(t.Context(), target, tool)
+	source, err := Cut(target, tool).Do(t.Context())
 	require.NoError(t, err)
-	ordinary, err := Copy(t.Context(), source)
+	ordinary, err := Copy(source).Do(t.Context())
 	require.NoError(t, err)
 	require.Nil(t, ordinary.n.Payload.(facetedPayload).ExactCopyMoments)
 
-	rotation := WithCopyRotation(r3.NewVec(10, 10, 10), r3.NewVec(1, 2, 3), units.Degrees(37))
-	copyOfCopy, err := Copy(t.Context(), ordinary, rotation)
+	rotation := CopyRotation{Center: r3.NewVec(10, 10, 10), Axis: r3.NewVec(1, 2, 3), Angle: units.Degrees(37)}
+	copyOfCopy, err := Copy(ordinary).Place(rotation).Do(t.Context())
 	require.NoError(t, err)
 	require.Nil(t, copyOfCopy.n.Payload.(facetedPayload).ExactCopyMoments)
 
 	_, floatRotation, err := exactrotation.New(r3.NewVec(10, 10, 10), r3.NewVec(1, 2, 3), units.Degrees(37))
 	require.NoError(t, err)
-	floatPlaced, err := Copy(t.Context(), source, WithCopyPlacement(floatRotation))
+	floatPlaced, err := Copy(source).Place(CopyTransform{Transform: floatRotation}).Do(t.Context())
 	require.NoError(t, err)
 	require.Nil(t, floatPlaced.n.Payload.(facetedPayload).ExactCopyMoments)
 
-	lastPlacement, err := Copy(t.Context(), source, rotation, WithCopyPlacement(floatRotation))
+	lastPlacement, err := Copy(source).Place(rotation).Place(CopyTransform{Transform: floatRotation}).Do(t.Context())
 	require.NoError(t, err)
 	require.Nil(t, lastPlacement.n.Payload.(facetedPayload).ExactCopyMoments)
 
-	zero, err := Copy(t.Context(), source,
-		WithCopyRotation(r3.Vec{}, r3.NewVec(1, 0, 0), units.Degrees(0)))
+	zero, err := Copy(source).Place(CopyRotation{Center: r3.Vec{}, Axis: r3.NewVec(1, 0, 0), Angle: units.Degrees(0)}).Do(t.Context())
 	require.NoError(t, err)
 	require.NotNil(t, zero.n.Payload.(facetedPayload).ExactCopyMoments)
 }
 
 func TestExactCopyMassQueriesAreReadOnly(t *testing.T) {
 	doc, target, tool := containedCutCentroidSources(t)
-	source, err := Cut(t.Context(), target, tool)
+	source, err := Cut(target, tool).Do(t.Context())
 	require.NoError(t, err)
-	copyBody, err := Copy(t.Context(), source, WithCopyRotation(r3.NewVec(10, 10, 10),
-		r3.NewVec(1, 2, 3), units.Degrees(37)))
+	copyBody, err := Copy(source).Place(CopyRotation{Center: r3.NewVec(10, 10, 10), Axis: r3.NewVec(1, 2, 3), Angle: units.Degrees(37)}).Do(t.Context())
 	require.NoError(t, err)
 	density1, density2 := units.KilogramsPerCubicMillimeter(1), units.KilogramsPerCubicMillimeter(2)
 	base, err := copyBody.MassProperties(t.Context(), density1)

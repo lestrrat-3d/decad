@@ -35,8 +35,8 @@ func Example_coil() {
 	// Wind two turns, advancing 1.5 mm per turn (the pitch). The length is
 	// stated in turns rather than millimeters.
 	doc := decad.New()
-	spring, err := decad.Coil(context.Background(), doc, s, s.Profiles()[0], axis,
-		units.Millimeters(1.5), units.Scalar(2))
+	spring, err := decad.Coil(doc, s, s.Profiles()[0], axis,
+		units.Millimeters(1.5), units.Scalar(2)).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to coil: %s\n", err)
 		return

@@ -133,7 +133,7 @@ func TestRegroupSurfacesInvariantBreaks(t *testing.T) {
 		d := New()
 		left := internalBoxBody(t, d, 0, 0, 2, 2, 2)
 		right := internalBoxBody(t, d, 1, 0, 3, 2, 2)
-		target, err := Union(t.Context(), left, right)
+		target, err := Union(left, right).Do(t.Context())
 		require.NoError(t, err)
 		tool := internalBoxBody(t, d, 0.5, 0.5, 2.5, 1.5, 2)
 		originalPayload := target.n.Payload
@@ -246,7 +246,7 @@ func TestRegroupSurfacesInvariantBreaks(t *testing.T) {
 		_, ok = pairedCutSources(private, d, target, tool)
 		require.False(t, ok)
 		target.n.Payload = originalPayload
-		cut, err := Cut(t.Context(), target, tool)
+		cut, err := Cut(target, tool).Do(t.Context())
 		require.NoError(t, err)
 		nextTool := internalBoxBody(t, d, 0.25, 0.25, 2.75, 0.4, 2)
 		target.n.Payload = facetedrecord.Payload{}
@@ -264,7 +264,7 @@ func TestRegroupSurfacesInvariantBreaks(t *testing.T) {
 
 // TestExactShiftProducerGate calls the history's exact-shift reading
 // directly, so a refusal is the gate's own and not a later geometry rule's.
-// Only a direct WithCopyLiftTranslation copy of a faceted body reads, as its
+// Only a direct CopyLiftTranslation copy of a faceted body reads, as its
 // source and lift·(to − from) exactly; a placement, rotation or plain copy, a
 // copy of a copy, a Transform of a copy, and a copy of a prism do not.
 //
@@ -275,9 +275,9 @@ func TestExactShiftProducerGate(t *testing.T) {
 	doc := New()
 	turn, err := r3.Rotation(r3.Vec{X: 1}, units.Degrees(30))
 	require.NoError(t, err)
-	disc, err := Transform(t.Context(), internalDiscBody(t, doc, 1, 6), turn)
+	disc, err := Transform(internalDiscBody(t, doc, 1, 6), turn).Do(t.Context())
 	require.NoError(t, err)
-	source, err := Union(t.Context(), internalBoxBody(t, doc, 0, -2, 4, 2, 2), disc)
+	source, err := Union(internalBoxBody(t, doc, 0, -2, 4, 2, 2), disc).Do(t.Context())
 	require.NoError(t, err)
 	_, faceted := source.n.Payload.(facetedPayload)
 	require.True(t, faceted, "the source must be faceted for an exact copy record")
@@ -286,9 +286,13 @@ func TestExactShiftProducerGate(t *testing.T) {
 	lift, err := r3.RotationAround(r3.Vec{X: 3, Y: -2, Z: 1}, r3.Vec{X: 1, Y: 2, Z: 3}, units.Radians(0.4))
 	require.NoError(t, err)
 	from, to := r3.Vec{X: 1}, r3.Vec{X: 21.5, Y: -3, Z: 2}
-	exact := WithCopyLiftTranslation(lift, from, to)
-	copyOf := func(b *Body, opts ...CopyOption) *Body {
-		c, err := Copy(t.Context(), b, opts...)
+	exact := CopyLiftTranslation{Lift: lift, From: from, To: to}
+	copyOf := func(b *Body, places ...CopyPlacement) *Body {
+		cmd := Copy(b)
+		for _, p := range places {
+			cmd.Place(p)
+		}
+		c, err := cmd.Do(t.Context())
 		require.NoError(t, err)
 		return c
 	}
@@ -316,16 +320,16 @@ func TestExactShiftProducerGate(t *testing.T) {
 		require.Zero(t, want.Cmp(shift[i]), "component %d is lift·(to − from) exactly", i)
 	}
 
-	transformed, err := Transform(t.Context(), copyOf(source, exact), moved)
+	transformed, err := Transform(copyOf(source, exact), moved).Do(t.Context())
 	require.NoError(t, err)
 	for _, tc := range []struct {
 		name string
 		body *Body
 	}{
 		{"plain copy", copyOf(source)},
-		{"placement copy", copyOf(source, WithCopyPlacement(moved))},
-		{"rotation copy", copyOf(source, WithCopyRotation(r3.Vec{}, r3.Vec{Z: 1}, units.Degrees(90)))},
-		{"copy of a copy", copyOf(direct, WithCopyLiftTranslation(lift, to, from))},
+		{"placement copy", copyOf(source, CopyTransform{Transform: moved})},
+		{"rotation copy", copyOf(source, CopyRotation{Axis: r3.Vec{Z: 1}, Angle: units.Degrees(90)})},
+		{"copy of a copy", copyOf(direct, CopyLiftTranslation{Lift: lift, From: to, To: from})},
 		{"Transform of a copy", transformed},
 		{"lift copy of a prism", copyOf(prism, exact)},
 	} {

@@ -41,7 +41,7 @@ func TestLoftSectionsFiveIndependentRectanglesKeepVolumeAndMeshProof(t *testing.
 	sections := manyRectangleSections(t, []float64{2, 3, 4, 5, 6},
 		[]float64{3, 4, 5, 7, 8}, []float64{0, 4, 8, 12, 16})
 	doc := decad.New()
-	body, err := decad.LoftSections(t.Context(), doc, sections...)
+	body, err := decad.LoftSections(doc, sections...).Do(t.Context())
 	require.NoError(t, err)
 	require.Len(t, doc.Bodies(), 1)
 	require.Len(t, body.Faces(), 6)
@@ -67,7 +67,7 @@ func TestLoftSectionsSixIndependentRectanglesHoldEverySection(t *testing.T) {
 	t.Parallel()
 	sections := manyRectangleSections(t, []float64{2, 3, 4, 5, 6, 7},
 		[]float64{3, 4, 5, 7, 8, 9}, []float64{0, 4, 8, 12, 16, 20})
-	body, err := decad.LoftSections(t.Context(), decad.New(), sections...)
+	body, err := decad.LoftSections(decad.New(), sections...).Do(t.Context())
 	require.NoError(t, err)
 	mesh, err := body.Tessellate(t.Context(), units.Millimeters(0.1), decad.WithVerification(decad.VerifyAll))
 	require.NoError(t, err)
@@ -100,7 +100,7 @@ func TestLoftSectionsManyRectanglesRefuseUnprovedInputs(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			sections := manyRectangleSections(t, tc.widths, tc.depths, tc.levels)
 			doc := decad.New()
-			body, err := decad.LoftSections(t.Context(), doc, sections...)
+			body, err := decad.LoftSections(doc, sections...).Do(t.Context())
 			require.Nil(t, body)
 			require.ErrorIs(t, err, decad.ErrUnsupported)
 			require.ErrorContains(t, err, tc.reason)
@@ -115,7 +115,7 @@ func TestLoftSectionsManyRectanglesRefuseExcessSections(t *testing.T) {
 	tooMany := make([]decad.LoftSection, 33)
 	copy(tooMany, sections)
 	doc := decad.New()
-	body, err := decad.LoftSections(t.Context(), doc, tooMany...)
+	body, err := decad.LoftSections(doc, tooMany...).Do(t.Context())
 	require.Nil(t, body)
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.ErrorContains(t, err, "at most 32 sections")

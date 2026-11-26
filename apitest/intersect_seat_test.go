@@ -43,7 +43,7 @@ func seatPlate(t *testing.T, sc *tcScene) *decad.Body {
 
 func seatCopy(t *testing.T, b *decad.Body) *decad.Body {
 	t.Helper()
-	c, err := decad.Copy(t.Context(), b)
+	c, err := decad.Copy(b).Do(t.Context())
 	require.NoError(t, err)
 	return c
 }
@@ -52,7 +52,7 @@ func seatCopy(t *testing.T, b *decad.Body) *decad.Body {
 func requireSeatEmpty(t *testing.T, a, b *decad.Body) {
 	t.Helper()
 	for _, ops := range [][2]*decad.Body{{a, b}, {b, a}} {
-		_, err := decad.Intersect(t.Context(), seatCopy(t, ops[0]), seatCopy(t, ops[1]))
+		_, err := decad.Intersect(seatCopy(t, ops[0]), seatCopy(t, ops[1])).Do(t.Context())
 		var be *decad.BooleanError
 		require.True(t, errors.As(err, &be) && be.Code == decad.BooleanEmpty, "got %v", err)
 	}
@@ -84,7 +84,7 @@ func TestIntersectSeat(t *testing.T) {
 		plate := seatPlate(t, sc)
 		block := tcCut(t, seatBox(t, sc, -4, -4, 5.95, 4, 4, 9), seatDisc(t, sc, 2.5, 5, 10))
 		for _, ops := range [][2]*decad.Body{{block, plate}, {plate, block}} {
-			out, err := decad.Intersect(t.Context(), seatCopy(t, ops[0]), seatCopy(t, ops[1]))
+			out, err := decad.Intersect(seatCopy(t, ops[0]), seatCopy(t, ops[1])).Do(t.Context())
 			require.NoError(t, err)
 			v, err := out.Volume()
 			require.NoError(t, err)
@@ -102,7 +102,7 @@ func TestIntersectSeat(t *testing.T) {
 		plate := tcCut(t, seatBox(t, sc, -20, -20, 0, 20, 20, 10), seatDisc(t, sc, 2.8, -1, 11))
 		block := tcCut(t, seatBox(t, sc, -4, -4, 6, 4, 4, 10), seatDisc(t, sc, 2.5, 5, 11))
 		for _, ops := range [][2]*decad.Body{{block, plate}, {plate, block}} {
-			out, err := decad.Intersect(t.Context(), seatCopy(t, ops[0]), seatCopy(t, ops[1]))
+			out, err := decad.Intersect(seatCopy(t, ops[0]), seatCopy(t, ops[1])).Do(t.Context())
 			require.NoError(t, err)
 			v, err := out.Volume()
 			require.NoError(t, err)
@@ -117,7 +117,7 @@ func TestIntersectSeat(t *testing.T) {
 		sc := newSeatScene()
 		plate := seatPlate(t, sc)
 		block := tcCut(t, seatBox(t, sc, -4, -4, 6, 4, 4, 9), seatDisc(t, sc, 2.5, 5, 10))
-		_, err := decad.Union(t.Context(), plate, block)
+		_, err := decad.Union(plate, block).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 	})
 	t.Run("a turned seat whose planes state a departure refuses", func(t *testing.T) {
@@ -127,11 +127,11 @@ func TestIntersectSeat(t *testing.T) {
 		sc := newSeatScene()
 		turn, err := r3.Rotation(r3.NewVec(1, 2, 3), units.Degrees(31))
 		require.NoError(t, err)
-		plate, err := decad.Transform(t.Context(), seatPlate(t, sc), turn)
+		plate, err := decad.Transform(seatPlate(t, sc), turn).Do(t.Context())
 		require.NoError(t, err)
-		block, err := decad.Transform(t.Context(), tcCut(t, seatBox(t, sc, -4, -4, 6, 4, 4, 9), seatDisc(t, sc, 2.5, 5, 10)), turn)
+		block, err := decad.Transform(tcCut(t, seatBox(t, sc, -4, -4, 6, 4, 4, 9), seatDisc(t, sc, 2.5, 5, 10)), turn).Do(t.Context())
 		require.NoError(t, err)
-		_, err = decad.Intersect(t.Context(), seatCopy(t, plate), seatCopy(t, block))
+		_, err = decad.Intersect(seatCopy(t, plate), seatCopy(t, block)).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 	})
 }
@@ -145,7 +145,7 @@ func TestIntersectPlacedSeat(t *testing.T) {
 		t.Helper()
 		turn, err := r3.Rotation(axis, units.Degrees(deg))
 		require.NoError(t, err)
-		out, err := decad.Transform(t.Context(), b, turn)
+		out, err := decad.Transform(b, turn).Do(t.Context())
 		require.NoError(t, err)
 		return out
 	}
@@ -181,11 +181,11 @@ func TestIntersectPlacedSeat(t *testing.T) {
 		sc := newSeatScene()
 		lift, err := r3.Translation(r3.NewVec(0, 0, 1e-30))
 		require.NoError(t, err)
-		plate, err := decad.Transform(t.Context(), seatPlate(t, sc), lift)
+		plate, err := decad.Transform(seatPlate(t, sc), lift).Do(t.Context())
 		require.NoError(t, err)
 		block := tcCut(t, seatBox(t, sc, -4, -4, 6, 4, 4, 9), seatDisc(t, sc, 2.5, 5, 10))
 		for _, ops := range [][2]*decad.Body{{block, plate}, {plate, block}} {
-			_, err := decad.Intersect(t.Context(), seatCopy(t, ops[0]), seatCopy(t, ops[1]))
+			_, err := decad.Intersect(seatCopy(t, ops[0]), seatCopy(t, ops[1])).Do(t.Context())
 			require.ErrorIs(t, err, decad.ErrUnsupported)
 		}
 	})
@@ -196,7 +196,7 @@ func TestIntersectPlacedSeat(t *testing.T) {
 		sc := newSeatScene()
 		plate := turned(t, seatPlate(t, sc), r3.NewVec(1, 0, 0), 31)
 		block := turned(t, tcCut(t, seatBox(t, sc, -4, -4, 6, 4, 4, 9), seatDisc(t, sc, 2.5, 5, 10)), r3.NewVec(1, 0, 0), 31)
-		_, err := decad.Intersect(t.Context(), seatCopy(t, block), seatCopy(t, plate))
+		_, err := decad.Intersect(seatCopy(t, block), seatCopy(t, plate)).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 	})
 }
@@ -210,7 +210,7 @@ func TestIntersectSeatWithinGapTolerance(t *testing.T) {
 		t.Helper()
 		turn, err := r3.Rotation(r3.NewVec(1, 0, 0), units.Degrees(31))
 		require.NoError(t, err)
-		out, err := decad.Transform(t.Context(), b, turn)
+		out, err := decad.Transform(b, turn).Do(t.Context())
 		require.NoError(t, err)
 		return out
 	}
@@ -236,7 +236,7 @@ func TestIntersectSeatWithinGapTolerance(t *testing.T) {
 		plate := turned(t, seatPlate(t, sc))
 		block := turned(t, tcCut(t, seatBox(t, sc, -4, -4, 5.95, 4, 4, 9), seatDisc(t, sc, 2.5, 5, 10)))
 		for _, ops := range [][2]*decad.Body{{block, plate}, {plate, block}} {
-			out, err := decad.Intersect(t.Context(), seatCopy(t, ops[0]), seatCopy(t, ops[1]))
+			out, err := decad.Intersect(seatCopy(t, ops[0]), seatCopy(t, ops[1])).Do(t.Context())
 			require.NoError(t, err)
 			v, err := out.Volume()
 			require.NoError(t, err)

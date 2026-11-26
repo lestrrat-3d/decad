@@ -9,6 +9,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/coneaxis"
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/opcommand"
 	"github.com/lestrrat-3d/decad/internal/revolveangle"
 	"github.com/lestrrat-3d/decad/internal/revolveaxis"
 	"github.com/lestrrat-3d/decad/internal/revolveplan"
@@ -18,7 +19,6 @@ import (
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
-	"github.com/lestrrat-go/option/v3"
 )
 
 // This file is the revolve of agent-docs/evaluator-design.md §6: the
@@ -27,7 +27,7 @@ import (
 // ToFaceAngular stop resolves through stops.go and leaves its body live), and the analytic revolve
 // evaluator — Cylinder, Cone, planar-annulus, Sphere and Torus side faces
 // per boundary segment kind, caps on partial sweeps (both closing the solid
-// and, under WithSurfaceResult, omitted from a sheet), and Pappus
+// and, under SurfaceResult, omitted from a sheet), and Pappus
 // measurements with proven float-evaluation bounds.
 //
 // That evaluator is spread over several files, each with its own doc
@@ -113,23 +113,10 @@ func normalizeAxis(a Axis) (Axis, error) {
 	}
 }
 
-// RevolveOption configures Revolve. WithSurfaceResult (agent-docs/surface-design.md
-// §4) is the one option today: it omits the two caps a partial sweep would
-// otherwise close with and publishes a sheet instead of a solid. A full
-// revolution mints no closing face to omit, so there the option changes no
-// face and returns a CLOSED sheet with no free edge — §2.1's closed-sheet
-// rule, not a refusal (Table W). A repeated WithSurfaceResult() is
-// idempotent, never an error. A chain section always revolves to a sheet, so
-// Revolve returns ErrUnsupported for WithSurfaceResult() on a chain.
-type RevolveOption interface {
-	option.Interface
-	revolveOption()
-}
-
 // Revolve spins the section sec of sketch s about axis per the angular
 // extent a, registers the new body, and returns it. sec is a closed
 // [*sketch.Profile], which revolves to a solid (sheet under
-// [WithSurfaceResult]), or an open [*sketch.Chain], which revolves to a
+// SurfaceResult), or an open [*sketch.Chain], which revolves to a
 // sheet. Both are recorded from s; the type argument S is inferred.
 //
 // A profile section MUST be a profile of s (ErrForeignProfile) and a
@@ -142,9 +129,9 @@ type RevolveOption interface {
 // endpoint on the axis, and a whole line segment lying along it; anything
 // else is ErrDegenerate (agent-docs/evaluator-design.md §6). A fitted-spline or
 // other Tier A free-form boundary requires proven strict clearance from the
-// axis; a free-form contact is ErrUnsupported. WithSurfaceResult() omits the
+// axis; a free-form contact is ErrUnsupported. SurfaceResult omits the
 // two caps a partial sweep closes with and publishes a sheet instead of a
-// solid; a full revolution already closes with no cap to omit, so the option
+// solid; a full revolution already closes with no cap to omit, so the method
 // there yields a closed sheet rather than a refusal (agent-docs/surface-design.md
 // §4, Table W).
 //
@@ -160,7 +147,7 @@ type RevolveOption interface {
 // segment (agent-docs/surface-design.md §13.4, Table G), with no cap and no closing
 // face. A full revolution of the chain is still OPEN: each off-axis free end
 // sweeps one free circle, so a chain with one pole has one free rim. A chain
-// section therefore returns ErrUnsupported for [WithSurfaceResult], which has
+// section therefore returns ErrUnsupported for SurfaceResult, which has
 // no solid to toggle. That refusal follows the chain's seam gate and precedes
 // the axis, extent and build work (agent-docs/surface-design.md §13.2).
 //
@@ -169,13 +156,52 @@ type RevolveOption interface {
 // axis and extent and building the body, and inside the evaluators; a
 // canceled context returns ctx.Err() unchanged. Every failure and
 // cancellation leaves the document unchanged.
-func Revolve[S Section](ctx context.Context, d *Document, s *sketch.Sketch, sec S, axis Axis, a AngularExtent,
-	opts ...RevolveOption) (*Body, error) {
-	switch v := any(sec).(type) {
+func Revolve[S Section](d *Document, s *sketch.Sketch, sec S, axis Axis, a AngularExtent) *RevolveCommand {
+	c := &RevolveCommand{d: d, s: s, sec: any(sec), axis: copyAxis(axis), a: copyAngularExtent(a)}
+	recordNilFaults(&c.state, "Revolve", d, sketchArg(s), sectionArg("sec", any(sec)))
+	return c
+}
+
+// RevolveCommand spins a section about an axis. Build it with [Revolve].
+type RevolveCommand struct {
+	state   opcommand.State      // consumed flag and first recorded fault
+	d       *Document            // stored as given
+	s       *sketch.Sketch       // stored as given
+	sec     any                  // the *sketch.Profile or *sketch.Chain given
+	axis    Axis                 // copied at Revolve, with the selector of an EdgeAxis
+	a       AngularExtent        // copied at Revolve, with the selector of a ToFaceAngular stop
+	surface surfaceResultSetting // set by SurfaceResult
+}
+
+// SurfaceResult omits the two caps a partial sweep closes with and publishes a
+// sheet instead of a solid (agent-docs/surface-design.md §4). A full
+// revolution mints no closing face to omit, so there it changes no face and
+// returns a CLOSED sheet with no free edge (Table W). A chain section always
+// revolves to a sheet, so it returns [ErrUnsupported] for it. Calling it twice
+// is the same as calling it once.
+func (c *RevolveCommand) SurfaceResult() *RevolveCommand { c.surface.set(); return c }
+
+// Do spins the section, registers the new body and returns it, or returns the
+// error of the first gate that refuses, leaving the document unchanged. A nil
+// ctx is ErrDegenerate, and a second call returns ErrConsumed.
+func (c *RevolveCommand) Do(ctx context.Context) (*Body, error) {
+	return runCommand(ctx, &c.state, OperationRevolve, c.run)
+}
+
+func (c *RevolveCommand) run(ctx context.Context) (*Body, error) {
+	return revolve(ctx, c.d, c.s, c.sec, c.axis, c.a, c.surface.on)
+}
+
+// revolve is Revolve's implementation. ctx is not nil, and the errors it
+// returns carry no operation tag (agent-docs/command-api-design.md §11). sec
+// is a *sketch.Profile or a *sketch.Chain.
+func revolve(ctx context.Context, d *Document, s *sketch.Sketch, sec any, axis Axis, a AngularExtent,
+	surfaceResult bool) (*Body, error) {
+	switch v := sec.(type) {
 	case *sketch.Profile:
-		return revolveProfile(ctx, d, s, v, axis, a, opts)
+		return revolveProfile(ctx, d, s, v, axis, a, surfaceResult)
 	case *sketch.Chain:
-		return revolveChain(ctx, d, s, v, axis, a, opts)
+		return revolveChain(ctx, d, s, v, axis, a, surfaceResult)
 	default:
 		return nil, fmt.Errorf(`%w: Revolve section %T is not a profile or chain`, ErrDegenerate, sec)
 	}
@@ -183,11 +209,11 @@ func Revolve[S Section](ctx context.Context, d *Document, s *sketch.Sketch, sec 
 
 // revolveProfile is the profile-fed Revolve body (agent-docs/evaluator-design.md
 // §6, agent-docs/surface-design.md §4). Its refusals run in this order: the record
-// and its seam gates, the recorded-area falsifier, the options, then the axis
+// and its seam gates, the recorded-area falsifier, then the axis
 // and extent gates.
 func revolveProfile(ctx context.Context, d *Document, s *sketch.Sketch, p *sketch.Profile, axis Axis, a AngularExtent,
-	opts []RevolveOption) (*Body, error) {
-	body, err := revolveProfileBuild(ctx, d, s, p, axis, a, opts)
+	surfaceResult bool) (*Body, error) {
+	body, err := revolveProfileBuild(ctx, d, s, p, axis, a, surfaceResult)
 	if err != nil {
 		return nil, err
 	}
@@ -202,10 +228,7 @@ func revolveProfile(ctx context.Context, d *Document, s *sketch.Sketch, p *sketc
 // returns the body without registering it in d, so a caller can refuse the
 // result before the document changes.
 func revolveProfileBuild(ctx context.Context, d *Document, s *sketch.Sketch, p *sketch.Profile, axis Axis,
-	a AngularExtent, opts []RevolveOption) (*Body, error) {
-	if ctx == nil {
-		return nil, fmt.Errorf(`%w: a nil context cannot control a revolve`, ErrDegenerate)
-	}
+	a AngularExtent, surfaceResult bool) (*Body, error) {
 	if d == nil {
 		return nil, fmt.Errorf(`%w: a nil document owns no model`, ErrDegenerate)
 	}
@@ -230,18 +253,6 @@ func revolveProfileBuild(ctx context.Context, d *Document, s *sketch.Sketch, p *
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	surfaceResult := false
-	for _, o := range opts {
-		if o == nil {
-			return nil, fmt.Errorf(`%w: a nil option names nothing to apply`, ErrDegenerate)
-		}
-		// A repeated WithSurfaceResult() is idempotent, the same tolerance
-		// Extrude gives its own repeat (extrude.go).
-		if _, ok := o.(surfaceResultOptionValue); ok {
-			surfaceResult = true
-		}
-	}
-
 	axis, err = normalizeAxis(axis)
 	if err != nil {
 		return nil, err
@@ -534,23 +545,15 @@ func (d *Document) resolveAngleSide(s SideAngular, st angularStops, travel float
 // its recorded walk through recordChain (seam.go) rather than sectioncert.RecordProfile.
 
 // revolveChain is the chain-fed Revolve body (agent-docs/surface-design.md §13).
-// Its refusals run in this order: the nil-option check, the seam gates, the
-// option refusal, then the axis and extent gates.
+// Its refusals run in this order: the seam gates, the
+// method refusal, then the axis and extent gates.
 func revolveChain(ctx context.Context, d *Document, s *sketch.Sketch, ch *sketch.Chain, axis Axis, a AngularExtent,
-	opts []RevolveOption) (*Body, error) {
-	if ctx == nil {
-		return nil, fmt.Errorf(`%w: a nil context cannot control a revolve`, ErrDegenerate)
-	}
+	surfaceResult bool) (*Body, error) {
 	if d == nil {
 		return nil, fmt.Errorf(`%w: a nil document owns no model`, ErrDegenerate)
 	}
 	if s == nil || ch == nil {
 		return nil, fmt.Errorf(`%w: Revolve requires a non-nil sketch and chain`, ErrDegenerate)
-	}
-	for _, o := range opts {
-		if o == nil {
-			return nil, fmt.Errorf(`%w: a nil option names nothing to apply`, ErrDegenerate)
-		}
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
@@ -560,9 +563,9 @@ func revolveChain(ctx context.Context, d *Document, s *sketch.Sketch, ch *sketch
 	if err != nil {
 		return nil, err
 	}
-	// The option refusal follows the seam gate and precedes the axis and
+	// The method refusal follows the seam gate and precedes the axis and
 	// extent work, so a repair the caller makes in the sketch is named first.
-	if err := refuseChainRevolveOptions(opts); err != nil {
+	if err := refuseChainRevolveSettings(surfaceResult); err != nil {
 		return nil, err
 	}
 	if err := ctx.Err(); err != nil {
@@ -694,20 +697,15 @@ func angularSideOperationInputs(side SideAngular) []OperationInput {
 	}
 }
 
-// refuseChainRevolveOptions refuses every option a chain section cannot
-// honour with ErrUnsupported. A chain revolve always returns a sheet, so
-// WithSurfaceResult has no solid to toggle. RevolveOption has no other member
-// today; a future profile-only option is refused the same way. opts holds no
-// nil element.
-func refuseChainRevolveOptions(opts []RevolveOption) error {
-	if len(opts) == 0 {
-		return nil
-	}
-	if _, ok := opts[0].(surfaceResultOptionValue); ok {
-		return fmt.Errorf(`%w: a chain revolve always returns a sheet; WithSurfaceResult has no solid to toggle`,
+// refuseChainRevolveSettings refuses SurfaceResult on a chain section with
+// ErrUnsupported: a chain revolve always returns a sheet, so there is no solid
+// to toggle.
+func refuseChainRevolveSettings(surfaceResult bool) error {
+	if surfaceResult {
+		return fmt.Errorf(`%w: a chain revolve always returns a sheet; SurfaceResult has no solid to toggle`,
 			ErrUnsupported)
 	}
-	return fmt.Errorf(`%w: the revolve option %T builds a solid from a profile only`, ErrUnsupported, opts[0])
+	return nil
 }
 
 // This file holds axisInPlane, the axisFrame alias,
@@ -743,3 +741,22 @@ func axisInPlane(a Axis, frame r3.Frame) (revolveaxis.Line2, error) {
 
 // The payload holds the internal axis frame and its profile proof charges.
 type axisFrame = revolveaxis.Frame
+
+// copyAxis copies the edge selector an EdgeAxis holds at the call that stores
+// it (agent-docs/command-api-design.md rule A3), directly or as a non-nil
+// pointer. An axis that holds no selector is stored as given.
+func copyAxis(a Axis) Axis {
+	switch v := a.(type) {
+	case EdgeAxis:
+		v.Edge = copyEdgeSelector(v.Edge)
+		return v
+	case *EdgeAxis:
+		if v == nil {
+			return v
+		}
+		cp := *v
+		cp.Edge = copyEdgeSelector(cp.Edge)
+		return &cp
+	}
+	return a
+}

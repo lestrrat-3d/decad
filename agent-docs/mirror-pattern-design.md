@@ -12,7 +12,7 @@ pattern result needs next).
 
 A reflection is already a placement. `r3.Transform` represents an improper
 isometry (det −1, `Transform.IsReflection`), `Transform` and
-`Copy` with `WithCopyPlacement` accept one, and every shipped payload
+`Copy(...).Place(CopyTransform{...})` accept one, and every shipped payload
 re-evaluates under it:
 `prismPayload`, `revolvePayload`, `stackedPrismPayload`, `capBlendPayload`,
 `cupPayload` and the chain ribbon flip their outward normals, windings and
@@ -61,7 +61,7 @@ These rows are the scenes that prism-boolean Part G cites by label. Each result 
 | M3 | `Union(L, mirror across x = 15)` (overlapping) | analytic (A3, A4): one lump, 3000 mm³ (`TestPrismUnionSharedWallMirroredL`), `Verify` `Sound` |
 | M4 | `Union(mirrored L, same-plane box)` | analytic through the re-wound record (A4); a box holding the image unions to the box (`TestPrismUnionReflectedOperandInsideBox`: 6 faces, 9000 mm³) |
 | M5 | `Cut(mirrored L, same-plane cylinder)` | analytic (A4), `Approximate`, one cylindrical face, 1750 − π·1.5²·10 mm³ within a bound under 1e-6 (`TestPrismCutReflectedTargetByCylinder`) |
-| M6 | `Transform(ctx, body, reflection)` | analytic, input retired, one live body |
+| M6 | `Transform(body, reflection).Do(ctx)` | analytic, input retired, one live body |
 | T1 | `Cut(mirrored L, mirrored cylinder)` (both reflected, proper relative map) | analytic through the shared-axis arm (A4), volume 1750 − π·1.5²·10 mm³ within a bound under 1e-9 (`TestPrismCutBothReflectedSharedAxis`) |
 | T2 | `Verify` on L beside an overlapping mirror | `Interfering`, one row of 500 mm³ (A3 reads the shared collinear walls as one carrier) |
 | T3 | `Verify` on L beside a separated mirror | `Sound`, clearance 20 mm |
@@ -136,7 +136,7 @@ exactly-one rule of core §9: zero or several faces is `ErrCardinality` with
 with no analytic `Plane` surface (a mesh-boolean `Faceted` face) is
 `ErrUnsupported`, another document's body `ErrForeignBody`, a retired one
 `ErrRetiredBody`. With
-`WithJoin` (§4.2) the selector may name several coplanar faces, and the
+`MirroredJoin` (§4.2) the selector may name several coplanar faces, and the
 cardinality rule is `AtLeast(1)` with every face proven coplanar (§5.1).
 Resolving the plane does not consume `Body`. The plane is the face's own
 `Plane.Frame`, so a `MirrorFace` over a face of the receiver reflects
@@ -151,31 +151,31 @@ affected.
 ### 4.2 Mirror
 
 ```go
-func Mirrored(ctx context.Context, b *Body, plane MirrorPlane, opts ...MirrorOption) (*Body, error)
-func MirroredCopy(ctx context.Context, b *Body, plane MirrorPlane) (*Body, error)
-
-type MirrorOption interface{ mirrorOption() }
-func WithJoin() MirrorOption
+func Mirrored(b *Body, plane MirrorPlane) *MirroredCommand
+func MirroredJoin(b *Body, plane MirrorPlane) *MirroredJoinCommand
+func MirroredCopy(b *Body, plane MirrorPlane) *MirroredCopyCommand
+// each command has Do(ctx context.Context) (*Body, error) and no method.
 ```
 
-`MirrorOption` is sealed by its private marker. Callers select the join through
-`WithJoin`; the option's codec identity is not part of the modeling contract.
+The three are operation commands (`agent-docs/command-api-design.md`). Each constructor copies `plane`
+(`copyMirrorPlane`: the face selector of a `MirrorFace` is deep-copied, as is the pointee of a pointer to either
+variant) and records a nil `b`, named `body`. The history kind is `OperationMirrored` for `Mirrored` and
+`MirroredJoin`, and `OperationMirroredCopy` for `MirroredCopy`.
 
 `Mirrored` is `Transform` under `r3.Reflection(frame)`: it retires the receiver
-and registers the image. `MirroredCopy` uses `Copy` with
-`WithCopyPlacement` under the same transform: the receiver stays live.
-Both take the gates `Transform` takes — a
+and registers the image. `MirroredCopy` is a copy under the same transform: the receiver
+stays live. Both take the gates `Transform` takes — a
 nil context, a body no evaluator built, a cancelled context before commit —
 and add only the plane's own resolution. A `MirrorFrame` whose frame is the
 zero value is `ErrDegenerate`.
 
-`WithJoin` makes `Mirrored` return the UNION of the receiver and its image as
+`MirroredJoin` returns the UNION of the receiver and its image as
 one body. It is the symmetric-part operation, and §5 owns it: the join is an
 exact rewrite of the receiver's own record, never a boolean, so it is admitted
 on a narrower class than `Mirrored` alone and refuses the rest with
-`ErrUnsupported` rather than falling back to `Union`. `MirroredCopy` takes no
-options: a join consumes its receiver by definition, and a caller wanting the
-half kept duplicates it first.
+`ErrUnsupported` rather than falling back to `Union`. It is its own constructor because it changes the
+result kind and loosens what `plane` means (rule M6). `MirroredCopy` has no join: a join consumes its receiver by
+definition, and a caller wanting the half kept duplicates it first.
 
 ### 4.3 Pattern
 
@@ -193,13 +193,17 @@ type LinearPattern struct{ Dir r3.Vec; Step units.Value; Count int }
 // Count, never by a float: a quarter turn is exactly a quarter turn.
 type CircularPattern struct{ Center, Axis r3.Vec; Count int }
 
-func PatternCopies(ctx context.Context, b *Body, spec PatternSpec) ([]*Body, error)
-func Patterned(ctx context.Context, b *Body, spec PatternSpec) (*Body, error)
-func PathPattern(ctx context.Context, b *Body, path *Path, opts ...PathPatternOption) ([]*Body, error)
+func PatternCopies(b *Body, spec PatternSpec) *PatternCopiesCommand // Do returns ([]*Body, error)
+func Patterned(b *Body, spec PatternSpec) *PatternedCommand             // Do returns (*Body, error)
+func PathPattern(b *Body, path *Path, stations PathStations) *PathPatternCommand
 ```
 
-`PathPattern` is not a `PatternSpec`: it takes a `Path` and a `WithPathCount` or
-`WithPathSpacing` option, leaves the receiver live like `PatternCopies`, and places each copy by translation along the path. `agent-docs/path-pattern-design.md` owns it.
+`PatternCopies` and `Patterned` are operation commands (`agent-docs/command-api-design.md`). Each constructor
+copies `spec` (a pointer to a variant is replaced by a pointer to a copy of its value) and records a nil `b`, named
+`body`. Every error carries the command's own kind, `OperationPatternCopies` or `OperationPatterned`.
+
+`PathPattern` is not a `PatternSpec`: it takes a `Path` and a `PathCount` or
+`PathSpacing` stations argument, leaves the receiver live like `PatternCopies`, and places each copy by translation along the path. `agent-docs/path-pattern-design.md` owns it.
 
 `PatternCopies` leaves the receiver live and returns `Count − 1` new live
 bodies, instances `1..Count−1` in order. `Patterned` retires the receiver and
@@ -222,26 +226,33 @@ and the motion keeps it co-directional — the exact rational `Dir · N` zero
 for a linear pattern, or `Axis` bit-identical to `±N` for a circular one,
 both read on the composed world normal `xform.ApplyDir(frame.N())` as
 prism-boolean G3 reads it — an
-instance is not a `Copy` with `WithCopyPlacement`. It is the same frame and placement over a
+instance is not a `Copy` with a `CopyTransform` placement. It is the same frame and placement over a
 TRANSLATED or ROTATED copy of the record (§6.2), with the rounding of that
 record motion charged into the instance's `sectionDelta`. That is what keeps
 a later analytic boolean's re-expression the identity (prism-boolean §3.4),
 and what makes a pattern of integer-millimetre holes `Exact`. Every other
 receiver, and every non-co-directional motion, instances through
-`Copy` with `WithCopyPlacement` under the composed rigid motion, which is what a caller's own
+`Copy` with a `CopyTransform` placement under the composed rigid motion, which is what a caller's own
 loop would do.
 
 ### 4.4 Exact rotation copies
 
 ```go
-func WithCopyRotation(center, axis r3.Vec, angle units.Value) CopyOption
+type CopyRotation struct{ Center, Axis r3.Vec; Angle units.Value }
+func (c *CopyCommand) Place(p CopyPlacement) *CopyCommand
 ```
 
+`CopyPlacement` is sealed: `CopyTransform{Transform}`, `CopyRotation` and `CopyLiftTranslation` (§4.5), so a copy takes
+one placement (rule M3 of the command design). `Place` resolves its argument when it is called and stores the motion
+and the fault validating it. `Do` returns that fault naming `Place`, ahead of the source's own gates, and a second
+`Place` call replaces the first. A zero `CopyTransform` is not a `Place` fault: the source's gate refuses it after the
+retired-body gate.
+
 A rotated instance that must keep a rotation exact copies through
-`WithCopyRotation`, not `WithCopyPlacement`. A float rotation matrix is not
+`CopyRotation`, not `CopyTransform`. A float rotation matrix is not
 exactly orthogonal. A faceted copy placed by it denotes the stored matrix read
 as an exact rational map, which scales an X-axis Revolve blank by about one
-float step. `WithCopyRotation` records an exactly orthogonal rational rotation
+float step. `CopyRotation` records an exactly orthogonal rational rotation
 instead: the rotation about exactly the given axis, chosen near `angle` (it is
 not in general the rotation by exactly that transcendental angle). A rotation
 about the X axis through the origin then leaves that blank exactly invariant.
@@ -274,21 +285,21 @@ re-placing `Q*S + t`. The refusal is on re-placement, so a fixed mover or one
 with no evaluated pair never reaches it.
 
 `PatternCopies` is not equivalent: its instances denote the float matrix.
-Other payloads place by `r3.RotationAround(center, axis, angle)`, exactly as
-`WithCopyPlacement` of that transform. Non-frame-keeping instances go through
-`Copy` with `WithCopyPlacement` (§4.3).
+Other payloads place by `r3.RotationAround(Center, Axis, Angle)`, exactly as
+`CopyTransform` of that transform. Non-frame-keeping instances go through
+`Copy` with a `CopyTransform` placement (§4.3).
 
 ### 4.5 Exact lift translations
 
 ```go
-func WithCopyLiftTranslation(lift r3.Transform, from, to r3.Vec) CopyOption
+type CopyLiftTranslation struct{ Lift r3.Transform; From, To r3.Vec }
 ```
 
 A body built on a lift `L` (a rigid or affine placement shared by the parts of
 an assembly) moves between positions sketched on that lift by a lift-local
 vector. The world translation is `t = L_lin * (to - from)`. A float world
 translation rounds it, and a body so placed no longer shares the lift-local
-coordinates of its neighbours. `WithCopyLiftTranslation` forms `t` in exact
+coordinates of its neighbours. `CopyLiftTranslation` forms `t` in exact
 rationals: the basis columns of `L` and the two points are read exactly, and
 `to - from` is subtracted exactly. The record is the identity matrix with the
 translation `t` (`exactrotation.NewLiftTranslation`).
@@ -300,7 +311,7 @@ The copy is marked `ExactPlaced` like every exact copy, so `VerifyMotion` and
 `VerifyLinkage` refuse to re-place it. Only a copy made directly from the
 source records the translation in its lineage; `Transform` and a copy of a copy
 record none. A payload that is not faceted places by the float translation
-alone, exactly as `WithCopyPlacement` of it. An invalid lift is `ErrDegenerate`
+alone, exactly as `CopyTransform` of it. An invalid lift is `ErrDegenerate`
 and a non-finite `from` or `to` is `ErrNotFinite`. Verify reads such a copy as
 its source shifted by `t` (interference §3.2).
 
@@ -584,7 +595,7 @@ loop clearance proven per slab, which is the one slab. `Lumps()` reports
 | `Union(group, other)` / `Intersect` | general-boolean class A5; a pair it does not admit takes the mesh path over the group's own tessellation (stacked §6) |
 | `Patterned` of a group (a grid) | the frame-keeping arm applies to every region at once; the disjointness scene holds `Count_1 · Count_2` outers |
 | `Mirrored` / `MirroredCopy` | reflection in `xform` (§3) |
-| `WithJoin` | `ErrUnsupported` (J1): the join does not splice a group's lumps one by one |
+| `MirroredJoin` | `ErrUnsupported` (J1): the join does not splice a group's lumps one by one |
 | `Fillet` / `Chamfer` / `Shell` | `ErrUnsupported` (modify-reach RX3 / SX10 for a stacked receiver) |
 | `Verify` surveys, clearance, tolerance gate | stacked §6 |
 | `Tessellate`, STL/OBJ/3MF/STEP | stacked §5; STEP refuses several shells (`agent-docs/step-export-design.md`) and a group has `Count`, so STEP of a group is `ErrUnsupported` until that writer takes several solids |
@@ -624,7 +635,7 @@ Every test asserts computed geometry; bounds are asserted as relations
   top cap, at z ∈ [10, 20] (only the join's J2 refuses a cap); across a
   cylinder's curved face: `ErrDegenerate`; across a `Faceted` flat face:
   `ErrUnsupported`; the L prism of §2, whose `Facing(+x)` resolves two
-  walls, without `WithJoin`: `ErrCardinality` with `Expected "exactly 1"`.
+  walls, without `MirroredJoin`: `ErrCardinality` with `Expected "exactly 1"`.
 - **Join, one wall**: the L (area 175 mm², height 10) joined across its wall
   x = 0 (`Faces(Planar(), Facing(−x))`, y ∈ [0, 20]) yields one lump of
   `Exact` volume 3500 mm³ (a T), an outer loop of 8 line segments, centroid
@@ -716,7 +727,7 @@ Every test asserts computed geometry; bounds are asserted as relations
 
 None are open. The decisions they settled live where the code is owned:
 
-- `WithJoin` refuses a `MirrorFrame` (J2, §5.1), since `MirrorFace` names the wall directly.
+- `MirroredJoin` refuses a `MirrorFrame` (J2, §5.1), since `MirrorFace` names the wall directly.
 - A prism group exists for prism receivers only (§6.1 rule 2); `PatternCopies` keeps other instances as bodies.
 - `Patterned` runs `Union` for instances not proven disjoint and returns that boolean's verdict (§6.1 rule 3).
 - `Count` includes the receiver (§4.3), as Fusion's quantity does.
@@ -727,7 +738,7 @@ None are open. The decisions they settled live where the code is owned:
 All four pieces have shipped. Each piece and its owner:
 
 1. `Mirrored`, `MirroredCopy`, `MirrorPlane` (§4.1, §4.2): `mirror.go`, tested by `apitest/mirror_test.go`.
-2. `WithJoin` (§5): `mirror_join.go` and `internal/mirrorjoin`, tested by `apitest/mirror_join_test.go`.
+2. `MirroredJoin` (§5): `mirror_join.go` and `internal/mirrorjoin`, tested by `apitest/mirror_join_test.go`.
 3. `PatternCopies`, `LinearPattern`, `CircularPattern` (§4.3, §6.2): `pattern.go` and `internal/patternrecord`.
 4. `Patterned` and the prism group (§6.1, §6.3): `pattern.go` and `internal/patternassembly`; the N-hole `Cut`
    admission is general-boolean class A5, which pins the tool and the boolean together.

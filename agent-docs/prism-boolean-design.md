@@ -751,7 +751,7 @@ hidden as an undecided pair.
 
 ### 4.6 One-scene Union of three or more prisms
 
-`Union(ctx, first, others...)` builds one section arrangement for three or more
+`Union(bodies...)` builds one section arrangement for three or more
 same-frame, same-placement prisms whose sweep intervals G5 proves equal
 (`prismplacement.UnionZIntervalMatches`: equal held floats and one shared
 denoted rational at each end), and the result keeps that shared denotation.
@@ -4156,7 +4156,7 @@ Regroup runs inside `performBoolean` (`boolean.go`) only when all of these hold:
 - `booleanBodyWith` returned an error `err` with `errors.Is(err, ErrUnsupported)`. This covers
   `BooleanUnsupportedContact` (it wraps `ErrUnsupported`, `newBooleanError`) and the plain staging refusal.
 - `err` is not a context error.
-- The call carries no `WithMatchingFaces` (`booleanConfig.matchingFaces` false). The option is a statement about
+- The call carries no `MatchingFaces` (`booleanConfig.matchingFaces` false). The method is a statement about
   the caller's operands, not about the plan's.
 - `boolchain.Flatten` expanded at least one operand (Chain normal form).
 
@@ -4244,7 +4244,7 @@ positive side, or a `Cut`/`Intersect` result inside a disjunction or a negative 
 
 #### Paired Cut continuation
 
-- Trigger only on `Cut` without `WithMatchingFaces`, after a `BooleanExpectedStaging` refusal carrying a
+- Trigger only on `Cut` without `MatchingFaces`, after a `BooleanExpectedStaging` refusal carrying a
   target-side `CoarseHeldContactError`. Reject conflicting tags and canceled contexts.
 - Authenticate public history and its identity seals. The target must be `Union(L,U)` with exactly two consumed
   sources, or `Cut(Union(L,U),H1)` with those same sources and the recorded first tool. Require expandable faceted
@@ -4546,7 +4546,7 @@ wall keeps the refusal under test.
 |---|---|---|---|
 | D1 | F1, but `Cut(Copy(first), t2)` | `Copy` producer: leaf, no expansion | `ErrUnsupported`, one diagnostic `OpDiagOperandBoundExceeded`, history length and `doc.Bodies()` unchanged |
 | D2 | F1's `first`, then `Union(first, t2)` | `Cut` result inside a disjunction: leaf | today's error unchanged |
-| D3 | F1 with `Cut(first, t2, decad.WithMatchingFaces())` | Trigger excludes the option | same as D1 |
+| D3 | F1 with `Cut(first, t2).MatchingFaces()` | Trigger excludes the method | same as D1 |
 | D4 | F1 with `t2` rotated 0.01 rad about the x axis through (22, 10, 10) | The full tool union builds, but the final full cut refuses | same as D1 |
 
 #### Unit tests (`internal/boolchain`)
@@ -4647,7 +4647,7 @@ the same body as before.
 **Trigger.** `rimSplitRebuild` (`boolean_regroup.go`) runs in `performBoolean` after the chain regroup declines,
 only when all of these hold:
 
-- The call is a two-body `Union` without `WithMatchingFaces`.
+- The call is a two-body `Union`.
 - The document does not set `WithRimSplit`, and the context carries no rim-split choice: such a chain was already
   built with splitting, so a rebuild repeats it.
 - The refusal carries a `meshbool.CoarseHeldContactError` (`booleandispatch.CoarseHeldOperand`), and the operand
@@ -4810,7 +4810,7 @@ construction name or original model coordinates.
 - MUST trigger only after the ordinary public Boolean returns its typed
   `ErrUnsupported` refusal carrying an unambiguous target-side
   `CoarseHeldContactError`. Conflicting nested tags decline.
-- MUST decline `WithMatchingFaces`, sheets, point-cone payloads, unsupported
+- MUST decline `MatchingFaces`, sheets, point-cone payloads, unsupported
   geometry changes and suppressed/private public-history contexts.
 - MUST authenticate every expanded source and adjustment before private geometry.
 - MUST keep accepted operands immutable. Materialization builds detached nodes
@@ -5195,7 +5195,7 @@ hole `i`, the band between `C`'s hole `i` reversed (an outer) and `O`'s hole
 | Result | Record |
 |---|---|
 | both caps removed, `k >= 1` holes (reach BX8) | a prism group: one slab over the receiver's sweep holding the `1 + k` bands; `sectionDelta` is the offset's proven displacement |
-| no opening, `k = 0` (reach BX5, `WithNoOpenings`) | three slabs: the cap region (`P` inward, `Q` outward) under the band `{O.Outer, reverse(C.Outer)}` under the cap region, both interfaces monotone, each exposing `C`; `sectionDelta` is the offset's proven displacement; `closedShell` is set; the cavity is a void shell (§3) |
+| no opening, `k = 0` (reach BX5, `ShellClosed`) | three slabs: the cap region (`P` inward, `Q` outward) under the band `{O.Outer, reverse(C.Outer)}` under the cap region, both interfaces monotone, each exposing `C`; `sectionDelta` is the offset's proven displacement; `closedShell` is set; the cavity is a void shell (§3) |
 | no opening, `k >= 1` (reach BX5) | three slabs: `O` under the `1 + k` bands under `O`, both interfaces lining readings, each exposing `C`, a region with `k` holes; `sectionDelta` is the offset's proven displacement; `closedShell` is set; the cavity is one void shell around every lining (§3). Outward, `C` is `P` itself and each lining lies between `P`'s hole and `Q`'s smaller one |
 | one cap removed, any `k` (a cup, modify B5/B6) | a floor slab over `O` and a wall slab over the bands, meeting at a lining interface (`k >= 1`) or a monotone one (`k = 0`) whose one exposed record is `C` itself; `sectionDelta` is zero |
 
@@ -6367,7 +6367,7 @@ In the prism path of `Fillet` and `Chamfer` (`internal/brepmodify/fillet.go`,
 (`brepmodify.CarrierLateralBlend`) before `RequireExactSection`, when every
 selected edge matches a lateral corner (`modifyselect.MatchCorner`) and the
 chamfer is symmetric. Any other selection (a cap edge, a cap loop,
-`WithTangentChain` reaching a cap, an asymmetric chamfer) is not matched; a
+`TangentChain` reaching a cap, an asymmetric chamfer) is not matched; a
 `Chamfer` of complete cap loops then tries §8.1's route, and every other
 selection keeps today's routes. A receiver with no valid record keeps today's
 behaviour exactly.

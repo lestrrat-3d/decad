@@ -19,9 +19,9 @@ func TestSectionCardinalRectangleFeedsVerifiedExtrude(t *testing.T) {
 	s.Fix(rect.A)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	source, err := decad.Extrude(t.Context(), decad.New(), s, s.Profiles()[0], decad.Distance{
+	source, err := decad.Extrude(decad.New(), s, s.Profiles()[0], decad.Distance{
 		D: units.Millimeters(5), Dir: decad.Along,
-	})
+	}).Do(t.Context())
 	require.NoError(t, err)
 	frame, err := r3.NewFrame(r3.NewVec(5, 0, 0), r3.NewVec(0, 1, 0), r3.NewVec(0, 0, 1))
 	require.NoError(t, err)
@@ -34,9 +34,9 @@ func TestSectionCardinalRectangleFeedsVerifiedExtrude(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, units.SquareMillimeters(50), areaReading.Value)
 	require.Equal(t, decad.Exact, areaReading.Exactness)
-	child, err := decad.Extrude(t.Context(), decad.New(), section, profiles[0], decad.Distance{
+	child, err := decad.Extrude(decad.New(), section, profiles[0], decad.Distance{
 		D: units.Millimeters(2), Dir: decad.Along,
-	})
+	}).Do(t.Context())
 	require.NoError(t, err)
 	volume, err := child.Volume()
 	require.NoError(t, err)
@@ -58,15 +58,15 @@ func TestSectionCardinalRectanglePlacementAndAxisSense(t *testing.T) {
 	s.Fix(rect.A)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	source, err := decad.Extrude(t.Context(), decad.New(), s, s.Profiles()[0], decad.Distance{
+	source, err := decad.Extrude(decad.New(), s, s.Profiles()[0], decad.Distance{
 		D: units.Millimeters(5), Dir: decad.Along,
-	})
+	}).Do(t.Context())
 	require.NoError(t, err)
 	placement, err := r3.FromBasis(r3.Basis{
 		EX: r3.Vec{Y: 1}, EY: r3.Vec{X: -1}, EZ: r3.Vec{Z: 1},
 	}, r3.NewVec(20, 30, 7))
 	require.NoError(t, err)
-	placed, err := decad.Transform(t.Context(), source, placement)
+	placed, err := decad.Transform(source, placement).Do(t.Context())
 	require.NoError(t, err)
 	for _, tc := range []struct {
 		name   string
@@ -104,9 +104,9 @@ func TestSectionCardinalRectangleRefusesTouchAndOtherSources(t *testing.T) {
 	s.Fix(rect.A)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	source, err := decad.Extrude(t.Context(), decad.New(), s, s.Profiles()[0], decad.Distance{
+	source, err := decad.Extrude(decad.New(), s, s.Profiles()[0], decad.Distance{
 		D: units.Millimeters(5), Dir: decad.Along,
-	})
+	}).Do(t.Context())
 	require.NoError(t, err)
 	for _, tc := range []struct {
 		name   string
@@ -128,9 +128,9 @@ func TestSectionCardinalRectangleRefusesTouchAndOtherSources(t *testing.T) {
 	}
 	frame, err := r3.NewFrame(r3.NewVec(5, 0, 0), r3.NewVec(0, 1, 0), r3.NewVec(0, 0, 1))
 	require.NoError(t, err)
-	tapered, err := decad.Extrude(t.Context(), decad.New(), s, s.Profiles()[0], decad.Distance{
+	tapered, err := decad.Extrude(decad.New(), s, s.Profiles()[0], decad.Distance{
 		D: units.Millimeters(5), Dir: decad.Along,
-	}, decad.WithTaper(units.Degrees(5)))
+	}).Taper(units.Degrees(5)).Do(t.Context())
 	require.NoError(t, err)
 	section, profiles, err := tapered.Section(t.Context(), frame)
 	require.ErrorIs(t, err, decad.ErrUnsupported)

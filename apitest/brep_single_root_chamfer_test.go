@@ -21,7 +21,7 @@ func TestBrepAdjacentBossRootChamferAddsCornerMaterial(t *testing.T) {
 	corner := r3.NewVec(5, -5, 5)
 	roots := decad.Edges(decad.ParallelTo(r3.NewVec(1, 0, 0)), decad.EndpointAt(corner)).
 		Or(decad.ParallelTo(r3.NewVec(0, 1, 0)), decad.EndpointAt(corner)).Exactly(2)
-	got, err := decad.Chamfer(t.Context(), joined, roots, units.Millimeters(1))
+	got, err := decad.Chamfer(joined, roots, units.Millimeters(1)).Do(t.Context())
 	require.NoError(t, err)
 	requireEveryEdgeOnTwoFaces(t, got)
 	require.Equal(t, 2, countRolePrefix(got, "chamferLoop("))
@@ -53,12 +53,12 @@ func TestBrepAdjacentUnderBossRootChamferAddsCornerMaterial(t *testing.T) {
 	doc := decad.New()
 	plate := boxBody(t, doc, -10, -10, 10, 10, 5)
 	boss := boxBodyAtZ(t, doc, -5, -5, 5, 5, -5, 5)
-	joined, err := decad.Union(t.Context(), plate, boss)
+	joined, err := decad.Union(plate, boss).Do(t.Context())
 	require.NoError(t, err)
 	corner := r3.NewVec(5, -5, 0)
 	roots := decad.Edges(decad.ParallelTo(r3.NewVec(1, 0, 0)), decad.EndpointAt(corner)).
 		Or(decad.ParallelTo(r3.NewVec(0, 1, 0)), decad.EndpointAt(corner)).Exactly(2)
-	got, err := decad.Chamfer(t.Context(), joined, roots, units.Millimeters(1))
+	got, err := decad.Chamfer(joined, roots, units.Millimeters(1)).Do(t.Context())
 	require.NoError(t, err)
 	wantVolume := 2500 + 10 + 1.0/3
 	volume, err := got.Volume()
@@ -87,7 +87,7 @@ func TestBrepSingleBossRootChamferAddsMaterial(t *testing.T) {
 
 	root := decad.Edges(decad.ParallelTo(r3.NewVec(1, 0, 0)),
 		decad.EndpointAt(r3.NewVec(-5, -5, 5))).Exactly(1)
-	got, err := decad.Chamfer(t.Context(), joined, root, units.Millimeters(1))
+	got, err := decad.Chamfer(joined, root, units.Millimeters(1)).Do(t.Context())
 	require.NoError(t, err)
 	after, err := got.Volume()
 	require.NoError(t, err)
@@ -116,7 +116,7 @@ func TestBrepSingleBossPerpendicularRootChamferAddsMaterial(t *testing.T) {
 	joined := squareBossOnPlate(t)
 	root := decad.Edges(decad.ParallelTo(r3.NewVec(0, 1, 0)),
 		decad.EndpointAt(r3.NewVec(5, -5, 5))).Exactly(1)
-	got, err := decad.Chamfer(t.Context(), joined, root, units.Millimeters(1))
+	got, err := decad.Chamfer(joined, root, units.Millimeters(1)).Do(t.Context())
 	require.NoError(t, err)
 	after, err := got.Volume()
 	require.NoError(t, err)
@@ -134,11 +134,11 @@ func TestBrepSingleUnderBossRootChamferAddsMaterial(t *testing.T) {
 	doc := decad.New()
 	plate := boxBody(t, doc, -10, -10, 10, 10, 5)
 	boss := boxBodyAtZ(t, doc, -5, -5, 5, 5, -5, 5)
-	joined, err := decad.Union(t.Context(), plate, boss)
+	joined, err := decad.Union(plate, boss).Do(t.Context())
 	require.NoError(t, err)
 	root := decad.Edges(decad.ParallelTo(r3.NewVec(1, 0, 0)),
 		decad.EndpointAt(r3.NewVec(-5, -5, 0))).Exactly(1)
-	got, err := decad.Chamfer(t.Context(), joined, root, units.Millimeters(1))
+	got, err := decad.Chamfer(joined, root, units.Millimeters(1)).Do(t.Context())
 	require.NoError(t, err)
 	after, err := got.Volume()
 	require.NoError(t, err)
@@ -157,7 +157,7 @@ func TestBrepSingleBossTopEdgeChamferKeepsRouteE(t *testing.T) {
 	joined := squareBossOnPlate(t)
 	top := decad.Edges(decad.ParallelTo(r3.NewVec(1, 0, 0)),
 		decad.EndpointAt(r3.NewVec(-5, -5, 10))).Exactly(1)
-	got, err := decad.Chamfer(t.Context(), joined, top, units.Millimeters(1))
+	got, err := decad.Chamfer(joined, top, units.Millimeters(1)).Do(t.Context())
 	require.NoError(t, err)
 	after, err := got.Volume()
 	require.NoError(t, err)
@@ -170,6 +170,6 @@ func TestBrepSingleBossTopEdgeChamferKeepsRouteE(t *testing.T) {
 func TestBrepIndependentBossRootEdgesRefuseChamferRouteE(t *testing.T) {
 	testIndependentBossRootRefusal(t, func(ctx context.Context, body *decad.Body, selector decad.EdgeSelector,
 		amount units.Value) (*decad.Body, error) {
-		return decad.Chamfer(ctx, body, selector, amount)
+		return decad.Chamfer(body, selector, amount).Do(ctx)
 	})
 }

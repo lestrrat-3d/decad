@@ -119,7 +119,7 @@ func loftBoredSquares(t *testing.T, world *sketch.World, lower, upper *sketch.Pl
 		require.NoError(t, err)
 		sections[i], profiles[i] = s, s.Profiles()[0]
 	}
-	body, err := decad.Loft(t.Context(), decad.New(), sections[0], profiles[0], sections[1], profiles[1])
+	body, err := decad.Loft(decad.New(), sections[0], profiles[0], sections[1], profiles[1]).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -156,7 +156,7 @@ func TestLoftCutExactToolCenterRefusesRewrite(t *testing.T) {
 	toolFrame, err := r3.NewFrame(r3.NewVec(1e9, 0, -1), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
 	require.NoError(t, err)
 	tool := loftBoreSoundnessTool(t, doc, toolFrame, .427, 0, 4, decad.Along)
-	cut, err := decad.Cut(t.Context(), blank, tool)
+	cut, err := decad.Cut(blank, tool).Do(t.Context())
 	require.NoError(t, err)
 	requireRetainedBoreWall(t, cut)
 }
@@ -168,7 +168,7 @@ func TestLoftCutRoundedYToolCenterKeepsFacetedTopology(t *testing.T) {
 	toolFrame, err := r3.NewFrame(r3.NewVec(0, 1e9, -1), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
 	require.NoError(t, err)
 	tool := loftBoreSoundnessTool(t, doc, toolFrame, 0, .427, 4, decad.Along)
-	cut, err := decad.Cut(t.Context(), blank, tool)
+	cut, err := decad.Cut(blank, tool).Do(t.Context())
 	require.NoError(t, err)
 	requireLoftCutFacetedVolume(t, cut)
 }
@@ -180,7 +180,7 @@ func TestLoftCutRoundedZToolCenterKeepsFacetedTopology(t *testing.T) {
 	toolFrame, err := r3.NewFrame(r3.NewVec(0, 0, .427), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
 	require.NoError(t, err)
 	tool := loftBoreSoundnessTool(t, doc, toolFrame, 0, 0, 14, decad.Along)
-	cut, err := decad.Cut(t.Context(), blank, tool)
+	cut, err := decad.Cut(blank, tool).Do(t.Context())
 	require.NoError(t, err)
 	requireLoftCutFacetedVolume(t, cut)
 }
@@ -190,7 +190,7 @@ func TestLoftCutTiltedFrameMapBoundsCylinder(t *testing.T) {
 	require.NoError(t, err)
 	blank, doc := loftBoreSoundnessBlank(t, frame)
 	tool := loftBoreSoundnessTool(t, doc, frame, 0, 0, 4, decad.Along)
-	cut, err := decad.Cut(t.Context(), blank, tool)
+	cut, err := decad.Cut(blank, tool).Do(t.Context())
 	require.NoError(t, err)
 	// The certified Cut keeps the Loft, and its bore cylinder charges the
 	// tilted frame map's departure to every normal reading.
@@ -242,7 +242,7 @@ func TestLoftCutExactToolSpanKeepsUncutCap(t *testing.T) {
 			require.NoError(t, err)
 			tool := loftBoreSoundnessTool(t, doc, toolFrame, 0, 0, tc.height, tc.dir)
 			uncut := tc.cap(blank)
-			cut, err := decad.Cut(t.Context(), blank, tool)
+			cut, err := decad.Cut(blank, tool).Do(t.Context())
 			if err != nil {
 				// The general mesh boolean may refuse a rounded cap contact.
 				require.ErrorIs(t, err, decad.ErrUnsupported)
@@ -276,7 +276,7 @@ func loftBoreSoundnessBlank(t *testing.T, frame r3.Frame, opts ...decad.Document
 		sections[i], profiles[i] = s, s.Profiles()[0]
 	}
 	doc := decad.New(opts...)
-	blank, err := decad.Loft(t.Context(), doc, sections[0], profiles[0], sections[1], profiles[1])
+	blank, err := decad.Loft(doc, sections[0], profiles[0], sections[1], profiles[1]).Do(t.Context())
 	require.NoError(t, err)
 	return blank, doc
 }
@@ -294,8 +294,8 @@ func loftBoreSoundnessTool(t *testing.T, doc *decad.Document, frame r3.Frame,
 	s.CreateCircle(center, 1)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	tool, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(height), Dir: direction})
+	tool, err := decad.Extrude(doc, s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(height), Dir: direction}).Do(t.Context())
 	require.NoError(t, err)
 	return tool
 }

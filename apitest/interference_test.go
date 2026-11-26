@@ -127,10 +127,7 @@ func TestVerifyAdmittedDisplacedPrismPairCarriesItsOwnBound(t *testing.T) {
 	doc := decad.New()
 	const shift = 1e12
 	lo, hi := 2-shift, 8-shift
-	merged, err := decad.Union(t.Context(),
-		boxBody(t, doc, 0, 0, 10, 10, 10),
-		placedFar(t, boxBody(t, doc, lo, 2, hi, 8, 10), shift),
-	)
+	merged, err := decad.Union(boxBody(t, doc, 0, 0, 10, 10, 10), placedFar(t, boxBody(t, doc, lo, 2, hi, 8, 10), shift)).Do(t.Context())
 	require.NoError(t, err)
 	require.False(t, tookMeshPath(merged), "the analytic reduction must own the union")
 	own, err := merged.Volume()
@@ -240,7 +237,7 @@ func ringBody(t *testing.T, doc *decad.Document, u0, v0, u1, v1 float64, holes .
 			break
 		}
 	}
-	body, err := decad.Revolve(t.Context(), doc, s, prof, uAxis, decad.FullRevolution{})
+	body, err := decad.Revolve(doc, s, prof, uAxis, decad.FullRevolution{}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -386,7 +383,7 @@ func TestVerifyUnsupportedOverlapStaysSuspectAndReadOnly(t *testing.T) {
 	ball := ballBody(t, doc, 8)
 	shift, err := r3.Translation(r3.NewVec(5, 0, 0))
 	require.NoError(t, err)
-	_, err = decad.Transform(t.Context(), ball, shift)
+	_, err = decad.Transform(ball, shift).Do(t.Context())
 	require.NoError(t, err)
 	before := snapshotDocument(t, doc)
 
@@ -441,7 +438,7 @@ func TestVerifyCoarseBooleanTessellationStaysSuspect(t *testing.T) {
 		}
 	}
 	require.NotNil(t, profile)
-	_, err = decad.Extrude(t.Context(), doc, s, profile, decad.Distance{D: units.Millimeters(8), Dir: decad.Along})
+	_, err = decad.Extrude(doc, s, profile, decad.Distance{D: units.Millimeters(8), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	boxBody(t, doc, -1, 1, 1, 2, 4)
 	before := snapshotDocument(t, doc)
@@ -568,7 +565,7 @@ func splitCellBody(t *testing.T, doc *decad.Document, h float64) *decad.Body {
 	}
 	require.NotNil(t, left, "the split rectangle's left cell must exist")
 
-	body, err := decad.Extrude(t.Context(), doc, s, left, decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
+	body, err := decad.Extrude(doc, s, left, decad.Distance{D: units.Millimeters(h), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }

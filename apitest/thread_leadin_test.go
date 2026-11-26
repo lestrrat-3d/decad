@@ -10,7 +10,7 @@ import (
 )
 
 // This file is agent-docs/thread-design.md §7's public-surface tests for
-// ThreadSpec.LeadIn, on the rod of thread_test.go.
+// ThreadCommand.LeadIn, on the rod of thread_test.go.
 
 // leadInRod is the volume of the 5 mm radius, 20 mm rod threaded at pitch 1.5 after
 // both its ends are chamfered by d at 45 degrees: the chamfered rod less the groove.
@@ -50,8 +50,8 @@ func TestThreadLeadInChamfersBothEndsBeforeTheThread(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
 	rod := circleBodyAtZ(t, doc, 0, 5, 0, 20)
-	out, err := decad.Thread(t.Context(), rod, decad.ThreadSpec{
-		Face: decad.Faces(decad.Cylindrical()), Pitch: units.Millimeters(threadPitch), LeadIn: units.Millimeters(0.8)})
+	out, err := decad.Thread(rod, decad.Faces(decad.Cylindrical()), units.Millimeters(threadPitch)).
+		LeadIn(units.Millimeters(0.8)).Do(t.Context())
 	require.NoError(t, err)
 	require.Len(t, doc.Bodies(), 1, "the rod, the chamfer and the trial all leave the document")
 	require.True(t, doc.Bodies()[0] == out)
@@ -68,8 +68,7 @@ func TestThreadLeadInChamfersBothEndsBeforeTheThread(t *testing.T) {
 	requireThreadVolume(t, volume, leadInRod(0.8))
 	// The chamfer takes more than the thread alone leaves.
 	plain := circleBodyAtZ(t, decad.New(), 0, 5, 0, 20)
-	threaded, err := decad.Thread(t.Context(), plain, decad.ThreadSpec{
-		Face: decad.Faces(decad.Cylindrical()), Pitch: units.Millimeters(threadPitch)})
+	threaded, err := decad.Thread(plain, decad.Faces(decad.Cylindrical()), units.Millimeters(threadPitch)).Do(t.Context())
 	require.NoError(t, err)
 	pv, err := threaded.Volume()
 	require.NoError(t, err)
@@ -80,17 +79,15 @@ func TestThreadLeadInRefusals(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
 	rod := circleBodyAtZ(t, doc, 0, 5, 0, 20)
-	spec := decad.ThreadSpec{Face: decad.Faces(decad.Cylindrical()), Pitch: units.Millimeters(threadPitch)}
-	spec.LeadIn = units.Millimeters(-1)
-	_, err := decad.Thread(t.Context(), rod, spec)
-	require.ErrorIs(t, err, decad.ErrNegativeMagnitude)
-	spec.LeadIn = units.Degrees(1)
-	_, err = decad.Thread(t.Context(), rod, spec)
-	require.ErrorIs(t, err, decad.ErrUnitKind)
+	thread := func(leadIn units.Value) error {
+		_, err := decad.Thread(rod, decad.Faces(decad.Cylindrical()), units.Millimeters(threadPitch)).
+			LeadIn(leadIn).Do(t.Context())
+		return err
+	}
+	require.ErrorIs(t, thread(units.Millimeters(-1)), decad.ErrNegativeMagnitude)
+	require.ErrorIs(t, thread(units.Degrees(1)), decad.ErrUnitKind)
 	// A chamfer as deep as the rod's radius is the chamfer's own refusal, and the rod stays live.
-	spec.LeadIn = units.Millimeters(6)
-	_, err = decad.Thread(t.Context(), rod, spec)
-	require.Error(t, err)
+	require.Error(t, thread(units.Millimeters(6)))
 	require.Len(t, doc.Bodies(), 1)
 	require.True(t, doc.Bodies()[0] == rod)
 }
@@ -99,9 +96,8 @@ func TestThreadLeadInAngleSetsTheBevelsSlope(t *testing.T) {
 	t.Parallel()
 	for name, angle := range map[string]float64{"shallow": 30, "steep": 60} {
 		rod := circleBodyAtZ(t, decad.New(), 0, 5, 0, 20)
-		out, err := decad.Thread(t.Context(), rod, decad.ThreadSpec{
-			Face: decad.Faces(decad.Cylindrical()), Pitch: units.Millimeters(threadPitch),
-			LeadIn: units.Millimeters(0.8), LeadInAngle: units.Degrees(angle)})
+		out, err := decad.Thread(rod, decad.Faces(decad.Cylindrical()), units.Millimeters(threadPitch)).
+			LeadInAngle(units.Millimeters(0.8), units.Degrees(angle)).Do(t.Context())
 		require.NoError(t, err, name)
 		volume, err := out.Volume()
 		require.NoError(t, err, name)
@@ -110,11 +106,11 @@ func TestThreadLeadInAngleSetsTheBevelsSlope(t *testing.T) {
 	// 45 degrees is the default.
 	a := circleBodyAtZ(t, decad.New(), 0, 5, 0, 20)
 	b := circleBodyAtZ(t, decad.New(), 0, 5, 0, 20)
-	spec := decad.ThreadSpec{Face: decad.Faces(decad.Cylindrical()), Pitch: units.Millimeters(threadPitch), LeadIn: units.Millimeters(0.8)}
-	plain, err := decad.Thread(t.Context(), a, spec)
+	plain, err := decad.Thread(a, decad.Faces(decad.Cylindrical()), units.Millimeters(threadPitch)).
+		LeadIn(units.Millimeters(0.8)).Do(t.Context())
 	require.NoError(t, err)
-	spec.LeadInAngle = units.Degrees(45)
-	angled, err := decad.Thread(t.Context(), b, spec)
+	angled, err := decad.Thread(b, decad.Faces(decad.Cylindrical()), units.Millimeters(threadPitch)).
+		LeadInAngle(units.Millimeters(0.8), units.Degrees(45)).Do(t.Context())
 	require.NoError(t, err)
 	pv, err := plain.Volume()
 	require.NoError(t, err)
@@ -127,11 +123,6 @@ func TestThreadLeadInAngleRefusals(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
 	rod := circleBodyAtZ(t, doc, 0, 5, 0, 20)
-	spec := decad.ThreadSpec{Face: decad.Faces(decad.Cylindrical()), Pitch: units.Millimeters(threadPitch)}
-	spec.LeadInAngle = units.Degrees(30)
-	_, err := decad.Thread(t.Context(), rod, spec)
-	require.ErrorIs(t, err, decad.ErrDegenerate, "an angle without a distance")
-	spec.LeadIn = units.Millimeters(0.8)
 	for name, tc := range map[string]struct {
 		angle units.Value
 		want  error
@@ -141,8 +132,8 @@ func TestThreadLeadInAngleRefusals(t *testing.T) {
 		testNegative:  {units.Degrees(-10), decad.ErrNegativeMagnitude},
 		"a length":    {units.Millimeters(1), decad.ErrUnitKind},
 	} {
-		spec.LeadInAngle = tc.angle
-		_, err := decad.Thread(t.Context(), rod, spec)
+		_, err := decad.Thread(rod, decad.Faces(decad.Cylindrical()), units.Millimeters(threadPitch)).
+			LeadInAngle(units.Millimeters(0.8), tc.angle).Do(t.Context())
 		require.ErrorIs(t, err, tc.want, name)
 	}
 	require.Len(t, doc.Bodies(), 1)

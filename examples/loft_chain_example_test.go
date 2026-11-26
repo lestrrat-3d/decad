@@ -46,8 +46,8 @@ func Example_loft_chain() {
 	// Segment 1 of the first chain pairs with segment 1 of the second, and
 	// so on, so the paths should have matching segments.
 	doc := decad.New()
-	ribbon, err := decad.LoftChain(context.Background(), doc,
-		sketches[0], sketches[0].Chains()[0], sketches[1], sketches[1].Chains()[0])
+	ribbon, err := decad.LoftChain(doc,
+		sketches[0], sketches[0].Chains()[0], sketches[1], sketches[1].Chains()[0]).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to loft: %s\n", err)
 		return

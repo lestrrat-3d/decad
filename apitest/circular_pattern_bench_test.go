@@ -31,7 +31,7 @@ func BenchmarkCircularPatternCubeSet(b *testing.B) {
 		for b.Loop() {
 			doc := decad.New()
 			source := circularPatternMeshSolid(b, doc, fixture.cubes)
-			out, err := decad.Patterned(b.Context(), source, spec)
+			out, err := decad.Patterned(source, spec).Do(b.Context())
 			if err != nil {
 				b.Fatal(err)
 			}
@@ -46,7 +46,7 @@ func BenchmarkCircularPatternCubeSet(b *testing.B) {
 			doc := decad.New()
 			source := circularPatternMeshSolid(b, doc, fixture.cubes)
 			b.StartTimer()
-			out, err := decad.Patterned(b.Context(), source, spec)
+			out, err := decad.Patterned(source, spec).Do(b.Context())
 			if err != nil {
 				b.Fatal(err)
 			}
@@ -69,9 +69,9 @@ func circularPatternFixture(b *testing.B) circularPatternBenchFixture {
 		if source == nil {
 			continue
 		}
-		out, err := decad.Patterned(b.Context(), source, decad.CircularPattern{
+		out, err := decad.Patterned(source, decad.CircularPattern{
 			Center: center, Axis: r3.NewVec(0, 0, 1), Count: count,
-		})
+		}).Do(b.Context())
 		if err != nil || count != 4 {
 			continue
 		}
@@ -102,7 +102,7 @@ func circularPatternMeshSolidOrNil(b *testing.B, doc *decad.Document, c *cubes) 
 	if err != nil {
 		b.Fatal(err)
 	}
-	body, err := decad.SolidFromMesh(b.Context(), doc, mesh)
+	body, err := decad.SolidFromMesh(doc, mesh).Do(b.Context())
 	if err != nil {
 		return nil
 	}

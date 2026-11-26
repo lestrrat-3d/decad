@@ -31,7 +31,7 @@ func prismFrom(t *testing.T, doc *decad.Document, z0, height float64, draw func(
 		}
 	}
 	require.NotNil(t, pr)
-	b, err := decad.Extrude(t.Context(), doc, s, pr, decad.Distance{D: units.Millimeters(height), Dir: decad.Along})
+	b, err := decad.Extrude(doc, s, pr, decad.Distance{D: units.Millimeters(height), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	return b
 }
@@ -83,7 +83,7 @@ func (k keyhole) facetedBodyIn(t *testing.T, slotFirst bool) (*decad.Body, *deca
 	out := plate
 	for _, tool := range tools {
 		var err error
-		out, err = decad.Cut(t.Context(), out, tool)
+		out, err = decad.Cut(out, tool).Do(t.Context())
 		require.NoError(t, err)
 	}
 	return out, doc
@@ -146,7 +146,7 @@ func TestChamferKeyholeRimRunOnMeshBoolean(t *testing.T) {
 				t.Run(fmt.Sprintf("r %v w %v flat %v d %v slot first %v", k.r, k.w, k.flat, d, slotFirst), func(t *testing.T) {
 					t.Parallel()
 					body := k.facetedBody(t, slotFirst)
-					out, err := decad.Chamfer(t.Context(), body, k.rimOf(t, body), units.Millimeters(d))
+					out, err := decad.Chamfer(body, k.rimOf(t, body), units.Millimeters(d)).Do(t.Context())
 					require.NoError(t, err)
 					require.True(t, out.IsSolid())
 					m, err := out.Volume()
@@ -171,9 +171,9 @@ func TestChamferKeyholeRimRunThenCut(t *testing.T) {
 	const d = 0.5
 	k := keyhole{4, 0.5, 3}
 	body, doc := k.facetedBodyIn(t, true)
-	out, err := decad.Chamfer(t.Context(), body, k.rimOf(t, body), units.Millimeters(d))
+	out, err := decad.Chamfer(body, k.rimOf(t, body), units.Millimeters(d)).Do(t.Context())
 	require.NoError(t, err)
-	cut, err := decad.Cut(t.Context(), out, box(t, doc, [3]float64{-3, -6, -1}, [3]float64{3, -5, 6}))
+	cut, err := decad.Cut(out, box(t, doc, [3]float64{-3, -6, -1}, [3]float64{3, -5, 6})).Do(t.Context())
 	require.NoError(t, err)
 	mc, err := cut.Volume()
 	require.NoError(t, err)
@@ -204,12 +204,12 @@ func TestChamferKeyholeRimRunRefusesAnotherFaceInReach(t *testing.T) {
 			body, doc := k.facetedBodyIn(t, true)
 			var err error
 			if tool.union {
-				body, err = decad.Union(t.Context(), body, box(t, doc, tool.lo, tool.hi))
+				body, err = decad.Union(body, box(t, doc, tool.lo, tool.hi)).Do(t.Context())
 			} else {
-				body, err = decad.Cut(t.Context(), body, box(t, doc, tool.lo, tool.hi))
+				body, err = decad.Cut(body, box(t, doc, tool.lo, tool.hi)).Do(t.Context())
 			}
 			require.NoError(t, err)
-			_, err = decad.Chamfer(t.Context(), body, k.rimOf(t, body), units.Millimeters(0.5))
+			_, err = decad.Chamfer(body, k.rimOf(t, body), units.Millimeters(0.5)).Do(t.Context())
 			require.ErrorIs(t, err, decad.ErrUnsupported)
 			require.Equal(t, []*decad.Body{body}, doc.Bodies())
 		})

@@ -60,9 +60,9 @@ func tongueOnBase(t *testing.T, width, height float64, faceted bool) (*decad.Bod
 		}
 		s0, p0 := circle(-1, 1.5)
 		s1, p1 := circle(6, 0.7)
-		hole, err := decad.Loft(t.Context(), doc, s0, p0, s1, p1)
+		hole, err := decad.Loft(doc, s0, p0, s1, p1).Do(t.Context())
 		require.NoError(t, err)
-		body, err = decad.Cut(t.Context(), body, hole)
+		body, err = decad.Cut(body, hole).Do(t.Context())
 		require.NoError(t, err)
 	}
 	return body, topEdges(lineEdge(1, vR, tR), lineEdge(1, tR, tL), lineEdge(1, tL, vL))
@@ -89,7 +89,7 @@ func TestChamferCapRunShallowConcaveEnd(t *testing.T) {
 			body, sel := tongueOnBase(t, width, height, c.faceted)
 			before, err := body.Volume()
 			require.NoError(t, err)
-			out, err := decad.Chamfer(t.Context(), body, sel, units.Millimeters(d))
+			out, err := decad.Chamfer(body, sel, units.Millimeters(d)).Do(t.Context())
 			require.NoError(t, err)
 			require.True(t, out.IsSolid())
 			for _, diag := range out.OperationDiagnostics() {
@@ -118,7 +118,7 @@ func TestChamferCapRunShallowConcaveEnd(t *testing.T) {
 		t.Parallel()
 		// The next wall's plane carried back leaves the band d/tan(turn) = 5.1 mm from the corner, past the top.
 		body, sel := tongueOnBase(t, width, 3, false)
-		_, err := decad.Chamfer(t.Context(), body, sel, units.Millimeters(d))
+		_, err := decad.Chamfer(body, sel, units.Millimeters(d)).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.ErrorContains(t, err, "comes back into the clip at its concave end")
 	})

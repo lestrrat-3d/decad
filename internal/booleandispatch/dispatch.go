@@ -51,7 +51,7 @@ type Hooks struct {
 	DirectShellUnion func(ctx context.Context, op meshbool.OperationKind, env topo.Env, a, b *topo.Body) (*topo.Body, bool, error)
 	// LowerSupport certifies a faceted Union result's lower support plane.
 	LowerSupport func(ctx context.Context, result, a, b *topo.Body) error
-	// MatchingFaces is decad.WithMatchingFaces: the caller intends the
+	// MatchingFaces is the MatchingFaces method of decad.Cut and decad.Intersect: the caller intends the
 	// operands' faces to meet exactly where they meet within rounding.
 	MatchingFaces bool
 }

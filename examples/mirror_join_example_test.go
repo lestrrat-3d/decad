@@ -10,7 +10,7 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// WithJoin makes Mirrored return one body: the original and its mirror image
+// MirroredJoin returns one body: the original and its mirror image
 // merged. Use it to model a symmetric part as a single half and mirror it
 // into the whole, so that changing the half changes both sides.
 func Example_mirror_join() {
@@ -36,8 +36,8 @@ func Example_mirror_join() {
 		return
 	}
 	doc := decad.New()
-	half, err := decad.Extrude(context.Background(), doc, s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	half, err := decad.Extrude(doc, s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to extrude: %s\n", err)
 		return
@@ -45,8 +45,8 @@ func Example_mirror_join() {
 
 	// Mirror across the half's -X wall and join the two sides into one body.
 	wall := decad.Faces(decad.Planar(), decad.Facing(r3.NewVec(-1, 0, 0)))
-	whole, err := decad.Mirrored(context.Background(), half,
-		decad.MirrorFace{Body: half, Face: wall}, decad.WithJoin())
+	whole, err := decad.MirroredJoin(half,
+		decad.MirrorFace{Body: half, Face: wall}).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to mirror: %s\n", err)
 		return

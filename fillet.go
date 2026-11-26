@@ -6,6 +6,8 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/brepmodify"
 	"github.com/lestrrat-3d/decad/internal/extent"
+	"github.com/lestrrat-3d/decad/internal/modifyoption"
+	"github.com/lestrrat-3d/decad/internal/opcommand"
 
 	"github.com/lestrrat-3d/decad/internal/offset2d"
 
@@ -42,10 +44,6 @@ import (
 // A one-sided positive circular draft also admits its one complete far cap
 // rim through the bounded meridian reduction in draft_circle.go.
 
-// FilletOption configures Fillet. WithTangentChain is the one option a
-// fillet takes (agent-docs/modify-design.md Part R §2).
-type FilletOption interface{ filletOption() }
-
 // Fillet rounds selected section corners of a straight prism, its admitted
 // one-line Sweep reduction, or an axial loft whose sections match in segment
 // kinds with a tangent arc of radius r, returning the new body and retiring b
@@ -56,7 +54,7 @@ type FilletOption interface{ filletOption() }
 // other unsupported cap selections are S1 (ErrUnsupported). A rewritten
 // section faces the §5 audit before anything is built.
 //
-// WithTangentChain expands the edges sel resolves to across every edge that
+// TangentChain expands the edges sel resolves to across every edge that
 // continues them with proven G1 continuity before any receiver gate runs
 // (agent-docs/modify-design.md Part R §5); sel's cardinality assertion applies to
 // the seeds it names. A continuation that branches or that this evaluator
@@ -134,12 +132,48 @@ type FilletOption interface{ filletOption() }
 // proof, exports to STEP, takes part in a mesh boolean, is surveyed for
 // undercuts and concave radii, and is placed, mirrored and patterned like any
 // brep body (agent-docs/modify-design.md Part L Table DF).
-func Fillet(ctx context.Context, b *Body, sel EdgeSelector, r units.Value,
-	opts ...FilletOption) (result *Body, retErr error) {
-	defer func() { retErr = operationError(OperationFillet, retErr) }()
-	if ctx == nil {
-		return nil, fmt.Errorf(`%w: a nil context cannot control a fillet`, ErrDegenerate)
+func Fillet(b *Body, sel EdgeSelector, r units.Value) *FilletCommand {
+	c := &FilletCommand{b: b, sel: copyEdgeSelector(sel), r: r}
+	if b == nil {
+		c.state.Record("body", errNilBody)
 	}
+	return c
+}
+
+// FilletCommand rounds edges of a body. Build it with [Fillet].
+type FilletCommand struct {
+	state opcommand.State     // consumed flag and first recorded fault
+	b     *Body               // stored as given
+	sel   EdgeSelector        // copied at Fillet
+	r     units.Value         // the radius, gated at Do
+	chain tangentChainSetting // set by TangentChain
+}
+
+// TangentChain expands each selected seed edge across the edges that
+// continue it with proven G1 continuity (agent-docs/modify-design.md Part R §5): an
+// edge leaving the seed's endpoint along the exactly opposite tangent ray,
+// whose two adjacent faces have the same outward normals there as the
+// seed's. The expansion repeats from every edge it adds. The seed query's
+// cardinality assertion applies to the seeds, before expansion. A
+// continuation with more than one candidate, or one this evaluator cannot
+// decide, is ErrUnsupported; the call never picks a branch or stops early.
+// Calling it again is the same as calling it once.
+func (c *FilletCommand) TangentChain() *FilletCommand { c.chain.set(); return c }
+
+// Do rounds the edges and retires the body, or returns the error of the
+// first gate that refuses, leaving the body live. A nil ctx is ErrDegenerate,
+// and a second call returns ErrConsumed.
+func (c *FilletCommand) Do(ctx context.Context) (*Body, error) {
+	return runCommand(ctx, &c.state, OperationFillet, c.run)
+}
+
+func (c *FilletCommand) run(ctx context.Context) (*Body, error) {
+	return fillet(ctx, c.b, c.sel, c.r, modifyoption.FilletConfig{TangentChain: c.chain.on})
+}
+
+// fillet is Fillet's implementation. ctx is not nil, and the errors it returns
+// carry no operation tag (agent-docs/command-api-design.md §11).
+func fillet(ctx context.Context, b *Body, sel EdgeSelector, r units.Value, o modifyoption.FilletConfig) (*Body, error) {
 	if b == nil || b.n.Doc == nil {
 		return nil, fmt.Errorf(`%w: the body belongs to no document`, ErrDegenerate)
 	}
@@ -152,10 +186,6 @@ func Fillet(ctx context.Context, b *Body, sel EdgeSelector, r units.Value,
 	// Table X (agent-docs/surface-design.md §11): refused ahead of the selector gate
 	// so the answer does not depend on what the selector matched.
 	if err := refuseSheetOperand(b, "Fillet"); err != nil {
-		return nil, err
-	}
-	o, err := decodeFilletOptions(opts)
-	if err != nil {
 		return nil, err
 	}
 	rmm, rDelta, err := extent.MagnitudeInBounded(r, units.Length, units.Millimeter, "the fillet radius")

@@ -65,11 +65,11 @@ func roundedPlate(t *testing.T, solved bool) *decad.Body {
 	require.NoError(t, err)
 	profs := s.Profiles()
 	require.Len(t, profs, 1)
-	body, err := decad.Extrude(t.Context(), doc, s, profs[0],
-		decad.Distance{D: units.Millimeters(rampArmTop), Dir: decad.Along})
+	body, err := decad.Extrude(doc, s, profs[0],
+		decad.Distance{D: units.Millimeters(rampArmTop), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	loops := decad.Edges(decad.OuterLoopOf(decad.CapStart(body))).Or(decad.OuterLoopOf(decad.CapEnd(body)))
-	body, err = decad.Chamfer(t.Context(), body, loops, units.Millimeters(rampArmSize))
+	body, err = decad.Chamfer(body, loops, units.Millimeters(rampArmSize)).Do(t.Context())
 	require.NoError(t, err)
 	return rampCut(t, w, doc, body)
 }
@@ -109,11 +109,11 @@ func galleryArm(t *testing.T) *decad.Body {
 	require.NoError(t, err)
 	profs := s.Profiles()
 	require.Len(t, profs, 1)
-	body, err := decad.Extrude(t.Context(), doc, s, profs[0],
-		decad.Distance{D: units.Millimeters(rampArmTop), Dir: decad.Along})
+	body, err := decad.Extrude(doc, s, profs[0],
+		decad.Distance{D: units.Millimeters(rampArmTop), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	loops := decad.Edges(decad.OuterLoopOf(decad.CapStart(body))).Or(decad.OuterLoopOf(decad.CapEnd(body)))
-	body, err = decad.Chamfer(t.Context(), body, loops, units.Millimeters(rampArmSize))
+	body, err = decad.Chamfer(body, loops, units.Millimeters(rampArmSize)).Do(t.Context())
 	require.NoError(t, err)
 	return rampCut(t, w, doc, body)
 }
@@ -151,8 +151,8 @@ func TestChamferEdgeEndsOnTiltedPlane(t *testing.T) {
 
 	topChamfer := func(t *testing.T, b *decad.Body) *decad.Body {
 		t.Helper()
-		out, err := decad.Chamfer(t.Context(), b, namedEdges([]*decad.Edge{rampArmTopEdge(t, b)}),
-			units.Millimeters(size))
+		out, err := decad.Chamfer(b, namedEdges([]*decad.Edge{rampArmTopEdge(t, b)}),
+			units.Millimeters(size)).Do(t.Context())
 		require.NoError(t, err)
 		v0, err := b.Volume()
 		require.NoError(t, err)
@@ -185,15 +185,15 @@ func TestChamferEdgeEndsOnTiltedPlane(t *testing.T) {
 		arm := galleryArm(t)
 		requireTiltedEndPlanes(t, arm)
 		out := topChamfer(t, arm)
-		_, err := decad.Chamfer(t.Context(), out, namedEdges(rampArmOutlineEdges(t, out)), units.Millimeters(size))
+		_, err := decad.Chamfer(out, namedEdges(rampArmOutlineEdges(t, out)), units.Millimeters(size)).Do(t.Context())
 		require.NoError(t, err)
 	})
 
 	t.Run("the gallery's arm, its outline and top edge in one call", func(t *testing.T) {
 		t.Parallel()
 		arm := galleryArm(t)
-		out, err := decad.Chamfer(t.Context(), arm,
-			namedEdges(append(rampArmOutlineEdges(t, arm), rampArmTopEdge(t, arm))), units.Millimeters(size))
+		out, err := decad.Chamfer(arm,
+			namedEdges(append(rampArmOutlineEdges(t, arm), rampArmTopEdge(t, arm))), units.Millimeters(size)).Do(t.Context())
 		require.NoError(t, err)
 		requireVerifiedMesh(t, out)
 	})

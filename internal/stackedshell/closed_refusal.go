@@ -11,7 +11,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/topo"
 )
 
-// RefuseClosed is Shell's answer to WithNoOpenings on every receiver but a
+// RefuseClosed is Shell's answer to ShellClosed on every receiver but a
 // full-turn revolve over a hole-free meridian, a straight prism, a brep record
 // that reads as a prism (inward along any axis, outward along its one axis),
 // an admitted two-slab rectangular boss, and an inward convex mesh Boolean result with planar faces

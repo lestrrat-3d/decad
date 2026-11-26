@@ -20,9 +20,9 @@ func joinedByPattern(t *testing.T, r, height float64, n int, axis r3.Vec) (*deca
 	doc := decad.New()
 	disc := circleBodyAtZ(t, doc, 0, r, 0, height)
 	lobe := lobeLoft(t, doc, r, 0, 0.4*math.Pi/float64(n), height)
-	copies, err := decad.PatternCopies(t.Context(), lobe, decad.CircularPattern{Axis: axis, Count: n})
+	copies, err := decad.PatternCopies(lobe, decad.CircularPattern{Axis: axis, Count: n}).Do(t.Context())
 	require.NoError(t, err)
-	return decad.Union(t.Context(), disc, append([]*decad.Body{lobe}, copies...)...)
+	return decad.Union(append([]*decad.Body{disc}, append([]*decad.Body{lobe}, copies...)...)...).Do(t.Context())
 }
 
 // drawnAtAngles joins the same lobes each drawn at its own angle.
@@ -35,7 +35,7 @@ func drawnAtAngles(t *testing.T, n int) *decad.Body {
 	for k := range lobes {
 		lobes[k] = lobeLoft(t, doc, r, 2*math.Pi*float64(k)/float64(n), 0.4*math.Pi/float64(n), height)
 	}
-	joined, err := decad.Union(t.Context(), disc, lobes...)
+	joined, err := decad.Union(append([]*decad.Body{disc}, lobes...)...).Do(t.Context())
 	require.NoError(t, err)
 	return joined
 }
@@ -83,20 +83,20 @@ func TestPatternUnionRefusalLeavesEveryOperandLive(t *testing.T) {
 	disc := circleBodyAtZ(t, doc, 0, r, 0, height)
 	lobe := lobeLoft(t, doc, r, 0, 0.4*math.Pi/n, height)
 	before := doc.Bodies()
-	copies, err := decad.PatternCopies(t.Context(), lobe, decad.CircularPattern{Axis: r3.NewVec(0.05, 0, 1), Count: n})
+	copies, err := decad.PatternCopies(lobe, decad.CircularPattern{Axis: r3.NewVec(0.05, 0, 1), Count: n}).Do(t.Context())
 	require.NoError(t, err)
-	_, err = decad.Union(t.Context(), disc, append([]*decad.Body{lobe}, copies...)...)
+	_, err = decad.Union(append([]*decad.Body{disc}, append([]*decad.Body{lobe}, copies...)...)...).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.True(t, slices.Equal(append(slices.Clone(before), copies...), doc.Bodies()),
 		"a refused Union leaves the target, the feature and every copy live")
 	for _, c := range copies {
-		require.NoError(t, decad.Remove(c))
+		require.NoError(t, decad.Remove(c).Do(t.Context()))
 	}
 	require.True(t, slices.Equal(before, doc.Bodies()))
 
-	_, err = decad.Union(t.Context(), lobe, lobe, disc)
+	_, err = decad.Union(lobe, lobe, disc).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrDegenerate)
-	_, err = decad.PatternCopies(t.Context(), lobe, decad.CircularPattern{Axis: r3.NewVec(0, 0, 1), Count: 1})
+	_, err = decad.PatternCopies(lobe, decad.CircularPattern{Axis: r3.NewVec(0, 0, 1), Count: 1}).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrDegenerate)
 	require.True(t, slices.Equal(before, doc.Bodies()))
 }
@@ -114,10 +114,10 @@ func TestPatternUnionSlidesATongueAlongAPlate(t *testing.T) {
 	require.NoError(t, err)
 	tv, err := tongue.Volume()
 	require.NoError(t, err)
-	copies, err := decad.PatternCopies(t.Context(), tongue,
-		decad.LinearPattern{Dir: r3.NewVec(1, 0, 0), Step: units.Millimeters(6), Count: 3})
+	copies, err := decad.PatternCopies(tongue,
+		decad.LinearPattern{Dir: r3.NewVec(1, 0, 0), Step: units.Millimeters(6), Count: 3}).Do(t.Context())
 	require.NoError(t, err)
-	joined, err := decad.Union(t.Context(), plate, append([]*decad.Body{tongue}, copies...)...)
+	joined, err := decad.Union(append([]*decad.Body{plate}, append([]*decad.Body{tongue}, copies...)...)...).Do(t.Context())
 	require.NoError(t, err)
 	v, err := joined.Volume()
 	require.NoError(t, err)
@@ -157,8 +157,8 @@ func obliquePatternUnion(t *testing.T, r, height float64, n int) (*decad.Body, e
 	ds.CreateCircle(ds.Origin(), r)
 	_, err = ds.Solve(t.Context())
 	require.NoError(t, err)
-	disc, err := decad.Extrude(t.Context(), doc, ds, ds.Profiles()[0],
-		decad.Distance{D: units.Millimeters(height), Dir: decad.Along})
+	disc, err := decad.Extrude(doc, ds, ds.Profiles()[0],
+		decad.Distance{D: units.Millimeters(height), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 
 	half := 0.4 * math.Pi / float64(n)
@@ -192,12 +192,12 @@ func obliquePatternUnion(t *testing.T, r, height float64, n int) (*decad.Body, e
 	}
 	s0, q0 := section(p0)
 	s1, q1 := section(p1)
-	lobe, err := decad.Loft(t.Context(), doc, s0, q0, s1, q1)
+	lobe, err := decad.Loft(doc, s0, q0, s1, q1).Do(t.Context())
 	require.NoError(t, err)
-	copies, err := decad.PatternCopies(t.Context(), lobe,
-		decad.CircularPattern{Center: f0.Origin(), Axis: f0.N(), Count: n})
+	copies, err := decad.PatternCopies(lobe,
+		decad.CircularPattern{Center: f0.Origin(), Axis: f0.N(), Count: n}).Do(t.Context())
 	require.NoError(t, err)
-	return decad.Union(t.Context(), disc, append([]*decad.Body{lobe}, copies...)...)
+	return decad.Union(append([]*decad.Body{disc}, append([]*decad.Body{lobe}, copies...)...)...).Do(t.Context())
 }
 
 // TestPatternUnionOnAnObliqueFrame joins patterned lobes on a frame no axis aligns with.
@@ -236,10 +236,10 @@ func TestPatternUnionManyCopies(t *testing.T) {
 			require.NoError(t, err)
 			lv, err := lobe.Volume()
 			require.NoError(t, err)
-			copies, err := decad.PatternCopies(t.Context(), lobe,
-				decad.CircularPattern{Axis: r3.NewVec(0, 0, 1), Count: n})
+			copies, err := decad.PatternCopies(lobe,
+				decad.CircularPattern{Axis: r3.NewVec(0, 0, 1), Count: n}).Do(t.Context())
 			require.NoError(t, err)
-			joined, err := decad.Union(t.Context(), disc, append([]*decad.Body{lobe}, copies...)...)
+			joined, err := decad.Union(append([]*decad.Body{disc}, append([]*decad.Body{lobe}, copies...)...)...).Do(t.Context())
 			require.NoError(t, err)
 			require.True(t, joined.IsSolid())
 			v, err := joined.Volume()
@@ -286,7 +286,7 @@ func slimLobeLoft(t *testing.T, doc *decad.Document, r, half, height float64) *d
 	}
 	s0, p0 := section(w.XY())
 	s1, p1 := section(splitTopPlane(t, w, height))
-	b, err := decad.Loft(t.Context(), doc, s0, p0, s1, p1)
+	b, err := decad.Loft(doc, s0, p0, s1, p1).Do(t.Context())
 	require.NoError(t, err)
 	return b
 }

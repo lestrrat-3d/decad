@@ -39,21 +39,21 @@ func TestShellCoaxialCounterbore(t *testing.T) {
 					var part *decad.Body
 					var err error
 					if throughFirst {
-						part, err = decad.Cut(t.Context(), plate, through)
+						part, err = decad.Cut(plate, through).Do(t.Context())
 						require.NoError(t, err)
-						part, err = decad.Cut(t.Context(), part, wide)
+						part, err = decad.Cut(part, wide).Do(t.Context())
 					} else {
-						part, err = decad.Cut(t.Context(), plate, wide)
+						part, err = decad.Cut(plate, wide).Do(t.Context())
 						require.NoError(t, err)
-						part, err = decad.Cut(t.Context(), part, through)
+						part, err = decad.Cut(part, through).Do(t.Context())
 					}
 					require.NoError(t, err)
 					selectedCap := decad.CapStart(part)
 					if fromTop {
 						selectedCap = decad.CapEnd(part)
 					}
-					shell, err := decad.Shell(t.Context(), part, decad.Faces(decad.FaceCreatedBy(selectedCap)).Exactly(1),
-						units.Millimeters(1))
+					shell, err := decad.Shell(part, decad.Faces(decad.FaceCreatedBy(selectedCap)).Exactly(1),
+						units.Millimeters(1)).Do(t.Context())
 					require.NoError(t, err)
 					require.Len(t, shell.Lumps(), 1)
 					torusFaces := 0
@@ -110,14 +110,14 @@ func TestShellCounterboreRefusesInsufficientShoulder(t *testing.T) {
 	doc := decad.New()
 	plate := boxBody(t, doc, -10, -10, 10, 10, 10)
 	through := circleBodyAtZ(t, doc, 0, 3, 0, 10)
-	part, err := decad.Cut(t.Context(), plate, through)
+	part, err := decad.Cut(plate, through).Do(t.Context())
 	require.NoError(t, err)
 	wide := circleBodyAtZ(t, doc, 0, 3.5, 7, 3)
-	part, err = decad.Cut(t.Context(), part, wide)
+	part, err = decad.Cut(part, wide).Do(t.Context())
 	require.NoError(t, err)
 	before := doc.Bodies()
-	_, err = decad.Shell(t.Context(), part, decad.Faces(decad.FaceCreatedBy(decad.CapEnd(part))).Exactly(1),
-		units.Millimeters(1))
+	_, err = decad.Shell(part, decad.Faces(decad.FaceCreatedBy(decad.CapEnd(part))).Exactly(1),
+		units.Millimeters(1)).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.ErrorContains(t, err, "insufficient shoulder")
 	require.Equal(t, before, doc.Bodies())

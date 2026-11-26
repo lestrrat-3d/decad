@@ -42,10 +42,10 @@ func pointLoftSliceSheetDirected(t *testing.T, doc *decad.Document,
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	require.Len(t, s.Chains(), 1)
-	sheet, err := decad.Extrude(t.Context(), doc, s, s.Chains()[0], decad.TwoSided{
+	sheet, err := decad.Extrude(doc, s, s.Chains()[0], decad.TwoSided{
 		One: decad.DistanceSide{D: units.Millimeters(30)},
 		Two: decad.DistanceSide{D: units.Millimeters(30)},
-	})
+	}).Do(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, decad.BodySheet, sheet.Kind())
 	return sheet
@@ -59,11 +59,11 @@ func TestPointLoftParallelSheetReversedLineKeepsOutwardCapNormals(t *testing.T) 
 			tooth := pointLoftRadialTab(t, doc)
 			span := pointLoftSliceSpan()
 			first := pointLoftSliceSheetDirected(t, doc, span/6, 30, reverse)
-			pieces, err := decad.Split(t.Context(), tooth, first)
+			pieces, err := decad.Split(tooth, first).Do(t.Context())
 			require.NoError(t, err)
 			require.Len(t, pieces, 2)
 			second := pointLoftSliceSheetDirected(t, doc, span/3, 30, !reverse)
-			parts, err := decad.Split(t.Context(), pieces[0], second)
+			parts, err := decad.Split(pieces[0], second).Do(t.Context())
 			require.NoError(t, err)
 			require.Len(t, parts, 2)
 			away := r3.NewVec(math.Cos(math.Pi/4), math.Sin(math.Pi/4), 0)
@@ -114,8 +114,8 @@ func TestPointLoftParallelSheetFarCapFollowsApexSide(t *testing.T) {
 			_, err = profileSketch.Solve(t.Context())
 			require.NoError(t, err)
 			require.Len(t, profileSketch.Profiles(), 1)
-			tooth, err := decad.LoftFromPoint(t.Context(), doc, r3.NewVec(apexX, 0, 0),
-				profileSketch, profileSketch.Profiles()[0])
+			tooth, err := decad.LoftFromPoint(doc, r3.NewVec(apexX, 0, 0),
+				profileSketch, profileSketch.Profiles()[0]).Do(t.Context())
 			require.NoError(t, err)
 			farFaces, err := decad.Faces(decad.FaceCreatedBy(decad.CapEnd(tooth))).SelectFaces(tooth)
 			require.NoError(t, err)
@@ -147,12 +147,12 @@ func TestPointLoftParallelSheetFarCapFollowsApexSide(t *testing.T) {
 			_, err = sheetSketch.Solve(t.Context())
 			require.NoError(t, err)
 			require.Len(t, sheetSketch.Chains(), 1)
-			sheet, err := decad.Extrude(t.Context(), doc, sheetSketch, sheetSketch.Chains()[0], decad.TwoSided{
+			sheet, err := decad.Extrude(doc, sheetSketch, sheetSketch.Chains()[0], decad.TwoSided{
 				One: decad.DistanceSide{D: units.Millimeters(30)},
 				Two: decad.DistanceSide{D: units.Millimeters(30)},
-			})
+			}).Do(t.Context())
 			require.NoError(t, err)
-			pieces, err := decad.Split(t.Context(), tooth, sheet)
+			pieces, err := decad.Split(tooth, sheet).Do(t.Context())
 			require.NoError(t, err)
 			require.Len(t, pieces, 2)
 			away := 1.0
@@ -186,7 +186,7 @@ func TestPointLoftParallelSheetFarCapFollowsApexSide(t *testing.T) {
 			}
 			motion, err := r3.Rotation(r3.NewVec(1, 0, 0), units.Radians(0.2))
 			require.NoError(t, err)
-			placed, err := decad.Copy(t.Context(), pieces[1], decad.WithCopyPlacement(motion))
+			placed, err := decad.Copy(pieces[1]).Place(decad.CopyTransform{Transform: motion}).Do(t.Context())
 			require.NoError(t, err)
 			placedCap, err := decad.Faces(decad.FaceCreatedBy(decad.CapStart(pieces[1]))).SelectFaces(placed)
 			require.NoError(t, err)
@@ -213,9 +213,9 @@ func TestPointLoftParallelSheetFarCapFollowsApexSide(t *testing.T) {
 			require.NoError(t, err)
 			unshift, err := r3.Translation(r3.NewVec(-2, 0, 0))
 			require.NoError(t, err)
-			shifted, err := decad.Copy(t.Context(), pieces[1], decad.WithCopyPlacement(shift))
+			shifted, err := decad.Copy(pieces[1]).Place(decad.CopyTransform{Transform: shift}).Do(t.Context())
 			require.NoError(t, err)
-			roundTrip, err := decad.Transform(t.Context(), shifted, unshift)
+			roundTrip, err := decad.Transform(shifted, unshift).Do(t.Context())
 			require.NoError(t, err)
 			_, _, err = roundTrip.ExtremeFacesByCentroid(t.Context(), r3.NewVec(1, 0, 0))
 			require.NoError(t, err)
@@ -229,13 +229,13 @@ func TestPointLoftParallelSheetFarCapFollowsApexSide(t *testing.T) {
 			innerSheetSketch.CreateLine(innerA, innerB)
 			_, err = innerSheetSketch.Solve(t.Context())
 			require.NoError(t, err)
-			innerSheet, err := decad.Extrude(t.Context(), doc, innerSheetSketch, innerSheetSketch.Chains()[0], decad.TwoSided{
+			innerSheet, err := decad.Extrude(doc, innerSheetSketch, innerSheetSketch.Chains()[0], decad.TwoSided{
 				One: decad.DistanceSide{D: units.Millimeters(30)},
 				Two: decad.DistanceSide{D: units.Millimeters(30)},
-			})
+			}).Do(t.Context())
 			require.NoError(t, err)
 			beforeRoundTripSplit := doc.Bodies()
-			_, err = decad.Split(t.Context(), roundTrip, innerSheet)
+			_, err = decad.Split(roundTrip, innerSheet).Do(t.Context())
 			require.ErrorIs(t, err, decad.ErrUnsupported)
 			require.Equal(t, beforeRoundTripSplit, doc.Bodies())
 			for _, piece := range pieces {
@@ -245,17 +245,17 @@ func TestPointLoftParallelSheetFarCapFollowsApexSide(t *testing.T) {
 				require.True(t, mesh.BoundaryVerified())
 				require.True(t, mesh.VolumeVerified())
 			}
-			canceledSheet, err := decad.Extrude(t.Context(), doc, sheetSketch, sheetSketch.Chains()[0], decad.TwoSided{
+			canceledSheet, err := decad.Extrude(doc, sheetSketch, sheetSketch.Chains()[0], decad.TwoSided{
 				One: decad.DistanceSide{D: units.Millimeters(30)},
 				Two: decad.DistanceSide{D: units.Millimeters(30)},
-			})
+			}).Do(t.Context())
 			require.NoError(t, err)
 			before := doc.Bodies()
 			ctx, cancel := context.WithCancel(t.Context())
 			cancel()
 			_, _, err = pieces[1].ExtremeFacesByCentroid(ctx, r3.NewVec(1, 0, 0))
 			require.ErrorIs(t, err, context.Canceled)
-			_, err = decad.Split(ctx, pieces[0], canceledSheet)
+			_, err = decad.Split(pieces[0], canceledSheet).Do(ctx)
 			require.ErrorIs(t, err, context.Canceled)
 			require.Equal(t, before, doc.Bodies())
 			retained, err := decad.Faces(decad.FaceCreatedBy(decad.CapEnd(pieces[0]))).SelectFaces(pieces[0])
@@ -287,7 +287,7 @@ func TestPointLoftParallelSheetEightSlices(t *testing.T) {
 	kept := make([]*decad.Body, 0, 8)
 	for k := 1; k <= 8; k++ {
 		sheet := pointLoftSliceSheet(t, doc, span*float64(k)/6, 30)
-		pieces, err := decad.Split(t.Context(), inner, sheet)
+		pieces, err := decad.Split(inner, sheet).Do(t.Context())
 		require.NoError(t, err)
 		require.Len(t, pieces, 2)
 		inner = pieces[0]
@@ -333,7 +333,7 @@ func TestPointLoftParallelSheetRefusesShortToolAtomically(t *testing.T) {
 	tooth := pointLoftRadialTab(t, doc)
 	sheet := pointLoftSliceSheet(t, doc, pointLoftSliceSpan()/6, 0.1)
 	before := doc.Bodies()
-	pieces, err := decad.Split(t.Context(), tooth, sheet)
+	pieces, err := decad.Split(tooth, sheet).Do(t.Context())
 	require.Error(t, err)
 	require.True(t, errors.Is(err, decad.ErrUnsupported))
 	require.Empty(t, pieces)
@@ -362,11 +362,11 @@ func TestPointLoftSplitPieceRefusesPlanesOutsideItsSlab(t *testing.T) {
 			t.Parallel()
 			doc := decad.New()
 			tooth := pointLoftRadialTab(t, doc)
-			pieces, err := decad.Split(t.Context(), tooth, pointLoftSliceSheetDirected(t, doc, span/6, 30, false))
+			pieces, err := decad.Split(tooth, pointLoftSliceSheetDirected(t, doc, span/6, 30, false)).Do(t.Context())
 			require.NoError(t, err)
 			sheet := pointLoftSliceSheetDirected(t, doc, span*tc.offset, 30, true)
 			before := doc.Bodies()
-			parts, err := decad.Split(t.Context(), pieces[tc.piece], sheet)
+			parts, err := decad.Split(pieces[tc.piece], sheet).Do(t.Context())
 			require.Nil(t, parts)
 			require.ErrorIs(t, err, tc.sentinel)
 			require.ErrorContains(t, err, tc.message)

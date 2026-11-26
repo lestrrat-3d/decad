@@ -30,10 +30,10 @@ func slab(t *testing.T, doc *decad.Document, x0, y0, x1, y1, z0, height float64,
 	s.Fix(r.A)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(height), Dir: decad.Along})
+	body, err := decad.Extrude(doc, s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(height), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
-	placed, err := decad.Transform(t.Context(), body, move)
+	placed, err := decad.Transform(body, move).Do(t.Context())
 	require.NoError(t, err)
 	return placed
 }
@@ -51,8 +51,8 @@ func boredLeg(t *testing.T, doc *decad.Document) *decad.Body {
 	s.CreateCircle(c, 3)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	leg, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
+	leg, err := decad.Extrude(doc, s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(20), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	return leg
 }
@@ -89,7 +89,7 @@ func TestVerifyHistorySeparator(t *testing.T) {
 			t.Parallel()
 			doc := decad.New()
 			stock := slab(t, doc, -5, 5, 45, 12, 5, 10, lift)
-			leg, err := decad.Cut(t.Context(), boredLeg(t, doc), stock)
+			leg, err := decad.Cut(boredLeg(t, doc), stock).Do(t.Context())
 			require.NoError(t, err)
 			require.Equal(t, "decad.facetedPayload", decadtest.PayloadClass(leg))
 			rail := slab(t, doc, tc.x0, 5, tc.x1, 12, tc.z0, tc.height, tc.move)
@@ -133,8 +133,7 @@ func TestVerifyHistoryFlushPrisms(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			doc := decad.New()
-			rail, err := decad.Cut(t.Context(), slab(t, doc, 0, 0, 40, 10, 5, 10, lift),
-				placedAlongZ(t, coaxialSection(t, doc, 20, 5, 30, 2), 1))
+			rail, err := decad.Cut(slab(t, doc, 0, 0, 40, 10, 5, 10, lift), placedAlongZ(t, coaxialSection(t, doc, 20, 5, 30, 2), 1)).Do(t.Context())
 			require.NoError(t, err)
 			require.Equal(t, "decad.facetedPayload", decadtest.PayloadClass(rail))
 			block := slab(t, doc, 10, tc.y0, 30, 15, 5, 10, tc.move)
@@ -175,11 +174,9 @@ func TestVerifyHistoryAnalyticCut(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			doc := decad.New()
-			rail, err := decad.Cut(t.Context(), slab(t, doc, 0, 0, 40, 10, 5, 10, lift),
-				placedAlongZ(t, coaxialSection(t, doc, 20, 5, 30, 2), 1))
+			rail, err := decad.Cut(slab(t, doc, 0, 0, 40, 10, 5, 10, lift), placedAlongZ(t, coaxialSection(t, doc, 20, 5, 30, 2), 1)).Do(t.Context())
 			require.NoError(t, err)
-			block, err := decad.Cut(t.Context(), slab(t, doc, 10, 5, 30, 15, 5, 10, lift),
-				slab(t, doc, 0, 0, 40, 10, 5, 10, tc.toolMove))
+			block, err := decad.Cut(slab(t, doc, 10, 5, 30, 15, 5, 10, lift), slab(t, doc, 0, 0, 40, 10, 5, 10, tc.toolMove)).Do(t.Context())
 			require.NoError(t, err)
 			if tc.separated {
 				require.NotEqual(t, "decad.facetedPayload", decadtest.PayloadClass(block), "premise: the block's Cut is analytic")
@@ -225,7 +222,7 @@ func TestVerifyHistoryPinInItsBore(t *testing.T) {
 			cube := slab(t, doc, 0, 0, 10, 10, 0, 10, r3.Identity())
 			tool := coaxialSection(t, doc, 5, 5, 12, 1)
 			tool = placedAlongZ(t, tool, -1)
-			drilled, err := decad.Cut(t.Context(), cube, tool)
+			drilled, err := decad.Cut(cube, tool).Do(t.Context())
 			require.NoError(t, err)
 			pin := placedAlongZ(t, coaxialSection(t, doc, tc.cx, 5, tc.z1-2, 1), 2)
 			report, err := doc.Verify(t.Context())
@@ -258,9 +255,9 @@ func hookRingSweep(t *testing.T, doc *decad.Document, z, degrees float64) *decad
 	s.CreateCircle(c, 0.8)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	ring, err := decad.Revolve(t.Context(), doc, s, s.Profiles()[0],
+	ring, err := decad.Revolve(doc, s, s.Profiles()[0],
 		decad.SketchLine{Start: decad.Point2{U: 10}, End: decad.Point2{U: 10, V: 1}},
-		decad.AngleExtent{A: units.Degrees(degrees), Dir: decad.Along})
+		decad.AngleExtent{A: units.Degrees(degrees), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	return ring
 }
@@ -290,10 +287,10 @@ func TestVerifyHistoryFarOperand(t *testing.T) {
 			doc := decad.New()
 			block := slab(t, doc, 0, -5, 20, 5, 0, 10, r3.Identity())
 			tool := placedAlongZ(t, coaxialSection(t, doc, 10, 0, 17, 1), -1)
-			drilled, err := decad.Cut(t.Context(), block, tool)
+			drilled, err := decad.Cut(block, tool).Do(t.Context())
 			require.NoError(t, err)
 			stem := placedAlongZ(t, coaxialSection(t, doc, 10, 0, 14, 1), 2)
-			hook, err := decad.Union(t.Context(), stem, hookRing(t, doc, tc.ringZ))
+			hook, err := decad.Union(stem, hookRing(t, doc, tc.ringZ)).Do(t.Context())
 			require.NoError(t, err)
 			report, err := doc.Verify(t.Context())
 			require.NoError(t, err)
@@ -332,10 +329,10 @@ func TestVerifyHistoryTurnedFarOperand(t *testing.T) {
 			turn := func(b *decad.Body) *decad.Body { return turned(t, b, math.Pi/4) }
 			block := turn(slab(t, doc, 0, -5, 20, 5, 0, 10, r3.Identity()))
 			tool := turn(placedAlongZ(t, coaxialSection(t, doc, 10, 0, 17, 1), -1))
-			drilled, err := decad.Cut(t.Context(), block, tool)
+			drilled, err := decad.Cut(block, tool).Do(t.Context())
 			require.NoError(t, err)
 			stem := turn(placedAlongZ(t, coaxialSection(t, doc, 10, 0, 14, 1), 2))
-			hook, err := decad.Union(t.Context(), stem, turn(hookRing(t, doc, tc.ringZ)))
+			hook, err := decad.Union(stem, turn(hookRing(t, doc, tc.ringZ))).Do(t.Context())
 			require.NoError(t, err)
 			report, err := doc.Verify(t.Context())
 			require.NoError(t, err)
@@ -363,12 +360,12 @@ func TestVerifyHistoryRefinedOperand(t *testing.T) {
 	doc := decad.New()
 	block := slab(t, doc, 0, -5, 20, 5, 0, 10, r3.Identity())
 	tool := placedAlongZ(t, coaxialSection(t, doc, 10, 0, 17, 1), -1)
-	drilled, err := decad.Cut(t.Context(), block, tool)
+	drilled, err := decad.Cut(block, tool).Do(t.Context())
 	require.NoError(t, err)
 	stem := placedAlongZ(t, coaxialSection(t, doc, 10, 0, 14, 1), 2)
-	hook, err := decad.Union(t.Context(), stem, hookRing(t, doc, 15.5))
+	hook, err := decad.Union(stem, hookRing(t, doc, 15.5)).Do(t.Context())
 	require.NoError(t, err)
-	refined, err := decad.Refine(t.Context(), hook, units.Millimeters(0.05))
+	refined, err := decad.Refine(hook, units.Millimeters(0.05)).Do(t.Context())
 	require.NoError(t, err)
 	report, err := doc.Verify(t.Context())
 	require.NoError(t, err)

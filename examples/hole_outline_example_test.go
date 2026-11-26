@@ -26,20 +26,15 @@ func Example_hole_outline() {
 		fmt.Printf("failed to solve: %s\n", err)
 		return
 	}
-	plate, err := decad.Extrude(context.Background(), decad.New(), s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	plate, err := decad.Extrude(decad.New(), s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to extrude: %s\n", err)
 		return
 	}
-	cut, err := decad.Hole(context.Background(), plate, decad.HoleSpec{
-		Face:  decad.Faces(decad.FaceCreatedBy(decad.CapEnd(plate))),
-		At:    r3.Vec{X: 20, Y: 15, Z: 10},
-		Depth: decad.BlindHole{Depth: units.Millimeters(5)},
-		Shape: decad.OutlineHole{Corners: []decad.Point2{
-			{U: -4, V: -4}, {U: 4, V: -4}, {U: 4, V: 0}, {U: 0, V: 0}, {U: 0, V: 4}, {U: -4, V: 4},
-		}},
-	})
+	cut, err := decad.HoleShaped(plate, decad.Faces(decad.FaceCreatedBy(decad.CapEnd(plate))), r3.Vec{X: 20, Y: 15, Z: 10}, decad.OutlineHole{Corners: []decad.Point2{
+		{U: -4, V: -4}, {U: 4, V: -4}, {U: 4, V: 0}, {U: 0, V: 0}, {U: 0, V: 4}, {U: -4, V: 4},
+	}}, decad.BlindHole{Depth: units.Millimeters(5)}).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to cut: %s\n", err)
 		return

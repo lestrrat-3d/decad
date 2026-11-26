@@ -6,6 +6,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/occupancy"
+	"github.com/lestrrat-3d/decad/internal/opcommand"
 	"github.com/lestrrat-3d/decad/internal/revolveshell"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/units"
@@ -15,7 +16,7 @@ import (
 // units. No caller sets it.
 const refineWorkLimit = 1 << 28
 
-// Refine returns a new body holding source's held mesh with a surface bound
+// Refine returns the command that builds a new body holding source's held mesh with a surface bound
 // no larger than maxBound, and retires source
 // (agent-docs/body-refine-design.md §7). It moves no vertex: the result has
 // source's vertices, triangles, topology, Volume, Area and every vertex and
@@ -45,13 +46,29 @@ const refineWorkLimit = 1 << 28
 //
 // maxBound is a length: wrong kind is ErrUnitKind, non-finite ErrNotFinite,
 // negative ErrNegativeMagnitude and zero ErrDegenerate. A nil context or body
-// is ErrDegenerate. A canceled context stops the certificate before the
+// is ErrDegenerate, returned by Do. A canceled context stops the certificate before the
 // document changes.
-func Refine(ctx context.Context, source *Body, maxBound units.Value) (result *Body, retErr error) {
-	defer func() { retErr = operationError(OperationRefine, retErr) }()
-	if ctx == nil {
-		return nil, fmt.Errorf(`%w: a nil context cannot control a refinement`, ErrDegenerate)
-	}
+func Refine(source *Body, maxBound units.Value) *RefineCommand {
+	return &RefineCommand{source: source, maxBound: maxBound}
+}
+
+// RefineCommand refines a mesh body's bound. Build it with [Refine].
+type RefineCommand struct {
+	state    opcommand.State
+	source   *Body
+	maxBound units.Value
+}
+
+// Do runs the refinement once. A second Do returns [ErrConsumed].
+func (c *RefineCommand) Do(ctx context.Context) (*Body, error) {
+	return runCommand(ctx, &c.state, OperationRefine, c.run)
+}
+
+func (c *RefineCommand) run(ctx context.Context) (*Body, error) {
+	return refine(ctx, c.source, c.maxBound)
+}
+
+func refine(ctx context.Context, source *Body, maxBound units.Value) (*Body, error) {
 	if source == nil || source.n.Doc == nil {
 		return nil, fmt.Errorf(`%w: the body belongs to no document`, ErrDegenerate)
 	}

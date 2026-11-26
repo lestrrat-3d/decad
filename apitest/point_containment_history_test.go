@@ -33,10 +33,9 @@ func crossedPlateUnion(t *testing.T, doc *decad.Document) *decad.Body {
 	t.Helper()
 	plate := boxBody(t, doc, 0, 0, 30, 30, 4)
 	narrow := boxBody(t, doc, 5, 0, 25, 30, 4)
-	turned, err := decad.Copy(t.Context(), narrow,
-		decad.WithCopyRotation(r3.NewVec(15, 15, 2), r3.NewVec(1, 0, 0), units.Degrees(45)))
+	turned, err := decad.Copy(narrow).Place(decad.CopyRotation{Center: r3.NewVec(15, 15, 2), Axis: r3.NewVec(1, 0, 0), Angle: units.Degrees(45)}).Do(t.Context())
 	require.NoError(t, err)
-	joined, err := decad.Union(t.Context(), plate, turned)
+	joined, err := decad.Union(plate, turned).Do(t.Context())
 	require.NoError(t, err)
 	require.True(t, tookMeshPath(joined))
 	require.Empty(t, joined.OperationDiagnostics())
@@ -66,7 +65,7 @@ func TestPointLocationHistoryCrossedPlates(t *testing.T) {
 		{name: "top face on the turned plate's end", at: r3.NewVec(5, 15, 4), want: decad.PointUndecided},
 	})
 
-	copied, err := decad.Copy(t.Context(), joined)
+	copied, err := decad.Copy(joined).Do(t.Context())
 	require.NoError(t, err)
 	requireLocations(t, copied, []locateCase{
 		{name: "mesh: 1e-9 under the top face", at: r3.NewVec(1, 1, 4-1e-9), want: decad.PointUndecided},
@@ -83,7 +82,7 @@ func TestPointLocationHistoryNestedCut(t *testing.T) {
 	doc := decad.New()
 	joined := crossedPlateUnion(t, doc)
 	pin := translated(t, diskBody(t, doc, 15, 15, 2), 0, 0, -10)
-	part, err := decad.Cut(t.Context(), joined, pin)
+	part, err := decad.Cut(joined, pin).Do(t.Context())
 	require.NoError(t, err)
 	require.True(t, tookMeshPath(part))
 	requireLocations(t, part, []locateCase{
@@ -108,7 +107,7 @@ func pinPlate(t *testing.T) (*decad.Body, *decad.Body) {
 func TestPointLocationHistoryPinCut(t *testing.T) {
 	t.Parallel()
 	plate, pin := pinPlate(t)
-	part, err := decad.Cut(t.Context(), plate, pin)
+	part, err := decad.Cut(plate, pin).Do(t.Context())
 	require.NoError(t, err)
 	require.True(t, tookMeshPath(part))
 	requireLocations(t, part, []locateCase{
@@ -129,7 +128,7 @@ func TestPointLocationHistoryPinCut(t *testing.T) {
 func TestPointLocationHistoryPinIntersect(t *testing.T) {
 	t.Parallel()
 	plate, pin := pinPlate(t)
-	common, err := decad.Intersect(t.Context(), plate, pin)
+	common, err := decad.Intersect(plate, pin).Do(t.Context())
 	require.NoError(t, err)
 	require.True(t, tookMeshPath(common))
 	requireLocations(t, common, []locateCase{
@@ -151,7 +150,7 @@ func TestPointLocationHistoryUndecidedOperand(t *testing.T) {
 	doc := decad.New()
 	pie := pieBody(t, doc, offRadiusEnd(20))
 	box := translated(t, boxBody(t, doc, -5, -5, 5, 5, 4), 0, 0, 3)
-	joined, err := decad.Union(t.Context(), pie, box)
+	joined, err := decad.Union(pie, box).Do(t.Context())
 	require.NoError(t, err)
 	require.True(t, tookMeshPath(joined))
 	requireLocations(t, joined, []locateCase{
@@ -172,10 +171,9 @@ func TestPointLocationHistoryRefusals(t *testing.T) {
 		t.Parallel()
 		doc := decad.New()
 		plate := boxBody(t, doc, 0, 0, 30, 30, 4)
-		turned, err := decad.Copy(t.Context(), plate,
-			decad.WithCopyRotation(r3.NewVec(15, 15, 2), r3.NewVec(1, 0, 0), units.Degrees(45)))
+		turned, err := decad.Copy(plate).Place(decad.CopyRotation{Center: r3.NewVec(15, 15, 2), Axis: r3.NewVec(1, 0, 0), Angle: units.Degrees(45)}).Do(t.Context())
 		require.NoError(t, err)
-		joined, err := decad.Union(t.Context(), plate, turned)
+		joined, err := decad.Union(plate, turned).Do(t.Context())
 		require.NoError(t, err)
 		require.True(t, tookMeshPath(joined))
 		diagnostics := joined.OperationDiagnostics()
@@ -196,7 +194,7 @@ func TestPointLocationHistoryRefusals(t *testing.T) {
 		t.Parallel()
 		doc := decad.New()
 		rotation := turnAboutX(t)
-		placed, err := decad.Transform(t.Context(), crossedPlateUnion(t, doc), rotation)
+		placed, err := decad.Transform(crossedPlateUnion(t, doc), rotation).Do(t.Context())
 		require.NoError(t, err)
 		require.Equal(t, "decad.facetedPayload", decadtest.PayloadClass(placed))
 		requireLocations(t, placed, []locateCase{

@@ -35,8 +35,8 @@ func Example_boolean_errors() {
 	doc := decad.New()
 	var cubes []*decad.Body
 	for _, profile := range s.Profiles() {
-		cube, err := decad.Extrude(context.Background(), doc, s, profile,
-			decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+		cube, err := decad.Extrude(doc, s, profile,
+			decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(context.Background())
 		if err != nil {
 			fmt.Printf("failed to extrude: %s\n", err)
 			return
@@ -44,7 +44,7 @@ func Example_boolean_errors() {
 		cubes = append(cubes, cube)
 	}
 
-	_, err = decad.Intersect(context.Background(), cubes[0], cubes[1])
+	_, err = decad.Intersect(cubes[0], cubes[1]).Do(context.Background())
 
 	// errors.As finds the typed error, and Code says which case it is.
 	var boolErr *decad.BooleanError

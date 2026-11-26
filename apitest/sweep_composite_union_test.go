@@ -69,7 +69,7 @@ func TestSweepCompositeTubeUnionAuditsCandidates(t *testing.T) {
 				decad.LineTo{End: r3.NewVec(0, -2*rr-b, a-c)},
 			)
 			require.NoError(t, err)
-			tube, err := decad.Sweep(t.Context(), doc, s, profile, path)
+			tube, err := decad.Sweep(doc, s, profile, path).Do(t.Context())
 			require.NoError(t, err)
 
 			// The box stands on the chosen leg's axis: Z from the leg's start.
@@ -82,15 +82,15 @@ func TestSweepCompositeTubeUnionAuditsCandidates(t *testing.T) {
 			h := tc.boxSide / 2
 			w := sketch.NewWorld()
 			bs, bp := meshPolygonSketch(t, w, w.XY(), [][2]float64{{-h, -h}, {h, -h}, {h, h}, {-h, h}})
-			box, err := decad.Extrude(t.Context(), doc, bs, bp,
-				decad.Distance{D: units.Millimeters(hi - lo), Dir: decad.Along})
+			box, err := decad.Extrude(doc, bs, bp,
+				decad.Distance{D: units.Millimeters(hi - lo), Dir: decad.Along}).Do(t.Context())
 			require.NoError(t, err)
 			move, err := r3.Translation(centre.Add(r3.NewVec(0, 0, lo)))
 			require.NoError(t, err)
-			box, err = decad.Transform(t.Context(), box, move)
+			box, err = decad.Transform(box, move).Do(t.Context())
 			require.NoError(t, err)
 
-			joined, err := decad.Union(t.Context(), tube, box)
+			joined, err := decad.Union(tube, box).Do(t.Context())
 			require.NoError(t, err)
 			require.True(t, joined.IsSolid())
 			volume, err := joined.Volume()

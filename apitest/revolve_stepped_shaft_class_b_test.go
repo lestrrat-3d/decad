@@ -38,7 +38,7 @@ func stepRevolve(t *testing.T, sc *retentionScene, radii ...float64) *decad.Body
 		pts = append(pts, [2]float64{stepLen * float64(i+1), r}, [2]float64{stepLen * float64(i), r})
 	}
 	s, profile := polygonSketch(t, pts)
-	shaft, err := decad.Revolve(t.Context(), sc.doc, s, profile, uAxis, decad.FullRevolution{})
+	shaft, err := decad.Revolve(sc.doc, s, profile, uAxis, decad.FullRevolution{}).Do(t.Context())
 	require.NoError(t, err)
 	return shaft
 }
@@ -166,7 +166,7 @@ func TestSteppedShaftClassBCut(t *testing.T) {
 			sc := newRetentionScene()
 			shaft := stepRevolve(t, sc, tc.radii...)
 			end := 20 * float64(len(tc.radii))
-			got, err := decad.Cut(t.Context(), shaft, shaftTool(t, sc, flatPlane(t, sc), -5, tc.v0, end+5, tc.v1))
+			got, err := decad.Cut(shaft, shaftTool(t, sc, flatPlane(t, sc), -5, tc.v0, end+5, tc.v1)).Do(t.Context())
 			require.NoError(t, err)
 			requireClassBStepped(t, got, tc.cylinders, tc.planes, stepsVolume(tc.sections()...))
 		})
@@ -180,8 +180,7 @@ func TestSteppedShaftClassBBlendsRefuse(t *testing.T) {
 	// plain shaft's does, so brep-modify's SB1 refuses a blend of its edges:
 	// the stepped flat reads as no prism (brep-modify §4.4).
 	sc := newRetentionScene()
-	cut, err := decad.Cut(t.Context(), stepRevolve(t, sc, 10, 8),
-		shaftTool(t, sc, flatPlane(t, sc), -5, -20, 45, 20))
+	cut, err := decad.Cut(stepRevolve(t, sc, 10, 8), shaftTool(t, sc, flatPlane(t, sc), -5, -20, 45, 20)).Do(t.Context())
 	require.NoError(t, err)
 	var edge *decad.EdgeQuery
 	for _, e := range cut.Edges() {
@@ -195,10 +194,10 @@ func TestSteppedShaftClassBBlendsRefuse(t *testing.T) {
 		}
 	}
 	require.NotNil(t, edge, `the flat has a long edge`)
-	_, err = decad.Fillet(t.Context(), cut, edge.Exactly(1), units.Millimeters(1))
+	_, err = decad.Fillet(cut, edge.Exactly(1), units.Millimeters(1)).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.ErrorContains(t, err, `brep-modify SB1`)
-	_, err = decad.Chamfer(t.Context(), cut, edge.Exactly(1), units.Millimeters(1))
+	_, err = decad.Chamfer(cut, edge.Exactly(1), units.Millimeters(1)).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.ErrorContains(t, err, `brep-modify SB1`)
 }
@@ -211,8 +210,7 @@ func TestSteppedShaftClassBMisses(t *testing.T) {
 		// The flat at z = 7 meets the r = 10 and r = 9 steps but not the
 		// r = 6 step between them, so its slice of the shaft is two loops.
 		sc := newRetentionScene()
-		got, err := decad.Cut(t.Context(), stepRevolve(t, sc, 10, 6, 9),
-			shaftTool(t, sc, flatPlane(t, sc), -5, -20, 65, 20))
+		got, err := decad.Cut(stepRevolve(t, sc, 10, 6, 9), shaftTool(t, sc, flatPlane(t, sc), -5, -20, 65, 20)).Do(t.Context())
 		requireShaftMeshPath(t, got, err)
 	})
 
@@ -228,10 +226,10 @@ func TestSteppedShaftClassBMisses(t *testing.T) {
 		s.Fix(r.A)
 		_, err = s.Solve(t.Context())
 		require.NoError(t, err)
-		slot, err := decad.Extrude(t.Context(), sc.doc, s, s.Profiles()[0],
-			decad.Distance{D: units.Millimeters(1), Dir: decad.Along})
+		slot, err := decad.Extrude(sc.doc, s, s.Profiles()[0],
+			decad.Distance{D: units.Millimeters(1), Dir: decad.Along}).Do(t.Context())
 		require.NoError(t, err)
-		got, err := decad.Cut(t.Context(), stepRevolve(t, sc, 10, 6), slot)
+		got, err := decad.Cut(stepRevolve(t, sc, 10, 6), slot).Do(t.Context())
 		requireShaftMeshPath(t, got, err)
 	})
 
@@ -247,7 +245,7 @@ func TestSteppedShaftClassBMisses(t *testing.T) {
 		sc := newRetentionScene()
 		plane, err := sc.w.CreateOffsetPlane(sc.w.XY(), 5)
 		require.NoError(t, err)
-		got, err := decad.Cut(t.Context(), stepRevolve(t, sc, 10, 6), shaftTool(t, sc, plane, -5, 4, 45, 6))
+		got, err := decad.Cut(stepRevolve(t, sc, 10, 6), shaftTool(t, sc, plane, -5, 4, 45, 6)).Do(t.Context())
 		requireShaftMeshPath(t, got, err)
 
 		at := func(y float64, root, asin *big.Float) *big.Float {
@@ -275,30 +273,28 @@ func TestSteppedShaftClassBMisses(t *testing.T) {
 		sc := newRetentionScene()
 		plane, err := sc.w.CreateOffsetPlane(sc.w.XY(), 8)
 		require.NoError(t, err)
-		got, err := decad.Cut(t.Context(), stepRevolve(t, sc, 10, 8), shaftTool(t, sc, plane, -5, -20, 45, 20))
+		got, err := decad.Cut(stepRevolve(t, sc, 10, 8), shaftTool(t, sc, plane, -5, -20, 45, 20)).Do(t.Context())
 		requireShaftMeshPath(t, got, err)
 	})
 
 	t.Run("keyseat ending inside the shaft", func(t *testing.T) {
 		t.Parallel()
 		sc := newRetentionScene()
-		got, err := decad.Cut(t.Context(), stepRevolve(t, sc, 10, 8),
-			shaftTool(t, sc, flatPlane(t, sc), 15, -3, 25, 3))
+		got, err := decad.Cut(stepRevolve(t, sc, 10, 8), shaftTool(t, sc, flatPlane(t, sc), 15, -3, 25, 3)).Do(t.Context())
 		requireShaftMeshPath(t, got, err)
 	})
 
 	t.Run("tool wall in the end plane", func(t *testing.T) {
 		t.Parallel()
 		sc := newRetentionScene()
-		got, err := decad.Cut(t.Context(), stepRevolve(t, sc, 10, 8),
-			shaftTool(t, sc, flatPlane(t, sc), 0, -20, 45, 20))
+		got, err := decad.Cut(stepRevolve(t, sc, 10, 8), shaftTool(t, sc, flatPlane(t, sc), 0, -20, 45, 20)).Do(t.Context())
 		requireShaftMeshPath(t, got, err)
 	})
 
 	t.Run("Transform-placed tool", func(t *testing.T) {
 		t.Parallel()
 		sc := newRetentionScene()
-		got, err := decad.Cut(t.Context(), stepRevolve(t, sc, 10, 8), flatTool(t, sc))
+		got, err := decad.Cut(stepRevolve(t, sc, 10, 8), flatTool(t, sc)).Do(t.Context())
 		requireShaftMeshPath(t, got, err)
 	})
 }

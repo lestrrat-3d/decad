@@ -5,12 +5,13 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/opcommand"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
 
-// Stretch scales a faceted solid by a separate factor along each world axis about anchor and returns the
-// result as a new solid, retiring b (agent-docs/mesh-solid-design.md §3). It is the non-uniform scale
+// Stretch returns the command that scales a faceted solid by a separate factor along each world axis about
+// anchor. Do returns the result as a new solid, retiring b (agent-docs/mesh-solid-design.md §3). It is the non-uniform scale
 // [ScaledAt] does not offer: a box becomes a longer box, and a part with planar faces keeps every face
 // planar while a slanted one tilts.
 //
@@ -20,11 +21,35 @@ import (
 // read back as [SolidFromMesh] reads one, so its planes are exact over the stretched coordinates. Each
 // factor is dimensionless, finite and not zero (ErrUnitKind, ErrNotFinite, ErrDegenerate); a negative
 // factor mirrors across the plane through anchor. A nil context or body is ErrDegenerate.
-func Stretch(ctx context.Context, b *Body, anchor r3.Vec, x, y, z units.Value) (result *Body, retErr error) {
-	defer func() { retErr = operationError(OperationStretch, retErr) }()
-	if ctx == nil {
-		return nil, fmt.Errorf(`%w: a nil context cannot control a stretch`, ErrDegenerate)
+func Stretch(b *Body, anchor r3.Vec, x, y, z units.Value) *StretchCommand {
+	c := &StretchCommand{b: b, anchor: anchor, x: x, y: y, z: z}
+	if b == nil {
+		c.state.Record("body", errNilBody)
 	}
+	return c
+}
+
+// StretchCommand scales a faceted solid by a factor per world axis. Build it with [Stretch].
+type StretchCommand struct {
+	state   opcommand.State // consumed flag and first recorded fault
+	b       *Body           // stored as given
+	anchor  r3.Vec          // the fixed point, gated at Do
+	x, y, z units.Value     // the factors, gated at Do
+}
+
+// Do stretches the body and retires it, or returns the error of the first gate that refuses. A nil ctx is
+// ErrDegenerate, and a second call returns ErrConsumed.
+func (c *StretchCommand) Do(ctx context.Context) (*Body, error) {
+	return runCommand(ctx, &c.state, OperationStretch, c.run)
+}
+
+func (c *StretchCommand) run(ctx context.Context) (*Body, error) {
+	return stretch(ctx, c.b, c.anchor, c.x, c.y, c.z)
+}
+
+// stretch is Stretch's implementation. ctx is not nil, and the errors it returns carry no operation tag
+// (agent-docs/command-api-design.md §11).
+func stretch(ctx context.Context, b *Body, anchor r3.Vec, x, y, z units.Value) (*Body, error) {
 	if b == nil || b.n.Doc == nil {
 		return nil, fmt.Errorf(`%w: the body belongs to no document`, ErrDegenerate)
 	}
@@ -59,6 +84,10 @@ func Stretch(ctx context.Context, b *Body, anchor r3.Vec, x, y, z units.Value) (
 	}
 	stretched, err := solidFromMeshBody(ctx, d, scaled)
 	if err != nil {
+		// A cancel inside the conversion is the caller's, not an unsupported solid.
+		if cerr := ctx.Err(); cerr != nil {
+			return nil, cerr
+		}
 		return nil, fmt.Errorf("%w: the stretched solid is not one the evaluator can prove: %s", ErrUnsupported, err)
 	}
 	return commitModifyResult(ctx, OperationStretch, b, stretched)

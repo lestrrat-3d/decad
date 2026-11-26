@@ -25,11 +25,11 @@ func TestFacetedRetainedBlendAreaCharge(t *testing.T) {
 	sc := newRetentionScene()
 	plate := rectBox(t, sc.w, sc.doc, 0, 0, 80, 60, 10)
 	top := decad.CapEnd(plate)
-	body, err := decad.Union(t.Context(), plate, placed(t, rectBox(t, sc.w, sc.doc, 30, 20, 50, 40, 15), 10))
+	body, err := decad.Union(plate, placed(t, rectBox(t, sc.w, sc.doc, 30, 20, 50, 40, 15), 10)).Do(t.Context())
 	require.NoError(t, err)
-	body, err = decad.Hole(t.Context(), body, decad.HoleSpec{Face: decad.Faces(decad.FaceCreatedBy(top)),
-		At: r3.NewVec(15, 15, 10), Diameter: units.Millimeters(6.6), Depth: decad.ThroughHole{},
-		Head: decad.Counterbore{Diameter: units.Millimeters(11), Depth: units.Millimeters(6.4)}})
+	body, err = decad.Hole(body, decad.Faces(decad.FaceCreatedBy(top)), r3.NewVec(15, 15, 10), units.Millimeters(6.6), decad.ThroughHole{}).
+		Head(decad.Counterbore{Diameter: units.Millimeters(11), Depth: units.Millimeters(6.4)}).
+		Do(t.Context())
 	require.NoError(t, err)
 	s, err := sc.w.CreateSketch(sc.w.XY())
 	require.NoError(t, err)
@@ -38,14 +38,14 @@ func TestFacetedRetainedBlendAreaCharge(t *testing.T) {
 	s.CreateCircle(c, 6)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	post, err := decad.Extrude(t.Context(), sc.doc, s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(8), Dir: decad.Along})
+	post, err := decad.Extrude(sc.doc, s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(8), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	move, err := r3.Translation(r3.Vec{X: 65, Y: 45, Z: 10})
 	require.NoError(t, err)
-	post, err = decad.Transform(t.Context(), post, move)
+	post, err = decad.Transform(post, move).Do(t.Context())
 	require.NoError(t, err)
-	body, err = decad.Union(t.Context(), body, post)
+	body, err = decad.Union(body, post).Do(t.Context())
 	require.NoError(t, err)
 	exact := 54000 - math.Pi*3.3*3.3*10 - math.Pi*(5.5*5.5-3.3*3.3)*6.4 + math.Pi*36*8
 	requireBossVolume(t, body, exact)
@@ -58,7 +58,7 @@ func TestFacetedRetainedBlendAreaCharge(t *testing.T) {
 
 	// Each side loses r²(1 − π/4) of section over its 15 mm.
 	const r = 2.0
-	filleted, err := decad.Fillet(t.Context(), body, bossSides(t, body, boxBoss.corners()), units.Millimeters(r))
+	filleted, err := decad.Fillet(body, bossSides(t, body, boxBoss.corners()), units.Millimeters(r)).Do(t.Context())
 	require.NoError(t, err)
 	exact -= 4 * 15 * r * r * (1 - math.Pi/4)
 	requireBossVolume(t, filleted, exact)
@@ -80,7 +80,7 @@ func TestFacetedRetainedBlendAreaCharge(t *testing.T) {
 		}
 	}
 	require.NotNil(t, rim)
-	chamfered, err := decad.Chamfer(t.Context(), filleted, rim, units.Millimeters(1))
+	chamfered, err := decad.Chamfer(filleted, rim, units.Millimeters(1)).Do(t.Context())
 	require.NoError(t, err)
 	exact -= 2 * math.Pi * (6 - 1.0/3) * 0.5
 	requireBossVolume(t, chamfered, exact)

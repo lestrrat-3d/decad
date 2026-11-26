@@ -31,7 +31,7 @@ func TestQuarterTurnExchangesCoordinatesExactly(t *testing.T) {
 	} {
 		doc := decad.New()
 		block := blockIn(t, doc, r3.NewVec(0, 0, 0), r3.NewVec(10, 8, 6))
-		out, err := decad.QuarterTurn(t.Context(), block, tc.axis, tc.about, tc.turns)
+		out, err := decad.QuarterTurn(block, tc.axis, tc.about, tc.turns).Do(t.Context())
 		require.NoError(t, err, name)
 		require.Equal(t, []*decad.Body{out}, doc.Bodies(), name)
 		requireVolume(t, out, 480)
@@ -50,11 +50,11 @@ func TestQuarterTurnedSolidsJoinExactly(t *testing.T) {
 	bar := blockIn(t, doc, r3.NewVec(0, 0, 0), r3.NewVec(10, 4, 4))
 	other := blockIn(t, doc, r3.NewVec(0, 0, 0), r3.NewVec(10, 4, 4))
 	// A copy turned a quarter about +Z through (0, 0, 0) lies along -Y from x in -4..0; moved to meet the bar.
-	turned, err := decad.QuarterTurn(t.Context(), other, r3.NewVec(0, 0, 1), r3.NewVec(0, 0, 0), 1)
+	turned, err := decad.QuarterTurn(other, r3.NewVec(0, 0, 1), r3.NewVec(0, 0, 0), 1).Do(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, 2, len(doc.Bodies()))
 	// It now spans x -4..0 and y 0..10 against the bar's x 0..10, y 0..4: they touch along x = 0 over y 0..4.
-	joined, err := decad.Union(t.Context(), bar, turned)
+	joined, err := decad.Union(bar, turned).Do(t.Context())
 	require.NoError(t, err)
 	requireVolume(t, joined, 160+160)
 }
@@ -64,20 +64,20 @@ func TestQuarterTurnRefusals(t *testing.T) {
 	doc := decad.New()
 	block := blockIn(t, doc, r3.NewVec(0, 0, 0), r3.NewVec(10, 8, 6))
 	z := r3.NewVec(0, 0, 1)
-	_, err := decad.QuarterTurn(t.Context(), block, z, r3.NewVec(0, 0, 0), 4)
+	_, err := decad.QuarterTurn(block, z, r3.NewVec(0, 0, 0), 4).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrDegenerate, "whole turns change nothing")
-	_, err = decad.QuarterTurn(t.Context(), block, r3.NewVec(1, 1, 0), r3.NewVec(0, 0, 0), 1)
+	_, err = decad.QuarterTurn(block, r3.NewVec(1, 1, 0), r3.NewVec(0, 0, 0), 1).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported, "an axis that is not a world axis")
-	_, err = decad.QuarterTurn(t.Context(), block, z, r3.NewVec(1.0/3, 0, 0), 1)
+	_, err = decad.QuarterTurn(block, z, r3.NewVec(1.0/3, 0, 0), 1).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported, "a centre the sums round on")
-	_, err = decad.QuarterTurn(t.Context(), block, z, r3.NewVec(math.NaN(), 0, 0), 1)
+	_, err = decad.QuarterTurn(block, z, r3.NewVec(math.NaN(), 0, 0), 1).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrNotFinite)
 	prism := boxBody(t, doc, 30, 0, 40, 8, 6)
-	_, err = decad.QuarterTurn(t.Context(), prism, z, r3.NewVec(0, 0, 0), 1)
+	_, err = decad.QuarterTurn(prism, z, r3.NewVec(0, 0, 0), 1).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported, "a solid that is not faceted")
-	_, err = decad.QuarterTurn(nil, block, z, r3.NewVec(0, 0, 0), 1) //nolint:staticcheck // a nil context is the case under test
+	_, err = decad.QuarterTurn(block, z, r3.NewVec(0, 0, 0), 1).Do(nil) //nolint:staticcheck // a nil context is the case under test
 	require.ErrorIs(t, err, decad.ErrDegenerate)
-	_, err = decad.QuarterTurn(t.Context(), nil, z, r3.NewVec(0, 0, 0), 1)
+	_, err = decad.QuarterTurn(nil, z, r3.NewVec(0, 0, 0), 1).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrDegenerate)
 	require.Len(t, doc.Bodies(), 2, "every refusal leaves the document alone")
 }

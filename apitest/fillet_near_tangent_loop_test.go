@@ -25,7 +25,7 @@ func roundedHexPrism(t *testing.T, doc *decad.Document, origin r3.Vec, h float64
 	t.Helper()
 	s := shortStepSketch(t, origin, r3.Vec{X: 1}, r3.Vec{Y: 1})
 	addRoundedHex(t, s, hexCircum, hexRound)
-	body, err := decad.Extrude(t.Context(), doc, s, shortStepProfile(t, s), decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
+	body, err := decad.Extrude(doc, s, shortStepProfile(t, s), decad.Distance{D: units.Millimeters(h), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -93,7 +93,7 @@ func TestFilletLoopNearTangentJoins(t *testing.T) {
 	const circum, round, h, r = 2.51, 0.8, 3.0, 0.6
 	doc := decad.New()
 	body := roundedHexPrism(t, doc, r3.Vec{}, h)
-	got, err := decad.Fillet(t.Context(), body, decad.Edges(decad.OuterLoopOf(decad.CapStart(body))), units.Millimeters(r))
+	got, err := decad.Fillet(body, decad.Edges(decad.OuterLoopOf(decad.CapStart(body))), units.Millimeters(r)).Do(t.Context())
 	require.NoError(t, err)
 
 	want := roundedHexFilletVolume(circum, round, h, r)
@@ -118,7 +118,7 @@ func TestFilletLoopNearTangentArcJoins(t *testing.T) {
 	body := tangentArcPlate(t, doc)
 	before, err := body.Volume()
 	require.NoError(t, err)
-	got, err := decad.Fillet(t.Context(), body, decad.Edges(decad.OuterLoopOf(decad.CapStart(body))), units.Millimeters(r))
+	got, err := decad.Fillet(body, decad.Edges(decad.OuterLoopOf(decad.CapStart(body))), units.Millimeters(r)).Do(t.Context())
 	require.NoError(t, err)
 
 	const halfWidth, cornerR, endR = 10.0, 4.5, 22.0
@@ -150,15 +150,15 @@ func TestFilletLoopNearTangentCut(t *testing.T) {
 	doc := decad.New()
 	arm := boxBodyAtZ(t, doc, -6, -5, 6, 5, 0, 4)
 	loops := decad.Edges(decad.OuterLoopOf(decad.CapStart(arm))).Or(decad.OuterLoopOf(decad.CapEnd(arm)))
-	arm, err := decad.Chamfer(ctx, arm, loops, units.Millimeters(0.5))
+	arm, err := decad.Chamfer(arm, loops, units.Millimeters(0.5)).Do(ctx)
 	require.NoError(t, err)
 	before, err := arm.Volume()
 	require.NoError(t, err)
 
 	tool := roundedHexPrism(t, doc, r3.Vec{Z: 1}, 5)
-	tool, err = decad.Fillet(ctx, tool, decad.Edges(decad.OuterLoopOf(decad.CapStart(tool))), units.Millimeters(r))
+	tool, err = decad.Fillet(tool, decad.Edges(decad.OuterLoopOf(decad.CapStart(tool))), units.Millimeters(r)).Do(ctx)
 	require.NoError(t, err)
-	got, err := decad.Cut(ctx, arm, tool)
+	got, err := decad.Cut(arm, tool).Do(ctx)
 	require.NoError(t, err)
 
 	vol, err := got.Volume()
@@ -212,7 +212,7 @@ func TestFilletLoopNearTangentHole(t *testing.T) {
 		}
 	}
 	require.NotNil(t, prof)
-	plate, err := decad.Extrude(ctx, doc, s, prof, decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
+	plate, err := decad.Extrude(doc, s, prof, decad.Distance{D: units.Millimeters(h), Dir: decad.Along}).Do(ctx)
 	require.NoError(t, err)
 	before, err := plate.Volume()
 	require.NoError(t, err)
@@ -224,7 +224,7 @@ func TestFilletLoopNearTangentHole(t *testing.T) {
 		}
 	}
 	require.NotNil(t, hole)
-	got, err := decad.Fillet(ctx, plate, loopEdgeQuery(hole), units.Millimeters(r))
+	got, err := decad.Fillet(plate, loopEdgeQuery(hole), units.Millimeters(r)).Do(ctx)
 	require.NoError(t, err)
 	requireFilletVolumeNear(t, got, volumeMM(t, before)-roundedHexStrip(circum, round, r, true), boundMM3(t, before), 0.01)
 }
@@ -240,7 +240,7 @@ func TestFilletLoopNearTangentBossRoot(t *testing.T) {
 	doc := decad.New()
 	plate := boxBodyAtZ(t, doc, -6, -5, 6, 5, 0, 3)
 	boss := roundedHexPrism(t, doc, r3.Vec{Z: 3}, 3)
-	joined, err := decad.Union(ctx, plate, boss)
+	joined, err := decad.Union(plate, boss).Do(ctx)
 	require.NoError(t, err)
 	before, err := joined.Volume()
 	require.NoError(t, err)
@@ -252,7 +252,7 @@ func TestFilletLoopNearTangentBossRoot(t *testing.T) {
 		}
 	}
 	require.NotNil(t, root)
-	got, err := decad.Fillet(ctx, joined, loopEdgeQuery(root), units.Millimeters(r))
+	got, err := decad.Fillet(joined, loopEdgeQuery(root), units.Millimeters(r)).Do(ctx)
 	require.NoError(t, err)
 	requireFilletVolumeNear(t, got, volumeMM(t, before)+roundedHexStrip(circum, round, r, true), boundMM3(t, before), 0.01)
 }
@@ -269,7 +269,7 @@ func TestFilletLoopNearTangentInchRadius(t *testing.T) {
 	radius := units.Inches(0.025)
 	r, err := radius.In(units.Millimeter)
 	require.NoError(t, err)
-	got, err := decad.Fillet(t.Context(), body, decad.Edges(decad.OuterLoopOf(decad.CapStart(body))), radius)
+	got, err := decad.Fillet(body, decad.Edges(decad.OuterLoopOf(decad.CapStart(body))), radius).Do(t.Context())
 	require.NoError(t, err)
 	requireFilletVolumeNear(t, got, roundedHexFilletVolume(circum, round, h, r), 0, 0.01)
 }

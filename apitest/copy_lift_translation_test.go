@@ -55,15 +55,15 @@ func TestCopyLiftTranslationFaceted(t *testing.T) {
 	b := boxBody(t, doc, 5, 5, 15, 15, 10)
 	above, err := r3.Translation(r3.Vec{Z: 30})
 	require.NoError(t, err)
-	b, err = decad.Transform(t.Context(), b, above)
+	b, err = decad.Transform(b, above).Do(t.Context())
 	require.NoError(t, err)
-	source, err := decad.Union(t.Context(), a, b)
+	source, err := decad.Union(a, b).Do(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, "decad.facetedPayload", decadtest.PayloadClass(source))
 
 	lift := liftTestTransform(t)
 	from, to := r3.Vec{X: 1, Y: 0, Z: 0}, r3.Vec{X: 21.5, Y: -3, Z: 2}
-	copied, err := decad.Copy(t.Context(), source, decad.WithCopyLiftTranslation(lift, from, to))
+	copied, err := decad.Copy(source).Place(decad.CopyLiftTranslation{Lift: lift, From: from, To: to}).Do(t.Context())
 	require.NoError(t, err)
 
 	shift := exactLiftShift(lift, from, to)
@@ -113,7 +113,7 @@ func TestCopyLiftTranslationErrors(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			_, err := decad.Copy(t.Context(), box, decad.WithCopyLiftTranslation(tc.lift, r3.Vec{}, tc.to))
+			_, err := decad.Copy(box).Place(decad.CopyLiftTranslation{Lift: tc.lift, From: r3.Vec{}, To: tc.to}).Do(t.Context())
 			require.ErrorIs(t, err, tc.want)
 			require.Len(t, doc.Bodies(), 1)
 		})
@@ -121,14 +121,14 @@ func TestCopyLiftTranslationErrors(t *testing.T) {
 }
 
 // TestCopyLiftTranslationPrism copies a prism, which is not faceted: it is
-// placed by the float world translation, exactly as WithCopyPlacement.
+// placed by the float world translation, exactly as CopyTransform.
 func TestCopyLiftTranslationPrism(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
 	box := boxBody(t, doc, 0, 0, 4, 4, 2)
 	lift := liftTestTransform(t)
 	from, to := r3.Vec{}, r3.Vec{X: 7, Y: 2, Z: -1}
-	copied, err := decad.Copy(t.Context(), box, decad.WithCopyLiftTranslation(lift, from, to))
+	copied, err := decad.Copy(box).Place(decad.CopyLiftTranslation{Lift: lift, From: from, To: to}).Do(t.Context())
 	require.NoError(t, err)
 	bb, err := box.Bounds()
 	require.NoError(t, err)

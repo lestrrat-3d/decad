@@ -19,16 +19,15 @@ const (
 	bossTapPitch  = 0.5
 )
 
-func bossTapSpec(plate *decad.Body, bore decad.BossBore) decad.BossSpec {
-	return bossSpec(plate, true, &bore)
+func bossTapCommand(plate *decad.Body, bore decad.BossBore) *decad.BossCommand {
+	return bossCommand(plate, true).Bore(bore)
 }
 
 func TestBossPilotWithACounterbore(t *testing.T) {
 	t.Parallel()
 	_, plate := bossPlate(t)
-	out, err := decad.Boss(t.Context(), plate, bossTapSpec(plate, decad.BossBore{
-		Diameter: units.Millimeters(2 * bossTapRadius), Depth: units.Millimeters(6),
-		Head: decad.Counterbore{Diameter: units.Millimeters(6), Depth: units.Millimeters(2)}}))
+	out, err := bossTapCommand(plate, decad.NewBossBore(units.Millimeters(2*bossTapRadius), units.Millimeters(6)).
+		Head(decad.Counterbore{Diameter: units.Millimeters(6), Depth: units.Millimeters(2)})).Do(t.Context())
 	require.NoError(t, err)
 	want := bossPlateVolume + math.Pi*16*8 - math.Pi*9*2 - math.Pi*bossTapRadius*bossTapRadius*4
 	volume, err := out.Volume()
@@ -54,9 +53,8 @@ func TestBossPilotWithACounterbore(t *testing.T) {
 func TestBossPilotWithACountersink(t *testing.T) {
 	t.Parallel()
 	_, plate := bossPlate(t)
-	out, err := decad.Boss(t.Context(), plate, bossTapSpec(plate, decad.BossBore{
-		Diameter: units.Millimeters(2 * bossTapRadius), Depth: units.Millimeters(6),
-		Head: decad.Countersink{Diameter: units.Millimeters(5), Angle: units.Degrees(90)}}))
+	out, err := bossTapCommand(plate, decad.NewBossBore(units.Millimeters(2*bossTapRadius), units.Millimeters(6)).
+		Head(decad.Countersink{Diameter: units.Millimeters(5), Angle: units.Degrees(90)})).Do(t.Context())
 	require.NoError(t, err)
 	// A 90 degree sink 5 wide over a bore 3 wide is 1 mm deep: a frustum of radii 2.5 and 1.5.
 	want := bossPlateVolume + math.Pi*16*8 - cylinderFrustum(2.5, 1.5, 1) - math.Pi*bossTapRadius*bossTapRadius*5
@@ -68,9 +66,8 @@ func TestBossPilotWithACountersink(t *testing.T) {
 func TestBossPilotTapped(t *testing.T) {
 	t.Parallel()
 	doc, plate := bossPlate(t)
-	out, err := decad.Boss(t.Context(), plate, bossTapSpec(plate, decad.BossBore{
-		Diameter: units.Millimeters(2 * bossTapRadius), Depth: units.Millimeters(6),
-		Thread: &decad.HoleThread{Pitch: units.Millimeters(bossTapPitch), Length: units.Millimeters(4)}}))
+	out, err := bossTapCommand(plate, decad.NewBossBore(units.Millimeters(2*bossTapRadius), units.Millimeters(6)).
+		Thread(decad.NewHoleThread(units.Millimeters(bossTapPitch)).Length(units.Millimeters(4)))).Do(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, []*decad.Body{out}, doc.Bodies())
 	operations := doc.OperationHistory().Operations()
@@ -87,23 +84,24 @@ func TestBossBoreRefusals(t *testing.T) {
 	t.Parallel()
 	pilot := units.Millimeters(2 * bossTapRadius)
 	depth := units.Millimeters(6)
+	bore := decad.NewBossBore(pilot, depth)
 	cases := []struct {
 		name string
 		bore decad.BossBore
 		want error
 	}{
-		{"a counterbore no wider than the pilot", decad.BossBore{Diameter: pilot, Depth: depth,
-			Head: decad.Counterbore{Diameter: units.Millimeters(2), Depth: units.Millimeters(1)}}, decad.ErrDegenerate},
-		{"a counterbore as deep as the pilot", decad.BossBore{Diameter: pilot, Depth: depth,
-			Head: decad.Counterbore{Diameter: units.Millimeters(6), Depth: depth}}, decad.ErrDegenerate},
-		{"a thread longer than the pilot", decad.BossBore{Diameter: pilot, Depth: depth,
-			Thread: &decad.HoleThread{Pitch: units.Millimeters(bossTapPitch), Length: units.Millimeters(7)}}, decad.ErrDegenerate},
-		{"a zero thread pitch", decad.BossBore{Diameter: pilot, Depth: depth,
-			Thread: &decad.HoleThread{Pitch: units.Millimeters(0)}}, decad.ErrDegenerate},
+		{"a counterbore no wider than the pilot",
+			bore.Head(decad.Counterbore{Diameter: units.Millimeters(2), Depth: units.Millimeters(1)}), decad.ErrDegenerate},
+		{"a counterbore as deep as the pilot",
+			bore.Head(decad.Counterbore{Diameter: units.Millimeters(6), Depth: depth}), decad.ErrDegenerate},
+		{"a thread longer than the pilot",
+			bore.Thread(decad.NewHoleThread(units.Millimeters(bossTapPitch)).Length(units.Millimeters(7))),
+			decad.ErrDegenerate},
+		{"a zero thread pitch", bore.Thread(decad.NewHoleThread(units.Millimeters(0))), decad.ErrDegenerate},
 	}
 	for _, tc := range cases {
 		doc, plate := bossPlate(t)
-		_, err := decad.Boss(t.Context(), plate, bossTapSpec(plate, tc.bore))
+		_, err := bossTapCommand(plate, tc.bore).Do(t.Context())
 		require.ErrorIs(t, err, tc.want, tc.name)
 		require.Equal(t, []*decad.Body{plate}, doc.Bodies(), "%s: a refused boss leaves the plate live and alone", tc.name)
 	}

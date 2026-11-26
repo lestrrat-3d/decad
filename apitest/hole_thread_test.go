@@ -11,7 +11,7 @@ import (
 )
 
 // This file is agent-docs/hole-design.md §8's public-surface tests for the
-// Thread field of HoleSpec, on the 20 x 20 x 10 plate of hole_test.go: a 4.2 mm
+// HoleCommand.Thread, on the 20 x 20 x 10 plate of hole_test.go: a 4.2 mm
 // tap drill and a 0.8 mm pitch, an M5 thread.
 
 const (
@@ -48,21 +48,16 @@ func removedPartialInternal(radius, pitch, span, turns float64) float64 {
 	return total
 }
 
-func tapSpec(plate *decad.Body, depth decad.HoleDepth, thread *decad.HoleThread) decad.HoleSpec {
-	return decad.HoleSpec{
-		Face:     capFace(true, plate),
-		At:       r3.Vec{X: 10, Y: 10, Z: 10},
-		Diameter: units.Millimeters(2 * tapRadius),
-		Depth:    depth,
-		Thread:   thread,
-	}
+func tapHole(plate *decad.Body, depth decad.HoleDepth, thread decad.HoleThread) *decad.HoleCommand {
+	return decad.Hole(plate, capFace(true, plate), r3.Vec{X: 10, Y: 10, Z: 10},
+		units.Millimeters(2*tapRadius), depth).Thread(thread)
 }
 
 func TestHoleThreadThroughPlate(t *testing.T) {
 	t.Parallel()
 	doc, plate := drillPlate(t)
-	out, err := decad.Hole(t.Context(), plate, tapSpec(plate, decad.ThroughHole{},
-		&decad.HoleThread{Pitch: units.Millimeters(tapPitch)}))
+	out, err := tapHole(plate, decad.ThroughHole{},
+		decad.NewHoleThread(units.Millimeters(tapPitch))).Do(t.Context())
 	require.NoError(t, err)
 	operations := doc.OperationHistory().Operations()
 	require.Equal(t, decad.OperationHole, operations[len(operations)-1].Kind(), "one hole entry holds the drill and the thread")
@@ -75,8 +70,8 @@ func TestHoleThreadThroughPlate(t *testing.T) {
 func TestHoleThreadBlindStopsAtTheLength(t *testing.T) {
 	t.Parallel()
 	_, plate := drillPlate(t)
-	out, err := decad.Hole(t.Context(), plate, tapSpec(plate, decad.BlindHole{Depth: units.Millimeters(6)},
-		&decad.HoleThread{Pitch: units.Millimeters(tapPitch), Length: units.Millimeters(4)}))
+	out, err := tapHole(plate, decad.BlindHole{Depth: units.Millimeters(6)},
+		decad.NewHoleThread(units.Millimeters(tapPitch)).Length(units.Millimeters(4))).Do(t.Context())
 	require.NoError(t, err)
 	volume, err := out.Volume()
 	require.NoError(t, err)
@@ -88,8 +83,8 @@ func TestHoleThreadBlindStopsAtTheLength(t *testing.T) {
 func TestHoleThreadBlindDefaultsToTheWholeBore(t *testing.T) {
 	t.Parallel()
 	_, plate := drillPlate(t)
-	out, err := decad.Hole(t.Context(), plate, tapSpec(plate, decad.BlindHole{Depth: units.Millimeters(6)},
-		&decad.HoleThread{Pitch: units.Millimeters(tapPitch)}))
+	out, err := tapHole(plate, decad.BlindHole{Depth: units.Millimeters(6)},
+		decad.NewHoleThread(units.Millimeters(tapPitch))).Do(t.Context())
 	require.NoError(t, err)
 	volume, err := out.Volume()
 	require.NoError(t, err)
@@ -101,9 +96,8 @@ func TestHoleThreadBlindDefaultsToTheWholeBore(t *testing.T) {
 func TestHoleThreadStartsAtTheFloorOfACounterbore(t *testing.T) {
 	t.Parallel()
 	_, plate := drillPlate(t)
-	spec := tapSpec(plate, decad.ThroughHole{}, &decad.HoleThread{Pitch: units.Millimeters(tapPitch)})
-	spec.Head = decad.Counterbore{Diameter: units.Millimeters(8), Depth: units.Millimeters(3)}
-	out, err := decad.Hole(t.Context(), plate, spec)
+	out, err := tapHole(plate, decad.ThroughHole{}, decad.NewHoleThread(units.Millimeters(tapPitch))).
+		Head(decad.Counterbore{Diameter: units.Millimeters(8), Depth: units.Millimeters(3)}).Do(t.Context())
 	require.NoError(t, err)
 	volume, err := out.Volume()
 	require.NoError(t, err)
@@ -136,12 +130,19 @@ func grooveCentre(t *testing.T, held *decad.MeshBody, rho, angle, lo, hi float64
 	return 0
 }
 
+func handed(left bool) decad.HoleThread {
+	thread := decad.NewHoleThread(units.Millimeters(tapPitch))
+	if left {
+		return thread.LeftHand()
+	}
+	return thread
+}
+
 func TestHoleThreadHandedness(t *testing.T) {
 	t.Parallel()
 	for _, left := range []bool{false, true} {
 		_, plate := drillPlate(t)
-		out, err := decad.Hole(t.Context(), plate, tapSpec(plate, decad.ThroughHole{},
-			&decad.HoleThread{Pitch: units.Millimeters(tapPitch), LeftHand: left}))
+		out, err := tapHole(plate, decad.ThroughHole{}, handed(left)).Do(t.Context())
 		require.NoError(t, err)
 		mesh, err := out.Tessellate(t.Context(), units.Millimeters(0.05))
 		require.NoError(t, err)
@@ -167,41 +168,32 @@ func TestHoleThreadHandedness(t *testing.T) {
 
 func TestHoleThreadRefusals(t *testing.T) {
 	t.Parallel()
-	_, plate := drillPlate(t)
 	pitch := units.Millimeters(tapPitch)
 	cases := []struct {
 		name string
-		spec func() decad.HoleSpec
+		cmd  func(plate *decad.Body) *decad.HoleCommand
 		want error
 	}{
-		{"zero pitch", func() decad.HoleSpec {
-			return tapSpec(plate, decad.ThroughHole{}, &decad.HoleThread{Pitch: units.Millimeters(0)})
+		{"zero pitch", func(plate *decad.Body) *decad.HoleCommand {
+			return tapHole(plate, decad.ThroughHole{}, decad.NewHoleThread(units.Millimeters(0)))
 		}, decad.ErrDegenerate},
-		{"pitch as an angle", func() decad.HoleSpec {
-			return tapSpec(plate, decad.ThroughHole{}, &decad.HoleThread{Pitch: units.Degrees(1)})
+		{"pitch as an angle", func(plate *decad.Body) *decad.HoleCommand {
+			return tapHole(plate, decad.ThroughHole{}, decad.NewHoleThread(units.Degrees(1)))
 		}, decad.ErrUnitKind},
-		{"pitch too coarse for the bore", func() decad.HoleSpec {
-			return tapSpec(plate, decad.ThroughHole{}, &decad.HoleThread{Pitch: units.Millimeters(50)})
+		{"pitch too coarse for the bore", func(plate *decad.Body) *decad.HoleCommand {
+			return tapHole(plate, decad.ThroughHole{}, decad.NewHoleThread(units.Millimeters(50)))
 		}, decad.ErrDegenerate},
-		{"a length longer than the bore", func() decad.HoleSpec {
-			return tapSpec(plate, decad.BlindHole{Depth: units.Millimeters(6)},
-				&decad.HoleThread{Pitch: pitch, Length: units.Millimeters(7)})
+		{"a length longer than the bore", func(plate *decad.Body) *decad.HoleCommand {
+			return tapHole(plate, decad.BlindHole{Depth: units.Millimeters(6)},
+				decad.NewHoleThread(pitch).Length(units.Millimeters(7)))
 		}, decad.ErrDegenerate},
-		{"a negative length", func() decad.HoleSpec {
-			return tapSpec(plate, decad.ThroughHole{}, &decad.HoleThread{Pitch: pitch, Length: units.Millimeters(-1)})
+		{"a negative length", func(plate *decad.Body) *decad.HoleCommand {
+			return tapHole(plate, decad.ThroughHole{}, decad.NewHoleThread(pitch).Length(units.Millimeters(-1)))
 		}, decad.ErrNegativeMagnitude},
-		{"a shaped hole", func() decad.HoleSpec {
-			spec := tapSpec(plate, decad.ThroughHole{}, &decad.HoleThread{Pitch: pitch})
-			spec.Diameter = units.Value{}
-			spec.Shape = decad.SlotHole{Length: units.Millimeters(8), Width: units.Millimeters(4), Angle: units.Degrees(0)}
-			return spec
-		}, decad.ErrDegenerate},
 	}
 	for _, tc := range cases {
 		doc, plate := drillPlate(t)
-		spec := tc.spec()
-		spec.Face = capFace(true, plate)
-		_, err := decad.Hole(t.Context(), plate, spec)
+		_, err := tc.cmd(plate).Do(t.Context())
 		require.ErrorIs(t, err, tc.want, tc.name)
 		require.Equal(t, []*decad.Body{plate}, doc.Bodies(), "%s: a refused hole leaves the plate live and alone", tc.name)
 	}
@@ -209,11 +201,10 @@ func TestHoleThreadRefusals(t *testing.T) {
 		t.Parallel()
 		doc := decad.New()
 		rod := circleBodyAtZ(t, doc, 0, 5, 0, 20)
-		_, err := decad.Hole(t.Context(), rod, decad.HoleSpec{
-			Face: decad.Faces(decad.Cylindrical()), At: r3.NewVec(5, 0, 10),
-			Diameter: units.Millimeters(3), Depth: decad.ThroughHole{},
-			Thread: &decad.HoleThread{Pitch: pitch},
-		})
+		_, err := decad.Hole(rod, decad.Faces(decad.Cylindrical()), r3.NewVec(5, 0, 10),
+			units.Millimeters(3), decad.ThroughHole{}).
+			Thread(decad.NewHoleThread(pitch)).
+			Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.Equal(t, []*decad.Body{rod}, doc.Bodies())
 	})

@@ -32,9 +32,9 @@ func coilSpring(t *testing.T) *decad.Body {
 	}
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := decad.Coil(t.Context(), decad.New(), s, s.Profiles()[0],
+	body, err := decad.Coil(decad.New(), s, s.Profiles()[0],
 		decad.SketchLine{Start: decad.Point2{}, End: decad.Point2{V: 1}},
-		units.Millimeters(1.5), units.Scalar(2))
+		units.Millimeters(1.5), units.Scalar(2)).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }

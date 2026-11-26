@@ -3,35 +3,14 @@ package decad
 import (
 	"context"
 	"fmt"
+	"slices"
 
 	"github.com/lestrrat-3d/decad/internal/arrangeplan"
+	"github.com/lestrrat-3d/decad/internal/opcommand"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
-	"github.com/lestrrat-go/option/v3"
 )
-
-// ArrangeOption configures [Arrange].
-type ArrangeOption interface {
-	option.Interface
-	arrangeOption()
-}
-
-type arrangeOption struct{ option.Interface }
-
-func (arrangeOption) arrangeOption() {}
-
-type identArrangeTurns struct{}
-
-// WithArrangeTurns lets [Arrange] turn a body a quarter turn about +Z to fit,
-// which swaps its footprint's width and depth. A body that is deeper than wide
-// is laid with its long side along X when that lets all of them fit, and no
-// body turns otherwise. A turned body is rotated about the minimum corner of
-// its bounding box and then moved, so it adds a second [OperationTransform]
-// entry to the history.
-func WithArrangeTurns() ArrangeOption {
-	return arrangeOption{option.New(identArrangeTurns{}, true)}
-}
 
 // ArrangeBed is the flat area [Arrange] fills. Origin is the world point of the
 // bed's minimum corner and its surface height. Width runs along X from Origin
@@ -49,45 +28,96 @@ type ArrangeBed struct {
 	Height units.Value
 }
 
-// Arrange moves bodies by translation so they lie side by side on bed, and
-// returns the moved bodies in the order given, retiring the inputs
-// (agent-docs/arrange-design.md). Each body's bounding box, grown on every side
+// Arrange returns the command that lays bodies side by side on bed. Do moves
+// bodies by translation so they lie side by side on bed, and returns the moved
+// bodies in the order given, retiring the inputs (agent-docs/arrange-design.md). Each body's bounding box, grown on every side
 // by the box's own error bound, rests on the bed's surface (its minimum Z is
 // Origin.Z) and keeps Gap from the others and from the bed's edge. Bodies are
 // placed deepest first in shelves along X. Arrange turns nothing unless
-// [WithArrangeTurns] is given, so a body keeps its orientation.
+// [ArrangeCommand.Turns] or [ArrangeCommand.Angle] is called, so a body keeps
+// its orientation. Arrange copies bodies when it is called, so a later write to
+// the caller's slice changes nothing.
 //
 // bodies MUST be live, distinct and belong to one document, and must not be
-// empty or hold a nil. A violation is ErrDegenerate, ErrForeignBody or
-// ErrRetiredBody. A bed with a non-positive size or a negative gap is
+// empty or hold a nil first body. A violation is ErrDegenerate, ErrForeignBody
+// or ErrRetiredBody. A bed with a non-positive size or a negative gap is
 // ErrDegenerate, a wrong unit kind is ErrUnitKind, and bodies that do not all
 // fit on the bed are ErrDegenerate; no body moves in any of these cases. A
-// canceled context stops the moves and leaves the bodies already moved at
-// their new places and the rest where they were.
-func Arrange(ctx context.Context, bodies []*Body, bed ArrangeBed, opts ...ArrangeOption) (result []*Body, retErr error) {
-	defer func() { retErr = operationError(OperationTransform, retErr) }()
-	if ctx == nil {
-		return nil, fmt.Errorf(`%w: a nil context cannot control an arrangement`, ErrDegenerate)
+// failed or canceled call leaves the document as it found it: every body live
+// at its own place, and no history entry or producer number added. Every error
+// carries [OperationTransform].
+func Arrange(bodies []*Body, bed ArrangeBed) *ArrangeCommand {
+	c := &ArrangeCommand{bodies: slices.Clone(bodies), bed: bed}
+	switch {
+	case len(bodies) == 0:
+		c.state.Record("bodies", errArrangeEmpty)
+	case bodies[0] == nil:
+		c.state.Record("bodies", errArrangeNilFirst)
 	}
+	return c
+}
+
+var (
+	errArrangeEmpty    = fmt.Errorf(`%w: an arrangement needs at least one body`, ErrDegenerate)
+	errArrangeNilFirst = fmt.Errorf(`%w: the first body belongs to no document`, ErrDegenerate)
+)
+
+// ArrangeCommand lays bodies side by side on a bed. Build it with [Arrange].
+type ArrangeCommand struct {
+	state  opcommand.State         // consumed flag and first recorded fault
+	bodies []*Body                 // copied at Arrange
+	bed    ArrangeBed              // the bed, gated at Do
+	turns  bool                    // set by Turns
+	angle  opcommand.Slot[float64] // set by Angle, in radians, with the fault of its validation
+}
+
+// Turns lets [Arrange] turn a body a quarter turn about +Z to fit, which swaps
+// its footprint's width and depth. A body that is deeper than wide is laid with
+// its long side along X when that lets all of them fit, and no body turns
+// otherwise. A turned body is rotated about the minimum corner of its bounding
+// box and then moved, so it adds a second [OperationTransform] entry to the
+// history. Calling Turns again changes nothing.
+func (c *ArrangeCommand) Turns() *ArrangeCommand {
+	c.turns = true
+	return c
+}
+
+// Do arranges the bodies, or returns the error of the first gate that refuses
+// with the document unchanged. A nil ctx is ErrDegenerate, and a second call
+// returns ErrConsumed.
+func (c *ArrangeCommand) Do(ctx context.Context) ([]*Body, error) {
+	return runCommand(ctx, &c.state, OperationTransform, c.run)
+}
+
+func (c *ArrangeCommand) run(ctx context.Context) ([]*Body, error) {
+	step, err := c.angle.Get()
+	return arrange(ctx, c.bodies, c.bed, c.turns, arrangeAngle{step: step, err: err, subject: "Angle"})
+}
+
+// arrangeAngle is the folded form of an arrangement's Angle method. err is the
+// fault of the step, refused where the option decode refused it, and subject
+// names what the diagnostic points at (agent-docs/command-api-design.md §11).
+type arrangeAngle struct {
+	step    float64 // radians, zero when absent
+	err     error
+	subject string
+}
+
+// arrange is Arrange's implementation. ctx is not nil, and the errors it
+// returns carry no operation tag, except one that names a method
+// (agent-docs/command-api-design.md §11). Its snapshot and restore sit after the
+// gates, so a call a gate refuses never takes a snapshot.
+func arrange(ctx context.Context, bodies []*Body, bed ArrangeBed, turns bool, angle arrangeAngle) (result []*Body, retErr error) {
 	if len(bodies) == 0 {
-		return nil, fmt.Errorf(`%w: an arrangement needs at least one body`, ErrDegenerate)
+		return nil, errArrangeEmpty
 	}
 	if bodies[0] == nil || bodies[0].n.Doc == nil {
-		return nil, fmt.Errorf(`%w: the first body belongs to no document`, ErrDegenerate)
+		return nil, errArrangeNilFirst
 	}
-	turns := false
-	for _, o := range opts {
-		if o == nil {
-			return nil, fmt.Errorf(`%w: a nil option names nothing to apply`, ErrDegenerate)
-		}
-		if _, ok := o.Ident().(identArrangeTurns); ok {
-			turns = true
-		}
+	if angle.err != nil {
+		return nil, subjectError(OperationTransform, angle.subject, angle.err)
 	}
-	angleStep, err := arrangeAngleStep(opts)
-	if err != nil {
-		return nil, err
-	}
+	angleStep := angle.step
 	d := documentHandle(bodies[0].n.Doc)
 	seen := make(map[*Body]struct{}, len(bodies))
 	for _, b := range bodies {
@@ -124,6 +154,12 @@ func Arrange(ctx context.Context, bodies []*Body, bed ArrangeBed, opts ...Arrang
 			return nil, fmt.Errorf(`%w: the bed height must be positive`, ErrDegenerate)
 		}
 	}
+	snap := d.snapshot()
+	defer func() {
+		if retErr != nil {
+			d.restore(snap)
+		}
+	}()
 	items := make([]arrangeplan.Item, len(bodies))
 	heights := make([]float64, len(bodies))
 	margins := make([]float64, len(bodies))
@@ -209,7 +245,7 @@ func Arrange(ctx context.Context, bodies []*Body, bed ArrangeBed, opts ...Arrang
 		if err != nil {
 			return nil, fmt.Errorf(`%w: the move of a body is not finite: %s`, ErrNotFinite, err)
 		}
-		if moved[i], err = Transform(ctx, b, t); err != nil {
+		if moved[i], err = transform(ctx, b, t, OperationTransform); err != nil {
 			return nil, err
 		}
 	}
@@ -227,7 +263,7 @@ func turnQuarter(ctx context.Context, b *Body) (*Body, error) {
 	if err != nil {
 		return nil, fmt.Errorf(`%w: the turn of a body is not finite: %s`, ErrNotFinite, err)
 	}
-	return Transform(ctx, b, t)
+	return transform(ctx, b, t, OperationTransform)
 }
 
 // boundMillimetres is the bound of b's bounding box in millimetres.

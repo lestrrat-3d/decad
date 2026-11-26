@@ -64,7 +64,7 @@ func departureRevolve(t *testing.T, pts [][2]float64, circle float64) *Body {
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	axis := SketchLine{Start: Point2{U: 0, V: 0}, End: Point2{U: 1, V: 0}}
-	body, err := Revolve(t.Context(), New(), s, s.Profiles()[0], axis, FullRevolution{})
+	body, err := Revolve(New(), s, s.Profiles()[0], axis, FullRevolution{}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -83,7 +83,7 @@ func departureSphere(t *testing.T) *Body {
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	axis := SketchLine{Start: Point2{U: 0, V: 0}, End: Point2{U: 1, V: 0}}
-	body, err := Revolve(t.Context(), New(), s, s.Profiles()[0], axis, FullRevolution{})
+	body, err := Revolve(New(), s, s.Profiles()[0], axis, FullRevolution{}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }

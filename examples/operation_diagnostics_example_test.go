@@ -25,8 +25,8 @@ func Example_operation_diagnostics() {
 		return
 	}
 	doc := decad.New()
-	body, err := decad.Extrude(ctx, doc, s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
+	body, err := decad.Extrude(doc, s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(5), Dir: decad.Along}).Do(ctx)
 	if err != nil {
 		fmt.Printf("failed to extrude: %s\n", err)
 		return

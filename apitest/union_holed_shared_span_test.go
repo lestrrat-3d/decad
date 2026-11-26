@@ -75,7 +75,7 @@ func spokedHubDisc(t *testing.T) (*decad.Document, *decad.Body) {
 	}
 	require.NotNil(t, profile)
 	doc := decad.New()
-	body, err := decad.Extrude(t.Context(), doc, s, profile, decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
+	body, err := decad.Extrude(doc, s, profile, decad.Distance{D: units.Millimeters(5), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	return doc, body
 }
@@ -84,8 +84,7 @@ func spokedHubDisc(t *testing.T) (*decad.Document, *decad.Body) {
 func bossOnCap(t *testing.T, body *decad.Body, diameter float64) (*decad.Body, error) {
 	t.Helper()
 	face := decad.Faces(decad.FaceCreatedBy(decad.CapEnd(body))).Exactly(1)
-	return decad.Boss(t.Context(), body, decad.BossSpec{Face: face, At: r3.Vec{Z: 5},
-		Diameter: units.Millimeters(diameter), Height: units.Millimeters(1)})
+	return decad.Boss(body, face, r3.Vec{Z: 5}, units.Millimeters(diameter), units.Millimeters(1)).Do(t.Context())
 }
 
 // volumeAndBound reads a body's volume and its error bound in mm³.
@@ -273,13 +272,12 @@ func TestUnionHoledSharedSpanKidneySlot(t *testing.T) {
 	}
 	require.NotNil(t, profile)
 	doc := decad.New()
-	plate, err := decad.Extrude(t.Context(), doc, s, profile, decad.Distance{D: units.Millimeters(4), Dir: decad.Along})
+	plate, err := decad.Extrude(doc, s, profile, decad.Distance{D: units.Millimeters(4), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	plateVolume, plateBound := volumeAndBound(t, plate)
 
 	face := decad.Faces(decad.FaceCreatedBy(decad.CapEnd(plate))).Exactly(1)
-	out, err := decad.Boss(t.Context(), plate, decad.BossSpec{Face: face, At: r3.Vec{X: cx, Y: cy, Z: 4},
-		Diameter: units.Millimeters(10), Height: units.Millimeters(2)})
+	out, err := decad.Boss(plate, face, r3.Vec{X: cx, Y: cy, Z: 4}, units.Millimeters(10), units.Millimeters(2)).Do(t.Context())
 	require.NoError(t, err)
 	requireAnalytic(t, out)
 	v, bound := volumeAndBound(t, out)
@@ -327,7 +325,7 @@ func holedSquarePlate(t *testing.T, doc *decad.Document) *decad.Body {
 	require.NoError(t, err)
 	for _, p := range s.Profiles() {
 		if p.Valid && len(p.Holes) == 1 {
-			body, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
+			body, err := decad.Extrude(doc, s, p, decad.Distance{D: units.Millimeters(5), Dir: decad.Along}).Do(t.Context())
 			require.NoError(t, err)
 			return body
 		}
@@ -343,7 +341,7 @@ func TestUnionHoledSharedSpanExactLines(t *testing.T) {
 		doc := decad.New()
 		plate := holedSquarePlate(t, doc)
 		block := boxBodyAtZ(t, doc, -8, 5, 8, 15, 4, 2)
-		out, err := decad.Union(t.Context(), plate, block)
+		out, err := decad.Union(plate, block).Do(t.Context())
 		require.NoError(t, err)
 		return out
 	}
@@ -375,7 +373,7 @@ func TestUnionHoledSharedSpanExactLines(t *testing.T) {
 	require.InDelta(t, 6, hi, 1e-12)
 
 	forScale := build()
-	scaled, err := decad.ScaledAt(t.Context(), forScale, r3.Vec{}, units.Scalar(2))
+	scaled, err := decad.ScaledAt(forScale, r3.Vec{}, units.Scalar(2)).Do(t.Context())
 	require.NoError(t, err)
 	sv, sb := volumeAndBound(t, scaled)
 	require.LessOrEqual(t, math.Abs(sv-8*want), sb)
@@ -405,7 +403,7 @@ func TestUnionHoledSharedSpanExactLines(t *testing.T) {
 	// the hole's top wall, which the build does not cover, so it takes the mesh
 	// path with no error and a volume within its bound.
 	second := boxBodyAtZ(t, out.Document(), -8, -15, 8, -5, 4, 2)
-	joined, err := decad.Union(t.Context(), out, second)
+	joined, err := decad.Union(out, second).Do(t.Context())
 	require.NoError(t, err)
 	jv, jb := volumeAndBound(t, joined)
 	require.LessOrEqual(t, math.Abs(jv-(want+16*10*1)), jb)
@@ -439,7 +437,7 @@ func TestUnionHoledSharedSpanSharpSector(t *testing.T) {
 	}
 	require.NotNil(t, profile)
 	doc := decad.New()
-	disc, err := decad.Extrude(t.Context(), doc, s, profile, decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
+	disc, err := decad.Extrude(doc, s, profile, decad.Distance{D: units.Millimeters(5), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	discVolume, discBound := volumeAndBound(t, disc)
 
@@ -459,7 +457,7 @@ func TestUnionHoledSharedSpanScaleRefusesCharged(t *testing.T) {
 	require.NoError(t, err)
 	requireAnalytic(t, out)
 
-	_, err = decad.ScaledAt(t.Context(), out, r3.Vec{}, units.Scalar(2))
+	_, err = decad.ScaledAt(out, r3.Vec{}, units.Scalar(2)).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 
 	frame := mustFrame(t, r3.Vec{Z: 2.5}, r3.Vec{X: 1}, r3.Vec{Y: 1})
@@ -477,8 +475,7 @@ func TestUnionHoledSharedSpanScaleRefusesCharged(t *testing.T) {
 	require.NotEmpty(t, top.Origins())
 	t.Logf("top face origins %v", top.Origins())
 	selector := decad.Faces(decad.FaceCreatedBy(top.Origins()[0])).Exactly(1)
-	_, err = decad.Boss(t.Context(), out, decad.BossSpec{Face: selector, At: r3.Vec{Z: 6},
-		Diameter: units.Millimeters(4), Height: units.Millimeters(1)})
+	_, err = decad.Boss(out, selector, r3.Vec{Z: 6}, units.Millimeters(4), units.Millimeters(1)).Do(t.Context())
 	require.NoError(t, err)
 }
 

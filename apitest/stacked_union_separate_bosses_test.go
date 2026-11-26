@@ -53,7 +53,7 @@ func unionOf(bosses ...separateBoss) func(t *testing.T, doc *decad.Document) *de
 		for i, b := range bosses {
 			tools[i] = b.prism(t, doc)
 		}
-		joined, err := decad.Union(t.Context(), plate, tools...)
+		joined, err := decad.Union(append([]*decad.Body{plate}, tools...)...).Do(t.Context())
 		require.NoError(t, err)
 		return joined
 	}
@@ -66,10 +66,10 @@ func separateBossesCases() []separateBossesCase {
 			t.Helper()
 			plate := boxBody(t, doc, 0, 0, 100, 60, 10)
 			boss := onTop(20).prism(t, doc)
-			copies, err := decad.PatternCopies(t.Context(), boss,
-				decad.LinearPattern{Dir: r3.NewVec(1, 0, 0), Step: units.Millimeters(30), Count: 3})
+			copies, err := decad.PatternCopies(boss,
+				decad.LinearPattern{Dir: r3.NewVec(1, 0, 0), Step: units.Millimeters(30), Count: 3}).Do(t.Context())
 			require.NoError(t, err)
-			joined, err := decad.Union(t.Context(), plate, append([]*decad.Body{boss}, copies...)...)
+			joined, err := decad.Union(append([]*decad.Body{plate}, append([]*decad.Body{boss}, copies...)...)...).Do(t.Context())
 			require.NoError(t, err)
 			return joined
 		}},
@@ -79,7 +79,7 @@ func separateBossesCases() []separateBossesCase {
 			t.Helper()
 			first := onTop(20).prism(t, doc)
 			plate := boxBody(t, doc, 0, 0, 100, 60, 10)
-			joined, err := decad.Union(t.Context(), first, plate, onTop(50).prism(t, doc), onTop(80).prism(t, doc))
+			joined, err := decad.Union(first, plate, onTop(50).prism(t, doc), onTop(80).prism(t, doc)).Do(t.Context())
 			require.NoError(t, err)
 			return joined
 		}},
@@ -182,7 +182,7 @@ func TestStackedUnionSeparateBossesFillet(t *testing.T) {
 	doc := decad.New()
 	joined := separateBossesCases()[0].join(t, doc)
 	const r = 1.0
-	filleted, err := decad.Fillet(t.Context(), joined, decad.Edges(decad.Circular()).Exactly(6), units.Millimeters(r))
+	filleted, err := decad.Fillet(joined, decad.Edges(decad.Circular()).Exactly(6), units.Millimeters(r)).Do(t.Context())
 	require.NoError(t, err)
 	var tori int
 	for _, f := range filleted.Faces() {

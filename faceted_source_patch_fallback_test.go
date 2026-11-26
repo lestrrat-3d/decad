@@ -63,17 +63,17 @@ func requireSameRefusal(t *testing.T, realErr, ctrlErr error) {
 // fallbackP3 cuts the P3 scene's first bore, places both it and the second
 // y-tool (x = 30, r = 4) by opt (none when nil), and cuts the placed pair. It
 // returns the placed target beside the second cut's result.
-func fallbackP3(t *testing.T, ctx context.Context, opt CopyOption) (*Body, *Body, error) {
+func fallbackP3(t *testing.T, ctx context.Context, opt CopyPlacement) (*Body, *Body, error) {
 	t.Helper()
 	sc := &slabScene{w: sketch.NewWorld(), doc: New()}
-	target, err := Cut(ctx, sc.roundedBox(ctx, t), sc.yTool(ctx, t, 20, 4))
+	target, err := Cut(sc.roundedBox(ctx, t), sc.yTool(ctx, t, 20, 4)).Do(ctx)
 	require.NoError(t, err)
 	tool := sc.yTool(ctx, t, 30, 4)
-	target, err = Copy(ctx, target, opt)
+	target, err = Copy(target).Place(opt).Do(ctx)
 	require.NoError(t, err)
-	tool, err = Copy(ctx, tool, opt)
+	tool, err = Copy(tool).Place(opt).Do(ctx)
 	require.NoError(t, err)
-	got, err := Cut(ctx, target, tool)
+	got, err := Cut(target, tool).Do(ctx)
 	return target, got, err
 }
 
@@ -104,10 +104,10 @@ func TestFacetedSourcePatchFallback(t *testing.T) {
 
 	for _, tc := range []struct {
 		name string
-		opt  CopyOption
+		opt  CopyPlacement
 		axis r3.Vec
 	}{
-		{"a 20 degree exact rotation", WithCopyRotation(r3.Vec{X: 20, Y: 10, Z: 10}, r3.Vec{Z: 1}, units.Degrees(20)), tilted},
+		{"a 20 degree exact rotation", CopyRotation{Center: r3.Vec{X: 20, Y: 10, Z: 10}, Axis: r3.Vec{Z: 1}, Angle: units.Degrees(20)}, tilted},
 	} {
 		t.Run(tc.name+" refuses as the control does", func(t *testing.T) {
 			t.Parallel()
@@ -129,7 +129,7 @@ func TestFacetedSourcePatchFallback(t *testing.T) {
 	// slab off, so the cut refuses where the integer translation builds.
 	t.Run("a translation by Y = 0.1 that moves the back face refuses", func(t *testing.T) {
 		t.Parallel()
-		target, _, err := fallbackP3(t, t.Context(), WithCopyPlacement(mustTranslation(r3.Vec{Y: 0.1})))
+		target, _, err := fallbackP3(t, t.Context(), CopyTransform{Transform: mustTranslation(r3.Vec{Y: 0.1})})
 		planes := planesAlong(target, yAxis)
 		require.Len(t, planes, 2, "the later cut touches the front and back faces")
 		for _, f := range planes {
@@ -156,7 +156,7 @@ func TestFacetedSourcePatchFallback(t *testing.T) {
 	} {
 		t.Run(tc.name+" builds where the control refuses", func(t *testing.T) {
 			t.Parallel()
-			opt := WithCopyPlacement(mustTranslation(tc.move))
+			opt := CopyTransform{Transform: mustTranslation(tc.move)}
 			target, got, err := fallbackP3(t, t.Context(), opt)
 			require.NoError(t, err)
 			planes := planesAlong(target, yAxis)
@@ -177,17 +177,17 @@ func TestFacetedSourcePatchFallback(t *testing.T) {
 		run := func(ctx context.Context) (*Body, error) {
 			sc := &slabScene{w: sketch.NewWorld(), doc: New()}
 			part := sc.revolvedShaft(ctx, t)
-			built, err := Cut(ctx, part, sc.zPin(ctx, t, 4, 6))
+			built, err := Cut(part, sc.zPin(ctx, t, 4, 6)).Do(ctx)
 			require.NoError(t, err)
 			// A Copy ends the operation history's Boolean chain, so the later cut meets the
 			// sequential gate and not a chain the regroup rebuilds.
-			first, err := Copy(ctx, built)
+			first, err := Copy(built).Do(ctx)
 			require.NoError(t, err)
 			caps := planesThrough(first, r3.Vec{X: 4, Y: 6})
 			require.Len(t, caps, 1, "the pin pierces one cap")
 			require.True(t, caps[0].RetainedTag)
 			require.NotNil(t, caps[0].Denoted, "the cap carries a denoted patch")
-			return Cut(ctx, first, sc.zPin(ctx, t, 8, 6))
+			return Cut(first, sc.zPin(ctx, t, 8, 6)).Do(ctx)
 		}
 		_, realErr := run(t.Context())
 		_, ctrlErr := run(booleaneval.WithoutRetainedPlaneSlab(t.Context()))
@@ -202,13 +202,13 @@ func TestFacetedSourcePatchFallback(t *testing.T) {
 			// lies within its chord's sagitta of each facet's plane, so the new
 			// rim reads that slab (faceted-source-retention §11, Claim C).
 			sc := &slabScene{w: sketch.NewWorld(), doc: New()}
-			built, err := Cut(ctx, sc.roundedBox(ctx, t), sc.yTool(ctx, t, 20, 4))
+			built, err := Cut(sc.roundedBox(ctx, t), sc.yTool(ctx, t, 20, 4)).Do(ctx)
 			require.NoError(t, err)
 			// A Copy ends the operation history's Boolean chain, so the cut under test
 			// is the sequential gate and not a chain the regroup rebuilds.
-			first, err := Copy(ctx, built)
+			first, err := Copy(built).Do(ctx)
 			require.NoError(t, err)
-			return Cut(ctx, first, sc.yTool(ctx, t, 22, 3))
+			return Cut(first, sc.yTool(ctx, t, 22, 3)).Do(ctx)
 		}
 		got, err := run(t.Context())
 		require.NoError(t, err)
@@ -257,7 +257,7 @@ func (sc *slabScene) revolvedShaft(ctx context.Context, t *testing.T) *Body {
 	_, err = s.Solve(ctx)
 	require.NoError(t, err)
 	axis := SketchLine{Start: Point2{U: 0, V: 0}, End: Point2{U: 1, V: 0}}
-	part, err := Revolve(ctx, sc.doc, s, s.Profiles()[0], axis, AngleExtent{A: units.Degrees(270), Dir: Along})
+	part, err := Revolve(sc.doc, s, s.Profiles()[0], axis, AngleExtent{A: units.Degrees(270), Dir: Along}).Do(ctx)
 	require.NoError(t, err)
 	return part
 }
@@ -274,7 +274,7 @@ func (sc *slabScene) zPin(ctx context.Context, t *testing.T, x, y float64) *Body
 	s.CreateCircle(c, 1.5)
 	_, err = s.Solve(ctx)
 	require.NoError(t, err)
-	pin, err := Extrude(ctx, sc.doc, s, s.Profiles()[0], Symmetric{D: units.Millimeters(4)})
+	pin, err := Extrude(sc.doc, s, s.Profiles()[0], Symmetric{D: units.Millimeters(4)}).Do(ctx)
 	require.NoError(t, err)
 	return pin
 }

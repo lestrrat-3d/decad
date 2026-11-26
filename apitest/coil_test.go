@@ -57,9 +57,9 @@ func TestCoilPublishesSpringGeometry(t *testing.T) {
 	require.Len(t, s.Profiles(), 1)
 
 	doc := decad.New()
-	spring, err := decad.Coil(t.Context(), doc, s, s.Profiles()[0], decad.SketchLine{
+	spring, err := decad.Coil(doc, s, s.Profiles()[0], decad.SketchLine{
 		Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 0, V: 1},
-	}, units.Millimeters(1.5), units.Scalar(2))
+	}, units.Millimeters(1.5), units.Scalar(2)).Do(t.Context())
 	require.NoError(t, err)
 
 	volume, err := spring.Volume()
@@ -79,17 +79,17 @@ func TestCoilThreadCutAndCoreUnionPreserveVolume(t *testing.T) {
 		axis := coilAxis()
 		doc := decad.New()
 		baseSketch, baseProfile := coilSketch(t, [][2]float64{{0, 0}, {5, 0}, {5, 20}, {0, 20}})
-		cylinder, err := decad.Revolve(t.Context(), doc, baseSketch, baseProfile, axis, decad.FullRevolution{})
+		cylinder, err := decad.Revolve(doc, baseSketch, baseProfile, axis, decad.FullRevolution{}).Do(t.Context())
 		require.NoError(t, err)
 
 		const halfWidth = 0.6928203230275509
 		grooveSketch, grooveProfile := coilSketch(t, [][2]float64{
 			{4.1, 3}, {5.3, 3 - halfWidth}, {5.3, 3 + halfWidth},
 		})
-		groove, err := decad.Coil(t.Context(), doc, grooveSketch, grooveProfile, axis,
-			units.Millimeters(1.5), units.Scalar(1))
+		groove, err := decad.Coil(doc, grooveSketch, grooveProfile, axis,
+			units.Millimeters(1.5), units.Scalar(1)).Do(t.Context())
 		require.NoError(t, err)
-		cut, err := decad.Cut(t.Context(), cylinder, groove)
+		cut, err := decad.Cut(cylinder, groove).Do(t.Context())
 		require.NoError(t, err)
 		require.Len(t, cut.Lumps(), 1)
 
@@ -107,17 +107,17 @@ func TestCoilThreadCutAndCoreUnionPreserveVolume(t *testing.T) {
 		axis := coilAxis()
 		doc := decad.New()
 		baseSketch, baseProfile := coilSketch(t, [][2]float64{{5, -20}, {10, -20}, {10, 0}, {5, 0}})
-		block, err := decad.Revolve(t.Context(), doc, baseSketch, baseProfile, axis, decad.FullRevolution{})
+		block, err := decad.Revolve(doc, baseSketch, baseProfile, axis, decad.FullRevolution{}).Do(t.Context())
 		require.NoError(t, err)
 
 		const halfWidth = 0.6928203230275509
 		grooveSketch, grooveProfile := coilSketch(t, [][2]float64{
 			{5.9, -17}, {4.7, -17 - halfWidth}, {4.7, -17 + halfWidth},
 		})
-		groove, err := decad.Coil(t.Context(), doc, grooveSketch, grooveProfile, axis,
-			units.Millimeters(1.5), units.Scalar(1))
+		groove, err := decad.Coil(doc, grooveSketch, grooveProfile, axis,
+			units.Millimeters(1.5), units.Scalar(1)).Do(t.Context())
 		require.NoError(t, err)
-		cut, err := decad.Cut(t.Context(), block, groove)
+		cut, err := decad.Cut(block, groove).Do(t.Context())
 		require.NoError(t, err)
 		require.Len(t, cut.Lumps(), 1)
 
@@ -142,8 +142,8 @@ func TestCoilPublicRimsBoundTheirRenderedGeometry(t *testing.T) {
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 
-	body, err := decad.Coil(t.Context(), decad.New(), s, s.Profiles()[0], coilAxis(),
-		units.Millimeters(1.5), units.Scalar(2.3))
+	body, err := decad.Coil(decad.New(), s, s.Profiles()[0], coilAxis(),
+		units.Millimeters(1.5), units.Scalar(2.3)).Do(t.Context())
 	require.NoError(t, err)
 	for _, edge := range body.Edges() {
 		circle, ok := edge.Curve().(decad.Circle3)
@@ -176,8 +176,8 @@ func TestCoilPublicArcRimFollowsWalkSense(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, s.Profiles(), 1)
 
-	body, err := decad.Coil(t.Context(), decad.New(), s, s.Profiles()[0], coilAxis(),
-		units.Millimeters(3), units.Scalar(1))
+	body, err := decad.Coil(decad.New(), s, s.Profiles()[0], coilAxis(),
+		units.Millimeters(3), units.Scalar(1)).Do(t.Context())
 	require.NoError(t, err)
 	arcs := 0
 	for _, edge := range body.Edges() {
@@ -207,8 +207,8 @@ func TestCoilFullTurnArcPublishesClosedRims(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, s.Profiles(), 1)
 
-	body, err := decad.Coil(t.Context(), decad.New(), s, s.Profiles()[0], coilAxis(),
-		units.Millimeters(1.5), units.Scalar(2.3))
+	body, err := decad.Coil(decad.New(), s, s.Profiles()[0], coilAxis(),
+		units.Millimeters(1.5), units.Scalar(2.3)).Do(t.Context())
 	require.NoError(t, err)
 	require.Len(t, body.Faces(), 3)
 	require.Len(t, body.Edges(), 2)
@@ -235,14 +235,14 @@ func TestCoilThreadEndClippedVolume(t *testing.T) {
 	const halfWidth, start, turns, length = 0.6928203230275509, -0.375, 2, 5
 	doc := decad.New()
 	cylinderSketch, cylinderProfile := coilSketch(t, [][2]float64{{0, 0}, {5, 0}, {5, length}, {0, length}})
-	cylinder, err := decad.Revolve(t.Context(), doc, cylinderSketch, cylinderProfile, coilAxis(), decad.FullRevolution{})
+	cylinder, err := decad.Revolve(doc, cylinderSketch, cylinderProfile, coilAxis(), decad.FullRevolution{}).Do(t.Context())
 	require.NoError(t, err)
 	points := [][2]float64{{4.1, start}, {5.3, start - halfWidth}, {5.3, start + halfWidth}}
 	grooveSketch, grooveProfile := coilSketch(t, points)
-	groove, err := decad.Coil(t.Context(), doc, grooveSketch, grooveProfile, coilAxis(),
-		units.Millimeters(1.5), units.Scalar(turns))
+	groove, err := decad.Coil(doc, grooveSketch, grooveProfile, coilAxis(),
+		units.Millimeters(1.5), units.Scalar(turns)).Do(t.Context())
 	require.NoError(t, err)
-	cut, err := decad.Cut(t.Context(), cylinder, groove)
+	cut, err := decad.Cut(cylinder, groove).Do(t.Context())
 	require.NoError(t, err)
 	require.Len(t, cut.Lumps(), 1)
 

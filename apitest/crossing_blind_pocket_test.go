@@ -29,10 +29,10 @@ func TestCrossingBlindPocketOnThroughHole(t *testing.T) {
 			doc := decad.New()
 			plate := boxBody(t, doc, -10, -10, 10, 10, 10)
 			through := boxBodyAtZ(t, doc, -4, -2, 0, 2, 0, 10)
-			part, err := decad.Cut(t.Context(), plate, through)
+			part, err := decad.Cut(plate, through).Do(t.Context())
 			require.NoError(t, err)
 			pocket := boxBodyAtZ(t, doc, -1, tc.pocketY0, 3, tc.pocketY1, 6, 4)
-			part, err = decad.Cut(t.Context(), part, pocket)
+			part, err = decad.Cut(part, pocket).Do(t.Context())
 			require.NoError(t, err)
 			require.False(t, tookMeshPath(part))
 			if tc.name == "shared-line" {

@@ -20,7 +20,7 @@ func roundTrip(t *testing.T, b *decad.Body) *decad.Body {
 	for _, deg := range []float64{20, -20} {
 		turn, err := r3.Rotation(r3.Vec{X: 1, Y: 1, Z: 1}, units.Degrees(deg))
 		require.NoError(t, err)
-		b, err = decad.Transform(t.Context(), b, turn)
+		b, err = decad.Transform(b, turn).Do(t.Context())
 		require.NoError(t, err)
 	}
 	return b
@@ -57,7 +57,7 @@ func TestCoplanarContactRoundedFixtureKeepsRetry(t *testing.T) {
 		doc := decad.New()
 		a := boxBodyAtZ(t, doc, 0, 0, 10, 10, 0, 10)
 		b := roundedBoxBodyAtZ(t, doc, 0.5, 0, 10.5, 10, 10, 10)
-		joined, err := decad.Union(t.Context(), a, b)
+		joined, err := decad.Union(a, b).Do(t.Context())
 		require.NoError(t, err)
 		shifted := false
 		for _, d := range joined.OperationDiagnostics() {
@@ -70,7 +70,7 @@ func TestCoplanarContactRoundedFixtureKeepsRetry(t *testing.T) {
 		doc := decad.New(decad.ExactOnly())
 		a := boxBodyAtZ(t, doc, 0, 0, 10, 10, 0, 10)
 		b := roundedBoxBodyAtZ(t, doc, 0.5, 0, 10.5, 10, 10, 10)
-		_, err := decad.Union(t.Context(), a, b)
+		_, err := decad.Union(a, b).Do(t.Context())
 		requireRoundedContactRefusal(t, err)
 	})
 }

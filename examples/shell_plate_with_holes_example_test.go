@@ -40,16 +40,16 @@ func Example_shell_plate_with_holes() {
 		}
 	}
 	doc := decad.New()
-	block, err := decad.Extrude(context.Background(), doc, s, plate,
-		decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
+	block, err := decad.Extrude(doc, s, plate,
+		decad.Distance{D: units.Millimeters(20), Dir: decad.Along}).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to extrude: %s\n", err)
 		return
 	}
 
 	// Remove both flat faces (those normal to Z) and keep 3 mm walls.
-	bands, err := decad.Shell(context.Background(), block,
-		decad.Faces(decad.NormalTo(r3.NewVec(0, 0, 1))), units.Millimeters(3))
+	bands, err := decad.Shell(block,
+		decad.Faces(decad.NormalTo(r3.NewVec(0, 0, 1))), units.Millimeters(3)).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to shell: %s\n", err)
 		return

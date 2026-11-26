@@ -54,7 +54,7 @@ func revolvedCylinder(t *testing.T, doc *decad.Document, u0, u1, axisV, r float6
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	axis := decad.SketchLine{Start: decad.Point2{U: 0, V: axisV}, End: decad.Point2{U: 1, V: axisV}}
-	body, err := decad.Revolve(t.Context(), doc, s, s.Profiles()[0], axis, decad.FullRevolution{})
+	body, err := decad.Revolve(doc, s, s.Profiles()[0], axis, decad.FullRevolution{}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -207,20 +207,20 @@ func TestContactPairRulingRefusals(t *testing.T) {
 		}},
 		{name: "void wall", build: func(t *testing.T, doc *decad.Document) (*decad.Body, *decad.Body) {
 			tubeSketch, tubeProfile := annularSketch(t)
-			tube, err := decad.Revolve(t.Context(), doc, tubeSketch, tubeProfile, uAxis, decad.FullRevolution{})
+			tube, err := decad.Revolve(doc, tubeSketch, tubeProfile, uAxis, decad.FullRevolution{}).Do(t.Context())
 			require.NoError(t, err)
 			return boxBodyAtZ(t, doc, -20, -20, 20, 20, -15, 10), tube
 		}},
 		{name: "arc end", build: func(t *testing.T, doc *decad.Document) (*decad.Body, *decad.Body) {
 			halfSketch, halfProfile := semicircleSketch(t)
-			half, err := decad.Extrude(t.Context(), doc, halfSketch, halfProfile,
-				decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+			half, err := decad.Extrude(doc, halfSketch, halfProfile,
+				decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(t.Context())
 			require.NoError(t, err)
 			return boxBodyAtZ(t, doc, 10, -20, 30, 20, -5, 20), half
 		}},
 		{name: "placed", build: func(t *testing.T, doc *decad.Document) (*decad.Body, *decad.Body) {
 			cylinder := revolvedCylinder(t, doc, 0, 10, 0, 8)
-			placed, err := decad.Copy(t.Context(), cylinder, decad.WithCopyPlacement(contactPose(t, r3.Vec{Z: .5})))
+			placed, err := decad.Copy(cylinder).Place(decad.CopyTransform{Transform: contactPose(t, r3.Vec{Z: .5})}).Do(t.Context())
 			require.NoError(t, err)
 			return boxBodyAtZ(t, doc, -20, -20, 20, 20, -17.5, 10), placed
 		}},
@@ -229,7 +229,7 @@ func TestContactPairRulingRefusals(t *testing.T) {
 		}},
 		{name: "void wall pair", build: func(t *testing.T, doc *decad.Document) (*decad.Body, *decad.Body) {
 			tubeSketch, tubeProfile := annularSketch(t)
-			tube, err := decad.Revolve(t.Context(), doc, tubeSketch, tubeProfile, uAxis, decad.FullRevolution{})
+			tube, err := decad.Revolve(doc, tubeSketch, tubeProfile, uAxis, decad.FullRevolution{}).Do(t.Context())
 			require.NoError(t, err)
 			return tube, revolvedCylinder(t, doc, 0, 10, 9, 4)
 		}},
@@ -239,7 +239,7 @@ func TestContactPairRulingRefusals(t *testing.T) {
 		{name: "tube", touching: true, reason: decad.ContactPayloadUnsupported,
 			build: func(t *testing.T, doc *decad.Document) (*decad.Body, *decad.Body) {
 				tubeSketch, tubeProfile := annularSketch(t)
-				tube, err := decad.Revolve(t.Context(), doc, tubeSketch, tubeProfile, uAxis, decad.FullRevolution{})
+				tube, err := decad.Revolve(doc, tubeSketch, tubeProfile, uAxis, decad.FullRevolution{}).Do(t.Context())
 				require.NoError(t, err)
 				return boxBodyAtZ(t, doc, -20, -20, 20, 20, -25, 10), tube
 			}},
@@ -283,7 +283,7 @@ func channelBody(t *testing.T, doc *decad.Document) *decad.Body {
 	}
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
+	body, err := decad.Extrude(doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(20), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -302,7 +302,7 @@ func verticalCylinder(t *testing.T, doc *decad.Document, cx, cy, r float64) *dec
 	s.CreateCircle(center, r)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	body, err := decad.Extrude(doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }

@@ -111,7 +111,7 @@ exactness, validity, verification coverage, or future warnings.
 | `WorkLimit` | Optional `OperationWorkLimit`; a named resource and integer observed and maximum counts. |
 | `Message` | Human-readable explanation. Its text is not a branch key or a serialized identity. |
 
-`OperationSubject` names a public argument, such as target, tool, first, others, body, profile, or selector.
+`OperationSubject` names a public argument, such as target, tool, bodies, body, profile, or selector.
 A variadic argument has an optional zero-based ordinal within that argument. The ordinal is caller input order,
 never a face, edge, vertex, facet, or private transient body. An absent subject concerns the whole operation.
 A nil offending body can still name its argument.
@@ -177,7 +177,7 @@ extend there without reclassifying outcomes.
 
 Emit a warning only when its event actually affects the accepted result. Ordinary floating-point bounds, a mesh
 route, a nonzero measurement bound, and `Approximate` alone create none; their measurement and surface contracts
-already expose them. `WithMatchingFaces` is outside the warning catalog until its real producer supplies typed
+already expose them. `MatchingFaces` is outside the warning catalog until its real producer supplies typed
 actual-use and deviation data; its existing geometry and bound contracts apply.
 
 | Suffix | Trigger and detail |
@@ -298,7 +298,7 @@ Full consumer models stay in their consumer repositories.
 
 - Warnings are read through the body-local accessor in Delivery API proposal. Operation signatures stay as they
   are; there are no parallel detailed-result entry points.
-- The warning catalog is the one in Successful-call warnings. The `WithMatchingFaces` exclusion is settled;
+- The warning catalog is the one in Successful-call warnings. The `MatchingFaces` exclusion is settled;
   adding it needs the producer evidence and typed detail specified there.
 - The chain record is the one in Record proposal; the touched bound, pair chord limit, and chain allowance are
   exposed together, never reduced to one effective threshold.
@@ -316,7 +316,7 @@ The shared `OperationKind` vocabulary lives in `operation_kind.go`, owned by
 [Operation history design: Operation kinds](operation-history-design.md#operation-kinds). Diagnostics depends on
 that vocabulary and on nothing else from history. `booleanOperandLocation` in `operation_diagnostics.go` maps each
 Boolean kind's operand index to its public argument name and ordinal (`target`/`tool`, `a`/`b`,
-`first`/`others`). No other entry-point checklist is kept in the repository.
+`bodies` with the operand's ordinal). No other entry-point checklist is kept in the repository.
 
 ### Phase 1: Add records, error transport, and immutable accessors
 
@@ -399,7 +399,7 @@ result is Sound under a loose request, an exact construction has an empty warnin
 leaves the creation warnings unchanged. `docs/api.md`, `docs/data-structures.md`,
 `examples/operation_diagnostics_example_test.go` and the `agent-docs/layout/` rows cover the public surface.
 No warning-as-error mode, report verdict field, or warning on Mesh, export, motion or dynamics results exists.
-`WithMatchingFaces` has no warning code.
+`MatchingFaces` has no warning code.
 
 ### Phase 9: Run focused checks and prepare review
 

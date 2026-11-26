@@ -93,7 +93,7 @@ func TestLoftSectionsConstantCurvesKeepAnalyticFacesAndProof(t *testing.T) {
 	sections := threeCurvedSections(t, [3]float64{-0.24, -0.24, -0.24},
 		[3]float64{8, 8, 8}, [3]float64{0, 5, 10})
 	doc := decad.New()
-	body, err := decad.LoftSections(t.Context(), doc, sections[:]...)
+	body, err := decad.LoftSections(doc, sections[:]...).Do(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, decad.BodySolid, body.Kind())
 	require.Len(t, doc.Bodies(), 1)
@@ -156,7 +156,7 @@ func TestLoftSectionsConstantCurvesKeepAnalyticFacesAndProof(t *testing.T) {
 
 	move, err := r3.Translation(r3.NewVec(16, 0, 0))
 	require.NoError(t, err)
-	placed, err := decad.Copy(t.Context(), body, decad.WithCopyPlacement(move))
+	placed, err := decad.Copy(body).Place(decad.CopyTransform{Transform: move}).Do(t.Context())
 	require.NoError(t, err)
 	placedMesh, err := placed.Tessellate(t.Context(), units.Millimeters(0.1), decad.WithVerification(decad.VerifyAll))
 	require.NoError(t, err)
@@ -168,7 +168,7 @@ func TestLoftSectionsVaryingFittedFlanksKeepSourceProof(t *testing.T) {
 	sections := threeCurvedSections(t, [3]float64{-0.24, -0.23, -0.24},
 		[3]float64{8, 8, 8}, [3]float64{0, 5, 10})
 	doc := decad.New()
-	body, err := decad.LoftSections(t.Context(), doc, sections[:]...)
+	body, err := decad.LoftSections(doc, sections[:]...).Do(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, decad.BodySolid, body.Kind())
 	require.Len(t, doc.Bodies(), 1)
@@ -213,7 +213,7 @@ func TestLoftSectionsVaryingFittedFlanksKeepSourceProof(t *testing.T) {
 	require.LessOrEqual(t, mesh.Bound().Base(), 0.1)
 	move, err := r3.Translation(r3.NewVec(16, 0, 0))
 	require.NoError(t, err)
-	placed, err := decad.Copy(t.Context(), body, decad.WithCopyPlacement(move))
+	placed, err := decad.Copy(body).Place(decad.CopyTransform{Transform: move}).Do(t.Context())
 	require.NoError(t, err)
 	placedVolume, err := placed.Volume()
 	require.NoError(t, err)
@@ -248,7 +248,7 @@ func TestLoftSectionsRefuseChangedArcAndUnequalSpacing(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			sections := threeCurvedSections(t, tc.mids, tc.tips, tc.heights)
 			doc := decad.New()
-			body, err := decad.LoftSections(t.Context(), doc, sections[:]...)
+			body, err := decad.LoftSections(doc, sections[:]...).Do(t.Context())
 			require.Nil(t, body)
 			require.ErrorIs(t, err, decad.ErrUnsupported)
 			require.Empty(t, doc.Bodies())

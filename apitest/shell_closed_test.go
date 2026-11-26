@@ -14,15 +14,15 @@ import (
 )
 
 // closedShellBox shells the 100×60×20 plate with no openings.
-func closedShellBox(t *testing.T, th float64, opts ...decad.ShellOption) (*decad.Document, *decad.Body) {
+func closedShellBox(t *testing.T, th float64, settings ...shellSetting) (*decad.Document, *decad.Body) {
 	t.Helper()
 	doc, box := shellBox(t)
-	closed, err := decad.Shell(t.Context(), box, nil, units.Millimeters(th), append(opts, decad.WithNoOpenings())...)
+	closed, err := applyShellClosed(box, units.Millimeters(th), settings...).Do(t.Context())
 	require.NoError(t, err)
 	return doc, closed
 }
 
-// TestShellClosedPrism is modify-reach BX5: WithNoOpenings on a hole-free
+// TestShellClosedPrism is modify-reach BX5: ShellClosed on a hole-free
 // prism keeps every face and lines it with a wall, so the body is one lump of
 // an outer shell around one void shell, the cavity.
 func TestShellClosedPrism(t *testing.T) {
@@ -55,7 +55,7 @@ func TestShellClosedPrism(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.sense.String(), func(t *testing.T) {
 			t.Parallel()
-			doc, closed := closedShellBox(t, tt.th, decad.WithShellSense(tt.sense))
+			doc, closed := closedShellBox(t, tt.th, senseSetting(tt.sense))
 			require.True(t, closed.IsSolid())
 			requireManifold(t, closed)
 			lumps := closed.Lumps()
@@ -118,7 +118,7 @@ func TestShellClosedPrism(t *testing.T) {
 
 			rotation, err := r3.Rotation(r3.NewVec(1, 2, 3), units.Degrees(37))
 			require.NoError(t, err)
-			placed, err := decad.Transform(t.Context(), closed, rotation)
+			placed, err := decad.Transform(closed, rotation).Do(t.Context())
 			require.NoError(t, err)
 			require.Len(t, placed.Lumps(), 1)
 			require.Len(t, placed.Shells(), 2)
@@ -140,9 +140,9 @@ func TestShellClosedPrismCylinder(t *testing.T) {
 	s.CreateCircle(center, 10)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	rod, err := decad.Extrude(t.Context(), decad.New(), s, s.Profiles()[0], decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
+	rod, err := decad.Extrude(decad.New(), s, s.Profiles()[0], decad.Distance{D: units.Millimeters(20), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
-	closed, err := decad.Shell(t.Context(), rod, nil, units.Millimeters(2), decad.WithNoOpenings())
+	closed, err := decad.ShellClosed(rod, units.Millimeters(2)).Do(t.Context())
 	require.NoError(t, err)
 	require.Len(t, closed.Shells(), 2)
 	require.Len(t, closed.Shells()[1].Faces(), 3, `a cylinder wall, a floor and a ceiling`)
@@ -160,26 +160,26 @@ func TestShellClosedPrismGatesAndConsumers(t *testing.T) {
 		// 10 mm < the inradius 30, so the section survives, but the two
 		// 10 mm caps meet in the 20 mm sweep.
 		doc, box := shellBox(t)
-		_, err := decad.Shell(t.Context(), box, nil, units.Millimeters(10), decad.WithNoOpenings())
+		_, err := decad.ShellClosed(box, units.Millimeters(10)).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrDegenerate)
 		require.ErrorContains(t, err, "SX11")
 		require.Equal(t, []*decad.Body{box}, doc.Bodies())
 	})
 	t.Run("t past the inradius (S10)", func(t *testing.T) {
 		_, box := shellBox(t)
-		_, err := decad.Shell(t.Context(), box, nil, units.Millimeters(35), decad.WithNoOpenings())
+		_, err := decad.ShellClosed(box, units.Millimeters(35)).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrDegenerate)
 		require.NotContains(t, err.Error(), "SX11")
 	})
 	t.Run("an outward wall has no cavity limit", func(t *testing.T) {
 		_, box := shellBox(t)
-		closed, err := decad.Shell(t.Context(), box, nil, units.Millimeters(12), decad.WithNoOpenings(), decad.WithShellSense(decad.Outward))
+		closed, err := decad.ShellClosed(box, units.Millimeters(12)).Sense(decad.Outward).Do(t.Context())
 		require.NoError(t, err)
 		require.Len(t, closed.Shells(), 2)
 	})
 	t.Run("a modify op on the closed shell has no face view", func(t *testing.T) {
 		doc, closed := closedShellBox(t, 5)
-		_, err := decad.Fillet(t.Context(), closed, verticalEdges(), units.Millimeters(1))
+		_, err := decad.Fillet(closed, verticalEdges(), units.Millimeters(1)).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.ErrorContains(t, err, "cavity")
 		require.Equal(t, []*decad.Body{closed}, doc.Bodies())
@@ -189,7 +189,7 @@ func TestShellClosedPrismGatesAndConsumers(t *testing.T) {
 		// and opens the cavity to the outside.
 		doc, closed := closedShellBox(t, 5)
 		bar := boxBodyAtZ(t, doc, 45, 25, 55, 35, -1, shellBoxHeight+2)
-		cut, err := decad.Cut(t.Context(), closed, bar)
+		cut, err := decad.Cut(closed, bar).Do(t.Context())
 		require.NoError(t, err)
 		requireVolumeNear(t, cut, 75000-1000)
 		for _, sh := range cut.Shells() {

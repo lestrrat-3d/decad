@@ -65,7 +65,7 @@ func TestSelectorUnionShellsQuarterTurnRevolve(t *testing.T) {
 			decadtest.Measures(t, "cap area", area, units.SquareMillimeters(100))
 		}
 
-		shelled, err := decad.Shell(t.Context(), ring, angularCaps(ring).Exactly(2), units.Millimeters(1))
+		shelled, err := decad.Shell(ring, angularCaps(ring).Exactly(2), units.Millimeters(1)).Do(t.Context())
 		require.NoError(t, err)
 		require.True(t, shelled.IsSolid())
 		requireManifold(t, shelled)
@@ -78,7 +78,7 @@ func TestSelectorUnionShellsQuarterTurnRevolve(t *testing.T) {
 		t.Parallel()
 		doc := decad.New()
 		cyl := revolveMeridian(t, doc, cylinderMeridian, quarterTurn)
-		shelled, err := decad.Shell(t.Context(), cyl, angularCaps(cyl).Exactly(2), units.Millimeters(2))
+		shelled, err := decad.Shell(cyl, angularCaps(cyl).Exactly(2), units.Millimeters(2)).Do(t.Context())
 		require.NoError(t, err)
 		requireManifold(t, shelled)
 		// The axis walk grows no wall: the cavity is z ∈ [2, 18], ρ ∈ [0, 8],

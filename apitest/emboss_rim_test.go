@@ -11,7 +11,7 @@ import (
 )
 
 // This file is agent-docs/emboss-design.md §7's public-surface tests for
-// WithEmbossRimFillet, on the plate of emboss_test.go.
+// RimFillet, on the plate of emboss_test.go.
 
 // embossCircle returns a sketch on the plane z = 10 with one circle of radius 4
 // at (20, 15), and its profile.
@@ -55,8 +55,7 @@ func TestEmbossRimFilletRoundsARaisedRelief(t *testing.T) {
 	t.Parallel()
 	doc, plate := embossPlate(t)
 	s, profiles := embossCircle(t)
-	out, err := decad.Emboss(t.Context(), plate, s, profiles, embossFace(true, plate), decad.EmbossRaised, units.Millimeters(2),
-		decad.WithEmbossRimFillet(units.Millimeters(0.5)))
+	out, err := decad.Emboss(plate, s, profiles, embossFace(true, plate), decad.EmbossRaised, units.Millimeters(2)).RimFillet(units.Millimeters(0.5)).Do(t.Context())
 	require.NoError(t, err)
 	require.Len(t, doc.Bodies(), 1, "the plate, the relief and the trial all leave the document")
 	require.True(t, doc.Bodies()[0] == out)
@@ -77,8 +76,7 @@ func TestEmbossRimFilletRoundsTheMouthOfAnEngraving(t *testing.T) {
 	t.Parallel()
 	_, plate := embossPlate(t)
 	s, profiles := embossCircle(t)
-	out, err := decad.Emboss(t.Context(), plate, s, profiles, embossFace(true, plate), decad.EmbossEngraved, units.Millimeters(3),
-		decad.WithEmbossRimFillet(units.Millimeters(0.5)))
+	out, err := decad.Emboss(plate, s, profiles, embossFace(true, plate), decad.EmbossEngraved, units.Millimeters(3)).RimFillet(units.Millimeters(0.5)).Do(t.Context())
 	require.NoError(t, err)
 	want := embossPlateVolume - math.Pi*16*3 - roundedRim(false)
 	v, err := out.Volume()
@@ -91,15 +89,12 @@ func TestEmbossRimFilletRefusalsLeaveTheBodyLive(t *testing.T) {
 	doc, plate := embossPlate(t)
 	s, profiles := embossCircle(t)
 	face := embossFace(true, plate)
-	_, err := decad.Emboss(t.Context(), plate, s, profiles, face, decad.EmbossRaised, units.Millimeters(2),
-		decad.WithEmbossRimFillet(units.Millimeters(-1)))
+	_, err := decad.Emboss(plate, s, profiles, face, decad.EmbossRaised, units.Millimeters(2)).RimFillet(units.Millimeters(-1)).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrNegativeMagnitude)
-	_, err = decad.Emboss(t.Context(), plate, s, profiles, face, decad.EmbossRaised, units.Millimeters(2),
-		decad.WithEmbossRimFillet(units.Degrees(1)))
+	_, err = decad.Emboss(plate, s, profiles, face, decad.EmbossRaised, units.Millimeters(2)).RimFillet(units.Degrees(1)).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnitKind)
 	// A round wider than the relief itself is the fillet's own refusal, and the plate stays live.
-	_, err = decad.Emboss(t.Context(), plate, s, profiles, face, decad.EmbossRaised, units.Millimeters(2),
-		decad.WithEmbossRimFillet(units.Millimeters(5)))
+	_, err = decad.Emboss(plate, s, profiles, face, decad.EmbossRaised, units.Millimeters(2)).RimFillet(units.Millimeters(5)).Do(t.Context())
 	require.Error(t, err)
 	require.Len(t, doc.Bodies(), 1)
 	require.True(t, doc.Bodies()[0] == plate)

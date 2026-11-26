@@ -334,3 +334,90 @@ func normalizeSideAngular(s SideAngular) (SideAngular, error) {
 		return s, nil
 	}
 }
+
+// copyExtent copies the selectors an extent holds at the call that stores it
+// (agent-docs/command-api-design.md rule A3): the face selector of a ToFace,
+// directly, as a non-nil pointer, or as a side of a TwoSided. An extent that
+// holds no selector is stored as given.
+func copyExtent(e Extent) Extent {
+	switch v := e.(type) {
+	case ToFace:
+		v.Face = copyFaceSelector(v.Face)
+		return v
+	case *ToFace:
+		if v == nil {
+			return v
+		}
+		cp := *v
+		cp.Face = copyFaceSelector(cp.Face)
+		return &cp
+	case TwoSided:
+		return TwoSided{One: copySideExtent(v.One), Two: copySideExtent(v.Two)}
+	case *TwoSided:
+		if v == nil {
+			return v
+		}
+		return &TwoSided{One: copySideExtent(v.One), Two: copySideExtent(v.Two)}
+	}
+	return e
+}
+
+// copySideExtent is copyExtent for one side of a TwoSided.
+func copySideExtent(s SideExtent) SideExtent {
+	switch v := s.(type) {
+	case ToFace:
+		v.Face = copyFaceSelector(v.Face)
+		return v
+	case *ToFace:
+		if v == nil {
+			return v
+		}
+		cp := *v
+		cp.Face = copyFaceSelector(cp.Face)
+		return &cp
+	}
+	return s
+}
+
+// copyAngularExtent is copyExtent for an angular extent: the face selector of
+// a ToFaceAngular, directly, as a non-nil pointer, or as a side of a
+// TwoSidedAngle.
+func copyAngularExtent(a AngularExtent) AngularExtent {
+	switch v := a.(type) {
+	case ToFaceAngular:
+		v.Face = copyFaceSelector(v.Face)
+		return v
+	case *ToFaceAngular:
+		if v == nil {
+			return v
+		}
+		cp := *v
+		cp.Face = copyFaceSelector(cp.Face)
+		return &cp
+	case TwoSidedAngle:
+		return TwoSidedAngle{One: copySideAngular(v.One), Two: copySideAngular(v.Two)}
+	case *TwoSidedAngle:
+		if v == nil {
+			return v
+		}
+		return &TwoSidedAngle{One: copySideAngular(v.One), Two: copySideAngular(v.Two)}
+	}
+	return a
+}
+
+// copySideAngular is copyAngularExtent for one side of a TwoSidedAngle.
+func copySideAngular(s SideAngular) SideAngular {
+	switch v := s.(type) {
+	case ToFaceAngular:
+		v.Face = copyFaceSelector(v.Face)
+		return v
+	case *ToFaceAngular:
+		if v == nil {
+			return v
+		}
+		cp := *v
+		cp.Face = copyFaceSelector(cp.Face)
+		return &cp
+	}
+	return s
+}

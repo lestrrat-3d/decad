@@ -7,16 +7,13 @@ import (
 
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
-	"github.com/lestrrat-go/option/v3"
 )
 
-type identArrangeAngle struct{}
-
-// maxArrangeAngles is how many turns [WithArrangeAngle] tries for each body, a
+// maxArrangeAngles is how many turns [ArrangeCommand.Angle] tries for each body, a
 // quarter turn cut into steps, so a step finer than a quarter degree is refused.
 const maxArrangeAngles = 360
 
-// WithArrangeAngle lets [Arrange] turn each body about +Z to the angle that
+// Angle lets [Arrange] turn each body about +Z to the angle that
 // gives its bounding box the smallest footprint, so a long part lying across the
 // bed's diagonal is laid nearly square to it (agent-docs/arrange-design.md §6).
 // Angles are the multiples of step from zero up to a quarter turn, because a
@@ -28,42 +25,35 @@ const maxArrangeAngles = 360
 // angle and retired again, so the bounds are the turned body's own, grown by the
 // bound of its box. A chosen turn is a [Transform] about the body's bounding box
 // centre before the move, a second [OperationTransform] entry. It combines with
-// [WithArrangeTurns], whose quarter turns then act on the turned footprints.
+// [ArrangeCommand.Turns], whose quarter turns then act on the turned footprints.
+// Each trial angle also records one [OperationCopy] entry that the probe's
+// retirement leaves without a Remove entry (agent-docs/arrange-design.md §6).
 //
 // step is a positive angle no finer than a quarter degree: a wrong unit kind is
 // ErrUnitKind, a negative step ErrNegativeMagnitude, and a zero or too fine step
-// ErrDegenerate. A body that cannot be copied turned carries [Copy]'s refusal.
-func WithArrangeAngle(step units.Value) ArrangeOption {
-	return arrangeOption{option.New(identArrangeAngle{}, step)}
+// ErrDegenerate. Do returns that fault naming Angle as its subject. A body that
+// cannot be copied turned carries [Copy]'s refusal. A second call replaces the
+// first.
+func (c *ArrangeCommand) Angle(step units.Value) *ArrangeCommand {
+	c.angle.Set(arrangeAngleStep(step))
+	return c
 }
 
-// arrangeAngleStep reads the step of [WithArrangeAngle] in radians, or zero when
-// the option is absent.
-func arrangeAngleStep(opts []ArrangeOption) (float64, error) {
-	var out float64
-	for _, o := range opts {
-		if o == nil {
-			continue
-		}
-		if _, ok := o.Ident().(identArrangeAngle); !ok {
-			continue
-		}
-		step, _ := option.Get[units.Value](o)
-		if step.Kind() != units.Angle {
-			return 0, fmt.Errorf(`%w: the arrangement angle step must be an angle`, ErrUnitKind)
-		}
-		rad := step.Base()
-		switch {
-		case math.IsNaN(rad) || math.IsInf(rad, 0):
-			return 0, fmt.Errorf(`%w: the arrangement angle step is not finite`, ErrNotFinite)
-		case rad < 0:
-			return 0, fmt.Errorf(`%w: the arrangement angle step is negative`, ErrNegativeMagnitude)
-		case rad == 0 || math.Pi/2/rad > maxArrangeAngles:
-			return 0, fmt.Errorf(`%w: the arrangement angle step must be at least a quarter degree`, ErrDegenerate)
-		}
-		out = rad
+// arrangeAngleStep validates step and returns it in radians.
+func arrangeAngleStep(step units.Value) (float64, error) {
+	if step.Kind() != units.Angle {
+		return 0, fmt.Errorf(`%w: the arrangement angle step must be an angle`, ErrUnitKind)
 	}
-	return out, nil
+	rad := step.Base()
+	switch {
+	case math.IsNaN(rad) || math.IsInf(rad, 0):
+		return 0, fmt.Errorf(`%w: the arrangement angle step is not finite`, ErrNotFinite)
+	case rad < 0:
+		return 0, fmt.Errorf(`%w: the arrangement angle step is negative`, ErrNegativeMagnitude)
+	case rad == 0 || math.Pi/2/rad > maxArrangeAngles:
+		return 0, fmt.Errorf(`%w: the arrangement angle step must be at least a quarter degree`, ErrDegenerate)
+	}
+	return rad, nil
 }
 
 // footprintTurned is the angle in [0, π/2) among the multiples of step that gives b
@@ -88,7 +78,11 @@ func footprintTurned(ctx context.Context, b *Body, step float64) (angle, width, 
 			}
 			w, d = box.Max.X-box.Min.X+2*m, box.Max.Y-box.Min.Y+2*m
 		} else {
-			c, cerr := Copy(ctx, b, WithCopyRotation(centre, r3.Vec{Z: 1}, units.Radians(theta)))
+			motion, cerr := rotationMotion(centre, r3.Vec{Z: 1}, units.Radians(theta))
+			if cerr != nil {
+				return 0, 0, 0, 0, cerr
+			}
+			c, cerr := copyBody(ctx, b, motion)
 			if cerr != nil {
 				return 0, 0, 0, 0, cerr
 			}
@@ -120,5 +114,5 @@ func turnAbout(ctx context.Context, b *Body, angle float64) (*Body, error) {
 	if err != nil {
 		return nil, fmt.Errorf(`%w: the turn of a body is not finite: %s`, ErrNotFinite, err)
 	}
-	return Transform(ctx, b, t)
+	return transform(ctx, b, t, OperationTransform)
 }

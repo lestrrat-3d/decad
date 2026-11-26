@@ -144,7 +144,7 @@ func (c *cubes) solid(t *testing.T, doc *decad.Document) (*decad.Body, bool) {
 	}
 	m, err := decad.NewMeshBody(t.Context(), v, tris)
 	require.NoError(t, err)
-	b, err := decad.SolidFromMesh(t.Context(), doc, m)
+	b, err := decad.SolidFromMesh(doc, m).Do(t.Context())
 	if err != nil {
 		require.True(t, errors.Is(err, decad.ErrNotSolid) || errors.Is(err, decad.ErrDegenerate) || errors.Is(err, decad.ErrUnsupported), "%v", err)
 		return nil, false
@@ -243,11 +243,11 @@ func TestMeshSolidBooleansAgreeWithTheCubeByCubeBoolean(t *testing.T) {
 			var err error
 			switch op {
 			case opUnion:
-				out, err = decad.Union(t.Context(), ba, bb)
+				out, err = decad.Union(ba, bb).Do(t.Context())
 			case opCut:
-				out, err = decad.Cut(t.Context(), ba, bb)
+				out, err = decad.Cut(ba, bb).Do(t.Context())
 			default:
-				out, err = decad.Intersect(t.Context(), ba, bb)
+				out, err = decad.Intersect(ba, bb).Do(t.Context())
 			}
 			if err != nil {
 				// An empty result, or cubes that meet only along an edge, which no solid is: refused, never a wrong volume.
@@ -277,21 +277,21 @@ func TestMeshSolidShellAndOffsetAgreeWithTheCubeByCubeErosionAndDilation(t *test
 			continue
 		}
 		// A closed inward shell one cube thick keeps the cubes the erosion takes away.
-		if out, err := decad.Shell(t.Context(), b, nil, units.Millimeters(1), decad.WithNoOpenings()); err == nil {
+		if out, err := decad.ShellClosed(b, units.Millimeters(1)).Do(t.Context()); err == nil {
 			shelled++
 			got, bound := volumeOf(t, out)
 			require.InDelta(t, float64(c.count()-c.eroded()), got, bound+1e-9, "shell of %d cubes", c.count())
 		}
 		doc = decad.New()
 		b, _ = c.solid(t, doc)
-		if out, err := decad.Offset(t.Context(), b, units.Millimeters(1)); err == nil {
+		if out, err := decad.Offset(b, units.Millimeters(1)).Do(t.Context()); err == nil {
 			grown++
 			got, bound := volumeOf(t, out)
 			require.InDelta(t, float64(c.grown()), got, bound+1e-9, "growing %d cubes", c.count())
 		}
 		doc = decad.New()
 		b, _ = c.solid(t, doc)
-		if out, err := decad.Offset(t.Context(), b, units.Millimeters(1), decad.WithOffsetSide(decad.OffsetNegative)); err == nil {
+		if out, err := decad.Offset(b, units.Millimeters(1)).Side(decad.OffsetNegative).Do(t.Context()); err == nil {
 			shrunk++
 			got, bound := volumeOf(t, out)
 			require.InDelta(t, float64(c.eroded()), got, bound+1e-9, "shrinking %d cubes", c.count())
@@ -390,7 +390,7 @@ func TestQuarterTurnAgreesWithTheTurnedCubes(t *testing.T) {
 		}
 		about := r3.NewVec(float64(rng.IntN(voxelSide)), float64(rng.IntN(voxelSide)), 0)
 		turns := 1 + rng.IntN(3)
-		out, err := decad.QuarterTurn(t.Context(), b, r3.NewVec(0, 0, 1), about, turns)
+		out, err := decad.QuarterTurn(b, r3.NewVec(0, 0, 1), about, turns).Do(t.Context())
 		if err != nil {
 			continue
 		}
@@ -439,7 +439,7 @@ func TestStretchAgreesWithTheStretchedCubes(t *testing.T) {
 			f[a] = factors[rng.IntN(len(factors))]
 		}
 		anchor := r3.NewVec(float64(rng.IntN(voxelSide)), float64(rng.IntN(voxelSide)), float64(rng.IntN(voxelSide)))
-		out, err := decad.Stretch(t.Context(), b, anchor, units.Scalar(f[0]), units.Scalar(f[1]), units.Scalar(f[2]))
+		out, err := decad.Stretch(b, anchor, units.Scalar(f[0]), units.Scalar(f[1]), units.Scalar(f[2])).Do(t.Context())
 		if err != nil {
 			continue
 		}
@@ -480,7 +480,7 @@ func TestCircularPatternAgreesWithTheUnionOfTurnedCubes(t *testing.T) {
 		}
 		count := []int{2, 4}[rng.IntN(2)]
 		centre := r3.NewVec(float64(rng.IntN(voxelSide+1)), float64(rng.IntN(voxelSide+1)), 0)
-		out, err := decad.Patterned(t.Context(), b, decad.CircularPattern{Center: centre, Axis: r3.NewVec(0, 0, 1), Count: count})
+		out, err := decad.Patterned(b, decad.CircularPattern{Center: centre, Axis: r3.NewVec(0, 0, 1), Count: count}).Do(t.Context())
 		if err != nil {
 			// A union whose kept cubes meet only along an edge, or too many cubes: refused, never a wrong volume.
 			continue
@@ -533,7 +533,7 @@ func TestMeshSolidWithAPrismAgreesWithTheCubeByCubeBoolean(t *testing.T) {
 			block := decadtest.NewBlock(t, doc, float64(lo[0]), float64(lo[1]), float64(hi[0]), float64(hi[1]), units.Millimeters(float64(hi[2]-lo[2])))
 			lift, err := r3.Translation(r3.NewVec(0, 0, float64(lo[2])))
 			require.NoError(t, err)
-			prism, err := decad.Transform(t.Context(), block, lift)
+			prism, err := decad.Transform(block, lift).Do(t.Context())
 			require.NoError(t, err)
 			want := 0
 			for x := range voxelSide {
@@ -560,11 +560,11 @@ func TestMeshSolidWithAPrismAgreesWithTheCubeByCubeBoolean(t *testing.T) {
 			var out *decad.Body
 			switch op {
 			case opUnion:
-				out, err = decad.Union(t.Context(), mesh, prism)
+				out, err = decad.Union(mesh, prism).Do(t.Context())
 			case opCut:
-				out, err = decad.Cut(t.Context(), mesh, prism)
+				out, err = decad.Cut(mesh, prism).Do(t.Context())
 			default:
-				out, err = decad.Intersect(t.Context(), mesh, prism)
+				out, err = decad.Intersect(mesh, prism).Do(t.Context())
 			}
 			if err != nil {
 				continue
@@ -597,11 +597,11 @@ func TestMirroredCopyAndUnionAgreeWithTheMirroredCubes(t *testing.T) {
 		k := rng.IntN(voxelSide + 1)
 		frame, err := r3.NewFrame(r3.NewVec(float64(k), 0, 0), r3.NewVec(0, 1, 0), r3.NewVec(0, 0, 1))
 		require.NoError(t, err)
-		image, err := decad.MirroredCopy(t.Context(), b, decad.MirrorFrame{Frame: frame})
+		image, err := decad.MirroredCopy(b, decad.MirrorFrame{Frame: frame}).Do(t.Context())
 		require.NoError(t, err)
 		got, bound := volumeOf(t, image)
 		require.InDelta(t, float64(c.count()), got, bound+1e-9, "a mirror keeps the volume")
-		both, err := decad.Union(t.Context(), b, image)
+		both, err := decad.Union(b, image).Do(t.Context())
 		if err != nil {
 			continue // cubes that meet only along an edge are refused, never a wrong volume
 		}

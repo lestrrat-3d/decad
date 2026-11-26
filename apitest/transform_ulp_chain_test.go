@@ -34,7 +34,7 @@ func ulpChainSolid(t *testing.T, opts ...decad.DocumentOption) (*decad.Body, []r
 	}
 	mesh, err := decad.NewMeshBody(t.Context(), verts, d.T)
 	require.NoError(t, err)
-	body, err := decad.SolidFromMesh(t.Context(), decad.New(opts...), mesh)
+	body, err := decad.SolidFromMesh(decad.New(opts...), mesh).Do(t.Context())
 	require.NoError(t, err)
 	return body, verts
 }
@@ -71,7 +71,7 @@ func TestTransformKeepsUlpChainApart(t *testing.T) {
 					srcVol, err := src.Volume()
 					require.NoError(t, err)
 					require.Positive(t, srcVol.Value.Base())
-					placed, err := decad.Transform(t.Context(), src, motion)
+					placed, err := decad.Transform(src, motion).Do(t.Context())
 					require.NoError(t, err)
 					vol, err := placed.Volume()
 					require.NoError(t, err)
@@ -98,7 +98,7 @@ func TestTransformKeepsUlpChainApart(t *testing.T) {
 		src, _ := ulpChainSolid(t, decad.ExactOnly())
 		shift, err := r3.Translation(r3.Vec{X: 100})
 		require.NoError(t, err)
-		_, err = decad.Transform(t.Context(), src, shift)
+		_, err = decad.Transform(src, shift).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 	})
 }

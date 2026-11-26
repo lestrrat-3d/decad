@@ -28,8 +28,8 @@ import (
 func TestPointConeSourceGates(t *testing.T) {
 	section := coneFromFaceSpiralSection()
 	blank := spiralTestRevolveBlank(t, section)
-	cone, err := ConeFromFace(t.Context(), blank, coneFromFaceSelector(t, blank, section[4], section[5]),
-		units.Millimeters(-5))
+	cone, err := ConeFromFace(blank, coneFromFaceSelector(t, blank, section[4], section[5]),
+		units.Millimeters(-5)).Do(t.Context())
 	require.NoError(t, err)
 	good := cone.n.Payload.(revolvePayload)
 	limit, ok := revolveplan.PointConeSource(&cone.n)

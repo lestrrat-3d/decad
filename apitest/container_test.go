@@ -32,7 +32,7 @@ func containerRect(t *testing.T, c *decad.Container, x0, y0, x1, y1 float64) (*s
 func containerBox(t *testing.T, doc *decad.Document, c *decad.Container, x0, y0, x1, y1, h float64) *decad.Body {
 	t.Helper()
 	s, p := containerRect(t, c, x0, y0, x1, y1)
-	body, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
+	body, err := decad.Extrude(doc, s, p, decad.Distance{D: units.Millimeters(h), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -130,20 +130,20 @@ func TestContainerPlacement(t *testing.T) {
 	tool := containerBox(t, doc, a, 1, 1, 2, 2, 2)
 	require.Same(t, a, containerOf(t, doc, base), "an extrude lands in its sketch's container")
 
-	cut, err := decad.Cut(t.Context(), base, tool)
+	cut, err := decad.Cut(base, tool).Do(t.Context())
 	require.NoError(t, err)
 	require.Same(t, a, containerOf(t, doc, cut), "a boolean lands in its target's container")
 
-	moved, err := decad.Transform(t.Context(), cut, mustTranslation(t, 5, 0, 0))
+	moved, err := decad.Transform(cut, mustTranslation(t, 5, 0, 0)).Do(t.Context())
 	require.NoError(t, err)
 	require.Same(t, a, containerOf(t, doc, moved), "a transform stays with its source")
 
-	copied, err := decad.Copy(t.Context(), moved, decad.WithCopyPlacement(mustTranslation(t, 0, 9, 0)))
+	copied, err := decad.Copy(moved).Place(decad.CopyTransform{Transform: mustTranslation(t, 0, 9, 0)}).Do(t.Context())
 	require.NoError(t, err)
 	require.Same(t, a, containerOf(t, doc, copied), "a copy stays with its source")
 	require.Same(t, a, containerOf(t, doc, moved), "the source stays too")
 
-	pattern, err := decad.PatternCopies(t.Context(), copied, decad.LinearPattern{Dir: r3.NewVec(1, 0, 0), Step: units.Millimeters(20), Count: 3})
+	pattern, err := decad.PatternCopies(copied, decad.LinearPattern{Dir: r3.NewVec(1, 0, 0), Step: units.Millimeters(20), Count: 3}).Do(t.Context())
 	require.NoError(t, err)
 	require.Len(t, pattern, 2)
 	for _, b := range pattern {
@@ -166,7 +166,7 @@ func TestContainerPlacement(t *testing.T) {
 	_, err = s1.Solve(t.Context())
 	require.NoError(t, err)
 	require.NoError(t, a.AddSketch(s1))
-	lofted, err := decad.Loft(t.Context(), doc, s0, p0, s1, s1.Profiles()[0])
+	lofted, err := decad.Loft(doc, s0, p0, s1, s1.Profiles()[0]).Do(t.Context())
 	require.NoError(t, err)
 	require.Same(t, a, containerOf(t, doc, lofted))
 }
@@ -186,7 +186,7 @@ func TestContainerResultFollowsSketchNotAmbientState(t *testing.T) {
 
 	rootA := containerBox(t, doc, nil, 20, 0, 24, 4, 4)
 	rootB := containerBox(t, doc, nil, 22, 0, 26, 4, 4)
-	cut, err := decad.Cut(t.Context(), rootA, rootB)
+	cut, err := decad.Cut(rootA, rootB).Do(t.Context())
 	require.NoError(t, err)
 	require.Same(t, doc.Root(), containerOf(t, doc, cut), "a cut of two root bodies lands in the root")
 }
@@ -204,22 +204,22 @@ func TestContainerCrossRefusal(t *testing.T) {
 	live := len(doc.Bodies())
 
 	for name, run := range map[string]func() error{
-		"Union of two": func() error { _, err := decad.Union(t.Context(), inA, inB); return err },
+		"Union of two": func() error { _, err := decad.Union(inA, inB).Do(t.Context()); return err },
 		"Union of three": func() error {
-			_, err := decad.Union(t.Context(), inA, inB, containerBox(t, doc, a, 9, 9, 10, 10, 1))
+			_, err := decad.Union(inA, inB, containerBox(t, doc, a, 9, 9, 10, 10, 1)).Do(t.Context())
 			return err
 		},
-		"Cut by a tool":    func() error { _, err := decad.Cut(t.Context(), inA, inB); return err },
-		"Intersect of two": func() error { _, err := decad.Intersect(t.Context(), inA, inB); return err },
+		"Cut by a tool":    func() error { _, err := decad.Cut(inA, inB).Do(t.Context()); return err },
+		"Intersect of two": func() error { _, err := decad.Intersect(inA, inB).Do(t.Context()); return err },
 		"Extrude to a face": func() error {
 			s, p := containerRect(t, a, 5, 5, 6, 6)
-			_, err := decad.Extrude(t.Context(), doc, s, p, decad.ToFace{Body: inB, Face: capEndFace(inB)})
+			_, err := decad.Extrude(doc, s, p, decad.ToFace{Body: inB, Face: capEndFace(inB)}).Do(t.Context())
 			return err
 		},
 		"Loft of two sketches": func() error {
 			s0, p0 := containerRect(t, a, 0, 0, 1, 1)
 			s1, p1 := containerRect(t, b, 0, 0, 1, 1)
-			_, err := decad.Loft(t.Context(), doc, s0, p0, s1, p1)
+			_, err := decad.Loft(doc, s0, p0, s1, p1).Do(t.Context())
 			return err
 		},
 	} {
@@ -251,7 +251,7 @@ func TestContainerAddBody(t *testing.T) {
 	box, err := inB.Bounds()
 	require.NoError(t, err)
 
-	_, err = decad.Cut(t.Context(), inA, inB)
+	_, err = decad.Cut(inA, inB).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrCrossContainer)
 
 	require.NoError(t, a.AddBody(inB))
@@ -268,7 +268,7 @@ func TestContainerAddBody(t *testing.T) {
 	require.Same(t, a, containerOf(t, doc, inB))
 	require.ElementsMatch(t, []*decad.Body{inA, inB}, a.Bodies())
 
-	cut, err := decad.Cut(t.Context(), inA, inB)
+	cut, err := decad.Cut(inA, inB).Do(t.Context())
 	require.NoError(t, err)
 	require.Same(t, a, containerOf(t, doc, cut), "after AddBody the operands share a container")
 	require.NoError(t, doc.Root().AddBody(cut))

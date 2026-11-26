@@ -27,8 +27,8 @@ func TestShellRoundStackedBoss(t *testing.T) {
 			doc := decad.New()
 			stack := roundBossFromSketch(t, doc, tc.cx, tc.cy)
 			require.Len(t, stack.Faces(), 8)
-			shell, err := decad.Shell(t.Context(), stack,
-				decad.Faces(decad.FaceCreatedBy(decad.CapEnd(stack))).Exactly(1), units.Millimeters(1))
+			shell, err := decad.Shell(stack,
+				decad.Faces(decad.FaceCreatedBy(decad.CapEnd(stack))).Exactly(1), units.Millimeters(1)).Do(t.Context())
 			require.NoError(t, err)
 			require.Len(t, shell.Faces(), 16)
 			volume, err := shell.Volume()
@@ -71,7 +71,7 @@ func TestShellRoundStackedBoss(t *testing.T) {
 			require.Equal(t, decad.Sound, report.Status)
 			movedBy, err := r3.Translation(r3.NewVec(3, -2, 4))
 			require.NoError(t, err)
-			moved, err := decad.Transform(t.Context(), shell, movedBy)
+			moved, err := decad.Transform(shell, movedBy).Do(t.Context())
 			require.NoError(t, err)
 			movedVolume, err := moved.Volume()
 			require.NoError(t, err)
@@ -86,7 +86,7 @@ func TestShellRoundStackedBoss(t *testing.T) {
 				require.NoError(t, err)
 				reflection, err := r3.Reflection(mirror)
 				require.NoError(t, err)
-				reflected, err := decad.Transform(t.Context(), moved, reflection)
+				reflected, err := decad.Transform(moved, reflection).Do(t.Context())
 				require.NoError(t, err)
 				reflectedMesh, err := reflected.Tessellate(t.Context(), units.Millimeters(0.05),
 					decad.WithVerification(decad.VerifyAll))
@@ -110,9 +110,9 @@ func TestShellRoundStackedBossClearance(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			doc := decad.New()
 			stack := roundBossFromSketch(t, doc, tc.cx, tc.cy)
-			_, err := decad.Shell(t.Context(), stack,
+			_, err := decad.Shell(stack,
 				decad.Faces(decad.FaceCreatedBy(decad.CapEnd(stack))).Exactly(1),
-				units.Millimeters(tc.thickness))
+				units.Millimeters(tc.thickness)).Do(t.Context())
 			require.ErrorIs(t, err, decad.ErrUnsupported)
 			_, err = stack.Volume()
 			require.NoError(t, err, "a refused Shell leaves the source live")
@@ -131,7 +131,7 @@ func roundBossFromSketch(t *testing.T, doc *decad.Document, cx, cy float64) *dec
 	s.Fix(rect.A)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	plate, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
+	plate, err := decad.Extrude(doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(5), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	plane, err = w.CreateOffsetPlane(w.XY(), 5)
 	require.NoError(t, err)
@@ -142,9 +142,9 @@ func roundBossFromSketch(t *testing.T, doc *decad.Document, cx, cy float64) *dec
 	s.CreateCircle(c, 4)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	boss, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
+	boss, err := decad.Extrude(doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(5), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
-	stack, err := decad.Union(t.Context(), plate, boss)
+	stack, err := decad.Union(plate, boss).Do(t.Context())
 	require.NoError(t, err)
 	return stack
 }

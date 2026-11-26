@@ -69,8 +69,8 @@ func TestWebPathJoinsALineArcLineChain(t *testing.T) {
 	doc, part := ribPart(t)
 	s, path := slotPath(t)
 	operationCount := len(doc.OperationHistory().Operations())
-	out, err := decad.WebPath(t.Context(), part, s, path, units.Millimeters(2),
-		decad.Distance{D: units.Millimeters(11), Dir: decad.Along}, decad.WithRibOverrun(units.Millimeters(0.5)))
+	out, err := decad.WebPath(part, s, path, units.Millimeters(2),
+		decad.Distance{D: units.Millimeters(11), Dir: decad.Along}).Overrun(units.Millimeters(0.5)).Do(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, []*decad.Body{out}, doc.Bodies(), "the part and the rib tools leave the document")
 	operations := doc.OperationHistory().Operations()
@@ -91,8 +91,8 @@ func TestWebPathOfOneLineIsARib(t *testing.T) {
 	t.Parallel()
 	_, part := ribPart(t)
 	s, lines := ribSketch(t, [4]float64{3, 20, 37, 20})
-	out, err := decad.WebPath(t.Context(), part, s, []sketch.Entity{lines[0]}, units.Millimeters(2),
-		decad.Distance{D: units.Millimeters(11), Dir: decad.Along})
+	out, err := decad.WebPath(part, s, []sketch.Entity{lines[0]}, units.Millimeters(2),
+		decad.Distance{D: units.Millimeters(11), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	decadtest.MeasuresVolume(t, out, units.CubicMillimeters(ribPartVolume+30*2*10), decadtest.WithinRel(units.Scalar(1e-6)))
 }
@@ -103,19 +103,19 @@ func TestWebPathRefusals(t *testing.T) {
 	thick := units.Millimeters(2)
 	doc, part := ribPart(t)
 	s, path := slotPath(t)
-	_, err := decad.WebPath(t.Context(), part, s, nil, thick, extent)
+	_, err := decad.WebPath(part, s, nil, thick, extent).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrDegenerate, "an empty path")
-	_, err = decad.WebPath(t.Context(), part, s, []sketch.Entity{nil}, thick, extent)
+	_, err = decad.WebPath(part, s, []sketch.Entity{nil}, thick, extent).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrDegenerate, "a nil entity")
 	_, foreignPath := slotPath(t)
-	_, err = decad.WebPath(t.Context(), part, s, foreignPath, thick, extent)
+	_, err = decad.WebPath(part, s, foreignPath, thick, extent).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrDegenerate, "entities of another sketch")
 	around := s.CreatePoint(30, 30)
 	s.Fix(around)
 	circle := s.CreateCircle(around, 2)
-	_, err = decad.WebPath(t.Context(), part, s, append([]sketch.Entity{circle}, path...), thick, extent)
+	_, err = decad.WebPath(part, s, append([]sketch.Entity{circle}, path...), thick, extent).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrDegenerate, "a circle is neither a line nor an arc")
-	_, err = decad.WebPath(t.Context(), part, s, path, units.Millimeters(25), extent)
+	_, err = decad.WebPath(part, s, path, units.Millimeters(25), extent).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrDegenerate, "a rib thicker than the arc's radius")
 	require.Equal(t, []*decad.Body{part}, doc.Bodies(), "a refused web leaves the part live and alone")
 }

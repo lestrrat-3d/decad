@@ -55,7 +55,7 @@ func facetedCapHull(t *testing.T, w *sketch.World, z float64, c1 [2]float64, r1,
 func facetedCapPrism(t *testing.T, doc *Document, bottom, top float64) *Body {
 	t.Helper()
 	s, p := facetedCapHull(t, sketch.NewWorld(), bottom, facetedCapDisc, facetedCapDiscR, facetedCapJoinR)
-	body, err := Extrude(t.Context(), doc, s, p, Distance{D: units.Millimeters(top - bottom), Dir: Along})
+	body, err := Extrude(doc, s, p, Distance{D: units.Millimeters(top - bottom), Dir: Along}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -65,7 +65,7 @@ func facetedCapPrism(t *testing.T, doc *Document, bottom, top float64) *Body {
 func facetedCapCutPrism(t *testing.T, doc *Document) *Body {
 	t.Helper()
 	prism := facetedCapPrism(t, doc, -2.4, 1)
-	cut, err := Cut(t.Context(), prism, internalBoxBodyAtZ(t, doc, -4, -4, 2, 2, 0, 2))
+	cut, err := Cut(prism, internalBoxBodyAtZ(t, doc, -4, -4, 2, 2, 0, 2)).Do(t.Context())
 	require.NoError(t, err)
 	return cut
 }
@@ -78,7 +78,7 @@ func facetedCapBoss(t *testing.T, doc *Document) *Body {
 	c := [2]float64{(1 - facetedCapTau) * facetedCapDisc[0], (1 - facetedCapTau) * facetedCapDisc[1]}
 	s1, p1 := facetedCapHull(t, w, sharedCapHeight, c, (1-facetedCapTau)*facetedCapDiscR+facetedCapTau*facetedCapJoinR,
 		facetedCapJoinR)
-	body, err := Loft(t.Context(), doc, s0, p0, s1, p1)
+	body, err := Loft(doc, s0, p0, s1, p1).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -86,7 +86,7 @@ func facetedCapBoss(t *testing.T, doc *Document) *Body {
 // facetedCapDrive is the boss with a cone standing on its top: a mesh Union result.
 func facetedCapDrive(t *testing.T, doc *Document) *Body {
 	t.Helper()
-	drive, err := Union(t.Context(), facetedCapBoss(t, doc), sharedCapCone(t, doc, [2]float64{}, facetedCapJoinR, 0.409, 4.15))
+	drive, err := Union(facetedCapBoss(t, doc), sharedCapCone(t, doc, [2]float64{}, facetedCapJoinR, 0.409, 4.15)).Do(t.Context())
 	require.NoError(t, err)
 	return drive
 }

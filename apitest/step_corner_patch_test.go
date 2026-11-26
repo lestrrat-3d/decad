@@ -38,11 +38,11 @@ func TestSTEPWritesCornerPatches(t *testing.T) {
 	t.Run("convex cone patches", func(t *testing.T) {
 		t.Parallel()
 		doc := decad.New()
-		rounded, err := decad.Fillet(t.Context(), boxBody(t, doc, 0, 0, 20, 20, 10),
-			decad.Edges(decad.ParallelTo(up)).Exactly(4), units.Millimeters(3))
+		rounded, err := decad.Fillet(boxBody(t, doc, 0, 0, 20, 20, 10),
+			decad.Edges(decad.ParallelTo(up)).Exactly(4), units.Millimeters(3)).Do(t.Context())
 		require.NoError(t, err)
 		top := planeFacing(t, rounded, up, r3.NewVec(0, 0, 10))
-		body, err := decad.Chamfer(t.Context(), rounded, loopEdgeQuery(top.Loops()[0]), units.Millimeters(1))
+		body, err := decad.Chamfer(rounded, loopEdgeQuery(top.Loops()[0]), units.Millimeters(1)).Do(t.Context())
 		require.NoError(t, err)
 		text := string(writeSTEP(t, body))
 		require.Contains(t, text, "faceted decad solid")
@@ -68,10 +68,10 @@ func TestSTEPWritesCornerPatches(t *testing.T) {
 	t.Run("reflex cone patches", func(t *testing.T) {
 		t.Parallel()
 		doc := decad.New()
-		pocket, err := decad.Cut(t.Context(), boxBody(t, doc, 0, 0, 40, 40, 10), boxBodyAtZ(t, doc, 10, 15, 30, 25, 5, 5))
+		pocket, err := decad.Cut(boxBody(t, doc, 0, 0, 40, 40, 10), boxBodyAtZ(t, doc, 10, 15, 30, 25, 5, 5)).Do(t.Context())
 		require.NoError(t, err)
 		mouth := planeFacing(t, pocket, up, r3.NewVec(0, 0, 10))
-		body, err := decad.Chamfer(t.Context(), pocket, loopEdgeQuery(mouth.Loops()[1]), units.Millimeters(1))
+		body, err := decad.Chamfer(pocket, loopEdgeQuery(mouth.Loops()[1]), units.Millimeters(1)).Do(t.Context())
 		require.NoError(t, err)
 		text := string(writeSTEP(t, body))
 		require.Contains(t, text, "faceted decad solid")
@@ -80,7 +80,7 @@ func TestSTEPWritesCornerPatches(t *testing.T) {
 	})
 	t.Run("sphere patches", func(t *testing.T) {
 		t.Parallel()
-		body, err := decad.Fillet(t.Context(), boxBody(t, decad.New(), 0, 0, 20, 20, 20), decad.Edges(), units.Millimeters(2))
+		body, err := decad.Fillet(boxBody(t, decad.New(), 0, 0, 20, 20, 20), decad.Edges(), units.Millimeters(2)).Do(t.Context())
 		require.NoError(t, err)
 		text := string(writeSTEP(t, body))
 		require.Contains(t, text, "analytic decad solid")

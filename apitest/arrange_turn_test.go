@@ -11,16 +11,16 @@ import (
 )
 
 // This file is agent-docs/arrange-design.md §5's public-surface tests for
-// WithArrangeTurns, on the bed of arrange_test.go.
+// Arrange(...).Turns, on the bed of arrange_test.go.
 
 func TestArrangeTurnsBodiesToFitTheBed(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
 	// Three 4 x 20 blocks need 22 mm of depth as they stand, and the bed has 20.
 	blocks := arrangeBlocks(t, doc, [][2]float64{{4, 20}, {4, 20}, {4, 20}})
-	_, err := decad.Arrange(t.Context(), blocks, arrangeBed(30, 20, 1))
+	_, err := decad.Arrange(blocks, arrangeBed(30, 20, 1)).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrDegenerate)
-	out, err := decad.Arrange(t.Context(), blocks, arrangeBed(30, 20, 1), decad.WithArrangeTurns())
+	out, err := decad.Arrange(blocks, arrangeBed(30, 20, 1)).Turns().Do(t.Context())
 	require.NoError(t, err)
 	require.Len(t, out, 3)
 	require.Len(t, doc.Bodies(), 3, "the inputs and the turned bodies are retired")
@@ -37,7 +37,7 @@ func TestArrangeTurnsLeavesAFlatBodyAlone(t *testing.T) {
 	doc := decad.New()
 	blocks := arrangeBlocks(t, doc, [][2]float64{{10, 5}})
 	history := len(doc.OperationHistory().Operations())
-	out, err := decad.Arrange(t.Context(), blocks, arrangeBed(30, 20, 2), decad.WithArrangeTurns())
+	out, err := decad.Arrange(blocks, arrangeBed(30, 20, 2)).Turns().Do(t.Context())
 	require.NoError(t, err)
 	decadtest.MeasuresBounds(t, out[0], r3.Vec{X: 102, Y: 202, Z: 5}, r3.Vec{X: 112, Y: 207, Z: 8}, decadtest.Within(units.Millimeters(1e-6)))
 	require.Len(t, doc.OperationHistory().Operations(), history+1, "an unturned body takes one move")
@@ -47,9 +47,7 @@ func TestArrangeTurnsRefusals(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
 	blocks := arrangeBlocks(t, doc, [][2]float64{{30, 30}})
-	_, err := decad.Arrange(t.Context(), blocks, arrangeBed(20, 20, 1), decad.WithArrangeTurns())
+	_, err := decad.Arrange(blocks, arrangeBed(20, 20, 1)).Turns().Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrDegenerate, "a body too big either way stays refused")
 	require.Equal(t, blocks, doc.Bodies(), "a refused arrangement moves nothing")
-	_, err = decad.Arrange(t.Context(), blocks, arrangeBed(40, 40, 1), nil)
-	require.ErrorIs(t, err, decad.ErrDegenerate)
 }

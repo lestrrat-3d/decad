@@ -40,12 +40,9 @@ func TestHoleRadialThroughARod(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
 	rod := circleBodyAtZ(t, doc, 0, 5, 0, 20) // radius 5 about Z, z from 0 to 20
-	out, err := decad.Hole(t.Context(), rod, decad.HoleSpec{
-		Face:     decad.Faces(decad.Cylindrical()),
-		At:       r3.NewVec(5, 0, 10),
-		Diameter: units.Millimeters(3),
-		Depth:    decad.ThroughHole{},
-	})
+	out, err := decad.Hole(rod, decad.Faces(decad.Cylindrical()), r3.NewVec(5, 0, 10),
+		units.Millimeters(3), decad.ThroughHole{}).
+		Do(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, []*decad.Body{out}, doc.Bodies())
 	volume, err := out.Volume()
@@ -65,12 +62,9 @@ func TestHoleRadialBlindIntoARod(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
 	rod := circleBodyAtZ(t, doc, 0, 5, 0, 20)
-	out, err := decad.Hole(t.Context(), rod, decad.HoleSpec{
-		Face:     decad.Faces(decad.Cylindrical()),
-		At:       r3.NewVec(0, 5, 10),
-		Diameter: units.Millimeters(2),
-		Depth:    decad.BlindHole{Depth: units.Millimeters(3)},
-	})
+	out, err := decad.Hole(rod, decad.Faces(decad.Cylindrical()), r3.NewVec(0, 5, 10),
+		units.Millimeters(2), decad.BlindHole{Depth: units.Millimeters(3)}).
+		Do(t.Context())
 	require.NoError(t, err)
 	// The 3 mm blind hole reaches y = 2 along the radial +Y line from the
 	// surface at (0, 5, 10): its axis point at y = 3 is empty, at y = 1.5 material.
@@ -87,15 +81,12 @@ func TestHoleRadialOutOfABore(t *testing.T) {
 	doc := decad.New()
 	block := boxBody(t, doc, -20, -20, 20, 20, 10)
 	bore := circleBodyAtZ(t, doc, 0, 5, -1, 12)
-	part, err := decad.Cut(t.Context(), block, bore)
+	part, err := decad.Cut(block, bore).Do(t.Context())
 	require.NoError(t, err)
 	// A radial hole from the bore wall at (5, 0, 5) out through the wall along +X.
-	out, err := decad.Hole(t.Context(), part, decad.HoleSpec{
-		Face:     decad.Faces(decad.Cylindrical()),
-		At:       r3.NewVec(5, 0, 5),
-		Diameter: units.Millimeters(3),
-		Depth:    decad.ThroughHole{},
-	})
+	out, err := decad.Hole(part, decad.Faces(decad.Cylindrical()), r3.NewVec(5, 0, 5),
+		units.Millimeters(3), decad.ThroughHole{}).
+		Do(t.Context())
 	require.NoError(t, err)
 	// The hole removes the wall's material between the bore and the block's +X
 	// face: along x from sqrt(25 - y²) to 20, over the hole's circle in y and z.
@@ -117,14 +108,11 @@ func TestHoleRadialOutOfATightBore(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
 	block := boxBody(t, doc, -20, -20, 20, 20, 10)
-	part, err := decad.Cut(t.Context(), block, circleBodyAtZ(t, doc, 0, 3, -1, 12))
+	part, err := decad.Cut(block, circleBodyAtZ(t, doc, 0, 3, -1, 12)).Do(t.Context())
 	require.NoError(t, err)
-	out, err := decad.Hole(t.Context(), part, decad.HoleSpec{
-		Face:     decad.Faces(decad.Cylindrical()),
-		At:       r3.NewVec(3, 0, 5),
-		Diameter: units.Millimeters(5),
-		Depth:    decad.ThroughHole{},
-	})
+	out, err := decad.Hole(part, decad.Faces(decad.Cylindrical()), r3.NewVec(3, 0, 5),
+		units.Millimeters(5), decad.ThroughHole{}).
+		Do(t.Context())
 	require.NoError(t, err)
 	const steps = 200000
 	removed, step := 0.0, 5.0/steps
@@ -137,28 +125,34 @@ func TestHoleRadialOutOfATightBore(t *testing.T) {
 	requireCylinderHoleVolume(t, volume, 40*40*10-math.Pi*9*10-removed)
 }
 
+// rodHole is a 3 mm hole through the rod's cylindrical face at the given point.
+func rodHole(rod *decad.Body, at r3.Vec) *decad.HoleCommand {
+	return decad.Hole(rod, decad.Faces(decad.Cylindrical()), at, units.Millimeters(3), decad.ThroughHole{})
+}
+
 func TestHoleOnACylinderRefusals(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
 		name string
-		edit func(*decad.HoleSpec)
+		cmd  func(rod *decad.Body) *decad.HoleCommand
 		want error
 	}{
-		{"centre off the cylinder", func(s *decad.HoleSpec) { s.At = r3.NewVec(4, 0, 10) }, decad.ErrDegenerate},
-		{"centre on the axis", func(s *decad.HoleSpec) { s.At = r3.NewVec(0, 0, 10) }, decad.ErrDegenerate},
-		{"draft on a curve", func(s *decad.HoleSpec) { s.Draft = units.Degrees(2) }, decad.ErrUnsupported},
+		{"centre off the cylinder", func(rod *decad.Body) *decad.HoleCommand {
+			return rodHole(rod, r3.NewVec(4, 0, 10))
+		}, decad.ErrDegenerate},
+		{"centre on the axis", func(rod *decad.Body) *decad.HoleCommand {
+			return rodHole(rod, r3.NewVec(0, 0, 10))
+		}, decad.ErrDegenerate},
+		{"draft on a curve", func(rod *decad.Body) *decad.HoleCommand {
+			return rodHole(rod, r3.NewVec(5, 0, 10)).Draft(units.Degrees(2))
+		}, decad.ErrUnsupported},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			doc := decad.New()
 			rod := circleBodyAtZ(t, doc, 0, 5, 0, 20)
-			spec := decad.HoleSpec{
-				Face: decad.Faces(decad.Cylindrical()), At: r3.NewVec(5, 0, 10),
-				Diameter: units.Millimeters(3), Depth: decad.ThroughHole{},
-			}
-			tc.edit(&spec)
-			_, err := decad.Hole(t.Context(), rod, spec)
+			_, err := tc.cmd(rod).Do(t.Context())
 			require.ErrorIs(t, err, tc.want)
 			require.Equal(t, []*decad.Body{rod}, doc.Bodies(), "a refused hole leaves the rod live and alone")
 		})
@@ -167,12 +161,11 @@ func TestHoleOnACylinderRefusals(t *testing.T) {
 		t.Parallel()
 		doc := decad.New()
 		block := boxBody(t, doc, -20, -20, 20, 20, 10)
-		part, err := decad.Cut(t.Context(), block, circleBodyAtZ(t, doc, 0, 5, -1, 12))
+		part, err := decad.Cut(block, circleBodyAtZ(t, doc, 0, 5, -1, 12)).Do(t.Context())
 		require.NoError(t, err)
-		_, err = decad.Hole(t.Context(), part, decad.HoleSpec{
-			Face: decad.Faces(decad.Cylindrical()), At: r3.NewVec(5, 0, 5),
-			Diameter: units.Millimeters(12), Depth: decad.ThroughHole{},
-		})
+		_, err = decad.Hole(part, decad.Faces(decad.Cylindrical()), r3.NewVec(5, 0, 5),
+			units.Millimeters(12), decad.ThroughHole{}).
+			Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 	})
 }

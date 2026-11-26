@@ -21,8 +21,8 @@ func sphereIslandTestFloor(t *testing.T, doc *decad.Document) *decad.Body {
 	s.Fix(rectangle.A)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{
-		D: units.Millimeters(10), Dir: decad.Along})
+	body, err := decad.Extrude(doc, s, s.Profiles()[0], decad.Distance{
+		D: units.Millimeters(10), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }

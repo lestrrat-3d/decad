@@ -39,7 +39,7 @@ func throughBoreFixture(t *testing.T) (*Document, *Body, loftPayload, prismPaylo
 	s0, p0 := square(base)
 	s1, p1 := square(top)
 	doc := New()
-	blank, err := Loft(t.Context(), doc, s0, p0, s1, p1)
+	blank, err := Loft(doc, s0, p0, s1, p1).Do(t.Context())
 	require.NoError(t, err)
 
 	toolFrame, err := r3.NewFrame(r3.NewVec(0, 0, -1), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
@@ -53,7 +53,7 @@ func throughBoreFixture(t *testing.T) (*Document, *Body, loftPayload, prismPaylo
 	ts.CreateCircle(center, 1)
 	_, err = ts.Solve(t.Context())
 	require.NoError(t, err)
-	tool, err := Extrude(t.Context(), doc, ts, ts.Profiles()[0], Distance{D: units.Millimeters(4), Dir: Along})
+	tool, err := Extrude(doc, ts, ts.Profiles()[0], Distance{D: units.Millimeters(4), Dir: Along}).Do(t.Context())
 	require.NoError(t, err)
 	return doc, blank, blank.n.Payload.(loftPayload), tool.n.Payload.(prismPayload)
 }
@@ -245,7 +245,7 @@ func TestLoftThroughBoreCutGates(t *testing.T) {
 		require.NoError(t, err)
 		require.True(t, admitted)
 		require.NotNil(t, node)
-		cut, err := Cut(t.Context(), blank, dTool)
+		cut, err := Cut(blank, dTool).Do(t.Context())
 		require.NoError(t, err)
 		result, ok := cut.n.Payload.(loftPayload)
 		require.True(t, ok, "a contained D-shaped tool must stay on the exact loft route")
@@ -284,8 +284,8 @@ func throughDToolFixture(t *testing.T, doc *Document) *Body {
 	circleSketch.AddConstraint(sketch.NewRadius(circle, 1))
 	_, err = circleSketch.Solve(t.Context())
 	require.NoError(t, err)
-	cylinder, err := Extrude(t.Context(), doc, circleSketch, circleSketch.Profiles()[0],
-		Distance{D: units.Millimeters(4), Dir: Along})
+	cylinder, err := Extrude(doc, circleSketch, circleSketch.Profiles()[0],
+		Distance{D: units.Millimeters(4), Dir: Along}).Do(t.Context())
 	require.NoError(t, err)
 
 	capSketch, err := world.CreateSketch(plane)
@@ -299,10 +299,10 @@ func throughDToolFixture(t *testing.T, doc *Document) *Body {
 	)
 	_, err = capSketch.Solve(t.Context())
 	require.NoError(t, err)
-	capBody, err := Extrude(t.Context(), doc, capSketch, capSketch.Profiles()[0],
-		Distance{D: units.Millimeters(4), Dir: Along})
+	capBody, err := Extrude(doc, capSketch, capSketch.Profiles()[0],
+		Distance{D: units.Millimeters(4), Dir: Along}).Do(t.Context())
 	require.NoError(t, err)
-	dTool, err := Cut(t.Context(), cylinder, capBody)
+	dTool, err := Cut(cylinder, capBody).Do(t.Context())
 	require.NoError(t, err)
 	return dTool
 }

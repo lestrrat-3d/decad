@@ -19,7 +19,7 @@ import (
 // 10..20 and z 10..25.
 func pinchTower(t *testing.T, doc *decad.Document) *decad.Body {
 	t.Helper()
-	body, err := decad.Union(t.Context(), boxBody(t, doc, 0, 0, 60, 40, 10), boxBodyAtZ(t, doc, 10, 10, 20, 20, 10, 15))
+	body, err := decad.Union(boxBody(t, doc, 0, 0, 60, 40, 10), boxBodyAtZ(t, doc, 10, 10, 20, 20, 10, 15)).Do(t.Context())
 	require.NoError(t, err)
 	require.False(t, tookMeshPath(body))
 	return body
@@ -29,7 +29,7 @@ func pinchTower(t *testing.T, doc *decad.Document) *decad.Body {
 // keeps the mesh path or refuses.
 func requireNoExactPinch(t *testing.T, a, b *decad.Body) {
 	t.Helper()
-	got, err := decad.Union(t.Context(), a, b)
+	got, err := decad.Union(a, b).Do(t.Context())
 	if err != nil {
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		return
@@ -92,7 +92,7 @@ func TestStackedUnionSelfPinch(t *testing.T) {
 	t.Run("corner clear", func(t *testing.T) {
 		t.Parallel()
 		doc := decad.New()
-		got, err := decad.Union(t.Context(), pinchTower(t, doc), uBridge(t, doc, 21))
+		got, err := decad.Union(pinchTower(t, doc), uBridge(t, doc, 21)).Do(t.Context())
 		require.NoError(t, err)
 		// The plate, the tower, and the bridge's bar, right column, top and
 		// arm over 5 mm.
@@ -106,7 +106,7 @@ func TestStackedUnionSelfPinch(t *testing.T) {
 	t.Run("apex clear", func(t *testing.T) {
 		t.Parallel()
 		doc := decad.New()
-		got, err := decad.Union(t.Context(), pinchTower(t, doc), peakBridge(t, doc, 9))
+		got, err := decad.Union(pinchTower(t, doc), peakBridge(t, doc, 9)).Do(t.Context())
 		require.NoError(t, err)
 		// The bar, the peak, the right column, the top and the arm.
 		requireSoundExactUnion(t, doc, got, 24000+1500+(25*5+6*4/2+5*20+18*5+6*10)*5)
@@ -121,7 +121,7 @@ func TestStackedUnionSelfPinch(t *testing.T) {
 	}
 	wideTower := func(t *testing.T, doc *decad.Document) *decad.Body {
 		t.Helper()
-		body, err := decad.Union(t.Context(), boxBody(t, doc, 0, 0, 60, 40, 10), boxBodyAtZ(t, doc, 10, 10, 40, 30, 10, 15))
+		body, err := decad.Union(boxBody(t, doc, 0, 0, 60, 40, 10), boxBodyAtZ(t, doc, 10, 10, 40, 30, 10, 15)).Do(t.Context())
 		require.NoError(t, err)
 		return body
 	}
@@ -133,7 +133,7 @@ func TestStackedUnionSelfPinch(t *testing.T) {
 	t.Run("notch apex inside", func(t *testing.T) {
 		t.Parallel()
 		doc := decad.New()
-		got, err := decad.Union(t.Context(), wideTower(t, doc), notchBridge(t, doc, 11))
+		got, err := decad.Union(wideTower(t, doc), notchBridge(t, doc, 11)).Do(t.Context())
 		require.NoError(t, err)
 		// The bridge's 40 × 30 outline less the notch's 10 × 15 slot and its
 		// 10 × 9 triangle.
@@ -156,7 +156,7 @@ func TestStackedUnionSelfTangent(t *testing.T) {
 	}
 	boss := func(t *testing.T, doc *decad.Document) *decad.Body {
 		t.Helper()
-		body, err := decad.Union(t.Context(), boxBody(t, doc, 0, -10, 60, 40, 10), circleBodyAtZ(t, doc, 15, 5, 10, 15))
+		body, err := decad.Union(boxBody(t, doc, 0, -10, 60, 40, 10), circleBodyAtZ(t, doc, 15, 5, 10, 15)).Do(t.Context())
 		require.NoError(t, err)
 		require.False(t, tookMeshPath(body))
 		return body
@@ -169,7 +169,7 @@ func TestStackedUnionSelfTangent(t *testing.T) {
 	t.Run("clear", func(t *testing.T) {
 		t.Parallel()
 		doc := decad.New()
-		got, err := decad.Union(t.Context(), boss(t, doc), bridge(t, doc, -6))
+		got, err := decad.Union(boss(t, doc), bridge(t, doc, -6)).Do(t.Context())
 		require.NoError(t, err)
 		require.False(t, tookMeshPath(got))
 		requireEveryEdgeOnTwoFaces(t, got)
@@ -217,11 +217,11 @@ func TestStackedUnionPinchRecordCount(t *testing.T) {
 	// x > 30, and B, a lower wedge pointing at p from x < 30 with the upper L.
 	operands := func(t *testing.T, doc *decad.Document) (*decad.Body, *decad.Body) {
 		t.Helper()
-		a, err := decad.Union(t.Context(), lowerL(t, doc), polygonPrismAtZ(t, doc, 10, 10,
-			[2]float64{30, 20}, [2]float64{35, 15}, [2]float64{35, 25}))
+		a, err := decad.Union(lowerL(t, doc), polygonPrismAtZ(t, doc, 10, 10,
+			[2]float64{30, 20}, [2]float64{35, 15}, [2]float64{35, 25})).Do(t.Context())
 		require.NoError(t, err)
-		b, err := decad.Union(t.Context(), polygonPrismAtZ(t, doc, 0, 10,
-			[2]float64{30, 20}, [2]float64{25, 25}, [2]float64{25, 15}), upperL(t, doc))
+		b, err := decad.Union(polygonPrismAtZ(t, doc, 0, 10,
+			[2]float64{30, 20}, [2]float64{25, 25}, [2]float64{25, 15}), upperL(t, doc)).Do(t.Context())
 		require.NoError(t, err)
 		return a, b
 	}

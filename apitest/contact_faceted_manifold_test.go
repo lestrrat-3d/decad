@@ -52,7 +52,7 @@ import (
 func prismBody(t *testing.T, doc *decad.Document, pts [][2]float64, h float64) *decad.Body {
 	t.Helper()
 	s, profile := polygonSketch(t, pts)
-	body, err := decad.Extrude(t.Context(), doc, s, profile, decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
+	body, err := decad.Extrude(doc, s, profile, decad.Distance{D: units.Millimeters(h), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }

@@ -26,17 +26,15 @@ func Example_thread_lead_in() {
 		fmt.Printf("failed to solve: %s\n", err)
 		return
 	}
-	rod, err := decad.Extrude(context.Background(), decad.New(), s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
+	rod, err := decad.Extrude(decad.New(), s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(20), Dir: decad.Along}).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to extrude: %s\n", err)
 		return
 	}
-	threaded, err := decad.Thread(context.Background(), rod, decad.ThreadSpec{
-		Face:   decad.Faces(decad.Cylindrical()),
-		Pitch:  units.Millimeters(1.5),
-		LeadIn: units.Millimeters(0.8),
-	})
+	threaded, err := decad.Thread(rod, decad.Faces(decad.Cylindrical()), units.Millimeters(1.5)).
+		LeadIn(units.Millimeters(0.8)).
+		Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to thread: %s\n", err)
 		return
@@ -68,18 +66,15 @@ func Example_thread_lead_in_angle() {
 		fmt.Printf("failed to solve: %s\n", err)
 		return
 	}
-	rod, err := decad.Extrude(context.Background(), decad.New(), s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
+	rod, err := decad.Extrude(decad.New(), s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(20), Dir: decad.Along}).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to extrude: %s\n", err)
 		return
 	}
-	threaded, err := decad.Thread(context.Background(), rod, decad.ThreadSpec{
-		Face:        decad.Faces(decad.Cylindrical()),
-		Pitch:       units.Millimeters(1.5),
-		LeadIn:      units.Millimeters(1),
-		LeadInAngle: units.Degrees(30),
-	})
+	threaded, err := decad.Thread(rod, decad.Faces(decad.Cylindrical()), units.Millimeters(1.5)).
+		LeadInAngle(units.Millimeters(1), units.Degrees(30)).
+		Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to thread: %s\n", err)
 		return

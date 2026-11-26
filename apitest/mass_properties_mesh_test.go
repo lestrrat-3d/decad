@@ -41,7 +41,7 @@ func stitchTrianglePatch(t *testing.T, doc *decad.Document, w *sketch.World, pla
 	}
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	patch, err := decad.PatchProfile(t.Context(), doc, s, s.Profiles()[0])
+	patch, err := decad.PatchProfile(doc, s, s.Profiles()[0]).Do(t.Context())
 	require.NoError(t, err)
 	return patch
 }
@@ -95,7 +95,7 @@ func stitchedTetrahedron(t *testing.T, doc *decad.Document) (*decad.Body, float6
 			require.Contains(t, want, v.Position().Value, "premise: every patch corner lands exactly")
 		}
 	}
-	tetrahedron, err := decad.Stitch(t.Context(), faces...)
+	tetrahedron, err := decad.Stitch(faces...).Do(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, decad.BodySolid, tetrahedron.Kind())
 	return tetrahedron, a
@@ -144,7 +144,7 @@ func TestMassPropertiesStitchedTetrahedron(t *testing.T) {
 	// refused rather than read off a mesh that proves only signed volume.
 	shift, err := r3.Translation(r3.NewVec(.1, 0, 0))
 	require.NoError(t, err)
-	placed, err := decad.Transform(t.Context(), tetrahedron, shift)
+	placed, err := decad.Transform(tetrahedron, shift).Do(t.Context())
 	require.NoError(t, err)
 	reading, err := placed.MassProperties(t.Context(), meshMassDensity)
 	require.ErrorIs(t, err, decad.ErrUnsupported)
@@ -173,7 +173,7 @@ func TestMassPropertiesLoftOctagons(t *testing.T) {
 	s1, p1 := fixedPolygonProfile(t, w, top, [][2]float64{
 		{5, -1.5}, {5, 2.5}, {3, 4.5}, {-1, 4.5}, {-3, 2.5}, {-3, -1.5}, {-1, -3.5}, {3, -3.5},
 	})
-	loft, err := decad.Loft(t.Context(), doc, s0, p0, s1, p1)
+	loft, err := decad.Loft(doc, s0, p0, s1, p1).Do(t.Context())
 	require.NoError(t, err)
 	got, err := loft.MassProperties(t.Context(), meshMassDensity)
 	require.NoError(t, err)
@@ -319,7 +319,7 @@ func divergenceMoments(mesh *decad.Mesh) (*big.Rat, [3]*big.Rat, [3][3]*big.Rat)
 func TestMassPropertiesCapChamferFallback(t *testing.T) {
 	const a, b, h, c = 16, 8, 10, 2
 	box := boxBody(t, decad.New(), 0, 0, a, b, h)
-	chamfered, err := decad.Chamfer(t.Context(), box, capLoopEdges(box), units.Millimeters(c))
+	chamfered, err := decad.Chamfer(box, capLoopEdges(box), units.Millimeters(c)).Do(t.Context())
 	require.NoError(t, err)
 	got, err := chamfered.MassProperties(t.Context(), meshMassDensity)
 	require.NoError(t, err)
@@ -343,8 +343,8 @@ func TestMassPropertiesRevolvedSphere(t *testing.T) {
 	s.CreateArc(center, end, start)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	ball, err := decad.Revolve(t.Context(), decad.New(), s, s.Profiles()[0],
-		decad.SketchLine{End: decad.Point2{U: 1}}, decad.FullRevolution{})
+	ball, err := decad.Revolve(decad.New(), s, s.Profiles()[0],
+		decad.SketchLine{End: decad.Point2{U: 1}}, decad.FullRevolution{}).Do(t.Context())
 	require.NoError(t, err)
 	got, err := ball.MassProperties(t.Context(), meshMassDensity)
 	require.NoError(t, err)

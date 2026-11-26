@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/lestrrat-3d/decad/internal/opcommand"
 	"github.com/lestrrat-3d/decad/internal/stitchrecord"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
@@ -15,7 +16,7 @@ import (
 // Document.commitOperationManyFacesIn (document.go) publishes the N results
 // and complete face map atomically with input retirement.
 
-// Unstitch returns one single-face sheet body per face of
+// Unstitch returns the command that builds one single-face sheet body per face of
 // b, in [Body.Faces] order, retiring b
 // (agent-docs/surface-design.md §6.5). Each result carries that face's own
 // surface, loops and readings, and every edge of every result is free: a
@@ -34,13 +35,39 @@ import (
 // [ErrRetiredBody] (R14). A failed call leaves the document and
 // b unchanged: every result is built before any is registered, and
 // Document.commitOperationManyFacesIn registers them and retires b in one atomic step.
-func Unstitch(ctx context.Context, b *Body) (results []*Body, retErr error) {
-	defer func() { retErr = operationError(OperationUnstitch, retErr) }()
-	if ctx == nil {
-		return nil, fmt.Errorf(`%w: a nil context cannot control an unstitch`, ErrDegenerate)
+// A nil ctx given to Do is [ErrDegenerate].
+func Unstitch(b *Body) *UnstitchCommand {
+	c := &UnstitchCommand{b: b}
+	if b == nil {
+		c.state.Record("body", errUnstitchNoPayload)
 	}
+	return c
+}
+
+// errUnstitchNoPayload is the refusal of a nil body and of a body with no evaluator payload.
+var errUnstitchNoPayload = fmt.Errorf(`%w: Unstitch requires a body with an evaluator payload`, ErrDegenerate)
+
+// UnstitchCommand splits a body into one sheet per face. Build it with [Unstitch].
+type UnstitchCommand struct {
+	state opcommand.State // consumed flag and first recorded fault
+	b     *Body           // stored as given
+}
+
+// Do splits the body and retires it, or returns the error of the first gate that refuses. A second call returns
+// [ErrConsumed].
+func (c *UnstitchCommand) Do(ctx context.Context) ([]*Body, error) {
+	return runCommand(ctx, &c.state, OperationUnstitch, c.run)
+}
+
+func (c *UnstitchCommand) run(ctx context.Context) ([]*Body, error) {
+	return unstitch(ctx, c.b)
+}
+
+// unstitch is Unstitch's implementation. ctx is not nil, and the errors it returns carry no operation tag
+// (agent-docs/command-api-design.md §11).
+func unstitch(ctx context.Context, b *Body) ([]*Body, error) {
 	if b == nil || b.n.Doc == nil || b.n.Payload == nil {
-		return nil, fmt.Errorf(`%w: Unstitch requires a body with an evaluator payload`, ErrDegenerate)
+		return nil, errUnstitchNoPayload
 	}
 	d := documentHandle(b.n.Doc)
 	if err := d.requireLive(b); err != nil {
@@ -55,7 +82,7 @@ func Unstitch(ctx context.Context, b *Body) (results []*Body, retErr error) {
 
 	faces := b.Faces()
 	base := d.producerAt(ctx)
-	results = make([]*Body, len(faces))
+	results := make([]*Body, len(faces))
 	for i, f := range faces {
 		if err := ctx.Err(); err != nil {
 			return nil, err

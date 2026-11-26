@@ -96,7 +96,7 @@ func framedBoxBody(t *testing.T, doc *decad.Document, x0, y0, x1, y1, z0, h floa
 	s.Fix(rect.A)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
+	body, err := decad.Extrude(doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(h), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -111,7 +111,7 @@ func TestVerifyNoneWithholdsTheVolumeProofOnARestatedMesh(t *testing.T) {
 	// about.
 	a := boxBody(t, doc, 0, 0, 10, 10, 10)
 	b := framedBoxBody(t, doc, 5, 5, 15, 15, 4, 8)
-	fused, err := decad.Union(t.Context(), a, b)
+	fused, err := decad.Union(a, b).Do(t.Context())
 	require.NoError(t, err)
 	require.True(t, tookMeshPath(fused), `this fixture must produce a faceted result, not an analytic prism`)
 

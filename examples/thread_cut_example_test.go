@@ -32,7 +32,7 @@ func Example_thread_cut() {
 		fmt.Printf("failed to solve: %s\n", err)
 		return
 	}
-	shaft, err := decad.Revolve(context.Background(), doc, shaftSketch, shaftSketch.Profiles()[0], axis, decad.FullRevolution{})
+	shaft, err := decad.Revolve(doc, shaftSketch, shaftSketch.Profiles()[0], axis, decad.FullRevolution{}).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to revolve shaft: %s\n", err)
 		return
@@ -65,15 +65,15 @@ func Example_thread_cut() {
 
 	// Coil the groove one turn at a 1.5 mm pitch. That makes a single turn
 	// of thread; use more turns for a longer thread.
-	groove, err := decad.Coil(context.Background(), doc, grooveSketch, grooveSketch.Profiles()[0], axis,
-		units.Millimeters(1.5), units.Scalar(1))
+	groove, err := decad.Coil(doc, grooveSketch, grooveSketch.Profiles()[0], axis,
+		units.Millimeters(1.5), units.Scalar(1)).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to coil groove: %s\n", err)
 		return
 	}
 
 	// Cut the groove out of the shaft.
-	threaded, err := decad.Cut(context.Background(), shaft, groove)
+	threaded, err := decad.Cut(shaft, groove).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to cut thread: %s\n", err)
 		return

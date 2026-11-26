@@ -39,7 +39,7 @@ func extendLeftRibbon(t *testing.T, doc *decad.Document) (*decad.Body, sectionre
 		require.True(t, ok)
 		require.Equal(t, 0.0, seg.TStart)
 		require.InDelta(t, 0.4, seg.TEnd, 1e-12)
-		body, err := decad.Extrude(t.Context(), doc, s, chain, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+		body, err := decad.Extrude(doc, s, chain, decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(t.Context())
 		require.NoError(t, err)
 		return body, seg
 	}
@@ -85,7 +85,7 @@ func extendReversedRibbon(t *testing.T, doc *decad.Document) (*decad.Body, secti
 		require.InDelta(t, 0.6, seg.TStart, 1e-12)
 		require.Equal(t, decad.Point2{U: 100, V: 0.1}, decad.Point2(seg.Start))
 		require.Equal(t, decad.Point2{U: 0, V: 0.1}, decad.Point2(seg.End))
-		body, err := decad.Extrude(t.Context(), doc, s, chain, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+		body, err := decad.Extrude(doc, s, chain, decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(t.Context())
 		require.NoError(t, err)
 		return body, seg
 	}
@@ -120,7 +120,7 @@ func TestSurfaceExtendReversedFragmentToNearestCut(t *testing.T) {
 	// unmapped reading publishes a boundary at x = 30 where the tool is not.
 	insideTool := trimSpanningTool(t, insideDoc, 70, -10, 90, 10)
 	before := insideDoc.Bodies()
-	_, err = decad.Extend(t.Context(), insideRibbon, query, insideTool)
+	_, err = decad.Extend(insideRibbon, query, insideTool).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.ErrorContains(t, err, "carrier's own natural domain")
 	require.Equal(t, before, insideDoc.Bodies())
@@ -130,7 +130,7 @@ func TestSurfaceExtendReversedFragmentToNearestCut(t *testing.T) {
 	// x in [10, 30] is genuinely past the named x = 40 end; the nearest of its
 	// two crossings is x = 30.
 	tool := trimSpanningTool(t, doc, 10, -10, 30, 10)
-	result, err := decad.Extend(t.Context(), ribbon, query, tool)
+	result, err := decad.Extend(ribbon, query, tool).Do(t.Context())
 	require.NoError(t, err)
 
 	area, err := result.Area()
@@ -230,7 +230,7 @@ func extendArcRibbon(t *testing.T, doc *decad.Document) (*decad.Body, sectionrec
 		require.InDelta(t, extendArcCutT, seg.TStart, 1e-12)
 		require.Equal(t, decad.Point2{U: 100, V: 0}, decad.Point2(seg.Start))
 		require.Equal(t, decad.Point2{U: -100, V: 0}, decad.Point2(seg.End))
-		body, err := decad.Extrude(t.Context(), doc, s, chain, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+		body, err := decad.Extrude(doc, s, chain, decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(t.Context())
 		require.NoError(t, err)
 		return body, seg
 	}
@@ -263,7 +263,7 @@ func TestSurfaceExtendArcReceiverToNearestCut(t *testing.T) {
 	sweeps, cut := extendFreeSweepEdges(t, ribbon, 60)
 	query := decad.Edges(decad.Free(), decad.ParallelTo(r3.NewVec(0, 0, 1)),
 		decad.EndpointAt(sweeps[cut].Start().Position().Value)).Exactly(1)
-	result, err := decad.Extend(t.Context(), ribbon, query, tool)
+	result, err := decad.Extend(ribbon, query, tool).Do(t.Context())
 	require.NoError(t, err)
 
 	wantT := math.Atan2(80, -60) / math.Pi
@@ -311,7 +311,7 @@ func TestSurfaceExtendLeftFragmentToNearestCut(t *testing.T) {
 	selected, err := query.SelectEdges(ribbon)
 	require.NoError(t, err)
 	require.Len(t, selected, 1)
-	result, err := decad.Extend(t.Context(), ribbon, query, tool)
+	result, err := decad.Extend(ribbon, query, tool).Do(t.Context())
 	require.NoError(t, err)
 	area, err := result.Area()
 	require.NoError(t, err)
@@ -352,7 +352,7 @@ func TestSurfaceExtendRefusesBeyondCarrierDomain(t *testing.T) {
 	query := decad.Edges(decad.Free(), decad.ParallelTo(r3.NewVec(0, 0, 1)),
 		decad.EndpointAt(r3.NewVec(40, 0, 0))).Exactly(1)
 	before := doc.Bodies()
-	_, err := decad.Extend(t.Context(), ribbon, query, tool)
+	_, err := decad.Extend(ribbon, query, tool).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.ErrorContains(t, err, "carrier's own natural domain")
 	require.Equal(t, before, doc.Bodies())
@@ -360,7 +360,7 @@ func TestSurfaceExtendRefusesBeyondCarrierDomain(t *testing.T) {
 	insideDoc := decad.New()
 	insideRibbon, _ := extendLeftRibbon(t, insideDoc)
 	insideTool := trimSpanningTool(t, insideDoc, 70, -10, 90, 10)
-	inside, err := decad.Extend(t.Context(), insideRibbon, query, insideTool)
+	inside, err := decad.Extend(insideRibbon, query, insideTool).Do(t.Context())
 	require.NoError(t, err)
 	area, err := inside.Area()
 	require.NoError(t, err)
@@ -373,7 +373,7 @@ func TestSurfaceExtendRequiresNamedEnd(t *testing.T) {
 	doc := decad.New()
 	ribbon, _ := extendLeftRibbon(t, doc)
 	tool := trimSpanningTool(t, doc, 70, -10, 90, 10)
-	_, err := decad.Extend(t.Context(), ribbon, decad.Edges(decad.EndpointAt(r3.NewVec(41, 0, 0))), tool)
+	_, err := decad.Extend(ribbon, decad.Edges(decad.EndpointAt(r3.NewVec(41, 0, 0))), tool).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrNoMatch)
 	var selection *decad.SelectionError
 	require.True(t, errors.As(err, &selection))
@@ -382,15 +382,15 @@ func TestSurfaceExtendRequiresNamedEnd(t *testing.T) {
 	_, err = decad.Edges(decad.EndpointAt(r3.NewVec(math.NaN(), 0, 0))).SelectEdges(ribbon)
 	require.ErrorIs(t, err, decad.ErrNotFinite)
 
-	_, err = decad.Extend(t.Context(), ribbon, decad.Edges(decad.Free(), decad.ParallelTo(r3.NewVec(0, 0, 1)),
-		decad.EndpointAt(r3.NewVec(0, 0, 0))).Exactly(1), tool)
+	_, err = decad.Extend(ribbon, decad.Edges(decad.Free(), decad.ParallelTo(r3.NewVec(0, 0, 1)),
+		decad.EndpointAt(r3.NewVec(0, 0, 0))).Exactly(1), tool).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.ErrorContains(t, err, "already reaches its carrier's own domain")
 
 	closedDoc := decad.New()
 	closed := trimRectSheet(t, closedDoc)
 	closedTool := trimSpanningTool(t, closedDoc, 70, -10, 90, 70)
-	_, err = decad.Extend(t.Context(), closed, decad.Edges(decad.Free()).Exactly(8), closedTool)
+	_, err = decad.Extend(closed, decad.Edges(decad.Free()).Exactly(8), closedTool).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.ErrorContains(t, err, "open section")
 }

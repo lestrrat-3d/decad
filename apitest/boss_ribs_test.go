@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file is agent-docs/boss-design.md §9's public-surface tests for BossRibs, on the
+// This file is agent-docs/boss-design.md §9's public-surface tests for BossCommand.Ribs, on the
 // plate of boss_test.go: a boss of diameter 8 and height 8 on its top face, z = 5.
 
 // ribOutside is the volume of one gusset rib of the given thickness, length and height that
@@ -31,19 +31,16 @@ func ribOutside(radius, thickness, length, height float64) float64 {
 	return height * (thickness*length/2 + flat)
 }
 
-func ribbedSpec(plate *decad.Body, ribs *decad.BossRibs) decad.BossSpec {
-	spec := bossSpec(plate, true, nil)
-	spec.Ribs = ribs
-	return spec
+func ribbedCommand(plate *decad.Body, ribs decad.BossRibs) *decad.BossCommand {
+	return bossCommand(plate, true).Ribs(ribs)
 }
 
 func TestBossWithGussetRibs(t *testing.T) {
 	t.Parallel()
 	const count, thick, length, height = 4, 2.0, 6.0, 5.0
 	doc, plate := bossPlate(t)
-	out, err := decad.Boss(t.Context(), plate, ribbedSpec(plate, &decad.BossRibs{
-		Count: count, Thickness: units.Millimeters(thick), Length: units.Millimeters(length),
-		Height: units.Millimeters(height)}))
+	out, err := ribbedCommand(plate, decad.NewBossRibs(count, units.Millimeters(thick),
+		units.Millimeters(length), units.Millimeters(height))).Do(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, []*decad.Body{out}, doc.Bodies(), "the plate and the tools leave the document")
 	volume, err := out.Volume()
@@ -63,10 +60,10 @@ func TestBossWithGussetRibs(t *testing.T) {
 func TestBossRibsTurnWithTheirAngleAndLeavePilotHoleClear(t *testing.T) {
 	t.Parallel()
 	_, plate := bossPlate(t)
-	spec := bossSpec(plate, true, &decad.BossBore{Diameter: units.Millimeters(3), Depth: units.Millimeters(6)})
-	spec.Ribs = &decad.BossRibs{Count: 3, Thickness: units.Millimeters(1.5), Length: units.Millimeters(5),
-		Height: units.Millimeters(4), Angle: units.Degrees(90)}
-	out, err := decad.Boss(t.Context(), plate, spec)
+	out, err := bossCommand(plate, true).
+		Bore(decad.NewBossBore(units.Millimeters(3), units.Millimeters(6))).
+		Ribs(decad.NewBossRibs(3, units.Millimeters(1.5), units.Millimeters(5), units.Millimeters(4)).
+			Angle(units.Degrees(90))).Do(t.Context())
 	require.NoError(t, err)
 	volume, err := out.Volume()
 	require.NoError(t, err)
@@ -89,39 +86,34 @@ func TestBossRibsTurnWithTheirAngleAndLeavePilotHoleClear(t *testing.T) {
 func TestBossRibsRefusals(t *testing.T) {
 	t.Parallel()
 	doc, plate := bossPlate(t)
-	good := decad.BossRibs{Count: 4, Thickness: units.Millimeters(2), Length: units.Millimeters(6), Height: units.Millimeters(5)}
-	boss := func(edit func(*decad.BossSpec, *decad.BossRibs)) error {
-		ribs := good
-		spec := bossSpec(plate, true, nil)
-		edit(&spec, &ribs)
-		spec.Ribs = &ribs
-		_, err := decad.Boss(t.Context(), plate, spec)
-		return err
+	mm := units.Millimeters
+	ribs := func(count int, thickness, length, height units.Value) decad.BossRibs {
+		return decad.NewBossRibs(count, thickness, length, height)
 	}
+	good := ribs(4, mm(2), mm(6), mm(5))
 	for name, tc := range map[string]struct {
-		edit func(*decad.BossSpec, *decad.BossRibs)
+		cmd  *decad.BossCommand
 		want error
 	}{
-		"no ribs":          {func(_ *decad.BossSpec, r *decad.BossRibs) { r.Count = 0 }, decad.ErrDegenerate},
-		"too many":         {func(_ *decad.BossSpec, r *decad.BossRibs) { r.Count = 17 }, decad.ErrDegenerate},
-		"zero thickness":   {func(_ *decad.BossSpec, r *decad.BossRibs) { r.Thickness = units.Millimeters(0) }, decad.ErrDegenerate},
-		"negative length":  {func(_ *decad.BossSpec, r *decad.BossRibs) { r.Length = units.Millimeters(-1) }, decad.ErrNegativeMagnitude},
-		"wrong unit":       {func(_ *decad.BossSpec, r *decad.BossRibs) { r.Height = units.Degrees(5) }, decad.ErrUnitKind},
-		"taller than boss": {func(_ *decad.BossSpec, r *decad.BossRibs) { r.Height = units.Millimeters(9) }, decad.ErrDegenerate},
-		"ribs collide":     {func(_ *decad.BossSpec, r *decad.BossRibs) { r.Count = 16; r.Thickness = units.Millimeters(3) }, decad.ErrDegenerate},
-		"with a draft":     {func(s *decad.BossSpec, _ *decad.BossRibs) { s.Draft = units.Degrees(2) }, decad.ErrUnsupported},
-		"with a fillet":    {func(s *decad.BossSpec, _ *decad.BossRibs) { s.RootFillet = units.Millimeters(1) }, decad.ErrUnsupported},
+		"no ribs":          {ribbedCommand(plate, ribs(0, mm(2), mm(6), mm(5))), decad.ErrDegenerate},
+		"too many":         {ribbedCommand(plate, ribs(17, mm(2), mm(6), mm(5))), decad.ErrDegenerate},
+		"zero thickness":   {ribbedCommand(plate, ribs(4, mm(0), mm(6), mm(5))), decad.ErrDegenerate},
+		"negative length":  {ribbedCommand(plate, ribs(4, mm(2), mm(-1), mm(5))), decad.ErrNegativeMagnitude},
+		"wrong unit":       {ribbedCommand(plate, ribs(4, mm(2), mm(6), units.Degrees(5))), decad.ErrUnitKind},
+		"taller than boss": {ribbedCommand(plate, ribs(4, mm(2), mm(6), mm(9))), decad.ErrDegenerate},
+		"ribs collide":     {ribbedCommand(plate, ribs(16, mm(3), mm(6), mm(5))), decad.ErrDegenerate},
+		"with a draft":     {ribbedCommand(plate, good).Draft(units.Degrees(2)), decad.ErrUnsupported},
+		"with a fillet":    {ribbedCommand(plate, good).RootFillet(mm(1)), decad.ErrUnsupported},
 	} {
-		require.ErrorIs(t, boss(tc.edit), tc.want, name)
+		_, err := tc.cmd.Do(t.Context())
+		require.ErrorIs(t, err, tc.want, name)
 	}
 	require.Equal(t, []*decad.Body{plate}, doc.Bodies(), "every refusal leaves the plate live")
 }
 
 // shapedRibbed is a boss of the given shape and height 8 on the top face of the plate of boss_test.go, braced by the ribs.
-func shapedRibbed(plate *decad.Body, shape decad.HoleShape, ribs *decad.BossRibs) decad.BossSpec {
-	return decad.BossSpec{
-		Face: capFace(true, plate), At: r3.Vec{X: 0, Y: 0, Z: 5}, Height: units.Millimeters(8), Shape: shape, Ribs: ribs,
-	}
+func shapedRibbed(plate *decad.Body, shape decad.HoleShape, ribs decad.BossRibs) *decad.BossShapedCommand {
+	return shapedBossCommand(plate, shape, 8).Ribs(ribs)
 }
 
 func TestBossRibsStandAtTheWallOfARectangularBoss(t *testing.T) {
@@ -139,10 +131,10 @@ func TestBossRibsStandAtTheWallOfARectangularBoss(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			doc, plate := bossPlate(t)
-			out, err := decad.Boss(t.Context(), plate, shapedRibbed(plate,
+			out, err := shapedRibbed(plate,
 				decad.RectangularHole{Width: units.Millimeters(20), Height: units.Millimeters(10), Angle: units.Degrees(0)},
-				&decad.BossRibs{Count: 2, Thickness: units.Millimeters(thick), Length: units.Millimeters(length),
-					Height: units.Millimeters(height), Angle: tc.angle}))
+				decad.NewBossRibs(2, units.Millimeters(thick), units.Millimeters(length), units.Millimeters(height)).
+					Angle(tc.angle)).Do(t.Context())
 			require.NoError(t, err)
 			require.Equal(t, []*decad.Body{out}, doc.Bodies())
 			requireVolumeWithin(t, out, bossPlateVolume+20*10*8+2*thick*length*height/2)
@@ -161,10 +153,10 @@ func TestBossRibsStandAtTheFlatsOfAPolygonalBoss(t *testing.T) {
 	const thick, length, height = 2.0, 6.0, 5.0
 	_, plate := bossPlate(t)
 	// A hexagon 10 mm across flats with a flat toward U: six ribs at 60 degrees from one another meet its six flats square.
-	out, err := decad.Boss(t.Context(), plate, shapedRibbed(plate,
+	out, err := shapedRibbed(plate,
 		decad.PolygonHole{Sides: 6, AcrossFlats: units.Millimeters(10), Angle: units.Degrees(0)},
-		&decad.BossRibs{Count: 6, Thickness: units.Millimeters(thick), Length: units.Millimeters(length),
-			Height: units.Millimeters(height)}))
+		decad.NewBossRibs(6, units.Millimeters(thick), units.Millimeters(length), units.Millimeters(height))).
+		Do(t.Context())
 	require.NoError(t, err)
 	hexagon := 6 * 25 * math.Tan(math.Pi/6)
 	requireVolumeWithin(t, out, bossPlateVolume+hexagon*8+6*thick*length*height/2)
@@ -176,10 +168,10 @@ func TestBossRibsStandAtTheEndOfASlot(t *testing.T) {
 	_, plate := bossPlate(t)
 	// A slot 20 long and 8 wide: a rib along its long axis meets the round end 10 mm from the axis, so it reaches the wall as
 	// a rib of a boss of radius 4 does.
-	out, err := decad.Boss(t.Context(), plate, shapedRibbed(plate,
+	out, err := shapedRibbed(plate,
 		decad.SlotHole{Length: units.Millimeters(20), Width: units.Millimeters(8), Angle: units.Degrees(0)},
-		&decad.BossRibs{Count: 2, Thickness: units.Millimeters(thick), Length: units.Millimeters(length),
-			Height: units.Millimeters(height)}))
+		decad.NewBossRibs(2, units.Millimeters(thick), units.Millimeters(length), units.Millimeters(height))).
+		Do(t.Context())
 	require.NoError(t, err)
 	slot := 8*12 + math.Pi*16
 	requireVolumeWithin(t, out, bossPlateVolume+slot*8+2*ribOutside(4, thick, length, height))

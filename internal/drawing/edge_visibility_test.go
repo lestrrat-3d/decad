@@ -54,8 +54,8 @@ func visibilityBody(tb testing.TB, notches int) *decad.Body {
 		}
 	}
 	require.NotNil(tb, profile)
-	body, err := decad.Extrude(tb.Context(), decad.New(), s, profile,
-		decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
+	body, err := decad.Extrude(decad.New(), s, profile,
+		decad.Distance{D: units.Millimeters(20), Dir: decad.Along}).Do(tb.Context())
 	require.NoError(tb, err)
 	volume, err := body.Volume()
 	require.NoError(tb, err)

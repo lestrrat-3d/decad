@@ -125,34 +125,34 @@ configuration option.
 | `decad.EdgeAxis` | struct | A linear edge of a body, selected by query. | The caller |
 | `decad.LoftSection` | struct | One recorded section of a smooth `decad.LoftSections` feature, including its sketch and profile. | The caller |
 | `decad.CircularLoftCorrespondence` | struct | Four exact rational Bernstein maps for a circular loft's cardinal quarters. | The caller |
-| `decad.LoftSplit` | struct | One recorded segment of one loop and the parameter fractions at which `decad.WithLoftSplits` cuts it. | The caller |
+| `decad.LoftSplit` | struct | One recorded segment of one loop and the parameter fractions at which `LoftCommand.Splits` cuts it. | The caller |
 | `decad.ClosestPoint` | struct | The nearest point of a body or face to a query point, its distance reading and how far it can lie from the true surface. | `Body.ClosestPoint`, `Face.ClosestPoint` |
 | `decad.MeshBody` | struct | An imported triangle mesh: vertices, triangles and what they say. Not a `decad.Body`. | `decad.ReadSTL`, `decad.ReadOBJ`, `decad.ReadThreeMF`, `decad.ReadSTEP`, `decad.NewMeshBody` |
 | `decad.MeshImportOption` | option set | A limit on `decad.ReadSTL`, `decad.ReadOBJ`, `decad.ReadThreeMF`, `decad.ReadSTEP` or `decad.ReadIGES`: `decad.WithMaxMeshTriangles` or `decad.WithMaxMeshBytes`. | The caller |
 | `export.ThreeMFItem` | struct | One object of a 3MF package: a name, a body and a rigid placement. | The caller |
 | `decad.SubDCage` | struct | A polygon cage: vertices and the faces that index them, wound counter-clockwise seen from outside. | `decad.SubDMesh` |
-| `decad.InfillSpec` | struct | An infill: the lattice kind, the cell length, the wall level, the samples to a cell and an optional skin thickness. | `decad.Infill` |
-| `decad.LatticeKind` | enum | Which lattice an infill uses: `GyroidInfill`, `SchwarzPInfill`, `DiamondInfill`, `NeoviusInfill`, `IWPInfill`, `FischerKochSInfill`, `LidinoidInfill` or `SplitPInfill`. | `decad.InfillSpec` |
-| `decad.SheetMetalSpec` | struct | A bent strip: thickness, inner bend radius, width, K-factor, flat leg lengths and bend angles. | `decad.SheetMetal` |
-| `decad.SheetMetalReport` | struct | The flat pattern of a strip: each bend's allowance and the blank's length. | `decad.SheetMetal` |
+| `decad.LatticeKind` | enum | Which lattice an infill uses: `GyroidInfill`, `SchwarzPInfill`, `DiamondInfill`, `NeoviusInfill`, `IWPInfill`, `FischerKochSInfill`, `LidinoidInfill` or `SplitPInfill`. | `decad.Infill` |
+| `decad.SheetMetalReport` | struct | The flat pattern of a strip: each bend's allowance and the blank's length. | `SheetMetalCommand.Do` |
 | `decad.LatticeSpec` | struct | A lattice: the box, the cell length, the wall level and the samples to a cell. | `decad.GyroidLattice`, `decad.SchwarzPLattice`, `decad.DiamondLattice`, `decad.NeoviusLattice`, `decad.IWPLattice`, `decad.FischerKochSLattice`, `decad.LidinoidLattice`, `decad.SplitPLattice` |
 | `decad.MeshReduceReport` | struct | The counts and the greatest vertex move `decad.ReduceMesh` reports: vertices merged, triangles dropped. | `decad.ReduceMesh` |
 | `decad.MeshRepairOption` | option set | A repair step of `decad.RepairMesh`: `decad.WithMeshWeld`, `decad.WithMeshOrient` or `decad.WithMeshFillHoles`. | The caller |
 | `decad.MeshRepairReport` | struct | The counts `decad.RepairMesh` changed: vertices welded, triangles dropped and flipped, loops filled or skipped, triangles added. | `decad.RepairMesh` |
 | `decad.MeshReport` | struct | The counts a mesh body reads from its triangles: edges by use, shells, zero-area triangles, closed and inverted. | `MeshBody.Report` |
-| `decad.PathPatternOption` | option set | A setting on `decad.PathPattern`: `decad.WithPathCount` or `decad.WithPathSpacing` chooses where the copies go, and `decad.WithPathFollow` turns each copy to follow the path, about its start or the point `decad.WithPathPivot` names. | The caller |
-| `decad.ArrangeOption` | option set | A setting on `decad.Arrange`: `decad.WithArrangeTurns` lets bodies turn a quarter turn to fit and `decad.WithArrangeAngle` turns each to the angle of least footprint. | The caller |
+| `decad.PathStations` | sealed interface | Where `decad.PathPattern` puts its instances: a `decad.PathCount` or a `decad.PathSpacing`. | The caller |
+| `decad.PathCount` | struct | A count of instances at equal arc length. | The caller |
+| `decad.PathSpacing` | struct | A length between instances along the path. | The caller |
+| `decad.CopyPlacement` | sealed interface | How `CopyCommand.Place` places a copy: a `decad.CopyTransform`, `decad.CopyRotation` or `decad.CopyLiftTranslation`. | The caller |
+| `decad.CopyTransform` | struct | A rigid transform that places a copy. | The caller |
+| `decad.CopyRotation` | struct | A center, an axis and an angle that place a copy by an exact rotation. | The caller |
+| `decad.CopyLiftTranslation` | struct | A lift transform and two lift-local points: the copy moves by the exact world vector between them. | The caller |
 | `decad.ArrangeBed` | struct | The flat area `decad.Arrange` fills: a corner, a width, a depth, a gap and an optional height to stack in layers. | The caller |
-| `decad.ThreadSpec` | struct | One thread: the cylindrical face to cut, the pitch, the hand, an optional length, an optional groove form and an optional lead-in chamfer. | The caller |
 | `decad.ThreadSize` | struct | A thread's major diameter and pitch, as `decad.LookupThread` reads them from a designation like `M10` or `1/4-20`. | `decad.LookupThread` |
-| `decad.ThreadForm` | struct | A trapezoidal thread groove: included flank angle or two separate flank leans, depth and root flat; the zero value is the ISO profile. | `decad.ThreadSpec` |
-| `decad.BossSpec` | struct | One boss: the face it stands on, a world point, its diameter and height, an optional pilot, an optional draft, an optional root fillet, an optional non-round shape, optional gusset ribs and an optional lean. | The caller |
-| `decad.BossRibs` | struct | The gusset ribs that brace a boss's root: their count, thickness, length, height and starting angle. | The caller |
-| `decad.BossBore` | struct | A boss's blind pilot hole: diameter and depth from the boss's top, an optional head and an optional thread. | The caller |
+| `decad.ThreadForm` | struct | A thread groove: the zero value is the ISO profile, `decad.TrapezoidThreadForm` makes a symmetric trapezoid from the included flank angle, depth and root flat, and `decad.ButtressThreadForm` an asymmetric one from two flank leans, depth and root flat. | `decad.TrapezoidThreadForm`, `decad.ButtressThreadForm` |
+| `decad.BossRibs` | struct | The gusset ribs that brace a boss's root: their count, thickness, length and height, and `BossRibs.Angle` for the first rib's angle. | `decad.NewBossRibs` |
+| `decad.BossBore` | struct | A boss's blind pilot hole: diameter and depth from the boss's top, with `BossBore.Head`, `BossBore.Thread` and `BossBore.Draft` for the optional parts. | `decad.NewBossBore` |
 | `decad.SectionOutline` | struct | The closed outlines where a body's verified mesh meets a plane, and how far they lie from the true surface. | `Body.SectionOutline` |
 | `decad.SectionClearance` | struct | The least distance between the material two section outlines enclose in their plane, the closest pair of points and whether the regions overlap. | `SectionOutline.Clearance` |
-| `decad.HoleSpec` | struct | One hole: the face, a world point on it, the diameter, a depth, an optional head, an optional shape, an optional thread and an optional draft. | The caller |
-| `decad.HoleThread` | struct | The thread of a tapped hole: pitch, hand and an optional length. | The caller |
+| `decad.HoleThread` | struct | The thread of a tapped hole or pilot: its pitch, with `HoleThread.LeftHand` and `HoleThread.Length` for the optional parts. | `decad.NewHoleThread` |
 | `decad.HoleShape` | sealed interface | The cross-section of a hole that is not round. | The caller |
 | `decad.RectangularHole` | struct | A hole with a rectangular bore: width, height and a turn about the hole axis. | The caller |
 | `decad.OutlineHole` | struct | A hole with an arbitrary simple polygonal bore: corners about the hole axis in the face frame and a turn about it. | The caller |
@@ -166,7 +166,6 @@ configuration option.
 | `decad.TextSpec` | struct | A line of lettering: the text, the font size, where its baseline starts, an optional tolerance, an optional font and an optional arc to set it along. | The caller |
 | `decad.TextArc` | struct | A circle to set lettering along: centre, radius, start angle and the way round. | `decad.TextSpec` |
 | `decad.EmbossMode` | enum | `decad.EmbossRaised` or `decad.EmbossEngraved`. | The caller |
-| `decad.EmbossOption` | option set | A setting on `decad.Emboss`: `decad.WithEmbossDraft` leans the relief's walls and `decad.WithEmbossRimFillet` rounds its rim. | The caller |
 | `decad.Countersink` | struct | A conical recess with an included angle. | The caller |
 
 ### Selection, patterns and placement
@@ -301,6 +300,70 @@ configuration option.
 | `decad.SweepDeparture` | struct | Certified separation after an initial touch. | `SweepReport` |
 | `decad.SweptBox` | struct | A box enclosing every point a body occupies along a path. | `Document.SweptBox` |
 
+### Commands
+
+A command is built by a package function, configured by chained methods and run once by `Do(ctx)`. A second `Do`
+returns `decad.ErrConsumed`.
+
+| Type | Kind | Holds | Obtained from |
+|---|---|---|---|
+| `decad.UnionCommand` | struct | The bodies to join and the optional refinement bound set by `UnionCommand.RefineTo`. `Do` returns `*decad.Body`. | `decad.Union` |
+| `decad.CutCommand` | struct | The target, the tool and the `CutCommand.MatchingFaces` declaration. `Do` returns `*decad.Body`. | `decad.Cut` |
+| `decad.IntersectCommand` | struct | The two operands and the `IntersectCommand.MatchingFaces` declaration. `Do` returns `*decad.Body`. | `decad.Intersect` |
+| `decad.RefineCommand` | struct | The source body and the refinement bound. `Do` returns `*decad.Body`. | `decad.Refine` |
+| `decad.FilletCommand` | struct | The body, the edge selector, the radius and the `FilletCommand.TangentChain` declaration. `Do` returns `*decad.Body`. | `decad.Fillet` |
+| `decad.ChamferCommand` | struct | The body, the edge selector, the setback, the `ChamferCommand.TangentChain` declaration and the `ChamferCommand.Asymmetric` reference and second distance. `Do` returns `*decad.Body`. | `decad.Chamfer` |
+| `decad.FilletChordCommand` | struct | The body, the edge selector and the chord length. `Do` returns `*decad.Body`. | `decad.FilletChord` |
+| `decad.ChamferAngleCommand` | struct | The body, the edge selector, the distance, the reference face selector and the angle. `Do` returns `*decad.Body`. | `decad.ChamferAngle` |
+| `decad.ShellCommand` | struct | The body, the face selector naming the openings, the thickness, the `ShellCommand.Sense` wall sense and the `ShellCommand.FaceThickness` thickness of each world axis direction. `Do` returns `*decad.Body`. | `decad.Shell` |
+| `decad.ShellClosedCommand` | struct | The body, the thickness and the `ShellClosedCommand.Sense` and `ShellClosedCommand.FaceThickness` settings. A closed shell removes no face. `Do` returns `*decad.Body`. | `decad.ShellClosed` |
+| `decad.DraftCommand` | struct | The body, the wall selector, the neutral plane and the angle. `Do` returns `*decad.Body`. | `decad.Draft` |
+| `decad.OffsetCommand` | struct | The sheet or axis-square solid, the distance and the `OffsetCommand.Side` side. `Do` returns the second body and leaves the first live. | `decad.Offset` |
+| `decad.ThickenCommand` | struct | The sheet, the thickness and the `ThickenCommand.Side` side. `Do` returns `*decad.Body`. | `decad.Thicken` |
+| `decad.MoveFaceCommand` | struct | The body, the face selector and the signed distance. `Do` returns `*decad.Body`. | `decad.MoveFace` |
+| `decad.ConeFromFaceCommand` | struct | The Revolve body, the face selector and the far plane. `Do` returns the cone and leaves the Revolve live. | `decad.ConeFromFace` |
+| `decad.ExtrudeCommand` | struct | The document, sketch, section, extent and the `ExtrudeCommand.Taper` and `ExtrudeCommand.SurfaceResult` settings. `Do` returns `*decad.Body`. | `decad.Extrude` |
+| `decad.RevolveCommand` | struct | The document, sketch, section, axis, angular extent and the `RevolveCommand.SurfaceResult` setting. `Do` returns `*decad.Body`. | `decad.Revolve` |
+| `decad.SweepCommand` | struct | The document, sketch, section, path and the `SweepCommand.Twist`, `SweepCommand.MitredJoins`, `SweepCommand.SectionScale` and `SweepCommand.SurfaceResult` settings. `Do` returns `*decad.Body`. | `decad.Sweep` |
+| `decad.CoilCommand` | struct | The document, sketch, profile, axis, pitch, turns and the `CoilCommand.LeftHand` setting. `Do` returns `*decad.Body`. | `decad.Coil` |
+| `decad.LoftCommand` | struct | The document, the two sketches and profiles and the `LoftCommand.Alignment`, `LoftCommand.Splits` and `LoftCommand.SurfaceResult` settings. `Do` returns `*decad.Body`. | `decad.Loft` |
+| `decad.LoftChainCommand` | struct | The document and the two sketches and open chains. `Do` returns `*decad.Body`, always a sheet. | `decad.LoftChain` |
+| `decad.LoftFromPointCommand` | struct | The document, the apex, the sketch and the profile. `Do` returns `*decad.Body`. | `decad.LoftFromPoint` |
+| `decad.LoftSectionsCommand` | struct | The document, the sections and the `LoftSectionsCommand.CircularCorrespondence` maps. `Do` returns `*decad.Body`. | `decad.LoftSections` |
+| `decad.LoftFacesCommand` | struct | The cap faces and, for a cone-tangent end, the cone and its radial direction. `Do` returns `*decad.Body`. | `decad.LoftFaces`, `decad.LoftFacesToCone` |
+| `decad.PatchProfileCommand` | struct | The document, the sketch and the profile. `Do` returns a one-face sheet. | `decad.PatchProfile` |
+| `decad.EmbossCommand` | struct | The body, the sketch, the profiles, the face selector, the mode, the height and the `EmbossCommand.RimFillet` and `EmbossCommand.Draft` settings. `Do` returns `*decad.Body`. | `decad.Emboss` |
+| `decad.WebPathCommand` | struct | The body, the sketch, the path entities, the thickness, the extent and the `WebPathCommand.Draft` and `WebPathCommand.Overrun` settings. `Do` returns `*decad.Body`. | `decad.WebPath` |
+| `decad.CutExtrudeCommand` | struct | The target, the sketch, the profiles, the extent and the `CutExtrudeCommand.Taper` setting. `Do` returns `*decad.Body`. | `decad.CutExtrude` |
+| `decad.CutRevolveCommand` | struct | The target, the sketch, the profiles, the axis and the angular extent. `Do` returns `*decad.Body`. | `decad.CutRevolve` |
+| `decad.TransformCommand` | struct | The body and the rigid transform. `Do` returns the placed body and retires the input. | `decad.Transform` |
+| `decad.CopyCommand` | struct | The source body and the `CopyCommand.Place` placement. `Do` returns `*decad.Body` and leaves the source live. | `decad.Copy` |
+| `decad.MirroredCommand` | struct | The body and the mirror plane. `Do` returns the mirror image and retires the input. | `decad.Mirrored` |
+| `decad.MirroredJoinCommand` | struct | The body and the mirror plane, a face of the body. `Do` returns the body joined to its image. | `decad.MirroredJoin` |
+| `decad.MirroredCopyCommand` | struct | The body and the mirror plane. `Do` returns the mirror image and leaves the source live. | `decad.MirroredCopy` |
+| `decad.ScaledAtCommand` | struct | The body, the anchor point and the dimensionless factor. `Do` returns `*decad.Body`. | `decad.ScaledAt` |
+| `decad.QuarterTurnCommand` | struct | The mesh solid, the world axis, a point on it and the number of quarter turns. `Do` returns `*decad.Body`. | `decad.QuarterTurn` |
+| `decad.StretchCommand` | struct | The mesh solid, the anchor point and one factor per world axis. `Do` returns `*decad.Body`. | `decad.Stretch` |
+| `decad.PatternCopiesCommand` | struct | The body and the pattern layout. `Do` returns the extra instances as `[]*decad.Body` and leaves the body live. | `decad.PatternCopies` |
+| `decad.PatternedCommand` | struct | The body and the pattern layout. `Do` returns one body holding every instance. | `decad.Patterned` |
+| `decad.PathPatternCommand` | struct | The body, the path, the stations and the `PathPatternCommand.Follow` or `PathPatternCommand.FollowAbout` turn. `Do` returns the copies as `[]*decad.Body`. | `decad.PathPattern` |
+| `decad.ArrangeCommand` | struct | The bodies, the bed and the `ArrangeCommand.Turns` and `ArrangeCommand.Angle` settings. `Do` returns the moved bodies as `[]*decad.Body`. | `decad.Arrange` |
+| `decad.HoleCommand` | struct | The body, the face, the point, the diameter, the depth and the `HoleCommand.Head`, `HoleCommand.Thread` and `HoleCommand.Draft` settings. `Do` returns `*decad.Body`. | `decad.Hole` |
+| `decad.HoleShapedCommand` | struct | The body, the face, the point, the shape and the depth. `Do` returns `*decad.Body`. | `decad.HoleShaped` |
+| `decad.BossCommand` | struct | The body, the face, the point, the diameter, the height and the `BossCommand.Bore`, `BossCommand.Draft`, `BossCommand.RootFillet`, `BossCommand.Ribs` and `BossCommand.Tilt` settings. `Do` returns `*decad.Body`. | `decad.Boss` |
+| `decad.BossShapedCommand` | struct | The body, the face, the point, the section shape, the height and the `BossShapedCommand.Bore`, `BossShapedCommand.Draft` and `BossShapedCommand.Ribs` settings. `Do` returns `*decad.Body`. | `decad.BossShaped` |
+| `decad.ThreadCommand` | struct | The body, the cylindrical face, the pitch and the `ThreadCommand.LeftHand`, `ThreadCommand.Length`, `ThreadCommand.Form`, `ThreadCommand.LeadIn` and `ThreadCommand.LeadInAngle` settings. `Do` returns `*decad.Body`. | `decad.Thread` |
+| `decad.InfillCommand` | struct | The body, the lattice kind, the cell length, the wall level and the `InfillCommand.Resolution` and `InfillCommand.Skin` settings. `Do` returns `*decad.Body`. | `decad.Infill` |
+| `decad.SheetMetalCommand` | struct | The document, the thickness, the inner radius, the width, the legs, the bends and the `SheetMetalCommand.KFactor` setting. `Do` returns the body, a `decad.SheetMetalReport` and an error. | `decad.SheetMetal` |
+| `decad.PatchEdgesCommand` | struct | The body and the edge selector. `Do` returns the body with one planar face per closed chain of free edges and retires the input. | `decad.PatchEdges` |
+| `decad.StitchCommand` | struct | The sheet bodies to weld. `Do` returns `*decad.Body` and retires every operand. | `decad.Stitch` |
+| `decad.UnstitchCommand` | struct | The body to take apart. `Do` returns one single-face sheet per face as `[]*decad.Body` and retires the input. | `decad.Unstitch` |
+| `decad.TrimCommand` | struct | The sheet, the tool and the `decad.TrimSide` to keep. `Do` returns `*decad.Body` and retires both operands. | `decad.Trim` |
+| `decad.ExtendCommand` | struct | The sheet, the edge query and the tool. `Do` returns the lengthened sheet and retires both operands. | `decad.Extend` |
+| `decad.SplitCommand` | struct | The target solid and the tool sheet. `Do` returns one solid per target cell as `[]*decad.Body` and retires both operands. | `decad.Split` |
+| `decad.SolidFromMeshCommand` | struct | The document and the closed mesh. `Do` returns the solid `*decad.Body`. | `decad.SolidFromMesh` |
+| `decad.RemoveCommand` | struct | The body to retire. `Do` returns only an error. | `decad.Remove` |
+
 ### Options
 
 Option types configure one feature each. The `With...` constructors in [Building bodies](api.md#building-bodies) and the
@@ -308,20 +371,6 @@ other sections return them.
 
 | Type | Configures |
 |---|---|
-| `decad.ExtrudeOption` | `decad.Extrude` |
-| `decad.RevolveOption` | `decad.Revolve` |
-| `decad.SweepOption` | `decad.Sweep` |
-| `decad.LoftOption`, `decad.ChainLoftOption` | `decad.Loft`, `decad.LoftChain` |
-| `decad.LoftFacesOption` | `decad.LoftFaces` |
-| `decad.CoilOption` | `decad.Coil` |
-| `decad.FilletOption`, `decad.ChamferOption`, `decad.FilletChamferOption` | `decad.Fillet`, `decad.Chamfer` |
-| `decad.ShellOption` | `decad.Shell` |
-| `decad.DraftOption` | `decad.Draft` |
-| `decad.OffsetOption`, `decad.ThickenOption` | `decad.Offset`, `decad.Thicken` |
-| `decad.RibOption` | `decad.WebPath` |
-| `decad.BooleanOption` | `decad.Cut`, `decad.Intersect` |
-| `decad.CopyOption`, `decad.MirrorOption` | `decad.Copy`, `decad.Mirrored` |
-| `decad.SurfaceResultOption` | Every feature that `decad.WithSurfaceResult` reaches. |
 | `decad.TessellateOption` | `Body.Tessellate` |
 | `decad.Verification` | How much of the tessellation proof runs, set by `decad.WithVerification`. |
 | `decad.VerifyOption`, `decad.WallOption` | `Document.Verify`, `decad.WithMinWallThickness` |

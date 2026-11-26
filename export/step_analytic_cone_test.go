@@ -28,7 +28,7 @@ func coneFrustum(t *testing.T, r0, r1 float64) *decad.Body {
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	axis := decad.SketchLine{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 1, V: 0}}
-	body, err := decad.Revolve(t.Context(), decad.New(), s, s.Profiles()[0], axis, decad.FullRevolution{})
+	body, err := decad.Revolve(decad.New(), s, s.Profiles()[0], axis, decad.FullRevolution{}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -107,7 +107,7 @@ func TestAnalyticConeToAnApexKeepsFaceted(t *testing.T) {
 	_, err = sk.Solve(t.Context())
 	require.NoError(t, err)
 	axis := decad.SketchLine{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 1, V: 0}}
-	body, err := decad.Revolve(t.Context(), decad.New(), sk, sk.Profiles()[0], axis, decad.FullRevolution{})
+	body, err := decad.Revolve(decad.New(), sk, sk.Profiles()[0], axis, decad.FullRevolution{}).Do(t.Context())
 	require.NoError(t, err)
 	ok, err := supportsAnalyticSTEP(t.Context(), body)
 	require.NoError(t, err)

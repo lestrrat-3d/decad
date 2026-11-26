@@ -37,6 +37,7 @@ func TestSentinelsMatchTheirRootReExports(t *testing.T) {
 		{"ErrUnitKind", decad.ErrUnitKind, decaderr.ErrUnitKind, "decad: wrong unit kind"},
 		{"ErrNotFinite", decad.ErrNotFinite, decaderr.ErrNotFinite, "decad: non-finite value"},
 		{"ErrUnsupported", decad.ErrUnsupported, decaderr.ErrUnsupported, "decad: not supported by the current evaluator"},
+		{"ErrConsumed", decad.ErrConsumed, decaderr.ErrConsumed, "decad: command has already run"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

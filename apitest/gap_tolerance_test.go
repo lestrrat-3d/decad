@@ -15,7 +15,7 @@ func gapPlate(t *testing.T, opts ...decad.DocumentOption) *decad.Body {
 	t.Helper()
 	s, p := plateSketch(t)
 	doc := decad.New(opts...)
-	body, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(shellBoxHeight), Dir: decad.Along})
+	body, err := decad.Extrude(doc, s, p, decad.Distance{D: units.Millimeters(shellBoxHeight), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -36,7 +36,7 @@ func TestDocumentGapToleranceOptions(t *testing.T) {
 		t.Run("accepts "+name, func(t *testing.T) {
 			t.Parallel()
 			body := gapPlate(t, opts...)
-			moved, err := decad.Transform(t.Context(), body, slide)
+			moved, err := decad.Transform(body, slide).Do(t.Context())
 			require.NoError(t, err)
 			centroid, err := moved.Centroid()
 			require.NoError(t, err)
@@ -61,7 +61,7 @@ func TestDocumentGapToleranceOptions(t *testing.T) {
 		t.Run("refuses "+name+" when an operation reads it", func(t *testing.T) {
 			t.Parallel()
 			body := gapPlate(t, tc.opts...)
-			_, err := decad.Transform(t.Context(), body, slide)
+			_, err := decad.Transform(body, slide).Do(t.Context())
 			require.ErrorIs(t, err, tc.want)
 			require.Len(t, body.Document().Bodies(), 1, "a refused operation leaves the body live")
 		})

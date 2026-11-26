@@ -26,7 +26,7 @@ func circleSectionSourceSized(t *testing.T, u, v, radius, height float64) (*deca
 	require.NoError(t, err)
 	require.Len(t, s.Profiles(), 1)
 	doc := decad.New()
-	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(height), Dir: decad.Along})
+	body, err := decad.Extrude(doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(height), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	return doc, body
 }
@@ -53,9 +53,9 @@ func verifyOffsetCylinderSection(t *testing.T, source *decad.Body, frame r3.Fram
 	require.Equal(t, units.SquareMillimeters(2*halfChord*height), area.Value)
 	require.Equal(t, decad.Exact, area.Exactness)
 
-	child, err := decad.Extrude(t.Context(), decad.New(), section, profiles[0], decad.Distance{
+	child, err := decad.Extrude(decad.New(), section, profiles[0], decad.Distance{
 		D: units.Millimeters(2), Dir: decad.Along,
-	})
+	}).Do(t.Context())
 	require.NoError(t, err)
 	volume, err := child.Volume()
 	require.NoError(t, err)
@@ -118,7 +118,7 @@ func TestSectionCardinalCylinderOffsetSignsAndPlacement(t *testing.T) {
 		EX: r3.Vec{Y: 1}, EY: r3.Vec{X: -1}, EZ: r3.Vec{Z: 1},
 	}, r3.NewVec(3, 4, 7))
 	require.NoError(t, err)
-	placed, err := decad.Transform(t.Context(), source, placement)
+	placed, err := decad.Transform(source, placement).Do(t.Context())
 	require.NoError(t, err)
 	frame := cardinalAxisSectionPlane(t, r3.NewVec(0, 4, 12), r3.NewVec(0, 1, 0))
 	child := verifyOffsetCylinderSection(t, placed, frame, 4, 10)
@@ -169,9 +169,9 @@ func TestSectionCardinalCylinderSketchFeedsVerifiedExtrude(t *testing.T) {
 	require.Equal(t, units.SquareMillimeters(10), area.Value)
 	require.Equal(t, decad.Exact, area.Exactness)
 
-	child, err := decad.Extrude(t.Context(), decad.New(), section, profiles[0], decad.Distance{
+	child, err := decad.Extrude(decad.New(), section, profiles[0], decad.Distance{
 		D: units.Millimeters(2), Dir: decad.Along,
-	})
+	}).Do(t.Context())
 	require.NoError(t, err)
 	volume, err := child.Volume()
 	require.NoError(t, err)
@@ -196,7 +196,7 @@ func TestSectionCardinalCylinderPlacedFrame(t *testing.T) {
 		EX: r3.Vec{Y: 1}, EY: r3.Vec{X: -1}, EZ: r3.Vec{Z: 1},
 	}, r3.NewVec(3, 4, 7))
 	require.NoError(t, err)
-	placed, err := decad.Transform(t.Context(), source, placement)
+	placed, err := decad.Transform(source, placement).Do(t.Context())
 	require.NoError(t, err)
 	frame := cardinalAxisSectionPlane(t, r3.NewVec(3, 4, 9.5), r3.NewVec(0, 1, 0))
 	section, profiles, err := placed.Section(t.Context(), frame)
@@ -219,9 +219,9 @@ func TestSectionCardinalCylinderOffsetCentreAndReverseAxis(t *testing.T) {
 	section, profiles, err := source.Section(t.Context(), frame)
 	require.NoError(t, err)
 	require.Len(t, profiles, 1)
-	child, err := decad.Extrude(t.Context(), decad.New(), section, profiles[0], decad.Distance{
+	child, err := decad.Extrude(decad.New(), section, profiles[0], decad.Distance{
 		D: units.Millimeters(1), Dir: decad.Along,
-	})
+	}).Do(t.Context())
 	require.NoError(t, err)
 	volume, err := child.Volume()
 	require.NoError(t, err)
@@ -267,7 +267,7 @@ func TestSectionCardinalPlaneRefusesNonrectangularPolygon(t *testing.T) {
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	doc := decad.New()
-	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
+	body, err := decad.Extrude(doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(5), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	frame := cardinalAxisSectionPlane(t, r3.NewVec(1, 1, 2.5), r3.NewVec(1, 0, 0))
 	section, profiles, err := body.Section(t.Context(), frame)

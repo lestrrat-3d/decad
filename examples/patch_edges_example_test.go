@@ -15,7 +15,7 @@ import (
 // solid.
 func Example_patch_edges() {
 	// A tube is a sheet with two open ends, so build one: extrude a rectangle
-	// with WithSurfaceResult (see Example_surface_result).
+	// with SurfaceResult (see Example_surface_result).
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	if err != nil {
@@ -29,9 +29,8 @@ func Example_patch_edges() {
 		return
 	}
 	doc := decad.New()
-	tube, err := decad.Extrude(context.Background(), doc, s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(10), Dir: decad.Along},
-		decad.WithSurfaceResult())
+	tube, err := decad.Extrude(doc, s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).SurfaceResult().Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to extrude: %s\n", err)
 		return
@@ -40,8 +39,8 @@ func Example_patch_edges() {
 	// Free edges are edges that belong to only one face, which is what an open
 	// boundary is made of. The tube has eight: four at each end. Both loops
 	// match the query, so one call caps both ends.
-	capped, err := decad.PatchEdges(context.Background(), tube,
-		decad.Edges(decad.Free()).Exactly(8))
+	capped, err := decad.PatchEdges(tube,
+		decad.Edges(decad.Free()).Exactly(8)).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to patch: %s\n", err)
 		return

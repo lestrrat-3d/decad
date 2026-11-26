@@ -36,7 +36,7 @@ func Example_revolve_chain() {
 	// profile would go.
 	axis := decad.SketchLine{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 0, V: 1}}
 	doc := decad.New()
-	bell, err := decad.Revolve(context.Background(), doc, s, s.Chains()[0], axis, decad.FullRevolution{})
+	bell, err := decad.Revolve(doc, s, s.Chains()[0], axis, decad.FullRevolution{}).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to revolve: %s\n", err)
 		return

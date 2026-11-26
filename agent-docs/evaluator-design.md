@@ -530,7 +530,7 @@ cylinder union), a copied cap placed by a non-identity transform
 (`CapRecord.Under` keeps the record only under the identity placement), and a
 sweep, mitred-sweep, twist or coil end cap and a `Body.Patch` chain patch. A
 `Distance` extent reaches them. A nonzero
-`WithTaper` builds a draft body over `Distance`, `ToFace`, `ThroughAll`,
+`Taper` builds a draft body over `Distance`, `ToFace`, `ThroughAll`,
 `Symmetric`, or `TwoSided`. `agent-docs/modify-design.md` Part D owns the tapered extrude:
 its sharp offset family, its one- and two-slab payloads, its refusals and its
 staging.
@@ -929,7 +929,7 @@ allowance. Each held vertex starts at the nearest float to its exact rational
 image under that map, before the embedding check can move it to another
 corner of the image's float box. Vertex rounding and a swept-volume allowance
 are added after the exact map. A non-finite bound refuses the placement.
-A faceted copy made with `WithCopyRotation` instead denotes an exactly
+A faceted copy made with `CopyRotation` instead denotes an exactly
 orthogonal rational rotation `Q` with translation `t`, recorded at Copy time.
 The evaluator first places held vertices by the same float basis. Each vertex pays
 `|Q - D|` times its largest coordinate plus `|t - t_D|` in place of the length
@@ -1917,7 +1917,7 @@ has not implemented returns `ErrUnsupported` at the build, or reads `Suspect` fo
 | Free-form segments | `agent-docs/spline-design.md` §10 | spline Table R |
 | Loft | `agent-docs/loft-design.md` §12 | N-section and guide-rail/centerline lofts; a loft case in the analytic clearance kernel; a non-constant-section wall survey |
 | Sweep | `agent-docs/sweep-design.md` §12 | sweep Table D states |
-| Coil | `agent-docs/helix-design.md` §11 | `CoilChain`, `WithSurfaceResult()` and modify on a coil |
+| Coil | `agent-docs/helix-design.md` §11 | `CoilChain`, `SurfaceResult` and modify on a coil |
 | Sheet bodies and surface operations | `agent-docs/surface-design.md` §14 | surface Table R |
 | Payload verification (cup adapter, faceted validity, clearance, surveys) | `agent-docs/payload-verification-design.md` §13 | the stages that file marks design only |
 

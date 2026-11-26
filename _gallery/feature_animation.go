@@ -238,14 +238,14 @@ func featureAnimationModels(ctx context.Context, name string, stage int, chord u
 			size := float64(stage) / (featureAnimationSteps - 1)
 			switch name {
 			case "fillet":
-				body, err = decad.Fillet(ctx, body, decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1))),
-					units.Millimeters(16*size))
+				body, err = decad.Fillet(body, decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1))),
+					units.Millimeters(16*size)).Do(ctx)
 			case "chamfer":
-				body, err = decad.Chamfer(ctx, body, decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1))),
-					units.Millimeters(16*size))
+				body, err = decad.Chamfer(body, decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1))),
+					units.Millimeters(16*size)).Do(ctx)
 			case "cap-chamfer":
-				body, err = decad.Chamfer(ctx, body, decad.Edges(decad.CreatedBy(decad.CapEnd(body))),
-					units.Millimeters(0.6+9.4*float64(stage-1)/(featureAnimationSteps-2)))
+				body, err = decad.Chamfer(body, decad.Edges(decad.CreatedBy(decad.CapEnd(body))),
+					units.Millimeters(0.6+9.4*float64(stage-1)/(featureAnimationSteps-2))).Do(ctx)
 			}
 			if err != nil {
 				return nil, err

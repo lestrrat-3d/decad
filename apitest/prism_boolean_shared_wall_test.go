@@ -55,14 +55,14 @@ func TestPrismBooleanSharedWallBoxes(t *testing.T) {
 			doc := decad.New()
 			a := boxBody(t, doc, 0, 0, 10, 10, 10)
 			b := boxBody(t, doc, tc.b[0], tc.b[1], tc.b[2], tc.b[3], 10)
-			union, err := decad.Union(t.Context(), a, b)
+			union, err := decad.Union(a, b).Do(t.Context())
 			require.NoError(t, err)
 			requireAnalyticVolume(t, union, tc.union)
 
 			doc = decad.New()
 			a = boxBody(t, doc, 0, 0, 10, 10, 10)
 			b = boxBody(t, doc, tc.b[0], tc.b[1], tc.b[2], tc.b[3], 10)
-			cut, err := decad.Cut(t.Context(), a, b)
+			cut, err := decad.Cut(a, b).Do(t.Context())
 			require.NoError(t, err)
 			requireAnalyticVolume(t, cut, tc.cutRest)
 		})
@@ -78,7 +78,7 @@ func TestPrismBooleanTouchingCornerStaysOnMesh(t *testing.T) {
 	doc := decad.New(decad.ExactOnly())
 	a := boxBody(t, doc, 0, 0, 10, 10, 10)
 	b := boxBody(t, doc, 10, 10, 20, 20, 10)
-	_, err := decad.Union(t.Context(), a, b)
+	_, err := decad.Union(a, b).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	var booleanErr *decad.BooleanError
 	require.ErrorAs(t, err, &booleanErr)
@@ -109,10 +109,10 @@ func TestPrismBooleanToothTouchingHubDoesNotOverlap(t *testing.T) {
 		toothVol, err := tooth.Volume()
 		require.NoError(t, err)
 
-		_, err = decad.Intersect(t.Context(), hub, tooth)
+		_, err = decad.Intersect(hub, tooth).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 
-		rest, err := decad.Cut(t.Context(), tooth, hub)
+		rest, err := decad.Cut(tooth, hub).Do(t.Context())
 		require.NoError(t, err)
 		requireAnalyticVolume(t, rest, volumeMM(t, toothVol))
 	})

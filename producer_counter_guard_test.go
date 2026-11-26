@@ -23,8 +23,10 @@ import (
 // NextCurve fields) through a selector, or names nextProducerID. Only the
 // functions producerAt and advanceProducer of root document.go and ProducerAt,
 // SeedsAt, MintLevel and MintCurve of internal/topo/document.go may touch the
-// counters, so a later change that routes them through the calling context
-// edits those functions alone. Any other function, including one added to an
+// counters, plus snapshot and restore of root document.go, which only save the
+// producer counter and put it back inside an atomic rollback, so a later change
+// that routes the counters through the calling context edits those functions
+// alone. Any other function, including one added to an
 // allowed file, fails. A composite literal that seeds a transient document
 // names the field as a key, not a selector, and passes.
 func TestProducerCounterAccess(t *testing.T) {
@@ -33,6 +35,8 @@ func TestProducerCounterAccess(t *testing.T) {
 	allowed := map[string]struct{}{
 		"document.go:producerAt":               {},
 		"document.go:advanceProducer":          {},
+		"document.go:snapshot":                 {}, // saves the counter for an atomic rollback; reads no new identity
+		"document.go:restore":                  {}, // puts the saved counter back; mints no identity
 		"internal/topo/document.go:ProducerAt": {},
 		"internal/topo/document.go:SeedsAt":    {},
 		"internal/topo/document.go:MintLevel":  {},

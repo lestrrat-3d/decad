@@ -123,7 +123,7 @@ func TestTessellationCachePayloadClasses(t *testing.T) {
 		{name: "prism", body: holedPlateBody},
 		{name: "cup", body: func(t *testing.T) *decad.Body {
 			_, box := shellBox(t)
-			body, err := decad.Shell(t.Context(), box, topCap(box), units.Millimeters(5))
+			body, err := decad.Shell(box, topCap(box), units.Millimeters(5)).Do(t.Context())
 			require.NoError(t, err)
 			return body
 		}},
@@ -135,19 +135,19 @@ func TestTessellationCachePayloadClasses(t *testing.T) {
 			doc := decad.New()
 			plate := boxBody(t, doc, 0, 0, 20, 20, 8)
 			tool := translated(t, diskBody(t, doc, 10, 10, 2), 0, 0, -6)
-			body, err := decad.Cut(t.Context(), plate, tool)
+			body, err := decad.Cut(plate, tool).Do(t.Context())
 			require.NoError(t, err)
 			return body
 		}},
 		{name: "revolve", body: func(t *testing.T) *decad.Body {
 			s, p := solidSketch(t)
-			body, err := decad.Revolve(t.Context(), decad.New(), s, p, uAxis, decad.FullRevolution{})
+			body, err := decad.Revolve(decad.New(), s, p, uAxis, decad.FullRevolution{}).Do(t.Context())
 			require.NoError(t, err)
 			return body
 		}},
 		{name: "cap blend", body: func(t *testing.T) *decad.Body {
 			_, box := capBlendBox(t)
-			body, err := decad.Chamfer(t.Context(), box, capLoopEdges(box), units.Millimeters(5))
+			body, err := decad.Chamfer(box, capLoopEdges(box), units.Millimeters(5)).Do(t.Context())
 			require.NoError(t, err)
 			return body
 		}},
@@ -177,14 +177,14 @@ func TestTessellationCacheCopiesDoNotInheritEntries(t *testing.T) {
 	base := holedPlateBody(t)
 	baseMesh := mustTessellate(t, base, tol)
 
-	duplicate, err := decad.Copy(t.Context(), base)
+	duplicate, err := decad.Copy(base).Do(t.Context())
 	require.NoError(t, err)
 	duplicateMesh := mustTessellate(t, duplicate, tol)
 	require.NotSame(t, baseMesh, duplicateMesh)
 	require.NotSame(t, base.Faces()[0], duplicate.Faces()[0])
 	require.Same(t, duplicateMesh, mustTessellate(t, duplicate, tol))
 
-	copied, err := decad.Copy(t.Context(), base, decad.WithCopyPlacement(mustTransform(t, r3.NewVec(5, 0, 0))))
+	copied, err := decad.Copy(base).Place(decad.CopyTransform{Transform: mustTransform(t, r3.NewVec(5, 0, 0))}).Do(t.Context())
 	require.NoError(t, err)
 	copyMesh := mustTessellate(t, copied, tol)
 	require.NotSame(t, baseMesh, copyMesh)
@@ -192,7 +192,7 @@ func TestTessellationCacheCopiesDoNotInheritEntries(t *testing.T) {
 
 	placedSource := holedPlateBody(t)
 	placedSourceMesh := mustTessellate(t, placedSource, tol)
-	placed, err := decad.Transform(t.Context(), placedSource, mustTransform(t, r3.NewVec(5, 0, 0)))
+	placed, err := decad.Transform(placedSource, mustTransform(t, r3.NewVec(5, 0, 0))).Do(t.Context())
 	require.NoError(t, err)
 	placedMesh := mustTessellate(t, placed, tol)
 	require.NotSame(t, placedSourceMesh, placedMesh)
@@ -311,7 +311,7 @@ func BenchmarkTessellationCacheVerify(b *testing.B) {
 	doc := decad.New()
 	a := benchRodBody(b, doc, 0, 0, 4)
 	c := benchRodBody(b, doc, 0, 0, 3)
-	placed, err := decad.Transform(b.Context(), c, mustTransform(b, r3.NewVec(0, -4, 2)))
+	placed, err := decad.Transform(c, mustTransform(b, r3.NewVec(0, -4, 2))).Do(b.Context())
 	if err != nil {
 		b.Fatal(err)
 	}

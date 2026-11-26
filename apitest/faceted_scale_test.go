@@ -61,7 +61,7 @@ func TestScaledAtUnmarkedFacetedSolid(t *testing.T) {
 		sections := fourRectangleSections(t, [4]float64{2, 3, 4, 5},
 			[4]float64{3, 4, 5, 7}, [4]float64{0, 4, 8, 12})
 		doc := decad.New()
-		body, err := decad.LoftSections(t.Context(), doc, sections[:]...)
+		body, err := decad.LoftSections(doc, sections[:]...).Do(t.Context())
 		require.NoError(t, err)
 		// The smooth walls read NURBS before the scale and Faceted after it.
 		nurbs := 0
@@ -72,7 +72,7 @@ func TestScaledAtUnmarkedFacetedSolid(t *testing.T) {
 		}
 		require.Equal(t, 4, nurbs)
 		anchor := r3.NewVec(1, -2, 3)
-		scaled, err := decad.ScaledAt(t.Context(), body, anchor, units.Scalar(10))
+		scaled, err := decad.ScaledAt(body, anchor, units.Scalar(10)).Do(t.Context())
 		require.NoError(t, err)
 		require.Equal(t, []*decad.Body{scaled}, doc.Bodies())
 
@@ -107,15 +107,15 @@ func TestScaledAtUnmarkedFacetedSolid(t *testing.T) {
 		t.Parallel()
 		sections := threeArcCircleSections(t, [3]float64{8, 10, 12}, [3]float64{0, 5, 10})
 		doc := decad.New()
-		body, err := decad.LoftSections(t.Context(), doc, sections[:]...)
+		body, err := decad.LoftSections(doc, sections[:]...).Do(t.Context())
 		require.NoError(t, err)
 		move, err := r3.Translation(r3.NewVec(4, 0, -2))
 		require.NoError(t, err)
-		placed, err := decad.Transform(t.Context(), body, move)
+		placed, err := decad.Transform(body, move).Do(t.Context())
 		require.NoError(t, err)
-		first, err := decad.ScaledAt(t.Context(), placed, r3.NewVec(0, 1, 0), units.Scalar(3))
+		first, err := decad.ScaledAt(placed, r3.NewVec(0, 1, 0), units.Scalar(3)).Do(t.Context())
 		require.NoError(t, err)
-		scaled, err := decad.ScaledAt(t.Context(), first, r3.NewVec(-2, 0, 5), units.Scalar(0.5))
+		scaled, err := decad.ScaledAt(first, r3.NewVec(-2, 0, 5), units.Scalar(0.5)).Do(t.Context())
 		require.NoError(t, err)
 		require.Equal(t, []*decad.Body{scaled}, doc.Bodies())
 
@@ -140,9 +140,9 @@ func TestScaledAtUnmarkedFacetedSolid(t *testing.T) {
 	t.Run("RetainedTangentChainFillet", func(t *testing.T) {
 		t.Parallel()
 		drilled := crossDrilled(t)
-		filleted, err := decad.Fillet(t.Context(), drilled, topFront(), units.Millimeters(1), decad.WithTangentChain())
+		filleted, err := decad.Fillet(drilled, topFront(), units.Millimeters(1)).TangentChain().Do(t.Context())
 		require.NoError(t, err)
-		scaled, err := decad.ScaledAt(t.Context(), filleted, r3.NewVec(1, 2, 3), units.Scalar(2))
+		scaled, err := decad.ScaledAt(filleted, r3.NewVec(1, 2, 3), units.Scalar(2)).Do(t.Context())
 		require.NoError(t, err)
 		require.Len(t, scaled.Document().Bodies(), 1)
 
@@ -183,9 +183,9 @@ func TestScaledAtUnmarkedFacetedSolid(t *testing.T) {
 		t.Parallel()
 		s, profile := pointLoftSquare(t, sketch.NewWorld(), 6)
 		doc := decad.New()
-		body, err := decad.LoftFromPoint(t.Context(), doc, r3.Vec{}, s, profile)
+		body, err := decad.LoftFromPoint(doc, r3.Vec{}, s, profile).Do(t.Context())
 		require.NoError(t, err)
-		scaled, err := decad.ScaledAt(t.Context(), body, r3.Vec{}, units.Scalar(3))
+		scaled, err := decad.ScaledAt(body, r3.Vec{}, units.Scalar(3)).Do(t.Context())
 		require.NoError(t, err)
 		require.Equal(t, []*decad.Body{scaled}, doc.Bodies())
 

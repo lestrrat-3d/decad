@@ -42,7 +42,7 @@ func requireSplitVolumeSumEncloses(t *testing.T, a, b decad.Measurement, want *b
 func splitBlock(t testing.TB, d *decad.Document) *decad.Body {
 	t.Helper()
 	s, p := plateSketch(t)
-	b, err := decad.Extrude(t.Context(), d, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	b, err := decad.Extrude(d, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	return b
 }
@@ -58,10 +58,10 @@ func splitRibbon(t testing.TB, d *decad.Document, endU float64) *decad.Body {
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	require.Len(t, s.Chains(), 1)
-	b, err := decad.Extrude(t.Context(), d, s, s.Chains()[0], decad.TwoSided{
+	b, err := decad.Extrude(d, s, s.Chains()[0], decad.TwoSided{
 		One: decad.DistanceSide{D: units.Millimeters(15)},
 		Two: decad.DistanceSide{D: units.Millimeters(5)},
-	})
+	}).Do(t.Context())
 	require.NoError(t, err)
 	return b
 }
@@ -71,7 +71,7 @@ func TestSurfaceSplitRibbonPartitionsBlock(t *testing.T) {
 	d := decad.New()
 	target := splitBlock(t, d)
 	tool := splitRibbon(t, d, 110)
-	pieces, err := decad.Split(t.Context(), target, tool)
+	pieces, err := decad.Split(target, tool).Do(t.Context())
 	require.NoError(t, err)
 	require.Len(t, pieces, 2)
 	volumes := make([]decad.Measurement, len(pieces))
@@ -94,12 +94,12 @@ func TestSurfaceSplitRibbonPartitionsBlock(t *testing.T) {
 		requireSplitVolumeSumEncloses(t, volumes[0], volumes[1], big.NewRat(60000, 1))
 	})
 	require.Equal(t, pieces, d.Bodies())
-	_, err = decad.Split(t.Context(), target, tool)
+	_, err = decad.Split(target, tool).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrRetiredBody)
 	replay := decad.New()
 	replayTarget := splitBlock(t, replay)
 	replayTool := splitRibbon(t, replay, 110)
-	replayPieces, err := decad.Split(t.Context(), replayTarget, replayTool)
+	replayPieces, err := decad.Split(replayTarget, replayTool).Do(t.Context())
 	require.NoError(t, err)
 	require.Len(t, replayPieces, len(pieces))
 	for i, piece := range replayPieces {
@@ -125,12 +125,12 @@ func TestSurfaceSplitCirclePartitionsBlock(t *testing.T) {
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	require.Len(t, s.Profiles(), 1)
-	tool, err := decad.Extrude(t.Context(), d, s, s.Profiles()[0], decad.TwoSided{
+	tool, err := decad.Extrude(d, s, s.Profiles()[0], decad.TwoSided{
 		One: decad.DistanceSide{D: units.Millimeters(15)},
 		Two: decad.DistanceSide{D: units.Millimeters(5)},
-	}, decad.WithSurfaceResult())
+	}).SurfaceResult().Do(t.Context())
 	require.NoError(t, err)
-	pieces, err := decad.Split(t.Context(), target, tool)
+	pieces, err := decad.Split(target, tool).Do(t.Context())
 	require.NoError(t, err)
 	require.Len(t, pieces, 2)
 	a, b := splitVolume(t, pieces[0]), splitVolume(t, pieces[1])
@@ -166,7 +166,7 @@ func TestSurfaceSplitInsideStubDoesNotSeparate(t *testing.T) {
 	targetVolume := splitVolume(t, target)
 	toolArea, err := tool.Area()
 	require.NoError(t, err)
-	pieces, err := decad.Split(t.Context(), target, tool)
+	pieces, err := decad.Split(target, tool).Do(t.Context())
 	require.Nil(t, pieces)
 	require.ErrorIs(t, err, decad.ErrDegenerate)
 	require.ErrorContains(t, err, "tool separates no part of the target")
@@ -183,7 +183,7 @@ func TestSurfaceSplitOutsideRibbonDoesNotSeparate(t *testing.T) {
 	target := splitBlock(t, d)
 	tool := splitRibbon(t, d, -20)
 	before := d.Bodies()
-	pieces, err := decad.Split(t.Context(), target, tool)
+	pieces, err := decad.Split(target, tool).Do(t.Context())
 	require.Nil(t, pieces)
 	require.ErrorIs(t, err, decad.ErrDegenerate)
 	require.ErrorContains(t, err, "tool separates no part of the target")
@@ -207,13 +207,13 @@ func TestSurfaceSplitCoincidentBoundarySeparatesNothing(t *testing.T) {
 	s.CreateLine(a, s.CreatePoint(100, 0))
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	tool, err := decad.Extrude(t.Context(), d, s, s.Chains()[0], decad.TwoSided{
+	tool, err := decad.Extrude(d, s, s.Chains()[0], decad.TwoSided{
 		One: decad.DistanceSide{D: units.Millimeters(15)},
 		Two: decad.DistanceSide{D: units.Millimeters(5)},
-	})
+	}).Do(t.Context())
 	require.NoError(t, err)
 	before := d.Bodies()
-	pieces, err := decad.Split(t.Context(), target, tool)
+	pieces, err := decad.Split(target, tool).Do(t.Context())
 	require.Nil(t, pieces)
 	require.ErrorIs(t, err, decad.ErrDegenerate)
 	require.ErrorContains(t, err, "tool separates no part of the target")

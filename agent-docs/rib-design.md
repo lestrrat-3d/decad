@@ -7,9 +7,10 @@ public contract is in `agent-docs/api-design.md` §8; this document owns the dec
 ## 1. Contract
 
 ```go
-func WebPath(ctx context.Context, b *Body, s *sketch.Sketch, path []sketch.Entity, thickness units.Value, e Extent, opts ...RibOption) (*Body, error)
-func WithRibOverrun(overrun units.Value) RibOption
-func WithRibDraft(angle units.Value) RibOption
+func WebPath(b *Body, s *sketch.Sketch, path []sketch.Entity, thickness units.Value, e Extent) *WebPathCommand
+func (c *WebPathCommand) Overrun(overrun units.Value) *WebPathCommand
+func (c *WebPathCommand) Draft(angle units.Value) *WebPathCommand
+func (c *WebPathCommand) Do(ctx context.Context) (*Body, error)
 ```
 
 `WebPath` is the one rib entry point. A path of one line is one rib, a path of one arc is one arc rib (§5), and a path
@@ -20,11 +21,11 @@ of several lines and arcs is a run of ribs (§6). It retires `b`, returns the jo
 |---|---|
 | R1 | A line rib is one straight `*sketch.Line` of the sketch `s`. A polyline is a path of its legs (§6), and an arc rib is §5's. A line that is nil, not an entity of `s`, stale or of zero length is `ErrDegenerate`. |
 | R2 | The rib outline is the line thickened across its width by `thickness`, centred on the line, and lengthened by the overrun past both ends. `ribplan.Footprint` computes its four corners in sketch-plane coordinates. |
-| R3 | `thickness` is a positive length and the overrun a non-negative length. The last `WithRibOverrun` wins and the default is zero. A violation is `ErrDegenerate`, `ErrUnitKind` or `ErrNegativeMagnitude`. |
+| R3 | `thickness` is a positive length and the overrun a non-negative length. The last `Overrun` wins and the default is zero. A violation is `ErrDegenerate`, `ErrUnitKind` or `ErrNegativeMagnitude`. |
 | R4 | The outline is extruded by `e` from the plane of `s`. `e` is any `Extent` that `Extrude` accepts, resolved against that plane exactly as for an `Extrude` of the outline. |
 | R5 | A rib whose bounding box is certifiably disjoint from the body's is `ErrDegenerate`. The test grows both boxes by their own bounds, so it can refuse and never admits. |
 | R6 | A result whose volume is certifiably no larger than the body's is `ErrDegenerate`: the ribs lie inside the material. The test compares the volume readings with their bounds, so it can refuse and never admits. |
-| R7 | A rib end that only touches a wall is a coplanar contact, which `Union` refuses as `BooleanUnsupportedContact`. The caller buries the ends with `WithRibOverrun`, and buries the base by drawing the sketch plane below the surface the rib stands on. |
+| R7 | A rib end that only touches a wall is a coplanar contact, which `Union` refuses as `BooleanUnsupportedContact`. The caller buries the ends with `Overrun`, and buries the base by drawing the sketch plane below the surface the rib stands on. |
 
 ## 2. Joining
 
@@ -58,7 +59,7 @@ the band.
 | A1 | The arc sweeps counter-clockwise from its `Start` to its `End` about its `Center`, as every sketch arc does. An arc whose end points share an angle sweeps a full turn, and any rib that would wrap a full turn once lengthened is `ErrDegenerate`. |
 | A2 | The arc's end points MUST lie on one circle about its centre, within 1e-9 of the radius, and the radius is positive. Otherwise the arc is `ErrDegenerate`. |
 | A3 | The band lies between the radii `R − thickness/2` and `R + thickness/2`. An inner radius of zero or less is `ErrDegenerate`. |
-| A4 | `WithRibOverrun` lengthens the band at each end by that arc length along the arc, which is `overrun / R` radians. |
+| A4 | `Overrun` lengthens the band at each end by that arc length along the arc, which is `overrun / R` radians. |
 | A5 | The tool is the band's two arcs and two straight ends on fixed sketch points, extruded by `e` from the plane of `s`. R3 to R7 apply, with the rib's outline in place of the rectangle. |
 | A6 | An arc rib and a line rib share the call's one `OperationWeb` entry (§1). History does not tell one from the other; the call's `path` does. |
 
@@ -80,14 +81,14 @@ round the circle turns them red.
 
 ## 7. Draft
 
-`WithRibDraft` leans every rib's walls. It passes `WithTaper` to the `Extrude` that builds each tool, so the lean, its
+`Draft` leans every rib's walls. It passes `Taper` to the `Extrude` that builds each tool, so the lean, its
 sign and its refusals are `Extrude`'s (`agent-docs/modify-design.md` Part D §2).
 
 | Decision | Rule |
 |---|---|
 | F1 | The lean is measured from the sketch plane, upward along the extent: at the height `t` above the plane a drafted line rib is `thickness − 2·t·tan(angle)` thick, and its ends lean in the same way. A positive angle makes the rib thinner as it rises and a negative one thicker. |
 | F2 | The overrun (R3, R7) is its length at the sketch plane. The ends of a rib that spans a cavity shorten by `t·tan(angle)` at height `t`, so the overrun MUST bury them at the top of the rib as well as at the plane. |
-| F3 | The angle is `WithTaper`'s: a wrong unit kind is `ErrUnitKind` and an angle at or past a right angle is `ErrDegenerate`. The last occurrence wins and the default is a straight wall. |
-| F4 | `WithRibDraft` applies to every rib of the path. A rib whose outline has arcs, such as an arc rib's band, meets the drafted `Extrude`'s refusals, so a corner of an arc and a line that is not tangent is `ErrUnsupported`. |
+| F3 | The angle is `Taper`'s: a wrong unit kind is `ErrUnitKind` and an angle at or past a right angle is `ErrDegenerate`. The last occurrence wins and the default is a straight wall. |
+| F4 | `Draft` applies to every rib of the path. A rib whose outline has arcs, such as an arc rib's band, meets the drafted `Extrude`'s refusals, so a corner of an arc and a line that is not tangent is `ErrUnsupported`. |
 | F5 | The tests compare the volume a drafted line rib adds against `length · ∫ (thickness − 2·t·tan(angle)) dt` over the height above the cavity floor within a relative `1e-9`. |
 

@@ -27,8 +27,8 @@ func Example_text() {
 		fmt.Printf("failed to solve: %s\n", err)
 		return
 	}
-	plate, err := decad.Extrude(context.Background(), decad.New(), s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	plate, err := decad.Extrude(decad.New(), s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to extrude: %s\n", err)
 		return
@@ -53,8 +53,8 @@ func Example_text() {
 	fmt.Printf("regions: %d\n", len(profiles))
 
 	// Raise the letters 2 mm out of the top face.
-	labelled, err := decad.Emboss(context.Background(), plate, lettering, profiles,
-		decad.Faces(decad.FaceCreatedBy(decad.CapEnd(plate))), decad.EmbossRaised, units.Millimeters(2))
+	labelled, err := decad.Emboss(plate, lettering, profiles,
+		decad.Faces(decad.FaceCreatedBy(decad.CapEnd(plate))), decad.EmbossRaised, units.Millimeters(2)).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to emboss: %s\n", err)
 		return

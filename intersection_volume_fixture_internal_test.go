@@ -31,7 +31,7 @@ func ivBox(t *testing.T, doc *Document, x0, y0, x1, y1, z0 float64) *Body {
 	s.Fix(rect.A)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	b, err := Extrude(t.Context(), doc, s, s.Profiles()[0], Distance{D: units.Millimeters(10), Dir: Along})
+	b, err := Extrude(doc, s, s.Profiles()[0], Distance{D: units.Millimeters(10), Dir: Along}).Do(t.Context())
 	require.NoError(t, err)
 	return b
 }
@@ -48,7 +48,7 @@ func ivCylinder(t *testing.T, doc *Document, cx, cy, r, z0, h float64) *Body {
 	s.CreateCircle(c, r)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	b, err := Extrude(t.Context(), doc, s, s.Profiles()[0], Distance{D: units.Millimeters(h), Dir: Along})
+	b, err := Extrude(doc, s, s.Profiles()[0], Distance{D: units.Millimeters(h), Dir: Along}).Do(t.Context())
 	require.NoError(t, err)
 	return b
 }
@@ -59,7 +59,7 @@ func ivMeshBox(t *testing.T, b *Body) *Body {
 	for _, deg := range []float64{20, -20} {
 		turn, err := r3.Rotation(r3.Vec{X: 1, Y: 1, Z: 1}, units.Degrees(deg))
 		require.NoError(t, err)
-		b, err = Transform(t.Context(), b, turn)
+		b, err = Transform(b, turn).Do(t.Context())
 		require.NoError(t, err)
 	}
 	return b
@@ -78,7 +78,7 @@ func ivGridBlock(t *testing.T, doc *Document, lo, hi r3.Vec) *Body {
 	}
 	m, err := NewMeshBody(t.Context(), v, tris)
 	require.NoError(t, err)
-	body, err := SolidFromMesh(t.Context(), doc, m)
+	body, err := SolidFromMesh(doc, m).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }

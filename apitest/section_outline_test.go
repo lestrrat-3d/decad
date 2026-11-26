@@ -61,12 +61,7 @@ func TestSectionOutlineOfADrilledPlateHasAHole(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
 	plate := boxBody(t, doc, -20, -20, 20, 20, 10)
-	drilled, err := decad.Hole(t.Context(), plate, decad.HoleSpec{
-		Face:     capFace(true, plate),
-		At:       r3.NewVec(0, 0, 10),
-		Diameter: units.Millimeters(8),
-		Depth:    decad.ThroughHole{},
-	})
+	drilled, err := decad.Hole(plate, capFace(true, plate), r3.NewVec(0, 0, 10), units.Millimeters(8), decad.ThroughHole{}).Do(t.Context())
 	require.NoError(t, err)
 	out, err := drilled.SectionOutline(t.Context(), outlinePlane(t, r3.NewVec(0, 0, 5), r3.NewVec(0, 0, 1)), units.Millimeters(0.05))
 	require.NoError(t, err)

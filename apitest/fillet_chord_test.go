@@ -19,7 +19,7 @@ func TestFilletChordSetsTheRadius(t *testing.T) {
 		t.Run("", func(t *testing.T) {
 			t.Parallel()
 			doc, block := angleBlock(t)
-			out, err := decad.FilletChord(t.Context(), block, angleCornerEdge(), units.Millimeters(chord))
+			out, err := decad.FilletChord(block, angleCornerEdge(), units.Millimeters(chord)).Do(t.Context())
 			require.NoError(t, err)
 			require.Equal(t, []*decad.Body{out}, doc.Bodies())
 			// A quarter-turn arc of radius chord/√2 removes (1 - π/4)·r² per mm of height.
@@ -47,7 +47,7 @@ func TestFilletChordRefusals(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			doc, block := angleBlock(t)
-			_, err := decad.FilletChord(t.Context(), block, angleCornerEdge(), tc.chord)
+			_, err := decad.FilletChord(block, angleCornerEdge(), tc.chord).Do(t.Context())
 			require.ErrorIs(t, err, tc.want)
 			require.Equal(t, []*decad.Body{block}, doc.Bodies(), "a refused fillet leaves the block live and alone")
 		})

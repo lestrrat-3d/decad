@@ -52,8 +52,8 @@ func TestLoftContactDirectShellUnionVaryingRectangleBothOrders(t *testing.T) {
 				sections[i], profiles[i] = s, s.Profiles()[0]
 			}
 			d := New()
-			loft, err := Loft(t.Context(), d, sections[0], profiles[0],
-				sections[1], profiles[1])
+			loft, err := Loft(d, sections[0], profiles[0],
+				sections[1], profiles[1]).Do(t.Context())
 			require.NoError(t, err)
 			prismSketch, err := world.CreateSketch(base)
 			require.NoError(t, err)
@@ -61,8 +61,8 @@ func TestLoftContactDirectShellUnionVaryingRectangleBothOrders(t *testing.T) {
 			prismSketch.Fix(rect.A)
 			_, err = prismSketch.Solve(t.Context())
 			require.NoError(t, err)
-			prism, err := Extrude(t.Context(), d, prismSketch,
-				prismSketch.Profiles()[0], Distance{D: units.Millimeters(5), Dir: Along})
+			prism, err := Extrude(d, prismSketch,
+				prismSketch.Profiles()[0], Distance{D: units.Millimeters(5), Dir: Along}).Do(t.Context())
 			require.NoError(t, err)
 			first, second := prism, loft
 			if reverse {
@@ -155,7 +155,7 @@ func TestLoftContactDirectShellUnionVaryingRectangleBothOrders(t *testing.T) {
 			firstVolumeBound, secondVolumeBound := first.n.Volume.Bound.Base(), second.n.Volume.Bound.Base()
 			firstVolumeExact, secondVolumeExact := first.n.Volume.Exactness, second.n.Volume.Exactness
 			limited := context.WithValue(t.Context(), loftdirect.LoftDirectOutputLimitKey{}, uint64(1))
-			refused, refusalErr := Union(limited, first, second)
+			refused, refusalErr := Union(first, second).Do(limited)
 			require.True(t, refused == nil)
 			require.ErrorIs(t, refusalErr, ErrUnsupported)
 			require.ErrorContains(t, refusalErr, "direct Loft/prism bounded proof limit")
@@ -198,7 +198,7 @@ func TestLoftContactDirectShellUnionVaryingRectangleBothOrders(t *testing.T) {
 			require.Equal(t, beforeProducer, d.producerAt(t.Context()),
 				"the refusal must not advance the document producer")
 
-			result, err := Union(t.Context(), first, second)
+			result, err := Union(first, second).Do(t.Context())
 			require.NoError(t, err)
 			require.True(t, result.IsSolid())
 			volume, err := result.Volume()
@@ -271,10 +271,10 @@ func TestLoftContactDirectShellUnionVaryingRectangleBothOrders(t *testing.T) {
 				require.NoError(t, err)
 				prismProfiles := prismSketch.Profiles()
 				require.Equal(t, 1, len(prismProfiles))
-				prism, err := Extrude(t.Context(), d, prismSketch, prismProfiles[0],
-					Distance{D: units.Millimeters(5), Dir: Along})
+				prism, err := Extrude(d, prismSketch, prismProfiles[0],
+					Distance{D: units.Millimeters(5), Dir: Along}).Do(t.Context())
 				require.NoError(t, err)
-				loft, err := Loft(t.Context(), d, sections[0], profiles[0], sections[1], profiles[1])
+				loft, err := Loft(d, sections[0], profiles[0], sections[1], profiles[1]).Do(t.Context())
 				require.NoError(t, err)
 				first, second := prism, loft
 				if reverse {
@@ -289,7 +289,7 @@ func TestLoftContactDirectShellUnionVaryingRectangleBothOrders(t *testing.T) {
 					before := append([]*Body(nil), d.Bodies()...)
 					beforeProducer := d.producerAt(t.Context())
 					limited := context.WithValue(t.Context(), loftdirect.LoftDirectOutputLimitKey{}, uint64(1))
-					refused, refusalErr := Union(limited, first, second)
+					refused, refusalErr := Union(first, second).Do(limited)
 					require.True(t, refused == nil)
 					require.ErrorIs(t, refusalErr, ErrUnsupported)
 					require.ErrorContains(t, refusalErr, "direct Loft/prism bounded proof limit")
@@ -301,7 +301,7 @@ func TestLoftContactDirectShellUnionVaryingRectangleBothOrders(t *testing.T) {
 					require.Equal(t, beforeProducer, d.producerAt(t.Context()),
 						"the refusal must not advance the document producer")
 				}
-				result, err := Union(t.Context(), first, second)
+				result, err := Union(first, second).Do(t.Context())
 				require.NoError(t, err)
 				require.True(t, result.IsSolid())
 				volume, err := result.Volume()
@@ -329,15 +329,15 @@ func TestLoftContactDirectShellUnionVaryingRectangleBothOrders(t *testing.T) {
 						require.NoError(t, createErr)
 						thirdProfiles := thirdSketch.Profiles()
 						require.Equal(t, 1, len(thirdProfiles))
-						third, createErr := Extrude(t.Context(), d, thirdSketch, thirdProfiles[0],
-							Distance{D: units.Millimeters(1), Dir: Along})
+						third, createErr := Extrude(d, thirdSketch, thirdProfiles[0],
+							Distance{D: units.Millimeters(1), Dir: Along}).Do(t.Context())
 						require.NoError(t, createErr)
 
 						before := append([]*Body(nil), d.Bodies()...)
 						beforeProducer := d.producerAt(t.Context())
 						cancelCtx, cancel := context.WithCancel(t.Context())
 						cancel()
-						refused, refusalErr := Union(cancelCtx, result, third)
+						refused, refusalErr := Union(result, third).Do(cancelCtx)
 						require.True(t, refused == nil)
 						require.ErrorIs(t, refusalErr, context.Canceled)
 						after := d.Bodies()
@@ -348,7 +348,7 @@ func TestLoftContactDirectShellUnionVaryingRectangleBothOrders(t *testing.T) {
 						require.Equal(t, beforeProducer, d.producerAt(t.Context()),
 							"refusal advanced the document producer")
 
-						combined, unionErr := Union(t.Context(), result, third)
+						combined, unionErr := Union(result, third).Do(t.Context())
 						require.NoError(t, unionErr)
 						require.True(t, combined.IsSolid())
 						require.Equal(t, 1, len(d.Bodies()), "the union must leave one live body")
@@ -423,7 +423,7 @@ func TestLoftContactDirectShellUnionRealVaryingTab(t *testing.T) {
 		sections[i], profiles[i] = s, s.Profiles()[0]
 	}
 	d := New()
-	loft, err := Loft(ctx, d, sections[0], profiles[0], sections[1], profiles[1])
+	loft, err := Loft(d, sections[0], profiles[0], sections[1], profiles[1]).Do(ctx)
 	require.NoError(t, err)
 	s, err := world.CreateSketch(base)
 	require.NoError(t, err)
@@ -431,15 +431,15 @@ func TestLoftContactDirectShellUnionRealVaryingTab(t *testing.T) {
 	s.Fix(rect.A)
 	_, err = s.Solve(ctx)
 	require.NoError(t, err)
-	prism, err := Extrude(ctx, d, s, s.Profiles()[0],
-		Distance{D: units.Millimeters(5), Dir: Along})
+	prism, err := Extrude(d, s, s.Profiles()[0],
+		Distance{D: units.Millimeters(5), Dir: Along}).Do(ctx)
 	require.NoError(t, err)
 	pp, lp, boundary, operation := loftVolumeRealCertificates(t, prism, loft)
 	proof, admitted, err := loftcontact.VolumeCompose(ctx, operation, pp, lp, boundary)
 	require.NoError(t, err)
 	require.True(t, admitted)
 	require.Zero(t, proof.SourceVolume.Cmp(big.NewRat(522, 1)))
-	result, err := Union(ctx, prism, loft)
+	result, err := Union(prism, loft).Do(ctx)
 	require.NoError(t, err)
 	require.True(t, result.IsSolid())
 	volume, err := result.Volume()

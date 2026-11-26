@@ -4,9 +4,11 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"slices"
 
 	"github.com/lestrrat-3d/decad/internal/holeplan"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
+	"github.com/lestrrat-3d/decad/internal/opcommand"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/decad/internal/threadplan"
 	"github.com/lestrrat-3d/r3"
@@ -106,82 +108,208 @@ func (OutlineHole) holeShape() {}
 
 // HoleThread is a thread tapped into a round hole. The hole's Diameter is then
 // the thread's minor (tap drill) diameter. Pitch is the axial advance per turn,
-// a positive length. The thread is right-handed unless LeftHand is set. Length
-// is the length to thread, measured from where the bore proper starts (the face
-// of a plain hole, the floor of a counterbore or the bottom of a countersink): the
-// zero Value threads the bore's whole length, running out of a through hole's far
-// end, and a positive length no longer than the bore stops the thread there with
-// the coil's flat end (agent-docs/hole-design.md §8).
+// a positive length. Build it with [NewHoleThread] and pass it to
+// [HoleCommand.Thread] or [BossBore.Thread]. The thread is right-handed unless
+// [HoleThread.LeftHand] is called. It threads the bore's whole length from where
+// the bore proper starts (the face of a plain hole, the floor of a counterbore or
+// the bottom of a countersink), running out of a through hole's far end, unless
+// [HoleThread.Length] is called: a positive length no longer than the bore stops
+// the thread there with the coil's flat end (agent-docs/hole-design.md §8).
 type HoleThread struct {
-	Pitch    units.Value
-	LeftHand bool
-	Length   units.Value
+	pitch     units.Value
+	leftHand  bool
+	length    units.Value
+	lengthSet bool
 }
 
-// HoleSpec describes one hole.
-//
-// Face selects the face the hole starts in and must resolve to exactly one
-// face, an analytic plane or cylinder. At is a world point in millimetres that
-// lies on that face's plane, or on the cylinder; the hole axis runs through it,
-// into the body, square to the plane or along the cylinder's radius. Diameter is a length. Depth is
-// required. Head is optional, and nil makes a plain hole; on a cylindrical face it cuts
-// from the plane tangent there (agent-docs/hole-design.md §11).
-//
-// Shape is optional. A nil Shape makes a round hole of Diameter. A non-nil
-// Shape replaces the round bore: Diameter MUST then be the zero units.Value and
-// Head MUST be nil, each otherwise ErrDegenerate.
-//
-// Thread is optional. A non-nil Thread taps the round bore in the same commit
-// (agent-docs/hole-design.md §8). It needs a nil Shape, ErrDegenerate otherwise.
-// On a cylindrical face the thread starts at the tangent plane at At, and the
-// cut is the evaluator's own ErrUnsupported where it cannot hold the pair
-// (agent-docs/hole-design.md §12).
-//
-// Draft is optional and leans the round bore's wall (agent-docs/hole-design.md
-// §9): a positive angle makes the bore narrower toward its bottom, a negative one
-// wider, and the zero Value is a straight bore. Diameter is the bore's diameter
-// at the face either way. It needs a nil Shape and a nil Thread, each otherwise
-// ErrDegenerate, and a planar face, ErrUnsupported on a cylinder. An angle whose
-// magnitude is at or past a right angle is ErrDegenerate, and one that closes the
-// bore before its bottom is the drafted extrusion's own refusal.
-type HoleSpec struct {
-	Face     FaceSelector
-	At       r3.Vec
-	Diameter units.Value
-	Depth    HoleDepth
-	Head     HoleHead
-	Shape    HoleShape
-	Thread   *HoleThread
-	Draft    units.Value
+// NewHoleThread returns a right-handed thread of the given pitch that runs the
+// bore's whole length. A pitch that is not a positive length is refused where
+// the thread is planned.
+func NewHoleThread(pitch units.Value) HoleThread {
+	return HoleThread{pitch: pitch}
+}
+
+// LeftHand returns t as a left-handed thread.
+func (t HoleThread) LeftHand() HoleThread {
+	t.leftHand = true
+	return t
+}
+
+// Length returns t stopping after length, a positive length no longer than the
+// bore, measured from where the bore proper starts. A second call replaces the
+// first.
+func (t HoleThread) Length(length units.Value) HoleThread {
+	t.length, t.lengthSet = length, true
+	return t
+}
+
+// holeSpec is the request a [HoleCommand] or [HoleShapedCommand] hands to the
+// implementation: the constructor arguments and the methods that were called.
+type holeSpec struct {
+	face     FaceSelector
+	at       r3.Vec
+	diameter units.Value
+	depth    HoleDepth
+	head     HoleHead
+	// shaped says the bore is shape, in place of a round bore of diameter.
+	shaped   bool
+	shape    HoleShape
+	thread   *HoleThread
+	draft    units.Value
+	draftSet bool
+	// headSubject, draftSubject and threadSubject name the method a fault of that
+	// value points at, or are empty for a composite that computed the value.
+	headSubject, draftSubject, threadSubject string
 }
 
 // holeTolerance is the chord tolerance, in millimetres, Hole reads At's
 // containment with.
 const holeTolerance = 0.05
 
-// Hole cuts a round hole into b and returns the result, retiring b.
+// Hole returns the command that cuts a round hole into b and returns the
+// result, retiring b.
 //
-// The hole starts at At on the face spec.Face selects, runs along the face's
-// inward normal for spec.Depth, and widens at the mouth by spec.Head. The
-// result is the same body that Extrude, Revolve and Cut would give for the
-// same tool shapes, so its measurements are as exact as those booleans make
-// them; a round hole is Approximate because pi is never exact.
+// The hole starts at the point `at` on the face that `face` selects, runs along the face's inward
+// normal for depth, and is diameter wide. The result is the same body that
+// Extrude, Revolve and Cut would give for the same tool shapes, so its
+// measurements are as exact as those booleans make them; a round hole is
+// Approximate because pi is never exact.
 //
-// b MUST be a live solid; a nil context, body or selector, a missing depth,
-// a non-positive diameter or depth, a head not wider than the hole, a
+// face must resolve to exactly one face, an analytic plane or cylinder, or a
+// convex planar face of a faceted solid with exact vertices. at is a world point
+// in millimetres that lies on that face's plane, or on the cylinder; the hole
+// axis runs through it, into the body, square to the plane or along the
+// cylinder's radius. diameter is a length and depth is [ThroughHole] or
+// [BlindHole]; a nil depth is ErrDegenerate. [HoleCommand.Head] widens the mouth,
+// [HoleCommand.Thread] taps the bore and [HoleCommand.Draft] leans its wall. A
+// hole that is not round is [HoleShaped].
+//
+// b MUST be a live solid; a nil context or body, a nil selector, a missing
+// depth, a non-positive diameter or depth, a head not wider than the hole, a
 // counterbore not shallower than the hole and a countersink deeper than the
-// hole are ErrDegenerate. A face that is not an analytic plane, nor a convex planar
-// face of a faceted solid with exact vertices, is ErrUnsupported. A selector that does not resolve to one face is the
-// selector's own error. An At more than 1e-6 mm off the face plane, or one
-// that Body.LocatePoint certifies lies outside the body along the hole axis,
-// is ErrDegenerate; an undecided location does not refuse. A boolean the
-// evaluator cannot decide is the boolean's own error. Every failure leaves
-// the document unchanged and b live.
-func Hole(ctx context.Context, b *Body, spec HoleSpec) (result *Body, retErr error) {
-	defer func() { retErr = operationError(OperationHole, retErr) }()
-	if ctx == nil {
-		return nil, fmt.Errorf(`%w: a nil context cannot control a hole`, ErrDegenerate)
+// hole are ErrDegenerate. A face that is not an analytic plane, nor a convex
+// planar face of a faceted solid with exact vertices, is ErrUnsupported. A
+// selector that does not resolve to one face is the selector's own error. An at
+// more than 1e-6 mm off the face plane, or one that Body.LocatePoint certifies
+// lies outside the body along the hole axis, is ErrDegenerate; an undecided
+// location does not refuse. A boolean the evaluator cannot decide is the
+// boolean's own error. Every failure leaves the document unchanged and b live.
+func Hole(b *Body, face FaceSelector, at r3.Vec, diameter units.Value, depth HoleDepth) *HoleCommand {
+	c := &HoleCommand{b: b, spec: holeSpec{face: copyFaceSelector(face), at: at, diameter: diameter,
+		depth: depth}}
+	if b == nil {
+		c.state.Record("body", errNilBody)
 	}
+	return c
+}
+
+// HoleCommand cuts a round hole into a body. Build it with [Hole].
+type HoleCommand struct {
+	state opcommand.State // consumed flag and first recorded fault
+	b     *Body           // stored as given
+	spec  holeSpec        // the constructor arguments, copied, and the methods called
+}
+
+// Head widens the mouth of the hole with a [Counterbore] or [Countersink]. A
+// head value that is not a positive length, or that is neither variant, is
+// refused by Do naming Head as the subject. A head not wider than the hole, a
+// counterbore not shallower than the hole and a countersink deeper than the
+// hole are ErrDegenerate. On a cylindrical face the head cuts from the
+// plane tangent there (agent-docs/hole-design.md §11). A second call replaces
+// the first.
+func (c *HoleCommand) Head(head HoleHead) *HoleCommand {
+	c.spec.head = head
+	return c
+}
+
+// Thread taps the round bore in the same commit (agent-docs/hole-design.md §8).
+// On a cylindrical face the thread starts at the tangent plane at the hole's
+// point, and the cut is the evaluator's own ErrUnsupported where it cannot hold
+// the pair (agent-docs/hole-design.md §12). A tapped hole takes no [HoleCommand.Draft],
+// ErrDegenerate. A second call replaces the first.
+func (c *HoleCommand) Thread(thread HoleThread) *HoleCommand {
+	c.spec.thread = &thread
+	return c
+}
+
+// Draft leans the round bore's wall (agent-docs/hole-design.md §9): a positive
+// angle makes the bore narrower toward its bottom, a negative one wider, and a
+// zero angle is a straight bore. The diameter is the bore's diameter at the face
+// either way. It needs a hole with no [HoleCommand.Thread], ErrDegenerate
+// otherwise, and a planar face, ErrUnsupported on a cylinder. An angle whose
+// magnitude is at or past a right angle is ErrDegenerate, returned by Do naming
+// Draft as the subject, and one that closes the bore before its bottom is the
+// drafted extrusion's own refusal. A second call replaces the first.
+func (c *HoleCommand) Draft(angle units.Value) *HoleCommand {
+	c.spec.draft, c.spec.draftSet = angle, true
+	return c
+}
+
+// Do cuts the hole and retires the body, or returns the error of the first gate
+// that refuses, leaving the body live and the document unchanged. A nil ctx is
+// ErrDegenerate, and a second call returns ErrConsumed.
+func (c *HoleCommand) Do(ctx context.Context) (*Body, error) {
+	return runCommand(ctx, &c.state, OperationHole, c.run)
+}
+
+func (c *HoleCommand) run(ctx context.Context) (*Body, error) {
+	spec := c.spec
+	spec.headSubject, spec.draftSubject, spec.threadSubject = "Head", "Draft", "Thread"
+	return hole(ctx, c.b, spec)
+}
+
+// HoleShaped returns the command that cuts a hole whose bore is shape, in
+// place of the round bore of [Hole], into b, retiring b. shape is a
+// [RectangularHole], [SlotHole], [PolygonHole] or [OutlineHole], centred on the
+// hole axis, and its size is the hole's size, so the command takes no
+// diameter, head, thread or draft. A nil shape is ErrDegenerate. face, at and
+// depth are Hole's, and so are the refusals. The hole of an [OutlineHole] takes
+// from 3 to 256 corners that enclose an area and whose sides do not cross or
+// touch but at a shared corner, otherwise ErrDegenerate.
+func HoleShaped(b *Body, face FaceSelector, at r3.Vec, shape HoleShape, depth HoleDepth) *HoleShapedCommand {
+	c := &HoleShapedCommand{b: b, spec: holeSpec{face: copyFaceSelector(face), at: at, shaped: true,
+		shape: copyHoleShape(shape), depth: depth}}
+	if b == nil {
+		c.state.Record("body", errNilBody)
+	}
+	return c
+}
+
+// HoleShapedCommand cuts a hole of a given shape into a body. Build it with
+// [HoleShaped].
+type HoleShapedCommand struct {
+	state opcommand.State // consumed flag and first recorded fault
+	b     *Body           // stored as given
+	spec  holeSpec        // the constructor arguments, copied
+}
+
+// Do cuts the hole and retires the body, or returns the error of the first gate
+// that refuses, leaving the body live and the document unchanged. A nil ctx is
+// ErrDegenerate, and a second call returns ErrConsumed.
+func (c *HoleShapedCommand) Do(ctx context.Context) (*Body, error) {
+	return runCommand(ctx, &c.state, OperationHole, c.run)
+}
+
+func (c *HoleShapedCommand) run(ctx context.Context) (*Body, error) {
+	return hole(ctx, c.b, c.spec)
+}
+
+// copyHoleShape copies a shape at the call that stores it, so a later write to the
+// caller's corner slice of an outline changes nothing (agent-docs/command-api-design.md
+// rules A2 and A3). A pointer to a shape variant is refused at Do as it always was, so it
+// needs no copy.
+func copyHoleShape(shape HoleShape) HoleShape {
+	if v, ok := shape.(OutlineHole); ok {
+		v.Corners = slices.Clone(v.Corners)
+		return v
+	}
+	return shape
+}
+
+// hole is the implementation of Hole and HoleShaped. ctx is not nil, and the
+// errors it returns carry no operation tag, except the refusal of a stored
+// method value (agent-docs/command-api-design.md §11).
+func hole(ctx context.Context, b *Body, spec holeSpec) (*Body, error) {
 	if b == nil || b.n.Doc == nil {
 		return nil, fmt.Errorf(`%w: the body belongs to no document`, ErrDegenerate)
 	}
@@ -192,7 +320,7 @@ func Hole(ctx context.Context, b *Body, spec HoleSpec) (result *Body, retErr err
 	if b.Kind() != BodySolid {
 		return nil, fmt.Errorf(`%w: Hole needs a solid body`, ErrNotSolid)
 	}
-	if spec.Face == nil {
+	if spec.face == nil {
 		return nil, errNilSelector
 	}
 	in, err := holeInput(ctx, b, spec)
@@ -210,13 +338,10 @@ func Hole(ctx context.Context, b *Body, spec HoleSpec) (result *Body, retErr err
 		return nil, err
 	}
 	var tap *holeTap
-	if spec.Thread != nil {
-		if spec.Shape != nil {
-			return nil, fmt.Errorf(`%w: a thread needs a round hole, not a shaped one`, ErrDegenerate)
-		}
-		_, through := spec.Depth.(ThroughHole)
-		if tap, err = planHoleThread(spec.Thread, through, in, plan); err != nil {
-			return nil, err
+	if spec.thread != nil {
+		_, through := spec.depth.(ThroughHole)
+		if tap, err = planHoleThread(spec.thread, through, in, plan); err != nil {
+			return nil, subjectFault(OperationHole, spec.threadSubject, err)
 		}
 	}
 	toolCtx, capture := privateConstructionContext(ctx)
@@ -241,7 +366,7 @@ func Hole(ctx context.Context, b *Body, spec HoleSpec) (result *Body, retErr err
 }
 
 // holeInput resolves spec into the plain-data request holeplan reads.
-func holeInput(ctx context.Context, b *Body, spec HoleSpec) (holeplan.Input, error) {
+func holeInput(ctx context.Context, b *Body, spec holeSpec) (holeplan.Input, error) {
 	var in holeplan.Input
 	site, err := resolveHoleSite(ctx, b, spec)
 	if err != nil {
@@ -253,25 +378,23 @@ func holeInput(ctx context.Context, b *Body, spec HoleSpec) (holeplan.Input, err
 	}
 	in.Frame = site.frame
 	in.Outward = site.outward
-	in.At = spec.At
-	if spec.Draft != (units.Value{}) {
-		if in.Draft, err = readDraft(spec.Draft, "the hole draft"); err != nil {
-			return in, err
+	in.At = spec.at
+	if spec.draftSet {
+		if in.Draft, err = readDraft(spec.draft, "the hole draft"); err != nil {
+			return in, subjectFault(OperationHole, spec.draftSubject, err)
 		}
 		switch {
-		case spec.Shape != nil:
-			return in, fmt.Errorf(`%w: a shaped hole takes no draft`, ErrDegenerate)
-		case spec.Thread != nil:
+		case spec.thread != nil:
 			return in, fmt.Errorf(`%w: a threaded hole is straight and takes no draft`, ErrDegenerate)
 		case site.cylinder != nil:
 			return in, fmt.Errorf(`%w: a draft in a hole on a cylindrical face is not built`, ErrUnsupported)
 		}
 	}
-	if spec.Shape != nil {
-		if err := holeShapeInput(&in, spec); err != nil {
+	if spec.shaped {
+		if err := holeShapeInput(&in, spec.shape); err != nil {
 			return in, err
 		}
-	} else if in.Diameter, err = sectionrecord.MagnitudeIn(spec.Diameter, units.Length, units.Millimeter, "the hole diameter"); err != nil {
+	} else if in.Diameter, err = sectionrecord.MagnitudeIn(spec.diameter, units.Length, units.Millimeter, "the hole diameter"); err != nil {
 		return in, err
 	}
 	bound, err := box.Bound.In(units.Millimeter)
@@ -279,11 +402,11 @@ func holeInput(ctx context.Context, b *Body, spec HoleSpec) (holeplan.Input, err
 		return in, fmt.Errorf(`%w: the body bounds are not representable: %s`, ErrNotFinite, err)
 	}
 	in.Reach = holeplan.Reach(box.Min, box.Max, site.frame.Origin(), site.outward, bound)
-	if err := holeDepthInput(&in, spec.Depth); err != nil {
+	if err := holeDepthInput(&in, spec.depth); err != nil {
 		return in, err
 	}
-	if err := holeHeadInput(&in, spec.Head); err != nil {
-		return in, err
+	if err := holeHeadInput(&in, spec.head); err != nil {
+		return in, subjectFault(OperationHole, spec.headSubject, err)
 	}
 	if site.cylinder != nil {
 		if in.Margin, err = site.cylinder.margin(in); err != nil {
@@ -330,13 +453,13 @@ func (c *curvedHole) margin(in holeplan.Input) (float64, error) {
 	return holeplan.CurvedMargin(c.radius, reach, c.concave)
 }
 
-// resolveHoleSite resolves spec.Face to exactly one analytic plane or cylinder, or a planar face of a faceted solid with
+// resolveHoleSite resolves the face of spec to exactly one analytic plane or cylinder, or a planar face of a faceted solid with
 // exact vertices (agent-docs/orthogonal-design.md B20).
 // On a plane the site is the plane. On a cylinder the hole axis runs along the
-// radial line through spec.At, which MUST lie on the cylinder, and the site is
+// radial line through the hole's point, which MUST lie on the cylinder, and the site is
 // the plane tangent to the cylinder there.
-func resolveHoleSite(ctx context.Context, b *Body, spec HoleSpec) (holeSite, error) {
-	faces, err := spec.Face.SelectFaces(b)
+func resolveHoleSite(ctx context.Context, b *Body, spec holeSpec) (holeSite, error) {
+	faces, err := spec.face.SelectFaces(b)
 	if err != nil {
 		return holeSite{}, err
 	}
@@ -356,7 +479,7 @@ func resolveHoleSite(ctx context.Context, b *Body, spec HoleSpec) (holeSite, err
 		}
 		return holeSite{frame: surface.Frame, outward: normal.Value}, nil
 	case Cylinder:
-		return cylinderHoleSite(faces[0], surface, spec.At)
+		return cylinderHoleSite(faces[0], surface, spec.at)
 	case Faceted:
 		return facetedHoleSite(ctx, b, faces[0])
 	default:
@@ -400,14 +523,8 @@ func cylinderHoleSite(face *Face, cyl Cylinder, centre r3.Vec) (holeSite, error)
 }
 
 // holeShapeInput reads a non-round bore into in.
-func holeShapeInput(in *holeplan.Input, spec HoleSpec) error {
-	if spec.Diameter != (units.Value{}) {
-		return fmt.Errorf(`%w: a shaped hole takes its size from the shape, so Diameter must be zero`, ErrDegenerate)
-	}
-	if spec.Head != nil {
-		return fmt.Errorf(`%w: a shaped hole takes no counterbore or countersink`, ErrDegenerate)
-	}
-	switch shape := spec.Shape.(type) {
+func holeShapeInput(in *holeplan.Input, bore HoleShape) error {
+	switch shape := bore.(type) {
 	case RectangularHole:
 		width, err := sectionrecord.MagnitudeIn(shape.Width, units.Length, units.Millimeter, "the rectangular hole width")
 		if err != nil {
@@ -460,7 +577,7 @@ func holeShapeInput(in *holeplan.Input, spec HoleSpec) error {
 		}
 		in.Slot = &holeplan.Slot{Length: length, Width: width, Angle: angle}
 	default:
-		return fmt.Errorf(`%w: unknown hole shape %T`, ErrDegenerate, spec.Shape)
+		return fmt.Errorf(`%w: unknown hole shape %T`, ErrDegenerate, bore)
 	}
 	return nil
 }
@@ -610,7 +727,7 @@ func holeBore(ctx context.Context, d *Document, plan holeplan.Plan) (*Body, erro
 	if plan.Against {
 		dir = Against
 	}
-	return Extrude(ctx, d, s, s.Profiles()[0], Distance{D: units.Millimeters(plan.Bore.Tool()), Dir: dir})
+	return extrudeTool(ctx, d, s, s.Profiles()[0], Distance{D: units.Millimeters(plan.Bore.Tool()), Dir: dir}, extrudeSettings{})
 }
 
 // holeCylinder extrudes one circle on the face plane inward by c.Length.
@@ -637,11 +754,11 @@ func holeCylinder(ctx context.Context, d *Document, plan holeplan.Plan, c holepl
 	if plan.Against {
 		dir = Against
 	}
-	var taper []ExtrudeOption
+	var st extrudeSettings
 	if draft != 0 {
-		taper = []ExtrudeOption{WithTaper(units.Radians(draft))}
+		st = withTaper(units.Radians(draft), "")
 	}
-	return Extrude(ctx, d, s, s.Profiles()[0], Distance{D: units.Millimeters(c.Tool()), Dir: dir}, taper...)
+	return extrudeTool(ctx, d, s, s.Profiles()[0], Distance{D: units.Millimeters(c.Tool()), Dir: dir}, st)
 }
 
 // holeSink revolves the countersink cone profile about the hole axis.
@@ -667,7 +784,7 @@ func holeSink(ctx context.Context, d *Document, sink *holeplan.Sink) (*Body, err
 		return nil, err
 	}
 	axis := SketchLine{Start: Point2{U: 0, V: 0}, End: Point2{U: 0, V: 1}}
-	return Revolve(ctx, d, s, s.Profiles()[0], axis, FullRevolution{})
+	return revolve(ctx, d, s, s.Profiles()[0], axis, FullRevolution{}, false)
 }
 
 // holeTap is the thread of a tapped hole in the plain data buildThreadCoil reads.
@@ -683,14 +800,14 @@ type holeTap struct {
 // and its U axis in the face plane. through is whether the hole runs through the
 // body, so that the groove may run out of its far end.
 func planHoleThread(thread *HoleThread, through bool, in holeplan.Input, plan holeplan.Plan) (*holeTap, error) {
-	pitch, err := sectionrecord.MagnitudeIn(thread.Pitch, units.Length, units.Millimeter, "the thread pitch")
+	pitch, err := sectionrecord.MagnitudeIn(thread.pitch, units.Length, units.Millimeter, "the thread pitch")
 	if err != nil {
 		return nil, err
 	}
 	span := plan.Bore.Length - plan.HeadDepth
-	partial := thread.Length != (units.Value{})
+	partial := thread.lengthSet
 	if partial {
-		threaded, err := sectionrecord.MagnitudeIn(thread.Length, units.Length, units.Millimeter, "the thread length")
+		threaded, err := sectionrecord.MagnitudeIn(thread.length, units.Length, units.Millimeter, "the thread length")
 		if err != nil {
 			return nil, err
 		}
@@ -712,7 +829,7 @@ func planHoleThread(thread *HoleThread, through bool, in holeplan.Input, plan ho
 	if err != nil {
 		return nil, fmt.Errorf(`%w: the thread frame is degenerate: %s`, ErrDegenerate, err)
 	}
-	return &holeTap{frame: frame, plan: threadPlan, pitch: pitch, leftHand: thread.LeftHand}, nil
+	return &holeTap{frame: frame, plan: threadPlan, pitch: pitch, leftHand: thread.leftHand}, nil
 }
 
 // readDraft reads a signed draft angle in radians. A wrong unit kind is

@@ -24,7 +24,7 @@ func pocketedCube(t *testing.T, doc *decad.Document) *decad.Body {
 	t.Helper()
 	cube := boxBody(t, doc, 0, 0, 10, 10, 10)
 	tool := boxBodyAtZ(t, doc, 3, 3, 7, 7, 6, 4)
-	pocketed, err := decad.Cut(t.Context(), cube, tool)
+	pocketed, err := decad.Cut(cube, tool).Do(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, "decad.stackedPrismPayload", decadtest.PayloadClass(pocketed))
 	return pocketed
@@ -40,7 +40,7 @@ func TestPointLocationExactStackedRoundPocket(t *testing.T) {
 	doc := decad.New()
 	cube := boxBody(t, doc, -5, -5, 5, 5, 10)
 	tool := circleBodyAtZ(t, doc, 0, 2.5, 6, 4)
-	pocketed, err := decad.Cut(t.Context(), cube, tool)
+	pocketed, err := decad.Cut(cube, tool).Do(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, "decad.stackedPrismPayload", decadtest.PayloadClass(pocketed))
 	requireLocations(t, pocketed, []locateCase{
@@ -69,7 +69,7 @@ func TestPointLocationExactStackedBoss(t *testing.T) {
 	doc := decad.New()
 	plate := boxBody(t, doc, -20, -20, 20, 20, 10)
 	boss := circleBodyAtZ(t, doc, 0, 5, 10, 15)
-	got, err := decad.Union(t.Context(), plate, boss)
+	got, err := decad.Union(plate, boss).Do(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, "decad.stackedPrismPayload", decadtest.PayloadClass(got))
 	requireLocations(t, got, []locateCase{
@@ -177,8 +177,7 @@ func TestPointLocationExactRevolvePlaced(t *testing.T) {
 		{name: "axis", at: r3.NewVec(100, 0, 30), want: decad.PointInside},
 	})
 	_, second := steppedShaft(t)
-	turned, err := decad.Copy(t.Context(), second,
-		decad.WithCopyRotation(r3.NewVec(0, 0, 0), r3.NewVec(1, 0, 0), units.Degrees(45)))
+	turned, err := decad.Copy(second).Place(decad.CopyRotation{Center: r3.NewVec(0, 0, 0), Axis: r3.NewVec(1, 0, 0), Angle: units.Degrees(45)}).Do(t.Context())
 	require.NoError(t, err)
 	rotation, err := r3.RotationAround(r3.NewVec(0, 0, 0), r3.NewVec(1, 0, 0), units.Degrees(45))
 	require.NoError(t, err)
@@ -197,7 +196,7 @@ func TestPointLocationThroughHistoryRevolveLeaf(t *testing.T) {
 	t.Parallel()
 	doc, shaft := steppedShaft(t)
 	box := boxBodyAtZ(t, doc, 8, -2, 20, 2, 2, 6)
-	got, err := decad.Union(t.Context(), shaft, box)
+	got, err := decad.Union(shaft, box).Do(t.Context())
 	require.NoError(t, err)
 	require.True(t, tookMeshPath(got))
 	requireLocations(t, got, []locateCase{
@@ -220,10 +219,9 @@ func TestPointLocationThroughHistoryStackedLeaf(t *testing.T) {
 	doc := decad.New()
 	pocketed := pocketedCube(t, doc)
 	pin := circleBodyAtZ(t, doc, 8, 1, -5, 20)
-	turned, err := decad.Copy(t.Context(), pin,
-		decad.WithCopyRotation(r3.NewVec(8, 0, 0), r3.NewVec(0, 0, 1), units.Degrees(45)))
+	turned, err := decad.Copy(pin).Place(decad.CopyRotation{Center: r3.NewVec(8, 0, 0), Axis: r3.NewVec(0, 0, 1), Angle: units.Degrees(45)}).Do(t.Context())
 	require.NoError(t, err)
-	got, err := decad.Cut(t.Context(), pocketed, turned)
+	got, err := decad.Cut(pocketed, turned).Do(t.Context())
 	require.NoError(t, err)
 	require.True(t, tookMeshPath(got))
 	requireLocations(t, got, []locateCase{
@@ -245,14 +243,13 @@ func TestPointLocationThroughHistoryStackBrepLeaf(t *testing.T) {
 	doc := decad.New()
 	plate := boxBody(t, doc, -20, -20, 20, 20, 10)
 	boss := boxBodyAtZ(t, doc, 10, -20, 20, -10, 10, 15)
-	brep, err := decad.Union(t.Context(), plate, boss)
+	brep, err := decad.Union(plate, boss).Do(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, "decad.brepPayload", decadtest.PayloadClass(brep))
 	pin := circleBodyAtZ(t, doc, -10, 1, -5, 40)
-	turned, err := decad.Copy(t.Context(), pin,
-		decad.WithCopyRotation(r3.NewVec(-10, 0, 0), r3.NewVec(0, 0, 1), units.Degrees(45)))
+	turned, err := decad.Copy(pin).Place(decad.CopyRotation{Center: r3.NewVec(-10, 0, 0), Axis: r3.NewVec(0, 0, 1), Angle: units.Degrees(45)}).Do(t.Context())
 	require.NoError(t, err)
-	got, err := decad.Cut(t.Context(), brep, turned)
+	got, err := decad.Cut(brep, turned).Do(t.Context())
 	require.NoError(t, err)
 	require.True(t, tookMeshPath(got))
 	requireLocations(t, got, []locateCase{

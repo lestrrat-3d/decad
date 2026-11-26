@@ -255,14 +255,14 @@ func TestExtrudeVertexReachesDenotedCutEnds(t *testing.T) {
 			doc := decad.New()
 			for _, profile := range profiles {
 				ends := denotedEnds(t, recordOf(t, s, profile))
-				body, err := decad.Extrude(t.Context(), doc, s, profile, decad.Distance{D: units.Millimeters(1), Dir: decad.Along})
+				body, err := decad.Extrude(doc, s, profile, decad.Distance{D: units.Millimeters(1), Dir: decad.Along}).Do(t.Context())
 				require.NoError(t, err)
 				bounded, shared := requireVerticesReachDenoted(t, body, ends, inPlane)
 				junctions := len(ends) / 2
 				require.Equal(t, 2*junctions, bounded, `every junction publishes a bound on both caps`)
 				require.Equal(t, 2*junctions, shared, `every junction vertex meets both neighbours' ends`)
 
-				patch, err := decad.PatchProfile(t.Context(), doc, s, profile)
+				patch, err := decad.PatchProfile(doc, s, profile).Do(t.Context())
 				require.NoError(t, err)
 				bounded, _ = requireVerticesReachDenoted(t, patch, ends, inPlane)
 				require.Equal(t, junctions, bounded, `every patch junction publishes a bound`)
@@ -296,7 +296,7 @@ func TestExtrudeVertexReachesDenotedCircleSeam(t *testing.T) {
 			profiles := s.Profiles()
 			require.Len(t, profiles, 1)
 			ends := denotedEnds(t, recordOf(t, s, profiles[0]))
-			body, err := decad.Extrude(t.Context(), decad.New(), s, profiles[0], decad.Distance{D: units.Millimeters(1), Dir: decad.Along})
+			body, err := decad.Extrude(decad.New(), s, profiles[0], decad.Distance{D: units.Millimeters(1), Dir: decad.Along}).Do(t.Context())
 			require.NoError(t, err)
 			bounded, _ := requireVerticesReachDenoted(t, body, ends, inPlane)
 			require.Equal(t, tc.bounded, bounded)
@@ -328,7 +328,7 @@ func TestExtrudeVertexReachesDenotedTrimmedSide(t *testing.T) {
 		profiles := s.Profiles()
 		require.Len(t, profiles, 1)
 		ends := denotedEnds(t, recordOf(t, s, profiles[0]))
-		body, err := decad.Extrude(t.Context(), decad.New(), s, profiles[0], decad.Distance{D: units.Millimeters(1), Dir: decad.Along})
+		body, err := decad.Extrude(decad.New(), s, profiles[0], decad.Distance{D: units.Millimeters(1), Dir: decad.Along}).Do(t.Context())
 		require.NoError(t, err)
 		bounded, _ := requireVerticesReachDenoted(t, body, ends, inPlane)
 		require.Equal(t, 2, bounded, `only the trimmed corner's two vertices carry a bound`)
@@ -347,7 +347,7 @@ func TestExtrudeVertexReachesDenotedTrimmedSide(t *testing.T) {
 		profiles := s.Profiles()
 		require.Len(t, profiles, 1)
 		ends := denotedEnds(t, recordOf(t, s, profiles[0]))
-		body, err := decad.Extrude(t.Context(), decad.New(), s, profiles[0], decad.Distance{D: units.Millimeters(2), Dir: decad.Along})
+		body, err := decad.Extrude(decad.New(), s, profiles[0], decad.Distance{D: units.Millimeters(2), Dir: decad.Along}).Do(t.Context())
 		require.NoError(t, err)
 		bounded, shared := requireVerticesReachDenoted(t, body, ends, inPlane)
 		require.Zero(t, bounded, `every vertex of an integer rectangle is Exact`)
@@ -363,7 +363,7 @@ func TestExtrudeVertexReachesDenotedTrimmedSide(t *testing.T) {
 		require.True(t, ok)
 		require.Equal(t, [2]float64{1, 0}, [2]float64{hole.TStart, hole.TEnd})
 		ends := denotedEnds(t, record)
-		body, err := decad.Extrude(t.Context(), decad.New(), s, profile, decad.Distance{D: units.Millimeters(2), Dir: decad.Along})
+		body, err := decad.Extrude(decad.New(), s, profile, decad.Distance{D: units.Millimeters(2), Dir: decad.Along}).Do(t.Context())
 		require.NoError(t, err)
 		bounded, _ := requireVerticesReachDenoted(t, body, ends, inPlane)
 		require.Zero(t, bounded, `the hole's seam sits on its exact t = 0 point`)
@@ -394,7 +394,7 @@ func TestRevolveVertexReachesDenotedCutEnds(t *testing.T) {
 	doc := decad.New()
 	for _, profile := range profiles {
 		ends := denotedEnds(t, recordOf(t, s, profile))
-		body, err := decad.Revolve(t.Context(), doc, s, profile, axis, decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along})
+		body, err := decad.Revolve(doc, s, profile, axis, decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along}).Do(t.Context())
 		require.NoError(t, err)
 		bounded, shared := requireVerticesReachDenoted(t, body, ends, quarter)
 		junctions := len(ends) / 2
@@ -429,7 +429,7 @@ func TestExtrudeVertexReachesDenotedMergedRun(t *testing.T) {
 	record := recordOf(t, s, profiles[0])
 	ends := denotedEnds(t, record)
 	require.Len(t, record.Outer.Segments, 5, `the base stays two recorded segments`)
-	body, err := decad.Extrude(t.Context(), decad.New(), s, profiles[0], decad.Distance{D: units.Millimeters(1), Dir: decad.Along})
+	body, err := decad.Extrude(decad.New(), s, profiles[0], decad.Distance{D: units.Millimeters(1), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	bounded, shared := requireVerticesReachDenoted(t, body, ends, inPlane)
 	require.Equal(t, 2, bounded, `only the trimmed corner's two vertices carry a bound`)
@@ -471,7 +471,7 @@ func TestChainVertexReachesDenotedCutEnd(t *testing.T) {
 		require.Len(t, record.Segments, 1)
 		ends := denotedSegmentEnds(t, record.Segments)
 
-		body, err := decad.Extrude(t.Context(), doc, s, ch, decad.Distance{D: units.Millimeters(1), Dir: decad.Along})
+		body, err := decad.Extrude(doc, s, ch, decad.Distance{D: units.Millimeters(1), Dir: decad.Along}).Do(t.Context())
 		require.NoError(t, err)
 		// Whether the trimmed end's held lerp rounds is arch-specific: an FMA
 		// evaluation lands on this lerp exactly, a two-step one does not. Only
@@ -479,7 +479,7 @@ func TestChainVertexReachesDenotedCutEnd(t *testing.T) {
 		bounded, _ := requireVerticesReachDenoted(t, body, ends, inPlane)
 		require.LessOrEqual(t, bounded, 2, `the natural end's two vertices stay Exact`)
 
-		body, err = decad.Revolve(t.Context(), doc, s, ch, axis, decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along})
+		body, err = decad.Revolve(doc, s, ch, axis, decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along}).Do(t.Context())
 		require.NoError(t, err)
 		bounded, _ = requireVerticesReachDenoted(t, body, ends, quarter)
 		require.GreaterOrEqual(t, bounded, 2, `the trimmed end's vertex at each sweep end carries a bound`)

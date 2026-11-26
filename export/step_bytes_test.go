@@ -42,8 +42,8 @@ func facetedCutPlate(t *testing.T) *decad.Body {
 	plateSketch.Fix(rect.A)
 	_, err = plateSketch.Solve(t.Context())
 	require.NoError(t, err)
-	plate, err := decad.Extrude(t.Context(), doc, plateSketch, plateSketch.Profiles()[0],
-		decad.Distance{D: units.Millimeters(8), Dir: decad.Along})
+	plate, err := decad.Extrude(doc, plateSketch, plateSketch.Profiles()[0],
+		decad.Distance{D: units.Millimeters(8), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 
 	toolSketch, err := w.CreateSketch(w.XY())
@@ -53,14 +53,14 @@ func facetedCutPlate(t *testing.T) *decad.Body {
 	toolSketch.CreateCircle(centre, 5)
 	_, err = toolSketch.Solve(t.Context())
 	require.NoError(t, err)
-	pin, err := decad.Extrude(t.Context(), doc, toolSketch, toolSketch.Profiles()[0],
-		decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
+	pin, err := decad.Extrude(doc, toolSketch, toolSketch.Profiles()[0],
+		decad.Distance{D: units.Millimeters(20), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	down, err := r3.Translation(r3.Vec{Z: -6})
 	require.NoError(t, err)
-	tool, err := decad.Transform(t.Context(), pin, down)
+	tool, err := decad.Transform(pin, down).Do(t.Context())
 	require.NoError(t, err)
-	body, err := decad.Cut(t.Context(), plate, tool)
+	body, err := decad.Cut(plate, tool).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }

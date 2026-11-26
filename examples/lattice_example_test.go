@@ -165,14 +165,15 @@ func Example_infill() {
 		fmt.Printf("failed to solve: %s\n", err)
 		return
 	}
-	block, err := decad.Extrude(context.Background(), doc, s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(12), Dir: decad.Along})
+	block, err := decad.Extrude(doc, s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(12), Dir: decad.Along}).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to extrude: %s\n", err)
 		return
 	}
-	filled, err := decad.Infill(context.Background(), block, decad.InfillSpec{
-		Kind: decad.GyroidInfill, Cell: units.Millimeters(10), Level: units.Scalar(0.8), Resolution: 8})
+	filled, err := decad.Infill(block, decad.GyroidInfill, units.Millimeters(10), units.Scalar(0.8)).
+		Resolution(8).
+		Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to fill: %s\n", err)
 		return
@@ -187,7 +188,7 @@ func Example_infill() {
 	// lighter than the block: true
 }
 
-// InfillSpec.Skin keeps a solid skin of the stated thickness round the part, the way a slicer's perimeters do, and
+// InfillCommand.Skin keeps a solid skin of the stated thickness round the part, the way a slicer's perimeters do, and
 // fills only what the skin encloses. Here the same block keeps a 1 mm skin, so it holds more than its 560 mm^3 skin
 // and less than the block.
 func Example_infill_skin() {
@@ -204,15 +205,16 @@ func Example_infill_skin() {
 		fmt.Printf("failed to solve: %s\n", err)
 		return
 	}
-	block, err := decad.Extrude(context.Background(), doc, s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(12), Dir: decad.Along})
+	block, err := decad.Extrude(doc, s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(12), Dir: decad.Along}).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to extrude: %s\n", err)
 		return
 	}
-	filled, err := decad.Infill(context.Background(), block, decad.InfillSpec{
-		Kind: decad.GyroidInfill, Cell: units.Millimeters(10), Level: units.Scalar(0.6), Resolution: 8,
-		Skin: units.Millimeters(1)})
+	filled, err := decad.Infill(block, decad.GyroidInfill, units.Millimeters(10), units.Scalar(0.6)).
+		Resolution(8).
+		Skin(units.Millimeters(1)).
+		Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to fill: %s\n", err)
 		return

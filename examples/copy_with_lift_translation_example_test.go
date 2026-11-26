@@ -10,7 +10,7 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// WithCopyLiftTranslation moves a copy by an offset measured in a lift's own
+// CopyLiftTranslation moves a copy by an offset measured in a lift's own
 // coordinates. The lift is the placement the parts of an assembly share, for
 // example a tilted plate that carries the holes the copy must seat in. The
 // world translation is the lift's linear part times the local offset, formed
@@ -37,16 +37,15 @@ func Example_copy_with_lift_translation() {
 		return
 	}
 	doc := decad.New()
-	master, err := decad.Extrude(ctx, doc, s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(4), Dir: decad.Along})
+	master, err := decad.Extrude(doc, s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(4), Dir: decad.Along}).Do(ctx)
 	if err != nil {
 		fmt.Printf("failed to extrude: %s\n", err)
 		return
 	}
 
 	// Move the copy 20 mm along the lift's local X axis, which is world Y.
-	moved, err := decad.Copy(ctx, master,
-		decad.WithCopyLiftTranslation(lift, r3.Vec{X: 10}, r3.Vec{X: 30}))
+	moved, err := decad.Copy(master).Place(decad.CopyLiftTranslation{Lift: lift, From: r3.Vec{X: 10}, To: r3.Vec{X: 30}}).Do(ctx)
 	if err != nil {
 		fmt.Printf("failed to copy: %s\n", err)
 		return

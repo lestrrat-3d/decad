@@ -44,7 +44,7 @@ func Example_sweep_along_path() {
 	}
 
 	doc := decad.New()
-	duct, err := decad.Sweep(context.Background(), doc, s, s.Profiles()[0], path)
+	duct, err := decad.Sweep(doc, s, s.Profiles()[0], path).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to sweep: %s\n", err)
 		return

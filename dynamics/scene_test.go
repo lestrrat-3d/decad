@@ -79,8 +79,8 @@ func sceneSphere(t *testing.T, doc *decad.Document, radius float64) *decad.Body 
 	s.CreateArc(center, right, left)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	ball, err := decad.Revolve(t.Context(), doc, s, s.Profiles()[0],
-		decad.SketchLine{Start: decad.Point2{}, End: decad.Point2{U: 1}}, decad.FullRevolution{})
+	ball, err := decad.Revolve(doc, s, s.Profiles()[0],
+		decad.SketchLine{Start: decad.Point2{}, End: decad.Point2{U: 1}}, decad.FullRevolution{}).Do(t.Context())
 	require.NoError(t, err)
 	return ball
 }
@@ -95,7 +95,7 @@ func sceneCylinder(t *testing.T, doc *decad.Document, radius, height float64) *d
 	s.Fix(center)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	cylinder, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(height), Dir: decad.Along})
+	cylinder, err := decad.Extrude(doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(height), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	return cylinder
 }
@@ -430,7 +430,7 @@ func tumbleTrayBox(t *testing.T, doc *decad.Document, x0, y0, x1, y1, z0, h floa
 	body := makeBox(t, doc, x0, y0, x1, y1, 0, h)
 	shift, err := r3.Translation(r3.Vec{Z: z0})
 	require.NoError(t, err)
-	placed, err := decad.Transform(t.Context(), body, shift)
+	placed, err := decad.Transform(body, shift).Do(t.Context())
 	require.NoError(t, err)
 	return placed
 }
@@ -441,8 +441,7 @@ func tumbleTrayBox(t *testing.T, doc *decad.Document, x0, y0, x1, y1, z0, h floa
 // the Cut is a zero-bound Boolean (§9).
 func tumbleTray(t *testing.T, doc *decad.Document) *decad.Body {
 	t.Helper()
-	tray, err := decad.Cut(t.Context(), tumbleTrayBox(t, doc, -90, -90, 90, 90, -10, 50),
-		tumbleTrayBox(t, doc, -80, -80, 80, 80, 0, 50))
+	tray, err := decad.Cut(tumbleTrayBox(t, doc, -90, -90, 90, 90, -10, 50), tumbleTrayBox(t, doc, -80, -80, 80, 80, 0, 50)).Do(t.Context())
 	require.NoError(t, err)
 	return tray
 }
@@ -463,7 +462,7 @@ func tumbleTriangle(t *testing.T, doc *decad.Document, w *sketch.World, plane *s
 	}
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	patch, err := decad.PatchProfile(t.Context(), doc, s, s.Profiles()[0])
+	patch, err := decad.PatchProfile(doc, s, s.Profiles()[0]).Do(t.Context())
 	require.NoError(t, err)
 	return patch
 }
@@ -489,11 +488,10 @@ func tumbleTetrahedron(t *testing.T, doc *decad.Document) *decad.Body {
 	diagonalPlane, err := w.CreatePlaneFromFrame(diagonal)
 	require.NoError(t, err)
 	// XY's frame is (+X, +Y) and XZ's (+X, +Z).
-	tetrahedron, err := decad.Stitch(t.Context(),
-		tumbleTriangle(t, doc, w, w.XY(), [3][2]float64{{a, 0}, {0, 0}, {0, a}}),
+	tetrahedron, err := decad.Stitch(tumbleTriangle(t, doc, w, w.XY(), [3][2]float64{{a, 0}, {0, 0}, {0, a}}),
 		tumbleTriangle(t, doc, w, w.XZ(), [3][2]float64{{a, 0}, {0, 0}, {a, a}}),
 		tumbleTriangle(t, doc, w, slantedPlane, [3][2]float64{{0, 0}, {0, 16}, {a, 0}}),
-		tumbleTriangle(t, doc, w, diagonalPlane, [3][2]float64{{0, 0}, {a, 0}, {0, 16}}))
+		tumbleTriangle(t, doc, w, diagonalPlane, [3][2]float64{{0, 0}, {a, 0}, {0, 16}})).Do(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, decad.BodySolid, tetrahedron.Kind())
 	want := map[r3.Vec]struct{}{{X: a}: {}, {}: {}, {Y: a}: {}, {X: a, Z: a}: {}}
@@ -892,7 +890,7 @@ const partsBinProofSteps = 24
 func partsBinCup(t *testing.T, doc *decad.Document) *decad.Body {
 	t.Helper()
 	box := makeBox(t, doc, -12, -8, 12, 8, 0, 16)
-	cup, err := decad.Shell(t.Context(), box, decad.Faces(decad.FaceCreatedBy(decad.CapEnd(box))), units.Millimeters(2))
+	cup, err := decad.Shell(box, decad.Faces(decad.FaceCreatedBy(decad.CapEnd(box))), units.Millimeters(2)).Do(t.Context())
 	require.NoError(t, err)
 	return cup
 }
@@ -903,7 +901,7 @@ func partsBinCup(t *testing.T, doc *decad.Document) *decad.Body {
 func partsBinBlock(t *testing.T, doc *decad.Document) *decad.Body {
 	t.Helper()
 	box := makeBox(t, doc, -6, -6, 6, 6, 0, 12)
-	block, err := decad.Chamfer(t.Context(), box, decad.Edges(decad.CreatedBy(decad.CapEnd(box))), units.Millimeters(2.3))
+	block, err := decad.Chamfer(box, decad.Edges(decad.CreatedBy(decad.CapEnd(box))), units.Millimeters(2.3)).Do(t.Context())
 	require.NoError(t, err)
 	return block
 }
@@ -943,7 +941,7 @@ func partsBinLoft(t *testing.T, doc *decad.Document) *decad.Body {
 	s1, p1 := partsBinPolygon(t, w, top, [][2]float64{
 		{6, -2.5}, {6, 2.5}, {2.5, 6}, {-2.5, 6}, {-6, 2.5}, {-6, -2.5}, {-2.5, -6}, {2.5, -6},
 	})
-	loft, err := decad.Loft(t.Context(), doc, s0, p0, s1, p1)
+	loft, err := decad.Loft(doc, s0, p0, s1, p1).Do(t.Context())
 	require.NoError(t, err)
 	return loft
 }
@@ -958,7 +956,7 @@ func partsBinSweep(t *testing.T, doc *decad.Document) *decad.Body {
 	})
 	path, err := decad.NewPath(r3.Vec{}, decad.LineTo{End: r3.NewVec(0, 0, 14)})
 	require.NoError(t, err)
-	sweep, err := decad.Sweep(t.Context(), doc, s, p, path)
+	sweep, err := decad.Sweep(doc, s, p, path).Do(t.Context())
 	require.NoError(t, err)
 	return sweep
 }

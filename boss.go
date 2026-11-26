@@ -7,106 +7,286 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/holeplan"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
+	"github.com/lestrrat-3d/decad/internal/opcommand"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
 )
 
-// BossBore is the blind pilot hole of a [BossSpec], a round hole drilled down
-// from the boss's top face. Depth is measured from that top face and is a
-// positive length. Head is optional and widens the pilot's mouth with a
-// [Counterbore] or [Countersink], as [HoleSpec].Head does. Thread is optional
-// and taps the pilot, as [HoleSpec].Thread does, with Diameter as the tap drill
-// (agent-docs/boss-design.md §4). Draft is optional and leans the pilot's wall as
-// [HoleSpec].Draft does a hole's, narrower toward its bottom for a positive angle;
-// a pilot that is tapped takes none (ErrDegenerate).
+// BossBore is the blind pilot hole of a boss, a round hole drilled down from the
+// boss's top face and passed to [BossCommand.Bore] or [BossShapedCommand.Bore].
+// Build it with [NewBossBore]. Its depth is measured from that top face and is a
+// positive length. [BossBore.Head] widens the pilot's mouth with a [Counterbore]
+// or [Countersink], as [HoleCommand.Head] does. [BossBore.Thread] taps the pilot,
+// as [HoleCommand.Thread] does, with the diameter as the tap drill
+// (agent-docs/boss-design.md §4). [BossBore.Draft] leans the pilot's wall as
+// [HoleCommand.Draft] does a hole's, narrower toward its bottom for a positive
+// angle; a pilot that is tapped takes none (ErrDegenerate).
 type BossBore struct {
-	Diameter units.Value
-	Depth    units.Value
-	Head     HoleHead
-	Thread   *HoleThread
-	Draft    units.Value
+	diameter, depth units.Value
+	head            HoleHead
+	thread          *HoleThread
+	draft           units.Value
+	draftSet        bool
 }
 
-// BossRibs is the set of triangular gusset ribs that brace a [BossSpec]'s root,
-// spaced evenly round the boss's axis (agent-docs/boss-design.md §9). Each rib
-// stands Height up the boss's wall and reaches Length out along the face, its
-// outer edge sloping from the face up to the wall, and is Thickness thick, centred
-// on the plane through the boss's axis. Count is from 1 to 16, Thickness, Length and
-// Height are positive lengths with Height at most the boss's Height, and Angle is the
-// angle of the first rib from the face frame's U axis about the boss's axis: the zero
-// Value is along U. The ribs are not drawn into the boss's pilot hole.
+// NewBossBore returns a plain pilot of the given diameter and depth, both
+// positive lengths. The diameter must be less than the boss's diameter at its top.
+func NewBossBore(diameter, depth units.Value) BossBore {
+	return BossBore{diameter: diameter, depth: depth}
+}
+
+// Head returns the bore with a head. A second call replaces the first.
+func (r BossBore) Head(head HoleHead) BossBore {
+	r.head = head
+	return r
+}
+
+// Thread returns the bore tapped with thread. A second call replaces the first.
+func (r BossBore) Thread(thread HoleThread) BossBore {
+	r.thread = &thread
+	return r
+}
+
+// Draft returns the bore with its wall leaned by angle. A second call replaces
+// the first.
+func (r BossBore) Draft(angle units.Value) BossBore {
+	r.draft, r.draftSet = angle, true
+	return r
+}
+
+// BossRibs is the set of triangular gusset ribs that brace a boss's root, passed
+// to [BossCommand.Ribs] or [BossShapedCommand.Ribs] and built with [NewBossRibs]
+// (agent-docs/boss-design.md §9). The ribs are spaced evenly round the boss's
+// axis. Each stands height up the boss's wall and reaches length out along the
+// face, its outer edge sloping from the face up to the wall, and is thickness
+// thick, centred on the plane through the boss's axis. The count is from 1 to 16,
+// thickness, length and height are positive lengths with height at most the
+// boss's height, and [BossRibs.Angle] is the angle of the first rib from the face
+// frame's U axis about the boss's axis: it is along U unless set. The ribs are not
+// drawn into the boss's pilot hole.
 type BossRibs struct {
-	Count                     int
-	Thickness, Length, Height units.Value
-	Angle                     units.Value
+	count                     int
+	thickness, length, height units.Value
+	angle                     units.Value
+	angleSet                  bool
 }
 
-// BossSpec describes one boss standing on a planar or cylindrical face: round by
-// default, or the shape Shape names.
-//
-// Face selects the face the boss stands on and must resolve to exactly one face.
-// At is a world point in millimetres that lies on that face's plane, or on a
-// cylindrical face, where the boss stands on the plane tangent there and takes
-// neither a RootFillet nor a Draft (agent-docs/boss-design.md §8); the boss axis
-// runs through it, out of the body. Diameter and Height are
-// positive lengths, Height measured from Face. Bore is optional, and nil makes
-// a solid boss. Draft is optional: a positive angle makes the boss narrower
-// toward its top by that lean of its wall, a negative one wider, and the zero
-// Value a straight wall (agent-docs/boss-design.md §5). Diameter is the boss's
-// diameter at Face either way. RootFillet is optional: a positive length rounds
-// the concave edge where the boss meets the face with a fillet of that radius,
-// and the zero Value leaves the corner sharp (agent-docs/boss-design.md §6).
-// Shape is optional and replaces the round section with a RectangularHole,
-// SlotHole or PolygonHole section, centred on At, as a Hole's shape is: Diameter
-// is then zero, the shape's size is the boss's size at Face, and a Draft leans
-// every wall by its angle (agent-docs/boss-design.md §7). A shaped boss takes no
-// RootFillet.
-type BossSpec struct {
-	Face       FaceSelector
-	At         r3.Vec
-	Diameter   units.Value
-	Height     units.Value
-	Bore       *BossBore
-	Draft      units.Value
-	RootFillet units.Value
-	Shape      HoleShape
-	// Ribs, when not nil, braces the boss's root with gusset ribs (agent-docs/boss-design.md §9).
-	Ribs *BossRibs
-	// Tilt, when set, leans the boss's axis from the face's normal by this angle, in the
-	// direction TiltDirection names (agent-docs/boss-design.md §10). It is an angle above
-	// zero and at most 60 degrees, and the zero Value is an upright boss. Height is then
-	// measured along the tilted axis from the face. TiltDirection is the angle about the face
-	// normal from the face frame's U axis to the direction the boss leans toward, and its
-	// zero Value is along U. A tilted boss is round and takes no Bore, Draft, RootFillet or
-	// Ribs, and stands on a planar face.
-	Tilt, TiltDirection units.Value
+// NewBossRibs returns count ribs of the given thickness, length and height, the
+// first along the face frame's U axis.
+func NewBossRibs(count int, thickness, length, height units.Value) BossRibs {
+	return BossRibs{count: count, thickness: thickness, length: length, height: height}
 }
 
-// Boss raises a round boss on a planar face of b, with an optional blind pilot
-// hole, and returns the result, retiring b (agent-docs/boss-design.md).
+// Angle returns the ribs with the first one angle from the face frame's U axis
+// about the boss's axis. A second call replaces the first.
+func (r BossRibs) Angle(angle units.Value) BossRibs {
+	r.angle, r.angleSet = angle, true
+	return r
+}
+
+// bossSpec is the request a [BossCommand] or [BossShapedCommand] hands to the
+// implementation: the constructor arguments and the methods that were called.
+type bossSpec struct {
+	face     FaceSelector
+	at       r3.Vec
+	diameter units.Value
+	height   units.Value
+	// shaped says the section is shape, in place of a circle of diameter.
+	shaped        bool
+	shape         HoleShape
+	bore          *BossBore
+	draft         units.Value
+	draftSet      bool
+	rootFillet    units.Value
+	rootSet       bool
+	ribs          *BossRibs
+	tilt          units.Value
+	tiltDirection units.Value
+	tiltSet       bool
+	// the subjects name the method a fault of that value points at, or are
+	// empty for a composite that computed the value.
+	boreSubject, draftSubject, rootSubject, ribsSubject, tiltSubject string
+}
+
+// Boss returns the command that raises a round boss on a planar or cylindrical
+// face of b, and returns the result, retiring b (agent-docs/boss-design.md).
 //
-// The boss is a cylinder that stands on Face, runs Height out of it and reaches
-// into the body behind the face so that the union crosses the face instead of
-// touching it. The pilot hole is cut from the boss's top face by the same
-// tools Hole builds, in the same atomic commit.
+// The boss is a cylinder of the given diameter that stands on face, runs height
+// out of it and reaches into the body behind the face so that the union crosses
+// the face instead of touching it. face must resolve to exactly one face. at is a
+// world point in millimetres that lies on that face's plane, or on a cylindrical
+// face, where the boss stands on the plane tangent there and takes neither a
+// root fillet nor a draft (agent-docs/boss-design.md §8); the boss axis runs
+// through it, out of the body. diameter and height are positive lengths, height
+// measured from the face. The methods add a pilot hole ([BossCommand.Bore]), a
+// lean of the wall ([BossCommand.Draft]), a rounded root ([BossCommand.RootFillet]),
+// gusset ribs ([BossCommand.Ribs]) and a tilt ([BossCommand.Tilt]). A boss
+// with another section is [BossShaped].
 //
-// b MUST be a live solid; a nil context, body or selector is ErrDegenerate. A
-// selector that does not resolve to one face is the selector's own error or
-// ErrDegenerate, and a face that is not an analytic plane or cylinder, nor a convex planar face of a faceted
-// solid with exact vertices, is ErrUnsupported. A
-// Diameter or Height that is not positive and finite is ErrDegenerate or
-// ErrUnitKind. A bore as wide as the boss, or one deep enough to leave the
-// boss's footing through the back of the body, is ErrDegenerate. An At more
-// than 1e-6 mm off the face plane is ErrDegenerate. A boolean the evaluator
+// The pilot hole is cut from the boss's top face by the same tools Hole builds,
+// in the same atomic commit.
+//
+// b MUST be a live solid; a nil context or body or a nil selector is
+// ErrDegenerate. A selector that does not resolve to one face is the selector's
+// own error or ErrDegenerate, and a face that is not an analytic plane or
+// cylinder, nor a convex planar face of a faceted solid with exact vertices, is
+// ErrUnsupported. A diameter or height that is not positive and finite is
+// ErrDegenerate or ErrUnitKind. A bore as wide as the boss, or one deep enough to
+// leave the boss's footing through the back of the body, is ErrDegenerate. An at
+// more than 1e-6 mm off the face plane is ErrDegenerate. A boolean the evaluator
 // cannot decide is the boolean's own error. Every failure leaves b live and the
 // document unchanged.
-func Boss(ctx context.Context, b *Body, spec BossSpec) (result *Body, retErr error) {
-	defer func() { retErr = operationError(OperationBoss, retErr) }()
-	if ctx == nil {
-		return nil, fmt.Errorf(`%w: a nil context cannot control a boss`, ErrDegenerate)
+func Boss(b *Body, face FaceSelector, at r3.Vec, diameter, height units.Value) *BossCommand {
+	c := &BossCommand{b: b, spec: bossSpec{face: copyFaceSelector(face), at: at, diameter: diameter, height: height}}
+	if b == nil {
+		c.state.Record("body", errNilBody)
 	}
+	return c
+}
+
+// BossCommand raises a round boss on a face. Build it with [Boss].
+type BossCommand struct {
+	state opcommand.State // consumed flag and first recorded fault
+	b     *Body           // stored as given
+	spec  bossSpec        // the constructor arguments, copied, and the methods called
+}
+
+// Bore drills a blind pilot hole down from the boss's top face. A bore as wide
+// as the boss at its top, or one deep enough to leave the boss's footing through
+// the back of the body, is ErrDegenerate, and every refusal of its own values is
+// returned by Do naming Bore as the subject. A second call replaces the first.
+func (c *BossCommand) Bore(bore BossBore) *BossCommand {
+	c.spec.bore = copyBossBore(bore)
+	return c
+}
+
+// Draft leans the boss's wall: a positive angle makes the boss narrower toward
+// its top by that lean, a negative one wider, and a zero angle is a straight wall
+// (agent-docs/boss-design.md §5). The diameter is the boss's diameter at the face
+// either way. A boss on a cylindrical face, with ribs or with a tilt takes no
+// draft. An angle at or past a right angle is ErrDegenerate, returned by Do
+// naming Draft as the subject. A second call replaces the first.
+func (c *BossCommand) Draft(angle units.Value) *BossCommand {
+	c.spec.draft, c.spec.draftSet = angle, true
+	return c
+}
+
+// RootFillet rounds the concave edge where the boss meets the face with a fillet
+// of the given radius, a positive length (agent-docs/boss-design.md §6). A boss
+// on a cylindrical face, with ribs or with a tilt takes none. A radius that is
+// not positive is refused by Do naming RootFillet as the subject. A second call
+// replaces the first.
+func (c *BossCommand) RootFillet(radius units.Value) *BossCommand {
+	c.spec.rootFillet, c.spec.rootSet = radius, true
+	return c
+}
+
+// Ribs braces the boss's root with gusset ribs (agent-docs/boss-design.md §9). A
+// boss on a cylindrical face, with a draft or a root fillet takes none. A second
+// call replaces the first.
+func (c *BossCommand) Ribs(ribs BossRibs) *BossCommand {
+	cp := ribs
+	c.spec.ribs = &cp
+	return c
+}
+
+// Tilt leans the boss's axis from the face's normal by angle, toward direction
+// (agent-docs/boss-design.md §10). angle is above zero and at most 60 degrees.
+// direction is the angle about the face normal from the face frame's U axis to the
+// direction the boss leans toward. The height is then measured along the tilted
+// axis from the face. A tilted boss stands on a planar face and takes no bore,
+// draft, root fillet or ribs. A second call replaces the first.
+func (c *BossCommand) Tilt(angle, direction units.Value) *BossCommand {
+	c.spec.tilt, c.spec.tiltDirection, c.spec.tiltSet = angle, direction, true
+	return c
+}
+
+// Do raises the boss and retires the body, or returns the error of the first
+// gate that refuses, leaving the body live and the document unchanged. A nil ctx
+// is ErrDegenerate, and a second call returns ErrConsumed.
+func (c *BossCommand) Do(ctx context.Context) (*Body, error) {
+	return runCommand(ctx, &c.state, OperationBoss, c.run)
+}
+
+func (c *BossCommand) run(ctx context.Context) (*Body, error) {
+	spec := c.spec
+	spec.boreSubject, spec.draftSubject, spec.rootSubject = "Bore", "Draft", "RootFillet"
+	spec.ribsSubject, spec.tiltSubject = "Ribs", "Tilt"
+	return boss(ctx, c.b, spec)
+}
+
+// BossShaped returns the command that raises a boss whose section is shape, in
+// place of the circle of [Boss], on a face of b, retiring b. shape is a
+// [RectangularHole], [SlotHole] or [PolygonHole], centred on at, as a hole's
+// shape is: its size is the boss's size at the face (agent-docs/boss-design.md
+// §7), and [OutlineHole] is refused. A nil shape is ErrDegenerate. face, at and
+// height are Boss's, and so are the refusals. A shaped boss takes a bore, a draft
+// and ribs, with Boss's methods, and no root fillet or tilt.
+func BossShaped(b *Body, face FaceSelector, at r3.Vec, shape HoleShape, height units.Value) *BossShapedCommand {
+	c := &BossShapedCommand{b: b, spec: bossSpec{face: copyFaceSelector(face), at: at, shaped: true,
+		shape: copyHoleShape(shape), height: height}}
+	if b == nil {
+		c.state.Record("body", errNilBody)
+	}
+	return c
+}
+
+// BossShapedCommand raises a boss of a given section on a face. Build it with
+// [BossShaped].
+type BossShapedCommand struct {
+	state opcommand.State // consumed flag and first recorded fault
+	b     *Body           // stored as given
+	spec  bossSpec        // the constructor arguments, copied, and the methods called
+}
+
+// Bore is [BossCommand.Bore] for a shaped boss.
+func (c *BossShapedCommand) Bore(bore BossBore) *BossShapedCommand {
+	c.spec.bore = copyBossBore(bore)
+	return c
+}
+
+// Draft is [BossCommand.Draft] for a shaped boss: it leans every wall by angle.
+func (c *BossShapedCommand) Draft(angle units.Value) *BossShapedCommand {
+	c.spec.draft, c.spec.draftSet = angle, true
+	return c
+}
+
+// Ribs is [BossCommand.Ribs] for a shaped boss.
+func (c *BossShapedCommand) Ribs(ribs BossRibs) *BossShapedCommand {
+	cp := ribs
+	c.spec.ribs = &cp
+	return c
+}
+
+// Do raises the boss and retires the body, or returns the error of the first
+// gate that refuses, leaving the body live and the document unchanged. A nil ctx
+// is ErrDegenerate, and a second call returns ErrConsumed.
+func (c *BossShapedCommand) Do(ctx context.Context) (*Body, error) {
+	return runCommand(ctx, &c.state, OperationBoss, c.run)
+}
+
+func (c *BossShapedCommand) run(ctx context.Context) (*Body, error) {
+	spec := c.spec
+	spec.boreSubject, spec.draftSubject, spec.ribsSubject = "Bore", "Draft", "Ribs"
+	return boss(ctx, c.b, spec)
+}
+
+// copyBossBore stores a bore. A bore holds no selector or slice, and its thread is a value
+// the command keeps its own copy of.
+func copyBossBore(bore BossBore) *BossBore {
+	if bore.thread != nil {
+		cp := *bore.thread
+		bore.thread = &cp
+	}
+	return &bore
+}
+
+// boss is the implementation of Boss and BossShaped. ctx is not nil, and the
+// errors it returns carry no operation tag, except the refusal of a stored
+// method value (agent-docs/command-api-design.md §11).
+func boss(ctx context.Context, b *Body, spec bossSpec) (*Body, error) {
 	if b == nil || b.n.Doc == nil {
 		return nil, fmt.Errorf(`%w: the body belongs to no document`, ErrDegenerate)
 	}
@@ -117,7 +297,7 @@ func Boss(ctx context.Context, b *Body, spec BossSpec) (result *Body, retErr err
 	if b.Kind() != BodySolid {
 		return nil, fmt.Errorf(`%w: Boss needs a solid body`, ErrNotSolid)
 	}
-	if spec.Face == nil {
+	if spec.face == nil {
 		return nil, errNilSelector
 	}
 	in, err := bossInput(ctx, b, spec)
@@ -127,19 +307,20 @@ func Boss(ctx context.Context, b *Body, spec BossSpec) (result *Body, retErr err
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	if spec.RootFillet == (units.Value{}) {
+	if !spec.rootSet {
 		return bossCombine(ctx, d, b, in)
 	}
-	radius, err := sectionrecord.MagnitudeIn(spec.RootFillet, units.Length, units.Millimeter, "the boss root fillet")
+	radius, err := sectionrecord.MagnitudeIn(spec.rootFillet, units.Length, units.Millimeter, "the boss root fillet")
 	if err != nil {
-		return nil, err
+		return nil, subjectFault(OperationBoss, spec.rootSubject, err)
 	}
 	if radius == 0 {
-		return nil, fmt.Errorf(`%w: a boss root fillet needs a positive radius`, ErrDegenerate)
+		return nil, subjectFault(OperationBoss, spec.rootSubject,
+			fmt.Errorf(`%w: a boss root fillet needs a positive radius`, ErrDegenerate))
 	}
 	// The boss and its fillet are tried on a copy first, so a fillet the evaluator
 	// refuses leaves b live and the document as it was.
-	probe, err := Copy(ctx, b)
+	probe, err := copyAsIs(ctx, b)
 	if err != nil {
 		return nil, err
 	}
@@ -195,7 +376,7 @@ func bossCombine(ctx context.Context, d *Document, b *Body, in bossRequest) (*Bo
 		if in.tap != nil {
 			tap, err := planHoleThread(in.tap, false, *in.bore, plan)
 			if err != nil {
-				return nil, err
+				return nil, subjectFault(OperationBoss, in.boreSubject, err)
 			}
 			coil, err := buildThreadCoil(toolCtx, d, tap.frame, tap.plan, tap.pitch, tap.leftHand, true)
 			if err != nil {
@@ -235,74 +416,68 @@ type bossRequest struct {
 	// tap the thread to cut in it.
 	bore *holeplan.Input
 	tap  *HoleThread
+	// boreSubject names the bore's method in a refusal of the bore's own values.
+	boreSubject string
 }
 
-// resolveBossSite resolves spec.Face to the plane the boss stands on: a planar
+// resolveBossSite resolves the spec's face to the plane the boss stands on: a planar
 // face is its own plane, and a cylindrical face gives the plane tangent to it at
-// spec.At, which MUST lie on the cylinder, as a hole's site does.
-func resolveBossSite(ctx context.Context, b *Body, spec BossSpec) (holeSite, error) {
-	if faces, err := spec.Face.SelectFaces(b); err == nil && len(faces) == 1 {
+// the spec's point, which MUST lie on the cylinder, as a hole's site does.
+func resolveBossSite(ctx context.Context, b *Body, spec bossSpec) (holeSite, error) {
+	if faces, err := spec.face.SelectFaces(b); err == nil && len(faces) == 1 {
 		if cyl, ok := faces[0].Surface().(Cylinder); ok {
-			return cylinderHoleSite(faces[0], cyl, spec.At)
+			return cylinderHoleSite(faces[0], cyl, spec.at)
 		}
 		if _, ok := faces[0].Surface().(Faceted); ok {
 			return facetedHoleSite(ctx, b, faces[0])
 		}
 	}
-	plane, normal, err := resolvePlanarFace(b, spec.Face, "Boss")
+	plane, normal, err := resolvePlanarFace(b, spec.face, "Boss")
 	if err != nil {
 		return holeSite{}, err
 	}
 	return holeSite{frame: plane.Frame, outward: normal.Value}, nil
 }
 
-func bossInput(ctx context.Context, b *Body, spec BossSpec) (bossRequest, error) {
-	var in bossRequest
+func bossInput(ctx context.Context, b *Body, spec bossSpec) (bossRequest, error) {
+	in := bossRequest{boreSubject: spec.boreSubject}
 	site, err := resolveBossSite(ctx, b, spec)
 	if err != nil {
 		return in, err
 	}
 	in.frame, in.outward, in.curved = site.frame, site.outward, site.cylinder
-	if spec.Tilt != (units.Value{}) {
+	if spec.tiltSet {
 		switch {
 		case in.curved != nil:
 			return in, fmt.Errorf(`%w: a boss on a cylindrical face stands upright`, ErrUnsupported)
-		case spec.Shape != nil || spec.Ribs != nil || spec.Draft != (units.Value{}) || spec.RootFillet != (units.Value{}):
+		case spec.ribs != nil || spec.draftSet || spec.rootSet:
 			return in, fmt.Errorf(`%w: a tilted boss is round and takes no ribs, draft or root fillet`, ErrUnsupported)
 		}
-	} else if spec.TiltDirection != (units.Value{}) {
-		return in, fmt.Errorf(`%w: a tilt direction needs a tilt`, ErrDegenerate)
 	}
-	if spec.Ribs != nil {
+	if spec.ribs != nil {
 		switch {
 		case in.curved != nil:
 			return in, fmt.Errorf(`%w: a boss on a cylindrical face takes no ribs`, ErrUnsupported)
-		case spec.Draft != (units.Value{}) || spec.RootFillet != (units.Value{}):
+		case spec.draftSet || spec.rootSet:
 			return in, fmt.Errorf(`%w: a boss with ribs takes no draft and no root fillet`, ErrUnsupported)
 		}
 	}
-	if in.curved != nil && spec.RootFillet != (units.Value{}) {
+	if in.curved != nil && spec.rootSet {
 		return in, fmt.Errorf(`%w: a boss on a cylindrical face takes no root fillet`, ErrUnsupported)
 	}
-	if in.curved != nil && spec.Draft != (units.Value{}) {
+	if in.curved != nil && spec.draftSet {
 		return in, fmt.Errorf(`%w: a boss on a cylindrical face takes no draft`, ErrUnsupported)
 	}
-	if spec.Shape == nil || spec.Diameter != (units.Value{}) {
-		if in.diameter, err = sectionrecord.MagnitudeIn(spec.Diameter, units.Length, units.Millimeter, "the boss diameter"); err != nil {
+	if !spec.shaped {
+		if in.diameter, err = sectionrecord.MagnitudeIn(spec.diameter, units.Length, units.Millimeter, "the boss diameter"); err != nil {
 			return in, err
 		}
 	}
-	if in.height, err = sectionrecord.MagnitudeIn(spec.Height, units.Length, units.Millimeter, "the boss height"); err != nil {
+	if in.height, err = sectionrecord.MagnitudeIn(spec.height, units.Length, units.Millimeter, "the boss height"); err != nil {
 		return in, err
 	}
-	if spec.Shape != nil {
-		if in.diameter != 0 {
-			return in, fmt.Errorf(`%w: a shaped boss takes its size from the shape, so Diameter must be zero`, ErrDegenerate)
-		}
-		if spec.RootFillet != (units.Value{}) {
-			return in, fmt.Errorf(`%w: a shaped boss takes no root fillet`, ErrUnsupported)
-		}
-		if in.shape, err = readBossShape(spec.Shape); err != nil {
+	if spec.shaped {
+		if in.shape, err = readBossShape(spec.shape); err != nil {
 			return in, err
 		}
 		in.diameter = in.shape.across()
@@ -310,23 +485,23 @@ func bossInput(ctx context.Context, b *Body, spec BossSpec) (bossRequest, error)
 	if in.diameter == 0 || in.height == 0 {
 		return in, fmt.Errorf(`%w: a boss needs a positive diameter and height`, ErrDegenerate)
 	}
-	if spec.Tilt != (units.Value{}) {
+	if spec.tiltSet {
 		if in.tilt, err = readBossTilt(spec, in); err != nil {
-			return in, err
+			return in, subjectFault(OperationBoss, spec.tiltSubject, err)
 		}
 	}
-	if spec.Ribs != nil {
-		if in.ribs, err = readBossRibs(spec.Ribs, in.diameter/2, in.height); err != nil {
-			return in, err
+	if spec.ribs != nil {
+		if in.ribs, err = readBossRibs(spec.ribs, in.diameter/2, in.height); err != nil {
+			return in, subjectFault(OperationBoss, spec.ribsSubject, err)
 		}
 	}
-	if spec.Draft != (units.Value{}) {
+	if spec.draftSet {
 		// A draft is signed, so it is read as an angle rather than as a magnitude.
-		if in.draft, err = readDraft(spec.Draft, "the boss draft"); err != nil {
-			return in, err
+		if in.draft, err = readDraft(spec.draft, "the boss draft"); err != nil {
+			return in, subjectFault(OperationBoss, spec.draftSubject, err)
 		}
 	}
-	local := in.frame.ToLocal(spec.At)
+	local := in.frame.ToLocal(spec.at)
 	if local.Z > holeplan.OnPlaneTol || local.Z < -holeplan.OnPlaneTol {
 		return in, fmt.Errorf(`%w: the boss centre lies %g mm off the face plane`, ErrDegenerate, local.Z)
 	}
@@ -372,24 +547,30 @@ func bossInput(ctx context.Context, b *Body, spec BossSpec) (bossRequest, error)
 				ErrDegenerate, in.tilt.angle*180/math.Pi)
 		}
 	}
-	if spec.Bore == nil {
+	if spec.bore == nil {
 		return in, nil
 	}
-	diameter, err := sectionrecord.MagnitudeIn(spec.Bore.Diameter, units.Length, units.Millimeter, "the pilot diameter")
+	return in, subjectFault(OperationBoss, spec.boreSubject, bossBoreInput(&in, spec.bore, reach))
+}
+
+// bossBoreInput reads the pilot hole of a boss into in.bore and in.tap. in is the
+// boss's request so far and reach how far the body runs behind the face.
+func bossBoreInput(in *bossRequest, bore *BossBore, reach float64) error {
+	diameter, err := sectionrecord.MagnitudeIn(bore.diameter, units.Length, units.Millimeter, "the pilot diameter")
 	if err != nil {
-		return in, err
+		return err
 	}
-	depth, err := sectionrecord.MagnitudeIn(spec.Bore.Depth, units.Length, units.Millimeter, "the pilot depth")
+	depth, err := sectionrecord.MagnitudeIn(bore.depth, units.Length, units.Millimeter, "the pilot depth")
 	if err != nil {
-		return in, err
+		return err
 	}
 	if diameter == 0 || depth == 0 {
-		return in, fmt.Errorf(`%w: a pilot hole needs a positive diameter and depth`, ErrDegenerate)
+		return fmt.Errorf(`%w: a pilot hole needs a positive diameter and depth`, ErrDegenerate)
 	}
 	// The pilot opens on the boss's top face, where a drafted boss is narrower.
 	topDiameter := in.diameter - 2*in.height*math.Tan(in.draft)
 	if diameter >= min(in.diameter, topDiameter) {
-		return in, fmt.Errorf(`%w: the pilot diameter %g mm must be less than the boss diameter %g mm at its top`,
+		return fmt.Errorf(`%w: the pilot diameter %g mm must be less than the boss diameter %g mm at its top`,
 			ErrDegenerate, diameter, min(in.diameter, topDiameter))
 	}
 	// The pilot runs along the boss's axis from the middle of its top face: the face's normal for an upright boss, and for
@@ -402,16 +583,16 @@ func bossInput(ctx context.Context, b *Body, spec BossSpec) (bossRequest, error)
 	}
 	reachAlong := in.height + (reach-diameter/2*sinTilt)/cosTilt
 	if depth >= reachAlong {
-		return in, fmt.Errorf(`%w: a pilot %g mm deep would leave the boss's footing through the back of the body`,
+		return fmt.Errorf(`%w: a pilot %g mm deep would leave the boss's footing through the back of the body`,
 			ErrDegenerate, depth)
 	}
 	origin := base.Add(axis.Scale(in.height))
 	if in.tilt != nil {
 		if topFrame, err = r3.NewFrame(origin, in.tilt.across, axis.Cross(in.tilt.across)); err != nil {
-			return in, fmt.Errorf(`%w: the tilted top frame is degenerate: %s`, ErrDegenerate, err)
+			return fmt.Errorf(`%w: the tilted top frame is degenerate: %s`, ErrDegenerate, err)
 		}
 	} else if topFrame, err = r3.NewFrame(in.frame.Origin().Add(in.outward.Scale(in.height)), in.frame.U(), in.frame.V()); err != nil {
-		return in, fmt.Errorf(`%w: the face frame is degenerate: %s`, ErrDegenerate, err)
+		return fmt.Errorf(`%w: the face frame is degenerate: %s`, ErrDegenerate, err)
 	}
 	at := topFrame.ToWorldUV(in.u, in.v)
 	if in.tilt != nil {
@@ -425,16 +606,16 @@ func bossInput(ctx context.Context, b *Body, spec BossSpec) (bossRequest, error)
 		Depth:    depth,
 		Reach:    reachAlong,
 	}
-	in.tap = spec.Bore.Thread
-	if spec.Bore.Draft != (units.Value{}) {
-		if spec.Bore.Thread != nil {
-			return in, fmt.Errorf(`%w: a tapped pilot is straight and takes no draft`, ErrDegenerate)
+	in.tap = bore.thread
+	if bore.draftSet {
+		if bore.thread != nil {
+			return fmt.Errorf(`%w: a tapped pilot is straight and takes no draft`, ErrDegenerate)
 		}
-		if in.bore.Draft, err = readDraft(spec.Bore.Draft, "the pilot draft"); err != nil {
-			return in, err
+		if in.bore.Draft, err = readDraft(bore.draft, "the pilot draft"); err != nil {
+			return err
 		}
 	}
-	return in, holeHeadInput(in.bore, spec.Bore.Head)
+	return holeHeadInput(in.bore, bore.head)
 }
 
 // buildBossPillar extrudes the boss's cylinder out of the face, starting embed
@@ -474,11 +655,11 @@ func buildBossPillar(ctx context.Context, d *Document, in bossRequest) (*Body, e
 	if in.outward.Dot(footing.N()) > 0 {
 		dir = Along
 	}
-	var taper []ExtrudeOption
+	var st extrudeSettings
 	if in.draft != 0 {
-		taper = []ExtrudeOption{WithTaper(units.Radians(in.draft))}
+		st = withTaper(units.Radians(in.draft), "")
 	}
-	return Extrude(ctx, d, s, s.Profiles()[0], Distance{D: units.Millimeters(in.height + in.embed), Dir: dir}, taper...)
+	return extrudeTool(ctx, d, s, s.Profiles()[0], Distance{D: units.Millimeters(in.height + in.embed), Dir: dir}, st)
 }
 
 // bossRibRequest is one gusset rib in plain data: its angle about the boss's axis from the
@@ -490,18 +671,18 @@ type bossRibRequest struct {
 // readBossRibs reads r into one request for each rib. radius is the boss's radius at the
 // face and height its height.
 func readBossRibs(r *BossRibs, radius, height float64) ([]bossRibRequest, error) {
-	if r.Count < 1 || r.Count > 16 {
-		return nil, fmt.Errorf(`%w: a boss takes from 1 to 16 ribs, not %d`, ErrDegenerate, r.Count)
+	if r.count < 1 || r.count > 16 {
+		return nil, fmt.Errorf(`%w: a boss takes from 1 to 16 ribs, not %d`, ErrDegenerate, r.count)
 	}
-	thickness, err := sectionrecord.MagnitudeIn(r.Thickness, units.Length, units.Millimeter, "the boss rib thickness")
+	thickness, err := sectionrecord.MagnitudeIn(r.thickness, units.Length, units.Millimeter, "the boss rib thickness")
 	if err != nil {
 		return nil, err
 	}
-	length, err := sectionrecord.MagnitudeIn(r.Length, units.Length, units.Millimeter, "the boss rib length")
+	length, err := sectionrecord.MagnitudeIn(r.length, units.Length, units.Millimeter, "the boss rib length")
 	if err != nil {
 		return nil, err
 	}
-	rise, err := sectionrecord.MagnitudeIn(r.Height, units.Length, units.Millimeter, "the boss rib height")
+	rise, err := sectionrecord.MagnitudeIn(r.height, units.Length, units.Millimeter, "the boss rib height")
 	if err != nil {
 		return nil, err
 	}
@@ -516,21 +697,21 @@ func readBossRibs(r *BossRibs, radius, height float64) ([]bossRibRequest, error)
 	}
 	// Neighbouring ribs meet at the boss's wall when half a rib's thickness reaches the
 	// half-way line between them.
-	if r.Count > 1 && thickness/2 >= radius*math.Sin(math.Pi/float64(r.Count)) {
-		return nil, fmt.Errorf(`%w: %d ribs %g mm thick meet at the root of a boss of radius %g mm`, ErrDegenerate, r.Count, thickness, radius)
+	if r.count > 1 && thickness/2 >= radius*math.Sin(math.Pi/float64(r.count)) {
+		return nil, fmt.Errorf(`%w: %d ribs %g mm thick meet at the root of a boss of radius %g mm`, ErrDegenerate, r.count, thickness, radius)
 	}
 	start := 0.0
-	if r.Angle != (units.Value{}) {
-		if start, err = r.Angle.In(units.Radian); err != nil {
+	if r.angleSet {
+		if start, err = r.angle.In(units.Radian); err != nil {
 			return nil, fmt.Errorf(`%w: the boss rib angle must be an angle: %s`, ErrUnitKind, err)
 		}
 		if math.IsNaN(start) || math.IsInf(start, 0) {
 			return nil, fmt.Errorf(`%w: the boss rib angle is not finite`, ErrNotFinite)
 		}
 	}
-	out := make([]bossRibRequest, r.Count)
+	out := make([]bossRibRequest, r.count)
 	for k := range out {
-		out[k] = bossRibRequest{angle: start + 2*math.Pi*float64(k)/float64(r.Count), thickness: thickness, length: length, height: rise}
+		out[k] = bossRibRequest{angle: start + 2*math.Pi*float64(k)/float64(r.count), thickness: thickness, length: length, height: rise}
 	}
 	return out, nil
 }
@@ -586,7 +767,7 @@ func buildBossRibs(ctx context.Context, d *Document, in bossRequest) ([]*Body, e
 			return fail(err)
 		}
 		half := units.Millimeters(rib.thickness / 2)
-		tool, err := Extrude(ctx, d, s, s.Profiles()[0], TwoSided{One: DistanceSide{D: half}, Two: DistanceSide{D: half}})
+		tool, err := extrudeTool(ctx, d, s, s.Profiles()[0], TwoSided{One: DistanceSide{D: half}, Two: DistanceSide{D: half}}, extrudeSettings{})
 		if err != nil {
 			return fail(err)
 		}
@@ -608,9 +789,9 @@ type bossTilt struct {
 // maxBossTilt is the largest lean, in radians, a boss may take: 60 degrees.
 const maxBossTilt = math.Pi / 3
 
-// readBossTilt reads spec.Tilt and spec.TiltDirection against the face frame of in.
-func readBossTilt(spec BossSpec, in bossRequest) (*bossTilt, error) {
-	angle, err := spec.Tilt.In(units.Radian)
+// readBossTilt reads the tilt and its direction of spec against the face frame of in.
+func readBossTilt(spec bossSpec, in bossRequest) (*bossTilt, error) {
+	angle, err := spec.tilt.In(units.Radian)
 	if err != nil {
 		return nil, fmt.Errorf(`%w: the boss tilt must be an angle: %s`, ErrUnitKind, err)
 	}
@@ -622,14 +803,12 @@ func readBossTilt(spec BossSpec, in bossRequest) (*bossTilt, error) {
 	case angle == 0 || angle > maxBossTilt:
 		return nil, fmt.Errorf(`%w: a boss tilt must lie above zero and at most 60 degrees`, ErrDegenerate)
 	}
-	direction := 0.0
-	if spec.TiltDirection != (units.Value{}) {
-		if direction, err = spec.TiltDirection.In(units.Radian); err != nil {
-			return nil, fmt.Errorf(`%w: the boss tilt direction must be an angle: %s`, ErrUnitKind, err)
-		}
-		if math.IsNaN(direction) || math.IsInf(direction, 0) {
-			return nil, fmt.Errorf(`%w: the boss tilt direction is not finite`, ErrNotFinite)
-		}
+	direction, err := spec.tiltDirection.In(units.Radian)
+	if err != nil {
+		return nil, fmt.Errorf(`%w: the boss tilt direction must be an angle: %s`, ErrUnitKind, err)
+	}
+	if math.IsNaN(direction) || math.IsInf(direction, 0) {
+		return nil, fmt.Errorf(`%w: the boss tilt direction is not finite`, ErrNotFinite)
 	}
 	lean := in.frame.U().Scale(math.Cos(direction)).Add(in.frame.V().Scale(math.Sin(direction)))
 	sin, cos := math.Sincos(angle)
@@ -669,5 +848,5 @@ func buildTiltedPillar(ctx context.Context, d *Document, in bossRequest) (*Body,
 	if t.axis.Dot(footing.N()) > 0 {
 		dir = Along
 	}
-	return Extrude(ctx, d, s, s.Profiles()[0], Distance{D: units.Millimeters(in.height + t.embed), Dir: dir})
+	return extrudeTool(ctx, d, s, s.Profiles()[0], Distance{D: units.Millimeters(in.height + t.embed), Dir: dir}, extrudeSettings{})
 }

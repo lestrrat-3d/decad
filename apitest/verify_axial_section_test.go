@@ -20,8 +20,8 @@ import (
 func axialScrew(t *testing.T, doc *decad.Document) *decad.Body {
 	t.Helper()
 	s, profile := polygonSketch(t, [][2]float64{{0, 0}, {4, 0}, {4, 40}, {0, 40}})
-	body, err := decad.Revolve(t.Context(), doc, s, profile,
-		decad.SketchLine{End: decad.Point2{V: 1}}, decad.FullRevolution{})
+	body, err := decad.Revolve(doc, s, profile,
+		decad.SketchLine{End: decad.Point2{V: 1}}, decad.FullRevolution{}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -35,7 +35,7 @@ func screwFlatTool(t *testing.T, doc *decad.Document, y1 float64) *decad.Body {
 	s.CreateRectangle(3, 10, 5, y1)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Symmetric{D: units.Millimeters(5)})
+	body, err := decad.Extrude(doc, s, s.Profiles()[0], decad.Symmetric{D: units.Millimeters(5)}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -70,8 +70,8 @@ func axialKnob(t *testing.T, doc *decad.Document, hx0, hx1, hz, round float64) *
 		}
 	}
 	require.NotNil(t, ring, "the knob's section has one hole")
-	body, err := decad.Extrude(t.Context(), doc, s, ring,
-		decad.Distance{D: units.Millimeters(8), Dir: decad.Along})
+	body, err := decad.Extrude(doc, s, ring,
+		decad.Distance{D: units.Millimeters(8), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -107,7 +107,7 @@ func TestVerifyAxialSectionSeparator(t *testing.T) {
 			screw := axialScrew(t, doc)
 			if tc.flat {
 				var err error
-				screw, err = decad.Cut(t.Context(), screw, screwFlatTool(t, doc, tc.toolEnd))
+				screw, err = decad.Cut(screw, screwFlatTool(t, doc, tc.toolEnd)).Do(t.Context())
 				require.NoError(t, err)
 			}
 			knob := axialKnob(t, doc, -4.5, tc.hx1, 4.5, tc.round)
@@ -149,11 +149,11 @@ func TestVerifyAxialSectionTurnedMate(t *testing.T) {
 			screw := axialScrew(t, doc)
 			turn, err := r3.RotationAround(r3.Vec{}, r3.Vec{Y: 1}, units.Radians(0.7))
 			require.NoError(t, err)
-			tool, err := decad.Transform(t.Context(), screwFlatTool(t, doc, 45), turn)
+			tool, err := decad.Transform(screwFlatTool(t, doc, 45), turn).Do(t.Context())
 			require.NoError(t, err)
-			cut, err := decad.Cut(t.Context(), screw, tool)
+			cut, err := decad.Cut(screw, tool).Do(t.Context())
 			require.NoError(t, err)
-			knob, err := decad.Transform(t.Context(), axialKnob(t, doc, -4.5, tc.hx1, 4.5, 0), turn)
+			knob, err := decad.Transform(axialKnob(t, doc, -4.5, tc.hx1, 4.5, 0), turn).Do(t.Context())
 			require.NoError(t, err)
 			report, err := doc.Verify(t.Context())
 			require.NoError(t, err)
@@ -179,10 +179,10 @@ func TestVerifyAxialSectionShoulderAtLevel(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
 	s, profile := polygonSketch(t, [][2]float64{{0, 0}, {4, 0}, {4, 20}, {10, 20}, {10, 22}, {4, 22}, {4, 40}, {0, 40}})
-	shaft, err := decad.Revolve(t.Context(), doc, s, profile,
-		decad.SketchLine{End: decad.Point2{V: 1}}, decad.FullRevolution{})
+	shaft, err := decad.Revolve(doc, s, profile,
+		decad.SketchLine{End: decad.Point2{V: 1}}, decad.FullRevolution{}).Do(t.Context())
 	require.NoError(t, err)
-	shaft, err = decad.Cut(t.Context(), shaft, screwFlatTool(t, doc, 45))
+	shaft, err = decad.Cut(shaft, screwFlatTool(t, doc, 45)).Do(t.Context())
 	require.NoError(t, err)
 	knob := axialKnob(t, doc, -4.5, 3.001, 4.5, 0)
 	report, err := doc.Verify(t.Context())
@@ -206,7 +206,7 @@ func roundShaft(t *testing.T, doc *decad.Document) *decad.Body {
 	s.CreateCircle(c, 4)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(40), Dir: decad.Along})
+	body, err := decad.Extrude(doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(40), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -232,11 +232,11 @@ func TestVerifyAxialSectionRoundPrismTurnedMate(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			doc := decad.New()
-			shaft, err := decad.Cut(t.Context(), roundShaft(t, doc), screwFlatTool(t, doc, 45))
+			shaft, err := decad.Cut(roundShaft(t, doc), screwFlatTool(t, doc, 45)).Do(t.Context())
 			require.NoError(t, err)
 			turn, err := r3.RotationAround(r3.Vec{}, r3.Vec{Y: 1}, units.Radians(0.7))
 			require.NoError(t, err)
-			knob, err := decad.Transform(t.Context(), axialKnob(t, doc, 0, 0, 0, tc.bore), turn)
+			knob, err := decad.Transform(axialKnob(t, doc, 0, 0, 0, tc.bore), turn).Do(t.Context())
 			require.NoError(t, err)
 			report, err := doc.Verify(t.Context())
 			require.NoError(t, err)

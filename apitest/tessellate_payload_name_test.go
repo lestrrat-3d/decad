@@ -13,7 +13,7 @@ import (
 func TestTessellateRefusalNamesChainRevolvePayload(t *testing.T) {
 	t.Parallel()
 	s, ch, axis := coneChainAtRadius(t, 0)
-	body, err := decad.Revolve(t.Context(), decad.New(), s, ch, axis, decad.FullRevolution{})
+	body, err := decad.Revolve(decad.New(), s, ch, axis, decad.FullRevolution{}).Do(t.Context())
 	require.NoError(t, err)
 	_, err = body.Tessellate(t.Context(), units.Millimeters(0.5))
 	require.ErrorIs(t, err, decad.ErrUnsupported)
@@ -28,7 +28,7 @@ func TestTessellateRefusalNamesChainLoftPayload(t *testing.T) {
 		[][2]float64{{0, 0}, {40, 0}},
 		[][2]float64{{0, 0}, {40, 0}},
 	)
-	body, err := decad.LoftChain(t.Context(), decad.New(), s0, ch0, s1, ch1)
+	body, err := decad.LoftChain(decad.New(), s0, ch0, s1, ch1).Do(t.Context())
 	require.NoError(t, err)
 	_, err = body.Tessellate(t.Context(), units.Millimeters(0.5))
 	require.ErrorIs(t, err, decad.ErrUnsupported)

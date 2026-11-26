@@ -24,8 +24,8 @@ func TestTiltedPrismPublishesBoundedVolume(t *testing.T) {
 	s.Fix(rect.A)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := decad.Extrude(t.Context(), decad.New(), s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(1), Dir: decad.Along})
+	body, err := decad.Extrude(decad.New(), s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(1), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 
 	volume, err := body.Volume()

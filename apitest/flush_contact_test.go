@@ -41,7 +41,7 @@ func flushProfilePrism(t *testing.T, doc *decad.Document, origin, u, v r3.Vec, d
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	require.Len(t, s.Profiles(), 1)
-	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(length), Dir: dir})
+	body, err := decad.Extrude(doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(length), Dir: dir}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -91,7 +91,7 @@ func TestFlushContactArcCap(t *testing.T) {
 	pts, above := flushTongue()
 	// The sketch's normal x × z is −y, so Against runs toward +y.
 	tool := flushProfilePrism(t, doc, r3.Vec{}, x, z, decad.Against, pts, 4)
-	joined, err := decad.Union(t.Context(), host, tool)
+	joined, err := decad.Union(host, tool).Do(t.Context())
 	require.NoError(t, err)
 	require.Empty(t, joined.OperationDiagnostics())
 	faces, err := decad.Faces(decad.Facing(y.Scale(-1))).Exactly(1).SelectFaces(joined)

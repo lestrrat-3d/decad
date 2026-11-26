@@ -36,7 +36,7 @@ func sharedCapFrustum(t *testing.T, doc *Document, c0 [2]float64, r0, r1 float64
 	w := sketch.NewWorld()
 	s0, p0 := sharedCapCircle(t, w, 0, c0, r0)
 	s1, p1 := sharedCapCircle(t, w, sharedCapHeight, [2]float64{}, r1)
-	body, err := Loft(t.Context(), doc, s0, p0, s1, p1)
+	body, err := Loft(doc, s0, p0, s1, p1).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -46,7 +46,7 @@ func sharedCapFrustum(t *testing.T, doc *Document, c0 [2]float64, r0, r1 float64
 func sharedCapBoss(t *testing.T, doc *Document, c [2]float64, r, height float64) *Body {
 	t.Helper()
 	s, p := sharedCapCircle(t, sketch.NewWorld(), sharedCapHeight, c, r)
-	body, err := Extrude(t.Context(), doc, s, p, Distance{D: units.Millimeters(height), Dir: Along})
+	body, err := Extrude(doc, s, p, Distance{D: units.Millimeters(height), Dir: Along}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -80,8 +80,8 @@ func sharedCapRevolve(t *testing.T, doc *Document, c [2]float64, pts [][2]float6
 	}
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := Revolve(t.Context(), doc, s, s.Profiles()[0], ConstructionAxis{Origin: origin, Dir: r3.Vec{Z: 1}},
-		FullRevolution{})
+	body, err := Revolve(doc, s, s.Profiles()[0], ConstructionAxis{Origin: origin, Dir: r3.Vec{Z: 1}},
+		FullRevolution{}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }

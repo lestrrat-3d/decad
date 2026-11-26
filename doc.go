@@ -35,8 +35,8 @@
 //	}
 //
 //	doc := decad.New()
-//	body, err := decad.Extrude(context.Background(), doc, s, s.Profiles()[0],
-//		decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+//	body, err := decad.Extrude(doc, s, s.Profiles()[0],
+//		decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(context.Background())
 //	if err != nil {
 //		// Every failure wraps a sentinel from errors.go — branch with
 //		// errors.Is(err, decad.ErrUnsupported), decad.ErrCardinality, etc.
@@ -86,15 +86,15 @@
 //	  Tier A chain proving no single curvature sign across
 //	    its spans and joints (spline design §6.5, R19)        ErrUnsupported
 //	  free-form work past the fixed budget (R7)               ErrUnsupported
-//	  WithTaper   line/circle/arc walls, G1 circular joins,
+//	  Taper   line/circle/arc walls, G1 circular joins,
 //	    Distance/ToFace/ThroughAll/Symmetric/TwoSided extent    builds
-//	  WithTaper   free-form wall, non-G1 circular corner,
-//	    WithSurfaceResult                                       ErrUnsupported
+//	  Taper   free-form wall, non-G1 circular corner,
+//	    SurfaceResult                                       ErrUnsupported
 //	  Tessellate/export/boolean/mass of a draft body          builds
 //	  boolean/mass of one with an inexact G1 join or a
 //	    trimmed segment (draft §9.1)                          ErrUnsupported
 //	  open chain section                                      builds a sheet
-//	  chain section with WithTaper or WithSurfaceResult       ErrUnsupported
+//	  chain section with Taper or SurfaceResult       ErrUnsupported
 //	Draft    prism operand, its complete wall set or a
 //	  subset, about one of its caps (draft design PR 3, 5)    builds
 //	  subset moving one of two walls at a circular corner,
@@ -104,11 +104,11 @@
 //	  composite path without exact transported frames or
 //	    certified span separation                             ErrUnsupported
 //	  closed path                                             ErrUnsupported
-//	  WithSweepTwist: centred convex whole-line or symmetric Line/Arc profile,
+//	  Twist: centred convex whole-line or symmetric Line/Arc profile,
 //	    origin XY plane, one positive-Z line, <= 1 turn     builds
 //	    or line then cardinal XZ quarter arc, <= 1 rad      builds
 //	  other nonzero twist                                     ErrUnsupported
-//	  WithMitredJoins / WithSectionScale over a LineTo path
+//	  MitredJoins / SectionScale over a LineTo path
 //	    and a whole-line profile                              builds
 //	Revolve       cylinder / cone / sphere / torus / annulus  builds
 //	Coil          profile of whole lines, arcs and circles
@@ -135,9 +135,9 @@
 //	  empty result (disjoint intersect, emptied cut)          ErrBooleanFailed
 //	Fillet/Chamfer  straight prism, lateral edges             builds
 //	Fillet/Chamfer  revolve meridian junction edges           builds
-//	Fillet/Chamfer  WithTangentChain over proven G1 joins     builds
+//	Fillet/Chamfer  TangentChain over proven G1 joins         builds
 //	  a tangent chain that branches or cannot be decided      ErrUnsupported
-//	Chamfer       WithAsymmetricChamfer, prism lateral edge,
+//	Chamfer       Asymmetric, prism lateral edge,
 //	  revolve junction or complete prism cap loop(s)          builds
 //	  asymmetric brep independent straight-edge chamfer       builds
 //	  asymmetric brep complete-loop chamfer                    builds
@@ -175,8 +175,8 @@
 //	Shell         positive-taper circular draft, far cap removed
 //	              inward                                         builds
 //	Shell         partial revolve, both angular caps removed  builds
-//	Shell         full revolve, WithNoOpenings (closed)       builds
-//	Shell         hole-free prism, WithNoOpenings (closed)    builds
+//	Shell         full revolve, ShellClosed (closed)          builds
+//	Shell         hole-free prism, ShellClosed (closed)       builds
 //	Shell         revolve, one run of side faces removed (and
 //	              both angular caps), any line or arc corner  builds
 //	Shell         hole-free prism, one run of side faces
@@ -190,7 +190,7 @@
 //	    rim past the removed walk's far end                   ErrUnsupported
 //	  holed meridian, or one meeting the axis twice           ErrUnsupported
 //	  offset reaching across the axis                         ErrUnsupported
-//	  WithNoOpenings on other receivers                       ErrUnsupported
+//	  ShellClosed on other receivers                          ErrUnsupported
 //	Fillet/Chamfer/Shell  brep or stacked boolean result that
 //	                      reads as a prism along an axis      builds
 //	Shell         brep read as a prism cut by through tools,
@@ -244,29 +244,29 @@
 //	  boolean body at a tolerance finer than its bound        ErrUnsupported
 //	  a chorded free-form wall past the fixed work budget     ErrUnsupported
 //
-// Options: Revolve accepts WithSurfaceResult for a sheet result.
-// WithTangentChain expands a Fillet's or Chamfer's edges
-// across proven tangent continuations, WithAsymmetricChamfer gives a Chamfer
-// two setbacks, WithShellSense picks a shell's wall sense, WithNoOpenings asks
-// for a closed shell (built for a full revolve, a hole-free prism and an
+// Methods: Revolve accepts SurfaceResult for a sheet result.
+// The TangentChain method expands a Fillet's or Chamfer's edges
+// across proven tangent continuations, Asymmetric gives a Chamfer
+// two setbacks, Sense picks a shell's wall sense, and ShellClosed builds
+// a closed shell (built for a full revolve, a hole-free prism and an
 // inward nested rectangular-slab Union; [ErrUnsupported] elsewhere),
-// and WithTaper drafts an extrude's walls by a signed angle, a positive one
+// and Taper drafts an extrude's walls by a signed angle, a positive one
 // narrowing the body away from the sketch plane (agent-docs/modify-design.md Part D); a
 // taper the support map does not list is [ErrUnsupported], returned before
 // the document changes. Draft leans an existing prism's walls, all of
 // them or a selected subset, the same way about one of its caps.
-// WithSweepTwist names a sweep's distributed twist. Its admitted straight
+// Twist names a sweep's distributed twist. Its admitted straight
 // polygon, symmetric Line/Arc, and cardinal curved polygon cases are
 // described in agent-docs/sweep-design.md §17. A boolean restates a one-cell
 // twisted sweep through its stationed boundary
 // (agent-docs/twist-sweep-cut-design.md).
-// WithLoftAlignment
+// Alignment
 // picks a loft's per-loop correspondence rotation
 // and is accepted at most once; a repeat is [ErrDegenerate], as is a repeated
-// WithLoftSplits, which cuts recorded segments of either section at stated
+// Splits, which cuts recorded segments of either section at stated
 // fractions of their parameter ranges so loops of different segment counts
 // pair one to one, and a repeated
-// WithLeftHand, which turns a coil left-handed. Separately,
+// LeftHand, which turns a coil left-handed. Separately,
 // Verify's options (WithTolerance, WithMinWallThickness, WithPullDirection,
 // WithConcaveRadius, WithClearances) take effect. The export package's STL and
 // OBJ writers take an explicit chord tolerance.

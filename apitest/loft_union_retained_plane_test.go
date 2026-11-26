@@ -30,7 +30,7 @@ func chordedFrustum(t *testing.T, doc *decad.Document, cx, r0, r1, h float64) *d
 	}
 	s0, p0 := circle(w.XY(), r0)
 	s1, p1 := circle(top, r1)
-	body, err := decad.Loft(t.Context(), doc, s0, p0, s1, p1)
+	body, err := decad.Loft(doc, s0, p0, s1, p1).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -91,20 +91,20 @@ func TestChordedLoftUnionKeepsRimBoundOnLaterCut(t *testing.T) {
 		target := chordedFrustum(t, doc, 0, 10, 8, 20)
 		for k := 1; k <= unions; k++ {
 			var err error
-			target, err = decad.Union(t.Context(), target, chordedFrustum(t, doc, 40*float64(k), 10, 8, 20))
+			target, err = decad.Union(target, chordedFrustum(t, doc, 40*float64(k), 10, 8, 20)).Do(t.Context())
 			require.NoError(t, err)
 		}
 		if placedBy != 0 {
 			move, err := r3.Translation(r3.Vec{Z: placedBy})
 			require.NoError(t, err)
-			target, err = decad.Copy(t.Context(), target, decad.WithCopyPlacement(move))
+			target, err = decad.Copy(target).Place(decad.CopyTransform{Transform: move}).Do(t.Context())
 			require.NoError(t, err)
 		}
 		return target, boxBodyAtZ(t, doc, cutX, -20, 20, 20, 2+placedBy, 14)
 	}
 
 	target, tool := build(t, 0, 0)
-	fresh, err := decad.Cut(t.Context(), target, tool)
+	fresh, err := decad.Cut(target, tool).Do(t.Context())
 	require.NoError(t, err)
 	freshClaimed, freshActual, freshCount := frustumRim(t, fresh, 0, 0, cutX)
 	require.Positive(t, freshCount)
@@ -127,7 +127,7 @@ func TestChordedLoftUnionKeepsRimBoundOnLaterCut(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			target, tool := build(t, tc.unions, tc.placedBy)
-			cut, err := decad.Cut(t.Context(), target, tool)
+			cut, err := decad.Cut(target, tool).Do(t.Context())
 			if tc.refusable && err != nil {
 				require.ErrorIs(t, err, decad.ErrUnsupported)
 				return

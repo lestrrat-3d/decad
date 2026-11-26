@@ -460,7 +460,7 @@ func TestExtrudeFitSplineProfileBuilds(t *testing.T) {
 	require.InDelta(t, 15.0, area.Value.Mag(), 1e-9, "the fit-spline region's own exact area")
 
 	d := decad.New()
-	body, err := decad.Extrude(t.Context(), d, s, profiles[0], &decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	body, err := decad.Extrude(d, s, profiles[0], &decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	require.NotNil(t, body)
 	require.NotEmpty(t, d.Bodies(), "a built extrude registers a body")

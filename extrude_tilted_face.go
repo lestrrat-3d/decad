@@ -30,11 +30,11 @@ const tiltedStopMargin = 1e-6
 // the sweep, must hold the whole footprint with a margin, so the tool's walls never meet the extrusion. handled is
 // false, with no error, when the route does not apply, and the caller keeps its refusal.
 func extrudeToTiltedFace(ctx context.Context, d *Document, s *sketch.Sketch, p *sketch.Profile, tf ToFace,
-	opts []ExtrudeOption) (result *Body, handled bool, err error) {
+	st extrudeSettings) (result *Body, handled bool, err error) {
 	if tf.Offset != (units.Value{}) {
 		return nil, false, nil
 	}
-	cfg, err := decodeExtrudeOptions(opts)
+	cfg, err := st.config()
 	if err != nil || cfg.Taper.Mag() != 0 || cfg.SurfaceResult {
 		return nil, false, nil
 	}
@@ -94,7 +94,7 @@ func extrudeToTiltedFace(ctx context.Context, d *Document, s *sketch.Sketch, p *
 			removeTools(made)
 		}
 	}()
-	base, err := Extrude(ctx, d, s, p, Distance{D: units.Millimeters(length), Dir: way})
+	base, err := extrudeTool(ctx, d, s, p, Distance{D: units.Millimeters(length), Dir: way}, extrudeSettings{})
 	if err != nil {
 		return nil, false, nil
 	}
@@ -108,7 +108,7 @@ func extrudeToTiltedFace(ctx context.Context, d *Document, s *sketch.Sketch, p *
 	if err != nil {
 		return nil, false, nil
 	}
-	tool, err := SolidFromMesh(toolCtx, d, m)
+	tool, err := solidFromMesh(toolCtx, d, m)
 	if err != nil {
 		return nil, false, nil
 	}

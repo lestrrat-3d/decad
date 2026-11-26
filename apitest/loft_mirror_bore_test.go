@@ -19,14 +19,14 @@ func roundedMirrorJoin(t *testing.T, half, twist float64) *decad.Body {
 	t.Helper()
 	g := newTwistedGear(5, 20*math.Pi/180, 0.05)
 	body, bottom, top := g.loft(t, half, twist, 0)
-	rounded, err := decad.Fillet(t.Context(), body, rungQuery(bottom, top, half).Exactly(len(bottom)),
-		units.Millimeters(0.25))
+	rounded, err := decad.Fillet(body, rungQuery(bottom, top, half).Exactly(len(bottom)),
+		units.Millimeters(0.25)).Do(t.Context())
 	require.NoError(t, err)
 	end, err := r3.NewFrame(r3.Vec{Z: half}, r3.Vec{X: 1}, r3.Vec{Y: 1})
 	require.NoError(t, err)
-	mirrored, err := decad.MirroredCopy(t.Context(), rounded, decad.MirrorFrame{Frame: end})
+	mirrored, err := decad.MirroredCopy(rounded, decad.MirrorFrame{Frame: end}).Do(t.Context())
 	require.NoError(t, err)
-	joined, err := decad.Union(t.Context(), rounded, mirrored)
+	joined, err := decad.Union(rounded, mirrored).Do(t.Context())
 	require.NoError(t, err)
 	return joined
 }
@@ -42,7 +42,7 @@ func TestLoftMirrorJoinThroughBore(t *testing.T) {
 	joined := roundedMirrorJoin(t, half, twist)
 	before, err := joined.Volume()
 	require.NoError(t, err)
-	bored, err := decad.Cut(t.Context(), joined, circleBodyAtZ(t, joined.Document(), 0, r, -1, 2*half+2))
+	bored, err := decad.Cut(joined, circleBodyAtZ(t, joined.Document(), 0, r, -1, 2*half+2)).Do(t.Context())
 	require.NoError(t, err)
 	after, err := bored.Volume()
 	require.NoError(t, err)
@@ -73,7 +73,7 @@ func TestLoftMirrorJoinShortToolKeepsTheTop(t *testing.T) {
 	joined := roundedMirrorJoin(t, half, 14.5*math.Pi/180)
 	before, err := joined.Volume()
 	require.NoError(t, err)
-	short, err := decad.Cut(t.Context(), joined, circleBodyAtZ(t, joined.Document(), 0, r, -1, half+2))
+	short, err := decad.Cut(joined, circleBodyAtZ(t, joined.Document(), 0, r, -1, half+2)).Do(t.Context())
 	if err != nil {
 		return
 	}

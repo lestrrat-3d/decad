@@ -40,7 +40,7 @@ func TestLoftCylinderUnionCentroidDiameter(t *testing.T) {
 
 	move, err := r3.Translation(r3.NewVec(1e6, -2e6, 3e6))
 	require.NoError(t, err)
-	placed, err := Transform(ctx, joined, move)
+	placed, err := Transform(joined, move).Do(ctx)
 	require.NoError(t, err)
 	placedPayload, ok := placed.n.Payload.(facetedPayload)
 	require.True(t, ok)
@@ -64,7 +64,7 @@ func loftCylinderTabJoin(t *testing.T) (*Document, *Body) {
 	s0, p0 := loftCylinderTabProfile(t, ctx, world, world.XY(), 0)
 	s1, p1 := loftCylinderTabProfile(t, ctx, world, top, 10*math.Pi/180)
 	doc := New()
-	tab, err := Loft(ctx, doc, s0, p0, s1, p1)
+	tab, err := Loft(doc, s0, p0, s1, p1).Do(ctx)
 	require.NoError(t, err)
 
 	s, err := world.CreateSketch(world.XY())
@@ -75,9 +75,9 @@ func loftCylinderTabJoin(t *testing.T) (*Document, *Body) {
 	_, err = s.Solve(ctx)
 	require.NoError(t, err)
 	require.Len(t, s.Profiles(), 1)
-	blank, err := Extrude(ctx, doc, s, s.Profiles()[0], Distance{D: units.Millimeters(2), Dir: Along})
+	blank, err := Extrude(doc, s, s.Profiles()[0], Distance{D: units.Millimeters(2), Dir: Along}).Do(ctx)
 	require.NoError(t, err)
-	joined, err := Union(ctx, blank, tab)
+	joined, err := Union(blank, tab).Do(ctx)
 	require.NoError(t, err)
 	return doc, joined
 }
@@ -96,9 +96,9 @@ func TestLoftCylinderBoreCentroidDiameter(t *testing.T) {
 	s.CreateCircle(c, 0.5)
 	_, err = s.Solve(ctx)
 	require.NoError(t, err)
-	tool, err := Extrude(ctx, doc, s, s.Profiles()[0], Distance{D: units.Millimeters(4), Dir: Along})
+	tool, err := Extrude(doc, s, s.Profiles()[0], Distance{D: units.Millimeters(4), Dir: Along}).Do(ctx)
 	require.NoError(t, err)
-	bored, err := Cut(ctx, joined, tool)
+	bored, err := Cut(joined, tool).Do(ctx)
 	require.NoError(t, err)
 	fp, ok := bored.n.Payload.(facetedPayload)
 	require.True(t, ok)

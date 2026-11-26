@@ -28,9 +28,9 @@ func sectionConeSource(t *testing.T, height float64) (*decad.Document, *decad.Bo
 	require.NoError(t, err)
 	require.Len(t, s.Profiles(), 1)
 	doc := decad.New()
-	body, err := decad.Revolve(t.Context(), doc, s, s.Profiles()[0], decad.SketchLine{
+	body, err := decad.Revolve(doc, s, s.Profiles()[0], decad.SketchLine{
 		Start: decad.Point2{}, End: decad.Point2{V: 1},
-	}, decad.FullRevolution{})
+	}, decad.FullRevolution{}).Do(t.Context())
 	require.NoError(t, err)
 	return doc, body
 }
@@ -55,9 +55,9 @@ func TestSectionCardinalConeFeedsVerifiedExtrude(t *testing.T) {
 	require.NoError(t, err)
 	require.LessOrEqual(t, math.Abs(area.Value.Base()-6.25*math.Pi), area.Bound.Base())
 	require.Less(t, area.Bound.Base(), 1e-9)
-	child, err := decad.Extrude(t.Context(), decad.New(), section, profiles[0], decad.Distance{
+	child, err := decad.Extrude(decad.New(), section, profiles[0], decad.Distance{
 		D: units.Millimeters(2), Dir: decad.Along,
-	})
+	}).Do(t.Context())
 	require.NoError(t, err)
 	volume, err := child.Volume()
 	require.NoError(t, err)
@@ -79,9 +79,9 @@ func TestSectionCardinalConeInexactRadiusFeedsVerifiedExtrude(t *testing.T) {
 	require.Len(t, profiles, 1)
 	_, err = decad.MeasureProfile(section, profiles[0])
 	require.ErrorIs(t, err, decad.ErrUnsupported)
-	child, err := decad.Extrude(t.Context(), decad.New(), section, profiles[0], decad.Distance{
+	child, err := decad.Extrude(decad.New(), section, profiles[0], decad.Distance{
 		D: units.Millimeters(2), Dir: decad.Along,
-	})
+	}).Do(t.Context())
 	require.NoError(t, err)
 	volume, err := child.Volume()
 	require.NoError(t, err)
@@ -99,7 +99,7 @@ func TestSectionCardinalConeRoundedProxyCarriesDisplacement(t *testing.T) {
 	_, cone := sectionConeSource(t, 3)
 	move, err := r3.Translation(r3.NewVec(1<<20, 0, 0))
 	require.NoError(t, err)
-	placed, err := decad.Transform(t.Context(), cone, move)
+	placed, err := decad.Transform(cone, move).Do(t.Context())
 	require.NoError(t, err)
 	section, profiles, err := placed.Section(t.Context(), sectionConePlane(t, 1))
 	require.NoError(t, err)
@@ -124,9 +124,9 @@ func TestSectionCardinalConeRoundedProxyCarriesDisplacement(t *testing.T) {
 	require.Positive(t, outside)
 	_, err = decad.MeasureProfile(section, profiles[0])
 	require.ErrorIs(t, err, decad.ErrUnsupported)
-	child, err := decad.Extrude(t.Context(), decad.New(), section, profiles[0], decad.Distance{
+	child, err := decad.Extrude(decad.New(), section, profiles[0], decad.Distance{
 		D: units.Millimeters(2), Dir: decad.Along,
-	})
+	}).Do(t.Context())
 	require.NoError(t, err)
 	volume, err := child.Volume()
 	require.NoError(t, err)
@@ -151,7 +151,7 @@ func TestSectionCardinalConeRefusesInexactProjectedCenter(t *testing.T) {
 			_, cone := sectionConeSource(t, 10)
 			move, err := r3.Translation(tc.center)
 			require.NoError(t, err)
-			placed, err := decad.Transform(t.Context(), cone, move)
+			placed, err := decad.Transform(cone, move).Do(t.Context())
 			require.NoError(t, err)
 			// The same source and exact radius succeed with a nearby plane origin.
 			_, nearby, err := placed.Section(t.Context(), sectionConePlane(t, 5))
@@ -173,16 +173,16 @@ func TestSectionCardinalConePlacementAndAxisSense(t *testing.T) {
 		EX: r3.Vec{Y: 1}, EY: r3.Vec{Z: 1}, EZ: r3.Vec{X: 1},
 	}, r3.NewVec(20, 30, 40))
 	require.NoError(t, err)
-	placed, err := decad.Transform(t.Context(), cone, motion)
+	placed, err := decad.Transform(cone, motion).Do(t.Context())
 	require.NoError(t, err)
 	frame, err := r3.NewFrame(r3.NewVec(25, 27, 38), r3.NewVec(0, 1, 0), r3.NewVec(0, 0, 1))
 	require.NoError(t, err)
 	section, profiles, err := placed.Section(t.Context(), frame)
 	require.NoError(t, err)
 	require.Len(t, profiles, 1)
-	child, err := decad.Extrude(t.Context(), decad.New(), section, profiles[0], decad.Distance{
+	child, err := decad.Extrude(decad.New(), section, profiles[0], decad.Distance{
 		D: units.Millimeters(2), Dir: decad.Along,
-	})
+	}).Do(t.Context())
 	require.NoError(t, err)
 	box, err := child.Bounds()
 	require.NoError(t, err)

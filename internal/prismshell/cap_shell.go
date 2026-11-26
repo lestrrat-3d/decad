@@ -29,7 +29,7 @@ import (
 type CapShellInput struct {
 	Prism prismrecord.Payload
 	// KeptCaps is 0 when both caps are removed, 1 for a cup, and 2 for
-	// WithNoOpenings, which keeps both.
+	// ShellClosed, which keeps both.
 	KeptCaps int
 	// Sense is +1 inward (erode) and -1 outward (dilate).
 	Sense          float64
@@ -117,7 +117,7 @@ func (in CapShellInput) OffsetSection(budget *proofbound.WorkBudget) (momentinpu
 // read with the section limit's scale-relative rounding tolerance
 // (offset2d.ShellTol*max(1, h), growing with the part's scale, not a fixed
 // sub-nanometre margin). A cup's floor is t thick, so its cavity is swept
-// over h − t (§8); WithNoOpenings keeps two floors, so its cavity's axial
+// over h − t (§8); ShellClosed keeps two floors, so its cavity's axial
 // height is h − 2t (SX11). With both caps removed there is no floor.
 func (in CapShellInput) requireFloorCavity() error {
 	h := in.Prism.Z1 - in.Prism.Z0
@@ -216,7 +216,7 @@ func BuildBands(ctx context.Context, env topo.Env, in CapShellInput, offset mome
 	}, stackedrecord.OwnPlan{})
 }
 
-// BuildClosed is reach BX5 (agent-docs/modify-design.md Part R §9.2): WithNoOpenings
+// BuildClosed is reach BX5 (agent-docs/modify-design.md Part R §9.2): ShellClosed
 // on a straight prism keeps every face and lines it with a wall of thickness
 // t, closing a cavity. The record is three stacked slabs: inward, the section
 // P on [z0, z0 + t], the wall bands between P and its erosion Q on

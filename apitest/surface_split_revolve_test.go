@@ -29,7 +29,7 @@ func splitRevolveSolid(t *testing.T, doc *decad.Document, build func(*sketch.Ske
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	require.Len(t, s.Profiles(), 1)
-	body, err := decad.Revolve(t.Context(), doc, s, s.Profiles()[0], trimRevolveAxis(), extent)
+	body, err := decad.Revolve(doc, s, s.Profiles()[0], trimRevolveAxis(), extent).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -55,7 +55,7 @@ func splitRevolveSheetAxis(t *testing.T, doc *decad.Document, u0, v0, u1, v1 flo
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	require.Len(t, s.Chains(), 1)
-	body, err := decad.Revolve(t.Context(), doc, s, s.Chains()[0], axis, extent)
+	body, err := decad.Revolve(doc, s, s.Chains()[0], axis, extent).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -68,7 +68,7 @@ func splitRevolveReflect(t *testing.T, body *decad.Body) *decad.Body {
 		EX: r3.NewVec(-1, 0, 0), EY: r3.NewVec(0, 1, 0), EZ: r3.NewVec(0, 0, 1),
 	}, r3.Vec{})
 	require.NoError(t, err)
-	placed, err := decad.Transform(t.Context(), body, mirror)
+	placed, err := decad.Transform(body, mirror).Do(t.Context())
 	require.NoError(t, err)
 	return placed
 }
@@ -260,7 +260,7 @@ func TestSurfaceSplitRevolveClosedForms(t *testing.T) {
 			tool := splitRevolveSheet(t, doc, tc.tool[0], tc.tool[1], tc.tool[2], tc.tool[3], tc.toolExtent)
 			require.Equal(t, decad.BodySheet, tool.Kind())
 
-			pieces, err := decad.Split(t.Context(), target, tool)
+			pieces, err := decad.Split(target, tool).Do(t.Context())
 			require.NoError(t, err)
 			require.Len(t, pieces, len(tc.pieces))
 			require.Equal(t, pieces, doc.Bodies())
@@ -359,7 +359,7 @@ func TestSurfaceSplitRevolveRolesAndSelectors(t *testing.T) {
 		doc := decad.New()
 		target := splitRevolveSolid(t, doc, splitRevolveCylinder, extent)
 		tool := splitRevolveSheet(t, doc, 0, 6, 8, 6, extent)
-		pieces, err := decad.Split(t.Context(), target, tool)
+		pieces, err := decad.Split(target, tool).Do(t.Context())
 		require.NoError(t, err)
 		require.Len(t, pieces, 2)
 		// Lower piece first, by centroid level.
@@ -428,7 +428,7 @@ func TestSurfaceSplitRevolveRolesAndSelectors(t *testing.T) {
 			doc := decad.New()
 			target := splitRevolveSolid(t, doc, splitRevolveTorus, decad.FullRevolution{})
 			tool := splitRevolveSheet(t, doc, 10, -5, 10, 5, decad.FullRevolution{})
-			pieces, err := decad.Split(t.Context(), target, tool)
+			pieces, err := decad.Split(target, tool).Do(t.Context())
 			require.NoError(t, err)
 			out := make([]decad.Measurement, len(pieces))
 			for i, p := range pieces {
@@ -514,7 +514,7 @@ func TestSurfaceSplitRevolveRefusals(t *testing.T) {
 			operands: func(t *testing.T, doc *decad.Document) (*decad.Body, *decad.Body) {
 				target := splitRevolveSolid(t, doc, splitRevolveCylinder, decad.FullRevolution{})
 				tool := splitRevolveSheet(t, doc, 0, 6, 8, 6, decad.FullRevolution{})
-				pieces, err := decad.Split(t.Context(), target, tool)
+				pieces, err := decad.Split(target, tool).Do(t.Context())
 				require.NoError(t, err)
 				return pieces[0], splitRevolveSheet(t, doc, 0, 3, 8, 3, decad.FullRevolution{})
 			},
@@ -536,7 +536,7 @@ func TestSurfaceSplitRevolveRefusals(t *testing.T) {
 			before := doc.Bodies()
 			targetArea, err := target.Area()
 			require.NoError(t, err)
-			pieces, err := decad.Split(t.Context(), target, tool)
+			pieces, err := decad.Split(target, tool).Do(t.Context())
 			require.Nil(t, pieces)
 			require.ErrorIs(t, err, tc.sentinel)
 			require.ErrorContains(t, err, tc.message)

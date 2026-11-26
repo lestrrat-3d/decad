@@ -41,7 +41,7 @@ func flushArcPrism(t *testing.T, doc *Document, p flushPlacement, origin, u, v, 
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	require.Len(t, s.Profiles(), 1)
-	body, err := Extrude(t.Context(), doc, s, s.Profiles()[0], Distance{D: units.Millimeters(length), Dir: p.toward(u, v, dir)})
+	body, err := Extrude(doc, s, s.Profiles()[0], Distance{D: units.Millimeters(length), Dir: p.toward(u, v, dir)}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -53,7 +53,7 @@ func flushArcUnion(t *testing.T, doc *Document, p flushPlacement, offset float64
 	x, y, z := r3.Vec{X: 1}, r3.Vec{Y: 1}, r3.Vec{Z: 1}
 	host := flushPolygonPrism(t, doc, p, r3.Vec{}, x, y, z.Scale(-1), [][2]float64{{-10, 0}, {10, 0}, {10, 16}, {-10, 16}}, 10)
 	tongue := flushArcPrism(t, doc, p, r3.Vec{Y: offset}, x, z, y, chordRoundTongue(), 4)
-	joined, err := Union(t.Context(), host, tongue)
+	joined, err := Union(host, tongue).Do(t.Context())
 	require.NoError(t, err)
 	return joined
 }
@@ -130,7 +130,7 @@ func filletedRectPrism(t *testing.T, doc *Document) *Body {
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	require.Len(t, s.Profiles(), 1)
-	body, err := Extrude(t.Context(), doc, s, s.Profiles()[0], Distance{D: units.Millimeters(16), Dir: flushPlacements[0].toward(r3.Vec{X: 1}, r3.Vec{Z: 1}, r3.Vec{Y: 1})})
+	body, err := Extrude(doc, s, s.Profiles()[0], Distance{D: units.Millimeters(16), Dir: flushPlacements[0].toward(r3.Vec{X: 1}, r3.Vec{Z: 1}, r3.Vec{Y: 1})}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -141,7 +141,7 @@ func flushChainHull(t *testing.T, doc *Document) *Body {
 	x, y, z := r3.Vec{X: 1}, r3.Vec{Y: 1}, r3.Vec{Z: 1}
 	long := flushArcPrism(t, doc, flushPlacements[0], r3.Vec{Y: -1}, x, z, y, chordRoundTongue(), 9)
 	back := internalBoxBodyAtZ(t, doc, -5, -3, 5, 0, -3, 11)
-	hull, err := Cut(t.Context(), long, back)
+	hull, err := Cut(long, back).Do(t.Context())
 	require.NoError(t, err)
 	requireNoGapShift(t, hull)
 	return hull
@@ -161,7 +161,7 @@ func requireVolumeWithin(t *testing.T, got Measurement, want, bound float64) {
 // flushChainTongue is the chain hull with the end block cut out flush on its foot tops.
 func flushChainTongue(t *testing.T, doc *Document) *Body {
 	t.Helper()
-	tongue, err := Cut(t.Context(), flushChainHull(t, doc), flushEndBlock(t, doc, -0.5))
+	tongue, err := Cut(flushChainHull(t, doc), flushEndBlock(t, doc, -0.5)).Do(t.Context())
 	require.NoError(t, err)
 	requireNoGapShift(t, tongue)
 	return tongue
@@ -173,7 +173,7 @@ func flushChainHost(t *testing.T, doc *Document) *Body {
 	x, y, z := r3.Vec{X: 1}, r3.Vec{Y: 1}, r3.Vec{Z: 1}
 	back := flushPolygonPrism(t, doc, flushPlacements[0], r3.Vec{Y: 8}, x, z, y,
 		[][2]float64{{-10, -10}, {10, -10}, {10, -5}, {-10, -5}}, 12)
-	host, err := Union(t.Context(), filletedRectPrism(t, doc), back)
+	host, err := Union(filletedRectPrism(t, doc), back).Do(t.Context())
 	require.NoError(t, err)
 	return host
 }
@@ -187,10 +187,10 @@ func TestFlushContactChain(t *testing.T) {
 	require.NoError(t, err)
 	vTongue, err := tongue.Volume()
 	require.NoError(t, err)
-	joined, err := Union(t.Context(), host, tongue)
+	joined, err := Union(host, tongue).Do(t.Context())
 	require.NoError(t, err)
 	requireFlushCheck(t, joined, 1, 0)
-	common, err := Intersect(t.Context(), flushChainHost(t, doc), flushChainTongue(t, doc))
+	common, err := Intersect(flushChainHost(t, doc), flushChainTongue(t, doc)).Do(t.Context())
 	require.NoError(t, err)
 	vCommon, err := common.Volume()
 	require.NoError(t, err)
@@ -235,9 +235,9 @@ func flushDiscUnion(t *testing.T, doc *Document) (*Body, error) {
 	s.CreateCircle(c, 1)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	disc, err := Extrude(t.Context(), doc, s, s.Profiles()[0], Distance{D: units.Millimeters(4), Dir: p.toward(x, z, y)})
+	disc, err := Extrude(doc, s, s.Profiles()[0], Distance{D: units.Millimeters(4), Dir: p.toward(x, z, y)}).Do(t.Context())
 	require.NoError(t, err)
-	return Union(t.Context(), host, disc)
+	return Union(host, disc).Do(t.Context())
 }
 
 func requireGapShift(t *testing.T, b *Body) {
@@ -271,10 +271,10 @@ func TestFlushContactTurnedRefused(t *testing.T) {
 	for _, deg := range []float64{37, -37} {
 		turn, err := r3.Rotation(z, units.Degrees(deg))
 		require.NoError(t, err)
-		tongue, err = Transform(t.Context(), tongue, turn)
+		tongue, err = Transform(tongue, turn).Do(t.Context())
 		require.NoError(t, err)
 	}
-	joined, err := Union(t.Context(), host, tongue)
+	joined, err := Union(host, tongue).Do(t.Context())
 	require.NoError(t, err)
 	requireGapShift(t, joined)
 	for _, g := range mergeFaceted(t, joined).Groups {
@@ -287,7 +287,7 @@ func TestFlushContactTurnedRefused(t *testing.T) {
 func TestFlushContactCutFlushEnd(t *testing.T) {
 	t.Parallel()
 	doc := New()
-	flush, err := Cut(t.Context(), flushChainHull(t, doc), flushEndBlock(t, doc, -0.5))
+	flush, err := Cut(flushChainHull(t, doc), flushEndBlock(t, doc, -0.5)).Do(t.Context())
 	require.NoError(t, err)
 	requireNoGapShift(t, flush)
 	fp := mergeFaceted(t, flush)
@@ -301,7 +301,7 @@ func TestFlushContactCutFlushEnd(t *testing.T) {
 		require.False(t, on && inside, "facet %d lies on z = -0.5 inside the block", t2)
 	}
 	lifted := -0.5 + math.Ldexp(1, -40)
-	slab, err := Cut(t.Context(), flushChainHull(t, doc), flushEndBlock(t, doc, lifted))
+	slab, err := Cut(flushChainHull(t, doc), flushEndBlock(t, doc, lifted)).Do(t.Context())
 	require.NoError(t, err)
 	require.NotEmpty(t, facesOnPlane(mergeFaceted(t, slab), slab, 2, lifted), "the thin slab's top face")
 }
@@ -324,7 +324,7 @@ func flushCircleLoft(t *testing.T, doc *Document) *Body {
 		require.NoError(t, err)
 		sections[i], profiles[i] = s, s.Profiles()[0]
 	}
-	body, err := Loft(t.Context(), doc, sections[0], profiles[0], sections[1], profiles[1])
+	body, err := Loft(doc, sections[0], profiles[0], sections[1], profiles[1]).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -336,7 +336,7 @@ func TestFlushContactChordedLoft(t *testing.T) {
 	// The box overlaps the loft's foot: its lower face shares the start cap's plane and facing, and its edge x = 0.5
 	// crosses the cap 0.5 from its centre.
 	box := internalBoxBodyAtZ(t, doc, -5, -5, 0.5, 5, 0, 1)
-	joined, err := Union(t.Context(), box, loft)
+	joined, err := Union(box, loft).Do(t.Context())
 	require.NoError(t, err)
 	requireGapShift(t, joined)
 }
@@ -415,7 +415,7 @@ func TestFlushContactClipBounds(t *testing.T) {
 	readHost, readTool := operands()
 	outline := flushToolOutlineBounds(t, readHost, readTool)
 	host, tool := operands()
-	joined, err := Union(t.Context(), host, tool)
+	joined, err := Union(host, tool).Do(t.Context())
 	require.NoError(t, err)
 	fp := mergeFaceted(t, joined)
 	// Every point on the flush plane inside the host's face that lies on the tool cap's outline was placed by the
@@ -469,11 +469,11 @@ func TestFlushContactRoundedCapLevelRefused(t *testing.T) {
 	doc := New(ExactOnly())
 	s0, p0 := square(lower, 5)
 	s1, p1 := square(upper, 5)
-	blank, err := Loft(t.Context(), doc, s0, p0, s1, p1)
+	blank, err := Loft(doc, s0, p0, s1, p1).Do(t.Context())
 	require.NoError(t, err)
 	ts, tp := square(lower, 1)
-	tool, err := Extrude(t.Context(), doc, ts, tp, Distance{D: units.Millimeters(math.Nextafter(2, 0)), Dir: Along})
+	tool, err := Extrude(doc, ts, tp, Distance{D: units.Millimeters(math.Nextafter(2, 0)), Dir: Along}).Do(t.Context())
 	require.NoError(t, err)
-	_, err = Cut(t.Context(), blank, tool)
+	_, err = Cut(blank, tool).Do(t.Context())
 	require.ErrorIs(t, err, ErrUnsupported)
 }

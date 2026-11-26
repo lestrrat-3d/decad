@@ -30,8 +30,8 @@ func Example_pattern_copies() {
 		return
 	}
 	doc := decad.New()
-	block, err := decad.Extrude(context.Background(), doc, s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
+	block, err := decad.Extrude(doc, s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(5), Dir: decad.Along}).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to extrude: %s\n", err)
 		return
@@ -39,8 +39,8 @@ func Example_pattern_copies() {
 
 	// Four blocks about the Z axis, one every quarter turn. The count
 	// includes the original, so the call returns three new bodies.
-	ring, err := decad.PatternCopies(context.Background(), block,
-		decad.CircularPattern{Axis: r3.NewVec(0, 0, 1), Count: 4})
+	ring, err := decad.PatternCopies(block,
+		decad.CircularPattern{Axis: r3.NewVec(0, 0, 1), Count: 4}).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to pattern: %s\n", err)
 		return
@@ -49,8 +49,8 @@ func Example_pattern_copies() {
 
 	// Three blocks in a row along +Y, 10 mm apart, starting from the first
 	// copy. Again the count includes the starting body.
-	row, err := decad.PatternCopies(context.Background(), ring[0],
-		decad.LinearPattern{Dir: r3.NewVec(0, 1, 0), Step: units.Millimeters(10), Count: 3})
+	row, err := decad.PatternCopies(ring[0],
+		decad.LinearPattern{Dir: r3.NewVec(0, 1, 0), Step: units.Millimeters(10), Count: 3}).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to pattern: %s\n", err)
 		return

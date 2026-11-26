@@ -39,7 +39,7 @@ func ValidateJoins(tangents []Tangents) error {
 	for i := 1; i < len(tangents); i++ {
 		previousOut, tangentIn := tangents[i-1].Out, tangents[i].In
 		if !sweeparc.IsZero(sweeparc.Cross(previousOut, tangentIn)) || sweeparc.Dot(previousOut, tangentIn).Sign() <= 0 {
-			return fmt.Errorf(`%w: sweep path join %d is not tangent; WithMitredJoins admits a corner on a LineTo-only path`, decaderr.ErrUnsupported, i)
+			return fmt.Errorf(`%w: sweep path join %d is not tangent; MitredJoins admits a corner on a LineTo-only path`, decaderr.ErrUnsupported, i)
 		}
 	}
 	return nil

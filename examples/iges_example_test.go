@@ -91,7 +91,7 @@ func Example_read_iges() {
 		fmt.Printf("failed to read the file: %s\n", err)
 		return
 	}
-	solid, err := decad.SolidFromMesh(context.Background(), decad.New(), mesh)
+	solid, err := decad.SolidFromMesh(decad.New(), mesh).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to make a solid: %s\n", err)
 		return

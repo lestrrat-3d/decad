@@ -40,7 +40,7 @@ func newBrepEdgeRoute(bp breprecord.Payload, topo *breprecord.Topology,
 // tangentJunctionNote names the condition behind SB7's curved third face
 // when the selected edge ends at a proven tangent junction whose continuation
 // is not selected: the exact route cannot round a tangent chain edge by edge,
-// and WithTangentChain selects the whole chain. The junction must be proven
+// and TangentChain selects the whole chain. The junction must be proven
 // (clearance.DegYes); an undecided or non-tangent junction returns "" and
 // leaves the curved-face reason unchanged.
 func (r *brepEdgeRoute) tangentJunctionNote(eb *breprecord.EdgeBlend, v [3]float64) string {
@@ -62,7 +62,7 @@ func (r *brepEdgeRoute) tangentJunctionNote(eb *breprecord.EdgeBlend, v [3]float
 						continue
 					}
 					if tangentchain.Continues(e, c, end) == clearance.DegYes {
-						return fmt.Sprintf(`the selected edge ends at the tangent junction %s whose continuation is not selected; WithTangentChain selects the whole chain`,
+						return fmt.Sprintf(`the selected edge ends at the tangent junction %s whose continuation is not selected; TangentChain selects the whole chain`,
 							selectorquery.RenderVec(end.Position))
 					}
 				}

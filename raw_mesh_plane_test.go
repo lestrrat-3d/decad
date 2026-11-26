@@ -21,7 +21,7 @@ func TestRawMeshPlaneOnBooleanFragments(t *testing.T) {
 		return m
 	}
 	target := mesh(r3.Vec{})
-	solid, err := SolidFromMesh(ctx, doc, target)
+	solid, err := SolidFromMesh(doc, target).Do(ctx)
 	require.NoError(t, err)
 	var original *topo.MeshPlaneSlab
 	for _, face := range solid.Faces() {
@@ -34,9 +34,9 @@ func TestRawMeshPlaneOnBooleanFragments(t *testing.T) {
 		}
 	}
 	require.NotNil(t, original)
-	tool, err := SolidFromMesh(ctx, doc, mesh(r3.Vec{X: 1, Y: .5, Z: .25}))
+	tool, err := SolidFromMesh(doc, mesh(r3.Vec{X: 1, Y: .5, Z: .25})).Do(ctx)
 	require.NoError(t, err)
-	result, err := Cut(ctx, solid, tool)
+	result, err := Cut(solid, tool).Do(ctx)
 	require.NoError(t, err)
 	var kept bool
 	for _, face := range result.Faces() {
@@ -45,7 +45,7 @@ func TestRawMeshPlaneOnBooleanFragments(t *testing.T) {
 	require.True(t, kept, "the cut retains the untouched part of the original oblique source plane")
 	translation, err := r3.Translation(r3.Vec{X: 2})
 	require.NoError(t, err)
-	moved, err := Transform(ctx, result, translation)
+	moved, err := Transform(result, translation).Do(ctx)
 	require.NoError(t, err)
 	for _, face := range moved.Faces() {
 		require.Nil(t, face.n.MeshPlaneSlab())

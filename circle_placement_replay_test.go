@@ -35,7 +35,7 @@ func TestCirclePlacementReplaySnapshot(t *testing.T) {
 	if _, err := sk.Solve(t.Context()); err != nil {
 		t.Fatal(err)
 	}
-	source, err := Extrude(t.Context(), doc, sk, sk.Profiles()[0], Distance{D: units.Millimeters(4), Dir: Along})
+	source, err := Extrude(doc, sk, sk.Profiles()[0], Distance{D: units.Millimeters(4), Dir: Along}).Do(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -51,7 +51,7 @@ func TestCirclePlacementReplaySnapshot(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	placed, err := Transform(t.Context(), source, motion)
+	placed, err := Transform(source, motion).Do(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -164,7 +164,7 @@ func TestCirclePlacementReplaySnapshot(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	placedAgain, err := Transform(t.Context(), placed, secondMotion)
+	placedAgain, err := Transform(placed, secondMotion).Do(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}

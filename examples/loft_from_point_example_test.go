@@ -34,8 +34,8 @@ func Example_loft_from_point() {
 	}
 
 	// The tip is the origin, 6 mm below the base.
-	pyramid, err := decad.LoftFromPoint(context.Background(), decad.New(),
-		r3.NewVec(0, 0, 0), s, s.Profiles()[0])
+	pyramid, err := decad.LoftFromPoint(decad.New(),
+		r3.NewVec(0, 0, 0), s, s.Profiles()[0]).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to loft: %s\n", err)
 		return

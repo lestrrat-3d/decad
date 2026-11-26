@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/lestrrat-3d/decad/internal/coneaxis"
+	"github.com/lestrrat-3d/decad/internal/opcommand"
 	"github.com/lestrrat-3d/decad/internal/pointcone"
 	"github.com/lestrrat-3d/decad/internal/revolveplan"
 	"github.com/lestrrat-3d/decad/internal/revolveshell"
@@ -39,7 +40,7 @@ import (
 //
 // far is the cone's far plane as an axial coordinate. It must be a finite
 // negative length (below X = 0, so the cone spans the origin) and strictly
-// below both ends of the face. A nil ctx, a nil body, a body of no document,
+// below both ends of the face. A nil ctx given to Do, a nil body, a body of no document,
 // or a far that is not a finite length is ErrDegenerate. Selector failures are
 // those of a ToFace stop. A retired body is ErrRetiredBody. A body or face
 // outside the supported class (a plane or cylinder side, a section edge on the
@@ -48,10 +49,38 @@ import (
 // float64 generator is not read back as an exact point cone is ErrUnsupported.
 // A canceled ctx returns ctx.Err() unchanged. Every failure leaves the
 // document and its provenance numbering unchanged.
-func ConeFromFace(ctx context.Context, body *Body, face FaceSelector, far units.Value) (*Body, error) {
-	if ctx == nil {
-		return nil, fmt.Errorf(`%w: a nil context cannot control ConeFromFace`, ErrDegenerate)
+func ConeFromFace(body *Body, face FaceSelector, far units.Value) *ConeFromFaceCommand {
+	c := &ConeFromFaceCommand{body: body, face: copyFaceSelector(face), far: far}
+	if body == nil {
+		c.state.Record("body", fmt.Errorf(`%w: ConeFromFace names no body of a document`, ErrDegenerate))
 	}
+	return c
+}
+
+// ConeFromFaceCommand builds the cone that extends a face of a Revolve. Build
+// it with [ConeFromFace]. It has no method.
+type ConeFromFaceCommand struct {
+	state opcommand.State // consumed flag and first recorded fault
+	body  *Body           // stored as given
+	face  FaceSelector    // copied at ConeFromFace
+	far   units.Value     // the far plane's axial coordinate, gated at Do
+}
+
+// Do builds the cone and leaves the body live, or returns the error of the
+// first gate that refuses. A nil ctx is ErrDegenerate, and a second call
+// returns ErrConsumed.
+func (c *ConeFromFaceCommand) Do(ctx context.Context) (*Body, error) {
+	return runCommand(ctx, &c.state, OperationConeFromFace, c.run)
+}
+
+func (c *ConeFromFaceCommand) run(ctx context.Context) (*Body, error) {
+	return coneFromFace(ctx, c.body, c.face, c.far)
+}
+
+// coneFromFace is ConeFromFace's implementation. ctx is not nil, and the
+// errors it returns carry no operation tag
+// (agent-docs/command-api-design.md §11).
+func coneFromFace(ctx context.Context, body *Body, face FaceSelector, far units.Value) (*Body, error) {
 	if body == nil || body.n.Doc == nil {
 		return nil, fmt.Errorf(`%w: ConeFromFace names no body of a document`, ErrDegenerate)
 	}
@@ -189,5 +218,5 @@ func revolveMeridianCone(ctx context.Context, d *Document, far, radius, apex flo
 		return nil, fmt.Errorf(`%w: the cone section is not one closed profile`, ErrUnsupported)
 	}
 	return revolveProfileBuild(ctx, d, s, profiles[0],
-		SketchLine{Start: planePoint{}, End: planePoint{U: 1}}, FullRevolution{}, nil)
+		SketchLine{Start: planePoint{}, End: planePoint{U: 1}}, FullRevolution{}, false)
 }

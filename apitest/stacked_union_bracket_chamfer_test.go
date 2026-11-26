@@ -30,7 +30,7 @@ func stackedLBracket(t *testing.T) (*decad.Document, *decad.Body) {
 	doc := decad.New()
 	base := boxBody(t, doc, 0, 0, 60, 40, 8)
 	upright := boxBody(t, doc, 0, 0, 8, 40, 50)
-	bracket, err := decad.Union(t.Context(), base, upright)
+	bracket, err := decad.Union(base, upright).Do(t.Context())
 	require.NoError(t, err)
 	decadtest.MeasuresVolume(t, bracket, units.CubicMillimeters(32640), decadtest.Exactly())
 	return doc, bracket
@@ -74,8 +74,8 @@ func requireBracketSound(t *testing.T, doc *decad.Document) {
 func TestStackedUnionBracketShell(t *testing.T) {
 	t.Parallel()
 	doc, bracket := stackedLBracket(t)
-	out, err := decad.Shell(t.Context(), bracket, decad.Faces(decad.Facing(r3.NewVec(0, -1, 0))).Exactly(1),
-		units.Millimeters(2))
+	out, err := decad.Shell(bracket, decad.Faces(decad.Facing(r3.NewVec(0, -1, 0))).Exactly(1),
+		units.Millimeters(2)).Do(t.Context())
 	require.NoError(t, err)
 	decadtest.MeasuresVolume(t, out, units.CubicMillimeters(17592+38*math.Pi), decadtest.WithinRel(units.Scalar(1e-12)))
 	requireBracketSound(t, doc)
@@ -89,8 +89,7 @@ func TestStackedUnionBracketChamfers(t *testing.T) {
 	t.Run("two distances", func(t *testing.T) {
 		t.Parallel()
 		doc, bracket := stackedLBracket(t)
-		out, err := decad.Chamfer(t.Context(), bracket, bracketHeel(), units.Millimeters(3),
-			decad.WithAsymmetricChamfer(decad.Faces(decad.Facing(r3.NewVec(-1, 0, 0))), units.Millimeters(5)))
+		out, err := decad.Chamfer(bracket, bracketHeel(), units.Millimeters(3)).Asymmetric(decad.Faces(decad.Facing(r3.NewVec(-1, 0, 0))), units.Millimeters(5)).Do(t.Context())
 		require.NoError(t, err)
 		// The bevel removes a right triangle with legs 3 and 5 along 40 mm.
 		decadtest.MeasuresVolume(t, out, units.CubicMillimeters(32640-0.5*3*5*40), decadtest.Exactly())
@@ -100,8 +99,8 @@ func TestStackedUnionBracketChamfers(t *testing.T) {
 	t.Run("angle", func(t *testing.T) {
 		t.Parallel()
 		doc, bracket := stackedLBracket(t)
-		out, err := decad.ChamferAngle(t.Context(), bracket, bracketInnerCorner(), units.Millimeters(3),
-			bracketBaseTop(t, bracket), units.Degrees(30))
+		out, err := decad.ChamferAngle(bracket, bracketInnerCorner(), units.Millimeters(3),
+			bracketBaseTop(t, bracket), units.Degrees(30)).Do(t.Context())
 		require.NoError(t, err)
 		// The inner corner is concave, so the bevel adds a wedge with legs 3
 		// and 3·tan(30°) = √3 along 40 mm: 60√3.
@@ -116,7 +115,7 @@ func TestStackedUnionBracketChamfers(t *testing.T) {
 	t.Run("equal distance", func(t *testing.T) {
 		t.Parallel()
 		doc, bracket := stackedLBracket(t)
-		out, err := decad.Chamfer(t.Context(), bracket, bracketHeel(), units.Millimeters(3))
+		out, err := decad.Chamfer(bracket, bracketHeel(), units.Millimeters(3)).Do(t.Context())
 		require.NoError(t, err)
 		decadtest.MeasuresVolume(t, out, units.CubicMillimeters(32640-0.5*3*3*40), decadtest.Exactly())
 		requireBracketSound(t, doc)

@@ -142,6 +142,13 @@ var ErrNotFinite = decaderr.ErrNotFinite
 // errors.Is(err, ErrUnsupported) branches on both.
 var ErrUnsupported = decaderr.ErrUnsupported
 
+// ErrConsumed is returned by an operation command's Do when that command has
+// already run once. Do consumes its command on every outcome — success,
+// refusal and cancellation alike — so a retry builds a new command
+// (agent-docs/command-api-design.md §3). The error carries the command's own
+// OperationKind at stage OperationStageInput.
+var ErrConsumed = decaderr.ErrConsumed
+
 // BooleanErrorCode is the branchable fine reason a public boolean operation
 // failed, read from a [BooleanError] with errors.As. It draws the line the
 // wrapped sentinel is too coarse to draw: the three codes separate a caller's

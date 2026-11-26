@@ -39,7 +39,7 @@ func tangentArcPlate(t *testing.T, doc *decad.Document) *decad.Body {
 		sketch.NewRadius(arcL, cornerR), sketch.NewTangent(left, arcL),
 		sketch.NewRadius(arcB, endR), sketch.NewTangentCircles(arcB, arcR, true), sketch.NewTangentCircles(arcB, arcL, true),
 	)
-	body, err := decad.Extrude(t.Context(), doc, s, shortStepProfile(t, s), decad.Distance{D: units.Millimeters(8), Dir: decad.Along})
+	body, err := decad.Extrude(doc, s, shortStepProfile(t, s), decad.Distance{D: units.Millimeters(8), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -57,13 +57,13 @@ func TestCapBlendCutAfterTangentArcChamfer(t *testing.T) {
 	doc := decad.New()
 	body := tangentArcPlate(t, doc)
 	loops := decad.Edges(decad.OuterLoopOf(decad.CapStart(body))).Or(decad.OuterLoopOf(decad.CapEnd(body)))
-	chamfered, err := decad.Chamfer(ctx, body, loops, units.Millimeters(0.5))
+	chamfered, err := decad.Chamfer(body, loops, units.Millimeters(0.5)).Do(ctx)
 	require.NoError(t, err)
 	before, err := chamfered.Volume()
 	require.NoError(t, err)
 
 	box := boxBodyAtZ(t, doc, -2, -2, 2, 2, -1, 4)
-	got, err := decad.Cut(ctx, chamfered, box)
+	got, err := decad.Cut(chamfered, box).Do(ctx)
 	require.NoError(t, err)
 	vol, err := got.Volume()
 	require.NoError(t, err)

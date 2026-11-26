@@ -22,7 +22,7 @@ func sixHoleGroup(t *testing.T, doc *decad.Document, h float64) *decad.Body {
 	group := discBody(t, doc, 5, 2, h)
 	for i := 1; i < 6; i++ {
 		var err error
-		group, err = decad.Union(t.Context(), group, discBody(t, doc, 5+10*float64(i), 2, h))
+		group, err = decad.Union(group, discBody(t, doc, 5+10*float64(i), 2, h)).Do(t.Context())
 		require.NoError(t, err)
 		require.False(t, tookMeshPath(group))
 		require.Len(t, group.Lumps(), i+1)
@@ -36,7 +36,7 @@ func TestPrismGroupDisjointUnion(t *testing.T) {
 	a := boxBody(t, doc, 0, 0, 5, 10, 10)
 	b := boxBody(t, doc, 10, 0, 15, 10, 10)
 
-	got, err := decad.Union(t.Context(), a, b)
+	got, err := decad.Union(a, b).Do(t.Context())
 	require.NoError(t, err)
 	require.False(t, tookMeshPath(got))
 	require.Len(t, got.Lumps(), 2)
@@ -69,7 +69,7 @@ func TestPrismGroupDisjointUnion(t *testing.T) {
 	require.Equal(t, 2, read.Report().Shells)
 	requireMeshVolume(t, read, 1000)
 
-	moved, err := decad.Transform(t.Context(), got, mustTranslation(t, 0, 0, 7))
+	moved, err := decad.Transform(got, mustTranslation(t, 0, 0, 7)).Do(t.Context())
 	require.NoError(t, err)
 	require.Len(t, moved.Lumps(), 2)
 	movedVolume, err := moved.Volume()
@@ -90,7 +90,7 @@ func TestPrismGroupSixHoleCut(t *testing.T) {
 	plate := boxBody(t, doc, 0, -20, 60, 20, 5)
 	tool := sixHoleGroup(t, doc, 5)
 
-	got, err := decad.Cut(t.Context(), plate, tool)
+	got, err := decad.Cut(plate, tool).Do(t.Context())
 	require.NoError(t, err)
 	require.False(t, tookMeshPath(got))
 	require.Len(t, got.Lumps(), 1)
@@ -108,7 +108,7 @@ func TestPrismGroupSixHoleCut(t *testing.T) {
 	require.Len(t, report.Bodies, 1)
 	require.NotNil(t, report.Bodies[0].Wall.Minimum, "the wall survey measures the holed plate")
 
-	filleted, err := decad.Fillet(t.Context(), got, verticalConvexEdge(), units.Millimeters(1))
+	filleted, err := decad.Fillet(got, verticalConvexEdge(), units.Millimeters(1)).Do(t.Context())
 	require.NoError(t, err)
 	filletVolume, err := filleted.Volume()
 	require.NoError(t, err)
@@ -123,11 +123,11 @@ func TestPrismGroupCutNotchesTheEdge(t *testing.T) {
 	plate := boxBody(t, doc, 0, 0, 30, 10, 4)
 	left := boxBody(t, doc, 5, 8, 9, 12, 4)
 	right := boxBody(t, doc, 20, 8, 24, 12, 4)
-	tool, err := decad.Union(t.Context(), left, right)
+	tool, err := decad.Union(left, right).Do(t.Context())
 	require.NoError(t, err)
 	require.Len(t, tool.Lumps(), 2)
 
-	got, err := decad.Cut(t.Context(), plate, tool)
+	got, err := decad.Cut(plate, tool).Do(t.Context())
 	require.NoError(t, err)
 	require.False(t, tookMeshPath(got))
 	require.Len(t, got.Lumps(), 1)
@@ -144,9 +144,9 @@ func TestPrismGroupCutNotchesTheEdge(t *testing.T) {
 func TestPrismGroupUnionMergesOneLump(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
-	group, err := decad.Union(t.Context(), boxBody(t, doc, 0, 0, 10, 10, 5), boxBody(t, doc, 20, 0, 30, 10, 5))
+	group, err := decad.Union(boxBody(t, doc, 0, 0, 10, 10, 5), boxBody(t, doc, 20, 0, 30, 10, 5)).Do(t.Context())
 	require.NoError(t, err)
-	got, err := decad.Union(t.Context(), group, boxBody(t, doc, 5, 5, 15, 15, 5))
+	got, err := decad.Union(group, boxBody(t, doc, 5, 5, 15, 15, 5)).Do(t.Context())
 	require.NoError(t, err)
 	require.False(t, tookMeshPath(got))
 	require.Len(t, got.Lumps(), 2)
@@ -159,9 +159,9 @@ func TestPrismGroupUnionMergesOneLump(t *testing.T) {
 	// A bridge across both lumps of an undisplaced group closes them into one
 	// prism. (On the merged group above the bridge would cross fragments a
 	// cut displaced, which prism-boolean §3.4 sends to the mesh path.)
-	group, err = decad.Union(t.Context(), boxBody(t, doc, 0, 0, 10, 10, 5), boxBody(t, doc, 20, 0, 30, 10, 5))
+	group, err = decad.Union(boxBody(t, doc, 0, 0, 10, 10, 5), boxBody(t, doc, 20, 0, 30, 10, 5)).Do(t.Context())
 	require.NoError(t, err)
-	bridged, err := decad.Union(t.Context(), group, boxBody(t, doc, 5, 2, 25, 4, 5))
+	bridged, err := decad.Union(group, boxBody(t, doc, 5, 2, 25, 4, 5)).Do(t.Context())
 	require.NoError(t, err)
 	require.False(t, tookMeshPath(bridged))
 	require.Len(t, bridged.Lumps(), 1)
@@ -179,19 +179,19 @@ func TestPrismGroupUnionLeavesAnEnclosedVoidToTheMeshPath(t *testing.T) {
 	t.Parallel()
 	doc := decad.New(decad.ExactOnly())
 	// Two bars, then a U bridging them closes a 6×6 void at x 2..8, y 2..8.
-	group, err := decad.Union(t.Context(), boxBody(t, doc, 0, 0, 10, 2, 3), boxBody(t, doc, 0, 8, 10, 10, 3))
+	group, err := decad.Union(boxBody(t, doc, 0, 0, 10, 2, 3), boxBody(t, doc, 0, 8, 10, 10, 3)).Do(t.Context())
 	require.NoError(t, err)
 	require.Len(t, group.Lumps(), 2)
 	bridge := polyPrismBody(t, doc, [][2]float64{{-1, 1}, {2, 1}, {2, 9}, {-1, 9}}, 3)
 	other := polyPrismBody(t, doc, [][2]float64{{8, 1}, {11, 1}, {11, 9}, {8, 9}}, 3)
-	ring, err := decad.Union(t.Context(), bridge, other)
+	ring, err := decad.Union(bridge, other).Do(t.Context())
 	require.NoError(t, err)
 	require.Len(t, ring.Lumps(), 2)
 
 	// The mesh path classifies the pair's coplanar caps exactly. The union's
 	// section is 40 + 20 + 20 = 80 mm² over 3 mm, 240 mm³; an analytic fill
 	// would have added the void's 6·6·3 mm³.
-	got, err := decad.Union(t.Context(), group, ring)
+	got, err := decad.Union(group, ring).Do(t.Context())
 	require.NoError(t, err)
 	volume, err := got.Volume()
 	require.NoError(t, err)

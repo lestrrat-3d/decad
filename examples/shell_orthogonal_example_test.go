@@ -43,12 +43,12 @@ func Example_shell_mesh_solid() {
 		fmt.Printf("failed to read mesh: %s\n", err)
 		return
 	}
-	box, err := decad.SolidFromMesh(context.Background(), decad.New(), mesh)
+	box, err := decad.SolidFromMesh(decad.New(), mesh).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to make a solid: %s\n", err)
 		return
 	}
-	cup, err := decad.Shell(context.Background(), box, decad.Faces(decad.Facing(r3.NewVec(0, 0, 1))), units.Millimeters(1))
+	cup, err := decad.Shell(box, decad.Faces(decad.Facing(r3.NewVec(0, 0, 1))), units.Millimeters(1)).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to shell: %s\n", err)
 		return
@@ -73,12 +73,12 @@ func Example_move_face() {
 		fmt.Printf("failed to read mesh: %s\n", err)
 		return
 	}
-	box, err := decad.SolidFromMesh(context.Background(), decad.New(), mesh)
+	box, err := decad.SolidFromMesh(decad.New(), mesh).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to make a solid: %s\n", err)
 		return
 	}
-	lower, err := decad.MoveFace(context.Background(), box, decad.Faces(decad.Facing(r3.NewVec(0, 0, 1))), units.Millimeters(-2))
+	lower, err := decad.MoveFace(box, decad.Faces(decad.Facing(r3.NewVec(0, 0, 1))), units.Millimeters(-2)).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to move the face: %s\n", err)
 		return
@@ -102,12 +102,12 @@ func Example_stretch() {
 		fmt.Printf("failed to read mesh: %s\n", err)
 		return
 	}
-	box, err := decad.SolidFromMesh(context.Background(), decad.New(), mesh)
+	box, err := decad.SolidFromMesh(decad.New(), mesh).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to make a solid: %s\n", err)
 		return
 	}
-	longer, err := decad.Stretch(context.Background(), box, r3.NewVec(0, 0, 0), units.Scalar(2), units.Scalar(0.5), units.Scalar(1))
+	longer, err := decad.Stretch(box, r3.NewVec(0, 0, 0), units.Scalar(2), units.Scalar(0.5), units.Scalar(1)).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to stretch: %s\n", err)
 		return
@@ -131,13 +131,12 @@ func Example_shell_centered() {
 		fmt.Printf("failed to read mesh: %s\n", err)
 		return
 	}
-	box, err := decad.SolidFromMesh(context.Background(), decad.New(), mesh)
+	box, err := decad.SolidFromMesh(decad.New(), mesh).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to make a solid: %s\n", err)
 		return
 	}
-	wall, err := decad.Shell(context.Background(), box, nil, units.Millimeters(2),
-		decad.WithNoOpenings(), decad.WithShellSense(decad.Centered))
+	wall, err := decad.ShellClosed(box, units.Millimeters(2)).Sense(decad.Centered).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to shell: %s\n", err)
 		return
@@ -172,12 +171,12 @@ func Example_orthogonal_union() {
 			fmt.Printf("failed to read mesh: %s\n", err)
 			return
 		}
-		if solids[i], err = decad.SolidFromMesh(context.Background(), doc, mesh); err != nil {
+		if solids[i], err = decad.SolidFromMesh(doc, mesh).Do(context.Background()); err != nil {
 			fmt.Printf("failed to make a solid: %s\n", err)
 			return
 		}
 	}
-	bar, err := decad.Union(context.Background(), solids[0], solids[1])
+	bar, err := decad.Union(solids[0], solids[1]).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to join: %s\n", err)
 		return
@@ -202,7 +201,7 @@ func Example_section_mesh_solid() {
 		fmt.Printf("failed to read mesh: %s\n", err)
 		return
 	}
-	box, err := decad.SolidFromMesh(context.Background(), decad.New(), mesh)
+	box, err := decad.SolidFromMesh(decad.New(), mesh).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to make a solid: %s\n", err)
 		return
@@ -241,12 +240,12 @@ func Example_offset_solid() {
 		fmt.Printf("failed to read mesh: %s\n", err)
 		return
 	}
-	box, err := decad.SolidFromMesh(context.Background(), decad.New(), mesh)
+	box, err := decad.SolidFromMesh(decad.New(), mesh).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to make a solid: %s\n", err)
 		return
 	}
-	grown, err := decad.Offset(context.Background(), box, units.Millimeters(2))
+	grown, err := decad.Offset(box, units.Millimeters(2)).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to offset: %s\n", err)
 		return
@@ -271,12 +270,12 @@ func Example_quarter_turn() {
 		fmt.Printf("failed to read mesh: %s\n", err)
 		return
 	}
-	box, err := decad.SolidFromMesh(context.Background(), decad.New(), mesh)
+	box, err := decad.SolidFromMesh(decad.New(), mesh).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to make a solid: %s\n", err)
 		return
 	}
-	turned, err := decad.QuarterTurn(context.Background(), box, r3.NewVec(0, 0, 1), r3.NewVec(0, 0, 0), 1)
+	turned, err := decad.QuarterTurn(box, r3.NewVec(0, 0, 1), r3.NewVec(0, 0, 0), 1).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to turn: %s\n", err)
 		return
@@ -291,7 +290,7 @@ func Example_quarter_turn() {
 	// x: -8 to 0, y: 0 to 10
 }
 
-// WithShellFaceThickness gives the walls that face one direction a thickness of their own, so a
+// The FaceThickness method gives the walls that face one direction a thickness of their own, so a
 // shelled part can have a heavy floor and thin sides. Here the 10 x 8 x 6 mm block read from OBJ is shelled
 // open at the top with 1 mm walls and a 3 mm floor.
 func Example_shell_face_thickness() {
@@ -300,13 +299,12 @@ func Example_shell_face_thickness() {
 		fmt.Printf("failed to read mesh: %s\n", err)
 		return
 	}
-	box, err := decad.SolidFromMesh(context.Background(), decad.New(), mesh)
+	box, err := decad.SolidFromMesh(decad.New(), mesh).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to make a solid: %s\n", err)
 		return
 	}
-	cup, err := decad.Shell(context.Background(), box, decad.Faces(decad.Facing(r3.NewVec(0, 0, 1))), units.Millimeters(1),
-		decad.WithShellFaceThickness(r3.NewVec(0, 0, -1), units.Millimeters(3)))
+	cup, err := decad.Shell(box, decad.Faces(decad.Facing(r3.NewVec(0, 0, 1))), units.Millimeters(1)).FaceThickness(r3.NewVec(0, 0, -1), units.Millimeters(3)).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to shell: %s\n", err)
 		return
@@ -332,12 +330,12 @@ func Example_verify_wall_orthogonal() {
 		return
 	}
 	doc := decad.New()
-	box, err := decad.SolidFromMesh(context.Background(), doc, mesh)
+	box, err := decad.SolidFromMesh(doc, mesh).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to make a solid: %s\n", err)
 		return
 	}
-	if _, err := decad.Shell(context.Background(), box, decad.Faces(decad.Facing(r3.NewVec(0, 0, 1))), units.Millimeters(1)); err != nil {
+	if _, err := decad.Shell(box, decad.Faces(decad.Facing(r3.NewVec(0, 0, 1))), units.Millimeters(1)).Do(context.Background()); err != nil {
 		fmt.Printf("failed to shell: %s\n", err)
 		return
 	}

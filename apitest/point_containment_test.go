@@ -37,7 +37,7 @@ func TestPointLocationAcrossPocketsAndBores(t *testing.T) {
 	doc := decad.New()
 	plate := boxBody(t, doc, -10, -10, 10, 10, 10)
 	bore := circleBodyAtZ(t, doc, 0, 2, 0, 10)
-	part, err := decad.Cut(t.Context(), plate, bore)
+	part, err := decad.Cut(plate, bore).Do(t.Context())
 	require.NoError(t, err)
 	for _, tc := range []struct {
 		name string
@@ -56,7 +56,7 @@ func TestPointLocationAcrossPocketsAndBores(t *testing.T) {
 	}
 
 	pocket := boxBodyAtZ(t, doc, 5, -2, 8, 2, 6, 4)
-	stack, err := decad.Cut(t.Context(), part, pocket)
+	stack, err := decad.Cut(part, pocket).Do(t.Context())
 	require.NoError(t, err)
 	for _, tc := range []struct {
 		at   r3.Vec
@@ -76,7 +76,7 @@ func TestPointLocationOnFacetedAndPlacedBodies(t *testing.T) {
 	doc := decad.New()
 	plate := boxBody(t, doc, 0, 0, 20, 20, 8)
 	tool := translated(t, diskBody(t, doc, 10, 10, 2), 0, 0, -6)
-	part, err := decad.Cut(t.Context(), plate, tool)
+	part, err := decad.Cut(plate, tool).Do(t.Context())
 	require.NoError(t, err)
 	require.True(t, tookMeshPath(part))
 	for _, tc := range []struct {
@@ -94,7 +94,7 @@ func TestPointLocationOnFacetedAndPlacedBodies(t *testing.T) {
 
 	rotation, err := r3.Rotation(r3.NewVec(1, 2, 3), units.Degrees(37))
 	require.NoError(t, err)
-	placed, err := decad.Transform(t.Context(), part, rotation)
+	placed, err := decad.Transform(part, rotation).Do(t.Context())
 	require.NoError(t, err)
 	for _, tc := range []struct {
 		at   r3.Vec
@@ -128,8 +128,7 @@ func TestPointLocationRejectsInvalidRequests(t *testing.T) {
 	require.ErrorIs(t, err, decad.ErrDegenerate)
 
 	s, p := plateSketch(t)
-	sheet, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along},
-		decad.WithSurfaceResult())
+	sheet, err := decad.Extrude(doc, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).SurfaceResult().Do(t.Context())
 	require.NoError(t, err)
 	_, err = sheet.LocatePoint(t.Context(), point, units.Millimeters(0.1))
 	require.ErrorIs(t, err, decad.ErrNotSolid)
@@ -138,7 +137,7 @@ func TestPointLocationRejectsInvalidRequests(t *testing.T) {
 	cancel()
 	_, err = plate.LocatePoint(ctx, point, units.Millimeters(0.1))
 	require.ErrorIs(t, err, context.Canceled)
-	require.NoError(t, decad.Remove(plate))
+	require.NoError(t, decad.Remove(plate).Do(t.Context()))
 	got, err := plate.LocatePoint(t.Context(), point, units.Millimeters(0.1))
 	require.NoError(t, err)
 	require.Equal(t, decad.PointInside, got)

@@ -8,9 +8,10 @@ validation and one atomic commit, and no new geometry kernel. The public contrac
 ## 1. Contract
 
 ```go
-func Emboss(ctx context.Context, b *Body, s *sketch.Sketch, profiles []*sketch.Profile, face FaceSelector, mode EmbossMode, height units.Value, opts ...EmbossOption) (*Body, error)
-func WithEmbossDraft(angle units.Value) EmbossOption
-func WithEmbossRimFillet(radius units.Value) EmbossOption
+func Emboss(b *Body, s *sketch.Sketch, profiles []*sketch.Profile, face FaceSelector, mode EmbossMode, height units.Value) *EmbossCommand
+func (c *EmbossCommand) Draft(angle units.Value) *EmbossCommand
+func (c *EmbossCommand) RimFillet(radius units.Value) *EmbossCommand
+func (c *EmbossCommand) Do(ctx context.Context) (*Body, error)
 ```
 
 `EmbossMode` is `EmbossRaised` or `EmbossEngraved`. `Emboss` retires `b` and returns the result.
@@ -55,23 +56,23 @@ reliefs of different height on one side, `Facing` matches several faces and `Emb
 
 ## 6. Draft
 
-`WithEmbossDraft` leans the relief's walls. It passes `WithTaper` to the `Extrude` that builds each tool, so the lean,
+`Draft` leans the relief's walls. It passes `Taper` to the `Extrude` that builds each tool, so the lean,
 its sign and its refusals are `Extrude`'s (`agent-docs/modify-design.md` Part D §2).
 
 | Decision | Rule |
 |---|---|
 | D1 | A positive angle narrows a raised relief toward its top and an engraving toward its floor: the wall at depth `t` from the face has moved in by `t·tan(angle)`. A negative angle widens them. The zero value is a straight wall. |
-| D2 | The angle is `WithTaper`'s: an angle is required, a wrong unit kind is `ErrUnitKind`, and one at or past a right angle is `ErrDegenerate`. A nil option is `ErrDegenerate`. |
+| D2 | The angle is `Taper`'s: an angle is required, a wrong unit kind is `ErrUnitKind`, and one at or past a right angle is `ErrDegenerate`. |
 | D3 | The tool's one millimetre on the other side of the face (E4) leans the same way and lies inside the body, so the join sees the relief's own walls where they meet the face. |
 | D4 | The result is what `Union` or `Cut` gives for the drafted tool. The tests compare the volume against `∫ (L − 2t·tan(angle))² dt` for a square relief within a relative `1e-9` and probe a point a drafted wall leaves as material. |
 
 ## 7. A rim fillet
 
-`WithEmbossRimFillet` rounds the relief's rim with the evaluator's `Fillet`.
+`RimFillet` rounds the relief's rim with the evaluator's `Fillet`.
 
 | Decision | Rule |
 |---|---|
-| R1 | The radius is a positive length: zero is `ErrDegenerate`, a negative value `ErrNegativeMagnitude` and a wrong unit kind `ErrUnitKind`. The last option wins. |
+| R1 | The radius is a positive length: zero is `ErrDegenerate`, a negative value `ErrNegativeMagnitude` and a wrong unit kind `ErrUnitKind`. A second `RimFillet` call replaces the first. |
 | R2 | The rim of a raised relief is every edge of the planar faces that face outward in the plane `height` out of the embossed face. The rim of an engraving is the edges of the inner loops of the planar faces that face outward in the embossed face's own plane, which is where the engraving's wall meets that face. Both are convex edges. |
 | R3 | The relief is built, and its rim rounded, on a copy of `b` first, retired once read, so a fillet the evaluator refuses, or a rim not found in the result, leaves `b` live and the document unchanged. The copy leaves history entries. The face is resolved once, on `b`, and the copy is embossed by that plane, so a provenance selector need not match it. |
 | R4 | The result is the emboss followed by `Fillet`, so the history holds `OperationEmboss` then `OperationFillet`. A round too large for the relief is `Fillet`'s refusal. |
@@ -87,6 +88,6 @@ sides on a curved wall.
 |---|---|
 | E1 | The sketch plane's normal is square to the cylinder's axis, and the plane lies at the cylinder's radius from it, within `embossplan.PlaneTol`. Any other plane is `ErrDegenerate`, naming "not parallel" or "not tangent". The relief's height is measured from that plane, outward along the face's outward normal at the line of contact: away from the axis for a rod and toward it for a bore. |
 | E2 | The plane touches the cylinder along a line, and the wall falls away from the plane on a rod and rises toward it in a bore by the sagitta `R − √(R² − w²)` at distance `w` from that line. The side of the tool that is left open reaches that far past the usual 1 mm margin, so the tool overlaps the body across the widest profile: a raised relief on a rod reaches in, an engraving in a bore reaches out, and the other two need nothing. `w` is read from the bounds of a private probe of each profile. A profile as wide as the cylinder (`w ≥ R`) is `ErrDegenerate`. |
-| E3 | A relief on a cylindrical face takes `WithEmbossDraft` as on a plane and takes no rim fillet: `WithEmbossRimFillet` is `ErrUnsupported`. The result is `Union` or `Cut`'s for the same bodies, a mesh Boolean where the evaluator has no analytic route, with its own volume bound. |
+| E3 | A relief on a cylindrical face takes `Draft` as on a plane and takes no rim fillet: `RimFillet` is `ErrUnsupported`. The result is `Union` or `Cut`'s for the same bodies, a mesh Boolean where the evaluator has no analytic route, with its own volume bound. |
 | E4 | The evaluator refuses some axis-aligned pocket tools on a rod from its brep topology check ("a brep edge must bound exactly two distinct faces"); that is its own `ErrUnsupported` and leaves the body live. The engraving tests tilt the plane to 45 degrees about the axis, which it takes. |
 | E5 | The tests state the added or removed volume from the integral of the relief's height over its width, `∫ (R + h − √(R² − y²)) dy` times the length for a raised relief on a rod, the wall above the floor for an engraving, and `∫ (√(R² − y²) − (R − h)) dy` for one in a bore, and require it inside the result's own bound. A relief wide enough that the sagitta exceeds the margin checks E2. |

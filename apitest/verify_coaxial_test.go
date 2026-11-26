@@ -31,8 +31,8 @@ func coaxialSection(t *testing.T, doc *decad.Document, cx, cy, length float64, r
 	}
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(length), Dir: decad.Along})
+	body, err := decad.Extrude(doc, s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(length), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -45,7 +45,7 @@ func placedAlongZ(t *testing.T, body *decad.Body, dz float64) *decad.Body {
 	}
 	move, err := r3.Translation(r3.Vec{Z: dz})
 	require.NoError(t, err)
-	placed, err := decad.Transform(t.Context(), body, move)
+	placed, err := decad.Transform(body, move).Do(t.Context())
 	require.NoError(t, err)
 	return placed
 }
@@ -62,10 +62,10 @@ func keyedShaft(t *testing.T, doc *decad.Document) *decad.Body {
 	s.Fix(r.A)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	key, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
+	key, err := decad.Extrude(doc, s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(20), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
-	keyed, err := decad.Cut(t.Context(), shaft, placedAlongZ(t, key, 10.001))
+	keyed, err := decad.Cut(shaft, placedAlongZ(t, key, 10.001)).Do(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, "decad.facetedPayload", decadtest.PayloadClass(keyed))
 	return keyed
@@ -79,7 +79,7 @@ func turned(t *testing.T, body *decad.Body, angle float64) *decad.Body {
 	}
 	turn, err := r3.Rotation(r3.Vec{X: 1}, units.Radians(angle))
 	require.NoError(t, err)
-	out, err := decad.Transform(t.Context(), body, turn)
+	out, err := decad.Transform(body, turn).Do(t.Context())
 	require.NoError(t, err)
 	return out
 }
@@ -175,7 +175,7 @@ func TestVerifyCoaxialNaryUnion(t *testing.T) {
 				placedAlongZ(t, coaxialSection(t, doc, 0, 0, 10, 4), 10),
 				placedAlongZ(t, coaxialSection(t, doc, 0, 0, 10, 4), 20),
 			}
-			shaft, err := decad.Union(t.Context(), segments[0], segments[1:]...)
+			shaft, err := decad.Union(append([]*decad.Body{segments[0]}, segments[1:]...)...).Do(t.Context())
 			require.NoError(t, err)
 			bearing := placedAlongZ(t, coaxialSection(t, doc, 0, 0, 8, 11, tc.bore), 6)
 			report, err := doc.Verify(t.Context())
@@ -216,7 +216,7 @@ func TestVerifyCoaxialCutTool(t *testing.T) {
 			doc := decad.New()
 			plate := slab(t, doc, -15, -15, 15, 15, 0, 8, r3.Identity())
 			tool := placedAlongZ(t, coaxialSection(t, doc, 0, 0, tc.toolH, tc.radius), tc.toolZ)
-			bored, err := decad.Cut(t.Context(), plate, tool)
+			bored, err := decad.Cut(plate, tool).Do(t.Context())
 			require.NoError(t, err)
 			shaft := placedAlongZ(t, coaxialSection(t, doc, 0, 0, 40, 4), -10)
 			report, err := doc.Verify(t.Context())

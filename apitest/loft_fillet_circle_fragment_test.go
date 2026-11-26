@@ -41,7 +41,7 @@ func bladeLoft(t *testing.T, doc *decad.Document, halfWidth, base, top, height f
 	}
 	s0, p0 := section(w.XY())
 	s1, p1 := section(splitTopPlane(t, w, height))
-	b, err := decad.Loft(t.Context(), doc, s0, p0, s1, p1)
+	b, err := decad.Loft(doc, s0, p0, s1, p1).Do(t.Context())
 	require.NoError(t, err)
 	return b
 }
@@ -59,7 +59,7 @@ func TestLoftFilletAtALineMeetingACircleFragment(t *testing.T) {
 	doc := decad.New()
 	disc := circleBodyAtZ(t, doc, 0, discR, 0, height)
 	blade := bladeLoft(t, doc, halfWidth, base, top, height)
-	joined, err := decad.Union(t.Context(), disc, blade)
+	joined, err := decad.Union(disc, blade).Do(t.Context())
 	require.NoError(t, err)
 	v0, err := joined.Volume()
 	require.NoError(t, err)
@@ -87,7 +87,7 @@ func TestLoftFilletAtALineMeetingACircleFragment(t *testing.T) {
 	}
 	require.Equal(t, 2, found, "both corner edges are on the joined body")
 
-	rounded, err := decad.Fillet(t.Context(), joined, sel, units.Millimeters(radius))
+	rounded, err := decad.Fillet(joined, sel, units.Millimeters(radius)).Do(t.Context())
 	require.NoError(t, err)
 	v1, err := rounded.Volume()
 	require.NoError(t, err)
@@ -120,13 +120,13 @@ func TestLoftFilletLargeRadiusRestsOnTheBladeTop(t *testing.T) {
 	doc := decad.New()
 	disc := circleBodyAtZ(t, doc, 0, discR, 0, height)
 	blade := bladeLoft(t, doc, halfWidth, base, top, height)
-	joined, err := decad.Union(t.Context(), disc, blade)
+	joined, err := decad.Union(disc, blade).Do(t.Context())
 	require.NoError(t, err)
 	v0, err := joined.Volume()
 	require.NoError(t, err)
 	corner := [2]float64{halfWidth, math.Sqrt(discR*discR - halfWidth*halfWidth)}
-	rounded, err := decad.Fillet(t.Context(), joined, cornerEdges(t, joined, [][2]float64{corner}),
-		units.Millimeters(radius))
+	rounded, err := decad.Fillet(joined, cornerEdges(t, joined, [][2]float64{corner}),
+		units.Millimeters(radius)).Do(t.Context())
 	require.NoError(t, err)
 	require.True(t, rounded.IsSolid())
 	v1, err := rounded.Volume()
@@ -177,7 +177,7 @@ func TestLoftFilletCircleFragmentRefusals(t *testing.T) {
 		doc := decad.New()
 		disc := circleBodyAtZ(t, doc, 0, discR, 0, height)
 		blade := bladeLoft(t, doc, halfWidth, 4, 8, height)
-		joined, err := decad.Union(t.Context(), disc, blade)
+		joined, err := decad.Union(disc, blade).Do(t.Context())
 		require.NoError(t, err)
 		return joined, cornerEdges(t, joined, [][2]float64{{halfWidth, cy}})
 	}
@@ -195,12 +195,12 @@ func TestLoftFilletCircleFragmentRefusals(t *testing.T) {
 		for k := range lobes {
 			lobes[k] = flankLobeLoft(t, doc, r, 2*math.Pi*float64(k)/n, half, height, straightFlank(r, line, half, 0.2))
 		}
-		joined, err := decad.Union(t.Context(), disc, lobes...)
+		joined, err := decad.Union(append([]*decad.Body{disc}, lobes...)...).Do(t.Context())
 		require.NoError(t, err)
 		next := 2*math.Pi/n - half
 		sel := cornerEdges(t, joined, [][2]float64{{r * math.Cos(half), r * math.Sin(half)},
 			{r * math.Cos(next), r * math.Sin(next)}})
-		_, err = decad.Fillet(t.Context(), joined, sel, units.Millimeters(0.45))
+		_, err = decad.Fillet(joined, sel, units.Millimeters(0.45)).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.ErrorContains(t, err, "outside its circle fragment")
 	})
@@ -218,7 +218,7 @@ func TestLoftFilletCircleFragmentRefusals(t *testing.T) {
 			}
 		}
 		require.NotNil(t, sel, "an axial edge on the circle's far side")
-		_, err = decad.Fillet(t.Context(), joined, sel, units.Millimeters(0.3))
+		_, err = decad.Fillet(joined, sel, units.Millimeters(0.3)).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 	})
 }
@@ -326,11 +326,11 @@ func TestLoftFilletRollsPastAShortLine(t *testing.T) {
 					corners = append(corners, [2]float64{r * math.Cos(a+rot), r * math.Sin(a+rot)})
 				}
 			}
-			joined, err := decad.Union(t.Context(), disc, lobes...)
+			joined, err := decad.Union(append([]*decad.Body{disc}, lobes...)...).Do(t.Context())
 			require.NoError(t, err)
 			v0, err := joined.Volume()
 			require.NoError(t, err)
-			rounded, err := decad.Fillet(t.Context(), joined, cornerEdges(t, joined, corners), units.Millimeters(tc.radius))
+			rounded, err := decad.Fillet(joined, cornerEdges(t, joined, corners), units.Millimeters(tc.radius)).Do(t.Context())
 			require.NoError(t, err)
 			require.True(t, rounded.IsSolid())
 			v1, err := rounded.Volume()
@@ -469,11 +469,11 @@ func TestLoftFilletRestsOnTheLineFlankVertex(t *testing.T) {
 					corners = append(corners, [2]float64{r * math.Cos(a+rot), r * math.Sin(a+rot)})
 				}
 			}
-			joined, err := decad.Union(t.Context(), disc, lobes...)
+			joined, err := decad.Union(append([]*decad.Body{disc}, lobes...)...).Do(t.Context())
 			require.NoError(t, err)
 			v0, err := joined.Volume()
 			require.NoError(t, err)
-			rounded, err := decad.Fillet(t.Context(), joined, cornerEdges(t, joined, corners), units.Millimeters(tc.radius))
+			rounded, err := decad.Fillet(joined, cornerEdges(t, joined, corners), units.Millimeters(tc.radius)).Do(t.Context())
 			require.NoError(t, err)
 			require.True(t, rounded.IsSolid())
 			v1, err := rounded.Volume()
@@ -517,11 +517,11 @@ func TestLoftFilletEveryCornerOfLobesOnADisc(t *testing.T) {
 			corners = append(corners, [2]float64{r * math.Cos(a+rot), r * math.Sin(a+rot)})
 		}
 	}
-	joined, err := decad.Union(t.Context(), disc, lobes...)
+	joined, err := decad.Union(append([]*decad.Body{disc}, lobes...)...).Do(t.Context())
 	require.NoError(t, err)
 	v0, err := joined.Volume()
 	require.NoError(t, err)
-	rounded, err := decad.Fillet(t.Context(), joined, cornerEdges(t, joined, corners), units.Millimeters(radius))
+	rounded, err := decad.Fillet(joined, cornerEdges(t, joined, corners), units.Millimeters(radius)).Do(t.Context())
 	require.NoError(t, err)
 	v1, err := rounded.Volume()
 	require.NoError(t, err)
@@ -530,7 +530,7 @@ func TestLoftFilletEveryCornerOfLobesOnADisc(t *testing.T) {
 
 	// The finishing order that follows a root fillet: a centered bore, then both outer caps.
 	bore := circleBodyAtZ(t, doc, 0, 0.8, -1, height+2)
-	bored, err := decad.Cut(t.Context(), rounded, bore)
+	bored, err := decad.Cut(rounded, bore).Do(t.Context())
 	require.NoError(t, err)
 	bv, err := bored.Volume()
 	require.NoError(t, err)
@@ -541,7 +541,7 @@ func TestLoftFilletEveryCornerOfLobesOnADisc(t *testing.T) {
 	if _, err := caps.SelectEdges(bored); err != nil {
 		caps = decad.Edges(decad.OuterLoopOf(decad.CapStart(rounded))).Or(decad.OuterLoopOf(decad.CapEnd(rounded)))
 	}
-	chamfered, err := decad.Chamfer(t.Context(), bored, caps, units.Millimeters(0.02))
+	chamfered, err := decad.Chamfer(bored, caps, units.Millimeters(0.02)).Do(t.Context())
 	require.NoError(t, err)
 	cv, err := chamfered.Volume()
 	require.NoError(t, err)

@@ -85,7 +85,7 @@ func TestLoftEmbeddedFitFlanksKeepOriginalCurve(t *testing.T) {
 	}
 	s0, p0 := makeProfile(world.XY())
 	s1, p1 := makeProfile(upper)
-	body, err := decad.Loft(t.Context(), decad.New(), s0, p0, s1, p1)
+	body, err := decad.Loft(decad.New(), s0, p0, s1, p1).Do(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, decad.BodySolid, body.Kind())
 	require.True(t, body.IsSolid())

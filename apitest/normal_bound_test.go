@@ -418,11 +418,11 @@ func TestNormalAtExactnessIsProven(t *testing.T) {
 	t.Run(`a rotated placement's cap normal is Approximate`, func(t *testing.T) {
 		s, p := plateSketch(t)
 		doc := decad.New()
-		body, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(8), Dir: decad.Along})
+		body, err := decad.Extrude(doc, s, p, decad.Distance{D: units.Millimeters(8), Dir: decad.Along}).Do(t.Context())
 		require.NoError(t, err)
 		rotation, err := r3.Rotation(r3.NewVec(1, 2, 3), units.Degrees(37))
 		require.NoError(t, err)
-		placed, err := decad.Transform(t.Context(), body, rotation)
+		placed, err := decad.Transform(body, rotation).Do(t.Context())
 		require.NoError(t, err)
 
 		for _, role := range []string{roleCapStart, roleCapEnd} {
@@ -471,11 +471,11 @@ func TestNormalAtExactnessIsProven(t *testing.T) {
 	t.Run(`a normal exact under the lift stays Exact`, func(t *testing.T) {
 		s, p := plateSketch(t)
 		doc := decad.New()
-		body, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(8), Dir: decad.Along})
+		body, err := decad.Extrude(doc, s, p, decad.Distance{D: units.Millimeters(8), Dir: decad.Along}).Do(t.Context())
 		require.NoError(t, err)
 		shift, err := r3.Translation(r3.NewVec(1000, -250, 80))
 		require.NoError(t, err)
-		placed, err := decad.Transform(t.Context(), body, shift)
+		placed, err := decad.Transform(body, shift).Do(t.Context())
 		require.NoError(t, err)
 
 		// A translation moves no direction at all, and the plate's own cap
@@ -514,9 +514,9 @@ func TestNormalAtExactnessIsProven(t *testing.T) {
 func TestNormalAtPlaneArmCoversItsFrameCross(t *testing.T) {
 	t.Parallel()
 	s, p := plateSketch(t)
-	body, err := decad.Extrude(t.Context(), decad.New(), s, p, decad.Distance{D: units.Millimeters(8), Dir: decad.Along})
+	body, err := decad.Extrude(decad.New(), s, p, decad.Distance{D: units.Millimeters(8), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
-	placed, err := decad.Transform(t.Context(), body, planeArmSpin(t))
+	placed, err := decad.Transform(body, planeArmSpin(t)).Do(t.Context())
 	require.NoError(t, err)
 
 	faces := placed.Faces()
@@ -563,10 +563,10 @@ func planeArmSpin(t *testing.T) r3.Transform {
 func plateCapFace(t *testing.T, role string, motion *r3.Transform) *decad.Face {
 	t.Helper()
 	s, p := plateSketch(t)
-	body, err := decad.Extrude(t.Context(), decad.New(), s, p, decad.Distance{D: units.Millimeters(8), Dir: decad.Along})
+	body, err := decad.Extrude(decad.New(), s, p, decad.Distance{D: units.Millimeters(8), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	if motion != nil {
-		body, err = decad.Transform(t.Context(), body, *motion)
+		body, err = decad.Transform(body, *motion).Do(t.Context())
 		require.NoError(t, err)
 	}
 	return normalFaceByRole(t, body, role)
@@ -580,7 +580,7 @@ func placedFace(t *testing.T, build func(t *testing.T) *decad.Body, kind decad.S
 	t.Helper()
 	body := build(t)
 	if motion != nil {
-		placed, err := decad.Transform(t.Context(), body, *motion)
+		placed, err := decad.Transform(body, *motion).Do(t.Context())
 		require.NoError(t, err)
 		body = placed
 	}
@@ -644,7 +644,7 @@ func holeWallBody(t *testing.T) *decad.Body {
 		}
 	}
 	require.NotNil(t, prof)
-	body, err := decad.Extrude(t.Context(), decad.New(), s, prof, decad.Distance{D: units.Millimeters(8), Dir: decad.Along})
+	body, err := decad.Extrude(decad.New(), s, prof, decad.Distance{D: units.Millimeters(8), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -942,7 +942,7 @@ func TestNormalAtAnswersRetainedSurfaces(t *testing.T) {
 	doc := decad.New()
 	plate := boxBody(t, doc, 0, 0, 20, 20, 8)
 	tool := translated(t, diskBody(t, doc, 14, 6, 2), 0, 0, -6)
-	got, err := decad.Cut(t.Context(), plate, tool)
+	got, err := decad.Cut(plate, tool).Do(t.Context())
 	require.NoError(t, err)
 
 	planes, walls := 0, 0
@@ -1039,7 +1039,7 @@ func coneBody(t *testing.T, top float64) *decad.Body {
 	require.NoError(t, err)
 
 	doc := decad.New()
-	body, err := decad.Revolve(t.Context(), doc, s, s.Profiles()[0], uAxis, decad.FullRevolution{})
+	body, err := decad.Revolve(doc, s, s.Profiles()[0], uAxis, decad.FullRevolution{}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }

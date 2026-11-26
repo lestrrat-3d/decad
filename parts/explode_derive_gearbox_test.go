@@ -31,8 +31,8 @@ func gearboxSet(t *testing.T) *parts.Set {
 	t.Helper()
 	doc := decad.New()
 	cyl := func(r, z0, h float64) *decad.Body { return cylinderAt(t, doc, 0, 0, r, z0, h) }
-	cut := func(b, tool *decad.Body) *decad.Body { return must(decad.Cut(t.Context(), b, tool)) }
-	union := func(b, o *decad.Body) *decad.Body { return must(decad.Union(t.Context(), b, o)) }
+	cut := func(b, tool *decad.Body) *decad.Body { return must(decad.Cut(b, tool).Do(t.Context())) }
+	union := func(b, o *decad.Body) *decad.Body { return must(decad.Union(b, o).Do(t.Context())) }
 
 	ring := cut(cyl(30, 0, 30), cyl(20, -1, 32))
 	frontCover := cut(cyl(30, -5, 5), cyl(8, -6, 7))

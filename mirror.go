@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/lestrrat-3d/decad/internal/mirrorjoin"
+	"github.com/lestrrat-3d/decad/internal/opcommand"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/r3"
 )
@@ -33,7 +34,7 @@ type MirrorFrame struct {
 // failed assertion of the selector's own is returned unchanged. A curved face
 // is ErrDegenerate. A flat face with no analytic [Plane] surface, such as a
 // mesh-boolean [Faceted] face, states no exact plane and is ErrUnsupported.
-// The mirror plane is the face's own Plane.Frame. Under [WithJoin], Body must
+// The mirror plane is the face's own Plane.Frame. Under [MirroredJoin], Body must
 // be the receiver and Face may name several walls on one line: zero faces is
 // ErrCardinality with Expected "at least 1".
 type MirrorFace struct {
@@ -45,48 +46,79 @@ type MirrorFace struct {
 func (MirrorFrame) mirrorPlane() {}
 func (MirrorFace) mirrorPlane()  {}
 
-// MirrorOption configures [Mirrored]. [WithJoin] is the one option.
-type MirrorOption interface {
-	mirrorOption()
-}
-
 // errNilMirrorPlane rejects a nil plane, or a nil variant pointer: either
 // names no plane to mirror across.
 var errNilMirrorPlane = fmt.Errorf(`%w: nil mirror plane`, ErrDegenerate)
 
-// Mirrored returns a new body carrying b's mirror image across plane,
-// retiring b. It calls [Transform] under r3.Reflection of the
-// resolved plane (agent-docs/mirror-pattern-design.md §4.2): the reflection is
-// carried in the body's accumulated placement, and every reading — volume,
-// centroid, outward normals, tessellation winding, export — follows it.
+// copyMirrorPlane copies the plane at the call that stores it
+// (agent-docs/command-api-design.md rule A3): the face selector of a
+// [MirrorFace], and the pointee of a non-nil pointer to either variant. A
+// selector that is no decad query is stored as given.
+func copyMirrorPlane(plane MirrorPlane) MirrorPlane {
+	switch p := plane.(type) {
+	case MirrorFace:
+		p.Face = copyFaceSelector(p.Face)
+		return p
+	case *MirrorFace:
+		if p == nil {
+			return p
+		}
+		cp := *p
+		cp.Face = copyFaceSelector(cp.Face)
+		return &cp
+	case *MirrorFrame:
+		if p == nil {
+			return p
+		}
+		cp := *p
+		return &cp
+	}
+	return plane
+}
+
+// Mirrored returns the command that mirrors b across plane. Do returns a new
+// body carrying b's mirror image across plane, retiring b. It calls
+// [Transform] under r3.Reflection of the resolved plane
+// (agent-docs/mirror-pattern-design.md §4.2): the reflection is carried in the
+// body's accumulated placement, and every reading — volume, centroid, outward
+// normals, tessellation winding, export — follows it.
 //
 // The gates are Transform's — a nil context is ErrDegenerate, a body this
 // evaluator did not build is ErrUnsupported, and a canceled context stops the
 // rebuild before the document changes — plus the plane's own resolution (see
-// [MirrorFrame] and [MirrorFace]). A nil plane or a nil option is
-// ErrDegenerate, as is a nil b. With [WithJoin] it returns the union of b and
-// its image instead, on the class WithJoin states. A refused call leaves the
-// document unchanged.
-func Mirrored(ctx context.Context, b *Body, plane MirrorPlane,
-	opts ...MirrorOption) (result *Body, retErr error) {
-	defer func() { retErr = operationError(OperationMirrored, retErr) }()
-	if ctx == nil {
-		return nil, fmt.Errorf(`%w: a nil context cannot control a mirror`, ErrDegenerate)
+// [MirrorFrame] and [MirrorFace]). A nil plane is ErrDegenerate, as is a nil b.
+// To mirror and join in one body, see [MirroredJoin]. A refused call leaves
+// the document unchanged. Mirrored copies plane when it is called, so a later
+// change to a selector the caller kept does not reach the command.
+func Mirrored(b *Body, plane MirrorPlane) *MirroredCommand {
+	c := &MirroredCommand{b: b, plane: copyMirrorPlane(plane)}
+	if b == nil {
+		c.state.Record("body", errNilBody)
 	}
-	join := false
-	for _, o := range opts {
-		if o == nil {
-			return nil, fmt.Errorf(`%w: a nil option names nothing to apply`, ErrDegenerate)
-		}
-		// MirrorOption carries one variant, so this is an if rather than a
-		// single-case type switch.
-		if _, ok := o.(mirrorJoinOption); ok {
-			join = true
-		}
-	}
-	if join {
-		return b.mirroredJoin(ctx, plane)
-	}
+	return c
+}
+
+// MirroredCommand mirrors a body across a plane. Build it with [Mirrored].
+type MirroredCommand struct {
+	state opcommand.State // consumed flag and first recorded fault
+	b     *Body           // stored as given
+	plane MirrorPlane     // copied at Mirrored
+}
+
+// Do mirrors the body and retires it, or returns the error of the first gate
+// that refuses, leaving the body live. A nil ctx is ErrDegenerate, and a
+// second call returns ErrConsumed.
+func (c *MirroredCommand) Do(ctx context.Context) (*Body, error) {
+	return runCommand(ctx, &c.state, OperationMirrored, c.run)
+}
+
+func (c *MirroredCommand) run(ctx context.Context) (*Body, error) {
+	return mirrored(ctx, c.b, c.plane)
+}
+
+// mirrored is Mirrored's implementation. ctx is not nil, and the errors it
+// returns carry no operation tag (agent-docs/command-api-design.md §11).
+func mirrored(ctx context.Context, b *Body, plane MirrorPlane) (*Body, error) {
 	t, err := b.mirrorTransform(plane)
 	if err != nil {
 		return nil, err
@@ -94,20 +126,39 @@ func Mirrored(ctx context.Context, b *Body, plane MirrorPlane,
 	return transform(ctx, b, t, OperationMirrored, mirrorPlaneInputs(plane)...)
 }
 
-// MirroredCopy returns a new live body carrying b's mirror image across
-// plane, leaving b LIVE. It calls [Copy] with [WithCopyPlacement] under
-// r3.Reflection of the resolved plane, with the gates [Mirrored] states.
-// A nil b is ErrDegenerate.
-func MirroredCopy(ctx context.Context, b *Body, plane MirrorPlane) (result *Body, retErr error) {
-	defer func() { retErr = operationError(OperationMirroredCopy, retErr) }()
-	if ctx == nil {
-		return nil, fmt.Errorf(`%w: a nil context cannot control a mirror`, ErrDegenerate)
+// MirroredCopy returns the command that copies b mirrored across plane. Do
+// returns a new live body carrying b's mirror image across plane, leaving b
+// LIVE. It copies under r3.Reflection of the resolved plane, with the gates
+// [Mirrored] states. A nil b is ErrDegenerate.
+func MirroredCopy(b *Body, plane MirrorPlane) *MirroredCopyCommand {
+	c := &MirroredCopyCommand{b: b, plane: copyMirrorPlane(plane)}
+	if b == nil {
+		c.state.Record("body", errNilBody)
 	}
-	t, err := b.mirrorTransform(plane)
+	return c
+}
+
+// MirroredCopyCommand copies a body mirrored across a plane. Build it with
+// [MirroredCopy].
+type MirroredCopyCommand struct {
+	state opcommand.State // consumed flag and first recorded fault
+	b     *Body           // stored as given
+	plane MirrorPlane     // copied at MirroredCopy
+}
+
+// Do copies the body mirrored and leaves it live, or returns the error of the
+// first gate that refuses. A nil ctx is ErrDegenerate, and a second call
+// returns ErrConsumed.
+func (c *MirroredCopyCommand) Do(ctx context.Context) (*Body, error) {
+	return runCommand(ctx, &c.state, OperationMirroredCopy, c.run)
+}
+
+func (c *MirroredCopyCommand) run(ctx context.Context) (*Body, error) {
+	t, err := c.b.mirrorTransform(c.plane)
 	if err != nil {
 		return nil, err
 	}
-	return b.copyUnder(ctx, t, nil, OperationMirroredCopy, mirrorPlaneInputs(plane)...)
+	return c.b.copyUnder(ctx, t, nil, OperationMirroredCopy, mirrorPlaneInputs(c.plane)...)
 }
 
 func mirrorPlaneInputs(plane MirrorPlane) []OperationInput {

@@ -10,7 +10,7 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// LoftFaces with WithConeTangentEnd lofts through the cap faces of a pointed
+// LoftFaces with LoftFacesToCone lofts through the cap faces of a pointed
 // solid that was cut into slabs, and closes the loft with one more section
 // built tangent to a cone. The cone is a full Revolve of a straight meridian
 // about world X; its apex and slope fix the end section exactly, so the loft
@@ -42,7 +42,7 @@ func Example_loft_faces_cone_tangent() {
 		fmt.Printf("failed to solve: %s\n", err)
 		return
 	}
-	spike, err := decad.LoftFromPoint(ctx, doc, r3.NewVec(0, 0, 0), s, s.Profiles()[0])
+	spike, err := decad.LoftFromPoint(doc, r3.NewVec(0, 0, 0), s, s.Profiles()[0]).Do(ctx)
 	if err != nil {
 		fmt.Printf("failed to loft: %s\n", err)
 		return
@@ -61,16 +61,16 @@ func Example_loft_faces_cone_tangent() {
 		if _, err := ss.Solve(ctx); err != nil {
 			return nil, err
 		}
-		return decad.Extrude(ctx, doc, ss, ss.Chains()[0], decad.TwoSided{
+		return decad.Extrude(doc, ss, ss.Chains()[0], decad.TwoSided{
 			One: decad.DistanceSide{D: units.Millimeters(20)},
-			Two: decad.DistanceSide{D: units.Millimeters(20)}})
+			Two: decad.DistanceSide{D: units.Millimeters(20)}}).Do(ctx)
 	}
 	cut1, err := sheet(5)
 	if err != nil {
 		fmt.Printf("failed to build the first sheet: %s\n", err)
 		return
 	}
-	first, err := decad.Split(ctx, spike, cut1)
+	first, err := decad.Split(spike, cut1).Do(ctx)
 	if err != nil {
 		fmt.Printf("failed to split: %s\n", err)
 		return
@@ -80,7 +80,7 @@ func Example_loft_faces_cone_tangent() {
 		fmt.Printf("failed to build the second sheet: %s\n", err)
 		return
 	}
-	second, err := decad.Split(ctx, first[0], cut2)
+	second, err := decad.Split(first[0], cut2).Do(ctx)
 	if err != nil {
 		fmt.Printf("failed to split: %s\n", err)
 		return
@@ -127,16 +127,15 @@ func Example_loft_faces_cone_tangent() {
 		fmt.Printf("failed to solve: %s\n", err)
 		return
 	}
-	cone, err := decad.Revolve(ctx, doc, cs, cs.Profiles()[0],
-		decad.SketchLine{Start: decad.Point2{}, End: decad.Point2{U: 1}}, decad.FullRevolution{})
+	cone, err := decad.Revolve(doc, cs, cs.Profiles()[0],
+		decad.SketchLine{Start: decad.Point2{}, End: decad.Point2{U: 1}}, decad.FullRevolution{}).Do(ctx)
 	if err != nil {
 		fmt.Printf("failed to revolve: %s\n", err)
 		return
 	}
 
 	// Loft the two caps and end tangent to the cone along its +Y ruling.
-	loft, err := decad.LoftFaces(ctx, []*decad.Face{toe, heel},
-		decad.WithConeTangentEnd(cone, r3.NewVec(0, 1, 0)))
+	loft, err := decad.LoftFacesToCone([]*decad.Face{toe, heel}, cone, r3.NewVec(0, 1, 0)).Do(ctx)
 	if err != nil {
 		fmt.Printf("failed to loft faces: %s\n", err)
 		return

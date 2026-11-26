@@ -169,7 +169,7 @@ func twistMapSweep(t *testing.T, c twistMapCase) *decad.Body {
 	s, p := c.profile(t)
 	path, err := decad.NewPath(r3.Vec{}, c.segments...)
 	require.NoError(t, err)
-	body, err := decad.Sweep(t.Context(), decad.New(), s, p, path, decad.WithSweepTwist(units.Degrees(c.degrees)))
+	body, err := decad.Sweep(decad.New(), s, p, path).Twist(units.Degrees(c.degrees)).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -182,7 +182,7 @@ func TestSweepTwistChargesPlacementMap(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()
 			body := twistMapSweep(t, c)
-			placed, err := decad.Transform(t.Context(), body, pose)
+			placed, err := decad.Transform(body, pose).Do(t.Context())
 			require.NoError(t, err)
 			v0, err := body.Volume()
 			require.NoError(t, err)
@@ -224,7 +224,7 @@ func TestSweepTwistExactPlacementKeepsReadings(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()
 			body := twistMapSweep(t, c)
-			placed, err := decad.Transform(t.Context(), body, move)
+			placed, err := decad.Transform(body, move).Do(t.Context())
 			require.NoError(t, err)
 			v0, err := body.Volume()
 			require.NoError(t, err)

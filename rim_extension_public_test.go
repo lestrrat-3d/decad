@@ -44,16 +44,16 @@ func TestChamferStraightRunAtCircularSupport(t *testing.T) {
 	flange.CreateArc(flange.Origin(), tip, c)
 	flange.CreateLine(c, d)
 	flange.CreateLine(d, a)
-	plate, err := Extrude(ctx, doc, flange, solve(flange), Distance{D: units.Millimeters(1), Dir: Against})
+	plate, err := Extrude(doc, flange, solve(flange), Distance{D: units.Millimeters(1), Dir: Against}).Do(ctx)
 	require.NoError(t, err)
 	// A transverse web makes the input a mesh Boolean, as required by this operation.
-	plate, err = Union(ctx, plate, internalBoxBodyAtZ(t, doc, -7.5, .75, -6.5, 2, -.5, 1))
+	plate, err = Union(plate, internalBoxBodyAtZ(t, doc, -7.5, .75, -6.5, 2, -.5, 1)).Do(ctx)
 	require.NoError(t, err)
 	disk := section(-1)
 	disk.AddConstraint(sketch.NewRadius(disk.CreateCircle(disk.Origin(), 5), 5))
-	boss, err := Extrude(ctx, doc, disk, solve(disk), Distance{D: units.Millimeters(1.75), Dir: Against})
+	boss, err := Extrude(doc, disk, solve(disk), Distance{D: units.Millimeters(1.75), Dir: Against}).Do(ctx)
 	require.NoError(t, err)
-	stock, err := Union(ctx, plate, boss)
+	stock, err := Union(plate, boss).Do(ctx)
 	require.NoError(t, err)
 	var ss [2]*sketch.Sketch
 	var pp [2]*sketch.Profile
@@ -65,14 +65,14 @@ func TestChamferStraightRunAtCircularSupport(t *testing.T) {
 		}
 		ss[i], pp[i] = s, solve(s)
 	}
-	tool, err := Loft(ctx, doc, ss[0], pp[0], ss[1], pp[1])
+	tool, err := Loft(doc, ss[0], pp[0], ss[1], pp[1]).Do(ctx)
 	require.NoError(t, err)
-	cut, err := Cut(ctx, stock, tool)
+	cut, err := Cut(stock, tool).Do(ctx)
 	require.NoError(t, err)
 	sel := Edges(EndpointAt(r3.Vec{X: -4.25, Z: 3.0625}), EndpointAt(r3.Vec{X: -3, Z: 4})).Exactly(1)
-	_, err = Chamfer(ctx, cut, sel, units.Millimeters(.05))
+	_, err = Chamfer(cut, sel, units.Millimeters(.05)).Do(ctx)
 	require.ErrorIs(t, err, ErrUnsupported)
-	out, err := Chamfer(ctx, cut, sel, units.Millimeters(.25))
+	out, err := Chamfer(cut, sel, units.Millimeters(.25)).Do(ctx)
 	require.NoError(t, err)
 	// A vertical ray at x=-4 crosses the untouched side at z=3.25. At
 	// y=0.1, the 3:4 slope gives a 5:4 multiplier on the remaining setback.

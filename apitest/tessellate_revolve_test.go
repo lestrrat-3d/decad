@@ -100,7 +100,7 @@ func requireSourceFacesLive(t *testing.T, b *decad.Body, mesh *decad.Mesh) {
 func TestRevolveTessellateFullCylinder(t *testing.T) {
 	t.Parallel()
 	s, p := solidSketch(t)
-	body, err := decad.Revolve(t.Context(), decad.New(), s, p, uAxis, decad.FullRevolution{})
+	body, err := decad.Revolve(decad.New(), s, p, uAxis, decad.FullRevolution{}).Do(t.Context())
 	require.NoError(t, err)
 
 	tol := units.Millimeters(0.05)
@@ -169,7 +169,7 @@ func TestRevolveTessellateConeApexIsOneInternedVertex(t *testing.T) {
 	s.CreateLine(top, o)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := decad.Revolve(t.Context(), decad.New(), s, s.Profiles()[0], uAxis, decad.FullRevolution{})
+	body, err := decad.Revolve(decad.New(), s, s.Profiles()[0], uAxis, decad.FullRevolution{}).Do(t.Context())
 	require.NoError(t, err)
 
 	mesh, err := body.Tessellate(t.Context(), units.Millimeters(0.05))
@@ -210,7 +210,7 @@ func TestRevolveTessellateConeApexIsOneInternedVertex(t *testing.T) {
 func TestRevolveTessellatePartialAxisLineSharesOneCapEdge(t *testing.T) {
 	t.Parallel()
 	s, p := solidSketch(t)
-	body, err := decad.Revolve(t.Context(), decad.New(), s, p, uAxis, decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along})
+	body, err := decad.Revolve(decad.New(), s, p, uAxis, decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 
 	mesh, err := body.Tessellate(t.Context(), units.Millimeters(0.05))
@@ -250,7 +250,7 @@ func TestRevolveTessellateAnnulusAndProfileHole(t *testing.T) {
 	t.Parallel()
 	t.Run("planar annulus walls", func(t *testing.T) {
 		s, p := annularSketch(t)
-		body, err := decad.Revolve(t.Context(), decad.New(), s, p, uAxis, decad.FullRevolution{})
+		body, err := decad.Revolve(decad.New(), s, p, uAxis, decad.FullRevolution{}).Do(t.Context())
 		require.NoError(t, err)
 		mesh, err := body.Tessellate(t.Context(), units.Millimeters(0.05))
 		require.NoError(t, err)
@@ -284,7 +284,7 @@ func TestRevolveTessellateAnnulusAndProfileHole(t *testing.T) {
 			}
 		}
 		require.NotNil(t, prof)
-		body, err := decad.Revolve(t.Context(), decad.New(), s, prof, uAxis, decad.FullRevolution{})
+		body, err := decad.Revolve(decad.New(), s, prof, uAxis, decad.FullRevolution{}).Do(t.Context())
 		require.NoError(t, err)
 
 		mesh, err := body.Tessellate(t.Context(), units.Millimeters(0.2))
@@ -308,13 +308,13 @@ func TestRevolveTessellateReflectedPlacementKeepsOutwardWinding(t *testing.T) {
 	t.Parallel()
 	s, p := solidSketch(t)
 	doc := decad.New()
-	body, err := decad.Revolve(t.Context(), doc, s, p, uAxis, decad.AngleExtent{A: units.Degrees(120), Dir: decad.Along})
+	body, err := decad.Revolve(doc, s, p, uAxis, decad.AngleExtent{A: units.Degrees(120), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	mirror, err := r3.NewFrame(r3.Vec{}, r3.Vec{X: 0, Y: 1, Z: 0}, r3.Vec{X: 0, Y: 0, Z: 1})
 	require.NoError(t, err)
 	xf, err := r3.Reflection(mirror)
 	require.NoError(t, err)
-	placed, err := decad.Transform(t.Context(), body, xf)
+	placed, err := decad.Transform(body, xf).Do(t.Context())
 	require.NoError(t, err)
 
 	mesh, err := placed.Tessellate(t.Context(), units.Millimeters(0.05))
@@ -330,7 +330,7 @@ func TestRevolveTessellateChargesPlacementRoundingSeparately(t *testing.T) {
 	// no coordinate operation and adds nothing, while a real motion rounds at
 	// its own magnitude and every source bound carries the difference.
 	s, p := solidSketch(t)
-	body, err := decad.Revolve(t.Context(), decad.New(), s, p, uAxis, decad.FullRevolution{})
+	body, err := decad.Revolve(decad.New(), s, p, uAxis, decad.FullRevolution{}).Do(t.Context())
 	require.NoError(t, err)
 	tol := units.Millimeters(0.05)
 
@@ -341,7 +341,7 @@ func TestRevolveTessellateChargesPlacementRoundingSeparately(t *testing.T) {
 
 	rot, err := r3.Rotation(r3.Vec{X: 1, Y: 2, Z: 3}, units.Degrees(37))
 	require.NoError(t, err)
-	rotated, err := decad.Copy(t.Context(), body, decad.WithCopyPlacement(rot))
+	rotated, err := decad.Copy(body).Place(decad.CopyTransform{Transform: rot}).Do(t.Context())
 	require.NoError(t, err)
 	rotMesh, err := rotated.Tessellate(t.Context(), tol)
 	require.NoError(t, err)
@@ -351,7 +351,7 @@ func TestRevolveTessellateChargesPlacementRoundingSeparately(t *testing.T) {
 
 	far, err := r3.Translation(r3.Vec{X: 1e7, Y: 3e6, Z: -2e6})
 	require.NoError(t, err)
-	moved, err := decad.Copy(t.Context(), body, decad.WithCopyPlacement(far))
+	moved, err := decad.Copy(body).Place(decad.CopyTransform{Transform: far}).Do(t.Context())
 	require.NoError(t, err)
 	farMesh, err := moved.Tessellate(t.Context(), tol)
 	require.NoError(t, err)
@@ -369,7 +369,7 @@ func TestRevolveTessellateRefusals(t *testing.T) {
 	t.Parallel()
 	t.Run("a tolerance past the facet ceiling refuses", func(t *testing.T) {
 		s, p := solidSketch(t)
-		body, err := decad.Revolve(t.Context(), decad.New(), s, p, uAxis, decad.FullRevolution{})
+		body, err := decad.Revolve(decad.New(), s, p, uAxis, decad.FullRevolution{}).Do(t.Context())
 		require.NoError(t, err)
 		_, err = body.Tessellate(t.Context(), units.Millimeters(1e-9))
 		require.ErrorIs(t, err, decad.ErrUnsupported)
@@ -392,7 +392,7 @@ func TestRevolveTessellateRefusals(t *testing.T) {
 		s.CreateLine(b, apex)
 		_, err = s.Solve(t.Context())
 		require.NoError(t, err)
-		body, err := decad.Revolve(t.Context(), decad.New(), s, s.Profiles()[0], uAxis, decad.FullRevolution{})
+		body, err := decad.Revolve(decad.New(), s, s.Profiles()[0], uAxis, decad.FullRevolution{}).Do(t.Context())
 		require.NoError(t, err)
 		_, err = body.Tessellate(t.Context(), units.Millimeters(0.05))
 		require.ErrorIs(t, err, decad.ErrDegenerate)
@@ -402,7 +402,7 @@ func TestRevolveTessellateRefusals(t *testing.T) {
 func TestRevolveTessellateExportIsByteIdentical(t *testing.T) {
 	t.Parallel()
 	s, p := solidSketch(t)
-	body, err := decad.Revolve(t.Context(), decad.New(), s, p, uAxis, decad.AngleExtent{A: units.Degrees(150), Dir: decad.Along})
+	body, err := decad.Revolve(decad.New(), s, p, uAxis, decad.AngleExtent{A: units.Degrees(150), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	requireRevolveExportsByteIdentical(t, body)
 }
@@ -410,7 +410,7 @@ func TestRevolveTessellateExportIsByteIdentical(t *testing.T) {
 func TestRevolveTessellateChordCountFollowsTolerance(t *testing.T) {
 	t.Parallel()
 	s, p := solidSketch(t)
-	body, err := decad.Revolve(t.Context(), decad.New(), s, p, uAxis, decad.FullRevolution{})
+	body, err := decad.Revolve(decad.New(), s, p, uAxis, decad.FullRevolution{}).Do(t.Context())
 	require.NoError(t, err)
 
 	prev := 0

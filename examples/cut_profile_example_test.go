@@ -25,8 +25,8 @@ func Example_cutExtrude() {
 		return
 	}
 	doc := decad.New()
-	body, err := decad.Extrude(context.Background(), doc, s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
+	body, err := decad.Extrude(doc, s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(5), Dir: decad.Along}).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to extrude: %s\n", err)
 		return
@@ -46,8 +46,8 @@ func Example_cutExtrude() {
 		fmt.Printf("failed to solve: %s\n", err)
 		return
 	}
-	out, err := decad.CutExtrude(context.Background(), body, c, c.Profiles(),
-		decad.Distance{D: units.Millimeters(3), Dir: decad.Along})
+	out, err := decad.CutExtrude(body, c, c.Profiles(),
+		decad.Distance{D: units.Millimeters(3), Dir: decad.Along}).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to cut: %s\n", err)
 		return

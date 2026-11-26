@@ -39,7 +39,7 @@ func Example_fillet_revolved_shoulder() {
 	// Spin the drawing a full turn about the X axis.
 	doc := decad.New()
 	axis := decad.SketchLine{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 1, V: 0}}
-	shaft, err := decad.Revolve(context.Background(), doc, s, s.Profiles()[0], axis, decad.FullRevolution{})
+	shaft, err := decad.Revolve(doc, s, s.Profiles()[0], axis, decad.FullRevolution{}).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to revolve: %s\n", err)
 		return
@@ -47,8 +47,8 @@ func Example_fillet_revolved_shoulder() {
 
 	// The shoulder's inside corner is the only circular edge that is
 	// concave, so that query selects it. Round it with a 2 mm radius.
-	rounded, err := decad.Fillet(context.Background(), shaft,
-		decad.Edges(decad.Circular(), decad.Concave()), units.Millimeters(2))
+	rounded, err := decad.Fillet(shaft,
+		decad.Edges(decad.Circular(), decad.Concave()), units.Millimeters(2)).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to fillet: %s\n", err)
 		return

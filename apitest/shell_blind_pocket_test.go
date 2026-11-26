@@ -17,12 +17,12 @@ func TestShellBlindRectangularPocket(t *testing.T) {
 	doc := decad.New()
 	outer := boxBodyAtZ(t, doc, 0, 0, 10, 10, 0, 10)
 	tool := boxBodyAtZ(t, doc, 3, 3, 7, 7, 6, 4)
-	pocket, err := decad.Cut(t.Context(), outer, tool)
+	pocket, err := decad.Cut(outer, tool).Do(t.Context())
 	require.NoError(t, err)
 	requireVolumeNear(t, pocket, 936)
 
 	opening := decad.Faces(decad.FaceCreatedBy(decad.CapEnd(pocket))).Exactly(1)
-	shell, err := decad.Shell(t.Context(), pocket, opening, units.Millimeters(1))
+	shell, err := decad.Shell(pocket, opening, units.Millimeters(1)).Do(t.Context())
 	require.NoError(t, err)
 	requireManifold(t, shell)
 	require.Len(t, shell.Faces(), 34)
@@ -58,7 +58,7 @@ func TestShellBlindRectangularPocket(t *testing.T) {
 
 	rotation, err := r3.Rotation(r3.NewVec(1, 2, 3), units.Degrees(37))
 	require.NoError(t, err)
-	placed, err := decad.Transform(t.Context(), shell, rotation)
+	placed, err := decad.Transform(shell, rotation).Do(t.Context())
 	require.NoError(t, err)
 	requireVolumeNear(t, placed, want)
 	placedMesh, err := placed.Tessellate(t.Context(), units.Millimeters(0.05), decad.WithVerification(decad.VerifyAll))
@@ -72,10 +72,10 @@ func TestShellBlindRectangularPocketClearance(t *testing.T) {
 	doc := decad.New()
 	outer := boxBodyAtZ(t, doc, 0, 0, 10, 10, 0, 10)
 	tool := boxBodyAtZ(t, doc, 2, 3, 6, 7, 6, 4)
-	pocket, err := decad.Cut(t.Context(), outer, tool)
+	pocket, err := decad.Cut(outer, tool).Do(t.Context())
 	require.NoError(t, err)
-	_, err = decad.Shell(t.Context(), pocket, decad.Faces(decad.FaceCreatedBy(decad.CapEnd(pocket))).Exactly(1),
-		units.Millimeters(1))
+	_, err = decad.Shell(pocket, decad.Faces(decad.FaceCreatedBy(decad.CapEnd(pocket))).Exactly(1),
+		units.Millimeters(1)).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.ErrorContains(t, err, "clearance")
 }
@@ -85,10 +85,10 @@ func TestShellBlindRectangularPocketOffsetMoments(t *testing.T) {
 	doc := decad.New()
 	outer := boxBodyAtZ(t, doc, -12, -10, 12, 10, 0, 12)
 	tool := boxBodyAtZ(t, doc, -4, -1, 2, 3, 7, 5)
-	pocket, err := decad.Cut(t.Context(), outer, tool)
+	pocket, err := decad.Cut(outer, tool).Do(t.Context())
 	require.NoError(t, err)
-	shell, err := decad.Shell(t.Context(), pocket, decad.Faces(decad.FaceCreatedBy(decad.CapEnd(pocket))).Exactly(1),
-		units.Millimeters(1))
+	shell, err := decad.Shell(pocket, decad.Faces(decad.FaceCreatedBy(decad.CapEnd(pocket))).Exactly(1),
+		units.Millimeters(1)).Do(t.Context())
 	require.NoError(t, err)
 	wantVolume := 1528 + 32*math.Pi/3
 	requireVolumeNear(t, shell, wantVolume)

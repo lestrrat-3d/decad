@@ -20,19 +20,15 @@ func lHoleCorners() []decad.Point2 {
 	return []decad.Point2{{U: -4, V: -4}, {U: 4, V: -4}, {U: 4, V: 0}, {U: 0, V: 0}, {U: 0, V: 4}, {U: -4, V: 4}}
 }
 
-func outlineHoleSpec(plate *decad.Body, corners []decad.Point2, depth decad.HoleDepth, degrees float64) decad.HoleSpec {
-	return decad.HoleSpec{
-		Face:  capFace(true, plate),
-		At:    r3.Vec{X: 10, Y: 10, Z: 10},
-		Depth: depth,
-		Shape: decad.OutlineHole{Corners: corners, Angle: units.Degrees(degrees)},
-	}
+func outlineHole(plate *decad.Body, corners []decad.Point2, depth decad.HoleDepth,
+	degrees float64) *decad.HoleShapedCommand {
+	return plateShapedHole(plate, decad.OutlineHole{Corners: corners, Angle: units.Degrees(degrees)}, depth)
 }
 
 func TestHoleOutlineCutsAnLShapedBore(t *testing.T) {
 	t.Parallel()
 	doc, plate := drillPlate(t)
-	out, err := decad.Hole(t.Context(), plate, outlineHoleSpec(plate, lHoleCorners(), decad.ThroughHole{}, 0))
+	out, err := outlineHole(plate, lHoleCorners(), decad.ThroughHole{}, 0).Do(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, []*decad.Body{out}, doc.Bodies())
 	decadtest.MeasuresVolume(t, out, units.CubicMillimeters(drillPlateVolume-48*10))
@@ -59,7 +55,7 @@ func TestHoleOutlineKeepsTheShapeWhenListedClockwiseAndTurnsWithTheAngle(t *test
 	}
 	probe := func(corners []decad.Point2, degrees float64, p r3.Vec) decad.PointLocation {
 		_, plate := drillPlate(t)
-		out, err := decad.Hole(t.Context(), plate, outlineHoleSpec(plate, corners, decad.ThroughHole{}, degrees))
+		out, err := outlineHole(plate, corners, decad.ThroughHole{}, degrees).Do(t.Context())
 		require.NoError(t, err)
 		decadtest.MeasuresVolume(t, out, units.CubicMillimeters(drillPlateVolume-48*10))
 		loc, err := out.LocatePoint(t.Context(), p, units.Millimeters(0.05))
@@ -78,7 +74,7 @@ func TestHoleOutlineBlindAndIrregularTriangle(t *testing.T) {
 	tri := []decad.Point2{{U: -3, V: -2}, {U: 5, V: -1}, {U: 1, V: 4}}
 	area := math.Abs((tri[1].U-tri[0].U)*(tri[2].V-tri[0].V)-(tri[2].U-tri[0].U)*(tri[1].V-tri[0].V)) / 2
 	_, plate := drillPlate(t)
-	out, err := decad.Hole(t.Context(), plate, outlineHoleSpec(plate, tri, decad.BlindHole{Depth: units.Millimeters(4)}, 0))
+	out, err := outlineHole(plate, tri, decad.BlindHole{Depth: units.Millimeters(4)}, 0).Do(t.Context())
 	require.NoError(t, err)
 	decadtest.MeasuresVolume(t, out, units.CubicMillimeters(drillPlateVolume-area*4))
 }
@@ -96,17 +92,12 @@ func TestHoleOutlineRefusals(t *testing.T) {
 	}
 	for name, corners := range cases {
 		doc, plate := drillPlate(t)
-		_, err := decad.Hole(t.Context(), plate, outlineHoleSpec(plate, corners, decad.ThroughHole{}, 0))
+		_, err := outlineHole(plate, corners, decad.ThroughHole{}, 0).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrDegenerate, name)
 		require.Len(t, doc.Bodies(), 1, "%s leaves the plate alone", name)
 	}
 	_, plate := drillPlate(t)
-	spec := outlineHoleSpec(plate, square, decad.ThroughHole{}, 0)
-	spec.Diameter = units.Millimeters(4)
-	_, err := decad.Hole(t.Context(), plate, spec)
-	require.ErrorIs(t, err, decad.ErrDegenerate, "a shaped hole takes no diameter")
-	spec = outlineHoleSpec(plate, square, decad.ThroughHole{}, 0)
-	spec.Shape = decad.OutlineHole{Corners: square, Angle: units.Millimeters(1)}
-	_, err = decad.Hole(t.Context(), plate, spec)
+	_, err := plateShapedHole(plate, decad.OutlineHole{Corners: square, Angle: units.Millimeters(1)},
+		decad.ThroughHole{}).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnitKind)
 }

@@ -26,12 +26,12 @@ func slabYTool(t *testing.T, sc *retentionScene, cx, r float64) *decad.Body {
 	s.CreateCircle(c, r)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	cyl, err := decad.Extrude(t.Context(), sc.doc, s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(60), Dir: decad.Along})
+	cyl, err := decad.Extrude(sc.doc, s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(60), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	move, err := r3.Translation(r3.Vec{Y: 30})
 	require.NoError(t, err)
-	placed, err := decad.Transform(t.Context(), cyl, move)
+	placed, err := decad.Transform(cyl, move).Do(t.Context())
 	require.NoError(t, err)
 	return placed
 }
@@ -50,9 +50,9 @@ func TestFacetedPlaneSlab(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			sc := newRetentionScene()
-			first, err := decad.Cut(t.Context(), sc.roundedBox(t), sc.tool(t, 20))
+			first, err := decad.Cut(sc.roundedBox(t), sc.tool(t, 20)).Do(t.Context())
 			require.NoError(t, err)
-			second, err := decad.Cut(t.Context(), first, slabYTool(t, sc, tc.cx, tc.r))
+			second, err := decad.Cut(first, slabYTool(t, sc, tc.cx, tc.r)).Do(t.Context())
 			require.NoError(t, err)
 
 			// Both holes run the full 20 mm through y and do not touch, so
@@ -90,17 +90,17 @@ func TestFacetedPlaneSlab(t *testing.T) {
 	t.Run("a contact on a curved rim still refuses", func(t *testing.T) {
 		t.Parallel()
 		sc := newRetentionScene()
-		built, err := decad.Cut(t.Context(), sc.roundedBox(t), sc.taperedTool(t))
+		built, err := decad.Cut(sc.roundedBox(t), sc.taperedTool(t)).Do(t.Context())
 		require.NoError(t, err)
 		// A Copy ends the operation history's Boolean chain, so the refusal under test is
 		// the sequential gate, not a chain the regroup rebuilds.
-		first, err := decad.Copy(t.Context(), built)
+		first, err := decad.Copy(built).Do(t.Context())
 		require.NoError(t, err)
 		held, err := mustTessellate(t, first, units.Millimeters(1)).Bound().In(units.Millimeter)
 		require.NoError(t, err)
 		// The tool's wall crosses the first hole's tapered wall, whose facets
 		// hold the rim's bound: a cone states no thinner slab.
-		_, err = decad.Cut(t.Context(), first, slabYTool(t, sc, 22, 3))
+		_, err = decad.Cut(first, slabYTool(t, sc, 22, 3)).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		var be *decad.BooleanError
 		require.False(t, errors.As(err, &be), "the chain-depth refusal is a plain ErrUnsupported, not a BooleanError")

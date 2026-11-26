@@ -47,15 +47,15 @@ func TestObliqueWallReaders(t *testing.T) {
 	t.Run("Hole", func(t *testing.T) {
 		t.Parallel()
 		part, charged, disc, twin := fixture(t)
-		spec := func(body *decad.Body, w obliqueWall) decad.HoleSpec {
-			return decad.HoleSpec{Face: wallSelector(t, body, w), At: at(w), Diameter: mm(1), Depth: decad.BlindHole{Depth: mm(1)}}
+		cmd := func(body *decad.Body, w obliqueWall) *decad.HoleCommand {
+			return decad.Hole(body, wallSelector(t, body, w), at(w), mm(1), decad.BlindHole{Depth: mm(1)})
 		}
-		_, err := decad.Hole(t.Context(), part, spec(part, charged))
+		_, err := cmd(part, charged).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.ErrorContains(t, err, "Hole cannot read this planar face as its plane")
 		require.ErrorContains(t, err, refusal)
 
-		out, err := decad.Hole(t.Context(), disc, spec(disc, twin))
+		out, err := cmd(disc, twin).Do(t.Context())
 		require.NoError(t, err)
 		require.True(t, out.IsSolid())
 	})
@@ -63,15 +63,15 @@ func TestObliqueWallReaders(t *testing.T) {
 	t.Run("Boss", func(t *testing.T) {
 		t.Parallel()
 		part, charged, disc, twin := fixture(t)
-		spec := func(body *decad.Body, w obliqueWall) decad.BossSpec {
-			return decad.BossSpec{Face: wallSelector(t, body, w), At: at(w), Diameter: mm(1), Height: mm(1)}
+		cmd := func(body *decad.Body, w obliqueWall) *decad.BossCommand {
+			return decad.Boss(body, wallSelector(t, body, w), at(w), mm(1), mm(1))
 		}
-		_, err := decad.Boss(t.Context(), part, spec(part, charged))
+		_, err := cmd(part, charged).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.ErrorContains(t, err, "Boss cannot read this planar face as its plane")
 		require.ErrorContains(t, err, refusal)
 
-		out, err := decad.Boss(t.Context(), disc, spec(disc, twin))
+		out, err := cmd(disc, twin).Do(t.Context())
 		require.NoError(t, err)
 		require.True(t, out.IsSolid())
 	})
@@ -90,7 +90,7 @@ func TestObliqueWallReaders(t *testing.T) {
 			s.CreateCircle(c, 0.5)
 			_, err = s.Solve(t.Context())
 			require.NoError(t, err)
-			return decad.Emboss(t.Context(), body, s, s.Profiles(), wallSelector(t, body, w), decad.EmbossRaised, mm(0.5))
+			return decad.Emboss(body, s, s.Profiles(), wallSelector(t, body, w), decad.EmbossRaised, mm(0.5)).Do(t.Context())
 		}
 		_, err := emboss(part, charged)
 		require.ErrorIs(t, err, decad.ErrUnsupported)

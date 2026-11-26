@@ -261,7 +261,7 @@ func compositeSweep(t *testing.T, doc *decad.Document) *decad.Body {
 		decad.LineTo{End: r3.NewVec(15, 0, 9)},
 	)
 	require.NoError(t, err)
-	body, err := decad.Sweep(t.Context(), doc, s, s.Profiles()[0], path)
+	body, err := decad.Sweep(doc, s, s.Profiles()[0], path).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -336,7 +336,7 @@ func TestMassPropertiesCompositeSweepPlaced(t *testing.T) {
 	// The composite replay certifies its span joins under this turn about X
 	// through the origin; it refuses several other turns of this path.
 	pose := composedRotation(t, r3.Vec{}, r3.NewVec(1, 0, 0), 30, 8)
-	placed, err := decad.Copy(t.Context(), body, decad.WithCopyPlacement(pose))
+	placed, err := decad.Copy(body).Place(decad.CopyTransform{Transform: pose}).Do(t.Context())
 	require.NoError(t, err)
 	density := units.KilogramsPerCubicMillimeter(1.0 / 1024)
 	got, err := placed.MassProperties(t.Context(), density)
@@ -373,7 +373,7 @@ func TestMassPropertiesCompositeSweepTurnedFrame(t *testing.T) {
 		decad.LineTo{End: r3.NewVec(0, 0, 10)},
 	)
 	require.NoError(t, err)
-	body, err := decad.Sweep(t.Context(), decad.New(), s, s.Profiles()[0], path)
+	body, err := decad.Sweep(decad.New(), s, s.Profiles()[0], path).Do(t.Context())
 	require.NoError(t, err)
 	density := units.KilogramsPerCubicMillimeter(1.0 / 1024)
 	got, err := body.MassProperties(t.Context(), density)
@@ -413,7 +413,7 @@ func TestMassPropertiesOneSpanSweeps(t *testing.T) {
 
 	straight, err := decad.NewPath(r3.NewVec(0, 0, 0), decad.LineTo{End: r3.NewVec(0, 0, 4)})
 	require.NoError(t, err)
-	body, err := decad.Sweep(t.Context(), decad.New(), s, s.Profiles()[0], straight)
+	body, err := decad.Sweep(decad.New(), s, s.Profiles()[0], straight).Do(t.Context())
 	require.NoError(t, err)
 	got, err := body.MassProperties(t.Context(), density)
 	require.NoError(t, err)
@@ -422,7 +422,7 @@ func TestMassPropertiesOneSpanSweeps(t *testing.T) {
 	arc, err := decad.NewPath(r3.NewVec(0, 0, 0),
 		decad.ArcThrough{Through: r3.NewVec(2, 0, 4), End: r3.NewVec(5, 0, 5)})
 	require.NoError(t, err)
-	body, err = decad.Sweep(t.Context(), decad.New(), s, s.Profiles()[0], arc)
+	body, err = decad.Sweep(decad.New(), s, s.Profiles()[0], arc).Do(t.Context())
 	require.NoError(t, err)
 	got, err = body.MassProperties(t.Context(), density)
 	require.NoError(t, err)

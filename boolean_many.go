@@ -135,7 +135,7 @@ func unionFold(ctx context.Context, bodies []*Body) (*Body, error) {
 	copies := make([]*Body, 0, len(bodies))
 	defer func() { removeTools(copies) }()
 	for _, b := range bodies {
-		c, err := Copy(ctx, b)
+		c, err := copyAsIs(ctx, b)
 		if err != nil {
 			return nil, err
 		}
@@ -154,7 +154,7 @@ func unionFold(ctx context.Context, bodies []*Body) (*Body, error) {
 func foldPairs(ctx context.Context, bodies []*Body) (*Body, error) {
 	acc := bodies[0]
 	for _, next := range bodies[1:] {
-		joined, err := performBoolean(ctx, meshbool.OpUnion, acc, next)
+		joined, err := performBoolean(ctx, meshbool.OpUnion, acc, next, booleanConfig{})
 		if err != nil {
 			return acc, operationError(OperationUnion, err)
 		}

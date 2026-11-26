@@ -29,15 +29,15 @@ func Example_unstitch() {
 		return
 	}
 	doc := decad.New()
-	box, err := decad.Extrude(context.Background(), doc, s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	box, err := decad.Extrude(doc, s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to extrude: %s\n", err)
 		return
 	}
 
 	// Each of the box's six faces becomes its own sheet body in the document.
-	sheets, err := decad.Unstitch(context.Background(), box)
+	sheets, err := decad.Unstitch(box).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to unstitch: %s\n", err)
 		return

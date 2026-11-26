@@ -91,7 +91,7 @@ type Payload struct {
 	// public topology uses one cylindrical wall per bore.
 	AnalyticBore bool
 
-	// SurfaceResult is WithSurfaceResult's own flag (agent-docs/surface-design.md
+	// SurfaceResult is SurfaceResult's own flag (agent-docs/surface-design.md
 	// §4): true when the build must omit both section caps and publish a
 	// sheet instead of a solid. It is part of the re-evaluable record for the
 	// same reason prismPayload's and revolvePayload's own copies are

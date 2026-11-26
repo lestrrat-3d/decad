@@ -46,7 +46,7 @@ func polyPrismBody(t *testing.T, doc *decad.Document, pts [][2]float64, h float6
 	require.NoError(t, err)
 	profs := s.Profiles()
 	require.Len(t, profs, 1)
-	body, err := decad.Extrude(t.Context(), doc, s, profs[0], decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
+	body, err := decad.Extrude(doc, s, profs[0], decad.Distance{D: units.Millimeters(h), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -279,9 +279,9 @@ func TestVerifyFacetedMultiRegionPairReadsOnItsGrid(t *testing.T) {
 	// (unchanged) mesh path.
 	notch := translated(t, boxBody(t, doc, 1, 1, 2, 2, 2), 0, 0, 1)
 	notch2 := translated(t, boxBody(t, doc, -1, 3, 0, 4, 2), 0, 0, 1)
-	uBored, err := decad.Cut(t.Context(), u, notch)
+	uBored, err := decad.Cut(u, notch).Do(t.Context())
 	require.NoError(t, err)
-	barBored, err := decad.Cut(t.Context(), bar, notch2)
+	barBored, err := decad.Cut(bar, notch2).Do(t.Context())
 	require.NoError(t, err)
 	require.True(t, tookMeshPath(uBored), "the bore must force the mesh path")
 	require.True(t, tookMeshPath(barBored), "the bore must force the mesh path")
@@ -324,15 +324,15 @@ func TestPublicBooleansOnMultiRegionPair(t *testing.T) {
 	const overlap = 120.0
 	t.Run("intersect is the overlap", func(t *testing.T) {
 		_, _, do := volumes(t)
-		require.InDelta(t, overlap, do(func(a, b *decad.Body) (*decad.Body, error) { return decad.Intersect(t.Context(), a, b) }), 1e-6)
+		require.InDelta(t, overlap, do(func(a, b *decad.Body) (*decad.Body, error) { return decad.Intersect(a, b).Do(t.Context()) }), 1e-6)
 	})
 	t.Run("cut removes the overlap", func(t *testing.T) {
 		u, _, do := volumes(t)
-		require.InDelta(t, u-overlap, do(func(a, b *decad.Body) (*decad.Body, error) { return decad.Cut(t.Context(), a, b) }), 1e-6)
+		require.InDelta(t, u-overlap, do(func(a, b *decad.Body) (*decad.Body, error) { return decad.Cut(a, b).Do(t.Context()) }), 1e-6)
 	})
 	t.Run("union leaves the enclosed notch empty", func(t *testing.T) {
 		u, bar, do := volumes(t)
-		require.InDelta(t, u+bar-overlap, do(func(a, b *decad.Body) (*decad.Body, error) { return decad.Union(t.Context(), a, b) }), 1e-6)
+		require.InDelta(t, u+bar-overlap, do(func(a, b *decad.Body) (*decad.Body, error) { return decad.Union(a, b).Do(t.Context()) }), 1e-6)
 	})
 }
 

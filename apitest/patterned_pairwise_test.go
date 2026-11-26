@@ -57,7 +57,7 @@ func (sc *mirrorScene) roundedPort(t *testing.T, plane *sketch.Plane, rIn, rOut,
 		}
 	}
 	require.NotNil(t, profile)
-	body, err := decad.Extrude(t.Context(), sc.doc, s, profile, e)
+	body, err := decad.Extrude(sc.doc, s, profile, e).Do(t.Context())
 	require.NoError(t, err)
 
 	// A round of radius r at an interior angle θ removes r²(cot(θ/2) − (π−θ)/2).
@@ -88,7 +88,7 @@ func TestPatternedPairwiseRing(t *testing.T) {
 	port, area := sc.roundedPort(t, plane, 30, 42, math.Pi/(2*count), 1, mirrorAlong(height))
 
 	start := time.Now()
-	ring, err := decad.Patterned(t.Context(), port, decad.CircularPattern{Axis: patternZ, Count: count})
+	ring, err := decad.Patterned(port, decad.CircularPattern{Axis: patternZ, Count: count}).Do(t.Context())
 	require.NoError(t, err)
 	require.Less(t, time.Since(start), 5*time.Second)
 	require.False(t, tookMeshPath(ring))
@@ -101,9 +101,9 @@ func TestPatternedPairwiseRing(t *testing.T) {
 
 	disc := sc.cylinder(t, sc.w.XY(), 0, 0, 58, mirrorAlong(3))
 	loops := decad.Edges(decad.OuterLoopOf(decad.CapStart(disc))).Or(decad.OuterLoopOf(decad.CapEnd(disc)))
-	disc, err = decad.Chamfer(t.Context(), disc, loops, units.Millimeters(0.5))
+	disc, err = decad.Chamfer(disc, loops, units.Millimeters(0.5)).Do(t.Context())
 	require.NoError(t, err)
-	cut, err := decad.Cut(t.Context(), disc, ring)
+	cut, err := decad.Cut(disc, ring).Do(t.Context())
 	require.NoError(t, err)
 	dv, err := disc.Volume()
 	require.NoError(t, err)
@@ -132,7 +132,7 @@ func TestPatternedPairwiseRingOverlap(t *testing.T) {
 	plane, err := sc.w.CreateOffsetPlane(sc.w.XY(), -1)
 	require.NoError(t, err)
 	port, _ := sc.roundedPort(t, plane, 30, 42, 2.5*math.Pi/(2*count), 1, mirrorAlong(5))
-	ring, err := decad.Patterned(t.Context(), port, decad.CircularPattern{Axis: patternZ, Count: count})
+	ring, err := decad.Patterned(port, decad.CircularPattern{Axis: patternZ, Count: count}).Do(t.Context())
 	if err != nil {
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		return

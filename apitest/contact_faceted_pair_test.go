@@ -31,7 +31,7 @@ func placedBox(t *testing.T, doc *decad.Document, box [6]float64) *decad.Body {
 	if box[4] == 0 {
 		return body
 	}
-	placed, err := decad.Transform(t.Context(), body, contactPose(t, r3.Vec{Z: box[4]}))
+	placed, err := decad.Transform(body, contactPose(t, r3.Vec{Z: box[4]})).Do(t.Context())
 	require.NoError(t, err)
 	return placed
 }
@@ -39,7 +39,7 @@ func placedBox(t *testing.T, doc *decad.Document, box [6]float64) *decad.Body {
 // cutOf is the Boolean target minus tool over two placed boxes.
 func cutOf(t *testing.T, doc *decad.Document, target, tool [6]float64) *decad.Body {
 	t.Helper()
-	body, err := decad.Cut(t.Context(), placedBox(t, doc, target), placedBox(t, doc, tool))
+	body, err := decad.Cut(placedBox(t, doc, target), placedBox(t, doc, tool)).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -68,7 +68,7 @@ func hexPrismBody(t *testing.T, doc *decad.Document) *decad.Body {
 	s, profile := polygonSketch(t, [][2]float64{
 		{0, 0}, {5.75, -10}, {17.25, -10}, {23, 0}, {17.25, 10}, {5.75, 10},
 	})
-	body, err := decad.Extrude(t.Context(), doc, s, profile, decad.Distance{D: units.Millimeters(12), Dir: decad.Along})
+	body, err := decad.Extrude(doc, s, profile, decad.Distance{D: units.Millimeters(12), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -252,7 +252,7 @@ func TestExactPlanarPairAdmitsStitchedSolid(t *testing.T) {
 	// down moves no held corner: every coordinate below 8 keeps its ulp.
 	lift, err := r3.Translation(r3.Vec{Z: 1})
 	require.NoError(t, err)
-	placed, err := decad.Transform(t.Context(), tetrahedron, lift)
+	placed, err := decad.Transform(tetrahedron, lift).Do(t.Context())
 	require.NoError(t, err)
 	var widest float64
 	for _, vertex := range placed.Vertices() {

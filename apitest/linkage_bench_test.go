@@ -14,7 +14,7 @@ import (
 func linkageBlock(tb testing.TB, doc *decad.Document, x0, y0, x1, y1, z0, h float64) *decad.Body {
 	tb.Helper()
 	s := offsetBoxSketch(tb, context.Background(), x0, y0, x1, y1, z0)
-	body, err := decad.Extrude(tb.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
+	body, err := decad.Extrude(doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(h), Dir: decad.Along}).Do(tb.Context())
 	require.NoError(tb, err)
 	return body
 }

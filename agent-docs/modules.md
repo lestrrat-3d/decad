@@ -22,5 +22,7 @@ Adding a `go.mod` module requires recording the decision here first.
   - `github.com/lestrrat-3d/kinetograph` — animates decad bodies; landing
     clip (`go run . clip`) and dynamics scenes (`go run . dynamics`).
 - `_shardgen` module: standard library only. It packs the race shards (`_shardgen/main.go`).
+- `_cmdrewrite` module: standard library only. It rewrites call sites to the command form while the operation families
+  migrate (`agent-docs/command-api-design.md` §14); deleted at stack landing.
 - `_proofs` module: standard library only. It holds the trace checker (`_proofs/tracecheck/`) for the Lean proofs.
   Its Lake project pins Lean and Mathlib in `_proofs/lake-manifest.json`; neither is a Go dependency.

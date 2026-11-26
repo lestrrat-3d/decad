@@ -14,7 +14,7 @@ import (
 
 func TestRevolveSectorAnnularCylinderCutVerified(t *testing.T) {
 	doc, hub, lug, _, _ := taperedHubAndRadialLug(t, 9, 7.5, 4.3, false)
-	joined, err := decad.Union(t.Context(), hub, lug)
+	joined, err := decad.Union(hub, lug).Do(t.Context())
 	require.NoError(t, err)
 	requireRevolveSectorCylinderCut(t, doc, hub, joined, 1)
 }
@@ -23,16 +23,16 @@ func TestRevolveSectorRepeatedAnnularCylinderCutVerified(t *testing.T) {
 	doc, hub, lug, _, _ := taperedHubAndRadialLug(t, 9, 7.5, 4.3, false)
 	turn, err := r3.Rotation(r3.Vec{X: 1}, units.Degrees(180))
 	require.NoError(t, err)
-	second, err := decad.Copy(t.Context(), lug, decad.WithCopyPlacement(turn))
+	second, err := decad.Copy(lug).Place(decad.CopyTransform{Transform: turn}).Do(t.Context())
 	require.NoError(t, err)
-	joined, err := decad.Union(t.Context(), hub, lug, second)
+	joined, err := decad.Union(hub, lug, second).Do(t.Context())
 	require.NoError(t, err)
 	requireRevolveSectorCylinderCut(t, doc, hub, joined, 1)
 }
 
 func TestRevolveSectorStraightBandCylinderCutVerified(t *testing.T) {
 	doc, hub, lug, _, _ := taperedHubAndRadialLug(t, 9, 7.5, 4.3, false)
-	joined, err := decad.Union(t.Context(), hub, lug)
+	joined, err := decad.Union(hub, lug).Do(t.Context())
 	require.NoError(t, err)
 	requireRevolveSectorCylinderCut(t, doc, hub, joined, 2)
 }
@@ -41,16 +41,16 @@ func TestRevolveSectorRepeatedStraightBandCylinderCutVerified(t *testing.T) {
 	doc, hub, lug, _, _ := taperedHubAndRadialLug(t, 9, 7.5, 4.3, false)
 	turn, err := r3.Rotation(r3.Vec{X: 1}, units.Degrees(180))
 	require.NoError(t, err)
-	second, err := decad.Copy(t.Context(), lug, decad.WithCopyPlacement(turn))
+	second, err := decad.Copy(lug).Place(decad.CopyTransform{Transform: turn}).Do(t.Context())
 	require.NoError(t, err)
-	joined, err := decad.Union(t.Context(), hub, lug, second)
+	joined, err := decad.Union(hub, lug, second).Do(t.Context())
 	require.NoError(t, err)
 	requireRevolveSectorCylinderCut(t, doc, hub, joined, 2)
 }
 
 func TestRevolveSectorCylinderCutRadiusBoundariesLeaveBodiesLive(t *testing.T) {
 	doc, hub, lug, _, _ := taperedHubAndRadialLug(t, 9, 7.5, 4.3, false)
-	joined, err := decad.Union(t.Context(), hub, lug)
+	joined, err := decad.Union(hub, lug).Do(t.Context())
 	require.NoError(t, err)
 	for _, radius := range []float64{
 		math.Nextafter(1.5, 0), 1.5, math.Nextafter(1.5, math.Inf(1)),
@@ -58,7 +58,7 @@ func TestRevolveSectorCylinderCutRadiusBoundariesLeaveBodiesLive(t *testing.T) {
 	} {
 		tool := revolveSectorCylinderTool(t, doc, radius, 4, 6, 0)
 		before := doc.Bodies()
-		_, err := decad.Cut(t.Context(), joined, tool)
+		_, err := decad.Cut(joined, tool).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported, "radius %g", radius)
 		require.Equal(t, before, doc.Bodies(), "radius %g", radius)
 	}
@@ -66,7 +66,7 @@ func TestRevolveSectorCylinderCutRadiusBoundariesLeaveBodiesLive(t *testing.T) {
 
 func TestRevolveSectorCylinderCutRequiresSpanningCenteredToolAndPlanarCaps(t *testing.T) {
 	doc, hub, lug, _, _ := taperedHubAndRadialLug(t, 9, 7.5, 4.3, false)
-	joined, err := decad.Union(t.Context(), hub, lug)
+	joined, err := decad.Union(hub, lug).Do(t.Context())
 	require.NoError(t, err)
 	for _, tc := range []struct {
 		name                   string
@@ -79,17 +79,17 @@ func TestRevolveSectorCylinderCutRequiresSpanningCenteredToolAndPlanarCaps(t *te
 		t.Run(tc.name, func(t *testing.T) {
 			tool := revolveSectorCylinderTool(t, doc, 1, tc.start, tc.height, tc.centerY)
 			before := doc.Bodies()
-			_, err := decad.Cut(t.Context(), joined, tool)
+			_, err := decad.Cut(joined, tool).Do(t.Context())
 			require.ErrorIs(t, err, decad.ErrUnsupported)
 			require.Equal(t, before, doc.Bodies())
 		})
 	}
 	shoulderDoc, shoulder, shoulderLug := shoulderedHubAndRadialLug(t)
-	joinedShoulder, err := decad.Union(t.Context(), shoulder, shoulderLug)
+	joinedShoulder, err := decad.Union(shoulder, shoulderLug).Do(t.Context())
 	require.NoError(t, err)
 	tool := revolveSectorCylinderTool(t, shoulderDoc, 1, 4, 6, 0)
 	before := shoulderDoc.Bodies()
-	_, err = decad.Cut(t.Context(), joinedShoulder, tool)
+	_, err = decad.Cut(joinedShoulder, tool).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.Equal(t, before, shoulderDoc.Bodies())
 }
@@ -109,7 +109,7 @@ func revolveSectorCylinderTool(t testing.TB, doc *decad.Document,
 	s.CreateCircle(center, radius)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	tool, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(height), Dir: decad.Along})
+	tool, err := decad.Extrude(doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(height), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	return tool
 }
@@ -120,7 +120,7 @@ func requireRevolveSectorCylinderCut(t *testing.T, doc *decad.Document,
 	tool := revolveSectorCylinderTool(t, doc, radius, 4, 6, 0)
 	before, err := joined.Volume()
 	require.NoError(t, err)
-	cut, err := decad.Cut(t.Context(), joined, tool)
+	cut, err := decad.Cut(joined, tool).Do(t.Context())
 	require.NoError(t, err)
 	after, err := cut.Volume()
 	require.NoError(t, err)

@@ -59,12 +59,13 @@ func TestThreadLeftHandRod(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
 	rod := circleBodyAtZ(t, doc, 0, 5, 0, 20)
-	out, err := decad.Thread(t.Context(), rod, decad.ThreadSpec{
-		Face: decad.Faces(decad.Cylindrical()), Pitch: units.Millimeters(threadPitch), LeftHand: true})
+	out, err := decad.Thread(rod, decad.Faces(decad.Cylindrical()), units.Millimeters(threadPitch)).
+		LeftHand().
+		Do(t.Context())
 	require.NoError(t, err)
 	volume, err := out.Volume()
 	require.NoError(t, err)
-	requireThreadVolume(t, volume, math.Pi*25*20-removedExternal(5, 20, threadPitch))
+	requireThreadVolume(t, volume, math.Pi*25*20-removedExternal(5, 20))
 
 	// Seen from +Z the groove of a left-hand thread descends as the angle turns
 	// counter-clockwise: a quarter turn on it is a quarter pitch lower.
@@ -88,9 +89,12 @@ func TestThreadPartialLengthStopsShortOfTheFaceEnd(t *testing.T) {
 	for _, hand := range []bool{false, true} {
 		doc := decad.New()
 		rod := circleBodyAtZ(t, doc, 0, 5, 0, 20)
-		out, err := decad.Thread(t.Context(), rod, decad.ThreadSpec{
-			Face: decad.Faces(decad.Cylindrical()), Pitch: units.Millimeters(threadPitch),
-			LeftHand: hand, Length: units.Millimeters(threaded)})
+		cmd := decad.Thread(rod, decad.Faces(decad.Cylindrical()), units.Millimeters(threadPitch)).
+			Length(units.Millimeters(threaded))
+		if hand {
+			cmd.LeftHand()
+		}
+		out, err := cmd.Do(t.Context())
 		require.NoError(t, err)
 		volume, err := out.Volume()
 		require.NoError(t, err)
@@ -126,8 +130,9 @@ func TestThreadLengthRefusals(t *testing.T) {
 			t.Parallel()
 			doc := decad.New()
 			rod := circleBodyAtZ(t, doc, 0, 5, 0, 20)
-			_, err := decad.Thread(t.Context(), rod, decad.ThreadSpec{
-				Face: decad.Faces(decad.Cylindrical()), Pitch: units.Millimeters(threadPitch), Length: tc.length})
+			_, err := decad.Thread(rod, decad.Faces(decad.Cylindrical()), units.Millimeters(threadPitch)).
+				Length(tc.length).
+				Do(t.Context())
 			require.ErrorIs(t, err, tc.want)
 			require.Equal(t, []*decad.Body{rod}, doc.Bodies(), "a refused thread leaves the rod live and alone")
 		})

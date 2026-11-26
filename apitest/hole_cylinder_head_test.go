@@ -35,10 +35,10 @@ func TestHoleCounterboreInARod(t *testing.T) {
 	// A 3 mm hole 6 mm deep from the tangent plane at x = 10, with a 6 mm counterbore 2 mm deep
 	// from it. The rod's wall at distance y across is x = √(R² − y²), so the bore removes
 	// √(R² − y²) − 4 of length over its disc and the recess √(R² − y²) − 8 over its ring.
-	out, err := decad.Hole(t.Context(), rod, decad.HoleSpec{
-		Face: decad.Faces(decad.Cylindrical()), At: r3.NewVec(R, 0, L/2),
-		Diameter: units.Millimeters(3), Depth: decad.BlindHole{Depth: units.Millimeters(6)},
-		Head: decad.Counterbore{Diameter: units.Millimeters(6), Depth: units.Millimeters(2)}})
+	out, err := decad.Hole(rod, decad.Faces(decad.Cylindrical()), r3.NewVec(R, 0, L/2),
+		units.Millimeters(3), decad.BlindHole{Depth: units.Millimeters(6)}).
+		Head(decad.Counterbore{Diameter: units.Millimeters(6), Depth: units.Millimeters(2)}).
+		Do(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, []*decad.Body{out}, doc.Bodies())
 	wall := func(y float64) float64 { return math.Sqrt(R*R - y*y) }
@@ -62,16 +62,16 @@ func TestHoleCounterboreOutOfABore(t *testing.T) {
 	const Rb = 5.0
 	doc := decad.New()
 	block := boxBody(t, doc, -20, -20, 20, 20, 10)
-	part, err := decad.Cut(t.Context(), block, circleBodyAtZ(t, doc, 0, Rb, -1, 12))
+	part, err := decad.Cut(block, circleBodyAtZ(t, doc, 0, Rb, -1, 12)).Do(t.Context())
 	require.NoError(t, err)
 	// A 2 mm hole through from the bore wall at (5, 0, 5) out along +X, with an 8 mm counterbore
 	// 1.5 mm deep from the tangent plane x = 5; the wall rises 2 mm toward that plane at 4 mm across. The wall at y across is x = √(R² − y²), below
 	// the tangent plane, so the recess removes 5 + 1.5 − √(R² − y²) of length over its disc and
 	// the bore the rest of the way to the block's face at x = 20.
-	out, err := decad.Hole(t.Context(), part, decad.HoleSpec{
-		Face: decad.Faces(decad.Cylindrical()), At: r3.NewVec(Rb, 0, 5),
-		Diameter: units.Millimeters(2), Depth: decad.ThroughHole{},
-		Head: decad.Counterbore{Diameter: units.Millimeters(8), Depth: units.Millimeters(1.5)}})
+	out, err := decad.Hole(part, decad.Faces(decad.Cylindrical()), r3.NewVec(Rb, 0, 5),
+		units.Millimeters(2), decad.ThroughHole{}).
+		Head(decad.Counterbore{Diameter: units.Millimeters(8), Depth: units.Millimeters(1.5)}).
+		Do(t.Context())
 	require.NoError(t, err)
 	recess := chordWeighted(4, func(y float64) float64 { return 6.5 - math.Sqrt(Rb*Rb-y*y) })
 	bore := math.Pi * 1 * (20 - 6.5)
@@ -89,10 +89,10 @@ func TestHoleCountersinkInARod(t *testing.T) {
 	// x = 10: the cone narrows 1 mm in radius for each mm of depth, from radius 3 at x = 10 to 1
 	// at x = 8. The wall at distance ρ from the axis across is x = √(R² − y²), and the cone at
 	// (y, z) with ρ = √(y² + z²) reaches x = 10 − (3 − ρ) down to the bore.
-	out, err := decad.Hole(t.Context(), rod, decad.HoleSpec{
-		Face: decad.Faces(decad.Cylindrical()), At: r3.NewVec(R, 0, L/2),
-		Diameter: units.Millimeters(2), Depth: decad.BlindHole{Depth: units.Millimeters(8)},
-		Head: decad.Countersink{Diameter: units.Millimeters(6), Angle: units.Degrees(90)}})
+	out, err := decad.Hole(rod, decad.Faces(decad.Cylindrical()), r3.NewVec(R, 0, L/2),
+		units.Millimeters(2), decad.BlindHole{Depth: units.Millimeters(8)}).
+		Head(decad.Countersink{Diameter: units.Millimeters(6), Angle: units.Degrees(90)}).
+		Do(t.Context())
 	require.NoError(t, err)
 	// Integrate over the disc of radius 3 in polar coordinates about the hole axis: at
 	// ρ the removed length along x is the wall's x there less the cone's floor
@@ -128,13 +128,15 @@ func TestHoleHeadOnACylinderRefusals(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
 	rod := circleBodyAtZ(t, doc, 0, 10, 0, 16)
-	spec := decad.HoleSpec{Face: decad.Faces(decad.Cylindrical()), At: r3.NewVec(10, 0, 8),
-		Diameter: units.Millimeters(3), Depth: decad.BlindHole{Depth: units.Millimeters(6)}}
-	spec.Head = decad.Counterbore{Diameter: units.Millimeters(2), Depth: units.Millimeters(1)}
-	_, err := decad.Hole(t.Context(), rod, spec)
+	blind := func() *decad.HoleCommand {
+		return decad.Hole(rod, decad.Faces(decad.Cylindrical()), r3.NewVec(10, 0, 8), units.Millimeters(3),
+			decad.BlindHole{Depth: units.Millimeters(6)})
+	}
+	_, err := blind().Head(decad.Counterbore{Diameter: units.Millimeters(2), Depth: units.Millimeters(1)}).
+		Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrDegenerate, "a counterbore narrower than the bore")
-	spec.Head = decad.Counterbore{Diameter: units.Millimeters(6), Depth: units.Millimeters(8)}
-	_, err = decad.Hole(t.Context(), rod, spec)
+	_, err = blind().Head(decad.Counterbore{Diameter: units.Millimeters(6), Depth: units.Millimeters(8)}).
+		Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrDegenerate, "a counterbore deeper than the hole")
 	require.Len(t, doc.Bodies(), 1)
 	require.True(t, doc.Bodies()[0] == rod)
@@ -145,7 +147,7 @@ func TestHoleCountersinkOutOfABore(t *testing.T) {
 	const Rb = 5.0
 	doc := decad.New()
 	block := boxBody(t, doc, -20, -20, 20, 20, 10)
-	part, err := decad.Cut(t.Context(), block, circleBodyAtZ(t, doc, 0, Rb, -1, 12))
+	part, err := decad.Cut(block, circleBodyAtZ(t, doc, 0, Rb, -1, 12)).Do(t.Context())
 	require.NoError(t, err)
 	// A 2 mm hole through from the bore wall at (5, 0, 5) out along +X, with a 90 degree countersink 4 mm
 	// across at the tangent plane x = 5: the cone has radius 7 − x there, so 2 at x = 5 and 1 at x = 6,
@@ -168,10 +170,10 @@ func TestHoleCountersinkOutOfABore(t *testing.T) {
 		}
 		removed += 2 * math.Pi * rho * (avg / around) * (4.0 / steps)
 	}
-	out, err := decad.Hole(t.Context(), part, decad.HoleSpec{
-		Face: decad.Faces(decad.Cylindrical()), At: r3.NewVec(Rb, 0, 5),
-		Diameter: units.Millimeters(2), Depth: decad.ThroughHole{},
-		Head: decad.Countersink{Diameter: units.Millimeters(4), Angle: units.Degrees(90)}})
+	out, err := decad.Hole(part, decad.Faces(decad.Cylindrical()), r3.NewVec(Rb, 0, 5),
+		units.Millimeters(2), decad.ThroughHole{}).
+		Head(decad.Countersink{Diameter: units.Millimeters(4), Angle: units.Degrees(90)}).
+		Do(t.Context())
 	require.NoError(t, err)
 	volume, err := out.Volume()
 	require.NoError(t, err)

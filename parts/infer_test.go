@@ -48,7 +48,7 @@ func TestInfer(t *testing.T) {
 
 func TestInferSlotAndRefusals(t *testing.T) {
 	doc := decad.New()
-	blk, err := decad.Cut(t.Context(), block(t, doc, 0, 0, 30, 20, 0, 10), block(t, doc, 12.8, 5, 17.2, 15, -1, 12))
+	blk, err := decad.Cut(block(t, doc, 0, 0, 30, 20, 0, 10), block(t, doc, 12.8, 5, 17.2, 15, -1, 12)).Do(t.Context())
 	require.NoError(t, err)
 	s := parts.NewSet(doc)
 	mustAdd(t, s,
@@ -97,7 +97,7 @@ func TestInferFacetedAndCheckInferred(t *testing.T) {
 	partial := parts.NewSet(doc2)
 	bore := func(z0 float64) *decad.Body {
 		b := block(t, doc2, 0, 0, 20, 20, z0, 5)
-		b, err := decad.Cut(t.Context(), b, cylinder(t, doc2, 5, 3.2, z0-1, 7))
+		b, err := decad.Cut(b, cylinder(t, doc2, 5, 3.2, z0-1, 7)).Do(t.Context())
 		require.NoError(t, err)
 		return b
 	}
@@ -118,14 +118,14 @@ func TestInferRotatedCopy(t *testing.T) {
 	doc := decad.New()
 	bore := func(z0 float64) *decad.Body {
 		b := block(t, doc, 0, 0, 20, 20, z0, 5)
-		b, err := decad.Cut(t.Context(), b, cylinder(t, doc, 5, 3.2, z0-1, 7))
+		b, err := decad.Cut(b, cylinder(t, doc, 5, 3.2, z0-1, 7)).Do(t.Context())
 		require.NoError(t, err)
 		return b
 	}
 	turn, err := r3.RotationAround(r3.Vec{X: 10, Y: 10, Z: 5}, r3.Vec{Y: 1}, units.Degrees(30))
 	require.NoError(t, err)
 	turned := func(b *decad.Body) *decad.Body {
-		out, err := decad.Transform(t.Context(), b, turn)
+		out, err := decad.Transform(b, turn).Do(t.Context())
 		require.NoError(t, err)
 		return out
 	}

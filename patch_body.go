@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/lestrrat-3d/decad/internal/opcommand"
 	"github.com/lestrrat-3d/decad/internal/patchchain"
 	"github.com/lestrrat-3d/r3"
 )
@@ -74,7 +75,7 @@ const (
 	patchRowNoPayload = `agent-docs/surface-design.md Table R row R19`
 )
 
-// PatchEdges resolves sel against b's own live topology, fills every closed
+// PatchEdges returns the command that resolves sel against b's own live topology, fills every closed
 // chain of free edges the selection proves, and returns a new body carrying
 // b's own faces plus one new planar face per chain, retiring b
 // (agent-docs/surface-design.md §5.2). b's own topology is never mutated: the
@@ -92,14 +93,42 @@ const (
 // [ErrRetiredBody]. sel's own resolution failure ([SelectionError] wrapping
 // [ErrNoMatch] or [ErrCardinality], Table R row R16) and every one of gates
 // 1-4's refusals (R4, R5, R6, R18) surface unchanged. A failed call leaves
-// the document and b unchanged.
-func PatchEdges(ctx context.Context, b *Body, sel EdgeSelector) (result *Body, retErr error) {
-	defer func() { retErr = operationError(OperationPatchEdges, retErr) }()
-	if ctx == nil {
-		return nil, fmt.Errorf(`%w: a nil context cannot control a patch`, ErrDegenerate)
+// the document and b unchanged. A nil ctx given to Do is [ErrDegenerate]. A selector that is a decad query is
+// copied at the call, so a later change to the caller's query changes nothing.
+func PatchEdges(b *Body, sel EdgeSelector) *PatchEdgesCommand {
+	c := &PatchEdgesCommand{b: b, sel: copyEdgeSelector(sel)}
+	if b == nil {
+		c.state.Record("body", errPatchEdgesNilBody)
 	}
+	return c
+}
+
+// errPatchEdgesNilBody is the refusal of a nil body, which PatchEdges records because the operation reports it
+// right after the nil ctx check.
+var errPatchEdgesNilBody = fmt.Errorf(`%w: a nil body names nothing to patch`, ErrDegenerate)
+
+// PatchEdgesCommand fills the closed free-edge chains a selection names. Build it with [PatchEdges].
+type PatchEdgesCommand struct {
+	state opcommand.State // consumed flag and first recorded fault
+	b     *Body           // stored as given
+	sel   EdgeSelector    // deep-copied at PatchEdges when it is a decad query
+}
+
+// Do fills the chains and retires the body, or returns the error of the first gate that refuses. A second call
+// returns [ErrConsumed].
+func (c *PatchEdgesCommand) Do(ctx context.Context) (*Body, error) {
+	return runCommand(ctx, &c.state, OperationPatchEdges, c.run)
+}
+
+func (c *PatchEdgesCommand) run(ctx context.Context) (*Body, error) {
+	return patchEdges(ctx, c.b, c.sel)
+}
+
+// patchEdges is PatchEdges's implementation. ctx is not nil, and the errors it returns carry no operation tag
+// (agent-docs/command-api-design.md §11).
+func patchEdges(ctx context.Context, b *Body, sel EdgeSelector) (*Body, error) {
 	if b == nil || b.n.Doc == nil {
-		return nil, fmt.Errorf(`%w: a nil body names nothing to patch`, ErrDegenerate)
+		return nil, errPatchEdgesNilBody
 	}
 	d := documentHandle(b.n.Doc)
 	if err := d.requireLive(b); err != nil {

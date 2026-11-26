@@ -27,7 +27,7 @@ func TestLoftFacesEightSourceSlabsKeepVolumeAndRejectBadCapOrder(t *testing.T) {
 	kept := make([]*decad.Body, 0, 8)
 	for k := 1; k <= 8; k++ {
 		sheet := pointLoftSliceSheet(t, doc, span*float64(k)/6, 30)
-		parts, err := decad.Split(t.Context(), inner, sheet)
+		parts, err := decad.Split(inner, sheet).Do(t.Context())
 		require.NoError(t, err)
 		require.Len(t, parts, 2)
 		inner = parts[0]
@@ -39,17 +39,17 @@ func TestLoftFacesEightSourceSlabsKeepVolumeAndRejectBadCapOrder(t *testing.T) {
 		sections = append(sections, pointSlabCap(t, slab, decad.CapEnd(slab)))
 	}
 	before := doc.Bodies()
-	_, err := decad.LoftFaces(t.Context(), sections[:1])
+	_, err := decad.LoftFaces(sections[:1]).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrDegenerate)
 	require.Equal(t, before, doc.Bodies())
 	duplicate := append([]*decad.Face(nil), sections...)
 	duplicate[2] = duplicate[1]
-	_, err = decad.LoftFaces(t.Context(), duplicate)
+	_, err = decad.LoftFaces(duplicate).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.Equal(t, before, doc.Bodies())
 	reordered := append([]*decad.Face(nil), sections...)
 	reordered[3], reordered[4] = reordered[4], reordered[3]
-	_, err = decad.LoftFaces(t.Context(), reordered)
+	_, err = decad.LoftFaces(reordered).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.Equal(t, before, doc.Bodies())
 	start := pointSlabCap(t, kept[0], decad.CapStart(kept[0]))
@@ -63,16 +63,16 @@ func TestLoftFacesEightSourceSlabsKeepVolumeAndRejectBadCapOrder(t *testing.T) {
 	require.NotNil(t, side)
 	withSide := append([]*decad.Face(nil), sections...)
 	withSide[len(withSide)-1] = side
-	_, err = decad.LoftFaces(t.Context(), withSide)
+	_, err = decad.LoftFaces(withSide).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.Equal(t, before, doc.Bodies())
 	canceled, cancel := context.WithCancel(t.Context())
 	cancel()
-	_, err = decad.LoftFaces(canceled, sections)
+	_, err = decad.LoftFaces(sections).Do(canceled)
 	require.ErrorIs(t, err, context.Canceled)
 	require.Equal(t, before, doc.Bodies())
 
-	loft, err := decad.LoftFaces(t.Context(), sections)
+	loft, err := decad.LoftFaces(sections).Do(t.Context())
 	require.NoError(t, err)
 	mesh, err := loft.Tessellate(t.Context(), units.Millimeters(0.1),
 		decad.WithVerification(decad.VerifyAll))
@@ -91,7 +91,7 @@ func TestLoftFacesEightSourceSlabsKeepVolumeAndRejectBadCapOrder(t *testing.T) {
 	}
 	require.InDelta(t, sum, volume.Value.Base(), allowance)
 	const toeApex = 5.3
-	cut, err := decad.Cut(t.Context(), loft, pointConeTool(t, doc, toeApex))
+	cut, err := decad.Cut(loft, pointConeTool(t, doc, toeApex)).Do(t.Context())
 	require.NoError(t, err)
 	cutVolume, err := cut.Volume()
 	require.NoError(t, err)
@@ -103,10 +103,10 @@ func TestLoftFacesEightSourceSlabsKeepVolumeAndRejectBadCapOrder(t *testing.T) {
 	require.True(t, cutMesh.VolumeVerified())
 	wrongHeel := pointConeTool(t, doc, math.Nextafter(8, math.Inf(1)))
 	beforeWrong := doc.Bodies()
-	_, err = decad.Intersect(t.Context(), cut, wrongHeel)
+	_, err = decad.Intersect(cut, wrongHeel).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.Equal(t, beforeWrong, doc.Bodies())
-	heel, err := decad.Intersect(t.Context(), cut, pointConeTool(t, doc, 8))
+	heel, err := decad.Intersect(cut, pointConeTool(t, doc, 8)).Do(t.Context())
 	require.NoError(t, err)
 	heelVolume, err := heel.Volume()
 	require.NoError(t, err)

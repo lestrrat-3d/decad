@@ -28,8 +28,8 @@ func Example_gcode_perimeters() {
 		fmt.Printf("failed to solve: %s\n", err)
 		return
 	}
-	block, err := decad.Extrude(context.Background(), decad.New(), s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(6), Dir: decad.Along})
+	block, err := decad.Extrude(decad.New(), s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(6), Dir: decad.Along}).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to extrude: %s\n", err)
 		return
@@ -66,8 +66,8 @@ func Example_gcode_infill() {
 		fmt.Printf("failed to solve: %s\n", err)
 		return
 	}
-	block, err := decad.Extrude(context.Background(), decad.New(), s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(1), Dir: decad.Along})
+	block, err := decad.Extrude(decad.New(), s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(1), Dir: decad.Along}).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to extrude: %s\n", err)
 		return

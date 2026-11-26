@@ -28,7 +28,7 @@ func loftBoxAt(t *testing.T, doc *decad.Document, z0, height float64) *decad.Bod
 	t.Helper()
 	const half = 20.0
 	s0, p0, s1, p1 := loftSquaresAt(t, r3.NewVec(0, 0, z0), half, half, height)
-	body, err := decad.Loft(t.Context(), doc, s0, p0, s1, p1)
+	body, err := decad.Loft(doc, s0, p0, s1, p1).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -102,7 +102,7 @@ func TestLoftTessellatePinnedLineSegLoftIsExact(t *testing.T) {
 	// exactly represented integer and no face pair is coplanar, so the union
 	// is decided on exact contacts alone.
 	prism := boxBody(t, doc, 0, 0, 40, 40, 10)
-	union, err := decad.Union(t.Context(), loft, prism)
+	union, err := decad.Union(loft, prism).Do(t.Context())
 	require.NoError(t, err)
 
 	vol, err := union.Volume()
@@ -131,7 +131,7 @@ func TestLoftTessellatePlacedLoftUsesThePositiveBoundPath(t *testing.T) {
 	require.NoError(t, err)
 	motion, err := rot.Then(shift)
 	require.NoError(t, err)
-	placed, err := decad.Transform(t.Context(), loft, motion)
+	placed, err := decad.Transform(loft, motion).Do(t.Context())
 	require.NoError(t, err)
 
 	mesh, err := placed.Tessellate(t.Context(), units.Millimeters(1))
@@ -151,7 +151,7 @@ func TestLoftTessellatePlacedLoftUsesThePositiveBoundPath(t *testing.T) {
 		"a LineSeg-only build's facet departure is its delta, up to each composition's own outward rounding")
 
 	prism := boxBody(t, doc, 0, 0, 40, 40, 10)
-	cut, err := decad.Cut(t.Context(), prism, placed)
+	cut, err := decad.Cut(prism, placed).Do(t.Context())
 	require.NoError(t, err)
 	vol, err := cut.Volume()
 	require.NoError(t, err)

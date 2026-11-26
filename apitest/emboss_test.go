@@ -54,7 +54,7 @@ func TestEmbossRaisedOnTop(t *testing.T) {
 	t.Parallel()
 	doc, plate := embossPlate(t)
 	s, profiles := embossSketch(t, 10, [4]float64{10, 10, 20, 16})
-	out, err := decad.Emboss(t.Context(), plate, s, profiles, embossFace(true, plate), decad.EmbossRaised, units.Millimeters(2))
+	out, err := decad.Emboss(plate, s, profiles, embossFace(true, plate), decad.EmbossRaised, units.Millimeters(2)).Do(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, []*decad.Body{out}, doc.Bodies())
 	operations := doc.OperationHistory().Operations()
@@ -69,7 +69,7 @@ func TestEmbossEngravedOnTop(t *testing.T) {
 	t.Parallel()
 	_, plate := embossPlate(t)
 	s, profiles := embossSketch(t, 10, [4]float64{10, 10, 20, 16})
-	out, err := decad.Emboss(t.Context(), plate, s, profiles, embossFace(true, plate), decad.EmbossEngraved, units.Millimeters(2))
+	out, err := decad.Emboss(plate, s, profiles, embossFace(true, plate), decad.EmbossEngraved, units.Millimeters(2)).Do(t.Context())
 	require.NoError(t, err)
 	decadtest.MeasuresVolume(t, out, units.CubicMillimeters(embossPlateVolume-10*6*2))
 	decadtest.MeasuresBounds(t, out, r3.Vec{}, r3.Vec{X: 40, Y: 30, Z: 10})
@@ -81,7 +81,7 @@ func TestEmbossRaisedOnBottom(t *testing.T) {
 	t.Parallel()
 	_, plate := embossPlate(t)
 	s, profiles := embossSketch(t, 0, [4]float64{10, 10, 20, 16}, [4]float64{25, 10, 35, 16})
-	out, err := decad.Emboss(t.Context(), plate, s, profiles, embossFace(false, plate), decad.EmbossRaised, units.Millimeters(3))
+	out, err := decad.Emboss(plate, s, profiles, embossFace(false, plate), decad.EmbossRaised, units.Millimeters(3)).Do(t.Context())
 	require.NoError(t, err)
 	decadtest.MeasuresVolume(t, out, units.CubicMillimeters(embossPlateVolume+2*10*6*3))
 	decadtest.MeasuresBounds(t, out, r3.Vec{Z: -3}, r3.Vec{X: 40, Y: 30, Z: 10})
@@ -91,7 +91,7 @@ func TestEmbossEngravedOnBottom(t *testing.T) {
 	t.Parallel()
 	_, plate := embossPlate(t)
 	s, profiles := embossSketch(t, 0, [4]float64{10, 10, 20, 16})
-	out, err := decad.Emboss(t.Context(), plate, s, profiles, embossFace(false, plate), decad.EmbossEngraved, units.Millimeters(3))
+	out, err := decad.Emboss(plate, s, profiles, embossFace(false, plate), decad.EmbossEngraved, units.Millimeters(3)).Do(t.Context())
 	require.NoError(t, err)
 	decadtest.MeasuresVolume(t, out, units.CubicMillimeters(embossPlateVolume-10*6*3))
 }
@@ -119,7 +119,7 @@ func TestEmbossRingKeepsItsHole(t *testing.T) {
 		}
 	}
 	require.NotNil(t, ring)
-	out, err := decad.Emboss(t.Context(), plate, s, []*sketch.Profile{ring}, embossFace(true, plate), decad.EmbossRaised, units.Millimeters(2))
+	out, err := decad.Emboss(plate, s, []*sketch.Profile{ring}, embossFace(true, plate), decad.EmbossRaised, units.Millimeters(2)).Do(t.Context())
 	require.NoError(t, err)
 	decadtest.MeasuresVolume(t, out, units.CubicMillimeters(embossPlateVolume+(100-16)*2))
 }
@@ -137,7 +137,7 @@ func TestEmbossCircleRelief(t *testing.T) {
 	s.CreateCircle(c, 5)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	out, err := decad.Emboss(t.Context(), plate, s, s.Profiles(), embossFace(true, plate), decad.EmbossEngraved, units.Millimeters(4))
+	out, err := decad.Emboss(plate, s, s.Profiles(), embossFace(true, plate), decad.EmbossEngraved, units.Millimeters(4)).Do(t.Context())
 	require.NoError(t, err)
 	decadtest.MeasuresVolume(t, out, units.CubicMillimeters(embossPlateVolume-math.Pi*25*4))
 }
@@ -166,7 +166,7 @@ func TestEmbossRefusals(t *testing.T) {
 			t.Parallel()
 			doc, plate := embossPlate(t)
 			s, profiles := embossSketch(t, tc.z, tc.rect)
-			_, err := decad.Emboss(t.Context(), plate, s, profiles, embossFace(true, plate), tc.mode, tc.height)
+			_, err := decad.Emboss(plate, s, profiles, embossFace(true, plate), tc.mode, tc.height).Do(t.Context())
 			require.ErrorIs(t, err, tc.want)
 			require.ErrorContains(t, err, tc.text)
 			require.Equal(t, []*decad.Body{plate}, doc.Bodies(), "a refused emboss leaves the plate live and alone")
@@ -189,25 +189,23 @@ func TestEmbossRefusesTiltedSketchAndUntangentCurvedFace(t *testing.T) {
 	s.Fix(rect.A)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	_, err = decad.Emboss(t.Context(), plate, s, s.Profiles(), embossFace(true, plate), decad.EmbossRaised, units.Millimeters(2))
+	_, err = decad.Emboss(plate, s, s.Profiles(), embossFace(true, plate), decad.EmbossRaised, units.Millimeters(2)).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrDegenerate)
 	require.ErrorContains(t, err, "not parallel")
 
 	flat, profiles := embossSketch(t, 10, [4]float64{10, 10, 20, 16})
-	_, err = decad.Emboss(t.Context(), plate, flat, nil, embossFace(true, plate), decad.EmbossRaised, units.Millimeters(2))
+	_, err = decad.Emboss(plate, flat, nil, embossFace(true, plate), decad.EmbossRaised, units.Millimeters(2)).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrDegenerate, "an empty profile list")
-	_, err = decad.Emboss(t.Context(), plate, flat, []*sketch.Profile{nil}, embossFace(true, plate), decad.EmbossRaised, units.Millimeters(2))
+	_, err = decad.Emboss(plate, flat, []*sketch.Profile{nil}, embossFace(true, plate), decad.EmbossRaised, units.Millimeters(2)).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrDegenerate, "a nil profile")
-	_, err = decad.Emboss(t.Context(), plate, flat, profiles, nil, decad.EmbossRaised, units.Millimeters(2))
+	_, err = decad.Emboss(plate, flat, profiles, nil, decad.EmbossRaised, units.Millimeters(2)).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrDegenerate, "a nil selector")
 	require.Equal(t, []*decad.Body{plate}, doc.Bodies())
 
-	drilled, err := decad.Hole(t.Context(), plate, decad.HoleSpec{
-		Face: embossFace(true, plate), At: r3.Vec{X: 20, Y: 15, Z: 10}, Diameter: units.Millimeters(6), Depth: decad.ThroughHole{},
-	})
+	drilled, err := decad.Hole(plate, embossFace(true, plate), r3.Vec{X: 20, Y: 15, Z: 10}, units.Millimeters(6), decad.ThroughHole{}).Do(t.Context())
 	require.NoError(t, err)
 	// A sketch on the top face's plane is not tangent to the hole's wall, so it names no relief on it.
-	_, err = decad.Emboss(t.Context(), drilled, flat, profiles, decad.Faces(decad.Cylindrical()), decad.EmbossRaised, units.Millimeters(2))
+	_, err = decad.Emboss(drilled, flat, profiles, decad.Faces(decad.Cylindrical()), decad.EmbossRaised, units.Millimeters(2)).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrDegenerate)
 	require.ErrorContains(t, err, "not parallel")
 }

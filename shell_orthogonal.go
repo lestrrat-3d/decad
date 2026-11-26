@@ -83,6 +83,9 @@ func commitShellWalls(ctx context.Context, d *Document, b *Body, wallVerts []r3.
 	}
 	walls, err := solidFromMeshBody(ctx, d, mesh)
 	if err != nil {
+		if cerr := ctx.Err(); cerr != nil {
+			return nil, true, cerr
+		}
 		return nil, true, fmt.Errorf("%w: the shell's walls are not a solid the evaluator can prove: %s", ErrUnsupported, err)
 	}
 	out, err := commitModifyResult(ctx, OperationShell, b, walls)
@@ -90,17 +93,17 @@ func commitShellWalls(ctx context.Context, d *Document, b *Body, wallVerts []r3.
 }
 
 // shellOrthogonalPerDirection is shellOrthogonal for walls whose thickness depends on the direction they face
-// (WithShellFaceThickness): the cavity is the solid eroded by the box that reaches each direction's own thickness.
+// (FaceThickness): the cavity is the solid eroded by the box that reaches each direction's own thickness.
 func shellOrthogonalPerDirection(ctx context.Context, d *Document, b *Body, call brepmodify.ShellCall,
 	faces []modifyoption.FaceThickness, sense ShellSense) (*Body, bool, error) {
 	if sense != Inward {
-		return nil, true, fmt.Errorf(`%w: WithShellFaceThickness takes an Inward shell`, ErrDegenerate)
+		return nil, true, fmt.Errorf(`%w: FaceThickness takes an Inward shell`, ErrDegenerate)
 	}
 	tNeg := [3]float64{call.Tmm, call.Tmm, call.Tmm}
 	tPos := tNeg
 	for _, f := range faces {
 		if f.Axis < 0 || f.Axis > 2 {
-			return nil, true, fmt.Errorf(`%w: WithShellFaceThickness names a direction that is not a world axis direction`, ErrDegenerate)
+			return nil, true, fmt.Errorf(`%w: FaceThickness names a direction that is not a world axis direction`, ErrDegenerate)
 		}
 		mm, _, err := extent.MagnitudeInBounded(f.T, units.Length, units.Millimeter, "the face thickness")
 		if err != nil {

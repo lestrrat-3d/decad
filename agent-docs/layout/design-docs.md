@@ -11,6 +11,7 @@ The rules for rows live in `agent-docs/layout.md`.
 |---|---|
 | `agent-docs/container-design.md` | `Container`: grouping of sketches, planes and bodies, result placement, `AddBody`, `ErrCrossContainer`. |
 | `agent-docs/api-design.md` | Public API contract for modeling, features, selectors, and verification. |
+| `agent-docs/command-api-design.md` | Operation commands: constructor and method rules, the `Do` run order, error tags, lint, family verdicts and the migration stack. |
 | `docs/api.md` | User-facing API reference by task; `apitest/api_reference_test.go` checks its names exist. |
 | `docs/data-structures.md` | User-facing type index and structure guide; `apitest/api_reference_test.go` checks it lists every exported type. |
 | `agent-docs/sketch-seam-design.md` | `sketch` recording: `TExact`, `CurveSegment`, and `ErrUnrecordableProfile`. |
@@ -81,7 +82,7 @@ The rules for rows live in `agent-docs/layout.md`.
 | `section.go` | Planar section query over certified prism, stack-backed BRep, stacked prism, Loft, sphere, cone, Revolve meridian and mesh Boolean history records; builders live in `internal/sectionclip/` and `internal/sectionhistory/`; also the `Section` constraint. See section design, surface §13.2. |
 | `path.go` | The immutable spatial `Path`, sealed segments and its recorded `internal/sweepinput.Path`. See sweep §2–§3. |
 | `extent.go` | Public linear and angular extent variants and normalization. See API §8.1. |
-| `selector.go` | `EdgeQuery`/`FaceQuery`, which resolve against live bodies through `internal/selectorquery` node views. See API §9. |
+| `selector.go` | `EdgeQuery`/`FaceQuery`, which resolve against live bodies through `internal/selectorquery` node views, and the copies a command stores at its constructor. See API §9. |
 | `selection_error.go` | Public selector error types and query rendering adapters. See API §9. |
 
 ### Mass properties and free-form curves

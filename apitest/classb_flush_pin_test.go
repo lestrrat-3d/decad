@@ -27,9 +27,9 @@ func bossAlongZ(t *testing.T, doc *decad.Document, x, y, z0, length float64) *de
 	s.CreateCircle(center, 3)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{
+	body, err := decad.Extrude(doc, s, s.Profiles()[0], decad.Distance{
 		D: units.Millimeters(length), Dir: decad.Along,
-	})
+	}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -48,7 +48,7 @@ func pinAlongXAt(t *testing.T, doc *decad.Document, x0, z float64, length units.
 	s.CreateCircle(center, 3)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: length, Dir: decad.Along})
+	body, err := decad.Extrude(doc, s, s.Profiles()[0], decad.Distance{D: length, Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -73,9 +73,9 @@ func pinFromYZ(t *testing.T, doc *decad.Document, planeX float64, dir decad.Dire
 	s.CreateCircle(center, 3)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{
+	body, err := decad.Extrude(doc, s, s.Profiles()[0], decad.Distance{
 		D: units.Millimeters(length), Dir: dir,
-	})
+	}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -120,7 +120,7 @@ func TestClassBFlushPinUnion(t *testing.T) {
 		if pinFirst {
 			a, b = pin, plate
 		}
-		got, err := decad.Union(t.Context(), a, b)
+		got, err := decad.Union(a, b).Do(t.Context())
 		require.NoError(t, err)
 		requireExactFlushResult(t, got, 8, 8000+135*math.Pi)
 	}
@@ -135,14 +135,14 @@ func TestClassBFlushPinCutAndIntersect(t *testing.T) {
 	doc := decad.New()
 	plate := boxBody(t, doc, 0, 0, 40, 20, 10)
 	pin := pinAlongX(t, doc, 30, 10)
-	cut, err := decad.Cut(t.Context(), plate, pin)
+	cut, err := decad.Cut(plate, pin).Do(t.Context())
 	require.NoError(t, err)
 	requireExactFlushResult(t, cut, 8, 8000-90*math.Pi)
 
 	doc = decad.New()
 	plate = boxBody(t, doc, 0, 0, 40, 20, 10)
 	pin = pinAlongX(t, doc, 30, 10)
-	common, err := decad.Intersect(t.Context(), plate, pin)
+	common, err := decad.Intersect(plate, pin).Do(t.Context())
 	require.NoError(t, err)
 	requireExactFlushResult(t, common, 3, 90*math.Pi)
 }
@@ -154,10 +154,10 @@ func TestClassBFlushBossOnBrep(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
 	plate := boxBody(t, doc, 0, 0, 40, 20, 10)
-	drilled, err := decad.Cut(t.Context(), plate, pinAlongX(t, doc, -5, 50))
+	drilled, err := decad.Cut(plate, pinAlongX(t, doc, -5, 50)).Do(t.Context())
 	require.NoError(t, err)
 	require.False(t, tookMeshPath(drilled))
-	got, err := decad.Union(t.Context(), drilled, bossAlongZ(t, doc, 20, 10, 10, 15))
+	got, err := decad.Union(drilled, bossAlongZ(t, doc, 20, 10, 10, 15)).Do(t.Context())
 	require.NoError(t, err)
 	requireExactFlushResult(t, got, 9, 8000-225*math.Pi)
 }
@@ -191,12 +191,12 @@ func TestClassBFlushPinSenses(t *testing.T) {
 			pin := pinFromYZ(t, doc, tc.planeX, tc.dir, tc.length)
 			pinVolume := 9 * math.Pi * tc.length
 			if tc.union {
-				got, err := decad.Union(t.Context(), plate, pin)
+				got, err := decad.Union(plate, pin).Do(t.Context())
 				require.NoError(t, err)
 				requireExactFlushResult(t, got, 8, 8000+pinVolume)
 				return
 			}
-			got, err := decad.Cut(t.Context(), plate, pin)
+			got, err := decad.Cut(plate, pin).Do(t.Context())
 			require.NoError(t, err)
 			requireExactFlushResult(t, got, 8, 8000-pinVolume)
 		})
@@ -218,7 +218,7 @@ func notchedPlate(t *testing.T, doc *decad.Document) *decad.Body {
 func TestClassBFlushPinBothCapsInTargetPlanes(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
-	got, err := decad.Cut(t.Context(), notchedPlate(t, doc), pinAlongX(t, doc, 25, 15))
+	got, err := decad.Cut(notchedPlate(t, doc), pinAlongX(t, doc, 25, 15)).Do(t.Context())
 	require.NoError(t, err)
 	requireExactFlushResult(t, got, 10, 13000-135*math.Pi)
 }
@@ -238,8 +238,8 @@ func TestClassBFlushPinMisses(t *testing.T) {
 			return boxBody(t, doc, 0, 0, 40, 20, 10), pinAlongX(t, doc, x0, length)
 		}
 	}
-	union := func(t *testing.T, a, b *decad.Body) (*decad.Body, error) { return decad.Union(t.Context(), a, b) }
-	cut := func(t *testing.T, a, b *decad.Body) (*decad.Body, error) { return decad.Cut(t.Context(), a, b) }
+	union := func(t *testing.T, a, b *decad.Body) (*decad.Body, error) { return decad.Union(a, b).Do(t.Context()) }
+	cut := func(t *testing.T, a, b *decad.Body) (*decad.Body, error) { return decad.Cut(a, b).Do(t.Context()) }
 	for _, tc := range []struct {
 		name string
 		pair pair
@@ -273,7 +273,7 @@ func TestClassBFlushPinMisses(t *testing.T) {
 	}
 	// A pin outside the plate shares only the disk with it.
 	doc := decad.New()
-	common, err := decad.Intersect(t.Context(), boxBody(t, doc, 0, 0, 40, 20, 10), pinAlongX(t, doc, 40, 15))
+	common, err := decad.Intersect(boxBody(t, doc, 0, 0, 40, 20, 10), pinAlongX(t, doc, 40, 15)).Do(t.Context())
 	require.Nil(t, common)
 	var boolean *decad.BooleanError
 	require.ErrorAs(t, err, &boolean)

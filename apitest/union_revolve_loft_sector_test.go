@@ -22,7 +22,7 @@ func TestUnionTaperedHubAndRadialLug(t *testing.T) {
 	_ = lugSketch
 	hubVolume, err := hub.Volume()
 	require.NoError(t, err)
-	joined, err := decad.Union(t.Context(), hub, trimmed)
+	joined, err := decad.Union(hub, trimmed).Do(t.Context())
 	require.NoError(t, err)
 	mesh, err := joined.Tessellate(t.Context(), units.Millimeters(0.1),
 		decad.WithVerification(decad.VerifyAll))
@@ -42,7 +42,7 @@ func TestUnionTaperedHubAndFittedRadialLug(t *testing.T) {
 	_, hub, trimmed, _, splitCap := taperedHubAndRadialLug(t, 9, 7.5, 4.3, true)
 	hubVolume, err := hub.Volume()
 	require.NoError(t, err)
-	joined, err := decad.Union(t.Context(), hub, trimmed)
+	joined, err := decad.Union(hub, trimmed).Do(t.Context())
 	require.NoError(t, err)
 	mesh, err := joined.Tessellate(t.Context(), units.Millimeters(0.1),
 		decad.WithVerification(decad.VerifyAll))
@@ -63,7 +63,7 @@ func TestUnionShoulderedHubAndRadialLug(t *testing.T) {
 	_, hub, trimmed := shoulderedHubAndRadialLug(t)
 	hubVolume, err := hub.Volume()
 	require.NoError(t, err)
-	joined, err := decad.Union(t.Context(), hub, trimmed)
+	joined, err := decad.Union(hub, trimmed).Do(t.Context())
 	require.NoError(t, err)
 	mesh, err := joined.Tessellate(t.Context(), units.Millimeters(0.1),
 		decad.WithVerification(decad.VerifyAll))
@@ -82,7 +82,7 @@ func TestUnionSlopedHubCapAndRadialLug(t *testing.T) {
 	_, hub, trimmed, _, splitCap := taperedHubAndRadialLug(t, 8.99, 7.5, 4.3, false)
 	hubVolume, err := hub.Volume()
 	require.NoError(t, err)
-	joined, err := decad.Union(t.Context(), hub, trimmed)
+	joined, err := decad.Union(hub, trimmed).Do(t.Context())
 	require.NoError(t, err)
 	mesh, err := joined.Tessellate(t.Context(), units.Millimeters(0.1),
 		decad.WithVerification(decad.VerifyAll))
@@ -104,11 +104,11 @@ func TestUnionShoulderedHubAndTwoRadialLugs(t *testing.T) {
 	require.NoError(t, err)
 	turn, err := r3.Rotation(r3.Vec{X: 1}, units.Degrees(180))
 	require.NoError(t, err)
-	second, err := decad.Copy(t.Context(), trimmed, decad.WithCopyPlacement(turn))
+	second, err := decad.Copy(trimmed).Place(decad.CopyTransform{Transform: turn}).Do(t.Context())
 	require.NoError(t, err)
-	joined, err := decad.Union(t.Context(), hub, trimmed)
+	joined, err := decad.Union(hub, trimmed).Do(t.Context())
 	require.NoError(t, err)
-	joined, err = decad.Union(t.Context(), joined, second)
+	joined, err = decad.Union(joined, second).Do(t.Context())
 	require.NoError(t, err)
 	mesh, err := joined.Tessellate(t.Context(), units.Millimeters(0.1),
 		decad.WithVerification(decad.VerifyAll))
@@ -146,8 +146,8 @@ func TestUnionSixSpanHubSerialRadialLugs(t *testing.T) {
 	require.NoError(t, err)
 	profiles := section.Profiles()
 	require.Len(t, profiles, 1)
-	hub, err := decad.Revolve(t.Context(), doc, section, profiles[0],
-		decad.SketchLine{Start: decad.Point2{}, End: decad.Point2{U: 1}}, decad.FullRevolution{})
+	hub, err := decad.Revolve(doc, section, profiles[0],
+		decad.SketchLine{Start: decad.Point2{}, End: decad.Point2{U: 1}}, decad.FullRevolution{}).Do(t.Context())
 	require.NoError(t, err)
 	hubVolume, err := hub.Volume()
 	require.NoError(t, err)
@@ -155,14 +155,14 @@ func TestUnionSixSpanHubSerialRadialLugs(t *testing.T) {
 	for _, degrees := range []float64{120, 240} {
 		turn, turnErr := r3.Rotation(r3.Vec{X: 1}, units.Degrees(degrees))
 		require.NoError(t, turnErr)
-		placedCopy, copyErr := decad.Copy(t.Context(), trimmed, decad.WithCopyPlacement(turn))
+		placedCopy, copyErr := decad.Copy(trimmed).Place(decad.CopyTransform{Transform: turn}).Do(t.Context())
 		require.NoError(t, copyErr)
 		placed = append(placed, placedCopy)
 	}
-	joined, err := decad.Union(t.Context(), hub, trimmed)
+	joined, err := decad.Union(hub, trimmed).Do(t.Context())
 	require.NoError(t, err)
 	for _, placedCopy := range placed {
-		joined, err = decad.Union(t.Context(), joined, placedCopy)
+		joined, err = decad.Union(joined, placedCopy).Do(t.Context())
 		require.NoError(t, err)
 	}
 	mesh, err := joined.Tessellate(t.Context(), units.Millimeters(0.1),
@@ -181,9 +181,9 @@ func TestUnionShoulderedHubAndTwoRadialLugsVariadic(t *testing.T) {
 	_, hub, trimmed := shoulderedHubAndRadialLug(t)
 	turn, err := r3.Rotation(r3.Vec{X: 1}, units.Degrees(180))
 	require.NoError(t, err)
-	second, err := decad.Copy(t.Context(), trimmed, decad.WithCopyPlacement(turn))
+	second, err := decad.Copy(trimmed).Place(decad.CopyTransform{Transform: turn}).Do(t.Context())
 	require.NoError(t, err)
-	joined, err := decad.Union(t.Context(), hub, trimmed, second)
+	joined, err := decad.Union(hub, trimmed, second).Do(t.Context())
 	require.NoError(t, err)
 	mesh, err := joined.Tessellate(t.Context(), units.Millimeters(0.1),
 		decad.WithVerification(decad.VerifyAll))
@@ -201,10 +201,10 @@ func TestUnionShoulderedHubAndThreeRadialLugsVariadic(t *testing.T) {
 	for i, degrees := range []float64{120, 240} {
 		turn, err := r3.Rotation(r3.Vec{X: 1}, units.Degrees(degrees))
 		require.NoError(t, err)
-		placed[i], err = decad.Copy(t.Context(), trimmed, decad.WithCopyPlacement(turn))
+		placed[i], err = decad.Copy(trimmed).Place(decad.CopyTransform{Transform: turn}).Do(t.Context())
 		require.NoError(t, err)
 	}
-	joined, err := decad.Union(t.Context(), hub, trimmed, placed[0], placed[1])
+	joined, err := decad.Union(hub, trimmed, placed[0], placed[1]).Do(t.Context())
 	require.NoError(t, err)
 	mesh, err := joined.Tessellate(t.Context(), units.Millimeters(0.1),
 		decad.WithVerification(decad.VerifyAll))
@@ -231,15 +231,15 @@ func TestUnionShoulderedHubWithNearAxisCopy(t *testing.T) {
 			require.NoError(t, err)
 			turn, err := r3.Rotation(r3.NewVec(1, 0, 0), units.Radians(2*math.Pi*5/16))
 			require.NoError(t, err)
-			copyOfLug, err := decad.Copy(t.Context(), trimmed, decad.WithCopyPlacement(turn))
+			copyOfLug, err := decad.Copy(trimmed).Place(decad.CopyTransform{Transform: turn}).Do(t.Context())
 			require.NoError(t, err)
 			var joined *decad.Body
 			if serial {
-				joined, err = decad.Union(t.Context(), hub, trimmed)
+				joined, err = decad.Union(hub, trimmed).Do(t.Context())
 				require.NoError(t, err)
-				joined, err = decad.Union(t.Context(), joined, copyOfLug)
+				joined, err = decad.Union(joined, copyOfLug).Do(t.Context())
 			} else {
-				joined, err = decad.Union(t.Context(), hub, trimmed, copyOfLug)
+				joined, err = decad.Union(hub, trimmed, copyOfLug).Do(t.Context())
 			}
 			require.NoError(t, err)
 			mesh, err := joined.Tessellate(t.Context(), units.Millimeters(0.1),
@@ -261,14 +261,14 @@ func TestUnionNearAxisCopyOverlapLeavesInputsLive(t *testing.T) {
 	doc, hub, trimmed := shoulderedHubAndRadialLug(t)
 	farTurn, err := r3.Rotation(r3.NewVec(1, 0, 0), units.Radians(2*math.Pi*5/16))
 	require.NoError(t, err)
-	farCopy, err := decad.Copy(t.Context(), trimmed, decad.WithCopyPlacement(farTurn))
+	farCopy, err := decad.Copy(trimmed).Place(decad.CopyTransform{Transform: farTurn}).Do(t.Context())
 	require.NoError(t, err)
 	nearTurn, err := r3.Rotation(r3.NewVec(1, 0, 0), units.Degrees(5))
 	require.NoError(t, err)
-	nearCopy, err := decad.Copy(t.Context(), trimmed, decad.WithCopyPlacement(nearTurn))
+	nearCopy, err := decad.Copy(trimmed).Place(decad.CopyTransform{Transform: nearTurn}).Do(t.Context())
 	require.NoError(t, err)
 	before := doc.Bodies()
-	_, err = decad.Union(t.Context(), hub, trimmed, farCopy, nearCopy)
+	_, err = decad.Union(hub, trimmed, farCopy, nearCopy).Do(t.Context())
 	require.ErrorContains(t, err, "complete sector sources are not separate")
 	require.Equal(t, before, doc.Bodies())
 }
@@ -277,10 +277,10 @@ func TestUnionShoulderedHubOverlappingLugsLeaveInputsLive(t *testing.T) {
 	doc, hub, trimmed := shoulderedHubAndRadialLug(t)
 	turn, err := r3.Rotation(r3.Vec{X: 1}, units.Degrees(5))
 	require.NoError(t, err)
-	second, err := decad.Copy(t.Context(), trimmed, decad.WithCopyPlacement(turn))
+	second, err := decad.Copy(trimmed).Place(decad.CopyTransform{Transform: turn}).Do(t.Context())
 	require.NoError(t, err)
 	before := doc.Bodies()
-	_, err = decad.Union(t.Context(), hub, trimmed, second)
+	_, err = decad.Union(hub, trimmed, second).Do(t.Context())
 	require.Error(t, err)
 	require.Equal(t, before, doc.Bodies())
 }
@@ -308,8 +308,8 @@ func shoulderedHubAndRadialLug(t *testing.T) (*decad.Document, *decad.Body, *dec
 	require.NoError(t, err)
 	profiles := section.Profiles()
 	require.Len(t, profiles, 1)
-	hub, err := decad.Revolve(t.Context(), doc, section, profiles[0],
-		decad.SketchLine{Start: decad.Point2{}, End: decad.Point2{U: 1}}, decad.FullRevolution{})
+	hub, err := decad.Revolve(doc, section, profiles[0],
+		decad.SketchLine{Start: decad.Point2{}, End: decad.Point2{U: 1}}, decad.FullRevolution{}).Do(t.Context())
 	require.NoError(t, err)
 	require.Greater(t, len(hub.Faces()), 5, "the shoulder must add an effective meridian side")
 	return doc, hub, trimmed
@@ -370,8 +370,8 @@ func taperedHubAndRadialLugWidth(t testing.TB, splitU, toeApex, rootRadius, half
 	require.NoError(t, err)
 	profiles := section.Profiles()
 	require.Len(t, profiles, 1)
-	hub, err := decad.Revolve(t.Context(), doc, section, profiles[0],
-		decad.SketchLine{Start: decad.Point2{}, End: decad.Point2{U: 1}}, decad.FullRevolution{})
+	hub, err := decad.Revolve(doc, section, profiles[0],
+		decad.SketchLine{Start: decad.Point2{}, End: decad.Point2{U: 1}}, decad.FullRevolution{}).Do(t.Context())
 	require.NoError(t, err)
 	var splitCap []decad.FeatureRef
 	for _, face := range hub.Faces() {
@@ -427,11 +427,11 @@ func taperedHubAndRadialLugWidth(t testing.TB, splitU, toeApex, rootRadius, half
 	require.NoError(t, err)
 	lugProfiles := lugSketch.Profiles()
 	require.Len(t, lugProfiles, 1)
-	lug, err := decad.LoftFromPoint(t.Context(), doc, r3.Vec{}, lugSketch, lugProfiles[0])
+	lug, err := decad.LoftFromPoint(doc, r3.Vec{}, lugSketch, lugProfiles[0]).Do(t.Context())
 	require.NoError(t, err)
-	toeTrim, err := decad.Cut(t.Context(), lug, pointConeTool(t, doc, toeApex))
+	toeTrim, err := decad.Cut(lug, pointConeTool(t, doc, toeApex)).Do(t.Context())
 	require.NoError(t, err)
-	trimmed, err := decad.Intersect(t.Context(), toeTrim, pointConeTool(t, doc, 12))
+	trimmed, err := decad.Intersect(toeTrim, pointConeTool(t, doc, 12)).Do(t.Context())
 	require.NoError(t, err)
 	return doc, hub, trimmed, lugSketch, splitCap
 }
@@ -468,7 +468,7 @@ func TestUnionTaperedHubRadialLugRefusals(t *testing.T) {
 				stop()
 			}
 			before := doc.Bodies()
-			_, err := decad.Union(ctx, hub, trimmed)
+			_, err := decad.Union(hub, trimmed).Do(ctx)
 			require.Error(t, err)
 			require.Equal(t, before, doc.Bodies())
 		})

@@ -35,10 +35,10 @@ func TestDistanceToPointFreePath(t *testing.T) {
 		// Both subtests mutate body's document through Copy and Transform, and a
 		// Document is not safe for concurrent mutation, so they run in sequence.
 		t.Run(m.name, func(t *testing.T) {
-			b, err := decad.Copy(t.Context(), body)
+			b, err := decad.Copy(body).Do(t.Context())
 			require.NoError(t, err)
 			if m.name != "as built" {
-				b, err = decad.Transform(t.Context(), b, m.xf)
+				b, err = decad.Transform(b, m.xf).Do(t.Context())
 				require.NoError(t, err)
 			}
 			// Points in the bore, 0.3 and 1.3 from its wall of radius 2.8.

@@ -59,8 +59,8 @@ func axisRevolve(t *testing.T, doc *Document, u, v r3.Vec, end planePoint, outli
 	require.NoError(t, err)
 	profiles := s.Profiles()
 	require.Len(t, profiles, 1)
-	body, err := Revolve(t.Context(), doc, s, profiles[0], SketchLine{Start: planePoint{}, End: end},
-		FullRevolution{})
+	body, err := Revolve(doc, s, profiles[0], SketchLine{Start: planePoint{}, End: end},
+		FullRevolution{}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -115,11 +115,11 @@ func axisLug(t *testing.T, doc *Document, origin, u, v r3.Vec, fitted bool, toe,
 	require.NoError(t, err)
 	profiles := s.Profiles()
 	require.Len(t, profiles, 1)
-	lug, err := LoftFromPoint(t.Context(), doc, r3.Vec{}, s, profiles[0])
+	lug, err := LoftFromPoint(doc, r3.Vec{}, s, profiles[0]).Do(t.Context())
 	require.NoError(t, err)
-	cut, err := Cut(t.Context(), lug, toe)
+	cut, err := Cut(lug, toe).Do(t.Context())
 	require.NoError(t, err)
-	trimmed, err := Intersect(t.Context(), cut, heel)
+	trimmed, err := Intersect(cut, heel).Do(t.Context())
 	require.NoError(t, err)
 	return trimmed
 }
@@ -540,8 +540,8 @@ func TestSectionAboutAxisRefusals(t *testing.T) {
 		doc := New()
 		blank := coneGapHub(t, doc, [][2]float64{{5, 0}, {15, 0}, {15, 10}, {12, 6}, {7, 1}})
 		before, producer := doc.Bodies(), doc.producerAt(t.Context())
-		_, err := ConeFromFace(t.Context(), blank, coneFromFaceSelector(t, blank, planePoint{U: 1, V: 3},
-			planePoint{V: 6}), units.Millimeters(-1))
+		_, err := ConeFromFace(blank, coneFromFaceSelector(t, blank, planePoint{U: 1, V: 3},
+			planePoint{V: 6}), units.Millimeters(-1)).Do(t.Context())
 		require.ErrorIs(t, err, ErrUnsupported)
 		require.ErrorContains(t, err, "about X")
 		require.Equal(t, before, doc.Bodies())
@@ -564,7 +564,7 @@ func TestSectorUnionAcceptsGeneralCertificate(t *testing.T) {
 		s5 := math.Sqrt(5)
 		turn, err := r3.Rotation(r3.Vec{X: 1 / s5, Y: 2 / s5}, units.Degrees(180))
 		require.NoError(t, err)
-		second, err := Copy(t.Context(), f.lug, WithCopyPlacement(turn))
+		second, err := Copy(f.lug).Place(CopyTransform{Transform: turn}).Do(t.Context())
 		require.NoError(t, err)
 		return f, second
 	}
@@ -588,17 +588,17 @@ func TestSectorUnionAcceptsGeneralCertificate(t *testing.T) {
 		if swapped {
 			a, b = b, a
 		}
-		joined, err := Union(t.Context(), a, b)
+		joined, err := Union(a, b).Do(t.Context())
 		require.NoError(t, err)
 		requireGeneralJoin(f, hubVolume, joined, 0)
-		serial, err := Union(t.Context(), joined, second)
+		serial, err := Union(joined, second).Do(t.Context())
 		require.NoError(t, err)
 		requireGeneralJoin(f, hubVolume, serial, 1)
 	}
 	f, second := fixture()
 	hubVolume, err := f.hub.Volume()
 	require.NoError(t, err)
-	variadic, err := Union(t.Context(), second, f.hub, f.lug)
+	variadic, err := Union(second, f.hub, f.lug).Do(t.Context())
 	require.NoError(t, err)
 	requireGeneralJoin(f, hubVolume, variadic, 1)
 }
@@ -631,7 +631,7 @@ func TestSectorTraceRefusesToothStraddlingBranchCut(t *testing.T) {
 		}
 		require.ErrorIs(t, err, ErrUnsupported)
 		before := doc.Bodies()
-		_, err = Union(t.Context(), f.hub, f.lug)
+		_, err = Union(f.hub, f.lug).Do(t.Context())
 		require.ErrorIs(t, err, ErrUnsupported)
 		require.Equal(t, before, doc.Bodies())
 	}

@@ -24,7 +24,7 @@ const saddleR = 10.0
 func saddleShaft(t *testing.T, r, y float64, opts ...decad.DocumentOption) (*decad.Body, *retentionScene) {
 	t.Helper()
 	sc := &retentionScene{w: sketch.NewWorld(), doc: decad.New(opts...)}
-	body, err := decad.Cut(t.Context(), saddleRevolve(t, sc), saddlePin(t, sc, r, y))
+	body, err := decad.Cut(saddleRevolve(t, sc), saddlePin(t, sc, r, y)).Do(t.Context())
 	require.NoError(t, err)
 	return body, sc
 }
@@ -39,15 +39,15 @@ func saddleExtrudedCylinder(t *testing.T, sc *retentionScene, plane *sketch.Plan
 	s.CreateCircle(c, radius)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	b, err := decad.Extrude(t.Context(), sc.doc, s, s.Profiles()[0],
-		decad.Symmetric{D: units.Millimeters(length)})
+	b, err := decad.Extrude(sc.doc, s, s.Profiles()[0],
+		decad.Symmetric{D: units.Millimeters(length)}).Do(t.Context())
 	require.NoError(t, err)
 	if move == (r3.Vec{}) {
 		return b
 	}
 	m, err := r3.Translation(move)
 	require.NoError(t, err)
-	b, err = decad.Transform(t.Context(), b, m)
+	b, err = decad.Transform(b, m).Do(t.Context())
 	require.NoError(t, err)
 	return b
 }
@@ -64,14 +64,14 @@ func saddleShaftWithFlatBesideMouth(t *testing.T) *decad.Body {
 	s.Fix(rect.C)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	box, err := decad.Extrude(t.Context(), sc.doc, s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
+	box, err := decad.Extrude(sc.doc, s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(20), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	move, err := r3.Translation(r3.Vec{Z: 9.8})
 	require.NoError(t, err)
-	flat, err := decad.Transform(t.Context(), box, move)
+	flat, err := decad.Transform(box, move).Do(t.Context())
 	require.NoError(t, err)
-	body, err = decad.Cut(t.Context(), body, flat)
+	body, err = decad.Cut(body, flat).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -87,7 +87,7 @@ func saddleRevolve(t *testing.T, sc *retentionScene) *decad.Body {
 	s.Fix(rect.C)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	shaft, err := decad.Revolve(t.Context(), sc.doc, s, s.Profiles()[0], uAxis, decad.FullRevolution{})
+	shaft, err := decad.Revolve(sc.doc, s, s.Profiles()[0], uAxis, decad.FullRevolution{}).Do(t.Context())
 	require.NoError(t, err)
 	return shaft
 }
@@ -104,8 +104,8 @@ func saddlePin(t *testing.T, sc *retentionScene, r, y float64) *decad.Body {
 	s.CreateCircle(c, r)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	pin, err := decad.Extrude(t.Context(), sc.doc, s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(30), Dir: decad.Along})
+	pin, err := decad.Extrude(sc.doc, s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(30), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	return pin
 }
@@ -269,7 +269,7 @@ func TestRetainedSaddleChamfer(t *testing.T) {
 				}
 			}
 
-			out, err := decad.Chamfer(t.Context(), body, sel, units.Millimeters(tc.d))
+			out, err := decad.Chamfer(body, sel, units.Millimeters(tc.d)).Do(t.Context())
 			require.NoError(t, err)
 			after, err := out.Volume()
 			require.NoError(t, err)
@@ -353,37 +353,37 @@ func TestRetainedSaddleChamferRefusals(t *testing.T) {
 	t.Run("a setback past half the bore's radius", func(t *testing.T) {
 		t.Parallel()
 		body, _ := saddleShaft(t, 3, 0)
-		_, err := decad.Chamfer(t.Context(), body, saddleMouths(t, body, 3, 0), units.Millimeters(1.6))
+		_, err := decad.Chamfer(body, saddleMouths(t, body, 3, 0), units.Millimeters(1.6)).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.ErrorContains(t, err, "a saddle chamfer's setback is past half the bore's radius")
 	})
 	t.Run("a pin off the shaft's axis", func(t *testing.T) {
 		t.Parallel()
 		body, _ := saddleShaft(t, 3, 0.5)
-		_, err := decad.Chamfer(t.Context(), body, saddleMouths(t, body, 3, 0.5), units.Millimeters(0.5))
+		_, err := decad.Chamfer(body, saddleMouths(t, body, 3, 0.5), units.Millimeters(0.5)).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.ErrorContains(t, err, crossingCylindersReason)
 	})
 	t.Run("a bore at or past 1/sqrt(2) of the shaft", func(t *testing.T) {
 		t.Parallel()
 		body, _ := saddleShaft(t, 7.5, 0)
-		_, err := decad.Chamfer(t.Context(), body, saddleMouths(t, body, 7.5, 0), units.Millimeters(0.5))
+		_, err := decad.Chamfer(body, saddleMouths(t, body, 7.5, 0), units.Millimeters(0.5)).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.ErrorContains(t, err, crossingCylindersReason)
 	})
 	t.Run("a pin joined through the shaft", func(t *testing.T) {
 		t.Parallel()
 		sc := newRetentionScene()
-		body, err := decad.Union(t.Context(), saddleRevolve(t, sc), saddlePin(t, sc, 3, 0))
+		body, err := decad.Union(saddleRevolve(t, sc), saddlePin(t, sc, 3, 0)).Do(t.Context())
 		require.NoError(t, err)
-		_, err = decad.Chamfer(t.Context(), body, saddleMouths(t, body, 3, 0), units.Millimeters(0.5))
+		_, err = decad.Chamfer(body, saddleMouths(t, body, 3, 0), units.Millimeters(0.5)).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.ErrorContains(t, err, crossingCylindersReason)
 	})
 	t.Run("a flat milled beside the mouth", func(t *testing.T) {
 		t.Parallel()
 		body := saddleShaftWithFlatBesideMouth(t)
-		_, err := decad.Chamfer(t.Context(), body, saddleMouths(t, body, 3, 0), units.Millimeters(1.5))
+		_, err := decad.Chamfer(body, saddleMouths(t, body, 3, 0), units.Millimeters(1.5)).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.ErrorContains(t, err, "another face of the body comes within the saddle chamfer's reach")
 	})
@@ -424,9 +424,7 @@ func TestRetainedSaddleChamferExtrudeShaft(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			sc := newRetentionScene()
-			body, err := decad.Cut(t.Context(),
-				saddleExtrudedCylinder(t, sc, tc.shaft(sc.w), saddleR, 40, tc.move),
-				saddleExtrudedCylinder(t, sc, tc.bore(sc.w), r, 30, tc.move))
+			body, err := decad.Cut(saddleExtrudedCylinder(t, sc, tc.shaft(sc.w), saddleR, 40, tc.move), saddleExtrudedCylinder(t, sc, tc.bore(sc.w), r, 30, tc.move)).Do(t.Context())
 			require.NoError(t, err)
 			at := func(p r3.Vec, i int) float64 { return [3]float64{p.X, p.Y, p.Z}[i] }
 			var q *decad.EdgeQuery
@@ -452,7 +450,7 @@ func TestRetainedSaddleChamferExtrudeShaft(t *testing.T) {
 			require.Equal(t, len(signs), n, "the selected mouths of the cross hole")
 			before, err := body.Volume()
 			require.NoError(t, err)
-			out, err := decad.Chamfer(t.Context(), body, q.Exactly(n), units.Millimeters(d))
+			out, err := decad.Chamfer(body, q.Exactly(n), units.Millimeters(d)).Do(t.Context())
 			require.NoError(t, err)
 			after, err := out.Volume()
 			require.NoError(t, err)

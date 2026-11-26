@@ -94,7 +94,7 @@ func TestLoftSectionsCircularFitOffCenter(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			sections := circularFitSectionsAtCenter(t, [2]float64{}, 0, 1, tc.center)
 			doc := decad.New()
-			body, err := decad.LoftSections(t.Context(), doc, sections...)
+			body, err := decad.LoftSections(doc, sections...).Do(t.Context())
 			if !tc.want {
 				require.ErrorIs(t, err, decad.ErrUnsupported)
 				require.Empty(t, doc.Bodies())
@@ -158,7 +158,7 @@ func TestLoftSectionsCircularFitFlatQuarter(t *testing.T) {
 		}
 		require.NotNil(t, sections[i].Profile)
 	}
-	body, err := decad.LoftSections(t.Context(), decad.New(), sections...)
+	body, err := decad.LoftSections(decad.New(), sections...).Do(t.Context())
 	require.NoError(t, err)
 	mesh, err := body.Tessellate(t.Context(), units.Millimeters(0.05), decad.WithVerification(decad.VerifyAll))
 	require.NoError(t, err)
@@ -216,7 +216,7 @@ func TestLoftSectionsCircularFitFlatQuarter(t *testing.T) {
 		correspondence.Numerators[i] = []int64{0, 1, 3}
 		correspondence.Denominators[i] = 3
 	}
-	explicit, err := decad.LoftSectionsWithCircularCorrespondence(t.Context(), decad.New(), correspondence, sections...)
+	explicit, err := decad.LoftSections(decad.New(), sections...).CircularCorrespondence(correspondence).Do(t.Context())
 	require.NoError(t, err)
 	explicitMesh, err := explicit.Tessellate(t.Context(), units.Millimeters(0.05), decad.WithVerification(decad.VerifyAll))
 	require.NoError(t, err)
@@ -259,7 +259,7 @@ func TestCircularLoftCorrespondenceRejectsInvalidMaps(t *testing.T) {
 			}
 			correspondence.Numerators[0], correspondence.Denominators[0] = tc.controls, tc.denominator
 			doc := decad.New()
-			_, err := decad.LoftSectionsWithCircularCorrespondence(t.Context(), doc, correspondence, make([]decad.LoftSection, 3)...)
+			_, err := decad.LoftSections(doc, make([]decad.LoftSection, 3)...).CircularCorrespondence(correspondence).Do(t.Context())
 			require.ErrorIs(t, err, decad.ErrUnsupported)
 			require.Empty(t, doc.Bodies())
 		})
@@ -316,12 +316,12 @@ func TestCircularLoftCorrespondenceSmoothCircularBands(t *testing.T) {
 	for i := range correspondence.Numerators {
 		correspondence.Numerators[i], correspondence.Denominators[i] = []int64{0, 1, 3}, 3
 	}
-	linear, err := decad.LoftSectionsWithCircularCorrespondence(t.Context(), decad.New(), correspondence, sections...)
+	linear, err := decad.LoftSections(decad.New(), sections...).CircularCorrespondence(correspondence).Do(t.Context())
 	require.NoError(t, err)
 	linearMesh, err := linear.Tessellate(t.Context(), units.Millimeters(0.05), decad.WithVerification(decad.VerifyAll))
 	require.NoError(t, err)
 	correspondence.SmoothCircularBands = true
-	smooth, err := decad.LoftSectionsWithCircularCorrespondence(t.Context(), decad.New(), correspondence, sections...)
+	smooth, err := decad.LoftSections(decad.New(), sections...).CircularCorrespondence(correspondence).Do(t.Context())
 	require.NoError(t, err)
 	smoothMesh, err := smooth.Tessellate(t.Context(), units.Millimeters(0.05), decad.WithVerification(decad.VerifyAll))
 	require.NoError(t, err)
@@ -416,7 +416,7 @@ func TestLoftSectionsCircularFitFlatQuarterRecordedKnots(t *testing.T) {
 		}
 		require.NotNil(t, sections[i].Profile)
 	}
-	body, err := decad.LoftSections(t.Context(), decad.New(), sections...)
+	body, err := decad.LoftSections(decad.New(), sections...).Do(t.Context())
 	require.NoError(t, err)
 	mesh, err := body.Tessellate(t.Context(), units.Millimeters(0.05), decad.WithVerification(decad.VerifyAll))
 	require.NoError(t, err)
@@ -478,7 +478,7 @@ func TestLoftSectionsCircularFitRefusesDifferentRecordDirections(t *testing.T) {
 		require.NotNil(t, sections[i].Profile)
 	}
 	doc := decad.New()
-	_, err := decad.LoftSections(t.Context(), doc, sections...)
+	_, err := decad.LoftSections(doc, sections...).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.ErrorContains(t, err, "spline record directions differ")
 	require.Empty(t, doc.Bodies())
@@ -556,7 +556,7 @@ func TestLoftSectionsCircularFitDiamond(t *testing.T) {
 	t.Parallel()
 	sections := circularFitSections(t, [2]float64{}, 0, 1)
 	doc := decad.New()
-	body, err := decad.LoftSections(t.Context(), doc, sections...)
+	body, err := decad.LoftSections(doc, sections...).Do(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, decad.BodySolid, body.Kind())
 	require.Len(t, body.Faces(), 6)
@@ -589,7 +589,7 @@ func TestLoftSectionsCircularFitVariesAndRefusesAtomically(t *testing.T) {
 	t.Parallel()
 	sections := circularFitSections(t, [2]float64{0.08, 0.15}, 0, 1)
 	doc := decad.New()
-	body, err := decad.LoftSections(t.Context(), doc, sections...)
+	body, err := decad.LoftSections(doc, sections...).Do(t.Context())
 	require.NoError(t, err)
 	require.Len(t, body.Faces(), 6)
 	for i := range 4 {
@@ -629,12 +629,12 @@ func TestLoftSectionsCircularFitVariesAndRefusesAtomically(t *testing.T) {
 	cancelled, cancel := context.WithCancel(t.Context())
 	cancel()
 	before := len(doc.Bodies())
-	_, err = decad.LoftSections(cancelled, doc, sections...)
+	_, err = decad.LoftSections(doc, sections...).Do(cancelled)
 	require.ErrorIs(t, err, context.Canceled)
 	require.Len(t, doc.Bodies(), before)
 	// A zero-area polar crossing is refused before a body is committed.
 	bad := circularFitSections(t, [2]float64{-0.6, -0.6}, 0, 1)
-	_, err = decad.LoftSections(t.Context(), doc, bad...)
+	_, err = decad.LoftSections(doc, bad...).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.Len(t, doc.Bodies(), before)
 }
@@ -642,7 +642,7 @@ func TestLoftSectionsCircularFitVariesAndRefusesAtomically(t *testing.T) {
 func TestLoftSectionsCircularFitRotatedSourceSeam(t *testing.T) {
 	t.Parallel()
 	sections := circularFitSections(t, [2]float64{}, 1, 1)
-	body, err := decad.LoftSections(t.Context(), decad.New(), sections...)
+	body, err := decad.LoftSections(decad.New(), sections...).Do(t.Context())
 	require.NoError(t, err)
 	require.Len(t, body.Faces(), 6)
 	ref := featureRefWithRole(t, body, "side(0,0)")
@@ -658,7 +658,7 @@ func TestLoftSectionsCircularFitTransverseHole(t *testing.T) {
 	t.Parallel()
 	sections := circularFitSections(t, [2]float64{0.08, 0.15}, 0, 2)
 	doc := decad.New()
-	body, err := decad.LoftSections(t.Context(), doc, sections...)
+	body, err := decad.LoftSections(doc, sections...).Do(t.Context())
 	require.NoError(t, err)
 	mesh, err := body.Tessellate(t.Context(), units.Millimeters(0.05), decad.WithVerification(decad.VerifyAll))
 	require.NoError(t, err)
@@ -677,10 +677,10 @@ func TestLoftSectionsCircularFitTransverseHole(t *testing.T) {
 	s.CreateCircle(center, 0.1)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	tool, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(4), Dir: decad.Along})
+	tool, err := decad.Extrude(doc, s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(4), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
-	bored, err := decad.Cut(t.Context(), body, tool)
+	bored, err := decad.Cut(body, tool).Do(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, decad.BodySolid, bored.Kind())
 	cutMesh, err := bored.Tessellate(t.Context(), units.Millimeters(0.05), decad.WithVerification(decad.VerifyAll))
@@ -705,10 +705,10 @@ func TestLoftSectionsCircularFitTransverseHole(t *testing.T) {
 	second.CreateCircle(secondCenter, 0.1)
 	_, err = second.Solve(t.Context())
 	require.NoError(t, err)
-	secondTool, err := decad.Extrude(t.Context(), doc, second, second.Profiles()[0],
-		decad.Distance{D: units.Millimeters(4), Dir: decad.Along})
+	secondTool, err := decad.Extrude(doc, second, second.Profiles()[0],
+		decad.Distance{D: units.Millimeters(4), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
-	chained, err := decad.Cut(t.Context(), bored, secondTool)
+	chained, err := decad.Cut(bored, secondTool).Do(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, decad.BodySolid, chained.Kind())
 	chainedMesh, err := chained.Tessellate(t.Context(), units.Millimeters(0.05), decad.WithVerification(decad.VerifyAll))

@@ -22,8 +22,8 @@ import (
 func collarSpindle(t *testing.T, doc *decad.Document) *decad.Body {
 	t.Helper()
 	s, profile := polygonSketch(t, [][2]float64{{0, 0}, {4, 0}, {4, 10}, {6, 10}, {6, 12}, {4, 12}, {4, 40}, {0, 40}})
-	body, err := decad.Revolve(t.Context(), doc, s, profile,
-		decad.SketchLine{End: decad.Point2{V: 1}}, decad.FullRevolution{})
+	body, err := decad.Revolve(doc, s, profile,
+		decad.SketchLine{End: decad.Point2{V: 1}}, decad.FullRevolution{}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -42,14 +42,14 @@ func yBearing(t *testing.T, doc *decad.Document, cx, y0, bore float64) *decad.Bo
 	}
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(8), Dir: decad.Along})
+	body, err := decad.Extrude(doc, s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(8), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	box, err := body.Bounds()
 	require.NoError(t, err)
 	move, err := r3.Translation(r3.Vec{Y: y0 - box.Min.Y})
 	require.NoError(t, err)
-	placed, err := decad.Transform(t.Context(), body, move)
+	placed, err := decad.Transform(body, move).Do(t.Context())
 	require.NoError(t, err)
 	return placed
 }
@@ -104,8 +104,8 @@ func bandWrap(t *testing.T, doc *decad.Document, cu float64) *decad.Body {
 	s.CreateCircle(c, 0.5)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := decad.Revolve(t.Context(), doc, s, s.Profiles()[0],
-		decad.SketchLine{End: decad.Point2{V: 1}}, decad.AngleExtent{A: units.Degrees(180), Dir: decad.Along})
+	body, err := decad.Revolve(doc, s, s.Profiles()[0],
+		decad.SketchLine{End: decad.Point2{V: 1}}, decad.AngleExtent{A: units.Degrees(180), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -132,8 +132,8 @@ func TestVerifyMeridianBandInGroove(t *testing.T) {
 			t.Parallel()
 			doc := decad.New()
 			s, profile := polygonSketch(t, [][2]float64{{0, -3}, {12, -3}, {12, -1}, {10, -1}, {10, 1}, {12, 1}, {12, 3}, {0, 3}})
-			pulley, err := decad.Revolve(t.Context(), doc, s, profile,
-				decad.SketchLine{End: decad.Point2{V: 1}}, decad.FullRevolution{})
+			pulley, err := decad.Revolve(doc, s, profile,
+				decad.SketchLine{End: decad.Point2{V: 1}}, decad.FullRevolution{}).Do(t.Context())
 			require.NoError(t, err)
 			band := bandWrap(t, doc, tc.cu)
 			report, err := doc.Verify(t.Context())
@@ -172,8 +172,8 @@ func TestVerifyMeridianSharedPlacement(t *testing.T) {
 			t.Parallel()
 			doc := decad.New()
 			s, profile := polygonSketch(t, [][2]float64{{0, -10}, {4, -10}, {4, 0}, {6, 0}, {6, 2}, {4, 2}, {4, 30}, {0, 30}})
-			spindle, err := decad.Revolve(t.Context(), doc, s, profile,
-				decad.SketchLine{End: decad.Point2{V: 1}}, decad.FullRevolution{})
+			spindle, err := decad.Revolve(doc, s, profile,
+				decad.SketchLine{End: decad.Point2{V: 1}}, decad.FullRevolution{}).Do(t.Context())
 			require.NoError(t, err)
 			w := sketch.NewWorld()
 			bs, err := w.CreateSketch(w.XZ())
@@ -185,8 +185,8 @@ func TestVerifyMeridianSharedPlacement(t *testing.T) {
 			}
 			_, err = bs.Solve(t.Context())
 			require.NoError(t, err)
-			bearing, err := decad.Extrude(t.Context(), doc, bs, bs.Profiles()[0],
-				decad.Distance{D: units.Millimeters(8), Dir: decad.Along})
+			bearing, err := decad.Extrude(doc, bs, bs.Profiles()[0],
+				decad.Distance{D: units.Millimeters(8), Dir: decad.Along}).Do(t.Context())
 			require.NoError(t, err)
 			spindle, bearing = turned(t, spindle, math.Pi/3), turned(t, bearing, math.Pi/3)
 			report, err := doc.Verify(t.Context())
@@ -226,11 +226,9 @@ func TestVerifyMeridianCutTool(t *testing.T) {
 			t.Parallel()
 			doc := decad.New()
 			block := slab(t, doc, 0, -5, 20, 5, 0, 10, r3.Identity())
-			pilots, err := decad.Union(t.Context(),
-				placedAlongZ(t, coaxialSection(t, doc, 5, 0, 12, 1), -1),
-				placedAlongZ(t, coaxialSection(t, doc, 15, 0, 12, 1), -1))
+			pilots, err := decad.Union(placedAlongZ(t, coaxialSection(t, doc, 5, 0, 12, 1), -1), placedAlongZ(t, coaxialSection(t, doc, 15, 0, 12, 1), -1)).Do(t.Context())
 			require.NoError(t, err)
-			bored, err := decad.Cut(t.Context(), block, pilots)
+			bored, err := decad.Cut(block, pilots).Do(t.Context())
 			require.NoError(t, err)
 			w := sketch.NewWorld()
 			s, err := w.CreateSketch(w.XZ())
@@ -246,8 +244,8 @@ func TestVerifyMeridianCutTool(t *testing.T) {
 			}
 			_, err = s.Solve(t.Context())
 			require.NoError(t, err)
-			screw, err := decad.Revolve(t.Context(), doc, s, s.Profiles()[0],
-				decad.SketchLine{Start: decad.Point2{U: 5}, End: decad.Point2{U: 5, V: 1}}, decad.FullRevolution{})
+			screw, err := decad.Revolve(doc, s, s.Profiles()[0],
+				decad.SketchLine{Start: decad.Point2{U: 5}, End: decad.Point2{U: 5, V: 1}}, decad.FullRevolution{}).Do(t.Context())
 			require.NoError(t, err)
 			report, err := doc.Verify(t.Context())
 			require.NoError(t, err)

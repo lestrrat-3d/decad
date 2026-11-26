@@ -100,7 +100,7 @@ func TestSetGroupAndRetirement(t *testing.T) {
 	require.ErrorIs(t, err, decad.ErrDegenerate)
 
 	// Consuming a body in a later modelling step is reported by the next query.
-	_, err = decad.Union(t.Context(), a, block(t, doc, 5, 0, 15, 10, 0, 5))
+	_, err = decad.Union(a, block(t, doc, 5, 0, 15, 10, 0, 5)).Do(t.Context())
 	require.NoError(t, err)
 	_, err = s.Explode(t.Context())
 	require.ErrorIs(t, err, decad.ErrRetiredBody)

@@ -71,7 +71,7 @@ func TestSweepClosedCardinalSquareStadium(t *testing.T) {
 	const side, length, major = 2.0, 5.0, 5.0
 	section, profile := squareSweepSection(t, side)
 	doc := decad.New()
-	body, err := decad.Sweep(t.Context(), doc, section, profile, racetrackPath(t, length, major))
+	body, err := decad.Sweep(doc, section, profile, racetrackPath(t, length, major)).Do(t.Context())
 	require.NoError(t, err)
 	require.Len(t, body.Faces(), 16)
 	requireClosedSquareTube(t, doc, body, side, 2*length+2*math.Pi*major)
@@ -82,7 +82,7 @@ func TestSweepClosedCardinalSquareRoundedRectangle(t *testing.T) {
 	const side = 1.0
 	section, profile := squareSweepSection(t, side)
 	doc := decad.New()
-	body, err := decad.Sweep(t.Context(), doc, section, profile, roundedRectangleSweepPath(t))
+	body, err := decad.Sweep(doc, section, profile, roundedRectangleSweepPath(t)).Do(t.Context())
 	require.NoError(t, err)
 	require.Len(t, body.Faces(), 32)
 	requireClosedSquareTube(t, doc, body, side, 40+10*math.Pi)
@@ -93,7 +93,7 @@ func TestSweepClosedCardinalSquareStadiumAboutXAxis(t *testing.T) {
 	const side, length, major = 2.0, 5.0, 5.0
 	section, profile := squareSweepSection(t, side)
 	doc := decad.New()
-	body, err := decad.Sweep(t.Context(), doc, section, profile, stadiumPathYZ(t, length, major))
+	body, err := decad.Sweep(doc, section, profile, stadiumPathYZ(t, length, major)).Do(t.Context())
 	require.NoError(t, err)
 	requireClosedSquareTube(t, doc, body, side, 2*length+2*math.Pi*major)
 }
@@ -115,7 +115,7 @@ func TestSweepClosedCardinalRefusesNonQuarterArcs(t *testing.T) {
 	require.NoError(t, err)
 	section, profile := squareSweepSection(t, 0.5)
 	doc := decad.New()
-	body, err := decad.Sweep(t.Context(), doc, section, profile, path)
+	body, err := decad.Sweep(doc, section, profile, path).Do(t.Context())
 	require.Nil(t, body)
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.ErrorContains(t, err, "not an exact quarter or half turn")

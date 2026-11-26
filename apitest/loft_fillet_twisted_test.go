@@ -130,7 +130,7 @@ func (g twistedGear) loft(t *testing.T, height, twist, radius float64) (*decad.B
 	w := sketch.NewWorld()
 	s0, p0, bottom := g.section(t, w, w.XY(), 0, radius)
 	s1, p1, top := g.section(t, w, splitTopPlane(t, w, height), twist, radius)
-	body, err := decad.Loft(t.Context(), decad.New(), s0, p0, s1, p1)
+	body, err := decad.Loft(decad.New(), s0, p0, s1, p1).Do(t.Context())
 	require.NoError(t, err)
 	return body, bottom, top
 }
@@ -196,8 +196,8 @@ func TestLoftFilletTwistedGearRoots(t *testing.T) {
 		body, bottom, top := g.loft(t, tc.height, tc.twist, 0)
 		before, err := body.Volume()
 		require.NoError(t, err, tc.name)
-		rounded, err := decad.Fillet(t.Context(), body, rungQuery(bottom, top, tc.height).Exactly(len(bottom)),
-			units.Millimeters(tc.radius))
+		rounded, err := decad.Fillet(body, rungQuery(bottom, top, tc.height).Exactly(len(bottom)),
+			units.Millimeters(tc.radius)).Do(t.Context())
 		require.NoError(t, err, tc.name)
 		after, err := rounded.Volume()
 		require.NoError(t, err, tc.name)
@@ -227,14 +227,14 @@ func TestLoftFilletTwistedGearMirrorJoin(t *testing.T) {
 	g := newTwistedGear(16, 20*math.Pi/180, 0.05)
 	g.samples = 15
 	body, bottom, top := g.loft(t, height, twist, 0)
-	half, err := decad.Fillet(t.Context(), body, rungQuery(bottom, top, height).Exactly(len(bottom)),
-		units.Millimeters(radius))
+	half, err := decad.Fillet(body, rungQuery(bottom, top, height).Exactly(len(bottom)),
+		units.Millimeters(radius)).Do(t.Context())
 	require.NoError(t, err)
 	end, err := r3.NewFrame(r3.Vec{Z: height}, r3.Vec{X: 1}, r3.Vec{Y: 1})
 	require.NoError(t, err)
-	mirrored, err := decad.MirroredCopy(t.Context(), half, decad.MirrorFrame{Frame: end})
+	mirrored, err := decad.MirroredCopy(half, decad.MirrorFrame{Frame: end}).Do(t.Context())
 	require.NoError(t, err)
-	joined, err := decad.Union(t.Context(), half, mirrored)
+	joined, err := decad.Union(half, mirrored).Do(t.Context())
 	require.NoError(t, err)
 	got, err := joined.Volume()
 	require.NoError(t, err)
@@ -292,7 +292,7 @@ func TestLoftFilletSectionsWithDifferentRecords(t *testing.T) {
 		w := sketch.NewWorld()
 		s0, p0, c0 := squareSection(t, w, w.XY(), 10, 0, radius)
 		s1, p1, c1 := squareSection(t, w, splitTopPlane(t, w, height), size1, twist, radius)
-		body, err := decad.Loft(t.Context(), decad.New(), s0, p0, s1, p1)
+		body, err := decad.Loft(decad.New(), s0, p0, s1, p1).Do(t.Context())
 		require.NoError(t, err)
 		return body, c0, c1
 	}
@@ -306,7 +306,7 @@ func TestLoftFilletSectionsWithDifferentRecords(t *testing.T) {
 	} {
 		body, c0, c1 := build(tc.size1, tc.twist, 0)
 		query := rungQuery([]gearPoint{c0}, []gearPoint{c1}, height).Exactly(1)
-		rounded, err := decad.Fillet(t.Context(), body, query, units.Millimeters(tc.radius))
+		rounded, err := decad.Fillet(body, query, units.Millimeters(tc.radius)).Do(t.Context())
 		require.NoError(t, err, tc.name)
 		got, err := rounded.Volume()
 		require.NoError(t, err, tc.name)
@@ -320,6 +320,6 @@ func TestLoftFilletSectionsWithDifferentRecords(t *testing.T) {
 
 	body, c0, c1 := build(6, 0, 0)
 	query := rungQuery([]gearPoint{c0}, []gearPoint{c1}, height).Exactly(1)
-	_, err := decad.Fillet(t.Context(), body, query, units.Millimeters(6.5))
+	_, err := decad.Fillet(body, query, units.Millimeters(6.5)).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 }

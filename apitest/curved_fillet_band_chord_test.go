@@ -15,7 +15,7 @@ func TestCurvedFilletBandChord(t *testing.T) {
 	doc := decad.New()
 	part := wedgeRoundedRectAtZ(t, doc, -3, -3, 3, 3, 1, 0, 2)
 	rim := decad.Edges(decad.OuterLoopOf(decad.CapStart(part)))
-	fillet, err := decad.Fillet(t.Context(), part, rim, units.Millimeters(.5))
+	fillet, err := decad.Fillet(part, rim, units.Millimeters(.5)).Do(t.Context())
 	require.NoError(t, err)
 	const chord = .01
 	mesh, err := fillet.Tessellate(t.Context(), units.Millimeters(chord), decad.WithVerification(decad.VerifyAll))

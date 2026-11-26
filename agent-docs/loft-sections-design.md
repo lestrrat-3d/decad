@@ -12,16 +12,15 @@ type LoftSection struct {
     Profile *sketch.Profile
 }
 
-func LoftSections(ctx context.Context, d *Document, sections ...LoftSection) (*Body, error)
+func LoftSections(d *Document, sections ...LoftSection) *LoftSectionsCommand
+func (c *LoftSectionsCommand) CircularCorrespondence(m CircularLoftCorrespondence) *LoftSectionsCommand
+func (c *LoftSectionsCommand) Do(ctx context.Context) (*Body, error)
 
 type CircularLoftCorrespondence struct {
     Numerators   [4][]int64
     Denominators [4]int64
     SmoothCircularBands bool
 }
-
-func LoftSectionsWithCircularCorrespondence(ctx context.Context, d *Document,
-    correspondence CircularLoftCorrespondence, sections ...LoftSection) (*Body, error)
 ```
 
 The call requires at least three sections. Each passes the ordinary profile
@@ -42,7 +41,7 @@ Any other five or more sections must be rectangles and stop at thirty-two.
 For the three-section homothetic route, all three planes have world-XY `U` and
 `V` axes, the same XY origin, and strictly increasing Z origins with the middle
 Z exactly halfway between the ends. A different pose or spacing returns `ErrUnsupported`. The returned body
-is a solid; the route has no surface-result or alignment option.
+is a solid; the route has no surface-result or alignment method.
 
 Let `P_j` be walked vertex `j` of the first section. Every corresponding
 vertex of section 1 must equal `q_1 P_j`, and every vertex of section 2 must
@@ -832,7 +831,7 @@ search or sampled residual admits input. For the 41-section ribbon of
 
 ## 14. Four-arc circle to fitted section
 
-`LoftSectionsWithCircularCorrespondence` explicitly selects this route and
+`LoftSectionsCommand.CircularCorrespondence` explicitly selects this route and
 supplies four monotone Bernstein parameter maps, indexed by cardinal quarter
 from +X counterclockwise. A map has two to six integer numerators over one
 positive denominator; the first numerator is zero, the last equals the

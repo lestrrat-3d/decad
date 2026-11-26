@@ -25,7 +25,7 @@ func Example_union_operandCaps() {
 		fmt.Printf("failed to build the boss: %s\n", err)
 		return
 	}
-	part, err := decad.Union(context.Background(), plate, boss)
+	part, err := decad.Union(plate, boss).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to join: %s\n", err)
 		return

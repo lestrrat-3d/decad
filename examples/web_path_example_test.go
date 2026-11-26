@@ -26,8 +26,8 @@ func Example_web_path() {
 		fmt.Printf("failed to solve: %s\n", err)
 		return
 	}
-	plate, err := decad.Extrude(context.Background(), decad.New(), s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
+	plate, err := decad.Extrude(decad.New(), s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(5), Dir: decad.Along}).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to extrude: %s\n", err)
 		return
@@ -61,8 +61,8 @@ func Example_web_path() {
 
 	// A 2 mm wall 9 mm tall from the sketch plane, so it stands 8 mm above the
 	// plate, with a 0.5 mm overrun at each leg's ends.
-	ribbed, err := decad.WebPath(context.Background(), plate, rs, path, units.Millimeters(2),
-		decad.Distance{D: units.Millimeters(9), Dir: decad.Along}, decad.WithRibOverrun(units.Millimeters(0.5)))
+	ribbed, err := decad.WebPath(plate, rs, path, units.Millimeters(2),
+		decad.Distance{D: units.Millimeters(9), Dir: decad.Along}).Overrun(units.Millimeters(0.5)).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to add the rib: %s\n", err)
 		return

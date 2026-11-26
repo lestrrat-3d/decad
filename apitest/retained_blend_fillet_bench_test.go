@@ -16,15 +16,14 @@ func BenchmarkFacetedRetainedBlendFourSideFillet(b *testing.B) {
 		b.StopTimer()
 		sc := newRetentionScene()
 		plate := benchRetainedRect(b, sc, 0, 0, 80, 60, 10)
-		body, err := decad.Union(b.Context(), plate,
-			benchRetainedPlaced(b, benchRetainedRect(b, sc, 30, 20, 50, 40, 15), 10))
+		body, err := decad.Union(plate, benchRetainedPlaced(b, benchRetainedRect(b, sc, 30, 20, 50, 40, 15), 10)).Do(b.Context())
 		if err != nil {
 			b.Fatal(err)
 		}
 		top := decad.CapEnd(plate)
-		body, err = decad.Hole(b.Context(), body, decad.HoleSpec{Face: decad.Faces(decad.FaceCreatedBy(top)),
-			At: r3.NewVec(15, 15, 10), Diameter: units.Millimeters(6.6), Depth: decad.ThroughHole{},
-			Head: decad.Counterbore{Diameter: units.Millimeters(11), Depth: units.Millimeters(6.4)}})
+		body, err = decad.Hole(body, decad.Faces(decad.FaceCreatedBy(top)), r3.NewVec(15, 15, 10), units.Millimeters(6.6), decad.ThroughHole{}).
+			Head(decad.Counterbore{Diameter: units.Millimeters(11), Depth: units.Millimeters(6.4)}).
+			Do(b.Context())
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -38,8 +37,8 @@ func BenchmarkFacetedRetainedBlendFourSideFillet(b *testing.B) {
 		if _, err = s.Solve(b.Context()); err != nil {
 			b.Fatal(err)
 		}
-		post, err := decad.Extrude(b.Context(), sc.doc, s, s.Profiles()[0],
-			decad.Distance{D: units.Millimeters(8), Dir: decad.Along})
+		post, err := decad.Extrude(sc.doc, s, s.Profiles()[0],
+			decad.Distance{D: units.Millimeters(8), Dir: decad.Along}).Do(b.Context())
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -47,11 +46,11 @@ func BenchmarkFacetedRetainedBlendFourSideFillet(b *testing.B) {
 		if err != nil {
 			b.Fatal(err)
 		}
-		post, err = decad.Transform(b.Context(), post, move)
+		post, err = decad.Transform(post, move).Do(b.Context())
 		if err != nil {
 			b.Fatal(err)
 		}
-		body, err = decad.Union(b.Context(), body, post)
+		body, err = decad.Union(body, post).Do(b.Context())
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -78,7 +77,7 @@ func BenchmarkFacetedRetainedBlendFourSideFillet(b *testing.B) {
 		}
 		selector = selector.Exactly(4)
 		b.StartTimer()
-		_, err = decad.Fillet(b.Context(), body, selector, units.Millimeters(2))
+		_, err = decad.Fillet(body, selector, units.Millimeters(2)).Do(b.Context())
 		b.StopTimer()
 		if err != nil {
 			b.Fatal(err)
@@ -96,8 +95,8 @@ func benchRetainedRect(b *testing.B, sc *retentionScene, x0, y0, x1, y1, h float
 	if _, err = s.Solve(b.Context()); err != nil {
 		b.Fatal(err)
 	}
-	out, err := decad.Extrude(b.Context(), sc.doc, s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
+	out, err := decad.Extrude(sc.doc, s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(h), Dir: decad.Along}).Do(b.Context())
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -109,7 +108,7 @@ func benchRetainedPlaced(b *testing.B, body *decad.Body, dz float64) *decad.Body
 	if err != nil {
 		b.Fatal(err)
 	}
-	out, err := decad.Transform(b.Context(), body, tr)
+	out, err := decad.Transform(body, tr).Do(b.Context())
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -130,7 +129,7 @@ func BenchmarkRetainedLineChamfer(b *testing.B) {
 		lips := decad.Edges(decad.EndpointAt(r3.NewVec(-5, 0, 0)), decad.ParallelTo(r3.NewVec(0, 1, 0))).
 			Or(decad.EndpointAt(r3.NewVec(5, 0, 0)), decad.ParallelTo(r3.NewVec(0, 1, 0))).Exactly(2)
 		b.StartTimer()
-		_, err := decad.Chamfer(b.Context(), socket, lips, units.Millimeters(0.5))
+		_, err := decad.Chamfer(socket, lips, units.Millimeters(0.5)).Do(b.Context())
 		b.StopTimer()
 		if err != nil {
 			b.Fatal(err)
@@ -160,8 +159,8 @@ func benchRetainedLipSocket(b *testing.B, sc *retentionScene) *decad.Body {
 	}
 	// The prism runs from y = 0 to 18 against the sketch normal; shifted down by 1
 	// it spans y ∈ [−1, 17], past both ends of the block.
-	tool, err := decad.Extrude(b.Context(), sc.doc, s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(18), Dir: decad.Against})
+	tool, err := decad.Extrude(sc.doc, s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(18), Dir: decad.Against}).Do(b.Context())
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -169,10 +168,10 @@ func benchRetainedLipSocket(b *testing.B, sc *retentionScene) *decad.Body {
 	if err != nil {
 		b.Fatal(err)
 	}
-	if tool, err = decad.Transform(b.Context(), tool, tr); err != nil {
+	if tool, err = decad.Transform(tool, tr).Do(b.Context()); err != nil {
 		b.Fatal(err)
 	}
-	socket, err := decad.Cut(b.Context(), block, tool)
+	socket, err := decad.Cut(block, tool).Do(b.Context())
 	if err != nil {
 		b.Fatal(err)
 	}

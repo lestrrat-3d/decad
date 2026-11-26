@@ -69,6 +69,129 @@ linters:
         - shadow
         - fieldalignment
       enable-all: true
+      settings:
+        # Replaces the analyzer's default list, so it carries the standard-library
+        # defaults too. Every constructor of an operation command is listed, so that
+        # a statement such as decad.Union(a, b) with no Do fails lint
+        # (agent-docs/command-api-design.md §10). The standard-library entries are
+        # copied from the default list of golang.org/x/tools v0.52.0
+        # (passes/unusedresult), the version inside golangci-lint v2.15.0. A
+        # golangci-lint bump re-copies them.
+        unusedresult:
+          funcs:
+            - context.WithCancel
+            - context.WithDeadline
+            - context.WithTimeout
+            - context.WithValue
+            - errors.New
+            - fmt.Append
+            - fmt.Appendf
+            - fmt.Appendln
+            - fmt.Errorf
+            - fmt.Sprint
+            - fmt.Sprintf
+            - fmt.Sprintln
+            - maps.All
+            - maps.Clone
+            - maps.Collect
+            - maps.Equal
+            - maps.EqualFunc
+            - maps.Keys
+            - maps.Values
+            - slices.All
+            - slices.AppendSeq
+            - slices.Backward
+            - slices.BinarySearch
+            - slices.BinarySearchFunc
+            - slices.Chunk
+            - slices.Clip
+            - slices.Clone
+            - slices.Collect
+            - slices.Compact
+            - slices.CompactFunc
+            - slices.Compare
+            - slices.CompareFunc
+            - slices.Concat
+            - slices.Contains
+            - slices.ContainsFunc
+            - slices.Delete
+            - slices.DeleteFunc
+            - slices.Equal
+            - slices.EqualFunc
+            - slices.Grow
+            - slices.Index
+            - slices.IndexFunc
+            - slices.Insert
+            - slices.IsSorted
+            - slices.IsSortedFunc
+            - slices.Max
+            - slices.MaxFunc
+            - slices.Min
+            - slices.MinFunc
+            - slices.Repeat
+            - slices.Replace
+            - slices.Sorted
+            - slices.SortedFunc
+            - slices.SortedStableFunc
+            - slices.Values
+            - sort.Reverse
+            - github.com/lestrrat-3d/decad.Union
+            - github.com/lestrrat-3d/decad.Cut
+            - github.com/lestrrat-3d/decad.Intersect
+            - github.com/lestrrat-3d/decad.Refine
+            - github.com/lestrrat-3d/decad.Fillet
+            - github.com/lestrrat-3d/decad.Chamfer
+            - github.com/lestrrat-3d/decad.FilletChord
+            - github.com/lestrrat-3d/decad.ChamferAngle
+            - github.com/lestrrat-3d/decad.Shell
+            - github.com/lestrrat-3d/decad.ShellClosed
+            - github.com/lestrrat-3d/decad.Draft
+            - github.com/lestrrat-3d/decad.Offset
+            - github.com/lestrrat-3d/decad.Thicken
+            - github.com/lestrrat-3d/decad.MoveFace
+            - github.com/lestrrat-3d/decad.ConeFromFace
+            - github.com/lestrrat-3d/decad.Extrude
+            - github.com/lestrrat-3d/decad.Revolve
+            - github.com/lestrrat-3d/decad.Sweep
+            - github.com/lestrrat-3d/decad.Coil
+            - github.com/lestrrat-3d/decad.Loft
+            - github.com/lestrrat-3d/decad.LoftChain
+            - github.com/lestrrat-3d/decad.LoftFromPoint
+            - github.com/lestrrat-3d/decad.LoftSections
+            - github.com/lestrrat-3d/decad.LoftFaces
+            - github.com/lestrrat-3d/decad.LoftFacesToCone
+            - github.com/lestrrat-3d/decad.PatchProfile
+            - github.com/lestrrat-3d/decad.Emboss
+            - github.com/lestrrat-3d/decad.WebPath
+            - github.com/lestrrat-3d/decad.CutExtrude
+            - github.com/lestrrat-3d/decad.CutRevolve
+            - github.com/lestrrat-3d/decad.Transform
+            - github.com/lestrrat-3d/decad.Copy
+            - github.com/lestrrat-3d/decad.Mirrored
+            - github.com/lestrrat-3d/decad.MirroredJoin
+            - github.com/lestrrat-3d/decad.MirroredCopy
+            - github.com/lestrrat-3d/decad.ScaledAt
+            - github.com/lestrrat-3d/decad.QuarterTurn
+            - github.com/lestrrat-3d/decad.Stretch
+            - github.com/lestrrat-3d/decad.PatternCopies
+            - github.com/lestrrat-3d/decad.Patterned
+            - github.com/lestrrat-3d/decad.PathPattern
+            - github.com/lestrrat-3d/decad.Arrange
+            - github.com/lestrrat-3d/decad.Hole
+            - github.com/lestrrat-3d/decad.HoleShaped
+            - github.com/lestrrat-3d/decad.Boss
+            - github.com/lestrrat-3d/decad.BossShaped
+            - github.com/lestrrat-3d/decad.Thread
+            - github.com/lestrrat-3d/decad.Infill
+            - github.com/lestrrat-3d/decad.SheetMetal
+            - github.com/lestrrat-3d/decad.PatchEdges
+            - github.com/lestrrat-3d/decad.Stitch
+            - github.com/lestrrat-3d/decad.Unstitch
+            - github.com/lestrrat-3d/decad.Trim
+            - github.com/lestrrat-3d/decad.Extend
+            - github.com/lestrrat-3d/decad.Split
+            - github.com/lestrrat-3d/decad.SolidFromMesh
+            - github.com/lestrrat-3d/decad.Remove
   exclusions:
     generated: lax
     presets:

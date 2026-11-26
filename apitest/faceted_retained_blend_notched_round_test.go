@@ -42,20 +42,20 @@ func notchedBlock(t *testing.T, w *sketch.World, doc *decad.Document, ears ...[6
 	sec.Fix(r.A)
 	_, err = sec.Solve(t.Context())
 	require.NoError(t, err)
-	block, err := decad.Extrude(t.Context(), doc, sec, sec.Profiles()[0],
-		decad.Distance{D: units.Millimeters(40), Dir: decad.Along})
+	block, err := decad.Extrude(doc, sec, sec.Profiles()[0],
+		decad.Distance{D: units.Millimeters(40), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
-	block, err = decad.Fillet(t.Context(), block, decad.Edges(x, decad.EndpointAt(r3.NewVec(0, 0, 0))).
-		Or(x, decad.EndpointAt(r3.NewVec(0, 20, 0))).Exactly(2), units.Millimeters(notchLongR))
+	block, err = decad.Fillet(block, decad.Edges(x, decad.EndpointAt(r3.NewVec(0, 0, 0))).
+		Or(x, decad.EndpointAt(r3.NewVec(0, 20, 0))).Exactly(2), units.Millimeters(notchLongR)).Do(t.Context())
 	require.NoError(t, err)
 	loops := decad.Edges(decad.OuterLoopOf(decad.CapStart(block))).Or(decad.OuterLoopOf(decad.CapEnd(block)))
-	block, err = decad.Fillet(t.Context(), block, loops, units.Millimeters(notchShortR))
+	block, err = decad.Fillet(block, loops, units.Millimeters(notchShortR)).Do(t.Context())
 	require.NoError(t, err)
-	block, err = decad.Cut(t.Context(), block, placed(t, rectBox(t, w, doc, 12, 6, 28, 14, 10), 12))
+	block, err = decad.Cut(block, placed(t, rectBox(t, w, doc, 12, 6, 28, 14, 10), 12)).Do(t.Context())
 	require.NoError(t, err)
 	for _, e := range ears {
 		ear := placed(t, rectBox(t, w, doc, e[0], e[1], e[2], e[3], e[5]-e[4]), e[4])
-		block, err = decad.Union(t.Context(), block, ear)
+		block, err = decad.Union(block, ear).Do(t.Context())
 		require.NoError(t, err)
 	}
 	return block
@@ -186,9 +186,9 @@ func TestFacetedRetainedBlendNotchedRound(t *testing.T) {
 
 				var out *decad.Body
 				if fillet {
-					out, err = decad.Fillet(t.Context(), body, c.seed(), units.Millimeters(size), decad.WithTangentChain())
+					out, err = decad.Fillet(body, c.seed(), units.Millimeters(size)).TangentChain().Do(t.Context())
 				} else {
-					out, err = decad.Chamfer(t.Context(), body, c.seed(), units.Millimeters(size), decad.WithTangentChain())
+					out, err = decad.Chamfer(body, c.seed(), units.Millimeters(size)).TangentChain().Do(t.Context())
 				}
 				require.NoError(t, err)
 
@@ -249,7 +249,7 @@ func TestFacetedRetainedBlendNotchedRoundRefusals(t *testing.T) {
 	// refusal's text.
 	refused := func(t *testing.T, body *decad.Body, c notchedRoot, text string) {
 		t.Helper()
-		_, err := decad.Fillet(t.Context(), body, c.seed(), units.Millimeters(1), decad.WithTangentChain())
+		_, err := decad.Fillet(body, c.seed(), units.Millimeters(1)).TangentChain().Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.ErrorContains(t, err, text)
 	}
@@ -257,8 +257,7 @@ func TestFacetedRetainedBlendNotchedRoundRefusals(t *testing.T) {
 	t.Run("a hole in the round inside the band is refused", func(t *testing.T) {
 		t.Parallel()
 		w, doc := sketch.NewWorld(), decad.New(decad.WithChainTolerance(units.Millimeters(0.1)))
-		body, err := decad.Cut(t.Context(), notchedBlock(t, w, doc, n1.ear),
-			zCylinderAt(t, &retentionScene{w: w, doc: doc}, 18.5, 2.2, 0.3, -1, 5))
+		body, err := decad.Cut(notchedBlock(t, w, doc, n1.ear), zCylinderAt(t, &retentionScene{w: w, doc: doc}, 18.5, 2.2, 0.3, -1, 5)).Do(t.Context())
 		require.NoError(t, err)
 		refused(t, body, n1, "another part of the wall lies within the blend's reach of the edge")
 	})
@@ -279,8 +278,7 @@ func TestFacetedRetainedBlendNotchedRoundRefusals(t *testing.T) {
 		// A 0.15 box clear of the round, across the plane y = 1.5 where the ear's
 		// front face takes the cap, inside the fillet's corner and clear of its
 		// strip.
-		body, err := decad.Union(t.Context(), notchedBlock(t, w, doc, n1.ear),
-			placed(t, rectBox(t, w, doc, 18.05, 1.4, 18.2, 1.6, 0.2), 0.1))
+		body, err := decad.Union(notchedBlock(t, w, doc, n1.ear), placed(t, rectBox(t, w, doc, 18.05, 1.4, 18.2, 1.6, 0.2), 0.1)).Do(t.Context())
 		require.NoError(t, err)
 		refused(t, body, n1, "the cap an end face takes meets another facet of the body")
 	})
@@ -368,7 +366,7 @@ func filletRoots(t *testing.T, ears [][6]float64, fill func(size, x float64) flo
 	var heldRun map[string]struct{}
 	for k, group := range groups {
 		seed := sharedBackSeed(group...)
-		body, err = decad.Fillet(t.Context(), body, seed, units.Millimeters(size), decad.WithTangentChain())
+		body, err = decad.Fillet(body, seed, units.Millimeters(size)).TangentChain().Do(t.Context())
 		require.NoError(t, err, "group %d", k)
 		roots += len(group)
 		for _, x := range group {
@@ -485,11 +483,9 @@ func TestFacetedRetainedBlendSharedBackPlaneRefusals(t *testing.T) {
 	t.Run("the same root twice", func(t *testing.T) {
 		t.Parallel()
 		body := notchedBody(t, earBoxA, earBoxB)
-		body, err := decad.Fillet(t.Context(), body, sharedBackSeed(12), units.Millimeters(1),
-			decad.WithTangentChain())
+		body, err := decad.Fillet(body, sharedBackSeed(12), units.Millimeters(1)).TangentChain().Do(t.Context())
 		require.NoError(t, err)
-		_, err = decad.Fillet(t.Context(), body, sharedBackSeed(12), units.Millimeters(1),
-			decad.WithTangentChain())
+		_, err = decad.Fillet(body, sharedBackSeed(12), units.Millimeters(1)).TangentChain().Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrNoMatch)
 		require.ErrorContains(t, err, "matched 0 edges")
 	})
@@ -554,8 +550,7 @@ func TestFacetedRetainedBlendSharedEndPlanesRefusals(t *testing.T) {
 		t.Helper()
 		var err error
 		for k, group := range groups {
-			body, err = decad.Fillet(t.Context(), body, sharedBackSeed(group...), units.Millimeters(1),
-				decad.WithTangentChain())
+			body, err = decad.Fillet(body, sharedBackSeed(group...), units.Millimeters(1)).TangentChain().Do(t.Context())
 			if k < len(groups)-1 {
 				require.NoError(t, err, "group %d", k)
 			}
@@ -585,10 +580,9 @@ func TestFacetedRetainedBlendSharedEndPlanesRefusals(t *testing.T) {
 	t.Run("a hole in the round inside the band on shared planes", func(t *testing.T) {
 		t.Parallel()
 		w, doc := sketch.NewWorld(), decad.New(decad.WithChainTolerance(units.Millimeters(0.1)))
-		body, err := decad.Cut(t.Context(), notchedBlock(t, w, doc, flushEars...),
-			zCylinderAt(t, &retentionScene{w: w, doc: doc}, 12.5, 2.2, 0.3, -1, 5))
+		body, err := decad.Cut(notchedBlock(t, w, doc, flushEars...), zCylinderAt(t, &retentionScene{w: w, doc: doc}, 12.5, 2.2, 0.3, -1, 5)).Do(t.Context())
 		require.NoError(t, err)
-		_, err = decad.Fillet(t.Context(), body, sharedBackSeed(12), units.Millimeters(1), decad.WithTangentChain())
+		_, err = decad.Fillet(body, sharedBackSeed(12), units.Millimeters(1)).TangentChain().Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.ErrorContains(t, err, "another part of the wall lies within the blend's reach of the edge")
 	})
@@ -636,7 +630,7 @@ func TestFacetedRetainedBlendEndRoundChordRow(t *testing.T) {
 				held, err := body.Tessellate(t.Context(), units.Millimeters(0.1))
 				require.NoError(t, err)
 
-				out, err := decad.Fillet(t.Context(), body, c.seed(), units.Millimeters(size), decad.WithTangentChain())
+				out, err := decad.Fillet(body, c.seed(), units.Millimeters(size)).TangentChain().Do(t.Context())
 				require.NoError(t, err)
 
 				af := size * size * (1 - math.Pi/4)
@@ -685,7 +679,7 @@ func TestFacetedRetainedBlendEarOverEndRound(t *testing.T) {
 	volBefore, err := body.Volume()
 	require.NoError(t, err)
 
-	out, err := decad.Fillet(t.Context(), body, c.seed(), units.Millimeters(size), decad.WithTangentChain())
+	out, err := decad.Fillet(body, c.seed(), units.Millimeters(size)).TangentChain().Do(t.Context())
 	require.NoError(t, err)
 
 	// The root's section is the square's corner the fillet leaves: its area times the

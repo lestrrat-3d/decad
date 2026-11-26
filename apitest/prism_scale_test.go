@@ -14,9 +14,9 @@ func TestStraightPrismScaledAtAcceptsPlacedSource(t *testing.T) {
 	prism := boxBody(t, doc, 0, 0, 4, 3, 5)
 	turn, err := r3.RotationAround(r3.NewVec(1, 1, 0), r3.NewVec(0, 1, 0), units.Radians(0.2))
 	require.NoError(t, err)
-	placed, err := decad.Transform(t.Context(), prism, turn)
+	placed, err := decad.Transform(prism, turn).Do(t.Context())
 	require.NoError(t, err)
-	scaled, err := decad.ScaledAt(t.Context(), placed, r3.NewVec(1, 2, 3), units.Scalar(0.9))
+	scaled, err := decad.ScaledAt(placed, r3.NewVec(1, 2, 3), units.Scalar(0.9)).Do(t.Context())
 	require.NoError(t, err)
 	volume, err := scaled.Volume()
 	require.NoError(t, err)
@@ -31,7 +31,7 @@ func TestStraightPrismScaledAtAcceptsPlacedSource(t *testing.T) {
 func TestStraightPrismScaledAtPreservesVolumeAndCapRoles(t *testing.T) {
 	doc := decad.New()
 	prism := boxBody(t, doc, 0, 0, 4, 3, 5)
-	scaled, err := decad.ScaledAt(t.Context(), prism, r3.NewVec(1, 1, 1), units.Scalar(1.5))
+	scaled, err := decad.ScaledAt(prism, r3.NewVec(1, 1, 1), units.Scalar(1.5)).Do(t.Context())
 	require.NoError(t, err)
 	volume, err := scaled.Volume()
 	require.NoError(t, err)
@@ -51,9 +51,9 @@ func TestStraightPrismScaledAtPreservesVolumeAndCapRoles(t *testing.T) {
 
 	shift, err := r3.Translation(r3.NewVec(3, -2, 1))
 	require.NoError(t, err)
-	placed, err := decad.Copy(t.Context(), scaled, decad.WithCopyPlacement(shift))
+	placed, err := decad.Copy(scaled).Place(decad.CopyTransform{Transform: shift}).Do(t.Context())
 	require.NoError(t, err)
-	again, err := decad.ScaledAt(t.Context(), placed, r3.NewVec(0, 0, 0), units.Scalar(0.75))
+	again, err := decad.ScaledAt(placed, r3.NewVec(0, 0, 0), units.Scalar(0.75)).Do(t.Context())
 	require.NoError(t, err)
 	volume, err = again.Volume()
 	require.NoError(t, err)
@@ -68,7 +68,7 @@ func TestStraightPrismScaledAtPreservesVolumeAndCapRoles(t *testing.T) {
 func TestStraightPrismScaledAtKeepsPolygonHole(t *testing.T) {
 	doc := decad.New()
 	prism := holedBoxSymmetric(t, doc, 10, 4, 2)
-	scaled, err := decad.ScaledAt(t.Context(), prism, r3.NewVec(0, 0, 0), units.Scalar(1.25))
+	scaled, err := decad.ScaledAt(prism, r3.NewVec(0, 0, 0), units.Scalar(1.25)).Do(t.Context())
 	require.NoError(t, err)
 	volume, err := scaled.Volume()
 	require.NoError(t, err)
@@ -83,10 +83,10 @@ func TestStraightPrismScaledAtKeepsPolygonHole(t *testing.T) {
 func TestPrismScaledAtRefusesSheetSource(t *testing.T) {
 	sheetDoc := decad.New()
 	s, profile := plateSketch(t)
-	sheet, err := decad.Extrude(t.Context(), sheetDoc, s, profile,
-		decad.Distance{D: units.Millimeters(2), Dir: decad.Along}, decad.WithSurfaceResult())
+	sheet, err := decad.Extrude(sheetDoc, s, profile,
+		decad.Distance{D: units.Millimeters(2), Dir: decad.Along}).SurfaceResult().Do(t.Context())
 	require.NoError(t, err)
-	_, err = decad.ScaledAt(t.Context(), sheet, r3.NewVec(0, 0, 0), units.Scalar(2))
+	_, err = decad.ScaledAt(sheet, r3.NewVec(0, 0, 0), units.Scalar(2)).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.Equal(t, []*decad.Body{sheet}, sheetDoc.Bodies())
 }

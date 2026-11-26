@@ -41,7 +41,7 @@ func benchRect(w *sketch.World, x0, y0, x1, y1 float64) *sketch.Sketch {
 func benchBox() *decad.Body {
 	w := sketch.NewWorld()
 	s := benchRect(w, 0, 0, 40, 24)
-	return must(decad.Extrude(context.Background(), decad.New(), s, s.Profiles()[0], decad.Distance{D: units.Millimeters(12), Dir: decad.Along}))
+	return must(decad.Extrude(decad.New(), s, s.Profiles()[0], decad.Distance{D: units.Millimeters(12), Dir: decad.Along}).Do(context.Background()))
 }
 
 func benchFreeformPrism() *decad.Body {
@@ -59,7 +59,7 @@ func benchFreeformPrism() *decad.Body {
 			break
 		}
 	}
-	return must(decad.Extrude(context.Background(), decad.New(), s, prof, decad.Distance{D: units.Millimeters(10), Dir: decad.Along}))
+	return must(decad.Extrude(decad.New(), s, prof, decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(context.Background()))
 }
 
 func benchRevolve(build func(s *sketch.Sketch), ext decad.AngularExtent) *decad.Body {
@@ -68,7 +68,7 @@ func benchRevolve(build func(s *sketch.Sketch), ext decad.AngularExtent) *decad.
 	build(s)
 	must(s.Solve(context.Background()))
 	axis := decad.SketchLine{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 1, V: 0}}
-	return must(decad.Revolve(context.Background(), decad.New(), s, s.Profiles()[0], axis, ext))
+	return must(decad.Revolve(decad.New(), s, s.Profiles()[0], axis, ext).Do(context.Background()))
 }
 
 func benchLoft() *decad.Body {
@@ -79,21 +79,21 @@ func benchLoft() *decad.Body {
 	tr := s1.CreateRectangle(-10, -10, 10, 10)
 	s1.Fix(tr.A)
 	must(s1.Solve(context.Background()))
-	return must(decad.Loft(context.Background(), decad.New(), s0, s0.Profiles()[0], s1, s1.Profiles()[0]))
+	return must(decad.Loft(decad.New(), s0, s0.Profiles()[0], s1, s1.Profiles()[0]).Do(context.Background()))
 }
 
 func benchCut() *decad.Body {
 	w := sketch.NewWorld()
 	doc := decad.New()
 	plate := benchRect(w, 0, 0, 60, 40)
-	pb := must(decad.Extrude(context.Background(), doc, plate, plate.Profiles()[0], decad.Distance{D: units.Millimeters(8), Dir: decad.Along}))
+	pb := must(decad.Extrude(doc, plate, plate.Profiles()[0], decad.Distance{D: units.Millimeters(8), Dir: decad.Along}).Do(context.Background()))
 	hs := must(w.CreateSketch(w.XY()))
 	center := hs.CreatePoint(30, 20)
 	hs.Fix(center)
 	hs.CreateCircle(center, 8)
 	must(hs.Solve(context.Background()))
-	tool := must(decad.Extrude(context.Background(), doc, hs, hs.Profiles()[0], decad.Distance{D: units.Millimeters(20), Dir: decad.Along}))
-	return must(decad.Cut(context.Background(), pb, tool))
+	tool := must(decad.Extrude(doc, hs, hs.Profiles()[0], decad.Distance{D: units.Millimeters(20), Dir: decad.Along}).Do(context.Background()))
+	return must(decad.Cut(pb, tool).Do(context.Background()))
 }
 
 // runTess is the shared benchmark body: the body is built once, outside the
@@ -179,7 +179,7 @@ func BenchmarkTessPrismBox(b *testing.B) { runTess(b, benchBox()) }
 func BenchmarkTessPrismBoxCold(b *testing.B) { runColdTess(b, benchBox) }
 
 func BenchmarkTessPrismFillet(b *testing.B) {
-	body := must(decad.Fillet(b.Context(), benchBox(), decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1))), units.Millimeters(6)))
+	body := must(decad.Fillet(benchBox(), decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1))), units.Millimeters(6)).Do(b.Context()))
 	runTess(b, body)
 }
 
@@ -206,26 +206,26 @@ func BenchmarkTessPrismFreeformCold(b *testing.B) {
 }
 
 func BenchmarkTessCup(b *testing.B) {
-	body := must(decad.Shell(b.Context(), benchBox(), decad.Faces(decad.Facing(r3.NewVec(0, 0, 1))).Exactly(1), units.Millimeters(4)))
+	body := must(decad.Shell(benchBox(), decad.Faces(decad.Facing(r3.NewVec(0, 0, 1))).Exactly(1), units.Millimeters(4)).Do(b.Context()))
 	runTess(b, body)
 }
 
 func BenchmarkTessCupCold(b *testing.B) {
 	runColdTess(b, func() *decad.Body {
-		return must(decad.Shell(b.Context(), benchBox(), decad.Faces(decad.Facing(r3.NewVec(0, 0, 1))).Exactly(1), units.Millimeters(4)))
+		return must(decad.Shell(benchBox(), decad.Faces(decad.Facing(r3.NewVec(0, 0, 1))).Exactly(1), units.Millimeters(4)).Do(b.Context()))
 	})
 }
 
 func BenchmarkTessCapBlend(b *testing.B) {
 	box := benchBox()
-	body := must(decad.Chamfer(b.Context(), box, decad.Edges(decad.CreatedBy(decad.CapEnd(box))), units.Millimeters(3)))
+	body := must(decad.Chamfer(box, decad.Edges(decad.CreatedBy(decad.CapEnd(box))), units.Millimeters(3)).Do(b.Context()))
 	runTess(b, body)
 }
 
 func BenchmarkTessCapBlendCold(b *testing.B) {
 	runColdTess(b, func() *decad.Body {
 		box := benchBox()
-		return must(decad.Chamfer(b.Context(), box, decad.Edges(decad.CreatedBy(decad.CapEnd(box))), units.Millimeters(3)))
+		return must(decad.Chamfer(box, decad.Edges(decad.CreatedBy(decad.CapEnd(box))), units.Millimeters(3)).Do(b.Context()))
 	})
 }
 

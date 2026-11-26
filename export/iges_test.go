@@ -108,7 +108,7 @@ func TestIGESWritesACurvedSolidAndACavity(t *testing.T) {
 	s.CreateCircle(s.CreatePoint(0, 0), 5)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	cylinder, err := decad.Extrude(t.Context(), decad.New(), s, s.Profiles()[0], decad.Distance{D: units.Millimeters(8), Dir: decad.Along})
+	cylinder, err := decad.Extrude(decad.New(), s, s.Profiles()[0], decad.Distance{D: units.Millimeters(8), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	got := requireRoundTrip(t, cylinder)
 	volume, err := got.Volume()
@@ -126,7 +126,7 @@ func TestIGESWritesACurvedSolidAndACavity(t *testing.T) {
 func TestIGESWritesOneSolidForEachLump(t *testing.T) {
 	t.Parallel()
 	block := decadtest.NewBlock(t, decad.New(), 0, 0, 20, 10, units.Millimeters(6))
-	pair, err := decad.Patterned(t.Context(), block, decad.LinearPattern{Dir: r3.Vec{X: 1}, Step: units.Millimeters(30), Count: 2})
+	pair, err := decad.Patterned(block, decad.LinearPattern{Dir: r3.Vec{X: 1}, Step: units.Millimeters(30), Count: 2}).Do(t.Context())
 	require.NoError(t, err)
 	require.Len(t, pair.Lumps(), 2)
 	got := requireRoundTrip(t, pair)

@@ -28,7 +28,7 @@ func pocketToolFromTop(t *testing.T, doc *decad.Document, x0, y0, x1, y1 float64
 	s.Fix(rect.A)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: depth, Dir: decad.Against})
+	body, err := decad.Extrude(doc, s, s.Profiles()[0], decad.Distance{D: depth, Dir: decad.Against}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -44,12 +44,12 @@ func requireIntendedNestedPockets(t *testing.T, outerDepth, innerDepth units.Val
 	outer := pocketToolFromTop(t, doc, 2, 2, 18, 18, outerDepth)
 	inner := pocketToolFromTop(t, doc, 6, 6, 14, 14, innerDepth)
 
-	step, err := decad.Cut(t.Context(), plate, outer)
+	step, err := decad.Cut(plate, outer).Do(t.Context())
 	if err != nil {
 		t.Logf("first cut refused: %v", err)
 		return
 	}
-	result, err := decad.Cut(t.Context(), step, inner)
+	result, err := decad.Cut(step, inner).Do(t.Context())
 	if err != nil {
 		t.Logf("second cut refused: %v", err)
 		return
@@ -144,12 +144,12 @@ func requireNestedByDenotation(t *testing.T, outerDepth, innerDepth units.Value,
 	plate := boxBody(t, doc, 0, 0, 20, 20, 10)
 	outer := pocketToolFromTop(t, doc, 2, 2, 18, 18, outerDepth)
 	inner := pocketToolFromTop(t, doc, 6, 6, 14, 14, innerDepth)
-	step, err := decad.Cut(t.Context(), plate, outer)
+	step, err := decad.Cut(plate, outer).Do(t.Context())
 	if err != nil {
 		t.Logf("first cut refused: %v", err)
 		return
 	}
-	result, err := decad.Cut(t.Context(), step, inner)
+	result, err := decad.Cut(step, inner).Do(t.Context())
 	if err != nil {
 		t.Logf("second cut refused: %v", err)
 		return
@@ -178,11 +178,11 @@ func TestInchPocketUnionLevelsFollowDenotation(t *testing.T) {
 	plateB := boxBody(t, doc, 10, 0, 30, 20, 10)
 	toolA := pocketToolFromTop(t, doc, 2, 2, 8, 18, units.Inches(0.2))
 	toolB := pocketToolFromTop(t, doc, 22, 2, 28, 18, units.Millimeters(5.08))
-	a, err := decad.Cut(t.Context(), plateA, toolA)
+	a, err := decad.Cut(plateA, toolA).Do(t.Context())
 	require.NoError(t, err)
-	b, err := decad.Cut(t.Context(), plateB, toolB)
+	b, err := decad.Cut(plateB, toolB).Do(t.Context())
 	require.NoError(t, err)
-	result, err := decad.Union(t.Context(), a, b)
+	result, err := decad.Union(a, b).Do(t.Context())
 	if err != nil {
 		t.Logf("union refused: %v", err)
 		return

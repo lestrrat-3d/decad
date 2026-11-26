@@ -17,15 +17,15 @@ func TestFacetedPrismUnionUntouchedOuterEdgeFillet(t *testing.T) {
 	lug := boxBodyAtZ(t, doc, 8, -2, 14, 2, 2, 6)
 	turn, err := r3.RotationAround(r3.Vec{}, r3.Vec{Z: 1}, units.Degrees(20))
 	require.NoError(t, err)
-	lug, err = decad.Transform(t.Context(), lug, turn)
+	lug, err = decad.Transform(lug, turn).Do(t.Context())
 	require.NoError(t, err)
-	joined, err := decad.Union(t.Context(), base, lug)
+	joined, err := decad.Union(base, lug).Do(t.Context())
 	require.NoError(t, err)
 	selector := decad.Edges(
 		decad.EndpointAt(r3.Vec{X: -10, Y: -10, Z: 0}),
 		decad.EndpointAt(r3.Vec{X: -10, Y: -10, Z: 10}),
 	).Exactly(1)
-	filleted, err := decad.Fillet(t.Context(), joined, selector, units.Millimeters(1))
+	filleted, err := decad.Fillet(joined, selector, units.Millimeters(1)).Do(t.Context())
 	require.NoError(t, err)
 	mesh, err := filleted.Tessellate(t.Context(), units.Millimeters(0.1), decad.WithVerification(decad.VerifyAll))
 	require.NoError(t, err)
@@ -48,15 +48,15 @@ func TestFacetedPrismUnionFilletReversedSources(t *testing.T) {
 	lug := boxBodyAtZ(t, doc, 8, -2, 14, 2, 2, 6)
 	turn, err := r3.RotationAround(r3.Vec{}, r3.Vec{Z: 1}, units.Degrees(20))
 	require.NoError(t, err)
-	lug, err = decad.Transform(t.Context(), lug, turn)
+	lug, err = decad.Transform(lug, turn).Do(t.Context())
 	require.NoError(t, err)
-	joined, err := decad.Union(t.Context(), lug, base)
+	joined, err := decad.Union(lug, base).Do(t.Context())
 	require.NoError(t, err)
 	selector := decad.Edges(
 		decad.EndpointAt(r3.Vec{X: -7, Y: 9, Z: 1}),
 		decad.EndpointAt(r3.Vec{X: -7, Y: 9, Z: 9}),
 	).Exactly(1)
-	filleted, err := decad.Fillet(t.Context(), joined, selector, units.Millimeters(1))
+	filleted, err := decad.Fillet(joined, selector, units.Millimeters(1)).Do(t.Context())
 	require.NoError(t, err)
 	mesh, err := filleted.Tessellate(t.Context(), units.Millimeters(0.1), decad.WithVerification(decad.VerifyAll))
 	require.NoError(t, err)
@@ -70,15 +70,15 @@ func TestFacetedPrismUnionFilletRefusesToolInCornerBand(t *testing.T) {
 	tool := boxBodyAtZ(t, doc, -9.8, -9.8, -8.5, -8.5, 2, 6)
 	turn, err := r3.RotationAround(r3.Vec{X: -9, Y: -9}, r3.Vec{Z: 1}, units.Degrees(20))
 	require.NoError(t, err)
-	tool, err = decad.Transform(t.Context(), tool, turn)
+	tool, err = decad.Transform(tool, turn).Do(t.Context())
 	require.NoError(t, err)
-	joined, err := decad.Union(t.Context(), base, tool)
+	joined, err := decad.Union(base, tool).Do(t.Context())
 	require.NoError(t, err)
 	selector := decad.Edges(
 		decad.EndpointAt(r3.Vec{X: -10, Y: -10, Z: 0}),
 		decad.EndpointAt(r3.Vec{X: -10, Y: -10, Z: 10}),
 	).Exactly(1)
-	_, err = decad.Fillet(t.Context(), joined, selector, units.Millimeters(1))
+	_, err = decad.Fillet(joined, selector, units.Millimeters(1)).Do(t.Context())
 	require.True(t, errors.Is(err, decad.ErrUnsupported), "fillet returned %v", err)
 }
 
@@ -88,13 +88,13 @@ func TestFacetedPrismUnionFilletOfPlacedUnionTakesTheRetainedRoute(t *testing.T)
 	lug := boxBodyAtZ(t, doc, 8, -2, 14, 2, 2, 6)
 	turn, err := r3.RotationAround(r3.Vec{}, r3.Vec{Z: 1}, units.Degrees(20))
 	require.NoError(t, err)
-	lug, err = decad.Transform(t.Context(), lug, turn)
+	lug, err = decad.Transform(lug, turn).Do(t.Context())
 	require.NoError(t, err)
-	joined, err := decad.Union(t.Context(), base, lug)
+	joined, err := decad.Union(base, lug).Do(t.Context())
 	require.NoError(t, err)
 	move, err := r3.Translation(r3.Vec{Z: 1})
 	require.NoError(t, err)
-	joined, err = decad.Transform(t.Context(), joined, move)
+	joined, err = decad.Transform(joined, move).Do(t.Context())
 	require.NoError(t, err)
 	selector := decad.Edges(
 		decad.EndpointAt(r3.Vec{X: -10, Y: -10, Z: 1}),
@@ -105,7 +105,7 @@ func TestFacetedPrismUnionFilletOfPlacedUnionTakesTheRetainedRoute(t *testing.T)
 	// The placed Union keeps no source relation, so the prism route declines;
 	// the edge is a straight edge between two retained planes, which
 	// agent-docs/modify-design.md Part E blends from the tags.
-	filleted, err := decad.Fillet(t.Context(), joined, selector, units.Millimeters(1))
+	filleted, err := decad.Fillet(joined, selector, units.Millimeters(1)).Do(t.Context())
 	require.NoError(t, err)
 	after, err := filleted.Volume()
 	require.NoError(t, err)

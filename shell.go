@@ -3,11 +3,13 @@ package decad
 import (
 	"context"
 	"fmt"
+	"slices"
 
 	"github.com/lestrrat-3d/decad/internal/brepmodify"
 	"github.com/lestrrat-3d/decad/internal/extent"
 	"github.com/lestrrat-3d/decad/internal/modifyoption"
 	"github.com/lestrrat-3d/decad/internal/offset2d"
+	"github.com/lestrrat-3d/decad/internal/opcommand"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -28,9 +30,6 @@ import (
 // existence test. Staged, never a wrong body: a topology-changing offset is
 // S11, ErrUnsupported. Removing side faces of a prism is a side opening,
 // agent-docs/modify-design.md Part O's (shell_opening.go).
-
-// ShellOption configures Shell, including its wall sense.
-type ShellOption interface{ shellOption() }
 
 // ShellSense is the wall sense of a shell (agent-docs/modify-design.md §8): the
 // thickness is a magnitude and carries no sign (core §8.1), so which way the
@@ -64,28 +63,50 @@ func (s ShellSense) String() string {
 	}
 }
 
-// WithShellSense sets the wall sense (Inward, Outward or Centered). Without it the sense
-// is Inward (agent-docs/modify-design.md §8).
-func WithShellSense(s ShellSense) ShellOption {
-	return shellOptionValue{encoded: modifyoption.WithShellSense(int(s))}
+// shellSettings holds the methods Shell and ShellClosed share: the wall sense
+// with the error validating it, and the per-direction wall thicknesses.
+type shellSettings struct {
+	sense      opcommand.Slot[ShellSense]
+	thickness  []modifyoption.FaceThickness
+	noOpenings bool
 }
 
-// WithShellFaceThickness gives the walls whose outward normal is the world axis direction normal (+X, +Y, +Z or a
-// negative one) the thickness t in place of Shell's own, so a part can have a heavy floor and thin sides
-// (agent-docs/orthogonal-design.md). It applies to an Inward shell of a faceted solid whose faces all square to a
-// world axis; any other body, a sense other than Inward, a normal that is not exactly a world axis direction
-// (ErrDegenerate) and a direction named twice (ErrDegenerate) are refused. t is a positive length. Directions the
-// option does not name take Shell's thickness, and the walls of two directions meet in a mitred corner.
-func WithShellFaceThickness(normal r3.Vec, t units.Value) ShellOption {
+func (s *shellSettings) setSense(sense ShellSense) {
+	s.sense.Set(sense, modifyoption.ValidateShellSense(int(sense)))
+}
+
+// addFaceThickness records the thickness for one direction. A direction named
+// again takes the later thickness. A normal that is no world axis direction
+// is recorded with axis -1 and refused at Do.
+func (s *shellSettings) addFaceThickness(normal r3.Vec, t units.Value) {
 	axis, sign, ok := unitAxis(normal)
 	if !ok {
-		axis = -1
+		axis, sign = -1, 0
 	}
-	return shellOptionValue{encoded: modifyoption.WithFaceThickness(modifyoption.FaceThickness{Axis: axis, Sign: int(sign), T: t})}
+	f := modifyoption.FaceThickness{Axis: axis, Sign: int(sign), T: t}
+	for i, have := range s.thickness {
+		if have.Axis == f.Axis && have.Sign == f.Sign {
+			s.thickness[i] = f
+			return
+		}
+	}
+	s.thickness = append(s.thickness, f)
 }
 
-// Shell removes the faces of b that sel selects and lines the rest
-// with a wall of thickness t, returning the new body and retiring b
+// config folds the settings into the shell configuration. The returned error
+// is the fault of the Sense call, refused where today's option decode
+// refused it.
+func (s *shellSettings) config() (modifyoption.ShellConfig, error) {
+	sense, err := s.sense.Get()
+	return modifyoption.ShellConfig{
+		Sense:         int(sense),
+		NoOpenings:    s.noOpenings,
+		FaceThickness: slices.Clone(s.thickness),
+	}, err
+}
+
+// Shell returns the command that removes the faces of b that sel selects and lines the rest
+// with a wall of thickness t, returning the new body and retiring b on Do
 // (agent-docs/modify-design.md §8, core §8). A nil b is ErrDegenerate. sel names the
 // faces to REMOVE — the openings — resolved against the live b; a query matching nothing is
 // loud (ErrNoMatch / ErrCardinality, S16). t is a length magnitude, gated like
@@ -135,31 +156,6 @@ func WithShellFaceThickness(normal r3.Vec, t units.Value) ShellOption {
 // A positive-taper one-sided full-circle draft with its far cap removed
 // inward builds a conical cup through draft §10.6's bounded meridian.
 //
-// WithNoOpenings asks for a closed hollow body that keeps every face; it is
-// the one call form that takes a nil sel, and a non-nil sel beside it is
-// ErrDegenerate (agent-docs/modify-design.md Part R §2, SX1). A full-turn revolve
-// builds it: the meridian's wall region swept a whole turn, an outer shell
-// around one void shell (FaceShell.IsVoid) that is the cavity. So does a
-// straight prism: both caps keep a floor t thick, so an inward wall needs t
-// below half the sweep (SX11, ErrDegenerate). A holed section builds too, its
-// cavity a ring round each hole's lining; outward the cavity is the section
-// itself and each lining grows into its hole, so a hole whose radius or
-// half-width is at most t fills in, which is ErrUnsupported (S11a). So does a
-// brep result that reads as a prism along some reference axis, such as a
-// drilled bar (modify-general §3.2); outward it must read along one axis
-// only. A two-slab rectangular boss Union builds the bounded inward cavity of
-// modify-general §3.1a. Other receivers return ErrUnsupported after the
-// stage-1 gates pass — a partial revolve, and brep or stacked results outside
-// those classes (SG2). A convex mesh Boolean result whose faces all keep an
-// exact plane tag and whose edges all meet at valence-3 vertices, such as the
-// 45 degree bevelled plate of a tilted Cut, builds the closed inward shell
-// through the trim graph: each face's plane moved in by t and the cavity
-// corners found as exact three-plane meets (agent-docs/trim-graph-design.md,
-// Component 6). The cavity is one void shell with a plane face per outer face;
-// a thickness that drops a face, or a receiver with a concave edge, keeps the
-// ErrUnsupported refusal. Two WithShellSense options naming different senses are
-// ErrDegenerate (SX1).
-//
 // An analytic boolean result (a brep or stacked body) that reads as a prism
 // along a reference axis is shelled as that prism
 // (agent-docs/modify-design.md Part B route P) when the removed faces are its caps.
@@ -183,12 +179,127 @@ func WithShellFaceThickness(normal r3.Vec, t units.Value) ShellOption {
 // nested rectangular slabs: removing the boss top inward builds the plate
 // and boss cavity with four cylinder root patches (modify-general §3.1a).
 // A coaxial two-level counterbore has a separate inward route (§3.1e).
-func Shell(ctx context.Context, b *Body, sel FaceSelector, t units.Value,
-	opts ...ShellOption) (result *Body, retErr error) {
-	defer func() { retErr = operationError(OperationShell, retErr) }()
-	if ctx == nil {
-		return nil, fmt.Errorf(`%w: a nil context cannot control a shell`, ErrDegenerate)
+func Shell(b *Body, sel FaceSelector, t units.Value) *ShellCommand {
+	c := &ShellCommand{b: b, sel: copyFaceSelector(sel), t: t}
+	if b == nil {
+		c.state.Record("body", errNilBody)
 	}
+	return c
+}
+
+// ShellCommand hollows a body and removes the faces its selector names. Build
+// it with [Shell].
+type ShellCommand struct {
+	state    opcommand.State // consumed flag and first recorded fault
+	b        *Body           // stored as given
+	sel      FaceSelector    // copied at Shell
+	t        units.Value     // the wall thickness, gated at Do
+	settings shellSettings   // set by Sense and FaceThickness
+}
+
+// Sense sets the wall sense (Inward, Outward or Centered). Without it the sense
+// is Inward (agent-docs/modify-design.md §8). A value that names no sense is
+// ErrDegenerate, returned by Do. A second call replaces the first.
+func (c *ShellCommand) Sense(s ShellSense) *ShellCommand { c.settings.setSense(s); return c }
+
+// FaceThickness gives the walls whose outward normal is the world axis direction normal (+X, +Y, +Z or a
+// negative one) the thickness t in place of Shell's own, so a part can have a heavy floor and thin sides
+// (agent-docs/orthogonal-design.md). It applies to an Inward shell of a faceted solid whose faces all square to a
+// world axis; any other body, a sense other than Inward and a normal that is not exactly a world axis direction
+// (ErrDegenerate) are refused. t is a positive length. Directions no call names take Shell's thickness, and the
+// walls of two directions meet in a mitred corner. Each call names one direction; calling the method again for
+// a direction replaces that direction's thickness.
+func (c *ShellCommand) FaceThickness(normal r3.Vec, t units.Value) *ShellCommand {
+	c.settings.addFaceThickness(normal, t)
+	return c
+}
+
+// Do hollows the body and retires it, or returns the error of the first gate
+// that refuses, leaving the body live. A nil ctx is ErrDegenerate, and a
+// second call returns ErrConsumed.
+func (c *ShellCommand) Do(ctx context.Context) (*Body, error) {
+	return runCommand(ctx, &c.state, OperationShell, c.run)
+}
+
+func (c *ShellCommand) run(ctx context.Context) (*Body, error) {
+	o, err := c.settings.config()
+	return shell(ctx, c.b, c.sel, c.t, o, err)
+}
+
+// ShellClosed returns the command that keeps every face of b and builds a
+// closed hollow body with a wall of thickness t, retiring b on Do. It takes no
+// face selector, because no face is removed (agent-docs/modify-design.md Part
+// R §2, SX1). A full-turn revolve
+// builds it: the meridian's wall region swept a whole turn, an outer shell
+// around one void shell (FaceShell.IsVoid) that is the cavity. So does a
+// straight prism: both caps keep a floor t thick, so an inward wall needs t
+// below half the sweep (SX11, ErrDegenerate). A holed section builds too, its
+// cavity a ring round each hole's lining; outward the cavity is the section
+// itself and each lining grows into its hole, so a hole whose radius or
+// half-width is at most t fills in, which is ErrUnsupported (S11a). So does a
+// brep result that reads as a prism along some reference axis, such as a
+// drilled bar (modify-general §3.2); outward it must read along one axis
+// only. A two-slab rectangular boss Union builds the bounded inward cavity of
+// modify-general §3.1a. Other receivers return ErrUnsupported after the
+// stage-1 gates pass — a partial revolve, and brep or stacked results outside
+// those classes (SG2). A convex mesh Boolean result whose faces all keep an
+// exact plane tag and whose edges all meet at valence-3 vertices, such as the
+// 45 degree bevelled plate of a tilted Cut, builds the closed inward shell
+// through the trim graph: each face's plane moved in by t and the cavity
+// corners found as exact three-plane meets (agent-docs/trim-graph-design.md,
+// Component 6). The cavity is one void shell with a plane face per outer face;
+// a thickness that drops a face, or a receiver with a concave edge, keeps the
+// ErrUnsupported refusal.
+// It has the methods Sense and FaceThickness of [ShellCommand].
+func ShellClosed(b *Body, t units.Value) *ShellClosedCommand {
+	c := &ShellClosedCommand{b: b, t: t}
+	c.settings.noOpenings = true
+	if b == nil {
+		c.state.Record("body", errNilBody)
+	}
+	return c
+}
+
+// ShellClosedCommand hollows a body and keeps every face. Build it with
+// [ShellClosed].
+type ShellClosedCommand struct {
+	state    opcommand.State // consumed flag and first recorded fault
+	b        *Body           // stored as given
+	t        units.Value     // the wall thickness, gated at Do
+	settings shellSettings   // set by Sense and FaceThickness
+}
+
+// Sense sets the wall sense as [ShellCommand.Sense] does.
+func (c *ShellClosedCommand) Sense(s ShellSense) *ShellClosedCommand {
+	c.settings.setSense(s)
+	return c
+}
+
+// FaceThickness gives the walls facing one world axis direction their own
+// thickness as [ShellCommand.FaceThickness] does.
+func (c *ShellClosedCommand) FaceThickness(normal r3.Vec, t units.Value) *ShellClosedCommand {
+	c.settings.addFaceThickness(normal, t)
+	return c
+}
+
+// Do hollows the body and retires it, or returns the error of the first gate
+// that refuses, leaving the body live. A nil ctx is ErrDegenerate, and a
+// second call returns ErrConsumed. Its errors carry [OperationShell].
+func (c *ShellClosedCommand) Do(ctx context.Context) (*Body, error) {
+	return runCommand(ctx, &c.state, OperationShell, c.run)
+}
+
+func (c *ShellClosedCommand) run(ctx context.Context) (*Body, error) {
+	o, err := c.settings.config()
+	return shell(ctx, c.b, nil, c.t, o, err)
+}
+
+// shell is the implementation of Shell and ShellClosed. ctx is not nil, and
+// the errors it returns carry no operation tag
+// (agent-docs/command-api-design.md §11). senseErr is the fault of the Sense
+// call. A nil sel is legal only with o.NoOpenings.
+func shell(ctx context.Context, b *Body, sel FaceSelector, t units.Value, o modifyoption.ShellConfig,
+	senseErr error) (*Body, error) {
 	if b == nil || b.n.Doc == nil {
 		return nil, fmt.Errorf(`%w: the body belongs to no document`, ErrDegenerate)
 	}
@@ -204,20 +315,14 @@ func Shell(ctx context.Context, b *Body, sel FaceSelector, t units.Value,
 	if err := refuseSheetOperand(b, "Shell"); err != nil {
 		return nil, err
 	}
-	o, err := decodeShellOptions(opts)
-	if err != nil {
-		return nil, err
+	if senseErr != nil {
+		return nil, subjectError(OperationShell, "Sense", senseErr)
 	}
 	sense := ShellSense(o.Sense)
 	// decad owns the selector vocabulary, so only the built-in query can be
 	// resolved and recorded. A typed nil query reads as an untyped nil.
 	q, isQuery := sel.(*FaceQuery)
 	nilSel := sel == nil || (isQuery && q == nil)
-	// SX1 (agent-docs/modify-design.md Part R §2): WithNoOpenings keeps every face,
-	// so a selector naming faces to remove beside it names no single intent.
-	if o.NoOpenings && !nilSel {
-		return nil, modifyoption.ErrOptionConflict(`WithNoOpenings keeps every face, and a non-nil selector names faces to remove`)
-	}
 	tmm, tDelta, err := extent.MagnitudeInBounded(t, units.Length, units.Millimeter, "the shell thickness")
 	if err != nil {
 		return nil, err

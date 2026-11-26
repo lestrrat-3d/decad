@@ -16,6 +16,11 @@ import (
 // lattice, or one too large to build.
 var ErrDegenerate = errors.New("lattice: degenerate lattice")
 
+// ErrResolution is the part of ErrDegenerate that a resolution below 4 samples to a
+// cell raises, so a caller that took the resolution from one of its own methods
+// can name that method.
+var ErrResolution = errors.New("at least 4 samples to a cell")
+
 // maxNodes bounds the grid a call may sample, and maxTriangles the mesh it may
 // return.
 const (
@@ -135,7 +140,7 @@ func Surface(ctx context.Context, kind Kind, lo, hi r3.Vec, cell, level float64,
 		return nil, nil, fmt.Errorf("%w: the level must lie between 0 and %g", ErrDegenerate, kind.MaxLevel())
 	}
 	if res < 4 {
-		return nil, nil, fmt.Errorf("%w: at least 4 samples to a cell", ErrDegenerate)
+		return nil, nil, fmt.Errorf("%w: %w", ErrDegenerate, ErrResolution)
 	}
 	size := hi.Sub(lo)
 	if !(size.X > 0 && size.Y > 0 && size.Z > 0) || math.IsInf(size.X+size.Y+size.Z, 0) {

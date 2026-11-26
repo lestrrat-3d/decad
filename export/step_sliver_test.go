@@ -49,7 +49,7 @@ func sliverPrism(t *testing.T, doc *decad.Document, origin, u, v r3.Vec, poly []
 		}
 	}
 	require.NotNil(t, chosen)
-	body, err := decad.Extrude(t.Context(), doc, s, chosen, decad.Distance{D: units.Millimeters(length), Dir: decad.Along})
+	body, err := decad.Extrude(doc, s, chosen, decad.Distance{D: units.Millimeters(length), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -71,12 +71,12 @@ func TestSTEPSplitBoreRoundingSliver(t *testing.T) {
 		{227, -36.3}, {245, -35}, {292, -35}, {292, -18}, {306, -18}, {306, 0}, {156, 0}, {140, -12}}
 	body := sliverPrism(t, doc, r3.Vec{Y: 20.3}, x, z, outline, nil, 40.6) // normal -Y, Y -20.3..20.3
 	bore := sliverPrism(t, doc, r3.Vec{Y: 21.3}, x, z, nil, [][3]float64{{205, -9, 2.1}}, 42.6)
-	body, err := decad.Cut(t.Context(), body, bore)
+	body, err := decad.Cut(body, bore).Do(t.Context())
 	require.NoError(t, err)
-	right, err := decad.Copy(t.Context(), body)
+	right, err := decad.Copy(body).Do(t.Context())
 	require.NoError(t, err)
 	box := sliverPrism(t, doc, r3.Vec{Z: -51.5}, x, y, [][2]float64{{139, 0}, {307, 0}, {307, 21.3}, {139, 21.3}}, nil, 52.5)
-	right, err = decad.Cut(t.Context(), right, box)
+	right, err = decad.Cut(right, box).Do(t.Context())
 	require.NoError(t, err)
 	requireSTEP(t, right, 0.1)
 }
@@ -95,9 +95,9 @@ func TestSTEPGapShiftSliver(t *testing.T) {
 			{277, -10.9}, {250, -10.9}, {248, -12.15}, {277, -12.15}}, nil, 3)
 	full := sliverPrism(t, doc, r3.Vec{Y: 23.3}, x, z,
 		[][2]float64{{165, -18}, {332, -18}, {332, 1.8}, {165, 1.8}}, nil, 3)
-	body, err := decad.Cut(t.Context(), full, window)
+	body, err := decad.Cut(full, window).Do(t.Context())
 	require.NoError(t, err)
-	body, err = decad.Cut(t.Context(), body, pocket)
+	body, err = decad.Cut(body, pocket).Do(t.Context())
 	require.NoError(t, err)
 	t.Logf("diagnostics: %v", body.OperationDiagnostics())
 	requireSTEP(t, body, 0.1)
@@ -116,9 +116,9 @@ func TestSTLGapShiftSliver(t *testing.T) {
 			{277, -10.9}, {250, -10.9}, {248, -12.15}, {277, -12.15}}, nil, 3)
 	full := sliverPrism(t, doc, r3.Vec{Y: 23.3}, x, z,
 		[][2]float64{{165, -18}, {332, -18}, {332, 1.8}, {165, 1.8}}, nil, 3)
-	body, err := decad.Cut(t.Context(), full, window)
+	body, err := decad.Cut(full, window).Do(t.Context())
 	require.NoError(t, err)
-	body, err = decad.Cut(t.Context(), body, pocket)
+	body, err = decad.Cut(body, pocket).Do(t.Context())
 	require.NoError(t, err)
 	var buf bytes.Buffer
 	require.NoError(t, export.STL(t.Context(), &buf, body, units.Millimeters(0.1)))

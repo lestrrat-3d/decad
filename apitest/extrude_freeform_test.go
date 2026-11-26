@@ -72,7 +72,7 @@ func TestExtrudeFreeformAreaIsRegionPlusPerimeter(t *testing.T) {
 
 	d := decad.New()
 	const height = 10.0
-	body, err := decad.Extrude(t.Context(), d, s, p, decad.Distance{D: units.Millimeters(height), Dir: decad.Along})
+	body, err := decad.Extrude(d, s, p, decad.Distance{D: units.Millimeters(height), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 
 	// Sum every SIDE face's own area (never a cap's, told apart by role) —
@@ -111,7 +111,7 @@ func TestExtrudeFreeformTopology(t *testing.T) {
 	require.Len(t, record.Outer.Segments, 2, "the fit spline plus its closing chord")
 
 	d := decad.New()
-	body, err := decad.Extrude(t.Context(), d, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	body, err := decad.Extrude(d, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 
 	faces := body.Faces()
@@ -146,7 +146,7 @@ func TestExtrudeFreeformRimLengthPublished(t *testing.T) {
 	t.Parallel()
 	s, p := fitSplineArchSketch(t)
 	d := decad.New()
-	body, err := decad.Extrude(t.Context(), d, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	body, err := decad.Extrude(d, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 
 	wall := freeformWallFace(t, body)
@@ -175,7 +175,7 @@ func TestExtrudeFreeformNormalAtRefuses(t *testing.T) {
 	t.Parallel()
 	s, p := fitSplineArchSketch(t)
 	d := decad.New()
-	body, err := decad.Extrude(t.Context(), d, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	body, err := decad.Extrude(d, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 
 	wall := freeformWallFace(t, body)
@@ -224,7 +224,7 @@ func TestExtrudeFreeformConvexityBothDirections(t *testing.T) {
 	convexOf := func(bulgeOut bool) bool {
 		s, p := rectangleWithBulgeSketch(t, bulgeOut)
 		d := decad.New()
-		body, err := decad.Extrude(t.Context(), d, s, p, decad.Distance{D: units.Millimeters(1), Dir: decad.Along})
+		body, err := decad.Extrude(d, s, p, decad.Distance{D: units.Millimeters(1), Dir: decad.Along}).Do(t.Context())
 		require.NoError(t, err)
 		wall := freeformWallFace(t, body)
 		var convex bool
@@ -270,7 +270,7 @@ func TestExtrudeFreeformStraightWalkBuilds(t *testing.T) {
 	require.Len(t, profiles, 1)
 
 	d := decad.New()
-	body, err := decad.Extrude(t.Context(), d, s, profiles[0], decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
+	body, err := decad.Extrude(d, s, profiles[0], decad.Distance{D: units.Millimeters(5), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	require.NotNil(t, body)
 
@@ -308,7 +308,7 @@ func TestExtrudeFreeformJointCarriesChainVerdict(t *testing.T) {
 	require.Len(t, profiles, 1)
 
 	d := decad.New()
-	body, err := decad.Extrude(t.Context(), d, s, profiles[0], decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
+	body, err := decad.Extrude(d, s, profiles[0], decad.Distance{D: units.Millimeters(5), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 
 	wall := freeformWallFace(t, body)
@@ -360,7 +360,7 @@ func TestExtrudeFreeformR19RefusesTheBuild(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			s, p := r19Fixture(t, control)
 			d := decad.New()
-			body, err := decad.Extrude(t.Context(), d, s, p, decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
+			body, err := decad.Extrude(d, s, p, decad.Distance{D: units.Millimeters(5), Dir: decad.Along}).Do(t.Context())
 			require.Error(t, err)
 			require.Nil(t, body)
 			require.ErrorIs(t, err, decad.ErrUnsupported)
@@ -388,7 +388,7 @@ func TestExtrudeFreeformR19RefusesTheBuild(t *testing.T) {
 		require.Len(t, profiles, 1)
 
 		d := decad.New()
-		body, err := decad.Extrude(t.Context(), d, s, profiles[0], decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
+		body, err := decad.Extrude(d, s, profiles[0], decad.Distance{D: units.Millimeters(5), Dir: decad.Along}).Do(t.Context())
 		require.Error(t, err)
 		require.Nil(t, body)
 		require.ErrorIs(t, err, decad.ErrUnsupported)
@@ -419,7 +419,7 @@ func TestExtrudeClosedSplineTwoLoopsAndSound(t *testing.T) {
 	require.Len(t, profiles, 1)
 
 	d := decad.New()
-	body, err := decad.Extrude(t.Context(), d, s, profiles[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	body, err := decad.Extrude(d, s, profiles[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 
 	faces := body.Faces()
@@ -450,7 +450,7 @@ func TestExtrudeFreeformVerifySound(t *testing.T) {
 	t.Parallel()
 	s, p := fitSplineArchSketch(t)
 	d := decad.New()
-	body, err := decad.Extrude(t.Context(), d, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	body, err := decad.Extrude(d, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	directVolume, err := body.Volume()
 	require.NoError(t, err)
@@ -479,7 +479,7 @@ func TestExtrudeFreeformPlacementReproducesVolume(t *testing.T) {
 	t.Parallel()
 	s, p := fitSplineArchSketch(t)
 	d := decad.New()
-	body, err := decad.Extrude(t.Context(), d, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	body, err := decad.Extrude(d, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	base, err := body.Volume()
 	require.NoError(t, err)
@@ -489,19 +489,19 @@ func TestExtrudeFreeformPlacementReproducesVolume(t *testing.T) {
 
 	// Copy leaves the input LIVE; Transform retires it
 	// (core §8), so it runs last.
-	dup, err := decad.Copy(t.Context(), body)
+	dup, err := decad.Copy(body).Do(t.Context())
 	require.NoError(t, err)
 	dv, err := dup.Volume()
 	require.NoError(t, err)
 	require.InDelta(t, base.Value.Mag(), dv.Value.Mag(), 1e-9, "Copy reproduces the volume")
 
-	copied, err := decad.Copy(t.Context(), body, decad.WithCopyPlacement(move))
+	copied, err := decad.Copy(body).Place(decad.CopyTransform{Transform: move}).Do(t.Context())
 	require.NoError(t, err)
 	cv, err := copied.Volume()
 	require.NoError(t, err)
 	require.InDelta(t, base.Value.Mag(), cv.Value.Mag(), 1e-9, "placed Copy reproduces the volume")
 
-	placed, err := decad.Transform(t.Context(), body, move)
+	placed, err := decad.Transform(body, move).Do(t.Context())
 	require.NoError(t, err)
 	pv, err := placed.Volume()
 	require.NoError(t, err)
@@ -518,7 +518,7 @@ func TestExtrudeFreeformTierBCRefusesWithTierACounterpart(t *testing.T) {
 	// Tier A counterpart: the fit-spline arch builds.
 	s, p := fitSplineArchSketch(t)
 	d := decad.New()
-	body, err := decad.Extrude(t.Context(), d, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	body, err := decad.Extrude(d, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	require.NotNil(t, body)
 
@@ -536,7 +536,7 @@ func TestExtrudeFreeformTierBCRefusesWithTierACounterpart(t *testing.T) {
 	require.Len(t, profiles2, 1)
 
 	d2 := decad.New()
-	body2, err := decad.Extrude(t.Context(), d2, s2, profiles2[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	body2, err := decad.Extrude(d2, s2, profiles2[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(t.Context())
 	require.Error(t, err)
 	require.Nil(t, body2)
 	require.ErrorIs(t, err, decad.ErrUnsupported)
@@ -590,7 +590,7 @@ func TestExtrudeFreeformFalsifierDenseSample(t *testing.T) {
 	require.Len(t, profiles, 1)
 
 	d := decad.New()
-	body, err := decad.Extrude(t.Context(), d, s, profiles[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	body, err := decad.Extrude(d, s, profiles[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 
 	box, err := body.Bounds()
@@ -629,7 +629,7 @@ func TestExtrudeFreeformFalsifierDenseSample(t *testing.T) {
 func freeformArchBody(t *testing.T, doc *decad.Document) *decad.Body {
 	t.Helper()
 	s, p := fitSplineArchSketch(t)
-	body, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	body, err := decad.Extrude(doc, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -656,7 +656,7 @@ func straightNURBSPrismBody(t *testing.T, doc *decad.Document) *decad.Body {
 	s.CreateLine(p3, p0)
 	profiles := s.Profiles()
 	require.Len(t, profiles, 1)
-	body, err := decad.Extrude(t.Context(), doc, s, profiles[0], decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
+	body, err := decad.Extrude(doc, s, profiles[0], decad.Distance{D: units.Millimeters(5), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -702,7 +702,7 @@ func overshootNetBody(t *testing.T, doc *decad.Document) *decad.Body {
 	s.CreateLine(pts[len(pts)-1], pts[0])
 	profiles := s.Profiles()
 	require.Len(t, profiles, 1)
-	body, err := decad.Extrude(t.Context(), doc, s, profiles[0], decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
+	body, err := decad.Extrude(doc, s, profiles[0], decad.Distance{D: units.Millimeters(5), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -866,7 +866,7 @@ func TestFreeformPrismExportsDeterministically(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
 	s, p := involuteFlankSketch(t)
-	body, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(4), Dir: decad.Along})
+	body, err := decad.Extrude(doc, s, p, decad.Distance{D: units.Millimeters(4), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 
 	for _, tc := range []struct {
@@ -900,12 +900,12 @@ func TestFreeformPrismCutsAnInteriorBox(t *testing.T) {
 
 	lift, err := r3.Translation(r3.NewVec(0, 0, 3))
 	require.NoError(t, err)
-	inner, err := decad.Transform(t.Context(), boxBody(t, doc, 3, 0.5, 5, 1.5, 4), lift)
+	inner, err := decad.Transform(boxBody(t, doc, 3, 0.5, 5, 1.5, 4), lift).Do(t.Context())
 	require.NoError(t, err)
 	innerVolume, err := inner.Volume()
 	require.NoError(t, err)
 
-	result, err := decad.Cut(t.Context(), body, inner)
+	result, err := decad.Cut(body, inner).Do(t.Context())
 	require.NoError(t, err)
 	got, err := result.Volume()
 	require.NoError(t, err)
@@ -928,7 +928,7 @@ func TestFreeformPrismInterferenceDecided(t *testing.T) {
 	// shares no face plane with its twin.
 	shift, err := r3.Translation(r3.NewVec(2, 0.2, 1))
 	require.NoError(t, err)
-	_, err = decad.Copy(t.Context(), body, decad.WithCopyPlacement(shift))
+	_, err = decad.Copy(body).Place(decad.CopyTransform{Transform: shift}).Do(t.Context())
 	require.NoError(t, err)
 
 	report, err := doc.Verify(t.Context())
@@ -1044,14 +1044,14 @@ func TestFreeformPrismFilletChamferRefuse(t *testing.T) {
 			t.Run("Fillet", func(t *testing.T) {
 				doc := decad.New()
 				body := fixture.build(t, doc)
-				_, err := decad.Fillet(t.Context(), body, verticalEdges(), units.Millimeters(1))
+				_, err := decad.Fillet(body, verticalEdges(), units.Millimeters(1)).Do(t.Context())
 				require.ErrorIs(t, err, decad.ErrUnsupported)
 				require.ErrorContains(t, err, "free-form boundary segment")
 			})
 			t.Run("Chamfer", func(t *testing.T) {
 				doc := decad.New()
 				body := fixture.build(t, doc)
-				_, err := decad.Chamfer(t.Context(), body, verticalEdges(), units.Millimeters(1))
+				_, err := decad.Chamfer(body, verticalEdges(), units.Millimeters(1)).Do(t.Context())
 				require.ErrorIs(t, err, decad.ErrUnsupported)
 				require.ErrorContains(t, err, "free-form boundary segment")
 			})
@@ -1078,7 +1078,7 @@ func TestFreeformPrismShellRefuses(t *testing.T) {
 		t.Run(fixture.name, func(t *testing.T) {
 			doc := decad.New()
 			body := fixture.build(t, doc)
-			_, err := decad.Shell(t.Context(), body, bothCaps(), units.Millimeters(1))
+			_, err := decad.Shell(body, bothCaps(), units.Millimeters(1)).Do(t.Context())
 			require.ErrorIs(t, err, decad.ErrUnsupported)
 			require.ErrorContains(t, err, "free-form boundary segment")
 		})
@@ -1093,7 +1093,7 @@ func TestFreeformPrismCapLoopChamferRefuses(t *testing.T) {
 	doc := decad.New()
 	body := freeformArchBody(t, doc)
 
-	_, err := decad.Chamfer(t.Context(), body, capLoopEdges(body), units.Millimeters(1))
+	_, err := decad.Chamfer(body, capLoopEdges(body), units.Millimeters(1)).Do(t.Context())
 
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.ErrorContains(t, err, "only a smooth rim offsets")
@@ -1107,7 +1107,7 @@ func TestFreeformRevolveAxisContactRefuses(t *testing.T) {
 	s, p := fitSplineArchSketch(t)
 	doc := decad.New()
 
-	_, err := decad.Revolve(t.Context(), doc, s, p, uAxis, decad.FullRevolution{})
+	_, err := decad.Revolve(doc, s, p, uAxis, decad.FullRevolution{}).Do(t.Context())
 
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.ErrorContains(t, err, "needs proven clearance from the axis")
@@ -1183,7 +1183,7 @@ func TestFreeformPrismChordsBothWalkDirectionsIdentically(t *testing.T) {
 	const tol = 0.02
 	meshOf := func(build func(t *testing.T) (*sketch.Sketch, *sketch.Profile)) *decad.Mesh {
 		s, p := build(t)
-		body, err := decad.Extrude(t.Context(), decad.New(), s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+		body, err := decad.Extrude(decad.New(), s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(t.Context())
 		require.NoError(t, err)
 		mesh, err := body.Tessellate(t.Context(), units.Millimeters(tol))
 		require.NoError(t, err)

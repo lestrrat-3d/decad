@@ -31,9 +31,9 @@ func TestFacetedRetainedBlendArcEndPlane(t *testing.T) {
 			const bore, r = 4.0, 4.0
 			h := bore * math.Sqrt(1-c*c)
 			sc := newRetentionScene()
-			bored, err := decad.Cut(t.Context(), blendPlate(t, sc), zCylinderAt(t, sc, h, 10, bore, -30, 30))
+			bored, err := decad.Cut(blendPlate(t, sc), zCylinderAt(t, sc, h, 10, bore, -30, 30)).Do(t.Context())
 			require.NoError(t, err)
-			out, err := decad.Fillet(t.Context(), bored, arcSeedAt(t, bored, 20), units.Millimeters(r))
+			out, err := decad.Fillet(bored, arcSeedAt(t, bored, 20), units.Millimeters(r)).Do(t.Context())
 			require.NoError(t, err)
 			for _, side := range []float64{1, -1} {
 				requireEndCurveCovered(t, out, func(alpha float64) r3.Vec {
@@ -55,10 +55,10 @@ func TestFacetedRetainedBlendArcEndPlane(t *testing.T) {
 				const bore = 4.0
 				h := bore * math.Sqrt(1-c*c)
 				sc := newRetentionScene()
-				bored, err := decad.Cut(t.Context(), blendPlate(t, sc), zCylinderAt(t, sc, h, 10, bore, -30, 30))
+				bored, err := decad.Cut(blendPlate(t, sc), zCylinderAt(t, sc, h, 10, bore, -30, 30)).Do(t.Context())
 				require.NoError(t, err)
 				old := originsOf(bored)
-				out, err := decad.Chamfer(t.Context(), bored, arcSeedAt(t, bored, 20), units.Millimeters(d))
+				out, err := decad.Chamfer(bored, arcSeedAt(t, bored, 20), units.Millimeters(d)).Do(t.Context())
 				require.NoError(t, err)
 				made := madeFaces(old, out)
 				// The cone's generator in the meridian plane about (h, 10),
@@ -83,10 +83,9 @@ func TestFacetedRetainedBlendArcEndPlane(t *testing.T) {
 		gx := openBoxR - h
 		sc := newRetentionScene()
 		block := placed(t, rectBox(t, sc.w, sc.doc, -5, -5, gx, 25, 30), -5)
-		trimmed, err := decad.Cut(t.Context(), roundedCornerBox(t, sc), block)
+		trimmed, err := decad.Cut(roundedCornerBox(t, sc), block).Do(t.Context())
 		require.NoError(t, err)
-		out, err := decad.Fillet(t.Context(), trimmed, arcSeedAt(t, trimmed, 20), units.Millimeters(r),
-			decad.WithTangentChain())
+		out, err := decad.Fillet(trimmed, arcSeedAt(t, trimmed, 20), units.Millimeters(r)).TangentChain().Do(t.Context())
 		require.NoError(t, err)
 		requireEndCurveCovered(t, out, func(alpha float64) r3.Vec {
 			rho := openBoxR - r + r*math.Sin(alpha)
@@ -106,8 +105,8 @@ func TestFacetedRetainedBlendArcEndPlane(t *testing.T) {
 			t.Parallel()
 			h := openBoxR - c.x1
 			body := pocketMouth(t, c.x1)
-			out, err := decad.Fillet(t.Context(), body, arcSeedAt(t, body, 10),
-				units.Millimeters(c.r), decad.WithTangentChain())
+			out, err := decad.Fillet(body, arcSeedAt(t, body, 10),
+				units.Millimeters(c.r)).TangentChain().Do(t.Context())
 			require.NoError(t, err)
 			for _, end := range []struct{ y, dir float64 }{{13, -1}, {27, 1}} {
 				requireEndCurveCovered(t, out, func(alpha float64) r3.Vec {
@@ -129,9 +128,9 @@ func pocketMouth(t *testing.T, x1 float64) *decad.Body {
 	up := decad.ParallelTo(r3.NewVec(0, 0, 1))
 	corners := decad.Edges(up, decad.EndpointAt(r3.NewVec(x1, 10, 0))).
 		Or(up, decad.EndpointAt(r3.NewVec(x1, 30, 0))).Exactly(2)
-	tool, err := decad.Fillet(t.Context(), tool, corners, units.Millimeters(openBoxR))
+	tool, err := decad.Fillet(tool, corners, units.Millimeters(openBoxR)).Do(t.Context())
 	require.NoError(t, err)
-	out, err := decad.Cut(t.Context(), plate, placed(t, tool, 5))
+	out, err := decad.Cut(plate, placed(t, tool, 5)).Do(t.Context())
 	require.NoError(t, err)
 	return out
 }

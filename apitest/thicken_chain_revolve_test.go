@@ -31,7 +31,7 @@ func thickenChainShellOf(t *testing.T, pts [][2]float64) (*decad.Document, *deca
 	chains := s.Chains()
 	require.Len(t, chains, 1)
 	doc := decad.New()
-	shell, err := decad.Revolve(t.Context(), doc, s, chains[0], thickenMeridianAxis, decad.FullRevolution{})
+	shell, err := decad.Revolve(doc, s, chains[0], thickenMeridianAxis, decad.FullRevolution{}).Do(t.Context())
 	require.NoError(t, err)
 	return doc, shell
 }
@@ -57,8 +57,7 @@ func TestThickenChainRevolveCylinder(t *testing.T) {
 			t.Parallel()
 			_, shell := thickenChainShellOf(t, [][2]float64{{10, 0}, {10, 40}})
 			require.Equal(t, decad.BodySheet, shell.Kind())
-			solid, err := decad.Thicken(t.Context(), shell, units.Millimeters(tc.thickness),
-				decad.WithThickenSide(tc.side))
+			solid, err := decad.Thicken(shell, units.Millimeters(tc.thickness)).Side(tc.side).Do(t.Context())
 			require.NoError(t, err)
 			require.Equal(t, decad.BodySolid, solid.Kind())
 			require.Len(t, solid.Faces(), 4)
@@ -79,8 +78,7 @@ func TestThickenChainRevolveCylinder(t *testing.T) {
 func TestThickenChainRevolveReachesAxis(t *testing.T) {
 	t.Parallel()
 	doc, shell := thickenChainShellOf(t, [][2]float64{{10, 0}, {10, 40}})
-	_, err := decad.Thicken(t.Context(), shell, units.Millimeters(11),
-		decad.WithThickenSide(decad.ThickenNegative))
+	_, err := decad.Thicken(shell, units.Millimeters(11)).Side(decad.ThickenNegative).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.Contains(t, err.Error(), "reaches the revolve axis")
 	require.Contains(t, err.Error(), "-1.000000000")
@@ -94,7 +92,7 @@ func TestThickenChainRevolveReachesAxis(t *testing.T) {
 func TestThickenChainRevolveStep(t *testing.T) {
 	t.Parallel()
 	_, shell := thickenChainShellOf(t, [][2]float64{{10, 0}, {10, 20}, {20, 20}})
-	solid, err := decad.Thicken(t.Context(), shell, units.Millimeters(2))
+	solid, err := decad.Thicken(shell, units.Millimeters(2)).Do(t.Context())
 	require.NoError(t, err)
 	require.Len(t, solid.Faces(), 6)
 	volume, err := solid.Volume()
@@ -113,7 +111,7 @@ func TestThickenChainRevolvePoleRefuses(t *testing.T) {
 	doc, shell := thickenChainShellOf(t, [][2]float64{{0, 0}, {10, 0}})
 	area, err := shell.Area()
 	require.NoError(t, err)
-	_, err = decad.Thicken(t.Context(), shell, units.Millimeters(2))
+	_, err = decad.Thicken(shell, units.Millimeters(2)).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.Contains(t, err.Error(), "reaches the revolve axis")
 	require.Contains(t, err.Error(), "0.000000000")

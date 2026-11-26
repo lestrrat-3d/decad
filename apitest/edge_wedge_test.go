@@ -18,7 +18,7 @@ func wedgePlateRectBoss(t *testing.T) *decad.Body {
 	doc := decad.New()
 	plate := boxBodyAtZ(t, doc, 0, 0, 80, 60, 0, 10)
 	boss := boxBodyAtZ(t, doc, 30, 20, 50, 40, 10, 15)
-	u, err := decad.Union(t.Context(), plate, boss)
+	u, err := decad.Union(plate, boss).Do(t.Context())
 	require.NoError(t, err)
 	return u
 }
@@ -72,7 +72,7 @@ func TestEdgeWedgeMirroredBossRoot(t *testing.T) {
 	u := wedgePlateRectBoss(t)
 	frame, err := r3.NewFrame(r3.Vec{X: 100}, r3.Vec{Y: 1}, r3.Vec{Z: 1})
 	require.NoError(t, err)
-	m, err := decad.Mirrored(t.Context(), u, decad.MirrorFrame{Frame: frame})
+	m, err := decad.Mirrored(u, decad.MirrorFrame{Frame: frame}).Do(t.Context())
 	require.NoError(t, err)
 	roots := wedgeSelect(t, m, decad.Reflex())
 	require.Len(t, roots, 4)
@@ -91,7 +91,7 @@ func TestEdgeWedgeLBracketInsideCorner(t *testing.T) {
 	doc := decad.New()
 	base := boxBodyAtZ(t, doc, 0, 0, 60, 40, 0, 8)
 	up := boxBodyAtZ(t, doc, 0, 0, 8, 40, 0, 50)
-	u, err := decad.Union(t.Context(), base, up)
+	u, err := decad.Union(base, up).Do(t.Context())
 	require.NoError(t, err)
 
 	corner := wedgeSelect(t, u, decad.Reflex())
@@ -109,7 +109,7 @@ func TestEdgeWedgeHoleRimSalientAndConcave(t *testing.T) {
 	doc := decad.New()
 	plate := boxBodyAtZ(t, doc, 0, 0, 80, 60, 0, 10)
 	tool := circlePrismAtZ(t, doc, 20, 30, 5, -1, 12)
-	drilled, err := decad.Cut(t.Context(), plate, tool)
+	drilled, err := decad.Cut(plate, tool).Do(t.Context())
 	require.NoError(t, err)
 
 	rims := wedgeSelect(t, drilled, decad.Circular())
@@ -133,7 +133,7 @@ func TestEdgeWedgeRoundBoss(t *testing.T) {
 	doc := decad.New()
 	plate := boxBodyAtZ(t, doc, 0, 0, 80, 60, 0, 10)
 	boss := circlePrismAtZ(t, doc, 40, 30, 10, 10, 15)
-	u, err := decad.Union(t.Context(), plate, boss)
+	u, err := decad.Union(plate, boss).Do(t.Context())
 	require.NoError(t, err)
 
 	root := wedgeSelect(t, u, decad.Circular(), decad.Reflex())
@@ -159,7 +159,7 @@ func TestEdgeWedgeTangentJunctionUndecided(t *testing.T) {
 	doc := decad.New()
 	plate := boxBodyAtZ(t, doc, 0, 0, 80, 60, 0, 10)
 	boss := wedgeRoundedRectAtZ(t, doc, 25, 15, 55, 45, 5, 10, 10)
-	u, err := decad.Union(t.Context(), plate, boss)
+	u, err := decad.Union(plate, boss).Do(t.Context())
 	require.NoError(t, err)
 
 	var undecided []*decad.Edge
@@ -233,7 +233,7 @@ func wedgeRoundedRectAtZ(t *testing.T, doc *decad.Document, x0, y0, x1, y1, r, z
 	}
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
+	body, err := decad.Extrude(doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(h), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -250,9 +250,9 @@ func TestEdgeWedgeMeshUnionUnprovenEdges(t *testing.T) {
 	post := circlePrismAtZ(t, doc, 0, 0, 4, 5, 10)
 	tilt, err := r3.RotationAround(r3.NewVec(0, 0, 5), r3.NewVec(1, 0, 0), units.Radians(0.2))
 	require.NoError(t, err)
-	post, err = decad.Transform(t.Context(), post, tilt)
+	post, err = decad.Transform(post, tilt).Do(t.Context())
 	require.NoError(t, err)
-	u, err := decad.Union(t.Context(), box, post)
+	u, err := decad.Union(box, post).Do(t.Context())
 	require.NoError(t, err)
 	require.True(t, tookMeshPath(u))
 
@@ -303,7 +303,7 @@ func TestEdgeWedgeRevolveCircles(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, s.Profiles(), 1)
 	doc := decad.New()
-	body, err := decad.Revolve(t.Context(), doc, s, s.Profiles()[0], uAxis, decad.FullRevolution{})
+	body, err := decad.Revolve(doc, s, s.Profiles()[0], uAxis, decad.FullRevolution{}).Do(t.Context())
 	require.NoError(t, err)
 
 	type want struct {
@@ -342,7 +342,7 @@ func TestEdgeWedgeFilletReflexRoots(t *testing.T) {
 	t.Parallel()
 	u := wedgePlateRectBoss(t)
 	const r = 2.0
-	got, err := decad.Fillet(t.Context(), u, decad.Edges(decad.Reflex()).Exactly(4), units.Millimeters(r))
+	got, err := decad.Fillet(u, decad.Edges(decad.Reflex()).Exactly(4), units.Millimeters(r)).Do(t.Context())
 	require.NoError(t, err)
 	area := (1 - math.Pi/4) * r * r
 	d := r * (10 - 3*math.Pi) / (3 * (4 - math.Pi))

@@ -100,7 +100,7 @@ func TestVerifyDoesNotChangeOperationWarnings(t *testing.T) {
 	a := boxBody(t, doc, 0, 0, 10, 10, 10)
 	require.Empty(t, a.OperationDiagnostics(), "exact construction adds no adjustment warning")
 	b := translated(t, roundTrip(t, boxBody(t, doc, 0, 0, 10, 10, 10)), 0.5, 0, 10)
-	joined, err := decad.Union(t.Context(), a, b)
+	joined, err := decad.Union(a, b).Do(t.Context())
 	require.NoError(t, err)
 	before := joined.OperationDiagnostics()
 	require.Len(t, before, 1)

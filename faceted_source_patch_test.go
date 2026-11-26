@@ -29,11 +29,11 @@ func (sc *slabScene) roundedBox(ctx context.Context, t *testing.T) *Body {
 	s.Fix(r.A)
 	_, err = s.Solve(ctx)
 	require.NoError(t, err)
-	box, err := Extrude(ctx, sc.doc, s, s.Profiles()[0],
-		Distance{D: units.Millimeters(20), Dir: Along})
+	box, err := Extrude(sc.doc, s, s.Profiles()[0],
+		Distance{D: units.Millimeters(20), Dir: Along}).Do(ctx)
 	require.NoError(t, err)
-	rounded, err := Fillet(ctx, box,
-		Edges(ParallelTo(r3.NewVec(0, 0, 1))).Exactly(4), units.Millimeters(3))
+	rounded, err := Fillet(box,
+		Edges(ParallelTo(r3.NewVec(0, 0, 1))).Exactly(4), units.Millimeters(3)).Do(ctx)
 	require.NoError(t, err)
 	return rounded
 }
@@ -49,12 +49,12 @@ func (sc *slabScene) yTool(ctx context.Context, t *testing.T, cx, r float64) *Bo
 	s.CreateCircle(c, r)
 	_, err = s.Solve(ctx)
 	require.NoError(t, err)
-	cyl, err := Extrude(ctx, sc.doc, s, s.Profiles()[0],
-		Distance{D: units.Millimeters(60), Dir: Along})
+	cyl, err := Extrude(sc.doc, s, s.Profiles()[0],
+		Distance{D: units.Millimeters(60), Dir: Along}).Do(ctx)
 	require.NoError(t, err)
 	move, err := r3.Translation(r3.Vec{Y: 30})
 	require.NoError(t, err)
-	placed, err := Transform(ctx, cyl, move)
+	placed, err := Transform(cyl, move).Do(ctx)
 	require.NoError(t, err)
 	return placed
 }
@@ -63,13 +63,13 @@ func (sc *slabScene) yTool(ctx context.Context, t *testing.T, cx, r float64) *Bo
 func slabRun(t *testing.T, ctx context.Context, cx, r float64) (*Body, error) {
 	t.Helper()
 	sc := &slabScene{w: sketch.NewWorld(), doc: New()}
-	built, err := Cut(ctx, sc.roundedBox(ctx, t), sc.yTool(ctx, t, 20, 4))
+	built, err := Cut(sc.roundedBox(ctx, t), sc.yTool(ctx, t, 20, 4)).Do(ctx)
 	require.NoError(t, err)
 	// A Copy ends the operation history's Boolean chain, so the control's refusal is
 	// the sequential gate, not a chain the regroup rebuilds.
-	first, err := Copy(ctx, built)
+	first, err := Copy(built).Do(ctx)
 	require.NoError(t, err)
-	return Cut(ctx, first, sc.yTool(ctx, t, cx, r))
+	return Cut(first, sc.yTool(ctx, t, cx, r)).Do(ctx)
 }
 
 // TestFacetedSourcePatchSlabControl measures retention §11's retained-plane

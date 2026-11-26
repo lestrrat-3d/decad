@@ -27,7 +27,7 @@ func rampSolid(t *testing.T, doc *decad.Document) (*decad.Body, decad.FaceSelect
 	}
 	m, err := decad.NewMeshBody(t.Context(), verts, tris)
 	require.NoError(t, err)
-	body, err := decad.SolidFromMesh(t.Context(), doc, m)
+	body, err := decad.SolidFromMesh(doc, m).Do(t.Context())
 	require.NoError(t, err)
 	// The sloped face is the one whose area centroid is the middle of the slope.
 	for _, f := range body.Faces() {
@@ -59,7 +59,7 @@ func TestExtrudeToATiltedMeshFaceStopsOnTheFacesPlane(t *testing.T) {
 	doc := decad.New()
 	stop, face := rampSolid(t, doc)
 	s, p := rectOnXY(t, 5, 2, 15, 8)
-	out, err := decad.Extrude(t.Context(), doc, s, p, decad.ToFace{Body: stop, Face: face})
+	out, err := decad.Extrude(doc, s, p, decad.ToFace{Body: stop, Face: face}).Do(t.Context())
 	require.NoError(t, err)
 	volume, err := out.Volume()
 	require.NoError(t, err)
@@ -90,7 +90,7 @@ func TestExtrudeToATiltedMeshFaceRefusesAFootprintThePolygonDoesNotHold(t *testi
 	stop, face := rampSolid(t, doc)
 	// The footprint reaches x = 25, past the ramp's 20 mm: the face does not stop the whole profile.
 	s, p := rectOnXY(t, 5, 2, 25, 8)
-	_, err := decad.Extrude(t.Context(), doc, s, p, decad.ToFace{Body: stop, Face: face})
+	_, err := decad.Extrude(doc, s, p, decad.ToFace{Body: stop, Face: face}).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.Equal(t, []*decad.Body{stop}, doc.Bodies(), "a refusal leaves no half-built extrusion behind")
 }
@@ -109,7 +109,7 @@ func TestExtrudeToATiltedMeshFaceFromAboveSweepsDown(t *testing.T) {
 	s.Fix(rect.A)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	out, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.ToFace{Body: stop, Face: face})
+	out, err := decad.Extrude(doc, s, s.Profiles()[0], decad.ToFace{Body: stop, Face: face}).Do(t.Context())
 	require.NoError(t, err)
 	volume, err := out.Volume()
 	require.NoError(t, err)

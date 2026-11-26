@@ -29,6 +29,7 @@ APIs are design-only.**
 | Any file, to find what owns what | `agent-docs/layout.md` — one row per root `.go` file and design doc |
 | Production code or its design/review | `agent-docs/module-boundary.md` — Module boundary gate |
 | Any public type | `agent-docs/api-design.md`, and every companion design listed in `agent-docs/layout/` |
+| An operation's constructor, methods or `Do` | `agent-docs/command-api-design.md` |
 | Collision geometry or rigid-body dynamics | `agent-docs/multibody-dynamics-design.md` |
 | Linkages and joints | `agent-docs/linkage-check-design.md` |
 | Evaluator, topology or feature code | `agent-docs/evaluator-design.md` |
@@ -101,8 +102,9 @@ APIs are design-only.**
 - **NEVER add a `go.mod` module without recording the decision in
   `agent-docs/modules.md`.**
 - **Tooling lives in its own nested module.** `_gallery/` renders the README
-  images and landing clip, `_shardgen/` packs the race shards, and `_proofs/`
-  holds the Lean proofs and their trace checker. All carry
+  images and landing clip, `_shardgen/` packs the race shards, `_cmdrewrite/`
+  rewrites call sites to the command form, and `_proofs/` holds the Lean
+  proofs and their trace checker. All carry
   their own `go.mod` and an `_` prefix, so the root module, its linter and
   `go list ./...` never see them. A generator NEVER joins the library's module.
 - **Correctness must be observable.** Every capability ships with a test

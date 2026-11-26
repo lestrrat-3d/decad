@@ -21,7 +21,7 @@ func TestCommonAxisRevolveUnionSharesAxialDisk(t *testing.T) {
 	right := revolveMeridian(t, doc, [][2]float64{{4, 0}, {6, 0}, {6, 3}, {4, 3}}, decad.FullRevolution{})
 	sourceFaces := [][]*decad.Face{left.Faces(), right.Faces()}
 
-	joined, err := decad.Union(t.Context(), left, right)
+	joined, err := decad.Union(left, right).Do(t.Context())
 	require.NoError(t, err)
 	requireAnalyticVolume(t, joined, 34*math.Pi)
 	mesh, err := joined.Tessellate(t.Context(), units.Millimeters(0.1), decad.WithVerification(decad.VerifyAll))
@@ -50,7 +50,7 @@ func TestCommonAxisRevolveSteppedBooleanOperations(t *testing.T) {
 		run  func(context.Context, *decad.Body, *decad.Body) (*decad.Body, error)
 	}{
 		{name: "common axis union", want: 84 * math.Pi, run: func(ctx context.Context, a, b *decad.Body) (*decad.Body, error) {
-			return decad.Union(ctx, a, b)
+			return decad.Union(a, b).Do(ctx)
 		}},
 		{name: "common axis cut", want: 36 * math.Pi, run: pairCut},
 		{name: "common axis intersect", want: 8 * math.Pi, run: pairIntersect},
@@ -81,7 +81,7 @@ func TestCommonAxisRevolveUnionMakesBlindCavity(t *testing.T) {
 	doc := decad.New()
 	tube := revolveMeridian(t, doc, [][2]float64{{0, 2}, {4, 2}, {4, 4}, {0, 4}}, decad.FullRevolution{})
 	end := revolveMeridian(t, doc, [][2]float64{{4, 0}, {6, 0}, {6, 3}, {4, 3}}, decad.FullRevolution{})
-	result, err := decad.Union(t.Context(), tube, end)
+	result, err := decad.Union(tube, end).Do(t.Context())
 	require.NoError(t, err)
 	decadtest.MeasuresVolume(t, result, units.CubicMillimeters((4*(16-4)+2*9)*math.Pi))
 	require.Len(t, result.Lumps(), 1)
@@ -106,7 +106,7 @@ func TestCommonAxisRevolveUnionKeepsBothCoincidentWallSources(t *testing.T) {
 		}
 	}
 	require.Len(t, wallOrigins, 2)
-	result, err := decad.Union(t.Context(), a, b)
+	result, err := decad.Union(a, b).Do(t.Context())
 	require.NoError(t, err)
 	requireAnalyticVolume(t, result, 16*math.Pi)
 	for _, origin := range wallOrigins {
@@ -127,24 +127,16 @@ func TestCommonAxisRevolveBooleanRefusalsLeaveInputsLive(t *testing.T) {
 		left := revolveMeridian(t, doc, [][2]float64{{0, 0}, {4, 0}, {4, 2}, {0, 2}}, decad.FullRevolution{})
 		ring := revolveMeridian(t, doc, [][2]float64{{4, 2}, {6, 2}, {6, 3}, {4, 3}}, decad.FullRevolution{})
 		before := doc.Bodies()
-		_, err := decad.Union(t.Context(), left, ring)
-		require.ErrorIs(t, err, decad.ErrUnsupported)
-		var booleanErr *decad.BooleanError
-		require.ErrorAs(t, err, &booleanErr)
-		require.Equal(t, decad.BooleanUnsupportedContact, booleanErr.Code)
-		require.Equal(t, before, doc.Bodies())
+		_, err := decad.Union(left, ring).Do(t.Context())
+		requireBooleanRefusal(t, doc, before, err, decad.ErrUnsupported, decad.BooleanUnsupportedContact)
 	})
 	t.Run("empty intersection", func(t *testing.T) {
 		doc := decad.New(decad.ExactOnly())
 		a := revolveMeridian(t, doc, [][2]float64{{0, 0}, {4, 0}, {4, 2}, {0, 2}}, decad.FullRevolution{})
 		b := revolveMeridian(t, doc, [][2]float64{{4, 0}, {6, 0}, {6, 3}, {4, 3}}, decad.FullRevolution{})
 		before := doc.Bodies()
-		_, err := decad.Intersect(t.Context(), a, b)
-		require.ErrorIs(t, err, decad.ErrBooleanFailed)
-		var booleanErr *decad.BooleanError
-		require.ErrorAs(t, err, &booleanErr)
-		require.Equal(t, decad.BooleanEmpty, booleanErr.Code)
-		require.Equal(t, before, doc.Bodies())
+		_, err := decad.Intersect(a, b).Do(t.Context())
+		requireBooleanRefusal(t, doc, before, err, decad.ErrBooleanFailed, decad.BooleanEmpty)
 	})
 	t.Run("near contact", func(t *testing.T) {
 		doc := decad.New(decad.ExactOnly())
@@ -152,7 +144,7 @@ func TestCommonAxisRevolveBooleanRefusalsLeaveInputsLive(t *testing.T) {
 		b := revolveMeridian(t, doc, [][2]float64{{4.00001, 0}, {6, 0}, {6, 3}, {4.00001, 3}},
 			decad.FullRevolution{})
 		before := doc.Bodies()
-		result, err := decad.Union(t.Context(), a, b)
+		result, err := decad.Union(a, b).Do(t.Context())
 		if err != nil {
 			require.True(t, errors.Is(err, decad.ErrUnsupported) || errors.Is(err, decad.ErrBooleanFailed))
 			require.Equal(t, before, doc.Bodies())
@@ -167,7 +159,7 @@ func TestCommonAxisRevolveBooleanRefusalsLeaveInputsLive(t *testing.T) {
 			[][2]float64{{4.0000000000005, 0}, {6, 0}, {6, 3}, {4.0000000000005, 3}},
 			decad.FullRevolution{})
 		before := doc.Bodies()
-		result, err := decad.Union(t.Context(), a, b)
+		result, err := decad.Union(a, b).Do(t.Context())
 		if err != nil {
 			require.ErrorIs(t, err, decad.ErrUnrecordableProfile)
 			require.Equal(t, before, doc.Bodies())
@@ -180,7 +172,7 @@ func TestCommonAxisRevolveBooleanRefusalsLeaveInputsLive(t *testing.T) {
 		a := revolveMeridian(t, docA, [][2]float64{{0, 0}, {4, 0}, {4, 2}, {0, 2}}, decad.FullRevolution{})
 		b := revolveMeridian(t, docB, [][2]float64{{4, 0}, {6, 0}, {6, 3}, {4, 3}}, decad.FullRevolution{})
 		beforeA, beforeB := docA.Bodies(), docB.Bodies()
-		_, err := decad.Union(t.Context(), a, b)
+		_, err := decad.Union(a, b).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrForeignBody)
 		require.Equal(t, beforeA, docA.Bodies())
 		require.Equal(t, beforeB, docB.Bodies())
@@ -192,8 +184,20 @@ func TestCommonAxisRevolveBooleanRefusalsLeaveInputsLive(t *testing.T) {
 		before := doc.Bodies()
 		ctx, cancel := context.WithCancel(t.Context())
 		cancel()
-		_, err := decad.Union(ctx, a, b)
+		_, err := decad.Union(a, b).Do(ctx)
 		require.ErrorIs(t, err, context.Canceled)
 		require.Equal(t, before, doc.Bodies())
 	})
+}
+
+// requireBooleanRefusal requires err to wrap sentinel and to be a BooleanError
+// of the given code, and the document's bodies to be as they were.
+func requireBooleanRefusal(t *testing.T, doc *decad.Document, before []*decad.Body, err, sentinel error,
+	code decad.BooleanErrorCode) {
+	t.Helper()
+	require.ErrorIs(t, err, sentinel)
+	var booleanErr *decad.BooleanError
+	require.ErrorAs(t, err, &booleanErr)
+	require.Equal(t, code, booleanErr.Code)
+	require.Equal(t, before, doc.Bodies())
 }

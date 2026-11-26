@@ -28,8 +28,8 @@ func crossCylinderBoreAt(t *testing.T, radius, bore, height, centerZ, toolY floa
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	require.Len(t, s.Profiles(), 1)
-	target, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(height), Dir: decad.Along})
+	target, err := decad.Extrude(doc, s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(height), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 
 	tw := sketch.NewWorld()
@@ -41,10 +41,10 @@ func crossCylinderBoreAt(t *testing.T, radius, bore, height, centerZ, toolY floa
 	_, err = ts.Solve(t.Context())
 	require.NoError(t, err)
 	require.Len(t, ts.Profiles(), 1)
-	tool, err := decad.Extrude(t.Context(), doc, ts, ts.Profiles()[0],
-		decad.Symmetric{D: units.Millimeters(2*radius + 2)})
+	tool, err := decad.Extrude(doc, ts, ts.Profiles()[0],
+		decad.Symmetric{D: units.Millimeters(2*radius + 2)}).Do(t.Context())
 	require.NoError(t, err)
-	bored, err := decad.Cut(t.Context(), target, tool)
+	bored, err := decad.Cut(target, tool).Do(t.Context())
 	require.NoError(t, err)
 	return doc, target, bored
 }
@@ -76,8 +76,8 @@ func TestCrossCylinderBoreMouthChamferVerified(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			doc, target, bored := crossCylinderBore(t, tc.R, tc.r, tc.H, tc.c)
-			out, err := decad.Chamfer(t.Context(), bored,
-				crossBoreMouth(t, bored, tc.c, tc.r, true), units.Millimeters(tc.setback))
+			out, err := decad.Chamfer(bored,
+				crossBoreMouth(t, bored, tc.c, tc.r, true), units.Millimeters(tc.setback)).Do(t.Context())
 			require.NoError(t, err)
 			require.Equal(t, []*decad.Body{out}, doc.Bodies())
 			for _, endCap := range []decad.FeatureRef{decad.CapStart(target), decad.CapEnd(target)} {
@@ -132,21 +132,20 @@ func TestCrossCylinderBoreMouthChamferRefusesUnprovedCases(t *testing.T) {
 			if tc.placed {
 				motion, err := r3.Translation(r3.NewVec(0, 0, 1))
 				require.NoError(t, err)
-				receiver, err = decad.Copy(t.Context(), bored, decad.WithCopyPlacement(motion))
+				receiver, err = decad.Copy(bored).Place(decad.CopyTransform{Transform: motion}).Do(t.Context())
 				require.NoError(t, err)
 				centerZ++
 			}
-			var opts []decad.ChamferOption
+			cmd := decad.Chamfer(receiver,
+				crossBoreMouth(t, receiver, centerZ, 1, tc.positive), units.Millimeters(tc.setback))
 			if tc.asymmetric {
 				sides, err := decad.Faces(decad.Cylindrical()).Exactly(1).SelectFaces(target)
 				require.NoError(t, err)
 				require.Len(t, sides[0].Origins(), 1)
 				side := sides[0].Origins()[0]
-				opts = append(opts, decad.WithAsymmetricChamfer(
-					decad.Faces(decad.FaceCreatedBy(side)).Exactly(1), units.Millimeters(0.25)))
+				cmd.Asymmetric(decad.Faces(decad.FaceCreatedBy(side)).Exactly(1), units.Millimeters(0.25))
 			}
-			_, err := decad.Chamfer(t.Context(), receiver,
-				crossBoreMouth(t, receiver, centerZ, 1, tc.positive), units.Millimeters(tc.setback), opts...)
+			_, err := cmd.Do(t.Context())
 			require.ErrorIs(t, err, decad.ErrUnsupported)
 			require.Equal(t, receiver, doc.Bodies()[len(doc.Bodies())-1])
 		})

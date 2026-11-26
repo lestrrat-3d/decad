@@ -67,7 +67,7 @@ func windowedHolePlate(t *testing.T) *decad.Body {
 		}
 	}
 	require.NotNil(t, profile)
-	body, err := decad.Extrude(t.Context(), decad.New(), s, profile, decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
+	body, err := decad.Extrude(decad.New(), s, profile, decad.Distance{D: units.Millimeters(5), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -116,7 +116,7 @@ func TestStackedBrepViewFilletChargedWall(t *testing.T) {
 	before, err := out.Volume()
 	require.NoError(t, err)
 	edge := decad.Edges(decad.EndpointAt(rim), decad.Circular()).Exactly(1)
-	filleted, err := decad.Fillet(t.Context(), out, edge, mm(0.5))
+	filleted, err := decad.Fillet(out, edge, mm(0.5)).Do(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, "decad.facetedPayload", decadtest.PayloadClass(filleted))
 	after, err := filleted.Volume()
@@ -170,7 +170,7 @@ func TestStackedBrepViewFilletChargedWall(t *testing.T) {
 		beforeVol, err := b.Volume()
 		require.NoError(t, err)
 		edge := decad.Edges(decad.EndpointAt(bottomRim(t, b)), decad.Circular()).Exactly(1)
-		out, err := decad.Chamfer(t.Context(), b, edge, mm(d))
+		out, err := decad.Chamfer(b, edge, mm(d)).Do(t.Context())
 		require.NoError(t, err)
 		afterVol, err := out.Volume()
 		require.NoError(t, err)
@@ -182,7 +182,7 @@ func TestStackedBrepViewFilletChargedWall(t *testing.T) {
 	// which is not safe for concurrent use, so the subtests run in turn.
 	copies := make([]*decad.Body, 3)
 	for i := range copies {
-		copies[i], err = decad.Copy(t.Context(), filleted)
+		copies[i], err = decad.Copy(filleted).Do(t.Context())
 		require.NoError(t, err)
 	}
 
@@ -193,7 +193,7 @@ func TestStackedBrepViewFilletChargedWall(t *testing.T) {
 	t.Run("a mesh Cut away from the hole keeps the wall and the rim chamfers", func(t *testing.T) {
 		doc := copies[1].Document()
 		tool := translated(t, boxBody(t, doc, 0, 0, 4, 4, 7), 10, 10, -1)
-		cut, err := decad.Cut(t.Context(), copies[1], tool)
+		cut, err := decad.Cut(copies[1], tool).Do(t.Context())
 		require.NoError(t, err)
 		require.Equal(t, "decad.facetedPayload", decadtest.PayloadClass(cut))
 		var kept bool
@@ -225,7 +225,7 @@ func TestStackedBrepViewFilletChargedWall(t *testing.T) {
 		}
 		require.Positive(t, n, "the windows' bottom inner arcs are Arc3 edges")
 		edge := decad.Edges(decad.EndpointAt(at), decad.Circular()).Exactly(1)
-		_, err := decad.Chamfer(t.Context(), copies[2], edge, mm(0.5))
+		_, err := decad.Chamfer(copies[2], edge, mm(0.5)).Do(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.ErrorContains(t, err, "an arc on a wall whose tag states a displacement is not built")
 	})

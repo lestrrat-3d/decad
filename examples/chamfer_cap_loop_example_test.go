@@ -28,8 +28,8 @@ func Example_chamfer_cap_loop() {
 		return
 	}
 	doc := decad.New()
-	box, err := decad.Extrude(context.Background(), doc, s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
+	box, err := decad.Extrude(doc, s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(20), Dir: decad.Along}).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to extrude: %s\n", err)
 		return
@@ -39,7 +39,7 @@ func Example_chamfer_cap_loop() {
 	// created at its far end, so "edges created by the end cap" finds them.
 	// Beveling them 5 mm removes the sharp rim.
 	rim := decad.Edges(decad.CreatedBy(decad.CapEnd(box)))
-	beveled, err := decad.Chamfer(context.Background(), box, rim, units.Millimeters(5))
+	beveled, err := decad.Chamfer(box, rim, units.Millimeters(5)).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to chamfer: %s\n", err)
 		return

@@ -38,7 +38,7 @@ func TestOffsetPadShoulderChamfer(t *testing.T) {
 		return nil
 	}
 	extrude := func(s *sketch.Sketch, h float64, dir decad.Direction) *decad.Body {
-		b, e := decad.Extrude(ctx, d, s, profile(s), decad.Distance{D: units.Millimeters(h), Dir: dir})
+		b, e := decad.Extrude(d, s, profile(s), decad.Distance{D: units.Millimeters(h), Dir: dir}).Do(ctx)
 		require.NoError(t, e)
 		return b
 	}
@@ -60,16 +60,16 @@ func TestOffsetPadShoulderChamfer(t *testing.T) {
 	// Cross drill away from the round to produce faceted stock with a retained shoulder.
 	drill := frame(r3.Vec{X: 11, Y: -.5, Z: -8}, x, y)
 	drill.CreateCircle(drill.Origin(), .2)
-	plate, e := decad.Cut(ctx, plate, extrude(drill, 16, decad.Along))
+	plate, e := decad.Cut(plate, extrude(drill, 16, decad.Along)).Do(ctx)
 	require.NoError(t, e)
 	padSketch := frame(r3.Vec{X: 8.008, Y: -.5}, x, z)
 	padSketch.CreateCircle(padSketch.Origin(), 2.5)
 	// The pad chamfer ends 0.00001 mm above the flange. Its cylindrical side
 	// protects the flange through the exposed shoulder cut.
 	pad := extrude(padSketch, .75001, decad.Against)
-	joined, e := decad.Union(ctx, plate, pad)
+	joined, e := decad.Union(plate, pad).Do(ctx)
 	require.NoError(t, e)
-	rounded, e := decad.Chamfer(ctx, joined, decad.Edges(decad.OuterLoopOf(decad.CapStart(pad))).Exactly(1), units.Millimeters(.25))
+	rounded, e := decad.Chamfer(joined, decad.Edges(decad.OuterLoopOf(decad.CapStart(pad))).Exactly(1), units.Millimeters(.25)).Do(ctx)
 	require.NoError(t, e)
 	// The four-sided loft stops the existing bevel at z = 3.125.
 	var ss [2]*sketch.Sketch
@@ -88,15 +88,15 @@ func TestOffsetPadShoulderChamfer(t *testing.T) {
 		}
 		pp[i] = profile(s)
 	}
-	loft, e := decad.Loft(ctx, d, ss[0], pp[0], ss[1], pp[1])
+	loft, e := decad.Loft(d, ss[0], pp[0], ss[1], pp[1]).Do(ctx)
 	require.NoError(t, e)
-	trimmed, e := decad.Cut(ctx, rounded, loft)
+	trimmed, e := decad.Cut(rounded, loft).Do(ctx)
 	require.NoError(t, e)
 
 	sel := decad.Edges(decad.EndpointAt(r3.Vec{X: 8, Z: 3.125}), decad.EndpointAt(r3.Vec{X: 6.5, Z: 2})).Exactly(1)
-	_, e = decad.Chamfer(ctx, trimmed, sel, units.Millimeters(.5))
+	_, e = decad.Chamfer(trimmed, sel, units.Millimeters(.5)).Do(ctx)
 	require.ErrorIs(t, e, decad.ErrUnsupported)
-	res, e := decad.Chamfer(ctx, trimmed, sel, units.Millimeters(.25))
+	res, e := decad.Chamfer(trimmed, sel, units.Millimeters(.25)).Do(ctx)
 	require.NoError(t, e)
 
 	// A vertical ray through the plane-only portion of the shoulder meets the

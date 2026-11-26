@@ -32,7 +32,7 @@ func internalBallBody(t *testing.T, doc *Document, r float64) *Body {
 	s.CreateArc(c, end, o)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := Revolve(t.Context(), doc, s, s.Profiles()[0], SketchLine{End: Point2{U: 1}}, FullRevolution{})
+	body, err := Revolve(doc, s, s.Profiles()[0], SketchLine{End: Point2{U: 1}}, FullRevolution{}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }
@@ -279,7 +279,7 @@ func internalRevolvedCylinderBody(t *testing.T, doc *Document, r, h float64) *Bo
 	s.CreateLine(d, a)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	body, err := Revolve(t.Context(), doc, s, s.Profiles()[0], SketchLine{End: Point2{U: 1}}, FullRevolution{})
+	body, err := Revolve(doc, s, s.Profiles()[0], SketchLine{End: Point2{U: 1}}, FullRevolution{}).Do(t.Context())
 	require.NoError(t, err)
 	return body
 }

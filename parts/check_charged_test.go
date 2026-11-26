@@ -64,14 +64,13 @@ func chargedHolePlate(t *testing.T, doc *decad.Document) *decad.Body {
 		}
 	}
 	require.NotNil(t, profile)
-	body, err := decad.Extrude(t.Context(), doc, s, profile, decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
+	body, err := decad.Extrude(doc, s, profile, decad.Distance{D: units.Millimeters(5), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	face := decad.Faces(decad.FaceCreatedBy(decad.CapEnd(body))).Exactly(1)
-	out, err := decad.Boss(t.Context(), body, decad.BossSpec{Face: face, At: r3.Vec{Z: 5},
-		Diameter: units.Millimeters(14), Height: units.Millimeters(1)})
+	out, err := decad.Boss(body, face, r3.Vec{Z: 5}, units.Millimeters(14), units.Millimeters(1)).Do(t.Context())
 	require.NoError(t, err)
 	edge := decad.Edges(decad.EndpointAt(r3.Vec{X: -12, Y: -14, Z: 5}), decad.Circular()).Exactly(1)
-	filleted, err := decad.Fillet(t.Context(), out, edge, units.Millimeters(0.5))
+	filleted, err := decad.Fillet(out, edge, units.Millimeters(0.5)).Do(t.Context())
 	require.NoError(t, err)
 	return filleted
 }
@@ -93,7 +92,7 @@ func TestCheckChargedWallUnread(t *testing.T) {
 	}
 
 	doc := decad.New()
-	plain, err := decad.Cut(t.Context(), mustBlock(t, doc), cylinderAt(t, doc, -14, -14, 2, -1, 7))
+	plain, err := decad.Cut(mustBlock(t, doc), cylinderAt(t, doc, -14, -14, 2, -1, 7)).Do(t.Context())
 	require.NoError(t, err)
 	twin := check(t, plain, doc)
 	require.Equal(t, parts.Confirmed, twin.Status, twin.Reason)

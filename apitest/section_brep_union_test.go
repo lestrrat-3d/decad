@@ -15,7 +15,7 @@ func TestBrepUnionSectionFeedsExtrude(t *testing.T) {
 	doc := decad.New()
 	base := boxBodyAtZ(t, doc, -5, -5, 5, 5, 0, 10)
 	lug := boxBodyAtZ(t, doc, 3, -2, 7, 2, 8, 4)
-	joined, err := decad.Union(t.Context(), base, lug)
+	joined, err := decad.Union(base, lug).Do(t.Context())
 	require.NoError(t, err)
 	joinedVolume, err := joined.Volume()
 	require.NoError(t, err)
@@ -30,8 +30,8 @@ func TestBrepUnionSectionFeedsExtrude(t *testing.T) {
 	area, err := reading.Area()
 	require.NoError(t, err)
 	require.LessOrEqual(t, math.Abs(area.Value.Base()-108), area.Bound.Base())
-	child, err := decad.Extrude(t.Context(), decad.New(), section, profiles[0],
-		decad.Distance{D: units.Millimeters(2), Dir: decad.Along})
+	child, err := decad.Extrude(decad.New(), section, profiles[0],
+		decad.Distance{D: units.Millimeters(2), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	volume, err := child.Volume()
 	require.NoError(t, err)
@@ -47,7 +47,7 @@ func TestBrepUnionSectionPlacementAndRefusals(t *testing.T) {
 	doc := decad.New()
 	base := boxBodyAtZ(t, doc, -5, -5, 5, 5, 0, 10)
 	lug := boxBodyAtZ(t, doc, 3, -2, 7, 2, 8, 4)
-	joined, err := decad.Union(t.Context(), base, lug)
+	joined, err := decad.Union(base, lug).Do(t.Context())
 	require.NoError(t, err)
 	for _, tc := range []struct {
 		z, area float64
@@ -76,7 +76,7 @@ func TestBrepUnionSectionPlacementAndRefusals(t *testing.T) {
 
 	move, err := r3.Translation(r3.Vec{X: 20, Y: 30, Z: 1})
 	require.NoError(t, err)
-	placed, err := decad.Transform(t.Context(), joined, move)
+	placed, err := decad.Transform(joined, move).Do(t.Context())
 	require.NoError(t, err)
 	frame, err := r3.NewFrame(r3.Vec{X: 20, Y: 30, Z: 10}, r3.Vec{X: 1}, r3.Vec{Y: 1})
 	require.NoError(t, err)

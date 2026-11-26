@@ -31,8 +31,8 @@ func Example_emboss() {
 		return
 	}
 	doc := decad.New()
-	plate, err := decad.Extrude(context.Background(), doc, s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	plate, err := decad.Extrude(doc, s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to extrude: %s\n", err)
 		return
@@ -56,8 +56,8 @@ func Example_emboss() {
 		fmt.Printf("failed to solve: %s\n", err)
 		return
 	}
-	raised, err := decad.Emboss(context.Background(), plate, label, label.Profiles(),
-		decad.Faces(decad.Facing(r3.Vec{Z: 1})), decad.EmbossRaised, units.Millimeters(2))
+	raised, err := decad.Emboss(plate, label, label.Profiles(),
+		decad.Faces(decad.Facing(r3.Vec{Z: 1})), decad.EmbossRaised, units.Millimeters(2)).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to raise label: %s\n", err)
 		return
@@ -76,8 +76,8 @@ func Example_emboss() {
 		fmt.Printf("failed to solve: %s\n", err)
 		return
 	}
-	part, err := decad.Emboss(context.Background(), raised, mark, mark.Profiles(),
-		decad.Faces(decad.Facing(r3.Vec{Z: -1})), decad.EmbossEngraved, units.Millimeters(1))
+	part, err := decad.Emboss(raised, mark, mark.Profiles(),
+		decad.Faces(decad.Facing(r3.Vec{Z: -1})), decad.EmbossEngraved, units.Millimeters(1)).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to engrave mark: %s\n", err)
 		return
@@ -93,7 +93,7 @@ func Example_emboss() {
 	// volume: 12100 mm^3
 }
 
-// WithEmbossDraft leans the relief's walls so a moulded or cast part releases
+// Draft leans the relief's walls so a moulded or cast part releases
 // from its tool. A positive angle makes a raised relief narrower toward its top.
 // Here a 10 mm square label, raised 3 mm with a 5 degree draft, is 10 mm wide on
 // the plate and about 9.5 mm wide at its top.
@@ -110,8 +110,8 @@ func Example_emboss_draft() {
 		fmt.Printf("failed to solve: %s\n", err)
 		return
 	}
-	plate, err := decad.Extrude(context.Background(), decad.New(), s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	plate, err := decad.Extrude(decad.New(), s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to extrude: %s\n", err)
 		return
@@ -132,9 +132,8 @@ func Example_emboss_draft() {
 		fmt.Printf("failed to solve: %s\n", err)
 		return
 	}
-	raised, err := decad.Emboss(context.Background(), plate, label, label.Profiles(),
-		decad.Faces(decad.Facing(r3.Vec{Z: 1})), decad.EmbossRaised, units.Millimeters(3),
-		decad.WithEmbossDraft(units.Degrees(5)))
+	raised, err := decad.Emboss(plate, label, label.Profiles(),
+		decad.Faces(decad.Facing(r3.Vec{Z: 1})), decad.EmbossRaised, units.Millimeters(3)).Draft(units.Degrees(5)).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to emboss: %s\n", err)
 		return
@@ -151,7 +150,7 @@ func Example_emboss_draft() {
 	// volume: 12285 mm^3
 }
 
-// WithEmbossRimFillet rounds the rim of a relief, so a raised badge or a nameplate
+// RimFillet rounds the rim of a relief, so a raised badge or a nameplate
 // has no sharp top edge to catch on. Here a round 8 mm badge 2 mm tall gets a
 // 0.5 mm round on its top rim.
 func Example_emboss_rim_fillet() {
@@ -167,8 +166,8 @@ func Example_emboss_rim_fillet() {
 		fmt.Printf("failed to solve: %s\n", err)
 		return
 	}
-	plate, err := decad.Extrude(context.Background(), decad.New(), s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	plate, err := decad.Extrude(decad.New(), s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to extrude: %s\n", err)
 		return
@@ -190,9 +189,8 @@ func Example_emboss_rim_fillet() {
 		fmt.Printf("failed to solve: %s\n", err)
 		return
 	}
-	raised, err := decad.Emboss(context.Background(), plate, badge, badge.Profiles(),
-		decad.Faces(decad.Facing(r3.Vec{Z: 1})), decad.EmbossRaised, units.Millimeters(2),
-		decad.WithEmbossRimFillet(units.Millimeters(0.5)))
+	raised, err := decad.Emboss(plate, badge, badge.Profiles(),
+		decad.Faces(decad.Facing(r3.Vec{Z: 1})), decad.EmbossRaised, units.Millimeters(2)).RimFillet(units.Millimeters(0.5)).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to emboss: %s\n", err)
 		return
@@ -226,8 +224,8 @@ func Example_emboss_cylinder() {
 		fmt.Printf("failed to solve: %s\n", err)
 		return
 	}
-	rod, err := decad.Extrude(context.Background(), decad.New(), s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(16), Dir: decad.Along})
+	rod, err := decad.Extrude(decad.New(), s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(16), Dir: decad.Along}).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to extrude: %s\n", err)
 		return
@@ -255,8 +253,8 @@ func Example_emboss_cylinder() {
 		fmt.Printf("failed to solve: %s\n", err)
 		return
 	}
-	padded, err := decad.Emboss(context.Background(), rod, ps, ps.Profiles(), decad.Faces(decad.Cylindrical()),
-		decad.EmbossRaised, units.Millimeters(4))
+	padded, err := decad.Emboss(rod, ps, ps.Profiles(), decad.Faces(decad.Cylindrical()),
+		decad.EmbossRaised, units.Millimeters(4)).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to emboss: %s\n", err)
 		return

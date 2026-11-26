@@ -22,7 +22,7 @@ func TestCircleSourceCandidateProducer(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	body, err = Transform(t.Context(), body, turn)
+	body, err = Transform(body, turn).Do(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -189,7 +189,7 @@ func TestCircleSourceCandidateChordConsumedByPlacement(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	body, err = Transform(t.Context(), body, motion)
+	body, err = Transform(body, motion).Do(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -247,7 +247,7 @@ func TestCircleSourceCandidateNearChord(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	body, err = Transform(t.Context(), body, turn)
+	body, err = Transform(body, turn).Do(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}

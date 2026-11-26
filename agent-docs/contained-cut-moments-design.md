@@ -4,7 +4,7 @@
 
 The contained-Cut source-moment consumer covers a rectangular prism target and
 a whole circular-prism tool. "Exact rotation copy" transfers the captured
-evidence through one direct public `Copy(..., WithCopyRotation(...))`.
+evidence through one direct public `Copy(...).Place(CopyRotation{...})`.
 
 `operation-history-design.md` "Contained Cut centroid" owns the existing
 source-volume and source-centroid calculations. This document owns the
@@ -277,9 +277,9 @@ Source admission is inherited from the validated contained-Cut record.
 Do not infer a cylinder, box, cavity or containment from a copied mesh,
 bounding box, public operation kind, ancestry, or a small residual.
 
-Default Copy, `WithCopyPlacement`, Transform, MirroredCopy, ScaledAt,
+Default Copy, `CopyTransform`, Transform, MirroredCopy, ScaledAt,
 patterns, modified bodies, a copy of a copy, and another Cut do not transfer
-moments. A zero-angle `WithCopyRotation` is admitted through the same exact
+moments. A zero-angle `CopyRotation` is admitted through the same exact
 record path. Repeated Copy options keep their existing last-option rule.
 An unsupported source or absent evidence preserves existing behavior.
 Present malformed source evidence in this admitted route fails before commit.
@@ -354,7 +354,7 @@ change of that image's source moments.
 
 Do not substitute a float rotation, a nominal sine/cosine rotation by the
 requested angle, a bounding-box tensor, or the source's published inertia.
-The exact rotation selected by `WithCopyRotation` is the copy's denotation.
+The exact rotation selected by `CopyRotation` is the copy's denotation.
 
 ### Capture and query flow
 
@@ -431,7 +431,7 @@ geometric measurements. Concurrent queries read immutable evidence only.
 
 The first fixture builds the sources with `containedCutCentroidSources` and
 runs the real public Cut from `TestContainedCutSourceMassProperties`. It
-copies that result with `WithCopyRotation`, center `(10,10,10)`, axis
+copies that result with `CopyRotation`, center `(10,10,10)`, axis
 `(1,2,3)`, angle 37 degrees, and uses the real rebuild, original moment
 producer, frozen copy evidence, verified mesh and public `MassProperties`.
 No fixture invents a proof.

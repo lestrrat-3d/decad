@@ -12,7 +12,7 @@ import (
 )
 
 // This file is agent-docs/surface-design.md §10's T10, run against the PRISM sheet
-// path: WithSurfaceResult()'s own manifold-with-boundary mesh and export.
+// path: SurfaceResult's own manifold-with-boundary mesh and export.
 // Every fixture reuses plateSketch/rectWithHoleSketch (extrude_test.go,
 // surface_test.go). NEVER call decadtest.IsManifold on a sheet mesh here — it
 // requires every edge to bound exactly two faces, which a sheet's own free
@@ -56,7 +56,7 @@ func TestSurfaceExtrudeSheetTessellates(t *testing.T) {
 	t.Parallel()
 	solidDoc := decad.New()
 	s1, p1 := plateSketch(t)
-	solid, err := decad.Extrude(t.Context(), solidDoc, s1, p1, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	solid, err := decad.Extrude(solidDoc, s1, p1, decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	solidMesh, err := solid.Tessellate(t.Context(), units.Millimeters(0.1))
 	require.NoError(t, err)
@@ -64,7 +64,7 @@ func TestSurfaceExtrudeSheetTessellates(t *testing.T) {
 
 	sheetDoc := decad.New()
 	s2, p2 := plateSketch(t)
-	sheet, err := decad.Extrude(t.Context(), sheetDoc, s2, p2, decad.Distance{D: units.Millimeters(10), Dir: decad.Along}, decad.WithSurfaceResult())
+	sheet, err := decad.Extrude(sheetDoc, s2, p2, decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).SurfaceResult().Do(t.Context())
 	require.NoError(t, err)
 	sheetMesh, err := sheet.Tessellate(t.Context(), units.Millimeters(0.1))
 	require.NoError(t, err)
@@ -147,14 +147,14 @@ func TestSurfaceExtrudeSheetBoundMatchesSolid(t *testing.T) {
 
 	solidDoc := decad.New()
 	s1, p1 := rectWithHoleSketch(t)
-	solid, err := decad.Extrude(t.Context(), solidDoc, s1, p1, decad.Distance{D: units.Millimeters(8), Dir: decad.Along})
+	solid, err := decad.Extrude(solidDoc, s1, p1, decad.Distance{D: units.Millimeters(8), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	solidMesh, err := solid.Tessellate(t.Context(), tol)
 	require.NoError(t, err)
 
 	sheetDoc := decad.New()
 	s2, p2 := rectWithHoleSketch(t)
-	sheet, err := decad.Extrude(t.Context(), sheetDoc, s2, p2, decad.Distance{D: units.Millimeters(8), Dir: decad.Along}, decad.WithSurfaceResult())
+	sheet, err := decad.Extrude(sheetDoc, s2, p2, decad.Distance{D: units.Millimeters(8), Dir: decad.Along}).SurfaceResult().Do(t.Context())
 	require.NoError(t, err)
 	sheetMesh, err := sheet.Tessellate(t.Context(), tol)
 	require.NoError(t, err)
@@ -178,7 +178,7 @@ func TestSurfaceExtrudeSheetDeterminism(t *testing.T) {
 		t.Helper()
 		s, p := plateSketch(t)
 		doc := decad.New()
-		sheet, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along}, decad.WithSurfaceResult())
+		sheet, err := decad.Extrude(doc, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).SurfaceResult().Do(t.Context())
 		require.NoError(t, err)
 		return sheet
 	}
@@ -222,7 +222,7 @@ func TestSurfaceExtrudeHoledSheetMultiLumpTessellates(t *testing.T) {
 	t.Parallel()
 	s, p := rectWithHoleSketch(t)
 	doc := decad.New()
-	sheet, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(8), Dir: decad.Along}, decad.WithSurfaceResult())
+	sheet, err := decad.Extrude(doc, s, p, decad.Distance{D: units.Millimeters(8), Dir: decad.Along}).SurfaceResult().Do(t.Context())
 	require.NoError(t, err)
 	require.Len(t, sheet.Lumps(), 2, `an outer wall tube and a hole wall tube, disconnected once their shared caps are omitted`)
 

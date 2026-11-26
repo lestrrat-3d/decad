@@ -60,10 +60,10 @@ func TestBrepLoopFilletPublicPlateTopLoop(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
 	plate := boxBody(t, doc, 0, 0, 40, 40, 10)
-	pocket, err := decad.Cut(t.Context(), plate, boxBodyAtZ(t, doc, 10, 15, 30, 25, 5, 5))
+	pocket, err := decad.Cut(plate, boxBodyAtZ(t, doc, 10, 15, 30, 25, 5, 5)).Do(t.Context())
 	require.NoError(t, err)
 	top := planeFacing(t, pocket, r3.NewVec(0, 0, 1), r3.NewVec(0, 0, 10))
-	got, err := decad.Fillet(t.Context(), pocket, loopEdgeQuery(top.Loops()[0]), units.Millimeters(1.5))
+	got, err := decad.Fillet(pocket, loopEdgeQuery(top.Loops()[0]), units.Millimeters(1.5)).Do(t.Context())
 	require.NoError(t, err)
 	require.Len(t, doc.Bodies(), 1, "the receiver is retired")
 	requireEveryEdgeOnTwoFaces(t, got)
@@ -122,7 +122,7 @@ func TestBrepLoopFilletPublicPlateTopLoop(t *testing.T) {
 func TestBrepLoopFilletPublicBoxCaps(t *testing.T) {
 	t.Parallel()
 	_, box := filletBox(t)
-	got, err := decad.Fillet(t.Context(), box, bothCapLoops(), units.Millimeters(5))
+	got, err := decad.Fillet(box, bothCapLoops(), units.Millimeters(5)).Do(t.Context())
 	require.NoError(t, err)
 	requireEveryEdgeOnTwoFaces(t, got)
 	require.Len(t, filletLoopPatches(got), 8)
@@ -137,7 +137,7 @@ func boxTopLoopFillet(t *testing.T) (*decad.Document, *decad.Body) {
 	doc := decad.New()
 	box := boxBody(t, doc, 0, 0, 60, 40, 20)
 	top := planeFacing(t, box, r3.NewVec(0, 0, 1), r3.NewVec(0, 0, 20))
-	got, err := decad.Fillet(t.Context(), box, loopEdgeQuery(top.Loops()[0]), units.Millimeters(3))
+	got, err := decad.Fillet(box, loopEdgeQuery(top.Loops()[0]), units.Millimeters(3)).Do(t.Context())
 	require.NoError(t, err)
 	return doc, got
 }
@@ -174,7 +174,7 @@ func TestBrepLoopFilletTessellateWithinTolerance(t *testing.T) {
 func TestBrepLoopFilletCornerCutVerifiesSound(t *testing.T) {
 	t.Parallel()
 	doc, got := boxTopLoopFillet(t)
-	cut, err := decad.Cut(t.Context(), got, boxBodyAtZ(t, doc, 55, 35, 65, 45, 15, 10))
+	cut, err := decad.Cut(got, boxBodyAtZ(t, doc, 55, 35, 65, 45, 15, 10)).Do(t.Context())
 	require.NoError(t, err)
 	report, err := doc.Verify(t.Context())
 	require.NoError(t, err)
@@ -187,7 +187,7 @@ func TestVertexBlendPublicBoxAllEdges(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
 	box := boxBody(t, doc, 0, 0, 40, 20, 20)
-	got, err := decad.Fillet(t.Context(), box, decad.Edges().Exactly(12), units.Millimeters(2))
+	got, err := decad.Fillet(box, decad.Edges().Exactly(12), units.Millimeters(2)).Do(t.Context())
 	require.NoError(t, err)
 	requireEveryEdgeOnTwoFaces(t, got)
 	volume, err := got.Volume()
@@ -221,7 +221,7 @@ func TestVertexBlendTwoAdjacentCapEdges(t *testing.T) {
 	corner := r3.NewVec(0, 0, 20)
 	sel := decad.Edges(decad.ParallelTo(r3.NewVec(1, 0, 0)), decad.EndpointAt(corner)).
 		Or(decad.ParallelTo(r3.NewVec(0, 1, 0)), decad.EndpointAt(corner)).Exactly(2)
-	got, err := decad.Fillet(t.Context(), box, sel, units.Millimeters(2))
+	got, err := decad.Fillet(box, sel, units.Millimeters(2)).Do(t.Context())
 	require.NoError(t, err)
 	requireEveryEdgeOnTwoFaces(t, got)
 	volume, err := got.Volume()
@@ -251,7 +251,7 @@ func TestBrepSingleYCapEdgeAfterRestatement(t *testing.T) {
 	box := boxBody(t, doc, 0, 0, 40, 20, 20)
 	sel := decad.Edges(decad.ParallelTo(r3.NewVec(0, 1, 0)),
 		decad.EndpointAt(r3.NewVec(0, 0, 20))).Exactly(1)
-	got, err := decad.Fillet(t.Context(), box, sel, units.Millimeters(2))
+	got, err := decad.Fillet(box, sel, units.Millimeters(2)).Do(t.Context())
 	require.NoError(t, err)
 	requireEveryEdgeOnTwoFaces(t, got)
 	volume, err := got.Volume()
@@ -269,7 +269,7 @@ func TestVertexBlendThreeEdgeOpenChain(t *testing.T) {
 			decad.EndpointAt(r3.NewVec(40, 0, 20))).
 		Or(decad.ParallelTo(r3.NewVec(1, 0, 0)),
 			decad.EndpointAt(r3.NewVec(40, 20, 20))).Exactly(3)
-	got, err := decad.Fillet(t.Context(), box, sel, units.Millimeters(2))
+	got, err := decad.Fillet(box, sel, units.Millimeters(2)).Do(t.Context())
 	require.NoError(t, err)
 	requireEveryEdgeOnTwoFaces(t, got)
 	var cylinders, ellipses int
@@ -303,7 +303,7 @@ func TestBrepLoopFilletPublicRevolveCapRefuses(t *testing.T) {
 	t.Parallel()
 	s, p := annularSketch(t)
 	doc := decad.New()
-	ring, err := decad.Revolve(t.Context(), doc, s, p, uAxis, decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along})
+	ring, err := decad.Revolve(doc, s, p, uAxis, decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	var capFace *decad.Face
 	for _, f := range ring.Faces() {
@@ -313,7 +313,7 @@ func TestBrepLoopFilletPublicRevolveCapRefuses(t *testing.T) {
 		}
 	}
 	require.NotNil(t, capFace)
-	_, err = decad.Fillet(t.Context(), ring, loopEdgeQuery(capFace.Loops()[0]), units.Millimeters(1))
+	_, err = decad.Fillet(ring, loopEdgeQuery(capFace.Loops()[0]), units.Millimeters(1)).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.ErrorContains(t, err, "not a swept meridian junction")
 	require.Equal(t, []*decad.Body{ring}, doc.Bodies())
@@ -355,7 +355,7 @@ func pocketMouthPlate(t *testing.T) (*decad.Body, *decad.Face) {
 	t.Helper()
 	doc := decad.New()
 	plate := boxBody(t, doc, 0, 0, 40, 40, 10)
-	pocket, err := decad.Cut(t.Context(), plate, boxBodyAtZ(t, doc, 10, 15, 30, 25, 5, 5))
+	pocket, err := decad.Cut(plate, boxBodyAtZ(t, doc, 10, 15, 30, 25, 5, 5)).Do(t.Context())
 	require.NoError(t, err)
 	return pocket, planeFacing(t, pocket, r3.NewVec(0, 0, 1), r3.NewVec(0, 0, 10))
 }
@@ -431,7 +431,7 @@ func TestBrepLoopFilletReflexMeridiansLieOnTheirCircles(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			body, q := tc.build(t)
-			got, err := decad.Fillet(t.Context(), body, q, units.Millimeters(1.5))
+			got, err := decad.Fillet(body, q, units.Millimeters(1.5)).Do(t.Context())
 			require.NoError(t, err)
 			r2 := big.NewRat(9, 4)
 			vertical := 0

@@ -13,12 +13,12 @@ import (
 func TestFullRevolveScaledAtPreservesSphereVolumeAndSourceFace(t *testing.T) {
 	s, profile := semicircleSketch(t)
 	doc := decad.New()
-	sphere, err := decad.Revolve(t.Context(), doc, s, profile, uAxis, decad.FullRevolution{})
+	sphere, err := decad.Revolve(doc, s, profile, uAxis, decad.FullRevolution{}).Do(t.Context())
 	require.NoError(t, err)
 	require.Len(t, sphere.Faces(), 1)
 	role := sphere.Faces()[0].Origins()[0]
 	anchor := r3.NewVec(1, 2, 3)
-	scaled, err := decad.ScaledAt(t.Context(), sphere, anchor, units.Scalar(2))
+	scaled, err := decad.ScaledAt(sphere, anchor, units.Scalar(2)).Do(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, []*decad.Body{scaled}, doc.Bodies())
 
@@ -48,9 +48,9 @@ func TestFullRevolveScaledAtPreservesSphereVolumeAndSourceFace(t *testing.T) {
 func TestFullRevolveScaledAtPreservesPlanarFaceRoles(t *testing.T) {
 	s, profile := solidSketch(t)
 	doc := decad.New()
-	cylinder, err := decad.Revolve(t.Context(), doc, s, profile, uAxis, decad.FullRevolution{})
+	cylinder, err := decad.Revolve(doc, s, profile, uAxis, decad.FullRevolution{}).Do(t.Context())
 	require.NoError(t, err)
-	scaled, err := decad.ScaledAt(t.Context(), cylinder, r3.NewVec(1, 2, 3), units.Scalar(1.25))
+	scaled, err := decad.ScaledAt(cylinder, r3.NewVec(1, 2, 3), units.Scalar(1.25)).Do(t.Context())
 	require.NoError(t, err)
 	volume, err := scaled.Volume()
 	require.NoError(t, err)
@@ -76,13 +76,13 @@ func TestFullRevolveScaledAtPreservesPlanarFaceRoles(t *testing.T) {
 func TestPartialRevolveScaledAtPreservesSectorVolumeAndFaceRoles(t *testing.T) {
 	s, profile := solidSketch(t)
 	doc := decad.New()
-	wedge, err := decad.Revolve(t.Context(), doc, s, profile, uAxis,
-		decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along})
+	wedge, err := decad.Revolve(doc, s, profile, uAxis,
+		decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along}).Do(t.Context())
 	require.NoError(t, err)
 	anchor := r3.NewVec(1, 2, 3)
 	srcCentroid, err := wedge.Centroid()
 	require.NoError(t, err)
-	scaled, err := decad.ScaledAt(t.Context(), wedge, anchor, units.Scalar(2))
+	scaled, err := decad.ScaledAt(wedge, anchor, units.Scalar(2)).Do(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, []*decad.Body{scaled}, doc.Bodies())
 
@@ -120,10 +120,10 @@ func TestPartialRevolveScaledAtPreservesSectorVolumeAndFaceRoles(t *testing.T) {
 func TestScaledAtRefusesPartialSheetRevolveWithoutRetiringSource(t *testing.T) {
 	s, profile := solidSketch(t)
 	doc := decad.New()
-	sheet, err := decad.Revolve(t.Context(), doc, s, profile, uAxis,
-		decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along}, decad.WithSurfaceResult())
+	sheet, err := decad.Revolve(doc, s, profile, uAxis,
+		decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along}).SurfaceResult().Do(t.Context())
 	require.NoError(t, err)
-	_, err = decad.ScaledAt(t.Context(), sheet, r3.Vec{}, units.Scalar(2))
+	_, err = decad.ScaledAt(sheet, r3.Vec{}, units.Scalar(2)).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.Equal(t, []*decad.Body{sheet}, doc.Bodies())
 }
@@ -131,15 +131,15 @@ func TestScaledAtRefusesPartialSheetRevolveWithoutRetiringSource(t *testing.T) {
 func TestFullRevolveScaledAtRepeatsAfterRigidPlacement(t *testing.T) {
 	s, profile := semicircleSketch(t)
 	doc := decad.New()
-	sphere, err := decad.Revolve(t.Context(), doc, s, profile, uAxis, decad.FullRevolution{})
+	sphere, err := decad.Revolve(doc, s, profile, uAxis, decad.FullRevolution{}).Do(t.Context())
 	require.NoError(t, err)
 	motion, err := r3.Translation(r3.NewVec(2, -3, 1))
 	require.NoError(t, err)
-	placed, err := decad.Transform(t.Context(), sphere, motion)
+	placed, err := decad.Transform(sphere, motion).Do(t.Context())
 	require.NoError(t, err)
-	first, err := decad.ScaledAt(t.Context(), placed, r3.Vec{}, units.Scalar(2))
+	first, err := decad.ScaledAt(placed, r3.Vec{}, units.Scalar(2)).Do(t.Context())
 	require.NoError(t, err)
-	again, err := decad.ScaledAt(t.Context(), first, r3.NewVec(1, 2, 3), units.Scalar(0.5))
+	again, err := decad.ScaledAt(first, r3.NewVec(1, 2, 3), units.Scalar(0.5)).Do(t.Context())
 	require.NoError(t, err)
 	volume, err := again.Volume()
 	require.NoError(t, err)
@@ -154,10 +154,10 @@ func TestFullRevolveScaledAtRepeatsAfterRigidPlacement(t *testing.T) {
 func TestScaledAtRefusesSheetRevolveWithoutRetiringSource(t *testing.T) {
 	s, profile := solidSketch(t)
 	doc := decad.New()
-	sheet, err := decad.Revolve(t.Context(), doc, s, profile, uAxis,
-		decad.FullRevolution{}, decad.WithSurfaceResult())
+	sheet, err := decad.Revolve(doc, s, profile, uAxis,
+		decad.FullRevolution{}).SurfaceResult().Do(t.Context())
 	require.NoError(t, err)
-	_, err = decad.ScaledAt(t.Context(), sheet, r3.Vec{}, units.Scalar(2))
+	_, err = decad.ScaledAt(sheet, r3.Vec{}, units.Scalar(2)).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.Equal(t, []*decad.Body{sheet}, doc.Bodies())
 }

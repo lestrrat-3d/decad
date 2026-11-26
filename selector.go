@@ -447,3 +447,47 @@ func (p FacePredicate) matches(f *Face) bool {
 
 // errNilSelector rejects a nil query.
 var errNilSelector = fmt.Errorf(`%w: nil selector`, ErrDegenerate)
+
+// copyEdgeQuery returns an independent copy of q: every union branch and its
+// predicates are cloned, because a later Or, Exactly or AtLeast on the
+// caller's query changes it in place. A nil query stays nil.
+func copyEdgeQuery(q *EdgeQuery) *EdgeQuery {
+	if q == nil {
+		return nil
+	}
+	branches := make([][]EdgePredicate, len(q.branches))
+	for i, b := range q.branches {
+		branches[i] = slices.Clone(b)
+	}
+	return &EdgeQuery{branches: branches, card: q.card}
+}
+
+// copyFaceQuery is copyEdgeQuery for a face query.
+func copyFaceQuery(q *FaceQuery) *FaceQuery {
+	if q == nil {
+		return nil
+	}
+	branches := make([][]FacePredicate, len(q.branches))
+	for i, b := range q.branches {
+		branches[i] = slices.Clone(b)
+	}
+	return &FaceQuery{branches: branches, card: q.card}
+}
+
+// copyEdgeSelector copies a decad edge query at the call that stores it
+// (agent-docs/command-api-design.md rule A3). A selector that is no decad query
+// is stored as given: the selector gate refuses it at Do without calling it.
+func copyEdgeSelector(sel EdgeSelector) EdgeSelector {
+	if q, ok := sel.(*EdgeQuery); ok {
+		return copyEdgeQuery(q)
+	}
+	return sel
+}
+
+// copyFaceSelector is copyEdgeSelector for a face selector.
+func copyFaceSelector(sel FaceSelector) FaceSelector {
+	if q, ok := sel.(*FaceQuery); ok {
+		return copyFaceQuery(q)
+	}
+	return sel
+}

@@ -173,14 +173,14 @@ func heroPlate(ctx context.Context) (*decad.Body, error) {
 		return nil, err
 	}
 	// Extrude has no context-aware variant; Solve above is the cancellable phase.
-	slab, err := decad.Extrude(ctx, decad.New(), s, profile, decad.Symmetric{D: units.Millimeters(plateDepth)})
+	slab, err := decad.Extrude(decad.New(), s, profile, decad.Symmetric{D: units.Millimeters(plateDepth)}).Do(ctx)
 	if err != nil {
 		return nil, err
 	}
 	// Facing(0,-1,0) is the cap nearest the camera (Along on this XZ sketch
 	// is -Y); opening it turns the slab into a shadow-box whose side walls
 	// and back keep a uniform 1.8mm thickness.
-	shelled, err := decad.Shell(ctx, slab, decad.Faces(decad.Facing(r3.NewVec(0, -1, 0))), units.Millimeters(plateShellThickness))
+	shelled, err := decad.Shell(slab, decad.Faces(decad.Facing(r3.NewVec(0, -1, 0))), units.Millimeters(plateShellThickness)).Do(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("shell backing plate: %w", err)
 	}
@@ -276,7 +276,7 @@ func xzPrism(ctx context.Context, loops [][]point, extent decad.Extent) (*decad.
 		return nil, err
 	}
 	// Extrude has no context-aware variant; Solve above is the cancellable phase.
-	return decad.Extrude(ctx, decad.New(), s, profile, extent)
+	return decad.Extrude(decad.New(), s, profile, extent).Do(ctx)
 }
 
 // letterBody extrudes one letter profile letterDepth toward the camera, then
@@ -298,16 +298,16 @@ func letterBody(ctx context.Context, loops [][]point, chamferCap bool) (*decad.B
 	if !chamferCap {
 		// Round the exposed outside corners while keeping the counters and
 		// interior cut-ins crisp for a legible wordmark.
-		filleted, err := decad.Fillet(ctx, extruded, decad.Edges(
+		filleted, err := decad.Fillet(extruded, decad.Edges(
 			decad.ParallelTo(r3.NewVec(0, 1, 0)),
 			decad.Convex(),
-		), units.Millimeters(letterFilletRadius))
+		), units.Millimeters(letterFilletRadius)).Do(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("fillet extruded loops: %w", err)
 		}
 		return filleted, nil
 	}
-	beveled, err := decad.Chamfer(ctx, extruded, decad.Edges(decad.CreatedBy(decad.CapEnd(extruded))), units.Millimeters(letterCapChamfer))
+	beveled, err := decad.Chamfer(extruded, decad.Edges(decad.CreatedBy(decad.CapEnd(extruded))), units.Millimeters(letterCapChamfer)).Do(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("chamfer letter cap: %w", err)
 	}
@@ -350,7 +350,7 @@ func heroStud(ctx context.Context, x, z, radius float64) (*decad.Body, error) {
 	}
 	axis := decad.SketchLine{Start: decad.Point2{U: 0, V: z}, End: decad.Point2{U: 1, V: z}}
 	// Revolve has no context-aware variant; Solve above is the cancellable phase.
-	dome, err := decad.Revolve(ctx, decad.New(), s, profile, axis, decad.FullRevolution{})
+	dome, err := decad.Revolve(decad.New(), s, profile, axis, decad.FullRevolution{}).Do(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("revolve the stud: %w", err)
 	}

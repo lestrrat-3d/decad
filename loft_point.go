@@ -7,6 +7,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
+	"github.com/lestrrat-3d/decad/internal/opcommand"
 	"github.com/lestrrat-3d/decad/internal/pointloft"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -19,16 +20,39 @@ import (
 // profile. The apex is in millimetres. This operation accepts one outer loop
 // and no holes; every fitted flank remains the recorded Sketch curve. The
 // boundary is a certified chorded fan and a cap (agent-docs/loft-design.md §20).
-func LoftFromPoint(ctx context.Context, d *Document, apex r3.Vec,
-	s *sketch.Sketch, p *sketch.Profile) (*Body, error) {
-	body, err := loftFromPoint(ctx, d, apex, s, p)
-	return body, operationError(OperationLoftFromPoint, err)
+func LoftFromPoint(d *Document, apex r3.Vec, s *sketch.Sketch, p *sketch.Profile) *LoftFromPointCommand {
+	c := &LoftFromPointCommand{d: d, apex: apex, s: s, p: p}
+	recordNilFaults(&c.state, "LoftFromPoint", d, sketchArg(s), profileArg(p))
+	return c
 }
 
+// LoftFromPointCommand builds a solid from a point to a profile. Build it with
+// [LoftFromPoint]. It has no method.
+type LoftFromPointCommand struct {
+	state opcommand.State // consumed flag and first recorded fault
+	d     *Document       // stored as given
+	apex  r3.Vec          // gated at Do
+	s     *sketch.Sketch  // stored as given
+	p     *sketch.Profile // stored as given
+}
+
+// Do builds the point loft, registers the new body and returns it, or returns
+// the error of the first gate that refuses, leaving the document unchanged. A
+// nil ctx is ErrDegenerate, and a second call returns ErrConsumed.
+func (c *LoftFromPointCommand) Do(ctx context.Context) (*Body, error) {
+	return runCommand(ctx, &c.state, OperationLoftFromPoint, c.run)
+}
+
+func (c *LoftFromPointCommand) run(ctx context.Context) (*Body, error) {
+	return loftFromPoint(ctx, c.d, c.apex, c.s, c.p)
+}
+
+// loftFromPoint is LoftFromPoint's implementation. ctx is not nil, and the
+// errors it returns carry no operation tag (agent-docs/command-api-design.md §11).
 func loftFromPoint(ctx context.Context, d *Document, apex r3.Vec,
 	s *sketch.Sketch, p *sketch.Profile) (*Body, error) {
-	if ctx == nil || d == nil || s == nil || p == nil {
-		return nil, fmt.Errorf("%w: point loft needs a context, document, sketch and profile", ErrDegenerate)
+	if d == nil || s == nil || p == nil {
+		return nil, fmt.Errorf("%w: point loft needs a document, sketch and profile", ErrDegenerate)
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, err

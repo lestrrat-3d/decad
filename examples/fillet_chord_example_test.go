@@ -29,8 +29,8 @@ func Example_fillet_chord() {
 		return
 	}
 	doc := decad.New()
-	plate, err := decad.Extrude(context.Background(), doc, s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	plate, err := decad.Extrude(doc, s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(10), Dir: decad.Along}).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to extrude: %s\n", err)
 		return
@@ -40,7 +40,7 @@ func Example_fillet_chord() {
 	// right angle is an arc of radius 4/sqrt(2).
 	edge := decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1)),
 		decad.EndpointAt(r3.NewVec(40, 20, 0))).Exactly(1)
-	rounded, err := decad.FilletChord(context.Background(), plate, edge, units.Millimeters(4))
+	rounded, err := decad.FilletChord(plate, edge, units.Millimeters(4)).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to fillet: %s\n", err)
 		return

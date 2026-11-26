@@ -33,7 +33,7 @@ func BenchmarkSweepCompositeBounds(b *testing.B) {
 	}
 	b.ResetTimer()
 	for b.Loop() {
-		body, err := decad.Sweep(b.Context(), decad.New(), section, profile, path)
+		body, err := decad.Sweep(decad.New(), section, profile, path).Do(b.Context())
 		if err != nil {
 			b.Fatal(err)
 		}

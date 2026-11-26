@@ -52,8 +52,8 @@ func checkDraftCircleShellRoles(t *testing.T, b *decad.Body) {
 func TestDraftCircleShellVerified(t *testing.T) {
 	t.Parallel()
 	base := draftedDisk(t, r3.NewVec(0, 0, 0), 5)
-	cup, err := decad.Shell(t.Context(), base,
-		decad.Faces(decad.FaceCreatedBy(decad.CapEnd(base))).Exactly(1), units.Millimeters(1))
+	cup, err := decad.Shell(base,
+		decad.Faces(decad.FaceCreatedBy(decad.CapEnd(base))).Exactly(1), units.Millimeters(1)).Do(t.Context())
 	require.NoError(t, err)
 	checkDraftCircleShellRoles(t, cup)
 	volume, err := cup.Volume()
@@ -83,12 +83,12 @@ func TestDraftCircleShellPlacement(t *testing.T) {
 	base := draftedDisk(t, r3.NewVec(3, -2, 4), 5)
 	shift, err := r3.Translation(r3.NewVec(6, 7, -3))
 	require.NoError(t, err)
-	placed, err := decad.Copy(t.Context(), base, decad.WithCopyPlacement(shift))
+	placed, err := decad.Copy(base).Place(decad.CopyTransform{Transform: shift}).Do(t.Context())
 	require.NoError(t, err)
-	cup, err := decad.Shell(t.Context(), placed,
-		decad.Faces(decad.FaceCreatedBy(decad.CapEnd(placed))).Exactly(1), units.Millimeters(1))
+	cup, err := decad.Shell(placed,
+		decad.Faces(decad.FaceCreatedBy(decad.CapEnd(placed))).Exactly(1), units.Millimeters(1)).Do(t.Context())
 	require.NoError(t, err)
-	moved, err := decad.Copy(t.Context(), cup, decad.WithCopyPlacement(shift))
+	moved, err := decad.Copy(cup).Place(decad.CopyTransform{Transform: shift}).Do(t.Context())
 	require.NoError(t, err)
 	checkDraftCircleShellRoles(t, moved)
 	mesh, err := moved.Tessellate(t.Context(), units.Millimeters(0.1),
@@ -107,17 +107,17 @@ func TestDraftCircleShellRefusals(t *testing.T) {
 	t.Parallel()
 	base := draftedDisk(t, r3.NewVec(0, 0, 0), 5)
 	top := decad.Faces(decad.FaceCreatedBy(decad.CapEnd(base))).Exactly(1)
-	_, err := decad.Shell(t.Context(), base, top, units.Millimeters(8))
+	_, err := decad.Shell(base, top, units.Millimeters(8)).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrDegenerate)
-	_, err = decad.Shell(t.Context(), base, decad.Faces(decad.FaceCreatedBy(decad.CapStart(base))).Exactly(1),
-		units.Millimeters(1))
+	_, err = decad.Shell(base, decad.Faces(decad.FaceCreatedBy(decad.CapStart(base))).Exactly(1),
+		units.Millimeters(1)).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
-	_, err = decad.Shell(t.Context(), base, top, units.Millimeters(1), decad.WithShellSense(decad.Outward))
+	_, err = decad.Shell(base, top, units.Millimeters(1)).Sense(decad.Outward).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 
 	flare := draftedDisk(t, r3.NewVec(0, 0, 0), -5)
-	_, err = decad.Shell(t.Context(), flare,
-		decad.Faces(decad.FaceCreatedBy(decad.CapEnd(flare))).Exactly(1), units.Millimeters(1))
+	_, err = decad.Shell(flare,
+		decad.Faces(decad.FaceCreatedBy(decad.CapEnd(flare))).Exactly(1), units.Millimeters(1)).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 
 	s, p := taperSketch(t, r3.NewVec(0, 0, 0), 1, func(s *sketch.Sketch) {
@@ -127,7 +127,7 @@ func TestDraftCircleShellRefusals(t *testing.T) {
 		s.Fix(c)
 	})
 	annulus := taperExtrude(t, decad.New(), s, p, 10, 5, decad.Along)
-	_, err = decad.Shell(t.Context(), annulus,
-		decad.Faces(decad.FaceCreatedBy(decad.CapEnd(annulus))).Exactly(1), units.Millimeters(1))
+	_, err = decad.Shell(annulus,
+		decad.Faces(decad.FaceCreatedBy(decad.CapEnd(annulus))).Exactly(1), units.Millimeters(1)).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 }

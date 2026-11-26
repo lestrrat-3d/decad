@@ -35,7 +35,7 @@ func solidFromBlock(t *testing.T) (*decad.Document, *decad.Body) {
 	m, err := decad.ReadSTL(t.Context(), &buf)
 	require.NoError(t, err)
 	doc := decad.New()
-	body, err := decad.SolidFromMesh(t.Context(), doc, m)
+	body, err := decad.SolidFromMesh(doc, m).Do(t.Context())
 	require.NoError(t, err)
 	return doc, body
 }
@@ -70,7 +70,7 @@ func TestSolidFromMeshTakesPartInBooleans(t *testing.T) {
 	doc, body := solidFromBlock(t)
 	// A tool box overlapping the block's x 2..4, y 1..2, z 0..2 corner region removes 2 x 1 x 2 = 4.
 	tool := boxBody(t, doc, 2, 1, 6, 2, 3)
-	out, err := decad.Cut(t.Context(), body, tool)
+	out, err := decad.Cut(body, tool).Do(t.Context())
 	require.NoError(t, err)
 	volume, err := out.Volume()
 	require.NoError(t, err)
@@ -79,7 +79,7 @@ func TestSolidFromMeshTakesPartInBooleans(t *testing.T) {
 	// the overlap: the bar is x 3..8, y -1..4, z 0.5..1.5 for 25, and inside the block's x 3..4 it
 	// meets the cut result over the 2 mm of y the notch leaves, 1 x 2 x 1 = 2, so the union holds 20 + 25 - 2 = 43.
 	bar := boxBodyAtZ(t, doc, 3, -1, 8, 4, 0.5, 1)
-	joined, err := decad.Union(t.Context(), out, bar)
+	joined, err := decad.Union(out, bar).Do(t.Context())
 	require.NoError(t, err)
 	jv, err := joined.Volume()
 	require.NoError(t, err)
@@ -91,7 +91,7 @@ func TestSolidFromMeshReadsATetrahedron(t *testing.T) {
 	facets := importTetrahedron()
 	m, err := decad.ReadSTL(t.Context(), bytes.NewReader(importBinarySTL(facets[:])))
 	require.NoError(t, err)
-	body, err := decad.SolidFromMesh(t.Context(), decad.New(), m)
+	body, err := decad.SolidFromMesh(decad.New(), m).Do(t.Context())
 	require.NoError(t, err)
 	require.Len(t, body.Faces(), 4)
 	volume, err := body.Volume()
@@ -108,7 +108,7 @@ func TestSolidFromMeshRefusals(t *testing.T) {
 		return m
 	}
 	solid := func(m *decad.MeshBody) error {
-		_, err := decad.SolidFromMesh(t.Context(), decad.New(), m)
+		_, err := decad.SolidFromMesh(decad.New(), m).Do(t.Context())
 		return err
 	}
 	require.NoError(t, solid(build(v, tris)))
@@ -126,14 +126,14 @@ func TestSolidFromMeshRefusals(t *testing.T) {
 		bothTris = append(bothTris, [3]int{tri[0] + len(v), tri[1] + len(v), tri[2] + len(v)})
 	}
 	require.ErrorIs(t, solid(build(both, bothTris)), decad.ErrDegenerate, "a mesh that crosses itself")
-	_, err := decad.SolidFromMesh(nil, decad.New(), build(v, tris)) //nolint:staticcheck // a nil context is the case under test
+	_, err := decad.SolidFromMesh(decad.New(), build(v, tris)).Do(nil) //nolint:staticcheck // a nil context is the case under test
 	require.ErrorIs(t, err, decad.ErrDegenerate)
-	_, err = decad.SolidFromMesh(t.Context(), nil, build(v, tris))
+	_, err = decad.SolidFromMesh(nil, build(v, tris)).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrDegenerate)
-	_, err = decad.SolidFromMesh(t.Context(), decad.New(), nil)
+	_, err = decad.SolidFromMesh(decad.New(), nil).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrDegenerate)
 	doc := decad.New()
-	_, err = decad.SolidFromMesh(t.Context(), doc, build(v, tris[:len(tris)-1]))
+	_, err = decad.SolidFromMesh(doc, build(v, tris[:len(tris)-1])).Do(t.Context())
 	require.Error(t, err)
 	require.Empty(t, doc.Bodies(), "a refusal leaves the document unchanged")
 }
@@ -151,7 +151,7 @@ func TestSolidFromMeshBodyKeepsWorkingAfterPlacementAndReadings(t *testing.T) {
 	// A translated copy lands where it should and keeps its faces and volume.
 	move, err := r3.Translation(r3.NewVec(5, 0, 0))
 	require.NoError(t, err)
-	moved, err := decad.Transform(t.Context(), body, move)
+	moved, err := decad.Transform(body, move).Do(t.Context())
 	require.NoError(t, err)
 	box, err := moved.Bounds()
 	require.NoError(t, err)

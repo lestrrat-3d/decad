@@ -6,74 +6,26 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/featureoption"
 	"github.com/lestrrat-3d/decad/internal/loftrecord"
+	"github.com/lestrrat-3d/decad/internal/opcommand"
 
 	"github.com/lestrrat-3d/sketch"
-	"github.com/lestrrat-go/option/v3"
 )
 
 // This file is agent-docs/loft-design.md PR 1b: the public entry point over PR 1a's
-// evaluator (internal/loftrecord). It owns the LoftOption surface, gates S9-S10,
-// and the atomic record->evaluate->commit tail (§10). internal/featureoption
-// owns S11 and S4's arity half. The other gates — S1-S8 and S13's coordinate-range
+// evaluator (internal/loftrecord). It owns the LoftCommand surface, gates S9-S10,
+// and the atomic record->evaluate->commit tail (§10). The loft methods replace
+// a repeated call, so S4's arity half and S11 have no counterpart. The other gates — S1-S8 and S13's coordinate-range
 // gate — is loftmesh.ValidateLoftRecords', loftmesh.AssembleTriangulated's and loftmesh.LoftCrossingAuditStructured's, run
 // inside loftrecord.Build in §4's stated order.
 
-// LoftOption configures Loft.
-type LoftOption interface {
-	option.Interface
-	loftOption()
-}
-
-// WithLoftAlignment records, per loop, which recorded segment index of the
-// SECOND profile pairs with segment index 0 of the FIRST profile's
-// corresponding loop. offsets[0] is the outer loop; offsets[1+h] is
-// p1.Holes[h]. Omitting the option means every offset is 0 — the natural
-// case where both profiles were authored with matching segment order
-// (agent-docs/loft-design.md §2/§3 Table P row P4).
-//
-// The option is accepted at most once: two payloads are two different
-// correspondences, so a repeat is [ErrDegenerate] rather than last-wins
-// (Table S row S4).
-func WithLoftAlignment(offsets ...int) LoftOption {
-	return loftOptionValue{featureoption.WithLoftAlignment(offsets...)}
-}
-
 // LoftSplit names one recorded segment of one loop and the fractions of its
-// parameter range at which WithLoftSplits cuts it. Loop 0 is the outer loop and
+// parameter range at which Splits cuts it. Loop 0 is the outer loop and
 // loop 1+h is Holes[h]; Segment is the recorded segment index within that loop.
 // Every fraction is strictly inside (0, 1), and they increase.
 type LoftSplit struct {
 	Loop    int
 	Segment int
 	At      []float64
-}
-
-// WithLoftSplits cuts recorded segments of the first and of the second section
-// before the loft pairs them, so two sections whose loops hold different numbers
-// of segments can be paired one to one. Each piece is the same recorded curve over
-// a sub-range of the segment's own parameter range, the way a trimmed fragment is
-// recorded, so a split changes no curve. A fraction f resolves to the parameter
-// TStart + f·(TEnd − TStart) of the segment, which is proportional to length on a
-// line and a parameter of the curve on any other kind. The pieces follow each
-// other in the loop's walk order. WithLoftAlignment then applies to the split
-// loops, and a wall's source role names the split segment index.
-//
-// The option is accepted at most once, like WithLoftAlignment: two payloads are
-// two different correspondences, so a repeat is [ErrDegenerate]. A split index
-// outside its loop, a fraction outside (0, 1) or not increasing, a segment split
-// twice, and a fraction that rounds onto its neighbour are [ErrDegenerate] too.
-// Loops still holding different segment counts, or a pair still of different
-// kinds, after the splits are [ErrUnsupported] as without the option, and a
-// correspondence that twists is refused by the crossing audit.
-func WithLoftSplits(first, second []LoftSplit) LoftOption {
-	conv := func(in []LoftSplit) []featureoption.LoftSplit {
-		out := make([]featureoption.LoftSplit, len(in))
-		for i, s := range in {
-			out[i] = featureoption.LoftSplit{Loop: s.Loop, Segment: s.Segment, At: s.At}
-		}
-		return out
-	}
-	return loftOptionValue{featureoption.WithLoftSplits(conv(first), conv(second))}
 }
 
 // Loft builds a solid ruled between two profiles recorded on distinct
@@ -111,21 +63,113 @@ func WithLoftSplits(first, second []LoftSplit) LoftOption {
 // Exhausting the audit's fixed pair-test budget is
 // [ErrUnsupported] (S8). A section point whose world coordinate runs past the
 // representable float64 range is [ErrUnsupported] (S13) — the body exists,
-// and this evaluator cannot hold its vertex table. WithSurfaceResult() omits
+// and this evaluator cannot hold its vertex table. SurfaceResult omits
 // both section caps and publishes a sheet body instead of a solid
 // (agent-docs/surface-design.md §4).
 //
 // A failed call leaves the document untouched.
-func Loft(ctx context.Context, d *Document, s0 *sketch.Sketch, p0 *sketch.Profile, s1 *sketch.Sketch, p1 *sketch.Profile, opts ...LoftOption) (*Body, error) {
-	body, err := loft(ctx, d, s0, p0, s1, p1, opts...)
-	return body, operationError(OperationLoft, err)
+func Loft(d *Document, s0 *sketch.Sketch, p0 *sketch.Profile, s1 *sketch.Sketch, p1 *sketch.Profile) *LoftCommand {
+	c := &LoftCommand{d: d, s0: s0, p0: p0, s1: s1, p1: p1}
+	if d == nil {
+		c.state.Record("d", errNilDocument)
+	}
+	// S10: the message names the four arguments, and the subject the first nil one.
+	for _, a := range []struct {
+		name string
+		nil  bool
+	}{{"s0", s0 == nil}, {"p0", p0 == nil}, {"s1", s1 == nil}, {"p1", p1 == nil}} {
+		if a.nil {
+			c.state.Record(a.name, fmt.Errorf(`%w: Loft requires two non-nil sketches and two non-nil profiles`, ErrDegenerate))
+			break
+		}
+	}
+	return c
 }
 
-func loft(ctx context.Context, d *Document, s0 *sketch.Sketch, p0 *sketch.Profile,
-	s1 *sketch.Sketch, p1 *sketch.Profile, opts ...LoftOption) (*Body, error) {
-	if ctx == nil {
-		return nil, fmt.Errorf(`%w: a nil context cannot control a loft`, ErrDegenerate)
+// LoftCommand builds a solid ruled between two profiles. Build it with [Loft].
+type LoftCommand struct {
+	state     opcommand.State               // consumed flag and first recorded fault
+	d         *Document                     // stored as given
+	s0, s1    *sketch.Sketch                // stored as given
+	p0, p1    *sketch.Profile               // stored as given
+	surface   surfaceResultSetting          // set by SurfaceResult
+	alignment opcommand.Slot[[]int]         // set by Alignment
+	splits    opcommand.Slot[loftSplitPair] // set by Splits
+}
+
+// loftSplitPair holds the copied splits of the first and the second section.
+type loftSplitPair struct{ first, second []featureoption.LoftSplit }
+
+// Alignment records, per loop, which recorded segment index of the
+// SECOND profile pairs with segment index 0 of the FIRST profile's
+// corresponding loop. offsets[0] is the outer loop; offsets[1+h] is
+// p1.Holes[h]. Omitting the method means every offset is 0 — the natural
+// case where both profiles were authored with matching segment order
+// (agent-docs/loft-design.md §2/§3 Table P row P4). A second call replaces the
+// first.
+func (c *LoftCommand) Alignment(offsets ...int) *LoftCommand {
+	// An empty call stores an empty, non-nil list: the call names a payload of no offsets, which the
+	// pairing gate refuses, and never means no alignment.
+	c.alignment.Set(append([]int{}, offsets...), nil)
+	return c
+}
+
+// Splits cuts recorded segments of the first and of the second section
+// before the loft pairs them, so two sections whose loops hold different numbers
+// of segments can be paired one to one. Each piece is the same recorded curve over
+// a sub-range of the segment's own parameter range, the way a trimmed fragment is
+// recorded, so a split changes no curve. A fraction f resolves to the parameter
+// TStart + f·(TEnd − TStart) of the segment, which is proportional to length on a
+// line and a parameter of the curve on any other kind. The pieces follow each
+// other in the loop's walk order. [LoftCommand.Alignment] then applies to the
+// split loops, and a wall's source role names the split segment index.
+//
+// A second call replaces the first. A split index outside its loop, a fraction
+// outside (0, 1) or not increasing, a segment split twice, and a fraction that
+// rounds onto its neighbour are [ErrDegenerate]. Loops still holding different
+// segment counts, or a pair still of different kinds, after the splits are
+// [ErrUnsupported] as without the method, and a correspondence that twists is
+// refused by the crossing audit.
+func (c *LoftCommand) Splits(first, second []LoftSplit) *LoftCommand {
+	conv := func(in []LoftSplit) []featureoption.LoftSplit {
+		out := make([]featureoption.LoftSplit, len(in))
+		for i, s := range in {
+			out[i] = featureoption.LoftSplit{Loop: s.Loop, Segment: s.Segment, At: s.At}
+		}
+		return featureoption.CloneSplits(out)
 	}
+	c.splits.Set(loftSplitPair{first: conv(first), second: conv(second)}, nil)
+	return c
+}
+
+// SurfaceResult omits both section caps and publishes a sheet body instead of
+// a solid (agent-docs/surface-design.md §4). Calling it twice is the same as
+// calling it once.
+func (c *LoftCommand) SurfaceResult() *LoftCommand { c.surface.set(); return c }
+
+// Do builds the loft, registers the new body and returns it, or returns the
+// error of the first gate that refuses, leaving the document unchanged. A nil
+// ctx is ErrDegenerate, and a second call returns ErrConsumed.
+func (c *LoftCommand) Do(ctx context.Context) (*Body, error) {
+	return runCommand(ctx, &c.state, OperationLoft, c.run)
+}
+
+func (c *LoftCommand) run(ctx context.Context) (*Body, error) {
+	cfg := featureoption.LoftConfig{SurfaceResult: c.surface.on}
+	if c.alignment.IsSet() {
+		cfg.Alignment, _ = c.alignment.Get()
+	}
+	if c.splits.IsSet() {
+		pair, _ := c.splits.Get()
+		cfg.Splits = [2][]featureoption.LoftSplit{pair.first, pair.second}
+	}
+	return loft(ctx, c.d, c.s0, c.p0, c.s1, c.p1, cfg)
+}
+
+// loft is Loft's implementation. ctx is not nil, and the errors it returns
+// carry no operation tag (agent-docs/command-api-design.md §11).
+func loft(ctx context.Context, d *Document, s0 *sketch.Sketch, p0 *sketch.Profile,
+	s1 *sketch.Sketch, p1 *sketch.Profile, cfg featureoption.LoftConfig) (*Body, error) {
 	if d == nil {
 		return nil, fmt.Errorf(`%w: a nil document owns no model`, ErrDegenerate)
 	}
@@ -136,15 +180,6 @@ func loft(ctx context.Context, d *Document, s0 *sketch.Sketch, p0 *sketch.Profil
 		return nil, fmt.Errorf(`%w: Loft requires two non-nil sketches and two non-nil profiles`, ErrDegenerate)
 	}
 
-	// S11 (option ownership) and S4's ARITY half (a repeated
-	// WithLoftAlignment), both pre-gates decidable with no record at all
-	// (agent-docs/loft-design.md §4, amended). decad owns the option vocabulary, so
-	// a foreign concrete type — including one that embeds LoftOption to
-	// promote the sealed marker — is rejected before its Ident() ever runs.
-	cfg, err := decodeLoftOptions(opts)
-	if err != nil {
-		return nil, err
-	}
 	if err := d.requireSameContainer(nil, s0, s1); err != nil {
 		return nil, err
 	}
@@ -169,20 +204,6 @@ func loft(ctx context.Context, d *Document, s0 *sketch.Sketch, p0 *sketch.Profil
 // walks do not — the positive side — and the exactly-parallel plane gate that
 // replaces it.
 
-// ChainLoftOption configures LoftChain. It is its own sealed tier rather than
-// [LoftOption]: WithSurfaceResult() does not implement it, so the compiler
-// refuses that option outright rather than accepting it as a no-op — a
-// chain-fed loft always returns a sheet, so there is no cap for the option to
-// omit (agent-docs/surface-design.md §13.2, agent-docs/loft-design.md §16.3).
-// WithLoftAlignment is not a member either: Table P's own P4 row forces a
-// chain pair's offset to 0, so the option would name a correspondence that
-// does not exist. This placeholder tier has no concrete option yet; it reserves the
-// call for a later chain-only option.
-type ChainLoftOption interface {
-	option.Interface
-	chainLoftOption()
-}
-
 // LoftChain builds a sheet ruled between the open chains c0 (of s0) and c1 (of
 // s1), registers it, and returns the new body. c0 is the FROM walk and c1 the
 // TO walk, the same argument order Loft uses for its two sections and the
@@ -205,22 +226,55 @@ type ChainLoftOption interface {
 // refuses a pair whose two published walks run opposite ways.
 //
 // The result is always a sheet — Kind() == BodySheet — two flat triangles per
-// chord cell with no cap and no closing face, so WithSurfaceResult() does not
+// chord cell with no cap and no closing face, so SurfaceResult does not
 // compile against this call. A failed call leaves the document untouched.
-func LoftChain(ctx context.Context, d *Document, s0 *sketch.Sketch, c0 *sketch.Chain, s1 *sketch.Sketch, c1 *sketch.Chain, opts ...ChainLoftOption) (*Body, error) {
-	if ctx == nil {
-		return nil, fmt.Errorf(`%w: a nil context cannot control a loft`, ErrDegenerate)
+func LoftChain(d *Document, s0 *sketch.Sketch, c0 *sketch.Chain, s1 *sketch.Sketch, c1 *sketch.Chain) *LoftChainCommand {
+	c := &LoftChainCommand{d: d, s0: s0, c0: c0, s1: s1, c1: c1}
+	if d == nil {
+		c.state.Record("d", errNilDocument)
 	}
+	for _, a := range []struct {
+		name string
+		nil  bool
+	}{{"s0", s0 == nil}, {"c0", c0 == nil}, {"s1", s1 == nil}, {"c1", c1 == nil}} {
+		if a.nil {
+			c.state.Record(a.name, fmt.Errorf(`%w: LoftChain requires two non-nil sketches and two non-nil chains`, ErrDegenerate))
+			break
+		}
+	}
+	return c
+}
+
+// LoftChainCommand builds a sheet ruled between two open chains. Build it with
+// [LoftChain]. It has no method: a chain loft always returns a sheet, so it has
+// no SurfaceResult, and its segment pairing leaves no alignment.
+type LoftChainCommand struct {
+	state  opcommand.State // consumed flag and first recorded fault
+	d      *Document       // stored as given
+	s0, s1 *sketch.Sketch  // stored as given
+	c0, c1 *sketch.Chain   // stored as given
+}
+
+// Do builds the ribbon, registers the new body and returns it, or returns the
+// error of the first gate that refuses, leaving the document unchanged. A nil
+// ctx is ErrDegenerate, and a second call returns ErrConsumed.
+func (c *LoftChainCommand) Do(ctx context.Context) (*Body, error) {
+	return runCommand(ctx, &c.state, OperationLoftChain, c.run)
+}
+
+func (c *LoftChainCommand) run(ctx context.Context) (*Body, error) {
+	return loftChain(ctx, c.d, c.s0, c.c0, c.s1, c.c1)
+}
+
+// loftChain is LoftChain's implementation. ctx is not nil, and the errors it
+// returns carry no operation tag (agent-docs/command-api-design.md §11).
+func loftChain(ctx context.Context, d *Document, s0 *sketch.Sketch, c0 *sketch.Chain, s1 *sketch.Sketch,
+	c1 *sketch.Chain) (*Body, error) {
 	if d == nil {
 		return nil, fmt.Errorf(`%w: a nil document owns no model`, ErrDegenerate)
 	}
 	if s0 == nil || c0 == nil || s1 == nil || c1 == nil {
 		return nil, fmt.Errorf(`%w: LoftChain requires two non-nil sketches and two non-nil chains`, ErrDegenerate)
-	}
-	for _, o := range opts {
-		if o == nil {
-			return nil, fmt.Errorf(`%w: a nil option names nothing to apply`, ErrDegenerate)
-		}
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, err

@@ -31,8 +31,8 @@ func Example_export_step() {
 		fmt.Printf("failed to solve: %s\n", err)
 		return
 	}
-	box, err := decad.Extrude(context.Background(), decad.New(), s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(4), Dir: decad.Along})
+	box, err := decad.Extrude(decad.New(), s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(4), Dir: decad.Along}).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to extrude: %s\n", err)
 		return
@@ -74,13 +74,13 @@ func Example_export_step_cavity() {
 		fmt.Printf("failed to solve: %s\n", err)
 		return
 	}
-	cube, err := decad.Extrude(context.Background(), decad.New(), s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
+	cube, err := decad.Extrude(decad.New(), s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(20), Dir: decad.Along}).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to extrude: %s\n", err)
 		return
 	}
-	hollow, err := decad.Shell(context.Background(), cube, nil, units.Millimeters(3), decad.WithNoOpenings())
+	hollow, err := decad.ShellClosed(cube, units.Millimeters(3)).Do(context.Background())
 	if err != nil {
 		fmt.Printf("failed to shell: %s\n", err)
 		return

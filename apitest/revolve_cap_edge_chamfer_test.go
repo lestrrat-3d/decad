@@ -20,7 +20,7 @@ func TestRevolveQuarterCapRadialRimChamferVerified(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			doc, source := rimQuarterCylinder(t, tc.xlo, tc.xhi, tc.radius, 90)
-			out, err := decad.Chamfer(t.Context(), source, quarterRim(tc.xhi), units.Millimeters(tc.setback))
+			out, err := decad.Chamfer(source, quarterRim(tc.xhi), units.Millimeters(tc.setback)).Do(t.Context())
 			require.NoError(t, err)
 			require.Equal(t, []*decad.Body{out}, doc.Bodies())
 			require.Len(t, out.Faces(), 6)
@@ -86,12 +86,12 @@ func TestRevolveQuarterCapRadialRimChamferRefusesOtherSources(t *testing.T) {
 			if tc.selectStart {
 				x = tc.xlo
 			}
-			var opts []decad.ChamferOption
+			cmd := decad.Chamfer(source, quarterRim(x), units.Millimeters(tc.setback))
 			if tc.asymmetric {
 				ref := decad.Faces(decad.Facing(r3.NewVec(1, 0, 0)))
-				opts = append(opts, decad.WithAsymmetricChamfer(ref, units.Millimeters(0.5)))
+				cmd.Asymmetric(ref, units.Millimeters(0.5))
 			}
-			_, err := decad.Chamfer(t.Context(), source, quarterRim(x), units.Millimeters(tc.setback), opts...)
+			_, err := cmd.Do(t.Context())
 			require.ErrorIs(t, err, decad.ErrUnsupported)
 			require.Equal(t, []*decad.Body{source}, doc.Bodies())
 		})
@@ -104,7 +104,7 @@ func TestRevolveQuarterCapRadialRimChamferRefusesOtherSources(t *testing.T) {
 func TestRevolveQuarterCapRadialRimChamferMeasurements(t *testing.T) {
 	const length, radius, setback = 10.0, 8.0, 1.0
 	_, source := rimQuarterCylinder(t, 0, length, radius, 90)
-	out, err := decad.Chamfer(t.Context(), source, quarterRim(length), units.Millimeters(setback))
+	out, err := decad.Chamfer(source, quarterRim(length), units.Millimeters(setback)).Do(t.Context())
 	require.NoError(t, err)
 	volume, err := out.Volume()
 	require.NoError(t, err)

@@ -26,9 +26,9 @@ func joinFixture(t *testing.T) (*decad.Document, *decad.Body, *decad.Body, *deca
 func TestPathPatternUnionUnitesTheInstancesWithTheTarget(t *testing.T) {
 	t.Parallel()
 	doc, bar, peg, path := joinFixture(t)
-	copies, err := decad.PathPattern(t.Context(), peg, path, decad.WithPathCount(3))
+	copies, err := decad.PathPattern(peg, path, decad.PathCount{Count: 3}).Do(t.Context())
 	require.NoError(t, err)
-	out, err := decad.Union(t.Context(), bar, append([]*decad.Body{peg}, copies...)...)
+	out, err := decad.Union(append([]*decad.Body{bar}, append([]*decad.Body{peg}, copies...)...)...).Do(t.Context())
 	require.NoError(t, err)
 	require.Len(t, doc.Bodies(), 1, "the target, the feature and the copies are all retired")
 	require.True(t, doc.Bodies()[0] == out)
@@ -40,9 +40,9 @@ func TestPathPatternUnionUnitesTheInstancesWithTheTarget(t *testing.T) {
 func TestPathPatternSpacingUnionPlacesTheCopiesByDistance(t *testing.T) {
 	t.Parallel()
 	doc, bar, peg, path := joinFixture(t)
-	copies, err := decad.PathPattern(t.Context(), peg, path, decad.WithPathSpacing(units.Millimeters(10)))
+	copies, err := decad.PathPattern(peg, path, decad.PathSpacing{Spacing: units.Millimeters(10)}).Do(t.Context())
 	require.NoError(t, err)
-	out, err := decad.Union(t.Context(), bar, append([]*decad.Body{peg}, copies...)...)
+	out, err := decad.Union(append([]*decad.Body{bar}, append([]*decad.Body{peg}, copies...)...)...).Do(t.Context())
 	require.NoError(t, err)
 	require.Len(t, doc.Bodies(), 1)
 	decadtest.MeasuresVolume(t, out, units.CubicMillimeters(120+3*16))
@@ -56,13 +56,13 @@ func TestPathPatternUnionRefusalLeavesEveryOperandLive(t *testing.T) {
 	// feature and every copy live.
 	sheetDoc, sheet := offsetPrismSheet(t)
 	feature := decadtest.NewBlock(t, sheetDoc, 0, 0, 4, 4, units.Millimeters(2))
-	copies, err := decad.PathPattern(t.Context(), feature, path, decad.WithPathCount(3))
+	copies, err := decad.PathPattern(feature, path, decad.PathCount{Count: 3}).Do(t.Context())
 	require.NoError(t, err)
-	_, err = decad.Union(t.Context(), sheet, append([]*decad.Body{feature}, copies...)...)
+	_, err = decad.Union(append([]*decad.Body{sheet}, append([]*decad.Body{feature}, copies...)...)...).Do(t.Context())
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.True(t, slices.Equal(append([]*decad.Body{sheet, feature}, copies...), sheetDoc.Bodies()))
 	for _, c := range copies {
-		require.NoError(t, decad.Remove(c))
+		require.NoError(t, decad.Remove(c).Do(t.Context()))
 	}
 	require.Len(t, sheetDoc.Bodies(), 2)
 }
