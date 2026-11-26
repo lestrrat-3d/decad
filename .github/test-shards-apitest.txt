@@ -3285,3 +3285,10 @@
 2	5.68	TestIntersectionVolumeLaterOperations
 2	23.75	TestIntersectionVolumeMatchesIntersect
 2	1.83	TestIntersectionVolumeSharedOperandsConcurrent
+7	0.38	TestBodyDigestMatchesMeshFingerprint
+8	0.22	TestPairDigestRenumberedIDs
+9	0.18	TestBodyDigestStableAfterCaches
+7	0.10	TestBodyDigestConcurrent
+8	0.05	TestPairDigestSharedSource
+9	0.02	TestBodyDigestIncludesHistory
+7	0.01	TestBodyDigestGates

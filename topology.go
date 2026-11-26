@@ -2,6 +2,7 @@ package decad
 
 import (
 	"fmt"
+	"sync/atomic"
 
 	"github.com/lestrrat-3d/decad/internal/edgewedge"
 	"github.com/lestrrat-3d/decad/internal/measurement"
@@ -599,6 +600,9 @@ type Body struct {
 	// first operand of; it changes no outcome either. ContactPair stores each
 	// report once and hands out copies.
 	pairReports ringmemo.Memo[pairReportKey, *nodeContactReport]
+	// digest memoizes Digest (body_digest.go). It is a cache the digest
+	// itself leaves out.
+	digest atomic.Pointer[bodyDigestMemo]
 }
 
 // Document returns the document that owns (or owned) this body.

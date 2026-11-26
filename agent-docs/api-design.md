@@ -857,6 +857,8 @@ value it reads, so a retired body still answers it (§6). The query set is:
 - measurements: `Bounds`, `Volume`, `Area`, `Centroid`, `MassProperties`,
   `LocatePoint`, `DistanceToPoint`, `ExtremeFacesByCentroid`;
 - `Tessellate`, which returns a `Mesh` and registers nothing;
+- the identities `Body.Digest` and `Document.PairDigest`, a SHA-256 of the state the evaluator reads, usable as a
+  cache key (`agent-docs/body-digest-design.md`);
 - the document reads `Bodies`, `Verify`, `VerifyMotion`, `VerifyLinkage`,
   `VerifyJointBox`, `ContactPair`, `ProvePairSeparated`, `SweepPair`, `SweptBox`
   and `IntersectionVolume`, each of which returns a result and leaves the document unchanged;

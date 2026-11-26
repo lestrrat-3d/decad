@@ -88,6 +88,7 @@ configuration option.
 | `decad.Measurement` | struct | A value, its exactness and an absolute error bound. | `Body.Volume`, `Body.Area`, `Edge.Length` |
 | `decad.VecMeasurement` | struct | A position or direction with its exactness and bound. | `Body.Centroid`, `Vertex.Position` |
 | `decad.Box` | struct | An axis-aligned bound with its own exactness and bound. | `Body.Bounds` |
+| `decad.Digest` | array | A 32-byte SHA-256 identity of a body's or an ordered pair's evaluator state. | `Body.Digest`, `Document.PairDigest` |
 | `decad.Exactness` | enum | `decad.Exact` or `decad.Approximate`. | `Measurement.Exactness` |
 | `decad.MassProperties` | struct | Mass, center and inertia of a solid, with certified source moments used for some contained prism Cuts when they improve the verified-mesh reading. | `Body.MassProperties` |
 | `decad.InertiaReading` | struct | The symmetric inertia tensor about the mass center in world axes. | `MassProperties.Inertia` |

@@ -52,6 +52,7 @@ The rules for rows live in `agent-docs/layout.md`.
 | `internal/planarband/` | Planar contact report from the exact relation: manifold witnesses and order, support band, the positive-displacement relation with its charged manifold, and planar solids of prism and faceted payloads. See multibody §9.3–§9.6, §10.4–§10.5. |
 | `internal/radiusmemo/` | Body rotational sweep-radius keys and bounded memo readings. See contact-sweep §6–§7. |
 | `internal/ringmemo/` | Bounded first-write memo that evicts its oldest key once full; backs the pair report and sweep replay memos. |
+| `internal/statedigest/` | Canonical reflect encoder and SHA-256 of a value graph: first-visit ids, pointer sharing, map order, skip and refuse lists, the shared structure of two walks. See body-digest-design. |
 | `internal/spherepath/` | Sphere path gaps, face corridors, point transfer, track bounds, brackets and pair replay. See contact-sweep §4–§6. |
 | `internal/linkagebound/` | Link bounds and projections. See linkage §5, §15. |
 | `internal/loopscene/` | Closed-loop sketch scenes. See linkage §15.2. |

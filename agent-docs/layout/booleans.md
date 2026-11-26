@@ -16,6 +16,7 @@ Boolean files and modify operations. The rules for rows live in `agent-docs/layo
 | `internal/flushface/` | Decides whether two coplanar held outlines keep their arrangement under their vertex bounds: padded box clearance and robust crossings. See flush-contact design §4.4. |
 | `internal/facemerge/` | Relabels a mesh Boolean result's source groups so adjacent exactly coplanar same-facing faces of the two operands become one face. See union-face-merge design §4. |
 | `boolean_regroup.go` | Root history, handle, error and commit adapters for chain regroup, rim-split rebuild and paired Cut continuation. `internal/booleandispatch` owns the private node plan. See boolean-chain-regroup-design. |
+| `body_digest.go` | Public `Digest`, `Body.Digest` and `Document.PairDigest`: the skip, refuse and id-field lists and the document side tables handed to `internal/statedigest`. See body-digest-design. |
 | `intersection_volume.go` | `Document.IntersectionVolume`: the read-only `Intersect` query, built on `buildBoolean` with no commit. See API §8. |
 | `surface_trim.go` | `TrimCommand`, `ExtendCommand` and `SplitCommand` over `trim`, `extend` and `split`: entry checks and commits; `internal/surfacetrim/` builds them. See surface-intersection §2–§3. |
 | `point_plane_scale.go` | The `ScaledAt` command: resolves the similarity source by payload kind and commits the image; facetedrecord.ScaleImage admits and scales it. See loft-point design and evaluator §8. |
