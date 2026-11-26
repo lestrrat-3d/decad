@@ -253,7 +253,7 @@ var documentWriteFields = map[string]struct{}{
 // live set or counters, or on a write lock of its LiveMu: an assignment, op=
 // assignment, ++ or -- whose left side ends in one of documentWriteFields; a
 // composite literal that sets one of them; a call of X.LiveMu.Lock or
-// X.LiveMu.Unlock; a call of Store, Add, Swap or CompareAndSwap on X.NextLevel or X.NextCurve. Reads, RLock and RUnlock, and calls of MintLevel,
+// X.LiveMu.Unlock. Reads, RLock and RUnlock, and calls of MintLevel,
 // MintCurve, IsLive and Live pass. Root is the writer and is not scanned
 // (agent-docs/evaluator-design.md §8).
 func TestTopoDocumentWriteGuard(t *testing.T) {
@@ -345,23 +345,11 @@ func documentNodeWrites(fset *token.FileSet, f *ast.File) []string {
 			}
 		case *ast.CallExpr:
 			sel, ok := x.Fun.(*ast.SelectorExpr)
-			if !ok {
+			if !ok || (sel.Sel.Name != "Lock" && sel.Sel.Name != "Unlock") {
 				return true
 			}
-			recv, ok := sel.X.(*ast.SelectorExpr)
-			if !ok {
-				return true
-			}
-			switch sel.Sel.Name {
-			case "Lock", "Unlock":
-				if recv.Sel.Name == "LiveMu" {
-					report(x, "LiveMu."+sel.Sel.Name+" called")
-				}
-			case "Store", "Add", "Swap", "CompareAndSwap":
-				// The level and curve counters are atomics, so a write is a method call.
-				if recv.Sel.Name == "NextLevel" || recv.Sel.Name == "NextCurve" {
-					report(x, recv.Sel.Name+"."+sel.Sel.Name+" called")
-				}
+			if mu, ok := sel.X.(*ast.SelectorExpr); ok && mu.Sel.Name == "LiveMu" {
+				report(x, "LiveMu."+sel.Sel.Name+" called")
 			}
 		}
 		return true

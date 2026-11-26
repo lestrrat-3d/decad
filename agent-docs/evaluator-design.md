@@ -864,12 +864,10 @@ The live body set (the node's `LiveSet`) sits behind the document node's own loc
 the node's `IsLive` and `Live` — reads it under the same lock, and a reader that walks the set walks
 its own snapshot. Only root writes the set and the producer counter, and only root takes the write
 lock: `TestTopoDocumentWriteGuard` fails on an internal package that writes `LiveSet`,
-`NextProducer`, `NextLevel` or `NextCurve`, calls `Store`, `Add`, `Swap` or `CompareAndSwap` on `NextLevel`
-or `NextCurve`, or locks `LiveMu` for writing, and the counters' own increments live in `MintLevel` and
-`MintCurve`. That is what lets a `Remove` run beside a `Verify`. The lock guards the set alone. The level
-and curve counters are atomic, so read-only builds such as `IntersectionVolume` may mint on one document at
-once. `NextProducer` and a feature's check-then-commit stay unguarded, which is why the document as a whole
-stays unsafe for concurrent mutation (core §12).
+`NextProducer`, `NextLevel` or `NextCurve` or locks `LiveMu` for writing, and the counters' own
+increments live in `MintLevel` and `MintCurve`. That is what lets a `Remove` run beside a `Verify`. The lock guards the set alone: the identity counters and a
+feature's check-then-commit are still unguarded, which is why the document as a whole stays unsafe
+for concurrent mutation (core §12).
 
 Every payload implements `topo.Payload`, and the body node holds it
 (`Payload`). `Placed` takes the builder environment `topo.Env` (the document

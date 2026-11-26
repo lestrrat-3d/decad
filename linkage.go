@@ -138,6 +138,7 @@ func (d *Document) VerifyLinkage(ctx context.Context, l *Linkage, drive Drive, o
 	if d == nil {
 		return nil, fmt.Errorf(`%w: a nil document owns no model`, ErrDegenerate)
 	}
+	ctx = d.queryContext(ctx)
 	if err := d.requireLinkage(l); err != nil {
 		return nil, err
 	}
@@ -193,6 +194,7 @@ func (d *Document) VerifyJointBox(ctx context.Context, l *Linkage, box JointBox,
 	if d == nil {
 		return nil, fmt.Errorf(`%w: a nil document owns no model`, ErrDegenerate)
 	}
+	ctx = d.queryContext(ctx)
 	if err := d.requireLinkage(l); err != nil {
 		return nil, err
 	}

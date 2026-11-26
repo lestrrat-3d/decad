@@ -9,8 +9,7 @@ import (
 
 // IntersectionVolume runs the evaluation Intersect runs on a and b, in that operand order, and returns the volume
 // of the body Intersect would build. It commits nothing: Bodies, the operation history, producer numbering,
-// containers and every body are unchanged, and both operands stay live. It may advance the private level and
-// curve identity counters, as a refused Intersect does.
+// containers, the level, curve and producer counters and every body are unchanged, and both operands stay live.
 //
 // The answer is Intersect's, bit for bit: the Measurement equals the Volume of the body Intersect returns for
 // the same operands in the same document state, and every error is the error Intersect returns, tagged
@@ -31,6 +30,7 @@ func (d *Document) intersectionVolume(ctx context.Context, a, b *Body) (Measurem
 	if ctx == nil {
 		return Measurement{}, fmt.Errorf(`%w: a nil context cannot control a boolean`, ErrDegenerate)
 	}
+	ctx = d.queryContext(ctx)
 	if err := d.requireLive(a); err != nil {
 		return Measurement{}, err
 	}

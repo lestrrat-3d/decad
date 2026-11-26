@@ -62,6 +62,7 @@ func (d *Document) VerifyMotion(ctx context.Context, moving []*Body, m Motion, o
 	if d == nil {
 		return nil, fmt.Errorf(`%w: a nil document owns no model`, ErrDegenerate)
 	}
+	ctx = d.queryContext(ctx)
 	if err := d.resolveMovers(moving); err != nil {
 		return nil, err
 	}
@@ -99,12 +100,12 @@ func motionHooks() motionengine.Hooks {
 		Operand: pairMeshes{},
 		Place:   placePayloadNode,
 		NewDocument: func(seeds topo.Seeds, live []*topo.Body) *topo.Document {
-			born := bornDocument(&Document{n: topo.Document{
+			return &bornDocument(&Document{n: topo.Document{
+				NextLevel:    seeds.Level,
+				NextCurve:    seeds.Curve,
 				NextProducer: seeds.Producer,
 				LiveSet:      live,
-			}})
-			born.n.StartFrom(seeds)
-			return &born.n
+			}}).n
 		},
 	}
 }

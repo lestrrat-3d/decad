@@ -9,10 +9,10 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestIntersectionVolumeLeavesTablesAlone snapshots the producer counter and every document table before and
+// TestIntersectionVolumeLeavesTablesAlone snapshots the identity counters and every document table before and
 // after each query: the live set, the operations and their producer and consumer indexes, the circle and
 // identity witnesses and the container membership. The pairs cover the span route, the exact grid route, mesh
-// operands, a body in a child container and a disjoint pair. Only the level and curve counters may move.
+// operands, a body in a child container and a disjoint pair. NextProducer, NextLevel and NextCurve must not move.
 func TestIntersectionVolumeLeavesTablesAlone(t *testing.T) {
 	t.Parallel()
 	doc := New()

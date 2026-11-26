@@ -8,6 +8,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/gaptol"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/rimsplit"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/units"
 	"github.com/lestrrat-go/option/v3"
 )
@@ -80,6 +81,18 @@ func gapReachOf(opts []DocumentOption) (float64, error) {
 		reach = mm
 	}
 	return reach, nil
+}
+
+// queryContext returns ctx carrying a private transient id source for d. Every
+// ctx query method (Verify, VerifyMotion, VerifyLinkage, VerifyJointBox,
+// ContactPair, ProvePairSeparated, SweepPair, SweptBox, IntersectionVolume) calls it at entry, so
+// bodies a query builds on its own worker goroutines never mint from, or move,
+// the document's level and curve counters. A nil d or ctx is returned as is.
+func (d *Document) queryContext(ctx context.Context) context.Context {
+	if d == nil {
+		return ctx
+	}
+	return topo.WithTransientIDs(ctx, &d.n)
 }
 
 // evalContext returns ctx carrying d's gap tolerance for the evaluator, or the

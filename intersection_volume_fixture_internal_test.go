@@ -11,6 +11,7 @@ import (
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
 
+	"github.com/lestrrat-3d/decad/internal/denotation"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/topo"
 )
@@ -82,10 +83,12 @@ func ivGridBlock(t *testing.T, doc *Document, lo, hi r3.Vec) *Body {
 	return body
 }
 
-// ivTables is a copy of the document state an operation writes and a read-only query must leave alone. The
-// level and curve counters are not in it: a query may advance them.
+// ivTables is a copy of the document state an operation writes and a read-only query must leave alone, the
+// three identity counters included.
 type ivTables struct {
 	nextProducer       producerID
+	nextLevel          denotation.LevelID
+	nextCurve          denotation.CurveID
 	live               []*topo.Body
 	operations         []*Operation
 	producers          map[*Body]*Operation
@@ -102,6 +105,8 @@ func ivTablesOf(d *Document) ivTables {
 	defer d.n.LiveMu.RUnlock()
 	tb := ivTables{
 		nextProducer:       d.n.NextProducer,
+		nextLevel:          d.n.NextLevel,
+		nextCurve:          d.n.NextCurve,
 		operations:         slices.Clone(d.operations),
 		producers:          maps.Clone(d.producers),
 		consumers:          map[*Body][]*Operation{},
@@ -125,6 +130,12 @@ func ivDiff(before, after ivTables) []string {
 	var out []string
 	if before.nextProducer != after.nextProducer {
 		out = append(out, fmt.Sprintf("NextProducer %d -> %d", before.nextProducer, after.nextProducer))
+	}
+	if before.nextLevel != after.nextLevel {
+		out = append(out, fmt.Sprintf("NextLevel %d -> %d", before.nextLevel, after.nextLevel))
+	}
+	if before.nextCurve != after.nextCurve {
+		out = append(out, fmt.Sprintf("NextCurve %d -> %d", before.nextCurve, after.nextCurve))
 	}
 	check := func(name string, same bool, nb, na int) {
 		if !same {

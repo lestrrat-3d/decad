@@ -1160,9 +1160,8 @@ func Intersect(ctx context.Context, a, b *Body, opts ...BooleanOption) (*Body, e
 `Document.IntersectionVolume(ctx, a, b)` is the read-only form of `Intersect`: it runs the evaluation `Intersect`
 runs on the same operands in the same order (both take `buildBoolean` in `boolean.go`) and returns the volume of the
 body `Intersect` would build, as a `Measurement` equal to it bit for bit. It commits nothing, so `Bodies`, the
-operation history, producer numbering and containers are unchanged and both operands stay live; it may advance the
-document's private level and curve counters, which are atomic so that queries and `Verify` may run together on one
-document. Every error is `Intersect`'s, wrapped with `operationError(OperationIntersect, err)` so its diagnostics carry the
+operation history, producer numbering, level and curve counters and containers are unchanged and both operands stay
+live; like `Verify`, it mints its identities from a private transient source (`queryContext`). Every error is `Intersect`'s, wrapped with `operationError(OperationIntersect, err)` so its diagnostics carry the
 `OperationIntersect` tag, and an empty result is the `*BooleanError` with
 `BooleanEmpty` that carries the gap shift, if one applied. It differs from `Intersect` in two gates: the operands may
 sit in different containers, since nothing lands in either, and it is a method on the document, as §6.3 makes a query.

@@ -299,8 +299,8 @@ const (
 
 // booleanBuild is the uncommitted result of buildBoolean. Nothing in it is
 // registered in the document, so dropping it leaves the live set, the history,
-// the tables and the producer counter as they were. Building it may have
-// advanced the document's level and curve counters, which stay advanced.
+// the tables and the identity counters as they were, provided the build ran
+// under a query context.
 type booleanBuild struct {
 	// ctx is the build's context, as buildBoolean narrowed it for the commit.
 	// It lives for one synchronous performBoolean call.
@@ -318,8 +318,8 @@ type booleanBuild struct {
 
 // buildBoolean runs the geometry evaluation of a boolean on gated operands and
 // returns the uncommitted result, or the error the operation reports. It
-// registers nothing and retires nothing; it may advance the document's private
-// level and curve counters. a and b MUST be distinct live bodies of d. Both
+// registers nothing and retires nothing; under a query context it mints no
+// document identity. a and b MUST be distinct live bodies of d. Both
 // performBoolean and IntersectionVolume take this route, so a query answers as
 // the operation does.
 func buildBoolean(ctx context.Context, d *Document, op meshbool.OperationKind, a, b *Body,
