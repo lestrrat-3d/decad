@@ -355,9 +355,7 @@ func TestBodyDigestConcurrent(t *testing.T) {
 	errs := make([]error, workers)
 	var wg sync.WaitGroup
 	for i := range workers {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			switch i % 4 {
 			case 0:
 				_, errs[i] = a.Tessellate(ctx, units.Millimeters(0.05))
@@ -372,7 +370,7 @@ func TestBodyDigestConcurrent(t *testing.T) {
 				return
 			}
 			pairs[i], errs[i] = doc.PairDigest(ctx, a, b)
-		}()
+		})
 	}
 	wg.Wait()
 	for i := range workers {
