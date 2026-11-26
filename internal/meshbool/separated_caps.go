@@ -18,9 +18,19 @@ import (
 // CapSide is a producer's claim about one planar face of an operand (agent-docs/coplanar-contact-design.md §19.2):
 // the operand's true solid lies in the closed half-space {x : N·(x − O) ≤ 0}, the true face Face lies in its boundary
 // plane N·(x − O) = 0, and the true solid meets that plane only in the closure of Face. O and N are exact.
+//
+// Region, when set, restricts the claim to a box (agent-docs/coplanar-contact-design.md §20.2): the true solid's part
+// inside the box lies in the half-space, and the held checks read only the facets whose boxes meet it. A side whose
+// claim is about the whole solid leaves it nil.
+//
+// KeptOutline marks a face whose outline vertices each stand for their true points within their own bounds, as an
+// analytic operand's do (facetedrecord.CapSideRecord.KeptOutline): the outline reading gives each the radius β
+// (agent-docs/flush-contact-design.md §4.3).
 type CapSide struct {
-	Face *topo.Face
-	O, N [3]*big.Rat
+	Face        *topo.Face
+	O, N        [3]*big.Rat
+	Region      *[2]r3.Vec
+	KeptOutline bool
 }
 
 // SlabCapSides reads caps, the faces carrying a CapRecord of an operand whose true solid lies between the planes of
@@ -193,16 +203,41 @@ func AttachCapSides(bmA, bmB *BoolMesh, a, b []CapSide) {
 		return
 	}
 	ff.sides = [2][]CapSide{a, b}
+	for k, sides := range ff.sides {
+		for _, side := range sides {
+			if !side.KeptOutline || side.Face == nil {
+				continue
+			}
+			op := ff.ops[k]
+			if op.keptOutline == nil {
+				op.keptOutline = map[*topo.Face]struct{}{}
+			}
+			op.keptOutline[side.Face] = struct{}{}
+		}
+	}
 }
 
 // SeparatedOperands reports whether the two operands bmA and bmB carry cap sides that form a separated cap pair
 // (agent-docs/coplanar-contact-design.md §19.3): their true solids then meet only where their caps' true regions
 // overlap, and those overlap over a disc of positive radius, so the proximity gate has nothing a chord could hide.
+//
+// When no pair of the operands' own sides is separated, it tries one operand's side against a local side of the other
+// (§20.2, localSide), which holds inside the box of the first operand's true solid, and keeps that local side only
+// when the pair it forms is separated.
 func SeparatedOperands(bmA, bmB *BoolMesh) (bool, error) {
 	ff := bmA.Flush
-	if ff == nil || bmB.Flush != ff || len(ff.sides[0]) == 0 || len(ff.sides[1]) == 0 {
+	if ff == nil || bmB.Flush != ff || len(ff.sides[0]) == 0 && len(ff.sides[1]) == 0 {
 		return false, nil
 	}
+	ok, err := ff.separatedOwnSides()
+	if err != nil || ok {
+		return ok, err
+	}
+	return ff.separatedLocalSides()
+}
+
+// separatedOwnSides looks for a separated cap pair among the sides the operands' payloads state.
+func (ff *FlushFaces) separatedOwnSides() (bool, error) {
 	for _, ca := range ff.sides[0] {
 		sx, ok := ff.ops[0].srcOf(ca.Face)
 		if !ok {
@@ -221,6 +256,63 @@ func SeparatedOperands(bmA, bmB *BoolMesh) (bool, error) {
 				ff.plane, ff.planeReach = &ca, sep.reach
 				return true, nil
 			}
+		}
+	}
+	return false, nil
+}
+
+// dropSide removes operand k's last side, at index ia, with its held reading.
+func (ff *FlushFaces) dropSide(k, ia int) {
+	ff.sides[k] = ff.sides[k][:ia]
+	delete(ff.inside, [2]int{k, ia})
+}
+
+// separatedLocalSides pairs each payload side of one operand with a local side of the other (§20.2). A local side
+// that forms a separated pair joins that operand's sides, so the coplanar pass reads the pair through separatedPair.
+func (ff *FlushFaces) separatedLocalSides() (bool, error) {
+	for k := range 2 {
+		own := ff.sides[1-k]
+		for ib := range own {
+			cb := own[ib]
+			if cb.Region != nil {
+				continue
+			}
+			if _, ok := ff.ops[1-k].srcOf(cb.Face); !ok {
+				continue
+			}
+			ca, ok, err := ff.localSide(k, cb)
+			if err != nil {
+				return false, err
+			}
+			if !ok {
+				continue
+			}
+			ia := len(ff.sides[k])
+			ff.sides[k] = append(ff.sides[k], ca)
+			sides := [2]int{ia, ib}
+			if k == 1 {
+				sides = [2]int{ib, ia}
+			}
+			faces := [2]*topo.Face{ff.sides[0][sides[0]].Face, ff.sides[1][sides[1]].Face}
+			sx, okx := ff.ops[0].srcOf(faces[0])
+			sy, oky := ff.ops[1].srcOf(faces[1])
+			if !okx || !oky {
+				ff.dropSide(k, ia)
+				continue
+			}
+			sep, err := ff.separatedSides(sides[0], sides[1], ff.ops[0].head(sx), ff.ops[1].head(sy))
+			if err != nil {
+				return false, err
+			}
+			if !sep.ok {
+				ff.dropSide(k, ia)
+				continue
+			}
+			// Verdicts read before this side joined may have missed it.
+			ff.sepMemo = nil
+			plane := ff.sides[0][sides[0]]
+			ff.plane, ff.planeReach = &plane, sep.reach
+			return true, nil
 		}
 	}
 	return false, nil
@@ -542,10 +634,21 @@ func (ff *FlushFaces) readHeldInside(k, idx int) (bool, error) {
 	if !ok {
 		return false, nil
 	}
+	// A local side (§20.2) is read only on the facets whose boxes meet its region, and on their vertices.
+	inRegion := func(t int) bool { return side.Region == nil || BoxesWithin(bm.Boxes[t], *side.Region, 0) }
+	read := make([]bool, len(bm.Verts))
+	for t, tri := range bm.Tris {
+		if inRegion(t) {
+			read[tri[0]], read[tri[1]], read[tri[2]] = true, true, true
+		}
+	}
 	on := make([]bool, len(bm.Verts))
 	for v, p := range bm.Verts {
 		if err := ff.budget.Step(); err != nil {
 			return false, err
+		}
+		if !read[v] {
+			continue
 		}
 		if !proofbound.FiniteVec(p) {
 			return false, nil
@@ -571,7 +674,7 @@ func (ff *FlushFaces) readHeldInside(k, idx int) (bool, error) {
 		if err := ff.budget.Step(); err != nil {
 			return false, err
 		}
-		if bm.Src[t] == src {
+		if bm.Src[t] == src || !inRegion(t) {
 			continue
 		}
 		var in []int
