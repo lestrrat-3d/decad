@@ -1,6 +1,7 @@
 package capblend_test
 
 import (
+	"context"
 	"math"
 	"testing"
 
@@ -252,12 +253,9 @@ func TestDisplacedTransfer(t *testing.T) {
 		err := capblend.RequireTransfer(t.Context(), cbp, mixedOf(cbp), []float64{1e-6, 0})
 		require.ErrorIs(t, err, decaderr.ErrUnsupported)
 		require.Contains(t, err.Error(), "T1)")
-		restore := capblend.DisableTransfer("T2")
-		err = capblend.RequireTransfer(t.Context(), cbp, mixedOf(cbp), []float64{1e-6, 0})
-		restore()
+		err = capblend.RequireTransfer(capblend.DisableTransfer(t.Context(), "T2"), cbp, mixedOf(cbp), []float64{1e-6, 0})
 		require.ErrorIs(t, err, decaderr.ErrUnsupported, "T2 off: T1 alone still refuses")
-		defer capblend.DisableTransfer("T1")()
-		require.NoError(t, capblend.RequireTransfer(t.Context(), cbp, mixedOf(cbp), []float64{1e-6, 0}))
+		require.NoError(t, capblend.RequireTransfer(capblend.DisableTransfer(t.Context(), "T1"), cbp, mixedOf(cbp), []float64{1e-6, 0}))
 	})
 	t.Run("T2 refuses a displaced outer loop certified within the floor of a contour", func(t *testing.T) {
 		// F is 1e-9 of the 20 × 20 section's diagonal; the hole's contour (offset
@@ -269,8 +267,7 @@ func TestDisplacedTransfer(t *testing.T) {
 		err := capblend.RequireTransfer(t.Context(), cbp, mixed, []float64{1e-12, 0})
 		require.ErrorIs(t, err, decaderr.ErrUnsupported)
 		require.Contains(t, err.Error(), "T2)")
-		defer capblend.DisableTransfer("T2")()
-		require.NoError(t, capblend.RequireTransfer(t.Context(), cbp, mixed, []float64{1e-12, 0}))
+		require.NoError(t, capblend.RequireTransfer(capblend.DisableTransfer(t.Context(), "T2"), cbp, mixed, []float64{1e-12, 0}))
 	})
 	t.Run("T2 charges the contour's own displacement", func(t *testing.T) {
 		floor := 1e-9 * 20 * math.Sqrt2
@@ -282,8 +279,7 @@ func TestDisplacedTransfer(t *testing.T) {
 		mixed := mixedOf(cbp)
 		err := capblend.RequireTransfer(t.Context(), cbp, mixed, []float64{1e-12, 0})
 		require.ErrorIs(t, err, decaderr.ErrUnsupported)
-		defer capblend.DisableTransfer("ContourDelta")()
-		require.NoError(t, capblend.RequireTransfer(t.Context(), cbp, mixed, []float64{1e-12, 0}))
+		require.NoError(t, capblend.RequireTransfer(capblend.DisableTransfer(t.Context(), "ContourDelta"), cbp, mixed, []float64{1e-12, 0}))
 	})
 	t.Run("T3 refuses a thin displaced loop whose segments are all adjacent", func(t *testing.T) {
 		const ld = 1e-8
@@ -296,8 +292,7 @@ func TestDisplacedTransfer(t *testing.T) {
 		err := capblend.RequireTransfer(t.Context(), cbp, cbp.Profile, []float64{ld})
 		require.ErrorIs(t, err, decaderr.ErrUnsupported)
 		require.Contains(t, err.Error(), "T3")
-		defer capblend.DisableTransfer("T3")()
-		require.NoError(t, capblend.RequireTransfer(t.Context(), cbp, cbp.Profile, []float64{ld}))
+		require.NoError(t, capblend.RequireTransfer(capblend.DisableTransfer(t.Context(), "T3"), cbp, cbp.Profile, []float64{ld}))
 	})
 	t.Run("a clear displaced loop passes", func(t *testing.T) {
 		cbp := dispPayload(t)
@@ -319,26 +314,36 @@ func TestSameWalkSegments(t *testing.T) {
 // than the offset audit, which passed. The hole's contour stands 7e-9 beyond
 // the contact floor from the outer wall at the held setback, so the held
 // numbers build; the span's top moves it 5e-9 closer and its own
-// displacement is charged.
+// displacement is charged. Switching T2 or ContourDelta off lets the span top
+// build, and the switch stays on the context it was made for: a build on the
+// test's own context, run while the switched context is live, still refuses.
 func TestDisplacedSpanTopTransferRefusal(t *testing.T) {
 	t.Parallel()
 	floor := 1e-9 * 20 * math.Sqrt2
-	build := func(dcDelta float64) error {
+	build := func(ctx context.Context, dcDelta float64) error {
 		set := capblend.Setback{Dc: 0.5, DcDelta: dcDelta, Ds: 0.5}
 		pp := prismrecord.Payload{
 			Profile: momentinput.Profile{Outer: squareLoop(20),
 				Holes: []sectionrecord.LoopRecord{holeLoop(20-3-0.5-floor-7e-9, 6, 3)}},
 			Frame: dispFrame(t), Z1: 10, Xform: r3.Identity(),
 		}
-		_, err := capblend.BuildCheckedDisplaced(t.Context(), dispEnv(), pp, set, set,
+		_, err := capblend.BuildCheckedDisplaced(ctx, dispEnv(), pp, set, set,
 			map[int]bool{1: true}, map[int]bool{1: true}, []float64{1e-12, 0})
 		return err
 	}
-	require.NoError(t, build(0), "the held setback alone builds")
-	err := build(5e-9)
-	require.ErrorIs(t, err, decaderr.ErrUnsupported)
-	require.Contains(t, err.Error(), "at the top of that span")
-	require.Contains(t, err.Error(), "fails the transfer condition")
-	require.Contains(t, err.Error(), "T2)")
-	require.NotContains(t, err.Error(), "fails the offset audit")
+	requireRefused := func(err error) {
+		t.Helper()
+		require.ErrorIs(t, err, decaderr.ErrUnsupported)
+		require.Contains(t, err.Error(), "at the top of that span")
+		require.Contains(t, err.Error(), "fails the transfer condition")
+		require.Contains(t, err.Error(), "T2)")
+		require.NotContains(t, err.Error(), "fails the offset audit")
+	}
+	require.NoError(t, build(t.Context(), 0), "the held setback alone builds")
+	requireRefused(build(t.Context(), 5e-9))
+	for _, check := range []string{"T2", "ContourDelta"} {
+		off := capblend.DisableTransfer(t.Context(), check)
+		require.NoError(t, build(off, 5e-9), "%s off: the span top builds", check)
+		requireRefused(build(t.Context(), 5e-9))
+	}
 }
