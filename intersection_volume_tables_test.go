@@ -51,7 +51,7 @@ func TestIntersectionVolumeOrthogonalRouteCommitsNothing(t *testing.T) {
 	require.Empty(t, ivDiff(before, ivTablesOf(doc)))
 	require.Equal(t, []*Body{a, b}, doc.Bodies())
 
-	got, err := Intersect(t.Context(), a, b)
+	got, err := Intersect(a, b).Do(t.Context())
 	require.NoError(t, err)
 	require.Len(t, doc.OperationHistory().Operations(), len(before.operations)+1)
 	require.Equal(t, before.nextProducer+1, ivTablesOf(doc).nextProducer)

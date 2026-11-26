@@ -59,7 +59,7 @@ func intersectionVolumeCases() []volumeCase {
 		{"regroup after a mesh cut", "ok", func(t *testing.T) (*decad.Document, *decad.Body, *decad.Body) {
 			sc := newRetentionScene()
 			box, t1, c := sc.roundedBox(t), sc.tool(t, 20), regroupSlabC(t, sc)
-			first, err := decad.Cut(t.Context(), box, t1)
+			first, err := decad.Cut(box, t1).Do(t.Context())
 			require.NoError(t, err)
 			return sc.doc, first, c
 		}},
@@ -84,10 +84,10 @@ func intersectionVolumeCases() []volumeCase {
 		// tolerance: the held operand cannot decide the contact.
 		{"tool wall on a coarse held rim", "unsupported", func(t *testing.T) (*decad.Document, *decad.Body, *decad.Body) {
 			sc := newRetentionScene()
-			built, err := decad.Cut(t.Context(), sc.roundedBox(t), sc.taperedTool(t))
+			built, err := decad.Cut(sc.roundedBox(t), sc.taperedTool(t)).Do(t.Context())
 			require.NoError(t, err)
 			// A Copy ends the Boolean chain, so the refusal is the sequential gate.
-			first, err := decad.Copy(t.Context(), built)
+			first, err := decad.Copy(built).Do(t.Context())
 			require.NoError(t, err)
 			return sc.doc, first, slabYTool(t, sc, 22, 3)
 		}},
@@ -229,18 +229,18 @@ func laterOperations(t *testing.T, d *decad.Document, a, b *decad.Body) []string
 	}
 	ops := func() string { return fmt.Sprintf("ops=%d", len(d.OperationHistory().Operations())) }
 
-	r, err := decad.Intersect(t.Context(), a, b)
+	r, err := decad.Intersect(a, b).Do(t.Context())
 	out := describe("intersect", r, err)
 	if err != nil {
-		cut, cerr := decad.Cut(t.Context(), a, b)
+		cut, cerr := decad.Cut(a, b).Do(t.Context())
 		return append(append(out, describe("cut", cut, cerr)...), ops())
 	}
 	third := boxBodyAtZ(t, d, 3, 3, 8, 8, 2, 20)
-	u, err := decad.Union(t.Context(), r, third)
+	u, err := decad.Union(r, third).Do(t.Context())
 	out = append(out, describe("union", u, err)...)
 	if err != nil {
 		return append(out, ops())
 	}
-	c, err := decad.Cut(t.Context(), u, circlePrismAtZ(t, d, 6, 6, 1.5, -5, 40))
+	c, err := decad.Cut(u, circlePrismAtZ(t, d, 6, 6, 1.5, -5, 40)).Do(t.Context())
 	return append(append(out, describe("cut", c, err)...), ops())
 }

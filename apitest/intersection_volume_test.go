@@ -22,7 +22,7 @@ func TestIntersectionVolumeMatchesIntersect(t *testing.T) {
 			docQ, aq, bq := tc.build(t)
 			_, ai, bi := tc.build(t)
 			queried, qerr := docQ.IntersectionVolume(t.Context(), aq, bq)
-			got, ierr := decad.Intersect(t.Context(), ai, bi)
+			got, ierr := decad.Intersect(ai, bi).Do(t.Context())
 			requireOutcomeKind(t, tc.outcome, ierr)
 			requireSameOutcome(t, queried, qerr, got, ierr)
 		})
@@ -61,8 +61,8 @@ func TestIntersectionVolumeCommitsNothing(t *testing.T) {
 			// Intersect on the queried document succeeds or is refused as it is on the twin that ran no query,
 			// answers the same volume, and adds one operation to the history. TestIntersectionVolumeLaterOperations
 			// compares the later results in full: outcome, volume, bounds, faces, face origins and tessellation.
-			got, err := decad.Intersect(t.Context(), a, b)
-			want, werr := decad.Intersect(t.Context(), ta, tb)
+			got, err := decad.Intersect(a, b).Do(t.Context())
+			want, werr := decad.Intersect(ta, tb).Do(t.Context())
 			require.Equal(t, werr == nil, err == nil)
 			if err != nil {
 				return
@@ -91,13 +91,13 @@ func TestIntersectionVolumeAcrossContainers(t *testing.T) {
 			queried, qerr := doc.IntersectionVolume(t.Context(), a, b)
 
 			// Intersect refuses the split pair, and answers once the bodies share a container.
-			_, err = decad.Intersect(t.Context(), a, b)
+			_, err = decad.Intersect(a, b).Do(t.Context())
 			require.ErrorIs(t, err, decad.ErrCrossContainer)
 			tchild, err := twin.Root().NewChild("tools")
 			require.NoError(t, err)
 			require.NoError(t, tchild.AddBody(tb))
 			require.NoError(t, twin.Root().AddBody(tb))
-			got, ierr := decad.Intersect(t.Context(), ta, tb)
+			got, ierr := decad.Intersect(ta, tb).Do(t.Context())
 			requireSameOutcome(t, queried, qerr, got, ierr)
 		})
 	}
@@ -115,11 +115,11 @@ func TestIntersectionVolumeGates(t *testing.T) {
 	require.ErrorIs(t, err, decad.ErrDegenerate)
 	_, err = doc.IntersectionVolume(t.Context(), nil, b)
 	require.ErrorIs(t, err, decad.ErrDegenerate)
-	_, want := decad.Intersect(t.Context(), nil, b)
+	_, want := decad.Intersect(nil, b).Do(t.Context())
 	require.EqualError(t, err, want.Error())
 	_, err = doc.IntersectionVolume(t.Context(), a, nil)
 	require.ErrorIs(t, err, decad.ErrDegenerate)
-	_, want = decad.Intersect(t.Context(), a, nil)
+	_, want = decad.Intersect(a, nil).Do(t.Context())
 	require.EqualError(t, err, want.Error())
 	_, err = doc.IntersectionVolume(t.Context(), a, a)
 	require.ErrorIs(t, err, decad.ErrDegenerate)
@@ -133,7 +133,7 @@ func TestIntersectionVolumeGates(t *testing.T) {
 	_, err = doc.IntersectionVolume(canceled, a, b)
 	require.Same(t, context.Canceled, err)
 
-	_, err = decad.Intersect(t.Context(), a, b)
+	_, err = decad.Intersect(a, b).Do(t.Context())
 	require.NoError(t, err)
 	_, err = doc.IntersectionVolume(t.Context(), a, b)
 	require.ErrorIs(t, err, decad.ErrRetiredBody)
