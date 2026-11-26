@@ -1,6 +1,7 @@
 package decad
 
 import (
+	"context"
 	"fmt"
 	"slices"
 	"strings"
@@ -341,20 +342,22 @@ func faceBodies(faces []*Face) []*Body {
 	return out
 }
 
-// resultIn makes every commit that names no container place its result in c, until
-// the returned function runs. It serves an operation whose commit sits several
-// calls below the code that knows the container; documents are not safe for
-// concurrent mutation, so one holder at a time is the contract.
-func (d *Document) resultIn(c *Container) func() {
-	d.n.LiveMu.Lock()
-	prev := d.resultC
-	d.resultC = c
-	d.n.LiveMu.Unlock()
-	return func() {
-		d.n.LiveMu.Lock()
-		d.resultC = prev
-		d.n.LiveMu.Unlock()
-	}
+// resultIn returns a context under which every commit on d that names no
+// container places its result in c. It serves an operation whose commit sits
+// several calls below the code that knows the container. The setting travels with
+// the returned context, so concurrent operations on one document cannot see each
+// other's container.
+func (d *Document) resultIn(ctx context.Context, c *Container) context.Context {
+	return context.WithValue(ctx, resultInKey{doc: d}, c)
+}
+
+// resultInKey keys the container resultIn names, per document.
+type resultInKey struct{ doc *Document }
+
+// resultInOf is the container resultIn put in ctx for d, or nil.
+func (d *Document) resultInOf(ctx context.Context) *Container {
+	c, _ := ctx.Value(resultInKey{doc: d}).(*Container)
+	return c
 }
 
 // requireSameContainer refuses with ErrCrossContainer when the bodies and sketches

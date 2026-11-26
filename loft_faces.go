@@ -161,7 +161,7 @@ func LoftFaces(ctx context.Context, sections []*Face, opts ...LoftFacesOption) (
 	if err := d.requireSameContainer(bodies); err != nil {
 		return nil, err
 	}
-	defer d.resultIn(d.bodyContainer(bodies[0]))()
+	ctx = d.resultIn(ctx, d.bodyContainer(bodies[0]))
 	inputs := faceInputs(sections, "section")
 	if cfg.tangent == nil {
 		return buildLoftFaces(ctx, d, inputs, selected, source, nil)

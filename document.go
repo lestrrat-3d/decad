@@ -46,9 +46,6 @@ type Document struct {
 	// groups is the container tree and the placement of its members
 	// (container.go), guarded by the node's LiveMu.
 	groups containerState
-	// resultIn names the container commits that name none place their result
-	// in, while an operation that cannot pass one down holds it (resultIn).
-	resultC *Container
 	// operations and their indexes are published under n.LiveMu with body
 	// retirement and registration.
 	operations       []*Operation
@@ -174,7 +171,7 @@ func (d *Document) commitOperationSpanPrefixIn(ctx context.Context, c *Container
 	if produced.blindProof != nil {
 		produced.blindProof.cut = operation
 	}
-	dest := d.destinationLocked(c, consumed)
+	dest := d.destinationLocked(ctx, c, consumed)
 	for _, gone := range consumed {
 		d.retire(gone)
 	}
@@ -222,7 +219,7 @@ func (d *Document) commitOperationManyFacesIn(ctx context.Context, c *Container,
 	d.n.NextProducer += producerID(len(produced))
 	d.n.LiveMu.Lock()
 	defer d.n.LiveMu.Unlock()
-	dest := d.destinationLocked(c, consumed)
+	dest := d.destinationLocked(ctx, c, consumed)
 	for _, gone := range consumed {
 		d.retire(gone)
 	}
@@ -361,18 +358,18 @@ func (d *Document) validateOperation(operation *Operation, consumed []*Body) err
 // and retires the consumed inputs — the atomic tail of every feature call
 // (agent-docs/evaluator-design.md §8): a failed evaluation never reaches here, so
 // a rejected operation leaves the document untouched.
-func (d *Document) commit(produced *Body, consumed ...*Body) {
-	d.commitIn(nil, produced, consumed...)
+func (d *Document) commit(ctx context.Context, produced *Body, consumed ...*Body) {
+	d.commitIn(ctx, nil, produced, consumed...)
 }
 
 // commitIn is commit placing the produced body in c. A nil c reads the container
 // of the first consumed body, and the root when nothing is consumed
 // (agent-docs/container-design.md §2).
-func (d *Document) commitIn(c *Container, produced *Body, consumed ...*Body) {
+func (d *Document) commitIn(ctx context.Context, c *Container, produced *Body, consumed ...*Body) {
 	d.n.NextProducer++
 	d.n.LiveMu.Lock()
 	defer d.n.LiveMu.Unlock()
-	dest := d.destinationLocked(c, consumed)
+	dest := d.destinationLocked(ctx, c, consumed)
 	for _, gone := range consumed {
 		d.retire(gone)
 	}
@@ -382,12 +379,12 @@ func (d *Document) commitIn(c *Container, produced *Body, consumed ...*Body) {
 
 // destinationLocked is the container a commit places its results in. The caller
 // holds LiveMu, and has not yet retired the consumed bodies.
-func (d *Document) destinationLocked(c *Container, consumed []*Body) *Container {
+func (d *Document) destinationLocked(ctx context.Context, c *Container, consumed []*Body) *Container {
 	if c != nil {
 		return c
 	}
-	if d.resultC != nil {
-		return d.resultC
+	if r := d.resultInOf(ctx); r != nil {
+		return r
 	}
 	if len(consumed) > 0 && consumed[0] != nil {
 		return d.bodyContainerLocked(bodyNode(consumed[0]))

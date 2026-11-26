@@ -105,7 +105,7 @@ func loftSections(ctx context.Context, d *Document, maps [][]*big.Rat, smoothCir
 		return nil, err
 	}
 	if sketches[0] != nil {
-		defer d.resultIn(d.ContainerOfSketch(sketches[0]))()
+		ctx = d.resultIn(ctx, d.ContainerOfSketch(sketches[0]))
 	}
 	if circularFitCandidate(sections) {
 		return d.buildCircularFitSectionsMode(ctx, sections, maps, smoothCircularBands, emergingFlat)

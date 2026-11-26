@@ -3220,3 +3220,4 @@
 12	3.10	TestUnionRefinedRejectsNilContextAndTooFewBodies
 12	3.10	TestUnionRefinedRefusesRepeatedOperands
 12	3.10	TestUnionRefinedStopsOnACanceledContext
+12	0.01	TestContainerResultFollowsSketchNotAmbientState
