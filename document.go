@@ -46,9 +46,6 @@ type Document struct {
 	// groups is the container tree and the placement of its members
 	// (container.go), guarded by the node's LiveMu.
 	groups containerState
-	// resultIn names the container commits that name none place their result
-	// in, while an operation that cannot pass one down holds it (resultIn).
-	resultC *Container
 	// operations and their indexes are published under n.LiveMu with body
 	// retirement and registration.
 	operations       []*Operation
@@ -168,13 +165,13 @@ func (d *Document) commitOperationSpanPrefixIn(ctx context.Context, c *Container
 	if produced.blindProof != nil && !produced.blindProof.acceptsOperation(operation, produced) {
 		return fmt.Errorf("%w: blind Cut history does not match its witness", ErrUnsupported)
 	}
-	d.n.NextProducer += prefix + span
+	d.advanceProducer(ctx, prefix+span)
 	d.n.LiveMu.Lock()
 	defer d.n.LiveMu.Unlock()
 	if produced.blindProof != nil {
 		produced.blindProof.cut = operation
 	}
-	dest := d.destinationLocked(c, consumed)
+	dest := d.destinationLocked(ctx, c, consumed)
 	for _, gone := range consumed {
 		d.retire(gone)
 	}
@@ -219,10 +216,10 @@ func (d *Document) commitOperationManyFacesIn(ctx context.Context, c *Container,
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	d.n.NextProducer += producerID(len(produced))
+	d.advanceProducer(ctx, producerID(len(produced)))
 	d.n.LiveMu.Lock()
 	defer d.n.LiveMu.Unlock()
-	dest := d.destinationLocked(c, consumed)
+	dest := d.destinationLocked(ctx, c, consumed)
 	for _, gone := range consumed {
 		d.retire(gone)
 	}
@@ -361,18 +358,18 @@ func (d *Document) validateOperation(operation *Operation, consumed []*Body) err
 // and retires the consumed inputs — the atomic tail of every feature call
 // (agent-docs/evaluator-design.md §8): a failed evaluation never reaches here, so
 // a rejected operation leaves the document untouched.
-func (d *Document) commit(produced *Body, consumed ...*Body) {
-	d.commitIn(nil, produced, consumed...)
+func (d *Document) commit(ctx context.Context, produced *Body, consumed ...*Body) {
+	d.commitIn(ctx, nil, produced, consumed...)
 }
 
 // commitIn is commit placing the produced body in c. A nil c reads the container
 // of the first consumed body, and the root when nothing is consumed
 // (agent-docs/container-design.md §2).
-func (d *Document) commitIn(c *Container, produced *Body, consumed ...*Body) {
-	d.n.NextProducer++
+func (d *Document) commitIn(ctx context.Context, c *Container, produced *Body, consumed ...*Body) {
+	d.advanceProducer(ctx, 1)
 	d.n.LiveMu.Lock()
 	defer d.n.LiveMu.Unlock()
-	dest := d.destinationLocked(c, consumed)
+	dest := d.destinationLocked(ctx, c, consumed)
 	for _, gone := range consumed {
 		d.retire(gone)
 	}
@@ -382,12 +379,12 @@ func (d *Document) commitIn(c *Container, produced *Body, consumed ...*Body) {
 
 // destinationLocked is the container a commit places its results in. The caller
 // holds LiveMu, and has not yet retired the consumed bodies.
-func (d *Document) destinationLocked(c *Container, consumed []*Body) *Container {
+func (d *Document) destinationLocked(ctx context.Context, c *Container, consumed []*Body) *Container {
 	if c != nil {
 		return c
 	}
-	if d.resultC != nil {
-		return d.resultC
+	if r := d.resultInOf(ctx); r != nil {
+		return r
 	}
 	if len(consumed) > 0 && consumed[0] != nil {
 		return d.bodyContainerLocked(bodyNode(consumed[0]))
@@ -410,14 +407,25 @@ func (d *Document) retire(b *Body) {
 	}
 }
 
-// nextProducerID is the identity the next successful operation will occupy.
-func (d *Document) nextProducerID() producerID { return d.n.NextProducer }
+// producerAt is the identity the next successful operation called with ctx
+// will occupy. Every read of the producer counter goes through it, so the
+// counter's source is one place (see TestProducerCounterAccess).
+func (d *Document) producerAt(ctx context.Context) producerID {
+	return d.n.ProducerAt(ctx)
+}
+
+// advanceProducer moves the producer counter past the n identities that an
+// operation called with ctx has just occupied. It is the only writer of the
+// counter and takes no lock itself.
+func (d *Document) advanceProducer(_ context.Context, n producerID) {
+	d.n.NextProducer += n
+}
 
 func (d *Document) producerID(ctx context.Context) producerID {
 	if capture, ok := ctx.Value(operationHistorySuppressedKey{}).(*operationHistoryCapture); ok {
-		return capture.nextProducerID(d)
+		return capture.nextProducer(ctx, d)
 	}
-	return d.nextProducerID()
+	return d.producerAt(ctx)
 }
 
 // requireLive gates a body-consuming operation: the body must belong to this
@@ -476,7 +484,7 @@ func transform(ctx context.Context, body *Body, t r3.Transform, kind OperationKi
 	if err != nil {
 		return nil, fmt.Errorf(`decad: composing the placement failed: %w`, err)
 	}
-	ref := d.nextProducerID()
+	ref := d.producerAt(ctx)
 	placed, err := placePayload(ctx, body.n.Payload, d, ref, composed)
 	if err != nil {
 		return nil, err
@@ -684,7 +692,7 @@ func (b *Body) copyUnder(ctx context.Context, motion r3.Transform, exact *exactr
 	if err != nil {
 		return nil, fmt.Errorf(`decad: composing the placement failed: %w`, err)
 	}
-	ref := d.nextProducerID()
+	ref := d.producerAt(ctx)
 	var copied *Body
 	faceted, isFaceted := b.n.Payload.(facetedPayload)
 	if isFaceted && exact != nil {

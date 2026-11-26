@@ -200,7 +200,7 @@ func upperNativeRim(ctx context.Context, d *Document, body *Body, edge *topo.Edg
 				continue
 			}
 			height := proofbound.RatFloatUp(new(big.Rat).Abs(rimSub(hi, lo)))
-			result, ok, err := directUpperRim(ctx, envOf(body.n.Doc, d.nextProducerID()), &body.n, finalCap, finalWall, center, hinge, radius, setback, height, budget)
+			result, ok, err := directUpperRim(ctx, envOf(body.n.Doc, d.producerAt(ctx)), &body.n, finalCap, finalWall, center, hinge, radius, setback, height, budget)
 			if ok && err == nil {
 				target := bodyHandle(result.Body)
 				top := rimAdd(hinge, rimRat(setback))

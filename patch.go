@@ -61,7 +61,7 @@ func PatchProfile(ctx context.Context, d *Document, s *sketch.Sketch, p *sketch.
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	ref := d.nextProducerID()
+	ref := d.producerAt(ctx)
 	body, err := bodyResult(patchchain.Build(ctx, envOf(&d.n, ref), patchPayload{
 		Profile: profile,
 		Frame:   frame,

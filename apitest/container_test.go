@@ -171,6 +171,26 @@ func TestContainerPlacement(t *testing.T) {
 	require.Same(t, a, containerOf(t, doc, lofted))
 }
 
+func TestContainerResultFollowsSketchNotAmbientState(t *testing.T) {
+	t.Parallel()
+	doc := decad.New()
+	a, err := doc.Root().NewChild("a")
+	require.NoError(t, err)
+	b, err := doc.Root().NewChild("b")
+	require.NoError(t, err)
+
+	inA := containerBox(t, doc, a, 0, 0, 4, 4, 4)
+	inB := containerBox(t, doc, b, 10, 0, 14, 4, 4)
+	require.Same(t, a, containerOf(t, doc, inA), "an extrude lands in its sketch's container")
+	require.Same(t, b, containerOf(t, doc, inB), "a later extrude does not keep the earlier container")
+
+	rootA := containerBox(t, doc, nil, 20, 0, 24, 4, 4)
+	rootB := containerBox(t, doc, nil, 22, 0, 26, 4, 4)
+	cut, err := decad.Cut(t.Context(), rootA, rootB)
+	require.NoError(t, err)
+	require.Same(t, doc.Root(), containerOf(t, doc, cut), "a cut of two root bodies lands in the root")
+}
+
 func TestContainerCrossRefusal(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()

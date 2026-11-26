@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/r3"
 	"github.com/stretchr/testify/require"
 )
 
@@ -41,21 +42,37 @@ func TestVerifyLeavesCountersUnchanged(t *testing.T) {
 	require.Equal(t, producer, doc.n.NextProducer, "producer counter")
 }
 
-// TestCircleWitnessReadsRaceWithCommit replays a circle source chain while
-// another goroutine commits new circle extrudes, which write the witness maps.
+// TestCircleWitnessReadsRaceWithCommit replays a circle source chain that
+// holds a Transform while another goroutine commits circle extrudes and
+// transforms, which write the witness maps. The chain's Transform makes the
+// replay read the placement witness and the producer map as well as the build
+// witness.
 func TestCircleWitnessReadsRaceWithCommit(t *testing.T) {
 	doc := New()
-	body := internalDiscBody(t, doc, 3, 2)
+	shift, err := r3.Translation(r3.Vec{X: 3, Y: -2, Z: 1})
+	require.NoError(t, err)
+	placed, err := Transform(t.Context(), internalDiscBody(t, doc, 3, 2), shift)
+	require.NoError(t, err)
+	errs := make(chan error, 1)
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
 		for range 300 {
-			internalDiscBody(t, doc, 2, 1)
+			body := internalDiscBody(t, doc, 2, 1)
+			if _, err := Transform(t.Context(), body, shift); err != nil {
+				errs <- err
+				return
+			}
 		}
 	}()
 	for range 300 {
-		_, err := captureCircleSource(t.Context(), doc, body, proofbound.NewCircleReplayBudget())
+		_, err := captureCircleSource(t.Context(), doc, placed, proofbound.NewCircleReplayBudget())
 		require.NoError(t, err)
 	}
 	<-done
+	select {
+	case err := <-errs:
+		require.NoError(t, err)
+	default:
+	}
 }

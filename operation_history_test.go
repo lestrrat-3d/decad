@@ -81,16 +81,16 @@ func TestPrivateConstructionKeepsBodiesAndProducerNumbersLocal(t *testing.T) {
 	doc := New()
 	body := internalBoxBody(t, doc, 0, 0, 2, 2, 2)
 	beforeBodies := doc.Bodies()
-	beforeProducer := doc.nextProducerID()
+	beforeProducer := doc.producerAt(t.Context())
 	ctx, capture := privateConstructionContext(t.Context())
 	ref := doc.producerID(ctx)
 	require.Equal(t, beforeProducer, ref)
 	require.NoError(t, doc.commitOperationSpanIn(ctx, nil, OperationExtrude, nil, body, 1))
-	require.Equal(t, beforeProducer, doc.nextProducerID())
+	require.Equal(t, beforeProducer, doc.producerAt(t.Context()))
 	require.Equal(t, beforeProducer+1, doc.producerID(ctx))
 	require.Equal(t, beforeBodies, doc.Bodies())
 	require.Len(t, doc.OperationHistory().Operations(), 1)
-	require.Equal(t, producerID(1), capture.producerSpan(doc))
+	require.Equal(t, producerID(1), capture.producerSpan(ctx, doc))
 }
 
 func TestOperationHistoryRemovePublishesZeroOutput(t *testing.T) {

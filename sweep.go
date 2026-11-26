@@ -109,7 +109,7 @@ func sweepProfile(ctx context.Context, d *Document, s *sketch.Sketch, p *sketch.
 	if err != nil {
 		return nil, err
 	}
-	node, err := sweepbuild.Profile(ctx, envOf(documentNode(d), d.nextProducerID()), s, p, path, cfg)
+	node, err := sweepbuild.Profile(ctx, envOf(documentNode(d), d.producerAt(ctx)), s, p, path, cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -162,7 +162,7 @@ func sweepChain(ctx context.Context, d *Document, s *sketch.Sketch, ch *sketch.C
 	if err := refuseChainSweepOptions(opts, len(path.Segments)); err != nil {
 		return nil, err
 	}
-	node, err := sweepbuild.Chain(ctx, envOf(documentNode(d), d.nextProducerID()), chain, plane, path)
+	node, err := sweepbuild.Chain(ctx, envOf(documentNode(d), d.producerAt(ctx)), chain, plane, path)
 	if err != nil {
 		return nil, err
 	}

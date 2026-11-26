@@ -296,7 +296,7 @@ func TestPointConeBooleanDeclinesMixedAxes(t *testing.T) {
 	d := documentHandle(tooth.n.Doc)
 	run := func(op meshbool.OperationKind, target *topo.Body, tool *Body) (*topo.Body, bool) {
 		t.Helper()
-		out, ok, err := revolveplan.PointConeBoolean(t.Context(), op, envOf(documentNode(d), d.nextProducerID()),
+		out, ok, err := revolveplan.PointConeBoolean(t.Context(), op, envOf(documentNode(d), d.producerAt(t.Context())),
 			target, bodyNode(tool), false)
 		require.NoError(t, err)
 		return out, ok
@@ -377,11 +377,11 @@ func TestCommitExactPointConeRefusesGeneralAxis(t *testing.T) {
 		require.NoError(t, err)
 		return built
 	}
-	before, producer := doc.Bodies(), doc.nextProducerID()
+	before, producer := doc.Bodies(), doc.producerAt(t.Context())
 	err := commitExactPointCone(t.Context(), doc, build(worldY, worldZ))
 	require.ErrorIs(t, err, ErrUnsupported)
 	require.Equal(t, before, doc.Bodies())
-	require.Equal(t, producer, doc.nextProducerID())
+	require.Equal(t, producer, doc.producerAt(t.Context()))
 	require.NoError(t, commitExactPointCone(t.Context(), doc, build(worldX, worldY)), "the +X cone is the control")
 }
 

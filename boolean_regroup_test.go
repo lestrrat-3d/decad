@@ -145,7 +145,7 @@ func TestRegroupSurfacesInvariantBreaks(t *testing.T) {
 		require.Nil(t, ancestry.firstTool)
 		beforeHistory := len(d.OperationHistory().Operations())
 		beforeBodies := d.Bodies()
-		beforeID := d.nextProducerID()
+		beforeID := d.producerAt(t.Context())
 		sources := []*Body{left, right, tool}
 		meshes := make([]*topo.TessEntry, len(sources))
 		faces := make([][]*Face, len(sources))
@@ -182,13 +182,13 @@ func TestRegroupSurfacesInvariantBreaks(t *testing.T) {
 			require.Equal(t, payloads[i].Z1, payload.Z1)
 			require.True(t, payloads[i].Walks == payload.Walks)
 		}
-		require.Equal(t, beforeID, d.nextProducerID())
+		require.Equal(t, beforeID, d.producerAt(t.Context()))
 		require.Len(t, d.OperationHistory().Operations(), beforeHistory)
 		cancelled, cancel := context.WithCancel(t.Context())
 		cancel()
 		err = commitPairedCut(cancelled, d, target, tool, target, 3, beforeID, ancestry, ErrUnsupported)
 		require.ErrorIs(t, err, context.Canceled)
-		require.Equal(t, beforeID, d.nextProducerID())
+		require.Equal(t, beforeID, d.producerAt(t.Context()))
 		require.Len(t, d.OperationHistory().Operations(), beforeHistory)
 		require.Len(t, d.Bodies(), len(beforeBodies))
 		for i, body := range d.Bodies() {
@@ -200,7 +200,7 @@ func TestRegroupSurfacesInvariantBreaks(t *testing.T) {
 		require.False(t, ok)
 		err = commitPairedCut(t.Context(), d, target, tool, target, 3, beforeID, ancestry, ErrUnsupported)
 		require.ErrorIs(t, err, ErrUnsupported)
-		require.Equal(t, beforeID, d.nextProducerID())
+		require.Equal(t, beforeID, d.producerAt(t.Context()))
 		require.Len(t, d.OperationHistory().Operations(), beforeHistory)
 		require.Len(t, d.Bodies(), len(beforeBodies))
 		for i, body := range d.Bodies() {
@@ -225,7 +225,7 @@ func TestRegroupSurfacesInvariantBreaks(t *testing.T) {
 		require.True(t, ok)
 		err = commitPairedCut(t.Context(), d, target, tool, target, 3, beforeID+1, ancestry, ErrUnsupported)
 		require.ErrorIs(t, err, ErrUnsupported)
-		require.Equal(t, beforeID, d.nextProducerID())
+		require.Equal(t, beforeID, d.producerAt(t.Context()))
 		require.Len(t, d.OperationHistory().Operations(), beforeHistory)
 		originalProducer := d.producers[left]
 		delete(d.producers, left)

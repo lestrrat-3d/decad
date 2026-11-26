@@ -105,7 +105,7 @@ func loftSections(ctx context.Context, d *Document, maps [][]*big.Rat, smoothCir
 		return nil, err
 	}
 	if sketches[0] != nil {
-		defer d.resultIn(d.ContainerOfSketch(sketches[0]))()
+		ctx = d.resultIn(ctx, d.ContainerOfSketch(sketches[0]))
 	}
 	if circularFitCandidate(sections) {
 		return d.buildCircularFitSectionsMode(ctx, sections, maps, smoothCircularBands, emergingFlat)
@@ -365,7 +365,7 @@ func (d *Document) buildSmoothSectionBody(ctx context.Context, built smoothloft.
 	if err != nil {
 		return nil, fmt.Errorf("%w: the last loft section has no frame: %s", ErrDegenerate, err)
 	}
-	ref := d.nextProducerID()
+	ref := d.producerAt(ctx)
 	groups := make([]facetGroup, built.EdgeCount+2)
 	for i := range built.EdgeCount {
 		role := fmt.Sprintf("side(0,%d)", i)
@@ -423,7 +423,7 @@ func (d *Document) buildConstantCurvedSections(ctx context.Context, profiles [3]
 	if err != nil {
 		return nil, err
 	}
-	ref := d.nextProducerID()
+	ref := d.producerAt(ctx)
 	return bodyResult(prismrecord.Build(ctx, envOf(documentNode(d), ref), prismrecord.Payload{
 		Profile: profiles[0], Frame: frame, Z0: 0, Z1: height, Xform: r3.Identity(),
 	}, work))

@@ -165,7 +165,7 @@ func extrudeProfile(ctx context.Context, d *Document, s *sketch.Sketch, p *sketc
 	if err := d.requireSameContainer(extentBodies(e), s); err != nil {
 		return nil, err
 	}
-	defer d.resultIn(d.ContainerOfSketch(s))()
+	ctx = d.resultIn(ctx, d.ContainerOfSketch(s))
 	profile, plane, profileArea, certificate, err := sectioncert.RecordExtrudeProfile(s, p)
 	if err != nil {
 		return nil, err
@@ -483,7 +483,7 @@ func extrudeChain(ctx context.Context, d *Document, s *sketch.Sketch, ch *sketch
 	if err := d.requireSameContainer(extentBodies(e), s); err != nil {
 		return nil, err
 	}
-	defer d.resultIn(d.ContainerOfSketch(s))()
+	ctx = d.resultIn(ctx, d.ContainerOfSketch(s))
 
 	chain, plane, err := recordChain(s, ch)
 	if err != nil {

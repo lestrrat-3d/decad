@@ -208,7 +208,7 @@ func extendOuterRim(ctx context.Context, d *Document, b *Body, e *topo.Edge, set
 		if !ok || err != nil {
 			return none, false, err
 		}
-		env := envOf(b.n.Doc, b.n.Doc.NextProducer)
+		env := envOf(b.n.Doc, documentHandle(b.n.Doc).producerID(ctx))
 		out, ok, err := rimextension.PrepareOuter(ctx, env, a, c, w, m)
 		if !ok || err != nil {
 			return none, false, err

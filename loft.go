@@ -149,7 +149,7 @@ func loft(ctx context.Context, d *Document, s0 *sketch.Sketch, p0 *sketch.Profil
 		return nil, err
 	}
 	// S9: both profiles through the unmodified seam gates, in argument order.
-	node, err := loftrecord.FromProfiles(ctx, envOf(documentNode(d), d.nextProducerID()), s0, p0, s1, p1, cfg)
+	node, err := loftrecord.FromProfiles(ctx, envOf(documentNode(d), d.producerAt(ctx)), s0, p0, s1, p1, cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -241,7 +241,7 @@ func LoftChain(ctx context.Context, d *Document, s0 *sketch.Sketch, c0 *sketch.C
 		return nil, err
 	}
 
-	node, err := loftrecord.FromChains(ctx, envOf(documentNode(d), d.nextProducerID()), chain0, plane0, chain1, plane1)
+	node, err := loftrecord.FromChains(ctx, envOf(documentNode(d), d.producerAt(ctx)), chain0, plane0, chain1, plane1)
 	if err != nil {
 		return nil, err
 	}

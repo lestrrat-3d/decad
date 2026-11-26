@@ -107,7 +107,7 @@ func TestThickenAdmissionGates(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			doc := New()
-			_, err := thickenbuild.Thicken(t.Context(), envOf(documentNode(doc), doc.nextProducerID()),
+			_, err := thickenbuild.Thicken(t.Context(), envOf(documentNode(doc), doc.producerAt(t.Context())),
 				&topo.Body{Payload: tc.payload}, thickenbuild.Positive, tc.tmm, tc.tDelta)
 			require.ErrorIs(t, err, ErrUnsupported)
 			require.ErrorContains(t, err, tc.wantContains)

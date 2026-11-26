@@ -99,11 +99,11 @@ func motionHooks() motionengine.Hooks {
 		Alloc:   handleAlloc{},
 		Operand: pairMeshes{},
 		Place:   placePayloadNode,
-		NewDocument: func(doc *topo.Document, live []*topo.Body) *topo.Document {
+		NewDocument: func(seeds topo.Seeds, live []*topo.Body) *topo.Document {
 			return &bornDocument(&Document{n: topo.Document{
-				NextLevel:    doc.NextLevel,
-				NextCurve:    doc.NextCurve,
-				NextProducer: doc.NextProducer,
+				NextLevel:    seeds.Level,
+				NextCurve:    seeds.Curve,
+				NextProducer: seeds.Producer,
 				LiveSet:      live,
 			}}).n
 		},

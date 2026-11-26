@@ -293,7 +293,7 @@ func TestGroupUnionInputsUsesPublicHistory(t *testing.T) {
 	require.NoError(t, stackedrecord.Falsify(t.Context(), stack.Record()))
 	t.Run("private two slab geometry", func(t *testing.T) {
 		node, log, builtOK, buildErr := stackedrecord.ReplayBlindGroupBuildWithSource(t.Context(),
-			envOf(documentNode(doc), doc.nextProducerID()), stack, &host.n, gp, scene, meter)
+			envOf(documentNode(doc), doc.producerAt(t.Context())), stack, &host.n, gp, scene, meter)
 		require.NoError(t, buildErr)
 		require.True(t, builtOK)
 		require.NotNil(t, log)
@@ -321,7 +321,7 @@ func TestGroupUnionInputsUsesPublicHistory(t *testing.T) {
 				return nil, err
 			}
 			node, log, ok, err := stackedrecord.ReplayBlindGroupBuildWithSource(t.Context(),
-				envOf(documentNode(doc), doc.nextProducerID()), payload, &host.n, gp, cert, m)
+				envOf(documentNode(doc), doc.producerAt(t.Context())), payload, &host.n, gp, cert, m)
 			if err != nil || !ok {
 				return nil, err
 			}
@@ -647,7 +647,7 @@ func TestGroupUnionInputsUsesPublicHistory(t *testing.T) {
 
 	fullMeter := proofbound.NewReplayTrialBudget()
 	result, admitted, cutErr := groupBlindCutBodyWithBudget(t.Context(), host, group,
-		doc.nextProducerID(), fullMeter)
+		doc.producerAt(t.Context()), fullMeter)
 	require.NoError(t, cutErr)
 	require.True(t, admitted)
 	fullWork, fullRecords := fullMeter.Usage()
@@ -666,7 +666,7 @@ func TestGroupUnionInputsUsesPublicHistory(t *testing.T) {
 		t.Run("private root route/"+tc.name, func(t *testing.T) {
 			limited, err := proofbound.NewReplayBudgetLimits(tc.work, tc.records, tc.bytes)
 			require.NoError(t, err)
-			got, ok, err := groupBlindCutBodyWithBudget(t.Context(), host, group, doc.nextProducerID(), limited)
+			got, ok, err := groupBlindCutBodyWithBudget(t.Context(), host, group, doc.producerAt(t.Context()), limited)
 			if tc.want {
 				require.NoError(t, err)
 				require.True(t, ok)
@@ -1021,11 +1021,11 @@ func TestGroupUnionInputsUsesPublicHistory(t *testing.T) {
 	t.Run("commit binds the witnessed Cut operation", func(t *testing.T) {
 		bad := []OperationInput{{Body: host, Role: "wrong", Use: InputConsumed},
 			{Body: group, Role: "tool", Use: InputConsumed}}
-		beforeProducer := doc.nextProducerID()
+		beforeProducer := doc.producerAt(t.Context())
 		beforeOperations := len(doc.OperationHistory().Operations())
 		err := doc.commitOperationIn(t.Context(), nil, OperationCut, bad, result, host, group)
 		require.ErrorIs(t, err, ErrUnsupported)
-		require.Equal(t, beforeProducer, doc.nextProducerID())
+		require.Equal(t, beforeProducer, doc.producerAt(t.Context()))
 		require.Len(t, doc.OperationHistory().Operations(), beforeOperations)
 		require.NoError(t, doc.requireLive(host))
 		require.NoError(t, doc.requireLive(group))

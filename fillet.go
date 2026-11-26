@@ -189,7 +189,7 @@ func Fillet(ctx context.Context, b *Body, sel EdgeSelector, r units.Value,
 		}
 	}
 
-	res, err := brepmodify.Fillet(ctx, envOf(b.n.Doc, b.n.Doc.NextProducer), &b.n, brepmodify.FilletCall{
+	res, err := brepmodify.Fillet(ctx, envOf(b.n.Doc, documentHandle(b.n.Doc).producerID(ctx)), &b.n, brepmodify.FilletCall{
 		Sel: fmt.Sprint(sel), Edges: edgeNodes(edges), R: rmm, RDelta: rDelta, Hooks: modifyHooks(),
 	})
 	if err != nil {

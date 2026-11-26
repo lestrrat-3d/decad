@@ -161,7 +161,7 @@ func LoftFaces(ctx context.Context, sections []*Face, opts ...LoftFacesOption) (
 	if err := d.requireSameContainer(bodies); err != nil {
 		return nil, err
 	}
-	defer d.resultIn(d.bodyContainer(bodies[0]))()
+	ctx = d.resultIn(ctx, d.bodyContainer(bodies[0]))
 	inputs := faceInputs(sections, "section")
 	if cfg.tangent == nil {
 		return buildLoftFaces(ctx, d, inputs, selected, source, nil)
@@ -186,7 +186,7 @@ func LoftFaces(ctx context.Context, sections []*Face, opts ...LoftFacesOption) (
 func buildLoftFaces(ctx context.Context, d *Document, inputs []OperationInput,
 	sections []revolveloftfaces.LoftFacesSection,
 	source *pointSectionRecord, tangent *loftface.TangentEnd) (*Body, error) {
-	ref := d.nextProducerID()
+	ref := d.producerAt(ctx)
 	body, err := bodyResult(revolveloftfaces.BuildLoftFaces(ctx, envOf(documentNode(d), ref), sections, source, tangent))
 	if err != nil {
 		return nil, err

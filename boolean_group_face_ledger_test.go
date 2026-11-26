@@ -85,13 +85,13 @@ func testBlindSourceSealCancellation(t *testing.T) {
 	if _, err := s.Solve(t.Context()); err != nil {
 		t.Fatal(err)
 	}
-	producer, live, history := doc.nextProducerID(), len(doc.n.LiveSet), len(doc.operations)
+	producer, live, history := doc.producerAt(t.Context()), len(doc.n.LiveSet), len(doc.operations)
 	ctx := &sealBatchCancelContext{Context: t.Context()}
 	body, err := Extrude(ctx, doc, s, s.Profiles()[0], Distance{D: units.Millimeters(2), Dir: Along})
 	if !ctx.reached || body != nil || !errors.Is(err, context.Canceled) {
 		t.Fatalf("checkpoint reached=%t body=%t error=%v", ctx.reached, body != nil, err)
 	}
-	if doc.nextProducerID() != producer || len(doc.n.LiveSet) != live || len(doc.operations) != history {
+	if doc.producerAt(t.Context()) != producer || len(doc.n.LiveSet) != live || len(doc.operations) != history {
 		t.Fatal("canceled construction changed document membership or numbering")
 	}
 }
@@ -127,14 +127,14 @@ func testBlindGroupPublicCutBudget(t *testing.T) {
 	run := func(ctx context.Context, budget *proofbound.ReplayBudget) error {
 		doc, host, group := blindGroupSources(t, true)        //nolint:contextcheck // The fixture uses t.Context().
 		unrelated := internalBoxBody(t, doc, 30, 30, 2, 2, 2) //nolint:contextcheck // The fixture uses t.Context().
-		beforeLive, beforeHistory, beforeProducer := len(doc.n.LiveSet), len(doc.operations), doc.nextProducerID()
+		beforeLive, beforeHistory, beforeProducer := len(doc.n.LiveSet), len(doc.operations), doc.producerAt(ctx)
 		hostCache, groupCache := host.n.Tess.Load(), group.n.Tess.Load()
 		candidate, admitted, err := groupBlindCutBodyWithBudget(ctx, host, group, beforeProducer, budget)
 		if err == nil && admitted && candidate != nil {
 			err = commitBlindGroupCut(ctx, doc, host, group, candidate, budget)
 		}
 		if err != nil || !admitted || candidate == nil {
-			if len(doc.n.LiveSet) != beforeLive || len(doc.operations) != beforeHistory || doc.nextProducerID() != beforeProducer ||
+			if len(doc.n.LiveSet) != beforeLive || len(doc.operations) != beforeHistory || doc.producerAt(ctx) != beforeProducer ||
 				doc.requireLive(host) != nil || doc.requireLive(group) != nil || doc.requireLive(unrelated) != nil ||
 				host.n.Tess.Load() != hostCache || group.n.Tess.Load() != groupCache {
 				t.Fatal("refused Cut changed document or input caches")
@@ -145,7 +145,7 @@ func testBlindGroupPublicCutBudget(t *testing.T) {
 			return err
 		}
 		if len(doc.n.LiveSet) != beforeLive-1 || len(doc.operations) != beforeHistory+1 ||
-			doc.nextProducerID() != beforeProducer+1 || doc.requireLive(candidate) != nil || doc.requireLive(unrelated) != nil ||
+			doc.producerAt(ctx) != beforeProducer+1 || doc.requireLive(candidate) != nil || doc.requireLive(unrelated) != nil ||
 			doc.requireLive(host) == nil || doc.requireLive(group) == nil {
 			t.Fatal("committed Cut did not update document atomically")
 		}
@@ -185,7 +185,7 @@ func testBlindGroupPublicCutBudget(t *testing.T) {
 		t.Fatalf("cancelled Cut error=%v", err)
 	}
 	doc, host, group := blindGroupSources(t, true)
-	beforeLive, beforeHistory, beforeProducer := len(doc.n.LiveSet), len(doc.operations), doc.nextProducerID()
+	beforeLive, beforeHistory, beforeProducer := len(doc.n.LiveSet), len(doc.operations), doc.producerAt(t.Context())
 	budget := proofbound.NewReplayTrialBudget()
 	candidate, admitted, err := groupBlindCutBodyWithBudget(t.Context(), host, group, beforeProducer, budget)
 	if err != nil || !admitted || candidate == nil {
@@ -194,7 +194,7 @@ func testBlindGroupPublicCutBudget(t *testing.T) {
 	late := newCancelAfterContext(t.Context(), 8)
 	err = commitBlindGroupCut(late, doc, host, group, candidate, budget)
 	if !errors.Is(err, context.Canceled) || len(doc.n.LiveSet) != beforeLive ||
-		len(doc.operations) != beforeHistory || doc.nextProducerID() != beforeProducer ||
+		len(doc.operations) != beforeHistory || doc.producerAt(t.Context()) != beforeProducer ||
 		doc.requireLive(host) != nil || doc.requireLive(group) != nil || candidate.blindProof.cut != nil {
 		t.Fatalf("commit cancellation error=%v polls=%d", err, late.calls)
 	}
@@ -432,7 +432,7 @@ func testBlindGroupFaceLedger(t *testing.T, withSlot bool) {
 	if withSlot {
 		cutMeter := proofbound.NewReplayTrialBudget()
 		cutBody, admitted, e := groupBlindCutBodyWithBudget(t.Context(), host, group,
-			doc.nextProducerID(), cutMeter)
+			doc.producerAt(t.Context()), cutMeter)
 		if e != nil || !admitted || cutBody == nil {
 			t.Fatalf("source-bound four-circle Cut admitted=%t body=%t error=%v",
 				admitted, cutBody != nil, e)
@@ -466,7 +466,7 @@ func testBlindGroupFaceLedger(t *testing.T, withSlot bool) {
 					t.Fatal(e)
 				}
 				got, yes, e := groupBlindCutBodyWithBudget(t.Context(), host, group,
-					doc.nextProducerID(), limited)
+					doc.producerAt(t.Context()), limited)
 				if tc.want {
 					if e != nil || !yes || got == nil {
 						t.Fatalf("exact Cut admitted=%t body=%t error=%v", yes, got != nil, e)
@@ -488,7 +488,7 @@ func testBlindGroupFaceLedger(t *testing.T, withSlot bool) {
 		cancelled, cancel := context.WithCancel(t.Context())
 		cancel()
 		got, yes, e := groupBlindCutBodyWithBudget(cancelled, host, group,
-			doc.nextProducerID(), proofbound.NewReplayTrialBudget())
+			doc.producerAt(t.Context()), proofbound.NewReplayTrialBudget())
 		if !errors.Is(e, context.Canceled) || yes || got != nil {
 			t.Fatalf("cancelled Cut admitted=%t body=%t error=%v", yes, got != nil, e)
 		}
@@ -496,7 +496,7 @@ func testBlindGroupFaceLedger(t *testing.T, withSlot bool) {
 		oldUpstream := sourceFace.Upstream
 		sourceFace.Upstream = []provenance.Ref{{Producer: 1, Role: "unproved"}}
 		got, yes, e = groupBlindCutBodyWithBudget(t.Context(), host, group,
-			doc.nextProducerID(), proofbound.NewReplayTrialBudget())
+			doc.producerAt(t.Context()), proofbound.NewReplayTrialBudget())
 		sourceFace.Upstream = oldUpstream
 		if e != nil || yes || got != nil {
 			t.Fatalf("mutated source ancestry admitted=%t body=%t error=%v", yes, got != nil, e)
@@ -507,7 +507,7 @@ func testBlindGroupFaceLedger(t *testing.T, withSlot bool) {
 			changedPayload.DenotedZ1(), changedPayload.Z1, changedPayload.Z1Delta)
 		host.n.Payload = changedPayload
 		got, yes, e = groupBlindCutBodyWithBudget(t.Context(), host, group,
-			doc.nextProducerID(), proofbound.NewReplayTrialBudget())
+			doc.producerAt(t.Context()), proofbound.NewReplayTrialBudget())
 		host.n.Payload = originalPayload
 		if e != nil || yes || got != nil {
 			t.Fatalf("replaced source denotation admitted=%t body=%t error=%v", yes, got != nil, e)
@@ -516,7 +516,7 @@ func testBlindGroupFaceLedger(t *testing.T, withSlot bool) {
 		originalKind := history.kind
 		history.kind = OperationCut
 		got, yes, e = groupBlindCutBodyWithBudget(t.Context(), host, group,
-			doc.nextProducerID(), proofbound.NewReplayTrialBudget())
+			doc.producerAt(t.Context()), proofbound.NewReplayTrialBudget())
 		history.kind = originalKind
 		if e != nil || yes || got != nil {
 			t.Fatalf("changed producer history admitted=%t body=%t error=%v", yes, got != nil, e)
@@ -539,7 +539,7 @@ func testBlindGroupFaceLedger(t *testing.T, withSlot bool) {
 	if err != nil || !ok {
 		t.Fatalf("payload ok=%t error=%v", ok, err)
 	}
-	result, events, ok, err := stackedrecord.ReplayBlindGroupBuildWithSource(t.Context(), envOf(documentNode(doc), doc.nextProducerID()), output, bodyNode(host), groupPayload, scene, budget)
+	result, events, ok, err := stackedrecord.ReplayBlindGroupBuildWithSource(t.Context(), envOf(documentNode(doc), doc.producerAt(t.Context())), output, bodyNode(host), groupPayload, scene, budget)
 	if err != nil || !ok {
 		t.Fatalf("build ok=%t error=%v", ok, err)
 	}
@@ -1115,7 +1115,7 @@ func testBlindGroupFaceLedger(t *testing.T, withSlot bool) {
 		if e != nil || !yes {
 			t.Fatalf("payload ok=%t error=%v", yes, e)
 		}
-		body, log, yes, e := stackedrecord.ReplayBlindGroupBuildWithSource(t.Context(), envOf(documentNode(doc), doc.nextProducerID()), p, bodyNode(host), groupPayload, cert, m)
+		body, log, yes, e := stackedrecord.ReplayBlindGroupBuildWithSource(t.Context(), envOf(documentNode(doc), doc.producerAt(t.Context())), p, bodyNode(host), groupPayload, cert, m)
 		if e != nil || !yes {
 			t.Fatalf("build ok=%t error=%v", yes, e)
 		}

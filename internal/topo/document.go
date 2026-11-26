@@ -64,9 +64,10 @@ func WithTransientIDs(ctx context.Context, d *Document) context.Context {
 	if t, _ := ctx.Value(transientIDsKey{}).(*transientIDs); t != nil && t.doc == d {
 		return ctx
 	}
+	seeds := d.SeedsAt(ctx)
 	t := &transientIDs{doc: d}
-	t.level.Store(int64(d.NextLevel))
-	t.curve.Store(int64(d.NextCurve))
+	t.level.Store(int64(seeds.Level))
+	t.curve.Store(int64(seeds.Curve))
 	return context.WithValue(ctx, transientIDsKey{}, t)
 }
 
@@ -79,6 +80,26 @@ func transientOf(ctx context.Context, d *Document) *transientIDs {
 		return nil
 	}
 	return t
+}
+
+// ProducerAt is the identity the next successful operation called with ctx
+// occupies. It is the only read of NextProducer outside root's commit
+// helpers; ctx names the caller so the source of the counter lives here.
+func (d *Document) ProducerAt(_ context.Context) provenance.Producer {
+	return d.NextProducer
+}
+
+// Seeds are the three identity counters a transient document starts from.
+type Seeds struct {
+	Level    denotation.LevelID
+	Curve    denotation.CurveID
+	Producer provenance.Producer
+}
+
+// SeedsAt reads the counters a transient document called with ctx starts
+// from: the identities the next operation would occupy.
+func (d *Document) SeedsAt(ctx context.Context) Seeds {
+	return Seeds{Level: d.NextLevel, Curve: d.NextCurve, Producer: d.ProducerAt(ctx)}
 }
 
 // MintLevel returns a token for a new level at origin with normal. It takes
@@ -96,7 +117,7 @@ func (d *Document) MintLevel(ctx context.Context, origin, normal r3.Vec) denotat
 // MintCurve returns a token for a new curve. It takes the id from the
 // transient source ctx carries for d, else it advances the curve counter.
 // Identities only increase, so none is reused, even by a build that later
-// fails.
+// fails. ctx names the caller, like ProducerAt's.
 func (d *Document) MintCurve(ctx context.Context) denotation.CurveToken {
 	if t := transientOf(ctx, d); t != nil {
 		return denotation.NewCurve(denotation.CurveID(t.curve.Add(1)))

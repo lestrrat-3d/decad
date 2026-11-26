@@ -70,7 +70,7 @@ func UnionRefined(ctx context.Context, bodies []*Body, maxBound units.Value) (*B
 	if err != nil {
 		return nil, operationError(OperationUnion, err)
 	}
-	node, matched, err := revolveshell.SectorUnionManyAt(ctx, envOf(documentNode(d), d.nextProducerID()),
+	node, matched, err := revolveshell.SectorUnionManyAt(ctx, envOf(documentNode(d), d.producerAt(ctx)),
 		bodyNodes(bodies), min(target, revolveshell.SectorJoinDefaultCeiling))
 	if err == nil && !matched {
 		err = fmt.Errorf("%w: the bodies are no sector join of a revolved blank and copies of one point-Loft tooth",

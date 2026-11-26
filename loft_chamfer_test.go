@@ -109,7 +109,7 @@ func TestLoftCapBandReflexVolumeProofAndSharpBore(t *testing.T) {
 	}
 	shift, err := r3.Translation(r3.NewVec(12, -7, 3))
 	require.NoError(t, err)
-	documentHandle(out.n.Doc).commit(out)
+	documentHandle(out.n.Doc).commit(t.Context(), out)
 	placed, err := Copy(t.Context(), out, WithCopyPlacement(shift))
 	require.NoError(t, err)
 	placedMesh, err := placed.Tessellate(t.Context(), units.Millimeters(0.1), WithVerification(VerifyAll))
@@ -120,7 +120,7 @@ func TestLoftCapBandReflexVolumeProofAndSharpBore(t *testing.T) {
 
 func TestLoftCapBandNoBoreChamfersBothOuterLoops(t *testing.T) {
 	body := notchedLoft(t, false)
-	documentHandle(body.n.Doc).commit(body)
+	documentHandle(body.n.Doc).commit(t.Context(), body)
 	before, err := body.Volume()
 	require.NoError(t, err)
 	selector := Edges(OuterLoopOf(CapStart(body))).Or(OuterLoopOf(CapEnd(body)))
