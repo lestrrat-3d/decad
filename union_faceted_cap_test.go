@@ -65,7 +65,7 @@ func TestUnionFlushCapTangentBossRefused(t *testing.T) {
 	// both faces.
 	w := sketch.NewWorld()
 	s, p := sharedCapCircle(t, w, 0, [2]float64{facetedCapJoinR + 0.5, 0}, 0.5)
-	boss, err := Extrude(t.Context(), doc, s, p, Distance{D: units.Millimeters(1), Dir: Along})
+	boss, err := Extrude(doc, s, p, Distance{D: units.Millimeters(1), Dir: Along}).Do(t.Context())
 	require.NoError(t, err)
 	_, err = Union(facetedCapCutPrism(t, doc), boss).Do(t.Context())
 	var be *BooleanError
