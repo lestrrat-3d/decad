@@ -85,8 +85,9 @@ func WithPathSpacing(spacing units.Value) PathPatternOption {
 //
 // b MUST be live; path MUST NOT be nil. A nil context, a nil option, and a path
 // segment with no length or no circle are ErrDegenerate. A failed or canceled
-// call leaves b live and retires every copy it had already made, so no copy
-// outlives the call. Each copy is a Copy, so it carries Copy's own refusals.
+// call leaves the document as it found it: b live, no copy live, and no
+// history entry or producer number added. Each copy is a Copy, so it carries
+// Copy's own refusals.
 func PathPattern(ctx context.Context, b *Body, path *Path, opts ...PathPatternOption) (result []*Body, retErr error) {
 	defer func() { retErr = operationError(OperationCopy, retErr) }()
 	if ctx == nil {
@@ -218,18 +219,25 @@ func pathSampleError(err error) error {
 }
 
 // pathCopies makes a Copy of b at each station but the first. A failure
-// retires the copies already made.
-func pathCopies(ctx context.Context, b *Body, stations []pathsample.Station, settings pathPatternSettings) ([]*Body, error) {
+// restores the document to the state it had before the first copy, so no copy,
+// history entry or producer number of the failed call remains.
+func pathCopies(ctx context.Context, b *Body, stations []pathsample.Station,
+	settings pathPatternSettings) (result []*Body, retErr error) {
+	d := documentHandle(b.n.Doc)
+	snap := d.snapshot()
+	defer func() {
+		if retErr != nil {
+			d.restore(snap)
+		}
+	}()
 	copies := make([]*Body, 0, len(stations)-1)
 	for _, st := range stations[1:] {
 		t, err := pathStep(stations[0], st, settings)
 		if err != nil {
-			removeTools(copies)
 			return nil, err
 		}
 		c, err := Copy(ctx, b, WithCopyPlacement(t))
 		if err != nil {
-			removeTools(copies)
 			return nil, err
 		}
 		copies = append(copies, c)

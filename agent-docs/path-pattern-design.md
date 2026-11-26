@@ -21,7 +21,7 @@ func WithPathPivot(pivot r3.Vec) PathPatternOption
 | P3 | Instances keep the orientation of `b` unless `WithPathFollow` is given (§5). |
 | P4 | Points are spaced by arc length over the whole path, not per segment. A short segment can hold no instance and a long one many. |
 | P5 | A `WithPathCount` below 2, a nil path, a nil context and a body of no document are `ErrDegenerate`. A retired body is `ErrRetiredBody`. |
-| P6 | A failed or canceled call retires every copy it already made and returns the error, so no copy outlives the call. |
+| P6 | A failed or canceled call returns the error and leaves the document as it found it: no copy is live, and no history entry or producer number of the call remains. A successful call records one `OperationCopy` entry per copy. |
 | P7 | Exactly one of `WithPathCount` (P1, P2) and `WithPathSpacing` (§6) places the instances. Neither, both, or either given twice is `ErrDegenerate`. The count is an `int`: it counts instances and measures nothing, like `LinearPattern.Count`. The spacing is a length `units.Value`. A failure is reported as an `OperationCopy` failure. |
 
 ## 2. Sampling

@@ -386,3 +386,8 @@
 12	0.10	TestConeFromFaceCommand
 12	0.10	TestFeatureConstructorsAreCommandConstructors
 12	0.10	TestFeatureCopyHelpersDeepCopyTheirSelectors
+12	1.50	TestArrangeCanceledMidwayLeavesTheDocumentUnchanged
+12	0.00	TestArrangeSuccessRecordsOneTransformEntryPerBody
+12	0.00	TestPathPatternRefusedCopyLeavesTheDocumentUnchanged
+12	0.30	TestPathPatternCanceledMidwayLeavesTheDocumentUnchanged
+12	0.00	TestPathPatternSuccessRecordsOneCopyEntryPerInstance

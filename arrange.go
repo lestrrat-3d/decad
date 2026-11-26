@@ -62,8 +62,8 @@ type ArrangeBed struct {
 // ErrRetiredBody. A bed with a non-positive size or a negative gap is
 // ErrDegenerate, a wrong unit kind is ErrUnitKind, and bodies that do not all
 // fit on the bed are ErrDegenerate; no body moves in any of these cases. A
-// canceled context stops the moves and leaves the bodies already moved at
-// their new places and the rest where they were.
+// failed or canceled call leaves the document as it found it: every body live
+// at its own place, and no history entry or producer number added.
 func Arrange(ctx context.Context, bodies []*Body, bed ArrangeBed, opts ...ArrangeOption) (result []*Body, retErr error) {
 	defer func() { retErr = operationError(OperationTransform, retErr) }()
 	if ctx == nil {
@@ -124,6 +124,12 @@ func Arrange(ctx context.Context, bodies []*Body, bed ArrangeBed, opts ...Arrang
 			return nil, fmt.Errorf(`%w: the bed height must be positive`, ErrDegenerate)
 		}
 	}
+	snap := d.snapshot()
+	defer func() {
+		if retErr != nil {
+			d.restore(snap)
+		}
+	}()
 	items := make([]arrangeplan.Item, len(bodies))
 	heights := make([]float64, len(bodies))
 	margins := make([]float64, len(bodies))

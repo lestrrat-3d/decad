@@ -200,9 +200,10 @@ serves Fillet and Chamfer, and `MatchingFaces` serves Cut and Intersect.
 ## 9. Atomicity
 
 A failed or canceled `Do` leaves `Document.Bodies()`, the operation history and producer numbering as it found
-them (api-design §2). `PathPattern` and `Arrange` do not meet this today: `PathPattern` commits each copy through
-`Copy` and only retires them on failure (`path_pattern.go`), and a canceled `Arrange` keeps bodies already moved
-(`arrange.go`). Stack PR 4 (§13) makes both atomic before stack PR 5 converts them.
+them (api-design §2). `PathPattern` and `Arrange` publish several results through the public
+`Copy` and `Transform`, so each takes a `Document` snapshot (`document.go`) before its first publication and restores
+it when the call fails or is canceled. The restore returns the live set in its order, the producer counter, the
+operation history with its producer and consumer indexes, and the container placement. No command is an exception.
 
 ## 10. A forgotten `Do`
 

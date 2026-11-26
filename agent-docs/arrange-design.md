@@ -41,8 +41,9 @@ cleverer packer would fit can still be refused.
 
 ## 3. Failure after the first move
 
-A canceled context, or a `Transform` failure, after some bodies have moved leaves those bodies at their new places
-and the rest where they were. Every refusal G2, G3 and G7 name is raised before the first move.
+A canceled context, or a `Transform` failure, after some bodies have moved returns the error and leaves the document
+as it found it: every body live at its own place, and no history entry or producer number of the call remains.
+Every refusal G2, G3 and G7 name is raised before the first move.
 
 ## 4. Not covered
 

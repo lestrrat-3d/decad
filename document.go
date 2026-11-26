@@ -3,6 +3,7 @@ package decad
 import (
 	"context"
 	"fmt"
+	"maps"
 	"slices"
 
 	"github.com/lestrrat-3d/decad/internal/exactrotation"
@@ -375,6 +376,75 @@ func (d *Document) commitIn(ctx context.Context, c *Container, produced *Body, c
 	}
 	d.n.LiveSet = append(d.n.LiveSet, bodyNode(produced))
 	d.placeLocked(bodyNode(produced), dest)
+}
+
+// documentSnapshot is the publication state of a document at one moment: the
+// live set with its order, the producer counter, the operation history length,
+// the container placement of bodies and the witness maps commits write.
+type documentSnapshot struct {
+	live               []*topo.Body
+	nextProducer       producerID
+	operations         int
+	ofBody             map[*topo.Body]*Container
+	circleBuilds       map[*Body]*prismrecord.CircleBuildWitness
+	circlePlacements   map[*Body]*circlePlacementWitness
+	identityPlacements map[*Body]struct{}
+}
+
+// snapshot records the publication state so restore can return the document to
+// it. A composite operation that publishes several results through the public
+// calls takes one before its first publication and restores it on failure, so
+// a failed or canceled call leaves the document as it found it
+// (agent-docs/api-design.md section 2). The caller MUST be the only mutator of
+// d between snapshot and restore (agent-docs/command-api-design.md section 8).
+func (d *Document) snapshot() *documentSnapshot {
+	d.n.LiveMu.RLock()
+	defer d.n.LiveMu.RUnlock()
+	return &documentSnapshot{
+		live:               slices.Clone(d.n.LiveSet),
+		nextProducer:       d.n.NextProducer,
+		operations:         len(d.operations),
+		ofBody:             maps.Clone(d.groups.ofBody),
+		circleBuilds:       maps.Clone(d.circleBuilds),
+		circlePlacements:   maps.Clone(d.circlePlacements),
+		identityPlacements: maps.Clone(d.identityPlacements),
+	}
+}
+
+// restore returns d to the state s recorded: it unpublishes every operation
+// recorded since, with its producer and consumer index entries, and puts back
+// the live set, the producer counter and the placement state.
+func (d *Document) restore(s *documentSnapshot) {
+	d.n.LiveMu.Lock()
+	defer d.n.LiveMu.Unlock()
+	for i := len(d.operations) - 1; i >= s.operations; i-- {
+		operation := d.operations[i]
+		for _, output := range operation.outputs {
+			delete(d.producers, output)
+		}
+		for _, input := range operation.inputs {
+			if input.Use != InputConsumed {
+				continue
+			}
+			recorded := d.consumers[input.Body]
+			if n := len(recorded); n > 0 && recorded[n-1] == operation {
+				recorded = recorded[:n-1]
+			}
+			if len(recorded) == 0 {
+				delete(d.consumers, input.Body)
+				continue
+			}
+			d.consumers[input.Body] = recorded
+		}
+		d.operations[i] = nil
+	}
+	d.operations = d.operations[:s.operations]
+	d.n.LiveSet = s.live
+	d.n.NextProducer = s.nextProducer
+	d.groups.ofBody = s.ofBody
+	d.circleBuilds = s.circleBuilds
+	d.circlePlacements = s.circlePlacements
+	d.identityPlacements = s.identityPlacements
 }
 
 // destinationLocked is the container a commit places its results in. The caller
