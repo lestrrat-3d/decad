@@ -8,6 +8,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/facetproof"
 	"github.com/lestrrat-3d/decad/internal/massmoment"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
+	"github.com/lestrrat-3d/decad/internal/occupancy"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/topo"
@@ -90,6 +91,7 @@ func ScaleImageWithSummary(ctx context.Context, body *topo.Body, fp Payload, anc
 	next.LoftMirrorCylinderBore = nil
 	next.RevolveLoftJoin = nil
 	next.RevolveLoftSector = nil
+	next.CapSides, next.CapSideMesh = nil, occupancy.Binding{}
 	next.LoftFacesPrimitive = false
 	next.CircularFitPrimitive = false
 	next.LoftFacesCap = nil

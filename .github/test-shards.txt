@@ -379,6 +379,12 @@
 12	0.00	TestVerifyConcurrentWithVerify
 12	0.00	TestVerifyLeavesCountersUnchanged
 12	0.00	TestCircleWitnessReadsRaceWithCommit
+12	0.00	TestUnionFlushCapCutPrismAndLoft
+12	0.00	TestUnionFlushCapFarPostAcrossPlane
+12	0.00	TestUnionFlushCapNearPostRefused
+12	0.00	TestUnionFlushCapTangentBossRefused
+12	0.00	TestUnionFlushCapCarriedByDrive
+12	0.00	TestUnionFlushCapCutPrismAndDrive
 12	0.00	TestRunCommand
 12	0.01	TestCommandConstructorsAreInUnusedResultFuncs
 12	0.40	TestCommandConstructorCallsEndInDo
