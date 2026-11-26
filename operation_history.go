@@ -2,7 +2,6 @@ package decad
 
 import (
 	"context"
-	"maps"
 	"slices"
 	"sync"
 
@@ -124,6 +123,9 @@ type Operation struct {
 	faceSuccessors map[*Face]FaceHistory
 	doc            *topo.Document
 	seal           operationIdentitySeal
+	// step is the index of the build step that committed the operation (steps.go), or -1 for an operation
+	// committed outside a run.
+	step int
 }
 
 type operationIdentityInput struct {
@@ -207,19 +209,7 @@ func (d *Document) OperationHistory() *OperationHistory {
 	if d == nil {
 		return &OperationHistory{}
 	}
-	d.n.LiveMu.RLock()
-	defer d.n.LiveMu.RUnlock()
-	h := &OperationHistory{
-		doc:        &d.n,
-		operations: slices.Clone(d.operations),
-		producers:  make(map[*Body]*Operation, len(d.producers)),
-		consumers:  make(map[*Body][]*Operation, len(d.consumers)),
-	}
-	maps.Copy(h.producers, d.producers)
-	for body, operations := range d.consumers {
-		h.consumers[body] = slices.Clone(operations)
-	}
-	return h
+	return d.historyOutside()
 }
 
 // Operations returns successful public calls in commit order.
@@ -325,7 +315,7 @@ func cloneFaceSuccessors(in map[*Face]FaceHistory) map[*Face]FaceHistory {
 }
 
 func (d *Document) operation(kind OperationKind, inputs []OperationInput, outputs ...*Body) *Operation {
-	o := &Operation{kind: kind, inputs: slices.Clone(inputs), outputs: slices.Clone(outputs), doc: &d.n}
+	o := &Operation{kind: kind, inputs: slices.Clone(inputs), outputs: slices.Clone(outputs), doc: &d.n, step: -1}
 	o.seal = operationIdentitySeal{kind: kind, doc: &d.n}
 	for _, input := range inputs {
 		var producer producerID

@@ -175,12 +175,15 @@ func (d *Document) Verify(ctx context.Context, opts ...VerifyOption) (*Report, e
 	if err != nil {
 		return nil, err
 	}
+	// The live set is read before the query's transient ids are seeded (queryContext), so the seeds exceed
+	// every id of a body the set holds even when a RunSteps call ends between the two reads.
+	live := d.n.LiveIn(ctx)
 	ctx = d.queryContext(ctx)
 	ctx, err = d.evalContext(ctx)
 	if err != nil {
 		return nil, err
 	}
-	found, err := verifyrun.Run(ctx, verifyHooks(d), d.n.Live(), cfg)
+	found, err := verifyrun.Run(ctx, verifyHooks(d), live, cfg)
 	if err != nil {
 		return nil, err
 	}

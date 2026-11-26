@@ -403,3 +403,11 @@
 9	5.26	TestDigestTypeCoverage
 8	0.01	TestDigestSideTables
 12	0.00	TestPairDigestIgnoresContainers
+12	0.01	TestRunStepsIDsInBlock
+12	0.00	TestRunStepsReadWithoutStepFailsRun
+12	0.00	TestRunStepsTransientIDsFromStepCursor
+12	0.01	TestRunStepsEndRaceWithQueries
+12	0.00	TestRunStepsSnapshotRestoreIsStepLocal
+12	0.00	TestRunStepsDispatchOrderDoesNotChangeResults
+12	0.05	TestStepCommitPathsGate
+12	0.05	TestLiveSetReadsGoThroughViews

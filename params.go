@@ -64,6 +64,9 @@ func (d *Document) Params() *param.Table {
 // a cycle is the table's own error (param.ErrUndefined, param.ErrCycle). The
 // read is recorded in Bindings.
 func (d *Document) Param(name string) (units.Value, error) {
+	if err := d.requireRunIdle("Param"); err != nil {
+		return units.Value{}, err
+	}
 	t := d.Params()
 	v, err := t.GetValue(name)
 	if err != nil {
@@ -83,6 +86,9 @@ func (d *Document) Param(name string) (units.Value, error) {
 // radian for an angle). An expression mixing kinds incompatibly is
 // param.ErrIncompatibleKind. The read is recorded in Bindings.
 func (d *Document) Expr(expr string) (units.Value, error) {
+	if err := d.requireRunIdle("Expr"); err != nil {
+		return units.Value{}, err
+	}
 	v, err := d.Params().EvalValue(expr)
 	if err != nil {
 		return units.Value{}, err

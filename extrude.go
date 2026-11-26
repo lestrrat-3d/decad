@@ -270,7 +270,7 @@ func extrudeProfile(ctx context.Context, d *Document, s *sketch.Sketch, p *sketc
 		// straight prism.
 		return d.extrudeDraft(ctx, profile, frame, e, alpha, alphaDelta, surfaceResult)
 	}
-	sweep, err := d.resolveLinearExtent(e, frame)
+	sweep, err := d.resolveLinearExtent(ctx, e, frame)
 	if err != nil {
 		return nil, err
 	}
@@ -334,7 +334,7 @@ type linearSweep struct {
 // extent order first, through-all stop bodies after them in stop order along
 // the sweep, deduplicated. Magnitudes are validated per core
 // §8.1/§12; a zero-thickness sweep is ErrDegenerate.
-func (d *Document) resolveLinearExtent(e Extent, frame r3.Frame) (linearSweep, error) {
+func (d *Document) resolveLinearExtent(ctx context.Context, e Extent, frame r3.Frame) (linearSweep, error) {
 	switch e := e.(type) {
 	case Distance:
 		m, delta, err := extent.MagnitudeInBounded(e.D, units.Length, units.Millimeter, "the extent distance")
@@ -376,11 +376,11 @@ func (d *Document) resolveLinearExtent(e Extent, frame r3.Frame) (linearSweep, e
 		return linearSweep{z0: -half, z1: half, z0Delta: delta, z1Delta: delta,
 			z0Exact: extent.ScaledExact(exact, -1, 1), z1Exact: exact}, nil
 	case TwoSided:
-		one, err := d.resolveLinearSide(e.One, frame, 1, "the along side")
+		one, err := d.resolveLinearSide(ctx, e.One, frame, 1, "the along side")
 		if err != nil {
 			return linearSweep{}, err
 		}
-		two, err := d.resolveLinearSide(e.Two, frame, -1, "the against side")
+		two, err := d.resolveLinearSide(ctx, e.Two, frame, -1, "the against side")
 		if err != nil {
 			return linearSweep{}, err
 		}
@@ -404,7 +404,7 @@ func (d *Document) resolveLinearExtent(e Extent, frame r3.Frame) (linearSweep, e
 		default:
 			return linearSweep{}, fmt.Errorf(`%w: unknown direction %d`, ErrDegenerate, int(e.Dir))
 		}
-		live := d.n.Live()
+		live := d.n.LiveIn(ctx)
 		stop, delta, refs, exact, err := extent.ThroughAll(frame, travel, live)
 		if err != nil {
 			return linearSweep{}, err
@@ -451,7 +451,7 @@ type linearSide struct {
 
 // resolveLinearSide resolves one side of a TwoSided; travel is +1 for the
 // along side, −1 for the against side.
-func (d *Document) resolveLinearSide(s SideExtent, frame r3.Frame, travel float64, what string) (linearSide, error) {
+func (d *Document) resolveLinearSide(ctx context.Context, s SideExtent, frame r3.Frame, travel float64, what string) (linearSide, error) {
 	s, err := normalizeSideExtent(s)
 	if err != nil {
 		return linearSide{}, err
@@ -467,7 +467,7 @@ func (d *Document) resolveLinearSide(s SideExtent, frame r3.Frame, travel float6
 		exact := extent.ScaledExact(extent.ExactConversion(s.D, units.Millimeter), int64(travel), 1)
 		return linearSide{z: travel * m, delta: delta, exact: exact}, nil
 	case ThroughAllSide:
-		live := d.n.Live()
+		live := d.n.LiveIn(ctx)
 		stop, delta, refs, exact, err := extent.ThroughAll(frame, travel, live)
 		if err != nil {
 			return linearSide{}, err
@@ -539,7 +539,7 @@ func extrudeChain(ctx context.Context, d *Document, s *sketch.Sketch, ch *sketch
 	if err != nil {
 		return nil, err
 	}
-	sweep, err := d.resolveLinearExtent(e, frame)
+	sweep, err := d.resolveLinearExtent(ctx, e, frame)
 	if err != nil {
 		return nil, err
 	}

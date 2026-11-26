@@ -31,13 +31,8 @@ func quarterPairLive(ctx context.Context, m loftHullMath, loft, prism *topo.Body
 		loft.Origin.Producer != 0 || prism.Origin.Producer != 1 {
 		return false, nil
 	}
-	loft.Doc.LiveMu.RLock()
-	if len(loft.Doc.LiveSet) > 2 {
-		loft.Doc.LiveMu.RUnlock()
-		return false, nil
-	}
-	live := append([]*topo.Body(nil), loft.Doc.LiveSet...)
-	loft.Doc.LiveMu.RUnlock()
+	// The set as ctx sees it: inside a build step, the bodies live before the run and the step's own.
+	live := loft.Doc.LiveIn(ctx)
 	if len(live) != 2 {
 		return false, nil
 	}

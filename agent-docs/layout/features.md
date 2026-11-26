@@ -9,6 +9,7 @@ The rules for rows live in `agent-docs/layout.md`.
 
 | Path | Responsibility |
 |---|---|
+| `steps.go` | `RunSteps`, `Step`, `WithStepWorkers`, `WithStepIdentities`; the step gate every commit calls, the step views of the history and the step-local rollback. See `agent-docs/steps-design.md`. |
 | `topology.go` | Topology types from `Body` to `Vertex` and public surface and curve variants. See API §6.1 and evaluator §3. |
 | `topology_handles.go` | Born-handle constructors, node-to-handle mapping, `handleAlloc` (with `ReplayNodeSize`) and `envOf` for internal builders, `bodyResult`, and `placePayload`. See evaluator §3, §8. |
 | `container.go` | `Container`, the document's grouping of sketches, planes and bodies; placement of results, `ErrCrossContainer`, `ChildNamed`, `NewUniqueChild` and `VerifyContainers`. See `agent-docs/container-design.md`. |

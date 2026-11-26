@@ -24,7 +24,8 @@ import (
 // functions producerAt and advanceProducer of root document.go and ProducerAt,
 // SeedsAt, MintLevel and MintCurve of internal/topo/document.go may touch the
 // counters, plus snapshot and restore of root document.go, which only save the
-// producer counter and put it back inside an atomic rollback, so a later change
+// producer counter and put it back inside an atomic rollback, plus BeginRun and EndRun of
+// internal/topo/step.go, which place and close the build steps' blocks, so a later change
 // that routes the counters through the calling context edits those functions
 // alone. Any other function, including one added to an
 // allowed file, fails. A composite literal that seeds a transient document
@@ -41,6 +42,8 @@ func TestProducerCounterAccess(t *testing.T) {
 		"internal/topo/document.go:SeedsAt":    {},
 		"internal/topo/document.go:MintLevel":  {},
 		"internal/topo/document.go:MintCurve":  {},
+		"internal/topo/step.go:BeginRun":       {}, // reads the counters to place the step blocks
+		"internal/topo/step.go:EndRun":         {}, // writes them past every block once the steps joined
 	}
 	var bad []string
 	check := func(path string) error {

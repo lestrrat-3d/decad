@@ -865,6 +865,10 @@ value it reads, so a retired body still answers it (§6). The query set is:
 - the accessors and report methods on result types (`Report`, `MotionReport`,
   `SweepReport`, `Path`, `Mesh` and the like).
 
+**`RunSteps` is a free function.** Its steps register bodies, which makes them operations (above), and it takes the
+document and the steps in its argument list. A step reaches decad only through the `ctx` it receives, so the document
+can refuse a call made with the wrong one (`agent-docs/steps-design.md`).
+
 **Container placement calls are neither operations nor queries.**
 `Container.AddBody`, `Container.ChildNamed` and `Container.NewUniqueChild`
 change which container holds a member and build, retire and register no body
@@ -2384,7 +2388,8 @@ the resulting bodies, measurements, and verification reports directly.
   staging is explicit and rejected at the call, never silently approximated or
   narrowed; `agent-docs/evaluator-design.md` §2), `ErrConsumed` (`Do` was called
   on an operation command that already ran; `agent-docs/command-api-design.md`
-  §7). `BooleanError` carries a `Code`
+  §7), `ErrStepScope` (a call broke the rules of a `RunSteps` run) and `ErrStepIdentities` (a step used up its
+  identity block; `agent-docs/steps-design.md`). `BooleanError` carries a `Code`
   (empty / unsupported-contact / evaluator-failure), wrapping `ErrBooleanFailed`
   (empty, evaluator-failure) or `ErrUnsupported` (unsupported-contact); a valid
   tangent or coplanar contact this evaluator cannot classify is
@@ -2427,6 +2432,11 @@ the resulting bodies, measurements, and verification reports directly.
   `Remove` and `Verify` may run concurrently with one another; a `Verify`
   reports on the set as it stood when the call began. `IntersectionVolume` may run beside `Bodies`,
   `Verify` and other `IntersectionVolume` calls, never beside `Remove` or another operation.
+- `RunSteps` is the one way to run operations on a document from several goroutines. Each step builds as if alone on
+  the document as it stood when the run began, and the result does not depend on the worker count. Outside a run,
+  two operations never run at once. `Verify` and the other queries that take a ctx mint their transient identities
+  from a private source and never move the document's counters, so they are safe beside each other and beside a run
+  (`agent-docs/steps-design.md`).
 - An operation command is NOT safe for concurrent use. Racing `Do` calls on one
   command run the operation at most once, and every other call returns
   `ErrConsumed` (`agent-docs/command-api-design.md` §8).

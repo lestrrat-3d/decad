@@ -90,7 +90,7 @@ func (d *Document) Bodies() []*Body {
 // liveBodies is the handle snapshot every root reader of the live set walks:
 // the node's Live copy, taken under LiveMu, mapped to its handles.
 func (d *Document) liveBodies() []*Body {
-	return bodyHandles(d.n.Live())
+	return bodyHandles(d.n.LiveOutside())
 }
 
 // Remove returns the command that takes b out of the live model by the caller's own hand: after Do, b leaves
@@ -135,18 +135,22 @@ func (c *RemoveCommand) run(ctx context.Context) (struct{}, error) {
 	if err := ctx.Err(); err != nil {
 		return struct{}{}, err
 	}
-	return struct{}{}, remove(c.b)
+	return struct{}{}, remove(ctx, c.b)
 }
 
 // remove is Remove's implementation. The errors it returns carry no operation tag
 // (agent-docs/command-api-design.md §11).
-func remove(b *Body) error {
+func remove(ctx context.Context, b *Body) error {
 	if b == nil {
 		return errRemoveNilBody
 	}
 	d := documentHandle(b.n.Doc)
 	if d == nil {
 		return fmt.Errorf(`%w: the body belongs to no document`, ErrDegenerate)
+	}
+	st, err := d.stepGate(ctx, nil, []*Body{b})
+	if err != nil {
+		return err
 	}
 	operation := d.operation(OperationRemove, []OperationInput{{Body: b, Role: "body", Use: InputConsumed}})
 	operation.faceSuccessors = make(map[*Face]FaceHistory)
@@ -162,6 +166,7 @@ func remove(b *Body) error {
 		return ErrRetiredBody
 	}
 	d.retire(b)
+	operation.step = stepIndex(st)
 	d.appendOperationLocked(operation)
 	return nil
 }
@@ -201,9 +206,17 @@ func (d *Document) commitOperationSpanPrefixIn(ctx context.Context, c *Container
 	if produced.blindProof != nil && !produced.blindProof.acceptsOperation(operation, produced) {
 		return fmt.Errorf("%w: blind Cut history does not match its witness", ErrUnsupported)
 	}
-	d.advanceProducer(ctx, prefix+span)
+	st, err := d.stepGate(ctx, inputs, consumed)
+	if err != nil {
+		return err
+	}
+	if err := d.advanceProducer(ctx, prefix+span); err != nil {
+		return err
+	}
+	operation.step = stepIndex(st)
 	d.n.LiveMu.Lock()
 	defer d.n.LiveMu.Unlock()
+	d.n.TagLocked(st, bodyNode(produced))
 	if produced.blindProof != nil {
 		produced.blindProof.cut = operation
 	}
@@ -252,9 +265,17 @@ func (d *Document) commitOperationManyFacesIn(ctx context.Context, c *Container,
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	d.advanceProducer(ctx, producerID(len(produced)))
+	st, err := d.stepGate(ctx, inputs, consumed)
+	if err != nil {
+		return err
+	}
+	if err := d.advanceProducer(ctx, producerID(len(produced))); err != nil {
+		return err
+	}
+	operation.step = stepIndex(st)
 	d.n.LiveMu.Lock()
 	defer d.n.LiveMu.Unlock()
+	d.n.TagLocked(st, bodyNodes(produced)...)
 	dest := d.destinationLocked(ctx, c, consumed)
 	for _, gone := range consumed {
 		d.retire(gone)
@@ -394,28 +415,39 @@ func (d *Document) validateOperation(operation *Operation, consumed []*Body) err
 // and retires the consumed inputs — the atomic tail of every feature call
 // (agent-docs/evaluator-design.md §8): a failed evaluation never reaches here, so
 // a rejected operation leaves the document untouched.
-func (d *Document) commit(ctx context.Context, produced *Body, consumed ...*Body) {
-	d.commitIn(ctx, nil, produced, consumed...)
+func (d *Document) commit(ctx context.Context, produced *Body, consumed ...*Body) error {
+	return d.commitIn(ctx, nil, produced, consumed...)
 }
 
 // commitIn is commit placing the produced body in c. A nil c reads the container
 // of the first consumed body, and the root when nothing is consumed
 // (agent-docs/container-design.md §2).
-func (d *Document) commitIn(ctx context.Context, c *Container, produced *Body, consumed ...*Body) {
-	d.advanceProducer(ctx, 1)
+func (d *Document) commitIn(ctx context.Context, c *Container, produced *Body, consumed ...*Body) error {
+	st, err := d.stepGate(ctx, nil, consumed)
+	if err != nil {
+		return err
+	}
+	if err := d.advanceProducer(ctx, 1); err != nil {
+		return err
+	}
 	d.n.LiveMu.Lock()
 	defer d.n.LiveMu.Unlock()
+	d.n.TagLocked(st, bodyNode(produced))
 	dest := d.destinationLocked(ctx, c, consumed)
 	for _, gone := range consumed {
 		d.retire(gone)
 	}
 	d.n.LiveSet = append(d.n.LiveSet, bodyNode(produced))
 	d.placeLocked(bodyNode(produced), dest)
+	return nil
 }
 
 // documentSnapshot is the publication state of a document at one moment: the
 // live set with its order, the producer counter, the operation history length,
-// the container placement of bodies and the witness maps commits write.
+// the container placement of bodies and the witness maps commits write. Inside
+// a build step it holds only the step's own publications (steps.go), and for a
+// caller without a step while a run is active it holds nothing, because no
+// call of such a caller publishes.
 type documentSnapshot struct {
 	live               []*topo.Body
 	nextProducer       producerID
@@ -424,6 +456,8 @@ type documentSnapshot struct {
 	circleBuilds       map[*Body]*prismrecord.CircleBuildWitness
 	circlePlacements   map[*Body]*circlePlacementWitness
 	identityPlacements map[*Body]struct{}
+	step               *stepSnapshot
+	inert              bool
 }
 
 // snapshot records the publication state so restore can return the document to
@@ -431,13 +465,23 @@ type documentSnapshot struct {
 // calls takes one before its first publication and restores it on failure, so
 // a failed or canceled call leaves the document as it found it
 // (agent-docs/api-design.md section 2). The caller MUST be the only mutator of
-// d between snapshot and restore (agent-docs/command-api-design.md section 8).
-func (d *Document) snapshot() *documentSnapshot {
+// d between snapshot and restore (agent-docs/command-api-design.md section 8),
+// where inside a run each step is the only mutator of its own publications.
+func (d *Document) snapshot(ctx context.Context) *documentSnapshot {
 	d.n.LiveMu.RLock()
 	defer d.n.LiveMu.RUnlock()
+	if run := d.n.ActiveRun(); run != nil {
+		if s := d.n.StepOf(ctx); s != nil && s.Run() == run {
+			return &documentSnapshot{step: d.stepSnapshotLocked(s)}
+		}
+		return &documentSnapshot{inert: true}
+	}
+	d.n.CounterMu.RLock()
+	next := d.n.NextProducer
+	d.n.CounterMu.RUnlock()
 	return &documentSnapshot{
 		live:               slices.Clone(d.n.LiveSet),
-		nextProducer:       d.n.NextProducer,
+		nextProducer:       next,
 		operations:         len(d.operations),
 		ofBody:             maps.Clone(d.groups.ofBody),
 		circleBuilds:       maps.Clone(d.circleBuilds),
@@ -450,36 +494,49 @@ func (d *Document) snapshot() *documentSnapshot {
 // recorded since, with its producer and consumer index entries, and puts back
 // the live set, the producer counter and the placement state.
 func (d *Document) restore(s *documentSnapshot) {
+	if s.inert {
+		return
+	}
 	d.n.LiveMu.Lock()
 	defer d.n.LiveMu.Unlock()
+	if s.step != nil {
+		d.restoreStepLocked(s.step)
+		return
+	}
 	for i := len(d.operations) - 1; i >= s.operations; i-- {
-		operation := d.operations[i]
-		for _, output := range operation.outputs {
-			delete(d.producers, output)
-		}
-		for _, input := range operation.inputs {
-			if input.Use != InputConsumed {
-				continue
-			}
-			recorded := d.consumers[input.Body]
-			if n := len(recorded); n > 0 && recorded[n-1] == operation {
-				recorded = slices.Delete(recorded, n-1, n)
-			}
-			if len(recorded) == 0 {
-				delete(d.consumers, input.Body)
-				continue
-			}
-			d.consumers[input.Body] = recorded
-		}
+		d.unpublishOperationLocked(d.operations[i])
 		d.operations[i] = nil
 	}
 	d.operations = d.operations[:s.operations]
 	d.n.LiveSet = s.live
+	d.n.CounterMu.Lock()
 	d.n.NextProducer = s.nextProducer
+	d.n.CounterMu.Unlock()
 	d.groups.ofBody = s.ofBody
 	d.circleBuilds = s.circleBuilds
 	d.circlePlacements = s.circlePlacements
 	d.identityPlacements = s.identityPlacements
+}
+
+// unpublishOperationLocked removes operation from the producer and consumer indexes. The caller holds LiveMu.
+func (d *Document) unpublishOperationLocked(operation *Operation) {
+	for _, output := range operation.outputs {
+		delete(d.producers, output)
+	}
+	for _, input := range operation.inputs {
+		if input.Use != InputConsumed {
+			continue
+		}
+		recorded := d.consumers[input.Body]
+		if n := len(recorded); n > 0 && recorded[n-1] == operation {
+			recorded = slices.Delete(recorded, n-1, n)
+		}
+		if len(recorded) == 0 {
+			delete(d.consumers, input.Body)
+			continue
+		}
+		d.consumers[input.Body] = recorded
+	}
 }
 
 // destinationLocked is the container a commit places its results in. The caller
@@ -521,9 +578,23 @@ func (d *Document) producerAt(ctx context.Context) producerID {
 
 // advanceProducer moves the producer counter past the n identities that an
 // operation called with ctx has just occupied. It is the only writer of the
-// counter and takes no lock itself.
-func (d *Document) advanceProducer(_ context.Context, n producerID) {
+// counter and takes no document lock. Inside a build step it moves the step's
+// cursor and returns ErrStepIdentities when the step's block cannot hold n
+// more. While a run is active, a call without a step's ctx marks the run
+// failed and returns ErrStepScope, and the counter stays as it was.
+func (d *Document) advanceProducer(ctx context.Context, n producerID) error {
+	if s := d.n.StepOf(ctx); s != nil {
+		return s.AdvanceProducer(n)
+	}
+	if r := d.n.ActiveRun(); r != nil {
+		r.Fail("an operation changed the document without its step's context")
+		return fmt.Errorf("%w: an operation changed the document while steps run, without its step's context",
+			ErrStepScope)
+	}
+	d.n.CounterMu.Lock()
 	d.n.NextProducer += n
+	d.n.CounterMu.Unlock()
+	return nil
 }
 
 func (d *Document) producerID(ctx context.Context) producerID {

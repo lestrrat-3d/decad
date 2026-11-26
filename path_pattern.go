@@ -297,7 +297,7 @@ func pathSampleError(err error) error {
 func pathCopies(ctx context.Context, b *Body, stations []pathsample.Station,
 	settings pathPatternSettings) (result []*Body, retErr error) {
 	d := documentHandle(b.n.Doc)
-	snap := d.snapshot()
+	snap := d.snapshot(ctx)
 	defer func() {
 		if retErr != nil {
 			d.restore(snap)

@@ -3275,3 +3275,12 @@
 8	0.05	TestPairDigestSharedSource
 9	0.02	TestBodyDigestIncludesHistory
 7	0.01	TestBodyDigestGates
+12	0.00	TestRunStepsDeterministic
+12	0.00	TestRunStepsOrder
+12	0.00	TestRunStepsView
+12	0.00	TestRunStepsMisuse
+12	0.00	TestRunStepsRemoveOwnBody
+12	0.00	TestRunStepsIdentities
+12	0.00	TestRunStepsOptions
+12	0.00	TestRunStepsErrors
+12	0.00	TestRunStepsMatchesAlone

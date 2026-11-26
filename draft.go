@@ -335,7 +335,7 @@ func (d *Document) extrudeDraft(ctx context.Context, profile profileRecord, fram
 	if surfaceResult {
 		return nil, fmt.Errorf(`%w: this evaluator builds a tapered extrude as a solid only; omit SurfaceResult or the taper (draft SD12)`, ErrUnsupported)
 	}
-	sweep, err := d.resolveLinearExtent(e, frame)
+	sweep, err := d.resolveLinearExtent(ctx, e, frame)
 	if err != nil {
 		return nil, err
 	}

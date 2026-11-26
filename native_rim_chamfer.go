@@ -2,10 +2,8 @@ package decad
 
 import (
 	"context"
-	"maps"
 	"math"
 	"math/big"
-	"slices"
 
 	"github.com/lestrrat-3d/decad/internal/boolchain"
 	"github.com/lestrrat-3d/decad/internal/booleaneval"
@@ -327,11 +325,17 @@ func rimMovedBounds(b *topo.Body, v r3.Vec) measurement.Box {
 func rimHistorySnapshot(ctx context.Context, d *Document, b *proofbound.ReplayBudget) (*OperationHistory, bool, error) {
 	d.n.LiveMu.RLock()
 	defer d.n.LiveMu.RUnlock()
-	n := len(d.operations) + len(d.producers) + len(d.consumers)
+	// The sizes are those of the calling step's view during a run, so the gate and the replay charge do not
+	// depend on how far another step has got.
+	view := d.viewSizesLocked(ctx)
+	n := view.operations + view.producers + view.consumers
 	if n > 65536 {
 		return nil, false, nil
 	}
-	for _, v := range d.consumers {
+	for body, v := range d.consumers {
+		if !d.n.VisibleLocked(ctx, &body.n) {
+			continue
+		}
 		if len(v) > 65536-n {
 			return nil, false, nil
 		}
@@ -340,11 +344,7 @@ func rimHistorySnapshot(ctx context.Context, d *Document, b *proofbound.ReplayBu
 	if err := b.ReserveBundle(ctx, uint64(n), uint64(n), uint64(128*n)); err != nil {
 		return nil, false, err
 	}
-	h := &OperationHistory{doc: &d.n, operations: slices.Clone(d.operations), producers: maps.Clone(d.producers), consumers: make(map[*Body][]*Operation, len(d.consumers))}
-	for k, v := range d.consumers {
-		h.consumers[k] = slices.Clone(v)
-	}
-	return h, true, nil
+	return d.historyAtLocked(ctx), true, nil
 }
 
 func upperRimCone(result *topo.Body) *topo.Face {

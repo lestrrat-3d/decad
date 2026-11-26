@@ -154,7 +154,7 @@ func arrange(ctx context.Context, bodies []*Body, bed ArrangeBed, turns bool, an
 			return nil, fmt.Errorf(`%w: the bed height must be positive`, ErrDegenerate)
 		}
 	}
-	snap := d.snapshot()
+	snap := d.snapshot(ctx)
 	defer func() {
 		if retErr != nil {
 			d.restore(snap)

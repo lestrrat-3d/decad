@@ -232,13 +232,11 @@ func CertifyQuarterHeldSeam(ctx context.Context, budget *proofbound.WorkBudget,
 	if loft == nil || loft.Doc == nil || loft.Owner == nil || loft.Origin.Role != provenance.RoleBody {
 		return decline("live_original")
 	}
-	loft.Doc.LiveMu.RLock()
-	if len(loft.Doc.LiveSet) > 65_536 {
-		loft.Doc.LiveMu.RUnlock()
+	// The set as ctx sees it: inside a build step, the bodies live before the run and the step's own.
+	liveSet := loft.Doc.LiveIn(ctx)
+	if len(liveSet) > 65_536 {
 		return decline("live_set_limit")
 	}
-	liveSet := append([]*topo.Body(nil), loft.Doc.LiveSet...)
-	loft.Doc.LiveMu.RUnlock()
 	live := false
 	for _, candidate := range liveSet {
 		if err := budget.Step(); err != nil {

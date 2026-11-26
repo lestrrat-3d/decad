@@ -177,8 +177,7 @@ func commitExactPointCone(ctx context.Context, d *Document, cone *Body) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	d.commit(ctx, cone)
-	return nil
+	return d.commit(ctx, cone)
 }
 
 // revolveSpanOfFace returns the recorded section side that Revolve bound to

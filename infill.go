@@ -147,7 +147,7 @@ func (c *InfillCommand) run(ctx context.Context) (result *Body, retErr error) {
 	// which sit in infillInterior behind the skin route's copies, so a refusal
 	// costs one snapshot.
 	d := documentHandle(c.b.n.Doc)
-	snap := d.snapshot()
+	snap := d.snapshot(ctx)
 	defer func() {
 		if retErr != nil {
 			d.restore(snap)
