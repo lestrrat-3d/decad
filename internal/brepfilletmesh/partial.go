@@ -68,6 +68,7 @@ func (fr *Rings) EmitPartialWithLevel(in Input, partial *partialband.PartialBand
 	mesh *topo.Mesh, sideDelta float64,
 	faceOfRole func(string) (*topo.Face, error), bump func(*topo.Face, float64)) error {
 	fr.PatchEps = map[*topo.Face]float64{}
+	fr.PatchFaces = nil
 	r := in.Band.Setback.AxialUpper()
 	dphi := proofbound.UpRound(proofbound.UpRound(math.Pi/2*(1+1e-12)) / float64(fr.Count))
 	sPhi := proofbound.ProductUpper(r, proofbound.UpRound(proofbound.ProductUpper(dphi, dphi)/8))
