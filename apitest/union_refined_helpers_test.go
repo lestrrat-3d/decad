@@ -18,17 +18,24 @@ import (
 // unjoined: a revolved hub and six copies of one wide point-Loft lug.
 func unionRefinedOperands(t testing.TB) (*decad.Document, *decad.Body, []*decad.Body) {
 	t.Helper()
-	return unionRefinedSet(t, false)
+	return unionRefinedSet(t, false, unionRefinedLugs)
 }
+
+// unionRefinedLugs is the lug count of unionRefinedOperands. The equality
+// tests use four, the fewest that start the sector join at its coarse cap
+// subdivision, so each build is a fraction of the six-lug mesh.
+const (
+	unionRefinedLugs     = 6
+	unionRefinedPairLugs = 4
+)
 
 // unionRefinedSet is unionRefinedOperands with lugs whose flanks are fitted
 // splines when fitted is set. That join's first construction attempt meets a
 // cap and root contact in the crossing audit, quarters the sag allowance and
 // builds again, so a build that skipped the audit would differ from one that
 // ran it.
-func unionRefinedSet(t testing.TB, fitted bool) (*decad.Document, *decad.Body, []*decad.Body) {
+func unionRefinedSet(t testing.TB, fitted bool, count int) (*decad.Document, *decad.Body, []*decad.Body) {
 	t.Helper()
-	const count = 6
 	doc, hub, lug, _, _ := taperedHubAndRadialLugWidth(t, 9, 7.5, 4.3, 0.8, fitted)
 	lugs := []*decad.Body{lug}
 	for i := 1; i < count; i++ {
@@ -90,9 +97,9 @@ func fingerprintUnionRefined(t *testing.T, body *decad.Body) unionRefinedFingerp
 
 // unionThenRefine is the pair RefineTo replaces, on a fresh set of
 // operands.
-func unionThenRefine(t *testing.T, fitted bool, bound units.Value) (*decad.Document, *decad.Body, error) {
+func unionThenRefine(t *testing.T, fitted bool, count int, bound units.Value) (*decad.Document, *decad.Body, error) {
 	t.Helper()
-	doc, hub, lugs := unionRefinedSet(t, fitted)
+	doc, hub, lugs := unionRefinedSet(t, fitted, count)
 	joined, err := decad.Union(append([]*decad.Body{hub}, lugs...)...).Do(t.Context())
 	require.NoError(t, err)
 	refined, err := decad.Refine(joined, bound).Do(t.Context())

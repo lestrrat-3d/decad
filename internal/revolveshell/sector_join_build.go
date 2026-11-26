@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"sync/atomic"
 
 	"github.com/lestrrat-3d/decad/internal/coneaxis"
 	"github.com/lestrrat-3d/decad/internal/decaderr"
@@ -58,6 +59,24 @@ type sectorContactRefineError struct{ cause error }
 
 func (r *sectorContactRefineError) Error() string { return r.cause.Error() }
 func (r *sectorContactRefineError) Unwrap() error { return r.cause }
+
+// SectorAttempt is one construction attempt of a sector join: the angular sag
+// allowance it ran at and whether a cap/root contact refusal ended it.
+type SectorAttempt struct {
+	Sag            float64
+	ContactRefused bool
+	Built          bool
+}
+
+var sectorAttemptObserver atomic.Pointer[func(SectorAttempt)]
+
+// ObserveSectorAttempts reports every sector-join construction attempt to
+// observe until the returned function is called. It exists so a test can prove
+// which attempts a build made; it never changes a build.
+func ObserveSectorAttempts(observe func(SectorAttempt)) (stop func()) {
+	sectorAttemptObserver.Store(&observe)
+	return func() { sectorAttemptObserver.Store(nil) }
+}
 
 // TraceSectorLoop sets cert's exterior loop, its root-contact sector angles
 // and its crossing bound from the certified source boundary.
@@ -166,6 +185,10 @@ func buildSectorsJoinRefined(ctx context.Context, env topo.Env,
 	for {
 		attempt++
 		body, ring, err := buildSectorsJoinAtSag(ctx, env, cert, sources, sag, capLimit, rounds, ceiling)
+		if observe := sectorAttemptObserver.Load(); observe != nil {
+			_, contact := err.(*sectorContactRefineError)
+			(*observe)(SectorAttempt{Sag: sag, ContactRefused: contact, Built: err == nil})
+		}
 		if err == nil {
 			return body, ring, nil
 		}

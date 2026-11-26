@@ -5,9 +5,11 @@ package apitest_test
 import (
 	"context"
 	"math"
+	"sync"
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
+	"github.com/lestrrat-3d/decad/internal/revolveshell"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
 )
@@ -17,10 +19,10 @@ import (
 func requireUnionRefinedEqualsPair(t *testing.T, fitted bool, targets []float64) {
 	t.Helper()
 	for _, target := range targets {
-		wantDoc, want, err := unionThenRefine(t, fitted, units.Millimeters(target))
+		wantDoc, want, err := unionThenRefine(t, fitted, unionRefinedPairLugs, units.Millimeters(target))
 		require.NoError(t, err, "target %g", target)
 
-		doc, hub, lugs := unionRefinedSet(t, fitted)
+		doc, hub, lugs := unionRefinedSet(t, fitted, unionRefinedPairLugs)
 		before := len(doc.OperationHistory().Operations())
 		got, err := decad.Union(append([]*decad.Body{hub}, lugs...)...).RefineTo(units.Millimeters(target)).Do(t.Context())
 		require.NoError(t, err, "target %g", target)
@@ -47,7 +49,31 @@ func TestUnionRefinedEqualsUnionThenRefineWhenTheAuditForcesARetry(t *testing.T)
 	// The fitted join's first attempt meets a cap and root contact in the
 	// crossing audit and builds again at a quarter of the sag allowance, so
 	// the equal mesh shows the direct build ran the same audit.
+	var mu sync.Mutex
+	var attempts []revolveshell.SectorAttempt
+	stop := revolveshell.ObserveSectorAttempts(func(a revolveshell.SectorAttempt) {
+		mu.Lock()
+		defer mu.Unlock()
+		attempts = append(attempts, a)
+	})
+	defer stop()
 	requireUnionRefinedEqualsPair(t, true, []float64{0.08})
+	stop()
+
+	// The retry itself: an attempt ends in the contact refusal and the next one
+	// builds at a quarter of its sag allowance. Each of the three builds
+	// (the pair's Union and Refine, the direct UnionRefined) does so.
+	mu.Lock()
+	defer mu.Unlock()
+	retried := 0
+	for i := 0; i+1 < len(attempts); i++ {
+		if attempts[i].ContactRefused && !attempts[i].Built {
+			require.Equal(t, attempts[i].Sag*0.25, attempts[i+1].Sag)
+			retried++
+		}
+	}
+	require.GreaterOrEqual(t, retried, 3, "attempts %+v", attempts)
+	require.True(t, attempts[len(attempts)-1].Built)
 }
 
 func TestUnionRefinedKeepsLaterOperationsAtTheRefinedBound(t *testing.T) {
