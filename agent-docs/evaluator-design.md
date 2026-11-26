@@ -1647,6 +1647,17 @@ work intervals inside quadratic/refinement loops, as interference §7 specifies.
     workers share them read-only, while a tree on alternate axes builds
     beside them. Each cache holds a pure function of its facet's held
     positions, so the scan answers as a serial one does.
+    The tree splits each node at the median facet count, on the axis whose two
+    halves have the smaller total box surface area, ordering facets by box
+    centre. Long thin facets whose boxes overlap while the facets do not
+    leave a lower-corner split with sibling nodes that overlap; the area rule
+    keeps them apart, so a scan of every facet reaches fewer node and facet
+    pairs (5.5 times fewer leaf-pair iterations and 16 times fewer node pairs
+    on the 92,544-facet union meshes). The tree holds the same facets and every
+    node box contains the boxes below it, so the scan still decides every
+    box-overlapping facet pair exactly once, whatever the split. Only the
+    order in which pairs are decided differs, so a mesh with a failing pair
+    refuses either way, and a poll or budget stop falls at a different pair.
     Both scans use exact predicates over the held binary64 values: no shared
     vertex means no contact, one shared vertex means contact only there, one
     shared edge means contact only along it.

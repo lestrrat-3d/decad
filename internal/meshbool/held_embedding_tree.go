@@ -47,7 +47,7 @@ func newHeldBoxTree(e *heldEmbedding) heldBoxTree {
 	for i := range boxes {
 		boxes[i] = e.triBox(i)
 	}
-	return newBoxTree(boxes)
+	return newScanBoxTree(boxes)
 }
 
 // newHeldScanTree can index three other linear projections of the same held
@@ -113,7 +113,7 @@ func newOrientedScanTree(ctx context.Context, h HeldRounding) (heldBoxTree, bool
 		}
 		boxes[i] = box
 	}
-	tree := newBoxTree(boxes)
+	tree := newScanBoxTree(boxes)
 	tree.oriented = true
 	return tree, true, ctx.Err()
 }
@@ -171,6 +171,18 @@ func newBoxTree(boxes [][2]r3.Vec) heldBoxTree {
 	return buildBoxTree(boxes, true)
 }
 
+// newScanBoxTree is newBoxTree with each node split on the axis whose halves
+// have the smaller total surface area, ordered by box centre. A held mesh of
+// long thin facets leaves the longest-axis, lower-corner split with sibling
+// nodes whose boxes overlap although few of their facets do; the area rule
+// keeps siblings apart, so the self-pair scan reaches far fewer node and
+// facet pairs. The tree holds the same facets, balanced by count, and its
+// node boxes still contain everything below them, so every scan answer is
+// the same (agent-docs/tessellation-design.md §1, the Embedding row).
+func newScanBoxTree(boxes [][2]r3.Vec) heldBoxTree {
+	return buildBoxTreeSplit(boxes, true, true)
+}
+
 // newQueryBoxTree builds a tree for read-only facet queries without keeping
 // the leaf-order box copy used only by held self-pair scans.
 func newQueryBoxTree(boxes [][2]r3.Vec) heldBoxTree {
@@ -178,6 +190,10 @@ func newQueryBoxTree(boxes [][2]r3.Vec) heldBoxTree {
 }
 
 func buildBoxTree(boxes [][2]r3.Vec, keepSlotBoxes bool) heldBoxTree {
+	return buildBoxTreeSplit(boxes, keepSlotBoxes, false)
+}
+
+func buildBoxTreeSplit(boxes [][2]r3.Vec, keepSlotBoxes, byArea bool) heldBoxTree {
 	facets := make([]int, 0, len(boxes))
 	for i, box := range boxes {
 		// BoxesOverlap is false for a box with a NaN coordinate.
@@ -189,7 +205,7 @@ func buildBoxTree(boxes [][2]r3.Vec, keepSlotBoxes bool) heldBoxTree {
 	tree := heldBoxTree{nodes: make([]heldBoxNode, 0, heldBoxNodeCount(len(facets))), boxes: boxes,
 		facets: make([]int, 0, len(facets))}
 	if len(facets) > 0 {
-		tree.build(boxes, facets)
+		tree.build(boxes, facets, byArea)
 	}
 	if keepSlotBoxes {
 		tree.slotBoxes = make([][2]r3.Vec, len(tree.facets))
@@ -302,7 +318,7 @@ func heldBoxHasNaN(box [2]r3.Vec) bool {
 	return false
 }
 
-func (tree *heldBoxTree) build(boxes [][2]r3.Vec, facets []int) int {
+func (tree *heldBoxTree) build(boxes [][2]r3.Vec, facets []int, byArea bool) int {
 	index := len(tree.nodes)
 	tree.nodes = append(tree.nodes, heldBoxNode{leafStart: -1})
 	box := boxes[facets[0]]
@@ -333,16 +349,64 @@ func (tree *heldBoxTree) build(boxes [][2]r3.Vec, facets []int) int {
 		axis = 2
 	}
 	middle := len(facets) / 2
-	selectHeldBoxMedian(facets, boxes, axis, middle)
-	tree.nodes[index].left = tree.build(boxes, facets[:middle])
-	tree.nodes[index].right = tree.build(boxes, facets[middle:])
+	if byArea {
+		axis = bestAreaSplitAxis(facets, boxes, middle)
+	}
+	selectHeldBoxMedian(facets, boxes, axis, middle, byArea)
+	tree.nodes[index].left = tree.build(boxes, facets[:middle], byArea)
+	tree.nodes[index].right = tree.build(boxes, facets[middle:], byArea)
 	return index
 }
 
-func selectHeldBoxMedian(facets []int, boxes [][2]r3.Vec, axis, middle int) {
+// bestAreaSplitAxis returns the axis whose centre-ordered median split of
+// facets has the smaller total surface area of its two halves' boxes, the
+// lowest axis on a tie or a non-finite area. Any axis yields a correct tree;
+// this one only makes the scan cheaper. It leaves facets partitioned on the
+// last axis it tried.
+func bestAreaSplitAxis(facets []int, boxes [][2]r3.Vec, middle int) int {
+	best, bestCost := 0, math.Inf(1)
+	for axis := range 3 {
+		selectHeldBoxMedian(facets, boxes, axis, middle, true)
+		cost := heldBoxArea(boxes, facets[:middle]) + heldBoxArea(boxes, facets[middle:])
+		if cost < bestCost {
+			best, bestCost = axis, cost
+		}
+	}
+	return best
+}
+
+// heldBoxArea is the surface area of the box bounding the boxes of facets.
+func heldBoxArea(boxes [][2]r3.Vec, facets []int) float64 {
+	box := boxes[facets[0]]
+	for _, f := range facets[1:] {
+		o := boxes[f]
+		box[0].X, box[0].Y, box[0].Z = min(box[0].X, o[0].X), min(box[0].Y, o[0].Y), min(box[0].Z, o[0].Z)
+		box[1].X, box[1].Y, box[1].Z = max(box[1].X, o[1].X), max(box[1].Y, o[1].Y), max(box[1].Z, o[1].Z)
+	}
+	dx, dy, dz := box[1].X-box[0].X, box[1].Y-box[0].Y, box[1].Z-box[0].Z
+	// Explicit float64 conversions block FMA fusion, so near-ties split the same way on every architecture.
+	return float64(dx*dy) + float64(dy*dz) + float64(dz*dx)
+}
+
+// heldBoxOrderKey is the coordinate on axis that selectHeldBoxMedian orders
+// a box by: its lower corner, or with byCentre the sum of its corners, which
+// orders as the centre does. A sum that is NaN (opposite infinities) falls
+// back to the lower corner.
+func heldBoxOrderKey(box [2]r3.Vec, axis int, byCentre bool) float64 {
+	lo := heldBoxAxis(box[0], axis)
+	if !byCentre {
+		return lo
+	}
+	if sum := lo + heldBoxAxis(box[1], axis); sum == sum {
+		return sum
+	}
+	return lo
+}
+
+func selectHeldBoxMedian(facets []int, boxes [][2]r3.Vec, axis, middle int, byCentre bool) {
 	less := func(a, b int) bool {
-		x := heldBoxAxis(boxes[a][0], axis)
-		y := heldBoxAxis(boxes[b][0], axis)
+		x := heldBoxOrderKey(boxes[a], axis, byCentre)
+		y := heldBoxOrderKey(boxes[b], axis, byCentre)
 		return x < y || x == y && a < b
 	}
 	maxSteps := 2 * bits.Len(uint(len(facets)))
