@@ -56,7 +56,7 @@ const restingBossPostVolume = 0.3 * 0.3 * 2
 // §20.2) and the boss's Union takes the shifted retry.
 func withRestingBossPost(t *testing.T, doc *decad.Document, plate *decad.Body) *decad.Body {
 	t.Helper()
-	joined, err := decad.Union(t.Context(), plate, boxBodyAtZ(t, doc, 55.55, 35.55, 55.85, 35.85, 0, 12))
+	joined, err := decad.Union(plate, boxBodyAtZ(t, doc, 55.55, 35.55, 55.85, 35.85, 0, 12)).Do(t.Context())
 	require.NoError(t, err)
 	return joined
 }

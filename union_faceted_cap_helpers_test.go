@@ -65,7 +65,7 @@ func facetedCapPrism(t *testing.T, doc *Document, bottom, top float64) *Body {
 func facetedCapCutPrism(t *testing.T, doc *Document) *Body {
 	t.Helper()
 	prism := facetedCapPrism(t, doc, -2.4, 1)
-	cut, err := Cut(t.Context(), prism, internalBoxBodyAtZ(t, doc, -4, -4, 2, 2, 0, 2))
+	cut, err := Cut(prism, internalBoxBodyAtZ(t, doc, -4, -4, 2, 2, 0, 2)).Do(t.Context())
 	require.NoError(t, err)
 	return cut
 }
@@ -86,7 +86,7 @@ func facetedCapBoss(t *testing.T, doc *Document) *Body {
 // facetedCapDrive is the boss with a cone standing on its top: a mesh Union result.
 func facetedCapDrive(t *testing.T, doc *Document) *Body {
 	t.Helper()
-	drive, err := Union(t.Context(), facetedCapBoss(t, doc), sharedCapCone(t, doc, [2]float64{}, facetedCapJoinR, 0.409, 4.15))
+	drive, err := Union(facetedCapBoss(t, doc), sharedCapCone(t, doc, [2]float64{}, facetedCapJoinR, 0.409, 4.15)).Do(t.Context())
 	require.NoError(t, err)
 	return drive
 }
